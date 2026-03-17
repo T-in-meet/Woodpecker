@@ -1,0 +1,95 @@
+name: Deploy Develop
+
+# develop 브랜치에 push(merge)될 때 실행
+on:
+  push:
+    branches:
+      - develop
+
+jobs:
+  # ─────────────────────────────────────────
+  # Job 1: CI 검증 (lint + type-check + test + build)
+  # 배포 전 코드 품질 재확인
+  # ─────────────────────────────────────────
+  ci:
+    name: CI Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run lint
+        run: npm run lint
+
+      - name: Run type check
+        run: npx tsc --noEmit
+
+      - name: Run tests
+        run: npx vitest run
+
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.DEVELOP_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.DEVELOP_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.DEVELOP_SUPABASE_SERVICE_ROLE_KEY }}
+          NEXT_PUBLIC_APP_URL: ${{ secrets.DEVELOP_APP_URL }}
+          NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${{ secrets.NEXT_PUBLIC_VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+
+  # ─────────────────────────────────────────
+  # Job 2: Vercel 스테이징 배포
+  # ci job 성공 후 실행
+  # ─────────────────────────────────────────
+  deploy:
+    name: Deploy to Vercel (Staging)
+    runs-on: ubuntu-latest
+    needs: [ci] # CI 통과 후 배포 진행
+    environment: develop # GitHub Environment로 관리 (선택사항)
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Vercel CLI 전역 설치
+      - name: Install Vercel CLI
+        run: npm install -g vercel
+
+      # Vercel 프로젝트와 연결 (토큰 + 프로젝트 ID 사용)
+      - name: Pull Vercel environment
+        run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      # Preview 빌드 생성 (--prod 없음 = 스테이징)
+      - name: Build for preview
+        run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      # Vercel Preview 환경에 배포
+      # 결과로 스테이징 URL 출력됨 (woodpecker-git-develop-xxx.vercel.app)
+      - name: Deploy to Vercel preview
+        run: vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}

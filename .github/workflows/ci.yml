@@ -1,0 +1,114 @@
+name: CI
+
+# develop 또는 main 브랜치로 PR이 열리거나 업데이트될 때 실행
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+
+jobs:
+  # ─────────────────────────────────────────
+  # Job 1: ESLint로 코드 스타일/오류 검사
+  # ─────────────────────────────────────────
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      # 레포 코드를 GitHub 서버에 내려받음
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Node.js 환경 설정 (package.json의 engines 필드 또는 지정 버전)
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm" # node_modules 캐싱으로 설치 속도 향상
+
+      # 의존성 설치 (npm ci는 package-lock.json 기준으로 정확히 설치)
+      - name: Install dependencies
+        run: npm ci
+
+      # ESLint 실행 (eslint.config.mjs 기준)
+      - name: Run ESLint
+        run: npm run lint
+
+  # ─────────────────────────────────────────
+  # Job 2: TypeScript 타입 오류 검사
+  # ─────────────────────────────────────────
+  type-check:
+    name: Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # tsc --noEmit: 실제 파일 생성 없이 타입만 체크
+      - name: Run type check
+        run: npx tsc --noEmit
+
+  # ─────────────────────────────────────────
+  # Job 3: Vitest 단위 테스트 실행
+  # ─────────────────────────────────────────
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # vitest run: watch 모드 없이 1회 실행 후 종료
+      - name: Run tests
+        run: npx vitest run
+
+  # ─────────────────────────────────────────
+  # Job 4: Next.js 프로덕션 빌드 검증
+  # lint, type-check, test 모두 통과한 후 실행
+  # ─────────────────────────────────────────
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [lint, type-check, test] # 앞 3개 job이 성공해야 실행됨
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # 빌드 시 필요한 환경변수 주입 (Secrets에서 가져옴)
+      # PR이 develop → main이면 PROD, 그 외엔 DEVELOP 값 사용
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ github.base_ref == 'main' && secrets.PROD_SUPABASE_URL || secrets.DEVELOP_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ github.base_ref == 'main' && secrets.PROD_SUPABASE_ANON_KEY || secrets.DEVELOP_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ github.base_ref == 'main' && secrets.PROD_SUPABASE_SERVICE_ROLE_KEY || secrets.DEVELOP_SUPABASE_SERVICE_ROLE_KEY }}
+          NEXT_PUBLIC_APP_URL: ${{ github.base_ref == 'main' && secrets.PROD_APP_URL || secrets.DEVELOP_APP_URL }}
+          NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${{ secrets.NEXT_PUBLIC_VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
