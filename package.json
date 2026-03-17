@@ -54,6 +54,7 @@
     "shadcn": "^4.0.7",
     "tailwindcss": "^4",
     "typescript": "^5",
+    "jsdom": "^26.1.0",
     "vitest": "^4.1.0"
   },
   "lint-staged": {
