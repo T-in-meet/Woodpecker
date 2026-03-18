@@ -1,7 +1,15 @@
 name: Project Automation
 
 on:
-  create:
+  # 브랜치 push 이벤트 (새 브랜치 생성 감지용)
+  push:
+    branches:
+      - "feat/**"
+      - "fix/**"
+      - "refactor/**"
+      - "chore/**"
+      - "docs/**"
+      - "test/**"
   pull_request:
     types:
       - opened
@@ -14,18 +22,16 @@ env:
 
 jobs:
   # ─────────────────────────────────────────
-  # Job 1: 브랜치 생성 → In Progress
-  # 브랜치 이름에서 이슈 번호 추출 후 해당 이슈를 In Progress로 이동
-  # 브랜치 네이밍: feat/#123-title 또는 fix/#123-title
+  # Job 1: 새 브랜치 생성 → In Progress
+  # push 이벤트에서 before SHA가 전부 0이면 새 브랜치 생성
+  # 브랜치 이름에서 이슈 번호 추출 후 In Progress로 이동
   # ─────────────────────────────────────────
   move-to-in-progress:
     name: Move to In Progress
     runs-on: ubuntu-latest
-    if: >
-      github.event_name == 'create' &&
-      github.event.ref_type == 'branch' &&
-      github.event.ref != 'main' &&
-      github.event.ref != 'development'
+    if: |
+      github.event_name == 'push' &&
+      github.event.before == '0000000000000000000000000000000000000000'
     steps:
       - name: Extract issue number and move to In Progress
         uses: actions/github-script@v7
@@ -34,9 +40,10 @@ jobs:
         with:
           github-token: ${{ secrets.PROJECT_TOKEN }}
           script: |
-            const branchName = context.ref;
+            const branchName = context.ref.replace('refs/heads/', '');
+            console.log('새 브랜치 감지:', branchName);
 
-            const match = branchName.match(/#?(\d+)/);
+            const match = branchName.match(/(\d+)/);
             if (!match) {
               console.log('브랜치 이름에서 이슈 번호를 찾을 수 없습니다:', branchName);
               return;
@@ -45,19 +52,14 @@ jobs:
             const issueNumber = parseInt(match[1]);
             console.log('이슈 번호:', issueNumber);
 
-            await moveIssueToStatus(github, context, issueNumber, 'In Progress');
-
-            // ── moveIssueToStatus 구현 ──────────────────────────────────
             async function moveIssueToStatus(github, context, issueNumber, statusName) {
               const owner = context.repo.owner;
               const repo = context.repo.repo;
               const projectNumber = parseInt(process.env.PROJECT_NUMBER);
 
-              // 1. 이슈의 node_id 조회
               const issueRes = await github.rest.issues.get({ owner, repo, issue_number: issueNumber });
               const issueNodeId = issueRes.data.node_id;
 
-              // 2. Project node_id 및 Status 필드 조회
               const projectQuery = `
                 query($owner: String!, $number: Int!) {
                   user(login: $owner) {
@@ -95,7 +97,6 @@ jobs:
                 return;
               }
 
-              // 3. Project에서 이슈 아이템 조회
               const itemQuery = `
                 query($projectId: ID!) {
                   node(id: $projectId) {
@@ -113,7 +114,6 @@ jobs:
               const itemData = await github.graphql(itemQuery, { projectId });
               let itemId = itemData.node.items.nodes.find(i => i.content?.id === issueNodeId)?.id;
 
-              // 4. 아이템이 없으면 Project에 추가
               if (!itemId) {
                 const addMutation = `
                   mutation($projectId: ID!, $contentId: ID!) {
@@ -126,7 +126,6 @@ jobs:
                 itemId = addRes.addProjectV2ItemById.item.id;
               }
 
-              // 5. Status 업데이트
               const updateMutation = `
                 mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
                   updateProjectV2ItemFieldValue(input: {
@@ -149,14 +148,15 @@ jobs:
               console.log(`이슈 #${issueNumber} → ${statusName} 이동 완료`);
             }
 
+            await moveIssueToStatus(github, context, issueNumber, 'In Progress');
+
   # ─────────────────────────────────────────
   # Job 2: PR 오픈 → In Review
-  # PR 본문의 closes #123 키워드로 이슈를 In Review로 이동
   # ─────────────────────────────────────────
   move-to-in-review:
     name: Move to In Review
     runs-on: ubuntu-latest
-    if: >
+    if: |
       github.event_name == 'pull_request' &&
       (github.event.action == 'opened' || github.event.action == 'ready_for_review') &&
       github.event.pull_request.draft == false
@@ -177,12 +177,6 @@ jobs:
               return;
             }
 
-            for (const match of matches) {
-              const issueNumber = parseInt(match[1]);
-              console.log('이슈', issueNumber, '→ In Review');
-              await moveIssueToStatus(github, context, issueNumber, 'In Review');
-            }
-
             async function moveIssueToStatus(github, context, issueNumber, statusName) {
               const owner = context.repo.owner;
               const repo = context.repo.repo;
@@ -279,14 +273,19 @@ jobs:
               console.log(`이슈 #${issueNumber} → ${statusName} 이동 완료`);
             }
 
+            for (const match of matches) {
+              const issueNumber = parseInt(match[1]);
+              console.log('이슈', issueNumber, '→ In Review');
+              await moveIssueToStatus(github, context, issueNumber, 'In Review');
+            }
+
   # ─────────────────────────────────────────
   # Job 3: PR merge → Done
-  # PR 본문의 closes #123 키워드로 이슈를 Done으로 이동
   # ─────────────────────────────────────────
   move-to-done:
     name: Move to Done
     runs-on: ubuntu-latest
-    if: >
+    if: |
       github.event_name == 'pull_request' &&
       github.event.action == 'closed' &&
       github.event.pull_request.merged == true
@@ -307,12 +306,6 @@ jobs:
               return;
             }
 
-            for (const match of matches) {
-              const issueNumber = parseInt(match[1]);
-              console.log('이슈', issueNumber, '→ Done');
-              await moveIssueToStatus(github, context, issueNumber, 'Done');
-            }
-
             async function moveIssueToStatus(github, context, issueNumber, statusName) {
               const owner = context.repo.owner;
               const repo = context.repo.repo;
@@ -407,4 +400,10 @@ jobs:
               });
 
               console.log(`이슈 #${issueNumber} → ${statusName} 이동 완료`);
+            }
+
+            for (const match of matches) {
+              const issueNumber = parseInt(match[1]);
+              console.log('이슈', issueNumber, '→ Done');
+              await moveIssueToStatus(github, context, issueNumber, 'Done');
             }
