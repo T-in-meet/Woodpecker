@@ -4,7 +4,7 @@ name: Deploy Develop
 on:
   push:
     branches:
-      - develop
+      - development
 
 jobs:
   # ─────────────────────────────────────────
