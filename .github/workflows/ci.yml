@@ -6,6 +6,7 @@ on:
     branches:
       - development
       - main
+  merge_group:
 
 jobs:
   # ─────────────────────────────────────────
