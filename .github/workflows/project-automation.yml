@@ -1,52 +1,41 @@
 name: Project Automation
 
-# ─────────────────────────────────────────
-# 트리거 3가지
-# 1. 브랜치 생성 → In Progress
-# 2. PR 오픈 → In Review
-# 3. PR merge → Done
-# ─────────────────────────────────────────
 on:
-  create: # 브랜치 또는 태그 생성 시
+  create:
   pull_request:
     types:
-      - opened # PR 새로 열림
-      - ready_for_review # Draft PR → 일반 PR 전환
-      - closed # PR 닫힘 (merge 또는 그냥 닫기)
+      - opened
+      - ready_for_review
+      - closed
 
 env:
-  # ⚠️ 아래 두 값은 본인 프로젝트에 맞게 변경 필요
-  # PROJECT_NUMBER: GitHub Project URL의 숫자
-  # 예) github.com/orgs/my-org/projects/3 → 3
   PROJECT_NUMBER: 1
   PROJECT_OWNER: ${{ github.repository_owner }}
 
 jobs:
   # ─────────────────────────────────────────
   # Job 1: 브랜치 생성 → In Progress
-  # 브랜치 이름에서 이슈 번호를 추출해 해당 이슈를 In Progress로 이동
-  # 브랜치 네이밍 컨벤션: feat/#123-title 또는 fix/#123-title
+  # 브랜치 이름에서 이슈 번호 추출 후 해당 이슈를 In Progress로 이동
+  # 브랜치 네이밍: feat/#123-title 또는 fix/#123-title
   # ─────────────────────────────────────────
   move-to-in-progress:
     name: Move to In Progress
     runs-on: ubuntu-latest
-    # 브랜치 생성 이벤트이고, main/develop이 아닌 경우만 실행
     if: >
       github.event_name == 'create' &&
       github.event.ref_type == 'branch' &&
       github.event.ref != 'main' &&
-      github.event.ref != 'develop'
+      github.event.ref != 'development'
     steps:
       - name: Extract issue number and move to In Progress
         uses: actions/github-script@v7
+        env:
+          PROJECT_NUMBER: ${{ env.PROJECT_NUMBER }}
         with:
-          # PROJECT_TOKEN: project 읽기/쓰기 권한이 있는 PAT (Personal Access Token)
-          # GITHUB_TOKEN은 Project v2에 권한이 없으므로 PAT 필요
           github-token: ${{ secrets.PROJECT_TOKEN }}
           script: |
-            const branchName = context.ref; // 예: refs/heads/feat/#123-title
+            const branchName = context.ref;
 
-            // 브랜치 이름에서 이슈 번호 추출 (숫자만)
             const match = branchName.match(/#?(\d+)/);
             if (!match) {
               console.log('브랜치 이름에서 이슈 번호를 찾을 수 없습니다:', branchName);
@@ -58,10 +47,111 @@ jobs:
 
             await moveIssueToStatus(github, context, issueNumber, 'In Progress');
 
+            // ── moveIssueToStatus 구현 ──────────────────────────────────
+            async function moveIssueToStatus(github, context, issueNumber, statusName) {
+              const owner = context.repo.owner;
+              const repo = context.repo.repo;
+              const projectNumber = parseInt(process.env.PROJECT_NUMBER);
+
+              // 1. 이슈의 node_id 조회
+              const issueRes = await github.rest.issues.get({ owner, repo, issue_number: issueNumber });
+              const issueNodeId = issueRes.data.node_id;
+
+              // 2. Project node_id 및 Status 필드 조회
+              const projectQuery = `
+                query($owner: String!, $number: Int!) {
+                  user(login: $owner) {
+                    projectV2(number: $number) {
+                      id
+                      fields(first: 20) {
+                        nodes {
+                          ... on ProjectV2SingleSelectField {
+                            id
+                            name
+                            options { id name }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              `;
+
+              let projectData;
+              try {
+                projectData = await github.graphql(projectQuery, { owner, number: projectNumber });
+              } catch {
+                const orgQuery = projectQuery.replace('user(login:', 'organization(login:');
+                projectData = await github.graphql(orgQuery, { owner, number: projectNumber });
+              }
+
+              const project = projectData.user?.projectV2 ?? projectData.organization?.projectV2;
+              const projectId = project.id;
+              const statusField = project.fields.nodes.find(f => f.name === 'Status');
+              const option = statusField?.options.find(o => o.name === statusName);
+
+              if (!option) {
+                console.log(`Status 옵션 "${statusName}"을 찾을 수 없습니다.`);
+                return;
+              }
+
+              // 3. Project에서 이슈 아이템 조회
+              const itemQuery = `
+                query($projectId: ID!) {
+                  node(id: $projectId) {
+                    ... on ProjectV2 {
+                      items(first: 100) {
+                        nodes {
+                          id
+                          content { ... on Issue { id } }
+                        }
+                      }
+                    }
+                  }
+                }
+              `;
+              const itemData = await github.graphql(itemQuery, { projectId });
+              let itemId = itemData.node.items.nodes.find(i => i.content?.id === issueNodeId)?.id;
+
+              // 4. 아이템이 없으면 Project에 추가
+              if (!itemId) {
+                const addMutation = `
+                  mutation($projectId: ID!, $contentId: ID!) {
+                    addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) {
+                      item { id }
+                    }
+                  }
+                `;
+                const addRes = await github.graphql(addMutation, { projectId, contentId: issueNodeId });
+                itemId = addRes.addProjectV2ItemById.item.id;
+              }
+
+              // 5. Status 업데이트
+              const updateMutation = `
+                mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                  updateProjectV2ItemFieldValue(input: {
+                    projectId: $projectId
+                    itemId: $itemId
+                    fieldId: $fieldId
+                    value: { singleSelectOptionId: $optionId }
+                  }) {
+                    projectV2Item { id }
+                  }
+                }
+              `;
+              await github.graphql(updateMutation, {
+                projectId,
+                itemId,
+                fieldId: statusField.id,
+                optionId: option.id,
+              });
+
+              console.log(`이슈 #${issueNumber} → ${statusName} 이동 완료`);
+            }
+
   # ─────────────────────────────────────────
   # Job 2: PR 오픈 → In Review
-  # PR에 연결된 이슈를 In Review로 이동
-  # PR 본문에 "closes #123", "fixes #123" 등의 키워드로 이슈 연결
+  # PR 본문의 closes #123 키워드로 이슈를 In Review로 이동
   # ─────────────────────────────────────────
   move-to-in-review:
     name: Move to In Review
@@ -73,20 +163,17 @@ jobs:
     steps:
       - name: Move linked issues to In Review
         uses: actions/github-script@v7
+        env:
+          PROJECT_NUMBER: ${{ env.PROJECT_NUMBER }}
         with:
           github-token: ${{ secrets.PROJECT_TOKEN }}
           script: |
             const prBody = context.payload.pull_request.body || '';
-            const prNumber = context.payload.pull_request.number;
-
-            // PR 본문에서 연결된 이슈 번호 추출
-            // 지원 키워드: closes, fixes, resolves (#123 또는 123)
             const issuePattern = /(?:closes?|fixes?|resolves?)\s+#?(\d+)/gi;
             const matches = [...prBody.matchAll(issuePattern)];
 
             if (matches.length === 0) {
-              console.log('PR 본문에서 연결된 이슈를 찾을 수 없습니다.');
-              console.log('PR 본문에 "closes #이슈번호" 형식으로 이슈를 연결하세요.');
+              console.log('PR 본문에서 연결된 이슈를 찾을 수 없습니다. "closes #이슈번호" 형식으로 작성하세요.');
               return;
             }
 
@@ -96,9 +183,105 @@ jobs:
               await moveIssueToStatus(github, context, issueNumber, 'In Review');
             }
 
+            async function moveIssueToStatus(github, context, issueNumber, statusName) {
+              const owner = context.repo.owner;
+              const repo = context.repo.repo;
+              const projectNumber = parseInt(process.env.PROJECT_NUMBER);
+
+              const issueRes = await github.rest.issues.get({ owner, repo, issue_number: issueNumber });
+              const issueNodeId = issueRes.data.node_id;
+
+              const projectQuery = `
+                query($owner: String!, $number: Int!) {
+                  user(login: $owner) {
+                    projectV2(number: $number) {
+                      id
+                      fields(first: 20) {
+                        nodes {
+                          ... on ProjectV2SingleSelectField {
+                            id
+                            name
+                            options { id name }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              `;
+
+              let projectData;
+              try {
+                projectData = await github.graphql(projectQuery, { owner, number: projectNumber });
+              } catch {
+                const orgQuery = projectQuery.replace('user(login:', 'organization(login:');
+                projectData = await github.graphql(orgQuery, { owner, number: projectNumber });
+              }
+
+              const project = projectData.user?.projectV2 ?? projectData.organization?.projectV2;
+              const projectId = project.id;
+              const statusField = project.fields.nodes.find(f => f.name === 'Status');
+              const option = statusField?.options.find(o => o.name === statusName);
+
+              if (!option) {
+                console.log(`Status 옵션 "${statusName}"을 찾을 수 없습니다.`);
+                return;
+              }
+
+              const itemQuery = `
+                query($projectId: ID!) {
+                  node(id: $projectId) {
+                    ... on ProjectV2 {
+                      items(first: 100) {
+                        nodes {
+                          id
+                          content { ... on Issue { id } }
+                        }
+                      }
+                    }
+                  }
+                }
+              `;
+              const itemData = await github.graphql(itemQuery, { projectId });
+              let itemId = itemData.node.items.nodes.find(i => i.content?.id === issueNodeId)?.id;
+
+              if (!itemId) {
+                const addMutation = `
+                  mutation($projectId: ID!, $contentId: ID!) {
+                    addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) {
+                      item { id }
+                    }
+                  }
+                `;
+                const addRes = await github.graphql(addMutation, { projectId, contentId: issueNodeId });
+                itemId = addRes.addProjectV2ItemById.item.id;
+              }
+
+              const updateMutation = `
+                mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                  updateProjectV2ItemFieldValue(input: {
+                    projectId: $projectId
+                    itemId: $itemId
+                    fieldId: $fieldId
+                    value: { singleSelectOptionId: $optionId }
+                  }) {
+                    projectV2Item { id }
+                  }
+                }
+              `;
+              await github.graphql(updateMutation, {
+                projectId,
+                itemId,
+                fieldId: statusField.id,
+                optionId: option.id,
+              });
+
+              console.log(`이슈 #${issueNumber} → ${statusName} 이동 완료`);
+            }
+
   # ─────────────────────────────────────────
   # Job 3: PR merge → Done
-  # PR에 연결된 이슈를 Done으로 이동
+  # PR 본문의 closes #123 키워드로 이슈를 Done으로 이동
   # ─────────────────────────────────────────
   move-to-done:
     name: Move to Done
@@ -110,11 +293,12 @@ jobs:
     steps:
       - name: Move linked issues to Done
         uses: actions/github-script@v7
+        env:
+          PROJECT_NUMBER: ${{ env.PROJECT_NUMBER }}
         with:
           github-token: ${{ secrets.PROJECT_TOKEN }}
           script: |
             const prBody = context.payload.pull_request.body || '';
-
             const issuePattern = /(?:closes?|fixes?|resolves?)\s+#?(\d+)/gi;
             const matches = [...prBody.matchAll(issuePattern)];
 
@@ -129,18 +313,98 @@ jobs:
               await moveIssueToStatus(github, context, issueNumber, 'Done');
             }
 
-# ─────────────────────────────────────────
-# 공통 함수: 이슈를 특정 Status로 이동
-# GitHub Project v2는 GraphQL API로만 조작 가능
-# ─────────────────────────────────────────
-# 아래는 각 job의 script 안에서 사용되는 헬퍼 함수입니다.
-# actions/github-script는 함수 재사용이 안 되므로
-# 실제 사용 시 각 job의 script 안에 함수 본문을 포함해야 합니다.
-# (현재는 구조 이해를 위한 주석입니다)
-#
-# async function moveIssueToStatus(github, context, issueNumber, statusName):
-#   1. 이슈의 node_id 조회 (REST API)
-#   2. Project의 node_id 조회 (GraphQL)
-#   3. Project에서 해당 이슈 아이템 조회 (GraphQL)
-#   4. Status 필드의 option_id 조회 (GraphQL)
-#   5. 아이템의 Status 필드 값 업데이트 (GraphQL mutation)
+            async function moveIssueToStatus(github, context, issueNumber, statusName) {
+              const owner = context.repo.owner;
+              const repo = context.repo.repo;
+              const projectNumber = parseInt(process.env.PROJECT_NUMBER);
+
+              const issueRes = await github.rest.issues.get({ owner, repo, issue_number: issueNumber });
+              const issueNodeId = issueRes.data.node_id;
+
+              const projectQuery = `
+                query($owner: String!, $number: Int!) {
+                  user(login: $owner) {
+                    projectV2(number: $number) {
+                      id
+                      fields(first: 20) {
+                        nodes {
+                          ... on ProjectV2SingleSelectField {
+                            id
+                            name
+                            options { id name }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              `;
+
+              let projectData;
+              try {
+                projectData = await github.graphql(projectQuery, { owner, number: projectNumber });
+              } catch {
+                const orgQuery = projectQuery.replace('user(login:', 'organization(login:');
+                projectData = await github.graphql(orgQuery, { owner, number: projectNumber });
+              }
+
+              const project = projectData.user?.projectV2 ?? projectData.organization?.projectV2;
+              const projectId = project.id;
+              const statusField = project.fields.nodes.find(f => f.name === 'Status');
+              const option = statusField?.options.find(o => o.name === statusName);
+
+              if (!option) {
+                console.log(`Status 옵션 "${statusName}"을 찾을 수 없습니다.`);
+                return;
+              }
+
+              const itemQuery = `
+                query($projectId: ID!) {
+                  node(id: $projectId) {
+                    ... on ProjectV2 {
+                      items(first: 100) {
+                        nodes {
+                          id
+                          content { ... on Issue { id } }
+                        }
+                      }
+                    }
+                  }
+                }
+              `;
+              const itemData = await github.graphql(itemQuery, { projectId });
+              let itemId = itemData.node.items.nodes.find(i => i.content?.id === issueNodeId)?.id;
+
+              if (!itemId) {
+                const addMutation = `
+                  mutation($projectId: ID!, $contentId: ID!) {
+                    addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) {
+                      item { id }
+                    }
+                  }
+                `;
+                const addRes = await github.graphql(addMutation, { projectId, contentId: issueNodeId });
+                itemId = addRes.addProjectV2ItemById.item.id;
+              }
+
+              const updateMutation = `
+                mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                  updateProjectV2ItemFieldValue(input: {
+                    projectId: $projectId
+                    itemId: $itemId
+                    fieldId: $fieldId
+                    value: { singleSelectOptionId: $optionId }
+                  }) {
+                    projectV2Item { id }
+                  }
+                }
+              `;
+              await github.graphql(updateMutation, {
+                projectId,
+                itemId,
+                fieldId: statusField.id,
+                optionId: option.id,
+              });
+
+              console.log(`이슈 #${issueNumber} → ${statusName} 이동 완료`);
+            }
