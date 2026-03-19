@@ -4,7 +4,7 @@
 
 BEGIN;
 
-SELECT plan(12);
+SELECT plan(13);
 
 -- 테스트용 UUID 준비
 SELECT set_config('test.u1_id', gen_random_uuid()::text, true);
@@ -166,7 +166,7 @@ SELECT throws_ok(
   ),
   '42501',
   'new row violates row-level security policy for table "profiles"',
-  '직접 INSERT 불가'
+  '인증 사용자 직접 INSERT 불가'
 );
 
 -- [경계 조건]
@@ -186,14 +186,14 @@ SELECT is(
   '본인 ID 정확히 일치하면 허용'
 );
 
--- 본인처럼 보이지만 다른 UUID인 경우 허용되면 안 된다.
+-- 본인처럼 보여도 다른 UUID는 허용되면 안 된다.
 SELECT is(
   (SELECT count(*) FROM public.profiles WHERE id = current_setting('test.u2_id')::uuid),
   0::bigint,
   '다른 UUID는 허용되지 않음'
 );
 
--- 인증된 사용자라도 자신의 profile이 없는 경우 다른 profile이 조회되면 안 된다.
+-- 인증된 사용자라도 자신의 profile이 없으면 어떤 타인 profile도 조회되면 안 된다.
 SELECT set_config(
   'request.jwt.claims',
   json_build_object(
@@ -210,7 +210,7 @@ SELECT is(
 );
 
 -- [불변 조건]
--- 어떤 상황에서도 사용자는 자기 profile만 접근 가능해야 한다.
+-- 어떤 상황에서도 현재 인증 사용자는 자신의 profile 외 다른 profile을 볼 수 없어야 한다.
 SELECT set_config(
   'request.jwt.claims',
   json_build_object(
@@ -220,10 +220,18 @@ SELECT set_config(
   true
 );
 
+-- 전체 스캔을 하더라도 본인 row는 정확히 1개만 보여야 한다.
 SELECT is(
-  (SELECT count(*) FROM public.profiles),
+  (SELECT count(*) FROM public.profiles WHERE id = current_setting('test.u1_id')::uuid),
   1::bigint,
-  '항상 자기 profile만 접근 가능'
+  '전체 접근 범위 안에서 본인 profile은 정확히 1개만 보여야 함'
+);
+
+-- 전체 스캔을 하더라도 타인 row는 1개도 보이면 안 된다.
+SELECT is(
+  (SELECT count(*) FROM public.profiles WHERE id <> current_setting('test.u1_id')::uuid),
+  0::bigint,
+  '전체 접근 범위 안에서 타인 profile은 보이면 안 됨'
 );
 
 -- profiles 생성은 허용된 시스템 경로로만 이루어져야 한다.

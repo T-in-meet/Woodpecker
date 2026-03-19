@@ -16,10 +16,10 @@ INSERT INTO _test_ids (label, id) VALUES
   ('u1', gen_random_uuid()),
   ('u2', gen_random_uuid()),
   ('u3', gen_random_uuid()),
+  ('u4', gen_random_uuid()),
   ('u5', gen_random_uuid()),
   ('u6', gen_random_uuid()),
   ('u7', gen_random_uuid()),
-  ('u8', gen_random_uuid()),
   ('u9', gen_random_uuid()),
   ('u10', gen_random_uuid());
 
@@ -189,8 +189,7 @@ SELECT is(
   'avatar_url이 null로 저장됨'
 );
 
--- TODO: nickname이 빈 문자열('')일 때 처리 정책 확정 필요
--- TODO: nickname 최대 길이 및 초과 처리 정책 확정 필요
+-- nickname 정책은 profiles 테이블의 CHECK constraint에서 검증한다.
 
 -- [불변 조건]
 -- profiles는 항상 auth.users와 1:1 관계를 유지해야 한다.

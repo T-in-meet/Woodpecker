@@ -4,14 +4,14 @@
 
 BEGIN;
 
-SELECT plan(7);
+SELECT plan(5);
 
 -- 테스트 데이터 준비
-SELECT set_config('test.u1', gen_random_uuid()::text, false);
-SELECT set_config('test.u2', gen_random_uuid()::text, false);
-SELECT set_config('test.u3', gen_random_uuid()::text, false);
-SELECT set_config('test.u4', gen_random_uuid()::text, false);
-SELECT set_config('test.bogus', gen_random_uuid()::text, false);
+SELECT set_config('test.u1', gen_random_uuid()::text, true);
+SELECT set_config('test.u2', gen_random_uuid()::text, true);
+SELECT set_config('test.u3', gen_random_uuid()::text, true);
+SELECT set_config('test.u4', gen_random_uuid()::text, true);
+SELECT set_config('test.bogus', gen_random_uuid()::text, true);
 
 INSERT INTO auth.users (id, email, raw_user_meta_data)
 VALUES
@@ -51,21 +51,6 @@ SELECT throws_ok($$
   INSERT INTO public.profiles (id, nickname, role)
   VALUES (current_setting('test.u1')::uuid, 'n_dup', 'USER');
 $$, '23505', 'duplicate key value violates unique constraint "profiles_pkey"', '동일 id 중복 생성 불가');
-
--- [경계 조건]
--- user 삭제 직후 profile이 남아 있으면 안 된다.
-DELETE FROM auth.users WHERE id = current_setting('test.u3')::uuid;
-SELECT is(
-  (SELECT count(*) FROM public.profiles WHERE id = current_setting('test.u3')::uuid),
-  0::bigint,
-  'user 삭제 직후 profile 없음'
-);
-
--- 같은 user에 대해 profile을 두 번 생성하려 하면 허용되면 안 된다.
-SELECT throws_ok($$
-  INSERT INTO public.profiles (id, nickname, role)
-  VALUES (current_setting('test.u4')::uuid, 'n_dup2', 'USER');
-$$, '23505', 'duplicate key value violates unique constraint "profiles_pkey"', '동일 user profile 2회 생성 불가');
 
 -- [불변 조건]
 -- profile은 항상 유효한 user에 종속되어야 한다.

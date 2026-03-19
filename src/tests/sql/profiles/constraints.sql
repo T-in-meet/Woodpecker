@@ -1,10 +1,10 @@
 ﻿-- =========================================
--- profiles / CHECK (role)
+-- profiles / CONSTRAINTS
 -- =========================================
 
 BEGIN;
 
-SELECT plan(9);
+SELECT plan(11);
 
 -- 테스트용 UUID 준비
 SELECT set_config('test.u1_id', gen_random_uuid()::text, true);
@@ -156,6 +156,36 @@ SELECT throws_ok(
   '23514',
   'new row for relation "profiles" violates check constraint "profiles_role_check"',
   '혼합 대소문자 User 거부'
+);
+
+-- nickname 빈 문자열 → 실패
+SELECT throws_ok(
+  format(
+    $sql$
+      UPDATE public.profiles
+      SET nickname = ''
+      WHERE id = '%s'::uuid
+    $sql$,
+    current_setting('test.u1_id')
+  ),
+  '23514',
+  'new row for relation "profiles" violates check constraint "profiles_nickname_not_empty"',
+  'nickname empty should fail'
+);
+
+-- nickname 길이 초과 → 실패
+SELECT throws_ok(
+  format(
+    $sql$
+      UPDATE public.profiles
+      SET nickname = '12345678901'
+      WHERE id = '%s'::uuid
+    $sql$,
+    current_setting('test.u2_id')
+  ),
+  '22001',
+  'value too long for type character varying(10)',
+  'nickname length > 10 should fail'
 );
 
 SELECT * FROM finish();
