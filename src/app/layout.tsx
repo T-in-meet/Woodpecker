@@ -19,6 +19,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Woodpecker",
   description: "딱다구리",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({
