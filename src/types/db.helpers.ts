@@ -32,19 +32,7 @@ export type TableMap = {
 
 export type IdOf<T extends TableName> = Row<T>["id"];
 
-export type TimestampFields =
-  | "created_at"
-  | "updated_at"
-  | "sent_at"
-  | "read_at"
-  | "skipped_at"
-  | "scheduled_at"
-  | "completed_at"
-  | "next_review_at";
-
 export type WithId<T extends TableName> = Pick<Row<T>, "id">;
-export type CreateInput<T extends TableName> = InsertDto<T>;
-export type PatchInput<T extends TableName> = UpdateDto<T>;
 
 export const TABLES = {
   notes: "notes",
