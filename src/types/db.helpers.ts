@@ -1,10 +1,10 @@
 import type {
   Database,
+  Enums,
+  Json,
   Tables,
   TablesInsert,
   TablesUpdate,
-  Enums,
-  Json,
 } from "@/types/database.types";
 
 export type { Database, Json };
