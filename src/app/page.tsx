@@ -3,8 +3,8 @@ import Link from "next/link";
 import { CtaSection } from "@/components/landing/CtaSection";
 import { FeaturesSection } from "@/components/landing/FeaturesSection";
 import { HeroSection } from "@/components/landing/HeroSection";
-import { TargetAudience } from "@/components/landing/TargetAudience ";
 import { SpacedLearningGraph } from "@/components/landing/SpacedLearningGraph";
+import { TargetAudience } from "@/components/landing/TargetAudience ";
 import { Button } from "@/components/ui/button";
 import { ROUTES } from "@/lib/constants/routes";
 
