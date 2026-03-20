@@ -130,8 +130,8 @@ fix: #34 - 토큰 만료 처리 누락 수정
 ## 7. 브랜치 전략
 
 ```
-feat/#<issue>-<kebab-summary>  →  develop  →  main
-fix/#<issue>-<kebab-summary>   →  develop  →  main
+feat/<issue>-<kebab-summary>  →  develop  →  main
+fix/<issue>-<kebab-summary>   →  develop  →  main
 hotfix/<kebab-summary>         →  main (+ develop 반영)
 ```
 
