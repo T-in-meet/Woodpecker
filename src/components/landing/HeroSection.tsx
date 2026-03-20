@@ -11,7 +11,7 @@ export function HeroSection() {
         현재 베타 서비스 운영 중
       </div>
 
-      <h1 className="text-4xl font-bold tracking-tight md:text-5xl lg:text-6xl">
+      <h1 className="text-4xl font-bold tracking-tight md:text-4xl lg:text-5xl">
         공부해도 잊혀진다면
         <br />
         <span className="text-primary">1-3-7 복습</span>으로
