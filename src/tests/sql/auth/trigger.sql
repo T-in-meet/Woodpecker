@@ -20,7 +20,6 @@ INSERT INTO _test_ids (label, id) VALUES
   ('u5', gen_random_uuid()),
   ('u6', gen_random_uuid()),
   ('u7', gen_random_uuid()),
-  ('u8', gen_random_uuid()),
   ('u9', gen_random_uuid()),
   ('u10', gen_random_uuid());
 
