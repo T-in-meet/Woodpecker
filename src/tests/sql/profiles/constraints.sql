@@ -1,4 +1,4 @@
-﻿-- =========================================
+-- =========================================
 -- profiles / CONSTRAINTS
 -- =========================================
 
@@ -17,7 +17,7 @@ SELECT set_config('test.u7_id', gen_random_uuid()::text, true);
 SELECT set_config('test.u8_id', gen_random_uuid()::text, true);
 SELECT set_config('test.u9_id', gen_random_uuid()::text, true);
 
--- seed
+-- seed: auth.users
 INSERT INTO auth.users (id, email, raw_user_meta_data)
 VALUES
   (current_setting('test.u1_id')::uuid, 'u1@test.com', '{}'::jsonb),
@@ -28,10 +28,25 @@ VALUES
   (current_setting('test.u6_id')::uuid, 'u6@test.com', '{}'::jsonb),
   (current_setting('test.u7_id')::uuid, 'u7@test.com', '{}'::jsonb),
   (current_setting('test.u8_id')::uuid, 'u8@test.com', '{}'::jsonb),
-  (current_setting('test.u9_id')::uuid, 'u9@test.com', '{}'::jsonb);
+  (current_setting('test.u9_id')::uuid, 'u9@test.com', '{}'::jsonb)
+ON CONFLICT (id) DO NOTHING;
+
+-- seed: profiles (handle_new_user 트리거가 동작하지 않는 환경을 대비해 직접 INSERT)
+INSERT INTO public.profiles (id, nickname, role)
+VALUES
+  (current_setting('test.u1_id')::uuid, 'user1', 'USER'),
+  (current_setting('test.u2_id')::uuid, 'user2', 'USER'),
+  (current_setting('test.u3_id')::uuid, 'user3', 'USER'),
+  (current_setting('test.u4_id')::uuid, 'user4', 'USER'),
+  (current_setting('test.u5_id')::uuid, 'user5', 'USER'),
+  (current_setting('test.u6_id')::uuid, 'user6', 'USER'),
+  (current_setting('test.u7_id')::uuid, 'user7', 'USER'),
+  (current_setting('test.u8_id')::uuid, 'user8', 'USER'),
+  (current_setting('test.u9_id')::uuid, 'user9', 'USER')
+ON CONFLICT (id) DO NOTHING;
 
 -- [정답 조건]
-
+-- role이 USER이면 UPDATE가 성공해야 한다
 SELECT lives_ok(
   format(
     $sql$
@@ -41,9 +56,10 @@ SELECT lives_ok(
     $sql$,
     current_setting('test.u1_id')
   ),
-  'role USER 저장 가능'
+  'role이 USER이면 UPDATE가 성공해야 한다'
 );
 
+-- role이 ADMIN이면 UPDATE가 성공해야 한다
 SELECT lives_ok(
   format(
     $sql$
@@ -53,11 +69,11 @@ SELECT lives_ok(
     $sql$,
     current_setting('test.u2_id')
   ),
-  'role ADMIN 저장 가능'
+  'role이 ADMIN이면 UPDATE가 성공해야 한다'
 );
 
 -- [예외 조건]
-
+-- role이 허용되지 않은 값(GUEST)이면 CHECK 위반으로 실패해야 한다
 SELECT throws_ok(
   format(
     $sql$
@@ -69,9 +85,10 @@ SELECT throws_ok(
   ),
   '23514',
   'new row for relation "profiles" violates check constraint "profiles_role_check"',
-  'role GUEST 거부'
+  'role이 허용되지 않은 값(GUEST)이면 CHECK 위반으로 실패해야 한다'
 );
 
+-- role이 임의 문자열이면 CHECK 위반으로 실패해야 한다
 SELECT throws_ok(
   format(
     $sql$
@@ -83,11 +100,11 @@ SELECT throws_ok(
   ),
   '23514',
   'new row for relation "profiles" violates check constraint "profiles_role_check"',
-  '임의 문자열 거부'
+  'role이 임의 문자열이면 CHECK 위반으로 실패해야 한다'
 );
 
 -- [경계 조건]
-
+-- role 소문자 user는 허용되지 않아야 한다
 SELECT throws_ok(
   format(
     $sql$
@@ -99,9 +116,10 @@ SELECT throws_ok(
   ),
   '23514',
   'new row for relation "profiles" violates check constraint "profiles_role_check"',
-  '소문자 user 거부'
+  'role 소문자 user는 허용되지 않아야 한다'
 );
 
+-- role 소문자 admin은 허용되지 않아야 한다
 SELECT throws_ok(
   format(
     $sql$
@@ -113,9 +131,10 @@ SELECT throws_ok(
   ),
   '23514',
   'new row for relation "profiles" violates check constraint "profiles_role_check"',
-  '소문자 admin 거부'
+  'role 소문자 admin은 허용되지 않아야 한다'
 );
 
+-- role 빈 문자열은 허용되지 않아야 한다
 SELECT throws_ok(
   format(
     $sql$
@@ -127,9 +146,10 @@ SELECT throws_ok(
   ),
   '23514',
   'new row for relation "profiles" violates check constraint "profiles_role_check"',
-  '빈 문자열 거부'
+  'role 빈 문자열은 허용되지 않아야 한다'
 );
 
+-- role 공백 포함 값은 허용되지 않아야 한다
 SELECT throws_ok(
   format(
     $sql$
@@ -141,9 +161,10 @@ SELECT throws_ok(
   ),
   '23514',
   'new row for relation "profiles" violates check constraint "profiles_role_check"',
-  '공백 포함 USER 거부'
+  'role 공백 포함 값은 허용되지 않아야 한다'
 );
 
+-- role 혼합 대소문자(User)는 허용되지 않아야 한다
 SELECT throws_ok(
   format(
     $sql$
@@ -155,10 +176,10 @@ SELECT throws_ok(
   ),
   '23514',
   'new row for relation "profiles" violates check constraint "profiles_role_check"',
-  '혼합 대소문자 User 거부'
+  'role 혼합 대소문자(User)는 허용되지 않아야 한다'
 );
 
--- nickname 빈 문자열 → 실패
+-- nickname이 빈 문자열이면 CHECK 위반으로 실패해야 한다
 SELECT throws_ok(
   format(
     $sql$
@@ -170,10 +191,10 @@ SELECT throws_ok(
   ),
   '23514',
   'new row for relation "profiles" violates check constraint "profiles_nickname_not_empty"',
-  'nickname empty should fail'
+  'nickname이 빈 문자열이면 CHECK 위반으로 실패해야 한다'
 );
 
--- nickname 길이 초과 → 실패
+-- nickname이 10자를 초과하면 CHECK 위반으로 실패해야 한다
 SELECT throws_ok(
   format(
     $sql$
@@ -183,9 +204,9 @@ SELECT throws_ok(
     $sql$,
     current_setting('test.u2_id')
   ),
-  '22001',
-  'value too long for type character varying(10)',
-  'nickname length > 10 should fail'
+  '23514',
+  'new row for relation "profiles" violates check constraint "profiles_nickname_max_length"',
+  'nickname이 10자를 초과하면 CHECK 위반으로 실패해야 한다'
 );
 
 SELECT * FROM finish();

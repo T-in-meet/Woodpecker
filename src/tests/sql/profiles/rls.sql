@@ -1,4 +1,4 @@
-﻿-- =========================================
+-- =========================================
 -- profiles / RLS
 -- =========================================
 
@@ -11,7 +11,7 @@ SELECT set_config('test.u1_id', gen_random_uuid()::text, true);
 SELECT set_config('test.u2_id', gen_random_uuid()::text, true);
 SELECT set_config('test.u3_id', gen_random_uuid()::text, true);
 
--- seed 단계에서는 role 전환 없이 사용자 생성
+-- seed: auth.users
 INSERT INTO auth.users (
   id,
   instance_id,
@@ -64,14 +64,22 @@ VALUES
     '{}'::jsonb,
     now(),
     now()
-  );
+  )
+ON CONFLICT (id) DO NOTHING;
+
+-- seed: profiles (handle_new_user 트리거 미동작 환경 대비 직접 INSERT)
+INSERT INTO public.profiles (id, nickname, role)
+VALUES
+  (current_setting('test.u1_id')::uuid, 'nick1', 'USER'),
+  (current_setting('test.u2_id')::uuid, 'nick2', 'USER')
+ON CONFLICT (id) DO NOTHING;
 
 -- u3는 profile 없는 사용자 시나리오를 위해 제거
 DELETE FROM public.profiles
 WHERE id = current_setting('test.u3_id')::uuid;
 
 -- [정답 조건]
--- 인증된 사용자는 자신의 profile을 조회할 수 있어야 한다.
+-- 인증된 사용자는 자신의 profile을 조회할 수 있어야 한다
 SET LOCAL ROLE authenticated;
 SELECT set_config(
   'request.jwt.claims',
@@ -85,10 +93,10 @@ SELECT set_config(
 SELECT is(
   (SELECT count(*) FROM public.profiles WHERE id = current_setting('test.u1_id')::uuid),
   1::bigint,
-  '본인 profile 조회 가능'
+  '인증된 사용자는 자신의 profile을 조회할 수 있어야 한다'
 );
 
--- 인증된 사용자는 자신의 profile을 수정할 수 있어야 한다.
+-- 인증된 사용자는 자신의 profile을 수정할 수 있어야 한다
 WITH updated AS (
   UPDATE public.profiles
   SET nickname = 'neo2'
@@ -98,18 +106,18 @@ WITH updated AS (
 SELECT is(
   (SELECT count(*) FROM updated),
   1::bigint,
-  '본인 profile 수정 가능'
+  '인증된 사용자는 자신의 profile을 수정할 수 있어야 한다'
 );
 
 -- [예외 조건]
--- 인증된 사용자는 다른 사용자의 profile을 조회할 수 없어야 한다.
+-- 인증된 사용자는 다른 사용자의 profile을 조회할 수 없어야 한다
 SELECT is(
   (SELECT count(*) FROM public.profiles WHERE id = current_setting('test.u2_id')::uuid),
   0::bigint,
-  '타인 profile 조회 불가'
+  '인증된 사용자는 다른 사용자의 profile을 조회할 수 없어야 한다'
 );
 
--- 인증된 사용자는 다른 사용자의 profile을 수정할 수 없어야 한다.
+-- 인증된 사용자는 다른 사용자의 profile을 수정할 수 없어야 한다
 WITH updated AS (
   UPDATE public.profiles
   SET nickname = 'x'
@@ -119,20 +127,20 @@ WITH updated AS (
 SELECT is(
   (SELECT count(*) FROM updated),
   0::bigint,
-  '타인 profile 수정 불가'
+  '인증된 사용자는 다른 사용자의 profile을 수정할 수 없어야 한다'
 );
 
--- 비인증 사용자는 profile에 접근할 수 없어야 한다.
+-- 비인증 사용자는 profile에 접근할 수 없어야 한다
 SET LOCAL ROLE anon;
 SELECT set_config('request.jwt.claims', '{}'::text, true);
 
 SELECT is(
   (SELECT count(*) FROM public.profiles WHERE id = current_setting('test.u1_id')::uuid),
   0::bigint,
-  '비인증 사용자는 profile 접근 불가'
+  '비인증 사용자는 profile에 접근할 수 없어야 한다'
 );
 
--- auth.uid()가 NULL인 경우 profile 접근이 허용되면 안 된다.
+-- auth.uid()가 NULL인 경우 profile 접근이 허용되면 안 된다
 SET LOCAL ROLE authenticated;
 SELECT set_config(
   'request.jwt.claims',
@@ -143,10 +151,10 @@ SELECT set_config(
 SELECT is(
   (SELECT count(*) FROM public.profiles WHERE id = current_setting('test.u1_id')::uuid),
   0::bigint,
-  'auth.uid() NULL이면 profile 접근 불가'
+  'auth.uid()가 NULL인 경우 profile 접근이 허용되면 안 된다'
 );
 
--- 사용자는 profiles를 직접 INSERT할 수 없어야 한다.
+-- 인증된 사용자도 profiles를 직접 INSERT할 수 없어야 한다
 SELECT set_config(
   'request.jwt.claims',
   json_build_object(
@@ -166,11 +174,11 @@ SELECT throws_ok(
   ),
   '42501',
   'new row violates row-level security policy for table "profiles"',
-  '인증 사용자 직접 INSERT 불가'
+  '인증된 사용자도 profiles를 직접 INSERT할 수 없어야 한다'
 );
 
 -- [경계 조건]
--- 본인 ID와 정확히 일치하는 경우만 허용되어야 한다.
+-- 본인 ID와 정확히 일치하는 경우만 조회가 허용되어야 한다
 SELECT set_config(
   'request.jwt.claims',
   json_build_object(
@@ -183,17 +191,17 @@ SELECT set_config(
 SELECT is(
   (SELECT count(*) FROM public.profiles WHERE id = current_setting('test.u1_id')::uuid),
   1::bigint,
-  '본인 ID 정확히 일치하면 허용'
+  '본인 ID와 정확히 일치하는 경우만 조회가 허용되어야 한다'
 );
 
--- 본인처럼 보여도 다른 UUID는 허용되면 안 된다.
+-- 다른 UUID는 조회가 허용되면 안 된다
 SELECT is(
   (SELECT count(*) FROM public.profiles WHERE id = current_setting('test.u2_id')::uuid),
   0::bigint,
-  '다른 UUID는 허용되지 않음'
+  '다른 UUID는 조회가 허용되면 안 된다'
 );
 
--- 인증된 사용자라도 자신의 profile이 없으면 어떤 타인 profile도 조회되면 안 된다.
+-- 자신의 profile이 없는 사용자는 어떤 타인 profile도 조회할 수 없어야 한다
 SELECT set_config(
   'request.jwt.claims',
   json_build_object(
@@ -206,11 +214,11 @@ SELECT set_config(
 SELECT is(
   (SELECT count(*) FROM public.profiles WHERE id = current_setting('test.u1_id')::uuid),
   0::bigint,
-  '본인 profile 없음 -> 타인 profile 조회 불가'
+  '자신의 profile이 없는 사용자는 어떤 타인 profile도 조회할 수 없어야 한다'
 );
 
 -- [불변 조건]
--- 어떤 상황에서도 현재 인증 사용자는 자신의 profile 외 다른 profile을 볼 수 없어야 한다.
+-- 인증된 사용자의 전체 조회 결과에는 본인 profile이 정확히 1개 존재해야 한다
 SELECT set_config(
   'request.jwt.claims',
   json_build_object(
@@ -220,21 +228,20 @@ SELECT set_config(
   true
 );
 
--- 전체 스캔을 하더라도 본인 row는 정확히 1개만 보여야 한다.
 SELECT is(
   (SELECT count(*) FROM public.profiles WHERE id = current_setting('test.u1_id')::uuid),
   1::bigint,
-  '전체 접근 범위 안에서 본인 profile은 정확히 1개만 보여야 함'
+  '인증된 사용자의 전체 조회 결과에는 본인 profile이 정확히 1개 존재해야 한다'
 );
 
--- 전체 스캔을 하더라도 타인 row는 1개도 보이면 안 된다.
+-- 조건 없는 전체 조회에서도 타인 profile은 반환되면 안 된다
 SELECT is(
   (SELECT count(*) FROM public.profiles WHERE id <> current_setting('test.u1_id')::uuid),
   0::bigint,
-  '전체 접근 범위 안에서 타인 profile은 보이면 안 됨'
+  '조건 없는 전체 조회에서도 타인 profile은 반환되면 안 된다'
 );
 
--- profiles 생성은 허용된 시스템 경로로만 이루어져야 한다.
+-- 비인증 사용자는 직접 INSERT를 통해 profiles에 접근할 수 없어야 한다
 SET LOCAL ROLE anon;
 SELECT set_config('request.jwt.claims', '{}'::text, true);
 
@@ -248,7 +255,7 @@ SELECT throws_ok(
   ),
   '42501',
   'new row violates row-level security policy for table "profiles"',
-  '비인증 사용자 직접 INSERT 불가'
+  '비인증 사용자는 직접 INSERT를 통해 profiles에 접근할 수 없어야 한다'
 );
 
 SELECT * FROM finish();
