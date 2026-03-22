@@ -4,7 +4,7 @@
 
 BEGIN;
 
-SELECT plan(13);
+SELECT plan(14);
 
 -- 테스트용 UUID 준비
 SELECT set_config('test.user_a_id', gen_random_uuid()::text, true);
@@ -12,7 +12,9 @@ SELECT set_config('test.user_b_id', gen_random_uuid()::text, true);
 SELECT set_config('test.note_a_select_id', gen_random_uuid()::text, true);
 SELECT set_config('test.note_a_update_id', gen_random_uuid()::text, true);
 SELECT set_config('test.note_a_delete_id', gen_random_uuid()::text, true);
-SELECT set_config('test.note_b_id', gen_random_uuid()::text, true);
+SELECT set_config('test.note_b_select_id', gen_random_uuid()::text, true);
+SELECT set_config('test.note_b_update_id', gen_random_uuid()::text, true);
+SELECT set_config('test.note_b_delete_id', gen_random_uuid()::text, true);
 SELECT set_config('test.note_a_single_id', gen_random_uuid()::text, true);
 SELECT set_config('test.note_invalid_id', gen_random_uuid()::text, true);
 
@@ -93,12 +95,28 @@ VALUES
     now() + interval '3 days'
   ),
   (
-    current_setting('test.note_b_id')::uuid,
+    current_setting('test.note_b_select_id')::uuid,
     current_setting('test.user_b_id')::uuid,
-    'note b',
-    'content b',
+    'note b select',
+    'content b select',
     0,
     now() + interval '4 days'
+  ),
+  (
+    current_setting('test.note_b_update_id')::uuid,
+    current_setting('test.user_b_id')::uuid,
+    'note b update',
+    'content b update',
+    0,
+    now() + interval '5 days'
+  ),
+  (
+    current_setting('test.note_b_delete_id')::uuid,
+    current_setting('test.user_b_id')::uuid,
+    'note b delete',
+    'content b delete',
+    0,
+    now() + interval '6 days'
   )
 ON CONFLICT (id) DO NOTHING;
 
@@ -156,7 +174,7 @@ ROLLBACK TO SAVEPOINT notes_delete_own;
 -- [예외 조건]
 -- user_a로 인증 후 user_b의 노트를 SELECT할 수 없어야 한다
 SELECT is(
-  (SELECT count(*) FROM public.notes WHERE id = current_setting('test.note_b_id')::uuid),
+  (SELECT count(*) FROM public.notes WHERE id = current_setting('test.note_b_select_id')::uuid),
   0::bigint,
   'user_a로 인증 후 user_b의 노트를 SELECT할 수 없어야 한다'
 );
@@ -165,7 +183,7 @@ SELECT is(
 WITH updated AS (
   UPDATE public.notes
   SET title = 'blocked'
-  WHERE id = current_setting('test.note_b_id')::uuid
+  WHERE id = current_setting('test.note_b_update_id')::uuid
   RETURNING 1
 )
 SELECT is(
@@ -177,7 +195,7 @@ SELECT is(
 -- user_a로 인증 후 user_b의 노트를 DELETE할 수 없어야 한다
 WITH deleted AS (
   DELETE FROM public.notes
-  WHERE id = current_setting('test.note_b_id')::uuid
+  WHERE id = current_setting('test.note_b_delete_id')::uuid
   RETURNING 1
 )
 SELECT is(
@@ -212,7 +230,7 @@ SELECT is(
 );
 
 -- [경계 조건]
--- user_a의 노트가 0개일 때 SELECT 결과는 빈 집합이어야 한다
+-- user_a의 노트가 0개일 때 전체 조회 결과는 0개여야 한다
 SET LOCAL ROLE authenticated;
 SELECT set_config(
   'request.jwt.claims',
@@ -228,14 +246,14 @@ DELETE FROM public.notes
 WHERE user_id = current_setting('test.user_a_id')::uuid;
 
 SELECT is(
-  (SELECT count(*) FROM public.notes WHERE user_id = current_setting('test.user_a_id')::uuid),
+  (SELECT count(*) FROM public.notes),
   0::bigint,
-  'user_a의 노트가 0개일 때 SELECT 결과는 빈 집합이어야 한다'
+  'user_a의 노트가 0개일 때 전체 조회 결과는 0개여야 한다'
 );
 
 ROLLBACK TO SAVEPOINT notes_boundary_zero;
 
--- user_a의 노트가 1개일 때 정확히 1개만 반환되어야 한다
+-- user_a의 노트가 1개일 때 전체 조회 결과는 정확히 1개여야 한다
 SAVEPOINT notes_boundary_one;
 DELETE FROM public.notes
 WHERE user_id = current_setting('test.user_a_id')::uuid;
@@ -257,36 +275,43 @@ VALUES (
 ON CONFLICT (id) DO NOTHING;
 
 SELECT is(
-  (SELECT count(*) FROM public.notes WHERE user_id = current_setting('test.user_a_id')::uuid),
+  (SELECT count(*) FROM public.notes),
   1::bigint,
-  'user_a의 노트가 1개일 때 정확히 1개만 반환되어야 한다'
+  'user_a의 노트가 1개일 때 전체 조회 결과는 정확히 1개여야 한다'
 );
 
 ROLLBACK TO SAVEPOINT notes_boundary_one;
 
--- user_a의 노트가 여러 개일 때 타인 행 없이 본인 행만 반환되어야 한다
+-- user_a의 노트가 여러 개일 때 전체 조회 결과는 본인 행 3개여야 한다
 SELECT is(
   (SELECT count(*) FROM public.notes),
   3::bigint,
-  'user_a의 노트가 여러 개일 때 타인 행 없이 본인 행만 반환되어야 한다'
+  'user_a의 노트가 여러 개일 때 전체 조회 결과는 본인 행 3개여야 한다'
 );
 
 -- [불변 조건]
--- 전체 조회든 조건 조회든 반환되는 행의 소유자는 항상 인증된 사용자와 일치해야 한다
-SELECT ok(
-  (SELECT count(*) FROM public.notes WHERE user_id = current_setting('test.user_a_id')::uuid) = 3
-  AND (SELECT count(*) FROM public.notes WHERE user_id <> current_setting('test.user_a_id')::uuid) = 0,
-  '전체 조회든 조건 조회든 반환되는 행의 소유자는 항상 인증된 사용자와 일치해야 한다'
+-- 인증된 사용자의 전체 조회 결과에는 본인 데이터가 기대 개수만큼 존재해야 한다
+SELECT is(
+  (SELECT count(*) FROM public.notes WHERE user_id = current_setting('test.user_a_id')::uuid),
+  3::bigint,
+  '인증된 사용자의 전체 조회 결과에는 본인 데이터가 기대 개수만큼 존재해야 한다'
 );
 
--- anon 상태에서는 어떤 notes 행도 반환되면 안 된다
+-- 인증된 사용자의 전체 조회 결과에는 타인 데이터가 0개여야 한다
+SELECT is(
+  (SELECT count(*) FROM public.notes WHERE user_id <> current_setting('test.user_a_id')::uuid),
+  0::bigint,
+  '인증된 사용자의 전체 조회 결과에는 타인 데이터가 0개여야 한다'
+);
+
+-- anon 상태에서는 notes 행이 0개여야 한다
 SET LOCAL ROLE anon;
 SELECT set_config('request.jwt.claims', '{}'::text, true);
 
 SELECT is(
   (SELECT count(*) FROM public.notes),
   0::bigint,
-  'anon 상태에서는 어떤 notes 행도 반환되면 안 된다'
+  'anon 상태에서는 notes 행이 0개여야 한다'
 );
 
 SELECT * FROM finish();
