@@ -194,13 +194,17 @@ SELECT ok(
 );
 
 -- title 변경 시 updated_at을 과거 값으로 지정해도 트리거가 현재 시각으로 덮어써야 한다
-SELECT set_config('test.override_t0', clock_timestamp()::text, true);
+SELECT set_config(
+  'test.override_old',
+  (SELECT updated_at::text FROM public.notes WHERE id = current_setting('test.note_override_id')::uuid),
+  true
+);
 UPDATE public.notes
 SET title = 'override changed',
     updated_at = now() - interval '1 day'
 WHERE id = current_setting('test.note_override_id')::uuid;
 SELECT ok(
-  (SELECT updated_at > current_setting('test.override_t0')::timestamptz
+  (SELECT updated_at > current_setting('test.override_old')::timestamptz
    FROM public.notes WHERE id = current_setting('test.note_override_id')::uuid),
   'updated_at을 직접 과거 값으로 지정해도 트리거가 현재 시각으로 덮어써야 한다'
 );

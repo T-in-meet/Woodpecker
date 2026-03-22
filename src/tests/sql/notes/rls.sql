@@ -4,7 +4,7 @@
 
 BEGIN;
 
-SELECT plan(14);
+SELECT plan(15);
 
 -- 테스트용 UUID 준비
 SELECT set_config('test.user_a_id', gen_random_uuid()::text, true);
@@ -302,6 +302,13 @@ SELECT is(
   (SELECT count(*) FROM public.notes WHERE user_id <> current_setting('test.user_a_id')::uuid),
   0::bigint,
   '인증된 사용자의 전체 조회 결과에는 타인 데이터가 0개여야 한다'
+);
+
+-- 인증된 사용자의 전체 조회 결과에는 user_b의 notes가 0개여야 한다
+SELECT is(
+  (SELECT count(*) FROM public.notes WHERE user_id = current_setting('test.user_b_id')::uuid),
+  0::bigint,
+  '인증된 사용자의 전체 조회 결과에는 user_b의 notes가 0개여야 한다'
 );
 
 -- anon 상태에서는 notes 행이 0개여야 한다
