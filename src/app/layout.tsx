@@ -17,8 +17,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Woodpecker",
-  description: "딱다구리",
+  title: "딱다구리",
+  description: "배운 것을 오래 기억하게 해주는 간격 복습 서비스",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({

@@ -1,10 +1,19 @@
+import { CtaSection } from "@/components/landing/CtaSection";
+import { FaqSection } from "@/components/landing/FaqSection";
+import { HeroSection } from "@/components/landing/HeroSection";
+import { LearningFlowSection } from "@/components/landing/LearningFlowSection";
+import { Footer } from "@/components/layout/Footer";
+import { Header } from "@/components/layout/Header";
+
 export default function Home() {
   return (
-    <div>
-      <h1 className="text-2xl">딱다구리</h1>
-      <h1 className="text-2xl text-sky-300">
-        워크플로우 테스트를 위한 한 줄🤨{" "}
-      </h1>
+    <div className="min-h-screen">
+      <Header />
+      <HeroSection />
+      <LearningFlowSection />
+      <FaqSection />
+      <CtaSection />
+      <Footer />
     </div>
   );
 }
