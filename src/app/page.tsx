@@ -1,46 +1,29 @@
-import Link from "next/link";
-
+import { AppPreviewSection } from "@/components/landing/AppPreviewSection";
+import { ComparisonSection } from "@/components/landing/ComparisonSection";
 import { CtaSection } from "@/components/landing/CtaSection";
+import { FaqSection } from "@/components/landing/FaqSection";
 import { FeaturesSection } from "@/components/landing/FeaturesSection";
 import { HeroSection } from "@/components/landing/HeroSection";
+import { HowItWorksSection } from "@/components/landing/HowItWorksSection";
 import { SpacedLearningGraph } from "@/components/landing/SpacedLearningGraph";
-import { TargetAudience } from "@/components/landing/TargetAudience";
-import { Button } from "@/components/ui/button";
-import { ROUTES } from "@/lib/constants/routes";
+import { TestimonialsSection } from "@/components/landing/TestimonialsSection";
+import { Footer } from "@/components/layout/Footer";
+import { Header } from "@/components/layout/Header";
 
 export default function Home() {
   return (
     <div className="min-h-screen">
-      {/* Header */}
-      <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
-          <Link href={ROUTES.HOME} className="font-mono text-lg font-bold">
-            딱다구리
-          </Link>
-          <div className="flex gap-2">
-            <Button variant="ghost" size="sm" asChild>
-              <Link href={ROUTES.LOGIN}>로그인</Link>
-            </Button>
-            <Button size="sm" asChild>
-              <Link href={ROUTES.SIGNUP}>시작하기</Link>
-            </Button>
-          </div>
-        </div>
-      </header>
-
+      <Header />
       <HeroSection />
       <FeaturesSection />
       <SpacedLearningGraph />
-      <TargetAudience />
+      <HowItWorksSection />
+      <AppPreviewSection />
+      <ComparisonSection />
+      <TestimonialsSection />
+      <FaqSection />
       <CtaSection />
-
-      <footer className="border-t">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-6">
-          <p className="text-sm text-muted-foreground">
-            &copy; 2025 딱다구리. All rights reserved.
-          </p>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 const highlights = [
-  "복습할 때마다 기억이 이전보다 높은 지점에서 회복됩니다",
-  "간격이 길어질수록 장기 기억으로 굳어집니다",
-];
+  "복습할 때마다 기억이 단순 회복을 넘어 장기 기억으로 통합되며, 망각 속도가 느려집니다 ¹",
+  "간격 반복 학습자는 미사용 그룹보다 학습 유지율이 35% 더 높습니다 ²",
+] as const;
 
 export function SpacedLearningGraph() {
   return (
@@ -13,14 +13,11 @@ export function SpacedLearningGraph() {
             <p className="text-sm font-medium text-muted-foreground">
               간격 반복 학습 (Spaced Repetition)
             </p>
+
             <h2 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl">
-              반복할수록
-              <br />더 오래 기억됩니다
+              망각을 이기는 과학적 방법
             </h2>
-            <p className="mt-4 text-muted-foreground">
-              간격을 두고 복습할수록 기억 강도가 이전보다 높은 수준에서
-              회복됩니다.
-            </p>
+
             <ul className="mt-6 space-y-3">
               {highlights.map((item) => (
                 <li key={item} className="flex items-start gap-2 text-sm">
@@ -31,6 +28,19 @@ export function SpacedLearningGraph() {
                 </li>
               ))}
             </ul>
+
+            {/* 각주 */}
+            <div className="mt-6 space-y-1 border-t pt-4">
+              <p className="text-xs text-muted-foreground">
+                ¹ Carpenter et al. (2022). The science of effective learning
+                with spacing and retrieval practice.{" "}
+                <em>Nature Reviews Psychology.</em>
+              </p>
+              <p className="text-xs text-muted-foreground">
+                ² Kerfoot et al. (2024). The Effect of Spaced Repetition on
+                Learning and Knowledge Transfer. <em>PubMed</em> (n=26,258).
+              </p>
+            </div>
           </div>
 
           {/* Right: SVG graph */}
@@ -160,7 +170,13 @@ export function SpacedLearningGraph() {
                 strokeWidth="2"
                 strokeDasharray="6,3"
               />
-              <text x="84" y="216" fontSize="10" fill="currentColor" opacity="0.5">
+              <text
+                x="84"
+                y="216"
+                fontSize="10"
+                fill="currentColor"
+                opacity="0.5"
+              >
                 복습 없을 때
               </text>
               <line
@@ -172,7 +188,13 @@ export function SpacedLearningGraph() {
                 strokeWidth="2.5"
               />
               <circle cx="202" cy="212" r="3" fill="#2563eb" />
-              <text x="219" y="216" fontSize="10" fill="currentColor" opacity="0.5">
+              <text
+                x="219"
+                y="216"
+                fontSize="10"
+                fill="currentColor"
+                opacity="0.5"
+              >
                 딱다구리 사용 시
               </text>
             </svg>

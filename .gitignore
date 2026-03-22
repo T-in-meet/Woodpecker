@@ -44,5 +44,9 @@ next-env.d.ts
 # supabase 
 supabase/.temp
 
-#docs
+# docs
 .ai
+CLAUDE.md
+
+# ai
+.claude/
