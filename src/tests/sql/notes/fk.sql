@@ -1,10 +1,13 @@
 ﻿-- =========================================
 -- notes / FK
 -- =========================================
+-- [전제 조건]
+-- public.notes.user_id -> auth.users.id 외래 키 제약이 설정되어 있어야 한다.
+-- 해당 외래 키에는 ON DELETE CASCADE가 설정되어 부모(auth.users) 삭제 시 자식(public.notes)이 자동 삭제되어야 한다.
 
 BEGIN;
 
-SELECT plan(8);
+SELECT plan(9);
 
 -- 테스트용 UUID 준비
 SELECT set_config('test.user_a_id', gen_random_uuid()::text, true);
@@ -84,6 +87,24 @@ SELECT throws_ok(
   'auth.users에 존재하지 않는 user_id로 notes INSERT를 시도하면 FK 위반으로 실패해야 한다'
 );
 
+-- 기존에 유효한 notes 행의 user_id를 auth.users에 존재하지 않는 값으로 UPDATE하면 FK 위반으로 실패해야 한다
+SAVEPOINT notes_fk_update_invalid_user;
+SELECT throws_ok(
+  format(
+    $sql$
+      UPDATE public.notes
+      SET user_id = '%s'::uuid
+      WHERE id = '%s'::uuid;
+    $sql$,
+    current_setting('test.user_bogus_id'),
+    current_setting('test.note_seed_id')
+  ),
+  '23503',
+  'insert or update on table "notes" violates foreign key constraint "notes_user_id_fkey"',
+  '기존에 유효한 notes 행의 user_id를 auth.users에 존재하지 않는 값으로 UPDATE하면 FK 위반으로 실패해야 한다'
+);
+ROLLBACK TO SAVEPOINT notes_fk_update_invalid_user;
+
 -- [경계 조건]
 -- user_a가 auth.users에서 삭제된 직후, 해당 user_id로 notes INSERT를 시도하면 실패해야 한다
 -- (방금 삭제된 stale reference도 유효하지 않은 참조로 처리되는지 확인)
@@ -157,13 +178,23 @@ SELECT is(
   'notes 테이블에는 auth.users에 대응하는 행이 없는 orphan notes가 존재해서는 안 된다'
 );
 
--- 부모 삭제 후에도 삭제된 user_id를 참조하는 notes 행이 남아 있어서는 안 된다
+-- 부모 삭제 직전 존재하던 특정 자식 notes 행은 부모 삭제 직후 남아 있어서는 안 된다
 SAVEPOINT notes_fk_orphan_after_delete;
+INSERT INTO public.notes (id, user_id, title, content, review_round)
+VALUES (
+  current_setting('test.note_stale_id')::uuid,
+  current_setting('test.user_a_id')::uuid,
+  'transition note',
+  'transition content',
+  0
+)
+ON CONFLICT (id) DO NOTHING;
+
 DELETE FROM auth.users WHERE id = current_setting('test.user_a_id')::uuid;
 SELECT is(
-  (SELECT count(*) FROM public.notes WHERE user_id = current_setting('test.user_a_id')::uuid),
+  (SELECT count(*) FROM public.notes WHERE id = current_setting('test.note_stale_id')::uuid),
   0::bigint,
-  '부모 삭제 후에도 삭제된 user_id를 참조하는 notes 행이 남아 있어서는 안 된다'
+  '부모 삭제 직전 존재하던 특정 자식 notes 행은 부모 삭제 직후 남아 있어서는 안 된다'
 );
 ROLLBACK TO SAVEPOINT notes_fk_orphan_after_delete;
 
