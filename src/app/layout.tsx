@@ -16,11 +16,58 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const SITE_URL = "https://woodpecker-app.vercel.app";
+
 export const metadata: Metadata = {
-  title: "딱다구리",
-  description: "배운 것을 오래 기억하게 해주는 간격 복습 서비스",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "딱다구리 — 기록이 기억이 되는 간격 반복 학습 플랫폼",
+    template: "%s | 딱다구리",
+  },
+  description:
+    "기록한 순간부터 복습이 설계됩니다. 에빙하우스 망각곡선 기반 1-3-7일 간격 반복과 백지 테스트로 학습 내용을 장기 기억으로 전환하세요.",
+  keywords: [
+    "간격 반복 학습",
+    "백지 테스트",
+    "복습 알림",
+    "망각곡선",
+    "에빙하우스",
+    "학습 도구",
+    "기억력 향상",
+    "인출 연습",
+    "코딩테스트 복습",
+  ],
   icons: {
     icon: "/favicon.svg",
+  },
+  openGraph: {
+    type: "website",
+    locale: "ko_KR",
+    url: SITE_URL,
+    siteName: "딱다구리",
+    title: "딱다구리 — 기록이 기억이 되는 간격 반복 학습 플랫폼",
+    description:
+      "에빙하우스 망각곡선 기반 1-3-7일 간격 반복과 백지 테스트로 학습 내용을 장기 기억으로 전환하세요.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "딱다구리 — 기록이 기억이 되는 간격 반복 학습 플랫폼",
+    description:
+      "에빙하우스 망각곡선 기반 1-3-7일 간격 반복과 백지 테스트로 학습 내용을 장기 기억으로 전환하세요.",
+  },
+  alternates: {
+    canonical: SITE_URL,
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
   },
 };
 

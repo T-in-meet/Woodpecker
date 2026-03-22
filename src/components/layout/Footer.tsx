@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 
 import { ROUTES } from "@/lib/constants/routes";
@@ -62,7 +61,7 @@ export function Footer() {
 
         <div className="mt-10 border-t pt-6">
           <p className="text-center text-xs text-muted-foreground">
-            &copy; 2025 딱다구리. All rights reserved.
+            &copy; 2026 딱다구리. All rights reserved.
           </p>
         </div>
       </div>
