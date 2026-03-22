@@ -2,9 +2,13 @@
 -- notes / TRIGGER
 -- =========================================
 
+-- [전제 조건]
+-- tr_notes_updated_at 트리거가 notes 테이블 BEFORE UPDATE 시
+-- "실제 컬럼 변경 시에만 updated_at 갱신" 정책을 보장하도록 설정되어 있어야 한다.
+
 BEGIN;
 
-SELECT plan(14);
+SELECT plan(16);
 
 -- 테스트용 UUID 준비
 SELECT set_config('test.user_a_id', gen_random_uuid()::text, true);
@@ -135,11 +139,9 @@ SELECT set_config(
   (SELECT updated_at::text FROM public.notes WHERE id = current_setting('test.note_title_id')::uuid),
   true
 );
-
 UPDATE public.notes
 SET title = 'title changed'
 WHERE id = current_setting('test.note_title_id')::uuid;
-
 SELECT ok(
   (SELECT updated_at > current_setting('test.title_t0')::timestamptz
    FROM public.notes WHERE id = current_setting('test.note_title_id')::uuid),
@@ -152,11 +154,9 @@ SELECT set_config(
   (SELECT updated_at::text FROM public.notes WHERE id = current_setting('test.note_content_id')::uuid),
   true
 );
-
 UPDATE public.notes
 SET content = 'content changed'
 WHERE id = current_setting('test.note_content_id')::uuid;
-
 SELECT ok(
   (SELECT updated_at > current_setting('test.content_t0')::timestamptz
    FROM public.notes WHERE id = current_setting('test.note_content_id')::uuid),
@@ -169,11 +169,9 @@ SELECT set_config(
   (SELECT updated_at::text FROM public.notes WHERE id = current_setting('test.note_review_id')::uuid),
   true
 );
-
 UPDATE public.notes
 SET review_round = 3
 WHERE id = current_setting('test.note_review_id')::uuid;
-
 SELECT ok(
   (SELECT updated_at > current_setting('test.review_t0')::timestamptz
    FROM public.notes WHERE id = current_setting('test.note_review_id')::uuid),
@@ -186,11 +184,9 @@ SELECT set_config(
   (SELECT updated_at::text FROM public.notes WHERE id = current_setting('test.note_next_review_id')::uuid),
   true
 );
-
 UPDATE public.notes
 SET next_review_at = now() + interval '30 days'
 WHERE id = current_setting('test.note_next_review_id')::uuid;
-
 SELECT ok(
   (SELECT updated_at > current_setting('test.next_review_t0')::timestamptz
    FROM public.notes WHERE id = current_setting('test.note_next_review_id')::uuid),
@@ -199,12 +195,10 @@ SELECT ok(
 
 -- title 변경 시 updated_at을 과거 값으로 지정해도 트리거가 현재 시각으로 덮어써야 한다
 SELECT set_config('test.override_t0', clock_timestamp()::text, true);
-
 UPDATE public.notes
 SET title = 'override changed',
     updated_at = now() - interval '1 day'
 WHERE id = current_setting('test.note_override_id')::uuid;
-
 SELECT ok(
   (SELECT updated_at > current_setting('test.override_t0')::timestamptz
    FROM public.notes WHERE id = current_setting('test.note_override_id')::uuid),
@@ -220,22 +214,22 @@ SELECT ok(
 
 -- [경계 조건]
 -- INSERT 시점의 updated_at과 이후 실제 변경 UPDATE 시점의 updated_at이 다른 값이어야 한다
+-- Snapshot
 SELECT set_config(
   'test.boundary_old',
   (SELECT updated_at::text FROM public.notes WHERE id = current_setting('test.note_boundary_id')::uuid),
   true
 );
-
+-- Action
 UPDATE public.notes
 SET title = 'boundary changed'
 WHERE id = current_setting('test.note_boundary_id')::uuid;
-
 SELECT set_config(
   'test.boundary_new',
   (SELECT updated_at::text FROM public.notes WHERE id = current_setting('test.note_boundary_id')::uuid),
   true
 );
-
+-- Assert
 SELECT ok(
   current_setting('test.boundary_new')::timestamptz <> current_setting('test.boundary_old')::timestamptz,
   'INSERT 시점의 updated_at과 이후 실제 변경 UPDATE 시점의 updated_at이 다른 값이어야 한다'
@@ -247,11 +241,9 @@ SELECT set_config(
   (SELECT updated_at::text FROM public.notes WHERE id = current_setting('test.note_same_title_id')::uuid),
   true
 );
-
 UPDATE public.notes
 SET title = title
 WHERE id = current_setting('test.note_same_title_id')::uuid;
-
 SELECT is(
   (SELECT updated_at FROM public.notes WHERE id = current_setting('test.note_same_title_id')::uuid),
   current_setting('test.same_title_old')::timestamptz,
@@ -264,11 +256,9 @@ SELECT set_config(
   (SELECT updated_at::text FROM public.notes WHERE id = current_setting('test.note_updated_only_id')::uuid),
   true
 );
-
 UPDATE public.notes
 SET updated_at = current_setting('test.updated_only_old')::timestamptz - interval '1 day'
 WHERE id = current_setting('test.note_updated_only_id')::uuid;
-
 SELECT is(
   (SELECT updated_at FROM public.notes WHERE id = current_setting('test.note_updated_only_id')::uuid),
   current_setting('test.updated_only_old')::timestamptz,
@@ -290,51 +280,52 @@ SELECT is(
 );
 
 -- 실제 변경이 발생한 UPDATE 후 new.updated_at > old.updated_at이어야 한다 (Transition)
+-- Snapshot
 SELECT set_config(
   'test.invariant_change_old',
   (SELECT updated_at::text FROM public.notes WHERE id = current_setting('test.note_invariant_change_id')::uuid),
   true
 );
-
+-- Action
 UPDATE public.notes
 SET content = 'invariant change updated'
 WHERE id = current_setting('test.note_invariant_change_id')::uuid;
-
 SELECT set_config(
   'test.invariant_change_new',
   (SELECT updated_at::text FROM public.notes WHERE id = current_setting('test.note_invariant_change_id')::uuid),
   true
 );
-
+-- Assert
 SELECT ok(
   current_setting('test.invariant_change_new')::timestamptz > current_setting('test.invariant_change_old')::timestamptz,
   '실제 변경이 발생한 UPDATE 후 new.updated_at > old.updated_at이어야 한다 (Transition)'
 );
 
 -- 동일한 값으로 UPDATE한 후 new.updated_at = old.updated_at이어야 한다 (Transition)
+-- Snapshot
 SELECT set_config(
   'test.invariant_same_old',
   (SELECT updated_at::text FROM public.notes WHERE id = current_setting('test.note_invariant_same_id')::uuid),
   true
 );
-
+-- Action
 UPDATE public.notes
 SET content = content
 WHERE id = current_setting('test.note_invariant_same_id')::uuid;
-
 SELECT set_config(
   'test.invariant_same_new',
   (SELECT updated_at::text FROM public.notes WHERE id = current_setting('test.note_invariant_same_id')::uuid),
   true
 );
-
+-- Assert
 SELECT is(
   current_setting('test.invariant_same_new')::timestamptz,
   current_setting('test.invariant_same_old')::timestamptz,
   '동일한 값으로 UPDATE한 후 new.updated_at = old.updated_at이어야 한다 (Transition)'
 );
 
--- 특정 컬럼만 변경한 UPDATE 후 수정 대상 외의 컬럼(created_at, user_id 등)은 이전 값과 같아야 한다 (Transition)
+-- 특정 컬럼만 변경한 UPDATE 후 created_at은 이전 값과 같아야 한다 (Transition)
+-- Snapshot
 SELECT set_config(
   'test.invariant_other_created_at',
   (SELECT created_at::text FROM public.notes WHERE id = current_setting('test.note_invariant_other_id')::uuid),
@@ -350,19 +341,29 @@ SELECT set_config(
   (SELECT content FROM public.notes WHERE id = current_setting('test.note_invariant_other_id')::uuid),
   true
 );
-
+-- Action
 UPDATE public.notes
 SET title = 'invariant other updated'
 WHERE id = current_setting('test.note_invariant_other_id')::uuid;
+-- Assert
+SELECT is(
+  (SELECT created_at FROM public.notes WHERE id = current_setting('test.note_invariant_other_id')::uuid),
+  current_setting('test.invariant_other_created_at')::timestamptz,
+  '특정 컬럼만 변경한 UPDATE 후 created_at은 이전 값과 같아야 한다 (Transition)'
+);
 
-SELECT ok(
-  (SELECT created_at = current_setting('test.invariant_other_created_at')::timestamptz
-   FROM public.notes WHERE id = current_setting('test.note_invariant_other_id')::uuid)
-  AND (SELECT user_id::text = current_setting('test.invariant_other_user_id')
-       FROM public.notes WHERE id = current_setting('test.note_invariant_other_id')::uuid)
-  AND (SELECT content = current_setting('test.invariant_other_content')
-       FROM public.notes WHERE id = current_setting('test.note_invariant_other_id')::uuid),
-  '특정 컬럼만 변경한 UPDATE 후 수정 대상 외의 컬럼(created_at, user_id 등)은 이전 값과 같아야 한다 (Transition)'
+-- 특정 컬럼만 변경한 UPDATE 후 user_id는 이전 값과 같아야 한다 (Transition)
+SELECT is(
+  (SELECT user_id::text FROM public.notes WHERE id = current_setting('test.note_invariant_other_id')::uuid),
+  current_setting('test.invariant_other_user_id'),
+  '특정 컬럼만 변경한 UPDATE 후 user_id는 이전 값과 같아야 한다 (Transition)'
+);
+
+-- 특정 컬럼만 변경한 UPDATE 후 content는 이전 값과 같아야 한다 (Transition)
+SELECT is(
+  (SELECT content FROM public.notes WHERE id = current_setting('test.note_invariant_other_id')::uuid),
+  current_setting('test.invariant_other_content'),
+  '특정 컬럼만 변경한 UPDATE 후 content는 이전 값과 같아야 한다 (Transition)'
 );
 
 SELECT * FROM finish();
