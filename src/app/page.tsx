@@ -2,7 +2,6 @@ import { AppPreviewSection } from "@/components/landing/AppPreviewSection";
 import { ComparisonSection } from "@/components/landing/ComparisonSection";
 import { CtaSection } from "@/components/landing/CtaSection";
 import { FaqSection } from "@/components/landing/FaqSection";
-import { FeaturesSection } from "@/components/landing/FeaturesSection";
 import { HeroSection } from "@/components/landing/HeroSection";
 import { HowItWorksSection } from "@/components/landing/HowItWorksSection";
 import { SpacedLearningGraph } from "@/components/landing/SpacedLearningGraph";
@@ -15,7 +14,6 @@ export default function Home() {
     <div className="min-h-screen">
       <Header />
       <HeroSection />
-      <FeaturesSection />
       <SpacedLearningGraph />
       <HowItWorksSection />
       <AppPreviewSection />

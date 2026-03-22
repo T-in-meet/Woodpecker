@@ -61,6 +61,19 @@ export function FaqSection() {
             </AccordionItem>
           ))}
         </Accordion>
+
+        <div className="mt-12 rounded-xl border bg-card p-6 text-center">
+          <p className="text-sm font-medium">찾으시는 답변이 없으신가요?</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            궁금한 점이 있으시다면 언제든 연락주세요.
+          </p>
+          <a
+            href="mailto:woodpecker.team.dev@gmail.com"
+            className="mt-3 inline-block text-sm font-medium text-primary hover:underline"
+          >
+            woodpecker.team.dev@gmail.com
+          </a>
+        </div>
       </div>
     </section>
   );
