@@ -4,7 +4,7 @@
 
 BEGIN;
 
-SELECT plan(15);
+SELECT plan(17);
 
 -- 테스트용 UUID 준비
 SELECT set_config('test.user_a_id', gen_random_uuid()::text, true);
@@ -67,6 +67,21 @@ SELECT is(
 );
 ROLLBACK TO SAVEPOINT notes_review_round_123_insert;
 
+-- 기존의 유효한 review_round 값을 1로 UPDATE하면 성공해야 한다
+SAVEPOINT notes_review_round_update_valid;
+SELECT lives_ok(
+  format(
+    $sql$
+      UPDATE public.notes
+      SET review_round = 1
+      WHERE id = '%s'::uuid;
+    $sql$,
+    current_setting('test.seed_note_id')
+  ),
+  '기존의 유효한 review_round 값을 1로 UPDATE하면 성공해야 한다'
+);
+ROLLBACK TO SAVEPOINT notes_review_round_update_valid;
+
 -- [예외 조건]
 -- review_round가 -1이면 CHECK 위반으로 실패해야 한다
 SELECT throws_ok(
@@ -94,6 +109,21 @@ SELECT throws_ok(
   '23514',
   'new row for relation "notes" violates check constraint "notes_review_round_check"',
   'review_round가 4이면 CHECK 위반으로 실패해야 한다'
+);
+
+-- 기존의 유효한 review_round 값을 4로 UPDATE하면 CHECK 위반으로 실패해야 한다
+SELECT throws_ok(
+  format(
+    $sql$
+      UPDATE public.notes
+      SET review_round = 4
+      WHERE id = '%s'::uuid;
+    $sql$,
+    current_setting('test.seed_note_id')
+  ),
+  '23514',
+  'new row for relation "notes" violates check constraint "notes_review_round_check"',
+  '기존의 유효한 review_round 값을 4로 UPDATE하면 CHECK 위반으로 실패해야 한다'
 );
 
 -- [경계 조건]
