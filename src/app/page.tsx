@@ -14,9 +14,9 @@ export default function Home() {
     <div className="min-h-screen">
       <Header />
       <HeroSection />
-      <SpacedLearningGraph />
       <HowItWorksSection />
       <AppPreviewSection />
+      <SpacedLearningGraph />
       <ComparisonSection />
       <TestimonialsSection />
       <FaqSection />
