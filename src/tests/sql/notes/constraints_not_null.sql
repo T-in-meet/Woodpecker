@@ -4,7 +4,7 @@
 
 BEGIN;
 
-SELECT plan(7);
+SELECT plan(12);
 
 -- 테스트용 UUID 준비
 SELECT set_config('test.user_a_id', gen_random_uuid()::text, true);
@@ -93,6 +93,51 @@ SELECT throws_ok(
   'review_round가 NULL이면 NOT NULL 위반으로 실패해야 한다'
 );
 
+-- 기존 유효한 행의 title을 NULL로 UPDATE하면 NOT NULL 위반으로 실패해야 한다
+SELECT throws_ok(
+  format(
+    $sql$
+      UPDATE public.notes
+      SET title = NULL
+      WHERE id = '%s'::uuid;
+    $sql$,
+    current_setting('test.seed_note_id')
+  ),
+  '23502',
+  'null value in column "title" of relation "notes" violates not-null constraint',
+  '기존 유효한 행의 title을 NULL로 UPDATE하면 NOT NULL 위반으로 실패해야 한다'
+);
+
+-- 기존 유효한 행의 content를 NULL로 UPDATE하면 NOT NULL 위반으로 실패해야 한다
+SELECT throws_ok(
+  format(
+    $sql$
+      UPDATE public.notes
+      SET content = NULL
+      WHERE id = '%s'::uuid;
+    $sql$,
+    current_setting('test.seed_note_id')
+  ),
+  '23502',
+  'null value in column "content" of relation "notes" violates not-null constraint',
+  '기존 유효한 행의 content를 NULL로 UPDATE하면 NOT NULL 위반으로 실패해야 한다'
+);
+
+-- 기존 유효한 행의 review_round를 NULL로 UPDATE하면 NOT NULL 위반으로 실패해야 한다
+SELECT throws_ok(
+  format(
+    $sql$
+      UPDATE public.notes
+      SET review_round = NULL
+      WHERE id = '%s'::uuid;
+    $sql$,
+    current_setting('test.seed_note_id')
+  ),
+  '23502',
+  'null value in column "review_round" of relation "notes" violates not-null constraint',
+  '기존 유효한 행의 review_round를 NULL로 UPDATE하면 NOT NULL 위반으로 실패해야 한다'
+);
+
 -- [경계 조건]
 -- title에 빈 문자열('')을 넣으면 NOT NULL은 통과해야 한다
 -- (최소 길이 규칙은 별도 정책으로 결정)
@@ -124,11 +169,25 @@ SELECT lives_ok(
 ROLLBACK TO SAVEPOINT notes_content_empty_string;
 
 -- [불변 조건]
--- notes 테이블에 title, content, review_round가 NULL인 행이 존재해서는 안 된다
+-- notes 테이블에 title이 NULL인 행이 존재해서는 안 된다
 SELECT is(
-  (SELECT count(*) FROM public.notes WHERE title IS NULL OR content IS NULL OR review_round IS NULL),
+  (SELECT count(*) FROM public.notes WHERE title IS NULL),
   0::bigint,
-  'notes 테이블에 title, content, review_round가 NULL인 행이 존재해서는 안 된다'
+  'notes 테이블에 title이 NULL인 행이 존재해서는 안 된다'
+);
+
+-- notes 테이블에 content가 NULL인 행이 존재해서는 안 된다
+SELECT is(
+  (SELECT count(*) FROM public.notes WHERE content IS NULL),
+  0::bigint,
+  'notes 테이블에 content가 NULL인 행이 존재해서는 안 된다'
+);
+
+-- notes 테이블에 review_round가 NULL인 행이 존재해서는 안 된다
+SELECT is(
+  (SELECT count(*) FROM public.notes WHERE review_round IS NULL),
+  0::bigint,
+  'notes 테이블에 review_round가 NULL인 행이 존재해서는 안 된다'
 );
 
 SELECT * FROM finish();
