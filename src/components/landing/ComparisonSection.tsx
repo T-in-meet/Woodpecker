@@ -1,27 +1,4 @@
-import { BrainCircuit, Check, Sparkles, Target, X } from "lucide-react";
-
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-const features = [
-  {
-    icon: BrainCircuit,
-    title: "인출 기반 학습",
-    description:
-      "단순히 다시 읽는 것이 아니라, 백지 상태에서 직접 떠올리는 과정이 기억을 강화합니다. 인출 연습은 재독보다 기억 유지율이 50% 이상 높습니다.",
-  },
-  {
-    icon: Target,
-    title: "최적의 복습 타이밍",
-    description:
-      "에빙하우스 망각곡선에 기반한 1-3-7일 간격으로, 잊혀지기 직전에 복습합니다. 같은 시간을 투자해도 기억에 남는 양이 다릅니다.",
-  },
-  {
-    icon: Sparkles,
-    title: "흩어진 도구를 하나로",
-    description:
-      "노트 앱에 기록하고, 캘린더에 일정 잡고, 알림을 따로 설정하던 번거로움. 기록부터 복습까지 한 곳에서 완결됩니다.",
-  },
-] as const;
+import { Check, X } from "lucide-react";
 
 const beforeItems = [
   "공부한 내용을 며칠 뒤 까먹음",
@@ -37,21 +14,6 @@ const afterItems = [
   "기록부터 복습까지 한 곳에서",
   "백지 테스트로 진짜 기억인지 확인",
   "반복할수록 장기 기억으로 전환",
-] as const;
-
-const personas = [
-  {
-    emoji: "📖",
-    description: "강의나 책을 읽고 나면 며칠 지나 기억이 나지 않는 분",
-  },
-  {
-    emoji: "💻",
-    description: "코딩 테스트·기술 면접을 앞두고 체계적인 복습이 필요한 개발자",
-  },
-  {
-    emoji: "📈",
-    description: "꾸준히 공부하지만 실력이 쌓이지 않는 것 같아 답답한 분",
-  },
 ] as const;
 
 export function ComparisonSection() {
@@ -101,43 +63,6 @@ export function ComparisonSection() {
               ))}
             </ul>
           </div>
-        </div>
-
-        {/* 딱다구리만의 강점 */}
-        <div className="mt-16 grid gap-6 md:grid-cols-3">
-          {features.map((feature) => (
-            <Card key={feature.title}>
-              <CardHeader>
-                <div className="flex size-12 items-center justify-center rounded-lg bg-primary/10">
-                  <feature.icon className="size-6 text-primary" />
-                </div>
-                <CardTitle className="mt-3">{feature.title}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  {feature.description}
-                </p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {/* Target Audience */}
-        <p className="mt-16 text-center text-sm font-medium text-muted-foreground">
-          이런 고민이 있다면 딱다구리가 답입니다
-        </p>
-        <div className="mt-6 grid gap-6 md:grid-cols-3">
-          {personas.map((persona) => (
-            <div
-              key={persona.description}
-              className="flex items-start gap-3 rounded-xl border bg-card p-5"
-            >
-              <span className="text-2xl">{persona.emoji}</span>
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                {persona.description}
-              </p>
-            </div>
-          ))}
         </div>
       </div>
     </section>
