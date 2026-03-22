@@ -1,10 +1,10 @@
-﻿-- =========================================
+-- =========================================
 -- notes / RLS
 -- =========================================
 
 BEGIN;
 
-SELECT plan(15);
+SELECT plan(16);
 
 -- 테스트용 UUID 준비
 SELECT set_config('test.user_a_id', gen_random_uuid()::text, true);
@@ -170,6 +170,20 @@ SELECT is(
 );
 
 ROLLBACK TO SAVEPOINT notes_delete_own;
+
+-- user_a로 인증 후 user_a의 user_id로 INSERT하면 성공해야 한다
+SAVEPOINT notes_insert_own;
+SELECT lives_ok(
+  format(
+    $sql$
+      INSERT INTO public.notes (id, user_id, title, content, review_round)
+      VALUES (gen_random_uuid(), '%s'::uuid, 'insert own', 'content', 0);
+    $sql$,
+    current_setting('test.user_a_id')
+  ),
+  'user_a로 인증 후 user_a의 user_id로 INSERT하면 성공해야 한다'
+);
+ROLLBACK TO SAVEPOINT notes_insert_own;
 
 -- [예외 조건]
 -- user_a로 인증 후 user_b의 노트를 SELECT할 수 없어야 한다

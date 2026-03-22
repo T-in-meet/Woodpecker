@@ -4,7 +4,7 @@
 
 BEGIN;
 
-SELECT plan(12);
+SELECT plan(15);
 
 -- 테스트용 UUID 준비
 SELECT set_config('test.user_a_id', gen_random_uuid()::text, true);
@@ -51,6 +51,14 @@ SELECT lives_ok(
 ROLLBACK TO SAVEPOINT notes_not_null_all_present;
 
 -- [예외 조건]
+-- user_id가 NULL이면 NOT NULL 위반으로 실패해야 한다
+SELECT throws_ok(
+  $$INSERT INTO public.notes (id, user_id, title, content, review_round)
+    VALUES (gen_random_uuid(), NULL, 'title', 'content', 0)$$,
+  '23502',
+  'null value in column "user_id" of relation "notes" violates not-null constraint',
+  'user_id가 NULL이면 NOT NULL 위반으로 실패해야 한다'
+);
 -- title이 NULL이면 NOT NULL 위반으로 실패해야 한다
 SELECT throws_ok(
   format(
@@ -92,7 +100,20 @@ SELECT throws_ok(
   'null value in column "review_round" of relation "notes" violates not-null constraint',
   'review_round가 NULL이면 NOT NULL 위반으로 실패해야 한다'
 );
-
+-- 기존 유효한 행의 user_id를 NULL로 UPDATE하면 NOT NULL 위반으로 실패해야 한다
+SELECT throws_ok(
+  format(
+    $sql$
+      UPDATE public.notes
+      SET user_id = NULL
+      WHERE id = '%s'::uuid;
+    $sql$,
+    current_setting('test.seed_note_id')
+  ),
+  '23502',
+  'null value in column "user_id" of relation "notes" violates not-null constraint',
+  '기존 유효한 행의 user_id를 NULL로 UPDATE하면 NOT NULL 위반으로 실패해야 한다'
+);
 -- 기존 유효한 행의 title을 NULL로 UPDATE하면 NOT NULL 위반으로 실패해야 한다
 SELECT throws_ok(
   format(
@@ -169,6 +190,12 @@ SELECT lives_ok(
 ROLLBACK TO SAVEPOINT notes_content_empty_string;
 
 -- [불변 조건]
+-- notes 테이블에 user_id가 NULL인 행이 존재해서는 안 된다
+SELECT is(
+  (SELECT count(*) FROM public.notes WHERE user_id IS NULL),
+  0::bigint,
+  'notes 테이블에 user_id가 NULL인 행이 존재해서는 안 된다'
+);
 -- notes 테이블에 title이 NULL인 행이 존재해서는 안 된다
 SELECT is(
   (SELECT count(*) FROM public.notes WHERE title IS NULL),

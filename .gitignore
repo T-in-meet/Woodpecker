@@ -46,3 +46,6 @@ supabase/.temp
 
 #docs
 .ai
+
+# .editorconfig
+.editorconfig
