@@ -1,9 +1,9 @@
-import { CtaSection } from "@/components/landing/CtaSection";
-import { faqs, FaqSection } from "@/components/landing/FaqSection";
-import { HeroSection } from "@/components/landing/HeroSection";
-import { LearningFlowSection } from "@/components/landing/LearningFlowSection";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
+import { CtaSection } from "@/features/landing/CtaSection";
+import { faqs, FaqSection } from "@/features/landing/FaqSection";
+import { HeroSection } from "@/features/landing/HeroSection";
+import { LearningFlowSection } from "@/features/landing/LearningFlowSection";
 
 const SITE_URL = "https://woodpecker-app.vercel.app";
 
