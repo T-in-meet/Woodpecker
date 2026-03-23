@@ -36,7 +36,45 @@ jobs:
         run: npm run lint
 
   # ─────────────────────────────────────────
-  # Job 2: TypeScript 타입 오류 검사
+  # Job 2: Prettier 포맷 검사
+  # ─────────────────────────────────────────
+  format:
+    name: Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # prettier --check: 포맷 불일치 파일이 있으면 실패
+      - name: Check formatting
+        run: npx prettier --check .
+
+  # ─────────────────────────────────────────
+  # Job 3: 취약점 검사
+  # PR에 새 패키지 추가 시 알려진 취약점 체크
+  # ─────────────────────────────────────────
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Dependency review
+        uses: actions/dependency-review-action@v4
+
+  # ─────────────────────────────────────────
+  # Job 4: TypeScript 타입 오류 검사
   # ─────────────────────────────────────────
   type-check:
     name: Type Check
@@ -59,7 +97,7 @@ jobs:
         run: npx tsc --noEmit
 
   # ─────────────────────────────────────────
-  # Job 3: Vitest 단위 테스트 실행
+  # Job 5: Vitest 단위 테스트 실행
   # ─────────────────────────────────────────
   test:
     name: Test
@@ -82,13 +120,13 @@ jobs:
         run: npx vitest run
 
   # ─────────────────────────────────────────
-  # Job 4: Next.js 프로덕션 빌드 검증
-  # lint, type-check, test 모두 통과한 후 실행
+  # Job 6: Next.js 프로덕션 빌드 검증
+  # lint, format, type-check, test 모두 통과한 후 실행
   # ─────────────────────────────────────────
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [lint, type-check, test] # 앞 3개 job이 성공해야 실행됨
+    needs: [lint, format, type-check, test] # 앞 3개 job이 성공해야 실행됨
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
