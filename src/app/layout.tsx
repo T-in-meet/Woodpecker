@@ -21,7 +21,7 @@ const SITE_URL = "https://woodpecker-app.vercel.app";
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "딱다구리 — 기록이 기억이 되는 간격 반복 학습 플랫폼",
+    default: "딱다구리 — 기록이 기억이 되는 간격 반복 학습 공간",
     template: "%s | 딱다구리",
   },
   description:
@@ -31,9 +31,8 @@ export const metadata: Metadata = {
     "백지 테스트",
     "복습 알림",
     "망각곡선",
-    "에빙하우스",
-    "학습 도구",
-    "기억력 향상",
+    "에빙하우스 학습법",
+    "스페이스드 리피티션",
     "인출 연습",
     "코딩테스트 복습",
   ],
@@ -45,13 +44,13 @@ export const metadata: Metadata = {
     locale: "ko_KR",
     url: SITE_URL,
     siteName: "딱다구리",
-    title: "딱다구리 — 기록이 기억이 되는 간격 반복 학습 플랫폼",
+    title: "딱다구리 — 기록이 기억이 되는 간격 반복 학습 공간",
     description:
       "에빙하우스 망각곡선 기반 1-3-7일 간격 반복과 백지 테스트로 학습 내용을 장기 기억으로 전환하세요.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "딱다구리 — 기록이 기억이 되는 간격 반복 학습 플랫폼",
+    title: "딱다구리 — 기록이 기억이 되는 간격 반복 학습 공간",
     description:
       "에빙하우스 망각곡선 기반 1-3-7일 간격 반복과 백지 테스트로 학습 내용을 장기 기억으로 전환하세요.",
   },

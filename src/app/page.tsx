@@ -5,20 +5,25 @@ import { LearningFlowSection } from "@/components/landing/LearningFlowSection";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
 
+const SITE_URL = "https://woodpecker-app.vercel.app";
+
 const jsonLd = {
   "@context": "https://schema.org",
   "@graph": [
     {
       "@type": "WebApplication",
+      "@id": `${SITE_URL}/#app`,
       name: "딱다구리",
-      url: "https://woodpecker-app.vercel.app",
+      url: SITE_URL,
+      image: `${SITE_URL}/og-image.png`,
+      inLanguage: "ko",
       applicationCategory: "EducationalApplication",
       operatingSystem: "Web",
       description:
-        "에빙하우스 망각곡선 기반 1-3-7일 간격 반복과 백지 테스트로 학습 내용을 장기 기억으로 전환하는 학습 플랫폼",
+        "에빙하우스 망각곡선 기반 1-3-7일 간격 반복과 백지 테스트로 학습 내용을 장기 기억으로 전환하는 학습 공간",
       offers: {
         "@type": "Offer",
-        price: "0",
+        price: 0,
         priceCurrency: "KRW",
         description: "베타 기간 무료",
       },
@@ -30,6 +35,7 @@ const jsonLd = {
     },
     {
       "@type": "FAQPage",
+      "@id": `${SITE_URL}/#faq`,
       mainEntity: faqs.map((faq) => ({
         "@type": "Question",
         name: faq.question,
