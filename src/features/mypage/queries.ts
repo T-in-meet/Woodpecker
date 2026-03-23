@@ -1,0 +1,116 @@
+import { createClient } from "@/lib/supabase/server";
+import type { Profile } from "@/types/profiles.types";
+
+export type LearningStats = {
+  totalNotes: number;
+  completedReviews: number;
+  pendingReviews: number;
+  reviewsByRound: { round: number; count: number }[];
+  recentActivity: { date: string; count: number }[];
+};
+
+export async function getProfile(): Promise<Profile | null> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return null;
+
+  const { data } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .single();
+
+  return data as Profile | null;
+}
+
+export async function getLearningStats(): Promise<LearningStats> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const empty: LearningStats = {
+    totalNotes: 0,
+    completedReviews: 0,
+    pendingReviews: 0,
+    reviewsByRound: [],
+    recentActivity: [],
+  };
+
+  if (!user) return empty;
+
+  const [
+    notesResult,
+    completedResult,
+    pendingResult,
+    roundsResult,
+    activityResult,
+  ] = await Promise.all([
+    supabase
+      .from("notes")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id),
+
+    supabase
+      .from("review_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .not("completed_at", "is", null),
+
+    supabase
+      .from("review_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .is("completed_at", null)
+      .lte("scheduled_at", new Date().toISOString()),
+
+    supabase
+      .from("review_logs")
+      .select("round")
+      .eq("user_id", user.id)
+      .not("completed_at", "is", null),
+
+    supabase
+      .from("review_logs")
+      .select("completed_at")
+      .eq("user_id", user.id)
+      .not("completed_at", "is", null)
+      .gte(
+        "completed_at",
+        new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+      ),
+  ]);
+
+  const roundCounts = new Map<number, number>();
+  if (roundsResult.data) {
+    for (const row of roundsResult.data) {
+      const r = row.round;
+      roundCounts.set(r, (roundCounts.get(r) ?? 0) + 1);
+    }
+  }
+
+  const dateCounts = new Map<string, number>();
+  if (activityResult.data) {
+    for (const row of activityResult.data) {
+      if (row.completed_at) {
+        const date = row.completed_at.slice(0, 10);
+        dateCounts.set(date, (dateCounts.get(date) ?? 0) + 1);
+      }
+    }
+  }
+
+  return {
+    totalNotes: notesResult.count ?? 0,
+    completedReviews: completedResult.count ?? 0,
+    pendingReviews: pendingResult.count ?? 0,
+    reviewsByRound: Array.from(roundCounts.entries())
+      .map(([round, count]) => ({ round, count }))
+      .sort((a, b) => a.round - b.round),
+    recentActivity: Array.from(dateCounts.entries())
+      .map(([date, count]) => ({ date, count }))
+      .sort((a, b) => a.date.localeCompare(b.date)),
+  };
+}
