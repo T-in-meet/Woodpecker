@@ -1,15 +1,7 @@
 -- =========================================
 -- review_logs / RLS (refined)
--- 목적:
--- 1) 중복 검증 축 축소
--- 2) 성공 INSERT 불변을 "방금 넣은 행" 직접 검증으로 강화
--- 3) UPDATE / DELETE 정책 부재 검증을 0 rows affected 중심으로 정리
---
--- 참고:
--- - 이 파일은 RLS 축에 집중한다.
--- - note_id 비존재, FK 위반 같은 축은 별도 FK 테스트 파일에서 검증하는 것을 권장한다.
 -- =========================================
-
+-- TODO: confirm whether review_logs should remain immutable (no UPDATE/DELETE policies)
 BEGIN;
 
 SELECT plan(32);

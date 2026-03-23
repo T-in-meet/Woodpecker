@@ -4,6 +4,7 @@
 
 BEGIN;
 
+-- TODO: fix plan count after schema is finalized (#39)
 SELECT plan(41);
 
 -- 테스트용 UUID 준비

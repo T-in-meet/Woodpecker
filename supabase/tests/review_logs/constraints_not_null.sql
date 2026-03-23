@@ -1,12 +1,14 @@
 -- =========================================
 -- review_logs / CONSTRAINTS_NOT_NULL
 -- =========================================
+-- TODO: add completed_at (nullable/transition) tests when domain behavior is confirmed
 
 BEGIN;
 
 SELECT plan(41);
 
 -- 테스트용 UUID 준비
+-- TODO: unify config key naming across test files
 SELECT set_config('test.constraints_round_user_a', gen_random_uuid()::text, true);
 SELECT set_config('test.constraints_round_note_a1', gen_random_uuid()::text, true);
 SELECT set_config('test.constraints_round_log_valid', gen_random_uuid()::text, true);
