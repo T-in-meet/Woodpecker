@@ -85,7 +85,6 @@ VALUES
   )
 ON CONFLICT (id) DO NOTHING;
 
-RESET ROLE;
 
 -- [정답 조건]
 -- 새로운 endpoint로 INSERT 가능

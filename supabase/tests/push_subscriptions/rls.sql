@@ -220,6 +220,10 @@ SELECT is(
 ROLLBACK TO SAVEPOINT push_subscriptions_delete_own;
 
 -- [예외 조건]
+-- RLS 차단 검증 방식 안내:
+-- INSERT는 WITH CHECK 위반 시 SQLSTATE 42501 오류로 거부되므로 throws_ok로 검증한다.
+-- UPDATE/DELETE는 대상 행이 정책에 의해 보이지 않으면 RETURNING 결과가 0건이 되므로 count(*) = 0으로 검증한다.
+
 -- [SELECT] user_a로 인증 후 user_b 소유 행은 조회할 수 없어야 한다.
 SELECT is(
   (SELECT count(*) FROM public.push_subscriptions WHERE user_id = current_setting('test.user_b_id')::uuid),

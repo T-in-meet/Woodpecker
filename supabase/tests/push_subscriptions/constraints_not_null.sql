@@ -360,7 +360,7 @@ SELECT throws_ok(
     VALUES (NULL, current_setting('test.user_a_id')::uuid, 'https://example.com/endpoint/null-id', 'p256dh_null', 'auth_null');
   $sql$,
   '23502',
-  'null value in column "id" of relation "push_subscriptions" violates not-null constraint',
+  NULL,
   $$id를 NULL로 명시한 INSERT 시도는 허용되지 않아야 한다.$$
 );
 
@@ -375,7 +375,7 @@ SELECT throws_ok(
     current_setting('test.ps_seed_id')
   ),
   '23502',
-  'null value in column "id" of relation "push_subscriptions" violates not-null constraint',
+  NULL,
   $$기존 유효 행을 id = NULL로 변경하는 시도는 허용되지 않아야 한다.$$
 );
 
@@ -386,7 +386,7 @@ SELECT throws_ok(
     VALUES (gen_random_uuid(), NULL, 'https://example.com/endpoint/null-user', 'p256dh_null_user', 'auth_null_user');
   $sql$,
   '23502',
-  'null value in column "user_id" of relation "push_subscriptions" violates not-null constraint',
+  NULL,
   $$user_id를 NULL로 입력한 INSERT 시도는 허용되지 않아야 한다.$$
 );
 
@@ -401,7 +401,7 @@ SELECT throws_ok(
     current_setting('test.ps_seed_id')
   ),
   '23502',
-  'null value in column "user_id" of relation "push_subscriptions" violates not-null constraint',
+  NULL,
   $$기존 유효 행을 user_id = NULL로 변경하는 시도는 허용되지 않아야 한다.$$
 );
 
@@ -412,7 +412,7 @@ SELECT throws_ok(
     VALUES (gen_random_uuid(), current_setting('test.user_a_id')::uuid, NULL, 'p256dh_null_endpoint', 'auth_null_endpoint');
   $sql$,
   '23502',
-  'null value in column "endpoint" of relation "push_subscriptions" violates not-null constraint',
+  NULL,
   $$endpoint를 NULL로 입력한 INSERT 시도는 허용되지 않아야 한다.$$
 );
 
@@ -427,7 +427,7 @@ SELECT throws_ok(
     current_setting('test.ps_seed_id')
   ),
   '23502',
-  'null value in column "endpoint" of relation "push_subscriptions" violates not-null constraint',
+  NULL,
   $$기존 유효 행을 endpoint = NULL로 변경하는 시도는 허용되지 않아야 한다.$$
 );
 
@@ -438,7 +438,7 @@ SELECT throws_ok(
     VALUES (gen_random_uuid(), current_setting('test.user_a_id')::uuid, 'https://example.com/endpoint/null-p256dh', NULL, 'auth_null_p256dh');
   $sql$,
   '23502',
-  'null value in column "p256dh" of relation "push_subscriptions" violates not-null constraint',
+  NULL,
   $$p256dh를 NULL로 입력한 INSERT 시도는 허용되지 않아야 한다.$$
 );
 
@@ -453,7 +453,7 @@ SELECT throws_ok(
     current_setting('test.ps_seed_id')
   ),
   '23502',
-  'null value in column "p256dh" of relation "push_subscriptions" violates not-null constraint',
+  NULL,
   $$기존 유효 행을 p256dh = NULL로 변경하는 시도는 허용되지 않아야 한다.$$
 );
 
@@ -464,7 +464,7 @@ SELECT throws_ok(
     VALUES (gen_random_uuid(), current_setting('test.user_a_id')::uuid, 'https://example.com/endpoint/null-auth', 'p256dh_null_auth', NULL);
   $sql$,
   '23502',
-  'null value in column "auth" of relation "push_subscriptions" violates not-null constraint',
+  NULL,
   $$auth를 NULL로 입력한 INSERT 시도는 허용되지 않아야 한다.$$
 );
 
@@ -479,7 +479,7 @@ SELECT throws_ok(
     current_setting('test.ps_seed_id')
   ),
   '23502',
-  'null value in column "auth" of relation "push_subscriptions" violates not-null constraint',
+  NULL,
   $$기존 유효 행을 auth = NULL로 변경하는 시도는 허용되지 않아야 한다.$$
 );
 
@@ -490,7 +490,7 @@ SELECT throws_ok(
     VALUES (gen_random_uuid(), current_setting('test.user_a_id')::uuid, 'https://example.com/endpoint/null-created-at', 'p256dh_null_created_at', 'auth_null_created_at', NULL);
   $sql$,
   '23502',
-  'null value in column "created_at" of relation "push_subscriptions" violates not-null constraint',
+  NULL,
   $$created_at을 NULL로 명시한 INSERT 시도는 허용되지 않아야 한다.$$
 );
 
@@ -505,7 +505,7 @@ SELECT throws_ok(
     current_setting('test.ps_seed_id')
   ),
   '23502',
-  'null value in column "created_at" of relation "push_subscriptions" violates not-null constraint',
+  NULL,
   $$기존 유효 행을 created_at = NULL로 변경하는 시도는 허용되지 않아야 한다.$$
 );
 
@@ -563,7 +563,7 @@ SELECT throws_ok(
     VALUES (NULL, current_setting('test.user_a_id')::uuid, 'https://example.com/endpoint/null-id-boundary', 'p256dh_boundary_null', 'auth_boundary_null');
   $sql$,
   '23502',
-  'null value in column "id" of relation "push_subscriptions" violates not-null constraint',
+  NULL,
   $$id = NULL 명시 INSERT는 허용되지 않아야 한다. (경계 바깥값)$$
 );
 
@@ -591,7 +591,7 @@ SELECT throws_ok(
     current_setting('test.ps_seed_id')
   ),
   '23502',
-  'null value in column "id" of relation "push_subscriptions" violates not-null constraint',
+  NULL,
   $$기존 유효 행을 id = NULL로 바꾸는 것은 허용되지 않아야 한다. (경계 바깥값)$$
 );
 
@@ -626,7 +626,7 @@ SELECT throws_ok(
     VALUES (gen_random_uuid(), NULL, 'https://example.com/endpoint/null-user-boundary', 'p256dh_boundary_user_null', 'auth_boundary_user_null');
   $sql$,
   '23502',
-  'null value in column "user_id" of relation "push_subscriptions" violates not-null constraint',
+  NULL,
   $$user_id = NULL 입력은 허용되지 않아야 한다. (경계 바깥값)$$
 );
 
@@ -654,7 +654,7 @@ SELECT throws_ok(
     current_setting('test.ps_seed_id')
   ),
   '23502',
-  'null value in column "user_id" of relation "push_subscriptions" violates not-null constraint',
+  NULL,
   $$기존 유효 행을 user_id = NULL로 바꾸는 것은 허용되지 않아야 한다. (경계 바깥값)$$
 );
 
@@ -689,7 +689,7 @@ SELECT throws_ok(
     VALUES (gen_random_uuid(), current_setting('test.user_a_id')::uuid, NULL, 'p256dh_boundary_endpoint_null', 'auth_boundary_endpoint_null');
   $sql$,
   '23502',
-  'null value in column "endpoint" of relation "push_subscriptions" violates not-null constraint',
+  NULL,
   $$endpoint = NULL 입력은 허용되지 않아야 한다. (경계 바깥값)$$
 );
 
@@ -716,7 +716,7 @@ SELECT throws_ok(
     current_setting('test.ps_seed_id')
   ),
   '23502',
-  'null value in column "endpoint" of relation "push_subscriptions" violates not-null constraint',
+  NULL,
   $$기존 유효 행을 endpoint = NULL로 바꾸는 것은 허용되지 않아야 한다. (경계 바깥값)$$
 );
 
@@ -751,7 +751,7 @@ SELECT throws_ok(
     VALUES (gen_random_uuid(), current_setting('test.user_a_id')::uuid, 'https://example.com/endpoint/null-p256dh-boundary', NULL, 'auth_boundary_p256dh_null');
   $sql$,
   '23502',
-  'null value in column "p256dh" of relation "push_subscriptions" violates not-null constraint',
+  NULL,
   $$p256dh = NULL 입력은 허용되지 않아야 한다. (경계 바깥값)$$
 );
 
@@ -778,7 +778,7 @@ SELECT throws_ok(
     current_setting('test.ps_seed_id')
   ),
   '23502',
-  'null value in column "p256dh" of relation "push_subscriptions" violates not-null constraint',
+  NULL,
   $$기존 유효 행을 p256dh = NULL로 바꾸는 것은 허용되지 않아야 한다. (경계 바깥값)$$
 );
 
@@ -813,7 +813,7 @@ SELECT throws_ok(
     VALUES (gen_random_uuid(), current_setting('test.user_a_id')::uuid, 'https://example.com/endpoint/null-auth-boundary', 'p256dh_boundary_auth_null', NULL);
   $sql$,
   '23502',
-  'null value in column "auth" of relation "push_subscriptions" violates not-null constraint',
+  NULL,
   $$auth = NULL 입력은 허용되지 않아야 한다. (경계 바깥값)$$
 );
 
@@ -840,7 +840,7 @@ SELECT throws_ok(
     current_setting('test.ps_seed_id')
   ),
   '23502',
-  'null value in column "auth" of relation "push_subscriptions" violates not-null constraint',
+  NULL,
   $$기존 유효 행을 auth = NULL로 바꾸는 것은 허용되지 않아야 한다. (경계 바깥값)$$
 );
 
@@ -899,7 +899,7 @@ SELECT throws_ok(
     VALUES (gen_random_uuid(), current_setting('test.user_a_id')::uuid, 'https://example.com/endpoint/null-created-at-boundary', 'p256dh_boundary_created_at_null', 'auth_boundary_created_at_null', NULL);
   $sql$,
   '23502',
-  'null value in column "created_at" of relation "push_subscriptions" violates not-null constraint',
+  NULL,
   $$created_at = NULL 명시 INSERT는 허용되지 않아야 한다. (경계 바깥값)$$
 );
 
@@ -926,7 +926,7 @@ SELECT throws_ok(
     current_setting('test.ps_seed_id')
   ),
   '23502',
-  'null value in column "created_at" of relation "push_subscriptions" violates not-null constraint',
+  NULL,
   $$기존 유효 행을 created_at = NULL로 바꾸는 것은 허용되지 않아야 한다. (경계 바깥값)$$
 );
 
@@ -995,7 +995,7 @@ SELECT throws_ok(
     current_setting('test.ps_seed_id')
   ),
   '23502',
-  'null value in column "endpoint" of relation "push_subscriptions" violates not-null constraint',
+  NULL,
   $$endpoint = NULL 업데이트 시도는 허용되지 않아야 한다. (Transition 전제)$$
 );
 
@@ -1027,7 +1027,7 @@ SELECT throws_ok(
     current_setting('test.ps_seed_id')
   ),
   '23502',
-  'null value in column "auth" of relation "push_subscriptions" violates not-null constraint',
+  NULL,
   $$auth = NULL 업데이트 시도는 허용되지 않아야 한다. (Transition 전제)$$
 );
 
