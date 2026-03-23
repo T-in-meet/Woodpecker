@@ -109,8 +109,6 @@ VALUES
   )
 ON CONFLICT (id) DO NOTHING;
 
-RESET ROLE;
-
 -- [정답 조건]
 -- 존재하는 user_a의 id를 참조하는 push_subscriptions INSERT는 성공해야 한다
 SAVEPOINT push_subscriptions_fk_insert_a;
@@ -347,3 +345,4 @@ ROLLBACK TO SAVEPOINT push_subscriptions_fk_transition_other_user;
 
 SELECT * FROM finish();
 ROLLBACK;
+
