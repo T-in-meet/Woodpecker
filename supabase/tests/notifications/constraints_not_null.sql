@@ -5,12 +5,10 @@
 -- 값의 허용 범위나 도메인 유효성은 별도 CHECK 테스트에서 검증한다.
 -- DEFAULT와의 상호작용은 NOT NULL 관점에서만 확인한다.
 
--- TODO: Add tests for read_at and skipped_at once domain policy is finalized
-
 
 BEGIN;
 
-SELECT plan(28);
+SELECT plan(32);
 
 -- 테스트용 UUID 준비
 SELECT set_config('test.notifications_constraints_not_null_user_a_id', gen_random_uuid()::text, true);
@@ -19,6 +17,8 @@ SELECT set_config('test.notifications_constraints_not_null_notification_seed_id'
 SELECT set_config('test.notifications_constraints_not_null_notification_insert_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notifications_constraints_not_null_notification_insert_explicit_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notifications_constraints_not_null_notification_boundary_id', gen_random_uuid()::text, true);
+SELECT set_config('test.notifications_constraints_not_null_read_at_null_id', gen_random_uuid()::text, true);
+SELECT set_config('test.notifications_constraints_not_null_skipped_at_null_id', gen_random_uuid()::text, true);
 
 -- seed: auth.users
 INSERT INTO auth.users (
@@ -113,6 +113,62 @@ SELECT is(
 );
 ROLLBACK TO SAVEPOINT notifications_not_null_insert_ok;
 
+-- read_at을 명시적으로 NULL로 INSERT해도 저장되어야 한다.
+SAVEPOINT notifications_not_null_insert_read_at_null;
+INSERT INTO public.notifications (
+  id,
+  user_id,
+  type,
+  title,
+  status,
+  sent_at,
+  read_at
+)
+VALUES (
+  current_setting('test.notifications_constraints_not_null_read_at_null_id')::uuid,
+  current_setting('test.notifications_constraints_not_null_user_a_id')::uuid,
+  'REVIEW',
+  'read_at null',
+  'SENT',
+  now(),
+  NULL
+);
+
+SELECT is(
+  (SELECT count(*) FROM public.notifications WHERE id = current_setting('test.notifications_constraints_not_null_read_at_null_id')::uuid),
+  1::bigint,
+  $$read_at을 명시적으로 NULL로 INSERT해도 저장되어야 한다.$$
+);
+ROLLBACK TO SAVEPOINT notifications_not_null_insert_read_at_null;
+
+-- skipped_at을 명시적으로 NULL로 INSERT해도 저장되어야 한다.
+SAVEPOINT notifications_not_null_insert_skipped_at_null;
+INSERT INTO public.notifications (
+  id,
+  user_id,
+  type,
+  title,
+  status,
+  sent_at,
+  skipped_at
+)
+VALUES (
+  current_setting('test.notifications_constraints_not_null_skipped_at_null_id')::uuid,
+  current_setting('test.notifications_constraints_not_null_user_a_id')::uuid,
+  'REVIEW',
+  'skipped_at null',
+  'SENT',
+  now(),
+  NULL
+);
+
+SELECT is(
+  (SELECT count(*) FROM public.notifications WHERE id = current_setting('test.notifications_constraints_not_null_skipped_at_null_id')::uuid),
+  1::bigint,
+  $$skipped_at을 명시적으로 NULL로 INSERT해도 저장되어야 한다.$$
+);
+ROLLBACK TO SAVEPOINT notifications_not_null_insert_skipped_at_null;
+
 -- 유효한 기존 알림 행에서 user_id를 다른 유효한 비NULL auth.users.id 값으로 UPDATE할 수 있어야 한다.
 SAVEPOINT notifications_not_null_update_user;
 UPDATE public.notifications
@@ -176,6 +232,30 @@ SELECT ok(
   $$유효한 기존 알림 행에서 sent_at을 다른 유효한 비NULL 시각 값으로 UPDATE할 수 있어야 한다.$$
 );
 ROLLBACK TO SAVEPOINT notifications_not_null_update_sent_at;
+
+-- 유효한 기존 알림 행에서 read_at을 비NULL 시각 값으로 UPDATE할 수 있어야 한다.
+SAVEPOINT notifications_not_null_update_read_at;
+UPDATE public.notifications
+SET read_at = now()
+WHERE id = current_setting('test.notifications_constraints_not_null_notification_seed_id')::uuid;
+
+SELECT ok(
+  (SELECT read_at FROM public.notifications WHERE id = current_setting('test.notifications_constraints_not_null_notification_seed_id')::uuid) IS NOT NULL,
+  $$유효한 기존 알림 행에서 read_at을 비NULL 시각 값으로 UPDATE할 수 있어야 한다.$$
+);
+ROLLBACK TO SAVEPOINT notifications_not_null_update_read_at;
+
+-- 유효한 기존 알림 행에서 skipped_at을 비NULL 시각 값으로 UPDATE할 수 있어야 한다.
+SAVEPOINT notifications_not_null_update_skipped_at;
+UPDATE public.notifications
+SET skipped_at = now()
+WHERE id = current_setting('test.notifications_constraints_not_null_notification_seed_id')::uuid;
+
+SELECT ok(
+  (SELECT skipped_at FROM public.notifications WHERE id = current_setting('test.notifications_constraints_not_null_notification_seed_id')::uuid) IS NOT NULL,
+  $$유효한 기존 알림 행에서 skipped_at을 비NULL 시각 값으로 UPDATE할 수 있어야 한다.$$
+);
+ROLLBACK TO SAVEPOINT notifications_not_null_update_skipped_at;
 
 -- id를 명시적으로 넣는 경우 유효한 비NULL UUID면 생성될 수 있어야 한다.
 SAVEPOINT notifications_not_null_insert_explicit_id;

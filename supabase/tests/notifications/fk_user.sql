@@ -17,7 +17,7 @@ SELECT set_config('test.notifications_fk_user_a1_id', gen_random_uuid()::text, t
 SELECT set_config('test.notifications_fk_user_a2_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notifications_fk_user_b1_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notifications_fk_user_null_id', gen_random_uuid()::text, true);
-SELECT set_config('test.notifications_fk_user_user_b_id', gen_random_uuid()::text, true);
+SELECT set_config('test.notifications_fk_user_notification_user_b_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notifications_fk_user_insert_ok_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notifications_fk_user_insert_min_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notifications_fk_user_insert_max_id', gen_random_uuid()::text, true);
@@ -143,7 +143,7 @@ VALUES
     'SENT'
   ),
   (
-    current_setting('test.notifications_fk_user_user_b_id')::uuid,
+    current_setting('test.notifications_fk_user_notification_user_b_id')::uuid,
     current_setting('test.notifications_fk_user_user_b_id')::uuid,
     NULL,
     'REVIEW',
@@ -227,7 +227,7 @@ SELECT throws_ok(
       WHERE id = '%s'::uuid;
     $sql$,
     current_setting('test.notifications_fk_user_invalid_user_id'),
-    current_setting('test.notifications_fk_user_user_b_id')
+    current_setting('test.notifications_fk_user_notification_user_b_id')
   ),
   '23503',
   'insert or update on table "notifications" violates foreign key constraint "notifications_user_id_fkey"',
@@ -261,7 +261,7 @@ SELECT throws_ok(
       WHERE id = '%s'::uuid;
     $sql$,
     current_setting('test.notifications_fk_user_user_a_id'),
-    current_setting('test.notifications_fk_user_user_b_id')
+    current_setting('test.notifications_fk_user_notification_user_b_id')
   ),
   '23503',
   'insert or update on table "notifications" violates foreign key constraint "notifications_user_id_fkey"',
