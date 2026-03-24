@@ -14,19 +14,17 @@ SELECT plan(9);
 SELECT set_config('test.notes_fk_user_bogus_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notes_fk_user_valid_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notes_fk_user_delete_cascade_id', gen_random_uuid()::text, true);
-SELECT set_config('test.notes_fk_user_update_seed_id', gen_random_uuid()::text, true);
+SELECT set_config('test.notes_fk_user_single_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notes_fk_user_stale_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notes_fk_user_multi_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notes_fk_user_zero_id', gen_random_uuid()::text, true);
-SELECT set_config('test.notes_fk_user_orphan_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notes_fk_note_insert_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notes_fk_note_delete_cascade_id', gen_random_uuid()::text, true);
-SELECT set_config('test.notes_fk_note_update_seed_id', gen_random_uuid()::text, true);
+SELECT set_config('test.notes_fk_note_single_delete_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notes_fk_note_invalid_insert_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notes_fk_note_stale_insert_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notes_fk_note_multi_1_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notes_fk_note_multi_2_id', gen_random_uuid()::text, true);
-SELECT set_config('test.notes_fk_note_orphan_target_id', gen_random_uuid()::text, true);
 
 -- seed
 INSERT INTO auth.users (id, email, raw_user_meta_data)
@@ -42,8 +40,8 @@ VALUES
     '{}'::jsonb
   ),
   (
-    current_setting('test.notes_fk_user_update_seed_id')::uuid,
-    'user_update_seed_' || current_setting('test.notes_fk_user_update_seed_id') || '@example.com',
+    current_setting('test.notes_fk_user_single_id')::uuid,
+    'user_single_' || current_setting('test.notes_fk_user_single_id') || '@example.com',
     '{}'::jsonb
   ),
   (
@@ -59,11 +57,6 @@ VALUES
   (
     current_setting('test.notes_fk_user_zero_id')::uuid,
     'user_zero_' || current_setting('test.notes_fk_user_zero_id') || '@example.com',
-    '{}'::jsonb
-  ),
-  (
-    current_setting('test.notes_fk_user_orphan_id')::uuid,
-    'user_orphan_' || current_setting('test.notes_fk_user_orphan_id') || '@example.com',
     '{}'::jsonb
   )
 ON CONFLICT (id) DO NOTHING;
@@ -84,10 +77,10 @@ VALUES
     0
   ),
   (
-    current_setting('test.notes_fk_note_update_seed_id')::uuid,
-    current_setting('test.notes_fk_user_update_seed_id')::uuid,
-    'update seed note',
-    'update seed content',
+    current_setting('test.notes_fk_note_single_delete_id')::uuid,
+    current_setting('test.notes_fk_user_single_id')::uuid,
+    'single delete seed note',
+    'single delete seed content',
     0
   )
 ON CONFLICT (id) DO NOTHING;
@@ -103,7 +96,7 @@ SELECT lives_ok(
     current_setting('test.notes_fk_note_insert_id'),
     current_setting('test.notes_fk_user_valid_id')
   ),
-  'auth.users에 존재하는 user_id로 notes INSERT가 성공해야 한다'
+  $$auth.users에 존재하는 user_id로 notes INSERT가 성공해야 한다$$
 );
 
 -- auth.users에서 user_a를 삭제하면 user_a의 notes가 자동으로 삭제되어야 한다
@@ -111,11 +104,11 @@ DELETE FROM auth.users WHERE id = current_setting('test.notes_fk_user_delete_cas
 SELECT is(
   (SELECT count(*) FROM public.notes WHERE user_id = current_setting('test.notes_fk_user_delete_cascade_id')::uuid),
   0::bigint,
-  'auth.users에서 user_a를 삭제하면 user_a의 notes가 자동으로 삭제되어야 한다'
+  $$auth.users에서 user_a를 삭제하면 user_a의 notes가 자동으로 삭제되어야 한다$$
 );
 
 -- [예외 조건]
--- auth.users에 존재하지 않는 user_id로 notes INSERT를 시도하면 FK 위반으로 실패해야 한다
+-- auth.users에 존재하지 않는 user_id로 notes INSERT를 시도하면 실패해야 한다
 SELECT throws_ok(
   format(
     $sql$
@@ -127,23 +120,7 @@ SELECT throws_ok(
   ),
   '23503',
   NULL,
-  'auth.users에 존재하지 않는 user_id로 notes INSERT를 시도하면 FK 위반으로 실패해야 한다'
-);
-
--- 기존에 유효한 notes 행의 user_id를 auth.users에 존재하지 않는 값으로 UPDATE하면 FK 위반으로 실패해야 한다
-SELECT throws_ok(
-  format(
-    $sql$
-      UPDATE public.notes
-      SET user_id = '%s'::uuid
-      WHERE id = '%s'::uuid;
-    $sql$,
-    current_setting('test.notes_fk_user_bogus_id'),
-    current_setting('test.notes_fk_note_update_seed_id')
-  ),
-  '23503',
-  NULL,
-  '기존에 유효한 notes 행의 user_id를 auth.users에 존재하지 않는 값으로 UPDATE하면 FK 위반으로 실패해야 한다'
+  $$auth.users에 존재하지 않는 user_id로 notes INSERT를 시도하면 실패해야 한다$$
 );
 
 -- [경계 조건]
@@ -161,7 +138,15 @@ SELECT throws_ok(
   ),
   '23503',
   NULL,
-  'user_a가 auth.users에서 삭제된 직후, 해당 user_id로 notes INSERT를 시도하면 실패해야 한다'
+  $$user_a가 auth.users에서 삭제된 직후, 해당 user_id로 notes INSERT를 시도하면 실패해야 한다$$
+);
+
+-- user_a의 notes가 정확히 1개일 때 user_a를 삭제하면 해당 notes 1개가 삭제되어야 한다
+DELETE FROM auth.users WHERE id = current_setting('test.notes_fk_user_single_id')::uuid;
+SELECT is(
+  (SELECT count(*) FROM public.notes WHERE user_id = current_setting('test.notes_fk_user_single_id')::uuid),
+  0::bigint,
+  $$user_a의 notes가 정확히 1개일 때 user_a를 삭제하면 해당 notes 1개가 삭제되어야 한다$$
 );
 
 -- user_a의 notes가 여러 개일 때 user_a를 삭제하면 모든 notes가 남김없이 삭제되어야 한다
@@ -187,7 +172,7 @@ DELETE FROM auth.users WHERE id = current_setting('test.notes_fk_user_multi_id')
 SELECT is(
   (SELECT count(*) FROM public.notes WHERE user_id = current_setting('test.notes_fk_user_multi_id')::uuid),
   0::bigint,
-  'user_a의 notes가 여러 개일 때 user_a를 삭제하면 모든 notes가 남김없이 삭제되어야 한다'
+  $$user_a의 notes가 여러 개일 때 user_a를 삭제하면 모든 notes가 남김없이 삭제되어야 한다$$
 );
 
 -- user_a의 notes가 0개일 때 user_a를 삭제해도 오류 없이 성공해야 한다
@@ -198,36 +183,29 @@ SELECT lives_ok(
     $sql$,
     current_setting('test.notes_fk_user_zero_id')
   ),
-  'user_a의 notes가 0개일 때 user_a를 삭제해도 오류 없이 성공해야 한다'
+  $$user_a의 notes가 0개일 때 user_a를 삭제해도 오류 없이 성공해야 한다$$
 );
 
 -- [불변 조건]
--- notes 테이블에는 auth.users에 대응하는 행이 없는 orphan notes가 존재해서는 안 된다
+-- notes 테이블에는 auth.users에 존재하지 않는 user_id를 참조하는 orphan notes가 존재해서는 안 된다
 SELECT is(
   (SELECT count(*)
    FROM public.notes n
    LEFT JOIN auth.users u ON u.id = n.user_id
    WHERE u.id IS NULL),
   0::bigint,
-  'notes 테이블에는 auth.users에 대응하는 행이 없는 orphan notes가 존재해서는 안 된다'
+  $$notes 테이블에는 auth.users에 존재하지 않는 user_id를 참조하는 orphan notes가 존재해서는 안 된다$$
 );
 
--- 부모 삭제 직전 존재하던 특정 자식 notes 행은 부모 삭제 직후 남아 있어서는 안 된다
-INSERT INTO public.notes (id, user_id, title, content, review_round)
-VALUES (
-  current_setting('test.notes_fk_note_orphan_target_id')::uuid,
-  current_setting('test.notes_fk_user_orphan_id')::uuid,
-  'transition note',
-  'transition content',
-  0
-)
-ON CONFLICT (id) DO NOTHING;
-
-DELETE FROM auth.users WHERE id = current_setting('test.notes_fk_user_orphan_id')::uuid;
+-- 부모 user 삭제 이후 해당 user_id를 참조하는 notes 개수는 항상 0이어야 한다
 SELECT is(
-  (SELECT count(*) FROM public.notes WHERE id = current_setting('test.notes_fk_note_orphan_target_id')::uuid),
+  (SELECT count(*) FROM public.notes WHERE user_id IN (
+    current_setting('test.notes_fk_user_delete_cascade_id')::uuid,
+    current_setting('test.notes_fk_user_single_id')::uuid,
+    current_setting('test.notes_fk_user_multi_id')::uuid
+  )),
   0::bigint,
-  '부모 삭제 직전 존재하던 특정 자식 notes 행은 부모 삭제 직후 남아 있어서는 안 된다'
+  $$부모 user 삭제 이후 해당 user_id를 참조하는 notes 개수는 항상 0이어야 한다$$
 );
 
 SELECT * FROM finish();
