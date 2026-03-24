@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
+import { useActionState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,16 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 
-import { changePasswordAction, logoutAction } from "../actions";
-import { DeleteAccountDialog } from "./DeleteAccountDialog";
+import { changePasswordAction } from "../actions";
 
 export function AccountSection() {
   const [passwordState, passwordFormAction, isPasswordPending] = useActionState(
     changePasswordAction,
     null,
   );
-  const [isLogoutPending, startLogoutTransition] = useTransition();
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const passwordFieldErrors =
     passwordState?.error && typeof passwordState.error === "object"
@@ -33,13 +30,13 @@ export function AccountSection() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>계정 관리</CardTitle>
+        <CardTitle>비밀번호 변경</CardTitle>
       </CardHeader>
+      <Separator />
       <CardContent className="space-y-6">
-        <div>
-          <h4 className="mb-4 text-sm font-medium">비밀번호 변경</h4>
-          <form action={passwordFormAction} className="space-y-3">
-            <div className="space-y-2">
+        <div className="my-5">
+          <form action={passwordFormAction} className="space-y-6">
+            <div className="space-y-3">
               <Label htmlFor="currentPassword">현재 비밀번호</Label>
               <Input
                 id="currentPassword"
@@ -53,7 +50,7 @@ export function AccountSection() {
                 </p>
               )}
             </div>
-            <div className="space-y-2">
+            <div className="space-y-3">
               <Label htmlFor="newPassword">새 비밀번호</Label>
               <Input
                 id="newPassword"
@@ -67,7 +64,7 @@ export function AccountSection() {
                 </p>
               )}
             </div>
-            <div className="space-y-2">
+            <div className="space-y-3">
               <Label htmlFor="confirmNewPassword">새 비밀번호 확인</Label>
               <Input
                 id="confirmNewPassword"
@@ -93,53 +90,6 @@ export function AccountSection() {
               {isPasswordPending ? "변경 중..." : "비밀번호 변경"}
             </Button>
           </form>
-        </div>
-
-        <Separator />
-
-        <div>
-          <h4 className="mb-2 text-sm font-medium">로그아웃</h4>
-          <p className="mb-3 text-sm text-muted-foreground">
-            현재 기기에서 로그아웃합니다.
-          </p>
-          <form
-            action={() => {
-              startLogoutTransition(async () => {
-                await logoutAction();
-              });
-            }}
-          >
-            <Button
-              type="submit"
-              variant="outline"
-              size="sm"
-              disabled={isLogoutPending}
-            >
-              {isLogoutPending ? "로그아웃 중..." : "로그아웃"}
-            </Button>
-          </form>
-        </div>
-
-        <Separator />
-
-        <div>
-          <h4 className="mb-2 text-sm font-medium text-destructive">
-            계정 삭제
-          </h4>
-          <p className="mb-3 text-sm text-muted-foreground">
-            계정을 삭제하면 모든 데이터가 영구적으로 삭제됩니다.
-          </p>
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => setShowDeleteDialog(true)}
-          >
-            계정 삭제
-          </Button>
-          <DeleteAccountDialog
-            open={showDeleteDialog}
-            onOpenChange={setShowDeleteDialog}
-          />
         </div>
       </CardContent>
     </Card>
