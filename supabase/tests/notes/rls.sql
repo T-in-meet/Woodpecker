@@ -7,16 +7,16 @@ BEGIN;
 SELECT plan(16);
 
 -- 테스트용 UUID 준비
-SELECT set_config('test.user_a_id', gen_random_uuid()::text, true);
-SELECT set_config('test.user_b_id', gen_random_uuid()::text, true);
-SELECT set_config('test.note_a_select_id', gen_random_uuid()::text, true);
-SELECT set_config('test.note_a_update_id', gen_random_uuid()::text, true);
-SELECT set_config('test.note_a_delete_id', gen_random_uuid()::text, true);
-SELECT set_config('test.note_b_select_id', gen_random_uuid()::text, true);
-SELECT set_config('test.note_b_update_id', gen_random_uuid()::text, true);
-SELECT set_config('test.note_b_delete_id', gen_random_uuid()::text, true);
-SELECT set_config('test.note_a_single_id', gen_random_uuid()::text, true);
-SELECT set_config('test.note_invalid_id', gen_random_uuid()::text, true);
+SELECT set_config('test.notes_rls_user_a_id', gen_random_uuid()::text, true);
+SELECT set_config('test.notes_rls_user_b_id', gen_random_uuid()::text, true);
+SELECT set_config('test.notes_rls_note_a_select_id', gen_random_uuid()::text, true);
+SELECT set_config('test.notes_rls_note_a_update_id', gen_random_uuid()::text, true);
+SELECT set_config('test.notes_rls_note_a_delete_id', gen_random_uuid()::text, true);
+SELECT set_config('test.notes_rls_note_b_select_id', gen_random_uuid()::text, true);
+SELECT set_config('test.notes_rls_note_b_update_id', gen_random_uuid()::text, true);
+SELECT set_config('test.notes_rls_note_b_delete_id', gen_random_uuid()::text, true);
+SELECT set_config('test.notes_rls_note_a_single_id', gen_random_uuid()::text, true);
+SELECT set_config('test.notes_rls_note_invalid_id', gen_random_uuid()::text, true);
 
 -- seed
 INSERT INTO auth.users (
@@ -34,11 +34,11 @@ INSERT INTO auth.users (
 )
 VALUES
   (
-    current_setting('test.user_a_id')::uuid,
+    current_setting('test.notes_rls_user_a_id')::uuid,
     '00000000-0000-0000-0000-000000000000',
     'authenticated',
     'authenticated',
-    'user_a_' || current_setting('test.user_a_id') || '@example.com',
+    'user_a_' || current_setting('test.notes_rls_user_a_id') || '@example.com',
     crypt('password123', gen_salt('bf')),
     now(),
     '{"provider":"email","providers":["email"]}'::jsonb,
@@ -47,11 +47,11 @@ VALUES
     now()
   ),
   (
-    current_setting('test.user_b_id')::uuid,
+    current_setting('test.notes_rls_user_b_id')::uuid,
     '00000000-0000-0000-0000-000000000000',
     'authenticated',
     'authenticated',
-    'user_b_' || current_setting('test.user_b_id') || '@example.com',
+    'user_b_' || current_setting('test.notes_rls_user_b_id') || '@example.com',
     crypt('password123', gen_salt('bf')),
     now(),
     '{"provider":"email","providers":["email"]}'::jsonb,
@@ -71,48 +71,48 @@ INSERT INTO public.notes (
 )
 VALUES
   (
-    current_setting('test.note_a_select_id')::uuid,
-    current_setting('test.user_a_id')::uuid,
+    current_setting('test.notes_rls_note_a_select_id')::uuid,
+    current_setting('test.notes_rls_user_a_id')::uuid,
     'note a select',
     'content a select',
     0,
     now() + interval '1 day'
   ),
   (
-    current_setting('test.note_a_update_id')::uuid,
-    current_setting('test.user_a_id')::uuid,
+    current_setting('test.notes_rls_note_a_update_id')::uuid,
+    current_setting('test.notes_rls_user_a_id')::uuid,
     'note a update',
     'content a update',
     0,
     now() + interval '2 days'
   ),
   (
-    current_setting('test.note_a_delete_id')::uuid,
-    current_setting('test.user_a_id')::uuid,
+    current_setting('test.notes_rls_note_a_delete_id')::uuid,
+    current_setting('test.notes_rls_user_a_id')::uuid,
     'note a delete',
     'content a delete',
     0,
     now() + interval '3 days'
   ),
   (
-    current_setting('test.note_b_select_id')::uuid,
-    current_setting('test.user_b_id')::uuid,
+    current_setting('test.notes_rls_note_b_select_id')::uuid,
+    current_setting('test.notes_rls_user_b_id')::uuid,
     'note b select',
     'content b select',
     0,
     now() + interval '4 days'
   ),
   (
-    current_setting('test.note_b_update_id')::uuid,
-    current_setting('test.user_b_id')::uuid,
+    current_setting('test.notes_rls_note_b_update_id')::uuid,
+    current_setting('test.notes_rls_user_b_id')::uuid,
     'note b update',
     'content b update',
     0,
     now() + interval '5 days'
   ),
   (
-    current_setting('test.note_b_delete_id')::uuid,
-    current_setting('test.user_b_id')::uuid,
+    current_setting('test.notes_rls_note_b_delete_id')::uuid,
+    current_setting('test.notes_rls_user_b_id')::uuid,
     'note b delete',
     'content b delete',
     0,
@@ -126,14 +126,14 @@ SET LOCAL ROLE authenticated;
 SELECT set_config(
   'request.jwt.claims',
   json_build_object(
-    'sub', current_setting('test.user_a_id'),
+    'sub', current_setting('test.notes_rls_user_a_id'),
     'role', 'authenticated'
   )::text,
   true
 );
 
 SELECT is(
-  (SELECT count(*) FROM public.notes WHERE id = current_setting('test.note_a_select_id')::uuid),
+  (SELECT count(*) FROM public.notes WHERE id = current_setting('test.notes_rls_note_a_select_id')::uuid),
   1::bigint,
   'user_a로 인증 후 user_a의 노트를 SELECT하면 해당 행이 반환된다'
 );
@@ -144,7 +144,7 @@ SAVEPOINT notes_update_own;
 WITH updated AS (
   UPDATE public.notes
   SET title = title || ' updated'
-  WHERE id = current_setting('test.note_a_update_id')::uuid
+  WHERE id = current_setting('test.notes_rls_note_a_update_id')::uuid
   RETURNING 1
 )
 SELECT is(
@@ -160,7 +160,7 @@ SAVEPOINT notes_delete_own;
 
 WITH deleted AS (
   DELETE FROM public.notes
-  WHERE id = current_setting('test.note_a_delete_id')::uuid
+  WHERE id = current_setting('test.notes_rls_note_a_delete_id')::uuid
   RETURNING 1
 )
 SELECT is(
@@ -179,7 +179,7 @@ SELECT lives_ok(
       INSERT INTO public.notes (id, user_id, title, content, review_round)
       VALUES (gen_random_uuid(), '%s'::uuid, 'insert own', 'content', 0);
     $sql$,
-    current_setting('test.user_a_id')
+    current_setting('test.notes_rls_user_a_id')
   ),
   'user_a로 인증 후 user_a의 user_id로 INSERT하면 성공해야 한다'
 );
@@ -188,7 +188,7 @@ ROLLBACK TO SAVEPOINT notes_insert_own;
 -- [예외 조건]
 -- user_a로 인증 후 user_b의 노트를 SELECT할 수 없어야 한다
 SELECT is(
-  (SELECT count(*) FROM public.notes WHERE id = current_setting('test.note_b_select_id')::uuid),
+  (SELECT count(*) FROM public.notes WHERE id = current_setting('test.notes_rls_note_b_select_id')::uuid),
   0::bigint,
   'user_a로 인증 후 user_b의 노트를 SELECT할 수 없어야 한다'
 );
@@ -197,7 +197,7 @@ SELECT is(
 WITH updated AS (
   UPDATE public.notes
   SET title = 'blocked'
-  WHERE id = current_setting('test.note_b_update_id')::uuid
+  WHERE id = current_setting('test.notes_rls_note_b_update_id')::uuid
   RETURNING 1
 )
 SELECT is(
@@ -209,7 +209,7 @@ SELECT is(
 -- user_a로 인증 후 user_b의 노트를 DELETE할 수 없어야 한다
 WITH deleted AS (
   DELETE FROM public.notes
-  WHERE id = current_setting('test.note_b_delete_id')::uuid
+  WHERE id = current_setting('test.notes_rls_note_b_delete_id')::uuid
   RETURNING 1
 )
 SELECT is(
@@ -225,8 +225,8 @@ SELECT throws_ok(
       INSERT INTO public.notes (id, user_id, title, content, review_round)
       VALUES ('%s'::uuid, '%s'::uuid, 'blocked', 'blocked', 0);
     $sql$,
-    current_setting('test.note_invalid_id'),
-    current_setting('test.user_b_id')
+    current_setting('test.notes_rls_note_invalid_id'),
+    current_setting('test.notes_rls_user_b_id')
   ),
   '42501',
   'new row violates row-level security policy for table "notes"',
@@ -249,7 +249,7 @@ SET LOCAL ROLE authenticated;
 SELECT set_config(
   'request.jwt.claims',
   json_build_object(
-    'sub', current_setting('test.user_a_id'),
+    'sub', current_setting('test.notes_rls_user_a_id'),
     'role', 'authenticated'
   )::text,
   true
@@ -257,7 +257,7 @@ SELECT set_config(
 
 SAVEPOINT notes_boundary_zero;
 DELETE FROM public.notes
-WHERE user_id = current_setting('test.user_a_id')::uuid;
+WHERE user_id = current_setting('test.notes_rls_user_a_id')::uuid;
 
 SELECT is(
   (SELECT count(*) FROM public.notes),
@@ -270,7 +270,7 @@ ROLLBACK TO SAVEPOINT notes_boundary_zero;
 -- user_a의 노트가 1개일 때 전체 조회 결과는 정확히 1개여야 한다
 SAVEPOINT notes_boundary_one;
 DELETE FROM public.notes
-WHERE user_id = current_setting('test.user_a_id')::uuid;
+WHERE user_id = current_setting('test.notes_rls_user_a_id')::uuid;
 
 INSERT INTO public.notes (
   id,
@@ -280,8 +280,8 @@ INSERT INTO public.notes (
   review_round
 )
 VALUES (
-  current_setting('test.note_a_single_id')::uuid,
-  current_setting('test.user_a_id')::uuid,
+  current_setting('test.notes_rls_note_a_single_id')::uuid,
+  current_setting('test.notes_rls_user_a_id')::uuid,
   'note a single',
   'content a single',
   0
@@ -306,21 +306,21 @@ SELECT is(
 -- [불변 조건]
 -- 인증된 사용자의 전체 조회 결과에는 본인 데이터가 기대 개수만큼 존재해야 한다
 SELECT is(
-  (SELECT count(*) FROM public.notes WHERE user_id = current_setting('test.user_a_id')::uuid),
+  (SELECT count(*) FROM public.notes WHERE user_id = current_setting('test.notes_rls_user_a_id')::uuid),
   3::bigint,
   '인증된 사용자의 전체 조회 결과에는 본인 데이터가 기대 개수만큼 존재해야 한다'
 );
 
 -- 인증된 사용자의 전체 조회 결과에는 타인 데이터가 0개여야 한다
 SELECT is(
-  (SELECT count(*) FROM public.notes WHERE user_id <> current_setting('test.user_a_id')::uuid),
+  (SELECT count(*) FROM public.notes WHERE user_id <> current_setting('test.notes_rls_user_a_id')::uuid),
   0::bigint,
   '인증된 사용자의 전체 조회 결과에는 타인 데이터가 0개여야 한다'
 );
 
 -- 인증된 사용자의 전체 조회 결과에는 user_b의 notes가 0개여야 한다
 SELECT is(
-  (SELECT count(*) FROM public.notes WHERE user_id = current_setting('test.user_b_id')::uuid),
+  (SELECT count(*) FROM public.notes WHERE user_id = current_setting('test.notes_rls_user_b_id')::uuid),
   0::bigint,
   '인증된 사용자의 전체 조회 결과에는 user_b의 notes가 0개여야 한다'
 );

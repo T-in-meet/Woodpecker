@@ -7,14 +7,14 @@ BEGIN;
 SELECT plan(15);
 
 -- 테스트용 UUID 준비
-SELECT set_config('test.user_a_id', gen_random_uuid()::text, true);
-SELECT set_config('test.seed_note_id', gen_random_uuid()::text, true);
+SELECT set_config('test.notes_constraints_not_null_user_a_id', gen_random_uuid()::text, true);
+SELECT set_config('test.notes_constraints_not_null_seed_note_id', gen_random_uuid()::text, true);
 
 -- seed
 INSERT INTO auth.users (id, email, raw_user_meta_data)
 VALUES (
-  current_setting('test.user_a_id')::uuid,
-  'user_a_' || current_setting('test.user_a_id') || '@example.com',
+  current_setting('test.notes_constraints_not_null_user_a_id')::uuid,
+  'user_a_' || current_setting('test.notes_constraints_not_null_user_a_id') || '@example.com',
   '{}'::jsonb
 )
 ON CONFLICT (id) DO NOTHING;
@@ -27,8 +27,8 @@ INSERT INTO public.notes (
   review_round
 )
 VALUES (
-  current_setting('test.seed_note_id')::uuid,
-  current_setting('test.user_a_id')::uuid,
+  current_setting('test.notes_constraints_not_null_seed_note_id')::uuid,
+  current_setting('test.notes_constraints_not_null_user_a_id')::uuid,
   'seed title',
   'seed content',
   0
@@ -44,7 +44,7 @@ SELECT lives_ok(
       INSERT INTO public.notes (id, user_id, title, content, review_round)
       VALUES (gen_random_uuid(), '%s'::uuid, 'nn title', 'nn content', 0);
     $sql$,
-    current_setting('test.user_a_id')
+    current_setting('test.notes_constraints_not_null_user_a_id')
   ),
   'title, content, review_round가 모두 값이 있으면 INSERT가 성공해야 한다'
 );
@@ -66,7 +66,7 @@ SELECT throws_ok(
       INSERT INTO public.notes (id, user_id, title, content, review_round)
       VALUES (gen_random_uuid(), '%s'::uuid, NULL, 'content', 0);
     $sql$,
-    current_setting('test.user_a_id')
+    current_setting('test.notes_constraints_not_null_user_a_id')
   ),
   '23502',
   'null value in column "title" of relation "notes" violates not-null constraint',
@@ -80,7 +80,7 @@ SELECT throws_ok(
       INSERT INTO public.notes (id, user_id, title, content, review_round)
       VALUES (gen_random_uuid(), '%s'::uuid, 'title', NULL, 0);
     $sql$,
-    current_setting('test.user_a_id')
+    current_setting('test.notes_constraints_not_null_user_a_id')
   ),
   '23502',
   'null value in column "content" of relation "notes" violates not-null constraint',
@@ -94,7 +94,7 @@ SELECT throws_ok(
       INSERT INTO public.notes (id, user_id, title, content, review_round)
       VALUES (gen_random_uuid(), '%s'::uuid, 'title', 'content', NULL);
     $sql$,
-    current_setting('test.user_a_id')
+    current_setting('test.notes_constraints_not_null_user_a_id')
   ),
   '23502',
   'null value in column "review_round" of relation "notes" violates not-null constraint',
@@ -108,7 +108,7 @@ SELECT throws_ok(
       SET user_id = NULL
       WHERE id = '%s'::uuid;
     $sql$,
-    current_setting('test.seed_note_id')
+    current_setting('test.notes_constraints_not_null_seed_note_id')
   ),
   '23502',
   'null value in column "user_id" of relation "notes" violates not-null constraint',
@@ -122,7 +122,7 @@ SELECT throws_ok(
       SET title = NULL
       WHERE id = '%s'::uuid;
     $sql$,
-    current_setting('test.seed_note_id')
+    current_setting('test.notes_constraints_not_null_seed_note_id')
   ),
   '23502',
   'null value in column "title" of relation "notes" violates not-null constraint',
@@ -137,7 +137,7 @@ SELECT throws_ok(
       SET content = NULL
       WHERE id = '%s'::uuid;
     $sql$,
-    current_setting('test.seed_note_id')
+    current_setting('test.notes_constraints_not_null_seed_note_id')
   ),
   '23502',
   'null value in column "content" of relation "notes" violates not-null constraint',
@@ -152,7 +152,7 @@ SELECT throws_ok(
       SET review_round = NULL
       WHERE id = '%s'::uuid;
     $sql$,
-    current_setting('test.seed_note_id')
+    current_setting('test.notes_constraints_not_null_seed_note_id')
   ),
   '23502',
   'null value in column "review_round" of relation "notes" violates not-null constraint',
@@ -169,7 +169,7 @@ SELECT lives_ok(
       INSERT INTO public.notes (id, user_id, title, content, review_round)
       VALUES (gen_random_uuid(), '%s'::uuid, '', 'content', 0);
     $sql$,
-    current_setting('test.user_a_id')
+    current_setting('test.notes_constraints_not_null_user_a_id')
   ),
   $$title에 빈 문자열('')을 넣으면 NOT NULL은 통과해야 한다$$
 );
@@ -183,7 +183,7 @@ SELECT lives_ok(
       INSERT INTO public.notes (id, user_id, title, content, review_round)
       VALUES (gen_random_uuid(), '%s'::uuid, 'title', '', 0);
     $sql$,
-    current_setting('test.user_a_id')
+    current_setting('test.notes_constraints_not_null_user_a_id')
   ),
   $$content에 빈 문자열('')을 넣으면 NOT NULL은 통과해야 한다$$
 );
