@@ -13,7 +13,7 @@ export function MypageHeader() {
       <Button variant="ghost" size="icon" onClick={() => router.back()}>
         <ArrowLeft className="size-5" />
       </Button>
-      <h1 className="text-2xl font-bold">마이페이지</h1>
+      <h1 className="text-xl font-bold">마이페이지</h1>
     </div>
   );
 }

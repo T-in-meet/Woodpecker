@@ -5,7 +5,6 @@ import { redirect } from "next/navigation";
 import { AccountSection } from "@/features/mypage/components/AccountSection";
 import { DeleteAccountSection } from "@/features/mypage/components/DeleteAccountSection";
 import { LearningStatsSection } from "@/features/mypage/components/LearningStatsSection";
-import { LogoutSection } from "@/features/mypage/components/LogoutSection";
 import {
   MypageNav,
   type MypageSection,
@@ -133,10 +132,9 @@ export default async function MyPage({ searchParams }: Props) {
         <div className="flex-1 space-y-6">
           {section === "profile" && (
             <>
-              <ProfileSection profile={profile} />
-              <LogoutSection />
+              <ProfileSection profile={profile} email={user?.email ?? ""} />
               <AccountSection />
-              <DeleteAccountSection />
+              <DeleteAccountSection userEmail={user?.email ?? ""} />
             </>
           )}
           {section === "stats" && <LearningStatsSection stats={stats} />}

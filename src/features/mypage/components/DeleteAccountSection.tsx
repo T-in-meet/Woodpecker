@@ -8,11 +8,15 @@ import { Separator } from "@/components/ui/separator";
 
 import { DeleteAccountDialog } from "./DeleteAccountDialog";
 
-export function DeleteAccountSection() {
+type DeleteAccountSectionProps = {
+  userEmail: string;
+};
+
+export function DeleteAccountSection({ userEmail }: DeleteAccountSectionProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   return (
-    <Card className="border-destructive/50">
+    <Card>
       <CardHeader>
         <CardTitle className="text-destructive">계정 삭제</CardTitle>
       </CardHeader>
@@ -33,6 +37,7 @@ export function DeleteAccountSection() {
           <DeleteAccountDialog
             open={showDeleteDialog}
             onOpenChange={setShowDeleteDialog}
+            userEmail={userEmail}
           />
         </div>
       </CardContent>

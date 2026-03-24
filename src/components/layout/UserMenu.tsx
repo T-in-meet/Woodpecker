@@ -33,7 +33,7 @@ export function UserMenu({ nickname, email, avatarUrl }: UserMenuProps) {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 rounded-full p-1 transition-colors hover:bg-accent"
+        className="flex items-center gap-2 rounded-full p-1 transition-colors hover:bg-accent cursor-pointer"
         aria-expanded={open}
         aria-haspopup="true"
       >
@@ -72,14 +72,14 @@ export function UserMenu({ nickname, email, avatarUrl }: UserMenuProps) {
               <User className="size-4" />
               마이페이지
             </Link>
-            <Link
+            {/* <Link
               href={`${ROUTES.MYPAGE}?section=account`}
               onClick={() => setOpen(false)}
               className="flex items-center gap-2 px-4 py-2 text-sm transition-colors hover:bg-accent"
             >
               <Settings className="size-4" />
               계정 설정
-            </Link>
+            </Link> */}
           </div>
 
           <div className="border-t" />

@@ -12,9 +12,10 @@ import { updateProfileAction } from "../actions";
 
 type ProfileSectionProps = {
   profile: Profile;
+  email: string;
 };
 
-export function ProfileSection({ profile }: ProfileSectionProps) {
+export function ProfileSection({ profile, email }: ProfileSectionProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [state, formAction, isPending] = useActionState(
     async (prevState: unknown, formData: FormData) => {
@@ -105,7 +106,10 @@ export function ProfileSection({ profile }: ProfileSectionProps) {
             <div className="space-y-1">
               <p className="font-medium">{profile.nickname}</p>
               <p className="text-sm text-muted-foreground">
-                {profile.role === "ADMIN" ? "관리자" : "일반 사용자"}
+                {profile.role === "ADMIN" ? "관리자" : ""}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                이메일 주소:{email}
               </p>
               <p className="text-xs text-muted-foreground">
                 가입일:{" "}
