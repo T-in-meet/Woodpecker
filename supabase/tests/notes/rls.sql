@@ -350,7 +350,7 @@ SELECT lives_ok(
   $$user_a 소유 notes가 0건인 상태에서도 user_a 명의 INSERT는 성공해야 한다$$
 );
 
--- user_a 소유 notes가 0건 / 1건 / 여러 건 어느 상태이든 user_b 명의 INSERT는 항상 허용되면 안 된다
+-- user_a 소유 notes가 0건인 상태에서도 user_b 명의 INSERT는 허용되면 안 된다
 SELECT throws_ok(
   format(
     $sql$
@@ -362,7 +362,7 @@ SELECT throws_ok(
   ),
   '42501',
   NULL,
-  $$user_a 소유 notes가 0건 / 1건 / 여러 건 어느 상태이든 user_b 명의 INSERT는 항상 허용되면 안 된다$$
+  $$user_a 소유 notes가 0건인 상태에서도 user_b 명의 INSERT는 허용되면 안 된다$$
 );
 
 DELETE FROM public.notes
@@ -391,7 +391,7 @@ SELECT is(
   $$user_a 소유 notes가 1건일 때, user_a의 조건 없는 SELECT 결과는 정확히 1건이어야 한다$$
 );
 
--- user_a 소유 notes가 1건일 때, user_a는 자신의 1건만 UPDATE할 수 있어야 하며 타인 note는 UPDATE할 수 없어야 한다
+-- user_a 소유 notes가 1건일 때, user_a는 자신의 1건만 UPDATE할 수 있어야 한다
 WITH updated AS (
   UPDATE public.notes
   SET title = 'one own updated'
@@ -401,10 +401,10 @@ WITH updated AS (
 SELECT is(
   (SELECT count(*) FROM updated),
   1::bigint,
-  $$user_a 소유 notes가 1건일 때, user_a는 자신의 1건만 UPDATE할 수 있어야 하며 타인 note는 UPDATE할 수 없어야 한다$$
+  $$user_a 소유 notes가 1건일 때, user_a는 자신의 1건만 UPDATE할 수 있어야 한다$$
 );
 
--- user_a 소유 notes가 1건일 때, user_a는 자신의 1건만 UPDATE할 수 있어야 하며 타인 note는 UPDATE할 수 없어야 한다
+-- user_a 소유 notes가 1건일 때, user_a는 타인 note를 UPDATE할 수 없어야 한다
 WITH updated AS (
   UPDATE public.notes
   SET title = 'one other blocked'
@@ -414,10 +414,10 @@ WITH updated AS (
 SELECT is(
   (SELECT count(*) FROM updated),
   0::bigint,
-  $$user_a 소유 notes가 1건일 때, user_a는 자신의 1건만 UPDATE할 수 있어야 하며 타인 note는 UPDATE할 수 없어야 한다$$
+  $$user_a 소유 notes가 1건일 때, user_a는 타인 note를 UPDATE할 수 없어야 한다$$
 );
 
--- user_a 소유 notes가 0건 / 1건 / 여러 건 어느 상태이든 user_b 명의 INSERT는 항상 허용되면 안 된다
+-- user_a 소유 notes가 1건일 때도 user_b 명의 INSERT는 허용되면 안 된다
 SELECT throws_ok(
   format(
     $sql$
@@ -429,7 +429,7 @@ SELECT throws_ok(
   ),
   '42501',
   NULL,
-  $$user_a 소유 notes가 0건 / 1건 / 여러 건 어느 상태이든 user_b 명의 INSERT는 항상 허용되면 안 된다$$
+  $$user_a 소유 notes가 1건일 때도 user_b 명의 INSERT는 허용되면 안 된다$$
 );
 
 DELETE FROM public.notes
@@ -540,7 +540,7 @@ SELECT lives_ok(
   $$user_a 소유 notes가 이미 여러 건인 상태에서도 user_a 명의 INSERT는 성공해야 한다$$
 );
 
--- user_a 소유 notes가 0건 / 1건 / 여러 건 어느 상태이든 user_b 명의 INSERT는 항상 허용되면 안 된다
+-- user_a 소유 notes가 여러 건인 상태에서도 user_b 명의 INSERT는 허용되면 안 된다
 SELECT throws_ok(
   format(
     $sql$
@@ -552,7 +552,7 @@ SELECT throws_ok(
   ),
   '42501',
   NULL,
-  $$user_a 소유 notes가 0건 / 1건 / 여러 건 어느 상태이든 user_b 명의 INSERT는 항상 허용되면 안 된다$$
+  $$user_a 소유 notes가 여러 건인 상태에서도 user_b 명의 INSERT는 허용되면 안 된다$$
 );
 
 -- [불변 조건]

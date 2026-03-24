@@ -4,7 +4,7 @@
 
 BEGIN;
 
-SELECT plan(19);
+SELECT plan(25);
 
 -- 테스트용 UUID 준비
 SELECT set_config('test.notes_constraints_check_user_a_id', gen_random_uuid()::text, true);
@@ -175,7 +175,7 @@ SELECT throws_ok(
   $$review_round = 4로 INSERT 시 CHECK 제약 위반으로 실패해야 한다$$
 );
 
--- review_round를 유효한 값에서 범위 밖 값으로 UPDATE 시 실패해야 한다
+-- review_round를 범위 초과 값(5)으로 UPDATE 시 실패해야 한다
 SELECT throws_ok(
   format(
     $sql$
@@ -187,10 +187,10 @@ SELECT throws_ok(
   ),
   '23514',
   NULL,
-  $$review_round를 유효한 값에서 범위 밖 값으로 UPDATE 시 실패해야 한다$$
+  $$review_round를 범위 초과 값(5)으로 UPDATE 시 실패해야 한다$$
 );
 
--- review_round를 유효한 값에서 범위 밖 값으로 UPDATE 시 실패해야 한다
+-- review_round를 범위 미만 값(-1)으로 UPDATE 시 실패해야 한다
 SELECT throws_ok(
   format(
     $sql$
@@ -202,7 +202,7 @@ SELECT throws_ok(
   ),
   '23514',
   NULL,
-  $$review_round를 유효한 값에서 범위 밖 값으로 UPDATE 시 실패해야 한다$$
+  $$review_round를 범위 미만 값(-1)으로 UPDATE 시 실패해야 한다$$
 );
 
 -- [경계 조건]
@@ -338,6 +338,81 @@ SELECT is(
   ),
   1::bigint,
   $$UPDATE 성공 시 수정 대상 외 컬럼(id, user_id, created_at 등)은 변경되지 않아야 한다 (Transition)$$
+);
+
+-- [정답 조건]
+-- title이 1자이면 INSERT가 성공해야 한다
+SELECT lives_ok(
+  format(
+    $sql$
+      INSERT INTO public.notes (id, user_id, title, content, review_round)
+      VALUES (gen_random_uuid(), '%s'::uuid, 'a', 'content', 0);
+    $sql$,
+    current_setting('test.notes_constraints_check_user_a_id')
+  ),
+  $$title이 1자이면 INSERT가 성공해야 한다$$
+);
+
+-- title이 100자이면 INSERT가 성공해야 한다
+SELECT lives_ok(
+  format(
+    $sql$
+      INSERT INTO public.notes (id, user_id, title, content, review_round)
+      VALUES (gen_random_uuid(), '%s'::uuid, repeat('a', 100), 'content', 0);
+    $sql$,
+    current_setting('test.notes_constraints_check_user_a_id')
+  ),
+  $$title이 100자이면 INSERT가 성공해야 한다$$
+);
+
+-- [예외 조건]
+-- title이 101자이면 INSERT가 실패해야 한다
+SELECT throws_ok(
+  format(
+    $sql$
+      INSERT INTO public.notes (id, user_id, title, content, review_round)
+      VALUES (gen_random_uuid(), '%s'::uuid, repeat('a', 101), 'content', 0);
+    $sql$,
+    current_setting('test.notes_constraints_check_user_a_id')
+  ),
+  '22001',
+  NULL,
+  $$title이 101자이면 INSERT가 실패해야 한다$$
+);
+
+-- [경계 조건]
+-- 최대 허용값 100자는 성공해야 한다
+SELECT lives_ok(
+  format(
+    $sql$
+      INSERT INTO public.notes (id, user_id, title, content, review_round)
+      VALUES (gen_random_uuid(), '%s'::uuid, repeat('b', 100), 'content', 0);
+    $sql$,
+    current_setting('test.notes_constraints_check_user_a_id')
+  ),
+  $$최대 허용값 100자는 성공해야 한다$$
+);
+
+-- 최대 초과 101자는 실패해야 한다
+SELECT throws_ok(
+  format(
+    $sql$
+      INSERT INTO public.notes (id, user_id, title, content, review_round)
+      VALUES (gen_random_uuid(), '%s'::uuid, repeat('b', 101), 'content', 0);
+    $sql$,
+    current_setting('test.notes_constraints_check_user_a_id')
+  ),
+  '22001',
+  NULL,
+  $$최대 초과 101자는 실패해야 한다$$
+);
+
+-- [불변 조건]
+-- notes 테이블에 title 길이가 100자를 초과하는 행이 존재해서는 안 된다
+SELECT is(
+  (SELECT count(*) FROM public.notes WHERE length(title) > 100),
+  0::bigint,
+  $$notes 테이블에 title 길이가 100자를 초과하는 행이 존재해서는 안 된다$$
 );
 
 SELECT * FROM finish();
