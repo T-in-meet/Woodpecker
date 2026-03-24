@@ -9,19 +9,24 @@ import type { Profile } from "@/types/profiles.types";
 import { UserMenu } from "./UserMenu";
 
 export async function Header() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+  let user = null;
   let profile: Profile | null = null;
-  if (user) {
-    const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .single();
-    profile = data as Profile | null;
+
+  try {
+    const supabase = await createClient();
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
+
+    if (user) {
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .single();
+      profile = profileData as Profile | null;
+    }
+  } catch {
+    // 환경변수 미설정 등으로 Supabase 연결 실패 시 비로그인 상태로 fallback
   }
 
   return (
