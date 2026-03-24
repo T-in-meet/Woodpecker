@@ -6,7 +6,14 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: "*",
         allow: "/",
-        disallow: ["/api/", "/(auth)/", "/(main)/"],
+        disallow: [
+          "/api/",
+          "/login",
+          "/signup",
+          "/notes",
+          "/mypage",
+          "/records",
+        ],
       },
     ],
     sitemap: "https://woodpecker-app.vercel.app/sitemap.xml",
