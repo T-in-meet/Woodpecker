@@ -16,7 +16,9 @@ export function CtaSection() {
           지금 바로 시작하세요
         </h2>
         <p className="mt-3 text-lg text-muted-foreground">
-          오늘 배운 것, 내일도 기억할 수 있습니다.
+          기록만 하세요.
+          <br />
+          기억은 딱다구리가 책임집니다
           <br />
           무료로 시작하고 학습 효과를 직접 경험하세요.
         </p>
