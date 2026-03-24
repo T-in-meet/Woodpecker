@@ -21,7 +21,7 @@ export function CtaSection() {
           무료로 시작하고 학습 효과를 직접 경험하세요.
         </p>
         <div className="mt-8">
-          <Button size="lg" asChild>
+          <Button size="2xl" asChild>
             <Link href={ROUTES.SIGNUP}>무료로 시작하기</Link>
           </Button>
         </div>

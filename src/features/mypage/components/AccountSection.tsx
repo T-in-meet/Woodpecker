@@ -86,7 +86,7 @@ export function AccountSection() {
                 비밀번호가 변경되었습니다.
               </p>
             )}
-            <Button type="submit" size="sm" disabled={isPasswordPending}>
+            <Button type="submit" size="md" disabled={isPasswordPending}>
               {isPasswordPending ? "변경 중..." : "비밀번호 변경"}
             </Button>
           </form>

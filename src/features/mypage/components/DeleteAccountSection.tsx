@@ -29,7 +29,7 @@ export function DeleteAccountSection({ userEmail }: DeleteAccountSectionProps) {
           </p>
           <Button
             variant="destructive"
-            size="sm"
+            size="md"
             onClick={() => setShowDeleteDialog(true)}
           >
             계정 삭제
