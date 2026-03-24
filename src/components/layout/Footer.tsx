@@ -1,7 +1,5 @@
 import Link from "next/link";
 
-import { ROUTES } from "@/lib/constants/routes";
-
 const footerLinks = [
   {
     title: "서비스",
@@ -31,14 +29,6 @@ export function Footer() {
     <footer className="border-t bg-muted/30">
       <div className="mx-auto max-w-5xl px-6 py-12 md:py-16">
         <div className="grid gap-8 md:grid-cols-4">
-          {/* Brand */}
-          {/* <div>
-            <Link href={ROUTES.HOME} className="font-mono text-lg font-bold">
-              <Image src="/favicon.svg" alt="딱다구리" width={28} height={28} />
-              <span className="font-jeju text-2xl">딱다구리</span>
-            </Link>
-          </div> */}
-
           {/* Link groups */}
           {footerLinks.map((group) => (
             <div key={group.title}>
