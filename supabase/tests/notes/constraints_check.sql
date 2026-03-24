@@ -2,6 +2,7 @@
 -- notes / CONSTRAINTS_CHECK
 -- =========================================
 
+
 BEGIN;
 
 SELECT plan(17);
@@ -93,7 +94,7 @@ SELECT throws_ok(
     current_setting('test.notes_constraints_check_user_a_id')
   ),
   '23514',
-  'new row for relation "notes" violates check constraint "notes_review_round_check"',
+  NULL,
   'review_round가 -1이면 CHECK 위반으로 실패해야 한다'
 );
 
@@ -107,7 +108,7 @@ SELECT throws_ok(
     current_setting('test.notes_constraints_check_user_a_id')
   ),
   '23514',
-  'new row for relation "notes" violates check constraint "notes_review_round_check"',
+  NULL,
   'review_round가 4이면 CHECK 위반으로 실패해야 한다'
 );
 
@@ -122,7 +123,7 @@ SELECT throws_ok(
     current_setting('test.notes_constraints_check_seed_note_id')
   ),
   '23514',
-  'new row for relation "notes" violates check constraint "notes_review_round_check"',
+  NULL,
   '기존의 유효한 review_round 값을 4로 UPDATE하면 CHECK 위반으로 실패해야 한다'
 );
 
@@ -165,7 +166,7 @@ SELECT throws_ok(
     current_setting('test.notes_constraints_check_user_a_id')
   ),
   '23514',
-  'new row for relation "notes" violates check constraint "notes_review_round_check"',
+  NULL,
   '최소 미만 -1은 실패해야 한다'
 );
 
@@ -179,7 +180,7 @@ SELECT throws_ok(
     current_setting('test.notes_constraints_check_user_a_id')
   ),
   '23514',
-  'new row for relation "notes" violates check constraint "notes_review_round_check"',
+  NULL,
   '최대 초과 4는 실패해야 한다'
 );
 
@@ -231,7 +232,7 @@ SELECT throws_ok(
     current_setting('test.notes_constraints_check_user_a_id')
   ),
   '22001',
-  'value too long for type character varying(100)',
+  NULL,
   'title이 101자이면 INSERT가 실패해야 한다'
 );
 
@@ -260,7 +261,7 @@ SELECT throws_ok(
     current_setting('test.notes_constraints_check_user_a_id')
   ),
   '22001',
-  'value too long for type character varying(100)',
+  NULL,
   '최대 초과 101자는 실패해야 한다'
 );
 

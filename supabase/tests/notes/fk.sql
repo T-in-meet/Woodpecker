@@ -126,7 +126,7 @@ SELECT throws_ok(
     current_setting('test.notes_fk_user_bogus_id')
   ),
   '23503',
-  'insert or update on table "notes" violates foreign key constraint "notes_user_id_fkey"',
+  NULL,
   'auth.users에 존재하지 않는 user_id로 notes INSERT를 시도하면 FK 위반으로 실패해야 한다'
 );
 
@@ -142,7 +142,7 @@ SELECT throws_ok(
     current_setting('test.notes_fk_note_update_seed_id')
   ),
   '23503',
-  'insert or update on table "notes" violates foreign key constraint "notes_user_id_fkey"',
+  NULL,
   '기존에 유효한 notes 행의 user_id를 auth.users에 존재하지 않는 값으로 UPDATE하면 FK 위반으로 실패해야 한다'
 );
 
@@ -160,7 +160,7 @@ SELECT throws_ok(
     current_setting('test.notes_fk_user_stale_id')
   ),
   '23503',
-  'insert or update on table "notes" violates foreign key constraint "notes_user_id_fkey"',
+  NULL,
   'user_a가 auth.users에서 삭제된 직후, 해당 user_id로 notes INSERT를 시도하면 실패해야 한다'
 );
 

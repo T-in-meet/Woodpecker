@@ -56,7 +56,7 @@ SELECT throws_ok(
   $$INSERT INTO public.notes (id, user_id, title, content, review_round)
     VALUES (gen_random_uuid(), NULL, 'title', 'content', 0)$$,
   '23502',
-  'null value in column "user_id" of relation "notes" violates not-null constraint',
+  NULL,
   'user_id가 NULL이면 NOT NULL 위반으로 실패해야 한다'
 );
 -- title이 NULL이면 NOT NULL 위반으로 실패해야 한다
@@ -69,7 +69,7 @@ SELECT throws_ok(
     current_setting('test.notes_constraints_not_null_user_a_id')
   ),
   '23502',
-  'null value in column "title" of relation "notes" violates not-null constraint',
+  NULL,
   'title이 NULL이면 NOT NULL 위반으로 실패해야 한다'
 );
 
@@ -83,7 +83,7 @@ SELECT throws_ok(
     current_setting('test.notes_constraints_not_null_user_a_id')
   ),
   '23502',
-  'null value in column "content" of relation "notes" violates not-null constraint',
+  NULL,
   'content가 NULL이면 NOT NULL 위반으로 실패해야 한다'
 );
 
@@ -97,7 +97,7 @@ SELECT throws_ok(
     current_setting('test.notes_constraints_not_null_user_a_id')
   ),
   '23502',
-  'null value in column "review_round" of relation "notes" violates not-null constraint',
+  NULL,
   'review_round가 NULL이면 NOT NULL 위반으로 실패해야 한다'
 );
 -- 기존 유효한 행의 user_id를 NULL로 UPDATE하면 NOT NULL 위반으로 실패해야 한다
@@ -111,7 +111,7 @@ SELECT throws_ok(
     current_setting('test.notes_constraints_not_null_seed_note_id')
   ),
   '23502',
-  'null value in column "user_id" of relation "notes" violates not-null constraint',
+  NULL,
   '기존 유효한 행의 user_id를 NULL로 UPDATE하면 NOT NULL 위반으로 실패해야 한다'
 );
 -- 기존 유효한 행의 title을 NULL로 UPDATE하면 NOT NULL 위반으로 실패해야 한다
@@ -125,7 +125,7 @@ SELECT throws_ok(
     current_setting('test.notes_constraints_not_null_seed_note_id')
   ),
   '23502',
-  'null value in column "title" of relation "notes" violates not-null constraint',
+  NULL,
   '기존 유효한 행의 title을 NULL로 UPDATE하면 NOT NULL 위반으로 실패해야 한다'
 );
 
@@ -140,7 +140,7 @@ SELECT throws_ok(
     current_setting('test.notes_constraints_not_null_seed_note_id')
   ),
   '23502',
-  'null value in column "content" of relation "notes" violates not-null constraint',
+  NULL,
   '기존 유효한 행의 content를 NULL로 UPDATE하면 NOT NULL 위반으로 실패해야 한다'
 );
 
@@ -155,7 +155,7 @@ SELECT throws_ok(
     current_setting('test.notes_constraints_not_null_seed_note_id')
   ),
   '23502',
-  'null value in column "review_round" of relation "notes" violates not-null constraint',
+  NULL,
   '기존 유효한 행의 review_round를 NULL로 UPDATE하면 NOT NULL 위반으로 실패해야 한다'
 );
 

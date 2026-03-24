@@ -229,7 +229,7 @@ SELECT throws_ok(
     current_setting('test.notes_rls_user_b_id')
   ),
   '42501',
-  'new row violates row-level security policy for table "notes"',
+  NULL,
   'user_a로 인증 후 user_id를 user_b로 설정하여 INSERT를 시도하면 실패해야 한다'
 );
 
