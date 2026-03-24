@@ -4,8 +4,7 @@ import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import { Accordion as AccordionPrimitive } from "radix-ui";
 import * as React from "react";
 
-// TODO : 경로 이동
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/utils/cn";
 
 function Accordion({
   className,
