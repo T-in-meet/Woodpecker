@@ -1,3 +1,3 @@
-export function RecordList() {
+export function NoteList() {
   return <ul />;
 }

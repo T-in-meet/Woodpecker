@@ -1,3 +1,3 @@
-export function RecordViewer({ content }: { content: string }) {
+export function NoteViewer({ content }: { content: string }) {
   return <div>{content}</div>;
 }

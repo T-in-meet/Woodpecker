@@ -1,9 +1,9 @@
 // TODO: Supabase query functions
 
-export async function getRecords() {
+export async function getNotes() {
   return [];
 }
 
-export async function getRecordById(_id: string) {
+export async function getNoteById(_id: string) {
   return null;
 }

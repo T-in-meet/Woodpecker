@@ -1,3 +1,3 @@
-export function RecordCard({ title }: { title: string }) {
+export function NoteCard({ title }: { title: string }) {
   return <div>{title}</div>;
 }
