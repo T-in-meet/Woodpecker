@@ -23,7 +23,7 @@ export function HeroSection() {
         </p>
 
         <div className="mt-8 flex flex-wrap justify-center gap-3">
-          <Button size="lg" asChild>
+          <Button size="2xl" asChild>
             <Link href={ROUTES.SIGNUP}>무료로 시작하기</Link>
           </Button>
         </div>
