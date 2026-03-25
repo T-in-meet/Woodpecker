@@ -77,7 +77,7 @@ export async function changePasswordAction(
   });
 
   if (signInError) {
-    return { error: "현재 비밀번호가 올바르지 않습니다" };
+    return { error: "인증 정보가 올바르지 않습니다" };
   }
 
   const { error: updateError } = await supabase.auth.updateUser({

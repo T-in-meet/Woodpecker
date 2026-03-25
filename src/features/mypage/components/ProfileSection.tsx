@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useActionState, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -16,12 +17,14 @@ type ProfileSectionProps = {
 };
 
 export function ProfileSection({ profile, email }: ProfileSectionProps) {
+  const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [state, formAction, isPending] = useActionState(
     async (prevState: unknown, formData: FormData) => {
       const result = await updateProfileAction(prevState, formData);
       if (result?.data) {
         setIsEditing(false);
+        router.refresh();
       }
       return result;
     },
@@ -59,7 +62,7 @@ export function ProfileSection({ profile, email }: ProfileSectionProps) {
                 name="nickname"
                 defaultValue={profile.nickname}
                 maxLength={10}
-                placeholder="닉네임 (2~10자)"
+                placeholder="닉네임 (1~10자)"
               />
               {fieldErrors?.nickname && (
                 <p className="text-sm text-destructive">
