@@ -1,9 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/client";
 import type { Profile } from "@/types/profiles.types";
+
+const profileRowSchema = z.object({
+  id: z.string().uuid(),
+  nickname: z.string(),
+  avatar_url: z.string().nullable(),
+  role: z.enum(["USER", "ADMIN"]),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
 
 export function useProfile() {
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -28,7 +38,8 @@ export function useProfile() {
         .eq("id", user.id)
         .single();
 
-      setProfile(data as Profile | null);
+      const parsed = profileRowSchema.safeParse(data);
+      setProfile(parsed.success ? (parsed.data as Profile) : null);
       setIsLoading(false);
     }
 
