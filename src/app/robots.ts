@@ -16,8 +16,9 @@ export default function robots(): MetadataRoute.Robots {
         allow: "/",
 
         // 크롤링을 하지 말아달라고 요청할 경로
-        // 로그인이 필요한 페이지나 API는 인덱싱해도 SEO 가치가 없으므로 제외
-        disallow: ["/api/", "/login", "/signup", "/records", "/mypage"],
+        // /api/는 공개할 필요 없는 내부 엔드포인트이므로 제외
+        // /login, /signup, /records, /mypage는 페이지 메타데이터의 noindex로 처리
+        disallow: ["/api/"],
       },
     ],
 

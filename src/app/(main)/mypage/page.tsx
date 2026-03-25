@@ -1,4 +1,5 @@
 import { ChevronRight } from "lucide-react";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -13,6 +14,10 @@ import { ProfileSection } from "@/features/mypage/components/ProfileSection";
 import { getLearningStats, getProfile } from "@/features/mypage/queries";
 import { ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
+
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+};
 
 const VALID_SECTIONS: MypageSection[] = ["profile", "stats"];
 
