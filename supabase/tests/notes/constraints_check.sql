@@ -4,7 +4,7 @@
 
 BEGIN;
 
-SELECT plan(25);
+SELECT plan(48);
 
 -- 테스트용 UUID 준비
 SELECT set_config('test.notes_constraints_check_user_a_id', gen_random_uuid()::text, true);
@@ -15,6 +15,12 @@ SELECT set_config('test.notes_constraints_check_note_boundary_move_id', gen_rand
 SELECT set_config('test.notes_constraints_check_note_boundary_fail_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notes_constraints_check_note_invariant_status_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notes_constraints_check_note_invariant_other_id', gen_random_uuid()::text, true);
+SELECT set_config('test.notes_constraints_check_note_language_update_valid_id', gen_random_uuid()::text, true);
+SELECT set_config('test.notes_constraints_check_note_language_update_invalid_id', gen_random_uuid()::text, true);
+SELECT set_config('test.notes_constraints_check_note_language_update_case_id', gen_random_uuid()::text, true);
+SELECT set_config('test.notes_constraints_check_note_language_update_empty_id', gen_random_uuid()::text, true);
+SELECT set_config('test.notes_constraints_check_note_language_boundary_update_id', gen_random_uuid()::text, true);
+SELECT set_config('test.notes_constraints_check_note_language_invariant_other_id', gen_random_uuid()::text, true);
 
 -- seed
 INSERT INTO auth.users (id, email, raw_user_meta_data)
@@ -30,7 +36,8 @@ INSERT INTO public.notes (
   user_id,
   title,
   content,
-  review_round
+  review_round,
+  language
 )
 VALUES
   (
@@ -38,49 +45,104 @@ VALUES
     current_setting('test.notes_constraints_check_user_a_id')::uuid,
     'update valid seed',
     'update valid content',
-    0
+    0,
+    NULL
   ),
   (
     current_setting('test.notes_constraints_check_note_update_invalid_high_id')::uuid,
     current_setting('test.notes_constraints_check_user_a_id')::uuid,
     'update invalid high seed',
     'update invalid high content',
-    2
+    2,
+    NULL
   ),
   (
     current_setting('test.notes_constraints_check_note_update_invalid_low_id')::uuid,
     current_setting('test.notes_constraints_check_user_a_id')::uuid,
     'update invalid low seed',
     'update invalid low content',
-    1
+    1,
+    NULL
   ),
   (
     current_setting('test.notes_constraints_check_note_boundary_move_id')::uuid,
     current_setting('test.notes_constraints_check_user_a_id')::uuid,
     'boundary move seed',
     'boundary move content',
-    0
+    0,
+    NULL
   ),
   (
     current_setting('test.notes_constraints_check_note_boundary_fail_id')::uuid,
     current_setting('test.notes_constraints_check_user_a_id')::uuid,
     'boundary fail seed',
     'boundary fail content',
-    3
+    3,
+    NULL
   ),
   (
     current_setting('test.notes_constraints_check_note_invariant_status_id')::uuid,
     current_setting('test.notes_constraints_check_user_a_id')::uuid,
     'invariant status seed',
     'invariant status content',
-    2
+    2,
+    NULL
   ),
   (
     current_setting('test.notes_constraints_check_note_invariant_other_id')::uuid,
     current_setting('test.notes_constraints_check_user_a_id')::uuid,
     'invariant other seed',
     'invariant other content',
-    2
+    2,
+    NULL
+  ),
+  (
+    current_setting('test.notes_constraints_check_note_language_update_valid_id')::uuid,
+    current_setting('test.notes_constraints_check_user_a_id')::uuid,
+    'language update valid seed',
+    'language update valid content',
+    2,
+    'markdown'
+  ),
+  (
+    current_setting('test.notes_constraints_check_note_language_update_invalid_id')::uuid,
+    current_setting('test.notes_constraints_check_user_a_id')::uuid,
+    'language update invalid seed',
+    'language update invalid content',
+    2,
+    'markdown'
+  ),
+  (
+    current_setting('test.notes_constraints_check_note_language_update_case_id')::uuid,
+    current_setting('test.notes_constraints_check_user_a_id')::uuid,
+    'language update case seed',
+    'language update case content',
+    2,
+    'markdown'
+  ),
+  (
+    current_setting('test.notes_constraints_check_note_language_update_empty_id')::uuid,
+    current_setting('test.notes_constraints_check_user_a_id')::uuid,
+    'language update empty seed',
+    'language update empty content',
+    2,
+    'markdown'
+  ),
+  (
+    current_setting('test.notes_constraints_check_note_language_boundary_update_id')::uuid,
+    current_setting('test.notes_constraints_check_user_a_id')::uuid,
+    'language boundary update seed',
+    'language boundary update content',
+    2,
+    'markdown'
+  ),
+  (
+    current_setting('test.notes_constraints_check_note_language_invariant_other_id')::uuid,
+    current_setting('test.notes_constraints_check_user_a_id')::uuid,
+    'language invariant other seed',
+    'language invariant other content',
+    2,
+    'markdown'
   )
 ON CONFLICT (id) DO NOTHING;
 
@@ -146,6 +208,91 @@ SELECT lives_ok(
   $$review_round가 유효한 값(0~3)에서 다른 유효한 값으로 UPDATE 시 성공해야 한다$$
 );
 
+-- language에 markdown을 저장할 수 있어야 한다.
+SELECT lives_ok(
+  format(
+    $sql$
+      INSERT INTO public.notes (id, user_id, title, content, review_round, language)
+      VALUES (gen_random_uuid(), '%s'::uuid, 'language markdown', 'content', 0, 'markdown');
+    $sql$,
+    current_setting('test.notes_constraints_check_user_a_id')
+  ),
+  $$language에 markdown을 저장할 수 있어야 한다.$$
+);
+
+-- language에 javascript를 저장할 수 있어야 한다.
+SELECT lives_ok(
+  format(
+    $sql$
+      INSERT INTO public.notes (id, user_id, title, content, review_round, language)
+      VALUES (gen_random_uuid(), '%s'::uuid, 'language javascript', 'content', 0, 'javascript');
+    $sql$,
+    current_setting('test.notes_constraints_check_user_a_id')
+  ),
+  $$language에 javascript를 저장할 수 있어야 한다.$$
+);
+
+-- language에 typescript를 저장할 수 있어야 한다.
+SELECT lives_ok(
+  format(
+    $sql$
+      INSERT INTO public.notes (id, user_id, title, content, review_round, language)
+      VALUES (gen_random_uuid(), '%s'::uuid, 'language typescript', 'content', 0, 'typescript');
+    $sql$,
+    current_setting('test.notes_constraints_check_user_a_id')
+  ),
+  $$language에 typescript를 저장할 수 있어야 한다.$$
+);
+
+-- language에 python을 저장할 수 있어야 한다.
+SELECT lives_ok(
+  format(
+    $sql$
+      INSERT INTO public.notes (id, user_id, title, content, review_round, language)
+      VALUES (gen_random_uuid(), '%s'::uuid, 'language python', 'content', 0, 'python');
+    $sql$,
+    current_setting('test.notes_constraints_check_user_a_id')
+  ),
+  $$language에 python을 저장할 수 있어야 한다.$$
+);
+
+-- language에 rust를 저장할 수 있어야 한다.
+SELECT lives_ok(
+  format(
+    $sql$
+      INSERT INTO public.notes (id, user_id, title, content, review_round, language)
+      VALUES (gen_random_uuid(), '%s'::uuid, 'language rust', 'content', 0, 'rust');
+    $sql$,
+    current_setting('test.notes_constraints_check_user_a_id')
+  ),
+  $$language에 rust를 저장할 수 있어야 한다.$$
+);
+
+-- language에 go를 저장할 수 있어야 한다.
+SELECT lives_ok(
+  format(
+    $sql$
+      INSERT INTO public.notes (id, user_id, title, content, review_round, language)
+      VALUES (gen_random_uuid(), '%s'::uuid, 'language go', 'content', 0, 'go');
+    $sql$,
+    current_setting('test.notes_constraints_check_user_a_id')
+  ),
+  $$language에 go를 저장할 수 있어야 한다.$$
+);
+
+-- 기존 유효 값(markdown)에서 다른 유효 값(javascript 등)으로 UPDATE할 수 있어야 한다.
+SELECT lives_ok(
+  format(
+    $sql$
+      UPDATE public.notes
+      SET language = 'javascript'
+      WHERE id = '%s'::uuid;
+    $sql$,
+    current_setting('test.notes_constraints_check_note_language_update_valid_id')
+  ),
+  $$기존 유효 값(markdown)에서 다른 유효 값(javascript 등)으로 UPDATE할 수 있어야 한다.$$
+);
+
 -- [예외 조건]
 -- review_round = -1로 INSERT 시 CHECK 제약 위반으로 실패해야 한다
 SELECT throws_ok(
@@ -203,6 +350,93 @@ SELECT throws_ok(
   '23514',
   NULL,
   $$review_round를 범위 미만 값(-1)으로 UPDATE 시 실패해야 한다$$
+);
+
+-- 허용값 목록에 없는 문자열(java, cpp, text, md 등)은 저장할 수 없어야 한다.
+SELECT throws_ok(
+  format(
+    $sql$
+      INSERT INTO public.notes (id, user_id, title, content, review_round, language)
+      VALUES (gen_random_uuid(), '%s'::uuid, 'language invalid list', 'content', 0, 'java');
+    $sql$,
+    current_setting('test.notes_constraints_check_user_a_id')
+  ),
+  '23514',
+  NULL,
+  $$허용값 목록에 없는 문자열(java, cpp, text, md 등)은 저장할 수 없어야 한다.$$
+);
+
+-- 대문자 또는 혼합 대소문자(JavaScript, MARKDOWN 등)는 저장할 수 없어야 한다.
+SELECT throws_ok(
+  format(
+    $sql$
+      INSERT INTO public.notes (id, user_id, title, content, review_round, language)
+      VALUES (gen_random_uuid(), '%s'::uuid, 'language invalid case', 'content', 0, 'JavaScript');
+    $sql$,
+    current_setting('test.notes_constraints_check_user_a_id')
+  ),
+  '23514',
+  NULL,
+  $$대문자 또는 혼합 대소문자(JavaScript, MARKDOWN 등)는 저장할 수 없어야 한다.$$
+);
+
+-- 빈 문자열('')은 저장할 수 없어야 한다.
+SELECT throws_ok(
+  format(
+    $sql$
+      INSERT INTO public.notes (id, user_id, title, content, review_round, language)
+      VALUES (gen_random_uuid(), '%s'::uuid, 'language invalid empty', 'content', 0, '');
+    $sql$,
+    current_setting('test.notes_constraints_check_user_a_id')
+  ),
+  '23514',
+  NULL,
+  $$빈 문자열('')은 저장할 수 없어야 한다.$$
+);
+
+-- 기존 유효 값에서 비허용값으로 UPDATE할 수 없어야 한다.
+SELECT throws_ok(
+  format(
+    $sql$
+      UPDATE public.notes
+      SET language = 'cpp'
+      WHERE id = '%s'::uuid;
+    $sql$,
+    current_setting('test.notes_constraints_check_note_language_update_invalid_id')
+  ),
+  '23514',
+  NULL,
+  $$기존 유효 값에서 비허용값으로 UPDATE할 수 없어야 한다.$$
+);
+
+-- 기존 유효 값에서 대문자/혼합 대소문자 값으로 UPDATE할 수 없어야 한다.
+SELECT throws_ok(
+  format(
+    $sql$
+      UPDATE public.notes
+      SET language = 'MARKDOWN'
+      WHERE id = '%s'::uuid;
+    $sql$,
+    current_setting('test.notes_constraints_check_note_language_update_case_id')
+  ),
+  '23514',
+  NULL,
+  $$기존 유효 값에서 대문자/혼합 대소문자 값으로 UPDATE할 수 없어야 한다.$$
+);
+
+-- 기존 유효 값에서 빈 문자열로 UPDATE할 수 없어야 한다.
+SELECT throws_ok(
+  format(
+    $sql$
+      UPDATE public.notes
+      SET language = ''
+      WHERE id = '%s'::uuid;
+    $sql$,
+    current_setting('test.notes_constraints_check_note_language_update_empty_id')
+  ),
+  '23514',
+  NULL,
+  $$기존 유효 값에서 빈 문자열로 UPDATE할 수 없어야 한다.$$
 );
 
 -- [경계 조건]
@@ -286,6 +520,87 @@ SELECT throws_ok(
   $$review_round = 3 → 4로 UPDATE는 실패해야 한다 (경계 초과)$$
 );
 
+-- 허용값 집합의 최소 단위 경계로서 가장 짧은 허용값(go)은 성공해야 한다.
+SELECT lives_ok(
+  format(
+    $sql$
+      INSERT INTO public.notes (id, user_id, title, content, review_round, language)
+      VALUES (gen_random_uuid(), '%s'::uuid, 'language boundary go', 'content', 0, 'go');
+    $sql$,
+    current_setting('test.notes_constraints_check_user_a_id')
+  ),
+  $$허용값 집합의 최소 단위 경계로서 가장 짧은 허용값(go)은 성공해야 한다.$$
+);
+
+-- 허용값 집합의 최대 단위 경계로서 가장 긴 허용값(typescript)은 성공해야 한다.
+SELECT lives_ok(
+  format(
+    $sql$
+      INSERT INTO public.notes (id, user_id, title, content, review_round, language)
+      VALUES (gen_random_uuid(), '%s'::uuid, 'language boundary typescript', 'content', 0, 'typescript');
+    $sql$,
+    current_setting('test.notes_constraints_check_user_a_id')
+  ),
+  $$허용값 집합의 최대 단위 경계로서 가장 긴 허용값(typescript)은 성공해야 한다.$$
+);
+
+-- 허용값과 유사하지만 집합 밖 값(md, ts, js, golang)은 실패해야 한다.
+SELECT throws_ok(
+  format(
+    $sql$
+      INSERT INTO public.notes (id, user_id, title, content, review_round, language)
+      VALUES (gen_random_uuid(), '%s'::uuid, 'language boundary similar', 'content', 0, 'md');
+    $sql$,
+    current_setting('test.notes_constraints_check_user_a_id')
+  ),
+  '23514',
+  NULL,
+  $$허용값과 유사하지만 집합 밖 값(md, ts, js, golang)은 실패해야 한다.$$
+);
+
+-- 허용값과 철자만 유사한 값(markdowns, python3)은 실패해야 한다.
+SELECT throws_ok(
+  format(
+    $sql$
+      INSERT INTO public.notes (id, user_id, title, content, review_round, language)
+      VALUES (gen_random_uuid(), '%s'::uuid, 'language boundary spelling', 'content', 0, 'markdowns');
+    $sql$,
+    current_setting('test.notes_constraints_check_user_a_id')
+  ),
+  '23514',
+  NULL,
+  $$허용값과 철자만 유사한 값(markdowns, python3)은 실패해야 한다.$$
+);
+
+-- 허용값 앞뒤 공백이 포함된 값(' markdown', 'python ')은 실패해야 한다.
+SELECT throws_ok(
+  format(
+    $sql$
+      INSERT INTO public.notes (id, user_id, title, content, review_round, language)
+      VALUES (gen_random_uuid(), '%s'::uuid, 'language boundary spaces', 'content', 0, ' markdown');
+    $sql$,
+    current_setting('test.notes_constraints_check_user_a_id')
+  ),
+  '23514',
+  NULL,
+  $$허용값 앞뒤 공백이 포함된 값(' markdown', 'python ')은 실패해야 한다.$$
+);
+
+-- 기존 행 UPDATE에서도 동일한 경계가 유지되어야 한다.
+SELECT throws_ok(
+  format(
+    $sql$
+      UPDATE public.notes
+      SET language = 'golang'
+      WHERE id = '%s'::uuid;
+    $sql$,
+    current_setting('test.notes_constraints_check_note_language_boundary_update_id')
+  ),
+  '23514',
+  NULL,
+  $$기존 행 UPDATE에서도 동일한 경계가 유지되어야 한다.$$
+);
+
 -- [불변 조건]
 -- notes 테이블에는 review_round < 0인 행이 존재해서는 안 된다 (Status)
 SELECT is(
@@ -338,6 +653,63 @@ SELECT is(
   ),
   1::bigint,
   $$UPDATE 성공 시 수정 대상 외 컬럼(id, user_id, created_at 등)은 변경되지 않아야 한다 (Transition)$$
+);
+
+-- language가 NULL이 아닌 notes 행의 language 값은 항상 허용값 6개 중 하나여야 한다. (Status)
+SELECT is(
+  (SELECT count(*)
+   FROM public.notes
+   WHERE language IS NOT NULL
+     AND language NOT IN ('markdown', 'javascript', 'typescript', 'python', 'rust', 'go')),
+  0::bigint,
+  $$language가 NULL이 아닌 notes 행의 language 값은 항상 허용값 6개 중 하나여야 한다. (Status)$$
+);
+
+-- language가 NULL이 아닌 notes 행 중 대문자 또는 혼합 대소문자를 포함한 값은 존재해서는 안 된다. (Status)
+SELECT is(
+  (SELECT count(*)
+   FROM public.notes
+   WHERE language IS NOT NULL
+     AND language <> lower(language)),
+  0::bigint,
+  $$language가 NULL이 아닌 notes 행 중 대문자 또는 혼합 대소문자를 포함한 값은 존재해서는 안 된다. (Status)$$
+);
+
+-- language가 NULL이 아닌 notes 행 중 빈 문자열은 존재해서는 안 된다. (Status)
+SELECT is(
+  (SELECT count(*)
+   FROM public.notes
+   WHERE language IS NOT NULL
+     AND language = ''),
+  0::bigint,
+  $$language가 NULL이 아닌 notes 행 중 빈 문자열은 존재해서는 안 된다. (Status)$$
+);
+
+-- language UPDATE 성공 후에도 수정 대상 외 컬럼(id, user_id, created_at 등)은 변하지 않아야 한다. (Transition)
+SELECT set_config(
+  'test.notes_constraints_check_language_other_before_user_id',
+  (SELECT user_id::text FROM public.notes WHERE id = current_setting('test.notes_constraints_check_note_language_invariant_other_id')::uuid),
+  true
+);
+SELECT set_config(
+  'test.notes_constraints_check_language_other_before_created_at',
+  (SELECT created_at::text FROM public.notes WHERE id = current_setting('test.notes_constraints_check_note_language_invariant_other_id')::uuid),
+  true
+);
+UPDATE public.notes
+SET language = 'python'
+WHERE id = current_setting('test.notes_constraints_check_note_language_invariant_other_id')::uuid;
+SELECT is(
+  (
+    SELECT count(*)
+    FROM public.notes
+    WHERE id = current_setting('test.notes_constraints_check_note_language_invariant_other_id')::uuid
+      AND language = 'python'
+      AND user_id::text = current_setting('test.notes_constraints_check_language_other_before_user_id')
+      AND created_at::text = current_setting('test.notes_constraints_check_language_other_before_created_at')
+  ),
+  1::bigint,
+  $$language UPDATE 성공 후에도 수정 대상 외 컬럼(id, user_id, created_at 등)은 변하지 않아야 한다. (Transition)$$
 );
 
 -- [정답 조건]
