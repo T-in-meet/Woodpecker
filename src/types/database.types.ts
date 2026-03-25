@@ -19,6 +19,7 @@ export type Database = {
           content: string;
           created_at: string;
           id: string;
+          language: string | null;
           next_review_at: string | null;
           review_round: number;
           title: string;
@@ -29,6 +30,7 @@ export type Database = {
           content: string;
           created_at?: string;
           id?: string;
+          language?: string | null;
           next_review_at?: string | null;
           review_round?: number;
           title: string;
@@ -39,6 +41,7 @@ export type Database = {
           content?: string;
           created_at?: string;
           id?: string;
+          language?: string | null;
           next_review_at?: string | null;
           review_round?: number;
           title?: string;
