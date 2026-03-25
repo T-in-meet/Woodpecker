@@ -30,7 +30,7 @@ export function CardHeader({
   children: React.ReactNode;
 }) {
   return (
-    <div className={cn("flex flex-col gap-1.5 p-6", className)}>{children}</div>
+    <div className={cn("flex flex-col gap-1.5 p-5", className)}>{children}</div>
   );
 }
 
