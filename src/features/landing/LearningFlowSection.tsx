@@ -5,7 +5,7 @@ const scenes = [
     title: "적는 순간,\n복습이 설계됩니다",
     description:
       "노트를 저장하는 순간, 복습 일정이 자동으로 잡힙니다. 캘린더를 따로 쓰거나 알림을 설정할 필요 없어요. 기록만 하면 딱다구리가 나머지를 챙깁니다.",
-    mockup: <RecordMockup />,
+    mockup: <NoteMockup />,
     reverse: false,
   },
   {
@@ -28,7 +28,7 @@ const scenes = [
   },
 ] as const;
 
-function RecordMockup() {
+function NoteMockup() {
   return (
     <div className="overflow-hidden rounded-2xl border bg-card shadow-lg">
       <div className="flex items-center gap-2 border-b bg-muted/50 px-4 py-2.5">

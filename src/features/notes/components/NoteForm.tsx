@@ -1,6 +1,6 @@
 "use client";
 
-export function RecordForm() {
+export function NoteForm() {
   return (
     <form>
       <input name="title" placeholder="제목" />
