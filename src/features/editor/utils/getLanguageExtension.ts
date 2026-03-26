@@ -9,7 +9,7 @@ import { go } from "@codemirror/legacy-modes/mode/go";
 import { rust } from "@codemirror/legacy-modes/mode/rust";
 import type { Extension } from "@codemirror/state";
 
-import type { SupportedLanguage } from "@/features/editor/config";
+import type { SupportedLanguage } from "@/features/editor/supportedLanguages";
 
 export function getLanguageExtension(language: SupportedLanguage): Extension {
   switch (language) {

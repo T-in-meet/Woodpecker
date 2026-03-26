@@ -2,8 +2,8 @@
 
 import { cn } from "@/lib/utils/cn";
 
-import type { SupportedLanguage } from "../config";
 import { useCodeMirror } from "../hooks/useCodeMirror";
+import type { SupportedLanguage } from "../supportedLanguages";
 
 interface CodeEditorProps {
   value: string;

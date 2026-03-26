@@ -7,7 +7,7 @@ import {
 } from "@codemirror/view";
 import { useEffect, useRef } from "react";
 
-import type { SupportedLanguage } from "@/features/editor/config";
+import type { SupportedLanguage } from "@/features/editor/supportedLanguages";
 import { getLanguageExtension } from "@/features/editor/utils/getLanguageExtension";
 
 interface UseCodeMirrorOptions {
