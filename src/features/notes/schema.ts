@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { NOTE_LANGUAGE_VALUES } from "@/lib/constants/languages";
+import { NOTE_LANGUAGE_VALUES } from "@/lib/constants/noteLanguages";
 
 export const noteSchema = z.object({
   title: z.string().min(1, "제목을 입력해주세요").max(100),

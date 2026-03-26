@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { NOTE_LANGUAGE_VALUES } from "@/lib/constants/languages";
+import { NOTE_LANGUAGE_VALUES } from "@/lib/constants/noteLanguages";
 
 import { noteSchema } from "../schema";
 
@@ -52,15 +52,18 @@ describe("noteSchema", () => {
       expect(result.success).toBe(true);
     });
 
-    it.each(NOTE_LANGUAGE_VALUES)("accepts allowed language %s", (language) => {
-      const result = noteSchema.safeParse({
-        title: "Title",
-        content: "Content",
-        language,
-      });
+    it.each(NOTE_LANGUAGE_VALUES)(
+      "accepts allowed language %s",
+      (...[language]) => {
+        const result = noteSchema.safeParse({
+          title: "Title",
+          content: "Content",
+          language,
+        });
 
-      expect(result.success).toBe(true);
-    });
+        expect(result.success).toBe(true);
+      },
+    );
 
     it("rejects a disallowed language", () => {
       const result = noteSchema.safeParse({
