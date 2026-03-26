@@ -33,9 +33,9 @@ export function LegalPage({
     <main className="min-h-screen" style={{ backgroundColor: "#faf8f3" }}>
       {/* Hero */}
       <div className="relative overflow-hidden border-b border-stone-200/60">
-        <div className="absolute inset-0 bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50" />
-        <div className="absolute -right-40 -top-40 h-96 w-96 rounded-full bg-gradient-to-br from-amber-200/40 to-orange-200/40 blur-3xl" />
-        <div className="absolute -bottom-20 -left-40 h-80 w-80 rounded-full bg-gradient-to-tr from-rose-200/40 to-pink-200/40 blur-3xl" />
+        <div className="absolute inset-0 bg-linear-to-br from-amber-50 via-orange-50 to-rose-50" />
+        <div className="absolute -right-40 -top-40 h-96 w-96 rounded-full bg-linear-to-br from-amber-200/40 to-orange-200/40 blur-3xl" />
+        <div className="absolute -bottom-20 -left-40 h-80 w-80 rounded-full bg-linear-to-tr from-rose-200/40 to-pink-200/40 blur-3xl" />
 
         <div className="relative mx-auto max-w-3xl px-6 py-20 text-center">
           <div className="mb-6 flex justify-center">
