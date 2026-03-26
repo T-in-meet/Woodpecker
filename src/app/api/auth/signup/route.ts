@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     email: normalizedEmail,
     password,
     options: {
-      emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/login`,
+      emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/login`,
     },
   });
 

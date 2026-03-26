@@ -57,7 +57,7 @@ describe("POST /api/auth/signup", () => {
     );
   });
 
-  it("signUp 호출 시 options.emailRedirectTo는 /auth/login 경로를 포함한다", async () => {
+  it("signUp 호출 시 options.emailRedirectTo는 /login 경로를 포함한다", async () => {
     mockSignUpSuccess();
 
     await POST(makeRequest(requestBody));
@@ -65,7 +65,7 @@ describe("POST /api/auth/signup", () => {
     expect(mockSignUp).toHaveBeenCalledWith(
       expect.objectContaining({
         options: expect.objectContaining({
-          emailRedirectTo: expect.stringContaining("/auth/login"),
+          emailRedirectTo: expect.stringContaining("/login"),
         }),
       }),
     );
