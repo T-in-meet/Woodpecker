@@ -1,5 +1,6 @@
+import { z } from "zod";
+
 import { createClient } from "@/lib/supabase/server";
-import type { Profile } from "@/types/profiles.types";
 
 export type LearningStats = {
   totalNotes: number;
@@ -9,7 +10,16 @@ export type LearningStats = {
   recentActivity: { date: string; count: number }[];
 };
 
-export async function getProfile(): Promise<Profile | null> {
+const profileDbSchema = z.object({
+  id: z.string(),
+  nickname: z.string(),
+  avatar_url: z.string().nullable(),
+  role: z.enum(["USER", "ADMIN"]),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+export async function getProfile() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -23,7 +33,8 @@ export async function getProfile(): Promise<Profile | null> {
     .eq("id", user.id)
     .single();
 
-  return data as Profile | null;
+  const parsed = profileDbSchema.safeParse(data);
+  return parsed.success ? parsed.data : null;
 }
 
 export async function getLearningStats(): Promise<LearningStats> {
@@ -102,6 +113,14 @@ export async function getLearningStats(): Promise<LearningStats> {
     }
   }
 
+  const today = new Date();
+  const recentActivity = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(today.getDate() - (6 - i));
+    const date = d.toISOString().slice(0, 10);
+    return { date, count: dateCounts.get(date) ?? 0 };
+  });
+
   return {
     totalNotes: notesResult.count ?? 0,
     completedReviews: completedResult.count ?? 0,
@@ -109,8 +128,6 @@ export async function getLearningStats(): Promise<LearningStats> {
     reviewsByRound: Array.from(roundCounts.entries())
       .map(([round, count]) => ({ round, count }))
       .sort((a, b) => a.round - b.round),
-    recentActivity: Array.from(dateCounts.entries())
-      .map(([date, count]) => ({ date, count }))
-      .sort((a, b) => a.date.localeCompare(b.date)),
+    recentActivity,
   };
 }

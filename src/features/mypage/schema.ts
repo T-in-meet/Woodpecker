@@ -3,7 +3,7 @@ import { z } from "zod";
 export const profileSchema = z.object({
   nickname: z
     .string()
-    .min(2, "닉네임은 2자 이상이어야 합니다")
+    .min(1, "닉네임은 1자 이상이어야 합니다")
     .max(10, "닉네임은 10자 이내로 입력해주세요"),
   avatarUrl: z
     .string()

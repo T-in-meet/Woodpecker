@@ -1,4 +1,5 @@
 import { ChevronRight } from "lucide-react";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -10,42 +11,12 @@ import {
   type MypageSection,
 } from "@/features/mypage/components/MypageNav";
 import { ProfileSection } from "@/features/mypage/components/ProfileSection";
-import type { LearningStats } from "@/features/mypage/queries";
 import { getLearningStats, getProfile } from "@/features/mypage/queries";
 import { ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
-import type { Profile } from "@/types/profiles.types";
 
-// TODO: 렌더링 확인용 목 데이터 — 확인 후 제거
-// 현재는 목 데이터로 페이지를 보여주고 있어서, 폼을 제출하면 서버 액션이 user를 못 찾아서 "인증이 필요합니다"를 반환
-
-const MOCK_PROFILE: Profile = {
-  id: "00000000-0000-0000-0000-000000000000",
-  nickname: "딱다구리",
-  avatar_url: null,
-  role: "USER",
-  created_at: "2025-01-15T09:00:00Z",
-  updated_at: "2025-03-20T12:00:00Z",
-};
-
-const MOCK_STATS: LearningStats = {
-  totalNotes: 12,
-  completedReviews: 28,
-  pendingReviews: 5,
-  reviewsByRound: [
-    { round: 1, count: 15 },
-    { round: 2, count: 9 },
-    { round: 3, count: 4 },
-  ],
-  recentActivity: [
-    { date: "2026-03-17", count: 3 },
-    { date: "2026-03-18", count: 5 },
-    { date: "2026-03-19", count: 2 },
-    { date: "2026-03-20", count: 7 },
-    { date: "2026-03-21", count: 4 },
-    { date: "2026-03-22", count: 1 },
-    { date: "2026-03-23", count: 6 },
-  ],
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
 };
 
 const VALID_SECTIONS: MypageSection[] = ["profile", "stats"];
@@ -74,16 +45,14 @@ export default async function MyPage({ searchParams }: Props) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  let profile: Profile | null = null;
-  let stats: LearningStats;
-
-  if (user) {
-    [profile, stats] = await Promise.all([getProfile(), getLearningStats()]);
-  } else {
-    // TODO: 렌더링 확인용 — 확인 후 아래 블록을 redirect(ROUTES.LOGIN)으로 교체
-    profile = MOCK_PROFILE;
-    stats = MOCK_STATS;
+  if (!user) {
+    redirect(ROUTES.LOGIN);
   }
+
+  const [profile, stats] = await Promise.all([
+    getProfile(),
+    getLearningStats(),
+  ]);
 
   if (!profile) {
     redirect(ROUTES.LOGIN);

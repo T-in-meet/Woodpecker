@@ -24,8 +24,13 @@ describe("profileSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  it("2자 미만 닉네임을 거부한다", () => {
+  it("1자 닉네임을 허용한다", () => {
     const result = profileSchema.safeParse({ nickname: "a" });
+    expect(result.success).toBe(true);
+  });
+
+  it("빈 문자열 닉네임을 거부한다", () => {
+    const result = profileSchema.safeParse({ nickname: "" });
     expect(result.success).toBe(false);
   });
 
