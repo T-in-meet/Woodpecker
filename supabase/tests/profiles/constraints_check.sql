@@ -4,7 +4,7 @@
 
 BEGIN;
 
-SELECT plan(23);
+SELECT plan(24);
 
 -- 테스트용 UUID 준비
 SELECT set_config('test.profiles_constraints_check_user_01_id', gen_random_uuid()::text, true);
@@ -259,6 +259,21 @@ SELECT throws_ok(
   $$profiles.role은 빈 문자열일 때 허용되면 안 된다.$$
 );
 
+-- profiles.role은 공백 포함 값(' USER ')일 때 허용되면 안 된다.
+SELECT throws_ok(
+  format(
+    $sql$
+      UPDATE public.profiles
+      SET role = ' USER '
+      WHERE id = '%s'::uuid
+    $sql$,
+    current_setting('test.profiles_constraints_check_user_14_id')
+  ),
+  '23514',
+  NULL,
+  $$profiles.role은 공백 포함 값(' USER ')일 때 허용되면 안 된다.$$
+);
+
 -- profiles.role은 USER 또는 ADMIN을 제외한 임의 문자열일 때 허용되면 안 된다.
 SELECT throws_ok(
   format(
@@ -267,7 +282,7 @@ SELECT throws_ok(
       SET role = 'RANDOM'
       WHERE id = '%s'::uuid
     $sql$,
-    current_setting('test.profiles_constraints_check_user_14_id')
+    current_setting('test.profiles_constraints_check_user_13_id')
   ),
   '23514',
   NULL,

@@ -4,7 +4,7 @@
 
 BEGIN;
 
-SELECT plan(30);
+SELECT plan(33);
 
 -- 테스트용 UUID 준비
 SELECT set_config('test.profiles_rls_user_a_id', gen_random_uuid()::text, true);
@@ -216,6 +216,67 @@ SELECT is(
   (SELECT count(*)::bigint FROM public.profiles),
   0::bigint,
   $$비인증 사용자는 profile에 접근할 수 없어야 한다.$$
+);
+
+-- auth.uid()가 NULL인 경우 profile 접근이 허용되면 안 된다.
+SET LOCAL ROLE authenticated;
+SELECT set_config(
+  'request.jwt.claims',
+  json_build_object(
+    'role', 'authenticated'
+  )::text,
+  true
+);
+
+SELECT is(
+  (SELECT count(*)::bigint FROM public.profiles),
+  0::bigint,
+  $$auth.uid()가 NULL인 경우 profile 접근이 허용되면 안 된다.$$
+);
+
+-- 인증된 사용자도 profiles를 직접 INSERT할 수 없어야 한다.
+SET LOCAL ROLE authenticated;
+SELECT set_config(
+  'request.jwt.claims',
+  json_build_object(
+    'sub', current_setting('test.profiles_rls_user_d_id'),
+    'role', 'authenticated'
+  )::text,
+  true
+);
+
+SELECT throws_ok(
+  format(
+    $sql$
+      INSERT INTO public.profiles (id, nickname)
+      VALUES ('%s'::uuid, 'direct1');
+    $sql$,
+    current_setting('test.profiles_rls_user_d_id')
+  ),
+  '42501',
+  NULL,
+  $$인증된 사용자도 profiles를 직접 INSERT할 수 없어야 한다.$$
+);
+
+-- 비인증 사용자는 직접 INSERT를 통해 profiles에 접근할 수 없어야 한다.
+SET LOCAL ROLE anon;
+SELECT set_config(
+  'request.jwt.claims',
+  '{}'::text,
+  true
+);
+
+SELECT throws_ok(
+  format(
+    $sql$
+      INSERT INTO public.profiles (id, nickname)
+      VALUES ('%s'::uuid, 'direct2');
+    $sql$,
+    current_setting('test.profiles_rls_user_d_id')
+  ),
+  '42501',
+  NULL,
+  $$비인증 사용자는 직접 INSERT를 통해 profiles에 접근할 수 없어야 한다.$$
 );
 
 -- [경계 조건]

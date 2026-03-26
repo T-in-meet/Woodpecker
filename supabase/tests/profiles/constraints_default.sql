@@ -196,7 +196,7 @@ SELECT is(
   $$role 생략 INSERT로 생성된 모든 행의 role은 항상 USER여야 한다.$$
 );
 
--- 기본값은 생략 시에만 적용되어야 하며, 명시값을 침범해서는 안 된다.
+-- role 기본값은 생략 시에만 적용되어야 하며, 명시값을 침범해서는 안 된다.
 SELECT is(
   (
     SELECT count(*)::bigint
@@ -206,7 +206,7 @@ SELECT is(
        OR (id = current_setting('test.profiles_constraints_default_role_boundary_admin_id')::uuid AND role = 'ADMIN')
   ),
   3::bigint,
-  $$기본값은 생략 시에만 적용되어야 하며, 명시값을 침범해서는 안 된다.$$
+  $$role 기본값은 생략 시에만 적용되어야 하며, 명시값을 침범해서는 안 된다.$$
 );
 
 -- [정답 조건]
@@ -346,7 +346,7 @@ SELECT is(
   $$created_at 생략 INSERT로 생성된 모든 행의 created_at은 항상 NULL이 아니어야 한다.$$
 );
 
--- 기본값은 생략 시에만 적용되어야 하며, 명시값을 침범해서는 안 된다.
+-- created_at 기본값은 생략 시에만 적용되어야 하며, 명시값을 침범해서는 안 된다.
 SELECT is(
   (
     SELECT count(*)::bigint
@@ -357,7 +357,7 @@ SELECT is(
            AND created_at = current_setting('test.profiles_constraints_default_created_boundary_future_value')::timestamptz)
   ),
   2::bigint,
-  $$기본값은 생략 시에만 적용되어야 하며, 명시값을 침범해서는 안 된다.$$
+  $$created_at 기본값은 생략 시에만 적용되어야 하며, 명시값을 침범해서는 안 된다.$$
 );
 
 -- created_at 기본값은 “생성 시각 기록”이라는 정책 의도를 유지해야 한다.
@@ -508,7 +508,7 @@ SELECT is(
   $$updated_at 생략 INSERT로 생성된 모든 행의 updated_at은 항상 NULL이 아니어야 한다.$$
 );
 
--- 기본값은 생략 시에만 적용되어야 하며, 명시값을 침범해서는 안 된다.
+-- updated_at 기본값은 생략 시에만 적용되어야 하며, 명시값을 침범해서는 안 된다.
 SELECT is(
   (
     SELECT count(*)::bigint
@@ -519,7 +519,7 @@ SELECT is(
            AND updated_at = current_setting('test.profiles_constraints_default_updated_boundary_future_value')::timestamptz)
   ),
   2::bigint,
-  $$기본값은 생략 시에만 적용되어야 하며, 명시값을 침범해서는 안 된다.$$
+  $$updated_at 기본값은 생략 시에만 적용되어야 하며, 명시값을 침범해서는 안 된다.$$
 );
 
 -- INSERT 시점 기준의 기본 생성 타임스탬프라는 정책 의도를 유지해야 한다.

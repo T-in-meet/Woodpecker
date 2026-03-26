@@ -227,7 +227,7 @@ SELECT is(
   $$nickname 누락 경계: nickname 없이 회원가입하면 fallback nickname이 채워져야 한다.$$
 );
 
--- avatar_url 누락 경계: avatar_url 없이 회원가입하면 profiles.avatar_url은 NULL이어야 한다.
+-- avatar_url 누락 경계: avatar_url 없이 회원가입하면 profiles.avatar_url은 NULL이어야 한다. (회원가입 요청)
 SELECT lives_ok(
   format(
     $sql$
@@ -251,19 +251,20 @@ SELECT lives_ok(
     current_setting('test.profiles_trigger_auto_avatarless_id'),
     current_setting('test.profiles_trigger_auto_avatarless_id')
   ),
-  $$avatar_url 누락 경계: avatar_url 없이 회원가입하면 profiles.avatar_url은 NULL이어야 한다.$$
+  $$avatar_url 누락 경계: avatar_url 없이 회원가입하면 profiles.avatar_url은 NULL이어야 한다. (회원가입 요청)$$
 );
 
+-- avatar_url 누락 경계: avatar_url 없이 회원가입하면 profiles.avatar_url은 NULL이어야 한다. (자동 생성 결과)
 SELECT ok(
   (
     SELECT avatar_url IS NULL
     FROM public.profiles
     WHERE id = current_setting('test.profiles_trigger_auto_avatarless_id')::uuid
   ),
-  $$avatar_url 누락 경계: avatar_url 없이 회원가입하면 profiles.avatar_url은 NULL이어야 한다.$$
+  $$avatar_url 누락 경계: avatar_url 없이 회원가입하면 profiles.avatar_url은 NULL이어야 한다. (자동 생성 결과)$$
 );
 
--- 메타데이터 전체 누락 경계: 메타데이터가 비어 있어도 profiles 행은 생성되어야 하며, 최소한 id와 fallback nickname이 채워져야 한다.
+-- 메타데이터 전체 누락 경계: 메타데이터가 비어 있어도 profiles 행은 생성되어야 하며, 최소한 id와 fallback nickname이 채워져야 한다. (회원가입 요청)
 SELECT lives_ok(
   format(
     $sql$
@@ -287,18 +288,19 @@ SELECT lives_ok(
     current_setting('test.profiles_trigger_auto_empty_id'),
     current_setting('test.profiles_trigger_auto_empty_id')
   ),
-  $$메타데이터 전체 누락 경계: 메타데이터가 비어 있어도 profiles 행은 생성되어야 하며, 최소한 id와 fallback nickname이 채워져야 한다.$$
+  $$메타데이터 전체 누락 경계: 메타데이터가 비어 있어도 profiles 행은 생성되어야 하며, 최소한 id와 fallback nickname이 채워져야 한다. (회원가입 요청)$$
 );
 
+-- 메타데이터 전체 누락 경계: 메타데이터가 비어 있어도 profiles 행은 생성되어야 하며, 최소한 id와 fallback nickname이 채워져야 한다. (자동 생성 결과)
 SELECT ok(
   (
     EXISTS (SELECT 1 FROM public.profiles WHERE id = current_setting('test.profiles_trigger_auto_empty_id')::uuid)
     AND (SELECT nickname FROM public.profiles WHERE id = current_setting('test.profiles_trigger_auto_empty_id')::uuid) = 'user_' || substring(current_setting('test.profiles_trigger_auto_empty_id') from 1 for 5)
   ),
-  $$메타데이터 전체 누락 경계: 메타데이터가 비어 있어도 profiles 행은 생성되어야 하며, 최소한 id와 fallback nickname이 채워져야 한다.$$
+  $$메타데이터 전체 누락 경계: 메타데이터가 비어 있어도 profiles 행은 생성되어야 하며, 최소한 id와 fallback nickname이 채워져야 한다. (자동 생성 결과)$$
 );
 
--- 다건 분포 경계: 여러 사용자가 순차적으로 생성되어도 각 사용자마다 자신의 profiles가 정확히 1건씩 생성되어야 한다.
+-- 다건 분포 경계: 여러 사용자가 순차적으로 생성되어도 각 사용자마다 자신의 profiles가 정확히 1건씩 생성되어야 한다. (회원가입 요청)
 SELECT lives_ok(
   format(
     $sql$
@@ -338,9 +340,10 @@ SELECT lives_ok(
     current_setting('test.profiles_trigger_auto_multi_b_id'),
     current_setting('test.profiles_trigger_auto_multi_b_id')
   ),
-  $$다건 분포 경계: 여러 사용자가 순차적으로 생성되어도 각 사용자마다 자신의 profiles가 정확히 1건씩 생성되어야 한다.$$
+  $$다건 분포 경계: 여러 사용자가 순차적으로 생성되어도 각 사용자마다 자신의 profiles가 정확히 1건씩 생성되어야 한다. (회원가입 요청)$$
 );
 
+-- 다건 분포 경계: 여러 사용자가 순차적으로 생성되어도 각 사용자마다 자신의 profiles가 정확히 1건씩 생성되어야 한다. (자동 생성 결과)
 SELECT is(
   (
     SELECT count(*)::bigint
@@ -351,7 +354,7 @@ SELECT is(
     )
   ),
   2::bigint,
-  $$다건 분포 경계: 여러 사용자가 순차적으로 생성되어도 각 사용자마다 자신의 profiles가 정확히 1건씩 생성되어야 한다.$$
+  $$다건 분포 경계: 여러 사용자가 순차적으로 생성되어도 각 사용자마다 자신의 profiles가 정확히 1건씩 생성되어야 한다. (자동 생성 결과)$$
 );
 
 -- [불변 조건]
@@ -580,14 +583,14 @@ SELECT is(
 -- updated_at만 직접 변경 경계: updated_at만 과거/미래 값으로 바꾸려는 UPDATE는 최종적으로 기존 updated_at이 유지되어야 한다.
 SELECT set_config('test.profiles_trigger_upd_direct_before', (SELECT updated_at::text FROM public.profiles WHERE id = current_setting('test.profiles_trigger_upd_direct_id')::uuid), true);
 UPDATE public.profiles SET updated_at = '2000-01-01 00:00:00+00'::timestamptz WHERE id = current_setting('test.profiles_trigger_upd_direct_id')::uuid;
+SELECT set_config('test.profiles_trigger_upd_direct_after_past', (SELECT updated_at::text FROM public.profiles WHERE id = current_setting('test.profiles_trigger_upd_direct_id')::uuid), true);
 UPDATE public.profiles SET updated_at = '2099-01-01 00:00:00+00'::timestamptz WHERE id = current_setting('test.profiles_trigger_upd_direct_id')::uuid;
-SELECT is(
+SELECT set_config('test.profiles_trigger_upd_direct_after_future', (SELECT updated_at::text FROM public.profiles WHERE id = current_setting('test.profiles_trigger_upd_direct_id')::uuid), true);
+SELECT ok(
   (
-    SELECT updated_at
-    FROM public.profiles
-    WHERE id = current_setting('test.profiles_trigger_upd_direct_id')::uuid
+    current_setting('test.profiles_trigger_upd_direct_before')::timestamptz = current_setting('test.profiles_trigger_upd_direct_after_past')::timestamptz
+    AND current_setting('test.profiles_trigger_upd_direct_after_past')::timestamptz = current_setting('test.profiles_trigger_upd_direct_after_future')::timestamptz
   ),
-  current_setting('test.profiles_trigger_upd_direct_before')::timestamptz,
   $$updated_at만 직접 변경 경계: updated_at만 과거/미래 값으로 바꾸려는 UPDATE는 최종적으로 기존 updated_at이 유지되어야 한다.$$
 );
 
