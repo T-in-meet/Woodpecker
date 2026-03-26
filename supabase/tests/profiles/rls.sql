@@ -102,7 +102,6 @@ ON CONFLICT (id) DO NOTHING;
 DELETE FROM public.profiles
 WHERE id = current_setting('test.profiles_rls_user_d_id')::uuid;
 
-RESET ROLE;
 
 -- [정답 조건]
 -- user_a로 인증 후 SELECT하면 id = user_a.id인 프로필만 조회되어야 한다.
@@ -586,7 +585,7 @@ SELECT throws_ok(
 
 -- [불변 조건]
 -- 본인 프로필 수정 성공 후에도 해당 행의 소유자는 여전히 본인이어야 한다.
-RESET ROLE;
+
 SELECT ok(
   EXISTS (
     SELECT 1
