@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import Image from "next/image";
+
+import { LegalPage, type LegalSection } from "@/app/(legal)/LegalPage";
 
 export const metadata: Metadata = {
   title: "이용약관 | 딱다구리",
@@ -8,13 +9,7 @@ export const metadata: Metadata = {
 
 const EFFECTIVE_DATE = "2026년 3월 24일";
 
-type Section = {
-  article: string;
-  title: string;
-  content: React.ReactNode;
-};
-
-const sections: Section[] = [
+const sections: LegalSection[] = [
   {
     article: "제1조",
     title: "목적",
@@ -148,7 +143,7 @@ const sections: Section[] = [
         처리방침은 서비스 내{" "}
         <a
           href="/privacy"
-          className="text-green-700 underline underline-offset-2 hover:text-green-900 transition-colors"
+          className="text-amber-700 underline underline-offset-2 transition-colors hover:text-amber-900"
         >
           /privacy
         </a>{" "}
@@ -206,71 +201,13 @@ const sections: Section[] = [
 
 export default function TermsPage() {
   return (
-    <main className="min-h-screen bg-stone-50">
-      {/* Header */}
-      <div className="relative overflow-hidden border-b border-stone-200">
-        <div className="absolute inset-0 bg-linear-to-br from-amber-50 via-orange-50 to-rose-50" />
-        <div className="absolute -right-40 -top-40 size-96 rounded-full bg-linear-to-br from-amber-200/40 to-orange-200/40 blur-3xl" />
-        <div className="absolute -bottom-20 -left-40 size-80 rounded-full bg-linear-to-tr from-rose-200/40 to-pink-200/40 blur-3xl" />
-        <div className="relative mx-auto max-w-3xl px-6 py-16 text-center">
-          <div className="mb-5 flex justify-center">
-            <Image src="/favicon.svg" alt="딱다구리" width={48} height={48} />
-          </div>
-          <h1 className="text-3xl font-bold tracking-tight text-stone-900">
-            이용약관
-          </h1>
-          <p className="mt-3 text-sm text-stone-500">
-            시행일: {EFFECTIVE_DATE}
-          </p>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="mx-auto max-w-3xl px-6 py-12">
-        {/* Intro */}
-        <div className="mb-10 rounded-xl border text-center px-6 py-5">
-          <p className="text-sm leading-relaxed">
-            딱다구리 서비스를 이용하시면 아래 이용약관에 동의한 것으로
-            간주됩니다. <br />
-            회원가입 전 아래 내용을 꼼꼼히 읽어주세요.
-          </p>
-        </div>
-
-        {/* Sections */}
-        <div className="space-y-8">
-          {sections.map((section) => (
-            <section key={section.article}>
-              <div className="mb-3 flex items-baseline gap-3">
-                <span className="shrink-0 rounded-md bg-stone-900 px-2 py-0.5 text-xs font-bold text-white">
-                  {section.article}
-                </span>
-                <h2 className="text-lg font-semibold text-stone-900">
-                  {section.title}
-                </h2>
-              </div>
-              <div
-                className="prose prose-stone prose-sm max-w-none
-                [&_ol]:mt-2 [&_ol]:space-y-2 [&_ol]:pl-5 [&_ol]:list-decimal
-                [&_ul]:mt-2 [&_ul]:space-y-1.5 [&_ul]:pl-5 [&_ul]:list-disc
-                [&_p]:leading-relaxed [&_p]:text-stone-600
-                [&_li]:text-stone-600 [&_li]:leading-relaxed
-                [&_li_ul]:mt-1.5 [&_li_ul]:mb-0
-              "
-              >
-                {section.content}
-              </div>
-              <div className="mt-8 border-b border-stone-100" />
-            </section>
-          ))}
-        </div>
-
-        {/* Footer note */}
-        <div className="mt-10 rounded-xl border border-stone-200 bg-white px-6 py-5">
-          <p className="text-xs text-stone-400">
-            부칙: 이 약관은 {EFFECTIVE_DATE}부터 시행합니다.
-          </p>
-        </div>
-      </div>
-    </main>
+    <LegalPage
+      title="이용약관"
+      effectiveDate={EFFECTIVE_DATE}
+      intro="딱다구리 서비스를 이용하시면 아래 이용약관에 동의한 것으로 간주됩니다. 회원가입 전 아래 내용을 꼼꼼히 읽어주세요."
+      sections={sections}
+      crossLink={{ href: "/privacy", label: "개인정보 처리방침" }}
+      footerNote={`부칙: 이 약관은 ${EFFECTIVE_DATE}부터 시행합니다.`}
+    />
   );
 }
