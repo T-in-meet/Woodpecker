@@ -568,29 +568,23 @@ SELECT throws_ok(
 );
 
 -- 기존 유효한 행의 updated_at을 NULL로 UPDATE하려고 하면 실패해야 한다.
-SELECT set_config(
-  'test.profiles_constraints_not_null_updated_update_before',
-  (
-    SELECT updated_at::text
-    FROM public.profiles
-    WHERE id = current_setting('test.profiles_constraints_not_null_updated_update_valid_id')::uuid
-  ),
-  true
-);
+ALTER TABLE public.profiles DISABLE TRIGGER tr_profiles_updated_at;
 
-UPDATE public.profiles
-SET updated_at = NULL
-WHERE id = current_setting('test.profiles_constraints_not_null_updated_update_valid_id')::uuid;
-
-SELECT ok(
-  (
-    SELECT updated_at IS NOT NULL
-       AND updated_at = current_setting('test.profiles_constraints_not_null_updated_update_before')::timestamptz
-    FROM public.profiles
-    WHERE id = current_setting('test.profiles_constraints_not_null_updated_update_valid_id')::uuid
+SELECT throws_ok(
+  format(
+    $sql$
+      UPDATE public.profiles
+      SET updated_at = NULL
+      WHERE id = '%s'::uuid
+    $sql$,
+    current_setting('test.profiles_constraints_not_null_updated_update_valid_id')
   ),
+  '23502',
+  NULL,
   $$기존 유효한 행의 updated_at을 NULL로 UPDATE하려고 하면 실패해야 한다.$$
 );
+
+ALTER TABLE public.profiles ENABLE TRIGGER tr_profiles_updated_at;
 
 -- updated_at 생략 시의 성공 여부는 이 파일의 검증 대상이 아니며, 기본값 적용 여부는 constraints_default에서 검증한다.
 SELECT ok(
