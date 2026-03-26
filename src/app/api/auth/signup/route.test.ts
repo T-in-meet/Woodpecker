@@ -2,13 +2,14 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { API_CODES } from "@/lib/constants/apiCodes";
+import { ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 
 import { POST } from "./route";
 
 vi.mock("@/lib/supabase/server");
 
-describe("POST /api/auth/signup", () => {
+describe("회원가입 API 기본 성공 흐름 검증", () => {
   const mockSignUp = vi.fn();
 
   beforeEach(() => {
@@ -65,7 +66,7 @@ describe("POST /api/auth/signup", () => {
     expect(mockSignUp).toHaveBeenCalledWith(
       expect.objectContaining({
         options: expect.objectContaining({
-          emailRedirectTo: expect.stringContaining("/login"),
+          emailRedirectTo: expect.stringContaining(ROUTES.LOGIN),
         }),
       }),
     );
