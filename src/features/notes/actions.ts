@@ -1,15 +1,16 @@
 "use server";
 
-import { recordSchema } from "./schema";
+import { noteSchema } from "./schema";
 
-export async function createRecordAction(
+export async function createNoteAction(
   _prevState: unknown,
   formData: FormData,
 ) {
-  const parsed = recordSchema.safeParse({
+  const rawLanguage = formData.get("language");
+  const parsed = noteSchema.safeParse({
     title: formData.get("title"),
     content: formData.get("content"),
-    language: formData.get("language"),
+    language: rawLanguage === "" ? null : rawLanguage,
   });
 
   if (!parsed.success) {
@@ -19,7 +20,7 @@ export async function createRecordAction(
   // TODO: Supabase insert
 }
 
-export async function deleteRecordAction(id: string) {
+export async function deleteNoteAction(id: string) {
   // TODO: Supabase delete
   return { id };
 }

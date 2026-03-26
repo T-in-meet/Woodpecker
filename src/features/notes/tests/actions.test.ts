@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { createRecordAction } from "../actions";
+import { createNoteAction } from "../actions";
 
-describe("createRecordAction", () => {
+describe("createNoteAction", () => {
   it("유효하지 않은 데이터에 에러를 반환한다", async () => {
     const formData = new FormData();
     formData.set("title", "");
     formData.set("content", "");
 
-    const result = await createRecordAction(null, formData);
+    const result = await createNoteAction(null, formData);
     expect(result?.error).toBeDefined();
   });
 });

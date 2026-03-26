@@ -47,6 +47,8 @@ supabase/.temp
 # docs
 .ai
 CLAUDE.md
+AGENTS.md
 
 # ai
 .claude/
+
