@@ -11,9 +11,12 @@ import {
   type MypageSection,
 } from "@/features/mypage/components/MypageNav";
 import { ProfileSection } from "@/features/mypage/components/ProfileSection";
-import { getLearningStats, getProfile } from "@/features/mypage/queries";
+import {
+  getLearningStats,
+  getProfile,
+  getUser,
+} from "@/features/mypage/queries";
 import { ROUTES } from "@/lib/constants/routes";
-import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
@@ -40,10 +43,7 @@ export default async function MyPage({ searchParams }: Props) {
     ? rawSection
     : "profile";
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getUser();
 
   if (!user) {
     redirect(ROUTES.LOGIN);

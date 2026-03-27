@@ -1,6 +1,17 @@
+import { cache } from "react";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
+
+/**
+ * React.cache()로 감싼 getUser.
+ * 하나의 렌더 트리(요청) 안에서 여러 번 호출해도 auth.getUser()는 1번만 실행됨.
+ */
+export const getUser = cache(async () => {
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getUser();
+  return data.user;
+});
 
 export type LearningStats = {
   totalNotes: number;
@@ -20,12 +31,11 @@ const profileDbSchema = z.object({
 });
 
 export async function getProfile() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getUser();
 
   if (!user) return null;
+
+  const supabase = await createClient();
 
   const { data } = await supabase
     .from("profiles")
@@ -38,10 +48,7 @@ export async function getProfile() {
 }
 
 export async function getLearningStats(): Promise<LearningStats> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getUser();
 
   const empty: LearningStats = {
     totalNotes: 0,
@@ -52,6 +59,8 @@ export async function getLearningStats(): Promise<LearningStats> {
   };
 
   if (!user) return empty;
+
+  const supabase = await createClient();
 
   const [
     notesResult,
