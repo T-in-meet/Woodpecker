@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { LegalPage, type LegalSection } from "@/app/(legal)/LegalPage";
 
@@ -141,12 +142,12 @@ const sections: LegalSection[] = [
       <p>
         서비스는 개인정보 처리방침에 따라 회원의 개인정보를 보호합니다. 개인정보
         처리방침은 서비스 내{" "}
-        <a
+        <Link
           href="/privacy"
           className="text-amber-700 underline underline-offset-2 transition-colors hover:text-amber-900"
         >
           /privacy
-        </a>{" "}
+        </Link>{" "}
         페이지에서 확인할 수 있습니다.
       </p>
     ),

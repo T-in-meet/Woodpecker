@@ -121,6 +121,17 @@ html {
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+@layer components {
+  .legal-prose {
+    @apply prose prose-stone prose-sm max-w-none
+      [&_li]:leading-relaxed [&_li]:text-stone-600
+      [&_li_ul]:mb-0 [&_li_ul]:mt-1.5
+      [&_ol]:mt-2 [&_ol]:list-decimal [&_ol]:space-y-2 [&_ol]:pl-5
+      [&_p]:leading-relaxed [&_p]:text-stone-600
+      [&_ul]:mt-2 [&_ul]:list-disc [&_ul]:space-y-1.5 [&_ul]:pl-5;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

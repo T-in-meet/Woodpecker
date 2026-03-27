@@ -19,8 +19,6 @@ type LegalPageProps = {
   footerNote: string;
 };
 
-const serifStyle = { fontFamily: "var(--font-noto-serif-kr), serif" };
-
 export function LegalPage({
   title,
   effectiveDate,
@@ -30,7 +28,7 @@ export function LegalPage({
   footerNote,
 }: LegalPageProps) {
   return (
-    <main className="min-h-screen" style={{ backgroundColor: "#faf8f3" }}>
+    <main className="min-h-screen bg-[#faf8f3]">
       {/* Hero */}
       <div className="relative overflow-hidden border-b border-stone-200/60">
         <div className="absolute inset-0 bg-linear-to-br from-amber-50 via-orange-50 to-rose-50" />
@@ -44,10 +42,7 @@ export function LegalPage({
           <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-amber-700/70">
             법적 고지
           </p>
-          <h1
-            className="text-4xl font-bold tracking-tight text-stone-900"
-            style={serifStyle}
-          >
+          <h1 className="font-[family-name:var(--font-noto-serif-kr)] text-4xl font-bold tracking-tight text-stone-900">
             {title}
           </h1>
           <p className="mt-4 text-sm text-stone-500">시행일: {effectiveDate}</p>
@@ -67,24 +62,16 @@ export function LegalPage({
             <section key={section.article} className="py-8">
               {/* Article header */}
               <div className="mb-4">
-                <p
-                  className="text-sm font-semibold text-amber-600"
-                  style={serifStyle}
-                >
+                <p className="font-[family-name:var(--font-noto-serif-kr)] text-sm font-semibold text-amber-600">
                   {section.article}
                 </p>
-                <h2
-                  className="text-xl font-semibold text-stone-900"
-                  style={serifStyle}
-                >
+                <h2 className="font-[family-name:var(--font-noto-serif-kr)] text-xl font-semibold text-stone-900">
                   {section.title}
                 </h2>
               </div>
 
               {/* Content */}
-              <div className="prose prose-stone prose-sm max-w-none [&_li]:leading-relaxed [&_li]:text-stone-600 [&_li_ul]:mb-0 [&_li_ul]:mt-1.5 [&_ol]:mt-2 [&_ol]:list-decimal [&_ol]:space-y-2 [&_ol]:pl-5 [&_p]:leading-relaxed [&_p]:text-stone-600 [&_ul]:mt-2 [&_ul]:list-disc [&_ul]:space-y-1.5 [&_ul]:pl-5">
-                {section.content}
-              </div>
+              <div className="legal-prose">{section.content}</div>
             </section>
           ))}
         </div>
