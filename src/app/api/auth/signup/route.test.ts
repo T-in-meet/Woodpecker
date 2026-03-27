@@ -33,6 +33,7 @@ describe("회원가입 API 기본 성공 흐름 검증", () => {
     email: "Test@Example.com",
     password: "Password123!",
     nickname: "테스터",
+    agreements: { termsOfService: true as const, privacyPolicy: true as const },
   };
 
   const mockSignUpSuccess = () => {
@@ -340,6 +341,7 @@ describe("PR-API-02 회원가입 입력 검증 - 형식 / 길이 / 경계값 / �
         email: "  test@example.com  ",
         password: "Password123!",
         nickname: "테스터",
+        agreements: { termsOfService: true, privacyPolicy: true },
       }),
     );
     const body = await response.json();
@@ -414,6 +416,7 @@ describe("PR-API-02 회원가입 입력 검증 - 형식 / 길이 / 경계값 / �
         email: "test@example.com",
         password: "Password123!",
         nickname: " 가 ",
+        agreements: { termsOfService: true, privacyPolicy: true },
       }),
     );
 
@@ -437,6 +440,7 @@ describe("PR-API-02 회원가입 입력 검증 - 형식 / 길이 / 경계값 / �
         email: "test@example.com",
         password: "Password123!",
         nickname: " 가나다라마바사아자차 ",
+        agreements: { termsOfService: true, privacyPolicy: true },
       }),
     );
 
@@ -460,6 +464,7 @@ describe("PR-API-02 회원가입 입력 검증 - 형식 / 길이 / 경계값 / �
         email: "  test@example.com  ",
         password: "Password123!",
         nickname: "테스터",
+        agreements: { termsOfService: true, privacyPolicy: true },
       }),
     );
 
@@ -477,6 +482,7 @@ describe("PR-API-02 회원가입 입력 검증 - 형식 / 길이 / 경계값 / �
         email: "test@example.com",
         password: "Password123!",
         nickname: "  테스터  ",
+        agreements: { termsOfService: true, privacyPolicy: true },
       }),
     );
 
@@ -498,6 +504,7 @@ describe("PR-API-02 회원가입 입력 검증 - 형식 / 길이 / 경계값 / �
         email: "test@example.com",
         password: "  Password123!  ",
         nickname: "테스터",
+        agreements: { termsOfService: true, privacyPolicy: true },
       }),
     );
 
@@ -652,5 +659,341 @@ describe("PR-API-02 회원가입 입력 검증 - 실패 응답 계약 / 외부 �
       ]),
     );
     expect(mockSignUp).toHaveBeenCalledTimes(0);
+  });
+});
+
+describe("PR-API-03 회원가입 약관 동의 검증", () => {
+  const mockSignUp = vi.fn();
+
+  const BASE_VALID_PAYLOAD = {
+    email: "test@example.com",
+    password: "Password123!",
+    nickname: "테스터",
+    agreements: {
+      termsOfService: true,
+      privacyPolicy: true,
+    },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(createClient).mockResolvedValue({
+      auth: { signUp: mockSignUp },
+    } as never);
+  });
+
+  function makeRequest(body: object): NextRequest {
+    return new NextRequest("http://localhost/api/auth/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  async function expectAgreementFailure(
+    response: Response,
+    field: string,
+    reason: string,
+  ) {
+    const body = await response.json();
+    expect(response.status).toBe(400);
+    expect(body.success).toBe(false);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_INVALID_INPUT);
+    expect(body.data.errors).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field, reason })]),
+    );
+  }
+
+  // TC-01: termsOfService = false
+  it("TC-01. termsOfService가 false이면 NOT_AGREED 오류를 반환한다", async () => {
+    const response = await POST(
+      makeRequest({
+        ...BASE_VALID_PAYLOAD,
+        agreements: { termsOfService: false, privacyPolicy: true },
+      }),
+    );
+
+    await expectAgreementFailure(
+      response,
+      "agreements.termsOfService",
+      VALIDATION_REASON.NOT_AGREED,
+    );
+    expect(mockSignUp).toHaveBeenCalledTimes(0);
+  });
+
+  // TC-02: privacyPolicy = false
+  it("TC-02. privacyPolicy가 false이면 NOT_AGREED 오류를 반환한다", async () => {
+    const response = await POST(
+      makeRequest({
+        ...BASE_VALID_PAYLOAD,
+        agreements: { termsOfService: true, privacyPolicy: false },
+      }),
+    );
+
+    await expectAgreementFailure(
+      response,
+      "agreements.privacyPolicy",
+      VALIDATION_REASON.NOT_AGREED,
+    );
+    expect(mockSignUp).toHaveBeenCalledTimes(0);
+  });
+
+  // TC-03: both false
+  it("TC-03. termsOfService와 privacyPolicy 모두 false이면 두 필드 모두 NOT_AGREED 오류를 반환한다", async () => {
+    const response = await POST(
+      makeRequest({
+        ...BASE_VALID_PAYLOAD,
+        agreements: { termsOfService: false, privacyPolicy: false },
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.success).toBe(false);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_INVALID_INPUT);
+    expect(body.data.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: "agreements.termsOfService",
+          reason: VALIDATION_REASON.NOT_AGREED,
+        }),
+        expect.objectContaining({
+          field: "agreements.privacyPolicy",
+          reason: VALIDATION_REASON.NOT_AGREED,
+        }),
+      ]),
+    );
+    expect(mockSignUp).toHaveBeenCalledTimes(0);
+  });
+
+  // TC-04: termsOfService missing
+  it("TC-04. termsOfService가 누락되면 REQUIRED 오류를 반환한다", async () => {
+    const response = await POST(
+      makeRequest({
+        ...BASE_VALID_PAYLOAD,
+        agreements: { privacyPolicy: true },
+      }),
+    );
+
+    await expectAgreementFailure(
+      response,
+      "agreements.termsOfService",
+      VALIDATION_REASON.REQUIRED,
+    );
+    expect(mockSignUp).toHaveBeenCalledTimes(0);
+  });
+
+  // TC-05: privacyPolicy missing
+  it("TC-05. privacyPolicy가 누락되면 REQUIRED 오류를 반환한다", async () => {
+    const response = await POST(
+      makeRequest({
+        ...BASE_VALID_PAYLOAD,
+        agreements: { termsOfService: true },
+      }),
+    );
+
+    await expectAgreementFailure(
+      response,
+      "agreements.privacyPolicy",
+      VALIDATION_REASON.REQUIRED,
+    );
+    expect(mockSignUp).toHaveBeenCalledTimes(0);
+  });
+
+  // TC-06: agreements missing
+  it("TC-06. agreements 필드 자체가 누락되면 REQUIRED 오류를 반환한다", async () => {
+    const { agreements: _, ...withoutAgreements } = BASE_VALID_PAYLOAD;
+    const response = await POST(makeRequest(withoutAgreements));
+
+    await expectAgreementFailure(
+      response,
+      "agreements",
+      VALIDATION_REASON.REQUIRED,
+    );
+    expect(mockSignUp).toHaveBeenCalledTimes(0);
+  });
+
+  // TC-07: both true
+  it("TC-07. agreements가 모두 true이면 회원가입이 성공한다", async () => {
+    mockSignUp.mockResolvedValue({
+      data: { user: { email: "test@example.com" } },
+      error: null,
+    });
+
+    const response = await POST(makeRequest(BASE_VALID_PAYLOAD));
+    const body = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(body.success).toBe(true);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
+    expect(mockSignUp).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("PR-API-03 회원가입 약관 동의 검증", () => {
+  const mockSignUp = vi.fn();
+
+  const BASE_VALID_PAYLOAD = {
+    email: "test@example.com",
+    password: "Password123!",
+    nickname: "테스터",
+    agreements: {
+      termsOfService: true,
+      privacyPolicy: true,
+    },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(createClient).mockResolvedValue({
+      auth: { signUp: mockSignUp },
+    } as never);
+  });
+
+  function makeRequest(body: object): NextRequest {
+    return new NextRequest("http://localhost/api/auth/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  async function expectAgreementFailure(
+    response: Response,
+    field: string,
+    reason: string,
+  ) {
+    const body = await response.json();
+    expect(response.status).toBe(400);
+    expect(body.success).toBe(false);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_INVALID_INPUT);
+    expect(body.data.errors).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field, reason })]),
+    );
+  }
+
+  // TC-01: termsOfService = false
+  it("TC-01. termsOfService가 false이면 NOT_AGREED 오류를 반환한다", async () => {
+    const response = await POST(
+      makeRequest({
+        ...BASE_VALID_PAYLOAD,
+        agreements: { termsOfService: false, privacyPolicy: true },
+      }),
+    );
+
+    await expectAgreementFailure(
+      response,
+      "agreements.termsOfService",
+      VALIDATION_REASON.NOT_AGREED,
+    );
+    expect(mockSignUp).toHaveBeenCalledTimes(0);
+  });
+
+  // TC-02: privacyPolicy = false
+  it("TC-02. privacyPolicy가 false이면 NOT_AGREED 오류를 반환한다", async () => {
+    const response = await POST(
+      makeRequest({
+        ...BASE_VALID_PAYLOAD,
+        agreements: { termsOfService: true, privacyPolicy: false },
+      }),
+    );
+
+    await expectAgreementFailure(
+      response,
+      "agreements.privacyPolicy",
+      VALIDATION_REASON.NOT_AGREED,
+    );
+    expect(mockSignUp).toHaveBeenCalledTimes(0);
+  });
+
+  // TC-03: both false
+  it("TC-03. termsOfService와 privacyPolicy 모두 false이면 두 필드 모두 NOT_AGREED 오류를 반환한다", async () => {
+    const response = await POST(
+      makeRequest({
+        ...BASE_VALID_PAYLOAD,
+        agreements: { termsOfService: false, privacyPolicy: false },
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.success).toBe(false);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_INVALID_INPUT);
+    expect(body.data.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: "agreements.termsOfService",
+          reason: VALIDATION_REASON.NOT_AGREED,
+        }),
+        expect.objectContaining({
+          field: "agreements.privacyPolicy",
+          reason: VALIDATION_REASON.NOT_AGREED,
+        }),
+      ]),
+    );
+    expect(mockSignUp).toHaveBeenCalledTimes(0);
+  });
+
+  // TC-04: termsOfService missing
+  it("TC-04. termsOfService가 누락되면 REQUIRED 오류를 반환한다", async () => {
+    const response = await POST(
+      makeRequest({
+        ...BASE_VALID_PAYLOAD,
+        agreements: { privacyPolicy: true },
+      }),
+    );
+
+    await expectAgreementFailure(
+      response,
+      "agreements.termsOfService",
+      VALIDATION_REASON.REQUIRED,
+    );
+    expect(mockSignUp).toHaveBeenCalledTimes(0);
+  });
+
+  // TC-05: privacyPolicy missing
+  it("TC-05. privacyPolicy가 누락되면 REQUIRED 오류를 반환한다", async () => {
+    const response = await POST(
+      makeRequest({
+        ...BASE_VALID_PAYLOAD,
+        agreements: { termsOfService: true },
+      }),
+    );
+
+    await expectAgreementFailure(
+      response,
+      "agreements.privacyPolicy",
+      VALIDATION_REASON.REQUIRED,
+    );
+    expect(mockSignUp).toHaveBeenCalledTimes(0);
+  });
+
+  // TC-06: agreements missing
+  it("TC-06. agreements 필드 자체가 누락되면 REQUIRED 오류를 반환한다", async () => {
+    const { agreements: _, ...withoutAgreements } = BASE_VALID_PAYLOAD;
+    const response = await POST(makeRequest(withoutAgreements));
+
+    await expectAgreementFailure(
+      response,
+      "agreements",
+      VALIDATION_REASON.REQUIRED,
+    );
+    expect(mockSignUp).toHaveBeenCalledTimes(0);
+  });
+
+  // TC-07: both true
+  it("TC-07. agreements가 모두 true이면 회원가입이 성공한다", async () => {
+    mockSignUp.mockResolvedValue({
+      data: { user: { email: "test@example.com" } },
+      error: null,
+    });
+
+    const response = await POST(makeRequest(BASE_VALID_PAYLOAD));
+    const body = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(body.success).toBe(true);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
+    expect(mockSignUp).toHaveBeenCalledTimes(1);
   });
 });
