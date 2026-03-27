@@ -1,28 +1,23 @@
-import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
+import { NextRequest } from "next/server";
 
-import { API_CODES } from "@/lib/constants/apiCodes";
+import { failureResponse, successResponse } from "@/lib/api/response";
+import { AUTH_API_CODES } from "@/lib/constants/authApiCodes";
 import { ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
-
-const signupRequestSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
-  nickname: z.string().min(1),
-});
+import { mapSignupValidationErrors } from "@/lib/validation/auth/mapSignupValidationErrors";
+import { signupApiSchema } from "@/lib/validation/auth/signupSchema";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const parsed = signupRequestSchema.safeParse(body);
+  const parsed = signupApiSchema.safeParse(body);
 
   if (!parsed.success) {
-    return NextResponse.json(
-      { success: false, code: "INVALID_INPUT", data: null },
-      { status: 400 },
-    );
+    return failureResponse(AUTH_API_CODES.SIGNUP_INVALID_INPUT, {
+      errors: mapSignupValidationErrors(parsed.error, body),
+    });
   }
 
-  const { email, password } = parsed.data;
+  const { email, password, nickname } = parsed.data;
   const normalizedEmail = email.toLowerCase();
 
   const supabase = await createClient();
@@ -31,22 +26,19 @@ export async function POST(request: NextRequest) {
     password,
     options: {
       emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}${ROUTES.LOGIN}`,
+      data: { nickname },
     },
   });
 
   if (error) {
-    return NextResponse.json(
-      { success: false, code: error.code ?? "SIGNUP_FAILED", data: null },
-      { status: 400 },
-    );
+    return failureResponse(AUTH_API_CODES.SIGNUP_INVALID_INPUT, {
+      status: 400,
+    });
   }
 
-  return NextResponse.json(
-    {
-      success: true,
-      code: API_CODES.SIGNUP_SUCCESS,
-      data: { email: data.user?.email ?? normalizedEmail },
-    },
+  return successResponse(
+    AUTH_API_CODES.SIGNUP_SUCCESS,
+    { email: data.user?.email ?? normalizedEmail },
     { status: 201 },
   );
 }
