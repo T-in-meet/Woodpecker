@@ -1,6 +1,9 @@
 import Image from "next/image";
 import Link from "next/link";
 
+const LEGAL_PROSE_CN =
+  "prose prose-stone prose-sm max-w-none [&_li]:leading-relaxed [&_li]:text-stone-600 [&_li_ul]:mb-0 [&_li_ul]:mt-1.5 [&_ol]:mt-2 [&_ol]:list-decimal [&_ol]:space-y-2 [&_ol]:pl-5 [&_p]:leading-relaxed [&_p]:text-stone-600 [&_ul]:mt-2 [&_ul]:list-disc [&_ul]:space-y-1.5 [&_ul]:pl-5";
+
 export type LegalSection = {
   article: string;
   title: string;
@@ -71,7 +74,7 @@ export function LegalPage({
               </div>
 
               {/* Content */}
-              <div className="legal-prose">{section.content}</div>
+              <div className={LEGAL_PROSE_CN}>{section.content}</div>
             </section>
           ))}
         </div>
