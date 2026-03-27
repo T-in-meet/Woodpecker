@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { ROUTES } from "@/lib/constants/routes";
+
 const footerLinks = [
   {
     title: "서비스",
@@ -18,8 +20,8 @@ const footerLinks = [
   {
     title: "법적 고지",
     links: [
-      { label: "이용약관", href: "#" },
-      { label: "개인정보처리방침", href: "#" },
+      { label: "이용약관", href: ROUTES.TERMS },
+      { label: "개인정보처리방침", href: ROUTES.PRIVACY },
     ],
   },
 ] as const;
