@@ -5,6 +5,7 @@ import { AUTH_API_CODES } from "@/lib/constants/authApiCodes";
 import { ROUTES } from "@/lib/constants/routes";
 import { VALIDATION_REASON } from "@/lib/constants/validation";
 import { createClient } from "@/lib/supabase/server";
+import { SIGNUP_PASSWORD_MIN } from "@/lib/validation/auth/signupSchema";
 
 import { POST } from "./route";
 
@@ -351,6 +352,32 @@ describe("PR-API-02 회원가입 입력 검증 - 형식 / 길이 / 경계값 / �
     if (body.data?.email !== undefined) {
       expect(body.data.email).toBe("test@example.com");
     }
+  });
+
+  // TC-12: 비밀번호 최소 길이 검증
+  it(`TC-12. 비밀번호가 최소 길이(${SIGNUP_PASSWORD_MIN}자) 미만이면 validation 실패를 반환한다`, async () => {
+    const shortPassword = "a".repeat(SIGNUP_PASSWORD_MIN - 1);
+    const response = await POST(
+      makeRequest({
+        email: "test@example.com",
+        password: shortPassword,
+        nickname: "테스터",
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.success).toBe(false);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_INVALID_INPUT);
+    expect(body.data.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: "password",
+          reason: VALIDATION_REASON.TOO_SHORT,
+        }),
+      ]),
+    );
+    expect(mockSignUp).toHaveBeenCalledTimes(0);
   });
 
   // TC-13: 길이 검증

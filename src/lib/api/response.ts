@@ -6,24 +6,24 @@ import {
 
 import { ValidationReason } from "../validation/validation.types";
 
-interface SuccessResponse<T> {
+type SuccessResponse<T> = {
   success: true;
   code: ApiCode;
   data: T;
   message?: string;
-}
+};
 
-interface FailureResponse {
+type FailureResponse = {
   success: false;
   code: ApiCode;
   data: null | { errors: ValidationError[] };
   message?: string;
-}
+};
 
-export interface ValidationError {
+export type ValidationError = {
   field: string;
   reason: ValidationReason;
-}
+};
 
 function getResultFromCode(code: string): ApiResult | undefined {
   const results = Object.keys(RESULT_HTTP_STATUS_MAP) as ApiResult[];

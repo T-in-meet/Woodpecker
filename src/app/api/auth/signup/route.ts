@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
   }
 
   const { email, password, nickname } = parsed.data;
-  const normalizedEmail = (email as string).toLowerCase();
+  const normalizedEmail = email.toLowerCase();
 
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signUp({
