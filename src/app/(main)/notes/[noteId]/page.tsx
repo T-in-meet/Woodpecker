@@ -13,7 +13,7 @@ export default async function NoteDetailPage({
 }: {
   params: Promise<{ noteId: string }>;
 }) {
-  const { noteId } = await params;
+  const { noteId: _noteId } = await params;
   const supabase = await createClient();
   const {
     data: { user },

@@ -44,8 +44,10 @@ export function getMarkdownTabIndentResult(
       ? state.doc.line(rawEndLine.number - 1)
       : rawEndLine;
   const changes: ChangeSpec[] = [];
-  let anchor = range.anchor;
-  let head = range.head;
+  const originalAnchor = range.anchor;
+  const originalHead = range.head;
+  let anchorShift = 0;
+  let headShift = 0;
 
   for (
     let lineNumber = startLine.number;
@@ -55,17 +57,20 @@ export function getMarkdownTabIndentResult(
     const line = state.doc.line(lineNumber);
     changes.push({ from: line.from, insert: MARKDOWN_TAB_INDENT });
 
-    if (line.from <= anchor) {
-      anchor += MARKDOWN_TAB_INDENT.length;
+    if (line.from <= originalAnchor) {
+      anchorShift += MARKDOWN_TAB_INDENT.length;
     }
 
-    if (line.from <= head) {
-      head += MARKDOWN_TAB_INDENT.length;
+    if (line.from <= originalHead) {
+      headShift += MARKDOWN_TAB_INDENT.length;
     }
   }
 
   return {
     changes,
-    range: EditorSelection.range(anchor, head),
+    range: EditorSelection.range(
+      originalAnchor + anchorShift,
+      originalHead + headShift,
+    ),
   };
 }
