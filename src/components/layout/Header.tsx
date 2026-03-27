@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { ROUTES } from "@/lib/constants/routes";
+import { getUser } from "@/lib/supabase/getUser";
 import { createClient } from "@/lib/supabase/server";
 import type { Profile } from "@/types/profiles.types";
 
@@ -13,9 +14,11 @@ export async function Header() {
   let profile: Profile | null = null;
 
   try {
-    const supabase = await createClient();
-    const { data } = await supabase.auth.getUser();
-    user = data.user;
+    const [currentUser, supabase] = await Promise.all([
+      getUser(),
+      createClient(),
+    ]);
+    user = currentUser;
 
     if (user) {
       const { data: profileData } = await supabase

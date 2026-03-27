@@ -1,17 +1,9 @@
-import { cache } from "react";
 import { z } from "zod";
 
+import { getUser } from "@/lib/supabase/getUser";
 import { createClient } from "@/lib/supabase/server";
 
-/**
- * React.cache()로 감싼 getUser.
- * 하나의 렌더 트리(요청) 안에서 여러 번 호출해도 auth.getUser()는 1번만 실행됨.
- */
-export const getUser = cache(async () => {
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getUser();
-  return data.user;
-});
+export { getUser };
 
 export type LearningStats = {
   totalNotes: number;
