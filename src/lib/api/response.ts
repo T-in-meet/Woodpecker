@@ -4,6 +4,8 @@ import {
   RESULT_HTTP_STATUS_MAP,
 } from "@/lib/constants/apiCodes";
 
+import { ValidationReason } from "../validation/validation.types";
+
 interface SuccessResponse<T> {
   success: true;
   code: ApiCode;
@@ -20,7 +22,7 @@ interface FailureResponse {
 
 export interface ValidationError {
   field: string;
-  reason: string;
+  reason: ValidationReason;
 }
 
 function getResultFromCode(code: string): ApiResult | undefined {
