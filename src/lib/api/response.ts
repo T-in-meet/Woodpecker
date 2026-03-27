@@ -26,7 +26,8 @@ export interface ValidationError {
 }
 
 function getResultFromCode(code: string): ApiResult | undefined {
-  return code.split("_").at(-1) as ApiResult | undefined;
+  const results = Object.keys(RESULT_HTTP_STATUS_MAP) as ApiResult[];
+  return results.find((result) => code.endsWith(`_${result}`));
 }
 
 function getStatusFromCode(code: ApiCode, override?: number): number {
