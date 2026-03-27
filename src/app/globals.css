@@ -2,6 +2,8 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+@plugin "@tailwindcss/typography";
+
 @custom-variant dark (&:is(.dark *));
 
 html {
@@ -9,7 +11,7 @@ html {
 }
 
 @theme inline {
-  --font-jeju: "JejuStoneWall", "Noto Sans KR", sans-serif;
+  --font-jeju: var(--font-geist-sans);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
@@ -131,12 +133,4 @@ html {
   html {
     @apply font-sans;
   }
-}
-
-@font-face {
-  font-family: "JejuStoneWall";
-  src: url("https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2210-EF@1.0/EF_jejudoldam.woff2")
-    format("woff2");
-  font-weight: normal;
-  font-display: swap;
 }

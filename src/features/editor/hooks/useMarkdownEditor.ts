@@ -1,4 +1,9 @@
+import { history, historyKeymap } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
+import {
+  defaultHighlightStyle,
+  syntaxHighlighting,
+} from "@codemirror/language";
 import { Compartment, EditorState } from "@codemirror/state";
 import {
   EditorView,
@@ -10,6 +15,8 @@ import {
 import { useEffect, useRef } from "react";
 
 import {
+  getAriaLabelExtension,
+  getMarkdownTabIndentResult,
   getPlaceholderExtension,
   getReadOnlyExtension,
 } from "@/features/editor/utils/editorExtensions";
@@ -19,13 +26,14 @@ import {
 } from "@/features/editor/utils/getDocumentChange";
 import { LANGUAGE_DESCRIPTIONS } from "@/features/editor/utils/getLanguageExtension";
 
-interface UseMarkdownEditorOptions {
+type UseMarkdownEditorOptions = {
   doc: string;
   onChange: (value: string) => void;
   placeholder?: string | undefined;
   readOnly?: boolean;
   autoFocus?: boolean;
-}
+  ariaLabel?: string | undefined;
+};
 
 export function useMarkdownEditor({
   doc,
@@ -33,12 +41,14 @@ export function useMarkdownEditor({
   placeholder: placeholderText,
   readOnly = false,
   autoFocus = false,
+  ariaLabel,
 }: UseMarkdownEditorOptions) {
   const containerRef = useRef<HTMLDivElement>(null);
   const editorViewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
   const readOnlyCompartment = useRef(new Compartment());
   const placeholderCompartment = useRef(new Compartment());
+  const ariaLabelCompartment = useRef(new Compartment());
 
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -53,6 +63,7 @@ export function useMarkdownEditor({
         lineNumbers(),
         highlightActiveLine(),
         highlightActiveLineGutter(),
+        syntaxHighlighting(defaultHighlightStyle),
         EditorView.lineWrapping,
         markdown({
           base: markdownLanguage,
@@ -62,16 +73,19 @@ export function useMarkdownEditor({
         placeholderCompartment.current.of(
           getPlaceholderExtension(placeholderText),
         ),
+        ariaLabelCompartment.current.of(getAriaLabelExtension(ariaLabel)),
+        history(),
         keymap.of([
+          ...historyKeymap,
           {
             key: "Tab",
             run: (view) => {
               if (view.state.readOnly) return false;
-              const { from, to } = view.state.selection.main;
-              view.dispatch({
-                changes: { from, to, insert: "  " },
-                selection: { anchor: from + 2 },
-              });
+              view.dispatch(
+                view.state.changeByRange((range) =>
+                  getMarkdownTabIndentResult(view.state, range),
+                ),
+              );
               return true;
             },
           },
@@ -105,6 +119,14 @@ export function useMarkdownEditor({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    editorViewRef.current?.dispatch({
+      effects: ariaLabelCompartment.current.reconfigure(
+        getAriaLabelExtension(ariaLabel),
+      ),
+    });
+  }, [ariaLabel]);
 
   useEffect(() => {
     editorViewRef.current?.dispatch({

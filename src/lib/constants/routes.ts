@@ -5,8 +5,6 @@ export const ROUTES = {
   NOTES: "/notes",
   NOTES_NEW: "/notes/new",
   MYPAGE: "/mypage",
-  TERMS: "/terms",
-  PRIVACY: "/privacy",
 } as const;
 
 export type Route = (typeof ROUTES)[keyof typeof ROUTES];

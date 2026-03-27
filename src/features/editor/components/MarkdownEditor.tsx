@@ -4,14 +4,15 @@ import { cn } from "@/lib/utils/cn";
 
 import { useMarkdownEditor } from "../hooks/useMarkdownEditor";
 
-interface MarkdownEditorProps {
+type MarkdownEditorProps = {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   readOnly?: boolean;
   autoFocus?: boolean;
   className?: string;
-}
+  "aria-label"?: string;
+};
 
 export function MarkdownEditor({
   value,
@@ -20,6 +21,7 @@ export function MarkdownEditor({
   readOnly = false,
   autoFocus = false,
   className,
+  "aria-label": ariaLabel,
 }: MarkdownEditorProps) {
   const { containerRef } = useMarkdownEditor({
     doc: value,
@@ -27,6 +29,7 @@ export function MarkdownEditor({
     placeholder,
     readOnly,
     autoFocus,
+    ariaLabel,
   });
 
   return (
