@@ -813,6 +813,34 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
     expect(mockSignUp).toHaveBeenCalledTimes(0);
   });
 
+  // TC-08: agreements null
+  it("TC-08. agreements가 null이면 REQUIRED 오류를 반환한다", async () => {
+    const response = await POST(
+      makeRequest({ ...BASE_VALID_PAYLOAD, agreements: null }),
+    );
+
+    await expectAgreementFailure(
+      response,
+      "agreements",
+      VALIDATION_REASON.REQUIRED,
+    );
+    expect(mockSignUp).toHaveBeenCalledTimes(0);
+  });
+
+  // TC-09: agreements invalid type
+  it("TC-09. agreements가 string이면 INVALID_TYPE 오류를 반환한다", async () => {
+    const response = await POST(
+      makeRequest({ ...BASE_VALID_PAYLOAD, agreements: "yes" }),
+    );
+
+    await expectAgreementFailure(
+      response,
+      "agreements",
+      VALIDATION_REASON.INVALID_TYPE,
+    );
+    expect(mockSignUp).toHaveBeenCalledTimes(0);
+  });
+
   // TC-07: both true
   it("TC-07. agreements가 모두 true이면 회원가입이 성공한다", async () => {
     mockSignUp.mockResolvedValue({
