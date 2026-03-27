@@ -11,12 +11,9 @@ import {
   type MypageSection,
 } from "@/features/mypage/components/MypageNav";
 import { ProfileSection } from "@/features/mypage/components/ProfileSection";
-import {
-  getLearningStats,
-  getProfile,
-  getUser,
-} from "@/features/mypage/queries";
+import { getLearningStats, getProfile } from "@/features/mypage/queries";
 import { ROUTES } from "@/lib/constants/routes";
+import { getUser } from "@/lib/supabase/getUser";
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false },

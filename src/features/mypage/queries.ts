@@ -3,8 +3,6 @@ import { z } from "zod";
 import { getUser } from "@/lib/supabase/getUser";
 import { createClient } from "@/lib/supabase/server";
 
-export { getUser };
-
 export type LearningStats = {
   totalNotes: number;
   completedReviews: number;

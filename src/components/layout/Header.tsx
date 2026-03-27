@@ -14,13 +14,10 @@ export async function Header() {
   let profile: Profile | null = null;
 
   try {
-    const [currentUser, supabase] = await Promise.all([
-      getUser(),
-      createClient(),
-    ]);
-    user = currentUser;
+    user = await getUser();
 
     if (user) {
+      const supabase = await createClient();
       const { data: profileData } = await supabase
         .from("profiles")
         .select("*")
