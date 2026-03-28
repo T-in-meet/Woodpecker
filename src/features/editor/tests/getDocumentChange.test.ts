@@ -38,4 +38,20 @@ describe("getDocumentChange", () => {
       insert: "",
     });
   });
+
+  it("returns a full insert change when inserting into an empty document", () => {
+    expect(getDocumentChange("", "hello")).toEqual({
+      from: 0,
+      to: 0,
+      insert: "hello",
+    });
+  });
+
+  it("returns a full delete change when clearing the entire document", () => {
+    expect(getDocumentChange("hello", "")).toEqual({
+      from: 0,
+      to: 5,
+      insert: "",
+    });
+  });
 });
