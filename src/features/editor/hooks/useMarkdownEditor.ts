@@ -5,13 +5,7 @@ import {
   syntaxHighlighting,
 } from "@codemirror/language";
 import { Compartment, EditorState } from "@codemirror/state";
-import {
-  EditorView,
-  highlightActiveLine,
-  highlightActiveLineGutter,
-  keymap,
-  lineNumbers,
-} from "@codemirror/view";
+import { EditorView, keymap } from "@codemirror/view";
 import { useEffect, useRef } from "react";
 
 import {
@@ -60,9 +54,6 @@ export function useMarkdownEditor({
     const state = EditorState.create({
       doc,
       extensions: [
-        lineNumbers(),
-        highlightActiveLine(),
-        highlightActiveLineGutter(),
         syntaxHighlighting(defaultHighlightStyle),
         EditorView.lineWrapping,
         markdown({
@@ -158,5 +149,44 @@ export function useMarkdownEditor({
     });
   }, [doc]);
 
-  return { containerRef };
+  const toggleFormat = (syntax: string) => {
+    const view = editorViewRef.current;
+    if (!view || view.state.readOnly) return;
+
+    const { state } = view;
+    const { from, to } = state.selection.main;
+    const len = syntax.length;
+    const selectedText = state.sliceDoc(from, to);
+    const before = from >= len ? state.sliceDoc(from - len, from) : "";
+    const after = state.sliceDoc(to, to + len);
+
+    if (before === syntax && after === syntax) {
+      view.dispatch({
+        changes: [
+          { from: from - len, to: from, insert: "" },
+          { from: to, to: to + len, insert: "" },
+        ],
+        selection: { anchor: from - len, head: to - len },
+      });
+    } else if (selectedText) {
+      view.dispatch({
+        changes: { from, to, insert: `${syntax}${selectedText}${syntax}` },
+        selection: { anchor: from + len, head: to + len },
+      });
+    } else {
+      view.dispatch({
+        changes: { from, insert: `${syntax}${syntax}` },
+        selection: { anchor: from + len },
+      });
+    }
+    view.focus();
+  };
+
+  return {
+    containerRef,
+    toggleBold: () => toggleFormat("**"),
+    toggleItalic: () => toggleFormat("*"),
+    toggleStrikethrough: () => toggleFormat("~~"),
+    toggleCode: () => toggleFormat("`"),
+  };
 }
