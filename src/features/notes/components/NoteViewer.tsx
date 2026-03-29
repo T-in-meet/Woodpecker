@@ -17,7 +17,12 @@ export function NoteViewer({ content, language, className }: NoteViewerProps) {
   const effectiveLanguage = language ?? "markdown";
 
   if (!isCodeLanguage(effectiveLanguage)) {
-    return <MarkdownPreview content={content} className={className} />;
+    return (
+      <MarkdownPreview
+        content={content}
+        {...(className !== undefined && { className })}
+      />
+    );
   }
 
   const highlighted = hljs.highlight(content, {
