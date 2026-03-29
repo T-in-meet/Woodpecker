@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
     AUTH_API_CODES.SIGNUP_SUCCESS,
     {
       email: data.user?.email ?? normalizedEmail,
-      avatar_url: avatarUrl,
+      ...(avatarUrl !== null ? { avatar_url: avatarUrl } : {}),
       redirectTo: ROUTES.VERIFY_EMAIL,
     },
     { status: 201 },

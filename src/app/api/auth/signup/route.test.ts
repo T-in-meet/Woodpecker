@@ -1321,3 +1321,97 @@ describe("PR-API-07 프로필 이미지 업로드 성공 시 avatar_url 반영",
     );
   });
 });
+
+describe("PR-API-08 프로필 이미지 업로드 실패 시 회원가입 성공 유지", () => {
+  const mockSignUp = vi.fn();
+  const mockStorageUpload = vi.fn();
+  const mockGetPublicUrl = vi.fn();
+  const mockProfileUpdate = vi.fn();
+
+  function makeMultipartRequest(): NextRequest {
+    const request = new NextRequest("http://localhost/api/auth/signup", {
+      method: "POST",
+      headers: {
+        "Content-Type": "multipart/form-data; boundary=boundary",
+      },
+      body: "dummy",
+    });
+
+    const mockFile = new File(["image-content"], "profile.jpg", {
+      type: "image/jpeg",
+    });
+    const fields: Record<string, string | File> = {
+      email: "test@example.com",
+      password: "Password123!",
+      nickname: "Tester",
+      agreements: JSON.stringify({ termsOfService: true, privacyPolicy: true }),
+      profileImage: mockFile,
+    };
+
+    vi.spyOn(request, "formData").mockResolvedValue({
+      get: (key: string) => fields[key] ?? null,
+    } as unknown as FormData);
+
+    return request;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getUserByEmail).mockResolvedValue(null);
+    vi.mocked(createClient).mockResolvedValue({
+      auth: { signUp: mockSignUp },
+      storage: {
+        from: vi.fn(() => ({
+          upload: mockStorageUpload,
+          getPublicUrl: mockGetPublicUrl,
+        })),
+      },
+      from: vi.fn(() => ({
+        update: mockProfileUpdate,
+      })),
+    } as never);
+    mockSignUp.mockResolvedValue({
+      data: { user: { id: "user-id", email: "test@example.com" } },
+      error: null,
+    });
+    mockStorageUpload.mockResolvedValue({
+      data: null,
+      error: { message: "upload failed" },
+    });
+  });
+
+  // TC-01: 업로드 실패해도 signup은 201로 성공한다
+  it("TC-01. 업로드 실패 시에도 회원가입은 201 성공 응답을 반환한다", async () => {
+    const response = await POST(makeMultipartRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(body.success).toBe(true);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
+    expect(body.data.email).toBe("test@example.com");
+    expect(body.data.redirectTo).toBe(ROUTES.VERIFY_EMAIL);
+  });
+
+  // TC-02: 업로드 실패 시 getPublicUrl 미호출
+  it("TC-02. 업로드 실패 시 getPublicUrl은 호출되지 않는다", async () => {
+    await POST(makeMultipartRequest());
+
+    expect(mockStorageUpload).toHaveBeenCalledTimes(1);
+    expect(mockGetPublicUrl).toHaveBeenCalledTimes(0);
+  });
+
+  // TC-03: 업로드 실패 시 profile update 미호출
+  it("TC-03. 업로드 실패 시 profiles 테이블 업데이트는 호출되지 않는다", async () => {
+    await POST(makeMultipartRequest());
+
+    expect(mockProfileUpdate).toHaveBeenCalledTimes(0);
+  });
+
+  // TC-04: 응답 data에 avatar_url 미포함
+  it("TC-04. 업로드 실패 시 응답 data에 avatar_url이 포함되지 않는다", async () => {
+    const response = await POST(makeMultipartRequest());
+    const body = await response.json();
+
+    expect(body.data).not.toHaveProperty("avatar_url");
+  });
+});
