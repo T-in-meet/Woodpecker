@@ -2,8 +2,12 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { failureResponse, successResponse } from "@/lib/api/response";
+import { getLastVerificationResendAt } from "@/lib/auth/getLastVerificationResendAt";
+import { resendVerificationEmail } from "@/lib/auth/resendVerificationEmail";
+import { setLastVerificationResendAt } from "@/lib/auth/setLastVerificationResendAt";
 import { AUTH_API_CODES } from "@/lib/constants/authApiCodes";
-import { createClient } from "@/lib/supabase/server";
+
+const RESEND_COOLDOWN_MS = 60 * 1000;
 
 const resendSchema = z.object({
   email: z.preprocess((v) => (typeof v === "string" ? v.trim() : v), z.email()),
@@ -21,17 +25,17 @@ export async function POST(request: NextRequest) {
 
   const normalizedEmail = parsed.data.email.toLowerCase();
 
-  const supabase = await createClient();
-  const { error } = await supabase.auth.resend({
-    type: "signup",
-    email: normalizedEmail,
-  });
+  const lastResendAt = await getLastVerificationResendAt(normalizedEmail);
+  const now = Date.now();
 
-  if (error) {
-    return failureResponse(AUTH_API_CODES.SIGNUP_INVALID_INPUT, {
-      status: 400,
-    });
+  if (lastResendAt !== null && now - lastResendAt < RESEND_COOLDOWN_MS) {
+    return failureResponse(
+      AUTH_API_CODES.EMAIL_VERIFICATION_RESEND_COOLDOWN_CONFLICT,
+    );
   }
+
+  await resendVerificationEmail(normalizedEmail);
+  await setLastVerificationResendAt(normalizedEmail, now);
 
   return successResponse(AUTH_API_CODES.EMAIL_VERIFICATION_RESEND_SUCCESS, {
     email: normalizedEmail,

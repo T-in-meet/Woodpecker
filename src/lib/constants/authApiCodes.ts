@@ -9,6 +9,11 @@ export const AUTH_API_CODES = {
     "resend",
     API_RESULTS.SUCCESS,
   ),
+  EMAIL_VERIFICATION_RESEND_COOLDOWN_CONFLICT: makeApiActionCode(
+    "email-verification",
+    "resend-cooldown",
+    API_RESULTS.CONFLICT,
+  ),
 } as const;
 
 export type AuthApiCode = (typeof AUTH_API_CODES)[keyof typeof AUTH_API_CODES];
