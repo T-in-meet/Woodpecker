@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { getUserByEmail } from "@/lib/auth/getUserByEmail";
 import { AUTH_API_CODES } from "@/lib/constants/authApiCodes";
 import { ROUTES } from "@/lib/constants/routes";
 import { VALIDATION_REASON } from "@/lib/constants/validation";
@@ -9,6 +10,7 @@ import { SIGNUP_PASSWORD_MIN } from "@/lib/validation/auth/signupSchema";
 
 import { POST } from "./route";
 
+vi.mock("@/lib/auth/getUserByEmail");
 vi.mock("@/lib/supabase/server");
 
 function makeRequest(body: object): NextRequest {
@@ -857,5 +859,155 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
     expect(body.success).toBe(true);
     expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
     expect(mockSignUp).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("PR-API-04 회원가입 - pending 계정 재요청 분기", () => {
+  const mockSignUp = vi.fn();
+
+  const requestBody = {
+    email: "test@example.com",
+    password: "Password123!",
+    nickname: "테스터",
+    agreements: { termsOfService: true as const, privacyPolicy: true as const },
+  };
+
+  const pendingUser = {
+    email: "test@example.com",
+    email_confirmed_at: null,
+  };
+
+  function makeRequest(): NextRequest {
+    return new NextRequest("http://localhost/api/auth/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody),
+    });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(createClient).mockResolvedValue({
+      auth: { signUp: mockSignUp },
+    } as never);
+    vi.mocked(getUserByEmail).mockResolvedValue(null);
+  });
+
+  it("TC-01. pending 계정이면 200 성공 응답으로 PENDING 상태를 반환한다", async () => {
+    vi.mocked(getUserByEmail).mockResolvedValue(pendingUser as never);
+
+    const response = await POST(makeRequest());
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.success).toBe(true);
+    expect(json.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
+    expect(json.data).toEqual({ email: "test@example.com", status: "PENDING" });
+  });
+
+  it("TC-02. pending 분기에서는 getUserByEmail이 정확히 1회 호출된다", async () => {
+    vi.mocked(getUserByEmail).mockResolvedValue(pendingUser as never);
+
+    await POST(makeRequest());
+
+    expect(vi.mocked(getUserByEmail)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(getUserByEmail)).toHaveBeenCalledWith("test@example.com");
+  });
+
+  it("TC-03. pending 분기에서는 signup이 호출되지 않는다", async () => {
+    vi.mocked(getUserByEmail).mockResolvedValue(pendingUser as never);
+
+    await POST(makeRequest());
+
+    expect(mockSignUp).toHaveBeenCalledTimes(0);
+  });
+});
+
+describe("PR-API-05 회원가입 - active 계정 재요청 분기", () => {
+  const mockSignUp = vi.fn();
+
+  const requestBody = {
+    email: "test@example.com",
+    password: "Password123!",
+    nickname: "tester",
+    agreements: { termsOfService: true as const, privacyPolicy: true as const },
+  };
+
+  const activeUser = {
+    id: "user-123",
+    email: "test@example.com",
+    email_confirmed_at: "2026-03-29T00:00:00.000Z",
+  };
+
+  function makeRequest(): NextRequest {
+    return new NextRequest("http://localhost:3000/api/auth/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody),
+    });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(createClient).mockResolvedValue({
+      auth: { signUp: mockSignUp },
+    } as never);
+    vi.mocked(getUserByEmail).mockResolvedValue(null);
+  });
+
+  it("TC-01. active 계정이면 200 응답과 /login redirect를 반환한다", async () => {
+    vi.mocked(getUserByEmail).mockResolvedValue(activeUser as never);
+
+    const response = await POST(makeRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
+    expect(body.data).toEqual({
+      email: "test@example.com",
+      redirectTo: "/login",
+    });
+  });
+
+  it("TC-02. active 분기에서는 signup이 호출되지 않는다", async () => {
+    vi.mocked(getUserByEmail).mockResolvedValue(activeUser as never);
+
+    await POST(makeRequest());
+
+    expect(vi.mocked(getUserByEmail)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(getUserByEmail)).toHaveBeenCalledWith("test@example.com");
+    expect(mockSignUp).not.toHaveBeenCalled();
+  });
+
+  it("TC-03. active 분기 응답은 API 계약 구조를 유지한다", async () => {
+    vi.mocked(getUserByEmail).mockResolvedValue(activeUser as never);
+
+    const response = await POST(makeRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({
+      success: true,
+      code: AUTH_API_CODES.SIGNUP_SUCCESS,
+      data: {
+        email: "test@example.com",
+        redirectTo: "/login",
+      },
+    });
+    expect(body).not.toHaveProperty("errors");
+    expect(body).not.toHaveProperty("error");
+  });
+
+  it("TC-04. active 분기 응답은 /verify-email redirect를 포함하지 않는다", async () => {
+    vi.mocked(getUserByEmail).mockResolvedValue(activeUser as never);
+
+    const response = await POST(makeRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
+    expect(body.data.redirectTo).toBe("/login");
+    expect(body.data.redirectTo).not.toBe("/verify-email");
   });
 });

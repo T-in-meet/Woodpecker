@@ -4,7 +4,7 @@ import {
   RESULT_HTTP_STATUS_MAP,
 } from "@/lib/constants/apiCodes";
 
-import { ValidationReason } from "../validation/validation.types";
+import type { ValidationReason } from "../validation/validation.types";
 
 type SuccessResponse<T> = {
   success: true;
