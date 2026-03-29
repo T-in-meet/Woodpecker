@@ -6,6 +6,6 @@ import { createClient } from "./server";
 export const getUser = cache(async () => {
   const supabase = await createClient();
   const { data, error } = await supabase.auth.getUser();
-  if (error) console.error("[getUser]", error.message);
+  if (error) throw error;
   return data.user;
 });
