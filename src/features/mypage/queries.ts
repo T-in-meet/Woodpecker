@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { getUser } from "@/lib/supabase/getUser";
 import { createClient } from "@/lib/supabase/server";
 
 export type LearningStats = {
@@ -20,12 +21,11 @@ const profileDbSchema = z.object({
 });
 
 export async function getProfile() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getUser();
 
   if (!user) return null;
+
+  const supabase = await createClient();
 
   const { data } = await supabase
     .from("profiles")
@@ -38,10 +38,7 @@ export async function getProfile() {
 }
 
 export async function getLearningStats(): Promise<LearningStats> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getUser();
 
   const empty: LearningStats = {
     totalNotes: 0,
@@ -52,6 +49,8 @@ export async function getLearningStats(): Promise<LearningStats> {
   };
 
   if (!user) return empty;
+
+  const supabase = await createClient();
 
   const [
     notesResult,
