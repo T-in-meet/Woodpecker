@@ -1216,3 +1216,108 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     expect(body.data).toBeNull();
   });
 });
+
+describe("PR-API-07 프로필 이미지 업로드 성공 시 avatar_url 반영", () => {
+  const mockSignUp = vi.fn();
+  const mockStorageUpload = vi.fn();
+  const mockGetPublicUrl = vi.fn();
+  const mockProfileUpdate = vi.fn();
+  const mockProfileEq = vi.fn();
+
+  const MOCK_UPLOAD_PATH = "avatars/mock-image.png";
+  const MOCK_PUBLIC_URL = "https://example.com/storage/avatars/mock-image.png";
+
+  function makeMultipartRequest(): NextRequest {
+    const request = new NextRequest("http://localhost/api/auth/signup", {
+      method: "POST",
+      headers: {
+        "Content-Type": "multipart/form-data; boundary=boundary",
+      },
+      body: "dummy",
+    });
+
+    const mockFile = new File(["image-content"], "profile.jpg", {
+      type: "image/jpeg",
+    });
+    const fields: Record<string, string | File> = {
+      email: "test@example.com",
+      password: "Password123!",
+      nickname: "테스터",
+      agreements: JSON.stringify({ termsOfService: true, privacyPolicy: true }),
+      profileImage: mockFile,
+    };
+
+    vi.spyOn(request, "formData").mockResolvedValue({
+      get: (key: string) => fields[key] ?? null,
+    } as unknown as FormData);
+
+    return request;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getUserByEmail).mockResolvedValue(null);
+    mockProfileUpdate.mockReturnValue({ eq: mockProfileEq });
+    mockProfileEq.mockResolvedValue({ data: null, error: null });
+    vi.mocked(createClient).mockResolvedValue({
+      auth: { signUp: mockSignUp },
+      storage: {
+        from: vi.fn(() => ({
+          upload: mockStorageUpload,
+          getPublicUrl: mockGetPublicUrl,
+        })),
+      },
+      from: vi.fn(() => ({
+        update: mockProfileUpdate,
+      })),
+    } as never);
+    mockSignUp.mockResolvedValue({
+      data: { user: { id: "user-id", email: "test@example.com" } },
+      error: null,
+    });
+    mockStorageUpload.mockResolvedValue({
+      data: { path: MOCK_UPLOAD_PATH },
+      error: null,
+    });
+    mockGetPublicUrl.mockReturnValue({
+      data: { publicUrl: MOCK_PUBLIC_URL },
+    });
+  });
+
+  // TC-01: 프로필 이미지 포함 회원가입 성공 응답 반환
+  it("TC-01. 프로필 이미지 포함 회원가입 성공 시 성공 응답을 반환한다", async () => {
+    const response = await POST(makeMultipartRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(body.success).toBe(true);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
+    expect(body.data.email).toBe("test@example.com");
+    expect(body.data.avatar_url).toBe(MOCK_PUBLIC_URL);
+  });
+
+  // TC-02: profileImage 제공 시 storage.upload 호출
+  it("TC-02. profileImage가 포함된 요청 시 storage.upload가 1회 호출된다", async () => {
+    await POST(makeMultipartRequest());
+
+    expect(mockStorageUpload).toHaveBeenCalledTimes(1);
+  });
+
+  // TC-03: upload 경로로 getPublicUrl 호출
+  it("TC-03. upload 경로로 getPublicUrl이 1회 호출된다", async () => {
+    await POST(makeMultipartRequest());
+
+    expect(mockGetPublicUrl).toHaveBeenCalledTimes(1);
+    expect(mockGetPublicUrl).toHaveBeenCalledWith(MOCK_UPLOAD_PATH);
+  });
+
+  // TC-04: 생성된 public URL로 avatar_url 업데이트
+  it("TC-04. 생성된 public URL로 profiles 테이블의 avatar_url이 업데이트된다", async () => {
+    await POST(makeMultipartRequest());
+
+    expect(mockProfileUpdate).toHaveBeenCalledTimes(1);
+    expect(mockProfileUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ avatar_url: MOCK_PUBLIC_URL }),
+    );
+  });
+});
