@@ -10,3 +10,7 @@ export const ROUTES = {
 } as const;
 
 export type Route = (typeof ROUTES)[keyof typeof ROUTES];
+
+export function getNoteDetailRoute(noteId: string) {
+  return `${ROUTES.NOTES}/${noteId}`;
+}
