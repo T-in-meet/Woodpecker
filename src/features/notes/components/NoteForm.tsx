@@ -33,6 +33,7 @@ const TOOLBAR_BUTTONS = [
 
 export function NoteForm() {
   const [state, formAction, isPending] = useActionState(createNoteAction, null);
+  const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [language, setLanguage] = useState<NoteLanguage>("markdown");
   const [activeTab, setActiveTab] = useState<EditorTab>("write");
@@ -104,6 +105,8 @@ export function NoteForm() {
           aria-label="제목"
           placeholder="제목 없음"
           maxLength={100}
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
           className="w-full border-none bg-transparent text-4xl font-bold text-foreground placeholder:text-muted-foreground/30 focus:outline-none"
         />
         {fieldErrors?.title && (

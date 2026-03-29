@@ -1,5 +1,3 @@
-import "highlight.js/styles/github-dark.min.css";
-
 import hljs from "highlight.js";
 
 import { MarkdownPreview } from "@/features/notes/components/MarkdownPreview";
@@ -19,12 +17,7 @@ export function NoteViewer({ content, language, className }: NoteViewerProps) {
   const effectiveLanguage = language ?? "markdown";
 
   if (!isCodeLanguage(effectiveLanguage)) {
-    return (
-      <MarkdownPreview
-        content={content}
-        {...(className !== undefined ? { className } : {})}
-      />
-    );
+    return <MarkdownPreview content={content} className={className} />;
   }
 
   const highlighted = hljs.highlight(content, {

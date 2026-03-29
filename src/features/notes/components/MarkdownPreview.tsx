@@ -1,7 +1,5 @@
 "use client";
 
-import "highlight.js/styles/github-dark.min.css";
-
 import { useMemo, useRef } from "react";
 import type { Components } from "react-markdown";
 import Markdown from "react-markdown";
@@ -23,6 +21,7 @@ export function MarkdownPreview({
   onToggleCheckbox,
 }: MarkdownPreviewProps) {
   const checkboxIndexRef = useRef(0);
+  // 렌더마다 체크박스 카운터를 초기화해 각 체크박스에 안정적인 인덱스를 부여
   checkboxIndexRef.current = 0;
 
   const components = useMemo<Components>(
