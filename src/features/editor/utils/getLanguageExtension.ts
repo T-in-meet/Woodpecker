@@ -23,6 +23,10 @@ export function getLanguageExtension(language: SupportedLanguage): Extension {
       return StreamLanguage.define(rust);
     case "go":
       return StreamLanguage.define(go);
+    default: {
+      const _exhaustive: never = language;
+      return _exhaustive;
+    }
   }
 }
 
