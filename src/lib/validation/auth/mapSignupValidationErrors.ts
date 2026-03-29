@@ -49,6 +49,14 @@ function mapIssueToReason(
     case "invalid_format":
       return VALIDATION_REASON.INVALID_FORMAT;
 
+    case "invalid_value": {
+      const fieldValue = getFieldValue(input, issue.path);
+      if (fieldValue === null || fieldValue === undefined) {
+        return VALIDATION_REASON.REQUIRED;
+      }
+      return VALIDATION_REASON.NOT_AGREED;
+    }
+
     default:
       return VALIDATION_REASON.INVALID_TYPE;
   }
@@ -59,7 +67,7 @@ export function mapSignupValidationErrors(
   input: unknown,
 ): ValidationError[] {
   return zodError.issues.map((issue) => ({
-    field: String(issue.path[0] ?? "unknown"),
+    field: issue.path.length > 0 ? issue.path.join(".") : "unknown",
     reason: mapIssueToReason(issue, input),
   }));
 }

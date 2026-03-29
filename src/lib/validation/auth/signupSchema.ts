@@ -15,6 +15,10 @@ export const signupApiSchema = z.object({
     trimIfString,
     z.string().min(SIGNUP_NICKNAME_MIN).max(SIGNUP_NICKNAME_MAX),
   ),
+  agreements: z.object({
+    termsOfService: z.literal(true),
+    privacyPolicy: z.literal(true),
+  }),
 });
 
 export type SignupApiInput = z.infer<typeof signupApiSchema>;

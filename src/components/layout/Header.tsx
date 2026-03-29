@@ -34,7 +34,7 @@ export async function Header() {
       <div className="flex items-center justify-between max-w-5xl mx-auto px-6 py-3.5">
         <Link href={ROUTES.HOME} className="flex items-center gap-2">
           <Image src="/favicon.svg" alt="딱다구리" width={28} height={28} />
-          <span className="font-jeju text-2xl">딱다구리</span>
+          <span className="font-sans text-2xl">딱다구리</span>
         </Link>
 
         <div className="flex gap-3">
