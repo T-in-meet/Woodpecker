@@ -4,13 +4,7 @@ import {
   syntaxHighlighting,
 } from "@codemirror/language";
 import { Compartment, EditorState } from "@codemirror/state";
-import {
-  EditorView,
-  highlightActiveLine,
-  highlightActiveLineGutter,
-  keymap,
-  lineNumbers,
-} from "@codemirror/view";
+import { EditorView, keymap } from "@codemirror/view";
 import { useEffect, useRef } from "react";
 
 import type { SupportedLanguage } from "@/features/editor/supportedLanguages";
@@ -50,9 +44,6 @@ export function useCodeMirror({
     const state = EditorState.create({
       doc,
       extensions: [
-        lineNumbers(),
-        highlightActiveLine(),
-        highlightActiveLineGutter(),
         syntaxHighlighting(defaultHighlightStyle),
         history(),
         keymap.of(historyKeymap),
