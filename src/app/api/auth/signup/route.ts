@@ -11,7 +11,7 @@ import { signupApiSchema } from "@/lib/validation/auth/signupSchema";
 
 async function parseRequest(
   request: NextRequest,
-): Promise<{ body: unknown; profileImage: File | null }> {
+): Promise<{ body: unknown; avatarFile: File | null }> {
   const contentType = request.headers.get("content-type") ?? "";
 
   if (contentType.includes("multipart/form-data")) {
@@ -30,26 +30,26 @@ async function parseRequest(
       nickname: formData.get("nickname"),
       agreements,
     };
-    const imageEntry = formData.get("profileImage");
-    const profileImage = imageEntry instanceof File ? imageEntry : null;
-    return { body, profileImage };
+    const imageEntry = formData.get("avatarFile");
+    const avatarFile = imageEntry instanceof File ? imageEntry : null;
+    return { body, avatarFile };
   }
 
   const body = await request.json();
-  return { body, profileImage: null };
+  return { body, avatarFile: null };
 }
 
 async function uploadAvatar(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  profileImage: File,
+  avatarFile: File,
   userId: string,
 ): Promise<string | null> {
-  const ext = profileImage.name.split(".").pop() ?? "jpg";
+  const ext = avatarFile.name.split(".").pop() ?? "jpg";
   const uploadPath = `avatars/${crypto.randomUUID()}.${ext}`;
 
   const { data: uploadData, error: uploadError } = await supabase.storage
     .from("avatars")
-    .upload(uploadPath, profileImage);
+    .upload(uploadPath, avatarFile);
 
   if (uploadError || !uploadData) {
     return null;
@@ -72,7 +72,7 @@ async function uploadAvatar(
 export async function POST(request: NextRequest) {
   const ip = request.headers.get("x-forwarded-for") ?? "unknown";
 
-  const { body, profileImage } = await parseRequest(request);
+  const { body, avatarFile } = await parseRequest(request);
   const parsed = signupApiSchema.safeParse(body);
 
   if (!parsed.success) {
@@ -125,8 +125,8 @@ export async function POST(request: NextRequest) {
 
   let avatarUrl: string | null = null;
 
-  if (profileImage && data.user) {
-    avatarUrl = await uploadAvatar(supabase, profileImage, data.user.id);
+  if (avatarFile && data.user) {
+    avatarUrl = await uploadAvatar(supabase, avatarFile, data.user.id);
   }
 
   return successResponse(

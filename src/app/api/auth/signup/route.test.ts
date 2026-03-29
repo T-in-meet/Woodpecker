@@ -1244,7 +1244,7 @@ describe("PR-API-07 프로필 이미지 업로드 성공 시 avatar_url 반영",
       password: "Password123!",
       nickname: "테스터",
       agreements: JSON.stringify({ termsOfService: true, privacyPolicy: true }),
-      profileImage: mockFile,
+      avatarFile: mockFile,
     };
 
     vi.spyOn(request, "formData").mockResolvedValue({
@@ -1296,8 +1296,8 @@ describe("PR-API-07 프로필 이미지 업로드 성공 시 avatar_url 반영",
     expect(body.data.avatar_url).toBe(MOCK_PUBLIC_URL);
   });
 
-  // TC-02: profileImage 제공 시 storage.upload 호출
-  it("TC-02. profileImage가 포함된 요청 시 storage.upload가 1회 호출된다", async () => {
+  // TC-02: avatarFile 제공 시 storage.upload 호출
+  it("TC-02. avatarFile가 포함된 요청 시 storage.upload가 1회 호출된다", async () => {
     await POST(makeMultipartRequest());
 
     expect(mockStorageUpload).toHaveBeenCalledTimes(1);
@@ -1345,7 +1345,7 @@ describe("PR-API-08 프로필 이미지 업로드 실패 시 회원가입 성공
       password: "Password123!",
       nickname: "Tester",
       agreements: JSON.stringify({ termsOfService: true, privacyPolicy: true }),
-      profileImage: mockFile,
+      avatarFile: mockFile,
     };
 
     vi.spyOn(request, "formData").mockResolvedValue({
