@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 
 import { failureResponse, successResponse } from "@/lib/api/response";
+import { checkSignupRateLimit } from "@/lib/auth/checkSignupRateLimit";
 import { getUserByEmail } from "@/lib/auth/getUserByEmail";
 import { AUTH_API_CODES } from "@/lib/constants/authApiCodes";
 import { ROUTES } from "@/lib/constants/routes";
@@ -9,6 +10,8 @@ import { mapSignupValidationErrors } from "@/lib/validation/auth/mapSignupValida
 import { signupApiSchema } from "@/lib/validation/auth/signupSchema";
 
 export async function POST(request: NextRequest) {
+  const ip = request.headers.get("x-forwarded-for") ?? "unknown";
+
   const body = await request.json();
   const parsed = signupApiSchema.safeParse(body);
 
@@ -20,6 +23,11 @@ export async function POST(request: NextRequest) {
 
   const { email, password, nickname } = parsed.data;
   const normalizedEmail = email.toLowerCase();
+
+  const rateLimit = await checkSignupRateLimit(ip, normalizedEmail);
+  if (!rateLimit.allowed) {
+    return failureResponse(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
+  }
 
   const existingUser = await getUserByEmail(normalizedEmail);
 
