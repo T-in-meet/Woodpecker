@@ -14,6 +14,7 @@ export const AUTH_API_CODES = {
     "resend-cooldown",
     API_RESULTS.CONFLICT,
   ),
+  RESEND_RATE_LIMIT_EXCEEDED: makeApiCode("resend", API_RESULTS.RATE_LIMITED),
 } as const;
 
 export type AuthApiCode = (typeof AUTH_API_CODES)[keyof typeof AUTH_API_CODES];

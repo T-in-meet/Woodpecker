@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { failureResponse, successResponse } from "@/lib/api/response";
+import { checkResendRateLimit } from "@/lib/auth/checkResendRateLimit";
 import { getLastVerificationResendAt } from "@/lib/auth/getLastVerificationResendAt";
 import { resendVerificationEmail } from "@/lib/auth/resendVerificationEmail";
 import { setLastVerificationResendAt } from "@/lib/auth/setLastVerificationResendAt";
@@ -24,6 +25,11 @@ export async function POST(request: NextRequest) {
   }
 
   const normalizedEmail = parsed.data.email.toLowerCase();
+
+  const rateLimit = await checkResendRateLimit(normalizedEmail);
+  if (!rateLimit.allowed) {
+    return failureResponse(AUTH_API_CODES.RESEND_RATE_LIMIT_EXCEEDED);
+  }
 
   const lastResendAt = await getLastVerificationResendAt(normalizedEmail);
   const now = Date.now();
