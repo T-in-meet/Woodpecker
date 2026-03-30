@@ -8,7 +8,7 @@ import { mapSignupValidationErrors } from "@/lib/validation/auth/mapSignupValida
 import { signupApiSchema } from "@/lib/validation/auth/signupSchema";
 
 export async function POST(request: NextRequest) {
-  const body = await request.json();
+  const body: unknown = await request.json();
   const parsed = signupApiSchema.safeParse(body);
 
   if (!parsed.success) {
@@ -38,7 +38,10 @@ export async function POST(request: NextRequest) {
 
   return successResponse(
     AUTH_API_CODES.SIGNUP_SUCCESS,
-    { email: data.user?.email ?? normalizedEmail },
+    {
+      email: data.user?.email ?? normalizedEmail,
+      redirectTo: ROUTES.VERIFY_EMAIL,
+    },
     { status: 201 },
   );
 }

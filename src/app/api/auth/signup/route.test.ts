@@ -103,6 +103,15 @@ describe("회원가입 API 기본 성공 흐름 검증", () => {
 
     expect(body.data.email).toBe("test@example.com");
   });
+
+  it("성공 응답 data.redirectTo는 이메일 인증 경로이다", async () => {
+    mockSignUpSuccess();
+
+    const response = await POST(makeRequest(requestBody));
+    const body = await response.json();
+
+    expect(body.data.redirectTo).toBe(ROUTES.VERIFY_EMAIL);
+  });
 });
 
 describe("PR-API-02 회원가입 입력 검증 - 필수값 검증", () => {
