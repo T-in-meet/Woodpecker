@@ -9,17 +9,18 @@ export type WindowEntry = {
   windowStart: number;
 };
 
-const WINDOW_MS = 60 * 1000;
+export const DEFAULT_WINDOW_MS = 60 * 1000;
 
 export function checkLimit(
   store: Map<string, WindowEntry>,
   key: string,
   limit: number,
+  windowMs: number = DEFAULT_WINDOW_MS,
 ): boolean {
   const now = Date.now();
   const entry = store.get(key);
 
-  if (!entry || now - entry.windowStart >= WINDOW_MS) {
+  if (!entry || now - entry.windowStart >= windowMs) {
     store.set(key, { count: 1, windowStart: now });
     return true;
   }

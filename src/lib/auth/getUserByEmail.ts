@@ -8,7 +8,15 @@ export async function getUserByEmail(
   const perPage = 1000;
 
   while (true) {
-    const { data } = await supabase.auth.admin.listUsers({ page, perPage });
+    const { data, error } = await supabase.auth.admin.listUsers({
+      page,
+      perPage,
+    });
+
+    if (error) {
+      throw error;
+    }
+
     const user = data.users.find((u) => u.email === email);
 
     if (user) {

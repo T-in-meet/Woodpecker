@@ -40,19 +40,41 @@ async function parseRequest(
   return { body, avatarFile: null };
 }
 
+const ALLOWED_AVATAR_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const ALLOWED_AVATAR_EXTENSIONS = ["jpg", "jpeg", "png", "webp"];
+const MAX_AVATAR_SIZE_BYTES = 10 * 1024 * 1024;
+
+function validateAvatarFile(file: File): boolean {
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+  return (
+    ALLOWED_AVATAR_MIME_TYPES.includes(file.type) &&
+    ALLOWED_AVATAR_EXTENSIONS.includes(ext) &&
+    file.size <= MAX_AVATAR_SIZE_BYTES
+  );
+}
+
 async function uploadAvatar(
   supabase: Awaited<ReturnType<typeof createClient>>,
   avatarFile: File,
   userId: string,
 ): Promise<string | null> {
-  const ext = avatarFile.name.split(".").pop() ?? "jpg";
-  const uploadPath = `${STORAGE_BUCKETS.AVATARS}/${crypto.randomUUID()}.${ext}`;
+  if (!validateAvatarFile(avatarFile)) {
+    console.warn("Invalid avatar file rejected");
+    return null;
+  }
+
+  const ext = avatarFile.name.split(".").pop()?.toLowerCase() ?? "jpg";
+  const uploadPath = `${crypto.randomUUID()}.${ext}`;
 
   const { data: uploadData, error: uploadError } = await supabase.storage
     .from(STORAGE_BUCKETS.AVATARS)
     .upload(uploadPath, avatarFile);
 
   if (uploadError || !uploadData) {
+    console.error("Failed to upload avatar file", {
+      userId,
+      uploadError,
+    });
     return null;
   }
 
@@ -62,15 +84,39 @@ async function uploadAvatar(
 
   const avatarUrl = urlData.publicUrl;
 
-  await supabase
+  const { error: updateError } = await supabase
     .from("profiles")
     .update({ avatar_url: avatarUrl })
     .eq("id", userId);
+
+  if (updateError) {
+    const { error: removeError } = await supabase.storage
+      .from(STORAGE_BUCKETS.AVATARS)
+      .remove([uploadData.path]);
+
+    if (removeError) {
+      console.error("Failed to rollback uploaded avatar file", {
+        userId,
+        path: uploadData.path,
+        updateError,
+        removeError,
+      });
+    } else {
+      console.warn("Rolled back uploaded avatar file after DB update failure", {
+        userId,
+        path: uploadData.path,
+        updateError,
+      });
+    }
+
+    return null;
+  }
 
   return avatarUrl;
 }
 
 export async function POST(request: NextRequest) {
+  // TODO: x-forwarded-for는 클라이언트가 임의 조작 가능 — Vercel Edge Config나 WAF를 통한 신뢰할 수 있는 IP 출처로 교체 필요
   const ip = request.headers.get("x-forwarded-for") ?? "unknown";
 
   const { body, avatarFile } = await parseRequest(request);
