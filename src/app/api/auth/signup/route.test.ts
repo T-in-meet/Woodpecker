@@ -68,6 +68,15 @@ describe("회원가입 API 기본 성공 흐름 검증", () => {
     );
   });
 
+  it("성공 응답 data.redirectTo는 이메일 인증 경로이다", async () => {
+    mockSignUpSuccess();
+
+    const response = await POST(makeRequest(requestBody));
+    const body = await response.json();
+
+    expect(body.data.redirectTo).toBe(ROUTES.VERIFY_EMAIL);
+  });
+
   it("signUp 호출 시 options.emailRedirectTo는 /login 경로를 포함한다", async () => {
     mockSignUpSuccess();
 
