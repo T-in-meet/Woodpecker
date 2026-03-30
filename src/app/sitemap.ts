@@ -1,3 +1,5 @@
+// sitemap: 검색엔진에 노출시키고 싶은 페이지 목록
+
 import type { MetadataRoute } from "next";
 
 const SITE_URL = "https://woodpecker-app.vercel.app";
@@ -9,18 +11,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
       lastModified: new Date(),
       changeFrequency: "weekly",
       priority: 1,
-    },
-    {
-      url: `${SITE_URL}/login`,
-      lastModified: new Date(),
-      changeFrequency: "monthly",
-      priority: 0.5,
-    },
-    {
-      url: `${SITE_URL}/signup`,
-      lastModified: new Date(),
-      changeFrequency: "monthly",
-      priority: 0.5,
     },
   ];
 }

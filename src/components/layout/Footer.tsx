@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 
 import { ROUTES } from "@/lib/constants/routes";
@@ -21,8 +20,8 @@ const footerLinks = [
   {
     title: "법적 고지",
     links: [
-      { label: "이용약관", href: "#" },
-      { label: "개인정보처리방침", href: "#" },
+      { label: "이용약관", href: ROUTES.TERMS },
+      { label: "개인정보처리방침", href: ROUTES.PRIVACY },
     ],
   },
 ] as const;
@@ -32,14 +31,6 @@ export function Footer() {
     <footer className="border-t bg-muted/30">
       <div className="mx-auto max-w-5xl px-6 py-12 md:py-16">
         <div className="grid gap-8 md:grid-cols-4">
-          {/* Brand */}
-          {/* <div>
-            <Link href={ROUTES.HOME} className="font-mono text-lg font-bold">
-              <Image src="/favicon.svg" alt="딱다구리" width={28} height={28} />
-              <span className="font-jeju text-2xl">딱다구리</span>
-            </Link>
-          </div> */}
-
           {/* Link groups */}
           {footerLinks.map((group) => (
             <div key={group.title}>
@@ -62,7 +53,7 @@ export function Footer() {
 
         <div className="mt-10 border-t pt-6">
           <p className="text-center text-xs text-muted-foreground">
-            &copy; 2025 딱다구리. All rights reserved.
+            &copy; 2026 딱다구리. All rights reserved.
           </p>
         </div>
       </div>
