@@ -2,9 +2,13 @@ import "./setup";
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useRef, useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import { MarkdownEditor } from "../components/MarkdownEditor";
+import {
+  MarkdownEditor,
+  type MarkdownEditorHandle,
+} from "../components/MarkdownEditor";
 
 function getEditorContentElement() {
   const contentElement = document.querySelector(".cm-content");
@@ -139,4 +143,49 @@ describe("MarkdownEditor", () => {
     expect(contentElement.textContent).not.toContain("!");
     expect(handleChange).not.toHaveBeenCalled();
   });
+
+  it.each([
+    { action: "toggleBold", expectedValue: "****", label: "bold" },
+    { action: "toggleItalic", expectedValue: "**", label: "italic" },
+    {
+      action: "toggleStrikethrough",
+      expectedValue: "~~~~",
+      label: "strikethrough",
+    },
+    { action: "toggleCode", expectedValue: "``", label: "code" },
+  ] as const)(
+    "updates the document through the imperative $label command",
+    async ({ action, expectedValue }) => {
+      function MarkdownEditorHarness() {
+        const [value, setValue] = useState("");
+        const editorRef = useRef<MarkdownEditorHandle>(null);
+
+        return (
+          <>
+            <button type="button" onClick={() => editorRef.current?.[action]()}>
+              apply format
+            </button>
+            <MarkdownEditor ref={editorRef} value={value} onChange={setValue} />
+            <div data-testid="editor-value">{value}</div>
+          </>
+        );
+      }
+
+      const user = userEvent.setup();
+      render(<MarkdownEditorHarness />);
+
+      await waitFor(() => {
+        expect(document.querySelector(".cm-editor")).toBeTruthy();
+      });
+
+      await user.click(screen.getByRole("button", { name: "apply format" }));
+
+      await waitFor(() => {
+        expect(screen.getByTestId("editor-value")).toHaveTextContent(
+          expectedValue,
+        );
+        expect(getEditorContentElement().textContent).toBe(expectedValue);
+      });
+    },
+  );
 });

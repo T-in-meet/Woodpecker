@@ -1,26 +1,60 @@
 "use server";
 
-import { noteSchema } from "./schema";
+import { redirect } from "next/navigation";
+
+import { getNoteDetailRoute } from "@/lib/constants/routes";
+import { createClient } from "@/lib/supabase/server";
+import type { NoteCreateInput } from "@/types/notes.types";
+
+import { type NoteInput, noteSchema } from "./schema";
+
+type NoteActionFieldErrors = Partial<Record<keyof NoteInput, string[]>>;
+
+export type CreateNoteActionState = {
+  error: NoteActionFieldErrors | string;
+} | null;
 
 export async function createNoteAction(
-  _prevState: unknown,
+  _prevState: CreateNoteActionState,
   formData: FormData,
-) {
-  const rawLanguage = formData.get("language");
+): Promise<CreateNoteActionState> {
   const parsed = noteSchema.safeParse({
     title: formData.get("title"),
     content: formData.get("content"),
-    language: rawLanguage === "" ? null : rawLanguage,
+    language: formData.get("language"),
   });
 
   if (!parsed.success) {
     return { error: parsed.error.flatten().fieldErrors };
   }
 
-  // TODO: Supabase insert
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "로그인이 필요합니다." };
+  }
+
+  const noteToCreate = {
+    title: parsed.data.title,
+    content: parsed.data.content,
+    language: parsed.data.language ?? null,
+    user_id: user.id,
+  } satisfies NoteCreateInput;
+
+  const { data, error } = await supabase
+    .from("notes")
+    .insert(noteToCreate)
+    .select("id")
+    .single();
+
+  if (error || !data) {
+    return { error: "노트 저장에 실패했습니다. 잠시 후 다시 시도해주세요." };
+  }
+
+  redirect(getNoteDetailRoute(data.id));
 }
 
-export async function deleteNoteAction(id: string) {
-  // TODO: Supabase delete
-  return { id };
-}
+// TODO: deleteNoteAction 구현 시 인증 체크 필수
