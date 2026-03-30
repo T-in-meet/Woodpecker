@@ -73,6 +73,8 @@ export async function POST(request: NextRequest) {
   const ip = request.headers.get("x-forwarded-for") ?? "unknown";
 
   const { body, avatarFile } = await parseRequest(request);
+export async function POST(request: NextRequest) {
+  const body: unknown = await request.json();
   const parsed = signupApiSchema.safeParse(body);
 
   if (!parsed.success) {
