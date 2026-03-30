@@ -6,27 +6,36 @@ on:
       - main
     paths:
       - "supabase/migrations/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-db-migrate
+  cancel-in-progress: false
 
 jobs:
   migrate:
     name: Apply Supabase Migrations
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: production
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Setup Supabase CLI
-        uses: supabase/setup-cli@v1
+        uses: supabase/setup-cli@v1.6.0
         with:
-          version: latest
+          version: 2.67.1
 
-      - name: Link Supabase project
-        run: supabase link --project-ref ${{ secrets.PROD_SUPABASE_PROJECT_REF }}
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-
-      - name: Apply migrations
-        run: supabase db push
+      - name: Link Supabase project and apply migrations
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.PROD_SUPABASE_DB_PASSWORD }}
+        run: |
+          supabase link --project-ref ${{ secrets.PROD_SUPABASE_PROJECT_REF }}
+          supabase db push
