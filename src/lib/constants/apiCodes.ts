@@ -6,6 +6,7 @@ export const API_RESULTS = {
   NOT_FOUND: "NOT_FOUND",
   CONFLICT: "CONFLICT",
   INTERNAL_ERROR: "INTERNAL_ERROR",
+  RATE_LIMITED: "RATE_LIMITED",
 } as const;
 
 export type ApiResult = (typeof API_RESULTS)[keyof typeof API_RESULTS];
@@ -31,6 +32,7 @@ export const RESULT_HTTP_STATUS_MAP: Record<ApiResult, number> = {
   NOT_FOUND: 404,
   CONFLICT: 409,
   INTERNAL_ERROR: 500,
+  RATE_LIMITED: 429,
 } as const;
 
 /**
