@@ -1,21 +1,3 @@
-/**
- * LegalContent — 법적 문서(이용약관 · 개인정보 처리방침)의 콘텐츠 레이어
- *
- * 이 컴포넌트는 UI 렌더링만 담당하며, 실제 약관 텍스트 데이터는 포함하지 않음.
- * 데이터(sections 배열)는 호출하는 쪽에서 주입해야 함.
- *
- * 현재 사용처:
- *   - app/(legal)/LegalPage.tsx  →  /terms, /privacy 풀페이지 렌더링
- *
- * 모달 · 드로어 · 인라인 등 다른 방식으로 렌더링할 때도 이 컴포넌트를 그대로 사용할 것.
- * Hero 영역(제목·시행일·배경 그라디언트)이 필요하면 LegalPage를 쓰고,
- * 콘텐츠만 필요하면 이 컴포넌트를 직접 사용할 것.
- *
- * 약관 데이터를 여러 곳에서 공유해야 한다면 별도 데이터 파일로 분리 권장:
- *   features/legal/terms.data.ts
- *   features/legal/privacy.data.ts
- */
-
 import Link from "next/link";
 
 const LEGAL_PROSE_CN =

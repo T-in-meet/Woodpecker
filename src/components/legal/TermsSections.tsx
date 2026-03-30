@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import type { LegalSection } from "@/app/(legal)/LegalPage";
+import type { LegalSection } from "@/components/legal/LegalContent";
 
 export const termsSections: LegalSection[] = [
   {
