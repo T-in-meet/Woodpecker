@@ -19,17 +19,12 @@ export async function POST(request: NextRequest) {
   const parsed = resendSchema.safeParse(body);
 
   if (!parsed.success) {
-    return failureResponse(AUTH_API_CODES.SIGNUP_INVALID_INPUT, {
+    return failureResponse(AUTH_API_CODES.RESEND_INVALID_INPUT, {
       status: 400,
     });
   }
 
   const normalizedEmail = parsed.data.email.toLowerCase();
-
-  const rateLimit = await checkResendRateLimit(normalizedEmail);
-  if (!rateLimit.allowed) {
-    return failureResponse(AUTH_API_CODES.RESEND_RATE_LIMIT_EXCEEDED);
-  }
 
   const lastResendAt = await getLastVerificationResendAt(normalizedEmail);
   const now = Date.now();
@@ -38,6 +33,11 @@ export async function POST(request: NextRequest) {
     return failureResponse(
       AUTH_API_CODES.EMAIL_VERIFICATION_RESEND_COOLDOWN_CONFLICT,
     );
+  }
+
+  const rateLimit = await checkResendRateLimit(normalizedEmail);
+  if (!rateLimit.allowed) {
+    return failureResponse(AUTH_API_CODES.RESEND_RATE_LIMIT_EXCEEDED);
   }
 
   await resendVerificationEmail(normalizedEmail);

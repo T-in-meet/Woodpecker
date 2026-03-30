@@ -14,6 +14,7 @@ export const AUTH_API_CODES = {
     "resend-cooldown",
     API_RESULTS.CONFLICT,
   ),
+  RESEND_INVALID_INPUT: makeApiCode("resend", API_RESULTS.INVALID_INPUT),
   RESEND_RATE_LIMIT_EXCEEDED: makeApiCode("resend", API_RESULTS.RATE_LIMITED),
 } as const;
 

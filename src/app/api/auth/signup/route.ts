@@ -5,6 +5,7 @@ import { checkSignupRateLimit } from "@/lib/auth/checkSignupRateLimit";
 import { getUserByEmail } from "@/lib/auth/getUserByEmail";
 import { AUTH_API_CODES } from "@/lib/constants/authApiCodes";
 import { ROUTES } from "@/lib/constants/routes";
+import { STORAGE_BUCKETS } from "@/lib/constants/storageBuckets";
 import { createClient } from "@/lib/supabase/server";
 import { mapSignupValidationErrors } from "@/lib/validation/auth/mapSignupValidationErrors";
 import { signupApiSchema } from "@/lib/validation/auth/signupSchema";
@@ -45,10 +46,10 @@ async function uploadAvatar(
   userId: string,
 ): Promise<string | null> {
   const ext = avatarFile.name.split(".").pop() ?? "jpg";
-  const uploadPath = `avatars/${crypto.randomUUID()}.${ext}`;
+  const uploadPath = `${STORAGE_BUCKETS.AVATARS}/${crypto.randomUUID()}.${ext}`;
 
   const { data: uploadData, error: uploadError } = await supabase.storage
-    .from("avatars")
+    .from(STORAGE_BUCKETS.AVATARS)
     .upload(uploadPath, avatarFile);
 
   if (uploadError || !uploadData) {
@@ -56,7 +57,7 @@ async function uploadAvatar(
   }
 
   const { data: urlData } = supabase.storage
-    .from("avatars")
+    .from(STORAGE_BUCKETS.AVATARS)
     .getPublicUrl(uploadData.path);
 
   const avatarUrl = urlData.publicUrl;
