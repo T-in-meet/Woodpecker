@@ -22,3 +22,27 @@ export const signupApiSchema = z.object({
 });
 
 export type SignupApiInput = z.infer<typeof signupApiSchema>;
+
+export const signupFormSchema = z
+  .object({
+    email: z.string().email("올바른 이메일을 입력해주세요"),
+    password: z.string().min(8, "비밀번호는 8자 이상이어야 합니다"),
+    confirmPassword: z.string(),
+    nickname: z.preprocess(
+      (val) => (typeof val === "string" ? val.trim() : val),
+      z
+        .string()
+        .min(1, "닉네임은 1자 이상이어야 합니다")
+        .max(10, "닉네임은 10자 이내로 입력해주세요"),
+    ),
+    termsOfService: z.boolean().refine((val) => val === true, {
+      message: "이용약관에 동의해주세요",
+    }),
+    privacyPolicy: z.boolean().refine((val) => val === true, {
+      message: "개인정보 처리방침에 동의해주세요",
+    }),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "비밀번호가 일치하지 않습니다",
+    path: ["confirmPassword"],
+  });
