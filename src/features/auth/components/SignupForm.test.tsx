@@ -13,14 +13,14 @@ vi.mock("@tanstack/react-query", () => ({
 }));
 
 // TC-01, TC-02: Page-level structure
-describe("SignupPage", () => {
-  it("TC-01: signup page renders the signup form", () => {
+describe("회원 가입 페이지", () => {
+  it("TC-01: 회원가입 페이지는 회원가입 폼을 렌더링한다", () => {
     render(<SignupPage />);
 
     expect(screen.getByRole("form")).toBeInTheDocument();
   });
 
-  it("TC-02: maintains single-page structure without step indicator or navigation buttons", () => {
+  it("TC-02: 단계 표시나 이전/다음 버튼 없이 단일 페이지 구조를 유지한다", () => {
     render(<SignupPage />);
 
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
@@ -34,8 +34,8 @@ describe("SignupPage", () => {
 });
 
 // TC-03 ~ TC-13: Form-level structure (구조 테스트)
-describe("SignupForm", () => {
-  it("TC-03: renders all required text input fields", () => {
+describe("회원가입 폼", () => {
+  it("TC-03: 모든 필수 입력 필드를 렌더링한다", () => {
     render(<SignupForm />);
 
     expect(screen.getByLabelText(/이메일/i)).toBeInTheDocument();
@@ -44,7 +44,7 @@ describe("SignupForm", () => {
     expect(screen.getByLabelText(/닉네임/i)).toBeInTheDocument();
   });
 
-  it("TC-04: renders required agreement checkboxes", () => {
+  it("TC-04: 필수 약관 동의 체크박스를 렌더링한다", () => {
     render(<SignupForm />);
 
     expect(
@@ -55,13 +55,13 @@ describe("SignupForm", () => {
     ).toBeInTheDocument();
   });
 
-  it("TC-05: renders the optional avatar file input", () => {
+  it("TC-05: 선택 입력인 프로필 이미지 파일 input을 렌더링한다", () => {
     render(<SignupForm />);
 
     expect(screen.getByLabelText(/프로필/i)).toBeInTheDocument();
   });
 
-  it("TC-06: renders triggers to view terms of service and privacy policy content", () => {
+  it("TC-06: 이용약관 및 개인정보 처리방침 내용을 확인할 수 있는 트리거를 렌더링한다", () => {
     render(<SignupForm />);
 
     expect(
@@ -72,7 +72,7 @@ describe("SignupForm", () => {
     ).toBeInTheDocument();
   });
 
-  it("TC-07: renders the submit button with type submit", () => {
+  it('TC-07: type="submit"인 회원가입 버튼을 렌더링한다', () => {
     render(<SignupForm />);
 
     const submitButton = screen.getByRole("button", { name: /회원가입/i });
@@ -81,13 +81,13 @@ describe("SignupForm", () => {
     expect(submitButton).toHaveAttribute("type", "submit");
   });
 
-  it("TC-08: visually distinguishes the optional avatar field from required fields", () => {
+  it("TC-08: 선택 필드(프로필 이미지)가 필수 필드와 구분되어 표시된다", () => {
     render(<SignupForm />);
 
     expect(screen.getByText(/선택/i)).toBeInTheDocument();
   });
 
-  it("TC-09: associates all inputs and checkboxes with accessible labels", () => {
+  it("TC-09: 모든 입력과 체크박스가 접근 가능한 label과 연결되어 있다", () => {
     render(<SignupForm />);
 
     expect(screen.getByLabelText(/이메일/i)).toBeInTheDocument();
@@ -103,7 +103,7 @@ describe("SignupForm", () => {
     ).toBeInTheDocument();
   });
 
-  it("TC-10: uses type password for both password fields", () => {
+  it('TC-10: 비밀번호 및 비밀번호 확인 필드는 type="password"를 사용한다', () => {
     render(<SignupForm />);
 
     expect(screen.getByLabelText(/^비밀번호$/i)).toHaveAttribute(
@@ -116,13 +116,13 @@ describe("SignupForm", () => {
     );
   });
 
-  it("TC-11: uses type email for the email field", () => {
+  it('TC-11: 이메일 필드는 type="email"을 사용한다', () => {
     render(<SignupForm />);
 
     expect(screen.getByLabelText(/이메일/i)).toHaveAttribute("type", "email");
   });
 
-  it("TC-12: renders agreement checkboxes unchecked on initial render", () => {
+  it("TC-12: 초기 렌더링 시 약관 체크박스는 체크되지 않은 상태이다", () => {
     render(<SignupForm />);
 
     expect(
@@ -133,7 +133,7 @@ describe("SignupForm", () => {
     ).not.toBeChecked();
   });
 
-  it("TC-13: renders the submit button enabled on initial render", () => {
+  it("TC-13: 초기 렌더링 시 회원가입 버튼은 활성 상태이다", () => {
     render(<SignupForm />);
 
     expect(
@@ -143,7 +143,9 @@ describe("SignupForm", () => {
 });
 
 // TC-14 ~ TC-15: Login Link (PR-UI-01A)
-describe("SignupForm Login Link", () => {
+// 회원가입 폼 하단 로그인 이동 링크 추가
+// PR-UI-01 완료 이후 보강 스펙으로 추가됨
+describe("회원가입 로그인 링크", () => {
   it("TC-14: 회원가입 폼에 로그인 안내 텍스트가 렌더링된다", () => {
     render(<SignupForm />);
 
@@ -161,7 +163,7 @@ describe("SignupForm Login Link", () => {
 });
 
 // TC-01 ~ TC-15: Form-level validation (유효성 검사 테스트)
-describe("SignupForm Validation", () => {
+describe("회원가입 폼 검증", () => {
   let mockMutate: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
@@ -482,7 +484,7 @@ describe("SignupForm Validation", () => {
 });
 
 // TC-01 ~ TC-05: Submit & Mutation (PR-UI-04)
-describe("SignupForm Submit & Mutation", () => {
+describe("회원가입 폼 제출 및 뮤테이션", () => {
   let mockMutate: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
