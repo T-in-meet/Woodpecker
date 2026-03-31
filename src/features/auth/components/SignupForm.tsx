@@ -123,9 +123,9 @@ export function SignupForm() {
         </Label>
         <Input
           id="avatarFile"
-          name="avatarFile"
           type="file"
           accept="image/jpeg,image/png,image/webp"
+          {...register("avatarFile")}
         />
       </div>
 
