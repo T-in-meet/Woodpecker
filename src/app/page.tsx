@@ -86,19 +86,21 @@ const jsonLd = {
 
 export default function Home() {
   return (
-    <div className="min-h-screen">
+    <>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <Header />
-      <main>
-        <HeroSection />
-        <LearningFlowSection />
-        <FaqSection />
-        <CtaSection />
-      </main>
-      <Footer />
-    </div>
+      <div className="min-h-screen">
+        <Header />
+        <main>
+          <HeroSection />
+          <LearningFlowSection />
+          <FaqSection />
+          <CtaSection />
+        </main>
+        <Footer />
+      </div>
+    </>
   );
 }
