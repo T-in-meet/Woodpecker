@@ -420,6 +420,8 @@ describe("회원가입 폼 검증", () => {
     ).toBeInTheDocument();
   });
 
+  // 이 테스트는 필드별 validation 트리거가 서로 다르므로
+  // (blur / change / submit) 각 단계의 상태 전이를 명시적으로 검증한다.
   it("TC-15: 각 필드의 정확한 Korean 에러 메시지를 표시한다", async () => {
     const user = userEvent.setup();
     render(<SignupForm />);
