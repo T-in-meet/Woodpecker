@@ -1,6 +1,6 @@
 import hljs from "highlight.js";
 
-import { MarkdownPreview } from "@/features/notes/components/MarkdownPreview";
+import { TipTapEditor } from "@/features/editor/components/TipTapEditor";
 import {
   isCodeLanguage,
   type NoteLanguage,
@@ -13,14 +13,29 @@ type NoteViewerProps = {
   className?: string;
 };
 
+const noop = () => {};
+
 export function NoteViewer({ content, language, className }: NoteViewerProps) {
   const effectiveLanguage = language ?? "markdown";
 
   if (!isCodeLanguage(effectiveLanguage)) {
+    if (!content) {
+      return (
+        <div className={cn("px-12 py-6 text-muted-foreground/40", className)}>
+          미리보기할 내용이 없습니다.
+        </div>
+      );
+    }
+
     return (
-      <MarkdownPreview
-        content={content}
-        {...(className !== undefined && { className })}
+      <TipTapEditor
+        value={content}
+        onChange={noop}
+        readOnly
+        className={cn(
+          "border-none focus-within:ring-0 focus-within:border-none",
+          className,
+        )}
       />
     );
   }

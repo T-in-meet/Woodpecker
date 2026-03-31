@@ -1,15 +1,12 @@
 "use client";
 
+import type { Editor } from "@tiptap/react";
 import { Bold, Code, Italic, Strikethrough } from "lucide-react";
-import { useActionState, useRef, useState } from "react";
+import { useActionState, useCallback, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { CodeEditor } from "@/features/editor/components/CodeEditor";
-import {
-  MarkdownEditor,
-  type MarkdownEditorHandle,
-} from "@/features/editor/components/MarkdownEditor";
-import { MarkdownPreview } from "@/features/notes/components/MarkdownPreview";
+import { TipTapEditor } from "@/features/editor/components/TipTapEditor";
 import {
   isCodeLanguage,
   isNoteLanguage,
@@ -18,17 +15,34 @@ import {
 } from "@/lib/constants/noteLanguages";
 
 import { createNoteAction } from "../actions";
-import { toggleMarkdownTaskItem } from "../utils/toggleMarkdownTaskItem";
-
-type EditorTab = "write" | "preview";
 
 const CONTENT_MAX_LENGTH = 50000;
 
 const TOOLBAR_BUTTONS = [
-  { label: "두껍게", action: "toggleBold", icon: Bold },
-  { label: "기울임", action: "toggleItalic", icon: Italic },
-  { label: "취소선", action: "toggleStrikethrough", icon: Strikethrough },
-  { label: "인라인 코드", action: "toggleCode", icon: Code },
+  {
+    label: "두껍게",
+    action: (e: Editor) => e.chain().focus().toggleBold().run(),
+    icon: Bold,
+    isActive: (e: Editor) => e.isActive("bold"),
+  },
+  {
+    label: "기울임",
+    action: (e: Editor) => e.chain().focus().toggleItalic().run(),
+    icon: Italic,
+    isActive: (e: Editor) => e.isActive("italic"),
+  },
+  {
+    label: "취소선",
+    action: (e: Editor) => e.chain().focus().toggleStrike().run(),
+    icon: Strikethrough,
+    isActive: (e: Editor) => e.isActive("strike"),
+  },
+  {
+    label: "인라인 코드",
+    action: (e: Editor) => e.chain().focus().toggleCode().run(),
+    icon: Code,
+    isActive: (e: Editor) => e.isActive("code"),
+  },
 ] as const;
 
 export function NoteForm() {
@@ -36,12 +50,9 @@ export function NoteForm() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [language, setLanguage] = useState<NoteLanguage>("markdown");
-  const [activeTab, setActiveTab] = useState<EditorTab>("write");
-  const editorRef = useRef<MarkdownEditorHandle>(null);
+  const [editor, setEditor] = useState<Editor | null>(null);
 
-  const handleToggleCheckbox = (index: number) => {
-    setContent((prev) => toggleMarkdownTaskItem(prev, index));
-  };
+  const handleEditorReady = useCallback((e: Editor) => setEditor(e), []);
 
   const fieldErrors =
     state?.error && typeof state.error === "object" ? state.error : null;
@@ -69,7 +80,6 @@ export function NoteForm() {
 
             if (isNoteLanguage(nextLanguage)) {
               setLanguage(nextLanguage);
-              setActiveTab("write");
             }
           }}
           className="h-7 cursor-pointer rounded-md border border-border bg-muted/50 px-2 text-xs text-muted-foreground transition-colors hover:bg-muted focus:outline-none focus:ring-1 focus:ring-ring"
@@ -116,54 +126,20 @@ export function NoteForm() {
         )}
       </div>
 
-      {isMarkdown && (
-        <div
-          className="flex gap-1 border-b border-border/50 px-12"
-          role="tablist"
-        >
-          <button
-            type="button"
-            role="tab"
-            id="tab-write"
-            aria-selected={activeTab === "write"}
-            aria-controls="tabpanel-editor"
-            onClick={() => setActiveTab("write")}
-            className={`px-3 py-1.5 text-sm transition-colors ${
-              activeTab === "write"
-                ? "border-b-2 border-foreground font-medium text-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            편집
-          </button>
-          <button
-            type="button"
-            role="tab"
-            id="tab-preview"
-            aria-selected={activeTab === "preview"}
-            aria-controls="tabpanel-editor"
-            onClick={() => setActiveTab("preview")}
-            className={`px-3 py-1.5 text-sm transition-colors ${
-              activeTab === "preview"
-                ? "border-b-2 border-foreground font-medium text-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            미리보기
-          </button>
-        </div>
-      )}
-
-      {isMarkdown && activeTab === "write" && (
+      {isMarkdown && editor && (
         <div className="flex gap-0.5 border-b border-border/50 px-12 py-1.5">
-          {TOOLBAR_BUTTONS.map(({ label, action, icon: Icon }) => (
+          {TOOLBAR_BUTTONS.map(({ label, action, icon: Icon, isActive }) => (
             <button
-              key={action}
+              key={label}
               type="button"
               title={label}
-              onClick={() => editorRef.current?.[action]()}
+              onClick={() => action(editor)}
               aria-label={label}
-              className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className={`rounded p-1.5 transition-colors ${
+                isActive(editor)
+                  ? "bg-muted text-foreground"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
             >
               <Icon className="h-3.5 w-3.5" />
             </button>
@@ -190,29 +166,15 @@ export function NoteForm() {
           className="flex-1 rounded-none border-none [&_.cm-editor]:min-h-[70vh] [&_.cm-scroller]:min-h-[70vh] [&_.cm-content]:px-12! [&_.cm-content]:py-6! [&_.cm-gutters]:bg-transparent [&_.cm-gutters]:border-none"
         />
       ) : (
-        <div
-          role="tabpanel"
-          id="tabpanel-editor"
-          aria-labelledby={activeTab === "write" ? "tab-write" : "tab-preview"}
-          className="flex-1"
-        >
-          {activeTab === "write" ? (
-            <MarkdownEditor
-              ref={editorRef}
-              value={content}
-              onChange={setContent}
-              placeholder="내용을 입력하세요..."
-              aria-label="내용"
-              className="rounded-none border-none focus-within:ring-0 focus-within:border-none [&_.cm-editor]:min-h-[70vh] [&_.cm-scroller]:min-h-[70vh] [&_.cm-content]:px-12! [&_.cm-content]:py-6! [&_.cm-gutters]:bg-transparent [&_.cm-gutters]:border-none"
-            />
-          ) : (
-            <MarkdownPreview
-              content={content}
-              className="min-h-[70vh]"
-              onToggleCheckbox={handleToggleCheckbox}
-            />
-          )}
-        </div>
+        <TipTapEditor
+          value={content}
+          onChange={setContent}
+          placeholder="내용을 입력하세요..."
+          autoFocus
+          aria-label="내용"
+          onEditorReady={handleEditorReady}
+          className="flex-1 rounded-none border-none focus-within:ring-0 focus-within:border-none [&_.tiptap]:min-h-[70vh] [&_.tiptap]:px-12! [&_.tiptap]:py-6!"
+        />
       )}
 
       <div className="flex justify-end px-12 py-2">

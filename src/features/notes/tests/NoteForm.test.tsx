@@ -12,8 +12,8 @@ const { createNoteActionMock } = vi.hoisted(() => ({
 
 import { NoteForm } from "../components/NoteForm";
 
-vi.mock("@/features/editor/components/MarkdownEditor", () => ({
-  MarkdownEditor: ({
+vi.mock("@/features/editor/components/TipTapEditor", () => ({
+  TipTapEditor: ({
     value,
     onChange,
   }: {
@@ -22,7 +22,7 @@ vi.mock("@/features/editor/components/MarkdownEditor", () => ({
   }) => (
     <button
       type="button"
-      data-testid="markdown-editor"
+      data-testid="tiptap-editor"
       onClick={() => onChange("markdown content")}
     >
       markdown:{value}
@@ -48,12 +48,6 @@ vi.mock("@/features/editor/components/CodeEditor", () => ({
     >
       code:{language}:{value}
     </button>
-  ),
-}));
-
-vi.mock("@/features/notes/components/MarkdownPreview", () => ({
-  MarkdownPreview: ({ content }: { content: string }) => (
-    <div data-testid="markdown-preview">{content}</div>
   ),
 }));
 
@@ -87,7 +81,7 @@ describe("NoteForm", () => {
     createNoteActionMock.mockResolvedValue(null);
   });
 
-  it("renders the markdown editor by default with the supported language options", () => {
+  it("renders the tiptap editor by default with the supported language options", () => {
     render(<NoteForm />);
 
     const select = screen.getByLabelText("언어") as HTMLSelectElement;
@@ -95,7 +89,7 @@ describe("NoteForm", () => {
 
     expect(select.value).toBe("markdown");
     expect(options).toEqual([...NOTE_LANGUAGE_VALUES]);
-    expect(screen.getByTestId("markdown-editor")).toBeInTheDocument();
+    expect(screen.getByTestId("tiptap-editor")).toBeInTheDocument();
     expect(screen.queryByTestId("code-editor")).not.toBeInTheDocument();
   });
 
@@ -112,7 +106,7 @@ describe("NoteForm", () => {
       "data-language",
       "javascript",
     );
-    expect(screen.queryByTestId("markdown-editor")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("tiptap-editor")).not.toBeInTheDocument();
   });
 
   it("syncs editor content into the hidden input and form data", async () => {
@@ -122,7 +116,7 @@ describe("NoteForm", () => {
     const hiddenContentInput = getHiddenContentInput(container);
 
     await user.type(screen.getByLabelText("제목"), "테스트 노트");
-    await user.click(screen.getByTestId("markdown-editor"));
+    await user.click(screen.getByTestId("tiptap-editor"));
 
     const formData = new FormData(form);
 
@@ -138,7 +132,7 @@ describe("NoteForm", () => {
     const hiddenContentInput = getHiddenContentInput(container);
     const select = screen.getByLabelText("언어") as HTMLSelectElement;
 
-    await user.click(screen.getByTestId("markdown-editor"));
+    await user.click(screen.getByTestId("tiptap-editor"));
     expect(hiddenContentInput.value).toBe("markdown content");
 
     await user.selectOptions(select, "javascript");
@@ -150,7 +144,7 @@ describe("NoteForm", () => {
     expect(hiddenContentInput.value).toBe("code:javascript");
 
     await user.selectOptions(select, "markdown");
-    expect(screen.getByTestId("markdown-editor")).toHaveTextContent(
+    expect(screen.getByTestId("tiptap-editor")).toHaveTextContent(
       "markdown:code:javascript",
     );
   });
