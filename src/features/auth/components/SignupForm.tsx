@@ -2,6 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
+import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -187,10 +188,13 @@ export function SignupForm() {
         </div>
       </div>
 
-      <Button type="submit" disabled={isPending}>
-        {isPending && <span role="status" aria-label="로딩 중" />}
-        회원가입
-      </Button>
+      <div className="flex justify-between">
+        <Link href="/login">이미 가입하셨나요?</Link>
+        <Button type="submit" disabled={isPending}>
+          {isPending && <span role="status" aria-label="로딩 중" />}
+          회원가입
+        </Button>
+      </div>
     </form>
   );
 }

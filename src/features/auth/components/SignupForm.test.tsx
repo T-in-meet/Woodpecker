@@ -142,6 +142,24 @@ describe("SignupForm", () => {
   });
 });
 
+// TC-14 ~ TC-15: Login Link (PR-UI-01A)
+describe("SignupForm Login Link", () => {
+  it("TC-14: 회원가입 폼에 로그인 안내 텍스트가 렌더링된다", () => {
+    render(<SignupForm />);
+
+    expect(screen.getByText("이미 가입하셨나요?")).toBeInTheDocument();
+  });
+
+  it("TC-15: 로그인 안내 요소가 /login을 가리키는 링크로 접근 가능하다", () => {
+    render(<SignupForm />);
+
+    const loginLink = screen.getByRole("link", { name: "이미 가입하셨나요?" });
+
+    expect(loginLink).toBeInTheDocument();
+    expect(loginLink).toHaveAttribute("href", "/login");
+  });
+});
+
 // TC-01 ~ TC-15: Form-level validation (유효성 검사 테스트)
 describe("SignupForm Validation", () => {
   let mockMutate: ReturnType<typeof vi.fn>;
