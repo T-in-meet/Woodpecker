@@ -38,7 +38,7 @@ type FormValues = z.infer<typeof signupFormSchema>;
 type SubmitPayload = Omit<FormValues, "confirmPassword">;
 
 export function SignupForm() {
-  const { mutate } = useMutation<void, Error, SubmitPayload>({
+  const { mutate, isPending } = useMutation<void, Error, SubmitPayload>({
     mutationFn: async (_data) => {
       // TODO: API call
     },
@@ -169,7 +169,10 @@ export function SignupForm() {
         </div>
       </div>
 
-      <Button type="submit">회원가입</Button>
+      <Button type="submit" disabled={isPending}>
+        {isPending && <span role="status" aria-label="로딩 중" />}
+        회원가입
+      </Button>
     </form>
   );
 }

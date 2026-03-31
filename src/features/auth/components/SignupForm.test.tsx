@@ -462,3 +462,89 @@ describe("SignupForm Validation", () => {
     ).toBeInTheDocument();
   });
 });
+
+// TC-01 ~ TC-05: Submit & Mutation (PR-UI-04)
+describe("SignupForm Submit & Mutation", () => {
+  let mockMutate: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    mockMutate = vi.fn();
+    vi.mocked(useMutation).mockReturnValue({
+      mutate: mockMutate,
+      isPending: false,
+    } as unknown as UseMutationResult<unknown, Error, unknown, unknown>);
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("TC-01: 유효한 폼 제출 시 mutate가 정확히 1회 호출된다", async () => {
+    const user = userEvent.setup();
+    render(<SignupForm />);
+
+    await user.type(screen.getByLabelText(/이메일/i), "test@example.com");
+    await user.type(screen.getByLabelText(/^비밀번호$/i), "12345678");
+    await user.type(screen.getByLabelText(/비밀번호 확인/i), "12345678");
+    await user.type(screen.getByLabelText(/닉네임/i), "tester");
+    await user.click(screen.getByRole("checkbox", { name: /이용약관/i }));
+    await user.click(screen.getByRole("checkbox", { name: /개인정보/i }));
+
+    await user.click(screen.getByRole("button", { name: /회원가입/i }));
+
+    await waitFor(() => {
+      expect(mockMutate).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("TC-02: 유효하지 않은 폼 제출 시 mutate가 호출되지 않는다", async () => {
+    const user = userEvent.setup();
+    render(<SignupForm />);
+
+    await user.click(screen.getByRole("button", { name: /회원가입/i }));
+
+    await waitFor(() => {
+      expect(mockMutate).not.toHaveBeenCalled();
+    });
+  });
+
+  it("TC-03: isPending이 true이면 제출 버튼이 비활성화된다", () => {
+    vi.mocked(useMutation).mockReturnValue({
+      mutate: mockMutate,
+      isPending: true,
+    } as unknown as UseMutationResult<unknown, Error, unknown, unknown>);
+
+    render(<SignupForm />);
+
+    expect(screen.getByRole("button", { name: /회원가입/i })).toBeDisabled();
+  });
+
+  it("TC-04: isPending이 true이면 제출 영역에 로딩 인디케이터가 표시된다", () => {
+    vi.mocked(useMutation).mockReturnValue({
+      mutate: mockMutate,
+      isPending: true,
+    } as unknown as UseMutationResult<unknown, Error, unknown, unknown>);
+
+    render(<SignupForm />);
+
+    expect(screen.getByRole("status")).toBeInTheDocument();
+  });
+
+  it("TC-05: isPending이 true인 상태에서 제출 버튼을 여러 번 클릭해도 mutate가 호출되지 않는다", async () => {
+    vi.mocked(useMutation).mockReturnValue({
+      mutate: mockMutate,
+      isPending: true,
+    } as unknown as UseMutationResult<unknown, Error, unknown, unknown>);
+
+    const user = userEvent.setup();
+    render(<SignupForm />);
+
+    const submitButton = screen.getByRole("button", { name: /회원가입/i });
+    await user.click(submitButton);
+    await user.click(submitButton);
+    await user.click(submitButton);
+
+    expect(mockMutate).not.toHaveBeenCalled();
+    expect(submitButton).toBeDisabled();
+  });
+});
