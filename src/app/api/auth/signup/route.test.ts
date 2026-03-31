@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { resetRateLimitStores } from "@/lib/auth/checkSignupRateLimit";
+import { getUserByEmail } from "@/lib/auth/getUserByEmail";
 import { AUTH_API_CODES } from "@/lib/constants/authApiCodes";
 import { ROUTES } from "@/lib/constants/routes";
 import { VALIDATION_REASON } from "@/lib/constants/validation";
@@ -9,7 +11,12 @@ import { SIGNUP_PASSWORD_MIN } from "@/lib/validation/auth/signupSchema";
 
 import { POST } from "./route";
 
+vi.mock("@/lib/auth/getUserByEmail");
 vi.mock("@/lib/supabase/server");
+
+beforeEach(() => {
+  resetRateLimitStores();
+});
 
 function makeRequest(body: object): NextRequest {
   return new NextRequest("http://localhost/api/auth/signup", {
@@ -59,6 +66,15 @@ describe("회원가입 API 기본 성공 흐름 검증", () => {
     expect(mockSignUp).toHaveBeenCalledWith(
       expect.objectContaining({ email: "test@example.com" }),
     );
+  });
+
+  it("성공 응답 data.redirectTo는 이메일 인증 경로이다", async () => {
+    mockSignUpSuccess();
+
+    const response = await POST(makeRequest(requestBody));
+    const body = await response.json();
+
+    expect(body.data.redirectTo).toBe(ROUTES.VERIFY_EMAIL);
   });
 
   it("signUp 호출 시 options.emailRedirectTo는 /login 경로를 포함한다", async () => {
@@ -866,5 +882,554 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
     expect(body.success).toBe(true);
     expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
     expect(mockSignUp).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("PR-API-04 회원가입 - pending 계정 재요청 분기", () => {
+  const mockSignUp = vi.fn();
+
+  const requestBody = {
+    email: "test@example.com",
+    password: "Password123!",
+    nickname: "테스터",
+    agreements: { termsOfService: true as const, privacyPolicy: true as const },
+  };
+
+  const pendingUser = {
+    email: "test@example.com",
+    email_confirmed_at: null,
+  };
+
+  function makeRequest(): NextRequest {
+    return new NextRequest("http://localhost/api/auth/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody),
+    });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(createClient).mockResolvedValue({
+      auth: { signUp: mockSignUp },
+    } as never);
+    vi.mocked(getUserByEmail).mockResolvedValue(null);
+  });
+
+  it("TC-01. pending 계정이면 200 성공 응답으로 PENDING 상태를 반환한다", async () => {
+    vi.mocked(getUserByEmail).mockResolvedValue(pendingUser as never);
+
+    const response = await POST(makeRequest());
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.success).toBe(true);
+    expect(json.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
+    expect(json.data).toEqual({ email: "test@example.com", status: "PENDING" });
+  });
+
+  it("TC-02. pending 분기에서는 getUserByEmail이 정확히 1회 호출된다", async () => {
+    vi.mocked(getUserByEmail).mockResolvedValue(pendingUser as never);
+
+    await POST(makeRequest());
+
+    expect(vi.mocked(getUserByEmail)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(getUserByEmail)).toHaveBeenCalledWith("test@example.com");
+  });
+
+  it("TC-03. pending 분기에서는 signup이 호출되지 않는다", async () => {
+    vi.mocked(getUserByEmail).mockResolvedValue(pendingUser as never);
+
+    await POST(makeRequest());
+
+    expect(mockSignUp).toHaveBeenCalledTimes(0);
+  });
+});
+
+describe("PR-API-05 회원가입 - active 계정 재요청 분기", () => {
+  const mockSignUp = vi.fn();
+
+  const requestBody = {
+    email: "test@example.com",
+    password: "Password123!",
+    nickname: "tester",
+    agreements: { termsOfService: true as const, privacyPolicy: true as const },
+  };
+
+  const activeUser = {
+    id: "user-123",
+    email: "test@example.com",
+    email_confirmed_at: "2026-03-29T00:00:00.000Z",
+  };
+
+  function makeRequest(): NextRequest {
+    return new NextRequest("http://localhost:3000/api/auth/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody),
+    });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(createClient).mockResolvedValue({
+      auth: { signUp: mockSignUp },
+    } as never);
+    vi.mocked(getUserByEmail).mockResolvedValue(null);
+  });
+
+  it("TC-01. active 계정이면 200 응답과 /login redirect를 반환한다", async () => {
+    vi.mocked(getUserByEmail).mockResolvedValue(activeUser as never);
+
+    const response = await POST(makeRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
+    expect(body.data).toEqual({
+      email: "test@example.com",
+      redirectTo: "/login",
+    });
+  });
+
+  it("TC-02. active 분기에서는 signup이 호출되지 않는다", async () => {
+    vi.mocked(getUserByEmail).mockResolvedValue(activeUser as never);
+
+    await POST(makeRequest());
+
+    expect(vi.mocked(getUserByEmail)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(getUserByEmail)).toHaveBeenCalledWith("test@example.com");
+    expect(mockSignUp).not.toHaveBeenCalled();
+  });
+
+  it("TC-03. active 분기 응답은 API 계약 구조를 유지한다", async () => {
+    vi.mocked(getUserByEmail).mockResolvedValue(activeUser as never);
+
+    const response = await POST(makeRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({
+      success: true,
+      code: AUTH_API_CODES.SIGNUP_SUCCESS,
+      data: {
+        email: "test@example.com",
+        redirectTo: "/login",
+      },
+    });
+    expect(body).not.toHaveProperty("errors");
+    expect(body).not.toHaveProperty("error");
+  });
+
+  it("TC-04. active 분기 응답은 /verify-email redirect를 포함하지 않는다", async () => {
+    vi.mocked(getUserByEmail).mockResolvedValue(activeUser as never);
+
+    const response = await POST(makeRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
+    expect(body.data.redirectTo).toBe("/login");
+    expect(body.data.redirectTo).not.toBe("/verify-email");
+  });
+});
+
+describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
+  const mockSignUp = vi.fn();
+
+  const BASE_BODY = {
+    password: "Password123!",
+    nickname: "tester",
+    agreements: { termsOfService: true as const, privacyPolicy: true as const },
+  };
+
+  function makeRequest(ip: string, email = "test@example.com"): NextRequest {
+    return new NextRequest("http://localhost/api/auth/signup", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-forwarded-for": ip,
+      },
+      body: JSON.stringify({ ...BASE_BODY, email }),
+    });
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+    vi.clearAllMocks();
+    vi.mocked(createClient).mockResolvedValue({
+      auth: { signUp: mockSignUp },
+    } as never);
+    vi.mocked(getUserByEmail).mockResolvedValue(null);
+    mockSignUp.mockResolvedValue({
+      data: { user: { email: "test@example.com" } },
+      error: null,
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("TC-01. 동일 IP로 10번까지 요청이 허용된다", async () => {
+    const ip = "10.1.0.1";
+    for (let i = 0; i < 10; i++) {
+      const response = await POST(makeRequest(ip, `tc01user${i}@example.com`));
+      expect(response.status).not.toBe(429);
+    }
+    expect(mockSignUp).toHaveBeenCalledTimes(10);
+  });
+
+  it("TC-02. 동일 IP로 11번째 요청은 429를 반환한다", async () => {
+    const ip = "10.2.0.1";
+    for (let i = 0; i < 10; i++) {
+      await POST(makeRequest(ip, `tc02user${i}@example.com`));
+    }
+    const response = await POST(makeRequest(ip, "tc02overflow@example.com"));
+    const body = await response.json();
+
+    expect(response.status).toBe(429);
+    expect(body.success).toBe(false);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
+    expect(body.data).toBeNull();
+    expect(mockSignUp).toHaveBeenCalledTimes(10);
+  });
+
+  it("TC-03. 동일 이메일로 5번까지 요청이 허용된다", async () => {
+    const email = "tc03@example.com";
+    for (let i = 0; i < 5; i++) {
+      const response = await POST(makeRequest(`10.3.${i}.1`, email));
+      expect(response.status).not.toBe(429);
+    }
+    expect(mockSignUp).toHaveBeenCalledTimes(5);
+  });
+
+  it("TC-04. 동일 이메일로 6번째 요청은 429를 반환한다", async () => {
+    const email = "tc04@example.com";
+    for (let i = 0; i < 5; i++) {
+      await POST(makeRequest(`10.4.${i}.1`, email));
+    }
+    const response = await POST(makeRequest("10.4.5.1", email));
+    const body = await response.json();
+
+    expect(response.status).toBe(429);
+    expect(body.success).toBe(false);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
+    expect(body.data).toBeNull();
+    expect(mockSignUp).toHaveBeenCalledTimes(5);
+  });
+
+  it("TC-05. 동일 IP로 10번째 요청이 경계값으로 허용된다", async () => {
+    const ip = "10.5.0.1";
+    for (let i = 0; i < 9; i++) {
+      await POST(makeRequest(ip, `tc05user${i}@example.com`));
+    }
+    const response = await POST(makeRequest(ip, "tc05user9@example.com"));
+    expect(response.status).not.toBe(429);
+    expect(mockSignUp).toHaveBeenCalledTimes(10);
+  });
+
+  it("TC-06. 동일 이메일로 5번째 요청이 경계값으로 허용된다", async () => {
+    const email = "tc06@example.com";
+    for (let i = 0; i < 4; i++) {
+      await POST(makeRequest(`10.6.${i}.1`, email));
+    }
+    const response = await POST(makeRequest("10.6.4.1", email));
+    expect(response.status).not.toBe(429);
+    expect(mockSignUp).toHaveBeenCalledTimes(5);
+  });
+
+  it("TC-07. IP 한도 초과 후 같은 윈도우에서 계속 차단된다", async () => {
+    const ip = "10.7.0.1";
+    for (let i = 0; i < 11; i++) {
+      await POST(makeRequest(ip, `tc07user${i}@example.com`));
+    }
+    mockSignUp.mockClear();
+
+    for (let i = 0; i < 3; i++) {
+      const response = await POST(makeRequest(ip, `tc07extra${i}@example.com`));
+      expect(response.status).toBe(429);
+    }
+    expect(mockSignUp).toHaveBeenCalledTimes(0);
+  });
+
+  it("TC-08. 이메일 한도 초과 후 같은 윈도우에서 계속 차단된다", async () => {
+    const email = "tc08@example.com";
+    for (let i = 0; i < 6; i++) {
+      await POST(makeRequest(`10.8.${i}.1`, email));
+    }
+    mockSignUp.mockClear();
+
+    for (let i = 0; i < 3; i++) {
+      const response = await POST(makeRequest(`10.8.${i + 10}.1`, email));
+      expect(response.status).toBe(429);
+    }
+    expect(mockSignUp).toHaveBeenCalledTimes(0);
+  });
+
+  it("TC-09. 윈도우 만료 후 IP limit이 리셋된다", async () => {
+    const ip = "10.9.0.1";
+    for (let i = 0; i < 11; i++) {
+      await POST(makeRequest(ip, `tc09user${i}@example.com`));
+    }
+    vi.advanceTimersByTime(61 * 1000);
+
+    const response = await POST(makeRequest(ip, "tc09reset@example.com"));
+    expect(response.status).not.toBe(429);
+    expect(mockSignUp).toHaveBeenCalled();
+  });
+
+  it("TC-10. 윈도우 만료 후 이메일 limit이 리셋된다", async () => {
+    const email = "tc10@example.com";
+    for (let i = 0; i < 6; i++) {
+      await POST(makeRequest(`10.10.${i}.1`, email));
+    }
+    vi.advanceTimersByTime(61 * 1000);
+
+    const response = await POST(makeRequest("10.10.10.1", email));
+    expect(response.status).not.toBe(429);
+    expect(mockSignUp).toHaveBeenCalled();
+  });
+
+  it("TC-11A. 이메일이 달라도 IP limit은 동작한다", async () => {
+    const ip = "10.11.0.1";
+    for (let i = 0; i < 10; i++) {
+      await POST(makeRequest(ip, `user${i}@example.com`));
+    }
+    const response = await POST(makeRequest(ip, "overflow@example.com"));
+    const body = await response.json();
+
+    expect(response.status).toBe(429);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
+  });
+
+  it("TC-11B. IP가 달라도 이메일 limit은 동작한다", async () => {
+    const email = "tc11b@example.com";
+    for (let i = 0; i < 5; i++) {
+      await POST(makeRequest(`10.11.${i}.2`, email));
+    }
+    const response = await POST(makeRequest("10.11.10.2", email));
+    const body = await response.json();
+
+    expect(response.status).toBe(429);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
+  });
+
+  it("TC-12. rate limit 실패 응답이 API 계약 구조를 유지한다", async () => {
+    const ip = "10.12.0.1";
+    for (let i = 0; i < 11; i++) {
+      await POST(makeRequest(ip));
+    }
+    const response = await POST(makeRequest(ip));
+    const body = await response.json();
+
+    expect(response.status).toBe(429);
+    expect(body).toHaveProperty("success");
+    expect(body).toHaveProperty("code");
+    expect(body).toHaveProperty("data");
+    expect(body).not.toHaveProperty("error");
+    expect(body).not.toHaveProperty("errors");
+    expect(body.data).toBeNull();
+  });
+});
+
+describe("PR-API-07 프로필 이미지 업로드 성공 시 avatar_url 반영", () => {
+  const mockSignUp = vi.fn();
+  const mockStorageUpload = vi.fn();
+  const mockGetPublicUrl = vi.fn();
+  const mockProfileUpdate = vi.fn();
+  const mockProfileEq = vi.fn();
+
+  const MOCK_UPLOAD_PATH = "avatars/mock-image.png";
+  const MOCK_PUBLIC_URL = "https://example.com/storage/avatars/mock-image.png";
+
+  function makeMultipartRequest(): NextRequest {
+    const request = new NextRequest("http://localhost/api/auth/signup", {
+      method: "POST",
+      headers: {
+        "Content-Type": "multipart/form-data; boundary=boundary",
+      },
+      body: "dummy",
+    });
+
+    const mockFile = new File(["image-content"], "profile.jpg", {
+      type: "image/jpeg",
+    });
+    const fields: Record<string, string | File> = {
+      email: "test@example.com",
+      password: "Password123!",
+      nickname: "테스터",
+      agreements: JSON.stringify({ termsOfService: true, privacyPolicy: true }),
+      avatarFile: mockFile,
+    };
+
+    vi.spyOn(request, "formData").mockResolvedValue({
+      get: (key: string) => fields[key] ?? null,
+    } as unknown as FormData);
+
+    return request;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getUserByEmail).mockResolvedValue(null);
+    mockProfileUpdate.mockReturnValue({ eq: mockProfileEq });
+    mockProfileEq.mockResolvedValue({ data: null, error: null });
+    vi.mocked(createClient).mockResolvedValue({
+      auth: { signUp: mockSignUp },
+      storage: {
+        from: vi.fn(() => ({
+          upload: mockStorageUpload,
+          getPublicUrl: mockGetPublicUrl,
+        })),
+      },
+      from: vi.fn(() => ({
+        update: mockProfileUpdate,
+      })),
+    } as never);
+    mockSignUp.mockResolvedValue({
+      data: { user: { id: "user-id", email: "test@example.com" } },
+      error: null,
+    });
+    mockStorageUpload.mockResolvedValue({
+      data: { path: MOCK_UPLOAD_PATH },
+      error: null,
+    });
+    mockGetPublicUrl.mockReturnValue({
+      data: { publicUrl: MOCK_PUBLIC_URL },
+    });
+  });
+
+  // TC-01: 프로필 이미지 포함 회원가입 성공 응답 반환
+  it("TC-01. 프로필 이미지 포함 회원가입 성공 시 성공 응답을 반환한다", async () => {
+    const response = await POST(makeMultipartRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(body.success).toBe(true);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
+    expect(body.data.email).toBe("test@example.com");
+    expect(body.data.avatar_url).toBe(MOCK_PUBLIC_URL);
+  });
+
+  // TC-02: avatarFile 제공 시 storage.upload 호출
+  it("TC-02. avatarFile가 포함된 요청 시 storage.upload가 1회 호출된다", async () => {
+    await POST(makeMultipartRequest());
+
+    expect(mockStorageUpload).toHaveBeenCalledTimes(1);
+  });
+
+  // TC-03: upload 경로로 getPublicUrl 호출
+  it("TC-03. upload 경로로 getPublicUrl이 1회 호출된다", async () => {
+    await POST(makeMultipartRequest());
+
+    expect(mockGetPublicUrl).toHaveBeenCalledTimes(1);
+    expect(mockGetPublicUrl).toHaveBeenCalledWith(MOCK_UPLOAD_PATH);
+  });
+
+  // TC-04: 생성된 public URL로 avatar_url 업데이트
+  it("TC-04. 생성된 public URL로 profiles 테이블의 avatar_url이 업데이트된다", async () => {
+    await POST(makeMultipartRequest());
+
+    expect(mockProfileUpdate).toHaveBeenCalledTimes(1);
+    expect(mockProfileUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ avatar_url: MOCK_PUBLIC_URL }),
+    );
+  });
+});
+
+describe("PR-API-08 프로필 이미지 업로드 실패 시 회원가입 성공 유지", () => {
+  const mockSignUp = vi.fn();
+  const mockStorageUpload = vi.fn();
+  const mockGetPublicUrl = vi.fn();
+  const mockProfileUpdate = vi.fn();
+
+  function makeMultipartRequest(): NextRequest {
+    const request = new NextRequest("http://localhost/api/auth/signup", {
+      method: "POST",
+      headers: {
+        "Content-Type": "multipart/form-data; boundary=boundary",
+      },
+      body: "dummy",
+    });
+
+    const mockFile = new File(["image-content"], "profile.jpg", {
+      type: "image/jpeg",
+    });
+    const fields: Record<string, string | File> = {
+      email: "test@example.com",
+      password: "Password123!",
+      nickname: "Tester",
+      agreements: JSON.stringify({ termsOfService: true, privacyPolicy: true }),
+      avatarFile: mockFile,
+    };
+
+    vi.spyOn(request, "formData").mockResolvedValue({
+      get: (key: string) => fields[key] ?? null,
+    } as unknown as FormData);
+
+    return request;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getUserByEmail).mockResolvedValue(null);
+    vi.mocked(createClient).mockResolvedValue({
+      auth: { signUp: mockSignUp },
+      storage: {
+        from: vi.fn(() => ({
+          upload: mockStorageUpload,
+          getPublicUrl: mockGetPublicUrl,
+        })),
+      },
+      from: vi.fn(() => ({
+        update: mockProfileUpdate,
+      })),
+    } as never);
+    mockSignUp.mockResolvedValue({
+      data: { user: { id: "user-id", email: "test@example.com" } },
+      error: null,
+    });
+    mockStorageUpload.mockResolvedValue({
+      data: null,
+      error: { message: "upload failed" },
+    });
+  });
+
+  // TC-01: 업로드 실패해도 signup은 201로 성공한다
+  it("TC-01. 업로드 실패 시에도 회원가입은 201 성공 응답을 반환한다", async () => {
+    const response = await POST(makeMultipartRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(body.success).toBe(true);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
+    expect(body.data.email).toBe("test@example.com");
+    expect(body.data.redirectTo).toBe(ROUTES.VERIFY_EMAIL);
+  });
+
+  // TC-02: 업로드 실패 시 getPublicUrl 미호출
+  it("TC-02. 업로드 실패 시 getPublicUrl은 호출되지 않는다", async () => {
+    await POST(makeMultipartRequest());
+
+    expect(mockStorageUpload).toHaveBeenCalledTimes(1);
+    expect(mockGetPublicUrl).toHaveBeenCalledTimes(0);
+  });
+
+  // TC-03: 업로드 실패 시 profile update 미호출
+  it("TC-03. 업로드 실패 시 profiles 테이블 업데이트는 호출되지 않는다", async () => {
+    await POST(makeMultipartRequest());
+
+    expect(mockProfileUpdate).toHaveBeenCalledTimes(0);
+  });
+
+  // TC-04: 응답 data에 avatar_url 미포함
+  it("TC-04. 업로드 실패 시 응답 data에 avatar_url이 포함되지 않는다", async () => {
+    const response = await POST(makeMultipartRequest());
+    const body = await response.json();
+
+    expect(body.data).not.toHaveProperty("avatar_url");
   });
 });
