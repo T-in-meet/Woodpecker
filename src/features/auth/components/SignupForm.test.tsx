@@ -402,22 +402,31 @@ describe("회원가입 폼 검증", () => {
 
     await user.click(screen.getByRole("button", { name: /회원가입/i }));
 
-    await screen.findByText("이용약관에 동의해주세요");
+    const termsField = screen.getByTestId("terms-of-service-field");
+    const privacyField = screen.getByTestId("privacy-policy-field");
 
+    // 1️⃣ 영역 내부 검증
+    expect(
+      within(termsField).getByText("이용약관에 동의해주세요"),
+    ).toBeInTheDocument();
+
+    expect(
+      within(privacyField).getByText("개인정보 처리방침에 동의해주세요"),
+    ).toBeInTheDocument();
+
+    // 2️⃣ 접근성 연결 검증
     const termsCheckbox = screen.getByRole("checkbox", { name: /이용약관/i });
     const privacyCheckbox = screen.getByRole("checkbox", { name: /개인정보/i });
 
-    expect(
-      within(termsCheckbox.closest("div")!).getByText(
-        "이용약관에 동의해주세요",
-      ),
-    ).toBeInTheDocument();
+    expect(termsCheckbox).toHaveAttribute(
+      "aria-describedby",
+      "terms-of-service-error",
+    );
 
-    expect(
-      within(privacyCheckbox.closest("div")!).getByText(
-        "개인정보 처리방침에 동의해주세요",
-      ),
-    ).toBeInTheDocument();
+    expect(privacyCheckbox).toHaveAttribute(
+      "aria-describedby",
+      "privacy-policy-error",
+    );
   });
 
   // 이 테스트는 필드별 validation 트리거가 서로 다르므로

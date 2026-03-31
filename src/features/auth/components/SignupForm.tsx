@@ -129,8 +129,9 @@ export function SignupForm() {
       </div>
 
       <div className="flex justify-between">
-        <div className="flex-1 space-y-2">
-          <div className="flex-1 flex items-center space-x-2">
+        {/* 이용약관 */}
+        <div data-testid="terms-of-service-field" className="flex-1 space-y-2">
+          <div className="flex items-center space-x-2">
             <Button
               type="button"
               variant="ghost"
@@ -139,22 +140,33 @@ export function SignupForm() {
             >
               이용약관 보기
             </Button>
+
             <Label htmlFor="termsOfService">이용약관에 동의합니다</Label>
+
             <input
               id="termsOfService"
               type="checkbox"
+              aria-describedby={
+                errors.termsOfService ? "terms-of-service-error" : undefined
+              }
               {...register("termsOfService")}
             />
           </div>
+
           {errors.termsOfService && (
-            <p role="alert" className="text-red-500">
+            <p
+              id="terms-of-service-error"
+              role="alert"
+              className="text-red-500"
+            >
               {errors.termsOfService.message}
             </p>
           )}
         </div>
 
-        <div className="flex-1 space-y-2">
-          <div className="flex-1 flex items-center space-x-2">
+        {/* 개인정보 */}
+        <div data-testid="privacy-policy-field" className="flex-1 space-y-2">
+          <div className="flex items-center space-x-2">
             <Button
               type="button"
               variant="ghost"
@@ -171,11 +183,15 @@ export function SignupForm() {
             <input
               id="privacyPolicy"
               type="checkbox"
+              aria-describedby={
+                errors.privacyPolicy ? "privacy-policy-error" : undefined
+              }
               {...register("privacyPolicy")}
             />
           </div>
+
           {errors.privacyPolicy && (
-            <p role="alert" className="text-red-500">
+            <p id="privacy-policy-error" role="alert" className="text-red-500">
               {errors.privacyPolicy.message}
             </p>
           )}
