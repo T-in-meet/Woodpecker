@@ -3,10 +3,11 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import Link from "next/link";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { signupFormSchema } from "@/lib/validation/auth/signupSchema";
@@ -23,6 +24,7 @@ export function SignupForm() {
   });
 
   const {
+    control,
     register,
     handleSubmit,
     formState: { errors },
@@ -143,13 +145,23 @@ export function SignupForm() {
 
             <Label htmlFor="termsOfService">이용약관에 동의합니다</Label>
 
-            <input
-              id="termsOfService"
-              type="checkbox"
-              aria-describedby={
-                errors.termsOfService ? "terms-of-service-error" : undefined
-              }
-              {...register("termsOfService")}
+            <Controller
+              name="termsOfService"
+              control={control}
+              render={({ field }) => (
+                <Checkbox
+                  id="termsOfService"
+                  name={field.name}
+                  checked={field.value}
+                  onCheckedChange={(checked) => {
+                    field.onChange(checked === true);
+                  }}
+                  onBlur={field.onBlur}
+                  aria-describedby={
+                    errors.termsOfService ? "terms-of-service-error" : undefined
+                  }
+                />
+              )}
             />
           </div>
 
@@ -180,13 +192,23 @@ export function SignupForm() {
               개인정보 처리방침에 동의합니다
             </Label>
 
-            <input
-              id="privacyPolicy"
-              type="checkbox"
-              aria-describedby={
-                errors.privacyPolicy ? "privacy-policy-error" : undefined
-              }
-              {...register("privacyPolicy")}
+            <Controller
+              name="privacyPolicy"
+              control={control}
+              render={({ field }) => (
+                <Checkbox
+                  id="privacyPolicy"
+                  name={field.name}
+                  checked={field.value}
+                  onCheckedChange={(checked) => {
+                    field.onChange(checked === true);
+                  }}
+                  onBlur={field.onBlur}
+                  aria-describedby={
+                    errors.privacyPolicy ? "privacy-policy-error" : undefined
+                  }
+                />
+              )}
             />
           </div>
 
