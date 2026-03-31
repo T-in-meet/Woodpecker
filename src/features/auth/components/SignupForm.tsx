@@ -73,12 +73,11 @@ export function SignupForm() {
           id="password"
           type="password"
           {...passwordRegister}
-          onChange={(e) => {
-            void onPasswordChange(e).then(() => {
-              if (getValues("confirmPassword")) {
-                void trigger("confirmPassword");
-              }
-            });
+          onChange={async (e) => {
+            await onPasswordChange(e);
+            if (getValues("confirmPassword")) {
+              await trigger("confirmPassword");
+            }
           }}
         />
         {errors.password && (
