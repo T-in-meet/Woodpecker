@@ -16,9 +16,9 @@ export default async function NewNotePage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // if (!user) {
-  //   redirect(ROUTES.LOGIN);
-  // }
+  if (!user) {
+    redirect(ROUTES.LOGIN);
+  }
 
   return <NoteForm />;
 }

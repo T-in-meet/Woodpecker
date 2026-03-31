@@ -3,6 +3,7 @@ import "@/tests/setup";
 import { Editor } from "@tiptap/core";
 import { describe, expect, it } from "vitest";
 
+import { serializeTipTapMarkdown } from "../utils/serializeTipTapMarkdown";
 import { getTipTapExtensions } from "../utils/tiptapExtensions";
 
 /**
@@ -11,7 +12,7 @@ import { getTipTapExtensions } from "../utils/tiptapExtensions";
  * markdown → TipTap → markdown 변환 결과가 허용 가능한 수준인지 확인한다.
  */
 
-const fixtures: { name: string; input: string; expected?: string }[] = [
+const fixtures: { name: string; input: string }[] = [
   {
     name: "headings",
     input: "# H1\n\n## H2\n\n### H3",
@@ -27,8 +28,6 @@ const fixtures: { name: string; input: string; expected?: string }[] = [
   {
     name: "task list",
     input: "- [ ] todo\n- [x] done",
-    // tiptap-markdown serializes task list items with blank lines between them
-    expected: "- [ ] todo\n\n- [x] done",
   },
   {
     name: "inline formatting",
@@ -41,7 +40,6 @@ const fixtures: { name: string; input: string; expected?: string }[] = [
   {
     name: "blockquote",
     input: "> This is a quote\n> with two lines",
-    expected: "> This is a quote\\\n> with two lines",
   },
   {
     name: "horizontal rule",
@@ -67,9 +65,6 @@ const fixtures: { name: string; input: string; expected?: string }[] = [
     name: "mixed content",
     input:
       "# Title\n\nSome text with **bold** and *italic*.\n\n- list item\n- [ ] task\n\n```python\nprint('hello')\n```\n\n> quote\n\n---\n\nEnd.",
-    // tiptap-markdown splits mixed bullet/task lists and adds blank lines between task items
-    expected:
-      "# Title\n\nSome text with **bold** and *italic*.\n\n- [ ] \n\n- list item\n\n- [ ] task\n\n```python\nprint('hello')\n```\n\n> quote\n\n---\n\nEnd.",
   },
 ];
 
@@ -83,9 +78,7 @@ function createHeadlessEditor(content: string): Editor {
 
 function roundTrip(markdown: string): string {
   const editor = createHeadlessEditor(markdown);
-  const result = (
-    editor.storage as unknown as { markdown: { getMarkdown: () => string } }
-  ).markdown.getMarkdown();
+  const result = serializeTipTapMarkdown(editor);
   editor.destroy();
   return result;
 }
@@ -94,9 +87,8 @@ describe("TipTap markdown round-trip", () => {
   for (const fixture of fixtures) {
     it(`round-trips: ${fixture.name}`, () => {
       const result = roundTrip(fixture.input);
-      const expected = fixture.expected ?? fixture.input;
 
-      expect(result.trim()).toBe(expected.trim());
+      expect(result.trim()).toBe(fixture.input.trim());
     });
   }
 });

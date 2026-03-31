@@ -1,6 +1,7 @@
 import { type Editor, useEditor } from "@tiptap/react";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
+import { serializeTipTapMarkdown } from "@/features/editor/utils/serializeTipTapMarkdown";
 import { getTipTapExtensions } from "@/features/editor/utils/tiptapExtensions";
 
 type UseTipTapEditorOptions = {
@@ -10,12 +11,6 @@ type UseTipTapEditorOptions = {
   readOnly?: boolean;
   autoFocus?: boolean;
 };
-
-type MarkdownStorage = { markdown: { getMarkdown: () => string } };
-
-function getMarkdown(editor: Editor): string {
-  return (editor.storage as unknown as MarkdownStorage).markdown.getMarkdown();
-}
 
 export function useTipTapEditor({
   value,
@@ -31,8 +26,13 @@ export function useTipTapEditor({
     onChangeRef.current = onChange;
   });
 
+  const extensions = useMemo(
+    () => getTipTapExtensions({ placeholder }),
+    [placeholder],
+  );
+
   const editor = useEditor({
-    extensions: getTipTapExtensions({ placeholder }),
+    extensions,
     content: value,
     editable: !readOnly,
     immediatelyRender: false,
@@ -42,7 +42,7 @@ export function useTipTapEditor({
     },
     onUpdate({ editor }) {
       if (skipNextUpdate.current) return;
-      onChangeRef.current(getMarkdown(editor));
+      onChangeRef.current(serializeTipTapMarkdown(editor));
     },
   });
 
@@ -52,7 +52,7 @@ export function useTipTapEditor({
 
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;
-    if (getMarkdown(editor) === value) return;
+    if (serializeTipTapMarkdown(editor) === value) return;
 
     editor.commands.setContent(value, { emitUpdate: false });
   }, [editor, value]);
