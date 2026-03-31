@@ -130,16 +130,23 @@ export function SignupForm() {
       </div>
 
       <div className="flex justify-between">
-        <div className="flex-1 space-y-4">
-          <input
-            id="termsOfService"
-            type="checkbox"
-            {...register("termsOfService")}
-          />
-          <Label htmlFor="termsOfService">이용약관에 동의합니다</Label>
-          <Button type="button" variant="ghost" size="sm">
-            이용약관 보기
-          </Button>
+        <div className="flex-1 space-y-2">
+          <div className="flex-1 flex items-center space-x-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="bg-blue-400 text-white"
+            >
+              이용약관 보기
+            </Button>
+            <Label htmlFor="termsOfService">이용약관에 동의합니다</Label>
+            <input
+              id="termsOfService"
+              type="checkbox"
+              {...register("termsOfService")}
+            />
+          </div>
           {errors.termsOfService && (
             <p role="alert" className="text-red-500">
               {errors.termsOfService.message}
@@ -147,16 +154,27 @@ export function SignupForm() {
           )}
         </div>
 
-        <div className="flex-1 space-y-4">
-          <input
-            id="privacyPolicy"
-            type="checkbox"
-            {...register("privacyPolicy")}
-          />
-          <Label htmlFor="privacyPolicy">개인정보 처리방침에 동의합니다</Label>
-          <Button type="button" variant="ghost" size="sm">
-            개인정보처리방침 보기
-          </Button>
+        <div className="flex-1 space-y-2">
+          <div className="flex-1 flex items-center space-x-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="bg-blue-400 text-white"
+            >
+              개인정보처리방침 보기
+            </Button>
+
+            <Label htmlFor="privacyPolicy">
+              개인정보 처리방침에 동의합니다
+            </Label>
+
+            <input
+              id="privacyPolicy"
+              type="checkbox"
+              {...register("privacyPolicy")}
+            />
+          </div>
           {errors.privacyPolicy && (
             <p role="alert" className="text-red-500">
               {errors.privacyPolicy.message}
@@ -166,7 +184,9 @@ export function SignupForm() {
       </div>
 
       <div className="flex justify-between">
-        <Link href="/login">이미 가입하셨나요?</Link>
+        <Link href="/login" className="text-blue-400 hover:text-blue-500">
+          이미 가입하셨나요?
+        </Link>
         <Button type="submit" disabled={isPending}>
           {isPending && <span role="status" aria-label="로딩 중" />}
           회원가입
