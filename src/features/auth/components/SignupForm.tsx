@@ -82,7 +82,11 @@ export function SignupForm() {
       <div className="space-y-4">
         <Label htmlFor="email">이메일</Label>
         <Input id="email" type="email" {...register("email")} />
-        {errors.email && <p role="alert">{errors.email.message}</p>}
+        {errors.email && (
+          <p role="alert" className="text-red-500">
+            {errors.email.message}
+          </p>
+        )}
       </div>
 
       <div className="space-y-4">
@@ -99,7 +103,11 @@ export function SignupForm() {
             });
           }}
         />
-        {errors.password && <p role="alert">{errors.password.message}</p>}
+        {errors.password && (
+          <p role="alert" className="text-red-500">
+            {errors.password.message}
+          </p>
+        )}
       </div>
 
       <div className="space-y-4">
@@ -115,14 +123,20 @@ export function SignupForm() {
           }}
         />
         {errors.confirmPassword && (
-          <p role="alert">{errors.confirmPassword.message}</p>
+          <p role="alert" className="text-red-500">
+            {errors.confirmPassword.message}
+          </p>
         )}
       </div>
 
       <div className="space-y-4">
         <Label htmlFor="nickname">닉네임</Label>
         <Input id="nickname" type="text" {...register("nickname")} />
-        {errors.nickname && <p role="alert">{errors.nickname.message}</p>}
+        {errors.nickname && (
+          <p role="alert" className="text-red-500">
+            {errors.nickname.message}
+          </p>
+        )}
       </div>
 
       <div className="space-y-4">
@@ -149,7 +163,9 @@ export function SignupForm() {
             이용약관 보기
           </Button>
           {errors.termsOfService && (
-            <p role="alert">{errors.termsOfService.message}</p>
+            <p role="alert" className="text-red-500">
+              {errors.termsOfService.message}
+            </p>
           )}
         </div>
 
@@ -164,7 +180,9 @@ export function SignupForm() {
             개인정보처리방침 보기
           </Button>
           {errors.privacyPolicy && (
-            <p role="alert">{errors.privacyPolicy.message}</p>
+            <p role="alert" className="text-red-500">
+              {errors.privacyPolicy.message}
+            </p>
           )}
         </div>
       </div>
