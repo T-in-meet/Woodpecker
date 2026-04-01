@@ -1,12 +1,12 @@
 import Image from "next/image";
 import Link from "next/link";
 
+import { Button } from "@/components/ui/button";
 import { ROUTES } from "@/lib/constants/routes";
 import { getUser } from "@/lib/supabase/getUser";
 import { createClient } from "@/lib/supabase/server";
 import type { Profile } from "@/types/profiles.types";
 
-import { AuthButtons } from "./AuthButtons";
 import { UserMenu } from "./UserMenu";
 
 export async function Header() {
@@ -46,7 +46,14 @@ export async function Header() {
               avatarUrl={profile.avatar_url}
             />
           ) : (
-            <AuthButtons />
+            <>
+              <Button variant="ghost" asChild>
+                <Link href={ROUTES.LOGIN}>로그인</Link>
+              </Button>
+              <Button asChild>
+                <Link href={ROUTES.SIGNUP}>회원가입</Link>
+              </Button>
+            </>
           )}
         </div>
       </div>
