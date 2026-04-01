@@ -33,7 +33,11 @@ function isPureTaskListElement(list: Element): boolean {
 
   return (
     items.length > 0 &&
-    items.every((item) => item.classList.contains("task-list-item"))
+    items.every(
+      (item) =>
+        item.classList.contains("task-list-item") &&
+        item.querySelector('input[type="checkbox"]') !== null,
+    )
   );
 }
 
@@ -46,13 +50,21 @@ const MarkdownTaskItem = TaskItem.extend({
       markdown: {
         parse: {
           updateDOM(element: HTMLElement) {
+            // DOM 수정 전에 pure task list를 미리 판별 (checkbox 제거 이후 재판별 오류 방지)
+            const pureLists = new Set<Element>();
+            for (const ul of element.querySelectorAll("ul")) {
+              if (isPureTaskListElement(ul)) {
+                pureLists.add(ul);
+              }
+            }
+
             for (const item of element.querySelectorAll(".task-list-item")) {
               if (!(item instanceof HTMLElement)) continue;
 
               const parentList = item.closest("ul");
               const input = item.querySelector("input");
 
-              if (!parentList || !isPureTaskListElement(parentList)) {
+              if (!parentList || !pureLists.has(parentList)) {
                 parentList?.removeAttribute("data-type");
                 item.removeAttribute("data-type");
                 item.removeAttribute("data-checked");

@@ -88,6 +88,8 @@ function normalizeEscapedCheckboxMarkers(
     .join("\n");
 }
 
+// serialize 과정에서 TipTap이 삽입한 trailing backslash만 제거하는 것이 이상적이나,
+// 현재는 사용자 입력과 구분할 수 없어 blockquote 끝 backslash를 일괄 제거한다.
 function normalizeBlockquoteLineBreaks(markdown: string): string {
   const lines = markdown.split("\n");
   let isInsideQuotedFence = false;

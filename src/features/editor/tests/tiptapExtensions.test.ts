@@ -36,10 +36,7 @@ describe("MarkdownTaskItem custom extension", () => {
 
   it("preserves a mixed list with regular items and task items", () => {
     const input = "- regular item\n- [ ] task item";
-    const result = roundTrip(input).trim();
-    // 혼합 리스트에서 task item이 정상적으로 분리 처리됨
-    expect(result).toContain("regular item");
-    expect(result).toContain("[ ] task item");
+    expect(roundTrip(input).trim()).toBe(input);
   });
 
   it("preserves checked state", () => {
