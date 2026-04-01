@@ -5,7 +5,7 @@ import { buildSignupRequestPayload } from "./buildSignupRequestPayload";
 const validInput = {
   email: "test@example.com",
   password: "12345678",
-  passwordConfirm: "12345678",
+  confirmPassword: "12345678",
   nickname: "tester",
   agreements: {
     termsOfService: true,
@@ -25,7 +25,7 @@ describe("buildSignupRequestPayload", () => {
     expect(body).toHaveProperty("password", validInput.password);
     expect(body).toHaveProperty("nickname", validInput.nickname);
     expect(body).toHaveProperty("agreements", validInput.agreements);
-    expect(body).not.toHaveProperty("passwordConfirm");
+    expect(body).not.toHaveProperty("confirmPassword");
   });
 
   it("TC-02: avatarFile이 null이면 JSON payload를 생성한다", () => {
@@ -77,10 +77,10 @@ describe("buildSignupRequestPayload", () => {
     expect(formData.get("avatarFile")).toBe(file);
   });
 
-  it("TC-06: JSON / multipart 모두 passwordConfirm을 포함하지 않는다", () => {
+  it("TC-06: JSON / multipart 모두 confirmPassword을 포함하지 않는다", () => {
     const jsonResult = buildSignupRequestPayload({ ...validInput });
     const body = jsonResult.body as Record<string, unknown>;
-    expect(body).not.toHaveProperty("passwordConfirm");
+    expect(body).not.toHaveProperty("confirmPassword");
 
     const file = new File(["content"], "avatar.png", { type: "image/png" });
     const multipartResult = buildSignupRequestPayload({
@@ -88,7 +88,7 @@ describe("buildSignupRequestPayload", () => {
       avatarFile: file,
     });
     const formData = multipartResult.body as FormData;
-    expect(formData.get("passwordConfirm")).toBeNull();
+    expect(formData.get("confirmPassword")).toBeNull();
   });
 
   it("TC-07: 정의되지 않은 임의 필드는 payload에 포함되지 않는다", () => {

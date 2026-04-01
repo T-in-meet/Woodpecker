@@ -363,7 +363,7 @@ describe("회원가입 폼 검증", () => {
 
     const calledWith = onSubmit.mock.calls[0]![0] as Record<string, unknown>;
     expect(calledWith).not.toHaveProperty("confirmPassword");
-    expect(calledWith).not.toHaveProperty("passwordConfirm");
+    expect(calledWith).not.toHaveProperty("confirmPassword");
   });
 
   it("TC-14: 동의 항목 에러가 해당 체크박스 영역 내에 렌더링된다", async () => {

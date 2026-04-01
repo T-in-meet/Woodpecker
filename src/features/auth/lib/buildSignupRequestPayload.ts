@@ -1,7 +1,7 @@
 type SignupFormValues = {
   email: string;
   password: string;
-  passwordConfirm: string;
+  confirmPassword: string;
   nickname: string;
   agreements: {
     termsOfService: boolean;
