@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildSignupRequestPayload } from "./build-signup-request-payload";
+import { buildSignupRequestPayload } from "./buildSignupRequestPayload";
 
 const validInput = {
   email: "test@example.com",
