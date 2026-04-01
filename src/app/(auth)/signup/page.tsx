@@ -5,6 +5,8 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+import { SignupForm } from "@/features/auth/components/SignupForm";
+
 export default function SignupPage() {
-  return <div>회원가입</div>;
+  return <SignupForm />;
 }
