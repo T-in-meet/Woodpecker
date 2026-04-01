@@ -68,9 +68,12 @@ export function useTipTapEditor({
     if (lastSerializedValueRef.current === value) return;
 
     lastSerializedValueRef.current = value;
+    // setContent는 현재 TipTap에서 동기적으로 onUpdate를 호출하므로 flag 기반 skip이 동작한다.
     skipNextUpdate.current = true;
     editor.commands.setContent(value);
-    skipNextUpdate.current = false;
+    queueMicrotask(() => {
+      skipNextUpdate.current = false;
+    });
   }, [editor, value]);
 
   return editor;

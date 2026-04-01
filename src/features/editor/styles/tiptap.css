@@ -129,7 +129,7 @@
 /* Blockquote */
 .tiptap-wrapper .tiptap blockquote {
   border-left: 3px solid var(--primary);
-  opacity: 0.5;
+  color: var(--muted-foreground);
   padding-left: 1rem;
   margin-bottom: 0.75rem;
   font-style: italic;

@@ -34,6 +34,7 @@ export function TipTapEditor({
 }: TipTapEditorProps) {
   const onEditorReadyRef = useRef(onEditorReady);
   onEditorReadyRef.current = onEditorReady;
+  const editorReadyFired = useRef(false);
 
   const editor = useTipTapEditor({
     value,
@@ -45,7 +46,8 @@ export function TipTapEditor({
   });
 
   useEffect(() => {
-    if (editor) {
+    if (editor && !editorReadyFired.current) {
+      editorReadyFired.current = true;
       onEditorReadyRef.current?.(editor);
     }
   }, [editor]);

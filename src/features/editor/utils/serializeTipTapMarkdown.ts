@@ -99,15 +99,16 @@ function normalizeBlockquoteLineBreaks(markdown: string): string {
       const currentLine = line ?? "";
       const unquotedLine = currentLine.replace(/^(>\s?)+/, "");
       const nextLine = lines[index + 1];
+
+      if (/^\s*```/.test(unquotedLine)) {
+        isInsideQuotedFence = !isInsideQuotedFence;
+      }
+
       const shouldStripEscape =
         !isInsideQuotedFence &&
         currentLine.startsWith(">") &&
         currentLine.endsWith("\\") &&
         nextLine?.startsWith(">");
-
-      if (/^\s*```/.test(unquotedLine)) {
-        isInsideQuotedFence = !isInsideQuotedFence;
-      }
 
       return shouldStripEscape ? currentLine.slice(0, -1) : currentLine;
     })
