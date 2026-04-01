@@ -115,12 +115,17 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
   return (
     <form
       aria-label="회원가입"
-      className="mx-auto mt-20 max-w-5xl space-y-4 pl-4"
+      className="mx-auto mt-16 max-w-5xl space-y-4 pl-4"
       onSubmit={handleSubmit(handleValidSubmit)}
     >
       <div className="space-y-4">
         <Label htmlFor="email">이메일</Label>
-        <Input id="email" type="email" {...register("email")} />
+        <Input
+          id="email"
+          type="email"
+          {...register("email")}
+          className={`${errors.email ? "" : "mb-14"}`}
+        />
         {errors.email && (
           <p role="alert" className="text-red-500">
             {errors.email.message}
@@ -133,6 +138,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
         <Input
           id="password"
           type="password"
+          className={`${errors.password ? "" : "mb-14"}`}
           {...passwordRegister}
           onChange={async (e) => {
             await onPasswordChange(e);
@@ -153,6 +159,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
         <Input
           id="confirmPassword"
           type="password"
+          className={`${errors.confirmPassword ? "" : "mb-14"}`}
           {...confirmPasswordRegister}
           onChange={(e) => {
             void onConfirmChange(e).then(() => {
@@ -169,7 +176,12 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
 
       <div className="space-y-4">
         <Label htmlFor="nickname">닉네임</Label>
-        <Input id="nickname" type="text" {...register("nickname")} />
+        <Input
+          id="nickname"
+          type="text"
+          className={`${errors.nickname ? "" : "mb-14"}`}
+          {...register("nickname")}
+        />
         {errors.nickname && (
           <p role="alert" className="text-red-500">
             {errors.nickname.message}
@@ -184,6 +196,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
         <Input
           id="avatarFile"
           type="file"
+          className={`${errors.avatarFile ? "" : "mb-14"}`}
           accept="image/jpeg,image/png,image/webp"
           {...register("avatarFile")}
         />
@@ -192,7 +205,9 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
       <div className="flex justify-between">
         {/* 이용약관 */}
         <div data-testid="terms-of-service-field" className="flex-1 space-y-2">
-          <div className="flex items-center space-x-2">
+          <div
+            className={`flex items-center space-x-2 ${errors.termsOfService ? "" : "mb-8"}`}
+          >
             <Button
               type="button"
               variant="ghost"
@@ -201,9 +216,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
             >
               이용약관 보기
             </Button>
-
             <Label htmlFor="termsOfService">이용약관에 동의합니다</Label>
-
             <Controller
               name="termsOfService"
               control={control}
@@ -237,7 +250,9 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
 
         {/* 개인정보 */}
         <div data-testid="privacy-policy-field" className="flex-1 space-y-2">
-          <div className="flex items-center space-x-2">
+          <div
+            className={`flex items-center space-x-2 ${errors.privacyPolicy ? "" : "mb-8"}`}
+          >
             <Button
               type="button"
               variant="ghost"
