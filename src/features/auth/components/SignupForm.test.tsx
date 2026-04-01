@@ -681,3 +681,178 @@ describe("서버 유효성 검사 에러 매핑", () => {
     });
   });
 });
+
+// PR-UI-10 fixtures
+const networkError = { type: "network" as const };
+const serverError = { type: "server" as const };
+const timeoutError = { type: "timeout" as const };
+
+// TC-01 ~ TC-07: Signup Global Error Handling (PR-UI-10)
+describe("회원가입 전역 에러 처리", () => {
+  async function fillValidForm(
+    user: ReturnType<typeof userEvent.setup>,
+    {
+      email = "test@example.com",
+      password = "12345678",
+      confirmPassword = "12345678",
+      nickname = "tester",
+    }: {
+      email?: string;
+      password?: string;
+      confirmPassword?: string;
+      nickname?: string;
+    } = {},
+  ) {
+    await user.type(screen.getByLabelText(/이메일/i), email);
+    await user.type(screen.getByLabelText(/^비밀번호$/i), password);
+    await user.type(screen.getByLabelText(/비밀번호 확인/i), confirmPassword);
+    await user.type(screen.getByLabelText(/닉네임/i), nickname);
+    await user.click(screen.getByRole("checkbox", { name: /이용약관/i }));
+    await user.click(screen.getByRole("checkbox", { name: /개인정보/i }));
+  }
+
+  async function submitValidForm(
+    user: ReturnType<typeof userEvent.setup>,
+    values?: Parameters<typeof fillValidForm>[1],
+  ) {
+    await fillValidForm(user, values);
+    await user.click(screen.getByRole("button", { name: /회원가입/i }));
+  }
+
+  it("TC-01: network 에러가 발생하면 상단 전역 에러 UI를 표시한다", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn().mockRejectedValue(networkError);
+    renderSignupForm({ onSubmit });
+
+    await submitValidForm(user);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "네트워크 연결을 확인해주세요",
+    );
+  });
+
+  it("TC-02: server 에러가 발생하면 상단 전역 에러 UI를 표시한다", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn().mockRejectedValue(serverError);
+    renderSignupForm({ onSubmit });
+
+    await submitValidForm(user);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "잠시 후 다시 시도해주세요",
+    );
+  });
+
+  it("TC-03: timeout 에러가 발생하면 상단 전역 에러 UI를 표시한다", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn().mockRejectedValue(timeoutError);
+    renderSignupForm({ onSubmit });
+
+    await submitValidForm(user);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "요청 시간이 초과되었습니다. 다시 시도해주세요",
+    );
+  });
+
+  it("TC-04: submit 실패 후 UI가 loading 상태에 고정되지 않는다", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn().mockRejectedValue(serverError);
+    const { rerender } = renderSignupForm({ onSubmit, isPending: true });
+
+    expect(screen.getByRole("button", { name: /회원가입/i })).toBeDisabled();
+    expect(screen.getByRole("status")).toBeInTheDocument();
+
+    rerender(<SignupForm onSubmit={onSubmit} isPending={false} />);
+
+    await submitValidForm(user);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "잠시 후 다시 시도해주세요",
+    );
+    expect(
+      screen.getByRole("button", { name: /회원가입/i }),
+    ).not.toBeDisabled();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("TC-05: submit 실패 후에도 입력값이 유지된다", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn().mockRejectedValue(networkError);
+    renderSignupForm({ onSubmit });
+
+    await submitValidForm(user, {
+      email: "test@example.com",
+      password: "12345678",
+      confirmPassword: "12345678",
+      nickname: "tester",
+    });
+
+    await screen.findByRole("alert");
+
+    expect(screen.getByLabelText(/이메일/i)).toHaveValue("test@example.com");
+    expect(screen.getByLabelText(/^비밀번호$/i)).toHaveValue("12345678");
+    expect(screen.getByLabelText(/비밀번호 확인/i)).toHaveValue("12345678");
+    expect(screen.getByLabelText(/닉네임/i)).toHaveValue("tester");
+  });
+
+  it("TC-06: validation 에러는 필드 에러로만 표시되고 전역 에러 UI는 표시하지 않는다", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn().mockRejectedValue({
+      success: false as const,
+      code: "AUTH_INVALID_INPUT",
+      data: {
+        errors: [
+          { field: "email", reason: "INVALID_FORMAT" },
+          { field: "nickname", reason: "REQUIRED" },
+        ],
+      },
+    });
+    renderSignupForm({ onSubmit });
+
+    await submitValidForm(user);
+
+    const emailField = screen.getByLabelText(/이메일/i).closest("div");
+    const nicknameField = screen.getByLabelText(/닉네임/i).closest("div");
+
+    expect(await within(emailField!).findByRole("alert")).toBeInTheDocument();
+    expect(within(nicknameField!).getByRole("alert")).toBeInTheDocument();
+    expect(
+      screen.queryByText("네트워크 연결을 확인해주세요"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("잠시 후 다시 시도해주세요"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("요청 시간이 초과되었습니다. 다시 시도해주세요"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("TC-07: 재제출 시 기존 전역 에러는 즉시 제거된다", async () => {
+    const user = userEvent.setup();
+    let resolveSecondSubmit: (() => void) | undefined;
+    const secondSubmit = new Promise<void>((resolve) => {
+      resolveSecondSubmit = resolve;
+    });
+    const onSubmit = vi
+      .fn()
+      .mockRejectedValueOnce(networkError)
+      .mockImplementationOnce(() => secondSubmit);
+    renderSignupForm({ onSubmit });
+
+    await submitValidForm(user);
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "네트워크 연결을 확인해주세요",
+    );
+
+    await user.click(screen.getByRole("button", { name: /회원가입/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.queryByText("네트워크 연결을 확인해주세요"),
+      ).not.toBeInTheDocument();
+    });
+
+    resolveSecondSubmit?.();
+  });
+});
