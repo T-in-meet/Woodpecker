@@ -29,10 +29,18 @@ function normalizeTaskListSpacing(markdown: string): string {
     const line = lines[index] ?? "";
 
     if (line === "") {
+      let nextNonEmptyIndex = index + 1;
+      while (
+        nextNonEmptyIndex < lines.length &&
+        lines[nextNonEmptyIndex] === ""
+      ) {
+        nextNonEmptyIndex += 1;
+      }
+
       const previousTaskIndent = getTaskItemIndent(
         normalizedLines[normalizedLines.length - 1],
       );
-      const nextTaskIndent = getTaskItemIndent(lines[index + 1]);
+      const nextTaskIndent = getTaskItemIndent(lines[nextNonEmptyIndex]);
 
       if (
         previousTaskIndent !== null &&
@@ -49,30 +57,33 @@ function normalizeTaskListSpacing(markdown: string): string {
   return normalizedLines.join("\n");
 }
 
+function detectCheckboxStyle(markdown: string): "escaped" | "unescaped" | null {
+  const lines = markdown.split("\n");
+
+  for (const line of lines) {
+    if (UNESCAPED_CHECKBOX_MARKER_PATTERN.test(line)) return "unescaped";
+    if (ESCAPED_CHECKBOX_MARKER_PATTERN.test(line)) return "escaped";
+  }
+
+  return null;
+}
+
 function normalizeEscapedCheckboxMarkers(
   markdown: string,
   previousMarkdown?: string,
 ): string {
-  const previousLines = previousMarkdown?.split("\n") ?? [];
+  const previousStyle = previousMarkdown
+    ? detectCheckboxStyle(previousMarkdown)
+    : null;
+
+  if (previousStyle !== "unescaped") return markdown;
 
   return markdown
     .split("\n")
-    .map((line, index) => {
-      const match = line.match(ESCAPED_CHECKBOX_MARKER_PATTERN);
+    .map((line) => {
+      if (!ESCAPED_CHECKBOX_MARKER_PATTERN.test(line)) return line;
 
-      if (!match) return line;
-
-      const previousLine = previousLines[index];
-
-      if (previousLine?.match(ESCAPED_CHECKBOX_MARKER_PATTERN)) {
-        return line;
-      }
-
-      if (previousLine?.match(UNESCAPED_CHECKBOX_MARKER_PATTERN)) {
-        return line.replace(ESCAPED_CHECKBOX_MARKER_PATTERN, "$1[$2] $3");
-      }
-
-      return line;
+      return line.replace(ESCAPED_CHECKBOX_MARKER_PATTERN, "$1[$2] $3");
     })
     .join("\n");
 }
@@ -92,7 +103,7 @@ function normalizeBlockquoteLineBreaks(markdown: string): string {
         currentLine.endsWith("\\") &&
         nextLine?.startsWith(">");
 
-      if (/^```/.test(unquotedLine)) {
+      if (/^\s*```/.test(unquotedLine)) {
         isInsideQuotedFence = !isInsideQuotedFence;
       }
 

@@ -8,7 +8,7 @@ import {
 } from "../utils/serializeTipTapMarkdown";
 
 describe("escaped checkbox markers", () => {
-  it("preserves escaped checkbox markers when the previous markdown was escaped", () => {
+  it("preserves escaped checkbox markers when the previous markdown had no unescaped checkboxes", () => {
     const previousMarkdown = "- \\[ \\] todo\n- \\[x\\] done";
     const input = "- \\[ \\] todo updated\n- \\[x\\] done updated";
 
@@ -67,10 +67,9 @@ describe("normalizeTaskListSpacing", () => {
     expect(normalizeTipTapMarkdown("")).toBe("");
   });
 
-  it("keeps double blank lines between same-indent tasks (single-pass limitation)", () => {
+  it("collapses double blank lines between same-indent tasks", () => {
     const input = "- [x] done\n\n\n- [ ] todo";
-    // 단일 패스이므로 첫 번째 빈 줄의 next가 빈 줄이라 task가 아님 → 유지됨
-    expect(normalizeTipTapMarkdown(input)).toBe("- [x] done\n\n\n- [ ] todo");
+    expect(normalizeTipTapMarkdown(input)).toBe("- [x] done\n- [ ] todo");
   });
 });
 
@@ -87,6 +86,11 @@ describe("normalizeBlockquoteLineBreaks", () => {
 
   it("does not strip backslash inside a fenced code block within blockquote", () => {
     const input = "> ```\n> code\\\n> more code\n> ```";
+    expect(normalizeTipTapMarkdown(input)).toBe(input);
+  });
+
+  it("does not strip backslash inside an indented fenced code block within blockquote", () => {
+    const input = "> ```\n>   code\\\n>   more code\n> ```";
     expect(normalizeTipTapMarkdown(input)).toBe(input);
   });
 

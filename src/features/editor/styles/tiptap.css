@@ -2,7 +2,7 @@
 
 .tiptap-wrapper .tiptap {
   min-height: 20rem;
-  padding: 1rem 3rem 1.5rem;
+  padding: 1rem 1rem 1.5rem;
   outline: none;
   font-size: 0.875rem;
   line-height: 1.625;
@@ -112,7 +112,7 @@
 /* Code block */
 .tiptap-wrapper .tiptap pre {
   border-radius: 0.5rem;
-  background-color: #18181b;
+  background-color: var(--muted);
   padding: 1rem;
   margin-bottom: 0.75rem;
   overflow-x: auto;
@@ -123,11 +123,7 @@
   padding: 0;
   border-radius: 0;
   font-size: 0.875rem;
-  color: #e4e4e7;
-}
-
-:is(.dark) .tiptap-wrapper .tiptap pre {
-  background-color: #27272a;
+  color: var(--foreground);
 }
 
 /* Blockquote */
@@ -199,4 +195,10 @@
 /* readOnly cursor */
 .tiptap-wrapper .tiptap[contenteditable="false"] {
   cursor: default;
+}
+
+@media (min-width: 640px) {
+  .tiptap-wrapper .tiptap {
+    padding: 1rem 3rem 1.5rem;
+  }
 }

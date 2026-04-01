@@ -37,6 +37,9 @@ function isPureTaskListElement(list: Element): boolean {
   );
 }
 
+// tiptap-markdown는 혼합 리스트(일반 + task item)를 파싱할 때 모든 항목에 task-list-item 클래스를 부여한다.
+// ProseMirror가 이를 그대로 받으면 일반 항목도 체크박스로 렌더링되므로,
+// parse 단계에서 DOM을 직접 수정하여 순수 task list만 taskItem으로 변환한다.
 const MarkdownTaskItem = TaskItem.extend({
   addStorage() {
     return {

@@ -68,7 +68,9 @@ export function useTipTapEditor({
     if (lastSerializedValueRef.current === value) return;
 
     lastSerializedValueRef.current = value;
-    editor.commands.setContent(value, { emitUpdate: false });
+    skipNextUpdate.current = true;
+    editor.commands.setContent(value);
+    skipNextUpdate.current = false;
   }, [editor, value]);
 
   return editor;

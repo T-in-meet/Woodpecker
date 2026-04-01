@@ -3,7 +3,7 @@
 import type { AnyExtension } from "@tiptap/core";
 import type { Editor } from "@tiptap/react";
 import { EditorContent } from "@tiptap/react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import { cn } from "@/lib/utils/cn";
 
@@ -32,6 +32,9 @@ export function TipTapEditor({
   onEditorReady,
   extensions,
 }: TipTapEditorProps) {
+  const onEditorReadyRef = useRef(onEditorReady);
+  onEditorReadyRef.current = onEditorReady;
+
   const editor = useTipTapEditor({
     value,
     onChange,
@@ -42,10 +45,10 @@ export function TipTapEditor({
   });
 
   useEffect(() => {
-    if (editor && onEditorReady) {
-      onEditorReady(editor);
+    if (editor) {
+      onEditorReadyRef.current?.(editor);
     }
-  }, [editor, onEditorReady]);
+  }, [editor]);
 
   useEffect(() => {
     if (!editor) return;
