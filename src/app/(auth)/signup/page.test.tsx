@@ -12,7 +12,10 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/features/auth/hooks/use-signup-mutation", () => ({
-  useSignupMutation: vi.fn(() => ({ mutateAsync: mockMutateAsync })),
+  useSignupMutation: vi.fn(() => ({
+    mutateAsync: mockMutateAsync,
+    isPending: false,
+  })),
 }));
 
 async function submitValidSignupForm(user: ReturnType<typeof userEvent.setup>) {

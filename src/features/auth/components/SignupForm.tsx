@@ -1,7 +1,6 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation } from "@tanstack/react-query";
 import Link from "next/link";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
@@ -16,13 +15,12 @@ type FormInput = z.input<typeof signupFormSchema>;
 type FormValues = z.infer<typeof signupFormSchema>;
 type SubmitPayload = Omit<FormValues, "confirmPassword">;
 
-export function SignupForm() {
-  const { mutate, isPending } = useMutation<void, Error, SubmitPayload>({
-    mutationFn: async (_data) => {
-      // TODO: API call
-    },
-  });
+type SignupFormProps = {
+  onSubmit: (values: SubmitPayload) => void | Promise<void>;
+  isPending?: boolean;
+};
 
+export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
   const {
     control,
     register,
@@ -48,16 +46,16 @@ export function SignupForm() {
   const { onChange: onConfirmChange, ...confirmPasswordRegister } =
     register("confirmPassword");
 
-  const onSubmit = (data: FormValues) => {
+  const handleValidSubmit = (data: FormValues) => {
     const { confirmPassword: _, ...payload } = data;
-    mutate(payload);
+    void onSubmit(payload);
   };
 
   return (
     <form
       aria-label="회원가입"
       className="mx-auto mt-20 max-w-5xl space-y-4 pl-4"
-      onSubmit={handleSubmit(onSubmit)}
+      onSubmit={handleSubmit(handleValidSubmit)}
     >
       <div className="space-y-4">
         <Label htmlFor="email">이메일</Label>
