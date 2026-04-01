@@ -14,7 +14,7 @@ const validInput = {
 };
 
 describe("buildSignupRequestPayload", () => {
-  it("avatarFile이 없으면 JSON payload를 생성한다", () => {
+  it("TC-01: avatarFile이 없으면 JSON payload를 생성한다", () => {
     const result = buildSignupRequestPayload({ ...validInput });
 
     expect(result.requestType).toBe("json");
@@ -28,7 +28,7 @@ describe("buildSignupRequestPayload", () => {
     expect(body).not.toHaveProperty("passwordConfirm");
   });
 
-  it("avatarFile이 null이면 JSON payload를 생성한다", () => {
+  it("TC-02: avatarFile이 null이면 JSON payload를 생성한다", () => {
     const result = buildSignupRequestPayload({
       ...validInput,
       avatarFile: null,
@@ -38,7 +38,7 @@ describe("buildSignupRequestPayload", () => {
     expect(result.body).not.toBeInstanceOf(FormData);
   });
 
-  it("avatarFile이 File 인스턴스이면 multipart payload를 생성한다", () => {
+  it("TC-03: avatarFile이 File 인스턴스이면 multipart payload를 생성한다", () => {
     const file = new File(["content"], "avatar.png", { type: "image/png" });
     const result = buildSignupRequestPayload({
       ...validInput,
@@ -49,7 +49,7 @@ describe("buildSignupRequestPayload", () => {
     expect(result.body).toBeInstanceOf(FormData);
   });
 
-  it("multipart payload는 agreements를 JSON 문자열로 직렬화한다", () => {
+  it("TC-04: multipart payload는 agreements를 JSON 문자열로 직렬화한다", () => {
     const file = new File(["content"], "avatar.png", { type: "image/png" });
     const result = buildSignupRequestPayload({
       ...validInput,
@@ -66,7 +66,7 @@ describe("buildSignupRequestPayload", () => {
     });
   });
 
-  it("multipart payload는 avatarFile을 그대로 포함한다", () => {
+  it("TC-05: multipart payload는 avatarFile을 그대로 포함한다", () => {
     const file = new File(["content"], "avatar.png", { type: "image/png" });
     const result = buildSignupRequestPayload({
       ...validInput,
@@ -77,7 +77,7 @@ describe("buildSignupRequestPayload", () => {
     expect(formData.get("avatarFile")).toBe(file);
   });
 
-  it("JSON / multipart 모두 passwordConfirm을 포함하지 않는다", () => {
+  it("TC-06: JSON / multipart 모두 passwordConfirm을 포함하지 않는다", () => {
     const jsonResult = buildSignupRequestPayload({ ...validInput });
     const body = jsonResult.body as Record<string, unknown>;
     expect(body).not.toHaveProperty("passwordConfirm");
@@ -91,7 +91,7 @@ describe("buildSignupRequestPayload", () => {
     expect(formData.get("passwordConfirm")).toBeNull();
   });
 
-  it("정의되지 않은 임의 필드는 payload에 포함되지 않는다", () => {
+  it("TC-07: 정의되지 않은 임의 필드는 payload에 포함되지 않는다", () => {
     const inputWithExtra = { ...validInput, extra: "data" };
 
     const jsonResult = buildSignupRequestPayload(
