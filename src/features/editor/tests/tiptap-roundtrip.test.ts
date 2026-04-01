@@ -78,7 +78,7 @@ function createHeadlessEditor(content: string): Editor {
 
 function roundTrip(markdown: string): string {
   const editor = createHeadlessEditor(markdown);
-  const result = serializeTipTapMarkdown(editor);
+  const result = serializeTipTapMarkdown(editor, markdown);
   editor.destroy();
   return result;
 }

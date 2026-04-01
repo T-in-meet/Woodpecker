@@ -1,10 +1,17 @@
 import type { Editor } from "@tiptap/core";
 
 type MarkdownStorage = {
-  markdown: {
-    getMarkdown: () => string;
-  };
+  markdown:
+    | {
+        getMarkdown: () => string;
+      }
+    | undefined;
 };
+
+const ESCAPED_CHECKBOX_MARKER_PATTERN =
+  /^(\s*(?:[-+*]|\d+\.)\s+)\\\[( |x|X)\\\] (.*)$/;
+const UNESCAPED_CHECKBOX_MARKER_PATTERN =
+  /^(\s*(?:[-+*]|\d+\.)\s+)\[( |x|X)\] (.*)$/;
 
 function getTaskItemIndent(line: string | undefined): string | null {
   if (!line) return null;
@@ -42,11 +49,32 @@ function normalizeTaskListSpacing(markdown: string): string {
   return normalizedLines.join("\n");
 }
 
-function normalizeEscapedCheckboxMarkers(markdown: string): string {
-  return markdown.replace(
-    /^(\s*(?:[-+*]|\d+\.)\s+)\\\[( |x|X)\\\] /gm,
-    "$1[$2] ",
-  );
+function normalizeEscapedCheckboxMarkers(
+  markdown: string,
+  previousMarkdown?: string,
+): string {
+  const previousLines = previousMarkdown?.split("\n") ?? [];
+
+  return markdown
+    .split("\n")
+    .map((line, index) => {
+      const match = line.match(ESCAPED_CHECKBOX_MARKER_PATTERN);
+
+      if (!match) return line;
+
+      const previousLine = previousLines[index];
+
+      if (previousLine?.match(ESCAPED_CHECKBOX_MARKER_PATTERN)) {
+        return line;
+      }
+
+      if (previousLine?.match(UNESCAPED_CHECKBOX_MARKER_PATTERN)) {
+        return line.replace(ESCAPED_CHECKBOX_MARKER_PATTERN, "$1[$2] $3");
+      }
+
+      return line;
+    })
+    .join("\n");
 }
 
 function normalizeBlockquoteLineBreaks(markdown: string): string {
@@ -74,15 +102,38 @@ function normalizeBlockquoteLineBreaks(markdown: string): string {
 }
 
 function getRawTipTapMarkdown(editor: Editor): string {
-  return (editor.storage as unknown as MarkdownStorage).markdown.getMarkdown();
+  const storage = editor.storage as Partial<MarkdownStorage> | undefined;
+
+  if (!storage?.markdown?.getMarkdown) {
+    throw new Error(
+      "TipTap Markdown extension is required to serialize editor content.",
+    );
+  }
+
+  return storage.markdown.getMarkdown();
 }
 
 export function normalizeTipTapMarkdown(markdown: string): string {
+  return normalizeTipTapMarkdownWithHistory(markdown);
+}
+
+export function normalizeTipTapMarkdownWithHistory(
+  markdown: string,
+  previousMarkdown?: string,
+): string {
   return normalizeBlockquoteLineBreaks(
-    normalizeTaskListSpacing(normalizeEscapedCheckboxMarkers(markdown)),
+    normalizeTaskListSpacing(
+      normalizeEscapedCheckboxMarkers(markdown, previousMarkdown),
+    ),
   );
 }
 
-export function serializeTipTapMarkdown(editor: Editor): string {
-  return normalizeTipTapMarkdown(getRawTipTapMarkdown(editor));
+export function serializeTipTapMarkdown(
+  editor: Editor,
+  previousMarkdown?: string,
+): string {
+  return normalizeTipTapMarkdownWithHistory(
+    getRawTipTapMarkdown(editor),
+    previousMarkdown,
+  );
 }

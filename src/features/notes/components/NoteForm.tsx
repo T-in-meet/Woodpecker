@@ -1,8 +1,6 @@
 "use client";
 
-import type { Editor } from "@tiptap/react";
-import { Bold, Code, Italic, Strikethrough } from "lucide-react";
-import { useActionState, useCallback, useState } from "react";
+import { useActionState, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { CodeEditor } from "@/features/editor/components/CodeEditor";
@@ -18,41 +16,11 @@ import { createNoteAction } from "../actions";
 
 const CONTENT_MAX_LENGTH = 50000;
 
-const TOOLBAR_BUTTONS = [
-  {
-    label: "두껍게",
-    action: (e: Editor) => e.chain().focus().toggleBold().run(),
-    icon: Bold,
-    isActive: (e: Editor) => e.isActive("bold"),
-  },
-  {
-    label: "기울임",
-    action: (e: Editor) => e.chain().focus().toggleItalic().run(),
-    icon: Italic,
-    isActive: (e: Editor) => e.isActive("italic"),
-  },
-  {
-    label: "취소선",
-    action: (e: Editor) => e.chain().focus().toggleStrike().run(),
-    icon: Strikethrough,
-    isActive: (e: Editor) => e.isActive("strike"),
-  },
-  {
-    label: "인라인 코드",
-    action: (e: Editor) => e.chain().focus().toggleCode().run(),
-    icon: Code,
-    isActive: (e: Editor) => e.isActive("code"),
-  },
-] as const;
-
 export function NoteForm() {
   const [state, formAction, isPending] = useActionState(createNoteAction, null);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [language, setLanguage] = useState<NoteLanguage>("markdown");
-  const [editor, setEditor] = useState<Editor | null>(null);
-
-  const handleEditorReady = useCallback((e: Editor) => setEditor(e), []);
 
   const fieldErrors =
     state?.error && typeof state.error === "object" ? state.error : null;
@@ -91,7 +59,11 @@ export function NoteForm() {
           ))}
         </select>
 
-        <Button type="submit" size="sm" disabled={isPending}>
+        <Button
+          type="submit"
+          size="sm"
+          disabled={isPending || content.length > CONTENT_MAX_LENGTH}
+        >
           {isPending ? "저장 중..." : "저장"}
         </Button>
       </div>
@@ -126,27 +98,6 @@ export function NoteForm() {
         )}
       </div>
 
-      {isMarkdown && editor && (
-        <div className="flex gap-0.5 border-b border-border/50 px-12 py-1.5">
-          {TOOLBAR_BUTTONS.map(({ label, action, icon: Icon, isActive }) => (
-            <button
-              key={label}
-              type="button"
-              title={label}
-              onClick={() => action(editor)}
-              aria-label={label}
-              className={`rounded p-1.5 transition-colors ${
-                isActive(editor)
-                  ? "bg-muted text-foreground"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              }`}
-            >
-              <Icon className="h-3.5 w-3.5" />
-            </button>
-          ))}
-        </div>
-      )}
-
       {!isMarkdown && <div className="border-t border-border/50" />}
 
       {fieldErrors?.content && (
@@ -172,7 +123,6 @@ export function NoteForm() {
           placeholder="내용을 입력하세요..."
           autoFocus
           aria-label="내용"
-          onEditorReady={handleEditorReady}
           className="flex-1 rounded-none border-none focus-within:ring-0 focus-within:border-none [&_.tiptap]:min-h-[70vh] [&_.tiptap]:px-12! [&_.tiptap]:py-6!"
         />
       )}

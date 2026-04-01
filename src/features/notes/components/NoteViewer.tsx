@@ -1,19 +1,19 @@
+import DOMPurify from "dompurify";
 import hljs from "highlight.js";
 
-import { TipTapEditor } from "@/features/editor/components/TipTapEditor";
 import {
   isCodeLanguage,
   type NoteLanguage,
 } from "@/lib/constants/noteLanguages";
 import { cn } from "@/lib/utils/cn";
 
+import { MarkdownNoteViewerClient } from "./MarkdownNoteViewerClient";
+
 type NoteViewerProps = {
   content: string;
   language: NoteLanguage | null;
   className?: string;
 };
-
-const noop = () => {};
 
 export function NoteViewer({ content, language, className }: NoteViewerProps) {
   const effectiveLanguage = language ?? "markdown";
@@ -28,14 +28,9 @@ export function NoteViewer({ content, language, className }: NoteViewerProps) {
     }
 
     return (
-      <TipTapEditor
-        value={content}
-        onChange={noop}
-        readOnly
-        className={cn(
-          "border-none focus-within:ring-0 focus-within:border-none",
-          className,
-        )}
+      <MarkdownNoteViewerClient
+        content={content}
+        {...(className !== undefined && { className })}
       />
     );
   }
@@ -54,7 +49,9 @@ export function NoteViewer({ content, language, className }: NoteViewerProps) {
     >
       <code
         className={`hljs language-${effectiveLanguage}`}
-        dangerouslySetInnerHTML={{ __html: highlighted.value }}
+        dangerouslySetInnerHTML={{
+          __html: DOMPurify.sanitize(highlighted.value),
+        }}
       />
     </pre>
   );

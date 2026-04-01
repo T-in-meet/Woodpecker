@@ -1,3 +1,4 @@
+import type { AnyExtension } from "@tiptap/core";
 import { type Editor, useEditor } from "@tiptap/react";
 import { useEffect, useMemo, useRef } from "react";
 
@@ -10,6 +11,7 @@ type UseTipTapEditorOptions = {
   placeholder?: string | undefined;
   readOnly?: boolean;
   autoFocus?: boolean;
+  extensions?: AnyExtension[] | undefined;
 };
 
 export function useTipTapEditor({
@@ -18,17 +20,19 @@ export function useTipTapEditor({
   placeholder,
   readOnly = false,
   autoFocus = false,
+  extensions: customExtensions,
 }: UseTipTapEditorOptions): Editor | null {
   const onChangeRef = useRef(onChange);
   const skipNextUpdate = useRef(true);
+  const lastSerializedValueRef = useRef(value);
 
   useEffect(() => {
     onChangeRef.current = onChange;
-  });
+  }, [onChange]);
 
   const extensions = useMemo(
-    () => getTipTapExtensions({ placeholder }),
-    [placeholder],
+    () => customExtensions ?? getTipTapExtensions({ placeholder }),
+    [customExtensions, placeholder],
   );
 
   const editor = useEditor({
@@ -38,11 +42,20 @@ export function useTipTapEditor({
     immediatelyRender: false,
     autofocus: autoFocus ? "end" : false,
     onCreate() {
+      lastSerializedValueRef.current = value;
       skipNextUpdate.current = false;
     },
     onUpdate({ editor }) {
       if (skipNextUpdate.current) return;
-      onChangeRef.current(serializeTipTapMarkdown(editor));
+      const nextValue = serializeTipTapMarkdown(
+        editor,
+        lastSerializedValueRef.current,
+      );
+
+      if (lastSerializedValueRef.current === nextValue) return;
+
+      lastSerializedValueRef.current = nextValue;
+      onChangeRef.current(nextValue);
     },
   });
 
@@ -52,8 +65,9 @@ export function useTipTapEditor({
 
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;
-    if (serializeTipTapMarkdown(editor) === value) return;
+    if (lastSerializedValueRef.current === value) return;
 
+    lastSerializedValueRef.current = value;
     editor.commands.setContent(value, { emitUpdate: false });
   }, [editor, value]);
 

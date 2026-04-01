@@ -10,13 +10,23 @@ import {
 import TaskItem from "@tiptap/extension-task-item";
 import TaskList from "@tiptap/extension-task-list";
 import StarterKit from "@tiptap/starter-kit";
-import { common, createLowlight } from "lowlight";
+import go from "highlight.js/lib/languages/go";
+import javascript from "highlight.js/lib/languages/javascript";
+import python from "highlight.js/lib/languages/python";
+import rust from "highlight.js/lib/languages/rust";
+import typescript from "highlight.js/lib/languages/typescript";
+import { createLowlight } from "lowlight";
 import { Markdown } from "tiptap-markdown";
 
 import { slashCommandSuggestionRender } from "../components/SlashCommandMenu";
 import { SlashCommand } from "./slashCommand";
 
-const lowlight = createLowlight(common);
+const lowlight = createLowlight();
+lowlight.register("javascript", javascript);
+lowlight.register("typescript", typescript);
+lowlight.register("python", python);
+lowlight.register("rust", rust);
+lowlight.register("go", go);
 
 function isPureTaskListElement(list: Element): boolean {
   const items = Array.from(list.children).filter(
@@ -70,12 +80,11 @@ const MarkdownTaskItem = TaskItem.extend({
   },
 });
 
-export function getTipTapExtensions({
-  placeholder,
-}: { placeholder?: string | undefined } = {}) {
+function getBaseExtensions() {
   return [
     StarterKit.configure({
       codeBlock: false,
+      link: false,
     }),
     CodeBlockLowlight.configure({ lowlight }),
     Link.configure({
@@ -88,9 +97,6 @@ export function getTipTapExtensions({
     TableRow,
     TableHeader,
     TableCell,
-    SlashCommand.configure({
-      suggestion: { ...slashCommandSuggestionRender() },
-    }),
     Markdown.configure({
       html: false,
       breaks: true,
@@ -98,6 +104,21 @@ export function getTipTapExtensions({
       transformPastedText: true,
       transformCopiedText: true,
     }),
+  ];
+}
+
+export function getTipTapExtensions({
+  placeholder,
+}: { placeholder?: string | undefined } = {}) {
+  return [
+    ...getBaseExtensions(),
+    SlashCommand.configure({
+      suggestion: { ...slashCommandSuggestionRender() },
+    }),
     ...(placeholder ? [Placeholder.configure({ placeholder })] : []),
   ];
+}
+
+export function getReadOnlyTipTapExtensions() {
+  return getBaseExtensions();
 }

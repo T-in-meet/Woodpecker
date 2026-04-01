@@ -1,5 +1,6 @@
 "use client";
 
+import type { AnyExtension } from "@tiptap/core";
 import type { Editor } from "@tiptap/react";
 import { EditorContent } from "@tiptap/react";
 import { useEffect } from "react";
@@ -7,6 +8,8 @@ import { useEffect } from "react";
 import { cn } from "@/lib/utils/cn";
 
 import { useTipTapEditor } from "../hooks/useTipTapEditor";
+import { BubbleMenuBar } from "./BubbleMenuBar";
+import { FixedToolbar } from "./FixedToolbar";
 
 type TipTapEditorProps = {
   value: string;
@@ -17,6 +20,7 @@ type TipTapEditorProps = {
   className?: string;
   "aria-label"?: string;
   onEditorReady?: (editor: Editor) => void;
+  extensions?: AnyExtension[];
 };
 
 export function TipTapEditor({
@@ -28,6 +32,7 @@ export function TipTapEditor({
   className,
   "aria-label": ariaLabel,
   onEditorReady,
+  extensions,
 }: TipTapEditorProps) {
   const editor = useTipTapEditor({
     value,
@@ -35,6 +40,7 @@ export function TipTapEditor({
     placeholder,
     readOnly,
     autoFocus,
+    extensions,
   });
 
   useEffect(() => {
@@ -62,6 +68,12 @@ export function TipTapEditor({
         className,
       )}
     >
+      {editor && !readOnly && (
+        <>
+          <FixedToolbar editor={editor} />
+          <BubbleMenuBar editor={editor} />
+        </>
+      )}
       <EditorContent editor={editor} />
     </div>
   );
