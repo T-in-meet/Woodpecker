@@ -2,6 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
+import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -9,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Toast } from "@/components/ui/toast";
 import { signupFormSchema } from "@/lib/validation/auth/signupSchema";
 
 import { isServerValidationError } from "../lib/isServerValidationError";
@@ -18,13 +20,36 @@ import { resolveFieldName } from "../lib/resolveFieldName";
 export type FormInput = z.input<typeof signupFormSchema>;
 type FormValues = z.infer<typeof signupFormSchema>;
 type SubmitPayload = Omit<FormValues, "confirmPassword">;
+type GlobalError =
+  | { type: "network" }
+  | { type: "server" }
+  | { type: "timeout" };
+
+const GLOBAL_ERROR_MESSAGES = {
+  network: "네트워크 연결을 확인해주세요",
+  server: "잠시 후 다시 시도해주세요",
+  timeout: "요청 시간이 초과되었습니다. 다시 시도해주세요",
+} as const;
 
 type SignupFormProps = {
   onSubmit: (values: SubmitPayload) => void | Promise<void>;
   isPending?: boolean;
 };
 
+function isGlobalError(error: unknown): error is GlobalError {
+  if (!error || typeof error !== "object" || !("type" in error)) return false;
+
+  return (
+    error.type === "network" ||
+    error.type === "server" ||
+    error.type === "timeout"
+  );
+}
+
 export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
+  const [globalErrorMessage, setGlobalErrorMessage] = useState<string | null>(
+    null,
+  );
   const {
     control,
     register,
@@ -55,22 +80,34 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
   const handleValidSubmit = async (data: FormValues) => {
     const { confirmPassword: _, ...payload } = data;
     clearErrors();
+    setGlobalErrorMessage(null);
+
     try {
       await onSubmit(payload);
     } catch (e: unknown) {
-      if (!isServerValidationError(e)) return;
-      let hasUnknownField = false;
-      for (const { field, reason } of e.data.errors) {
-        const fieldName = resolveFieldName(field);
-        const message = mapReasonToMessage(reason);
-        if (fieldName !== null) {
-          setError(fieldName, { message });
-        } else {
-          hasUnknownField = true;
+      if (isServerValidationError(e)) {
+        let hasUnknownField = false;
+
+        for (const { field, reason } of e.data.errors) {
+          const fieldName = resolveFieldName(field);
+          const message = mapReasonToMessage(reason);
+
+          if (fieldName !== null) {
+            setError(fieldName, { message });
+          } else {
+            hasUnknownField = true;
+          }
         }
+
+        if (hasUnknownField) {
+          setError("root", { message: "요청을 처리할 수 없습니다" });
+        }
+
+        return;
       }
-      if (hasUnknownField) {
-        setError("root", { message: "요청을 처리할 수 없습니다" });
+
+      if (isGlobalError(e)) {
+        setGlobalErrorMessage(GLOBAL_ERROR_MESSAGES[e.type]);
       }
     }
   };
@@ -241,6 +278,10 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
           )}
         </div>
       </div>
+
+      {globalErrorMessage && (
+        <Toast message={globalErrorMessage} variant="destructive" />
+      )}
 
       {errors.root && (
         <p role="alert" className="text-red-500">
