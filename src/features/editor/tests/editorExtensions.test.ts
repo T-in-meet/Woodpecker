@@ -43,8 +43,6 @@ describe("getMarkdownTabIndentResult", () => {
   });
 
   it("correctly shifts anchor/head when anchor is at a line boundary", () => {
-    // anchor at end of line 1 (pos 5 = newline boundary), head in line 3
-    // "alpha\nbeta\ngamma" → positions: alpha=0-4, \n=5, beta=6-9, \n=10, gamma=11-15
     expect(applyMarkdownTabIndent("alpha\nbeta\ngamma", 5, 14)).toMatchObject({
       doc: "  alpha\n  beta\n  gamma",
       selection: { anchor: 7, head: 20 },

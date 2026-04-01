@@ -1,0 +1,121 @@
+import "./setup";
+
+import { render, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
+
+import { TipTapEditor } from "../components/TipTapEditor";
+
+function getEditorContentElement() {
+  const contentElement = document.querySelector("[contenteditable]");
+
+  if (!(contentElement instanceof HTMLElement)) {
+    throw new Error("editor content element not found");
+  }
+
+  return contentElement;
+}
+
+describe("TipTapEditor", () => {
+  it("applies the aria-label to the editor", async () => {
+    render(
+      <TipTapEditor value="" onChange={vi.fn()} aria-label="마크다운 편집기" />,
+    );
+
+    await waitFor(() => {
+      expect(getEditorContentElement().getAttribute("aria-label")).toBe(
+        "마크다운 편집기",
+      );
+    });
+  });
+
+  it("shows the placeholder text when the document is empty", async () => {
+    render(
+      <TipTapEditor
+        value=""
+        onChange={vi.fn()}
+        placeholder="내용을 입력해주세요"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(document.querySelector("[data-placeholder]")).toBeInTheDocument();
+    });
+  });
+
+  it("focuses the editor when autoFocus is enabled", async () => {
+    render(<TipTapEditor value="" onChange={vi.fn()} autoFocus />);
+
+    await waitFor(() => {
+      const el = getEditorContentElement();
+      expect(el).toBeTruthy();
+      expect(
+        document.activeElement === el || el.contains(document.activeElement),
+      ).toBe(true);
+    });
+  });
+
+  it("does not emit onChange when the value prop is synced from outside", async () => {
+    const handleChange = vi.fn();
+
+    const { rerender } = render(
+      <TipTapEditor value="Initial content" onChange={handleChange} />,
+    );
+
+    await waitFor(() => {
+      expect(getEditorContentElement()).toBeTruthy();
+    });
+
+    handleChange.mockClear();
+
+    rerender(<TipTapEditor value="Updated content" onChange={handleChange} />);
+
+    await waitFor(() => {
+      expect(getEditorContentElement().textContent).toContain(
+        "Updated content",
+      );
+    });
+
+    expect(handleChange).not.toHaveBeenCalled();
+  });
+
+  it("emits onChange when the user types into the editor", async () => {
+    const user = userEvent.setup();
+    const handleChange = vi.fn();
+
+    render(<TipTapEditor value="" onChange={handleChange} />);
+
+    await waitFor(() => {
+      expect(getEditorContentElement()).toBeTruthy();
+    });
+
+    const contentElement = getEditorContentElement();
+    await user.click(contentElement);
+    await user.keyboard("hello tiptap");
+
+    await waitFor(() => {
+      expect(handleChange).toHaveBeenCalled();
+    });
+  });
+
+  it("prevents edits while readOnly is enabled", async () => {
+    const user = userEvent.setup();
+    const handleChange = vi.fn();
+
+    render(
+      <TipTapEditor value="Locked content" onChange={handleChange} readOnly />,
+    );
+
+    await waitFor(() => {
+      expect(getEditorContentElement()).toBeTruthy();
+    });
+
+    const contentElement = getEditorContentElement();
+    expect(contentElement.getAttribute("contenteditable")).toBe("false");
+
+    await user.click(contentElement);
+    await user.keyboard("!");
+
+    expect(handleChange).not.toHaveBeenCalled();
+  });
+});
