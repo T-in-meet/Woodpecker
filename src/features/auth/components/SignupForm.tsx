@@ -11,7 +11,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { signupFormSchema } from "@/lib/validation/auth/signupSchema";
 
-type FormInput = z.input<typeof signupFormSchema>;
+import { isServerValidationError } from "../lib/isServerValidationError";
+import { mapReasonToMessage } from "../lib/mapReasonToMessage";
+import { resolveFieldName } from "../lib/resolveFieldName";
+
+export type FormInput = z.input<typeof signupFormSchema>;
 type FormValues = z.infer<typeof signupFormSchema>;
 type SubmitPayload = Omit<FormValues, "confirmPassword">;
 
@@ -28,6 +32,8 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
     formState: { errors },
     trigger,
     getValues,
+    setError,
+    clearErrors,
   } = useForm<FormInput, unknown, FormValues>({
     resolver: zodResolver(signupFormSchema),
     mode: "onBlur",
@@ -46,9 +52,27 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
   const { onChange: onConfirmChange, ...confirmPasswordRegister } =
     register("confirmPassword");
 
-  const handleValidSubmit = (data: FormValues) => {
+  const handleValidSubmit = async (data: FormValues) => {
     const { confirmPassword: _, ...payload } = data;
-    void onSubmit(payload);
+    clearErrors();
+    try {
+      await onSubmit(payload);
+    } catch (e: unknown) {
+      if (!isServerValidationError(e)) return;
+      let hasUnknownField = false;
+      for (const { field, reason } of e.data.errors) {
+        const fieldName = resolveFieldName(field);
+        const message = mapReasonToMessage(reason);
+        if (fieldName !== null) {
+          setError(fieldName, { message });
+        } else {
+          hasUnknownField = true;
+        }
+      }
+      if (hasUnknownField) {
+        setError("root", { message: "요청을 처리할 수 없습니다" });
+      }
+    }
   };
 
   return (
@@ -217,6 +241,12 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
           )}
         </div>
       </div>
+
+      {errors.root && (
+        <p role="alert" className="text-red-500">
+          {errors.root.message}
+        </p>
+      )}
 
       <div className="flex justify-between">
         <Link href="/login" className="text-blue-400 hover:text-blue-500">
