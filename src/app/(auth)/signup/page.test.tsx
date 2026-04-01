@@ -11,7 +11,7 @@ vi.mock("next/navigation", () => ({
   useRouter: vi.fn(() => ({ push: mockPush })),
 }));
 
-vi.mock("@/features/auth/hooks/use-signup-mutation", () => ({
+vi.mock("@/features/auth/hooks/useSignupMutation", () => ({
   useSignupMutation: vi.fn(() => ({
     mutateAsync: mockMutateAsync,
     isPending: false,
