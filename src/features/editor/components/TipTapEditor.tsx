@@ -11,7 +11,7 @@ import { useTipTapEditor } from "../hooks/useTipTapEditor";
 
 type TipTapEditorProps = {
   value: string;
-  onChange: (value: string) => void;
+  onChange?: (value: string) => void;
   placeholder?: string;
   readOnly?: boolean;
   autoFocus?: boolean;

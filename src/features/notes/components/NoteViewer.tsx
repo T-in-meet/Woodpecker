@@ -1,4 +1,3 @@
-import DOMPurify from "dompurify";
 import hljs from "highlight.js";
 
 import {
@@ -27,12 +26,7 @@ export function NoteViewer({ content, language, className }: NoteViewerProps) {
       );
     }
 
-    return (
-      <MarkdownNoteViewerClient
-        content={content}
-        {...(className !== undefined && { className })}
-      />
-    );
+    return <MarkdownNoteViewerClient content={content} className={className} />;
   }
 
   const highlighted = hljs.highlight(content, {
@@ -49,9 +43,7 @@ export function NoteViewer({ content, language, className }: NoteViewerProps) {
     >
       <code
         className={`hljs language-${effectiveLanguage}`}
-        dangerouslySetInnerHTML={{
-          __html: DOMPurify.sanitize(highlighted.value),
-        }}
+        dangerouslySetInnerHTML={{ __html: highlighted.value }}
       />
     </pre>
   );

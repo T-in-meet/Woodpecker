@@ -52,6 +52,37 @@ describe("MarkdownTaskItem custom extension", () => {
   });
 });
 
+describe("MarkdownTaskItem — isPureTaskListElement edge cases", () => {
+  it("converts ordered task list items to plain text markers", () => {
+    const input = "1. [ ] ordered task\n2. [x] ordered done";
+    const result = roundTrip(input).trim();
+    expect(result).toContain("[ ] ordered task");
+    expect(result).toContain("[x] ordered done");
+  });
+
+  it("does not create checkboxes for a list with no task items", () => {
+    const input = "- plain a\n- plain b";
+    const result = roundTrip(input).trim();
+    expect(result).not.toContain("[");
+    expect(result).toContain("plain a");
+    expect(result).toContain("plain b");
+  });
+});
+
+describe("Read-only editor", () => {
+  it("marks the editor as non-editable", () => {
+    const extensions = getReadOnlyTipTapExtensions();
+    const editor = new Editor({
+      extensions,
+      content: "- [ ] task",
+      editable: false,
+    });
+
+    expect(editor.isEditable).toBe(false);
+    editor.destroy();
+  });
+});
+
 describe("getReadOnlyTipTapExtensions", () => {
   it("creates a working editor without SlashCommand and Placeholder", () => {
     const extensions = getReadOnlyTipTapExtensions();

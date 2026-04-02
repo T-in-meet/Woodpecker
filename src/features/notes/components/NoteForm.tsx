@@ -63,6 +63,11 @@ export function NoteForm() {
           type="submit"
           size="sm"
           disabled={isPending || content.length > CONTENT_MAX_LENGTH}
+          title={
+            content.length > CONTENT_MAX_LENGTH
+              ? "내용이 최대 글자수를 초과했습니다"
+              : undefined
+          }
         >
           {isPending ? "저장 중..." : "저장"}
         </Button>

@@ -7,7 +7,7 @@ import { getTipTapExtensions } from "@/features/editor/utils/tiptapExtensions";
 
 type UseTipTapEditorOptions = {
   value: string;
-  onChange: (value: string) => void;
+  onChange?: (value: string) => void;
   placeholder?: string | undefined;
   readOnly?: boolean;
   autoFocus?: boolean;
@@ -55,7 +55,7 @@ export function useTipTapEditor({
       if (lastSerializedValueRef.current === nextValue) return;
 
       lastSerializedValueRef.current = nextValue;
-      onChangeRef.current(nextValue);
+      onChangeRef.current?.(nextValue);
     },
   });
 
