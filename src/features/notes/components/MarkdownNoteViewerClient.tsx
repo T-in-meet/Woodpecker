@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils/cn";
 
 type MarkdownNoteViewerClientProps = {
   content: string;
-  className?: string;
+  className?: string | undefined;
 };
 
 const readOnlyExtensions = getReadOnlyTipTapExtensions();

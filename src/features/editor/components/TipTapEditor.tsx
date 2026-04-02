@@ -67,7 +67,7 @@ export function TipTapEditor({
   return (
     <div
       className={cn(
-        "tiptap-wrapper overflow-hidden rounded-md border border-border bg-background text-sm transition-colors",
+        "tiptap-wrapper overflow-hidden rounded-md border border-border bg-background text-base transition-colors",
         "focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20",
         readOnly && "[&_.tiptap]:cursor-default",
         className,

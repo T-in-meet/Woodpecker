@@ -37,7 +37,7 @@ export function NoteViewer({ content, language, className }: NoteViewerProps) {
   return (
     <pre
       className={cn(
-        "overflow-x-auto rounded-lg bg-zinc-900 px-6 py-5 font-mono text-sm leading-relaxed text-zinc-100",
+        "overflow-x-auto rounded-lg bg-zinc-900 px-6 py-5 font-mono text-base leading-relaxed text-zinc-100",
         className,
       )}
     >

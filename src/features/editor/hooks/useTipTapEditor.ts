@@ -7,7 +7,7 @@ import { getTipTapExtensions } from "@/features/editor/utils/tiptapExtensions";
 
 type UseTipTapEditorOptions = {
   value: string;
-  onChange?: (value: string) => void;
+  onChange?: ((value: string) => void) | undefined;
   placeholder?: string | undefined;
   readOnly?: boolean;
   autoFocus?: boolean;
