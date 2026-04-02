@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Toast } from "@/components/ui/toast";
+import { cn } from "@/lib/utils/cn";
 import { signupFormSchema } from "@/lib/validation/auth/signupSchema";
 
 import { isServerValidationError } from "../lib/isServerValidationError";
@@ -124,7 +125,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
           id="email"
           type="email"
           {...register("email")}
-          className={`${errors.email ? "" : "mb-14"}`}
+          className={cn(!errors.email && "mb-14")}
         />
         {errors.email && (
           <p role="alert" className="text-red-500">
@@ -138,7 +139,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
         <Input
           id="password"
           type="password"
-          className={`${errors.password ? "" : "mb-14"}`}
+          className={cn(!errors.password && "mb-14")}
           {...passwordRegister}
           onChange={async (e) => {
             await onPasswordChange(e);
@@ -159,7 +160,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
         <Input
           id="confirmPassword"
           type="password"
-          className={`${errors.confirmPassword ? "" : "mb-14"}`}
+          className={cn(!errors.confirmPassword && "mb-14")}
           {...confirmPasswordRegister}
           onChange={(e) => {
             void onConfirmChange(e).then(() => {
@@ -179,7 +180,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
         <Input
           id="nickname"
           type="text"
-          className={`${errors.nickname ? "" : "mb-14"}`}
+          className={cn(!errors.nickname && "mb-14")}
           {...register("nickname")}
         />
         {errors.nickname && (
@@ -196,7 +197,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
         <Input
           id="avatarFile"
           type="file"
-          className={`${errors.avatarFile ? "" : "mb-14"}`}
+          className={cn(!errors.avatarFile && "mb-14")}
           accept="image/jpeg,image/png,image/webp"
           {...register("avatarFile")}
         />
@@ -206,7 +207,10 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
         {/* 이용약관 */}
         <div data-testid="terms-of-service-field" className="flex-1 space-y-2">
           <div
-            className={`flex items-center space-x-2 ${errors.termsOfService ? "" : "mb-8"}`}
+            className={cn(
+              "flex items-center space-x-2",
+              !errors.termsOfService && "mb-8",
+            )}
           >
             <Button
               type="button"
@@ -251,7 +255,10 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
         {/* 개인정보 */}
         <div data-testid="privacy-policy-field" className="flex-1 space-y-2">
           <div
-            className={`flex items-center space-x-2 ${errors.privacyPolicy ? "" : "mb-8"}`}
+            className={cn(
+              "flex items-center space-x-2",
+              !errors.privacyPolicy && "mb-8",
+            )}
           >
             <Button
               type="button"
@@ -299,7 +306,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
       )}
 
       {errors.root && (
-        <p role="alert" className="text-red-500">
+        <p role="alert" data-testid="form-error" className="text-red-500">
           {errors.root.message}
         </p>
       )}

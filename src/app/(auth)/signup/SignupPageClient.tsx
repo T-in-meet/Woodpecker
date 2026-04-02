@@ -12,7 +12,11 @@ export default function SignupPageClient() {
   return (
     <SignupForm
       onSubmit={async (values) => {
-        const response = await mutateAsync(values);
+        const { termsOfService, privacyPolicy, ...rest } = values;
+        const response = await mutateAsync({
+          ...rest,
+          agreements: { termsOfService, privacyPolicy },
+        });
         router.push(response.data.redirectTo);
       }}
       isPending={isPending}

@@ -363,7 +363,6 @@ describe("회원가입 폼 검증", () => {
 
     const calledWith = onSubmit.mock.calls[0]![0] as Record<string, unknown>;
     expect(calledWith).not.toHaveProperty("confirmPassword");
-    expect(calledWith).not.toHaveProperty("confirmPassword");
   });
 
   it("TC-14: 동의 항목 에러가 해당 체크박스 영역 내에 렌더링된다", async () => {
@@ -652,7 +651,7 @@ describe("서버 유효성 검사 에러 매핑", () => {
       ).not.toBeInTheDocument();
     });
 
-    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(screen.getByTestId("form-error")).toBeInTheDocument();
   });
 
   it("TC-06: reason은 사용자 친화적인 메시지로 변환되어 표시되며 원본 reason 문자열은 렌더링되지 않는다", async () => {
