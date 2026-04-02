@@ -47,3 +47,20 @@ if (!Range.prototype.getClientRects) {
     value: () => emptyDOMRectList,
   });
 }
+
+// TipTap(ProseMirror)이 jsdom에서 동작하도록 DOM API 보강
+if (!document.elementFromPoint) {
+  document.elementFromPoint = () => null;
+}
+
+if (!HTMLElement.prototype.scrollIntoView) {
+  HTMLElement.prototype.scrollIntoView = () => {};
+}
+
+if (typeof window.ResizeObserver === "undefined") {
+  window.ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof window.ResizeObserver;
+}
