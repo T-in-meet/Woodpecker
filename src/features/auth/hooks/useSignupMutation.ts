@@ -15,16 +15,32 @@ type SignupPayload = {
 
 type SignupSuccessResponse = {
   data: {
+    email: string;
     redirectTo: string;
+    signupAccountStatus: "active" | "pending";
   };
 };
 
 export function useSignupMutation() {
   return useMutation<SignupSuccessResponse, Error, SignupPayload>({
     mutationFn: async (payload) => {
-      const _request = buildSignupRequestPayload(payload);
-      // TODO: implement API call
-      throw new Error("Not implemented");
+      const request = buildSignupRequestPayload(payload);
+
+      const response = await fetch("/api/auth/signup", {
+        method: "POST",
+        ...(request.requestType === "json"
+          ? {
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(request.body),
+            }
+          : { body: request.body }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Signup request failed");
+      }
+
+      return response.json() as Promise<SignupSuccessResponse>;
     },
   });
 }

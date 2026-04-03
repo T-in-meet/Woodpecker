@@ -38,21 +38,6 @@ describe("PR-UI-05: SignupPageClient redirectTo 라우팅", () => {
     vi.clearAllMocks();
   });
 
-  it("TC-01: mutateAsync가 redirectTo='/verify-email'로 응답하면 router.push('/verify-email')가 1회 호출된다", async () => {
-    mockMutateAsync.mockResolvedValue({
-      data: { redirectTo: "/verify-email" },
-    });
-    const user = userEvent.setup();
-    render(<SignupPageClient />);
-
-    await submitValidSignupForm(user);
-
-    await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledTimes(1);
-      expect(mockPush).toHaveBeenCalledWith("/verify-email");
-    });
-  });
-
   it("TC-02: mutateAsync가 redirectTo='/login'으로 응답하면 router.push('/login')가 1회 호출된다", async () => {
     mockMutateAsync.mockResolvedValue({ data: { redirectTo: "/login" } });
     const user = userEvent.setup();

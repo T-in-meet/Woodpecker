@@ -7,7 +7,6 @@ export const ROUTES = {
   MYPAGE: "/mypage",
   TERMS: "/terms",
   PRIVACY: "/privacy",
-  VERIFY_EMAIL: "/verify-email",
 } as const;
 
 export type Route = (typeof ROUTES)[keyof typeof ROUTES];
