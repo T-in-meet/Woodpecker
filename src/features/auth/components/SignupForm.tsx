@@ -58,6 +58,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
     formState: { errors },
     trigger,
     getValues,
+    setValue,
     setError,
     clearErrors,
   } = useForm<FormInput, unknown, FormValues>({
@@ -199,7 +200,13 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
           type="file"
           className={cn(!errors.avatarFile && "mb-14")}
           accept="image/jpeg,image/png,image/webp"
-          {...register("avatarFile")}
+          onChange={(e) => {
+            const file = e.target.files?.[0] ?? null;
+            setValue("avatarFile", file, {
+              shouldValidate: true,
+              shouldDirty: true,
+            });
+          }}
         />
       </div>
 
