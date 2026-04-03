@@ -50,7 +50,6 @@ export async function Header() {
               <Button variant="ghost" asChild>
                 <Link href={ROUTES.LOGIN}>로그인</Link>
               </Button>
-
               <Button asChild>
                 <Link href={ROUTES.SIGNUP}>회원가입</Link>
               </Button>
