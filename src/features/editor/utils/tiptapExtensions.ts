@@ -172,7 +172,6 @@ function getBaseExtensions({ readOnly = false }: { readOnly?: boolean } = {}) {
     TaskList,
     MarkdownTaskItem.configure({
       nested: true,
-      ...(readOnly && { onReadOnlyChecked: () => false }),
     }),
     Table.configure({ resizable: false }),
     TableRow,
