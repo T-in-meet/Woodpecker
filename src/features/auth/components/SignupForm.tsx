@@ -1,8 +1,8 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation } from "@tanstack/react-query";
 import Link from "next/link";
+import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -10,19 +10,47 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Toast } from "@/components/ui/toast";
+import { cn } from "@/lib/utils/cn";
 import { signupFormSchema } from "@/lib/validation/auth/signupSchema";
 
-type FormInput = z.input<typeof signupFormSchema>;
+import { isServerValidationError } from "../lib/isServerValidationError";
+import { mapReasonToMessage } from "../lib/mapReasonToMessage";
+import { resolveFieldName } from "../lib/resolveFieldName";
+
+export type FormInput = z.input<typeof signupFormSchema>;
 type FormValues = z.infer<typeof signupFormSchema>;
 type SubmitPayload = Omit<FormValues, "confirmPassword">;
+type GlobalError =
+  | { type: "network" }
+  | { type: "server" }
+  | { type: "timeout" };
 
-export function SignupForm() {
-  const { mutate, isPending } = useMutation<void, Error, SubmitPayload>({
-    mutationFn: async (_data) => {
-      // TODO: API call
-    },
-  });
+const GLOBAL_ERROR_MESSAGES = {
+  network: "네트워크 연결을 확인해주세요",
+  server: "잠시 후 다시 시도해주세요",
+  timeout: "요청 시간이 초과되었습니다. 다시 시도해주세요",
+} as const;
 
+type SignupFormProps = {
+  onSubmit: (values: SubmitPayload) => void | Promise<void>;
+  isPending?: boolean;
+};
+
+function isGlobalError(error: unknown): error is GlobalError {
+  if (!error || typeof error !== "object" || !("type" in error)) return false;
+
+  return (
+    error.type === "network" ||
+    error.type === "server" ||
+    error.type === "timeout"
+  );
+}
+
+export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
+  const [globalErrorMessage, setGlobalErrorMessage] = useState<string | null>(
+    null,
+  );
   const {
     control,
     register,
@@ -30,6 +58,9 @@ export function SignupForm() {
     formState: { errors },
     trigger,
     getValues,
+    setValue,
+    setError,
+    clearErrors,
   } = useForm<FormInput, unknown, FormValues>({
     resolver: zodResolver(signupFormSchema),
     mode: "onBlur",
@@ -48,20 +79,55 @@ export function SignupForm() {
   const { onChange: onConfirmChange, ...confirmPasswordRegister } =
     register("confirmPassword");
 
-  const onSubmit = (data: FormValues) => {
+  const handleValidSubmit = async (data: FormValues) => {
     const { confirmPassword: _, ...payload } = data;
-    mutate(payload);
+    clearErrors();
+    setGlobalErrorMessage(null);
+
+    try {
+      await onSubmit(payload);
+    } catch (e: unknown) {
+      if (isServerValidationError(e)) {
+        let hasUnknownField = false;
+
+        for (const { field, reason } of e.data.errors) {
+          const fieldName = resolveFieldName(field);
+          const message = mapReasonToMessage(reason);
+
+          if (fieldName !== null) {
+            setError(fieldName, { message });
+          } else {
+            hasUnknownField = true;
+          }
+        }
+
+        if (hasUnknownField) {
+          setError("root", { message: "요청을 처리할 수 없습니다" });
+        }
+
+        return;
+      }
+
+      if (isGlobalError(e)) {
+        setGlobalErrorMessage(GLOBAL_ERROR_MESSAGES[e.type]);
+      }
+    }
   };
 
   return (
     <form
       aria-label="회원가입"
-      className="mx-auto mt-20 max-w-5xl space-y-4 pl-4"
-      onSubmit={handleSubmit(onSubmit)}
+      className="mx-auto mt-16 max-w-5xl space-y-4 pl-4"
+      onSubmit={handleSubmit(handleValidSubmit)}
     >
       <div className="space-y-4">
         <Label htmlFor="email">이메일</Label>
-        <Input id="email" type="email" {...register("email")} />
+        <Input
+          id="email"
+          type="email"
+          {...register("email")}
+          className={cn(!errors.email && "mb-14")}
+        />
         {errors.email && (
           <p role="alert" className="text-red-500">
             {errors.email.message}
@@ -74,6 +140,7 @@ export function SignupForm() {
         <Input
           id="password"
           type="password"
+          className={cn(!errors.password && "mb-14")}
           {...passwordRegister}
           onChange={async (e) => {
             await onPasswordChange(e);
@@ -94,6 +161,7 @@ export function SignupForm() {
         <Input
           id="confirmPassword"
           type="password"
+          className={cn(!errors.confirmPassword && "mb-14")}
           {...confirmPasswordRegister}
           onChange={(e) => {
             void onConfirmChange(e).then(() => {
@@ -110,7 +178,12 @@ export function SignupForm() {
 
       <div className="space-y-4">
         <Label htmlFor="nickname">닉네임</Label>
-        <Input id="nickname" type="text" {...register("nickname")} />
+        <Input
+          id="nickname"
+          type="text"
+          className={cn(!errors.nickname && "mb-14")}
+          {...register("nickname")}
+        />
         {errors.nickname && (
           <p role="alert" className="text-red-500">
             {errors.nickname.message}
@@ -125,15 +198,27 @@ export function SignupForm() {
         <Input
           id="avatarFile"
           type="file"
+          className={cn(!errors.avatarFile && "mb-14")}
           accept="image/jpeg,image/png,image/webp"
-          {...register("avatarFile")}
+          onChange={(e) => {
+            const file = e.target.files?.[0] ?? null;
+            setValue("avatarFile", file, {
+              shouldValidate: true,
+              shouldDirty: true,
+            });
+          }}
         />
       </div>
 
       <div className="flex justify-between">
         {/* 이용약관 */}
         <div data-testid="terms-of-service-field" className="flex-1 space-y-2">
-          <div className="flex items-center space-x-2">
+          <div
+            className={cn(
+              "flex items-center space-x-2",
+              !errors.termsOfService && "mb-8",
+            )}
+          >
             <Button
               type="button"
               variant="ghost"
@@ -142,9 +227,7 @@ export function SignupForm() {
             >
               이용약관 보기
             </Button>
-
             <Label htmlFor="termsOfService">이용약관에 동의합니다</Label>
-
             <Controller
               name="termsOfService"
               control={control}
@@ -178,7 +261,12 @@ export function SignupForm() {
 
         {/* 개인정보 */}
         <div data-testid="privacy-policy-field" className="flex-1 space-y-2">
-          <div className="flex items-center space-x-2">
+          <div
+            className={cn(
+              "flex items-center space-x-2",
+              !errors.privacyPolicy && "mb-8",
+            )}
+          >
             <Button
               type="button"
               variant="ghost"
@@ -219,6 +307,16 @@ export function SignupForm() {
           )}
         </div>
       </div>
+
+      {globalErrorMessage && (
+        <Toast message={globalErrorMessage} variant="destructive" />
+      )}
+
+      {errors.root && (
+        <p role="alert" data-testid="form-error" className="text-red-500">
+          {errors.root.message}
+        </p>
+      )}
 
       <div className="flex justify-between">
         <Link href="/login" className="text-blue-400 hover:text-blue-500">

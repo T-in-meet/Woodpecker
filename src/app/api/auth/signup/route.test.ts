@@ -68,15 +68,6 @@ describe("회원가입 API 기본 성공 흐름 검증", () => {
     );
   });
 
-  it("성공 응답 data.redirectTo는 이메일 인증 경로이다", async () => {
-    mockSignUpSuccess();
-
-    const response = await POST(makeRequest(requestBody));
-    const body = await response.json();
-
-    expect(body.data.redirectTo).toBe(ROUTES.VERIFY_EMAIL);
-  });
-
   it("signUp 호출 시 options.emailRedirectTo는 /login 경로를 포함한다", async () => {
     mockSignUpSuccess();
 
@@ -118,15 +109,6 @@ describe("회원가입 API 기본 성공 흐름 검증", () => {
     const body = await response.json();
 
     expect(body.data.email).toBe("test@example.com");
-  });
-
-  it("성공 응답 data.redirectTo는 이메일 인증 경로이다", async () => {
-    mockSignUpSuccess();
-
-    const response = await POST(makeRequest(requestBody));
-    const body = await response.json();
-
-    expect(body.data.redirectTo).toBe(ROUTES.VERIFY_EMAIL);
   });
 });
 
@@ -925,7 +907,11 @@ describe("PR-API-04 회원가입 - pending 계정 재요청 분기", () => {
     expect(response.status).toBe(200);
     expect(json.success).toBe(true);
     expect(json.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
-    expect(json.data).toEqual({ email: "test@example.com", status: "PENDING" });
+    expect(json.data).toEqual({
+      email: "test@example.com",
+      signupAccountStatus: "pending",
+      redirectTo: "/login",
+    });
   });
 
   it("TC-02. pending 분기에서는 getUserByEmail이 정확히 1회 호출된다", async () => {
@@ -990,6 +976,7 @@ describe("PR-API-05 회원가입 - active 계정 재요청 분기", () => {
     expect(body.data).toEqual({
       email: "test@example.com",
       redirectTo: "/login",
+      signupAccountStatus: "active",
     });
   });
 
@@ -1016,22 +1003,11 @@ describe("PR-API-05 회원가입 - active 계정 재요청 분기", () => {
       data: {
         email: "test@example.com",
         redirectTo: "/login",
+        signupAccountStatus: "active",
       },
     });
     expect(body).not.toHaveProperty("errors");
     expect(body).not.toHaveProperty("error");
-  });
-
-  it("TC-04. active 분기 응답은 /verify-email redirect를 포함하지 않는다", async () => {
-    vi.mocked(getUserByEmail).mockResolvedValue(activeUser as never);
-
-    const response = await POST(makeRequest());
-    const body = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
-    expect(body.data.redirectTo).toBe("/login");
-    expect(body.data.redirectTo).not.toBe("/verify-email");
   });
 });
 
@@ -1310,8 +1286,11 @@ describe("PR-API-07 프로필 이미지 업로드 성공 시 avatar_url 반영",
     expect(response.status).toBe(201);
     expect(body.success).toBe(true);
     expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
+
+    // contract 검증
     expect(body.data.email).toBe("test@example.com");
-    expect(body.data.avatar_url).toBe(MOCK_PUBLIC_URL);
+    expect(body.data.redirectTo).toBe(ROUTES.LOGIN);
+    expect(body.data.signupAccountStatus).toBe("pending");
   });
 
   // TC-02: avatarFile 제공 시 storage.upload 호출
@@ -1398,16 +1377,18 @@ describe("PR-API-08 프로필 이미지 업로드 실패 시 회원가입 성공
     });
   });
 
-  // TC-01: 업로드 실패해도 signup은 201로 성공한다
-  it("TC-01. 업로드 실패 시에도 회원가입은 201 성공 응답을 반환한다", async () => {
+  // TC-01: 이미지 업로드 실패 시에도 회원 가입 성공 유지
+  it("TC-01. 업로드 실패 시에도 회원가입은 201 성공 응답 계약을 유지한다", async () => {
     const response = await POST(makeMultipartRequest());
     const body = await response.json();
 
     expect(response.status).toBe(201);
     expect(body.success).toBe(true);
     expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
+
     expect(body.data.email).toBe("test@example.com");
-    expect(body.data.redirectTo).toBe(ROUTES.VERIFY_EMAIL);
+    expect(body.data.redirectTo).toBe(ROUTES.LOGIN);
+    expect(body.data.signupAccountStatus).toBe("pending");
   });
 
   // TC-02: 업로드 실패 시 getPublicUrl 미호출
