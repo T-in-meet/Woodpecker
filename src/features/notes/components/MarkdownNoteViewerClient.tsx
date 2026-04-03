@@ -19,6 +19,7 @@ export function MarkdownNoteViewerClient({
     <TipTapEditor
       value={content}
       readOnly
+      disableReadOnlyCheckboxes
       extensions={readOnlyExtensions}
       className={cn(
         "border-none focus-within:border-none focus-within:ring-0",

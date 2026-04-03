@@ -92,7 +92,7 @@ const MarkdownTaskItem = TaskItem.extend({
   },
 });
 
-function getBaseExtensions() {
+function getBaseExtensions({ readOnly = false }: { readOnly?: boolean } = {}) {
   return [
     StarterKit.configure({
       codeBlock: false,
@@ -100,11 +100,14 @@ function getBaseExtensions() {
     }),
     CodeBlockLowlight.configure({ lowlight }),
     Link.configure({
-      openOnClick: false,
+      openOnClick: readOnly,
       HTMLAttributes: { class: "tiptap-link" },
     }),
     TaskList,
-    MarkdownTaskItem.configure({ nested: true }),
+    MarkdownTaskItem.configure({
+      nested: true,
+      ...(readOnly ? { onReadOnlyChecked: () => false } : {}),
+    }),
     Table.configure({ resizable: false }),
     TableRow,
     TableHeader,
@@ -129,5 +132,5 @@ export function getTipTapExtensions({
 }
 
 export function getReadOnlyTipTapExtensions() {
-  return getBaseExtensions();
+  return getBaseExtensions({ readOnly: true });
 }

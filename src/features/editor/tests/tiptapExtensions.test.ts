@@ -114,4 +114,13 @@ describe("getReadOnlyTipTapExtensions", () => {
     );
     expect(extensionNames).not.toContain("placeholder");
   });
+
+  it("keeps links clickable in readonly mode", () => {
+    const extensions = getReadOnlyTipTapExtensions();
+    const linkExtension = extensions.find(
+      (ext) => typeof ext === "object" && "name" in ext && ext.name === "link",
+    );
+
+    expect(linkExtension?.options.openOnClick).toBe(true);
+  });
 });

@@ -22,13 +22,25 @@ describe("NoteViewer", () => {
       expect(editor).toBeTruthy();
     });
 
+    expect(screen.getByRole("checkbox")).toBeDisabled();
     expect(screen.getByText("first")).toBeInTheDocument();
+    expect(screen.getByText("first").closest(".viewer-shell")).toBeTruthy();
   });
 
   it("renders empty state when markdown content is empty", () => {
     render(<NoteViewer content="" language="markdown" />);
 
     expect(screen.getByText("미리보기할 내용이 없습니다.")).toBeInTheDocument();
+  });
+
+  it("renders markdown links in readonly mode", async () => {
+    render(
+      <NoteViewer content="[OpenAI](https://openai.com)" language="markdown" />,
+    );
+
+    const link = await screen.findByRole("link", { name: "OpenAI" });
+
+    expect(link).toHaveAttribute("href", "https://openai.com");
   });
 
   it("renders code notes with syntax-highlighted markup", () => {

@@ -14,6 +14,7 @@ type TipTapEditorProps = {
   onChange?: (value: string) => void;
   placeholder?: string;
   readOnly?: boolean;
+  disableReadOnlyCheckboxes?: boolean;
   autoFocus?: boolean;
   className?: string;
   "aria-label"?: string;
@@ -26,6 +27,7 @@ export function TipTapEditor({
   onChange,
   placeholder,
   readOnly = false,
+  disableReadOnlyCheckboxes = false,
   autoFocus = false,
   className,
   "aria-label": ariaLabel,
@@ -63,6 +65,20 @@ export function TipTapEditor({
       el.removeAttribute("aria-label");
     }
   }, [editor, ariaLabel]);
+
+  useEffect(() => {
+    if (!editor) return;
+
+    const checkboxes = editor.view.dom.querySelectorAll(
+      'input[type="checkbox"]',
+    );
+
+    for (const checkbox of checkboxes) {
+      if (!(checkbox instanceof HTMLInputElement)) continue;
+
+      checkbox.disabled = readOnly && disableReadOnlyCheckboxes;
+    }
+  }, [disableReadOnlyCheckboxes, editor, readOnly, value]);
 
   return (
     <div
