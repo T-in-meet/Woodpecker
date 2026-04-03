@@ -23,6 +23,7 @@ describe("NoteViewer", () => {
     });
 
     const checkbox = screen.getByRole("checkbox");
+    expect(checkbox).toBeDisabled();
     expect(checkbox.closest("[contenteditable='false']")).toBeTruthy();
     expect(screen.getByText("first")).toBeInTheDocument();
     expect(screen.getByText("first").closest(".viewer-shell")).toBeTruthy();

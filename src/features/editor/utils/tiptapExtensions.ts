@@ -1,3 +1,8 @@
+import {
+  mergeAttributes,
+  type NodeViewRenderer,
+  type NodeViewRendererProps,
+} from "@tiptap/core";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -88,6 +93,50 @@ const MarkdownTaskItem = TaskItem.extend({
           },
         },
       },
+    };
+  },
+  renderHTML({ node, HTMLAttributes }) {
+    const isReadOnly = !this.editor?.isEditable;
+
+    return [
+      "li",
+      mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, {
+        "data-type": this.name,
+      }),
+      [
+        "label",
+        [
+          "input",
+          {
+            type: "checkbox",
+            checked: node.attrs.checked ? "checked" : null,
+            disabled: isReadOnly ? "disabled" : null,
+          },
+        ],
+        ["span"],
+      ],
+      ["div", 0],
+    ];
+  },
+  addNodeView() {
+    const parentNodeView = this.parent?.() as NodeViewRenderer | undefined;
+
+    if (!parentNodeView) {
+      return null;
+    }
+
+    return (props: NodeViewRendererProps) => {
+      const nodeView = parentNodeView(props);
+      const checkbox =
+        nodeView.dom instanceof Element
+          ? nodeView.dom.querySelector('input[type="checkbox"]')
+          : null;
+
+      if (checkbox instanceof HTMLInputElement) {
+        checkbox.disabled = !props.editor.isEditable;
+      }
+
+      return nodeView;
     };
   },
 });

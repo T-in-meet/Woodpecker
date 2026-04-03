@@ -3,7 +3,10 @@ import { type Editor, useEditor } from "@tiptap/react";
 import { useEffect, useMemo, useRef } from "react";
 
 import { serializeTipTapMarkdown } from "@/features/editor/utils/serializeTipTapMarkdown";
-import { getTipTapExtensions } from "@/features/editor/utils/tiptapExtensions";
+import {
+  getReadOnlyTipTapExtensions,
+  getTipTapExtensions,
+} from "@/features/editor/utils/tiptapExtensions";
 
 type UseTipTapEditorOptions = {
   value: string;
@@ -31,8 +34,12 @@ export function useTipTapEditor({
   }, [onChange]);
 
   const extensions = useMemo(
-    () => customExtensions ?? getTipTapExtensions({ placeholder }),
-    [customExtensions, placeholder],
+    () =>
+      customExtensions ??
+      (readOnly
+        ? getReadOnlyTipTapExtensions()
+        : getTipTapExtensions({ placeholder })),
+    [customExtensions, placeholder, readOnly],
   );
 
   const editor = useEditor({

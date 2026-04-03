@@ -125,4 +125,16 @@ describe("getReadOnlyTipTapExtensions", () => {
       (linkExtension?.options as Record<string, unknown>).openOnClick,
     ).toBe(true);
   });
+
+  it("preserves code block language metadata for the CSS label", () => {
+    const extensions = getReadOnlyTipTapExtensions();
+    const editor = new Editor({
+      extensions,
+      content: "```typescript\nconst answer = 42;\n```",
+      editable: false,
+    });
+
+    expect(editor.getHTML()).toContain('data-language="typescript"');
+    editor.destroy();
+  });
 });

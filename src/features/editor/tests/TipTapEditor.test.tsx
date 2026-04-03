@@ -129,6 +129,39 @@ describe("TipTapEditor", () => {
     const checkbox = document.querySelector('input[type="checkbox"]');
 
     expect(checkbox).toBeInTheDocument();
+    expect(checkbox).toBeDisabled();
     expect(checkbox?.closest("[contenteditable='false']")).toBeTruthy();
+  });
+
+  it("uses readonly link behavior when readOnly is enabled", async () => {
+    const handleEditorReady = vi.fn();
+
+    render(
+      <TipTapEditor
+        value="[OpenAI](https://openai.com)"
+        readOnly
+        onEditorReady={handleEditorReady}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(handleEditorReady).toHaveBeenCalled();
+    });
+
+    const [editor] = handleEditorReady.mock.calls[0] as [
+      {
+        extensionManager: {
+          extensions: Array<{
+            name: string;
+            options?: Record<string, unknown>;
+          }>;
+        };
+      },
+    ];
+    const linkExtension = editor.extensionManager.extensions.find(
+      (extension) => extension.name === "link",
+    );
+
+    expect(linkExtension?.options?.openOnClick).toBe(true);
   });
 });

@@ -217,8 +217,9 @@
   cursor: default;
 }
 
-.tiptap-wrapper .tiptap[contenteditable="false"] input[type="checkbox"] {
-  pointer-events: none;
+.tiptap-wrapper
+  .tiptap[contenteditable="false"]
+  input[type="checkbox"]:disabled {
   opacity: 0.6;
 }
 
