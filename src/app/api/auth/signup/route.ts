@@ -167,7 +167,7 @@ export async function POST(request: NextRequest) {
     email: normalizedEmail,
     password,
     options: {
-      emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}${ROUTES.LOGIN}`,
+      emailRedirectTo: `${process.env.NEXT_PUBLIC_SUPABASE_URL}${ROUTES.LOGIN}`,
       data: { nickname },
     },
   });
