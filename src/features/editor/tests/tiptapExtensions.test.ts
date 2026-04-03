@@ -121,6 +121,8 @@ describe("getReadOnlyTipTapExtensions", () => {
       (ext) => typeof ext === "object" && "name" in ext && ext.name === "link",
     );
 
-    expect(linkExtension?.options.openOnClick).toBe(true);
+    expect(
+      (linkExtension?.options as Record<string, unknown>).openOnClick,
+    ).toBe(true);
   });
 });

@@ -119,14 +119,8 @@ describe("TipTapEditor", () => {
     expect(handleChange).not.toHaveBeenCalled();
   });
 
-  it("disables task checkboxes when requested in readOnly mode", async () => {
-    render(
-      <TipTapEditor
-        value="- [ ] readonly task"
-        readOnly
-        disableReadOnlyCheckboxes
-      />,
-    );
+  it("renders task checkboxes inside a non-editable editor in readOnly mode", async () => {
+    render(<TipTapEditor value="- [ ] readonly task" readOnly />);
 
     await waitFor(() => {
       expect(document.querySelector("[contenteditable='false']")).toBeTruthy();
@@ -134,6 +128,7 @@ describe("TipTapEditor", () => {
 
     const checkbox = document.querySelector('input[type="checkbox"]');
 
-    expect(checkbox).toBeDisabled();
+    expect(checkbox).toBeInTheDocument();
+    expect(checkbox?.closest("[contenteditable='false']")).toBeTruthy();
   });
 });

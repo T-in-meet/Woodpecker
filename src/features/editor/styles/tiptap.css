@@ -130,7 +130,8 @@
   display: block;
 }
 
-.tiptap-wrapper .tiptap pre code[class*="language-"]::before {
+.tiptap-wrapper .tiptap pre code[data-language]::before {
+  content: attr(data-language);
   display: block;
   width: fit-content;
   margin-left: auto;
@@ -143,26 +144,6 @@
   font-weight: 600;
   letter-spacing: 0.01em;
   color: var(--muted-foreground);
-}
-
-.tiptap-wrapper .tiptap pre code.language-javascript::before {
-  content: "javascript";
-}
-
-.tiptap-wrapper .tiptap pre code.language-typescript::before {
-  content: "typescript";
-}
-
-.tiptap-wrapper .tiptap pre code.language-python::before {
-  content: "python";
-}
-
-.tiptap-wrapper .tiptap pre code.language-rust::before {
-  content: "rust";
-}
-
-.tiptap-wrapper .tiptap pre code.language-go::before {
-  content: "go";
 }
 
 /* Blockquote */
@@ -234,6 +215,11 @@
 /* readOnly cursor */
 .tiptap-wrapper .tiptap[contenteditable="false"] {
   cursor: default;
+}
+
+.tiptap-wrapper .tiptap[contenteditable="false"] input[type="checkbox"] {
+  pointer-events: none;
+  opacity: 0.6;
 }
 
 @media (min-width: 640px) {

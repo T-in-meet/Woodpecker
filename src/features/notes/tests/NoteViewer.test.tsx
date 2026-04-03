@@ -22,7 +22,8 @@ describe("NoteViewer", () => {
       expect(editor).toBeTruthy();
     });
 
-    expect(screen.getByRole("checkbox")).toBeDisabled();
+    const checkbox = screen.getByRole("checkbox");
+    expect(checkbox.closest("[contenteditable='false']")).toBeTruthy();
     expect(screen.getByText("first")).toBeInTheDocument();
     expect(screen.getByText("first").closest(".viewer-shell")).toBeTruthy();
   });

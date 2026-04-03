@@ -1,5 +1,7 @@
 "use client";
 
+import { useMemo } from "react";
+
 import { TipTapEditor } from "@/features/editor/components/TipTapEditor";
 import { getReadOnlyTipTapExtensions } from "@/features/editor/utils/tiptapExtensions";
 import { cn } from "@/lib/utils/cn";
@@ -9,18 +11,17 @@ type MarkdownNoteViewerClientProps = {
   className?: string | undefined;
 };
 
-const readOnlyExtensions = getReadOnlyTipTapExtensions();
-
 export function MarkdownNoteViewerClient({
   content,
   className,
 }: MarkdownNoteViewerClientProps) {
+  const extensions = useMemo(() => getReadOnlyTipTapExtensions(), []);
+
   return (
     <TipTapEditor
       value={content}
       readOnly
-      disableReadOnlyCheckboxes
-      extensions={readOnlyExtensions}
+      extensions={extensions}
       className={cn(
         "border-none focus-within:border-none focus-within:ring-0",
         className,

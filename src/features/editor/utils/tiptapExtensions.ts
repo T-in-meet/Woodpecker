@@ -98,7 +98,24 @@ function getBaseExtensions({ readOnly = false }: { readOnly?: boolean } = {}) {
       codeBlock: false,
       link: false,
     }),
-    CodeBlockLowlight.configure({ lowlight }),
+    CodeBlockLowlight.extend({
+      renderHTML({ node, HTMLAttributes }) {
+        return [
+          "pre",
+          HTMLAttributes,
+          [
+            "code",
+            {
+              class: node.attrs.language
+                ? `language-${node.attrs.language}`
+                : null,
+              "data-language": node.attrs.language || null,
+            },
+            0,
+          ],
+        ];
+      },
+    }).configure({ lowlight }),
     Link.configure({
       openOnClick: readOnly,
       HTMLAttributes: { class: "tiptap-link" },
@@ -106,7 +123,7 @@ function getBaseExtensions({ readOnly = false }: { readOnly?: boolean } = {}) {
     TaskList,
     MarkdownTaskItem.configure({
       nested: true,
-      ...(readOnly ? { onReadOnlyChecked: () => false } : {}),
+      ...(readOnly && { onReadOnlyChecked: () => false }),
     }),
     Table.configure({ resizable: false }),
     TableRow,
