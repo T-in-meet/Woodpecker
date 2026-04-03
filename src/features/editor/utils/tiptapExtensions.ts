@@ -1,3 +1,8 @@
+import {
+  mergeAttributes,
+  type NodeViewRenderer,
+  type NodeViewRendererProps,
+} from "@tiptap/core";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -90,21 +95,84 @@ const MarkdownTaskItem = TaskItem.extend({
       },
     };
   },
+  renderHTML({ node, HTMLAttributes }) {
+    const isReadOnly = !this.editor?.isEditable;
+
+    return [
+      "li",
+      mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, {
+        "data-type": this.name,
+      }),
+      [
+        "label",
+        [
+          "input",
+          {
+            type: "checkbox",
+            checked: node.attrs.checked ? "checked" : null,
+            disabled: isReadOnly ? "disabled" : null,
+          },
+        ],
+        ["span"],
+      ],
+      ["div", 0],
+    ];
+  },
+  addNodeView() {
+    const parentNodeView = this.parent?.() as NodeViewRenderer | undefined;
+
+    if (!parentNodeView) {
+      return null;
+    }
+
+    return (props: NodeViewRendererProps) => {
+      const nodeView = parentNodeView(props);
+      const checkbox =
+        nodeView.dom instanceof Element
+          ? nodeView.dom.querySelector('input[type="checkbox"]')
+          : null;
+
+      if (checkbox instanceof HTMLInputElement) {
+        checkbox.disabled = !props.editor.isEditable;
+      }
+
+      return nodeView;
+    };
+  },
 });
 
-function getBaseExtensions() {
+function getBaseExtensions({ readOnly = false }: { readOnly?: boolean } = {}) {
   return [
     StarterKit.configure({
       codeBlock: false,
       link: false,
     }),
-    CodeBlockLowlight.configure({ lowlight }),
+    CodeBlockLowlight.extend({
+      renderHTML({ node, HTMLAttributes }) {
+        return [
+          "pre",
+          HTMLAttributes,
+          [
+            "code",
+            {
+              class: node.attrs.language
+                ? `language-${node.attrs.language}`
+                : null,
+              "data-language": node.attrs.language || null,
+            },
+            0,
+          ],
+        ];
+      },
+    }).configure({ lowlight }),
     Link.configure({
-      openOnClick: false,
+      openOnClick: readOnly,
       HTMLAttributes: { class: "tiptap-link" },
     }),
     TaskList,
-    MarkdownTaskItem.configure({ nested: true }),
+    MarkdownTaskItem.configure({
+      nested: true,
+    }),
     Table.configure({ resizable: false }),
     TableRow,
     TableHeader,
@@ -129,5 +197,5 @@ export function getTipTapExtensions({
 }
 
 export function getReadOnlyTipTapExtensions() {
-  return getBaseExtensions();
+  return getBaseExtensions({ readOnly: true });
 }
