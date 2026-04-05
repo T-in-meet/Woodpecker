@@ -9,6 +9,7 @@ import {
   type SlashCommandMenuRef,
 } from "../components/SlashCommandMenu";
 import {
+  filterSlashCommandItems,
   SLASH_COMMAND_ITEMS,
   type SlashCommandItem,
 } from "../utils/slashCommand";
@@ -112,37 +113,31 @@ describe("SlashCommandMenu", () => {
   });
 });
 
-describe("SLASH_COMMAND_ITEMS filtering", () => {
-  function filterItems(query: string): SlashCommandItem[] {
-    return SLASH_COMMAND_ITEMS.filter(
-      (item) =>
-        item.title.toLowerCase().includes(query.toLowerCase()) ||
-        item.description.toLowerCase().includes(query.toLowerCase()),
-    );
-  }
-
+describe("filterSlashCommandItems", () => {
   it("returns all items for empty query", () => {
-    expect(filterItems("")).toHaveLength(SLASH_COMMAND_ITEMS.length);
+    expect(filterSlashCommandItems("")).toHaveLength(
+      SLASH_COMMAND_ITEMS.length,
+    );
   });
 
   it("filters by title", () => {
-    const results = filterItems("제목");
+    const results = filterSlashCommandItems("제목");
     expect(results.length).toBeGreaterThanOrEqual(3);
     expect(results.every((result) => result.title.includes("제목"))).toBe(true);
   });
 
   it("filters by description", () => {
-    const results = filterItems("코드");
+    const results = filterSlashCommandItems("코드");
     expect(results.length).toBeGreaterThanOrEqual(1);
   });
 
   it("returns empty array for non-matching query", () => {
-    expect(filterItems("zzz_no_match")).toHaveLength(0);
+    expect(filterSlashCommandItems("zzz_no_match")).toHaveLength(0);
   });
 
   it("is case-insensitive for ASCII queries", () => {
-    const lower = filterItems("table");
-    const upper = filterItems("TABLE");
+    const lower = filterSlashCommandItems("table");
+    const upper = filterSlashCommandItems("TABLE");
     expect(lower).toEqual(upper);
   });
 });

@@ -19,12 +19,12 @@ function getEditorContentElement() {
 describe("TipTapEditor", () => {
   it("applies the aria-label to the editor", async () => {
     render(
-      <TipTapEditor value="" onChange={vi.fn()} aria-label="Markdown editor" />,
+      <TipTapEditor value="" onChange={vi.fn()} aria-label="마크다운 편집기" />,
     );
 
     await waitFor(() => {
       expect(getEditorContentElement().getAttribute("aria-label")).toBe(
-        "Markdown editor",
+        "마크다운 편집기",
       );
     });
   });
@@ -34,7 +34,7 @@ describe("TipTapEditor", () => {
       <TipTapEditor
         value=""
         onChange={vi.fn()}
-        placeholder="Type something here"
+        placeholder="내용을 입력해주세요"
       />,
     );
 

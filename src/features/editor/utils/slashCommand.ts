@@ -80,6 +80,14 @@ export const SLASH_COMMAND_ITEMS: SlashCommandItem[] = [
   },
 ];
 
+export function filterSlashCommandItems(query: string): SlashCommandItem[] {
+  return SLASH_COMMAND_ITEMS.filter(
+    (item) =>
+      item.title.toLowerCase().includes(query.toLowerCase()) ||
+      item.description.toLowerCase().includes(query.toLowerCase()),
+  );
+}
+
 const slashCommandPluginKey = new PluginKey("slashCommand");
 
 export const SlashCommand = Extension.create({
@@ -103,11 +111,7 @@ export const SlashCommand = Extension.create({
           props.command(editor);
         },
         items: ({ query }: { query: string }): SlashCommandItem[] => {
-          return SLASH_COMMAND_ITEMS.filter(
-            (item) =>
-              item.title.toLowerCase().includes(query.toLowerCase()) ||
-              item.description.toLowerCase().includes(query.toLowerCase()),
-          );
+          return filterSlashCommandItems(query);
         },
       } satisfies Partial<SuggestionOptions>,
     };

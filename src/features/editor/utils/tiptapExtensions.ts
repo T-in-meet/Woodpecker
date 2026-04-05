@@ -196,7 +196,7 @@ export function getTipTapExtensions({
   return [
     ...getBaseExtensions(),
     SlashCommand.configure({
-      suggestion: { ...slashCommandSuggestionRender() },
+      suggestion: slashCommandSuggestionRender(),
     }),
     ...(placeholder ? [Placeholder.configure({ placeholder })] : []),
   ];

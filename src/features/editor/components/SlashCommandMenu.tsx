@@ -129,6 +129,8 @@ export function slashCommandSuggestionRender() {
 
       return {
         onStart: (props: SuggestionProps) => {
+          destroy();
+
           reactRoot = document.createElement("div");
           reactRoot.classList.add("slash-command-container");
           document.body.appendChild(reactRoot);

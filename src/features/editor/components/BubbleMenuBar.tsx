@@ -56,10 +56,9 @@ export function BubbleMenuBar({ editor }: BubbleMenuBarProps) {
   const isLink = editor.isActive("link");
   const isCodeBlock = editor.isActive("codeBlock");
   const isTable = editor.isActive("table");
+  const codeBlockAttrs = editor.getAttributes("codeBlock");
   const codeBlockLanguage =
-    typeof editor.getAttributes("codeBlock").language === "string"
-      ? editor.getAttributes("codeBlock").language
-      : "";
+    typeof codeBlockAttrs.language === "string" ? codeBlockAttrs.language : "";
 
   return showLinkEdit ? (
     <LinkEditPopover

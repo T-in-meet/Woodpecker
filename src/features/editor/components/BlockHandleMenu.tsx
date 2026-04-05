@@ -173,55 +173,21 @@ export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
     };
   }, []);
 
-  const shouldRenderHandle =
-    anchorPosition !== null && (isEditorFocused || isMenuOpen);
-
-  if (
-    !shouldRenderHandle ||
-    typeof window === "undefined" ||
-    typeof document === "undefined"
-  ) {
+  if (typeof window === "undefined" || typeof document === "undefined") {
     return null;
   }
 
-  const estimatedMenuWidth = Math.min(
-    MENU_MAX_WIDTH,
-    window.innerWidth - MENU_PADDING * 2,
-  );
-  const availableLeftWidth = Math.max(
-    0,
-    anchorPosition.blockLeft - MENU_GAP - MENU_PADDING,
-  );
-  const canPlaceLeft = availableLeftWidth >= MIN_LEFT_MENU_WIDTH;
-  const menuMaxWidth = canPlaceLeft
-    ? Math.min(MENU_MAX_WIDTH, availableLeftWidth)
-    : estimatedMenuWidth;
-  const measuredMenuWidth = menuRef.current?.offsetWidth ?? menuMaxWidth;
-  const measuredMenuHeight = menuRef.current?.offsetHeight ?? 56;
-  const menuLeft = canPlaceLeft
-    ? Math.max(
-        MENU_PADDING,
-        anchorPosition.blockLeft - MENU_GAP - measuredMenuWidth,
-      )
-    : Math.min(
-        Math.max(MENU_PADDING, anchorPosition.blockLeft),
-        Math.max(
-          MENU_PADDING,
-          window.innerWidth - measuredMenuWidth - MENU_PADDING,
-        ),
-      );
-  const preferredTop = canPlaceLeft
-    ? anchorPosition.handleTop + HANDLE_SIZE / 2 - measuredMenuHeight / 2
-    : anchorPosition.blockTop - measuredMenuHeight - MENU_GAP;
-  const fallbackTop = anchorPosition.blockBottom + MENU_GAP;
-  const rawMenuTop =
-    !canPlaceLeft && preferredTop < MENU_PADDING ? fallbackTop : preferredTop;
-  const menuTop = Math.min(
-    Math.max(MENU_PADDING, rawMenuTop),
-    Math.max(
-      MENU_PADDING,
-      window.innerHeight - measuredMenuHeight - MENU_PADDING,
-    ),
+  const shouldRenderHandle =
+    anchorPosition !== null && (isEditorFocused || isMenuOpen);
+
+  if (!shouldRenderHandle) {
+    return null;
+  }
+
+  const menuPosition = computeMenuPosition(
+    anchorPosition,
+    menuRef.current?.offsetWidth ?? null,
+    menuRef.current?.offsetHeight ?? null,
   );
 
   return createPortal(
@@ -260,9 +226,9 @@ export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
           ref={menuRef}
           className="fixed z-50"
           style={{
-            left: menuLeft,
-            maxWidth: menuMaxWidth,
-            top: menuTop,
+            left: menuPosition.left,
+            maxWidth: menuPosition.maxWidth,
+            top: menuPosition.top,
           }}
         >
           <BubbleMenuBar editor={editor} />
@@ -271,6 +237,53 @@ export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
     </>,
     document.body,
   );
+}
+
+type MenuPositionType = {
+  left: number;
+  maxWidth: number;
+  top: number;
+};
+
+function computeMenuPosition(
+  anchor: BlockAnchorPositionType,
+  measuredWidth: number | null,
+  measuredHeight: number | null,
+): MenuPositionType {
+  const estimatedMenuWidth = Math.min(
+    MENU_MAX_WIDTH,
+    window.innerWidth - MENU_PADDING * 2,
+  );
+  const availableLeftWidth = Math.max(
+    0,
+    anchor.blockLeft - MENU_GAP - MENU_PADDING,
+  );
+  const canPlaceLeft = availableLeftWidth >= MIN_LEFT_MENU_WIDTH;
+  const maxWidth = canPlaceLeft
+    ? Math.min(MENU_MAX_WIDTH, availableLeftWidth)
+    : estimatedMenuWidth;
+  const width = measuredWidth ?? maxWidth;
+  const height = measuredHeight ?? 56;
+
+  const left = canPlaceLeft
+    ? Math.max(MENU_PADDING, anchor.blockLeft - MENU_GAP - width)
+    : Math.min(
+        Math.max(MENU_PADDING, anchor.blockLeft),
+        Math.max(MENU_PADDING, window.innerWidth - width - MENU_PADDING),
+      );
+
+  const preferredTop = canPlaceLeft
+    ? anchor.handleTop + HANDLE_SIZE / 2 - height / 2
+    : anchor.blockTop - height - MENU_GAP;
+  const fallbackTop = anchor.blockBottom + MENU_GAP;
+  const rawTop =
+    !canPlaceLeft && preferredTop < MENU_PADDING ? fallbackTop : preferredTop;
+  const top = Math.min(
+    Math.max(MENU_PADDING, rawTop),
+    Math.max(MENU_PADDING, window.innerHeight - height - MENU_PADDING),
+  );
+
+  return { left, maxWidth, top };
 }
 
 function getActiveBlockElement(editor: Editor): HTMLElement | null {

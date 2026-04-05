@@ -16,16 +16,44 @@ function createMockEditor(
     tableActive?: boolean;
   } & Record<string, unknown> = {},
 ) {
-  const chain: Record<string, unknown> = new Proxy(
-    {},
-    {
-      get(_, prop) {
-        if (prop === "run") return vi.fn(() => true);
+  const run = vi.fn(() => true);
+  const chainMethods = {
+    focus: vi.fn(),
+    undo: vi.fn(),
+    redo: vi.fn(),
+    toggleHeading: vi.fn(),
+    toggleBold: vi.fn(),
+    toggleItalic: vi.fn(),
+    toggleStrike: vi.fn(),
+    toggleCode: vi.fn(),
+    toggleBulletList: vi.fn(),
+    toggleOrderedList: vi.fn(),
+    toggleTaskList: vi.fn(),
+    toggleBlockquote: vi.fn(),
+    toggleCodeBlock: vi.fn(),
+    setHorizontalRule: vi.fn(),
+    setLink: vi.fn(),
+    unsetLink: vi.fn(),
+    insertTable: vi.fn(),
+    addColumnAfter: vi.fn(),
+    deleteColumn: vi.fn(),
+    addRowAfter: vi.fn(),
+    deleteRow: vi.fn(),
+    deleteTable: vi.fn(),
+    updateAttributes: vi.fn(),
+    run,
+  } as Record<string, ReturnType<typeof vi.fn>>;
 
-        return () => chain;
-      },
-    },
-  );
+  const chain: Record<string, unknown> = {};
+  for (const key of Object.keys(chainMethods)) {
+    chain[key] =
+      key === "run"
+        ? run
+        : (...args: unknown[]) => {
+            chainMethods[key]!(...args);
+            return chain;
+          };
+  }
 
   return {
     chain: () => chain,
