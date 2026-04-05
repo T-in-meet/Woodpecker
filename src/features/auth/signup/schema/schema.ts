@@ -49,14 +49,3 @@ export const signupFormSchema = z
     message: "비밀번호가 일치하지 않습니다",
     path: ["confirmPassword"],
   });
-
-export const signupInputSchema = loginFormSchema
-  .extend({
-    confirmPassword: z.string(),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "비밀번호가 일치하지 않습니다",
-    path: ["confirmPassword"],
-  });
-
-export type SignupInput = z.infer<typeof signupInputSchema>;
