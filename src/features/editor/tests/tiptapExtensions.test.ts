@@ -83,6 +83,17 @@ describe("Read-only editor", () => {
   });
 });
 
+describe("getTipTapExtensions", () => {
+  it("includes SlashCommand in editable mode", () => {
+    const extensions = getTipTapExtensions();
+    const extensionNames = extensions.map((ext) =>
+      typeof ext === "object" && "name" in ext ? ext.name : "",
+    );
+
+    expect(extensionNames).toContain("slashCommand");
+  });
+});
+
 describe("getReadOnlyTipTapExtensions", () => {
   it("creates a working editor without SlashCommand and Placeholder", () => {
     const extensions = getReadOnlyTipTapExtensions();

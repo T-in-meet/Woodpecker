@@ -23,6 +23,9 @@ import typescript from "highlight.js/lib/languages/typescript";
 import { createLowlight } from "lowlight";
 import { Markdown } from "tiptap-markdown";
 
+import { slashCommandSuggestionRender } from "../components/SlashCommandMenu";
+import { SlashCommand } from "./slashCommand";
+
 const lowlight = createLowlight();
 lowlight.register("javascript", javascript);
 lowlight.register("typescript", typescript);
@@ -192,6 +195,9 @@ export function getTipTapExtensions({
 }: { placeholder?: string | undefined } = {}) {
   return [
     ...getBaseExtensions(),
+    SlashCommand.configure({
+      suggestion: { ...slashCommandSuggestionRender() },
+    }),
     ...(placeholder ? [Placeholder.configure({ placeholder })] : []),
   ];
 }
