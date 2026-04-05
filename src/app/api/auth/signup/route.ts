@@ -141,7 +141,11 @@ export async function POST(request: NextRequest) {
   if (existingUser && existingUser.email_confirmed_at === null) {
     return successResponse(
       AUTH_API_CODES.SIGNUP_SUCCESS,
-      { email: normalizedEmail, status: "PENDING" },
+      {
+        email: normalizedEmail,
+        redirectTo: ROUTES.LOGIN,
+        signupAccountStatus: "pending",
+      },
       { status: 200 },
     );
   }
@@ -149,7 +153,11 @@ export async function POST(request: NextRequest) {
   if (existingUser && existingUser.email_confirmed_at !== null) {
     return successResponse(
       AUTH_API_CODES.SIGNUP_SUCCESS,
-      { email: normalizedEmail, redirectTo: ROUTES.LOGIN },
+      {
+        email: normalizedEmail,
+        redirectTo: ROUTES.LOGIN,
+        signupAccountStatus: "active",
+      },
       { status: 200 },
     );
   }
@@ -159,7 +167,7 @@ export async function POST(request: NextRequest) {
     email: normalizedEmail,
     password,
     options: {
-      emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}${ROUTES.LOGIN}`,
+      emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}${ROUTES.LOGIN}`,
       data: { nickname },
     },
   });
@@ -180,8 +188,8 @@ export async function POST(request: NextRequest) {
     AUTH_API_CODES.SIGNUP_SUCCESS,
     {
       email: data.user?.email ?? normalizedEmail,
-      ...(avatarUrl !== null ? { avatar_url: avatarUrl } : {}),
-      redirectTo: ROUTES.VERIFY_EMAIL,
+      redirectTo: ROUTES.LOGIN,
+      signupAccountStatus: "pending",
     },
     { status: 201 },
   );
