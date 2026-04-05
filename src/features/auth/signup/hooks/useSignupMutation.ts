@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 
-import { buildSignupRequestPayload } from "@/features/auth/lib/buildSignupRequestPayload";
+import { buildSignupRequestPayload } from "@/features/auth/signup/lib/buildSignupRequestPayload";
 
 type SignupPayload = {
   email: string;

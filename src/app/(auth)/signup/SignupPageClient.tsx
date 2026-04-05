@@ -2,8 +2,8 @@
 
 import { useRouter } from "next/navigation";
 
-import { SignupForm } from "@/features/auth/components/SignupForm";
-import { useSignupMutation } from "@/features/auth/hooks/useSignupMutation";
+import { SignupForm } from "@/features/auth/signup/components/SignupForm";
+import { useSignupMutation } from "@/features/auth/signup/hooks/useSignupMutation";
 
 export default function SignupPageClient() {
   const router = useRouter();

@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { loginFormSchema } from "../../login/schema/schema";
+
 export const SIGNUP_PASSWORD_MIN = 8;
 export const SIGNUP_NICKNAME_MIN = 1;
 export const SIGNUP_NICKNAME_MAX = 10;
@@ -47,3 +49,14 @@ export const signupFormSchema = z
     message: "비밀번호가 일치하지 않습니다",
     path: ["confirmPassword"],
   });
+
+export const signupInputSchema = loginFormSchema
+  .extend({
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "비밀번호가 일치하지 않습니다",
+    path: ["confirmPassword"],
+  });
+
+export type SignupInput = z.infer<typeof signupInputSchema>;

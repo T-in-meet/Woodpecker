@@ -2,10 +2,10 @@ import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
-import { VALIDATION_REASON } from "@/features/auth/constants/validation";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
+import { VALIDATION_REASON } from "@/features/auth/signup/constants/validation";
 import { resetRateLimitStores } from "@/features/auth/signup/lib/checkSignupRateLimit";
-import { SIGNUP_PASSWORD_MIN } from "@/features/auth/signup/schema";
+import { SIGNUP_PASSWORD_MIN } from "@/features/auth/signup/schema/schema";
 import { ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 

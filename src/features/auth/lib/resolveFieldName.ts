@@ -1,4 +1,4 @@
-import type { FormInput } from "../components/SignupForm";
+import type { FormInput } from "../signup/components/SignupForm";
 
 const FORM_FIELD_NAMES = new Set([
   "email",

@@ -3,8 +3,8 @@ import { renderHook } from "@testing-library/react";
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useSignupMutation } from "@/features/auth/hooks/useSignupMutation";
-import { buildSignupRequestPayload } from "@/features/auth/lib/buildSignupRequestPayload";
+import { useSignupMutation } from "@/features/auth/signup/hooks/useSignupMutation";
+import { buildSignupRequestPayload } from "@/features/auth/signup/lib/buildSignupRequestPayload";
 
 const mockFetch = vi.fn();
 

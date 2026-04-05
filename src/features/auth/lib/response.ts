@@ -1,9 +1,10 @@
-import { ValidationReason } from "@/features/auth/types/validation.types";
 import {
   type ApiCode,
   type ApiResult,
   RESULT_HTTP_STATUS_MAP,
 } from "@/lib/constants/apiCodes";
+
+import { ValidationReason } from "../signup/types/validation.types";
 
 type SuccessResponse<T> = {
   success: true;

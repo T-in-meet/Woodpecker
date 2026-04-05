@@ -2,7 +2,7 @@ import {
   checkLimit,
   RateLimitResult,
   WindowEntry,
-} from "@/features/auth/uitils/rateLimitUtils";
+} from "@/features/auth/uitils/rateLimit.utils";
 
 const IP_LIMIT = 10;
 const EMAIL_LIMIT = 5;
