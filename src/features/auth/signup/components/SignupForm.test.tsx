@@ -526,7 +526,7 @@ describe("회원가입 폼 제출 및 pending 상태", () => {
   it("TC-03: isPending이 true이면 제출 버튼이 비활성화된다", () => {
     renderSignupForm({ isPending: true });
 
-    expect(screen.getByRole("button", { name: /회원가입/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /가입 중/i })).toBeDisabled();
   });
 
   it("TC-04: isPending이 true이면 제출 영역에 로딩 인디케이터가 표시된다", () => {
@@ -540,7 +540,7 @@ describe("회원가입 폼 제출 및 pending 상태", () => {
     const onSubmit = vi.fn();
     renderSignupForm({ onSubmit, isPending: true });
 
-    const submitButton = screen.getByRole("button", { name: /회원가입/i });
+    const submitButton = screen.getByRole("button", { name: /가입 중/i });
     await user.click(submitButton);
     await user.click(submitButton);
     await user.click(submitButton);
@@ -781,7 +781,7 @@ describe("회원가입 전역 에러 처리", () => {
     const onSubmit = vi.fn().mockRejectedValue(serverError);
     const { rerender } = renderSignupForm({ onSubmit, isPending: true });
 
-    expect(screen.getByRole("button", { name: /회원가입/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /가입 중/i })).toBeDisabled();
     expect(screen.getByRole("status")).toBeInTheDocument();
 
     rerender(<SignupForm onSubmit={onSubmit} isPending={false} />);
@@ -792,7 +792,7 @@ describe("회원가입 전역 에러 처리", () => {
       "잠시 후 다시 시도해주세요",
     );
     expect(
-      screen.getByRole("button", { name: /회원가입/i }),
+      screen.getByRole("button", { name: /^회원가입$/ }),
     ).not.toBeDisabled();
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
@@ -875,5 +875,88 @@ describe("회원가입 전역 에러 처리", () => {
     });
 
     resolveSecondSubmit?.();
+  });
+});
+
+// TC-01 ~ TC-10: PR-UI-14 반응형 레이아웃
+describe("SignupForm 반응형 레이아웃 (PR-UI-14)", () => {
+  describe("agreements 외부 레이아웃", () => {
+    // — md:grid-cols-2 + grid-cols-1 클래스가 동시에 존재해야 모든 breakpoint를 커버
+    it("TC-01: agreements 컨테이너가 grid-cols-1 md:grid-cols-2 반응형 클래스를 갖는다", () => {
+      renderSignupForm();
+
+      const container = screen.getByTestId("agreements-container");
+
+      expect(container).toHaveClass("grid-cols-1");
+      expect(container).toHaveClass("md:grid-cols-2");
+    });
+  });
+
+  describe("각 agreement 항목 내부 레이아웃", () => {
+    // — flex-col lg:flex-row 클래스가 동시에 존재해야 모든 breakpoint를 커버
+    it("TC-02: 이용약관 항목 내부가 flex-col lg:flex-row 반응형 클래스를 갖는다", () => {
+      renderSignupForm();
+
+      const innerRow = screen.getByTestId("tos-inner-row");
+
+      expect(innerRow).toHaveClass("flex-col");
+      expect(innerRow).toHaveClass("lg:flex-row");
+    });
+
+    it("TC-03: 이용약관 텍스트와 checkbox가 동일한 그룹 컨테이너 안에 있다", () => {
+      renderSignupForm();
+
+      const group = screen.getByTestId("tos-text-checkbox-group");
+
+      expect(
+        within(group).getByText("이용약관에 동의합니다"),
+      ).toBeInTheDocument();
+      expect(
+        within(group).getByRole("checkbox", { name: /이용약관/i }),
+      ).toBeInTheDocument();
+    });
+
+    it("TC-04: 이용약관 보기 버튼이 텍스트+checkbox 그룹보다 앞에 위치한다", () => {
+      renderSignupForm();
+
+      const tosButton = screen.getByRole("button", { name: /이용약관 보기/i });
+      const textCheckboxGroup = screen.getByTestId("tos-text-checkbox-group");
+
+      expect(
+        tosButton.compareDocumentPosition(textCheckboxGroup) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    });
+  });
+
+  describe("하단 액션 영역", () => {
+    it("TC-05: 하단 액션 컨테이너에 flex-wrap 클래스가 적용된다", () => {
+      renderSignupForm();
+
+      const actionArea = screen.getByTestId("form-action-area");
+
+      expect(actionArea).toHaveClass("flex-wrap");
+    });
+  });
+
+  describe("기존 동작 유지", () => {
+    it("TC-06: 기존 form validation / submit 동작이 그대로 유지된다", async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+      renderSignupForm({ onSubmit });
+
+      await user.type(screen.getByLabelText(/이메일/i), "test@example.com");
+      await user.type(screen.getByLabelText(/^비밀번호$/i), "12345678");
+      await user.type(screen.getByLabelText(/비밀번호 확인/i), "12345678");
+      await user.type(screen.getByLabelText(/닉네임/i), "tester");
+      await user.click(screen.getByRole("checkbox", { name: /이용약관/i }));
+      await user.click(screen.getByRole("checkbox", { name: /개인정보/i }));
+
+      await user.click(screen.getByRole("button", { name: /^회원가입$/i }));
+
+      await waitFor(() => {
+        expect(onSubmit).toHaveBeenCalledTimes(1);
+      });
+    });
   });
 });

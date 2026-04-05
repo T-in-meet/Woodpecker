@@ -116,7 +116,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
   return (
     <form
       aria-label="회원가입"
-      className="mx-auto mt-16 max-w-5xl space-y-4 pl-4"
+      className="mx-auto max-w-4xl space-y-4 mt-16 px-4"
       onSubmit={handleSubmit(handleValidSubmit)}
     >
       <div className="space-y-4">
@@ -200,12 +200,16 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
         />
       </div>
 
-      <div className="flex justify-between">
+      <div
+        data-testid="agreements-container"
+        className="grid grid-cols-1 md:grid-cols-2 gap-4"
+      >
         {/* 이용약관 */}
-        <div data-testid="terms-of-service-field" className="flex-1 space-y-2">
+        <div data-testid="terms-of-service-field" className="space-y-2">
           <div
+            data-testid="tos-inner-row"
             className={cn(
-              "flex items-center space-x-2",
+              "flex flex-col lg:flex-row lg:items-center gap-2",
               !errors.termsOfService && "mb-8",
             )}
           >
@@ -217,25 +221,32 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
             >
               이용약관 보기
             </Button>
-            <Label htmlFor="termsOfService">이용약관에 동의합니다</Label>
-            <Controller
-              name="termsOfService"
-              control={control}
-              render={({ field }) => (
-                <Checkbox
-                  id="termsOfService"
-                  name={field.name}
-                  checked={field.value}
-                  onCheckedChange={(checked) => {
-                    field.onChange(checked === true);
-                  }}
-                  onBlur={field.onBlur}
-                  aria-describedby={
-                    errors.termsOfService ? "terms-of-service-error" : undefined
-                  }
-                />
-              )}
-            />
+            <div
+              data-testid="tos-text-checkbox-group"
+              className="flex items-center gap-2"
+            >
+              <Label htmlFor="termsOfService">이용약관에 동의합니다</Label>
+              <Controller
+                name="termsOfService"
+                control={control}
+                render={({ field }) => (
+                  <Checkbox
+                    id="termsOfService"
+                    name={field.name}
+                    checked={field.value}
+                    onCheckedChange={(checked) => {
+                      field.onChange(checked === true);
+                    }}
+                    onBlur={field.onBlur}
+                    aria-describedby={
+                      errors.termsOfService
+                        ? "terms-of-service-error"
+                        : undefined
+                    }
+                  />
+                )}
+              />
+            </div>
           </div>
 
           {errors.termsOfService && (
@@ -250,10 +261,10 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
         </div>
 
         {/* 개인정보 */}
-        <div data-testid="privacy-policy-field" className="flex-1 space-y-2">
+        <div data-testid="privacy-policy-field" className="space-y-2">
           <div
             className={cn(
-              "flex items-center space-x-2",
+              "flex flex-col lg:flex-row lg:items-center gap-2",
               !errors.privacyPolicy && "mb-8",
             )}
           >
@@ -266,28 +277,30 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
               개인정보처리방침 보기
             </Button>
 
-            <Label htmlFor="privacyPolicy">
-              개인정보 처리방침에 동의합니다
-            </Label>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="privacyPolicy">
+                개인정보 처리방침에 동의합니다
+              </Label>
 
-            <Controller
-              name="privacyPolicy"
-              control={control}
-              render={({ field }) => (
-                <Checkbox
-                  id="privacyPolicy"
-                  name={field.name}
-                  checked={field.value}
-                  onCheckedChange={(checked) => {
-                    field.onChange(checked === true);
-                  }}
-                  onBlur={field.onBlur}
-                  aria-describedby={
-                    errors.privacyPolicy ? "privacy-policy-error" : undefined
-                  }
-                />
-              )}
-            />
+              <Controller
+                name="privacyPolicy"
+                control={control}
+                render={({ field }) => (
+                  <Checkbox
+                    id="privacyPolicy"
+                    name={field.name}
+                    checked={field.value}
+                    onCheckedChange={(checked) => {
+                      field.onChange(checked === true);
+                    }}
+                    onBlur={field.onBlur}
+                    aria-describedby={
+                      errors.privacyPolicy ? "privacy-policy-error" : undefined
+                    }
+                  />
+                )}
+              />
+            </div>
           </div>
 
           {errors.privacyPolicy && (
@@ -308,7 +321,10 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
         </p>
       )}
 
-      <div className="flex justify-between">
+      <div
+        data-testid="form-action-area"
+        className="flex flex-wrap justify-between gap-2"
+      >
         <Link href="/login" className="text-blue-400 hover:text-blue-500">
           이미 가입하셨나요?
         </Link>
