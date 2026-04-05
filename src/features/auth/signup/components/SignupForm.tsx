@@ -314,7 +314,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
         </Link>
         <Button type="submit" disabled={isPending}>
           {isPending && <span role="status" aria-label="로딩 중" />}
-          회원가입
+          {isPending ? "가입 중..." : "회원가입"}
         </Button>
       </div>
     </form>
