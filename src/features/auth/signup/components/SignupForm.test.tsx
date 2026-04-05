@@ -8,6 +8,12 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
   return { ...actual };
 });
 
+import {
+  NICKNAME_MAX_LENGTH,
+  NICKNAME_MIN_LENGTH,
+  PASSWORD_MIN_LENGTH,
+} from "@/lib/constants/user";
+
 import { SignupForm } from "./SignupForm";
 
 function renderSignupForm({
@@ -158,13 +164,15 @@ describe("회원가입 폼 검증", () => {
       screen.queryByText("올바른 이메일을 입력해주세요"),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByText("비밀번호는 8자 이상이어야 합니다"),
+      screen.queryByText(
+        `비밀번호는 ${PASSWORD_MIN_LENGTH}자 이상이어야 합니다`,
+      ),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByText("비밀번호가 일치하지 않습니다"),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByText("닉네임은 1자 이상이어야 합니다"),
+      screen.queryByText(`닉네임은 ${NICKNAME_MIN_LENGTH}자 이상이어야 합니다`),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByText("이용약관에 동의해주세요"),
@@ -189,7 +197,9 @@ describe("회원가입 폼 검증", () => {
     await user.tab();
 
     expect(
-      await screen.findByText("닉네임은 1자 이상이어야 합니다"),
+      await screen.findByText(
+        `닉네임은 ${NICKNAME_MIN_LENGTH}자 이상이어야 합니다`,
+      ),
     ).toBeInTheDocument();
   });
 
@@ -203,10 +213,10 @@ describe("회원가입 폼 검증", () => {
       await screen.findByText("올바른 이메일을 입력해주세요"),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("비밀번호는 8자 이상이어야 합니다"),
+      screen.getByText(`비밀번호는 ${PASSWORD_MIN_LENGTH}자 이상이어야 합니다`),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("닉네임은 1자 이상이어야 합니다"),
+      screen.getByText(`닉네임은 ${NICKNAME_MIN_LENGTH}자 이상이어야 합니다`),
     ).toBeInTheDocument();
     expect(screen.getByText("이용약관에 동의해주세요")).toBeInTheDocument();
     expect(
@@ -226,7 +236,7 @@ describe("회원가입 폼 검증", () => {
     });
   });
 
-  it("TC-05: 비밀번호 8자 미만 입력 blur 시 에러가 표시된다", async () => {
+  it(`TC-05: 비밀번호 ${PASSWORD_MIN_LENGTH}자 미만 입력 blur 시 에러가 표시된다`, async () => {
     const user = userEvent.setup();
     renderSignupForm();
 
@@ -234,7 +244,9 @@ describe("회원가입 폼 검증", () => {
     await user.tab();
 
     expect(
-      await screen.findByText("비밀번호는 8자 이상이어야 합니다"),
+      await screen.findByText(
+        `비밀번호는 ${PASSWORD_MIN_LENGTH}자 이상이어야 합니다`,
+      ),
     ).toBeInTheDocument();
   });
 
@@ -246,11 +258,13 @@ describe("회원가입 폼 검증", () => {
     await user.tab();
 
     expect(
-      await screen.findByText("닉네임은 1자 이상이어야 합니다"),
+      await screen.findByText(
+        `닉네임은 ${NICKNAME_MIN_LENGTH}자 이상이어야 합니다`,
+      ),
     ).toBeInTheDocument();
   });
 
-  it("TC-07: 닉네임 10자 초과 입력 blur 시 에러가 표시된다", async () => {
+  it(`TC-07: 닉네임 ${NICKNAME_MAX_LENGTH}자 초과 입력 blur 시 에러가 표시된다`, async () => {
     const user = userEvent.setup();
     renderSignupForm();
 
@@ -258,7 +272,9 @@ describe("회원가입 폼 검증", () => {
     await user.tab();
 
     expect(
-      await screen.findByText("닉네임은 10자 이내로 입력해주세요"),
+      await screen.findByText(
+        `닉네임은 ${NICKNAME_MAX_LENGTH}자 이내로 입력해주세요`,
+      ),
     ).toBeInTheDocument();
   });
 
@@ -420,7 +436,9 @@ describe("회원가입 폼 검증", () => {
     await user.type(screen.getByLabelText(/^비밀번호$/i), "short1");
     await user.tab();
     expect(
-      await screen.findByText("비밀번호는 8자 이상이어야 합니다"),
+      await screen.findByText(
+        `비밀번호는 ${PASSWORD_MIN_LENGTH}자 이상이어야 합니다`,
+      ),
     ).toBeInTheDocument();
 
     // 비밀번호 확인: 불일치
@@ -443,7 +461,9 @@ describe("회원가입 폼 검증", () => {
     await user.type(screen.getByLabelText(/닉네임/i), "   ");
     await user.tab();
     expect(
-      await screen.findByText("닉네임은 1자 이상이어야 합니다"),
+      await screen.findByText(
+        `닉네임은 ${NICKNAME_MIN_LENGTH}자 이상이어야 합니다`,
+      ),
     ).toBeInTheDocument();
 
     // 닉네임: 10자 초과
@@ -451,7 +471,9 @@ describe("회원가입 폼 검증", () => {
     await user.type(screen.getByLabelText(/닉네임/i), "가나다라마바사아자차카");
     await user.tab();
     expect(
-      await screen.findByText("닉네임은 10자 이내로 입력해주세요"),
+      await screen.findByText(
+        `닉네임은 ${NICKNAME_MAX_LENGTH}자 이내로 입력해주세요`,
+      ),
     ).toBeInTheDocument();
 
     await user.clear(screen.getByLabelText(/이메일/i));

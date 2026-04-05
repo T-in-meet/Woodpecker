@@ -5,7 +5,7 @@ import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { VALIDATION_REASON } from "@/features/auth/signup/constants/validation";
 import { resetRateLimitStores } from "@/features/auth/signup/lib/checkSignupRateLimit";
-import { SIGNUP_PASSWORD_MIN } from "@/features/auth/signup/schema/schema";
+import { PASSWORD_MIN_LENGTH } from "@/features/auth/signup/schema/schema";
 import { ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 
@@ -348,8 +348,8 @@ describe("PR-API-02 회원가입 입력 검증 - 형식 / 길이 / 경계값 / �
   });
 
   // TC-12: 비밀번호 최소 길이 검증
-  it(`TC-12. 비밀번호가 최소 길이(${SIGNUP_PASSWORD_MIN}자) 미만이면 validation 실패를 반환한다`, async () => {
-    const shortPassword = "a".repeat(SIGNUP_PASSWORD_MIN - 1);
+  it(`TC-12. 비밀번호가 최소 길이(${PASSWORD_MIN_LENGTH}자) 미만이면 validation 실패를 반환한다`, async () => {
+    const shortPassword = "a".repeat(PASSWORD_MIN_LENGTH - 1);
     const response = await POST(
       makeRequest({
         email: "test@example.com",
