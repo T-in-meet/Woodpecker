@@ -1,4 +1,5 @@
 import { buildSignupRequestPayload } from "../lib/buildSignupRequestPayload";
+import { signupSuccessResponseSchema } from "../schema/schema";
 
 // 회원가입 요청 시 사용하는 payload 타입
 type SignupPayload = {
@@ -57,5 +58,5 @@ export async function signupMutation(
     throw body;
   }
 
-  return body;
+  return signupSuccessResponseSchema.parse(body);
 }

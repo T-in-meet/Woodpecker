@@ -90,3 +90,13 @@ export const signupFormSchema = z
     message: "비밀번호가 일치하지 않습니다",
     path: ["confirmPassword"],
   });
+
+export const signupSuccessResponseSchema = z.object({
+  data: z.object({
+    email: z.string().email(),
+    redirectTo: z.string(),
+    signupAccountStatus: z.union([z.literal("active"), z.literal("pending")]),
+  }),
+});
+
+export type SignupSuccessResponse = z.infer<typeof signupSuccessResponseSchema>;
