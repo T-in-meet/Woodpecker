@@ -46,7 +46,13 @@ export function BubbleMenuBar({ editor }: BubbleMenuBarProps) {
       if (url === "") {
         editor.chain().focus().unsetLink().run();
       } else {
-        editor.chain().focus().setLink({ href: url }).run();
+        const chain = editor.chain().focus();
+
+        if (editor.isActive("link")) {
+          chain.extendMarkRange("link");
+        }
+
+        chain.setLink({ href: url }).run();
       }
       setShowLinkEdit(false);
     },

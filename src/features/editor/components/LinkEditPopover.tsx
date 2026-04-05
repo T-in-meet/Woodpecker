@@ -5,16 +5,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils/cn";
 
-const ALLOWED_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
-
-function isSafeUrl(input: string): boolean {
-  try {
-    const url = new URL(input);
-    return ALLOWED_PROTOCOLS.has(url.protocol);
-  } catch {
-    return false;
-  }
-}
+import { isSafeLinkHref } from "../utils/linkValidation";
 
 type LinkEditPopoverProps = {
   initialUrl: string;
@@ -42,8 +33,8 @@ export function LinkEditPopover({
       onSubmit("");
       return;
     }
-    if (!isSafeUrl(trimmed)) {
-      setError("http, https, mailto 프로토콜만 허용됩니다.");
+    if (!isSafeLinkHref(trimmed)) {
+      setError("허용되지 않는 링크 형식입니다.");
       return;
     }
     setError("");

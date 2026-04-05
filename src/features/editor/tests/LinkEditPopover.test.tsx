@@ -134,6 +134,21 @@ describe("LinkEditPopover", () => {
     expect(onSubmit).toHaveBeenCalledWith("mailto:test@example.com");
   });
 
+  it("allows relative URLs supported by the editor link extension", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+
+    render(
+      <LinkEditPopover initialUrl="" onSubmit={onSubmit} onCancel={vi.fn()} />,
+    );
+
+    const input = screen.getByLabelText("링크 URL");
+    await user.type(input, "/docs");
+    await user.keyboard("{Enter}");
+
+    expect(onSubmit).toHaveBeenCalledWith("/docs");
+  });
+
   it("rejects invalid URLs", async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();

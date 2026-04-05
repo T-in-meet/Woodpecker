@@ -1,8 +1,13 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { Editor } from "@tiptap/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { BubbleMenuBar } from "../components/BubbleMenuBar";
+
+type MockEditorType = Editor & {
+  __chainMethods: Record<string, ReturnType<typeof vi.fn>>;
+};
 
 function createMockEditor(
   overrides: {
@@ -15,10 +20,11 @@ function createMockEditor(
     linkActive?: boolean;
     tableActive?: boolean;
   } & Record<string, unknown> = {},
-) {
+): MockEditorType {
   const run = vi.fn(() => true);
   const chainMethods = {
     focus: vi.fn(),
+    extendMarkRange: vi.fn(),
     undo: vi.fn(),
     redo: vi.fn(),
     toggleHeading: vi.fn(),
@@ -56,6 +62,7 @@ function createMockEditor(
   }
 
   return {
+    __chainMethods: chainMethods,
     chain: () => chain,
     can: () => ({
       undo: () => overrides.canUndo ?? true,
@@ -85,7 +92,7 @@ function createMockEditor(
     }),
     isEditable: true,
     ...overrides,
-  } as never;
+  } as unknown as MockEditorType;
 }
 
 describe("BubbleMenuBar", () => {
@@ -159,6 +166,25 @@ describe("BubbleMenuBar", () => {
     await user.click(screen.getByTestId("toolbar-add-link"));
 
     expect(screen.getByPlaceholderText("https://...")).toBeInTheDocument();
+  });
+
+  it("extends the active link range before updating the URL", async () => {
+    const user = userEvent.setup();
+    const editor = createMockEditor({ linkActive: true });
+
+    render(<BubbleMenuBar editor={editor} />);
+
+    await user.click(screen.getByTestId("toolbar-edit-link"));
+
+    const input = screen.getByLabelText("링크 URL");
+    await user.clear(input);
+    await user.type(input, "https://updated.example");
+    await user.keyboard("{Enter}");
+
+    expect(editor.__chainMethods.extendMarkRange).toHaveBeenCalledWith("link");
+    expect(editor.__chainMethods.setLink).toHaveBeenCalledWith({
+      href: "https://updated.example",
+    });
   });
 
   it("shows a code language selector when a code block is active", () => {

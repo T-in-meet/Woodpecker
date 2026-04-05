@@ -137,6 +137,21 @@ describe("getReadOnlyTipTapExtensions", () => {
     ).toBe(true);
   });
 
+  it("uses the shared link validator for safe relative links", () => {
+    const extensions = getReadOnlyTipTapExtensions();
+    const linkExtension = extensions.find(
+      (ext) => typeof ext === "object" && "name" in ext && ext.name === "link",
+    );
+    const isAllowedUri = (
+      linkExtension?.options as {
+        isAllowedUri?: (url: string) => boolean;
+      }
+    ).isAllowedUri;
+
+    expect(isAllowedUri?.("/docs")).toBe(true);
+    expect(isAllowedUri?.("javascript:alert(1)")).toBe(false);
+  });
+
   it("preserves code block language metadata for the CSS label", () => {
     const extensions = getReadOnlyTipTapExtensions();
     const editor = new Editor({

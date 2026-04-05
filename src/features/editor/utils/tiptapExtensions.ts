@@ -24,6 +24,7 @@ import { createLowlight } from "lowlight";
 import { Markdown } from "tiptap-markdown";
 
 import { slashCommandSuggestionRender } from "../components/SlashCommandMenu";
+import { isSafeLinkHref } from "./linkValidation";
 import { SlashCommand } from "./slashCommand";
 
 const lowlight = createLowlight();
@@ -169,6 +170,7 @@ function getBaseExtensions({ readOnly = false }: { readOnly?: boolean } = {}) {
       },
     }).configure({ lowlight }),
     Link.configure({
+      isAllowedUri: (url) => isSafeLinkHref(url),
       openOnClick: readOnly,
       HTMLAttributes: { class: "tiptap-link" },
     }),
