@@ -14,6 +14,7 @@ import { Toast } from "@/components/ui/toast";
 import { signupFormSchema } from "@/features/auth/signup/schema/schema";
 import { cn } from "@/lib/utils/cn";
 
+import { GLOBAL_ERROR_MESSAGES, isGlobalError } from "../../errors/globalError";
 import { isServerValidationError } from "../../lib/isServerValidationError";
 import { resolveFieldName } from "../../lib/resolveFieldName";
 import { mapReasonToMessage } from "../lib/mapReasonToMessage";
@@ -21,31 +22,11 @@ import { mapReasonToMessage } from "../lib/mapReasonToMessage";
 export type FormInput = z.input<typeof signupFormSchema>;
 type FormValues = z.infer<typeof signupFormSchema>;
 type SubmitPayload = Omit<FormValues, "confirmPassword">;
-type GlobalError =
-  | { type: "network" }
-  | { type: "server" }
-  | { type: "timeout" };
-
-const GLOBAL_ERROR_MESSAGES = {
-  network: "네트워크 연결을 확인해주세요",
-  server: "잠시 후 다시 시도해주세요",
-  timeout: "요청 시간이 초과되었습니다. 다시 시도해주세요",
-} as const;
 
 type SignupFormProps = {
   onSubmit: (values: SubmitPayload) => void | Promise<void>;
   isPending?: boolean;
 };
-
-function isGlobalError(error: unknown): error is GlobalError {
-  if (!error || typeof error !== "object" || !("type" in error)) return false;
-
-  return (
-    error.type === "network" ||
-    error.type === "server" ||
-    error.type === "timeout"
-  );
-}
 
 export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
   const [globalErrorMessage, setGlobalErrorMessage] = useState<string | null>(
