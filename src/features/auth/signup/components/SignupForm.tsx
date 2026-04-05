@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -114,6 +114,24 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
     }
   };
 
+  const handlePasswordChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      await onPasswordChange(e);
+      if (getValues("confirmPassword")) {
+        await trigger("confirmPassword");
+      }
+    },
+    [onPasswordChange, getValues, trigger],
+  );
+
+  const handleConfirmPasswordChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      await onConfirmChange(e);
+      await trigger("confirmPassword");
+    },
+    [onConfirmChange, trigger],
+  );
+
   return (
     <form
       aria-label="회원가입"
@@ -142,12 +160,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
           type="password"
           className={cn(!errors.password && "mb-14")}
           {...passwordRegister}
-          onChange={async (e) => {
-            await onPasswordChange(e);
-            if (getValues("confirmPassword")) {
-              await trigger("confirmPassword");
-            }
-          }}
+          onChange={handlePasswordChange}
         />
         {errors.password && (
           <p role="alert" className="text-red-500">
@@ -163,11 +176,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
           type="password"
           className={cn(!errors.confirmPassword && "mb-14")}
           {...confirmPasswordRegister}
-          onChange={(e) => {
-            void onConfirmChange(e).then(() => {
-              void trigger("confirmPassword");
-            });
-          }}
+          onChange={handleConfirmPasswordChange}
         />
         {errors.confirmPassword && (
           <p role="alert" className="text-red-500">
