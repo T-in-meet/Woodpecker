@@ -1,12 +1,12 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 
-import { failureResponse, successResponse } from "@/lib/api/response";
-import { checkResendRateLimit } from "@/lib/auth/checkResendRateLimit";
-import { getLastVerificationResendAt } from "@/lib/auth/getLastVerificationResendAt";
-import { resendVerificationEmail } from "@/lib/auth/resendVerificationEmail";
-import { setLastVerificationResendAt } from "@/lib/auth/setLastVerificationResendAt";
-import { AUTH_API_CODES } from "@/lib/constants/authApiCodes";
+import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
+import { failureResponse, successResponse } from "@/features/auth/lib/response";
+import { checkResendRateLimit } from "@/features/auth/resend-verification-email/lib/checkResendRateLimit";
+import { getLastVerificationResendAt } from "@/features/auth/resend-verification-email/lib/getLastVerificationResendAt";
+import { resendVerificationEmail } from "@/features/auth/resend-verification-email/lib/resendVerificationEmail";
+import { setLastVerificationResendAt } from "@/features/auth/resend-verification-email/lib/setLastVerificationResendAt";
 
 const RESEND_COOLDOWN_MS = 60 * 1000;
 

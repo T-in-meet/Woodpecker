@@ -1,9 +1,8 @@
 import type { ZodError } from "zod";
 
-import type { ValidationError } from "@/lib/api/response";
-import { VALIDATION_REASON } from "@/lib/constants/validation";
-
-import type { ValidationReason } from "../validation.types";
+import { VALIDATION_REASON } from "@/features/auth/constants/validation";
+import type { ValidationError } from "@/features/auth/lib/response";
+import { ValidationReason } from "@/features/auth/types/validation.types";
 
 function getFieldValue(
   input: unknown,

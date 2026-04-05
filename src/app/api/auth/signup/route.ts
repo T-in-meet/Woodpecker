@@ -1,14 +1,14 @@
 import { NextRequest } from "next/server";
 
-import { failureResponse, successResponse } from "@/lib/api/response";
-import { checkSignupRateLimit } from "@/lib/auth/checkSignupRateLimit";
-import { getUserByEmail } from "@/lib/auth/getUserByEmail";
-import { AUTH_API_CODES } from "@/lib/constants/authApiCodes";
+import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
+import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
+import { failureResponse, successResponse } from "@/features/auth/lib/response";
+import { checkSignupRateLimit } from "@/features/auth/signup/lib/checkSignupRateLimit";
+import { mapSignupValidationErrors } from "@/features/auth/signup/lib/mapSignupValidationErrors";
+import { signupApiSchema } from "@/features/auth/signup/schema";
 import { ROUTES } from "@/lib/constants/routes";
 import { STORAGE_BUCKETS } from "@/lib/constants/storageBuckets";
 import { createClient } from "@/lib/supabase/server";
-import { mapSignupValidationErrors } from "@/lib/validation/auth/mapSignupValidationErrors";
-import { signupApiSchema } from "@/lib/validation/auth/signupSchema";
 
 async function parseRequest(
   request: NextRequest,

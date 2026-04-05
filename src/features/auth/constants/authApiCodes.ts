@@ -1,4 +1,8 @@
-import { API_RESULTS, makeApiActionCode, makeApiCode } from "./apiCodes";
+import {
+  API_RESULTS,
+  makeApiActionCode,
+  makeApiCode,
+} from "@/lib/constants/apiCodes";
 
 export const AUTH_API_CODES = {
   SIGNUP_SUCCESS: makeApiCode("signup", API_RESULTS.SUCCESS),

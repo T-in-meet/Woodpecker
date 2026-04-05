@@ -11,8 +11,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Toast } from "@/components/ui/toast";
+import { signupFormSchema } from "@/features/auth/signup/schema";
 import { cn } from "@/lib/utils/cn";
-import { signupFormSchema } from "@/lib/validation/auth/signupSchema";
 
 import { isServerValidationError } from "../lib/isServerValidationError";
 import { mapReasonToMessage } from "../lib/mapReasonToMessage";

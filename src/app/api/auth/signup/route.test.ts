@@ -1,13 +1,13 @@
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { resetRateLimitStores } from "@/lib/auth/checkSignupRateLimit";
-import { getUserByEmail } from "@/lib/auth/getUserByEmail";
-import { AUTH_API_CODES } from "@/lib/constants/authApiCodes";
+import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
+import { VALIDATION_REASON } from "@/features/auth/constants/validation";
+import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
+import { resetRateLimitStores } from "@/features/auth/signup/lib/checkSignupRateLimit";
+import { SIGNUP_PASSWORD_MIN } from "@/features/auth/signup/schema";
 import { ROUTES } from "@/lib/constants/routes";
-import { VALIDATION_REASON } from "@/lib/constants/validation";
 import { createClient } from "@/lib/supabase/server";
-import { SIGNUP_PASSWORD_MIN } from "@/lib/validation/auth/signupSchema";
 
 import { POST } from "./route";
 
