@@ -1,13 +1,52 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { Editor } from "@tiptap/react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, type Mock, vi } from "vitest";
 
 import { BubbleMenuBar } from "../components/BubbleMenuBar";
 
-type MockEditorType = Editor & {
-  __chainMethods: Record<string, ReturnType<typeof vi.fn>>;
+type ChainMethodType = (...args: unknown[]) => void;
+type ChainMethodMockType = Mock<ChainMethodType>;
+type ChainRunnerMockType = Mock<() => boolean>;
+type ChainMethodNameType = (typeof CHAIN_METHOD_NAMES)[number];
+type ChainMethodsType = Record<ChainMethodNameType, ChainMethodMockType> & {
+  run: ChainRunnerMockType;
 };
+
+type MockEditorType = Editor & {
+  __chainMethods: ChainMethodsType;
+};
+
+const CHAIN_METHOD_NAMES = [
+  "focus",
+  "extendMarkRange",
+  "undo",
+  "redo",
+  "toggleHeading",
+  "toggleBold",
+  "toggleItalic",
+  "toggleStrike",
+  "toggleCode",
+  "toggleBulletList",
+  "toggleOrderedList",
+  "toggleTaskList",
+  "toggleBlockquote",
+  "toggleCodeBlock",
+  "setHorizontalRule",
+  "setLink",
+  "unsetLink",
+  "insertTable",
+  "addColumnAfter",
+  "deleteColumn",
+  "addRowAfter",
+  "deleteRow",
+  "deleteTable",
+  "updateAttributes",
+] as const;
+
+function createChainMethodMock(): ChainMethodMockType {
+  return vi.fn<ChainMethodType>();
+}
 
 function createMockEditor(
   overrides: {
@@ -21,44 +60,41 @@ function createMockEditor(
     tableActive?: boolean;
   } & Record<string, unknown> = {},
 ): MockEditorType {
-  const run = vi.fn(() => true);
-  const chainMethods = {
-    focus: vi.fn(),
-    extendMarkRange: vi.fn(),
-    undo: vi.fn(),
-    redo: vi.fn(),
-    toggleHeading: vi.fn(),
-    toggleBold: vi.fn(),
-    toggleItalic: vi.fn(),
-    toggleStrike: vi.fn(),
-    toggleCode: vi.fn(),
-    toggleBulletList: vi.fn(),
-    toggleOrderedList: vi.fn(),
-    toggleTaskList: vi.fn(),
-    toggleBlockquote: vi.fn(),
-    toggleCodeBlock: vi.fn(),
-    setHorizontalRule: vi.fn(),
-    setLink: vi.fn(),
-    unsetLink: vi.fn(),
-    insertTable: vi.fn(),
-    addColumnAfter: vi.fn(),
-    deleteColumn: vi.fn(),
-    addRowAfter: vi.fn(),
-    deleteRow: vi.fn(),
-    deleteTable: vi.fn(),
-    updateAttributes: vi.fn(),
+  const run = vi.fn<() => boolean>(() => true);
+  const chainMethods: ChainMethodsType = {
+    focus: createChainMethodMock(),
+    extendMarkRange: createChainMethodMock(),
+    undo: createChainMethodMock(),
+    redo: createChainMethodMock(),
+    toggleHeading: createChainMethodMock(),
+    toggleBold: createChainMethodMock(),
+    toggleItalic: createChainMethodMock(),
+    toggleStrike: createChainMethodMock(),
+    toggleCode: createChainMethodMock(),
+    toggleBulletList: createChainMethodMock(),
+    toggleOrderedList: createChainMethodMock(),
+    toggleTaskList: createChainMethodMock(),
+    toggleBlockquote: createChainMethodMock(),
+    toggleCodeBlock: createChainMethodMock(),
+    setHorizontalRule: createChainMethodMock(),
+    setLink: createChainMethodMock(),
+    unsetLink: createChainMethodMock(),
+    insertTable: createChainMethodMock(),
+    addColumnAfter: createChainMethodMock(),
+    deleteColumn: createChainMethodMock(),
+    addRowAfter: createChainMethodMock(),
+    deleteRow: createChainMethodMock(),
+    deleteTable: createChainMethodMock(),
+    updateAttributes: createChainMethodMock(),
     run,
-  } as Record<string, ReturnType<typeof vi.fn>>;
+  };
 
-  const chain: Record<string, unknown> = {};
-  for (const key of Object.keys(chainMethods)) {
-    chain[key] =
-      key === "run"
-        ? run
-        : (...args: unknown[]) => {
-            chainMethods[key]!(...args);
-            return chain;
-          };
+  const chain: Record<string, unknown> = { run };
+  for (const key of CHAIN_METHOD_NAMES) {
+    chain[key] = (...args: unknown[]) => {
+      chainMethods[key](...args);
+      return chain;
+    };
   }
 
   return {
