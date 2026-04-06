@@ -16,7 +16,10 @@ export const signupFormSchema = z
     privacyPolicy: z.boolean().refine((val) => val === true, {
       message: "개인정보 처리방침에 동의해주세요",
     }),
-    avatarFile: z.any().optional(),
+    avatarFile: z.custom<File | null | undefined>((value) => {
+      if (value === undefined || value === null) return true;
+      return typeof File !== "undefined" && value instanceof File;
+    }),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "비밀번호가 일치하지 않습니다",
