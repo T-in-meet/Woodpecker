@@ -16,7 +16,13 @@ import {
   Table,
   TextQuote,
 } from "lucide-react";
-import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import { createRoot } from "react-dom/client";
 
 import { cn } from "@/lib/utils/cn";
@@ -36,6 +42,11 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   table: <Table className="size-4" />,
 };
 
+const SLASH_COMMAND_MENU_GAP = 4;
+const SLASH_COMMAND_MENU_PADDING = 8;
+const SLASH_COMMAND_MENU_FALLBACK_WIDTH = 288;
+const SLASH_COMMAND_MENU_FALLBACK_HEIGHT = 256;
+
 export type SlashCommandMenuRef = {
   onKeyDown: (props: SuggestionKeyDownProps) => boolean;
 };
@@ -45,15 +56,59 @@ type SlashCommandMenuProps = {
   command: (item: SlashCommandItem) => void;
 };
 
+type SlashCommandMenuSizeType = {
+  height: number;
+  width: number;
+};
+
+function clampToViewport(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
+export function computeSlashCommandMenuPosition(
+  rect: Pick<DOMRect, "bottom" | "left" | "top">,
+  menuSize: SlashCommandMenuSizeType,
+) {
+  const width = menuSize.width || SLASH_COMMAND_MENU_FALLBACK_WIDTH;
+  const height = menuSize.height || SLASH_COMMAND_MENU_FALLBACK_HEIGHT;
+  const maxLeft = Math.max(
+    SLASH_COMMAND_MENU_PADDING,
+    window.innerWidth - width - SLASH_COMMAND_MENU_PADDING,
+  );
+  const left = clampToViewport(rect.left, SLASH_COMMAND_MENU_PADDING, maxLeft);
+  const maxTop = Math.max(
+    SLASH_COMMAND_MENU_PADDING,
+    window.innerHeight - height - SLASH_COMMAND_MENU_PADDING,
+  );
+  const preferredTop = rect.bottom + SLASH_COMMAND_MENU_GAP;
+  const topAbove = rect.top - height - SLASH_COMMAND_MENU_GAP;
+  const rawTop =
+    preferredTop > maxTop && topAbove >= SLASH_COMMAND_MENU_PADDING
+      ? topAbove
+      : preferredTop;
+  const top = clampToViewport(rawTop, SLASH_COMMAND_MENU_PADDING, maxTop);
+
+  return { left, top };
+}
+
 export const SlashCommandMenu = forwardRef<
   SlashCommandMenuRef,
   SlashCommandMenuProps
 >(({ items, command }, ref) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   useEffect(() => {
     setSelectedIndex(0);
   }, [items]);
+
+  useEffect(() => {
+    itemRefs.current = itemRefs.current.slice(0, items.length);
+  }, [items]);
+
+  useEffect(() => {
+    itemRefs.current[selectedIndex]?.scrollIntoView({ block: "nearest" });
+  }, [items, selectedIndex]);
 
   useImperativeHandle(ref, () => ({
     onKeyDown: ({ event }: SuggestionKeyDownProps) => {
@@ -82,17 +137,20 @@ export const SlashCommandMenu = forwardRef<
 
   if (items.length === 0) {
     return (
-      <div className="slash-command-menu rounded-lg border border-border bg-popover p-2 text-sm text-muted-foreground shadow-md">
+      <div className="slash-command-menu max-w-[min(18rem,calc(100vw-1rem))] rounded-lg border border-border bg-popover p-2 text-sm text-muted-foreground shadow-md">
         결과 없음
       </div>
     );
   }
 
   return (
-    <div className="slash-command-menu max-h-64 overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-md">
+    <div className="slash-command-menu max-h-64 max-w-[min(18rem,calc(100vw-1rem))] overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-md">
       {items.map((item, index) => (
         <button
           key={item.title}
+          ref={(element) => {
+            itemRefs.current[index] = element;
+          }}
           type="button"
           className={cn(
             "flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors",
@@ -193,9 +251,24 @@ export function slashCommandSuggestionRender() {
         if (!rect) return;
 
         element.style.position = "fixed";
-        element.style.left = `${rect.left}px`;
-        element.style.top = `${rect.bottom + 4}px`;
         element.style.zIndex = "50";
+
+        const syncPosition = () => {
+          if (!document.body.contains(element)) {
+            return;
+          }
+
+          const { left, top } = computeSlashCommandMenuPosition(rect, {
+            height: element.offsetHeight,
+            width: element.offsetWidth,
+          });
+
+          element.style.left = `${left}px`;
+          element.style.top = `${top}px`;
+        };
+
+        syncPosition();
+        requestAnimationFrame(syncPosition);
       }
     },
   };

@@ -152,6 +152,19 @@ describe("getReadOnlyTipTapExtensions", () => {
     expect(isAllowedUri?.("javascript:alert(1)")).toBe(false);
   });
 
+  it("preserves scheme-less links from existing markdown content", () => {
+    const extensions = getReadOnlyTipTapExtensions();
+    const editor = new Editor({
+      extensions,
+      content: "[Example](example.com)",
+      editable: false,
+    });
+
+    expect(editor.getHTML()).toContain('href="example.com"');
+
+    editor.destroy();
+  });
+
   it("preserves code block language metadata for the CSS label", () => {
     const extensions = getReadOnlyTipTapExtensions();
     const editor = new Editor({

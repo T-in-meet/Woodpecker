@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { TipTapEditor } from "../components/TipTapEditor";
+import { SLASH_COMMAND_ITEMS } from "../utils/slashCommand";
 
 function getEditorContentElement() {
   const contentElement = document.querySelector("[contenteditable]");
@@ -172,6 +173,29 @@ describe("TipTapEditor", () => {
     expect(handleChange).not.toHaveBeenCalled();
   });
 
+  it("opens the slash command menu when '/' is typed in editable mode", async () => {
+    const user = userEvent.setup();
+    const firstSlashCommandItem = SLASH_COMMAND_ITEMS[0];
+
+    if (!firstSlashCommandItem) {
+      throw new Error("slash command items must not be empty");
+    }
+
+    render(<TipTapEditor value="" onChange={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(getEditorContentElement()).toBeTruthy();
+    });
+
+    const contentElement = getEditorContentElement();
+    await user.click(contentElement);
+    await user.keyboard("/");
+
+    expect(
+      await screen.findByText(firstSlashCommandItem.title),
+    ).toBeInTheDocument();
+  });
+
   it("does not render editor toolbars in readOnly mode", async () => {
     render(<TipTapEditor value="Locked content" readOnly />);
 
@@ -179,7 +203,10 @@ describe("TipTapEditor", () => {
       expect(getEditorContentElement()).toBeTruthy();
     });
 
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Open block toolbar"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("bubble-toolbar")).not.toBeInTheDocument();
   });
 
   it("renders task checkboxes inside a non-editable editor in readOnly mode", async () => {

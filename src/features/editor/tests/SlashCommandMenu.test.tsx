@@ -1,10 +1,11 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { SuggestionKeyDownProps } from "@tiptap/suggestion";
 import { createRef } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  computeSlashCommandMenuPosition,
   SlashCommandMenu,
   type SlashCommandMenuRef,
 } from "../components/SlashCommandMenu";
@@ -110,6 +111,55 @@ describe("SlashCommandMenu", () => {
 
     const handled = ref.current!.onKeyDown(makeSuggestionKeyDownProps("Tab"));
     expect(handled).toBe(false);
+  });
+
+  it("scrolls the active item into view during keyboard navigation", async () => {
+    const ref = createRef<SlashCommandMenuRef>();
+    const scrollIntoViewSpy = vi.spyOn(HTMLElement.prototype, "scrollIntoView");
+
+    render(<SlashCommandMenu ref={ref} items={MOCK_ITEMS} command={vi.fn()} />);
+
+    scrollIntoViewSpy.mockClear();
+    ref.current!.onKeyDown(makeSuggestionKeyDownProps("ArrowDown"));
+
+    await waitFor(() => {
+      expect(scrollIntoViewSpy).toHaveBeenCalledWith({ block: "nearest" });
+    });
+
+    scrollIntoViewSpy.mockRestore();
+  });
+
+  it("clamps the menu position inside the viewport", () => {
+    const originalInnerWidth = window.innerWidth;
+    const originalInnerHeight = window.innerHeight;
+
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 320,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 200,
+    });
+
+    const position = computeSlashCommandMenuPosition(
+      new DOMRect(300, 180, 20, 20),
+      { width: 120, height: 80 },
+    );
+
+    expect(position).toEqual({
+      left: 192,
+      top: 96,
+    });
+
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: originalInnerWidth,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: originalInnerHeight,
+    });
   });
 });
 

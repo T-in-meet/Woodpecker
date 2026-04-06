@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils/cn";
 
-import { isSafeLinkHref } from "../utils/linkValidation";
+import { isSafeLinkHref, normalizeLinkHref } from "../utils/linkValidation";
 
 type LinkEditPopoverProps = {
   initialUrl: string;
@@ -33,12 +33,28 @@ export function LinkEditPopover({
       onSubmit("");
       return;
     }
-    if (!isSafeLinkHref(trimmed)) {
+    const normalizedHref = normalizeLinkHref(trimmed);
+    if (!normalizedHref) {
       setError("허용되지 않는 링크 형식입니다.");
       return;
     }
     setError("");
-    onSubmit(trimmed);
+    onSubmit(normalizedHref);
+  };
+
+  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const nextUrl = event.target.value;
+    setUrl(nextUrl);
+
+    if (error === "") {
+      return;
+    }
+
+    const trimmed = nextUrl.trim();
+
+    if (trimmed === "" || isSafeLinkHref(trimmed)) {
+      setError("");
+    }
   };
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
@@ -58,7 +74,7 @@ export function LinkEditPopover({
         ref={inputRef}
         type="url"
         value={url}
-        onChange={(event) => setUrl(event.target.value)}
+        onChange={handleChange}
         onKeyDown={handleKeyDown}
         placeholder="https://..."
         className={cn(

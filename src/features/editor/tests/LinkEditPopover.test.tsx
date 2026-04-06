@@ -149,6 +149,57 @@ describe("LinkEditPopover", () => {
     expect(onSubmit).toHaveBeenCalledWith("/docs");
   });
 
+  it("normalizes scheme-less URLs before submit", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+
+    render(
+      <LinkEditPopover initialUrl="" onSubmit={onSubmit} onCancel={vi.fn()} />,
+    );
+
+    const input = screen.getByRole("textbox");
+    await user.type(input, "example.com");
+    await user.keyboard("{Enter}");
+
+    expect(onSubmit).toHaveBeenCalledWith("http://example.com/");
+  });
+
+  it("allows scheme-less URLs with '@' in the path", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+
+    render(
+      <LinkEditPopover initialUrl="" onSubmit={onSubmit} onCancel={vi.fn()} />,
+    );
+
+    const input = screen.getByRole("textbox");
+    await user.type(input, "example.com/@openai");
+    await user.keyboard("{Enter}");
+
+    expect(onSubmit).toHaveBeenCalledWith("http://example.com/@openai");
+  });
+
+  it("clears the validation error after the user fixes the URL", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+
+    render(
+      <LinkEditPopover initialUrl="" onSubmit={onSubmit} onCancel={vi.fn()} />,
+    );
+
+    const input = screen.getByRole("textbox");
+    await user.type(input, "not-a-url");
+    await user.keyboard("{Enter}");
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(input).toHaveAttribute("aria-invalid", "true");
+
+    await user.clear(input);
+    await user.type(input, "example.com");
+
+    expect(input).toHaveAttribute("aria-invalid", "false");
+  });
+
   it("rejects invalid URLs", async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();
