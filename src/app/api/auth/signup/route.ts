@@ -9,6 +9,9 @@ import { signupApiSchema } from "@/features/auth/signup/schema/signupApiSchema";
 import { ROUTES } from "@/lib/constants/routes";
 import { STORAGE_BUCKETS } from "@/lib/constants/storageBuckets";
 import { createClient } from "@/lib/supabase/server";
+import { VALIDATION_REASON } from "@/lib/validation/reasons";
+
+class JsonParseError extends Error {}
 
 async function parseRequest(
   request: NextRequest,
@@ -36,7 +39,12 @@ async function parseRequest(
     return { body, avatarFile };
   }
 
-  const body = await request.json();
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    throw new JsonParseError();
+  }
   return { body, avatarFile: null };
 }
 
@@ -119,7 +127,19 @@ export async function POST(request: NextRequest) {
   // TODO: x-forwarded-for는 클라이언트가 임의 조작 가능 — Vercel Edge Config나 WAF를 통한 신뢰할 수 있는 IP 출처로 교체 필요
   const ip = request.headers.get("x-forwarded-for") ?? "unknown";
 
-  const { body, avatarFile } = await parseRequest(request);
+  let body: unknown;
+  let avatarFile: File | null;
+  try {
+    ({ body, avatarFile } = await parseRequest(request));
+  } catch (e) {
+    if (e instanceof JsonParseError) {
+      return failureResponse(AUTH_API_CODES.SIGNUP_INVALID_INPUT, {
+        errors: [{ field: "body", reason: VALIDATION_REASON.INVALID_FORMAT }],
+      });
+    }
+    throw e;
+  }
+
   const parsed = signupApiSchema.safeParse(body);
 
   if (!parsed.success) {
