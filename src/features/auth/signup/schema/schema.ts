@@ -3,8 +3,8 @@ import { z } from "zod";
 import {
   NICKNAME_MAX_LENGTH,
   NICKNAME_MIN_LENGTH,
-  PASSWORD_MIN_LENGTH,
-} from "@/lib/constants/user";
+} from "@/lib/constants/profiles";
+import { PASSWORD_MIN_LENGTH } from "@/lib/constants/user";
 
 // Boundary helper
 // 문자열 입력에 대해서만 trim 적용 (API/Form 입력 정규화용)

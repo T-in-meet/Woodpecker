@@ -5,9 +5,22 @@
 
 import { resendTimestampStore } from "./resendTimestampStore";
 
+/**
+ * 이메일 인증 재전송 시각 저장
+ *
+ * @param email 대상 이메일
+ * @param timestamp 저장할 시각 (ms 단위 timestamp)
+ *
+ * 사용 목적:
+ * - 마지막 재전송 시각을 기록하여 cooldown 계산에 활용
+ * - 이후 getLastVerificationResendAt에서 조회됨
+ */
 export async function setLastVerificationResendAt(
   email: string,
   timestamp: number,
 ): Promise<void> {
+  /**
+   * Map에 이메일 기준으로 timestamp 저장
+   */
   resendTimestampStore.set(email, timestamp);
 }

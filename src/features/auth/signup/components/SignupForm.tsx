@@ -19,19 +19,56 @@ import { isServerValidationError } from "../../lib/isServerValidationError";
 import { resolveFieldName } from "../../lib/resolveFieldName";
 import { mapReasonToMessage } from "../lib/mapReasonToMessage";
 
+/**
+ * 폼 입력 타입 (raw input 기준)
+ * - nullable / optional 상태 포함
+ */
 export type FormInput = z.input<typeof signupFormSchema>;
+
+/**
+ * validation 이후 확정된 값 타입
+ */
 type FormValues = z.infer<typeof signupFormSchema>;
+
+/**
+ * API로 전달되는 payload
+ * - confirmPassword는 서버로 보내지 않음
+ */
 type SubmitPayload = Omit<FormValues, "confirmPassword">;
 
+/**
+ * SignupForm Props
+ * - onSubmit: 상위에서 API 호출 담당
+ * - isPending: 요청 상태 (중복 제출 방지 / UI 제어)
+ */
 type SignupFormProps = {
   onSubmit: (values: SubmitPayload) => void | Promise<void>;
   isPending?: boolean;
 };
 
+/**
+ * 회원가입 폼 컴포넌트
+ *
+ * 책임:
+ * - 입력 UI
+ * - validation (RHF + Zod)
+ * - 에러 처리 (field / global)
+ *
+ * 비책임:
+ * - API 호출
+ * - 라우팅
+ */
 export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
+  /**
+   * 글로벌 에러 메시지 (네트워크 / 서버 등)
+   */
   const [globalErrorMessage, setGlobalErrorMessage] = useState<string | null>(
     null,
   );
+
+  /**
+   * react-hook-form 설정
+   */
   const {
     control,
     register,
@@ -55,19 +92,39 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
     },
   });
 
+  /**
+   * password / confirmPassword 분리
+   * - onChange 커스터마이징 위해
+   */
   const { onChange: onPasswordChange, ...passwordRegister } =
     register("password");
   const { onChange: onConfirmChange, ...confirmPasswordRegister } =
     register("confirmPassword");
 
+  /**
+   * 유효한 폼 제출 시 실행
+   */
   const handleValidSubmit = async (data: FormValues) => {
+    /**
+     * confirmPassword 제거
+     */
     const { confirmPassword: _, ...payload } = data;
+
+    /**
+     * 기존 에러 초기화
+     */
     clearErrors();
     setGlobalErrorMessage(null);
 
     try {
+      /**
+       * 실제 API 호출은 상위에서 수행
+       */
       await onSubmit(payload);
     } catch (e: unknown) {
+      /**
+       * 서버 validation 에러 처리
+       */
       if (isServerValidationError(e)) {
         let hasUnknownField = false;
 
@@ -82,6 +139,9 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
           }
         }
 
+        /**
+         * 매핑 불가능한 필드 존재 시 root 에러
+         */
         if (hasUnknownField) {
           setError("root", { message: "요청을 처리할 수 없습니다" });
         }
@@ -89,15 +149,22 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
         return;
       }
 
+      /**
+       * 글로벌 에러 처리 (network, timeout 등)
+       */
       if (isGlobalError(e)) {
         setGlobalErrorMessage(GLOBAL_ERROR_MESSAGES[e.type]);
       }
     }
   };
 
+  /**
+   * password 변경 시 confirmPassword 재검증
+   */
   const handlePasswordChange = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       await onPasswordChange(e);
+
       if (getValues("confirmPassword")) {
         await trigger("confirmPassword");
       }
@@ -105,6 +172,9 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
     [onPasswordChange, getValues, trigger],
   );
 
+  /**
+   * confirmPassword 변경 시 즉시 검증
+   */
   const handleConfirmPasswordChange = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       await onConfirmChange(e);
@@ -119,6 +189,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
       className="mx-auto max-w-4xl space-y-4 mt-16 px-4"
       onSubmit={handleSubmit(handleValidSubmit)}
     >
+      {/* 이메일 */}
       <div className="space-y-4">
         <Label htmlFor="email">이메일</Label>
         <Input
@@ -134,6 +205,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
         )}
       </div>
 
+      {/* 비밀번호 */}
       <div className="space-y-4">
         <Label htmlFor="password">비밀번호</Label>
         <Input
@@ -150,6 +222,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
         )}
       </div>
 
+      {/* 비밀번호 확인 */}
       <div className="space-y-4">
         <Label htmlFor="confirmPassword">비밀번호 확인</Label>
         <Input
@@ -166,6 +239,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
         )}
       </div>
 
+      {/* 닉네임 */}
       <div className="space-y-4">
         <Label htmlFor="nickname">닉네임</Label>
         <Input
@@ -181,6 +255,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
         )}
       </div>
 
+      {/* 프로필 이미지 */}
       <div className="space-y-4">
         <Label htmlFor="avatarFile">
           프로필 사진 <span>(선택)</span>
@@ -192,6 +267,10 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
           accept="image/jpeg,image/png,image/webp"
           onChange={(e) => {
             const file = e.target.files?.[0] ?? null;
+
+            /**
+             * RHF에 파일 수동 등록
+             */
             setValue("avatarFile", file, {
               shouldValidate: true,
               shouldDirty: true,
@@ -200,6 +279,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
         />
       </div>
 
+      {/* 약관 */}
       <div
         data-testid="agreements-container"
         className="grid grid-cols-1 md:grid-cols-2 gap-4"
@@ -221,11 +301,13 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
             >
               이용약관 보기
             </Button>
+
             <div
               data-testid="tos-text-checkbox-group"
               className="flex items-center gap-2"
             >
               <Label htmlFor="termsOfService">이용약관에 동의합니다</Label>
+
               <Controller
                 name="termsOfService"
                 control={control}
@@ -311,16 +393,19 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
         </div>
       </div>
 
+      {/* 글로벌 에러 */}
       {globalErrorMessage && (
         <Toast message={globalErrorMessage} variant="destructive" />
       )}
 
+      {/* root 에러 */}
       {errors.root && (
         <p role="alert" data-testid="form-error" className="text-red-500">
           {errors.root.message}
         </p>
       )}
 
+      {/* 액션 영역 */}
       <div
         data-testid="form-action-area"
         className="flex flex-wrap justify-between gap-2"
@@ -328,6 +413,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
         <Link href="/login" className="text-blue-400 hover:text-blue-500">
           이미 가입하셨나요?
         </Link>
+
         <Button type="submit" disabled={isPending}>
           {isPending && <span role="status" aria-label="로딩 중" />}
           {isPending ? "가입 중..." : "회원가입"}
