@@ -9,6 +9,7 @@ import { signupApiSchema } from "@/features/auth/signup/schema/signupApiSchema";
 import { ROUTES } from "@/lib/constants/routes";
 import { STORAGE_BUCKETS } from "@/lib/constants/storageBuckets";
 import { createClient } from "@/lib/supabase/server";
+import { getClientIp } from "@/lib/utils/getClientIp";
 import { VALIDATION_REASON } from "@/lib/validation/reasons";
 
 class JsonParseError extends Error {}
@@ -124,8 +125,7 @@ async function uploadAvatar(
 }
 
 export async function POST(request: NextRequest) {
-  // TODO: x-forwarded-for는 클라이언트가 임의 조작 가능 — Vercel Edge Config나 WAF를 통한 신뢰할 수 있는 IP 출처로 교체 필요
-  const ip = request.headers.get("x-forwarded-for") ?? "unknown";
+  const ip = getClientIp(request);
 
   let body: unknown;
   let avatarFile: File | null;
