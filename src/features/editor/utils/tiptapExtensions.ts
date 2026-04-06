@@ -23,6 +23,10 @@ import typescript from "highlight.js/lib/languages/typescript";
 import { createLowlight } from "lowlight";
 import { Markdown } from "tiptap-markdown";
 
+import { slashCommandSuggestionRender } from "../components/SlashCommandMenu";
+import { isSafeLinkHref } from "./linkValidation";
+import { SlashCommand } from "./slashCommand";
+
 const lowlight = createLowlight();
 lowlight.register("javascript", javascript);
 lowlight.register("typescript", typescript);
@@ -166,6 +170,7 @@ function getBaseExtensions({ readOnly = false }: { readOnly?: boolean } = {}) {
       },
     }).configure({ lowlight }),
     Link.configure({
+      isAllowedUri: (url) => isSafeLinkHref(url),
       openOnClick: readOnly,
       HTMLAttributes: { class: "tiptap-link" },
     }),
@@ -192,6 +197,9 @@ export function getTipTapExtensions({
 }: { placeholder?: string | undefined } = {}) {
   return [
     ...getBaseExtensions(),
+    SlashCommand.configure({
+      suggestion: slashCommandSuggestionRender(),
+    }),
     ...(placeholder ? [Placeholder.configure({ placeholder })] : []),
   ];
 }
