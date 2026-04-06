@@ -8,6 +8,7 @@ import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils/cn";
 
 import { useTipTapEditor } from "../hooks/useTipTapEditor";
+import { BlockHandleMenu } from "./BlockHandleMenu";
 
 type TipTapEditorProps = {
   value: string;
@@ -67,12 +68,13 @@ export function TipTapEditor({
   return (
     <div
       className={cn(
-        "tiptap-wrapper overflow-hidden rounded-md border border-border bg-background text-base transition-colors",
+        "tiptap-wrapper relative overflow-hidden rounded-md border border-border bg-background text-base transition-colors",
         "focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20",
         readOnly && "[&_.tiptap]:cursor-default",
         className,
       )}
     >
+      {editor && !readOnly && <BlockHandleMenu editor={editor} />}
       <EditorContent editor={editor} />
     </div>
   );

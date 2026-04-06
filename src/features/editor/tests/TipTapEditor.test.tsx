@@ -1,10 +1,11 @@
 import "./setup";
 
-import { render, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { TipTapEditor } from "../components/TipTapEditor";
+import { SLASH_COMMAND_ITEMS } from "../utils/slashCommand";
 
 function getEditorContentElement() {
   const contentElement = document.querySelector("[contenteditable]");
@@ -98,6 +99,59 @@ describe("TipTapEditor", () => {
     });
   });
 
+  it("shows the block handle after the current line is focused", async () => {
+    const user = userEvent.setup();
+
+    render(<TipTapEditor value="" onChange={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(getEditorContentElement()).toBeTruthy();
+    });
+
+    await user.click(getEditorContentElement());
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Open block toolbar")).toBeInTheDocument();
+    });
+  });
+
+  it("opens the toolbar from the block handle button", async () => {
+    const user = userEvent.setup();
+
+    render(<TipTapEditor value="" onChange={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(getEditorContentElement()).toBeTruthy();
+    });
+
+    await user.click(getEditorContentElement());
+
+    const handleButton = await screen.findByLabelText("Open block toolbar");
+    await user.click(handleButton);
+
+    expect(screen.getByTestId("bubble-toolbar")).toBeInTheDocument();
+    expect(screen.getByTestId("toolbar-undo")).toBeInTheDocument();
+    expect(screen.getByTestId("toolbar-bold")).toBeInTheDocument();
+  });
+
+  it("shows the language selector after turning the current block into a code block", async () => {
+    const user = userEvent.setup();
+
+    render(<TipTapEditor value="" onChange={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(getEditorContentElement()).toBeTruthy();
+    });
+
+    await user.click(getEditorContentElement());
+    await user.click(await screen.findByLabelText("Open block toolbar"));
+    await user.click(screen.getByTestId("toolbar-code-block"));
+
+    expect(
+      await screen.findByTestId("toolbar-code-language"),
+    ).toBeInTheDocument();
+  });
+
   it("prevents edits while readOnly is enabled", async () => {
     const user = userEvent.setup();
     const handleChange = vi.fn();
@@ -117,6 +171,42 @@ describe("TipTapEditor", () => {
     await user.keyboard("!");
 
     expect(handleChange).not.toHaveBeenCalled();
+  });
+
+  it("opens the slash command menu when '/' is typed in editable mode", async () => {
+    const user = userEvent.setup();
+    const firstSlashCommandItem = SLASH_COMMAND_ITEMS[0];
+
+    if (!firstSlashCommandItem) {
+      throw new Error("slash command items must not be empty");
+    }
+
+    render(<TipTapEditor value="" onChange={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(getEditorContentElement()).toBeTruthy();
+    });
+
+    const contentElement = getEditorContentElement();
+    await user.click(contentElement);
+    await user.keyboard("/");
+
+    expect(
+      await screen.findByText(firstSlashCommandItem.title),
+    ).toBeInTheDocument();
+  });
+
+  it("does not render editor toolbars in readOnly mode", async () => {
+    render(<TipTapEditor value="Locked content" readOnly />);
+
+    await waitFor(() => {
+      expect(getEditorContentElement()).toBeTruthy();
+    });
+
+    expect(
+      screen.queryByLabelText("Open block toolbar"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("bubble-toolbar")).not.toBeInTheDocument();
   });
 
   it("renders task checkboxes inside a non-editable editor in readOnly mode", async () => {

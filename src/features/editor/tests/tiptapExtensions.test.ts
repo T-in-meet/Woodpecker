@@ -83,6 +83,17 @@ describe("Read-only editor", () => {
   });
 });
 
+describe("getTipTapExtensions", () => {
+  it("includes SlashCommand in editable mode", () => {
+    const extensions = getTipTapExtensions();
+    const extensionNames = extensions.map((ext) =>
+      typeof ext === "object" && "name" in ext ? ext.name : "",
+    );
+
+    expect(extensionNames).toContain("slashCommand");
+  });
+});
+
 describe("getReadOnlyTipTapExtensions", () => {
   it("creates a working editor without SlashCommand and Placeholder", () => {
     const extensions = getReadOnlyTipTapExtensions();
@@ -124,6 +135,34 @@ describe("getReadOnlyTipTapExtensions", () => {
     expect(
       (linkExtension?.options as Record<string, unknown>).openOnClick,
     ).toBe(true);
+  });
+
+  it("uses the shared link validator for safe relative links", () => {
+    const extensions = getReadOnlyTipTapExtensions();
+    const linkExtension = extensions.find(
+      (ext) => typeof ext === "object" && "name" in ext && ext.name === "link",
+    );
+    const isAllowedUri = (
+      linkExtension?.options as {
+        isAllowedUri?: (url: string) => boolean;
+      }
+    ).isAllowedUri;
+
+    expect(isAllowedUri?.("/docs")).toBe(true);
+    expect(isAllowedUri?.("javascript:alert(1)")).toBe(false);
+  });
+
+  it("preserves scheme-less links from existing markdown content", () => {
+    const extensions = getReadOnlyTipTapExtensions();
+    const editor = new Editor({
+      extensions,
+      content: "[Example](example.com)",
+      editable: false,
+    });
+
+    expect(editor.getHTML()).toContain('href="example.com"');
+
+    editor.destroy();
   });
 
   it("preserves code block language metadata for the CSS label", () => {
