@@ -6,6 +6,11 @@ import { failureResponse, successResponse } from "@/features/auth/lib/response";
 import { checkSignupRateLimit } from "@/features/auth/signup/lib/checkSignupRateLimit";
 import { mapSignupValidationErrors } from "@/features/auth/signup/lib/mapSignupValidationErrors";
 import { signupApiSchema } from "@/features/auth/signup/schema/signupApiSchema";
+import {
+  ALLOWED_AVATAR_EXTENSIONS,
+  ALLOWED_AVATAR_MIME_TYPES,
+  MAX_AVATAR_SIZE_BYTES,
+} from "@/lib/constants/profiles";
 import { ROUTES } from "@/lib/constants/routes";
 import { STORAGE_BUCKETS } from "@/lib/constants/storageBuckets";
 import { createClient } from "@/lib/supabase/server";
@@ -48,10 +53,6 @@ async function parseRequest(
   }
   return { body, avatarFile: null };
 }
-
-const ALLOWED_AVATAR_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const ALLOWED_AVATAR_EXTENSIONS = ["jpg", "jpeg", "png", "webp"];
-const MAX_AVATAR_SIZE_BYTES = 10 * 1024 * 1024;
 
 function validateAvatarFile(file: File): boolean {
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
