@@ -58,10 +58,13 @@ export function isServerValidationError(
 
   /**
    * 3. 특정 에러 코드 확인
-   * - 현재는 AUTH_INVALID_INPUT만 validation 에러로 간주
-   * ⚠️ 다른 validation code가 추가되면 확장 필요
+   * - _INVALID_INPUT로 끝나는 에러를 validation 에러로 간주
    */
-  if (obj["code"] !== "AUTH_INVALID_INPUT") return false;
+  function isValidationCode(code: string): boolean {
+    return code.endsWith("_INVALID_INPUT");
+  }
+
+  if (!isValidationCode(obj["code"] as string)) return false;
 
   /**
    * 4. data 객체 존재 여부 확인
