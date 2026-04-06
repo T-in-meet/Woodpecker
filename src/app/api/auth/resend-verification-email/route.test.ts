@@ -9,6 +9,7 @@ import { resetResendRateLimitStore } from "@/features/auth/resend-verification-e
 import { getLastVerificationResendAt } from "@/features/auth/resend-verification-email/lib/getLastVerificationResendAt";
 import { resendVerificationEmail } from "@/features/auth/resend-verification-email/lib/resendVerificationEmail";
 import { setLastVerificationResendAt } from "@/features/auth/resend-verification-email/lib/setLastVerificationResendAt";
+import { VALIDATION_REASON } from "@/lib/validation/reasons";
 
 // 테스트 대상 API 핸들러
 import { POST } from "./route";
@@ -77,6 +78,36 @@ describe("이메일 인증 재전송 API 성공 흐름", () => {
     // 보안: 불필요한 필드 노출 금지
     expect(body).not.toHaveProperty("error");
     expect(body).not.toHaveProperty("errors");
+  });
+});
+
+describe("이메일 인증 재전송 API malformed JSON 처리", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetResendRateLimitStore();
+  });
+
+  it("TC-01. malformed JSON 요청이면 INVALID_INPUT 응답을 반환한다", async () => {
+    const request = new NextRequest(
+      "http://localhost/api/auth/resend-verification-email",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: '{"email":"test@example.com"',
+      },
+    );
+
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.success).toBe(false);
+    expect(body.code).toBe(AUTH_API_CODES.RESEND_INVALID_INPUT);
+    expect(body.data).toEqual({
+      errors: [{ field: "body", reason: VALIDATION_REASON.INVALID_FORMAT }],
+    });
+    expect(resendVerificationEmail).not.toHaveBeenCalled();
+    expect(setLastVerificationResendAt).not.toHaveBeenCalled();
   });
 });
 
