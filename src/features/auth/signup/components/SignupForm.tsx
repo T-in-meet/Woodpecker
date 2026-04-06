@@ -169,7 +169,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
         await trigger("confirmPassword");
       }
     },
-    [onPasswordChange, getValues, trigger],
+    [onPasswordChange, trigger],
   );
 
   /**

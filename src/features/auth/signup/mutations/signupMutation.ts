@@ -1,5 +1,5 @@
 import { buildSignupRequestPayload } from "../lib/buildSignupRequestPayload";
-import { signupSuccessResponseSchema } from "../schema/signupSuccessReponseSchema";
+import { signupSuccessResponseSchema } from "../schema/signupSuccessResponseSchema";
 
 // 회원가입 요청 시 사용하는 payload 타입
 type SignupPayload = {

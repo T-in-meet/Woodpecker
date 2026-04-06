@@ -2,7 +2,7 @@ import {
   checkLimit,
   RateLimitResult,
   WindowEntry,
-} from "@/features/auth/uitils/rateLimit.utils";
+} from "@/features/auth/utils/rateLimit.utils";
 
 /**
  * 이메일 인증 재전송 허용 횟수 제한

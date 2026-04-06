@@ -156,10 +156,16 @@ describe("PR-API-10 이메일 재전송 1분 쿨다운 검증", () => {
     expect(response.status).toBe(200);
     expect(body.success).toBe(true);
     expect(body.code).toBe(AUTH_API_CODES.EMAIL_VERIFICATION_RESEND_SUCCESS);
+    expect(typeof body.data).toBe("object");
 
     // 흐름 검증: 조회 → 전송 → 저장
     expect(getLastVerificationResendAt).toHaveBeenCalledTimes(1);
+    expect(getLastVerificationResendAt).toHaveBeenCalledWith(
+      "test@example.com",
+    );
     expect(resendVerificationEmail).toHaveBeenCalledTimes(1);
+    expect(resendVerificationEmail).toHaveBeenCalledWith("test@example.com");
+    expect(setLastVerificationResendAt).toHaveBeenCalledTimes(1);
     expect(setLastVerificationResendAt).toHaveBeenCalledWith(
       "test@example.com",
       now,
@@ -179,6 +185,9 @@ describe("PR-API-10 이메일 재전송 1분 쿨다운 검증", () => {
       AUTH_API_CODES.EMAIL_VERIFICATION_RESEND_COOLDOWN_CONFLICT,
     );
 
+    expect(body.data).toBeNull();
+    expect(getLastVerificationResendAt).toHaveBeenCalledTimes(1);
+
     // 차단 시 외부 호출 없음
     expect(resendVerificationEmail).toHaveBeenCalledTimes(0);
     expect(setLastVerificationResendAt).toHaveBeenCalledTimes(0);
@@ -193,8 +202,13 @@ describe("PR-API-10 이메일 재전송 1분 쿨다운 검증", () => {
 
     expect(response.status).toBe(200);
     expect(body.success).toBe(true);
+    expect(body.code).toBe(AUTH_API_CODES.EMAIL_VERIFICATION_RESEND_SUCCESS);
+    expect(typeof body.data).toBe("object");
+    expect(getLastVerificationResendAt).toHaveBeenCalledTimes(1);
 
     expect(resendVerificationEmail).toHaveBeenCalledTimes(1);
+    expect(resendVerificationEmail).toHaveBeenCalledWith("test@example.com");
+    expect(setLastVerificationResendAt).toHaveBeenCalledTimes(1);
     expect(setLastVerificationResendAt).toHaveBeenCalledWith(
       "test@example.com",
       now,
@@ -206,8 +220,12 @@ describe("PR-API-10 이메일 재전송 1분 쿨다운 검증", () => {
     vi.mocked(getLastVerificationResendAt).mockResolvedValue(now - 59 * 1000);
 
     const response = await POST(makeRequest());
-    await response.json();
-
+    const body = await response.json();
+    expect(response.status).toBe(409);
+    expect(body.success).toBe(false);
+    expect(body.code).toBe(
+      AUTH_API_CODES.EMAIL_VERIFICATION_RESEND_COOLDOWN_CONFLICT,
+    );
     expect(resendVerificationEmail).toHaveBeenCalledTimes(0);
   });
 
@@ -216,8 +234,13 @@ describe("PR-API-10 이메일 재전송 1분 쿨다운 검증", () => {
     vi.mocked(getLastVerificationResendAt).mockResolvedValue(now - 59 * 1000);
 
     const response = await POST(makeRequest());
-    await response.json();
+    const body = await response.json();
 
+    expect(response.status).toBe(409);
+    expect(body.success).toBe(false);
+    expect(body.code).toBe(
+      AUTH_API_CODES.EMAIL_VERIFICATION_RESEND_COOLDOWN_CONFLICT,
+    );
     expect(setLastVerificationResendAt).toHaveBeenCalledTimes(0);
   });
 
@@ -226,9 +249,13 @@ describe("PR-API-10 이메일 재전송 1분 쿨다운 검증", () => {
     vi.mocked(getLastVerificationResendAt).mockResolvedValue(null);
 
     const response = await POST(makeRequest());
-    await response.json();
+    const body = await response.json();
 
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.code).toBe(AUTH_API_CODES.EMAIL_VERIFICATION_RESEND_SUCCESS);
     expect(resendVerificationEmail).toHaveBeenCalledTimes(1);
+    expect(setLastVerificationResendAt).toHaveBeenCalledTimes(1);
     expect(setLastVerificationResendAt).toHaveBeenCalledWith(
       "test@example.com",
       now,

@@ -2,7 +2,7 @@ import {
   checkLimit,
   RateLimitResult,
   WindowEntry,
-} from "@/features/auth/uitils/rateLimit.utils";
+} from "@/features/auth/utils/rateLimit.utils";
 
 /**
  * IP 기준 요청 제한 횟수
