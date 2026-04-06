@@ -24,10 +24,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
-import { VALIDATION_REASON } from "@/features/auth/signup/constants/validation";
 import { resetRateLimitStores } from "@/features/auth/signup/lib/checkSignupRateLimit";
 import { PASSWORD_MIN_LENGTH } from "@/lib/constants/user";
 import { createClient } from "@/lib/supabase/server";
+import { VALIDATION_REASON } from "@/lib/validation/reasons";
 
 import { POST } from "../route";
 import { makeRequest } from "./utils/signupTestHelper";

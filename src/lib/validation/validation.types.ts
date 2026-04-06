@@ -1,4 +1,4 @@
-import { VALIDATION_REASON } from "../constants/validation";
+import { VALIDATION_REASON } from "@/lib/validation/reasons";
 
 /**
  * ValidationReason 타입

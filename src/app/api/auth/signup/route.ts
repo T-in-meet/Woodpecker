@@ -5,7 +5,7 @@ import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { failureResponse, successResponse } from "@/features/auth/lib/response";
 import { checkSignupRateLimit } from "@/features/auth/signup/lib/checkSignupRateLimit";
 import { mapSignupValidationErrors } from "@/features/auth/signup/lib/mapSignupValidationErrors";
-import { signupApiSchema } from "@/features/auth/signup/schema/schema";
+import { signupApiSchema } from "@/features/auth/signup/schema/signupApiSchema";
 import { ROUTES } from "@/lib/constants/routes";
 import { STORAGE_BUCKETS } from "@/lib/constants/storageBuckets";
 import { createClient } from "@/lib/supabase/server";

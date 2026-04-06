@@ -11,13 +11,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Toast } from "@/components/ui/toast";
-import { signupFormSchema } from "@/features/auth/signup/schema/schema";
 import { cn } from "@/lib/utils/cn";
+import { isServerValidationError } from "@/lib/validation/isServerValidationError";
+import { mapReasonToMessage } from "@/lib/validation/mapReasonToMessage";
 
 import { GLOBAL_ERROR_MESSAGES, isGlobalError } from "../../errors/globalError";
-import { isServerValidationError } from "../../lib/isServerValidationError";
 import { resolveFieldName } from "../../lib/resolveFieldName";
-import { mapReasonToMessage } from "../lib/mapReasonToMessage";
+import { signupFormSchema } from "../schema/signupFormSchema";
 
 /**
  * 폼 입력 타입 (raw input 기준)

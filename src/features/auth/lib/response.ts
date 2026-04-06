@@ -4,7 +4,7 @@ import {
   RESULT_HTTP_STATUS_MAP,
 } from "@/lib/constants/apiCodes";
 
-import { ValidationReason } from "../signup/types/validation.types";
+import { ValidationReason } from "../../../lib/validation/validation.types";
 
 /**
  * 성공 응답 타입

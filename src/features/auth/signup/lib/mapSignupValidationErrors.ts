@@ -1,9 +1,9 @@
 import type { ZodError } from "zod";
 
 import type { ValidationError } from "@/features/auth/lib/response";
-import { VALIDATION_REASON } from "@/features/auth/signup/constants/validation";
+import { VALIDATION_REASON } from "@/lib/validation/reasons";
 
-import { ValidationReason } from "../types/validation.types";
+import { ValidationReason } from "../../../../lib/validation/validation.types";
 
 /**
  * Zod issue.path를 따라 원본 input에서 실제 값을 조회하는 유틸 함수
