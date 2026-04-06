@@ -11,6 +11,7 @@ import { BubbleMenuBar } from "./BubbleMenuBar";
 
 const HANDLE_SIZE = 22;
 const HANDLE_MARGIN = 10;
+const LIST_MARKER_CLEARANCE = 6;
 const MENU_GAP = 8;
 const MENU_PADDING = 8;
 const MENU_MAX_WIDTH = 704;
@@ -57,6 +58,7 @@ export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
     const fallbackRect = editor.view.dom.getBoundingClientRect();
     const effectiveRect =
       rect.height > 0 || rect.width > 0 ? rect : fallbackRect;
+    const handleOffset = getBlockHandleMarkerOffset(blockElement);
 
     setAnchorPosition({
       blockBottom: effectiveRect.bottom,
@@ -64,7 +66,7 @@ export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
       blockTop: effectiveRect.top,
       handleLeft: Math.max(
         MENU_PADDING,
-        effectiveRect.left - HANDLE_SIZE - HANDLE_MARGIN,
+        effectiveRect.left - HANDLE_SIZE - HANDLE_MARGIN - handleOffset,
       ),
       handleTop: Math.max(
         MENU_PADDING,
@@ -284,6 +286,37 @@ function computeMenuPosition(
   );
 
   return { left, maxWidth, top };
+}
+
+export function getBlockHandleMarkerOffset(blockElement: HTMLElement): number {
+  if (blockElement.tagName !== "LI") {
+    return 0;
+  }
+
+  const parentListElement = blockElement.parentElement;
+
+  if (
+    !(
+      parentListElement instanceof HTMLUListElement ||
+      parentListElement instanceof HTMLOListElement
+    ) ||
+    parentListElement.dataset.type === "taskList"
+  ) {
+    return 0;
+  }
+
+  const parentListStyles = window.getComputedStyle(parentListElement);
+  const markerPadding = Number.parseFloat(
+    parentListStyles.paddingInlineStart || parentListStyles.paddingLeft,
+  );
+
+  if (!Number.isFinite(markerPadding) || markerPadding <= 0) {
+    return 0;
+  }
+
+  // Standard list markers sit inside the parent list padding, so the handle
+  // needs that space added back to avoid covering the marker itself.
+  return markerPadding + LIST_MARKER_CLEARANCE;
 }
 
 function getActiveBlockElement(editor: Editor): HTMLElement | null {
