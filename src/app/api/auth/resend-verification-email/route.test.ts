@@ -8,9 +8,15 @@ import { resendVerificationEmail } from "@/features/auth/resend-verification-ema
 import { setLastVerificationResendAt } from "@/features/auth/resend-verification-email/lib/setLastVerificationResendAt";
 
 import { POST } from "./route";
-vi.mock("@/lib/auth/getLastVerificationResendAt");
-vi.mock("@/lib/auth/resendVerificationEmail");
-vi.mock("@/lib/auth/setLastVerificationResendAt");
+vi.mock(
+  "@/features/auth/resend-verification-email/lib/getLastVerificationResendAt",
+);
+vi.mock(
+  "@/features/auth/resend-verification-email/lib/resendVerificationEmail",
+);
+vi.mock(
+  "@/features/auth/resend-verification-email/lib/setLastVerificationResendAt",
+);
 
 describe("PR-API-09 이메일 인증 재전송 API 성공 흐름", () => {
   function makeRequest(body: object): NextRequest {

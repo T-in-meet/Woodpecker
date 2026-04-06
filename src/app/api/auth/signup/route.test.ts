@@ -5,13 +5,13 @@ import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { VALIDATION_REASON } from "@/features/auth/signup/constants/validation";
 import { resetRateLimitStores } from "@/features/auth/signup/lib/checkSignupRateLimit";
-import { PASSWORD_MIN_LENGTH } from "@/features/auth/signup/schema/schema";
 import { ROUTES } from "@/lib/constants/routes";
+import { PASSWORD_MIN_LENGTH } from "@/lib/constants/user";
 import { createClient } from "@/lib/supabase/server";
 
 import { POST } from "./route";
 
-vi.mock("@/lib/auth/getUserByEmail");
+vi.mock("@/features/auth/lib/getUserByEmail");
 vi.mock("@/lib/supabase/server");
 
 beforeEach(() => {
