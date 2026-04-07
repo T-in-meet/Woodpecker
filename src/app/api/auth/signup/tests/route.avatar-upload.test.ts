@@ -108,14 +108,13 @@ describe("PR-API-07 프로필 이미지 업로드 성공 시 avatar_url 반영",
     const response = await POST(makeMultipartRequest());
     const body = await response.json();
 
-    expect(response.status).toBe(201);
+    expect(response.status).toBe(200);
     expect(body.success).toBe(true);
     expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
 
     // contract 검증
     expect(body.data.email).toBe("test@example.com");
     expect(body.data.redirectTo).toBe(ROUTES.LOGIN);
-    expect(body.data.signupAccountStatus).toBe("pending");
   });
 
   // TC-02: avatarFile 제공 시 storage.upload 호출
@@ -203,18 +202,17 @@ describe("PR-API-08 프로필 이미지 업로드 실패 시 회원가입 성공
   });
 
   // TC-01: 이미지 업로드 실패 시에도 회원 가입 성공 유지
-  it("TC-01. 업로드 실패 시에도 회원가입은 201 성공 응답 계약을 유지한다", async () => {
+  it("TC-01. 업로드 실패 시에도 회원가입은 200 성공 응답 계약을 유지한다", async () => {
     const response = await POST(makeMultipartRequest());
     const body = await response.json();
 
     // 업로드 실패는 회원가입 자체를 실패시키지 않는 부수효과 실패로 취급한다
-    expect(response.status).toBe(201);
+    expect(response.status).toBe(200);
     expect(body.success).toBe(true);
     expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
 
     expect(body.data.email).toBe("test@example.com");
     expect(body.data.redirectTo).toBe(ROUTES.LOGIN);
-    expect(body.data.signupAccountStatus).toBe("pending");
   });
 
   // TC-02: 업로드 실패 시 getPublicUrl 미호출

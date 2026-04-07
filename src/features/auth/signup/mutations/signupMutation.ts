@@ -18,7 +18,6 @@ export type SignupSuccessResponse = {
   data: {
     email: string;
     redirectTo: string;
-    signupAccountStatus: "active" | "pending";
   };
 };
 

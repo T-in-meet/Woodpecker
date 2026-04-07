@@ -246,7 +246,7 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
     const response = await POST(makeRequest(BASE_VALID_PAYLOAD));
     const body = await response.json();
 
-    expect(response.status).toBe(201);
+    expect(response.status).toBe(200);
     expect(body.success).toBe(true);
     expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
     expect(mockSignUp).toHaveBeenCalledTimes(1);

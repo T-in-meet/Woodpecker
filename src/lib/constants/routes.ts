@@ -7,6 +7,7 @@ export const ROUTES = {
   MYPAGE: "/mypage",
   TERMS: "/terms",
   PRIVACY: "/privacy",
+  CALLBACK: "/auth/callback",
 } as const;
 
 export type Route = (typeof ROUTES)[keyof typeof ROUTES];
