@@ -76,20 +76,6 @@ describe("회원가입 API 기본 성공 흐름 검증", () => {
     );
   });
 
-  it("TC-03: signUp 호출 시 options.emailRedirectTo는 /auth/callback 경로를 포함한다", async () => {
-    mockSignUpSuccess();
-
-    await POST(makeRequest(requestBody));
-
-    expect(mockSignUp).toHaveBeenCalledWith(
-      expect.objectContaining({
-        options: expect.objectContaining({
-          emailRedirectTo: expect.stringContaining(ROUTES.CALLBACK),
-        }),
-      }),
-    );
-  });
-
   it("TC-04: API는 200 OK를 반환한다", async () => {
     mockSignUpSuccess();
 

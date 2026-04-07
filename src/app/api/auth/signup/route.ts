@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
+import { sendAuthEmail } from "@/features/auth/email/sendAuthEmail";
+import { encryptTicket } from "@/features/auth/email/ticket";
 import { applyMinimumResponseTime } from "@/features/auth/lib/applyMinimumResponseTime";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { failureResponse, successResponse } from "@/features/auth/lib/response";
@@ -14,6 +16,7 @@ import {
 } from "@/lib/constants/profiles";
 import { ROUTES } from "@/lib/constants/routes";
 import { STORAGE_BUCKETS } from "@/lib/constants/storageBuckets";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getClientIp } from "@/lib/utils/getClientIp";
 import { VALIDATION_REASON } from "@/lib/validation/reasons";
@@ -265,8 +268,27 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
 
   /**
    * [기존 사용자 - 미인증]
+   *
+   * 이메일 재발송 시도 (side-effect):
+   * - 실패해도 외부 응답은 항상 동일 (AE 방어)
    */
   if (existingUser && existingUser.email_confirmed_at === null) {
+    try {
+      const adminClient = createAdminClient();
+      const { data: linkData, error: linkError } =
+        await adminClient.auth.admin.generateLink({
+          type: "magiclink", // 로그인 인증 링크 생성
+          email: normalizedEmail,
+        });
+
+      if (!linkError && linkData?.properties?.hashed_token) {
+        const ticket = encryptTicket(linkData.properties.hashed_token);
+        await sendAuthEmail(normalizedEmail, ticket, "verify-email");
+      }
+    } catch {
+      console.warn("이메일 재발송 실패 (무시됨)", { email: normalizedEmail });
+    }
+
     return successResponse(
       AUTH_API_CODES.SIGNUP_SUCCESS,
       {
@@ -300,25 +322,25 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
     password,
     options: {
       /**
-       * emailRedirectTo는 "API 호출 URL"이 아니라
-       * "사용자가 이메일 클릭 시 브라우저가 최초로 이동하는 URL"이다.
+       * emailRedirectTo 제거 이유
        *
-       * ⚠️ 중요한 개념:
-       * - NEXT_PUBLIC_APP_URL = 프론트 도메인 (브라우저가 접근하는 주소)
-       * - /auth/callback = Next.js route handler (API 역할 수행)
+       * 기존:
+       * - Supabase의 emailRedirectTo를 사용해 인증 링크 생성
        *
-       * 즉, 이 URL은:
-       * - 사용자 입장에서는 "페이지 이동"
-       * - 내부적으로는 route.ts가 실행되는 "서버 처리 지점"
+       * 변경:
+       * - 인증 이메일은 Supabase 기본 링크를 사용하지 않고
+       *   Send Email Hook → encryptTicket → sendAuthEmail 흐름으로 통일한다.
        *
-       * 흐름:
-       * 이메일 클릭 → /auth/callback (route.ts 실행)
-       * → 인증 처리 (verifyOtp 등)
-       * → /login으로 redirect
+       * 목적:
+       * - 인증 링크 구조를 ticket 기반으로 일원화
+       * - Supabase 기본 token 링크와의 혼재 방지
+       * - Account Enumeration 방어를 위한 외부 흐름 통일
        *
-       * 따라서 "프론트 도메인 + API route 경로" 조합은 정상이며 의도된 구조이다.
+       * 결과:
+       * - signUp에서는 emailRedirectTo를 설정하지 않는다
+       * - 이메일 발송은 Hook에서만 처리된다
        */
-      emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}${ROUTES.CALLBACK}`,
+
       data: { nickname },
     },
   });

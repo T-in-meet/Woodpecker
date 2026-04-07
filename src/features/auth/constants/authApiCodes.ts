@@ -82,6 +82,36 @@ export const AUTH_API_CODES = {
    * - success: false
    */
   SIGNUP_INTERNAL_ERROR: makeApiCode("signup", API_RESULTS.INTERNAL_ERROR),
+
+  /**
+   * Supabase Send Email Hook 처리 성공
+   * - 이메일 발송 완료
+   */
+  SEND_EMAIL_HOOK_SUCCESS: makeApiCode("send-email-hook", API_RESULTS.SUCCESS),
+
+  /**
+   * Send Email Hook 입력값 오류
+   * - user.email 또는 email_data.token_hash 누락
+   */
+  SEND_EMAIL_HOOK_INVALID_INPUT: makeApiCode(
+    "send-email-hook",
+    API_RESULTS.INVALID_INPUT,
+  ),
+
+  /**
+   * Send Email Hook 처리 중 내부 서버 오류
+   * - ticket 암호화 실패
+   * - 이메일 발송 실패
+   */
+  SEND_EMAIL_HOOK_INTERNAL_ERROR: makeApiCode(
+    "send-email-hook",
+    API_RESULTS.INTERNAL_ERROR,
+  ),
+
+  SEND_EMAIL_HOOK_UNAUTHORIZED: makeApiCode(
+    "send-email-hook",
+    API_RESULTS.UNAUTHORIZED,
+  ),
 } as const;
 
 /**
