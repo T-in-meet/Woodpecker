@@ -8,13 +8,25 @@ import {
  * IP 기준 요청 제한 횟수
  * - 동일 IP에서의 회원가입 시도 제한
  */
-const IP_LIMIT = 10;
+export const IP_LIMIT = 10;
+
+/**
+ * IP 기준 rate limit window
+ * - burst abuse를 빠르게 차단하기 위해 짧게 유지
+ */
+export const IP_WINDOW_MS = 60 * 1000;
 
 /**
  * 이메일 기준 요청 제한 횟수
  * - 동일 이메일로의 회원가입 시도 제한
  */
-const EMAIL_LIMIT = 5;
+export const EMAIL_LIMIT = 5;
+
+/**
+ * 이메일 기준 rate limit window
+ * - 동일 계정 대상 반복 시도를 더 긴 시간축에서 완만하게 제한
+ */
+export const EMAIL_WINDOW_MS = 15 * 60 * 1000;
 
 /**
  * IP별 rate limit 상태 저장소 (in-memory)
@@ -37,58 +49,56 @@ export function resetRateLimitStores(): void {
 }
 
 /**
- * 회원가입 rate limit 검사
+ * 회원가입 IP rate limit 검사
  *
  * @param ip 요청 IP
- * @param email 요청 이메일
  * @returns { allowed: boolean }
  *
- * 동작 순서:
- * 1. IP 제한 체크
- * 2. 이메일 제한 체크
- * 3. 이메일 제한 실패 시 IP 카운트 롤백
+ * 설계 의도:
+ * - 요청 본문 파싱/validation 이전에도 적용 가능한 조기 차단 버킷
+ * - malformed/invalid 요청 flood까지 포함해 짧고 강하게 제한
+ */
+export async function checkSignupIpRateLimit(
+  ip: string,
+): Promise<RateLimitResult> {
+  return { allowed: checkLimit(ipStore, ip, IP_LIMIT, IP_WINDOW_MS) };
+}
+
+/**
+ * 회원가입 이메일 rate limit 검사
+ *
+ * @param email 정규화된 요청 이메일
+ * @returns { allowed: boolean }
  *
  * 설계 의도:
- * - IP + 이메일 이중 제한
- * - email 차단 시 IP 카운트까지 증가하면 과도한 차단 발생 → 롤백 처리
+ * - validation 이후, 정규화된 이메일 기준으로 적용하는 계정 단위 제한
+ * - 짧은 burst보다 중기적인 반복 시도를 억제하기 위해 더 긴 window를 사용
+ */
+export async function checkSignupEmailRateLimit(
+  email: string,
+): Promise<RateLimitResult> {
+  return {
+    allowed: checkLimit(emailStore, email, EMAIL_LIMIT, EMAIL_WINDOW_MS),
+  };
+}
+
+/**
+ * 회원가입 rate limit 검사 (임시 호환용)
+ *
+ * 현재 signup route가 단일 함수 호출 구조를 사용하고 있어,
+ * 단계형 정책으로 route를 옮기기 전까지는 기존 진입점을 유지한다.
+ *
+ * 주의:
+ * - 새 정책의 정석 사용법은 checkSignupIpRateLimit / checkSignupEmailRateLimit를
+ *   요청 흐름 단계별로 각각 호출하는 것이다.
+ * - 이 호환 함수는 rollback을 수행하지 않는다.
  */
 export async function checkSignupRateLimit(
   ip: string,
   email: string,
 ): Promise<RateLimitResult> {
-  /**
-   * 1. IP 기준 제한 체크
-   */
-  const ipAllowed = checkLimit(ipStore, ip, IP_LIMIT);
+  const ipResult = await checkSignupIpRateLimit(ip);
+  if (!ipResult.allowed) return ipResult;
 
-  if (!ipAllowed) {
-    return { allowed: false };
-  }
-
-  /**
-   * 2. 이메일 기준 제한 체크
-   */
-  const emailAllowed = checkLimit(emailStore, email, EMAIL_LIMIT);
-
-  if (!emailAllowed) {
-    /**
-     * 이메일 차단 시 IP 카운트 롤백
-     *
-     * 이유:
-     * - 이메일 기준으로 차단된 요청까지 IP 제한에 포함되면
-     *   정상 사용자까지 IP 차단될 가능성 있음
-     */
-    const ipEntry = ipStore.get(ip);
-
-    if (ipEntry && ipEntry.count > 0) {
-      ipEntry.count -= 1;
-    }
-
-    return { allowed: false };
-  }
-
-  /**
-   * 모든 조건 통과
-   */
-  return { allowed: true };
+  return checkSignupEmailRateLimit(email);
 }

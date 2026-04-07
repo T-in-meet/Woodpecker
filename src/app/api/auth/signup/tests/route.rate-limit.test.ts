@@ -2,11 +2,12 @@
  * 회원가입 API - rate limit 정책 테스트
  *
  * 목적:
- * - IP + 이메일 기반 rate limit 동작 검증
+ * - 단계형 rate limit 동작 검증
  * - brute force / abuse / account enumeration 시도 방어
  *
  * 핵심 보안 포인트:
- * - 특정 계정 존재 여부와 무관하게 동일하게 rate limit 적용
+ * - IP rate limit은 본문 파싱/validation 이전에 조기 적용
+ * - email rate limit은 validation 이후 정규화된 이메일 기준으로 적용
  * - limit 초과 시 signup 로직 자체가 실행되지 않아야 함
  * - 실패 응답도 API 계약 구조를 유지해야 함
  *
@@ -71,6 +72,20 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
         "x-forwarded-for": ip,
       },
       body: JSON.stringify({ ...BASE_BODY, email }),
+    });
+  }
+
+  function makeInvalidRequest(ip: string): NextRequest {
+    return new NextRequest("http://localhost/api/auth/signup", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-forwarded-for": ip,
+      },
+      body: JSON.stringify({
+        password: "Password123!",
+        nickname: "tester",
+      }),
     });
   }
 
@@ -289,12 +304,17 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     expect(mockSignUp).toHaveBeenCalled();
   });
 
-  it("TC-10. 윈도우 만료 후 이메일 limit이 리셋된다", async () => {
+  it("TC-10. 15분 윈도우 만료 후 이메일 limit이 리셋된다", async () => {
     const email = "tc10@example.com";
 
     for (let i = 0; i < 6; i++) {
       await sendRequest(`10.10.${i}.1`, email);
     }
+
+    vi.advanceTimersByTime(14 * 60 * 1000);
+
+    const stillBlocked = await sendRequest("10.10.20.1", email);
+    expect(stillBlocked.status).toBe(429);
 
     vi.advanceTimersByTime(61 * 1000);
 
@@ -357,5 +377,100 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     expect(body).not.toHaveProperty("errors");
 
     expect(body.data).toBeNull();
+  });
+
+  it("TC-13. validation 실패 요청도 동일 IP 기준으로 누적되어 차단된다", async () => {
+    const ip = "10.13.0.1";
+
+    for (let i = 0; i < 10; i++) {
+      const responsePromise = POST(makeInvalidRequest(ip));
+      await vi.advanceTimersByTimeAsync(MIN_RESPONSE_MS);
+      const response = await responsePromise;
+      expect(response.status).toBe(400);
+    }
+
+    const blocked = await sendRequest(ip, "tc13@example.com");
+    const body = await blocked.json();
+
+    expect(blocked.status).toBe(429);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
+    expect(mockSignUp).toHaveBeenCalledTimes(0);
+  });
+
+  it("TC-14. validation 실패 요청은 이메일 limit을 소모하지 않는다", async () => {
+    const email = "tc14@example.com";
+
+    for (let i = 0; i < 5; i++) {
+      const responsePromise = POST(
+        new NextRequest("http://localhost/api/auth/signup", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-forwarded-for": `10.14.${i}.1`,
+          },
+          body: JSON.stringify({
+            email,
+            nickname: "tester",
+          }),
+        }),
+      );
+      await vi.advanceTimersByTimeAsync(MIN_RESPONSE_MS);
+      const response = await responsePromise;
+      expect(response.status).toBe(400);
+    }
+
+    for (let i = 0; i < 5; i++) {
+      const response = await sendRequest(`10.14.${i + 10}.1`, email);
+      expect(response.status).not.toBe(429);
+    }
+
+    const blocked = await sendRequest("10.14.99.1", email);
+    expect(blocked.status).toBe(429);
+  });
+
+  it("TC-15. IP rate limit hit 시 구조화된 경고 로그를 남긴다", async () => {
+    const ip = "10.15.0.1";
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    for (let i = 0; i < 10; i++) {
+      await sendRequest(ip, `tc15user${i}@example.com`);
+    }
+
+    const response = await sendRequest(ip, "tc15blocked@example.com");
+
+    expect(response.status).toBe(429);
+    expect(warnSpy).toHaveBeenCalledWith(
+      "signup_rate_limit_hit",
+      expect.objectContaining({
+        dimension: "ip",
+        route: "/api/auth/signup",
+        limit: 10,
+        windowMs: 60 * 1000,
+        ipMasked: "10.15.*.*",
+      }),
+    );
+  });
+
+  it("TC-16. email rate limit hit 시 구조화된 경고 로그를 남긴다", async () => {
+    const email = "tc16@example.com";
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    for (let i = 0; i < 5; i++) {
+      await sendRequest(`10.16.${i}.1`, email);
+    }
+
+    const response = await sendRequest("10.16.99.1", email);
+
+    expect(response.status).toBe(429);
+    expect(warnSpy).toHaveBeenCalledWith(
+      "signup_rate_limit_hit",
+      expect.objectContaining({
+        dimension: "email",
+        route: "/api/auth/signup",
+        limit: 5,
+        windowMs: 15 * 60 * 1000,
+        emailMasked: "t***@example.com",
+      }),
+    );
   });
 });

@@ -6,7 +6,15 @@ import { encryptTicket } from "@/features/auth/email/ticket";
 import { applyMinimumResponseTime } from "@/features/auth/lib/applyMinimumResponseTime";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { failureResponse, successResponse } from "@/features/auth/lib/response";
-import { checkSignupRateLimit } from "@/features/auth/signup/lib/checkSignupRateLimit";
+import {
+  checkSignupEmailRateLimit,
+  checkSignupIpRateLimit,
+  EMAIL_LIMIT,
+  EMAIL_WINDOW_MS,
+  IP_LIMIT,
+  IP_WINDOW_MS,
+} from "@/features/auth/signup/lib/checkSignupRateLimit";
+import { logSignupRateLimitHit } from "@/features/auth/signup/lib/logSignupRateLimitHit";
 import { mapSignupValidationErrors } from "@/features/auth/signup/lib/mapSignupValidationErrors";
 import { signupApiSchema } from "@/features/auth/signup/schema/signupApiSchema";
 import {
@@ -219,6 +227,26 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
    */
   const ip = getClientIp(request);
 
+  /**
+   * IP rate limit은 가장 앞단에서 적용한다.
+   *
+   * 이유:
+   * - malformed JSON / validation 실패 요청도 abuse 트래픽일 수 있다.
+   * - 본문 파싱 이전에 차단해야 불필요한 서버 자원 소모를 줄일 수 있다.
+   * - 따라서 signup에서는 "IP 선차단, email 후차단"의 단계형 정책을 사용한다.
+   */
+  const ipRateLimit = await checkSignupIpRateLimit(ip);
+  if (!ipRateLimit.allowed) {
+    logSignupRateLimitHit({
+      dimension: "ip",
+      route: "/api/auth/signup",
+      limit: IP_LIMIT,
+      windowMs: IP_WINDOW_MS,
+      ip,
+    });
+    return failureResponse(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
+  }
+
   let body: unknown;
   let avatarFile: File | null;
 
@@ -251,10 +279,21 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
   const normalizedEmail = email.toLowerCase();
 
   /**
-   * rate limit 체크
+   * Email rate limit은 validation 이후 정규화된 이메일 기준으로 적용한다.
+   *
+   * 이유:
+   * - email key는 유효한 입력에서만 의미가 있다.
+   * - 소문자 정규화 후 같은 계정을 동일한 버킷으로 취급해야 한다.
    */
-  const rateLimit = await checkSignupRateLimit(ip, normalizedEmail);
-  if (!rateLimit.allowed) {
+  const emailRateLimit = await checkSignupEmailRateLimit(normalizedEmail);
+  if (!emailRateLimit.allowed) {
+    logSignupRateLimitHit({
+      dimension: "email",
+      route: "/api/auth/signup",
+      limit: EMAIL_LIMIT,
+      windowMs: EMAIL_WINDOW_MS,
+      email: normalizedEmail,
+    });
     return failureResponse(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
   }
 
