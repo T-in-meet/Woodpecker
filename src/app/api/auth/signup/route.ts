@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
+import { applyMinimumResponseTime } from "@/features/auth/lib/applyMinimumResponseTime";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { failureResponse, successResponse } from "@/features/auth/lib/response";
 import { checkSignupRateLimit } from "@/features/auth/signup/lib/checkSignupRateLimit";
@@ -203,16 +204,13 @@ async function uploadAvatar(
 
   return avatarUrl;
 }
-
 /**
- * 회원가입 API (Account Enumeration 방어 적용)
+ * 회원가입 핵심 로직
  *
- * 핵심 원칙:
- * - 외부 응답은 항상 동일하게 유지
- * - 내부 상태 분기는 유지하되 외부로 노출하지 않음
- * - 응답만 보고 계정 존재 여부를 추론할 수 없도록 설계
+ * POST 핸들러에서 분리된 내부 함수.
+ * 타이밍 정책(최소 응답 시간)은 POST에서 일괄 적용한다.
  */
-export async function POST(request: NextRequest) {
+async function resolveSignupResponse(request: NextRequest): Promise<Response> {
   /**
    * 요청 IP 추출 (rate limit key)
    */
@@ -351,4 +349,26 @@ export async function POST(request: NextRequest) {
     },
     { status: 200 },
   );
+}
+
+/**
+ * 회원가입 API (Account Enumeration 방어 적용)
+ *
+ * 핵심 원칙:
+ * - 외부 응답은 항상 동일하게 유지
+ * - 내부 상태 분기는 유지하되 외부로 노출하지 않음
+ * - 응답만 보고 계정 존재 여부를 추론할 수 없도록 설계
+ * - 모든 경로(성공/실패/예외)는 최소 응답 시간을 보장한다
+ */
+export async function POST(request: NextRequest) {
+  const start = Date.now();
+  let response: Response;
+
+  try {
+    response = await resolveSignupResponse(request);
+  } catch {
+    response = failureResponse(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR);
+  }
+
+  return applyMinimumResponseTime(start, response);
 }

@@ -9,12 +9,19 @@
  * - 특정 계정 존재 여부와 무관하게 동일하게 rate limit 적용
  * - limit 초과 시 signup 로직 자체가 실행되지 않아야 함
  * - 실패 응답도 API 계약 구조를 유지해야 함
+ *
+ * 수정 이유:
+ * - signup route는 모든 응답 경로에 최소 응답 시간 보장 정책을 적용한다.
+ * - 이 테스트는 fake timer를 사용해 rate limit window를 검증하므로,
+ *   각 요청 후 최소 응답 시간만큼 타이머를 함께 전진시켜야 POST가 완료된다.
+ * - 즉시 응답을 가정하면 현재 구현 계약과 충돌하므로, 테스트가 최신 계약을 반영해야 한다.
  */
 
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
+import { MIN_RESPONSE_MS } from "@/features/auth/lib/applyMinimumResponseTime";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { resetRateLimitStores } from "@/features/auth/signup/lib/checkSignupRateLimit";
 import { createClient } from "@/lib/supabase/server";
@@ -67,6 +74,15 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     });
   }
 
+  /**
+   * 최소 응답 시간 정책과 fake timer를 함께 처리하는 요청 헬퍼
+   */
+  async function sendRequest(ip: string, email = "test@example.com") {
+    const responsePromise = POST(makeRequest(ip, email));
+    await vi.advanceTimersByTimeAsync(MIN_RESPONSE_MS);
+    return responsePromise;
+  }
+
   beforeEach(() => {
     /**
      * fake timer 설정
@@ -114,7 +130,7 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
      * → IP limit만 검증
      */
     for (let i = 0; i < 10; i++) {
-      const response = await POST(makeRequest(ip, `tc01user${i}@example.com`));
+      const response = await sendRequest(ip, `tc01user${i}@example.com`);
       expect(response.status).not.toBe(429);
     }
 
@@ -128,13 +144,13 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     const ip = "10.2.0.1";
 
     for (let i = 0; i < 10; i++) {
-      await POST(makeRequest(ip, `tc02user${i}@example.com`));
+      await sendRequest(ip, `tc02user${i}@example.com`);
     }
 
     /**
      * limit 초과 요청
      */
-    const response = await POST(makeRequest(ip, "tc02overflow@example.com"));
+    const response = await sendRequest(ip, "tc02overflow@example.com");
     const body = await response.json();
 
     /**
@@ -158,7 +174,7 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
      * IP를 바꿔서 이메일 limit만 검증
      */
     for (let i = 0; i < 5; i++) {
-      const response = await POST(makeRequest(`10.3.${i}.1`, email));
+      const response = await sendRequest(`10.3.${i}.1`, email);
       expect(response.status).not.toBe(429);
     }
 
@@ -169,10 +185,10 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     const email = "tc04@example.com";
 
     for (let i = 0; i < 5; i++) {
-      await POST(makeRequest(`10.4.${i}.1`, email));
+      await sendRequest(`10.4.${i}.1`, email);
     }
 
-    const response = await POST(makeRequest("10.4.5.1", email));
+    const response = await sendRequest("10.4.5.1", email);
     const body = await response.json();
 
     expect(response.status).toBe(429);
@@ -190,13 +206,13 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     const ip = "10.5.0.1";
 
     for (let i = 0; i < 9; i++) {
-      await POST(makeRequest(ip, `tc05user${i}@example.com`));
+      await sendRequest(ip, `tc05user${i}@example.com`);
     }
 
     /**
      * 경계값 요청 (허용)
      */
-    const response = await POST(makeRequest(ip, "tc05user9@example.com"));
+    const response = await sendRequest(ip, "tc05user9@example.com");
 
     expect(response.status).not.toBe(429);
     expect(mockSignUp).toHaveBeenCalledTimes(10);
@@ -206,10 +222,10 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     const email = "tc06@example.com";
 
     for (let i = 0; i < 4; i++) {
-      await POST(makeRequest(`10.6.${i}.1`, email));
+      await sendRequest(`10.6.${i}.1`, email);
     }
 
-    const response = await POST(makeRequest("10.6.4.1", email));
+    const response = await sendRequest("10.6.4.1", email);
 
     expect(response.status).not.toBe(429);
     expect(mockSignUp).toHaveBeenCalledTimes(5);
@@ -219,7 +235,7 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     const ip = "10.7.0.1";
 
     for (let i = 0; i < 11; i++) {
-      await POST(makeRequest(ip, `tc07user${i}@example.com`));
+      await sendRequest(ip, `tc07user${i}@example.com`);
     }
 
     /**
@@ -231,7 +247,7 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
      * 같은 window에서는 계속 차단
      */
     for (let i = 0; i < 3; i++) {
-      const response = await POST(makeRequest(ip, `tc07extra${i}@example.com`));
+      const response = await sendRequest(ip, `tc07extra${i}@example.com`);
       expect(response.status).toBe(429);
     }
 
@@ -242,13 +258,13 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     const email = "tc08@example.com";
 
     for (let i = 0; i < 6; i++) {
-      await POST(makeRequest(`10.8.${i}.1`, email));
+      await sendRequest(`10.8.${i}.1`, email);
     }
 
     mockSignUp.mockClear();
 
     for (let i = 0; i < 3; i++) {
-      const response = await POST(makeRequest(`10.8.${i + 10}.1`, email));
+      const response = await sendRequest(`10.8.${i + 10}.1`, email);
       expect(response.status).toBe(429);
     }
 
@@ -259,7 +275,7 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     const ip = "10.9.0.1";
 
     for (let i = 0; i < 11; i++) {
-      await POST(makeRequest(ip, `tc09user${i}@example.com`));
+      await sendRequest(ip, `tc09user${i}@example.com`);
     }
 
     /**
@@ -267,7 +283,7 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
      */
     vi.advanceTimersByTime(61 * 1000);
 
-    const response = await POST(makeRequest(ip, "tc09reset@example.com"));
+    const response = await sendRequest(ip, "tc09reset@example.com");
 
     expect(response.status).not.toBe(429);
     expect(mockSignUp).toHaveBeenCalled();
@@ -277,12 +293,12 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     const email = "tc10@example.com";
 
     for (let i = 0; i < 6; i++) {
-      await POST(makeRequest(`10.10.${i}.1`, email));
+      await sendRequest(`10.10.${i}.1`, email);
     }
 
     vi.advanceTimersByTime(61 * 1000);
 
-    const response = await POST(makeRequest("10.10.10.1", email));
+    const response = await sendRequest("10.10.10.1", email);
 
     expect(response.status).not.toBe(429);
     expect(mockSignUp).toHaveBeenCalled();
@@ -292,10 +308,10 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     const ip = "10.11.0.1";
 
     for (let i = 0; i < 10; i++) {
-      await POST(makeRequest(ip, `user${i}@example.com`));
+      await sendRequest(ip, `user${i}@example.com`);
     }
 
-    const response = await POST(makeRequest(ip, "overflow@example.com"));
+    const response = await sendRequest(ip, "overflow@example.com");
     const body = await response.json();
 
     expect(response.status).toBe(429);
@@ -306,10 +322,10 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     const email = "tc11b@example.com";
 
     for (let i = 0; i < 5; i++) {
-      await POST(makeRequest(`10.11.${i}.2`, email));
+      await sendRequest(`10.11.${i}.2`, email);
     }
 
-    const response = await POST(makeRequest("10.11.10.2", email));
+    const response = await sendRequest("10.11.10.2", email);
     const body = await response.json();
 
     expect(response.status).toBe(429);
@@ -320,10 +336,10 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     const ip = "10.12.0.1";
 
     for (let i = 0; i < 11; i++) {
-      await POST(makeRequest(ip));
+      await sendRequest(ip);
     }
 
-    const response = await POST(makeRequest(ip));
+    const response = await sendRequest(ip);
     const body = await response.json();
 
     /**

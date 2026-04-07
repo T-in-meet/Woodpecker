@@ -65,6 +65,23 @@ export const AUTH_API_CODES = {
    * - rate limit 초과 (429)
    */
   RESEND_RATE_LIMIT_EXCEEDED: makeApiCode("resend", API_RESULTS.RATE_LIMITED),
+
+  /**
+   * 회원가입 처리 중 내부 서버 오류
+   * - DB 조회 실패
+   * - Supabase 호출 실패
+   * - 예상하지 못한 런타임 예외
+   *
+   * 특징:
+   * - 클라이언트 입력 문제가 아님
+   * - 서버 내부 처리 중 발생한 오류
+   * - 상세 원인은 외부에 노출하지 않음
+   *
+   * 응답:
+   * - status: 500
+   * - success: false
+   */
+  SIGNUP_INTERNAL_ERROR: makeApiCode("signup", API_RESULTS.INTERNAL_ERROR),
 } as const;
 
 /**
