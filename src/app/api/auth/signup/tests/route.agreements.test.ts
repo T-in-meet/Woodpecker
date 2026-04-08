@@ -15,15 +15,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
+import { sendAuthEmail } from "@/features/auth/email/sendAuthEmail";
 import { resetRateLimitStores } from "@/features/auth/signup/lib/checkSignupRateLimit";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { VALIDATION_REASON } from "@/lib/validation/reasons";
 
 import { POST } from "../route";
 import { makeRequest } from "./utils/signupTestHelper";
 
 vi.mock("@/features/auth/lib/getUserByEmail");
-vi.mock("@/lib/supabase/server");
+vi.mock("@/features/auth/email/sendAuthEmail");
+vi.mock("@/lib/supabase/admin");
 
 // 테스트 간 rate limit store 공유 상태 제거
 beforeEach(() => {
@@ -31,7 +33,7 @@ beforeEach(() => {
 });
 
 describe("PR-API-03 회원가입 약관 동의 검증", () => {
-  const mockSignUp = vi.fn();
+  const mockGenerateLink = vi.fn();
   // 약관만 바꿔가며 테스트하기 위한 기준 payload
   const BASE_VALID_PAYLOAD = {
     email: "test@example.com",
@@ -45,9 +47,11 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(createClient).mockResolvedValue({
-      auth: { signUp: mockSignUp },
+    process.env["EMAIL_TICKET_SECRET"] = "test-ticket-secret";
+    vi.mocked(createAdminClient).mockReturnValue({
+      auth: { admin: { generateLink: mockGenerateLink } },
     } as never);
+    vi.mocked(sendAuthEmail).mockResolvedValue(undefined);
   });
 
   // 약관 실패 케이스마다 동일한 실패 계약을 검증하는 helper
@@ -79,7 +83,7 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
       "agreements.termsOfService",
       VALIDATION_REASON.NOT_AGREED,
     );
-    expect(mockSignUp).toHaveBeenCalledTimes(0);
+    expect(mockGenerateLink).toHaveBeenCalledTimes(0);
   });
 
   // TC-02: privacyPolicy = false
@@ -96,7 +100,7 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
       "agreements.privacyPolicy",
       VALIDATION_REASON.NOT_AGREED,
     );
-    expect(mockSignUp).toHaveBeenCalledTimes(0);
+    expect(mockGenerateLink).toHaveBeenCalledTimes(0);
   });
 
   // TC-03: both false
@@ -124,7 +128,7 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
         }),
       ]),
     );
-    expect(mockSignUp).toHaveBeenCalledTimes(0);
+    expect(mockGenerateLink).toHaveBeenCalledTimes(0);
   });
 
   // TC-04: termsOfService missing
@@ -141,7 +145,7 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
       "agreements.termsOfService",
       VALIDATION_REASON.REQUIRED,
     );
-    expect(mockSignUp).toHaveBeenCalledTimes(0);
+    expect(mockGenerateLink).toHaveBeenCalledTimes(0);
   });
 
   // TC-05: privacyPolicy missing
@@ -158,7 +162,7 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
       "agreements.privacyPolicy",
       VALIDATION_REASON.REQUIRED,
     );
-    expect(mockSignUp).toHaveBeenCalledTimes(0);
+    expect(mockGenerateLink).toHaveBeenCalledTimes(0);
   });
 
   // TC-06: agreements missing
@@ -171,7 +175,7 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
       "agreements",
       VALIDATION_REASON.REQUIRED,
     );
-    expect(mockSignUp).toHaveBeenCalledTimes(0);
+    expect(mockGenerateLink).toHaveBeenCalledTimes(0);
   });
 
   // TC-07: agreements null
@@ -185,7 +189,7 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
       "agreements",
       VALIDATION_REASON.REQUIRED,
     );
-    expect(mockSignUp).toHaveBeenCalledTimes(0);
+    expect(mockGenerateLink).toHaveBeenCalledTimes(0);
   });
 
   // TC-08: termsOfService null
@@ -202,7 +206,7 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
       "agreements.termsOfService",
       VALIDATION_REASON.REQUIRED,
     );
-    expect(mockSignUp).toHaveBeenCalledTimes(0);
+    expect(mockGenerateLink).toHaveBeenCalledTimes(0);
   });
 
   // TC-09: privacyPolicy null
@@ -219,7 +223,7 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
       "agreements.privacyPolicy",
       VALIDATION_REASON.REQUIRED,
     );
-    expect(mockSignUp).toHaveBeenCalledTimes(0);
+    expect(mockGenerateLink).toHaveBeenCalledTimes(0);
   });
 
   // TC-10: agreements invalid type
@@ -233,13 +237,16 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
       "agreements",
       VALIDATION_REASON.INVALID_TYPE,
     );
-    expect(mockSignUp).toHaveBeenCalledTimes(0);
+    expect(mockGenerateLink).toHaveBeenCalledTimes(0);
   });
 
   // TC-11: both true
   it("TC-11. agreements가 모두 true이면 회원가입이 성공한다", async () => {
-    mockSignUp.mockResolvedValue({
-      data: { user: { email: "test@example.com" } },
+    mockGenerateLink.mockResolvedValue({
+      data: {
+        user: { id: "user-id", email: "test@example.com" },
+        properties: { hashed_token: "hashed-token" },
+      },
       error: null,
     });
 
@@ -249,6 +256,6 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
     expect(response.status).toBe(200);
     expect(body.success).toBe(true);
     expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
-    expect(mockSignUp).toHaveBeenCalledTimes(1);
+    expect(mockGenerateLink).toHaveBeenCalledTimes(1);
   });
 });

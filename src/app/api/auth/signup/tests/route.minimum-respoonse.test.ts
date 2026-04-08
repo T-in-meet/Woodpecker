@@ -21,17 +21,19 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
+import { sendAuthEmail } from "@/features/auth/email/sendAuthEmail";
 import { MIN_RESPONSE_MS } from "@/features/auth/lib/applyMinimumResponseTime";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { resetRateLimitStores } from "@/features/auth/signup/lib/checkSignupRateLimit";
 import { ROUTES } from "@/lib/constants/routes";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 import { POST } from "../route";
 import { makeRequest } from "./utils/signupTestHelper";
 
 vi.mock("@/features/auth/lib/getUserByEmail");
-vi.mock("@/lib/supabase/server");
+vi.mock("@/features/auth/email/sendAuthEmail");
+vi.mock("@/lib/supabase/admin");
 
 /**
  * Date.now() mock의 기준 시각 (임의의 epoch ms)
@@ -39,19 +41,21 @@ vi.mock("@/lib/supabase/server");
 const START_TIME = 1_000_000;
 
 describe("회원가입 API 최소 응답 시간 보장 검증", () => {
-  const mockSignUp = vi.fn();
+  const mockGenerateLink = vi.fn();
 
   beforeEach(() => {
     resetRateLimitStores();
     vi.useRealTimers();
     vi.restoreAllMocks();
     vi.clearAllMocks();
+    process.env["EMAIL_TICKET_SECRET"] = "test-ticket-secret";
 
-    vi.mocked(createClient).mockResolvedValue({
-      auth: { signUp: mockSignUp },
+    vi.mocked(createAdminClient).mockReturnValue({
+      auth: { admin: { generateLink: mockGenerateLink } },
     } as never);
 
     vi.mocked(getUserByEmail).mockResolvedValue(null);
+    vi.mocked(sendAuthEmail).mockResolvedValue(undefined);
   });
 
   const validBody = {
@@ -116,16 +120,19 @@ describe("회원가입 API 최소 응답 시간 보장 검증", () => {
       .mockReturnValue(START_TIME + MIN_RESPONSE_MS + 500);
   }
 
-  function mockSignUpSuccess() {
-    mockSignUp.mockResolvedValue({
-      data: { user: { email: "test@example.com" } },
+  function mockGenerateLinkSuccess() {
+    mockGenerateLink.mockResolvedValue({
+      data: {
+        user: { id: "user-id", email: "test@example.com" },
+        properties: { hashed_token: "hashed-token" },
+      },
       error: null,
     });
   }
 
   it("TC-01: fast success path → 최소 응답 시간 이전에 응답하지 않는다", async () => {
     useFakeClockWithNoElapsedTime();
-    mockSignUpSuccess();
+    mockGenerateLinkSuccess();
 
     const promise = POST(makeRequest(validBody));
 
@@ -168,7 +175,7 @@ describe("회원가입 API 최소 응답 시간 보장 검증", () => {
   it("TC-04: elapsed time이 최소 응답 시간을 초과하면 추가 지연 없이 반환한다", async () => {
     mockSlowExecution();
     const setTimeoutSpy = vi.spyOn(global, "setTimeout");
-    mockSignUpSuccess();
+    mockGenerateLinkSuccess();
 
     const response = await POST(makeRequest(validBody));
 
@@ -178,7 +185,7 @@ describe("회원가입 API 최소 응답 시간 보장 검증", () => {
 
   it("TC-05: 최소 응답 시간 적용 후에도 성공 응답 계약이 유지된다", async () => {
     useFakeClockWithNoElapsedTime();
-    mockSignUpSuccess();
+    mockGenerateLinkSuccess();
 
     const promise = POST(makeRequest(validBody));
 
@@ -231,7 +238,7 @@ describe("회원가입 API 최소 응답 시간 보장 검증", () => {
 
   it("TC-08: fast rate-limit path도 최소 응답 시간 이전에 응답하지 않는다", async () => {
     useFakeClockWithNoElapsedTime();
-    mockSignUpSuccess();
+    mockGenerateLinkSuccess();
     const ip = "127.0.0.1";
 
     for (let i = 0; i < 10; i++) {
