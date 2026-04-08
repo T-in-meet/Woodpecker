@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { decryptTicket } from "@/features/auth/email/ticket";
+import { applyMinimumResponseTime } from "@/features/auth/lib/applyMinimumResponseTime";
 import { ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 
@@ -113,6 +114,12 @@ function parseTicketPayload(raw: string): {
  * - callback은 추가 상태 저장 없이 stateless하게 처리
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  const start = Date.now();
+
+  // callback의 모든 분기에서 동일한 최소 응답 시간 정책을 적용하기 위한 공통 반환 함수.
+  const finalize = (res: NextResponse): Promise<NextResponse> =>
+    applyMinimumResponseTime(start, res) as Promise<NextResponse>;
+
   /**
    * 이메일 링크에 포함된 opaque ticket 추출
    */
@@ -122,7 +129,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
    * ticket 누락 시 조기 종료
    */
   if (!ticket) {
-    return redirectToLogin(request);
+    return finalize(redirectToLogin(request));
   }
 
   let decrypted: string;
@@ -138,18 +145,18 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     /**
      * 복호화 실패도 외부에는 동일 redirect
      */
-    return redirectToLogin(request);
+    return finalize(redirectToLogin(request));
   }
 
   const parsed = parseTicketPayload(decrypted);
 
   if (parsed.kind === "notify") {
     // notify는 검증 API를 호출하지 않고 동일한 외부 응답(로그인 리다이렉트)만 유지한다.
-    return redirectToLogin(request);
+    return finalize(redirectToLogin(request));
   }
 
   if (!parsed.tokenHash || !parsed.verifyType) {
-    return redirectToLogin(request);
+    return finalize(redirectToLogin(request));
   }
 
   try {
@@ -167,5 +174,5 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
      */
   }
 
-  return redirectToLogin(request);
+  return finalize(redirectToLogin(request));
 }
