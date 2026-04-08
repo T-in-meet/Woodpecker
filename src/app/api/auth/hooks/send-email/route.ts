@@ -10,6 +10,13 @@ export async function POST(request: NextRequest): Promise<Response> {
   const expectedSecret = process.env["SUPABASE_HOOK_SECRET"];
 
   if (!expectedSecret || hookSecret !== expectedSecret) {
+    // Hook 인증 문제는 운영에서 자주 발생하므로 원인 파악용 최소 로그를 남긴다.
+    console.error(
+      "[send-email-hook] Unauthorized. expectedSecret exists:",
+      !!expectedSecret,
+      "hookSecret matched:",
+      hookSecret === expectedSecret,
+    );
     return failureResponse(AUTH_API_CODES.SEND_EMAIL_HOOK_UNAUTHORIZED);
   }
 
@@ -17,7 +24,9 @@ export async function POST(request: NextRequest): Promise<Response> {
 
   try {
     body = await request.json();
-  } catch {
+  } catch (error) {
+    // malformed payload가 반복될 수 있어 parsing 실패 로그를 분리한다.
+    console.error("[send-email-hook] Failed to parse request JSON.", error);
     return failureResponse(AUTH_API_CODES.SEND_EMAIL_HOOK_INVALID_INPUT);
   }
 
@@ -35,6 +44,10 @@ export async function POST(request: NextRequest): Promise<Response> {
       (body as Record<string, unknown>)["email_data"] as Record<string, unknown>
     )["token_hash"] !== "string"
   ) {
+    console.error(
+      "[send-email-hook] Validation failed for payload:",
+      JSON.stringify(body, null, 2),
+    );
     return failureResponse(AUTH_API_CODES.SEND_EMAIL_HOOK_INVALID_INPUT);
   }
 
@@ -49,7 +62,9 @@ export async function POST(request: NextRequest): Promise<Response> {
   try {
     const ticket = encryptTicket(tokenHash);
     await sendAuthEmail(email, ticket, "verify-email");
-  } catch {
+    console.log(`[send-email-hook] Successfully sent auth email to ${email}`);
+  } catch (error) {
+    console.error("[send-email-hook] Failed to send auth email:", error);
     return failureResponse(AUTH_API_CODES.SEND_EMAIL_HOOK_INTERNAL_ERROR);
   }
 

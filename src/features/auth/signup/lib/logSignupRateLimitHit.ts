@@ -28,7 +28,7 @@ function maskIp(ip: string): string {
 
 function maskEmail(email: string): string {
   const [localPart, domain = ""] = email.split("@");
-  const firstChar = localPart[0]?.toLowerCase() ?? "*";
+  const firstChar = localPart?.[0]?.toLowerCase() ?? "*";
 
   return `${firstChar}***@${domain}`;
 }

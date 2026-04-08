@@ -122,6 +122,18 @@ describe("callback - verifyOtp 정상 흐름", () => {
       new URL(ROUTES.LOGIN, request.url).toString(),
     );
   });
+
+  it("TC-07A. magiclink prefix ticket이면 verifyOtp가 magiclink 타입으로 호출된다", async () => {
+    vi.mocked(decryptTicket).mockReturnValue("magiclink:token-hash-xyz");
+
+    await GET(makeCallbackRequest("valid-ticket"));
+
+    expect(mockVerifyOtp).toHaveBeenCalledTimes(1);
+    expect(mockVerifyOtp).toHaveBeenCalledWith({
+      type: "magiclink",
+      token_hash: "token-hash-xyz",
+    });
+  });
 });
 
 describe("callback - verifyOtp 실패/예외", () => {
@@ -165,5 +177,26 @@ describe("callback - redirect location 순수성", () => {
     expect(location).toContain(ROUTES.LOGIN);
     expect(location).not.toContain("foo");
     expect(location).not.toContain("ticket=");
+  });
+});
+
+describe("callback - notify ticket 정책", () => {
+  it("TC-11. notify ticket이면 verifyOtp를 호출하지 않고 로그인으로 redirect한다", async () => {
+    vi.mocked(decryptTicket).mockReturnValue("notify-ticket-without-auth");
+
+    const response = await GET(makeCallbackRequest("notify-ticket"));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toContain(ROUTES.LOGIN);
+    expect(mockVerifyOtp).toHaveBeenCalledTimes(0);
+  });
+
+  it("TC-12. notify ticket에서도 외부 응답 계약은 동일하게 유지된다", async () => {
+    vi.mocked(decryptTicket).mockReturnValue("notify-ticket-without-auth");
+
+    const response = await GET(makeCallbackRequest("notify-ticket"));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toContain(ROUTES.LOGIN);
   });
 });

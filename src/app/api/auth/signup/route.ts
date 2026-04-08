@@ -25,7 +25,6 @@ import {
 import { ROUTES } from "@/lib/constants/routes";
 import { STORAGE_BUCKETS } from "@/lib/constants/storageBuckets";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
 import { getClientIp } from "@/lib/utils/getClientIp";
 import { VALIDATION_REASON } from "@/lib/validation/reasons";
 
@@ -143,7 +142,7 @@ function validateAvatarFile(file: File): boolean {
  * - 외부 응답에는 절대 영향을 주지 않음 (AE 방지)
  */
 async function uploadAvatar(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: ReturnType<typeof createAdminClient>,
   avatarFile: File,
   userId: string,
 ): Promise<string | null> {
@@ -321,7 +320,10 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
         });
 
       if (!linkError && linkData?.properties?.hashed_token) {
-        const ticket = encryptTicket(linkData.properties.hashed_token);
+        // callback에서 verifyOtp type을 결정할 수 있도록 ticket payload에 목적 prefix를 포함한다.
+        const ticket = encryptTicket(
+          `magiclink:${linkData.properties.hashed_token}`,
+        );
         await sendAuthEmail(normalizedEmail, ticket, "verify-email");
       }
     } catch {
@@ -342,6 +344,16 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
    * [기존 사용자 - 인증 완료]
    */
   if (existingUser && existingUser.email_confirmed_at !== null) {
+    try {
+      // 기존 인증 사용자는 재인증이 목적이 아니므로, 인증정보 없는 notify marker ticket을 발급한다.
+      const notifyTicket = `notify-${crypto.randomUUID()}`;
+      await sendAuthEmail(normalizedEmail, notifyTicket, "verify-email");
+    } catch {
+      console.warn("인증 완료 사용자 안내 메일 전송 실패 (무시됨)", {
+        email: normalizedEmail,
+      });
+    }
+
     return successResponse(
       AUTH_API_CODES.SIGNUP_SUCCESS,
       {
@@ -355,10 +367,11 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
   /**
    * [신규 사용자 가입]
    */
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.signUp({
+  const adminClient = createAdminClient();
+  const { data, error } = await adminClient.auth.admin.generateLink({
     email: normalizedEmail,
     password,
+    type: "signup",
     options: {
       /**
        * emailRedirectTo 제거 이유
@@ -385,18 +398,45 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
   });
 
   if (error) {
+    console.error("Supabase generateLink(signup) failed", {
+      email: normalizedEmail,
+      message: error.message,
+      status: error.status,
+      code: error.code,
+      name: error.name,
+    });
+
     return failureResponse(AUTH_API_CODES.SIGNUP_INVALID_INPUT, {
       status: 400,
     });
   }
 
-  let avatarUrl: string | null = null;
+  const tokenHash = data.properties?.hashed_token;
+
+  if (!tokenHash) {
+    console.error("Supabase generateLink(signup) returned no hashed token", {
+      email: normalizedEmail,
+    });
+    return failureResponse(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR);
+  }
+
+  try {
+    // 신규 가입 검증용 ticket임을 명시해 callback에서 signup verifyOtp로 분기한다.
+    const ticket = encryptTicket(`signup:${tokenHash}`);
+    await sendAuthEmail(normalizedEmail, ticket, "verify-email");
+  } catch (error) {
+    console.error("Failed to send signup verification email", {
+      email: normalizedEmail,
+      error,
+    });
+    return failureResponse(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR);
+  }
 
   /**
    * 아바타 업로드 (side-effect)
    */
   if (avatarFile && data.user) {
-    avatarUrl = await uploadAvatar(supabase, avatarFile, data.user.id);
+    await uploadAvatar(adminClient, avatarFile, data.user.id);
   }
 
   /**
@@ -405,7 +445,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
   return successResponse(
     AUTH_API_CODES.SIGNUP_SUCCESS,
     {
-      email: data.user?.email ?? normalizedEmail,
+      email: data.user.email ?? normalizedEmail,
       redirectTo: ROUTES.LOGIN,
     },
     { status: 200 },
