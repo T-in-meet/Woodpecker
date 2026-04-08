@@ -346,7 +346,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
   if (existingUser && existingUser.email_confirmed_at !== null) {
     try {
       // 기존 인증 사용자는 재인증이 목적이 아니므로, 인증정보 없는 notify marker ticket을 발급한다.
-      const notifyTicket = `notify-${crypto.randomUUID()}`;
+      const notifyTicket = encryptTicket(`notify-${crypto.randomUUID()}`);
       await sendAuthEmail(normalizedEmail, notifyTicket, "verify-email");
     } catch {
       console.warn("인증 완료 사용자 안내 메일 전송 실패 (무시됨)", {

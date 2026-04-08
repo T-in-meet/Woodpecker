@@ -152,11 +152,14 @@ describe("회원가입 이메일 발송 - 기존 인증 사용자", () => {
     );
   });
 
-  it("TC-06. 기존 인증 사용자 분기에서는 인증정보용 generateLink를 호출하지 않는다", async () => {
+  it("TC-06. 기존 인증 사용자 분기에서는 인증정보용 generateLink를 호출하지 않고, notify ticket은 encryptTicket으로 암호화한다", async () => {
     await POST(makeRequest(requestBody));
 
     expect(mockGenerateLink).toHaveBeenCalledTimes(0);
-    expect(vi.mocked(encryptTicket)).toHaveBeenCalledTimes(0);
+    expect(vi.mocked(encryptTicket)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(encryptTicket)).toHaveBeenCalledWith(
+      expect.stringMatching(/^notify-/),
+    );
   });
 
   it("TC-07. 기존 인증 사용자 메일 전송 실패는 외부 응답을 실패로 바꾸지 않는다", async () => {

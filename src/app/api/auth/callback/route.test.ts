@@ -61,12 +61,13 @@ describe("callback - ticket query 누락/빈값", () => {
     expect(mockVerifyOtp).toHaveBeenCalledTimes(0);
   });
 
-  it("TC-02. ticket query가 빈 문자열이면 307 redirect되고 createClient, verifyOtp를 호출하지 않는다", async () => {
+  it("TC-02. ticket query가 빈 문자열이면 307 redirect되고 createClient, decryptTicket, verifyOtp를 호출하지 않는다", async () => {
     const response = await GET(makeCallbackRequest(""));
 
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toContain(ROUTES.LOGIN);
     expect(vi.mocked(createClient)).toHaveBeenCalledTimes(0);
+    expect(vi.mocked(decryptTicket)).toHaveBeenCalledTimes(0);
     expect(mockVerifyOtp).toHaveBeenCalledTimes(0);
   });
 });
@@ -134,6 +135,18 @@ describe("callback - verifyOtp 정상 흐름", () => {
       token_hash: "token-hash-xyz",
     });
   });
+
+  it("TC-07B. signup prefix ticket이면 verifyOtp가 signup 타입으로 호출된다", async () => {
+    vi.mocked(decryptTicket).mockReturnValue("signup:token-hash-xyz");
+
+    await GET(makeCallbackRequest("valid-ticket"));
+
+    expect(mockVerifyOtp).toHaveBeenCalledTimes(1);
+    expect(mockVerifyOtp).toHaveBeenCalledWith({
+      type: "signup",
+      token_hash: "token-hash-xyz",
+    });
+  });
 });
 
 describe("callback - verifyOtp 실패/예외", () => {
@@ -189,14 +202,5 @@ describe("callback - notify ticket 정책", () => {
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toContain(ROUTES.LOGIN);
     expect(mockVerifyOtp).toHaveBeenCalledTimes(0);
-  });
-
-  it("TC-12. notify ticket에서도 외부 응답 계약은 동일하게 유지된다", async () => {
-    vi.mocked(decryptTicket).mockReturnValue("notify-ticket-without-auth");
-
-    const response = await GET(makeCallbackRequest("notify-ticket"));
-
-    expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toContain(ROUTES.LOGIN);
   });
 });

@@ -92,9 +92,12 @@ describe("ticket - AEAD 암호화/복호화 순수 함수 검증", () => {
 
   it("TC-11. 다른 secret으로 decrypt 시 실패한다", () => {
     const ticket = encryptTicket(TEST_TOKEN_HASH);
-
-    process.env["EMAIL_TICKET_SECRET"] = "another-secret";
-
-    expect(() => decryptTicket(ticket)).toThrow();
+    const original = process.env["EMAIL_TICKET_SECRET"];
+    try {
+      process.env["EMAIL_TICKET_SECRET"] = "another-secret";
+      expect(() => decryptTicket(ticket)).toThrow();
+    } finally {
+      process.env["EMAIL_TICKET_SECRET"] = original;
+    }
   });
 });
