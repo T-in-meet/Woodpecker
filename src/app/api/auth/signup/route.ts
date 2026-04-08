@@ -429,7 +429,8 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
       email: normalizedEmail,
       error,
     });
-    return failureResponse(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR);
+    // AE 방어: 이메일 발송 실패를 외부에 노출하지 않는다.
+    // 계정은 이미 생성됨. 사용자는 재가입 시도 또는 /resend-verification-email로 재발송 가능.
   }
 
   /**

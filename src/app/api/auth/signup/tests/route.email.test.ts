@@ -102,6 +102,21 @@ describe("회원가입 이메일 발송 - 신규 사용자", () => {
       "verify-email",
     );
   });
+
+  it("TC-03. 신규 사용자 이메일 발송 실패 시에도 SIGNUP_SUCCESS 응답을 반환한다", async () => {
+    vi.mocked(sendAuthEmail).mockRejectedValue(new Error("SMTP error"));
+
+    const response = await POST(makeRequest(requestBody));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
+    expect(body.data).toEqual({
+      email: "test@example.com",
+      redirectTo: ROUTES.LOGIN,
+    });
+  });
 });
 
 describe("회원가입 이메일 발송 - 기존 미인증 사용자", () => {
