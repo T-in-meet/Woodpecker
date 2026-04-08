@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import { after, NextRequest } from "next/server";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 import { sendAuthEmail } from "@/features/auth/email/sendAuthEmail";
@@ -434,9 +434,13 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
 
   /**
    * 아바타 업로드 (side-effect)
+   *
+   * 응답 시간에서 upload latency를 제거하기 위해 after()로 응답 후 처리한다.
+   * 실패해도 이미 응답이 전송된 이후이므로 외부 응답에 영향을 주지 않는다.
    */
   if (avatarFile && data.user) {
-    await uploadAvatar(adminClient, avatarFile, data.user.id);
+    const userId = data.user.id;
+    after(() => uploadAvatar(adminClient, avatarFile, userId));
   }
 
   /**

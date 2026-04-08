@@ -2,7 +2,7 @@
  * 회원가입 API avatar 업로드 전용 테스트
  */
 
-import { NextRequest } from "next/server";
+import { after, NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
@@ -13,7 +13,12 @@ import { ROUTES } from "@/lib/constants/routes";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { POST } from "../route";
+import { makeRequest } from "./utils/signupTestHelper";
 
+vi.mock("next/server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("next/server")>();
+  return { ...actual, after: vi.fn((cb: () => unknown) => cb()) };
+});
 vi.mock("@/features/auth/lib/getUserByEmail");
 vi.mock("@/features/auth/email/sendAuthEmail");
 vi.mock("@/lib/supabase/admin");
@@ -126,6 +131,12 @@ describe("PR-API-07 프로필 이미지 업로드 성공 시 avatar_url 반영",
       expect.objectContaining({ avatar_url: MOCK_PUBLIC_URL }),
     );
   });
+
+  it("TC-05. avatarFile이 있으면 after가 1회 호출된다", async () => {
+    await POST(makeMultipartRequest());
+
+    expect(vi.mocked(after)).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("PR-API-08 프로필 이미지 업로드 실패 시 회원가입 성공 유지", () => {
@@ -219,5 +230,42 @@ describe("PR-API-08 프로필 이미지 업로드 실패 시 회원가입 성공
     const body = await response.json();
 
     expect(body.data).not.toHaveProperty("avatar_url");
+  });
+});
+
+describe("PR-API-09 아바타 없는 가입 시 after 미호출", () => {
+  const mockGenerateLink = vi.fn();
+
+  const BASE_BODY = {
+    email: "test@example.com",
+    password: "Password123!",
+    nickname: "테스터",
+    agreements: { termsOfService: true as const, privacyPolicy: true as const },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env["EMAIL_TICKET_SECRET"] = "test-ticket-secret";
+    vi.mocked(getUserByEmail).mockResolvedValue(null);
+    vi.mocked(sendAuthEmail).mockResolvedValue(undefined);
+
+    vi.mocked(createAdminClient).mockReturnValue({
+      auth: { admin: { generateLink: mockGenerateLink } },
+    } as never);
+
+    mockGenerateLink.mockResolvedValue({
+      data: {
+        user: { id: "user-id", email: "test@example.com" },
+        properties: { hashed_token: "hashed-token" },
+      },
+      error: null,
+    });
+  });
+
+  it("TC-01. avatarFile이 없으면 after가 호출되지 않는다", async () => {
+    const response = await POST(makeRequest(BASE_BODY));
+
+    expect(response.status).toBe(200);
+    expect(vi.mocked(after)).not.toHaveBeenCalled();
   });
 });
