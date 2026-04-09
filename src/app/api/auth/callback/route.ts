@@ -15,13 +15,6 @@ const REDIRECT_OPTIONS = { status: 307 } as const;
  * 3) request.url origin fallback
  */
 function resolvePublicOrigin(request: NextRequest): string {
-  const forwardedProto = request.headers.get("x-forwarded-proto");
-  const forwardedHost = request.headers.get("x-forwarded-host");
-
-  if (forwardedProto && forwardedHost) {
-    return `${forwardedProto}://${forwardedHost}`;
-  }
-
   const appUrl = process.env["APP_URL"];
 
   if (appUrl) {
@@ -29,7 +22,17 @@ function resolvePublicOrigin(request: NextRequest): string {
       return new URL(appUrl).origin;
     } catch {
       // invalid APP_URL은 아래 request.url fallback 사용
+      console.warn(
+        `[Warning] 올바르지 않은 APP_URL 환경변수 설정입니다: ${appUrl}`,
+      );
     }
+  }
+
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+  const forwardedHost = request.headers.get("x-forwarded-host");
+
+  if (forwardedProto && forwardedHost) {
+    return `${forwardedProto}://${forwardedHost}`;
   }
 
   return new URL(request.url).origin;

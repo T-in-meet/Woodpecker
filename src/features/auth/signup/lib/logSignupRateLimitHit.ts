@@ -4,15 +4,15 @@ type LogSignupRateLimitHitParams =
   | {
       dimension: "ip";
       route: string;
-      limit: number;
-      windowMs: number;
+      limit?: number | undefined;
+      windowMs?: number | undefined;
       ip: string;
     }
   | {
       dimension: "email";
       route: string;
-      limit: number;
-      windowMs: number;
+      limit?: number | undefined;
+      windowMs?: number | undefined;
       email: string;
     };
 

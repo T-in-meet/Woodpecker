@@ -15,7 +15,7 @@ type FormValues = {
 const COOLDOWN_SECONDS = 60;
 
 type Props = {
-  email?: string;
+  email?: string | undefined;
 };
 
 export default function VerifyEmailPageClient({ email }: Props) {

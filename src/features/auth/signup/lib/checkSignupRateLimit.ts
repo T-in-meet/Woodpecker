@@ -61,7 +61,11 @@ export function resetRateLimitStores(): void {
 export async function checkSignupIpRateLimit(
   ip: string,
 ): Promise<RateLimitResult> {
-  return { allowed: checkLimit(ipStore, ip, IP_LIMIT, IP_WINDOW_MS) };
+  return {
+    allowed: checkLimit(ipStore, ip, IP_LIMIT, IP_WINDOW_MS),
+    limit: IP_LIMIT,
+    windowMs: IP_WINDOW_MS,
+  };
 }
 
 /**
@@ -79,6 +83,8 @@ export async function checkSignupEmailRateLimit(
 ): Promise<RateLimitResult> {
   return {
     allowed: checkLimit(emailStore, email, EMAIL_LIMIT, EMAIL_WINDOW_MS),
+    limit: EMAIL_LIMIT,
+    windowMs: EMAIL_WINDOW_MS,
   };
 }
 

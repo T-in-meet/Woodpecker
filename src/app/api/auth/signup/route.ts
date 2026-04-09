@@ -10,8 +10,6 @@ import {
   checkSignupIpRateLimit,
   EMAIL_LIMIT,
   EMAIL_WINDOW_MS,
-  IP_LIMIT,
-  IP_WINDOW_MS,
 } from "@/features/auth/signup/lib/checkSignupRateLimit";
 import { logSignupRateLimitHit } from "@/features/auth/signup/lib/logSignupRateLimitHit";
 import { mapSignupValidationErrors } from "@/features/auth/signup/lib/mapSignupValidationErrors";
@@ -238,8 +236,8 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
     logSignupRateLimitHit({
       dimension: "ip",
       route: "/api/auth/signup",
-      limit: IP_LIMIT,
-      windowMs: IP_WINDOW_MS,
+      limit: ipRateLimit.limit,
+      windowMs: ipRateLimit.windowMs,
       ip,
     });
     return failureResponse(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
@@ -306,8 +304,10 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
   /**
    * [기존 사용자 - 미인증]
    *
-   * 이메일 재발송 시도 (side-effect):
-   * - 실패해도 외부 응답은 항상 동일 (AE 방어)
+   * 이메일 재발송 시도 (side-effect)
+   * ⚠️ 설계 의도: 미인증 상태에서 회원가입을 다시 시도한 경우,
+   * 메일의 링크를 누르면 "이메일 인증"과 "로그인"을 한 번에 처리해주기 위해
+   * 'signup'이 아닌 'magiclink' 타입을 발급한다.
    */
   if (existingUser && existingUser.email_confirmed_at === null) {
     try {
@@ -393,17 +393,13 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
        * - Supabase의 emailRedirectTo를 사용해 인증 링크 생성
        *
        * 변경:
-       * - 인증 이메일은 Supabase 기본 링크를 사용하지 않고
-       *   Send Email Hook → encryptTicket → sendAuthEmail 흐름으로 통일한다.
+       * - 인증 이메일은 Supabase 기본 링크를 사용하지 않고 sendAuthEmail을 사용한다
        *
        * 목적:
-       * - 인증 링크 구조를 ticket 기반으로 일원화
-       * - Supabase 기본 token 링크와의 혼재 방지
        * - Account Enumeration 방어를 위한 외부 흐름 통일
        *
        * 결과:
        * - signUp에서는 emailRedirectTo를 설정하지 않는다
-       * - 이메일 발송은 Hook에서만 처리된다
        */
 
       data: { nickname },
