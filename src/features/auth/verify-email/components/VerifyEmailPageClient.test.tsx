@@ -1,6 +1,12 @@
 /**
  * VerifyEmailPageClient 행동 테스트
  *
+ * 설계 의도:
+ * - 사용자가 관찰할 수 있는 DOM 변화와 API 호출만 검증한다.
+ * - 내부 상태(useState 값)나 구현 세부 사항은 검증하지 않는다.
+ * - state-rules.md에 따라 API 경계(global.fetch)만 mock하고,
+ *   나머지는 실제 컴포넌트 로직을 그대로 실행한다.
+ *
  * 검증 범위:
  * - 안내 메시지, 이메일 input, 재발송 버튼 렌더링
  * - email prop으로 input pre-fill
@@ -11,6 +17,10 @@
  *
  * mock 대상:
  * - global.fetch (API boundary)
+ *
+ * 타이머 전략:
+ * - vi.useFakeTimers로 실제 시간을 대체하여 60초 쿨다운을 즉시 시뮬레이션한다.
+ * - userEvent.setup에 advanceTimers를 연결해 user-event 내부 딜레이도 fake timer로 제어한다.
  */
 
 import { render, screen, waitFor } from "@testing-library/react";
@@ -21,6 +31,8 @@ import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 
 import VerifyEmailPageClient from "./VerifyEmailPageClient";
 
+// API 응답 팩토리 함수 — 실제 서버 응답 계약을 반영한다.
+// 각 케이스별 mock Response를 일관된 형태로 생성해 테스트 간 중복을 줄인다.
 function makeFetchResponse(status: number, body: object) {
   return Promise.resolve(
     new Response(JSON.stringify(body), {
@@ -30,6 +42,7 @@ function makeFetchResponse(status: number, body: object) {
   );
 }
 
+// 200: 인증 메일 재발송 성공 — 쿨다운 타이머 시작 트리거
 function makeSuccessResponse() {
   return makeFetchResponse(200, {
     success: true,
@@ -38,6 +51,7 @@ function makeSuccessResponse() {
   });
 }
 
+// 409: 서버에서 이미 쿨다운 중 — 프론트도 동일하게 쿨다운 타이머를 표시해야 한다.
 function makeCooldownResponse() {
   return makeFetchResponse(409, {
     success: false,
@@ -46,6 +60,7 @@ function makeCooldownResponse() {
   });
 }
 
+// 429: 서버 rate limit 초과 — 쿨다운 대신 별도 에러 메시지를 표시해야 한다.
 function makeRateLimitResponse() {
   return makeFetchResponse(429, {
     success: false,
