@@ -2,6 +2,7 @@ export const ROUTES = {
   HOME: "/",
   LOGIN: "/login",
   SIGNUP: "/signup",
+  VERIFY_EMAIL: "/verify-email",
   NOTES: "/notes",
   NOTES_NEW: "/notes/new",
   MYPAGE: "/mypage",

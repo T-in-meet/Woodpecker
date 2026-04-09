@@ -9,22 +9,26 @@
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { decryptTicket } from "@/features/auth/email/ticket";
 import { MIN_RESPONSE_MS } from "@/features/auth/lib/applyMinimumResponseTime";
 import { createClient } from "@/lib/supabase/server";
 
 import { GET } from "./route";
 
 vi.mock("@/lib/supabase/server");
-vi.mock("@/features/auth/email/ticket");
 
 const START_TIME = 1_000_000;
 const mockVerifyOtp = vi.fn();
 
-function makeRequest(ticket?: string): NextRequest {
+function makeRequest(params?: {
+  token_hash?: string;
+  type?: string;
+}): NextRequest {
   const url = new URL("http://localhost/api/auth/callback");
-  if (ticket !== undefined) {
-    url.searchParams.set("ticket", ticket);
+  if (params?.token_hash !== undefined) {
+    url.searchParams.set("token_hash", params.token_hash);
+  }
+  if (params?.type !== undefined) {
+    url.searchParams.set("type", params.type);
   }
   return new NextRequest(url.toString(), { method: "GET" });
 }
@@ -65,14 +69,13 @@ describe("callback 최소 응답 시간 보장", () => {
       auth: { verifyOtp: mockVerifyOtp },
     } as never);
 
-    vi.mocked(decryptTicket).mockReturnValue("signup:token-hash-xyz");
     mockVerifyOtp.mockResolvedValue({ data: { user: null }, error: null });
   });
 
-  it("TC-01: ticket 누락 빠른 경로도 최소 응답 시간 이전에 응답하지 않는다", async () => {
+  it("TC-01: token_hash 누락 빠른 경로도 최소 응답 시간 이전에 응답하지 않는다", async () => {
     useFastPathClock();
 
-    const promise = GET(makeRequest());
+    const promise = GET(makeRequest({ type: "signup" }));
 
     await expectPendingUntilMinimumTime(promise);
 
@@ -80,23 +83,23 @@ describe("callback 최소 응답 시간 보장", () => {
     expect(response.status).toBe(307);
   });
 
-  it("TC-02: notify 경로(verifyOtp 미호출)도 최소 응답 시간 이전에 응답하지 않는다", async () => {
+  it("TC-02: type 누락 빠른 경로도 최소 응답 시간 이전에 응답하지 않는다", async () => {
     useFastPathClock();
-    vi.mocked(decryptTicket).mockReturnValue("notify-anything");
 
-    const promise = GET(makeRequest("opaque-ticket"));
+    const promise = GET(makeRequest({ token_hash: "hash-abc" }));
 
     await expectPendingUntilMinimumTime(promise);
 
     const response = await promise;
     expect(response.status).toBe(307);
-    expect(mockVerifyOtp).toHaveBeenCalledTimes(0);
   });
 
   it("TC-03: verifyOtp 성공 경로도 최소 응답 시간 이전에 응답하지 않는다", async () => {
     useFastPathClock();
 
-    const promise = GET(makeRequest("opaque-ticket"));
+    const promise = GET(
+      makeRequest({ token_hash: "hash-abc", type: "signup" }),
+    );
 
     await expectPendingUntilMinimumTime(promise);
 
@@ -105,13 +108,16 @@ describe("callback 최소 응답 시간 보장", () => {
     expect(mockVerifyOtp).toHaveBeenCalledTimes(1);
   });
 
-  it("TC-04: decrypt 실패 경로도 최소 응답 시간 이전에 응답하지 않는다", async () => {
+  it("TC-04: verifyOtp 실패 경로도 최소 응답 시간 이전에 응답하지 않는다", async () => {
     useFastPathClock();
-    vi.mocked(decryptTicket).mockImplementation(() => {
-      throw new Error("invalid ticket");
+    mockVerifyOtp.mockResolvedValue({
+      data: { user: null },
+      error: { message: "Invalid token" },
     });
 
-    const promise = GET(makeRequest("bad-ticket"));
+    const promise = GET(
+      makeRequest({ token_hash: "hash-abc", type: "signup" }),
+    );
 
     await expectPendingUntilMinimumTime(promise);
 
@@ -123,7 +129,9 @@ describe("callback 최소 응답 시간 보장", () => {
     mockSlowExecution();
     const setTimeoutSpy = vi.spyOn(global, "setTimeout");
 
-    const response = await GET(makeRequest("opaque-ticket"));
+    const response = await GET(
+      makeRequest({ token_hash: "hash-abc", type: "signup" }),
+    );
 
     expect(response.status).toBe(307);
     expect(setTimeoutSpy).not.toHaveBeenCalled();

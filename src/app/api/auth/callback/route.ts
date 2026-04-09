@@ -1,18 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { decryptTicket } from "@/features/auth/email/ticket";
 import { applyMinimumResponseTime } from "@/features/auth/lib/applyMinimumResponseTime";
 import { ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 
-/**
- * callback 처리 결과와 무관하게 로그인 페이지로 동일 redirect한다.
- *
- * 목적:
- * - 성공/실패/예외에 따른 외부 응답 차이를 제거
- * - callback을 stateless하게 유지
- */
-const LOGIN_REDIRECT = { status: 307 } as const;
+const REDIRECT_OPTIONS = { status: 307 } as const;
 
 /**
  * callback redirect에 사용할 공개 origin을 결정한다.
@@ -43,136 +35,63 @@ function resolvePublicOrigin(request: NextRequest): string {
   return new URL(request.url).origin;
 }
 
-/**
- * 공통 로그인 redirect 응답 생성
- *
- * 모든 분기에서 동일한 redirect 계약을 재사용하기 위한 helper.
- */
-function redirectToLogin(request: NextRequest): NextResponse {
-  const resolvedOrigin = resolvePublicOrigin(request);
-  const redirectUrl = new URL(ROUTES.LOGIN, `${resolvedOrigin}/`);
-
-  console.info("[auth-callback] redirect context", {
-    requestUrl: request.url,
-    pathname: request.nextUrl.pathname,
-    host: request.headers.get("host"),
-    xForwardedHost: request.headers.get("x-forwarded-host"),
-    xForwardedProto: request.headers.get("x-forwarded-proto"),
-    resolvedOrigin,
-    redirectTo: redirectUrl.toString(),
-  });
-
-  return NextResponse.redirect(redirectUrl, LOGIN_REDIRECT);
+function redirectToMypage(request: NextRequest): NextResponse {
+  const origin = resolvePublicOrigin(request);
+  const redirectUrl = new URL(ROUTES.MYPAGE, `${origin}/`);
+  return NextResponse.redirect(redirectUrl, REDIRECT_OPTIONS);
 }
 
-type VerifyType = "signup" | "magiclink";
-
-/**
- * decryptTicket 결과를 callback 처리용 의미 단위로 파싱한다.
- *
- * - notify ticket: 인증 처리 없이 로그인 이동
- * - verify ticket: verifyType(signup|magiclink) + token_hash 추출
- * - 구버전 ticket(raw token_hash): signup으로 하위호환 처리
- */
-function parseTicketPayload(raw: string): {
-  kind: "verify" | "notify";
-  tokenHash?: string;
-  verifyType?: VerifyType;
-} {
-  // notify ticket은 인증 상태 변경 없이 로그인 화면으로만 이동시키는 용도다.
-  if (raw.startsWith("notify-") || raw.startsWith("notify:")) {
-    return { kind: "notify" };
-  }
-
-  // magiclink/signup prefix로 verifyOtp type을 명확히 결정한다.
-  if (raw.startsWith("magiclink:")) {
-    const tokenHash = raw.slice("magiclink:".length);
-    return { kind: "verify", tokenHash, verifyType: "magiclink" };
-  }
-
-  if (raw.startsWith("signup:")) {
-    const tokenHash = raw.slice("signup:".length);
-    return { kind: "verify", tokenHash, verifyType: "signup" };
-  }
-
-  // backward compatibility: 구버전 ticket은 token_hash 원문만 담고 있으므로 signup으로 해석한다.
-  return { kind: "verify", tokenHash: raw, verifyType: "signup" };
+function redirectToVerifyEmail(request: NextRequest): NextResponse {
+  const origin = resolvePublicOrigin(request);
+  const redirectUrl = new URL(ROUTES.VERIFY_EMAIL, `${origin}/`);
+  return NextResponse.redirect(redirectUrl, REDIRECT_OPTIONS);
 }
 
 /**
  * 이메일 인증 callback 처리
  *
  * 흐름:
- * 1. ticket query 확인
- * 2. decryptTicket으로 token_hash 복원
- * 3. Supabase verifyOtp(type: "signup") 호출
- * 4. 결과와 무관하게 로그인 페이지로 redirect
+ * 1. Supabase 표준 파라미터(token_hash, type) 추출
+ * 2. 파라미터 누락 시 → /verify-email redirect
+ * 3. Supabase verifyOtp 호출
+ * 4. 성공(error 없음) → /mypage redirect
+ * 5. 실패/예외 → /verify-email redirect
  *
  * 보안/설계 원칙:
- * - ticket 누락, 복호화 실패, verifyOtp 실패/예외 모두 외부에는 동일 응답
- * - 상세 성공/실패 원인을 body나 query로 노출하지 않음
- * - callback은 추가 상태 저장 없이 stateless하게 처리
+ * - 커스텀 ticket 미사용, Supabase 표준 파라미터만 사용
+ * - 상세 실패 원인을 외부에 노출하지 않음
+ * - 모든 분기에서 최소 응답 시간 정책 적용
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const start = Date.now();
 
-  // callback의 모든 분기에서 동일한 최소 응답 시간 정책을 적용하기 위한 공통 반환 함수.
   const finalize = (res: NextResponse): Promise<NextResponse> =>
     applyMinimumResponseTime(start, res) as Promise<NextResponse>;
 
-  /**
-   * 이메일 링크에 포함된 opaque ticket 추출
-   */
-  const ticket = request.nextUrl.searchParams.get("ticket");
+  const tokenHash = request.nextUrl.searchParams.get("token_hash");
+  const type = request.nextUrl.searchParams.get("type");
 
-  /**
-   * ticket 누락 시 조기 종료
-   */
-  if (!ticket) {
-    return finalize(redirectToLogin(request));
+  if (!tokenHash || !type) {
+    return finalize(redirectToVerifyEmail(request));
   }
 
-  let decrypted: string;
-
-  try {
-    /**
-     * ticket 복호화
-     *
-     * 현재 decryptTicket 계약은 token_hash 문자열 반환이다.
-     */
-    decrypted = decryptTicket(ticket);
-  } catch {
-    /**
-     * 복호화 실패도 외부에는 동일 redirect
-     */
-    return finalize(redirectToLogin(request));
-  }
-
-  const parsed = parseTicketPayload(decrypted);
-
-  if (parsed.kind === "notify") {
-    // notify는 검증 API를 호출하지 않고 동일한 외부 응답(로그인 리다이렉트)만 유지한다.
-    return finalize(redirectToLogin(request));
-  }
-
-  if (!parsed.tokenHash || !parsed.verifyType) {
-    return finalize(redirectToLogin(request));
+  if (type !== "signup" && type !== "magiclink") {
+    return finalize(redirectToVerifyEmail(request));
   }
 
   try {
-    /**
-     * ticket가 유효한 경우에만 Supabase client 생성 및 OTP 검증 수행
-     */
     const supabase = await createClient();
-    await supabase.auth.verifyOtp({
-      type: parsed.verifyType,
-      token_hash: parsed.tokenHash,
+    const { error } = await supabase.auth.verifyOtp({
+      token_hash: tokenHash,
+      type: type as "signup" | "magiclink",
     });
+
+    if (error) {
+      return finalize(redirectToVerifyEmail(request));
+    }
   } catch {
-    /**
-     * verifyOtp 실패/예외 모두 외부에는 동일하게 처리
-     */
+    return finalize(redirectToVerifyEmail(request));
   }
 
-  return finalize(redirectToLogin(request));
+  return finalize(redirectToMypage(request));
 }

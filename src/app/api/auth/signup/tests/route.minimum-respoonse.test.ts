@@ -199,7 +199,7 @@ describe("회원가입 API 최소 응답 시간 보장 검증", () => {
     expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
     expect(body.data).toEqual({
       email: "test@example.com",
-      redirectTo: ROUTES.LOGIN,
+      redirectTo: ROUTES.VERIFY_EMAIL,
     });
   });
 

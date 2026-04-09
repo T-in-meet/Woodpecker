@@ -66,7 +66,7 @@ describe("회원가입 - 기존 미인증 사용자 재요청 분기", () => {
     expect(json.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
     expect(json.data).toEqual({
       email: "test@example.com",
-      redirectTo: ROUTES.LOGIN,
+      redirectTo: ROUTES.VERIFY_EMAIL,
     });
   });
 
@@ -125,7 +125,7 @@ describe("회원가입 - 기존 인증 사용자 재요청 분기", () => {
     expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
     expect(body.data).toEqual({
       email: "test@example.com",
-      redirectTo: ROUTES.LOGIN,
+      redirectTo: ROUTES.VERIFY_EMAIL,
     });
   });
 
@@ -151,7 +151,7 @@ describe("회원가입 - 기존 인증 사용자 재요청 분기", () => {
       code: AUTH_API_CODES.SIGNUP_SUCCESS,
       data: {
         email: "test@example.com",
-        redirectTo: ROUTES.LOGIN,
+        redirectTo: ROUTES.VERIFY_EMAIL,
       },
     });
     expect(body).not.toHaveProperty("errors");

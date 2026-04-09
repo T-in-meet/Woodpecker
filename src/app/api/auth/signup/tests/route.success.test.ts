@@ -122,7 +122,7 @@ describe("회원가입 API 기본 성공 흐름 검증", () => {
 
     expect(body.data).toEqual({
       email: "test@example.com",
-      redirectTo: ROUTES.LOGIN,
+      redirectTo: ROUTES.VERIFY_EMAIL,
     });
   });
 });

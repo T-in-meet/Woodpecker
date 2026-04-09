@@ -2,35 +2,46 @@
  * 이메일 인증 callback 처리 테스트
  *
  * 검증 범위:
- * - ticket query 유무/유효성에 따른 분기
- * - decryptTicket → verifyOtp 호출 순서 및 인자
- * - 성공/실패/예외 모두 307 redirect로 동일하게 처리
+ * - token_hash / type query 파라미터 누락 시 분기
+ * - verifyOtp 성공/실패/예외에 따른 redirect 분기
+ * - 성공: 307 → ROUTES.MYPAGE
+ * - 실패/누락/예외: 307 → ROUTES.VERIFY_EMAIL
  * - redirect location에 추가 query 미포함
+ * - 최소 응답 시간 정책 적용
  *
  * 공통 계약:
  * - 모든 경우 307 redirect
- * - location 헤더는 ROUTES.LOGIN 포함
  * - 응답 body 검증 없음
  */
 
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { decryptTicket } from "@/features/auth/email/ticket";
 import { ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 
 import { GET } from "./route";
 
 vi.mock("@/lib/supabase/server");
-vi.mock("@/features/auth/email/ticket");
 
 const mockVerifyOtp = vi.fn();
 
-function makeCallbackRequest(ticket?: string): NextRequest {
+function makeCallbackRequest(params?: {
+  token_hash?: string;
+  type?: string;
+  extra?: Record<string, string>;
+}): NextRequest {
   const url = new URL("http://localhost/api/auth/callback");
-  if (ticket !== undefined) {
-    url.searchParams.set("ticket", ticket);
+  if (params?.token_hash !== undefined) {
+    url.searchParams.set("token_hash", params.token_hash);
+  }
+  if (params?.type !== undefined) {
+    url.searchParams.set("type", params.type);
+  }
+  if (params?.extra) {
+    for (const [k, v] of Object.entries(params.extra)) {
+      url.searchParams.set(k, v);
+    }
   }
   return new NextRequest(url.toString(), { method: "GET" });
 }
@@ -42,165 +53,144 @@ beforeEach(() => {
     auth: { verifyOtp: mockVerifyOtp },
   } as never);
 
-  vi.mocked(decryptTicket).mockReturnValue("token-hash-xyz");
-
   mockVerifyOtp.mockResolvedValue({
     data: { user: { email: "test@example.com" } },
     error: null,
   });
 });
 
-describe("callback - ticket query 누락/빈값", () => {
-  it("TC-01. ticket query가 없으면 307 redirect되고 createClient, decryptTicket, verifyOtp를 호출하지 않는다", async () => {
+describe("callback - 파라미터 누락", () => {
+  it("TC-01. token_hash가 없으면 307 redirect되고 verifyOtp를 호출하지 않는다", async () => {
+    const response = await GET(makeCallbackRequest({ type: "signup" }));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toContain(ROUTES.VERIFY_EMAIL);
+    expect(mockVerifyOtp).toHaveBeenCalledTimes(0);
+  });
+
+  it("TC-02. type이 없으면 307 redirect되고 verifyOtp를 호출하지 않는다", async () => {
+    const response = await GET(makeCallbackRequest({ token_hash: "hash-abc" }));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toContain(ROUTES.VERIFY_EMAIL);
+    expect(mockVerifyOtp).toHaveBeenCalledTimes(0);
+  });
+
+  it("TC-03. token_hash와 type 모두 없으면 307 redirect되고 verifyOtp를 호출하지 않는다", async () => {
     const response = await GET(makeCallbackRequest());
 
     expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toContain(ROUTES.LOGIN);
-    expect(vi.mocked(createClient)).toHaveBeenCalledTimes(0);
-    expect(vi.mocked(decryptTicket)).toHaveBeenCalledTimes(0);
-    expect(mockVerifyOtp).toHaveBeenCalledTimes(0);
-  });
-
-  it("TC-02. ticket query가 빈 문자열이면 307 redirect되고 createClient, decryptTicket, verifyOtp를 호출하지 않는다", async () => {
-    const response = await GET(makeCallbackRequest(""));
-
-    expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toContain(ROUTES.LOGIN);
-    expect(vi.mocked(createClient)).toHaveBeenCalledTimes(0);
-    expect(vi.mocked(decryptTicket)).toHaveBeenCalledTimes(0);
+    expect(response.headers.get("location")).toContain(ROUTES.VERIFY_EMAIL);
     expect(mockVerifyOtp).toHaveBeenCalledTimes(0);
   });
 });
 
-describe("callback - decryptTicket 실패", () => {
-  it("TC-03. decryptTicket이 throw하면 307 redirect되고 createClient, verifyOtp를 호출하지 않는다", async () => {
-    vi.mocked(decryptTicket).mockImplementation(() => {
-      throw new Error("invalid ticket");
-    });
-
-    const response = await GET(makeCallbackRequest("bad-ticket"));
+describe("callback - verifyOtp 성공", () => {
+  it("TC-04. token_hash와 type(signup)이 있고 verifyOtp 성공 시 307로 MYPAGE에 redirect된다", async () => {
+    const response = await GET(
+      makeCallbackRequest({ token_hash: "hash-abc", type: "signup" }),
+    );
 
     expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toContain(ROUTES.LOGIN);
-    expect(vi.mocked(createClient)).toHaveBeenCalledTimes(0);
-    expect(mockVerifyOtp).toHaveBeenCalledTimes(0);
+    expect(response.headers.get("location")).toContain(ROUTES.MYPAGE);
   });
-});
 
-describe("callback - verifyOtp 정상 흐름", () => {
-  it("TC-04. decryptTicket 성공, verifyOtp 성공 시 307 redirect되고 createClient 1회, verifyOtp 1회 호출된다", async () => {
-    const response = await GET(makeCallbackRequest("valid-ticket"));
+  it("TC-05. token_hash와 type(magiclink)이 있고 verifyOtp 성공 시 307로 MYPAGE에 redirect된다", async () => {
+    const response = await GET(
+      makeCallbackRequest({ token_hash: "hash-abc", type: "magiclink" }),
+    );
 
     expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toContain(ROUTES.LOGIN);
-    expect(vi.mocked(createClient)).toHaveBeenCalledTimes(1);
-    expect(mockVerifyOtp).toHaveBeenCalledTimes(1);
+    expect(response.headers.get("location")).toContain(ROUTES.MYPAGE);
   });
 
-  it("TC-05. valid ticket이면 decryptTicket이 원본 ticket 값으로 정확히 1회 호출된다", async () => {
-    await GET(makeCallbackRequest("valid-ticket"));
-
-    expect(vi.mocked(decryptTicket)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(decryptTicket)).toHaveBeenCalledWith("valid-ticket");
-  });
-
-  it("TC-06. valid ticket이면 verifyOtp가 { type: 'signup', token_hash } 형태로 정확히 1회 호출된다", async () => {
-    await GET(makeCallbackRequest("valid-ticket"));
+  it("TC-06. verifyOtp가 { token_hash, type } 형태로 정확히 1회 호출된다", async () => {
+    await GET(makeCallbackRequest({ token_hash: "hash-abc", type: "signup" }));
 
     expect(mockVerifyOtp).toHaveBeenCalledTimes(1);
     expect(mockVerifyOtp).toHaveBeenCalledWith({
+      token_hash: "hash-abc",
       type: "signup",
-      token_hash: "token-hash-xyz",
     });
   });
 
-  it("TC-07. 성공 시 redirect location은 로그인 URL과 정확히 일치한다", async () => {
-    const request = makeCallbackRequest("valid-ticket");
+  it("TC-07. 성공 시 redirect location은 MYPAGE URL과 정확히 일치한다", async () => {
+    const request = makeCallbackRequest({
+      token_hash: "hash-abc",
+      type: "signup",
+    });
 
     const response = await GET(request);
 
     expect(response.headers.get("location")).toBe(
-      new URL(ROUTES.LOGIN, request.url).toString(),
+      new URL(ROUTES.MYPAGE, request.url).toString(),
     );
-  });
-
-  it("TC-07A. magiclink prefix ticket이면 verifyOtp가 magiclink 타입으로 호출된다", async () => {
-    vi.mocked(decryptTicket).mockReturnValue("magiclink:token-hash-xyz");
-
-    await GET(makeCallbackRequest("valid-ticket"));
-
-    expect(mockVerifyOtp).toHaveBeenCalledTimes(1);
-    expect(mockVerifyOtp).toHaveBeenCalledWith({
-      type: "magiclink",
-      token_hash: "token-hash-xyz",
-    });
-  });
-
-  it("TC-07B. signup prefix ticket이면 verifyOtp가 signup 타입으로 호출된다", async () => {
-    vi.mocked(decryptTicket).mockReturnValue("signup:token-hash-xyz");
-
-    await GET(makeCallbackRequest("valid-ticket"));
-
-    expect(mockVerifyOtp).toHaveBeenCalledTimes(1);
-    expect(mockVerifyOtp).toHaveBeenCalledWith({
-      type: "signup",
-      token_hash: "token-hash-xyz",
-    });
   });
 });
 
 describe("callback - verifyOtp 실패/예외", () => {
-  it("TC-08. verifyOtp가 error를 반환해도 307 redirect되고 createClient 1회, verifyOtp 1회 호출된다", async () => {
+  it("TC-08. verifyOtp가 error를 반환하면 307로 VERIFY_EMAIL에 redirect된다", async () => {
     mockVerifyOtp.mockResolvedValue({
       data: { user: null },
       error: { message: "Invalid token" },
     });
 
-    const response = await GET(makeCallbackRequest("valid-ticket"));
+    const response = await GET(
+      makeCallbackRequest({ token_hash: "hash-abc", type: "signup" }),
+    );
 
     expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toContain(ROUTES.LOGIN);
-    expect(vi.mocked(decryptTicket)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(createClient)).toHaveBeenCalledTimes(1);
+    expect(response.headers.get("location")).toContain(ROUTES.VERIFY_EMAIL);
     expect(mockVerifyOtp).toHaveBeenCalledTimes(1);
   });
 
-  it("TC-09. verifyOtp가 예상치 못한 에러를 throw해도 307 redirect되고 createClient 1회 호출된다", async () => {
+  it("TC-09. verifyOtp가 예외를 throw해도 307로 VERIFY_EMAIL에 redirect된다", async () => {
     mockVerifyOtp.mockRejectedValue(new Error("unexpected"));
 
-    const response = await GET(makeCallbackRequest("valid-ticket"));
+    const response = await GET(
+      makeCallbackRequest({ token_hash: "hash-abc", type: "signup" }),
+    );
 
     expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toContain(ROUTES.LOGIN);
-    expect(vi.mocked(createClient)).toHaveBeenCalledTimes(1);
+    expect(response.headers.get("location")).toContain(ROUTES.VERIFY_EMAIL);
   });
 });
 
 describe("callback - redirect location 순수성", () => {
-  it("TC-10. 추가 query parameter가 있어도 redirect location에 포함되지 않는다", async () => {
-    const url = new URL("http://localhost/api/auth/callback");
-    url.searchParams.set("ticket", "valid-ticket");
-    url.searchParams.set("foo", "bar");
-    const request = new NextRequest(url.toString(), { method: "GET" });
-
-    const response = await GET(request);
+  it("TC-10. 성공 시 redirect location에 추가 query parameter가 포함되지 않는다", async () => {
+    const response = await GET(
+      makeCallbackRequest({
+        token_hash: "hash-abc",
+        type: "signup",
+        extra: { foo: "bar" },
+      }),
+    );
 
     expect(response.status).toBe(307);
     const location = response.headers.get("location") ?? "";
-    expect(location).toContain(ROUTES.LOGIN);
+    expect(location).toContain(ROUTES.MYPAGE);
     expect(location).not.toContain("foo");
-    expect(location).not.toContain("ticket=");
+    expect(location).not.toContain("token_hash=");
+    expect(location).not.toContain("type=");
   });
-});
 
-describe("callback - notify ticket 정책", () => {
-  it("TC-11. notify ticket이면 verifyOtp를 호출하지 않고 로그인으로 redirect한다", async () => {
-    vi.mocked(decryptTicket).mockReturnValue("notify-ticket-without-auth");
+  it("TC-11. 실패 시 redirect location에 추가 query parameter가 포함되지 않는다", async () => {
+    mockVerifyOtp.mockResolvedValue({
+      data: { user: null },
+      error: { message: "Invalid token" },
+    });
 
-    const response = await GET(makeCallbackRequest("notify-ticket"));
+    const response = await GET(
+      makeCallbackRequest({
+        token_hash: "hash-abc",
+        type: "signup",
+        extra: { foo: "bar" },
+      }),
+    );
 
     expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toContain(ROUTES.LOGIN);
-    expect(mockVerifyOtp).toHaveBeenCalledTimes(0);
+    const location = response.headers.get("location") ?? "";
+    expect(location).toContain(ROUTES.VERIFY_EMAIL);
+    expect(location).not.toContain("foo");
   });
 });

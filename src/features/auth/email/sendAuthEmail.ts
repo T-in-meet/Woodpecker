@@ -6,7 +6,7 @@ import type { EmailProvider } from "./providers/emailProvider.types";
 import { sendViaNodemailer } from "./providers/sendViaNodemailer";
 import { sendViaResend } from "./providers/sendViaResend";
 
-type AuthEmailType = "verify-email";
+type AuthEmailType = "signup" | "magiclink";
 
 /**
  * 이메일 전송 provider를 환경에 따라 결정한다.
@@ -44,7 +44,7 @@ function resolveFromAddress(): string {
 
 export async function sendAuthEmail(
   email: string,
-  ticket: string,
+  tokenHash: string,
   type: AuthEmailType,
 ): Promise<void> {
   const appUrl = process.env["APP_URL"];
@@ -53,17 +53,11 @@ export async function sendAuthEmail(
     throw new Error("APP_URL is not set");
   }
 
-  // callback 경로를 API route로 고정해 클라이언트 페이지 미존재(404) 문제를 방지한다.
-  const link = `${appUrl}/api/auth/callback?ticket=${ticket}`;
+  // Supabase 표준 파라미터를 직접 사용해 커스텀 ticket 없이 callback을 처리한다.
+  const link = `${appUrl}/api/auth/callback?token_hash=${tokenHash}&type=${type}`;
   const html = await render(React.createElement(AuthEmailTemplate, { link }));
 
-  let subject: string;
-
-  switch (type) {
-    case "verify-email":
-      subject = "이메일 인증";
-      break;
-  }
+  const subject = "이메일 인증";
 
   const provider = resolveEmailProvider();
   const payload = {

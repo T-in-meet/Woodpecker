@@ -108,7 +108,7 @@ describe("PR-API-07 프로필 이미지 업로드 성공 시 avatar_url 반영",
     expect(body.success).toBe(true);
     expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
     expect(body.data.email).toBe("test@example.com");
-    expect(body.data.redirectTo).toBe(ROUTES.LOGIN);
+    expect(body.data.redirectTo).toBe(ROUTES.VERIFY_EMAIL);
   });
 
   it("TC-02. avatarFile가 포함된 요청 시 storage.upload가 1회 호출된다", async () => {
@@ -210,7 +210,7 @@ describe("PR-API-08 프로필 이미지 업로드 실패 시 회원가입 성공
     expect(body.success).toBe(true);
     expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
     expect(body.data.email).toBe("test@example.com");
-    expect(body.data.redirectTo).toBe(ROUTES.LOGIN);
+    expect(body.data.redirectTo).toBe(ROUTES.VERIFY_EMAIL);
   });
 
   it("TC-02. 업로드 실패 시 getPublicUrl은 호출되지 않는다", async () => {

@@ -2,7 +2,7 @@
  * sendAuthEmail - 이메일 발송 통합 함수 테스트
  *
  * 검증 범위:
- * - 콜백 링크 생성: ${APP_URL}/api/auth/callback?ticket=${ticket}
+ * - 콜백 링크 생성: ${APP_URL}/api/auth/callback?token_hash=<tokenHash>&type=<type>
  * - React Email 템플릿 렌더링 호출
  * - nodemailer provider 호출(현 정책: 전 환경 nodemailer 고정)
  * - 외부 서비스 실패 시 에러 전파
@@ -31,7 +31,7 @@ vi.mock("@/features/auth/email/providers/sendViaResend", () => ({
 vi.mock("@/features/auth/email/AuthEmailTemplate");
 
 const TEST_EMAIL = "user@example.com";
-const TEST_TICKET = "encrypted-ticket-xyz";
+const TEST_TOKEN_HASH = "token_hash_abc123";
 const TEST_HTML = "<html><body>Test Email</body></html>";
 
 beforeEach(() => {
@@ -44,26 +44,38 @@ beforeEach(() => {
 });
 
 describe("sendAuthEmail - 이메일 발송 핵심 흐름", () => {
-  it("TC-01. AuthEmailTemplate에 APP_URL/api/auth/callback?ticket=<ticket> 형태의 link가 전달된다", async () => {
-    await sendAuthEmail(TEST_EMAIL, TEST_TICKET, "verify-email");
+  it("TC-01. AuthEmailTemplate에 APP_URL/api/auth/callback?token_hash=<hash>&type=signup 형태의 link가 전달된다", async () => {
+    await sendAuthEmail(TEST_EMAIL, TEST_TOKEN_HASH, "signup");
 
     expect(vi.mocked(render)).toHaveBeenCalledWith(
       expect.objectContaining({
         props: expect.objectContaining({
-          link: `http://localhost:3000/api/auth/callback?ticket=${TEST_TICKET}`,
+          link: `http://localhost:3000/api/auth/callback?token_hash=${TEST_TOKEN_HASH}&type=signup`,
+        }),
+      }),
+    );
+  });
+
+  it("TC-01b. type이 magiclink인 경우 link에 type=magiclink가 포함된다", async () => {
+    await sendAuthEmail(TEST_EMAIL, TEST_TOKEN_HASH, "magiclink");
+
+    expect(vi.mocked(render)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        props: expect.objectContaining({
+          link: `http://localhost:3000/api/auth/callback?token_hash=${TEST_TOKEN_HASH}&type=magiclink`,
         }),
       }),
     );
   });
 
   it("TC-02. render()가 정확히 1회 호출된다", async () => {
-    await sendAuthEmail(TEST_EMAIL, TEST_TICKET, "verify-email");
+    await sendAuthEmail(TEST_EMAIL, TEST_TOKEN_HASH, "signup");
 
     expect(vi.mocked(render)).toHaveBeenCalledTimes(1);
   });
 
   it("TC-03. render() 결과 HTML이 sendViaNodemailer의 html 필드로 전달된다", async () => {
-    await sendAuthEmail(TEST_EMAIL, TEST_TICKET, "verify-email");
+    await sendAuthEmail(TEST_EMAIL, TEST_TOKEN_HASH, "signup");
 
     expect(vi.mocked(sendViaNodemailer)).toHaveBeenCalledWith(
       expect.objectContaining({ html: TEST_HTML }),
@@ -71,7 +83,7 @@ describe("sendAuthEmail - 이메일 발송 핵심 흐름", () => {
   });
 
   it("TC-04. sendViaNodemailer에 올바른 to 이메일이 전달된다", async () => {
-    await sendAuthEmail(TEST_EMAIL, TEST_TICKET, "verify-email");
+    await sendAuthEmail(TEST_EMAIL, TEST_TOKEN_HASH, "signup");
 
     expect(vi.mocked(sendViaNodemailer)).toHaveBeenCalledWith(
       expect.objectContaining({ to: TEST_EMAIL }),
@@ -79,7 +91,7 @@ describe("sendAuthEmail - 이메일 발송 핵심 흐름", () => {
   });
 
   it("TC-05. sendViaNodemailer가 정확히 1회 호출되고 resend는 호출되지 않는다", async () => {
-    await sendAuthEmail(TEST_EMAIL, TEST_TICKET, "verify-email");
+    await sendAuthEmail(TEST_EMAIL, TEST_TOKEN_HASH, "signup");
 
     expect(vi.mocked(sendViaNodemailer)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(sendViaResend)).not.toHaveBeenCalled();
@@ -91,7 +103,7 @@ describe("sendAuthEmail - 이메일 발송 핵심 흐름", () => {
     );
 
     await expect(
-      sendAuthEmail(TEST_EMAIL, TEST_TICKET, "verify-email"),
+      sendAuthEmail(TEST_EMAIL, TEST_TOKEN_HASH, "signup"),
     ).rejects.toThrow();
   });
 
@@ -99,7 +111,7 @@ describe("sendAuthEmail - 이메일 발송 핵심 흐름", () => {
     vi.mocked(render).mockRejectedValue(new Error("Render failed"));
 
     await expect(
-      sendAuthEmail(TEST_EMAIL, TEST_TICKET, "verify-email"),
+      sendAuthEmail(TEST_EMAIL, TEST_TOKEN_HASH, "signup"),
     ).rejects.toThrow("Render failed");
   });
 
@@ -107,7 +119,7 @@ describe("sendAuthEmail - 이메일 발송 핵심 흐름", () => {
     delete process.env["APP_URL"];
 
     await expect(
-      sendAuthEmail(TEST_EMAIL, TEST_TICKET, "verify-email"),
+      sendAuthEmail(TEST_EMAIL, TEST_TOKEN_HASH, "signup"),
     ).rejects.toThrow("APP_URL is not set");
   });
 
@@ -115,7 +127,7 @@ describe("sendAuthEmail - 이메일 발송 핵심 흐름", () => {
     delete process.env["AUTH_EMAIL_FROM"];
 
     await expect(
-      sendAuthEmail(TEST_EMAIL, TEST_TICKET, "verify-email"),
+      sendAuthEmail(TEST_EMAIL, TEST_TOKEN_HASH, "signup"),
     ).rejects.toThrow("AUTH_EMAIL_FROM is not set");
   });
 });

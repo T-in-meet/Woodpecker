@@ -2,7 +2,6 @@ import { after, NextRequest } from "next/server";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 import { sendAuthEmail } from "@/features/auth/email/sendAuthEmail";
-import { encryptTicket } from "@/features/auth/email/ticket";
 import { applyMinimumResponseTime } from "@/features/auth/lib/applyMinimumResponseTime";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { failureResponse, successResponse } from "@/features/auth/lib/response";
@@ -320,11 +319,11 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
         });
 
       if (!linkError && linkData?.properties?.hashed_token) {
-        // callback에서 verifyOtp type을 결정할 수 있도록 ticket payload에 목적 prefix를 포함한다.
-        const ticket = encryptTicket(
-          `magiclink:${linkData.properties.hashed_token}`,
+        await sendAuthEmail(
+          normalizedEmail,
+          linkData.properties.hashed_token,
+          "magiclink",
         );
-        await sendAuthEmail(normalizedEmail, ticket, "verify-email");
       }
     } catch {
       console.warn("이메일 재발송 실패 (무시됨)", { email: normalizedEmail });
@@ -334,7 +333,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
       AUTH_API_CODES.SIGNUP_SUCCESS,
       {
         email: normalizedEmail,
-        redirectTo: ROUTES.LOGIN,
+        redirectTo: ROUTES.VERIFY_EMAIL,
       },
       { status: 200 },
     );
@@ -342,14 +341,28 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
 
   /**
    * [기존 사용자 - 인증 완료]
+   *
+   * 미인증 사용자와 동일한 email link 흐름을 적용한다.
+   * notify ticket 없이 magiclink로 통일한다.
    */
   if (existingUser && existingUser.email_confirmed_at !== null) {
     try {
-      // 기존 인증 사용자는 재인증이 목적이 아니므로, 인증정보 없는 notify marker ticket을 발급한다.
-      const notifyTicket = encryptTicket(`notify-${crypto.randomUUID()}`);
-      await sendAuthEmail(normalizedEmail, notifyTicket, "verify-email");
+      const adminClient = createAdminClient();
+      const { data: linkData, error: linkError } =
+        await adminClient.auth.admin.generateLink({
+          type: "magiclink",
+          email: normalizedEmail,
+        });
+
+      if (!linkError && linkData?.properties?.hashed_token) {
+        await sendAuthEmail(
+          normalizedEmail,
+          linkData.properties.hashed_token,
+          "magiclink",
+        );
+      }
     } catch {
-      console.warn("인증 완료 사용자 안내 메일 전송 실패 (무시됨)", {
+      console.warn("인증 완료 사용자 이메일 발송 실패 (무시됨)", {
         email: normalizedEmail,
       });
     }
@@ -358,7 +371,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
       AUTH_API_CODES.SIGNUP_SUCCESS,
       {
         email: normalizedEmail,
-        redirectTo: ROUTES.LOGIN,
+        redirectTo: ROUTES.VERIFY_EMAIL,
       },
       { status: 200 },
     );
@@ -421,9 +434,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
   }
 
   try {
-    // 신규 가입 검증용 ticket임을 명시해 callback에서 signup verifyOtp로 분기한다.
-    const ticket = encryptTicket(`signup:${tokenHash}`);
-    await sendAuthEmail(normalizedEmail, ticket, "verify-email");
+    await sendAuthEmail(normalizedEmail, tokenHash, "signup");
   } catch (error) {
     console.error("Failed to send signup verification email", {
       email: normalizedEmail,
@@ -451,7 +462,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
     AUTH_API_CODES.SIGNUP_SUCCESS,
     {
       email: data.user.email ?? normalizedEmail,
-      redirectTo: ROUTES.LOGIN,
+      redirectTo: ROUTES.VERIFY_EMAIL,
     },
     { status: 200 },
   );
