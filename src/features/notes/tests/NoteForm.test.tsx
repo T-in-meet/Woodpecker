@@ -1,8 +1,8 @@
 import "./setup";
 
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NOTE_LANGUAGE_VALUES } from "@/lib/constants/noteLanguages";
 
@@ -79,6 +79,10 @@ describe("NoteForm", () => {
   beforeEach(() => {
     createNoteActionMock.mockReset();
     createNoteActionMock.mockResolvedValue(null);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("renders the tiptap editor by default with the supported language options", () => {
@@ -179,5 +183,32 @@ describe("NoteForm", () => {
     await user.click(screen.getByRole("button", { name: "저장" }));
 
     expect(await screen.findByText("로그인이 필요합니다.")).toBeInTheDocument();
+  });
+
+  it("저장 중에도 페이지 이탈 방지가 활성화된다", async () => {
+    const user = userEvent.setup();
+    let resolveAction: (state: null) => void = () => {};
+    createNoteActionMock.mockReturnValueOnce(
+      new Promise<null>((resolve) => {
+        resolveAction = resolve;
+      }),
+    );
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+
+    render(<NoteForm />);
+
+    await user.type(screen.getByLabelText("제목"), "테스트 노트");
+    await user.click(screen.getByRole("button", { name: "저장" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "저장 중..." })).toBeDisabled();
+    });
+
+    history.pushState(null, "", "/after-submit");
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(window.location.pathname).not.toBe("/after-submit");
+
+    resolveAction(null);
   });
 });

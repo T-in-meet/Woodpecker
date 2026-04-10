@@ -5,6 +5,7 @@ import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { CodeEditor } from "@/features/editor/components/CodeEditor";
 import { TipTapEditor } from "@/features/editor/components/TipTapEditor";
+import { usePreventPageLeave } from "@/hooks/usePreventPageLeave";
 import {
   isCodeLanguage,
   isNoteLanguage,
@@ -26,6 +27,9 @@ export function NoteForm() {
     state?.error && typeof state.error === "object" ? state.error : null;
   const generalError =
     state?.error && typeof state.error === "string" ? state.error : null;
+
+  const isDirty = title.length > 0 || content.length > 0;
+  usePreventPageLeave(isDirty);
 
   const isMarkdown = !isCodeLanguage(language);
 
