@@ -21,6 +21,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  checkIpRateLimitPrecheck,
   checkRequestEligibility,
   EMAIL_LONG_LIMIT,
   EMAIL_LONG_WINDOW_MS,
@@ -30,6 +31,7 @@ import {
   IP_WINDOW_MS,
   resetEligibilityStore,
 } from "./checkRequestEligibility";
+import { ipStore } from "./requestEligibilityStore";
 
 beforeEach(() => {
   resetEligibilityStore();
@@ -763,6 +765,65 @@ describe("checkRequestEligibility", () => {
       expect(lastCall).toContain("***@example.com");
 
       consoleSpy.mockRestore();
+    });
+  });
+
+  describe("checkIpRateLimitPrecheck — 읽기 전용 IP 사전 검증", () => {
+    it("TC-P1. IP 한도 이하 → { allowed: true }", () => {
+      const ip = "10.200.0.1";
+      const precheck = checkIpRateLimitPrecheck(ip);
+      expect(precheck.allowed).toBe(true);
+    });
+
+    it("TC-P2. IP 한도 초과 → { allowed: false }", () => {
+      const ip = "10.200.1.1";
+
+      /**
+       * IP limit 채우기
+       */
+      for (let i = 0; i < IP_LIMIT; i++) {
+        checkRequestEligibility("signup", ip, `user${i}@example.com`);
+      }
+
+      /**
+       * Precheck가 차단해야 함
+       */
+      const precheck = checkIpRateLimitPrecheck(ip);
+      expect(precheck.allowed).toBe(false);
+    });
+
+    it("TC-P3. 호출 후 ipStore 상태 변경 없음 (읽기 전용)", () => {
+      const ip = "10.200.2.1";
+
+      /**
+       * 초기 상태: IP 항목 없음
+       */
+      let precheck = checkIpRateLimitPrecheck(ip);
+      expect(precheck.allowed).toBe(true);
+
+      /**
+       * 첫 번째 체크 후: 여전히 ipStore에 항목 없음 (precheck은 상태 변경 안 함)
+       */
+      let ipEntry = (ipStore as unknown as Map<string, { count: number }>).get(
+        ip,
+      );
+      expect(ipEntry).toBeUndefined();
+
+      /**
+       * checkRequestEligibility를 통해 상태를 생성해야 ipStore에 항목이 생김
+       */
+      checkRequestEligibility("signup", ip, "user@example.com");
+      ipEntry = (ipStore as unknown as Map<string, { count: number }>).get(ip);
+      expect(ipEntry).toBeDefined();
+      expect(ipEntry?.count).toBe(1);
+
+      /**
+       * Precheck 호출 후 상태가 변경되지 않음
+       */
+      precheck = checkIpRateLimitPrecheck(ip);
+      expect(precheck.allowed).toBe(true); // 아직 한도 이하
+      ipEntry = (ipStore as unknown as Map<string, { count: number }>).get(ip);
+      expect(ipEntry?.count).toBe(1); // count가 변경되지 않음
     });
   });
 });

@@ -2,7 +2,10 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
-import { checkRequestEligibility } from "@/features/auth/lib/checkRequestEligibility";
+import {
+  checkIpRateLimitPrecheck,
+  checkRequestEligibility,
+} from "@/features/auth/lib/checkRequestEligibility";
 import { failureResponse, successResponse } from "@/features/auth/lib/response";
 import { resendVerificationEmail } from "@/features/auth/resend-verification-email/lib/resendVerificationEmail";
 import { getClientIp } from "@/lib/utils/getClientIp";
@@ -43,6 +46,18 @@ export async function POST(request: NextRequest) {
    * - user-scoped 정책 (IP + email)에 기여
    */
   const ip = getClientIp(request);
+
+  /**
+   * IP 사전 검증 — 본문 파싱 비용 없이 IP 차단
+   *
+   * [이유: spec precheck_ip_rate_limit — must_run_before_body_parsing 요건]
+   * - 읽기 전용: ipStore를 읽기만 함, 상태 변경 금지
+   * - 최종 결정 권한이 아님: 이후 checkRequestEligibility가 최종 판단
+   */
+  const precheck = checkIpRateLimitPrecheck(ip);
+  if (!precheck.allowed) {
+    return failureResponse(AUTH_API_CODES.RESEND_RATE_LIMIT_EXCEEDED);
+  }
 
   let body: unknown;
 

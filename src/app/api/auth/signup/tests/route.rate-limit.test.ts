@@ -350,11 +350,14 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     const email = "tc10@example.com";
     const startedAt = Date.now();
 
-    // Fill long limit and then try one more (advance past short window between requests)
-    for (let i = 0; i < EMAIL_LONG_LIMIT + 1; i++) {
-      // const response = await sendRequest(`10.10.${i}.1`, email);
-      if (i < EMAIL_LONG_LIMIT) {
-        // Advance past short window for next request
+    // Fill long limit (advance past short window between requests)
+    // [이유: EMAIL_SHORT_LIMIT=1이므로 consecutive requests는 blocked됨.
+    //  각 요청 사이에 short window를 지나가야 다음 요청이 허용됨.]
+    for (let i = 0; i < EMAIL_LONG_LIMIT; i++) {
+      const response = await sendRequest(`10.10.${i}.1`, email);
+      expect(response.status).not.toBe(429);
+      // Advance past short window for next request
+      if (i < EMAIL_LONG_LIMIT - 1) {
         await vi.advanceTimersByTimeAsync(EMAIL_SHORT_WINDOW_MS + 1);
       }
     }
@@ -365,13 +368,17 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
 
     expect(remainingBeforeResetMs).toBeGreaterThan(0);
 
-    vi.advanceTimersByTime(remainingBeforeResetMs);
+    // Advance to just before long window expires
+    await vi.advanceTimersByTimeAsync(remainingBeforeResetMs);
 
+    // Next request should still be blocked (long window not yet expired)
     const stillBlocked = await sendRequest("10.10.20.1", email);
     expect(stillBlocked.status).toBe(429);
 
-    vi.advanceTimersByTime(WINDOW_BUFFER_MS + 1);
+    // Advance past the window expiry
+    await vi.advanceTimersByTimeAsync(WINDOW_BUFFER_MS + 1);
 
+    // Now should be allowed (long window reset)
     const response = await sendRequest("10.10.10.1", email);
 
     expect(response.status).not.toBe(429);
@@ -527,5 +534,81 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     //  응답 계약만 검증한다.]
     expect(response.status).toBe(429);
     expect(response.headers.get("content-type")).toBe("application/json");
+  });
+
+  it("TC-PRC1. IP 한도 초과 후 malformed JSON 요청 → 400이 아닌 429 반환 (precheck 우선)", async () => {
+    const ip = "10.prc.1.1";
+
+    /**
+     * IP limit 채우기
+     */
+    for (let i = 0; i < IP_LIMIT; i++) {
+      await sendRequest(ip, `user${i}@example.com`);
+    }
+
+    /**
+     * IP 한도 초과 상태에서 malformed JSON 요청
+     * - Precheck이 먼저 실행되어 IP 차단 → 429 반환
+     * - Body parsing이 시도되지 않음
+     */
+    const malformedRequest = new NextRequest(
+      "http://localhost/api/auth/signup",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-forwarded-for": ip,
+        },
+        body: JSON.stringify({
+          // 필수 필드 누락: password, nickname 없음
+          email: "malformed@example.com",
+        }),
+      },
+    );
+
+    const responsePromise = POST(malformedRequest);
+    await vi.advanceTimersByTimeAsync(MIN_RESPONSE_MS);
+    const response = await responsePromise;
+
+    /**
+     * Precheck이 IP 한도를 먼저 확인하므로 400(validation error)이 아닌 429(rate limit)를 반환
+     */
+    expect(response.status).toBe(429);
+    const body = await response.json();
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
+  });
+
+  it("TC-PRC2. IP 한도 초과 + precheck 차단 → 이후 동일 IP 요청의 counter 변화 없음", async () => {
+    const ip = "10.prc.2.1";
+
+    /**
+     * IP limit 채우기
+     */
+    for (let i = 0; i < IP_LIMIT; i++) {
+      await sendRequest(ip, `user${i}@example.com`);
+    }
+
+    /**
+     * IP 한도 초과 상태 — precheck이 차단
+     */
+    const blockedResponse = await sendRequest(ip, "blocked@example.com");
+    expect(blockedResponse.status).toBe(429);
+
+    /**
+     * IP window 만료 — precheck은 상태를 변경하지 않았으므로 여전히 한도 상태
+     */
+    await vi.advanceTimersByTimeAsync(IP_WINDOW_MS);
+
+    /**
+     * Window 만료 후 동일 IP로 요청 — 새로운 window로 복구되어 허용
+     */
+    const recoveredResponse = await sendRequest(ip, "after-window@example.com");
+    expect(recoveredResponse.status).not.toBe(429);
+
+    /**
+     * [검증 의도: precheck이 호출되었어도 상태를 변경하지 않았으므로,
+     *  window 만료 시 counter가 리셋되고 새로운 window가 시작됨]
+     */
+    expect(mockGenerateLink).toHaveBeenCalled();
   });
 });

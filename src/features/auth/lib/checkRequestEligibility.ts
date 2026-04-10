@@ -9,6 +9,8 @@
  * - AND 평가: 3가지 조건이 모두 통과되어야 함
  * - 사용자 범위: 회원가입과 재전송 간에 이메일 상태가 공유됨
  * - 관측 가능성(Observability): 차단된 요청에 대해서만 logRequestEligibilityBlocked 로그 기록
+ * - body parsing 이전에 read-only IP precheck를 수행할 수 있음
+ * - 단, precheck는 최종 결정 권한이 아니며 상태를 변경하지 않음
  *
  * 상태 모델:
  * - IP rate limit: 단일 윈도우, 강력한 과도한 요청(burst) 억제
@@ -77,7 +79,31 @@ export const EMAIL_LONG_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
  * - 불변 업데이트(Immutable update): nextWindow()는 새 객체를 반환하며 직접 수정하지 않음
  * - 상태 오염 방지: 차단된 요청은 어떠한 상태도 건드리지 않음
  * - 이메일 정규화: 스토어 키 일관성을 위해 이메일을 소문자로 변환함
+ *
  */
+
+/**
+ * IP precheck — read-only 사전 검증
+ *
+ * - body parsing 이전 단계에서 실행
+ * - withinLimit을 사용하여 현재 IP 상태를 평가만 수행
+ * - ipStore 및 어떤 상태도 변경하지 않음
+ *
+ * 설계 의도:
+ * - parsing 비용 없이 과도한 요청을 1차적으로 필터링
+ * - 최종 rate limit 결정은 checkRequestEligibility에서 단일하게 수행
+ *
+ * Trade-off:
+ * - malformed JSON 요청은 eligibility 계층에 도달하지 않으므로
+ *   rate limit 카운터에 포함되지 않음
+ * - 따라서 parsing 이전의 저수준 공격은 precheck만으로 완전히 해결되지 않을 수 있음
+ *
+ * 대응 전략:
+ * - app-layer에서는 read-only precheck까지만 수행
+ * - 최종 상태 갱신은 checkRequestEligibility에서만 수행
+ * - malformed JSON flood와 같은 저수준 공격 완화는 infra/edge 계층(WAF/CDN 등)과 함께 고려
+ */
+
 export function checkRequestEligibility(
   route: "signup" | "resend",
   ip: string,
@@ -281,6 +307,30 @@ function maskEmail(email: string): string {
     return "***" + email.substring(atIndex);
   }
   return "***";
+}
+
+/**
+ * IP 기반 rate limit 사전 검증 — 읽기 전용
+ *
+ * 목적:
+ * - 본문 파싱 전에 IP 차단 여부를 조기 평가하여 파싱 비용 절감
+ * - 상태를 변경하지 않으므로 최종 결정 권한(checkRequestEligibility)을 대체하지 않음
+ *
+ * 설계 제약:
+ * - 읽기 전용(read-only): ipStore를 읽기만 하고 쓰지 않음
+ * - 이메일 불필요: 본문 파싱 전에 실행되므로 IP만 사용
+ * - 상태 오염 금지: 차단 시에도 어떤 카운터도 증가하지 않음
+ * - 최종 결정 권한이 아님: checkRequestEligibility가 항상 최종 판단
+ *
+ * @param ip - 클라이언트 IP 주소
+ * @returns { allowed: boolean } — false이면 checkRequestEligibility를 호출하지 않고 차단
+ */
+export function checkIpRateLimitPrecheck(ip: string): { allowed: boolean } {
+  const now = Date.now();
+  const ipEntry = ipStore.get(ip);
+  // [이유: 상태를 변경하지 않고 현재 IP 한도만 평가한다. 최종 결정은 checkRequestEligibility에 위임]
+  const allowed = withinLimit(ipEntry, IP_LIMIT, IP_WINDOW_MS, now);
+  return { allowed };
 }
 
 // 테스트를 위한 모듈 내보내기
