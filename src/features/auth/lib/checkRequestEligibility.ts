@@ -22,6 +22,7 @@ import {
   emailStore,
   ipStore,
   resetEligibilityStore,
+  tryCleanupExpiredEntries,
   type WindowEntry,
 } from "./requestEligibilityStore";
 
@@ -170,6 +171,21 @@ export function checkRequestEligibility(
     longWindow: nextWindow(emailEntry.longWindow, EMAIL_LONG_WINDOW_MS, now),
   };
   emailStore.set(normalizedEmail, nextEmailEntry);
+
+  /**
+   * 기회주의적 cleanup 실행
+   *
+   * [설계]
+   * - 요청이 허용된 후에만 cleanup 호출
+   * - 스로틀링: 분당 최대 1회만 실행 (내부에서 처리됨)
+   * - 순환 참조 방지: windowMs 값을 파라미터로 전달
+   * - 메모리 누수 방지: 만료된 rate limit 항목 정리
+   */
+  tryCleanupExpiredEntries(
+    IP_WINDOW_MS,
+    EMAIL_SHORT_WINDOW_MS,
+    EMAIL_LONG_WINDOW_MS,
+  );
 
   return { allowed: true };
 }
