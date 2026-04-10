@@ -232,6 +232,38 @@ describe("Eligibility Store Cleanup", () => {
       expect(after?.shortWindow).not.toBeNull();
       expect(after?.longWindow).not.toBeNull();
     });
+
+    it("TC-Cleanup-Email-05. 한쪽만 만료되면 entry를 교체하고 반대쪽 값은 보존한다", () => {
+      const email = "replace@example.com";
+      const now = Date.now();
+
+      const originalEntry = {
+        shortWindow: {
+          count: 7,
+          windowStart: now - EMAIL_SHORT_WINDOW_MS - 1000, // 만료
+        },
+        longWindow: {
+          count: 9,
+          windowStart: now - EMAIL_LONG_WINDOW_MS + 20_000, // 유효
+        },
+      };
+      emailStore.set(email, originalEntry);
+
+      tryCleanupExpiredEntries(
+        IP_WINDOW_MS,
+        EMAIL_SHORT_WINDOW_MS,
+        EMAIL_LONG_WINDOW_MS,
+      );
+
+      const after = emailStore.get(email);
+      expect(after).toBeDefined();
+      expect(after).not.toBe(originalEntry); // set(..., newEntry) full replace
+      expect(after?.shortWindow).toBeNull();
+      expect(after?.longWindow?.count).toBe(9);
+      expect(after?.longWindow?.windowStart).toBe(
+        originalEntry.longWindow.windowStart,
+      );
+    });
   });
 
   describe("Cleanup throttling", () => {

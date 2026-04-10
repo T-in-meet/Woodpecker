@@ -67,6 +67,22 @@ function makeRateLimitResponse() {
   });
 }
 
+function makeBadRequestResponse() {
+  return makeFetchResponse(400, {
+    success: false,
+    code: AUTH_API_CODES.RESEND_INVALID_INPUT,
+    data: null,
+  });
+}
+
+function makeInternalErrorResponse() {
+  return makeFetchResponse(500, {
+    success: false,
+    code: "AUTH_INTERNAL_ERROR",
+    data: null,
+  });
+}
+
 beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
 });
@@ -232,5 +248,43 @@ describe("VerifyEmailPageClient - 429 Rate Limit 응답", () => {
         "destructive",
       );
     });
+  });
+});
+
+describe("VerifyEmailPageClient - 비 Rate Limit 실패 응답", () => {
+  it("TC-10. 400 응답은 rate-limit 토스트를 표시하지 않는다", async () => {
+    vi.spyOn(global, "fetch").mockReturnValueOnce(makeBadRequestResponse());
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
+    render(<VerifyEmailPageClient email="test@example.com" />);
+
+    await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalled();
+    });
+    expect(showToast).not.toHaveBeenCalledWith(
+      RATE_LIMIT_TOAST_MESSAGE,
+      "destructive",
+    );
+    expect(showToast).not.toHaveBeenCalledWith("인증 메일이 재발송되었습니다.");
+  });
+
+  it("TC-11. 500 응답은 rate-limit 토스트를 표시하지 않는다", async () => {
+    vi.spyOn(global, "fetch").mockReturnValueOnce(makeInternalErrorResponse());
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
+    render(<VerifyEmailPageClient email="test@example.com" />);
+
+    await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalled();
+    });
+    expect(showToast).not.toHaveBeenCalledWith(
+      RATE_LIMIT_TOAST_MESSAGE,
+      "destructive",
+    );
+    expect(showToast).not.toHaveBeenCalledWith("인증 메일이 재발송되었습니다.");
   });
 });

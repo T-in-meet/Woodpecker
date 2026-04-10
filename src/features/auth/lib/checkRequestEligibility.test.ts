@@ -617,6 +617,28 @@ describe("checkRequestEligibility", () => {
   });
 
   // ============================================================================
+  // Concurrency approximation — same tick sequential calls
+  // ============================================================================
+
+  describe("동시성 근사 — 같은 시점 연속 호출", () => {
+    it("TC-26A. 같은 email로 연속 2회 요청 시 한 번만 허용된다 (short window)", () => {
+      const email = "near-concurrent@example.com";
+
+      // same timestamp (no timer advance), different IP
+      const first = checkRequestEligibility("signup", "10.30.0.1", email);
+      const second = checkRequestEligibility("signup", "10.30.0.2", email);
+
+      expect(first.allowed).toBe(true);
+      expect(second.allowed).toBe(false);
+
+      // short window 만료 후에는 다시 허용되어야 함
+      vi.advanceTimersByTime(EMAIL_SHORT_WINDOW_MS + 1);
+      const third = checkRequestEligibility("signup", "10.30.0.3", email);
+      expect(third.allowed).toBe(true);
+    });
+  });
+
+  // ============================================================================
   // Recovery flow — time-based natural recovery
   // ============================================================================
 
