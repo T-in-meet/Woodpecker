@@ -65,6 +65,53 @@ export const AUTH_API_CODES = {
    * - rate limit 초과 (429)
    */
   RESEND_RATE_LIMIT_EXCEEDED: makeApiCode("resend", API_RESULTS.RATE_LIMITED),
+
+  /**
+   * 회원가입 처리 중 내부 서버 오류
+   * - DB 조회 실패
+   * - Supabase 호출 실패
+   * - 예상하지 못한 런타임 예외
+   *
+   * 특징:
+   * - 클라이언트 입력 문제가 아님
+   * - 서버 내부 처리 중 발생한 오류
+   * - 상세 원인은 외부에 노출하지 않음
+   *
+   * 응답:
+   * - status: 500
+   * - success: false
+   */
+  SIGNUP_INTERNAL_ERROR: makeApiCode("signup", API_RESULTS.INTERNAL_ERROR),
+
+  /**
+   * Supabase Send Email Hook 처리 성공
+   * - 이메일 발송 완료
+   */
+  SEND_EMAIL_HOOK_SUCCESS: makeApiCode("send-email-hook", API_RESULTS.SUCCESS),
+
+  /**
+   * Send Email Hook 입력값 오류
+   * - user.email 또는 email_data.token_hash 누락
+   */
+  SEND_EMAIL_HOOK_INVALID_INPUT: makeApiCode(
+    "send-email-hook",
+    API_RESULTS.INVALID_INPUT,
+  ),
+
+  /**
+   * Send Email Hook 처리 중 내부 서버 오류
+   * - ticket 암호화 실패
+   * - 이메일 발송 실패
+   */
+  SEND_EMAIL_HOOK_INTERNAL_ERROR: makeApiCode(
+    "send-email-hook",
+    API_RESULTS.INTERNAL_ERROR,
+  ),
+
+  SEND_EMAIL_HOOK_UNAUTHORIZED: makeApiCode(
+    "send-email-hook",
+    API_RESULTS.UNAUTHORIZED,
+  ),
 } as const;
 
 /**
