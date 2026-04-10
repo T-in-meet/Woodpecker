@@ -5,9 +5,11 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NOTE_LANGUAGE_VALUES } from "@/lib/constants/noteLanguages";
+import { getNoteDetailRoute } from "@/lib/constants/routes";
 
-const { createNoteActionMock } = vi.hoisted(() => ({
+const { createNoteActionMock, routerPushMock } = vi.hoisted(() => ({
   createNoteActionMock: vi.fn(),
+  routerPushMock: vi.fn(),
 }));
 
 import { NoteForm } from "../components/NoteForm";
@@ -55,6 +57,12 @@ vi.mock("../actions", () => ({
   createNoteAction: createNoteActionMock,
 }));
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: routerPushMock,
+  }),
+}));
+
 function getForm(container: HTMLElement) {
   const form = container.querySelector("form");
 
@@ -79,6 +87,8 @@ describe("NoteForm", () => {
   beforeEach(() => {
     createNoteActionMock.mockReset();
     createNoteActionMock.mockResolvedValue(null);
+    routerPushMock.mockReset();
+    history.replaceState(null, "", "/notes/new");
   });
 
   afterEach(() => {
@@ -183,6 +193,33 @@ describe("NoteForm", () => {
     await user.click(screen.getByRole("button", { name: "저장" }));
 
     expect(await screen.findByText("로그인이 필요합니다.")).toBeInTheDocument();
+  });
+
+  it("저장 성공 후 이탈 방지를 해제하고 상세 페이지로 이동한다", async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    createNoteActionMock.mockResolvedValueOnce({
+      success: true,
+      newNoteId: "note-123",
+    });
+    routerPushMock.mockImplementationOnce((href: string) => {
+      history.pushState(null, "", href);
+    });
+
+    render(<NoteForm />);
+
+    await user.type(screen.getByLabelText("제목"), "테스트 노트");
+    await user.click(screen.getByTestId("tiptap-editor"));
+    await user.click(screen.getByRole("button", { name: "저장" }));
+
+    await waitFor(() => {
+      expect(routerPushMock).toHaveBeenCalledWith(
+        getNoteDetailRoute("note-123"),
+      );
+    });
+
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(window.location.pathname).toBe(getNoteDetailRoute("note-123"));
   });
 
   it("저장 중에도 페이지 이탈 방지가 활성화된다", async () => {

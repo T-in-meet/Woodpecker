@@ -1,18 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getNoteDetailRoute } from "@/lib/constants/routes";
-
-const { createClientMock, redirectMock } = vi.hoisted(() => ({
+const { createClientMock } = vi.hoisted(() => ({
   createClientMock: vi.fn(),
-  redirectMock: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: createClientMock,
-}));
-
-vi.mock("next/navigation", () => ({
-  redirect: redirectMock,
 }));
 
 import { createNoteAction } from "../actions";
@@ -61,7 +54,6 @@ function createSupabaseMock({
 describe("createNoteAction", () => {
   beforeEach(() => {
     createClientMock.mockReset();
-    redirectMock.mockReset();
   });
 
   it("returns field errors for invalid note data", async () => {
@@ -109,10 +101,9 @@ describe("createNoteAction", () => {
 
     expect(result).toEqual({ error: "로그인이 필요합니다." });
     expect(insertMock).not.toHaveBeenCalled();
-    expect(redirectMock).not.toHaveBeenCalled();
   });
 
-  it("inserts a note and redirects when the payload is valid", async () => {
+  it("inserts a note and returns the new note id when the payload is valid", async () => {
     const { supabase, insertMock, selectMock, singleMock, fromMock } =
       createSupabaseMock();
     createClientMock.mockResolvedValue(supabase);
@@ -122,7 +113,7 @@ describe("createNoteAction", () => {
     formData.set("content", "Valid content");
     formData.set("language", "javascript");
 
-    await createNoteAction(null, formData);
+    const result = await createNoteAction(null, formData);
 
     expect(fromMock).toHaveBeenCalledWith("notes");
     expect(insertMock).toHaveBeenCalledWith({
@@ -133,7 +124,7 @@ describe("createNoteAction", () => {
     });
     expect(selectMock).toHaveBeenCalledWith("id");
     expect(singleMock).toHaveBeenCalledOnce();
-    expect(redirectMock).toHaveBeenCalledWith(getNoteDetailRoute("note-123"));
+    expect(result).toEqual({ success: true, newNoteId: "note-123" });
   });
 
   it("serializes an empty language as null for the insert payload", async () => {
@@ -145,7 +136,7 @@ describe("createNoteAction", () => {
     formData.set("content", "Valid content");
     formData.set("language", "");
 
-    await createNoteAction(null, formData);
+    const result = await createNoteAction(null, formData);
 
     expect(insertMock).toHaveBeenCalledWith({
       title: "Valid title",
@@ -153,7 +144,7 @@ describe("createNoteAction", () => {
       language: null,
       user_id: "user-123",
     });
-    expect(redirectMock).toHaveBeenCalledWith(getNoteDetailRoute("note-123"));
+    expect(result).toEqual({ success: true, newNoteId: "note-123" });
   });
 
   it("returns a general error when the insert fails", async () => {
@@ -173,6 +164,5 @@ describe("createNoteAction", () => {
       error: "노트 저장에 실패했습니다. 잠시 후 다시 시도해주세요.",
     });
     expect(insertMock).toHaveBeenCalledOnce();
-    expect(redirectMock).not.toHaveBeenCalled();
   });
 });

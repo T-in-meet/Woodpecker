@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useActionState, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { CodeEditor } from "@/features/editor/components/CodeEditor";
@@ -12,24 +13,39 @@ import {
   NOTE_LANGUAGE_VALUES,
   type NoteLanguage,
 } from "@/lib/constants/noteLanguages";
+import { getNoteDetailRoute } from "@/lib/constants/routes";
 
 import { createNoteAction } from "../actions";
 
 const CONTENT_MAX_LENGTH = 50000;
 
 export function NoteForm() {
+  const router = useRouter();
   const [state, formAction, isPending] = useActionState(createNoteAction, null);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [language, setLanguage] = useState<NoteLanguage>("markdown");
+  const [createdNoteId, setCreatedNoteId] = useState<string | null>(null);
 
   const fieldErrors =
     state?.error && typeof state.error === "object" ? state.error : null;
   const generalError =
     state?.error && typeof state.error === "string" ? state.error : null;
 
-  const isDirty = title.length > 0 || content.length > 0;
+  const isDirty = (title.length > 0 || content.length > 0) && !createdNoteId;
   usePreventPageLeave(isDirty);
+
+  useEffect(() => {
+    if (state?.success) {
+      setCreatedNoteId(state.newNoteId);
+    }
+  }, [state]);
+
+  useEffect(() => {
+    if (!createdNoteId) return;
+
+    router.push(getNoteDetailRoute(createdNoteId));
+  }, [createdNoteId, router]);
 
   const isMarkdown = !isCodeLanguage(language);
 

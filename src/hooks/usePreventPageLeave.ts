@@ -40,6 +40,8 @@ export function usePreventPageLeave(shouldPrevent: boolean) {
 
     window.addEventListener("beforeunload", handleBeforeUnload);
 
+    // TODO: App Router에는 공식 navigation blocker가 없어 History API를 패치한다.
+    // 라우터 내부 상태와 어긋날 수 있으므로 공식 API가 생기면 이 우회 구현을 교체한다.
     window.history.pushState = function (
       ...args: Parameters<History["pushState"]>
     ) {
@@ -77,6 +79,7 @@ export function usePreventPageLeave(shouldPrevent: boolean) {
       }
 
       event.stopImmediatePropagation();
+      // 브라우저 제약상 pushState로 현재 URL을 복구하면 forward 이력이 사라지는 trade-off가 있다.
       originalPushState.call(
         window.history,
         currentHistoryState,

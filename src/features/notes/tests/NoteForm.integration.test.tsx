@@ -12,6 +12,12 @@ vi.mock("../actions", () => ({
   createNoteAction: createNoteActionMock,
 }));
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+  }),
+}));
+
 import { NoteForm } from "../components/NoteForm";
 
 function getHiddenContentInput(container: HTMLElement) {
