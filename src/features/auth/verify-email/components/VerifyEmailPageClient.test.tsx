@@ -12,7 +12,7 @@
  * - email prop으로 input pre-fill
  * - 버튼 클릭 → POST /api/auth/resend-verification-email 호출
  * - 요청 중(isSubmitting) 버튼 비활성화
- * - 성공/409/429 응답별 토스트 메시지 표시
+ * - 성공/429 응답별 토스트 메시지 표시
  *
  * mock 대상:
  * - global.fetch (API boundary)
@@ -35,6 +35,9 @@ vi.mock("@/lib/utils/showToast", () => ({
   showToast: vi.fn(),
 }));
 
+const RATE_LIMIT_TOAST_MESSAGE =
+  "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.";
+
 // API 응답 팩토리 함수 — 실제 서버 응답 계약을 반영한다.
 // 각 케이스별 mock Response를 일관된 형태로 생성해 테스트 간 중복을 줄인다.
 function makeFetchResponse(status: number, body: object) {
@@ -52,15 +55,6 @@ function makeSuccessResponse() {
     success: true,
     code: AUTH_API_CODES.EMAIL_VERIFICATION_RESEND_SUCCESS,
     data: { email: "test@example.com", resent: true },
-  });
-}
-
-// 409: 서버 충돌(이미 진행 중인 요청) — 파괴적 토스트를 표시한다.
-function makeCooldownResponse() {
-  return makeFetchResponse(409, {
-    success: false,
-    code: AUTH_API_CODES.EMAIL_VERIFICATION_RESEND_COOLDOWN_CONFLICT,
-    data: null,
   });
 }
 
@@ -217,36 +211,14 @@ describe("VerifyEmailPageClient - 성공 응답", () => {
       expect(showToast).toHaveBeenCalledWith("인증 메일이 재발송되었습니다.");
     });
     expect(showToast).not.toHaveBeenCalledWith(
-      "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.",
+      RATE_LIMIT_TOAST_MESSAGE,
       "destructive",
     );
-    expect(showToast).not.toHaveBeenCalledWith(
-      "이미 진행 중인 요청이 있습니다. 잠시 후 다시 시도해주세요.",
-      "destructive",
-    );
-  });
-});
-
-describe("VerifyEmailPageClient - 409 충돌 응답", () => {
-  it("TC-09. 409 응답 시 파괴적 토스트를 표시한다", async () => {
-    vi.spyOn(global, "fetch").mockReturnValueOnce(makeCooldownResponse());
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-
-    render(<VerifyEmailPageClient email="test@example.com" />);
-
-    await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
-
-    await waitFor(() => {
-      expect(showToast).toHaveBeenCalledWith(
-        "이미 진행 중인 요청이 있습니다. 잠시 후 다시 시도해주세요.",
-        "destructive",
-      );
-    });
   });
 });
 
 describe("VerifyEmailPageClient - 429 Rate Limit 응답", () => {
-  it("TC-10. 429 응답 시 파괴적 토스트를 표시한다", async () => {
+  it("TC-09. 429 응답 시 generic rate-limit 토스트를 표시한다", async () => {
     vi.spyOn(global, "fetch").mockReturnValueOnce(makeRateLimitResponse());
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
 
@@ -256,7 +228,7 @@ describe("VerifyEmailPageClient - 429 Rate Limit 응답", () => {
 
     await waitFor(() => {
       expect(showToast).toHaveBeenCalledWith(
-        "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.",
+        RATE_LIMIT_TOAST_MESSAGE,
         "destructive",
       );
     });

@@ -102,20 +102,18 @@ function cleanupExpiredEntries(
     let shortExpired = false;
     let longExpired = false;
 
-    // Short window 만료 확인 및 정리
+    // Short window 만료 확인
     if (entry.shortWindow !== null) {
       if (now - entry.shortWindow.windowStart >= emailShortWindowMs) {
-        entry.shortWindow = null;
         shortExpired = true;
       }
     } else {
       shortExpired = true; // 이미 null이면 만료된 것으로 간주
     }
 
-    // Long window 만료 확인 및 정리
+    // Long window 만료 확인
     if (entry.longWindow !== null) {
       if (now - entry.longWindow.windowStart >= emailLongWindowMs) {
-        entry.longWindow = null;
         longExpired = true;
       }
     } else {
@@ -126,6 +124,14 @@ function cleanupExpiredEntries(
     // [이유: lazy initialization — 활성 윈도우 없으면 항목 불필요]
     if (shortExpired && longExpired) {
       emailStore.delete(email);
+    } else if (shortExpired || longExpired) {
+      // 한쪽만 만료된 경우: 불변 업데이트로 새 entry 생성 후 교체
+      // [이유: direct mutation 금지 — checkRequestEligibility의 full-replace 패턴과 동일]
+      const nextEmailEntry: EmailEligibilityEntry = {
+        shortWindow: shortExpired ? null : entry.shortWindow,
+        longWindow: longExpired ? null : entry.longWindow,
+      };
+      emailStore.set(email, nextEmailEntry);
     }
   }
 }

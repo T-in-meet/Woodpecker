@@ -11,7 +11,7 @@
  *
  * rate limit 처리:
  * - auth-rules 스펙에 따라 클라이언트 측에서 쿨다운 타이머나 남은 시간을 추적하지 않는다.
- * - 오직 서버의 상태(429/409)에 따라 이벤트 기반의 전역 토스트 메시지(showToast)로만 피드백한다.
+ * - 오직 서버의 상태(429)에 따라 이벤트 기반의 전역 토스트 메시지(showToast)로만 피드백한다.
  */
 
 import { useForm } from "react-hook-form";
@@ -25,6 +25,9 @@ import { showToast } from "@/lib/utils/showToast";
 type FormValues = {
   email: string;
 };
+
+const RATE_LIMIT_TOAST_MESSAGE =
+  "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.";
 
 type Props = {
   // 이전 단계(회원가입)에서 전달받은 이메일을 input에 pre-fill하기 위해 사용한다.
@@ -54,18 +57,7 @@ export default function VerifyEmailPageClient({ email }: Props) {
       const body = (await res.json()) as { code: string };
 
       if (res.status === 429) {
-        showToast(
-          "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.",
-          "destructive",
-        );
-        return;
-      }
-
-      if (res.status === 409) {
-        showToast(
-          "이미 진행 중인 요청이 있습니다. 잠시 후 다시 시도해주세요.",
-          "destructive",
-        );
+        showToast(RATE_LIMIT_TOAST_MESSAGE, "destructive");
         return;
       }
 

@@ -536,7 +536,7 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     expect(response.headers.get("content-type")).toBe("application/json");
   });
 
-  it("TC-PRC1. IP 한도 초과 후 malformed JSON 요청 → 400이 아닌 429 반환 (precheck 우선)", async () => {
+  it("TC-PRC1. IP 한도 초과 후 invalid payload 요청 → 400이 아닌 429 반환 (precheck 우선)", async () => {
     const ip = "10.prc.1.1";
 
     /**
@@ -547,9 +547,9 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     }
 
     /**
-     * IP 한도 초과 상태에서 malformed JSON 요청
+     * IP 한도 초과 상태에서 invalid payload 요청(정상 JSON이지만 필수 필드 누락)
      * - Precheck이 먼저 실행되어 IP 차단 → 429 반환
-     * - Body parsing이 시도되지 않음
+     * - 따라서 schema validation 단계까지 진행되지 않음
      */
     const malformedRequest = new NextRequest(
       "http://localhost/api/auth/signup",

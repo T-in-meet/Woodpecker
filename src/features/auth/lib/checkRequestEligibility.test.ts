@@ -267,10 +267,16 @@ describe("checkRequestEligibility", () => {
     it("TC-13. email long 초과 → IP/short 조건 무관하게 { allowed: false }", () => {
       const email = "longblock@example.com";
 
-      // Fill long quota
+      // Fill long quota (short window 영향을 배제하기 위해 요청 간 간격 확보)
       for (let i = 0; i < EMAIL_LONG_LIMIT; i++) {
         checkRequestEligibility("signup", `10.0.0.${i}`, email);
+        if (i < EMAIL_LONG_LIMIT - 1) {
+          vi.advanceTimersByTime(EMAIL_SHORT_WINDOW_MS + 1);
+        }
       }
+
+      // short window를 명시적으로 만료시켜 long 조건만으로 차단되는지 검증
+      vi.advanceTimersByTime(EMAIL_SHORT_WINDOW_MS + 1);
 
       // Long blocked, IP fresh, short fresh → still blocked
       const result = checkRequestEligibility("signup", "10.0.0.99", email);
