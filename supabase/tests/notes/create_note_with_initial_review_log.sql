@@ -40,8 +40,8 @@ SELECT set_config(
   public.create_note_with_initial_review_log(
     'rpc title',
     'rpc content',
-    NULL,
-    current_setting('test.notes_rpc_scheduled_at')::timestamptz
+    current_setting('test.notes_rpc_scheduled_at')::timestamptz,
+    NULL
   )::text,
   true
 );
@@ -145,8 +145,8 @@ SELECT set_config(
   public.create_note_with_initial_review_log(
     'rpc language title',
     'rpc language content',
-    'javascript',
-    current_setting('test.notes_rpc_language_scheduled_at')::timestamptz
+    current_setting('test.notes_rpc_language_scheduled_at')::timestamptz,
+    'javascript'
   )::text,
   true
 );
@@ -169,8 +169,8 @@ SELECT throws_ok(
     SELECT public.create_note_with_initial_review_log(
       'anon title',
       'anon content',
-      NULL::text,
-      '2026-01-04T00:00:00Z'::timestamptz
+      '2026-01-04T00:00:00Z'::timestamptz,
+      NULL::text
     );
   $sql$,
   '42501',
@@ -193,8 +193,8 @@ SELECT throws_ok(
     SELECT public.create_note_with_initial_review_log(
       'invalid language title',
       'invalid language content',
-      'ruby',
-      '2026-01-05T00:00:00Z'::timestamptz
+      '2026-01-05T00:00:00Z'::timestamptz,
+      'ruby'
     );
   $sql$,
   '23514',
@@ -207,8 +207,8 @@ SELECT throws_ok(
     SELECT public.create_note_with_initial_review_log(
       'null schedule title',
       'null schedule content',
-      NULL::text,
-      NULL::timestamptz
+      NULL::timestamptz,
+      NULL::text
     );
   $sql$,
   'P0001',
@@ -237,8 +237,8 @@ SELECT throws_ok(
     SELECT public.create_note_with_initial_review_log(
       'atomic failure marker',
       'content',
-      NULL::text,
-      '2200-01-01T00:00:00Z'::timestamptz
+      '2200-01-01T00:00:00Z'::timestamptz,
+      NULL::text
     );
   $sql$,
   '23514',

@@ -218,7 +218,7 @@ export type Database = {
         Args: {
           p_content: string;
           p_language?: string;
-          p_scheduled_at?: string;
+          p_scheduled_at: string;
           p_title: string;
         };
         Returns: string;

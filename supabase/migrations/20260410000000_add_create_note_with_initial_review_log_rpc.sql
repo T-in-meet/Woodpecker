@@ -1,8 +1,8 @@
 CREATE OR REPLACE FUNCTION public.create_note_with_initial_review_log(
   p_title text,
   p_content text,
-  p_language text DEFAULT NULL,
-  p_scheduled_at timestamptz DEFAULT NULL
+  p_scheduled_at timestamptz,
+  p_language text DEFAULT NULL
 )
 RETURNS uuid
 LANGUAGE plpgsql
@@ -32,5 +32,5 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.create_note_with_initial_review_log(text, text, text, timestamptz) FROM PUBLIC, anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.create_note_with_initial_review_log(text, text, text, timestamptz) TO authenticated;
+REVOKE ALL ON FUNCTION public.create_note_with_initial_review_log(text, text, timestamptz, text) FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.create_note_with_initial_review_log(text, text, timestamptz, text) TO authenticated;
