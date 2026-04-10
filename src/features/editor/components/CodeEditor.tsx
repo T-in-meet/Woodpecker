@@ -31,7 +31,7 @@ export function CodeEditor({
     <div
       ref={containerRef}
       className={cn(
-        "min-h-50 rounded-md border border-border font-mono text-sm",
+        "min-h-50 rounded-md border border-border font-mono text-base",
         className,
       )}
     />

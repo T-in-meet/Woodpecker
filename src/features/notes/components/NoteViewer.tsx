@@ -1,11 +1,12 @@
 import hljs from "highlight.js";
 
-import { MarkdownPreview } from "@/features/notes/components/MarkdownPreview";
 import {
   isCodeLanguage,
   type NoteLanguage,
 } from "@/lib/constants/noteLanguages";
 import { cn } from "@/lib/utils/cn";
+
+import { MarkdownNoteViewerClient } from "./MarkdownNoteViewerClient";
 
 type NoteViewerProps = {
   content: string;
@@ -17,12 +18,15 @@ export function NoteViewer({ content, language, className }: NoteViewerProps) {
   const effectiveLanguage = language ?? "markdown";
 
   if (!isCodeLanguage(effectiveLanguage)) {
-    return (
-      <MarkdownPreview
-        content={content}
-        {...(className !== undefined && { className })}
-      />
-    );
+    if (!content) {
+      return (
+        <div className={cn("px-12 py-6 text-muted-foreground/40", className)}>
+          미리보기할 내용이 없습니다.
+        </div>
+      );
+    }
+
+    return <MarkdownNoteViewerClient content={content} className={className} />;
   }
 
   const highlighted = hljs.highlight(content, {
@@ -33,7 +37,7 @@ export function NoteViewer({ content, language, className }: NoteViewerProps) {
   return (
     <pre
       className={cn(
-        "overflow-x-auto rounded-lg bg-zinc-900 px-6 py-5 font-mono text-sm leading-relaxed text-zinc-100",
+        "overflow-x-auto rounded-lg bg-zinc-900 px-6 py-5 font-mono text-base leading-relaxed text-zinc-100",
         className,
       )}
     >

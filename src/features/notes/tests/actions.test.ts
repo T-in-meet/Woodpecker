@@ -1,50 +1,31 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getNoteDetailRoute } from "@/lib/constants/routes";
-
-const { createClientMock, redirectMock } = vi.hoisted(() => ({
+const { createClientMock } = vi.hoisted(() => ({
   createClientMock: vi.fn(),
-  redirectMock: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: createClientMock,
 }));
 
-vi.mock("next/navigation", () => ({
-  redirect: redirectMock,
-}));
-
 import { createNoteAction } from "../actions";
 
 function createSupabaseMock({
   userId = "user-123",
-  insertError = null,
-  insertedNoteId = "note-123",
+  rpcError = null,
+  rpcResult = "note-123",
 }: {
   userId?: string | null;
-  insertError?: { message: string } | null;
-  insertedNoteId?: string;
+  rpcError?: { message: string } | null;
+  rpcResult?: string | null;
 } = {}) {
-  const singleMock = vi.fn().mockResolvedValue({
-    data: insertError ? null : { id: insertedNoteId },
-    error: insertError,
-  });
-  const selectMock = vi.fn().mockReturnValue({
-    single: singleMock,
-  });
-  const insertMock = vi.fn().mockReturnValue({
-    select: selectMock,
-  });
-  const fromMock = vi.fn().mockReturnValue({
-    insert: insertMock,
+  const rpcMock = vi.fn().mockResolvedValue({
+    data: rpcError ? null : rpcResult,
+    error: rpcError,
   });
 
   return {
-    insertMock,
-    selectMock,
-    singleMock,
-    fromMock,
+    rpcMock,
     supabase: {
       auth: {
         getUser: vi.fn().mockResolvedValue({
@@ -53,15 +34,21 @@ function createSupabaseMock({
           },
         }),
       },
-      from: fromMock,
+      rpc: rpcMock,
     },
   };
 }
 
 describe("createNoteAction", () => {
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
     createClientMock.mockReset();
-    redirectMock.mockReset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it("returns field errors for invalid note data", async () => {
@@ -98,7 +85,7 @@ describe("createNoteAction", () => {
   });
 
   it("returns an auth error when the user is not logged in", async () => {
-    const { supabase, insertMock } = createSupabaseMock({ userId: null });
+    const { supabase, rpcMock } = createSupabaseMock({ userId: null });
     createClientMock.mockResolvedValue(supabase);
 
     const formData = new FormData();
@@ -108,13 +95,11 @@ describe("createNoteAction", () => {
     const result = await createNoteAction(null, formData);
 
     expect(result).toEqual({ error: "로그인이 필요합니다." });
-    expect(insertMock).not.toHaveBeenCalled();
-    expect(redirectMock).not.toHaveBeenCalled();
+    expect(rpcMock).not.toHaveBeenCalled();
   });
 
-  it("inserts a note and redirects when the payload is valid", async () => {
-    const { supabase, insertMock, selectMock, singleMock, fromMock } =
-      createSupabaseMock();
+  it("calls the note creation RPC and returns the new note id when the payload is valid", async () => {
+    const { supabase, rpcMock } = createSupabaseMock();
     createClientMock.mockResolvedValue(supabase);
 
     const formData = new FormData();
@@ -122,22 +107,22 @@ describe("createNoteAction", () => {
     formData.set("content", "Valid content");
     formData.set("language", "javascript");
 
-    await createNoteAction(null, formData);
+    const result = await createNoteAction(null, formData);
 
-    expect(fromMock).toHaveBeenCalledWith("notes");
-    expect(insertMock).toHaveBeenCalledWith({
-      title: "Valid title",
-      content: "Valid content",
-      language: "javascript",
-      user_id: "user-123",
-    });
-    expect(selectMock).toHaveBeenCalledWith("id");
-    expect(singleMock).toHaveBeenCalledOnce();
-    expect(redirectMock).toHaveBeenCalledWith(getNoteDetailRoute("note-123"));
+    expect(rpcMock).toHaveBeenCalledWith(
+      "create_note_with_initial_review_log",
+      {
+        p_title: "Valid title",
+        p_content: "Valid content",
+        p_language: "javascript",
+        p_scheduled_at: "2026-01-02T00:00:00.000Z",
+      },
+    );
+    expect(result).toEqual({ success: true, newNoteId: "note-123" });
   });
 
-  it("serializes an empty language as null for the insert payload", async () => {
-    const { supabase, insertMock } = createSupabaseMock();
+  it("omits language from the RPC payload when the language is empty", async () => {
+    const { supabase, rpcMock } = createSupabaseMock();
     createClientMock.mockResolvedValue(supabase);
 
     const formData = new FormData();
@@ -145,20 +130,22 @@ describe("createNoteAction", () => {
     formData.set("content", "Valid content");
     formData.set("language", "");
 
-    await createNoteAction(null, formData);
+    const result = await createNoteAction(null, formData);
 
-    expect(insertMock).toHaveBeenCalledWith({
-      title: "Valid title",
-      content: "Valid content",
-      language: null,
-      user_id: "user-123",
-    });
-    expect(redirectMock).toHaveBeenCalledWith(getNoteDetailRoute("note-123"));
+    expect(rpcMock).toHaveBeenCalledWith(
+      "create_note_with_initial_review_log",
+      {
+        p_title: "Valid title",
+        p_content: "Valid content",
+        p_scheduled_at: "2026-01-02T00:00:00.000Z",
+      },
+    );
+    expect(result).toEqual({ success: true, newNoteId: "note-123" });
   });
 
-  it("returns a general error when the insert fails", async () => {
-    const { supabase, insertMock } = createSupabaseMock({
-      insertError: { message: "insert failed" },
+  it("returns a general error when the RPC fails", async () => {
+    const { supabase, rpcMock } = createSupabaseMock({
+      rpcError: { message: "rpc failed" },
     });
     createClientMock.mockResolvedValue(supabase);
 
@@ -172,7 +159,23 @@ describe("createNoteAction", () => {
     expect(result).toEqual({
       error: "노트 저장에 실패했습니다. 잠시 후 다시 시도해주세요.",
     });
-    expect(insertMock).toHaveBeenCalledOnce();
-    expect(redirectMock).not.toHaveBeenCalled();
+    expect(rpcMock).toHaveBeenCalledOnce();
+  });
+
+  it("returns a general error when the RPC returns no note id", async () => {
+    const { supabase, rpcMock } = createSupabaseMock({ rpcResult: null });
+    createClientMock.mockResolvedValue(supabase);
+
+    const formData = new FormData();
+    formData.set("title", "Valid title");
+    formData.set("content", "Valid content");
+    formData.set("language", "markdown");
+
+    const result = await createNoteAction(null, formData);
+
+    expect(result).toEqual({
+      error: "노트 저장에 실패했습니다. 잠시 후 다시 시도해주세요.",
+    });
+    expect(rpcMock).toHaveBeenCalledOnce();
   });
 });

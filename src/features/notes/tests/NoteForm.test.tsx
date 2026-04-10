@@ -1,19 +1,21 @@
 import "./setup";
 
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NOTE_LANGUAGE_VALUES } from "@/lib/constants/noteLanguages";
+import { getNoteDetailRoute } from "@/lib/constants/routes";
 
-const { createNoteActionMock } = vi.hoisted(() => ({
+const { createNoteActionMock, routerPushMock } = vi.hoisted(() => ({
   createNoteActionMock: vi.fn(),
+  routerPushMock: vi.fn(),
 }));
 
 import { NoteForm } from "../components/NoteForm";
 
-vi.mock("@/features/editor/components/MarkdownEditor", () => ({
-  MarkdownEditor: ({
+vi.mock("@/features/editor/components/TipTapEditor", () => ({
+  TipTapEditor: ({
     value,
     onChange,
   }: {
@@ -22,7 +24,7 @@ vi.mock("@/features/editor/components/MarkdownEditor", () => ({
   }) => (
     <button
       type="button"
-      data-testid="markdown-editor"
+      data-testid="tiptap-editor"
       onClick={() => onChange("markdown content")}
     >
       markdown:{value}
@@ -51,14 +53,14 @@ vi.mock("@/features/editor/components/CodeEditor", () => ({
   ),
 }));
 
-vi.mock("@/features/notes/components/MarkdownPreview", () => ({
-  MarkdownPreview: ({ content }: { content: string }) => (
-    <div data-testid="markdown-preview">{content}</div>
-  ),
-}));
-
 vi.mock("../actions", () => ({
   createNoteAction: createNoteActionMock,
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: routerPushMock,
+  }),
 }));
 
 function getForm(container: HTMLElement) {
@@ -85,9 +87,15 @@ describe("NoteForm", () => {
   beforeEach(() => {
     createNoteActionMock.mockReset();
     createNoteActionMock.mockResolvedValue(null);
+    routerPushMock.mockReset();
+    history.replaceState(null, "", "/notes/new");
   });
 
-  it("renders the markdown editor by default with the supported language options", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("renders the tiptap editor by default with the supported language options", () => {
     render(<NoteForm />);
 
     const select = screen.getByLabelText("언어") as HTMLSelectElement;
@@ -95,7 +103,7 @@ describe("NoteForm", () => {
 
     expect(select.value).toBe("markdown");
     expect(options).toEqual([...NOTE_LANGUAGE_VALUES]);
-    expect(screen.getByTestId("markdown-editor")).toBeInTheDocument();
+    expect(screen.getByTestId("tiptap-editor")).toBeInTheDocument();
     expect(screen.queryByTestId("code-editor")).not.toBeInTheDocument();
   });
 
@@ -112,7 +120,7 @@ describe("NoteForm", () => {
       "data-language",
       "javascript",
     );
-    expect(screen.queryByTestId("markdown-editor")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("tiptap-editor")).not.toBeInTheDocument();
   });
 
   it("syncs editor content into the hidden input and form data", async () => {
@@ -122,7 +130,7 @@ describe("NoteForm", () => {
     const hiddenContentInput = getHiddenContentInput(container);
 
     await user.type(screen.getByLabelText("제목"), "테스트 노트");
-    await user.click(screen.getByTestId("markdown-editor"));
+    await user.click(screen.getByTestId("tiptap-editor"));
 
     const formData = new FormData(form);
 
@@ -138,7 +146,7 @@ describe("NoteForm", () => {
     const hiddenContentInput = getHiddenContentInput(container);
     const select = screen.getByLabelText("언어") as HTMLSelectElement;
 
-    await user.click(screen.getByTestId("markdown-editor"));
+    await user.click(screen.getByTestId("tiptap-editor"));
     expect(hiddenContentInput.value).toBe("markdown content");
 
     await user.selectOptions(select, "javascript");
@@ -150,7 +158,7 @@ describe("NoteForm", () => {
     expect(hiddenContentInput.value).toBe("code:javascript");
 
     await user.selectOptions(select, "markdown");
-    expect(screen.getByTestId("markdown-editor")).toHaveTextContent(
+    expect(screen.getByTestId("tiptap-editor")).toHaveTextContent(
       "markdown:code:javascript",
     );
   });
@@ -185,5 +193,59 @@ describe("NoteForm", () => {
     await user.click(screen.getByRole("button", { name: "저장" }));
 
     expect(await screen.findByText("로그인이 필요합니다.")).toBeInTheDocument();
+  });
+
+  it("저장 성공 후 이탈 방지를 해제하고 상세 페이지로 이동한다", async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    createNoteActionMock.mockResolvedValueOnce({
+      success: true,
+      newNoteId: "note-123",
+    });
+    routerPushMock.mockImplementationOnce((href: string) => {
+      history.pushState(null, "", href);
+    });
+
+    render(<NoteForm />);
+
+    await user.type(screen.getByLabelText("제목"), "테스트 노트");
+    await user.click(screen.getByTestId("tiptap-editor"));
+    await user.click(screen.getByRole("button", { name: "저장" }));
+
+    await waitFor(() => {
+      expect(routerPushMock).toHaveBeenCalledWith(
+        getNoteDetailRoute("note-123"),
+      );
+    });
+
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(window.location.pathname).toBe(getNoteDetailRoute("note-123"));
+  });
+
+  it("저장 중에도 페이지 이탈 방지가 활성화된다", async () => {
+    const user = userEvent.setup();
+    let resolveAction: (state: null) => void = () => {};
+    createNoteActionMock.mockReturnValueOnce(
+      new Promise<null>((resolve) => {
+        resolveAction = resolve;
+      }),
+    );
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+
+    render(<NoteForm />);
+
+    await user.type(screen.getByLabelText("제목"), "테스트 노트");
+    await user.click(screen.getByRole("button", { name: "저장" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "저장 중..." })).toBeDisabled();
+    });
+
+    history.pushState(null, "", "/after-submit");
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(window.location.pathname).not.toBe("/after-submit");
+
+    resolveAction(null);
   });
 });

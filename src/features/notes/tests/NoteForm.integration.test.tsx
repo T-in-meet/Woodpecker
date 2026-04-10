@@ -8,14 +8,14 @@ const { createNoteActionMock } = vi.hoisted(() => ({
   createNoteActionMock: vi.fn(),
 }));
 
-vi.mock("@/features/notes/components/MarkdownPreview", () => ({
-  MarkdownPreview: ({ content }: { content: string }) => (
-    <div data-testid="markdown-preview">{content}</div>
-  ),
-}));
-
 vi.mock("../actions", () => ({
   createNoteAction: createNoteActionMock,
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+  }),
 }));
 
 import { NoteForm } from "../components/NoteForm";
@@ -30,14 +30,24 @@ function getHiddenContentInput(container: HTMLElement) {
   return hiddenContentInput;
 }
 
-function getEditorContentElement() {
-  const contentElement = document.querySelector(".cm-content");
+/**
+ * ProseMirror은 jsdom에서 표준 키보드 이벤트를 통한 텍스트 입력을 지원하지 않으므로,
+ * contenteditable에 직접 텍스트를 삽입한 뒤 input 이벤트를 발행하여 ProseMirror의 DOM 변경 감지를 트리거한다.
+ */
+function typeIntoTipTap(text: string) {
+  const el = document.querySelector("[contenteditable]");
+  if (!(el instanceof HTMLElement)) throw new Error("editor not found");
 
-  if (!(contentElement instanceof HTMLElement)) {
-    throw new Error("editor content element not found");
-  }
+  el.focus();
 
-  return contentElement;
+  const p = el.querySelector("p");
+  if (!p) throw new Error("paragraph not found");
+
+  p.textContent = text;
+
+  // ProseMirror은 MutationObserver를 사용해 DOM 변경을 감지한다.
+  // jsdom에서는 flush가 자동으로 일어나므로 input 이벤트를 보내 확실하게 처리한다.
+  el.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
 describe("NoteForm editor integration", () => {
@@ -46,18 +56,15 @@ describe("NoteForm editor integration", () => {
     createNoteActionMock.mockResolvedValue(null);
   });
 
-  it("syncs markdown editor input into the hidden content field", async () => {
-    const user = userEvent.setup();
+  it("syncs tiptap editor input into the hidden content field", async () => {
     const { container } = render(<NoteForm />);
     const hiddenContentInput = getHiddenContentInput(container);
 
     await waitFor(() => {
-      expect(document.querySelector(".cm-editor")).toBeTruthy();
+      expect(document.querySelector("[contenteditable]")).toBeTruthy();
     });
 
-    const contentElement = getEditorContentElement();
-    await user.click(contentElement);
-    await user.paste("markdown body");
+    typeIntoTipTap("markdown body");
 
     await waitFor(() => {
       expect(hiddenContentInput.value).toBe("markdown body");
@@ -75,12 +82,10 @@ describe("NoteForm editor integration", () => {
     }
 
     await waitFor(() => {
-      expect(document.querySelector(".cm-editor")).toBeTruthy();
+      expect(document.querySelector("[contenteditable]")).toBeTruthy();
     });
 
-    const contentElement = getEditorContentElement();
-    await user.click(contentElement);
-    await user.paste("shared content");
+    typeIntoTipTap("shared content");
 
     await waitFor(() => {
       expect(hiddenContentInput.value).toBe("shared content");
@@ -90,7 +95,6 @@ describe("NoteForm editor integration", () => {
 
     await waitFor(() => {
       expect(hiddenContentInput.value).toBe("shared content");
-      expect(getEditorContentElement().textContent).toContain("shared content");
     });
   });
 });

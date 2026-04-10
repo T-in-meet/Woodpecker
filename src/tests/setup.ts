@@ -1,5 +1,17 @@
 import "@testing-library/jest-dom";
 
+class ResizeObserverMock {
+  observe() {}
+
+  unobserve() {}
+
+  disconnect() {}
+}
+
+if (typeof globalThis.ResizeObserver === "undefined") {
+  globalThis.ResizeObserver = ResizeObserverMock as typeof ResizeObserver;
+}
+
 const emptyDOMRect = {
   x: 0,
   y: 0,
@@ -34,4 +46,21 @@ if (!Range.prototype.getClientRects) {
     configurable: true,
     value: () => emptyDOMRectList,
   });
+}
+
+// TipTap(ProseMirror)이 jsdom에서 동작하도록 DOM API 보강
+if (!document.elementFromPoint) {
+  document.elementFromPoint = () => null;
+}
+
+if (!HTMLElement.prototype.scrollIntoView) {
+  HTMLElement.prototype.scrollIntoView = () => {};
+}
+
+if (typeof window.ResizeObserver === "undefined") {
+  window.ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof window.ResizeObserver;
 }

@@ -1,18 +1,24 @@
 "use server";
 
-import { redirect } from "next/navigation";
-
-import { getNoteDetailRoute } from "@/lib/constants/routes";
+import { getNextReviewDate } from "@/lib/constants/reviewIntervals";
 import { createClient } from "@/lib/supabase/server";
-import type { NoteCreateInput } from "@/types/notes.types";
 
 import { type NoteInput, noteSchema } from "./schema";
 
 type NoteActionFieldErrors = Partial<Record<keyof NoteInput, string[]>>;
 
-export type CreateNoteActionState = {
-  error: NoteActionFieldErrors | string;
-} | null;
+export type CreateNoteActionState =
+  | {
+      success: true;
+      newNoteId: string;
+      error?: never;
+    }
+  | {
+      success?: false;
+      newNoteId?: never;
+      error: NoteActionFieldErrors | string;
+    }
+  | null;
 
 export async function createNoteAction(
   _prevState: CreateNoteActionState,
@@ -37,24 +43,27 @@ export async function createNoteAction(
     return { error: "로그인이 필요합니다." };
   }
 
-  const noteToCreate = {
-    title: parsed.data.title,
-    content: parsed.data.content,
-    language: parsed.data.language ?? null,
-    user_id: user.id,
-  } satisfies NoteCreateInput;
+  const firstReviewDate = getNextReviewDate(0);
 
-  const { data, error } = await supabase
-    .from("notes")
-    .insert(noteToCreate)
-    .select("id")
-    .single();
-
-  if (error || !data) {
+  if (!firstReviewDate) {
     return { error: "노트 저장에 실패했습니다. 잠시 후 다시 시도해주세요." };
   }
 
-  redirect(getNoteDetailRoute(data.id));
+  const { data: newNoteId, error } = await supabase.rpc(
+    "create_note_with_initial_review_log",
+    {
+      p_title: parsed.data.title,
+      p_content: parsed.data.content,
+      p_scheduled_at: firstReviewDate.toISOString(),
+      ...(parsed.data.language ? { p_language: parsed.data.language } : {}),
+    },
+  );
+
+  if (error || !newNoteId) {
+    return { error: "노트 저장에 실패했습니다. 잠시 후 다시 시도해주세요." };
+  }
+
+  return { success: true, newNoteId };
 }
 
 // TODO: deleteNoteAction 구현 시 인증 체크 필수
