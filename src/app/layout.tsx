@@ -9,6 +9,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 
 import { QueryProvider } from "@/components/providers/QueryProvider";
 import { SessionProvider } from "@/components/providers/SessionProvider";
+import { ToasterProvider } from "@/components/providers/ToasterProvider";
 
 /* ─── 폰트 ───────────────────────────────────────────────────────────────────
    Geist (본문), Geist_Mono (코드) 폰트를 CSS 변수로 등록.
@@ -93,6 +94,7 @@ export default function RootLayout({
       >
         <SessionProvider>
           <QueryProvider>{children}</QueryProvider>
+          <ToasterProvider />
         </SessionProvider>
       </body>
     </html>

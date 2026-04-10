@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -10,8 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Toast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils/cn";
+import { showToast } from "@/lib/utils/showToast";
 import { isServerValidationError } from "@/lib/validation/isServerValidationError";
 import { mapReasonToMessage } from "@/lib/validation/mapReasonToMessage";
 
@@ -60,13 +60,6 @@ type SignupFormProps = {
  */
 export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
   /**
-   * 글로벌 에러 메시지 (네트워크 / 서버 등)
-   */
-  const [globalErrorMessage, setGlobalErrorMessage] = useState<string | null>(
-    null,
-  );
-
-  /**
    * react-hook-form 설정
    */
   const {
@@ -114,7 +107,6 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
      * 기존 에러 초기화
      */
     clearErrors();
-    setGlobalErrorMessage(null);
 
     try {
       /**
@@ -153,7 +145,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
        * 글로벌 에러 처리 (network, timeout 등)
        */
       if (isGlobalError(e)) {
-        setGlobalErrorMessage(GLOBAL_ERROR_MESSAGES[e.type]);
+        showToast(GLOBAL_ERROR_MESSAGES[e.type], "destructive");
       }
     }
   };
@@ -392,11 +384,6 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
           )}
         </div>
       </div>
-
-      {/* 글로벌 에러 */}
-      {globalErrorMessage && (
-        <Toast message={globalErrorMessage} variant="destructive" />
-      )}
 
       {/* root 에러 */}
       {errors.root && (
