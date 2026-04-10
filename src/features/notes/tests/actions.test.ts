@@ -246,5 +246,6 @@ describe("createNoteAction", () => {
     });
     expect(noteInsertMock).toHaveBeenCalledOnce();
     expect(reviewLogInsertMock).not.toHaveBeenCalled();
+    expect(redirectMock).not.toHaveBeenCalled();
   });
 });

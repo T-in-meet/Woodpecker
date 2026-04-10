@@ -78,10 +78,17 @@ export async function createNoteAction(
         error: reviewLogError,
       });
 
-      await supabase
+      const { error: rollbackError } = await supabase
         .from("notes")
         .update({ next_review_at: null })
         .eq("id", data.id);
+
+      if (rollbackError) {
+        console.error("Failed to rollback next_review_at", {
+          noteId: data.id,
+          error: rollbackError,
+        });
+      }
     }
   }
 

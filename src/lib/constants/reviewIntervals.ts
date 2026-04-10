@@ -3,8 +3,8 @@ export const MAX_REVIEW_ROUND = REVIEW_INTERVALS_DAYS.length;
 
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 
-export function getNextReviewDate(currentRound: number): Date | null {
-  const intervalDays = REVIEW_INTERVALS_DAYS[currentRound];
+export function getNextReviewDate(completedRound: number): Date | null {
+  const intervalDays = REVIEW_INTERVALS_DAYS[completedRound];
 
   if (intervalDays === undefined) {
     return null;
