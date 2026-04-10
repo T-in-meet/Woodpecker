@@ -14,8 +14,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
+import { resetEligibilityStore } from "@/features/auth/lib/checkRequestEligibility";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
-import { resetRateLimitStores } from "@/features/auth/signup/lib/checkSignupRateLimit";
 import { ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 
@@ -28,7 +28,7 @@ vi.mock("@/lib/supabase/server");
 
 // 테스트 간 rate limit store 공유 상태 제거
 beforeEach(() => {
-  resetRateLimitStores();
+  resetEligibilityStore();
 });
 
 describe("회원가입 - 기존 미인증 사용자 재요청 분기", () => {

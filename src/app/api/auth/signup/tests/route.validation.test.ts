@@ -25,7 +25,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 import { sendAuthEmail } from "@/features/auth/email/sendAuthEmail";
-import { resetRateLimitStores } from "@/features/auth/signup/lib/checkSignupRateLimit";
+import { resetEligibilityStore } from "@/features/auth/lib/checkRequestEligibility";
 import { PASSWORD_MIN_LENGTH } from "@/lib/constants/user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { VALIDATION_REASON } from "@/lib/validation/reasons";
@@ -39,7 +39,7 @@ vi.mock("@/lib/supabase/admin");
 
 // 테스트 간 rate limit store 공유 상태 제거
 beforeEach(() => {
-  resetRateLimitStores();
+  resetEligibilityStore();
 });
 
 describe("PR-API-02 회원가입 입력 검증 - 필수값 검증", () => {

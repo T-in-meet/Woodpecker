@@ -19,8 +19,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 import { sendAuthEmail } from "@/features/auth/email/sendAuthEmail";
+import { resetEligibilityStore } from "@/features/auth/lib/checkRequestEligibility";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
-import { resetRateLimitStores } from "@/features/auth/signup/lib/checkSignupRateLimit";
 import { ROUTES } from "@/lib/constants/routes";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -35,7 +35,7 @@ describe("회원가입 API 기본 성공 흐름 검증", () => {
   const mockGenerateLink = vi.fn();
 
   beforeEach(() => {
-    resetRateLimitStores();
+    resetEligibilityStore();
     vi.clearAllMocks();
     process.env["EMAIL_TICKET_SECRET"] = "test-ticket-secret";
 

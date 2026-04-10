@@ -3,15 +3,9 @@ import { after, NextRequest } from "next/server";
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 import { sendAuthEmail } from "@/features/auth/email/sendAuthEmail";
 import { applyMinimumResponseTime } from "@/features/auth/lib/applyMinimumResponseTime";
+import { checkRequestEligibility } from "@/features/auth/lib/checkRequestEligibility";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { failureResponse, successResponse } from "@/features/auth/lib/response";
-import {
-  checkSignupEmailRateLimit,
-  checkSignupIpRateLimit,
-  EMAIL_LIMIT,
-  EMAIL_WINDOW_MS,
-} from "@/features/auth/signup/lib/checkSignupRateLimit";
-import { logSignupRateLimitHit } from "@/features/auth/signup/lib/logSignupRateLimitHit";
 import { mapSignupValidationErrors } from "@/features/auth/signup/lib/mapSignupValidationErrors";
 import { signupApiSchema } from "@/features/auth/signup/schema/signupApiSchema";
 import {
@@ -223,26 +217,6 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
    */
   const ip = getClientIp(request);
 
-  /**
-   * IP rate limit은 가장 앞단에서 적용한다.
-   *
-   * 이유:
-   * - malformed JSON / validation 실패 요청도 abuse 트래픽일 수 있다.
-   * - 본문 파싱 이전에 차단해야 불필요한 서버 자원 소모를 줄일 수 있다.
-   * - 따라서 signup에서는 "IP 선차단, email 후차단"의 단계형 정책을 사용한다.
-   */
-  const ipRateLimit = await checkSignupIpRateLimit(ip);
-  if (!ipRateLimit.allowed) {
-    logSignupRateLimitHit({
-      dimension: "ip",
-      route: "/api/auth/signup",
-      limit: ipRateLimit.limit,
-      windowMs: ipRateLimit.windowMs,
-      ip,
-    });
-    return failureResponse(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
-  }
-
   let body: unknown;
   let avatarFile: File | null;
 
@@ -275,21 +249,16 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
   const normalizedEmail = email.toLowerCase();
 
   /**
-   * Email rate limit은 validation 이후 정규화된 이메일 기준으로 적용한다.
+   * Request eligibility check — unified decision for IP + email short + email long
    *
-   * 이유:
-   * - email key는 유효한 입력에서만 의미가 있다.
-   * - 소문자 정규화 후 같은 계정을 동일한 버킷으로 취급해야 한다.
+   * 설계:
+   * - single entry point: checkRequestEligibility 하나로 모든 조건 평가
+   * - atomic: 판단과 상태 업데이트가 함수 내에서 함께 일어남
+   * - AND evaluation: 세 조건(IP, short, long) 모두 통과해야 허용
+   * - Observability: 차단 시에만 내부 로그 기록 (raw IP/email 노출 금지)
    */
-  const emailRateLimit = await checkSignupEmailRateLimit(normalizedEmail);
-  if (!emailRateLimit.allowed) {
-    logSignupRateLimitHit({
-      dimension: "email",
-      route: "/api/auth/signup",
-      limit: EMAIL_LIMIT,
-      windowMs: EMAIL_WINDOW_MS,
-      email: normalizedEmail,
-    });
+  const eligibility = checkRequestEligibility("signup", ip, normalizedEmail);
+  if (!eligibility.allowed) {
     return failureResponse(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
   }
 

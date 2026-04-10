@@ -7,8 +7,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 import { sendAuthEmail } from "@/features/auth/email/sendAuthEmail";
+import { resetEligibilityStore } from "@/features/auth/lib/checkRequestEligibility";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
-import { resetRateLimitStores } from "@/features/auth/signup/lib/checkSignupRateLimit";
 import { ROUTES } from "@/lib/constants/routes";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -24,7 +24,7 @@ vi.mock("@/features/auth/email/sendAuthEmail");
 vi.mock("@/lib/supabase/admin");
 
 beforeEach(() => {
-  resetRateLimitStores();
+  resetEligibilityStore();
 });
 
 describe("PR-API-07 프로필 이미지 업로드 성공 시 avatar_url 반영", () => {

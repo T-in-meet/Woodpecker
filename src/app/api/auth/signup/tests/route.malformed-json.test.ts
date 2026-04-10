@@ -13,8 +13,8 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
+import { resetEligibilityStore } from "@/features/auth/lib/checkRequestEligibility";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
-import { resetRateLimitStores } from "@/features/auth/signup/lib/checkSignupRateLimit";
 import { createClient } from "@/lib/supabase/server";
 
 import { POST } from "../route";
@@ -31,7 +31,7 @@ function makeMalformedJsonRequest(): NextRequest {
 }
 
 beforeEach(() => {
-  resetRateLimitStores();
+  resetEligibilityStore();
   vi.clearAllMocks();
 });
 
