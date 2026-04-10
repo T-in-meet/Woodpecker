@@ -249,7 +249,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
   const normalizedEmail = email.toLowerCase();
 
   /**
-   * Request eligibility check — unified decision for IP + email short + email long
+   * Request eligibility check — IP, email short, email long 에 대한 통합 판별
    *
    * 설계:
    * - single entry point: checkRequestEligibility 하나로 모든 조건 평가

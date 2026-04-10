@@ -1,19 +1,19 @@
 /**
- * Request Eligibility System — single entry point
+ * Request Eligibility System — 단일 진입점(single entry point)
  *
- * Unified decision authority for rate limiting across signup and resend.
+ * 회원가입 및 재전송의 rate limit에 대한 통합된 결정 권한을 가집니다.
  *
- * Design:
- * - Single entry point: checkRequestEligibility(route, ip, email)
- * - Atomic: decision + state update in one function
- * - AND evaluation: all three conditions must pass
- * - User-scoped: email state shared between signup/resend
- * - Observability: logRequestEligibilityBlocked on blocked requests only
+ * 설계:
+ * - 단일 진입점: checkRequestEligibility(route, ip, email)
+ * - 원자성(Atomic): 한 함수 내에서 결정과 상태 업데이트가 이루어짐
+ * - AND 평가: 3가지 조건이 모두 통과되어야 함
+ * - 사용자 범위: 회원가입과 재전송 간에 이메일 상태가 공유됨
+ * - 관측 가능성(Observability): 차단된 요청에 대해서만 logRequestEligibilityBlocked 로그 기록
  *
- * State Model:
- * - IP rate limit: single window, strong burst suppression
- * - Email short window: immediate retry suppression (cooldown replacement)
- * - Email long window: user-level account rate limit (signup + resend shared)
+ * 상태 모델:
+ * - IP rate limit: 단일 윈도우, 강력한 과도한 요청(burst) 억제
+ * - 이메일 short window: 즉각적인 재시도 억제 (재사용 대기 시간 교체)
+ * - 이메일 long window: 사용자 수준 계정 rate limit (회원가입 + 재전송 공유)
  */
 
 import {
@@ -24,59 +24,59 @@ import {
 } from "./requestEligibilityStore";
 
 /**
- * IP-based rate limit
- * - Burst suppression: reject multiple requests from same IP in short window
+ * IP 기반 rate limit
+ * - 과도한 요청(Burst) 억제: 짧은 윈도우 내에 동일한 IP의 다수 요청을 거절함
  */
 export const IP_LIMIT = 10;
 export const IP_WINDOW_MS = 60 * 1000; // 1 minute
 
 /**
- * Email-based rate limit: short window
- * - Immediate retry suppression (replaces cooldown timestamp model)
- * - Much shorter than long window
- * [Reason: EMAIL_SHORT_LIMIT = 1 to prevent rapid-fire requests (cooldown behavior).
- *  Short window blocks any request within 30sec of the previous request.]
+ * 이메일 기반 rate limit: 짧은 윈도우(short window)
+ * - 즉각적인 재시도 억제 (재사용 대기 시간 타임스탬프 모델 대체)
+ * - 긴 윈도우(long window)보다 훨씬 짧음
+ * [이유: EMAIL_SHORT_LIMIT = 1 이면 연속된 요청을 막음(cooldown 동작과 유사).
+ *  Short window는 이전 요청 후 30초 이내의 어떠한 요청도 차단함.]
  */
 export const EMAIL_SHORT_LIMIT = 1;
 export const EMAIL_SHORT_WINDOW_MS = 30 * 1000; // 30 seconds
 
 /**
- * Email-based rate limit: long window
- * - User-level account rate limit shared across signup and resend
- * - Prevents sustained attacks against single account
+ * 이메일 기반 rate limit: 긴 윈도우(long window)
+ * - 회원가입과 재전송 간 공유되는 사용자 수준의 계정 rate limit
+ * - 단일 계정에 대한 지속적인 공격 방지
  */
 export const EMAIL_LONG_LIMIT = 5;
 export const EMAIL_LONG_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 
 /**
- * Check request eligibility — single decision authority
+ * 요청 적격성 확인 — 단일 결정 권한(single decision authority)
  *
- * @param route - "signup" or "resend" (used for logging to identify which API blocked)
- * @param ip - client IP address (used as-is for IP store)
- * @param email - email address (will be lowercased for store key)
+ * @param route - "signup" 또는 "resend" (어떤 API가 차단되었는지 로깅 목적)
+ * @param ip - 클라이언트 IP 주소 (IP 저장소에 그대로 사용됨)
+ * @param email - 이메일 주소 (저장소 키를 위해 소문자로 변환됨)
  *
  * @returns { allowed: boolean }
  *
- * Flow:
- * 1. Read phase: evaluate all conditions WITHOUT updating state
- *    - ipOk: within IP limit?
- *    - emailShortOk: within email short window limit?
- *    - emailLongOk: within email long window limit?
+ * 흐름:
+ * 1. 읽기(Read) 단계: 상태 변경 없이 모든 조건을 평가함
+ *    - ipOk: IP 한도 내에 있는가?
+ *    - emailShortOk: 이메일 짧은 윈도우 한도 내에 있는가?
+ *    - emailLongOk: 이메일 긴 윈도우 한도 내에 있는가?
  *
- * 2. Decision: AND all conditions
+ * 2. 결정(Decision): 모든 조건을 AND 로 묶음
  *    - allowed = ipOk && emailShortOk && emailLongOk
  *
- * 3. Write phase: update state ONLY if allowed=true
- *    - If blocked: log the rejection, do NOT modify state
- *    - If allowed: atomically update IP and email stores
+ * 3. 쓰기(Write) 단계: allowed=true 일 때만 상태를 업데이트함
+ *    - 차단된 경우: 거절 로그를 남기고 상태를 변경하지 않음
+ *    - 허용된 경우: IP와 이메일 저장소를 원자적으로(atomically) 업데이트함
  *
- * Design constraints:
- * - Lazy initialization: email store entries created only on allowed=true
- * - Safe access: use ?? defaultEntry to avoid undefined access
- * - Full replace: always create new WindowEntry/EmailEligibilityEntry objects
- * - Immutable update: nextWindow() returns new objects, no direct mutation
- * - State pollution prevention: blocked requests never touch state
- * - Email normalization: email is lowercased for consistent store key
+ * 설계 제약조건:
+ * - 지연 초기화(Lazy initialization): email 저장소 항목은 allowed=true 일 때만 생성됨
+ * - 안전한 접근: undefined 접근 처리를 막기 위해 ?? defaultEntry 사용
+ * - 완전한 교체(Full replace): 항상 새로운 WindowEntry/EmailEligibilityEntry 객체를 생성함
+ * - 불변 업데이트(Immutable update): nextWindow()는 새 객체를 반환하며 직접 수정하지 않음
+ * - 상태 오염 방지: 차단된 요청은 어떠한 상태도 건드리지 않음
+ * - 이메일 정규화: 스토어 키 일관성을 위해 이메일을 소문자로 변환함
  */
 export function checkRequestEligibility(
   route: "signup" | "resend",
@@ -87,7 +87,7 @@ export function checkRequestEligibility(
   const normalizedEmail = email.toLowerCase();
 
   // ============================================================================
-  // 1. Read phase — evaluate all conditions without state updates
+  // 1. 읽기(Read) 단계 — 상태 업데이트 없이 모든 조건 평가
   // ============================================================================
 
   const ipEntry = ipStore.get(ip);
@@ -111,17 +111,17 @@ export function checkRequestEligibility(
   );
 
   // ============================================================================
-  // 2. AND decision
+  // 2. AND 판별
   // ============================================================================
 
   const allowed = ipOk && emailShortOk && emailLongOk;
 
   // ============================================================================
-  // 3. Write phase — update state ONLY if allowed
+  // 3. 쓰기(Write) 단계 — allowed 일 때만 상태를 업데이트함
   // ============================================================================
 
   if (!allowed) {
-    // Blocked: log rejection but DO NOT modify state
+    // 차단됨: 거절 로그를 남기고 상태를 수정하지 않음
     logRequestEligibilityBlocked({
       route,
       ip,
@@ -135,7 +135,7 @@ export function checkRequestEligibility(
     return { allowed: false };
   }
 
-  // Allowed: atomically update both stores
+  // 허용됨: 두 저장소를 모두 원자적으로 업데이트함
   const nextIpEntry = nextWindow(ipEntry, IP_WINDOW_MS, now);
   ipStore.set(ip, nextIpEntry);
 
@@ -149,20 +149,20 @@ export function checkRequestEligibility(
 }
 
 /**
- * Helper: evaluate if request is within limit (read-only, no state update)
+ * 헬퍼: 요청이 한도 내에 있는지 판별함 (읽기 전용, 상태 수정 없음)
  *
- * @param entry - existing WindowEntry or undefined
- * @param limit - max requests allowed in window
- * @param windowMs - window duration
- * @param now - current timestamp
+ * @param entry - 기존 WindowEntry 이거나 undefined
+ * @param limit - 윈도우 내에서 허용된 최대 요청 수
+ * @param windowMs - 윈도우 유지 기간
+ * @param now - 현재 타임스탬프
  *
- * @returns true if request should be allowed
+ * @returns 요청이 허용되어야 하면 true
  *
- * Logic:
- * - No entry: allow (first request)
- * - Entry expired: allow (window reset)
- * - Count < limit: allow
- * - Count >= limit: deny
+ * 논리:
+ * - 항목 없음: 허용 (첫 요청)
+ * - 만료된 항목: 허용 (윈도우 초기화)
+ * - Count < limit: 허용
+ * - Count >= limit: 거절
  */
 function withinLimit(
   entry: WindowEntry | null | undefined,
@@ -182,18 +182,18 @@ function withinLimit(
 }
 
 /**
- * Helper: compute next window state (immutable)
+ * 헬퍼: 다음 윈도우 상태를 계산함 (불변성 유지)
  *
- * @param entry - existing WindowEntry or null
- * @param windowMs - window duration
- * @param now - current timestamp
+ * @param entry - 기존 WindowEntry 이거나 null
+ * @param windowMs - 윈도우 유지 시간
+ * @param now - 현재 타임스탬프
  *
- * @returns new WindowEntry object
+ * @returns 새로운 WindowEntry 객체 반환
  *
- * Design:
- * - No entry or expired: start new window with count=1
- * - Active window: increment count
- * - Always return NEW object (no mutation of input)
+ * 설계:
+ * - 항목이 없거나 만료된 경우: count=1인 새로운 윈도우 시작
+ * - 활성화된 윈도우: count 증가
+ * - 언제나 새로운 객체 반환 (입력된 값의 내부값을 변경하지 않음)
  */
 function nextWindow(
   entry: WindowEntry | null | undefined,
@@ -201,14 +201,14 @@ function nextWindow(
   now: number,
 ): WindowEntry {
   if (!entry || now - entry.windowStart >= windowMs) {
-    // New window
+    // 새로운 윈도우
     return {
       count: 1,
       windowStart: now,
     };
   }
 
-  // Active window: increment
+  // 활성화된 윈도우: count 증가
   return {
     count: entry.count + 1,
     windowStart: entry.windowStart,
@@ -216,17 +216,16 @@ function nextWindow(
 }
 
 /**
- * Log request eligibility rejection (internal use only)
+ * 요청 적격성 거절 로그 작성 (내부 용도로만 사용됨)
  *
- * Called only when allowed=false. Records:
- * - Which API blocked (signup vs resend)
- * - Which conditions failed (ipOk, emailShortOk, emailLongOk)
- * - Masked identifiers (never raw IP/email)
+ * allowed=false일 때만 호출됨. 다음과 같은 것을 기록함:
+ * - 어떤 API가 차단되었는가 (signup vs resend)
+ * - 어떤 조건이 실패했는가 (ipOk, emailShortOk, emailLongOk)
+ * - 마스킹된 식별자 (아주 날 것의 IP/이메일은 보관하지 않음)
  *
- * This function is internal to checkRequestEligibility and should not be
- * exposed or called directly from routes. All logging happens inside
- * checkRequestEligibility to prevent log duplication and ensure
- * consistent observability.
+ * 이 함수는 checkRequestEligibility 내부에 한정되며, 라우터에서
+ * 노출되거나 직접 호출되어서는 안 됨. 모든 로깅은 중복 로그를 방지하고
+ * 일관된 관측 가능성을 보장하기 위해 checkRequestEligibility 내부에서 진행됨.
  */
 function logRequestEligibilityBlocked(params: {
   route: "signup" | "resend";
@@ -255,8 +254,8 @@ function logRequestEligibilityBlocked(params: {
 }
 
 /**
- * Mask IP address for logging (hide last octet)
- * Example: 192.168.1.100 → 192.168.1.***
+ * 로깅을 위해 IP 주소 마스킹 (마지막 자리를 가림)
+ * 예: 192.168.1.100 → 192.168.1.***
  */
 function maskIp(ip: string): string {
   const parts = ip.split(".");
@@ -264,7 +263,7 @@ function maskIp(ip: string): string {
     parts[3] = "***";
     return parts.join(".");
   }
-  // IPv6 or other format: mask last part after colon
+  // IPv6 혹은 기타 포맷의 경우: 콜론 뒤 마지막 문자들을 마스킹
   if (ip.includes(":")) {
     const colonIndex = ip.lastIndexOf(":");
     return ip.substring(0, colonIndex + 1) + "***";
@@ -273,8 +272,8 @@ function maskIp(ip: string): string {
 }
 
 /**
- * Mask email for logging (hide local part)
- * Example: user@example.com → ***@example.com
+ * 로깅을 위해 이메일 마스킹 (로컬 부분을 가림)
+ * 예: user@example.com → ***@example.com
  */
 function maskEmail(email: string): string {
   const atIndex = email.indexOf("@");
@@ -284,5 +283,5 @@ function maskEmail(email: string): string {
   return "***";
 }
 
-// Export for testing
+// 테스트를 위한 모듈 내보내기
 export { resetEligibilityStore };

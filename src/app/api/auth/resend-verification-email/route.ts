@@ -83,14 +83,14 @@ export async function POST(request: NextRequest) {
   const normalizedEmail = parsed.data.email.toLowerCase();
 
   /**
-   * 5. Request eligibility check — unified decision
+   * 5. Request eligibility check — 통합 판별
    *
    * 설계:
-   * - single entry point: checkRequestEligibility(route, ip, email)
-   * - atomic: 판단과 상태 업데이트가 함수 내에서 함께 일어남
-   * - AND evaluation: IP, email short, email long 모두 통과해야 허용
+   * - 단일 진입점(single entry point): checkRequestEligibility(route, ip, email)
+   * - 원자성(atomic): 판단과 상태 업데이트가 함수 내에서 함께 일어남
+   * - AND 평가: IP, email short, email long 모두 통과해야 허용
    * - cooldown timestamp 제거: email short window로 대체 (즉시 재시도 억제)
-   * - Observability: 차단 시에만 내부 로그 기록
+   * - 관측 가능성(Observability): 차단 시에만 내부 로그 기록
    */
   const eligibility = checkRequestEligibility("resend", ip, normalizedEmail);
   if (!eligibility.allowed) {
