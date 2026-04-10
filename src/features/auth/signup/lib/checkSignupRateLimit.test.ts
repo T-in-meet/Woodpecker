@@ -1,23 +1,21 @@
 /**
- * PR-UI-15 회원가입 rate limit - IP rollback 검증
+ * 회원가입 rate limit - 단계형 정책 검증
  *
- * 이 파일은 checkSignupRateLimit의 rollback 동작과
- * 기존 IP/email limit 정책의 회귀 여부를 검증한다.
+ * 새 정책:
+ * - IP rate limit은 요청 초기에 적용되어 invalid/malformed 요청 flood까지 조기 차단한다.
+ * - Email rate limit은 validation 이후, 정규화된 이메일 기준으로 적용된다.
+ * - IP와 Email은 서로 다른 window 정책을 사용한다.
  *
- * 검증 항목:
- * - IP 허용 + email 차단 시 최종 결과 blocked
- * - email 차단 요청 이후 IP rollback 반영 여부 (연속 호출 기반)
- * - email 차단 없는 정상 흐름에서 IP count 소모 동작 (rollback 대조군)
- * - 기존 IP limit 초과 차단 동작 유지
- * - 기존 email limit 초과 차단 동작 유지
- *
- * mock: 없음
+ * 이 파일은 route 통합 테스트가 아니라 rate limit 유틸의 정책 자체를 검증한다.
+ * 따라서 "언제 호출되는가"는 route 테스트에서 다루고, 여기서는 "호출되었을 때 어떤
+ * 차단 규칙으로 동작하는가"에 집중한다.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  checkSignupRateLimit,
+  checkSignupEmailRateLimit,
+  checkSignupIpRateLimit,
   resetRateLimitStores,
 } from "./checkSignupRateLimit";
 
@@ -31,77 +29,107 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("PR-UI-15 회원가입 rate limit - IP rollback 검증", () => {
-  it("TC-01. IP는 허용되고 email이 차단된 경우 최종 결과는 blocked이다", async () => {
-    // email limit 소진 (5회, 다른 IP에서)
-    for (let i = 0; i < 5; i++) {
-      await checkSignupRateLimit(`10.0.${i}.1`, "blocked@tc01.com");
-    }
+describe("회원가입 rate limit - 단계형 정책 검증", () => {
+  it("TC-01. 동일 IP는 10번까지 허용되고 11번째 요청부터 차단된다", async () => {
+    const ip = "10.1.1.1";
 
-    // IP는 clean, email은 차단된 상태에서 요청
-    const result = await checkSignupRateLimit("10.1.1.1", "blocked@tc01.com");
-
-    expect(result.allowed).toBe(false);
-  });
-
-  it("TC-02. email 차단으로 실패한 요청 이후 동일 IP 재시도 시 rollback이 반영되어 IP limit가 추가 소모되지 않는다", async () => {
-    const ip = "10.2.1.1";
-
-    // IP count를 9까지 소진 (fresh email들로 정상 허용)
-    for (let i = 0; i < 9; i++) {
-      await checkSignupRateLimit(ip, `fresh${i}@tc02.com`);
-    }
-
-    // email limit 소진 (다른 IP에서 5회)
-    for (let i = 0; i < 5; i++) {
-      await checkSignupRateLimit(`10.0.${i}.2`, "blocked@tc02.com");
-    }
-
-    // 1차 호출: IP count 9 → 10 증가 후 email 차단 → rollback으로 IP count 9 복원
-    const blockedResult = await checkSignupRateLimit(ip, "blocked@tc02.com");
-    expect(blockedResult.allowed).toBe(false);
-
-    // 2차 호출: rollback 적용 시 IP count = 9이므로 허용 (10번째 소비)
-    //           rollback 미적용 시 IP count = 10이므로 차단됨
-    const retryResult = await checkSignupRateLimit(ip, "retry@tc02.com");
-    expect(retryResult.allowed).toBe(true);
-  });
-
-  it("TC-03. rollback 검증은 email 차단이 없을 때의 정상 IP limit 소모 동작과 구분되어야 한다", async () => {
-    const ip = "10.3.1.1";
-
-    // email 차단 없이 IP를 10회 모두 소진 (정상 허용 흐름)
     for (let i = 0; i < 10; i++) {
-      const result = await checkSignupRateLimit(ip, `fresh${i}@tc03.com`);
+      const result = await checkSignupIpRateLimit(ip);
       expect(result.allowed).toBe(true);
     }
 
-    // email 차단 없는 11번째 요청은 IP limit 소모로 차단 (rollback 없음)
-    const result = await checkSignupRateLimit(ip, "overflow@tc03.com");
-    expect(result.allowed).toBe(false);
+    const blocked = await checkSignupIpRateLimit(ip);
+
+    expect(blocked.allowed).toBe(false);
   });
 
-  it("TC-04. 기존 IP limit 초과 시 차단 동작은 그대로 유지된다", async () => {
-    const ip = "10.4.1.1";
+  it("TC-02. IP rate limit은 1분 window 만료 후 리셋된다", async () => {
+    const ip = "10.2.1.1";
 
     for (let i = 0; i < 10; i++) {
-      await checkSignupRateLimit(ip, `user${i}@tc04.com`);
+      await checkSignupIpRateLimit(ip);
     }
 
-    const result = await checkSignupRateLimit(ip, "overflow@tc04.com");
+    expect((await checkSignupIpRateLimit(ip)).allowed).toBe(false);
 
-    expect(result.allowed).toBe(false);
+    vi.advanceTimersByTime(61 * 1000);
+
+    expect((await checkSignupIpRateLimit(ip)).allowed).toBe(true);
   });
 
-  it("TC-05. 기존 email limit 초과 시 차단 동작은 그대로 유지된다", async () => {
-    const email = "target@tc05.com";
+  it("TC-03. 동일 이메일은 5번까지 허용되고 6번째 요청부터 차단된다", async () => {
+    const email = "target@example.com";
 
     for (let i = 0; i < 5; i++) {
-      await checkSignupRateLimit(`10.5.${i}.1`, email);
+      const result = await checkSignupEmailRateLimit(email);
+      expect(result.allowed).toBe(true);
     }
 
-    const result = await checkSignupRateLimit("10.5.9.1", email);
+    const blocked = await checkSignupEmailRateLimit(email);
 
-    expect(result.allowed).toBe(false);
+    expect(blocked.allowed).toBe(false);
+  });
+
+  it("TC-04. email rate limit은 더 긴 window 만료 후 리셋된다", async () => {
+    const email = "reset@example.com";
+
+    for (let i = 0; i < 5; i++) {
+      await checkSignupEmailRateLimit(email);
+    }
+
+    expect((await checkSignupEmailRateLimit(email)).allowed).toBe(false);
+
+    vi.advanceTimersByTime(14 * 60 * 1000);
+    expect((await checkSignupEmailRateLimit(email)).allowed).toBe(false);
+
+    vi.advanceTimersByTime(61 * 1000);
+    expect((await checkSignupEmailRateLimit(email)).allowed).toBe(true);
+  });
+
+  it("TC-05. IP rate limit과 email rate limit은 서로 독립적으로 동작한다", async () => {
+    const ip = "10.5.1.1";
+    const email = "independent@example.com";
+
+    for (let i = 0; i < 10; i++) {
+      await checkSignupIpRateLimit(ip);
+    }
+
+    expect((await checkSignupIpRateLimit(ip)).allowed).toBe(false);
+    expect((await checkSignupEmailRateLimit(email)).allowed).toBe(true);
+  });
+
+  it("TC-06. email limit이 소진되어도 별도의 IP 카운트 롤백 개념은 존재하지 않는다", async () => {
+    const ip = "10.6.1.1";
+    const blockedEmail = "blocked@example.com";
+
+    for (let i = 0; i < 9; i++) {
+      expect((await checkSignupIpRateLimit(ip)).allowed).toBe(true);
+    }
+
+    for (let i = 0; i < 5; i++) {
+      expect((await checkSignupEmailRateLimit(blockedEmail)).allowed).toBe(
+        true,
+      );
+    }
+
+    expect((await checkSignupEmailRateLimit(blockedEmail)).allowed).toBe(false);
+
+    // 단계형 정책에서는 IP와 email이 별도 버킷이므로, email 차단이 IP count를 되돌리지 않는다.
+    expect((await checkSignupIpRateLimit(ip)).allowed).toBe(true);
+    expect((await checkSignupIpRateLimit(ip)).allowed).toBe(false);
+  });
+
+  it("TC-07. 정규화된 동일 이메일 기준 정책을 따르므로 소문자 email key로 일관되게 차단된다", async () => {
+    const normalizedEmail = "mixedcase@example.com";
+
+    for (let i = 0; i < 5; i++) {
+      expect((await checkSignupEmailRateLimit(normalizedEmail)).allowed).toBe(
+        true,
+      );
+    }
+
+    expect((await checkSignupEmailRateLimit(normalizedEmail)).allowed).toBe(
+      false,
+    );
   });
 });

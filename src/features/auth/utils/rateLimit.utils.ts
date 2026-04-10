@@ -7,6 +7,8 @@
  */
 export type RateLimitResult = {
   allowed: boolean;
+  limit?: number | undefined;
+  windowMs?: number | undefined;
 };
 
 /**

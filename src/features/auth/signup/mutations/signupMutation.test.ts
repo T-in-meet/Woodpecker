@@ -29,7 +29,6 @@ const signupSuccessResponse = {
   data: {
     email: "test@example.com",
     redirectTo: "/login",
-    signupAccountStatus: "pending" as const,
   },
 };
 
