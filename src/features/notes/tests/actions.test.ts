@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { createClientMock } = vi.hoisted(() => ({
   createClientMock: vi.fn(),
@@ -14,29 +14,48 @@ function createSupabaseMock({
   userId = "user-123",
   insertError = null,
   insertedNoteId = "note-123",
+  reviewLogInsertError = null,
 }: {
   userId?: string | null;
   insertError?: { message: string } | null;
   insertedNoteId?: string;
+  reviewLogInsertError?: { message: string } | null;
 } = {}) {
-  const singleMock = vi.fn().mockResolvedValue({
+  const noteSingleMock = vi.fn().mockResolvedValue({
     data: insertError ? null : { id: insertedNoteId },
     error: insertError,
   });
-  const selectMock = vi.fn().mockReturnValue({
-    single: singleMock,
+  const noteSelectMock = vi.fn().mockReturnValue({
+    single: noteSingleMock,
   });
-  const insertMock = vi.fn().mockReturnValue({
-    select: selectMock,
+  const noteInsertMock = vi.fn().mockReturnValue({
+    select: noteSelectMock,
   });
-  const fromMock = vi.fn().mockReturnValue({
-    insert: insertMock,
+  const noteUpdateEqMock = vi.fn().mockResolvedValue({ error: null });
+  const noteUpdateMock = vi.fn().mockReturnValue({ eq: noteUpdateEqMock });
+  const reviewLogInsertMock = vi.fn().mockResolvedValue({
+    error: reviewLogInsertError,
+  });
+  const fromMock = vi.fn((table: string) => {
+    if (table === "review_logs") {
+      return {
+        insert: reviewLogInsertMock,
+      };
+    }
+
+    return {
+      insert: noteInsertMock,
+      update: noteUpdateMock,
+    };
   });
 
   return {
-    insertMock,
-    selectMock,
-    singleMock,
+    noteInsertMock,
+    noteSelectMock,
+    noteSingleMock,
+    noteUpdateMock,
+    noteUpdateEqMock,
+    reviewLogInsertMock,
     fromMock,
     supabase: {
       auth: {
@@ -53,7 +72,14 @@ function createSupabaseMock({
 
 describe("createNoteAction", () => {
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
     createClientMock.mockReset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it("returns field errors for invalid note data", async () => {
@@ -90,7 +116,7 @@ describe("createNoteAction", () => {
   });
 
   it("returns an auth error when the user is not logged in", async () => {
-    const { supabase, insertMock } = createSupabaseMock({ userId: null });
+    const { supabase, noteInsertMock } = createSupabaseMock({ userId: null });
     createClientMock.mockResolvedValue(supabase);
 
     const formData = new FormData();
@@ -100,12 +126,18 @@ describe("createNoteAction", () => {
     const result = await createNoteAction(null, formData);
 
     expect(result).toEqual({ error: "로그인이 필요합니다." });
-    expect(insertMock).not.toHaveBeenCalled();
+    expect(noteInsertMock).not.toHaveBeenCalled();
   });
 
   it("inserts a note and returns the new note id when the payload is valid", async () => {
-    const { supabase, insertMock, selectMock, singleMock, fromMock } =
-      createSupabaseMock();
+    const {
+      supabase,
+      noteInsertMock,
+      noteSelectMock,
+      noteSingleMock,
+      reviewLogInsertMock,
+      fromMock,
+    } = createSupabaseMock();
     createClientMock.mockResolvedValue(supabase);
 
     const formData = new FormData();
@@ -116,19 +148,27 @@ describe("createNoteAction", () => {
     const result = await createNoteAction(null, formData);
 
     expect(fromMock).toHaveBeenCalledWith("notes");
-    expect(insertMock).toHaveBeenCalledWith({
+    expect(noteInsertMock).toHaveBeenCalledWith({
       title: "Valid title",
       content: "Valid content",
       language: "javascript",
+      next_review_at: "2026-01-02T00:00:00.000Z",
       user_id: "user-123",
     });
-    expect(selectMock).toHaveBeenCalledWith("id");
-    expect(singleMock).toHaveBeenCalledOnce();
+    expect(noteSelectMock).toHaveBeenCalledWith("id");
+    expect(noteSingleMock).toHaveBeenCalledOnce();
+    expect(fromMock).toHaveBeenCalledWith("review_logs");
+    expect(reviewLogInsertMock).toHaveBeenCalledWith({
+      note_id: "note-123",
+      user_id: "user-123",
+      round: 1,
+      scheduled_at: "2026-01-02T00:00:00.000Z",
+    });
     expect(result).toEqual({ success: true, newNoteId: "note-123" });
   });
 
   it("serializes an empty language as null for the insert payload", async () => {
-    const { supabase, insertMock } = createSupabaseMock();
+    const { supabase, noteInsertMock } = createSupabaseMock();
     createClientMock.mockResolvedValue(supabase);
 
     const formData = new FormData();
@@ -138,19 +178,52 @@ describe("createNoteAction", () => {
 
     const result = await createNoteAction(null, formData);
 
-    expect(insertMock).toHaveBeenCalledWith({
+    expect(noteInsertMock).toHaveBeenCalledWith({
       title: "Valid title",
       content: "Valid content",
       language: null,
+      next_review_at: "2026-01-02T00:00:00.000Z",
       user_id: "user-123",
     });
     expect(result).toEqual({ success: true, newNoteId: "note-123" });
   });
 
+  it("rolls back next_review_at and still returns success when review log scheduling fails", async () => {
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const { supabase, reviewLogInsertMock, noteUpdateMock, noteUpdateEqMock } =
+      createSupabaseMock({
+        reviewLogInsertError: { message: "review log failed" },
+      });
+    createClientMock.mockResolvedValue(supabase);
+
+    const formData = new FormData();
+    formData.set("title", "Valid title");
+    formData.set("content", "Valid content");
+    formData.set("language", "markdown");
+
+    const result = await createNoteAction(null, formData);
+
+    expect(reviewLogInsertMock).toHaveBeenCalledOnce();
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to create initial review log",
+      expect.objectContaining({
+        noteId: "note-123",
+        userId: "user-123",
+        error: { message: "review log failed" },
+      }),
+    );
+    expect(noteUpdateMock).toHaveBeenCalledWith({ next_review_at: null });
+    expect(noteUpdateEqMock).toHaveBeenCalledWith("id", "note-123");
+    expect(result).toEqual({ success: true, newNoteId: "note-123" });
+  });
+
   it("returns a general error when the insert fails", async () => {
-    const { supabase, insertMock } = createSupabaseMock({
-      insertError: { message: "insert failed" },
-    });
+    const { supabase, noteInsertMock, reviewLogInsertMock } =
+      createSupabaseMock({
+        insertError: { message: "insert failed" },
+      });
     createClientMock.mockResolvedValue(supabase);
 
     const formData = new FormData();
@@ -163,6 +236,7 @@ describe("createNoteAction", () => {
     expect(result).toEqual({
       error: "노트 저장에 실패했습니다. 잠시 후 다시 시도해주세요.",
     });
-    expect(insertMock).toHaveBeenCalledOnce();
+    expect(noteInsertMock).toHaveBeenCalledOnce();
+    expect(reviewLogInsertMock).not.toHaveBeenCalled();
   });
 });

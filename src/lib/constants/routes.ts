@@ -16,3 +16,7 @@ export type Route = (typeof ROUTES)[keyof typeof ROUTES];
 export function getNoteDetailRoute(noteId: string) {
   return `${ROUTES.NOTES}/${noteId}`;
 }
+
+export function getNoteReviewRoute(noteId: string) {
+  return `${getNoteDetailRoute(noteId)}/review`;
+}
