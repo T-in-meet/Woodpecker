@@ -11,15 +11,14 @@
  * - 안내 메시지, 이메일 input, 재발송 버튼 렌더링
  * - email prop으로 input pre-fill
  * - 버튼 클릭 → POST /api/auth/resend-verification-email 호출
- * - 성공 → 버튼 비활성화 + 60초 쿨다운 타이머 표시 → 만료 후 재활성화
- * - 409(cooldown) → 쿨다운 타이머 표시
- * - 429(rate limit) → 에러 메시지 표시
+ * - 요청 중(isSubmitting) 버튼 비활성화
+ * - 성공/409/429 응답별 토스트 메시지 표시
  *
  * mock 대상:
  * - global.fetch (API boundary)
  *
  * 타이머 전략:
- * - vi.useFakeTimers로 실제 시간을 대체하여 60초 쿨다운을 즉시 시뮬레이션한다.
+ * - vi.useFakeTimers로 비동기 흐름을 안정적으로 제어한다.
  * - userEvent.setup에 advanceTimers를 연결해 user-event 내부 딜레이도 fake timer로 제어한다.
  */
 
@@ -28,8 +27,13 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
+import { showToast } from "@/lib/utils/showToast";
 
 import VerifyEmailPageClient from "./VerifyEmailPageClient";
+
+vi.mock("@/lib/utils/showToast", () => ({
+  showToast: vi.fn(),
+}));
 
 // API 응답 팩토리 함수 — 실제 서버 응답 계약을 반영한다.
 // 각 케이스별 mock Response를 일관된 형태로 생성해 테스트 간 중복을 줄인다.
@@ -42,7 +46,7 @@ function makeFetchResponse(status: number, body: object) {
   );
 }
 
-// 200: 인증 메일 재발송 성공 — 쿨다운 타이머 시작 트리거
+// 200: 인증 메일 재발송 성공
 function makeSuccessResponse() {
   return makeFetchResponse(200, {
     success: true,
@@ -51,7 +55,7 @@ function makeSuccessResponse() {
   });
 }
 
-// 409: 서버에서 이미 쿨다운 중 — 프론트도 동일하게 쿨다운 타이머를 표시해야 한다.
+// 409: 서버 충돌(이미 진행 중인 요청) — 파괴적 토스트를 표시한다.
 function makeCooldownResponse() {
   return makeFetchResponse(409, {
     success: false,
@@ -60,7 +64,7 @@ function makeCooldownResponse() {
   });
 }
 
-// 429: 서버 rate limit 초과 — 쿨다운 대신 별도 에러 메시지를 표시해야 한다.
+// 429: 서버 rate limit 초과 — 파괴적 토스트를 표시한다.
 function makeRateLimitResponse() {
   return makeFetchResponse(429, {
     success: false,
@@ -75,8 +79,28 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.clearAllMocks();
   vi.restoreAllMocks();
 });
+
+function createDeferredResponse(status: number, body: object) {
+  let resolver: ((response: Response) => void) | undefined;
+  const promise = new Promise<Response>((resolve) => {
+    resolver = resolve;
+  });
+
+  return {
+    promise,
+    resolve: () => {
+      resolver?.(
+        new Response(JSON.stringify(body), {
+          status,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    },
+  };
+}
 
 describe("VerifyEmailPageClient - 렌더링", () => {
   it("TC-01. 안내 메시지가 렌더링된다", () => {
@@ -140,36 +164,13 @@ describe("VerifyEmailPageClient - API 호출", () => {
 });
 
 describe("VerifyEmailPageClient - 성공 응답", () => {
-  it("TC-06. 성공 응답 후 버튼이 비활성화된다", async () => {
-    vi.spyOn(global, "fetch").mockReturnValueOnce(makeSuccessResponse());
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-
-    render(<VerifyEmailPageClient email="test@example.com" />);
-
-    await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
-
-    await waitFor(() => {
-      expect(
-        screen.getByRole("button", { name: /인증 메일 재발송/i }),
-      ).toBeDisabled();
+  it("TC-06. 요청 중에는 버튼이 비활성화된다", async () => {
+    const deferred = createDeferredResponse(200, {
+      success: true,
+      code: AUTH_API_CODES.EMAIL_VERIFICATION_RESEND_SUCCESS,
+      data: { email: "test@example.com", resent: true },
     });
-  });
-
-  it("TC-07. 성공 응답 후 남은 쿨다운 시간이 버튼에 표시된다", async () => {
-    vi.spyOn(global, "fetch").mockReturnValueOnce(makeSuccessResponse());
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-
-    render(<VerifyEmailPageClient email="test@example.com" />);
-
-    await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
-
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: /60/ })).toBeInTheDocument();
-    });
-  });
-
-  it("TC-08. 60초 쿨다운 만료 후 버튼이 다시 활성화된다", async () => {
-    vi.spyOn(global, "fetch").mockReturnValueOnce(makeSuccessResponse());
+    vi.spyOn(global, "fetch").mockReturnValueOnce(deferred.promise);
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
 
     render(<VerifyEmailPageClient email="test@example.com" />);
@@ -182,7 +183,7 @@ describe("VerifyEmailPageClient - 성공 응답", () => {
       ).toBeDisabled();
     });
 
-    await vi.advanceTimersByTimeAsync(60_000);
+    deferred.resolve();
 
     await waitFor(() => {
       expect(
@@ -190,10 +191,44 @@ describe("VerifyEmailPageClient - 성공 응답", () => {
       ).toBeEnabled();
     });
   });
+
+  it("TC-07. 성공 응답 시 성공 토스트가 표시된다", async () => {
+    vi.spyOn(global, "fetch").mockReturnValueOnce(makeSuccessResponse());
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
+    render(<VerifyEmailPageClient email="test@example.com" />);
+
+    await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
+
+    await waitFor(() => {
+      expect(showToast).toHaveBeenCalledWith("인증 메일이 재발송되었습니다.");
+    });
+  });
+
+  it("TC-08. 성공 응답 시 파괴적 토스트는 표시되지 않는다", async () => {
+    vi.spyOn(global, "fetch").mockReturnValueOnce(makeSuccessResponse());
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
+    render(<VerifyEmailPageClient email="test@example.com" />);
+
+    await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
+
+    await waitFor(() => {
+      expect(showToast).toHaveBeenCalledWith("인증 메일이 재발송되었습니다.");
+    });
+    expect(showToast).not.toHaveBeenCalledWith(
+      "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.",
+      "destructive",
+    );
+    expect(showToast).not.toHaveBeenCalledWith(
+      "이미 진행 중인 요청이 있습니다. 잠시 후 다시 시도해주세요.",
+      "destructive",
+    );
+  });
 });
 
-describe("VerifyEmailPageClient - 409 쿨다운 응답", () => {
-  it("TC-09. 409 응답 시 쿨다운 타이머가 표시된다", async () => {
+describe("VerifyEmailPageClient - 409 충돌 응답", () => {
+  it("TC-09. 409 응답 시 파괴적 토스트를 표시한다", async () => {
     vi.spyOn(global, "fetch").mockReturnValueOnce(makeCooldownResponse());
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
 
@@ -202,13 +237,16 @@ describe("VerifyEmailPageClient - 409 쿨다운 응답", () => {
     await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /60/ })).toBeInTheDocument();
+      expect(showToast).toHaveBeenCalledWith(
+        "이미 진행 중인 요청이 있습니다. 잠시 후 다시 시도해주세요.",
+        "destructive",
+      );
     });
   });
 });
 
 describe("VerifyEmailPageClient - 429 Rate Limit 응답", () => {
-  it("TC-10. 429 응답 시 에러 메시지가 표시된다", async () => {
+  it("TC-10. 429 응답 시 파괴적 토스트를 표시한다", async () => {
     vi.spyOn(global, "fetch").mockReturnValueOnce(makeRateLimitResponse());
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
 
@@ -217,7 +255,10 @@ describe("VerifyEmailPageClient - 429 Rate Limit 응답", () => {
     await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
 
     await waitFor(() => {
-      expect(screen.getByRole("alert")).toBeInTheDocument();
+      expect(showToast).toHaveBeenCalledWith(
+        "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.",
+        "destructive",
+      );
     });
   });
 });
