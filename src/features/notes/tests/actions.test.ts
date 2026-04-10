@@ -1,18 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getNoteDetailRoute } from "@/lib/constants/routes";
-
-const { createClientMock, redirectMock } = vi.hoisted(() => ({
+const { createClientMock } = vi.hoisted(() => ({
   createClientMock: vi.fn(),
-  redirectMock: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: createClientMock,
-}));
-
-vi.mock("next/navigation", () => ({
-  redirect: redirectMock,
 }));
 
 import { createNoteAction } from "../actions";
@@ -82,7 +75,6 @@ describe("createNoteAction", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
     createClientMock.mockReset();
-    redirectMock.mockReset();
   });
 
   afterEach(() => {
@@ -137,7 +129,7 @@ describe("createNoteAction", () => {
     expect(noteInsertMock).not.toHaveBeenCalled();
   });
 
-  it("inserts a note and redirects when the payload is valid", async () => {
+  it("inserts a note and returns the new note id when the payload is valid", async () => {
     const {
       supabase,
       noteInsertMock,
@@ -153,7 +145,7 @@ describe("createNoteAction", () => {
     formData.set("content", "Valid content");
     formData.set("language", "javascript");
 
-    await createNoteAction(null, formData);
+    const result = await createNoteAction(null, formData);
 
     expect(fromMock).toHaveBeenCalledWith("notes");
     expect(noteInsertMock).toHaveBeenCalledWith({
@@ -172,7 +164,7 @@ describe("createNoteAction", () => {
       round: 1,
       scheduled_at: "2026-01-02T00:00:00.000Z",
     });
-    expect(redirectMock).toHaveBeenCalledWith(getNoteDetailRoute("note-123"));
+    expect(result).toEqual({ success: true, newNoteId: "note-123" });
   });
 
   it("serializes an empty language as null for the insert payload", async () => {
@@ -184,7 +176,7 @@ describe("createNoteAction", () => {
     formData.set("content", "Valid content");
     formData.set("language", "");
 
-    await createNoteAction(null, formData);
+    const result = await createNoteAction(null, formData);
 
     expect(noteInsertMock).toHaveBeenCalledWith({
       title: "Valid title",
@@ -193,10 +185,10 @@ describe("createNoteAction", () => {
       next_review_at: "2026-01-02T00:00:00.000Z",
       user_id: "user-123",
     });
-    expect(redirectMock).toHaveBeenCalledWith(getNoteDetailRoute("note-123"));
+    expect(result).toEqual({ success: true, newNoteId: "note-123" });
   });
 
-  it("rolls back next_review_at and still redirects when review log scheduling fails", async () => {
+  it("rolls back next_review_at and still returns success when review log scheduling fails", async () => {
     const consoleErrorSpy = vi
       .spyOn(console, "error")
       .mockImplementation(() => {});
@@ -211,7 +203,7 @@ describe("createNoteAction", () => {
     formData.set("content", "Valid content");
     formData.set("language", "markdown");
 
-    await createNoteAction(null, formData);
+    const result = await createNoteAction(null, formData);
 
     expect(reviewLogInsertMock).toHaveBeenCalledOnce();
     expect(consoleErrorSpy).toHaveBeenCalledWith(
@@ -224,7 +216,7 @@ describe("createNoteAction", () => {
     );
     expect(noteUpdateMock).toHaveBeenCalledWith({ next_review_at: null });
     expect(noteUpdateEqMock).toHaveBeenCalledWith("id", "note-123");
-    expect(redirectMock).toHaveBeenCalledWith(getNoteDetailRoute("note-123"));
+    expect(result).toEqual({ success: true, newNoteId: "note-123" });
   });
 
   it("returns a general error when the insert fails", async () => {
@@ -246,6 +238,5 @@ describe("createNoteAction", () => {
     });
     expect(noteInsertMock).toHaveBeenCalledOnce();
     expect(reviewLogInsertMock).not.toHaveBeenCalled();
-    expect(redirectMock).not.toHaveBeenCalled();
   });
 });

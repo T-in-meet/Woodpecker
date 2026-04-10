@@ -1,9 +1,6 @@
 "use server";
 
-import { redirect } from "next/navigation";
-
 import { getNextReviewDate } from "@/lib/constants/reviewIntervals";
-import { getNoteDetailRoute } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 import type { NoteCreateInput } from "@/types/notes.types";
 import type { ReviewLogCreateInput } from "@/types/review-logs.types";
@@ -12,9 +9,18 @@ import { type NoteInput, noteSchema } from "./schema";
 
 type NoteActionFieldErrors = Partial<Record<keyof NoteInput, string[]>>;
 
-export type CreateNoteActionState = {
-  error: NoteActionFieldErrors | string;
-} | null;
+export type CreateNoteActionState =
+  | {
+      success: true;
+      newNoteId: string;
+      error?: never;
+    }
+  | {
+      success?: false;
+      newNoteId?: never;
+      error: NoteActionFieldErrors | string;
+    }
+  | null;
 
 export async function createNoteAction(
   _prevState: CreateNoteActionState,
@@ -92,7 +98,7 @@ export async function createNoteAction(
     }
   }
 
-  redirect(getNoteDetailRoute(data.id));
+  return { success: true, newNoteId: data.id };
 }
 
 // TODO: deleteNoteAction 구현 시 인증 체크 필수
