@@ -2,8 +2,6 @@
 
 import { getNextReviewDate } from "@/lib/constants/reviewIntervals";
 import { createClient } from "@/lib/supabase/server";
-import type { NoteCreateInput } from "@/types/notes.types";
-import type { ReviewLogCreateInput } from "@/types/review-logs.types";
 
 import { type NoteInput, noteSchema } from "./schema";
 
@@ -47,58 +45,25 @@ export async function createNoteAction(
 
   const firstReviewDate = getNextReviewDate(0);
 
-  const noteToCreate = {
-    title: parsed.data.title,
-    content: parsed.data.content,
-    language: parsed.data.language ?? null,
-    next_review_at: firstReviewDate?.toISOString() ?? null,
-    user_id: user.id,
-  } satisfies NoteCreateInput;
-
-  const { data, error } = await supabase
-    .from("notes")
-    .insert(noteToCreate)
-    .select("id")
-    .single();
-
-  if (error || !data) {
+  if (!firstReviewDate) {
     return { error: "노트 저장에 실패했습니다. 잠시 후 다시 시도해주세요." };
   }
 
-  if (firstReviewDate) {
-    const reviewLogToCreate = {
-      note_id: data.id,
-      user_id: user.id,
-      round: 1,
-      scheduled_at: firstReviewDate.toISOString(),
-    } satisfies ReviewLogCreateInput;
+  const { data: newNoteId, error } = await supabase.rpc(
+    "create_note_with_initial_review_log",
+    {
+      p_title: parsed.data.title,
+      p_content: parsed.data.content,
+      p_scheduled_at: firstReviewDate.toISOString(),
+      ...(parsed.data.language ? { p_language: parsed.data.language } : {}),
+    },
+  );
 
-    const { error: reviewLogError } = await supabase
-      .from("review_logs")
-      .insert(reviewLogToCreate);
-
-    if (reviewLogError) {
-      console.error("Failed to create initial review log", {
-        noteId: data.id,
-        userId: user.id,
-        error: reviewLogError,
-      });
-
-      const { error: rollbackError } = await supabase
-        .from("notes")
-        .update({ next_review_at: null })
-        .eq("id", data.id);
-
-      if (rollbackError) {
-        console.error("Failed to rollback next_review_at", {
-          noteId: data.id,
-          error: rollbackError,
-        });
-      }
-    }
+  if (error || !newNoteId) {
+    return { error: "노트 저장에 실패했습니다. 잠시 후 다시 시도해주세요." };
   }
 
-  return { success: true, newNoteId: data.id };
+  return { success: true, newNoteId };
 }
 
 // TODO: deleteNoteAction 구현 시 인증 체크 필수
