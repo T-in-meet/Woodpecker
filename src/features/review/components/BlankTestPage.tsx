@@ -8,11 +8,10 @@ import type { NoteLanguage } from "@/lib/constants/noteLanguages";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 
 import { submitAnswerAction } from "../actions";
+import { ANSWER_MAX_LENGTH } from "../schema";
 import { BlankEditor } from "./BlankEditor";
 import { ComparisonView } from "./ComparisonView";
 import { ReviewCompleteButton } from "./ReviewCompleteButton";
-
-const ANSWER_MAX_LENGTH = 50000;
 
 type BlankTestPageProps = {
   noteId: string;

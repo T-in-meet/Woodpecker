@@ -1,8 +1,7 @@
 "use client";
 
-import hljs from "highlight.js";
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CodeEditor } from "@/features/editor/components/CodeEditor";
 import { MarkdownNoteViewerClient } from "@/features/notes/components/MarkdownNoteViewerClient";
 import {
   isCodeLanguage,
@@ -35,7 +34,13 @@ function ComparisonPanel({ title, content, language }: ComparisonPanelProps) {
             내용이 없습니다.
           </div>
         ) : isCodeLanguage(effectiveLanguage) ? (
-          <CodeComparisonPanel content={content} language={effectiveLanguage} />
+          <CodeEditor
+            value={content}
+            language={effectiveLanguage}
+            readOnly
+            aria-label={title}
+            className="min-h-[50vh] rounded-none border-none [&_.cm-editor]:min-h-[50vh] [&_.cm-scroller]:min-h-[50vh] [&_.cm-content]:px-6! [&_.cm-content]:py-5! [&_.cm-gutters]:border-none [&_.cm-gutters]:bg-transparent"
+          />
         ) : (
           <MarkdownNoteViewerClient
             content={content}
@@ -44,28 +49,6 @@ function ComparisonPanel({ title, content, language }: ComparisonPanelProps) {
         )}
       </CardContent>
     </Card>
-  );
-}
-
-function CodeComparisonPanel({
-  content,
-  language,
-}: {
-  content: string;
-  language: Exclude<NoteLanguage, "markdown">;
-}) {
-  const highlighted = hljs.highlight(content, {
-    language,
-    ignoreIllegals: true,
-  });
-
-  return (
-    <pre className="min-h-[50vh] overflow-x-auto bg-zinc-900 px-6 py-5 font-mono text-base leading-relaxed text-zinc-100">
-      <code
-        className={`hljs language-${language}`}
-        dangerouslySetInnerHTML={{ __html: highlighted.value }}
-      />
-    </pre>
   );
 }
 

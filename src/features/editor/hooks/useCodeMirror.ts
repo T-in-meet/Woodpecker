@@ -20,6 +20,7 @@ type UseCodeMirrorOptions = {
   language: SupportedLanguage;
   onChange: (value: string) => void;
   ariaLabel?: string | undefined;
+  readOnly?: boolean;
 };
 
 export function useCodeMirror({
@@ -27,6 +28,7 @@ export function useCodeMirror({
   language,
   onChange,
   ariaLabel,
+  readOnly = false,
 }: UseCodeMirrorOptions) {
   const containerRef = useRef<HTMLDivElement>(null);
   const editorViewRef = useRef<EditorView | null>(null);
@@ -45,8 +47,9 @@ export function useCodeMirror({
       doc,
       extensions: [
         syntaxHighlighting(defaultHighlightStyle),
-        history(),
-        keymap.of(historyKeymap),
+        ...(readOnly
+          ? [EditorState.readOnly.of(true), EditorView.editable.of(false)]
+          : [history(), keymap.of(historyKeymap)]),
         languageCompartment.current.of(getLanguageExtension(language)),
         ariaLabelCompartment.current.of(getAriaLabelExtension(ariaLabel)),
         EditorView.updateListener.of((update) => {

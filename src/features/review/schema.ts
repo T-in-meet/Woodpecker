@@ -1,10 +1,12 @@
 import { z } from "zod";
 
+export const ANSWER_MAX_LENGTH = 50000;
+
 export const submitAnswerSchema = z.object({
   noteId: z.string().uuid("유효한 노트 ID가 아닙니다"),
   answer: z
     .string()
-    .max(50000, "답안이 너무 깁니다")
+    .max(ANSWER_MAX_LENGTH, "답안이 너무 깁니다")
     .refine((value) => value.trim().length > 0, "답안을 입력해주세요"),
 });
 

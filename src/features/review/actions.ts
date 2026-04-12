@@ -71,10 +71,24 @@ export async function submitAnswerAction(
     return { error: "로그인이 필요합니다." };
   }
 
-  const note = await getNoteContentForComparison(parsed.data.noteId, user.id);
+  let note, pendingReviewLog;
+  try {
+    [note, pendingReviewLog] = await Promise.all([
+      getNoteContentForComparison(parsed.data.noteId, user.id),
+      getPendingReviewLog(parsed.data.noteId, user.id),
+    ]);
+  } catch {
+    return {
+      error: "데이터를 불러오는 데 실패했습니다. 잠시 후 다시 시도해주세요.",
+    };
+  }
 
   if (!note) {
     return { error: "비교할 노트를 찾을 수 없습니다." };
+  }
+
+  if (!pendingReviewLog) {
+    return { error: "진행 중인 복습을 찾을 수 없습니다." };
   }
 
   return {
@@ -107,10 +121,17 @@ export async function completeReviewAction(
     return { error: "로그인이 필요합니다." };
   }
 
-  const [reviewableNote, pendingReviewLog] = await Promise.all([
-    getReviewableNote(parsed.data.noteId, user.id),
-    getPendingReviewLog(parsed.data.noteId, user.id),
-  ]);
+  let reviewableNote, pendingReviewLog;
+  try {
+    [reviewableNote, pendingReviewLog] = await Promise.all([
+      getReviewableNote(parsed.data.noteId, user.id),
+      getPendingReviewLog(parsed.data.noteId, user.id),
+    ]);
+  } catch {
+    return {
+      error: "데이터를 불러오는 데 실패했습니다. 잠시 후 다시 시도해주세요.",
+    };
+  }
 
   if (
     !reviewableNote ||

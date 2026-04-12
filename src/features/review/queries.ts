@@ -34,12 +34,14 @@ export async function getReviewableNote(
   userId: string,
 ): Promise<ReviewableNote | null> {
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("notes")
     .select("title, language, review_round")
     .eq("id", noteId)
     .eq("user_id", userId)
     .maybeSingle();
+
+  if (error) throw error;
 
   const parsed = reviewableNoteSchema.safeParse(data);
   return parsed.success ? parsed.data : null;
@@ -50,7 +52,7 @@ export async function getPendingReviewLog(
   userId: string,
 ): Promise<PendingReviewLog | null> {
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("review_logs")
     .select("id, note_id, round, scheduled_at, completed_at")
     .eq("note_id", noteId)
@@ -62,6 +64,8 @@ export async function getPendingReviewLog(
     .limit(1)
     .maybeSingle();
 
+  if (error) throw error;
+
   const parsed = pendingReviewLogSchema.safeParse(data);
   return parsed.success ? parsed.data : null;
 }
@@ -71,12 +75,14 @@ export async function getNoteContentForComparison(
   userId: string,
 ): Promise<NoteContentForComparison | null> {
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("notes")
     .select("content, language")
     .eq("id", noteId)
     .eq("user_id", userId)
     .maybeSingle();
+
+  if (error) throw error;
 
   const parsed = noteContentForComparisonSchema.safeParse(data);
   return parsed.success ? parsed.data : null;

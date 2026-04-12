@@ -82,6 +82,7 @@ describe("submitAnswerAction", () => {
   beforeEach(() => {
     createClientMock.mockReset();
     getNoteContentForComparisonMock.mockReset();
+    getPendingReviewLogMock.mockReset();
   });
 
   afterEach(() => {
@@ -117,11 +118,53 @@ describe("submitAnswerAction", () => {
     expect(getNoteContentForComparisonMock).not.toHaveBeenCalled();
   });
 
+  it("returns an error when there is no pending review log", async () => {
+    createClientMock.mockResolvedValue(createAuthSupabaseMock("user-123"));
+    getNoteContentForComparisonMock.mockResolvedValue({
+      content: "원본 내용",
+      language: "markdown",
+    });
+    getPendingReviewLogMock.mockResolvedValue(null);
+
+    const formData = new FormData();
+    formData.set("noteId", NOTE_ID);
+    formData.set("answer", "내 답안");
+
+    const result = await submitAnswerAction(null, formData);
+
+    expect(result).toEqual({ error: "진행 중인 복습을 찾을 수 없습니다." });
+  });
+
+  it("returns an error when a query throws", async () => {
+    createClientMock.mockResolvedValue(createAuthSupabaseMock("user-123"));
+    getNoteContentForComparisonMock.mockRejectedValue(
+      new Error("db connection failed"),
+    );
+    getPendingReviewLogMock.mockResolvedValue(null);
+
+    const formData = new FormData();
+    formData.set("noteId", NOTE_ID);
+    formData.set("answer", "내 답안");
+
+    const result = await submitAnswerAction(null, formData);
+
+    expect(result).toEqual({
+      error: "데이터를 불러오는 데 실패했습니다. 잠시 후 다시 시도해주세요.",
+    });
+  });
+
   it("returns the original content for comparison when the note exists", async () => {
     createClientMock.mockResolvedValue(createAuthSupabaseMock("user-123"));
     getNoteContentForComparisonMock.mockResolvedValue({
       content: "원본 내용",
       language: "markdown",
+    });
+    getPendingReviewLogMock.mockResolvedValue({
+      id: REVIEW_LOG_ID,
+      note_id: NOTE_ID,
+      round: 1,
+      scheduled_at: "2026-01-02T00:00:00.000Z",
+      completed_at: null,
     });
 
     const formData = new FormData();
@@ -134,6 +177,7 @@ describe("submitAnswerAction", () => {
       NOTE_ID,
       "user-123",
     );
+    expect(getPendingReviewLogMock).toHaveBeenCalledWith(NOTE_ID, "user-123");
     expect(result).toEqual({
       success: true,
       originalContent: "원본 내용",
@@ -299,6 +343,23 @@ describe("completeReviewAction", () => {
       error: "복습 완료 처리에 실패했습니다. 잠시 후 다시 시도해주세요.",
     });
     expect(rpcMock).toHaveBeenCalledOnce();
+    expect(redirectMock).not.toHaveBeenCalled();
+  });
+
+  it("returns an error when a query throws", async () => {
+    createClientMock.mockResolvedValue(createAuthSupabaseMock("user-123"));
+    getReviewableNoteMock.mockRejectedValue(new Error("db connection failed"));
+    getPendingReviewLogMock.mockResolvedValue(null);
+
+    const formData = new FormData();
+    formData.set("noteId", NOTE_ID);
+    formData.set("reviewLogId", REVIEW_LOG_ID);
+
+    const result = await completeReviewAction(null, formData);
+
+    expect(result).toEqual({
+      error: "데이터를 불러오는 데 실패했습니다. 잠시 후 다시 시도해주세요.",
+    });
     expect(redirectMock).not.toHaveBeenCalled();
   });
 
