@@ -216,6 +216,16 @@ async function uploadAvatar(
  * 타이밍 정책(최소 응답 시간)은 POST에서 일괄 적용한다.
  */
 async function resolveSignupResponse(request: NextRequest): Promise<Response> {
+  const makeSignupSuccess = (email: string) =>
+    successResponse(
+      AUTH_API_CODES.SIGNUP_SUCCESS,
+      {
+        email,
+        redirectTo: ROUTES.VERIFY_EMAIL,
+      },
+      { status: 200 },
+    );
+
   /**
    * 요청 IP 추출 (rate limit key)
    */
@@ -304,14 +314,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
       console.warn("이메일 재발송 실패 (무시됨)", { email: normalizedEmail });
     }
 
-    return successResponse(
-      AUTH_API_CODES.SIGNUP_SUCCESS,
-      {
-        email: normalizedEmail,
-        redirectTo: ROUTES.VERIFY_EMAIL,
-      },
-      { status: 200 },
-    );
+    return makeSignupSuccess(normalizedEmail);
   }
 
   /**
@@ -332,14 +335,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
       });
     }
 
-    return successResponse(
-      AUTH_API_CODES.SIGNUP_SUCCESS,
-      {
-        email: normalizedEmail,
-        redirectTo: ROUTES.VERIFY_EMAIL,
-      },
-      { status: 200 },
-    );
+    return makeSignupSuccess(normalizedEmail);
   }
 
   /**
@@ -349,6 +345,10 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
    * 1) createUser로 auth user 생성 보장
    * 2) magiclink 발급
    * 3) 커스텀 메일 발송
+   *
+   * 실패 정책:
+   * - createUser/generateLink/tokenHash/sendAuthEmail 실패는 모두 외부에 노출하지 않는다.
+   * - 내부 로깅만 남기고 동일한 SIGNUP_SUCCESS 계약을 유지한다.
    */
   const adminClient = createAdminClient();
   let createdUser: { id: string; email?: string | null } | null = null;
@@ -370,10 +370,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
         code: createUserError.code,
         name: createUserError.name,
       });
-
-      return failureResponse(AUTH_API_CODES.SIGNUP_INVALID_INPUT, {
-        status: 400,
-      });
+      return makeSignupSuccess(normalizedEmail);
     }
 
     createdUser = createdData.user;
@@ -396,9 +393,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
       name: error.name,
     });
 
-    return failureResponse(AUTH_API_CODES.SIGNUP_INVALID_INPUT, {
-      status: 400,
-    });
+    return makeSignupSuccess(normalizedEmail);
   }
 
   const tokenHash = data.properties?.hashed_token;
@@ -407,7 +402,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
     console.error("Supabase generateLink(magiclink) returned no hashed token", {
       email: normalizedEmail,
     });
-    return failureResponse(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR);
+    return makeSignupSuccess(normalizedEmail);
   }
 
   const signupUser = createdUser ?? data.user;
@@ -438,14 +433,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
   /**
    * 최종 성공 응답 (완전 통일)
    */
-  return successResponse(
-    AUTH_API_CODES.SIGNUP_SUCCESS,
-    {
-      email: signupUserEmail,
-      redirectTo: ROUTES.VERIFY_EMAIL,
-    },
-    { status: 200 },
-  );
+  return makeSignupSuccess(signupUserEmail);
 }
 
 /**
