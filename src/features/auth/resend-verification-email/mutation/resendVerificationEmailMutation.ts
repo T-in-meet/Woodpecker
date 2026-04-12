@@ -41,8 +41,6 @@ export async function resendVerificationEmailMutation(
    */
   const body = await response.json();
 
-  console.log(body);
-
   /**
    * HTTP 레벨 실패 처리 (예: 400, 422, 500 등)
    *
