@@ -1,0 +1,123 @@
+DO $$
+DECLARE
+  v_duplicate_note_count integer;
+  v_duplicate_note_ids text;
+BEGIN
+  SELECT count(*)
+    INTO v_duplicate_note_count
+  FROM (
+    SELECT rl.note_id
+    FROM public.review_logs rl
+    WHERE rl.completed_at IS NULL
+    GROUP BY rl.note_id
+    HAVING count(*) > 1
+  ) duplicate_pending_notes;
+
+  SELECT string_agg(duplicate_pending_notes.note_id::text, ', ' ORDER BY duplicate_pending_notes.note_id::text)
+    INTO v_duplicate_note_ids
+  FROM (
+    SELECT rl.note_id
+    FROM public.review_logs rl
+    WHERE rl.completed_at IS NULL
+    GROUP BY rl.note_id
+    HAVING count(*) > 1
+    ORDER BY rl.note_id
+    LIMIT 10
+  ) duplicate_pending_notes;
+
+  -- Fail with an actionable error before the index build hides which note rows need cleanup.
+  IF v_duplicate_note_count > 0 THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'Cannot add review_logs_one_pending_per_note_idx while duplicate pending review_logs exist.',
+      DETAIL = format(
+        'Found %s note_id(s) with more than one pending review_log. Sample note_id(s): %s',
+        v_duplicate_note_count,
+        coalesce(v_duplicate_note_ids, '(none)')
+      ),
+      HINT = 'Deduplicate rows where completed_at IS NULL so each note_id has at most one pending review_log, then rerun this migration.';
+  END IF;
+END
+$$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS review_logs_one_pending_per_note_idx
+ON public.review_logs (note_id)
+WHERE completed_at IS NULL;
+
+CREATE OR REPLACE FUNCTION public.complete_review_and_schedule_next(
+  p_note_id uuid,
+  p_review_log_id uuid
+)
+RETURNS uuid
+LANGUAGE plpgsql
+-- review_logs intentionally has no UPDATE policy, so this RPC performs the
+-- ownership check explicitly and updates the locked row within the same transaction.
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_user_id uuid := auth.uid();
+  v_current_round integer;
+  v_note_review_round integer;
+  v_next_review_at timestamptz;
+  -- Use wall-clock time so completion and the next schedule share the same actual timestamp.
+  v_now timestamptz := clock_timestamp();
+BEGIN
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'not authenticated';
+  END IF;
+
+  IF p_note_id IS NULL OR p_review_log_id IS NULL THEN
+    RAISE EXCEPTION 'note_id and review_log_id are required';
+  END IF;
+
+  SELECT rl.round, n.review_round
+    INTO v_current_round, v_note_review_round
+  FROM public.review_logs rl
+  JOIN public.notes n
+    ON n.id = rl.note_id
+  WHERE rl.id = p_review_log_id
+    AND rl.note_id = p_note_id
+    AND rl.user_id = v_user_id
+    AND rl.completed_at IS NULL
+    AND n.user_id = v_user_id
+  FOR UPDATE OF rl, n;
+
+  IF v_current_round IS NULL THEN
+    RAISE EXCEPTION 'pending review log not found';
+  END IF;
+
+  IF v_current_round <> v_note_review_round + 1 THEN
+    RAISE EXCEPTION 'review log round does not match current note state';
+  END IF;
+
+  -- Keep this in sync with REVIEW_INTERVALS_DAYS ([1, 3, 7]) so callers
+  -- cannot bypass the spaced-repetition cadence by supplying arbitrary dates.
+  v_next_review_at := CASE v_current_round
+    WHEN 1 THEN v_now + interval '3 days'
+    WHEN 2 THEN v_now + interval '7 days'
+    ELSE NULL
+  END;
+
+  UPDATE public.review_logs
+  SET completed_at = v_now
+  WHERE id = p_review_log_id
+    AND note_id = p_note_id
+    AND user_id = v_user_id;
+
+  UPDATE public.notes
+  SET review_round = v_current_round,
+      next_review_at = v_next_review_at
+  WHERE id = p_note_id
+    AND user_id = v_user_id;
+
+  IF v_current_round < 3 THEN
+    INSERT INTO public.review_logs (note_id, user_id, round, scheduled_at)
+    VALUES (p_note_id, v_user_id, v_current_round + 1, v_next_review_at);
+  END IF;
+
+  RETURN p_note_id;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.complete_review_and_schedule_next(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.complete_review_and_schedule_next(uuid, uuid) TO authenticated;
