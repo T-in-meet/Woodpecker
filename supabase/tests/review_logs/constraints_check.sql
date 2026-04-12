@@ -33,14 +33,15 @@ VALUES
   )
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO public.review_logs (id, note_id, user_id, round, scheduled_at)
+INSERT INTO public.review_logs (id, note_id, user_id, round, scheduled_at, completed_at)
 VALUES
   (
     current_setting('test.constraints_round_log_valid')::uuid,
     current_setting('test.constraints_round_note_a1')::uuid,
     current_setting('test.constraints_round_user_a')::uuid,
     2,
-    now() + interval '1 day'
+    now() + interval '1 day',
+    now()
   )
 ON CONFLICT (id) DO NOTHING;
 
