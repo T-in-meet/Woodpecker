@@ -4,10 +4,6 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import type { NoteLanguage } from "@/lib/constants/noteLanguages";
-import {
-  getNextReviewDate,
-  MAX_REVIEW_ROUND,
-} from "@/lib/constants/reviewIntervals";
 import { getNoteDetailRoute, getNoteReviewRoute } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 
@@ -124,23 +120,10 @@ export async function completeReviewAction(
     return { error: "진행 중인 복습을 찾을 수 없습니다." };
   }
 
-  const completedRound = pendingReviewLog.round;
-  const nextReviewAt =
-    completedRound >= MAX_REVIEW_ROUND
-      ? null
-      : (getNextReviewDate(completedRound)?.toISOString() ?? null);
-
-  if (completedRound < MAX_REVIEW_ROUND && !nextReviewAt) {
-    return {
-      error: "다음 복습 일정 계산에 실패했습니다. 잠시 후 다시 시도해주세요.",
-    };
-  }
-
   const { data: completedNoteId, error: completeReviewError } =
     await supabase.rpc("complete_review_and_schedule_next", {
       p_note_id: parsed.data.noteId,
       p_review_log_id: parsed.data.reviewLogId,
-      p_next_review_at: nextReviewAt,
     });
 
   if (completeReviewError || !completedNoteId) {

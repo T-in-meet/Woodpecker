@@ -229,7 +229,6 @@ describe("completeReviewAction", () => {
     expect(rpcMock).toHaveBeenCalledWith("complete_review_and_schedule_next", {
       p_note_id: NOTE_ID,
       p_review_log_id: REVIEW_LOG_ID,
-      p_next_review_at: "2026-01-04T00:00:00.000Z",
     });
     expect(revalidatePathMock).toHaveBeenCalledWith(
       getNoteDetailRoute(NOTE_ID),
@@ -268,7 +267,6 @@ describe("completeReviewAction", () => {
     expect(rpcMock).toHaveBeenCalledWith("complete_review_and_schedule_next", {
       p_note_id: NOTE_ID,
       p_review_log_id: REVIEW_LOG_ID,
-      p_next_review_at: null,
     });
   });
 

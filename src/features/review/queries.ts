@@ -56,6 +56,7 @@ export async function getPendingReviewLog(
     .eq("note_id", noteId)
     .eq("user_id", userId)
     .is("completed_at", null)
+    .lte("scheduled_at", new Date().toISOString())
     .order("round", { ascending: false })
     .order("scheduled_at", { ascending: false })
     .limit(1)
