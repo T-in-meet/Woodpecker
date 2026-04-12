@@ -30,6 +30,12 @@ import {
   isRateLimitError,
   RATE_LIMIT_TOAST_MESSAGE,
 } from "@/features/auth/errors/rateLimitError";
+/**
+ * 🔽 추가: mutation 훅 import
+ * - fetch를 직접 호출하던 구조를 제거하고
+ * - API 호출을 mutation 레이어로 위임하기 위해 사용한다.
+ */
+import { useResendVerificationEmailMutation } from "@/features/auth/resend-verification-email/hooks/useResendVerificationEmailMutation";
 import { showToast } from "@/lib/utils/showToast";
 
 type FormValues = {
@@ -37,8 +43,6 @@ type FormValues = {
 };
 
 type Props = {
-  // 이전 단계(회원가입)에서 전달받은 이메일을 input에 pre-fill하기 위해 사용한다.
-  // searchParams를 통해 전달되며, 없으면 빈 입력 상태로 시작한다.
   email?: string | undefined;
 };
 
@@ -51,37 +55,37 @@ export default function VerifyEmailPageClient({ email }: Props) {
     values: { email: email ?? "" },
   });
 
-  const isDisabled = isSubmitting;
+  /**
+   * 🔽 추가: resend mutation 훅 사용
+   *
+   * 역할:
+   * - API 호출(fetch)을 컴포넌트에서 제거하고 mutation으로 위임
+   * - loading 상태(isPending)를 제공
+   */
+  const { mutateAsync, isPending } = useResendVerificationEmailMutation();
+
+  /**
+   * 🔽 수정: loading 상태 통합
+   *
+   * - form submitting 상태 + mutation pending 상태를 함께 고려
+   */
+  const isDisabled = isSubmitting || isPending;
 
   const onSubmit = async (values: FormValues) => {
     try {
-      const res = await fetch("/api/auth/resend-verification-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: values.email }),
-      });
-
-      const body = (await res.json()) as { code: string };
-
       /**
-       * rate limit 에러 처리
+       * 🔽 수정: fetch 제거 → mutation 사용
        *
        * 동작:
-       * - 서버 응답 body의 `code`를 기반으로 rate limit 여부를 판별한다.
-       * - rate limit에 해당하면 사용자에게 공통 토스트 메시지를 노출하고 흐름을 중단한다.
+       * - mutation 내부에서 fetch 수행
+       * - 실패 시 response body를 throw
+       * - 성공 시 response body 반환
        *
        * 설계 의도:
-       * - HTTP status(예: 429)에 의존하지 않고, response body contract(code) 기준으로 처리한다.
-       * - validation / global error와 구분되는 "도메인 에러 계층"으로 취급한다.
-       * - signup / resend 등 auth 전반에서 동일한 기준으로 처리한다.
-       *
-       * 주의:
-       * - 내부 정책(요청 횟수, window 등)은 외부에 노출하지 않는다.
+       * - UI는 네트워크/응답 처리에서 분리
+       * - SignupForm과 동일한 패턴으로 구조 통일
        */
-      if (isRateLimitError(body)) {
-        showToast(RATE_LIMIT_TOAST_MESSAGE, "destructive");
-        return;
-      }
+      const body = await mutateAsync({ email: values.email });
 
       /**
        * 성공 처리
@@ -101,6 +105,22 @@ export default function VerifyEmailPageClient({ email }: Props) {
       console.error("Failed to resend email:", e);
 
       /**
+       * rate limit 에러 처리
+       *
+       * 동작:
+       * - mutation에서 throw된 response body의 `code`를 기반으로 rate limit 여부를 판별한다.
+       * - rate limit에 해당하면 사용자에게 공통 토스트 메시지를 노출하고 흐름을 중단한다.
+       *
+       * 설계 의도:
+       * - HTTP status(예: 429)에 의존하지 않고, response body contract(code) 기준으로 처리한다.
+       * - validation / global error와 구분되는 "도메인 에러 계층"으로 취급한다.
+       */
+      if (isRateLimitError(e)) {
+        showToast(RATE_LIMIT_TOAST_MESSAGE, "destructive");
+        return;
+      }
+
+      /**
        * 글로벌 에러 처리 (network, timeout 등)
        *
        * 동작:
@@ -109,10 +129,6 @@ export default function VerifyEmailPageClient({ email }: Props) {
        *
        * 설계 의도:
        * - 서버가 반환한 도메인 에러(response body 기반)와 구분한다.
-       * - rate limit, validation 등은 이 분기에서 처리하지 않는다.
-       *
-       * 주의:
-       * - 이 분기는 서버 응답 contract가 아닌, 클라이언트 환경/네트워크 문제를 다룬다.
        */
       if (isGlobalError(e)) {
         showToast(GLOBAL_ERROR_MESSAGES[e.type], "destructive");
