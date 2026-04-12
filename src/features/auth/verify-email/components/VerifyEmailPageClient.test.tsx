@@ -22,8 +22,10 @@
  * - userEvent.setup에 advanceTimers를 연결해 user-event 내부 딜레이도 fake timer로 제어한다.
  */
 
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
@@ -112,16 +114,23 @@ function createDeferredResponse(status: number, body: object) {
   };
 }
 
+function renderWithQueryClient(ui: ReactElement) {
+  const queryClient = new QueryClient();
+  return render(
+    <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>,
+  );
+}
+
 describe("VerifyEmailPageClient - 렌더링", () => {
   it("TC-01. 안내 메시지가 렌더링된다", () => {
-    render(<VerifyEmailPageClient />);
+    renderWithQueryClient(<VerifyEmailPageClient />);
 
     expect(screen.getByText(/회원가입이 완료되었습니다/)).toBeInTheDocument();
     expect(screen.getByText(/인증 이메일을 확인해주세요/)).toBeInTheDocument();
   });
 
   it("TC-02. 이메일 input과 재발송 버튼이 렌더링된다", () => {
-    render(<VerifyEmailPageClient />);
+    renderWithQueryClient(<VerifyEmailPageClient />);
 
     expect(
       screen.getByRole("textbox", { name: /이메일/i }),
@@ -132,7 +141,9 @@ describe("VerifyEmailPageClient - 렌더링", () => {
   });
 
   it("TC-03. email prop이 있으면 input에 pre-fill된다", () => {
-    render(<VerifyEmailPageClient email="prefill@example.com" />);
+    renderWithQueryClient(
+      <VerifyEmailPageClient email="prefill@example.com" />,
+    );
 
     expect(screen.getByRole("textbox", { name: /이메일/i })).toHaveValue(
       "prefill@example.com",
@@ -140,7 +151,7 @@ describe("VerifyEmailPageClient - 렌더링", () => {
   });
 
   it("TC-04. email prop이 없으면 input이 비어있다", () => {
-    render(<VerifyEmailPageClient />);
+    renderWithQueryClient(<VerifyEmailPageClient />);
 
     expect(screen.getByRole("textbox", { name: /이메일/i })).toHaveValue("");
   });
@@ -153,7 +164,7 @@ describe("VerifyEmailPageClient - API 호출", () => {
       .mockReturnValueOnce(makeSuccessResponse());
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
 
-    render(<VerifyEmailPageClient />);
+    renderWithQueryClient(<VerifyEmailPageClient />);
 
     await user.type(
       screen.getByRole("textbox", { name: /이메일/i }),
@@ -183,7 +194,7 @@ describe("VerifyEmailPageClient - 성공 응답", () => {
     vi.spyOn(global, "fetch").mockReturnValueOnce(deferred.promise);
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
 
-    render(<VerifyEmailPageClient email="test@example.com" />);
+    renderWithQueryClient(<VerifyEmailPageClient email="test@example.com" />);
 
     await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
 
@@ -206,7 +217,7 @@ describe("VerifyEmailPageClient - 성공 응답", () => {
     vi.spyOn(global, "fetch").mockReturnValueOnce(makeSuccessResponse());
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
 
-    render(<VerifyEmailPageClient email="test@example.com" />);
+    renderWithQueryClient(<VerifyEmailPageClient email="test@example.com" />);
 
     await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
 
@@ -219,7 +230,7 @@ describe("VerifyEmailPageClient - 성공 응답", () => {
     vi.spyOn(global, "fetch").mockReturnValueOnce(makeSuccessResponse());
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
 
-    render(<VerifyEmailPageClient email="test@example.com" />);
+    renderWithQueryClient(<VerifyEmailPageClient email="test@example.com" />);
 
     await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
 
@@ -238,7 +249,7 @@ describe("VerifyEmailPageClient - 429 Rate Limit 응답", () => {
     vi.spyOn(global, "fetch").mockReturnValueOnce(makeRateLimitResponse());
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
 
-    render(<VerifyEmailPageClient email="test@example.com" />);
+    renderWithQueryClient(<VerifyEmailPageClient email="test@example.com" />);
 
     await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
 
@@ -256,7 +267,7 @@ describe("VerifyEmailPageClient - 비 Rate Limit 실패 응답", () => {
     vi.spyOn(global, "fetch").mockReturnValueOnce(makeBadRequestResponse());
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
 
-    render(<VerifyEmailPageClient email="test@example.com" />);
+    renderWithQueryClient(<VerifyEmailPageClient email="test@example.com" />);
 
     await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
 
@@ -274,7 +285,7 @@ describe("VerifyEmailPageClient - 비 Rate Limit 실패 응답", () => {
     vi.spyOn(global, "fetch").mockReturnValueOnce(makeInternalErrorResponse());
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
 
-    render(<VerifyEmailPageClient email="test@example.com" />);
+    renderWithQueryClient(<VerifyEmailPageClient email="test@example.com" />);
 
     await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
 
