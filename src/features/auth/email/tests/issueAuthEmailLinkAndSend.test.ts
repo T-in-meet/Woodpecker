@@ -64,9 +64,8 @@ describe("issueAuthEmailLinkAndSend", () => {
 
     await expect(
       issueAuthEmailLinkAndSend({
-        type: "signup",
+        type: "magiclink",
         email: TEST_EMAIL,
-        password: "Password123!",
       }),
     ).rejects.toThrow("generate failed");
   });
@@ -79,9 +78,8 @@ describe("issueAuthEmailLinkAndSend", () => {
 
     await expect(
       issueAuthEmailLinkAndSend({
-        type: "signup",
+        type: "magiclink",
         email: TEST_EMAIL,
-        password: "Password123!",
       }),
     ).rejects.toThrow("Missing hashed_token from generateLink");
   });

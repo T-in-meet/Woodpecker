@@ -290,9 +290,9 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
    * [기존 사용자 - 미인증]
    *
    * 이메일 재발송 시도 (side-effect)
-   * ⚠️ 설계 의도: 미인증 상태에서 회원가입을 다시 시도한 경우,
-   * 메일의 링크를 누르면 "이메일 인증"과 "로그인"을 한 번에 처리해주기 위해
-   * 'signup'이 아닌 'magiclink' 타입을 발급한다.
+   * ⚠️ 설계 의도:
+   * - signup 정책은 magiclink 단일 타입을 사용한다.
+   * - 링크 클릭 시 "이메일 인증"과 "로그인"을 한 번에 처리한다.
    */
   if (existingUser && existingUser.email_confirmed_at === null) {
     try {
@@ -344,35 +344,51 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
 
   /**
    * [신규 사용자 가입]
+   *
+   * 순서:
+   * 1) createUser로 auth user 생성 보장
+   * 2) magiclink 발급
+   * 3) 커스텀 메일 발송
    */
   const adminClient = createAdminClient();
+  let createdUser: { id: string; email?: string | null } | null = null;
+
+  if (adminClient.auth.admin.createUser) {
+    const { data: createdData, error: createUserError } =
+      await adminClient.auth.admin.createUser({
+        email: normalizedEmail,
+        password,
+        email_confirm: false,
+        user_metadata: { nickname },
+      });
+
+    if (createUserError) {
+      console.error("Supabase admin.createUser failed", {
+        email: normalizedEmail,
+        message: createUserError.message,
+        status: createUserError.status,
+        code: createUserError.code,
+        name: createUserError.name,
+      });
+
+      return failureResponse(AUTH_API_CODES.SIGNUP_INVALID_INPUT, {
+        status: 400,
+      });
+    }
+
+    createdUser = createdData.user;
+  }
+
   const { data, error } = await adminClient.auth.admin.generateLink({
     email: normalizedEmail,
-    password,
-    type: "signup",
+    type: "magiclink",
     options: {
-      /**
-       * emailRedirectTo 제거 이유
-       *
-       * 기존:
-       * - Supabase의 emailRedirectTo를 사용해 인증 링크 생성
-       *
-       * 변경:
-       * - 인증 이메일은 Supabase 기본 링크를 사용하지 않고 sendAuthEmail을 사용한다
-       *
-       * 목적:
-       * - Account Enumeration 방어를 위한 외부 흐름 통일
-       *
-       * 결과:
-       * - signUp에서는 emailRedirectTo를 설정하지 않는다
-       */
-
       data: { nickname },
     },
   });
 
   if (error) {
-    console.error("Supabase generateLink(signup) failed", {
+    console.error("Supabase generateLink(magiclink) failed", {
       email: normalizedEmail,
       message: error.message,
       status: error.status,
@@ -387,17 +403,30 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
 
   const tokenHash = data.properties?.hashed_token;
 
-  if (!tokenHash) {
-    console.error("Supabase generateLink(signup) returned no hashed token", {
-      email: normalizedEmail,
-    });
-    return failureResponse(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR);
-  }
+  const signupUser = createdUser ?? data.user;
+  const signupUserEmail = signupUser?.email ?? normalizedEmail;
 
   try {
-    await sendAuthEmail(normalizedEmail, tokenHash, "signup");
+    if (tokenHash) {
+      await sendAuthEmail(normalizedEmail, tokenHash, "magiclink");
+    } else {
+      /**
+       * 일부 환경에서 generateLink 응답에 hashed_token이 누락될 수 있어
+       * magiclink 재발급 유틸로 한 번 더 시도한다.
+       *
+       * ⚠️ 실패하더라도 외부 응답은 성공 계약을 유지한다.
+       */
+      console.warn(
+        "Supabase generateLink(magiclink) returned no hashed token; fallback issueAuthEmailLinkAndSend",
+        { email: normalizedEmail },
+      );
+      await issueAuthEmailLinkAndSend({
+        type: "magiclink",
+        email: normalizedEmail,
+      });
+    }
   } catch (error) {
-    console.error("Failed to send signup verification email", {
+    console.error("Failed to send signup magiclink email", {
       email: normalizedEmail,
       error,
     });
@@ -411,8 +440,8 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
    * 응답 시간에서 upload latency를 제거하기 위해 after()로 응답 후 처리한다.
    * 실패해도 이미 응답이 전송된 이후이므로 외부 응답에 영향을 주지 않는다.
    */
-  if (avatarFile && data.user) {
-    const userId = data.user.id;
+  if (avatarFile && signupUser?.id) {
+    const userId = signupUser.id;
     after(() => uploadAvatar(adminClient, avatarFile, userId));
   }
 
@@ -422,7 +451,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
   return successResponse(
     AUTH_API_CODES.SIGNUP_SUCCESS,
     {
-      email: data.user.email ?? normalizedEmail,
+      email: signupUserEmail,
       redirectTo: ROUTES.VERIFY_EMAIL,
     },
     { status: 200 },

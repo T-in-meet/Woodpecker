@@ -32,6 +32,7 @@ vi.mock("@/features/auth/email/sendAuthEmail");
 vi.mock("@/lib/supabase/admin");
 
 describe("회원가입 API 기본 성공 흐름 검증", () => {
+  const mockCreateUser = vi.fn();
   const mockGenerateLink = vi.fn();
 
   beforeEach(() => {
@@ -40,10 +41,18 @@ describe("회원가입 API 기본 성공 흐름 검증", () => {
     process.env["EMAIL_TICKET_SECRET"] = "test-ticket-secret";
 
     vi.mocked(createAdminClient).mockReturnValue({
-      auth: { admin: { generateLink: mockGenerateLink } },
+      auth: {
+        admin: { createUser: mockCreateUser, generateLink: mockGenerateLink },
+      },
     } as never);
     vi.mocked(getUserByEmail).mockResolvedValue(null);
     vi.mocked(sendAuthEmail).mockResolvedValue(undefined);
+    mockCreateUser.mockResolvedValue({
+      data: {
+        user: { id: "user-id", email: "test@example.com" },
+      },
+      error: null,
+    });
   });
 
   const requestBody = {
@@ -63,12 +72,13 @@ describe("회원가입 API 기본 성공 흐름 검증", () => {
     });
   };
 
-  it("TC-01: 신규 이메일 요청 시 generateLink(signup)이 1회 호출된다", async () => {
+  it("TC-01: 신규 이메일 요청 시 generateLink(magiclink)이 1회 호출된다", async () => {
     mockSignupGenerateLinkSuccess();
 
     await POST(makeRequest(requestBody));
 
     expect(mockGenerateLink).toHaveBeenCalledTimes(1);
+    expect(mockCreateUser).toHaveBeenCalledTimes(1);
   });
 
   it("TC-02: 이메일은 소문자로 정규화되어 generateLink에 전달된다", async () => {
@@ -78,9 +88,8 @@ describe("회원가입 API 기본 성공 흐름 검증", () => {
 
     expect(mockGenerateLink).toHaveBeenCalledWith(
       expect.objectContaining({
-        type: "signup",
+        type: "magiclink",
         email: "test@example.com",
-        password: "Password123!",
       }),
     );
   });

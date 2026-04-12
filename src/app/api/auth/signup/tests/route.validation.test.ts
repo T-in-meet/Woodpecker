@@ -437,9 +437,6 @@ describe("PR-API-02 회원가입 입력 검증 - 형식 / 길이 / 경계값 / �
     );
 
     expect(mockGenerateLink).toHaveBeenCalledTimes(1);
-    expect(mockGenerateLink).toHaveBeenCalledWith(
-      expect.objectContaining({ password: "  Password123!  " }),
-    );
   });
 });
 

@@ -2,7 +2,7 @@
  * 회원가입 API - 이메일 발송 분기 테스트 (정책 기준)
  *
  * 정책:
- * - 신규 사용자: signup generateLink → sendAuthEmail(email, tokenHash, "signup")
+ * - 신규 사용자: magiclink generateLink → sendAuthEmail(email, tokenHash, "magiclink")
  * - 기존 미인증 사용자: magiclink generateLink → sendAuthEmail(email, tokenHash, "magiclink")
  * - 기존 인증 사용자: magiclink generateLink → sendAuthEmail(email, tokenHash, "magiclink")
  *
@@ -44,6 +44,7 @@ const verifiedUser = {
   email_confirmed_at: "2026-03-29T00:00:00.000Z",
 };
 
+const mockCreateUser = vi.fn();
 const mockGenerateLink = vi.fn();
 
 beforeEach(() => {
@@ -53,6 +54,7 @@ beforeEach(() => {
   vi.mocked(createAdminClient).mockReturnValue({
     auth: {
       admin: {
+        createUser: mockCreateUser,
         generateLink: mockGenerateLink,
       },
     },
@@ -70,30 +72,37 @@ beforeEach(() => {
     },
     error: null,
   });
+
+  mockCreateUser.mockResolvedValue({
+    data: {
+      user: { id: "user-id", email: "test@example.com" },
+    },
+    error: null,
+  });
 });
 
 describe("회원가입 이메일 발송 - 신규 사용자", () => {
-  it("TC-01. 신규 사용자 분기에서 signup generateLink가 호출된다", async () => {
+  it("TC-01. 신규 사용자 분기에서 magiclink generateLink가 호출된다", async () => {
     await POST(makeRequest(requestBody));
 
     expect(mockGenerateLink).toHaveBeenCalledTimes(1);
+    expect(mockCreateUser).toHaveBeenCalledTimes(1);
     expect(mockGenerateLink).toHaveBeenCalledWith(
       expect.objectContaining({
-        type: "signup",
+        type: "magiclink",
         email: "test@example.com",
-        password: requestBody.password,
       }),
     );
   });
 
-  it("TC-02. 신규 사용자 분기에서 sendAuthEmail이 tokenHash와 type=signup으로 호출된다", async () => {
+  it("TC-02. 신규 사용자 분기에서 sendAuthEmail이 tokenHash와 type=magiclink으로 호출된다", async () => {
     await POST(makeRequest(requestBody));
 
     expect(vi.mocked(sendAuthEmail)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(sendAuthEmail)).toHaveBeenCalledWith(
       "test@example.com",
       TEST_TOKEN_HASH,
-      "signup",
+      "magiclink",
     );
   });
 
@@ -122,6 +131,7 @@ describe("회원가입 이메일 발송 - 기존 미인증 사용자", () => {
     await POST(makeRequest(requestBody));
 
     expect(mockGenerateLink).toHaveBeenCalledTimes(1);
+    expect(mockCreateUser).not.toHaveBeenCalled();
     expect(mockGenerateLink).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "magiclink",
@@ -151,6 +161,7 @@ describe("회원가입 이메일 발송 - 기존 인증 사용자", () => {
     await POST(makeRequest(requestBody));
 
     expect(mockGenerateLink).toHaveBeenCalledTimes(1);
+    expect(mockCreateUser).not.toHaveBeenCalled();
     expect(mockGenerateLink).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "magiclink",

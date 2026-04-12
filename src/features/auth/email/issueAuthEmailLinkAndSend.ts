@@ -20,7 +20,7 @@ type IssueAuthEmailLinkAndSendInput = GenerateLinkParams & {
  * - nodemailer 기반 sendAuthEmail 호출
  *
  * 정책:
- * - 어떤 type(signup/magiclink)를 쓸지는 호출부가 결정한다.
+ * - auth 이메일 링크 타입은 magiclink 단일 정책을 따른다.
  */
 export async function issueAuthEmailLinkAndSend(
   input: IssueAuthEmailLinkAndSendInput,
