@@ -1,6 +1,7 @@
 import { after, NextRequest } from "next/server";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
+import { issueAuthEmailLinkAndSend } from "@/features/auth/email/issueAuthEmailLinkAndSend";
 import { sendAuthEmail } from "@/features/auth/email/sendAuthEmail";
 import { applyMinimumResponseTime } from "@/features/auth/lib/applyMinimumResponseTime";
 import {
@@ -295,20 +296,10 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
    */
   if (existingUser && existingUser.email_confirmed_at === null) {
     try {
-      const adminClient = createAdminClient();
-      const { data: linkData, error: linkError } =
-        await adminClient.auth.admin.generateLink({
-          type: "magiclink", // 로그인 인증 링크 생성
-          email: normalizedEmail,
-        });
-
-      if (!linkError && linkData?.properties?.hashed_token) {
-        await sendAuthEmail(
-          normalizedEmail,
-          linkData.properties.hashed_token,
-          "magiclink",
-        );
-      }
+      await issueAuthEmailLinkAndSend({
+        type: "magiclink", // 로그인 인증 링크 생성
+        email: normalizedEmail,
+      });
     } catch {
       console.warn("이메일 재발송 실패 (무시됨)", { email: normalizedEmail });
     }
@@ -331,20 +322,10 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
    */
   if (existingUser && existingUser.email_confirmed_at !== null) {
     try {
-      const adminClient = createAdminClient();
-      const { data: linkData, error: linkError } =
-        await adminClient.auth.admin.generateLink({
-          type: "magiclink",
-          email: normalizedEmail,
-        });
-
-      if (!linkError && linkData?.properties?.hashed_token) {
-        await sendAuthEmail(
-          normalizedEmail,
-          linkData.properties.hashed_token,
-          "magiclink",
-        );
-      }
+      await issueAuthEmailLinkAndSend({
+        type: "magiclink",
+        email: normalizedEmail,
+      });
     } catch {
       console.warn("인증 완료 사용자 이메일 발송 실패 (무시됨)", {
         email: normalizedEmail,
