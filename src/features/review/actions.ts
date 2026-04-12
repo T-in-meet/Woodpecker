@@ -8,6 +8,10 @@ import { getNoteDetailRoute, getNoteReviewRoute } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 
 import {
+  createReviewCompletionToken,
+  verifyReviewCompletionToken,
+} from "./lib/reviewCompletionToken";
+import {
   getNoteContentForComparison,
   getPendingReviewLog,
   getReviewableNote,
@@ -28,6 +32,7 @@ export type SubmitAnswerActionState =
       originalContent: string;
       language: NoteLanguage | null;
       userAnswer: string;
+      completionToken: string;
       error?: never;
     }
   | {
@@ -91,11 +96,26 @@ export async function submitAnswerAction(
     return { error: "진행 중인 복습을 찾을 수 없습니다." };
   }
 
+  let completionToken: string;
+
+  try {
+    completionToken = createReviewCompletionToken({
+      noteId: parsed.data.noteId,
+      reviewLogId: pendingReviewLog.id,
+      userId: user.id,
+    });
+  } catch {
+    return {
+      error: "비교 준비에 실패했습니다. 잠시 후 다시 시도해주세요.",
+    };
+  }
+
   return {
     success: true,
     originalContent: note.content,
     language: note.language,
     userAnswer: parsed.data.answer,
+    completionToken,
   };
 }
 
@@ -106,6 +126,7 @@ export async function completeReviewAction(
   const parsed = completeReviewSchema.safeParse({
     noteId: formData.get("noteId"),
     reviewLogId: formData.get("reviewLogId"),
+    completionToken: formData.get("completionToken"),
   });
 
   if (!parsed.success) {
@@ -119,6 +140,29 @@ export async function completeReviewAction(
 
   if (!user) {
     return { error: "로그인이 필요합니다." };
+  }
+
+  let isCompletionTokenValid = false;
+
+  try {
+    isCompletionTokenValid = verifyReviewCompletionToken(
+      parsed.data.completionToken,
+      {
+        noteId: parsed.data.noteId,
+        reviewLogId: parsed.data.reviewLogId,
+        userId: user.id,
+      },
+    );
+  } catch {
+    return {
+      error: "복습 완료를 준비하는 데 실패했습니다. 잠시 후 다시 시도해주세요.",
+    };
+  }
+
+  if (!isCompletionTokenValid) {
+    return {
+      error: "답안을 제출한 뒤 원본을 확인하고 복습을 완료해주세요.",
+    };
   }
 
   let reviewableNote, pendingReviewLog;

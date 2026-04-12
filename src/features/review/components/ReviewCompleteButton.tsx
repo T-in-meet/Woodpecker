@@ -9,11 +9,13 @@ import { completeReviewAction } from "../actions";
 type ReviewCompleteButtonProps = {
   noteId: string;
   reviewLogId: string;
+  completionToken: string;
 };
 
 export function ReviewCompleteButton({
   noteId,
   reviewLogId,
+  completionToken,
 }: ReviewCompleteButtonProps) {
   const [state, formAction, isPending] = useActionState(
     completeReviewAction,
@@ -24,6 +26,7 @@ export function ReviewCompleteButton({
     <form action={formAction} className="flex flex-col items-start gap-3">
       <input type="hidden" name="noteId" value={noteId} />
       <input type="hidden" name="reviewLogId" value={reviewLogId} />
+      <input type="hidden" name="completionToken" value={completionToken} />
 
       {state?.error && (
         <p role="alert" className="text-sm text-destructive">

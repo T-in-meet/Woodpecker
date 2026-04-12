@@ -38,6 +38,7 @@ describe("completeReviewSchema", () => {
     const parsed = completeReviewSchema.safeParse({
       noteId: NOTE_ID,
       reviewLogId: REVIEW_LOG_ID,
+      completionToken: "valid-token",
     });
 
     expect(parsed.success).toBe(true);
@@ -47,6 +48,7 @@ describe("completeReviewSchema", () => {
     const parsed = completeReviewSchema.safeParse({
       noteId: "note-123",
       reviewLogId: "log-123",
+      completionToken: "",
     });
 
     expect(parsed.success).toBe(false);

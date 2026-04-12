@@ -6,6 +6,7 @@ const REDIRECT_ERROR = new Error("NEXT_REDIRECT");
 const NOTE_ID = "11111111-1111-4111-8111-111111111111";
 const REVIEW_LOG_ID = "22222222-2222-4222-8222-222222222222";
 const NEXT_REVIEW_LOG_ID = "33333333-3333-4333-8333-333333333333";
+const TEST_USER_ID = "user-123";
 
 const {
   createClientMock,
@@ -14,14 +15,18 @@ const {
   getReviewableNoteMock,
   redirectMock,
   revalidatePathMock,
-} = vi.hoisted(() => ({
-  createClientMock: vi.fn(),
-  getNoteContentForComparisonMock: vi.fn(),
-  getPendingReviewLogMock: vi.fn(),
-  getReviewableNoteMock: vi.fn(),
-  redirectMock: vi.fn(),
-  revalidatePathMock: vi.fn(),
-}));
+} = vi.hoisted(() => {
+  process.env["REVIEW_COMPLETION_TOKEN_SECRET"] = "test-review-secret";
+
+  return {
+    createClientMock: vi.fn(),
+    getNoteContentForComparisonMock: vi.fn(),
+    getPendingReviewLogMock: vi.fn(),
+    getReviewableNoteMock: vi.fn(),
+    redirectMock: vi.fn(),
+    revalidatePathMock: vi.fn(),
+  };
+});
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: createClientMock,
@@ -42,6 +47,10 @@ vi.mock("../queries", () => ({
 }));
 
 import { completeReviewAction, submitAnswerAction } from "../actions";
+import {
+  createReviewCompletionToken,
+  verifyReviewCompletionToken,
+} from "../lib/reviewCompletionToken";
 
 function createAuthSupabaseMock(userId: string | null) {
   return {
@@ -56,7 +65,7 @@ function createAuthSupabaseMock(userId: string | null) {
 }
 
 function createCompleteReviewSupabaseMock({
-  userId = "user-123",
+  userId = TEST_USER_ID,
   rpcResult = NOTE_ID,
   rpcError = null,
 }: {
@@ -76,6 +85,35 @@ function createCompleteReviewSupabaseMock({
       rpc: rpcMock,
     },
   };
+}
+
+function createCompleteReviewFormData({
+  noteId = NOTE_ID,
+  reviewLogId = REVIEW_LOG_ID,
+  tokenNoteId = noteId,
+  tokenReviewLogId = reviewLogId,
+  tokenUserId = TEST_USER_ID,
+}: {
+  noteId?: string;
+  reviewLogId?: string;
+  tokenNoteId?: string;
+  tokenReviewLogId?: string;
+  tokenUserId?: string;
+} = {}) {
+  const formData = new FormData();
+
+  formData.set("noteId", noteId);
+  formData.set("reviewLogId", reviewLogId);
+  formData.set(
+    "completionToken",
+    createReviewCompletionToken({
+      noteId: tokenNoteId,
+      reviewLogId: tokenReviewLogId,
+      userId: tokenUserId,
+    }),
+  );
+
+  return formData;
 }
 
 describe("submitAnswerAction", () => {
@@ -119,7 +157,7 @@ describe("submitAnswerAction", () => {
   });
 
   it("returns an error when there is no pending review log", async () => {
-    createClientMock.mockResolvedValue(createAuthSupabaseMock("user-123"));
+    createClientMock.mockResolvedValue(createAuthSupabaseMock(TEST_USER_ID));
     getNoteContentForComparisonMock.mockResolvedValue({
       content: "원본 내용",
       language: "markdown",
@@ -136,7 +174,7 @@ describe("submitAnswerAction", () => {
   });
 
   it("returns an error when a query throws", async () => {
-    createClientMock.mockResolvedValue(createAuthSupabaseMock("user-123"));
+    createClientMock.mockResolvedValue(createAuthSupabaseMock(TEST_USER_ID));
     getNoteContentForComparisonMock.mockRejectedValue(
       new Error("db connection failed"),
     );
@@ -153,8 +191,8 @@ describe("submitAnswerAction", () => {
     });
   });
 
-  it("returns the original content for comparison when the note exists", async () => {
-    createClientMock.mockResolvedValue(createAuthSupabaseMock("user-123"));
+  it("returns the original content and completion token when the note exists", async () => {
+    createClientMock.mockResolvedValue(createAuthSupabaseMock(TEST_USER_ID));
     getNoteContentForComparisonMock.mockResolvedValue({
       content: "원본 내용",
       language: "markdown",
@@ -175,15 +213,29 @@ describe("submitAnswerAction", () => {
 
     expect(getNoteContentForComparisonMock).toHaveBeenCalledWith(
       NOTE_ID,
-      "user-123",
+      TEST_USER_ID,
     );
-    expect(getPendingReviewLogMock).toHaveBeenCalledWith(NOTE_ID, "user-123");
-    expect(result).toEqual({
+    expect(getPendingReviewLogMock).toHaveBeenCalledWith(NOTE_ID, TEST_USER_ID);
+
+    expect(result).toMatchObject({
       success: true,
       originalContent: "원본 내용",
       language: "markdown",
       userAnswer: "내 답안",
+      completionToken: expect.any(String),
     });
+
+    if (!result || !result.success) {
+      throw new Error("expected a successful comparison result");
+    }
+
+    expect(
+      verifyReviewCompletionToken(result.completionToken, {
+        noteId: NOTE_ID,
+        reviewLogId: REVIEW_LOG_ID,
+        userId: TEST_USER_ID,
+      }),
+    ).toBe(true);
   });
 });
 
@@ -211,18 +263,32 @@ describe("completeReviewAction", () => {
   it("returns an auth error when the user is not logged in", async () => {
     createClientMock.mockResolvedValue(createAuthSupabaseMock(null));
 
-    const formData = new FormData();
-    formData.set("noteId", NOTE_ID);
-    formData.set("reviewLogId", REVIEW_LOG_ID);
-
-    const result = await completeReviewAction(null, formData);
+    const result = await completeReviewAction(
+      null,
+      createCompleteReviewFormData(),
+    );
 
     expect(result).toEqual({ error: "로그인이 필요합니다." });
     expect(getReviewableNoteMock).not.toHaveBeenCalled();
   });
 
+  it("returns an error when the completion token is invalid", async () => {
+    createClientMock.mockResolvedValue(createAuthSupabaseMock(TEST_USER_ID));
+
+    const formData = createCompleteReviewFormData();
+    formData.set("completionToken", "forged-token");
+
+    const result = await completeReviewAction(null, formData);
+
+    expect(result).toEqual({
+      error: "답안을 제출한 뒤 원본을 확인하고 복습을 완료해주세요.",
+    });
+    expect(getReviewableNoteMock).not.toHaveBeenCalled();
+    expect(getPendingReviewLogMock).not.toHaveBeenCalled();
+  });
+
   it("returns an error when the pending review log does not match", async () => {
-    createClientMock.mockResolvedValue(createAuthSupabaseMock("user-123"));
+    createClientMock.mockResolvedValue(createAuthSupabaseMock(TEST_USER_ID));
     getReviewableNoteMock.mockResolvedValue({
       title: "테스트 노트",
       language: "markdown",
@@ -236,11 +302,10 @@ describe("completeReviewAction", () => {
       completed_at: null,
     });
 
-    const formData = new FormData();
-    formData.set("noteId", NOTE_ID);
-    formData.set("reviewLogId", REVIEW_LOG_ID);
-
-    const result = await completeReviewAction(null, formData);
+    const result = await completeReviewAction(
+      null,
+      createCompleteReviewFormData(),
+    );
 
     expect(result).toEqual({ error: "진행 중인 복습을 찾을 수 없습니다." });
   });
@@ -262,13 +327,9 @@ describe("completeReviewAction", () => {
       completed_at: null,
     });
 
-    const formData = new FormData();
-    formData.set("noteId", NOTE_ID);
-    formData.set("reviewLogId", REVIEW_LOG_ID);
-
-    await expect(completeReviewAction(null, formData)).rejects.toBe(
-      REDIRECT_ERROR,
-    );
+    await expect(
+      completeReviewAction(null, createCompleteReviewFormData()),
+    ).rejects.toBe(REDIRECT_ERROR);
 
     expect(rpcMock).toHaveBeenCalledWith("complete_review_and_schedule_next", {
       p_note_id: NOTE_ID,
@@ -300,13 +361,9 @@ describe("completeReviewAction", () => {
       completed_at: null,
     });
 
-    const formData = new FormData();
-    formData.set("noteId", NOTE_ID);
-    formData.set("reviewLogId", REVIEW_LOG_ID);
-
-    await expect(completeReviewAction(null, formData)).rejects.toBe(
-      REDIRECT_ERROR,
-    );
+    await expect(
+      completeReviewAction(null, createCompleteReviewFormData()),
+    ).rejects.toBe(REDIRECT_ERROR);
 
     expect(rpcMock).toHaveBeenCalledWith("complete_review_and_schedule_next", {
       p_note_id: NOTE_ID,
@@ -333,11 +390,10 @@ describe("completeReviewAction", () => {
       completed_at: null,
     });
 
-    const formData = new FormData();
-    formData.set("noteId", NOTE_ID);
-    formData.set("reviewLogId", REVIEW_LOG_ID);
-
-    const result = await completeReviewAction(null, formData);
+    const result = await completeReviewAction(
+      null,
+      createCompleteReviewFormData(),
+    );
 
     expect(result).toEqual({
       error: "복습 완료 처리에 실패했습니다. 잠시 후 다시 시도해주세요.",
@@ -347,15 +403,14 @@ describe("completeReviewAction", () => {
   });
 
   it("returns an error when a query throws", async () => {
-    createClientMock.mockResolvedValue(createAuthSupabaseMock("user-123"));
+    createClientMock.mockResolvedValue(createAuthSupabaseMock(TEST_USER_ID));
     getReviewableNoteMock.mockRejectedValue(new Error("db connection failed"));
     getPendingReviewLogMock.mockResolvedValue(null);
 
-    const formData = new FormData();
-    formData.set("noteId", NOTE_ID);
-    formData.set("reviewLogId", REVIEW_LOG_ID);
-
-    const result = await completeReviewAction(null, formData);
+    const result = await completeReviewAction(
+      null,
+      createCompleteReviewFormData(),
+    );
 
     expect(result).toEqual({
       error: "데이터를 불러오는 데 실패했습니다. 잠시 후 다시 시도해주세요.",
@@ -382,11 +437,10 @@ describe("completeReviewAction", () => {
       completed_at: null,
     });
 
-    const formData = new FormData();
-    formData.set("noteId", NOTE_ID);
-    formData.set("reviewLogId", REVIEW_LOG_ID);
-
-    const result = await completeReviewAction(null, formData);
+    const result = await completeReviewAction(
+      null,
+      createCompleteReviewFormData(),
+    );
 
     expect(result).toEqual({
       error: "복습 완료 처리에 실패했습니다. 잠시 후 다시 시도해주세요.",

@@ -23,6 +23,10 @@ type UseCodeMirrorOptions = {
   readOnly?: boolean;
 };
 
+function getReadOnlyExtensions(readOnly: boolean) {
+  return [EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)];
+}
+
 export function useCodeMirror({
   doc,
   language,
@@ -34,6 +38,7 @@ export function useCodeMirror({
   const editorViewRef = useRef<EditorView | null>(null);
   const languageCompartment = useRef(new Compartment());
   const ariaLabelCompartment = useRef(new Compartment());
+  const readOnlyCompartment = useRef(new Compartment());
   const onChangeRef = useRef(onChange);
 
   useEffect(() => {
@@ -47,9 +52,9 @@ export function useCodeMirror({
       doc,
       extensions: [
         syntaxHighlighting(defaultHighlightStyle),
-        ...(readOnly
-          ? [EditorState.readOnly.of(true), EditorView.editable.of(false)]
-          : [history(), keymap.of(historyKeymap)]),
+        history(),
+        keymap.of(historyKeymap),
+        readOnlyCompartment.current.of(getReadOnlyExtensions(readOnly)),
         languageCompartment.current.of(getLanguageExtension(language)),
         ariaLabelCompartment.current.of(getAriaLabelExtension(ariaLabel)),
         EditorView.updateListener.of((update) => {
@@ -91,6 +96,14 @@ export function useCodeMirror({
       ),
     });
   }, [language]);
+
+  useEffect(() => {
+    editorViewRef.current?.dispatch({
+      effects: readOnlyCompartment.current.reconfigure(
+        getReadOnlyExtensions(readOnly),
+      ),
+    });
+  }, [readOnly]);
 
   useEffect(() => {
     const view = editorViewRef.current;

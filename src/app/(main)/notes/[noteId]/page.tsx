@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
+import { Button } from "@/components/ui/button";
 import { NoteViewer } from "@/features/notes/components/NoteViewer";
 import { getNoteById } from "@/features/notes/queries";
-import { ROUTES } from "@/lib/constants/routes";
+import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
+import { getNoteReviewRoute, ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 import { formatDateTime } from "@/lib/utils/formatDate";
 
@@ -33,6 +36,19 @@ export default async function NoteDetailPage({
     notFound();
   }
 
+  const isReviewCompleted = note.review_round >= MAX_REVIEW_ROUND;
+  const isReviewDue =
+    !isReviewCompleted &&
+    note.next_review_at !== null &&
+    new Date(note.next_review_at).getTime() <= Date.now();
+  const reviewStatusMessage = isReviewCompleted
+    ? "1-3-7 복습을 모두 마쳤습니다."
+    : note.next_review_at
+      ? isReviewDue
+        ? "지금 백지 테스트를 진행할 수 있습니다."
+        : `다음 백지 테스트 예정 ${formatDateTime(note.next_review_at)}`
+      : "다음 복습 일정이 아직 준비되지 않았습니다.";
+
   return (
     <div className="mx-auto w-full max-w-4xl px-6 py-10 md:px-12">
       <header className="border-b border-border/60 pb-6">
@@ -40,11 +56,22 @@ export default async function NoteDetailPage({
           <span className="rounded-full bg-muted px-2 py-1 font-medium text-foreground">
             {note.language ?? "markdown"}
           </span>
+          <span className="rounded-full bg-muted px-2 py-1 font-medium text-foreground">
+            복습 {note.review_round} / {MAX_REVIEW_ROUND}
+          </span>
           <span>마지막 수정 {formatDateTime(note.updated_at)}</span>
         </div>
         <h1 className="mt-4 text-3xl font-bold text-foreground">
           {note.title}
         </h1>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <p className="text-sm text-muted-foreground">{reviewStatusMessage}</p>
+          {isReviewDue && (
+            <Button asChild size="sm">
+              <Link href={getNoteReviewRoute(noteId)}>백지 테스트 시작</Link>
+            </Button>
+          )}
+        </div>
       </header>
 
       <NoteViewer

@@ -71,7 +71,11 @@ export function BlankTestPage({
               넘어가세요.
             </p>
             <div className="mt-4">
-              <ReviewCompleteButton noteId={noteId} reviewLogId={reviewLogId} />
+              <ReviewCompleteButton
+                noteId={noteId}
+                reviewLogId={reviewLogId}
+                completionToken={comparisonState.completionToken}
+              />
             </div>
           </div>
         </section>
