@@ -314,13 +314,26 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
   it("TC-08. 이메일 한도 초과 후 같은 윈도우에서 계속 차단된다", async () => {
     const email = "tc08@example.com";
 
+    /**
+     * long window 한도 채우기
+     * - short window 영향을 제거하기 위해 요청 간 간격 확보
+     */
     for (let i = 0; i < EMAIL_LONG_LIMIT + 1; i++) {
       await sendRequest(`10.8.${i}.1`, email);
+      if (i < EMAIL_LONG_LIMIT) {
+        await vi.advanceTimersByTimeAsync(EMAIL_SHORT_WINDOW_MS + 1);
+      }
     }
 
     mockGenerateLink.mockClear();
 
+    /**
+     * 같은 long window 내 재시도는 계속 차단되어야 한다.
+     * - 각 재시도 전 short window를 명시적으로 만료시켜
+     *   차단 원인이 long window임을 고정한다.
+     */
     for (let i = 0; i < 3; i++) {
+      await vi.advanceTimersByTimeAsync(EMAIL_SHORT_WINDOW_MS + 1);
       const response = await sendRequest(`10.8.${i + 10}.1`, email);
       expect(response.status).toBe(429);
     }
