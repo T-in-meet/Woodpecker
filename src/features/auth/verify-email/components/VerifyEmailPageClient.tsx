@@ -5,13 +5,14 @@
  *
  * 설계 의도:
  * - 회원가입 완료 후 이메일 인증을 유도하는 단일 진입점 역할을 한다.
- * - 인증 메일 재발송 기능을 제공하며, 남용 방지를 위해 쿨다운과 rate limit을 처리한다.
+ * - 인증 메일 재발송 기능을 제공하며, 남용 방지를 위해 rate limit을 처리한다.
  * - auth-rules.md 정책에 따라 회원 상태(신규/미인증/인증)를 프론트에서 구분하지 않는다.
- *   → 서버 응답 코드나 상태로 계정 상태를 추론할 수 없도록 동일한 UX 흐름을 유지한다.
+ *   → 서버 응답 코드 기반으로도 계정 상태를 추론할 수 없도록 동일한 UX 흐름을 유지한다.
  *
  * rate limit 처리:
- * - auth-rules 스펙에 따라 클라이언트 측에서 쿨다운 타이머나 남은 시간을 추적하지 않는다.
- * - 오직 서버의 상태(429)에 따라 이벤트 기반의 전역 토스트 메시지(showToast)로만 피드백한다.
+ * - 클라이언트는 쿨다운 타이머나 남은 시간을 추적하지 않는다.
+ * - HTTP status(예: 429)에 의존하지 않고, 서버 response body의 `code`를 기준으로 처리한다.
+ * - rate limit 발생 시, 이벤트 기반의 전역 토스트 메시지(showToast)로만 피드백한다.
  */
 
 import { useForm } from "react-hook-form";
@@ -20,14 +21,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
+import {
+  GLOBAL_ERROR_MESSAGES,
+  isGlobalError,
+} from "@/features/auth/errors//globalError";
+import { UNKNOWN_ERROR_MESSAGE } from "@/features/auth/errors//unknownError";
+import {
+  isRateLimitError,
+  RATE_LIMIT_TOAST_MESSAGE,
+} from "@/features/auth/errors/rateLimitError";
 import { showToast } from "@/lib/utils/showToast";
 
 type FormValues = {
   email: string;
 };
-
-const RATE_LIMIT_TOAST_MESSAGE =
-  "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.";
 
 type Props = {
   // 이전 단계(회원가입)에서 전달받은 이메일을 input에 pre-fill하기 위해 사용한다.
@@ -56,17 +63,74 @@ export default function VerifyEmailPageClient({ email }: Props) {
 
       const body = (await res.json()) as { code: string };
 
-      if (res.status === 429) {
+      /**
+       * rate limit 에러 처리
+       *
+       * 동작:
+       * - 서버 응답 body의 `code`를 기반으로 rate limit 여부를 판별한다.
+       * - rate limit에 해당하면 사용자에게 공통 토스트 메시지를 노출하고 흐름을 중단한다.
+       *
+       * 설계 의도:
+       * - HTTP status(예: 429)에 의존하지 않고, response body contract(code) 기준으로 처리한다.
+       * - validation / global error와 구분되는 "도메인 에러 계층"으로 취급한다.
+       * - signup / resend 등 auth 전반에서 동일한 기준으로 처리한다.
+       *
+       * 주의:
+       * - 내부 정책(요청 횟수, window 등)은 외부에 노출하지 않는다.
+       */
+      if (isRateLimitError(body)) {
         showToast(RATE_LIMIT_TOAST_MESSAGE, "destructive");
         return;
       }
 
+      /**
+       * 성공 처리
+       *
+       * 동작:
+       * - 서버 response body의 `code`를 기반으로 성공 여부를 판별한다.
+       * - 성공 시 사용자에게 인증 메일 재발송 완료 토스트를 노출한다.
+       *
+       * 설계 의도:
+       * - HTTP status가 아닌 response body contract(code) 기준으로 성공을 판단한다.
+       * - 모든 auth 흐름에서 동일한 방식으로 응답을 해석하도록 일관성을 유지한다.
+       */
       if (body.code === AUTH_API_CODES.EMAIL_VERIFICATION_RESEND_SUCCESS) {
         showToast("인증 메일이 재발송되었습니다.");
       }
-    } catch (error) {
-      console.error("Failed to resend email:", error);
-      showToast("일시적인 오류가 발생했습니다.", "destructive");
+    } catch (e) {
+      console.error("Failed to resend email:", e);
+
+      /**
+       * 글로벌 에러 처리 (network, timeout 등)
+       *
+       * 동작:
+       * - 네트워크 실패, 타임아웃 등 transport/infra 계층의 에러를 처리한다.
+       * - 해당 에러 타입에 맞는 메시지를 토스트로 노출하고 흐름을 종료한다.
+       *
+       * 설계 의도:
+       * - 서버가 반환한 도메인 에러(response body 기반)와 구분한다.
+       * - rate limit, validation 등은 이 분기에서 처리하지 않는다.
+       *
+       * 주의:
+       * - 이 분기는 서버 응답 contract가 아닌, 클라이언트 환경/네트워크 문제를 다룬다.
+       */
+      if (isGlobalError(e)) {
+        showToast(GLOBAL_ERROR_MESSAGES[e.type], "destructive");
+        return;
+      }
+
+      /**
+       * fallback 처리 (unknown error)
+       *
+       * 동작:
+       * - 정의된 에러 타입으로 판별되지 않는 모든 예외를 처리한다.
+       * - 사용자에게 일반적인 오류 메시지를 토스트로 노출한다.
+       *
+       * 설계 의도:
+       * - 예상하지 못한 에러(contract 위반, 런타임 예외 등)에 대해
+       *   최소한의 사용자 피드백을 보장한다.
+       */
+      showToast(UNKNOWN_ERROR_MESSAGE, "destructive");
     }
   };
 
