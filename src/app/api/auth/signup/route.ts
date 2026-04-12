@@ -403,28 +403,18 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
 
   const tokenHash = data.properties?.hashed_token;
 
+  if (!tokenHash) {
+    console.error("Supabase generateLink(magiclink) returned no hashed token", {
+      email: normalizedEmail,
+    });
+    return failureResponse(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR);
+  }
+
   const signupUser = createdUser ?? data.user;
   const signupUserEmail = signupUser?.email ?? normalizedEmail;
 
   try {
-    if (tokenHash) {
-      await sendAuthEmail(normalizedEmail, tokenHash, "magiclink");
-    } else {
-      /**
-       * 일부 환경에서 generateLink 응답에 hashed_token이 누락될 수 있어
-       * magiclink 재발급 유틸로 한 번 더 시도한다.
-       *
-       * ⚠️ 실패하더라도 외부 응답은 성공 계약을 유지한다.
-       */
-      console.warn(
-        "Supabase generateLink(magiclink) returned no hashed token; fallback issueAuthEmailLinkAndSend",
-        { email: normalizedEmail },
-      );
-      await issueAuthEmailLinkAndSend({
-        type: "magiclink",
-        email: normalizedEmail,
-      });
-    }
+    await sendAuthEmail(normalizedEmail, tokenHash, "magiclink");
   } catch (error) {
     console.error("Failed to send signup magiclink email", {
       email: normalizedEmail,
