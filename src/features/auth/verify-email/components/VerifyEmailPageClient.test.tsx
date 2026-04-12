@@ -75,6 +75,14 @@ describe("VerifyEmailPageClient", () => {
     expect(screen.getByRole("textbox", { name: /이메일/i })).toHaveValue("");
   });
 
+  it("TC-12. email prop에 공백이 포함되면 trim된 값으로 pre-fill된다", () => {
+    render(<VerifyEmailPageClient email="  prefill@example.com  " />);
+
+    expect(screen.getByRole("textbox", { name: /이메일/i })).toHaveValue(
+      "prefill@example.com",
+    );
+  });
+
   it("TC-05. 이메일 입력 후 버튼 클릭 시 mutateAsync가 올바른 email로 호출된다", async () => {
     const user = userEvent.setup();
     render(<VerifyEmailPageClient />);

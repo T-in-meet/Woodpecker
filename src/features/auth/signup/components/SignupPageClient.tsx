@@ -59,7 +59,22 @@ export default function SignupPageClient() {
         /**
          * 서버 응답 기반 리다이렉트
          * - 프론트에서 경로를 추론하지 않음
+         *
+         * verify-email 예외 처리:
+         * - 인증 안내 페이지는 pre-fill UX를 위해 email query를 사용한다.
+         * - 서버가 내려준 redirectTo가 '/verify-email'인 경우에만
+         *   email을 querystring으로 보존해 전달한다.
+         *
+         * 설계 의도:
+         * - 라우팅 정책은 여전히 서버 응답(redirectTo)에 따르고,
+         *   클라이언트는 verify-email 케이스에서만 입력 편의 정보를 추가한다.
          */
+        if (response.data.redirectTo === "/verify-email") {
+          const query = new URLSearchParams({ email: response.data.email });
+          router.push(`/verify-email?${query.toString()}`);
+          return;
+        }
+
         router.push(response.data.redirectTo);
       }}
       /**

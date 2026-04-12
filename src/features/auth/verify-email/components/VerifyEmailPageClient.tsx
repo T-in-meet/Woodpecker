@@ -15,6 +15,7 @@
  * - rate limit 발생 시, 이벤트 기반의 전역 토스트 메시지(showToast)로만 피드백한다.
  */
 
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
@@ -47,13 +48,42 @@ type Props = {
 };
 
 export default function VerifyEmailPageClient({ email }: Props) {
+  /**
+   * pre-fill 입력값 정규화
+   *
+   * 목적:
+   * - URL query 기반 전달값의 앞뒤 공백 제거
+   * - 빈 값(undefined/null 포함)은 빈 문자열로 통일
+   *
+   * 설계 의도:
+   * - input 초기값과 제출값의 형태를 안정적으로 유지해
+   *   동일한 사용자 입력 경험을 보장한다.
+   */
+  const normalizedPrefillEmail = email?.trim() ?? "";
+
   const {
     register,
     handleSubmit,
+    reset,
     formState: { isSubmitting },
   } = useForm<FormValues>({
-    values: { email: email ?? "" },
+    defaultValues: { email: normalizedPrefillEmail },
   });
+
+  /**
+   * pre-fill 동기화
+   *
+   * 목적:
+   * - 클라이언트 내비게이션으로 `email` prop이 바뀌는 경우,
+   *   폼 input 값을 최신 prop과 일치시킨다.
+   *
+   * 설계 의도:
+   * - defaultValues는 최초 렌더 기준이므로
+   *   이후 prop 변화는 reset으로 명시적으로 반영한다.
+   */
+  useEffect(() => {
+    reset({ email: normalizedPrefillEmail });
+  }, [normalizedPrefillEmail, reset]);
 
   /**
    * 🔽 추가: resend mutation 훅 사용
