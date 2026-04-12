@@ -1,3 +1,44 @@
+DO $$
+DECLARE
+  v_duplicate_note_count integer;
+  v_duplicate_note_ids text;
+BEGIN
+  SELECT count(*)
+    INTO v_duplicate_note_count
+  FROM (
+    SELECT rl.note_id
+    FROM public.review_logs rl
+    WHERE rl.completed_at IS NULL
+    GROUP BY rl.note_id
+    HAVING count(*) > 1
+  ) duplicate_pending_notes;
+
+  SELECT string_agg(duplicate_pending_notes.note_id::text, ', ' ORDER BY duplicate_pending_notes.note_id::text)
+    INTO v_duplicate_note_ids
+  FROM (
+    SELECT rl.note_id
+    FROM public.review_logs rl
+    WHERE rl.completed_at IS NULL
+    GROUP BY rl.note_id
+    HAVING count(*) > 1
+    ORDER BY rl.note_id
+    LIMIT 10
+  ) duplicate_pending_notes;
+
+  -- Fail with an actionable error before the index build hides which note rows need cleanup.
+  IF v_duplicate_note_count > 0 THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'Cannot add review_logs_one_pending_per_note_idx while duplicate pending review_logs exist.',
+      DETAIL = format(
+        'Found %s note_id(s) with more than one pending review_log. Sample note_id(s): %s',
+        v_duplicate_note_count,
+        coalesce(v_duplicate_note_ids, '(none)')
+      ),
+      HINT = 'Deduplicate rows where completed_at IS NULL so each note_id has at most one pending review_log, then rerun this migration.';
+  END IF;
+END
+$$;
+
 CREATE UNIQUE INDEX IF NOT EXISTS review_logs_one_pending_per_note_idx
 ON public.review_logs (note_id)
 WHERE completed_at IS NULL;
