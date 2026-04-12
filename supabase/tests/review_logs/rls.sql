@@ -4,7 +4,7 @@
 -- TODO: confirm whether review_logs should remain immutable (no UPDATE/DELETE policies)
 BEGIN;
 
-SELECT plan(32);
+SELECT plan(33);
 
 -- 테스트용 UUID 준비
 SELECT set_config('test.user_a_id', gen_random_uuid()::text, true);
@@ -42,11 +42,11 @@ VALUES
   (current_setting('test.note_b1_id')::uuid, current_setting('test.user_b_id')::uuid, 'note b1', 'content b1', 0)
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO public.review_logs (id, note_id, user_id, round, scheduled_at)
+INSERT INTO public.review_logs (id, note_id, user_id, round, scheduled_at, completed_at)
 VALUES
-  (current_setting('test.review_log_a1_id')::uuid, current_setting('test.note_a1_id')::uuid, current_setting('test.user_a_id')::uuid, 1, now() + interval '1 day'),
-  (current_setting('test.review_log_a2_id')::uuid, current_setting('test.note_a2_id')::uuid, current_setting('test.user_a_id')::uuid, 2, now() + interval '2 days'),
-  (current_setting('test.review_log_b1_id')::uuid, current_setting('test.note_b1_id')::uuid, current_setting('test.user_b_id')::uuid, 1, now() + interval '3 days')
+  (current_setting('test.review_log_a1_id')::uuid, current_setting('test.note_a1_id')::uuid, current_setting('test.user_a_id')::uuid, 1, now() + interval '1 day', now()),
+  (current_setting('test.review_log_a2_id')::uuid, current_setting('test.note_a2_id')::uuid, current_setting('test.user_a_id')::uuid, 2, now() + interval '2 days', now()),
+  (current_setting('test.review_log_b1_id')::uuid, current_setting('test.note_b1_id')::uuid, current_setting('test.user_b_id')::uuid, 1, now() + interval '3 days', now())
 ON CONFLICT (id) DO NOTHING;
 
 -- =====================================================================
@@ -237,6 +237,31 @@ SELECT lives_ok(
   $$본인 note에 대한 첫 review_log INSERT는 성공해야 한다$$
 );
 ROLLBACK TO SAVEPOINT review_logs_insert_first;
+
+SAVEPOINT review_logs_insert_duplicate_pending;
+INSERT INTO public.review_logs (id, note_id, user_id, round, scheduled_at)
+VALUES (
+  gen_random_uuid(),
+  current_setting('test.note_a3_id')::uuid,
+  current_setting('test.user_a_id')::uuid,
+  1,
+  now() + interval '12 days'
+);
+
+SELECT throws_ok(
+  format(
+    $sql$
+      INSERT INTO public.review_logs (id, note_id, user_id, round, scheduled_at)
+      VALUES (gen_random_uuid(), '%s'::uuid, '%s'::uuid, 2, now() + interval '13 days');
+    $sql$,
+    current_setting('test.note_a3_id'),
+    current_setting('test.user_a_id')
+  ),
+  '23505',
+  NULL,
+  $$the same note cannot have two pending review logs$$
+);
+ROLLBACK TO SAVEPOINT review_logs_insert_duplicate_pending;
 
 -- 여러 note에 대한 반복 INSERT도 각각 성공해야 한다
 SAVEPOINT review_logs_insert_multiple;

@@ -214,6 +214,13 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      complete_review_and_schedule_next: {
+        Args: {
+          p_note_id: string;
+          p_review_log_id: string;
+        };
+        Returns: string;
+      };
       create_note_with_initial_review_log: {
         Args: {
           p_content: string;
