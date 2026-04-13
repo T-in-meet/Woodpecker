@@ -18,7 +18,6 @@ type BlankTestPageProps = {
   noteTitle: string;
   language: NoteLanguage | null;
   reviewRound: number;
-  reviewLogId: string;
 };
 
 export function BlankTestPage({
@@ -26,7 +25,6 @@ export function BlankTestPage({
   noteTitle,
   language,
   reviewRound,
-  reviewLogId,
 }: BlankTestPageProps) {
   const [answer, setAnswer] = useState("");
   const [state, formAction, isPending] = useActionState(
@@ -73,7 +71,7 @@ export function BlankTestPage({
             <div className="mt-4">
               <ReviewCompleteButton
                 noteId={noteId}
-                reviewLogId={reviewLogId}
+                reviewLogId={comparisonState.reviewLogId}
                 completionToken={comparisonState.completionToken}
               />
             </div>

@@ -32,6 +32,7 @@ export type SubmitAnswerActionState =
       originalContent: string;
       language: NoteLanguage | null;
       userAnswer: string;
+      reviewLogId: string;
       completionToken: string;
       error?: never;
     }
@@ -115,6 +116,7 @@ export async function submitAnswerAction(
     originalContent: note.content,
     language: note.language,
     userAnswer: parsed.data.answer,
+    reviewLogId: pendingReviewLog.id,
     completionToken,
   };
 }

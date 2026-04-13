@@ -59,7 +59,7 @@ export default async function NoteReviewPage({
             <p className="text-sm text-muted-foreground">
               {isCompleted
                 ? "필요하면 노트 상세 페이지에서 내용을 다시 확인해보세요."
-                : "현재 완료할 수 있는 리뷰 로그를 찾지 못했습니다. 노트 상세로 돌아가 상태를 확인해주세요."}
+                : "현재 진행할 리뷰 로그를 찾지 못했습니다. 노트 상세로 돌아가 상태를 확인해주세요."}
             </p>
 
             <Button asChild>
@@ -78,7 +78,6 @@ export default async function NoteReviewPage({
         noteTitle={note.title}
         language={note.language}
         reviewRound={pendingReviewLog.round}
-        reviewLogId={pendingReviewLog.id}
       />
     </div>
   );

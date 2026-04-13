@@ -15,7 +15,6 @@ function createReviewLogsQueryMock(data: unknown) {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
     is: vi.fn().mockReturnThis(),
-    lte: vi.fn().mockReturnThis(),
     order: vi.fn().mockReturnThis(),
     limit: vi.fn().mockReturnThis(),
     maybeSingle: vi.fn().mockResolvedValue({ data }),
@@ -40,12 +39,12 @@ describe("getPendingReviewLog", () => {
     vi.useRealTimers();
   });
 
-  it("filters pending review logs to only those that are due", async () => {
+  it("returns the pending review log even before its scheduled time", async () => {
     const { chain, supabase } = createReviewLogsQueryMock({
       id: "22222222-2222-4222-8222-222222222222",
       note_id: "11111111-1111-4111-8111-111111111111",
       round: 1,
-      scheduled_at: "2026-01-05T09:00:00.000Z",
+      scheduled_at: "2026-01-06T09:00:00.000Z",
       completed_at: null,
     });
 
@@ -57,15 +56,11 @@ describe("getPendingReviewLog", () => {
     );
 
     expect(supabase.from).toHaveBeenCalledWith("review_logs");
-    expect(chain.lte).toHaveBeenCalledWith(
-      "scheduled_at",
-      "2026-01-05T12:00:00.000Z",
-    );
     expect(result).toEqual({
       id: "22222222-2222-4222-8222-222222222222",
       note_id: "11111111-1111-4111-8111-111111111111",
       round: 1,
-      scheduled_at: "2026-01-05T09:00:00.000Z",
+      scheduled_at: "2026-01-06T09:00:00.000Z",
       completed_at: null,
     });
   });

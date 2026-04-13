@@ -226,6 +226,7 @@ describe("submitAnswerAction", () => {
       originalContent: "원본 내용",
       language: "markdown",
       userAnswer: "내 답안",
+      reviewLogId: REVIEW_LOG_ID,
       completionToken: expect.any(String),
     });
 

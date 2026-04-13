@@ -33,17 +33,13 @@ vi.mock("@/features/review/components/BlankTestPage", () => ({
   BlankTestPage: ({
     noteId,
     noteTitle,
-    reviewLogId,
     reviewRound,
   }: {
     noteId: string;
     noteTitle: string;
-    reviewLogId: string;
     reviewRound: number;
   }) => (
-    <div data-testid="blank-test-page">
-      {`${noteId}|${noteTitle}|${reviewLogId}|${reviewRound}`}
-    </div>
+    <div data-testid="blank-test-page">{`${noteId}|${noteTitle}|${reviewRound}`}</div>
   ),
 }));
 
@@ -172,7 +168,7 @@ describe("NoteReviewPage", () => {
       "user-123",
     );
     expect(screen.getByTestId("blank-test-page")).toHaveTextContent(
-      "11111111-1111-1111-1111-111111111111|테스트 노트|22222222-2222-2222-2222-222222222222|1",
+      "11111111-1111-1111-1111-111111111111|테스트 노트|1",
     );
   });
 });
