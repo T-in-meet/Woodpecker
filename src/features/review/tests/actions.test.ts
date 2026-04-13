@@ -49,6 +49,7 @@ vi.mock("../queries", () => ({
 import { completeReviewAction, submitAnswerAction } from "../actions";
 import {
   createReviewCompletionToken,
+  REVIEW_COMPLETION_TOKEN_TTL_SECONDS,
   verifyReviewCompletionToken,
 } from "../lib/reviewCompletionToken";
 
@@ -118,6 +119,9 @@ function createCompleteReviewFormData({
 
 describe("submitAnswerAction", () => {
   beforeEach(() => {
+    process.env["REVIEW_COMPLETION_TOKEN_SECRET"] = "test-review-secret";
+    delete process.env["EMAIL_TICKET_SECRET"];
+
     createClientMock.mockReset();
     getNoteContentForComparisonMock.mockReset();
     getPendingReviewLogMock.mockReset();
@@ -237,12 +241,41 @@ describe("submitAnswerAction", () => {
       }),
     ).toBe(true);
   });
+
+  it("fails closed when the review completion secret is missing", async () => {
+    createClientMock.mockResolvedValue(createAuthSupabaseMock(TEST_USER_ID));
+    getNoteContentForComparisonMock.mockResolvedValue({
+      content: "original content",
+      language: "markdown",
+    });
+    getPendingReviewLogMock.mockResolvedValue({
+      id: REVIEW_LOG_ID,
+      note_id: NOTE_ID,
+      round: 1,
+      scheduled_at: "2026-01-02T00:00:00.000Z",
+      completed_at: null,
+    });
+    delete process.env["REVIEW_COMPLETION_TOKEN_SECRET"];
+    process.env["EMAIL_TICKET_SECRET"] = "legacy-ticket-secret";
+
+    const formData = new FormData();
+    formData.set("noteId", NOTE_ID);
+    formData.set("answer", "user answer");
+
+    const result = await submitAnswerAction(null, formData);
+
+    expect(result).toMatchObject({
+      error: expect.any(String),
+    });
+  });
 });
 
 describe("completeReviewAction", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+    process.env["REVIEW_COMPLETION_TOKEN_SECRET"] = "test-review-secret";
+    delete process.env["EMAIL_TICKET_SECRET"];
 
     createClientMock.mockReset();
     getPendingReviewLogMock.mockReset();
@@ -282,6 +315,21 @@ describe("completeReviewAction", () => {
 
     expect(result).toEqual({
       error: "답안을 제출한 뒤 원본을 확인하고 복습을 완료해주세요.",
+    });
+    expect(getReviewableNoteMock).not.toHaveBeenCalled();
+    expect(getPendingReviewLogMock).not.toHaveBeenCalled();
+  });
+
+  it("returns an error when the completion token has expired", async () => {
+    createClientMock.mockResolvedValue(createAuthSupabaseMock(TEST_USER_ID));
+
+    const formData = createCompleteReviewFormData();
+    vi.advanceTimersByTime((REVIEW_COMPLETION_TOKEN_TTL_SECONDS + 1) * 1000);
+
+    const result = await completeReviewAction(null, formData);
+
+    expect(result).toMatchObject({
+      error: expect.any(String),
     });
     expect(getReviewableNoteMock).not.toHaveBeenCalled();
     expect(getPendingReviewLogMock).not.toHaveBeenCalled();

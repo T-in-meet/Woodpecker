@@ -3,27 +3,41 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 
 const REVIEW_COMPLETION_TOKEN_PURPOSE = "review-completion.v1";
+export const REVIEW_COMPLETION_TOKEN_TTL_SECONDS = 10 * 60;
 
-const reviewCompletionTokenPayloadSchema = z.object({
+const reviewCompletionTokenBasePayloadSchema = z.object({
   noteId: z.string().uuid(),
   reviewLogId: z.string().uuid(),
   userId: z.string().min(1),
 });
 
+const reviewCompletionTokenPayloadSchema =
+  reviewCompletionTokenBasePayloadSchema
+    .extend({
+      issuedAt: z.number().int().nonnegative(),
+      expiresAt: z.number().int().positive(),
+    })
+    .refine((payload) => payload.expiresAt > payload.issuedAt, {
+      message: "Review completion token expiration must be after issuance.",
+      path: ["expiresAt"],
+    });
+
 type ReviewCompletionTokenPayload = z.infer<
-  typeof reviewCompletionTokenPayloadSchema
+  typeof reviewCompletionTokenBasePayloadSchema
 >;
 
 function getReviewCompletionTokenSecret() {
-  const secret =
-    process.env.REVIEW_COMPLETION_TOKEN_SECRET ??
-    process.env.EMAIL_TICKET_SECRET;
+  const secret = process.env.REVIEW_COMPLETION_TOKEN_SECRET;
 
   if (!secret) {
     throw new Error("Review completion token secret is not configured.");
   }
 
   return secret;
+}
+
+function getCurrentUnixTimestamp() {
+  return Math.floor(Date.now() / 1000);
 }
 
 function signReviewCompletionTokenPayload(encodedPayload: string) {
@@ -35,9 +49,14 @@ function signReviewCompletionTokenPayload(encodedPayload: string) {
 export function createReviewCompletionToken(
   payload: ReviewCompletionTokenPayload,
 ) {
-  const encodedPayload = Buffer.from(JSON.stringify(payload)).toString(
-    "base64url",
-  );
+  const issuedAt = getCurrentUnixTimestamp();
+  const encodedPayload = Buffer.from(
+    JSON.stringify({
+      ...payload,
+      issuedAt,
+      expiresAt: issuedAt + REVIEW_COMPLETION_TOKEN_TTL_SECONDS,
+    }),
+  ).toString("base64url");
   const signature =
     signReviewCompletionTokenPayload(encodedPayload).toString("base64url");
 
@@ -92,6 +111,10 @@ export function verifyReviewCompletionToken(
     reviewCompletionTokenPayloadSchema.safeParse(rawPayload);
 
   if (!parsedPayload.success) {
+    return false;
+  }
+
+  if (parsedPayload.data.expiresAt <= getCurrentUnixTimestamp()) {
     return false;
   }
 
