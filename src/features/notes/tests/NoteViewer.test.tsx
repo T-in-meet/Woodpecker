@@ -45,6 +45,57 @@ describe("NoteViewer", () => {
     expect(link).toHaveAttribute("href", "https://openai.com");
   });
 
+  it("renders markdown images in readonly mode", async () => {
+    render(
+      <NoteViewer
+        content="![Architecture diagram](https://example.com/diagram.png)"
+        language="markdown"
+      />,
+    );
+
+    const image = await screen.findByRole("img", {
+      name: "Architecture diagram",
+    });
+
+    expect(image).toHaveAttribute("src", "https://example.com/diagram.png");
+  });
+
+  it("does not render markdown images with unsafe sources", async () => {
+    render(
+      <NoteViewer
+        content="![Unsafe image](javascript:alert(1))"
+        language="markdown"
+      />,
+    );
+
+    await waitFor(() => {
+      const editor = document.querySelector("[contenteditable='false']");
+      expect(editor).toBeTruthy();
+    });
+
+    expect(
+      screen.queryByRole("img", { name: "Unsafe image" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not render markdown images with relative sources", async () => {
+    render(
+      <NoteViewer
+        content="![Relative image](../api/internal.png)"
+        language="markdown"
+      />,
+    );
+
+    await waitFor(() => {
+      const editor = document.querySelector("[contenteditable='false']");
+      expect(editor).toBeTruthy();
+    });
+
+    expect(
+      screen.queryByRole("img", { name: "Relative image" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("renders code notes with syntax-highlighted markup", () => {
     const { container } = render(
       <NoteViewer content={"const answer = 42;"} language="typescript" />,

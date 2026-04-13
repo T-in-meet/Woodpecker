@@ -26,6 +26,26 @@ describe("MarkdownTaskItem custom extension", () => {
     expect(roundTrip(input).trim()).toBe(input);
   });
 
+  it("round-trips markdown images", () => {
+    const input = "![Architecture diagram](https://example.com/diagram.png)";
+    expect(roundTrip(input).trim()).toBe(input);
+  });
+
+  it("normalizes angle-bracket markdown image destinations during round-trip", () => {
+    const input =
+      "![Dog](<https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQDBqBsYdSaYjDuQTnKzZG-M-IxDEf8vA0bgA&s>)";
+    expect(roundTrip(input).trim()).toBe(
+      "![Dog](https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQDBqBsYdSaYjDuQTnKzZG-M-IxDEf8vA0bgA&s)",
+    );
+  });
+
+  it("normalizes bare markdown image hosts to https during round-trip", () => {
+    const input = "![Architecture diagram](example.com/diagram.png)";
+    expect(roundTrip(input).trim()).toBe(
+      "![Architecture diagram](https://example.com/diagram.png)",
+    );
+  });
+
   it("round-trips nested task lists (blank line between different indents)", () => {
     const input = "- [ ] parent\n  - [x] child";
     const result = roundTrip(input).trim();
@@ -174,6 +194,76 @@ describe("getReadOnlyTipTapExtensions", () => {
     });
 
     expect(editor.getHTML()).toContain('data-language="typescript"');
+    editor.destroy();
+  });
+
+  it("renders safe markdown images in readonly mode", () => {
+    const extensions = getReadOnlyTipTapExtensions();
+    const editor = new Editor({
+      extensions,
+      content: "![Architecture diagram](https://example.com/diagram.png)",
+      editable: false,
+    });
+
+    expect(editor.getHTML()).toContain("<img");
+    expect(editor.getHTML()).toContain('src="https://example.com/diagram.png"');
+
+    editor.destroy();
+  });
+
+  it("normalizes scheme-less markdown images in readonly mode", () => {
+    const extensions = getReadOnlyTipTapExtensions();
+    const editor = new Editor({
+      extensions,
+      content: "![Architecture diagram](example.com/diagram.png)",
+      editable: false,
+    });
+
+    expect(editor.getHTML()).toContain('src="https://example.com/diagram.png"');
+
+    editor.destroy();
+  });
+
+  it("renders angle-bracket markdown images in readonly mode", () => {
+    const extensions = getReadOnlyTipTapExtensions();
+    const editor = new Editor({
+      extensions,
+      content:
+        "![Dog](<https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQDBqBsYdSaYjDuQTnKzZG-M-IxDEf8vA0bgA&s>)",
+      editable: false,
+    });
+
+    expect(editor.getHTML()).toContain("<img");
+    expect(editor.getHTML()).toContain(
+      'src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQDBqBsYdSaYjDuQTnKzZG-M-IxDEf8vA0bgA&amp;s"',
+    );
+
+    editor.destroy();
+  });
+
+  it("filters localhost markdown images in readonly mode", () => {
+    const extensions = getReadOnlyTipTapExtensions();
+    const editor = new Editor({
+      extensions,
+      content: "![Local image](http://localhost:3000/diagram.png)",
+      editable: false,
+    });
+
+    expect(editor.getHTML()).not.toContain("<img");
+
+    editor.destroy();
+  });
+
+  it("filters unsafe markdown images in readonly mode", () => {
+    const extensions = getReadOnlyTipTapExtensions();
+    const editor = new Editor({
+      extensions,
+      content: "![Unsafe image](javascript:alert(1))",
+      editable: false,
+    });
+
+    expect(editor.getHTML()).not.toContain("<img");
+
     editor.destroy();
   });
 });
