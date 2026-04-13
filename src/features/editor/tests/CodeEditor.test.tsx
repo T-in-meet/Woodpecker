@@ -150,4 +150,51 @@ describe("CodeEditor", () => {
       );
     });
   });
+
+  it("updates editability when the readOnly prop changes", async () => {
+    const user = userEvent.setup();
+    const handleChange = vi.fn();
+
+    const { rerender } = render(
+      <CodeEditor
+        value="const lockedValue = 1;"
+        onChange={handleChange}
+        language="javascript"
+        readOnly
+      />,
+    );
+
+    await waitFor(() => {
+      expect(document.querySelector(".cm-editor")).toBeTruthy();
+    });
+
+    const initialContentElement = getEditorContentElement();
+    await user.click(initialContentElement);
+    await user.keyboard("x");
+
+    expect(handleChange).not.toHaveBeenCalled();
+    expect(initialContentElement.textContent).toContain(
+      "const lockedValue = 1;",
+    );
+
+    rerender(
+      <CodeEditor
+        value="const lockedValue = 1;"
+        onChange={handleChange}
+        language="javascript"
+      />,
+    );
+
+    const updatedContentElement = getEditorContentElement();
+    await user.click(updatedContentElement);
+    await user.keyboard("x");
+
+    await waitFor(() => {
+      expect(handleChange).toHaveBeenCalled();
+      expect(updatedContentElement.textContent).toContain(
+        "const lockedValue = 1;",
+      );
+      expect(updatedContentElement.textContent).toContain("x");
+    });
+  });
 });
