@@ -284,7 +284,16 @@ const SafeImage = Image.extend({
             return;
           }
 
-          serializeImage(state, node, parent, index);
+          const normalizedNode = node.type.create(
+            {
+              ...node.attrs,
+              src,
+            },
+            null,
+            node.marks,
+          );
+
+          serializeImage(state, normalizedNode, parent, index);
         },
         parse: {
           updateDOM(element: HTMLElement) {

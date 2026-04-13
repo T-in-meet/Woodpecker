@@ -70,6 +70,25 @@ describe("MarkdownTaskItem custom extension", () => {
     const input = "";
     expect(roundTrip(input).trim()).toBe("");
   });
+
+  it("normalizes programmatically inserted image URLs during serialization", () => {
+    const editor = createEditor("");
+
+    editor.commands.insertContent({
+      type: "image",
+      attrs: {
+        src: "example.com/diagram.png",
+        alt: "Architecture diagram",
+        title: null,
+      },
+    });
+
+    expect(serializeTipTapMarkdown(editor).trim()).toBe(
+      "![Architecture diagram](https://example.com/diagram.png)",
+    );
+
+    editor.destroy();
+  });
 });
 
 describe("MarkdownTaskItem — isPureTaskListElement edge cases", () => {

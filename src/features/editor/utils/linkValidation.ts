@@ -67,6 +67,10 @@ function hasAuthorityUserInfo(input: string): boolean {
   return authority.includes("@");
 }
 
+function hasUrlUserInfo(url: URL): boolean {
+  return url.username !== "" || url.password !== "";
+}
+
 function unwrapMarkdownLinkDestination(input: string): string {
   return input.startsWith("<") && input.endsWith(">")
     ? input.slice(1, -1).trim()
@@ -142,6 +146,7 @@ function normalizeAbsoluteImageSrc(input: string): string | null {
     const url = new URL(input);
 
     if (
+      hasUrlUserInfo(url) ||
       !ALLOWED_IMAGE_PROTOCOLS.has(url.protocol) ||
       !hasAllowedImageHostname(url.hostname)
     ) {

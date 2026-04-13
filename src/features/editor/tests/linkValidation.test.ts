@@ -29,6 +29,13 @@ describe("normalizeImageSrc", () => {
     );
   });
 
+  it("rejects image URLs with embedded credentials", () => {
+    expect(
+      normalizeImageSrc("https://user:pass@example.com/private.png"),
+    ).toBeNull();
+    expect(normalizeImageSrc("//user:pass@example.com/private.png")).toBeNull();
+  });
+
   it("rejects relative image paths", () => {
     expect(normalizeImageSrc("/image.png")).toBeNull();
     expect(normalizeImageSrc("./image.png")).toBeNull();
