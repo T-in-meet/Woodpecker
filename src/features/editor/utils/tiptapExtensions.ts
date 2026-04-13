@@ -1,9 +1,12 @@
 import {
   mergeAttributes,
+  nodeInputRule,
+  nodePasteRule,
   type NodeViewRenderer,
   type NodeViewRendererProps,
 } from "@tiptap/core";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
+import Image, { inputRegex as imageInputRegex } from "@tiptap/extension-image";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import {
@@ -14,6 +17,11 @@ import {
 } from "@tiptap/extension-table";
 import TaskItem from "@tiptap/extension-task-item";
 import TaskList from "@tiptap/extension-task-list";
+import {
+  defaultMarkdownSerializer,
+  type MarkdownSerializerState,
+} from "@tiptap/pm/markdown";
+import { type Node as ProseMirrorNode } from "@tiptap/pm/model";
 import StarterKit from "@tiptap/starter-kit";
 import go from "highlight.js/lib/languages/go";
 import javascript from "highlight.js/lib/languages/javascript";
@@ -24,7 +32,7 @@ import { createLowlight } from "lowlight";
 import { Markdown } from "tiptap-markdown";
 
 import { slashCommandSuggestionRender } from "../components/SlashCommandMenu";
-import { isSafeLinkHref } from "./linkValidation";
+import { isSafeLinkHref, normalizeImageSrc } from "./linkValidation";
 import { SlashCommand } from "./slashCommand";
 
 const lowlight = createLowlight();
@@ -145,6 +153,225 @@ const MarkdownTaskItem = TaskItem.extend({
   },
 });
 
+type SafeImageInputAttributesType = {
+  src: string;
+  alt: string | null;
+  title: string | null;
+};
+
+const safeImagePasteRegex =
+  /(?:^|\s)(!\[(.*?)\]\((<[^>\n]+>|\S+)(?:(?:\s+)["'](\S+)["'])?\))/g;
+
+function getSafeImageAttributes(
+  alt: unknown,
+  rawSrc: unknown,
+  title: unknown,
+): SafeImageInputAttributesType | null {
+  if (typeof rawSrc !== "string") {
+    return null;
+  }
+
+  const src = normalizeImageSrc(rawSrc);
+
+  if (!src) {
+    return null;
+  }
+
+  return {
+    src,
+    alt: typeof alt === "string" ? alt : null,
+    title: typeof title === "string" ? title : null,
+  };
+}
+
+function getSafeImageInputAttributes(match: {
+  data?: Record<string, unknown>;
+}): SafeImageInputAttributesType | false {
+  const src = typeof match.data?.src === "string" ? match.data.src : null;
+
+  if (!src) {
+    return false;
+  }
+
+  return {
+    src,
+    alt: typeof match.data?.alt === "string" ? match.data.alt : null,
+    title: typeof match.data?.title === "string" ? match.data.title : null,
+  };
+}
+
+function findSafeImageInputRuleMatch(text: string) {
+  const match = imageInputRegex.exec(text);
+
+  if (!match) {
+    return null;
+  }
+
+  const [, imageMarkdown, alt, rawSrc, title] = match;
+
+  if (typeof imageMarkdown !== "string" || typeof rawSrc !== "string") {
+    return null;
+  }
+
+  const data = getSafeImageAttributes(alt, rawSrc, title);
+
+  if (!data) {
+    return null;
+  }
+
+  return {
+    index: match.index ?? 0,
+    text: match[0],
+    replaceWith: imageMarkdown,
+    data,
+  };
+}
+
+function findSafeImagePasteRuleMatches(text: string) {
+  const matches = Array.from(text.matchAll(safeImagePasteRegex));
+
+  return matches.flatMap((match) => {
+    const [, imageMarkdown, alt, rawSrc, title] = match;
+
+    if (typeof imageMarkdown !== "string") {
+      return [];
+    }
+
+    const data = getSafeImageAttributes(alt, rawSrc, title);
+
+    if (!data) {
+      return [];
+    }
+
+    const fullMatch = typeof match[0] === "string" ? match[0] : imageMarkdown;
+    const imageMarkdownOffset = fullMatch.lastIndexOf(imageMarkdown);
+
+    return [
+      {
+        index: (match.index ?? 0) + Math.max(0, imageMarkdownOffset),
+        text: imageMarkdown,
+        data,
+      },
+    ];
+  });
+}
+
+const SafeImage = Image.extend({
+  addStorage() {
+    return {
+      markdown: {
+        // tiptap-markdown reads node-specific storage.markdown hooks during
+        // parse/serialize, so image sanitization lives here to cover every
+        // markdown entry point with the same validator.
+        serialize(
+          state: MarkdownSerializerState,
+          node: ProseMirrorNode,
+          parent: ProseMirrorNode,
+          index: number,
+        ) {
+          const src =
+            typeof node.attrs.src === "string"
+              ? normalizeImageSrc(node.attrs.src)
+              : null;
+
+          if (!src) {
+            return;
+          }
+
+          const serializeImage = defaultMarkdownSerializer.nodes.image;
+
+          if (!serializeImage) {
+            return;
+          }
+
+          const normalizedNode = node.type.create(
+            {
+              ...node.attrs,
+              src,
+            },
+            null,
+            node.marks,
+          );
+
+          serializeImage(state, normalizedNode, parent, index);
+        },
+        parse: {
+          updateDOM(element: HTMLElement) {
+            for (const image of element.querySelectorAll("img[src]")) {
+              if (!(image instanceof HTMLImageElement)) continue;
+
+              const src = image.getAttribute("src");
+              const normalizedSrc =
+                typeof src === "string" ? normalizeImageSrc(src) : null;
+
+              if (!normalizedSrc) {
+                image.remove();
+                continue;
+              }
+
+              image.setAttribute("src", normalizedSrc);
+            }
+          },
+        },
+      },
+    };
+  },
+  renderHTML({ HTMLAttributes }) {
+    const src =
+      typeof HTMLAttributes.src === "string"
+        ? normalizeImageSrc(HTMLAttributes.src)
+        : null;
+
+    if (!src) {
+      return ["span", { "data-invalid-image": "true", hidden: "hidden" }];
+    }
+
+    return [
+      "img",
+      mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, { src }),
+    ];
+  },
+  addCommands() {
+    return {
+      setImage:
+        (options) =>
+        ({ commands }) => {
+          const src = normalizeImageSrc(options.src);
+
+          if (!src) {
+            return false;
+          }
+
+          return commands.insertContent({
+            type: this.name,
+            attrs: {
+              ...options,
+              src,
+            },
+          });
+        },
+    };
+  },
+  addInputRules() {
+    return [
+      nodeInputRule({
+        find: findSafeImageInputRuleMatch,
+        type: this.type,
+        getAttributes: getSafeImageInputAttributes,
+      }),
+    ];
+  },
+  addPasteRules() {
+    return [
+      nodePasteRule({
+        find: findSafeImagePasteRuleMatches,
+        type: this.type,
+        getAttributes: getSafeImageInputAttributes,
+      }),
+    ];
+  },
+});
+
 function getBaseExtensions({ readOnly = false }: { readOnly?: boolean } = {}) {
   return [
     StarterKit.configure({
@@ -169,6 +396,12 @@ function getBaseExtensions({ readOnly = false }: { readOnly?: boolean } = {}) {
         ];
       },
     }).configure({ lowlight }),
+    SafeImage.configure({
+      allowBase64: false,
+      HTMLAttributes: {
+        class: "tiptap-image",
+      },
+    }),
     Link.configure({
       isAllowedUri: (url) => isSafeLinkHref(url),
       openOnClick: readOnly,
