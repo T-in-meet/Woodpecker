@@ -28,7 +28,7 @@ async function submitValidSignupForm(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: /이용약관 보기/i }));
   const termsDialog = await screen.findByRole("dialog");
   await user.click(
-    within(termsDialog).getByRole("button", { name: /Agree and continue/i }),
+    within(termsDialog).getByRole("button", { name: /동의하기/i }),
   );
   // 즉시 언마운트/애니메이션 지연 모두 허용
   await waitFor(() => {
@@ -40,7 +40,7 @@ async function submitValidSignupForm(user: ReturnType<typeof userEvent.setup>) {
   );
   const privacyDialog = await screen.findByRole("dialog");
   await user.click(
-    within(privacyDialog).getByRole("button", { name: /Agree and continue/i }),
+    within(privacyDialog).getByRole("button", { name: /동의하기/i }),
   );
   // 즉시 언마운트/애니메이션 지연 모두 허용
   await waitFor(() => {
@@ -216,7 +216,7 @@ describe("PR-UI-13: SignupPageClient submit → mutateAsync → redirectTo 연�
     await user.click(screen.getByRole("button", { name: /이용약관 보기/i }));
     const termsDialog = await screen.findByRole("dialog");
     await user.click(
-      within(termsDialog).getByRole("button", { name: /Agree and continue/i }),
+      within(termsDialog).getByRole("button", { name: /동의하기/i }),
     );
     // 즉시 언마운트/애니메이션 지연 모두 허용
     await waitFor(() => {
@@ -229,7 +229,7 @@ describe("PR-UI-13: SignupPageClient submit → mutateAsync → redirectTo 연�
     const privacyDialog = await screen.findByRole("dialog");
     await user.click(
       within(privacyDialog).getByRole("button", {
-        name: /Agree and continue/i,
+        name: /동의하기/i,
       }),
     );
     // 즉시 언마운트/애니메이션 지연 모두 허용

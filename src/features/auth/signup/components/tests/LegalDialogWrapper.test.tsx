@@ -117,7 +117,7 @@ describe("LegalDialogWrapper", () => {
     expect(screen.getByText(/개인정보의 처리 목적/i)).toBeInTheDocument();
   });
 
-  it('TC-06: "Agree and continue" 클릭 시 onAgree 콜백이 호출된다', async () => {
+  it('TC-06: "동의하기" 클릭 시 onAgree 콜백이 호출된다', async () => {
     const user = userEvent.setup();
 
     render(
@@ -131,14 +131,12 @@ describe("LegalDialogWrapper", () => {
       />,
     );
 
-    await user.click(
-      screen.getByRole("button", { name: /Agree and continue/i }),
-    );
+    await user.click(screen.getByRole("button", { name: /동의하기/i }));
 
     expect(mockOnAgree).toHaveBeenCalled();
   });
 
-  it('TC-07: "Agree and continue" 클릭 시 모달이 닫힌다', async () => {
+  it('TC-07: "동의하기" 클릭 시 모달이 닫힌다', async () => {
     const user = userEvent.setup();
 
     render(
@@ -152,9 +150,7 @@ describe("LegalDialogWrapper", () => {
       />,
     );
 
-    await user.click(
-      screen.getByRole("button", { name: /Agree and continue/i }),
-    );
+    await user.click(screen.getByRole("button", { name: /동의하기/i }));
 
     expect(mockOnOpenChange).toHaveBeenCalledWith(false);
   });

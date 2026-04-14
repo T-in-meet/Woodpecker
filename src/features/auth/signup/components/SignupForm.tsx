@@ -256,16 +256,24 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
    */
   const handleTermsOpenChange = (open: boolean) => {
     setTermsModalOpen(open);
-    if (!open) setTermsInteractionEnabled(true);
+    if (!open) {
+      setTermsInteractionEnabled(true);
+      // Label 경유 플래그는 닫힘 시 리셋하여 다음 오픈에서 stale 상태를 방지
+      setTermsOpenedByLabel(false);
+    }
   };
 
   const handlePrivacyOpenChange = (open: boolean) => {
     setPrivacyModalOpen(open);
-    if (!open) setPrivacyInteractionEnabled(true);
+    if (!open) {
+      setPrivacyInteractionEnabled(true);
+      // Label 경유 플래그는 닫힘 시 리셋하여 다음 오픈에서 stale 상태를 방지
+      setPrivacyOpenedByLabel(false);
+    }
   };
 
   /**
-   * "Agree and continue" 클릭 시 체크박스 체크
+   * "동의하기" 클릭 시 체크박스 체크
    * 이유: onAgree에서 setValue("termsOfService", true)를 호출하기 때문
    */
   const handleTermsAgree = () => {
@@ -377,6 +385,10 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
         data-testid="agreements-container"
         className="grid grid-cols-1 md:grid-cols-2 gap-4"
       >
+        <p className="md:col-span-2 text-sm text-muted-foreground">
+          약관 확인 후 체크해주세요
+        </p>
+
         {/* 이용약관 */}
         <div data-testid="terms-of-service-field" className="space-y-2">
           <div
@@ -472,7 +484,19 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
             <p
               id="terms-of-service-error"
               role="alert"
-              className="text-red-500"
+              className="text-red-500 cursor-pointer"
+              onClick={() => {
+                setTermsOpenedByLabel(false);
+                setTermsModalOpen(true);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setTermsOpenedByLabel(false);
+                  setTermsModalOpen(true);
+                }
+              }}
+              tabIndex={0}
             >
               {errors.termsOfService.message}
             </p>
@@ -565,7 +589,23 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
           </div>
 
           {errors.privacyPolicy && (
-            <p id="privacy-policy-error" role="alert" className="text-red-500">
+            <p
+              id="privacy-policy-error"
+              role="alert"
+              className="text-red-500 cursor-pointer"
+              onClick={() => {
+                setPrivacyOpenedByLabel(false);
+                setPrivacyModalOpen(true);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setPrivacyOpenedByLabel(false);
+                  setPrivacyModalOpen(true);
+                }
+              }}
+              tabIndex={0}
+            >
               {errors.privacyPolicy.message}
             </p>
           )}

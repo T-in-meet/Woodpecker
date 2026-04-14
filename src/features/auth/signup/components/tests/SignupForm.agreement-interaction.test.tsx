@@ -35,10 +35,8 @@ describe("회원가입 폼 동의 상호작용", () => {
     // 이유: interactionEnabled=false 상태에서 체크박스 클릭은 모달을 열어야 함
     await user.click(termsCheckbox);
 
-    // 모달 열림 확인 — "Agree and continue" 버튼이 보여야 함
-    expect(
-      screen.getByRole("button", { name: /Agree and continue/i }),
-    ).toBeVisible();
+    // 모달 열림 확인 — "동의하기" 버튼이 보여야 함
+    expect(screen.getByRole("button", { name: /동의하기/i })).toBeVisible();
   });
 
   it("TC-03: 초기 렌더 시 이용약관 라벨 클릭 → 이용약관 모달이 열린다", async () => {
@@ -50,9 +48,7 @@ describe("회원가입 폼 동의 상호작용", () => {
     // 이유: Label도 마찬가지로 interactionEnabled=false에서는 모달을 열어야 함
     await user.click(termsLabel);
 
-    expect(
-      screen.getByRole("button", { name: /Agree and continue/i }),
-    ).toBeVisible();
+    expect(screen.getByRole("button", { name: /동의하기/i })).toBeVisible();
   });
 
   it("TC-04: 초기 렌더 시 이용약관 체크박스에 Space 키 입력 → 이용약관 모달이 열린다", async () => {
@@ -65,9 +61,7 @@ describe("회원가입 폼 동의 상호작용", () => {
     // 이유: 키보드로도 disabled 우회를 방지하기 위해 인터셉트
     await user.keyboard(" ");
 
-    expect(
-      screen.getByRole("button", { name: /Agree and continue/i }),
-    ).toBeVisible();
+    expect(screen.getByRole("button", { name: /동의하기/i })).toBeVisible();
   });
 
   it("TC-05: 이용약관 모달을 동의 없이 닫으면 체크박스의 aria-disabled가 제거된다", async () => {
@@ -76,9 +70,7 @@ describe("회원가입 폼 동의 상호작용", () => {
 
     // 모달 열기
     await user.click(screen.getByTestId("terms-of-service-checkbox"));
-    expect(
-      screen.getByRole("button", { name: /Agree and continue/i }),
-    ).toBeVisible();
+    expect(screen.getByRole("button", { name: /동의하기/i })).toBeVisible();
 
     // 닫기 버튼으로 모달 닫기 (동의 없이)
     // 이유: 모달을 열고 닫기만 해도 interactionEnabled=true로 전환 (스펙 명시)
@@ -138,18 +130,16 @@ describe("회원가입 폼 동의 상호작용", () => {
     });
   });
 
-  it('TC-08: "Agree and continue" 클릭 시 이용약관 체크박스가 체크 상태가 된다', async () => {
+  it('TC-08: "동의하기" 클릭 시 이용약관 체크박스가 체크 상태가 된다', async () => {
     const user = userEvent.setup();
     renderSignupForm();
 
     // 모달 열기
     await user.click(screen.getByTestId("terms-of-service-checkbox"));
 
-    // "Agree and continue" 클릭
+    // "동의하기" 클릭
     // 이유: onAgree 콜백에서 setValue("termsOfService", true)를 호출하기 때문
-    await user.click(
-      screen.getByRole("button", { name: /Agree and continue/i }),
-    );
+    await user.click(screen.getByRole("button", { name: /동의하기/i }));
 
     // 체크박스가 체크된 상태 확인
     const termsCheckbox = screen.getByTestId("terms-of-service-checkbox");
@@ -158,25 +148,21 @@ describe("회원가입 폼 동의 상호작용", () => {
     });
   });
 
-  it('TC-09: "Agree and continue" 후 모달이 닫힌다', async () => {
+  it('TC-09: "동의하기" 후 모달이 닫힌다', async () => {
     const user = userEvent.setup();
     renderSignupForm();
 
     // 모달 열기
     await user.click(screen.getByTestId("terms-of-service-checkbox"));
-    expect(
-      screen.getByRole("button", { name: /Agree and continue/i }),
-    ).toBeVisible();
+    expect(screen.getByRole("button", { name: /동의하기/i })).toBeVisible();
 
-    // "Agree and continue" 클릭
-    await user.click(
-      screen.getByRole("button", { name: /Agree and continue/i }),
-    );
+    // "동의하기" 클릭
+    await user.click(screen.getByRole("button", { name: /동의하기/i }));
 
     // 모달 닫힘 확인
     await waitFor(() => {
       expect(
-        screen.queryByRole("button", { name: /Agree and continue/i }),
+        screen.queryByRole("button", { name: /동의하기/i }),
       ).not.toBeInTheDocument();
     });
   });
@@ -221,9 +207,7 @@ describe("회원가입 폼 동의 상호작용", () => {
 
     // 모달 열고 동의하기
     await user.click(screen.getByTestId("terms-of-service-checkbox"));
-    await user.click(
-      screen.getByRole("button", { name: /Agree and continue/i }),
-    );
+    await user.click(screen.getByRole("button", { name: /동의하기/i }));
 
     const termsCheckbox = screen.getByTestId("terms-of-service-checkbox");
     await waitFor(() => {
@@ -241,6 +225,7 @@ describe("회원가입 폼 동의 상호작용", () => {
 
   it('TC-13: reset 이후 aria-disabled="true" 상태가 복원된다', async () => {
     const user = userEvent.setup();
+    renderSignupForm();
 
     // 모달 열고 닫기
     await user.click(screen.getByTestId("terms-of-service-checkbox"));

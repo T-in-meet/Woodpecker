@@ -56,7 +56,7 @@ describe("회원가입 폼 동의 상호작용 + Validation", () => {
     await user.click(screen.getByRole("button", { name: /닫기/i }));
 
     // 이제 termsCheckbox는 체크되지 않은 상태
-    // (모달을 열기만 했고 "Agree and continue"를 누르지 않음)
+    // (모달을 열기만 했고 "동의하기"를 누르지 않음)
     await waitFor(() => {
       expect(termsCheckbox).not.toBeChecked();
     });
@@ -72,7 +72,7 @@ describe("회원가입 폼 동의 상호작용 + Validation", () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
-  it('TC-03: "Agree and continue" 후 폼 제출 시 약관 에러가 표시되지 않는다', async () => {
+  it('TC-03: "동의하기" 후 폼 제출 시 약관 에러가 표시되지 않는다', async () => {
     const user = userEvent.setup();
     const { onSubmit } = renderSignupForm();
 
@@ -82,21 +82,17 @@ describe("회원가입 폼 동의 상호작용 + Validation", () => {
     await user.type(screen.getByLabelText(/비밀번호 확인/i), "Test@1234");
     await user.type(screen.getByLabelText(/닉네임/i), "testuser");
 
-    // 이용약관 모달 열기 → "Agree and continue" 클릭
+    // 이용약관 모달 열기 → "동의하기" 클릭
     // 이유: onAgree에서 setValue("termsOfService", true)를 호출하므로
     //       체크박스가 checked=true가 됨
     const termsCheckbox = screen.getByTestId("terms-of-service-checkbox");
     await user.click(termsCheckbox);
-    await user.click(
-      screen.getByRole("button", { name: /Agree and continue/i }),
-    );
+    await user.click(screen.getByRole("button", { name: /동의하기/i }));
 
     // 개인정보도 동의하기
     const privacyCheckbox = screen.getByTestId("privacy-policy-checkbox");
     await user.click(privacyCheckbox);
-    await user.click(
-      screen.getByRole("button", { name: /Agree and continue/i }),
-    );
+    await user.click(screen.getByRole("button", { name: /동의하기/i }));
 
     // 두 체크박스 모두 체크된 상태 확인
     await waitFor(() => {
@@ -136,9 +132,7 @@ describe("회원가입 폼 동의 상호작용 + Validation", () => {
     // 이용약관 모달 열고 동의하기
     const termsCheckbox = screen.getByTestId("terms-of-service-checkbox");
     await user.click(termsCheckbox);
-    await user.click(
-      screen.getByRole("button", { name: /Agree and continue/i }),
-    );
+    await user.click(screen.getByRole("button", { name: /동의하기/i }));
 
     // 체크 상태 확인
     await waitFor(() => {
@@ -156,9 +150,7 @@ describe("회원가입 폼 동의 상호작용 + Validation", () => {
     // 개인정보는 동의하기
     const privacyCheckbox = screen.getByTestId("privacy-policy-checkbox");
     await user.click(privacyCheckbox);
-    await user.click(
-      screen.getByRole("button", { name: /Agree and continue/i }),
-    );
+    await user.click(screen.getByRole("button", { name: /동의하기/i }));
 
     // 폼 제출
     await user.click(screen.getByRole("button", { name: /회원가입/i }));

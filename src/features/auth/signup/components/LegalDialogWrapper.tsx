@@ -28,7 +28,7 @@ type LegalDialogWrapperProps = {
  * 책임:
  * - Radix Dialog 기반의 모달 UI 렌더링
  * - 법적 콘텐츠(약관/개인정보) 렌더링
- * - "Agree and continue" 버튼 → onAgree 콜백
+ * - "동의하기" 버튼 → onAgree 콜백
  * - focus restore fallback 처리 (Label 클릭 경유 시)
  *
  * 제외:
@@ -85,7 +85,7 @@ export function LegalDialogWrapper({
       <RadixDialog.Portal>
         <RadixDialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
         <RadixDialog.Content
-          className="fixed left-1/2 top-1/2 z-50 w-[90vw] max-w-2xl -translate-x-1/2 -translate-y-1/2 rounded-lg bg-background p-6 shadow-lg max-h-[85vh] overflow-y-auto"
+          className="fixed left-1/2 top-1/2 z-50 flex max-h-[85vh] w-[90vw] max-w-2xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg bg-background p-6 shadow-lg"
           aria-describedby={`${agreementType}-description`}
         >
           <RadixDialog.Title className="text-lg font-semibold mb-4">
@@ -98,7 +98,7 @@ export function LegalDialogWrapper({
           </div>
 
           {/* 법적 콘텐츠 — 스크롤 가능한 영역 */}
-          <div className="overflow-y-auto mb-6">
+          <div className="relative mb-4 min-h-0 flex-1 overflow-y-auto">
             <div className="prose dark:prose-invert max-w-none space-y-6">
               {contentSections.map((section) => (
                 <div key={section.article}>
@@ -123,19 +123,21 @@ export function LegalDialogWrapper({
           </div>
 
           {/* 푸터: 동작 버튼 */}
-          <div className="mt-6 flex justify-end gap-2">
-            <RadixDialog.Close asChild>
-              <Button type="button" variant="ghost">
-                닫기
+          <div className="sticky bottom-0 z-10 -mx-6 border-t bg-background px-6 pt-4">
+            <div className="flex justify-end gap-2">
+              <RadixDialog.Close asChild>
+                <Button type="button" variant="ghost">
+                  닫기
+                </Button>
+              </RadixDialog.Close>
+              <Button
+                type="button"
+                onClick={handleAgree}
+                className="bg-blue-500 text-white hover:bg-blue-600"
+              >
+                동의하기
               </Button>
-            </RadixDialog.Close>
-            <Button
-              type="button"
-              onClick={handleAgree}
-              className="bg-blue-500 text-white hover:bg-blue-600"
-            >
-              Agree and continue
-            </Button>
+            </div>
           </div>
         </RadixDialog.Content>
       </RadixDialog.Portal>
