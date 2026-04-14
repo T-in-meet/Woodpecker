@@ -10,6 +10,27 @@
  * - ipStore: Map<ip, WindowEntry>
  * - emailStore: Map<normalizedEmail, EmailEligibilityEntry>
  *
+ * 운영 한계(중요):
+ * - 이 저장소는 프로세스 메모리 기반(single-process) 구현이다.
+ * - 따라서 멀티 인스턴스/서버리스 환경에서는 인스턴스별 카운터가 분리되어
+ *   전역 rate limit 정확도가 낮아지는 best-effort 방식으로 동작한다.
+ *
+ * 현재 선택 이유:
+ * - MVP 단계에서의 단순성과 낮은 지연(latency)을 고려한 의도적인 선택이다.
+ * - 외부 저장소 없이 빠르게 동작하는 대신, best-effort 수준의 rate limit만 보장한다.
+ *
+ * 보안 범위:
+ * - 이 방식은 다중 인스턴스 환경에서 strict한 rate limit을 보장하지 않는다.
+ * - 현재는 기본적인 abuse 방지 수준에서는 허용되지만,
+ *   높은 보안 요구사항이나 공격 빈도가 높은 환경에서는 충분하지 않다.
+ *
+ * TODO(스케일 아웃 전환 기준):
+ * - Upstash Redis 같은 외부 공유 저장소로 전환한다.
+ * - 전환 트리거(예시):
+ *   1) 동시 활성 인스턴스가 2개 이상으로 유지되는 환경(예: Vercel scale-out)
+ *   2) auth 요청량이 분당 1,000건 이상으로 증가해 인스턴스 간 편차가 관측되는 시점
+ *   3) 보안/컴플라이언스 요구사항상 "전역 일관 rate limit"이 필수인 시점
+ *
  * EmailEligibilityEntry는 즉시 재시도 억제와 사용자 수준 rate limiting을 분리합니다:
  * - shortWindow: null | WindowEntry (쿨다운 대체 — 즉각적인 재시도 억제)
  * - longWindow: null | WindowEntry (회원가입 + 재전송이 공유하는 계정 수준 제한)
@@ -39,6 +60,7 @@ export type EmailEligibilityEntry = {
  * IP 기반 rate limit 저장소 (인메모리)
  * - Key: IP 주소 (문자열 그대로)
  * - Value: WindowEntry
+ * - 특성: single-process best-effort (멀티 인스턴스 간 공유되지 않음)
  */
 export const ipStore = new Map<string, WindowEntry>();
 
@@ -46,6 +68,7 @@ export const ipStore = new Map<string, WindowEntry>();
  * 이메일 기반 적격성 저장소 (인메모리)
  * - Key: 소문자로 정규화된 이메일
  * - Value: EmailEligibilityEntry (short + long 윈도우)
+ * - 특성: single-process best-effort (멀티 인스턴스 간 공유되지 않음)
  *
  * 설계 이유:
  * - 지연 초기화(Lazy initialization): 요청이 허용될 때만 항목 확정
