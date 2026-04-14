@@ -62,14 +62,14 @@ VALUES
   (current_setting('test.constraints_not_null_created_note_a1')::uuid, current_setting('test.constraints_not_null_created_user_a')::uuid, 'not null created a1', 'content', 1)
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO public.review_logs (id, note_id, user_id, round, scheduled_at)
+INSERT INTO public.review_logs (id, note_id, user_id, round, scheduled_at, completed_at)
 VALUES
-  (current_setting('test.constraints_round_log_valid')::uuid, current_setting('test.constraints_round_note_a1')::uuid, current_setting('test.constraints_round_user_a')::uuid, 2, now() + interval '1 day'),
-  (current_setting('test.constraints_not_null_note_log_valid')::uuid, current_setting('test.constraints_not_null_note_note_a1')::uuid, current_setting('test.constraints_not_null_note_user_a')::uuid, 1, now() + interval '2 days'),
-  (current_setting('test.constraints_not_null_user_log_valid')::uuid, current_setting('test.constraints_not_null_user_note_a1')::uuid, current_setting('test.constraints_not_null_user_user_a')::uuid, 1, now() + interval '3 days'),
-  (current_setting('test.constraints_not_null_round_log_valid')::uuid, current_setting('test.constraints_not_null_round_note_a1')::uuid, current_setting('test.constraints_not_null_round_user_a')::uuid, 1, now() + interval '4 days'),
-  (current_setting('test.constraints_not_null_scheduled_log_valid')::uuid, current_setting('test.constraints_not_null_scheduled_note_a1')::uuid, current_setting('test.constraints_not_null_scheduled_user_a')::uuid, 1, now() + interval '5 days'),
-  (current_setting('test.constraints_not_null_created_log_valid')::uuid, current_setting('test.constraints_not_null_created_note_a1')::uuid, current_setting('test.constraints_not_null_created_user_a')::uuid, 1, now() + interval '6 days')
+  (current_setting('test.constraints_round_log_valid')::uuid, current_setting('test.constraints_round_note_a1')::uuid, current_setting('test.constraints_round_user_a')::uuid, 2, now() + interval '1 day', now()),
+  (current_setting('test.constraints_not_null_note_log_valid')::uuid, current_setting('test.constraints_not_null_note_note_a1')::uuid, current_setting('test.constraints_not_null_note_user_a')::uuid, 1, now() + interval '2 days', now()),
+  (current_setting('test.constraints_not_null_user_log_valid')::uuid, current_setting('test.constraints_not_null_user_note_a1')::uuid, current_setting('test.constraints_not_null_user_user_a')::uuid, 1, now() + interval '3 days', now()),
+  (current_setting('test.constraints_not_null_round_log_valid')::uuid, current_setting('test.constraints_not_null_round_note_a1')::uuid, current_setting('test.constraints_not_null_round_user_a')::uuid, 1, now() + interval '4 days', now()),
+  (current_setting('test.constraints_not_null_scheduled_log_valid')::uuid, current_setting('test.constraints_not_null_scheduled_note_a1')::uuid, current_setting('test.constraints_not_null_scheduled_user_a')::uuid, 1, now() + interval '5 days', now()),
+  (current_setting('test.constraints_not_null_created_log_valid')::uuid, current_setting('test.constraints_not_null_created_note_a1')::uuid, current_setting('test.constraints_not_null_created_user_a')::uuid, 1, now() + interval '6 days', now())
 ON CONFLICT (id) DO NOTHING;
 
 -- =====================================================================
@@ -597,11 +597,11 @@ SELECT throws_ok(
 -- 과거/현재/미래 시각 자체는 스키마에 금지 규칙이 없으므로 NULL이 아니면 허용되어야 한다
 SAVEPOINT constraints_not_null_scheduled_boundary_times;
 WITH inserted AS (
-  INSERT INTO public.review_logs (id, note_id, user_id, round, scheduled_at)
+  INSERT INTO public.review_logs (id, note_id, user_id, round, scheduled_at, completed_at)
   VALUES
-    (gen_random_uuid(), current_setting('test.constraints_not_null_scheduled_note_a1')::uuid, current_setting('test.constraints_not_null_scheduled_user_a')::uuid, 1, now() - interval '1 day'),
-    (gen_random_uuid(), current_setting('test.constraints_not_null_scheduled_note_a1')::uuid, current_setting('test.constraints_not_null_scheduled_user_a')::uuid, 1, now()),
-    (gen_random_uuid(), current_setting('test.constraints_not_null_scheduled_note_a1')::uuid, current_setting('test.constraints_not_null_scheduled_user_a')::uuid, 1, now() + interval '1 day')
+    (gen_random_uuid(), current_setting('test.constraints_not_null_scheduled_note_a1')::uuid, current_setting('test.constraints_not_null_scheduled_user_a')::uuid, 1, now() - interval '1 day', now()),
+    (gen_random_uuid(), current_setting('test.constraints_not_null_scheduled_note_a1')::uuid, current_setting('test.constraints_not_null_scheduled_user_a')::uuid, 1, now(), now()),
+    (gen_random_uuid(), current_setting('test.constraints_not_null_scheduled_note_a1')::uuid, current_setting('test.constraints_not_null_scheduled_user_a')::uuid, 1, now() + interval '1 day', now())
   RETURNING 1
 )
 SELECT is(

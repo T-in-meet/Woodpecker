@@ -7,24 +7,29 @@ import type { SupportedLanguage } from "../supportedLanguages";
 
 type CodeEditorProps = {
   value: string;
-  onChange: (value: string) => void;
+  onChange?: (value: string) => void;
   language: SupportedLanguage;
   className?: string;
+  readOnly?: boolean;
   "aria-label"?: string;
 };
+
+const noop = () => {};
 
 export function CodeEditor({
   value,
   onChange,
   language,
   className,
+  readOnly = false,
   "aria-label": ariaLabel,
 }: CodeEditorProps) {
   const { containerRef } = useCodeMirror({
     doc: value,
     language,
-    onChange,
+    onChange: onChange ?? noop,
     ariaLabel,
+    readOnly,
   });
 
   return (

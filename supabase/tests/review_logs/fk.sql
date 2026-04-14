@@ -94,22 +94,22 @@ VALUES
   (current_setting('test.user_fk_cascade_note_other')::uuid, current_setting('test.user_fk_cascade_user_other')::uuid, 'user fk cascade other', 'content', 0)
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO public.review_logs (id, note_id, user_id, round, scheduled_at)
+INSERT INTO public.review_logs (id, note_id, user_id, round, scheduled_at, completed_at)
 VALUES
-  (current_setting('test.note_fk_ref_log_a1')::uuid, current_setting('test.note_fk_ref_note_a1')::uuid, current_setting('test.note_fk_ref_user_a')::uuid, 1, now() + interval '1 day'),
-  (current_setting('test.note_fk_cascade_log_1a')::uuid, current_setting('test.note_fk_cascade_note_1child')::uuid, current_setting('test.note_fk_cascade_user_a')::uuid, 1, now() + interval '2 days'),
-  (current_setting('test.note_fk_cascade_log_n1')::uuid, current_setting('test.note_fk_cascade_note_nchild')::uuid, current_setting('test.note_fk_cascade_user_a')::uuid, 2, now() + interval '3 days'),
-  (current_setting('test.note_fk_cascade_log_n2')::uuid, current_setting('test.note_fk_cascade_note_nchild')::uuid, current_setting('test.note_fk_cascade_user_a')::uuid, 3, now() + interval '4 days'),
-  (current_setting('test.note_fk_cascade_log_n3')::uuid, current_setting('test.note_fk_cascade_note_nchild2')::uuid, current_setting('test.note_fk_cascade_user_a')::uuid, 2, now() + interval '5 days'),
-  (current_setting('test.note_fk_cascade_log_n4')::uuid, current_setting('test.note_fk_cascade_note_nchild2')::uuid, current_setting('test.note_fk_cascade_user_a')::uuid, 3, now() + interval '6 days'),
-  (current_setting('test.note_fk_cascade_log_other')::uuid, current_setting('test.note_fk_cascade_other_note')::uuid, current_setting('test.note_fk_cascade_user_a')::uuid, 1, now() + interval '5 days'),
-  (current_setting('test.user_fk_ref_log_a1')::uuid, current_setting('test.user_fk_ref_note_a1')::uuid, current_setting('test.user_fk_ref_user_a')::uuid, 1, now() + interval '6 days'),
-  (current_setting('test.user_fk_cascade_log_1a')::uuid, current_setting('test.user_fk_cascade_note_1child')::uuid, current_setting('test.user_fk_cascade_user_1child')::uuid, 1, now() + interval '7 days'),
-  (current_setting('test.user_fk_cascade_log_n1')::uuid, current_setting('test.user_fk_cascade_note_n1')::uuid, current_setting('test.user_fk_cascade_user_nchild')::uuid, 2, now() + interval '8 days'),
-  (current_setting('test.user_fk_cascade_log_n2')::uuid, current_setting('test.user_fk_cascade_note_n2')::uuid, current_setting('test.user_fk_cascade_user_nchild')::uuid, 3, now() + interval '9 days'),
-  (current_setting('test.user_fk_cascade_log_n3')::uuid, current_setting('test.user_fk_cascade_note_n3')::uuid, current_setting('test.user_fk_cascade_user_nchild2')::uuid, 2, now() + interval '10 days'),
-  (current_setting('test.user_fk_cascade_log_n4')::uuid, current_setting('test.user_fk_cascade_note_n4')::uuid, current_setting('test.user_fk_cascade_user_nchild2')::uuid, 3, now() + interval '11 days'),
-  (current_setting('test.user_fk_cascade_log_other')::uuid, current_setting('test.user_fk_cascade_note_other')::uuid, current_setting('test.user_fk_cascade_user_other')::uuid, 1, now() + interval '10 days')
+  (current_setting('test.note_fk_ref_log_a1')::uuid, current_setting('test.note_fk_ref_note_a1')::uuid, current_setting('test.note_fk_ref_user_a')::uuid, 1, now() + interval '1 day', now()),
+  (current_setting('test.note_fk_cascade_log_1a')::uuid, current_setting('test.note_fk_cascade_note_1child')::uuid, current_setting('test.note_fk_cascade_user_a')::uuid, 1, now() + interval '2 days', now()),
+  (current_setting('test.note_fk_cascade_log_n1')::uuid, current_setting('test.note_fk_cascade_note_nchild')::uuid, current_setting('test.note_fk_cascade_user_a')::uuid, 2, now() + interval '3 days', now()),
+  (current_setting('test.note_fk_cascade_log_n2')::uuid, current_setting('test.note_fk_cascade_note_nchild')::uuid, current_setting('test.note_fk_cascade_user_a')::uuid, 3, now() + interval '4 days', now()),
+  (current_setting('test.note_fk_cascade_log_n3')::uuid, current_setting('test.note_fk_cascade_note_nchild2')::uuid, current_setting('test.note_fk_cascade_user_a')::uuid, 2, now() + interval '5 days', now()),
+  (current_setting('test.note_fk_cascade_log_n4')::uuid, current_setting('test.note_fk_cascade_note_nchild2')::uuid, current_setting('test.note_fk_cascade_user_a')::uuid, 3, now() + interval '6 days', now()),
+  (current_setting('test.note_fk_cascade_log_other')::uuid, current_setting('test.note_fk_cascade_other_note')::uuid, current_setting('test.note_fk_cascade_user_a')::uuid, 1, now() + interval '5 days', now()),
+  (current_setting('test.user_fk_ref_log_a1')::uuid, current_setting('test.user_fk_ref_note_a1')::uuid, current_setting('test.user_fk_ref_user_a')::uuid, 1, now() + interval '6 days', now()),
+  (current_setting('test.user_fk_cascade_log_1a')::uuid, current_setting('test.user_fk_cascade_note_1child')::uuid, current_setting('test.user_fk_cascade_user_1child')::uuid, 1, now() + interval '7 days', now()),
+  (current_setting('test.user_fk_cascade_log_n1')::uuid, current_setting('test.user_fk_cascade_note_n1')::uuid, current_setting('test.user_fk_cascade_user_nchild')::uuid, 2, now() + interval '8 days', now()),
+  (current_setting('test.user_fk_cascade_log_n2')::uuid, current_setting('test.user_fk_cascade_note_n2')::uuid, current_setting('test.user_fk_cascade_user_nchild')::uuid, 3, now() + interval '9 days', now()),
+  (current_setting('test.user_fk_cascade_log_n3')::uuid, current_setting('test.user_fk_cascade_note_n3')::uuid, current_setting('test.user_fk_cascade_user_nchild2')::uuid, 2, now() + interval '10 days', now()),
+  (current_setting('test.user_fk_cascade_log_n4')::uuid, current_setting('test.user_fk_cascade_note_n4')::uuid, current_setting('test.user_fk_cascade_user_nchild2')::uuid, 3, now() + interval '11 days', now()),
+  (current_setting('test.user_fk_cascade_log_other')::uuid, current_setting('test.user_fk_cascade_note_other')::uuid, current_setting('test.user_fk_cascade_user_other')::uuid, 1, now() + interval '10 days', now())
 ON CONFLICT (id) DO NOTHING;
 
 -- =====================================================================

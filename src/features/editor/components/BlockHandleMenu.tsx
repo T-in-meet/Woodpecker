@@ -191,6 +191,25 @@ export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
     menuRef.current?.offsetWidth ?? null,
     menuRef.current?.offsetHeight ?? null,
   );
+  const handleDeleteBlock = () => {
+    const blockElement = getActiveBlockElement(editor);
+
+    if (!blockElement) {
+      return;
+    }
+
+    const blockRange = getBlockNodeRange(editor, blockElement);
+
+    if (!blockRange) {
+      return;
+    }
+
+    const didDelete = editor.chain().focus().deleteRange(blockRange).run();
+
+    if (didDelete) {
+      setIsMenuOpen(false);
+    }
+  };
 
   return createPortal(
     <>
@@ -233,13 +252,18 @@ export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
             top: menuPosition.top,
           }}
         >
-          <BubbleMenuBar editor={editor} />
+          <BubbleMenuBar editor={editor} onDeleteBlock={handleDeleteBlock} />
         </div>
       )}
     </>,
     document.body,
   );
 }
+
+type BlockNodeRangeType = {
+  from: number;
+  to: number;
+};
 
 type MenuPositionType = {
   left: number;
@@ -319,20 +343,64 @@ export function getBlockHandleMarkerOffset(blockElement: HTMLElement): number {
   return markerPadding + LIST_MARKER_CLEARANCE;
 }
 
+function getBlockNodeRange(
+  editor: Editor,
+  blockElement: HTMLElement,
+): BlockNodeRangeType | null {
+  let blockRange: BlockNodeRangeType | null = null;
+
+  editor.state.doc.descendants((node, pos) => {
+    if (editor.view.nodeDOM(pos) !== blockElement) {
+      return true;
+    }
+
+    blockRange = { from: pos, to: pos + node.nodeSize };
+
+    return false;
+  });
+
+  return blockRange;
+}
+
 function getActiveBlockElement(editor: Editor): HTMLElement | null {
   const rootElement = editor.view.dom;
   const { from } = editor.state.selection;
+  const selectedNodeDom = editor.view.nodeDOM(from);
   const domAtPos = editor.view.domAtPos(from);
+
+  if (
+    selectedNodeDom instanceof HTMLImageElement &&
+    rootElement.contains(selectedNodeDom)
+  ) {
+    return selectedNodeDom;
+  }
+
+  if (
+    domAtPos.node instanceof HTMLImageElement &&
+    rootElement.contains(domAtPos.node)
+  ) {
+    return domAtPos.node;
+  }
+
+  const selectedElement =
+    selectedNodeDom instanceof HTMLElement
+      ? selectedNodeDom
+      : selectedNodeDom instanceof Text
+        ? selectedNodeDom.parentElement
+        : null;
   const currentElement =
     domAtPos.node instanceof HTMLElement
       ? domAtPos.node
       : domAtPos.node.parentElement;
 
-  if (!(currentElement instanceof HTMLElement)) {
+  const activeElement =
+    selectedElement instanceof HTMLElement ? selectedElement : currentElement;
+
+  if (!(activeElement instanceof HTMLElement)) {
     return null;
   }
 
-  const tableElement = currentElement.closest("table");
+  const tableElement = activeElement.closest("table");
 
   if (
     tableElement instanceof HTMLElement &&
@@ -341,7 +409,7 @@ function getActiveBlockElement(editor: Editor): HTMLElement | null {
     return tableElement;
   }
 
-  const listItemElement = currentElement.closest("li");
+  const listItemElement = activeElement.closest("li");
 
   if (
     listItemElement instanceof HTMLElement &&
@@ -350,8 +418,8 @@ function getActiveBlockElement(editor: Editor): HTMLElement | null {
     return listItemElement;
   }
 
-  const blockElement = currentElement.closest(
-    "p, h1, h2, h3, pre, blockquote, hr",
+  const blockElement = activeElement.closest(
+    "p, h1, h2, h3, pre, blockquote, hr, img",
   );
 
   if (
