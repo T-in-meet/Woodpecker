@@ -291,4 +291,44 @@ describe("LegalDialogWrapper", () => {
       expect(mockCheckboxFocus).toHaveBeenCalled();
     });
   });
+
+  it('TC-13: openedByLabel=true에서 "동의하기"로 닫아도 Checkbox focus fallback이 동작한다', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <LegalDialogWrapper
+        agreementType="termsOfService"
+        open={true}
+        onOpenChange={mockOnOpenChange}
+        onAgree={mockOnAgree}
+        triggerLabel="이용약관 보기"
+        dialogTitle="이용약관"
+        checkboxRef={mockCheckboxRef}
+        openedByLabel={true}
+      />,
+    );
+
+    mockOnOpenChange.mockClear();
+    mockCheckboxFocus.mockClear();
+
+    await user.click(screen.getByRole("button", { name: /동의하기/i }));
+
+    rerender(
+      <LegalDialogWrapper
+        agreementType="termsOfService"
+        open={false}
+        onOpenChange={mockOnOpenChange}
+        onAgree={mockOnAgree}
+        triggerLabel="이용약관 보기"
+        dialogTitle="이용약관"
+        checkboxRef={mockCheckboxRef}
+        openedByLabel={true}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(mockOnAgree).toHaveBeenCalled();
+      expect(mockOnOpenChange).toHaveBeenCalledWith(false);
+      expect(mockCheckboxFocus).toHaveBeenCalled();
+    });
+  });
 });

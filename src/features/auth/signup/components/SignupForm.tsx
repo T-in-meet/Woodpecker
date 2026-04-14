@@ -235,7 +235,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
         await trigger("confirmPassword");
       }
     },
-    [onPasswordChange, trigger],
+    [getValues, onPasswordChange, trigger],
   );
 
   /**

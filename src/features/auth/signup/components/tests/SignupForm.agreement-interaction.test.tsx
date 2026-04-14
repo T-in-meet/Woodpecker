@@ -223,9 +223,9 @@ describe("회원가입 폼 동의 상호작용", () => {
     });
   });
 
-  it('TC-13: reset 이후 aria-disabled="true" 상태가 복원된다', async () => {
+  it('TC-13: 컴포넌트 재마운트 시 aria-disabled="true" 초기 상태가 복원된다', async () => {
     const user = userEvent.setup();
-    renderSignupForm();
+    const { unmount } = renderSignupForm();
 
     // 모달 열고 닫기
     await user.click(screen.getByTestId("terms-of-service-checkbox"));
@@ -237,18 +237,21 @@ describe("회원가입 폼 동의 상호작용", () => {
       expect(termsCheckbox).not.toHaveAttribute("aria-disabled", "true");
     });
 
-    // reset 발생 시 상태 복원 (수동 reset 또는 submit 후 reset)
-    // 참고: 현재 SignupForm에서 reset()이 직접 호출되지 않음
-    //       미래 reset 경로 추가 시 이 테스트가 실행됨
+    // 컴포넌트를 재마운트하면 내부 interaction 상태는 초기값(false)으로 복원되어야 한다.
+    unmount();
+    renderSignupForm();
 
-    // 이유: reset 후 interactionEnabled=false로 초기화되어야 함 (스펙 명시)
-    // -> 현재 코드에서 reset() 직접 호출이 없으므로 스킵
-    // -> 향후 reset 경로 추가 시 이 테스트 활성화
+    await waitFor(() => {
+      expect(screen.getByTestId("terms-of-service-checkbox")).toHaveAttribute(
+        "aria-disabled",
+        "true",
+      );
+    });
   });
 
-  it("TC-14: reset 이후 체크박스 직접 클릭 시 다시 모달이 열린다", async () => {
+  it("TC-14: 컴포넌트 재마운트 후 체크박스 클릭 시 다시 모달이 열린다", async () => {
     const user = userEvent.setup();
-    renderSignupForm();
+    const { unmount } = renderSignupForm();
 
     // 모달 열고 닫기
     await user.click(screen.getByTestId("terms-of-service-checkbox"));
@@ -260,10 +263,11 @@ describe("회원가입 폼 동의 상호작용", () => {
       expect(termsCheckbox).not.toHaveAttribute("aria-disabled", "true");
     });
 
-    // reset 후 (미래): 다시 aria-disabled=true → 모달이 열려야 함
-    // 이유: reset 후 interactionEnabled=false로 초기화되므로
-    //       체크박스 클릭이 다시 모달을 열어야 함
+    // 재마운트 후에는 다시 초기 blocked 상태로 돌아가야 한다.
+    unmount();
+    renderSignupForm();
 
-    // 현재: reset() 직접 호출이 없으므로 스킵
+    await user.click(screen.getByTestId("terms-of-service-checkbox"));
+    expect(screen.getByRole("button", { name: /동의하기/i })).toBeVisible();
   });
 });
