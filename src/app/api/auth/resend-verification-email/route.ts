@@ -21,6 +21,14 @@ const resendSchema = z.object({
   email: z.preprocess((v) => (typeof v === "string" ? v.trim() : v), z.email()),
 });
 
+function maskEmail(email: string): string {
+  const atIndex = email.indexOf("@");
+  if (atIndex > 0) {
+    return "***" + email.substring(atIndex);
+  }
+  return "***";
+}
+
 /**
  * 이메일 인증 재전송 API
  *
@@ -114,8 +122,24 @@ export async function POST(request: NextRequest) {
 
   /**
    * 6. 인증 메일 재전송
+   *
+   * 설계 원칙(중요):
+   * - 이 라우트는 "외부 응답 계약 통일"을 책임진다.
+   * - 따라서 resend 내부 side-effect 실패(user not found, generateLink 실패, 메일 발송 실패 등)는
+   *   내부 로깅으로만 처리하고, 외부에는 동일한 성공 계약을 반환한다.
+   * - 단, 입력 검증/요청 적격성(rate limit) 실패는 계약된 실패 응답을 그대로 반환한다.
+   *
+   * 즉, 모든 예외를 무조건 삼키는 것이 아니라
+   * "계약 통일이 필요한 구간(side-effect 실행 단계)"의 예외만 의도적으로 흡수한다.
    */
-  await resendVerificationEmail(normalizedEmail);
+  try {
+    await resendVerificationEmail(normalizedEmail);
+  } catch (error) {
+    console.error("Resend verification email side-effect failed", {
+      maskedEmail: maskEmail(normalizedEmail),
+      error,
+    });
+  }
 
   /**
    * 7. 성공 응답 반환
