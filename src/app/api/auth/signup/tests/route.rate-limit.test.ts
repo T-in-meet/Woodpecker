@@ -55,6 +55,7 @@ beforeEach(() => {
 });
 
 describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
+  const mockCreateUser = vi.fn();
   const mockGenerateLink = vi.fn();
   const WINDOW_BUFFER_MS = 1000;
 
@@ -124,7 +125,9 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
      * - signup 호출 여부 및 횟수 추적
      */
     vi.mocked(createAdminClient).mockReturnValue({
-      auth: { admin: { generateLink: mockGenerateLink } },
+      auth: {
+        admin: { createUser: mockCreateUser, generateLink: mockGenerateLink },
+      },
     } as never);
 
     /**
@@ -140,6 +143,10 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
         user: { id: "user-id", email: "test@example.com" },
         properties: { hashed_token: "hashed-token" },
       },
+      error: null,
+    });
+    mockCreateUser.mockResolvedValue({
+      data: { user: { id: "user-id", email: "test@example.com" } },
       error: null,
     });
     vi.mocked(sendAuthEmail).mockResolvedValue(undefined);

@@ -28,6 +28,7 @@ beforeEach(() => {
 });
 
 describe("PR-API-07 프로필 이미지 업로드 성공 시 avatar_url 반영", () => {
+  const mockCreateUser = vi.fn();
   const mockGenerateLink = vi.fn();
   const mockStorageUpload = vi.fn();
   const mockGetPublicUrl = vi.fn();
@@ -72,7 +73,9 @@ describe("PR-API-07 프로필 이미지 업로드 성공 시 avatar_url 반영",
     mockProfileEq.mockResolvedValue({ data: null, error: null });
 
     vi.mocked(createAdminClient).mockReturnValue({
-      auth: { admin: { generateLink: mockGenerateLink } },
+      auth: {
+        admin: { createUser: mockCreateUser, generateLink: mockGenerateLink },
+      },
       storage: {
         from: vi.fn(() => ({
           upload: mockStorageUpload,
@@ -83,6 +86,10 @@ describe("PR-API-07 프로필 이미지 업로드 성공 시 avatar_url 반영",
         update: mockProfileUpdate,
       })),
     } as never);
+    mockCreateUser.mockResolvedValue({
+      data: { user: { id: "user-id", email: "test@example.com" } },
+      error: null,
+    });
 
     mockGenerateLink.mockResolvedValue({
       data: {
@@ -140,6 +147,7 @@ describe("PR-API-07 프로필 이미지 업로드 성공 시 avatar_url 반영",
 });
 
 describe("PR-API-08 프로필 이미지 업로드 실패 시 회원가입 성공 유지", () => {
+  const mockCreateUser = vi.fn();
   const mockGenerateLink = vi.fn();
   const mockStorageUpload = vi.fn();
   const mockGetPublicUrl = vi.fn();
@@ -177,7 +185,9 @@ describe("PR-API-08 프로필 이미지 업로드 실패 시 회원가입 성공
     vi.mocked(sendAuthEmail).mockResolvedValue(undefined);
 
     vi.mocked(createAdminClient).mockReturnValue({
-      auth: { admin: { generateLink: mockGenerateLink } },
+      auth: {
+        admin: { createUser: mockCreateUser, generateLink: mockGenerateLink },
+      },
       storage: {
         from: vi.fn(() => ({
           upload: mockStorageUpload,
@@ -188,6 +198,10 @@ describe("PR-API-08 프로필 이미지 업로드 실패 시 회원가입 성공
         update: mockProfileUpdate,
       })),
     } as never);
+    mockCreateUser.mockResolvedValue({
+      data: { user: { id: "user-id", email: "test@example.com" } },
+      error: null,
+    });
 
     mockGenerateLink.mockResolvedValue({
       data: {
@@ -234,6 +248,7 @@ describe("PR-API-08 프로필 이미지 업로드 실패 시 회원가입 성공
 });
 
 describe("PR-API-09 아바타 없는 가입 시 after 미호출", () => {
+  const mockCreateUser = vi.fn();
   const mockGenerateLink = vi.fn();
 
   const BASE_BODY = {
@@ -250,8 +265,14 @@ describe("PR-API-09 아바타 없는 가입 시 after 미호출", () => {
     vi.mocked(sendAuthEmail).mockResolvedValue(undefined);
 
     vi.mocked(createAdminClient).mockReturnValue({
-      auth: { admin: { generateLink: mockGenerateLink } },
+      auth: {
+        admin: { createUser: mockCreateUser, generateLink: mockGenerateLink },
+      },
     } as never);
+    mockCreateUser.mockResolvedValue({
+      data: { user: { id: "user-id", email: "test@example.com" } },
+      error: null,
+    });
 
     mockGenerateLink.mockResolvedValue({
       data: {

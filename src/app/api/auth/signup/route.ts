@@ -351,30 +351,26 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
    * - 내부 로깅만 남기고 동일한 SIGNUP_SUCCESS 계약을 유지한다.
    */
   const adminClient = createAdminClient();
-  let createdUser: { id: string; email?: string | null } | null = null;
+  const { data: createdData, error: createUserError } =
+    await adminClient.auth.admin.createUser({
+      email: normalizedEmail,
+      password,
+      email_confirm: false,
+      user_metadata: { nickname },
+    });
 
-  if (adminClient.auth.admin.createUser) {
-    const { data: createdData, error: createUserError } =
-      await adminClient.auth.admin.createUser({
-        email: normalizedEmail,
-        password,
-        email_confirm: false,
-        user_metadata: { nickname },
-      });
-
-    if (createUserError) {
-      console.error("Supabase admin.createUser failed", {
-        email: normalizedEmail,
-        message: createUserError.message,
-        status: createUserError.status,
-        code: createUserError.code,
-        name: createUserError.name,
-      });
-      return makeSignupSuccess(normalizedEmail);
-    }
-
-    createdUser = createdData.user;
+  if (createUserError) {
+    console.error("Supabase admin.createUser failed", {
+      email: normalizedEmail,
+      message: createUserError.message,
+      status: createUserError.status,
+      code: createUserError.code,
+      name: createUserError.name,
+    });
+    return makeSignupSuccess(normalizedEmail);
   }
+
+  const signupUser = createdData.user;
 
   const { data, error } = await adminClient.auth.admin.generateLink({
     email: normalizedEmail,
@@ -405,7 +401,6 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
     return makeSignupSuccess(normalizedEmail);
   }
 
-  const signupUser = createdUser ?? data.user;
   const signupUserEmail = signupUser?.email ?? normalizedEmail;
 
   try {

@@ -43,13 +43,20 @@ beforeEach(() => {
 });
 
 describe("PR-API-02 회원가입 입력 검증 - 필수값 검증", () => {
+  const mockCreateUser = vi.fn();
   const mockGenerateLink = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(createAdminClient).mockReturnValue({
-      auth: { admin: { generateLink: mockGenerateLink } },
+      auth: {
+        admin: { createUser: mockCreateUser, generateLink: mockGenerateLink },
+      },
     } as never);
+    mockCreateUser.mockResolvedValue({
+      data: { user: { id: "user-id", email: "test@example.com" } },
+      error: null,
+    });
     vi.mocked(sendAuthEmail).mockResolvedValue(undefined);
   });
 
@@ -214,13 +221,20 @@ describe("PR-API-02 회원가입 입력 검증 - 필수값 검증", () => {
 });
 
 describe("PR-API-02 회원가입 입력 검증 - 형식 / 길이 / 경계값 / 정규화", () => {
+  const mockCreateUser = vi.fn();
   const mockGenerateLink = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(createAdminClient).mockReturnValue({
-      auth: { admin: { generateLink: mockGenerateLink } },
+      auth: {
+        admin: { createUser: mockCreateUser, generateLink: mockGenerateLink },
+      },
     } as never);
+    mockCreateUser.mockResolvedValue({
+      data: { user: { id: "user-id", email: "test@example.com" } },
+      error: null,
+    });
     vi.mocked(sendAuthEmail).mockResolvedValue(undefined);
   });
 
@@ -441,15 +455,22 @@ describe("PR-API-02 회원가입 입력 검증 - 형식 / 길이 / 경계값 / �
 });
 
 describe("PR-API-02 회원가입 입력 검증 - 실패 응답 계약 / 외부 호출 차단 / 다중 오류 수집", () => {
+  const mockCreateUser = vi.fn();
   const mockGenerateLink = vi.fn();
   const mockStorageUpload = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(createAdminClient).mockReturnValue({
-      auth: { admin: { generateLink: mockGenerateLink } },
+      auth: {
+        admin: { createUser: mockCreateUser, generateLink: mockGenerateLink },
+      },
       storage: { from: vi.fn(() => ({ upload: mockStorageUpload })) },
     } as never);
+    mockCreateUser.mockResolvedValue({
+      data: { user: { id: "user-id", email: "test@example.com" } },
+      error: null,
+    });
     vi.mocked(sendAuthEmail).mockResolvedValue(undefined);
   });
 

@@ -41,6 +41,7 @@ vi.mock("@/lib/supabase/admin");
 const START_TIME = 1_000_000;
 
 describe("회원가입 API 최소 응답 시간 보장 검증", () => {
+  const mockCreateUser = vi.fn();
   const mockGenerateLink = vi.fn();
 
   beforeEach(() => {
@@ -51,8 +52,14 @@ describe("회원가입 API 최소 응답 시간 보장 검증", () => {
     process.env["EMAIL_TICKET_SECRET"] = "test-ticket-secret";
 
     vi.mocked(createAdminClient).mockReturnValue({
-      auth: { admin: { generateLink: mockGenerateLink } },
+      auth: {
+        admin: { createUser: mockCreateUser, generateLink: mockGenerateLink },
+      },
     } as never);
+    mockCreateUser.mockResolvedValue({
+      data: { user: { id: "user-id", email: "test@example.com" } },
+      error: null,
+    });
 
     vi.mocked(getUserByEmail).mockResolvedValue(null);
     vi.mocked(sendAuthEmail).mockResolvedValue(undefined);

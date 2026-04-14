@@ -33,6 +33,7 @@ beforeEach(() => {
 });
 
 describe("PR-API-03 회원가입 약관 동의 검증", () => {
+  const mockCreateUser = vi.fn();
   const mockGenerateLink = vi.fn();
   // 약관만 바꿔가며 테스트하기 위한 기준 payload
   const BASE_VALID_PAYLOAD = {
@@ -49,8 +50,14 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
     vi.clearAllMocks();
     process.env["EMAIL_TICKET_SECRET"] = "test-ticket-secret";
     vi.mocked(createAdminClient).mockReturnValue({
-      auth: { admin: { generateLink: mockGenerateLink } },
+      auth: {
+        admin: { createUser: mockCreateUser, generateLink: mockGenerateLink },
+      },
     } as never);
+    mockCreateUser.mockResolvedValue({
+      data: { user: { id: "user-id", email: "test@example.com" } },
+      error: null,
+    });
     vi.mocked(sendAuthEmail).mockResolvedValue(undefined);
   });
 
