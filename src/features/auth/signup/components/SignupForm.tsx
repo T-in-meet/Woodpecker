@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -10,14 +10,21 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Toast } from "@/components/ui/toast";
+import { UNKNOWN_ERROR_MESSAGE } from "@/features/auth/errors//unknownError";
+import {
+  GLOBAL_ERROR_MESSAGES,
+  isGlobalError,
+} from "@/features/auth/errors/globalError";
+import {
+  isRateLimitError,
+  RATE_LIMIT_TOAST_MESSAGE,
+} from "@/features/auth/errors/rateLimitError";
+import { resolveFieldName } from "@/features/auth/lib/resolveFieldName";
+import { signupFormSchema } from "@/features/auth/signup/schema/signupFormSchema";
 import { cn } from "@/lib/utils/cn";
+import { showToast } from "@/lib/utils/showToast";
 import { isServerValidationError } from "@/lib/validation/isServerValidationError";
 import { mapReasonToMessage } from "@/lib/validation/mapReasonToMessage";
-
-import { GLOBAL_ERROR_MESSAGES, isGlobalError } from "../../errors/globalError";
-import { resolveFieldName } from "../../lib/resolveFieldName";
-import { signupFormSchema } from "../schema/signupFormSchema";
 
 /**
  * 폼 입력 타입 (raw input 기준)
@@ -59,13 +66,6 @@ type SignupFormProps = {
  * - 라우팅
  */
 export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
-  /**
-   * 글로벌 에러 메시지 (네트워크 / 서버 등)
-   */
-  const [globalErrorMessage, setGlobalErrorMessage] = useState<string | null>(
-    null,
-  );
-
   /**
    * react-hook-form 설정
    */
@@ -114,7 +114,6 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
      * 기존 에러 초기화
      */
     clearErrors();
-    setGlobalErrorMessage(null);
 
     try {
       /**
@@ -150,11 +149,56 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
       }
 
       /**
+       * rate limit 에러 처리
+       *
+       * 동작:
+       * - 서버 failure response body의 `code`를 기반으로 rate limit 여부를 판별한다.
+       * - rate limit에 해당하면 사용자에게 공통 토스트 메시지를 노출하고 흐름을 중단한다.
+       *
+       * 설계 의도:
+       * - HTTP status(예: 429)에 의존하지 않고, response body contract(`code`) 기준으로 처리한다.
+       * - validation / global error와 구분되는 "도메인 에러 계층"으로 취급한다.
+       * - signup / resend 등 auth 전반에서 동일한 기준으로 처리하기 위한 공통 분기이다.
+       *
+       * 주의:
+       * - 내부 정책(요청 횟수, window 등)은 외부에 노출하지 않는다.
+       */
+      if (isRateLimitError(e)) {
+        showToast(RATE_LIMIT_TOAST_MESSAGE, "destructive");
+        return;
+      }
+
+      /**
        * 글로벌 에러 처리 (network, timeout 등)
+       *
+       * 동작:
+       * - 네트워크 실패, 타임아웃 등 transport/infra 계층의 에러를 처리한다.
+       * - 해당 에러 타입에 맞는 메시지를 토스트로 노출하고 흐름을 종료한다.
+       *
+       * 설계 의도:
+       * - 서버가 반환한 도메인 에러(response body 기반)와 구분한다.
+       * - rate limit, validation 등은 이 분기에서 처리하지 않는다.
+       *
+       * 주의:
+       * - 이 분기는 서버 응답 contract가 아닌, 클라이언트 환경/네트워크 문제를 다룬다.
        */
       if (isGlobalError(e)) {
-        setGlobalErrorMessage(GLOBAL_ERROR_MESSAGES[e.type]);
+        showToast(GLOBAL_ERROR_MESSAGES[e.type], "destructive");
+        return;
       }
+
+      /**
+       * fallback 처리 (unknown error)
+       *
+       * 동작:
+       * - 정의된 에러 타입으로 판별되지 않는 모든 예외를 처리한다.
+       * - 사용자에게 일반적인 오류 메시지를 토스트로 노출한다.
+       *
+       * 설계 의도:
+       * - 예상하지 못한 에러(contract 위반, 런타임 예외 등)에 대해
+       *   최소한의 사용자 피드백을 보장한다.
+       */
+      showToast(UNKNOWN_ERROR_MESSAGE, "destructive");
     }
   };
 
@@ -392,11 +436,6 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
           )}
         </div>
       </div>
-
-      {/* 글로벌 에러 */}
-      {globalErrorMessage && (
-        <Toast message={globalErrorMessage} variant="destructive" />
-      )}
 
       {/* root 에러 */}
       {errors.root && (

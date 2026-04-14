@@ -1,9 +1,15 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { showToast } from "@/lib/utils/showToast";
 
 import { SignupForm } from "../SignupForm";
 import { renderSignupForm } from "./utils/signupFormTestUtils";
+
+vi.mock("@/lib/utils/showToast", () => ({
+  showToast: vi.fn(),
+}));
 
 vi.mock("@tanstack/react-query", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@tanstack/react-query")>();
@@ -21,8 +27,12 @@ const networkError = { type: "network" as const };
 const serverError = { type: "server" as const };
 const timeoutError = { type: "timeout" as const };
 
-// TC-01 ~ TC-07: 전역 에러 UI 및 실패 후 상태 복구
+// TC-01 ~ TC-06: 전역 에러 UI 및 실패 후 상태 복구
 describe("회원가입 전역 에러 처리", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
   async function fillValidForm(
     user: ReturnType<typeof userEvent.setup>,
     {
@@ -60,9 +70,12 @@ describe("회원가입 전역 에러 처리", () => {
 
     await submitValidForm(user);
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "네트워크 연결을 확인해주세요",
-    );
+    await waitFor(() => {
+      expect(showToast).toHaveBeenCalledWith(
+        "네트워크 연결을 확인해주세요",
+        "destructive",
+      );
+    });
   });
 
   it("TC-02: server 에러가 발생하면 상단 전역 에러 UI를 표시한다", async () => {
@@ -72,9 +85,12 @@ describe("회원가입 전역 에러 처리", () => {
 
     await submitValidForm(user);
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "잠시 후 다시 시도해주세요",
-    );
+    await waitFor(() => {
+      expect(showToast).toHaveBeenCalledWith(
+        "잠시 후 다시 시도해주세요",
+        "destructive",
+      );
+    });
   });
 
   it("TC-03: timeout 에러가 발생하면 상단 전역 에러 UI를 표시한다", async () => {
@@ -84,9 +100,12 @@ describe("회원가입 전역 에러 처리", () => {
 
     await submitValidForm(user);
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "요청 시간이 초과되었습니다. 다시 시도해주세요",
-    );
+    await waitFor(() => {
+      expect(showToast).toHaveBeenCalledWith(
+        "요청 시간이 초과되었습니다. 다시 시도해주세요",
+        "destructive",
+      );
+    });
   });
 
   it("TC-04: submit 실패 후 UI가 loading 상태에 고정되지 않는다", async () => {
@@ -101,9 +120,12 @@ describe("회원가입 전역 에러 처리", () => {
 
     await submitValidForm(user);
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "잠시 후 다시 시도해주세요",
-    );
+    await waitFor(() => {
+      expect(showToast).toHaveBeenCalledWith(
+        "잠시 후 다시 시도해주세요",
+        "destructive",
+      );
+    });
     expect(
       screen.getByRole("button", { name: /^회원가입$/ }),
     ).not.toBeDisabled();
@@ -122,7 +144,9 @@ describe("회원가입 전역 에러 처리", () => {
       nickname: "tester",
     });
 
-    await screen.findByRole("alert");
+    await waitFor(() => {
+      expect(showToast).toHaveBeenCalled();
+    });
 
     expect(screen.getByLabelText(/이메일/i)).toHaveValue("test@example.com");
     expect(screen.getByLabelText(/^비밀번호$/i)).toHaveValue("12345678");
@@ -151,42 +175,8 @@ describe("회원가입 전역 에러 처리", () => {
 
     expect(await within(emailField!).findByRole("alert")).toBeInTheDocument();
     expect(within(nicknameField!).getByRole("alert")).toBeInTheDocument();
-    expect(
-      screen.queryByText("네트워크 연결을 확인해주세요"),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByText("잠시 후 다시 시도해주세요"),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByText("요청 시간이 초과되었습니다. 다시 시도해주세요"),
-    ).not.toBeInTheDocument();
-  });
 
-  it("TC-07: 재제출 시 기존 전역 에러는 즉시 제거된다", async () => {
-    const user = userEvent.setup();
-    let resolveSecondSubmit: (() => void) | undefined;
-    const secondSubmit = new Promise<void>((resolve) => {
-      resolveSecondSubmit = resolve;
-    });
-    const onSubmit = vi
-      .fn()
-      .mockRejectedValueOnce(networkError)
-      .mockImplementationOnce(() => secondSubmit);
-    renderSignupForm({ onSubmit });
-
-    await submitValidForm(user);
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "네트워크 연결을 확인해주세요",
-    );
-
-    await user.click(screen.getByRole("button", { name: /회원가입/i }));
-
-    await waitFor(() => {
-      expect(
-        screen.queryByText("네트워크 연결을 확인해주세요"),
-      ).not.toBeInTheDocument();
-    });
-
-    resolveSecondSubmit?.();
+    // 글로벌 에러 toast는 호출되지 않아야 함
+    expect(showToast).not.toHaveBeenCalled();
   });
 });

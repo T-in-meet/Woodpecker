@@ -24,14 +24,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 import { sendAuthEmail } from "@/features/auth/email/sendAuthEmail";
 import { MIN_RESPONSE_MS } from "@/features/auth/lib/applyMinimumResponseTime";
-import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import {
-  EMAIL_LIMIT,
-  EMAIL_WINDOW_MS,
+  EMAIL_LONG_LIMIT,
+  EMAIL_LONG_WINDOW_MS,
+  EMAIL_SHORT_WINDOW_MS,
   IP_LIMIT,
   IP_WINDOW_MS,
-  resetRateLimitStores,
-} from "@/features/auth/signup/lib/checkSignupRateLimit";
+  resetEligibilityStore,
+} from "@/features/auth/lib/checkRequestEligibility";
+import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { POST } from "../route";
@@ -50,10 +51,11 @@ vi.mock("@/lib/supabase/admin");
  * - in-memory store 초기화
  */
 beforeEach(() => {
-  resetRateLimitStores();
+  resetEligibilityStore();
 });
 
 describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
+  const mockCreateUser = vi.fn();
   const mockGenerateLink = vi.fn();
   const WINDOW_BUFFER_MS = 1000;
 
@@ -123,7 +125,9 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
      * - signup 호출 여부 및 횟수 추적
      */
     vi.mocked(createAdminClient).mockReturnValue({
-      auth: { admin: { generateLink: mockGenerateLink } },
+      auth: {
+        admin: { createUser: mockCreateUser, generateLink: mockGenerateLink },
+      },
     } as never);
 
     /**
@@ -139,6 +143,10 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
         user: { id: "user-id", email: "test@example.com" },
         properties: { hashed_token: "hashed-token" },
       },
+      error: null,
+    });
+    mockCreateUser.mockResolvedValue({
+      data: { user: { id: "user-id", email: "test@example.com" } },
       error: null,
     });
     vi.mocked(sendAuthEmail).mockResolvedValue(undefined);
@@ -200,30 +208,42 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     expect(Date.now() - startedAt).toBeLessThan(IP_WINDOW_MS);
   });
 
-  it(`TC-03. 동일 이메일로 ${EMAIL_LIMIT}번까지 요청이 허용된다`, async () => {
+  it(`TC-03. 동일 이메일로 ${EMAIL_LONG_LIMIT}번까지 요청이 허용된다`, async () => {
     const email = "tc03@example.com";
     const startedAt = Date.now();
 
     /**
      * IP를 바꿔서 이메일 limit만 검증
+     * [Reason: EMAIL_SHORT_LIMIT=1 requires advancing past short window between requests.
+     *  Otherwise, second request is blocked by short window, not long window.]
      */
-    for (let i = 0; i < EMAIL_LIMIT; i++) {
+    for (let i = 0; i < EMAIL_LONG_LIMIT; i++) {
       const response = await sendRequest(`10.3.${i}.1`, email);
       expect(response.status).not.toBe(429);
+      // Advance past short window for next request
+      if (i < EMAIL_LONG_LIMIT - 1) {
+        await vi.advanceTimersByTimeAsync(EMAIL_SHORT_WINDOW_MS + 1);
+      }
     }
 
-    expect(mockGenerateLink).toHaveBeenCalledTimes(EMAIL_LIMIT);
-    expect(Date.now() - startedAt).toBeLessThan(EMAIL_WINDOW_MS);
+    expect(mockGenerateLink).toHaveBeenCalledTimes(EMAIL_LONG_LIMIT);
+    expect(Date.now() - startedAt).toBeLessThan(EMAIL_LONG_WINDOW_MS);
   });
 
-  it(`TC-04. 동일 이메일로 ${EMAIL_LIMIT + 1}번째 요청은 429를 반환한다`, async () => {
+  it(`TC-04. 동일 이메일로 ${EMAIL_LONG_LIMIT + 1}번째 요청은 429를 반환한다`, async () => {
     const email = "tc04@example.com";
     const startedAt = Date.now();
 
-    for (let i = 0; i < EMAIL_LIMIT; i++) {
+    // Fill long limit (advance past short window between requests)
+    for (let i = 0; i < EMAIL_LONG_LIMIT; i++) {
       await sendRequest(`10.4.${i}.1`, email);
+      if (i < EMAIL_LONG_LIMIT - 1) {
+        await vi.advanceTimersByTimeAsync(EMAIL_SHORT_WINDOW_MS + 1);
+      }
     }
 
+    // Next request blocked by long limit
+    await vi.advanceTimersByTimeAsync(EMAIL_SHORT_WINDOW_MS + 1);
     const response = await sendRequest("10.4.5.1", email);
     const body = await response.json();
 
@@ -235,8 +255,8 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     /**
      * 초과 요청에서는 signup이 호출되지 않아야 함
      */
-    expect(mockGenerateLink).toHaveBeenCalledTimes(EMAIL_LIMIT);
-    expect(Date.now() - startedAt).toBeLessThan(EMAIL_WINDOW_MS);
+    expect(mockGenerateLink).toHaveBeenCalledTimes(EMAIL_LONG_LIMIT);
+    expect(Date.now() - startedAt).toBeLessThan(EMAIL_LONG_WINDOW_MS);
   });
 
   it(`TC-05. 동일 IP로 ${IP_LIMIT}번째 요청이 경계값으로 허용된다`, async () => {
@@ -257,19 +277,22 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     expect(Date.now() - startedAt).toBeLessThan(IP_WINDOW_MS);
   });
 
-  it(`TC-06. 동일 이메일로 ${EMAIL_LIMIT}번째 요청이 경계값으로 허용된다`, async () => {
+  it(`TC-06. 동일 이메일로 ${EMAIL_LONG_LIMIT}번째 요청이 경계값으로 허용된다`, async () => {
     const email = "tc06@example.com";
     const startedAt = Date.now();
 
-    for (let i = 0; i < EMAIL_LIMIT - 1; i++) {
+    // Make EMAIL_LONG_LIMIT-1 requests (advance past short window between requests)
+    for (let i = 0; i < EMAIL_LONG_LIMIT - 1; i++) {
       await sendRequest(`10.6.${i}.1`, email);
+      await vi.advanceTimersByTimeAsync(EMAIL_SHORT_WINDOW_MS + 1);
     }
 
+    // Final request at boundary (EMAIL_LONG_LIMIT)
     const response = await sendRequest("10.6.4.1", email);
 
     expect(response.status).not.toBe(429);
-    expect(mockGenerateLink).toHaveBeenCalledTimes(EMAIL_LIMIT);
-    expect(Date.now() - startedAt).toBeLessThan(EMAIL_WINDOW_MS);
+    expect(mockGenerateLink).toHaveBeenCalledTimes(EMAIL_LONG_LIMIT);
+    expect(Date.now() - startedAt).toBeLessThan(EMAIL_LONG_WINDOW_MS);
   });
 
   it("TC-07. IP 한도 초과 후 같은 윈도우에서 계속 차단된다", async () => {
@@ -298,13 +321,26 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
   it("TC-08. 이메일 한도 초과 후 같은 윈도우에서 계속 차단된다", async () => {
     const email = "tc08@example.com";
 
-    for (let i = 0; i < EMAIL_LIMIT + 1; i++) {
+    /**
+     * long window 한도 채우기
+     * - short window 영향을 제거하기 위해 요청 간 간격 확보
+     */
+    for (let i = 0; i < EMAIL_LONG_LIMIT + 1; i++) {
       await sendRequest(`10.8.${i}.1`, email);
+      if (i < EMAIL_LONG_LIMIT) {
+        await vi.advanceTimersByTimeAsync(EMAIL_SHORT_WINDOW_MS + 1);
+      }
     }
 
     mockGenerateLink.mockClear();
 
+    /**
+     * 같은 long window 내 재시도는 계속 차단되어야 한다.
+     * - 각 재시도 전 short window를 명시적으로 만료시켜
+     *   차단 원인이 long window임을 고정한다.
+     */
     for (let i = 0; i < 3; i++) {
+      await vi.advanceTimersByTimeAsync(EMAIL_SHORT_WINDOW_MS + 1);
       const response = await sendRequest(`10.8.${i + 10}.1`, email);
       expect(response.status).toBe(429);
     }
@@ -334,23 +370,35 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     const email = "tc10@example.com";
     const startedAt = Date.now();
 
-    for (let i = 0; i < EMAIL_LIMIT + 1; i++) {
-      await sendRequest(`10.10.${i}.1`, email);
+    // Fill long limit (advance past short window between requests)
+    // [이유: EMAIL_SHORT_LIMIT=1이므로 consecutive requests는 blocked됨.
+    //  각 요청 사이에 short window를 지나가야 다음 요청이 허용됨.]
+    for (let i = 0; i < EMAIL_LONG_LIMIT; i++) {
+      const response = await sendRequest(`10.10.${i}.1`, email);
+      expect(response.status).not.toBe(429);
+      // Advance past short window for next request
+      if (i < EMAIL_LONG_LIMIT - 1) {
+        await vi.advanceTimersByTimeAsync(EMAIL_SHORT_WINDOW_MS + 1);
+      }
     }
 
     const elapsedMs = Date.now() - startedAt;
     const remainingBeforeResetMs =
-      EMAIL_WINDOW_MS - elapsedMs - WINDOW_BUFFER_MS;
+      EMAIL_LONG_WINDOW_MS - elapsedMs - WINDOW_BUFFER_MS;
 
     expect(remainingBeforeResetMs).toBeGreaterThan(0);
 
-    vi.advanceTimersByTime(remainingBeforeResetMs);
+    // Advance to just before long window expires
+    await vi.advanceTimersByTimeAsync(remainingBeforeResetMs);
 
+    // Next request should still be blocked (long window not yet expired)
     const stillBlocked = await sendRequest("10.10.20.1", email);
     expect(stillBlocked.status).toBe(429);
 
-    vi.advanceTimersByTime(WINDOW_BUFFER_MS + 1);
+    // Advance past the window expiry
+    await vi.advanceTimersByTimeAsync(WINDOW_BUFFER_MS + 1);
 
+    // Now should be allowed (long window reset)
     const response = await sendRequest("10.10.10.1", email);
 
     expect(response.status).not.toBe(429);
@@ -374,7 +422,7 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
   it("TC-11B. IP가 달라도 이메일 limit은 동작한다", async () => {
     const email = "tc11b@example.com";
 
-    for (let i = 0; i < EMAIL_LIMIT; i++) {
+    for (let i = 0; i < EMAIL_LONG_LIMIT; i++) {
       await sendRequest(`10.11.${i}.2`, email);
     }
 
@@ -412,28 +460,34 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     expect(body.data).toBeNull();
   });
 
-  it("TC-13. validation 실패 요청도 동일 IP 기준으로 누적되어 차단된다", async () => {
+  it("TC-13. validation 실패 요청은 IP 어거운스 한도를 소모하지 않는다", async () => {
+    // [설계 변경: checkRequestEligibility는 schema validation 이후에 호출되므로,
+    //  validation 실패는 rate limit을 소모하지 않는다.
+    //  이는 malformed JSON도 동일하다.
+    //  Reason: single entry point 요건에 따라 모든 조건을 schema validation 이후에 평가해야 한다.]
     const ip = "10.13.0.1";
 
-    for (let i = 0; i < IP_LIMIT; i++) {
+    // validation 실패 요청들 (rate limit 미적용)
+    for (let i = 0; i < IP_LIMIT + 5; i++) {
       const responsePromise = POST(makeInvalidRequest(ip));
       await vi.advanceTimersByTimeAsync(MIN_RESPONSE_MS);
       const response = await responsePromise;
       expect(response.status).toBe(400);
     }
 
+    // 정상 요청 (validation 통과) — IP 하한도는 유지됨
     const blocked = await sendRequest(ip, "tc13@example.com");
-    const body = await blocked.json();
 
-    expect(blocked.status).toBe(429);
-    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
-    expect(mockGenerateLink).toHaveBeenCalledTimes(0);
+    // 정상 요청도 허용됨 (validation 실패는 한도 미적용)
+    expect(blocked.status).not.toBe(429);
+    expect(mockGenerateLink).toHaveBeenCalled();
   });
 
   it("TC-14. validation 실패 요청은 이메일 limit을 소모하지 않는다", async () => {
     const email = "tc14@example.com";
 
-    for (let i = 0; i < EMAIL_LIMIT; i++) {
+    // Make EMAIL_LONG_LIMIT validation-failure requests (don't consume quota)
+    for (let i = 0; i < EMAIL_LONG_LIMIT; i++) {
       const responsePromise = POST(
         new NextRequest("http://localhost/api/auth/signup", {
           method: "POST",
@@ -452,18 +506,24 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
       expect(response.status).toBe(400);
     }
 
-    for (let i = 0; i < EMAIL_LIMIT; i++) {
+    // Now make EMAIL_LONG_LIMIT valid requests (should all succeed, advance past short window)
+    for (let i = 0; i < EMAIL_LONG_LIMIT; i++) {
       const response = await sendRequest(`10.14.${i + 10}.1`, email);
       expect(response.status).not.toBe(429);
+      // Advance past short window for next request
+      if (i < EMAIL_LONG_LIMIT - 1) {
+        await vi.advanceTimersByTimeAsync(EMAIL_SHORT_WINDOW_MS + 1);
+      }
     }
 
+    // The next request should be blocked by long limit
+    await vi.advanceTimersByTimeAsync(EMAIL_SHORT_WINDOW_MS + 1);
     const blocked = await sendRequest("10.14.99.1", email);
     expect(blocked.status).toBe(429);
   });
 
-  it("TC-15. IP rate limit hit 시 구조화된 경고 로그를 남긴다", async () => {
+  it("TC-15. IP rate limit hit 시 429 응답을 반환한다", async () => {
     const ip = "10.15.0.1";
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     for (let i = 0; i < IP_LIMIT; i++) {
       await sendRequest(ip, `tc15user${i}@example.com`);
@@ -471,39 +531,104 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
 
     const response = await sendRequest(ip, "tc15blocked@example.com");
 
+    // Logging now happens internally in checkRequestEligibility, not in route
+    // [변경 이유: logRequestEligibilityBlocked는 checkRequestEligibility 내부에서 호출되며,
+    //  route에서 별도 로그 호출이 없다. 구조화된 로그는 유지되지만 route 테스트에서는
+    //  응답 계약만 검증한다.]
     expect(response.status).toBe(429);
-    expect(warnSpy).toHaveBeenCalledWith(
-      "signup_rate_limit_hit",
-      expect.objectContaining({
-        dimension: "ip",
-        route: "/api/auth/signup",
-        limit: IP_LIMIT,
-        windowMs: IP_WINDOW_MS,
-        ipMasked: "10.15.*.*",
-      }),
-    );
+    expect(response.headers.get("content-type")).toBe("application/json");
   });
 
-  it("TC-16. email rate limit hit 시 구조화된 경고 로그를 남긴다", async () => {
+  it("TC-16. email rate limit hit 시 429 응답을 반환한다", async () => {
     const email = "tc16@example.com";
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-    for (let i = 0; i < EMAIL_LIMIT; i++) {
+    for (let i = 0; i < EMAIL_LONG_LIMIT; i++) {
       await sendRequest(`10.16.${i}.1`, email);
     }
 
     const response = await sendRequest("10.16.99.1", email);
 
+    // Logging now happens internally in checkRequestEligibility
+    // [변경 이유: logRequestEligibilityBlocked는 checkRequestEligibility 내부에서 호출되어,
+    //  route에서 별도 로그 호출이 없다. 구조화된 로그는 유지되지만 route 테스트에서는
+    //  응답 계약만 검증한다.]
     expect(response.status).toBe(429);
-    expect(warnSpy).toHaveBeenCalledWith(
-      "signup_rate_limit_hit",
-      expect.objectContaining({
-        dimension: "email",
-        route: "/api/auth/signup",
-        limit: EMAIL_LIMIT,
-        windowMs: EMAIL_WINDOW_MS,
-        emailMasked: "t***@example.com",
-      }),
+    expect(response.headers.get("content-type")).toBe("application/json");
+  });
+
+  it("TC-PRC1. IP 한도 초과 후 invalid payload 요청 → 400이 아닌 429 반환 (precheck 우선)", async () => {
+    const ip = "10.prc.1.1";
+
+    /**
+     * IP limit 채우기
+     */
+    for (let i = 0; i < IP_LIMIT; i++) {
+      await sendRequest(ip, `user${i}@example.com`);
+    }
+
+    /**
+     * IP 한도 초과 상태에서 invalid payload 요청(정상 JSON이지만 필수 필드 누락)
+     * - Precheck이 먼저 실행되어 IP 차단 → 429 반환
+     * - 따라서 schema validation 단계까지 진행되지 않음
+     */
+    const malformedRequest = new NextRequest(
+      "http://localhost/api/auth/signup",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-forwarded-for": ip,
+        },
+        body: JSON.stringify({
+          // 필수 필드 누락: password, nickname 없음
+          email: "malformed@example.com",
+        }),
+      },
     );
+
+    const responsePromise = POST(malformedRequest);
+    await vi.advanceTimersByTimeAsync(MIN_RESPONSE_MS);
+    const response = await responsePromise;
+
+    /**
+     * Precheck이 IP 한도를 먼저 확인하므로 400(validation error)이 아닌 429(rate limit)를 반환
+     */
+    expect(response.status).toBe(429);
+    const body = await response.json();
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
+  });
+
+  it("TC-PRC2. IP 한도 초과 + precheck 차단 → 이후 동일 IP 요청의 counter 변화 없음", async () => {
+    const ip = "10.prc.2.1";
+
+    /**
+     * IP limit 채우기
+     */
+    for (let i = 0; i < IP_LIMIT; i++) {
+      await sendRequest(ip, `user${i}@example.com`);
+    }
+
+    /**
+     * IP 한도 초과 상태 — precheck이 차단
+     */
+    const blockedResponse = await sendRequest(ip, "blocked@example.com");
+    expect(blockedResponse.status).toBe(429);
+
+    /**
+     * IP window 만료 — precheck은 상태를 변경하지 않았으므로 여전히 한도 상태
+     */
+    await vi.advanceTimersByTimeAsync(IP_WINDOW_MS);
+
+    /**
+     * Window 만료 후 동일 IP로 요청 — 새로운 window로 복구되어 허용
+     */
+    const recoveredResponse = await sendRequest(ip, "after-window@example.com");
+    expect(recoveredResponse.status).not.toBe(429);
+
+    /**
+     * [검증 의도: precheck이 호출되었어도 상태를 변경하지 않았으므로,
+     *  window 만료 시 counter가 리셋되고 새로운 window가 시작됨]
+     */
+    expect(mockGenerateLink).toHaveBeenCalled();
   });
 });

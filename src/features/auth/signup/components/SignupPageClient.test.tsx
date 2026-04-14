@@ -78,6 +78,26 @@ describe("PR-UI-05: SignupPageClient redirectTo 라우팅", () => {
       expect(mockPush).not.toHaveBeenCalledWith("/login");
     });
   });
+
+  it("TC-05: redirectTo가 '/verify-email'이면 email query를 포함해 이동한다", async () => {
+    mockMutateAsync.mockResolvedValue({
+      data: {
+        redirectTo: "/verify-email",
+        email: "test@example.com",
+      },
+    });
+    const user = userEvent.setup();
+    render(<SignupPageClient />);
+
+    await submitValidSignupForm(user);
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledTimes(1);
+      expect(mockPush).toHaveBeenCalledWith(
+        "/verify-email?email=test%40example.com",
+      );
+    });
+  });
 });
 
 describe("PR-UI-13: SignupPageClient submit → mutateAsync → redirectTo 연결", () => {
