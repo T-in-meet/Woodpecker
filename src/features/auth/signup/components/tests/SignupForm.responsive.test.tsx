@@ -52,7 +52,7 @@ describe("SignupForm 반응형 레이아웃 (PR-UI-14)", () => {
         within(group).getByText("이용약관에 동의합니다"),
       ).toBeInTheDocument();
       expect(
-        within(group).getByRole("checkbox", { name: /이용약관/i }),
+        within(group).getByTestId("terms-of-service-checkbox"),
       ).toBeInTheDocument();
     });
 
@@ -93,8 +93,17 @@ describe("SignupForm 반응형 레이아웃 (PR-UI-14)", () => {
       await user.type(screen.getByLabelText(/^비밀번호$/i), "12345678");
       await user.type(screen.getByLabelText(/비밀번호 확인/i), "12345678");
       await user.type(screen.getByLabelText(/닉네임/i), "tester");
-      await user.click(screen.getByRole("checkbox", { name: /이용약관/i }));
-      await user.click(screen.getByRole("checkbox", { name: /개인정보/i }));
+      // 이유: interactionEnabled=false 상태에서 체크박스 직접 클릭이 차단되므로 모달 경유
+      await user.click(screen.getByRole("button", { name: /이용약관 보기/i }));
+      await user.click(
+        screen.getByRole("button", { name: /Agree and continue/i }),
+      );
+      await user.click(
+        screen.getByRole("button", { name: /개인정보처리방침 보기/i }),
+      );
+      await user.click(
+        screen.getByRole("button", { name: /Agree and continue/i }),
+      );
 
       await user.click(screen.getByRole("button", { name: /^회원가입$/i }));
 
