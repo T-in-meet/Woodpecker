@@ -351,6 +351,19 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
    * - 내부 로깅만 남기고 동일한 SIGNUP_SUCCESS 계약을 유지한다.
    */
   const adminClient = createAdminClient();
+
+  /**
+   * NOTE:
+   * email_confirm: false는 이메일 인증 상태만 제어하며,
+   * Supabase의 자동 이메일 발송을 비활성화하는 옵션이 아니다.
+   * 검증 기준(2026-04-14): 현재 운영/스테이징 설정에서는 Supabase 기본 이메일이
+   * 발송되지 않아 커스텀 magiclink 메일만 발송되고 있다.
+   *
+   * ⚠️ 주의:
+   * Supabase 이메일 설정(Auth Email Provider 포함)이 변경될 경우 기본 메일이 함께
+   * 발송되어 중복 전송이 발생할 수 있으므로, 설정 전제를 유지해야 한다.
+   * 설정 변경 시 signup 메일 발송 회귀 테스트를 반드시 수행한다.
+   */
   const { data: createdData, error: createUserError } =
     await adminClient.auth.admin.createUser({
       email: normalizedEmail,
