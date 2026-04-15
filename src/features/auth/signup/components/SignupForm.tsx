@@ -356,30 +356,6 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
         )}
       </div>
 
-      {/* 프로필 이미지 */}
-      <div className="space-y-4">
-        <Label htmlFor="avatarFile">
-          프로필 사진 <span>(선택)</span>
-        </Label>
-        <Input
-          id="avatarFile"
-          type="file"
-          className={cn(!errors.avatarFile && "mb-14")}
-          accept="image/jpeg,image/png,image/webp"
-          onChange={(e) => {
-            const file = e.target.files?.[0] ?? null;
-
-            /**
-             * RHF에 파일 수동 등록
-             */
-            setValue("avatarFile", file, {
-              shouldValidate: true,
-              shouldDirty: true,
-            });
-          }}
-        />
-      </div>
-
       {/* 약관 */}
       <div
         data-testid="agreements-container"

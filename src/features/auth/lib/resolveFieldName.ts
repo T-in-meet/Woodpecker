@@ -17,7 +17,6 @@ const FORM_FIELD_NAMES = new Set([
   "nickname",
   "termsOfService",
   "privacyPolicy",
-  "avatarFile",
 ]);
 
 /**
