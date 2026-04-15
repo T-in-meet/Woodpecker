@@ -61,7 +61,7 @@ beforeEach(() => {
 
 describe("callback - 파라미터 누락", () => {
   it("TC-01. token_hash가 없으면 307 redirect되고 verifyOtp를 호출하지 않는다", async () => {
-    const response = await GET(makeCallbackRequest({ type: "signup" }));
+    const response = await GET(makeCallbackRequest({ type: "magiclink" }));
 
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toContain(ROUTES.VERIFY_EMAIL);
@@ -86,16 +86,7 @@ describe("callback - 파라미터 누락", () => {
 });
 
 describe("callback - verifyOtp 성공", () => {
-  it("TC-04. token_hash와 type(signup)이 있고 verifyOtp 성공 시 307로 MYPAGE에 redirect된다", async () => {
-    const response = await GET(
-      makeCallbackRequest({ token_hash: "hash-abc", type: "signup" }),
-    );
-
-    expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toContain(ROUTES.MYPAGE);
-  });
-
-  it("TC-05. token_hash와 type(magiclink)이 있고 verifyOtp 성공 시 307로 MYPAGE에 redirect된다", async () => {
+  it("TC-04. token_hash와 type(magiclink)이 있고 verifyOtp 성공 시 307로 MYPAGE에 redirect된다", async () => {
     const response = await GET(
       makeCallbackRequest({ token_hash: "hash-abc", type: "magiclink" }),
     );
@@ -104,20 +95,32 @@ describe("callback - verifyOtp 성공", () => {
     expect(response.headers.get("location")).toContain(ROUTES.MYPAGE);
   });
 
-  it("TC-06. verifyOtp가 { token_hash, type } 형태로 정확히 1회 호출된다", async () => {
-    await GET(makeCallbackRequest({ token_hash: "hash-abc", type: "signup" }));
+  it("TC-05. type이 magiclink가 아니면 307으로 VERIFY_EMAIL에 redirect되고 verifyOtp를 호출하지 않는다", async () => {
+    const response = await GET(
+      makeCallbackRequest({ token_hash: "hash-abc", type: "signup" }),
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toContain(ROUTES.VERIFY_EMAIL);
+    expect(mockVerifyOtp).toHaveBeenCalledTimes(0);
+  });
+
+  it("TC-06. verifyOtp가 { token_hash, type: magiclink } 형태로 정확히 1회 호출된다", async () => {
+    await GET(
+      makeCallbackRequest({ token_hash: "hash-abc", type: "magiclink" }),
+    );
 
     expect(mockVerifyOtp).toHaveBeenCalledTimes(1);
     expect(mockVerifyOtp).toHaveBeenCalledWith({
       token_hash: "hash-abc",
-      type: "signup",
+      type: "magiclink",
     });
   });
 
   it("TC-07. 성공 시 redirect location은 MYPAGE URL과 정확히 일치한다", async () => {
     const request = makeCallbackRequest({
       token_hash: "hash-abc",
-      type: "signup",
+      type: "magiclink",
     });
 
     const response = await GET(request);
@@ -136,7 +139,7 @@ describe("callback - verifyOtp 실패/예외", () => {
     });
 
     const response = await GET(
-      makeCallbackRequest({ token_hash: "hash-abc", type: "signup" }),
+      makeCallbackRequest({ token_hash: "hash-abc", type: "magiclink" }),
     );
 
     expect(response.status).toBe(307);
@@ -148,7 +151,7 @@ describe("callback - verifyOtp 실패/예외", () => {
     mockVerifyOtp.mockRejectedValue(new Error("unexpected"));
 
     const response = await GET(
-      makeCallbackRequest({ token_hash: "hash-abc", type: "signup" }),
+      makeCallbackRequest({ token_hash: "hash-abc", type: "magiclink" }),
     );
 
     expect(response.status).toBe(307);
@@ -161,7 +164,7 @@ describe("callback - redirect location 순수성", () => {
     const response = await GET(
       makeCallbackRequest({
         token_hash: "hash-abc",
-        type: "signup",
+        type: "magiclink",
         extra: { foo: "bar" },
       }),
     );
@@ -183,7 +186,7 @@ describe("callback - redirect location 순수성", () => {
     const response = await GET(
       makeCallbackRequest({
         token_hash: "hash-abc",
-        type: "signup",
+        type: "magiclink",
         extra: { foo: "bar" },
       }),
     );

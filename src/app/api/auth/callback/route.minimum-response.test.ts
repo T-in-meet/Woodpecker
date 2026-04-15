@@ -75,7 +75,7 @@ describe("callback 최소 응답 시간 보장", () => {
   it("TC-01: token_hash 누락 빠른 경로도 최소 응답 시간 이전에 응답하지 않는다", async () => {
     useFastPathClock();
 
-    const promise = GET(makeRequest({ type: "signup" }));
+    const promise = GET(makeRequest({ type: "magiclink" }));
 
     await expectPendingUntilMinimumTime(promise);
 
@@ -98,7 +98,7 @@ describe("callback 최소 응답 시간 보장", () => {
     useFastPathClock();
 
     const promise = GET(
-      makeRequest({ token_hash: "hash-abc", type: "signup" }),
+      makeRequest({ token_hash: "hash-abc", type: "magiclink" }),
     );
 
     await expectPendingUntilMinimumTime(promise);
@@ -116,7 +116,7 @@ describe("callback 최소 응답 시간 보장", () => {
     });
 
     const promise = GET(
-      makeRequest({ token_hash: "hash-abc", type: "signup" }),
+      makeRequest({ token_hash: "hash-abc", type: "magiclink" }),
     );
 
     await expectPendingUntilMinimumTime(promise);
@@ -130,7 +130,7 @@ describe("callback 최소 응답 시간 보장", () => {
     const setTimeoutSpy = vi.spyOn(global, "setTimeout");
 
     const response = await GET(
-      makeRequest({ token_hash: "hash-abc", type: "signup" }),
+      makeRequest({ token_hash: "hash-abc", type: "magiclink" }),
     );
 
     expect(response.status).toBe(307);

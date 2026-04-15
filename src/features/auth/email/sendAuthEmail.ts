@@ -6,7 +6,13 @@ import type { EmailProvider } from "./providers/emailProvider.types";
 import { sendViaNodemailer } from "./providers/sendViaNodemailer";
 import { sendViaResend } from "./providers/sendViaResend";
 
-type AuthEmailType = "signup" | "magiclink";
+/**
+ * 인증 이메일 링크 타입
+ *
+ * 정책:
+ * - auth 이메일 링크는 magiclink 단일 타입만 사용한다.
+ */
+export type AuthEmailType = "magiclink";
 
 /**
  * 이메일 전송 provider를 환경에 따라 결정한다.
