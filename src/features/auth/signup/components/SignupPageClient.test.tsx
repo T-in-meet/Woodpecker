@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -23,8 +23,30 @@ async function submitValidSignupForm(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText(/^비밀번호$/i), "password123");
   await user.type(screen.getByLabelText(/비밀번호 확인/i), "password123");
   await user.type(screen.getByLabelText(/닉네임/i), "tester");
-  await user.click(screen.getByRole("checkbox", { name: /이용약관/i }));
-  await user.click(screen.getByRole("checkbox", { name: /개인정보/i }));
+  // interactionEnabled=false 상태에서 체크박스 클릭이 모달을 열므로 모달 경유
+  // 이유: agreement-interaction-control-spec에서 모달-먼저 상호작용 강제
+  await user.click(screen.getByRole("button", { name: /이용약관 보기/i }));
+  const termsDialog = await screen.findByRole("dialog");
+  await user.click(
+    within(termsDialog).getByRole("button", { name: /동의하기/i }),
+  );
+  // 즉시 언마운트/애니메이션 지연 모두 허용
+  await waitFor(() => {
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  await user.click(
+    screen.getByRole("button", { name: /개인정보처리방침 보기/i }),
+  );
+  const privacyDialog = await screen.findByRole("dialog");
+  await user.click(
+    within(privacyDialog).getByRole("button", { name: /동의하기/i }),
+  );
+  // 즉시 언마운트/애니메이션 지연 모두 허용
+  await waitFor(() => {
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
   await user.click(screen.getByRole("button", { name: /회원가입/i }));
 }
 
@@ -189,8 +211,32 @@ describe("PR-UI-13: SignupPageClient submit → mutateAsync → redirectTo 연�
     await user.type(screen.getByLabelText(/비밀번호 확인/i), "password123");
     await user.type(screen.getByLabelText(/닉네임/i), "tester");
     await user.upload(screen.getByLabelText(/프로필 사진/i), avatarFile);
-    await user.click(screen.getByRole("checkbox", { name: /이용약관/i }));
-    await user.click(screen.getByRole("checkbox", { name: /개인정보/i }));
+    // interactionEnabled=false 상태에서 체크박스 클릭이 모달을 열므로 모달 경유
+    // 이유: agreement-interaction-control-spec에서 모달-먼저 상호작용 강제
+    await user.click(screen.getByRole("button", { name: /이용약관 보기/i }));
+    const termsDialog = await screen.findByRole("dialog");
+    await user.click(
+      within(termsDialog).getByRole("button", { name: /동의하기/i }),
+    );
+    // 즉시 언마운트/애니메이션 지연 모두 허용
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: /개인정보처리방침 보기/i }),
+    );
+    const privacyDialog = await screen.findByRole("dialog");
+    await user.click(
+      within(privacyDialog).getByRole("button", {
+        name: /동의하기/i,
+      }),
+    );
+    // 즉시 언마운트/애니메이션 지연 모두 허용
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
     await user.click(screen.getByRole("button", { name: /회원가입/i }));
 
     await waitFor(() => {

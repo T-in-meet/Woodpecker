@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
-import { useCallback } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -20,6 +20,7 @@ import {
   RATE_LIMIT_TOAST_MESSAGE,
 } from "@/features/auth/errors/rateLimitError";
 import { resolveFieldName } from "@/features/auth/lib/resolveFieldName";
+import { LegalDialogWrapper } from "@/features/auth/signup/components/LegalDialogWrapper";
 import { signupFormSchema } from "@/features/auth/signup/schema/signupFormSchema";
 import { cn } from "@/lib/utils/cn";
 import { showToast } from "@/lib/utils/showToast";
@@ -91,6 +92,27 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
       privacyPolicy: false,
     },
   });
+
+  /**
+   * UI 상호작용 상태 — RHF form field가 아니므로 useState로 관리
+   * interactionEnabled: 모달을 한번이라도 열고 닫아야 true로 전환
+   * 이유: HTML disabled 금지 스펙 — aria-disabled + 인터셉트 방식으로 대체
+   */
+  const [termsInteractionEnabled, setTermsInteractionEnabled] = useState(false);
+  const [privacyInteractionEnabled, setPrivacyInteractionEnabled] =
+    useState(false);
+  const [termsModalOpen, setTermsModalOpen] = useState(false);
+  const [privacyModalOpen, setPrivacyModalOpen] = useState(false);
+  const [termsOpenedByLabel, setTermsOpenedByLabel] = useState(false);
+  const [privacyOpenedByLabel, setPrivacyOpenedByLabel] = useState(false);
+
+  /**
+   * focus fallback 대상 refs
+   * Checkbox 컴포넌트가 forwardRef를 지원하므로
+   * checkboxRef.current.focus()로 포커스 복원 가능
+   */
+  const termsCheckboxRef = useRef<HTMLButtonElement>(null);
+  const privacyCheckboxRef = useRef<HTMLButtonElement>(null);
 
   /**
    * password / confirmPassword 분리
@@ -213,7 +235,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
         await trigger("confirmPassword");
       }
     },
-    [onPasswordChange, trigger],
+    [getValues, onPasswordChange, trigger],
   );
 
   /**
@@ -226,6 +248,41 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
     },
     [onConfirmChange, trigger],
   );
+
+  /**
+   * 모달이 닫힐 때에만 interactionEnabled 활성화
+   * 이유: 콘텐츠 열람 의도 확인 이후부터 직접 조작 허용 (스펙 명시)
+   * 향후: 스크롤 완료 후에만 활성화하는 정책으로 강화 가능 (scrollEnforced 플래그 추가 포인트)
+   */
+  const handleTermsOpenChange = (open: boolean) => {
+    setTermsModalOpen(open);
+    if (!open) {
+      setTermsInteractionEnabled(true);
+      // Label 경유 플래그는 닫힘 시 리셋하여 다음 오픈에서 stale 상태를 방지
+      setTermsOpenedByLabel(false);
+    }
+  };
+
+  const handlePrivacyOpenChange = (open: boolean) => {
+    setPrivacyModalOpen(open);
+    if (!open) {
+      setPrivacyInteractionEnabled(true);
+      // Label 경유 플래그는 닫힘 시 리셋하여 다음 오픈에서 stale 상태를 방지
+      setPrivacyOpenedByLabel(false);
+    }
+  };
+
+  /**
+   * "동의하기" 클릭 시 체크박스 체크
+   * 이유: onAgree에서 setValue("termsOfService", true)를 호출하기 때문
+   */
+  const handleTermsAgree = () => {
+    setValue("termsOfService", true, { shouldValidate: true });
+  };
+
+  const handlePrivacyAgree = () => {
+    setValue("privacyPolicy", true, { shouldValidate: true });
+  };
 
   return (
     <form
@@ -328,6 +385,10 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
         data-testid="agreements-container"
         className="grid grid-cols-1 md:grid-cols-2 gap-4"
       >
+        <p className="md:col-span-2 text-sm text-muted-foreground">
+          약관 확인 후 체크해주세요
+        </p>
+
         {/* 이용약관 */}
         <div data-testid="terms-of-service-field" className="space-y-2">
           <div
@@ -337,33 +398,77 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
               !errors.termsOfService && "mb-8",
             )}
           >
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="bg-blue-400 text-white"
-            >
-              이용약관 보기
-            </Button>
+            <LegalDialogWrapper
+              agreementType="termsOfService"
+              open={termsModalOpen}
+              onOpenChange={handleTermsOpenChange}
+              onAgree={handleTermsAgree}
+              triggerLabel="이용약관 보기"
+              dialogTitle="이용약관"
+              checkboxRef={termsCheckboxRef}
+              openedByLabel={termsOpenedByLabel}
+            />
 
             <div
               data-testid="tos-text-checkbox-group"
               className="flex items-center gap-2"
             >
-              <Label htmlFor="termsOfService">이용약관에 동의합니다</Label>
+              <Label
+                htmlFor="termsOfService"
+                onClick={(e) => {
+                  if (!termsInteractionEnabled) {
+                    // htmlFor 연결로 인한 체크박스 자동 토글을 차단하고 모달 열기
+                    // 이유: Label 클릭이 체크박스 토글을 유발하지 않도록 인터셉트
+                    e.preventDefault();
+                    setTermsOpenedByLabel(true);
+                    setTermsModalOpen(true);
+                  }
+                }}
+              >
+                이용약관에 동의합니다
+              </Label>
 
               <Controller
                 name="termsOfService"
                 control={control}
                 render={({ field }) => (
                   <Checkbox
+                    ref={termsCheckboxRef}
                     id="termsOfService"
+                    data-testid="terms-of-service-checkbox"
                     name={field.name}
                     checked={field.value}
                     onCheckedChange={(checked) => {
+                      // interactionEnabled=false이면 체크 변경을 막고 모달 열기
+                      // 이유: HTML disabled 금지 스펙 준수 — 인터셉트로 동일 효과 구현
+                      if (!termsInteractionEnabled) {
+                        setTermsOpenedByLabel(false);
+                        setTermsModalOpen(true);
+                        return;
+                      }
                       field.onChange(checked === true);
                     }}
+                    onKeyDown={(e) => {
+                      // Space/Enter 키보드 입력도 마우스 클릭과 동일하게 인터셉트
+                      // 이유: 키보드로 aria-disabled 우회를 방지하고 접근성 일관성 보장
+                      if (
+                        !termsInteractionEnabled &&
+                        (e.key === " " || e.key === "Enter")
+                      ) {
+                        e.preventDefault();
+                        setTermsOpenedByLabel(false);
+                        setTermsModalOpen(true);
+                      }
+                    }}
                     onBlur={field.onBlur}
+                    aria-disabled={
+                      !termsInteractionEnabled ? "true" : undefined
+                    }
+                    aria-label={
+                      !termsInteractionEnabled
+                        ? "약관을 먼저 확인해야 체크할 수 있습니다"
+                        : undefined
+                    }
                     aria-describedby={
                       errors.termsOfService
                         ? "terms-of-service-error"
@@ -394,17 +499,30 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
               !errors.privacyPolicy && "mb-8",
             )}
           >
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="bg-blue-400 text-white"
-            >
-              개인정보처리방침 보기
-            </Button>
+            <LegalDialogWrapper
+              agreementType="privacyPolicy"
+              open={privacyModalOpen}
+              onOpenChange={handlePrivacyOpenChange}
+              onAgree={handlePrivacyAgree}
+              triggerLabel="개인정보처리방침 보기"
+              dialogTitle="개인정보처리방침"
+              checkboxRef={privacyCheckboxRef}
+              openedByLabel={privacyOpenedByLabel}
+            />
 
             <div className="flex items-center gap-2">
-              <Label htmlFor="privacyPolicy">
+              <Label
+                htmlFor="privacyPolicy"
+                onClick={(e) => {
+                  if (!privacyInteractionEnabled) {
+                    // htmlFor 연결로 인한 체크박스 자동 토글을 차단하고 모달 열기
+                    // 이유: Label 클릭이 체크박스 토글을 유발하지 않도록 인터셉트
+                    e.preventDefault();
+                    setPrivacyOpenedByLabel(true);
+                    setPrivacyModalOpen(true);
+                  }
+                }}
+              >
                 개인정보 처리방침에 동의합니다
               </Label>
 
@@ -413,13 +531,42 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
                 control={control}
                 render={({ field }) => (
                   <Checkbox
+                    ref={privacyCheckboxRef}
                     id="privacyPolicy"
+                    data-testid="privacy-policy-checkbox"
                     name={field.name}
                     checked={field.value}
                     onCheckedChange={(checked) => {
+                      // interactionEnabled=false이면 체크 변경을 막고 모달 열기
+                      // 이유: HTML disabled 금지 스펙 준수 — 인터셉트로 동일 효과 구현
+                      if (!privacyInteractionEnabled) {
+                        setPrivacyOpenedByLabel(false);
+                        setPrivacyModalOpen(true);
+                        return;
+                      }
                       field.onChange(checked === true);
                     }}
+                    onKeyDown={(e) => {
+                      // Space/Enter 키보드 입력도 마우스 클릭과 동일하게 인터셉트
+                      // 이유: 키보드로 aria-disabled 우회를 방지하고 접근성 일관성 보장
+                      if (
+                        !privacyInteractionEnabled &&
+                        (e.key === " " || e.key === "Enter")
+                      ) {
+                        e.preventDefault();
+                        setPrivacyOpenedByLabel(false);
+                        setPrivacyModalOpen(true);
+                      }
+                    }}
                     onBlur={field.onBlur}
+                    aria-disabled={
+                      !privacyInteractionEnabled ? "true" : undefined
+                    }
+                    aria-label={
+                      !privacyInteractionEnabled
+                        ? "약관을 먼저 확인해야 체크할 수 있습니다"
+                        : undefined
+                    }
                     aria-describedby={
                       errors.privacyPolicy ? "privacy-policy-error" : undefined
                     }
