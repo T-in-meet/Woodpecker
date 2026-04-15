@@ -10,7 +10,6 @@ type SignupPayload = {
     termsOfService: boolean;
     privacyPolicy: boolean;
   };
-  avatarFile?: File | null;
 };
 
 // 회원가입 성공 시 서버에서 반환하는 응답 타입
@@ -29,23 +28,14 @@ export type SignupSuccessResponse = {
 export async function signupMutation(
   payload: SignupPayload,
 ): Promise<SignupSuccessResponse> {
-  // payload를 JSON 또는 multipart 형태로 변환
-  // (이미지 포함 여부 등에 따라 분기됨)
-  const request = buildSignupRequestPayload(payload);
+  // payload를 JSON body 형태로 변환
+  const requestBody = buildSignupRequestPayload(payload);
 
   // 회원가입 API 요청
   const response = await fetch("/api/auth/signup", {
     method: "POST",
-
-    // JSON 요청인 경우: Content-Type 설정 + 문자열 직렬화
-    ...(request.requestType === "json"
-      ? {
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(request.body),
-        }
-      : // multipart 요청인 경우: FormData 그대로 전달
-        // (Content-Type은 브라우저가 자동으로 boundary 포함하여 설정)
-        { body: request.body }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(requestBody),
   });
 
   // 성공/실패 분기 전에 body를 먼저 파싱

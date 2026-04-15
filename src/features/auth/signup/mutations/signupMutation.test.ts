@@ -32,15 +32,12 @@ const signupSuccessResponse = {
   },
 };
 
-// JSON 요청 형태 mock (buildSignupRequestPayload가 반환하는 값)
-const jsonRequestMock = {
-  requestType: "json" as const,
-  body: {
-    email: "test@example.com",
-    password: "Password123!",
-    nickname: "tester",
-    agreements: { termsOfService: true, privacyPolicy: true },
-  },
+// JSON 요청 body mock (buildSignupRequestPayload가 반환하는 값)
+const jsonRequestBodyMock = {
+  email: "test@example.com",
+  password: "Password123!",
+  nickname: "tester",
+  agreements: { termsOfService: true, privacyPolicy: true },
 };
 
 describe("signupMutation", () => {
@@ -55,9 +52,9 @@ describe("signupMutation", () => {
     vi.clearAllMocks();
   });
 
-  it("json 요청이면 Content-Type application/json과 직렬화된 body로 fetch를 호출한다", async () => {
-    // payload builder가 JSON 형태 요청을 반환하도록 설정
-    vi.mocked(buildSignupRequestPayload).mockReturnValue(jsonRequestMock);
+  it("JSON 요청으로 fetch를 호출한다", async () => {
+    // payload builder가 JSON body를 반환하도록 설정
+    vi.mocked(buildSignupRequestPayload).mockReturnValue(jsonRequestBodyMock);
 
     // fetch가 성공 응답을 반환하도록 설정
     mockFetch.mockResolvedValue({
@@ -73,38 +70,12 @@ describe("signupMutation", () => {
     expect(mockFetch).toHaveBeenCalledWith("/api/auth/signup", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(jsonRequestMock.body),
-    });
-  });
-
-  it("multipart 요청이면 Content-Type 없이 FormData body로 fetch를 호출한다", async () => {
-    const formData = new FormData();
-
-    // multipart 요청 형태로 반환하도록 설정
-    vi.mocked(buildSignupRequestPayload).mockReturnValue({
-      requestType: "multipart",
-      body: formData,
-    });
-
-    // fetch 성공 응답 설정
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => signupSuccessResponse,
-    });
-
-    // mutation 실행
-    await signupMutation(validSignupPayload);
-
-    // multipart는 Content-Type을 직접 설정하면 안됨 (boundary 문제)
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-    expect(mockFetch).toHaveBeenCalledWith("/api/auth/signup", {
-      method: "POST",
-      body: formData,
+      body: JSON.stringify(jsonRequestBodyMock),
     });
   });
 
   it("fetch가 ok: true면 응답 객체를 그대로 반환한다", async () => {
-    vi.mocked(buildSignupRequestPayload).mockReturnValue(jsonRequestMock);
+    vi.mocked(buildSignupRequestPayload).mockReturnValue(jsonRequestBodyMock);
     mockFetch.mockResolvedValue({
       ok: true,
       json: async () => signupSuccessResponse,
@@ -120,7 +91,7 @@ describe("signupMutation", () => {
   it("TC-04: fetch가 ok: false면 실패 응답 객체를 그대로 reject 한다", async () => {
     const failureBody = { code: "SIGNUP_FAILED" };
 
-    vi.mocked(buildSignupRequestPayload).mockReturnValue(jsonRequestMock);
+    vi.mocked(buildSignupRequestPayload).mockReturnValue(jsonRequestBodyMock);
     mockFetch.mockResolvedValue({
       ok: false,
       json: async () => failureBody,
@@ -142,7 +113,7 @@ describe("signupMutation", () => {
       },
     };
 
-    vi.mocked(buildSignupRequestPayload).mockReturnValue(jsonRequestMock);
+    vi.mocked(buildSignupRequestPayload).mockReturnValue(jsonRequestBodyMock);
     mockFetch.mockResolvedValue({
       ok: false,
       json: async () => failureBody,
@@ -159,7 +130,7 @@ describe("signupMutation", () => {
   });
 
   it("buildSignupRequestPayload를 payload와 함께 정확히 1회 호출한다", async () => {
-    vi.mocked(buildSignupRequestPayload).mockReturnValue(jsonRequestMock);
+    vi.mocked(buildSignupRequestPayload).mockReturnValue(jsonRequestBodyMock);
     mockFetch.mockResolvedValue({
       ok: true,
       json: async () => signupSuccessResponse,
