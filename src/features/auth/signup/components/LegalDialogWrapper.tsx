@@ -1,12 +1,18 @@
 "use client";
 
-import * as RadixDialog from "@radix-ui/react-dialog";
 import * as React from "react";
 
 import type { LegalSection } from "@/components/legal/LegalContent";
 import { privacySections } from "@/components/legal/PrivacySections";
 import { termsSections } from "@/components/legal/TermsSections";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils/cn";
 
 type AgreementType = "termsOfService" | "privacyPolicy";
@@ -71,8 +77,8 @@ export function LegalDialogWrapper({
   };
 
   return (
-    <RadixDialog.Root open={open} onOpenChange={handleOpenChange} modal={true}>
-      <RadixDialog.Trigger asChild>
+    <Dialog open={open} onOpenChange={handleOpenChange} modal={true}>
+      <DialogTrigger asChild>
         <Button
           type="button"
           variant="ghost"
@@ -81,67 +87,62 @@ export function LegalDialogWrapper({
         >
           {triggerLabel}
         </Button>
-      </RadixDialog.Trigger>
+      </DialogTrigger>
 
-      <RadixDialog.Portal>
-        <RadixDialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
-        <RadixDialog.Content
-          className="fixed left-1/2 top-1/2 z-50 flex max-h-[85vh] w-[90vw] max-w-2xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg bg-background p-6 shadow-lg"
-          aria-describedby={`${agreementType}-description`}
-        >
-          <RadixDialog.Title className="text-lg font-semibold mb-4">
-            {dialogTitle}
-          </RadixDialog.Title>
+      <DialogContent
+        className="flex max-h-[85vh] flex-col overflow-hidden"
+        aria-describedby={`${agreementType}-description`}
+      >
+        <DialogTitle className="mb-4">{dialogTitle}</DialogTitle>
 
-          {/* 스크린리더용 설명 텍스트 */}
-          <div id={`${agreementType}-description`} className="sr-only">
-            {dialogTitle} 전문을 확인하고 동의할 수 있습니다.
-          </div>
+        {/* 스크린리더용 설명 텍스트 */}
+        <div id={`${agreementType}-description`} className="sr-only">
+          {dialogTitle} 전문을 확인하고 동의할 수 있습니다.
+        </div>
 
-          {/* 법적 콘텐츠 — 스크롤 가능한 영역 */}
-          <div className="relative mb-4 min-h-0 flex-1 overflow-y-auto">
-            <div className="prose dark:prose-invert max-w-none space-y-6">
-              {contentSections.map((section) => (
-                <div key={section.article}>
-                  <h3 className="text-base font-semibold">
-                    {section.article} {section.title}
-                  </h3>
-                  <div className="text-sm text-muted-foreground">
-                    {section.content}
-                  </div>
+        {/* 법적 콘텐츠 — 스크롤 가능한 영역 */}
+        <div className="relative mb-4 min-h-0 flex-1 overflow-y-auto">
+          <div className="prose dark:prose-invert max-w-none space-y-6">
+            {contentSections.map((section) => (
+              <div key={section.article}>
+                <h3 className="text-base font-semibold">
+                  {section.article} {section.title}
+                </h3>
+                <div className="text-sm text-muted-foreground">
+                  {section.content}
                 </div>
-              ))}
-            </div>
-
-            {/* 스크롤 힌트: 하단 gradient overlay */}
-            <div
-              className={cn(
-                "pointer-events-none absolute inset-x-0 bottom-0 h-16",
-                "bg-linear-to-t from-background to-transparent",
-              )}
-              aria-hidden="true"
-            />
+              </div>
+            ))}
           </div>
 
-          {/* 푸터: 동작 버튼 */}
-          <div className="sticky bottom-0 z-10 -mx-6 border-t bg-background px-6 pt-4">
-            <div className="flex justify-end gap-2">
-              <RadixDialog.Close asChild>
-                <Button type="button" variant="ghost">
-                  닫기
-                </Button>
-              </RadixDialog.Close>
-              <Button
-                type="button"
-                onClick={handleAgree}
-                className="bg-blue-500 text-white hover:bg-blue-600"
-              >
-                동의하기
+          {/* 스크롤 힌트: 하단 gradient overlay */}
+          <div
+            className={cn(
+              "pointer-events-none absolute inset-x-0 bottom-0 h-16",
+              "bg-linear-to-t from-background to-transparent",
+            )}
+            aria-hidden="true"
+          />
+        </div>
+
+        {/* 푸터: 동작 버튼 */}
+        <div className="sticky bottom-0 z-10 -mx-6 border-t bg-background px-6 pt-4">
+          <div className="flex justify-end gap-2">
+            <DialogClose asChild>
+              <Button type="button" variant="ghost">
+                닫기
               </Button>
-            </div>
+            </DialogClose>
+            <Button
+              type="button"
+              onClick={handleAgree}
+              className="bg-blue-500 text-white hover:bg-blue-600"
+            >
+              동의하기
+            </Button>
           </div>
-        </RadixDialog.Content>
-      </RadixDialog.Portal>
-    </RadixDialog.Root>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

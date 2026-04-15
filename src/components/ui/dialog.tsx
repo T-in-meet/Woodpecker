@@ -13,13 +13,11 @@ const DialogOverlay = React.forwardRef<
   React.ElementRef<typeof Dialog.Overlay>,
   React.ComponentPropsWithoutRef<typeof Dialog.Overlay>
 >(({ className, ...props }, ref) => (
-  <DialogPortal>
-    <Dialog.Overlay
-      ref={ref}
-      className={cn("fixed inset-0 z-50 bg-black/50", className)}
-      {...props}
-    />
-  </DialogPortal>
+  <Dialog.Overlay
+    ref={ref}
+    className={cn("fixed inset-0 z-50 bg-black/50", className)}
+    {...props}
+  />
 ));
 DialogOverlay.displayName = Dialog.Overlay.displayName;
 
@@ -44,18 +42,40 @@ const DialogContent = React.forwardRef<
 ));
 DialogContent.displayName = Dialog.Content.displayName;
 
-function DialogHeader({ children }: { children: React.ReactNode }) {
-  return <div className="mb-4">{children}</div>;
-}
-
-function DialogTitle({ children }: { children: React.ReactNode }) {
+function DialogHeader({
+  children,
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <Dialog.Title className="text-lg font-semibold">{children}</Dialog.Title>
+    <div className={cn("mb-4", className)} {...props}>
+      {children}
+    </div>
   );
 }
 
-function DialogFooter({ children }: { children: React.ReactNode }) {
-  return <div className="mt-6 flex justify-end gap-2">{children}</div>;
+function DialogTitle({
+  children,
+  className,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof Dialog.Title>) {
+  return (
+    <Dialog.Title className={cn("text-lg font-semibold", className)} {...props}>
+      {children}
+    </Dialog.Title>
+  );
+}
+
+function DialogFooter({
+  children,
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div className={cn("mt-6 flex justify-end gap-2", className)} {...props}>
+      {children}
+    </div>
+  );
 }
 
 export {

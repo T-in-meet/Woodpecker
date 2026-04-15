@@ -466,7 +466,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
                     }
                     aria-label={
                       !termsInteractionEnabled
-                        ? "Agreement must be reviewed before checking"
+                        ? "약관을 먼저 확인해야 체크할 수 있습니다"
                         : undefined
                     }
                     aria-describedby={
@@ -484,19 +484,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
             <p
               id="terms-of-service-error"
               role="alert"
-              className="text-red-500 cursor-pointer"
-              onClick={() => {
-                setTermsOpenedByLabel(false);
-                setTermsModalOpen(true);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  setTermsOpenedByLabel(false);
-                  setTermsModalOpen(true);
-                }
-              }}
-              tabIndex={0}
+              className="text-red-500"
             >
               {errors.termsOfService.message}
             </p>
@@ -576,7 +564,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
                     }
                     aria-label={
                       !privacyInteractionEnabled
-                        ? "Agreement must be reviewed before checking"
+                        ? "약관을 먼저 확인해야 체크할 수 있습니다"
                         : undefined
                     }
                     aria-describedby={
@@ -589,23 +577,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
           </div>
 
           {errors.privacyPolicy && (
-            <p
-              id="privacy-policy-error"
-              role="alert"
-              className="text-red-500 cursor-pointer"
-              onClick={() => {
-                setPrivacyOpenedByLabel(false);
-                setPrivacyModalOpen(true);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  setPrivacyOpenedByLabel(false);
-                  setPrivacyModalOpen(true);
-                }
-              }}
-              tabIndex={0}
-            >
+            <p id="privacy-policy-error" role="alert" className="text-red-500">
               {errors.privacyPolicy.message}
             </p>
           )}
