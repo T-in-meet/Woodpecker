@@ -12,7 +12,6 @@
  * - 약관 동의 실패
  * - 기존 계정 인증/미인증 분기
  * - rate limit
- * - avatar 업로드
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
