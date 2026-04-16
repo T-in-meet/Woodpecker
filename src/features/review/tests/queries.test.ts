@@ -8,7 +8,7 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: createClientMock,
 }));
 
-import { getPendingReviewLog } from "../queries";
+import { getPendingReviewLog, getReviewableNote } from "../queries";
 
 function createReviewLogsQueryMock(data: unknown) {
   const chain = {
@@ -28,6 +28,54 @@ function createReviewLogsQueryMock(data: unknown) {
   };
 }
 
+function createNotesQueryMock(data: unknown) {
+  const chain = {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue({ data, error: null }),
+  };
+
+  return {
+    chain,
+    supabase: {
+      from: vi.fn().mockReturnValue(chain),
+    },
+  };
+}
+
+describe("getReviewableNote", () => {
+  beforeEach(() => {
+    createClientMock.mockReset();
+  });
+
+  it("returns the note review status fields needed by the review page", async () => {
+    const { chain, supabase } = createNotesQueryMock({
+      title: "테스트 노트",
+      language: "markdown",
+      next_review_at: "2026-01-06T09:00:00.000Z",
+      review_round: 2,
+    });
+
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await getReviewableNote(
+      "11111111-1111-4111-8111-111111111111",
+      "user-123",
+    );
+
+    expect(supabase.from).toHaveBeenCalledWith("notes");
+    expect(chain.select).toHaveBeenCalledWith(
+      "title, language, next_review_at, review_round",
+    );
+    expect(result).toEqual({
+      title: "테스트 노트",
+      language: "markdown",
+      next_review_at: "2026-01-06T09:00:00.000Z",
+      review_round: 2,
+    });
+  });
+});
+
 describe("getPendingReviewLog", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -40,7 +88,7 @@ describe("getPendingReviewLog", () => {
   });
 
   it("returns the pending review log even before its scheduled time", async () => {
-    const { chain, supabase } = createReviewLogsQueryMock({
+    const { supabase } = createReviewLogsQueryMock({
       id: "22222222-2222-4222-8222-222222222222",
       note_id: "11111111-1111-4111-8111-111111111111",
       round: 1,

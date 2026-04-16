@@ -43,7 +43,9 @@ export default async function NoteReviewPage({
   }
 
   if (!pendingReviewLog) {
-    const isCompleted = note.review_round >= MAX_REVIEW_ROUND;
+    const nextReviewAt = note.next_review_at;
+    const isCompleted =
+      note.review_round >= MAX_REVIEW_ROUND && nextReviewAt === null;
 
     return (
       <div className="mx-auto flex min-h-[60vh] w-full max-w-3xl items-center px-6 py-10 md:px-12">

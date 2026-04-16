@@ -114,6 +114,7 @@ describe("NoteReviewPage", () => {
     getReviewableNoteMock.mockResolvedValue({
       title: "테스트 노트",
       language: "markdown",
+      next_review_at: null,
       review_round: 3,
     });
     getPendingReviewLogMock.mockResolvedValue(null);
@@ -136,11 +137,42 @@ describe("NoteReviewPage", () => {
     ).toBeInTheDocument();
   });
 
+  it("does not mark the note as completed when the next review is still scheduled", async () => {
+    createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
+    getReviewableNoteMock.mockResolvedValue({
+      title: "테스트 노트",
+      language: "markdown",
+      next_review_at: "2026-01-08T00:00:00.000Z",
+      review_round: 3,
+    });
+    getPendingReviewLogMock.mockResolvedValue(null);
+
+    render(
+      await NoteReviewPage({
+        params: Promise.resolve({
+          noteId: "11111111-1111-1111-1111-111111111111",
+        }),
+      }),
+    );
+
+    expect(
+      screen.getByRole("heading", {
+        name: "진행 중인 백지 테스트가 없습니다.",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", {
+        name: "이 노트는 모든 복습을 마쳤습니다.",
+      }),
+    ).not.toBeInTheDocument();
+  });
+
   it("renders the blank test page when a pending review exists", async () => {
     createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
     getReviewableNoteMock.mockResolvedValue({
       title: "테스트 노트",
       language: "markdown",
+      next_review_at: "2026-01-02T00:00:00.000Z",
       review_round: 0,
     });
     getPendingReviewLogMock.mockResolvedValue({

@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 const reviewableNoteSchema = z.object({
   title: z.string(),
   language: z.enum(NOTE_LANGUAGE_VALUES).nullable(),
+  next_review_at: z.string().nullable(),
   review_round: z.number().int().min(0).max(MAX_REVIEW_ROUND),
 });
 
@@ -36,7 +37,7 @@ export async function getReviewableNote(
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("notes")
-    .select("title, language, review_round")
+    .select("title, language, next_review_at, review_round")
     .eq("id", noteId)
     .eq("user_id", userId)
     .maybeSingle();
