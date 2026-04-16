@@ -1,14 +1,9 @@
 -- avatars 버킷 RLS 정책
 --
 -- 설계 원칙:
--- - SELECT: 전체 공개 (public 버킷)
+-- - SELECT: 정책 없음 (public 버킷은 URL 서빙에 SELECT RLS 불필요, 열거 방지)
 -- - INSERT/UPDATE/DELETE: 인증 유저 본인 폴더({auth.uid()}/)만 허용
 -- - 회원가입 업로드는 service_role(adminClient)로 처리되어 RLS 우회
-
--- SELECT: 전체 공개
-CREATE POLICY "avatars_public_select"
-  ON storage.objects FOR SELECT
-  USING (bucket_id = 'avatars');
 
 -- INSERT: 인증 유저가 본인 폴더에만 업로드 가능
 CREATE POLICY "avatars_authenticated_insert"
