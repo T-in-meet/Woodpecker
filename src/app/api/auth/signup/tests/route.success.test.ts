@@ -80,15 +80,17 @@ describe("회원가입 API 기본 성공 흐름 검증", () => {
     expect(mockCreateUser).toHaveBeenCalledTimes(1);
   });
 
-  it("TC-02: 이메일은 소문자로 정규화되어 generateLink에 전달된다", async () => {
+  it("TC-02: raw email이 generateLink에 전달된다", async () => {
     mockSignupGenerateLinkSuccess();
 
     await POST(makeRequest(requestBody));
 
+    // canonicalization을 위해 canonical email은 내부용으로만 사용
+    // generateLink는 auth.users의 raw email 기준으로 호출
     expect(mockGenerateLink).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "magiclink",
-        email: "test@example.com",
+        email: "Test@Example.com",
       }),
     );
   });
@@ -113,23 +115,25 @@ describe("회원가입 API 기본 성공 흐름 검증", () => {
     expect(typeof body.data).toBe("object");
   });
 
-  it("TC-06: 성공 응답 data.email은 소문자로 정규화된 이메일이다", async () => {
+  it("TC-06: 성공 응답 data.email은 사용자 입력 이메일(raw email)을 보존한다", async () => {
     mockSignupGenerateLinkSuccess();
 
     const response = await POST(makeRequest(requestBody));
     const body = await response.json();
 
-    expect(body.data.email).toBe("test@example.com");
+    // canonicalization은 내부 identity check용
+    // 응답은 사용자 입력 보존 (raw email)
+    expect(body.data.email).toBe("Test@Example.com");
   });
 
-  it("TC-07: 성공 응답 data는 email과 redirectTo만 포함한다", async () => {
+  it("TC-07: 성공 응답 data는 email(raw)과 redirectTo만 포함한다", async () => {
     mockSignupGenerateLinkSuccess();
 
     const response = await POST(makeRequest(requestBody));
     const body = await response.json();
 
     expect(body.data).toEqual({
-      email: "test@example.com",
+      email: "Test@Example.com",
       redirectTo: ROUTES.VERIFY_EMAIL,
     });
   });

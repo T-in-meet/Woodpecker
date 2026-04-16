@@ -1,81 +1,90 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
- * 이메일로 사용자 조회 (Admin API 사용)
+ * canonical_email으로 사용자 조회
  *
- * - Supabase Auth의 admin.listUsers()는 이메일 단건 조회 API를 제공하지 않음
- * - 따라서 페이지네이션을 순회하며 전체 유저 목록에서 이메일을 탐색
+ * 설계 변경 (v2):
+ * - 기존: Supabase admin.listUsers() O(N) 스캔 (페이지네이션으로 전체 유저 순회)
+ * - 변경: profiles.canonical_email 인덱스 기반 O(1) 조회
  *
- * @param email 조회할 사용자 이메일
+ * 흐름:
+ * 1. profiles 테이블에서 canonical_email로 id 조회 (service role key)
+ * 2. 해당 id로 auth.users에서 email_confirmed_at 조회 (admin API)
+ *
+ * @param canonicalEmail 정규화된 이메일 (signup/resend에서 canonicalizeEmail() 결과)
  * @returns
- *  - 존재하는 경우: { email, email_confirmed_at }
+ *  - 존재하는 경우: { email: auth.users의 원본 이메일, email_confirmed_at }
  *  - 존재하지 않는 경우: null
  *
  * ⚠️ 주의사항
- * - O(N) 탐색 (전체 유저 수에 비례) → 사용자 수 많아지면 성능 이슈
- * - 서버리스/대규모 환경에서는 DB 테이블(profile 등) 기반 조회로 대체 권장
+ * - 입력값은 반드시 canonicalizeEmail() 결과여야 함
+ * - profiles 테이블에 canonical_email이 존재해야 함 (migration 필수)
+ * - email_confirmed_at은 Supabase Auth가 관리하는 필드
  */
 export async function getUserByEmail(
-  email: string,
+  canonicalEmail: string,
 ): Promise<{ email: string; email_confirmed_at: string | null } | null> {
-  /**
-   * 관리자 권한 Supabase 클라이언트
-   * - 일반 client로는 admin API 사용 불가
-   */
-  const supabase = createAdminClient();
+  const adminClient = createAdminClient();
 
   /**
-   * 페이지네이션 설정
-   * - Supabase listUsers는 page 기반 pagination 사용
+   * 1단계: profiles 테이블에서 canonical_email로 사용자 id 조회
+   * - canonical_email은 UNIQUE index로 빠른 조회 (O(1))
+   * - null 값은 UNIQUE 제약에서 제외되므로 maybeSingle() 안전
    */
-  let page = 1;
-  const perPage = 1000;
+  const { data: profile, error: profileError } = await adminClient
+    .from("profiles")
+    .select("id")
+    .eq("canonical_email", canonicalEmail)
+    .maybeSingle();
 
-  while (true) {
-    /**
-     * 현재 페이지 사용자 목록 조회
-     */
-    const { data, error } = await supabase.auth.admin.listUsers({
-      page,
-      perPage,
-    });
-
-    /**
-     * API 호출 실패 시 에러 전파
-     * - 상위에서 에러 처리 (로그/응답 매핑)
-     */
-    if (error) {
-      throw error;
-    }
-
-    /**
-     * 현재 페이지에서 이메일 일치 사용자 탐색
-     */
-    const user = data.users.find((u) => u.email === email);
-
-    /**
-     * 사용자 발견 시 필요한 필드만 반환
-     * - email: fallback으로 입력값 사용
-     * - email_confirmed_at: null 가능
-     */
-    if (user) {
-      return {
-        email: user.email ?? email,
-        email_confirmed_at: user.email_confirmed_at ?? null,
-      };
-    }
-
-    /**
-     * 마지막 페이지 판단
-     * - 현재 페이지 데이터 수가 perPage보다 작으면 더 이상 데이터 없음
-     */
-    if (data.users.length < perPage) {
-      return null;
-    }
-
-    /**
-     * 다음 페이지로 이동
-     */
-    page += 1;
+  /**
+   * profiles 조회 실패 시 에러 전파
+   */
+  if (profileError) {
+    throw profileError;
   }
+
+  /**
+   * 프로필 없으면 사용자 미존재
+   *
+   * 운영 전제:
+   * - canonical_email 도입 시점에 기존 사용자 데이터는 삭제 후 재가입으로 전환한다.
+   * - 따라서 canonical_email이 비어 있는 legacy profiles를 여기서 fallback 조회하지 않는다.
+   * - legacy 데이터 유지 배포가 필요해지면 backfill migration과 함께 fallback 정책을 재검토해야 한다.
+   */
+  if (!profile) {
+    return null;
+  }
+
+  /**
+   * 2단계: auth.users에서 해당 id로 사용자 조회
+   * - email_confirmed_at을 포함하여 이메일 인증 상태 확인
+   */
+  const { data: userData, error: userError } =
+    await adminClient.auth.admin.getUserById(profile.id);
+
+  /**
+   * auth.users 조회 실패 시 에러 전파
+   */
+  if (userError) {
+    throw userError;
+  }
+
+  /**
+   * 사용자 없으면 일관성 위반 (profiles 존재하는데 auth.users 없음)
+   * 실제로는 FK 제약으로 불가능하지만 방어 처리
+   */
+  if (!userData.user) {
+    return null;
+  }
+
+  /**
+   * 사용자 정보 반환
+   * - email: auth.users의 raw email (사용자 입력 보존)
+   * - email_confirmed_at: 이메일 인증 상태
+   */
+  return {
+    email: userData.user.email ?? "",
+    email_confirmed_at: userData.user.email_confirmed_at ?? null,
+  };
 }

@@ -56,7 +56,7 @@ export const EMAIL_LONG_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
  *
  * @param route - "signup" 또는 "resend" (어떤 API가 차단되었는지 로깅 목적)
  * @param ip - 클라이언트 IP 주소 (IP 저장소에 그대로 사용됨)
- * @param email - 이메일 주소 (저장소 키를 위해 소문자로 변환됨)
+ * @param email - canonical email (caller에서 canonicalizeEmail() 적용된 값)
  *
  * @returns { allowed: boolean }
  *
@@ -79,7 +79,7 @@ export const EMAIL_LONG_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
  * - 완전한 교체(Full replace): 항상 새로운 WindowEntry/EmailEligibilityEntry 객체를 생성함
  * - 불변 업데이트(Immutable update): nextWindow()는 새 객체를 반환하며 직접 수정하지 않음
  * - 상태 오염 방지: 차단된 요청은 어떠한 상태도 건드리지 않음
- * - 이메일 정규화: 스토어 키 일관성을 위해 이메일을 소문자로 변환함
+ * - 정규화 책임 분리: 이 함수는 이메일을 정규화하지 않으며 caller의 canonical 값을 그대로 사용함
  *
  */
 
@@ -111,14 +111,16 @@ export function checkRequestEligibility(
   email: string,
 ): { allowed: boolean } {
   const now = Date.now();
-  const normalizedEmail = email.toLowerCase();
+  // caller(signup/resend)가 canonicalizeEmail으로 canonical email을 전달 보장
+  // 중복 정규화 제거 — email을 그대로 canonical email key로 사용
+  const canonicalEmail = email;
 
   // ============================================================================
   // 1. 읽기(Read) 단계 — 상태 업데이트 없이 모든 조건 평가
   // ============================================================================
 
   const ipEntry = ipStore.get(ip);
-  const emailEntry = emailStore.get(normalizedEmail) ?? {
+  const emailEntry = emailStore.get(canonicalEmail) ?? {
     shortWindow: null,
     longWindow: null,
   };
@@ -152,7 +154,7 @@ export function checkRequestEligibility(
     logRequestEligibilityBlocked({
       route,
       ip,
-      email: normalizedEmail,
+      email: canonicalEmail,
       ipOk,
       emailShortOk,
       emailLongOk,
@@ -170,7 +172,7 @@ export function checkRequestEligibility(
     shortWindow: nextWindow(emailEntry.shortWindow, EMAIL_SHORT_WINDOW_MS, now),
     longWindow: nextWindow(emailEntry.longWindow, EMAIL_LONG_WINDOW_MS, now),
   };
-  emailStore.set(normalizedEmail, nextEmailEntry);
+  emailStore.set(canonicalEmail, nextEmailEntry);
 
   /**
    * 기회주의적 cleanup 실행

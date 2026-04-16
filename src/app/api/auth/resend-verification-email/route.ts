@@ -9,6 +9,7 @@ import {
 } from "@/features/auth/lib/checkRequestEligibility";
 import { failureResponse, successResponse } from "@/features/auth/lib/response";
 import { resendVerificationEmail } from "@/features/auth/resend-verification-email/lib/resendVerificationEmail";
+import { canonicalizeEmail } from "@/lib/utils/canonicalizeEmail";
 import { getClientIp } from "@/lib/utils/getClientIp";
 import { VALIDATION_REASON } from "@/lib/validation/reasons";
 
@@ -117,10 +118,11 @@ export async function POST(request: NextRequest) {
   /**
    * 4. 이메일 정규화
    *
-   * - 대소문자 구분 제거
+   * - canonicalizeEmail으로 단일 정규화 진입점 사용
+   * - Gmail alias를 동일 identity로 취급
    * - request eligibility key 일관성 유지
    */
-  const normalizedEmail = parsed.data.email.toLowerCase();
+  const canonicalEmail = canonicalizeEmail(parsed.data.email);
 
   /**
    * 5. Request eligibility check — 통합 판별
@@ -132,7 +134,7 @@ export async function POST(request: NextRequest) {
    * - cooldown timestamp 제거: email short window로 대체 (즉시 재시도 억제)
    * - 관측 가능성(Observability): 차단 시에만 내부 로그 기록
    */
-  const eligibility = checkRequestEligibility("resend", ip, normalizedEmail);
+  const eligibility = checkRequestEligibility("resend", ip, canonicalEmail);
   if (!eligibility.allowed) {
     return applyMinimumResponseTime(
       start,
@@ -153,10 +155,10 @@ export async function POST(request: NextRequest) {
    * "계약 통일이 필요한 구간(side-effect 실행 단계)"의 예외만 의도적으로 흡수한다.
    */
   try {
-    await resendVerificationEmail(normalizedEmail);
+    await resendVerificationEmail(canonicalEmail);
   } catch (error) {
     console.error("Resend verification email side-effect failed", {
-      maskedEmail: maskEmail(normalizedEmail),
+      maskedEmail: maskEmail(canonicalEmail),
       error,
     });
   }
@@ -167,7 +169,7 @@ export async function POST(request: NextRequest) {
   return applyMinimumResponseTime(
     start,
     successResponse(AUTH_API_CODES.EMAIL_VERIFICATION_RESEND_SUCCESS, {
-      email: normalizedEmail,
+      email: canonicalEmail,
       resent: true,
     }),
   );

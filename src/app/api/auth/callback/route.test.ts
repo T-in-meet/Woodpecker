@@ -45,7 +45,9 @@ function makeCallbackRequest(params?: {
     }
   }
 
-  const requestInit: RequestInit = { method: "GET" };
+  const requestInit: RequestInit & { signal?: AbortSignal | undefined } = {
+    method: "GET",
+  };
   if (params?.headers) {
     requestInit.headers = params.headers;
   }

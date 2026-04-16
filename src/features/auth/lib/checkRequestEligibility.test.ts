@@ -534,26 +534,31 @@ describe("checkRequestEligibility", () => {
   });
 
   // ============================================================================
-  // Email normalization consistency
+  // Email canonicalization (caller responsibility)
   // ============================================================================
 
-  describe("email 정규화 일관성", () => {
-    it("TC-23. 대소문자 다른 이메일 → 동일 key로 state 공유", () => {
-      const email1 = "Test@Example.com";
-      const email2 = "test@example.com";
+  describe("email canonicalization은 caller 책임", () => {
+    it("TC-23. caller가 canonical email을 전달 → 동일 canonical은 동일 bucket", () => {
+      // caller(signup/resend)에서 canonicalizeEmail()으로 정규화 후 전달
+      // 이 테스트는 canonicalized email들이 동일 bucket을 공유하는지 검증
+      const canonicalEmail = "test@example.com"; // caller가 이미 정규화
 
-      // Consume long limit via uppercase variant (advance past short window between requests)
+      // Consume long limit (advance past short window between requests)
       for (let i = 0; i < EMAIL_LONG_LIMIT; i++) {
-        checkRequestEligibility("signup", `10.0.0.${i}`, email1);
+        checkRequestEligibility("signup", `10.0.0.${i}`, canonicalEmail);
         if (i < EMAIL_LONG_LIMIT - 1) {
           vi.advanceTimersByTime(EMAIL_SHORT_WINDOW_MS + 1);
         }
       }
 
-      // Next request via lowercase variant should also be blocked (same key, long limit reached)
+      // Next request with same canonical should also be blocked (long limit reached)
       vi.advanceTimersByTime(EMAIL_SHORT_WINDOW_MS + 1);
-      const result = checkRequestEligibility("signup", "10.0.0.99", email2);
-      expect(result.allowed).toBe(false);
+      const result = checkRequestEligibility(
+        "signup",
+        "10.0.0.99",
+        canonicalEmail,
+      );
+      expect(result.allowed).toBe(false); // 동일 canonical → 동일 bucket
     });
   });
 

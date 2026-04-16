@@ -14,6 +14,7 @@ import { mapSignupValidationErrors } from "@/features/auth/signup/lib/mapSignupV
 import { signupApiSchema } from "@/features/auth/signup/schema/signupApiSchema";
 import { ROUTES } from "@/lib/constants/routes";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { canonicalizeEmail } from "@/lib/utils/canonicalizeEmail";
 import { getClientIp } from "@/lib/utils/getClientIp";
 import { VALIDATION_REASON } from "@/lib/validation/reasons";
 
@@ -108,7 +109,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
   }
 
   const { email, password, nickname } = parsed.data;
-  const normalizedEmail = email.toLowerCase();
+  const canonicalEmail = canonicalizeEmail(email);
 
   /**
    * Request eligibility check — IP, email short, email long 에 대한 통합 판별
@@ -119,7 +120,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
    * - AND evaluation: 세 조건(IP, short, long) 모두 통과해야 허용
    * - Observability: 차단 시에만 내부 로그 기록 (raw IP/email 노출 금지)
    */
-  const eligibility = checkRequestEligibility("signup", ip, normalizedEmail);
+  const eligibility = checkRequestEligibility("signup", ip, canonicalEmail);
   if (!eligibility.allowed) {
     return failureResponse(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
   }
@@ -130,7 +131,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
    * ⚠️ 중요:
    * - 외부 응답은 반드시 동일해야 함
    */
-  const existingUser = await getUserByEmail(normalizedEmail);
+  const existingUser = await getUserByEmail(canonicalEmail);
 
   /**
    * [기존 사용자 - 미인증]
@@ -141,16 +142,17 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
    * - 링크 클릭 시 "이메일 인증"과 "로그인"을 한 번에 처리한다.
    */
   if (existingUser && existingUser.email_confirmed_at === null) {
+    const deliveryEmail = existingUser.email;
     try {
       await issueAuthEmailLinkAndSend({
         type: "magiclink", // 로그인 인증 링크 생성
-        email: normalizedEmail,
+        email: deliveryEmail,
       });
     } catch {
-      console.warn("이메일 재발송 실패 (무시됨)", { email: normalizedEmail });
+      console.warn("이메일 재발송 실패 (무시됨)", { email: canonicalEmail });
     }
 
-    return makeSignupSuccess(normalizedEmail);
+    return makeSignupSuccess(email);
   }
 
   /**
@@ -160,18 +162,19 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
    * notify ticket 없이 magiclink로 통일한다.
    */
   if (existingUser && existingUser.email_confirmed_at !== null) {
+    const deliveryEmail = existingUser.email;
     try {
       await issueAuthEmailLinkAndSend({
         type: "magiclink",
-        email: normalizedEmail,
+        email: deliveryEmail,
       });
     } catch {
       console.warn("인증 완료 사용자 이메일 발송 실패 (무시됨)", {
-        email: normalizedEmail,
+        email: canonicalEmail,
       });
     }
 
-    return makeSignupSuccess(normalizedEmail);
+    return makeSignupSuccess(email);
   }
 
   /**
@@ -200,29 +203,26 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
    * 발송되어 중복 전송이 발생할 수 있으므로, 설정 전제를 유지해야 한다.
    * 설정 변경 시 signup 메일 발송 회귀 테스트를 반드시 수행한다.
    */
-  const { data: createdData, error: createUserError } =
-    await adminClient.auth.admin.createUser({
-      email: normalizedEmail,
-      password,
-      email_confirm: false,
-      user_metadata: { nickname },
-    });
+  const { error: createUserError } = await adminClient.auth.admin.createUser({
+    email: email, // raw email — auth.users에 사용자 입력 보존
+    password,
+    email_confirm: false,
+    user_metadata: { nickname, canonical_email: canonicalEmail }, // trigger가 profiles에 기록
+  });
 
   if (createUserError) {
     console.error("Supabase admin.createUser failed", {
-      email: normalizedEmail,
+      email: email, // raw email 로깅
       message: createUserError.message,
       status: createUserError.status,
       code: createUserError.code,
       name: createUserError.name,
     });
-    return makeSignupSuccess(normalizedEmail);
+    return makeSignupSuccess(email); // raw email 응답
   }
 
-  const signupUser = createdData.user;
-
   const { data, error } = await adminClient.auth.admin.generateLink({
-    email: normalizedEmail,
+    email: email, // raw email — auth.users의 실제 email
     type: "magiclink",
     options: {
       data: { nickname },
@@ -231,32 +231,30 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
 
   if (error) {
     console.error("Supabase generateLink(magiclink) failed", {
-      email: normalizedEmail,
+      email: email, // raw email 로깅
       message: error.message,
       status: error.status,
       code: error.code,
       name: error.name,
     });
 
-    return makeSignupSuccess(normalizedEmail);
+    return makeSignupSuccess(email); // raw email 응답
   }
 
   const tokenHash = data.properties?.hashed_token;
 
   if (!tokenHash) {
     console.error("Supabase generateLink(magiclink) returned no hashed token", {
-      email: normalizedEmail,
+      email: email, // raw email 로깅
     });
-    return makeSignupSuccess(normalizedEmail);
+    return makeSignupSuccess(email); // raw email 응답
   }
 
-  const signupUserEmail = signupUser?.email ?? normalizedEmail;
-
   try {
-    await sendAuthEmail(normalizedEmail, tokenHash, "magiclink");
+    await sendAuthEmail(email, tokenHash, "magiclink"); // raw email 발송
   } catch (error) {
     console.error("Failed to send signup magiclink email", {
-      email: normalizedEmail,
+      email: email, // raw email 로깅
       error,
     });
     // AE 방어: 이메일 발송 실패를 외부에 노출하지 않는다.
@@ -266,7 +264,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
   /**
    * 최종 성공 응답 (완전 통일)
    */
-  return makeSignupSuccess(signupUserEmail);
+  return makeSignupSuccess(email); // raw email 응답
 }
 
 /**
