@@ -6,21 +6,23 @@
  *
  * 검증 항목:
  * - 400 응답 및 응답 계약(success, code, data.errors) 준수
- * - validation 이전 단계이므로 외부 의존 호출이 전혀 발생하지 않음
+ * - malformed JSON 단계에서 후속 처리(유저 조회/링크 발급/메일 전송)가 실행되지 않음
  */
 
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
+import { sendAuthEmail } from "@/features/auth/email/sendAuthEmail";
+import { resetEligibilityStore } from "@/features/auth/lib/checkRequestEligibility";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
-import { resetRateLimitStores } from "@/features/auth/signup/lib/checkSignupRateLimit";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 import { POST } from "../route";
 
 vi.mock("@/features/auth/lib/getUserByEmail");
-vi.mock("@/lib/supabase/server");
+vi.mock("@/features/auth/email/sendAuthEmail");
+vi.mock("@/lib/supabase/admin");
 
 function makeMalformedJsonRequest(): NextRequest {
   return new NextRequest("http://localhost/api/auth/signup", {
@@ -31,7 +33,7 @@ function makeMalformedJsonRequest(): NextRequest {
 }
 
 beforeEach(() => {
-  resetRateLimitStores();
+  resetEligibilityStore();
   vi.clearAllMocks();
 });
 
@@ -58,7 +60,8 @@ describe("회원가입 - malformed JSON 처리", () => {
   it("TC-02. malformed JSON 요청 시 외부 의존 호출이 전혀 발생하지 않는다", async () => {
     await POST(makeMalformedJsonRequest());
 
-    expect(createClient).toHaveBeenCalledTimes(0);
+    expect(createAdminClient).toHaveBeenCalledTimes(0);
     expect(getUserByEmail).toHaveBeenCalledTimes(0);
+    expect(sendAuthEmail).toHaveBeenCalledTimes(0);
   });
 });

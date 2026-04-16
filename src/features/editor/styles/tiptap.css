@@ -155,6 +155,17 @@
   font-style: italic;
 }
 
+/* Images */
+.tiptap-wrapper .tiptap img {
+  display: block;
+  max-width: 100%;
+  max-height: min(600px, 70vh);
+  height: auto;
+  object-fit: contain;
+  margin: 0.75rem auto;
+  border-radius: 0.75rem;
+}
+
 /* Horizontal rule */
 .tiptap-wrapper .tiptap hr {
   border: none;

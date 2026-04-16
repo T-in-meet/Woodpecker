@@ -56,9 +56,10 @@ function redirectToVerifyEmail(request: NextRequest): NextResponse {
  * 흐름:
  * 1. Supabase 표준 파라미터(token_hash, type) 추출
  * 2. 파라미터 누락 시 → /verify-email redirect
- * 3. Supabase verifyOtp 호출
- * 4. 성공(error 없음) → /mypage redirect
- * 5. 실패/예외 → /verify-email redirect
+ * 3. type이 magiclink가 아니면 → /verify-email redirect
+ * 4. Supabase verifyOtp 호출 (type: "magiclink" 고정)
+ * 5. 성공(error 없음) → /mypage redirect
+ * 6. 실패/예외 → /verify-email redirect
  *
  * 보안/설계 원칙:
  * - 커스텀 ticket 미사용, Supabase 표준 파라미터만 사용
@@ -78,7 +79,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return finalize(redirectToVerifyEmail(request));
   }
 
-  if (type !== "signup" && type !== "magiclink") {
+  if (type !== "magiclink") {
     return finalize(redirectToVerifyEmail(request));
   }
 
@@ -86,7 +87,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const supabase = await createClient();
     const { error } = await supabase.auth.verifyOtp({
       token_hash: tokenHash,
-      type: type as "signup" | "magiclink",
+      type: "magiclink",
     });
 
     if (error) {

@@ -36,9 +36,10 @@ import { LinkEditPopover } from "./LinkEditPopover";
 
 type BubbleMenuBarProps = {
   editor: Editor;
+  onDeleteBlock?: () => void;
 };
 
-export function BubbleMenuBar({ editor }: BubbleMenuBarProps) {
+export function BubbleMenuBar({ editor, onDeleteBlock }: BubbleMenuBarProps) {
   const [showLinkEdit, setShowLinkEdit] = useState(false);
 
   const handleLinkSubmit = useCallback(
@@ -264,6 +265,17 @@ export function BubbleMenuBar({ editor }: BubbleMenuBarProps) {
             aria-label="Insert table"
           >
             <Table className="size-3.5" />
+          </ToolbarButton>
+
+          <Divider />
+
+          <ToolbarButton
+            onClick={onDeleteBlock}
+            data-testid="toolbar-delete-block"
+            aria-label="Delete block"
+            title="Delete block"
+          >
+            <Trash2 className="size-3.5" />
           </ToolbarButton>
 
           {isTable && (

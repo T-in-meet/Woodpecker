@@ -31,12 +31,8 @@ describe("회원가입 폼", () => {
   it("TC-02: 필수 약관 동의 체크박스를 렌더링한다", () => {
     renderSignupForm();
 
-    expect(
-      screen.getByRole("checkbox", { name: /이용약관/i }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("checkbox", { name: /개인정보/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId("terms-of-service-checkbox")).toBeInTheDocument();
+    expect(screen.getByTestId("privacy-policy-checkbox")).toBeInTheDocument();
   });
 
   it("TC-03: 선택 입력인 프로필 이미지 파일 input을 렌더링한다", () => {
@@ -79,12 +75,8 @@ describe("회원가입 폼", () => {
     expect(screen.getByLabelText(/비밀번호 확인/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/닉네임/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/프로필/i)).toBeInTheDocument();
-    expect(
-      screen.getByRole("checkbox", { name: /이용약관/i }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("checkbox", { name: /개인정보/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId("terms-of-service-checkbox")).toBeInTheDocument();
+    expect(screen.getByTestId("privacy-policy-checkbox")).toBeInTheDocument();
   });
 
   it('TC-08: 비밀번호 및 비밀번호 확인 필드는 type="password"를 사용한다', () => {
@@ -109,12 +101,8 @@ describe("회원가입 폼", () => {
   it("TC-10: 초기 렌더링 시 약관 체크박스는 체크되지 않은 상태이다", () => {
     renderSignupForm();
 
-    expect(
-      screen.getByRole("checkbox", { name: /이용약관/i }),
-    ).not.toBeChecked();
-    expect(
-      screen.getByRole("checkbox", { name: /개인정보/i }),
-    ).not.toBeChecked();
+    expect(screen.getByTestId("terms-of-service-checkbox")).not.toBeChecked();
+    expect(screen.getByTestId("privacy-policy-checkbox")).not.toBeChecked();
   });
 
   it("TC-11: 초기 렌더링 시 회원가입 버튼은 활성 상태이다", () => {

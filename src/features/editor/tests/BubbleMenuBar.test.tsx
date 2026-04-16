@@ -159,6 +159,7 @@ describe("BubbleMenuBar", () => {
     expect(screen.getByTestId("toolbar-code-block")).toBeInTheDocument();
     expect(screen.getByTestId("toolbar-divider")).toBeInTheDocument();
     expect(screen.getByTestId("toolbar-insert-table")).toBeInTheDocument();
+    expect(screen.getByTestId("toolbar-delete-block")).toBeInTheDocument();
     expect(screen.getByTestId("toolbar-add-link")).toBeInTheDocument();
   });
 
@@ -202,6 +203,22 @@ describe("BubbleMenuBar", () => {
     await user.click(screen.getByTestId("toolbar-add-link"));
 
     expect(screen.getByPlaceholderText("https://...")).toBeInTheDocument();
+  });
+
+  it("calls the block delete handler when the delete button is clicked", async () => {
+    const user = userEvent.setup();
+    const handleDeleteBlock = vi.fn();
+
+    render(
+      <BubbleMenuBar
+        editor={createMockEditor()}
+        onDeleteBlock={handleDeleteBlock}
+      />,
+    );
+
+    await user.click(screen.getByTestId("toolbar-delete-block"));
+
+    expect(handleDeleteBlock).toHaveBeenCalledTimes(1);
   });
 
   it("extends the active link range before updating the URL", async () => {

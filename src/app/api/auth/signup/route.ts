@@ -1,17 +1,15 @@
 import { after, NextRequest } from "next/server";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
+import { issueAuthEmailLinkAndSend } from "@/features/auth/email/issueAuthEmailLinkAndSend";
 import { sendAuthEmail } from "@/features/auth/email/sendAuthEmail";
 import { applyMinimumResponseTime } from "@/features/auth/lib/applyMinimumResponseTime";
+import {
+  checkIpRateLimitPrecheck,
+  checkRequestEligibility,
+} from "@/features/auth/lib/checkRequestEligibility";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { failureResponse, successResponse } from "@/features/auth/lib/response";
-import {
-  checkSignupEmailRateLimit,
-  checkSignupIpRateLimit,
-  EMAIL_LIMIT,
-  EMAIL_WINDOW_MS,
-} from "@/features/auth/signup/lib/checkSignupRateLimit";
-import { logSignupRateLimitHit } from "@/features/auth/signup/lib/logSignupRateLimitHit";
 import { mapSignupValidationErrors } from "@/features/auth/signup/lib/mapSignupValidationErrors";
 import { signupApiSchema } from "@/features/auth/signup/schema/signupApiSchema";
 import {
@@ -218,28 +216,30 @@ async function uploadAvatar(
  * 타이밍 정책(최소 응답 시간)은 POST에서 일괄 적용한다.
  */
 async function resolveSignupResponse(request: NextRequest): Promise<Response> {
+  const makeSignupSuccess = (email: string) =>
+    successResponse(
+      AUTH_API_CODES.SIGNUP_SUCCESS,
+      {
+        email,
+        redirectTo: ROUTES.VERIFY_EMAIL,
+      },
+      { status: 200 },
+    );
+
   /**
    * 요청 IP 추출 (rate limit key)
    */
   const ip = getClientIp(request);
 
   /**
-   * IP rate limit은 가장 앞단에서 적용한다.
+   * IP 사전 검증 — 본문 파싱 비용 없이 IP 차단
    *
-   * 이유:
-   * - malformed JSON / validation 실패 요청도 abuse 트래픽일 수 있다.
-   * - 본문 파싱 이전에 차단해야 불필요한 서버 자원 소모를 줄일 수 있다.
-   * - 따라서 signup에서는 "IP 선차단, email 후차단"의 단계형 정책을 사용한다.
+   * [이유: spec precheck_ip_rate_limit — must_run_before_body_parsing 요건]
+   * - 읽기 전용: ipStore를 읽기만 함, 상태 변경 금지
+   * - 최종 결정 권한이 아님: 이후 checkRequestEligibility가 최종 판단
    */
-  const ipRateLimit = await checkSignupIpRateLimit(ip);
-  if (!ipRateLimit.allowed) {
-    logSignupRateLimitHit({
-      dimension: "ip",
-      route: "/api/auth/signup",
-      limit: ipRateLimit.limit,
-      windowMs: ipRateLimit.windowMs,
-      ip,
-    });
+  const precheck = checkIpRateLimitPrecheck(ip);
+  if (!precheck.allowed) {
     return failureResponse(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
   }
 
@@ -275,21 +275,16 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
   const normalizedEmail = email.toLowerCase();
 
   /**
-   * Email rate limit은 validation 이후 정규화된 이메일 기준으로 적용한다.
+   * Request eligibility check — IP, email short, email long 에 대한 통합 판별
    *
-   * 이유:
-   * - email key는 유효한 입력에서만 의미가 있다.
-   * - 소문자 정규화 후 같은 계정을 동일한 버킷으로 취급해야 한다.
+   * 설계:
+   * - single entry point: checkRequestEligibility 하나로 모든 조건 평가
+   * - atomic: 판단과 상태 업데이트가 함수 내에서 함께 일어남
+   * - AND evaluation: 세 조건(IP, short, long) 모두 통과해야 허용
+   * - Observability: 차단 시에만 내부 로그 기록 (raw IP/email 노출 금지)
    */
-  const emailRateLimit = await checkSignupEmailRateLimit(normalizedEmail);
-  if (!emailRateLimit.allowed) {
-    logSignupRateLimitHit({
-      dimension: "email",
-      route: "/api/auth/signup",
-      limit: EMAIL_LIMIT,
-      windowMs: EMAIL_WINDOW_MS,
-      email: normalizedEmail,
-    });
+  const eligibility = checkRequestEligibility("signup", ip, normalizedEmail);
+  if (!eligibility.allowed) {
     return failureResponse(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
   }
 
@@ -305,38 +300,21 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
    * [기존 사용자 - 미인증]
    *
    * 이메일 재발송 시도 (side-effect)
-   * ⚠️ 설계 의도: 미인증 상태에서 회원가입을 다시 시도한 경우,
-   * 메일의 링크를 누르면 "이메일 인증"과 "로그인"을 한 번에 처리해주기 위해
-   * 'signup'이 아닌 'magiclink' 타입을 발급한다.
+   * ⚠️ 설계 의도:
+   * - signup 정책은 magiclink 단일 타입을 사용한다.
+   * - 링크 클릭 시 "이메일 인증"과 "로그인"을 한 번에 처리한다.
    */
   if (existingUser && existingUser.email_confirmed_at === null) {
     try {
-      const adminClient = createAdminClient();
-      const { data: linkData, error: linkError } =
-        await adminClient.auth.admin.generateLink({
-          type: "magiclink", // 로그인 인증 링크 생성
-          email: normalizedEmail,
-        });
-
-      if (!linkError && linkData?.properties?.hashed_token) {
-        await sendAuthEmail(
-          normalizedEmail,
-          linkData.properties.hashed_token,
-          "magiclink",
-        );
-      }
+      await issueAuthEmailLinkAndSend({
+        type: "magiclink", // 로그인 인증 링크 생성
+        email: normalizedEmail,
+      });
     } catch {
       console.warn("이메일 재발송 실패 (무시됨)", { email: normalizedEmail });
     }
 
-    return successResponse(
-      AUTH_API_CODES.SIGNUP_SUCCESS,
-      {
-        email: normalizedEmail,
-        redirectTo: ROUTES.VERIFY_EMAIL,
-      },
-      { status: 200 },
-    );
+    return makeSignupSuccess(normalizedEmail);
   }
 
   /**
@@ -347,67 +325,76 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
    */
   if (existingUser && existingUser.email_confirmed_at !== null) {
     try {
-      const adminClient = createAdminClient();
-      const { data: linkData, error: linkError } =
-        await adminClient.auth.admin.generateLink({
-          type: "magiclink",
-          email: normalizedEmail,
-        });
-
-      if (!linkError && linkData?.properties?.hashed_token) {
-        await sendAuthEmail(
-          normalizedEmail,
-          linkData.properties.hashed_token,
-          "magiclink",
-        );
-      }
+      await issueAuthEmailLinkAndSend({
+        type: "magiclink",
+        email: normalizedEmail,
+      });
     } catch {
       console.warn("인증 완료 사용자 이메일 발송 실패 (무시됨)", {
         email: normalizedEmail,
       });
     }
 
-    return successResponse(
-      AUTH_API_CODES.SIGNUP_SUCCESS,
-      {
-        email: normalizedEmail,
-        redirectTo: ROUTES.VERIFY_EMAIL,
-      },
-      { status: 200 },
-    );
+    return makeSignupSuccess(normalizedEmail);
   }
 
   /**
    * [신규 사용자 가입]
+   *
+   * 순서:
+   * 1) createUser로 auth user 생성 보장
+   * 2) magiclink 발급
+   * 3) 커스텀 메일 발송
+   *
+   * 실패 정책:
+   * - createUser/generateLink/tokenHash/sendAuthEmail 실패는 모두 외부에 노출하지 않는다.
+   * - 내부 로깅만 남기고 동일한 SIGNUP_SUCCESS 계약을 유지한다.
    */
   const adminClient = createAdminClient();
+
+  /**
+   * NOTE:
+   * email_confirm: false는 이메일 인증 상태만 제어하며,
+   * Supabase의 자동 이메일 발송을 비활성화하는 옵션이 아니다.
+   * 검증 기준(2026-04-14): 현재 운영/스테이징 설정에서는 Supabase 기본 이메일이
+   * 발송되지 않아 커스텀 magiclink 메일만 발송되고 있다.
+   *
+   * ⚠️ 주의:
+   * Supabase 이메일 설정(Auth Email Provider 포함)이 변경될 경우 기본 메일이 함께
+   * 발송되어 중복 전송이 발생할 수 있으므로, 설정 전제를 유지해야 한다.
+   * 설정 변경 시 signup 메일 발송 회귀 테스트를 반드시 수행한다.
+   */
+  const { data: createdData, error: createUserError } =
+    await adminClient.auth.admin.createUser({
+      email: normalizedEmail,
+      password,
+      email_confirm: false,
+      user_metadata: { nickname },
+    });
+
+  if (createUserError) {
+    console.error("Supabase admin.createUser failed", {
+      email: normalizedEmail,
+      message: createUserError.message,
+      status: createUserError.status,
+      code: createUserError.code,
+      name: createUserError.name,
+    });
+    return makeSignupSuccess(normalizedEmail);
+  }
+
+  const signupUser = createdData.user;
+
   const { data, error } = await adminClient.auth.admin.generateLink({
     email: normalizedEmail,
-    password,
-    type: "signup",
+    type: "magiclink",
     options: {
-      /**
-       * emailRedirectTo 제거 이유
-       *
-       * 기존:
-       * - Supabase의 emailRedirectTo를 사용해 인증 링크 생성
-       *
-       * 변경:
-       * - 인증 이메일은 Supabase 기본 링크를 사용하지 않고 sendAuthEmail을 사용한다
-       *
-       * 목적:
-       * - Account Enumeration 방어를 위한 외부 흐름 통일
-       *
-       * 결과:
-       * - signUp에서는 emailRedirectTo를 설정하지 않는다
-       */
-
       data: { nickname },
     },
   });
 
   if (error) {
-    console.error("Supabase generateLink(signup) failed", {
+    console.error("Supabase generateLink(magiclink) failed", {
       email: normalizedEmail,
       message: error.message,
       status: error.status,
@@ -415,24 +402,24 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
       name: error.name,
     });
 
-    return failureResponse(AUTH_API_CODES.SIGNUP_INVALID_INPUT, {
-      status: 400,
-    });
+    return makeSignupSuccess(normalizedEmail);
   }
 
   const tokenHash = data.properties?.hashed_token;
 
   if (!tokenHash) {
-    console.error("Supabase generateLink(signup) returned no hashed token", {
+    console.error("Supabase generateLink(magiclink) returned no hashed token", {
       email: normalizedEmail,
     });
-    return failureResponse(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR);
+    return makeSignupSuccess(normalizedEmail);
   }
 
+  const signupUserEmail = signupUser?.email ?? normalizedEmail;
+
   try {
-    await sendAuthEmail(normalizedEmail, tokenHash, "signup");
+    await sendAuthEmail(normalizedEmail, tokenHash, "magiclink");
   } catch (error) {
-    console.error("Failed to send signup verification email", {
+    console.error("Failed to send signup magiclink email", {
       email: normalizedEmail,
       error,
     });
@@ -446,22 +433,15 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
    * 응답 시간에서 upload latency를 제거하기 위해 after()로 응답 후 처리한다.
    * 실패해도 이미 응답이 전송된 이후이므로 외부 응답에 영향을 주지 않는다.
    */
-  if (avatarFile && data.user) {
-    const userId = data.user.id;
+  if (avatarFile && signupUser?.id) {
+    const userId = signupUser.id;
     after(() => uploadAvatar(adminClient, avatarFile, userId));
   }
 
   /**
    * 최종 성공 응답 (완전 통일)
    */
-  return successResponse(
-    AUTH_API_CODES.SIGNUP_SUCCESS,
-    {
-      email: data.user.email ?? normalizedEmail,
-      redirectTo: ROUTES.VERIFY_EMAIL,
-    },
-    { status: 200 },
-  );
+  return makeSignupSuccess(signupUserEmail);
 }
 
 /**

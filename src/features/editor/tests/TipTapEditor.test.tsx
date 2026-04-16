@@ -1,6 +1,6 @@
 import "./setup";
 
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -15,6 +15,32 @@ function getEditorContentElement() {
   }
 
   return contentElement;
+}
+
+type ClipboardDataMockType = {
+  files: { length: number };
+  getData: (type: string) => string;
+  items: { length: number };
+  types: string[];
+};
+
+function dispatchPaste(text: string) {
+  const pasteEvent = new Event("paste", {
+    bubbles: true,
+    cancelable: true,
+  });
+  const clipboardData: ClipboardDataMockType = {
+    files: { length: 0 },
+    getData: (type: string) => (type === "text/plain" ? text : ""),
+    items: { length: 0 },
+    types: ["text/plain"],
+  };
+
+  Object.defineProperty(pasteEvent, "clipboardData", {
+    value: clipboardData,
+  });
+
+  getEditorContentElement().dispatchEvent(pasteEvent);
 }
 
 describe("TipTapEditor", () => {
@@ -132,6 +158,27 @@ describe("TipTapEditor", () => {
     expect(screen.getByTestId("bubble-toolbar")).toBeInTheDocument();
     expect(screen.getByTestId("toolbar-undo")).toBeInTheDocument();
     expect(screen.getByTestId("toolbar-bold")).toBeInTheDocument();
+  });
+
+  it("deletes the current block from the toolbar", async () => {
+    const user = userEvent.setup();
+    const handleChange = vi.fn();
+
+    render(<TipTapEditor value="Delete me" onChange={handleChange} />);
+
+    await waitFor(() => {
+      expect(getEditorContentElement()).toBeTruthy();
+    });
+
+    await user.click(getEditorContentElement());
+    await user.click(await screen.findByLabelText("Open block toolbar"));
+    await user.click(screen.getByTestId("toolbar-delete-block"));
+
+    await waitFor(() => {
+      expect(getEditorContentElement().textContent).not.toContain("Delete me");
+    });
+
+    expect(handleChange).toHaveBeenCalled();
   });
 
   it("shows the language selector after turning the current block into a code block", async () => {
@@ -253,5 +300,78 @@ describe("TipTapEditor", () => {
     );
 
     expect(linkExtension?.options?.openOnClick).toBe(true);
+  });
+
+  it("converts pasted markdown images with angle-bracket destinations", async () => {
+    const user = userEvent.setup();
+    const handleChange = vi.fn();
+
+    render(<TipTapEditor value="" onChange={handleChange} />);
+    await waitFor(() => {
+      expect(getEditorContentElement()).toBeTruthy();
+    });
+
+    await user.click(getEditorContentElement());
+
+    await act(async () => {
+      dispatchPaste(
+        "![Dog](<https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQDBqBsYdSaYjDuQTnKzZG-M-IxDEf8vA0bgA&s>)",
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("img", { name: "Dog" })).toBeInTheDocument();
+    });
+
+    expect(handleChange).toHaveBeenLastCalledWith(
+      "![Dog](https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQDBqBsYdSaYjDuQTnKzZG-M-IxDEf8vA0bgA&s)",
+    );
+  });
+
+  it("converts pasted markdown images with empty alt text", async () => {
+    const user = userEvent.setup();
+    const handleChange = vi.fn();
+
+    render(<TipTapEditor value="" onChange={handleChange} />);
+    await waitFor(() => {
+      expect(getEditorContentElement()).toBeTruthy();
+    });
+
+    await user.click(getEditorContentElement());
+
+    await act(async () => {
+      dispatchPaste("![](https://example.com/empty-alt.png)");
+    });
+
+    await waitFor(() => {
+      const image = document.querySelector(
+        'img[src="https://example.com/empty-alt.png"]',
+      );
+
+      expect(image).toBeInTheDocument();
+      expect(image).toHaveAttribute("alt", "");
+    });
+
+    expect(handleChange).toHaveBeenLastCalledWith(
+      "![](https://example.com/empty-alt.png)",
+    );
+  });
+
+  it("shows the block handle when an image block is focused", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <TipTapEditor
+        value="![Dog](https://example.com/diagram.png)"
+        onChange={vi.fn()}
+      />,
+    );
+
+    const image = await screen.findByRole("img", { name: "Dog" });
+    await user.click(image);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Open block toolbar")).toBeInTheDocument();
+    });
   });
 });
