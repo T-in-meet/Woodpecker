@@ -151,7 +151,11 @@ describe("회원가입 폼 검증", () => {
     await user.type(screen.getByLabelText(/^비밀번호$/i), "password123");
     await user.type(screen.getByLabelText(/비밀번호 확인/i), "password123");
     await user.type(screen.getByLabelText(/닉네임/i), "테스트닉");
-    await user.click(screen.getByRole("checkbox", { name: /개인정보/i }));
+    // 이유: interactionEnabled=false 상태에서 체크박스 직접 클릭이 차단되므로 모달 경유
+    await user.click(
+      screen.getByRole("button", { name: /개인정보처리방침 보기/i }),
+    );
+    await user.click(screen.getByRole("button", { name: /동의하기/i }));
 
     await user.click(screen.getByRole("button", { name: /회원가입/i }));
 
@@ -168,7 +172,9 @@ describe("회원가입 폼 검증", () => {
     await user.type(screen.getByLabelText(/^비밀번호$/i), "password123");
     await user.type(screen.getByLabelText(/비밀번호 확인/i), "password123");
     await user.type(screen.getByLabelText(/닉네임/i), "테스트닉");
-    await user.click(screen.getByRole("checkbox", { name: /이용약관/i }));
+    // 이유: interactionEnabled=false 상태에서 체크박스 직접 클릭이 차단되므로 모달 경유
+    await user.click(screen.getByRole("button", { name: /이용약관 보기/i }));
+    await user.click(screen.getByRole("button", { name: /동의하기/i }));
 
     await user.click(screen.getByRole("button", { name: /회원가입/i }));
 
@@ -233,8 +239,13 @@ describe("회원가입 폼 검증", () => {
     await user.type(screen.getByLabelText(/^비밀번호$/i), "password123");
     await user.type(screen.getByLabelText(/비밀번호 확인/i), "password123");
     await user.type(screen.getByLabelText(/닉네임/i), "테스트닉");
-    await user.click(screen.getByRole("checkbox", { name: /이용약관/i }));
-    await user.click(screen.getByRole("checkbox", { name: /개인정보/i }));
+    // 이유: interactionEnabled=false 상태에서 체크박스 직접 클릭이 차단되므로 모달 경유
+    await user.click(screen.getByRole("button", { name: /이용약관 보기/i }));
+    await user.click(screen.getByRole("button", { name: /동의하기/i }));
+    await user.click(
+      screen.getByRole("button", { name: /개인정보처리방침 보기/i }),
+    );
+    await user.click(screen.getByRole("button", { name: /동의하기/i }));
 
     await user.click(screen.getByRole("button", { name: /회원가입/i }));
 
@@ -270,8 +281,8 @@ describe("회원가입 폼 검증", () => {
     ).toBeInTheDocument();
 
     // 2️⃣ 접근성 연결 검증
-    const termsCheckbox = screen.getByRole("checkbox", { name: /이용약관/i });
-    const privacyCheckbox = screen.getByRole("checkbox", { name: /개인정보/i });
+    const termsCheckbox = screen.getByTestId("terms-of-service-checkbox");
+    const privacyCheckbox = screen.getByTestId("privacy-policy-checkbox");
 
     expect(termsCheckbox).toHaveAttribute(
       "aria-describedby",
