@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // API 응답 코드 상수
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
+import { MIN_RESPONSE_MS } from "@/features/auth/lib/applyMinimumResponseTime";
 // Request Eligibility store 초기화 (테스트 간 상태 격리)
 import {
   EMAIL_LONG_LIMIT,
@@ -131,6 +132,12 @@ describe("이메일 재전송 Request Eligibility 검증", () => {
     );
   }
 
+  async function postWithMinimumDelay(email: string) {
+    const promise = POST(makeRequest(email));
+    await vi.advanceTimersByTimeAsync(MIN_RESPONSE_MS);
+    return promise;
+  }
+
   beforeEach(() => {
     vi.clearAllMocks();
     resetEligibilityStore();
@@ -149,13 +156,13 @@ describe("이메일 재전송 Request Eligibility 검증", () => {
       const email = "test@example.com";
 
       // 첫 요청 허용
-      const response1 = await POST(makeRequest(email));
+      const response1 = await postWithMinimumDelay(email);
       expect(response1.status).toBe(200);
       expect(resendVerificationEmail).toHaveBeenCalledTimes(1);
 
       // 10초 경과 후 재시도 차단 (short window 활성)
       vi.advanceTimersByTime(10 * 1000);
-      const response2 = await POST(makeRequest(email));
+      const response2 = await postWithMinimumDelay(email);
       const body2 = await response2.json();
 
       expect(response2.status).toBe(429);
@@ -167,14 +174,14 @@ describe("이메일 재전송 Request Eligibility 검증", () => {
       const email = "test2@example.com";
 
       // 첫 요청
-      await POST(makeRequest(email));
+      await postWithMinimumDelay(email);
       expect(resendVerificationEmail).toHaveBeenCalledTimes(1);
 
       // 30초 초과 경과 → short window 만료 (하지만 long window는 활성)
       vi.advanceTimersByTime(31 * 1000);
 
       // 재시도 허용
-      const response = await POST(makeRequest(email));
+      const response = await postWithMinimumDelay(email);
       expect(response.status).toBe(200);
       expect(resendVerificationEmail).toHaveBeenCalledTimes(2);
     });
@@ -191,7 +198,7 @@ describe("이메일 재전송 Request Eligibility 검증", () => {
           vi.advanceTimersByTime(31 * 1000);
         }
 
-        const response = await POST(makeRequest(email));
+        const response = await postWithMinimumDelay(email);
         expect(response.status).toBe(200);
       }
 
@@ -204,12 +211,12 @@ describe("이메일 재전송 Request Eligibility 검증", () => {
       // EMAIL_LONG_LIMIT회 요청
       for (let i = 0; i < EMAIL_LONG_LIMIT; i++) {
         if (i > 0) vi.advanceTimersByTime(31 * 1000);
-        await POST(makeRequest(email));
+        await postWithMinimumDelay(email);
       }
 
       // 다음 요청 차단 (long window 초과)
       vi.advanceTimersByTime(31 * 1000);
-      const response = await POST(makeRequest(email));
+      const response = await postWithMinimumDelay(email);
       const body = await response.json();
 
       expect(response.status).toBe(429);
@@ -223,17 +230,17 @@ describe("이메일 재전송 Request Eligibility 검증", () => {
       // EMAIL_LONG_LIMIT회 요청 (long 한도 소진)
       for (let i = 0; i < EMAIL_LONG_LIMIT; i++) {
         if (i > 0) vi.advanceTimersByTime(31 * 1000);
-        await POST(makeRequest(email));
+        await postWithMinimumDelay(email);
       }
 
       // long window 만료 전: 차단
       vi.advanceTimersByTime(31 * 1000);
-      let response = await POST(makeRequest(email));
+      let response = await postWithMinimumDelay(email);
       expect(response.status).toBe(429);
 
       // long window 만료 (15분): 허용
       vi.advanceTimersByTime(EMAIL_LONG_WINDOW_MS);
-      response = await POST(makeRequest(email));
+      response = await postWithMinimumDelay(email);
       expect(response.status).toBe(200);
       expect(resendVerificationEmail).toHaveBeenCalledTimes(
         EMAIL_LONG_LIMIT + 1,
@@ -247,11 +254,11 @@ describe("이메일 재전송 Request Eligibility 검증", () => {
       const email = "noresend@example.com";
 
       // 첫 요청
-      await POST(makeRequest(email));
+      await postWithMinimumDelay(email);
       expect(resendVerificationEmail).toHaveBeenCalledTimes(1);
 
       // 즉시 재시도 (short window 차단)
-      const response = await POST(makeRequest(email));
+      const response = await postWithMinimumDelay(email);
       expect(response.status).toBe(429);
       expect(resendVerificationEmail).toHaveBeenCalledTimes(1); // 증가하지 않음
     });
@@ -266,11 +273,11 @@ describe("이메일 재전송 Request Eligibility 검증", () => {
       // email1: long 한도 소진
       for (let i = 0; i < EMAIL_LONG_LIMIT; i++) {
         if (i > 0) vi.advanceTimersByTime(31 * 1000);
-        await POST(makeRequest(email1));
+        await postWithMinimumDelay(email1);
       }
 
       // email2: 여전히 허용됨
-      const response = await POST(makeRequest(email2));
+      const response = await postWithMinimumDelay(email2);
       expect(response.status).toBe(200);
       expect(resendVerificationEmail).toHaveBeenCalledTimes(
         EMAIL_LONG_LIMIT + 1,

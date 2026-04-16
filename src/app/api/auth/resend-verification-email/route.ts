@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
+import { applyMinimumResponseTime } from "@/features/auth/lib/applyMinimumResponseTime";
 import {
   checkIpRateLimitPrecheck,
   checkRequestEligibility,
@@ -41,12 +42,19 @@ function maskEmail(email: string): string {
  * 6. 메일 재전송
  * 7. 성공 응답 반환
  *
+ * 보안 — Account Enumeration 방어:
+ * - 이메일 존재 여부에 따른 응답 시간 차이 제거
+ * - 모든 분기(성공/실패/rate-limit)에서 동일한 최소 응답 시간 정책 적용
+ * - signup API와 동일한 timing normalization (MIN_RESPONSE_MS=400ms)
+ * - 공격자가 응답 시간 차이로 계정 존재 여부를 추론할 수 없도록 보장
+ *
  * 설계 변경:
  * - cooldown timestamp 모델 제거 (email short window로 대체)
  * - 단일 entry point: checkRequestEligibility로 모든 rate limit 정책 처리
  * - atomic: 판단과 상태 업데이트가 함수 내에서 함께 일어남
  */
 export async function POST(request: NextRequest) {
+  const start = Date.now();
   /**
    * 1. IP 추출
    *
@@ -64,7 +72,10 @@ export async function POST(request: NextRequest) {
    */
   const precheck = checkIpRateLimitPrecheck(ip);
   if (!precheck.allowed) {
-    return failureResponse(AUTH_API_CODES.RESEND_RATE_LIMIT_EXCEEDED);
+    return applyMinimumResponseTime(
+      start,
+      failureResponse(AUTH_API_CODES.RESEND_RATE_LIMIT_EXCEEDED),
+    );
   }
 
   let body: unknown;
@@ -78,9 +89,12 @@ export async function POST(request: NextRequest) {
   try {
     body = await request.json();
   } catch {
-    return failureResponse(AUTH_API_CODES.RESEND_INVALID_INPUT, {
-      errors: [{ field: "body", reason: VALIDATION_REASON.INVALID_FORMAT }],
-    });
+    return applyMinimumResponseTime(
+      start,
+      failureResponse(AUTH_API_CODES.RESEND_INVALID_INPUT, {
+        errors: [{ field: "body", reason: VALIDATION_REASON.INVALID_FORMAT }],
+      }),
+    );
   }
 
   /**
@@ -92,9 +106,12 @@ export async function POST(request: NextRequest) {
   const parsed = resendSchema.safeParse(body);
 
   if (!parsed.success) {
-    return failureResponse(AUTH_API_CODES.RESEND_INVALID_INPUT, {
-      status: 400,
-    });
+    return applyMinimumResponseTime(
+      start,
+      failureResponse(AUTH_API_CODES.RESEND_INVALID_INPUT, {
+        status: 400,
+      }),
+    );
   }
 
   /**
@@ -117,7 +134,10 @@ export async function POST(request: NextRequest) {
    */
   const eligibility = checkRequestEligibility("resend", ip, normalizedEmail);
   if (!eligibility.allowed) {
-    return failureResponse(AUTH_API_CODES.RESEND_RATE_LIMIT_EXCEEDED);
+    return applyMinimumResponseTime(
+      start,
+      failureResponse(AUTH_API_CODES.RESEND_RATE_LIMIT_EXCEEDED),
+    );
   }
 
   /**
@@ -144,8 +164,11 @@ export async function POST(request: NextRequest) {
   /**
    * 7. 성공 응답 반환
    */
-  return successResponse(AUTH_API_CODES.EMAIL_VERIFICATION_RESEND_SUCCESS, {
-    email: normalizedEmail,
-    resent: true,
-  });
+  return applyMinimumResponseTime(
+    start,
+    successResponse(AUTH_API_CODES.EMAIL_VERIFICATION_RESEND_SUCCESS, {
+      email: normalizedEmail,
+      resent: true,
+    }),
+  );
 }
