@@ -18,12 +18,12 @@
  * - 이메일 long window: 사용자 수준 계정 rate limit (회원가입 + 재전송 공유)
  */
 
+import { evaluateSlidingWindow } from "../utils/rateLimit.utils";
 import {
   emailStore,
   ipStore,
   resetEligibilityStore,
   tryCleanupExpiredEntries,
-  type WindowEntry,
 } from "./requestEligibilityStore";
 
 /**
@@ -76,8 +76,8 @@ export const EMAIL_LONG_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
  * 설계 제약조건:
  * - 지연 초기화(Lazy initialization): email 저장소 항목은 allowed=true 일 때만 생성됨
  * - 안전한 접근: undefined 접근 처리를 막기 위해 ?? defaultEntry 사용
- * - 완전한 교체(Full replace): 항상 새로운 WindowEntry/EmailEligibilityEntry 객체를 생성함
- * - 불변 업데이트(Immutable update): nextWindow()는 새 객체를 반환하며 직접 수정하지 않음
+ * - 책임 위임: prune/evaluate/append는 evaluateSlidingWindow(utils)에서 수행함
+ * - 완전한 교체(Full replace): 이 함수는 utils가 계산한 next 상태를 store에 교체 저장함
  * - 상태 오염 방지: 차단된 요청은 어떠한 상태도 건드리지 않음
  * - 정규화 책임 분리: 이 함수는 이메일을 정규화하지 않으며 caller의 canonical 값을 그대로 사용함
  *
@@ -87,7 +87,7 @@ export const EMAIL_LONG_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
  * IP precheck — read-only 사전 검증
  *
  * - body parsing 이전 단계에서 실행
- * - withinLimit을 사용하여 현재 IP 상태를 평가만 수행
+ * - evaluateSlidingWindow(appendOnAllow=false)로 현재 IP 상태를 읽기 전용 평가만 수행
  * - ipStore 및 어떤 상태도 변경하지 않음
  *
  * 설계 의도:
@@ -125,19 +125,29 @@ export function checkRequestEligibility(
     longWindow: null,
   };
 
-  const ipOk = withinLimit(ipEntry, IP_LIMIT, IP_WINDOW_MS, now);
-  const emailShortOk = withinLimit(
-    emailEntry.shortWindow,
+  // 이유: prune/evaluate/append 책임을 utils로 위임하여 호출부 오케스트레이션 축소
+  const ipEval = evaluateSlidingWindow(
+    ipEntry?.timestamps ?? [],
+    IP_LIMIT,
+    IP_WINDOW_MS,
+    now,
+  );
+  const shortEval = evaluateSlidingWindow(
+    emailEntry.shortWindow?.timestamps ?? [],
     EMAIL_SHORT_LIMIT,
     EMAIL_SHORT_WINDOW_MS,
     now,
   );
-  const emailLongOk = withinLimit(
-    emailEntry.longWindow,
+  const longEval = evaluateSlidingWindow(
+    emailEntry.longWindow?.timestamps ?? [],
     EMAIL_LONG_LIMIT,
     EMAIL_LONG_WINDOW_MS,
     now,
   );
+
+  const ipOk = ipEval.allowed;
+  const emailShortOk = shortEval.allowed;
+  const emailLongOk = longEval.allowed;
 
   // ============================================================================
   // 2. AND 판별
@@ -165,12 +175,12 @@ export function checkRequestEligibility(
   }
 
   // 허용됨: 두 저장소를 모두 원자적으로 업데이트함
-  const nextIpEntry = nextWindow(ipEntry, IP_WINDOW_MS, now);
-  ipStore.set(ip, nextIpEntry);
+  // 이유: utils가 계산한 next 상태를 그대로 저장
+  ipStore.set(ip, { timestamps: ipEval.next });
 
   const nextEmailEntry = {
-    shortWindow: nextWindow(emailEntry.shortWindow, EMAIL_SHORT_WINDOW_MS, now),
-    longWindow: nextWindow(emailEntry.longWindow, EMAIL_LONG_WINDOW_MS, now),
+    shortWindow: { timestamps: shortEval.next },
+    longWindow: { timestamps: longEval.next },
   };
   emailStore.set(canonicalEmail, nextEmailEntry);
 
@@ -190,73 +200,6 @@ export function checkRequestEligibility(
   );
 
   return { allowed: true };
-}
-
-/**
- * 헬퍼: 요청이 한도 내에 있는지 판별함 (읽기 전용, 상태 수정 없음)
- *
- * @param entry - 기존 WindowEntry 이거나 undefined
- * @param limit - 윈도우 내에서 허용된 최대 요청 수
- * @param windowMs - 윈도우 유지 기간
- * @param now - 현재 타임스탬프
- *
- * @returns 요청이 허용되어야 하면 true
- *
- * 논리:
- * - 항목 없음: 허용 (첫 요청)
- * - 만료된 항목: 허용 (윈도우 초기화)
- * - Count < limit: 허용
- * - Count >= limit: 거절
- */
-function withinLimit(
-  entry: WindowEntry | null | undefined,
-  limit: number,
-  windowMs: number,
-  now: number,
-): boolean {
-  if (!entry) {
-    return true;
-  }
-
-  if (now - entry.windowStart >= windowMs) {
-    return true;
-  }
-
-  return entry.count < limit;
-}
-
-/**
- * 헬퍼: 다음 윈도우 상태를 계산함 (불변성 유지)
- *
- * @param entry - 기존 WindowEntry 이거나 null
- * @param windowMs - 윈도우 유지 시간
- * @param now - 현재 타임스탬프
- *
- * @returns 새로운 WindowEntry 객체 반환
- *
- * 설계:
- * - 항목이 없거나 만료된 경우: count=1인 새로운 윈도우 시작
- * - 활성화된 윈도우: count 증가
- * - 언제나 새로운 객체 반환 (입력된 값의 내부값을 변경하지 않음)
- */
-function nextWindow(
-  entry: WindowEntry | null | undefined,
-  windowMs: number,
-  now: number,
-): WindowEntry {
-  if (!entry || now - entry.windowStart >= windowMs) {
-    // 새로운 윈도우
-    return {
-      count: 1,
-      windowStart: now,
-    };
-  }
-
-  // 활성화된 윈도우: count 증가
-  return {
-    count: entry.count + 1,
-    windowStart: entry.windowStart,
-  };
 }
 
 /**
@@ -347,8 +290,14 @@ export function checkIpRateLimitPrecheck(ip: string): { allowed: boolean } {
   const now = Date.now();
   const ipEntry = ipStore.get(ip);
   // [이유: 상태를 변경하지 않고 현재 IP 한도만 평가한다. 최종 결정은 checkRequestEligibility에 위임]
-  const allowed = withinLimit(ipEntry, IP_LIMIT, IP_WINDOW_MS, now);
-  return { allowed };
+  const evaluation = evaluateSlidingWindow(
+    ipEntry?.timestamps ?? [],
+    IP_LIMIT,
+    IP_WINDOW_MS,
+    now,
+    { appendOnAllow: false },
+  );
+  return { allowed: evaluation.allowed };
 }
 
 // 테스트를 위한 모듈 내보내기

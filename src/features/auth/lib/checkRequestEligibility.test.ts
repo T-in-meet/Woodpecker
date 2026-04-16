@@ -504,7 +504,7 @@ describe("checkRequestEligibility", () => {
       expect(result.allowed).toBe(true);
     });
 
-    it("TC-21. email short window: now - windowStart === windowMs 일 때 → { allowed: true }", () => {
+    it("TC-21. email short window: now - windowStart === windowMs 일 때 → { allowed: false }", () => {
       const email = "shortboundary@example.com";
 
       // First request at t=0
@@ -513,9 +513,10 @@ describe("checkRequestEligibility", () => {
       // Advance to exactly EMAIL_SHORT_WINDOW_MS (boundary)
       vi.advanceTimersByTime(EMAIL_SHORT_WINDOW_MS);
 
-      // At boundary, short window should be expired → new window
+      // 슬라이딩 윈도우 규칙(timestamp >= window_start)에서 경계값은 유효 구간에 포함됨
+      // 첫 요청 timestamp가 경계에 포함되므로 short limit(1) 기준으로 차단되어야 한다.
       const result = checkRequestEligibility("signup", "10.0.0.2", email);
-      expect(result.allowed).toBe(true);
+      expect(result.allowed).toBe(false);
     });
 
     it("TC-22. email long window: now - windowStart === windowMs 일 때 → { allowed: true }", () => {
@@ -825,6 +826,19 @@ describe("checkRequestEligibility", () => {
       expect(precheck.allowed).toBe(false);
     });
 
+    it("TC-P2A. 경계값(timestamp === now - window)은 유효로 포함되어 평가된다", () => {
+      const ip = "10.200.1.2";
+      const now = Date.now();
+      const boundaryTs = now - IP_WINDOW_MS;
+
+      (ipStore as unknown as Map<string, { timestamps: number[] }>).set(ip, {
+        timestamps: Array.from({ length: IP_LIMIT }, () => boundaryTs),
+      });
+
+      const precheck = checkIpRateLimitPrecheck(ip);
+      expect(precheck.allowed).toBe(false);
+    });
+
     it("TC-P3. 호출 후 ipStore 상태 변경 없음 (읽기 전용)", () => {
       const ip = "10.200.2.1";
 
@@ -837,26 +851,30 @@ describe("checkRequestEligibility", () => {
       /**
        * 첫 번째 체크 후: 여전히 ipStore에 항목 없음 (precheck은 상태 변경 안 함)
        */
-      let ipEntry = (ipStore as unknown as Map<string, { count: number }>).get(
-        ip,
-      );
+      let ipEntry = (
+        ipStore as unknown as Map<string, { timestamps: number[] }>
+      ).get(ip);
       expect(ipEntry).toBeUndefined();
 
       /**
        * checkRequestEligibility를 통해 상태를 생성해야 ipStore에 항목이 생김
        */
       checkRequestEligibility("signup", ip, "user@example.com");
-      ipEntry = (ipStore as unknown as Map<string, { count: number }>).get(ip);
+      ipEntry = (
+        ipStore as unknown as Map<string, { timestamps: number[] }>
+      ).get(ip);
       expect(ipEntry).toBeDefined();
-      expect(ipEntry?.count).toBe(1);
+      expect(ipEntry?.timestamps.length).toBe(1);
 
       /**
        * Precheck 호출 후 상태가 변경되지 않음
        */
       precheck = checkIpRateLimitPrecheck(ip);
       expect(precheck.allowed).toBe(true); // 아직 한도 이하
-      ipEntry = (ipStore as unknown as Map<string, { count: number }>).get(ip);
-      expect(ipEntry?.count).toBe(1); // count가 변경되지 않음
+      ipEntry = (
+        ipStore as unknown as Map<string, { timestamps: number[] }>
+      ).get(ip);
+      expect(ipEntry?.timestamps.length).toBe(1); // timestamps 길이가 변경되지 않음
     });
   });
 });
