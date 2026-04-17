@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { NOTE_LANGUAGE_VALUES } from "@/lib/constants/noteLanguages";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
-import { createClient } from "@/lib/supabase/server";
+import { createServerComponentClient } from "@/lib/supabase/server";
 
 const noteDetailSchema = z.object({
   id: z.string().uuid(),
@@ -26,7 +26,7 @@ export async function getNoteById(
   noteId: string,
   userId: string,
 ): Promise<NoteDetail | null> {
-  const supabase = await createClient();
+  const supabase = await createServerComponentClient();
   const { data } = await supabase
     .from("notes")
     .select(

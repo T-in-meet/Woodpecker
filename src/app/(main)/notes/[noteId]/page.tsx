@@ -7,7 +7,7 @@ import { NoteViewer } from "@/features/notes/components/NoteViewer";
 import { getNoteById } from "@/features/notes/queries";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { getNoteReviewRoute, ROUTES } from "@/lib/constants/routes";
-import { createClient } from "@/lib/supabase/server";
+import { createServerComponentClient } from "@/lib/supabase/server";
 import { formatDateTime } from "@/lib/utils/formatDate";
 
 export const metadata: Metadata = {
@@ -21,7 +21,7 @@ export default async function NoteDetailPage({
   params: Promise<{ noteId: string }>;
 }) {
   const { noteId } = await params;
-  const supabase = await createClient();
+  const supabase = await createServerComponentClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
