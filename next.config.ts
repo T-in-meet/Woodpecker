@@ -1,3 +1,22 @@
+// TODO(v2 - CSP hardening & observability)
+//
+// 1. CSP violation report 수집
+// - Reporting-Endpoints + report-to 기반 수집 구조 검토
+// - 필요 시 report-uri fallback 고려
+// - /api/csp-report 또는 외부 도구(Sentry 등) 연동 검토
+//
+// 2. 환경별 CSP 적용 전략
+// - development / production에서 Report-Only 적용 여부 결정
+// - dev 환경에서 과도한 로그 발생 시 처리 전략 수립
+//
+// 3. CSP 정책 강화
+// - script-src에서 'unsafe-inline', 'unsafe-eval' 제거 가능성 검토
+// - nonce 또는 hash 기반 strict CSP 전환 검토
+//
+// 4. 리소스 출처 제한
+// - connect-src, img-src, font-src를 실제 사용 origin으로 축소
+// - supabase 및 외부 API 도메인 화이트리스트화
+
 import type { NextConfig } from "next";
 
 const supabaseHostname = process.env.NEXT_PUBLIC_SUPABASE_HOSTNAME;
