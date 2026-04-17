@@ -22,6 +22,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { canonicalizeEmail } from "@/lib/utils/canonicalizeEmail";
 import { getClientIp } from "@/lib/utils/getClientIp";
 import { VALIDATION_REASON } from "@/lib/validation/reasons";
+
 /**
  * 회원가입 핵심 로직
  *

@@ -107,12 +107,6 @@ async function resolveResendResponse(request: NextRequest): Promise<Response> {
    * - request eligibility key 일관성 유지
    */
   const canonicalEmail = canonicalizeEmail(rawEmail);
-  /**
-   * 기존 사용자 식별은 canonical 기준, 발송 대상은 raw email 기준으로 분리한다.
-   * - 식별: Gmail alias를 동일 identity로 취급하기 위해 canonical_email로 조회
-   * - 발송: auth.users에 저장된 실제 이메일(raw)을 사용해 신규 계정 생성/분기 오탐 방지
-   */
-  const existingUser = await getUserByEmail(canonicalEmail);
 
   /**
    * 5. Request eligibility check — 통합 판별
@@ -128,6 +122,13 @@ async function resolveResendResponse(request: NextRequest): Promise<Response> {
   if (!eligibility.allowed) {
     return failureResponse(AUTH_API_CODES.RESEND_RATE_LIMIT_EXCEEDED);
   }
+
+  /**
+   * 기존 사용자 식별은 canonical 기준, 발송 대상은 raw email 기준으로 분리한다.
+   * - 식별: Gmail alias를 동일 identity로 취급하기 위해 canonical_email로 조회
+   * - 발송: auth.users에 저장된 실제 이메일(raw)을 사용해 신규 계정 생성/분기 오탐 방지
+   */
+  const existingUser = await getUserByEmail(canonicalEmail);
 
   const deliveryEmail = existingUser?.email ?? null;
 

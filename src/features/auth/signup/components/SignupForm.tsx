@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { UNKNOWN_ERROR_MESSAGE } from "@/features/auth/errors//unknownError";
 import {
   GLOBAL_ERROR_MESSAGES,
   isGlobalError,
@@ -20,6 +19,7 @@ import {
   isRateLimitError,
   RATE_LIMIT_TOAST_MESSAGE,
 } from "@/features/auth/errors/rateLimitError";
+import { UNKNOWN_ERROR_MESSAGE } from "@/features/auth/errors/unknownError";
 import { resolveFieldName } from "@/features/auth/lib/resolveFieldName";
 import { LegalDialogWrapper } from "@/features/auth/signup/components/LegalDialogWrapper";
 import { signupFormSchema } from "@/features/auth/signup/schema/signupFormSchema";
@@ -498,7 +498,6 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
               dialogTitle="이용약관"
               triggerButtonRef={termsTriggerButtonRef}
               onTriggerClick={() => setTermsModalTrigger("button")}
-              checkboxRef={termsCheckboxRef}
             />
 
             <div
@@ -609,7 +608,6 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
               dialogTitle="개인정보처리방침"
               triggerButtonRef={privacyTriggerButtonRef}
               onTriggerClick={() => setPrivacyModalTrigger("button")}
-              checkboxRef={privacyCheckboxRef}
             />
 
             <div className="flex items-center gap-2">

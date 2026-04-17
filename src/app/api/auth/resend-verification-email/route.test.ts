@@ -276,6 +276,17 @@ describe("이메일 재전송 Request Eligibility 검증", () => {
       expect(response.status).toBe(429);
       expect(resendVerificationEmail).toHaveBeenCalledTimes(1); // 증가하지 않음
     });
+
+    it("TC-06-1. short window로 차단된 요청은 getUserByEmail을 호출하지 않는다", async () => {
+      const email = "nodbhit@example.com";
+
+      await postWithMinimumDelay(email);
+      expect(getUserByEmail).toHaveBeenCalledTimes(1);
+
+      const response = await postWithMinimumDelay(email);
+      expect(response.status).toBe(429);
+      expect(getUserByEmail).toHaveBeenCalledTimes(1);
+    });
   });
 
   // 다양한 이메일 주소 독립 처리

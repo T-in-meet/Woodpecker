@@ -25,12 +25,12 @@ import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 import {
   GLOBAL_ERROR_MESSAGES,
   isGlobalError,
-} from "@/features/auth/errors//globalError";
-import { UNKNOWN_ERROR_MESSAGE } from "@/features/auth/errors//unknownError";
+} from "@/features/auth/errors/globalError";
 import {
   isRateLimitError,
   RATE_LIMIT_TOAST_MESSAGE,
 } from "@/features/auth/errors/rateLimitError";
+import { UNKNOWN_ERROR_MESSAGE } from "@/features/auth/errors/unknownError";
 /**
  * 🔽 추가: mutation 훅 import
  * - fetch를 직접 호출하던 구조를 제거하고

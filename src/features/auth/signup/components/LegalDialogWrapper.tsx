@@ -26,8 +26,6 @@ type LegalDialogWrapperProps = {
   dialogTitle: string;
   triggerButtonRef?: React.RefObject<HTMLButtonElement | null>;
   onTriggerClick?: () => void;
-  checkboxRef?: React.RefObject<HTMLButtonElement | null>;
-  openedByLabel?: boolean;
 };
 
 /**
@@ -37,11 +35,10 @@ type LegalDialogWrapperProps = {
  * - Radix Dialog 기반의 모달 UI 렌더링
  * - 법적 콘텐츠(약관/개인정보) 렌더링
  * - "동의하기" 버튼 → onAgree 콜백
- * - focus restore fallback 처리 (Label 클릭 경유 시)
  *
  * 제외:
  * - form state 관리 (SignupForm의 책임)
- * - openedByLabel 상태 관리 (SignupForm에서 주입)
+ * - 모달 닫힘 후 focus restore 정책 (SignupForm의 책임)
  */
 export function LegalDialogWrapper({
   agreementType,
@@ -52,25 +49,13 @@ export function LegalDialogWrapper({
   dialogTitle,
   triggerButtonRef,
   onTriggerClick,
-  checkboxRef,
-  openedByLabel = false,
 }: LegalDialogWrapperProps) {
   // 콘텐츠 섹션 선택
   // 이유: agreementType에 따라 다른 법적 문서를 표시하기 위해 분기
   const contentSections: LegalSection[] =
     agreementType === "termsOfService" ? termsSections : privacySections;
 
-  // focus restore fallback 처리
-  // 이유: Radix Dialog 기본 복원은 Dialog.Trigger 기반
-  //       Label은 non-focusable이므로 포커스 손실 발생
-  //       → openedByLabel=true일 때 checkboxRef로 명시적 복원
   const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen && openedByLabel && checkboxRef?.current) {
-      // 비동기로 실행하여 Dialog 닫힘 애니메이션 완료 후 포커스 이동
-      requestAnimationFrame(() => {
-        checkboxRef.current?.focus();
-      });
-    }
     onOpenChange(nextOpen);
   };
 

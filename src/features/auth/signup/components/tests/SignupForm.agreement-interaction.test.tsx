@@ -270,4 +270,17 @@ describe("회원가입 폼 동의 상호작용", () => {
     await user.click(screen.getByTestId("terms-of-service-checkbox"));
     expect(screen.getByRole("button", { name: /동의하기/i })).toBeVisible();
   });
+
+  it("TC-15: 초기 렌더 시 이용약관 체크박스에 Enter 키 입력 → 이용약관 모달이 열린다", async () => {
+    const user = userEvent.setup();
+    renderSignupForm();
+
+    const termsCheckbox = screen.getByTestId("terms-of-service-checkbox");
+    termsCheckbox.focus();
+
+    // 이유: 키보드로도 disabled 우회를 방지하기 위해 인터셉트 (Space와 동일한 인터셉트 대상)
+    await user.keyboard("{Enter}");
+
+    expect(screen.getByRole("button", { name: /동의하기/i })).toBeVisible();
+  });
 });

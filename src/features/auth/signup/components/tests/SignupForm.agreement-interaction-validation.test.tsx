@@ -125,7 +125,7 @@ describe("회원가입 폼 동의 상호작용 + Validation", () => {
     expect(onSubmit).toHaveBeenCalled();
   });
 
-  it("TC-05: 이용약관 에러 메시지 클릭 시 이용약관 모달이 열린다", async () => {
+  it("TC-04: 이용약관 에러 메시지 클릭 시 이용약관 모달이 열린다", async () => {
     const user = userEvent.setup();
     renderSignupForm();
 
@@ -149,7 +149,7 @@ describe("회원가입 폼 동의 상호작용 + Validation", () => {
     expect(screen.getByRole("button", { name: /동의하기/i })).toBeVisible();
   });
 
-  it("TC-06: 개인정보 에러 메시지 클릭 시 개인정보 모달이 열린다", async () => {
+  it("TC-05: 개인정보 에러 메시지 클릭 시 개인정보 모달이 열린다", async () => {
     const user = userEvent.setup();
     renderSignupForm();
 
@@ -178,7 +178,7 @@ describe("회원가입 폼 동의 상호작용 + Validation", () => {
     expect(screen.getByText(/개인정보의 처리 목적/i)).toBeInTheDocument();
   });
 
-  it("TC-07: 개인정보만 미동의로 제출하면 개인정보 에러 버튼으로 포커스가 이동한다", async () => {
+  it("TC-06: 개인정보만 미동의로 제출하면 개인정보 에러 버튼으로 포커스가 이동한다", async () => {
     const user = userEvent.setup();
     renderSignupForm();
 
@@ -205,7 +205,7 @@ describe("회원가입 폼 동의 상호작용 + Validation", () => {
     });
   });
 
-  it("TC-04: 동의 후 언체크하면 다시 약관 에러가 표시된다", async () => {
+  it("TC-07: 동의 후 언체크하면 다시 약관 에러가 표시된다", async () => {
     const user = userEvent.setup();
     const { onSubmit } = renderSignupForm();
 

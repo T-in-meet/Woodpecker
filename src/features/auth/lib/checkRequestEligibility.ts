@@ -83,28 +83,6 @@ export const EMAIL_LONG_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
  *
  */
 
-/**
- * IP precheck — read-only 사전 검증
- *
- * - body parsing 이전 단계에서 실행
- * - evaluateSlidingWindow(appendOnAllow=false)로 현재 IP 상태를 읽기 전용 평가만 수행
- * - ipStore 및 어떤 상태도 변경하지 않음
- *
- * 설계 의도:
- * - parsing 비용 없이 과도한 요청을 1차적으로 필터링
- * - 최종 rate limit 결정은 checkRequestEligibility에서 단일하게 수행
- *
- * Trade-off:
- * - malformed JSON 요청은 eligibility 계층에 도달하지 않으므로
- *   rate limit 카운터에 포함되지 않음
- * - 따라서 parsing 이전의 저수준 공격은 precheck만으로 완전히 해결되지 않을 수 있음
- *
- * 대응 전략:
- * - app-layer에서는 read-only precheck까지만 수행
- * - 최종 상태 갱신은 checkRequestEligibility에서만 수행
- * - malformed JSON flood와 같은 저수준 공격 완화는 infra/edge 계층(WAF/CDN 등)과 함께 고려
- */
-
 export function checkRequestEligibility(
   route: "signup" | "resend",
   ip: string,
@@ -270,6 +248,27 @@ function maskEmail(email: string): string {
   return "***";
 }
 
+/**
+ * IP precheck — read-only 사전 검증
+ *
+ * - body parsing 이전 단계에서 실행
+ * - evaluateSlidingWindow(appendOnAllow=false)로 현재 IP 상태를 읽기 전용 평가만 수행
+ * - ipStore 및 어떤 상태도 변경하지 않음
+ *
+ * 설계 의도:
+ * - parsing 비용 없이 과도한 요청을 1차적으로 필터링
+ * - 최종 rate limit 결정은 checkRequestEligibility에서 단일하게 수행
+ *
+ * Trade-off:
+ * - malformed JSON 요청은 eligibility 계층에 도달하지 않으므로
+ *   rate limit 카운터에 포함되지 않음
+ * - 따라서 parsing 이전의 저수준 공격은 precheck만으로 완전히 해결되지 않을 수 있음
+ *
+ * 대응 전략:
+ * - app-layer에서는 read-only precheck까지만 수행
+ * - 최종 상태 갱신은 checkRequestEligibility에서만 수행
+ * - malformed JSON flood와 같은 저수준 공격 완화는 infra/edge 계층(WAF/CDN 등)과 함께 고려
+ */
 /**
  * IP 기반 rate limit 사전 검증 — 읽기 전용
  *
