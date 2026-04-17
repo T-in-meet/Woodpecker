@@ -405,73 +405,73 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
   return (
     <form
       aria-label="회원가입"
-      className="mx-auto max-w-4xl space-y-4 mt-16 px-4"
+      className="mx-auto max-w-4xl space-y-6 py-7 px-4 md:px-6"
       onSubmit={handleSubmit(handleValidSubmit)}
     >
       {/* 이메일 */}
-      <div className="space-y-4">
+      <div className="space-y-2">
         <Label htmlFor="email">이메일</Label>
-        <Input
-          id="email"
-          type="email"
-          {...register("email")}
-          className={cn(!errors.email && "mb-14")}
-        />
-        {errors.email && (
-          <p role="alert" className="text-red-500">
-            {errors.email.message}
-          </p>
-        )}
+        <Input id="email" type="email" {...register("email")} />
+        {/* 에러 영역을 항상 고정 높이로 유지 — 에러 표시 여부에 따른 레이아웃 흔들림 방지 */}
+        <div className="min-h-5">
+          {errors.email && (
+            <p role="alert" className="text-sm text-destructive">
+              {errors.email.message}
+            </p>
+          )}
+        </div>
       </div>
 
       {/* 비밀번호 */}
-      <div className="space-y-4">
+      <div className="space-y-2">
         <Label htmlFor="password">비밀번호</Label>
         <Input
           id="password"
           type="password"
-          className={cn(!errors.password && "mb-14")}
           {...passwordRegister}
           onChange={handlePasswordChange}
         />
-        {errors.password && (
-          <p role="alert" className="text-red-500">
-            {errors.password.message}
-          </p>
-        )}
+        {/* 에러 영역을 항상 고정 높이로 유지 — 에러 표시 여부에 따른 레이아웃 흔들림 방지 */}
+        <div className="min-h-5">
+          {errors.password && (
+            <p role="alert" className="text-sm text-destructive">
+              {errors.password.message}
+            </p>
+          )}
+        </div>
       </div>
 
       {/* 비밀번호 확인 */}
-      <div className="space-y-4">
+      <div className="space-y-2">
         <Label htmlFor="confirmPassword">비밀번호 확인</Label>
         <Input
           id="confirmPassword"
           type="password"
-          className={cn(!errors.confirmPassword && "mb-14")}
           {...confirmPasswordRegister}
           onChange={handleConfirmPasswordChange}
         />
-        {errors.confirmPassword && (
-          <p role="alert" className="text-red-500">
-            {errors.confirmPassword.message}
-          </p>
-        )}
+        {/* 에러 영역을 항상 고정 높이로 유지 — 에러 표시 여부에 따른 레이아웃 흔들림 방지 */}
+        <div className="min-h-5">
+          {errors.confirmPassword && (
+            <p role="alert" className="text-sm text-destructive">
+              {errors.confirmPassword.message}
+            </p>
+          )}
+        </div>
       </div>
 
       {/* 닉네임 */}
-      <div className="space-y-4">
+      <div className="space-y-2">
         <Label htmlFor="nickname">닉네임</Label>
-        <Input
-          id="nickname"
-          type="text"
-          className={cn(!errors.nickname && "mb-14")}
-          {...register("nickname")}
-        />
-        {errors.nickname && (
-          <p role="alert" className="text-red-500">
-            {errors.nickname.message}
-          </p>
-        )}
+        <Input id="nickname" type="text" {...register("nickname")} />
+        {/* 에러 영역을 항상 고정 높이로 유지 — 에러 표시 여부에 따른 레이아웃 흔들림 방지 */}
+        <div className="min-h-5">
+          {errors.nickname && (
+            <p role="alert" className="text-sm text-destructive">
+              {errors.nickname.message}
+            </p>
+          )}
+        </div>
       </div>
 
       {/* 약관 */}
@@ -487,10 +487,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
         <div data-testid="terms-of-service-field" className="space-y-2">
           <div
             data-testid="tos-inner-row"
-            className={cn(
-              "flex flex-col lg:flex-row lg:items-center gap-2",
-              !errors.termsOfService && "mb-8",
-            )}
+            className="flex flex-col lg:flex-row lg:items-center gap-2"
           >
             <LegalDialogWrapper
               agreementType="termsOfService"
@@ -581,7 +578,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
               role="alert"
               ref={termsErrorContainerRef}
               tabIndex={-1}
-              className="text-red-500"
+              className="text-sm text-destructive"
             >
               {/* 에러 메시지를 클릭 가능하게 처리 — 사용자가 에러 원인을 즉시 해소할 수 있도록
                   스펙: error_click_should_open_modal_if_possible */}
@@ -602,12 +599,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
 
         {/* 개인정보 */}
         <div data-testid="privacy-policy-field" className="space-y-2">
-          <div
-            className={cn(
-              "flex flex-col lg:flex-row lg:items-center gap-2",
-              !errors.privacyPolicy && "mb-8",
-            )}
-          >
+          <div className="flex flex-col lg:flex-row lg:items-center gap-2">
             <LegalDialogWrapper
               agreementType="privacyPolicy"
               open={privacyModalOpen}
@@ -692,7 +684,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
               role="alert"
               ref={privacyErrorContainerRef}
               tabIndex={-1}
-              className="text-red-500"
+              className="text-sm text-destructive"
             >
               {/* 에러 메시지를 클릭 가능하게 처리 — 이용약관과 동일한 단일 행동 경로 제공
                   스펙: error_click_should_open_modal_if_possible */}
@@ -714,7 +706,11 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
 
       {/* root 에러 */}
       {errors.root && (
-        <p role="alert" data-testid="form-error" className="text-red-500">
+        <p
+          role="alert"
+          data-testid="form-error"
+          className="text-sm text-destructive"
+        >
           {errors.root.message}
         </p>
       )}
@@ -722,13 +718,13 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
       {/* 액션 영역 */}
       <div
         data-testid="form-action-area"
-        className="flex flex-wrap justify-between gap-2"
+        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"
       >
         <Link href="/login" className="text-blue-400 hover:text-blue-500">
           이미 가입하셨나요?
         </Link>
 
-        <Button type="submit" disabled={isPending}>
+        <Button type="submit" disabled={isPending} className="w-full sm:w-auto">
           {/* 시각적 스피너 추가 — 400ms 이상의 서버 응답 대기 동안 처리 중임을 명확히 전달 */}
           {isPending && (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
