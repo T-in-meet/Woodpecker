@@ -39,6 +39,23 @@ type FailureResponse = {
 };
 
 /**
+ * ApiCode → HTTP status 결정 규칙
+ *
+ * 우선순위:
+ * 1. override (명시적 지정)
+ * 2. ApiCode suffix 기반 자동 매핑 (RESULT_HTTP_STATUS_MAP)
+ * 3. fallback: 500
+ *
+ * 현재 상태:
+ * - 모든 API는 ApiCode suffix 기반 자동 매핑을 사용하고 있음
+ * - status override의 실사용처는 존재하지 않음
+ *
+ * 설계 의도:
+ * - 향후 resource 생성 API 등에서 201 등의 예외 status가 필요할 수 있어
+ *   override 옵션을 유지함
+ */
+
+/**
  * ApiCode에서 ApiResult 추출
  *
  * 예:

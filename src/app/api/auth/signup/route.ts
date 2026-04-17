@@ -56,14 +56,10 @@ async function parseRequest(request: NextRequest): Promise<unknown> {
  */
 async function resolveSignupResponse(request: NextRequest): Promise<Response> {
   const makeSignupSuccess = (email: string) =>
-    successResponse(
-      AUTH_API_CODES.SIGNUP_SUCCESS,
-      {
-        email,
-        redirectTo: ROUTES.VERIFY_EMAIL,
-      },
-      { status: 200 },
-    );
+    successResponse(AUTH_API_CODES.SIGNUP_SUCCESS, {
+      email,
+      redirectTo: ROUTES.VERIFY_EMAIL,
+    });
 
   /**
    * 요청 IP 추출 (rate limit key)

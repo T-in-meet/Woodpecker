@@ -109,9 +109,7 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) {
     return applyMinimumResponseTime(
       start,
-      failureResponse(AUTH_API_CODES.RESEND_INVALID_INPUT, {
-        status: 400,
-      }),
+      failureResponse(AUTH_API_CODES.RESEND_INVALID_INPUT),
     );
   }
 

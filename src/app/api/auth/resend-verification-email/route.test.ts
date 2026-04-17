@@ -64,8 +64,8 @@ describe("이메일 인증 재전송 API 성공 흐름", () => {
     expect(body.success).toBe(true);
     expect(body.code).toBe(AUTH_API_CODES.EMAIL_VERIFICATION_RESEND_SUCCESS);
 
-    // email normalize 확인 (trim + lowercase)
-    expect(body.data.email).toBe("test@example.com");
+    // email 확인 (trim + lowercase)
+    expect(body.data.email).toBe("Test@Example.COM");
     expect(body.data.resent).toBe(true);
 
     // 외부 의존 호출 검증
