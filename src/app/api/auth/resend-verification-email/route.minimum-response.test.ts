@@ -13,6 +13,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 import { MIN_RESPONSE_MS } from "@/features/auth/lib/applyMinimumResponseTime";
 import { resetEligibilityStore } from "@/features/auth/lib/checkRequestEligibility";
+import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { resendVerificationEmail } from "@/features/auth/resend-verification-email/lib/resendVerificationEmail";
 
 import { POST } from "./route";
@@ -20,6 +21,7 @@ import { POST } from "./route";
 vi.mock(
   "@/features/auth/resend-verification-email/lib/resendVerificationEmail",
 );
+vi.mock("@/features/auth/lib/getUserByEmail");
 
 const START_TIME = 1_000_000;
 
@@ -80,6 +82,10 @@ describe("resend 최소 응답 시간 보장", () => {
     vi.clearAllMocks();
 
     vi.mocked(resendVerificationEmail).mockResolvedValue(undefined);
+    vi.mocked(getUserByEmail).mockImplementation(async (canonicalEmail) => ({
+      email: canonicalEmail,
+      email_confirmed_at: null,
+    }));
   });
 
   it("TC-01: IP rate limit precheck 빠른 경로도 최소 응답 시간 이전에 응답하지 않는다", async () => {

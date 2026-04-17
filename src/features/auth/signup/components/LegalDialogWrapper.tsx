@@ -24,6 +24,8 @@ type LegalDialogWrapperProps = {
   onAgree: () => void;
   triggerLabel: string;
   dialogTitle: string;
+  triggerButtonRef?: React.RefObject<HTMLButtonElement | null>;
+  onTriggerClick?: () => void;
   checkboxRef?: React.RefObject<HTMLButtonElement | null>;
   openedByLabel?: boolean;
 };
@@ -48,6 +50,8 @@ export function LegalDialogWrapper({
   onAgree,
   triggerLabel,
   dialogTitle,
+  triggerButtonRef,
+  onTriggerClick,
   checkboxRef,
   openedByLabel = false,
 }: LegalDialogWrapperProps) {
@@ -80,10 +84,12 @@ export function LegalDialogWrapper({
     <Dialog open={open} onOpenChange={handleOpenChange} modal={true}>
       <DialogTrigger asChild>
         <Button
+          ref={triggerButtonRef}
           type="button"
           variant="ghost"
           size="sm"
           className="bg-blue-400 text-white"
+          onClick={onTriggerClick}
         >
           {triggerLabel}
         </Button>
@@ -92,6 +98,11 @@ export function LegalDialogWrapper({
       <DialogContent
         className="flex max-h-[85vh] flex-col overflow-hidden"
         aria-describedby={`${agreementType}-description`}
+        onCloseAutoFocus={(event) => {
+          // SignupForm에서 트리거/동의 경로별로 포커스를 명시적으로 제어하므로
+          // Radix 기본 복원(DialogTrigger 포커스)은 차단한다.
+          event.preventDefault();
+        }}
       >
         <DialogTitle className="mb-4">{dialogTitle}</DialogTitle>
 

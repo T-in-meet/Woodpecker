@@ -1,5 +1,6 @@
 "use client";
 
+import { Loader2 } from "lucide-react";
 /**
  * 이메일 인증 안내 페이지 클라이언트 컴포넌트
  *
@@ -14,7 +15,6 @@
  * - HTTP status(예: 429)에 의존하지 않고, 서버 response body의 `code`를 기준으로 처리한다.
  * - rate limit 발생 시, 이벤트 기반의 전역 토스트 메시지(showToast)로만 피드백한다.
  */
-
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 
@@ -129,10 +129,14 @@ export default function VerifyEmailPageClient({ email }: Props) {
        * - 모든 auth 흐름에서 동일한 방식으로 응답을 해석하도록 일관성을 유지한다.
        */
       if (body.code === AUTH_API_CODES.EMAIL_VERIFICATION_RESEND_SUCCESS) {
-        showToast("인증 메일이 재발송되었습니다.");
+        // 행동 유도형 문구로 교체 — 상태 보고 대신 사용자가 다음에 할 일을 즉시 안내
+        showToast("메일을 다시 보냈습니다. 받은 편지함을 확인해주세요.");
       }
     } catch (e) {
-      console.error("Failed to resend email:", e);
+      // 프로덕션에서 응답 객체 전체가 콘솔에 노출되지 않도록 개발 환경으로 제한
+      if (process.env.NODE_ENV === "development") {
+        console.error("Failed to resend email:", e);
+      }
 
       /**
        * rate limit 에러 처리
@@ -183,11 +187,25 @@ export default function VerifyEmailPageClient({ email }: Props) {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-4">
       <div className="w-full max-w-md space-y-6 text-center">
-        <p className="text-base leading-relaxed">
-          회원가입이 완료되었습니다.
-          <br />
-          가입하실 때 사용하신 이메일에서 인증 이메일을 확인해주세요.
-        </p>
+        {/* 행동 유도형 구조로 재편 — 상태 보고 대신 사용자가 즉시 다음 행동을 인식할 수 있도록 */}
+        <div className="space-y-2">
+          <p className="text-lg font-medium">메일함을 확인해주세요</p>
+          {normalizedPrefillEmail ? (
+            // 이메일 주소를 안내 문구에 직접 표시 — input에만 의존하지 않고 바로 인지 가능하도록
+            <p className="text-base">
+              <span className="font-medium">{normalizedPrefillEmail}</span>
+              {"으로 인증 링크를 보냈습니다."}
+            </p>
+          ) : (
+            <p className="text-base">인증 링크를 보냈습니다.</p>
+          )}
+          <p className="text-sm text-muted-foreground">
+            스팸 메일함도 확인해주세요.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            메일이 오지 않으면 아래에서 다시 보낼 수 있습니다.
+          </p>
+        </div>
 
         <form
           aria-label="인증 메일 재발송"
@@ -205,7 +223,14 @@ export default function VerifyEmailPageClient({ email }: Props) {
           </div>
 
           <Button type="submit" className="w-full" disabled={isDisabled}>
-            인증 메일 재발송
+            {/* 로딩 스피너 추가 — SignupForm 패턴과 일관성 유지, 요청 등록 여부를 즉시 전달 */}
+            {isDisabled && (
+              <Loader2
+                className="mr-2 h-4 w-4 animate-spin"
+                aria-hidden="true"
+              />
+            )}
+            {isDisabled ? "전송 중..." : "인증 메일 재발송"}
           </Button>
         </form>
       </div>

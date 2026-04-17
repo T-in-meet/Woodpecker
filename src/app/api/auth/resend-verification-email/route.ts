@@ -6,6 +6,7 @@ import {
   checkIpRateLimitPrecheck,
   checkRequestEligibility,
 } from "@/features/auth/lib/checkRequestEligibility";
+import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { mapAuthValidationErrors } from "@/features/auth/lib/mapAuthValidationErrors";
 import { maskEmailForLogging } from "@/features/auth/lib/maskEmailForLogging";
 import {
@@ -106,6 +107,12 @@ async function resolveResendResponse(request: NextRequest): Promise<Response> {
    * - request eligibility key 일관성 유지
    */
   const canonicalEmail = canonicalizeEmail(rawEmail);
+  /**
+   * 기존 사용자 식별은 canonical 기준, 발송 대상은 raw email 기준으로 분리한다.
+   * - 식별: Gmail alias를 동일 identity로 취급하기 위해 canonical_email로 조회
+   * - 발송: auth.users에 저장된 실제 이메일(raw)을 사용해 신규 계정 생성/분기 오탐 방지
+   */
+  const existingUser = await getUserByEmail(canonicalEmail);
 
   /**
    * 5. Request eligibility check — 통합 판별
@@ -122,6 +129,8 @@ async function resolveResendResponse(request: NextRequest): Promise<Response> {
     return failureResponse(AUTH_API_CODES.RESEND_RATE_LIMIT_EXCEEDED);
   }
 
+  const deliveryEmail = existingUser?.email ?? null;
+
   /**
    * 6. 인증 메일 재전송
    *
@@ -134,13 +143,15 @@ async function resolveResendResponse(request: NextRequest): Promise<Response> {
    * 즉, 모든 예외를 무조건 삼키는 것이 아니라
    * "계약 통일이 필요한 구간(side-effect 실행 단계)"의 예외만 의도적으로 흡수한다.
    */
-  try {
-    await resendVerificationEmail(canonicalEmail);
-  } catch (error) {
-    console.error("Resend verification email side-effect failed", {
-      maskedEmail: maskEmailForLogging(canonicalEmail),
-      error,
-    });
+  if (deliveryEmail) {
+    try {
+      await resendVerificationEmail(deliveryEmail);
+    } catch (error) {
+      console.error("Resend verification email side-effect failed", {
+        maskedEmail: maskEmailForLogging(canonicalEmail),
+        error,
+      });
+    }
   }
 
   /**

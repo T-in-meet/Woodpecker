@@ -10,6 +10,7 @@ import {
   EMAIL_LONG_WINDOW_MS,
   resetEligibilityStore,
 } from "@/features/auth/lib/checkRequestEligibility";
+import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 // 외부 의존성 (모두 mock 대상)
 import { resendVerificationEmail } from "@/features/auth/resend-verification-email/lib/resendVerificationEmail";
 import { VALIDATION_REASON } from "@/lib/validation/reasons";
@@ -26,6 +27,7 @@ import { POST } from "./route";
 vi.mock(
   "@/features/auth/resend-verification-email/lib/resendVerificationEmail",
 );
+vi.mock("@/features/auth/lib/getUserByEmail");
 
 describe("이메일 인증 재전송 API 성공 흐름", () => {
   /**
@@ -52,6 +54,10 @@ describe("이메일 인증 재전송 API 성공 흐름", () => {
 
     // 기본 mock 동작 정의
     vi.mocked(resendVerificationEmail).mockResolvedValue(undefined);
+    vi.mocked(getUserByEmail).mockImplementation(async (canonicalEmail) => ({
+      email: canonicalEmail,
+      email_confirmed_at: null,
+    }));
   });
 
   // TC-01: 정상 흐름
@@ -82,6 +88,10 @@ describe("이메일 인증 재전송 API malformed JSON 처리", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetEligibilityStore();
+    vi.mocked(getUserByEmail).mockImplementation(async (canonicalEmail) => ({
+      email: canonicalEmail,
+      email_confirmed_at: null,
+    }));
   });
 
   it("TC-01. malformed JSON 요청이면 INVALID_INPUT 응답을 반환한다", async () => {
@@ -144,6 +154,10 @@ describe("이메일 재전송 Request Eligibility 검증", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
     vi.mocked(resendVerificationEmail).mockResolvedValue(undefined);
+    vi.mocked(getUserByEmail).mockImplementation(async (canonicalEmail) => ({
+      email: canonicalEmail,
+      email_confirmed_at: null,
+    }));
   });
 
   afterEach(() => {
@@ -301,6 +315,10 @@ describe("이메일 인증 재전송 API 입력 검증", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetEligibilityStore();
+    vi.mocked(getUserByEmail).mockImplementation(async (canonicalEmail) => ({
+      email: canonicalEmail,
+      email_confirmed_at: null,
+    }));
   });
 
   it("이메일 형식이 잘못되면 validation 실패 + errors 반환", async () => {

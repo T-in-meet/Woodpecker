@@ -95,6 +95,22 @@ describe("회원가입 API 기본 성공 흐름 검증", () => {
     );
   });
 
+  it("TC-03: createUser는 raw email을 저장하고 canonical_email은 metadata로 저장한다", async () => {
+    mockSignupGenerateLinkSuccess();
+
+    await POST(makeRequest(requestBody));
+
+    expect(mockCreateUser).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: "Test@Example.com",
+        user_metadata: expect.objectContaining({
+          nickname: "테스터",
+          canonical_email: "test@example.com",
+        }),
+      }),
+    );
+  });
+
   it("TC-04: API는 200 OK를 반환한다", async () => {
     mockSignupGenerateLinkSuccess();
 

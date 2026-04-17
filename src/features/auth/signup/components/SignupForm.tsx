@@ -1,8 +1,9 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Loader2 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -43,6 +44,7 @@ type FormValues = z.infer<typeof signupFormSchema>;
  * - confirmPassword는 서버로 보내지 않음
  */
 type SubmitPayload = Omit<FormValues, "confirmPassword">;
+type ModalTrigger = "button" | "checkbox" | "error" | null;
 
 /**
  * SignupForm Props
@@ -103,8 +105,10 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
     useState(false);
   const [termsModalOpen, setTermsModalOpen] = useState(false);
   const [privacyModalOpen, setPrivacyModalOpen] = useState(false);
-  const [termsOpenedByLabel, setTermsOpenedByLabel] = useState(false);
-  const [privacyOpenedByLabel, setPrivacyOpenedByLabel] = useState(false);
+  const [termsModalTrigger, setTermsModalTrigger] =
+    useState<ModalTrigger>(null);
+  const [privacyModalTrigger, setPrivacyModalTrigger] =
+    useState<ModalTrigger>(null);
 
   /**
    * focus fallback 대상 refs
@@ -113,6 +117,18 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
    */
   const termsCheckboxRef = useRef<HTMLButtonElement>(null);
   const privacyCheckboxRef = useRef<HTMLButtonElement>(null);
+  const termsTriggerButtonRef = useRef<HTMLButtonElement>(null);
+  const privacyTriggerButtonRef = useRef<HTMLButtonElement>(null);
+  const termsErrorButtonRef = useRef<HTMLButtonElement>(null);
+  const privacyErrorButtonRef = useRef<HTMLButtonElement>(null);
+  const termsErrorContainerRef = useRef<HTMLParagraphElement>(null);
+  const privacyErrorContainerRef = useRef<HTMLParagraphElement>(null);
+  const termsAgreeIntentRef = useRef(false);
+  const privacyAgreeIntentRef = useRef(false);
+  const prevAgreementErrorsRef = useRef({
+    terms: false,
+    privacy: false,
+  });
 
   /**
    * password / confirmPassword 분리
@@ -249,6 +265,45 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
     [onConfirmChange, trigger],
   );
 
+  const focusAgreementCheckbox = useCallback(
+    (checkboxRef: React.RefObject<HTMLButtonElement | null>) => {
+      requestAnimationFrame(() => {
+        checkboxRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+        checkboxRef.current?.focus();
+      });
+    },
+    [],
+  );
+
+  const restoreFocusByTrigger = useCallback(
+    (
+      trigger: ModalTrigger,
+      refs: {
+        checkbox: React.RefObject<HTMLButtonElement | null>;
+        button: React.RefObject<HTMLButtonElement | null>;
+        error: React.RefObject<HTMLButtonElement | null>;
+      },
+    ) => {
+      requestAnimationFrame(() => {
+        if (trigger === "checkbox") {
+          refs.checkbox.current?.focus();
+          return;
+        }
+        if (trigger === "error") {
+          refs.error.current?.focus();
+          return;
+        }
+        if (trigger === "button") {
+          refs.button.current?.focus();
+        }
+      });
+    },
+    [],
+  );
+
   /**
    * 모달이 닫힐 때에만 interactionEnabled 활성화
    * 이유: 콘텐츠 열람 의도 확인 이후부터 직접 조작 허용 (스펙 명시)
@@ -258,8 +313,17 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
     setTermsModalOpen(open);
     if (!open) {
       setTermsInteractionEnabled(true);
-      // Label 경유 플래그는 닫힘 시 리셋하여 다음 오픈에서 stale 상태를 방지
-      setTermsOpenedByLabel(false);
+      if (termsAgreeIntentRef.current) {
+        termsAgreeIntentRef.current = false;
+        focusAgreementCheckbox(termsCheckboxRef);
+      } else {
+        restoreFocusByTrigger(termsModalTrigger, {
+          checkbox: termsCheckboxRef,
+          button: termsTriggerButtonRef,
+          error: termsErrorButtonRef,
+        });
+      }
+      setTermsModalTrigger(null);
     }
   };
 
@@ -267,8 +331,17 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
     setPrivacyModalOpen(open);
     if (!open) {
       setPrivacyInteractionEnabled(true);
-      // Label 경유 플래그는 닫힘 시 리셋하여 다음 오픈에서 stale 상태를 방지
-      setPrivacyOpenedByLabel(false);
+      if (privacyAgreeIntentRef.current) {
+        privacyAgreeIntentRef.current = false;
+        focusAgreementCheckbox(privacyCheckboxRef);
+      } else {
+        restoreFocusByTrigger(privacyModalTrigger, {
+          checkbox: privacyCheckboxRef,
+          button: privacyTriggerButtonRef,
+          error: privacyErrorButtonRef,
+        });
+      }
+      setPrivacyModalTrigger(null);
     }
   };
 
@@ -277,12 +350,57 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
    * 이유: onAgree에서 setValue("termsOfService", true)를 호출하기 때문
    */
   const handleTermsAgree = () => {
+    termsAgreeIntentRef.current = true;
     setValue("termsOfService", true, { shouldValidate: true });
   };
 
   const handlePrivacyAgree = () => {
+    privacyAgreeIntentRef.current = true;
     setValue("privacyPolicy", true, { shouldValidate: true });
   };
+
+  useEffect(() => {
+    if (termsModalOpen || privacyModalOpen) {
+      return;
+    }
+
+    const hasTermsError = Boolean(errors.termsOfService);
+    const hasPrivacyError = Boolean(errors.privacyPolicy);
+    const hadTermsError = prevAgreementErrorsRef.current.terms;
+    const hadPrivacyError = prevAgreementErrorsRef.current.privacy;
+
+    const termsNewlyAppeared = hasTermsError && !hadTermsError;
+    const privacyNewlyAppeared = hasPrivacyError && !hadPrivacyError;
+
+    if (termsNewlyAppeared || privacyNewlyAppeared) {
+      requestAnimationFrame(() => {
+        if (termsNewlyAppeared) {
+          if (termsErrorButtonRef.current) {
+            termsErrorButtonRef.current.focus();
+          } else {
+            termsErrorContainerRef.current?.focus();
+          }
+          return;
+        }
+
+        if (privacyErrorButtonRef.current) {
+          privacyErrorButtonRef.current.focus();
+        } else {
+          privacyErrorContainerRef.current?.focus();
+        }
+      });
+    }
+
+    prevAgreementErrorsRef.current = {
+      terms: hasTermsError,
+      privacy: hasPrivacyError,
+    };
+  }, [
+    errors.termsOfService,
+    errors.privacyPolicy,
+    termsModalOpen,
+    privacyModalOpen,
+  ]);
 
   return (
     <form
@@ -381,8 +499,9 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
               onAgree={handleTermsAgree}
               triggerLabel="이용약관 보기"
               dialogTitle="이용약관"
+              triggerButtonRef={termsTriggerButtonRef}
+              onTriggerClick={() => setTermsModalTrigger("button")}
               checkboxRef={termsCheckboxRef}
-              openedByLabel={termsOpenedByLabel}
             />
 
             <div
@@ -396,7 +515,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
                     // htmlFor 연결로 인한 체크박스 자동 토글을 차단하고 모달 열기
                     // 이유: Label 클릭이 체크박스 토글을 유발하지 않도록 인터셉트
                     e.preventDefault();
-                    setTermsOpenedByLabel(true);
+                    setTermsModalTrigger("checkbox");
                     setTermsModalOpen(true);
                   }
                 }}
@@ -418,7 +537,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
                       // interactionEnabled=false이면 체크 변경을 막고 모달 열기
                       // 이유: HTML disabled 금지 스펙 준수 — 인터셉트로 동일 효과 구현
                       if (!termsInteractionEnabled) {
-                        setTermsOpenedByLabel(false);
+                        setTermsModalTrigger("checkbox");
                         setTermsModalOpen(true);
                         return;
                       }
@@ -432,7 +551,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
                         (e.key === " " || e.key === "Enter")
                       ) {
                         e.preventDefault();
-                        setTermsOpenedByLabel(false);
+                        setTermsModalTrigger("checkbox");
                         setTermsModalOpen(true);
                       }
                     }}
@@ -460,9 +579,23 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
             <p
               id="terms-of-service-error"
               role="alert"
+              ref={termsErrorContainerRef}
+              tabIndex={-1}
               className="text-red-500"
             >
-              {errors.termsOfService.message}
+              {/* 에러 메시지를 클릭 가능하게 처리 — 사용자가 에러 원인을 즉시 해소할 수 있도록
+                  스펙: error_click_should_open_modal_if_possible */}
+              <button
+                ref={termsErrorButtonRef}
+                type="button"
+                className="cursor-pointer underline hover:no-underline"
+                onClick={() => {
+                  setTermsModalTrigger("error");
+                  setTermsModalOpen(true);
+                }}
+              >
+                {errors.termsOfService.message}
+              </button>
             </p>
           )}
         </div>
@@ -482,8 +615,9 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
               onAgree={handlePrivacyAgree}
               triggerLabel="개인정보처리방침 보기"
               dialogTitle="개인정보처리방침"
+              triggerButtonRef={privacyTriggerButtonRef}
+              onTriggerClick={() => setPrivacyModalTrigger("button")}
               checkboxRef={privacyCheckboxRef}
-              openedByLabel={privacyOpenedByLabel}
             />
 
             <div className="flex items-center gap-2">
@@ -494,7 +628,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
                     // htmlFor 연결로 인한 체크박스 자동 토글을 차단하고 모달 열기
                     // 이유: Label 클릭이 체크박스 토글을 유발하지 않도록 인터셉트
                     e.preventDefault();
-                    setPrivacyOpenedByLabel(true);
+                    setPrivacyModalTrigger("checkbox");
                     setPrivacyModalOpen(true);
                   }
                 }}
@@ -516,7 +650,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
                       // interactionEnabled=false이면 체크 변경을 막고 모달 열기
                       // 이유: HTML disabled 금지 스펙 준수 — 인터셉트로 동일 효과 구현
                       if (!privacyInteractionEnabled) {
-                        setPrivacyOpenedByLabel(false);
+                        setPrivacyModalTrigger("checkbox");
                         setPrivacyModalOpen(true);
                         return;
                       }
@@ -530,7 +664,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
                         (e.key === " " || e.key === "Enter")
                       ) {
                         e.preventDefault();
-                        setPrivacyOpenedByLabel(false);
+                        setPrivacyModalTrigger("checkbox");
                         setPrivacyModalOpen(true);
                       }
                     }}
@@ -553,8 +687,26 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
           </div>
 
           {errors.privacyPolicy && (
-            <p id="privacy-policy-error" role="alert" className="text-red-500">
-              {errors.privacyPolicy.message}
+            <p
+              id="privacy-policy-error"
+              role="alert"
+              ref={privacyErrorContainerRef}
+              tabIndex={-1}
+              className="text-red-500"
+            >
+              {/* 에러 메시지를 클릭 가능하게 처리 — 이용약관과 동일한 단일 행동 경로 제공
+                  스펙: error_click_should_open_modal_if_possible */}
+              <button
+                ref={privacyErrorButtonRef}
+                type="button"
+                className="cursor-pointer underline hover:no-underline"
+                onClick={() => {
+                  setPrivacyModalTrigger("error");
+                  setPrivacyModalOpen(true);
+                }}
+              >
+                {errors.privacyPolicy.message}
+              </button>
             </p>
           )}
         </div>
@@ -577,7 +729,10 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
         </Link>
 
         <Button type="submit" disabled={isPending}>
-          {isPending && <span role="status" aria-label="로딩 중" />}
+          {/* 시각적 스피너 추가 — 400ms 이상의 서버 응답 대기 동안 처리 중임을 명확히 전달 */}
+          {isPending && (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+          )}
           {isPending ? "가입 중..." : "회원가입"}
         </Button>
       </div>
