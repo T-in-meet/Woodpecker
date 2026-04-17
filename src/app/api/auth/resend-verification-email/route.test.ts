@@ -285,3 +285,55 @@ describe("이메일 재전송 Request Eligibility 검증", () => {
     });
   });
 });
+
+describe("이메일 인증 재전송 API 입력 검증", () => {
+  function makeRequest(body: object): NextRequest {
+    return new NextRequest(
+      "http://localhost/api/auth/resend-verification-email",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetEligibilityStore();
+  });
+
+  it("이메일 형식이 잘못되면 validation 실패 + errors 반환", async () => {
+    const response = await POST(makeRequest({ email: "invalid-email" }));
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.success).toBe(false);
+    expect(body.code).toBe(AUTH_API_CODES.RESEND_INVALID_INPUT);
+    expect(body.data.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: "email",
+          reason: VALIDATION_REASON.INVALID_FORMAT,
+        }),
+      ]),
+    );
+  });
+
+  it("email이 빈 문자열이면 REQUIRED 반환", async () => {
+    const response = await POST(makeRequest({ email: " " }));
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.success).toBe(false);
+    expect(body.code).toBe(AUTH_API_CODES.RESEND_INVALID_INPUT);
+    expect(body.data.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: "email",
+          reason: VALIDATION_REASON.REQUIRED,
+        }),
+      ]),
+    );
+  });
+});

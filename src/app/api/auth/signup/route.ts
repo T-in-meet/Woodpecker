@@ -9,7 +9,7 @@ import {
   checkRequestEligibility,
 } from "@/features/auth/lib/checkRequestEligibility";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
-import { mapSignupValidationErrors } from "@/features/auth/signup/lib/mapSignupValidationErrors";
+import { mapAuthValidationErrors } from "@/features/auth/lib/mapAuthValidationErrors";
 import { signupApiSchema } from "@/features/auth/signup/schema/signupApiSchema";
 import { failureResponse, successResponse } from "@/lib/api/response";
 import { ROUTES } from "@/lib/constants/routes";
@@ -100,7 +100,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
 
   if (!parsed.success) {
     return failureResponse(AUTH_API_CODES.SIGNUP_INVALID_INPUT, {
-      errors: mapSignupValidationErrors(parsed.error, body),
+      errors: mapAuthValidationErrors(parsed.error, body),
     });
   }
 

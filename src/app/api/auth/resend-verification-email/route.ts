@@ -1,5 +1,4 @@
 import { NextRequest } from "next/server";
-import { z } from "zod";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 import { applyMinimumResponseTime } from "@/features/auth/lib/applyMinimumResponseTime";
@@ -7,21 +6,13 @@ import {
   checkIpRateLimitPrecheck,
   checkRequestEligibility,
 } from "@/features/auth/lib/checkRequestEligibility";
+import { mapAuthValidationErrors } from "@/features/auth/lib/mapAuthValidationErrors";
 import { resendVerificationEmail } from "@/features/auth/resend-verification-email/lib/resendVerificationEmail";
+import { resendApiSchema } from "@/features/auth/resend-verification-email/schema/resendApiSchema";
 import { failureResponse, successResponse } from "@/lib/api/response";
 import { canonicalizeEmail } from "@/lib/utils/canonicalizeEmail";
 import { getClientIp } from "@/lib/utils/getClientIp";
 import { VALIDATION_REASON } from "@/lib/validation/reasons";
-
-/**
- * 재전송 요청 스키마
- *
- * - email: 문자열 → trim → 이메일 형식 검증
- * - boundary validation (외부 입력 검증) 역할
- */
-const resendSchema = z.object({
-  email: z.preprocess((v) => (typeof v === "string" ? v.trim() : v), z.email()),
-});
 
 function maskEmail(email: string): string {
   const atIndex = email.indexOf("@");
@@ -101,15 +92,17 @@ export async function POST(request: NextRequest) {
   /**
    * 3. Zod validation
    *
-   * - 이메일 형식 검증
+   * - email trim + 필수값(min 1) + 이메일 형식 검증
    * - 실패 시 INVALID_INPUT 반환
    */
-  const parsed = resendSchema.safeParse(body);
+  const parsed = resendApiSchema.safeParse(body);
 
   if (!parsed.success) {
     return applyMinimumResponseTime(
       start,
-      failureResponse(AUTH_API_CODES.RESEND_INVALID_INPUT),
+      failureResponse(AUTH_API_CODES.RESEND_INVALID_INPUT, {
+        errors: mapAuthValidationErrors(parsed.error, body),
+      }),
     );
   }
 
