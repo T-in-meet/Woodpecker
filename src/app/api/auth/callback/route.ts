@@ -54,6 +54,41 @@ function redirectToVerifyEmail(request: NextRequest): NextResponse {
   return NextResponse.redirect(redirectUrl, REDIRECT_OPTIONS);
 }
 
+type CallbackInput = {
+  tokenHash: string | null;
+  type: string | null;
+};
+
+function extractCallbackInput(request: NextRequest): CallbackInput {
+  return {
+    tokenHash: request.nextUrl.searchParams.get("token_hash"),
+    type: request.nextUrl.searchParams.get("type"),
+  };
+}
+
+function isValidMagiclinkInput(input: CallbackInput): input is {
+  tokenHash: string;
+  type: "magiclink";
+} {
+  return Boolean(input.tokenHash) && input.type === "magiclink";
+}
+
+async function verifyMagiclinkToken(
+  tokenHash: string,
+): Promise<{ ok: boolean }> {
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.auth.verifyOtp({
+      token_hash: tokenHash,
+      type: "magiclink",
+    });
+
+    return { ok: !error };
+  } catch {
+    return { ok: false };
+  }
+}
+
 /**
  * 이메일 인증 callback 처리
  *
@@ -78,30 +113,28 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const finalize = (res: NextResponse): Promise<NextResponse> =>
     applyMinimumResponseTime(start, res) as Promise<NextResponse>;
 
-  const tokenHash = request.nextUrl.searchParams.get("token_hash");
-  const type = request.nextUrl.searchParams.get("type");
+  /**
+   * 1) 입력 추출
+   */
+  const input = extractCallbackInput(request);
 
-  if (!tokenHash || !type) {
+  /**
+   * 2) 입력 검증
+   */
+  if (!isValidMagiclinkInput(input)) {
     return finalize(redirectToVerifyEmail(request));
   }
 
-  if (type !== "magiclink") {
+  /**
+   * 3) side-effect (Supabase verifyOtp)
+   */
+  const verification = await verifyMagiclinkToken(input.tokenHash);
+  if (!verification.ok) {
     return finalize(redirectToVerifyEmail(request));
   }
 
-  try {
-    const supabase = await createClient();
-    const { error } = await supabase.auth.verifyOtp({
-      token_hash: tokenHash,
-      type: "magiclink",
-    });
-
-    if (error) {
-      return finalize(redirectToVerifyEmail(request));
-    }
-  } catch {
-    return finalize(redirectToVerifyEmail(request));
-  }
-
+  /**
+   * 4) finalize redirect
+   */
   return finalize(redirectToMypage(request));
 }

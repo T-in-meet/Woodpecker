@@ -7,20 +7,17 @@ import {
   checkRequestEligibility,
 } from "@/features/auth/lib/checkRequestEligibility";
 import { mapAuthValidationErrors } from "@/features/auth/lib/mapAuthValidationErrors";
+import { maskEmailForLogging } from "@/features/auth/lib/maskEmailForLogging";
+import {
+  AuthJsonParseError,
+  parseAuthJsonRequestBody,
+} from "@/features/auth/lib/parseAuthJsonRequestBody";
 import { resendVerificationEmail } from "@/features/auth/resend-verification-email/lib/resendVerificationEmail";
 import { resendApiSchema } from "@/features/auth/resend-verification-email/schema/resendApiSchema";
 import { failureResponse, successResponse } from "@/lib/api/response";
 import { canonicalizeEmail } from "@/lib/utils/canonicalizeEmail";
 import { getClientIp } from "@/lib/utils/getClientIp";
 import { VALIDATION_REASON } from "@/lib/validation/reasons";
-
-function maskEmail(email: string): string {
-  const atIndex = email.indexOf("@");
-  if (atIndex > 0) {
-    return "***" + email.substring(atIndex);
-  }
-  return "***";
-}
 
 /**
  * 이메일 인증 재전송 API
@@ -45,8 +42,7 @@ function maskEmail(email: string): string {
  * - 단일 entry point: checkRequestEligibility로 모든 rate limit 정책 처리
  * - atomic: 판단과 상태 업데이트가 함수 내에서 함께 일어남
  */
-export async function POST(request: NextRequest) {
-  const start = Date.now();
+async function resolveResendResponse(request: NextRequest): Promise<Response> {
   /**
    * 1. IP 추출
    *
@@ -64,10 +60,7 @@ export async function POST(request: NextRequest) {
    */
   const precheck = checkIpRateLimitPrecheck(ip);
   if (!precheck.allowed) {
-    return applyMinimumResponseTime(
-      start,
-      failureResponse(AUTH_API_CODES.RESEND_RATE_LIMIT_EXCEEDED),
-    );
+    return failureResponse(AUTH_API_CODES.RESEND_RATE_LIMIT_EXCEEDED);
   }
 
   let body: unknown;
@@ -79,14 +72,14 @@ export async function POST(request: NextRequest) {
    * - validation 이전 단계이므로 field는 "body"로 처리
    */
   try {
-    body = await request.json();
-  } catch {
-    return applyMinimumResponseTime(
-      start,
-      failureResponse(AUTH_API_CODES.RESEND_INVALID_INPUT, {
+    body = await parseAuthJsonRequestBody(request);
+  } catch (e) {
+    if (e instanceof AuthJsonParseError) {
+      return failureResponse(AUTH_API_CODES.RESEND_INVALID_INPUT, {
         errors: [{ field: "body", reason: VALIDATION_REASON.INVALID_FORMAT }],
-      }),
-    );
+      });
+    }
+    throw e;
   }
 
   /**
@@ -98,12 +91,9 @@ export async function POST(request: NextRequest) {
   const parsed = resendApiSchema.safeParse(body);
 
   if (!parsed.success) {
-    return applyMinimumResponseTime(
-      start,
-      failureResponse(AUTH_API_CODES.RESEND_INVALID_INPUT, {
-        errors: mapAuthValidationErrors(parsed.error, body),
-      }),
-    );
+    return failureResponse(AUTH_API_CODES.RESEND_INVALID_INPUT, {
+      errors: mapAuthValidationErrors(parsed.error, body),
+    });
   }
 
   const rawEmail = parsed.data.email;
@@ -129,10 +119,7 @@ export async function POST(request: NextRequest) {
    */
   const eligibility = checkRequestEligibility("resend", ip, canonicalEmail);
   if (!eligibility.allowed) {
-    return applyMinimumResponseTime(
-      start,
-      failureResponse(AUTH_API_CODES.RESEND_RATE_LIMIT_EXCEEDED),
-    );
+    return failureResponse(AUTH_API_CODES.RESEND_RATE_LIMIT_EXCEEDED);
   }
 
   /**
@@ -151,7 +138,7 @@ export async function POST(request: NextRequest) {
     await resendVerificationEmail(canonicalEmail);
   } catch (error) {
     console.error("Resend verification email side-effect failed", {
-      maskedEmail: maskEmail(canonicalEmail),
+      maskedEmail: maskEmailForLogging(canonicalEmail),
       error,
     });
   }
@@ -159,11 +146,21 @@ export async function POST(request: NextRequest) {
   /**
    * 7. 성공 응답 반환
    */
-  return applyMinimumResponseTime(
-    start,
-    successResponse(AUTH_API_CODES.EMAIL_VERIFICATION_RESEND_SUCCESS, {
-      email: rawEmail,
-      resent: true,
-    }),
-  );
+  return successResponse(AUTH_API_CODES.EMAIL_VERIFICATION_RESEND_SUCCESS, {
+    email: rawEmail,
+    resent: true,
+  });
+}
+
+export async function POST(request: NextRequest): Promise<Response> {
+  const start = Date.now();
+  let response: Response;
+
+  try {
+    response = await resolveResendResponse(request);
+  } catch {
+    response = failureResponse(AUTH_API_CODES.RESEND_INTERNAL_ERROR);
+  }
+
+  return applyMinimumResponseTime(start, response);
 }

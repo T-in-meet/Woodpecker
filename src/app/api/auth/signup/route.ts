@@ -10,6 +10,11 @@ import {
 } from "@/features/auth/lib/checkRequestEligibility";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { mapAuthValidationErrors } from "@/features/auth/lib/mapAuthValidationErrors";
+import { maskEmailForLogging } from "@/features/auth/lib/maskEmailForLogging";
+import {
+  AuthJsonParseError,
+  parseAuthJsonRequestBody,
+} from "@/features/auth/lib/parseAuthJsonRequestBody";
 import { signupApiSchema } from "@/features/auth/signup/schema/signupApiSchema";
 import { failureResponse, successResponse } from "@/lib/api/response";
 import { ROUTES } from "@/lib/constants/routes";
@@ -17,37 +22,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { canonicalizeEmail } from "@/lib/utils/canonicalizeEmail";
 import { getClientIp } from "@/lib/utils/getClientIp";
 import { VALIDATION_REASON } from "@/lib/validation/reasons";
-
-/**
- * JSON 파싱 실패를 명확하게 구분하기 위한 커스텀 에러
- *
- * 목적:
- * - request.json() 실패를 일반 에러와 구분
- * - validation 이전 단계에서 동일한 실패 응답을 반환하기 위함
- */
-class JsonParseError extends Error {}
-
-/**
- * 요청 파싱 함수
- *
- * 역할:
- * - JSON 요청 본문 파싱
- *
- * 보안 관점:
- * - 이 단계는 계정 상태와 무관한 입력 처리 단계
- * - 어떤 경우에도 계정 존재 여부와 연결되면 안됨
- */
-async function parseRequest(request: NextRequest): Promise<unknown> {
-  let body: unknown;
-
-  try {
-    body = await request.json();
-  } catch {
-    throw new JsonParseError();
-  }
-
-  return body;
-}
 /**
  * 회원가입 핵심 로직
  *
@@ -80,12 +54,12 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
 
   let body: unknown;
   try {
-    body = await parseRequest(request);
+    body = await parseAuthJsonRequestBody(request);
   } catch (e) {
     /**
      * malformed JSON 처리
      */
-    if (e instanceof JsonParseError) {
+    if (e instanceof AuthJsonParseError) {
       return failureResponse(AUTH_API_CODES.SIGNUP_INVALID_INPUT, {
         errors: [{ field: "body", reason: VALIDATION_REASON.INVALID_FORMAT }],
       });
@@ -106,6 +80,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
 
   const { email, password, nickname } = parsed.data;
   const canonicalEmail = canonicalizeEmail(email);
+  const maskedEmail = maskEmailForLogging(canonicalEmail);
 
   /**
    * Request eligibility check — IP, email short, email long 에 대한 통합 판별
@@ -145,7 +120,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
         email: deliveryEmail,
       });
     } catch {
-      console.warn("이메일 재발송 실패 (무시됨)", { email: canonicalEmail });
+      console.warn("이메일 재발송 실패 (무시됨)", { maskedEmail });
     }
 
     return makeSignupSuccess(email);
@@ -166,7 +141,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
       });
     } catch {
       console.warn("인증 완료 사용자 이메일 발송 실패 (무시됨)", {
-        email: canonicalEmail,
+        maskedEmail,
       });
     }
 
@@ -208,7 +183,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
 
   if (createUserError) {
     console.error("Supabase admin.createUser failed", {
-      email: email, // raw email 로깅
+      maskedEmail,
       message: createUserError.message,
       status: createUserError.status,
       code: createUserError.code,
@@ -227,7 +202,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
 
   if (error) {
     console.error("Supabase generateLink(magiclink) failed", {
-      email: email, // raw email 로깅
+      maskedEmail,
       message: error.message,
       status: error.status,
       code: error.code,
@@ -241,7 +216,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
 
   if (!tokenHash) {
     console.error("Supabase generateLink(magiclink) returned no hashed token", {
-      email: email, // raw email 로깅
+      maskedEmail,
     });
     return makeSignupSuccess(email); // raw email 응답
   }
@@ -250,7 +225,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
     await sendAuthEmail(email, tokenHash, "magiclink"); // raw email 발송
   } catch (error) {
     console.error("Failed to send signup magiclink email", {
-      email: email, // raw email 로깅
+      maskedEmail,
       error,
     });
     // AE 방어: 이메일 발송 실패를 외부에 노출하지 않는다.
