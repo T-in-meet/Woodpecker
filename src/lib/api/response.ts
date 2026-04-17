@@ -4,7 +4,7 @@ import {
   RESULT_HTTP_STATUS_MAP,
 } from "@/lib/constants/apiCodes";
 
-import { ValidationReason } from "../../../lib/validation/validation.types";
+import type { ValidationError } from "../validation/validation-error.types";
 
 /**
  * 성공 응답 타입
@@ -36,17 +36,6 @@ type FailureResponse = {
   code: ApiCode;
   data: null | { errors: ValidationError[] };
   message?: string;
-};
-
-/**
- * Validation 에러 구조
- *
- * - field: 에러가 발생한 필드
- * - reason: 에러 원인 (도메인 상수)
- */
-export type ValidationError = {
-  field: string;
-  reason: ValidationReason;
 };
 
 /**

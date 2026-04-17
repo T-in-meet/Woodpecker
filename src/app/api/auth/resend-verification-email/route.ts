@@ -7,8 +7,8 @@ import {
   checkIpRateLimitPrecheck,
   checkRequestEligibility,
 } from "@/features/auth/lib/checkRequestEligibility";
-import { failureResponse, successResponse } from "@/features/auth/lib/response";
 import { resendVerificationEmail } from "@/features/auth/resend-verification-email/lib/resendVerificationEmail";
+import { failureResponse, successResponse } from "@/lib/api/response";
 import { canonicalizeEmail } from "@/lib/utils/canonicalizeEmail";
 import { getClientIp } from "@/lib/utils/getClientIp";
 import { VALIDATION_REASON } from "@/lib/validation/reasons";
@@ -115,6 +115,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const rawEmail = parsed.data.email;
+
   /**
    * 4. 이메일 정규화
    *
@@ -122,7 +124,7 @@ export async function POST(request: NextRequest) {
    * - Gmail alias를 동일 identity로 취급
    * - request eligibility key 일관성 유지
    */
-  const canonicalEmail = canonicalizeEmail(parsed.data.email);
+  const canonicalEmail = canonicalizeEmail(rawEmail);
 
   /**
    * 5. Request eligibility check — 통합 판별
@@ -169,7 +171,7 @@ export async function POST(request: NextRequest) {
   return applyMinimumResponseTime(
     start,
     successResponse(AUTH_API_CODES.EMAIL_VERIFICATION_RESEND_SUCCESS, {
-      email: canonicalEmail,
+      email: rawEmail,
       resent: true,
     }),
   );

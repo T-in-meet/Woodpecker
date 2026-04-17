@@ -9,9 +9,9 @@ import {
   checkRequestEligibility,
 } from "@/features/auth/lib/checkRequestEligibility";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
-import { failureResponse, successResponse } from "@/features/auth/lib/response";
 import { mapSignupValidationErrors } from "@/features/auth/signup/lib/mapSignupValidationErrors";
 import { signupApiSchema } from "@/features/auth/signup/schema/signupApiSchema";
+import { failureResponse, successResponse } from "@/lib/api/response";
 import { ROUTES } from "@/lib/constants/routes";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { canonicalizeEmail } from "@/lib/utils/canonicalizeEmail";
