@@ -147,7 +147,7 @@ async function uploadAvatar(
   }
 
   const ext = avatarFile.name.split(".").pop()?.toLowerCase() ?? "jpg";
-  const uploadPath = `${crypto.randomUUID()}.${ext}`;
+  const uploadPath = `${userId}/${crypto.randomUUID()}.${ext}`;
 
   /**
    * Storage 업로드

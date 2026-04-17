@@ -118,9 +118,11 @@ describe("PR-API-07 프로필 이미지 업로드 성공 시 avatar_url 반영",
     expect(body.data.redirectTo).toBe(ROUTES.VERIFY_EMAIL);
   });
 
-  it("TC-02. avatarFile가 포함된 요청 시 storage.upload가 1회 호출된다", async () => {
+  it("TC-02. avatarFile가 포함된 요청 시 storage.upload가 1회 호출되며 userId/ 경로로 업로드된다", async () => {
     await POST(makeMultipartRequest());
     expect(mockStorageUpload).toHaveBeenCalledTimes(1);
+    const uploadPath = mockStorageUpload.mock.calls[0]?.[0] as string;
+    expect(uploadPath).toMatch(/^user-id\//);
   });
 
   it("TC-03. upload 경로로 getPublicUrl이 1회 호출된다", async () => {
