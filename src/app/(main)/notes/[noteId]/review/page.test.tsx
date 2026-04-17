@@ -21,7 +21,7 @@ const {
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
-  createClient: createClientMock,
+  createServerComponentClient: createClientMock,
 }));
 
 vi.mock("@/features/review/queries", () => ({

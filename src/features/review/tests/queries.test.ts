@@ -5,7 +5,7 @@ const { createClientMock } = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
-  createClient: createClientMock,
+  createServerComponentClient: createClientMock,
 }));
 
 import { getPendingReviewLog } from "../queries";
