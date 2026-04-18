@@ -55,18 +55,14 @@ export function LegalDialogWrapper({
   const contentSections: LegalSection[] =
     agreementType === "termsOfService" ? termsSections : privacySections;
 
-  const handleOpenChange = (nextOpen: boolean) => {
-    onOpenChange(nextOpen);
-  };
-
   const handleAgree = () => {
     onAgree();
     // "동의하기" 경로도 일반 닫기와 동일한 포커스 복원 규칙을 따르도록 통일
-    handleOpenChange(false);
+    onOpenChange(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange} modal={true}>
+    <Dialog open={open} onOpenChange={onOpenChange} modal={true}>
       <DialogTrigger asChild>
         <Button
           ref={triggerButtonRef}
