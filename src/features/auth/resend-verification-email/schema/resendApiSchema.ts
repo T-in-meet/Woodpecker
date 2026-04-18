@@ -1,14 +1,16 @@
 import { z } from "zod";
 
+import { normalizedEmailSchema } from "@/lib/validation/emailSchema";
+
 /**
- * 재전송 요청 스키마
+ * 재전송 요청 스키마 (API boundary)
  *
- * - email: 문자열 → trim → 필수값 검증 → 이메일 형식 검증
- * - boundary validation (외부 입력 검증) 역할
+ * - email: 공용 normalizedEmailSchema 사용
+ *   - trim / normalize / format 검증을 공통 규칙으로 통일
+ * - auth 내 모든 email 입력 경계 규칙 일관성 유지 목적
  */
 export const resendApiSchema = z.object({
-  email: z.preprocess(
-    (v) => (typeof v === "string" ? v.trim() : v),
-    z.string().min(1).email(),
-  ),
+  email: normalizedEmailSchema,
 });
+
+export type ResendRequest = z.infer<typeof resendApiSchema>;
