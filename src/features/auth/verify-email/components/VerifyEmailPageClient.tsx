@@ -1,6 +1,7 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
+import Link from "next/link";
 /**
  * 이메일 인증 안내 페이지 클라이언트 컴포넌트
  *
@@ -185,55 +186,72 @@ export default function VerifyEmailPageClient({ email }: Props) {
   };
 
   return (
-    <div className="max-w-4xl space-y-6 py-7 px-4 flex min-h-screen flex-col items-center justify-center">
-      {/* 행동 유도형 구조로 재편 — 상태 보고 대신 사용자가 즉시 다음 행동을 인식할 수 있도록 */}
-      <div className="w-full max-w-md space-y-4 text-center">
-        <div className="space-y-2">
-          {/* 기준 페이지(mypage) 제목 스타일과 일관성 유지 */}
-          <h1 className="text-3xl font-bold">메일함을 확인해주세요</h1>
-          {normalizedPrefillEmail ? (
-            // 이메일 주소를 안내 문구에 직접 표시 — input에만 의존하지 않고 바로 인지 가능하도록
-            <p className="text-base text-muted-foreground">
-              <span className="font-medium text-foreground">
-                {normalizedPrefillEmail}
-              </span>
-              {"으로 인증 링크를 보냈습니다."}
+    <div className="mx-auto flex min-h-[calc(100vh-80px)] w-full max-w-6xl md:items-center justify-center px-4 py-10">
+      <div className="w-full max-w-4xl rounded-3xl md:border bg-background px-6 py-10 md:shadow-sm md:px-10 md:py-12">
+        {/* 행동 유도형 구조로 재편 — 상태 보고 대신 사용자가 즉시 다음 행동을 인식할 수 있도록 */}
+        <div className="space-y-8">
+          {/* 제목 영역 */}
+          <div className="space-y-3 text-center">
+            <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
+              이메일 인증
+            </h1>
+            <p className="text-base text-muted-foreground md:text-md">
+              가입하신 이메일로 인증 링크를 보냈습니다.
             </p>
-          ) : (
-            <p className="text-base text-muted-foreground">
-              인증 링크를 보냈습니다.
-            </p>
-          )}
-        </div>
-        <div className="space-y-1 text-sm text-muted-foreground">
-          <p>스팸 메일함도 확인해주세요.</p>
-          <p>메일이 오지 않으면 아래에서 다시 보낼 수 있습니다.</p>
+          </div>
+
+          <form
+            aria-label="인증 메일 재발송"
+            onSubmit={handleSubmit(onSubmit)}
+            className="mx-auto w-full max-w-xl"
+          >
+            <div className="space-y-6 bg-background px-5 py-6 md:px-7 md:py-7">
+              <div className="flex gap-4">
+                <Label htmlFor="email" className="text-base shrink-0  min-w-16">
+                  이메일
+                </Label>
+                <Input
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  {...register("email")}
+                  className="h-12 rounded-xl"
+                />
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full h-12 rounded-full"
+                disabled={isDisabled}
+              >
+                {/* 로딩 스피너 추가 — SignupForm 패턴과 일관성 유지, 요청 등록 여부를 즉시 전달 */}
+                {isDisabled && (
+                  <Loader2
+                    className="mr-2 h-4 w-4 animate-spin"
+                    aria-hidden="true"
+                  />
+                )}
+                {isDisabled ? "전송 중..." : "인증 메일 재발송"}
+              </Button>
+
+              <div className="space-y-1 text-center text-sm text-muted-foreground">
+                <p>메일이 오지 않으면 스팸함을 확인해주세요.</p>
+                <p>여전히 보이지 않으면 위 버튼으로 다시 보낼 수 있습니다.</p>
+              </div>
+            </div>
+          </form>
+
+          <div className="text-center text-sm text-muted-foreground">
+            이미 인증하셨나요?{" "}
+            <Link
+              href="/login"
+              className="font-medium text-foreground underline underline-offset-4"
+            >
+              로그인
+            </Link>
+          </div>
         </div>
       </div>
-
-      <form
-        aria-label="인증 메일 재발송"
-        onSubmit={handleSubmit(onSubmit)}
-        className="max-w-md space-y-4"
-      >
-        <div className="space-y-2">
-          <Label htmlFor="email">이메일</Label>
-          <Input
-            id="email"
-            type="email"
-            autoComplete="email"
-            {...register("email")}
-          />
-        </div>
-
-        <Button type="submit" className="w-full" disabled={isDisabled}>
-          {/* 로딩 스피너 추가 — SignupForm 패턴과 일관성 유지, 요청 등록 여부를 즉시 전달 */}
-          {isDisabled && (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-          )}
-          {isDisabled ? "전송 중..." : "인증 메일 재발송"}
-        </Button>
-      </form>
     </div>
   );
 }
