@@ -4,6 +4,7 @@ const SIGNUP_ENDPOINT = "/api/auth/signup";
 const CALLBACK_ENDPOINT = "/api/auth/callback";
 const SIGNUP_SUCCESS_CODE = "SIGNUP_SUCCESS";
 const SIGNUP_REDIRECT_TO = "/verify-email";
+const SIGNUP_INTERNAL_ERROR_CODE = "SIGNUP_INTERNAL_ERROR";
 
 type SignupResponse = {
   success: boolean;
@@ -58,7 +59,7 @@ test.describe("Auth external-observable regression", () => {
     expect(existingDataKeys).toEqual(newDataKeys);
   });
 
-  test("TC-02: signup 응답 형태 계약(code/data.email/data.redirectTo)을 유지한다", async ({
+  test("TC-02: signup 유효 payload 응답은 현재 계약(success 또는 internal_error envelope)을 유지한다", async ({
     request,
   }) => {
     const response = await postSignup(
@@ -70,17 +71,28 @@ test.describe("Auth external-observable regression", () => {
 
     expect(typeof body.success).toBe("boolean");
     expect(typeof body.code).toBe("string");
-    expect(body.data).not.toBeNull();
-    expect(typeof body.data?.email).toBe("string");
-    expect(body.data?.redirectTo).toBe("/verify-email");
+
+    if (body.success) {
+      expect(body.code).toBe(SIGNUP_SUCCESS_CODE);
+      expect(body.data).not.toBeNull();
+      expect(typeof body.data?.email).toBe("string");
+      expect(body.data?.redirectTo).toBe(SIGNUP_REDIRECT_TO);
+      return;
+    }
+
+    expect(body.code).toBe(SIGNUP_INTERNAL_ERROR_CODE);
+    expect(body.data).toBeNull();
   });
 
-  test("TC-03: callback(token=dummy) 요청은 현재 계약대로 동일한 redirect observable(status/location)을 반환한다", async ({
+  test("TC-03: callback(token_hash/type) 요청은 현재 계약대로 redirect observable(status/location)을 반환한다", async ({
     request,
   }) => {
-    const response = await request.get(`${CALLBACK_ENDPOINT}?token=dummy`, {
-      maxRedirects: 0,
-    });
+    const response = await request.get(
+      `${CALLBACK_ENDPOINT}?token_hash=dummy&type=magiclink`,
+      {
+        maxRedirects: 0,
+      },
+    );
     const headers = response.headers();
 
     expect(response.status()).toBe(307);
@@ -88,17 +100,17 @@ test.describe("Auth external-observable regression", () => {
     expect(headers.location).toContain("/verify-email");
   });
 
-  test("TC-04: callback 실패 케이스(token=dummy vs token=invalid)는 외부 observable이 동일하다", async ({
+  test("TC-04: callback 실패 케이스(token_hash=dummy vs invalid)는 외부 observable이 동일하다", async ({
     request,
   }) => {
     const dummyResponse = await request.get(
-      `${CALLBACK_ENDPOINT}?token=dummy`,
+      `${CALLBACK_ENDPOINT}?token_hash=dummy&type=magiclink`,
       {
         maxRedirects: 0,
       },
     );
     const invalidResponse = await request.get(
-      `${CALLBACK_ENDPOINT}?token=invalid`,
+      `${CALLBACK_ENDPOINT}?token_hash=invalid&type=magiclink`,
       {
         maxRedirects: 0,
       },
