@@ -288,20 +288,19 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
     [onConfirmChange, trigger],
   );
 
-  const focusAgreementCheckbox = useCallback(
-    (checkboxRef: React.RefObject<HTMLButtonElement | null>) => {
-      requestAnimationFrame(() => {
-        checkboxRef.current?.scrollIntoView({
-          behavior: "smooth",
-          block: "center",
-        });
-        checkboxRef.current?.focus();
+  const focusAgreementCheckbox = (
+    checkboxRef: React.RefObject<HTMLButtonElement | null>,
+  ) => {
+    requestAnimationFrame(() => {
+      checkboxRef.current?.scrollIntoView({
+        block: "center",
+        behavior: "smooth",
       });
-    },
-    [],
-  );
+      checkboxRef.current?.focus();
+    });
+  };
 
-  const focusNextAction = useCallback(() => {
+  const focusNextAction = () => {
     requestAnimationFrame(() => {
       if (submitButtonRef.current && !submitButtonRef.current.disabled) {
         submitButtonRef.current.focus();
@@ -309,33 +308,26 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
       }
       loginLinkRef.current?.focus();
     });
-  }, []);
+  };
 
-  const restoreFocusByTrigger = useCallback(
-    (
-      trigger: ModalTrigger,
-      refs: {
-        checkbox: React.RefObject<HTMLButtonElement | null>;
-        button: React.RefObject<HTMLButtonElement | null>;
-        error: React.RefObject<HTMLButtonElement | null>;
-      },
-    ) => {
-      requestAnimationFrame(() => {
-        if (trigger === "checkbox") {
-          refs.checkbox.current?.focus();
-          return;
-        }
-        if (trigger === "error") {
-          refs.error.current?.focus();
-          return;
-        }
-        if (trigger === "button") {
-          refs.button.current?.focus();
-        }
-      });
+  const restoreFocusByTrigger = (
+    trigger: "checkbox" | "button" | "error" | null,
+    refs: {
+      checkbox: React.RefObject<HTMLButtonElement | null>;
+      button: React.RefObject<HTMLButtonElement | null>;
+      error: React.RefObject<HTMLButtonElement | null>;
     },
-    [],
-  );
+  ) => {
+    requestAnimationFrame(() => {
+      if (trigger === "checkbox") {
+        refs.checkbox.current?.focus();
+      } else if (trigger === "button") {
+        refs.button.current?.focus();
+      } else if (trigger === "error") {
+        refs.error.current?.focus();
+      }
+    });
+  };
 
   /**
    * 모달이 닫힐 때에만 interactionEnabled 활성화
