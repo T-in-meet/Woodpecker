@@ -47,8 +47,19 @@ describe("VerifyEmailPageClient", () => {
     render(<VerifyEmailPageClient />);
 
     // 행동 유도형 문구로 교체됨 — 사용자가 즉시 다음 행동을 인식할 수 있도록
-    expect(screen.getByText(/메일함을 확인해주세요/)).toBeInTheDocument();
-    expect(screen.getByText(/스팸 메일함도 확인해주세요/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/가입하신 이메일로 인증 링크를 보냈습니다\./),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByText(/메일이 오지 않으면 스팸함을 확인해주세요\./),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByText(
+        /여전히 보이지 않으면 위 버튼으로 다시 보낼 수 있습니다\./,
+      ),
+    ).toBeInTheDocument();
   });
 
   it("TC-02. 이메일 input과 재발송 버튼이 렌더링된다", () => {
@@ -88,7 +99,7 @@ describe("VerifyEmailPageClient", () => {
     render(<VerifyEmailPageClient email="user@example.com" />);
 
     // 이메일 주소를 안내 문구에 직접 표시 — input에만 의존하지 않고 바로 인지 가능하도록
-    expect(screen.getByText(/user@example.com/)).toBeInTheDocument();
+    expect(screen.getByDisplayValue("user@example.com")).toBeInTheDocument();
   });
 
   it("TC-05. 이메일 입력 후 버튼 클릭 시 mutateAsync가 올바른 email로 호출된다", async () => {
