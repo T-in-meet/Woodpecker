@@ -26,6 +26,8 @@ const validSignupPayload = {
 
 // 성공 응답 mock 데이터
 const signupSuccessResponse = {
+  success: true,
+  code: "SIGNUP_SUCCESS",
   data: {
     email: "test@example.com",
     redirectTo: "/login",
