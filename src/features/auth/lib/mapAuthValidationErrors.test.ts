@@ -202,4 +202,27 @@ describe("mapAuthValidationErrors", () => {
       },
     ]);
   });
+
+  it("처리되지 않은 issue code(custom)는 INVALID_TYPE으로 매핑하고 빈 path는 unknown으로 반환한다", () => {
+    const schema = z
+      .object({
+        email: z.string(),
+      })
+      .superRefine((_value, ctx) => {
+        ctx.addIssue({
+          code: "custom",
+        });
+      });
+
+    const input = { email: "test@example.com" };
+    const parsed = schema.safeParse(input);
+
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+
+    const errors = mapAuthValidationErrors(parsed.error, input);
+    expect(errors).toEqual([
+      { field: "unknown", reason: VALIDATION_REASON.INVALID_TYPE },
+    ]);
+  });
 });
