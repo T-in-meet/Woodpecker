@@ -1,21 +1,21 @@
 /**
- * Request Eligibility System — unified rate limit check
+ * 요청 허용성 시스템 — 통합 rate limit 검증
  *
- * Tests the single entry point decision function that evaluates all three conditions
- * (IP limit, email short window, email long window) atomically.
+ * IP 제한, 이메일 short window, 이메일 long window의 세 조건을
+ * 단일 진입점 결정 함수에서 원자적으로 평가하는지 검증한다.
  *
- * Design:
- * - Single decision authority: checkRequestEligibility(route, ip, email)
- * - AND evaluation: all conditions must pass for allowed=true
- * - Atomic update: state updates only if allowed=true
- * - No state pollution: blocked requests do not increment any counters
- * - Lazy initialization: email store entries created only on allowed=true
- * - User-scoped: email state is shared between signup and resend
+ * 설계:
+ * - 단일 결정 권한: checkRequestEligibility(route, ip, email)
+ * - AND 평가: 모든 조건이 통과해야 allowed=true
+ * - 원자적 업데이트: allowed=true일 때만 상태 갱신
+ * - 상태 오염 방지: 차단된 요청은 어떤 카운터도 증가시키지 않음
+ * - 지연 초기화: email store 항목은 allowed=true일 때만 생성
+ * - 사용자 스코프: email 상태는 signup/resend 간 공유
  *
- * Observability:
- * - logRequestEligibilityBlocked called only when allowed=false
- * - Conditions (ipOk, emailShortOk, emailLongOk) logged for debugging
- * - Masked identifiers (no raw IP/email in logs)
+ * 관측성:
+ * - logRequestEligibilityBlocked는 allowed=false일 때만 호출
+ * - 디버깅을 위해 조건(ipOk, emailShortOk, emailLongOk) 로깅
+ * - 식별자 마스킹(raw IP/email 로그 금지)
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -45,7 +45,7 @@ afterEach(() => {
 
 describe("checkRequestEligibility", () => {
   // ============================================================================
-  // IP rate limit (single window, shared across signup/resend)
+  // IP rate limit (단일 윈도우, signup/resend 공유)
   // ============================================================================
 
   describe("IP rate limit", () => {
@@ -65,12 +65,12 @@ describe("checkRequestEligibility", () => {
     it("TC-02. 동일 IP: 한도 초과 → { allowed: false }", () => {
       const ip = "10.0.0.2";
 
-      // Fill quota
+      // 한도 채우기
       for (let i = 0; i < IP_LIMIT; i++) {
         checkRequestEligibility("signup", ip, `user${i}@example.com`);
       }
 
-      // 11th request blocked
+      // 11번째 요청 차단
       const result = checkRequestEligibility(
         "signup",
         ip,
@@ -82,19 +82,19 @@ describe("checkRequestEligibility", () => {
     it("TC-03. IP window 만료 후 → 허용으로 복구", () => {
       const ip = "10.0.0.3";
 
-      // Fill quota
+      // 한도 채우기
       for (let i = 0; i < IP_LIMIT; i++) {
         checkRequestEligibility("signup", ip, `user${i}@example.com`);
       }
 
-      // Blocked
+      // 차단됨
       let result = checkRequestEligibility("signup", ip, "blocked@example.com");
       expect(result.allowed).toBe(false);
 
-      // Advance time past window
+      // window 만료 시점까지 시간 진행
       vi.advanceTimersByTime(IP_WINDOW_MS + 1);
 
-      // Now allowed
+      // 다시 허용
       result = checkRequestEligibility("signup", ip, "recovered@example.com");
       expect(result.allowed).toBe(true);
     });
@@ -103,12 +103,12 @@ describe("checkRequestEligibility", () => {
       const ip1 = "10.0.0.4";
       const ip2 = "10.0.0.5";
 
-      // Fill quota for ip1
+      // ip1 한도 채우기
       for (let i = 0; i < IP_LIMIT; i++) {
         checkRequestEligibility("signup", ip1, `user${i}@example.com`);
       }
 
-      // ip1 blocked
+      // ip1 차단
       let result = checkRequestEligibility(
         "signup",
         ip1,
@@ -116,14 +116,14 @@ describe("checkRequestEligibility", () => {
       );
       expect(result.allowed).toBe(false);
 
-      // ip2 allowed (independent)
+      // ip2 허용(독립 동작)
       result = checkRequestEligibility("signup", ip2, "user@example.com");
       expect(result.allowed).toBe(true);
     });
   });
 
   // ============================================================================
-  // Email short window (immediate retry suppression, replaces cooldown)
+  // Email short window (즉시 재시도 억제, cooldown 대체)
   // ============================================================================
 
   describe("email short window (연타 억제)", () => {
@@ -139,12 +139,12 @@ describe("checkRequestEligibility", () => {
     it("TC-06. 동일 email: short 한도 초과 → { allowed: false }", () => {
       const email = "retry@example.com";
 
-      // Fill short quota
+      // short 한도 채우기
       for (let i = 0; i < EMAIL_SHORT_LIMIT; i++) {
         checkRequestEligibility("signup", `10.0.0.${i}`, email);
       }
 
-      // Next request blocked
+      // 다음 요청 차단
       const result = checkRequestEligibility("signup", "10.0.0.99", email);
       expect(result.allowed).toBe(false);
     });
@@ -152,39 +152,39 @@ describe("checkRequestEligibility", () => {
     it("TC-07. short window 만료 후 → 허용으로 복구", () => {
       const email = "retry@example.com";
 
-      // Make initial request (EMAIL_SHORT_LIMIT=1, so quota filled with 1 request)
+      // 초기 요청 1회 수행 (EMAIL_SHORT_LIMIT=1 이므로 1회로 한도 도달)
       checkRequestEligibility("signup", "10.0.0.0", email);
 
-      // Blocked (short window active: count=1, limit=1)
+      // 차단됨 (short window 활성: count=1, limit=1)
       let result = checkRequestEligibility("signup", "10.0.0.99", email);
       expect(result.allowed).toBe(false);
 
-      // Advance time past short window
+      // short window 만료 시점까지 시간 진행
       vi.advanceTimersByTime(EMAIL_SHORT_WINDOW_MS + 1);
 
-      // Allowed (short window expired, long window count=1 < limit=5)
-      // [Reason: after short window expires, withinLimit returns true.
-      //  long window hasn't expired yet but count < limit, so also true.]
+      // 허용됨 (short window 만료, long window count=1 < limit=5)
+      // [이유: short window 만료 후 withinLimit=true.
+      //  long window는 아직 만료 전이지만 count < limit 이므로 true.]
       result = checkRequestEligibility("signup", "10.0.0.99", email);
       expect(result.allowed).toBe(true);
     });
   });
 
   // ============================================================================
-  // Email long window (user-level account rate limit)
+  // Email long window (사용자 단위 계정 rate limit)
   // ============================================================================
 
   describe("email long window (user-level)", () => {
     it("TC-08. 동일 email: long 한도 이하 → { allowed: true }", () => {
       const email = "longwindow@example.com";
 
-      // Make EMAIL_LONG_LIMIT requests, advancing past short window each time
-      // [Reason: EMAIL_SHORT_LIMIT=1 prevents consecutive requests without time advance.
-      //  To test long window behavior, we advance past short window between requests.]
+      // EMAIL_LONG_LIMIT만큼 요청하고, 매 요청 사이 short window를 넘겨 시간 진행
+      // [이유: EMAIL_SHORT_LIMIT=1 이므로 시간 진행 없이 연속 요청 불가.
+      //  long window 동작 검증을 위해 요청 간 short window를 넘긴다.]
       for (let i = 0; i < EMAIL_LONG_LIMIT; i++) {
         const result = checkRequestEligibility("signup", `10.0.0.${i}`, email);
         expect(result.allowed).toBe(true);
-        // Advance past short window before next request
+        // 다음 요청 전 short window를 넘겨 시간 진행
         if (i < EMAIL_LONG_LIMIT - 1) {
           vi.advanceTimersByTime(EMAIL_SHORT_WINDOW_MS + 1);
         }
@@ -194,7 +194,7 @@ describe("checkRequestEligibility", () => {
     it("TC-09. 동일 email: long 한도 초과 → { allowed: false }", () => {
       const email = "longwindow@example.com";
 
-      // Fill long quota (advance past short window between requests)
+      // long 한도 채우기 (요청 간 short window를 넘겨 시간 진행)
       for (let i = 0; i < EMAIL_LONG_LIMIT; i++) {
         checkRequestEligibility("signup", `10.0.0.${i}`, email);
         if (i < EMAIL_LONG_LIMIT - 1) {
@@ -202,7 +202,7 @@ describe("checkRequestEligibility", () => {
         }
       }
 
-      // Next request blocked by long window (reached limit)
+      // 다음 요청은 long window 한도 도달로 차단
       vi.advanceTimersByTime(EMAIL_SHORT_WINDOW_MS + 1);
       const result = checkRequestEligibility("signup", "10.0.0.99", email);
       expect(result.allowed).toBe(false);
@@ -211,7 +211,7 @@ describe("checkRequestEligibility", () => {
     it("TC-10. long window 만료 후 → 허용으로 복구", () => {
       const email = "longwindow@example.com";
 
-      // Fill long quota
+      // long 한도 채우기
       for (let i = 0; i < EMAIL_LONG_LIMIT; i++) {
         checkRequestEligibility("signup", `10.0.0.${i}`, email);
         if (i < EMAIL_LONG_LIMIT - 1) {
@@ -219,34 +219,34 @@ describe("checkRequestEligibility", () => {
         }
       }
 
-      // Blocked by long window
+      // long window로 차단
       vi.advanceTimersByTime(EMAIL_SHORT_WINDOW_MS + 1);
       let result = checkRequestEligibility("signup", "10.0.0.99", email);
       expect(result.allowed).toBe(false);
 
-      // Advance time past long window
+      // long window 만료 시점까지 시간 진행
       vi.advanceTimersByTime(EMAIL_LONG_WINDOW_MS + 1);
 
-      // Now allowed (both windows reset)
+      // 다시 허용 (두 window 모두 초기화)
       result = checkRequestEligibility("signup", "10.0.0.99", email);
       expect(result.allowed).toBe(true);
     });
   });
 
   // ============================================================================
-  // AND evaluation — simultaneous condition check
+  // AND 평가 — 동시 조건 확인
   // ============================================================================
 
   describe("AND 조건 — 동시 평가", () => {
     it("TC-11. IP 초과 → email 조건 무관하게 { allowed: false }", () => {
       const ip = "10.0.1.1";
 
-      // Fill IP quota
+      // IP 한도 채우기
       for (let i = 0; i < IP_LIMIT; i++) {
         checkRequestEligibility("signup", ip, `user${i}@example.com`);
       }
 
-      // IP blocked, email fresh → still blocked
+      // IP 차단 상태, email 조건이 새로워도 차단 유지
       const result = checkRequestEligibility("signup", ip, "fresh@example.com");
       expect(result.allowed).toBe(false);
     });
@@ -254,12 +254,12 @@ describe("checkRequestEligibility", () => {
     it("TC-12. email short 초과 → IP/long 조건 무관하게 { allowed: false }", () => {
       const email = "retry@example.com";
 
-      // Fill short quota
+      // short 한도 채우기
       for (let i = 0; i < EMAIL_SHORT_LIMIT; i++) {
         checkRequestEligibility("signup", `10.0.0.${i}`, email);
       }
 
-      // Short blocked, IP fresh, long fresh → still blocked
+      // short 차단 상태, IP/long이 새로워도 차단 유지
       const result = checkRequestEligibility("signup", "10.0.0.99", email);
       expect(result.allowed).toBe(false);
     });
@@ -267,7 +267,7 @@ describe("checkRequestEligibility", () => {
     it("TC-13. email long 초과 → IP/short 조건 무관하게 { allowed: false }", () => {
       const email = "longblock@example.com";
 
-      // Fill long quota (short window 영향을 배제하기 위해 요청 간 간격 확보)
+      // long 한도 채우기 (short window 영향을 배제하기 위해 요청 간 간격 확보)
       for (let i = 0; i < EMAIL_LONG_LIMIT; i++) {
         checkRequestEligibility("signup", `10.0.0.${i}`, email);
         if (i < EMAIL_LONG_LIMIT - 1) {
@@ -278,7 +278,7 @@ describe("checkRequestEligibility", () => {
       // short window를 명시적으로 만료시켜 long 조건만으로 차단되는지 검증
       vi.advanceTimersByTime(EMAIL_SHORT_WINDOW_MS + 1);
 
-      // Long blocked, IP fresh, short fresh → still blocked
+      // long 차단 상태, IP/short가 새로워도 차단 유지
       const result = checkRequestEligibility("signup", "10.0.0.99", email);
       expect(result.allowed).toBe(false);
     });
@@ -287,18 +287,18 @@ describe("checkRequestEligibility", () => {
       const ip = "10.0.2.1";
       const email = "test@example.com";
 
-      // IP limit: allow 10 times, then block
+      // IP 한도: 10회 허용 후 차단
       for (let i = 0; i < IP_LIMIT; i++) {
         checkRequestEligibility("signup", ip, `user${i}@example.com`);
       }
 
-      // Blocked request should not increment any counter
+      // 차단 요청은 어떤 카운터도 증가시키지 않아야 함
       const blockedResult = checkRequestEligibility("signup", ip, email);
       expect(blockedResult.allowed).toBe(false);
 
-      // Verify by advancing time past IP window and trying again
-      // If IP counter was incremented on blocked request, next request would still be blocked
-      // But since blocked requests don't increment, counter should be reset after window expiry
+      // IP window 만료 후 재시도로 검증
+      // 차단 요청에서 카운터가 증가했다면 다음 요청도 차단되어야 하지만,
+      // 차단 요청은 증가하지 않으므로 만료 후에는 다시 허용되어야 함
       vi.advanceTimersByTime(IP_WINDOW_MS + 1);
 
       const recoveredResult = checkRequestEligibility("signup", ip, email);
@@ -307,7 +307,7 @@ describe("checkRequestEligibility", () => {
   });
 
   // ============================================================================
-  // Atomic state updates
+  // 원자적 상태 갱신
   // ============================================================================
 
   describe("atomic 상태 갱신", () => {
@@ -318,8 +318,8 @@ describe("checkRequestEligibility", () => {
       const result = checkRequestEligibility("signup", ip, email);
       expect(result.allowed).toBe(true);
 
-      // Verify IP counter increments
-      // Use different emails to avoid long window limit for this email
+      // IP 카운터 증가 확인
+      // 동일 email long window 제한을 피하기 위해 email을 바꿔 호출
       for (let i = 1; i < IP_LIMIT; i++) {
         const r = checkRequestEligibility(
           "signup",
@@ -329,7 +329,7 @@ describe("checkRequestEligibility", () => {
         expect(r.allowed).toBe(true);
       }
 
-      // Next IP request blocked
+      // 다음 IP 요청은 차단
       const ipBlocked = checkRequestEligibility(
         "signup",
         ip,
@@ -337,14 +337,14 @@ describe("checkRequestEligibility", () => {
       );
       expect(ipBlocked.allowed).toBe(false);
 
-      // Now test email counters with a fresh email and different IPs
+      // 새 email + 다른 IP로 email 카운터 검증
       const email2 = "atomic2@example.com";
 
-      // Make 1 request (fill short limit = 1)
+      // 1회 요청으로 short 한도(=1) 채우기
       const r = checkRequestEligibility("signup", "10.0.15.100", email2);
       expect(r.allowed).toBe(true);
 
-      // Next request blocked by short window (count=1, limit=1)
+      // 다음 요청은 short window로 차단 (count=1, limit=1)
       const shortBlocked = checkRequestEligibility(
         "signup",
         "10.0.15.101",
@@ -352,12 +352,12 @@ describe("checkRequestEligibility", () => {
       );
       expect(shortBlocked.allowed).toBe(false);
 
-      // Advance past short window to reset short counter
+      // short 카운터 초기화를 위해 short window 넘겨 시간 진행
       vi.advanceTimersByTime(EMAIL_SHORT_WINDOW_MS + 1);
 
-      // Short window expired (reset), long window count still =1 < limit=5
-      // Next request allowed by both short and long window
-      // [Reason: short window resets on expiration, long window count=1 < 5]
+      // short window 만료(초기화), long window count=1 < limit=5 유지
+      // 다음 요청은 short/long 모두 통과
+      // [이유: short는 만료 시 초기화되고 long count=1 < 5]
       const afterShortReset = checkRequestEligibility(
         "signup",
         "10.0.15.101",
@@ -369,12 +369,12 @@ describe("checkRequestEligibility", () => {
     it("TC-16. 차단 시 → 어느 카운터도 증가하지 않음", () => {
       const ip = "10.0.4.1";
 
-      // Fill IP quota
+      // IP 한도 채우기
       for (let i = 0; i < IP_LIMIT; i++) {
         checkRequestEligibility("signup", ip, `user${i}@example.com`);
       }
 
-      // Next 5 requests blocked by IP
+      // 이후 5회 요청은 IP로 차단
       for (let i = 0; i < 5; i++) {
         const result = checkRequestEligibility(
           "signup",
@@ -384,10 +384,10 @@ describe("checkRequestEligibility", () => {
         expect(result.allowed).toBe(false);
       }
 
-      // Advance time past IP window
+      // IP window 만료 시점까지 시간 진행
       vi.advanceTimersByTime(IP_WINDOW_MS + 1);
 
-      // Now allowed — IP counter was reset, not incremented during blocked requests
+      // 다시 허용 — 차단 구간에서는 IP 카운터가 증가하지 않음
       const recovered = checkRequestEligibility(
         "signup",
         ip,
@@ -398,22 +398,22 @@ describe("checkRequestEligibility", () => {
   });
 
   // ============================================================================
-  // User-scoped state — signup/resend share email store
+  // 사용자 스코프 상태 — signup/resend email store 공유
   // ============================================================================
 
   describe("user-level state — signup/resend 공유", () => {
     it("TC-17. email long 카운터를 signup/resend가 공유", () => {
       const email = "shared@example.com";
 
-      // Consume some of long limit via signup (EMAIL_LONG_LIMIT-1 requests, leave 1 for resend)
-      // [Reason: Test both signup and resend consuming the shared quota.]
+      // signup으로 long 한도 일부 소모 (EMAIL_LONG_LIMIT-1회, resend에 1회 남김)
+      // [이유: signup/resend가 공유 quota를 함께 소모하는지 검증]
       for (let i = 0; i < EMAIL_LONG_LIMIT - 1; i++) {
         const result = checkRequestEligibility("signup", `10.0.0.${i}`, email);
         expect(result.allowed).toBe(true);
         vi.advanceTimersByTime(EMAIL_SHORT_WINDOW_MS + 1);
       }
 
-      // Consume remaining quota via resend
+      // 남은 quota를 resend로 소모
       vi.advanceTimersByTime(EMAIL_SHORT_WINDOW_MS + 1);
       let result = checkRequestEligibility(
         "resend",
@@ -422,19 +422,19 @@ describe("checkRequestEligibility", () => {
       );
       expect(result.allowed).toBe(true);
 
-      // Next signup blocked (quota exhausted)
+      // 다음 signup은 quota 소진으로 차단
       vi.advanceTimersByTime(EMAIL_SHORT_WINDOW_MS + 1);
       result = checkRequestEligibility("signup", "10.0.0.99", email);
       expect(result.allowed).toBe(false);
 
-      // Resend should also be blocked (shares long counter)
+      // resend도 차단되어야 함 (long 카운터 공유)
       result = checkRequestEligibility("resend", "10.0.0.99", email);
       expect(result.allowed).toBe(false);
 
-      // Recover long window
+      // long window 복구
       vi.advanceTimersByTime(EMAIL_LONG_WINDOW_MS + 1);
 
-      // Both signup and resend should be allowed again
+      // signup/resend 모두 다시 허용
       result = checkRequestEligibility("signup", "10.0.0.99", email);
       expect(result.allowed).toBe(true);
     });
@@ -442,16 +442,16 @@ describe("checkRequestEligibility", () => {
     it("TC-18. 같은 email + 같은 시간 → 두 호출이 동일한 결과", () => {
       const email = "consistency@example.com";
 
-      // First call with signup
+      // signup으로 첫 호출
       const signupResult = checkRequestEligibility("signup", "10.0.0.1", email);
       expect(signupResult.allowed).toBe(true);
 
-      // Advance past short window to reset for fair comparison
+      // 공정 비교를 위해 short window를 넘겨 초기화
       vi.advanceTimersByTime(EMAIL_SHORT_WINDOW_MS + 1);
 
-      // Second call with resend — should also be allowed (both use same email/store)
-      // [Reason: after short window expires, both signup and resend should behave identically
-      //  with the same email. The shared emailStore ensures user-scoped behavior.]
+      // resend로 두 번째 호출 — 동일하게 허용되어야 함(같은 email/store 사용)
+      // [이유: short 만료 후 같은 email이면 signup/resend는 동일 동작이어야 함.
+      //  공유 emailStore가 사용자 스코프 동작을 보장한다.]
       const resendResult = checkRequestEligibility("resend", "10.0.0.2", email);
       expect(resendResult.allowed).toBe(true);
       expect(signupResult.allowed).toBe(resendResult.allowed);
@@ -459,7 +459,7 @@ describe("checkRequestEligibility", () => {
   });
 
   // ============================================================================
-  // Store reset functionality
+  // Store 초기화 기능
   // ============================================================================
 
   describe("resetEligibilityStore", () => {
@@ -467,39 +467,39 @@ describe("checkRequestEligibility", () => {
       const ip = "10.0.5.1";
       const email = "reset@example.com";
 
-      // Fill quotas
+      // 한도 채우기
       for (let i = 0; i < IP_LIMIT; i++) {
         checkRequestEligibility("signup", ip, `user${i}@example.com`);
       }
 
-      // Blocked
+      // 차단됨
       let result = checkRequestEligibility("signup", ip, email);
       expect(result.allowed).toBe(false);
 
-      // Reset
+      // 초기화
       resetEligibilityStore();
 
-      // All conditions pass
+      // 모든 조건 통과
       result = checkRequestEligibility("signup", ip, email);
       expect(result.allowed).toBe(true);
     });
   });
 
   // ============================================================================
-  // Window boundary behavior (explicit time-boundary testing)
+  // Window 경계 동작 (명시적 시간 경계 테스트)
   // ============================================================================
 
   describe("window 경계값 — 정확한 만료 시점 동작 고정", () => {
     it("TC-20. IP window: now - windowStart === windowMs 일 때 → { allowed: true }", () => {
       const ip = "10.0.6.1";
 
-      // First request at t=0
+      // t=0에서 첫 요청
       checkRequestEligibility("signup", ip, "user0@example.com");
 
-      // Advance to exactly windowMs (boundary)
+      // 정확히 windowMs(경계)까지 시간 진행
       vi.advanceTimersByTime(IP_WINDOW_MS);
 
-      // At boundary, window should be considered expired → new window
+      // 경계에서는 window 만료로 간주되어 새 window 시작
       const result = checkRequestEligibility("signup", ip, "user1@example.com");
       expect(result.allowed).toBe(true);
     });
@@ -507,10 +507,10 @@ describe("checkRequestEligibility", () => {
     it("TC-21. email short window: now - windowStart === windowMs 일 때 → { allowed: false }", () => {
       const email = "shortboundary@example.com";
 
-      // First request at t=0
+      // t=0에서 첫 요청
       checkRequestEligibility("signup", "10.0.0.1", email);
 
-      // Advance to exactly EMAIL_SHORT_WINDOW_MS (boundary)
+      // 정확히 EMAIL_SHORT_WINDOW_MS(경계)까지 시간 진행
       vi.advanceTimersByTime(EMAIL_SHORT_WINDOW_MS);
 
       // 슬라이딩 윈도우 규칙(timestamp >= window_start)에서 경계값은 유효 구간에 포함됨
@@ -522,29 +522,29 @@ describe("checkRequestEligibility", () => {
     it("TC-22. email long window: now - windowStart === windowMs 일 때 → { allowed: true }", () => {
       const email = "longboundary@example.com";
 
-      // First request at t=0
+      // t=0에서 첫 요청
       checkRequestEligibility("signup", "10.0.0.1", email);
 
-      // Advance to exactly EMAIL_LONG_WINDOW_MS (boundary)
+      // 정확히 EMAIL_LONG_WINDOW_MS(경계)까지 시간 진행
       vi.advanceTimersByTime(EMAIL_LONG_WINDOW_MS);
 
-      // At boundary, long window should be expired → new window
+      // 경계에서는 long window 만료로 간주되어 새 window 시작
       const result = checkRequestEligibility("signup", "10.0.0.2", email);
       expect(result.allowed).toBe(true);
     });
   });
 
   // ============================================================================
-  // Email canonicalization (caller responsibility)
+  // 이메일 canonicalization (caller 책임)
   // ============================================================================
 
   describe("email canonicalization은 caller 책임", () => {
     it("TC-23. caller가 canonical email을 전달 → 동일 canonical은 동일 bucket", () => {
-      // caller(signup/resend)에서 canonicalizeEmail()으로 정규화 후 전달
-      // 이 테스트는 canonicalized email들이 동일 bucket을 공유하는지 검증
-      const canonicalEmail = "test@example.com"; // caller가 이미 정규화
+      // caller(signup/resend)에서 canonicalizeEmail()로 정규화 후 전달
+      // 이 테스트는 정규화된 이메일이 동일 bucket을 공유하는지 검증
+      const canonicalEmail = "test@example.com"; // caller가 사전 정규화
 
-      // Consume long limit (advance past short window between requests)
+      // long 한도 소모 (요청 간 short window를 넘겨 시간 진행)
       for (let i = 0; i < EMAIL_LONG_LIMIT; i++) {
         checkRequestEligibility("signup", `10.0.0.${i}`, canonicalEmail);
         if (i < EMAIL_LONG_LIMIT - 1) {
@@ -552,7 +552,7 @@ describe("checkRequestEligibility", () => {
         }
       }
 
-      // Next request with same canonical should also be blocked (long limit reached)
+      // 같은 canonical로 다음 요청 시에도 차단되어야 함 (long 한도 도달)
       vi.advanceTimersByTime(EMAIL_SHORT_WINDOW_MS + 1);
       const result = checkRequestEligibility(
         "signup",
@@ -564,14 +564,14 @@ describe("checkRequestEligibility", () => {
   });
 
   // ============================================================================
-  // Complex state scenarios
+  // 복합 상태 시나리오
   // ============================================================================
 
   describe("복합 상태 — 내부 차단 원인이 달라도 외부 observable은 동일", () => {
     it("TC-24. short window 복구 + long window 차단 → { allowed: false }", () => {
       const email = "complex@example.com";
 
-      // Fill long quota (advance past short window between requests)
+      // long 한도 채우기 (요청 간 short window를 넘겨 시간 진행)
       for (let i = 0; i < EMAIL_LONG_LIMIT; i++) {
         checkRequestEligibility("signup", `10.0.0.${i}`, email);
         if (i < EMAIL_LONG_LIMIT - 1) {
@@ -579,17 +579,17 @@ describe("checkRequestEligibility", () => {
         }
       }
 
-      // Blocked by long window (not short)
+      // long window로 차단됨 (short 아님)
       vi.advanceTimersByTime(EMAIL_SHORT_WINDOW_MS + 1);
       let result = checkRequestEligibility("signup", "10.0.0.99", email);
       expect(result.allowed).toBe(false);
 
-      // Advance past short window doesn't help (long still active)
+      // short window를 넘어도 효과 없음 (long 활성 유지)
       vi.advanceTimersByTime(EMAIL_SHORT_WINDOW_MS + 1);
 
-      // Still blocked (long window not expired yet)
-      // [Reason: EMAIL_LONG_WINDOW_MS = 900 seconds >> EMAIL_SHORT_WINDOW_MS = 30 seconds.
-      //  Advancing past short window (30+30=60 sec) doesn't expire long window (900 sec).]
+      // 여전히 차단됨 (long window 미만료)
+      // [이유: EMAIL_LONG_WINDOW_MS=900초, EMAIL_SHORT_WINDOW_MS=30초.
+      //  short만 넘긴 60초로는 long(900초)이 만료되지 않는다.]
       result = checkRequestEligibility("signup", "10.0.0.99", email);
       expect(result.allowed).toBe(false);
     });
@@ -598,12 +598,12 @@ describe("checkRequestEligibility", () => {
       const ip = "10.0.7.1";
       const email = "ip-blocked@example.com";
 
-      // Fill IP quota
+      // IP 한도 채우기
       for (let i = 0; i < IP_LIMIT; i++) {
         checkRequestEligibility("signup", ip, `user${i}@example.com`);
       }
 
-      // IP blocked, others ok → overall blocked
+      // IP만 차단, 나머지 조건 통과여도 전체 차단
       const result = checkRequestEligibility("signup", ip, email);
       expect(result.allowed).toBe(false);
     });
@@ -611,26 +611,26 @@ describe("checkRequestEligibility", () => {
     it("TC-26. email short만 차단된 상태 → { allowed: false }", () => {
       const email = "short-blocked@example.com";
 
-      // Fill short quota
+      // short 한도 채우기
       for (let i = 0; i < EMAIL_SHORT_LIMIT; i++) {
         checkRequestEligibility("signup", `10.0.0.${i}`, email);
       }
 
-      // Short blocked, IP ok, long ok → overall blocked
+      // short만 차단, IP/long 통과여도 전체 차단
       const result = checkRequestEligibility("signup", "10.0.0.99", email);
       expect(result.allowed).toBe(false);
     });
   });
 
   // ============================================================================
-  // Concurrency approximation — same tick sequential calls
+  // 동시성 근사 — 같은 시점 연속 호출
   // ============================================================================
 
   describe("동시성 근사 — 같은 시점 연속 호출", () => {
     it("TC-26A. 같은 email로 연속 2회 요청 시 한 번만 허용된다 (short window)", () => {
       const email = "near-concurrent@example.com";
 
-      // same timestamp (no timer advance), different IP
+      // 같은 timestamp(타이머 진행 없음), 다른 IP
       const first = checkRequestEligibility("signup", "10.30.0.1", email);
       const second = checkRequestEligibility("signup", "10.30.0.2", email);
 
@@ -645,21 +645,21 @@ describe("checkRequestEligibility", () => {
   });
 
   // ============================================================================
-  // Recovery flow — time-based natural recovery
+  // 복구 흐름 — 시간 경과 기반 자연 복구
   // ============================================================================
 
   describe("복구 흐름 — 차단 → window 만료 → 재시도 성공", () => {
     it("TC-27. IP window 만료 후 동일 IP로 재시도 → { allowed: true }", () => {
       const ip = "10.0.8.1";
 
-      // Fill and block
+      // 한도 채우고 차단 확인
       for (let i = 0; i < IP_LIMIT; i++) {
         checkRequestEligibility("signup", ip, `user${i}@example.com`);
       }
       let result = checkRequestEligibility("signup", ip, "blocked@example.com");
       expect(result.allowed).toBe(false);
 
-      // Recover
+      // 복구
       vi.advanceTimersByTime(IP_WINDOW_MS + 1);
       result = checkRequestEligibility("signup", ip, "recovered@example.com");
       expect(result.allowed).toBe(true);
@@ -668,42 +668,42 @@ describe("checkRequestEligibility", () => {
     it("TC-28. email short window 만료 후 동일 email로 재시도 → { allowed: true }", () => {
       const email = "short-recover@example.com";
 
-      // Make 1 request (fill short window with EMAIL_SHORT_LIMIT=1)
+      // 1회 요청으로 short window 채우기 (EMAIL_SHORT_LIMIT=1)
       checkRequestEligibility("signup", "10.0.0.0", email);
       let result = checkRequestEligibility("signup", "10.0.0.99", email);
       expect(result.allowed).toBe(false);
 
-      // Advance past short window
+      // short window 만료 시점까지 시간 진행
       vi.advanceTimersByTime(EMAIL_SHORT_WINDOW_MS + 1);
 
-      // Now allowed (short window expired, long window count=1 < 5)
-      // [Reason: short window reset on expiration. long window count=1 < limit=5,
-      //  so both conditions are now true.]
+      // 다시 허용됨 (short 만료, long count=1 < 5)
+      // [이유: short는 만료 시 초기화되고 long count=1 < limit=5라
+      //  두 조건이 모두 true가 된다.]
       result = checkRequestEligibility("signup", "10.0.0.99", email);
       expect(result.allowed).toBe(true);
     });
   });
 
   // ============================================================================
-  // Observability — logging on blocked requests
+  // 관측성 — 차단 요청 로깅
   // ============================================================================
 
-  describe("Observability — logRequestEligibilityBlocked 호출 검증", () => {
+  describe("관측성 — logRequestEligibilityBlocked 호출 검증", () => {
     it("TC-L1. checkRequestEligibility('signup', ...) 차단 시 → route:'signup'으로 로그됨", () => {
-      // Setup spy on console.log to capture logging output
+      // 로깅 출력 캡처를 위한 console.log 스파이 설정
       const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
       const ip = "10.0.9.1";
 
-      // Fill IP quota
+      // IP 한도 채우기
       for (let i = 0; i < IP_LIMIT; i++) {
         checkRequestEligibility("signup", ip, `user${i}@example.com`);
       }
 
-      // Blocked request should log
+      // 차단 요청은 로그가 남아야 함
       checkRequestEligibility("signup", ip, "blocked@example.com");
 
-      // Verify log was called with signup route
+      // signup route로 로그 호출되었는지 검증
       expect(consoleSpy).toHaveBeenCalled();
       const lastCall =
         consoleSpy.mock.calls[consoleSpy.mock.calls.length - 1]?.[0];
@@ -717,15 +717,15 @@ describe("checkRequestEligibility", () => {
 
       const email = "test@example.com";
 
-      // Fill long quota
+      // long 한도 채우기
       for (let i = 0; i < EMAIL_LONG_LIMIT; i++) {
         checkRequestEligibility("resend", `10.0.0.${i}`, email);
       }
 
-      // Blocked request should log
+      // 차단 요청은 로그가 남아야 함
       checkRequestEligibility("resend", "10.0.0.99", email);
 
-      // Verify log was called with resend route
+      // resend route로 로그 호출되었는지 검증
       expect(consoleSpy).toHaveBeenCalled();
       const lastCall =
         consoleSpy.mock.calls[consoleSpy.mock.calls.length - 1]?.[0];
@@ -737,7 +737,7 @@ describe("checkRequestEligibility", () => {
     it("TC-L3. 허용 시 → logRequestEligibilityBlocked 미호출", () => {
       const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
-      // Allowed request should not trigger logging
+      // 허용 요청은 로깅을 유발하지 않아야 함
       const result = checkRequestEligibility(
         "signup",
         "10.0.0.1",
@@ -752,7 +752,7 @@ describe("checkRequestEligibility", () => {
     it("TC-L4. 차단 원인에 따라 ipOk/emailShortOk/emailLongOk가 정확히 전달됨", () => {
       const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
-      // IP blocking scenario
+      // IP 차단 시나리오
       const ip = "10.0.10.1";
       for (let i = 0; i < IP_LIMIT; i++) {
         checkRequestEligibility("signup", ip, `user${i}@example.com`);
@@ -775,27 +775,27 @@ describe("checkRequestEligibility", () => {
       const ip = "10.0.11.1";
       const email = "secret@example.com";
 
-      // Fill IP quota
+      // IP 한도 채우기
       for (let i = 0; i < IP_LIMIT; i++) {
         checkRequestEligibility("signup", ip, `user${i}@example.com`);
       }
 
-      // Blocked request
+      // 차단 요청
       checkRequestEligibility("signup", ip, email);
 
       const lastCall =
         consoleSpy.mock.calls[consoleSpy.mock.calls.length - 1]?.[0];
 
-      // Verify raw IP is not in log
+      // raw IP가 로그에 없어야 함
       expect(lastCall).not.toContain(ip);
 
-      // Verify masked IP is in log
+      // 마스킹된 IP는 로그에 있어야 함
       expect(lastCall).toContain("10.0.11.***");
 
-      // Verify raw email is not in log
+      // raw email이 로그에 없어야 함
       expect(lastCall).not.toContain(email);
 
-      // Verify masked email is in log
+      // 마스킹된 email은 로그에 있어야 함
       expect(lastCall).toContain("***@example.com");
 
       consoleSpy.mockRestore();
@@ -813,14 +813,14 @@ describe("checkRequestEligibility", () => {
       const ip = "10.200.1.1";
 
       /**
-       * IP limit 채우기
+       * IP 한도 채우기
        */
       for (let i = 0; i < IP_LIMIT; i++) {
         checkRequestEligibility("signup", ip, `user${i}@example.com`);
       }
 
       /**
-       * Precheck가 차단해야 함
+       * 사전검증(precheck)에서 차단되어야 함
        */
       const precheck = checkIpRateLimitPrecheck(ip);
       expect(precheck.allowed).toBe(false);
@@ -867,7 +867,7 @@ describe("checkRequestEligibility", () => {
       expect(ipEntry?.timestamps.length).toBe(1);
 
       /**
-       * Precheck 호출 후 상태가 변경되지 않음
+       * 사전검증(precheck) 호출 후 상태가 변경되지 않음
        */
       precheck = checkIpRateLimitPrecheck(ip);
       expect(precheck.allowed).toBe(true); // 아직 한도 이하
