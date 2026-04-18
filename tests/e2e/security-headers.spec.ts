@@ -17,6 +17,10 @@ test.describe("Security headers (HTTP response contract)", () => {
     const response = await request.get("/");
     const csp = response.headers()["content-security-policy"];
 
+    if (!csp) {
+      throw new Error("content-security-policy header is missing");
+    }
+
     expect(csp).toBeTruthy();
 
     const directives = csp
@@ -39,6 +43,10 @@ test.describe("Security headers (HTTP response contract)", () => {
   }) => {
     const response = await request.get("/");
     const csp = response.headers()["content-security-policy"];
+
+    if (!csp) {
+      throw new Error("content-security-policy header is missing");
+    }
 
     expect(csp).toBeTruthy();
 
