@@ -334,6 +334,22 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
    * 이유: 콘텐츠 열람 의도 확인 이후부터 직접 조작 허용 (스펙 명시)
    * 향후: 스크롤 완료 후에만 활성화하는 정책으로 강화 가능 (scrollEnforced 플래그 추가 포인트)
    */
+
+  /**
+   * intent ref reset 정책
+   * 현재: Dialog의 onOpenChange(false) 경로를 통해 항상 reset됨
+   * (agree, ESC, overlay click 등 모든 닫힘 경로가 동일하게 해당 핸들러를 탐)
+   *
+   * 따라서 현재 구현에서는 stale 상태가 남을 가능성은 낮음
+   *
+   * 주의: reset이 "닫힘 이벤트"에 의존하고 있으므로,
+   * 향후 programmatic close 또는 새로운 닫힘 경로가 추가될 경우
+   * stale 상태가 남을 수 있음
+   *
+   * 개선 방향:
+   * - closeReason("agree" | "dismiss") 기반 상태 모델로 전환
+   * - 또는 intent를 consume 시점에 즉시 reset하는 구조로 변경
+   */
   const handleTermsOpenChange = (open: boolean) => {
     setTermsModalOpen(open);
     if (!open) {
