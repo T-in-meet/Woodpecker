@@ -124,8 +124,6 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
   const privacyErrorButtonRef = useRef<HTMLButtonElement>(null);
   const submitButtonRef = useRef<HTMLButtonElement>(null);
   const loginLinkRef = useRef<HTMLAnchorElement>(null);
-  const termsErrorContainerRef = useRef<HTMLParagraphElement>(null);
-  const privacyErrorContainerRef = useRef<HTMLParagraphElement>(null);
   const termsAgreeIntentRef = useRef(false);
   const privacyAgreeIntentRef = useRef(false);
   const prevAgreementErrorsRef = useRef({
@@ -407,19 +405,11 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
     if (termsNewlyAppeared || privacyNewlyAppeared) {
       requestAnimationFrame(() => {
         if (termsNewlyAppeared) {
-          if (termsErrorButtonRef.current) {
-            termsErrorButtonRef.current.focus();
-          } else {
-            termsErrorContainerRef.current?.focus();
-          }
+          termsErrorButtonRef.current?.focus();
           return;
         }
 
-        if (privacyErrorButtonRef.current) {
-          privacyErrorButtonRef.current.focus();
-        } else {
-          privacyErrorContainerRef.current?.focus();
-        }
+        privacyErrorButtonRef.current?.focus();
       });
     }
 
@@ -652,7 +642,6 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
                 <p
                   id="terms-of-service-error"
                   role="alert"
-                  ref={termsErrorContainerRef}
                   tabIndex={-1}
                   className="text-sm text-destructive"
                 >
@@ -760,7 +749,6 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
                 <p
                   id="privacy-policy-error"
                   role="alert"
-                  ref={privacyErrorContainerRef}
                   tabIndex={-1}
                   className="text-sm text-destructive"
                 >
