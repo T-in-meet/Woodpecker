@@ -26,6 +26,7 @@ type LegalDialogWrapperProps = {
   dialogTitle: string;
   triggerButtonRef?: React.RefObject<HTMLButtonElement | null>;
   onTriggerClick?: () => void;
+  preventCloseAutoFocus?: boolean;
 };
 
 /**
@@ -49,6 +50,7 @@ export function LegalDialogWrapper({
   dialogTitle,
   triggerButtonRef,
   onTriggerClick,
+  preventCloseAutoFocus = true,
 }: LegalDialogWrapperProps) {
   // 콘텐츠 섹션 선택
   // 이유: agreementType에 따라 다른 법적 문서를 표시하기 위해 분기
@@ -80,9 +82,12 @@ export function LegalDialogWrapper({
         className="flex max-h-[85vh] flex-col overflow-hidden"
         aria-describedby={`${agreementType}-description`}
         onCloseAutoFocus={(event) => {
-          // SignupForm에서 트리거/동의 경로별로 포커스를 명시적으로 제어하므로
+          // 기본적으로 SignupForm에서 트리거/동의 경로별로 포커스를 명시적으로 제어하므로
           // Radix 기본 복원(DialogTrigger 포커스)은 차단한다.
-          event.preventDefault();
+          // 필요 시 preventCloseAutoFocus=false로 기본 동작을 허용할 수 있음
+          if (preventCloseAutoFocus) {
+            event.preventDefault();
+          }
         }}
       >
         <DialogTitle className="mb-4">{dialogTitle}</DialogTitle>
