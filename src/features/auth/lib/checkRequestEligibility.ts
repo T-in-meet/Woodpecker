@@ -56,7 +56,7 @@ export const EMAIL_LONG_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
  *
  * @param route - "signup" 또는 "resend" (어떤 API가 차단되었는지 로깅 목적)
  * @param ip - 클라이언트 IP 주소 (IP 저장소에 그대로 사용됨)
- * @param email - canonical email (caller에서 canonicalizeEmail() 적용된 값)
+ * @param canonicalEmail - caller에서 canonicalizeEmail() 적용된 값
  *
  * @returns { allowed: boolean }
  *
@@ -86,12 +86,11 @@ export const EMAIL_LONG_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 export function checkRequestEligibility(
   route: "signup" | "resend",
   ip: string,
-  email: string,
+  canonicalEmail: string,
 ): { allowed: boolean } {
   const now = Date.now();
   // caller(signup/resend)가 canonicalizeEmail으로 canonical email을 전달 보장
   // 중복 정규화 제거 — email을 그대로 canonical email key로 사용
-  const canonicalEmail = email;
 
   // ============================================================================
   // 1. 읽기(Read) 단계 — 상태 업데이트 없이 모든 조건 평가
