@@ -556,6 +556,27 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     expect(response.headers.get("content-type")).toBe("application/json");
   });
 
+  it("TC-17. canonical email variant(Test@Example.com / test@example.com)는 동일 email long limit을 공유한다", async () => {
+    const variantA = " Test@Example.com ";
+    const variantB = "test@example.com";
+
+    for (let i = 0; i < EMAIL_LONG_LIMIT; i++) {
+      const email = i % 2 === 0 ? variantA : variantB;
+      const response = await sendRequest(`10.17.${i}.1`, email);
+      expect(response.status).not.toBe(429);
+      if (i < EMAIL_LONG_LIMIT - 1) {
+        await vi.advanceTimersByTimeAsync(EMAIL_SHORT_WINDOW_MS + 1);
+      }
+    }
+
+    await vi.advanceTimersByTimeAsync(EMAIL_SHORT_WINDOW_MS + 1);
+    const blocked = await sendRequest("10.17.99.1", " TEST@example.com ");
+    const body = await blocked.json();
+
+    expect(blocked.status).toBe(429);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
+  });
+
   it("TC-PRC1. IP 한도 초과 후 invalid payload 요청 → 400이 아닌 429 반환 (precheck 우선)", async () => {
     const ip = "10.prc.1.1";
 

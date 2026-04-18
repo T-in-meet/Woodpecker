@@ -309,6 +309,29 @@ describe("이메일 재전송 Request Eligibility 검증", () => {
       );
     });
   });
+
+  describe("canonical email variant 공유", () => {
+    it(`TC-08. Test@Example.com / test@example.com은 동일 email long limit(${EMAIL_LONG_LIMIT})을 공유한다`, async () => {
+      const variantA = " Test@Example.com ";
+      const variantB = "test@example.com";
+
+      for (let i = 0; i < EMAIL_LONG_LIMIT; i++) {
+        const email = i % 2 === 0 ? variantA : variantB;
+        const response = await postWithMinimumDelay(email);
+        expect(response.status).toBe(200);
+        if (i < EMAIL_LONG_LIMIT - 1) {
+          vi.advanceTimersByTime(31 * 1000);
+        }
+      }
+
+      vi.advanceTimersByTime(31 * 1000);
+      const blocked = await postWithMinimumDelay(" TEST@example.com ");
+      const body = await blocked.json();
+
+      expect(blocked.status).toBe(429);
+      expect(body.code).toBe(AUTH_API_CODES.RESEND_RATE_LIMIT_EXCEEDED);
+    });
+  });
 });
 
 describe("이메일 인증 재전송 API 입력 검증", () => {
