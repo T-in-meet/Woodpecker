@@ -1,4 +1,3 @@
-import { buildSignupRequestPayload } from "../lib/buildSignupRequestPayload";
 import { signupSuccessResponseSchema } from "../schema/signupSuccessResponseSchema";
 
 // 회원가입 요청 시 사용하는 payload 타입
@@ -29,7 +28,8 @@ export async function signupMutation(
   payload: SignupPayload,
 ): Promise<SignupSuccessResponse> {
   // payload를 JSON body 형태로 변환
-  const requestBody = buildSignupRequestPayload(payload);
+  const { email, password, nickname, agreements } = payload;
+  const requestBody = { email, password, nickname, agreements };
 
   // 회원가입 API 요청
   const response = await fetch("/api/auth/signup", {
