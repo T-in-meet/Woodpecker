@@ -144,12 +144,28 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
     typeof value === "string" ? value : "";
   const normalizeChecked = (value: unknown) => value === true;
 
-  const watchedEmail = normalizeText(watch("email"));
-  const watchedPassword = normalizeText(watch("password"));
-  const watchedConfirmPassword = normalizeText(watch("confirmPassword"));
-  const watchedNickname = normalizeText(watch("nickname"));
-  const watchedTermsOfService = normalizeChecked(watch("termsOfService"));
-  const watchedPrivacyPolicy = normalizeChecked(watch("privacyPolicy"));
+  const [
+    rawEmail,
+    rawPassword,
+    rawConfirmPassword,
+    rawNickname,
+    rawTermsOfService,
+    rawPrivacyPolicy,
+  ] = watch([
+    "email",
+    "password",
+    "confirmPassword",
+    "nickname",
+    "termsOfService",
+    "privacyPolicy",
+  ]);
+
+  const watchedEmail = normalizeText(rawEmail);
+  const watchedPassword = normalizeText(rawPassword);
+  const watchedConfirmPassword = normalizeText(rawConfirmPassword);
+  const watchedNickname = normalizeText(rawNickname);
+  const watchedTermsOfService = normalizeChecked(rawTermsOfService);
+  const watchedPrivacyPolicy = normalizeChecked(rawPrivacyPolicy);
 
   // 버튼의 "스타일용 활성 상태"를 나타내는 값
   // - 실제 disabled 조건과 완전히 동일하지는 않지만, UX 일관성을 위해 일부 조건(입력 + 약관)을 공유
