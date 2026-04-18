@@ -80,8 +80,8 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
   }
 
   const { email, password, nickname } = parsed.data;
-  const rawEmail = email.trim();
-  const canonicalEmail = canonicalizeEmail(rawEmail);
+
+  const canonicalEmail = canonicalizeEmail(email);
   const maskedEmail = maskEmailForLogging(canonicalEmail);
 
   /**
@@ -125,7 +125,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
       console.warn("이메일 재발송 실패 (무시됨)", { maskedEmail });
     }
 
-    return makeSignupSuccess(rawEmail);
+    return makeSignupSuccess(email);
   }
 
   /**
@@ -147,7 +147,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
       });
     }
 
-    return makeSignupSuccess(rawEmail);
+    return makeSignupSuccess(email);
   }
 
   /**
@@ -177,7 +177,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
    * 설정 변경 시 signup 메일 발송 회귀 테스트를 반드시 수행한다.
    */
   const { error: createUserError } = await adminClient.auth.admin.createUser({
-    email: rawEmail, // raw email — auth.users에 사용자 입력 보존
+    email: email, // raw email — auth.users에 사용자 입력 보존
     password,
     email_confirm: false,
     user_metadata: { nickname, canonical_email: canonicalEmail }, // trigger가 profiles에 기록
@@ -191,11 +191,11 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
       code: createUserError.code,
       name: createUserError.name,
     });
-    return makeSignupSuccess(rawEmail); // raw email 응답
+    return makeSignupSuccess(email); // raw email 응답
   }
 
   const { data, error } = await adminClient.auth.admin.generateLink({
-    email: rawEmail, // raw email — auth.users의 실제 email
+    email: email, // raw email — auth.users의 실제 email
     type: "magiclink",
     options: {
       data: { nickname },
@@ -211,7 +211,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
       name: error.name,
     });
 
-    return makeSignupSuccess(rawEmail); // raw email 응답
+    return makeSignupSuccess(email); // raw email 응답
   }
 
   const tokenHash = data.properties?.hashed_token;
@@ -220,11 +220,11 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
     console.error("Supabase generateLink(magiclink) returned no hashed token", {
       maskedEmail,
     });
-    return makeSignupSuccess(rawEmail); // raw email 응답
+    return makeSignupSuccess(email); // raw email 응답
   }
 
   try {
-    await sendAuthEmail(rawEmail, tokenHash, "magiclink"); // raw email 발송
+    await sendAuthEmail(email, tokenHash, "magiclink"); // raw email 발송
   } catch (error) {
     console.error("Failed to send signup magiclink email", {
       maskedEmail,
@@ -237,7 +237,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
   /**
    * 최종 성공 응답 (완전 통일)
    */
-  return makeSignupSuccess(rawEmail); // raw email 응답
+  return makeSignupSuccess(email); // raw email 응답
 }
 
 /**
