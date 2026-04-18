@@ -19,6 +19,7 @@
  */
 
 import { evaluateSlidingWindow } from "../utils/rateLimit.utils";
+import { maskEmailForLogging } from "./maskEmailForLogging";
 import {
   emailStore,
   ipStore,
@@ -201,7 +202,7 @@ function logRequestEligibilityBlocked(params: {
   now: number;
 }): void {
   const maskedIp = maskIp(params.ip);
-  const maskedEmail = maskEmail(params.email);
+  const maskedEmail = maskEmailForLogging(params.email);
 
   console.log(
     JSON.stringify({
@@ -231,18 +232,6 @@ function maskIp(ip: string): string {
   if (ip.includes(":")) {
     const colonIndex = ip.lastIndexOf(":");
     return ip.substring(0, colonIndex + 1) + "***";
-  }
-  return "***";
-}
-
-/**
- * 로깅을 위해 이메일 마스킹 (로컬 부분을 가림)
- * 예: user@example.com → ***@example.com
- */
-function maskEmail(email: string): string {
-  const atIndex = email.indexOf("@");
-  if (atIndex > 0) {
-    return "***" + email.substring(atIndex);
   }
   return "***";
 }
