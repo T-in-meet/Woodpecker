@@ -79,14 +79,8 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
     });
   }
 
-  const { email: normalizedEmail, password, nickname } = parsed.data;
-  const rawEmail =
-    typeof body === "object" &&
-    body !== null &&
-    "email" in body &&
-    typeof (body as { email?: unknown }).email === "string"
-      ? (body as { email: string }).email.trim()
-      : normalizedEmail;
+  const { email, password, nickname } = parsed.data;
+  const rawEmail = email.trim();
   const canonicalEmail = canonicalizeEmail(rawEmail);
   const maskedEmail = maskEmailForLogging(canonicalEmail);
 
