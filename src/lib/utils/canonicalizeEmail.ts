@@ -1,3 +1,6 @@
+// Gmail / GoogleMail 도메인인 경우 특별 처리
+const GMAIL_DOMAINS = ["gmail.com", "googlemail.com"];
+
 /**
  * 이메일 정규화 함수 (Canonicalization)
  *
@@ -37,8 +40,6 @@ export function canonicalizeEmail(email: string): string {
   const local = trimmed.slice(0, atIndex);
   const domain = trimmed.slice(atIndex + 1);
 
-  // Gmail / GoogleMail 도메인인 경우 특별 처리
-  const GMAIL_DOMAINS = ["gmail.com", "googlemail.com"];
   if (GMAIL_DOMAINS.includes(domain)) {
     // local에서 '.' 전부 제거
     const dotsRemoved = local.replace(/\./g, "");
