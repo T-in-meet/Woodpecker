@@ -15,8 +15,8 @@ import {
 } from "@/features/auth/lib/parseAuthJsonRequestBody";
 import { resendVerificationEmail } from "@/features/auth/resend-verification-email/lib/resendVerificationEmail";
 import { resendApiSchema } from "@/features/auth/resend-verification-email/schema/resendApiSchema";
+import { canonicalizeEmail } from "@/features/auth/utils/canonicalizeEmail";
 import { failureResponse, successResponse } from "@/lib/api/response";
-import { canonicalizeEmail } from "@/lib/utils/canonicalizeEmail";
 import { getClientIp } from "@/lib/utils/getClientIp";
 import { VALIDATION_REASON } from "@/lib/validation/reasons";
 
