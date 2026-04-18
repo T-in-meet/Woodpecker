@@ -20,27 +20,29 @@ describe("SignupForm 반응형 레이아웃 (PR-UI-14)", () => {
   // agreements 외부 레이아웃
   // - 모바일/태블릿 구간의 컬럼 전환 클래스 검증
   describe("agreements 외부 레이아웃", () => {
-    it("TC-01: agreements 컨테이너가 grid-cols-1 md:grid-cols-2 반응형 클래스를 갖는다", () => {
+    it("TC-01: agreements 컨테이너가 현재 카드형 레이아웃 클래스를 갖는다", () => {
       renderSignupForm();
 
       const container = screen.getByTestId("agreements-container");
 
-      expect(container).toHaveClass("grid-cols-1");
-      expect(container).toHaveClass("md:grid-cols-2");
+      expect(container).toHaveClass("flex");
+      expect(container).toHaveClass("flex-col");
+      expect(container).toHaveClass("border");
+      expect(container).toHaveClass("rounded-lg");
     });
   });
 
   // 각 agreement 항목 내부 레이아웃
   // - 버튼, 텍스트, 체크박스의 상대 배치와 방향 전환 검증
   describe("각 agreement 항목 내부 레이아웃", () => {
-    // — flex-col lg:flex-row 클래스가 동시에 존재해야 모든 breakpoint를 커버
-    it("TC-02: 이용약관 항목 내부가 flex-col lg:flex-row 반응형 클래스를 갖는다", () => {
+    // — 현재 구현은 sm 구간부터 row 전환
+    it("TC-02: 이용약관 항목 내부가 flex-col sm:flex-row 반응형 클래스를 갖는다", () => {
       renderSignupForm();
 
       const innerRow = screen.getByTestId("tos-inner-row");
 
       expect(innerRow).toHaveClass("flex-col");
-      expect(innerRow).toHaveClass("lg:flex-row");
+      expect(innerRow).toHaveClass("sm:flex-row");
     });
 
     it("TC-03: 이용약관 텍스트와 checkbox가 동일한 그룹 컨테이너 안에 있다", () => {
@@ -56,14 +58,14 @@ describe("SignupForm 반응형 레이아웃 (PR-UI-14)", () => {
       ).toBeInTheDocument();
     });
 
-    it("TC-04: 이용약관 보기 버튼이 텍스트+checkbox 그룹보다 앞에 위치한다", () => {
+    it("TC-04: 이용약관 보기 버튼이 텍스트+checkbox 그룹보다 뒤에 위치한다", () => {
       renderSignupForm();
 
       const tosButton = screen.getByRole("button", { name: /이용약관 보기/i });
       const textCheckboxGroup = screen.getByTestId("tos-text-checkbox-group");
 
       expect(
-        tosButton.compareDocumentPosition(textCheckboxGroup) &
+        textCheckboxGroup.compareDocumentPosition(tosButton) &
           Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy();
     });

@@ -283,4 +283,62 @@ describe("회원가입 폼 동의 상호작용", () => {
 
     expect(screen.getByRole("button", { name: /동의하기/i })).toBeVisible();
   });
+
+  it('TC-16: 이용약관 모달에서 "동의하기" 후 개인정보 체크박스로 포커스가 이동한다', async () => {
+    const user = userEvent.setup();
+    renderSignupForm();
+
+    await user.click(screen.getByTestId("terms-of-service-checkbox"));
+    await user.click(screen.getByRole("button", { name: /동의하기/i }));
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(
+        screen.getByTestId("privacy-policy-checkbox"),
+      );
+    });
+  });
+
+  it('TC-17: 개인정보 모달에서 "동의하기" 후 회원가입 버튼으로 포커스가 이동한다', async () => {
+    const user = userEvent.setup();
+    renderSignupForm();
+
+    await user.click(screen.getByTestId("privacy-policy-checkbox"));
+    await user.click(screen.getByRole("button", { name: /동의하기/i }));
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(
+        screen.getByRole("button", { name: /^회원가입$/i }),
+      );
+    });
+  });
+
+  it('TC-18: 트리거 버튼으로 개인정보 모달을 열어 "동의하기"해도 회원가입 버튼으로 포커스가 이동한다', async () => {
+    const user = userEvent.setup();
+    renderSignupForm();
+
+    await user.click(
+      screen.getByRole("button", { name: /개인정보처리방침 보기/i }),
+    );
+    await user.click(screen.getByRole("button", { name: /동의하기/i }));
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(
+        screen.getByRole("button", { name: /^회원가입$/i }),
+      );
+    });
+  });
+
+  it("TC-19: 제출 버튼이 disabled면 개인정보 동의 후 로그인 링크로 포커스가 이동한다", async () => {
+    const user = userEvent.setup();
+    renderSignupForm({ isPending: true });
+
+    await user.click(screen.getByTestId("privacy-policy-checkbox"));
+    await user.click(screen.getByRole("button", { name: /동의하기/i }));
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(
+        screen.getByRole("link", { name: /로그인/i }),
+      );
+    });
+  });
 });

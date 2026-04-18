@@ -73,7 +73,7 @@ export function LegalDialogWrapper({
           type="button"
           variant="ghost"
           size="sm"
-          className="bg-blue-400 text-white"
+          className="bg-black text-white"
           onClick={onTriggerClick}
         >
           {triggerLabel}
