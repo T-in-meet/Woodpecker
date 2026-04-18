@@ -32,11 +32,6 @@ import {
   RATE_LIMIT_TOAST_MESSAGE,
 } from "@/features/auth/errors/rateLimitError";
 import { UNKNOWN_ERROR_MESSAGE } from "@/features/auth/errors/unknownError";
-/**
- * 🔽 추가: mutation 훅 import
- * - fetch를 직접 호출하던 구조를 제거하고
- * - API 호출을 mutation 레이어로 위임하기 위해 사용한다.
- */
 import { useResendVerificationEmailMutation } from "@/features/auth/resend-verification-email/hooks/useResendVerificationEmailMutation";
 import { showToast } from "@/lib/utils/showToast";
 
@@ -86,35 +81,24 @@ export default function VerifyEmailPageClient({ email }: Props) {
     reset({ email: normalizedPrefillEmail });
   }, [normalizedPrefillEmail, reset]);
 
-  /**
-   * 🔽 추가: resend mutation 훅 사용
-   *
-   * 역할:
-   * - API 호출(fetch)을 컴포넌트에서 제거하고 mutation으로 위임
-   * - loading 상태(isPending)를 제공
-   */
   const { mutateAsync, isPending } = useResendVerificationEmailMutation();
 
   /**
-   * 🔽 수정: loading 상태 통합
+   * 제출 중이거나 재발송 mutation이 진행 중이면 버튼을 비활성화한다.
    *
-   * - form submitting 상태 + mutation pending 상태를 함께 고려
+   * - 중복 제출을 방지한다.
+   * - 로딩 스피너와 버튼 문구를 동일한 기준으로 제어한다.
    */
   const isDisabled = isSubmitting || isPending;
 
   const onSubmit = async (values: FormValues) => {
     try {
       /**
-       * 🔽 수정: fetch 제거 → mutation 사용
+       * 재발송 요청은 mutation을 통해 수행한다.
        *
-       * 동작:
-       * - mutation 내부에서 fetch 수행
-       * - 실패 시 response body를 throw
-       * - 성공 시 response body 반환
-       *
-       * 설계 의도:
-       * - UI는 네트워크/응답 처리에서 분리
-       * - SignupForm과 동일한 패턴으로 구조 통일
+       * - 네트워크 호출과 응답 파싱 책임은 mutation 레이어가 가진다.
+       * - UI는 성공/실패에 따른 사용자 피드백만 담당한다.
+       * - SignupForm과 동일한 호출 패턴을 유지한다.
        */
       const body = await mutateAsync({ email: values.email });
 
@@ -207,7 +191,7 @@ export default function VerifyEmailPageClient({ email }: Props) {
           >
             <div className="space-y-6 bg-background px-5 py-6 md:px-7 md:py-7">
               <div className="flex gap-4">
-                <Label htmlFor="email" className="text-base shrink-0  min-w-16">
+                <Label htmlFor="email" className="text-base shrink-0 min-w-16">
                   이메일
                 </Label>
                 <Input

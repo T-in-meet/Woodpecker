@@ -249,41 +249,28 @@ function maskEmail(email: string): string {
 }
 
 /**
- * IP precheck — read-only 사전 검증
- *
- * - body parsing 이전 단계에서 실행
- * - evaluateSlidingWindow(appendOnAllow=false)로 현재 IP 상태를 읽기 전용 평가만 수행
- * - ipStore 및 어떤 상태도 변경하지 않음
- *
- * 설계 의도:
- * - parsing 비용 없이 과도한 요청을 1차적으로 필터링
- * - 최종 rate limit 결정은 checkRequestEligibility에서 단일하게 수행
- *
- * Trade-off:
- * - malformed JSON 요청은 eligibility 계층에 도달하지 않으므로
- *   rate limit 카운터에 포함되지 않음
- * - 따라서 parsing 이전의 저수준 공격은 precheck만으로 완전히 해결되지 않을 수 있음
- *
- * 대응 전략:
- * - app-layer에서는 read-only precheck까지만 수행
- * - 최종 상태 갱신은 checkRequestEligibility에서만 수행
- * - malformed JSON flood와 같은 저수준 공격 완화는 infra/edge 계층(WAF/CDN 등)과 함께 고려
- */
-/**
  * IP 기반 rate limit 사전 검증 — 읽기 전용
  *
  * 목적:
- * - 본문 파싱 전에 IP 차단 여부를 조기 평가하여 파싱 비용 절감
- * - 상태를 변경하지 않으므로 최종 결정 권한(checkRequestEligibility)을 대체하지 않음
+ * - 본문 파싱 전에 IP 차단 여부를 조기 평가하여 파싱 비용을 줄임
+ * - 최종 결정 권한(checkRequestEligibility)을 대체하지 않고 1차 필터 역할만 수행
+ *
+ * 동작:
+ * - evaluateSlidingWindow(appendOnAllow=false)로 현재 IP 상태를 읽기 전용 평가만 수행
+ * - ipStore 및 어떤 상태도 변경하지 않음
  *
  * 설계 제약:
  * - 읽기 전용(read-only): ipStore를 읽기만 하고 쓰지 않음
  * - 이메일 불필요: 본문 파싱 전에 실행되므로 IP만 사용
  * - 상태 오염 금지: 차단 시에도 어떤 카운터도 증가하지 않음
- * - 최종 결정 권한이 아님: checkRequestEligibility가 항상 최종 판단
+ * - 최종 결정 권한이 아님: 최종 허용/차단 판단은 항상 checkRequestEligibility가 수행
+ *
+ * trade-off:
+ * - malformed JSON 요청은 eligibility 계층에 도달하지 않으므로 rate limit 카운터에 포함되지 않음
+ * - 따라서 파싱 이전의 저수준 flood 공격 완화는 infra/edge 계층(WAF/CDN 등)과 함께 고려해야 함
  *
  * @param ip - 클라이언트 IP 주소
- * @returns { allowed: boolean } — false이면 checkRequestEligibility를 호출하지 않고 차단
+ * @returns { allowed: boolean } false이면 checkRequestEligibility를 호출하지 않고 즉시 차단
  */
 export function checkIpRateLimitPrecheck(ip: string): { allowed: boolean } {
   const now = Date.now();
