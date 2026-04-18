@@ -28,15 +28,24 @@ const REDIRECT_OPTIONS = { status: 307 } as const;
 function resolvePublicOrigin(request: NextRequest): string {
   const appUrl = process.env["APP_URL"];
 
+  // APP_URL 검증
+  // - 잘못된 URL이면 즉시 실패시켜 설정 오류를 조기에 발견
+  // - fallback을 허용하지 않는 이유:
+  //   request.url 기반 origin은 환경에 따라 변조 가능성이 있어
+  //   open redirect 및 잘못된 리다이렉트 위험이 있음
   if (appUrl) {
     try {
       return new URL(appUrl).origin;
     } catch {
-      // invalid APP_URL은 아래 request.url fallback 사용
-      console.warn(
-        `[Warning] 올바르지 않은 APP_URL 환경변수 설정입니다: ${appUrl}`,
-      );
+      throw new Error(`Invalid APP_URL: ${appUrl}`);
     }
+  }
+
+  // production에서는 APP_URL 필수
+  // - 운영 환경에서 fallback을 허용하면 설정 오류가 숨겨짐
+  // - 반드시 명시적으로 설정된 origin만 사용하도록 강제
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("APP_URL must be set in production");
   }
 
   return new URL(request.url).origin;
