@@ -115,7 +115,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
    * - 링크 클릭 시 "이메일 인증"과 "로그인"을 한 번에 처리한다.
    */
   if (existingUser && existingUser.email_confirmed_at === null) {
-    const deliveryEmail = existingUser.email;
+    const deliveryEmail = existingUser?.email ?? email;
     try {
       await issueAuthEmailLinkAndSend({
         type: "magiclink", // 로그인 인증 링크 생성
@@ -135,7 +135,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
    * notify ticket 없이 magiclink로 통일한다.
    */
   if (existingUser && existingUser.email_confirmed_at !== null) {
-    const deliveryEmail = existingUser.email;
+    const deliveryEmail = existingUser?.email ?? email;
     try {
       await issueAuthEmailLinkAndSend({
         type: "magiclink",

@@ -23,7 +23,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
  */
 export async function getUserByEmail(
   canonicalEmail: string,
-): Promise<{ email: string; email_confirmed_at: string | null } | null> {
+): Promise<{ email: string | null; email_confirmed_at: string | null } | null> {
   const adminClient = createAdminClient();
 
   /**
@@ -84,7 +84,7 @@ export async function getUserByEmail(
    * - email_confirmed_at: 이메일 인증 상태
    */
   return {
-    email: userData.user.email ?? "",
+    email: userData.user.email ?? null,
     email_confirmed_at: userData.user.email_confirmed_at ?? null,
   };
 }
