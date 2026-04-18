@@ -151,7 +151,10 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
   const watchedTermsOfService = normalizeChecked(watch("termsOfService"));
   const watchedPrivacyPolicy = normalizeChecked(watch("privacyPolicy"));
 
-  const isSubmitVisuallyReady =
+  // 버튼의 "스타일용 활성 상태"를 나타내는 값
+  // - 실제 disabled 조건과 완전히 동일하지는 않지만, UX 일관성을 위해 일부 조건(입력 + 약관)을 공유
+  // - 제출 전 단계에서 버튼이 과도하게 활성화되어 보이는 것을 방지하기 위함
+  const isSubmitButtonVisuallyEnabled =
     watchedEmail.trim().length > 0 &&
     watchedPassword.trim().length > 0 &&
     watchedConfirmPassword.trim().length > 0 &&
@@ -804,7 +807,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
             disabled={isPending}
             className={cn(
               "w-full sm:w-auto transition-colors duration-200",
-              isSubmitVisuallyReady
+              isSubmitButtonVisuallyEnabled
                 ? "hover:bg-primary"
                 : "bg-primary/45 text-primary-foreground/85 hover:bg-primary/55",
             )}
