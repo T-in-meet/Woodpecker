@@ -247,10 +247,7 @@ async function resolveSignupResponse(
   });
 
   if (createUserError) {
-    return {
-      response: makeSignupSuccess(email),
-      outcome: { type: "completed" },
-    }; // raw email 응답
+    throw createUserError;
   }
 
   const { data, error } = await adminClient.auth.admin.generateLink({
@@ -262,27 +259,16 @@ async function resolveSignupResponse(
   });
 
   if (error) {
-    return {
-      response: makeSignupSuccess(email),
-      outcome: { type: "completed" },
-    }; // raw email 응답
+    throw error;
   }
 
   const tokenHash = data.properties?.hashed_token;
 
   if (!tokenHash) {
-    return {
-      response: makeSignupSuccess(email),
-      outcome: { type: "completed" },
-    }; // raw email 응답
+    throw new Error("Missing hashed_token from generateLink");
   }
 
-  try {
-    await sendAuthEmail(email, tokenHash, "magiclink"); // raw email 발송
-  } catch {
-    // AE 방어: 이메일 발송 실패를 외부에 노출하지 않는다.
-    // 계정은 이미 생성됨. 사용자는 재가입 시도 또는 /resend-verification-email로 재발송 가능.
-  }
+  await sendAuthEmail(email, tokenHash, "magiclink"); // raw email 발송
 
   /**
    * 최종 성공 응답 (완전 통일)

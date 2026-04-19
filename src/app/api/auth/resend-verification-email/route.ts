@@ -205,11 +205,7 @@ async function resolveResendResponse(
    * "계약 통일이 필요한 구간(side-effect 실행 단계)"의 예외만 의도적으로 흡수한다.
    */
   if (deliveryEmail) {
-    try {
-      await resendVerificationEmail(deliveryEmail);
-    } catch {
-      // 외부 응답 계약 통일: side-effect 실패는 여기서 로깅하지 않는다.
-    }
+    await resendVerificationEmail(deliveryEmail);
   }
 
   /**

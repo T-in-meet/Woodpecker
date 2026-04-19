@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { AUTH_EVENTS } from "@/features/auth/constants/authEvents";
+import { AUTH_LOG_REASONS } from "@/features/auth/constants/authLogReasons";
 import { applyMinimumResponseTime } from "@/features/auth/lib/applyMinimumResponseTime";
-import { logCallback, logRequested } from "@/features/auth/lib/authLogger";
+import {
+  logAuthError,
+  logCallback,
+  logRequested,
+  normalizeUnknownError,
+} from "@/features/auth/lib/authLogger";
 import { ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 
@@ -93,17 +99,13 @@ function isValidMagiclinkInput(input: CallbackInput): input is {
 async function verifyMagiclinkToken(
   tokenHash: string,
 ): Promise<{ ok: boolean }> {
-  try {
-    const supabase = await createClient();
-    const { error } = await supabase.auth.verifyOtp({
-      token_hash: tokenHash,
-      type: "magiclink",
-    });
+  const supabase = await createClient();
+  const { error } = await supabase.auth.verifyOtp({
+    token_hash: tokenHash,
+    type: "magiclink",
+  });
 
-    return { ok: !error };
-  } catch {
-    return { ok: false };
-  }
+  return { ok: !error };
 }
 
 /**
@@ -136,10 +138,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const finalize = (res: NextResponse): Promise<NextResponse> =>
     applyMinimumResponseTime(start, res) as Promise<NextResponse>;
 
-  type CallbackTerminalOutcome = "completed" | "rejected";
+  type CallbackTerminalOutcome = "completed" | "rejected" | "failed";
 
   let outcome: CallbackTerminalOutcome;
   let response: NextResponse;
+  let failureMeta: { errorMessage: string; errorName: string } | null = null;
 
   try {
     /**
@@ -171,28 +174,38 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       }
     }
   } catch (error) {
-    if (
-      error instanceof Error &&
-      (error.message.startsWith("Invalid APP_URL:") ||
-        error.message === "APP_URL must be set in production")
-    ) {
-      throw error;
-    }
-    outcome = "rejected";
+    const { errorMessage, errorName } = normalizeUnknownError(error);
+    failureMeta = { errorMessage, errorName };
+    outcome = "failed";
     response = fallbackRedirectToVerifyEmail(request);
   }
 
-  logCallback(
-    outcome === "completed"
-      ? AUTH_EVENTS.AUTH_CALLBACK_COMPLETED
-      : AUTH_EVENTS.AUTH_CALLBACK_REJECTED,
-    {
+  if (outcome === "failed") {
+    logAuthError(AUTH_EVENTS.AUTH_CALLBACK_FAILED, {
       path: request.nextUrl.pathname,
       method: request.method,
       status: response.status,
       provider: "email",
-    },
-  );
+      result: "failure",
+      reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+      ...(failureMeta?.errorMessage
+        ? { errorMessage: failureMeta.errorMessage }
+        : {}),
+      ...(failureMeta?.errorName ? { errorName: failureMeta.errorName } : {}),
+    });
+  } else {
+    logCallback(
+      outcome === "completed"
+        ? AUTH_EVENTS.AUTH_CALLBACK_COMPLETED
+        : AUTH_EVENTS.AUTH_CALLBACK_REJECTED,
+      {
+        path: request.nextUrl.pathname,
+        method: request.method,
+        status: response.status,
+        provider: "email",
+      },
+    );
+  }
 
   return finalize(response);
 }

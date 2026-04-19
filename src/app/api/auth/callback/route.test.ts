@@ -337,17 +337,18 @@ describe("callback - Open Redirect 방어", () => {
     expect(location).toContain(ROUTES.VERIFY_EMAIL);
   });
 
-  it("TC-16. APP_URL이 잘못된 URL이면 fallback 하지 않고 예외를 던진다", async () => {
+  it("TC-16. APP_URL이 잘못된 URL이면 catch 처리 후 VERIFY_EMAIL로 fallback redirect된다", async () => {
     process.env["APP_URL"] = "://not-a-valid-url";
 
-    await expect(
-      GET(
-        makeCallbackRequest({
-          token_hash: "hash-abc",
-          type: "magiclink",
-        }),
-      ),
-    ).rejects.toThrow("Invalid APP_URL: ://not-a-valid-url");
+    const response = await GET(
+      makeCallbackRequest({
+        token_hash: "hash-abc",
+        type: "magiclink",
+      }),
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toContain(ROUTES.VERIFY_EMAIL);
   });
 
   it("TC-17. APP_URL에 path/query가 있어도 redirect는 origin만 사용한다", async () => {
