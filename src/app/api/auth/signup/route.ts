@@ -20,6 +20,7 @@ import {
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { mapAuthValidationErrors } from "@/features/auth/lib/mapAuthValidationErrors";
 import { maskEmailForLogging } from "@/features/auth/lib/maskEmailForLogging";
+import { maskIpForLogging } from "@/features/auth/lib/maskIpForLogging";
 import {
   AuthJsonParseError,
   parseAuthJsonRequestBody,
@@ -53,6 +54,7 @@ type SignupTerminalOutcome =
         | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT
         | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG;
       maskedEmail?: string;
+      maskedIp?: string;
     }
   | { type: "completed" };
 
@@ -74,6 +76,7 @@ async function resolveSignupResponse(
    * 요청 IP 추출 (rate limit key)
    */
   const ip = getClientIp(request);
+  const maskedIp = maskIpForLogging(ip);
 
   /**
    * IP 사전 검증 — 본문 파싱 비용 없이 IP 차단
@@ -89,6 +92,7 @@ async function resolveSignupResponse(
       outcome: {
         type: "blocked",
         reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_IP,
+        maskedIp,
       },
     };
   }
@@ -153,6 +157,7 @@ async function resolveSignupResponse(
         type: "blocked",
         reasonCode: mapBlockedByToReason(eligibility.blockedBy),
         maskedEmail,
+        ...(eligibility.blockedBy === "ip" ? { maskedIp } : {}),
       },
     };
   }
@@ -339,6 +344,7 @@ export async function POST(request: NextRequest) {
         result: "blocked",
         reasonCode: outcome.reasonCode,
         ...(outcome.maskedEmail ? { maskedEmail: outcome.maskedEmail } : {}),
+        ...(outcome.maskedIp ? { maskedIp: outcome.maskedIp } : {}),
       });
       break;
     case "completed":

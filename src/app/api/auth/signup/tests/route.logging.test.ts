@@ -243,6 +243,7 @@ describe("signup 라우트 인증 로깅", () => {
       AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED,
       expect.objectContaining({
         reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_IP,
+        maskedIp: "127.0.*.*",
       }),
     );
 
@@ -255,6 +256,24 @@ describe("signup 라우트 인증 로깅", () => {
         AUTH_EVENTS.AUTH_SIGNUP_FAILED,
       ]),
     );
+  });
+
+  it("IP precheck 차단이면 AUTH_RATE_LIMIT_BLOCKED에 maskedIp가 포함된다", async () => {
+    vi.mocked(checkIpRateLimitPrecheck).mockReturnValue({
+      allowed: false,
+    });
+
+    await POST(makeRequest());
+
+    expect(vi.mocked(logAuthEvent)).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED,
+      expect.objectContaining({
+        reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_IP,
+        maskedIp: "127.0.*.*",
+      }),
+    );
+    expect(vi.mocked(logAuthError)).not.toHaveBeenCalled();
+    expect(vi.mocked(logAuthEvent)).toHaveBeenCalledTimes(1);
   });
 
   it("요청 제한 차단(emailShort)이면 RATE_LIMIT_EMAIL_SHORT 사유코드가 기록된다", async () => {

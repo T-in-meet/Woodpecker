@@ -68,7 +68,7 @@ type ResendTerminalOutcome =
         | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG;
       maskedEmail?: string;
     }
-  | { type: "completed" };
+  | { type: "completed"; suppressCompletedLog?: true };
 
 type ResolveResendResult = {
   response: Response;
@@ -205,7 +205,32 @@ async function resolveResendResponse(
    * "계약 통일이 필요한 구간(side-effect 실행 단계)"의 예외만 의도적으로 흡수한다.
    */
   if (deliveryEmail) {
-    await resendVerificationEmail(deliveryEmail);
+    try {
+      await resendVerificationEmail(deliveryEmail);
+    } catch (error) {
+      const { errorMessage, errorName } = normalizeUnknownError(error);
+      logAuthError(AUTH_EVENTS.AUTH_RESEND_FAILED, {
+        path: request.nextUrl.pathname,
+        method: request.method,
+        status: 500,
+        provider: "email",
+        result: "failure",
+        reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+        errorMessage,
+        errorName,
+      });
+
+      return {
+        response: successResponse(
+          AUTH_API_CODES.EMAIL_VERIFICATION_RESEND_SUCCESS,
+          {
+            email: rawEmail,
+            resent: true,
+          },
+        ),
+        outcome: { type: "completed", suppressCompletedLog: true },
+      };
+    }
   }
 
   /**
@@ -280,13 +305,15 @@ export async function POST(request: NextRequest): Promise<Response> {
       });
       break;
     case "completed":
-      logAuthEvent(AUTH_EVENTS.AUTH_RESEND_COMPLETED, {
-        path: request.nextUrl.pathname,
-        method: request.method,
-        status: response.status,
-        provider: "email",
-        result: "success",
-      });
+      if (!outcome.suppressCompletedLog) {
+        logAuthEvent(AUTH_EVENTS.AUTH_RESEND_COMPLETED, {
+          path: request.nextUrl.pathname,
+          method: request.method,
+          status: response.status,
+          provider: "email",
+          result: "success",
+        });
+      }
       break;
   }
 

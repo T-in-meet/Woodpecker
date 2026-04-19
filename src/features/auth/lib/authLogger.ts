@@ -20,6 +20,7 @@ type CommonLogFields = {
   provider: string;
   userId?: string;
   maskedEmail?: string;
+  maskedIp?: string;
 };
 
 type SuccessLogContext = CommonLogFields & {

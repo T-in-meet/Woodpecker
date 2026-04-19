@@ -197,7 +197,7 @@ describe("resend 최소 응답 시간 보장", () => {
     expect(setTimeoutSpy).not.toHaveBeenCalled();
   });
 
-  it("TC-07: 이메일 발송 실패 내부 예외도 최소 응답 시간을 보장하고 RESEND_INTERNAL_ERROR를 반환한다", async () => {
+  it("TC-07: 이메일 발송 실패 내부 예외도 최소 응답 시간을 보장하고 성공 계약을 유지한다", async () => {
     useFakeClockWithNoElapsedTime();
 
     vi.mocked(resendVerificationEmail).mockRejectedValue(
@@ -211,8 +211,8 @@ describe("resend 최소 응답 시간 보장", () => {
     const response = await promise;
     const body = await response.json();
 
-    expect(response.status).toBe(500);
-    expect(body.code).toBe(AUTH_API_CODES.RESEND_INTERNAL_ERROR);
+    expect(response.status).toBe(200);
+    expect(body.code).toBe(AUTH_API_CODES.EMAIL_VERIFICATION_RESEND_SUCCESS);
   });
 
   it("TC-08: 최소 응답 시간 적용 후에도 성공 응답 계약이 유지된다", async () => {

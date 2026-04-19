@@ -57,6 +57,7 @@ function makeCallbackRequest(params?: {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  process.env["APP_URL"] = "http://localhost";
 
   vi.mocked(createClient).mockResolvedValue({
     auth: { verifyOtp: mockVerifyOtp },
@@ -127,15 +128,15 @@ describe("callback - verifyOtp 성공", () => {
   });
 
   it("TC-07. 성공 시 redirect location은 MYPAGE URL과 정확히 일치한다", async () => {
-    const request = makeCallbackRequest({
-      token_hash: "hash-abc",
-      type: "magiclink",
-    });
-
-    const response = await GET(request);
+    const response = await GET(
+      makeCallbackRequest({
+        token_hash: "hash-abc",
+        type: "magiclink",
+      }),
+    );
 
     expect(response.headers.get("location")).toBe(
-      new URL(ROUTES.MYPAGE, request.url).toString(),
+      new URL(ROUTES.MYPAGE, "http://localhost").toString(),
     );
   });
 });
@@ -214,7 +215,7 @@ describe("callback - Open Redirect 방어", () => {
    * 목적:
    * - 조작된 forwarded header로 외부 도메인 redirect 불가능한지 검증
    * - APP_URL 환경변수가 설정된 경우, 헤더 값이 무시되어야 함
-   * - APP_URL 미설정 시에도 request.url만 사용하고 forwarded header 신뢰 불가
+   * - APP_URL 미설정 시에는 redirect를 진행하지 않고 예외를 발생시켜 설정 누락을 노출
    */
 
   const originalAppUrl = process.env["APP_URL"];
@@ -283,29 +284,20 @@ describe("callback - Open Redirect 방어", () => {
     expect(location).not.toContain("malicious.com");
   });
 
-  it("TC-14. APP_URL 미설정 시에도 forwarded header 신뢰하지 않고 request.url 기반 redirect", async () => {
+  it("TC-14. APP_URL 미설정이면 예외를 던진다", async () => {
     // APP_URL 미설정 시나리오
-    // delete process.env["APP_URL"]; // 이미 beforeEach에서 삭제됨
-
-    const response = await GET(
-      makeCallbackRequest({
-        token_hash: "hash-abc",
-        type: "magiclink",
-        headers: {
-          "x-forwarded-host": "evil.com",
-          "x-forwarded-proto": "https",
-        },
-      }),
-    );
-
-    expect(response.status).toBe(307);
-    const location = response.headers.get("location") ?? "";
-
-    // request.url 기반 (localhost)이어야 함
-    expect(location).toContain("localhost");
-    // 헤더 값이 무시되어야 함
-    expect(location).not.toContain("evil.com");
-    expect(location).toContain(ROUTES.MYPAGE);
+    await expect(
+      GET(
+        makeCallbackRequest({
+          token_hash: "hash-abc",
+          type: "magiclink",
+          headers: {
+            "x-forwarded-host": "evil.com",
+            "x-forwarded-proto": "https",
+          },
+        }),
+      ),
+    ).rejects.toThrow("APP_URL must be set");
   });
 
   it("TC-15. 실패 경로에서도 forwarded header 신뢰하지 않음", async () => {
@@ -337,18 +329,17 @@ describe("callback - Open Redirect 방어", () => {
     expect(location).toContain(ROUTES.VERIFY_EMAIL);
   });
 
-  it("TC-16. APP_URL이 잘못된 URL이면 catch 처리 후 VERIFY_EMAIL로 fallback redirect된다", async () => {
+  it("TC-16. APP_URL이 잘못된 URL이면 예외를 던진다", async () => {
     process.env["APP_URL"] = "://not-a-valid-url";
 
-    const response = await GET(
-      makeCallbackRequest({
-        token_hash: "hash-abc",
-        type: "magiclink",
-      }),
-    );
-
-    expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toContain(ROUTES.VERIFY_EMAIL);
+    await expect(
+      GET(
+        makeCallbackRequest({
+          token_hash: "hash-abc",
+          type: "magiclink",
+        }),
+      ),
+    ).rejects.toThrow("Invalid APP_URL");
   });
 
   it("TC-17. APP_URL에 path/query가 있어도 redirect는 origin만 사용한다", async () => {

@@ -100,6 +100,7 @@ function expectNoForbiddenFields(payload: unknown): void {
 describe("콜백 라우트 인증 로깅", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env["APP_URL"] = "http://localhost";
     vi.mocked(createClient).mockResolvedValue({
       auth: { verifyOtp },
     } as never);
@@ -161,20 +162,15 @@ describe("콜백 라우트 인증 로깅", () => {
     expect(terminals).not.toContain(AUTH_EVENTS.AUTH_CALLBACK_COMPLETED);
   });
 
-  it("APP_URL 설정 오류면 catch에서 AUTH_CALLBACK_FAILED가 기록된다", async () => {
+  it("APP_URL 설정 오류면 예외를 던지고 terminal 로그를 남기지 않는다", async () => {
     process.env["APP_URL"] = "://invalid";
 
-    await GET(makeRequest({ token_hash: "hash", type: "magiclink" }));
+    await expect(
+      GET(makeRequest({ token_hash: "hash", type: "magiclink" })),
+    ).rejects.toThrow("Invalid APP_URL");
 
     const terminals = terminalEvents();
-    expect(terminals).toHaveLength(1);
-    expect(terminals[0]).toBe(AUTH_EVENTS.AUTH_CALLBACK_FAILED);
-    expect(vi.mocked(logAuthError)).toHaveBeenCalledWith(
-      AUTH_EVENTS.AUTH_CALLBACK_FAILED,
-      expect.objectContaining({
-        reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
-      }),
-    );
+    expect(terminals).toHaveLength(0);
   });
 
   it("verifyOtp에서 예외가 나면 AUTH_CALLBACK_FAILED가 기록된다", async () => {
