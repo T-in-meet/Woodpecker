@@ -65,6 +65,12 @@ function redirectToVerifyEmail(request: NextRequest): NextResponse {
   return NextResponse.redirect(redirectUrl, REDIRECT_OPTIONS);
 }
 
+function fallbackRedirectToVerifyEmail(request: NextRequest): NextResponse {
+  const origin = new URL(request.url).origin;
+  const redirectUrl = new URL(ROUTES.VERIFY_EMAIL, `${origin}/`);
+  return NextResponse.redirect(redirectUrl, REDIRECT_OPTIONS);
+}
+
 type CallbackInput = {
   tokenHash: string | null;
   type: string | null;
@@ -130,50 +136,63 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const finalize = (res: NextResponse): Promise<NextResponse> =>
     applyMinimumResponseTime(start, res) as Promise<NextResponse>;
 
-  /**
-   * 1) 입력 추출
-   */
-  const input = extractCallbackInput(request);
+  type CallbackTerminalOutcome = "completed" | "rejected";
 
-  /**
-   * 2) 입력 검증
-   */
-  if (!isValidMagiclinkInput(input)) {
-    // 주의:
-    // 다른 *_FAILED 이벤트와 달리
-    // AUTH_CALLBACK_REJECTED는 "예외"가 아니라
-    // verify-email로 귀결되는 정상 분기 결과를 의미한다.
-    logCallback(AUTH_EVENTS.AUTH_CALLBACK_REJECTED, {
-      path: request.nextUrl.pathname,
-      method: request.method,
-      status: 307,
-      provider: "email",
-    });
-    return finalize(redirectToVerifyEmail(request));
+  let outcome: CallbackTerminalOutcome;
+  let response: NextResponse;
+
+  try {
+    /**
+     * 1) 입력 추출
+     */
+    const input = extractCallbackInput(request);
+
+    /**
+     * 2) 입력 검증
+     */
+    if (!isValidMagiclinkInput(input)) {
+      outcome = "rejected";
+      response = redirectToVerifyEmail(request);
+    } else {
+      /**
+       * 3) side-effect (Supabase verifyOtp)
+       */
+      const verification = await verifyMagiclinkToken(input.tokenHash);
+
+      if (!verification.ok) {
+        outcome = "rejected";
+        response = redirectToVerifyEmail(request);
+      } else {
+        /**
+         * 4) finalize redirect
+         */
+        outcome = "completed";
+        response = redirectToMypage(request);
+      }
+    }
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      (error.message.startsWith("Invalid APP_URL:") ||
+        error.message === "APP_URL must be set in production")
+    ) {
+      throw error;
+    }
+    outcome = "rejected";
+    response = fallbackRedirectToVerifyEmail(request);
   }
 
-  /**
-   * 3) side-effect (Supabase verifyOtp)
-   */
-  const verification = await verifyMagiclinkToken(input.tokenHash);
-  if (!verification.ok) {
-    logCallback(AUTH_EVENTS.AUTH_CALLBACK_REJECTED, {
+  logCallback(
+    outcome === "completed"
+      ? AUTH_EVENTS.AUTH_CALLBACK_COMPLETED
+      : AUTH_EVENTS.AUTH_CALLBACK_REJECTED,
+    {
       path: request.nextUrl.pathname,
       method: request.method,
-      status: 307,
+      status: response.status,
       provider: "email",
-    });
-    return finalize(redirectToVerifyEmail(request));
-  }
+    },
+  );
 
-  /**
-   * 4) finalize redirect
-   */
-  logCallback(AUTH_EVENTS.AUTH_CALLBACK_COMPLETED, {
-    path: request.nextUrl.pathname,
-    method: request.method,
-    status: 307,
-    provider: "email",
-  });
-  return finalize(redirectToMypage(request));
+  return finalize(response);
 }

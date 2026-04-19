@@ -18,10 +18,7 @@
  * - 이메일 long window: 사용자 수준 계정 rate limit (회원가입 + 재전송 공유)
  */
 
-import {
-  AUTH_LOG_REASONS,
-  type AuthLogReason,
-} from "../constants/authLogReasons";
+import { AUTH_LOG_REASONS } from "../constants/authLogReasons";
 import { evaluateSlidingWindow } from "../utils/rateLimit.utils";
 import {
   emailStore,
@@ -93,7 +90,12 @@ export type EligibilityResult =
   | { allowed: true }
   | { allowed: false; blockedBy: BlockedBy };
 
-export function mapBlockedByToReason(blockedBy: BlockedBy): AuthLogReason {
+export type RateLimitReason =
+  | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP
+  | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT
+  | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG;
+
+export function mapBlockedByToReason(blockedBy: BlockedBy): RateLimitReason {
   switch (blockedBy) {
     case "ip":
       return AUTH_LOG_REASONS.RATE_LIMIT_IP;

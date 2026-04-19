@@ -52,7 +52,32 @@ import { VALIDATION_REASON } from "@/lib/validation/reasons";
  * - 단일 entry point: checkRequestEligibility로 모든 rate limit 정책 처리
  * - atomic: 판단과 상태 업데이트가 함수 내에서 함께 일어남
  */
-async function resolveResendResponse(request: NextRequest): Promise<Response> {
+type ResendTerminalOutcome =
+  | {
+      type: "invalid_input";
+      reasonCode:
+        | typeof AUTH_LOG_REASONS.INVALID_JSON
+        | typeof AUTH_LOG_REASONS.SCHEMA_VALIDATION_FAILED;
+      maskedEmail?: string;
+    }
+  | {
+      type: "blocked";
+      reasonCode:
+        | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP
+        | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT
+        | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG;
+      maskedEmail?: string;
+    }
+  | { type: "completed" };
+
+type ResolveResendResult = {
+  response: Response;
+  outcome: ResendTerminalOutcome;
+};
+
+async function resolveResendResponse(
+  request: NextRequest,
+): Promise<ResolveResendResult> {
   /**
    * 1. IP 추출
    *
@@ -70,7 +95,13 @@ async function resolveResendResponse(request: NextRequest): Promise<Response> {
    */
   const precheck = checkIpRateLimitPrecheck(ip);
   if (!precheck.allowed) {
-    return failureResponse(AUTH_API_CODES.RESEND_RATE_LIMIT_EXCEEDED);
+    return {
+      response: failureResponse(AUTH_API_CODES.RESEND_RATE_LIMIT_EXCEEDED),
+      outcome: {
+        type: "blocked",
+        reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_IP,
+      },
+    };
   }
 
   let body: unknown;
@@ -85,17 +116,15 @@ async function resolveResendResponse(request: NextRequest): Promise<Response> {
     body = await parseAuthJsonRequestBody(request);
   } catch (e) {
     if (e instanceof AuthJsonParseError) {
-      logAuthEvent(AUTH_EVENTS.AUTH_INVALID_INPUT, {
-        path: request.nextUrl.pathname,
-        method: request.method,
-        status: 400,
-        provider: "email",
-        result: "failure",
-        reasonCode: AUTH_LOG_REASONS.INVALID_JSON,
-      });
-      return failureResponse(AUTH_API_CODES.RESEND_INVALID_INPUT, {
-        errors: [{ field: "body", reason: VALIDATION_REASON.INVALID_FORMAT }],
-      });
+      return {
+        response: failureResponse(AUTH_API_CODES.RESEND_INVALID_INPUT, {
+          errors: [{ field: "body", reason: VALIDATION_REASON.INVALID_FORMAT }],
+        }),
+        outcome: {
+          type: "invalid_input",
+          reasonCode: AUTH_LOG_REASONS.INVALID_JSON,
+        },
+      };
     }
     throw e;
   }
@@ -109,17 +138,15 @@ async function resolveResendResponse(request: NextRequest): Promise<Response> {
   const parsed = resendApiSchema.safeParse(body);
 
   if (!parsed.success) {
-    logAuthEvent(AUTH_EVENTS.AUTH_INVALID_INPUT, {
-      path: request.nextUrl.pathname,
-      method: request.method,
-      status: 400,
-      provider: "email",
-      result: "failure",
-      reasonCode: AUTH_LOG_REASONS.SCHEMA_VALIDATION_FAILED,
-    });
-    return failureResponse(AUTH_API_CODES.RESEND_INVALID_INPUT, {
-      errors: mapAuthValidationErrors(parsed.error, body),
-    });
+    return {
+      response: failureResponse(AUTH_API_CODES.RESEND_INVALID_INPUT, {
+        errors: mapAuthValidationErrors(parsed.error, body),
+      }),
+      outcome: {
+        type: "invalid_input",
+        reasonCode: AUTH_LOG_REASONS.SCHEMA_VALIDATION_FAILED,
+      },
+    };
   }
 
   const rawEmail = parsed.data.email;
@@ -146,16 +173,14 @@ async function resolveResendResponse(request: NextRequest): Promise<Response> {
   const canonicalEmailForLog = maskEmailForLogging(canonicalEmail);
   const eligibility = checkRequestEligibility("resend", ip, canonicalEmail);
   if (!eligibility.allowed) {
-    logAuthEvent(AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED, {
-      path: request.nextUrl.pathname,
-      method: request.method,
-      status: 429,
-      provider: "email",
-      result: "blocked",
-      reasonCode: mapBlockedByToReason(eligibility.blockedBy),
-      maskedEmail: canonicalEmailForLog,
-    });
-    return failureResponse(AUTH_API_CODES.RESEND_RATE_LIMIT_EXCEEDED);
+    return {
+      response: failureResponse(AUTH_API_CODES.RESEND_RATE_LIMIT_EXCEEDED),
+      outcome: {
+        type: "blocked",
+        reasonCode: mapBlockedByToReason(eligibility.blockedBy),
+        maskedEmail: canonicalEmailForLog,
+      },
+    };
   }
 
   /**
@@ -182,59 +207,41 @@ async function resolveResendResponse(request: NextRequest): Promise<Response> {
   if (deliveryEmail) {
     try {
       await resendVerificationEmail(deliveryEmail);
-    } catch (resendError) {
-      const { errorMessage, errorName } = normalizeUnknownError(resendError);
-
-      logAuthError(AUTH_EVENTS.AUTH_RESEND_FAILED, {
-        path: request.nextUrl.pathname,
-        method: request.method,
-        status: 200,
-        provider: "email",
-        result: "failure",
-        reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
-        maskedEmail: canonicalEmailForLog,
-        errorMessage,
-        errorName,
-      });
+    } catch {
+      // 외부 응답 계약 통일: side-effect 실패는 여기서 로깅하지 않는다.
     }
   }
 
   /**
    * 7. 성공 응답 반환
    */
-  return successResponse(AUTH_API_CODES.EMAIL_VERIFICATION_RESEND_SUCCESS, {
-    email: rawEmail,
-    resent: true,
-  });
+  return {
+    response: successResponse(
+      AUTH_API_CODES.EMAIL_VERIFICATION_RESEND_SUCCESS,
+      {
+        email: rawEmail,
+        resent: true,
+      },
+    ),
+    outcome: { type: "completed" },
+  };
 }
 
 export async function POST(request: NextRequest): Promise<Response> {
   const start = Date.now();
-  let response: Response;
-  let wasException = false;
-
   logRequested(AUTH_EVENTS.AUTH_RESEND_REQUESTED, {
     path: request.nextUrl.pathname,
     method: request.method,
     provider: "email",
   });
 
+  let resolved: ResolveResendResult;
   try {
-    response = await resolveResendResponse(request);
-  } catch {
-    wasException = true;
-    response = failureResponse(AUTH_API_CODES.RESEND_INTERNAL_ERROR);
-  }
+    resolved = await resolveResendResponse(request);
+  } catch (error) {
+    const { errorMessage, errorName } = normalizeUnknownError(error);
+    const response = failureResponse(AUTH_API_CODES.RESEND_INTERNAL_ERROR);
 
-  if (response.status === 200) {
-    logAuthEvent(AUTH_EVENTS.AUTH_RESEND_COMPLETED, {
-      path: request.nextUrl.pathname,
-      method: request.method,
-      status: response.status,
-      provider: "email",
-      result: "success",
-    });
-  } else if (wasException) {
     logAuthError(AUTH_EVENTS.AUTH_RESEND_FAILED, {
       path: request.nextUrl.pathname,
       method: request.method,
@@ -242,7 +249,47 @@ export async function POST(request: NextRequest): Promise<Response> {
       provider: "email",
       result: "failure",
       reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+      errorMessage,
+      errorName,
     });
+
+    return applyMinimumResponseTime(start, response);
+  }
+
+  const { response, outcome } = resolved;
+
+  switch (outcome.type) {
+    case "invalid_input":
+      logAuthEvent(AUTH_EVENTS.AUTH_INVALID_INPUT, {
+        path: request.nextUrl.pathname,
+        method: request.method,
+        status: response.status,
+        provider: "email",
+        result: "failure",
+        reasonCode: outcome.reasonCode,
+        ...(outcome.maskedEmail ? { maskedEmail: outcome.maskedEmail } : {}),
+      });
+      break;
+    case "blocked":
+      logAuthEvent(AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED, {
+        path: request.nextUrl.pathname,
+        method: request.method,
+        status: response.status,
+        provider: "email",
+        result: "blocked",
+        reasonCode: outcome.reasonCode,
+        ...(outcome.maskedEmail ? { maskedEmail: outcome.maskedEmail } : {}),
+      });
+      break;
+    case "completed":
+      logAuthEvent(AUTH_EVENTS.AUTH_RESEND_COMPLETED, {
+        path: request.nextUrl.pathname,
+        method: request.method,
+        status: response.status,
+        provider: "email",
+        result: "success",
+      });
+      break;
   }
 
   return applyMinimumResponseTime(start, response);
