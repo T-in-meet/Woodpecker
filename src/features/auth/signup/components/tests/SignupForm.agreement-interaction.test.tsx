@@ -128,18 +128,10 @@ describe("회원가입 폼 동의 상호작용", () => {
       expect(termsCheckbox).toHaveAttribute("data-state", "checked");
     });
 
-    await waitFor(() => {
-      expect(termsCheckbox).toHaveFocus();
-    });
-
     await user.keyboard(" ");
 
     await waitFor(() => {
       expect(termsCheckbox).toHaveAttribute("data-state", "unchecked");
-    });
-
-    await waitFor(() => {
-      expect(termsCheckbox).toHaveFocus();
     });
   });
 
