@@ -117,46 +117,29 @@ describe("회원가입 폼 동의 상호작용", () => {
     });
 
     termsCheckbox.focus();
-    expect(termsCheckbox).toHaveFocus();
-
-    fireEvent.keyDown(termsCheckbox, {
-      key: " ",
-      code: "Space",
-      keyCode: 32,
-      charCode: 32,
-    });
-    fireEvent.keyUp(termsCheckbox, {
-      key: " ",
-      code: "Space",
-      keyCode: 32,
-      charCode: 32,
-    });
-    // JSDOM은 Space 입력 시 button click 자동 발생을 브라우저처럼 재현하지 못할 수 있어
-    // 키 입력 후 click을 보조로 발생시켜 실제 사용자 토글 동작을 등가로 검증한다.
-    fireEvent.click(termsCheckbox);
 
     await waitFor(() => {
-      expect(termsCheckbox).toBeChecked();
+      expect(termsCheckbox).toHaveFocus();
     });
 
-    expect(termsCheckbox).toHaveFocus();
-
-    fireEvent.keyDown(termsCheckbox, {
-      key: " ",
-      code: "Space",
-      keyCode: 32,
-      charCode: 32,
-    });
-    fireEvent.keyUp(termsCheckbox, {
-      key: " ",
-      code: "Space",
-      keyCode: 32,
-      charCode: 32,
-    });
-    fireEvent.click(termsCheckbox);
+    await user.keyboard(" ");
 
     await waitFor(() => {
-      expect(termsCheckbox).not.toBeChecked();
+      expect(termsCheckbox).toHaveAttribute("aria-checked", "true");
+    });
+
+    await waitFor(() => {
+      expect(termsCheckbox).toHaveFocus();
+    });
+
+    await user.keyboard(" ");
+
+    await waitFor(() => {
+      expect(termsCheckbox).toHaveAttribute("aria-checked", "false");
+    });
+
+    await waitFor(() => {
+      expect(termsCheckbox).toHaveFocus();
     });
   });
 
@@ -235,21 +218,19 @@ describe("회원가입 폼 동의 상호작용", () => {
     const user = userEvent.setup();
     renderSignupForm();
 
-    // 모달 열고 동의하기
     await user.click(screen.getByTestId("terms-of-service-checkbox"));
     await user.click(screen.getByRole("button", { name: /동의하기/i }));
 
     const termsCheckbox = screen.getByTestId("terms-of-service-checkbox");
+
     await waitFor(() => {
-      expect(termsCheckbox).toBeChecked();
+      expect(termsCheckbox).toHaveAttribute("aria-checked", "true");
     });
 
-    // 다시 클릭해서 언체크하기
-    // 이유: interactionEnabled=true가 되었으므로 체크박스 직접 조작 가능
     await user.click(termsCheckbox);
 
     await waitFor(() => {
-      expect(termsCheckbox).not.toBeChecked();
+      expect(termsCheckbox).toHaveAttribute("aria-checked", "false");
     });
   });
 
