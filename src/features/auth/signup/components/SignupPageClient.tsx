@@ -45,7 +45,7 @@ export default function SignupPageClient() {
          * - 폼에서는 flat 구조
          * - API는 nested 구조 요구
          */
-        const { avatarFile, termsOfService, privacyPolicy, ...rest } = values;
+        const { termsOfService, privacyPolicy, ...rest } = values;
 
         /**
          * 회원가입 요청
@@ -53,7 +53,6 @@ export default function SignupPageClient() {
         const response = await mutateAsync({
           ...rest,
           agreements: { termsOfService, privacyPolicy },
-          ...(avatarFile !== undefined ? { avatarFile } : {}),
         });
 
         /**

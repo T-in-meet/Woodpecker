@@ -1,5 +1,7 @@
 "use client";
 
+import { Loader2 } from "lucide-react";
+import Link from "next/link";
 /**
  * 이메일 인증 안내 페이지 클라이언트 컴포넌트
  *
@@ -14,7 +16,6 @@
  * - HTTP status(예: 429)에 의존하지 않고, 서버 response body의 `code`를 기준으로 처리한다.
  * - rate limit 발생 시, 이벤트 기반의 전역 토스트 메시지(showToast)로만 피드백한다.
  */
-
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 
@@ -25,17 +26,12 @@ import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 import {
   GLOBAL_ERROR_MESSAGES,
   isGlobalError,
-} from "@/features/auth/errors//globalError";
-import { UNKNOWN_ERROR_MESSAGE } from "@/features/auth/errors//unknownError";
+} from "@/features/auth/errors/globalError";
 import {
   isRateLimitError,
   RATE_LIMIT_TOAST_MESSAGE,
 } from "@/features/auth/errors/rateLimitError";
-/**
- * 🔽 추가: mutation 훅 import
- * - fetch를 직접 호출하던 구조를 제거하고
- * - API 호출을 mutation 레이어로 위임하기 위해 사용한다.
- */
+import { UNKNOWN_ERROR_MESSAGE } from "@/features/auth/errors/unknownError";
 import { useResendVerificationEmailMutation } from "@/features/auth/resend-verification-email/hooks/useResendVerificationEmailMutation";
 import { showToast } from "@/lib/utils/showToast";
 
@@ -85,35 +81,24 @@ export default function VerifyEmailPageClient({ email }: Props) {
     reset({ email: normalizedPrefillEmail });
   }, [normalizedPrefillEmail, reset]);
 
-  /**
-   * 🔽 추가: resend mutation 훅 사용
-   *
-   * 역할:
-   * - API 호출(fetch)을 컴포넌트에서 제거하고 mutation으로 위임
-   * - loading 상태(isPending)를 제공
-   */
   const { mutateAsync, isPending } = useResendVerificationEmailMutation();
 
   /**
-   * 🔽 수정: loading 상태 통합
+   * 제출 중이거나 재발송 mutation이 진행 중이면 버튼을 비활성화한다.
    *
-   * - form submitting 상태 + mutation pending 상태를 함께 고려
+   * - 중복 제출을 방지한다.
+   * - 로딩 스피너와 버튼 문구를 동일한 기준으로 제어한다.
    */
   const isDisabled = isSubmitting || isPending;
 
   const onSubmit = async (values: FormValues) => {
     try {
       /**
-       * 🔽 수정: fetch 제거 → mutation 사용
+       * 재발송 요청은 mutation을 통해 수행한다.
        *
-       * 동작:
-       * - mutation 내부에서 fetch 수행
-       * - 실패 시 response body를 throw
-       * - 성공 시 response body 반환
-       *
-       * 설계 의도:
-       * - UI는 네트워크/응답 처리에서 분리
-       * - SignupForm과 동일한 패턴으로 구조 통일
+       * - 네트워크 호출과 응답 파싱 책임은 mutation 레이어가 가진다.
+       * - UI는 성공/실패에 따른 사용자 피드백만 담당한다.
+       * - SignupForm과 동일한 호출 패턴을 유지한다.
        */
       const body = await mutateAsync({ email: values.email });
 
@@ -129,10 +114,14 @@ export default function VerifyEmailPageClient({ email }: Props) {
        * - 모든 auth 흐름에서 동일한 방식으로 응답을 해석하도록 일관성을 유지한다.
        */
       if (body.code === AUTH_API_CODES.EMAIL_VERIFICATION_RESEND_SUCCESS) {
-        showToast("인증 메일이 재발송되었습니다.");
+        // 행동 유도형 문구로 교체 — 상태 보고 대신 사용자가 다음에 할 일을 즉시 안내
+        showToast("메일을 다시 보냈습니다. 받은 편지함을 확인해주세요.");
       }
     } catch (e) {
-      console.error("Failed to resend email:", e);
+      // 프로덕션에서 응답 객체 전체가 콘솔에 노출되지 않도록 개발 환경으로 제한
+      if (process.env.NODE_ENV === "development") {
+        console.error("Failed to resend email:", e);
+      }
 
       /**
        * rate limit 에러 처리
@@ -181,33 +170,71 @@ export default function VerifyEmailPageClient({ email }: Props) {
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center px-4">
-      <div className="w-full max-w-md space-y-6 text-center">
-        <p className="text-base leading-relaxed">
-          회원가입이 완료되었습니다.
-          <br />
-          가입하실 때 사용하신 이메일에서 인증 이메일을 확인해주세요.
-        </p>
-
-        <form
-          aria-label="인증 메일 재발송"
-          onSubmit={handleSubmit(onSubmit)}
-          className="space-y-4"
-        >
-          <div className="space-y-2 text-left">
-            <Label htmlFor="email">이메일</Label>
-            <Input
-              id="email"
-              type="email"
-              autoComplete="email"
-              {...register("email")}
-            />
+    <div className="mx-auto flex min-h-[calc(100vh-80px)] w-full max-w-6xl md:items-center justify-center px-4 py-10">
+      <div className="w-full max-w-4xl rounded-3xl md:border bg-background px-6 py-10 md:shadow-sm md:px-10 md:py-12">
+        {/* 행동 유도형 구조로 재편 — 상태 보고 대신 사용자가 즉시 다음 행동을 인식할 수 있도록 */}
+        <div className="space-y-8">
+          {/* 제목 영역 */}
+          <div className="space-y-3 text-center">
+            <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
+              이메일 인증
+            </h1>
+            <p className="text-base text-muted-foreground md:text-md">
+              가입하신 이메일로 인증 링크를 보냈습니다.
+            </p>
           </div>
 
-          <Button type="submit" className="w-full" disabled={isDisabled}>
-            인증 메일 재발송
-          </Button>
-        </form>
+          <form
+            aria-label="인증 메일 재발송"
+            onSubmit={handleSubmit(onSubmit)}
+            className="mx-auto w-full max-w-xl"
+          >
+            <div className="space-y-6 bg-background px-5 py-6 md:px-7 md:py-7">
+              <div className="flex gap-4">
+                <Label htmlFor="email" className="text-base shrink-0 min-w-16">
+                  이메일
+                </Label>
+                <Input
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  {...register("email")}
+                  className="h-12 rounded-xl"
+                />
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full h-12 rounded-full"
+                disabled={isDisabled}
+              >
+                {/* 로딩 스피너 추가 — SignupForm 패턴과 일관성 유지, 요청 등록 여부를 즉시 전달 */}
+                {isDisabled && (
+                  <Loader2
+                    className="mr-2 h-4 w-4 animate-spin"
+                    aria-hidden="true"
+                  />
+                )}
+                {isDisabled ? "전송 중..." : "인증 메일 재발송"}
+              </Button>
+
+              <div className="space-y-1 text-center text-sm text-muted-foreground">
+                <p>메일이 오지 않으면 스팸함을 확인해주세요.</p>
+                <p>여전히 보이지 않으면 위 버튼으로 다시 보낼 수 있습니다.</p>
+              </div>
+            </div>
+          </form>
+
+          <div className="text-center text-sm text-muted-foreground">
+            이미 인증하셨나요?{" "}
+            <Link
+              href="/login"
+              className="font-medium text-foreground underline underline-offset-4"
+            >
+              로그인
+            </Link>
+          </div>
+        </div>
       </div>
     </div>
   );

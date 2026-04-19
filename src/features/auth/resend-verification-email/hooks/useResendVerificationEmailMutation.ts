@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 
-import { resendVerificationEmailMutation } from "../mutation/resendVerificationEmailMutation";
+import { resendVerificationEmailMutation } from "../mutations/resendVerificationEmailMutation";
 
 /**
  * 인증 메일 재전송 mutation 훅

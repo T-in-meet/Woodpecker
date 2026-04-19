@@ -1,4 +1,4 @@
-import { after, NextRequest } from "next/server";
+import { NextRequest } from "next/server";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 import { issueAuthEmailLinkAndSend } from "@/features/auth/email/issueAuthEmailLinkAndSend";
@@ -9,206 +9,20 @@ import {
   checkRequestEligibility,
 } from "@/features/auth/lib/checkRequestEligibility";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
-import { failureResponse, successResponse } from "@/features/auth/lib/response";
-import { mapSignupValidationErrors } from "@/features/auth/signup/lib/mapSignupValidationErrors";
-import { signupApiSchema } from "@/features/auth/signup/schema/signupApiSchema";
+import { mapAuthValidationErrors } from "@/features/auth/lib/mapAuthValidationErrors";
+import { maskEmailForLogging } from "@/features/auth/lib/maskEmailForLogging";
 import {
-  ALLOWED_AVATAR_EXTENSIONS,
-  ALLOWED_AVATAR_MIME_TYPES,
-  MAX_AVATAR_SIZE_BYTES,
-} from "@/lib/constants/profiles";
+  AuthJsonParseError,
+  parseAuthJsonRequestBody,
+} from "@/features/auth/lib/parseAuthJsonRequestBody";
+import { signupApiSchema } from "@/features/auth/signup/schema/signupApiSchema";
+import { canonicalizeEmail } from "@/features/auth/utils/canonicalizeEmail";
+import { failureResponse, successResponse } from "@/lib/api/response";
 import { ROUTES } from "@/lib/constants/routes";
-import { STORAGE_BUCKETS } from "@/lib/constants/storageBuckets";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getClientIp } from "@/lib/utils/getClientIp";
 import { VALIDATION_REASON } from "@/lib/validation/reasons";
 
-/**
- * JSON 파싱 실패를 명확하게 구분하기 위한 커스텀 에러
- *
- * 목적:
- * - request.json() 실패를 일반 에러와 구분
- * - validation 이전 단계에서 동일한 실패 응답을 반환하기 위함
- */
-class JsonParseError extends Error {}
-
-/**
- * 요청 파싱 함수
- *
- * 역할:
- * - multipart/form-data와 JSON 요청을 모두 처리
- * - avatarFile을 별도로 분리하여 반환
- *
- * 보안 관점:
- * - 이 단계는 계정 상태와 무관한 입력 처리 단계
- * - 어떤 경우에도 계정 존재 여부와 연결되면 안됨
- */
-async function parseRequest(
-  request: NextRequest,
-): Promise<{ body: unknown; avatarFile: File | null }> {
-  const contentType = request.headers.get("content-type") ?? "";
-
-  /**
-   * multipart 요청 처리 (이미지 포함)
-   */
-  if (contentType.includes("multipart/form-data")) {
-    const formData = await request.formData();
-
-    /**
-     * agreements는 JSON 문자열로 전달되므로 파싱 필요
-     * 실패 시 null로 처리 (validation 단계에서 처리)
-     */
-    const agreementsRaw = formData.get("agreements");
-    let agreements: unknown = null;
-
-    try {
-      agreements =
-        typeof agreementsRaw === "string" ? JSON.parse(agreementsRaw) : null;
-    } catch {
-      agreements = null;
-    }
-
-    const body = {
-      email: formData.get("email"),
-      password: formData.get("password"),
-      nickname: formData.get("nickname"),
-      agreements,
-    };
-
-    /**
-     * avatarFile은 File 타입인지 검증 후 추출
-     */
-    const imageEntry = formData.get("avatarFile");
-    const avatarFile = imageEntry instanceof File ? imageEntry : null;
-
-    return { body, avatarFile };
-  }
-
-  /**
-   * JSON 요청 처리
-   *
-   * ⚠️ malformed JSON은 별도로 처리 필요
-   */
-  let body: unknown;
-
-  try {
-    body = await request.json();
-  } catch {
-    throw new JsonParseError();
-  }
-
-  return { body, avatarFile: null };
-}
-
-/**
- * 아바타 파일 유효성 검사
- *
- * 검증 항목:
- * - MIME 타입
- * - 확장자
- * - 파일 크기
- *
- * 목적:
- * - 잘못된 파일 업로드 방지
- * - 서버 리소스 보호
- */
-function validateAvatarFile(file: File): boolean {
-  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-
-  return (
-    ALLOWED_AVATAR_MIME_TYPES.includes(file.type) &&
-    ALLOWED_AVATAR_EXTENSIONS.includes(ext) &&
-    file.size <= MAX_AVATAR_SIZE_BYTES
-  );
-}
-
-/**
- * 아바타 업로드 처리
- *
- * 흐름:
- * 1. 파일 검증
- * 2. Storage 업로드
- * 3. public URL 생성
- * 4. profiles 테이블 업데이트
- * 5. 실패 시 롤백
- *
- * 보안/설계 포인트:
- * - 업로드 실패는 회원가입 실패로 이어지지 않음
- * - 외부 응답에는 절대 영향을 주지 않음 (AE 방지)
- */
-async function uploadAvatar(
-  supabase: ReturnType<typeof createAdminClient>,
-  avatarFile: File,
-  userId: string,
-): Promise<string | null> {
-  if (!validateAvatarFile(avatarFile)) {
-    console.warn("Invalid avatar file rejected");
-    return null;
-  }
-
-  const ext = avatarFile.name.split(".").pop()?.toLowerCase() ?? "jpg";
-  const uploadPath = `${userId}/${crypto.randomUUID()}.${ext}`;
-
-  /**
-   * Storage 업로드
-   */
-  const { data: uploadData, error: uploadError } = await supabase.storage
-    .from(STORAGE_BUCKETS.AVATARS)
-    .upload(uploadPath, avatarFile);
-
-  if (uploadError || !uploadData) {
-    console.error("Failed to upload avatar file", {
-      userId,
-      uploadError,
-    });
-    return null;
-  }
-
-  /**
-   * public URL 생성
-   */
-  const { data: urlData } = supabase.storage
-    .from(STORAGE_BUCKETS.AVATARS)
-    .getPublicUrl(uploadData.path);
-
-  const avatarUrl = urlData.publicUrl;
-
-  /**
-   * profiles 테이블 업데이트
-   */
-  const { error: updateError } = await supabase
-    .from("profiles")
-    .update({ avatar_url: avatarUrl })
-    .eq("id", userId);
-
-  /**
-   * DB 업데이트 실패 시 롤백
-   */
-  if (updateError) {
-    const { error: removeError } = await supabase.storage
-      .from(STORAGE_BUCKETS.AVATARS)
-      .remove([uploadData.path]);
-
-    if (removeError) {
-      console.error("Failed to rollback uploaded avatar file", {
-        userId,
-        path: uploadData.path,
-        updateError,
-        removeError,
-      });
-    } else {
-      console.warn("Rolled back uploaded avatar file after DB update failure", {
-        userId,
-        path: uploadData.path,
-        updateError,
-      });
-    }
-
-    return null;
-  }
-
-  return avatarUrl;
-}
 /**
  * 회원가입 핵심 로직
  *
@@ -217,14 +31,10 @@ async function uploadAvatar(
  */
 async function resolveSignupResponse(request: NextRequest): Promise<Response> {
   const makeSignupSuccess = (email: string) =>
-    successResponse(
-      AUTH_API_CODES.SIGNUP_SUCCESS,
-      {
-        email,
-        redirectTo: ROUTES.VERIFY_EMAIL,
-      },
-      { status: 200 },
-    );
+    successResponse(AUTH_API_CODES.SIGNUP_SUCCESS, {
+      email,
+      redirectTo: ROUTES.VERIFY_EMAIL,
+    });
 
   /**
    * 요청 IP 추출 (rate limit key)
@@ -244,15 +54,13 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
   }
 
   let body: unknown;
-  let avatarFile: File | null;
-
   try {
-    ({ body, avatarFile } = await parseRequest(request));
+    body = await parseAuthJsonRequestBody(request);
   } catch (e) {
     /**
      * malformed JSON 처리
      */
-    if (e instanceof JsonParseError) {
+    if (e instanceof AuthJsonParseError) {
       return failureResponse(AUTH_API_CODES.SIGNUP_INVALID_INPUT, {
         errors: [{ field: "body", reason: VALIDATION_REASON.INVALID_FORMAT }],
       });
@@ -267,12 +75,14 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
 
   if (!parsed.success) {
     return failureResponse(AUTH_API_CODES.SIGNUP_INVALID_INPUT, {
-      errors: mapSignupValidationErrors(parsed.error, body),
+      errors: mapAuthValidationErrors(parsed.error, body),
     });
   }
 
   const { email, password, nickname } = parsed.data;
-  const normalizedEmail = email.toLowerCase();
+
+  const canonicalEmail = canonicalizeEmail(email);
+  const maskedEmail = maskEmailForLogging(canonicalEmail);
 
   /**
    * Request eligibility check — IP, email short, email long 에 대한 통합 판별
@@ -283,7 +93,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
    * - AND evaluation: 세 조건(IP, short, long) 모두 통과해야 허용
    * - Observability: 차단 시에만 내부 로그 기록 (raw IP/email 노출 금지)
    */
-  const eligibility = checkRequestEligibility("signup", ip, normalizedEmail);
+  const eligibility = checkRequestEligibility("signup", ip, canonicalEmail);
   if (!eligibility.allowed) {
     return failureResponse(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
   }
@@ -294,7 +104,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
    * ⚠️ 중요:
    * - 외부 응답은 반드시 동일해야 함
    */
-  const existingUser = await getUserByEmail(normalizedEmail);
+  const existingUser = await getUserByEmail(canonicalEmail);
 
   /**
    * [기존 사용자 - 미인증]
@@ -305,16 +115,17 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
    * - 링크 클릭 시 "이메일 인증"과 "로그인"을 한 번에 처리한다.
    */
   if (existingUser && existingUser.email_confirmed_at === null) {
+    const deliveryEmail = existingUser?.email ?? email;
     try {
       await issueAuthEmailLinkAndSend({
         type: "magiclink", // 로그인 인증 링크 생성
-        email: normalizedEmail,
+        email: deliveryEmail,
       });
     } catch {
-      console.warn("이메일 재발송 실패 (무시됨)", { email: normalizedEmail });
+      console.warn("이메일 재발송 실패 (무시됨)", { maskedEmail });
     }
 
-    return makeSignupSuccess(normalizedEmail);
+    return makeSignupSuccess(email);
   }
 
   /**
@@ -324,18 +135,19 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
    * notify ticket 없이 magiclink로 통일한다.
    */
   if (existingUser && existingUser.email_confirmed_at !== null) {
+    const deliveryEmail = existingUser?.email ?? email;
     try {
       await issueAuthEmailLinkAndSend({
         type: "magiclink",
-        email: normalizedEmail,
+        email: deliveryEmail,
       });
     } catch {
       console.warn("인증 완료 사용자 이메일 발송 실패 (무시됨)", {
-        email: normalizedEmail,
+        maskedEmail,
       });
     }
 
-    return makeSignupSuccess(normalizedEmail);
+    return makeSignupSuccess(email);
   }
 
   /**
@@ -364,29 +176,26 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
    * 발송되어 중복 전송이 발생할 수 있으므로, 설정 전제를 유지해야 한다.
    * 설정 변경 시 signup 메일 발송 회귀 테스트를 반드시 수행한다.
    */
-  const { data: createdData, error: createUserError } =
-    await adminClient.auth.admin.createUser({
-      email: normalizedEmail,
-      password,
-      email_confirm: false,
-      user_metadata: { nickname },
-    });
+  const { error: createUserError } = await adminClient.auth.admin.createUser({
+    email: email, // raw email — auth.users에 사용자 입력 보존
+    password,
+    email_confirm: false,
+    user_metadata: { nickname, canonical_email: canonicalEmail }, // trigger가 profiles에 기록
+  });
 
   if (createUserError) {
     console.error("Supabase admin.createUser failed", {
-      email: normalizedEmail,
+      maskedEmail,
       message: createUserError.message,
       status: createUserError.status,
       code: createUserError.code,
       name: createUserError.name,
     });
-    return makeSignupSuccess(normalizedEmail);
+    return makeSignupSuccess(email); // raw email 응답
   }
 
-  const signupUser = createdData.user;
-
   const { data, error } = await adminClient.auth.admin.generateLink({
-    email: normalizedEmail,
+    email: email, // raw email — auth.users의 실제 email
     type: "magiclink",
     options: {
       data: { nickname },
@@ -395,32 +204,30 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
 
   if (error) {
     console.error("Supabase generateLink(magiclink) failed", {
-      email: normalizedEmail,
+      maskedEmail,
       message: error.message,
       status: error.status,
       code: error.code,
       name: error.name,
     });
 
-    return makeSignupSuccess(normalizedEmail);
+    return makeSignupSuccess(email); // raw email 응답
   }
 
   const tokenHash = data.properties?.hashed_token;
 
   if (!tokenHash) {
     console.error("Supabase generateLink(magiclink) returned no hashed token", {
-      email: normalizedEmail,
+      maskedEmail,
     });
-    return makeSignupSuccess(normalizedEmail);
+    return makeSignupSuccess(email); // raw email 응답
   }
 
-  const signupUserEmail = signupUser?.email ?? normalizedEmail;
-
   try {
-    await sendAuthEmail(normalizedEmail, tokenHash, "magiclink");
+    await sendAuthEmail(email, tokenHash, "magiclink"); // raw email 발송
   } catch (error) {
     console.error("Failed to send signup magiclink email", {
-      email: normalizedEmail,
+      maskedEmail,
       error,
     });
     // AE 방어: 이메일 발송 실패를 외부에 노출하지 않는다.
@@ -428,20 +235,9 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
   }
 
   /**
-   * 아바타 업로드 (side-effect)
-   *
-   * 응답 시간에서 upload latency를 제거하기 위해 after()로 응답 후 처리한다.
-   * 실패해도 이미 응답이 전송된 이후이므로 외부 응답에 영향을 주지 않는다.
-   */
-  if (avatarFile && signupUser?.id) {
-    const userId = signupUser.id;
-    after(() => uploadAvatar(adminClient, avatarFile, userId));
-  }
-
-  /**
    * 최종 성공 응답 (완전 통일)
    */
-  return makeSignupSuccess(signupUserEmail);
+  return makeSignupSuccess(email); // raw email 응답
 }
 
 /**

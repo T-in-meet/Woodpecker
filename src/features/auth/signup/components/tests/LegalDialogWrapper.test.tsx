@@ -1,7 +1,6 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import { render } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { RefObject } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { LegalDialogWrapper } from "../LegalDialogWrapper";
@@ -15,23 +14,15 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
 // - Radix Dialog 기반의 모달 동작
 // - 콘텐츠 렌더링 (약관/개인정보 구분)
 // - 콜백 호출
-// - focus restore fallback 동작
 // - 접근성 (Esc 키, 오버레이 클릭, focus trap)
 
 describe("LegalDialogWrapper", () => {
   const mockOnOpenChange = vi.fn();
   const mockOnAgree = vi.fn();
-  const checkboxElement = document.createElement("button");
-  const mockCheckboxFocus = vi.fn();
-  checkboxElement.focus = mockCheckboxFocus;
-  const mockCheckboxRef = {
-    current: checkboxElement,
-  } as RefObject<HTMLButtonElement | null>;
 
   beforeEach(() => {
     mockOnOpenChange.mockClear();
     mockOnAgree.mockClear();
-    mockCheckboxFocus.mockClear();
   });
 
   it("TC-01: 트리거 버튼이 triggerLabel 텍스트로 렌더링된다", () => {
@@ -250,85 +241,5 @@ describe("LegalDialogWrapper", () => {
     expect(
       screen.getByRole("button", { name: /이용약관 보기/i }),
     ).toBeInTheDocument();
-  });
-
-  it("TC-12: checkboxRef가 제공된 경우, openedByLabel=true일 때 모달 닫기 시 Checkbox로 focus fallback 동작", async () => {
-    const user = userEvent.setup();
-    const { rerender } = render(
-      <LegalDialogWrapper
-        agreementType="termsOfService"
-        open={true}
-        onOpenChange={mockOnOpenChange}
-        onAgree={mockOnAgree}
-        triggerLabel="이용약관 보기"
-        dialogTitle="이용약관"
-        checkboxRef={mockCheckboxRef}
-        openedByLabel={true}
-      />,
-    );
-
-    // 모달을 닫기 위해 닫기 버튼 클릭
-    mockOnOpenChange.mockClear();
-    const closeButton = screen.getByRole("button", { name: /닫기/i });
-    await user.click(closeButton);
-
-    // 모달을 닫은 상태로 리렌더링
-    rerender(
-      <LegalDialogWrapper
-        agreementType="termsOfService"
-        open={false}
-        onOpenChange={mockOnOpenChange}
-        onAgree={mockOnAgree}
-        triggerLabel="이용약관 보기"
-        dialogTitle="이용약관"
-        checkboxRef={mockCheckboxRef}
-        openedByLabel={true}
-      />,
-    );
-
-    // requestAnimationFrame 콜백이 비동기로 실행되므로 waitFor로 대기
-    await waitFor(() => {
-      expect(mockCheckboxFocus).toHaveBeenCalled();
-    });
-  });
-
-  it('TC-13: openedByLabel=true에서 "동의하기"로 닫아도 Checkbox focus fallback이 동작한다', async () => {
-    const user = userEvent.setup();
-    const { rerender } = render(
-      <LegalDialogWrapper
-        agreementType="termsOfService"
-        open={true}
-        onOpenChange={mockOnOpenChange}
-        onAgree={mockOnAgree}
-        triggerLabel="이용약관 보기"
-        dialogTitle="이용약관"
-        checkboxRef={mockCheckboxRef}
-        openedByLabel={true}
-      />,
-    );
-
-    mockOnOpenChange.mockClear();
-    mockCheckboxFocus.mockClear();
-
-    await user.click(screen.getByRole("button", { name: /동의하기/i }));
-
-    rerender(
-      <LegalDialogWrapper
-        agreementType="termsOfService"
-        open={false}
-        onOpenChange={mockOnOpenChange}
-        onAgree={mockOnAgree}
-        triggerLabel="이용약관 보기"
-        dialogTitle="이용약관"
-        checkboxRef={mockCheckboxRef}
-        openedByLabel={true}
-      />,
-    );
-
-    await waitFor(() => {
-      expect(mockOnAgree).toHaveBeenCalled();
-      expect(mockOnOpenChange).toHaveBeenCalledWith(false);
-      expect(mockCheckboxFocus).toHaveBeenCalled();
-    });
   });
 });

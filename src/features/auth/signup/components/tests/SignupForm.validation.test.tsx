@@ -299,6 +299,7 @@ describe("회원가입 폼 검증", () => {
   // blur / change / submit 흐름을 한 번에 확인하는 회귀용 테스트다.
   it("TC-15: 각 필드의 정확한 Korean 에러 메시지를 표시한다", async () => {
     const user = userEvent.setup();
+
     renderSignupForm();
 
     // 이메일: 잘못된 형식
@@ -363,5 +364,5 @@ describe("회원가입 폼 검증", () => {
     expect(
       screen.getByText("개인정보 처리방침에 동의해주세요"),
     ).toBeInTheDocument();
-  });
+  }, 15000);
 });

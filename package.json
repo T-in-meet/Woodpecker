@@ -66,6 +66,7 @@
     "@commitlint/cli": "^20.4.4",
     "@commitlint/config-conventional": "^20.4.4",
     "@eslint/eslintrc": "^3",
+    "@playwright/test": "^1.59.1",
     "@serwist/next": "^9.5.7",
     "@tailwindcss/postcss": "^4",
     "@testing-library/jest-dom": "^6.9.1",
