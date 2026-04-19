@@ -28,7 +28,6 @@ import { signupApiSchema } from "@/features/auth/signup/schema/signupApiSchema";
 import { canonicalizeEmail } from "@/features/auth/utils/canonicalizeEmail";
 import { failureResponse, successResponse } from "@/lib/api/response";
 import { ROUTES } from "@/lib/constants/routes";
-import { logError, logWarn } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getClientIp } from "@/lib/utils/getClientIp";
 import { VALIDATION_REASON } from "@/lib/validation/reasons";
@@ -156,8 +155,20 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
         type: "magiclink", // 로그인 인증 링크 생성
         email: deliveryEmail,
       });
-    } catch {
-      logWarn({ event: "signup-email-resend-failed", maskedEmail });
+    } catch (error) {
+      const { errorMessage, errorName } = normalizeUnknownError(error);
+
+      logAuthError(AUTH_EVENTS.AUTH_SIGNUP_FAILED, {
+        path: request.nextUrl.pathname,
+        method: request.method,
+        status: 200,
+        provider: "email",
+        result: "failure",
+        reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+        maskedEmail,
+        errorMessage,
+        errorName,
+      });
     }
 
     return makeSignupSuccess(email);
@@ -176,8 +187,20 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
         type: "magiclink",
         email: deliveryEmail,
       });
-    } catch {
-      logWarn({ event: "signup-email-send-failed", maskedEmail });
+    } catch (error) {
+      const { errorMessage, errorName } = normalizeUnknownError(error);
+
+      logAuthError(AUTH_EVENTS.AUTH_SIGNUP_FAILED, {
+        path: request.nextUrl.pathname,
+        method: request.method,
+        status: 200,
+        provider: "email",
+        result: "failure",
+        reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+        maskedEmail,
+        errorMessage,
+        errorName,
+      });
     }
 
     return makeSignupSuccess(email);
@@ -217,13 +240,19 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
   });
 
   if (createUserError) {
-    logError({
-      event: "signup-create-user-failed",
+    logAuthError(AUTH_EVENTS.AUTH_SIGNUP_FAILED, {
+      path: request.nextUrl.pathname,
+      method: request.method,
+      status: 200,
+      provider: "email",
+      result: "failure",
+      reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
       maskedEmail,
       errorMessage: createUserError.message,
       errorName: createUserError.name,
-      errorCode: createUserError.code ?? undefined,
+      ...(createUserError.code ? { errorCode: createUserError.code } : {}),
     });
+
     return makeSignupSuccess(email); // raw email 응답
   }
 
@@ -236,12 +265,17 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
   });
 
   if (error) {
-    logError({
-      event: "signup-generate-link-failed",
+    logAuthError(AUTH_EVENTS.AUTH_SIGNUP_FAILED, {
+      path: request.nextUrl.pathname,
+      method: request.method,
+      status: 200,
+      provider: "email",
+      result: "failure",
+      reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
       maskedEmail,
       errorMessage: error.message,
       errorName: error.name,
-      errorCode: error.code ?? undefined,
+      ...(error.code ? { errorCode: error.code } : {}),
     });
 
     return makeSignupSuccess(email); // raw email 응답
@@ -250,7 +284,16 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
   const tokenHash = data.properties?.hashed_token;
 
   if (!tokenHash) {
-    logError({ event: "signup-no-token-hash", maskedEmail });
+    logAuthError(AUTH_EVENTS.AUTH_SIGNUP_FAILED, {
+      path: request.nextUrl.pathname,
+      method: request.method,
+      status: 200,
+      provider: "email",
+      result: "failure",
+      reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+      maskedEmail,
+    });
+
     return makeSignupSuccess(email); // raw email 응답
   }
 
@@ -258,8 +301,14 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
     await sendAuthEmail(email, tokenHash, "magiclink"); // raw email 발송
   } catch (sendError) {
     const { errorMessage, errorName } = normalizeUnknownError(sendError);
-    logError({
-      event: "signup-send-email-failed",
+
+    logAuthError(AUTH_EVENTS.AUTH_SIGNUP_FAILED, {
+      path: request.nextUrl.pathname,
+      method: request.method,
+      status: 200,
+      provider: "email",
+      result: "failure",
+      reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
       maskedEmail,
       errorMessage,
       errorName,
