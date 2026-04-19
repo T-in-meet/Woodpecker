@@ -621,10 +621,6 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
                           setTermsModalOpen(true);
                           return;
                         }
-
-                        // interactionEnabled=true: 키보드로 직접 토글
-                        e.preventDefault();
-                        field.onChange(!field.value);
                       }}
                       onBlur={field.onBlur}
                       aria-disabled={
@@ -735,10 +731,6 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
                           setPrivacyModalOpen(true);
                           return;
                         }
-
-                        // interactionEnabled=true: 키보드로 직접 토글
-                        e.preventDefault();
-                        field.onChange(!field.value);
                       }}
                       onBlur={field.onBlur}
                       aria-disabled={
