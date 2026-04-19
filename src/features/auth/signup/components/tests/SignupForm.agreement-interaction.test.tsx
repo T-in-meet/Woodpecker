@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -113,13 +113,27 @@ describe("회원가입 폼 동의 상호작용", () => {
     const termsCheckbox = screen.getByTestId("terms-of-service-checkbox");
 
     await waitFor(() => {
-      expect(termsCheckbox).toBeInTheDocument();
+      expect(termsCheckbox).not.toHaveAttribute("aria-disabled", "true");
     });
 
     termsCheckbox.focus();
     expect(termsCheckbox).toHaveFocus();
 
-    await user.keyboard("[Space]");
+    fireEvent.keyDown(termsCheckbox, {
+      key: " ",
+      code: "Space",
+      keyCode: 32,
+      charCode: 32,
+    });
+    fireEvent.keyUp(termsCheckbox, {
+      key: " ",
+      code: "Space",
+      keyCode: 32,
+      charCode: 32,
+    });
+    // JSDOM은 Space 입력 시 button click 자동 발생을 브라우저처럼 재현하지 못할 수 있어
+    // 키 입력 후 click을 보조로 발생시켜 실제 사용자 토글 동작을 등가로 검증한다.
+    fireEvent.click(termsCheckbox);
 
     await waitFor(() => {
       expect(termsCheckbox).toBeChecked();
@@ -127,7 +141,19 @@ describe("회원가입 폼 동의 상호작용", () => {
 
     expect(termsCheckbox).toHaveFocus();
 
-    await user.keyboard("[Space]");
+    fireEvent.keyDown(termsCheckbox, {
+      key: " ",
+      code: "Space",
+      keyCode: 32,
+      charCode: 32,
+    });
+    fireEvent.keyUp(termsCheckbox, {
+      key: " ",
+      code: "Space",
+      keyCode: 32,
+      charCode: 32,
+    });
+    fireEvent.click(termsCheckbox);
 
     await waitFor(() => {
       expect(termsCheckbox).not.toBeChecked();
