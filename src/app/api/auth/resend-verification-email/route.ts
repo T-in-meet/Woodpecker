@@ -26,7 +26,6 @@ import { resendVerificationEmail } from "@/features/auth/resend-verification-ema
 import { resendApiSchema } from "@/features/auth/resend-verification-email/schema/resendApiSchema";
 import { canonicalizeEmail } from "@/features/auth/utils/canonicalizeEmail";
 import { failureResponse, successResponse } from "@/lib/api/response";
-import { logError } from "@/lib/logger";
 import { getClientIp } from "@/lib/utils/getClientIp";
 import { VALIDATION_REASON } from "@/lib/validation/reasons";
 
@@ -86,7 +85,7 @@ async function resolveResendResponse(request: NextRequest): Promise<Response> {
     body = await parseAuthJsonRequestBody(request);
   } catch (e) {
     if (e instanceof AuthJsonParseError) {
-      logAuthError(AUTH_EVENTS.AUTH_SIGNUP_FAILED, {
+      logAuthError(AUTH_EVENTS.AUTH_RESEND_FAILED, {
         path: request.nextUrl.pathname,
         method: request.method,
         status: 400,
@@ -110,7 +109,7 @@ async function resolveResendResponse(request: NextRequest): Promise<Response> {
   const parsed = resendApiSchema.safeParse(body);
 
   if (!parsed.success) {
-    logAuthError(AUTH_EVENTS.AUTH_SIGNUP_FAILED, {
+    logAuthError(AUTH_EVENTS.AUTH_RESEND_FAILED, {
       path: request.nextUrl.pathname,
       method: request.method,
       status: 400,
@@ -185,9 +184,15 @@ async function resolveResendResponse(request: NextRequest): Promise<Response> {
       await resendVerificationEmail(deliveryEmail);
     } catch (resendError) {
       const { errorMessage, errorName } = normalizeUnknownError(resendError);
-      logError({
-        event: "resend-email-side-effect-failed",
-        maskedEmail: maskEmailForLogging(canonicalEmail),
+
+      logAuthError(AUTH_EVENTS.AUTH_RESEND_FAILED, {
+        path: request.nextUrl.pathname,
+        method: request.method,
+        status: 200,
+        provider: "email",
+        result: "failure",
+        reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+        maskedEmail: canonicalEmailForLog,
         errorMessage,
         errorName,
       });
@@ -230,7 +235,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       result: "success",
     });
   } else if (wasException) {
-    logAuthError(AUTH_EVENTS.AUTH_SIGNUP_FAILED, {
+    logAuthError(AUTH_EVENTS.AUTH_RESEND_FAILED, {
       path: request.nextUrl.pathname,
       method: request.method,
       status: response.status,
