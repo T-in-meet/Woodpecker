@@ -18,6 +18,10 @@
  * - 이메일 long window: 사용자 수준 계정 rate limit (회원가입 + 재전송 공유)
  */
 
+import {
+  AUTH_LOG_REASONS,
+  type AuthLogReason,
+} from "../constants/authLogReasons";
 import { evaluateSlidingWindow } from "../utils/rateLimit.utils";
 import {
   emailStore,
@@ -83,9 +87,22 @@ export const EMAIL_LONG_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
  *
  */
 
+export type BlockedBy = "ip" | "emailShort" | "emailLong";
+
 export type EligibilityResult =
   | { allowed: true }
-  | { allowed: false; blockedBy: "ip" | "emailShort" | "emailLong" };
+  | { allowed: false; blockedBy: BlockedBy };
+
+export function mapBlockedByToReason(blockedBy: BlockedBy): AuthLogReason {
+  switch (blockedBy) {
+    case "ip":
+      return AUTH_LOG_REASONS.RATE_LIMIT_IP;
+    case "emailShort":
+      return AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT;
+    case "emailLong":
+      return AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG;
+  }
+}
 
 export function checkRequestEligibility(
   route: "signup" | "resend",
@@ -143,7 +160,7 @@ export function checkRequestEligibility(
   if (!allowed) {
     // 차단 차원은 ip → emailShort → emailLong 우선순위로 결정
     // route handler가 blockedBy를 받아 AUTH_RATE_LIMIT_BLOCKED 이벤트를 로깅한다
-    const blockedBy: "ip" | "emailShort" | "emailLong" = !ipOk
+    const blockedBy: BlockedBy = !ipOk
       ? "ip"
       : !emailShortOk
         ? "emailShort"

@@ -15,6 +15,7 @@ import {
 import {
   checkIpRateLimitPrecheck,
   checkRequestEligibility,
+  mapBlockedByToReason,
 } from "@/features/auth/lib/checkRequestEligibility";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { mapAuthValidationErrors } from "@/features/auth/lib/mapAuthValidationErrors";
@@ -120,18 +121,13 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
    */
   const eligibility = checkRequestEligibility("signup", ip, canonicalEmail);
   if (!eligibility.allowed) {
-    logAuthEvent(AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED, {
+    logAuthEvent(AUTH_EVENTS.AUTH_SIGNUP_COMPLETED, {
       path: request.nextUrl.pathname,
       method: request.method,
       status: 429,
       provider: "email",
       result: "blocked",
-      reasonCode:
-        eligibility.blockedBy === "ip"
-          ? AUTH_LOG_REASONS.RATE_LIMIT_IP
-          : eligibility.blockedBy === "emailShort"
-            ? AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT
-            : AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG,
+      reasonCode: mapBlockedByToReason(eligibility.blockedBy),
       maskedEmail,
     });
     return failureResponse(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
