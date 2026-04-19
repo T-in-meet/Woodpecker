@@ -137,6 +137,36 @@ describe("NoteDetailPage", () => {
 
     expect(screen.getByText(/다음 백지 테스트 예정/)).toBeInTheDocument();
     expect(
+      screen.getByText(/원하면 지금 미리 진행할 수 있습니다\./),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "백지 테스트 시작" }),
+    ).toHaveAttribute("href", getNoteReviewRoute("note-123"));
+  });
+
+  it("shows a completed badge when the note finished every review round", async () => {
+    createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
+    getNoteByIdMock.mockResolvedValue({
+      id: "note-123",
+      title: "Completed note",
+      content: "note body",
+      language: "markdown",
+      next_review_at: null,
+      review_round: 3,
+      created_at: "2026-03-29T00:00:00.000Z",
+      updated_at: "2026-03-29T01:00:00.000Z",
+      user_id: "user-123",
+    });
+
+    render(
+      await NoteDetailPage({ params: Promise.resolve({ noteId: "note-123" }) }),
+    );
+
+    expect(screen.getByText("학습 완료")).toBeInTheDocument();
+    expect(
+      screen.getByText("1-3-7 복습을 모두 마쳤습니다."),
+    ).toBeInTheDocument();
+    expect(
       screen.queryByRole("link", { name: "백지 테스트 시작" }),
     ).not.toBeInTheDocument();
   });
