@@ -125,7 +125,7 @@ describe("회원가입 폼 동의 상호작용", () => {
     await user.keyboard(" ");
 
     await waitFor(() => {
-      expect(termsCheckbox).toHaveAttribute("aria-checked", "true");
+      expect(termsCheckbox).toHaveAttribute("data-state", "checked");
     });
 
     await waitFor(() => {
@@ -135,7 +135,7 @@ describe("회원가입 폼 동의 상호작용", () => {
     await user.keyboard(" ");
 
     await waitFor(() => {
-      expect(termsCheckbox).toHaveAttribute("aria-checked", "false");
+      expect(termsCheckbox).toHaveAttribute("data-state", "unchecked");
     });
 
     await waitFor(() => {
