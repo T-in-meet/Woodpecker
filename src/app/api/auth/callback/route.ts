@@ -141,9 +141,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (!isValidMagiclinkInput(input)) {
     // 주의:
     // 다른 *_FAILED 이벤트와 달리
-    // AUTH_CALLBACK_FAILED는 "예외"가 아니라
+    // AUTH_CALLBACK_REJECTED는 "예외"가 아니라
     // verify-email로 귀결되는 정상 분기 결과를 의미한다.
-    logCallback(AUTH_EVENTS.AUTH_CALLBACK_FAILED, {
+    logCallback(AUTH_EVENTS.AUTH_CALLBACK_REJECTED, {
       path: request.nextUrl.pathname,
       method: request.method,
       status: 307,
@@ -157,7 +157,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
    */
   const verification = await verifyMagiclinkToken(input.tokenHash);
   if (!verification.ok) {
-    logCallback(AUTH_EVENTS.AUTH_CALLBACK_FAILED, {
+    logCallback(AUTH_EVENTS.AUTH_CALLBACK_REJECTED, {
       path: request.nextUrl.pathname,
       method: request.method,
       status: 307,

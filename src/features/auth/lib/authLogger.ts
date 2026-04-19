@@ -92,7 +92,7 @@ export function logAuthError(
  *
  * 중요:
  * - callback 흐름은 다른 auth 흐름과 다르게 처리된다.
- * - AUTH_CALLBACK_FAILED는 시스템 에러를 의미하지 않는다.
+ * - AUTH_CALLBACK_REJECTED는 시스템 에러를 의미하지 않는다.
  *   (잘못된 링크, 만료된 토큰 등 "예상 가능한 분기"를 의미한다)
  *
  * 설계 의도:
@@ -100,7 +100,7 @@ export function logAuthError(
  * - 따라서 ERROR가 아니라 INFO로 기록한다.
  *
  * 금지:
- * - AUTH_CALLBACK_FAILED를 예외/장애 로그로 취급하지 말 것
+ * - AUTH_CALLBACK_REJECTED를 예외/장애 로그로 취급하지 말 것
  * - logError로 보내지 말 것
  */
 export function logCallback(
