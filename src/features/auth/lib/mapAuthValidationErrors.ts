@@ -1,9 +1,8 @@
 import type { ZodError } from "zod";
 
-import type { ValidationError } from "@/features/auth/lib/response";
 import { VALIDATION_REASON } from "@/lib/validation/reasons";
-
-import { ValidationReason } from "../../../../lib/validation/validation.types";
+import { ValidationReason } from "@/lib/validation/validation.types";
+import { ValidationError } from "@/lib/validation/validation-error.types";
 
 /**
  * Zod issue.path를 따라 원본 input에서 실제 값을 조회하는 유틸 함수
@@ -130,6 +129,7 @@ function mapIssueToReason(
 
 /**
  * ZodError를 API 응답용 ValidationError[]로 변환
+ * auth API 공통 validation 매퍼
  *
  * 반환 형식:
  * - field: issue.path를 "."으로 join한 문자열
@@ -141,7 +141,7 @@ function mapIssueToReason(
  *
  * path가 비어 있으면 field는 "unknown"으로 처리
  */
-export function mapSignupValidationErrors(
+export function mapAuthValidationErrors(
   zodError: ZodError,
   input: unknown,
 ): ValidationError[] {

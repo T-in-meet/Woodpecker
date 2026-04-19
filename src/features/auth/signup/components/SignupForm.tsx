@@ -1,8 +1,9 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Loader2 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -10,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { UNKNOWN_ERROR_MESSAGE } from "@/features/auth/errors//unknownError";
 import {
   GLOBAL_ERROR_MESSAGES,
   isGlobalError,
@@ -19,6 +19,7 @@ import {
   isRateLimitError,
   RATE_LIMIT_TOAST_MESSAGE,
 } from "@/features/auth/errors/rateLimitError";
+import { UNKNOWN_ERROR_MESSAGE } from "@/features/auth/errors/unknownError";
 import { resolveFieldName } from "@/features/auth/lib/resolveFieldName";
 import { LegalDialogWrapper } from "@/features/auth/signup/components/LegalDialogWrapper";
 import { signupFormSchema } from "@/features/auth/signup/schema/signupFormSchema";
@@ -43,6 +44,7 @@ type FormValues = z.infer<typeof signupFormSchema>;
  * - confirmPassword는 서버로 보내지 않음
  */
 type SubmitPayload = Omit<FormValues, "confirmPassword">;
+type ModalTrigger = "button" | "checkbox" | "error" | null;
 
 /**
  * SignupForm Props
@@ -75,6 +77,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
     register,
     handleSubmit,
     formState: { errors },
+    watch,
     trigger,
     getValues,
     setValue,
@@ -103,8 +106,10 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
     useState(false);
   const [termsModalOpen, setTermsModalOpen] = useState(false);
   const [privacyModalOpen, setPrivacyModalOpen] = useState(false);
-  const [termsOpenedByLabel, setTermsOpenedByLabel] = useState(false);
-  const [privacyOpenedByLabel, setPrivacyOpenedByLabel] = useState(false);
+  const [termsModalTrigger, setTermsModalTrigger] =
+    useState<ModalTrigger>(null);
+  const [privacyModalTrigger, setPrivacyModalTrigger] =
+    useState<ModalTrigger>(null);
 
   /**
    * focus fallback 대상 refs
@@ -113,6 +118,18 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
    */
   const termsCheckboxRef = useRef<HTMLButtonElement>(null);
   const privacyCheckboxRef = useRef<HTMLButtonElement>(null);
+  const termsTriggerButtonRef = useRef<HTMLButtonElement>(null);
+  const privacyTriggerButtonRef = useRef<HTMLButtonElement>(null);
+  const termsErrorButtonRef = useRef<HTMLButtonElement>(null);
+  const privacyErrorButtonRef = useRef<HTMLButtonElement>(null);
+  const submitButtonRef = useRef<HTMLButtonElement>(null);
+  const loginLinkRef = useRef<HTMLAnchorElement>(null);
+  const termsAgreeIntentRef = useRef(false);
+  const privacyAgreeIntentRef = useRef(false);
+  const prevAgreementErrorsRef = useRef({
+    terms: false,
+    privacy: false,
+  });
 
   /**
    * password / confirmPassword 분리
@@ -122,6 +139,44 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
     register("password");
   const { onChange: onConfirmChange, ...confirmPasswordRegister } =
     register("confirmPassword");
+
+  const normalizeText = (value: unknown) =>
+    typeof value === "string" ? value : "";
+  const normalizeChecked = (value: unknown) => value === true;
+
+  const [
+    rawEmail,
+    rawPassword,
+    rawConfirmPassword,
+    rawNickname,
+    rawTermsOfService,
+    rawPrivacyPolicy,
+  ] = watch([
+    "email",
+    "password",
+    "confirmPassword",
+    "nickname",
+    "termsOfService",
+    "privacyPolicy",
+  ]);
+
+  const watchedEmail = normalizeText(rawEmail);
+  const watchedPassword = normalizeText(rawPassword);
+  const watchedConfirmPassword = normalizeText(rawConfirmPassword);
+  const watchedNickname = normalizeText(rawNickname);
+  const watchedTermsOfService = normalizeChecked(rawTermsOfService);
+  const watchedPrivacyPolicy = normalizeChecked(rawPrivacyPolicy);
+
+  // 버튼의 "스타일용 활성 상태"를 나타내는 값
+  // - 실제 disabled 조건과 완전히 동일하지는 않지만, UX 일관성을 위해 일부 조건(입력 + 약관)을 공유
+  // - 제출 전 단계에서 버튼이 과도하게 활성화되어 보이는 것을 방지하기 위함
+  const isSubmitButtonVisuallyEnabled =
+    watchedEmail.trim().length > 0 &&
+    watchedPassword.trim().length > 0 &&
+    watchedConfirmPassword.trim().length > 0 &&
+    watchedNickname.trim().length > 0 &&
+    watchedTermsOfService &&
+    watchedPrivacyPolicy;
 
   /**
    * 유효한 폼 제출 시 실행
@@ -249,17 +304,83 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
     [onConfirmChange, trigger],
   );
 
+  const focusAgreementCheckbox = (
+    checkboxRef: React.RefObject<HTMLButtonElement | null>,
+  ) => {
+    requestAnimationFrame(() => {
+      checkboxRef.current?.scrollIntoView({
+        block: "center",
+        behavior: "smooth",
+      });
+      checkboxRef.current?.focus();
+    });
+  };
+
+  const focusNextAction = () => {
+    requestAnimationFrame(() => {
+      if (submitButtonRef.current && !submitButtonRef.current.disabled) {
+        submitButtonRef.current.focus();
+        return;
+      }
+      loginLinkRef.current?.focus();
+    });
+  };
+
+  const restoreFocusByTrigger = (
+    trigger: "checkbox" | "button" | "error" | null,
+    refs: {
+      checkbox: React.RefObject<HTMLButtonElement | null>;
+      button: React.RefObject<HTMLButtonElement | null>;
+      error: React.RefObject<HTMLButtonElement | null>;
+    },
+  ) => {
+    requestAnimationFrame(() => {
+      if (trigger === "checkbox") {
+        refs.checkbox.current?.focus();
+      } else if (trigger === "button") {
+        refs.button.current?.focus();
+      } else if (trigger === "error") {
+        refs.error.current?.focus();
+      }
+    });
+  };
+
   /**
    * 모달이 닫힐 때에만 interactionEnabled 활성화
    * 이유: 콘텐츠 열람 의도 확인 이후부터 직접 조작 허용 (스펙 명시)
    * 향후: 스크롤 완료 후에만 활성화하는 정책으로 강화 가능 (scrollEnforced 플래그 추가 포인트)
    */
+
+  /**
+   * intent ref reset 정책
+   * 현재: Dialog의 onOpenChange(false) 경로를 통해 항상 reset됨
+   * (agree, ESC, overlay click 등 모든 닫힘 경로가 동일하게 해당 핸들러를 탐)
+   *
+   * 따라서 현재 구현에서는 stale 상태가 남을 가능성은 낮음
+   *
+   * 주의: reset이 "닫힘 이벤트"에 의존하고 있으므로,
+   * 향후 programmatic close 또는 새로운 닫힘 경로가 추가될 경우
+   * stale 상태가 남을 수 있음
+   *
+   * 개선 방향:
+   * - closeReason("agree" | "dismiss") 기반 상태 모델로 전환
+   * - 또는 intent를 consume 시점에 즉시 reset하는 구조로 변경
+   */
   const handleTermsOpenChange = (open: boolean) => {
     setTermsModalOpen(open);
     if (!open) {
       setTermsInteractionEnabled(true);
-      // Label 경유 플래그는 닫힘 시 리셋하여 다음 오픈에서 stale 상태를 방지
-      setTermsOpenedByLabel(false);
+      if (termsAgreeIntentRef.current) {
+        termsAgreeIntentRef.current = false;
+        focusAgreementCheckbox(privacyCheckboxRef);
+      } else {
+        restoreFocusByTrigger(termsModalTrigger, {
+          checkbox: termsCheckboxRef,
+          button: termsTriggerButtonRef,
+          error: termsErrorButtonRef,
+        });
+      }
+      setTermsModalTrigger(null);
     }
   };
 
@@ -267,8 +388,17 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
     setPrivacyModalOpen(open);
     if (!open) {
       setPrivacyInteractionEnabled(true);
-      // Label 경유 플래그는 닫힘 시 리셋하여 다음 오픈에서 stale 상태를 방지
-      setPrivacyOpenedByLabel(false);
+      if (privacyAgreeIntentRef.current) {
+        privacyAgreeIntentRef.current = false;
+        focusNextAction();
+      } else {
+        restoreFocusByTrigger(privacyModalTrigger, {
+          checkbox: privacyCheckboxRef,
+          button: privacyTriggerButtonRef,
+          error: privacyErrorButtonRef,
+        });
+      }
+      setPrivacyModalTrigger(null);
     }
   };
 
@@ -277,334 +407,446 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
    * 이유: onAgree에서 setValue("termsOfService", true)를 호출하기 때문
    */
   const handleTermsAgree = () => {
+    termsAgreeIntentRef.current = true;
     setValue("termsOfService", true, { shouldValidate: true });
   };
 
   const handlePrivacyAgree = () => {
+    privacyAgreeIntentRef.current = true;
     setValue("privacyPolicy", true, { shouldValidate: true });
   };
 
+  useEffect(() => {
+    if (termsModalOpen || privacyModalOpen) {
+      return;
+    }
+
+    const hasTermsError = Boolean(errors.termsOfService);
+    const hasPrivacyError = Boolean(errors.privacyPolicy);
+    const hadTermsError = prevAgreementErrorsRef.current.terms;
+    const hadPrivacyError = prevAgreementErrorsRef.current.privacy;
+
+    const termsNewlyAppeared = hasTermsError && !hadTermsError;
+    const privacyNewlyAppeared = hasPrivacyError && !hadPrivacyError;
+
+    if (termsNewlyAppeared || privacyNewlyAppeared) {
+      requestAnimationFrame(() => {
+        if (termsNewlyAppeared) {
+          termsErrorButtonRef.current?.focus();
+          return;
+        }
+
+        privacyErrorButtonRef.current?.focus();
+      });
+    }
+
+    prevAgreementErrorsRef.current = {
+      terms: hasTermsError,
+      privacy: hasPrivacyError,
+    };
+  }, [
+    errors.termsOfService,
+    errors.privacyPolicy,
+    termsModalOpen,
+    privacyModalOpen,
+  ]);
+
   return (
-    <form
-      aria-label="회원가입"
-      className="mx-auto max-w-4xl space-y-4 mt-16 px-4"
-      onSubmit={handleSubmit(handleValidSubmit)}
-    >
-      {/* 이메일 */}
-      <div className="space-y-4">
-        <Label htmlFor="email">이메일</Label>
-        <Input
-          id="email"
-          type="email"
-          {...register("email")}
-          className={cn(!errors.email && "mb-14")}
-        />
-        {errors.email && (
-          <p role="alert" className="text-red-500">
-            {errors.email.message}
-          </p>
-        )}
-      </div>
-
-      {/* 비밀번호 */}
-      <div className="space-y-4">
-        <Label htmlFor="password">비밀번호</Label>
-        <Input
-          id="password"
-          type="password"
-          className={cn(!errors.password && "mb-14")}
-          {...passwordRegister}
-          onChange={handlePasswordChange}
-        />
-        {errors.password && (
-          <p role="alert" className="text-red-500">
-            {errors.password.message}
-          </p>
-        )}
-      </div>
-
-      {/* 비밀번호 확인 */}
-      <div className="space-y-4">
-        <Label htmlFor="confirmPassword">비밀번호 확인</Label>
-        <Input
-          id="confirmPassword"
-          type="password"
-          className={cn(!errors.confirmPassword && "mb-14")}
-          {...confirmPasswordRegister}
-          onChange={handleConfirmPasswordChange}
-        />
-        {errors.confirmPassword && (
-          <p role="alert" className="text-red-500">
-            {errors.confirmPassword.message}
-          </p>
-        )}
-      </div>
-
-      {/* 닉네임 */}
-      <div className="space-y-4">
-        <Label htmlFor="nickname">닉네임</Label>
-        <Input
-          id="nickname"
-          type="text"
-          className={cn(!errors.nickname && "mb-14")}
-          {...register("nickname")}
-        />
-        {errors.nickname && (
-          <p role="alert" className="text-red-500">
-            {errors.nickname.message}
-          </p>
-        )}
-      </div>
-
-      {/* 프로필 이미지 */}
-      <div className="space-y-4">
-        <Label htmlFor="avatarFile">
-          프로필 사진 <span>(선택)</span>
-        </Label>
-        <Input
-          id="avatarFile"
-          type="file"
-          className={cn(!errors.avatarFile && "mb-14")}
-          accept="image/jpeg,image/png,image/webp"
-          onChange={(e) => {
-            const file = e.target.files?.[0] ?? null;
-
-            /**
-             * RHF에 파일 수동 등록
-             */
-            setValue("avatarFile", file, {
-              shouldValidate: true,
-              shouldDirty: true,
-            });
-          }}
-        />
-      </div>
-
-      {/* 약관 */}
-      <div
-        data-testid="agreements-container"
-        className="grid grid-cols-1 md:grid-cols-2 gap-4"
+    <div className="my-0 md:my-4 mx-auto max-w-2xl bg-white border-0 md:border md:border-outline-variant md:rounded-xl rounded-none md:shadow-sm shadow-none overflow-hidden">
+      <form
+        aria-label="회원가입"
+        className="mx-auto max-w-4xl space-y-2 py-7 px-4 md:px-8"
+        onSubmit={handleSubmit(handleValidSubmit)}
       >
-        <p className="md:col-span-2 text-sm text-muted-foreground">
-          약관 확인 후 체크해주세요
-        </p>
-
-        {/* 이용약관 */}
-        <div data-testid="terms-of-service-field" className="space-y-2">
-          <div
-            data-testid="tos-inner-row"
-            className={cn(
-              "flex flex-col lg:flex-row lg:items-center gap-2",
-              !errors.termsOfService && "mb-8",
-            )}
-          >
-            <LegalDialogWrapper
-              agreementType="termsOfService"
-              open={termsModalOpen}
-              onOpenChange={handleTermsOpenChange}
-              onAgree={handleTermsAgree}
-              triggerLabel="이용약관 보기"
-              dialogTitle="이용약관"
-              checkboxRef={termsCheckboxRef}
-              openedByLabel={termsOpenedByLabel}
+        {/* 타이틀 */}
+        <h1 className="text-2xl font-bold text-primary tracking-tight mb-8">
+          계정 만들기
+        </h1>
+        {/* 닉네임 */}
+        <div>
+          <div className="grid grid-cols-[6.25rem_minmax(0,1fr)] gap-x-4">
+            <div className="flex items-center">
+              <Label htmlFor="nickname" className="shrink-0 min-w-25">
+                닉네임
+              </Label>
+            </div>
+            <Input
+              id="nickname"
+              type="text"
+              placeholder="닉네임을 입력하세요"
+              {...register("nickname")}
             />
+            <div />
+            {/* 에러 영역을 항상 고정 높이로 유지 — 에러 표시 여부에 따른 레이아웃 흔들림 방지 */}
+            <div className="min-h-5 mt-2">
+              {errors.nickname && (
+                <p role="alert" className="text-sm text-destructive">
+                  {errors.nickname.message}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
 
+        {/* 이메일 */}
+        <div>
+          <div className="grid grid-cols-[6.25rem_minmax(0,1fr)] gap-x-4">
+            <div className="flex items-center">
+              <Label htmlFor="email" className="shrink-0 min-w-25">
+                이메일
+              </Label>
+            </div>
+            <Input
+              id="email"
+              type="email"
+              placeholder="example@email.com"
+              {...register("email")}
+            />
+            <div />
+            {/* 에러 영역을 항상 고정 높이로 유지 — 에러 표시 여부에 따른 레이아웃 흔들림 방지 */}
+            <div className="min-h-5 mt-2">
+              {errors.email && (
+                <p role="alert" className="text-sm text-destructive">
+                  {errors.email.message}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* 비밀번호 */}
+        <div>
+          <div className="grid grid-cols-[6.25rem_minmax(0,1fr)] gap-x-4">
+            <div className="flex items-center">
+              <Label htmlFor="password" className="shrink-0 min-w-25">
+                비밀번호
+              </Label>
+            </div>
+            <Input
+              id="password"
+              type="password"
+              placeholder="8자 이상 입력하세요"
+              {...passwordRegister}
+              onChange={handlePasswordChange}
+            />
+            <div />
+            {/* 에러 영역을 항상 고정 높이로 유지 — 에러 표시 여부에 따른 레이아웃 흔들림 방지 */}
+            <div className="min-h-5 mt-2">
+              {errors.password && (
+                <p role="alert" className="text-sm text-destructive">
+                  {errors.password.message}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* 비밀번호 확인 */}
+        <div>
+          <div className="grid grid-cols-[6.25rem_minmax(0,1fr)] gap-x-4">
+            <div className="flex items-center">
+              <Label htmlFor="confirmPassword" className="shrink-0 min-w-25">
+                비밀번호 확인
+              </Label>
+            </div>
+            <Input
+              id="confirmPassword"
+              type="password"
+              placeholder="비밀번호를 다시 입력하세요"
+              {...confirmPasswordRegister}
+              onChange={handleConfirmPasswordChange}
+            />
+            <div />
+            {/* 에러 영역을 항상 고정 높이로 유지 — 에러 표시 여부에 따른 레이아웃 흔들림 방지 */}
+            <div className="min-h-5 mt-2">
+              {errors.confirmPassword && (
+                <p role="alert" className="text-sm text-destructive">
+                  {errors.confirmPassword.message}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* 약관 */}
+        <div
+          data-testid="agreements-container"
+          className="flex flex-col border rounded-lg p-4 shadow-sm"
+        >
+          <p className="md:col-span-2 text-sm text-muted-foreground mb-2">
+            약관 확인 후 체크해주세요
+          </p>
+
+          {/* 이용약관 */}
+          <div data-testid="terms-of-service-field" className="">
             <div
-              data-testid="tos-text-checkbox-group"
-              className="flex items-center gap-2"
+              data-testid="tos-inner-row"
+              className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
             >
-              <Label
-                htmlFor="termsOfService"
-                onClick={(e) => {
-                  if (!termsInteractionEnabled) {
-                    // htmlFor 연결로 인한 체크박스 자동 토글을 차단하고 모달 열기
-                    // 이유: Label 클릭이 체크박스 토글을 유발하지 않도록 인터셉트
-                    e.preventDefault();
-                    setTermsOpenedByLabel(true);
-                    setTermsModalOpen(true);
-                  }
-                }}
+              <div
+                data-testid="tos-text-checkbox-group"
+                className="flex items-center gap-2"
               >
-                이용약관에 동의합니다
-              </Label>
-
-              <Controller
-                name="termsOfService"
-                control={control}
-                render={({ field }) => (
-                  <Checkbox
-                    ref={termsCheckboxRef}
-                    id="termsOfService"
-                    data-testid="terms-of-service-checkbox"
-                    name={field.name}
-                    checked={field.value}
-                    onCheckedChange={(checked) => {
-                      // interactionEnabled=false이면 체크 변경을 막고 모달 열기
-                      // 이유: HTML disabled 금지 스펙 준수 — 인터셉트로 동일 효과 구현
-                      if (!termsInteractionEnabled) {
-                        setTermsOpenedByLabel(false);
-                        setTermsModalOpen(true);
-                        return;
+                <Controller
+                  name="termsOfService"
+                  control={control}
+                  render={({ field }) => (
+                    <Checkbox
+                      ref={termsCheckboxRef}
+                      id="termsOfService"
+                      data-testid="terms-of-service-checkbox"
+                      name={field.name}
+                      checked={field.value}
+                      onCheckedChange={(checked) => {
+                        // interactionEnabled=false이면 체크 변경을 막고 모달 열기
+                        // 이유: HTML disabled 금지 스펙 준수 — 인터셉트로 동일 효과 구현
+                        if (!termsInteractionEnabled) {
+                          setTermsModalTrigger("checkbox");
+                          setTermsModalOpen(true);
+                          return;
+                        }
+                        field.onChange(checked === true);
+                      }}
+                      onKeyDown={(e) => {
+                        // Space/Enter 키보드 입력도 마우스 클릭과 동일하게 인터셉트
+                        // 이유: 키보드로 aria-disabled 우회를 방지하고 접근성 일관성 보장
+                        if (
+                          !termsInteractionEnabled &&
+                          (e.key === " " || e.key === "Enter")
+                        ) {
+                          e.preventDefault();
+                          setTermsModalTrigger("checkbox");
+                          setTermsModalOpen(true);
+                        }
+                      }}
+                      onBlur={field.onBlur}
+                      aria-disabled={
+                        !termsInteractionEnabled ? "true" : undefined
                       }
-                      field.onChange(checked === true);
-                    }}
-                    onKeyDown={(e) => {
-                      // Space/Enter 키보드 입력도 마우스 클릭과 동일하게 인터셉트
-                      // 이유: 키보드로 aria-disabled 우회를 방지하고 접근성 일관성 보장
-                      if (
-                        !termsInteractionEnabled &&
-                        (e.key === " " || e.key === "Enter")
-                      ) {
-                        e.preventDefault();
-                        setTermsOpenedByLabel(false);
-                        setTermsModalOpen(true);
+                      aria-label={
+                        !termsInteractionEnabled
+                          ? "약관을 먼저 확인해야 체크할 수 있습니다"
+                          : undefined
                       }
-                    }}
-                    onBlur={field.onBlur}
-                    aria-disabled={
-                      !termsInteractionEnabled ? "true" : undefined
+                      aria-describedby={
+                        errors.termsOfService
+                          ? "terms-of-service-error"
+                          : undefined
+                      }
+                    />
+                  )}
+                />
+                <Label
+                  htmlFor="termsOfService"
+                  onClick={(e) => {
+                    if (!termsInteractionEnabled) {
+                      // htmlFor 연결로 인한 체크박스 자동 토글을 차단하고 모달 열기
+                      // 이유: Label 클릭이 체크박스 토글을 유발하지 않도록 인터셉트
+                      e.preventDefault();
+                      setTermsModalTrigger("checkbox");
+                      setTermsModalOpen(true);
                     }
-                    aria-label={
-                      !termsInteractionEnabled
-                        ? "약관을 먼저 확인해야 체크할 수 있습니다"
-                        : undefined
-                    }
-                    aria-describedby={
-                      errors.termsOfService
-                        ? "terms-of-service-error"
-                        : undefined
-                    }
-                  />
-                )}
+                  }}
+                >
+                  이용약관에 동의합니다
+                </Label>
+              </div>
+              <LegalDialogWrapper
+                agreementType="termsOfService"
+                open={termsModalOpen}
+                onOpenChange={handleTermsOpenChange}
+                onAgree={handleTermsAgree}
+                triggerLabel="이용약관 보기"
+                dialogTitle="이용약관"
+                triggerButtonRef={termsTriggerButtonRef}
+                onTriggerClick={() => setTermsModalTrigger("button")}
               />
+            </div>
+
+            {/* 에러 영역을 항상 고정 높이로 유지 — 에러 표시 여부에 따른 약관 간 간격 흔들림 방지 */}
+            <div className="min-h-5">
+              {errors.termsOfService && (
+                <p
+                  id="terms-of-service-error"
+                  role="alert"
+                  tabIndex={-1}
+                  className="text-sm text-destructive"
+                >
+                  {/* 에러 메시지를 클릭 가능하게 처리 — 사용자가 에러 원인을 즉시 해소할 수 있도록
+                    스펙: error_click_should_open_modal_if_possible */}
+                  <button
+                    ref={termsErrorButtonRef}
+                    type="button"
+                    className="cursor-pointer underline hover:no-underline"
+                    onClick={() => {
+                      setTermsModalTrigger("error");
+                      setTermsModalOpen(true);
+                    }}
+                  >
+                    {errors.termsOfService.message}
+                  </button>
+                </p>
+              )}
             </div>
           </div>
 
-          {errors.termsOfService && (
-            <p
-              id="terms-of-service-error"
-              role="alert"
-              className="text-red-500"
-            >
-              {errors.termsOfService.message}
-            </p>
-          )}
+          {/* 개인정보 */}
+          <div data-testid="privacy-policy-field" className="">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2">
+                <Controller
+                  name="privacyPolicy"
+                  control={control}
+                  render={({ field }) => (
+                    <Checkbox
+                      ref={privacyCheckboxRef}
+                      id="privacyPolicy"
+                      data-testid="privacy-policy-checkbox"
+                      name={field.name}
+                      checked={field.value}
+                      onCheckedChange={(checked) => {
+                        // interactionEnabled=false이면 체크 변경을 막고 모달 열기
+                        // 이유: HTML disabled 금지 스펙 준수 — 인터셉트로 동일 효과 구현
+                        if (!privacyInteractionEnabled) {
+                          setPrivacyModalTrigger("checkbox");
+                          setPrivacyModalOpen(true);
+                          return;
+                        }
+                        field.onChange(checked === true);
+                      }}
+                      onKeyDown={(e) => {
+                        // Space/Enter 키보드 입력도 마우스 클릭과 동일하게 인터셉트
+                        // 이유: 키보드로 aria-disabled 우회를 방지하고 접근성 일관성 보장
+                        if (
+                          !privacyInteractionEnabled &&
+                          (e.key === " " || e.key === "Enter")
+                        ) {
+                          e.preventDefault();
+                          setPrivacyModalTrigger("checkbox");
+                          setPrivacyModalOpen(true);
+                        }
+                      }}
+                      onBlur={field.onBlur}
+                      aria-disabled={
+                        !privacyInteractionEnabled ? "true" : undefined
+                      }
+                      aria-label={
+                        !privacyInteractionEnabled
+                          ? "약관을 먼저 확인해야 체크할 수 있습니다"
+                          : undefined
+                      }
+                      aria-describedby={
+                        errors.privacyPolicy
+                          ? "privacy-policy-error"
+                          : undefined
+                      }
+                    />
+                  )}
+                />
+                <Label
+                  htmlFor="privacyPolicy"
+                  onClick={(e) => {
+                    if (!privacyInteractionEnabled) {
+                      // htmlFor 연결로 인한 체크박스 자동 토글을 차단하고 모달 열기
+                      // 이유: Label 클릭이 체크박스 토글을 유발하지 않도록 인터셉트
+                      e.preventDefault();
+                      setPrivacyModalTrigger("checkbox");
+                      setPrivacyModalOpen(true);
+                    }
+                  }}
+                >
+                  개인정보 처리방침에 동의합니다
+                </Label>
+              </div>
+              <LegalDialogWrapper
+                agreementType="privacyPolicy"
+                open={privacyModalOpen}
+                onOpenChange={handlePrivacyOpenChange}
+                onAgree={handlePrivacyAgree}
+                triggerLabel="개인정보처리방침 보기"
+                dialogTitle="개인정보처리방침"
+                triggerButtonRef={privacyTriggerButtonRef}
+                onTriggerClick={() => setPrivacyModalTrigger("button")}
+              />
+            </div>
+
+            {/* 에러 영역을 항상 고정 높이로 유지 — 에러 표시 여부에 따른 레이아웃 흔들림 방지 */}
+            <div className="min-h-5">
+              {errors.privacyPolicy && (
+                <p
+                  id="privacy-policy-error"
+                  role="alert"
+                  tabIndex={-1}
+                  className="text-sm text-destructive"
+                >
+                  {/* 에러 메시지를 클릭 가능하게 처리 — 이용약관과 동일한 단일 행동 경로 제공
+                    스펙: error_click_should_open_modal_if_possible */}
+                  <button
+                    ref={privacyErrorButtonRef}
+                    type="button"
+                    className="cursor-pointer underline hover:no-underline"
+                    onClick={() => {
+                      setPrivacyModalTrigger("error");
+                      setPrivacyModalOpen(true);
+                    }}
+                  >
+                    {errors.privacyPolicy.message}
+                  </button>
+                </p>
+              )}
+            </div>
+          </div>
         </div>
 
-        {/* 개인정보 */}
-        <div data-testid="privacy-policy-field" className="space-y-2">
-          <div
+        {/* root 에러 */}
+        {errors.root && (
+          <p
+            role="alert"
+            data-testid="form-error"
+            className="text-sm text-destructive"
+          >
+            {errors.root.message}
+          </p>
+        )}
+
+        {/* 액션 영역 */}
+        <div
+          data-testid="form-action-area"
+          className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mt-6"
+        >
+          <p className="text-sm text-muted-foreground">
+            이미 계정이 있으신가요?{" "}
+            <Link
+              ref={loginLinkRef}
+              href="/login"
+              className="text-muted-foreground underline hover:text-foreground"
+            >
+              로그인
+            </Link>
+          </p>
+
+          <Button
+            ref={submitButtonRef}
+            type="submit"
+            disabled={isPending}
             className={cn(
-              "flex flex-col lg:flex-row lg:items-center gap-2",
-              !errors.privacyPolicy && "mb-8",
+              "w-full sm:w-auto transition-colors duration-200",
+              isSubmitButtonVisuallyEnabled
+                ? "hover:bg-primary"
+                : "bg-primary/45 text-primary-foreground/85 hover:bg-primary/55",
             )}
           >
-            <LegalDialogWrapper
-              agreementType="privacyPolicy"
-              open={privacyModalOpen}
-              onOpenChange={handlePrivacyOpenChange}
-              onAgree={handlePrivacyAgree}
-              triggerLabel="개인정보처리방침 보기"
-              dialogTitle="개인정보처리방침"
-              checkboxRef={privacyCheckboxRef}
-              openedByLabel={privacyOpenedByLabel}
-            />
-
-            <div className="flex items-center gap-2">
-              <Label
-                htmlFor="privacyPolicy"
-                onClick={(e) => {
-                  if (!privacyInteractionEnabled) {
-                    // htmlFor 연결로 인한 체크박스 자동 토글을 차단하고 모달 열기
-                    // 이유: Label 클릭이 체크박스 토글을 유발하지 않도록 인터셉트
-                    e.preventDefault();
-                    setPrivacyOpenedByLabel(true);
-                    setPrivacyModalOpen(true);
-                  }
-                }}
-              >
-                개인정보 처리방침에 동의합니다
-              </Label>
-
-              <Controller
-                name="privacyPolicy"
-                control={control}
-                render={({ field }) => (
-                  <Checkbox
-                    ref={privacyCheckboxRef}
-                    id="privacyPolicy"
-                    data-testid="privacy-policy-checkbox"
-                    name={field.name}
-                    checked={field.value}
-                    onCheckedChange={(checked) => {
-                      // interactionEnabled=false이면 체크 변경을 막고 모달 열기
-                      // 이유: HTML disabled 금지 스펙 준수 — 인터셉트로 동일 효과 구현
-                      if (!privacyInteractionEnabled) {
-                        setPrivacyOpenedByLabel(false);
-                        setPrivacyModalOpen(true);
-                        return;
-                      }
-                      field.onChange(checked === true);
-                    }}
-                    onKeyDown={(e) => {
-                      // Space/Enter 키보드 입력도 마우스 클릭과 동일하게 인터셉트
-                      // 이유: 키보드로 aria-disabled 우회를 방지하고 접근성 일관성 보장
-                      if (
-                        !privacyInteractionEnabled &&
-                        (e.key === " " || e.key === "Enter")
-                      ) {
-                        e.preventDefault();
-                        setPrivacyOpenedByLabel(false);
-                        setPrivacyModalOpen(true);
-                      }
-                    }}
-                    onBlur={field.onBlur}
-                    aria-disabled={
-                      !privacyInteractionEnabled ? "true" : undefined
-                    }
-                    aria-label={
-                      !privacyInteractionEnabled
-                        ? "약관을 먼저 확인해야 체크할 수 있습니다"
-                        : undefined
-                    }
-                    aria-describedby={
-                      errors.privacyPolicy ? "privacy-policy-error" : undefined
-                    }
-                  />
-                )}
+            {/* 시각적 스피너 추가 — 400ms 이상의 서버 응답 대기 동안 처리 중임을 명확히 전달 */}
+            {isPending && (
+              <Loader2
+                className="mr-2 h-4 w-4 animate-spin"
+                aria-hidden="true"
               />
-            </div>
-          </div>
-
-          {errors.privacyPolicy && (
-            <p id="privacy-policy-error" role="alert" className="text-red-500">
-              {errors.privacyPolicy.message}
-            </p>
-          )}
+            )}
+            {isPending ? "가입 중..." : "회원가입"}
+          </Button>
         </div>
-      </div>
-
-      {/* root 에러 */}
-      {errors.root && (
-        <p role="alert" data-testid="form-error" className="text-red-500">
-          {errors.root.message}
-        </p>
-      )}
-
-      {/* 액션 영역 */}
-      <div
-        data-testid="form-action-area"
-        className="flex flex-wrap justify-between gap-2"
-      >
-        <Link href="/login" className="text-blue-400 hover:text-blue-500">
-          이미 가입하셨나요?
-        </Link>
-
-        <Button type="submit" disabled={isPending}>
-          {isPending && <span role="status" aria-label="로딩 중" />}
-          {isPending ? "가입 중..." : "회원가입"}
-        </Button>
-      </div>
-    </form>
+      </form>
+    </div>
   );
 }

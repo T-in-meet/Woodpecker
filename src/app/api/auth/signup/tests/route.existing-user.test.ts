@@ -105,6 +105,29 @@ describe("회원가입 - 기존 미인증 사용자 재요청 분기", () => {
       redirectTo: ROUTES.VERIFY_EMAIL,
     });
   });
+
+  it("TC-05. 기존 미인증 사용자의 auth email이 null이어도 요청 email로 magiclink 발송을 시도한다", async () => {
+    vi.mocked(getUserByEmail).mockResolvedValue({
+      email: null,
+      email_confirmed_at: null,
+    });
+
+    const response = await POST(makeRequest(requestBody));
+    const body = await response.json();
+
+    expect(vi.mocked(issueAuthEmailLinkAndSend)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(issueAuthEmailLinkAndSend)).toHaveBeenCalledWith({
+      type: "magiclink",
+      email: requestBody.email,
+    });
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
+    expect(body.data).toEqual({
+      email: requestBody.email,
+      redirectTo: ROUTES.VERIFY_EMAIL,
+    });
+  });
 });
 
 describe("회원가입 - 기존 인증 사용자 재요청 분기", () => {

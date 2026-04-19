@@ -18,12 +18,13 @@
  * - 이메일 long window: 사용자 수준 계정 rate limit (회원가입 + 재전송 공유)
  */
 
+import { evaluateSlidingWindow } from "../utils/rateLimit.utils";
+import { maskEmailForLogging } from "./maskEmailForLogging";
 import {
   emailStore,
   ipStore,
   resetEligibilityStore,
   tryCleanupExpiredEntries,
-  type WindowEntry,
 } from "./requestEligibilityStore";
 
 /**
@@ -56,7 +57,7 @@ export const EMAIL_LONG_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
  *
  * @param route - "signup" 또는 "resend" (어떤 API가 차단되었는지 로깅 목적)
  * @param ip - 클라이언트 IP 주소 (IP 저장소에 그대로 사용됨)
- * @param email - 이메일 주소 (저장소 키를 위해 소문자로 변환됨)
+ * @param canonicalEmail - caller에서 canonicalizeEmail() 적용된 값
  *
  * @returns { allowed: boolean }
  *
@@ -76,66 +77,55 @@ export const EMAIL_LONG_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
  * 설계 제약조건:
  * - 지연 초기화(Lazy initialization): email 저장소 항목은 allowed=true 일 때만 생성됨
  * - 안전한 접근: undefined 접근 처리를 막기 위해 ?? defaultEntry 사용
- * - 완전한 교체(Full replace): 항상 새로운 WindowEntry/EmailEligibilityEntry 객체를 생성함
- * - 불변 업데이트(Immutable update): nextWindow()는 새 객체를 반환하며 직접 수정하지 않음
+ * - 책임 위임: prune/evaluate/append는 evaluateSlidingWindow(utils)에서 수행함
+ * - 완전한 교체(Full replace): 이 함수는 utils가 계산한 next 상태를 store에 교체 저장함
  * - 상태 오염 방지: 차단된 요청은 어떠한 상태도 건드리지 않음
- * - 이메일 정규화: 스토어 키 일관성을 위해 이메일을 소문자로 변환함
+ * - 정규화 책임 분리: 이 함수는 이메일을 정규화하지 않으며 caller의 canonical 값을 그대로 사용함
  *
- */
-
-/**
- * IP precheck — read-only 사전 검증
- *
- * - body parsing 이전 단계에서 실행
- * - withinLimit을 사용하여 현재 IP 상태를 평가만 수행
- * - ipStore 및 어떤 상태도 변경하지 않음
- *
- * 설계 의도:
- * - parsing 비용 없이 과도한 요청을 1차적으로 필터링
- * - 최종 rate limit 결정은 checkRequestEligibility에서 단일하게 수행
- *
- * Trade-off:
- * - malformed JSON 요청은 eligibility 계층에 도달하지 않으므로
- *   rate limit 카운터에 포함되지 않음
- * - 따라서 parsing 이전의 저수준 공격은 precheck만으로 완전히 해결되지 않을 수 있음
- *
- * 대응 전략:
- * - app-layer에서는 read-only precheck까지만 수행
- * - 최종 상태 갱신은 checkRequestEligibility에서만 수행
- * - malformed JSON flood와 같은 저수준 공격 완화는 infra/edge 계층(WAF/CDN 등)과 함께 고려
  */
 
 export function checkRequestEligibility(
   route: "signup" | "resend",
   ip: string,
-  email: string,
+  canonicalEmail: string,
 ): { allowed: boolean } {
   const now = Date.now();
-  const normalizedEmail = email.toLowerCase();
+  // caller(signup/resend)가 canonicalizeEmail으로 canonical email을 전달 보장
+  // 중복 정규화 제거 — email을 그대로 canonical email key로 사용
 
   // ============================================================================
   // 1. 읽기(Read) 단계 — 상태 업데이트 없이 모든 조건 평가
   // ============================================================================
 
   const ipEntry = ipStore.get(ip);
-  const emailEntry = emailStore.get(normalizedEmail) ?? {
+  const emailEntry = emailStore.get(canonicalEmail) ?? {
     shortWindow: null,
     longWindow: null,
   };
 
-  const ipOk = withinLimit(ipEntry, IP_LIMIT, IP_WINDOW_MS, now);
-  const emailShortOk = withinLimit(
-    emailEntry.shortWindow,
+  // 이유: prune/evaluate/append 책임을 utils로 위임하여 호출부 오케스트레이션 축소
+  const ipEval = evaluateSlidingWindow(
+    ipEntry?.timestamps ?? [],
+    IP_LIMIT,
+    IP_WINDOW_MS,
+    now,
+  );
+  const shortEval = evaluateSlidingWindow(
+    emailEntry.shortWindow?.timestamps ?? [],
     EMAIL_SHORT_LIMIT,
     EMAIL_SHORT_WINDOW_MS,
     now,
   );
-  const emailLongOk = withinLimit(
-    emailEntry.longWindow,
+  const longEval = evaluateSlidingWindow(
+    emailEntry.longWindow?.timestamps ?? [],
     EMAIL_LONG_LIMIT,
     EMAIL_LONG_WINDOW_MS,
     now,
   );
+
+  const ipOk = ipEval.allowed;
+  const emailShortOk = shortEval.allowed;
+  const emailLongOk = longEval.allowed;
 
   // ============================================================================
   // 2. AND 판별
@@ -152,7 +142,7 @@ export function checkRequestEligibility(
     logRequestEligibilityBlocked({
       route,
       ip,
-      email: normalizedEmail,
+      email: canonicalEmail,
       ipOk,
       emailShortOk,
       emailLongOk,
@@ -163,14 +153,14 @@ export function checkRequestEligibility(
   }
 
   // 허용됨: 두 저장소를 모두 원자적으로 업데이트함
-  const nextIpEntry = nextWindow(ipEntry, IP_WINDOW_MS, now);
-  ipStore.set(ip, nextIpEntry);
+  // 이유: utils가 계산한 next 상태를 그대로 저장
+  ipStore.set(ip, { timestamps: ipEval.next });
 
   const nextEmailEntry = {
-    shortWindow: nextWindow(emailEntry.shortWindow, EMAIL_SHORT_WINDOW_MS, now),
-    longWindow: nextWindow(emailEntry.longWindow, EMAIL_LONG_WINDOW_MS, now),
+    shortWindow: { timestamps: shortEval.next },
+    longWindow: { timestamps: longEval.next },
   };
-  emailStore.set(normalizedEmail, nextEmailEntry);
+  emailStore.set(canonicalEmail, nextEmailEntry);
 
   /**
    * 기회주의적 cleanup 실행
@@ -188,73 +178,6 @@ export function checkRequestEligibility(
   );
 
   return { allowed: true };
-}
-
-/**
- * 헬퍼: 요청이 한도 내에 있는지 판별함 (읽기 전용, 상태 수정 없음)
- *
- * @param entry - 기존 WindowEntry 이거나 undefined
- * @param limit - 윈도우 내에서 허용된 최대 요청 수
- * @param windowMs - 윈도우 유지 기간
- * @param now - 현재 타임스탬프
- *
- * @returns 요청이 허용되어야 하면 true
- *
- * 논리:
- * - 항목 없음: 허용 (첫 요청)
- * - 만료된 항목: 허용 (윈도우 초기화)
- * - Count < limit: 허용
- * - Count >= limit: 거절
- */
-function withinLimit(
-  entry: WindowEntry | null | undefined,
-  limit: number,
-  windowMs: number,
-  now: number,
-): boolean {
-  if (!entry) {
-    return true;
-  }
-
-  if (now - entry.windowStart >= windowMs) {
-    return true;
-  }
-
-  return entry.count < limit;
-}
-
-/**
- * 헬퍼: 다음 윈도우 상태를 계산함 (불변성 유지)
- *
- * @param entry - 기존 WindowEntry 이거나 null
- * @param windowMs - 윈도우 유지 시간
- * @param now - 현재 타임스탬프
- *
- * @returns 새로운 WindowEntry 객체 반환
- *
- * 설계:
- * - 항목이 없거나 만료된 경우: count=1인 새로운 윈도우 시작
- * - 활성화된 윈도우: count 증가
- * - 언제나 새로운 객체 반환 (입력된 값의 내부값을 변경하지 않음)
- */
-function nextWindow(
-  entry: WindowEntry | null | undefined,
-  windowMs: number,
-  now: number,
-): WindowEntry {
-  if (!entry || now - entry.windowStart >= windowMs) {
-    // 새로운 윈도우
-    return {
-      count: 1,
-      windowStart: now,
-    };
-  }
-
-  // 활성화된 윈도우: count 증가
-  return {
-    count: entry.count + 1,
-    windowStart: entry.windowStart,
-  };
 }
 
 /**
@@ -279,7 +202,7 @@ function logRequestEligibilityBlocked(params: {
   now: number;
 }): void {
   const maskedIp = maskIp(params.ip);
-  const maskedEmail = maskEmail(params.email);
+  const maskedEmail = maskEmailForLogging(params.email);
 
   console.log(
     JSON.stringify({
@@ -314,39 +237,41 @@ function maskIp(ip: string): string {
 }
 
 /**
- * 로깅을 위해 이메일 마스킹 (로컬 부분을 가림)
- * 예: user@example.com → ***@example.com
- */
-function maskEmail(email: string): string {
-  const atIndex = email.indexOf("@");
-  if (atIndex > 0) {
-    return "***" + email.substring(atIndex);
-  }
-  return "***";
-}
-
-/**
  * IP 기반 rate limit 사전 검증 — 읽기 전용
  *
  * 목적:
- * - 본문 파싱 전에 IP 차단 여부를 조기 평가하여 파싱 비용 절감
- * - 상태를 변경하지 않으므로 최종 결정 권한(checkRequestEligibility)을 대체하지 않음
+ * - 본문 파싱 전에 IP 차단 여부를 조기 평가하여 파싱 비용을 줄임
+ * - 최종 결정 권한(checkRequestEligibility)을 대체하지 않고 1차 필터 역할만 수행
+ *
+ * 동작:
+ * - evaluateSlidingWindow(appendOnAllow=false)로 현재 IP 상태를 읽기 전용 평가만 수행
+ * - ipStore 및 어떤 상태도 변경하지 않음
  *
  * 설계 제약:
  * - 읽기 전용(read-only): ipStore를 읽기만 하고 쓰지 않음
  * - 이메일 불필요: 본문 파싱 전에 실행되므로 IP만 사용
  * - 상태 오염 금지: 차단 시에도 어떤 카운터도 증가하지 않음
- * - 최종 결정 권한이 아님: checkRequestEligibility가 항상 최종 판단
+ * - 최종 결정 권한이 아님: 최종 허용/차단 판단은 항상 checkRequestEligibility가 수행
+ *
+ * trade-off:
+ * - malformed JSON 요청은 eligibility 계층에 도달하지 않으므로 rate limit 카운터에 포함되지 않음
+ * - 따라서 파싱 이전의 저수준 flood 공격 완화는 infra/edge 계층(WAF/CDN 등)과 함께 고려해야 함
  *
  * @param ip - 클라이언트 IP 주소
- * @returns { allowed: boolean } — false이면 checkRequestEligibility를 호출하지 않고 차단
+ * @returns { allowed: boolean } false이면 checkRequestEligibility를 호출하지 않고 즉시 차단
  */
 export function checkIpRateLimitPrecheck(ip: string): { allowed: boolean } {
   const now = Date.now();
   const ipEntry = ipStore.get(ip);
   // [이유: 상태를 변경하지 않고 현재 IP 한도만 평가한다. 최종 결정은 checkRequestEligibility에 위임]
-  const allowed = withinLimit(ipEntry, IP_LIMIT, IP_WINDOW_MS, now);
-  return { allowed };
+  const evaluation = evaluateSlidingWindow(
+    ipEntry?.timestamps ?? [],
+    IP_LIMIT,
+    IP_WINDOW_MS,
+    now,
+    { appendOnAllow: false },
+  );
+  return { allowed: evaluation.allowed };
 }
 
 // 테스트를 위한 모듈 내보내기

@@ -4,7 +4,7 @@ import {
   RESULT_HTTP_STATUS_MAP,
 } from "@/lib/constants/apiCodes";
 
-import { ValidationReason } from "../../../lib/validation/validation.types";
+import type { ValidationError } from "../validation/validation-error.types";
 
 /**
  * 성공 응답 타입
@@ -39,15 +39,21 @@ type FailureResponse = {
 };
 
 /**
- * Validation 에러 구조
+ * ApiCode → HTTP status 결정 규칙
  *
- * - field: 에러가 발생한 필드
- * - reason: 에러 원인 (도메인 상수)
+ * 우선순위:
+ * 1. override (명시적 지정)
+ * 2. ApiCode suffix 기반 자동 매핑 (RESULT_HTTP_STATUS_MAP)
+ * 3. fallback: 500
+ *
+ * 현재 상태:
+ * - 모든 API는 ApiCode suffix 기반 자동 매핑을 사용하고 있음
+ * - status override의 실사용처는 존재하지 않음
+ *
+ * 설계 의도:
+ * - 향후 resource 생성 API 등에서 201 등의 예외 status가 필요할 수 있어
+ *   override 옵션을 유지함
  */
-export type ValidationError = {
-  field: string;
-  reason: ValidationReason;
-};
 
 /**
  * ApiCode에서 ApiResult 추출
