@@ -14,20 +14,24 @@ export const AUTH_EVENTS = {
 
 export type AuthEvent = (typeof AUTH_EVENTS)[keyof typeof AUTH_EVENTS];
 
-export type RequestedEvent =
+export type RequestedAuthEvent =
   | typeof AUTH_EVENTS.AUTH_SIGNUP_REQUESTED
   | typeof AUTH_EVENTS.AUTH_RESEND_REQUESTED
   | typeof AUTH_EVENTS.AUTH_CALLBACK_REQUESTED;
 
 // 주의:
-// 다른 *_FAILED 이벤트와 달리
-// AUTH_CALLBACK_REJECTED는 "예외"가 아니라
-// verify-email로 귀결되는 정상 분기 결과를 의미한다.
+// AUTH_CALLBACK_REJECTED는 예외가 아니라 callback 흐름의 정상적인 분기 결과다.
 export type CallbackAuthEvent =
   | typeof AUTH_EVENTS.AUTH_CALLBACK_COMPLETED
   | typeof AUTH_EVENTS.AUTH_CALLBACK_REJECTED;
 
-export type BaseAuthEvent = Exclude<
+export type AuthFailureEvent =
+  | typeof AUTH_EVENTS.AUTH_SIGNUP_FAILED
+  | typeof AUTH_EVENTS.AUTH_RESEND_FAILED;
+
+export type AuthFlowEvent = Exclude<
   AuthEvent,
-  RequestedEvent | CallbackAuthEvent
+  RequestedAuthEvent | CallbackAuthEvent
 >;
+
+export type AuthNonFailureEvent = Exclude<AuthFlowEvent, AuthFailureEvent>;

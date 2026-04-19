@@ -1,7 +1,8 @@
 import {
-  BaseAuthEvent,
+  AuthFailureEvent,
+  AuthNonFailureEvent,
   CallbackAuthEvent,
-  RequestedEvent,
+  RequestedAuthEvent,
 } from "@/features/auth/constants/authEvents";
 import { AuthLogReason } from "@/features/auth/constants/authLogReasons";
 import { logError, logInfo, logWarn } from "@/lib/logger";
@@ -41,10 +42,6 @@ export type AuthErrorContext = CommonLogFields & {
   errorCode?: string;
 };
 
-export type AuthFailureEvent = "AUTH_SIGNUP_FAILED" | "AUTH_RESEND_FAILED";
-
-export type AuthNonFailureEvent = Exclude<BaseAuthEvent, AuthFailureEvent>;
-
 export type CallbackContext = {
   path: string;
   method: string;
@@ -55,10 +52,13 @@ export type CallbackContext = {
 type LogEntry<E extends string, C extends object> = { event: E } & C;
 
 export function logRequested(
-  event: RequestedEvent,
+  event: RequestedAuthEvent,
   ctx: RequestedContext,
 ): void {
-  const entry: LogEntry<RequestedEvent, RequestedContext> = { event, ...ctx };
+  const entry: LogEntry<RequestedAuthEvent, RequestedContext> = {
+    event,
+    ...ctx,
+  };
   logInfo(entry);
 }
 
