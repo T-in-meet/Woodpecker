@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 
 import { NoteForm } from "@/features/notes/components/NoteForm";
 import { ROUTES } from "@/lib/constants/routes";
-import { createClient } from "@/lib/supabase/server";
+import { createServerComponentClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
   title: "새 노트",
@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 };
 
 export default async function NewNotePage() {
-  const supabase = await createClient();
+  const supabase = await createServerComponentClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

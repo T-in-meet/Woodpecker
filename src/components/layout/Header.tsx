@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ROUTES } from "@/lib/constants/routes";
 import { getUser } from "@/lib/supabase/getUser";
-import { createClient } from "@/lib/supabase/server";
+import { createServerComponentClient } from "@/lib/supabase/server";
 import type { Profile } from "@/types/profiles.types";
 
 import { UserMenu } from "./UserMenu";
@@ -17,7 +17,7 @@ export async function Header() {
     user = await getUser();
 
     if (user) {
-      const supabase = await createClient();
+      const supabase = await createServerComponentClient();
       const { data: profileData } = await supabase
         .from("profiles")
         .select("*")

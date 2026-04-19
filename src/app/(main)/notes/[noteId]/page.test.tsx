@@ -15,7 +15,7 @@ const { createClientMock, getNoteByIdMock, notFoundMock, redirectMock } =
   }));
 
 vi.mock("@/lib/supabase/server", () => ({
-  createClient: createClientMock,
+  createServerComponentClient: createClientMock,
 }));
 
 vi.mock("@/features/notes/queries", () => ({
