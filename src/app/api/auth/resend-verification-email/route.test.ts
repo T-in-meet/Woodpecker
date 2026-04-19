@@ -3,12 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // API 응답 코드 상수
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
+import { MIN_RESPONSE_MS } from "@/features/auth/lib/applyMinimumResponseTime";
 // Request Eligibility store 초기화 (테스트 간 상태 격리)
 import {
   EMAIL_LONG_LIMIT,
   EMAIL_LONG_WINDOW_MS,
   resetEligibilityStore,
 } from "@/features/auth/lib/checkRequestEligibility";
+import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 // 외부 의존성 (모두 mock 대상)
 import { resendVerificationEmail } from "@/features/auth/resend-verification-email/lib/resendVerificationEmail";
 import { VALIDATION_REASON } from "@/lib/validation/reasons";
@@ -25,6 +27,7 @@ import { POST } from "./route";
 vi.mock(
   "@/features/auth/resend-verification-email/lib/resendVerificationEmail",
 );
+vi.mock("@/features/auth/lib/getUserByEmail");
 
 describe("이메일 인증 재전송 API 성공 흐름", () => {
   /**
@@ -51,6 +54,10 @@ describe("이메일 인증 재전송 API 성공 흐름", () => {
 
     // 기본 mock 동작 정의
     vi.mocked(resendVerificationEmail).mockResolvedValue(undefined);
+    vi.mocked(getUserByEmail).mockImplementation(async (canonicalEmail) => ({
+      email: canonicalEmail,
+      email_confirmed_at: null,
+    }));
   });
 
   // TC-01: 정상 흐름
@@ -63,8 +70,8 @@ describe("이메일 인증 재전송 API 성공 흐름", () => {
     expect(body.success).toBe(true);
     expect(body.code).toBe(AUTH_API_CODES.EMAIL_VERIFICATION_RESEND_SUCCESS);
 
-    // email normalize 확인 (trim + lowercase)
-    expect(body.data.email).toBe("test@example.com");
+    // email 확인 (trim + lowercase)
+    expect(body.data.email).toBe("Test@Example.COM");
     expect(body.data.resent).toBe(true);
 
     // 외부 의존 호출 검증
@@ -81,6 +88,10 @@ describe("이메일 인증 재전송 API malformed JSON 처리", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetEligibilityStore();
+    vi.mocked(getUserByEmail).mockImplementation(async (canonicalEmail) => ({
+      email: canonicalEmail,
+      email_confirmed_at: null,
+    }));
   });
 
   it("TC-01. malformed JSON 요청이면 INVALID_INPUT 응답을 반환한다", async () => {
@@ -131,12 +142,22 @@ describe("이메일 재전송 Request Eligibility 검증", () => {
     );
   }
 
+  async function postWithMinimumDelay(email: string) {
+    const promise = POST(makeRequest(email));
+    await vi.advanceTimersByTimeAsync(MIN_RESPONSE_MS);
+    return promise;
+  }
+
   beforeEach(() => {
     vi.clearAllMocks();
     resetEligibilityStore();
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
     vi.mocked(resendVerificationEmail).mockResolvedValue(undefined);
+    vi.mocked(getUserByEmail).mockImplementation(async (canonicalEmail) => ({
+      email: canonicalEmail,
+      email_confirmed_at: null,
+    }));
   });
 
   afterEach(() => {
@@ -149,13 +170,13 @@ describe("이메일 재전송 Request Eligibility 검증", () => {
       const email = "test@example.com";
 
       // 첫 요청 허용
-      const response1 = await POST(makeRequest(email));
+      const response1 = await postWithMinimumDelay(email);
       expect(response1.status).toBe(200);
       expect(resendVerificationEmail).toHaveBeenCalledTimes(1);
 
       // 10초 경과 후 재시도 차단 (short window 활성)
       vi.advanceTimersByTime(10 * 1000);
-      const response2 = await POST(makeRequest(email));
+      const response2 = await postWithMinimumDelay(email);
       const body2 = await response2.json();
 
       expect(response2.status).toBe(429);
@@ -167,14 +188,14 @@ describe("이메일 재전송 Request Eligibility 검증", () => {
       const email = "test2@example.com";
 
       // 첫 요청
-      await POST(makeRequest(email));
+      await postWithMinimumDelay(email);
       expect(resendVerificationEmail).toHaveBeenCalledTimes(1);
 
       // 30초 초과 경과 → short window 만료 (하지만 long window는 활성)
       vi.advanceTimersByTime(31 * 1000);
 
       // 재시도 허용
-      const response = await POST(makeRequest(email));
+      const response = await postWithMinimumDelay(email);
       expect(response.status).toBe(200);
       expect(resendVerificationEmail).toHaveBeenCalledTimes(2);
     });
@@ -191,7 +212,7 @@ describe("이메일 재전송 Request Eligibility 검증", () => {
           vi.advanceTimersByTime(31 * 1000);
         }
 
-        const response = await POST(makeRequest(email));
+        const response = await postWithMinimumDelay(email);
         expect(response.status).toBe(200);
       }
 
@@ -204,12 +225,12 @@ describe("이메일 재전송 Request Eligibility 검증", () => {
       // EMAIL_LONG_LIMIT회 요청
       for (let i = 0; i < EMAIL_LONG_LIMIT; i++) {
         if (i > 0) vi.advanceTimersByTime(31 * 1000);
-        await POST(makeRequest(email));
+        await postWithMinimumDelay(email);
       }
 
       // 다음 요청 차단 (long window 초과)
       vi.advanceTimersByTime(31 * 1000);
-      const response = await POST(makeRequest(email));
+      const response = await postWithMinimumDelay(email);
       const body = await response.json();
 
       expect(response.status).toBe(429);
@@ -223,17 +244,17 @@ describe("이메일 재전송 Request Eligibility 검증", () => {
       // EMAIL_LONG_LIMIT회 요청 (long 한도 소진)
       for (let i = 0; i < EMAIL_LONG_LIMIT; i++) {
         if (i > 0) vi.advanceTimersByTime(31 * 1000);
-        await POST(makeRequest(email));
+        await postWithMinimumDelay(email);
       }
 
       // long window 만료 전: 차단
       vi.advanceTimersByTime(31 * 1000);
-      let response = await POST(makeRequest(email));
+      let response = await postWithMinimumDelay(email);
       expect(response.status).toBe(429);
 
       // long window 만료 (15분): 허용
       vi.advanceTimersByTime(EMAIL_LONG_WINDOW_MS);
-      response = await POST(makeRequest(email));
+      response = await postWithMinimumDelay(email);
       expect(response.status).toBe(200);
       expect(resendVerificationEmail).toHaveBeenCalledTimes(
         EMAIL_LONG_LIMIT + 1,
@@ -247,13 +268,24 @@ describe("이메일 재전송 Request Eligibility 검증", () => {
       const email = "noresend@example.com";
 
       // 첫 요청
-      await POST(makeRequest(email));
+      await postWithMinimumDelay(email);
       expect(resendVerificationEmail).toHaveBeenCalledTimes(1);
 
       // 즉시 재시도 (short window 차단)
-      const response = await POST(makeRequest(email));
+      const response = await postWithMinimumDelay(email);
       expect(response.status).toBe(429);
       expect(resendVerificationEmail).toHaveBeenCalledTimes(1); // 증가하지 않음
+    });
+
+    it("TC-06-1. short window로 차단된 요청은 getUserByEmail을 호출하지 않는다", async () => {
+      const email = "nodbhit@example.com";
+
+      await postWithMinimumDelay(email);
+      expect(getUserByEmail).toHaveBeenCalledTimes(1);
+
+      const response = await postWithMinimumDelay(email);
+      expect(response.status).toBe(429);
+      expect(getUserByEmail).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -266,15 +298,94 @@ describe("이메일 재전송 Request Eligibility 검증", () => {
       // email1: long 한도 소진
       for (let i = 0; i < EMAIL_LONG_LIMIT; i++) {
         if (i > 0) vi.advanceTimersByTime(31 * 1000);
-        await POST(makeRequest(email1));
+        await postWithMinimumDelay(email1);
       }
 
       // email2: 여전히 허용됨
-      const response = await POST(makeRequest(email2));
+      const response = await postWithMinimumDelay(email2);
       expect(response.status).toBe(200);
       expect(resendVerificationEmail).toHaveBeenCalledTimes(
         EMAIL_LONG_LIMIT + 1,
       );
     });
+  });
+
+  describe("canonical email variant 공유", () => {
+    it(`TC-08. Test@Example.com / test@example.com은 동일 email long limit(${EMAIL_LONG_LIMIT})을 공유한다`, async () => {
+      const variantA = " Test@Example.com ";
+      const variantB = "test@example.com";
+
+      for (let i = 0; i < EMAIL_LONG_LIMIT; i++) {
+        const email = i % 2 === 0 ? variantA : variantB;
+        const response = await postWithMinimumDelay(email);
+        expect(response.status).toBe(200);
+        if (i < EMAIL_LONG_LIMIT - 1) {
+          vi.advanceTimersByTime(31 * 1000);
+        }
+      }
+
+      vi.advanceTimersByTime(31 * 1000);
+      const blocked = await postWithMinimumDelay(" TEST@example.com ");
+      const body = await blocked.json();
+
+      expect(blocked.status).toBe(429);
+      expect(body.code).toBe(AUTH_API_CODES.RESEND_RATE_LIMIT_EXCEEDED);
+    });
+  });
+});
+
+describe("이메일 인증 재전송 API 입력 검증", () => {
+  function makeRequest(body: object): NextRequest {
+    return new NextRequest(
+      "http://localhost/api/auth/resend-verification-email",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetEligibilityStore();
+    vi.mocked(getUserByEmail).mockImplementation(async (canonicalEmail) => ({
+      email: canonicalEmail,
+      email_confirmed_at: null,
+    }));
+  });
+
+  it("이메일 형식이 잘못되면 validation 실패 + errors 반환", async () => {
+    const response = await POST(makeRequest({ email: "invalid-email" }));
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.success).toBe(false);
+    expect(body.code).toBe(AUTH_API_CODES.RESEND_INVALID_INPUT);
+    expect(body.data.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: "email",
+          reason: VALIDATION_REASON.INVALID_FORMAT,
+        }),
+      ]),
+    );
+  });
+
+  it("email이 빈 문자열이면 REQUIRED 반환", async () => {
+    const response = await POST(makeRequest({ email: " " }));
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.success).toBe(false);
+    expect(body.code).toBe(AUTH_API_CODES.RESEND_INVALID_INPUT);
+    expect(body.data.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: "email",
+          reason: VALIDATION_REASON.REQUIRED,
+        }),
+      ]),
+    );
   });
 });

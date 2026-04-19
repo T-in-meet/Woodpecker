@@ -67,6 +67,12 @@ export const AUTH_API_CODES = {
   RESEND_RATE_LIMIT_EXCEEDED: makeApiCode("resend", API_RESULTS.RATE_LIMITED),
 
   /**
+   * 재전송 처리 중 내부 서버 오류
+   * - 예상하지 못한 런타임 예외
+   */
+  RESEND_INTERNAL_ERROR: makeApiCode("resend", API_RESULTS.INTERNAL_ERROR),
+
+  /**
    * 회원가입 처리 중 내부 서버 오류
    * - DB 조회 실패
    * - Supabase 호출 실패

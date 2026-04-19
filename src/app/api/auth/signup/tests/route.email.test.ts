@@ -90,17 +90,17 @@ describe("회원가입 이메일 발송 - 신규 사용자", () => {
     expect(mockGenerateLink).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "magiclink",
-        email: "test@example.com",
+        email: "Test@Example.com",
       }),
     );
   });
 
-  it("TC-02. 신규 사용자 분기에서 sendAuthEmail이 tokenHash와 type=magiclink으로 호출된다", async () => {
+  it("TC-02. 신규 사용자 분기에서 sendAuthEmail이 raw email로 호출된다", async () => {
     await POST(makeRequest(requestBody));
 
     expect(vi.mocked(sendAuthEmail)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(sendAuthEmail)).toHaveBeenCalledWith(
-      "test@example.com",
+      "Test@Example.com",
       TEST_TOKEN_HASH,
       "magiclink",
     );
@@ -117,7 +117,7 @@ describe("회원가입 이메일 발송 - 신규 사용자", () => {
     expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
     expect(body.code).not.toBe(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR);
     expect(body.data).toEqual({
-      email: "test@example.com",
+      email: "Test@Example.com",
       redirectTo: ROUTES.VERIFY_EMAIL,
     });
     expect(body).not.toHaveProperty("error");
@@ -142,7 +142,7 @@ describe("회원가입 이메일 발송 - 신규 사용자", () => {
     expect(body.success).toBe(true);
     expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
     expect(body.data).toEqual({
-      email: "test@example.com",
+      email: "Test@Example.com",
       redirectTo: ROUTES.VERIFY_EMAIL,
     });
     expect(vi.mocked(sendAuthEmail)).not.toHaveBeenCalled();
@@ -169,7 +169,7 @@ describe("회원가입 이메일 발송 - 신규 사용자", () => {
     expect(body.success).toBe(true);
     expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
     expect(body.data).toEqual({
-      email: "test@example.com",
+      email: "Test@Example.com",
       redirectTo: ROUTES.VERIFY_EMAIL,
     });
     expect(vi.mocked(sendAuthEmail)).not.toHaveBeenCalled();
@@ -191,7 +191,7 @@ describe("회원가입 이메일 발송 - 신규 사용자", () => {
     expect(body.success).toBe(true);
     expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
     expect(body.data).toEqual({
-      email: "test@example.com",
+      email: "Test@Example.com",
       redirectTo: ROUTES.VERIFY_EMAIL,
     });
     expect(vi.mocked(sendAuthEmail)).not.toHaveBeenCalled();
@@ -246,7 +246,7 @@ describe("회원가입 이메일 발송 - 기존 인증 사용자", () => {
     );
   });
 
-  it("TC-07. 기존 인증 사용자 분기에서 sendAuthEmail이 tokenHash와 type=magiclink으로 호출된다", async () => {
+  it("TC-07. 기존 인증 사용자 분기에서 sendAuthEmail이 existingUser.email로 호출된다", async () => {
     await POST(makeRequest(requestBody));
 
     expect(vi.mocked(sendAuthEmail)).toHaveBeenCalledTimes(1);
@@ -267,7 +267,7 @@ describe("회원가입 이메일 발송 - 기존 인증 사용자", () => {
     expect(body.success).toBe(true);
     expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
     expect(body.data).toEqual({
-      email: "test@example.com",
+      email: "Test@Example.com",
       redirectTo: ROUTES.VERIFY_EMAIL,
     });
   });
