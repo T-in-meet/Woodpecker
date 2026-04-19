@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { NOTE_LANGUAGE_VALUES } from "@/lib/constants/noteLanguages";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
-import { createClient } from "@/lib/supabase/server";
+import { createServerComponentClient } from "@/lib/supabase/server";
 
 const reviewableNoteSchema = z.object({
   title: z.string(),
@@ -34,7 +34,7 @@ export async function getReviewableNote(
   noteId: string,
   userId: string,
 ): Promise<ReviewableNote | null> {
-  const supabase = await createClient();
+  const supabase = await createServerComponentClient();
   const { data, error } = await supabase
     .from("notes")
     .select("title, language, next_review_at, review_round")
@@ -52,7 +52,7 @@ export async function getPendingReviewLog(
   noteId: string,
   userId: string,
 ): Promise<PendingReviewLog | null> {
-  const supabase = await createClient();
+  const supabase = await createServerComponentClient();
   const { data, error } = await supabase
     .from("review_logs")
     .select("id, note_id, round, scheduled_at, completed_at")
@@ -74,7 +74,7 @@ export async function getNoteContentForComparison(
   noteId: string,
   userId: string,
 ): Promise<NoteContentForComparison | null> {
-  const supabase = await createClient();
+  const supabase = await createServerComponentClient();
   const { data, error } = await supabase
     .from("notes")
     .select("content, language")

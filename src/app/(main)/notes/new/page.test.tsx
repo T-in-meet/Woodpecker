@@ -11,7 +11,7 @@ const { createClientMock, redirectMock } = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
-  createClient: createClientMock,
+  createServerComponentClient: createClientMock,
 }));
 
 vi.mock("next/navigation", () => ({
