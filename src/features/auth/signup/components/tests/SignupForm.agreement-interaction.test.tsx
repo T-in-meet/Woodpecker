@@ -107,23 +107,27 @@ describe("회원가입 폼 동의 상호작용", () => {
     const user = userEvent.setup();
     renderSignupForm();
 
-    // 모달 열고 닫기
     await user.click(screen.getByTestId("terms-of-service-checkbox"));
     await user.click(screen.getByRole("button", { name: /닫기/i }));
 
-    // 이제 Space 키로 토글 가능해야 함
     const termsCheckbox = screen.getByTestId("terms-of-service-checkbox");
-    termsCheckbox.focus();
 
-    // 이유: interactionEnabled=true 상태에서 키보드 입력이 체크박스 토글을 유발해야 함
-    await user.keyboard(" ");
+    await waitFor(() => {
+      expect(termsCheckbox).toBeInTheDocument();
+    });
+
+    termsCheckbox.focus();
+    expect(termsCheckbox).toHaveFocus();
+
+    await user.keyboard("[Space]");
 
     await waitFor(() => {
       expect(termsCheckbox).toBeChecked();
     });
 
-    // 다시 누르면 언체크
-    await user.keyboard(" ");
+    expect(termsCheckbox).toHaveFocus();
+
+    await user.keyboard("[Space]");
 
     await waitFor(() => {
       expect(termsCheckbox).not.toBeChecked();
