@@ -19,7 +19,6 @@
  */
 
 import { evaluateSlidingWindow } from "../utils/rateLimit.utils";
-import { maskEmailForLogging } from "./maskEmailForLogging";
 import {
   emailStore,
   ipStore,
@@ -59,7 +58,7 @@ export const EMAIL_LONG_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
  * @param ip - 클라이언트 IP 주소 (IP 저장소에 그대로 사용됨)
  * @param canonicalEmail - caller에서 canonicalizeEmail() 적용된 값
  *
- * @returns { allowed: boolean }
+ * @returns EligibilityResult — allowed:true 또는 allowed:false + blockedBy 차원
  *
  * 흐름:
  * 1. 읽기(Read) 단계: 상태 변경 없이 모든 조건을 평가함
@@ -71,7 +70,7 @@ export const EMAIL_LONG_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
  *    - allowed = ipOk && emailShortOk && emailLongOk
  *
  * 3. 쓰기(Write) 단계: allowed=true 일 때만 상태를 업데이트함
- *    - 차단된 경우: 거절 로그를 남기고 상태를 변경하지 않음
+ *    - 차단된 경우: blockedBy 차원을 반환하고 상태를 변경하지 않음 (로깅은 route handler 책임)
  *    - 허용된 경우: IP와 이메일 저장소를 원자적으로(atomically) 업데이트함
  *
  * 설계 제약조건:
@@ -84,11 +83,15 @@ export const EMAIL_LONG_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
  *
  */
 
+export type EligibilityResult =
+  | { allowed: true }
+  | { allowed: false; blockedBy: "ip" | "emailShort" | "emailLong" };
+
 export function checkRequestEligibility(
   route: "signup" | "resend",
   ip: string,
   canonicalEmail: string,
-): { allowed: boolean } {
+): EligibilityResult {
   const now = Date.now();
   // caller(signup/resend)가 canonicalizeEmail으로 canonical email을 전달 보장
   // 중복 정규화 제거 — email을 그대로 canonical email key로 사용
@@ -138,18 +141,15 @@ export function checkRequestEligibility(
   // ============================================================================
 
   if (!allowed) {
-    // 차단됨: 거절 로그를 남기고 상태를 수정하지 않음
-    logRequestEligibilityBlocked({
-      route,
-      ip,
-      email: canonicalEmail,
-      ipOk,
-      emailShortOk,
-      emailLongOk,
-      now,
-    });
+    // 차단 차원은 ip → emailShort → emailLong 우선순위로 결정
+    // route handler가 blockedBy를 받아 AUTH_RATE_LIMIT_BLOCKED 이벤트를 로깅한다
+    const blockedBy: "ip" | "emailShort" | "emailLong" = !ipOk
+      ? "ip"
+      : !emailShortOk
+        ? "emailShort"
+        : "emailLong";
 
-    return { allowed: false };
+    return { allowed: false, blockedBy };
   }
 
   // 허용됨: 두 저장소를 모두 원자적으로 업데이트함
@@ -178,62 +178,6 @@ export function checkRequestEligibility(
   );
 
   return { allowed: true };
-}
-
-/**
- * 요청 적격성 거절 로그 작성 (내부 용도로만 사용됨)
- *
- * allowed=false일 때만 호출됨. 다음과 같은 것을 기록함:
- * - 어떤 API가 차단되었는가 (signup vs resend)
- * - 어떤 조건이 실패했는가 (ipOk, emailShortOk, emailLongOk)
- * - 마스킹된 식별자 (아주 날 것의 IP/이메일은 보관하지 않음)
- *
- * 이 함수는 checkRequestEligibility 내부에 한정되며, 라우터에서
- * 노출되거나 직접 호출되어서는 안 됨. 모든 로깅은 중복 로그를 방지하고
- * 일관된 관측 가능성을 보장하기 위해 checkRequestEligibility 내부에서 진행됨.
- */
-function logRequestEligibilityBlocked(params: {
-  route: "signup" | "resend";
-  ip: string;
-  email: string;
-  ipOk: boolean;
-  emailShortOk: boolean;
-  emailLongOk: boolean;
-  now: number;
-}): void {
-  const maskedIp = maskIp(params.ip);
-  const maskedEmail = maskEmailForLogging(params.email);
-
-  console.log(
-    JSON.stringify({
-      event: "request_eligibility_blocked",
-      route: params.route,
-      maskedIp,
-      maskedEmail,
-      ipOk: params.ipOk,
-      emailShortOk: params.emailShortOk,
-      emailLongOk: params.emailLongOk,
-      timestamp: new Date(params.now).toISOString(),
-    }),
-  );
-}
-
-/**
- * 로깅을 위해 IP 주소 마스킹 (마지막 자리를 가림)
- * 예: 192.168.1.100 → 192.168.1.***
- */
-function maskIp(ip: string): string {
-  const parts = ip.split(".");
-  if (parts.length === 4) {
-    parts[3] = "***";
-    return parts.join(".");
-  }
-  // IPv6 혹은 기타 포맷의 경우: 콜론 뒤 마지막 문자들을 마스킹
-  if (ip.includes(":")) {
-    const colonIndex = ip.lastIndexOf(":");
-    return ip.substring(0, colonIndex + 1) + "***";
-  }
-  return "***";
 }
 
 /**

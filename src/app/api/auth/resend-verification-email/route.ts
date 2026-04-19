@@ -1,7 +1,15 @@
 import { NextRequest } from "next/server";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
+import { AUTH_EVENTS } from "@/features/auth/constants/authEvents";
+import { AUTH_LOG_REASONS } from "@/features/auth/constants/authLogReasons";
 import { applyMinimumResponseTime } from "@/features/auth/lib/applyMinimumResponseTime";
+import {
+  logAuthError,
+  logAuthEvent,
+  logRequested,
+  normalizeUnknownError,
+} from "@/features/auth/lib/authLogger";
 import {
   checkIpRateLimitPrecheck,
   checkRequestEligibility,
@@ -17,6 +25,7 @@ import { resendVerificationEmail } from "@/features/auth/resend-verification-ema
 import { resendApiSchema } from "@/features/auth/resend-verification-email/schema/resendApiSchema";
 import { canonicalizeEmail } from "@/features/auth/utils/canonicalizeEmail";
 import { failureResponse, successResponse } from "@/lib/api/response";
+import { logError } from "@/lib/logger";
 import { getClientIp } from "@/lib/utils/getClientIp";
 import { VALIDATION_REASON } from "@/lib/validation/reasons";
 
@@ -76,6 +85,14 @@ async function resolveResendResponse(request: NextRequest): Promise<Response> {
     body = await parseAuthJsonRequestBody(request);
   } catch (e) {
     if (e instanceof AuthJsonParseError) {
+      logAuthEvent(AUTH_EVENTS.AUTH_INVALID_INPUT, {
+        path: request.nextUrl.pathname,
+        method: request.method,
+        status: 400,
+        provider: "email",
+        result: "failure",
+        reasonCode: AUTH_LOG_REASONS.INVALID_JSON,
+      });
       return failureResponse(AUTH_API_CODES.RESEND_INVALID_INPUT, {
         errors: [{ field: "body", reason: VALIDATION_REASON.INVALID_FORMAT }],
       });
@@ -92,6 +109,14 @@ async function resolveResendResponse(request: NextRequest): Promise<Response> {
   const parsed = resendApiSchema.safeParse(body);
 
   if (!parsed.success) {
+    logAuthEvent(AUTH_EVENTS.AUTH_INVALID_INPUT, {
+      path: request.nextUrl.pathname,
+      method: request.method,
+      status: 400,
+      provider: "email",
+      result: "failure",
+      reasonCode: AUTH_LOG_REASONS.SCHEMA_VALIDATION_FAILED,
+    });
     return failureResponse(AUTH_API_CODES.RESEND_INVALID_INPUT, {
       errors: mapAuthValidationErrors(parsed.error, body),
     });
@@ -116,10 +141,25 @@ async function resolveResendResponse(request: NextRequest): Promise<Response> {
    * - 원자성(atomic): 판단과 상태 업데이트가 함수 내에서 함께 일어남
    * - AND 평가: IP, email short, email long 모두 통과해야 허용
    * - cooldown timestamp 제거: email short window로 대체 (즉시 재시도 억제)
-   * - 관측 가능성(Observability): 차단 시에만 내부 로그 기록
+   * - 차단 시 blockedBy를 반환하며, 로깅은 route handler(여기)에서 담당한다
    */
+  const canonicalEmailForLog = maskEmailForLogging(canonicalEmail);
   const eligibility = checkRequestEligibility("resend", ip, canonicalEmail);
   if (!eligibility.allowed) {
+    logAuthEvent(AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED, {
+      path: request.nextUrl.pathname,
+      method: request.method,
+      status: 429,
+      provider: "email",
+      result: "blocked",
+      reasonCode:
+        eligibility.blockedBy === "ip"
+          ? AUTH_LOG_REASONS.RATE_LIMIT_IP
+          : eligibility.blockedBy === "emailShort"
+            ? AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT
+            : AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG,
+      maskedEmail: canonicalEmailForLog,
+    });
     return failureResponse(AUTH_API_CODES.RESEND_RATE_LIMIT_EXCEEDED);
   }
 
@@ -147,10 +187,13 @@ async function resolveResendResponse(request: NextRequest): Promise<Response> {
   if (deliveryEmail) {
     try {
       await resendVerificationEmail(deliveryEmail);
-    } catch (error) {
-      console.error("Resend verification email side-effect failed", {
+    } catch (resendError) {
+      const { errorMessage, errorName } = normalizeUnknownError(resendError);
+      logError({
+        event: "resend-email-side-effect-failed",
         maskedEmail: maskEmailForLogging(canonicalEmail),
-        error,
+        errorMessage,
+        errorName,
       });
     }
   }
@@ -167,11 +210,37 @@ async function resolveResendResponse(request: NextRequest): Promise<Response> {
 export async function POST(request: NextRequest): Promise<Response> {
   const start = Date.now();
   let response: Response;
+  let wasException = false;
+
+  logRequested(AUTH_EVENTS.AUTH_RESEND_REQUESTED, {
+    path: request.nextUrl.pathname,
+    method: request.method,
+    provider: "email",
+  });
 
   try {
     response = await resolveResendResponse(request);
   } catch {
+    wasException = true;
     response = failureResponse(AUTH_API_CODES.RESEND_INTERNAL_ERROR);
+  }
+
+  if (response.status === 200) {
+    logAuthEvent(AUTH_EVENTS.AUTH_RESEND_COMPLETED, {
+      path: request.nextUrl.pathname,
+      method: request.method,
+      status: response.status,
+      provider: "email",
+      result: "success",
+    });
+  } else if (wasException) {
+    logAuthError(AUTH_EVENTS.AUTH_RESEND_FAILED, {
+      path: request.nextUrl.pathname,
+      method: request.method,
+      status: response.status,
+      provider: "email",
+      result: "failure",
+    });
   }
 
   return applyMinimumResponseTime(start, response);

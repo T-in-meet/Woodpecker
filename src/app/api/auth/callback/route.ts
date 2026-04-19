@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { AUTH_EVENTS } from "@/features/auth/constants/authEvents";
 import { applyMinimumResponseTime } from "@/features/auth/lib/applyMinimumResponseTime";
+import { logCallback, logRequested } from "@/features/auth/lib/authLogger";
 import { ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 
@@ -119,6 +121,12 @@ async function verifyMagiclinkToken(
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const start = Date.now();
 
+  logRequested(AUTH_EVENTS.AUTH_CALLBACK_REQUESTED, {
+    path: request.nextUrl.pathname,
+    method: request.method,
+    provider: "email",
+  });
+
   const finalize = (res: NextResponse): Promise<NextResponse> =>
     applyMinimumResponseTime(start, res) as Promise<NextResponse>;
 
@@ -131,6 +139,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
    * 2) 입력 검증
    */
   if (!isValidMagiclinkInput(input)) {
+    logCallback(AUTH_EVENTS.AUTH_CALLBACK_FAILED, {
+      path: request.nextUrl.pathname,
+      method: request.method,
+      status: 307,
+      provider: "email",
+    });
     return finalize(redirectToVerifyEmail(request));
   }
 
@@ -139,11 +153,23 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
    */
   const verification = await verifyMagiclinkToken(input.tokenHash);
   if (!verification.ok) {
+    logCallback(AUTH_EVENTS.AUTH_CALLBACK_FAILED, {
+      path: request.nextUrl.pathname,
+      method: request.method,
+      status: 307,
+      provider: "email",
+    });
     return finalize(redirectToVerifyEmail(request));
   }
 
   /**
    * 4) finalize redirect
    */
+  logCallback(AUTH_EVENTS.AUTH_CALLBACK_COMPLETED, {
+    path: request.nextUrl.pathname,
+    method: request.method,
+    status: 307,
+    provider: "email",
+  });
   return finalize(redirectToMypage(request));
 }

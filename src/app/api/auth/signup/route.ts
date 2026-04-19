@@ -1,9 +1,17 @@
 import { NextRequest } from "next/server";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
+import { AUTH_EVENTS } from "@/features/auth/constants/authEvents";
+import { AUTH_LOG_REASONS } from "@/features/auth/constants/authLogReasons";
 import { issueAuthEmailLinkAndSend } from "@/features/auth/email/issueAuthEmailLinkAndSend";
 import { sendAuthEmail } from "@/features/auth/email/sendAuthEmail";
 import { applyMinimumResponseTime } from "@/features/auth/lib/applyMinimumResponseTime";
+import {
+  logAuthError,
+  logAuthEvent,
+  logRequested,
+  normalizeUnknownError,
+} from "@/features/auth/lib/authLogger";
 import {
   checkIpRateLimitPrecheck,
   checkRequestEligibility,
@@ -19,6 +27,7 @@ import { signupApiSchema } from "@/features/auth/signup/schema/signupApiSchema";
 import { canonicalizeEmail } from "@/features/auth/utils/canonicalizeEmail";
 import { failureResponse, successResponse } from "@/lib/api/response";
 import { ROUTES } from "@/lib/constants/routes";
+import { logError, logWarn } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getClientIp } from "@/lib/utils/getClientIp";
 import { VALIDATION_REASON } from "@/lib/validation/reasons";
@@ -61,6 +70,14 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
      * malformed JSON 처리
      */
     if (e instanceof AuthJsonParseError) {
+      logAuthEvent(AUTH_EVENTS.AUTH_INVALID_INPUT, {
+        path: request.nextUrl.pathname,
+        method: request.method,
+        status: 400,
+        provider: "email",
+        result: "failure",
+        reasonCode: AUTH_LOG_REASONS.INVALID_JSON,
+      });
       return failureResponse(AUTH_API_CODES.SIGNUP_INVALID_INPUT, {
         errors: [{ field: "body", reason: VALIDATION_REASON.INVALID_FORMAT }],
       });
@@ -74,6 +91,14 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
   const parsed = signupApiSchema.safeParse(body);
 
   if (!parsed.success) {
+    logAuthEvent(AUTH_EVENTS.AUTH_INVALID_INPUT, {
+      path: request.nextUrl.pathname,
+      method: request.method,
+      status: 400,
+      provider: "email",
+      result: "failure",
+      reasonCode: AUTH_LOG_REASONS.SCHEMA_VALIDATION_FAILED,
+    });
     return failureResponse(AUTH_API_CODES.SIGNUP_INVALID_INPUT, {
       errors: mapAuthValidationErrors(parsed.error, body),
     });
@@ -91,10 +116,24 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
    * - single entry point: checkRequestEligibility 하나로 모든 조건 평가
    * - atomic: 판단과 상태 업데이트가 함수 내에서 함께 일어남
    * - AND evaluation: 세 조건(IP, short, long) 모두 통과해야 허용
-   * - Observability: 차단 시에만 내부 로그 기록 (raw IP/email 노출 금지)
+   * - 차단 시 blockedBy를 반환하며, 로깅은 route handler(여기)에서 담당한다
    */
   const eligibility = checkRequestEligibility("signup", ip, canonicalEmail);
   if (!eligibility.allowed) {
+    logAuthEvent(AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED, {
+      path: request.nextUrl.pathname,
+      method: request.method,
+      status: 429,
+      provider: "email",
+      result: "blocked",
+      reasonCode:
+        eligibility.blockedBy === "ip"
+          ? AUTH_LOG_REASONS.RATE_LIMIT_IP
+          : eligibility.blockedBy === "emailShort"
+            ? AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT
+            : AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG,
+      maskedEmail,
+    });
     return failureResponse(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
   }
 
@@ -122,7 +161,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
         email: deliveryEmail,
       });
     } catch {
-      console.warn("이메일 재발송 실패 (무시됨)", { maskedEmail });
+      logWarn({ event: "signup-email-resend-failed", maskedEmail });
     }
 
     return makeSignupSuccess(email);
@@ -142,9 +181,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
         email: deliveryEmail,
       });
     } catch {
-      console.warn("인증 완료 사용자 이메일 발송 실패 (무시됨)", {
-        maskedEmail,
-      });
+      logWarn({ event: "signup-email-send-failed", maskedEmail });
     }
 
     return makeSignupSuccess(email);
@@ -184,12 +221,12 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
   });
 
   if (createUserError) {
-    console.error("Supabase admin.createUser failed", {
+    logError({
+      event: "signup-create-user-failed",
       maskedEmail,
-      message: createUserError.message,
-      status: createUserError.status,
-      code: createUserError.code,
-      name: createUserError.name,
+      errorMessage: createUserError.message,
+      errorName: createUserError.name,
+      errorCode: createUserError.code ?? undefined,
     });
     return makeSignupSuccess(email); // raw email 응답
   }
@@ -203,12 +240,12 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
   });
 
   if (error) {
-    console.error("Supabase generateLink(magiclink) failed", {
+    logError({
+      event: "signup-generate-link-failed",
       maskedEmail,
-      message: error.message,
-      status: error.status,
-      code: error.code,
-      name: error.name,
+      errorMessage: error.message,
+      errorName: error.name,
+      errorCode: error.code ?? undefined,
     });
 
     return makeSignupSuccess(email); // raw email 응답
@@ -217,18 +254,19 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
   const tokenHash = data.properties?.hashed_token;
 
   if (!tokenHash) {
-    console.error("Supabase generateLink(magiclink) returned no hashed token", {
-      maskedEmail,
-    });
+    logError({ event: "signup-no-token-hash", maskedEmail });
     return makeSignupSuccess(email); // raw email 응답
   }
 
   try {
     await sendAuthEmail(email, tokenHash, "magiclink"); // raw email 발송
-  } catch (error) {
-    console.error("Failed to send signup magiclink email", {
+  } catch (sendError) {
+    const { errorMessage, errorName } = normalizeUnknownError(sendError);
+    logError({
+      event: "signup-send-email-failed",
       maskedEmail,
-      error,
+      errorMessage,
+      errorName,
     });
     // AE 방어: 이메일 발송 실패를 외부에 노출하지 않는다.
     // 계정은 이미 생성됨. 사용자는 재가입 시도 또는 /resend-verification-email로 재발송 가능.
@@ -252,11 +290,37 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
 export async function POST(request: NextRequest) {
   const start = Date.now();
   let response: Response;
+  let wasException = false;
+
+  logRequested(AUTH_EVENTS.AUTH_SIGNUP_REQUESTED, {
+    path: request.nextUrl.pathname,
+    method: request.method,
+    provider: "email",
+  });
 
   try {
     response = await resolveSignupResponse(request);
   } catch {
+    wasException = true;
     response = failureResponse(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR);
+  }
+
+  if (response.status === 200) {
+    logAuthEvent(AUTH_EVENTS.AUTH_SIGNUP_COMPLETED, {
+      path: request.nextUrl.pathname,
+      method: request.method,
+      status: response.status,
+      provider: "email",
+      result: "success",
+    });
+  } else if (wasException) {
+    logAuthError(AUTH_EVENTS.AUTH_SIGNUP_FAILED, {
+      path: request.nextUrl.pathname,
+      method: request.method,
+      status: response.status,
+      provider: "email",
+      result: "failure",
+    });
   }
 
   return applyMinimumResponseTime(start, response);
