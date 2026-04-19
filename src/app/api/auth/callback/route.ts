@@ -180,6 +180,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     response = fallbackRedirectToVerifyEmail(request);
   }
 
+  // callback은 외부 동작이 동일한 redirect(307)여도
+  // 내부 원인 구분을 위해 REJECTED(예상 거부)와 FAILED(예외)를 분리 기록한다.
   if (outcome === "failed") {
     logAuthError(AUTH_EVENTS.AUTH_CALLBACK_FAILED, {
       path: request.nextUrl.pathname,

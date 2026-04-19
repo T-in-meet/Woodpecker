@@ -238,6 +238,8 @@ export async function POST(request: NextRequest): Promise<Response> {
     const { errorMessage, errorName } = normalizeUnknownError(error);
     const response = failureResponse(AUTH_API_CODES.RESEND_INTERNAL_ERROR);
 
+    // 현재는 내부 예외를 INTERNAL_ERROR로 정규화한다.
+    // 상세 원인은 errorMessage/errorName으로 추적하며, reasonCode는 추후 세분화할 예정이다.
     logAuthError(AUTH_EVENTS.AUTH_RESEND_FAILED, {
       path: request.nextUrl.pathname,
       method: request.method,
