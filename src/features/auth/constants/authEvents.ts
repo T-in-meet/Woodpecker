@@ -8,6 +8,8 @@ export const AUTH_EVENTS = {
   AUTH_CALLBACK_REQUESTED: "AUTH_CALLBACK_REQUESTED",
   AUTH_CALLBACK_COMPLETED: "AUTH_CALLBACK_COMPLETED",
   AUTH_CALLBACK_REJECTED: "AUTH_CALLBACK_REJECTED",
+  AUTH_RATE_LIMIT_BLOCKED: "AUTH_RATE_LIMIT_BLOCKED",
+  AUTH_INVALID_INPUT: "AUTH_INVALID_INPUT",
 } as const;
 
 export type AuthEvent = (typeof AUTH_EVENTS)[keyof typeof AUTH_EVENTS];
@@ -27,9 +29,11 @@ export type AuthFailureEvent =
   | typeof AUTH_EVENTS.AUTH_SIGNUP_FAILED
   | typeof AUTH_EVENTS.AUTH_RESEND_FAILED;
 
-export type AuthFlowEvent = Exclude<
-  AuthEvent,
-  RequestedAuthEvent | CallbackAuthEvent
->;
+export type AuthCompletedEvent =
+  | typeof AUTH_EVENTS.AUTH_SIGNUP_COMPLETED
+  | typeof AUTH_EVENTS.AUTH_RESEND_COMPLETED;
 
-export type AuthNonFailureEvent = Exclude<AuthFlowEvent, AuthFailureEvent>;
+export type AuthNonFailureEvent =
+  | AuthCompletedEvent
+  | typeof AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED
+  | typeof AUTH_EVENTS.AUTH_INVALID_INPUT;

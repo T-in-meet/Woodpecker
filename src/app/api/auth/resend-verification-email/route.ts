@@ -85,7 +85,7 @@ async function resolveResendResponse(request: NextRequest): Promise<Response> {
     body = await parseAuthJsonRequestBody(request);
   } catch (e) {
     if (e instanceof AuthJsonParseError) {
-      logAuthError(AUTH_EVENTS.AUTH_RESEND_FAILED, {
+      logAuthEvent(AUTH_EVENTS.AUTH_INVALID_INPUT, {
         path: request.nextUrl.pathname,
         method: request.method,
         status: 400,
@@ -109,7 +109,7 @@ async function resolveResendResponse(request: NextRequest): Promise<Response> {
   const parsed = resendApiSchema.safeParse(body);
 
   if (!parsed.success) {
-    logAuthError(AUTH_EVENTS.AUTH_RESEND_FAILED, {
+    logAuthEvent(AUTH_EVENTS.AUTH_INVALID_INPUT, {
       path: request.nextUrl.pathname,
       method: request.method,
       status: 400,
@@ -146,7 +146,7 @@ async function resolveResendResponse(request: NextRequest): Promise<Response> {
   const canonicalEmailForLog = maskEmailForLogging(canonicalEmail);
   const eligibility = checkRequestEligibility("resend", ip, canonicalEmail);
   if (!eligibility.allowed) {
-    logAuthEvent(AUTH_EVENTS.AUTH_RESEND_COMPLETED, {
+    logAuthEvent(AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED, {
       path: request.nextUrl.pathname,
       method: request.method,
       status: 429,

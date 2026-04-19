@@ -70,7 +70,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
      * malformed JSON 처리
      */
     if (e instanceof AuthJsonParseError) {
-      logAuthError(AUTH_EVENTS.AUTH_SIGNUP_FAILED, {
+      logAuthEvent(AUTH_EVENTS.AUTH_INVALID_INPUT, {
         path: request.nextUrl.pathname,
         method: request.method,
         status: 400,
@@ -91,7 +91,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
   const parsed = signupApiSchema.safeParse(body);
 
   if (!parsed.success) {
-    logAuthError(AUTH_EVENTS.AUTH_SIGNUP_FAILED, {
+    logAuthEvent(AUTH_EVENTS.AUTH_INVALID_INPUT, {
       path: request.nextUrl.pathname,
       method: request.method,
       status: 400,
@@ -120,7 +120,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
    */
   const eligibility = checkRequestEligibility("signup", ip, canonicalEmail);
   if (!eligibility.allowed) {
-    logAuthEvent(AUTH_EVENTS.AUTH_SIGNUP_COMPLETED, {
+    logAuthEvent(AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED, {
       path: request.nextUrl.pathname,
       method: request.method,
       status: 429,
