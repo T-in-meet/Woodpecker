@@ -41,10 +41,7 @@ export type AuthErrorContext = CommonLogFields & {
   errorCode?: string;
 };
 
-export type AuthFailureEvent =
-  | "AUTH_SIGNUP_FAILED"
-  | "AUTH_RESEND_FAILED"
-  | "AUTH_CALLBACK_FAILED";
+export type AuthFailureEvent = "AUTH_SIGNUP_FAILED" | "AUTH_RESEND_FAILED";
 
 export type AuthNonFailureEvent = Exclude<BaseAuthEvent, AuthFailureEvent>;
 
@@ -90,6 +87,22 @@ export function logAuthError(
   logError(entry);
 }
 
+/**
+ * Callback 전용 로깅 (특수 케이스)
+ *
+ * 중요:
+ * - callback 흐름은 다른 auth 흐름과 다르게 처리된다.
+ * - AUTH_CALLBACK_FAILED는 시스템 에러를 의미하지 않는다.
+ *   (잘못된 링크, 만료된 토큰 등 "예상 가능한 분기"를 의미한다)
+ *
+ * 설계 의도:
+ * - callback 실패는 외부 동작을 동일하게 맞추기 위해 하나의 흐름으로 정규화된다.
+ * - 따라서 ERROR가 아니라 INFO로 기록한다.
+ *
+ * 금지:
+ * - AUTH_CALLBACK_FAILED를 예외/장애 로그로 취급하지 말 것
+ * - logError로 보내지 말 것
+ */
 export function logCallback(
   event: CallbackAuthEvent,
   ctx: CallbackContext,
