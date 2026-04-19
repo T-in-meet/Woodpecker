@@ -70,7 +70,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
      * malformed JSON 처리
      */
     if (e instanceof AuthJsonParseError) {
-      logAuthEvent(AUTH_EVENTS.AUTH_INVALID_INPUT, {
+      logAuthError(AUTH_EVENTS.AUTH_SIGNUP_FAILED, {
         path: request.nextUrl.pathname,
         method: request.method,
         status: 400,
@@ -91,7 +91,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
   const parsed = signupApiSchema.safeParse(body);
 
   if (!parsed.success) {
-    logAuthEvent(AUTH_EVENTS.AUTH_INVALID_INPUT, {
+    logAuthError(AUTH_EVENTS.AUTH_SIGNUP_FAILED, {
       path: request.nextUrl.pathname,
       method: request.method,
       status: 400,
@@ -320,6 +320,7 @@ export async function POST(request: NextRequest) {
       status: response.status,
       provider: "email",
       result: "failure",
+      reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
     });
   }
 

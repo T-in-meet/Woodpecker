@@ -12,20 +12,41 @@ export type RequestedContext = {
   provider: string;
 };
 
-export type BaseLogContext = {
+type CommonLogFields = {
   path: string;
   method: string;
   status: number;
   provider: string;
-  result: "success" | "failure" | "blocked";
-  // reasonCode는 failure/blocked 이벤트에만 적용되며 success(COMPLETED)에는 불필요
-  reasonCode?: AuthLogReason;
   userId?: string;
   maskedEmail?: string;
+};
+
+type SuccessLogContext = CommonLogFields & {
+  result: "success";
+  reasonCode?: never;
+};
+
+type BlockedLogContext = CommonLogFields & {
+  result: "blocked";
+  reasonCode: AuthLogReason;
+};
+
+export type AuthEventContext = SuccessLogContext | BlockedLogContext;
+
+export type AuthErrorContext = CommonLogFields & {
+  result: "failure";
+  reasonCode: AuthLogReason;
   errorMessage?: string;
   errorName?: string;
   errorCode?: string;
 };
+
+export type AuthFailureEvent =
+  | "AUTH_SIGNUP_FAILED"
+  | "AUTH_RESEND_FAILED"
+  | "AUTH_CALLBACK_FAILED";
+
+export type AuthNonFailureEvent = Exclude<BaseAuthEvent, AuthFailureEvent>;
 
 export type CallbackContext = {
   path: string;
@@ -44,17 +65,28 @@ export function logRequested(
   logInfo(entry);
 }
 
-export function logAuthEvent(event: BaseAuthEvent, ctx: BaseLogContext): void {
-  const entry: LogEntry<BaseAuthEvent, BaseLogContext> = { event, ...ctx };
-  if (ctx.result === "failure" || ctx.result === "blocked") {
+export function logAuthEvent(
+  event: AuthNonFailureEvent,
+  ctx: AuthEventContext,
+): void {
+  const entry: LogEntry<AuthNonFailureEvent, AuthEventContext> = {
+    event,
+    ...ctx,
+  };
+
+  if (ctx.result === "blocked") {
     logWarn(entry);
-  } else {
-    logInfo(entry);
+    return;
   }
+
+  logInfo(entry);
 }
 
-export function logAuthError(event: BaseAuthEvent, ctx: BaseLogContext): void {
-  const entry: LogEntry<BaseAuthEvent, BaseLogContext> = { event, ...ctx };
+export function logAuthError(
+  event: AuthFailureEvent,
+  ctx: AuthErrorContext,
+): void {
+  const entry: LogEntry<AuthFailureEvent, AuthErrorContext> = { event, ...ctx };
   logError(entry);
 }
 

@@ -85,7 +85,7 @@ async function resolveResendResponse(request: NextRequest): Promise<Response> {
     body = await parseAuthJsonRequestBody(request);
   } catch (e) {
     if (e instanceof AuthJsonParseError) {
-      logAuthEvent(AUTH_EVENTS.AUTH_INVALID_INPUT, {
+      logAuthError(AUTH_EVENTS.AUTH_SIGNUP_FAILED, {
         path: request.nextUrl.pathname,
         method: request.method,
         status: 400,
@@ -109,7 +109,7 @@ async function resolveResendResponse(request: NextRequest): Promise<Response> {
   const parsed = resendApiSchema.safeParse(body);
 
   if (!parsed.success) {
-    logAuthEvent(AUTH_EVENTS.AUTH_INVALID_INPUT, {
+    logAuthError(AUTH_EVENTS.AUTH_SIGNUP_FAILED, {
       path: request.nextUrl.pathname,
       method: request.method,
       status: 400,
@@ -234,12 +234,13 @@ export async function POST(request: NextRequest): Promise<Response> {
       result: "success",
     });
   } else if (wasException) {
-    logAuthError(AUTH_EVENTS.AUTH_RESEND_FAILED, {
+    logAuthError(AUTH_EVENTS.AUTH_SIGNUP_FAILED, {
       path: request.nextUrl.pathname,
       method: request.method,
       status: response.status,
       provider: "email",
       result: "failure",
+      reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
     });
   }
 
