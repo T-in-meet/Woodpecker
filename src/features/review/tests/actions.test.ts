@@ -1,12 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getNoteDetailRoute, getNoteReviewRoute } from "@/lib/constants/routes";
+import {
+  getNoteDetailRoute,
+  getNoteReviewRoute,
+  ROUTES,
+} from "@/lib/constants/routes";
 
 const REDIRECT_ERROR = new Error("NEXT_REDIRECT");
 const NOTE_ID = "11111111-1111-4111-8111-111111111111";
 const REVIEW_LOG_ID = "22222222-2222-4222-8222-222222222222";
 const NEXT_REVIEW_LOG_ID = "33333333-3333-4333-8333-333333333333";
 const TEST_USER_ID = "user-123";
+const CONFIRMED_AT = "2026-01-01T00:00:00.000Z";
+const UNVERIFIED_EMAIL_STATES = [null, undefined] as const;
 
 const {
   createClientMock,
@@ -16,8 +22,6 @@ const {
   redirectMock,
   revalidatePathMock,
 } = vi.hoisted(() => {
-  process.env["REVIEW_COMPLETION_TOKEN_SECRET"] = "test-review-secret";
-
   return {
     createClientMock: vi.fn(),
     getNoteContentForComparisonMock: vi.fn(),
@@ -47,18 +51,23 @@ vi.mock("../queries", () => ({
 }));
 
 import { completeReviewAction, submitAnswerAction } from "../actions";
-import {
-  createReviewCompletionToken,
-  REVIEW_COMPLETION_TOKEN_TTL_SECONDS,
-  verifyReviewCompletionToken,
-} from "../lib/reviewCompletionToken";
 
-function createAuthSupabaseMock(userId: string | null) {
+function createAuthSupabaseMock(
+  userId: string | null,
+  options?: { emailConfirmedAt?: string | null | undefined },
+) {
+  const emailConfirmedAt =
+    options && Object.prototype.hasOwnProperty.call(options, "emailConfirmedAt")
+      ? options.emailConfirmedAt
+      : CONFIRMED_AT;
+
   return {
     auth: {
       getUser: vi.fn().mockResolvedValue({
         data: {
-          user: userId ? { id: userId } : null,
+          user: userId
+            ? { id: userId, email_confirmed_at: emailConfirmedAt }
+            : null,
         },
       }),
     },
@@ -91,40 +100,28 @@ function createCompleteReviewSupabaseMock({
 function createCompleteReviewFormData({
   noteId = NOTE_ID,
   reviewLogId = REVIEW_LOG_ID,
-  tokenNoteId = noteId,
-  tokenReviewLogId = reviewLogId,
-  tokenUserId = TEST_USER_ID,
 }: {
   noteId?: string;
   reviewLogId?: string;
-  tokenNoteId?: string;
-  tokenReviewLogId?: string;
-  tokenUserId?: string;
 } = {}) {
   const formData = new FormData();
 
   formData.set("noteId", noteId);
   formData.set("reviewLogId", reviewLogId);
-  formData.set(
-    "completionToken",
-    createReviewCompletionToken({
-      noteId: tokenNoteId,
-      reviewLogId: tokenReviewLogId,
-      userId: tokenUserId,
-    }),
-  );
 
   return formData;
 }
 
 describe("submitAnswerAction", () => {
   beforeEach(() => {
-    process.env["REVIEW_COMPLETION_TOKEN_SECRET"] = "test-review-secret";
-    delete process.env["EMAIL_TICKET_SECRET"];
-
     createClientMock.mockReset();
     getNoteContentForComparisonMock.mockReset();
     getPendingReviewLogMock.mockReset();
+    redirectMock.mockReset();
+
+    redirectMock.mockImplementation(() => {
+      throw REDIRECT_ERROR;
+    });
   });
 
   afterEach(() => {
@@ -195,7 +192,7 @@ describe("submitAnswerAction", () => {
     });
   });
 
-  it("returns the original content and completion token when the note exists", async () => {
+  it("returns the original content and review log id when the note exists", async () => {
     createClientMock.mockResolvedValue(createAuthSupabaseMock(TEST_USER_ID));
     getNoteContentForComparisonMock.mockResolvedValue({
       content: "원본 내용",
@@ -227,57 +224,33 @@ describe("submitAnswerAction", () => {
       language: "markdown",
       userAnswer: "내 답안",
       reviewLogId: REVIEW_LOG_ID,
-      completionToken: expect.any(String),
-    });
-
-    if (!result || !result.success) {
-      throw new Error("expected a successful comparison result");
-    }
-
-    expect(
-      verifyReviewCompletionToken(result.completionToken, {
-        noteId: NOTE_ID,
-        reviewLogId: REVIEW_LOG_ID,
-        userId: TEST_USER_ID,
-      }),
-    ).toBe(true);
-  });
-
-  it("fails closed when the review completion secret is missing", async () => {
-    createClientMock.mockResolvedValue(createAuthSupabaseMock(TEST_USER_ID));
-    getNoteContentForComparisonMock.mockResolvedValue({
-      content: "original content",
-      language: "markdown",
-    });
-    getPendingReviewLogMock.mockResolvedValue({
-      id: REVIEW_LOG_ID,
-      note_id: NOTE_ID,
-      round: 1,
-      scheduled_at: "2026-01-02T00:00:00.000Z",
-      completed_at: null,
-    });
-    delete process.env["REVIEW_COMPLETION_TOKEN_SECRET"];
-    process.env["EMAIL_TICKET_SECRET"] = "legacy-ticket-secret";
-
-    const formData = new FormData();
-    formData.set("noteId", NOTE_ID);
-    formData.set("answer", "user answer");
-
-    const result = await submitAnswerAction(null, formData);
-
-    expect(result).toMatchObject({
-      error: expect.any(String),
     });
   });
+
+  it.each(UNVERIFIED_EMAIL_STATES)(
+    "redirects unverified emails to the verify-email route when email_confirmed_at is %s",
+    async (emailConfirmedAt) => {
+      createClientMock.mockResolvedValue(
+        createAuthSupabaseMock(TEST_USER_ID, { emailConfirmedAt }),
+      );
+
+      const formData = new FormData();
+      formData.set("noteId", NOTE_ID);
+      formData.set("answer", "내 답안");
+
+      await expect(submitAnswerAction(null, formData)).rejects.toBe(
+        REDIRECT_ERROR,
+      );
+
+      expect(redirectMock).toHaveBeenCalledWith(ROUTES.VERIFY_EMAIL);
+      expect(getNoteContentForComparisonMock).not.toHaveBeenCalled();
+      expect(getPendingReviewLogMock).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe("completeReviewAction", () => {
   beforeEach(() => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
-    process.env["REVIEW_COMPLETION_TOKEN_SECRET"] = "test-review-secret";
-    delete process.env["EMAIL_TICKET_SECRET"];
-
     createClientMock.mockReset();
     getPendingReviewLogMock.mockReset();
     getReviewableNoteMock.mockReset();
@@ -290,7 +263,6 @@ describe("completeReviewAction", () => {
   });
 
   afterEach(() => {
-    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -306,34 +278,40 @@ describe("completeReviewAction", () => {
     expect(getReviewableNoteMock).not.toHaveBeenCalled();
   });
 
-  it("returns an error when the completion token is invalid", async () => {
+  it.each(UNVERIFIED_EMAIL_STATES)(
+    "redirects unverified emails to the verify-email route when email_confirmed_at is %s",
+    async (emailConfirmedAt) => {
+      createClientMock.mockResolvedValue(
+        createAuthSupabaseMock(TEST_USER_ID, { emailConfirmedAt }),
+      );
+
+      await expect(
+        completeReviewAction(null, createCompleteReviewFormData()),
+      ).rejects.toBe(REDIRECT_ERROR);
+
+      expect(redirectMock).toHaveBeenCalledWith(ROUTES.VERIFY_EMAIL);
+      expect(getReviewableNoteMock).not.toHaveBeenCalled();
+      expect(getPendingReviewLogMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it("returns an error when there is no pending review log", async () => {
     createClientMock.mockResolvedValue(createAuthSupabaseMock(TEST_USER_ID));
+    getReviewableNoteMock.mockResolvedValue({
+      title: "테스트 노트",
+      language: "markdown",
+      review_round: 0,
+    });
+    getPendingReviewLogMock.mockResolvedValue(null);
 
-    const formData = createCompleteReviewFormData();
-    formData.set("completionToken", "forged-token");
-
-    const result = await completeReviewAction(null, formData);
+    const result = await completeReviewAction(
+      null,
+      createCompleteReviewFormData(),
+    );
 
     expect(result).toEqual({
-      error: "답안을 제출한 뒤 원본을 확인하고 복습을 완료해주세요.",
+      error: "이미 완료되었거나 진행 중인 복습이 없습니다.",
     });
-    expect(getReviewableNoteMock).not.toHaveBeenCalled();
-    expect(getPendingReviewLogMock).not.toHaveBeenCalled();
-  });
-
-  it("returns an error when the completion token has expired", async () => {
-    createClientMock.mockResolvedValue(createAuthSupabaseMock(TEST_USER_ID));
-
-    const formData = createCompleteReviewFormData();
-    vi.advanceTimersByTime((REVIEW_COMPLETION_TOKEN_TTL_SECONDS + 1) * 1000);
-
-    const result = await completeReviewAction(null, formData);
-
-    expect(result).toMatchObject({
-      error: expect.any(String),
-    });
-    expect(getReviewableNoteMock).not.toHaveBeenCalled();
-    expect(getPendingReviewLogMock).not.toHaveBeenCalled();
   });
 
   it("returns an error when the pending review log does not match", async () => {
@@ -356,7 +334,9 @@ describe("completeReviewAction", () => {
       createCompleteReviewFormData(),
     );
 
-    expect(result).toEqual({ error: "진행 중인 복습을 찾을 수 없습니다." });
+    expect(result).toEqual({
+      error: "답안을 제출한 뒤 원본을 확인하고 복습을 완료해주세요.",
+    });
   });
 
   it("completes a non-final review and schedules the next one", async () => {
