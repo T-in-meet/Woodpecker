@@ -1,6 +1,6 @@
 import "@/tests/setup";
 
-import { Editor } from "@tiptap/core";
+import { Editor, type JSONContent } from "@tiptap/core";
 import { describe, expect, it } from "vitest";
 
 import { serializeTipTapMarkdown } from "../utils/serializeTipTapMarkdown";
@@ -9,7 +9,10 @@ import {
   getTipTapExtensions,
 } from "../utils/tiptapExtensions";
 
-function createEditor(content: string, extensions = getTipTapExtensions()) {
+function createEditor(
+  content: string | JSONContent,
+  extensions = getTipTapExtensions(),
+) {
   return new Editor({ extensions, content, editable: false });
 }
 
@@ -85,6 +88,57 @@ describe("MarkdownTaskItem custom extension", () => {
 
     expect(serializeTipTapMarkdown(editor).trim()).toBe(
       "![Architecture diagram](https://example.com/diagram.png)",
+    );
+
+    editor.destroy();
+  });
+
+  it("serializes tables with multi-block cells without placeholder output", () => {
+    const editor = createEditor({
+      type: "doc",
+      content: [
+        {
+          type: "table",
+          content: [
+            {
+              type: "tableRow",
+              content: [
+                {
+                  type: "tableHeader",
+                  content: [
+                    {
+                      type: "paragraph",
+                      content: [{ type: "text", text: "제목" }],
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              type: "tableRow",
+              content: [
+                {
+                  type: "tableCell",
+                  content: [
+                    {
+                      type: "paragraph",
+                      content: [{ type: "text", text: "첫 줄" }],
+                    },
+                    {
+                      type: "paragraph",
+                      content: [{ type: "text", text: "둘째 줄" }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(serializeTipTapMarkdown(editor).trim()).toBe(
+      "| 제목 |\n| --- |\n| 첫 줄 둘째 줄 |",
     );
 
     editor.destroy();
