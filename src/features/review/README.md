@@ -45,3 +45,10 @@
 ### 이메일 인증
 
 회원가입 플로우에서 magiclink 클릭 전까지 `email_confirmed_at`이 비어 있다. Supabase `User` shape에서는 이 값이 `null` 또는 `undefined`일 수 있으므로, 복습 관련 모든 엔트리포인트(페이지, `submitAnswerAction`, `completeReviewAction`)에서 `email_confirmed_at == null` 기준으로 `/verify-email`로 redirect한다.
+
+이메일 인증 가드는 두 층으로 구성된다:
+
+- **앱 레벨 (UX)**: 페이지/서버 액션에서 `email_confirmed_at == null` 시 `/verify-email` redirect. 사용자가 UI를 통해 복습 플로우에 진입하는 경우를 담당.
+- **DB 레벨 (쓰기 차단)**: `complete_review_and_schedule_next` RPC 본문에서 `auth.users.email_confirmed_at`이 `NULL`이면 `email not confirmed` 예외로 쓰기 자체를 차단. 서버 액션을 우회해 RPC/REST로 직접 호출하는 경로를 방어.
+
+RPC 에러는 `completeReviewAction`에서 기존 공통 실패 메시지로 변환되므로 사용자-facing 메시지 정책은 불변. 이슈 #138 참고.
