@@ -685,120 +685,91 @@ describe("checkRequestEligibility", () => {
   });
 
   // ============================================================================
-  // 관측성 — 차단 요청 로깅
+  // blockedBy 반환값 검증 — 차단 차원 식별
   // ============================================================================
 
-  describe("관측성 — logRequestEligibilityBlocked 호출 검증", () => {
-    it("TC-L1. checkRequestEligibility('signup', ...) 차단 시 → route:'signup'으로 로그됨", () => {
-      // 로깅 출력 캡처를 위한 console.log 스파이 설정
-      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-
+  describe("blockedBy 반환값 — 차단 차원 식별", () => {
+    it("TC-B1. IP 차단 시 → { allowed: false, blockedBy: 'ip' }", () => {
       const ip = "10.0.9.1";
 
-      // IP 한도 채우기
       for (let i = 0; i < IP_LIMIT; i++) {
         checkRequestEligibility("signup", ip, `user${i}@example.com`);
       }
 
-      // 차단 요청은 로그가 남아야 함
-      checkRequestEligibility("signup", ip, "blocked@example.com");
-
-      // signup route로 로그 호출되었는지 검증
-      expect(consoleSpy).toHaveBeenCalled();
-      const lastCall =
-        consoleSpy.mock.calls[consoleSpy.mock.calls.length - 1]?.[0];
-      expect(lastCall).toContain('"route":"signup"');
-
-      consoleSpy.mockRestore();
-    });
-
-    it("TC-L2. checkRequestEligibility('resend', ...) 차단 시 → route:'resend'으로 로그됨", () => {
-      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-
-      const email = "test@example.com";
-
-      // long 한도 채우기
-      for (let i = 0; i < EMAIL_LONG_LIMIT; i++) {
-        checkRequestEligibility("resend", `10.0.0.${i}`, email);
-      }
-
-      // 차단 요청은 로그가 남아야 함
-      checkRequestEligibility("resend", "10.0.0.99", email);
-
-      // resend route로 로그 호출되었는지 검증
-      expect(consoleSpy).toHaveBeenCalled();
-      const lastCall =
-        consoleSpy.mock.calls[consoleSpy.mock.calls.length - 1]?.[0];
-      expect(lastCall).toContain('"route":"resend"');
-
-      consoleSpy.mockRestore();
-    });
-
-    it("TC-L3. 허용 시 → logRequestEligibilityBlocked 미호출", () => {
-      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-
-      // 허용 요청은 로깅을 유발하지 않아야 함
       const result = checkRequestEligibility(
         "signup",
-        "10.0.0.1",
-        "user@example.com",
+        ip,
+        "blocked@example.com",
       );
+
+      expect(result.allowed).toBe(false);
+      if (!result.allowed) {
+        expect(result.blockedBy).toBe("ip");
+      }
+    });
+
+    it("TC-B2. emailShort 차단 시 → { allowed: false, blockedBy: 'emailShort' }", () => {
+      const ip1 = "10.0.12.1";
+      const ip2 = "10.0.12.2";
+      const email = "short-blocked@example.com";
+
+      checkRequestEligibility("signup", ip1, email);
+
+      // ip1과 다른 ip로 즉시 재시도 → emailShort에 걸려야 함
+      const result = checkRequestEligibility("signup", ip2, email);
+
+      expect(result.allowed).toBe(false);
+      if (!result.allowed) {
+        expect(result.blockedBy).toBe("emailShort");
+      }
+    });
+
+    it("TC-B3. emailLong 차단 시 → { allowed: false, blockedBy: 'emailLong' }", () => {
+      const email = "long-blocked@example.com";
+
+      for (let i = 0; i < EMAIL_LONG_LIMIT; i++) {
+        checkRequestEligibility("signup", `10.0.13.${i}`, email);
+        vi.advanceTimersByTime(EMAIL_SHORT_WINDOW_MS + 1000);
+      }
+
+      const result = checkRequestEligibility("signup", "10.0.13.99", email);
+
+      expect(result.allowed).toBe(false);
+      if (!result.allowed) {
+        expect(result.blockedBy).toBe("emailLong");
+      }
+    });
+
+    it("TC-B4. IP와 emailShort 동시 차단 시 → blockedBy: 'ip' (ip 우선)", () => {
+      const ip = "10.0.14.1";
+      const email = "priority@example.com";
+
+      // IP 한도 채우면서 동시에 emailShort도 채움
+      for (let i = 0; i < IP_LIMIT; i++) {
+        checkRequestEligibility("signup", ip, `user${i}@example.com`);
+      }
+      // emailShort도 최근 요청이 있는 상태
+      checkRequestEligibility("signup", "10.0.14.99", email);
+      vi.advanceTimersByTime(100); // short window 내
+
+      const result = checkRequestEligibility("signup", ip, email);
+
+      expect(result.allowed).toBe(false);
+      if (!result.allowed) {
+        // ip 조건이 먼저 평가되므로 ip 우선
+        expect(result.blockedBy).toBe("ip");
+      }
+    });
+
+    it("TC-B5. 허용 시 → { allowed: true } (blockedBy 없음)", () => {
+      const result = checkRequestEligibility(
+        "signup",
+        "10.0.15.1",
+        "allowed@example.com",
+      );
+
       expect(result.allowed).toBe(true);
-      expect(consoleSpy).not.toHaveBeenCalled();
-
-      consoleSpy.mockRestore();
-    });
-
-    it("TC-L4. 차단 원인에 따라 ipOk/emailShortOk/emailLongOk가 정확히 전달됨", () => {
-      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-
-      // IP 차단 시나리오
-      const ip = "10.0.10.1";
-      for (let i = 0; i < IP_LIMIT; i++) {
-        checkRequestEligibility("signup", ip, `user${i}@example.com`);
-      }
-
-      checkRequestEligibility("signup", ip, "blocked@example.com");
-
-      const lastCall =
-        consoleSpy.mock.calls[consoleSpy.mock.calls.length - 1]?.[0];
-      expect(lastCall).toContain('"ipOk":false');
-      expect(lastCall).toContain('"emailShortOk":true');
-      expect(lastCall).toContain('"emailLongOk":true');
-
-      consoleSpy.mockRestore();
-    });
-
-    it("TC-L5. 로그에 raw IP/email이 아닌 masked 값이 포함됨", () => {
-      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-
-      const ip = "10.0.11.1";
-      const email = "secret@example.com";
-
-      // IP 한도 채우기
-      for (let i = 0; i < IP_LIMIT; i++) {
-        checkRequestEligibility("signup", ip, `user${i}@example.com`);
-      }
-
-      // 차단 요청
-      checkRequestEligibility("signup", ip, email);
-
-      const lastCall =
-        consoleSpy.mock.calls[consoleSpy.mock.calls.length - 1]?.[0];
-
-      // raw IP가 로그에 없어야 함
-      expect(lastCall).not.toContain(ip);
-
-      // 마스킹된 IP는 로그에 있어야 함
-      expect(lastCall).toContain("10.0.11.***");
-
-      // raw email이 로그에 없어야 함
-      expect(lastCall).not.toContain(email);
-
-      // 마스킹된 email은 로그에 있어야 함
-      expect(lastCall).toContain("***@example.com");
-
-      consoleSpy.mockRestore();
+      expect((result as { blockedBy?: string }).blockedBy).toBeUndefined();
     });
   });
 

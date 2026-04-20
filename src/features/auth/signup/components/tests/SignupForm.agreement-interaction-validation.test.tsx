@@ -192,16 +192,12 @@ describe("회원가입 폼 동의 상호작용 + Validation", () => {
 
     await user.click(screen.getByRole("button", { name: /회원가입/i }));
 
-    await waitFor(() => {
-      expect(
-        screen.getByText("개인정보 처리방침에 동의해주세요"),
-      ).toBeInTheDocument();
+    const errorButton = await screen.findByRole("button", {
+      name: "개인정보 처리방침에 동의해주세요",
     });
 
     await waitFor(() => {
-      expect(document.activeElement).toHaveTextContent(
-        "개인정보 처리방침에 동의해주세요",
-      );
+      expect(errorButton).toHaveFocus();
     });
   });
 

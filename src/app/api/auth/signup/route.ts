@@ -1,16 +1,26 @@
 import { NextRequest } from "next/server";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
+import { AUTH_EVENTS } from "@/features/auth/constants/authEvents";
+import { AUTH_LOG_REASONS } from "@/features/auth/constants/authLogReasons";
 import { issueAuthEmailLinkAndSend } from "@/features/auth/email/issueAuthEmailLinkAndSend";
 import { sendAuthEmail } from "@/features/auth/email/sendAuthEmail";
 import { applyMinimumResponseTime } from "@/features/auth/lib/applyMinimumResponseTime";
 import {
+  logAuthError,
+  logAuthEvent,
+  logRequested,
+  normalizeUnknownError,
+} from "@/features/auth/lib/authLogger";
+import {
   checkIpRateLimitPrecheck,
   checkRequestEligibility,
+  mapBlockedByToReason,
 } from "@/features/auth/lib/checkRequestEligibility";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { mapAuthValidationErrors } from "@/features/auth/lib/mapAuthValidationErrors";
 import { maskEmailForLogging } from "@/features/auth/lib/maskEmailForLogging";
+import { maskIpForLogging } from "@/features/auth/lib/maskIpForLogging";
 import {
   AuthJsonParseError,
   parseAuthJsonRequestBody,
@@ -29,7 +39,33 @@ import { VALIDATION_REASON } from "@/lib/validation/reasons";
  * POST 핸들러에서 분리된 내부 함수.
  * 타이밍 정책(최소 응답 시간)은 POST에서 일괄 적용한다.
  */
-async function resolveSignupResponse(request: NextRequest): Promise<Response> {
+type SignupTerminalOutcome =
+  | {
+      type: "invalid_input";
+      reasonCode:
+        | typeof AUTH_LOG_REASONS.INVALID_JSON
+        | typeof AUTH_LOG_REASONS.SCHEMA_VALIDATION_FAILED;
+      maskedEmail?: string;
+    }
+  | {
+      type: "blocked";
+      reasonCode:
+        | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP
+        | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT
+        | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG;
+      maskedEmail?: string;
+      maskedIp?: string;
+    }
+  | { type: "completed" };
+
+type ResolveSignupResult = {
+  response: Response;
+  outcome: SignupTerminalOutcome;
+};
+
+async function resolveSignupResponse(
+  request: NextRequest,
+): Promise<ResolveSignupResult> {
   const makeSignupSuccess = (email: string) =>
     successResponse(AUTH_API_CODES.SIGNUP_SUCCESS, {
       email,
@@ -40,6 +76,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
    * 요청 IP 추출 (rate limit key)
    */
   const ip = getClientIp(request);
+  const maskedIp = maskIpForLogging(ip);
 
   /**
    * IP 사전 검증 — 본문 파싱 비용 없이 IP 차단
@@ -50,7 +87,14 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
    */
   const precheck = checkIpRateLimitPrecheck(ip);
   if (!precheck.allowed) {
-    return failureResponse(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
+    return {
+      response: failureResponse(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED),
+      outcome: {
+        type: "blocked",
+        reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_IP,
+        maskedIp,
+      },
+    };
   }
 
   let body: unknown;
@@ -61,9 +105,15 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
      * malformed JSON 처리
      */
     if (e instanceof AuthJsonParseError) {
-      return failureResponse(AUTH_API_CODES.SIGNUP_INVALID_INPUT, {
-        errors: [{ field: "body", reason: VALIDATION_REASON.INVALID_FORMAT }],
-      });
+      return {
+        response: failureResponse(AUTH_API_CODES.SIGNUP_INVALID_INPUT, {
+          errors: [{ field: "body", reason: VALIDATION_REASON.INVALID_FORMAT }],
+        }),
+        outcome: {
+          type: "invalid_input",
+          reasonCode: AUTH_LOG_REASONS.INVALID_JSON,
+        },
+      };
     }
     throw e;
   }
@@ -74,9 +124,15 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
   const parsed = signupApiSchema.safeParse(body);
 
   if (!parsed.success) {
-    return failureResponse(AUTH_API_CODES.SIGNUP_INVALID_INPUT, {
-      errors: mapAuthValidationErrors(parsed.error, body),
-    });
+    return {
+      response: failureResponse(AUTH_API_CODES.SIGNUP_INVALID_INPUT, {
+        errors: mapAuthValidationErrors(parsed.error, body),
+      }),
+      outcome: {
+        type: "invalid_input",
+        reasonCode: AUTH_LOG_REASONS.SCHEMA_VALIDATION_FAILED,
+      },
+    };
   }
 
   const { email, password, nickname } = parsed.data;
@@ -91,11 +147,19 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
    * - single entry point: checkRequestEligibility 하나로 모든 조건 평가
    * - atomic: 판단과 상태 업데이트가 함수 내에서 함께 일어남
    * - AND evaluation: 세 조건(IP, short, long) 모두 통과해야 허용
-   * - Observability: 차단 시에만 내부 로그 기록 (raw IP/email 노출 금지)
+   * - 차단 시 blockedBy를 반환하며, 로깅은 route handler(여기)에서 담당한다
    */
   const eligibility = checkRequestEligibility("signup", ip, canonicalEmail);
   if (!eligibility.allowed) {
-    return failureResponse(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
+    return {
+      response: failureResponse(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED),
+      outcome: {
+        type: "blocked",
+        reasonCode: mapBlockedByToReason(eligibility.blockedBy),
+        maskedEmail,
+        ...(eligibility.blockedBy === "ip" ? { maskedIp } : {}),
+      },
+    };
   }
 
   /**
@@ -122,10 +186,13 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
         email: deliveryEmail,
       });
     } catch {
-      console.warn("이메일 재발송 실패 (무시됨)", { maskedEmail });
+      // 외부 응답 계약 통일: side-effect 실패는 여기서 로깅하지 않는다.
     }
 
-    return makeSignupSuccess(email);
+    return {
+      response: makeSignupSuccess(email),
+      outcome: { type: "completed" },
+    };
   }
 
   /**
@@ -142,12 +209,13 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
         email: deliveryEmail,
       });
     } catch {
-      console.warn("인증 완료 사용자 이메일 발송 실패 (무시됨)", {
-        maskedEmail,
-      });
+      // 외부 응답 계약 통일: side-effect 실패는 여기서 로깅하지 않는다.
     }
 
-    return makeSignupSuccess(email);
+    return {
+      response: makeSignupSuccess(email),
+      outcome: { type: "completed" },
+    };
   }
 
   /**
@@ -184,14 +252,7 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
   });
 
   if (createUserError) {
-    console.error("Supabase admin.createUser failed", {
-      maskedEmail,
-      message: createUserError.message,
-      status: createUserError.status,
-      code: createUserError.code,
-      name: createUserError.name,
-    });
-    return makeSignupSuccess(email); // raw email 응답
+    throw createUserError;
   }
 
   const { data, error } = await adminClient.auth.admin.generateLink({
@@ -203,41 +264,21 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
   });
 
   if (error) {
-    console.error("Supabase generateLink(magiclink) failed", {
-      maskedEmail,
-      message: error.message,
-      status: error.status,
-      code: error.code,
-      name: error.name,
-    });
-
-    return makeSignupSuccess(email); // raw email 응답
+    throw error;
   }
 
   const tokenHash = data.properties?.hashed_token;
 
   if (!tokenHash) {
-    console.error("Supabase generateLink(magiclink) returned no hashed token", {
-      maskedEmail,
-    });
-    return makeSignupSuccess(email); // raw email 응답
+    throw new Error("Missing hashed_token from generateLink");
   }
 
-  try {
-    await sendAuthEmail(email, tokenHash, "magiclink"); // raw email 발송
-  } catch (error) {
-    console.error("Failed to send signup magiclink email", {
-      maskedEmail,
-      error,
-    });
-    // AE 방어: 이메일 발송 실패를 외부에 노출하지 않는다.
-    // 계정은 이미 생성됨. 사용자는 재가입 시도 또는 /resend-verification-email로 재발송 가능.
-  }
+  await sendAuthEmail(email, tokenHash, "magiclink"); // raw email 발송
 
   /**
    * 최종 성공 응답 (완전 통일)
    */
-  return makeSignupSuccess(email); // raw email 응답
+  return { response: makeSignupSuccess(email), outcome: { type: "completed" } }; // raw email 응답
 }
 
 /**
@@ -251,12 +292,70 @@ async function resolveSignupResponse(request: NextRequest): Promise<Response> {
  */
 export async function POST(request: NextRequest) {
   const start = Date.now();
-  let response: Response;
+  logRequested(AUTH_EVENTS.AUTH_SIGNUP_REQUESTED, {
+    path: request.nextUrl.pathname,
+    method: request.method,
+    provider: "email",
+  });
 
+  let resolved: ResolveSignupResult;
   try {
-    response = await resolveSignupResponse(request);
-  } catch {
-    response = failureResponse(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR);
+    resolved = await resolveSignupResponse(request);
+  } catch (error) {
+    const { errorMessage, errorName } = normalizeUnknownError(error);
+    const response = failureResponse(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR);
+
+    // 현재는 내부 예외를 INTERNAL_ERROR로 정규화한다.
+    // 상세 원인은 errorMessage/errorName으로 추적하며, reasonCode는 추후 세분화할 예정이다.
+    logAuthError(AUTH_EVENTS.AUTH_SIGNUP_FAILED, {
+      path: request.nextUrl.pathname,
+      method: request.method,
+      status: response.status,
+      provider: "email",
+      result: "failure",
+      reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+      errorMessage,
+      errorName,
+    });
+
+    return applyMinimumResponseTime(start, response);
+  }
+
+  const { response, outcome } = resolved;
+
+  switch (outcome.type) {
+    case "invalid_input":
+      logAuthEvent(AUTH_EVENTS.AUTH_INVALID_INPUT, {
+        path: request.nextUrl.pathname,
+        method: request.method,
+        status: response.status,
+        provider: "email",
+        result: "failure",
+        reasonCode: outcome.reasonCode,
+        ...(outcome.maskedEmail ? { maskedEmail: outcome.maskedEmail } : {}),
+      });
+      break;
+    case "blocked":
+      logAuthEvent(AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED, {
+        path: request.nextUrl.pathname,
+        method: request.method,
+        status: response.status,
+        provider: "email",
+        result: "blocked",
+        reasonCode: outcome.reasonCode,
+        ...(outcome.maskedEmail ? { maskedEmail: outcome.maskedEmail } : {}),
+        ...(outcome.maskedIp ? { maskedIp: outcome.maskedIp } : {}),
+      });
+      break;
+    case "completed":
+      logAuthEvent(AUTH_EVENTS.AUTH_SIGNUP_COMPLETED, {
+        path: request.nextUrl.pathname,
+        method: request.method,
+        status: response.status,
+        provider: "email",
+        result: "success",
+      });
+      break;
   }
 
   return applyMinimumResponseTime(start, response);

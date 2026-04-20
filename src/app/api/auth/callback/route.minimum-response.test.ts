@@ -7,7 +7,7 @@
  */
 
 import { NextRequest } from "next/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MIN_RESPONSE_MS } from "@/features/auth/lib/applyMinimumResponseTime";
 import { createClient } from "@/lib/supabase/server";
@@ -18,6 +18,7 @@ vi.mock("@/lib/supabase/server");
 
 const START_TIME = 1_000_000;
 const mockVerifyOtp = vi.fn();
+const originalAppUrl = process.env["APP_URL"];
 
 function makeRequest(params?: {
   token_hash?: string;
@@ -64,12 +65,21 @@ describe("callback 최소 응답 시간 보장", () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
     vi.clearAllMocks();
+    process.env["APP_URL"] = "http://localhost";
 
     vi.mocked(createClient).mockResolvedValue({
       auth: { verifyOtp: mockVerifyOtp },
     } as never);
 
     mockVerifyOtp.mockResolvedValue({ data: { user: null }, error: null });
+  });
+
+  afterEach(() => {
+    if (originalAppUrl) {
+      process.env["APP_URL"] = originalAppUrl;
+      return;
+    }
+    delete process.env["APP_URL"];
   });
 
   it("TC-01: token_hash 누락 빠른 경로도 최소 응답 시간 이전에 응답하지 않는다", async () => {

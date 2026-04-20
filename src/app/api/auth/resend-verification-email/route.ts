@@ -1,10 +1,19 @@
 import { NextRequest } from "next/server";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
+import { AUTH_EVENTS } from "@/features/auth/constants/authEvents";
+import { AUTH_LOG_REASONS } from "@/features/auth/constants/authLogReasons";
 import { applyMinimumResponseTime } from "@/features/auth/lib/applyMinimumResponseTime";
+import {
+  logAuthError,
+  logAuthEvent,
+  logRequested,
+  normalizeUnknownError,
+} from "@/features/auth/lib/authLogger";
 import {
   checkIpRateLimitPrecheck,
   checkRequestEligibility,
+  mapBlockedByToReason,
 } from "@/features/auth/lib/checkRequestEligibility";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { mapAuthValidationErrors } from "@/features/auth/lib/mapAuthValidationErrors";
@@ -43,7 +52,32 @@ import { VALIDATION_REASON } from "@/lib/validation/reasons";
  * - 단일 entry point: checkRequestEligibility로 모든 rate limit 정책 처리
  * - atomic: 판단과 상태 업데이트가 함수 내에서 함께 일어남
  */
-async function resolveResendResponse(request: NextRequest): Promise<Response> {
+type ResendTerminalOutcome =
+  | {
+      type: "invalid_input";
+      reasonCode:
+        | typeof AUTH_LOG_REASONS.INVALID_JSON
+        | typeof AUTH_LOG_REASONS.SCHEMA_VALIDATION_FAILED;
+      maskedEmail?: string;
+    }
+  | {
+      type: "blocked";
+      reasonCode:
+        | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP
+        | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT
+        | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG;
+      maskedEmail?: string;
+    }
+  | { type: "completed"; suppressCompletedLog?: true };
+
+type ResolveResendResult = {
+  response: Response;
+  outcome: ResendTerminalOutcome;
+};
+
+async function resolveResendResponse(
+  request: NextRequest,
+): Promise<ResolveResendResult> {
   /**
    * 1. IP 추출
    *
@@ -61,7 +95,13 @@ async function resolveResendResponse(request: NextRequest): Promise<Response> {
    */
   const precheck = checkIpRateLimitPrecheck(ip);
   if (!precheck.allowed) {
-    return failureResponse(AUTH_API_CODES.RESEND_RATE_LIMIT_EXCEEDED);
+    return {
+      response: failureResponse(AUTH_API_CODES.RESEND_RATE_LIMIT_EXCEEDED),
+      outcome: {
+        type: "blocked",
+        reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_IP,
+      },
+    };
   }
 
   let body: unknown;
@@ -76,9 +116,15 @@ async function resolveResendResponse(request: NextRequest): Promise<Response> {
     body = await parseAuthJsonRequestBody(request);
   } catch (e) {
     if (e instanceof AuthJsonParseError) {
-      return failureResponse(AUTH_API_CODES.RESEND_INVALID_INPUT, {
-        errors: [{ field: "body", reason: VALIDATION_REASON.INVALID_FORMAT }],
-      });
+      return {
+        response: failureResponse(AUTH_API_CODES.RESEND_INVALID_INPUT, {
+          errors: [{ field: "body", reason: VALIDATION_REASON.INVALID_FORMAT }],
+        }),
+        outcome: {
+          type: "invalid_input",
+          reasonCode: AUTH_LOG_REASONS.INVALID_JSON,
+        },
+      };
     }
     throw e;
   }
@@ -92,9 +138,15 @@ async function resolveResendResponse(request: NextRequest): Promise<Response> {
   const parsed = resendApiSchema.safeParse(body);
 
   if (!parsed.success) {
-    return failureResponse(AUTH_API_CODES.RESEND_INVALID_INPUT, {
-      errors: mapAuthValidationErrors(parsed.error, body),
-    });
+    return {
+      response: failureResponse(AUTH_API_CODES.RESEND_INVALID_INPUT, {
+        errors: mapAuthValidationErrors(parsed.error, body),
+      }),
+      outcome: {
+        type: "invalid_input",
+        reasonCode: AUTH_LOG_REASONS.SCHEMA_VALIDATION_FAILED,
+      },
+    };
   }
 
   const rawEmail = parsed.data.email;
@@ -116,11 +168,19 @@ async function resolveResendResponse(request: NextRequest): Promise<Response> {
    * - 원자성(atomic): 판단과 상태 업데이트가 함수 내에서 함께 일어남
    * - AND 평가: IP, email short, email long 모두 통과해야 허용
    * - cooldown timestamp 제거: email short window로 대체 (즉시 재시도 억제)
-   * - 관측 가능성(Observability): 차단 시에만 내부 로그 기록
+   * - 차단 시 blockedBy를 반환하며, 로깅은 route handler(여기)에서 담당한다
    */
+  const canonicalEmailForLog = maskEmailForLogging(canonicalEmail);
   const eligibility = checkRequestEligibility("resend", ip, canonicalEmail);
   if (!eligibility.allowed) {
-    return failureResponse(AUTH_API_CODES.RESEND_RATE_LIMIT_EXCEEDED);
+    return {
+      response: failureResponse(AUTH_API_CODES.RESEND_RATE_LIMIT_EXCEEDED),
+      outcome: {
+        type: "blocked",
+        reasonCode: mapBlockedByToReason(eligibility.blockedBy),
+        maskedEmail: canonicalEmailForLog,
+      },
+    };
   }
 
   /**
@@ -148,30 +208,113 @@ async function resolveResendResponse(request: NextRequest): Promise<Response> {
     try {
       await resendVerificationEmail(deliveryEmail);
     } catch (error) {
-      console.error("Resend verification email side-effect failed", {
-        maskedEmail: maskEmailForLogging(canonicalEmail),
-        error,
+      const { errorMessage, errorName } = normalizeUnknownError(error);
+      logAuthError(AUTH_EVENTS.AUTH_RESEND_FAILED, {
+        path: request.nextUrl.pathname,
+        method: request.method,
+        status: 500,
+        provider: "email",
+        result: "failure",
+        reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+        errorMessage,
+        errorName,
       });
+
+      return {
+        response: successResponse(
+          AUTH_API_CODES.EMAIL_VERIFICATION_RESEND_SUCCESS,
+          {
+            email: rawEmail,
+            resent: true,
+          },
+        ),
+        outcome: { type: "completed", suppressCompletedLog: true },
+      };
     }
   }
 
   /**
    * 7. 성공 응답 반환
    */
-  return successResponse(AUTH_API_CODES.EMAIL_VERIFICATION_RESEND_SUCCESS, {
-    email: rawEmail,
-    resent: true,
-  });
+  return {
+    response: successResponse(
+      AUTH_API_CODES.EMAIL_VERIFICATION_RESEND_SUCCESS,
+      {
+        email: rawEmail,
+        resent: true,
+      },
+    ),
+    outcome: { type: "completed" },
+  };
 }
 
 export async function POST(request: NextRequest): Promise<Response> {
   const start = Date.now();
-  let response: Response;
+  logRequested(AUTH_EVENTS.AUTH_RESEND_REQUESTED, {
+    path: request.nextUrl.pathname,
+    method: request.method,
+    provider: "email",
+  });
 
+  let resolved: ResolveResendResult;
   try {
-    response = await resolveResendResponse(request);
-  } catch {
-    response = failureResponse(AUTH_API_CODES.RESEND_INTERNAL_ERROR);
+    resolved = await resolveResendResponse(request);
+  } catch (error) {
+    const { errorMessage, errorName } = normalizeUnknownError(error);
+    const response = failureResponse(AUTH_API_CODES.RESEND_INTERNAL_ERROR);
+
+    // 현재는 내부 예외를 INTERNAL_ERROR로 정규화한다.
+    // 상세 원인은 errorMessage/errorName으로 추적하며, reasonCode는 추후 세분화할 예정이다.
+    logAuthError(AUTH_EVENTS.AUTH_RESEND_FAILED, {
+      path: request.nextUrl.pathname,
+      method: request.method,
+      status: response.status,
+      provider: "email",
+      result: "failure",
+      reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+      errorMessage,
+      errorName,
+    });
+
+    return applyMinimumResponseTime(start, response);
+  }
+
+  const { response, outcome } = resolved;
+
+  switch (outcome.type) {
+    case "invalid_input":
+      logAuthEvent(AUTH_EVENTS.AUTH_INVALID_INPUT, {
+        path: request.nextUrl.pathname,
+        method: request.method,
+        status: response.status,
+        provider: "email",
+        result: "failure",
+        reasonCode: outcome.reasonCode,
+        ...(outcome.maskedEmail ? { maskedEmail: outcome.maskedEmail } : {}),
+      });
+      break;
+    case "blocked":
+      logAuthEvent(AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED, {
+        path: request.nextUrl.pathname,
+        method: request.method,
+        status: response.status,
+        provider: "email",
+        result: "blocked",
+        reasonCode: outcome.reasonCode,
+        ...(outcome.maskedEmail ? { maskedEmail: outcome.maskedEmail } : {}),
+      });
+      break;
+    case "completed":
+      if (!outcome.suppressCompletedLog) {
+        logAuthEvent(AUTH_EVENTS.AUTH_RESEND_COMPLETED, {
+          path: request.nextUrl.pathname,
+          method: request.method,
+          status: response.status,
+          provider: "email",
+          result: "success",
+        });
+      }
+      break;
   }
 
   return applyMinimumResponseTime(start, response);
