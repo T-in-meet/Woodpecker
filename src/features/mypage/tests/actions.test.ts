@@ -27,26 +27,14 @@ function makeSupabaseMock({
   removeError?: { message: string } | null;
   updateError?: { message: string } | null;
 } = {}) {
-  const selectMock = vi.fn().mockResolvedValue({
-    data: updateError
-      ? null
-      : { id: userId, avatar_url: "https://example.com/avatar" },
-    error: updateError,
-  });
-  const singleMock = vi.fn(() => ({ data: null, error: updateError }));
-
   const updateChain = {
     eq: vi.fn().mockReturnThis(),
-    select: vi
-      .fn()
-      .mockReturnValue({
-        single: vi
-          .fn()
-          .mockResolvedValue({
-            data: updateError ? null : { id: userId },
-            error: updateError,
-          }),
+    select: vi.fn().mockReturnValue({
+      single: vi.fn().mockResolvedValue({
+        data: updateError ? null : { id: userId },
+        error: updateError,
       }),
+    }),
   };
 
   const uploadMock = vi.fn().mockResolvedValue({ error: uploadError });
