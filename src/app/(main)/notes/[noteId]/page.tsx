@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { DeleteNoteDialog } from "@/features/notes/components/DeleteNoteDialog";
 import { NoteViewer } from "@/features/notes/components/NoteViewer";
 import { getNoteById } from "@/features/notes/queries";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
@@ -70,20 +71,23 @@ export default async function NoteDetailPage({
         <h1 className="mt-4 text-3xl font-bold text-foreground">
           {note.title}
         </h1>
-        <div className="mt-4 flex flex-wrap items-center gap-3">
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-muted-foreground">{reviewStatusMessage}</p>
-          {canStartReview && (
-            <Button asChild size="sm">
-              <Link href={getNoteReviewRoute(noteId)}>백지 테스트 시작</Link>
-            </Button>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {canStartReview && (
+              <Button asChild size="sm">
+                <Link href={getNoteReviewRoute(noteId)}>백지 테스트 시작</Link>
+              </Button>
+            )}
+            <DeleteNoteDialog noteId={note.id} noteTitle={note.title} />
+          </div>
         </div>
       </header>
 
       <NoteViewer
         content={note.content}
         language={note.language}
-        className="min-h-[60vh] py-6"
+        className="min-h-[60vh]"
       />
     </div>
   );
