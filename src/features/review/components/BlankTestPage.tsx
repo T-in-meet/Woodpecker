@@ -72,7 +72,6 @@ export function BlankTestPage({
               <ReviewCompleteButton
                 noteId={noteId}
                 reviewLogId={comparisonState.reviewLogId}
-                completionToken={comparisonState.completionToken}
               />
             </div>
           </div>

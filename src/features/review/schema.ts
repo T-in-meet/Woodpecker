@@ -13,7 +13,6 @@ export const submitAnswerSchema = z.object({
 export const completeReviewSchema = z.object({
   noteId: z.string().uuid("유효한 노트 ID가 아닙니다"),
   reviewLogId: z.string().uuid("유효한 리뷰 로그 ID가 아닙니다"),
-  completionToken: z.string().min(1, "복습 완료 토큰이 필요합니다"),
 });
 
 export type SubmitAnswerInput = z.infer<typeof submitAnswerSchema>;

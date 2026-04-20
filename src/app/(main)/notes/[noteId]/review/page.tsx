@@ -33,6 +33,10 @@ export default async function NoteReviewPage({
     redirect(ROUTES.LOGIN);
   }
 
+  if (user.email_confirmed_at == null) {
+    redirect(ROUTES.VERIFY_EMAIL);
+  }
+
   const [note, pendingReviewLog] = await Promise.all([
     getReviewableNote(noteId, user.id),
     getPendingReviewLog(noteId, user.id),
