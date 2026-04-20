@@ -27,6 +27,11 @@ describe("NoteViewer", () => {
     expect(checkbox.closest("[contenteditable='false']")).toBeTruthy();
     expect(screen.getByText("first")).toBeInTheDocument();
     expect(screen.getByText("first").closest(".viewer-shell")).toBeTruthy();
+    expect(
+      document
+        .querySelector("[contenteditable='false']")
+        ?.closest(".tiptap-wrapper")?.className,
+    ).toContain("[&_.tiptap]:px-0!");
   });
 
   it("renders empty state when markdown content is empty", () => {

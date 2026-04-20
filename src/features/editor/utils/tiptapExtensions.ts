@@ -1,4 +1,7 @@
 import {
+  Extension,
+  isAtStartOfNode,
+  isNodeActive,
   mergeAttributes,
   nodeInputRule,
   nodePasteRule,
@@ -41,6 +44,80 @@ lowlight.register("typescript", typescript);
 lowlight.register("python", python);
 lowlight.register("rust", rust);
 lowlight.register("go", go);
+
+const LIST_ITEM_TYPE_NAMES = ["listItem", "taskItem"] as const;
+
+type TableCellAlignmentType = "left" | "center" | "right" | null;
+
+function getTableCells(row: ProseMirrorNode): ProseMirrorNode[] {
+  const cells: ProseMirrorNode[] = [];
+
+  row.forEach((cell) => {
+    cells.push(cell);
+  });
+
+  return cells;
+}
+
+function getTableCellAlignment(
+  cell: ProseMirrorNode | null | undefined,
+): TableCellAlignmentType {
+  if (!cell || typeof cell.attrs.align !== "string") {
+    return null;
+  }
+
+  if (
+    cell.attrs.align === "left" ||
+    cell.attrs.align === "center" ||
+    cell.attrs.align === "right"
+  ) {
+    return cell.attrs.align;
+  }
+
+  return null;
+}
+
+function getTableCellText(cell: ProseMirrorNode | null | undefined): string {
+  if (!cell) {
+    return "";
+  }
+
+  const parts: string[] = [];
+
+  cell.forEach((child) => {
+    const text = child.textContent.replace(/\s+/g, " ").trim();
+
+    if (text) {
+      parts.push(text);
+    }
+  });
+
+  return parts.join(" ").replace(/\|/g, "\\|");
+}
+
+function getTableDividerCell(alignment: TableCellAlignmentType): string {
+  if (alignment === "left") {
+    return ":---";
+  }
+
+  if (alignment === "right") {
+    return "---:";
+  }
+
+  if (alignment === "center") {
+    return ":---:";
+  }
+
+  return "---";
+}
+
+function writeMarkdownTableRow(
+  state: MarkdownSerializerState,
+  cells: string[],
+) {
+  state.write(`| ${cells.join(" | ")} |`);
+  state.ensureNewLine();
+}
 
 function isPureTaskListElement(list: Element): boolean {
   const items = Array.from(list.children).filter(
@@ -149,6 +226,116 @@ const MarkdownTaskItem = TaskItem.extend({
       }
 
       return nodeView;
+    };
+  },
+});
+
+const ListItemBackspaceLift = Extension.create({
+  name: "listItemBackspaceLift",
+  priority: 1100,
+  addKeyboardShortcuts() {
+    const liftCurrentListItem = () => {
+      if (this.editor.commands.undoInputRule()) {
+        return true;
+      }
+
+      const { state } = this.editor;
+
+      if (state.selection.from !== state.selection.to) {
+        return false;
+      }
+
+      if (!isAtStartOfNode(state)) {
+        return false;
+      }
+
+      for (const itemName of LIST_ITEM_TYPE_NAMES) {
+        if (state.schema.nodes[itemName] === undefined) {
+          continue;
+        }
+
+        if (!isNodeActive(state, itemName)) {
+          continue;
+        }
+
+        // StarterKit's list keymap prefers merging with the previous item.
+        // At the start of a list item, we want Backspace to remove the marker first.
+        return this.editor.commands.liftListItem(itemName);
+      }
+
+      return false;
+    };
+
+    return {
+      Backspace: liftCurrentListItem,
+      "Mod-Backspace": liftCurrentListItem,
+    };
+  },
+});
+
+const MarkdownTable = Table.extend({
+  addStorage() {
+    return {
+      markdown: {
+        serialize(state: MarkdownSerializerState, node: ProseMirrorNode) {
+          const rows = getTableCells(node);
+          const columnCount = rows.reduce(
+            (max, row) => Math.max(max, row.childCount),
+            0,
+          );
+
+          if (columnCount === 0) {
+            state.closeBlock(node);
+            return;
+          }
+
+          const headerRow = rows[0];
+          const hasHeaderRow =
+            headerRow?.childCount !== undefined &&
+            getTableCells(headerRow).some(
+              (cell) => cell.type.name === "tableHeader",
+            );
+
+          const bodyRows = hasHeaderRow ? rows.slice(1) : rows;
+          const alignments = Array.from({ length: columnCount }, (_, index) => {
+            for (const row of rows) {
+              const alignment = getTableCellAlignment(row.maybeChild(index));
+
+              if (alignment) {
+                return alignment;
+              }
+            }
+
+            return null;
+          });
+
+          // tiptap-markdown falls back to "[table]" when a cell contains
+          // multiple blocks. Flattening cells keeps notes persistable as GFM.
+          writeMarkdownTableRow(
+            state,
+            Array.from({ length: columnCount }, (_, index) =>
+              hasHeaderRow
+                ? getTableCellText(headerRow?.maybeChild(index))
+                : "",
+            ),
+          );
+          writeMarkdownTableRow(
+            state,
+            alignments.map((alignment) => getTableDividerCell(alignment)),
+          );
+
+          for (const row of bodyRows) {
+            writeMarkdownTableRow(
+              state,
+              Array.from({ length: columnCount }, (_, index) =>
+                getTableCellText(row.maybeChild(index)),
+              ),
+            );
+          }
+
+          state.closeBlock(node);
+        },
+      },
     };
   },
 });
@@ -378,6 +565,7 @@ function getBaseExtensions({ readOnly = false }: { readOnly?: boolean } = {}) {
       codeBlock: false,
       link: false,
     }),
+    ListItemBackspaceLift,
     CodeBlockLowlight.extend({
       renderHTML({ node, HTMLAttributes }) {
         return [
@@ -411,7 +599,7 @@ function getBaseExtensions({ readOnly = false }: { readOnly?: boolean } = {}) {
     MarkdownTaskItem.configure({
       nested: true,
     }),
-    Table.configure({ resizable: false }),
+    MarkdownTable.configure({ resizable: false }),
     TableRow,
     TableHeader,
     TableCell,

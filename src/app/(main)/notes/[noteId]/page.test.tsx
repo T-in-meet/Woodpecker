@@ -115,6 +115,9 @@ describe("NoteDetailPage", () => {
     expect(
       screen.getByRole("link", { name: "백지 테스트 시작" }),
     ).toHaveAttribute("href", getNoteReviewRoute("note-123"));
+    expect(
+      screen.getByRole("button", { name: "노트 삭제" }),
+    ).toBeInTheDocument();
   });
 
   it("shows the next review schedule when the note is not due yet", async () => {
