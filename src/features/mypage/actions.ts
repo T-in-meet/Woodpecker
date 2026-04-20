@@ -38,7 +38,6 @@ export async function updateProfileAction(
     .from("profiles")
     .update({
       nickname: parsed.data.nickname,
-      updated_at: new Date().toISOString(),
     })
     .eq("id", user.id)
     .select()
@@ -94,7 +93,6 @@ export async function uploadAvatarAction(
     .from("profiles")
     .update({
       avatar_url: cacheBustedUrl,
-      updated_at: new Date().toISOString(),
     })
     .eq("id", user.id)
     .select()
@@ -113,11 +111,18 @@ export async function deleteAvatarAction() {
 
   if (!user) return { error: "인증이 필요합니다" };
 
-  await supabase.storage.from("avatars").remove([`${user.id}/avatar`]);
+  const { error: removeError } = await supabase.storage
+    .from("avatars")
+    .remove([`${user.id}/avatar`]);
+
+  if (removeError) {
+    console.error("아바타 파일 삭제 실패:", removeError.message);
+    return { error: "아바타 삭제에 실패했습니다" };
+  }
 
   const { data, error } = await supabase
     .from("profiles")
-    .update({ avatar_url: null, updated_at: new Date().toISOString() })
+    .update({ avatar_url: null })
     .eq("id", user.id)
     .select()
     .single();
