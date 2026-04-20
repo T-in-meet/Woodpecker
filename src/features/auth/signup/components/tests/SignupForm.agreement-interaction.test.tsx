@@ -110,6 +110,10 @@ describe("회원가입 폼 동의 상호작용", () => {
     await user.click(screen.getByTestId("terms-of-service-checkbox"));
     await user.click(screen.getByRole("button", { name: /닫기/i }));
 
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
     const termsCheckbox = screen.getByTestId("terms-of-service-checkbox");
 
     await waitFor(() => {
@@ -122,16 +126,16 @@ describe("회원가입 폼 동의 상호작용", () => {
       expect(termsCheckbox).toHaveFocus();
     });
 
-    await user.keyboard(" ");
+    await user.keyboard("[Space]");
 
     await waitFor(() => {
-      expect(termsCheckbox).toHaveAttribute("data-state", "checked");
+      expect(termsCheckbox).toBeChecked();
     });
 
-    await user.keyboard(" ");
+    await user.keyboard("[Space]");
 
     await waitFor(() => {
-      expect(termsCheckbox).toHaveAttribute("data-state", "unchecked");
+      expect(termsCheckbox).not.toBeChecked();
     });
   });
 
