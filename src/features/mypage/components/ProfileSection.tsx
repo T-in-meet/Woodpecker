@@ -131,7 +131,7 @@ export function ProfileSection({ profile, email }: ProfileSectionProps) {
           {isEditing ? (
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label>아바타</Label>
+                <Label>사진</Label>
                 <div className="flex items-center gap-3">
                   {avatarDisplay}
                   <div className="flex gap-2">
