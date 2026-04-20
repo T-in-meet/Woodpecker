@@ -207,11 +207,9 @@ export function ProfileSection({ profile, email }: ProfileSectionProps) {
               <p className="text-sm text-muted-foreground">
                 {profile.role === "ADMIN" ? "관리자" : ""}
               </p>
+              <p className="text-xs text-muted-foreground">{email}</p>
               <p className="text-xs text-muted-foreground">
-                이메일 주소:{email}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                가입일:{" "}
+                가입일{" "}
                 {new Date(profile.created_at).toLocaleDateString("ko-KR")}
               </p>
             </div>
