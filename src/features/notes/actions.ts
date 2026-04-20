@@ -1,11 +1,16 @@
 "use server";
 
+import { redirect } from "next/navigation";
+import { z } from "zod";
+
 import { getNextReviewDate } from "@/lib/constants/reviewIntervals";
+import { ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 
 import { type NoteInput, noteSchema } from "./schema";
 
 type NoteActionFieldErrors = Partial<Record<keyof NoteInput, string[]>>;
+const noteIdSchema = z.string().uuid();
 
 export type CreateNoteActionState =
   | {
@@ -66,4 +71,37 @@ export async function createNoteAction(
   return { success: true, newNoteId };
 }
 
-// TODO: deleteNoteAction 구현 시 인증 체크 필수
+export async function deleteNoteAction(noteId: string) {
+  const parsedNoteId = noteIdSchema.safeParse(noteId);
+
+  if (!parsedNoteId.success) {
+    return { error: "삭제할 노트를 찾을 수 없습니다." };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "로그인이 필요합니다." };
+  }
+
+  const { data: deletedNote, error } = await supabase
+    .from("notes")
+    .delete()
+    .eq("id", parsedNoteId.data)
+    .eq("user_id", user.id)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    return { error: "노트 삭제에 실패했습니다. 잠시 후 다시 시도해주세요." };
+  }
+
+  if (!deletedNote) {
+    return { error: "삭제할 노트를 찾을 수 없습니다." };
+  }
+
+  redirect(ROUTES.NOTES);
+}
