@@ -88,9 +88,14 @@ export async function uploadAvatarAction(
     data: { publicUrl },
   } = supabase.storage.from("avatars").getPublicUrl(path);
 
+  const cacheBustedUrl = `${publicUrl}?t=${Date.now()}`;
+
   const { data, error } = await supabase
     .from("profiles")
-    .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
+    .update({
+      avatar_url: cacheBustedUrl,
+      updated_at: new Date().toISOString(),
+    })
     .eq("id", user.id)
     .select()
     .single();

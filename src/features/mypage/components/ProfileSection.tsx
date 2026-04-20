@@ -54,15 +54,19 @@ export function ProfileSection({ profile, email }: ProfileSectionProps) {
     formData.set("avatar", file);
 
     startAvatarTransition(async () => {
-      const result = await uploadAvatarAction(null, formData);
-      if (result?.data) {
-        router.refresh();
-      } else if (result?.error) {
-        setAvatarError(
-          typeof result.error === "string"
-            ? result.error
-            : "업로드에 실패했습니다",
-        );
+      try {
+        const result = await uploadAvatarAction(null, formData);
+        if (result?.data) {
+          router.refresh();
+        } else if (result?.error) {
+          setAvatarError(
+            typeof result.error === "string"
+              ? result.error
+              : "업로드에 실패했습니다",
+          );
+        }
+      } catch {
+        setAvatarError("업로드에 실패했습니다");
       }
     });
 
@@ -72,15 +76,19 @@ export function ProfileSection({ profile, email }: ProfileSectionProps) {
   const handleDeleteAvatar = () => {
     setAvatarError(null);
     startAvatarTransition(async () => {
-      const result = await deleteAvatarAction();
-      if (result?.data) {
-        router.refresh();
-      } else if (result?.error) {
-        setAvatarError(
-          typeof result.error === "string"
-            ? result.error
-            : "삭제에 실패했습니다",
-        );
+      try {
+        const result = await deleteAvatarAction();
+        if (result?.data) {
+          router.refresh();
+        } else if (result?.error) {
+          setAvatarError(
+            typeof result.error === "string"
+              ? result.error
+              : "삭제에 실패했습니다",
+          );
+        }
+      } catch {
+        setAvatarError("삭제에 실패했습니다");
       }
     });
   };

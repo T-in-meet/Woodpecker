@@ -19,12 +19,21 @@
 
 import type { NextConfig } from "next";
 
-const supabaseHostname = process.env.NEXT_PUBLIC_SUPABASE_HOSTNAME;
+const supabaseHostname =
+  process.env.NEXT_PUBLIC_SUPABASE_HOSTNAME ??
+  (process.env.NEXT_PUBLIC_SUPABASE_URL
+    ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname
+    : undefined);
 
 // [설계 의도] securityHeaders는 top-level에서 정의하지 않고 headers() 내부에서 생성
 // 이유: isProduction을 top-level 상수로 두면 import 시점에 고정되어 테스트에서 NODE_ENV 변경이 반영되지 않음
 
 const nextConfig: NextConfig = {
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "5mb",
+    },
+  },
   images: {
     remotePatterns: supabaseHostname
       ? [
