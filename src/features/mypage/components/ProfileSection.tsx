@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import type { Profile } from "@/types/profiles.types";
 
 import {
@@ -97,12 +98,12 @@ export function ProfileSection({ profile, email }: ProfileSectionProps) {
     <Image
       src={profile.avatar_url}
       alt={profile.nickname}
-      width={48}
-      height={48}
-      className="size-12 rounded-full object-cover"
+      width={80}
+      height={80}
+      className="size-20 rounded-full object-cover"
     />
   ) : (
-    <div className="flex size-12 items-center justify-center rounded-full bg-primary text-lg font-semibold text-primary-foreground">
+    <div className="flex size-20 items-center justify-center rounded-full bg-primary text-2xl font-semibold text-primary-foreground">
       {profile.nickname.charAt(0)}
     </div>
   );
@@ -123,98 +124,102 @@ export function ProfileSection({ profile, email }: ProfileSectionProps) {
           )}
         </div>
       </CardHeader>
+      <Separator />
+
       <CardContent>
-        {isEditing ? (
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>아바타</Label>
-              <div className="flex items-center gap-3">
-                {avatarDisplay}
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={isPendingAvatar}
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    {isPendingAvatar ? "처리 중..." : "변경"}
-                  </Button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/gif,image/webp"
-                    className="hidden"
-                    onChange={handleFileChange}
-                    disabled={isPendingAvatar}
-                  />
-                  {profile.avatar_url && (
+        <div className="pt-5">
+          {isEditing ? (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>아바타</Label>
+                <div className="flex items-center gap-3">
+                  {avatarDisplay}
+                  <div className="flex gap-2">
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
                       disabled={isPendingAvatar}
-                      onClick={handleDeleteAvatar}
+                      onClick={() => fileInputRef.current?.click()}
                     >
-                      삭제
+                      {isPendingAvatar ? "처리 중..." : "변경"}
                     </Button>
-                  )}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/gif,image/webp"
+                      className="hidden"
+                      onChange={handleFileChange}
+                      disabled={isPendingAvatar}
+                    />
+                    {profile.avatar_url && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={isPendingAvatar}
+                        onClick={handleDeleteAvatar}
+                      >
+                        삭제
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              </div>
-              {avatarError && (
-                <p className="text-sm text-destructive">{avatarError}</p>
-              )}
-            </div>
-            <form action={formAction} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="nickname">닉네임</Label>
-                <Input
-                  id="nickname"
-                  name="nickname"
-                  defaultValue={profile.nickname}
-                  maxLength={10}
-                  placeholder="닉네임 (1~10자)"
-                />
-                {fieldErrors?.nickname && (
-                  <p className="text-sm text-destructive">
-                    {fieldErrors.nickname[0]}
-                  </p>
+                {avatarError && (
+                  <p className="text-sm text-destructive">{avatarError}</p>
                 )}
               </div>
-              {generalError && (
-                <p className="text-sm text-destructive">{generalError}</p>
-              )}
-              <div className="flex gap-2">
-                <Button type="submit" size="sm" disabled={isPending}>
-                  {isPending ? "저장 중..." : "저장"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsEditing(false)}
-                >
-                  취소
-                </Button>
-              </div>
-            </form>
-          </div>
-        ) : (
-          <div className="flex items-center gap-4">
-            {avatarDisplay}
-            <div className="space-y-1">
-              <p className="font-medium">{profile.nickname}</p>
-              <p className="text-sm text-muted-foreground">
-                {profile.role === "ADMIN" ? "관리자" : ""}
-              </p>
-              <p className="text-xs text-muted-foreground">{email}</p>
-              <p className="text-xs text-muted-foreground">
-                가입일{" "}
-                {new Date(profile.created_at).toLocaleDateString("ko-KR")}
-              </p>
+              <form action={formAction} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="nickname">닉네임</Label>
+                  <Input
+                    id="nickname"
+                    name="nickname"
+                    defaultValue={profile.nickname}
+                    maxLength={10}
+                    placeholder="닉네임 (1~10자)"
+                  />
+                  {fieldErrors?.nickname && (
+                    <p className="text-sm text-destructive">
+                      {fieldErrors.nickname[0]}
+                    </p>
+                  )}
+                </div>
+                {generalError && (
+                  <p className="text-sm text-destructive">{generalError}</p>
+                )}
+                <div className="flex gap-2">
+                  <Button type="submit" size="sm" disabled={isPending}>
+                    {isPending ? "저장 중..." : "저장"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsEditing(false)}
+                  >
+                    취소
+                  </Button>
+                </div>
+              </form>
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="flex items-center gap-4">
+              {avatarDisplay}
+              <div className="space-y-1">
+                <p className="font-medium">{profile.nickname}</p>
+                <p className="text-sm text-muted-foreground">
+                  {profile.role === "ADMIN" ? "관리자" : ""}
+                </p>
+                <p className="text-xs text-muted-foreground">{email}</p>
+                <p className="text-xs text-muted-foreground">
+                  가입일{" "}
+                  {new Date(profile.created_at).toLocaleDateString("ko-KR")}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
