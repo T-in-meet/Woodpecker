@@ -610,13 +610,16 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
                       onKeyDown={(e) => {
                         // Space/Enter 키보드 입력도 마우스 클릭과 동일하게 인터셉트
                         // 이유: 키보드로 aria-disabled 우회를 방지하고 접근성 일관성 보장
-                        if (
-                          !termsInteractionEnabled &&
-                          (e.key === " " || e.key === "Enter")
-                        ) {
+                        if (e.key !== " " && e.key !== "Enter") {
+                          return;
+                        }
+
+                        // interactionEnabled=false: 모달 열기
+                        if (!termsInteractionEnabled) {
                           e.preventDefault();
                           setTermsModalTrigger("checkbox");
                           setTermsModalOpen(true);
+                          return;
                         }
                       }}
                       onBlur={field.onBlur}
@@ -717,13 +720,16 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
                       onKeyDown={(e) => {
                         // Space/Enter 키보드 입력도 마우스 클릭과 동일하게 인터셉트
                         // 이유: 키보드로 aria-disabled 우회를 방지하고 접근성 일관성 보장
-                        if (
-                          !privacyInteractionEnabled &&
-                          (e.key === " " || e.key === "Enter")
-                        ) {
+                        if (e.key !== " " && e.key !== "Enter") {
+                          return;
+                        }
+
+                        // interactionEnabled=false: 모달 열기
+                        if (!privacyInteractionEnabled) {
                           e.preventDefault();
                           setPrivacyModalTrigger("checkbox");
                           setPrivacyModalOpen(true);
+                          return;
                         }
                       }}
                       onBlur={field.onBlur}
