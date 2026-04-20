@@ -5,6 +5,7 @@ import { ROUTES } from "@/lib/constants/routes";
 
 const REDIRECT_ERROR = new Error("NEXT_REDIRECT");
 const NOT_FOUND_ERROR = new Error("NEXT_NOT_FOUND");
+const CONFIRMED_AT = "2026-01-01T00:00:00.000Z";
 
 const {
   createClientMock,
@@ -50,12 +51,22 @@ vi.mock("next/navigation", () => ({
 
 import NoteReviewPage from "./page";
 
-function createSupabaseMock(userId: string | null) {
+function createSupabaseMock(
+  userId: string | null,
+  options?: { emailConfirmedAt?: string | null | undefined },
+) {
+  const emailConfirmedAt =
+    options && Object.prototype.hasOwnProperty.call(options, "emailConfirmedAt")
+      ? options.emailConfirmedAt
+      : CONFIRMED_AT;
+
   return {
     auth: {
       getUser: vi.fn().mockResolvedValue({
         data: {
-          user: userId ? { id: userId } : null,
+          user: userId
+            ? { id: userId, email_confirmed_at: emailConfirmedAt }
+            : null,
         },
       }),
     },
@@ -91,6 +102,24 @@ describe("NoteReviewPage", () => {
 
     expect(redirectMock).toHaveBeenCalledWith(ROUTES.LOGIN);
     expect(getReviewableNoteMock).not.toHaveBeenCalled();
+  });
+
+  it("redirects to verify-email when the user has not confirmed email", async () => {
+    createClientMock.mockResolvedValue(
+      createSupabaseMock("user-123", { emailConfirmedAt: null }),
+    );
+
+    await expect(
+      NoteReviewPage({
+        params: Promise.resolve({
+          noteId: "11111111-1111-1111-1111-111111111111",
+        }),
+      }),
+    ).rejects.toBe(REDIRECT_ERROR);
+
+    expect(redirectMock).toHaveBeenCalledWith(ROUTES.VERIFY_EMAIL);
+    expect(getReviewableNoteMock).not.toHaveBeenCalled();
+    expect(getPendingReviewLogMock).not.toHaveBeenCalled();
   });
 
   it("returns not found when the note does not exist for the current user", async () => {
