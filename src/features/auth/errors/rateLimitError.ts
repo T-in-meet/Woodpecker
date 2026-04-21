@@ -37,6 +37,8 @@ export function isRateLimitError(e: unknown): boolean {
   return (
     "code" in e &&
     (e.code === AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED ||
-      e.code === AUTH_API_CODES.RESEND_RATE_LIMIT_EXCEEDED)
+      e.code === AUTH_API_CODES.RESEND_RATE_LIMIT_EXCEEDED ||
+      // 로그인 rate limit 응답도 동일한 토스트 처리 흐름으로 통합
+      e.code === AUTH_API_CODES.LOGIN_RATE_LIMIT_EXCEEDED)
   );
 }
