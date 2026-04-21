@@ -33,18 +33,18 @@ export function UserMenu({ nickname, email, avatarUrl }: UserMenuProps) {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 rounded-full p-1 transition-colors hover:bg-accent cursor-pointer"
+        className="flex items-center gap-2 rounded-full p-px transition-colors hover:bg-accent cursor-pointer"
         aria-expanded={open}
         aria-haspopup="true"
       >
-        <div className="flex size-8 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
+        <div className="flex size-10 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
           {avatarUrl ? (
             <Image
               src={avatarUrl}
               alt={nickname}
-              width={32}
-              height={32}
-              className="rounded-full object-cover"
+              width={40}
+              height={40}
+              className="size-10 rounded-full object-cover"
             />
           ) : (
             nickname.charAt(0)

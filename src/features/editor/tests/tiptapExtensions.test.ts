@@ -23,6 +23,25 @@ function roundTrip(markdown: string): string {
   return result;
 }
 
+function findTextStartPosition(editor: Editor, text: string): number {
+  let position: number | null = null;
+
+  editor.state.doc.descendants((node, pos) => {
+    if (node.isText && node.text?.includes(text)) {
+      position = pos;
+      return false;
+    }
+
+    return true;
+  });
+
+  if (position === null) {
+    throw new Error(`text node not found: ${text}`);
+  }
+
+  return position;
+}
+
 describe("MarkdownTaskItem custom extension", () => {
   it("round-trips a pure task list", () => {
     const input = "- [ ] todo\n- [x] done";

@@ -22,7 +22,7 @@ import TaskItem from "@tiptap/extension-task-item";
 import TaskList from "@tiptap/extension-task-list";
 import {
   defaultMarkdownSerializer,
-  type MarkdownSerializerState,
+  MarkdownSerializerState,
 } from "@tiptap/pm/markdown";
 import { type Node as ProseMirrorNode } from "@tiptap/pm/model";
 import StarterKit from "@tiptap/starter-kit";
