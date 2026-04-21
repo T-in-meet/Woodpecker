@@ -39,12 +39,20 @@ vi.mock("next/navigation", () => ({
 
 import NoteDetailPage from "./page";
 
-function createSupabaseMock(userId: string | null) {
+function createSupabaseMock(
+  userId: string | null,
+  emailConfirmedAt?: string | null,
+) {
+  const resolvedEmailConfirmedAt =
+    arguments.length > 1 ? emailConfirmedAt : "2026-03-29T00:00:00.000Z";
+
   return {
     auth: {
       getUser: vi.fn().mockResolvedValue({
         data: {
-          user: userId ? { id: userId } : null,
+          user: userId
+            ? { id: userId, email_confirmed_at: resolvedEmailConfirmedAt }
+            : null,
         },
       }),
     },
@@ -83,6 +91,22 @@ describe("NoteDetailPage", () => {
     expect(redirectMock).toHaveBeenCalledWith(ROUTES.LOGIN);
     expect(getNoteByIdMock).not.toHaveBeenCalled();
   });
+
+  it.each([null, undefined])(
+    "redirects to verify email when email_confirmed_at is %s",
+    async (emailConfirmedAt) => {
+      createClientMock.mockResolvedValue(
+        createSupabaseMock("user-123", emailConfirmedAt),
+      );
+
+      await expect(
+        NoteDetailPage({ params: Promise.resolve({ noteId: "note-123" }) }),
+      ).rejects.toBe(REDIRECT_ERROR);
+
+      expect(redirectMock).toHaveBeenCalledWith(ROUTES.VERIFY_EMAIL);
+      expect(getNoteByIdMock).not.toHaveBeenCalled();
+    },
+  );
 
   it("renders a review entry point when the note is due for review", async () => {
     createClientMock.mockResolvedValue(createSupabaseMock("user-123"));

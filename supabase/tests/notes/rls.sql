@@ -4,17 +4,20 @@
 
 BEGIN;
 
-SELECT plan(32);
+SELECT plan(36);
 
 -- 테스트용 UUID 준비
 SELECT set_config('test.notes_rls_user_a_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notes_rls_user_b_id', gen_random_uuid()::text, true);
+SELECT set_config('test.notes_rls_user_unverified_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notes_rls_note_a_select_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notes_rls_note_a_update_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notes_rls_note_a_delete_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notes_rls_note_b_select_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notes_rls_note_b_update_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notes_rls_note_b_delete_id', gen_random_uuid()::text, true);
+SELECT set_config('test.notes_rls_note_unverified_id', gen_random_uuid()::text, true);
+SELECT set_config('test.notes_rls_note_invalid_unverified_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notes_rls_note_invalid_authenticated_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notes_rls_note_invalid_zero_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notes_rls_note_invalid_one_id', gen_random_uuid()::text, true);
@@ -61,6 +64,19 @@ VALUES
     'user_b_' || current_setting('test.notes_rls_user_b_id') || '@example.com',
     crypt('password123', gen_salt('bf')),
     now(),
+    '{"provider":"email","providers":["email"]}'::jsonb,
+    '{}'::jsonb,
+    now(),
+    now()
+  ),
+  (
+    current_setting('test.notes_rls_user_unverified_id')::uuid,
+    '00000000-0000-0000-0000-000000000000',
+    'authenticated',
+    'authenticated',
+    'user_unverified_' || current_setting('test.notes_rls_user_unverified_id') || '@example.com',
+    crypt('password123', gen_salt('bf')),
+    NULL,
     '{"provider":"email","providers":["email"]}'::jsonb,
     '{}'::jsonb,
     now(),
@@ -124,6 +140,14 @@ VALUES
     'content b delete',
     0,
     now() + interval '6 days'
+  ),
+  (
+    current_setting('test.notes_rls_note_unverified_id')::uuid,
+    current_setting('test.notes_rls_user_unverified_id')::uuid,
+    'note unverified',
+    'content unverified',
+    0,
+    now() + interval '7 days'
   )
 ON CONFLICT (id) DO NOTHING;
 
@@ -305,6 +329,59 @@ SELECT is(
 );
 
 -- [경계 조건]
+SET LOCAL ROLE authenticated;
+SELECT set_config(
+  'request.jwt.claims',
+  json_build_object(
+    'sub', current_setting('test.notes_rls_user_unverified_id'),
+    'role', 'authenticated'
+  )::text,
+  true
+);
+
+SELECT is(
+  (SELECT count(*) FROM public.notes),
+  1::bigint,
+  $$unverified users should still be able to select their own notes$$
+);
+
+SELECT throws_ok(
+  format(
+    $sql$
+      INSERT INTO public.notes (id, user_id, title, content, review_round)
+      VALUES ('%s'::uuid, '%s'::uuid, 'unverified blocked', 'content', 0);
+    $sql$,
+    current_setting('test.notes_rls_note_invalid_unverified_id'),
+    current_setting('test.notes_rls_user_unverified_id')
+  ),
+  '42501',
+  NULL,
+  $$unverified users should not be able to insert notes$$
+);
+
+WITH updated AS (
+  UPDATE public.notes
+  SET title = 'unverified blocked'
+  WHERE id = current_setting('test.notes_rls_note_unverified_id')::uuid
+  RETURNING 1
+)
+SELECT is(
+  (SELECT count(*) FROM updated),
+  0::bigint,
+  $$unverified users should not be able to update notes$$
+);
+
+WITH deleted AS (
+  DELETE FROM public.notes
+  WHERE id = current_setting('test.notes_rls_note_unverified_id')::uuid
+  RETURNING 1
+)
+SELECT is(
+  (SELECT count(*) FROM deleted),
+  0::bigint,
+  $$unverified users should not be able to delete notes$$
+);
+
 SET LOCAL ROLE authenticated;
 SELECT set_config(
   'request.jwt.claims',
