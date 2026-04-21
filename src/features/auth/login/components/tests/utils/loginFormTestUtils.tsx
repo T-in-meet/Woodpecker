@@ -23,11 +23,6 @@ vi.mock("@/features/auth/login/hooks/useLoginMutation");
 
 export const mockMutateAsync = vi.fn();
 export const mockPush = vi.fn();
-export const mockReplace = vi.fn();
-export const mockRefresh = vi.fn();
-export const mockBack = vi.fn();
-export const mockForward = vi.fn();
-export const mockPrefetch = vi.fn();
 
 /**
  * 테스트 전용 QueryClient를 생성한다.
@@ -75,11 +70,6 @@ export function setupDefaultMocks({
 } = {}) {
   mockMutateAsync.mockReset();
   mockPush.mockReset();
-  mockReplace.mockReset();
-  mockRefresh.mockReset();
-  mockBack.mockReset();
-  mockForward.mockReset();
-  mockPrefetch.mockReset();
 
   vi.mocked(useLoginMutation).mockReturnValue({
     mutateAsync: mockMutateAsync,
@@ -88,12 +78,7 @@ export function setupDefaultMocks({
 
   vi.mocked(useRouter).mockReturnValue({
     push: mockPush,
-    back: mockBack,
-    forward: mockForward,
-    refresh: mockRefresh,
-    replace: mockReplace,
-    prefetch: mockPrefetch,
-  });
+  } as unknown as ReturnType<typeof useRouter>);
 
   vi.mocked(useSearchParams).mockReturnValue({
     get: vi
