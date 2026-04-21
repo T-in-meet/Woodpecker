@@ -1,5 +1,6 @@
 "use client";
 
+import { Plus } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -8,16 +9,17 @@ import { ROUTES } from "@/lib/constants/routes";
 export function NotesNav() {
   const pathname = usePathname();
   const isNotesList =
-    pathname === ROUTES.NOTES ||
-    (pathname.startsWith("/notes") && pathname !== ROUTES.NOTES_NEW);
+    pathname.startsWith(ROUTES.NOTES) && pathname !== ROUTES.NOTES_NEW;
+  const isNotesNew = pathname === ROUTES.NOTES_NEW;
 
   return (
     <nav className="flex items-center gap-6">
       <Link
         href={ROUTES.NOTES}
+        aria-current={isNotesList ? "page" : undefined}
         className={`text-base font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm ${
           isNotesList
-            ? "text-foreground"
+            ? "text-foreground font-semibold"
             : "text-muted-foreground hover:text-foreground"
         }`}
       >
@@ -25,9 +27,14 @@ export function NotesNav() {
       </Link>
       <Link
         href={ROUTES.NOTES_NEW}
-        className="text-base font-medium px-4 py-1.5 rounded-full cursor-pointer bg-[var(--color-orange-200)]/50 hover:bg-[var(--color-orange-200)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-current={isNotesNew ? "page" : undefined}
+        className={`text-base font-medium px-4 py-1.5 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring flex items-center gap-1 ${
+          isNotesNew
+            ? "bg-orange-200 text-foreground font-semibold"
+            : "bg-orange-200/50 hover:bg-orange-200"
+        }`}
       >
-        + 새 노트
+        <Plus size={16} />새 노트
       </Link>
     </nav>
   );

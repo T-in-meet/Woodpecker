@@ -39,7 +39,7 @@ export async function Header() {
           <span className="font-jeju text-2xl">딱다구리</span>
         </Link>
 
-        <div className="flex justify-center">
+        <div className="hidden md:flex justify-center">
           {profile && user && <NotesNav />}
         </div>
 
