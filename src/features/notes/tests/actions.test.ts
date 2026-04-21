@@ -19,19 +19,31 @@ vi.mock("next/navigation", () => ({
 
 import { createNoteAction, deleteNoteAction } from "../actions";
 
-function createSupabaseMock({
-  userId = "user-123",
-  rpcError = null,
-  rpcResult = "note-123",
-  deleteError = null,
-  deletedNote = { id: "11111111-1111-4111-8111-111111111111" },
-}: {
-  userId?: string | null;
-  rpcError?: { message: string } | null;
-  rpcResult?: string | null;
-  deleteError?: { message: string } | null;
-  deletedNote?: { id: string } | null;
-} = {}) {
+function createSupabaseMock(
+  input: {
+    userId?: string | null;
+    emailConfirmedAt?: string | null | undefined;
+    rpcError?: { message: string } | null;
+    rpcResult?: string | null;
+    deleteError?: { message: string } | null;
+    deletedNote?: { id: string } | null;
+  } = {},
+) {
+  const {
+    userId = "user-123",
+    emailConfirmedAt,
+    rpcError = null,
+    rpcResult = "note-123",
+    deleteError = null,
+    deletedNote = { id: "11111111-1111-4111-8111-111111111111" },
+  } = input;
+  const resolvedEmailConfirmedAt = Object.prototype.hasOwnProperty.call(
+    input,
+    "emailConfirmedAt",
+  )
+    ? emailConfirmedAt
+    : "2026-03-29T00:00:00.000Z";
+
   const rpcMock = vi.fn().mockResolvedValue({
     data: rpcError ? null : rpcResult,
     error: rpcError,
@@ -68,7 +80,9 @@ function createSupabaseMock({
       auth: {
         getUser: vi.fn().mockResolvedValue({
           data: {
-            user: userId ? { id: userId } : null,
+            user: userId
+              ? { id: userId, email_confirmed_at: resolvedEmailConfirmedAt }
+              : null,
           },
         }),
       },
@@ -140,6 +154,27 @@ describe("createNoteAction", () => {
     expect(result).toEqual({ error: "로그인이 필요합니다." });
     expect(rpcMock).not.toHaveBeenCalled();
   });
+
+  it.each([null, undefined])(
+    "redirects unverified emails to the verify-email route when email_confirmed_at is %s",
+    async (emailConfirmedAt) => {
+      const { supabase, rpcMock } = createSupabaseMock({
+        emailConfirmedAt,
+      });
+      createClientMock.mockResolvedValue(supabase);
+
+      const formData = new FormData();
+      formData.set("title", "Valid title");
+      formData.set("content", "Valid content");
+
+      await expect(createNoteAction(null, formData)).rejects.toBe(
+        REDIRECT_ERROR,
+      );
+
+      expect(redirectMock).toHaveBeenCalledWith(ROUTES.VERIFY_EMAIL);
+      expect(rpcMock).not.toHaveBeenCalled();
+    },
+  );
 
   it("calls the note creation RPC and returns the new note id when the payload is valid", async () => {
     const { supabase, rpcMock } = createSupabaseMock();
@@ -254,6 +289,23 @@ describe("deleteNoteAction", () => {
     expect(result).toEqual({ error: "로그인이 필요합니다." });
     expect(fromMock).not.toHaveBeenCalled();
   });
+
+  it.each([null, undefined])(
+    "redirects unverified emails to the verify-email route when email_confirmed_at is %s",
+    async (emailConfirmedAt) => {
+      const { supabase, fromMock } = createSupabaseMock({
+        emailConfirmedAt,
+      });
+      createClientMock.mockResolvedValue(supabase);
+
+      await expect(
+        deleteNoteAction("11111111-1111-4111-8111-111111111111"),
+      ).rejects.toBe(REDIRECT_ERROR);
+
+      expect(redirectMock).toHaveBeenCalledWith(ROUTES.VERIFY_EMAIL);
+      expect(fromMock).not.toHaveBeenCalled();
+    },
+  );
 
   it("deletes the note and redirects to the notes page", async () => {
     const validNoteId = "11111111-1111-4111-8111-111111111111";
