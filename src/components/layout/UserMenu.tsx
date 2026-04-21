@@ -1,6 +1,6 @@
 "use client";
 
-import { LogOut, Settings, User } from "lucide-react";
+import { BookOpen, LogOut, Plus, User } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
@@ -20,13 +20,20 @@ export function UserMenu({ nickname, email, avatarUrl }: UserMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
+    const handleMouseDown = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
         setOpen(false);
       }
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", handleMouseDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleMouseDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, []);
 
   return (
@@ -62,6 +69,27 @@ export function UserMenu({ nickname, email, avatarUrl }: UserMenuProps) {
 
           <div className="border-t" />
 
+          {/* 노트 메뉴 — 모바일에서만 표시 */}
+          <div className="py-1 md:hidden">
+            <Link
+              href={ROUTES.NOTES}
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 px-4 py-2 text-sm transition-colors hover:bg-accent"
+            >
+              <BookOpen className="size-4" />
+              노트 목록
+            </Link>
+            <Link
+              href={ROUTES.NOTES_NEW}
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 px-4 py-2 text-sm transition-colors hover:bg-accent"
+            >
+              <Plus className="size-4" />새 노트
+            </Link>
+          </div>
+
+          <div className="border-t md:hidden" />
+
           {/* 메뉴 항목 */}
           <div className="py-1">
             <Link
@@ -72,14 +100,6 @@ export function UserMenu({ nickname, email, avatarUrl }: UserMenuProps) {
               <User className="size-4" />
               마이페이지
             </Link>
-            {/* <Link
-              href={`${ROUTES.MYPAGE}?section=account`}
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-2 px-4 py-2 text-sm transition-colors hover:bg-accent"
-            >
-              <Settings className="size-4" />
-              계정 설정
-            </Link> */}
           </div>
 
           <div className="border-t" />
