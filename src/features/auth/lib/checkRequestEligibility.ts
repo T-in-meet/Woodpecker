@@ -55,7 +55,7 @@ export const EMAIL_LONG_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 /**
  * 요청 적격성 확인 — 단일 결정 권한(single decision authority)
  *
- * @param route - "signup" 또는 "resend" (어떤 API가 차단되었는지 로깅 목적)
+ * @param route - "signup" | "resend" | "login" (어떤 API가 차단되었는지 로깅 목적)
  * @param ip - 클라이언트 IP 주소 (IP 저장소에 그대로 사용됨)
  * @param canonicalEmail - caller에서 canonicalizeEmail() 적용된 값
  *
@@ -64,11 +64,14 @@ export const EMAIL_LONG_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
  * 흐름:
  * 1. 읽기(Read) 단계: 상태 변경 없이 모든 조건을 평가함
  *    - ipOk: IP 한도 내에 있는가?
- *    - emailShortOk: 이메일 짧은 윈도우 한도 내에 있는가?
+ *    - emailShortOk: 이메일 짧은 윈도우 한도 내에 있는가? (signup/resend 전용)
  *    - emailLongOk: 이메일 긴 윈도우 한도 내에 있는가?
  *
  * 2. 결정(Decision): 모든 조건을 AND 로 묶음
- *    - allowed = ipOk && emailShortOk && emailLongOk
+ *    - signup/resend: allowed = ipOk && emailShortOk && emailLongOk
+ *    - login: allowed = ipOk && emailLongOk
+ *      [이유: login-rules §Rate Limit — 이메일 기준 제한은 더 긴 시간축에서 완만하게 적용.
+ *       short window는 즉각 재시도를 막기 위한 것이므로 로그인 비밀번호 오타 재시도에는 부적합]
  *
  * 3. 쓰기(Write) 단계: allowed=true 일 때만 상태를 업데이트함
  *    - 차단된 경우: blockedBy 차원을 반환하고 상태를 변경하지 않음 (로깅은 route handler 책임)
@@ -107,7 +110,7 @@ export function mapBlockedByToReason(blockedBy: BlockedBy): RateLimitReason {
 }
 
 export function checkRequestEligibility(
-  route: "signup" | "resend",
+  route: "signup" | "resend" | "login",
   ip: string,
   canonicalEmail: string,
 ): EligibilityResult {
@@ -146,7 +149,8 @@ export function checkRequestEligibility(
   );
 
   const ipOk = ipEval.allowed;
-  const emailShortOk = shortEval.allowed;
+  // login은 short window를 적용하지 않음 — 비밀번호 오타 재시도를 허용하기 위해 완만한 long window만 사용
+  const emailShortOk = route === "login" ? true : shortEval.allowed;
   const emailLongOk = longEval.allowed;
 
   // ============================================================================
@@ -176,7 +180,11 @@ export function checkRequestEligibility(
   ipStore.set(ip, { timestamps: ipEval.next });
 
   const nextEmailEntry = {
-    shortWindow: { timestamps: shortEval.next },
+    // login은 short window 카운터를 업데이트하지 않음 — 적용하지 않은 윈도우를 오염시키지 않기 위해
+    shortWindow:
+      route === "login"
+        ? (emailStore.get(canonicalEmail)?.shortWindow ?? null)
+        : { timestamps: shortEval.next },
     longWindow: { timestamps: longEval.next },
   };
   emailStore.set(canonicalEmail, nextEmailEntry);

@@ -2,7 +2,6 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_EVENTS } from "@/features/auth/constants/authEvents";
-import { AUTH_LOG_REASONS } from "@/features/auth/constants/authLogReasons";
 import {
   logAuthError,
   logCallback,
