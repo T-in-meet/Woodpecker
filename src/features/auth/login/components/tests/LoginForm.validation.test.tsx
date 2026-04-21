@@ -21,7 +21,6 @@ import {
 
 describe("LoginForm 클라이언트 validation", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     setupDefaultMocks();
   });
 
