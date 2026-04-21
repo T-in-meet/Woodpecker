@@ -86,7 +86,9 @@ function dispatchTextInput(editor: Editor, text: string): void {
   const { from, to } = editor.state.selection;
   const handled =
     editor.view.someProp("handleTextInput", (handleTextInput) =>
-      handleTextInput(editor.view, from, to, text),
+      handleTextInput(editor.view, from, to, text, () =>
+        editor.state.tr.insertText(text, from, to),
+      ),
     ) === true;
 
   if (!handled) {
