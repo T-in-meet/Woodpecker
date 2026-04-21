@@ -1,6 +1,6 @@
 "use client";
 
-import { LogOut, User } from "lucide-react";
+import { BookOpen, LogOut, Plus, User } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
@@ -68,6 +68,27 @@ export function UserMenu({ nickname, email, avatarUrl }: UserMenuProps) {
           </div>
 
           <div className="border-t" />
+
+          {/* 노트 메뉴 — 모바일에서만 표시 */}
+          <div className="py-1 md:hidden">
+            <Link
+              href={ROUTES.NOTES}
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 px-4 py-2 text-sm transition-colors hover:bg-accent"
+            >
+              <BookOpen className="size-4" />
+              노트 목록
+            </Link>
+            <Link
+              href={ROUTES.NOTES_NEW}
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 px-4 py-2 text-sm transition-colors hover:bg-accent"
+            >
+              <Plus className="size-4" />새 노트
+            </Link>
+          </div>
+
+          <div className="border-t md:hidden" />
 
           {/* 메뉴 항목 */}
           <div className="py-1">
