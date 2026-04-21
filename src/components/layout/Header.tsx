@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
 import { ROUTES } from "@/lib/constants/routes";
@@ -9,7 +10,12 @@ import { createServerComponentClient } from "@/lib/supabase/server";
 import { NotesNav } from "./NotesNav";
 import { UserMenu } from "./UserMenu";
 
-type HeaderProfile = { nickname: string; avatar_url: string | null };
+const headerProfileSchema = z.object({
+  nickname: z.string(),
+  avatar_url: z.string().nullable(),
+});
+
+type HeaderProfile = z.infer<typeof headerProfileSchema>;
 
 export async function Header() {
   let user = null;
@@ -25,7 +31,8 @@ export async function Header() {
         .select("nickname, avatar_url")
         .eq("id", user.id)
         .single();
-      profile = data as HeaderProfile | null;
+      const parsed = headerProfileSchema.safeParse(data);
+      profile = parsed.success ? parsed.data : null;
     }
   } catch {
     // 환경변수 미설정 등으로 Supabase 연결 실패 시 비로그인 상태로 fallback
