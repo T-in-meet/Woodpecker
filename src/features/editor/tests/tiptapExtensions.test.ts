@@ -23,6 +23,25 @@ function roundTrip(markdown: string): string {
   return result;
 }
 
+function findTextStartPosition(editor: Editor, text: string): number {
+  let position: number | null = null;
+
+  editor.state.doc.descendants((node, pos) => {
+    if (node.isText && node.text?.includes(text)) {
+      position = pos;
+      return false;
+    }
+
+    return true;
+  });
+
+  if (position === null) {
+    throw new Error(`text node not found: ${text}`);
+  }
+
+  return position;
+}
+
 describe("MarkdownTaskItem custom extension", () => {
   it("round-trips a pure task list", () => {
     const input = "- [ ] todo\n- [x] done";
@@ -140,6 +159,117 @@ describe("MarkdownTaskItem custom extension", () => {
     expect(serializeTipTapMarkdown(editor).trim()).toBe(
       "| 제목 |\n| --- |\n| 첫 줄 둘째 줄 |",
     );
+
+    editor.destroy();
+  });
+
+  it("preserves inline markdown inside table cells while flattening multi-block content", () => {
+    const editor = createEditor({
+      type: "doc",
+      content: [
+        {
+          type: "table",
+          content: [
+            {
+              type: "tableRow",
+              content: [
+                {
+                  type: "tableHeader",
+                  content: [
+                    {
+                      type: "paragraph",
+                      content: [{ type: "text", text: "제목" }],
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              type: "tableRow",
+              content: [
+                {
+                  type: "tableCell",
+                  content: [
+                    {
+                      type: "paragraph",
+                      content: [
+                        {
+                          type: "text",
+                          marks: [{ type: "bold" }],
+                          text: "첫 줄",
+                        },
+                      ],
+                    },
+                    {
+                      type: "paragraph",
+                      content: [
+                        {
+                          type: "text",
+                          marks: [
+                            {
+                              type: "link",
+                              attrs: { href: "https://openai.com" },
+                            },
+                          ],
+                          text: "둘째 줄",
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(serializeTipTapMarkdown(editor).trim()).toBe(
+      "| 제목 |\n| --- |\n| **첫 줄** [둘째 줄](https://openai.com) |",
+    );
+
+    editor.destroy();
+  });
+});
+
+describe("ListItemBackspaceLift", () => {
+  it("does not lift the list item from the start of a later paragraph", () => {
+    const editor = new Editor({
+      extensions: getTipTapExtensions(),
+      editable: true,
+      content: {
+        type: "doc",
+        content: [
+          {
+            type: "bulletList",
+            content: [
+              {
+                type: "listItem",
+                content: [
+                  {
+                    type: "paragraph",
+                    content: [{ type: "text", text: "첫 문단" }],
+                  },
+                  {
+                    type: "paragraph",
+                    content: [{ type: "text", text: "둘째 문단" }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    const secondParagraphStart = findTextStartPosition(editor, "둘째 문단");
+
+    editor.commands.setTextSelection(secondParagraphStart);
+    editor.commands.keyboardShortcut("Backspace");
+
+    expect(editor.state.doc.firstChild?.type.name).toBe("bulletList");
+    expect(editor.getText()).toContain("첫 문단");
+    expect(editor.getText()).toContain("둘째 문단");
 
     editor.destroy();
   });
