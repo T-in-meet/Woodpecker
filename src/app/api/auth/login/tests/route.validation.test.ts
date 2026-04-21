@@ -17,7 +17,13 @@ import { createClient } from "@/lib/supabase/server";
 import { VALIDATION_REASON } from "@/lib/validation/reasons";
 
 import { POST } from "../route";
-import { makeLoginRequest } from "./utils/loginTestHelper";
+import {
+  makeLoginRequest,
+  mockLoginSuccess,
+  mockSignIn,
+  resetLoginApiMocks,
+  setupLoginApiMocks,
+} from "./utils/loginTestHelper";
 
 vi.mock("@/lib/supabase/server");
 vi.mock("@/lib/utils/getClientIp", () => ({
@@ -25,15 +31,11 @@ vi.mock("@/lib/utils/getClientIp", () => ({
 }));
 
 describe("로그인 API 입력 검증", () => {
-  const mockSignIn = vi.fn();
-
   beforeEach(() => {
     resetEligibilityStore();
-    vi.clearAllMocks();
-
-    vi.mocked(createClient).mockResolvedValue({
-      auth: { signInWithPassword: mockSignIn },
-    } as never);
+    resetLoginApiMocks();
+    setupLoginApiMocks();
+    mockLoginSuccess();
   });
 
   /** 검증 실패 응답의 공통 계약을 확인하는 헬퍼 */

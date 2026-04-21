@@ -18,7 +18,16 @@ import {
 import { createClient } from "@/lib/supabase/server";
 
 import { POST } from "../route";
-import { DEFAULT_LOGIN_BODY, makeLoginRequest } from "./utils/loginTestHelper";
+import {
+  DEFAULT_LOGIN_BODY,
+  makeLoginRequest,
+  mockEligibilityAllowed,
+  mockIpPrecheckAllowed,
+  mockLoginSuccess,
+  mockSignIn,
+  resetLoginApiMocks,
+  setupLoginApiMocks,
+} from "./utils/loginTestHelper";
 
 vi.mock("@/lib/supabase/server");
 vi.mock("@/lib/utils/getClientIp", () => ({
@@ -38,23 +47,15 @@ vi.mock("@/features/auth/lib/checkRequestEligibility", async () => {
 });
 
 describe("로그인 API rate limit 처리", () => {
-  const mockSignIn = vi.fn();
-
   beforeEach(() => {
     resetEligibilityStore();
-    vi.clearAllMocks();
-
-    vi.mocked(createClient).mockResolvedValue({
-      auth: { signInWithPassword: mockSignIn },
-    } as never);
+    resetLoginApiMocks();
+    setupLoginApiMocks();
+    mockLoginSuccess();
 
     // 기본적으로 허용 상태로 초기화
-    vi.mocked(checkIpRateLimitPrecheck).mockReturnValue({ allowed: true });
-    vi.mocked(checkRequestEligibility).mockReturnValue({ allowed: true });
-    mockSignIn.mockResolvedValue({
-      data: { user: { id: "uid" }, session: {} },
-      error: null,
-    });
+    mockIpPrecheckAllowed();
+    mockEligibilityAllowed();
   });
 
   it("TC-01: IP precheck 차단 시 429 + LOGIN_RATE_LIMIT_EXCEEDED를 반환한다", async () => {

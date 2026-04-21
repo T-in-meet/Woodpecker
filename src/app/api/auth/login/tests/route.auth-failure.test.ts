@@ -17,7 +17,14 @@ import { resetEligibilityStore } from "@/features/auth/lib/checkRequestEligibili
 import { createClient } from "@/lib/supabase/server";
 
 import { POST } from "../route";
-import { DEFAULT_LOGIN_BODY, makeLoginRequest } from "./utils/loginTestHelper";
+import {
+  DEFAULT_LOGIN_BODY,
+  makeLoginRequest,
+  mockLoginSuccess,
+  mockSignIn,
+  resetLoginApiMocks,
+  setupLoginApiMocks,
+} from "./utils/loginTestHelper";
 
 vi.mock("@/lib/supabase/server");
 vi.mock("@/lib/utils/getClientIp", () => ({
@@ -25,15 +32,11 @@ vi.mock("@/lib/utils/getClientIp", () => ({
 }));
 
 describe("로그인 API 인증 실패 통합 처리", () => {
-  const mockSignIn = vi.fn();
-
   beforeEach(() => {
     resetEligibilityStore();
-    vi.clearAllMocks();
-
-    vi.mocked(createClient).mockResolvedValue({
-      auth: { signInWithPassword: mockSignIn },
-    } as never);
+    resetLoginApiMocks();
+    setupLoginApiMocks();
+    mockLoginSuccess();
   });
 
   describe("인증 실패 응답 통합 — account enumeration 방어", () => {

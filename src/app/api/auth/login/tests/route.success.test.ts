@@ -15,7 +15,14 @@ import { resetEligibilityStore } from "@/features/auth/lib/checkRequestEligibili
 import { createClient } from "@/lib/supabase/server";
 
 import { POST } from "../route";
-import { DEFAULT_LOGIN_BODY, makeLoginRequest } from "./utils/loginTestHelper";
+import {
+  DEFAULT_LOGIN_BODY,
+  makeLoginRequest,
+  mockLoginSuccess,
+  mockSignIn,
+  resetLoginApiMocks,
+  setupLoginApiMocks,
+} from "./utils/loginTestHelper";
 
 vi.mock("@/lib/supabase/server");
 vi.mock("@/lib/utils/getClientIp", () => ({
@@ -23,21 +30,11 @@ vi.mock("@/lib/utils/getClientIp", () => ({
 }));
 
 describe("로그인 API 성공 흐름", () => {
-  const mockSignIn = vi.fn();
-
   beforeEach(() => {
     resetEligibilityStore();
-    vi.clearAllMocks();
-
-    // signInWithPassword 성공 응답 mock
-    vi.mocked(createClient).mockResolvedValue({
-      auth: { signInWithPassword: mockSignIn },
-    } as never);
-
-    mockSignIn.mockResolvedValue({
-      data: { user: { id: "user-id" }, session: {} },
-      error: null,
-    });
+    resetLoginApiMocks();
+    setupLoginApiMocks();
+    mockLoginSuccess();
   });
 
   it("TC-01: 올바른 자격 증명이면 200을 반환한다", async () => {

@@ -21,14 +21,23 @@ import {
 import {
   checkIpRateLimitPrecheck,
   checkRequestEligibility,
+  resetEligibilityStore,
 } from "@/features/auth/lib/checkRequestEligibility";
 import {
   AuthJsonParseError,
   parseAuthJsonRequestBody,
 } from "@/features/auth/lib/parseAuthJsonRequestBody";
-import { createClient } from "@/lib/supabase/server";
 
 import { POST } from "../route";
+import {
+  mockEligibilityAllowed,
+  mockIpPrecheckAllowed,
+  mockLoginSuccess,
+  mockParsedLoginBody,
+  mockSignIn,
+  resetLoginApiMocks,
+  setupLoginApiMocks,
+} from "./utils/loginTestHelper";
 
 // applyMinimumResponseTime을 우회하여 타이밍 영향 제거
 vi.mock("@/features/auth/lib/applyMinimumResponseTime", () => ({
@@ -125,25 +134,38 @@ function makeRequest(
   });
 }
 
+/**
+ * 로깅 테스트에서 사용하는 mock 호출 기록을 초기화한다.
+ *
+ * 역할:
+ * - logRequested, logAuthEvent, logAuthError의 호출 횟수와 인자 기록을 비운다
+ * - rate limit / eligibility / body parse 관련 mock의 이전 테스트 호출 흔적을 제거한다
+ *
+ * 설계 의도:
+ * - vi.clearAllMocks() 같은 전역 초기화에 의존하지 않고
+ *   logging 테스트가 실제로 사용하는 mock만 명시적으로 초기화한다
+ * - mock 구현 자체는 beforeEach에서 다시 주입하므로 여기서는 호출 기록 정리만 담당한다
+ */
+function clearLoggingMocks() {
+  vi.mocked(logRequested).mockClear();
+  vi.mocked(logAuthEvent).mockClear();
+  vi.mocked(logAuthError).mockClear();
+  vi.mocked(checkIpRateLimitPrecheck).mockClear();
+  vi.mocked(checkRequestEligibility).mockClear();
+  vi.mocked(parseAuthJsonRequestBody).mockClear();
+}
+
 describe("로그인 API 로깅 검증", () => {
-  const mockSignIn = vi.fn();
-
   beforeEach(() => {
-    vi.clearAllMocks();
+    resetEligibilityStore();
+    resetLoginApiMocks();
+    setupLoginApiMocks();
+    mockLoginSuccess();
+    clearLoggingMocks();
 
-    vi.mocked(checkIpRateLimitPrecheck).mockReturnValue({ allowed: true });
-    vi.mocked(checkRequestEligibility).mockReturnValue({ allowed: true });
-    vi.mocked(parseAuthJsonRequestBody).mockResolvedValue({
-      email: "user@example.com",
-      password: "Password1!",
-    });
-    vi.mocked(createClient).mockResolvedValue({
-      auth: { signInWithPassword: mockSignIn },
-    } as never);
-    mockSignIn.mockResolvedValue({
-      data: { user: { id: "uid" }, session: {} },
-      error: null,
-    });
+    mockParsedLoginBody();
+    mockIpPrecheckAllowed();
+    mockEligibilityAllowed();
   });
 
   it("AUTH_LOGIN_REQUESTED가 1회 기록된다", async () => {
