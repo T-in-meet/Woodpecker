@@ -20,9 +20,6 @@ import {
   setupDefaultMocks,
 } from "./utils/loginFormTestUtils";
 
-vi.mock("next/navigation");
-vi.mock("@/features/auth/login/hooks/useLoginMutation");
-
 async function fillAndSubmit(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText(/이메일/i), "user@example.com");
   await user.type(screen.getByLabelText(/^비밀번호$/i), "Password1!");
@@ -31,7 +28,7 @@ async function fillAndSubmit(user: ReturnType<typeof userEvent.setup>) {
 
 describe("LoginForm 제출 및 pending 상태", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    setupDefaultMocks();
   });
 
   it("isPending=true이면 로그인 버튼이 비활성화된다", () => {

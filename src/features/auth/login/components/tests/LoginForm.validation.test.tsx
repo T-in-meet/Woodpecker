@@ -19,9 +19,6 @@ import {
   setupDefaultMocks,
 } from "./utils/loginFormTestUtils";
 
-vi.mock("next/navigation");
-vi.mock("@/features/auth/login/hooks/useLoginMutation");
-
 describe("LoginForm 클라이언트 validation", () => {
   beforeEach(() => {
     vi.clearAllMocks();

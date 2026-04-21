@@ -20,8 +20,6 @@ import {
   setupDefaultMocks,
 } from "./utils/loginFormTestUtils";
 
-vi.mock("next/navigation");
-vi.mock("@/features/auth/login/hooks/useLoginMutation");
 vi.mock("@/lib/utils/showToast", () => ({ showToast: vi.fn() }));
 
 async function submitValidForm(user: ReturnType<typeof userEvent.setup>) {
@@ -32,12 +30,7 @@ async function submitValidForm(user: ReturnType<typeof userEvent.setup>) {
 
 describe("LoginForm 전역 에러 처리", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     setupDefaultMocks();
-  });
-
-  afterEach(() => {
-    vi.clearAllMocks();
   });
 
   it("network 에러가 발생하면 showToast가 호출된다", async () => {

@@ -3,25 +3,68 @@ import { render } from "@testing-library/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { vi } from "vitest";
 
+import { LoginForm } from "@/features/auth/login/components/LoginForm";
 import { useLoginMutation } from "@/features/auth/login/hooks/useLoginMutation";
 
-import { LoginForm } from "../../LoginForm";
+vi.mock("next/navigation");
+vi.mock("@/features/auth/login/hooks/useLoginMutation");
 
-// 각 테스트 파일에서 vi.mock("next/navigation")과
-// vi.mock("@/features/auth/login/hooks/useLoginMutation")을 선언한 후
-// setupDefaultMocks를 호출해야 한다.
+/**
+ * 공통 mock 선언 영역
+ *
+ * 역할:
+ * - next/navigation, useLoginMutation에 대한 vi.mock을 한 번만 선언한다
+ * - 이 파일을 import하는 테스트는 별도의 vi.mock 선언 없이 동일한 mock 환경을 사용한다
+ *
+ * 주의:
+ * - 각 테스트 파일에서 vi.mock(...)을 다시 선언하지 않는다
+ * - mock 초기화는 setupDefaultMocks()를 통해 수행한다
+ */
 
 export const mockMutateAsync = vi.fn();
 export const mockPush = vi.fn();
-
-// 테스트 전용 QueryClient — invalidateQueries 등을 spy로 검증할 때 사용
-export const testQueryClient = new QueryClient({
-  defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-});
+export const mockReplace = vi.fn();
+export const mockRefresh = vi.fn();
+export const mockBack = vi.fn();
+export const mockForward = vi.fn();
+export const mockPrefetch = vi.fn();
 
 /**
- * useLoginMutation, useRouter, useSearchParams를 기본 상태로 설정한다.
- * 각 테스트에서 mockMutateAsync.mockRejectedValue 등으로 개별 override 가능.
+ * 테스트 전용 QueryClient를 생성한다.
+ *
+ * 역할:
+ * - 테스트 간 cache 공유를 방지하기 위해 매 테스트마다 새로운 인스턴스를 생성한다
+ * - retry를 비활성화하여 테스트의 예측 가능성을 높인다
+ *
+ * 사용 방식:
+ * - query-invalidation 테스트에서는 이 인스턴스에 spy를 설정한 뒤
+ *   renderLoginForm(queryClient)로 동일 인스턴스를 주입해야 한다
+ */
+export function createTestQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  });
+}
+
+/**
+ * 공통 테스트 mock 환경을 초기 상태로 복구한다.
+ *
+ * 역할:
+ * - useLoginMutation, useRouter, useSearchParams의 기본 mock 구현을 설정한다
+ * - 모든 공통 mock 함수(mockMutateAsync, router 관련 함수 등)를 reset한다
+ *
+ * 사용 방식:
+ * - 각 테스트의 beforeEach에서 호출하여 테스트 간 상태 오염을 방지한다
+ * - 개별 테스트에서는 mockMutateAsync.mockResolvedValue / mockRejectedValue 등으로
+ *   필요한 시나리오만 override한다
+ *
+ * 설계 의도:
+ * - 공통 mock 초기화 책임을 이 함수로 집중시켜
+ *   vi.clearAllMocks 같은 전역 초기화 사용을 제거한다
+ * - 테스트 파일은 "mock 설정"이 아니라 "시나리오 정의"에 집중하도록 한다
  */
 export function setupDefaultMocks({
   isPending = false,
@@ -30,6 +73,14 @@ export function setupDefaultMocks({
   isPending?: boolean;
   redirectQuery?: string | null;
 } = {}) {
+  mockMutateAsync.mockReset();
+  mockPush.mockReset();
+  mockReplace.mockReset();
+  mockRefresh.mockReset();
+  mockBack.mockReset();
+  mockForward.mockReset();
+  mockPrefetch.mockReset();
+
   vi.mocked(useLoginMutation).mockReturnValue({
     mutateAsync: mockMutateAsync,
     isPending,
@@ -37,11 +88,11 @@ export function setupDefaultMocks({
 
   vi.mocked(useRouter).mockReturnValue({
     push: mockPush,
-    back: vi.fn(),
-    forward: vi.fn(),
-    refresh: vi.fn(),
-    replace: vi.fn(),
-    prefetch: vi.fn(),
+    back: mockBack,
+    forward: mockForward,
+    refresh: mockRefresh,
+    replace: mockReplace,
+    prefetch: mockPrefetch,
   });
 
   vi.mocked(useSearchParams).mockReturnValue({
@@ -53,10 +104,20 @@ export function setupDefaultMocks({
   } as unknown as ReturnType<typeof useSearchParams>);
 }
 
-/** LoginForm을 QueryClientProvider와 함께 렌더링한다. */
-export function renderLoginForm() {
+/**
+ * LoginForm을 QueryClientProvider와 함께 렌더링한다.
+ *
+ * 역할:
+ * - 테스트 환경에서 사용할 QueryClient를 Provider로 주입한다
+ *
+ * 사용 방식:
+ * - 기본적으로 내부에서 새로운 QueryClient를 생성한다
+ * - query-invalidation 검증 시에는 외부에서 생성한 queryClient를 전달하여
+ *   spy 대상과 실제 사용 인스턴스를 일치시켜야 한다
+ */
+export function renderLoginForm(queryClient = createTestQueryClient()) {
   return render(
-    <QueryClientProvider client={testQueryClient}>
+    <QueryClientProvider client={queryClient}>
       <LoginForm />
     </QueryClientProvider>,
   );

@@ -11,9 +11,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { renderLoginForm, setupDefaultMocks } from "./utils/loginFormTestUtils";
 
-vi.mock("next/navigation");
-vi.mock("@/features/auth/login/hooks/useLoginMutation");
-
 describe("LoginForm 렌더링", () => {
   beforeEach(() => {
     setupDefaultMocks();
