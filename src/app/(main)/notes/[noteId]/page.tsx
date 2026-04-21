@@ -31,6 +31,10 @@ export default async function NoteDetailPage({
     redirect(ROUTES.LOGIN);
   }
 
+  if (user.email_confirmed_at == null) {
+    redirect(ROUTES.VERIFY_EMAIL);
+  }
+
   const note = await getNoteById(noteId, user.id);
 
   if (!note) {

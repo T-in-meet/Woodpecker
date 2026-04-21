@@ -20,5 +20,9 @@ export default async function NewNotePage() {
     redirect(ROUTES.LOGIN);
   }
 
+  if (user.email_confirmed_at == null) {
+    redirect(ROUTES.VERIFY_EMAIL);
+  }
+
   return <NoteForm />;
 }

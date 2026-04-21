@@ -23,6 +23,10 @@ export default async function NotesPage() {
     redirect(ROUTES.LOGIN);
   }
 
+  if (user.email_confirmed_at == null) {
+    redirect(ROUTES.VERIFY_EMAIL);
+  }
+
   const notes = await getNotes(user.id);
 
   return (
