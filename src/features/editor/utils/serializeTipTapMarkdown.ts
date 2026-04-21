@@ -10,8 +10,6 @@ type MarkdownStorage = {
 
 const ESCAPED_CHECKBOX_MARKER_PATTERN =
   /^(\s*(?:[-+*]|\d+\.)\s+)\\\[( |x|X)\\\] (.*)$/;
-const UNESCAPED_CHECKBOX_MARKER_PATTERN =
-  /^(\s*(?:[-+*]|\d+\.)\s+)\[( |x|X)\] (.*)$/;
 
 function getTaskItemIndent(line: string | undefined): string | null {
   if (!line) return null;
@@ -57,27 +55,7 @@ function normalizeTaskListSpacing(markdown: string): string {
   return normalizedLines.join("\n");
 }
 
-function detectCheckboxStyle(markdown: string): "escaped" | "unescaped" | null {
-  const lines = markdown.split("\n");
-
-  for (const line of lines) {
-    if (UNESCAPED_CHECKBOX_MARKER_PATTERN.test(line)) return "unescaped";
-    if (ESCAPED_CHECKBOX_MARKER_PATTERN.test(line)) return "escaped";
-  }
-
-  return null;
-}
-
-function normalizeEscapedCheckboxMarkers(
-  markdown: string,
-  previousMarkdown?: string,
-): string {
-  const previousStyle = previousMarkdown
-    ? detectCheckboxStyle(previousMarkdown)
-    : null;
-
-  if (previousStyle !== "unescaped") return markdown;
-
+function normalizeEscapedCheckboxMarkers(markdown: string): string {
   return markdown
     .split("\n")
     .map((line) => {
@@ -133,12 +111,10 @@ export function normalizeTipTapMarkdown(markdown: string): string {
 
 export function normalizeTipTapMarkdownWithHistory(
   markdown: string,
-  previousMarkdown?: string,
+  _previousMarkdown?: string,
 ): string {
   return normalizeBlockquoteLineBreaks(
-    normalizeTaskListSpacing(
-      normalizeEscapedCheckboxMarkers(markdown, previousMarkdown),
-    ),
+    normalizeTaskListSpacing(normalizeEscapedCheckboxMarkers(markdown)),
   );
 }
 

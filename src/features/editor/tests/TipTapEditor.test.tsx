@@ -145,6 +145,49 @@ describe("TipTapEditor", () => {
     });
   });
 
+  it("converts typed markdown checkbox markers into task items", async () => {
+    const user = userEvent.setup();
+    const handleChange = vi.fn();
+
+    render(<TipTapEditor value="" onChange={handleChange} />);
+
+    await waitFor(() => {
+      expect(getEditorContentElement()).toBeTruthy();
+    });
+
+    await user.click(getEditorContentElement());
+    await user.keyboard("- [[ ] first");
+
+    const checkbox = await screen.findByRole("checkbox");
+
+    expect(checkbox).toBeInTheDocument();
+    expect(screen.getByText("first")).toBeInTheDocument();
+    expect(handleChange).toHaveBeenLastCalledWith("- [ ] first");
+  });
+
+  it("converts checkbox markers typed after an existing bullet item", async () => {
+    const user = userEvent.setup();
+    const handleChange = vi.fn();
+
+    render(<TipTapEditor value="" onChange={handleChange} />);
+
+    await waitFor(() => {
+      expect(getEditorContentElement()).toBeTruthy();
+    });
+
+    await user.click(getEditorContentElement());
+    await user.keyboard("- first{Enter}[[ ] second");
+
+    const checkbox = await screen.findByRole("checkbox");
+    const lastChange = handleChange.mock.lastCall?.[0];
+
+    expect(checkbox).toBeInTheDocument();
+    expect(screen.getByText("first")).toBeInTheDocument();
+    expect(screen.getByText("second")).toBeInTheDocument();
+    expect(lastChange).toContain("- [ ] second");
+    expect(lastChange).not.toContain("\\[ \\]");
+  });
+
   it("lifts the current bullet list item when Backspace is pressed at the start of the line", async () => {
     const handleChange = vi.fn();
     const handleEditorReady = vi.fn();

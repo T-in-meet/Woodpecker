@@ -8,12 +8,12 @@ import {
 } from "../utils/serializeTipTapMarkdown";
 
 describe("escaped checkbox markers", () => {
-  it("preserves escaped checkbox markers when the previous markdown had no unescaped checkboxes", () => {
+  it("restores escaped checkbox markers even when the previous markdown was escaped", () => {
     const previousMarkdown = "- \\[ \\] todo\n- \\[x\\] done";
     const input = "- \\[ \\] todo updated\n- \\[x\\] done updated";
 
     expect(normalizeTipTapMarkdownWithHistory(input, previousMarkdown)).toBe(
-      input,
+      "- [ ] todo updated\n- [x] done updated",
     );
   });
 
@@ -26,9 +26,9 @@ describe("escaped checkbox markers", () => {
     );
   });
 
-  it("keeps escaped checkbox markers by default when there is no history", () => {
+  it("restores escaped checkbox markers by default when there is no history", () => {
     const input = "1. \\[ \\] first\n2. \\[x\\] second";
-    expect(normalizeTipTapMarkdown(input)).toBe(input);
+    expect(normalizeTipTapMarkdown(input)).toBe("1. [ ] first\n2. [x] second");
   });
 
   it("does not alter already-unescaped checkboxes", () => {
