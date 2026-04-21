@@ -1,6 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -38,6 +39,7 @@ type FormValues = {
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
   const { mutateAsync, isPending } = useLoginMutation();
 
   const {
@@ -63,6 +65,12 @@ export function LoginForm() {
       const result = await mutateAsync(
         redirectParam ? { ...data, redirectTo: redirectParam } : { ...data },
       );
+
+      // 로그인 성공 후 서버 상태 동기화 — 세션/유저/마이페이지 캐시를 무효화해 최신 상태 보장
+      await queryClient.invalidateQueries({ queryKey: ["auth", "session"] });
+      await queryClient.invalidateQueries({ queryKey: ["auth", "user"] });
+      await queryClient.invalidateQueries({ queryKey: ["mypage"] });
+
       router.push(result.data.redirectTo);
     } catch (e: unknown) {
       // 서버 validation 에러 — 필드 단위로 매핑

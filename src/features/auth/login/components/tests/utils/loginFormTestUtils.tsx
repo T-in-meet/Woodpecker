@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render } from "@testing-library/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { vi } from "vitest";
@@ -12,6 +13,11 @@ import { LoginForm } from "../../LoginForm";
 
 export const mockMutateAsync = vi.fn();
 export const mockPush = vi.fn();
+
+// 테스트 전용 QueryClient — invalidateQueries 등을 spy로 검증할 때 사용
+export const testQueryClient = new QueryClient({
+  defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+});
 
 /**
  * useLoginMutation, useRouter, useSearchParams를 기본 상태로 설정한다.
@@ -47,7 +53,11 @@ export function setupDefaultMocks({
   } as unknown as ReturnType<typeof useSearchParams>);
 }
 
-/** LoginForm을 렌더링한다. */
+/** LoginForm을 QueryClientProvider와 함께 렌더링한다. */
 export function renderLoginForm() {
-  return render(<LoginForm />);
+  return render(
+    <QueryClientProvider client={testQueryClient}>
+      <LoginForm />
+    </QueryClientProvider>,
+  );
 }
