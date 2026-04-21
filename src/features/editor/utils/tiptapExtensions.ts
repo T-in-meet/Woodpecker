@@ -22,7 +22,7 @@ import TaskItem from "@tiptap/extension-task-item";
 import TaskList from "@tiptap/extension-task-list";
 import {
   defaultMarkdownSerializer,
-  type MarkdownSerializerState,
+  MarkdownSerializerState,
 } from "@tiptap/pm/markdown";
 import { type Node as ProseMirrorNode } from "@tiptap/pm/model";
 import StarterKit from "@tiptap/starter-kit";
@@ -48,6 +48,29 @@ lowlight.register("go", go);
 const LIST_ITEM_TYPE_NAMES = ["listItem", "taskItem"] as const;
 
 type TableCellAlignmentType = "left" | "center" | "right" | null;
+
+type RuntimeMarkdownSerializerState = MarkdownSerializerState & {
+  marks: Record<string, unknown>;
+  nodes: Record<
+    string,
+    (
+      state: MarkdownSerializerState,
+      node: ProseMirrorNode,
+      parent: ProseMirrorNode,
+      index: number,
+    ) => void
+  >;
+  out: string;
+};
+
+type MarkdownSerializerStateConstructorType = new (
+  nodes: RuntimeMarkdownSerializerState["nodes"],
+  marks: RuntimeMarkdownSerializerState["marks"],
+  options: RuntimeMarkdownSerializerState["options"],
+) => RuntimeMarkdownSerializerState;
+
+const MarkdownSerializerStateConstructor =
+  MarkdownSerializerState as unknown as MarkdownSerializerStateConstructorType;
 
 function getTableCells(row: ProseMirrorNode): ProseMirrorNode[] {
   const cells: ProseMirrorNode[] = [];
@@ -77,7 +100,26 @@ function getTableCellAlignment(
   return null;
 }
 
-function getTableCellText(cell: ProseMirrorNode | null | undefined): string {
+function renderInlineMarkdown(
+  state: MarkdownSerializerState,
+  node: ProseMirrorNode,
+): string {
+  const runtimeState = state as RuntimeMarkdownSerializerState;
+  const tempState = new MarkdownSerializerStateConstructor(
+    runtimeState.nodes,
+    runtimeState.marks,
+    runtimeState.options,
+  );
+
+  tempState.renderInline(node);
+
+  return tempState.out.trim();
+}
+
+function getTableCellMarkdown(
+  state: MarkdownSerializerState,
+  cell: ProseMirrorNode | null | undefined,
+): string {
   if (!cell) {
     return "";
   }
@@ -85,14 +127,16 @@ function getTableCellText(cell: ProseMirrorNode | null | undefined): string {
   const parts: string[] = [];
 
   cell.forEach((child) => {
-    const text = child.textContent.replace(/\s+/g, " ").trim();
+    const text = child.type.inlineContent
+      ? renderInlineMarkdown(state, child)
+      : child.textContent.replace(/\s+/g, " ").trim();
 
     if (text) {
       parts.push(text);
     }
   });
 
-  return parts.join(" ").replace(/\|/g, "\\|");
+  return parts.join(" ");
 }
 
 function getTableDividerCell(alignment: TableCellAlignmentType): string {
@@ -245,17 +289,31 @@ const ListItemBackspaceLift = Extension.create({
         return false;
       }
 
+      const { $from } = state.selection;
+
       if (!isAtStartOfNode(state)) {
         return false;
       }
 
       for (const itemName of LIST_ITEM_TYPE_NAMES) {
-        if (state.schema.nodes[itemName] === undefined) {
+        let listItemDepth: number | null = null;
+
+        for (let depth = $from.depth; depth > 0; depth -= 1) {
+          if ($from.node(depth).type.name === itemName) {
+            listItemDepth = depth;
+            break;
+          }
+        }
+
+        if (listItemDepth === null || !isNodeActive(state, itemName)) {
           continue;
         }
 
-        if (!isNodeActive(state, itemName)) {
-          continue;
+        if ($from.node(listItemDepth).firstChild !== $from.parent) {
+          return (
+            this.editor.commands.joinBackward() ||
+            this.editor.commands.joinTextblockBackward()
+          );
         }
 
         // StarterKit's list keymap prefers merging with the previous item.
@@ -315,7 +373,7 @@ const MarkdownTable = Table.extend({
             state,
             Array.from({ length: columnCount }, (_, index) =>
               hasHeaderRow
-                ? getTableCellText(headerRow?.maybeChild(index))
+                ? getTableCellMarkdown(state, headerRow?.maybeChild(index))
                 : "",
             ),
           );
@@ -328,7 +386,7 @@ const MarkdownTable = Table.extend({
             writeMarkdownTableRow(
               state,
               Array.from({ length: columnCount }, (_, index) =>
-                getTableCellText(row.maybeChild(index)),
+                getTableCellMarkdown(state, row.maybeChild(index)),
               ),
             );
           }
