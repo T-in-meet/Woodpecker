@@ -10,13 +10,6 @@ const footerLinks = [
       { label: "기능 소개", href: "#features" },
     ],
   },
-  // {
-  //   title: "시작하기",
-  //   links: [
-  //     { label: "로그인", href: ROUTES.LOGIN },
-  //     { label: "회원가입", href: ROUTES.SIGNUP },
-  //   ],
-  // },
   {
     title: "법적 고지",
     links: [

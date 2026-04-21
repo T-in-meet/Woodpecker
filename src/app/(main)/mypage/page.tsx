@@ -40,16 +40,16 @@ export default async function MyPage({ searchParams }: Props) {
     ? rawSection
     : "profile";
 
+  const profilePromise = getProfile();
+  const statsPromise = getLearningStats();
+
   const user = await getUser();
 
   if (!user) {
     redirect(ROUTES.LOGIN);
   }
 
-  const [profile, stats] = await Promise.all([
-    getProfile(),
-    getLearningStats(),
-  ]);
+  const [profile, stats] = await Promise.all([profilePromise, statsPromise]);
 
   if (!profile) {
     redirect(ROUTES.LOGIN);

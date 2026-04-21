@@ -5,25 +5,26 @@ import { Button } from "@/components/ui/button";
 import { ROUTES } from "@/lib/constants/routes";
 import { getUser } from "@/lib/supabase/getUser";
 import { createServerComponentClient } from "@/lib/supabase/server";
-import type { Profile } from "@/types/profiles.types";
 
 import { UserMenu } from "./UserMenu";
 
+type HeaderProfile = { nickname: string; avatar_url: string | null };
+
 export async function Header() {
   let user = null;
-  let profile: Profile | null = null;
+  let profile: HeaderProfile | null = null;
 
   try {
     user = await getUser();
 
     if (user) {
       const supabase = await createServerComponentClient();
-      const { data: profileData } = await supabase
+      const { data } = await supabase
         .from("profiles")
-        .select("*")
+        .select("nickname, avatar_url")
         .eq("id", user.id)
         .single();
-      profile = profileData as Profile | null;
+      profile = data as HeaderProfile | null;
     }
   } catch {
     // 환경변수 미설정 등으로 Supabase 연결 실패 시 비로그인 상태로 fallback
@@ -55,6 +56,24 @@ export async function Header() {
               </Button>
             </>
           )}
+        </div>
+      </div>
+    </header>
+  );
+}
+
+export function HeaderSkeleton() {
+  return (
+    <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-sm">
+      <div className="grid grid-cols-3 items-center max-w-5xl mx-auto px-6 py-3.5">
+        <div className="flex items-center gap-2">
+          <div className="size-7 rounded bg-muted animate-pulse" />
+          <div className="h-6 w-20 rounded bg-muted animate-pulse" />
+        </div>
+        <div />
+        <div className="flex justify-end gap-3">
+          <div className="h-9 w-16 rounded bg-muted animate-pulse" />
+          <div className="h-9 w-20 rounded bg-muted animate-pulse" />
         </div>
       </div>
     </header>

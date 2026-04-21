@@ -1,5 +1,7 @@
+import { Suspense } from "react";
+
 import { Footer } from "@/components/layout/Footer";
-import { Header } from "@/components/layout/Header";
+import { Header, HeaderSkeleton } from "@/components/layout/Header";
 import { CtaSection } from "@/features/landing/CtaSection";
 import { faqs, FaqSection } from "@/features/landing/FaqSection";
 import { HeroSection } from "@/features/landing/HeroSection";
@@ -92,7 +94,9 @@ export default function Home() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <div className="min-h-screen">
-        <Header />
+        <Suspense fallback={<HeaderSkeleton />}>
+          <Header />
+        </Suspense>
         <main>
           <HeroSection />
           <LearningFlowSection />
