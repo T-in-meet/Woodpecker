@@ -7,6 +7,7 @@ import { getUser } from "@/lib/supabase/getUser";
 import { createServerComponentClient } from "@/lib/supabase/server";
 import type { Profile } from "@/types/profiles.types";
 
+import { NotesNav } from "./NotesNav";
 import { UserMenu } from "./UserMenu";
 
 export async function Header() {
@@ -31,14 +32,18 @@ export async function Header() {
 
   return (
     <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-sm">
-      <div className="flex items-center justify-between max-w-5xl mx-auto px-6 py-3.5">
+      <div className="flex justify-between md:grid md:grid-cols-3 items-center max-w-5xl mx-auto px-6 py-3.5">
         <Link href={ROUTES.HOME} className="flex items-center gap-2">
           <Image src="/favicon.svg" alt="딱다구리" width={28} height={28} />
           {/* font-jeju: 브랜드 폰트(JejuStoneWall), globals.css @font-face 참조 */}
           <span className="font-jeju text-2xl">딱다구리</span>
         </Link>
 
-        <div className="flex gap-3">
+        <div className="hidden md:flex justify-center">
+          {profile && user && <NotesNav />}
+        </div>
+
+        <div className="flex justify-end gap-3 items-center">
           {profile && user ? (
             <UserMenu
               nickname={profile.nickname}
