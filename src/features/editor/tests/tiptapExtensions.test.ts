@@ -18,7 +18,7 @@ function createEditor(
 
 function roundTrip(markdown: string): string {
   const editor = createEditor(markdown);
-  const result = serializeTipTapMarkdown(editor, markdown);
+  const result = serializeTipTapMarkdown(editor);
   editor.destroy();
   return result;
 }

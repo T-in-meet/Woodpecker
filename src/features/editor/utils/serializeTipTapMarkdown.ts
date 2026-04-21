@@ -106,24 +106,11 @@ function getRawTipTapMarkdown(editor: Editor): string {
 }
 
 export function normalizeTipTapMarkdown(markdown: string): string {
-  return normalizeTipTapMarkdownWithHistory(markdown);
-}
-
-export function normalizeTipTapMarkdownWithHistory(
-  markdown: string,
-  _previousMarkdown?: string,
-): string {
   return normalizeBlockquoteLineBreaks(
     normalizeTaskListSpacing(normalizeEscapedCheckboxMarkers(markdown)),
   );
 }
 
-export function serializeTipTapMarkdown(
-  editor: Editor,
-  previousMarkdown?: string,
-): string {
-  return normalizeTipTapMarkdownWithHistory(
-    getRawTipTapMarkdown(editor),
-    previousMarkdown,
-  );
+export function serializeTipTapMarkdown(editor: Editor): string {
+  return normalizeTipTapMarkdown(getRawTipTapMarkdown(editor));
 }

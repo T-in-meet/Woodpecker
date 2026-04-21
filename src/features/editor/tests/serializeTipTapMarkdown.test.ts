@@ -3,30 +3,23 @@ import { describe, expect, it } from "vitest";
 
 import {
   normalizeTipTapMarkdown,
-  normalizeTipTapMarkdownWithHistory,
   serializeTipTapMarkdown,
 } from "../utils/serializeTipTapMarkdown";
 
 describe("escaped checkbox markers", () => {
-  it("restores escaped checkbox markers even when the previous markdown was escaped", () => {
-    const previousMarkdown = "- \\[ \\] todo\n- \\[x\\] done";
+  it("restores escaped checkbox markers", () => {
     const input = "- \\[ \\] todo updated\n- \\[x\\] done updated";
 
-    expect(normalizeTipTapMarkdownWithHistory(input, previousMarkdown)).toBe(
+    expect(normalizeTipTapMarkdown(input)).toBe(
       "- [ ] todo updated\n- [x] done updated",
     );
   });
 
-  it("restores checkbox markers when the previous markdown used task syntax", () => {
-    const previousMarkdown = "- [ ] todo\n- [x] done";
-    const input = "- \\[ \\] todo updated\n- \\[x\\] done updated";
-
-    expect(normalizeTipTapMarkdownWithHistory(input, previousMarkdown)).toBe(
-      "- [ ] todo updated\n- [x] done updated",
-    );
+  it("restores uppercase checked checkbox markers", () => {
+    expect(normalizeTipTapMarkdown("- \\[X\\] done")).toBe("- [X] done");
   });
 
-  it("restores escaped checkbox markers by default when there is no history", () => {
+  it("restores escaped ordered checkbox markers", () => {
     const input = "1. \\[ \\] first\n2. \\[x\\] second";
     expect(normalizeTipTapMarkdown(input)).toBe("1. [ ] first\n2. [x] second");
   });

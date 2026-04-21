@@ -165,6 +165,26 @@ describe("TipTapEditor", () => {
     expect(handleChange).toHaveBeenLastCalledWith("- [ ] first");
   });
 
+  it("converts typed checked markdown checkbox markers into task items", async () => {
+    const user = userEvent.setup();
+    const handleChange = vi.fn();
+
+    render(<TipTapEditor value="" onChange={handleChange} />);
+
+    await waitFor(() => {
+      expect(getEditorContentElement()).toBeTruthy();
+    });
+
+    await user.click(getEditorContentElement());
+    await user.keyboard("- [[x] done");
+
+    const checkbox = await screen.findByRole("checkbox");
+
+    expect(checkbox).toBeChecked();
+    expect(screen.getByText("done")).toBeInTheDocument();
+    expect(handleChange).toHaveBeenLastCalledWith("- [x] done");
+  });
+
   it("converts checkbox markers typed after an existing bullet item", async () => {
     const user = userEvent.setup();
     const handleChange = vi.fn();

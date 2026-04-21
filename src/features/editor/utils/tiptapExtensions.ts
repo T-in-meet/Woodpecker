@@ -51,7 +51,7 @@ lowlight.register("rust", rust);
 lowlight.register("go", go);
 
 const LIST_ITEM_TYPE_NAMES = ["listItem", "taskItem"] as const;
-const TASK_MARKER_IN_BULLET_LIST_INPUT_REGEX = /^\[( |x|X)\]\s$/;
+const TASK_MARKER_IN_BULLET_LIST_INPUT_REGEX = /^\[( |x|X)\][ ]$/;
 
 type TableCellAlignmentType = "left" | "center" | "right" | null;
 
@@ -445,6 +445,7 @@ const BulletTaskItemInputRule = Extension.create({
             mappedListPosition + nextListNode.nodeSize,
             replacementNodes,
           );
+          // ProseMirror 포지션은 taskList/taskItem/paragraph 경계를 각각 1칸씩 지난다.
           tr.setSelection(
             TextSelection.near(tr.doc.resolve(taskListPosition + 3)),
           );
