@@ -185,6 +185,43 @@ describe("TipTapEditor", () => {
     expect(handleChange).toHaveBeenLastCalledWith("- [x] done");
   });
 
+  it("preserves escaped task markers in the initial value prop", async () => {
+    render(<TipTapEditor value={"- \\[ \\] literal"} onChange={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(getEditorContentElement()).toBeTruthy();
+    });
+
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.getByText("[ ] literal")).toBeInTheDocument();
+  });
+
+  it("keeps escaped task markers escaped when the user edits literal text", async () => {
+    const user = userEvent.setup();
+    const handleChange = vi.fn();
+
+    render(
+      <TipTapEditor value={"- \\[ \\] literal"} onChange={handleChange} />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("[ ] literal")).toBeInTheDocument();
+    });
+
+    handleChange.mockClear();
+
+    await user.click(getEditorContentElement());
+    await user.keyboard("!");
+
+    await waitFor(() => {
+      expect(handleChange).toHaveBeenCalled();
+    });
+
+    const lastChange = handleChange.mock.lastCall?.[0] as string;
+    expect(lastChange).toContain("\\[ \\] literal");
+    expect(lastChange).not.toContain("- [ ] literal");
+  });
+
   it("converts checkbox markers typed after an existing bullet item", async () => {
     const user = userEvent.setup();
     const handleChange = vi.fn();

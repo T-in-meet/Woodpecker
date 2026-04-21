@@ -34,13 +34,16 @@ describe("NoteViewer", () => {
     ).toContain("[&_.tiptap]:px-0!");
   });
 
-  it("normalizes escaped task markers before rendering markdown notes", async () => {
+  it("preserves escaped task markers as literal markdown text", async () => {
     render(<NoteViewer content={"- \\[ \\] first"} language="markdown" />);
 
-    const checkbox = await screen.findByRole("checkbox");
+    await waitFor(() => {
+      const editor = document.querySelector("[contenteditable='false']");
+      expect(editor).toBeTruthy();
+    });
 
-    expect(checkbox).toBeDisabled();
-    expect(screen.getByText("first")).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.getByText("[ ] first")).toBeInTheDocument();
   });
 
   it("renders empty state when markdown content is empty", () => {

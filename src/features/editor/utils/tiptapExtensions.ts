@@ -382,9 +382,23 @@ const BulletTaskItemInputRule = Extension.create({
             return null;
           }
 
-          const itemIndex = $from.index(listDepth);
+          let itemIndex = $from.index(listDepth);
           const listNode = $from.node(listDepth);
           const listPosition = $from.before(listDepth);
+          const previousListItemNode =
+            itemIndex > 0 ? listNode.maybeChild(itemIndex - 1) : null;
+
+          if (
+            $from.parentOffset === 0 &&
+            previousListItemNode?.type === listItemType &&
+            previousListItemNode.childCount === 1 &&
+            previousListItemNode.firstChild?.type.name === "paragraph" &&
+            previousListItemNode.textContent === ""
+          ) {
+            // Empty list item boundaries resolve forward into the next item, so
+            // the marker typed in that empty item would otherwise convert its sibling.
+            itemIndex -= 1;
+          }
 
           if (itemIndex < 0 || itemIndex >= listNode.childCount) {
             return null;

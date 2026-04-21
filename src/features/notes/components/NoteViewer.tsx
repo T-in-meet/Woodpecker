@@ -1,6 +1,5 @@
 import hljs from "highlight.js";
 
-import { normalizeTipTapMarkdown } from "@/features/editor/utils/serializeTipTapMarkdown";
 import {
   isCodeLanguage,
   type NoteLanguage,
@@ -27,11 +26,9 @@ export function NoteViewer({ content, language, className }: NoteViewerProps) {
       );
     }
 
-    const normalizedContent = normalizeTipTapMarkdown(content);
-
     return (
       <MarkdownNoteViewerClient
-        content={normalizedContent}
+        content={content}
         className={cn(
           "[&_.tiptap]:px-0! [&_.tiptap]:py-6! sm:[&_.tiptap]:px-0!",
           className,
