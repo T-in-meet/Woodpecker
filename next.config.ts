@@ -173,12 +173,12 @@ const nextConfig: NextConfig = {
                   // - 평문 HTTP 접근 차단
                   //
                   // 현재 값 의미:
-                  // - max-age=63072000      : 2년 동안 HTTPS 강제 기억
+                  // - max-age=300      : 5분 동안 HTTPS 강제 기억
                   // - includeSubDomains    : 모든 서브도메인에도 동일 적용
                   //
                   // 주의:
                   // - 운영 환경 HTTPS 구성이 완전해야만 안전하게 적용 가능
-                  value: "max-age=63072000; includeSubDomains",
+                  value: "max-age=300; includeSubDomains",
                 },
               ]
             : []),
