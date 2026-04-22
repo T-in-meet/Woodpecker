@@ -304,26 +304,29 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
     [onConfirmChange, trigger],
   );
 
+  // onCloseAutoFocus 시점(Radix focus scope 해제 후)에 실행할 포커스 동작을 저장한다
+  // 이유: onOpenChange 시점에는 trigger/intent 상태가 유효하지만 focus scope가 아직 활성이므로,
+  //       실행 시점을 onCloseAutoFocus로 분리하기 위해 클로저를 ref에 캡처한다
+  const pendingTermsFocusRef = useRef<(() => void) | null>(null);
+  const pendingPrivacyFocusRef = useRef<(() => void) | null>(null);
+
+  // RAF 제거 — onCloseAutoFocus 콜백에서 동기 호출되므로 focus scope가 이미 해제됨
   const focusAgreementCheckbox = (
     checkboxRef: React.RefObject<HTMLButtonElement | null>,
   ) => {
-    requestAnimationFrame(() => {
-      checkboxRef.current?.scrollIntoView({
-        block: "center",
-        behavior: "smooth",
-      });
-      checkboxRef.current?.focus();
+    checkboxRef.current?.scrollIntoView({
+      block: "center",
+      behavior: "smooth",
     });
+    checkboxRef.current?.focus();
   };
 
   const focusNextAction = () => {
-    requestAnimationFrame(() => {
-      if (submitButtonRef.current && !submitButtonRef.current.disabled) {
-        submitButtonRef.current.focus();
-        return;
-      }
-      loginLinkRef.current?.focus();
-    });
+    if (submitButtonRef.current && !submitButtonRef.current.disabled) {
+      submitButtonRef.current.focus();
+      return;
+    }
+    loginLinkRef.current?.focus();
   };
 
   const restoreFocusByTrigger = (
@@ -334,15 +337,9 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
       error: React.RefObject<HTMLButtonElement | null>;
     },
   ) => {
-    requestAnimationFrame(() => {
-      if (trigger === "checkbox") {
-        refs.checkbox.current?.focus();
-      } else if (trigger === "button") {
-        refs.button.current?.focus();
-      } else if (trigger === "error") {
-        refs.error.current?.focus();
-      }
-    });
+    if (trigger === "checkbox") refs.checkbox.current?.focus();
+    else if (trigger === "button") refs.button.current?.focus();
+    else if (trigger === "error") refs.error.current?.focus();
   };
 
   /**
@@ -370,16 +367,23 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
     setTermsModalOpen(open);
     if (!open) {
       setTermsInteractionEnabled(true);
+
+      // onOpenChange 시점에 trigger/intent 상태를 클로저로 캡처한다
+      // 이유: onCloseAutoFocus가 실행되는 시점에는 setTermsModalTrigger(null)로 이미 초기화되므로
+      const trigger = termsModalTrigger;
       if (termsAgreeIntentRef.current) {
         termsAgreeIntentRef.current = false;
-        focusAgreementCheckbox(privacyCheckboxRef);
+        pendingTermsFocusRef.current = () =>
+          focusAgreementCheckbox(privacyCheckboxRef);
       } else {
-        restoreFocusByTrigger(termsModalTrigger, {
-          checkbox: termsCheckboxRef,
-          button: termsTriggerButtonRef,
-          error: termsErrorButtonRef,
-        });
+        pendingTermsFocusRef.current = () =>
+          restoreFocusByTrigger(trigger, {
+            checkbox: termsCheckboxRef,
+            button: termsTriggerButtonRef,
+            error: termsErrorButtonRef,
+          });
       }
+
       setTermsModalTrigger(null);
     }
   };
@@ -388,16 +392,20 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
     setPrivacyModalOpen(open);
     if (!open) {
       setPrivacyInteractionEnabled(true);
+
+      const trigger = privacyModalTrigger;
       if (privacyAgreeIntentRef.current) {
         privacyAgreeIntentRef.current = false;
-        focusNextAction();
+        pendingPrivacyFocusRef.current = () => focusNextAction();
       } else {
-        restoreFocusByTrigger(privacyModalTrigger, {
-          checkbox: privacyCheckboxRef,
-          button: privacyTriggerButtonRef,
-          error: privacyErrorButtonRef,
-        });
+        pendingPrivacyFocusRef.current = () =>
+          restoreFocusByTrigger(trigger, {
+            checkbox: privacyCheckboxRef,
+            button: privacyTriggerButtonRef,
+            error: privacyErrorButtonRef,
+          });
       }
+
       setPrivacyModalTrigger(null);
     }
   };
@@ -430,14 +438,12 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
     const privacyNewlyAppeared = hasPrivacyError && !hadPrivacyError;
 
     if (termsNewlyAppeared || privacyNewlyAppeared) {
-      requestAnimationFrame(() => {
-        if (termsNewlyAppeared) {
-          termsErrorButtonRef.current?.focus();
-          return;
-        }
-
-        privacyErrorButtonRef.current?.focus();
-      });
+      // useEffect는 React commit 이후 실행되므로 에러 DOM이 이미 존재함 — RAF 불필요
+      if (termsNewlyAppeared) {
+        termsErrorButtonRef.current?.focus();
+        return;
+      }
+      privacyErrorButtonRef.current?.focus();
     }
 
     prevAgreementErrorsRef.current = {
@@ -614,13 +620,15 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
                           return;
                         }
 
-                        // interactionEnabled=false: 모달 열기
+                        e.preventDefault();
+
                         if (!termsInteractionEnabled) {
-                          e.preventDefault();
                           setTermsModalTrigger("checkbox");
                           setTermsModalOpen(true);
                           return;
                         }
+
+                        field.onChange(!field.value);
                       }}
                       onBlur={field.onBlur}
                       aria-disabled={
@@ -663,6 +671,11 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
                 dialogTitle="이용약관"
                 triggerButtonRef={termsTriggerButtonRef}
                 onTriggerClick={() => setTermsModalTrigger("button")}
+                onCloseComplete={() => {
+                  const fn = pendingTermsFocusRef.current;
+                  pendingTermsFocusRef.current = null;
+                  fn?.();
+                }}
               />
             </div>
 
@@ -724,13 +737,15 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
                           return;
                         }
 
-                        // interactionEnabled=false: 모달 열기
+                        e.preventDefault();
+
                         if (!privacyInteractionEnabled) {
-                          e.preventDefault();
                           setPrivacyModalTrigger("checkbox");
                           setPrivacyModalOpen(true);
                           return;
                         }
+
+                        field.onChange(!field.value);
                       }}
                       onBlur={field.onBlur}
                       aria-disabled={
@@ -773,6 +788,11 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
                 dialogTitle="개인정보처리방침"
                 triggerButtonRef={privacyTriggerButtonRef}
                 onTriggerClick={() => setPrivacyModalTrigger("button")}
+                onCloseComplete={() => {
+                  const fn = pendingPrivacyFocusRef.current;
+                  pendingPrivacyFocusRef.current = null;
+                  fn?.();
+                }}
               />
             </div>
 

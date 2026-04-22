@@ -12,7 +12,10 @@ import { getTipTapExtensions } from "../utils/tiptapExtensions";
  * markdown → TipTap → markdown 변환 결과가 허용 가능한 수준인지 확인한다.
  */
 
-const fixtures: { name: string; input: string }[] = [
+// `expected`가 생략되면 input과 동일한 결과를 기대한다.
+// serialize 경로에서 legacy task marker 복구를 제거했기 때문에,
+// mixed list 등 TipTap이 downgrade하는 구조는 round-trip 시 escape가 보존된다.
+const fixtures: { name: string; input: string; expected?: string }[] = [
   {
     name: "headings",
     input: "# H1\n\n## H2\n\n### H3",
@@ -65,6 +68,9 @@ const fixtures: { name: string; input: string }[] = [
     name: "mixed content",
     input:
       "# Title\n\nSome text with **bold** and *italic*.\n\n- list item\n- [ ] task\n\n```python\nprint('hello')\n```\n\n> quote\n\n---\n\nEnd.",
+    // `- list item\n- [ ] task` is a mixed list → downgraded to plain listItems; serialize escapes the task marker.
+    expected:
+      "# Title\n\nSome text with **bold** and *italic*.\n\n- list item\n- \\[ \\] task\n\n```python\nprint('hello')\n```\n\n> quote\n\n---\n\nEnd.",
   },
 ];
 
@@ -78,7 +84,7 @@ function createHeadlessEditor(content: string): Editor {
 
 function roundTrip(markdown: string): string {
   const editor = createHeadlessEditor(markdown);
-  const result = serializeTipTapMarkdown(editor, markdown);
+  const result = serializeTipTapMarkdown(editor);
   editor.destroy();
   return result;
 }
@@ -87,8 +93,9 @@ describe("TipTap markdown round-trip", () => {
   for (const fixture of fixtures) {
     it(`round-trips: ${fixture.name}`, () => {
       const result = roundTrip(fixture.input);
+      const expected = (fixture.expected ?? fixture.input).trim();
 
-      expect(result.trim()).toBe(fixture.input.trim());
+      expect(result.trim()).toBe(expected);
     });
   }
 });

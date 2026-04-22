@@ -70,7 +70,6 @@ export default async function NoteDetailPage({
               학습 완료
             </span>
           )}
-          <span>마지막 수정 {formatDateTime(note.updated_at)}</span>
         </div>
         <h1 className="mt-4 text-3xl font-bold text-foreground">
           {note.title}
