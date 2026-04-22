@@ -157,10 +157,10 @@ const nextConfig: NextConfig = {
             value: cspReportOnly,
           },
           // ⚠️  HSTS(Strict-Transport-Security) 적용 전 반드시 확인사항:
-          // - HSTS는 브라우저에 max-age(63072000초 = 2년)동안 캐시된다
-          // - production에서 한 번 적용되면 해당 브라우저는 HTTP 접근을 장기간 차단한다
+          // - HSTS는 브라우저에 max-age(300초 = 5분)동안 캐시된다
+          // - production에서 한 번 적용되면 해당 브라우저는 HTTP 접근을 설정 기간 동안 차단한다
           // - 배포 전에 HTTPS가 정상 동작하는지 반드시 확인해야 한다
-          // - 잘못 적용 시 사용자 접근이 최대 2년간 차단될 수 있다
+          // - 잘못 적용 시 사용자 접근이 max-age 기간 동안 차단될 수 있다
           // - preload 옵션은 이번 단계에서 제외 (HSTS preload list 등록은 별도 절차 필요)
           ...(isProduction
             ? [
@@ -173,12 +173,12 @@ const nextConfig: NextConfig = {
                   // - 평문 HTTP 접근 차단
                   //
                   // 현재 값 의미:
-                  // - max-age=63072000      : 2년 동안 HTTPS 강제 기억
+                  // - max-age=300      : 5분 동안 HTTPS 강제 기억
                   // - includeSubDomains    : 모든 서브도메인에도 동일 적용
                   //
                   // 주의:
                   // - 운영 환경 HTTPS 구성이 완전해야만 안전하게 적용 가능
-                  value: "max-age=63072000; includeSubDomains",
+                  value: "max-age=300; includeSubDomains",
                 },
               ]
             : []),
