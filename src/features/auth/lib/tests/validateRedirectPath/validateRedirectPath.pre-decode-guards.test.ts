@@ -41,6 +41,10 @@ describe("validateRedirectPath 디코딩 전 위험 패턴 차단", () => {
     it('" //evil.com/mypage " (앞뒤 공백)는 trim 후 protocol-relative URL → /mypage를 반환한다', () => {
       expect(validateRedirectPath(" //evil.com/mypage ")).toBe("/mypage");
     });
+
+    it('"/my page"는 내부 공백 포함 → /mypage를 반환한다', () => {
+      expect(validateRedirectPath("/my page")).toBe("/mypage");
+    });
   });
 
   describe("URL 부가 요소", () => {
