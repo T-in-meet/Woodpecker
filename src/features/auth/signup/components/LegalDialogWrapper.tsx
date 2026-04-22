@@ -17,6 +17,19 @@ import { cn } from "@/lib/utils/cn";
 
 type AgreementType = "termsOfService" | "privacyPolicy";
 
+/**
+ * onCloseComplete 동작 주의사항:
+ *
+ * - preventCloseAutoFocus=true:
+ *   Radix 기본 focus 복귀를 막고, onCloseComplete에서 포커스 이동을 직접 제어한다.
+ *
+ * - preventCloseAutoFocus=false:
+ *   Radix 기본 focus 복귀가 유지되므로,
+ *   onCloseComplete에서 포커스를 이동하더라도 최종 focus는 보장되지 않을 수 있다.
+ *
+ * 즉, onCloseComplete는 "닫힘 이후 후처리" 용도이며,
+ * 포커스 제어를 보장하려면 preventCloseAutoFocus=true와 함께 사용해야 한다.
+ */
 type LegalDialogWrapperProps = {
   agreementType: AgreementType;
   open: boolean;
@@ -27,6 +40,7 @@ type LegalDialogWrapperProps = {
   triggerButtonRef?: React.RefObject<HTMLButtonElement | null>;
   onTriggerClick?: () => void;
   preventCloseAutoFocus?: boolean;
+  onCloseComplete?: () => void;
 };
 
 /**
@@ -51,6 +65,7 @@ export function LegalDialogWrapper({
   triggerButtonRef,
   onTriggerClick,
   preventCloseAutoFocus = true,
+  onCloseComplete,
 }: LegalDialogWrapperProps) {
   // 콘텐츠 섹션 선택
   // 이유: agreementType에 따라 다른 법적 문서를 표시하기 위해 분기
@@ -82,12 +97,13 @@ export function LegalDialogWrapper({
         className="flex max-h-[85vh] flex-col overflow-hidden"
         aria-describedby={`${agreementType}-description`}
         onCloseAutoFocus={(event) => {
-          // 기본적으로 SignupForm에서 트리거/동의 경로별로 포커스를 명시적으로 제어하므로
-          // Radix 기본 복원(DialogTrigger 포커스)은 차단한다.
-          // 필요 시 preventCloseAutoFocus=false로 기본 동작을 허용할 수 있음
+          // preventCloseAutoFocus와 onCloseComplete는 독립적인 책임:
+          // 전자는 Radix 기본 복원(DialogTrigger 포커스) 억제,
+          // 후자는 닫힘 직후 커스텀 후처리 실행
           if (preventCloseAutoFocus) {
             event.preventDefault();
           }
+          onCloseComplete?.();
         }}
       >
         <DialogTitle className="mb-4">{dialogTitle}</DialogTitle>
