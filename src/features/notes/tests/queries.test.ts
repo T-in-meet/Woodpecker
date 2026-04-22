@@ -41,7 +41,6 @@ describe("getNotes", () => {
       {
         id: "11111111-1111-4111-8111-111111111111",
         title: "최근 노트",
-        language: "markdown",
         next_review_at: "2026-03-30T09:00:00.000Z",
         review_round: 1,
         updated_at: "2026-03-29T12:00:00.000Z",
@@ -49,7 +48,6 @@ describe("getNotes", () => {
       {
         id: "22222222-2222-4222-8222-222222222222",
         title: "이전 노트",
-        language: "typescript",
         next_review_at: null,
         review_round: 3,
         updated_at: "2026-03-28T12:00:00.000Z",
@@ -62,7 +60,7 @@ describe("getNotes", () => {
 
     expect(supabase.from).toHaveBeenCalledWith("notes");
     expect(selectMock).toHaveBeenCalledWith(
-      "id, title, language, next_review_at, review_round, updated_at",
+      "id, title, next_review_at, review_round, updated_at",
     );
     expect(eqMock).toHaveBeenCalledWith("user_id", "user-123");
     expect(orderMock).toHaveBeenCalledWith("updated_at", { ascending: false });
@@ -70,7 +68,6 @@ describe("getNotes", () => {
       {
         id: "11111111-1111-4111-8111-111111111111",
         title: "최근 노트",
-        language: "markdown",
         next_review_at: "2026-03-30T09:00:00.000Z",
         review_round: 1,
         updated_at: "2026-03-29T12:00:00.000Z",
@@ -78,7 +75,6 @@ describe("getNotes", () => {
       {
         id: "22222222-2222-4222-8222-222222222222",
         title: "이전 노트",
-        language: "typescript",
         next_review_at: null,
         review_round: 3,
         updated_at: "2026-03-28T12:00:00.000Z",
@@ -91,7 +87,6 @@ describe("getNotes", () => {
       {
         id: "invalid-note-id",
         title: "잘못된 노트",
-        language: "markdown",
         next_review_at: null,
         review_round: 1,
         updated_at: "2026-03-29T12:00:00.000Z",

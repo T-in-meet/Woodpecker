@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import type { NoteLanguage } from "@/lib/constants/noteLanguages";
 import {
   getNoteDetailRoute,
   getNoteReviewRoute,
@@ -30,7 +29,6 @@ export type SubmitAnswerActionState =
   | {
       success: true;
       originalContent: string;
-      language: NoteLanguage | null;
       userAnswer: string;
       reviewLogId: string;
       error?: never;
@@ -38,7 +36,6 @@ export type SubmitAnswerActionState =
   | {
       success?: false;
       originalContent?: never;
-      language?: never;
       userAnswer?: never;
       error: SubmitAnswerFieldErrors | string;
     }
@@ -103,7 +100,6 @@ export async function submitAnswerAction(
   return {
     success: true,
     originalContent: note.content,
-    language: note.language,
     userAnswer: parsed.data.answer,
     reviewLogId: pendingReviewLog.id,
   };
