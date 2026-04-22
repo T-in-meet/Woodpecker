@@ -25,7 +25,7 @@
 
 - `@/lib/supabase/server` — 서버 Supabase 클라이언트
 - `@/lib/constants/routes` — `ROUTES.VERIFY_EMAIL`, `ROUTES.LOGIN`, `getNoteDetailRoute`, `getNoteReviewRoute`
-- `@/lib/constants/noteLanguages`, `@/lib/constants/reviewIntervals` — 도메인 상수
+- `@/lib/constants/reviewIntervals` — 도메인 상수
 - Supabase RPC `complete_review_and_schedule_next` — 완료 처리 및 다음 회차 스케줄링을 원자적으로 수행
 
 ## 주의사항

@@ -85,7 +85,6 @@ describe("NotesPage", () => {
       {
         id: "11111111-1111-4111-8111-111111111111",
         title: "테스트 노트",
-        language: "markdown",
         next_review_at: null,
         review_round: 3,
         updated_at: "2026-03-29T12:00:00.000Z",

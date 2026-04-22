@@ -60,9 +60,6 @@ export default async function NoteDetailPage({
       <header className="border-b border-border/60 pb-6">
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span className="rounded-full bg-muted px-2 py-1 font-medium text-foreground">
-            {note.language ?? "markdown"}
-          </span>
-          <span className="rounded-full bg-muted px-2 py-1 font-medium text-foreground">
             복습 {note.review_round} / {MAX_REVIEW_ROUND}
           </span>
           {isReviewCompleted && (
@@ -87,11 +84,7 @@ export default async function NoteDetailPage({
         </div>
       </header>
 
-      <NoteViewer
-        content={note.content}
-        language={note.language}
-        className="min-h-[60vh]"
-      />
+      <NoteViewer content={note.content} className="min-h-[60vh]" />
     </div>
   );
 }

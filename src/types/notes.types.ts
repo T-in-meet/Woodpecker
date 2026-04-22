@@ -17,10 +17,7 @@ export type NoteListItem = Pick<
   "id" | "title" | "created_at" | "updated_at" | "next_review_at"
 >;
 
-export type NoteEditorValue = Pick<
-  NoteInsert,
-  "title" | "content" | "language"
->;
+export type NoteEditorValue = Pick<NoteInsert, "title" | "content">;
 
 export type NoteCreateInput = Omit<
   NoteInsert,
@@ -28,8 +25,5 @@ export type NoteCreateInput = Omit<
 >;
 
 export type NotePatchInput = Partial<
-  Pick<
-    NoteUpdate,
-    "title" | "content" | "language" | "next_review_at" | "review_round"
-  >
+  Pick<NoteUpdate, "title" | "content" | "next_review_at" | "review_round">
 >;

@@ -51,7 +51,6 @@ describe("getReviewableNote", () => {
   it("returns the note review status fields needed by the review page", async () => {
     const { chain, supabase } = createNotesQueryMock({
       title: "테스트 노트",
-      language: "markdown",
       next_review_at: "2026-01-06T09:00:00.000Z",
       review_round: 2,
     });
@@ -65,11 +64,10 @@ describe("getReviewableNote", () => {
 
     expect(supabase.from).toHaveBeenCalledWith("notes");
     expect(chain.select).toHaveBeenCalledWith(
-      "title, language, next_review_at, review_round",
+      "title, next_review_at, review_round",
     );
     expect(result).toEqual({
       title: "테스트 노트",
-      language: "markdown",
       next_review_at: "2026-01-06T09:00:00.000Z",
       review_round: 2,
     });

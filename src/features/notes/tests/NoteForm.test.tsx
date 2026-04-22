@@ -4,7 +4,6 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { NOTE_LANGUAGE_VALUES } from "@/lib/constants/noteLanguages";
 import { getNoteDetailRoute } from "@/lib/constants/routes";
 
 const { createNoteActionMock, routerPushMock } = vi.hoisted(() => ({
@@ -28,27 +27,6 @@ vi.mock("@/features/editor/components/TipTapEditor", () => ({
       onClick={() => onChange("markdown content")}
     >
       markdown:{value}
-    </button>
-  ),
-}));
-
-vi.mock("@/features/editor/components/CodeEditor", () => ({
-  CodeEditor: ({
-    value,
-    language,
-    onChange,
-  }: {
-    value: string;
-    language: string;
-    onChange: (value: string) => void;
-  }) => (
-    <button
-      type="button"
-      data-testid="code-editor"
-      data-language={language}
-      onClick={() => onChange(`code:${language}`)}
-    >
-      code:{language}:{value}
     </button>
   ),
 }));
@@ -95,32 +73,10 @@ describe("NoteForm", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders the tiptap editor by default with the supported language options", () => {
+  it("renders the tiptap editor", () => {
     render(<NoteForm />);
 
-    const select = screen.getByLabelText("언어") as HTMLSelectElement;
-    const options = Array.from(select.options).map((option) => option.value);
-
-    expect(select.value).toBe("markdown");
-    expect(options).toEqual([...NOTE_LANGUAGE_VALUES]);
     expect(screen.getByTestId("tiptap-editor")).toBeInTheDocument();
-    expect(screen.queryByTestId("code-editor")).not.toBeInTheDocument();
-  });
-
-  it("switches to the code editor when a code language is selected", async () => {
-    const user = userEvent.setup();
-
-    render(<NoteForm />);
-
-    const select = screen.getByLabelText("언어") as HTMLSelectElement;
-    await user.selectOptions(select, "javascript");
-
-    expect(select.value).toBe("javascript");
-    expect(screen.getByTestId("code-editor")).toHaveAttribute(
-      "data-language",
-      "javascript",
-    );
-    expect(screen.queryByTestId("tiptap-editor")).not.toBeInTheDocument();
   });
 
   it("syncs editor content into the hidden input and form data", async () => {
@@ -136,31 +92,7 @@ describe("NoteForm", () => {
 
     expect(hiddenContentInput.value).toBe("markdown content");
     expect(formData.get("title")).toBe("테스트 노트");
-    expect(formData.get("language")).toBe("markdown");
     expect(formData.get("content")).toBe("markdown content");
-  });
-
-  it("preserves content when switching between markdown and code editors", async () => {
-    const user = userEvent.setup();
-    const { container } = render(<NoteForm />);
-    const hiddenContentInput = getHiddenContentInput(container);
-    const select = screen.getByLabelText("언어") as HTMLSelectElement;
-
-    await user.click(screen.getByTestId("tiptap-editor"));
-    expect(hiddenContentInput.value).toBe("markdown content");
-
-    await user.selectOptions(select, "javascript");
-    expect(screen.getByTestId("code-editor")).toHaveTextContent(
-      "code:javascript:markdown content",
-    );
-
-    await user.click(screen.getByTestId("code-editor"));
-    expect(hiddenContentInput.value).toBe("code:javascript");
-
-    await user.selectOptions(select, "markdown");
-    expect(screen.getByTestId("tiptap-editor")).toHaveTextContent(
-      "markdown:code:javascript",
-    );
   });
 
   it("renders validation messages returned from the action", async () => {
@@ -168,7 +100,6 @@ describe("NoteForm", () => {
     createNoteActionMock.mockResolvedValueOnce({
       error: {
         title: ["제목을 입력해주세요"],
-        language: ["지원하지 않는 언어입니다"],
         content: ["내용을 입력해주세요"],
       },
     });
@@ -178,7 +109,6 @@ describe("NoteForm", () => {
     await user.click(screen.getByRole("button", { name: "저장" }));
 
     expect(await screen.findByText("제목을 입력해주세요")).toBeInTheDocument();
-    expect(screen.getByText("지원하지 않는 언어입니다")).toBeInTheDocument();
     expect(screen.getByText("내용을 입력해주세요")).toBeInTheDocument();
   });
 

@@ -4,7 +4,6 @@ import { useActionState, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { NoteLanguage } from "@/lib/constants/noteLanguages";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 
 import { submitAnswerAction } from "../actions";
@@ -16,14 +15,12 @@ import { ReviewCompleteButton } from "./ReviewCompleteButton";
 type BlankTestPageProps = {
   noteId: string;
   noteTitle: string;
-  language: NoteLanguage | null;
   reviewRound: number;
 };
 
 export function BlankTestPage({
   noteId,
   noteTitle,
-  language,
   reviewRound,
 }: BlankTestPageProps) {
   const [answer, setAnswer] = useState("");
@@ -58,7 +55,6 @@ export function BlankTestPage({
       {comparisonState ? (
         <section className="space-y-6">
           <ComparisonView
-            language={comparisonState.language}
             userAnswer={comparisonState.userAnswer}
             originalContent={comparisonState.originalContent}
           />
@@ -98,11 +94,7 @@ export function BlankTestPage({
                 </p>
               )}
 
-              <BlankEditor
-                language={language}
-                value={answer}
-                onChange={setAnswer}
-              />
+              <BlankEditor value={answer} onChange={setAnswer} />
 
               <div className="flex flex-col gap-3 border-t border-border/60 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <span

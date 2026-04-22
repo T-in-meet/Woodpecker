@@ -1,33 +1,13 @@
 "use client";
 
-import { CodeEditor } from "@/features/editor/components/CodeEditor";
 import { TipTapEditor } from "@/features/editor/components/TipTapEditor";
-import {
-  isCodeLanguage,
-  type NoteLanguage,
-} from "@/lib/constants/noteLanguages";
 
 type BlankEditorProps = {
-  language: NoteLanguage | null;
   value: string;
   onChange: (value: string) => void;
 };
 
-export function BlankEditor({ language, value, onChange }: BlankEditorProps) {
-  const effectiveLanguage = language ?? "markdown";
-
-  if (isCodeLanguage(effectiveLanguage)) {
-    return (
-      <CodeEditor
-        value={value}
-        onChange={onChange}
-        language={effectiveLanguage}
-        aria-label="답안"
-        className="min-h-[60vh] rounded-none border-none [&_.cm-editor]:min-h-[60vh] [&_.cm-scroller]:min-h-[60vh] [&_.cm-content]:px-6! [&_.cm-content]:py-5! [&_.cm-gutters]:border-none [&_.cm-gutters]:bg-transparent"
-      />
-    );
-  }
-
+export function BlankEditor({ value, onChange }: BlankEditorProps) {
   return (
     <TipTapEditor
       value={value}
