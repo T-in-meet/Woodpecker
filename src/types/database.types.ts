@@ -39,7 +39,6 @@ export type Database = {
           content: string;
           created_at: string;
           id: string;
-          language: string | null;
           next_review_at: string | null;
           review_round: number;
           title: string;
@@ -50,7 +49,6 @@ export type Database = {
           content: string;
           created_at?: string;
           id?: string;
-          language?: string | null;
           next_review_at?: string | null;
           review_round?: number;
           title: string;
@@ -61,7 +59,6 @@ export type Database = {
           content?: string;
           created_at?: string;
           id?: string;
-          language?: string | null;
           next_review_at?: string | null;
           review_round?: number;
           title?: string;
@@ -224,7 +221,6 @@ export type Database = {
       create_note_with_initial_review_log: {
         Args: {
           p_content: string;
-          p_language?: string;
           p_scheduled_at: string;
           p_title: string;
         };
