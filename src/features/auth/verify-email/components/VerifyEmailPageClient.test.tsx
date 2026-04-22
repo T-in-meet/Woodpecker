@@ -46,8 +46,20 @@ describe("VerifyEmailPageClient", () => {
   it("TC-01. 안내 메시지가 렌더링된다", () => {
     render(<VerifyEmailPageClient />);
 
-    expect(screen.getByText(/회원가입이 완료되었습니다/)).toBeInTheDocument();
-    expect(screen.getByText(/인증 이메일을 확인해주세요/)).toBeInTheDocument();
+    // 행동 유도형 문구로 교체됨 — 사용자가 즉시 다음 행동을 인식할 수 있도록
+    expect(
+      screen.getByText(/가입하신 이메일로 인증 링크를 보냈습니다\./),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByText(/메일이 오지 않으면 스팸함을 확인해주세요\./),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByText(
+        /여전히 보이지 않으면 위 버튼으로 다시 보낼 수 있습니다\./,
+      ),
+    ).toBeInTheDocument();
   });
 
   it("TC-02. 이메일 input과 재발송 버튼이 렌더링된다", () => {
@@ -83,6 +95,13 @@ describe("VerifyEmailPageClient", () => {
     );
   });
 
+  it("TC-13. email prop이 있으면 이메일 주소가 안내 문구에 표시된다", () => {
+    render(<VerifyEmailPageClient email="user@example.com" />);
+
+    // 이메일 주소를 안내 문구에 직접 표시 — input에만 의존하지 않고 바로 인지 가능하도록
+    expect(screen.getByDisplayValue("user@example.com")).toBeInTheDocument();
+  });
+
   it("TC-05. 이메일 입력 후 버튼 클릭 시 mutateAsync가 올바른 email로 호출된다", async () => {
     const user = userEvent.setup();
     render(<VerifyEmailPageClient />);
@@ -101,13 +120,13 @@ describe("VerifyEmailPageClient", () => {
     });
   });
 
-  it("TC-06. isPending이면 버튼이 비활성화된다", () => {
+  it("TC-06. isPending이면 버튼이 비활성화되고 '전송 중...' 텍스트로 변경된다", () => {
     mockHookState.isPending = true;
     render(<VerifyEmailPageClient email="test@example.com" />);
 
-    expect(
-      screen.getByRole("button", { name: /인증 메일 재발송/i }),
-    ).toBeDisabled();
+    // 로딩 중 버튼 텍스트 변경 — SignupForm 패턴과 일관성 유지
+    const button = screen.getByRole("button", { name: /전송 중/i });
+    expect(button).toBeDisabled();
   });
 
   it("TC-07. 성공 응답 시 성공 토스트가 표시된다", async () => {
@@ -117,7 +136,10 @@ describe("VerifyEmailPageClient", () => {
     await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
 
     await waitFor(() => {
-      expect(showToast).toHaveBeenCalledWith("인증 메일이 재발송되었습니다.");
+      // 행동 유도형 문구로 교체됨 — 상태 보고 대신 다음 행동 안내
+      expect(showToast).toHaveBeenCalledWith(
+        "메일을 다시 보냈습니다. 받은 편지함을 확인해주세요.",
+      );
     });
   });
 
@@ -128,7 +150,10 @@ describe("VerifyEmailPageClient", () => {
     await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
 
     await waitFor(() => {
-      expect(showToast).toHaveBeenCalledWith("인증 메일이 재발송되었습니다.");
+      // 행동 유도형 문구로 교체됨 — 상태 보고 대신 다음 행동 안내
+      expect(showToast).toHaveBeenCalledWith(
+        "메일을 다시 보냈습니다. 받은 편지함을 확인해주세요.",
+      );
     });
     expect(showToast).not.toHaveBeenCalledWith(
       RATE_LIMIT_TOAST_MESSAGE,

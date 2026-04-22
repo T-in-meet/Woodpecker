@@ -1,4 +1,6 @@
-import { Header } from "@/components/layout/Header";
+import { Suspense } from "react";
+
+import { Header, HeaderSkeleton } from "@/components/layout/Header";
 
 export default function MainLayout({
   children,
@@ -7,7 +9,9 @@ export default function MainLayout({
 }) {
   return (
     <div className="min-h-screen">
-      <Header />
+      <Suspense fallback={<HeaderSkeleton />}>
+        <Header />
+      </Suspense>
       <main className="flex-1 pb-16 md:pb-0">{children}</main>
     </div>
   );

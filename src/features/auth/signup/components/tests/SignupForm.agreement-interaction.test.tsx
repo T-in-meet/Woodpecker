@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -107,23 +107,32 @@ describe("회원가입 폼 동의 상호작용", () => {
     const user = userEvent.setup();
     renderSignupForm();
 
-    // 모달 열고 닫기
     await user.click(screen.getByTestId("terms-of-service-checkbox"));
     await user.click(screen.getByRole("button", { name: /닫기/i }));
 
-    // 이제 Space 키로 토글 가능해야 함
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
     const termsCheckbox = screen.getByTestId("terms-of-service-checkbox");
+
+    await waitFor(() => {
+      expect(termsCheckbox).not.toHaveAttribute("aria-disabled", "true");
+    });
+
     termsCheckbox.focus();
 
-    // 이유: interactionEnabled=true 상태에서 키보드 입력이 체크박스 토글을 유발해야 함
-    await user.keyboard(" ");
+    await waitFor(() => {
+      expect(termsCheckbox).toHaveFocus();
+    });
+
+    await user.keyboard("[Space]");
 
     await waitFor(() => {
       expect(termsCheckbox).toBeChecked();
     });
 
-    // 다시 누르면 언체크
-    await user.keyboard(" ");
+    await user.keyboard("[Space]");
 
     await waitFor(() => {
       expect(termsCheckbox).not.toBeChecked();
@@ -205,21 +214,19 @@ describe("회원가입 폼 동의 상호작용", () => {
     const user = userEvent.setup();
     renderSignupForm();
 
-    // 모달 열고 동의하기
     await user.click(screen.getByTestId("terms-of-service-checkbox"));
     await user.click(screen.getByRole("button", { name: /동의하기/i }));
 
     const termsCheckbox = screen.getByTestId("terms-of-service-checkbox");
+
     await waitFor(() => {
-      expect(termsCheckbox).toBeChecked();
+      expect(termsCheckbox).toHaveAttribute("aria-checked", "true");
     });
 
-    // 다시 클릭해서 언체크하기
-    // 이유: interactionEnabled=true가 되었으므로 체크박스 직접 조작 가능
     await user.click(termsCheckbox);
 
     await waitFor(() => {
-      expect(termsCheckbox).not.toBeChecked();
+      expect(termsCheckbox).toHaveAttribute("aria-checked", "false");
     });
   });
 
@@ -269,5 +276,76 @@ describe("회원가입 폼 동의 상호작용", () => {
 
     await user.click(screen.getByTestId("terms-of-service-checkbox"));
     expect(screen.getByRole("button", { name: /동의하기/i })).toBeVisible();
+  });
+
+  it("TC-15: 초기 렌더 시 이용약관 체크박스에 Enter 키 입력 → 이용약관 모달이 열린다", async () => {
+    const user = userEvent.setup();
+    renderSignupForm();
+
+    const termsCheckbox = screen.getByTestId("terms-of-service-checkbox");
+    termsCheckbox.focus();
+
+    // 이유: 키보드로도 disabled 우회를 방지하기 위해 인터셉트 (Space와 동일한 인터셉트 대상)
+    await user.keyboard("{Enter}");
+
+    expect(screen.getByRole("button", { name: /동의하기/i })).toBeVisible();
+  });
+
+  it('TC-16: 이용약관 모달에서 "동의하기" 후 개인정보 체크박스로 포커스가 이동한다', async () => {
+    const user = userEvent.setup();
+    renderSignupForm();
+
+    await user.click(screen.getByTestId("terms-of-service-checkbox"));
+    await user.click(screen.getByRole("button", { name: /동의하기/i }));
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(
+        screen.getByTestId("privacy-policy-checkbox"),
+      );
+    });
+  });
+
+  it('TC-17: 개인정보 모달에서 "동의하기" 후 회원가입 버튼으로 포커스가 이동한다', async () => {
+    const user = userEvent.setup();
+    renderSignupForm();
+
+    await user.click(screen.getByTestId("privacy-policy-checkbox"));
+    await user.click(screen.getByRole("button", { name: /동의하기/i }));
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(
+        screen.getByRole("button", { name: /^회원가입$/i }),
+      );
+    });
+  });
+
+  it('TC-18: 트리거 버튼으로 개인정보 모달을 열어 "동의하기"해도 회원가입 버튼으로 포커스가 이동한다', async () => {
+    const user = userEvent.setup();
+    renderSignupForm();
+
+    await user.click(
+      screen.getByRole("button", { name: /개인정보처리방침 보기/i }),
+    );
+    await user.click(screen.getByRole("button", { name: /동의하기/i }));
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(
+        screen.getByRole("button", { name: /^회원가입$/i }),
+      );
+    });
+  });
+
+  it("TC-19: 제출 버튼이 disabled면 개인정보 동의 후 로그인 링크로 포커스가 이동한다", async () => {
+    const user = userEvent.setup();
+    renderSignupForm({ isPending: true });
+
+    await user.click(screen.getByTestId("privacy-policy-checkbox"));
+    await user.click(screen.getByRole("button", { name: /동의하기/i }));
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(
+        screen.getByRole("link", { name: /로그인/i }),
+      );
+    });
   });
 });

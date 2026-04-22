@@ -15,7 +15,7 @@ const { createClientMock, getNoteByIdMock, notFoundMock, redirectMock } =
   }));
 
 vi.mock("@/lib/supabase/server", () => ({
-  createClient: createClientMock,
+  createServerComponentClient: createClientMock,
 }));
 
 vi.mock("@/features/notes/queries", () => ({
@@ -39,12 +39,20 @@ vi.mock("next/navigation", () => ({
 
 import NoteDetailPage from "./page";
 
-function createSupabaseMock(userId: string | null) {
+function createSupabaseMock(
+  userId: string | null,
+  emailConfirmedAt?: string | null,
+) {
+  const resolvedEmailConfirmedAt =
+    arguments.length > 1 ? emailConfirmedAt : "2026-03-29T00:00:00.000Z";
+
   return {
     auth: {
       getUser: vi.fn().mockResolvedValue({
         data: {
-          user: userId ? { id: userId } : null,
+          user: userId
+            ? { id: userId, email_confirmed_at: resolvedEmailConfirmedAt }
+            : null,
         },
       }),
     },
@@ -84,6 +92,22 @@ describe("NoteDetailPage", () => {
     expect(getNoteByIdMock).not.toHaveBeenCalled();
   });
 
+  it.each([null, undefined])(
+    "redirects to verify email when email_confirmed_at is %s",
+    async (emailConfirmedAt) => {
+      createClientMock.mockResolvedValue(
+        createSupabaseMock("user-123", emailConfirmedAt),
+      );
+
+      await expect(
+        NoteDetailPage({ params: Promise.resolve({ noteId: "note-123" }) }),
+      ).rejects.toBe(REDIRECT_ERROR);
+
+      expect(redirectMock).toHaveBeenCalledWith(ROUTES.VERIFY_EMAIL);
+      expect(getNoteByIdMock).not.toHaveBeenCalled();
+    },
+  );
+
   it("renders a review entry point when the note is due for review", async () => {
     createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
     getNoteByIdMock.mockResolvedValue({
@@ -115,6 +139,9 @@ describe("NoteDetailPage", () => {
     expect(
       screen.getByRole("link", { name: "백지 테스트 시작" }),
     ).toHaveAttribute("href", getNoteReviewRoute("note-123"));
+    expect(
+      screen.getByRole("button", { name: "노트 삭제" }),
+    ).toBeInTheDocument();
   });
 
   it("shows the next review schedule when the note is not due yet", async () => {
@@ -136,6 +163,36 @@ describe("NoteDetailPage", () => {
     );
 
     expect(screen.getByText(/다음 백지 테스트 예정/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/원하면 지금 미리 진행할 수 있습니다\./),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "백지 테스트 시작" }),
+    ).toHaveAttribute("href", getNoteReviewRoute("note-123"));
+  });
+
+  it("shows a completed badge when the note finished every review round", async () => {
+    createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
+    getNoteByIdMock.mockResolvedValue({
+      id: "note-123",
+      title: "Completed note",
+      content: "note body",
+      language: "markdown",
+      next_review_at: null,
+      review_round: 3,
+      created_at: "2026-03-29T00:00:00.000Z",
+      updated_at: "2026-03-29T01:00:00.000Z",
+      user_id: "user-123",
+    });
+
+    render(
+      await NoteDetailPage({ params: Promise.resolve({ noteId: "note-123" }) }),
+    );
+
+    expect(screen.getByText("학습 완료")).toBeInTheDocument();
+    expect(
+      screen.getByText("1-3-7 복습을 모두 마쳤습니다."),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("link", { name: "백지 테스트 시작" }),
     ).not.toBeInTheDocument();

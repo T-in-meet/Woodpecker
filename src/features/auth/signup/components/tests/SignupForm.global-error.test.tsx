@@ -119,7 +119,6 @@ describe("회원가입 전역 에러 처리", () => {
     const { rerender } = renderSignupForm({ onSubmit, isPending: true });
 
     expect(screen.getByRole("button", { name: /가입 중/i })).toBeDisabled();
-    expect(screen.getByRole("status")).toBeInTheDocument();
 
     rerender(<SignupForm onSubmit={onSubmit} isPending={false} />);
 

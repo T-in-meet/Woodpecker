@@ -1,4 +1,8 @@
 import {
+  Extension,
+  InputRule,
+  isAtStartOfNode,
+  isNodeActive,
   mergeAttributes,
   nodeInputRule,
   nodePasteRule,
@@ -19,9 +23,13 @@ import TaskItem from "@tiptap/extension-task-item";
 import TaskList from "@tiptap/extension-task-list";
 import {
   defaultMarkdownSerializer,
-  type MarkdownSerializerState,
+  MarkdownSerializerState,
 } from "@tiptap/pm/markdown";
-import { type Node as ProseMirrorNode } from "@tiptap/pm/model";
+import {
+  type Node as ProseMirrorNode,
+  type ResolvedPos,
+} from "@tiptap/pm/model";
+import { TextSelection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import go from "highlight.js/lib/languages/go";
 import javascript from "highlight.js/lib/languages/javascript";
@@ -41,6 +49,138 @@ lowlight.register("typescript", typescript);
 lowlight.register("python", python);
 lowlight.register("rust", rust);
 lowlight.register("go", go);
+
+const LIST_ITEM_TYPE_NAMES = ["listItem", "taskItem"] as const;
+const TASK_MARKER_IN_BULLET_LIST_INPUT_REGEX = /^\[( |x|X)\][ ]$/;
+
+type TableCellAlignmentType = "left" | "center" | "right" | null;
+
+type RuntimeMarkdownSerializerState = MarkdownSerializerState & {
+  marks: Record<string, unknown>;
+  nodes: Record<
+    string,
+    (
+      state: MarkdownSerializerState,
+      node: ProseMirrorNode,
+      parent: ProseMirrorNode,
+      index: number,
+    ) => void
+  >;
+  out: string;
+};
+
+type MarkdownSerializerStateConstructorType = new (
+  nodes: RuntimeMarkdownSerializerState["nodes"],
+  marks: RuntimeMarkdownSerializerState["marks"],
+  options: RuntimeMarkdownSerializerState["options"],
+) => RuntimeMarkdownSerializerState;
+
+const MarkdownSerializerStateConstructor =
+  MarkdownSerializerState as unknown as MarkdownSerializerStateConstructorType;
+
+function getTableCells(row: ProseMirrorNode): ProseMirrorNode[] {
+  const cells: ProseMirrorNode[] = [];
+
+  row.forEach((cell) => {
+    cells.push(cell);
+  });
+
+  return cells;
+}
+
+function getTableCellAlignment(
+  cell: ProseMirrorNode | null | undefined,
+): TableCellAlignmentType {
+  if (!cell || typeof cell.attrs.align !== "string") {
+    return null;
+  }
+
+  if (
+    cell.attrs.align === "left" ||
+    cell.attrs.align === "center" ||
+    cell.attrs.align === "right"
+  ) {
+    return cell.attrs.align;
+  }
+
+  return null;
+}
+
+function findAncestorDepth(
+  $from: ResolvedPos,
+  typeName: string,
+): number | null {
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    if ($from.node(depth).type.name === typeName) {
+      return depth;
+    }
+  }
+
+  return null;
+}
+
+function renderInlineMarkdown(
+  state: MarkdownSerializerState,
+  node: ProseMirrorNode,
+): string {
+  const runtimeState = state as RuntimeMarkdownSerializerState;
+  const tempState = new MarkdownSerializerStateConstructor(
+    runtimeState.nodes,
+    runtimeState.marks,
+    runtimeState.options,
+  );
+
+  tempState.renderInline(node);
+
+  return tempState.out.trim();
+}
+
+function getTableCellMarkdown(
+  state: MarkdownSerializerState,
+  cell: ProseMirrorNode | null | undefined,
+): string {
+  if (!cell) {
+    return "";
+  }
+
+  const parts: string[] = [];
+
+  cell.forEach((child) => {
+    const text = child.type.inlineContent
+      ? renderInlineMarkdown(state, child)
+      : child.textContent.replace(/\s+/g, " ").trim();
+
+    if (text) {
+      parts.push(text);
+    }
+  });
+
+  return parts.join(" ");
+}
+
+function getTableDividerCell(alignment: TableCellAlignmentType): string {
+  if (alignment === "left") {
+    return ":---";
+  }
+
+  if (alignment === "right") {
+    return "---:";
+  }
+
+  if (alignment === "center") {
+    return ":---:";
+  }
+
+  return "---";
+}
+
+function writeMarkdownTableRow(
+  state: MarkdownSerializerState,
+  cells: string[],
+) {
+  state.write(`| ${cells.join(" | ")} |`);
+  state.ensureNewLine();
+}
 
 function isPureTaskListElement(list: Element): boolean {
   const items = Array.from(list.children).filter(
@@ -149,6 +289,249 @@ const MarkdownTaskItem = TaskItem.extend({
       }
 
       return nodeView;
+    };
+  },
+});
+
+const ListItemBackspaceLift = Extension.create({
+  name: "listItemBackspaceLift",
+  priority: 1100,
+  addKeyboardShortcuts() {
+    const liftCurrentListItem = () => {
+      if (this.editor.commands.undoInputRule()) {
+        return true;
+      }
+
+      const { state } = this.editor;
+
+      if (state.selection.from !== state.selection.to) {
+        return false;
+      }
+
+      const { $from } = state.selection;
+
+      if (!isAtStartOfNode(state)) {
+        return false;
+      }
+
+      for (const itemName of LIST_ITEM_TYPE_NAMES) {
+        let listItemDepth: number | null = null;
+
+        for (let depth = $from.depth; depth > 0; depth -= 1) {
+          if ($from.node(depth).type.name === itemName) {
+            listItemDepth = depth;
+            break;
+          }
+        }
+
+        if (listItemDepth === null || !isNodeActive(state, itemName)) {
+          continue;
+        }
+
+        if ($from.node(listItemDepth).firstChild !== $from.parent) {
+          return (
+            this.editor.commands.joinBackward() ||
+            this.editor.commands.joinTextblockBackward()
+          );
+        }
+
+        // StarterKit's list keymap prefers merging with the previous item.
+        // At the start of a list item, we want Backspace to remove the marker first.
+        return this.editor.commands.liftListItem(itemName);
+      }
+
+      return false;
+    };
+
+    return {
+      Backspace: liftCurrentListItem,
+      "Mod-Backspace": liftCurrentListItem,
+    };
+  },
+});
+
+const BulletTaskItemInputRule = Extension.create({
+  name: "bulletTaskItemInputRule",
+  priority: 1200,
+  addInputRules() {
+    return [
+      new InputRule({
+        find: TASK_MARKER_IN_BULLET_LIST_INPUT_REGEX,
+        handler: ({ state, range, match }) => {
+          const marker = match[1];
+          const bulletListType = state.schema.nodes.bulletList;
+          const listItemType = state.schema.nodes.listItem;
+          const taskListType = state.schema.nodes.taskList;
+          const taskItemType = state.schema.nodes.taskItem;
+
+          if (
+            !marker ||
+            !bulletListType ||
+            !listItemType ||
+            !taskListType ||
+            !taskItemType
+          ) {
+            return null;
+          }
+
+          const { $from } = state.selection;
+          const listItemDepth = findAncestorDepth($from, listItemType.name);
+          const listDepth = findAncestorDepth($from, bulletListType.name);
+
+          if (listItemDepth === null || listDepth === null) {
+            return null;
+          }
+
+          let itemIndex = $from.index(listDepth);
+          const listNode = $from.node(listDepth);
+          const listPosition = $from.before(listDepth);
+          const previousListItemNode =
+            itemIndex > 0 ? listNode.maybeChild(itemIndex - 1) : null;
+
+          if (
+            $from.parentOffset === 0 &&
+            previousListItemNode?.type === listItemType &&
+            previousListItemNode.childCount === 1 &&
+            previousListItemNode.firstChild?.type.name === "paragraph" &&
+            previousListItemNode.textContent === ""
+          ) {
+            // Empty list item boundaries resolve forward into the next item, so
+            // the marker typed in that empty item would otherwise convert its sibling.
+            itemIndex -= 1;
+          }
+
+          if (itemIndex < 0 || itemIndex >= listNode.childCount) {
+            return null;
+          }
+
+          const tr = state.tr.delete(range.from, range.to);
+          const mappedListPosition = tr.mapping.map(listPosition);
+          const nextListNode = tr.doc.nodeAt(mappedListPosition);
+          const nextListItemNode = nextListNode?.maybeChild(itemIndex);
+
+          if (
+            !nextListNode ||
+            nextListNode.type !== bulletListType ||
+            !nextListItemNode ||
+            !taskItemType.validContent(nextListItemNode.content)
+          ) {
+            return null;
+          }
+
+          const taskItemNode = taskItemType.create(
+            { checked: marker.toLowerCase() === "x" },
+            nextListItemNode.content,
+          );
+          const taskListNode = taskListType.create(null, taskItemNode);
+          const replacementNodes: ProseMirrorNode[] = [];
+          let taskListPosition = mappedListPosition;
+
+          if (itemIndex > 0) {
+            const previousItems = Array.from(
+              { length: itemIndex },
+              (_, index) => nextListNode.child(index),
+            );
+            const previousListNode = bulletListType.create(
+              nextListNode.attrs,
+              previousItems,
+            );
+
+            replacementNodes.push(previousListNode);
+            taskListPosition += previousListNode.nodeSize;
+          }
+
+          replacementNodes.push(taskListNode);
+
+          if (itemIndex < nextListNode.childCount - 1) {
+            replacementNodes.push(
+              bulletListType.create(
+                nextListNode.attrs,
+                Array.from(
+                  { length: nextListNode.childCount - itemIndex - 1 },
+                  (_, index) => nextListNode.child(itemIndex + index + 1),
+                ),
+              ),
+            );
+          }
+
+          tr.replaceWith(
+            mappedListPosition,
+            mappedListPosition + nextListNode.nodeSize,
+            replacementNodes,
+          );
+          // ProseMirror 포지션은 taskList/taskItem/paragraph 경계를 각각 1칸씩 지난다.
+          tr.setSelection(
+            TextSelection.near(tr.doc.resolve(taskListPosition + 3)),
+          );
+        },
+      }),
+    ];
+  },
+});
+
+const MarkdownTable = Table.extend({
+  addStorage() {
+    return {
+      markdown: {
+        serialize(state: MarkdownSerializerState, node: ProseMirrorNode) {
+          const rows = getTableCells(node);
+          const columnCount = rows.reduce(
+            (max, row) => Math.max(max, row.childCount),
+            0,
+          );
+
+          if (columnCount === 0) {
+            state.closeBlock(node);
+            return;
+          }
+
+          const headerRow = rows[0];
+          const hasHeaderRow =
+            headerRow?.childCount !== undefined &&
+            getTableCells(headerRow).some(
+              (cell) => cell.type.name === "tableHeader",
+            );
+
+          const bodyRows = hasHeaderRow ? rows.slice(1) : rows;
+          const alignments = Array.from({ length: columnCount }, (_, index) => {
+            for (const row of rows) {
+              const alignment = getTableCellAlignment(row.maybeChild(index));
+
+              if (alignment) {
+                return alignment;
+              }
+            }
+
+            return null;
+          });
+
+          // tiptap-markdown falls back to "[table]" when a cell contains
+          // multiple blocks. Flattening cells keeps notes persistable as GFM.
+          writeMarkdownTableRow(
+            state,
+            Array.from({ length: columnCount }, (_, index) =>
+              hasHeaderRow
+                ? getTableCellMarkdown(state, headerRow?.maybeChild(index))
+                : "",
+            ),
+          );
+          writeMarkdownTableRow(
+            state,
+            alignments.map((alignment) => getTableDividerCell(alignment)),
+          );
+
+          for (const row of bodyRows) {
+            writeMarkdownTableRow(
+              state,
+              Array.from({ length: columnCount }, (_, index) =>
+                getTableCellMarkdown(state, row.maybeChild(index)),
+              ),
+            );
+          }
+
+          state.closeBlock(node);
+        },
+      },
     };
   },
 });
@@ -378,6 +761,8 @@ function getBaseExtensions({ readOnly = false }: { readOnly?: boolean } = {}) {
       codeBlock: false,
       link: false,
     }),
+    ListItemBackspaceLift,
+    BulletTaskItemInputRule,
     CodeBlockLowlight.extend({
       renderHTML({ node, HTMLAttributes }) {
         return [
@@ -411,7 +796,7 @@ function getBaseExtensions({ readOnly = false }: { readOnly?: boolean } = {}) {
     MarkdownTaskItem.configure({
       nested: true,
     }),
-    Table.configure({ resizable: false }),
+    MarkdownTable.configure({ resizable: false }),
     TableRow,
     TableHeader,
     TableCell,

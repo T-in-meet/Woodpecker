@@ -3,11 +3,12 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { DeleteNoteDialog } from "@/features/notes/components/DeleteNoteDialog";
 import { NoteViewer } from "@/features/notes/components/NoteViewer";
 import { getNoteById } from "@/features/notes/queries";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { getNoteReviewRoute, ROUTES } from "@/lib/constants/routes";
-import { createClient } from "@/lib/supabase/server";
+import { createServerComponentClient } from "@/lib/supabase/server";
 import { formatDateTime } from "@/lib/utils/formatDate";
 
 export const metadata: Metadata = {
@@ -21,7 +22,7 @@ export default async function NoteDetailPage({
   params: Promise<{ noteId: string }>;
 }) {
   const { noteId } = await params;
-  const supabase = await createClient();
+  const supabase = await createServerComponentClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -30,23 +31,28 @@ export default async function NoteDetailPage({
     redirect(ROUTES.LOGIN);
   }
 
+  if (user.email_confirmed_at == null) {
+    redirect(ROUTES.VERIFY_EMAIL);
+  }
+
   const note = await getNoteById(noteId, user.id);
 
   if (!note) {
     notFound();
   }
 
-  const isReviewCompleted = note.review_round >= MAX_REVIEW_ROUND;
+  const nextReviewAt = note.next_review_at;
+  const isReviewCompleted =
+    note.review_round >= MAX_REVIEW_ROUND && nextReviewAt === null;
+  const canStartReview = !isReviewCompleted && nextReviewAt !== null;
   const isReviewDue =
-    !isReviewCompleted &&
-    note.next_review_at !== null &&
-    new Date(note.next_review_at).getTime() <= Date.now();
+    nextReviewAt !== null && new Date(nextReviewAt).getTime() <= Date.now();
   const reviewStatusMessage = isReviewCompleted
     ? "1-3-7 복습을 모두 마쳤습니다."
-    : note.next_review_at
+    : nextReviewAt
       ? isReviewDue
         ? "지금 백지 테스트를 진행할 수 있습니다."
-        : `다음 백지 테스트 예정 ${formatDateTime(note.next_review_at)}`
+        : `다음 백지 테스트 예정 ${formatDateTime(nextReviewAt)}. 원하면 지금 미리 진행할 수 있습니다.`
       : "다음 복습 일정이 아직 준비되지 않았습니다.";
 
   return (
@@ -59,25 +65,32 @@ export default async function NoteDetailPage({
           <span className="rounded-full bg-muted px-2 py-1 font-medium text-foreground">
             복습 {note.review_round} / {MAX_REVIEW_ROUND}
           </span>
-          <span>마지막 수정 {formatDateTime(note.updated_at)}</span>
+          {isReviewCompleted && (
+            <span className="rounded-full bg-emerald-100 px-2 py-1 font-medium text-emerald-700">
+              학습 완료
+            </span>
+          )}
         </div>
         <h1 className="mt-4 text-3xl font-bold text-foreground">
           {note.title}
         </h1>
-        <div className="mt-4 flex flex-wrap items-center gap-3">
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-muted-foreground">{reviewStatusMessage}</p>
-          {isReviewDue && (
-            <Button asChild size="sm">
-              <Link href={getNoteReviewRoute(noteId)}>백지 테스트 시작</Link>
-            </Button>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {canStartReview && (
+              <Button asChild size="sm">
+                <Link href={getNoteReviewRoute(noteId)}>백지 테스트 시작</Link>
+              </Button>
+            )}
+            <DeleteNoteDialog noteId={note.id} noteTitle={note.title} />
+          </div>
         </div>
       </header>
 
       <NoteViewer
         content={note.content}
         language={note.language}
-        className="min-h-[60vh] py-6"
+        className="min-h-[60vh]"
       />
     </div>
   );

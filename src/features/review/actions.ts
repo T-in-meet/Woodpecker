@@ -4,13 +4,13 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import type { NoteLanguage } from "@/lib/constants/noteLanguages";
-import { getNoteDetailRoute, getNoteReviewRoute } from "@/lib/constants/routes";
+import {
+  getNoteDetailRoute,
+  getNoteReviewRoute,
+  ROUTES,
+} from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 
-import {
-  createReviewCompletionToken,
-  verifyReviewCompletionToken,
-} from "./lib/reviewCompletionToken";
 import {
   getNoteContentForComparison,
   getPendingReviewLog,
@@ -32,7 +32,7 @@ export type SubmitAnswerActionState =
       originalContent: string;
       language: NoteLanguage | null;
       userAnswer: string;
-      completionToken: string;
+      reviewLogId: string;
       error?: never;
     }
   | {
@@ -76,6 +76,10 @@ export async function submitAnswerAction(
     return { error: "로그인이 필요합니다." };
   }
 
+  if (user.email_confirmed_at == null) {
+    redirect(ROUTES.VERIFY_EMAIL);
+  }
+
   let note, pendingReviewLog;
   try {
     [note, pendingReviewLog] = await Promise.all([
@@ -96,26 +100,12 @@ export async function submitAnswerAction(
     return { error: "진행 중인 복습을 찾을 수 없습니다." };
   }
 
-  let completionToken: string;
-
-  try {
-    completionToken = createReviewCompletionToken({
-      noteId: parsed.data.noteId,
-      reviewLogId: pendingReviewLog.id,
-      userId: user.id,
-    });
-  } catch {
-    return {
-      error: "비교 준비에 실패했습니다. 잠시 후 다시 시도해주세요.",
-    };
-  }
-
   return {
     success: true,
     originalContent: note.content,
     language: note.language,
     userAnswer: parsed.data.answer,
-    completionToken,
+    reviewLogId: pendingReviewLog.id,
   };
 }
 
@@ -126,7 +116,6 @@ export async function completeReviewAction(
   const parsed = completeReviewSchema.safeParse({
     noteId: formData.get("noteId"),
     reviewLogId: formData.get("reviewLogId"),
-    completionToken: formData.get("completionToken"),
   });
 
   if (!parsed.success) {
@@ -142,27 +131,8 @@ export async function completeReviewAction(
     return { error: "로그인이 필요합니다." };
   }
 
-  let isCompletionTokenValid = false;
-
-  try {
-    isCompletionTokenValid = verifyReviewCompletionToken(
-      parsed.data.completionToken,
-      {
-        noteId: parsed.data.noteId,
-        reviewLogId: parsed.data.reviewLogId,
-        userId: user.id,
-      },
-    );
-  } catch {
-    return {
-      error: "복습 완료를 준비하는 데 실패했습니다. 잠시 후 다시 시도해주세요.",
-    };
-  }
-
-  if (!isCompletionTokenValid) {
-    return {
-      error: "답안을 제출한 뒤 원본을 확인하고 복습을 완료해주세요.",
-    };
+  if (user.email_confirmed_at == null) {
+    redirect(ROUTES.VERIFY_EMAIL);
   }
 
   let reviewableNote, pendingReviewLog;
@@ -177,12 +147,18 @@ export async function completeReviewAction(
     };
   }
 
-  if (
-    !reviewableNote ||
-    !pendingReviewLog ||
-    pendingReviewLog.id !== parsed.data.reviewLogId
-  ) {
-    return { error: "진행 중인 복습을 찾을 수 없습니다." };
+  if (!reviewableNote) {
+    return { error: "노트를 찾을 수 없거나 접근 권한이 없습니다." };
+  }
+
+  if (!pendingReviewLog) {
+    return { error: "이미 완료되었거나 진행 중인 복습이 없습니다." };
+  }
+
+  if (pendingReviewLog.id !== parsed.data.reviewLogId) {
+    return {
+      error: "답안을 제출한 뒤 원본을 확인하고 복습을 완료해주세요.",
+    };
   }
 
   const { data: completedNoteId, error: completeReviewError } =

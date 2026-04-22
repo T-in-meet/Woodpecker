@@ -5,6 +5,7 @@ import { ROUTES } from "@/lib/constants/routes";
 
 const REDIRECT_ERROR = new Error("NEXT_REDIRECT");
 const NOT_FOUND_ERROR = new Error("NEXT_NOT_FOUND");
+const CONFIRMED_AT = "2026-01-01T00:00:00.000Z";
 
 const {
   createClientMock,
@@ -21,7 +22,7 @@ const {
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
-  createClient: createClientMock,
+  createServerComponentClient: createClientMock,
 }));
 
 vi.mock("@/features/review/queries", () => ({
@@ -33,17 +34,13 @@ vi.mock("@/features/review/components/BlankTestPage", () => ({
   BlankTestPage: ({
     noteId,
     noteTitle,
-    reviewLogId,
     reviewRound,
   }: {
     noteId: string;
     noteTitle: string;
-    reviewLogId: string;
     reviewRound: number;
   }) => (
-    <div data-testid="blank-test-page">
-      {`${noteId}|${noteTitle}|${reviewLogId}|${reviewRound}`}
-    </div>
+    <div data-testid="blank-test-page">{`${noteId}|${noteTitle}|${reviewRound}`}</div>
   ),
 }));
 
@@ -54,12 +51,22 @@ vi.mock("next/navigation", () => ({
 
 import NoteReviewPage from "./page";
 
-function createSupabaseMock(userId: string | null) {
+function createSupabaseMock(
+  userId: string | null,
+  options?: { emailConfirmedAt?: string | null | undefined },
+) {
+  const emailConfirmedAt =
+    options && Object.prototype.hasOwnProperty.call(options, "emailConfirmedAt")
+      ? options.emailConfirmedAt
+      : CONFIRMED_AT;
+
   return {
     auth: {
       getUser: vi.fn().mockResolvedValue({
         data: {
-          user: userId ? { id: userId } : null,
+          user: userId
+            ? { id: userId, email_confirmed_at: emailConfirmedAt }
+            : null,
         },
       }),
     },
@@ -97,6 +104,24 @@ describe("NoteReviewPage", () => {
     expect(getReviewableNoteMock).not.toHaveBeenCalled();
   });
 
+  it("redirects to verify-email when the user has not confirmed email", async () => {
+    createClientMock.mockResolvedValue(
+      createSupabaseMock("user-123", { emailConfirmedAt: null }),
+    );
+
+    await expect(
+      NoteReviewPage({
+        params: Promise.resolve({
+          noteId: "11111111-1111-1111-1111-111111111111",
+        }),
+      }),
+    ).rejects.toBe(REDIRECT_ERROR);
+
+    expect(redirectMock).toHaveBeenCalledWith(ROUTES.VERIFY_EMAIL);
+    expect(getReviewableNoteMock).not.toHaveBeenCalled();
+    expect(getPendingReviewLogMock).not.toHaveBeenCalled();
+  });
+
   it("returns not found when the note does not exist for the current user", async () => {
     createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
     getReviewableNoteMock.mockResolvedValue(null);
@@ -118,6 +143,7 @@ describe("NoteReviewPage", () => {
     getReviewableNoteMock.mockResolvedValue({
       title: "테스트 노트",
       language: "markdown",
+      next_review_at: null,
       review_round: 3,
     });
     getPendingReviewLogMock.mockResolvedValue(null);
@@ -140,11 +166,42 @@ describe("NoteReviewPage", () => {
     ).toBeInTheDocument();
   });
 
+  it("does not mark the note as completed when the next review is still scheduled", async () => {
+    createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
+    getReviewableNoteMock.mockResolvedValue({
+      title: "테스트 노트",
+      language: "markdown",
+      next_review_at: "2026-01-08T00:00:00.000Z",
+      review_round: 3,
+    });
+    getPendingReviewLogMock.mockResolvedValue(null);
+
+    render(
+      await NoteReviewPage({
+        params: Promise.resolve({
+          noteId: "11111111-1111-1111-1111-111111111111",
+        }),
+      }),
+    );
+
+    expect(
+      screen.getByRole("heading", {
+        name: "진행 중인 백지 테스트가 없습니다.",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", {
+        name: "이 노트는 모든 복습을 마쳤습니다.",
+      }),
+    ).not.toBeInTheDocument();
+  });
+
   it("renders the blank test page when a pending review exists", async () => {
     createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
     getReviewableNoteMock.mockResolvedValue({
       title: "테스트 노트",
       language: "markdown",
+      next_review_at: "2026-01-02T00:00:00.000Z",
       review_round: 0,
     });
     getPendingReviewLogMock.mockResolvedValue({
@@ -172,7 +229,7 @@ describe("NoteReviewPage", () => {
       "user-123",
     );
     expect(screen.getByTestId("blank-test-page")).toHaveTextContent(
-      "11111111-1111-1111-1111-111111111111|테스트 노트|22222222-2222-2222-2222-222222222222|1",
+      "11111111-1111-1111-1111-111111111111|테스트 노트|1",
     );
   });
 });

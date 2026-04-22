@@ -6,7 +6,12 @@ import { ROUTES } from "@/lib/constants/routes";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
-import { changePasswordSchema, profileSchema } from "./schema";
+import {
+  AVATAR_ALLOWED_TYPES,
+  AVATAR_MAX_SIZE,
+  changePasswordSchema,
+  profileSchema,
+} from "./schema";
 
 export async function updateProfileAction(
   _prevState: unknown,
@@ -14,7 +19,6 @@ export async function updateProfileAction(
 ) {
   const parsed = profileSchema.safeParse({
     nickname: formData.get("nickname"),
-    avatarUrl: formData.get("avatarUrl"),
   });
 
   if (!parsed.success) {
@@ -34,8 +38,6 @@ export async function updateProfileAction(
     .from("profiles")
     .update({
       nickname: parsed.data.nickname,
-      avatar_url: parsed.data.avatarUrl || null,
-      updated_at: new Date().toISOString(),
     })
     .eq("id", user.id)
     .select()
@@ -44,6 +46,88 @@ export async function updateProfileAction(
   if (error) {
     return { error: "프로필 업데이트에 실패했습니다" };
   }
+
+  return { data };
+}
+
+export async function uploadAvatarAction(
+  _prevState: unknown,
+  formData: FormData,
+) {
+  const file = formData.get("avatar");
+
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: "파일을 선택해주세요" };
+  }
+
+  if (!(AVATAR_ALLOWED_TYPES as readonly string[]).includes(file.type)) {
+    return { error: "JPG, PNG, GIF, WebP 형식만 업로드 가능합니다" };
+  }
+
+  if (file.size > AVATAR_MAX_SIZE) {
+    return { error: "파일 크기는 5MB 이하여야 합니다" };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: "인증이 필요합니다" };
+
+  const path = `${user.id}/avatar`;
+
+  const { error: uploadError } = await supabase.storage
+    .from("avatars")
+    .upload(path, file, { upsert: true, contentType: file.type });
+
+  if (uploadError) return { error: "이미지 업로드에 실패했습니다" };
+
+  const {
+    data: { publicUrl },
+  } = supabase.storage.from("avatars").getPublicUrl(path);
+
+  const cacheBustedUrl = `${publicUrl}?t=${Date.now()}`;
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .update({
+      avatar_url: cacheBustedUrl,
+    })
+    .eq("id", user.id)
+    .select()
+    .single();
+
+  if (error) return { error: "프로필 업데이트에 실패했습니다" };
+
+  return { data };
+}
+
+export async function deleteAvatarAction() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: "인증이 필요합니다" };
+
+  const { error: removeError } = await supabase.storage
+    .from("avatars")
+    .remove([`${user.id}/avatar`]);
+
+  if (removeError) {
+    console.error("아바타 파일 삭제 실패:", removeError.message);
+    return { error: "아바타 삭제에 실패했습니다" };
+  }
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .update({ avatar_url: null })
+    .eq("id", user.id)
+    .select()
+    .single();
+
+  if (error) return { error: "아바타 삭제에 실패했습니다" };
 
   return { data };
 }

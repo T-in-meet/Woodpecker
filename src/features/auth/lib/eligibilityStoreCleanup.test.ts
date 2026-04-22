@@ -41,10 +41,10 @@ describe("Eligibility Store Cleanup", () => {
 
       /**
        * IP 항목 수동 추가 (cleanup 테스트용)
+       * 타임스탬프가 windowStart보다 이전(만료된 상태)
        */
       ipStore.set(ip, {
-        count: 5,
-        windowStart: now - IP_WINDOW_MS - 1000, // IP_WINDOW_MS보다 1초 이상 이전
+        timestamps: [now - IP_WINDOW_MS - 1000], // IP_WINDOW_MS보다 1초 이상 이전
       });
 
       expect(ipStore.has(ip)).toBe(true);
@@ -69,11 +69,10 @@ describe("Eligibility Store Cleanup", () => {
       const now = Date.now();
 
       /**
-       * 아직 유효한 IP 항목
+       * 아직 유효한 IP 항목 (windowStart 이후 타임스탬프)
        */
       ipStore.set(ip, {
-        count: 3,
-        windowStart: now - IP_WINDOW_MS + 5000, // 아직 5초 남음
+        timestamps: [now - IP_WINDOW_MS + 5000], // 아직 5초 남음
       });
 
       expect(ipStore.has(ip)).toBe(true);
@@ -88,7 +87,7 @@ describe("Eligibility Store Cleanup", () => {
        * 유효한 항목은 유지됨
        */
       expect(ipStore.has(ip)).toBe(true);
-      expect(ipStore.get(ip)?.count).toBe(3);
+      expect(ipStore.get(ip)?.timestamps).toBeDefined();
     });
   });
 
@@ -99,15 +98,14 @@ describe("Eligibility Store Cleanup", () => {
 
       /**
        * 양쪽 윈도우 모두 만료된 항목
+       * 이유: 타임스탬프가 각 windowStart보다 이전 상태
        */
       emailStore.set(email, {
         shortWindow: {
-          count: 1,
-          windowStart: now - EMAIL_SHORT_WINDOW_MS - 1000,
+          timestamps: [now - EMAIL_SHORT_WINDOW_MS - 1000],
         },
         longWindow: {
-          count: 3,
-          windowStart: now - EMAIL_LONG_WINDOW_MS - 1000,
+          timestamps: [now - EMAIL_LONG_WINDOW_MS - 1000],
         },
       });
 
@@ -131,15 +129,14 @@ describe("Eligibility Store Cleanup", () => {
 
       /**
        * short는 만료, long은 유효
+       * 이유: short window의 타임스탬프가 windowStart보다 이전, long은 이후
        */
       emailStore.set(email, {
         shortWindow: {
-          count: 1,
-          windowStart: now - EMAIL_SHORT_WINDOW_MS - 1000, // 만료
+          timestamps: [now - EMAIL_SHORT_WINDOW_MS - 1000], // 만료
         },
         longWindow: {
-          count: 2,
-          windowStart: now - EMAIL_LONG_WINDOW_MS + 5000, // 유효 (5초 남음)
+          timestamps: [now - EMAIL_LONG_WINDOW_MS + 5000], // 유효 (5초 남음)
         },
       });
 
@@ -162,7 +159,7 @@ describe("Eligibility Store Cleanup", () => {
       const after = emailStore.get(email);
       expect(after?.shortWindow).toBeNull();
       expect(after?.longWindow).not.toBeNull();
-      expect(after?.longWindow?.count).toBe(2);
+      expect(after?.longWindow?.timestamps.length).toBeGreaterThan(0);
     });
 
     it("TC-Cleanup-Email-03. long window만 만료되면 null로 설정한다", () => {
@@ -171,15 +168,14 @@ describe("Eligibility Store Cleanup", () => {
 
       /**
        * long은 만료, short는 유효
+       * 이유: long window의 타임스탬프가 windowStart보다 이전, short는 이후
        */
       emailStore.set(email, {
         shortWindow: {
-          count: 1,
-          windowStart: now - EMAIL_SHORT_WINDOW_MS + 5000, // 유효
+          timestamps: [now - EMAIL_SHORT_WINDOW_MS + 5000], // 유효
         },
         longWindow: {
-          count: 5,
-          windowStart: now - EMAIL_LONG_WINDOW_MS - 1000, // 만료
+          timestamps: [now - EMAIL_LONG_WINDOW_MS - 1000], // 만료
         },
       });
 
@@ -209,12 +205,10 @@ describe("Eligibility Store Cleanup", () => {
        */
       emailStore.set(email, {
         shortWindow: {
-          count: 1,
-          windowStart: now - EMAIL_SHORT_WINDOW_MS + 10000,
+          timestamps: [now - EMAIL_SHORT_WINDOW_MS + 10000],
         },
         longWindow: {
-          count: 3,
-          windowStart: now - EMAIL_LONG_WINDOW_MS + 10000,
+          timestamps: [now - EMAIL_LONG_WINDOW_MS + 10000],
         },
       });
 
@@ -237,14 +231,15 @@ describe("Eligibility Store Cleanup", () => {
       const email = "replace@example.com";
       const now = Date.now();
 
+      const originalShortTs = now - EMAIL_SHORT_WINDOW_MS - 1000; // 만료
+      const originalLongTs = now - EMAIL_LONG_WINDOW_MS + 20_000; // 유효
+
       const originalEntry = {
         shortWindow: {
-          count: 7,
-          windowStart: now - EMAIL_SHORT_WINDOW_MS - 1000, // 만료
+          timestamps: [originalShortTs],
         },
         longWindow: {
-          count: 9,
-          windowStart: now - EMAIL_LONG_WINDOW_MS + 20_000, // 유효
+          timestamps: [originalLongTs],
         },
       };
       emailStore.set(email, originalEntry);
@@ -259,10 +254,44 @@ describe("Eligibility Store Cleanup", () => {
       expect(after).toBeDefined();
       expect(after).not.toBe(originalEntry); // set(..., newEntry) full replace
       expect(after?.shortWindow).toBeNull();
-      expect(after?.longWindow?.count).toBe(9);
-      expect(after?.longWindow?.windowStart).toBe(
-        originalEntry.longWindow.windowStart,
+      expect(after?.longWindow).not.toBeNull();
+      // 타임스탬프는 pruneExpired를 거쳐 반환되므로 값은 동일해야 함
+      expect(after?.longWindow?.timestamps).toContain(originalLongTs);
+    });
+
+    it("TC-Cleanup-Email-06. 부분 prune 시 유효 타임스탬프만 정확히 보존한다", () => {
+      const email = "partial-prune@example.com";
+      const now = Date.now();
+
+      const shortExpired = now - EMAIL_SHORT_WINDOW_MS - 1;
+      const shortValid1 = now - EMAIL_SHORT_WINDOW_MS + 1;
+      const shortValid2 = now;
+
+      const longExpired = now - EMAIL_LONG_WINDOW_MS - 1;
+      const longValid1 = now - EMAIL_LONG_WINDOW_MS + 1;
+      const longValid2 = now;
+
+      emailStore.set(email, {
+        shortWindow: {
+          timestamps: [shortExpired, shortValid1, shortValid2],
+        },
+        longWindow: {
+          timestamps: [longExpired, longValid1, longValid2],
+        },
+      });
+
+      tryCleanupExpiredEntries(
+        IP_WINDOW_MS,
+        EMAIL_SHORT_WINDOW_MS,
+        EMAIL_LONG_WINDOW_MS,
       );
+
+      const after = emailStore.get(email);
+      expect(after?.shortWindow?.timestamps).toEqual([
+        shortValid1,
+        shortValid2,
+      ]);
+      expect(after?.longWindow?.timestamps).toEqual([longValid1, longValid2]);
     });
   });
 
@@ -275,8 +304,7 @@ describe("Eligibility Store Cleanup", () => {
        * 만료된 항목 추가
        */
       ipStore.set(ip, {
-        count: 1,
-        windowStart: initialTime - IP_WINDOW_MS - 1000,
+        timestamps: [initialTime - IP_WINDOW_MS - 1000],
       });
 
       /**
@@ -293,8 +321,7 @@ describe("Eligibility Store Cleanup", () => {
        * 같은 분 내 다시 항목 추가 (cleanup이 실행된 후)
        */
       ipStore.set(ip, {
-        count: 1,
-        windowStart: initialTime - IP_WINDOW_MS - 1000,
+        timestamps: [initialTime - IP_WINDOW_MS - 1000],
       });
 
       /**
@@ -326,8 +353,7 @@ describe("Eligibility Store Cleanup", () => {
        * 만료된 항목 추가
        */
       ipStore.set(ip, {
-        count: 1,
-        windowStart: initialTime - IP_WINDOW_MS - 1000,
+        timestamps: [initialTime - IP_WINDOW_MS - 1000],
       });
 
       /**
@@ -344,8 +370,7 @@ describe("Eligibility Store Cleanup", () => {
        * 다시 항목 추가
        */
       ipStore.set(ip, {
-        count: 1,
-        windowStart: Date.now() - IP_WINDOW_MS - 1000,
+        timestamps: [Date.now() - IP_WINDOW_MS - 1000],
       });
 
       /**
@@ -396,12 +421,10 @@ describe("Eligibility Store Cleanup", () => {
        * 여러 IP 항목 추가
        */
       ipStore.set("10.5.0.1", {
-        count: 1,
-        windowStart: now - IP_WINDOW_MS - 1000, // 만료
+        timestamps: [now - IP_WINDOW_MS - 1000], // 만료
       });
       ipStore.set("10.5.0.2", {
-        count: 2,
-        windowStart: now - IP_WINDOW_MS + 5000, // 유효
+        timestamps: [now - IP_WINDOW_MS + 5000], // 유효
       });
 
       /**
@@ -409,34 +432,28 @@ describe("Eligibility Store Cleanup", () => {
        */
       emailStore.set("exp1@example.com", {
         shortWindow: {
-          count: 1,
-          windowStart: now - EMAIL_SHORT_WINDOW_MS - 1000, // 만료
+          timestamps: [now - EMAIL_SHORT_WINDOW_MS - 1000], // 만료
         },
         longWindow: {
-          count: 2,
-          windowStart: now - EMAIL_LONG_WINDOW_MS - 1000, // 만료
+          timestamps: [now - EMAIL_LONG_WINDOW_MS - 1000], // 만료
         },
       });
 
       emailStore.set("exp2@example.com", {
         shortWindow: {
-          count: 1,
-          windowStart: now - EMAIL_SHORT_WINDOW_MS - 1000, // 만료
+          timestamps: [now - EMAIL_SHORT_WINDOW_MS - 1000], // 만료
         },
         longWindow: {
-          count: 3,
-          windowStart: now - EMAIL_LONG_WINDOW_MS + 5000, // 유효
+          timestamps: [now - EMAIL_LONG_WINDOW_MS + 5000], // 유효
         },
       });
 
       emailStore.set("valid@example.com", {
         shortWindow: {
-          count: 1,
-          windowStart: now - EMAIL_SHORT_WINDOW_MS + 5000, // 유효
+          timestamps: [now - EMAIL_SHORT_WINDOW_MS + 5000], // 유효
         },
         longWindow: {
-          count: 4,
-          windowStart: now - EMAIL_LONG_WINDOW_MS + 5000, // 유효
+          timestamps: [now - EMAIL_LONG_WINDOW_MS + 5000], // 유효
         },
       });
 

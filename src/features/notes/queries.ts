@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { NOTE_LANGUAGE_VALUES } from "@/lib/constants/noteLanguages";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
-import { createClient } from "@/lib/supabase/server";
+import { createServerComponentClient } from "@/lib/supabase/server";
 
 const noteDetailSchema = z.object({
   id: z.string().uuid(),
@@ -16,17 +16,36 @@ const noteDetailSchema = z.object({
   user_id: z.string().uuid(),
 });
 
-export type NoteDetail = z.infer<typeof noteDetailSchema>;
+const noteSummarySchema = z.object({
+  id: z.string().uuid(),
+  title: z.string(),
+  language: z.enum(NOTE_LANGUAGE_VALUES).nullable(),
+  next_review_at: z.string().nullable(),
+  review_round: z.number().int().min(0).max(MAX_REVIEW_ROUND),
+  updated_at: z.string(),
+});
 
-export async function getNotes() {
-  return [];
+export type NoteDetail = z.infer<typeof noteDetailSchema>;
+export type NoteSummary = z.infer<typeof noteSummarySchema>;
+
+export async function getNotes(userId: string): Promise<NoteSummary[]> {
+  const supabase = await createServerComponentClient();
+  const { data } = await supabase
+    .from("notes")
+    .select("id, title, language, next_review_at, review_round, updated_at")
+    .eq("user_id", userId)
+    .order("updated_at", { ascending: false });
+
+  const parsed = z.array(noteSummarySchema).safeParse(data);
+
+  return parsed.success ? parsed.data : [];
 }
 
 export async function getNoteById(
   noteId: string,
   userId: string,
 ): Promise<NoteDetail | null> {
-  const supabase = await createClient();
+  const supabase = await createServerComponentClient();
   const { data } = await supabase
     .from("notes")
     .select(

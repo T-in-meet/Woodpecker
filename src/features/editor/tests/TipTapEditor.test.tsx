@@ -2,6 +2,7 @@ import "./setup";
 
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { Editor } from "@tiptap/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { TipTapEditor } from "../components/TipTapEditor";
@@ -15,6 +16,25 @@ function getEditorContentElement() {
   }
 
   return contentElement;
+}
+
+function findTextStartPosition(editor: Editor, text: string) {
+  let position: number | null = null;
+
+  editor.state.doc.descendants((node, pos) => {
+    if (node.isText && node.text?.includes(text)) {
+      position = pos;
+      return false;
+    }
+
+    return true;
+  });
+
+  if (position === null) {
+    throw new Error(`text node not found: ${text}`);
+  }
+
+  return position;
 }
 
 type ClipboardDataMockType = {
@@ -122,6 +142,177 @@ describe("TipTapEditor", () => {
 
     await waitFor(() => {
       expect(handleChange).toHaveBeenCalled();
+    });
+  });
+
+  it("converts typed markdown checkbox markers into task items", async () => {
+    const user = userEvent.setup();
+    const handleChange = vi.fn();
+
+    render(<TipTapEditor value="" onChange={handleChange} />);
+
+    await waitFor(() => {
+      expect(getEditorContentElement()).toBeTruthy();
+    });
+
+    await user.click(getEditorContentElement());
+    await user.keyboard("- [[ ] first");
+
+    const checkbox = await screen.findByRole("checkbox");
+
+    expect(checkbox).toBeInTheDocument();
+    expect(screen.getByText("first")).toBeInTheDocument();
+    expect(handleChange).toHaveBeenLastCalledWith("- [ ] first");
+  });
+
+  it("converts typed checked markdown checkbox markers into task items", async () => {
+    const user = userEvent.setup();
+    const handleChange = vi.fn();
+
+    render(<TipTapEditor value="" onChange={handleChange} />);
+
+    await waitFor(() => {
+      expect(getEditorContentElement()).toBeTruthy();
+    });
+
+    await user.click(getEditorContentElement());
+    await user.keyboard("- [[x] done");
+
+    const checkbox = await screen.findByRole("checkbox");
+
+    expect(checkbox).toBeChecked();
+    expect(screen.getByText("done")).toBeInTheDocument();
+    expect(handleChange).toHaveBeenLastCalledWith("- [x] done");
+  });
+
+  it("preserves escaped task markers in the initial value prop", async () => {
+    render(<TipTapEditor value={"- \\[ \\] literal"} onChange={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(getEditorContentElement()).toBeTruthy();
+    });
+
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.getByText("[ ] literal")).toBeInTheDocument();
+  });
+
+  it("keeps escaped task markers escaped when the user edits literal text", async () => {
+    const user = userEvent.setup();
+    const handleChange = vi.fn();
+
+    render(
+      <TipTapEditor value={"- \\[ \\] literal"} onChange={handleChange} />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("[ ] literal")).toBeInTheDocument();
+    });
+
+    handleChange.mockClear();
+
+    await user.click(getEditorContentElement());
+    await user.keyboard("!");
+
+    await waitFor(() => {
+      expect(handleChange).toHaveBeenCalled();
+    });
+
+    const lastChange = handleChange.mock.lastCall?.[0] as string;
+    expect(lastChange).toContain("\\[ \\] literal");
+    expect(lastChange).not.toContain("- [ ] literal");
+  });
+
+  it("converts checkbox markers typed after an existing bullet item", async () => {
+    const user = userEvent.setup();
+    const handleChange = vi.fn();
+
+    render(<TipTapEditor value="" onChange={handleChange} />);
+
+    await waitFor(() => {
+      expect(getEditorContentElement()).toBeTruthy();
+    });
+
+    await user.click(getEditorContentElement());
+    await user.keyboard("- first{Enter}[[ ] second");
+
+    const checkbox = await screen.findByRole("checkbox");
+    const lastChange = handleChange.mock.lastCall?.[0];
+
+    expect(checkbox).toBeInTheDocument();
+    expect(screen.getByText("first")).toBeInTheDocument();
+    expect(screen.getByText("second")).toBeInTheDocument();
+    expect(lastChange).toContain("- [ ] second");
+    expect(lastChange).not.toContain("\\[ \\]");
+  });
+
+  it("lifts the current bullet list item when Backspace is pressed at the start of the line", async () => {
+    const handleChange = vi.fn();
+    const handleEditorReady = vi.fn();
+
+    render(
+      <TipTapEditor
+        value="- first item\n- second item"
+        onChange={handleChange}
+        onEditorReady={handleEditorReady}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(handleEditorReady).toHaveBeenCalled();
+    });
+
+    const [editor] = handleEditorReady.mock.calls[0] as [Editor];
+
+    await act(async () => {
+      editor.commands.setContent({
+        type: "doc",
+        content: [
+          {
+            type: "bulletList",
+            content: [
+              {
+                type: "listItem",
+                content: [
+                  {
+                    type: "paragraph",
+                    content: [{ type: "text", text: "first item" }],
+                  },
+                ],
+              },
+              {
+                type: "listItem",
+                content: [
+                  {
+                    type: "paragraph",
+                    content: [{ type: "text", text: "second item" }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      });
+    });
+
+    await waitFor(() => {
+      expect(handleChange).toHaveBeenLastCalledWith(
+        "- first item\n- second item",
+      );
+    });
+
+    handleChange.mockClear();
+
+    const secondItemTextStart = findTextStartPosition(editor, "second item");
+
+    await act(async () => {
+      editor.commands.setTextSelection(secondItemTextStart);
+      editor.commands.keyboardShortcut("Backspace");
+    });
+
+    await waitFor(() => {
+      expect(handleChange).toHaveBeenLastCalledWith(
+        "- first item\n\nsecond item",
+      );
     });
   });
 

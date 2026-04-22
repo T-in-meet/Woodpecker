@@ -17,13 +17,13 @@ describe("회원가입 로그인 링크", () => {
   it("TC-01: 회원가입 폼에 로그인 안내 텍스트가 렌더링된다", () => {
     renderSignupForm();
 
-    expect(screen.getByText("이미 가입하셨나요?")).toBeInTheDocument();
+    expect(screen.getByText("이미 계정이 있으신가요?")).toBeInTheDocument();
   });
 
   it("TC-02: 로그인 안내 요소가 /login을 가리키는 링크로 접근 가능하다", () => {
     renderSignupForm();
 
-    const loginLink = screen.getByRole("link", { name: "이미 가입하셨나요?" });
+    const loginLink = screen.getByRole("link", { name: "로그인" });
 
     expect(loginLink).toBeInTheDocument();
     expect(loginLink).toHaveAttribute("href", "/login");

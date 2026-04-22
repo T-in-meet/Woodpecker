@@ -27,6 +27,23 @@ describe("NoteViewer", () => {
     expect(checkbox.closest("[contenteditable='false']")).toBeTruthy();
     expect(screen.getByText("first")).toBeInTheDocument();
     expect(screen.getByText("first").closest(".viewer-shell")).toBeTruthy();
+    expect(
+      document
+        .querySelector("[contenteditable='false']")
+        ?.closest(".tiptap-wrapper")?.className,
+    ).toContain("[&_.tiptap]:px-0!");
+  });
+
+  it("preserves escaped task markers as literal markdown text", async () => {
+    render(<NoteViewer content={"- \\[ \\] first"} language="markdown" />);
+
+    await waitFor(() => {
+      const editor = document.querySelector("[contenteditable='false']");
+      expect(editor).toBeTruthy();
+    });
+
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.getByText("[ ] first")).toBeInTheDocument();
   });
 
   it("renders empty state when markdown content is empty", () => {

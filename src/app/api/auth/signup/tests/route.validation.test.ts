@@ -18,7 +18,6 @@
  * - 약관 전용 세부 분기
  * - 기존 계정 분기
  * - rate limit
- * - avatar 업로드
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -457,7 +456,6 @@ describe("PR-API-02 회원가입 입력 검증 - 형식 / 길이 / 경계값 / �
 describe("PR-API-02 회원가입 입력 검증 - 실패 응답 계약 / 외부 호출 차단 / 다중 오류 수집", () => {
   const mockCreateUser = vi.fn();
   const mockGenerateLink = vi.fn();
-  const mockStorageUpload = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -465,7 +463,6 @@ describe("PR-API-02 회원가입 입력 검증 - 실패 응답 계약 / 외부 �
       auth: {
         admin: { createUser: mockCreateUser, generateLink: mockGenerateLink },
       },
-      storage: { from: vi.fn(() => ({ upload: mockStorageUpload })) },
     } as never);
     mockCreateUser.mockResolvedValue({
       data: { user: { id: "user-id", email: "test@example.com" } },
@@ -566,7 +563,6 @@ describe("PR-API-02 회원가입 입력 검증 - 실패 응답 계약 / 외부 �
     );
 
     expect(mockGenerateLink).toHaveBeenCalledTimes(0);
-    expect(mockStorageUpload).toHaveBeenCalledTimes(0);
   });
 
   // TC-25: 다중 오류 수집

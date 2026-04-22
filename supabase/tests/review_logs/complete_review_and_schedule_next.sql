@@ -4,31 +4,42 @@
 
 BEGIN;
 
-SELECT plan(17);
+SELECT plan(18);
 
 SELECT set_config('test.review_complete_user_a_id', gen_random_uuid()::text, true);
 SELECT set_config('test.review_complete_user_b_id', gen_random_uuid()::text, true);
+SELECT set_config('test.review_complete_user_unverified_id', gen_random_uuid()::text, true);
 SELECT set_config('test.review_complete_note_round1_id', gen_random_uuid()::text, true);
 SELECT set_config('test.review_complete_note_round2_id', gen_random_uuid()::text, true);
 SELECT set_config('test.review_complete_note_round3_id', gen_random_uuid()::text, true);
 SELECT set_config('test.review_complete_note_other_id', gen_random_uuid()::text, true);
 SELECT set_config('test.review_complete_note_mismatch_id', gen_random_uuid()::text, true);
+SELECT set_config('test.review_complete_note_unverified_id', gen_random_uuid()::text, true);
 SELECT set_config('test.review_complete_log_round1_id', gen_random_uuid()::text, true);
 SELECT set_config('test.review_complete_log_round2_id', gen_random_uuid()::text, true);
 SELECT set_config('test.review_complete_log_round3_id', gen_random_uuid()::text, true);
 SELECT set_config('test.review_complete_log_other_id', gen_random_uuid()::text, true);
 SELECT set_config('test.review_complete_log_mismatch_id', gen_random_uuid()::text, true);
+SELECT set_config('test.review_complete_log_unverified_id', gen_random_uuid()::text, true);
 
-INSERT INTO auth.users (id, email, raw_user_meta_data)
+INSERT INTO auth.users (id, email, email_confirmed_at, raw_user_meta_data)
 VALUES
   (
     current_setting('test.review_complete_user_a_id')::uuid,
     'review_complete_user_a_' || current_setting('test.review_complete_user_a_id') || '@example.com',
+    now(),
     '{}'::jsonb
   ),
   (
     current_setting('test.review_complete_user_b_id')::uuid,
     'review_complete_user_b_' || current_setting('test.review_complete_user_b_id') || '@example.com',
+    now(),
+    '{}'::jsonb
+  ),
+  (
+    current_setting('test.review_complete_user_unverified_id')::uuid,
+    'review_complete_user_unverified_' || current_setting('test.review_complete_user_unverified_id') || '@example.com',
+    NULL,
     '{}'::jsonb
   )
 ON CONFLICT (id) DO NOTHING;
@@ -74,6 +85,14 @@ VALUES
     'mismatch content',
     0,
     '2026-01-06T00:00:00Z'::timestamptz
+  ),
+  (
+    current_setting('test.review_complete_note_unverified_id')::uuid,
+    current_setting('test.review_complete_user_unverified_id')::uuid,
+    'unverified note',
+    'unverified content',
+    0,
+    '2026-01-07T00:00:00Z'::timestamptz
   );
 
 INSERT INTO public.review_logs (id, note_id, user_id, round, scheduled_at)
@@ -112,6 +131,13 @@ VALUES
     current_setting('test.review_complete_user_a_id')::uuid,
     2,
     '2026-01-06T00:00:00Z'::timestamptz
+  ),
+  (
+    current_setting('test.review_complete_log_unverified_id')::uuid,
+    current_setting('test.review_complete_note_unverified_id')::uuid,
+    current_setting('test.review_complete_user_unverified_id')::uuid,
+    1,
+    '2026-01-07T00:00:00Z'::timestamptz
   );
 
 SET LOCAL ROLE anon;
@@ -321,6 +347,27 @@ SELECT throws_ok(
   'P0001',
   'review log round does not match current note state',
   $$out-of-order review logs should be rejected$$
+);
+
+SELECT set_config(
+  'request.jwt.claims',
+  json_build_object(
+    'sub', current_setting('test.review_complete_user_unverified_id'),
+    'role', 'authenticated'
+  )::text,
+  true
+);
+
+SELECT throws_ok(
+  $sql$
+    SELECT public.complete_review_and_schedule_next(
+      current_setting('test.review_complete_note_unverified_id')::uuid,
+      current_setting('test.review_complete_log_unverified_id')::uuid
+    );
+  $sql$,
+  'P0001',
+  'email not confirmed',
+  $$unverified users should be blocked by the DB-level guard$$
 );
 
 SELECT * FROM finish();
