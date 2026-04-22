@@ -1,5 +1,6 @@
 import {
   Extension,
+  InputRule,
   isAtStartOfNode,
   isNodeActive,
   mergeAttributes,
@@ -24,7 +25,11 @@ import {
   defaultMarkdownSerializer,
   MarkdownSerializerState,
 } from "@tiptap/pm/markdown";
-import { type Node as ProseMirrorNode } from "@tiptap/pm/model";
+import {
+  type Node as ProseMirrorNode,
+  type ResolvedPos,
+} from "@tiptap/pm/model";
+import { TextSelection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import go from "highlight.js/lib/languages/go";
 import javascript from "highlight.js/lib/languages/javascript";
@@ -46,6 +51,7 @@ lowlight.register("rust", rust);
 lowlight.register("go", go);
 
 const LIST_ITEM_TYPE_NAMES = ["listItem", "taskItem"] as const;
+const TASK_MARKER_IN_BULLET_LIST_INPUT_REGEX = /^\[( |x|X)\][ ]$/;
 
 type TableCellAlignmentType = "left" | "center" | "right" | null;
 
@@ -95,6 +101,19 @@ function getTableCellAlignment(
     cell.attrs.align === "right"
   ) {
     return cell.attrs.align;
+  }
+
+  return null;
+}
+
+function findAncestorDepth(
+  $from: ResolvedPos,
+  typeName: string,
+): number | null {
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    if ($from.node(depth).type.name === typeName) {
+      return depth;
+    }
   }
 
   return null;
@@ -328,6 +347,125 @@ const ListItemBackspaceLift = Extension.create({
       Backspace: liftCurrentListItem,
       "Mod-Backspace": liftCurrentListItem,
     };
+  },
+});
+
+const BulletTaskItemInputRule = Extension.create({
+  name: "bulletTaskItemInputRule",
+  priority: 1200,
+  addInputRules() {
+    return [
+      new InputRule({
+        find: TASK_MARKER_IN_BULLET_LIST_INPUT_REGEX,
+        handler: ({ state, range, match }) => {
+          const marker = match[1];
+          const bulletListType = state.schema.nodes.bulletList;
+          const listItemType = state.schema.nodes.listItem;
+          const taskListType = state.schema.nodes.taskList;
+          const taskItemType = state.schema.nodes.taskItem;
+
+          if (
+            !marker ||
+            !bulletListType ||
+            !listItemType ||
+            !taskListType ||
+            !taskItemType
+          ) {
+            return null;
+          }
+
+          const { $from } = state.selection;
+          const listItemDepth = findAncestorDepth($from, listItemType.name);
+          const listDepth = findAncestorDepth($from, bulletListType.name);
+
+          if (listItemDepth === null || listDepth === null) {
+            return null;
+          }
+
+          let itemIndex = $from.index(listDepth);
+          const listNode = $from.node(listDepth);
+          const listPosition = $from.before(listDepth);
+          const previousListItemNode =
+            itemIndex > 0 ? listNode.maybeChild(itemIndex - 1) : null;
+
+          if (
+            $from.parentOffset === 0 &&
+            previousListItemNode?.type === listItemType &&
+            previousListItemNode.childCount === 1 &&
+            previousListItemNode.firstChild?.type.name === "paragraph" &&
+            previousListItemNode.textContent === ""
+          ) {
+            // Empty list item boundaries resolve forward into the next item, so
+            // the marker typed in that empty item would otherwise convert its sibling.
+            itemIndex -= 1;
+          }
+
+          if (itemIndex < 0 || itemIndex >= listNode.childCount) {
+            return null;
+          }
+
+          const tr = state.tr.delete(range.from, range.to);
+          const mappedListPosition = tr.mapping.map(listPosition);
+          const nextListNode = tr.doc.nodeAt(mappedListPosition);
+          const nextListItemNode = nextListNode?.maybeChild(itemIndex);
+
+          if (
+            !nextListNode ||
+            nextListNode.type !== bulletListType ||
+            !nextListItemNode ||
+            !taskItemType.validContent(nextListItemNode.content)
+          ) {
+            return null;
+          }
+
+          const taskItemNode = taskItemType.create(
+            { checked: marker.toLowerCase() === "x" },
+            nextListItemNode.content,
+          );
+          const taskListNode = taskListType.create(null, taskItemNode);
+          const replacementNodes: ProseMirrorNode[] = [];
+          let taskListPosition = mappedListPosition;
+
+          if (itemIndex > 0) {
+            const previousItems = Array.from(
+              { length: itemIndex },
+              (_, index) => nextListNode.child(index),
+            );
+            const previousListNode = bulletListType.create(
+              nextListNode.attrs,
+              previousItems,
+            );
+
+            replacementNodes.push(previousListNode);
+            taskListPosition += previousListNode.nodeSize;
+          }
+
+          replacementNodes.push(taskListNode);
+
+          if (itemIndex < nextListNode.childCount - 1) {
+            replacementNodes.push(
+              bulletListType.create(
+                nextListNode.attrs,
+                Array.from(
+                  { length: nextListNode.childCount - itemIndex - 1 },
+                  (_, index) => nextListNode.child(itemIndex + index + 1),
+                ),
+              ),
+            );
+          }
+
+          tr.replaceWith(
+            mappedListPosition,
+            mappedListPosition + nextListNode.nodeSize,
+            replacementNodes,
+          );
+          // ProseMirror 포지션은 taskList/taskItem/paragraph 경계를 각각 1칸씩 지난다.
+          tr.setSelection(
+            TextSelection.near(tr.doc.resolve(taskListPosition + 3)),
+          );
+        },
+      }),
+    ];
   },
 });
 
@@ -624,6 +762,7 @@ function getBaseExtensions({ readOnly = false }: { readOnly?: boolean } = {}) {
       link: false,
     }),
     ListItemBackspaceLift,
+    BulletTaskItemInputRule,
     CodeBlockLowlight.extend({
       renderHTML({ node, HTMLAttributes }) {
         return [
