@@ -2,9 +2,11 @@
 -- profiles / TRIGGER
 -- =========================================
 -- TODO(#162):
--- 본 테스트 수정은 과거 signup 정책(avatar_url 반영) 기준으로 남아 있던 assertion을 정리해
--- 현재 깨지는 false negative를 우선 제거하기 위한 복구 작업이다.
--- 로그인 구현 이후, 실제 구현 코드/DB 스키마 기준으로 profiles 트리거 테스트를 재정비한다.
+-- 이번 변경 범위: 과거 signup 정책(avatar_url 반영) 기반 assertion 정리로
+-- 깨진 테스트(false negative)만 우선 복구.
+-- 이번 변경 비범위: 현재 구현 코드/DB 스키마 기준의 최종 정합화.
+-- 후속 작업: 로그인 구현 이후 auth/profiles 트리거 테스트와 스키마 검증을 재정비.
+
 
 BEGIN;
 
