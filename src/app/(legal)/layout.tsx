@@ -1,7 +1,8 @@
 import { Noto_Serif_KR } from "next/font/google";
+import { Suspense } from "react";
 
 import { Footer } from "@/components/layout/Footer";
-import { Header } from "@/components/layout/Header";
+import { Header, HeaderSkeleton } from "@/components/layout/Header";
 
 const notoSerifKR = Noto_Serif_KR({
   weight: ["400", "600", "700"],
@@ -18,7 +19,9 @@ export default function LegalLayout({
 }) {
   return (
     <div className={`min-h-screen ${notoSerifKR.variable}`}>
-      <Header />
+      <Suspense fallback={<HeaderSkeleton />}>
+        <Header />
+      </Suspense>
       {children}
       <Footer />
     </div>

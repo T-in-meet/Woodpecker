@@ -48,6 +48,10 @@ export async function createNoteAction(
     return { error: "로그인이 필요합니다." };
   }
 
+  if (user.email_confirmed_at == null) {
+    redirect(ROUTES.VERIFY_EMAIL);
+  }
+
   const firstReviewDate = getNextReviewDate(0);
 
   if (!firstReviewDate) {
@@ -85,6 +89,10 @@ export async function deleteNoteAction(noteId: string) {
 
   if (!user) {
     return { error: "로그인이 필요합니다." };
+  }
+
+  if (user.email_confirmed_at == null) {
+    redirect(ROUTES.VERIFY_EMAIL);
   }
 
   const { data: deletedNote, error } = await supabase

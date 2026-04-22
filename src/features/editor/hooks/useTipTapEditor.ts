@@ -54,10 +54,7 @@ export function useTipTapEditor({
     },
     onUpdate({ editor }) {
       if (skipNextUpdate.current) return;
-      const nextValue = serializeTipTapMarkdown(
-        editor,
-        lastSerializedValueRef.current,
-      );
+      const nextValue = serializeTipTapMarkdown(editor);
 
       if (lastSerializedValueRef.current === nextValue) return;
 

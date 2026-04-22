@@ -1,5 +1,6 @@
 import {
   Extension,
+  InputRule,
   isAtStartOfNode,
   isNodeActive,
   mergeAttributes,
@@ -22,9 +23,13 @@ import TaskItem from "@tiptap/extension-task-item";
 import TaskList from "@tiptap/extension-task-list";
 import {
   defaultMarkdownSerializer,
-  type MarkdownSerializerState,
+  MarkdownSerializerState,
 } from "@tiptap/pm/markdown";
-import { type Node as ProseMirrorNode } from "@tiptap/pm/model";
+import {
+  type Node as ProseMirrorNode,
+  type ResolvedPos,
+} from "@tiptap/pm/model";
+import { TextSelection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import go from "highlight.js/lib/languages/go";
 import javascript from "highlight.js/lib/languages/javascript";
@@ -46,8 +51,32 @@ lowlight.register("rust", rust);
 lowlight.register("go", go);
 
 const LIST_ITEM_TYPE_NAMES = ["listItem", "taskItem"] as const;
+const TASK_MARKER_IN_BULLET_LIST_INPUT_REGEX = /^\[( |x|X)\][ ]$/;
 
 type TableCellAlignmentType = "left" | "center" | "right" | null;
+
+type RuntimeMarkdownSerializerState = MarkdownSerializerState & {
+  marks: Record<string, unknown>;
+  nodes: Record<
+    string,
+    (
+      state: MarkdownSerializerState,
+      node: ProseMirrorNode,
+      parent: ProseMirrorNode,
+      index: number,
+    ) => void
+  >;
+  out: string;
+};
+
+type MarkdownSerializerStateConstructorType = new (
+  nodes: RuntimeMarkdownSerializerState["nodes"],
+  marks: RuntimeMarkdownSerializerState["marks"],
+  options: RuntimeMarkdownSerializerState["options"],
+) => RuntimeMarkdownSerializerState;
+
+const MarkdownSerializerStateConstructor =
+  MarkdownSerializerState as unknown as MarkdownSerializerStateConstructorType;
 
 function getTableCells(row: ProseMirrorNode): ProseMirrorNode[] {
   const cells: ProseMirrorNode[] = [];
@@ -77,7 +106,39 @@ function getTableCellAlignment(
   return null;
 }
 
-function getTableCellText(cell: ProseMirrorNode | null | undefined): string {
+function findAncestorDepth(
+  $from: ResolvedPos,
+  typeName: string,
+): number | null {
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    if ($from.node(depth).type.name === typeName) {
+      return depth;
+    }
+  }
+
+  return null;
+}
+
+function renderInlineMarkdown(
+  state: MarkdownSerializerState,
+  node: ProseMirrorNode,
+): string {
+  const runtimeState = state as RuntimeMarkdownSerializerState;
+  const tempState = new MarkdownSerializerStateConstructor(
+    runtimeState.nodes,
+    runtimeState.marks,
+    runtimeState.options,
+  );
+
+  tempState.renderInline(node);
+
+  return tempState.out.trim();
+}
+
+function getTableCellMarkdown(
+  state: MarkdownSerializerState,
+  cell: ProseMirrorNode | null | undefined,
+): string {
   if (!cell) {
     return "";
   }
@@ -85,14 +146,16 @@ function getTableCellText(cell: ProseMirrorNode | null | undefined): string {
   const parts: string[] = [];
 
   cell.forEach((child) => {
-    const text = child.textContent.replace(/\s+/g, " ").trim();
+    const text = child.type.inlineContent
+      ? renderInlineMarkdown(state, child)
+      : child.textContent.replace(/\s+/g, " ").trim();
 
     if (text) {
       parts.push(text);
     }
   });
 
-  return parts.join(" ").replace(/\|/g, "\\|");
+  return parts.join(" ");
 }
 
 function getTableDividerCell(alignment: TableCellAlignmentType): string {
@@ -245,17 +308,31 @@ const ListItemBackspaceLift = Extension.create({
         return false;
       }
 
+      const { $from } = state.selection;
+
       if (!isAtStartOfNode(state)) {
         return false;
       }
 
       for (const itemName of LIST_ITEM_TYPE_NAMES) {
-        if (state.schema.nodes[itemName] === undefined) {
+        let listItemDepth: number | null = null;
+
+        for (let depth = $from.depth; depth > 0; depth -= 1) {
+          if ($from.node(depth).type.name === itemName) {
+            listItemDepth = depth;
+            break;
+          }
+        }
+
+        if (listItemDepth === null || !isNodeActive(state, itemName)) {
           continue;
         }
 
-        if (!isNodeActive(state, itemName)) {
-          continue;
+        if ($from.node(listItemDepth).firstChild !== $from.parent) {
+          return (
+            this.editor.commands.joinBackward() ||
+            this.editor.commands.joinTextblockBackward()
+          );
         }
 
         // StarterKit's list keymap prefers merging with the previous item.
@@ -270,6 +347,125 @@ const ListItemBackspaceLift = Extension.create({
       Backspace: liftCurrentListItem,
       "Mod-Backspace": liftCurrentListItem,
     };
+  },
+});
+
+const BulletTaskItemInputRule = Extension.create({
+  name: "bulletTaskItemInputRule",
+  priority: 1200,
+  addInputRules() {
+    return [
+      new InputRule({
+        find: TASK_MARKER_IN_BULLET_LIST_INPUT_REGEX,
+        handler: ({ state, range, match }) => {
+          const marker = match[1];
+          const bulletListType = state.schema.nodes.bulletList;
+          const listItemType = state.schema.nodes.listItem;
+          const taskListType = state.schema.nodes.taskList;
+          const taskItemType = state.schema.nodes.taskItem;
+
+          if (
+            !marker ||
+            !bulletListType ||
+            !listItemType ||
+            !taskListType ||
+            !taskItemType
+          ) {
+            return null;
+          }
+
+          const { $from } = state.selection;
+          const listItemDepth = findAncestorDepth($from, listItemType.name);
+          const listDepth = findAncestorDepth($from, bulletListType.name);
+
+          if (listItemDepth === null || listDepth === null) {
+            return null;
+          }
+
+          let itemIndex = $from.index(listDepth);
+          const listNode = $from.node(listDepth);
+          const listPosition = $from.before(listDepth);
+          const previousListItemNode =
+            itemIndex > 0 ? listNode.maybeChild(itemIndex - 1) : null;
+
+          if (
+            $from.parentOffset === 0 &&
+            previousListItemNode?.type === listItemType &&
+            previousListItemNode.childCount === 1 &&
+            previousListItemNode.firstChild?.type.name === "paragraph" &&
+            previousListItemNode.textContent === ""
+          ) {
+            // Empty list item boundaries resolve forward into the next item, so
+            // the marker typed in that empty item would otherwise convert its sibling.
+            itemIndex -= 1;
+          }
+
+          if (itemIndex < 0 || itemIndex >= listNode.childCount) {
+            return null;
+          }
+
+          const tr = state.tr.delete(range.from, range.to);
+          const mappedListPosition = tr.mapping.map(listPosition);
+          const nextListNode = tr.doc.nodeAt(mappedListPosition);
+          const nextListItemNode = nextListNode?.maybeChild(itemIndex);
+
+          if (
+            !nextListNode ||
+            nextListNode.type !== bulletListType ||
+            !nextListItemNode ||
+            !taskItemType.validContent(nextListItemNode.content)
+          ) {
+            return null;
+          }
+
+          const taskItemNode = taskItemType.create(
+            { checked: marker.toLowerCase() === "x" },
+            nextListItemNode.content,
+          );
+          const taskListNode = taskListType.create(null, taskItemNode);
+          const replacementNodes: ProseMirrorNode[] = [];
+          let taskListPosition = mappedListPosition;
+
+          if (itemIndex > 0) {
+            const previousItems = Array.from(
+              { length: itemIndex },
+              (_, index) => nextListNode.child(index),
+            );
+            const previousListNode = bulletListType.create(
+              nextListNode.attrs,
+              previousItems,
+            );
+
+            replacementNodes.push(previousListNode);
+            taskListPosition += previousListNode.nodeSize;
+          }
+
+          replacementNodes.push(taskListNode);
+
+          if (itemIndex < nextListNode.childCount - 1) {
+            replacementNodes.push(
+              bulletListType.create(
+                nextListNode.attrs,
+                Array.from(
+                  { length: nextListNode.childCount - itemIndex - 1 },
+                  (_, index) => nextListNode.child(itemIndex + index + 1),
+                ),
+              ),
+            );
+          }
+
+          tr.replaceWith(
+            mappedListPosition,
+            mappedListPosition + nextListNode.nodeSize,
+            replacementNodes,
+          );
+          // ProseMirror 포지션은 taskList/taskItem/paragraph 경계를 각각 1칸씩 지난다.
+          tr.setSelection(
+            TextSelection.near(tr.doc.resolve(taskListPosition + 3)),
+          );
+        },
+      }),
+    ];
   },
 });
 
@@ -315,7 +511,7 @@ const MarkdownTable = Table.extend({
             state,
             Array.from({ length: columnCount }, (_, index) =>
               hasHeaderRow
-                ? getTableCellText(headerRow?.maybeChild(index))
+                ? getTableCellMarkdown(state, headerRow?.maybeChild(index))
                 : "",
             ),
           );
@@ -328,7 +524,7 @@ const MarkdownTable = Table.extend({
             writeMarkdownTableRow(
               state,
               Array.from({ length: columnCount }, (_, index) =>
-                getTableCellText(row.maybeChild(index)),
+                getTableCellMarkdown(state, row.maybeChild(index)),
               ),
             );
           }
@@ -566,6 +762,7 @@ function getBaseExtensions({ readOnly = false }: { readOnly?: boolean } = {}) {
       link: false,
     }),
     ListItemBackspaceLift,
+    BulletTaskItemInputRule,
     CodeBlockLowlight.extend({
       renderHTML({ node, HTMLAttributes }) {
         return [
