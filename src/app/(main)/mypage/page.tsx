@@ -41,18 +41,15 @@ export default async function MyPage({ searchParams }: Props) {
     ? rawSection
     : "profile";
 
-  const profilePromise = getProfile();
-  const statsPromise = getLearningStats();
+  // getUser/getProfile/getLearningStats는 내부적으로 getUser를 React.cache로 공유함
+  // 3개를 한 번에 시작해 waterfall 제거
+  const [user, profile, stats] = await Promise.all([
+    getUser(),
+    getProfile(),
+    getLearningStats(),
+  ]);
 
-  const user = await getUser();
-
-  if (!user) {
-    redirect(ROUTES.LOGIN);
-  }
-
-  const [profile, stats] = await Promise.all([profilePromise, statsPromise]);
-
-  if (!profile) {
+  if (!user || !profile) {
     redirect(ROUTES.LOGIN);
   }
 
