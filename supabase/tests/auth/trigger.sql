@@ -30,7 +30,7 @@ SELECT lives_ok($$
   VALUES (
     (SELECT id FROM _test_ids WHERE label = 'u1'),
     (SELECT 'u1_' || id::text || '@example.com' FROM _test_ids WHERE label = 'u1'),
-    '{"nickname":"neo","avatar_url":"https://example.com/a.png"}'::jsonb
+    '{"nickname":"neo","canonical_email":"neo@example.com"}'::jsonb
   )
   ON CONFLICT (id) DO NOTHING;
 $$, 'auth.users에 새 사용자가 생성되면 INSERT가 성공해야 한다');
@@ -56,11 +56,11 @@ SELECT is(
   'raw_user_meta_data.nickname이 있으면 profiles.nickname에 저장되어야 한다'
 );
 
--- raw_user_meta_data.avatar_url이 있으면 profiles.avatar_url에 저장되어야 한다
+-- raw_user_meta_data.canonical_email이 있으면 profiles.canonical_email에 저장되어야 한다
 SELECT is(
-  (SELECT avatar_url FROM public.profiles WHERE id = (SELECT id FROM _test_ids WHERE label = 'u1')),
-  'https://example.com/a.png',
-  'raw_user_meta_data.avatar_url이 있으면 profiles.avatar_url에 저장되어야 한다'
+  (SELECT canonical_email FROM public.profiles WHERE id = (SELECT id FROM _test_ids WHERE label = 'u1')),
+  'neo@example.com',
+  'raw_user_meta_data.canonical_email이 있으면 profiles.canonical_email에 저장되어야 한다'
 );
 
 -- nickname이 없어도 INSERT가 성공하고 profiles가 생성되어야 한다
@@ -80,7 +80,7 @@ SELECT is(
   'nickname이 없어도 profiles가 생성되어야 한다'
 );
 
--- avatar_url이 없어도 INSERT가 성공하고 profiles가 생성되어야 한다
+-- canonical_email이 없어도 INSERT가 성공하고 profiles가 생성되어야 한다
 SELECT lives_ok($$
   INSERT INTO auth.users (id, email, raw_user_meta_data)
   VALUES (
@@ -89,12 +89,12 @@ SELECT lives_ok($$
     '{"nickname":"ava"}'::jsonb
   )
   ON CONFLICT (id) DO NOTHING;
-$$, 'avatar_url이 없어도 INSERT가 성공해야 한다');
+$$, 'canonical_email이 없어도 INSERT가 성공해야 한다');
 
 SELECT is(
   (SELECT count(*) FROM public.profiles WHERE id = (SELECT id FROM _test_ids WHERE label = 'u3')),
   1::bigint,
-  'avatar_url이 없어도 profiles가 생성되어야 한다'
+  'canonical_email이 없어도 profiles가 생성되어야 한다'
 );
 
 -- raw_user_meta_data가 NULL이어도 INSERT가 성공하고 profiles가 생성되어야 한다
@@ -181,21 +181,21 @@ SELECT is(
   'nickname이 최대 길이(10자)일 때 profiles.nickname에 정상 저장되어야 한다'
 );
 
--- avatar_url이 null일 때 profiles.avatar_url도 null로 저장되어야 한다
+-- canonical_email이 null일 때 profiles.canonical_email도 null로 저장되어야 한다
 SELECT lives_ok($$
   INSERT INTO auth.users (id, email, raw_user_meta_data)
   VALUES (
     (SELECT id FROM _test_ids WHERE label = 'u7'),
     (SELECT 'u7_' || id::text || '@example.com' FROM _test_ids WHERE label = 'u7'),
-    '{"nickname":"nullava","avatar_url":null}'::jsonb
+    '{"nickname":"nullava","canonical_email":null}'::jsonb
   )
   ON CONFLICT (id) DO NOTHING;
-$$, 'avatar_url이 null일 때 INSERT가 성공해야 한다');
+$$, 'canonical_email이 null일 때 INSERT가 성공해야 한다');
 
 SELECT is(
-  (SELECT avatar_url IS NULL FROM public.profiles WHERE id = (SELECT id FROM _test_ids WHERE label = 'u7')),
+  (SELECT canonical_email IS NULL FROM public.profiles WHERE id = (SELECT id FROM _test_ids WHERE label = 'u7')),
   true,
-  'avatar_url이 null일 때 profiles.avatar_url도 null로 저장되어야 한다'
+  'canonical_email이 null일 때 profiles.canonical_email도 null로 저장되어야 한다'
 );
 
 -- [불변 조건]
