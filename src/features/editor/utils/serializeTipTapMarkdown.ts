@@ -10,8 +10,6 @@ type MarkdownStorage = {
 
 const ESCAPED_CHECKBOX_MARKER_PATTERN =
   /^(\s*(?:[-+*]|\d+\.)\s+)\\\[( |x|X)\\\] (.*)$/;
-const UNESCAPED_CHECKBOX_MARKER_PATTERN =
-  /^(\s*(?:[-+*]|\d+\.)\s+)\[( |x|X)\] (.*)$/;
 
 function getTaskItemIndent(line: string | undefined): string | null {
   if (!line) return null;
@@ -57,27 +55,7 @@ function normalizeTaskListSpacing(markdown: string): string {
   return normalizedLines.join("\n");
 }
 
-function detectCheckboxStyle(markdown: string): "escaped" | "unescaped" | null {
-  const lines = markdown.split("\n");
-
-  for (const line of lines) {
-    if (UNESCAPED_CHECKBOX_MARKER_PATTERN.test(line)) return "unescaped";
-    if (ESCAPED_CHECKBOX_MARKER_PATTERN.test(line)) return "escaped";
-  }
-
-  return null;
-}
-
-function normalizeEscapedCheckboxMarkers(
-  markdown: string,
-  previousMarkdown?: string,
-): string {
-  const previousStyle = previousMarkdown
-    ? detectCheckboxStyle(previousMarkdown)
-    : null;
-
-  if (previousStyle !== "unescaped") return markdown;
-
+function normalizeEscapedCheckboxMarkers(markdown: string): string {
   return markdown
     .split("\n")
     .map((line) => {
@@ -127,27 +105,18 @@ function getRawTipTapMarkdown(editor: Editor): string {
   return storage.markdown.getMarkdown();
 }
 
-export function normalizeTipTapMarkdown(markdown: string): string {
-  return normalizeTipTapMarkdownWithHistory(markdown);
+// TipTap 직렬화기가 자기 출력에 주입하는 공백/줄바꿈 아티팩트를 정리한다.
+// 여기서는 사용자가 입력한 escape(예: literal `\[x\]`)를 건드리지 않는다.
+export function normalizeTipTapSerializerOutput(markdown: string): string {
+  return normalizeBlockquoteLineBreaks(normalizeTaskListSpacing(markdown));
 }
 
-export function normalizeTipTapMarkdownWithHistory(
-  markdown: string,
-  previousMarkdown?: string,
-): string {
-  return normalizeBlockquoteLineBreaks(
-    normalizeTaskListSpacing(
-      normalizeEscapedCheckboxMarkers(markdown, previousMarkdown),
-    ),
-  );
+// 과거 저장 사이클에서 task marker가 `\[x\]` 형태로 이스케이프되어 굳은 데이터를 복구한다.
+// 사용자 리터럴 escape와 구분할 수 없으므로 일반 에디터/뷰어 입력 경계에서는 자동 적용하지 않는다.
+export function recoverLegacyTaskMarkers(markdown: string): string {
+  return normalizeEscapedCheckboxMarkers(markdown);
 }
 
-export function serializeTipTapMarkdown(
-  editor: Editor,
-  previousMarkdown?: string,
-): string {
-  return normalizeTipTapMarkdownWithHistory(
-    getRawTipTapMarkdown(editor),
-    previousMarkdown,
-  );
+export function serializeTipTapMarkdown(editor: Editor): string {
+  return normalizeTipTapSerializerOutput(getRawTipTapMarkdown(editor));
 }

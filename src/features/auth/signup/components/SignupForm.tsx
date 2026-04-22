@@ -620,13 +620,15 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
                           return;
                         }
 
-                        // interactionEnabled=false: 모달 열기
+                        e.preventDefault();
+
                         if (!termsInteractionEnabled) {
-                          e.preventDefault();
                           setTermsModalTrigger("checkbox");
                           setTermsModalOpen(true);
                           return;
                         }
+
+                        field.onChange(!field.value);
                       }}
                       onBlur={field.onBlur}
                       aria-disabled={
@@ -735,13 +737,15 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
                           return;
                         }
 
-                        // interactionEnabled=false: 모달 열기
+                        e.preventDefault();
+
                         if (!privacyInteractionEnabled) {
-                          e.preventDefault();
                           setPrivacyModalTrigger("checkbox");
                           setPrivacyModalOpen(true);
                           return;
                         }
+
+                        field.onChange(!field.value);
                       }}
                       onBlur={field.onBlur}
                       aria-disabled={
