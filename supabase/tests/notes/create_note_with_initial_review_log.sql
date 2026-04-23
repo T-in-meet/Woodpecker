@@ -4,26 +4,41 @@
 
 BEGIN;
 
-SELECT plan(15);
+SELECT plan(13);
 
 SELECT set_config('test.notes_rpc_user_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notes_rpc_atomic_user_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notes_rpc_scheduled_at', '2026-01-02T00:00:00Z', true);
-SELECT set_config('test.notes_rpc_language_scheduled_at', '2026-01-03T00:00:00Z', true);
 
-INSERT INTO auth.users (id, email, raw_user_meta_data)
+INSERT INTO auth.users (id, email, email_confirmed_at, raw_user_meta_data)
 VALUES
   (
     current_setting('test.notes_rpc_user_id')::uuid,
     'notes_rpc_user_' || current_setting('test.notes_rpc_user_id') || '@example.com',
+    '2026-01-01T00:00:00Z'::timestamptz,
     '{}'::jsonb
   ),
   (
     current_setting('test.notes_rpc_atomic_user_id')::uuid,
     'notes_rpc_atomic_user_' || current_setting('test.notes_rpc_atomic_user_id') || '@example.com',
+    '2026-01-01T00:00:00Z'::timestamptz,
     '{}'::jsonb
   )
 ON CONFLICT (id) DO NOTHING;
+
+SELECT is(
+  (
+    SELECT count(*)
+    FROM pg_proc p
+    JOIN pg_namespace n
+      ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public'
+      AND p.proname = 'create_note_with_initial_review_log'
+      AND p.proargtypes::text = '25 25 1184 25'
+  ),
+  0::bigint,
+  $$legacy create_note_with_initial_review_log RPC with p_language should be removed$$
+);
 
 SET LOCAL ROLE authenticated;
 SELECT set_config(
@@ -40,8 +55,7 @@ SELECT set_config(
   public.create_note_with_initial_review_log(
     'rpc title',
     'rpc content',
-    current_setting('test.notes_rpc_scheduled_at')::timestamptz,
-    NULL
+    current_setting('test.notes_rpc_scheduled_at')::timestamptz
   )::text,
   true
 );
@@ -130,37 +144,6 @@ SELECT is(
   $$초기 notes.review_round는 기본값 0이어야 한다$$
 );
 
-SELECT is(
-  (
-    SELECT language
-    FROM public.notes
-    WHERE id = current_setting('test.notes_rpc_note_id')::uuid
-  ),
-  NULL::character varying,
-  $$p_language = NULL 호출은 language를 NULL로 저장해야 한다$$
-);
-
-SELECT set_config(
-  'test.notes_rpc_language_note_id',
-  public.create_note_with_initial_review_log(
-    'rpc language title',
-    'rpc language content',
-    current_setting('test.notes_rpc_language_scheduled_at')::timestamptz,
-    'javascript'
-  )::text,
-  true
-);
-
-SELECT is(
-  (
-    SELECT language::text
-    FROM public.notes
-    WHERE id = current_setting('test.notes_rpc_language_note_id')::uuid
-  ),
-  'javascript',
-  $$허용된 language 값은 정상 저장되어야 한다$$
-);
-
 SET LOCAL ROLE anon;
 SELECT set_config('request.jwt.claims', '{}'::text, true);
 
@@ -169,8 +152,7 @@ SELECT throws_ok(
     SELECT public.create_note_with_initial_review_log(
       'anon title',
       'anon content',
-      '2026-01-04T00:00:00Z'::timestamptz,
-      NULL::text
+      '2026-01-04T00:00:00Z'::timestamptz
     );
   $sql$,
   '42501',
@@ -191,24 +173,9 @@ SELECT set_config(
 SELECT throws_ok(
   $sql$
     SELECT public.create_note_with_initial_review_log(
-      'invalid language title',
-      'invalid language content',
-      '2026-01-05T00:00:00Z'::timestamptz,
-      'ruby'
-    );
-  $sql$,
-  '23514',
-  NULL,
-  $$허용되지 않은 language 값은 기존 DB constraint로 거부되어야 한다$$
-);
-
-SELECT throws_ok(
-  $sql$
-    SELECT public.create_note_with_initial_review_log(
       'null schedule title',
       'null schedule content',
-      NULL::timestamptz,
-      NULL::text
+      NULL::timestamptz
     );
   $sql$,
   'P0001',
@@ -237,8 +204,7 @@ SELECT throws_ok(
     SELECT public.create_note_with_initial_review_log(
       'atomic failure marker',
       'content',
-      '2200-01-01T00:00:00Z'::timestamptz,
-      NULL::text
+      '2200-01-01T00:00:00Z'::timestamptz
     );
   $sql$,
   '23514',
