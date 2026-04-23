@@ -35,21 +35,51 @@ export function resolveFieldName<FieldName extends string>(
   field: string,
   validFieldSet: ReadonlySet<FieldName>,
 ): FieldName | null {
-  // 서버 field가 유효한 필드 집합에 그대로 일치하는 경우
+  // 1. direct field 매칭
+  // 서버에서 내려온 field가 그대로 유효한 경우 즉시 반환한다
   // 예: "email" → "email"
   if (validFieldSet.has(field as FieldName)) {
     return field as FieldName;
   }
 
-  // 중첩 필드 처리 — 서버가 객체 경로 형태로 내려줄 때 마지막 segment만 추출
-  // 예: "agreements.termsOfService" → "termsOfService"
-  const lastSegment = field.split(".").at(-1) ?? "";
+  // 2. dot path 분리
+  // 예: "agreements.termsOfService" → ["agreements", "termsOfService"]
+  const segments = field.split(".");
 
+  // 3. 비정상 path 방어 (구조 검증)
+  // - 선행, 중간, 후행에 빈 segment가 하나라도 있으면 invalid 처리
+  // - 마지막 segment만 보고 판단하지 않고 path 자체가 정상이어야 함
+  //
+  // 차단 예:
+  // ".email"
+  // "a..email"
+  // "email."
+  // "..email"
+  if (segments.some((segment) => segment === "")) {
+    return null;
+  }
+
+  // 4. 마지막 segment 추출
+  const lastSegment = segments[segments.length - 1];
+
+  // 5. 마지막 segment 존재 검증
+  // - 타입 안전을 위해 undefined 가능성을 제거한다
+  if (!lastSegment) return null;
+
+  // 6. 마지막 segment 유효성 검사
+  // 공백만 있는 경우는 유효한 필드명이 아니므로 차단
+  // 예: "a.b.   "
+  if (lastSegment.trim() === "") {
+    return null;
+  }
+
+  // 7. 마지막 segment 기준 매핑
+  // validFieldSet에 포함된 경우에만 반환
   if (validFieldSet.has(lastSegment as FieldName)) {
     return lastSegment as FieldName;
   }
 
-  // 어떤 필드 집합에도 해당하지 않으면 null 반환
-  // 폼에서 처리하지 않는 필드는 무시한다
+  // 8. 어떤 필드 집합에도 속하지 않는 경우 null 반환
+  // → 폼에서 처리하지 않는 필드는 무시
   return null;
 }
