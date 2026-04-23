@@ -1,4 +1,3 @@
-import { unstable_cache } from "next/cache";
 import { cache } from "react";
 import { z } from "zod";
 
@@ -16,27 +15,17 @@ const profileDbSchema = z.object({
 
 export type CachedProfile = z.infer<typeof profileDbSchema>;
 
-export const PROFILE_CACHE_TAG = (userId: string) => `profile-${userId}`;
-
-const fetchProfileById = (userId: string) =>
-  unstable_cache(
-    async () => {
-      const supabase = await createServerComponentClient();
-      const { data } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", userId)
-        .single();
-      const parsed = profileDbSchema.safeParse(data);
-      return parsed.success ? parsed.data : null;
-    },
-    ["profile", userId],
-    { tags: [PROFILE_CACHE_TAG(userId)], revalidate: 3600 },
-  );
-
-// React.cache로 동일 요청 내 중복 호출 방지
 export const getProfile = cache(async (): Promise<CachedProfile | null> => {
   const user = await getUser();
   if (!user) return null;
-  return fetchProfileById(user.id)();
+
+  const supabase = await createServerComponentClient();
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, nickname, avatar_url, role, created_at, updated_at")
+    .eq("id", user.id)
+    .single();
+
+  const parsed = profileDbSchema.safeParse(data);
+  return parsed.success ? parsed.data : null;
 });

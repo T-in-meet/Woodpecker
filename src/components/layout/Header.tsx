@@ -14,7 +14,7 @@ export async function Header() {
   let profile = null;
 
   try {
-    // getProfile()은 React.cache() + unstable_cache()로 래핑되어 있어
+    // getProfile()은 React.cache()로 래핑되어 있어
     // 동일 요청 내 Header와 page 컴포넌트 간 중복 쿼리가 방지됨
     [user, profile] = await Promise.all([getUser(), getProfile()]);
   } catch {

@@ -41,17 +41,17 @@ export default async function MyPage({ searchParams }: Props) {
     ? rawSection
     : "profile";
 
-  // getUser/getProfile/getLearningStats는 내부적으로 getUser를 React.cache로 공유함
-  // 3개를 한 번에 시작해 waterfall 제거
-  const [user, profile, stats] = await Promise.all([
-    getUser(),
+  const user = await getUser();
+  if (!user) redirect(ROUTES.LOGIN);
+
+  // getProfile/getLearningStats는 내부적으로 getUser를 React.cache로 공유함
+  // 2개를 한 번에 시작해 waterfall 제거
+  const [profile, stats] = await Promise.all([
     getProfile(),
     getLearningStats(),
   ]);
 
-  if (!user || !profile) {
-    redirect(ROUTES.LOGIN);
-  }
+  if (!profile) redirect(ROUTES.LOGIN);
 
   return (
     <div className="mx-auto max-w-5xl py-7 px-6">
