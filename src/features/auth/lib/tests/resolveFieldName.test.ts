@@ -6,18 +6,11 @@ import {
 } from "@/features/auth/lib/resolveFieldName";
 import { resolveFieldName } from "@/features/auth/lib/resolveFieldName";
 
-/**
- * login 필드 집합 — 테스트에서 resolveFieldName의 generic 동작을 검증하기 위해 사용
- */
 const loginFieldSet = new Set(LOGIN_FIELD_NAMES);
-
-/**
- * signup 필드 집합 — 기존 동작 회귀 검증 및 generic 동작 확인을 위해 사용
- */
 const signupFieldSet = new Set(SIGNUP_FIELD_NAMES);
 
-describe("resolveFieldName — generic 필드 이름 매핑", () => {
-  describe("login 필드 집합에서의 동작", () => {
+describe("resolveFieldName", () => {
+  describe("login 필드 집합", () => {
     it("email 필드는 그대로 email을 반환한다", () => {
       expect(resolveFieldName("email", loginFieldSet)).toBe("email");
     });
@@ -35,7 +28,7 @@ describe("resolveFieldName — generic 필드 이름 매핑", () => {
     });
   });
 
-  describe("signup 필드 집합에서의 동작 — 기존 회귀 검증", () => {
+  describe("signup 필드 집합", () => {
     it("email 필드는 그대로 email을 반환한다", () => {
       expect(resolveFieldName("email", signupFieldSet)).toBe("email");
     });
@@ -49,7 +42,6 @@ describe("resolveFieldName — generic 필드 이름 매핑", () => {
     });
 
     it("중첩 필드 agreements.termsOfService는 termsOfService를 반환한다", () => {
-      // 서버가 중첩 경로로 내려주는 필드를 마지막 segment로 매핑하기 위함
       expect(
         resolveFieldName("agreements.termsOfService", signupFieldSet),
       ).toBe("termsOfService");
@@ -62,24 +54,92 @@ describe("resolveFieldName — generic 필드 이름 매핑", () => {
     });
 
     it("중첩 필드의 마지막 segment가 필드 집합에 없으면 null을 반환한다", () => {
-      // 폼에서 처리할 수 없는 필드는 null로 반환하여 무시한다
       expect(resolveFieldName("agreements.unknown", signupFieldSet)).toBeNull();
     });
   });
 
-  describe("공통 동작 — 입력 필드가 존재하지 않는 경우", () => {
-    it("빈 문자열 필드는 어느 집합에서도 null을 반환한다", () => {
-      expect(resolveFieldName("", loginFieldSet)).toBeNull();
-      expect(resolveFieldName("", signupFieldSet)).toBeNull();
+  describe("공통 동작 — dot path 경계", () => {
+    it('".."는 빈 segment만 존재하므로 null을 반환한다', () => {
+      expect(resolveFieldName("..", loginFieldSet)).toBeNull();
+      expect(resolveFieldName("..", signupFieldSet)).toBeNull();
     });
 
+    it('"email."는 마지막 segment가 비어 있으므로 null을 반환한다', () => {
+      expect(resolveFieldName("email.", loginFieldSet)).toBeNull();
+      expect(resolveFieldName("email.", signupFieldSet)).toBeNull();
+    });
+
+    it('".email"는 선행 빈 segment가 있으므로 null을 반환한다', () => {
+      expect(resolveFieldName(".email", loginFieldSet)).toBeNull();
+      expect(resolveFieldName(".email", signupFieldSet)).toBeNull();
+    });
+
+    it('"a..email"는 중간에 빈 segment가 있으므로 null을 반환한다', () => {
+      expect(resolveFieldName("a..email", loginFieldSet)).toBeNull();
+      expect(resolveFieldName("a..email", signupFieldSet)).toBeNull();
+    });
+
+    it('"a.b."는 마지막 segment가 비어 있으므로 null을 반환한다', () => {
+      expect(resolveFieldName("a.b.", loginFieldSet)).toBeNull();
+      expect(resolveFieldName("a.b.", signupFieldSet)).toBeNull();
+    });
+
+    it('"..email"는 빈 segment를 포함하므로 null을 반환한다', () => {
+      expect(resolveFieldName("..email", loginFieldSet)).toBeNull();
+      expect(resolveFieldName("..email", signupFieldSet)).toBeNull();
+    });
+
+    it('"a..b..email"는 다중 빈 segment를 포함하므로 null을 반환한다', () => {
+      expect(resolveFieldName("a..b..email", loginFieldSet)).toBeNull();
+      expect(resolveFieldName("a..b..email", signupFieldSet)).toBeNull();
+    });
+
+    it("공백만 있는 마지막 segment는 null을 반환한다", () => {
+      expect(resolveFieldName("a.b.   ", loginFieldSet)).toBeNull();
+      expect(resolveFieldName("a.b.   ", signupFieldSet)).toBeNull();
+    });
+  });
+
+  describe("공통 동작 — 마지막 segment 규칙", () => {
     it("중첩 경로 마지막 segment가 필드 집합에 없으면 null을 반환한다", () => {
       expect(resolveFieldName("a.b.c.unknown", loginFieldSet)).toBeNull();
     });
 
     it("중첩 경로 마지막 segment가 필드 집합에 있으면 해당 필드를 반환한다", () => {
-      // 깊이와 관계없이 마지막 segment만 기준으로 삼는다
       expect(resolveFieldName("a.b.c.email", loginFieldSet)).toBe("email");
+    });
+
+    it('"email.invalid"는 마지막 segment가 유효하지 않으므로 null을 반환한다', () => {
+      expect(resolveFieldName("email.invalid", loginFieldSet)).toBeNull();
+    });
+
+    it('"agreements.password.invalid"는 마지막 segment가 유효하지 않으므로 null을 반환한다', () => {
+      expect(
+        resolveFieldName("agreements.password.invalid", signupFieldSet),
+      ).toBeNull();
+    });
+
+    it("유효 필드명을 포함하더라도 마지막 segment가 정확히 일치하지 않으면 null을 반환한다", () => {
+      expect(resolveFieldName("profile.user-email", loginFieldSet)).toBeNull();
+      expect(
+        resolveFieldName("agreements.nicknameSuffix", signupFieldSet),
+      ).toBeNull();
+    });
+  });
+
+  describe("공통 동작 — generic set 의존성", () => {
+    it("같은 마지막 segment라도 set에 따라 결과가 달라진다", () => {
+      expect(resolveFieldName("profile.nickname", loginFieldSet)).toBeNull();
+      expect(resolveFieldName("profile.nickname", signupFieldSet)).toBe(
+        "nickname",
+      );
+    });
+
+    it("깊은 중첩 경로도 마지막 segment의 set membership만으로 판정한다", () => {
+      expect(resolveFieldName("a.b.c.nickname", loginFieldSet)).toBeNull();
+      expect(resolveFieldName("a.b.c.nickname", signupFieldSet)).toBe(
+        "nickname",
+      );
     });
   });
 });
