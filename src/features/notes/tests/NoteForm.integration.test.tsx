@@ -1,7 +1,6 @@
 import "./setup";
 
 import { render, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { createNoteActionMock } = vi.hoisted(() => ({
@@ -68,33 +67,6 @@ describe("NoteForm editor integration", () => {
 
     await waitFor(() => {
       expect(hiddenContentInput.value).toBe("markdown body");
-    });
-  });
-
-  it("preserves the hidden content field when switching from markdown to code", async () => {
-    const user = userEvent.setup();
-    const { container } = render(<NoteForm />);
-    const hiddenContentInput = getHiddenContentInput(container);
-    const languageSelect = container.querySelector("select[name='language']");
-
-    if (!(languageSelect instanceof HTMLSelectElement)) {
-      throw new Error("language select not found");
-    }
-
-    await waitFor(() => {
-      expect(document.querySelector("[contenteditable]")).toBeTruthy();
-    });
-
-    typeIntoTipTap("shared content");
-
-    await waitFor(() => {
-      expect(hiddenContentInput.value).toBe("shared content");
-    });
-
-    await user.selectOptions(languageSelect, "javascript");
-
-    await waitFor(() => {
-      expect(hiddenContentInput.value).toBe("shared content");
     });
   });
 });

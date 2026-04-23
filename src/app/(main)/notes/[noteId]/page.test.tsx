@@ -23,13 +23,9 @@ vi.mock("@/features/notes/queries", () => ({
 }));
 
 vi.mock("@/features/notes/components/NoteViewer", () => ({
-  NoteViewer: ({
-    content,
-    language,
-  }: {
-    content: string;
-    language: string | null;
-  }) => <div data-testid="note-viewer">{`${language}:${content}`}</div>,
+  NoteViewer: ({ content }: { content: string }) => (
+    <div data-testid="note-viewer">{content}</div>
+  ),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -114,7 +110,6 @@ describe("NoteDetailPage", () => {
       id: "note-123",
       title: "Test note",
       content: "note body",
-      language: "markdown",
       next_review_at: "2026-03-29T09:00:00.000Z",
       review_round: 1,
       created_at: "2026-03-29T00:00:00.000Z",
@@ -130,9 +125,7 @@ describe("NoteDetailPage", () => {
     expect(
       screen.getByRole("heading", { name: "Test note" }),
     ).toBeInTheDocument();
-    expect(screen.getByTestId("note-viewer")).toHaveTextContent(
-      "markdown:note body",
-    );
+    expect(screen.getByTestId("note-viewer")).toHaveTextContent("note body");
     expect(
       screen.getByText("지금 백지 테스트를 진행할 수 있습니다."),
     ).toBeInTheDocument();
@@ -150,7 +143,6 @@ describe("NoteDetailPage", () => {
       id: "note-123",
       title: "Future review note",
       content: "note body",
-      language: "markdown",
       next_review_at: "2026-03-30T09:00:00.000Z",
       review_round: 1,
       created_at: "2026-03-29T00:00:00.000Z",
@@ -177,7 +169,6 @@ describe("NoteDetailPage", () => {
       id: "note-123",
       title: "Completed note",
       content: "note body",
-      language: "markdown",
       next_review_at: null,
       review_round: 3,
       created_at: "2026-03-29T00:00:00.000Z",

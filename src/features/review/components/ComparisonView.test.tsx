@@ -9,7 +9,6 @@ describe("ComparisonView", () => {
   it("renders markdown images in both readonly panels", async () => {
     render(
       <ComparisonView
-        language="markdown"
         userAnswer="![User answer image](https://example.com/user-answer.png)"
         originalContent="![Original image](https://example.com/original.png)"
       />,

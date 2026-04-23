@@ -33,9 +33,6 @@ export function NoteCard({ note }: NoteCardProps) {
       <CardHeader className="gap-3">
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span className="rounded-full bg-muted px-2 py-1 font-medium text-foreground">
-            {note.language ?? "markdown"}
-          </span>
-          <span className="rounded-full bg-muted px-2 py-1 font-medium text-foreground">
             복습 {note.review_round} / {MAX_REVIEW_ROUND}
           </span>
         </div>

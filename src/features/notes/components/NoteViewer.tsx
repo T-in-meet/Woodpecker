@@ -1,58 +1,28 @@
-import hljs from "highlight.js";
-
-import {
-  isCodeLanguage,
-  type NoteLanguage,
-} from "@/lib/constants/noteLanguages";
 import { cn } from "@/lib/utils/cn";
 
 import { MarkdownNoteViewerClient } from "./MarkdownNoteViewerClient";
 
 type NoteViewerProps = {
   content: string;
-  language: NoteLanguage | null;
   className?: string;
 };
 
-export function NoteViewer({ content, language, className }: NoteViewerProps) {
-  const effectiveLanguage = language ?? "markdown";
-
-  if (!isCodeLanguage(effectiveLanguage)) {
-    if (!content) {
-      return (
-        <div className={cn("py-6 text-muted-foreground/40", className)}>
-          미리보기할 내용이 없습니다.
-        </div>
-      );
-    }
-
+export function NoteViewer({ content, className }: NoteViewerProps) {
+  if (!content) {
     return (
-      <MarkdownNoteViewerClient
-        content={content}
-        className={cn(
-          "[&_.tiptap]:px-0! [&_.tiptap]:py-6! sm:[&_.tiptap]:px-0!",
-          className,
-        )}
-      />
+      <div className={cn("py-6 text-muted-foreground/40", className)}>
+        미리보기할 내용이 없습니다.
+      </div>
     );
   }
 
-  const highlighted = hljs.highlight(content, {
-    language: effectiveLanguage,
-    ignoreIllegals: true,
-  });
-
   return (
-    <pre
+    <MarkdownNoteViewerClient
+      content={content}
       className={cn(
-        "overflow-x-auto rounded-lg bg-zinc-900 px-0 py-6 font-mono text-base leading-relaxed text-zinc-100",
+        "[&_.tiptap]:px-0! [&_.tiptap]:py-6! sm:[&_.tiptap]:px-0!",
         className,
       )}
-    >
-      <code
-        className={`hljs language-${effectiveLanguage}`}
-        dangerouslySetInnerHTML={{ __html: highlighted.value }}
-      />
-    </pre>
+    />
   );
 }

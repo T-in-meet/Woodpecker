@@ -82,7 +82,6 @@ export default async function NoteReviewPage({
       <BlankTestPage
         noteId={noteId}
         noteTitle={note.title}
-        language={note.language}
         reviewRound={pendingReviewLog.round}
       />
     </div>

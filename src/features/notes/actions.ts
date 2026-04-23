@@ -32,7 +32,6 @@ export async function createNoteAction(
   const parsed = noteSchema.safeParse({
     title: formData.get("title"),
     content: formData.get("content"),
-    language: formData.get("language"),
   });
 
   if (!parsed.success) {
@@ -64,7 +63,6 @@ export async function createNoteAction(
       p_title: parsed.data.title,
       p_content: parsed.data.content,
       p_scheduled_at: firstReviewDate.toISOString(),
-      ...(parsed.data.language ? { p_language: parsed.data.language } : {}),
     },
   );
 

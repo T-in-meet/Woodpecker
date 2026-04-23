@@ -142,7 +142,6 @@ describe("NoteReviewPage", () => {
     createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
     getReviewableNoteMock.mockResolvedValue({
       title: "테스트 노트",
-      language: "markdown",
       next_review_at: null,
       review_round: 3,
     });
@@ -170,7 +169,6 @@ describe("NoteReviewPage", () => {
     createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
     getReviewableNoteMock.mockResolvedValue({
       title: "테스트 노트",
-      language: "markdown",
       next_review_at: "2026-01-08T00:00:00.000Z",
       review_round: 3,
     });
@@ -200,7 +198,6 @@ describe("NoteReviewPage", () => {
     createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
     getReviewableNoteMock.mockResolvedValue({
       title: "테스트 노트",
-      language: "markdown",
       next_review_at: "2026-01-02T00:00:00.000Z",
       review_round: 0,
     });
