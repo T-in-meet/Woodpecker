@@ -73,13 +73,18 @@ describe("로그인 API 성공 흐름", () => {
     expect(body.data.redirectTo).toBe("/mypage");
   });
 
-  it("TC-06: /notes/123 dynamic route redirect는 data.redirectTo에 반영된다", async () => {
+  it("TC-06: /notes/550e8400-e29b-41d4-a716-446655440000 dynamic route redirect는 data.redirectTo에 반영된다", async () => {
     const response = await POST(
-      makeLoginRequest(DEFAULT_LOGIN_BODY, "/notes/123"),
+      makeLoginRequest(
+        DEFAULT_LOGIN_BODY,
+        "/notes/550e8400-e29b-41d4-a716-446655440000",
+      ),
     );
     const body = await response.json();
 
-    expect(body.data.redirectTo).toBe("/notes/123");
+    expect(body.data.redirectTo).toBe(
+      "/notes/550e8400-e29b-41d4-a716-446655440000",
+    );
   });
 
   it("TC-07: signInWithPassword는 canonicalize된 이메일로 호출된다", async () => {
