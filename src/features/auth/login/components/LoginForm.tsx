@@ -23,13 +23,10 @@ import { UNKNOWN_ERROR_MESSAGE } from "@/features/auth/errors/unknownError";
 import { resolveFieldName } from "@/features/auth/lib/resolveFieldName";
 import { useLoginMutation } from "@/features/auth/login/hooks/useLoginMutation";
 import { loginFormSchema } from "@/features/auth/login/schema/loginFormSchema";
-import { LOGIN_FIELD_NAMES } from "@/features/auth/login/types/form.types";
+import { LOGIN_FIELD_SET } from "@/features/auth/login/types/form.types";
 import { showToast } from "@/lib/utils/showToast";
 import { isServerValidationError } from "@/lib/validation/isServerValidationError";
 import { mapReasonToMessage } from "@/lib/validation/mapReasonToMessage";
-
-// login 폼 필드 집합 — resolveFieldName에 주입하여 서버 field → 폼 필드 매핑에 사용
-const LOGIN_FIELD_NAME_SET = new Set(LOGIN_FIELD_NAMES);
 
 type FormValues = {
   email: string;
@@ -78,7 +75,7 @@ export function LoginForm() {
         let hasUnknownField = false;
 
         for (const { field, reason } of e.data.errors) {
-          const fieldName = resolveFieldName(field, LOGIN_FIELD_NAME_SET);
+          const fieldName = resolveFieldName(field, LOGIN_FIELD_SET);
           const message = mapReasonToMessage(reason);
 
           if (fieldName !== null) {
