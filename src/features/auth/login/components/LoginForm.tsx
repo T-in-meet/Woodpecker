@@ -56,10 +56,14 @@ export function LoginForm() {
     }
   };
 
+  const redirectParam = searchParams.get("redirect");
+
+  const forgotPasswordHref = redirectParam
+    ? `/forgot-password?${new URLSearchParams({ redirect: redirectParam }).toString()}`
+    : "/forgot-password";
+
   const handleValidSubmit = async (data: LoginFormValues) => {
     clearErrors();
-
-    const redirectParam = searchParams.get("redirect");
 
     try {
       // exactOptionalPropertyTypes: redirectTo가 없을 때는 키 자체를 제외해야 함
@@ -218,7 +222,7 @@ export function LoginForm() {
         {/* 액션 영역 */}
         <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
           <Link
-            href="/forgot-password"
+            href={forgotPasswordHref}
             className="text-sm text-muted-foreground underline hover:text-foreground"
           >
             비밀번호 찾기
