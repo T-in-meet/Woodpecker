@@ -4,7 +4,7 @@
 
 BEGIN;
 
-SELECT plan(18);
+SELECT plan(20);
 
 SELECT set_config('test.review_complete_user_a_id', gen_random_uuid()::text, true);
 SELECT set_config('test.review_complete_user_b_id', gen_random_uuid()::text, true);
@@ -246,6 +246,44 @@ SELECT is(
   ),
   1::bigint,
   $$round 1 completion should create exactly one pending round 2 log$$
+);
+
+SELECT set_config(
+  'test.review_complete_generated_round2_log_id',
+  (
+    SELECT rl.id::text
+    FROM public.review_logs rl
+    WHERE rl.note_id = current_setting('test.review_complete_note_round1_id')::uuid
+      AND rl.round = 2
+      AND rl.completed_at IS NULL
+    ORDER BY rl.created_at DESC
+    LIMIT 1
+  ),
+  true
+);
+
+SELECT throws_ok(
+  $sql$
+    SELECT public.complete_review_and_schedule_next(
+      current_setting('test.review_complete_note_round1_id')::uuid,
+      current_setting('test.review_complete_generated_round2_log_id')::uuid
+    );
+  $sql$,
+  'WP001',
+  'daily review completion limit reached',
+  $$a second completion for the same note on the same KST day should be rejected with the daily-limit code$$
+);
+
+SELECT ok(
+  (
+    SELECT n.review_round = 1
+      AND rl.completed_at IS NULL
+    FROM public.notes n
+    JOIN public.review_logs rl
+      ON rl.id = current_setting('test.review_complete_generated_round2_log_id')::uuid
+    WHERE n.id = current_setting('test.review_complete_note_round1_id')::uuid
+  ),
+  $$daily-limit rejection should leave the pending review and note state unchanged$$
 );
 
 SELECT throws_ok(
