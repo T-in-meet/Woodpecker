@@ -52,6 +52,12 @@ export function LoginForm() {
     defaultValues: { email: "", password: "" },
   });
 
+  const clearRootError = () => {
+    if (errors.root) {
+      clearErrors("root");
+    }
+  };
+
   const handleValidSubmit = async (data: FormValues) => {
     clearErrors();
 
@@ -148,7 +154,9 @@ export function LoginForm() {
               type="email"
               autoComplete="email"
               placeholder="example@email.com"
-              {...register("email")}
+              {...register("email", {
+                onChange: clearRootError,
+              })}
             />
             <div />
             {/* 에러 영역을 고정 높이로 유지 — 레이아웃 흔들림 방지 */}
@@ -175,7 +183,9 @@ export function LoginForm() {
               type="password"
               autoComplete="current-password"
               placeholder="비밀번호를 입력하세요"
-              {...register("password")}
+              {...register("password", {
+                onChange: clearRootError,
+              })}
             />
             <div />
             {/* 에러 영역을 고정 높이로 유지 — 레이아웃 흔들림 방지 */}
