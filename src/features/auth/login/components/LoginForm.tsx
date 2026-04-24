@@ -125,18 +125,27 @@ export function LoginForm() {
 
       // rate limit — 토스트로 안내
       if (isRateLimitError(e)) {
-        showToast(RATE_LIMIT_TOAST_MESSAGE, "destructive");
+        showToast(RATE_LIMIT_TOAST_MESSAGE, {
+          variant: "destructive",
+          dedupeKey: "auth-rate-limit",
+        });
         return;
       }
 
       // 네트워크/서버/타임아웃 에러 — 토스트로 안내
       if (isGlobalError(e)) {
-        showToast(GLOBAL_ERROR_MESSAGES[e.type], "destructive");
+        showToast(GLOBAL_ERROR_MESSAGES[e.type], {
+          variant: "destructive",
+          dedupeKey: `auth-global-${e.type}`,
+        });
         return;
       }
 
       // 그 외 예상하지 못한 에러 — 최소한의 피드백 보장
-      showToast(UNKNOWN_ERROR_MESSAGE, "destructive");
+      showToast(UNKNOWN_ERROR_MESSAGE, {
+        variant: "destructive",
+        dedupeKey: "auth-unknown-error",
+      });
     }
   };
 

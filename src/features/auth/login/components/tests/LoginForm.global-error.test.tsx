@@ -41,10 +41,10 @@ describe("LoginForm 전역 에러 처리", () => {
     await submitValidForm(user);
 
     await waitFor(() => {
-      expect(showToast).toHaveBeenCalledWith(
-        "네트워크 연결을 확인해주세요",
-        "destructive",
-      );
+      expect(showToast).toHaveBeenCalledWith("네트워크 연결을 확인해주세요", {
+        variant: "destructive",
+        dedupeKey: "auth-global-network",
+      });
     });
   });
 
@@ -56,10 +56,10 @@ describe("LoginForm 전역 에러 처리", () => {
     await submitValidForm(user);
 
     await waitFor(() => {
-      expect(showToast).toHaveBeenCalledWith(
-        "잠시 후 다시 시도해주세요",
-        "destructive",
-      );
+      expect(showToast).toHaveBeenCalledWith("잠시 후 다시 시도해주세요", {
+        variant: "destructive",
+        dedupeKey: "auth-global-server",
+      });
     });
   });
 
@@ -73,7 +73,10 @@ describe("LoginForm 전역 에러 처리", () => {
     await waitFor(() => {
       expect(showToast).toHaveBeenCalledWith(
         "요청 시간이 초과되었습니다. 다시 시도해주세요",
-        "destructive",
+        {
+          variant: "destructive",
+          dedupeKey: "auth-global-timeout",
+        },
       );
     });
   });
@@ -92,7 +95,10 @@ describe("LoginForm 전역 에러 처리", () => {
     await waitFor(() => {
       expect(showToast).toHaveBeenCalledWith(
         expect.stringContaining("요청이 너무 많습니다"),
-        "destructive",
+        {
+          variant: "destructive",
+          dedupeKey: "auth-rate-limit",
+        },
       );
     });
   });
@@ -105,10 +111,10 @@ describe("LoginForm 전역 에러 처리", () => {
     await submitValidForm(user);
 
     await waitFor(() => {
-      expect(showToast).toHaveBeenCalledWith(
-        "일시적인 오류가 발생했습니다.",
-        "destructive",
-      );
+      expect(showToast).toHaveBeenCalledWith("일시적인 오류가 발생했습니다.", {
+        variant: "destructive",
+        dedupeKey: "auth-unknown-error",
+      });
     });
   });
 });

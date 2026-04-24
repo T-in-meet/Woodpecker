@@ -250,7 +250,10 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
        * - 내부 정책(요청 횟수, window 등)은 외부에 노출하지 않는다.
        */
       if (isRateLimitError(e)) {
-        showToast(RATE_LIMIT_TOAST_MESSAGE, "destructive");
+        showToast(RATE_LIMIT_TOAST_MESSAGE, {
+          variant: "destructive",
+          dedupeKey: "auth-rate-limit",
+        });
         return;
       }
 
@@ -269,7 +272,10 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
        * - 이 분기는 서버 응답 contract가 아닌, 클라이언트 환경/네트워크 문제를 다룬다.
        */
       if (isGlobalError(e)) {
-        showToast(GLOBAL_ERROR_MESSAGES[e.type], "destructive");
+        showToast(GLOBAL_ERROR_MESSAGES[e.type], {
+          variant: "destructive",
+          dedupeKey: `auth-global-${e.type}`,
+        });
         return;
       }
 
@@ -284,7 +290,10 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
        * - 예상하지 못한 에러(contract 위반, 런타임 예외 등)에 대해
        *   최소한의 사용자 피드백을 보장한다.
        */
-      showToast(UNKNOWN_ERROR_MESSAGE, "destructive");
+      showToast(UNKNOWN_ERROR_MESSAGE, {
+        variant: "destructive",
+        dedupeKey: "auth-unknown-error",
+      });
     }
   };
 
