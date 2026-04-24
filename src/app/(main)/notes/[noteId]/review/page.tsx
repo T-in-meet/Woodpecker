@@ -8,6 +8,7 @@ import { BlankTestPage } from "@/features/review/components/BlankTestPage";
 import {
   getPendingReviewLog,
   getReviewableNote,
+  hasCompletedReviewForNoteToday,
 } from "@/features/review/queries";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { getNoteDetailRoute, ROUTES } from "@/lib/constants/routes";
@@ -77,9 +78,15 @@ export default async function NoteReviewPage({
     );
   }
 
+  const alreadyCompletedToday = await hasCompletedReviewForNoteToday(
+    noteId,
+    user.id,
+  );
+
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-10 md:px-12">
       <BlankTestPage
+        alreadyCompletedToday={alreadyCompletedToday}
         noteId={noteId}
         noteTitle={note.title}
         reviewRound={pendingReviewLog.round}

@@ -13,12 +13,14 @@ import { ComparisonView } from "./ComparisonView";
 import { ReviewCompleteButton } from "./ReviewCompleteButton";
 
 type BlankTestPageProps = {
+  alreadyCompletedToday: boolean;
   noteId: string;
   noteTitle: string;
   reviewRound: number;
 };
 
 export function BlankTestPage({
+  alreadyCompletedToday,
   noteId,
   noteTitle,
   reviewRound,
@@ -61,11 +63,13 @@ export function BlankTestPage({
 
           <div className="rounded-xl border border-border/60 bg-muted/30 px-5 py-4">
             <p className="text-sm text-muted-foreground">
-              비교를 마쳤다면 이번 복습을 완료 처리하고 다음 간격으로
-              넘어가세요.
+              {alreadyCompletedToday
+                ? "오늘은 이미 이 노트의 복습을 완료했어요. 내일 자정(KST) 이후 다시 완료할 수 있어요."
+                : "비교를 마쳤다면 이번 복습을 완료 처리하고 다음 간격으로 넘어가세요."}
             </p>
             <div className="mt-4">
               <ReviewCompleteButton
+                disabled={alreadyCompletedToday}
                 noteId={noteId}
                 reviewLogId={comparisonState.reviewLogId}
               />
