@@ -79,7 +79,7 @@ describe("LoginForm 제출 및 pending 상태", () => {
     });
   });
 
-  it("redirect query가 있으면 mutateAsync에 redirectTo로 전달된다", async () => {
+  it("redirect query가 있으면 mutateAsync에 redirect로 전달된다", async () => {
     setupDefaultMocks({ redirectQuery: "/notes" });
     mockMutateAsync.mockResolvedValue({
       success: true,
@@ -92,9 +92,13 @@ describe("LoginForm 제출 및 pending 상태", () => {
     await fillAndSubmit(user);
 
     await waitFor(() => {
-      expect(mockMutateAsync).toHaveBeenCalledWith(
-        expect.objectContaining({ redirectTo: "/notes" }),
-      );
+      expect.objectContaining({
+        payload: {
+          email: "user@example.com",
+          password: "Password123!",
+        },
+        redirect: "/notes",
+      });
     });
   });
 

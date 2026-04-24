@@ -60,7 +60,9 @@ export function LoginForm() {
     try {
       // exactOptionalPropertyTypes: redirectTo가 없을 때는 키 자체를 제외해야 함
       const result = await mutateAsync(
-        redirectParam ? { ...data, redirectTo: redirectParam } : { ...data },
+        redirectParam
+          ? { payload: data, redirect: redirectParam }
+          : { payload: data },
       );
 
       // 로그인 성공 후 서버 상태 동기화 — 세션/유저/마이페이지 캐시를 무효화해 최신 상태 보장
