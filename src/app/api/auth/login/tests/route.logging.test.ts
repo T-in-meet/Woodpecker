@@ -236,6 +236,9 @@ describe("로그인 API 로깅 검증", () => {
         reasonCode: AUTH_LOG_REASONS.INVALID_JSON,
       }),
     );
+
+    expect(terminalEvents()).toHaveLength(1);
+    expect(terminalEvents()[0]).toBe(AUTH_EVENTS.AUTH_INVALID_INPUT);
   });
 
   it("rate limit 차단 시 AUTH_RATE_LIMIT_BLOCKED가 기록된다", async () => {
