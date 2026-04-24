@@ -22,16 +22,14 @@ import {
 import { UNKNOWN_ERROR_MESSAGE } from "@/features/auth/errors/unknownError";
 import { resolveFieldName } from "@/features/auth/lib/resolveFieldName";
 import { useLoginMutation } from "@/features/auth/login/hooks/useLoginMutation";
-import { loginFormSchema } from "@/features/auth/login/schema/loginFormSchema";
+import {
+  loginFormSchema,
+  LoginFormValues,
+} from "@/features/auth/login/schema/loginFormSchema";
 import { LOGIN_FIELD_SET } from "@/features/auth/login/types/form.types";
 import { showToast } from "@/lib/utils/showToast";
 import { isServerValidationError } from "@/lib/validation/isServerValidationError";
 import { mapReasonToMessage } from "@/lib/validation/mapReasonToMessage";
-
-type FormValues = {
-  email: string;
-  password: string;
-};
 
 export function LoginForm() {
   const router = useRouter();
@@ -45,7 +43,7 @@ export function LoginForm() {
     formState: { errors },
     setError,
     clearErrors,
-  } = useForm<FormValues>({
+  } = useForm<LoginFormValues>({
     resolver: zodResolver(loginFormSchema),
     mode: "onSubmit",
     reValidateMode: "onChange",
@@ -58,7 +56,7 @@ export function LoginForm() {
     }
   };
 
-  const handleValidSubmit = async (data: FormValues) => {
+  const handleValidSubmit = async (data: LoginFormValues) => {
     clearErrors();
 
     const redirectParam = searchParams.get("redirect");
