@@ -62,6 +62,10 @@ export function LoginForm() {
     ? `/forgot-password?${new URLSearchParams({ redirect: redirectParam }).toString()}`
     : "/forgot-password";
 
+  const signupHref = redirectParam
+    ? `/signup?${new URLSearchParams({ redirect: redirectParam }).toString()}`
+    : "/signup";
+
   const handleValidSubmit = async (data: LoginFormValues) => {
     clearErrors();
 
@@ -221,12 +225,21 @@ export function LoginForm() {
 
         {/* 액션 영역 */}
         <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
-          <Link
-            href={forgotPasswordHref}
-            className="text-sm text-muted-foreground underline hover:text-foreground"
-          >
-            비밀번호 찾기
-          </Link>
+          <div className="flex flex-col gap-2">
+            <Link
+              href={forgotPasswordHref}
+              className="text-sm text-muted-foreground underline hover:text-foreground"
+            >
+              비밀번호 찾기
+            </Link>
+
+            <Link
+              href={signupHref}
+              className="text-sm text-muted-foreground underline hover:text-foreground"
+            >
+              회원가입
+            </Link>
+          </div>
 
           <Button
             type="submit"
