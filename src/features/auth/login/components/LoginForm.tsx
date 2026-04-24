@@ -200,15 +200,17 @@ export function LoginForm() {
         </div>
 
         {/* 인증 실패 / 서버 에러 */}
-        {errors.root && (
-          <p
-            role="alert"
-            data-testid="form-error"
-            className="text-sm text-destructive"
-          >
-            {errors.root.message}
-          </p>
-        )}
+        <div className="min-h-5">
+          {errors.root && (
+            <p
+              role="alert"
+              data-testid="form-error"
+              className="text-sm text-destructive"
+            >
+              {errors.root.message}
+            </p>
+          )}
+        </div>
 
         {/* 액션 영역 */}
         <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
