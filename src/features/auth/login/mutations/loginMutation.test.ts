@@ -54,7 +54,7 @@ describe("loginMutation", () => {
     });
   });
 
-  it("redirectTo가 있으면 URL query에 포함해서 요청한다", async () => {
+  it("redirect query가 있으면 URL query에 포함해서 요청한다", async () => {
     mockFetch.mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -63,11 +63,18 @@ describe("loginMutation", () => {
       }),
     });
 
-    await loginMutation({ ...validPayload, redirectTo: "/notes" });
+    await loginMutation(validPayload, "/notes");
 
     expect(mockFetch).toHaveBeenCalledWith(
       "/api/auth/login?redirect=%2Fnotes",
-      expect.any(Object),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: validPayload.email,
+          password: validPayload.password,
+        }),
+      },
     );
   });
 
