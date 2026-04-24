@@ -3,7 +3,6 @@ import { loginSuccessResponseSchema } from "../schema/loginSuccessResponseSchema
 type LoginPayload = {
   email: string;
   password: string;
-  redirectTo?: string;
 };
 
 export type LoginSuccessResponse = {
@@ -14,12 +13,13 @@ export type LoginSuccessResponse = {
 
 export async function loginMutation(
   payload: LoginPayload,
+  redirect?: string,
 ): Promise<LoginSuccessResponse> {
-  const { email, password, redirectTo } = payload;
+  const { email, password } = payload;
 
   // redirect query가 있을 때만 URL에 포함 — 없는 경우 불필요한 query 생성 방지
-  const url = redirectTo
-    ? `/api/auth/login?redirect=${encodeURIComponent(redirectTo)}`
+  const url = redirect
+    ? `/api/auth/login?redirect=${encodeURIComponent(redirect)}`
     : "/api/auth/login";
 
   const response = await fetch(url, {
