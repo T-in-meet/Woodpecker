@@ -1,14 +1,11 @@
-import { loginSuccessResponseSchema } from "../schema/loginSuccessResponseSchema";
+import {
+  LoginSuccessResponse,
+  loginSuccessResponseSchema,
+} from "../schema/loginSuccessResponseSchema";
 
 export type LoginPayload = {
   email: string;
   password: string;
-};
-
-export type LoginSuccessResponse = {
-  data: {
-    redirectTo: string;
-  };
 };
 
 export async function loginMutation(
