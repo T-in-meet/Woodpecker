@@ -92,13 +92,15 @@ describe("LoginForm 제출 및 pending 상태", () => {
     await fillAndSubmit(user);
 
     await waitFor(() => {
-      expect.objectContaining({
-        payload: {
-          email: "user@example.com",
-          password: "Password123!",
-        },
-        redirect: "/notes",
-      });
+      expect(mockMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: {
+            email: "user@example.com",
+            password: "Password1!",
+          },
+          redirect: "/notes",
+        }),
+      );
     });
   });
 
