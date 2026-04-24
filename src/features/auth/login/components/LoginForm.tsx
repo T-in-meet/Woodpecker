@@ -146,6 +146,7 @@ export function LoginForm() {
             <Input
               id="email"
               type="email"
+              autoComplete="email"
               placeholder="example@email.com"
               {...register("email")}
             />
@@ -172,6 +173,7 @@ export function LoginForm() {
             <Input
               id="password"
               type="password"
+              autoComplete="current-password"
               placeholder="비밀번호를 입력하세요"
               {...register("password")}
             />
