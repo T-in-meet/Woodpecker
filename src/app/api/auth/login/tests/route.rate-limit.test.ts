@@ -15,7 +15,6 @@ import {
   checkRequestEligibility,
   resetEligibilityStore,
 } from "@/features/auth/lib/checkRequestEligibility";
-import { createClient } from "@/lib/supabase/server";
 
 import { POST } from "../route";
 import {

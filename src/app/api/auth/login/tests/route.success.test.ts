@@ -12,7 +12,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 import { resetEligibilityStore } from "@/features/auth/lib/checkRequestEligibility";
-import { createClient } from "@/lib/supabase/server";
 
 import { POST } from "../route";
 import {
