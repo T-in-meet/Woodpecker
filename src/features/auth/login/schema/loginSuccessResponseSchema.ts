@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const loginSuccessResponseSchema = z.object({
   success: z.literal(true),
-  code: z.string(),
+  code: z.literal("LOGIN_SUCCESS"),
   data: z.object({
     redirectTo: z.string(),
   }),
