@@ -137,10 +137,25 @@ describe("로그인 API 입력 검증", () => {
       expect(response.status).toBe(400);
       expect(body.code).toBe(AUTH_API_CODES.LOGIN_INVALID_INPUT);
     });
+
+    it("TC-08: redirect가 body에 포함되면 400 + LOGIN_INVALID_INPUT을 반환한다", async () => {
+      const response = await POST(
+        makeLoginRequest({
+          email: "user@example.com",
+          password: "Password123!",
+          redirect: "/notes",
+        }),
+      );
+
+      const body = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(body.code).toBe(AUTH_API_CODES.LOGIN_INVALID_INPUT);
+    });
   });
 
   describe("malformed JSON", () => {
-    it("TC-08: Content-Type이 application/json이 아니면 400을 반환한다", async () => {
+    it("TC-09: Content-Type이 application/json이 아니면 400을 반환한다", async () => {
       const { NextRequest } = await import("next/server");
       const request = new NextRequest("http://localhost/api/auth/login", {
         method: "POST",
@@ -157,7 +172,7 @@ describe("로그인 API 입력 검증", () => {
   });
 
   describe("검증 실패 시 외부 호출 차단", () => {
-    it("TC-09: 검증 실패 시 signInWithPassword가 호출되지 않는다", async () => {
+    it("TC-10: 검증 실패 시 signInWithPassword가 호출되지 않는다", async () => {
       await POST(makeLoginRequest({ email: "bad-email", password: "pass" }));
       expect(mockSignIn).not.toHaveBeenCalled();
     });
