@@ -134,4 +134,10 @@ describe("loginMutation", () => {
     expect((rejected as typeof failureBody).code).toBe("LOGIN_INVALID_INPUT");
     expect((rejected as typeof failureBody).data.errors).toHaveLength(1);
   });
+
+  it("fetch가 throw하면 에러를 그대로 throw한다", async () => {
+    mockFetch.mockRejectedValue(new Error("network error"));
+
+    await expect(loginMutation(validPayload)).rejects.toThrow("network error");
+  });
 });
