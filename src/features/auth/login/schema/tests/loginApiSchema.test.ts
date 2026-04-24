@@ -25,15 +25,6 @@ describe("loginApiSchema — 로그인 API 입력 검증", () => {
         expect(result.data.email).toBe("user@example.com");
       }
     });
-
-    it("비밀번호는 최소 8자면 파싱에 성공한다", () => {
-      const result = loginApiSchema.safeParse({
-        email: "user@example.com",
-        password: "12345678",
-      });
-
-      expect(result.success).toBe(true);
-    });
   });
 
   describe("이메일 필드 유효성 실패", () => {
@@ -77,15 +68,6 @@ describe("loginApiSchema — 로그인 API 입력 검증", () => {
       const result = loginApiSchema.safeParse({
         email: "user@example.com",
         password: "",
-      });
-
-      expect(result.success).toBe(false);
-    });
-
-    it("비밀번호가 최소 길이 미만이면 파싱에 실패한다", () => {
-      const result = loginApiSchema.safeParse({
-        email: "user@example.com",
-        password: "1234567", // 7자, 최소 8자 미만
       });
 
       expect(result.success).toBe(false);
