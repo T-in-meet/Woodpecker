@@ -98,7 +98,6 @@ export function mockParsedLoginBody(
   overrides?: Partial<{
     email: string;
     password: string;
-    redirectTo?: string;
   }>,
 ) {
   vi.mocked(parseAuthJsonRequestBody).mockResolvedValue({
