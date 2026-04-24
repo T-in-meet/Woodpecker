@@ -153,7 +153,7 @@ export function LoginForm() {
     <div className="mx-auto my-0 max-w-md overflow-hidden rounded-none border-0 bg-white shadow-none md:my-8 md:rounded-xl md:border md:border-outline-variant md:shadow-sm">
       <form
         aria-label="로그인"
-        className="mx-auto max-w-4xl space-y-4 px-4 py-8 md:px-8"
+        className="mx-auto max-w-4xl space-y-4 px-4 py-8 md:px-12"
         onSubmit={handleSubmit(handleValidSubmit)}
         noValidate
       >
@@ -233,8 +233,8 @@ export function LoginForm() {
         </div>
 
         {/* 액션 영역 */}
-        <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-5 pt-2 ">
+          <div className="flex flex-col gap-3">
             <Link
               href={forgotPasswordHref}
               className="text-sm text-muted-foreground underline hover:text-foreground"
@@ -242,12 +242,15 @@ export function LoginForm() {
               비밀번호 찾기
             </Link>
 
-            <Link
-              href={signupHref}
-              className="text-sm text-muted-foreground underline hover:text-foreground"
-            >
-              회원가입
-            </Link>
+            <p className="text-sm text-muted-foreground">
+              아직 계정이 없으신가요?{" "}
+              <Link
+                href={signupHref}
+                className="text-sm text-muted-foreground underline hover:text-foreground"
+              >
+                회원가입하기
+              </Link>
+            </p>
           </div>
 
           <Button

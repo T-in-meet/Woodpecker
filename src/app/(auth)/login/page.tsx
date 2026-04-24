@@ -8,5 +8,9 @@ export const metadata: Metadata = {
 };
 
 export default function LoginPage() {
-  return <LoginForm />;
+  return (
+    <div className="md:flex md:min-h-[calc(100dvh-4.5rem)] md:items-center md:justify-center">
+      <LoginForm />
+    </div>
+  );
 }
