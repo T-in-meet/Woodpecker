@@ -86,14 +86,15 @@ describe("로그인 API 성공 흐름", () => {
     );
   });
 
-  it("TC-07: signInWithPassword는 canonicalize된 이메일로 호출된다", async () => {
-    // 이메일 대소문자 정규화 확인 — canonicalizeEmail이 적용됨
+  it("TC-07: signInWithPassword는 사용자가 입력한 실제 email로 호출된다", async () => {
     await POST(
       makeLoginRequest({ email: "User@Example.COM", password: "Password123!" }),
     );
 
     expect(mockSignIn).toHaveBeenCalledWith(
-      expect.objectContaining({ email: "user@example.com" }),
+      expect.objectContaining({
+        email: "User@Example.COM",
+      }),
     );
   });
 

@@ -175,16 +175,18 @@ async function resolveLoginResponse(
   /**
    * Supabase signInWithPassword 호출
    *
-   * canonicalEmail로 인증을 시도한다:
+   * 실제 email로 인증을 시도한다:
+   * - canonicalEmail은 rate limit / identity key / logging masking 기준으로만 사용한다
+   * - Supabase Auth에는 실제 email이 저장되므로 signInWithPassword에는 사용자가 입력한 email을 그대로 전달한다
    * - 성공 시 세션 쿠키가 자동으로 설정됨 (SSR client 특성)
    * - error가 존재하면 어떤 인증 실패든 동일하게 LOGIN_INVALID_CREDENTIALS로 처리
    *   (계정 존재 여부/비밀번호 불일치/미인증 여부를 외부에 노출하지 않기 위함)
    *
-   * spec 근거: login-spec.md §4.7 Authentication Failure Integration
+   *
    */
   const supabase = await createClient();
   const { error: authError } = await supabase.auth.signInWithPassword({
-    email: canonicalEmail,
+    email,
     password,
   });
 
