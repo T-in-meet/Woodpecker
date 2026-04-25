@@ -12,7 +12,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   checkRequestEligibility,
   resetEligibilityStore,
-} from "./checkRequestEligibility";
+} from "@/features/auth/lib/checkRequestEligibility";
 
 beforeEach(() => {
   resetEligibilityStore();
