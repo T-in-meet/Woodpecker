@@ -24,6 +24,8 @@ const ROUND_LABELS: Record<number, string> = {
 
 export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
   const maxActivity = Math.max(...stats.recentActivity.map((a) => a.count), 1);
+  // map 콜백 바깥에서 한 번만 계산 — 인라인이면 O(n²)
+  const maxRound = Math.max(...stats.reviewsByRound.map((r) => r.count), 1);
 
   return (
     <Card>
@@ -50,7 +52,7 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
                     <div
                       className="h-full rounded-full bg-primary"
                       style={{
-                        width: `${(count / Math.max(...stats.reviewsByRound.map((r) => r.count), 1)) * 100}%`,
+                        width: `${(count / maxRound) * 100}%`,
                       }}
                     />
                   </div>

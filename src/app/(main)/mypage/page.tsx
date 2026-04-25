@@ -11,8 +11,9 @@ import {
   type MypageSection,
 } from "@/features/mypage/components/MypageNav";
 import { ProfileSection } from "@/features/mypage/components/ProfileSection";
-import { getLearningStats, getProfile } from "@/features/mypage/queries";
+import { getLearningStats } from "@/features/mypage/queries";
 import { ROUTES } from "@/lib/constants/routes";
+import { getProfile } from "@/lib/supabase/getProfile";
 import { getUser } from "@/lib/supabase/getUser";
 
 export const metadata: Metadata = {
@@ -40,20 +41,17 @@ export default async function MyPage({ searchParams }: Props) {
     ? rawSection
     : "profile";
 
-  const profilePromise = getProfile();
-  const statsPromise = getLearningStats();
-
   const user = await getUser();
+  if (!user) redirect(ROUTES.LOGIN);
 
-  if (!user) {
-    redirect(ROUTES.LOGIN);
-  }
+  // getProfile/getLearningStats는 내부적으로 getUser를 React.cache로 공유함
+  // 2개를 한 번에 시작해 waterfall 제거
+  const [profile, stats] = await Promise.all([
+    getProfile(),
+    getLearningStats(),
+  ]);
 
-  const [profile, stats] = await Promise.all([profilePromise, statsPromise]);
-
-  if (!profile) {
-    redirect(ROUTES.LOGIN);
-  }
+  if (!profile) redirect(ROUTES.LOGIN);
 
   return (
     <div className="mx-auto max-w-5xl py-7 px-6">

@@ -20,6 +20,9 @@ export function UserMenu({ nickname, email, avatarUrl }: UserMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // 드롭다운이 열렸을 때만 리스너 등록 — 닫혀 있을 때 전역 리스너 불필요
+    if (!open) return;
+
     const handleMouseDown = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
         setOpen(false);
@@ -34,7 +37,7 @@ export function UserMenu({ nickname, email, avatarUrl }: UserMenuProps) {
       document.removeEventListener("mousedown", handleMouseDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, []);
+  }, [open]);
 
   return (
     <div ref={ref} className="relative">

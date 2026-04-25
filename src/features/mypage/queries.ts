@@ -1,5 +1,3 @@
-import { z } from "zod";
-
 import { getUser } from "@/lib/supabase/getUser";
 import { createServerComponentClient } from "@/lib/supabase/server";
 
@@ -10,32 +8,6 @@ export type LearningStats = {
   reviewsByRound: { round: number; count: number }[];
   recentActivity: { date: string; count: number }[];
 };
-
-const profileDbSchema = z.object({
-  id: z.string(),
-  nickname: z.string(),
-  avatar_url: z.string().nullable(),
-  role: z.enum(["USER", "ADMIN"]),
-  created_at: z.string(),
-  updated_at: z.string(),
-});
-
-export async function getProfile() {
-  const user = await getUser();
-
-  if (!user) return null;
-
-  const supabase = await createServerComponentClient();
-
-  const { data } = await supabase
-    .from("profiles")
-    .select("id, nickname, avatar_url, role, created_at, updated_at")
-    .eq("id", user.id)
-    .single();
-
-  const parsed = profileDbSchema.safeParse(data);
-  return parsed.success ? parsed.data : null;
-}
 
 export async function getLearningStats(): Promise<LearningStats> {
   const user = await getUser();
