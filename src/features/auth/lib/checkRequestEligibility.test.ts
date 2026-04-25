@@ -27,8 +27,11 @@ import {
   EMAIL_LONG_WINDOW_MS,
   EMAIL_SHORT_LIMIT,
   EMAIL_SHORT_WINDOW_MS,
-  IP_LIMIT,
-  IP_WINDOW_MS,
+  // IP_SHORT_LIMIT과 IP_SHORT_WINDOW_MS로 rename됨 — IP 단일 윈도우를 short/long으로 분리하기 위해
+  IP_LONG_LIMIT,
+  IP_LONG_WINDOW_MS,
+  IP_SHORT_LIMIT,
+  IP_SHORT_WINDOW_MS,
   resetEligibilityStore,
 } from "./checkRequestEligibility";
 import { ipStore } from "./requestEligibilityStore";
@@ -45,14 +48,15 @@ afterEach(() => {
 
 describe("checkRequestEligibility", () => {
   // ============================================================================
-  // IP rate limit (단일 윈도우, signup/resend 공유)
+  // IP rate limit (short window — burst 억제)
   // ============================================================================
 
-  describe("IP rate limit", () => {
-    it("TC-01. 동일 IP: 한도 이하 → { allowed: true }", () => {
+  describe("IP rate limit (short window)", () => {
+    it("TC-01. 동일 IP: short 한도 이하 → { allowed: true }", () => {
       const ip = "10.0.0.1";
 
-      for (let i = 0; i < IP_LIMIT; i++) {
+      // IP_SHORT_LIMIT으로 rename됨 — IP 단일 윈도우를 short/long으로 분리하기 위해
+      for (let i = 0; i < IP_SHORT_LIMIT; i++) {
         const result = checkRequestEligibility(
           "signup",
           ip,
@@ -62,15 +66,15 @@ describe("checkRequestEligibility", () => {
       }
     });
 
-    it("TC-02. 동일 IP: 한도 초과 → { allowed: false }", () => {
+    it("TC-02. 동일 IP: short 한도 초과 → { allowed: false }", () => {
       const ip = "10.0.0.2";
 
-      // 한도 채우기
-      for (let i = 0; i < IP_LIMIT; i++) {
+      // short 한도 채우기 (IP_SHORT_LIMIT으로 rename됨)
+      for (let i = 0; i < IP_SHORT_LIMIT; i++) {
         checkRequestEligibility("signup", ip, `user${i}@example.com`);
       }
 
-      // 11번째 요청 차단
+      // 초과 요청 차단
       const result = checkRequestEligibility(
         "signup",
         ip,
@@ -79,11 +83,11 @@ describe("checkRequestEligibility", () => {
       expect(result.allowed).toBe(false);
     });
 
-    it("TC-03. IP window 만료 후 → 허용으로 복구", () => {
+    it("TC-03. IP short window 만료 후 → 허용으로 복구", () => {
       const ip = "10.0.0.3";
 
-      // 한도 채우기
-      for (let i = 0; i < IP_LIMIT; i++) {
+      // short 한도 채우기
+      for (let i = 0; i < IP_SHORT_LIMIT; i++) {
         checkRequestEligibility("signup", ip, `user${i}@example.com`);
       }
 
@@ -91,10 +95,10 @@ describe("checkRequestEligibility", () => {
       let result = checkRequestEligibility("signup", ip, "blocked@example.com");
       expect(result.allowed).toBe(false);
 
-      // window 만료 시점까지 시간 진행
-      vi.advanceTimersByTime(IP_WINDOW_MS + 1);
+      // IP_SHORT_WINDOW_MS로 rename됨 — short window 만료
+      vi.advanceTimersByTime(IP_SHORT_WINDOW_MS + 1);
 
-      // 다시 허용
+      // 다시 허용 (long window 미차단 가정)
       result = checkRequestEligibility("signup", ip, "recovered@example.com");
       expect(result.allowed).toBe(true);
     });
@@ -103,8 +107,8 @@ describe("checkRequestEligibility", () => {
       const ip1 = "10.0.0.4";
       const ip2 = "10.0.0.5";
 
-      // ip1 한도 채우기
-      for (let i = 0; i < IP_LIMIT; i++) {
+      // ip1 short 한도 채우기
+      for (let i = 0; i < IP_SHORT_LIMIT; i++) {
         checkRequestEligibility("signup", ip1, `user${i}@example.com`);
       }
 
@@ -119,6 +123,151 @@ describe("checkRequestEligibility", () => {
       // ip2 허용(독립 동작)
       result = checkRequestEligibility("signup", ip2, "user@example.com");
       expect(result.allowed).toBe(true);
+    });
+  });
+
+  // ============================================================================
+  // IP rate limit (long window — sustained 공격 방어)
+  // ============================================================================
+
+  describe("IP rate limit (long window — sustained 공격 방어)", () => {
+    /**
+     * IP long window 테스트 전략
+     *
+     * 제약 조건:
+     * - IP_SHORT_WINDOW_MS(60s) > IP_LONG_WINDOW_MS / IP_LONG_LIMIT (900s/50 = 18s)
+     *   → 매 요청마다 short window를 넘기면 총 시간이 long window를 초과함
+     *
+     * 해결:
+     * - IP_SHORT_LIMIT(10)개씩 배치로 요청
+     * - 배치 간에만 IP_SHORT_WINDOW_MS+1 진행
+     * - 배치 수 = ceil(IP_LONG_LIMIT / IP_SHORT_LIMIT) = 5
+     * - 총 진행 시간 = 4배치 * 61초 = 244초 < IP_LONG_WINDOW_MS(900초) ✓
+     */
+    function fillIpLongLimitBatched(ip: string, emailPrefix: string): void {
+      // IP_LONG_LIMIT(50)개를 IP_SHORT_LIMIT(10)개씩 배치로 나눠 요청
+      // 배치 간에만 IP_SHORT_WINDOW_MS+1 진행하여 long window 안에 누적
+      const batchCount = Math.ceil(IP_LONG_LIMIT / IP_SHORT_LIMIT);
+      let requestIndex = 0;
+
+      for (let batch = 0; batch < batchCount; batch++) {
+        if (batch > 0) {
+          // 배치 간 short window 만료 처리
+          vi.advanceTimersByTime(IP_SHORT_WINDOW_MS + 1);
+        }
+        const batchSize = Math.min(
+          IP_SHORT_LIMIT,
+          IP_LONG_LIMIT - batch * IP_SHORT_LIMIT,
+        );
+        for (let j = 0; j < batchSize; j++) {
+          checkRequestEligibility(
+            "signup",
+            ip,
+            `${emailPrefix}${requestIndex}@example.com`,
+          );
+          requestIndex++;
+        }
+      }
+    }
+
+    it("TC-L1. IP short 한도 이하이지만 long 한도 초과 → { allowed: false, blockedBy: 'ipLong' }", () => {
+      // 설계: IP_SHORT_LIMIT개씩 배치로 요청하여 IP_LONG_WINDOW_MS 이내에 IP_LONG_LIMIT 누적
+      //        배치 간 IP_SHORT_WINDOW_MS+1 진행하여 short는 각 배치 시작 시 리셋
+      const ip = "10.100.0.1";
+
+      fillIpLongLimitBatched(ip, "tc-l1-user");
+
+      // IP_LONG_LIMIT+1번째 요청: long window 한도 초과 (short 리셋 후)
+      vi.advanceTimersByTime(IP_SHORT_WINDOW_MS + 1);
+      const result = checkRequestEligibility(
+        "signup",
+        ip,
+        "tc-l1-blocked@example.com",
+      );
+      expect(result.allowed).toBe(false);
+      if (!result.allowed) {
+        // [이유: short는 초기화되었으므로 long이 차단 원인]
+        expect(result.blockedBy).toBe("ipLong");
+      }
+    });
+
+    it("TC-L2. IP long window 만료 후 → 허용으로 복구", () => {
+      const ip = "10.100.0.2";
+
+      fillIpLongLimitBatched(ip, "tc-l2-user");
+
+      // long 한도 초과로 차단됨
+      vi.advanceTimersByTime(IP_SHORT_WINDOW_MS + 1);
+      let result = checkRequestEligibility(
+        "signup",
+        ip,
+        "tc-l2-blocked@example.com",
+      );
+      expect(result.allowed).toBe(false);
+
+      // IP_LONG_WINDOW_MS+1 경과 → long window 만료
+      vi.advanceTimersByTime(IP_LONG_WINDOW_MS + 1);
+
+      // 복구됨
+      result = checkRequestEligibility(
+        "signup",
+        ip,
+        "tc-l2-recovered@example.com",
+      );
+      expect(result.allowed).toBe(true);
+    });
+
+    it("TC-L3. IP short와 long 동시 차단 → blockedBy: 'ipShort' (short 우선)", () => {
+      // [이유: 우선순위 — ipShort → ipLong → emailShort → emailLong]
+      const ip = "10.100.0.3";
+
+      // long 한도 채우기 (배치 전략 사용)
+      fillIpLongLimitBatched(ip, "tc-l3-user");
+
+      // long 차단 상태 + 마지막 배치 이후 short window 이내에 추가 요청 → short도 차단
+      // [이유: fillIpLongLimitBatched 후 마지막 배치는 short window 내이므로
+      //  short window를 넘기지 않은 상태에서 즉시 요청하면 short와 long 둘 다 차단]
+      const result = checkRequestEligibility(
+        "signup",
+        ip,
+        "tc-l3-blocked@example.com",
+      );
+      expect(result.allowed).toBe(false);
+      if (!result.allowed) {
+        // [이유: short와 long 둘 다 차단 시 short가 우선]
+        expect(result.blockedBy).toBe("ipShort");
+      }
+    });
+
+    it("TC-L4. 차단 시 IP long 카운터 증가하지 않음 (long window 만료 후 재허용으로 검증)", () => {
+      const ip = "10.100.0.4";
+
+      // long 한도 채우기
+      fillIpLongLimitBatched(ip, "tc-l4-user");
+
+      // 차단 상태에서 여러 번 추가 요청 (차단된 요청은 카운터 증가 금지)
+      vi.advanceTimersByTime(IP_SHORT_WINDOW_MS + 1);
+      for (let i = 0; i < 5; i++) {
+        const blocked = checkRequestEligibility(
+          "signup",
+          ip,
+          `tc-l4-blocked${i}@example.com`,
+        );
+        expect(blocked.allowed).toBe(false);
+        if (i < 4) {
+          vi.advanceTimersByTime(IP_SHORT_WINDOW_MS + 1);
+        }
+      }
+
+      // long window 만료 후 재허용 검증 — 카운터가 증가했다면 여전히 차단되어야 하지만,
+      // 차단 요청은 카운터를 증가시키지 않으므로 만료 후 정확히 IP_LONG_LIMIT으로 돌아가야 함
+      vi.advanceTimersByTime(IP_LONG_WINDOW_MS + 1);
+      const recovered = checkRequestEligibility(
+        "signup",
+        ip,
+        "tc-l4-recovered@example.com",
+      );
+      expect(recovered.allowed).toBe(true);
     });
   });
 
@@ -238,15 +387,15 @@ describe("checkRequestEligibility", () => {
   // ============================================================================
 
   describe("AND 조건 — 동시 평가", () => {
-    it("TC-11. IP 초과 → email 조건 무관하게 { allowed: false }", () => {
+    it("TC-11. IP short 초과 → email 조건 무관하게 { allowed: false }", () => {
       const ip = "10.0.1.1";
 
-      // IP 한도 채우기
-      for (let i = 0; i < IP_LIMIT; i++) {
+      // IP short 한도 채우기 (IP_SHORT_LIMIT으로 rename됨)
+      for (let i = 0; i < IP_SHORT_LIMIT; i++) {
         checkRequestEligibility("signup", ip, `user${i}@example.com`);
       }
 
-      // IP 차단 상태, email 조건이 새로워도 차단 유지
+      // IP short 차단 상태, email 조건이 새로워도 차단 유지
       const result = checkRequestEligibility("signup", ip, "fresh@example.com");
       expect(result.allowed).toBe(false);
     });
@@ -287,8 +436,8 @@ describe("checkRequestEligibility", () => {
       const ip = "10.0.2.1";
       const email = "test@example.com";
 
-      // IP 한도: 10회 허용 후 차단
-      for (let i = 0; i < IP_LIMIT; i++) {
+      // IP short 한도: IP_SHORT_LIMIT회 허용 후 차단
+      for (let i = 0; i < IP_SHORT_LIMIT; i++) {
         checkRequestEligibility("signup", ip, `user${i}@example.com`);
       }
 
@@ -296,10 +445,11 @@ describe("checkRequestEligibility", () => {
       const blockedResult = checkRequestEligibility("signup", ip, email);
       expect(blockedResult.allowed).toBe(false);
 
-      // IP window 만료 후 재시도로 검증
+      // IP short window 만료 후 재시도로 검증
       // 차단 요청에서 카운터가 증가했다면 다음 요청도 차단되어야 하지만,
       // 차단 요청은 증가하지 않으므로 만료 후에는 다시 허용되어야 함
-      vi.advanceTimersByTime(IP_WINDOW_MS + 1);
+      // [이유: IP_SHORT_WINDOW_MS로 rename됨 — short window 만료]
+      vi.advanceTimersByTime(IP_SHORT_WINDOW_MS + 1);
 
       const recoveredResult = checkRequestEligibility("signup", ip, email);
       expect(recoveredResult.allowed).toBe(true);
@@ -318,9 +468,10 @@ describe("checkRequestEligibility", () => {
       const result = checkRequestEligibility("signup", ip, email);
       expect(result.allowed).toBe(true);
 
-      // IP 카운터 증가 확인
+      // IP short 카운터 증가 확인
       // 동일 email long window 제한을 피하기 위해 email을 바꿔 호출
-      for (let i = 1; i < IP_LIMIT; i++) {
+      // [이유: IP_SHORT_LIMIT으로 rename됨 — short window 기준 확인]
+      for (let i = 1; i < IP_SHORT_LIMIT; i++) {
         const r = checkRequestEligibility(
           "signup",
           ip,
@@ -329,7 +480,7 @@ describe("checkRequestEligibility", () => {
         expect(r.allowed).toBe(true);
       }
 
-      // 다음 IP 요청은 차단
+      // 다음 IP 요청은 short window로 차단
       const ipBlocked = checkRequestEligibility(
         "signup",
         ip,
@@ -369,12 +520,12 @@ describe("checkRequestEligibility", () => {
     it("TC-16. 차단 시 → 어느 카운터도 증가하지 않음", () => {
       const ip = "10.0.4.1";
 
-      // IP 한도 채우기
-      for (let i = 0; i < IP_LIMIT; i++) {
+      // IP short 한도 채우기 (IP_SHORT_LIMIT으로 rename됨)
+      for (let i = 0; i < IP_SHORT_LIMIT; i++) {
         checkRequestEligibility("signup", ip, `user${i}@example.com`);
       }
 
-      // 이후 5회 요청은 IP로 차단
+      // 이후 5회 요청은 IP short로 차단
       for (let i = 0; i < 5; i++) {
         const result = checkRequestEligibility(
           "signup",
@@ -384,8 +535,8 @@ describe("checkRequestEligibility", () => {
         expect(result.allowed).toBe(false);
       }
 
-      // IP window 만료 시점까지 시간 진행
-      vi.advanceTimersByTime(IP_WINDOW_MS + 1);
+      // IP short window 만료 시점까지 시간 진행 (IP_SHORT_WINDOW_MS로 rename됨)
+      vi.advanceTimersByTime(IP_SHORT_WINDOW_MS + 1);
 
       // 다시 허용 — 차단 구간에서는 IP 카운터가 증가하지 않음
       const recovered = checkRequestEligibility(
@@ -467,8 +618,8 @@ describe("checkRequestEligibility", () => {
       const ip = "10.0.5.1";
       const email = "reset@example.com";
 
-      // 한도 채우기
-      for (let i = 0; i < IP_LIMIT; i++) {
+      // IP short 한도 채우기 (IP_SHORT_LIMIT으로 rename됨)
+      for (let i = 0; i < IP_SHORT_LIMIT; i++) {
         checkRequestEligibility("signup", ip, `user${i}@example.com`);
       }
 
@@ -490,16 +641,17 @@ describe("checkRequestEligibility", () => {
   // ============================================================================
 
   describe("window 경계값 — 정확한 만료 시점 동작 고정", () => {
-    it("TC-20. IP window: now - windowStart === windowMs 일 때 → { allowed: true }", () => {
+    it("TC-20. IP short window: now - windowStart === windowMs 일 때 → { allowed: true }", () => {
       const ip = "10.0.6.1";
 
       // t=0에서 첫 요청
       checkRequestEligibility("signup", ip, "user0@example.com");
 
-      // 정확히 windowMs(경계)까지 시간 진행
-      vi.advanceTimersByTime(IP_WINDOW_MS);
+      // 정확히 IP_SHORT_WINDOW_MS(경계)까지 시간 진행
+      // [이유: IP_WINDOW_MS → IP_SHORT_WINDOW_MS로 rename됨]
+      vi.advanceTimersByTime(IP_SHORT_WINDOW_MS);
 
-      // 경계에서는 window 만료로 간주되어 새 window 시작
+      // 경계에서는 short window 만료로 간주되어 새 window 시작
       const result = checkRequestEligibility("signup", ip, "user1@example.com");
       expect(result.allowed).toBe(true);
     });
@@ -594,16 +746,16 @@ describe("checkRequestEligibility", () => {
       expect(result.allowed).toBe(false);
     });
 
-    it("TC-25. IP만 차단된 상태 → { allowed: false }", () => {
+    it("TC-25. IP short만 차단된 상태 → { allowed: false }", () => {
       const ip = "10.0.7.1";
       const email = "ip-blocked@example.com";
 
-      // IP 한도 채우기
-      for (let i = 0; i < IP_LIMIT; i++) {
+      // IP short 한도 채우기 (IP_SHORT_LIMIT으로 rename됨)
+      for (let i = 0; i < IP_SHORT_LIMIT; i++) {
         checkRequestEligibility("signup", ip, `user${i}@example.com`);
       }
 
-      // IP만 차단, 나머지 조건 통과여도 전체 차단
+      // IP short만 차단, 나머지 조건 통과여도 전체 차단
       const result = checkRequestEligibility("signup", ip, email);
       expect(result.allowed).toBe(false);
     });
@@ -649,18 +801,19 @@ describe("checkRequestEligibility", () => {
   // ============================================================================
 
   describe("복구 흐름 — 차단 → window 만료 → 재시도 성공", () => {
-    it("TC-27. IP window 만료 후 동일 IP로 재시도 → { allowed: true }", () => {
+    it("TC-27. IP short window 만료 후 동일 IP로 재시도 → { allowed: true }", () => {
+      // [이유: IP_LIMIT → IP_SHORT_LIMIT, IP_WINDOW_MS → IP_SHORT_WINDOW_MS로 rename됨]
       const ip = "10.0.8.1";
 
-      // 한도 채우고 차단 확인
-      for (let i = 0; i < IP_LIMIT; i++) {
+      // IP short 한도 채우고 차단 확인
+      for (let i = 0; i < IP_SHORT_LIMIT; i++) {
         checkRequestEligibility("signup", ip, `user${i}@example.com`);
       }
       let result = checkRequestEligibility("signup", ip, "blocked@example.com");
       expect(result.allowed).toBe(false);
 
-      // 복구
-      vi.advanceTimersByTime(IP_WINDOW_MS + 1);
+      // IP short window 복구
+      vi.advanceTimersByTime(IP_SHORT_WINDOW_MS + 1);
       result = checkRequestEligibility("signup", ip, "recovered@example.com");
       expect(result.allowed).toBe(true);
     });
@@ -689,10 +842,11 @@ describe("checkRequestEligibility", () => {
   // ============================================================================
 
   describe("blockedBy 반환값 — 차단 차원 식별", () => {
-    it("TC-B1. IP 차단 시 → { allowed: false, blockedBy: 'ip' }", () => {
+    it("TC-B1. IP short 차단 시 → { allowed: false, blockedBy: 'ipShort' }", () => {
+      // [이유: blockedBy "ip" → "ipShort"로 rename됨 — IP가 short/long으로 분리됨]
       const ip = "10.0.9.1";
 
-      for (let i = 0; i < IP_LIMIT; i++) {
+      for (let i = 0; i < IP_SHORT_LIMIT; i++) {
         checkRequestEligibility("signup", ip, `user${i}@example.com`);
       }
 
@@ -704,7 +858,47 @@ describe("checkRequestEligibility", () => {
 
       expect(result.allowed).toBe(false);
       if (!result.allowed) {
-        expect(result.blockedBy).toBe("ip");
+        expect(result.blockedBy).toBe("ipShort");
+      }
+    });
+
+    it("TC-B1L. IP long 차단 시 → { allowed: false, blockedBy: 'ipLong' }", () => {
+      // [이유: IP long window 추가로 인한 새 차단 차원]
+      // [배치 전략: IP_LONG_WINDOW_MS 내에서 IP_SHORT_LIMIT개씩 배치로 IP_LONG_LIMIT 채우기]
+      const ip = "10.0.9.2";
+
+      // fillIpLongLimitBatched와 동일한 배치 전략 사용
+      const batchCount = Math.ceil(IP_LONG_LIMIT / IP_SHORT_LIMIT);
+      let requestIndex = 0;
+      for (let batch = 0; batch < batchCount; batch++) {
+        if (batch > 0) {
+          vi.advanceTimersByTime(IP_SHORT_WINDOW_MS + 1);
+        }
+        const batchSize = Math.min(
+          IP_SHORT_LIMIT,
+          IP_LONG_LIMIT - batch * IP_SHORT_LIMIT,
+        );
+        for (let j = 0; j < batchSize; j++) {
+          checkRequestEligibility(
+            "signup",
+            ip,
+            `tc-b1l-user${requestIndex}@example.com`,
+          );
+          requestIndex++;
+        }
+      }
+
+      // short 리셋 후 long 한도 초과 요청
+      vi.advanceTimersByTime(IP_SHORT_WINDOW_MS + 1);
+      const result = checkRequestEligibility(
+        "signup",
+        ip,
+        "tc-b1l-blocked@example.com",
+      );
+
+      expect(result.allowed).toBe(false);
+      if (!result.allowed) {
+        expect(result.blockedBy).toBe("ipLong");
       }
     });
 
@@ -740,12 +934,13 @@ describe("checkRequestEligibility", () => {
       }
     });
 
-    it("TC-B4. IP와 emailShort 동시 차단 시 → blockedBy: 'ip' (ip 우선)", () => {
+    it("TC-B4. IP short와 emailShort 동시 차단 시 → blockedBy: 'ipShort' (ipShort 우선)", () => {
+      // [이유: blockedBy "ip" → "ipShort"로 rename됨. 우선순위: ipShort → ipLong → emailShort → emailLong]
       const ip = "10.0.14.1";
       const email = "priority@example.com";
 
-      // IP 한도 채우면서 동시에 emailShort도 채움
-      for (let i = 0; i < IP_LIMIT; i++) {
+      // IP short 한도 채우면서 동시에 emailShort도 채움
+      for (let i = 0; i < IP_SHORT_LIMIT; i++) {
         checkRequestEligibility("signup", ip, `user${i}@example.com`);
       }
       // emailShort도 최근 요청이 있는 상태
@@ -756,8 +951,8 @@ describe("checkRequestEligibility", () => {
 
       expect(result.allowed).toBe(false);
       if (!result.allowed) {
-        // ip 조건이 먼저 평가되므로 ip 우선
-        expect(result.blockedBy).toBe("ip");
+        // ipShort 조건이 먼저 평가되므로 ipShort 우선
+        expect(result.blockedBy).toBe("ipShort");
       }
     });
 
@@ -780,13 +975,14 @@ describe("checkRequestEligibility", () => {
       expect(precheck.allowed).toBe(true);
     });
 
-    it("TC-P2. IP 한도 초과 → { allowed: false }", () => {
+    it("TC-P2. IP short 한도 초과 → { allowed: false }", () => {
+      // [이유: IP_LIMIT → IP_SHORT_LIMIT으로 rename됨]
       const ip = "10.200.1.1";
 
       /**
-       * IP 한도 채우기
+       * IP short 한도 채우기
        */
-      for (let i = 0; i < IP_LIMIT; i++) {
+      for (let i = 0; i < IP_SHORT_LIMIT; i++) {
         checkRequestEligibility("signup", ip, `user${i}@example.com`);
       }
 
@@ -797,13 +993,55 @@ describe("checkRequestEligibility", () => {
       expect(precheck.allowed).toBe(false);
     });
 
+    it("TC-LP. IP long 한도 초과 시 precheck → { allowed: false }", () => {
+      // [이유: precheck는 short + long 모두 read-only 평가해야 함]
+      // [배치 전략: IP_LONG_WINDOW_MS 내에서 IP_SHORT_LIMIT개씩 배치로 IP_LONG_LIMIT 채우기]
+      const ip = "10.200.3.1";
+
+      // long 한도 채우기 (배치 전략)
+      const batchCount = Math.ceil(IP_LONG_LIMIT / IP_SHORT_LIMIT);
+      let requestIndex = 0;
+      for (let batch = 0; batch < batchCount; batch++) {
+        if (batch > 0) {
+          vi.advanceTimersByTime(IP_SHORT_WINDOW_MS + 1);
+        }
+        const batchSize = Math.min(
+          IP_SHORT_LIMIT,
+          IP_LONG_LIMIT - batch * IP_SHORT_LIMIT,
+        );
+        for (let j = 0; j < batchSize; j++) {
+          checkRequestEligibility(
+            "signup",
+            ip,
+            `tc-lp-user${requestIndex}@example.com`,
+          );
+          requestIndex++;
+        }
+      }
+
+      // short 리셋 후 precheck 호출 → long 한도 초과로 차단되어야 함
+      vi.advanceTimersByTime(IP_SHORT_WINDOW_MS + 1);
+      const precheck = checkIpRateLimitPrecheck(ip);
+      expect(precheck.allowed).toBe(false);
+    });
+
     it("TC-P2A. 경계값(timestamp === now - window)은 유효로 포함되어 평가된다", () => {
+      // [이유: ipStore 구조가 RateLimitEntry → IpEligibilityEntry로 변경됨.
+      //  shortWindow 직접 설정으로 경계값 검증]
       const ip = "10.200.1.2";
       const now = Date.now();
-      const boundaryTs = now - IP_WINDOW_MS;
+      const boundaryTs = now - IP_SHORT_WINDOW_MS;
 
-      (ipStore as unknown as Map<string, { timestamps: number[] }>).set(ip, {
-        timestamps: Array.from({ length: IP_LIMIT }, () => boundaryTs),
+      (
+        ipStore as unknown as Map<
+          string,
+          { shortWindow: { timestamps: number[] } | null; longWindow: null }
+        >
+      ).set(ip, {
+        shortWindow: {
+          timestamps: Array.from({ length: IP_SHORT_LIMIT }, () => boundaryTs),
+        },
+        longWindow: null,
       });
 
       const precheck = checkIpRateLimitPrecheck(ip);
@@ -811,7 +1049,13 @@ describe("checkRequestEligibility", () => {
     });
 
     it("TC-P3. 호출 후 ipStore 상태 변경 없음 (읽기 전용)", () => {
+      // [이유: ipStore 구조가 IpEligibilityEntry로 변경됨 — shortWindow/longWindow 구조로 접근]
       const ip = "10.200.2.1";
+
+      type IpEligibilityEntryShape = {
+        shortWindow: { timestamps: number[] } | null;
+        longWindow: { timestamps: number[] } | null;
+      };
 
       /**
        * 초기 상태: IP 항목 없음
@@ -823,7 +1067,7 @@ describe("checkRequestEligibility", () => {
        * 첫 번째 체크 후: 여전히 ipStore에 항목 없음 (precheck은 상태 변경 안 함)
        */
       let ipEntry = (
-        ipStore as unknown as Map<string, { timestamps: number[] }>
+        ipStore as unknown as Map<string, IpEligibilityEntryShape>
       ).get(ip);
       expect(ipEntry).toBeUndefined();
 
@@ -832,10 +1076,11 @@ describe("checkRequestEligibility", () => {
        */
       checkRequestEligibility("signup", ip, "user@example.com");
       ipEntry = (
-        ipStore as unknown as Map<string, { timestamps: number[] }>
+        ipStore as unknown as Map<string, IpEligibilityEntryShape>
       ).get(ip);
       expect(ipEntry).toBeDefined();
-      expect(ipEntry?.timestamps.length).toBe(1);
+      // [이유: IpEligibilityEntry.shortWindow.timestamps에서 확인]
+      expect(ipEntry?.shortWindow?.timestamps.length).toBe(1);
 
       /**
        * 사전검증(precheck) 호출 후 상태가 변경되지 않음
@@ -843,9 +1088,10 @@ describe("checkRequestEligibility", () => {
       precheck = checkIpRateLimitPrecheck(ip);
       expect(precheck.allowed).toBe(true); // 아직 한도 이하
       ipEntry = (
-        ipStore as unknown as Map<string, { timestamps: number[] }>
+        ipStore as unknown as Map<string, IpEligibilityEntryShape>
       ).get(ip);
-      expect(ipEntry?.timestamps.length).toBe(1); // timestamps 길이가 변경되지 않음
+      // [이유: precheck는 상태를 변경하지 않으므로 timestamps 길이가 그대로여야 함]
+      expect(ipEntry?.shortWindow?.timestamps.length).toBe(1);
     });
   });
 });

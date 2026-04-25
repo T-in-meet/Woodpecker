@@ -51,8 +51,9 @@ type LoginTerminalOutcome =
     }
   | {
       type: "blocked";
-      reasonCode:
-        | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP
+      reasonCode: // [이유: RATE_LIMIT_IP → RATE_LIMIT_IP_SHORT | RATE_LIMIT_IP_LONG으로 분리됨]
+        | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT
+        | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP_LONG
         | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT
         | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG;
       maskedEmail?: string;
@@ -99,11 +100,12 @@ async function resolveLoginResponse(
    */
   const precheck = checkIpRateLimitPrecheck(ip);
   if (!precheck.allowed) {
+    // [이유: precheck는 short/long 양쪽 평가. short가 우선이므로 RATE_LIMIT_IP_SHORT 사용]
     return {
       response: failureResponse(AUTH_API_CODES.LOGIN_RATE_LIMIT_EXCEEDED),
       outcome: {
         type: "blocked",
-        reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_IP,
+        reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT,
         maskedIp,
       },
     };
@@ -161,7 +163,11 @@ async function resolveLoginResponse(
         type: "blocked",
         reasonCode: mapBlockedByToReason(eligibility.blockedBy),
         maskedEmail,
-        ...(eligibility.blockedBy === "ip" ? { maskedIp } : {}),
+        // [이유: blockedBy "ip" → "ipShort" | "ipLong"으로 분리됨]
+        ...(eligibility.blockedBy === "ipShort" ||
+        eligibility.blockedBy === "ipLong"
+          ? { maskedIp }
+          : {}),
       },
     };
   }

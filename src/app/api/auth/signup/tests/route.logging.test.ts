@@ -43,12 +43,16 @@ vi.mock("@/features/auth/lib/authLogger", () => ({
 vi.mock("@/features/auth/lib/checkRequestEligibility", () => ({
   checkIpRateLimitPrecheck: vi.fn(),
   checkRequestEligibility: vi.fn(),
-  mapBlockedByToReason: vi.fn((blockedBy: "ip" | "emailShort" | "emailLong") =>
-    blockedBy === "ip"
-      ? "RATE_LIMIT_IP"
-      : blockedBy === "emailShort"
-        ? "RATE_LIMIT_EMAIL_SHORT"
-        : "RATE_LIMIT_EMAIL_LONG",
+  // [이유: BlockedBy "ip" → "ipShort" | "ipLong"으로 분리됨]
+  mapBlockedByToReason: vi.fn(
+    (blockedBy: "ipShort" | "ipLong" | "emailShort" | "emailLong") =>
+      blockedBy === "ipShort"
+        ? "RATE_LIMIT_IP_SHORT"
+        : blockedBy === "ipLong"
+          ? "RATE_LIMIT_IP_LONG"
+          : blockedBy === "emailShort"
+            ? "RATE_LIMIT_EMAIL_SHORT"
+            : "RATE_LIMIT_EMAIL_LONG",
   ),
 }));
 
@@ -232,9 +236,10 @@ describe("signup 라우트 인증 로깅", () => {
   });
 
   it("요청 제한 차단이면 AUTH_RATE_LIMIT_BLOCKED가 기록되고 최종 이벤트는 정확히 1개다", async () => {
+    // [이유: blockedBy "ip" → "ipShort"로 rename됨]
     vi.mocked(checkRequestEligibility).mockReturnValue({
       allowed: false,
-      blockedBy: "ip",
+      blockedBy: "ipShort",
     });
 
     await POST(makeRequest());
@@ -242,7 +247,8 @@ describe("signup 라우트 인증 로깅", () => {
     expect(vi.mocked(logAuthEvent)).toHaveBeenCalledWith(
       AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED,
       expect.objectContaining({
-        reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_IP,
+        // [이유: RATE_LIMIT_IP → RATE_LIMIT_IP_SHORT로 rename됨]
+        reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT,
         maskedIp: "127.0.*.*",
       }),
     );
@@ -268,7 +274,8 @@ describe("signup 라우트 인증 로깅", () => {
     expect(vi.mocked(logAuthEvent)).toHaveBeenCalledWith(
       AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED,
       expect.objectContaining({
-        reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_IP,
+        // [이유: precheck 차단 시 RATE_LIMIT_IP_SHORT 사용 — short가 우선 평가됨]
+        reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT,
         maskedIp: "127.0.*.*",
       }),
     );
@@ -457,9 +464,10 @@ describe("signup 라우트 인증 로깅", () => {
   });
 
   it("시퀀스 검증: rate_limit 분기는 REQUESTED 이후 terminal 1개로 끝난다", async () => {
+    // [이유: BlockedBy "ip" → "ipShort"로 rename됨 — short/long 이중 윈도우 분리]
     vi.mocked(checkRequestEligibility).mockReturnValue({
       allowed: false,
-      blockedBy: "ip",
+      blockedBy: "ipShort",
     });
 
     await POST(makeRequest());

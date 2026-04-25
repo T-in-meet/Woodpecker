@@ -2,7 +2,7 @@
  * Cleanup functionality tests — 만료된 rate limit 항목 정리
  *
  * 테스트 범위:
- * - IP store 만료 항목 제거
+ * - IP store 만료 항목 제거 (short/long 이중 윈도우)
  * - Email store 부분 정리 (개별 윈도우 만료)
  * - Email store 완전 제거 (양쪽 윈도우 모두 만료)
  * - 스로틀링 동작 (1분 간격 강제)
@@ -10,6 +10,9 @@
  * 주의:
  * - 이 테스트는 cleanup만 검증하며, rate limit 로직은 변경하지 않음
  * - checkRequestEligibility 함수는 테스트하지 않음 (기존 테스트에서 이미 검증)
+ *
+ * [이유: ipStore 구조가 RateLimitEntry → IpEligibilityEntry로 변경됨.
+ *  IP_WINDOW_MS → IP_SHORT_WINDOW_MS로 rename, tryCleanupExpiredEntries에 IP_LONG_WINDOW_MS 추가]
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -17,7 +20,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   EMAIL_LONG_WINDOW_MS,
   EMAIL_SHORT_WINDOW_MS,
-  IP_WINDOW_MS,
+  // [이유: IP_WINDOW_MS → IP_SHORT_WINDOW_MS로 rename됨 — IP 이중 윈도우 분리]
+  IP_LONG_WINDOW_MS,
+  IP_SHORT_WINDOW_MS,
   resetEligibilityStore,
 } from "./checkRequestEligibility";
 import { emailStore, ipStore } from "./requestEligibilityStore";
@@ -35,59 +40,124 @@ describe("Eligibility Store Cleanup", () => {
   });
 
   describe("IP store cleanup", () => {
-    it("TC-Cleanup-IP-01. 만료된 IP 항목을 제거한다", () => {
+    it("TC-Cleanup-IP-01. 만료된 IP short window 항목을 제거한다", () => {
       const ip = "10.1.0.1";
       const now = Date.now();
 
       /**
        * IP 항목 수동 추가 (cleanup 테스트용)
-       * 타임스탬프가 windowStart보다 이전(만료된 상태)
+       * [이유: IpEligibilityEntry 구조로 변경됨 — shortWindow/longWindow 형식]
+       * shortWindow 타임스탬프가 만료된 상태
        */
       ipStore.set(ip, {
-        timestamps: [now - IP_WINDOW_MS - 1000], // IP_WINDOW_MS보다 1초 이상 이전
+        shortWindow: {
+          timestamps: [now - IP_SHORT_WINDOW_MS - 1000], // IP_SHORT_WINDOW_MS보다 1초 이상 이전
+        },
+        longWindow: null,
       });
 
       expect(ipStore.has(ip)).toBe(true);
 
       /**
        * Cleanup 실행
+       * [이유: tryCleanupExpiredEntries에 ipLongWindowMs 파라미터 추가됨]
        */
       tryCleanupExpiredEntries(
-        IP_WINDOW_MS,
+        IP_SHORT_WINDOW_MS,
+        IP_LONG_WINDOW_MS,
         EMAIL_SHORT_WINDOW_MS,
         EMAIL_LONG_WINDOW_MS,
       );
 
       /**
-       * 만료된 항목이 제거됨
+       * 양쪽 모두 만료(short만료, long=null)이므로 항목 전체 제거
        */
       expect(ipStore.has(ip)).toBe(false);
     });
 
-    it("TC-Cleanup-IP-02. 만료되지 않은 IP 항목은 유지한다", () => {
+    it("TC-Cleanup-IP-02. 만료되지 않은 IP short window 항목은 유지한다", () => {
       const ip = "10.2.0.1";
       const now = Date.now();
 
       /**
-       * 아직 유효한 IP 항목 (windowStart 이후 타임스탬프)
+       * 아직 유효한 IP 항목 (shortWindow 타임스탬프가 윈도우 내)
+       * [이유: IpEligibilityEntry 구조로 변경됨]
        */
       ipStore.set(ip, {
-        timestamps: [now - IP_WINDOW_MS + 5000], // 아직 5초 남음
+        shortWindow: {
+          timestamps: [now - IP_SHORT_WINDOW_MS + 5000], // 아직 5초 남음
+        },
+        longWindow: null,
       });
 
       expect(ipStore.has(ip)).toBe(true);
 
       tryCleanupExpiredEntries(
-        IP_WINDOW_MS,
+        IP_SHORT_WINDOW_MS,
+        IP_LONG_WINDOW_MS,
         EMAIL_SHORT_WINDOW_MS,
         EMAIL_LONG_WINDOW_MS,
       );
 
       /**
        * 유효한 항목은 유지됨
+       * [이유: shortWindow가 아직 활성이므로 항목 유지]
        */
       expect(ipStore.has(ip)).toBe(true);
-      expect(ipStore.get(ip)?.timestamps).toBeDefined();
+      // [이유: IpEligibilityEntry.shortWindow.timestamps에서 확인]
+      expect(ipStore.get(ip)?.shortWindow?.timestamps).toBeDefined();
+    });
+
+    it("TC-Cleanup-IP-03. IP short window 만료 + long window 유효 → short=null, 항목 유지", () => {
+      // [이유: IP long window 추가 — 한쪽 만료 시 부분 정리 동작 검증]
+      const ip = "10.3.0.5";
+      const now = Date.now();
+
+      ipStore.set(ip, {
+        shortWindow: {
+          timestamps: [now - IP_SHORT_WINDOW_MS - 1000], // 만료
+        },
+        longWindow: {
+          timestamps: [now - IP_LONG_WINDOW_MS + 60_000], // 유효 (1분 남음)
+        },
+      });
+
+      tryCleanupExpiredEntries(
+        IP_SHORT_WINDOW_MS,
+        IP_LONG_WINDOW_MS,
+        EMAIL_SHORT_WINDOW_MS,
+        EMAIL_LONG_WINDOW_MS,
+      );
+
+      // short 만료로 null, long은 유효이므로 항목 유지
+      expect(ipStore.has(ip)).toBe(true);
+      const after = ipStore.get(ip);
+      expect(after?.shortWindow).toBeNull();
+      expect(after?.longWindow).not.toBeNull();
+    });
+
+    it("TC-Cleanup-IP-04. IP short/long 모두 만료 → 항목 전체 제거", () => {
+      // [이유: 양쪽 모두 만료 시 항목 제거 검증]
+      const ip = "10.3.0.6";
+      const now = Date.now();
+
+      ipStore.set(ip, {
+        shortWindow: {
+          timestamps: [now - IP_SHORT_WINDOW_MS - 1000], // 만료
+        },
+        longWindow: {
+          timestamps: [now - IP_LONG_WINDOW_MS - 1000], // 만료
+        },
+      });
+
+      tryCleanupExpiredEntries(
+        IP_SHORT_WINDOW_MS,
+        IP_LONG_WINDOW_MS,
+        EMAIL_SHORT_WINDOW_MS,
+        EMAIL_LONG_WINDOW_MS,
+      );
+
+      expect(ipStore.has(ip)).toBe(false);
     });
   });
 
@@ -112,7 +182,8 @@ describe("Eligibility Store Cleanup", () => {
       expect(emailStore.has(email)).toBe(true);
 
       tryCleanupExpiredEntries(
-        IP_WINDOW_MS,
+        IP_SHORT_WINDOW_MS,
+        IP_LONG_WINDOW_MS,
         EMAIL_SHORT_WINDOW_MS,
         EMAIL_LONG_WINDOW_MS,
       );
@@ -146,7 +217,8 @@ describe("Eligibility Store Cleanup", () => {
       expect(before?.longWindow).not.toBeNull();
 
       tryCleanupExpiredEntries(
-        IP_WINDOW_MS,
+        IP_SHORT_WINDOW_MS,
+        IP_LONG_WINDOW_MS,
         EMAIL_SHORT_WINDOW_MS,
         EMAIL_LONG_WINDOW_MS,
       );
@@ -182,7 +254,8 @@ describe("Eligibility Store Cleanup", () => {
       expect(emailStore.has(email)).toBe(true);
 
       tryCleanupExpiredEntries(
-        IP_WINDOW_MS,
+        IP_SHORT_WINDOW_MS,
+        IP_LONG_WINDOW_MS,
         EMAIL_SHORT_WINDOW_MS,
         EMAIL_LONG_WINDOW_MS,
       );
@@ -213,7 +286,8 @@ describe("Eligibility Store Cleanup", () => {
       });
 
       tryCleanupExpiredEntries(
-        IP_WINDOW_MS,
+        IP_SHORT_WINDOW_MS,
+        IP_LONG_WINDOW_MS,
         EMAIL_SHORT_WINDOW_MS,
         EMAIL_LONG_WINDOW_MS,
       );
@@ -245,7 +319,8 @@ describe("Eligibility Store Cleanup", () => {
       emailStore.set(email, originalEntry);
 
       tryCleanupExpiredEntries(
-        IP_WINDOW_MS,
+        IP_SHORT_WINDOW_MS,
+        IP_LONG_WINDOW_MS,
         EMAIL_SHORT_WINDOW_MS,
         EMAIL_LONG_WINDOW_MS,
       );
@@ -281,7 +356,8 @@ describe("Eligibility Store Cleanup", () => {
       });
 
       tryCleanupExpiredEntries(
-        IP_WINDOW_MS,
+        IP_SHORT_WINDOW_MS,
+        IP_LONG_WINDOW_MS,
         EMAIL_SHORT_WINDOW_MS,
         EMAIL_LONG_WINDOW_MS,
       );
@@ -301,17 +377,22 @@ describe("Eligibility Store Cleanup", () => {
       const initialTime = Date.now();
 
       /**
-       * 만료된 항목 추가
+       * 만료된 항목 추가 (IpEligibilityEntry 구조)
+       * [이유: ipStore 구조 변경 반영]
        */
       ipStore.set(ip, {
-        timestamps: [initialTime - IP_WINDOW_MS - 1000],
+        shortWindow: {
+          timestamps: [initialTime - IP_SHORT_WINDOW_MS - 1000],
+        },
+        longWindow: null,
       });
 
       /**
        * 첫 cleanup: 실행됨
        */
       tryCleanupExpiredEntries(
-        IP_WINDOW_MS,
+        IP_SHORT_WINDOW_MS,
+        IP_LONG_WINDOW_MS,
         EMAIL_SHORT_WINDOW_MS,
         EMAIL_LONG_WINDOW_MS,
       );
@@ -321,7 +402,10 @@ describe("Eligibility Store Cleanup", () => {
        * 같은 분 내 다시 항목 추가 (cleanup이 실행된 후)
        */
       ipStore.set(ip, {
-        timestamps: [initialTime - IP_WINDOW_MS - 1000],
+        shortWindow: {
+          timestamps: [initialTime - IP_SHORT_WINDOW_MS - 1000],
+        },
+        longWindow: null,
       });
 
       /**
@@ -334,7 +418,8 @@ describe("Eligibility Store Cleanup", () => {
        * (마지막 cleanup으로부터 30초만 경과했으므로)
        */
       tryCleanupExpiredEntries(
-        IP_WINDOW_MS,
+        IP_SHORT_WINDOW_MS,
+        IP_LONG_WINDOW_MS,
         EMAIL_SHORT_WINDOW_MS,
         EMAIL_LONG_WINDOW_MS,
       );
@@ -350,17 +435,21 @@ describe("Eligibility Store Cleanup", () => {
       const initialTime = Date.now();
 
       /**
-       * 만료된 항목 추가
+       * 만료된 항목 추가 (IpEligibilityEntry 구조)
        */
       ipStore.set(ip, {
-        timestamps: [initialTime - IP_WINDOW_MS - 1000],
+        shortWindow: {
+          timestamps: [initialTime - IP_SHORT_WINDOW_MS - 1000],
+        },
+        longWindow: null,
       });
 
       /**
        * 첫 cleanup
        */
       tryCleanupExpiredEntries(
-        IP_WINDOW_MS,
+        IP_SHORT_WINDOW_MS,
+        IP_LONG_WINDOW_MS,
         EMAIL_SHORT_WINDOW_MS,
         EMAIL_LONG_WINDOW_MS,
       );
@@ -370,7 +459,10 @@ describe("Eligibility Store Cleanup", () => {
        * 다시 항목 추가
        */
       ipStore.set(ip, {
-        timestamps: [Date.now() - IP_WINDOW_MS - 1000],
+        shortWindow: {
+          timestamps: [Date.now() - IP_SHORT_WINDOW_MS - 1000],
+        },
+        longWindow: null,
       });
 
       /**
@@ -382,7 +474,8 @@ describe("Eligibility Store Cleanup", () => {
        * 두 번째 cleanup: 스로틀링 만료로 실행됨
        */
       tryCleanupExpiredEntries(
-        IP_WINDOW_MS,
+        IP_SHORT_WINDOW_MS,
+        IP_LONG_WINDOW_MS,
         EMAIL_SHORT_WINDOW_MS,
         EMAIL_LONG_WINDOW_MS,
       );
@@ -404,7 +497,8 @@ describe("Eligibility Store Cleanup", () => {
        */
       expect(() => {
         tryCleanupExpiredEntries(
-          IP_WINDOW_MS,
+          IP_SHORT_WINDOW_MS,
+          IP_LONG_WINDOW_MS,
           EMAIL_SHORT_WINDOW_MS,
           EMAIL_LONG_WINDOW_MS,
         );
@@ -418,13 +512,20 @@ describe("Eligibility Store Cleanup", () => {
       const now = Date.now();
 
       /**
-       * 여러 IP 항목 추가
+       * 여러 IP 항목 추가 (IpEligibilityEntry 구조)
+       * [이유: ipStore가 IpEligibilityEntry로 변경됨]
        */
       ipStore.set("10.5.0.1", {
-        timestamps: [now - IP_WINDOW_MS - 1000], // 만료
+        shortWindow: {
+          timestamps: [now - IP_SHORT_WINDOW_MS - 1000], // 만료
+        },
+        longWindow: null,
       });
       ipStore.set("10.5.0.2", {
-        timestamps: [now - IP_WINDOW_MS + 5000], // 유효
+        shortWindow: {
+          timestamps: [now - IP_SHORT_WINDOW_MS + 5000], // 유효
+        },
+        longWindow: null,
       });
 
       /**
@@ -461,7 +562,8 @@ describe("Eligibility Store Cleanup", () => {
       expect(emailStore.size).toBe(3);
 
       tryCleanupExpiredEntries(
-        IP_WINDOW_MS,
+        IP_SHORT_WINDOW_MS,
+        IP_LONG_WINDOW_MS,
         EMAIL_SHORT_WINDOW_MS,
         EMAIL_LONG_WINDOW_MS,
       );

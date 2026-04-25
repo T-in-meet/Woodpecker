@@ -99,4 +99,31 @@ describe("로그인 API rate limit 처리", () => {
 
     expect(mockSignIn).not.toHaveBeenCalled();
   });
+
+  it("TC-05: ipLong 차단 시 429 + LOGIN_RATE_LIMIT_EXCEEDED를 반환한다", async () => {
+    // [이유: IP long window 추가로 blockedBy: "ipLong" 시나리오가 새로 발생]
+    vi.mocked(checkRequestEligibility).mockReturnValue({
+      allowed: false,
+      blockedBy: "ipLong",
+    });
+
+    const response = await POST(makeLoginRequest(DEFAULT_LOGIN_BODY));
+    const body = await response.json();
+
+    expect(response.status).toBe(429);
+    expect(body.code).toBe(AUTH_API_CODES.LOGIN_RATE_LIMIT_EXCEEDED);
+    expect(body.success).toBe(false);
+  });
+
+  it("TC-06: ipLong 차단 시 signInWithPassword가 호출되지 않는다", async () => {
+    // [이유: IP long window 추가로 blockedBy: "ipLong" 시나리오가 새로 발생]
+    vi.mocked(checkRequestEligibility).mockReturnValue({
+      allowed: false,
+      blockedBy: "ipLong",
+    });
+
+    await POST(makeLoginRequest(DEFAULT_LOGIN_BODY));
+
+    expect(mockSignIn).not.toHaveBeenCalled();
+  });
 });

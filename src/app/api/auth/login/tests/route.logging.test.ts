@@ -65,8 +65,10 @@ vi.mock("@/features/auth/lib/checkRequestEligibility", async () => {
     ...actual,
     checkIpRateLimitPrecheck: vi.fn(),
     checkRequestEligibility: vi.fn(),
+    // [이유: BlockedBy "ip" → "ipShort" | "ipLong"으로 분리됨]
     mapBlockedByToReason: vi.fn((blockedBy: string) => {
-      if (blockedBy === "ip") return "RATE_LIMIT_IP";
+      if (blockedBy === "ipShort") return "RATE_LIMIT_IP_SHORT";
+      if (blockedBy === "ipLong") return "RATE_LIMIT_IP_LONG";
       if (blockedBy === "emailShort") return "RATE_LIMIT_EMAIL_SHORT";
       return "RATE_LIMIT_EMAIL_LONG";
     }),
@@ -242,16 +244,20 @@ describe("로그인 API 로깅 검증", () => {
   });
 
   it("rate limit 차단 시 AUTH_RATE_LIMIT_BLOCKED가 기록된다", async () => {
+    // [이유: blockedBy "ip" → "ipShort"로 rename됨]
     vi.mocked(checkRequestEligibility).mockReturnValue({
       allowed: false,
-      blockedBy: "ip",
+      blockedBy: "ipShort",
     });
 
     await POST(makeRequest());
 
     expect(vi.mocked(logAuthEvent)).toHaveBeenCalledWith(
       AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED,
-      expect.objectContaining({ reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_IP }),
+      // [이유: RATE_LIMIT_IP → RATE_LIMIT_IP_SHORT로 rename됨]
+      expect.objectContaining({
+        reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT,
+      }),
     );
     expect(terminalEvents()).toHaveLength(1);
   });
