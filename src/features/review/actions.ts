@@ -163,6 +163,13 @@ export async function completeReviewAction(
       p_review_log_id: parsed.data.reviewLogId,
     });
 
+  if (completeReviewError?.code === "WP001") {
+    return {
+      error:
+        "오늘은 이미 이 노트의 복습을 완료했어요. 내일 자정(KST) 이후 다시 시도해주세요.",
+    };
+  }
+
   if (completeReviewError || !completedNoteId) {
     return {
       error: "복습 완료 처리에 실패했습니다. 잠시 후 다시 시도해주세요.",
