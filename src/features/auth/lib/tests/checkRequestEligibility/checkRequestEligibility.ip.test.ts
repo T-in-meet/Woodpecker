@@ -268,8 +268,7 @@ describe("checkRequestEligibility — IP rate limit", () => {
       expect(precheck.allowed).toBe(true);
     });
 
-    it("TC-P2. IP short 한도 초과 → { allowed: false }", () => {
-      // [이유: IP_LIMIT → IP_SHORT_LIMIT으로 rename됨]
+    it("TC-P2. IP short 한도 초과 → { allowed: false, blockedBy: 'ipShort' }", () => {
       const ip = "10.200.1.1";
 
       /**
@@ -283,10 +282,13 @@ describe("checkRequestEligibility — IP rate limit", () => {
        * 사전검증(precheck)에서 차단되어야 함
        */
       const precheck = checkIpRateLimitPrecheck(ip);
-      expect(precheck.allowed).toBe(false);
+      expect(precheck).toEqual({
+        allowed: false,
+        blockedBy: "ipShort",
+      });
     });
 
-    it("TC-LP. IP long 한도 초과 시 precheck → { allowed: false }", () => {
+    it("TC-LP. IP long 한도 초과 시 precheck → { allowed: false, blockedBy: 'ipLong' }", () => {
       // [이유: precheck는 short + long 모두 read-only 평가해야 함]
       // [배치 전략: IP_LONG_WINDOW_MS 내에서 IP_SHORT_LIMIT개씩 배치로 IP_LONG_LIMIT 채우기]
       const ip = "10.200.3.1";
@@ -315,7 +317,10 @@ describe("checkRequestEligibility — IP rate limit", () => {
       // short 리셋 후 precheck 호출 → long 한도 초과로 차단되어야 함
       vi.advanceTimersByTime(IP_SHORT_WINDOW_MS + 1);
       const precheck = checkIpRateLimitPrecheck(ip);
-      expect(precheck.allowed).toBe(false);
+      expect(precheck).toEqual({
+        allowed: false,
+        blockedBy: "ipLong",
+      });
     });
 
     it("TC-P2A. 경계값(timestamp === now - window)은 유효로 포함되어 평가된다", () => {
@@ -338,7 +343,10 @@ describe("checkRequestEligibility — IP rate limit", () => {
       });
 
       const precheck = checkIpRateLimitPrecheck(ip);
-      expect(precheck.allowed).toBe(false);
+      expect(precheck).toEqual({
+        allowed: false,
+        blockedBy: "ipShort",
+      });
     });
 
     it("TC-P3. 호출 후 ipStore 상태 변경 없음 (읽기 전용)", () => {

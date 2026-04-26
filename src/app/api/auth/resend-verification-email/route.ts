@@ -18,6 +18,7 @@ import {
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { mapAuthValidationErrors } from "@/features/auth/lib/mapAuthValidationErrors";
 import { maskEmailForLogging } from "@/features/auth/lib/maskEmailForLogging";
+import { maskIpForLogging } from "@/features/auth/lib/maskIpForLogging";
 import {
   AuthJsonParseError,
   parseAuthJsonRequestBody,
@@ -68,6 +69,7 @@ type ResendTerminalOutcome =
         | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT
         | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG;
       maskedEmail?: string;
+      maskedIp?: string;
     }
   | { type: "completed"; suppressCompletedLog?: true };
 
@@ -86,6 +88,7 @@ async function resolveResendResponse(
    * - user-scoped 정책 (IP + email)에 기여
    */
   const ip = getClientIp(request);
+  const maskedIp = maskIpForLogging(ip);
 
   /**
    * IP 사전 검증 — 본문 파싱 비용 없이 IP 차단
@@ -96,12 +99,17 @@ async function resolveResendResponse(
    */
   const precheck = checkIpRateLimitPrecheck(ip);
   if (!precheck.allowed) {
-    // [이유: precheck는 short/long 양쪽 평가. short가 우선이므로 RATE_LIMIT_IP_SHORT 사용]
+    const reasonCode =
+      precheck.blockedBy === "ipLong"
+        ? AUTH_LOG_REASONS.RATE_LIMIT_IP_LONG
+        : AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT;
+
     return {
       response: failureResponse(AUTH_API_CODES.RESEND_RATE_LIMIT_EXCEEDED),
       outcome: {
         type: "blocked",
-        reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT,
+        reasonCode,
+        maskedIp,
       },
     };
   }

@@ -242,6 +242,23 @@ export function checkRequestEligibility(
 }
 
 /**
+ * IP rate limit precheck 결과
+ *
+ * - allowed: 요청 허용 여부
+ * - blockedBy: 차단된 경우 어떤 window에서 차단되었는지 식별
+ *
+ * 주의:
+ * - blockedBy는 route 계층에서 AUTH_LOG_REASONS 매핑에 사용된다
+ * - precheck는 read-only 판단만 수행하며 상태를 변경하지 않는다
+ */
+type IpRateLimitPrecheckResult =
+  | { allowed: true }
+  | {
+      allowed: false;
+      blockedBy: "ipShort" | "ipLong";
+    };
+
+/**
  * IP 기반 rate limit 사전 검증 — 읽기 전용
  *
  * 목적:
@@ -250,6 +267,8 @@ export function checkRequestEligibility(
  *
  * 동작:
  * - evaluateSlidingWindow(appendOnAllow=false)로 현재 IP 상태를 읽기 전용 평가만 수행
+ * - short window를 먼저 평가하고, short가 허용된 경우에만 long window를 평가함
+ * - 차단 시 blockedBy로 어떤 window에서 차단되었는지 반환함
  * - ipStore 및 어떤 상태도 변경하지 않음
  *
  * 설계 제약:
@@ -263,14 +282,16 @@ export function checkRequestEligibility(
  * - 따라서 파싱 이전의 저수준 flood 공격 완화는 infra/edge 계층(WAF/CDN 등)과 함께 고려해야 함
  *
  * @param ip - 클라이언트 IP 주소
- * @returns { allowed: boolean } false이면 checkRequestEligibility를 호출하지 않고 즉시 차단
+ * @returns 허용 시 `{ allowed: true }`, 차단 시 `{ allowed: false, blockedBy }`를 반환한다.
+ *          blockedBy는 `"ipShort"` 또는 `"ipLong"`이며, route 계층에서 로그 reason 매핑에 사용한다.
  */
-export function checkIpRateLimitPrecheck(ip: string): { allowed: boolean } {
+
+export function checkIpRateLimitPrecheck(
+  ip: string,
+): IpRateLimitPrecheckResult {
   const now = Date.now();
   const ipEntry = ipStore.get(ip);
-  // [이유: 상태를 변경하지 않고 현재 IP short + long 한도를 모두 평가한다.
-  //  최종 결정은 checkRequestEligibility에 위임.
-  //  IP long window 추가로 precheck도 short/long 양쪽 read-only 평가 필요.]
+
   const shortEvaluation = evaluateSlidingWindow(
     ipEntry?.shortWindow?.timestamps ?? [],
     IP_SHORT_LIMIT,
@@ -278,6 +299,11 @@ export function checkIpRateLimitPrecheck(ip: string): { allowed: boolean } {
     now,
     { appendOnAllow: false },
   );
+
+  if (!shortEvaluation.allowed) {
+    return { allowed: false, blockedBy: "ipShort" };
+  }
+
   const longEvaluation = evaluateSlidingWindow(
     ipEntry?.longWindow?.timestamps ?? [],
     IP_LONG_LIMIT,
@@ -285,7 +311,12 @@ export function checkIpRateLimitPrecheck(ip: string): { allowed: boolean } {
     now,
     { appendOnAllow: false },
   );
-  return { allowed: shortEvaluation.allowed && longEvaluation.allowed };
+
+  if (!longEvaluation.allowed) {
+    return { allowed: false, blockedBy: "ipLong" };
+  }
+
+  return { allowed: true };
 }
 
 // 테스트를 위한 모듈 내보내기

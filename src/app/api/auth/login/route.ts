@@ -100,12 +100,16 @@ async function resolveLoginResponse(
    */
   const precheck = checkIpRateLimitPrecheck(ip);
   if (!precheck.allowed) {
-    // [이유: precheck는 short/long 양쪽 평가. short가 우선이므로 RATE_LIMIT_IP_SHORT 사용]
+    const reasonCode =
+      precheck.blockedBy === "ipLong"
+        ? AUTH_LOG_REASONS.RATE_LIMIT_IP_LONG
+        : AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT;
+
     return {
       response: failureResponse(AUTH_API_CODES.LOGIN_RATE_LIMIT_EXCEEDED),
       outcome: {
         type: "blocked",
-        reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT,
+        reasonCode,
         maskedIp,
       },
     };
