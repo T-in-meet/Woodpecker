@@ -24,18 +24,18 @@ import {
   resolveFieldName,
   SIGNUP_FIELD_NAMES,
 } from "@/features/auth/lib/resolveFieldName";
-
-/**
- * signup 폼에서 처리 가능한 필드 이름 집합
- * resolveFieldName에 주입하여 서버 field → 폼 필드 매핑에 사용한다
- */
-const SIGNUP_FIELD_NAME_SET = new Set(SIGNUP_FIELD_NAMES);
 import { LegalDialogWrapper } from "@/features/auth/signup/components/LegalDialogWrapper";
 import { signupFormSchema } from "@/features/auth/signup/schema/signupFormSchema";
 import { cn } from "@/lib/utils/cn";
 import { showToast } from "@/lib/utils/showToast";
 import { isServerValidationError } from "@/lib/validation/isServerValidationError";
 import { mapReasonToMessage } from "@/lib/validation/mapReasonToMessage";
+
+/**
+ * signup 폼에서 처리 가능한 필드 이름 집합
+ * resolveFieldName에 주입하여 서버 field → 폼 필드 매핑에 사용한다
+ */
+const SIGNUP_FIELD_NAME_SET = new Set(SIGNUP_FIELD_NAMES);
 
 /**
  * 폼 입력 타입 (raw input 기준)
