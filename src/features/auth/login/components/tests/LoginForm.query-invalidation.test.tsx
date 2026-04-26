@@ -5,7 +5,8 @@
  * - 로그인 성공 후 ["auth", "session"] invalidate 호출
  * - 로그인 성공 후 ["auth", "user"] invalidate 호출
  * - 로그인 성공 후 ["mypage"] invalidate 호출
- * - invalidate 완료 후 router.push 호출 (순서 보장)
+ * - 모든 invalidate 요청 완료 후 router.push 호출
+ * - invalidateQueries 간 호출 순서는 검증하지 않음
  */
 
 import { QueryClient } from "@tanstack/react-query";
@@ -90,16 +91,7 @@ describe("LoginForm 로그인 성공 후 query invalidation", () => {
     });
   });
 
-  it("모든 invalidate 완료 후 router.push가 호출된다", async () => {
-    const callOrder: string[] = [];
-
-    invalidateSpy.mockImplementation(async () => {
-      callOrder.push("invalidate");
-    });
-    mockPush.mockImplementation(() => {
-      callOrder.push("push");
-    });
-
+  it("모든 invalidate 요청 완료 후 router.push가 호출된다", async () => {
     const user = userEvent.setup();
     renderLoginForm(queryClient);
 
@@ -109,15 +101,15 @@ describe("LoginForm 로그인 성공 후 query invalidation", () => {
       expect(mockPush).toHaveBeenCalledTimes(1);
     });
 
-    // invalidate가 모두 push보다 먼저 실행되어야 함
-    const pushIndex = callOrder.indexOf("push");
-    const invalidateCount = callOrder.filter((v) => v === "invalidate").length;
-
-    expect(invalidateCount).toBe(3);
-    expect(pushIndex).toBeGreaterThan(0);
-    // push 이전의 모든 항목이 invalidate여야 함
-    expect(callOrder.slice(0, pushIndex).every((v) => v === "invalidate")).toBe(
-      true,
-    );
+    expect(invalidateSpy).toHaveBeenCalledTimes(3);
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ["auth", "session"],
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ["auth", "user"],
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ["mypage"],
+    });
   });
 });

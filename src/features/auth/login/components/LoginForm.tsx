@@ -77,15 +77,14 @@ export function LoginForm() {
           : { payload: data },
       );
 
-      // 로그인 성공 후 서버 상태 동기화 — 세션/유저/마이페이지 캐시를 무효화해 최신 상태 보장
-      // NOTE:
-      // 아래 query invalidation은 현재 순차 실행으로 유지한다.
-      // 세 query는 서로 독립적이므로 Promise.all로 병렬화할 수 있으나,
-      // 현재 테스트에서 invalidate 호출 순서를 검증하고 있어 구조 변경 시 테스트 수정이 필요하다.
-      // 성능 이득이 크지 않아 우선 보류하며, 향후 리팩토링 시 병렬화 고려 가능.
-      await queryClient.invalidateQueries({ queryKey: ["auth", "session"] });
-      await queryClient.invalidateQueries({ queryKey: ["auth", "user"] });
-      await queryClient.invalidateQueries({ queryKey: ["mypage"] });
+      // 로그인 성공 후 서버 상태 동기화
+      // 세션/유저/마이페이지 캐시는 서로 독립적이므로 병렬로 무효화한다.
+      // 모든 무효화 요청이 완료된 뒤 로그인 성공 redirect를 수행한다.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["auth", "session"] }),
+        queryClient.invalidateQueries({ queryKey: ["auth", "user"] }),
+        queryClient.invalidateQueries({ queryKey: ["mypage"] }),
+      ]);
 
       router.push(result.data.redirectTo);
     } catch (e: unknown) {
