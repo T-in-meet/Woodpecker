@@ -11,12 +11,14 @@ const {
   createClientMock,
   getPendingReviewLogMock,
   getReviewableNoteMock,
+  hasCompletedReviewForNoteTodayMock,
   notFoundMock,
   redirectMock,
 } = vi.hoisted(() => ({
   createClientMock: vi.fn(),
   getPendingReviewLogMock: vi.fn(),
   getReviewableNoteMock: vi.fn(),
+  hasCompletedReviewForNoteTodayMock: vi.fn(),
   notFoundMock: vi.fn(),
   redirectMock: vi.fn(),
 }));
@@ -28,19 +30,24 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("@/features/review/queries", () => ({
   getPendingReviewLog: getPendingReviewLogMock,
   getReviewableNote: getReviewableNoteMock,
+  hasCompletedReviewForNoteToday: hasCompletedReviewForNoteTodayMock,
 }));
 
 vi.mock("@/features/review/components/BlankTestPage", () => ({
   BlankTestPage: ({
+    alreadyCompletedToday,
     noteId,
     noteTitle,
     reviewRound,
   }: {
+    alreadyCompletedToday: boolean;
     noteId: string;
     noteTitle: string;
     reviewRound: number;
   }) => (
-    <div data-testid="blank-test-page">{`${noteId}|${noteTitle}|${reviewRound}`}</div>
+    <div data-testid="blank-test-page">
+      {`${noteId}|${noteTitle}|${reviewRound}|${alreadyCompletedToday}`}
+    </div>
   ),
 }));
 
@@ -78,6 +85,7 @@ describe("NoteReviewPage", () => {
     createClientMock.mockReset();
     getPendingReviewLogMock.mockReset();
     getReviewableNoteMock.mockReset();
+    hasCompletedReviewForNoteTodayMock.mockReset();
     notFoundMock.mockReset();
     redirectMock.mockReset();
 
@@ -102,6 +110,7 @@ describe("NoteReviewPage", () => {
 
     expect(redirectMock).toHaveBeenCalledWith(ROUTES.LOGIN);
     expect(getReviewableNoteMock).not.toHaveBeenCalled();
+    expect(hasCompletedReviewForNoteTodayMock).not.toHaveBeenCalled();
   });
 
   it("redirects to verify-email when the user has not confirmed email", async () => {
@@ -120,6 +129,7 @@ describe("NoteReviewPage", () => {
     expect(redirectMock).toHaveBeenCalledWith(ROUTES.VERIFY_EMAIL);
     expect(getReviewableNoteMock).not.toHaveBeenCalled();
     expect(getPendingReviewLogMock).not.toHaveBeenCalled();
+    expect(hasCompletedReviewForNoteTodayMock).not.toHaveBeenCalled();
   });
 
   it("returns not found when the note does not exist for the current user", async () => {
@@ -136,6 +146,7 @@ describe("NoteReviewPage", () => {
     ).rejects.toBe(NOT_FOUND_ERROR);
 
     expect(notFoundMock).toHaveBeenCalledOnce();
+    expect(hasCompletedReviewForNoteTodayMock).not.toHaveBeenCalled();
   });
 
   it("renders an empty state when there is no pending review log", async () => {
@@ -163,6 +174,7 @@ describe("NoteReviewPage", () => {
     expect(
       screen.getByRole("link", { name: "노트로 돌아가기" }),
     ).toBeInTheDocument();
+    expect(hasCompletedReviewForNoteTodayMock).not.toHaveBeenCalled();
   });
 
   it("does not mark the note as completed when the next review is still scheduled", async () => {
@@ -192,9 +204,10 @@ describe("NoteReviewPage", () => {
         name: "이 노트는 모든 복습을 마쳤습니다.",
       }),
     ).not.toBeInTheDocument();
+    expect(hasCompletedReviewForNoteTodayMock).not.toHaveBeenCalled();
   });
 
-  it("renders the blank test page when a pending review exists", async () => {
+  it("falls back to alreadyCompletedToday=false when the lookup fails, since the DB is the source of truth", async () => {
     createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
     getReviewableNoteMock.mockResolvedValue({
       title: "테스트 노트",
@@ -208,6 +221,45 @@ describe("NoteReviewPage", () => {
       scheduled_at: "2026-01-02T00:00:00.000Z",
       completed_at: null,
     });
+    hasCompletedReviewForNoteTodayMock.mockRejectedValue(
+      new Error("review logs query failed"),
+    );
+
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    render(
+      await NoteReviewPage({
+        params: Promise.resolve({
+          noteId: "11111111-1111-1111-1111-111111111111",
+        }),
+      }),
+    );
+
+    expect(screen.getByTestId("blank-test-page")).toHaveTextContent(
+      "11111111-1111-1111-1111-111111111111|테스트 노트|1|false",
+    );
+    expect(consoleErrorSpy).toHaveBeenCalledOnce();
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("passes today's completion state to the blank test page when a pending review exists", async () => {
+    createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
+    getReviewableNoteMock.mockResolvedValue({
+      title: "테스트 노트",
+      next_review_at: "2026-01-02T00:00:00.000Z",
+      review_round: 0,
+    });
+    getPendingReviewLogMock.mockResolvedValue({
+      id: "22222222-2222-2222-2222-222222222222",
+      note_id: "11111111-1111-1111-1111-111111111111",
+      round: 1,
+      scheduled_at: "2026-01-02T00:00:00.000Z",
+      completed_at: null,
+    });
+    hasCompletedReviewForNoteTodayMock.mockResolvedValue(true);
 
     render(
       await NoteReviewPage({
@@ -225,8 +277,12 @@ describe("NoteReviewPage", () => {
       "11111111-1111-1111-1111-111111111111",
       "user-123",
     );
+    expect(hasCompletedReviewForNoteTodayMock).toHaveBeenCalledWith(
+      "11111111-1111-1111-1111-111111111111",
+      "user-123",
+    );
     expect(screen.getByTestId("blank-test-page")).toHaveTextContent(
-      "11111111-1111-1111-1111-111111111111|테스트 노트|1",
+      "11111111-1111-1111-1111-111111111111|테스트 노트|1|true",
     );
   });
 });

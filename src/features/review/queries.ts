@@ -3,6 +3,8 @@ import { z } from "zod";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { createServerComponentClient } from "@/lib/supabase/server";
 
+import { getKstDayBoundsUtc } from "./lib/kstDay";
+
 const reviewableNoteSchema = z.object({
   title: z.string(),
   next_review_at: z.string().nullable(),
@@ -65,6 +67,26 @@ export async function getPendingReviewLog(
 
   const parsed = pendingReviewLogSchema.safeParse(data);
   return parsed.success ? parsed.data : null;
+}
+
+export async function hasCompletedReviewForNoteToday(
+  noteId: string,
+  userId: string,
+): Promise<boolean> {
+  const { startUtcIso, endUtcIso } = getKstDayBoundsUtc();
+  const supabase = await createServerComponentClient();
+  const { count, error } = await supabase
+    .from("review_logs")
+    .select("id", { count: "exact", head: true })
+    .eq("note_id", noteId)
+    .eq("user_id", userId)
+    .not("completed_at", "is", null)
+    .gte("completed_at", startUtcIso)
+    .lt("completed_at", endUtcIso);
+
+  if (error) throw error;
+
+  return (count ?? 0) > 0;
 }
 
 export async function getNoteContentForComparison(

@@ -226,6 +226,12 @@ export type Database = {
         };
         Returns: string;
       };
+      kst_date: {
+        Args: {
+          ts: string;
+        };
+        Returns: string;
+      };
     };
     Enums: {
       [_ in never]: never;

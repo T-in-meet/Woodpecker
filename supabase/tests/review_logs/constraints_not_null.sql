@@ -599,9 +599,9 @@ SAVEPOINT constraints_not_null_scheduled_boundary_times;
 WITH inserted AS (
   INSERT INTO public.review_logs (id, note_id, user_id, round, scheduled_at, completed_at)
   VALUES
-    (gen_random_uuid(), current_setting('test.constraints_not_null_scheduled_note_a1')::uuid, current_setting('test.constraints_not_null_scheduled_user_a')::uuid, 1, now() - interval '1 day', now()),
-    (gen_random_uuid(), current_setting('test.constraints_not_null_scheduled_note_a1')::uuid, current_setting('test.constraints_not_null_scheduled_user_a')::uuid, 1, now(), now()),
-    (gen_random_uuid(), current_setting('test.constraints_not_null_scheduled_note_a1')::uuid, current_setting('test.constraints_not_null_scheduled_user_a')::uuid, 1, now() + interval '1 day', now())
+    (gen_random_uuid(), current_setting('test.constraints_not_null_scheduled_note_a1')::uuid, current_setting('test.constraints_not_null_scheduled_user_a')::uuid, 1, now() - interval '1 day', TIMESTAMPTZ '2026-01-01 00:00:00+00'),
+    (gen_random_uuid(), current_setting('test.constraints_not_null_scheduled_note_a1')::uuid, current_setting('test.constraints_not_null_scheduled_user_a')::uuid, 1, now(), TIMESTAMPTZ '2026-01-02 00:00:00+00'),
+    (gen_random_uuid(), current_setting('test.constraints_not_null_scheduled_note_a1')::uuid, current_setting('test.constraints_not_null_scheduled_user_a')::uuid, 1, now() + interval '1 day', TIMESTAMPTZ '2026-01-03 00:00:00+00')
   RETURNING 1
 )
 SELECT is(

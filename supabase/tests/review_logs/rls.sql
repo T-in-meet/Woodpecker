@@ -4,7 +4,7 @@
 -- TODO: confirm whether review_logs should remain immutable (no UPDATE/DELETE policies)
 BEGIN;
 
-SELECT plan(33);
+SELECT plan(34);
 
 -- 테스트용 UUID 준비
 SELECT set_config('test.user_a_id', gen_random_uuid()::text, true);
@@ -278,6 +278,22 @@ SELECT is(
   $$본인 여러 note에 대한 반복 INSERT는 각각 성공해야 한다$$
 );
 ROLLBACK TO SAVEPOINT review_logs_insert_multiple;
+
+SAVEPOINT review_logs_insert_completed_direct;
+SELECT throws_ok(
+  format(
+    $sql$
+      INSERT INTO public.review_logs (id, note_id, user_id, round, scheduled_at, completed_at)
+      VALUES (gen_random_uuid(), '%s'::uuid, '%s'::uuid, 1, now() + interval '15 days', now() - interval '30 days');
+    $sql$,
+    current_setting('test.note_a1_id'),
+    current_setting('test.user_a_id')
+  ),
+  '42501',
+  NULL,
+  $$authenticated users cannot directly insert completed review logs$$
+);
+ROLLBACK TO SAVEPOINT review_logs_insert_completed_direct;
 
 -- [예외 조건] user_id 불일치
 SELECT throws_ok(
