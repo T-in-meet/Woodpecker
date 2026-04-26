@@ -6,8 +6,7 @@ import { CtaSection } from "@/features/landing/CtaSection";
 import { faqs, FaqSection } from "@/features/landing/FaqSection";
 import { HeroSection } from "@/features/landing/HeroSection";
 import { LearningFlowSection } from "@/features/landing/LearningFlowSection";
-
-const SITE_URL = "https://woodpecker-app.vercel.app";
+import { SITE_URL } from "@/lib/constants/site";
 
 /* ─── JSON-LD 구조화 데이터 ────────────────────────────────────────────────────
    JSON-LD는 검색엔진(구글 등)에게 "이 페이지가 무엇인지"를 기계가 이해할 수 있는
@@ -86,12 +85,15 @@ const jsonLd = {
   ],
 };
 
+// 모듈 로드 시 1회 직렬화 — 매 요청마다 JSON.stringify 호출 비용 제거
+const jsonLdString = JSON.stringify(jsonLd);
+
 export default function Home() {
   return (
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: jsonLdString }}
       />
       <div className="min-h-screen">
         <Suspense fallback={<HeaderSkeleton />}>

@@ -5,6 +5,8 @@
 
 import type { MetadataRoute } from "next";
 
+import { SITE_URL } from "@/lib/constants/site";
+
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
@@ -23,6 +25,6 @@ export default function robots(): MetadataRoute.Robots {
     ],
 
     // 크롤러에게 sitemap 위치를 알려줌 (색인 효율 향상)
-    sitemap: "https://woodpecker-app.vercel.app/sitemap.xml",
+    sitemap: `${SITE_URL}/sitemap.xml`,
   };
 }

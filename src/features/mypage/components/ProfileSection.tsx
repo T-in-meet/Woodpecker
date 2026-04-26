@@ -2,7 +2,13 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useActionState, useRef, useState, useTransition } from "react";
+import {
+  useActionState,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -93,6 +99,12 @@ export function ProfileSection({ profile, email }: ProfileSectionProps) {
       }
     });
   };
+
+  // profile.created_at은 불변값 — 매 렌더마다 Date 객체 생성 방지
+  const joinedDate = useMemo(
+    () => new Date(profile.created_at).toLocaleDateString("ko-KR"),
+    [profile.created_at],
+  );
 
   const avatarDisplay = profile.avatar_url ? (
     <Image
@@ -213,8 +225,7 @@ export function ProfileSection({ profile, email }: ProfileSectionProps) {
                 </p>
                 <p className="text-xs text-muted-foreground">{email}</p>
                 <p className="text-xs text-muted-foreground">
-                  가입일{" "}
-                  {new Date(profile.created_at).toLocaleDateString("ko-KR")}
+                  가입일 {joinedDate}
                 </p>
               </div>
             </div>
