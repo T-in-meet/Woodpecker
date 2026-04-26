@@ -207,6 +207,44 @@ describe("NoteReviewPage", () => {
     expect(hasCompletedReviewForNoteTodayMock).not.toHaveBeenCalled();
   });
 
+  it("falls back to alreadyCompletedToday=false when the lookup fails, since the DB is the source of truth", async () => {
+    createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
+    getReviewableNoteMock.mockResolvedValue({
+      title: "테스트 노트",
+      next_review_at: "2026-01-02T00:00:00.000Z",
+      review_round: 0,
+    });
+    getPendingReviewLogMock.mockResolvedValue({
+      id: "22222222-2222-2222-2222-222222222222",
+      note_id: "11111111-1111-1111-1111-111111111111",
+      round: 1,
+      scheduled_at: "2026-01-02T00:00:00.000Z",
+      completed_at: null,
+    });
+    hasCompletedReviewForNoteTodayMock.mockRejectedValue(
+      new Error("review logs query failed"),
+    );
+
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    render(
+      await NoteReviewPage({
+        params: Promise.resolve({
+          noteId: "11111111-1111-1111-1111-111111111111",
+        }),
+      }),
+    );
+
+    expect(screen.getByTestId("blank-test-page")).toHaveTextContent(
+      "11111111-1111-1111-1111-111111111111|테스트 노트|1|false",
+    );
+    expect(consoleErrorSpy).toHaveBeenCalledOnce();
+
+    consoleErrorSpy.mockRestore();
+  });
+
   it("passes today's completion state to the blank test page when a pending review exists", async () => {
     createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
     getReviewableNoteMock.mockResolvedValue({
