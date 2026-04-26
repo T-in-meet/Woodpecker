@@ -267,6 +267,7 @@ describe("signup 라우트 인증 로깅", () => {
   it("IP precheck 차단이면 AUTH_RATE_LIMIT_BLOCKED에 maskedIp가 포함된다", async () => {
     vi.mocked(checkIpRateLimitPrecheck).mockReturnValue({
       allowed: false,
+      blockedBy: "ipShort",
     });
 
     await POST(makeRequest());

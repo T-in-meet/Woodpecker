@@ -58,7 +58,10 @@ describe("로그인 API rate limit 처리", () => {
   });
 
   it("TC-01: IP precheck 차단 시 429 + LOGIN_RATE_LIMIT_EXCEEDED를 반환한다", async () => {
-    vi.mocked(checkIpRateLimitPrecheck).mockReturnValue({ allowed: false });
+    vi.mocked(checkIpRateLimitPrecheck).mockReturnValue({
+      allowed: false,
+      blockedBy: "ipShort",
+    });
 
     const response = await POST(makeLoginRequest(DEFAULT_LOGIN_BODY));
     const body = await response.json();
@@ -69,7 +72,10 @@ describe("로그인 API rate limit 처리", () => {
   });
 
   it("TC-02: IP precheck 차단 시 signInWithPassword가 호출되지 않는다", async () => {
-    vi.mocked(checkIpRateLimitPrecheck).mockReturnValue({ allowed: false });
+    vi.mocked(checkIpRateLimitPrecheck).mockReturnValue({
+      allowed: false,
+      blockedBy: "ipShort",
+    });
 
     await POST(makeLoginRequest(DEFAULT_LOGIN_BODY));
 
