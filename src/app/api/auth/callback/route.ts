@@ -51,13 +51,13 @@ function resolvePublicOrigin(): string {
   throw new Error("APP_URL must be set");
 }
 
-function redirectToMypage(request: NextRequest): NextResponse {
+function redirectToMypage(): NextResponse {
   const origin = resolvePublicOrigin();
   const redirectUrl = new URL(ROUTES.MYPAGE, `${origin}/`);
   return NextResponse.redirect(redirectUrl, REDIRECT_OPTIONS);
 }
 
-function redirectToVerifyEmail(request: NextRequest): NextResponse {
+function redirectToVerifyEmail(): NextResponse {
   const origin = resolvePublicOrigin();
   const redirectUrl = new URL(ROUTES.VERIFY_EMAIL, `${origin}/`);
   return NextResponse.redirect(redirectUrl, REDIRECT_OPTIONS);
@@ -141,7 +141,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
      */
     if (!isValidMagiclinkInput(input)) {
       outcome = "rejected";
-      response = redirectToVerifyEmail(request);
+      response = redirectToVerifyEmail();
     } else {
       /**
        * 3) side-effect (Supabase verifyOtp)
@@ -150,20 +150,20 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
       if (!verification.ok) {
         outcome = "rejected";
-        response = redirectToVerifyEmail(request);
+        response = redirectToVerifyEmail();
       } else {
         /**
          * 4) finalize redirect
          */
         outcome = "completed";
-        response = redirectToMypage(request);
+        response = redirectToMypage();
       }
     }
   } catch (error) {
     const { errorMessage, errorName } = normalizeUnknownError(error);
     failureMeta = { errorMessage, errorName };
     outcome = "failed";
-    response = redirectToVerifyEmail(request);
+    response = redirectToVerifyEmail();
   }
 
   // callback은 외부 동작이 동일한 redirect(307)여도

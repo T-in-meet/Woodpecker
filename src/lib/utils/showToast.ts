@@ -1,7 +1,10 @@
+import { toast } from "sonner";
+
 /**
  * 명령형(Imperative) 토스트 유틸리티
  *
- * 사용법: 이벤트 핸들러 내에서 showToast(message, variant) 로 호출
+ * 사용법:
+ * showToast(message, { variant, duration, dedupeKey })
  *
  * 설계:
  * - React 훅이 아님 (useState, useEffect 사용 안 함)
@@ -12,8 +15,13 @@
  * 이유:
  * - Toast는 단발성 디스플레이 요소임
  * - 조건부 렌더링을 사용하면 불필요한 상태 관리가 필요하게 됨
- * - 명령형 접근법을 통해 Toast를 컴포넌트 상태와 완벽히 분리함
+ * - 명령형 접근법을 통해 Toast를 컴포넌트 상태와 완전히 분리함
  * - sonner는 전역 Toaster에 의해 관리되므로 DOM 조작이 불필요함
+ *
+ * 옵션 설계:
+ * - variant, duration, dedupeKey를 하나의 객체로 관리
+ * - dedupeKey를 통해 동일 의미의 toast 중복 표시를 방지
+ * - dedupeKey는 Sonner의 id로 매핑됨
  *
  * [변경 이유: createRoot / document.createElement 제거]
  * - sonner의 toast() 함수가 전역 Toaster에 의해 자동으로 관리됨
@@ -21,33 +29,49 @@
  * - 여러 토스트가 자동으로 스택됨
  */
 
-import { toast } from "sonner";
+type ToastVariant = "default" | "destructive";
+
+type ShowToastOptions = {
+  variant?: ToastVariant;
+  duration?: number;
+  dedupeKey?: string;
+};
 
 /**
  * 토스트 메시지를 명령형으로 표시한다
  *
  * @param message - 표시할 메시지
- * @param variant - "default" | "destructive" (선택사항, 기본값은 "default")
- * @param duration - 토스트를 표시할 밀리초(ms) 단위의 시간 (선택사항, 기본값은 3000)
+ * @param options - 토스트 옵션
+ *   - variant: "default" | "destructive" (기본값: "default")
+ *   - duration: 표시 시간(ms) (기본값: 3000)
+ *   - dedupeKey: 동일 의미 toast 중복 방지 키
  *
  * 예시:
- * try {
- *   await submitForm();
- * } catch {
- *   showToast("제출을 실패했습니다.", "destructive");
- * }
+ * showToast("저장되었습니다.");
+ *
+ * showToast("요청에 실패했습니다.", {
+ *   variant: "destructive",
+ * });
+ *
+ * showToast("잠시 후 다시 시도해주세요.", {
+ *   variant: "destructive",
+ *   dedupeKey: "auth-rate-limit",
+ * });
  */
 export function showToast(
   message: string,
-  variant: "default" | "destructive" = "default",
-  duration = 3000,
+  options: ShowToastOptions = {},
 ): void {
-  // [설계: sonner의 toast() 함수를 사용]
-  // - variant를 sonner의 type 파라미터로 매핑: "destructive" → "error", "default" → "success"
-  // - duration은 자동으로 처리됨
+  const { variant = "default", duration = 3000, dedupeKey } = options;
+
+  const toastOptions = {
+    duration,
+    ...(dedupeKey ? { id: dedupeKey } : {}),
+  };
+
   if (variant === "destructive") {
-    toast.error(message, { duration });
+    toast.error(message, toastOptions);
   } else {
-    toast(message, { duration });
+    toast(message, toastOptions);
   }
 }

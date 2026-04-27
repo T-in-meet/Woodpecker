@@ -171,10 +171,10 @@ describe("VerifyEmailPageClient", () => {
     await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
 
     await waitFor(() => {
-      expect(showToast).toHaveBeenCalledWith(
-        RATE_LIMIT_TOAST_MESSAGE,
-        "destructive",
-      );
+      expect(showToast).toHaveBeenCalledWith(RATE_LIMIT_TOAST_MESSAGE, {
+        variant: "destructive",
+        dedupeKey: "auth-rate-limit",
+      });
     });
   });
 
@@ -188,10 +188,10 @@ describe("VerifyEmailPageClient", () => {
     await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
 
     await waitFor(() => {
-      expect(showToast).toHaveBeenCalledWith(
-        UNKNOWN_ERROR_MESSAGE,
-        "destructive",
-      );
+      expect(showToast).toHaveBeenCalledWith(UNKNOWN_ERROR_MESSAGE, {
+        variant: "destructive",
+        dedupeKey: "auth-unknown-error",
+      });
     });
     expect(showToast).not.toHaveBeenCalledWith(
       RATE_LIMIT_TOAST_MESSAGE,
@@ -207,10 +207,10 @@ describe("VerifyEmailPageClient", () => {
     await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
 
     await waitFor(() => {
-      expect(showToast).toHaveBeenCalledWith(
-        "잠시 후 다시 시도해주세요",
-        "destructive",
-      );
+      expect(showToast).toHaveBeenCalledWith("잠시 후 다시 시도해주세요", {
+        variant: "destructive",
+        dedupeKey: "auth-global-server",
+      });
     });
   });
 });

@@ -57,13 +57,14 @@ describe("authLogger 분기 라우팅", () => {
   });
 
   it('logAuthEvent에서 result === "blocked"이면 warn을 호출한다', () => {
+    // [이유: RATE_LIMIT_IP → RATE_LIMIT_IP_SHORT로 rename됨]
     logAuthEvent(AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED, {
       path: "/api/auth/signup",
       method: "POST",
       status: 429,
       provider: "email",
       result: "blocked",
-      reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_IP,
+      reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT,
     });
 
     expect(vi.mocked(logWarn)).toHaveBeenCalledTimes(1);
@@ -111,13 +112,14 @@ describe("authLogger 분기 라우팅", () => {
       provider: "email",
       result: "success",
     });
+    // [이유: RATE_LIMIT_IP → RATE_LIMIT_IP_SHORT로 rename됨]
     logAuthEvent(AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED, {
       path: "/api/auth/signup",
       method: "POST",
       status: 429,
       provider: "email",
       result: "blocked",
-      reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_IP,
+      reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT,
     });
     logAuthError(AUTH_EVENTS.AUTH_CALLBACK_FAILED, {
       path: "/api/auth/callback",

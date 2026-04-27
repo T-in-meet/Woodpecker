@@ -76,10 +76,10 @@ describe("회원가입 전역 에러 처리", () => {
     await submitValidForm(user);
 
     await waitFor(() => {
-      expect(showToast).toHaveBeenCalledWith(
-        "네트워크 연결을 확인해주세요",
-        "destructive",
-      );
+      expect(showToast).toHaveBeenCalledWith("네트워크 연결을 확인해주세요", {
+        variant: "destructive",
+        dedupeKey: "auth-global-network",
+      });
     });
   });
 
@@ -91,10 +91,10 @@ describe("회원가입 전역 에러 처리", () => {
     await submitValidForm(user);
 
     await waitFor(() => {
-      expect(showToast).toHaveBeenCalledWith(
-        "잠시 후 다시 시도해주세요",
-        "destructive",
-      );
+      expect(showToast).toHaveBeenCalledWith("잠시 후 다시 시도해주세요", {
+        variant: "destructive",
+        dedupeKey: "auth-global-server",
+      });
     });
   });
 
@@ -108,7 +108,10 @@ describe("회원가입 전역 에러 처리", () => {
     await waitFor(() => {
       expect(showToast).toHaveBeenCalledWith(
         "요청 시간이 초과되었습니다. 다시 시도해주세요",
-        "destructive",
+        {
+          variant: "destructive",
+          dedupeKey: "auth-global-timeout",
+        },
       );
     });
   });
@@ -125,10 +128,10 @@ describe("회원가입 전역 에러 처리", () => {
     await submitValidForm(user);
 
     await waitFor(() => {
-      expect(showToast).toHaveBeenCalledWith(
-        "잠시 후 다시 시도해주세요",
-        "destructive",
-      );
+      expect(showToast).toHaveBeenCalledWith("잠시 후 다시 시도해주세요", {
+        variant: "destructive",
+        dedupeKey: "auth-global-server",
+      });
     });
     expect(
       screen.getByRole("button", { name: /^회원가입$/ }),

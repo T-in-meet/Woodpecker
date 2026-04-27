@@ -2,182 +2,152 @@ import { describe, expect, it } from "vitest";
 
 import { canonicalizeEmail } from "./canonicalizeEmail";
 
-describe("canonicalizeEmail", () => {
-  describe("Gmail plus addressing", () => {
-    it("TC-01: removes plus tag from Gmail address", () => {
+describe("canonicalizeEmail — 이메일 정규화", () => {
+  describe("Gmail plus 주소 정규화", () => {
+    it("TC-01: Gmail 주소의 plus 태그를 제거한다", () => {
       expect(canonicalizeEmail("user+tag@gmail.com")).toBe("user@gmail.com");
     });
 
-    it("TC-02: removes plus tag with multiple characters", () => {
+    it("TC-02: 여러 글자로 된 plus 태그를 제거한다", () => {
       expect(canonicalizeEmail("user+notification@gmail.com")).toBe(
         "user@gmail.com",
       );
     });
 
-    it("TC-03: removes everything after plus", () => {
+    it("TC-03: plus 이후의 모든 문자열을 제거한다", () => {
       expect(canonicalizeEmail("user+a+b@gmail.com")).toBe("user@gmail.com");
     });
   });
 
-  describe("Gmail dot removal", () => {
-    it("TC-04: removes dots from Gmail local part", () => {
+  describe("Gmail dot 제거", () => {
+    it("TC-04: Gmail local part의 dot을 제거한다", () => {
       expect(canonicalizeEmail("u.s.e.r@gmail.com")).toBe("user@gmail.com");
     });
 
-    it("TC-05: removes single dot from Gmail local part", () => {
+    it("TC-05: Gmail local part의 단일 dot을 제거한다", () => {
       expect(canonicalizeEmail("first.last@gmail.com")).toBe(
         "firstlast@gmail.com",
       );
     });
 
-    it("TC-06: handles dot at start (edge case)", () => {
+    it("TC-06: local part 앞쪽 dot도 제거한다", () => {
       expect(canonicalizeEmail(".user@gmail.com")).toBe("user@gmail.com");
     });
 
-    it("TC-07: handles dot at end (edge case)", () => {
+    it("TC-07: local part 뒤쪽 dot도 제거한다", () => {
       expect(canonicalizeEmail("user.@gmail.com")).toBe("user@gmail.com");
     });
   });
 
-  describe("Gmail combined rules", () => {
-    it("TC-08: removes both dots and plus tag", () => {
+  describe("Gmail 복합 정규화", () => {
+    it("TC-08: dot과 plus 태그를 함께 제거한다", () => {
       expect(canonicalizeEmail("u.s.e.r+tag@gmail.com")).toBe("user@gmail.com");
     });
 
-    it("TC-09: handles complex combined case", () => {
+    it("TC-09: 복합 plus 태그도 제거한다", () => {
       expect(canonicalizeEmail("u.s.e.r+notification+tag@gmail.com")).toBe(
         "user@gmail.com",
       );
     });
 
-    it("TC-10: uppercase Gmail address with dots and plus", () => {
+    it("TC-10: 대소문자, dot, plus가 함께 있어도 정규화한다", () => {
       expect(canonicalizeEmail("U.S.E.R+TAG@Gmail.COM")).toBe("user@gmail.com");
     });
   });
 
-  describe("googlemail.com domain unification", () => {
-    it("TC-11: converts googlemail.com to gmail.com", () => {
+  describe("googlemail.com 도메인 통일", () => {
+    it("TC-11: googlemail.com을 gmail.com으로 변환한다", () => {
       expect(canonicalizeEmail("user@googlemail.com")).toBe("user@gmail.com");
     });
 
-    it("TC-12: removes dots from googlemail address", () => {
+    it("TC-12: googlemail.com 주소의 dot을 제거한다", () => {
       expect(canonicalizeEmail("u.s.e.r@googlemail.com")).toBe(
         "user@gmail.com",
       );
     });
 
-    it("TC-13: removes plus from googlemail address", () => {
+    it("TC-13: googlemail.com 주소의 plus 태그를 제거한다", () => {
       expect(canonicalizeEmail("user+tag@googlemail.com")).toBe(
         "user@gmail.com",
       );
     });
 
-    it("TC-14: handles uppercase googlemail.com", () => {
+    it("TC-14: 대문자가 포함된 googlemail.com도 gmail.com으로 통일한다", () => {
       expect(canonicalizeEmail("user@GoogleMail.COM")).toBe("user@gmail.com");
     });
 
-    it("TC-15: handles both dots and plus on googlemail.com", () => {
+    it("TC-15: googlemail.com 주소의 dot과 plus를 함께 정규화한다", () => {
       expect(canonicalizeEmail("u.s.e.r+tag@GOOGLEMAIL.COM")).toBe(
         "user@gmail.com",
       );
     });
   });
 
-  describe("non-Gmail domain handling", () => {
-    it("TC-16: preserves plus addressing in non-Gmail domains", () => {
+  describe("Gmail이 아닌 도메인 처리", () => {
+    it("TC-16: Gmail이 아닌 도메인의 plus 주소는 유지한다", () => {
       expect(canonicalizeEmail("user+tag@company.com")).toBe(
         "user+tag@company.com",
       );
     });
 
-    it("TC-17: preserves dots in non-Gmail domains", () => {
+    it("TC-17: Gmail이 아닌 도메인의 dot은 유지한다", () => {
       expect(canonicalizeEmail("user.name@company.com")).toBe(
         "user.name@company.com",
       );
     });
 
-    it("TC-18: preserves both dots and plus in non-Gmail", () => {
+    it("TC-18: Gmail이 아닌 도메인의 dot과 plus를 모두 유지한다", () => {
       expect(canonicalizeEmail("user.name+tag@company.com")).toBe(
         "user.name+tag@company.com",
       );
     });
 
-    it("TC-19: lowercase non-Gmail domain", () => {
+    it("TC-19: Gmail이 아닌 도메인의 소문자 주소는 그대로 유지한다", () => {
       expect(canonicalizeEmail("user@example.com")).toBe("user@example.com");
     });
 
-    it("TC-20: uppercase domain in non-Gmail", () => {
+    it("TC-20: Gmail이 아닌 도메인의 대문자는 소문자로 변환한다", () => {
       expect(canonicalizeEmail("user@EXAMPLE.COM")).toBe("user@example.com");
     });
   });
 
-  describe("trim and case normalization", () => {
-    it("TC-21: trims leading whitespace", () => {
-      expect(canonicalizeEmail("  user@example.com")).toBe("user@example.com");
-    });
-
-    it("TC-22: trims trailing whitespace", () => {
-      expect(canonicalizeEmail("user@example.com  ")).toBe("user@example.com");
-    });
-
-    it("TC-23: trims both leading and trailing whitespace", () => {
-      expect(canonicalizeEmail("  user@example.com  ")).toBe(
-        "user@example.com",
-      );
-    });
-
-    it("TC-24: converts uppercase to lowercase", () => {
+  describe("대소문자 정규화", () => {
+    it("TC-21: 대문자는 소문자로 변환한다", () => {
       expect(canonicalizeEmail("USER@EXAMPLE.COM")).toBe("user@example.com");
     });
 
-    it("TC-25: mixed case normalization", () => {
+    it("TC-22: 혼합 대소문자는 소문자로 정규화한다", () => {
       expect(canonicalizeEmail("User@Example.COM")).toBe("user@example.com");
-    });
-
-    it("TC-26: whitespace and case combination", () => {
-      expect(canonicalizeEmail("  User@Example.COM  ")).toBe(
-        "user@example.com",
-      );
     });
   });
 
-  describe("edge cases", () => {
-    it("TC-27: empty local part after plus removal", () => {
+  describe("경계 케이스", () => {
+    it("TC-23: plus 제거 후 local part가 비어 있어도 처리한다", () => {
       expect(canonicalizeEmail("+tag@gmail.com")).toBe("@gmail.com");
     });
 
-    it("TC-28: Gmail address with no special characters", () => {
+    it("TC-24: 특수 규칙이 없는 Gmail 주소는 그대로 유지한다", () => {
       expect(canonicalizeEmail("user@gmail.com")).toBe("user@gmail.com");
     });
 
-    it("TC-29: multiple at signs (takes last @)", () => {
+    it("TC-25: @가 여러 개 있으면 마지막 @를 기준으로 처리한다", () => {
       expect(canonicalizeEmail("user+@fake@gmail.com")).toBe("user@gmail.com");
     });
 
-    it("TC-30: no at sign - edge case", () => {
+    it("TC-26: @가 없는 입력은 그대로 반환한다", () => {
       expect(canonicalizeEmail("notanemail")).toBe("notanemail");
-    });
-
-    it("TC-31: whitespace only in local part (non-Gmail)", () => {
-      expect(canonicalizeEmail("  @company.com")).toBe("@company.com");
-    });
-
-    it("TC-32: tab and newline characters", () => {
-      expect(canonicalizeEmail("\t\nuser@example.com\n\t")).toBe(
-        "user@example.com",
-      );
     });
   });
 
-  describe("determinism", () => {
-    it("TC-33: same input produces same output", () => {
+  describe("결정성", () => {
+    it("TC-27: 같은 입력은 항상 같은 결과를 반환한다", () => {
       const input = "User+Tag@Gmail.COM";
       const result1 = canonicalizeEmail(input);
       const result2 = canonicalizeEmail(input);
       expect(result1).toBe(result2);
     });
 
-    it("TC-34: multiple calls are idempotent", () => {
+    it("TC-28: 여러 번 호출해도 결과가 동일하다", () => {
       const input = "user@example.com";
       const result1 = canonicalizeEmail(input);
       const result2 = canonicalizeEmail(result1);

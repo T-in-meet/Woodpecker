@@ -1,0 +1,115 @@
+/**
+ * LoginForm 로그인 성공 후 query invalidation 테스트
+ *
+ * 검증 범위:
+ * - 로그인 성공 후 ["auth", "session"] invalidate 호출
+ * - 로그인 성공 후 ["auth", "user"] invalidate 호출
+ * - 로그인 성공 후 ["mypage"] invalidate 호출
+ * - 모든 invalidate 요청 완료 후 router.push 호출
+ * - invalidateQueries 간 호출 순서는 검증하지 않음
+ */
+
+import { QueryClient } from "@tanstack/react-query";
+import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import {
+  createTestQueryClient,
+  mockMutateAsync,
+  mockPush,
+  renderLoginForm,
+  setupDefaultMocks,
+} from "./utils/loginFormTestUtils";
+
+async function submitValidForm(user: ReturnType<typeof userEvent.setup>) {
+  await user.type(screen.getByLabelText(/이메일/i), "user@example.com");
+  await user.type(screen.getByLabelText(/^비밀번호$/i), "Password1!");
+  await user.click(screen.getByRole("button", { name: /^로그인$/ }));
+}
+
+describe("LoginForm 로그인 성공 후 query invalidation", () => {
+  let invalidateSpy: ReturnType<typeof vi.spyOn>;
+
+  let queryClient: QueryClient;
+
+  beforeEach(() => {
+    setupDefaultMocks();
+
+    queryClient = createTestQueryClient();
+
+    // queryClient 인스턴스를 테스트마다 새로 생성하고,
+    // 해당 인스턴스의 invalidateQueries를 spy로 감싸 호출 여부와 인자를 검증한다.
+    // 반드시 renderLoginForm(queryClient)로 동일 인스턴스를 주입해야 한다.
+    invalidateSpy = vi
+      .spyOn(queryClient, "invalidateQueries")
+      .mockResolvedValue(undefined);
+
+    mockMutateAsync.mockResolvedValue({
+      success: true,
+      code: "LOGIN_SUCCESS",
+      data: { redirectTo: "/mypage" },
+    });
+  });
+
+  it("로그인 성공 후 ['auth', 'session'] 쿼리를 invalidate한다", async () => {
+    const user = userEvent.setup();
+    renderLoginForm(queryClient);
+
+    await submitValidForm(user);
+
+    await waitFor(() => {
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ["auth", "session"],
+      });
+    });
+  });
+
+  it("로그인 성공 후 ['auth', 'user'] 쿼리를 invalidate한다", async () => {
+    const user = userEvent.setup();
+    renderLoginForm(queryClient);
+
+    await submitValidForm(user);
+
+    await waitFor(() => {
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ["auth", "user"],
+      });
+    });
+  });
+
+  it("로그인 성공 후 ['mypage'] 쿼리를 invalidate한다", async () => {
+    const user = userEvent.setup();
+    renderLoginForm(queryClient);
+
+    await submitValidForm(user);
+
+    await waitFor(() => {
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ["mypage"],
+      });
+    });
+  });
+
+  it("모든 invalidate 요청 완료 후 router.push가 호출된다", async () => {
+    const user = userEvent.setup();
+    renderLoginForm(queryClient);
+
+    await submitValidForm(user);
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledTimes(1);
+    });
+
+    expect(invalidateSpy).toHaveBeenCalledTimes(3);
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ["auth", "session"],
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ["auth", "user"],
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ["mypage"],
+    });
+  });
+});

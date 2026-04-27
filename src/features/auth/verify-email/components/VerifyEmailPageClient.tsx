@@ -135,7 +135,10 @@ export default function VerifyEmailPageClient({ email }: Props) {
        * - validation / global error와 구분되는 "도메인 에러 계층"으로 취급한다.
        */
       if (isRateLimitError(e)) {
-        showToast(RATE_LIMIT_TOAST_MESSAGE, "destructive");
+        showToast(RATE_LIMIT_TOAST_MESSAGE, {
+          variant: "destructive",
+          dedupeKey: "auth-rate-limit",
+        });
         return;
       }
 
@@ -150,7 +153,10 @@ export default function VerifyEmailPageClient({ email }: Props) {
        * - 서버가 반환한 도메인 에러(response body 기반)와 구분한다.
        */
       if (isGlobalError(e)) {
-        showToast(GLOBAL_ERROR_MESSAGES[e.type], "destructive");
+        showToast(GLOBAL_ERROR_MESSAGES[e.type], {
+          variant: "destructive",
+          dedupeKey: `auth-global-${e.type}`,
+        });
         return;
       }
 
@@ -165,7 +171,10 @@ export default function VerifyEmailPageClient({ email }: Props) {
        * - 예상하지 못한 에러(contract 위반, 런타임 예외 등)에 대해
        *   최소한의 사용자 피드백을 보장한다.
        */
-      showToast(UNKNOWN_ERROR_MESSAGE, "destructive");
+      showToast(UNKNOWN_ERROR_MESSAGE, {
+        variant: "destructive",
+        dedupeKey: "auth-unknown-error",
+      });
     }
   };
 

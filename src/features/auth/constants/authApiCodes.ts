@@ -118,6 +118,46 @@ export const AUTH_API_CODES = {
     "send-email-hook",
     API_RESULTS.UNAUTHORIZED,
   ),
+
+  /**
+   * 로그인 성공
+   * - 이메일 + 비밀번호 인증이 정상적으로 완료된 경우
+   */
+  LOGIN_SUCCESS: makeApiCode("login", API_RESULTS.SUCCESS),
+
+  /**
+   * 로그인 입력값 오류
+   * - JSON 파싱 실패, schema validation 실패, extra field 포함 등
+   */
+  LOGIN_INVALID_INPUT: makeApiCode("login", API_RESULTS.INVALID_INPUT),
+
+  /**
+   * 로그인 인증 실패 통합
+   *
+   * 다음 케이스를 외부에서 구분하지 않고 동일하게 처리한다:
+   * - 존재하지 않는 계정
+   * - 비밀번호 불일치
+   * - 이메일 미인증 계정
+   * - 기타 인증 실패
+   *
+   * 응답: 401
+   */
+  LOGIN_INVALID_CREDENTIALS: makeApiCode(
+    "login",
+    API_RESULTS.INVALID_CREDENTIALS,
+  ),
+
+  /**
+   * 로그인 요청 횟수 초과
+   * - IP 또는 이메일 기준 rate limit에 걸린 경우 (429)
+   */
+  LOGIN_RATE_LIMIT_EXCEEDED: makeApiCode("login", API_RESULTS.RATE_LIMITED),
+
+  /**
+   * 로그인 처리 중 내부 서버 오류
+   * - 예상하지 못한 런타임 예외 (500)
+   */
+  LOGIN_INTERNAL_ERROR: makeApiCode("login", API_RESULTS.INTERNAL_ERROR),
 } as const;
 
 /**
