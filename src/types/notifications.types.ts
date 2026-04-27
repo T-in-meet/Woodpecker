@@ -1,12 +1,11 @@
+import type {
+  NotificationKindType,
+  NotificationStatusType,
+} from "@/lib/constants/notifications";
 import type { InsertDto, Row, UpdateDto } from "@/types/db.helpers";
 
-export type NotificationStatus =
-  | "PENDING"
-  | "SENT"
-  | "READ"
-  | "SKIPPED"
-  | "FAILED";
-export type NotificationType = "REVIEW" | "SYSTEM";
+export type NotificationStatus = NotificationStatusType;
+export type NotificationType = NotificationKindType;
 
 // DB Row를 베이스로 status/type을 리터럴 유니온으로 override
 type NotificationRow = Omit<Row<"notifications">, "status" | "type"> & {
@@ -21,11 +20,6 @@ export type NotificationUpdate = UpdateDto<"notifications">;
 export type NotificationId = Notification["id"];
 export type NotificationUserId = Notification["user_id"];
 export type NotificationNoteId = Notification["note_id"];
-
-export type NotificationListItem = Pick<
-  Notification,
-  "id" | "title" | "body" | "type" | "status" | "sent_at" | "read_at"
->;
 
 export type NotificationCreateInput = Omit<
   NotificationInsert,

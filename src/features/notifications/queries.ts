@@ -1,9 +1,147 @@
-// TODO: Supabase query functions
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { z } from "zod";
 
-export async function getNotifications() {
-  return [];
+import {
+  NOTIFICATION_STATUS,
+  NOTIFICATION_TYPES,
+} from "@/lib/constants/notifications";
+import { createServerComponentClient } from "@/lib/supabase/server";
+import type { Database } from "@/types/database.types";
+
+const DEFAULT_NOTIFICATION_LIST_LIMIT = 20;
+const MAX_NOTIFICATION_LIST_LIMIT = 50;
+
+const notificationStatusSchema = z.enum([
+  NOTIFICATION_STATUS.SENT,
+  NOTIFICATION_STATUS.READ,
+  NOTIFICATION_STATUS.SKIPPED,
+]);
+
+const joinedNoteSchema = z.object({
+  title: z.string(),
+});
+
+const notificationListRowSchema = z.object({
+  id: z.string().uuid(),
+  title: z.string(),
+  body: z.string().nullable(),
+  type: z.enum([NOTIFICATION_TYPES.REVIEW_DUE]),
+  status: notificationStatusSchema,
+  sent_at: z.string(),
+  read_at: z.string().nullable(),
+  note_id: z.string().uuid().nullable(),
+  review_log_id: z.string().uuid().nullable(),
+  note: joinedNoteSchema.nullable().optional(),
+});
+
+const notificationListItemSchema = notificationListRowSchema.transform(
+  ({ note, ...item }) => ({
+    ...item,
+    noteTitle: note?.title ?? null,
+  }),
+);
+
+export type NotificationListItemType = z.infer<
+  typeof notificationListItemSchema
+>;
+
+type NotificationQueryClientType = {
+  auth: Pick<SupabaseClient<Database>["auth"], "getUser">;
+  from: SupabaseClient<Database>["from"];
+};
+
+type NotificationQueryOptionsType = {
+  supabase?: NotificationQueryClientType;
+  userId?: string;
+};
+
+type NotificationListOptionsType = NotificationQueryOptionsType & {
+  limit?: number;
+};
+
+function normalizeNotificationListLimit(limit: number | undefined) {
+  if (typeof limit !== "number" || !Number.isInteger(limit)) {
+    return DEFAULT_NOTIFICATION_LIST_LIMIT;
+  }
+
+  return Math.min(Math.max(limit, 1), MAX_NOTIFICATION_LIST_LIMIT);
 }
 
-export async function markAsRead(_id: string) {
-  return null;
+/**
+ * Defaults to the RSC client; route handlers and server actions should inject
+ * their strict client and userId after their own auth check.
+ */
+async function getNotificationQueryContext(
+  options: NotificationQueryOptionsType = {},
+) {
+  const supabase = options.supabase ?? (await createServerComponentClient());
+
+  if (options.userId) {
+    return {
+      supabase,
+      userId: options.userId,
+    };
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  return {
+    supabase,
+    userId: user?.id ?? null,
+  };
+}
+
+export async function getUnreadCount(
+  options: NotificationQueryOptionsType = {},
+): Promise<number> {
+  const { supabase, userId } = await getNotificationQueryContext(options);
+
+  if (!userId) return 0;
+
+  const { count, error } = await supabase
+    .from("notifications")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("type", NOTIFICATION_TYPES.REVIEW_DUE)
+    .eq("status", NOTIFICATION_STATUS.SENT);
+
+  if (error) throw error;
+
+  return count ?? 0;
+}
+
+export async function getNotificationList(
+  options: NotificationListOptionsType = {},
+): Promise<NotificationListItemType[]> {
+  const { supabase, userId } = await getNotificationQueryContext(options);
+
+  if (!userId) return [];
+
+  const limit = normalizeNotificationListLimit(options.limit);
+  const { data, error } = await supabase
+    .from("notifications")
+    .select(
+      "id, title, body, type, status, sent_at, read_at, note_id, review_log_id, note:notes(title)",
+    )
+    .eq("user_id", userId)
+    .eq("type", NOTIFICATION_TYPES.REVIEW_DUE)
+    .in("status", [
+      NOTIFICATION_STATUS.SENT,
+      NOTIFICATION_STATUS.READ,
+      NOTIFICATION_STATUS.SKIPPED,
+    ])
+    .order("sent_at", { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+
+  const parsed = z.array(notificationListItemSchema).safeParse(data);
+
+  if (!parsed.success) {
+    throw parsed.error;
+  }
+
+  return parsed.data;
 }
