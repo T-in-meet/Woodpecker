@@ -25,7 +25,7 @@ const notificationListRowSchema = z.object({
   id: z.string().uuid(),
   title: z.string(),
   body: z.string().nullable(),
-  type: z.enum([NOTIFICATION_TYPES.REVIEW_DUE]),
+  type: z.enum([NOTIFICATION_TYPES.REVIEW]),
   status: notificationStatusSchema,
   sent_at: z.string(),
   read_at: z.string().nullable(),
@@ -104,7 +104,7 @@ export async function getUnreadCount(
     .from("notifications")
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
-    .eq("type", NOTIFICATION_TYPES.REVIEW_DUE)
+    .eq("type", NOTIFICATION_TYPES.REVIEW)
     .eq("status", NOTIFICATION_STATUS.SENT);
 
   if (error) throw error;
@@ -126,7 +126,7 @@ export async function getNotificationList(
       "id, title, body, type, status, sent_at, read_at, note_id, review_log_id, note:notes(title)",
     )
     .eq("user_id", userId)
-    .eq("type", NOTIFICATION_TYPES.REVIEW_DUE)
+    .eq("type", NOTIFICATION_TYPES.REVIEW)
     .in("status", [
       NOTIFICATION_STATUS.SENT,
       NOTIFICATION_STATUS.READ,

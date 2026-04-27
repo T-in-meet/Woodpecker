@@ -1,5 +1,6 @@
 export const NOTIFICATION_TYPES = {
-  REVIEW_DUE: "REVIEW_DUE",
+  REVIEW: "REVIEW",
+  SYSTEM: "SYSTEM",
 } as const;
 
 export const NOTIFICATION_STATUS = {
