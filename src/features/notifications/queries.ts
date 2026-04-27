@@ -145,3 +145,20 @@ export async function getNotificationList(
 
   return parsed.data;
 }
+
+export async function getHasAnyPushSubscription(
+  options: NotificationQueryOptionsType = {},
+): Promise<boolean> {
+  const { supabase, userId } = await getNotificationQueryContext(options);
+
+  if (!userId) return false;
+
+  const { count, error } = await supabase
+    .from("push_subscriptions")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId);
+
+  if (error) throw error;
+
+  return (count ?? 0) > 0;
+}

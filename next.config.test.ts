@@ -201,6 +201,7 @@ describe("Security Headers — next.config.ts", () => {
         expect(cspReportOnly).toContain("img-src");
         expect(cspReportOnly).toContain("font-src");
         expect(cspReportOnly).toContain("connect-src");
+        expect(cspReportOnly).toContain("worker-src 'self'");
       });
 
       it("TC-CSP-09. Report-Only CSP에 강제 CSP 디렉티브(object-src, base-uri, frame-ancestors)가 없다", async () => {

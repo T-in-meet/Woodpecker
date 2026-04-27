@@ -17,6 +17,7 @@
 // - connect-src, img-src, font-src를 실제 사용 origin으로 축소
 // - supabase 및 외부 API 도메인 화이트리스트화
 
+import withSerwist from "@serwist/next";
 import type { NextConfig } from "next";
 
 const supabaseHostname =
@@ -79,6 +80,7 @@ const nextConfig: NextConfig = {
     // 주의:
     // - 'unsafe-inline', 'unsafe-eval'은 완화된 설정 (현재는 필요하므로 유지, 추후 개선)
     // - 강제 CSP 디렉티브(object-src, base-uri, frame-ancestors)는 혼재하지 않음
+    // - worker-src는 서비스 워커 호환성 관측 후 강제 CSP 승격 여부를 판단함
     const cspReportOnly = [
       "default-src 'self'",
       "img-src 'self' data: blob: https:",
@@ -86,6 +88,7 @@ const nextConfig: NextConfig = {
       "style-src 'self' 'unsafe-inline' https:",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:",
       "connect-src 'self' https:",
+      "worker-src 'self'",
     ].join("; ");
 
     return [
@@ -188,4 +191,8 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withSerwist({
+  swSrc: "src/sw.ts",
+  swDest: "public/sw.js",
+  disable: process.env.NODE_ENV === "development",
+})(nextConfig);
