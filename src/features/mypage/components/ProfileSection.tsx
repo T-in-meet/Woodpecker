@@ -23,8 +23,13 @@ import {
   uploadAvatarAction,
 } from "../actions";
 
+type ProfileSectionProfile = Pick<
+  Profile,
+  "avatar_url" | "created_at" | "nickname" | "role"
+>;
+
 type ProfileSectionProps = {
-  profile: Profile;
+  profile: ProfileSectionProfile;
   email: string;
 };
 

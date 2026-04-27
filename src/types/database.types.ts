@@ -40,6 +40,7 @@ export type Database = {
           created_at: string;
           id: string;
           next_review_at: string | null;
+          notification_time_of_day: string | null;
           review_round: number;
           title: string;
           updated_at: string;
@@ -50,6 +51,7 @@ export type Database = {
           created_at?: string;
           id?: string;
           next_review_at?: string | null;
+          notification_time_of_day?: string | null;
           review_round?: number;
           title: string;
           updated_at?: string;
@@ -60,6 +62,7 @@ export type Database = {
           created_at?: string;
           id?: string;
           next_review_at?: string | null;
+          notification_time_of_day?: string | null;
           review_round?: number;
           title?: string;
           updated_at?: string;
@@ -73,6 +76,7 @@ export type Database = {
           id: string;
           note_id: string | null;
           read_at: string | null;
+          review_log_id: string | null;
           sent_at: string;
           skipped_at: string | null;
           status: string;
@@ -85,6 +89,7 @@ export type Database = {
           id?: string;
           note_id?: string | null;
           read_at?: string | null;
+          review_log_id?: string | null;
           sent_at?: string;
           skipped_at?: string | null;
           status?: string;
@@ -97,6 +102,7 @@ export type Database = {
           id?: string;
           note_id?: string | null;
           read_at?: string | null;
+          review_log_id?: string | null;
           sent_at?: string;
           skipped_at?: string | null;
           status?: string;
@@ -112,11 +118,19 @@ export type Database = {
             referencedRelation: "notes";
             referencedColumns: ["id"];
           },
+          {
+            foreignKeyName: "notifications_review_log_id_fkey";
+            columns: ["review_log_id"];
+            isOneToOne: false;
+            referencedRelation: "review_logs";
+            referencedColumns: ["id"];
+          },
         ];
       };
       profiles: {
         Row: {
           avatar_url: string | null;
+          canonical_email: string | null;
           created_at: string;
           id: string;
           nickname: string;
@@ -125,6 +139,7 @@ export type Database = {
         };
         Insert: {
           avatar_url?: string | null;
+          canonical_email?: string | null;
           created_at?: string;
           id: string;
           nickname: string;
@@ -133,6 +148,7 @@ export type Database = {
         };
         Update: {
           avatar_url?: string | null;
+          canonical_email?: string | null;
           created_at?: string;
           id?: string;
           nickname?: string;
@@ -174,6 +190,11 @@ export type Database = {
           created_at: string;
           id: string;
           note_id: string;
+          notification_base_scheduled_at: string | null;
+          notification_claimed_at: string | null;
+          notification_dispatch_attempts: number;
+          notification_dispatch_failed_at: string | null;
+          notification_dispatched_at: string | null;
           round: number;
           scheduled_at: string;
           user_id: string;
@@ -183,6 +204,11 @@ export type Database = {
           created_at?: string;
           id?: string;
           note_id: string;
+          notification_base_scheduled_at?: string | null;
+          notification_claimed_at?: string | null;
+          notification_dispatch_attempts?: number;
+          notification_dispatch_failed_at?: string | null;
+          notification_dispatched_at?: string | null;
           round: number;
           scheduled_at: string;
           user_id: string;
@@ -192,6 +218,11 @@ export type Database = {
           created_at?: string;
           id?: string;
           note_id?: string;
+          notification_base_scheduled_at?: string | null;
+          notification_claimed_at?: string | null;
+          notification_dispatch_attempts?: number;
+          notification_dispatch_failed_at?: string | null;
+          notification_dispatched_at?: string | null;
           round?: number;
           scheduled_at?: string;
           user_id?: string;
@@ -211,26 +242,38 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      apply_time_of_day: { Args: { t: string; ts: string }; Returns: string };
+      apply_time_of_day_not_before: {
+        Args: { t: string; ts: string };
+        Returns: string;
+      };
+      claim_due_review_logs: {
+        Args: { p_limit?: number };
+        Returns: {
+          id: string;
+          note_id: string;
+          round: number;
+          scheduled_at: string;
+          user_id: string;
+        }[];
+      };
       complete_review_and_schedule_next: {
-        Args: {
-          p_note_id: string;
-          p_review_log_id: string;
-        };
+        Args: { p_note_id: string; p_review_log_id: string };
         Returns: string;
       };
       create_note_with_initial_review_log: {
-        Args: {
-          p_content: string;
-          p_scheduled_at: string;
-          p_title: string;
-        };
+        Args: { p_content: string; p_scheduled_at: string; p_title: string };
         Returns: string;
       };
-      kst_date: {
-        Args: {
-          ts: string;
-        };
-        Returns: string;
+      is_current_user_email_confirmed: { Args: never; Returns: boolean };
+      kst_date: { Args: { ts: string }; Returns: string };
+      mark_notification_as_read: {
+        Args: { p_notification_id: string };
+        Returns: boolean;
+      };
+      update_notification_time_of_day: {
+        Args: { p_note_id: string; p_time?: string };
+        Returns: undefined;
       };
     };
     Enums: {
