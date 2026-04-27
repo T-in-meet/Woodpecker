@@ -9,6 +9,7 @@ declare const self: ServiceWorkerGlobalScope & {
 
 const serwist = new Serwist({
   precacheEntries: self.__SW_MANIFEST,
+  // First push rollout should receive review reminders without waiting for every open tab to close.
   skipWaiting: true,
   clientsClaim: true,
   runtimeCaching: defaultCache,
@@ -65,6 +66,33 @@ function getNotificationUrl(data: unknown) {
   }
 }
 
+function isSameOriginWindowClient(client: Client): client is WindowClient {
+  return (
+    client.type === "window" &&
+    new URL(client.url).origin === self.location.origin
+  );
+}
+
+async function openOrFocusNotificationUrl(url: string) {
+  const windowClients = await self.clients.matchAll({
+    type: "window",
+    includeUncontrolled: true,
+  });
+  const sameOriginClient = windowClients.find(isSameOriginWindowClient);
+
+  if (sameOriginClient) {
+    const navigatedClient =
+      sameOriginClient.url === url
+        ? sameOriginClient
+        : await sameOriginClient.navigate(url);
+
+    await (navigatedClient ?? sameOriginClient).focus();
+    return;
+  }
+
+  await self.clients.openWindow(url);
+}
+
 self.addEventListener("push", (event) => {
   const { body, notificationData, tag, title } = getPushPayload(event.data);
   const options: NotificationOptions = {
@@ -83,5 +111,5 @@ self.addEventListener("notificationclick", (event) => {
   const url = getNotificationUrl(event.notification.data);
 
   event.notification.close();
-  event.waitUntil(self.clients.openWindow(url));
+  event.waitUntil(openOrFocusNotificationUrl(url));
 });

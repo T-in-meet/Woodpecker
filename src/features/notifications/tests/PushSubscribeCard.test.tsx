@@ -58,7 +58,7 @@ function restoreDescriptor<T extends object>(
 }
 
 async function loadPushSubscribeCard() {
-  const mod = await import("./PushSubscribeCard");
+  const mod = await import("../components/PushSubscribeCard");
   return mod.PushSubscribeCard;
 }
 
@@ -225,6 +225,20 @@ describe("PushSubscribeCard", () => {
       expect(unsubscribeFromPushActionMock).toHaveBeenCalledWith(ENDPOINT);
     });
     expect(existingSubscription.unsubscribe).toHaveBeenCalled();
+    const serverDeleteCallOrder =
+      unsubscribeFromPushActionMock.mock.invocationCallOrder.at(0);
+    const browserUnsubscribeCallOrder = vi
+      .mocked(existingSubscription.unsubscribe)
+      .mock.invocationCallOrder.at(0);
+
+    if (
+      serverDeleteCallOrder === undefined ||
+      browserUnsubscribeCallOrder === undefined
+    ) {
+      throw new Error("Expected both unsubscribe steps to run");
+    }
+
+    expect(serverDeleteCallOrder).toBeLessThan(browserUnsubscribeCallOrder);
     expect(refreshMock).toHaveBeenCalled();
     expect(
       await screen.findByText("이 브라우저의 복습 알림을 껐습니다."),

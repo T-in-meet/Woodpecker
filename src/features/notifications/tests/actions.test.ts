@@ -9,13 +9,21 @@ const NOTIFICATION_ID = "33333333-3333-4333-8333-333333333333";
 const ENDPOINT = "https://push.example.test/subscription-id";
 const CONFIRMED_AT = "2026-04-27T00:00:00.000Z";
 
-const { createClientMock, redirectMock, revalidatePathMock } = vi.hoisted(
-  () => ({
-    createClientMock: vi.fn(),
-    redirectMock: vi.fn(),
-    revalidatePathMock: vi.fn(),
-  }),
-);
+const {
+  createAdminClientMock,
+  createClientMock,
+  redirectMock,
+  revalidatePathMock,
+} = vi.hoisted(() => ({
+  createAdminClientMock: vi.fn(),
+  createClientMock: vi.fn(),
+  redirectMock: vi.fn(),
+  revalidatePathMock: vi.fn(),
+}));
+
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: createAdminClientMock,
+}));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: createClientMock,
@@ -103,6 +111,7 @@ function createPushSubscriptionInput() {
 
 describe("notification server actions", () => {
   beforeEach(() => {
+    createAdminClientMock.mockReset();
     createClientMock.mockReset();
     redirectMock.mockReset();
     revalidatePathMock.mockReset();
@@ -123,14 +132,19 @@ describe("notification server actions", () => {
       error: "브라우저 구독 정보가 올바르지 않습니다.",
     });
     expect(createClientMock).not.toHaveBeenCalled();
+    expect(createAdminClientMock).not.toHaveBeenCalled();
   });
 
-  it("upserts a valid push subscription by endpoint", async () => {
-    const { supabase, upsertMock } = createSupabaseMock();
+  it("claims a valid push subscription endpoint for the current user", async () => {
+    const { supabase, fromMock } = createSupabaseMock();
+    const { supabase: adminClient, upsertMock } = createSupabaseMock();
     createClientMock.mockResolvedValue(supabase);
+    createAdminClientMock.mockReturnValue(adminClient);
 
     const result = await subscribeToPushAction(createPushSubscriptionInput());
 
+    expect(fromMock).not.toHaveBeenCalled();
+    expect(createAdminClientMock).toHaveBeenCalled();
     expect(upsertMock).toHaveBeenCalledWith(
       {
         user_id: USER_ID,
@@ -208,7 +222,7 @@ describe("notification server actions", () => {
   });
 
   it("redirects unverified users before mutating notification data", async () => {
-    const { supabase, upsertMock } = createSupabaseMock({
+    const { supabase } = createSupabaseMock({
       emailConfirmedAt: null,
     });
     createClientMock.mockResolvedValue(supabase);
@@ -218,6 +232,6 @@ describe("notification server actions", () => {
     ).rejects.toBe(REDIRECT_ERROR);
 
     expect(redirectMock).toHaveBeenCalledWith(ROUTES.VERIFY_EMAIL);
-    expect(upsertMock).not.toHaveBeenCalled();
+    expect(createAdminClientMock).not.toHaveBeenCalled();
   });
 });

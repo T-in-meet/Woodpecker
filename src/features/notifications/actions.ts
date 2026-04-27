@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { getNoteDetailRoute, ROUTES } from "@/lib/constants/routes";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 import {
@@ -71,7 +72,9 @@ export async function subscribeToPushAction(
   }
 
   const { endpoint, keys } = parsed.data;
-  const { error } = await context.supabase.from("push_subscriptions").upsert(
+  // A push endpoint is origin-scoped, so account switches must claim it across RLS ownership.
+  const adminClient = createAdminClient();
+  const { error } = await adminClient.from("push_subscriptions").upsert(
     {
       user_id: context.userId,
       endpoint,

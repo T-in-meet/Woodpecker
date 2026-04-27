@@ -96,9 +96,6 @@ export function PushSubscribeCard({
   const [permission, setPermission] =
     useState<NotificationPermission>("default");
   const [isSupported, setIsSupported] = useState(true);
-  const [hasAnySubscription, setHasAnySubscription] = useState(
-    initialHasAnySubscription,
-  );
   const [browserEndpoint, setBrowserEndpoint] = useState<string | null>(null);
   const [isChecking, setIsChecking] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
@@ -108,10 +105,6 @@ export function PushSubscribeCard({
   const isRuntimeEnabled = isProductionRuntime && vapidPublicKey.length > 0;
   const isCurrentBrowserSubscribed =
     permission === "granted" && browserEndpoint !== null;
-
-  useEffect(() => {
-    setHasAnySubscription(initialHasAnySubscription);
-  }, [initialHasAnySubscription]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -199,7 +192,6 @@ export function PushSubscribeCard({
           return;
         }
 
-        setHasAnySubscription(true);
         setBrowserEndpoint(payload.endpoint);
         setMessage("이 브라우저에서 복습 알림을 받을 수 있습니다.");
         router.refresh();
@@ -223,10 +215,6 @@ export function PushSubscribeCard({
           return;
         }
 
-        if (subscription) {
-          await subscription.unsubscribe();
-        }
-
         const result = await unsubscribeFromPushAction(endpoint);
 
         if (!result.success) {
@@ -234,7 +222,10 @@ export function PushSubscribeCard({
           return;
         }
 
-        setHasAnySubscription(false);
+        if (subscription) {
+          await subscription.unsubscribe();
+        }
+
         setBrowserEndpoint(null);
         setMessage("이 브라우저의 복습 알림을 껐습니다.");
         router.refresh();
@@ -250,7 +241,7 @@ export function PushSubscribeCard({
       ? disabledReason
       : isCurrentBrowserSubscribed
         ? "현재 브라우저에서 알림이 켜져 있습니다."
-        : hasAnySubscription
+        : initialHasAnySubscription
           ? "다른 브라우저에 저장된 알림 구독이 있습니다."
           : "현재 브라우저에서 알림이 꺼져 있습니다.";
 
