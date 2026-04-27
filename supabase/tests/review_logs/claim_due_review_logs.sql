@@ -4,7 +4,7 @@
 
 BEGIN;
 
-SELECT plan(10);
+SELECT plan(13);
 
 SELECT set_config('test.claim_due_user_id', gen_random_uuid()::text, true);
 SELECT set_config('test.claim_due_note_id', gen_random_uuid()::text, true);
@@ -178,6 +178,84 @@ SELECT ok(
     WHERE id = current_setting('test.claim_due_log_id')::uuid
   ),
   $$rows at the retry limit should be marked failed when they become stale$$
+);
+
+WITH inserted_notes AS (
+  INSERT INTO public.notes (id, user_id, title, content, review_round, next_review_at)
+  SELECT
+    gen_random_uuid(),
+    current_setting('test.claim_due_user_id')::uuid,
+    'claim due minimum clamp ' || n,
+    'content',
+    0,
+    now() - interval '1 hour'
+  FROM generate_series(1, 2) AS n
+  RETURNING id, user_id
+)
+INSERT INTO public.review_logs (note_id, user_id, round, scheduled_at)
+SELECT id, user_id, 1, now() - interval '1 hour'
+FROM inserted_notes;
+
+SELECT is(
+  (SELECT count(*) FROM public.claim_due_review_logs(0)),
+  1::bigint,
+  $$p_limit <= 0 should be clamped to the minimum batch size$$
+);
+
+UPDATE public.review_logs rl
+SET notification_dispatched_at = now()
+FROM public.notes n
+WHERE n.id = rl.note_id
+  AND n.title LIKE 'claim due minimum clamp %';
+
+WITH inserted_notes AS (
+  INSERT INTO public.notes (id, user_id, title, content, review_round, next_review_at)
+  SELECT
+    gen_random_uuid(),
+    current_setting('test.claim_due_user_id')::uuid,
+    'claim due null default ' || n,
+    'content',
+    0,
+    now() - interval '1 hour'
+  FROM generate_series(1, 201) AS n
+  RETURNING id, user_id
+)
+INSERT INTO public.review_logs (note_id, user_id, round, scheduled_at)
+SELECT id, user_id, 1, now() - interval '1 hour'
+FROM inserted_notes;
+
+SELECT is(
+  (SELECT count(*) FROM public.claim_due_review_logs(NULL)),
+  200::bigint,
+  $$NULL p_limit should use the default batch size$$
+);
+
+UPDATE public.review_logs rl
+SET notification_dispatched_at = now()
+FROM public.notes n
+WHERE n.id = rl.note_id
+  AND n.title LIKE 'claim due null default %';
+
+WITH inserted_notes AS (
+  INSERT INTO public.notes (id, user_id, title, content, review_round, next_review_at)
+  SELECT
+    gen_random_uuid(),
+    current_setting('test.claim_due_user_id')::uuid,
+    'claim due maximum clamp ' || n,
+    'content',
+    0,
+    now() - interval '1 hour'
+  FROM generate_series(1, 201) AS n
+  RETURNING id, user_id
+)
+INSERT INTO public.review_logs (note_id, user_id, round, scheduled_at)
+SELECT id, user_id, 1, now() - interval '1 hour'
+FROM inserted_notes;
+
+SELECT is(
+  (SELECT count(*) FROM public.claim_due_review_logs(201)),
+  200::bigint,
+  $$p_limit above the maximum batch size should be clamped$$
 );
 
 SELECT * FROM finish();

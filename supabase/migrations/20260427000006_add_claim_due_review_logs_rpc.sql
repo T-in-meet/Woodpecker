@@ -4,7 +4,10 @@ LANGUAGE sql
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  WITH dead_lettered AS (
+  WITH safe_limit AS (
+    SELECT LEAST(GREATEST(COALESCE(p_limit, 200), 1), 200) AS value
+  ),
+  dead_lettered AS (
     UPDATE public.review_logs rl
     SET notification_dispatch_failed_at = clock_timestamp()
     WHERE rl.completed_at IS NULL
@@ -36,7 +39,7 @@ AS $$
         WHERE dl.id = rl.id
       )
     ORDER BY rl.scheduled_at
-    LIMIT p_limit
+    LIMIT (SELECT value FROM safe_limit)
     FOR UPDATE SKIP LOCKED
   )
   UPDATE public.review_logs rl
