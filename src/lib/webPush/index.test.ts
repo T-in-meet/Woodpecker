@@ -52,6 +52,7 @@ describe("web push helper", () => {
       SUBSCRIPTION,
       JSON.stringify({ title: "Review due" }),
     );
+    expect(setVapidDetailsMock).not.toHaveBeenCalled();
     expect(result).toEqual({ ok: true });
   });
 
@@ -63,6 +64,22 @@ describe("web push helper", () => {
     ).resolves.toEqual({
       gone: true,
       ok: false,
+      statusCode: 410,
+    });
+  });
+
+  it("returns provider failure context for non-expired errors", async () => {
+    sendNotificationMock.mockRejectedValue({
+      body: "provider temporarily unavailable",
+      statusCode: 503,
+    });
+
+    await expect(
+      sendPush(SUBSCRIPTION, { title: "Review due" }),
+    ).resolves.toEqual({
+      ok: false,
+      reason: "provider temporarily unavailable",
+      statusCode: 503,
     });
   });
 

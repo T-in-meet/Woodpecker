@@ -45,6 +45,7 @@ function createAuthorizedRequest() {
 
 function createSupabaseMock({
   claimedLogs = [CLAIMED_LOG],
+  existingNotification = { id: NOTIFICATION_ID },
   insertedNotification = { id: NOTIFICATION_ID },
   note = { title: "알림 노트" },
   subscriptions = [
@@ -56,7 +57,8 @@ function createSupabaseMock({
     },
   ],
 }: {
-  claimedLogs?: (typeof CLAIMED_LOG)[];
+  claimedLogs?: (typeof CLAIMED_LOG)[] | null;
+  existingNotification?: { id: string } | null;
   insertedNotification?: { id: string } | null;
   note?: { title: string } | null;
   subscriptions?: {
@@ -107,6 +109,22 @@ function createSupabaseMock({
   const notificationUpsertMock = vi.fn().mockReturnValue({
     select: notificationUpsertSelectMock,
   });
+  const notificationSelectMaybeSingleMock = vi.fn().mockResolvedValue({
+    data: existingNotification,
+    error: null,
+  });
+  const notificationSelectUserEqMock = vi.fn().mockReturnValue({
+    maybeSingle: notificationSelectMaybeSingleMock,
+  });
+  const notificationSelectTypeEqMock = vi.fn().mockReturnValue({
+    eq: notificationSelectUserEqMock,
+  });
+  const notificationSelectReviewLogEqMock = vi.fn().mockReturnValue({
+    eq: notificationSelectTypeEqMock,
+  });
+  const notificationSelectMock = vi.fn().mockReturnValue({
+    eq: notificationSelectReviewLogEqMock,
+  });
 
   const reviewLogUpdateEqMock = vi.fn().mockResolvedValue({ error: null });
   const reviewLogUpdateMock = vi.fn().mockReturnValue({
@@ -129,6 +147,7 @@ function createSupabaseMock({
 
     if (table === "notifications") {
       return {
+        select: notificationSelectMock,
         upsert: notificationUpsertMock,
       };
     }
@@ -145,6 +164,7 @@ function createSupabaseMock({
   return {
     deleteSubscriptionEqMock,
     fromMock,
+    notificationSelectMock,
     notificationUpsertMock,
     reviewLogUpdateMock,
     rpcMock,
@@ -233,7 +253,7 @@ describe("/api/cron/dispatch-notifications", () => {
         },
       },
       {
-        body: "알림 노트",
+        body: "복습할 노트가 있어요.",
         data: {
           noteId: NOTE_ID,
           notificationId: NOTIFICATION_ID,
@@ -243,6 +263,26 @@ describe("/api/cron/dispatch-notifications", () => {
         title: "복습 시간이에요",
       },
     );
+  });
+
+  it("treats null claim data as an empty batch", async () => {
+    const { fromMock, supabase } = createSupabaseMock({
+      claimedLogs: null,
+    });
+    createAdminClientMock.mockReturnValue(supabase);
+
+    const response = await dispatchRoute.GET(createAuthorizedRequest());
+
+    await expect(response.json()).resolves.toEqual({
+      claimed: 0,
+      dispatched: 0,
+      expiredSubscriptions: 0,
+      itemFailed: 0,
+      pushFailed: 0,
+      pushed: 0,
+    });
+    expect(response.status).toBe(200);
+    expect(fromMock).not.toHaveBeenCalled();
   });
 
   it("deletes expired push subscriptions", async () => {
@@ -263,19 +303,32 @@ describe("/api/cron/dispatch-notifications", () => {
     );
   });
 
-  it("does not send duplicate push when the notification already exists", async () => {
-    const { supabase } = createSupabaseMock({
-      insertedNotification: null,
-    });
+  it("retries push when the notification already exists but the review log is still due", async () => {
+    const { notificationSelectMock, reviewLogUpdateMock, supabase } =
+      createSupabaseMock({
+        insertedNotification: null,
+      });
     createAdminClientMock.mockReturnValue(supabase);
 
     const response = await dispatchRoute.GET(createAuthorizedRequest());
 
     await expect(response.json()).resolves.toMatchObject({
       dispatched: 1,
-      pushed: 0,
+      pushed: 1,
     });
-    expect(sendPushMock).not.toHaveBeenCalled();
+    expect(notificationSelectMock).toHaveBeenCalledWith("id");
+    expect(sendPushMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        data: expect.objectContaining({
+          notificationId: NOTIFICATION_ID,
+          reviewLogId: REVIEW_LOG_ID,
+        }),
+      }),
+    );
+    expect(reviewLogUpdateMock).toHaveBeenCalledWith({
+      notification_dispatched_at: expect.any(String),
+    });
   });
 
   it("does not create a notification when the note is missing", async () => {
@@ -297,8 +350,11 @@ describe("/api/cron/dispatch-notifications", () => {
     expect(sendPushMock).not.toHaveBeenCalled();
   });
 
-  it("counts non-expired push failures separately", async () => {
-    const { supabase } = createSupabaseMock({
+  it("leaves review logs retryable when a non-expired push fails", async () => {
+    const consoleWarnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+    const { reviewLogUpdateMock, supabase } = createSupabaseMock({
       subscriptions: [
         {
           auth: "auth-secret",
@@ -315,16 +371,27 @@ describe("/api/cron/dispatch-notifications", () => {
       ],
     });
     createAdminClientMock.mockReturnValue(supabase);
-    sendPushMock
-      .mockResolvedValueOnce({ ok: true })
-      .mockResolvedValueOnce({ ok: false });
+    sendPushMock.mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce({
+      ok: false,
+      reason: "temporary provider failure",
+      statusCode: 503,
+    });
 
     const response = await dispatchRoute.GET(createAuthorizedRequest());
 
     await expect(response.json()).resolves.toMatchObject({
+      dispatched: 0,
       itemFailed: 0,
       pushFailed: 1,
       pushed: 1,
     });
+    expect(reviewLogUpdateMock).not.toHaveBeenCalled();
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "cron.dispatchNotifications.pushFailed",
+        reason: "temporary provider failure",
+        statusCode: 503,
+      }),
+    );
   });
 });

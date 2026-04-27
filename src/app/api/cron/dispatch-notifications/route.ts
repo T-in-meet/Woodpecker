@@ -16,6 +16,7 @@ export const dynamic = "force-dynamic";
 
 const CLAIM_LIMIT = 200;
 const CLAIM_CONCURRENCY = 8;
+const REVIEW_NOTIFICATION_PUSH_BODY = "복습할 노트가 있어요.";
 const REVIEW_NOTIFICATION_TITLE = "복습 시간이에요";
 const REVIEW_ROUTE_SEGMENT = "review";
 
@@ -50,14 +51,9 @@ type PushDispatchStatsType = Pick<
   "expiredSubscriptions" | "pushFailed" | "pushed"
 >;
 
-type EnsureNotificationResultType =
-  | {
-      id: string;
-      isNew: true;
-    }
-  | {
-      isNew: false;
-    };
+type EnsureNotificationResultType = {
+  id: string;
+};
 
 function hashSecretValue(value: string): Buffer {
   return createHash("sha256").update(value).digest();
@@ -102,19 +98,17 @@ function buildReviewUrl(noteId: string): string {
 function buildPushPayload({
   noteId,
   notificationId,
-  noteTitle,
   reviewLogId,
 }: {
   noteId: string;
   notificationId: string;
-  noteTitle: string;
   reviewLogId: string;
 }) {
   const url = buildReviewUrl(noteId);
 
   return {
     title: REVIEW_NOTIFICATION_TITLE,
-    body: noteTitle,
+    body: REVIEW_NOTIFICATION_PUSH_BODY,
     data: {
       noteId,
       notificationId,
@@ -172,10 +166,29 @@ async function ensureNotification(
   }
 
   if (data?.id) {
-    return { id: data.id, isNew: true };
+    return { id: data.id };
   }
 
-  return { isNew: false };
+  const { data: existingNotification, error: existingNotificationError } =
+    await supabase
+      .from("notifications")
+      .select("id")
+      .eq("review_log_id", claimedLog.id)
+      .eq("type", NOTIFICATION_TYPES.REVIEW)
+      .eq("user_id", claimedLog.user_id)
+      .maybeSingle();
+
+  if (existingNotificationError) {
+    throw existingNotificationError;
+  }
+
+  if (!existingNotification?.id) {
+    throw new Error(
+      "Existing notification was not found after upsert conflict.",
+    );
+  }
+
+  return { id: existingNotification.id };
 }
 
 async function markReviewLogDispatched(
@@ -234,7 +247,11 @@ async function dispatchPushSubscription(
   stats.pushFailed += 1;
   logWarn({
     event: "cron.dispatchNotifications.pushFailed",
+    ...(result.reason !== undefined ? { reason: result.reason } : {}),
     reviewLogId: payload.data.reviewLogId,
+    ...(result.statusCode !== undefined
+      ? { statusCode: result.statusCode }
+      : {}),
     subscriptionId: subscription.id,
   });
 
@@ -242,7 +259,7 @@ async function dispatchPushSubscription(
 }
 
 function addPushDispatchStats(
-  current: DispatchItemStatsType,
+  current: PushDispatchStatsType,
   next: PushDispatchStatsType,
 ): void {
   current.expiredSubscriptions += next.expiredSubscriptions;
@@ -302,21 +319,18 @@ async function dispatchClaimedReviewLog(
       noteTitle,
     );
 
-    await markReviewLogDispatched(supabase, claimedLog.id);
-    stats.dispatched += 1;
-
-    if (!notification.isNew) {
-      return stats;
-    }
-
     const payload = buildPushPayload({
       noteId: claimedLog.note_id,
       notificationId: notification.id,
-      noteTitle,
       reviewLogId: claimedLog.id,
     });
 
     const subscriptions = subscriptionsResult.data ?? [];
+    const pushStats = {
+      expiredSubscriptions: 0,
+      pushFailed: 0,
+      pushed: 0,
+    };
     const pushResults = await Promise.allSettled(
       subscriptions.map((subscription) =>
         dispatchPushSubscription(supabase, subscription, payload),
@@ -325,11 +339,11 @@ async function dispatchClaimedReviewLog(
 
     for (const [index, pushResult] of pushResults.entries()) {
       if (pushResult.status === "fulfilled") {
-        addPushDispatchStats(stats, pushResult.value);
+        addPushDispatchStats(pushStats, pushResult.value);
         continue;
       }
 
-      stats.pushFailed += 1;
+      pushStats.pushFailed += 1;
       logWarn({
         event: "cron.dispatchNotifications.pushFailed",
         error: pushResult.reason,
@@ -337,6 +351,16 @@ async function dispatchClaimedReviewLog(
         subscriptionId: subscriptions[index]?.id,
       });
     }
+
+    addPushDispatchStats(stats, pushStats);
+
+    if (pushStats.pushFailed > 0) {
+      // Keep the review log retryable because web push has no per-subscription delivery state.
+      return stats;
+    }
+
+    await markReviewLogDispatched(supabase, claimedLog.id);
+    stats.dispatched += 1;
   } catch (error) {
     stats.itemFailed += 1;
     logError({
@@ -352,16 +376,12 @@ async function dispatchClaimedReviewLog(
 function addDispatchStats(
   current: DispatchStatsType,
   next: DispatchItemStatsType,
-): DispatchStatsType {
-  return {
-    claimed: current.claimed,
-    dispatched: current.dispatched + next.dispatched,
-    expiredSubscriptions:
-      current.expiredSubscriptions + next.expiredSubscriptions,
-    itemFailed: current.itemFailed + next.itemFailed,
-    pushFailed: current.pushFailed + next.pushFailed,
-    pushed: current.pushed + next.pushed,
-  };
+): void {
+  current.dispatched += next.dispatched;
+  current.expiredSubscriptions += next.expiredSubscriptions;
+  current.itemFailed += next.itemFailed;
+  current.pushFailed += next.pushFailed;
+  current.pushed += next.pushed;
 }
 
 async function runWithConcurrencyLimit<ItemType, ResultType>(
@@ -396,7 +416,7 @@ export async function GET(request: Request) {
     setVapidDetails();
 
     const supabase = createAdminClient();
-    const { data: claimedLogs, error } = await supabase.rpc(
+    const { data: claimedLogRows, error } = await supabase.rpc(
       "claim_due_review_logs",
       { p_limit: CLAIM_LIMIT },
     );
@@ -409,7 +429,9 @@ export async function GET(request: Request) {
       );
     }
 
-    let stats: DispatchStatsType = {
+    const claimedLogs = claimedLogRows ?? [];
+
+    const stats: DispatchStatsType = {
       claimed: claimedLogs.length,
       dispatched: 0,
       expiredSubscriptions: 0,
@@ -425,7 +447,7 @@ export async function GET(request: Request) {
     );
 
     for (const nextStats of claimedLogResults) {
-      stats = addDispatchStats(stats, nextStats);
+      addDispatchStats(stats, nextStats);
     }
 
     return NextResponse.json(stats);

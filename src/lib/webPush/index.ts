@@ -5,13 +5,21 @@ export type WebPushSendResultType =
   | {
       ok: true;
       gone?: never;
+      reason?: never;
+      statusCode?: never;
     }
   | {
       ok: false;
       gone?: boolean;
+      reason?: unknown;
+      statusCode?: number;
     };
 
-export type WebPushPayloadType = Record<string, unknown>;
+export type WebPushPayloadType = {
+  body?: string;
+  data?: Record<string, unknown>;
+  title: string;
+};
 
 function getRequiredEnv(name: string): string {
   const value = process.env[name];
@@ -35,12 +43,47 @@ function getVapidSubject(): string {
   return subject;
 }
 
-function hasGoneStatus(error: unknown): boolean {
+function getWebPushStatusCode(error: unknown): number | undefined {
   if (typeof error !== "object" || error === null || !("statusCode" in error)) {
-    return false;
+    return undefined;
   }
 
-  return error.statusCode === 404 || error.statusCode === 410;
+  return typeof error.statusCode === "number" ? error.statusCode : undefined;
+}
+
+function getWebPushFailureReason(error: unknown): unknown {
+  if (typeof error === "object" && error !== null && "body" in error) {
+    return error.body;
+  }
+
+  if (error instanceof Error) {
+    return { message: error.message, name: error.name };
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  return undefined;
+}
+
+function createFailureResult(error: unknown): WebPushSendResultType {
+  const statusCode = getWebPushStatusCode(error);
+  const reason = getWebPushFailureReason(error);
+  const result: WebPushSendResultType =
+    statusCode === 404 || statusCode === 410
+      ? { gone: true, ok: false }
+      : { ok: false };
+
+  if (statusCode !== undefined) {
+    result.statusCode = statusCode;
+  }
+
+  if (reason !== undefined) {
+    result.reason = reason;
+  }
+
+  return result;
 }
 
 export function setVapidDetails(): void {
@@ -55,16 +98,10 @@ export async function sendPush(
   subscription: PushSubscription,
   payload: WebPushPayloadType,
 ): Promise<WebPushSendResultType> {
-  setVapidDetails();
-
   try {
     await webpush.sendNotification(subscription, JSON.stringify(payload));
     return { ok: true };
   } catch (error) {
-    if (hasGoneStatus(error)) {
-      return { gone: true, ok: false };
-    }
-
-    return { ok: false };
+    return createFailureResult(error);
   }
 }
