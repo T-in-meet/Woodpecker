@@ -71,6 +71,10 @@ cp .env.example .env.local
 
 팀 공유 채널에서 환경 변수 값을 받아 `.env.local`에 입력하세요.
 
+### Vercel Cron
+
+`vercel.json`의 `/api/cron/dispatch-notifications`는 복습 알림 지연을 줄이기 위해 5분 간격(`*/5 * * * *`)으로 실행합니다. 이 주기는 Vercel Pro/Team 이상 플랜을 전제로 하며, Hobby 플랜 배포 시에는 플랜 또는 스케줄 조정이 필요합니다.
+
 ---
 
 ## 4. 개발 서버 실행
