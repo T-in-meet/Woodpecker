@@ -26,12 +26,12 @@ const notificationListRowSchema = notificationListItemSchema
     note: joinedNoteSchema.nullable().optional(),
   });
 
-const notificationListRowToItemSchema = notificationListRowSchema
-  .transform(({ note, ...item }) => ({
+const notificationListRowToItemSchema = notificationListRowSchema.transform(
+  ({ note, ...item }) => ({
     ...item,
     noteTitle: note?.title ?? null,
-  }))
-  .pipe(notificationListItemSchema);
+  }),
+);
 
 export type { NotificationListItemType };
 
