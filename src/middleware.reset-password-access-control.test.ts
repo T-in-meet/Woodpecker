@@ -3,17 +3,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { RESET_REQUIRED_COOKIE_NAME } from "@/features/auth/constants/cookies";
 import { ROUTES } from "@/lib/constants/routes";
-import { updateSession } from "@/lib/supabase/middleware";
-import { createClient } from "@/lib/supabase/server";
+import {
+  getSessionFromMiddlewareRequest,
+  updateSession,
+} from "@/lib/supabase/middleware";
 
 import { middleware } from "../middleware";
 
 vi.mock("@/lib/supabase/middleware", () => ({
   updateSession: vi.fn(),
-}));
-
-vi.mock("@/lib/supabase/server", () => ({
-  createClient: vi.fn(),
+  getSessionFromMiddlewareRequest: vi.fn(),
 }));
 
 const getSessionMock = vi.fn();
@@ -37,10 +36,10 @@ describe("middleware reset-password access control", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(updateSession).mockResolvedValue(makeUpdateSessionResponse());
-    vi.mocked(createClient).mockResolvedValue({
-      auth: { getSession: getSessionMock },
-    } as never);
-    getSessionMock.mockResolvedValue({ data: { session: {} } });
+    vi.mocked(getSessionFromMiddlewareRequest).mockImplementation(async () =>
+      getSessionMock(),
+    );
+    getSessionMock.mockResolvedValue({});
   });
 
   it("TC1: session+cookie 상태로 보호 페이지 접근 시 reset-password로 redirect한다", async () => {
@@ -63,7 +62,7 @@ describe("middleware reset-password access control", () => {
   });
 
   it("TC3: session 없음 + cookie 있음이면 forgot-password로 redirect한다", async () => {
-    getSessionMock.mockResolvedValueOnce({ data: { session: null } });
+    getSessionMock.mockResolvedValueOnce(null);
 
     const response = await middleware(
       makeRequest(ROUTES.RESET_PASSWORD, { hasResetCookie: true }),
@@ -81,7 +80,7 @@ describe("middleware reset-password access control", () => {
   });
 
   it("TC5: session 없음 + cookie 없음이면 forgot-password로 redirect한다", async () => {
-    getSessionMock.mockResolvedValueOnce({ data: { session: null } });
+    getSessionMock.mockResolvedValueOnce(null);
 
     const response = await middleware(makeRequest(ROUTES.RESET_PASSWORD));
 
@@ -112,7 +111,7 @@ describe("middleware reset-password access control", () => {
     const onlySessionResponse = await middleware(makeRequest(ROUTES.NOTES));
     expect(onlySessionResponse.headers.get("location")).toBeNull();
 
-    getSessionMock.mockResolvedValueOnce({ data: { session: null } });
+    getSessionMock.mockResolvedValueOnce(null);
     const onlyCookieResponse = await middleware(
       makeRequest(ROUTES.NOTES, { hasResetCookie: true }),
     );
@@ -123,10 +122,11 @@ describe("middleware reset-password access control", () => {
     await middleware(makeRequest(ROUTES.NOTES, { hasResetCookie: true }));
 
     expect(updateSession).toHaveBeenCalledTimes(1);
-    expect(createClient).toHaveBeenCalledTimes(1);
+    expect(getSessionFromMiddlewareRequest).toHaveBeenCalledTimes(1);
 
     const updateOrder = vi.mocked(updateSession).mock.invocationCallOrder[0]!;
-    const sessionOrder = vi.mocked(createClient).mock.invocationCallOrder[0]!;
+    const sessionOrder = vi.mocked(getSessionFromMiddlewareRequest).mock
+      .invocationCallOrder[0]!;
     expect(updateOrder).toBeLessThan(sessionOrder);
   });
 
@@ -153,5 +153,26 @@ describe("middleware reset-password access control", () => {
   it("TC12: 강제 상태 해제(session 있음 + cookie 없음)면 notes 접근 시 강제 redirect하지 않는다", async () => {
     const response = await middleware(makeRequest(ROUTES.NOTES));
     expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("TC13: 강제 상태에서 allowlist 허용 경로(/notes)는 redirect query를 보존한다", async () => {
+    const response = await middleware(
+      makeRequest(ROUTES.NOTES, { hasResetCookie: true }),
+    );
+
+    const location = response.headers.get("location") ?? "";
+    expect(location).toContain(ROUTES.RESET_PASSWORD);
+    expect(location).toContain("redirect=%2Fnotes");
+  });
+
+  it("TC14: 강제 상태에서 allowlist 비허용 경로는 redirect query를 붙이지 않는다", async () => {
+    const response = await middleware(
+      makeRequest("/unknown-path", { hasResetCookie: true }),
+    );
+
+    const location = response.headers.get("location") ?? "";
+    expect(location).toContain(ROUTES.RESET_PASSWORD);
+    expect(location).not.toContain("redirect=");
+    expect(location).not.toContain("redirect=%2Fmypage");
   });
 });
