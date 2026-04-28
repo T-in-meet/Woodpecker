@@ -181,7 +181,7 @@ describe("notification queries", () => {
     } = createNotificationListMock([
       {
         id: "22222222-2222-4222-8222-222222222222",
-        title: "복습 시간이에요",
+        title: "복습할 시간이에요!",
         body: "Notification body",
         type: "REVIEW",
         status: NOTIFICATION_STATUS.SENT,
@@ -211,7 +211,7 @@ describe("notification queries", () => {
     expect(result).toEqual([
       {
         id: "22222222-2222-4222-8222-222222222222",
-        title: "복습 시간이에요",
+        title: "복습할 시간이에요!",
         body: "Notification body",
         type: "REVIEW",
         status: NOTIFICATION_STATUS.SENT,
