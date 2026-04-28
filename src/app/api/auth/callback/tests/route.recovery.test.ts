@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { RESET_REQUIRED_COOKIE_NAME } from "@/features/auth/constants/cookies";
+import { ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 
 import { GET } from "../route";
@@ -42,7 +43,9 @@ function makeRequest(params: {
 
 function expectInvalidResetRedirect(response: Response): void {
   const location = response.headers.get("location") ?? "";
-  expect(location).toContain("/forgot-password?error=invalid_reset_link");
+  expect(location).toContain(
+    `${ROUTES.FORGOT_PASSWORD}?error=invalid_reset_link`,
+  );
 }
 
 describe("callback recovery 분기", () => {
@@ -74,14 +77,14 @@ describe("callback recovery 분기", () => {
     expect(response.cookies.get(RESET_REQUIRED_COOKIE_NAME)).toBeUndefined();
   });
 
-  it("TC3: unsupported type이면 verifyOtp를 호출하지 않고 invalid_reset_link로 redirect한다", async () => {
+  it("TC3: unsupported type이면 verifyOtp를 호출하지 않고 verify-email로 redirect한다", async () => {
     const response = await GET(
       makeRequest({ token_hash: "valid-token", type: "signup" }),
     );
 
     expect(verifyOtp).not.toHaveBeenCalled();
     expect(response.status).toBe(307);
-    expectInvalidResetRedirect(response);
+    expect(response.headers.get("location")).toContain(ROUTES.VERIFY_EMAIL);
     expect(response.cookies.get(RESET_REQUIRED_COOKIE_NAME)).toBeUndefined();
   });
 
@@ -99,7 +102,7 @@ describe("callback recovery 분기", () => {
     expect(response.status).toBe(307);
     const location = response.headers.get("location") ?? "";
     expect(location).toBe(
-      "https://app.example.com/reset-password?redirect=%2Fnotes",
+      `https://app.example.com${ROUTES.RESET_PASSWORD}?redirect=%2Fnotes`,
     );
   });
 
