@@ -1,0 +1,48 @@
+import { fireEvent, render, screen } from "@testing-library/react";
+import { vi } from "vitest";
+
+import { ResetPasswordForm } from "@/features/auth/reset-password/components/ResetPasswordForm";
+
+export const RESET_PASSWORD_GLOBAL_ERROR_MESSAGE_FIXTURE =
+  "비밀번호를 변경하지 못했습니다. 잠시 후 다시 시도해주세요.";
+
+type FormAction = (formData: FormData) => unknown;
+
+export function renderResetPasswordForm(formActionMock: FormAction) {
+  return render(<ResetPasswordForm action={formActionMock} />);
+}
+
+export function setIdleActionState(
+  useActionStateMock: ReturnType<typeof vi.fn>,
+  formActionMock: ReturnType<typeof vi.fn>,
+) {
+  useActionStateMock.mockReturnValue([
+    { status: "idle" },
+    formActionMock,
+    false,
+  ]);
+}
+
+export function setDefaultValidSafeParse(
+  safeParseMock: ReturnType<typeof vi.fn>,
+) {
+  safeParseMock.mockReturnValue({
+    success: true,
+    data: {
+      password: "valid-password",
+      confirmPassword: "valid-password",
+    },
+  });
+}
+
+export function fillResetPasswordFields(values: {
+  password: string;
+  confirmPassword: string;
+}) {
+  fireEvent.change(screen.getByLabelText(/^비밀번호$/i), {
+    target: { value: values.password },
+  });
+  fireEvent.change(screen.getByLabelText(/비밀번호 확인/i), {
+    target: { value: values.confirmPassword },
+  });
+}
