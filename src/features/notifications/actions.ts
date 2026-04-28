@@ -36,6 +36,8 @@ export type MarkNotificationAsReadActionResultType =
       error: string;
     };
 
+export type CheckPushSubscriptionOwnedResultType = { owned: boolean };
+
 async function getVerifiedNotificationContext() {
   const supabase = await createClient();
   const {
@@ -115,11 +117,13 @@ export async function unsubscribeFromPushAction(
     return { success: false, error: context.error };
   }
 
-  const { error } = await context.supabase
+  // endpoint는 origin-scoped이고 클라이언트가 곧 PushSubscription.unsubscribe()로 무효화하므로,
+  // 같은 브라우저에서 이전 계정이 남긴 row까지 admin 권한으로 함께 정리한다.
+  const adminClient = createAdminClient();
+  const { error } = await adminClient
     .from("push_subscriptions")
     .delete()
-    .eq("endpoint", parsed.data)
-    .eq("user_id", context.userId);
+    .eq("endpoint", parsed.data);
 
   if (error) {
     return {
@@ -131,6 +135,34 @@ export async function unsubscribeFromPushAction(
   revalidatePath(ROUTES.MYPAGE);
 
   return { success: true };
+}
+
+export async function checkPushSubscriptionOwnedAction(
+  endpoint: unknown,
+): Promise<CheckPushSubscriptionOwnedResultType> {
+  const parsed = pushSubscriptionEndpointSchema.safeParse(endpoint);
+
+  if (!parsed.success) {
+    return { owned: false };
+  }
+
+  const context = await getVerifiedNotificationContext();
+
+  if ("error" in context) {
+    return { owned: false };
+  }
+
+  const { count, error } = await context.supabase
+    .from("push_subscriptions")
+    .select("id", { count: "exact", head: true })
+    .eq("endpoint", parsed.data)
+    .eq("user_id", context.userId);
+
+  if (error) {
+    return { owned: false };
+  }
+
+  return { owned: (count ?? 0) > 0 };
 }
 
 export async function markNotificationAsReadAction(

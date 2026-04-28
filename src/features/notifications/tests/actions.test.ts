@@ -38,6 +38,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import {
+  checkPushSubscriptionOwnedAction,
   markNotificationAsReadAction,
   setNotificationTimeAction,
   subscribeToPushAction,
@@ -49,6 +50,8 @@ function createSupabaseMock({
   emailConfirmedAt = CONFIRMED_AT,
   upsertError = null,
   deleteError = null,
+  selectCount = 0,
+  selectError = null,
   rpcData = true,
   rpcError = null,
 }: {
@@ -56,20 +59,31 @@ function createSupabaseMock({
   emailConfirmedAt?: string | null;
   upsertError?: { message: string } | null;
   deleteError?: { message: string } | null;
+  selectCount?: number | null;
+  selectError?: { message: string } | null;
   rpcData?: boolean | null;
   rpcError?: { message: string } | null;
 } = {}) {
   const upsertMock = vi.fn().mockResolvedValue({ error: upsertError });
-  const deleteUserEqMock = vi.fn().mockResolvedValue({ error: deleteError });
-  const deleteEndpointEqMock = vi.fn().mockReturnValue({
-    eq: deleteUserEqMock,
-  });
+  const deleteEndpointEqMock = vi
+    .fn()
+    .mockResolvedValue({ error: deleteError });
   const deleteMock = vi.fn().mockReturnValue({
     eq: deleteEndpointEqMock,
+  });
+  const selectUserEqMock = vi
+    .fn()
+    .mockResolvedValue({ count: selectCount, error: selectError });
+  const selectEndpointEqMock = vi.fn().mockReturnValue({
+    eq: selectUserEqMock,
+  });
+  const selectMock = vi.fn().mockReturnValue({
+    eq: selectEndpointEqMock,
   });
   const fromMock = vi.fn().mockReturnValue({
     upsert: upsertMock,
     delete: deleteMock,
+    select: selectMock,
   });
   const rpcMock = vi.fn().mockResolvedValue({
     data: rpcError ? null : rpcData,
@@ -79,9 +93,11 @@ function createSupabaseMock({
   return {
     deleteEndpointEqMock,
     deleteMock,
-    deleteUserEqMock,
     fromMock,
     rpcMock,
+    selectEndpointEqMock,
+    selectMock,
+    selectUserEqMock,
     upsertMock,
     supabase: {
       auth: {
@@ -158,17 +174,89 @@ describe("notification server actions", () => {
     expect(result).toEqual({ success: true });
   });
 
-  it("deletes the current user's matching push subscription", async () => {
-    const { supabase, fromMock, deleteEndpointEqMock, deleteUserEqMock } =
-      createSupabaseMock();
+  it("deletes the push subscription endpoint via the admin client (covering orphan rows)", async () => {
+    const { supabase, fromMock: userFromMock } = createSupabaseMock();
+    const {
+      supabase: adminClient,
+      fromMock: adminFromMock,
+      deleteMock: adminDeleteMock,
+      deleteEndpointEqMock: adminDeleteEndpointEqMock,
+    } = createSupabaseMock();
+    createClientMock.mockResolvedValue(supabase);
+    createAdminClientMock.mockReturnValue(adminClient);
+
+    const result = await unsubscribeFromPushAction(ENDPOINT);
+
+    expect(createAdminClientMock).toHaveBeenCalled();
+    expect(userFromMock).not.toHaveBeenCalled();
+    expect(adminFromMock).toHaveBeenCalledWith("push_subscriptions");
+    expect(adminDeleteMock).toHaveBeenCalled();
+    expect(adminDeleteEndpointEqMock).toHaveBeenCalledWith(
+      "endpoint",
+      ENDPOINT,
+    );
+    expect(revalidatePathMock).toHaveBeenCalledWith(ROUTES.MYPAGE);
+    expect(result).toEqual({ success: true });
+  });
+
+  it("requires authentication before unsubscribing", async () => {
+    const { supabase } = createSupabaseMock({ userId: null });
     createClientMock.mockResolvedValue(supabase);
 
     const result = await unsubscribeFromPushAction(ENDPOINT);
 
+    expect(createAdminClientMock).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      success: false,
+      error: "로그인이 필요합니다.",
+    });
+  });
+
+  it("reports ownership when the current user has a row for the endpoint", async () => {
+    const {
+      supabase,
+      fromMock,
+      selectMock,
+      selectEndpointEqMock,
+      selectUserEqMock,
+    } = createSupabaseMock({ selectCount: 1 });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await checkPushSubscriptionOwnedAction(ENDPOINT);
+
     expect(fromMock).toHaveBeenCalledWith("push_subscriptions");
-    expect(deleteEndpointEqMock).toHaveBeenCalledWith("endpoint", ENDPOINT);
-    expect(deleteUserEqMock).toHaveBeenCalledWith("user_id", USER_ID);
-    expect(result).toEqual({ success: true });
+    expect(selectMock).toHaveBeenCalledWith("id", {
+      count: "exact",
+      head: true,
+    });
+    expect(selectEndpointEqMock).toHaveBeenCalledWith("endpoint", ENDPOINT);
+    expect(selectUserEqMock).toHaveBeenCalledWith("user_id", USER_ID);
+    expect(result).toEqual({ owned: true });
+  });
+
+  it("reports non-ownership when no row matches the current user and endpoint", async () => {
+    const { supabase } = createSupabaseMock({ selectCount: 0 });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await checkPushSubscriptionOwnedAction(ENDPOINT);
+
+    expect(result).toEqual({ owned: false });
+  });
+
+  it("returns owned:false for an invalid endpoint without opening a Supabase client", async () => {
+    const result = await checkPushSubscriptionOwnedAction("not-a-url");
+
+    expect(createClientMock).not.toHaveBeenCalled();
+    expect(result).toEqual({ owned: false });
+  });
+
+  it("returns owned:false when the user is not authenticated", async () => {
+    const { supabase } = createSupabaseMock({ userId: null });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await checkPushSubscriptionOwnedAction(ENDPOINT);
+
+    expect(result).toEqual({ owned: false });
   });
 
   it("calls the read RPC instead of updating notifications directly", async () => {

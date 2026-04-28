@@ -1,15 +1,17 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const ENDPOINT = "https://push.example.test/subscription-id";
 const VAPID_PUBLIC_KEY = "AAAA";
 
 const {
+  checkPushSubscriptionOwnedActionMock,
   refreshMock,
   subscribeToPushActionMock,
   unsubscribeFromPushActionMock,
 } = vi.hoisted(() => ({
+  checkPushSubscriptionOwnedActionMock: vi.fn(),
   refreshMock: vi.fn(),
   subscribeToPushActionMock: vi.fn(),
   unsubscribeFromPushActionMock: vi.fn(),
@@ -22,6 +24,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("../actions", () => ({
+  checkPushSubscriptionOwnedAction: checkPushSubscriptionOwnedActionMock,
   subscribeToPushAction: subscribeToPushActionMock,
   unsubscribeFromPushAction: unsubscribeFromPushActionMock,
 }));
@@ -125,9 +128,14 @@ function setupSupportedPushEnvironment({
 }
 
 describe("PushSubscribeCard", () => {
+  beforeEach(() => {
+    checkPushSubscriptionOwnedActionMock.mockResolvedValue({ owned: false });
+  });
+
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.resetModules();
+    checkPushSubscriptionOwnedActionMock.mockReset();
     refreshMock.mockReset();
     subscribeToPushActionMock.mockReset();
     unsubscribeFromPushActionMock.mockReset();
@@ -147,12 +155,13 @@ describe("PushSubscribeCard", () => {
     expect(screen.getByRole("button", { name: /알림 켜기/ })).toBeDisabled();
   });
 
-  it("does not auto-resubscribe an existing browser subscription", async () => {
+  it("does not auto-resubscribe an existing browser subscription owned by the current user", async () => {
     vi.stubEnv("NEXT_PUBLIC_VAPID_PUBLIC_KEY", VAPID_PUBLIC_KEY);
     setupSupportedPushEnvironment({
       existingSubscription: createPushSubscription(),
       permission: "granted",
     });
+    checkPushSubscriptionOwnedActionMock.mockResolvedValue({ owned: true });
     const PushSubscribeCard = await loadPushSubscribeCard();
 
     render(<PushSubscribeCard initialHasAnySubscription={true} />);
@@ -160,7 +169,43 @@ describe("PushSubscribeCard", () => {
     expect(
       await screen.findByText("현재 브라우저에서 알림이 켜져 있습니다."),
     ).toBeInTheDocument();
+    expect(checkPushSubscriptionOwnedActionMock).toHaveBeenCalledWith(ENDPOINT);
     expect(subscribeToPushActionMock).not.toHaveBeenCalled();
+  });
+
+  it("treats a browser subscription left by a previous account as a claim opportunity", async () => {
+    vi.stubEnv("NEXT_PUBLIC_VAPID_PUBLIC_KEY", VAPID_PUBLIC_KEY);
+    setupSupportedPushEnvironment({
+      existingSubscription: createPushSubscription(),
+      permission: "granted",
+    });
+    checkPushSubscriptionOwnedActionMock.mockResolvedValue({ owned: false });
+    subscribeToPushActionMock.mockResolvedValue({ success: true });
+    const PushSubscribeCard = await loadPushSubscribeCard();
+    const user = userEvent.setup();
+
+    render(<PushSubscribeCard initialHasAnySubscription={false} />);
+
+    expect(
+      await screen.findByText(
+        "이 브라우저에 다른 계정의 구독이 남아있습니다. 알림 켜기를 누르면 현재 계정으로 가져옵니다.",
+      ),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /알림 켜기/ }));
+
+    await waitFor(() => {
+      expect(subscribeToPushActionMock).toHaveBeenCalledWith({
+        endpoint: ENDPOINT,
+        keys: {
+          auth: "auth-secret",
+          p256dh: "p256dh-key",
+        },
+      });
+    });
+    expect(
+      await screen.findByText("이 브라우저에서 복습 알림을 받을 수 있습니다."),
+    ).toBeInTheDocument();
   });
 
   it("subscribes this browser when the user clicks the subscribe button", async () => {
@@ -206,6 +251,7 @@ describe("PushSubscribeCard", () => {
       existingSubscription,
       permission: "granted",
     });
+    checkPushSubscriptionOwnedActionMock.mockResolvedValue({ owned: true });
     unsubscribeFromPushActionMock.mockResolvedValue({ success: true });
     const PushSubscribeCard = await loadPushSubscribeCard();
     const user = userEvent.setup();

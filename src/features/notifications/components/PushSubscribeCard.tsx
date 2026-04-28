@@ -8,7 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 
-import { subscribeToPushAction, unsubscribeFromPushAction } from "../actions";
+import {
+  checkPushSubscriptionOwnedAction,
+  subscribeToPushAction,
+  unsubscribeFromPushAction,
+} from "../actions";
 
 type PushSubscriptionPayloadType = {
   endpoint: string;
@@ -96,14 +100,24 @@ export function PushSubscribeCard({
     useState<NotificationPermission>("default");
   const [isSupported, setIsSupported] = useState(true);
   const [browserEndpoint, setBrowserEndpoint] = useState<string | null>(null);
+  const [isOwnedByCurrentUser, setIsOwnedByCurrentUser] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const isRuntimeEnabled = vapidPublicKey.length > 0;
+  // Push endpoint is origin-scoped, so a stale browser subscription left by a previous account
+  // does NOT mean the current user owns it. Verify ownership against the DB before treating
+  // the button as "unsubscribe".
   const isCurrentBrowserSubscribed =
-    permission === "granted" && browserEndpoint !== null;
+    permission === "granted" &&
+    browserEndpoint !== null &&
+    isOwnedByCurrentUser;
+  const hasOrphanBrowserSubscription =
+    permission === "granted" &&
+    browserEndpoint !== null &&
+    !isOwnedByCurrentUser;
 
   useEffect(() => {
     let isCancelled = false;
@@ -129,7 +143,15 @@ export function PushSubscribeCard({
 
         if (isCancelled) return;
 
-        setBrowserEndpoint(subscription?.endpoint ?? null);
+        const endpoint = subscription?.endpoint ?? null;
+        setBrowserEndpoint(endpoint);
+
+        if (endpoint) {
+          const { owned } = await checkPushSubscriptionOwnedAction(endpoint);
+          if (!isCancelled) setIsOwnedByCurrentUser(owned);
+        } else {
+          setIsOwnedByCurrentUser(false);
+        }
       } catch (checkError) {
         if (!isCancelled) {
           console.error("푸시 알림 상태를 확인하지 못했습니다.", checkError);
@@ -190,6 +212,7 @@ export function PushSubscribeCard({
         }
 
         setBrowserEndpoint(payload.endpoint);
+        setIsOwnedByCurrentUser(true);
         setMessage("이 브라우저에서 복습 알림을 받을 수 있습니다.");
         router.refresh();
       } catch (subscribeError) {
@@ -224,6 +247,7 @@ export function PushSubscribeCard({
         }
 
         setBrowserEndpoint(null);
+        setIsOwnedByCurrentUser(false);
         setMessage("이 브라우저의 복습 알림을 껐습니다.");
         router.refresh();
       } catch (unsubscribeError) {
@@ -238,9 +262,11 @@ export function PushSubscribeCard({
       ? disabledReason
       : isCurrentBrowserSubscribed
         ? "현재 브라우저에서 알림이 켜져 있습니다."
-        : initialHasAnySubscription
-          ? "다른 브라우저에 저장된 알림 구독이 있습니다."
-          : "현재 브라우저에서 알림이 꺼져 있습니다.";
+        : hasOrphanBrowserSubscription
+          ? "이 브라우저에 다른 계정의 구독이 남아있습니다. 알림 켜기를 누르면 현재 계정으로 가져옵니다."
+          : initialHasAnySubscription
+            ? "다른 브라우저에 저장된 알림 구독이 있습니다."
+            : "현재 브라우저에서 알림이 꺼져 있습니다.";
 
   return (
     <Card>
