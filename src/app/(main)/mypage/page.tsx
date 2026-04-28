@@ -12,6 +12,8 @@ import {
 } from "@/features/mypage/components/MypageNav";
 import { ProfileSection } from "@/features/mypage/components/ProfileSection";
 import { getLearningStats } from "@/features/mypage/queries";
+import { PushSubscribeCard } from "@/features/notifications/components/PushSubscribeCard";
+import { getHasAnyPushSubscription } from "@/features/notifications/queries";
 import { ROUTES } from "@/lib/constants/routes";
 import { getProfile } from "@/lib/supabase/getProfile";
 import { getUser } from "@/lib/supabase/getUser";
@@ -46,9 +48,10 @@ export default async function MyPage({ searchParams }: Props) {
 
   // getProfile/getLearningStats는 내부적으로 getUser를 React.cache로 공유함
   // 2개를 한 번에 시작해 waterfall 제거
-  const [profile, stats] = await Promise.all([
+  const [profile, stats, hasAnyPushSubscription] = await Promise.all([
     getProfile(),
     getLearningStats(),
+    getHasAnyPushSubscription({ userId: user.id }),
   ]);
 
   if (!profile) redirect(ROUTES.LOGIN);
@@ -97,6 +100,9 @@ export default async function MyPage({ searchParams }: Props) {
           {section === "profile" && (
             <>
               <ProfileSection profile={profile} email={user?.email ?? ""} />
+              <PushSubscribeCard
+                initialHasAnySubscription={hasAnyPushSubscription}
+              />
               <AccountSection />
               <DeleteAccountSection userEmail={user?.email ?? ""} />
             </>

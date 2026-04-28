@@ -16,8 +16,7 @@ export const dynamic = "force-dynamic";
 
 const CLAIM_LIMIT = 200;
 const CLAIM_CONCURRENCY = 8;
-const REVIEW_NOTIFICATION_PUSH_BODY = "복습할 노트가 있어요.";
-const REVIEW_NOTIFICATION_TITLE = "복습 시간이에요";
+const REVIEW_NOTIFICATION_TITLE = "복습할 시간이에요!";
 const REVIEW_ROUTE_SEGMENT = "review";
 
 type ClaimedReviewLogType = {
@@ -95,12 +94,18 @@ function buildReviewUrl(noteId: string): string {
   return `/notes/${noteId}/${REVIEW_ROUTE_SEGMENT}`;
 }
 
+function buildReviewNotificationBody(noteTitle: string): string {
+  return `"${noteTitle}" 복습할 시간이에요.`;
+}
+
 function buildPushPayload({
   noteId,
+  noteTitle,
   notificationId,
   reviewLogId,
 }: {
   noteId: string;
+  noteTitle: string;
   notificationId: string;
   reviewLogId: string;
 }) {
@@ -108,7 +113,7 @@ function buildPushPayload({
 
   return {
     title: REVIEW_NOTIFICATION_TITLE,
-    body: REVIEW_NOTIFICATION_PUSH_BODY,
+    body: buildReviewNotificationBody(noteTitle),
     data: {
       noteId,
       notificationId,
@@ -321,6 +326,7 @@ async function dispatchClaimedReviewLog(
 
     const payload = buildPushPayload({
       noteId: claimedLog.note_id,
+      noteTitle,
       notificationId: notification.id,
       reviewLogId: claimedLog.id,
     });

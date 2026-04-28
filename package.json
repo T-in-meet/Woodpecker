@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
+    "dev:sw": "cross-env ENABLE_SW=true next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -69,6 +70,7 @@
     "@types/react-dom": "^19",
     "@types/web-push": "^3.6.4",
     "@vitejs/plugin-react": "^6.0.1",
+    "cross-env": "^7.0.3",
     "eslint": "^9",
     "eslint-config-next": "15.5.12",
     "eslint-plugin-simple-import-sort": "^12.1.1",

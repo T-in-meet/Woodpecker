@@ -235,7 +235,7 @@ describe("/api/cron/dispatch-notifications", () => {
         note_id: NOTE_ID,
         review_log_id: REVIEW_LOG_ID,
         status: "SENT",
-        title: "복습 시간이에요",
+        title: "복습할 시간이에요!",
         type: "REVIEW",
         user_id: USER_ID,
       },
@@ -253,14 +253,14 @@ describe("/api/cron/dispatch-notifications", () => {
         },
       },
       {
-        body: "복습할 노트가 있어요.",
+        body: '"알림 노트" 복습할 시간이에요.',
         data: {
           noteId: NOTE_ID,
           notificationId: NOTIFICATION_ID,
           reviewLogId: REVIEW_LOG_ID,
           url: `/notes/${NOTE_ID}/review`,
         },
-        title: "복습 시간이에요",
+        title: "복습할 시간이에요!",
       },
     );
   });

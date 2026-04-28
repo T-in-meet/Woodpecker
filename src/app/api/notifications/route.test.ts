@@ -49,7 +49,7 @@ describe("/api/notifications", () => {
     getNotificationListMock.mockResolvedValue([
       {
         id: "22222222-2222-4222-8222-222222222222",
-        title: "복습 시간이에요",
+        title: "복습할 시간이에요!",
       },
     ]);
     getUnreadCountMock.mockResolvedValue(1);
@@ -60,7 +60,7 @@ describe("/api/notifications", () => {
       items: [
         {
           id: "22222222-2222-4222-8222-222222222222",
-          title: "복습 시간이에요",
+          title: "복습할 시간이에요!",
         },
       ],
       unreadCount: 1,

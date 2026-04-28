@@ -12,7 +12,11 @@ vi.mock("@/lib/supabase/server", () => ({
   createServerComponentClient: createServerComponentClientMock,
 }));
 
-import { getNotificationList, getUnreadCount } from "../queries";
+import {
+  getHasAnyPushSubscription,
+  getNotificationList,
+  getUnreadCount,
+} from "../queries";
 
 function withAuth<T extends Record<string, unknown>>(
   supabase: T,
@@ -94,6 +98,32 @@ function createNotificationListMock(data: unknown) {
   };
 }
 
+function createHasAnyPushSubscriptionMock({
+  count,
+  error = null,
+}: {
+  count: number | null;
+  error?: { message: string } | null;
+}) {
+  const userEqMock = vi.fn().mockResolvedValue({ count, error });
+  const selectMock = vi.fn().mockReturnValue({
+    eq: userEqMock,
+  });
+
+  return {
+    selectMock,
+    userEqMock,
+    supabase: withAuth(
+      {
+        from: vi.fn().mockReturnValue({
+          select: selectMock,
+        }),
+      },
+      USER_ID,
+    ),
+  };
+}
+
 describe("notification queries", () => {
   beforeEach(() => {
     createServerComponentClientMock.mockReset();
@@ -151,7 +181,7 @@ describe("notification queries", () => {
     } = createNotificationListMock([
       {
         id: "22222222-2222-4222-8222-222222222222",
-        title: "복습 시간이에요",
+        title: "복습할 시간이에요!",
         body: "Notification body",
         type: "REVIEW",
         status: NOTIFICATION_STATUS.SENT,
@@ -181,7 +211,7 @@ describe("notification queries", () => {
     expect(result).toEqual([
       {
         id: "22222222-2222-4222-8222-222222222222",
-        title: "복습 시간이에요",
+        title: "복습할 시간이에요!",
         body: "Notification body",
         type: "REVIEW",
         status: NOTIFICATION_STATUS.SENT,
@@ -212,5 +242,48 @@ describe("notification queries", () => {
     createServerComponentClientMock.mockResolvedValue(supabase);
 
     await expect(getNotificationList()).rejects.toThrow();
+  });
+
+  it("returns whether the current user has any push subscription", async () => {
+    const { supabase, selectMock, userEqMock } =
+      createHasAnyPushSubscriptionMock({ count: 2 });
+    createServerComponentClientMock.mockResolvedValue(supabase);
+
+    const result = await getHasAnyPushSubscription();
+
+    expect(supabase.from).toHaveBeenCalledWith("push_subscriptions");
+    expect(selectMock).toHaveBeenCalledWith("id", {
+      count: "exact",
+      head: true,
+    });
+    expect(userEqMock).toHaveBeenCalledWith("user_id", USER_ID);
+    expect(result).toBe(true);
+  });
+
+  it("returns false when there is no logged-in user for push subscriptions", async () => {
+    const supabase = withAuth({ from: vi.fn() }, null);
+    createServerComponentClientMock.mockResolvedValue(supabase);
+
+    await expect(getHasAnyPushSubscription()).resolves.toBe(false);
+
+    expect(supabase.from).not.toHaveBeenCalled();
+  });
+
+  it("returns false when the current user has no push subscriptions", async () => {
+    const { supabase } = createHasAnyPushSubscriptionMock({ count: 0 });
+    createServerComponentClientMock.mockResolvedValue(supabase);
+
+    await expect(getHasAnyPushSubscription()).resolves.toBe(false);
+  });
+
+  it("throws when the push subscription query fails", async () => {
+    const error = { message: "database unavailable" };
+    const { supabase } = createHasAnyPushSubscriptionMock({
+      count: null,
+      error,
+    });
+    createServerComponentClientMock.mockResolvedValue(supabase);
+
+    await expect(getHasAnyPushSubscription()).rejects.toMatchObject(error);
   });
 });

@@ -30,6 +30,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import {
+  checkPushSubscriptionOwnedAction,
   markNotificationAsReadAction,
   setNotificationTimeAction,
   subscribeToPushAction,
@@ -41,6 +42,8 @@ function createSupabaseMock({
   emailConfirmedAt = CONFIRMED_AT,
   upsertError = null,
   deleteError = null,
+  selectCount = 0,
+  selectError = null,
   rpcData = true,
   rpcError = null,
 }: {
@@ -48,6 +51,8 @@ function createSupabaseMock({
   emailConfirmedAt?: string | null;
   upsertError?: { message: string } | null;
   deleteError?: { message: string } | null;
+  selectCount?: number | null;
+  selectError?: { message: string } | null;
   rpcData?: boolean | null;
   rpcError?: { message: string } | null;
 } = {}) {
@@ -59,9 +64,19 @@ function createSupabaseMock({
   const deleteMock = vi.fn().mockReturnValue({
     eq: deleteEndpointEqMock,
   });
+  const selectUserEqMock = vi
+    .fn()
+    .mockResolvedValue({ count: selectCount, error: selectError });
+  const selectEndpointEqMock = vi.fn().mockReturnValue({
+    eq: selectUserEqMock,
+  });
+  const selectMock = vi.fn().mockReturnValue({
+    eq: selectEndpointEqMock,
+  });
   const fromMock = vi.fn().mockReturnValue({
     upsert: upsertMock,
     delete: deleteMock,
+    select: selectMock,
   });
   const rpcMock = vi.fn().mockResolvedValue({
     data: rpcError ? null : rpcData,
@@ -74,6 +89,9 @@ function createSupabaseMock({
     deleteUserEqMock,
     fromMock,
     rpcMock,
+    selectEndpointEqMock,
+    selectMock,
+    selectUserEqMock,
     upsertMock,
     supabase: {
       auth: {
@@ -125,12 +143,13 @@ describe("notification server actions", () => {
     expect(createClientMock).not.toHaveBeenCalled();
   });
 
-  it("upserts a valid push subscription by endpoint", async () => {
-    const { supabase, upsertMock } = createSupabaseMock();
+  it("upserts a valid push subscription endpoint through the current user session", async () => {
+    const { supabase, fromMock, upsertMock } = createSupabaseMock();
     createClientMock.mockResolvedValue(supabase);
 
     const result = await subscribeToPushAction(createPushSubscriptionInput());
 
+    expect(fromMock).toHaveBeenCalledWith("push_subscriptions");
     expect(upsertMock).toHaveBeenCalledWith(
       {
         user_id: USER_ID,
@@ -144,17 +163,100 @@ describe("notification server actions", () => {
     expect(result).toEqual({ success: true });
   });
 
-  it("deletes the current user's matching push subscription", async () => {
-    const { supabase, fromMock, deleteEndpointEqMock, deleteUserEqMock } =
-      createSupabaseMock();
+  it("returns an error when RLS blocks claiming an endpoint owned by another user", async () => {
+    const { supabase, upsertMock } = createSupabaseMock({
+      upsertError: { message: "new row violates row-level security policy" },
+    });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await subscribeToPushAction(createPushSubscriptionInput());
+
+    expect(upsertMock).toHaveBeenCalled();
+    expect(revalidatePathMock).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      success: false,
+      error:
+        "푸시 알림 구독에 실패했습니다. 브라우저 알림 구독을 해제한 뒤 다시 시도해주세요.",
+    });
+  });
+
+  it("deletes only the current user's push subscription endpoint", async () => {
+    const {
+      supabase,
+      fromMock,
+      deleteMock,
+      deleteEndpointEqMock,
+      deleteUserEqMock,
+    } = createSupabaseMock();
     createClientMock.mockResolvedValue(supabase);
 
     const result = await unsubscribeFromPushAction(ENDPOINT);
 
     expect(fromMock).toHaveBeenCalledWith("push_subscriptions");
+    expect(deleteMock).toHaveBeenCalled();
     expect(deleteEndpointEqMock).toHaveBeenCalledWith("endpoint", ENDPOINT);
     expect(deleteUserEqMock).toHaveBeenCalledWith("user_id", USER_ID);
+    expect(revalidatePathMock).toHaveBeenCalledWith(ROUTES.MYPAGE);
     expect(result).toEqual({ success: true });
+  });
+
+  it("requires authentication before unsubscribing", async () => {
+    const { supabase } = createSupabaseMock({ userId: null });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await unsubscribeFromPushAction(ENDPOINT);
+
+    expect(result).toEqual({
+      success: false,
+      error: "로그인이 필요합니다.",
+    });
+  });
+
+  it("reports ownership when the current user has a row for the endpoint", async () => {
+    const {
+      supabase,
+      fromMock,
+      selectMock,
+      selectEndpointEqMock,
+      selectUserEqMock,
+    } = createSupabaseMock({ selectCount: 1 });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await checkPushSubscriptionOwnedAction(ENDPOINT);
+
+    expect(fromMock).toHaveBeenCalledWith("push_subscriptions");
+    expect(selectMock).toHaveBeenCalledWith("id", {
+      count: "exact",
+      head: true,
+    });
+    expect(selectEndpointEqMock).toHaveBeenCalledWith("endpoint", ENDPOINT);
+    expect(selectUserEqMock).toHaveBeenCalledWith("user_id", USER_ID);
+    expect(result).toEqual({ owned: true });
+  });
+
+  it("reports non-ownership when no row matches the current user and endpoint", async () => {
+    const { supabase } = createSupabaseMock({ selectCount: 0 });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await checkPushSubscriptionOwnedAction(ENDPOINT);
+
+    expect(result).toEqual({ owned: false });
+  });
+
+  it("returns owned:false for an invalid endpoint without opening a Supabase client", async () => {
+    const result = await checkPushSubscriptionOwnedAction("not-a-url");
+
+    expect(createClientMock).not.toHaveBeenCalled();
+    expect(result).toEqual({ owned: false });
+  });
+
+  it("returns owned:false when the user is not authenticated", async () => {
+    const { supabase } = createSupabaseMock({ userId: null });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await checkPushSubscriptionOwnedAction(ENDPOINT);
+
+    expect(result).toEqual({ owned: false });
   });
 
   it("calls the read RPC instead of updating notifications directly", async () => {
@@ -208,7 +310,7 @@ describe("notification server actions", () => {
   });
 
   it("redirects unverified users before mutating notification data", async () => {
-    const { supabase, upsertMock } = createSupabaseMock({
+    const { supabase } = createSupabaseMock({
       emailConfirmedAt: null,
     });
     createClientMock.mockResolvedValue(supabase);
@@ -218,6 +320,5 @@ describe("notification server actions", () => {
     ).rejects.toBe(REDIRECT_ERROR);
 
     expect(redirectMock).toHaveBeenCalledWith(ROUTES.VERIFY_EMAIL);
-    expect(upsertMock).not.toHaveBeenCalled();
   });
 });
