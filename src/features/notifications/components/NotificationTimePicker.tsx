@@ -3,14 +3,26 @@
 import { Clock, Loader2, RotateCcw, Save } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
+  type ChangeEvent,
   type FormEvent,
+  type KeyboardEvent,
   useEffect,
   useId,
+  useRef,
   useState,
   useTransition,
 } from "react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatDateTime } from "@/lib/utils/formatDate";
@@ -24,6 +36,8 @@ type NotificationTimePickerProps = {
   nextReviewAt: string | null;
 };
 
+type PeriodType = "am" | "pm";
+
 function toInputTime(time: string | null) {
   return time ? time.slice(0, 5) : "";
 }
@@ -32,27 +46,165 @@ function getCurrentSettingLabel(time: string) {
   return time ? `${time} KST` : "기본 복습 예정 시간";
 }
 
+function padTimePart(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function getTimeParts(time: string): {
+  hour: string;
+  minute: string;
+  period: PeriodType;
+} {
+  if (time === "") {
+    return { hour: "", minute: "", period: "am" };
+  }
+
+  const [hour = "0", minute = "00"] = time.split(":");
+  const hour24 = Number(hour);
+  const hour12 = hour24 % 12 || 12;
+
+  return {
+    hour: padTimePart(hour12),
+    minute,
+    period: hour24 >= 12 ? "pm" : "am",
+  };
+}
+
+function toTimeValue(period: PeriodType, hour: string, minute: string) {
+  const trimmedHour = hour.trim();
+  const trimmedMinute = minute.trim();
+
+  if (trimmedHour === "" && trimmedMinute === "") {
+    return "";
+  }
+
+  const hourNumber = Number(trimmedHour);
+  const minuteNumber = Number(trimmedMinute);
+
+  if (
+    !Number.isInteger(hourNumber) ||
+    !Number.isInteger(minuteNumber) ||
+    hourNumber < 1 ||
+    hourNumber > 12 ||
+    minuteNumber < 0 ||
+    minuteNumber > 59
+  ) {
+    return null;
+  }
+
+  const hour24 =
+    period === "pm"
+      ? hourNumber === 12
+        ? 12
+        : hourNumber + 12
+      : hourNumber === 12
+        ? 0
+        : hourNumber;
+
+  return `${padTimePart(hour24)}:${padTimePart(minuteNumber)}`;
+}
+
+function getNumericInput(value: string) {
+  return value.replace(/\D/g, "").slice(0, 2);
+}
+
+function clampTimePart(value: string, min: number, max: number) {
+  if (value === "") {
+    return "";
+  }
+
+  const number = Number(value);
+
+  if (!Number.isInteger(number)) {
+    return "";
+  }
+
+  return padTimePart(Math.min(max, Math.max(min, number)));
+}
+
 export function NotificationTimePicker({
   noteId,
   initialTime,
   nextReviewAt,
 }: NotificationTimePickerProps) {
-  const inputId = useId();
+  const inputBaseId = useId();
+  const labelId = `${inputBaseId}-label`;
+  const hourInputId = `${inputBaseId}-hour`;
+  const minuteInputId = `${inputBaseId}-minute`;
+  const nativeTimeInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const initialInputTime = toInputTime(initialTime);
-  const [timeValue, setTimeValue] = useState(initialInputTime);
+  const initialTimeParts = getTimeParts(initialInputTime);
+  const [open, setOpen] = useState(false);
+  const [period, setPeriod] = useState<PeriodType>(initialTimeParts.period);
+  const [hourValue, setHourValue] = useState(initialTimeParts.hour);
+  const [minuteValue, setMinuteValue] = useState(initialTimeParts.minute);
   const [savedTime, setSavedTime] = useState(initialInputTime);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const hasSavedOverride = savedTime.length > 0;
-  const hasChanges = timeValue !== savedTime;
+  const timeValue = toTimeValue(period, hourValue, minuteValue);
+  const hasChanges = timeValue === null || timeValue !== savedTime;
+  const isDraftEmpty = hourValue.trim() === "" && minuteValue.trim() === "";
+  const periodLabel = period === "am" ? "오전" : "오후";
+
+  const setDraftFromTime = (time: string) => {
+    const nextTimeParts = getTimeParts(time);
+    setPeriod(nextTimeParts.period);
+    setHourValue(nextTimeParts.hour);
+    setMinuteValue(nextTimeParts.minute);
+  };
 
   useEffect(() => {
     setSavedTime(initialInputTime);
-    setTimeValue(initialInputTime);
+    const nextTimeParts = getTimeParts(initialInputTime);
+    setPeriod(nextTimeParts.period);
+    setHourValue(nextTimeParts.hour);
+    setMinuteValue(nextTimeParts.minute);
   }, [initialInputTime]);
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    setMessage(null);
+    setError(null);
+    setDraftFromTime(savedTime);
+  };
+
+  const togglePeriod = () => {
+    setPeriod((currentPeriod) => (currentPeriod === "am" ? "pm" : "am"));
+  };
+
+  const handlePeriodKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (
+      event.key !== "ArrowUp" &&
+      event.key !== "ArrowDown" &&
+      event.key !== "ArrowLeft" &&
+      event.key !== "ArrowRight"
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    togglePeriod();
+  };
+
+  const openNativeTimePicker = () => {
+    const nativeTimeInput = nativeTimeInputRef.current;
+
+    if (!nativeTimeInput) {
+      return;
+    }
+
+    try {
+      nativeTimeInput.showPicker();
+      return;
+    } catch {
+      nativeTimeInput.focus();
+      nativeTimeInput.click();
+    }
+  };
 
   const saveTime = (nextTime: string | null) => {
     setMessage(null);
@@ -77,7 +229,7 @@ export function NotificationTimePicker({
 
       const nextSavedTime = nextTime ?? "";
       setSavedTime(nextSavedTime);
-      setTimeValue(nextSavedTime);
+      setDraftFromTime(nextSavedTime);
       setMessage(
         nextTime
           ? `알림 시간이 저장되었습니다. (${nextTime})`
@@ -89,7 +241,13 @@ export function NotificationTimePicker({
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const nextTime = timeValue.trim() === "" ? null : timeValue;
+
+    if (timeValue === null) {
+      setError("알림 시간이 올바르지 않습니다.");
+      return;
+    }
+
+    const nextTime = timeValue === "" ? null : timeValue;
     saveTime(nextTime);
   };
 
@@ -97,69 +255,160 @@ export function NotificationTimePicker({
     saveTime(null);
   };
 
+  const handleNativeTimeChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setMessage(null);
+    setError(null);
+    setDraftFromTime(event.target.value);
+  };
+
   return (
-    <section className="mt-6 rounded-lg border border-border/70 bg-background p-4">
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-1">
-          <h2 className="text-base font-semibold text-foreground">
-            복습 알림 시간
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            현재 설정: {getCurrentSettingLabel(savedTime)}
-          </p>
-          {nextReviewAt && (
-            <p className="text-xs text-muted-foreground">
-              다음 복습 예정 {formatDateTime(nextReviewAt)}
-            </p>
-          )}
-        </div>
-        <Clock className="mt-0.5 size-4 text-muted-foreground" />
-      </div>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>
+        <Button type="button" variant="outline" size="sm">
+          <Clock aria-hidden="true" />
+          다음 알림 시간 설정
+        </Button>
+      </DialogTrigger>
+      {open && (
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>다음 알림 시간 설정</DialogTitle>
+            <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+              <p>현재 설정: {getCurrentSettingLabel(savedTime)}</p>
+              {nextReviewAt && (
+                <p>다음 복습 예정 {formatDateTime(nextReviewAt)}</p>
+              )}
+            </div>
+          </DialogHeader>
 
-      <form
-        onSubmit={handleSubmit}
-        className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end"
-      >
-        <div className="w-full space-y-2 sm:max-w-48">
-          <Label htmlFor={inputId}>알림 시간</Label>
-          <Input
-            id={inputId}
-            type="time"
-            step={60}
-            value={timeValue}
-            disabled={isPending}
-            onChange={(event) => setTimeValue(event.target.value)}
-          />
-        </div>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label id={labelId} htmlFor={hourInputId}>
+                알림 시간
+              </Label>
+              <div
+                role="group"
+                aria-labelledby={labelId}
+                className="flex w-full items-center gap-2 rounded-md border border-input bg-background p-1 shadow-sm"
+              >
+                <button
+                  type="button"
+                  aria-label={`오전 오후 전환, 현재 ${periodLabel}`}
+                  aria-pressed={period === "pm"}
+                  disabled={isPending}
+                  onClick={togglePeriod}
+                  onKeyDown={handlePeriodKeyDown}
+                  className="h-8 w-16 rounded-md bg-muted px-2 text-sm font-medium text-foreground transition-colors hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {periodLabel}
+                </button>
+                <Input
+                  id={hourInputId}
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  aria-label="시"
+                  placeholder="시"
+                  value={hourValue}
+                  disabled={isPending}
+                  onBlur={() =>
+                    setHourValue((currentValue) =>
+                      clampTimePart(currentValue, 1, 12),
+                    )
+                  }
+                  onChange={(event) =>
+                    setHourValue(getNumericInput(event.target.value))
+                  }
+                  className="h-8 w-16 border-0 text-center shadow-none focus-visible:ring-0"
+                />
+                <span className="text-sm font-semibold text-muted-foreground">
+                  :
+                </span>
+                <Input
+                  id={minuteInputId}
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  aria-label="분"
+                  placeholder="분"
+                  value={minuteValue}
+                  disabled={isPending}
+                  onBlur={() =>
+                    setMinuteValue((currentValue) =>
+                      clampTimePart(currentValue, 0, 59),
+                    )
+                  }
+                  onChange={(event) =>
+                    setMinuteValue(getNumericInput(event.target.value))
+                  }
+                  className="h-8 w-16 border-0 text-center shadow-none focus-visible:ring-0"
+                />
+                <Input
+                  ref={nativeTimeInputRef}
+                  type="time"
+                  step={60}
+                  tabIndex={-1}
+                  value={timeValue ?? ""}
+                  onChange={handleNativeTimeChange}
+                  data-testid="native-time-input"
+                  className="sr-only"
+                />
+                <button
+                  type="button"
+                  aria-label="시간 선택하기"
+                  disabled={isPending}
+                  onClick={openNativeTimePicker}
+                  className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Clock className="size-4" aria-hidden="true" />
+                </button>
+              </div>
+            </div>
 
-        <div className="flex flex-wrap gap-2">
-          <Button type="submit" size="md" disabled={isPending || !hasChanges}>
-            {isPending ? (
-              <Loader2 className="animate-spin" aria-hidden="true" />
-            ) : (
-              <Save aria-hidden="true" />
-            )}
-            저장
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="md"
-            disabled={
-              isPending || (!hasSavedOverride && timeValue.length === 0)
-            }
-            onClick={handleClear}
-          >
-            <RotateCcw aria-hidden="true" />
-            기본 시간
-          </Button>
-        </div>
-      </form>
+            <div aria-live="polite" className="min-h-5">
+              {message && <p className="text-sm text-green-600">{message}</p>}
+              {error && <p className="text-sm text-destructive">{error}</p>}
+            </div>
 
-      <div aria-live="polite" className="mt-3 min-h-5">
-        {message && <p className="text-sm text-green-600">{message}</p>}
-        {error && <p className="text-sm text-destructive">{error}</p>}
-      </div>
-    </section>
+            <DialogFooter className="mt-0 flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+              <Button
+                type="button"
+                variant="outline"
+                size="md"
+                disabled={isPending || (!hasSavedOverride && isDraftEmpty)}
+                onClick={handleClear}
+              >
+                <RotateCcw aria-hidden="true" />
+                기본 시간
+              </Button>
+              <div className="flex justify-end gap-2">
+                <DialogClose asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="md"
+                    disabled={isPending}
+                  >
+                    닫기
+                  </Button>
+                </DialogClose>
+                <Button
+                  type="submit"
+                  size="md"
+                  disabled={isPending || !hasChanges}
+                >
+                  {isPending ? (
+                    <Loader2 className="animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Save aria-hidden="true" />
+                  )}
+                  저장
+                </Button>
+              </div>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      )}
+    </Dialog>
   );
 }

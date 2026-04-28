@@ -173,9 +173,10 @@ describe("NoteDetailPage", () => {
       await NoteDetailPage({ params: Promise.resolve({ noteId: "note-123" }) }),
     );
 
-    expect(screen.getByText(/다음 백지 테스트 예정/)).toBeInTheDocument();
     expect(
-      screen.getByText(/원하면 지금 미리 진행할 수 있습니다\./),
+      screen.getByText(
+        "다음 백지 테스트가 예정되어 있습니다. 원하면 지금 미리 진행할 수 있습니다.",
+      ),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "백지 테스트 시작" }),

@@ -10,7 +10,6 @@ import { NotificationTimePicker } from "@/features/notifications/components/Noti
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { getNoteReviewRoute, ROUTES } from "@/lib/constants/routes";
 import { createServerComponentClient } from "@/lib/supabase/server";
-import { formatDateTime } from "@/lib/utils/formatDate";
 
 export const metadata: Metadata = {
   title: "노트 상세",
@@ -53,7 +52,7 @@ export default async function NoteDetailPage({
     : nextReviewAt
       ? isReviewDue
         ? "지금 백지 테스트를 진행할 수 있습니다."
-        : `다음 백지 테스트 예정 ${formatDateTime(nextReviewAt)}. 원하면 지금 미리 진행할 수 있습니다.`
+        : "다음 백지 테스트가 예정되어 있습니다. 원하면 지금 미리 진행할 수 있습니다."
       : "다음 복습 일정이 아직 준비되지 않았습니다.";
 
   return (
@@ -80,16 +79,15 @@ export default async function NoteDetailPage({
                 <Link href={getNoteReviewRoute(noteId)}>백지 테스트 시작</Link>
               </Button>
             )}
+            <NotificationTimePicker
+              noteId={note.id}
+              initialTime={note.notification_time_of_day}
+              nextReviewAt={note.next_review_at}
+            />
             <DeleteNoteDialog noteId={note.id} noteTitle={note.title} />
           </div>
         </div>
       </header>
-
-      <NotificationTimePicker
-        noteId={note.id}
-        initialTime={note.notification_time_of_day}
-        nextReviewAt={note.next_review_at}
-      />
 
       <NoteViewer content={note.content} className="min-h-[60vh]" />
     </div>
