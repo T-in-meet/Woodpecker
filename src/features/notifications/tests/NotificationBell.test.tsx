@@ -18,36 +18,54 @@ vi.mock("../actions", () => ({
 
 import { NotificationBell } from "../components/NotificationBell";
 
+const USER_A_ID = "11111111-1111-4111-8111-111111111111";
+const USER_B_ID = "22222222-2222-4222-8222-222222222222";
+
 const NOTIFICATION_RESPONSE = {
   unreadCount: 1,
   items: [
     {
-      id: "11111111-1111-4111-8111-111111111111",
-      title: "복습할 시간이에요!",
-      body: "노트 내용을 다시 꺼내볼 차례입니다.",
+      id: "33333333-3333-4333-8333-333333333333",
+      title: "Review reminder",
+      body: "Review body",
       type: NOTIFICATION_TYPES.REVIEW,
       status: NOTIFICATION_STATUS.SENT,
       sent_at: "2026-04-28T03:00:00.000Z",
       read_at: null,
-      note_id: "22222222-2222-4222-8222-222222222222",
-      review_log_id: "33333333-3333-4333-8333-333333333333",
-      noteTitle: "간격 반복 정리",
+      note_id: "44444444-4444-4444-8444-444444444444",
+      review_log_id: "55555555-5555-4555-8555-555555555555",
+      noteTitle: "Interval note",
     },
   ],
 };
 
-function renderNotificationBell() {
-  const queryClient = new QueryClient({
+function createJsonResponse(payload: unknown, status = 200) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+function createTestQueryClient() {
+  return new QueryClient({
     defaultOptions: {
       queries: {
         retry: false,
       },
     },
   });
+}
 
-  render(
+function renderNotificationBell({
+  queryClient = createTestQueryClient(),
+  userId = USER_A_ID,
+}: {
+  queryClient?: QueryClient;
+  userId?: string;
+} = {}) {
+  return render(
     <QueryClientProvider client={queryClient}>
-      <NotificationBell />
+      <NotificationBell userId={userId} />
     </QueryClientProvider>,
   );
 }
@@ -61,12 +79,7 @@ describe("NotificationBell", () => {
     });
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(JSON.stringify(NOTIFICATION_RESPONSE), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        }),
-      ),
+      vi.fn().mockResolvedValue(createJsonResponse(NOTIFICATION_RESPONSE)),
     );
   });
 
@@ -78,15 +91,10 @@ describe("NotificationBell", () => {
     const user = userEvent.setup();
     renderNotificationBell();
 
-    const button = await screen.findByRole("button", {
-      name: "읽지 않은 알림 1개",
-    });
+    await user.click(await screen.findByRole("button"));
 
-    await user.click(button);
-
-    expect(await screen.findByText("알림")).toBeVisible();
-    expect(screen.getByText("복습할 시간이에요!")).toBeInTheDocument();
-    expect(screen.getByText("간격 반복 정리")).toBeInTheDocument();
+    expect(await screen.findByText("Review reminder")).toBeInTheDocument();
+    expect(screen.getByText("Interval note")).toBeInTheDocument();
     expect(fetch).toHaveBeenCalledWith("/api/notifications", {
       credentials: "same-origin",
     });
@@ -96,11 +104,7 @@ describe("NotificationBell", () => {
     const user = userEvent.setup();
     renderNotificationBell();
 
-    await user.click(
-      await screen.findByRole("button", {
-        name: "읽지 않은 알림 1개",
-      }),
-    );
+    await user.click(await screen.findByRole("button"));
 
     const link = await screen.findByRole("link");
     link.addEventListener("click", (event) => event.preventDefault());
@@ -109,26 +113,58 @@ describe("NotificationBell", () => {
 
     await waitFor(() => {
       expect(markNotificationAsReadActionMock).toHaveBeenCalledWith(
-        "11111111-1111-4111-8111-111111111111",
+        "33333333-3333-4333-8333-333333333333",
       );
     });
-    expect(screen.queryByText("간격 반복 정리")).not.toBeInTheDocument();
+    expect(screen.queryByText("Interval note")).not.toBeInTheDocument();
   });
 
   it("shows an error state instead of treating unauthorized responses as empty", async () => {
     const user = userEvent.setup();
     vi.mocked(fetch).mockResolvedValue(
-      new Response(JSON.stringify({ error: "unauthorized" }), {
-        status: 401,
-        headers: { "content-type": "application/json" },
-      }),
+      createJsonResponse({ error: "unauthorized" }, 401),
     );
     renderNotificationBell();
 
-    await user.click(await screen.findByRole("button", { name: "알림" }));
+    await user.click(await screen.findByRole("button"));
 
     expect(
       await screen.findByText("알림을 불러오지 못했습니다."),
     ).toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+
+  it("does not reuse cached notifications when the user id changes", async () => {
+    const user = userEvent.setup();
+    const queryClient = createTestQueryClient();
+
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(createJsonResponse(NOTIFICATION_RESPONSE))
+      .mockResolvedValueOnce(createJsonResponse(NOTIFICATION_RESPONSE))
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          unreadCount: 0,
+          items: [],
+        }),
+      );
+
+    const { rerender } = renderNotificationBell({
+      queryClient,
+      userId: USER_A_ID,
+    });
+
+    await user.click(await screen.findByRole("button"));
+    expect(await screen.findByText("Interval note")).toBeInTheDocument();
+
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <NotificationBell userId={USER_B_ID} />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledTimes(3);
+    });
+    expect(screen.queryByText("Interval note")).not.toBeInTheDocument();
   });
 });

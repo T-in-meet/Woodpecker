@@ -38,7 +38,7 @@ export async function Header() {
         <div className="flex justify-end gap-3 items-center">
           {profile && user ? (
             <>
-              <NotificationBell />
+              <NotificationBell userId={user.id} />
               <UserMenu
                 nickname={profile.nickname}
                 email={user.email ?? ""}

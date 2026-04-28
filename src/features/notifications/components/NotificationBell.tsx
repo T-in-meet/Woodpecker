@@ -15,8 +15,6 @@ import {
 } from "../schema";
 import { NotificationList } from "./NotificationList";
 
-const NOTIFICATIONS_QUERY_KEY = ["notifications"] as const;
-
 const EMPTY_NOTIFICATIONS: NotificationsResponseType = {
   items: [],
   unreadCount: 0,
@@ -73,7 +71,11 @@ function markAsReadInCache(
   };
 }
 
-export function NotificationBell() {
+type NotificationBellProps = {
+  userId: string;
+};
+
+export function NotificationBell({ userId }: NotificationBellProps) {
   const [open, setOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [markingNotificationId, setMarkingNotificationId] = useState<
@@ -81,6 +83,7 @@ export function NotificationBell() {
   >(null);
   const queryClient = useQueryClient();
   const ref = useRef<HTMLDivElement>(null);
+  const notificationsQueryKey = ["notifications", userId] as const;
 
   const {
     data = EMPTY_NOTIFICATIONS,
@@ -89,7 +92,7 @@ export function NotificationBell() {
     isLoading,
     refetch,
   } = useQuery({
-    queryKey: NOTIFICATIONS_QUERY_KEY,
+    queryKey: notificationsQueryKey,
     queryFn: fetchNotifications,
     refetchInterval: 60_000,
     retry: (failureCount, error) =>
@@ -148,7 +151,7 @@ export function NotificationBell() {
       }
 
       queryClient.setQueryData<NotificationsResponseType>(
-        NOTIFICATIONS_QUERY_KEY,
+        notificationsQueryKey,
         (current) =>
           current
             ? markAsReadInCache(current, notificationId, result.updated)
