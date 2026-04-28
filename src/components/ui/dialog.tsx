@@ -66,6 +66,21 @@ function DialogTitle({
   );
 }
 
+function DialogDescription({
+  children,
+  className,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof Dialog.Description>) {
+  return (
+    <Dialog.Description
+      className={cn("text-sm text-muted-foreground", className)}
+      {...props}
+    >
+      {children}
+    </Dialog.Description>
+  );
+}
+
 function DialogFooter({
   children,
   className,
@@ -82,6 +97,7 @@ export {
   DialogRoot as Dialog,
   DialogClose,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogOverlay,

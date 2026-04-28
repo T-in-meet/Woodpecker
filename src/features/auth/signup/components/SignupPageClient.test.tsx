@@ -1,4 +1,10 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -19,10 +25,18 @@ vi.mock("@/features/auth/signup/hooks/useSignupMutation", () => ({
 }));
 
 async function submitValidSignupForm(user: ReturnType<typeof userEvent.setup>) {
-  await user.type(screen.getByLabelText(/이메일/i), "test@example.com");
-  await user.type(screen.getByLabelText(/^비밀번호$/i), "password123");
-  await user.type(screen.getByLabelText(/비밀번호 확인/i), "password123");
-  await user.type(screen.getByLabelText(/닉네임/i), "tester");
+  fireEvent.change(screen.getByLabelText(/이메일/i), {
+    target: { value: "test@example.com" },
+  });
+  fireEvent.change(screen.getByLabelText(/^비밀번호$/i), {
+    target: { value: "password123" },
+  });
+  fireEvent.change(screen.getByLabelText(/비밀번호 확인/i), {
+    target: { value: "password123" },
+  });
+  fireEvent.change(screen.getByLabelText(/닉네임/i), {
+    target: { value: "tester" },
+  });
   // interactionEnabled=false 상태에서 체크박스 클릭이 모달을 열므로 모달 경유
   // 이유: agreement-interaction-control-spec에서 모달-먼저 상호작용 강제
   await user.click(screen.getByRole("button", { name: /이용약관 보기/i }));
