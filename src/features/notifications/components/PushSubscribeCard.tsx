@@ -23,7 +23,6 @@ type PushSubscribeCardProps = {
 };
 
 const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
-const isProductionRuntime = process.env.NODE_ENV === "production";
 
 function isPushSupported() {
   return (
@@ -102,7 +101,7 @@ export function PushSubscribeCard({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const isRuntimeEnabled = isProductionRuntime && vapidPublicKey.length > 0;
+  const isRuntimeEnabled = vapidPublicKey.length > 0;
   const isCurrentBrowserSubscribed =
     permission === "granted" && browserEndpoint !== null;
 
@@ -151,13 +150,11 @@ export function PushSubscribeCard({
 
   const disabledReason = !isSupported
     ? "이 브라우저는 푸시 알림을 지원하지 않습니다."
-    : !isProductionRuntime
-      ? "프로덕션 빌드에서 알림을 켤 수 있습니다."
-      : vapidPublicKey.length === 0
-        ? "VAPID 공개 키가 설정되지 않았습니다."
-        : permission === "denied"
-          ? "브라우저 사이트 설정에서 알림을 허용해 주세요."
-          : null;
+    : vapidPublicKey.length === 0
+      ? "VAPID 공개 키가 설정되지 않았습니다."
+      : permission === "denied"
+        ? "브라우저 사이트 설정에서 알림을 허용해 주세요."
+        : null;
 
   const handleSubscribe = () => {
     setError(null);

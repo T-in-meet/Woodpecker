@@ -148,7 +148,6 @@ describe("PushSubscribeCard", () => {
   });
 
   it("does not auto-resubscribe an existing browser subscription", async () => {
-    vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("NEXT_PUBLIC_VAPID_PUBLIC_KEY", VAPID_PUBLIC_KEY);
     setupSupportedPushEnvironment({
       existingSubscription: createPushSubscription(),
@@ -165,7 +164,6 @@ describe("PushSubscribeCard", () => {
   });
 
   it("subscribes this browser when the user clicks the subscribe button", async () => {
-    vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("NEXT_PUBLIC_VAPID_PUBLIC_KEY", VAPID_PUBLIC_KEY);
     const { requestPermissionMock, subscribeMock } =
       setupSupportedPushEnvironment();
@@ -202,7 +200,6 @@ describe("PushSubscribeCard", () => {
   });
 
   it("unsubscribes this browser when the user clicks the unsubscribe button", async () => {
-    vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("NEXT_PUBLIC_VAPID_PUBLIC_KEY", VAPID_PUBLIC_KEY);
     const existingSubscription = createPushSubscription();
     setupSupportedPushEnvironment({
