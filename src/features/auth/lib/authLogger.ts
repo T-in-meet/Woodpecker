@@ -33,14 +33,20 @@ type BlockedLogContext = CommonLogFields & {
   reasonCode: AuthLogReason;
 };
 
+type RejectedLogContext = CommonLogFields & {
+  result: "rejected";
+  reasonCode: AuthLogReason;
+};
+
 type InvalidInputLogContext = CommonLogFields & {
-  result: "failure";
+  result: "invalid_input";
   reasonCode: AuthLogReason;
 };
 
 export type AuthEventContext =
   | SuccessLogContext
   | BlockedLogContext
+  | RejectedLogContext
   | InvalidInputLogContext;
 
 export type AuthErrorContext = CommonLogFields & {
@@ -86,6 +92,11 @@ export function logAuthEvent(
   }
 
   if (ctx.result === "blocked") {
+    logWarn(entry);
+    return;
+  }
+
+  if (ctx.result === "rejected") {
     logWarn(entry);
     return;
   }

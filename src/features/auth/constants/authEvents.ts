@@ -84,6 +84,7 @@ export type AuthCompletedEvent =
  */
 export type AuthNonFailureEvent =
   | AuthCompletedEvent
+  | typeof AUTH_EVENTS.AUTH_RESET_PASSWORD_REJECTED
   | typeof AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED
   | typeof AUTH_EVENTS.AUTH_INVALID_INPUT
   | typeof AUTH_EVENTS.AUTH_RESET_PASSWORD_INVALID_INPUT;
