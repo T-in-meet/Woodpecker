@@ -32,12 +32,13 @@ function getTerminalEventCallCount(mocks: {
 }
 
 describe("resetPasswordAction - logging", () => {
+  let mocks: ReturnType<typeof setupActionTest>;
+
   beforeEach(() => {
-    setupActionTest();
+    mocks = setupActionTest();
   });
 
   it("TC18: validation 실패 시 INVALID_INPUT 기록", async () => {
-    const mocks = setupActionTest();
     await runResetPasswordAction(
       null,
       makeFormData({ password: "short", confirmPassword: "short" }),
@@ -47,11 +48,12 @@ describe("resetPasswordAction - logging", () => {
       AUTH_EVENTS.AUTH_RESET_PASSWORD_INVALID_INPUT,
       expect.any(Object),
     );
+    expect(mocks.logAuthEvent).toHaveBeenCalledTimes(1);
+    expect(mocks.logAuthError).not.toHaveBeenCalled();
     expect(getTerminalEventCallCount(mocks)).toBe(1);
   });
 
   it("TC19: session/cookie 없음이면 REJECTED 기록", async () => {
-    const mocks = setupActionTest();
     mockSession(null);
     await expect(
       runResetPasswordAction(
@@ -67,11 +69,12 @@ describe("resetPasswordAction - logging", () => {
       AUTH_EVENTS.AUTH_RESET_PASSWORD_REJECTED,
       expect.any(Object),
     );
+    expect(mocks.logAuthEvent).toHaveBeenCalledTimes(1);
+    expect(mocks.logAuthError).not.toHaveBeenCalled();
     expect(getTerminalEventCallCount(mocks)).toBe(1);
   });
 
   it("TC20: updateUser error면 FAILED 기록", async () => {
-    const mocks = setupActionTest();
     mockUpdateUser("error");
     await runResetPasswordAction(
       null,
@@ -84,11 +87,12 @@ describe("resetPasswordAction - logging", () => {
       AUTH_EVENTS.AUTH_RESET_PASSWORD_FAILED,
       expect.any(Object),
     );
+    expect(mocks.logAuthError).toHaveBeenCalledTimes(1);
+    expect(mocks.logAuthEvent).not.toHaveBeenCalled();
     expect(getTerminalEventCallCount(mocks)).toBe(1);
   });
 
   it("TC21: updateUser throw면 FAILED 기록", async () => {
-    const mocks = setupActionTest();
     mockUpdateUser("throw");
     await runResetPasswordAction(
       null,
@@ -101,11 +105,12 @@ describe("resetPasswordAction - logging", () => {
       AUTH_EVENTS.AUTH_RESET_PASSWORD_FAILED,
       expect.any(Object),
     );
+    expect(mocks.logAuthError).toHaveBeenCalledTimes(1);
+    expect(mocks.logAuthEvent).not.toHaveBeenCalled();
     expect(getTerminalEventCallCount(mocks)).toBe(1);
   });
 
   it("TC22: 성공 시 COMPLETED 기록", async () => {
-    const mocks = setupActionTest();
     await expect(
       runResetPasswordAction(
         null,
@@ -119,11 +124,12 @@ describe("resetPasswordAction - logging", () => {
       AUTH_EVENTS.AUTH_RESET_PASSWORD_COMPLETED,
       expect.any(Object),
     );
+    expect(mocks.logAuthEvent).toHaveBeenCalledTimes(1);
+    expect(mocks.logAuthError).not.toHaveBeenCalled();
     expect(getTerminalEventCallCount(mocks)).toBe(1);
   });
 
   it("TC23: 로그 payload에 password/confirmPassword를 남기지 않는다", async () => {
-    const mocks = setupActionTest();
     await runResetPasswordAction(
       null,
       makeFormData({ password: "short", confirmPassword: "short" }),

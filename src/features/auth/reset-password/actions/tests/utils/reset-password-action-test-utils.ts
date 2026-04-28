@@ -11,7 +11,9 @@ const hoisted = vi.hoisted(() => ({
   getSession: vi.fn(),
   updateUser: vi.fn(),
   cookieGet: vi.fn(),
+  cookieHas: vi.fn(),
   cookieDelete: vi.fn(),
+  cookieSet: vi.fn(),
   redirect: vi.fn(),
   validateRedirectPath: vi.fn(),
   logRequested: vi.fn(),
@@ -29,7 +31,9 @@ vi.mock("next/navigation", () => ({
 vi.mock("next/headers", () => ({
   cookies: vi.fn(async () => ({
     get: hoisted.cookieGet,
+    has: hoisted.cookieHas,
     delete: hoisted.cookieDelete,
+    set: hoisted.cookieSet,
   })),
 }));
 
@@ -120,6 +124,10 @@ export function setupActionTest() {
     name: RESET_REQUIRED_COOKIE_NAME,
     value: "true",
   });
+  hoisted.cookieHas.mockImplementation((name: string) => {
+    if (name !== RESET_REQUIRED_COOKIE_NAME) return false;
+    return Boolean(hoisted.cookieGet(name));
+  });
   hoisted.validateRedirectPath.mockImplementation((input: unknown) =>
     typeof input === "string" && input.startsWith("/") ? input : "/mypage",
   );
@@ -162,7 +170,9 @@ export function setupActionTest() {
     getSession: hoisted.getSession,
     updateUser: hoisted.updateUser,
     cookieGet: hoisted.cookieGet,
+    cookieHas: hoisted.cookieHas,
     cookieDelete: hoisted.cookieDelete,
+    cookieSet: hoisted.cookieSet,
     redirect: hoisted.redirect,
     validateRedirectPath: hoisted.validateRedirectPath,
     logRequested: hoisted.logRequested,

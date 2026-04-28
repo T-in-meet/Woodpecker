@@ -9,8 +9,10 @@ import {
 } from "./utils/reset-password-action-test-utils";
 
 describe("resetPasswordAction - policy", () => {
+  let mocks: ReturnType<typeof setupActionTest>;
+
   beforeEach(() => {
-    setupActionTest();
+    mocks = setupActionTest();
   });
 
   it("TC24: Supabase error 상세를 사용자 메시지로 노출하지 않는다", async () => {
@@ -29,7 +31,6 @@ describe("resetPasswordAction - policy", () => {
   });
 
   it("TC25: checkRequestEligibility를 호출하지 않는다", async () => {
-    const mocks = setupActionTest();
     await expect(
       runResetPasswordAction(
         null,

@@ -11,12 +11,13 @@ import {
 } from "./utils/reset-password-action-test-utils";
 
 describe("resetPasswordAction - cookie", () => {
+  let mocks: ReturnType<typeof setupActionTest>;
+
   beforeEach(() => {
-    setupActionTest();
+    mocks = setupActionTest();
   });
 
   it("TC2: 성공 시 reset-required cookie를 삭제한다", async () => {
-    const mocks = setupActionTest();
     await expect(
       runResetPasswordAction(
         null,
@@ -31,7 +32,6 @@ describe("resetPasswordAction - cookie", () => {
   });
 
   it("TC14: updateUser 실패 시 cookie delete 미호출", async () => {
-    const mocks = setupActionTest();
     mockUpdateUser("error");
     await runResetPasswordAction(
       null,
@@ -45,7 +45,6 @@ describe("resetPasswordAction - cookie", () => {
   });
 
   it("TC16: updateUser throw 시 cookie delete 미호출", async () => {
-    const mocks = setupActionTest();
     mockUpdateUser("throw");
     await runResetPasswordAction(
       null,
@@ -59,7 +58,6 @@ describe("resetPasswordAction - cookie", () => {
   });
 
   it("TC28: cookie delete는 name 기준 호출만 검증하고 option은 검증하지 않는다", async () => {
-    const mocks = setupActionTest();
     await expect(
       runResetPasswordAction(
         null,

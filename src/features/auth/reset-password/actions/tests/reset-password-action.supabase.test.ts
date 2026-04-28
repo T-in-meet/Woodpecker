@@ -9,13 +9,13 @@ import {
 } from "./utils/reset-password-action-test-utils";
 
 describe("resetPasswordAction - supabase", () => {
+  let mocks: ReturnType<typeof setupActionTest>;
+
   beforeEach(() => {
-    setupActionTest();
+    mocks = setupActionTest();
   });
 
   it("TC1: valid input + session + cookie면 updateUser({ password }) 호출", async () => {
-    const mocks = setupActionTest();
-
     await expect(
       runResetPasswordAction(
         null,

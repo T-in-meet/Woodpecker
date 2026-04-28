@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { PASSWORD_MIN_LENGTH } from "@/lib/constants/user";
+
 import {
   makeFormData,
   runResetPasswordAction,
@@ -19,6 +21,11 @@ describe("resetPasswordAction - validation", () => {
     expect(state).toMatchObject({
       status: "field_error",
       fieldErrors: { password: expect.any(Array) },
+    });
+    expect(state).toMatchObject({
+      fieldErrors: {
+        password: [`비밀번호는 ${PASSWORD_MIN_LENGTH}자 이상이어야 합니다`],
+      },
     });
   });
 
