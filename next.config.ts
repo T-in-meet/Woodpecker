@@ -26,6 +26,12 @@ const supabaseHostname =
     ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname
     : undefined);
 
+export function shouldDisableSerwist() {
+  return (
+    process.env.NODE_ENV === "development" && process.env.ENABLE_SW !== "true"
+  );
+}
+
 // [설계 의도] securityHeaders는 top-level에서 정의하지 않고 headers() 내부에서 생성
 // 이유: isProduction을 top-level 상수로 두면 import 시점에 고정되어 테스트에서 NODE_ENV 변경이 반영되지 않음
 
@@ -196,6 +202,5 @@ export default withSerwist({
   swDest: "public/sw.js",
   // dev에서는 기본적으로 SW 비활성화 (HMR 충돌 회피).
   // 푸시 알림을 로컬에서 검증할 때만 ENABLE_SW=true로 일시 활성화.
-  disable:
-    process.env.NODE_ENV === "development" && process.env.ENABLE_SW !== "true",
+  disable: shouldDisableSerwist(),
 })(nextConfig);

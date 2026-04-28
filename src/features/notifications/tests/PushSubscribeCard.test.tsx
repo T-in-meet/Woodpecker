@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const ENDPOINT = "https://push.example.test/subscription-id";
+const STALE_ENDPOINT = "https://push.example.test/stale-subscription-id";
 const VAPID_PUBLIC_KEY = "AAAA";
 
 const {
@@ -45,6 +46,7 @@ const originalServiceWorker = Object.getOwnPropertyDescriptor(
 type SupportedPushEnvironmentOptionsType = {
   existingSubscription?: PushSubscription | null;
   permission?: NotificationPermission;
+  subscribedSubscription?: PushSubscription;
 };
 
 function restoreDescriptor<T extends object>(
@@ -82,6 +84,7 @@ function createPushSubscription(endpoint = ENDPOINT) {
 function setupSupportedPushEnvironment({
   existingSubscription = null,
   permission = "default",
+  subscribedSubscription = createPushSubscription(),
 }: SupportedPushEnvironmentOptionsType = {}) {
   const requestPermissionMock = vi.fn().mockResolvedValue("granted");
   const notificationMock = {
@@ -89,7 +92,6 @@ function setupSupportedPushEnvironment({
     requestPermission: requestPermissionMock,
   };
   const getSubscriptionMock = vi.fn().mockResolvedValue(existingSubscription);
-  const subscribedSubscription = createPushSubscription();
   const subscribeMock = vi.fn().mockResolvedValue(subscribedSubscription);
   const registration = {
     pushManager: {
@@ -173,10 +175,11 @@ describe("PushSubscribeCard", () => {
     expect(subscribeToPushActionMock).not.toHaveBeenCalled();
   });
 
-  it("treats a browser subscription left by a previous account as a claim opportunity", async () => {
+  it("replaces a browser subscription left by a previous account before subscribing", async () => {
     vi.stubEnv("NEXT_PUBLIC_VAPID_PUBLIC_KEY", VAPID_PUBLIC_KEY);
+    const staleSubscription = createPushSubscription(STALE_ENDPOINT);
     setupSupportedPushEnvironment({
-      existingSubscription: createPushSubscription(),
+      existingSubscription: staleSubscription,
       permission: "granted",
     });
     checkPushSubscriptionOwnedActionMock.mockResolvedValue({ owned: false });
@@ -188,13 +191,17 @@ describe("PushSubscribeCard", () => {
 
     expect(
       await screen.findByText(
-        "이 브라우저에 다른 계정의 구독이 남아있습니다. 알림 켜기를 누르면 현재 계정으로 가져옵니다.",
+        "이 브라우저에 다른 계정의 구독이 남아있습니다. 알림 켜기를 누르면 새 구독으로 다시 설정합니다.",
       ),
     ).toBeInTheDocument();
+    expect(checkPushSubscriptionOwnedActionMock).toHaveBeenCalledWith(
+      STALE_ENDPOINT,
+    );
 
     await user.click(screen.getByRole("button", { name: /알림 켜기/ }));
 
     await waitFor(() => {
+      expect(staleSubscription.unsubscribe).toHaveBeenCalled();
       expect(subscribeToPushActionMock).toHaveBeenCalledWith({
         endpoint: ENDPOINT,
         keys: {
@@ -203,6 +210,7 @@ describe("PushSubscribeCard", () => {
         },
       });
     });
+    expect(unsubscribeFromPushActionMock).not.toHaveBeenCalled();
     expect(
       await screen.findByText("이 브라우저에서 복습 알림을 받을 수 있습니다."),
     ).toBeInTheDocument();

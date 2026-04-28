@@ -197,8 +197,16 @@ export function PushSubscribeCard({
         }
 
         const registration = await getReadyServiceWorkerRegistration();
+        const existingSubscription =
+          await registration.pushManager.getSubscription();
+
+        if (existingSubscription && !isOwnedByCurrentUser) {
+          await existingSubscription.unsubscribe();
+          setBrowserEndpoint(null);
+        }
+
         const subscription =
-          (await registration.pushManager.getSubscription()) ??
+          (isOwnedByCurrentUser ? existingSubscription : null) ??
           (await registration.pushManager.subscribe({
             userVisibleOnly: true,
             applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
@@ -263,7 +271,7 @@ export function PushSubscribeCard({
       : isCurrentBrowserSubscribed
         ? "현재 브라우저에서 알림이 켜져 있습니다."
         : hasOrphanBrowserSubscription
-          ? "이 브라우저에 다른 계정의 구독이 남아있습니다. 알림 켜기를 누르면 현재 계정으로 가져옵니다."
+          ? "이 브라우저에 다른 계정의 구독이 남아있습니다. 알림 켜기를 누르면 새 구독으로 다시 설정합니다."
           : initialHasAnySubscription
             ? "다른 브라우저에 저장된 알림 구독이 있습니다."
             : "현재 브라우저에서 알림이 꺼져 있습니다.";

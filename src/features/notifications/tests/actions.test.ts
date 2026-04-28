@@ -9,21 +9,13 @@ const NOTIFICATION_ID = "33333333-3333-4333-8333-333333333333";
 const ENDPOINT = "https://push.example.test/subscription-id";
 const CONFIRMED_AT = "2026-04-27T00:00:00.000Z";
 
-const {
-  createAdminClientMock,
-  createClientMock,
-  redirectMock,
-  revalidatePathMock,
-} = vi.hoisted(() => ({
-  createAdminClientMock: vi.fn(),
-  createClientMock: vi.fn(),
-  redirectMock: vi.fn(),
-  revalidatePathMock: vi.fn(),
-}));
-
-vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: createAdminClientMock,
-}));
+const { createClientMock, redirectMock, revalidatePathMock } = vi.hoisted(
+  () => ({
+    createClientMock: vi.fn(),
+    redirectMock: vi.fn(),
+    revalidatePathMock: vi.fn(),
+  }),
+);
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: createClientMock,
@@ -65,9 +57,10 @@ function createSupabaseMock({
   rpcError?: { message: string } | null;
 } = {}) {
   const upsertMock = vi.fn().mockResolvedValue({ error: upsertError });
-  const deleteEndpointEqMock = vi
-    .fn()
-    .mockResolvedValue({ error: deleteError });
+  const deleteUserEqMock = vi.fn().mockResolvedValue({ error: deleteError });
+  const deleteEndpointEqMock = vi.fn().mockReturnValue({
+    eq: deleteUserEqMock,
+  });
   const deleteMock = vi.fn().mockReturnValue({
     eq: deleteEndpointEqMock,
   });
@@ -93,6 +86,7 @@ function createSupabaseMock({
   return {
     deleteEndpointEqMock,
     deleteMock,
+    deleteUserEqMock,
     fromMock,
     rpcMock,
     selectEndpointEqMock,
@@ -127,7 +121,6 @@ function createPushSubscriptionInput() {
 
 describe("notification server actions", () => {
   beforeEach(() => {
-    createAdminClientMock.mockReset();
     createClientMock.mockReset();
     redirectMock.mockReset();
     revalidatePathMock.mockReset();
@@ -148,19 +141,15 @@ describe("notification server actions", () => {
       error: "브라우저 구독 정보가 올바르지 않습니다.",
     });
     expect(createClientMock).not.toHaveBeenCalled();
-    expect(createAdminClientMock).not.toHaveBeenCalled();
   });
 
-  it("claims a valid push subscription endpoint for the current user", async () => {
-    const { supabase, fromMock } = createSupabaseMock();
-    const { supabase: adminClient, upsertMock } = createSupabaseMock();
+  it("upserts a valid push subscription endpoint through the current user session", async () => {
+    const { supabase, fromMock, upsertMock } = createSupabaseMock();
     createClientMock.mockResolvedValue(supabase);
-    createAdminClientMock.mockReturnValue(adminClient);
 
     const result = await subscribeToPushAction(createPushSubscriptionInput());
 
-    expect(fromMock).not.toHaveBeenCalled();
-    expect(createAdminClientMock).toHaveBeenCalled();
+    expect(fromMock).toHaveBeenCalledWith("push_subscriptions");
     expect(upsertMock).toHaveBeenCalledWith(
       {
         user_id: USER_ID,
@@ -174,27 +163,39 @@ describe("notification server actions", () => {
     expect(result).toEqual({ success: true });
   });
 
-  it("deletes the push subscription endpoint via the admin client (covering orphan rows)", async () => {
-    const { supabase, fromMock: userFromMock } = createSupabaseMock();
+  it("returns an error when RLS blocks claiming an endpoint owned by another user", async () => {
+    const { supabase, upsertMock } = createSupabaseMock({
+      upsertError: { message: "new row violates row-level security policy" },
+    });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await subscribeToPushAction(createPushSubscriptionInput());
+
+    expect(upsertMock).toHaveBeenCalled();
+    expect(revalidatePathMock).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      success: false,
+      error:
+        "푸시 알림 구독에 실패했습니다. 브라우저 알림 구독을 해제한 뒤 다시 시도해주세요.",
+    });
+  });
+
+  it("deletes only the current user's push subscription endpoint", async () => {
     const {
-      supabase: adminClient,
-      fromMock: adminFromMock,
-      deleteMock: adminDeleteMock,
-      deleteEndpointEqMock: adminDeleteEndpointEqMock,
+      supabase,
+      fromMock,
+      deleteMock,
+      deleteEndpointEqMock,
+      deleteUserEqMock,
     } = createSupabaseMock();
     createClientMock.mockResolvedValue(supabase);
-    createAdminClientMock.mockReturnValue(adminClient);
 
     const result = await unsubscribeFromPushAction(ENDPOINT);
 
-    expect(createAdminClientMock).toHaveBeenCalled();
-    expect(userFromMock).not.toHaveBeenCalled();
-    expect(adminFromMock).toHaveBeenCalledWith("push_subscriptions");
-    expect(adminDeleteMock).toHaveBeenCalled();
-    expect(adminDeleteEndpointEqMock).toHaveBeenCalledWith(
-      "endpoint",
-      ENDPOINT,
-    );
+    expect(fromMock).toHaveBeenCalledWith("push_subscriptions");
+    expect(deleteMock).toHaveBeenCalled();
+    expect(deleteEndpointEqMock).toHaveBeenCalledWith("endpoint", ENDPOINT);
+    expect(deleteUserEqMock).toHaveBeenCalledWith("user_id", USER_ID);
     expect(revalidatePathMock).toHaveBeenCalledWith(ROUTES.MYPAGE);
     expect(result).toEqual({ success: true });
   });
@@ -205,7 +206,6 @@ describe("notification server actions", () => {
 
     const result = await unsubscribeFromPushAction(ENDPOINT);
 
-    expect(createAdminClientMock).not.toHaveBeenCalled();
     expect(result).toEqual({
       success: false,
       error: "로그인이 필요합니다.",
@@ -320,6 +320,5 @@ describe("notification server actions", () => {
     ).rejects.toBe(REDIRECT_ERROR);
 
     expect(redirectMock).toHaveBeenCalledWith(ROUTES.VERIFY_EMAIL);
-    expect(createAdminClientMock).not.toHaveBeenCalled();
   });
 });

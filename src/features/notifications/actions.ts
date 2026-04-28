@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { getNoteDetailRoute, ROUTES } from "@/lib/constants/routes";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 import {
@@ -74,9 +73,7 @@ export async function subscribeToPushAction(
   }
 
   const { endpoint, keys } = parsed.data;
-  // A push endpoint is origin-scoped, so account switches must claim it across RLS ownership.
-  const adminClient = createAdminClient();
-  const { error } = await adminClient.from("push_subscriptions").upsert(
+  const { error } = await context.supabase.from("push_subscriptions").upsert(
     {
       user_id: context.userId,
       endpoint,
@@ -117,13 +114,11 @@ export async function unsubscribeFromPushAction(
     return { success: false, error: context.error };
   }
 
-  // endpoint는 origin-scoped이고 클라이언트가 곧 PushSubscription.unsubscribe()로 무효화하므로,
-  // 같은 브라우저에서 이전 계정이 남긴 row까지 admin 권한으로 함께 정리한다.
-  const adminClient = createAdminClient();
-  const { error } = await adminClient
+  const { error } = await context.supabase
     .from("push_subscriptions")
     .delete()
-    .eq("endpoint", parsed.data);
+    .eq("endpoint", parsed.data)
+    .eq("user_id", context.userId);
 
   if (error) {
     return {

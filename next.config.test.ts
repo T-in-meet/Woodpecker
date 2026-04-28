@@ -15,7 +15,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import nextConfig from "./next.config";
+import nextConfig, { shouldDisableSerwist } from "./next.config";
 
 /**
  * headers() 반환값에서 source "/(.*)" 항목의 헤더 배열을 추출하는 헬퍼
@@ -240,5 +240,25 @@ describe("Security Headers — next.config.ts", () => {
         expect(typeof cspReportOnly).toBe("string");
       });
     });
+  });
+
+  describe("Serwist disable env matrix", () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it.each([
+      { enableSw: undefined, expected: true, nodeEnv: "development" },
+      { enableSw: "true", expected: false, nodeEnv: "development" },
+      { enableSw: undefined, expected: false, nodeEnv: "production" },
+    ])(
+      "returns $expected when NODE_ENV=$nodeEnv and ENABLE_SW=$enableSw",
+      ({ enableSw, expected, nodeEnv }) => {
+        vi.stubEnv("NODE_ENV", nodeEnv);
+        vi.stubEnv("ENABLE_SW", enableSw);
+
+        expect(shouldDisableSerwist()).toBe(expected);
+      },
+    );
   });
 });
