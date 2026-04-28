@@ -32,11 +32,16 @@ function getRequiredEnv(name: string): string {
 }
 
 function getVapidSubject(): string {
-  const subject = process.env.NEXT_PUBLIC_APP_URL ?? process.env.APP_URL;
+  // web-push 스펙상 subject는 https: 또는 mailto: 스킴만 허용. http://localhost는 거절되므로
+  // dev에서는 VAPID_SUBJECT(mailto:)로 우회하고, prod는 https인 NEXT_PUBLIC_APP_URL을 그대로 사용.
+  const subject =
+    process.env.VAPID_SUBJECT ??
+    process.env.NEXT_PUBLIC_APP_URL ??
+    process.env.APP_URL;
 
   if (!subject) {
     throw new Error(
-      "NEXT_PUBLIC_APP_URL or APP_URL is required for Web Push dispatch.",
+      "VAPID_SUBJECT, NEXT_PUBLIC_APP_URL, or APP_URL is required for Web Push dispatch.",
     );
   }
 

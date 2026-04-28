@@ -194,5 +194,8 @@ const nextConfig: NextConfig = {
 export default withSerwist({
   swSrc: "src/sw.ts",
   swDest: "public/sw.js",
-  disable: process.env.NODE_ENV === "development",
+  // dev에서는 기본적으로 SW 비활성화 (HMR 충돌 회피).
+  // 푸시 알림을 로컬에서 검증할 때만 ENABLE_SW=true로 일시 활성화.
+  disable:
+    process.env.NODE_ENV === "development" && process.env.ENABLE_SW !== "true",
 })(nextConfig);
