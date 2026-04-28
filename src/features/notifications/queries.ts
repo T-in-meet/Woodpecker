@@ -8,42 +8,32 @@ import {
 import { createServerComponentClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database.types";
 
+import {
+  notificationListItemSchema,
+  type NotificationListItemType,
+} from "./schema";
+
 const DEFAULT_NOTIFICATION_LIST_LIMIT = 20;
 const MAX_NOTIFICATION_LIST_LIMIT = 50;
-
-const notificationStatusSchema = z.enum([
-  NOTIFICATION_STATUS.SENT,
-  NOTIFICATION_STATUS.READ,
-  NOTIFICATION_STATUS.SKIPPED,
-]);
 
 const joinedNoteSchema = z.object({
   title: z.string(),
 });
 
-const notificationListRowSchema = z.object({
-  id: z.string().uuid(),
-  title: z.string(),
-  body: z.string().nullable(),
-  type: z.enum([NOTIFICATION_TYPES.REVIEW]),
-  status: notificationStatusSchema,
-  sent_at: z.string(),
-  read_at: z.string().nullable(),
-  note_id: z.string().uuid().nullable(),
-  review_log_id: z.string().uuid().nullable(),
-  note: joinedNoteSchema.nullable().optional(),
-});
+const notificationListRowSchema = notificationListItemSchema
+  .omit({ noteTitle: true })
+  .extend({
+    note: joinedNoteSchema.nullable().optional(),
+  });
 
-const notificationListItemSchema = notificationListRowSchema.transform(
-  ({ note, ...item }) => ({
+const notificationListRowToItemSchema = notificationListRowSchema
+  .transform(({ note, ...item }) => ({
     ...item,
     noteTitle: note?.title ?? null,
-  }),
-);
+  }))
+  .pipe(notificationListItemSchema);
 
-export type NotificationListItemType = z.infer<
-  typeof notificationListItemSchema
->;
+export type { NotificationListItemType };
 
 type NotificationQueryClientType = {
   auth: Pick<SupabaseClient<Database>["auth"], "getUser">;
@@ -137,7 +127,7 @@ export async function getNotificationList(
 
   if (error) throw error;
 
-  const parsed = z.array(notificationListItemSchema).safeParse(data);
+  const parsed = z.array(notificationListRowToItemSchema).safeParse(data);
 
   if (!parsed.success) {
     throw parsed.error;

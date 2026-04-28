@@ -8,6 +8,7 @@ const noteDetailSchema = z.object({
   title: z.string(),
   content: z.string(),
   next_review_at: z.string().nullable(),
+  notification_time_of_day: z.string().nullable(),
   review_round: z.number().int().min(0).max(MAX_REVIEW_ROUND),
   created_at: z.string(),
   updated_at: z.string(),
@@ -46,7 +47,7 @@ export async function getNoteById(
   const { data } = await supabase
     .from("notes")
     .select(
-      "id, title, content, next_review_at, review_round, created_at, updated_at, user_id",
+      "id, title, content, next_review_at, notification_time_of_day, review_round, created_at, updated_at, user_id",
     )
     .eq("id", noteId)
     .eq("user_id", userId)

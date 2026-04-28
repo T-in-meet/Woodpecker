@@ -18,6 +18,20 @@ vi.mock("@/lib/supabase/server", () => ({
   createServerComponentClient: createClientMock,
 }));
 
+vi.mock("@/features/notifications/components/NotificationTimePicker", () => ({
+  NotificationTimePicker: ({
+    initialTime,
+    noteId,
+  }: {
+    initialTime: string | null;
+    noteId: string;
+  }) => (
+    <div data-testid="notification-time-picker">
+      {noteId}:{initialTime ?? "default"}
+    </div>
+  ),
+}));
+
 vi.mock("@/features/notes/queries", () => ({
   getNoteById: getNoteByIdMock,
 }));
@@ -111,6 +125,7 @@ describe("NoteDetailPage", () => {
       title: "Test note",
       content: "note body",
       next_review_at: "2026-03-29T09:00:00.000Z",
+      notification_time_of_day: "21:30:00",
       review_round: 1,
       created_at: "2026-03-29T00:00:00.000Z",
       updated_at: "2026-03-29T01:00:00.000Z",
@@ -126,6 +141,9 @@ describe("NoteDetailPage", () => {
       screen.getByRole("heading", { name: "Test note" }),
     ).toBeInTheDocument();
     expect(screen.getByTestId("note-viewer")).toHaveTextContent("note body");
+    expect(screen.getByTestId("notification-time-picker")).toHaveTextContent(
+      "note-123:21:30:00",
+    );
     expect(
       screen.getByText("지금 백지 테스트를 진행할 수 있습니다."),
     ).toBeInTheDocument();
@@ -144,6 +162,7 @@ describe("NoteDetailPage", () => {
       title: "Future review note",
       content: "note body",
       next_review_at: "2026-03-30T09:00:00.000Z",
+      notification_time_of_day: null,
       review_round: 1,
       created_at: "2026-03-29T00:00:00.000Z",
       updated_at: "2026-03-29T01:00:00.000Z",
@@ -170,6 +189,7 @@ describe("NoteDetailPage", () => {
       title: "Completed note",
       content: "note body",
       next_review_at: null,
+      notification_time_of_day: null,
       review_round: 3,
       created_at: "2026-03-29T00:00:00.000Z",
       updated_at: "2026-03-29T01:00:00.000Z",

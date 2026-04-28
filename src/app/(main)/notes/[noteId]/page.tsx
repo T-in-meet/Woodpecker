@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { DeleteNoteDialog } from "@/features/notes/components/DeleteNoteDialog";
 import { NoteViewer } from "@/features/notes/components/NoteViewer";
 import { getNoteById } from "@/features/notes/queries";
+import { NotificationTimePicker } from "@/features/notifications/components/NotificationTimePicker";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { getNoteReviewRoute, ROUTES } from "@/lib/constants/routes";
 import { createServerComponentClient } from "@/lib/supabase/server";
@@ -83,6 +84,12 @@ export default async function NoteDetailPage({
           </div>
         </div>
       </header>
+
+      <NotificationTimePicker
+        noteId={note.id}
+        initialTime={note.notification_time_of_day}
+        nextReviewAt={note.next_review_at}
+      />
 
       <NoteViewer content={note.content} className="min-h-[60vh]" />
     </div>
