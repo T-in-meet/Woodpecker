@@ -21,6 +21,8 @@ vi.mock("@/features/notes/queries", () => ({
 
 vi.mock("next/navigation", () => ({
   redirect: redirectMock,
+  useRouter: () => ({ push: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 import NotesPage from "./page";
@@ -59,7 +61,9 @@ describe("NotesPage", () => {
   it("redirects to login when the user is not authenticated", async () => {
     createClientMock.mockResolvedValue(createSupabaseMock(null));
 
-    await expect(NotesPage()).rejects.toBe(REDIRECT_ERROR);
+    await expect(NotesPage({ searchParams: Promise.resolve({}) })).rejects.toBe(
+      REDIRECT_ERROR,
+    );
 
     expect(redirectMock).toHaveBeenCalledWith(ROUTES.LOGIN);
     expect(getNotesMock).not.toHaveBeenCalled();
@@ -72,7 +76,9 @@ describe("NotesPage", () => {
         createSupabaseMock("user-123", emailConfirmedAt),
       );
 
-      await expect(NotesPage()).rejects.toBe(REDIRECT_ERROR);
+      await expect(
+        NotesPage({ searchParams: Promise.resolve({}) }),
+      ).rejects.toBe(REDIRECT_ERROR);
 
       expect(redirectMock).toHaveBeenCalledWith(ROUTES.VERIFY_EMAIL);
       expect(getNotesMock).not.toHaveBeenCalled();
@@ -81,27 +87,27 @@ describe("NotesPage", () => {
 
   it("renders the note list for authenticated users", async () => {
     createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
-    getNotesMock.mockResolvedValue([
-      {
-        id: "11111111-1111-4111-8111-111111111111",
-        title: "테스트 노트",
-        next_review_at: null,
-        review_round: 3,
-        updated_at: "2026-03-29T12:00:00.000Z",
-      },
-    ]);
+    getNotesMock.mockResolvedValue({
+      notes: [
+        {
+          id: "11111111-1111-4111-8111-111111111111",
+          title: "테스트 노트",
+          next_review_at: null,
+          review_round: 3,
+          created_at: "2026-03-01T00:00:00.000Z",
+          updated_at: "2026-03-29T12:00:00.000Z",
+        },
+      ],
+      total: 1,
+    });
 
-    render(await NotesPage());
+    render(await NotesPage({ searchParams: Promise.resolve({}) }));
 
-    expect(getNotesMock).toHaveBeenCalledWith("user-123");
+    expect(getNotesMock).toHaveBeenCalledWith("user-123", 1, "", 5);
     expect(
       screen.getByRole("heading", { name: "기록 목록" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "새 노트" })).toHaveAttribute(
-      "href",
-      ROUTES.NOTES_NEW,
-    );
-    expect(screen.getByRole("link", { name: "테스트 노트" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /테스트 노트/ })).toHaveAttribute(
       "href",
       `${ROUTES.NOTES}/11111111-1111-4111-8111-111111111111`,
     );

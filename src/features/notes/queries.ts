@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { NOTES_LIST_PAGE_SIZE } from "@/lib/constants/notes";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { createServerComponentClient } from "@/lib/supabase/server";
 
@@ -19,23 +20,41 @@ const noteSummarySchema = z.object({
   title: z.string(),
   next_review_at: z.string().nullable(),
   review_round: z.number().int().min(0).max(MAX_REVIEW_ROUND),
+  created_at: z.string(),
   updated_at: z.string(),
 });
 
 export type NoteDetail = z.infer<typeof noteDetailSchema>;
 export type NoteSummary = z.infer<typeof noteSummarySchema>;
 
-export async function getNotes(userId: string): Promise<NoteSummary[]> {
+export async function getNotes(
+  userId: string,
+  page = 1,
+  search = "",
+  pageSize = NOTES_LIST_PAGE_SIZE,
+): Promise<{ notes: NoteSummary[]; total: number }> {
   const supabase = await createServerComponentClient();
-  const { data } = await supabase
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  let query = supabase
     .from("notes")
-    .select("id, title, next_review_at, review_round, updated_at")
+    .select("id, title, next_review_at, review_round, created_at, updated_at", {
+      count: "exact",
+    })
     .eq("user_id", userId)
     .order("updated_at", { ascending: false });
 
+  if (search.trim()) {
+    const term = search.trim().replace(/%/g, "\\%").replace(/_/g, "\\_");
+    query = query.or(`title.ilike.%${term}%,content.ilike.%${term}%`);
+  }
+
+  const { data, count } = await query.range(from, to);
+
   const parsed = z.array(noteSummarySchema).safeParse(data);
 
-  return parsed.success ? parsed.data : [];
+  return { notes: parsed.success ? parsed.data : [], total: count ?? 0 };
 }
 
 export async function getNoteById(

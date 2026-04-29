@@ -18,6 +18,16 @@ export function formatDateTime(date: Date | string, locale = "ko-KR"): string {
   });
 }
 
+export function formatDateKST(date: Date | string): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  return d.toLocaleDateString("ko-KR", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    timeZone: "Asia/Seoul",
+  });
+}
+
 export function formatRelativeDate(date: Date | string): string {
   const d = typeof date === "string" ? new Date(date) : date;
   const now = new Date();
