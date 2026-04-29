@@ -54,3 +54,16 @@ export function fillResetPasswordFields(values: {
     target: { value: values.confirmPassword },
   });
 }
+
+export function submitResetPasswordForm() {
+  const submitButton = screen.getByRole("button", {
+    name: "비밀번호 변경하기",
+  });
+
+  const form = submitButton.closest("form");
+  if (!form) {
+    throw new Error("reset password form을 찾을 수 없습니다.");
+  }
+
+  fireEvent.submit(form);
+}
