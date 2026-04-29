@@ -1,16 +1,68 @@
-import { expect, vi } from "vitest";
+import { afterEach, beforeEach, expect, vi } from "vitest";
+
+import { AUTH_EVENTS } from "@/features/auth/constants/authEvents";
+import { resetEligibilityStore } from "@/features/auth/lib/requestEligibilityStore";
 
 import {
   type ForgotPasswordActionState,
   INITIAL_FORGOT_PASSWORD_ACTION_STATE,
 } from "../../forgotPasswordAction";
 
+export const FORGOT_PASSWORD_TERMINAL_EVENTS = [
+  AUTH_EVENTS.AUTH_FORGOT_PASSWORD_COMPLETED,
+  AUTH_EVENTS.AUTH_FORGOT_PASSWORD_INVALID_INPUT,
+  AUTH_EVENTS.AUTH_FORGOT_PASSWORD_RATE_LIMITED,
+  AUTH_EVENTS.AUTH_FORGOT_PASSWORD_FAILED,
+] as const;
+
+type TerminalEvent = (typeof FORGOT_PASSWORD_TERMINAL_EVENTS)[number];
+
+export function getTerminalEventCalls(
+  mocks: ReturnType<typeof setupActionTest>,
+) {
+  return [
+    ...mocks.logAuthEventMock.mock.calls,
+    ...mocks.logAuthErrorMock.mock.calls,
+  ].filter(([event]) =>
+    FORGOT_PASSWORD_TERMINAL_EVENTS.includes(event as TerminalEvent),
+  );
+}
+
+export function expectExactlyOneTerminalEvent(
+  mocks: ReturnType<typeof setupActionTest>,
+  expected: TerminalEvent,
+) {
+  const calls = getTerminalEventCalls(mocks);
+
+  expect(calls).toHaveLength(1);
+  expect(calls[0]?.[0]).toBe(expected);
+}
+
+export function expectRequestedBeforeTerminalEvent(
+  mocks: ReturnType<typeof setupActionTest>,
+) {
+  const requestedOrder = mocks.logRequestedMock.mock.invocationCallOrder[0];
+
+  const terminalOrders = [
+    ...mocks.logAuthEventMock.mock.invocationCallOrder,
+    ...mocks.logAuthErrorMock.mock.invocationCallOrder,
+  ];
+
+  expect(requestedOrder).toBeDefined();
+  expect(terminalOrders.length).toBeGreaterThan(0);
+  expect(Math.min(...terminalOrders)).toBeGreaterThan(requestedOrder!);
+}
+
+export function expectNoLegacyActionFields(state: Record<string, unknown>) {
+  expect(state).not.toHaveProperty("code");
+  expect(state).not.toHaveProperty("success");
+  expect(state).not.toHaveProperty("data");
+}
+
 const hoisted = vi.hoisted(() => ({
   createClientMock: vi.fn(),
   resetPasswordForEmail: vi.fn(),
-  checkRequestEligibility: vi.fn(),
-  getClientIp: vi.fn(),
-  canonicalizeEmail: vi.fn(),
+  getServerActionClientIp: vi.fn(),
   applyMinimumActionDelay: vi.fn(),
   logRequested: vi.fn(),
   logAuthEvent: vi.fn(),
@@ -21,22 +73,8 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: hoisted.createClientMock,
 }));
 
-vi.mock("@/features/auth/lib/checkRequestEligibility", async () => {
-  const actual = await vi.importActual<
-    typeof import("@/features/auth/lib/checkRequestEligibility")
-  >("@/features/auth/lib/checkRequestEligibility");
-  return {
-    ...actual,
-    checkRequestEligibility: hoisted.checkRequestEligibility,
-  };
-});
-
-vi.mock("@/lib/utils/getClientIp", () => ({
-  getClientIp: hoisted.getClientIp,
-}));
-
-vi.mock("@/features/auth/utils/canonicalizeEmail", () => ({
-  canonicalizeEmail: hoisted.canonicalizeEmail,
+vi.mock("@/lib/utils/getServerActionClientIp", () => ({
+  getServerActionClientIp: hoisted.getServerActionClientIp,
 }));
 
 vi.mock("@/features/auth/lib/applyMinimumActionDelay", () => ({
@@ -54,20 +92,12 @@ vi.mock("@/features/auth/lib/authLogger", () => ({
   ),
 }));
 
-export type RateLimitMode = "allow" | "block";
 export type SupabaseMode = "success" | "error" | "emailNotFoundError" | "throw";
 
 export type ForgotPasswordActionTestOptions = {
   email?: string;
   redirect?: string | null;
   ip?: string;
-  appUrl?: string;
-  rateLimit?: {
-    ipShort?: RateLimitMode;
-    ipLong?: RateLimitMode;
-    emailShort?: RateLimitMode;
-    emailLong?: RateLimitMode;
-  };
   supabase?: SupabaseMode;
 };
 
@@ -75,16 +105,6 @@ export function makeFormData(input: { email: string }) {
   const formData = new FormData();
   formData.set("email", input.email);
   return formData;
-}
-
-function resolveBlockedBy(
-  rateLimit?: ForgotPasswordActionTestOptions["rateLimit"],
-) {
-  if (rateLimit?.ipShort === "block") return "ipShort";
-  if (rateLimit?.ipLong === "block") return "ipLong";
-  if (rateLimit?.emailShort === "block") return "emailShort";
-  if (rateLimit?.emailLong === "block") return "emailLong";
-  return null;
 }
 
 function mockSupabase(mode: SupabaseMode) {
@@ -111,10 +131,24 @@ function mockSupabase(mode: SupabaseMode) {
   );
 }
 
+let originalAppUrl: string | undefined;
+
+beforeEach(() => {
+  originalAppUrl = process.env.APP_URL;
+  process.env.APP_URL = "https://example.com";
+});
+
+afterEach(() => {
+  if (originalAppUrl === undefined) {
+    delete process.env.APP_URL;
+  } else {
+    process.env.APP_URL = originalAppUrl;
+  }
+});
+
 export function setupActionTest(options: ForgotPasswordActionTestOptions = {}) {
   vi.clearAllMocks();
-
-  process.env["APP_URL"] = options.appUrl ?? "https://example.com";
+  resetEligibilityStore();
 
   hoisted.createClientMock.mockResolvedValue({
     auth: {
@@ -123,16 +157,12 @@ export function setupActionTest(options: ForgotPasswordActionTestOptions = {}) {
   } as never);
 
   const email = options.email ?? "user@example.com";
-  hoisted.getClientIp.mockReturnValue(options.ip ?? "203.0.113.10");
-  hoisted.canonicalizeEmail.mockImplementation((input: string) =>
-    input.trim().toLowerCase(),
-  );
-  hoisted.applyMinimumActionDelay.mockResolvedValue(undefined);
 
-  const blockedBy = resolveBlockedBy(options.rateLimit);
-  hoisted.checkRequestEligibility.mockReturnValue(
-    blockedBy ? { allowed: false, blockedBy } : { allowed: true },
+  hoisted.getServerActionClientIp.mockResolvedValue(
+    options.ip ?? "203.0.113.10",
   );
+
+  hoisted.applyMinimumActionDelay.mockResolvedValue(undefined);
 
   mockSupabase(options.supabase ?? "success");
 
@@ -141,6 +171,7 @@ export function setupActionTest(options: ForgotPasswordActionTestOptions = {}) {
     redirect?: string | null;
   }) {
     const mod = await import("../../forgotPasswordAction");
+
     return mod.forgotPasswordAction(
       override?.redirect ?? options.redirect ?? null,
       INITIAL_FORGOT_PASSWORD_ACTION_STATE,
@@ -155,9 +186,7 @@ export function setupActionTest(options: ForgotPasswordActionTestOptions = {}) {
     logRequestedMock: hoisted.logRequested,
     logAuthEventMock: hoisted.logAuthEvent,
     logAuthErrorMock: hoisted.logAuthError,
-    checkRequestEligibilityMock: hoisted.checkRequestEligibility,
-    getClientIpMock: hoisted.getClientIp,
-    canonicalizeEmailMock: hoisted.canonicalizeEmail,
+    getServerActionClientIp: hoisted.getServerActionClientIp,
   };
 }
 
@@ -165,7 +194,6 @@ export function expectActionStateShape(state: unknown) {
   const typed = state as ForgotPasswordActionState;
   expect(typed).toHaveProperty("status");
   expect(typed).toHaveProperty("fieldErrors");
-  expect(typed).toHaveProperty("message");
   expect(typed).not.toHaveProperty("code");
   expect(typed).not.toHaveProperty("success");
   expect(typed).not.toHaveProperty("data");
