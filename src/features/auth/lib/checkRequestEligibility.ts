@@ -63,7 +63,7 @@ export const EMAIL_LONG_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 /**
  * 요청 적격성 확인 — 단일 결정 권한(single decision authority)
  *
- * @param route - "signup" | "resend" | "login" (어떤 API가 차단되었는지 로깅 목적)
+ * @param route - "signup" | "resend" | "login" | "forgot-password" (어떤 API가 차단되었는지 로깅 목적)
  * @param ip - 클라이언트 IP 주소 (IP 저장소에 그대로 사용됨)
  * @param canonicalEmail - caller에서 canonicalizeEmail() 적용된 값
  *
@@ -124,7 +124,7 @@ export function mapBlockedByToReason(blockedBy: BlockedBy): RateLimitReason {
 }
 
 export function checkRequestEligibility(
-  route: "signup" | "resend" | "login",
+  route: "signup" | "resend" | "login" | "forgot-password",
   ip: string,
   canonicalEmail: string,
 ): EligibilityResult {
