@@ -1,15 +1,23 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { vi } from "vitest";
 
+import { ResetPasswordActionState } from "@/features/auth/reset-password/actions/resetPasswordAction";
 import { ResetPasswordForm } from "@/features/auth/reset-password/components/ResetPasswordForm";
 
 export const RESET_PASSWORD_GLOBAL_ERROR_MESSAGE_FIXTURE =
   "비밀번호를 변경하지 못했습니다. 잠시 후 다시 시도해주세요.";
 
-type FormAction = (formData: FormData) => unknown;
+type BoundResetPasswordAction = (
+  prevState: ResetPasswordActionState,
+  formData: FormData,
+) => Promise<ResetPasswordActionState>;
 
-export function renderResetPasswordForm(formActionMock: FormAction) {
-  return render(<ResetPasswordForm action={formActionMock} />);
+export function renderResetPasswordForm() {
+  const boundActionMock = vi.fn(
+    async () => ({ status: "idle" }) satisfies ResetPasswordActionState,
+  ) as BoundResetPasswordAction;
+
+  return render(<ResetPasswordForm action={boundActionMock} />);
 }
 
 export function setIdleActionState(

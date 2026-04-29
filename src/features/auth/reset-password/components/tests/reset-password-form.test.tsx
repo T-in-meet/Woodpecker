@@ -42,7 +42,7 @@ describe("reset-password-form", () => {
   });
 
   it("TC1/TC2: 기본 렌더링과 기본 버튼 문구를 표시한다", () => {
-    renderResetPasswordForm(hoisted.formActionMock);
+    renderResetPasswordForm();
     expect(screen.getByLabelText(/^비밀번호$/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/비밀번호 확인/i)).toBeInTheDocument();
     expect(
@@ -56,13 +56,13 @@ describe("reset-password-form", () => {
       hoisted.formActionMock,
       true,
     ]);
-    renderResetPasswordForm(hoisted.formActionMock);
+    renderResetPasswordForm();
     expect(screen.getByRole("button", { name: "변경 중..." })).toBeDisabled();
   });
 
   it("TC14/TC15/TC16/TC17: submit payload는 password/confirmPassword만 포함하고 redirect hidden input이 없다", async () => {
     const user = userEvent.setup();
-    const { container } = renderResetPasswordForm(hoisted.formActionMock);
+    const { container } = renderResetPasswordForm();
 
     await user.type(screen.getByLabelText(/^비밀번호$/i), "valid-password");
     await user.type(screen.getByLabelText(/비밀번호 확인/i), "valid-password");
@@ -89,7 +89,7 @@ describe("reset-password-form", () => {
       hoisted.formActionMock,
       false,
     ]);
-    renderResetPasswordForm(hoisted.formActionMock);
+    renderResetPasswordForm();
     expect(
       screen.getByText("비밀번호는 최소 8자 이상이어야 합니다."),
     ).toBeInTheDocument();
@@ -107,7 +107,7 @@ describe("reset-password-form", () => {
       hoisted.formActionMock,
       false,
     ]);
-    renderResetPasswordForm(hoisted.formActionMock);
+    renderResetPasswordForm();
     expect(
       screen.getByText("비밀번호가 일치하지 않습니다."),
     ).toBeInTheDocument();
@@ -125,7 +125,7 @@ describe("reset-password-form", () => {
       hoisted.formActionMock,
       false,
     ]);
-    renderResetPasswordForm(hoisted.formActionMock);
+    renderResetPasswordForm();
     expect(
       screen.getByText(RESET_PASSWORD_GLOBAL_ERROR_MESSAGE_FIXTURE),
     ).toBeInTheDocument();
@@ -134,7 +134,7 @@ describe("reset-password-form", () => {
 
   it("TC22: idle에서는 global error UI를 표시하지 않는다", async () => {
     const user = userEvent.setup();
-    renderResetPasswordForm(hoisted.formActionMock);
+    renderResetPasswordForm();
     await user.type(screen.getByLabelText(/^비밀번호$/i), "secret-value");
     await user.type(screen.getByLabelText(/비밀번호 확인/i), "secret-value");
 
@@ -145,7 +145,7 @@ describe("reset-password-form", () => {
 
   it("TC23: idle에서는 입력한 민감값을 화면 텍스트로 노출하지 않는다", async () => {
     const user = userEvent.setup();
-    renderResetPasswordForm(hoisted.formActionMock);
+    renderResetPasswordForm();
     await user.type(screen.getByLabelText(/^비밀번호$/i), "secret-value");
     await user.type(screen.getByLabelText(/비밀번호 확인/i), "secret-value");
 
@@ -154,7 +154,7 @@ describe("reset-password-form", () => {
 
   it("TC24: idle에서는 성공 UI를 표시하지 않는다", async () => {
     const user = userEvent.setup();
-    renderResetPasswordForm(hoisted.formActionMock);
+    renderResetPasswordForm();
     await user.type(screen.getByLabelText(/^비밀번호$/i), "secret-value");
     await user.type(screen.getByLabelText(/비밀번호 확인/i), "secret-value");
 
@@ -163,7 +163,7 @@ describe("reset-password-form", () => {
 
   it("TC25: idle에서는 rejected UI를 표시하지 않는다", async () => {
     const user = userEvent.setup();
-    renderResetPasswordForm(hoisted.formActionMock);
+    renderResetPasswordForm();
     await user.type(screen.getByLabelText(/^비밀번호$/i), "secret-value");
     await user.type(screen.getByLabelText(/비밀번호 확인/i), "secret-value");
 

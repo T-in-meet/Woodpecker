@@ -49,7 +49,7 @@ describe("reset-password-form validation", () => {
   });
 
   it("TC8: 입력 중 validation은 debounce(300ms)로 실행된다", () => {
-    renderResetPasswordForm(hoisted.formActionMock);
+    renderResetPasswordForm();
     fillResetPasswordFields({
       password: "valid-password",
       confirmPassword: "valid-password",
@@ -64,7 +64,7 @@ describe("reset-password-form validation", () => {
 
   it("TC9: submit 시 debounce 없이 즉시 validation을 실행한다", async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    renderResetPasswordForm(hoisted.formActionMock);
+    renderResetPasswordForm();
     fillResetPasswordFields({
       password: "valid-password",
       confirmPassword: "valid-password",
@@ -88,7 +88,7 @@ describe("reset-password-form validation", () => {
       },
     });
 
-    renderResetPasswordForm(hoisted.formActionMock);
+    renderResetPasswordForm();
     fillResetPasswordFields({ password: "short", confirmPassword: "short" });
     vi.advanceTimersByTime(300);
     await user.click(screen.getByRole("button", { name: "비밀번호 변경하기" }));
@@ -118,7 +118,7 @@ describe("reset-password-form validation", () => {
       },
     });
 
-    renderResetPasswordForm(hoisted.formActionMock);
+    renderResetPasswordForm();
     fillResetPasswordFields({
       password: "valid-password",
       confirmPassword: "different-password",
@@ -144,7 +144,7 @@ describe("reset-password-form validation", () => {
 
   it("TC11/TC13: valid 상태에서는 버튼 활성화 및 formActionMock 호출을 허용한다", async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    renderResetPasswordForm(hoisted.formActionMock);
+    renderResetPasswordForm();
     fillResetPasswordFields({
       password: "valid-password",
       confirmPassword: "valid-password",
@@ -162,7 +162,7 @@ describe("reset-password-form validation", () => {
 
   it("TC26/TC27: resetPasswordFormSchema만 사용하고 최종 검증은 bind된 formAction에 위임한다", async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    renderResetPasswordForm(hoisted.formActionMock);
+    renderResetPasswordForm();
     fillResetPasswordFields({
       password: "valid-password",
       confirmPassword: "valid-password",
