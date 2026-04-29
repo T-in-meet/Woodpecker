@@ -62,6 +62,29 @@ describe("reset-password-form validation", () => {
     expect(hoisted.safeParseMock).toHaveBeenCalledTimes(1);
   });
 
+  it("TC8-1: debounce 대기 중 입력이 변경되면 마지막 입력 기준으로만 validation 1회 실행된다", () => {
+    renderResetPasswordForm();
+    fillResetPasswordFields({
+      password: "first-password",
+      confirmPassword: "first-password",
+    });
+
+    vi.advanceTimersByTime(150);
+    fillResetPasswordFields({
+      password: "second-password",
+      confirmPassword: "second-password",
+    });
+
+    vi.advanceTimersByTime(299);
+    expect(hoisted.safeParseMock).toHaveBeenCalledTimes(0);
+    vi.advanceTimersByTime(1);
+    expect(hoisted.safeParseMock).toHaveBeenCalledTimes(1);
+    expect(hoisted.safeParseMock).toHaveBeenLastCalledWith({
+      password: "second-password",
+      confirmPassword: "second-password",
+    });
+  });
+
   it("TC9: submit 시 debounce 없이 즉시 validation을 실행한다", async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     renderResetPasswordForm();
@@ -72,6 +95,25 @@ describe("reset-password-form validation", () => {
 
     await user.click(screen.getByRole("button", { name: "비밀번호 변경하기" }));
     expect(hoisted.safeParseMock).toHaveBeenCalled();
+  });
+
+  it("TC9-1: debounce 예약 상태에서 submit하면 즉시 validation 후 formAction 호출, 이후 timer로 중복 validation이 없다", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderResetPasswordForm();
+    fillResetPasswordFields({
+      password: "valid-password",
+      confirmPassword: "valid-password",
+    });
+
+    expect(hoisted.safeParseMock).toHaveBeenCalledTimes(0);
+    await user.click(screen.getByRole("button", { name: "비밀번호 변경하기" }));
+    expect(hoisted.safeParseMock).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(hoisted.formActionMock).toHaveBeenCalledTimes(1);
+    });
+
+    vi.runOnlyPendingTimers();
+    expect(hoisted.safeParseMock).toHaveBeenCalledTimes(1);
   });
 
   it("TC4/TC10/TC12: invalid 입력이면 field error를 표시하고 submit 차단한다", async () => {
@@ -140,6 +182,42 @@ describe("reset-password-form validation", () => {
     vi.advanceTimersByTime(300);
     await user.click(screen.getByRole("button", { name: "비밀번호 변경하기" }));
     expect(hoisted.formActionMock).not.toHaveBeenCalled();
+  });
+
+  it("TC19-1: server field_error 이후 client error가 생기면 client error만 우선 표시한다", async () => {
+    hoisted.useActionStateMock.mockReturnValue([
+      {
+        status: "field_error",
+        fieldErrors: { confirmPassword: ["서버 불일치 에러"] },
+      },
+      hoisted.formActionMock,
+      false,
+    ]);
+    hoisted.safeParseMock.mockReturnValue({
+      success: false,
+      error: {
+        flatten: () => ({
+          formErrors: [],
+          fieldErrors: {
+            password: ["클라이언트 비밀번호 에러"],
+          },
+        }),
+      },
+    });
+
+    renderResetPasswordForm();
+    expect(screen.getByText("서버 불일치 에러")).toBeInTheDocument();
+
+    fillResetPasswordFields({
+      password: "short",
+      confirmPassword: "short",
+    });
+    vi.advanceTimersByTime(300);
+
+    await waitFor(() => {
+      expect(screen.getByText("클라이언트 비밀번호 에러")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("서버 불일치 에러")).not.toBeInTheDocument();
   });
 
   it("TC11/TC13: valid 상태에서는 버튼 활성화 및 formActionMock 호출을 허용한다", async () => {
