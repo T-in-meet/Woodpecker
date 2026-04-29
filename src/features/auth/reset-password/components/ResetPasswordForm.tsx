@@ -12,6 +12,8 @@ import {
 } from "@/features/auth/reset-password/actions/resetPasswordAction";
 import { resetPasswordFormSchema } from "@/features/auth/reset-password/schemas/resetPasswordFormSchema";
 
+import { useDebouncedCallback } from "../../hooks/useDebouncedCallback";
+
 type ClientFieldErrors = {
   password?: string[];
   confirmPassword?: string[];
@@ -99,33 +101,21 @@ export function ResetPasswordForm({ action }: ResetPasswordFormProps) {
    * 입력 변경 시 즉시 검증하지 않고 debounce 후 현재 폼 값을 검증한다.
    * submit 시에는 별도로 즉시 검증하므로 예약된 검증은 handleSubmit에서 정리한다.
    */
-  const scheduleValidation = () => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-
-    timerRef.current = setTimeout(() => {
+  const { schedule: scheduleValidation, cancel: cancelValidation } =
+    useDebouncedCallback(() => {
       const formElement = formRef.current;
-      if (!formElement) {
-        return;
-      }
+      if (!formElement) return;
 
       const errors = toClientErrors(new FormData(formElement));
       setClientErrors(errors);
-      timerRef.current = null;
     }, DEBOUNCE_DELAY_MS);
-  };
 
   /**
    * submit 직전에 클라이언트 검증을 즉시 수행한다.
    * 에러가 있으면 서버 액션 호출을 막고 필드 에러만 표시한다.
    */
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
+    cancelValidation();
 
     const errors = toClientErrors(new FormData(event.currentTarget));
     setClientErrors(errors);
