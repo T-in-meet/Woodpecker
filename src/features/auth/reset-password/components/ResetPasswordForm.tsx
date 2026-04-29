@@ -1,7 +1,11 @@
 "use client";
 
+import { Loader2 } from "lucide-react";
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   initialResetPasswordActionState,
   type ResetPasswordActionState,
@@ -24,6 +28,10 @@ const DEBOUNCE_DELAY_MS = 300;
 const GLOBAL_ERROR_MESSAGE =
   "비밀번호를 변경하지 못했습니다. 잠시 후 다시 시도해주세요.";
 
+/**
+ * 현재 FormData를 resetPasswordFormSchema로 검증하고,
+ * UI에서 표시할 클라이언트 필드 에러 형태로 변환한다.
+ */
 function toClientErrors(formData: FormData): ClientFieldErrors {
   const parsed = resetPasswordFormSchema.safeParse({
     password: String(formData.get("password") ?? ""),
@@ -67,6 +75,10 @@ export function ResetPasswordForm({ action }: ResetPasswordFormProps) {
     };
   }, []);
 
+  /**
+   * 클라이언트 검증 에러를 서버 액션의 field_error보다 우선 표시한다.
+   * 사용자가 입력을 수정한 뒤에는 현재 입력값 기준의 에러를 보여주기 위함이다.
+   */
   const visibleFieldErrors = useMemo(() => {
     if (hasClientErrors(clientErrors)) {
       return clientErrors;
@@ -79,7 +91,14 @@ export function ResetPasswordForm({ action }: ResetPasswordFormProps) {
 
   const showGlobalError =
     state.status === "global_error" && !hasClientErrors(clientErrors);
+  const passwordErrorId = "reset-password-password-error";
+  const confirmPasswordErrorId = "reset-password-confirm-password-error";
+  const globalErrorId = "reset-password-global-error";
 
+  /**
+   * 입력 변경 시 즉시 검증하지 않고 debounce 후 현재 폼 값을 검증한다.
+   * submit 시에는 별도로 즉시 검증하므로 예약된 검증은 handleSubmit에서 정리한다.
+   */
   const scheduleValidation = () => {
     if (timerRef.current) {
       clearTimeout(timerRef.current);
@@ -98,6 +117,10 @@ export function ResetPasswordForm({ action }: ResetPasswordFormProps) {
     }, DEBOUNCE_DELAY_MS);
   };
 
+  /**
+   * submit 직전에 클라이언트 검증을 즉시 수행한다.
+   * 에러가 있으면 서버 액션 호출을 막고 필드 에러만 표시한다.
+   */
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     if (timerRef.current) {
       clearTimeout(timerRef.current);
@@ -112,37 +135,99 @@ export function ResetPasswordForm({ action }: ResetPasswordFormProps) {
   };
 
   return (
-    <form action={formAction} onSubmit={handleSubmit} ref={formRef}>
-      <label htmlFor="password">비밀번호</label>
-      <input
-        id="password"
-        name="password"
-        type="password"
-        onChange={scheduleValidation}
-      />
-      {visibleFieldErrors.password?.map((error) => (
-        <p key={`password-${error}`}>{error}</p>
-      ))}
-
-      <label htmlFor="confirmPassword">비밀번호 확인</label>
-      <input
-        id="confirmPassword"
-        name="confirmPassword"
-        type="password"
-        onChange={scheduleValidation}
-      />
-      {visibleFieldErrors.confirmPassword?.map((error) => (
-        <p key={`confirmPassword-${error}`}>{error}</p>
-      ))}
-
-      {showGlobalError ? <p>{state.message || GLOBAL_ERROR_MESSAGE}</p> : null}
-
-      <button
-        disabled={isPending || hasClientErrors(clientErrors)}
-        type="submit"
+    <div className="my-0 md:my-4 mx-auto max-w-2xl bg-white border-0 md:border md:border-outline-variant md:rounded-xl rounded-none md:shadow-sm shadow-none overflow-hidden">
+      <form
+        action={formAction}
+        onSubmit={handleSubmit}
+        ref={formRef}
+        className="mx-auto max-w-4xl space-y-2 py-7 px-4 md:px-8"
       >
-        {isPending ? "변경 중..." : "비밀번호 변경하기"}
-      </button>
-    </form>
+        <div className="grid grid-cols-1 md:grid-cols-[6.25rem_minmax(0,1fr)] gap-x-4">
+          <div className="flex items-center">
+            <Label htmlFor="password" className="shrink-0 min-w-25">
+              비밀번호
+            </Label>
+          </div>
+          <Input
+            id="password"
+            name="password"
+            type="password"
+            onChange={scheduleValidation}
+            aria-describedby={
+              visibleFieldErrors.password?.length ? passwordErrorId : undefined
+            }
+          />
+          <div className="hidden md:block" />
+          <div className="min-h-5 mt-2">
+            {visibleFieldErrors.password?.map((error) => (
+              <p
+                key={`password-${error}`}
+                id={passwordErrorId}
+                role="alert"
+                className="text-sm text-destructive"
+              >
+                {error}
+              </p>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-[6.25rem_minmax(0,1fr)] gap-x-4">
+          <div className="flex items-center">
+            <Label htmlFor="confirmPassword" className="shrink-0 min-w-25">
+              비밀번호 확인
+            </Label>
+          </div>
+          <Input
+            id="confirmPassword"
+            name="confirmPassword"
+            type="password"
+            onChange={scheduleValidation}
+            aria-describedby={
+              visibleFieldErrors.confirmPassword?.length
+                ? confirmPasswordErrorId
+                : undefined
+            }
+          />
+          <div className="hidden md:block" />
+          <div className="min-h-5 mt-2">
+            {visibleFieldErrors.confirmPassword?.map((error) => (
+              <p
+                key={`confirmPassword-${error}`}
+                id={confirmPasswordErrorId}
+                role="alert"
+                className="text-sm text-destructive"
+              >
+                {error}
+              </p>
+            ))}
+          </div>
+        </div>
+
+        <div className="min-h-5">
+          {showGlobalError ? (
+            <p
+              id={globalErrorId}
+              role="alert"
+              className="text-sm text-destructive"
+            >
+              {state.message || GLOBAL_ERROR_MESSAGE}
+            </p>
+          ) : null}
+        </div>
+
+        <Button
+          disabled={isPending || hasClientErrors(clientErrors)}
+          type="submit"
+          className="w-full md:w-auto"
+          aria-describedby={showGlobalError ? globalErrorId : undefined}
+        >
+          {isPending && (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+          )}
+          {isPending ? "변경 중..." : "비밀번호 변경하기"}
+        </Button>
+      </form>
+    </div>
   );
 }
