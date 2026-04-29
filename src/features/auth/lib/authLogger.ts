@@ -39,7 +39,7 @@ type RejectedLogContext = CommonLogFields & {
 };
 
 type InvalidInputLogContext = CommonLogFields & {
-  result: "invalid_input";
+  result: "failure";
   reasonCode: AuthLogReason;
 };
 

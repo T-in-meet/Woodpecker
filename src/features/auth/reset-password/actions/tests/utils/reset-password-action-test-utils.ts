@@ -4,6 +4,11 @@ import { z } from "zod";
 import { RESET_REQUIRED_COOKIE_NAME } from "@/features/auth/constants/cookies";
 import { passwordFieldSchema } from "@/lib/validation/passwordSchema";
 
+import {
+  initialResetPasswordActionState,
+  type ResetPasswordActionState,
+} from "../../resetPasswordAction";
+
 export const REDIRECT_ERROR = new Error("NEXT_REDIRECT");
 
 const hoisted = vi.hoisted(() => ({
@@ -187,7 +192,7 @@ export function setupActionTest() {
 export async function runResetPasswordAction(
   redirectValue: string | null,
   formData: FormData,
-  prevState: unknown = null,
+  prevState: ResetPasswordActionState = initialResetPasswordActionState,
 ) {
   const mod = await import("../../resetPasswordAction");
   return mod.resetPasswordAction(redirectValue, prevState, formData);

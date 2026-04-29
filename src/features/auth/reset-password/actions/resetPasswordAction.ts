@@ -71,7 +71,7 @@ export async function resetPasswordAction(
       method: "POST",
       status: 422,
       provider: "password",
-      result: "invalid_input",
+      result: "failure",
       reasonCode: AUTH_LOG_REASONS.SCHEMA_VALIDATION_FAILED,
     });
     return {
