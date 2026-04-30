@@ -74,7 +74,11 @@ vi.mock(
 vi.mock(
   "@/features/auth/forgot-password/lib/forgotPasswordPrefillMemory",
   () => ({
-    consumeForgotPasswordPrefillEmail: vi.fn(() => hoisted.prefillStore.email),
+    consumeForgotPasswordPrefillEmail: vi.fn(() => {
+      const email = hoisted.prefillStore.email;
+      hoisted.prefillStore.email = null;
+      return email;
+    }),
   }),
 );
 
