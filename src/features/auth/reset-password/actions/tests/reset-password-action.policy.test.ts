@@ -25,8 +25,8 @@ describe("resetPasswordAction - policy", () => {
       }),
     );
     expect(state).toEqual({
-      status: "global_error",
-      message: "비밀번호를 변경하지 못했습니다. 잠시 후 다시 시도해주세요.",
+      reason: "same_password",
+      status: "internal_error",
     });
   });
 

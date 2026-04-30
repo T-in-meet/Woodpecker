@@ -17,10 +17,6 @@ import { resetPasswordActionSchema } from "@/features/auth/reset-password/schema
 import { ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 
-import {
-  RESET_PASSWORD_GLOBAL_ERROR_MESSAGE,
-  RESET_PASSWORD_SAME_PASSWORD_MESSAGE,
-} from "./resetPasswordAction.constants";
 import { ResetPasswordActionState } from "./resetPasswordActionState";
 
 function toPayload(formData: FormData) {
@@ -70,7 +66,7 @@ export async function resetPasswordAction(
       reasonCode: AUTH_LOG_REASONS.SCHEMA_VALIDATION_FAILED,
     });
     return {
-      status: "field_error",
+      status: "invalid_input",
       fieldErrors: parsed.error.flatten().fieldErrors,
     };
   }
@@ -99,8 +95,7 @@ export async function resetPasswordAction(
       ...normalized,
     });
     return {
-      status: "global_error",
-      message: RESET_PASSWORD_GLOBAL_ERROR_MESSAGE,
+      status: "internal_error",
     };
   }
 
@@ -139,8 +134,7 @@ export async function resetPasswordAction(
       ...normalized,
     });
     return {
-      status: "global_error",
-      message: RESET_PASSWORD_GLOBAL_ERROR_MESSAGE,
+      status: "internal_error",
     };
   }
 
@@ -159,10 +153,8 @@ export async function resetPasswordAction(
     });
 
     return {
-      status: "global_error",
-      message: isSamePassword
-        ? RESET_PASSWORD_SAME_PASSWORD_MESSAGE
-        : RESET_PASSWORD_GLOBAL_ERROR_MESSAGE,
+      status: "internal_error",
+      reason: "same_password",
     };
   }
 

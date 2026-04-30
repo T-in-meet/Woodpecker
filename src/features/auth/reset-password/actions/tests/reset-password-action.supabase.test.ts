@@ -36,7 +36,7 @@ describe("resetPasswordAction - supabase", () => {
     );
   });
 
-  it("TC13: updateUser error 반환이면 global_error state 반환", async () => {
+  it("TC13: updateUser error 반환이면 internal_error state 반환", async () => {
     mockUpdateUser("error");
     const state = await runResetPasswordAction(
       null,
@@ -46,12 +46,34 @@ describe("resetPasswordAction - supabase", () => {
       }),
     );
     expect(state).toEqual({
-      status: "global_error",
-      message: "비밀번호를 변경하지 못했습니다. 잠시 후 다시 시도해주세요.",
+      reason: "same_password",
+      status: "internal_error",
     });
   });
 
-  it("TC15: updateUser throw면 global_error state 반환", async () => {
+  it("TC14: updateUser가 same_password error를 반환하면 동일 비밀번호 메시지로 internal_error state를 반환한다", async () => {
+    mocks.updateUser.mockResolvedValueOnce({
+      error: {
+        status: 422,
+        code: "same_password",
+      },
+    });
+
+    const state = await runResetPasswordAction(
+      null,
+      makeFormData({
+        password: "valid-password",
+        confirmPassword: "valid-password",
+      }),
+    );
+
+    expect(state).toEqual({
+      reason: "same_password",
+      status: "internal_error",
+    });
+  });
+
+  it("TC15: updateUser throw면 internal_error state 반환", async () => {
     mockUpdateUser("throw");
     const state = await runResetPasswordAction(
       null,
@@ -61,8 +83,8 @@ describe("resetPasswordAction - supabase", () => {
       }),
     );
     expect(state).toEqual({
-      status: "global_error",
-      message: "비밀번호를 변경하지 못했습니다. 잠시 후 다시 시도해주세요.",
+      status: "internal_error",
     });
+    expect(state).not.toHaveProperty("reason");
   });
 });

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { vi } from "vitest";
 
-import { ResetPasswordActionState } from "@/features/auth/reset-password/actions/resetPasswordAction";
+import { ResetPasswordActionState } from "@/features/auth/reset-password/actions/resetPasswordActionState";
 import { ResetPasswordForm } from "@/features/auth/reset-password/components/ResetPasswordForm";
 
 export const RESET_PASSWORD_GLOBAL_ERROR_MESSAGE_FIXTURE =

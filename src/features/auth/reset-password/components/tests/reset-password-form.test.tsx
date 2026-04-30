@@ -80,10 +80,10 @@ describe("reset-password-form", () => {
     ).toBeNull();
   });
 
-  it("TC18: action state password field_error를 표시한다", () => {
+  it("TC18: action state password invalid_input을 표시한다", () => {
     hoisted.useActionStateMock.mockReturnValue([
       {
-        status: "field_error",
+        status: "invalid_input",
         fieldErrors: { password: ["비밀번호는 최소 8자 이상이어야 합니다."] },
       },
       hoisted.formActionMock,
@@ -98,10 +98,10 @@ describe("reset-password-form", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("TC19: action state confirmPassword field_error를 표시한다", () => {
+  it("TC19: action state confirmPassword invalid_input을 표시한다", () => {
     hoisted.useActionStateMock.mockReturnValue([
       {
-        status: "field_error",
+        status: "invalid_input",
         fieldErrors: { confirmPassword: ["비밀번호가 일치하지 않습니다."] },
       },
       hoisted.formActionMock,
@@ -116,10 +116,10 @@ describe("reset-password-form", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("TC20/TC21: action state global_error는 global 영역에만 표시한다", () => {
+  it("TC20/TC21: action state internal_error는 global 영역에만 표시한다", () => {
     hoisted.useActionStateMock.mockReturnValue([
       {
-        status: "global_error",
+        status: "internal_error",
         message: RESET_PASSWORD_GLOBAL_ERROR_MESSAGE_FIXTURE,
       },
       hoisted.formActionMock,

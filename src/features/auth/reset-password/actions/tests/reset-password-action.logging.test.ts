@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { AUTH_EVENTS } from "@/features/auth/constants/authEvents";
+import { AUTH_LOG_REASONS } from "@/features/auth/constants/authLogReasons";
 
 import {
   makeFormData,
@@ -143,5 +144,33 @@ describe("resetPasswordAction - logging", () => {
       expect(payload).not.toHaveProperty("password");
       expect(payload).not.toHaveProperty("confirmPassword");
     }
+  });
+
+  it("same_password error 발생 시 SAME_PASSWORD reasonCode로 실패 로그를 기록한다", async () => {
+    const mocks = setupActionTest();
+
+    mocks.updateUser.mockResolvedValueOnce({
+      error: {
+        status: 422,
+        code: "same_password",
+      },
+    });
+
+    await runResetPasswordAction(
+      null,
+      makeFormData({
+        password: "valid-password",
+        confirmPassword: "valid-password",
+      }),
+    );
+
+    expect(mocks.logAuthError).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_RESET_PASSWORD_FAILED,
+      expect.objectContaining({
+        status: 422,
+        result: "failure",
+        reasonCode: AUTH_LOG_REASONS.SAME_PASSWORD,
+      }),
+    );
   });
 });

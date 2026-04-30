@@ -13,6 +13,10 @@ import {
   INITIAL_RESET_PASSWORD_ACTION_STATE,
   ResetPasswordActionState,
 } from "../actions/resetPasswordActionState";
+import {
+  RESET_PASSWORD_GLOBAL_ERROR_MESSAGE,
+  RESET_PASSWORD_SAME_PASSWORD_MESSAGE,
+} from "../constants/errors";
 
 type ClientFieldErrors = {
   password?: string[];
@@ -27,8 +31,6 @@ type ResetPasswordFormProps = {
 };
 
 const DEBOUNCE_DELAY_MS = 300;
-const GLOBAL_ERROR_MESSAGE =
-  "비밀번호를 변경하지 못했습니다. 잠시 후 다시 시도해주세요.";
 
 /**
  * 현재 FormData를 resetPasswordFormSchema로 검증하고,
@@ -78,21 +80,25 @@ export function ResetPasswordForm({ action }: ResetPasswordFormProps) {
   }, []);
 
   /**
-   * 클라이언트 검증 에러를 서버 액션의 field_error보다 우선 표시한다.
+   * 클라이언트 검증 에러를 서버 액션의 invalid_input보다 우선 표시한다.
    * 사용자가 입력을 수정한 뒤에는 현재 입력값 기준의 에러를 보여주기 위함이다.
    */
   const visibleFieldErrors = useMemo(() => {
     if (hasClientErrors(clientErrors)) {
       return clientErrors;
     }
-    if (state.status === "field_error") {
+    if (state.status === "invalid_input") {
       return state.fieldErrors;
     }
     return {};
   }, [clientErrors, state]);
 
   const showGlobalError =
-    state.status === "global_error" && !hasClientErrors(clientErrors);
+    state.status === "internal_error" && !hasClientErrors(clientErrors);
+  const globalErrorMessage =
+    state.status === "internal_error" && state.reason === "same_password"
+      ? RESET_PASSWORD_SAME_PASSWORD_MESSAGE
+      : RESET_PASSWORD_GLOBAL_ERROR_MESSAGE;
   const passwordErrorId = "reset-password-password-error";
   const confirmPasswordErrorId = "reset-password-confirm-password-error";
   const globalErrorId = "reset-password-global-error";
@@ -201,7 +207,7 @@ export function ResetPasswordForm({ action }: ResetPasswordFormProps) {
               role="alert"
               className="text-sm text-destructive"
             >
-              {state.message || GLOBAL_ERROR_MESSAGE}
+              {globalErrorMessage}
             </p>
           ) : null}
         </div>

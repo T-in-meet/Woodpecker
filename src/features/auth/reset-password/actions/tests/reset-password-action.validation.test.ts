@@ -14,13 +14,13 @@ describe("resetPasswordAction - validation", () => {
     setupActionTest();
   });
 
-  it("TC6: validation 실패 시 field_error state를 반환한다", async () => {
+  it("TC6: validation 실패 시 invalid_input state를 반환한다", async () => {
     const state = await runResetPasswordAction(
       null,
       makeFormData({ password: "short", confirmPassword: "short" }),
     );
     expect(state).toMatchObject({
-      status: "field_error",
+      status: "invalid_input",
       fieldErrors: { password: expect.any(Array) },
     });
     expect(state).toMatchObject({
@@ -39,7 +39,7 @@ describe("resetPasswordAction - validation", () => {
       }),
     );
     expect(state).toMatchObject({
-      status: "field_error",
+      status: "invalid_input",
       fieldErrors: {
         confirmPassword: ["비밀번호가 일치하지 않습니다."],
       },
@@ -65,7 +65,7 @@ describe("resetPasswordAction - validation", () => {
       role: "admin",
     } as Record<string, string>);
     const state = await runResetPasswordAction(null, form);
-    expect(state).toMatchObject({ status: "field_error" });
+    expect(state).toMatchObject({ status: "invalid_input" });
     expect(mocks.updateUser).not.toHaveBeenCalled();
   });
 

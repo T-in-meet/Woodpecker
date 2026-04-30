@@ -179,10 +179,10 @@ describe("reset-password-form validation", () => {
     expect(hoisted.formActionMock).not.toHaveBeenCalled();
   });
 
-  it("TC19-1: server field_error 이후 client error가 생기면 client error만 우선 표시한다", async () => {
+  it("TC19-1: server invalid_input 이후 client error가 생기면 client error만 우선 표시한다", async () => {
     hoisted.useActionStateMock.mockReturnValue([
       {
-        status: "field_error",
+        status: "invalid_input",
         fieldErrors: { confirmPassword: ["서버 불일치 에러"] },
       },
       hoisted.formActionMock,
