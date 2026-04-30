@@ -6,13 +6,13 @@ import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  initialResetPasswordActionState,
-  type ResetPasswordActionState,
-} from "@/features/auth/reset-password/actions/resetPasswordAction";
 import { resetPasswordFormSchema } from "@/features/auth/reset-password/schemas/resetPasswordFormSchema";
 
 import { useDebouncedCallback } from "../../hooks/useDebouncedCallback";
+import {
+  initialResetPasswordActionState,
+  ResetPasswordActionState,
+} from "../actions/resetPasswordActionState";
 
 type ClientFieldErrors = {
   password?: string[];

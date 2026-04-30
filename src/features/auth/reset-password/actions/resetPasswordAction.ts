@@ -17,28 +17,8 @@ import { resetPasswordActionSchema } from "@/features/auth/reset-password/schema
 import { ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 
-export type ResetPasswordActionState =
-  | {
-      status: "idle";
-    }
-  | {
-      status: "field_error";
-      fieldErrors: {
-        password?: string[];
-        confirmPassword?: string[];
-      };
-    }
-  | {
-      status: "global_error";
-      message: string;
-    };
-
-export const initialResetPasswordActionState: ResetPasswordActionState = {
-  status: "idle",
-};
-
-export const RESET_PASSWORD_GLOBAL_ERROR_MESSAGE =
-  "비밀번호를 변경하지 못했습니다. 잠시 후 다시 시도해주세요.";
+import { RESET_PASSWORD_GLOBAL_ERROR_MESSAGE } from "./resetPasswordAction.constants";
+import { ResetPasswordActionState } from "./resetPasswordActionState";
 
 function toPayload(formData: FormData): Record<string, FormDataEntryValue> {
   return Object.fromEntries(formData.entries());
