@@ -1,12 +1,15 @@
-import { CalendarClock, RotateCcw } from "lucide-react";
-import Link from "next/link";
+"use client";
+
+import { CalendarClock, Play, RotateCcw, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useTransition } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
-import { getNoteDetailRoute } from "@/lib/constants/routes";
-import { cn } from "@/lib/utils/cn";
+import { getNoteDetailRoute, getNoteReviewRoute } from "@/lib/constants/routes";
 import { formatDateKST } from "@/lib/utils/formatDate";
 
+import { deleteNoteAction } from "../actions";
 import type { NoteSummary } from "../queries";
 
 type ReviewStatus = "available" | "completed" | "scheduled" | "pending";
@@ -19,32 +22,11 @@ function getReviewStatus(note: NoteSummary): ReviewStatus {
   return "scheduled";
 }
 
-const statusBadge: Record<ReviewStatus, { label: string; className: string }> =
-  {
-    available: {
-      label: "테스트 가능",
-      className:
-        "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400",
-    },
-    completed: {
-      label: "학습 완료",
-      className:
-        "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400",
-    },
-    scheduled: {
-      label: "복습 예정",
-      className:
-        "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400",
-    },
-    pending: {
-      label: "준비 중",
-      className: "bg-muted text-muted-foreground",
-    },
-  };
-
 export function NoteCardCompact({ note }: { note: NoteSummary }) {
+  const router = useRouter();
+  const [isDeleting, startDeleteTransition] = useTransition();
+
   const status = getReviewStatus(note);
-  const badge = statusBadge[status];
 
   const nextReviewText =
     status === "completed"
@@ -55,10 +37,35 @@ export function NoteCardCompact({ note }: { note: NoteSummary }) {
           ? formatDateKST(note.next_review_at)
           : "-";
 
+  const canReview = status === "available";
+
+  function handleCardClick() {
+    router.push(getNoteDetailRoute(note.id));
+  }
+
+  function handleStartReview(e: React.MouseEvent) {
+    e.stopPropagation();
+    router.push(getNoteReviewRoute(note.id));
+  }
+
+  function handleDelete(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!window.confirm("이 노트를 삭제하시겠습니까?")) return;
+    startDeleteTransition(async () => {
+      await deleteNoteAction(note.id);
+      router.refresh();
+    });
+  }
+
   return (
-    <Link
-      href={getNoteDetailRoute(note.id)}
-      className="block h-full cursor-pointer"
+    <div
+      role="link"
+      tabIndex={0}
+      onClick={handleCardClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") handleCardClick();
+      }}
+      className="group block h-full cursor-pointer rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
       <Card className="h-full transition-shadow duration-200 hover:shadow-md">
         <CardContent className="flex h-full flex-col gap-3 p-5">
@@ -67,34 +74,55 @@ export function NoteCardCompact({ note }: { note: NoteSummary }) {
             {note.title}
           </span>
 
-          {/* Badges */}
-          <div className="flex flex-wrap gap-1.5">
-            <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-              {note.review_round}회 완료
-            </span>
-            <span
-              className={cn(
-                "rounded-md px-2 py-0.5 text-xs font-medium",
-                badge.className,
-              )}
-            >
-              {badge.label}
-            </span>
-          </div>
+          {/* Content preview */}
+          {note.content.trim() && (
+            <p className="line-clamp-3 text-sm text-muted-foreground">
+              {note.content}
+            </p>
+          )}
+
+          {/* Review count */}
+          <span className="inline-flex w-fit items-center rounded bg-gray-100 px-2 py-0.5 text-xs font-medium">
+            복습 {note.review_round} / {MAX_REVIEW_ROUND}
+          </span>
 
           {/* Metadata */}
           <div className="mt-auto space-y-2 text-sm text-muted-foreground">
             <div className="flex items-center gap-1.5">
-              <RotateCcw className="h-3.5 w-3.5 flex-shrink-0" />
+              <RotateCcw className="h-3.5 w-3.5 shrink-0" />
               다음 복습: {nextReviewText}
             </div>
-            <div className="flex items-center gap-1.5">
-              <CalendarClock className="h-3.5 w-3.5 flex-shrink-0" />
-              생성일: {formatDateKST(note.created_at)}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5">
+                <CalendarClock className="h-3.5 w-3.5 shrink-0" />
+                생성일: {formatDateKST(note.created_at)}
+              </div>
+
+              <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                {canReview && (
+                  <button
+                    type="button"
+                    onClick={handleStartReview}
+                    aria-label="복습 시작"
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-emerald-500 text-white cursor-pointer transition-colors hover:bg-emerald-600"
+                  >
+                    <Play className="h-3.5 w-3.5" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  aria-label="노트 삭제"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground cursor-pointer transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </div>
           </div>
         </CardContent>
       </Card>
-    </Link>
+    </div>
   );
 }

@@ -84,7 +84,7 @@ export function NotesToolbar({ initialQuery, initialView }: NotesToolbarProps) {
       </div>
 
       {/* View toggle */}
-      <div className="flex items-center rounded-md border border-input">
+      <div className="grid grid-cols-2 divide-x divide-input rounded-md border border-input">
         <ViewButton
           active={view === "list"}
           onClick={() => handleViewChange("list")}
@@ -93,7 +93,6 @@ export function NotesToolbar({ initialQuery, initialView }: NotesToolbarProps) {
           <AlignJustify className="h-4 w-4" />
           <span className="hidden sm:inline">List</span>
         </ViewButton>
-        <div className="w-px self-stretch bg-input" />
         <ViewButton
           active={view === "cards"}
           onClick={() => handleViewChange("cards")}
@@ -123,7 +122,7 @@ function ViewButton({
       onClick={onClick}
       aria-label={ariaLabel}
       className={cn(
-        "flex cursor-pointer items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors first:rounded-l-md last:rounded-r-md",
+        "flex cursor-pointer items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors first:rounded-l-md last:rounded-r-md",
         active
           ? "bg-foreground text-background"
           : "text-muted-foreground hover:bg-muted hover:text-foreground",

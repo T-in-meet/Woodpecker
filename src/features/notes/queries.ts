@@ -18,6 +18,7 @@ const noteDetailSchema = z.object({
 const noteSummarySchema = z.object({
   id: z.string().uuid(),
   title: z.string(),
+  content: z.string(),
   next_review_at: z.string().nullable(),
   review_round: z.number().int().min(0).max(MAX_REVIEW_ROUND),
   created_at: z.string(),
@@ -39,9 +40,10 @@ export async function getNotes(
 
   let query = supabase
     .from("notes")
-    .select("id, title, next_review_at, review_round, created_at, updated_at", {
-      count: "exact",
-    })
+    .select(
+      "id, title, content, next_review_at, review_round, created_at, updated_at",
+      { count: "exact" },
+    )
     .eq("user_id", userId)
     .order("updated_at", { ascending: false });
 

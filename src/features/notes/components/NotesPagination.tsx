@@ -5,6 +5,8 @@ import { cn } from "@/lib/utils/cn";
 type NotesPaginationProps = {
   currentPage: number;
   totalPages: number;
+  view: "list" | "cards";
+  query: string;
 };
 
 function getPageNumbers(current: number, total: number): (number | "...")[] {
@@ -26,9 +28,20 @@ function getPageNumbers(current: number, total: number): (number | "...")[] {
   return pages;
 }
 
+function buildPageUrl(page: number, view: "list" | "cards", query: string) {
+  const params = new URLSearchParams();
+  if (query.trim()) params.set("q", query.trim());
+  if (view !== "list") params.set("view", view);
+  if (page > 1) params.set("page", String(page));
+  const qs = params.toString();
+  return `/notes${qs ? `?${qs}` : ""}`;
+}
+
 export function NotesPagination({
   currentPage,
   totalPages,
+  view,
+  query,
 }: NotesPaginationProps) {
   if (totalPages <= 1) return null;
 
@@ -42,7 +55,7 @@ export function NotesPagination({
       className="flex items-center justify-center gap-1 pt-2"
     >
       <PaginationLink
-        href={`/notes?page=${currentPage - 1}`}
+        href={buildPageUrl(currentPage - 1, view, query)}
         disabled={!hasPrev}
         aria-label="이전 페이지"
       >
@@ -60,7 +73,7 @@ export function NotesPagination({
         ) : (
           <PaginationLink
             key={page}
-            href={`/notes?page=${page}`}
+            href={buildPageUrl(page, view, query)}
             active={page === currentPage}
             aria-label={`${page} 페이지`}
             aria-current={page === currentPage ? "page" : undefined}
@@ -71,7 +84,7 @@ export function NotesPagination({
       )}
 
       <PaginationLink
-        href={`/notes?page=${currentPage + 1}`}
+        href={buildPageUrl(currentPage + 1, view, query)}
         disabled={!hasNext}
         aria-label="다음 페이지"
       >

@@ -1,12 +1,15 @@
-import { CalendarDays, CheckCircle2, Clock, Loader2 } from "lucide-react";
-import Link from "next/link";
+"use client";
+
+import { CalendarDays, Play, RotateCcw, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useTransition } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
-import { getNoteDetailRoute } from "@/lib/constants/routes";
-import { cn } from "@/lib/utils/cn";
-import { formatDateTime } from "@/lib/utils/formatDate";
+import { getNoteDetailRoute, getNoteReviewRoute } from "@/lib/constants/routes";
+import { formatDateKST } from "@/lib/utils/formatDate";
 
+import { deleteNoteAction } from "../actions";
 import type { NoteSummary } from "../queries";
 
 type ReviewStatus = "available" | "completed" | "scheduled" | "pending";
@@ -19,72 +22,107 @@ function getReviewStatus(note: NoteSummary): ReviewStatus {
   return "scheduled";
 }
 
-const statusConfig: Record<
-  ReviewStatus,
-  { label: string; badge: string; icon: React.ReactNode }
-> = {
-  available: {
-    label: "테스트 가능",
-    badge:
-      "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-800",
-    icon: <CheckCircle2 className="h-3.5 w-3.5" />,
-  },
-  completed: {
-    label: "학습 완료",
-    badge:
-      "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-800",
-    icon: <CheckCircle2 className="h-3.5 w-3.5" />,
-  },
-  scheduled: {
-    label: "복습 예정",
-    badge:
-      "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-400 dark:border-blue-800",
-    icon: <Clock className="h-3.5 w-3.5" />,
-  },
-  pending: {
-    label: "준비 중",
-    badge: "bg-muted text-muted-foreground border-border",
-    icon: <Loader2 className="h-3.5 w-3.5 animate-spin" />,
-  },
-};
-
 export function NoteCard({ note }: { note: NoteSummary }) {
+  const router = useRouter();
+  const [isDeleting, startDeleteTransition] = useTransition();
+
   const status = getReviewStatus(note);
-  const { badge, icon, label } = statusConfig[status];
+
+  const nextReviewText =
+    status === "completed"
+      ? "완료"
+      : status === "pending"
+        ? "준비 중"
+        : note.next_review_at
+          ? formatDateKST(note.next_review_at)
+          : "-";
+
+  const canReview = status === "available";
+
+  function handleCardClick() {
+    router.push(getNoteDetailRoute(note.id));
+  }
+
+  function handleStartReview(e: React.MouseEvent) {
+    e.stopPropagation();
+    router.push(getNoteReviewRoute(note.id));
+  }
+
+  function handleDelete(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!window.confirm("이 노트를 삭제하시겠습니까?")) return;
+    startDeleteTransition(async () => {
+      await deleteNoteAction(note.id);
+      router.refresh();
+    });
+  }
 
   return (
-    <Link href={getNoteDetailRoute(note.id)} className="block cursor-pointer">
+    <div
+      role="link"
+      tabIndex={0}
+      onClick={handleCardClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") handleCardClick();
+      }}
+      className="group block cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-xl"
+    >
       <Card className="transition-shadow duration-200 hover:shadow-md">
         <CardContent className="p-5">
-          <div className="flex min-w-0 items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center justify-between gap-2">
             <span className="min-w-0 truncate text-base font-semibold leading-snug">
               {note.title}
             </span>
-
-            <div className="flex flex-shrink-0 flex-col items-end gap-1.5">
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium",
-                  badge,
-                )}
-              >
-                {icon}
-                {label}
-              </span>
-              <span className="inline-flex items-center rounded-md border border-border bg-muted/50 px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                복습 {note.review_round} / {MAX_REVIEW_ROUND}
-              </span>
-            </div>
+            <span className="inline-flex shrink-0 items-center rounded bg-gray-100 px-2 py-0.5 text-xs font-medium">
+              복습 {note.review_round} / {MAX_REVIEW_ROUND}
+            </span>
           </div>
+
+          {note.content.trim() && (
+            <p className="mt-2 line-clamp-1 text-sm text-muted-foreground">
+              {note.content}
+            </p>
+          )}
 
           <div className="my-3.5 border-t" />
 
-          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            <CalendarDays className="h-3.5 w-3.5" />
-            마지막 수정 {formatDateTime(note.updated_at)}
+          <div className="flex items-center justify-between gap-4 text-sm text-muted-foreground">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-1.5">
+                <RotateCcw className="h-3.5 w-3.5 shrink-0" />
+                다음 복습: {nextReviewText}
+              </div>
+              <div className="flex items-center gap-1.5">
+                <CalendarDays className="h-3.5 w-3.5 shrink-0" />
+                생성일: {formatDateKST(note.created_at)}
+              </div>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+              {canReview && (
+                <button
+                  type="button"
+                  onClick={handleStartReview}
+                  aria-label="복습 시작"
+                  className="inline-flex h-8 items-center gap-1 rounded-md bg-emerald-500 px-2.5 text-xs font-medium text-white cursor-pointer transition-colors hover:bg-emerald-600"
+                >
+                  <Play className="h-3.5 w-3.5" />
+                  복습 시작
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={isDeleting}
+                aria-label="노트 삭제"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground cursor-pointer transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </CardContent>
       </Card>
-    </Link>
+    </div>
   );
 }
