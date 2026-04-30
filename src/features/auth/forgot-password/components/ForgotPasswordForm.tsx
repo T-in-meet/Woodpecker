@@ -114,30 +114,28 @@ export function ForgotPasswordForm() {
     schedule();
   };
 
-  const onSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    // submit 시점에는 예약된 debounce 검증을 취소하고 즉시 재검증한다.
+  const onSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     cancel();
 
-    const result = validateEmail(email);
+    const trimmedEmail = email.trim();
+    const result = validateEmail(trimmedEmail);
+
     if (!result.ok) {
+      event.preventDefault();
       setError(result.message);
       setIsClientValid(false);
       return;
     }
 
+    const emailInput = event.currentTarget.elements.namedItem("email");
+    if (emailInput instanceof HTMLInputElement) {
+      emailInput.value = trimmedEmail;
+    }
+
+    emailRef.current = trimmedEmail;
+    setEmail(trimmedEmail);
     setError(null);
     setIsClientValid(true);
-
-    const formData = new FormData(event.currentTarget);
-    formData.set("email", email.trim());
-
-    try {
-      await formAction(formData);
-    } catch {
-      // action throw는 form 레벨에서 global error toast로만 처리한다.
-      showToast(GLOBAL_ERROR_MESSAGE);
-    }
   };
 
   const onEmailKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -148,7 +146,13 @@ export function ForgotPasswordForm() {
   };
 
   return (
-    <form ref={formRef} onSubmit={onSubmit} className="space-y-3" noValidate>
+    <form
+      ref={formRef}
+      action={formAction}
+      onSubmit={onSubmit}
+      className="space-y-3"
+      noValidate
+    >
       <div className="space-y-2">
         <Label htmlFor="forgot-password-email">이메일</Label>
         <Input
