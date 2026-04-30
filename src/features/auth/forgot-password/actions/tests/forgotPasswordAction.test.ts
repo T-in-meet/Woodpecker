@@ -39,7 +39,7 @@ describe("forgotPasswordAction", () => {
     expect(mocks.resetPasswordForEmailMock).toHaveBeenCalledWith(
       "user@example.com",
       expect.objectContaining({
-        redirectTo: "https://example.com/api/auth/callback",
+        redirectTo: "https://example.com/api/auth/callback?type=recovery",
       }),
     );
 
@@ -94,7 +94,7 @@ describe("forgotPasswordAction", () => {
       "user@example.com",
       expect.objectContaining({
         redirectTo:
-          "https://example.com/api/auth/callback?redirect=%2Fnotes%3Ftab%3D1",
+          "https://example.com/api/auth/callback?type=recovery&redirect=%2Fnotes%3Ftab%3D1",
       }),
     );
     expect(mocks.resetPasswordForEmailMock).not.toHaveBeenCalledWith(
@@ -117,7 +117,7 @@ describe("forgotPasswordAction", () => {
       "user@example.com",
       expect.objectContaining({
         redirectTo:
-          "https://example.com/api/auth/callback?redirect=%2Fnotes%3Ftab%3D1",
+          "https://example.com/api/auth/callback?type=recovery&redirect=%2Fnotes%3Ftab%3D1",
       }),
     );
   });

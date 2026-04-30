@@ -71,6 +71,7 @@ function redirectToVerifyEmail(): NextResponse {
 // redirect는 magiclink에서는 사용하지 않지만 recovery redirect 보존을 위해 항상 포함한다.
 type CallbackInput = {
   tokenHash: string | null;
+  code: string | null;
   type: string | null;
   redirect: string | null;
 };
@@ -83,6 +84,7 @@ type ValidMagiclinkInput = CallbackInput & {
 function extractCallbackInput(request: NextRequest): CallbackInput {
   return {
     tokenHash: request.nextUrl.searchParams.get("token_hash"),
+    code: request.nextUrl.searchParams.get("code"),
     type: request.nextUrl.searchParams.get("type"),
     redirect: request.nextUrl.searchParams.get("redirect"),
   };
@@ -112,6 +114,7 @@ async function verifyMagiclinkToken(
 // redirect는 여기서 검증하지 않고 reset-password 단계까지 보존만 한다.
 function isValidRecoveryInput(input: CallbackInput): input is {
   tokenHash: string;
+  code: null;
   type: "recovery";
   redirect: string | null;
 } {
@@ -126,6 +129,13 @@ async function verifyRecoveryToken(
     token_hash: tokenHash,
     type: "recovery",
   });
+
+  return { ok: !error };
+}
+
+async function exchangeRecoveryCode(code: string): Promise<{ ok: boolean }> {
+  const supabase = await createClient();
+  const { error } = await supabase.auth.exchangeCodeForSession(code);
 
   return { ok: !error };
 }
@@ -165,22 +175,51 @@ function setResetRequiredCookie(response: NextResponse): void {
 }
 
 /**
- * 이메일 인증 callback 처리
+ * Auth Callback Route
  *
- * 흐름:
- * 1. Supabase 표준 파라미터(token_hash, type) 추출
- * 2. 파라미터 누락 시 → /verify-email redirect
- * 3. type이 magiclink가 아니면 → /verify-email redirect
- * 4. Supabase verifyOtp 호출 (type: "magiclink" 고정)
- * 5. 성공(error 없음) → /mypage redirect
- * 6. 실패/예외 → /verify-email redirect
+ * 역할:
+ * - Supabase 인증 관련 callback을 단일 진입점에서 처리
+ * - PKCE(code) 방식과 token_hash 방식 모두 지원
  *
- * 보안/설계 원칙:
- * - 커스텀 ticket 미사용, Supabase 표준 파라미터만 사용
- * - 상세 실패 원인을 외부에 노출하지 않음
- * - 모든 분기에서 최소 응답 시간 정책 적용 (Account Enumeration 방어)
- *   → verifyOtp 호출 여부, 네트워크 지연, Supabase 상태와 무관하게 동일 timing
- *   → 토큰 유효성, 계정 상태를 응답 시간 차이로 추론 불가능하도록 보장
+ * 지원 흐름:
+ *
+ * 1. 이메일 인증 (magiclink)
+ *    - 입력: token_hash + type=magiclink
+ *    - 처리: verifyOtp(token_hash)
+ *    - 성공: /mypage 이동
+ *    - 실패: /verify-email 이동
+ *
+ * 2. 비밀번호 재설정 (recovery - PKCE)
+ *    - 입력: type=recovery + code
+ *    - 처리: exchangeCodeForSession(code)
+ *    - 성공:
+ *        - reset-required cookie 설정
+ *        - /reset-password 이동 (redirect query 보존)
+ *    - 실패:
+ *        - /forgot-password?error=invalid_reset_link 이동
+ *
+ * 3. 비밀번호 재설정 (recovery - token_hash)
+ *    - 입력: token_hash + type=recovery
+ *    - 처리: verifyOtp(token_hash)
+ *    - 성공:
+ *        - reset-required cookie 설정
+ *        - /reset-password 이동 (redirect query 보존)
+ *    - 실패:
+ *        - /forgot-password?error=invalid_reset_link 이동
+ *
+ * 4. 지원하지 않는 요청
+ *    - 입력: type 없음 / 알 수 없는 type / code only
+ *    - 처리:
+ *        - /verify-email 이동
+ *
+ * 보안 정책:
+ * - recovery 성공 시에만 reset-required cookie 설정
+ * - 실패 시 원인 노출 없이 일관된 redirect 처리
+ * - 최소 응답 시간(applyMinimumResponseTime) 적용
+ *
+ * 참고:
+ * - Supabase recovery 메일은 PKCE 방식(code)을 기본 사용
+ * - token_hash 방식은 하위 호환 및 특정 케이스 대응용으로 유지
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const start = Date.now();
@@ -237,7 +276,18 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     } else if (input.type === "recovery") {
       flow = "recovery";
 
-      if (!isValidRecoveryInput(input)) {
+      if (input.code) {
+        const exchange = await exchangeRecoveryCode(input.code);
+
+        if (!exchange.ok) {
+          outcome = "rejected";
+          response = redirectToForgotPasswordInvalidLink();
+        } else {
+          outcome = "completed";
+          response = redirectToResetPassword(input.redirect);
+          setResetRequiredCookie(response);
+        }
+      } else if (!isValidRecoveryInput(input)) {
         outcome = "rejected";
         response = redirectToForgotPasswordInvalidLink();
       } else {

@@ -64,6 +64,7 @@ function buildRedirectTo(redirectPath: string | null): string {
     throw new Error("APP_URL must be set");
   }
   const url = new URL(AUTH_CALLBACK_PATH, appUrl);
+  url.searchParams.set("type", "recovery");
   if (redirectPath) {
     url.searchParams.set("redirect", redirectPath);
   }
@@ -135,6 +136,14 @@ export async function forgotPasswordAction(
       parsed.data.email,
       { redirectTo },
     );
+
+    if (error) {
+      console.error("resetPasswordForEmail error", {
+        message: error.message,
+        status: error.status,
+        name: error.name,
+      });
+    }
 
     if (error) {
       logAuthError(AUTH_EVENTS.AUTH_FORGOT_PASSWORD_FAILED, {
