@@ -146,39 +146,51 @@ export function ForgotPasswordForm() {
   };
 
   return (
-    <form
-      ref={formRef}
-      action={formAction}
-      onSubmit={onSubmit}
-      className="space-y-3"
-      noValidate
-    >
-      <div className="space-y-2">
-        <Label htmlFor="forgot-password-email">이메일</Label>
-        <Input
-          id="forgot-password-email"
-          name="email"
-          type="email"
-          value={email}
-          onChange={(event) => onChangeEmail(event.target.value)}
-          onKeyDown={onEmailKeyDown}
-          aria-invalid={Boolean(error)}
-          aria-describedby={error ? "forgot-password-email-error" : undefined}
-        />
-        {error ? (
-          <p
-            id="forgot-password-email-error"
-            role="alert"
-            className="text-sm text-destructive"
-          >
-            {error}
-          </p>
-        ) : null}
-      </div>
+    <div className="mx-auto my-0 max-w-md overflow-hidden rounded-none border-0 bg-white p-16 shadow-none md:my-8 md:max-w-2xl md:rounded-xl md:border md:border-outline-variant md:shadow-sm">
+      <form
+        ref={formRef}
+        action={formAction}
+        onSubmit={onSubmit}
+        className="space-y-3 md:grid md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-start md:gap-x-4 md:space-y-0"
+        noValidate
+      >
+        <Label
+          htmlFor="forgot-password-email"
+          className="md:h-10 md:leading-10"
+        >
+          이메일
+        </Label>
 
-      <Button type="submit" disabled={isPending || !isClientValid}>
-        {isPending ? "전송 중..." : "비밀번호 재설정 메일 받기"}
-      </Button>
-    </form>
+        <div className="space-y-2">
+          <Input
+            id="forgot-password-email"
+            name="email"
+            type="email"
+            value={email}
+            onChange={(event) => onChangeEmail(event.target.value)}
+            onKeyDown={onEmailKeyDown}
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? "forgot-password-email-error" : undefined}
+          />
+          {error ? (
+            <p
+              id="forgot-password-email-error"
+              role="alert"
+              className="text-sm text-destructive"
+            >
+              {error}
+            </p>
+          ) : null}
+        </div>
+
+        <Button
+          type="submit"
+          disabled={isPending || !isClientValid}
+          className="md:h-10 md:shrink-0"
+        >
+          {isPending ? "전송 중..." : "비밀번호 재설정 메일 받기"}
+        </Button>
+      </form>
+    </div>
   );
 }
