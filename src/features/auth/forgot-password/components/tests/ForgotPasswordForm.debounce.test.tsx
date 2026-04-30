@@ -1,3 +1,4 @@
+import { act } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -32,7 +33,11 @@ describe("ForgotPasswordForm.debounce", () => {
     await typeValidEmail();
 
     expect(getSafeParseMock()).toHaveBeenCalledTimes(0);
-    vi.advanceTimersByTime(299);
+
+    await act(async () => {
+      vi.advanceTimersByTime(299);
+    });
+
     expect(getSafeParseMock()).toHaveBeenCalledTimes(0);
     vi.advanceTimersByTime(1);
     expect(getSafeParseMock()).toHaveBeenCalledTimes(1);
@@ -44,7 +49,9 @@ describe("ForgotPasswordForm.debounce", () => {
     setInvalidSafeParse(MESSAGES.invalidFormat);
     await typeInvalidEmail();
 
-    vi.advanceTimersByTime(300);
+    await act(async () => {
+      vi.advanceTimersByTime(300);
+    });
 
     expect(document.body).toHaveTextContent(MESSAGES.invalidFormat);
 
@@ -53,7 +60,9 @@ describe("ForgotPasswordForm.debounce", () => {
 
     expect(document.body).toHaveTextContent(MESSAGES.invalidFormat);
 
-    vi.advanceTimersByTime(300);
+    await act(async () => {
+      vi.advanceTimersByTime(300);
+    });
 
     expect(document.body).not.toHaveTextContent(MESSAGES.invalidFormat);
   });

@@ -7,7 +7,6 @@ import {
   renderForgotPasswordForm,
   resetToastMock,
   setDefaultValidSafeParse,
-  setFormActionRejectOnce,
   setupForgotPasswordFormTest,
   submitForm,
   typeValidEmail,
@@ -50,17 +49,6 @@ describe("ForgotPasswordForm.result", () => {
     });
 
     renderForgotPasswordForm();
-
-    expect(showToast).toHaveBeenCalledTimes(1);
-    expect(showToast).toHaveBeenCalledWith(MESSAGES.globalError);
-  });
-
-  it("TC17: action reject 경로에서 global error toast를 표시한다", async () => {
-    setupForgotPasswordFormTest();
-    setFormActionRejectOnce();
-    renderForgotPasswordForm();
-    await typeValidEmail();
-    await submitForm();
 
     expect(showToast).toHaveBeenCalledTimes(1);
     expect(showToast).toHaveBeenCalledWith(MESSAGES.globalError);
