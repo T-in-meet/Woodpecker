@@ -41,6 +41,7 @@ const hoisted = vi.hoisted(() => {
   };
 });
 
+// query.error 시나리오를 테스트에서 제어하기 위해 useSearchParams를 고정 mock한다.
 vi.mock("next/navigation", () => ({
   useSearchParams: vi.fn(() => ({
     get: (key: string) =>
@@ -48,6 +49,7 @@ vi.mock("next/navigation", () => ({
   })),
 }));
 
+// form 테스트는 useActionState tuple(state, formAction, isPending)을 파일 단위로 제어한다.
 vi.mock("react", async () => {
   const actual = await vi.importActual<typeof import("react")>("react");
   return {
@@ -74,7 +76,6 @@ vi.mock(
   () => ({
     consumeForgotPasswordPrefillEmail: vi.fn(() => hoisted.prefillStore.email),
   }),
-  { virtual: true },
 );
 
 import { ForgotPasswordForm } from "@/features/auth/forgot-password/components/ForgotPasswordForm";
@@ -131,21 +132,22 @@ export function setInvalidSafeParse(message: string) {
 }
 
 export function setupForgotPasswordFormTest(options: SetupOptions = {}) {
-  const {
-    state,
-    isPending = false,
-    prefillEmail = null,
-    queryError = null,
-  } = options;
+  const { state, isPending, prefillEmail = null, queryError = null } = options;
 
   hoisted.prefillStore.email = prefillEmail;
   hoisted.searchParamsStore.error = queryError;
-  hoisted.formActionMock.mockReset();
+  // pending deferred를 사용하는 테스트에서는 formAction 구현을 유지한다.
+  if (!hoisted.deferred) {
+    hoisted.formActionMock.mockReset();
+  }
+
+  const resolvedIsPending =
+    typeof isPending === "boolean" ? isPending : Boolean(hoisted.deferred);
 
   hoisted.useActionStateMock.mockReturnValue([
     state ?? { status: "idle", fieldErrors: null },
     hoisted.formActionMock,
-    isPending,
+    resolvedIsPending,
   ]);
 }
 
@@ -158,8 +160,14 @@ export function setPendingWithDeferredPromise() {
     reject = rej;
   });
 
+  // resolve/reject 제어가 가능한 pending Promise로 로딩 상태를 재현한다.
   hoisted.deferred = { promise, resolve, reject };
   hoisted.formActionMock.mockImplementation(() => promise);
+  hoisted.useActionStateMock.mockReturnValue([
+    { status: "idle", fieldErrors: null },
+    hoisted.formActionMock,
+    true,
+  ]);
 }
 
 export function setFormActionRejectOnce() {
@@ -193,18 +201,15 @@ export function getSubmitButtonByLoadingLabel() {
 }
 
 export async function typeValidEmail() {
-  const user = userEvent.setup();
-  await user.clear(getEmailInput());
-  await user.type(getEmailInput(), FIXTURES.valid);
+  fireEvent.change(getEmailInput(), { target: { value: FIXTURES.valid } });
 }
 
 export async function typeInvalidEmail() {
-  const user = userEvent.setup();
-  await user.clear(getEmailInput());
-  await user.type(getEmailInput(), FIXTURES.invalid);
+  fireEvent.change(getEmailInput(), { target: { value: FIXTURES.invalid } });
 }
 
 export async function submitForm() {
+  // 초기/로딩 문구 모두 허용해 버튼 query를 고정한다.
   const user = userEvent.setup();
   await user.click(
     screen.getByRole("button", {
