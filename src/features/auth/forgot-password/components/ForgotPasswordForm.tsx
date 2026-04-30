@@ -92,7 +92,7 @@ export function ForgotPasswordForm() {
     if (state.status === "global_error") {
       showToast(GLOBAL_ERROR_MESSAGE);
     }
-  }, [state.status]);
+  }, [state]);
 
   const { schedule, cancel } = useDebouncedCallback(() => {
     // debounce 시점에는 최신 입력값(ref)을 기준으로 검증한다.
