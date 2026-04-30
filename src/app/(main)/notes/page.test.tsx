@@ -105,7 +105,7 @@ describe("NotesPage", () => {
 
     expect(getNotesMock).toHaveBeenCalledWith("user-123", 1, "", 5);
     expect(
-      screen.getByRole("heading", { name: "기록 목록" }),
+      screen.getByRole("heading", { name: "노트 목록" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /테스트 노트/ })).toHaveAttribute(
       "href",

@@ -63,7 +63,12 @@ export function NoteList({
         </ul>
       )}
 
-      <NotesPagination currentPage={currentPage} totalPages={totalPages} view={view} query={query} />
+      <NotesPagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        view={view}
+        query={query}
+      />
     </div>
   );
 }

@@ -13,7 +13,7 @@ import { ROUTES } from "@/lib/constants/routes";
 import { createServerComponentClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
-  title: "기록 목록",
+  title: "노트 목록",
   robots: { index: false, follow: false },
 };
 
@@ -48,7 +48,7 @@ export default async function NotesPage({ searchParams }: NotesPageProps) {
     <div className="mx-auto w-full max-w-5xl px-6 py-10 md:px-12">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
-          <h1 className="text-3xl font-bold text-foreground">기록 목록</h1>
+          <h1 className="text-3xl font-bold text-foreground">노트 목록</h1>
           <p className="text-sm text-muted-foreground">
             저장한 노트를 확인하고 다음 복습을 이어가세요.
           </p>
