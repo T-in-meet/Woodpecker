@@ -9,12 +9,13 @@ import { Label } from "@/components/ui/label";
 import {
   forgotPasswordAction,
   type ForgotPasswordActionState,
-  INITIAL_FORGOT_PASSWORD_ACTION_STATE,
 } from "@/features/auth/forgot-password/actions/forgotPasswordAction";
 import { consumeForgotPasswordPrefillEmail } from "@/features/auth/forgot-password/lib/forgotPasswordPrefillMemory";
 import { forgotPasswordFormSchema } from "@/features/auth/forgot-password/schemas/forgotPasswordFormSchema";
 import { useDebouncedCallback } from "@/features/auth/hooks/useDebouncedCallback";
 import { showToast } from "@/lib/utils/showToast";
+
+import { INITIAL_FORGOT_PASSWORD_ACTION_STATE } from "../actions/forgotPasswordActionState";
 
 const DEBOUNCE_DELAY_MS = 300;
 

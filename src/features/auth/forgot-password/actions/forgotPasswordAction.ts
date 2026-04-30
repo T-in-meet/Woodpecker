@@ -44,11 +44,6 @@ export type ForgotPasswordActionState =
       };
     };
 
-export const INITIAL_FORGOT_PASSWORD_ACTION_STATE: ForgotPasswordActionState = {
-  status: "idle",
-  fieldErrors: null,
-};
-
 function successState(): ForgotPasswordActionState {
   return {
     status: "success",
