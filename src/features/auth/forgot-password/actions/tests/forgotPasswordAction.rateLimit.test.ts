@@ -79,7 +79,7 @@ describe("forgotPasswordAction - rate limit", () => {
     expect(emailStore.has(CANONICAL_EMAIL)).toBe(false);
   });
 
-  it("TC7: IP short 차단 시 success를 반환하고 Supabase를 호출하지 않는다", async () => {
+  it("TC7: IP short 차단 시 success를 반환하고 generateLink를 호출하지 않는다", async () => {
     const mocks = setupActionTest();
     blockIpShort();
 
@@ -90,11 +90,11 @@ describe("forgotPasswordAction - rate limit", () => {
       fieldErrors: null,
     });
     expectNoLegacyActionFields(state);
-    expect(mocks.resetPasswordForEmailMock).not.toHaveBeenCalled();
+    expect(mocks.generateLinkMock).not.toHaveBeenCalled();
     expectRateLimitedLog(mocks, AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT);
   });
 
-  it("TC8: IP long 차단 시 success를 반환하고 Supabase를 호출하지 않는다", async () => {
+  it("TC8: IP long 차단 시 success를 반환하고 generateLink를 호출하지 않는다", async () => {
     const mocks = setupActionTest();
     blockIpLong();
 
@@ -105,11 +105,11 @@ describe("forgotPasswordAction - rate limit", () => {
       fieldErrors: null,
     });
     expectNoLegacyActionFields(state);
-    expect(mocks.resetPasswordForEmailMock).not.toHaveBeenCalled();
+    expect(mocks.generateLinkMock).not.toHaveBeenCalled();
     expectRateLimitedLog(mocks, AUTH_LOG_REASONS.RATE_LIMIT_IP_LONG);
   });
 
-  it("TC9: email short 차단 시 success를 반환하고 Supabase를 호출하지 않는다", async () => {
+  it("TC9: email short 차단 시 success를 반환하고 generateLink를 호출하지 않는다", async () => {
     const mocks = setupActionTest();
     blockEmailShort();
 
@@ -120,11 +120,11 @@ describe("forgotPasswordAction - rate limit", () => {
       fieldErrors: null,
     });
     expectNoLegacyActionFields(state);
-    expect(mocks.resetPasswordForEmailMock).not.toHaveBeenCalled();
+    expect(mocks.generateLinkMock).not.toHaveBeenCalled();
     expectRateLimitedLog(mocks, AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT);
   });
 
-  it("TC10: email long 차단 시 success를 반환하고 Supabase를 호출하지 않는다", async () => {
+  it("TC10: email long 차단 시 success를 반환하고 generateLink를 호출하지 않는다", async () => {
     const mocks = setupActionTest();
     blockEmailLong();
 
@@ -135,7 +135,7 @@ describe("forgotPasswordAction - rate limit", () => {
       fieldErrors: null,
     });
     expectNoLegacyActionFields(state);
-    expect(mocks.resetPasswordForEmailMock).not.toHaveBeenCalled();
+    expect(mocks.generateLinkMock).not.toHaveBeenCalled();
     expectRateLimitedLog(mocks, AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG);
   });
 

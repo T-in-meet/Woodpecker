@@ -21,8 +21,10 @@ import {
 import { maskEmailForLogging } from "@/features/auth/lib/maskEmailForLogging";
 import { maskIpForLogging } from "@/features/auth/lib/maskIpForLogging";
 import { canonicalizeEmail } from "@/features/auth/utils/canonicalizeEmail";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getServerActionClientIp } from "@/lib/utils/getServerActionClientIp";
+
+import { sendAuthEmail } from "../../email/sendAuthEmail";
 
 export type ForgotPasswordActionState =
   | {
@@ -130,22 +132,37 @@ export async function forgotPasswordAction(
     }
 
     const redirectTo = buildRedirectTo(redirectPath);
-    const supabase = await createClient();
-
-    const { error } = await supabase.auth.resetPasswordForEmail(
-      parsed.data.email,
-      { redirectTo },
-    );
-
-    if (error) {
-      console.error("resetPasswordForEmail error", {
-        message: error.message,
-        status: error.status,
-        name: error.name,
+    const adminClient = createAdminClient();
+    const { data: linkData, error: linkError } =
+      await adminClient.auth.admin.generateLink({
+        type: "recovery",
+        email: parsed.data.email,
+        options: { redirectTo },
       });
+
+    if (linkError) {
+      logAuthError(AUTH_EVENTS.AUTH_FORGOT_PASSWORD_FAILED, {
+        path: FORGOT_PASSWORD_PATH,
+        method: "POST",
+        status: 500,
+        provider: "password",
+        result: "failure",
+        reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+        maskedEmail,
+        maskedIp,
+      });
+      return successState();
     }
 
-    if (error) {
+    const tokenHash = linkData?.properties?.hashed_token;
+
+    if (!tokenHash) {
+      throw new Error("Missing hashed_token from generateLink");
+    }
+
+    try {
+      await sendAuthEmail(email, tokenHash, "recovery");
+    } catch {
       logAuthError(AUTH_EVENTS.AUTH_FORGOT_PASSWORD_FAILED, {
         path: FORGOT_PASSWORD_PATH,
         method: "POST",

@@ -10,9 +10,10 @@ import { sendViaResend } from "./providers/sendViaResend";
  * 인증 이메일 링크 타입
  *
  * 정책:
- * - auth 이메일 링크는 magiclink 단일 타입만 사용한다.
+ * - magiclink: 이메일 인증/로그인 링크
+ * - recovery: 비밀번호 재설정 링크
  */
-export type AuthEmailType = "magiclink";
+export type AuthEmailType = "magiclink" | "recovery";
 
 /**
  * 이메일 전송 provider를 환경에 따라 결정한다.
@@ -63,13 +64,13 @@ export async function sendAuthEmail(
   const link = `${appUrl}/api/auth/callback?token_hash=${tokenHash}&type=${type}`;
   const html = await render(React.createElement(AuthEmailTemplate, { link }));
 
-  const subject = "이메일 인증";
+  const subject = type === "recovery" ? "비밀번호 재설정" : "이메일 인증";
 
   const provider = resolveEmailProvider();
   const payload = {
     from: resolveFromAddress(),
     to: email,
-    subject: subject ?? "이메일 인증",
+    subject: subject,
     html,
   };
 

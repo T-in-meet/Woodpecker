@@ -31,17 +31,21 @@ describe("forgotPasswordAction", () => {
     setupActionTest();
   });
 
-  it("TC1: 유효한 email이면 resetPasswordForEmail을 호출한다", async () => {
+  it("TC1: 유효한 email이면 generateLink를 호출한다", async () => {
     const mocks = setupActionTest();
     const state = await mocks.callAction();
 
-    expect(mocks.resetPasswordForEmailMock).toHaveBeenCalledTimes(1);
-    expect(mocks.resetPasswordForEmailMock).toHaveBeenCalledWith(
-      "user@example.com",
+    expect(mocks.generateLinkMock).toHaveBeenCalledTimes(1);
+    expect(mocks.generateLinkMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        redirectTo: "https://example.com/api/auth/callback?type=recovery",
+        type: "recovery",
+        email: "user@example.com",
+        options: expect.objectContaining({
+          redirectTo: "https://example.com/api/auth/callback?type=recovery",
+        }),
       }),
     );
+    expect(mocks.sendViaNodemailerMock).toHaveBeenCalledTimes(1);
 
     expect(state).toMatchObject({
       status: "success",
@@ -55,9 +59,10 @@ describe("forgotPasswordAction", () => {
     const mocks = setupActionTest({ email: "  user@example.com  " });
     const state = await mocks.callAction();
 
-    expect(mocks.resetPasswordForEmailMock).toHaveBeenCalledWith(
-      "user@example.com",
-      expect.any(Object),
+    expect(mocks.generateLinkMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: "user@example.com",
+      }),
     );
     expect(state).toMatchObject({
       status: "success",
@@ -78,7 +83,7 @@ describe("forgotPasswordAction", () => {
 
     expectNoLegacyActionFields(state);
 
-    expect(mocks.resetPasswordForEmailMock).not.toHaveBeenCalled();
+    expect(mocks.generateLinkMock).not.toHaveBeenCalled();
 
     // checkRequestEligibilityMock 제거됨.
     // 대신 rate limit store가 변경되지 않았는지 검증.
@@ -90,16 +95,19 @@ describe("forgotPasswordAction", () => {
     const mocks = setupActionTest({ redirect: "/notes?tab=1" });
     await mocks.callAction();
 
-    expect(mocks.resetPasswordForEmailMock).toHaveBeenCalledWith(
-      "user@example.com",
+    expect(mocks.generateLinkMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        redirectTo:
-          "https://example.com/api/auth/callback?type=recovery&redirect=%2Fnotes%3Ftab%3D1",
+        email: "user@example.com",
+        options: expect.objectContaining({
+          redirectTo:
+            "https://example.com/api/auth/callback?type=recovery&redirect=%2Fnotes%3Ftab%3D1",
+        }),
       }),
     );
-    expect(mocks.resetPasswordForEmailMock).not.toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ redirectTo: "/notes?tab=1" }),
+    expect(mocks.generateLinkMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: expect.objectContaining({ redirectTo: "/notes?tab=1" }),
+      }),
     );
   });
 
@@ -113,11 +121,13 @@ describe("forgotPasswordAction", () => {
     await mocks.callAction();
 
     expect(mod.validateRedirectPath).not.toHaveBeenCalled();
-    expect(mocks.resetPasswordForEmailMock).toHaveBeenCalledWith(
-      "user@example.com",
+    expect(mocks.generateLinkMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        redirectTo:
-          "https://example.com/api/auth/callback?type=recovery&redirect=%2Fnotes%3Ftab%3D1",
+        email: "user@example.com",
+        options: expect.objectContaining({
+          redirectTo:
+            "https://example.com/api/auth/callback?type=recovery&redirect=%2Fnotes%3Ftab%3D1",
+        }),
       }),
     );
   });
@@ -141,7 +151,7 @@ describe("forgotPasswordAction", () => {
     const state = await mocks.callAction();
 
     expect(state.status).toBe("success");
-    expect(mocks.resetPasswordForEmailMock).toHaveBeenCalled();
+    expect(mocks.generateLinkMock).toHaveBeenCalled();
     expectNoLegacyActionFields(state);
   });
 
@@ -214,7 +224,7 @@ describe("forgotPasswordAction", () => {
   it("TC33: 별도 API route 의존 없이 Server Action을 직접 호출한다", async () => {
     const mocks = setupActionTest();
     await mocks.callAction();
-    expect(mocks.resetPasswordForEmailMock).toHaveBeenCalledTimes(1);
+    expect(mocks.generateLinkMock).toHaveBeenCalledTimes(1);
   });
 
   it("TC34: validation/rate-limit 실패 시 Supabase 호출 없이 종료한다", async () => {
@@ -222,20 +232,21 @@ describe("forgotPasswordAction", () => {
 
     await invalid.callAction();
 
-    expect(invalid.resetPasswordForEmailMock).not.toHaveBeenCalled();
+    expect(invalid.generateLinkMock).not.toHaveBeenCalled();
 
     const blocked = setupActionTest();
     blockIpShort();
 
     await blocked.callAction();
 
-    expect(blocked.resetPasswordForEmailMock).not.toHaveBeenCalled();
+    expect(blocked.generateLinkMock).not.toHaveBeenCalled();
   });
 
-  it("TC35/TC36: 이메일 발송은 Supabase resetPasswordForEmail 호출만 검증한다", async () => {
+  it("TC35/TC36: 이메일 발송은 Supabase generateLink + nodemailer 호출만 검증한다", async () => {
     const mocks = setupActionTest();
     await mocks.callAction();
-    expect(mocks.resetPasswordForEmailMock).toHaveBeenCalledTimes(1);
+    expect(mocks.generateLinkMock).toHaveBeenCalledTimes(1);
+    expect(mocks.sendViaNodemailerMock).toHaveBeenCalledTimes(1);
   });
 
   it("TC37: redirect query는 encode되어 전달된다", async () => {
@@ -245,10 +256,12 @@ describe("forgotPasswordAction", () => {
 
     await mocks.callAction();
 
-    expect(mocks.resetPasswordForEmailMock).toHaveBeenCalledWith(
-      "user@example.com",
+    expect(mocks.generateLinkMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        redirectTo: expect.stringContaining("redirect=%2Fnotes%3Ftab%3D1"),
+        email: "user@example.com",
+        options: expect.objectContaining({
+          redirectTo: expect.stringContaining("redirect=%2Fnotes%3Ftab%3D1"),
+        }),
       }),
     );
   });

@@ -3,10 +3,8 @@ import { afterEach, beforeEach, expect, vi } from "vitest";
 import { AUTH_EVENTS } from "@/features/auth/constants/authEvents";
 import { resetEligibilityStore } from "@/features/auth/lib/requestEligibilityStore";
 
-import {
-  type ForgotPasswordActionState,
-  INITIAL_FORGOT_PASSWORD_ACTION_STATE,
-} from "../../forgotPasswordAction";
+import { type ForgotPasswordActionState } from "../../forgotPasswordAction";
+import { INITIAL_FORGOT_PASSWORD_ACTION_STATE } from "../../forgotPasswordActionState";
 
 export const FORGOT_PASSWORD_TERMINAL_EVENTS = [
   AUTH_EVENTS.AUTH_FORGOT_PASSWORD_COMPLETED,
@@ -60,8 +58,9 @@ export function expectNoLegacyActionFields(state: Record<string, unknown>) {
 }
 
 const hoisted = vi.hoisted(() => ({
-  createClientMock: vi.fn(),
-  resetPasswordForEmail: vi.fn(),
+  createAdminClientMock: vi.fn(),
+  generateLinkMock: vi.fn(),
+  sendViaNodemailerMock: vi.fn(),
   getServerActionClientIp: vi.fn(),
   applyMinimumActionDelay: vi.fn(),
   logRequested: vi.fn(),
@@ -69,8 +68,12 @@ const hoisted = vi.hoisted(() => ({
   logAuthError: vi.fn(),
 }));
 
-vi.mock("@/lib/supabase/server", () => ({
-  createClient: hoisted.createClientMock,
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: hoisted.createAdminClientMock,
+}));
+
+vi.mock("@/features/auth/email/providers/sendViaNodemailer", () => ({
+  sendViaNodemailer: hoisted.sendViaNodemailerMock,
 }));
 
 vi.mock("@/lib/utils/getServerActionClientIp", () => ({
@@ -109,33 +112,43 @@ export function makeFormData(input: { email: string }) {
 
 function mockSupabase(mode: SupabaseMode) {
   if (mode === "success") {
-    hoisted.resetPasswordForEmail.mockResolvedValue({ data: {}, error: null });
+    hoisted.generateLinkMock.mockResolvedValue({
+      data: {
+        properties: { hashed_token: "test-token-hash" },
+      },
+      error: null,
+    });
+    hoisted.sendViaNodemailerMock.mockResolvedValue(undefined);
     return;
   }
   if (mode === "error") {
-    hoisted.resetPasswordForEmail.mockResolvedValue({
+    hoisted.generateLinkMock.mockResolvedValue({
       data: {},
       error: new Error("supabase error"),
     });
+    hoisted.sendViaNodemailerMock.mockResolvedValue(undefined);
     return;
   }
   if (mode === "emailNotFoundError") {
-    hoisted.resetPasswordForEmail.mockResolvedValue({
+    hoisted.generateLinkMock.mockResolvedValue({
       data: {},
       error: new Error("email not found"),
     });
+    hoisted.sendViaNodemailerMock.mockResolvedValue(undefined);
     return;
   }
-  hoisted.resetPasswordForEmail.mockRejectedValue(
-    new Error("unexpected error"),
-  );
+  hoisted.generateLinkMock.mockRejectedValue(new Error("unexpected error"));
+  hoisted.sendViaNodemailerMock.mockResolvedValue(undefined);
 }
 
 let originalAppUrl: string | undefined;
+let originalAuthEmailFrom: string | undefined;
 
 beforeEach(() => {
   originalAppUrl = process.env.APP_URL;
+  originalAuthEmailFrom = process.env.AUTH_EMAIL_FROM;
   process.env.APP_URL = "https://example.com";
+  process.env.AUTH_EMAIL_FROM = "no-reply@example.com";
 });
 
 afterEach(() => {
@@ -144,15 +157,23 @@ afterEach(() => {
   } else {
     process.env.APP_URL = originalAppUrl;
   }
+
+  if (originalAuthEmailFrom === undefined) {
+    delete process.env.AUTH_EMAIL_FROM;
+  } else {
+    process.env.AUTH_EMAIL_FROM = originalAuthEmailFrom;
+  }
 });
 
 export function setupActionTest(options: ForgotPasswordActionTestOptions = {}) {
   vi.clearAllMocks();
   resetEligibilityStore();
 
-  hoisted.createClientMock.mockResolvedValue({
+  hoisted.createAdminClientMock.mockReturnValue({
     auth: {
-      resetPasswordForEmail: hoisted.resetPasswordForEmail,
+      admin: {
+        generateLink: hoisted.generateLinkMock,
+      },
     },
   } as never);
 
@@ -181,7 +202,8 @@ export function setupActionTest(options: ForgotPasswordActionTestOptions = {}) {
 
   return {
     callAction,
-    resetPasswordForEmailMock: hoisted.resetPasswordForEmail,
+    generateLinkMock: hoisted.generateLinkMock,
+    sendViaNodemailerMock: hoisted.sendViaNodemailerMock,
     applyMinimumActionDelayMock: hoisted.applyMinimumActionDelay,
     logRequestedMock: hoisted.logRequested,
     logAuthEventMock: hoisted.logAuthEvent,
