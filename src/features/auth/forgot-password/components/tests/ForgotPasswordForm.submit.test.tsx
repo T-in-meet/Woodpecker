@@ -44,9 +44,9 @@ describe("ForgotPasswordForm.submit", () => {
   });
 
   it("TC13: submit 중 버튼은 disabled + loading 상태다", async () => {
+    setupForgotPasswordFormTest();
     setPendingWithDeferredPromise();
     setDefaultValidSafeParse();
-    setupForgotPasswordFormTest();
     renderForgotPasswordForm();
 
     await typeValidEmail();
@@ -67,6 +67,7 @@ describe("ForgotPasswordForm.submit", () => {
   });
 
   it('TC23: submit 중 버튼 문구는 "전송 중..."이고 disabled다', async () => {
+    setupForgotPasswordFormTest();
     setPendingWithDeferredPromise();
     setDefaultValidSafeParse();
     renderForgotPasswordForm();

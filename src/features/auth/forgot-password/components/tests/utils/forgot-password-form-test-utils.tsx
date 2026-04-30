@@ -138,15 +138,12 @@ export function setInvalidSafeParse(message: string) {
 export function setupForgotPasswordFormTest(options: SetupOptions = {}) {
   const { state, isPending, prefillEmail = null, queryError = null } = options;
 
+  hoisted.deferred = null;
   hoisted.prefillStore.email = prefillEmail;
   hoisted.searchParamsStore.error = queryError;
-  // pending deferred를 사용하는 테스트에서는 formAction 구현을 유지한다.
-  if (!hoisted.deferred) {
-    hoisted.formActionMock.mockReset();
-  }
+  hoisted.formActionMock.mockReset();
 
-  const resolvedIsPending =
-    typeof isPending === "boolean" ? isPending : Boolean(hoisted.deferred);
+  const resolvedIsPending = typeof isPending === "boolean" ? isPending : false;
 
   hoisted.useActionStateMock.mockReturnValue([
     state ?? { status: "idle", fieldErrors: null },
