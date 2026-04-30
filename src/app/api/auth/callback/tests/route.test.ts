@@ -20,7 +20,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 
-import { GET } from "./route";
+import { GET } from "../route";
 
 vi.mock("@/lib/supabase/server");
 

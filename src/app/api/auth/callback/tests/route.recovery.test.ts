@@ -22,11 +22,9 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 const verifyOtp = vi.fn();
-const exchangeCodeForSession = vi.fn();
 
 function makeRequest(params: {
   token_hash?: string;
-  code?: string;
   type?: string;
   redirect?: string;
 }): NextRequest {
@@ -36,9 +34,6 @@ function makeRequest(params: {
   }
   if (params.type !== undefined) {
     url.searchParams.set("type", params.type);
-  }
-  if (params.code !== undefined) {
-    url.searchParams.set("code", params.code);
   }
   if (params.redirect !== undefined) {
     url.searchParams.set("redirect", params.redirect);
@@ -58,13 +53,9 @@ describe("callback recovery 분기", () => {
     vi.clearAllMocks();
     process.env["APP_URL"] = "https://app.example.com";
     vi.mocked(createClient).mockResolvedValue({
-      auth: { verifyOtp, exchangeCodeForSession },
+      auth: { verifyOtp },
     } as never);
     verifyOtp.mockResolvedValue({ data: { user: {} }, error: null });
-    exchangeCodeForSession.mockResolvedValue({
-      data: { session: {} },
-      error: null,
-    });
   });
 
   it("TC1: token_hash + type=recovery면 verifyOtp({ token_hash, type: recovery })를 호출한다", async () => {
@@ -211,50 +202,5 @@ describe("callback recovery 분기", () => {
       token_hash: "valid-token",
       type: "magiclink",
     });
-  });
-
-  it("TC11: type=recovery + code면 exchangeCodeForSession(code)을 호출한다", async () => {
-    await GET(makeRequest({ type: "recovery", code: "pkce-code" }));
-
-    expect(exchangeCodeForSession).toHaveBeenCalledTimes(1);
-    expect(exchangeCodeForSession).toHaveBeenCalledWith("pkce-code");
-    expect(verifyOtp).not.toHaveBeenCalled();
-  });
-
-  it("TC12: type=recovery + code 성공 시 reset-password로 redirect하고 cookie를 설정한다", async () => {
-    const response = await GET(
-      makeRequest({ type: "recovery", code: "pkce-code", redirect: "/notes" }),
-    );
-
-    expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe(
-      `https://app.example.com${ROUTES.RESET_PASSWORD}?redirect=%2Fnotes`,
-    );
-    expect(response.cookies.get(RESET_REQUIRED_COOKIE_NAME)).toBeDefined();
-  });
-
-  it("TC13: type=recovery + code 실패 시 invalid_reset_link로 redirect한다", async () => {
-    exchangeCodeForSession.mockResolvedValueOnce({
-      data: { session: null },
-      error: { message: "invalid code" },
-    });
-
-    const response = await GET(
-      makeRequest({ type: "recovery", code: "bad-code" }),
-    );
-
-    expect(response.status).toBe(307);
-    expectInvalidResetRedirect(response);
-    expect(response.cookies.get(RESET_REQUIRED_COOKIE_NAME)).toBeUndefined();
-  });
-
-  it("TC14: code만 있고 type이 없으면 recovery로 추론하지 않고 rejected 처리한다", async () => {
-    const response = await GET(makeRequest({ code: "pkce-code" }));
-
-    expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toContain(ROUTES.VERIFY_EMAIL);
-    expect(exchangeCodeForSession).not.toHaveBeenCalled();
-    expect(verifyOtp).not.toHaveBeenCalled();
-    expect(response.cookies.get(RESET_REQUIRED_COOKIE_NAME)).toBeUndefined();
   });
 });

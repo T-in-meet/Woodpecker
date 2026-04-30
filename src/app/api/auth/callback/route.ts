@@ -71,7 +71,6 @@ function redirectToVerifyEmail(): NextResponse {
 // redirect는 magiclink에서는 사용하지 않지만 recovery redirect 보존을 위해 항상 포함한다.
 type CallbackInput = {
   tokenHash: string | null;
-  code: string | null;
   type: string | null;
   redirect: string | null;
 };
@@ -84,7 +83,6 @@ type ValidMagiclinkInput = CallbackInput & {
 function extractCallbackInput(request: NextRequest): CallbackInput {
   return {
     tokenHash: request.nextUrl.searchParams.get("token_hash"),
-    code: request.nextUrl.searchParams.get("code"),
     type: request.nextUrl.searchParams.get("type"),
     redirect: request.nextUrl.searchParams.get("redirect"),
   };
@@ -114,7 +112,6 @@ async function verifyMagiclinkToken(
 // redirect는 여기서 검증하지 않고 reset-password 단계까지 보존만 한다.
 function isValidRecoveryInput(input: CallbackInput): input is {
   tokenHash: string;
-  code: null;
   type: "recovery";
   redirect: string | null;
 } {
@@ -129,13 +126,6 @@ async function verifyRecoveryToken(
     token_hash: tokenHash,
     type: "recovery",
   });
-
-  return { ok: !error };
-}
-
-async function exchangeRecoveryCode(code: string): Promise<{ ok: boolean }> {
-  const supabase = await createClient();
-  const { error } = await supabase.auth.exchangeCodeForSession(code);
 
   return { ok: !error };
 }
@@ -276,18 +266,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     } else if (input.type === "recovery") {
       flow = "recovery";
 
-      if (input.code) {
-        const exchange = await exchangeRecoveryCode(input.code);
-
-        if (!exchange.ok) {
-          outcome = "rejected";
-          response = redirectToForgotPasswordInvalidLink();
-        } else {
-          outcome = "completed";
-          response = redirectToResetPassword(input.redirect);
-          setResetRequiredCookie(response);
-        }
-      } else if (!isValidRecoveryInput(input)) {
+      if (!isValidRecoveryInput(input)) {
         outcome = "rejected";
         response = redirectToForgotPasswordInvalidLink();
       } else {
