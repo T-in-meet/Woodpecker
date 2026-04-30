@@ -14,6 +14,6 @@ export type ResetPasswordActionState =
       message: string;
     };
 
-export const initialResetPasswordActionState: ResetPasswordActionState = {
+export const INITIAL_RESET_PASSWORD_ACTION_STATE: ResetPasswordActionState = {
   status: "idle",
 };

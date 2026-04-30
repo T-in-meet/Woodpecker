@@ -5,9 +5,9 @@ import { RESET_REQUIRED_COOKIE_NAME } from "@/features/auth/constants/cookies";
 import { passwordFieldSchema } from "@/lib/validation/passwordSchema";
 
 import {
-  initialResetPasswordActionState,
-  type ResetPasswordActionState,
-} from "../../resetPasswordAction";
+  INITIAL_RESET_PASSWORD_ACTION_STATE,
+  ResetPasswordActionState,
+} from "../../resetPasswordActionState";
 
 export const REDIRECT_ERROR = new Error("NEXT_REDIRECT");
 
@@ -192,7 +192,7 @@ export function setupActionTest() {
 export async function runResetPasswordAction(
   redirectValue: string | null,
   formData: FormData,
-  prevState: ResetPasswordActionState = initialResetPasswordActionState,
+  prevState: ResetPasswordActionState = INITIAL_RESET_PASSWORD_ACTION_STATE,
 ) {
   const mod = await import("../../resetPasswordAction");
   return mod.resetPasswordAction(redirectValue, prevState, formData);

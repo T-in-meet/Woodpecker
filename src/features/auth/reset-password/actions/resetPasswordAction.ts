@@ -17,11 +17,17 @@ import { resetPasswordActionSchema } from "@/features/auth/reset-password/schema
 import { ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 
-import { RESET_PASSWORD_GLOBAL_ERROR_MESSAGE } from "./resetPasswordAction.constants";
+import {
+  RESET_PASSWORD_GLOBAL_ERROR_MESSAGE,
+  RESET_PASSWORD_SAME_PASSWORD_MESSAGE,
+} from "./resetPasswordAction.constants";
 import { ResetPasswordActionState } from "./resetPasswordActionState";
 
-function toPayload(formData: FormData): Record<string, FormDataEntryValue> {
-  return Object.fromEntries(formData.entries());
+function toPayload(formData: FormData) {
+  return {
+    password: formData.get("password"),
+    confirmPassword: formData.get("confirmPassword"),
+  };
 }
 
 function resolveRedirectPath(redirectPath: string | null): string {
@@ -29,6 +35,17 @@ function resolveRedirectPath(redirectPath: string | null): string {
     return ROUTES.MYPAGE;
   }
   return validateRedirectPath(redirectPath);
+}
+
+function isSamePasswordError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "status" in error &&
+    "code" in error &&
+    error.status === 422 &&
+    error.code === "same_password"
+  );
 }
 
 export async function resetPasswordAction(
@@ -46,6 +63,7 @@ export async function resetPasswordAction(
   const parsed = resetPasswordActionSchema.safeParse(payload);
 
   if (!parsed.success) {
+    console.log("reset-password schema issues", parsed.error.issues);
     logAuthEvent(AUTH_EVENTS.AUTH_RESET_PASSWORD_INVALID_INPUT, {
       path: ROUTES.RESET_PASSWORD,
       method: "POST",
@@ -111,6 +129,7 @@ export async function resetPasswordAction(
       password: parsed.data.password,
     });
     updateError = error;
+    console.log("reset-password updateUser error", error);
   } catch (error) {
     const normalized = normalizeUnknownError(error);
     logAuthError(AUTH_EVENTS.AUTH_RESET_PASSWORD_FAILED, {
@@ -129,17 +148,24 @@ export async function resetPasswordAction(
   }
 
   if (updateError) {
+    const isSamePassword = isSamePasswordError(updateError);
+
     logAuthError(AUTH_EVENTS.AUTH_RESET_PASSWORD_FAILED, {
       path: ROUTES.RESET_PASSWORD,
       method: "POST",
-      status: 500,
+      status: isSamePassword ? 422 : 500,
       provider: "password",
       result: "failure",
-      reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+      reasonCode: isSamePassword
+        ? AUTH_LOG_REASONS.SAME_PASSWORD
+        : AUTH_LOG_REASONS.INTERNAL_ERROR,
     });
+
     return {
       status: "global_error",
-      message: RESET_PASSWORD_GLOBAL_ERROR_MESSAGE,
+      message: isSamePassword
+        ? RESET_PASSWORD_SAME_PASSWORD_MESSAGE
+        : RESET_PASSWORD_GLOBAL_ERROR_MESSAGE,
     };
   }
 

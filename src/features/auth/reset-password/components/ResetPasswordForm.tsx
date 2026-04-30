@@ -10,7 +10,7 @@ import { resetPasswordFormSchema } from "@/features/auth/reset-password/schemas/
 
 import { useDebouncedCallback } from "../../hooks/useDebouncedCallback";
 import {
-  initialResetPasswordActionState,
+  INITIAL_RESET_PASSWORD_ACTION_STATE,
   ResetPasswordActionState,
 } from "../actions/resetPasswordActionState";
 
@@ -62,7 +62,7 @@ function hasClientErrors(errors: ClientFieldErrors): boolean {
 export function ResetPasswordForm({ action }: ResetPasswordFormProps) {
   const [state, formAction, isPending] = useActionState(
     action,
-    initialResetPasswordActionState,
+    INITIAL_RESET_PASSWORD_ACTION_STATE,
   );
   const [clientErrors, setClientErrors] = useState<ClientFieldErrors>({});
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
