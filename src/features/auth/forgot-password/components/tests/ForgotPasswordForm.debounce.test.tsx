@@ -8,6 +8,7 @@ import {
   setDefaultValidSafeParse,
   setInvalidSafeParse,
   setupForgotPasswordFormTest,
+  typeInvalidEmail,
   typeValidEmail,
 } from "@/features/auth/forgot-password/components/tests/utils/forgot-password-form-test-utils";
 
@@ -38,13 +39,22 @@ describe("ForgotPasswordForm.debounce", () => {
   });
 
   it("TC19: invalid -> valid 변경 시 즉시 error 유지, 300ms 이후 제거된다", async () => {
-    setInvalidSafeParse(MESSAGES.invalidFormat);
     renderForgotPasswordForm();
 
-    await typeValidEmail();
-    expect(document.body).not.toHaveTextContent(MESSAGES.invalidFormat);
+    setInvalidSafeParse(MESSAGES.invalidFormat);
+    await typeInvalidEmail();
 
     vi.advanceTimersByTime(300);
-    expect(getSafeParseMock()).toHaveBeenCalled();
+
+    expect(document.body).toHaveTextContent(MESSAGES.invalidFormat);
+
+    setDefaultValidSafeParse();
+    await typeValidEmail();
+
+    expect(document.body).toHaveTextContent(MESSAGES.invalidFormat);
+
+    vi.advanceTimersByTime(300);
+
+    expect(document.body).not.toHaveTextContent(MESSAGES.invalidFormat);
   });
 });

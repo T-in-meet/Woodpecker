@@ -109,7 +109,6 @@ export function ForgotPasswordForm() {
   const onChangeEmail = (value: string) => {
     emailRef.current = value;
     setEmail(value);
-    setError(null);
     setIsClientValid(value.trim().length > 0);
     schedule();
   };
