@@ -6,6 +6,7 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RATE_LIMIT_TOAST_MESSAGE } from "@/features/auth/errors/rateLimitError";
 import {
   forgotPasswordAction,
   type ForgotPasswordActionState,
@@ -87,10 +88,16 @@ export function ForgotPasswordForm() {
   }, []);
 
   useEffect(() => {
-    if (state.status === "success") {
+    if (state.status === "completed") {
       showToast(SUCCESS_MESSAGE);
     }
-    if (state.status === "global_error") {
+    if (state.status === "blocked") {
+      showToast(RATE_LIMIT_TOAST_MESSAGE, {
+        variant: "destructive",
+        dedupeKey: "auth-rate-limit",
+      });
+    }
+    if (state.status === "internal_error") {
       showToast(GLOBAL_ERROR_MESSAGE);
     }
   }, [state]);

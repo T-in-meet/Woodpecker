@@ -32,30 +32,55 @@ export type ForgotPasswordActionState =
       fieldErrors: null;
     }
   | {
-      status: "success";
+      status: "completed";
       fieldErrors: null;
     }
   | {
-      status: "global_error";
+      status: "blocked";
       fieldErrors: null;
+      reasonCode:
+        | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT
+        | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP_LONG
+        | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT
+        | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG;
     }
   | {
-      status: "field_error";
+      status: "internal_error";
+      fieldErrors: null;
+      reasonCode: typeof AUTH_LOG_REASONS.INTERNAL_ERROR;
+    }
+  | {
+      status: "invalid_input";
       fieldErrors: {
         email?: string[];
       };
     };
 
-function successState(): ForgotPasswordActionState {
+function completedState(): ForgotPasswordActionState {
   return {
-    status: "success",
+    status: "completed",
     fieldErrors: null,
   };
 }
 
-function globalErrorState(): ForgotPasswordActionState {
+function blockedState(
+  reasonCode:
+    | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT
+    | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP_LONG
+    | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT
+    | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG,
+): ForgotPasswordActionState {
   return {
-    status: "global_error",
+    status: "blocked",
+    reasonCode,
+    fieldErrors: null,
+  };
+}
+
+function internalErrorState(): ForgotPasswordActionState {
+  return {
+    status: "internal_error",
+    reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
     fieldErrors: null,
   };
 }
@@ -101,7 +126,7 @@ export async function forgotPasswordAction(
         reasonCode: AUTH_LOG_REASONS.SCHEMA_VALIDATION_FAILED,
       });
       return {
-        status: "field_error",
+        status: "invalid_input",
         fieldErrors: parsed.error.flatten().fieldErrors,
       };
     }
@@ -118,17 +143,20 @@ export async function forgotPasswordAction(
     );
 
     if (!eligibility.allowed) {
+      const reasonCode = mapBlockedByToReason(eligibility.blockedBy);
+
       logAuthEvent(AUTH_EVENTS.AUTH_FORGOT_PASSWORD_RATE_LIMITED, {
         path: FORGOT_PASSWORD_PATH,
         method: "POST",
         status: 429,
         provider: "password",
         result: "blocked",
-        reasonCode: mapBlockedByToReason(eligibility.blockedBy),
+        reasonCode,
         maskedEmail,
         maskedIp,
       });
-      return successState();
+
+      return blockedState(reasonCode);
     }
 
     const redirectTo = buildRedirectTo(redirectPath);
@@ -151,7 +179,7 @@ export async function forgotPasswordAction(
         maskedEmail,
         maskedIp,
       });
-      return successState();
+      return completedState();
     }
 
     const tokenHash = linkData?.properties?.hashed_token;
@@ -173,7 +201,7 @@ export async function forgotPasswordAction(
         maskedEmail,
         maskedIp,
       });
-      return successState();
+      return completedState();
     }
 
     logAuthEvent(AUTH_EVENTS.AUTH_FORGOT_PASSWORD_COMPLETED, {
@@ -185,7 +213,7 @@ export async function forgotPasswordAction(
       maskedEmail,
       maskedIp,
     });
-    return successState();
+    return completedState();
   } catch (error) {
     const normalized = normalizeUnknownError(error);
     logAuthError(AUTH_EVENTS.AUTH_FORGOT_PASSWORD_FAILED, {
@@ -197,7 +225,7 @@ export async function forgotPasswordAction(
       reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
       ...normalized,
     });
-    return globalErrorState();
+    return internalErrorState();
   } finally {
     await applyMinimumActionDelay(start);
   }

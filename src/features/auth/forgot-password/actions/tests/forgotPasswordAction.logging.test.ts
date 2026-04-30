@@ -147,7 +147,7 @@ describe("forgotPasswordAction - logging & delay", () => {
     expect(state).not.toHaveProperty("error");
     expect(state).not.toHaveProperty("errorMessage");
     expect(state).toMatchObject({
-      status: "success",
+      status: "completed",
       fieldErrors: null,
     });
   });

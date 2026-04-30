@@ -24,10 +24,7 @@ import {
 import { ResetPasswordActionState } from "./resetPasswordActionState";
 
 function toPayload(formData: FormData) {
-  return {
-    password: formData.get("password"),
-    confirmPassword: formData.get("confirmPassword"),
-  };
+  return Object.fromEntries(formData.entries());
 }
 
 function resolveRedirectPath(redirectPath: string | null): string {

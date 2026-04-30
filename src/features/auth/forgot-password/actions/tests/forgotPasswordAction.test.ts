@@ -48,7 +48,7 @@ describe("forgotPasswordAction", () => {
     expect(mocks.sendViaNodemailerMock).toHaveBeenCalledTimes(1);
 
     expect(state).toMatchObject({
-      status: "success",
+      status: "completed",
       fieldErrors: null,
     });
 
@@ -65,7 +65,7 @@ describe("forgotPasswordAction", () => {
       }),
     );
     expect(state).toMatchObject({
-      status: "success",
+      status: "completed",
       fieldErrors: null,
     });
 
@@ -77,7 +77,7 @@ describe("forgotPasswordAction", () => {
     const state = await mocks.callAction();
 
     expect(state).toMatchObject({
-      status: "field_error",
+      status: "invalid_input",
       fieldErrors: { email: expect.any(Array) },
     });
 
@@ -136,7 +136,7 @@ describe("forgotPasswordAction", () => {
     const mocks = setupActionTest({ supabase: "success" });
     const state = await mocks.callAction();
     expect(state).toMatchObject({
-      status: "success",
+      status: "completed",
       fieldErrors: null,
     });
 
@@ -150,19 +150,19 @@ describe("forgotPasswordAction", () => {
 
     const state = await mocks.callAction();
 
-    expect(state.status).toBe("success");
+    expect(state.status).toBe("completed");
     expect(mocks.generateLinkMock).toHaveBeenCalled();
     expectNoLegacyActionFields(state);
   });
 
-  it("TC20: general error → success 유지 + 내부 logging", async () => {
+  it("TC20: general error → completed 유지 + 내부 logging", async () => {
     const mocks = setupActionTest({
       supabase: "error",
     });
 
     const state = await mocks.callAction();
 
-    expect(state.status).toBe("success");
+    expect(state.status).toBe("completed");
     expect(
       mocks.logAuthEventMock.mock.calls.length +
         mocks.logAuthErrorMock.mock.calls.length,
@@ -170,11 +170,23 @@ describe("forgotPasswordAction", () => {
     expectNoLegacyActionFields(state);
   });
 
-  it("TC21: Supabase throw면 global_error 상태를 반환한다", async () => {
+  it("TC21: Supabase throw면 internal_error 상태를 반환한다", async () => {
     const mocks = setupActionTest({ supabase: "throw" });
     const state = await mocks.callAction();
     expect(state).toMatchObject({
-      status: "global_error",
+      status: "internal_error",
+      fieldErrors: null,
+    });
+
+    expectNoLegacyActionFields(state);
+  });
+
+  it("TC21-1: rate limit이면 blocked 상태를 반환한다", async () => {
+    const mocks = setupActionTest();
+    blockIpShort();
+    const state = await mocks.callAction();
+    expect(state).toMatchObject({
+      status: "blocked",
       fieldErrors: null,
     });
 
@@ -194,7 +206,7 @@ describe("forgotPasswordAction", () => {
     expectNoLegacyActionFields(state);
   });
 
-  it("TC32: field_error 응답 state에는 redirect 관련 필드가 포함되지 않는다", async () => {
+  it("TC32: invalid_input 응답 state에는 redirect 관련 필드가 포함되지 않는다", async () => {
     const mocks = setupActionTest({
       redirect: "/notes",
       email: "invalid-email",
@@ -202,12 +214,12 @@ describe("forgotPasswordAction", () => {
 
     const state = await mocks.callAction();
 
-    expect(state.status).toBe("field_error");
+    expect(state.status).toBe("invalid_input");
     expect(state).not.toHaveProperty("redirect");
     expect(state).not.toHaveProperty("redirectTo");
   });
 
-  it("TC32-1: global_error 응답 state에는 redirect 관련 필드가 포함되지 않는다", async () => {
+  it("TC32-1: internal_error 응답 state에는 redirect 관련 필드가 포함되지 않는다", async () => {
     const mocks = setupActionTest({
       redirect: "/notes",
       supabase: "throw",
@@ -215,7 +227,7 @@ describe("forgotPasswordAction", () => {
 
     const state = await mocks.callAction();
 
-    expect(state.status).toBe("global_error");
+    expect(state.status).toBe("internal_error");
     expect(state).not.toHaveProperty("redirect");
     expect(state).not.toHaveProperty("redirectTo");
     expectNoLegacyActionFields(state);

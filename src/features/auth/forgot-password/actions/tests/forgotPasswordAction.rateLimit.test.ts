@@ -79,14 +79,14 @@ describe("forgotPasswordAction - rate limit", () => {
     expect(emailStore.has(CANONICAL_EMAIL)).toBe(false);
   });
 
-  it("TC7: IP short 차단 시 success를 반환하고 generateLink를 호출하지 않는다", async () => {
+  it("TC7: IP short 차단 시 blocked를 반환하고 generateLink를 호출하지 않는다", async () => {
     const mocks = setupActionTest();
     blockIpShort();
 
     const state = await mocks.callAction();
 
     expect(state).toMatchObject({
-      status: "success",
+      status: "blocked",
       fieldErrors: null,
     });
     expectNoLegacyActionFields(state);
@@ -94,14 +94,14 @@ describe("forgotPasswordAction - rate limit", () => {
     expectRateLimitedLog(mocks, AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT);
   });
 
-  it("TC8: IP long 차단 시 success를 반환하고 generateLink를 호출하지 않는다", async () => {
+  it("TC8: IP long 차단 시 blocked를 반환하고 generateLink를 호출하지 않는다", async () => {
     const mocks = setupActionTest();
     blockIpLong();
 
     const state = await mocks.callAction();
 
     expect(state).toMatchObject({
-      status: "success",
+      status: "blocked",
       fieldErrors: null,
     });
     expectNoLegacyActionFields(state);
@@ -109,14 +109,14 @@ describe("forgotPasswordAction - rate limit", () => {
     expectRateLimitedLog(mocks, AUTH_LOG_REASONS.RATE_LIMIT_IP_LONG);
   });
 
-  it("TC9: email short 차단 시 success를 반환하고 generateLink를 호출하지 않는다", async () => {
+  it("TC9: email short 차단 시 blocked를 반환하고 generateLink를 호출하지 않는다", async () => {
     const mocks = setupActionTest();
     blockEmailShort();
 
     const state = await mocks.callAction();
 
     expect(state).toMatchObject({
-      status: "success",
+      status: "blocked",
       fieldErrors: null,
     });
     expectNoLegacyActionFields(state);
@@ -124,14 +124,14 @@ describe("forgotPasswordAction - rate limit", () => {
     expectRateLimitedLog(mocks, AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT);
   });
 
-  it("TC10: email long 차단 시 success를 반환하고 generateLink를 호출하지 않는다", async () => {
+  it("TC10: email long 차단 시 blocked를 반환하고 generateLink를 호출하지 않는다", async () => {
     const mocks = setupActionTest();
     blockEmailLong();
 
     const state = await mocks.callAction();
 
     expect(state).toMatchObject({
-      status: "success",
+      status: "blocked",
       fieldErrors: null,
     });
     expectNoLegacyActionFields(state);

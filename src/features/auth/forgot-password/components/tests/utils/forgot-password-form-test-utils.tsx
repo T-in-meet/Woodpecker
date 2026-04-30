@@ -7,9 +7,10 @@ import { showToast } from "@/lib/utils/showToast";
 
 type ForgotPasswordFormActionState =
   | { status: "idle"; fieldErrors: null }
-  | { status: "success"; fieldErrors: null }
-  | { status: "global_error"; fieldErrors: null }
-  | { status: "field_error"; fieldErrors: { email?: string[] } };
+  | { status: "completed"; fieldErrors: null }
+  | { status: "blocked"; fieldErrors: null }
+  | { status: "internal_error"; fieldErrors: null }
+  | { status: "invalid_input"; fieldErrors: { email?: string[] } };
 
 type UseActionStateMockReturn = [
   ForgotPasswordFormActionState,
@@ -86,9 +87,10 @@ import { ForgotPasswordForm } from "@/features/auth/forgot-password/components/F
 
 type ForgotPasswordState =
   | { status: "idle"; fieldErrors: null }
-  | { status: "success"; fieldErrors: null }
-  | { status: "field_error"; fieldErrors: { email?: string[] } }
-  | { status: "global_error"; fieldErrors: null };
+  | { status: "completed"; fieldErrors: null }
+  | { status: "invalid_input"; fieldErrors: { email?: string[] } }
+  | { status: "blocked"; fieldErrors: null }
+  | { status: "internal_error"; fieldErrors: null };
 
 type SetupOptions = {
   state?: ForgotPasswordState;

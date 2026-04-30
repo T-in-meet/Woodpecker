@@ -22,7 +22,7 @@ describe("ForgotPasswordForm.result", () => {
 
   it("TC14: action success면 success toast를 표시한다", async () => {
     setupForgotPasswordFormTest({
-      state: { status: "success", fieldErrors: null },
+      state: { status: "completed", fieldErrors: null },
     });
 
     renderForgotPasswordForm();
@@ -33,7 +33,7 @@ describe("ForgotPasswordForm.result", () => {
 
   it("TC15: success 후에도 input value를 유지한다", async () => {
     setupForgotPasswordFormTest({
-      state: { status: "success", fieldErrors: null },
+      state: { status: "completed", fieldErrors: null },
     });
     renderForgotPasswordForm();
 
@@ -43,9 +43,9 @@ describe("ForgotPasswordForm.result", () => {
     expect(getEmailInput()).toHaveValue(FIXTURES.valid);
   });
 
-  it("TC16: global_error 응답(정규화된 rate limit 포함)에서 global error toast를 표시한다", () => {
+  it("TC16: internal_error 응답에서 global error toast를 표시한다", () => {
     setupForgotPasswordFormTest({
-      state: { status: "global_error", fieldErrors: null },
+      state: { status: "internal_error", fieldErrors: null },
     });
 
     renderForgotPasswordForm();
@@ -56,13 +56,30 @@ describe("ForgotPasswordForm.result", () => {
 
   it("TC18: global error 이후에도 input value를 유지한다", async () => {
     setupForgotPasswordFormTest({
-      state: { status: "global_error", fieldErrors: null },
+      state: { status: "internal_error", fieldErrors: null },
     });
     renderForgotPasswordForm();
 
     await typeValidEmail();
 
     expect(getEmailInput()).toHaveValue(FIXTURES.valid);
+  });
+
+  it("TC19: blocked 응답이면 rate limit toast를 표시한다", () => {
+    setupForgotPasswordFormTest({
+      state: { status: "blocked", fieldErrors: null },
+    });
+
+    renderForgotPasswordForm();
+
+    expect(showToast).toHaveBeenCalledTimes(1);
+    expect(showToast).toHaveBeenCalledWith(
+      "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.",
+      expect.objectContaining({
+        variant: "destructive",
+        dedupeKey: "auth-rate-limit",
+      }),
+    );
   });
   it("TC24: invalid_reset_link query면 toast를 1회 표시한다", () => {
     setupForgotPasswordFormTest({
