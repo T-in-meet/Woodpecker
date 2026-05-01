@@ -1,8 +1,8 @@
 import { act } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { INPUT_DEBOUNCE_DELAY_MS } from "@/features/auth/constants/ui";
 import {
-  getSafeParseMock,
   MESSAGES,
   renderForgotPasswordForm,
   resetToastMock,
@@ -34,7 +34,7 @@ describe("ForgotPasswordForm.debounce", () => {
     await typeInvalidEmail();
 
     await act(async () => {
-      vi.advanceTimersByTime(300);
+      vi.advanceTimersByTime(INPUT_DEBOUNCE_DELAY_MS);
     });
 
     expect(document.body).toHaveTextContent(MESSAGES.invalidFormat);
@@ -45,7 +45,7 @@ describe("ForgotPasswordForm.debounce", () => {
     expect(document.body).toHaveTextContent(MESSAGES.invalidFormat);
 
     await act(async () => {
-      vi.advanceTimersByTime(300);
+      vi.advanceTimersByTime(INPUT_DEBOUNCE_DELAY_MS);
     });
 
     expect(document.body).not.toHaveTextContent(MESSAGES.invalidFormat);

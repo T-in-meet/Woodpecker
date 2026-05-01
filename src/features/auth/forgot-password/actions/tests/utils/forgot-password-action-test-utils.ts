@@ -3,8 +3,10 @@ import { afterEach, beforeEach, expect, vi } from "vitest";
 import { AUTH_EVENTS } from "@/features/auth/constants/authEvents";
 import { resetEligibilityStore } from "@/features/auth/lib/requestEligibilityStore";
 
-import { type ForgotPasswordActionState } from "../../forgotPasswordAction";
-import { INITIAL_FORGOT_PASSWORD_ACTION_STATE } from "../../forgotPasswordActionState";
+import {
+  ForgotPasswordActionState,
+  INITIAL_FORGOT_PASSWORD_ACTION_STATE,
+} from "../../forgotPasswordActionState";
 
 export const FORGOT_PASSWORD_TERMINAL_EVENTS = [
   AUTH_EVENTS.AUTH_FORGOT_PASSWORD_COMPLETED,

@@ -3,11 +3,15 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  PASSWORD_MIN_LENGTH_MESSAGE,
+  PASSWORD_MISMATCH_MESSAGE,
+} from "@/features/auth/constants/messages";
+import {
   renderResetPasswordForm,
-  RESET_PASSWORD_GLOBAL_ERROR_MESSAGE_FIXTURE,
   setDefaultValidSafeParse,
   setIdleActionState,
 } from "@/features/auth/reset-password/components/tests/utils/reset-password-form-test-utils";
+import { RESET_PASSWORD_GLOBAL_ERROR_MESSAGE } from "@/features/auth/reset-password/constants/messages";
 
 const hoisted = vi.hoisted(() => ({
   useActionStateMock: vi.fn(),
@@ -84,17 +88,15 @@ describe("reset-password-form", () => {
     hoisted.useActionStateMock.mockReturnValue([
       {
         status: "invalid_input",
-        fieldErrors: { password: ["비밀번호는 최소 8자 이상이어야 합니다."] },
+        fieldErrors: { password: [PASSWORD_MIN_LENGTH_MESSAGE] },
       },
       hoisted.formActionMock,
       false,
     ]);
     renderResetPasswordForm();
+    expect(screen.getByText(PASSWORD_MIN_LENGTH_MESSAGE)).toBeInTheDocument();
     expect(
-      screen.getByText("비밀번호는 최소 8자 이상이어야 합니다."),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByText(RESET_PASSWORD_GLOBAL_ERROR_MESSAGE_FIXTURE),
+      screen.queryByText(RESET_PASSWORD_GLOBAL_ERROR_MESSAGE),
     ).not.toBeInTheDocument();
   });
 
@@ -102,17 +104,15 @@ describe("reset-password-form", () => {
     hoisted.useActionStateMock.mockReturnValue([
       {
         status: "invalid_input",
-        fieldErrors: { confirmPassword: ["비밀번호가 일치하지 않습니다."] },
+        fieldErrors: { confirmPassword: [PASSWORD_MISMATCH_MESSAGE] },
       },
       hoisted.formActionMock,
       false,
     ]);
     renderResetPasswordForm();
+    expect(screen.getByText(PASSWORD_MISMATCH_MESSAGE)).toBeInTheDocument();
     expect(
-      screen.getByText("비밀번호가 일치하지 않습니다."),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByText(RESET_PASSWORD_GLOBAL_ERROR_MESSAGE_FIXTURE),
+      screen.queryByText(RESET_PASSWORD_GLOBAL_ERROR_MESSAGE),
     ).not.toBeInTheDocument();
   });
 
@@ -120,14 +120,14 @@ describe("reset-password-form", () => {
     hoisted.useActionStateMock.mockReturnValue([
       {
         status: "internal_error",
-        message: RESET_PASSWORD_GLOBAL_ERROR_MESSAGE_FIXTURE,
+        message: RESET_PASSWORD_GLOBAL_ERROR_MESSAGE,
       },
       hoisted.formActionMock,
       false,
     ]);
     renderResetPasswordForm();
     expect(
-      screen.getByText(RESET_PASSWORD_GLOBAL_ERROR_MESSAGE_FIXTURE),
+      screen.getByText(RESET_PASSWORD_GLOBAL_ERROR_MESSAGE),
     ).toBeInTheDocument();
     expect(screen.queryByText("supabase error")).not.toBeInTheDocument();
   });
@@ -139,7 +139,7 @@ describe("reset-password-form", () => {
     await user.type(screen.getByLabelText(/비밀번호 확인/i), "secret-value");
 
     expect(
-      screen.queryByText(RESET_PASSWORD_GLOBAL_ERROR_MESSAGE_FIXTURE),
+      screen.queryByText(RESET_PASSWORD_GLOBAL_ERROR_MESSAGE),
     ).not.toBeInTheDocument();
   });
 

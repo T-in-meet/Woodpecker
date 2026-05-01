@@ -25,36 +25,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getServerActionClientIp } from "@/lib/utils/getServerActionClientIp";
 
 import { sendAuthEmail } from "../../email/sendAuthEmail";
-
-export type ForgotPasswordActionState =
-  | {
-      status: "idle";
-      fieldErrors: null;
-    }
-  | {
-      status: "completed";
-      fieldErrors: null;
-    }
-  | {
-      status: "blocked";
-      fieldErrors: null;
-      reasonCode:
-        | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT
-        | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP_LONG
-        | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT
-        | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG;
-    }
-  | {
-      status: "internal_error";
-      fieldErrors: null;
-      reasonCode: typeof AUTH_LOG_REASONS.INTERNAL_ERROR;
-    }
-  | {
-      status: "invalid_input";
-      fieldErrors: {
-        email?: string[];
-      };
-    };
+import { ForgotPasswordActionState } from "./forgotPasswordActionState";
 
 function completedState(): ForgotPasswordActionState {
   return {

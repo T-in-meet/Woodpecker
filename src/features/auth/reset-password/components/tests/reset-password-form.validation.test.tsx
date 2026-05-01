@@ -2,6 +2,11 @@ import { act, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  PASSWORD_MIN_LENGTH_MESSAGE,
+  PASSWORD_MISMATCH_MESSAGE,
+} from "@/features/auth/constants/messages";
+import { INPUT_DEBOUNCE_DELAY_MS } from "@/features/auth/constants/ui";
+import {
   fillResetPasswordFields,
   renderResetPasswordForm,
   setDefaultValidSafeParse,
@@ -69,7 +74,7 @@ describe("reset-password-form validation", () => {
         flatten: () => ({
           formErrors: [],
           fieldErrors: {
-            password: ["비밀번호는 최소 8자 이상이어야 합니다."],
+            password: [PASSWORD_MIN_LENGTH_MESSAGE],
           },
         }),
       },
@@ -78,13 +83,11 @@ describe("reset-password-form validation", () => {
     renderResetPasswordForm();
     fillResetPasswordFields({ password: "short", confirmPassword: "short" });
     act(() => {
-      vi.advanceTimersByTime(300);
+      vi.advanceTimersByTime(INPUT_DEBOUNCE_DELAY_MS);
     });
     submitResetPasswordForm();
 
-    expect(
-      screen.getByText("비밀번호는 최소 8자 이상이어야 합니다."),
-    ).toBeInTheDocument();
+    expect(screen.getByText(PASSWORD_MIN_LENGTH_MESSAGE)).toBeInTheDocument();
 
     expect(
       screen.getByRole("button", { name: "비밀번호 변경하기" }),
@@ -99,7 +102,7 @@ describe("reset-password-form validation", () => {
         flatten: () => ({
           formErrors: [],
           fieldErrors: {
-            confirmPassword: ["비밀번호가 일치하지 않습니다."],
+            confirmPassword: [PASSWORD_MISMATCH_MESSAGE],
           },
         }),
       },
@@ -112,12 +115,10 @@ describe("reset-password-form validation", () => {
     });
 
     act(() => {
-      vi.advanceTimersByTime(300);
+      vi.advanceTimersByTime(INPUT_DEBOUNCE_DELAY_MS);
     });
 
-    expect(
-      screen.getByText("비밀번호가 일치하지 않습니다."),
-    ).toBeInTheDocument();
+    expect(screen.getByText(PASSWORD_MISMATCH_MESSAGE)).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText(/^비밀번호$/i), {
       target: { value: "changed-password" },
@@ -126,7 +127,7 @@ describe("reset-password-form validation", () => {
       target: { value: "different-password" },
     });
     act(() => {
-      vi.advanceTimersByTime(300);
+      vi.advanceTimersByTime(INPUT_DEBOUNCE_DELAY_MS);
     });
     submitResetPasswordForm();
     expect(hoisted.formActionMock).not.toHaveBeenCalled();
@@ -162,7 +163,7 @@ describe("reset-password-form validation", () => {
     });
 
     act(() => {
-      vi.advanceTimersByTime(300);
+      vi.advanceTimersByTime(INPUT_DEBOUNCE_DELAY_MS);
     });
 
     expect(screen.getByText("클라이언트 비밀번호 에러")).toBeInTheDocument();
@@ -176,7 +177,7 @@ describe("reset-password-form validation", () => {
       confirmPassword: "valid-password",
     });
     act(() => {
-      vi.advanceTimersByTime(300);
+      vi.advanceTimersByTime(INPUT_DEBOUNCE_DELAY_MS);
     });
     expect(
       screen.getByRole("button", { name: "비밀번호 변경하기" }),
@@ -194,7 +195,7 @@ describe("reset-password-form validation", () => {
       confirmPassword: "valid-password",
     });
     act(() => {
-      vi.advanceTimersByTime(300);
+      vi.advanceTimersByTime(INPUT_DEBOUNCE_DELAY_MS);
     });
     submitResetPasswordForm();
 

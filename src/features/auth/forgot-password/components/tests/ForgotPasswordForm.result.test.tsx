@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { RATE_LIMIT_TOAST_MESSAGE } from "@/features/auth/errors/rateLimitError";
 import {
   FIXTURES,
   getEmailInput,
@@ -74,7 +75,7 @@ describe("ForgotPasswordForm.result", () => {
 
     expect(showToast).toHaveBeenCalledTimes(1);
     expect(showToast).toHaveBeenCalledWith(
-      "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.",
+      RATE_LIMIT_TOAST_MESSAGE,
       expect.objectContaining({
         variant: "destructive",
         dedupeKey: "auth-rate-limit",

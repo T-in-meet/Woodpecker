@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { resetPasswordFormSchema } from "@/features/auth/reset-password/schemas/resetPasswordFormSchema";
 
+import { INPUT_DEBOUNCE_DELAY_MS } from "../../constants/ui";
 import { useDebouncedCallback } from "../../hooks/useDebouncedCallback";
 import {
   INITIAL_RESET_PASSWORD_ACTION_STATE,
@@ -16,7 +17,7 @@ import {
 import {
   RESET_PASSWORD_GLOBAL_ERROR_MESSAGE,
   RESET_PASSWORD_SAME_PASSWORD_MESSAGE,
-} from "../constants/errors";
+} from "../constants/messages";
 
 type ClientFieldErrors = {
   password?: string[];
@@ -29,8 +30,6 @@ type ResetPasswordFormProps = {
     formData: FormData,
   ) => Promise<ResetPasswordActionState>;
 };
-
-const DEBOUNCE_DELAY_MS = 300;
 
 /**
  * 현재 FormData를 resetPasswordFormSchema로 검증하고,
@@ -114,7 +113,7 @@ export function ResetPasswordForm({ action }: ResetPasswordFormProps) {
 
       const errors = toClientErrors(new FormData(formElement));
       setClientErrors(errors);
-    }, DEBOUNCE_DELAY_MS);
+    }, INPUT_DEBOUNCE_DELAY_MS);
 
   /**
    * submit 직전에 클라이언트 검증을 즉시 수행한다.

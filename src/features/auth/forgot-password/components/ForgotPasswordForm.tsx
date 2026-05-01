@@ -6,23 +6,21 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { INPUT_DEBOUNCE_DELAY_MS } from "@/features/auth/constants/ui";
 import { RATE_LIMIT_TOAST_MESSAGE } from "@/features/auth/errors/rateLimitError";
-import { type ForgotPasswordActionState } from "@/features/auth/forgot-password/actions/forgotPasswordAction";
+import {
+  ForgotPasswordActionState,
+  INITIAL_FORGOT_PASSWORD_ACTION_STATE,
+} from "@/features/auth/forgot-password/actions/forgotPasswordActionState";
+import {
+  FORGOT_PASSWORD_GLOBAL_ERROR_MESSAGE,
+  FORGOT_PASSWORD_INVALID_RESET_LINK_MESSAGE,
+  FORGOT_PASSWORD_SUCCESS_MESSAGE,
+} from "@/features/auth/forgot-password/constants/messages";
 import { consumeForgotPasswordPrefillEmail } from "@/features/auth/forgot-password/lib/forgotPasswordPrefillMemory";
 import { forgotPasswordFormSchema } from "@/features/auth/forgot-password/schemas/forgotPasswordFormSchema";
 import { useDebouncedCallback } from "@/features/auth/hooks/useDebouncedCallback";
 import { showToast } from "@/lib/utils/showToast";
-
-import { INITIAL_FORGOT_PASSWORD_ACTION_STATE } from "../actions/forgotPasswordActionState";
-
-const DEBOUNCE_DELAY_MS = 300;
-
-const SUCCESS_MESSAGE =
-  "가입된 이메일이라면 비밀번호 재설정 메일을 받을 수 있습니다.";
-const GLOBAL_ERROR_MESSAGE =
-  "요청을 처리하지 못했습니다. 잠시 후 다시 시도해주세요.";
-const INVALID_RESET_LINK_MESSAGE =
-  "비밀번호 재설정 링크가 만료되었거나 유효하지 않습니다. 다시 요청해 주세요.";
 
 type ForgotPasswordFormProps = {
   action: (
@@ -41,7 +39,8 @@ function validateEmail(
   }
 
   const message =
-    parsed.error.flatten().fieldErrors.email?.[0] ?? GLOBAL_ERROR_MESSAGE;
+    parsed.error.flatten().fieldErrors.email?.[0] ??
+    FORGOT_PASSWORD_GLOBAL_ERROR_MESSAGE;
   return { ok: false, message };
 }
 
@@ -67,7 +66,7 @@ export function ForgotPasswordForm({ action }: ForgotPasswordFormProps) {
     hasHandledQueryErrorRef.current = true;
 
     if (searchParams.get("error") === "invalid_reset_link") {
-      showToast(INVALID_RESET_LINK_MESSAGE);
+      showToast(FORGOT_PASSWORD_INVALID_RESET_LINK_MESSAGE);
     }
   }, [searchParams]);
 
@@ -90,7 +89,7 @@ export function ForgotPasswordForm({ action }: ForgotPasswordFormProps) {
 
   useEffect(() => {
     if (state.status === "completed") {
-      showToast(SUCCESS_MESSAGE);
+      showToast(FORGOT_PASSWORD_SUCCESS_MESSAGE);
     }
     if (state.status === "blocked") {
       showToast(RATE_LIMIT_TOAST_MESSAGE, {
@@ -99,7 +98,7 @@ export function ForgotPasswordForm({ action }: ForgotPasswordFormProps) {
       });
     }
     if (state.status === "internal_error") {
-      showToast(GLOBAL_ERROR_MESSAGE);
+      showToast(FORGOT_PASSWORD_GLOBAL_ERROR_MESSAGE);
     }
   }, [state]);
 
@@ -113,7 +112,7 @@ export function ForgotPasswordForm({ action }: ForgotPasswordFormProps) {
       setError(result.message);
       setIsClientValid(false);
     }
-  }, DEBOUNCE_DELAY_MS);
+  }, INPUT_DEBOUNCE_DELAY_MS);
 
   const onChangeEmail = (value: string) => {
     emailRef.current = value;

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { INPUT_DEBOUNCE_DELAY_MS } from "@/features/auth/constants/ui";
 import {
   getFormActionMock,
   getSubmitButtonByDefaultLabel,
@@ -66,7 +67,9 @@ describe("ForgotPasswordForm.validation", () => {
 
     await typeValidEmail();
 
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    await new Promise((resolve) =>
+      setTimeout(resolve, INPUT_DEBOUNCE_DELAY_MS),
+    );
 
     expect(getSubmitButtonByDefaultLabel()).toBeEnabled();
   });

@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { PASSWORD_MIN_LENGTH } from "@/lib/constants/user";
+import {
+  PASSWORD_MIN_LENGTH_MESSAGE,
+  PASSWORD_MISMATCH_MESSAGE,
+} from "@/features/auth/constants/messages";
 
 import {
   makeFormData,
@@ -25,7 +28,7 @@ describe("resetPasswordAction - validation", () => {
     });
     expect(state).toMatchObject({
       fieldErrors: {
-        password: [`비밀번호는 ${PASSWORD_MIN_LENGTH}자 이상이어야 합니다`],
+        password: [PASSWORD_MIN_LENGTH_MESSAGE],
       },
     });
   });
@@ -41,7 +44,7 @@ describe("resetPasswordAction - validation", () => {
     expect(state).toMatchObject({
       status: "invalid_input",
       fieldErrors: {
-        confirmPassword: ["비밀번호가 일치하지 않습니다."],
+        confirmPassword: [PASSWORD_MISMATCH_MESSAGE],
       },
     });
   });

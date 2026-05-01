@@ -6,7 +6,7 @@ import { vi } from "vitest";
 import { ForgotPasswordForm } from "@/features/auth/forgot-password/components/ForgotPasswordForm";
 import { showToast } from "@/lib/utils/showToast";
 
-import { ForgotPasswordActionState } from "../../../actions/forgotPasswordAction";
+import { ForgotPasswordActionState } from "../../../actions/forgotPasswordActionState";
 
 type ForgotPasswordFormActionState =
   | { status: "idle"; fieldErrors: null }

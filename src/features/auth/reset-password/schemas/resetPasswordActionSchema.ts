@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { PASSWORD_MISMATCH_MESSAGE } from "@/features/auth/constants/messages";
 import { passwordFieldSchema } from "@/lib/validation/passwordSchema";
 
 export const resetPasswordActionSchema = z
@@ -12,7 +13,7 @@ export const resetPasswordActionSchema = z
     if (value.password !== value.confirmPassword) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "비밀번호가 일치하지 않습니다.",
+        message: PASSWORD_MISMATCH_MESSAGE,
         path: ["confirmPassword"],
       });
     }

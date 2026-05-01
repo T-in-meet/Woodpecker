@@ -4,9 +4,6 @@ import { vi } from "vitest";
 import { ResetPasswordActionState } from "@/features/auth/reset-password/actions/resetPasswordActionState";
 import { ResetPasswordForm } from "@/features/auth/reset-password/components/ResetPasswordForm";
 
-export const RESET_PASSWORD_GLOBAL_ERROR_MESSAGE_FIXTURE =
-  "비밀번호를 변경하지 못했습니다. 잠시 후 다시 시도해주세요.";
-
 type BoundResetPasswordAction = (
   prevState: ResetPasswordActionState,
   formData: FormData,

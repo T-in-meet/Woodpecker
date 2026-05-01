@@ -4,6 +4,8 @@ import { emailFieldSchema } from "@/lib/validation/emailSchema";
 import { nicknameFieldSchema } from "@/lib/validation/nicknameSchema";
 import { passwordFieldSchema } from "@/lib/validation/passwordSchema";
 
+import { PASSWORD_MISMATCH_MESSAGE } from "../../constants/messages";
+
 export const signupFormSchema = z
   .object({
     email: emailFieldSchema,
@@ -18,6 +20,6 @@ export const signupFormSchema = z
     }),
   })
   .refine((data) => data.password === data.confirmPassword, {
-    message: "비밀번호가 일치하지 않습니다",
+    message: PASSWORD_MISMATCH_MESSAGE,
     path: ["confirmPassword"],
   });
