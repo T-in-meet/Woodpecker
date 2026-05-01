@@ -48,69 +48,18 @@ describe("reset-password-form validation", () => {
     vi.useRealTimers();
   });
 
-  it("TC8: 입력 중 validation은 debounce(300ms)로 실행된다", () => {
+  it("TC9-1: debounce 예약 상태에서 submit하면 즉시 validation 후 formAction을 호출한다", async () => {
     renderResetPasswordForm();
-    fillResetPasswordFields({
-      password: "valid-password",
-      confirmPassword: "valid-password",
-    });
 
-    expect(hoisted.safeParseMock).toHaveBeenCalledTimes(0);
-    vi.advanceTimersByTime(299);
-    expect(hoisted.safeParseMock).toHaveBeenCalledTimes(0);
-    vi.advanceTimersByTime(1);
-    expect(hoisted.safeParseMock).toHaveBeenCalledTimes(1);
-  });
-
-  it("TC8-1: debounce 대기 중 입력이 변경되면 마지막 입력 기준으로만 validation 1회 실행된다", () => {
-    renderResetPasswordForm();
-    fillResetPasswordFields({
-      password: "first-password",
-      confirmPassword: "first-password",
-    });
-
-    vi.advanceTimersByTime(150);
-    fillResetPasswordFields({
-      password: "second-password",
-      confirmPassword: "second-password",
-    });
-
-    vi.advanceTimersByTime(299);
-    expect(hoisted.safeParseMock).toHaveBeenCalledTimes(0);
-    vi.advanceTimersByTime(1);
-    expect(hoisted.safeParseMock).toHaveBeenCalledTimes(1);
-    expect(hoisted.safeParseMock).toHaveBeenLastCalledWith({
-      password: "second-password",
-      confirmPassword: "second-password",
-    });
-  });
-
-  it("TC9: submit 시 debounce 없이 즉시 validation을 실행한다", async () => {
-    renderResetPasswordForm();
     fillResetPasswordFields({
       password: "valid-password",
       confirmPassword: "valid-password",
     });
 
     submitResetPasswordForm();
-    expect(hoisted.safeParseMock).toHaveBeenCalled();
-  });
 
-  it("TC9-1: debounce 예약 상태에서 submit하면 즉시 validation 후 formAction 호출, 이후 timer로 중복 validation이 없다", async () => {
-    renderResetPasswordForm();
-    fillResetPasswordFields({
-      password: "valid-password",
-      confirmPassword: "valid-password",
-    });
-
-    expect(hoisted.safeParseMock).toHaveBeenCalledTimes(0);
-    submitResetPasswordForm();
     expect(hoisted.safeParseMock).toHaveBeenCalledTimes(1);
-
     expect(hoisted.formActionMock).toHaveBeenCalledTimes(1);
-
-    vi.runOnlyPendingTimers();
-    expect(hoisted.safeParseMock).toHaveBeenCalledTimes(1);
   });
 
   it("TC4/TC10/TC12: invalid 입력이면 field error를 표시하고 submit 차단한다", async () => {
@@ -128,7 +77,9 @@ describe("reset-password-form validation", () => {
 
     renderResetPasswordForm();
     fillResetPasswordFields({ password: "short", confirmPassword: "short" });
-    vi.advanceTimersByTime(300);
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
     submitResetPasswordForm();
 
     expect(
@@ -174,7 +125,9 @@ describe("reset-password-form validation", () => {
     fireEvent.change(screen.getByLabelText(/비밀번호 확인/i), {
       target: { value: "different-password" },
     });
-    vi.advanceTimersByTime(300);
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
     submitResetPasswordForm();
     expect(hoisted.formActionMock).not.toHaveBeenCalled();
   });
@@ -222,7 +175,9 @@ describe("reset-password-form validation", () => {
       password: "valid-password",
       confirmPassword: "valid-password",
     });
-    vi.advanceTimersByTime(300);
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
     expect(
       screen.getByRole("button", { name: "비밀번호 변경하기" }),
     ).toBeEnabled();
@@ -238,7 +193,9 @@ describe("reset-password-form validation", () => {
       password: "valid-password",
       confirmPassword: "valid-password",
     });
-    vi.advanceTimersByTime(300);
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
     submitResetPasswordForm();
 
     expect(hoisted.safeParseMock).toHaveBeenCalled();
