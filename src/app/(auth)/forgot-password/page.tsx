@@ -9,8 +9,9 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+// Next.js 요구사항: searchParams는 Promise 형태
 type Props = {
-  searchParams: { redirect?: string };
+  searchParams: Promise<{ redirect?: string }>;
 };
 
 /**
@@ -20,18 +21,30 @@ type Props = {
  * forgot-password → callback → reset-password → redirect
  *
  * 이 페이지는 redirect query를 받아 이후 흐름 전체에 전달하는 시작점 역할을 한다.
+ *
+ * 주의:
+ * Next.js App Router에서 searchParams는 Promise로 전달되므로
+ * Props 타입도 Promise로 선언하고 await 후 사용해야 한다.
+ *
+ * 객체 타입으로 선언하면 PageProps 제약과 충돌하여 빌드 시
+ * "Type '{ redirect?: string; }' is missing properties from type 'Promise'"
+ * 오류가 발생한다.
  */
-export default function ForgotPasswordPage({ searchParams }: Props) {
+export default async function ForgotPasswordPage({ searchParams }: Props) {
   /**
    * redirect query 전달
    *
-   * - 이전 페이지(예: 보호된 페이지)에서 접근 시 redirect가 포함될 수 있다
-   * - forgot-password → callback → reset-password → 최종 이동까지 이어지는 흐름을 유지하기 위해
-   *   redirect 값을 action으로 전달한다
+   * - callback에서 전달된 redirect 값을 받아
+   *   reset-password 완료 후 최종 이동 경로로 사용한다
    *
-   * - 없을 경우(null) fallback 경로로 처리된다
+   * - searchParams는 Next.js PageProps 기준 Promise이므로
+   *   await 후 redirect 값을 추출한다
+   *
+   * - 값이 없으면 action 내부 fallback 경로를 사용한다
    */
-  const redirect = searchParams?.redirect ?? null;
+  const { redirect } = await searchParams;
+
+  const redirectPath = redirect ?? null;
 
   /**
    * ForgotPasswordForm에 전달할 Server Action
@@ -43,7 +56,10 @@ export default function ForgotPasswordPage({ searchParams }: Props) {
    * - Form은 (prevState, formData) 시그니처를 기대하므로
    *   bind로 redirectPath를 미리 주입한다
    */
-  const forgotPasswordFormAction = forgotPasswordAction.bind(null, redirect);
+  const forgotPasswordFormAction = forgotPasswordAction.bind(
+    null,
+    redirectPath,
+  );
 
   return (
     <div className="md:flex md:min-h-[calc(100dvh-4.5rem)] md:items-center md:justify-center">

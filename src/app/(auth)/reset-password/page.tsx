@@ -9,8 +9,9 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+// Next.js 요구사항: searchParams는 Promise 형태
 type Props = {
-  searchParams: { redirect?: string };
+  searchParams: Promise<{ redirect?: string }>;
 };
 
 /**
@@ -27,17 +28,30 @@ type Props = {
  * redirect:
  * - 최종 이동은 Server Action에서 수행한다
  * - 이 페이지는 redirect query를 action으로 전달하는 역할만 한다
+ *
+ * * 주의:
+ * Next.js App Router에서 searchParams는 Promise로 전달되므로
+ * Props 타입도 Promise로 선언하고 await 후 사용해야 한다.
+ *
+ * 객체 타입으로 선언하면 PageProps 제약과 충돌하여 빌드 시
+ * "Type '{ redirect?: string; }' is missing properties from type 'Promise'"
+ * 오류가 발생한다.
  */
-export default function ResetPasswordPage({ searchParams }: Props) {
+export default async function ResetPasswordPage({ searchParams }: Props) {
   /**
    * redirect query 전달
    *
    * - callback에서 전달된 redirect 값을 받아
    *   reset-password 완료 후 최종 이동 경로로 사용한다
    *
+   * - searchParams는 Next.js PageProps 기준 Promise이므로
+   *   await 후 redirect 값을 추출한다
+   *
    * - 값이 없으면 action 내부 fallback 경로를 사용한다
    */
-  const redirect = searchParams?.redirect ?? null;
+  const { redirect } = await searchParams;
+
+  const redirectPath = redirect ?? null;
 
   /**
    * ResetPasswordForm에 전달할 Server Action
@@ -49,7 +63,7 @@ export default function ResetPasswordPage({ searchParams }: Props) {
    * - Form은 (prevState, formData) 시그니처를 기대하므로
    *   bind를 사용해 redirectPath를 미리 주입한다
    */
-  const resetPasswordFormAction = resetPasswordAction.bind(null, redirect);
+  const resetPasswordFormAction = resetPasswordAction.bind(null, redirectPath);
 
   return (
     <main className="md:flex md:min-h-[calc(100dvh-4.5rem)] md:items-center md:justify-center">
