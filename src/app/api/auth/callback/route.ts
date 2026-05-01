@@ -127,7 +127,8 @@ async function verifyRecoveryToken(
 }
 
 // recovery 성공 후 reset-password로만 이동한다.
-// redirect query는 최종 이동 경로가 아니라 reset-password 단계에서 사용할 후보값으로만 전달한다.
+// redirect query는 callback에서 검증하지 않고,
+// reset-password page를 거쳐 action에서 최종 검증/사용할 후보값으로만 보존한다.
 function redirectToResetPassword(redirect: string | null): NextResponse {
   const origin = resolvePublicOrigin();
   const redirectUrl = new URL(ROUTES.RESET_PASSWORD, `${origin}/`);
@@ -253,10 +254,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         }
       }
     } else {
-      /**
-       * unsupported type은 기존 callback 정책 유지 (verify-email redirect)
-       * TODO: recovery(reset-password) 흐름과의 정책 불일치 존재 → callback 정책 통합 시 재정의 필요
-       */
       outcome = "rejected";
       response = redirectToVerifyEmail();
     }
