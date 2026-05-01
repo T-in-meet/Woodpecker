@@ -1,7 +1,6 @@
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { RESET_REQUIRED_COOKIE_NAME } from "@/features/auth/constants/cookies";
 import { ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 
@@ -74,7 +73,6 @@ describe("callback recovery 분기", () => {
     expect(verifyOtp).not.toHaveBeenCalled();
     expect(response.status).toBe(307);
     expectInvalidResetRedirect(response);
-    expect(response.cookies.get(RESET_REQUIRED_COOKIE_NAME)).toBeUndefined();
   });
 
   it("TC3: unsupported type이면 verifyOtp를 호출하지 않고 verify-email로 redirect한다", async () => {
@@ -85,7 +83,6 @@ describe("callback recovery 분기", () => {
     expect(verifyOtp).not.toHaveBeenCalled();
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toContain(ROUTES.VERIFY_EMAIL);
-    expect(response.cookies.get(RESET_REQUIRED_COOKIE_NAME)).toBeUndefined();
   });
 
   // callback에서는 redirect를 검증하지 않고 reset-password 단계로 보존 전달한다.
@@ -106,7 +103,7 @@ describe("callback recovery 분기", () => {
     );
   });
 
-  it("TC5: verifyOtp가 error를 반환하면 invalid_reset_link로 redirect하고 cookie를 설정하지 않는다", async () => {
+  it("TC5: verifyOtp가 error를 반환하면 invalid_reset_link로 redirect한다", async () => {
     verifyOtp.mockResolvedValueOnce({
       data: { user: null },
       error: { message: "invalid" },
@@ -118,10 +115,9 @@ describe("callback recovery 분기", () => {
 
     expect(response.status).toBe(307);
     expectInvalidResetRedirect(response);
-    expect(response.cookies.get(RESET_REQUIRED_COOKIE_NAME)).toBeUndefined();
   });
 
-  it("TC6: verifyOtp가 throw하면 invalid_reset_link로 redirect하고 cookie를 설정하지 않는다", async () => {
+  it("TC6: verifyOtp가 throw하면 invalid_reset_link로 redirect한다", async () => {
     verifyOtp.mockRejectedValueOnce(new Error("boom"));
 
     const response = await GET(
@@ -130,72 +126,26 @@ describe("callback recovery 분기", () => {
 
     expect(response.status).toBe(307);
     expectInvalidResetRedirect(response);
-    expect(response.cookies.get(RESET_REQUIRED_COOKIE_NAME)).toBeUndefined();
   });
 
-  it("TC7: 성공 시 reset-required cookie를 설정한다", async () => {
-    const response = await GET(
-      makeRequest({ token_hash: "valid-token", type: "recovery" }),
-    );
-
-    expect(response.cookies.get(RESET_REQUIRED_COOKIE_NAME)).toBeDefined();
-  });
-
-  it("TC8: rejected 또는 failure 시 reset-required cookie를 설정하지 않는다", async () => {
-    const missingTokenResponse = await GET(makeRequest({ type: "recovery" }));
-
-    expect(
-      missingTokenResponse.cookies.get(RESET_REQUIRED_COOKIE_NAME),
-    ).toBeUndefined();
-
-    const unsupportedTypeResponse = await GET(
-      makeRequest({ token_hash: "valid-token", type: "signup" }),
-    );
-
-    expect(
-      unsupportedTypeResponse.cookies.get(RESET_REQUIRED_COOKIE_NAME),
-    ).toBeUndefined();
-
-    verifyOtp.mockResolvedValueOnce({
-      data: { user: null },
-      error: { message: "invalid" },
-    });
-
-    const verifyOtpErrorResponse = await GET(
-      makeRequest({ token_hash: "valid-token", type: "recovery" }),
-    );
-
-    expect(
-      verifyOtpErrorResponse.cookies.get(RESET_REQUIRED_COOKIE_NAME),
-    ).toBeUndefined();
-
-    verifyOtp.mockRejectedValueOnce(new Error("boom"));
-
-    const throwResponse = await GET(
-      makeRequest({ token_hash: "valid-token", type: "recovery" }),
-    );
-
-    expect(
-      throwResponse.cookies.get(RESET_REQUIRED_COOKIE_NAME),
-    ).toBeUndefined();
-  });
-
-  it("TC9: 모든 분기에서 applyMinimumResponseTime을 호출한다", async () => {
+  it("TC7: 모든 분기에서 applyMinimumResponseTime을 호출한다", async () => {
     await GET(makeRequest({ token_hash: "valid-token", type: "recovery" }));
     await GET(makeRequest({ type: "recovery" }));
     await GET(makeRequest({ token_hash: "valid-token", type: "signup" }));
+
     verifyOtp.mockResolvedValueOnce({
       data: { user: null },
       error: { message: "invalid" },
     });
     await GET(makeRequest({ token_hash: "valid-token", type: "recovery" }));
+
     verifyOtp.mockRejectedValueOnce(new Error("boom"));
     await GET(makeRequest({ token_hash: "valid-token", type: "recovery" }));
 
     expect(applyMinimumResponseTimeMock).toHaveBeenCalledTimes(5);
   });
 
-  it("TC10: type=magiclink은 recovery가 아니라 magiclink 타입으로 verifyOtp를 호출한다", async () => {
+  it("TC8: type=magiclink은 recovery가 아니라 magiclink 타입으로 verifyOtp를 호출한다", async () => {
     await GET(makeRequest({ token_hash: "valid-token", type: "magiclink" }));
 
     expect(verifyOtp).toHaveBeenCalledWith({

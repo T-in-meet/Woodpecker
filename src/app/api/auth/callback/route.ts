@@ -2,10 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { AUTH_EVENTS } from "@/features/auth/constants/authEvents";
 import { AUTH_LOG_REASONS } from "@/features/auth/constants/authLogReasons";
-import {
-  RESET_REQUIRED_COOKIE_NAME,
-  RESET_REQUIRED_COOKIE_OPTIONS,
-} from "@/features/auth/constants/cookies";
 import { applyMinimumResponseTime } from "@/features/auth/lib/applyMinimumResponseTime";
 import {
   logAuthError,
@@ -151,25 +147,11 @@ function redirectToForgotPasswordInvalidLink(): NextResponse {
 }
 
 /**
- * reset-password 접근 제어용 reset-required cookie 생성
- * - 생성 시점: recovery verifyOtp 성공 직후에만 호출
- * - 사용 위치: reset-password 단계에서 접근 제어
- * - 제약: token/email/redirect 등 민감 정보나 사용자 입력 포함 금지
- */
-function setResetRequiredCookie(response: NextResponse): void {
-  response.cookies.set(
-    RESET_REQUIRED_COOKIE_NAME,
-    "true",
-    RESET_REQUIRED_COOKIE_OPTIONS,
-  );
-}
-
-/**
  * Auth Callback Route
  *
  * 역할:
  * - Supabase 인증 관련 callback을 단일 진입점에서 처리
- * - PKCE(code) 방식과 token_hash 방식 모두 지원
+ * - token_hash 방식 callback을 처리
  *
  * 지원 흐름:
  *
@@ -179,37 +161,27 @@ function setResetRequiredCookie(response: NextResponse): void {
  *    - 성공: /mypage 이동
  *    - 실패: /verify-email 이동
  *
- * 2. 비밀번호 재설정 (recovery - PKCE)
- *    - 입력: type=recovery + code
- *    - 처리: exchangeCodeForSession(code)
- *    - 성공:
- *        - reset-required cookie 설정
- *        - /reset-password 이동 (redirect query 보존)
- *    - 실패:
- *        - /forgot-password?error=invalid_reset_link 이동
- *
- * 3. 비밀번호 재설정 (recovery - token_hash)
+ * 2. 비밀번호 재설정 (recovery - token_hash)
  *    - 입력: token_hash + type=recovery
  *    - 처리: verifyOtp(token_hash)
  *    - 성공:
- *        - reset-required cookie 설정
  *        - /reset-password 이동 (redirect query 보존)
  *    - 실패:
  *        - /forgot-password?error=invalid_reset_link 이동
  *
- * 4. 지원하지 않는 요청
- *    - 입력: type 없음 / 알 수 없는 type / code only
+ * 3. 지원하지 않는 요청
+ *    - 입력: type 없음 / 알 수 없는 type
  *    - 처리:
  *        - /verify-email 이동
  *
  * 보안 정책:
- * - recovery 성공 시에만 reset-required cookie 설정
+ * - callback 단계에서는 recovery token 검증과 session 생성만 수행한다
+ * - /reset-password 접근 가능 여부는 middleware에서 session 기준으로 판단한다
  * - 실패 시 원인 노출 없이 일관된 redirect 처리
  * - 최소 응답 시간(applyMinimumResponseTime) 적용
  *
  * 참고:
- * - Supabase recovery 메일은 PKCE 방식(code)을 기본 사용
- * - token_hash 방식은 하위 호환 및 특정 케이스 대응용으로 유지
+ * - recovery 성공 후 최종 비밀번호 변경 및 redirect 검증은 resetPasswordAction에서 처리한다
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const start = Date.now();
@@ -278,9 +250,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         } else {
           outcome = "completed";
           response = redirectToResetPassword(input.redirect);
-
-          // cookie는 redirect response에 설정해야 브라우저가 reset-password 진입 전에 저장한다.
-          setResetRequiredCookie(response);
         }
       }
     } else {

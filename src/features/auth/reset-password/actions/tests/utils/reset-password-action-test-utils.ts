@@ -1,7 +1,6 @@
 import { vi } from "vitest";
 import { z } from "zod";
 
-import { RESET_REQUIRED_COOKIE_NAME } from "@/features/auth/constants/cookies";
 import { passwordFieldSchema } from "@/lib/validation/passwordSchema";
 
 import {
@@ -15,10 +14,6 @@ const hoisted = vi.hoisted(() => ({
   createClientMock: vi.fn(),
   getSession: vi.fn(),
   updateUser: vi.fn(),
-  cookieGet: vi.fn(),
-  cookieHas: vi.fn(),
-  cookieDelete: vi.fn(),
-  cookieSet: vi.fn(),
   redirect: vi.fn(),
   validateRedirectPath: vi.fn(),
   logRequested: vi.fn(),
@@ -31,15 +26,6 @@ const hoisted = vi.hoisted(() => ({
 
 vi.mock("next/navigation", () => ({
   redirect: hoisted.redirect,
-}));
-
-vi.mock("next/headers", () => ({
-  cookies: vi.fn(async () => ({
-    get: hoisted.cookieGet,
-    has: hoisted.cookieHas,
-    delete: hoisted.cookieDelete,
-    set: hoisted.cookieSet,
-  })),
 }));
 
 vi.mock("@/features/auth/lib/validateRedirectPath", () => ({
@@ -125,14 +111,6 @@ export function setupActionTest() {
   mockSession({});
   mockUpdateUser("success");
 
-  hoisted.cookieGet.mockReturnValue({
-    name: RESET_REQUIRED_COOKIE_NAME,
-    value: "true",
-  });
-  hoisted.cookieHas.mockImplementation((name: string) => {
-    if (name !== RESET_REQUIRED_COOKIE_NAME) return false;
-    return Boolean(hoisted.cookieGet(name));
-  });
   hoisted.validateRedirectPath.mockImplementation((input: unknown) =>
     typeof input === "string" && input.startsWith("/") ? input : "/mypage",
   );
@@ -174,10 +152,6 @@ export function setupActionTest() {
   return {
     getSession: hoisted.getSession,
     updateUser: hoisted.updateUser,
-    cookieGet: hoisted.cookieGet,
-    cookieHas: hoisted.cookieHas,
-    cookieDelete: hoisted.cookieDelete,
-    cookieSet: hoisted.cookieSet,
     redirect: hoisted.redirect,
     validateRedirectPath: hoisted.validateRedirectPath,
     logRequested: hoisted.logRequested,

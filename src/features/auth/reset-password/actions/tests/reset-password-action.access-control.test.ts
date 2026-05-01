@@ -32,43 +32,5 @@ describe("resetPasswordAction - access control", () => {
 
     expect(mocks.redirect).toHaveBeenCalledWith(ROUTES.FORGOT_PASSWORD);
     expect(mocks.updateUser).not.toHaveBeenCalled();
-    expect(mocks.cookieDelete).not.toHaveBeenCalled();
-  });
-
-  it("TC11: cookie 없음이면 ROUTES.FORGOT_PASSWORD로 redirect한다", async () => {
-    mocks.cookieGet.mockReturnValueOnce(undefined);
-
-    await expect(
-      runResetPasswordAction(
-        null,
-        makeFormData({
-          password: "valid-password",
-          confirmPassword: "valid-password",
-        }),
-      ),
-    ).rejects.toBe(REDIRECT_ERROR);
-
-    expect(mocks.redirect).toHaveBeenCalledWith(ROUTES.FORGOT_PASSWORD);
-    expect(mocks.updateUser).not.toHaveBeenCalled();
-    expect(mocks.cookieDelete).not.toHaveBeenCalled();
-  });
-
-  it("TC12: session 없음 + cookie 없음이면 ROUTES.FORGOT_PASSWORD로 redirect한다", async () => {
-    mockSession(null);
-    mocks.cookieGet.mockReturnValueOnce(undefined);
-
-    await expect(
-      runResetPasswordAction(
-        null,
-        makeFormData({
-          password: "valid-password",
-          confirmPassword: "valid-password",
-        }),
-      ),
-    ).rejects.toBe(REDIRECT_ERROR);
-
-    expect(mocks.redirect).toHaveBeenCalledWith(ROUTES.FORGOT_PASSWORD);
-    expect(mocks.updateUser).not.toHaveBeenCalled();
-    expect(mocks.cookieDelete).not.toHaveBeenCalled();
   });
 });

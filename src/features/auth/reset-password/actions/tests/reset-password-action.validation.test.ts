@@ -53,7 +53,6 @@ describe("resetPasswordAction - validation", () => {
       makeFormData({ password: "short", confirmPassword: "short" }),
     );
     expect(mocks.updateUser).not.toHaveBeenCalled();
-    expect(mocks.cookieDelete).not.toHaveBeenCalled();
     expect(mocks.redirect).not.toHaveBeenCalled();
   });
 

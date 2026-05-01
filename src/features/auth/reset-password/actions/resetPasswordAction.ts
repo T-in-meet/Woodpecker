@@ -1,11 +1,9 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { AUTH_EVENTS } from "@/features/auth/constants/authEvents";
 import { AUTH_LOG_REASONS } from "@/features/auth/constants/authLogReasons";
-import { RESET_REQUIRED_COOKIE_NAME } from "@/features/auth/constants/cookies";
 import {
   logAuthError,
   logAuthEvent,
@@ -71,7 +69,6 @@ export async function resetPasswordAction(
     };
   }
 
-  const cookieStore = await cookies();
   let supabase: Awaited<ReturnType<typeof createClient>>;
   let session: Awaited<
     ReturnType<(typeof supabase)["auth"]["getSession"]>
@@ -99,11 +96,7 @@ export async function resetPasswordAction(
     };
   }
 
-  const hasResetRequiredCookie = Boolean(
-    cookieStore.get(RESET_REQUIRED_COOKIE_NAME),
-  );
-
-  if (!session || !hasResetRequiredCookie) {
+  if (!session) {
     logAuthEvent(AUTH_EVENTS.AUTH_RESET_PASSWORD_REJECTED, {
       path: ROUTES.RESET_PASSWORD,
       method: "POST",
@@ -158,7 +151,6 @@ export async function resetPasswordAction(
     };
   }
 
-  cookieStore.delete(RESET_REQUIRED_COOKIE_NAME);
   const finalRedirectPath = resolveRedirectPath(redirectPath);
 
   logAuthEvent(AUTH_EVENTS.AUTH_RESET_PASSWORD_COMPLETED, {
