@@ -46,7 +46,6 @@ describe("resetPasswordAction - supabase", () => {
       }),
     );
     expect(state).toEqual({
-      reason: "same_password",
       status: "internal_error",
     });
   });

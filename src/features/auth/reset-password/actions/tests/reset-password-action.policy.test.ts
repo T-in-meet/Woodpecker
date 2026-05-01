@@ -25,7 +25,6 @@ describe("resetPasswordAction - policy", () => {
       }),
     );
     expect(state).toEqual({
-      reason: "same_password",
       status: "internal_error",
     });
   });

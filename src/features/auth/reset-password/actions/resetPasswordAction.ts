@@ -114,7 +114,6 @@ export async function resetPasswordAction(
       password: parsed.data.password,
     });
     updateError = error;
-    console.log("reset-password updateUser error", error);
   } catch (error) {
     const normalized = normalizeUnknownError(error);
     logAuthError(AUTH_EVENTS.AUTH_RESET_PASSWORD_FAILED, {
@@ -145,9 +144,25 @@ export async function resetPasswordAction(
         : AUTH_LOG_REASONS.INTERNAL_ERROR,
     });
 
+    /**
+     * Supabase는 기존 비밀번호와 동일한 경우 updateUser를 422 same_password로 실패시킨다.
+     *
+     * 외부 상태는 reset-password 실패로 동일하게 처리하되,
+     * UI에서 전용 안내 문구를 보여줄 수 있도록 same_password인 경우에만 reason을 함께 반환한다.
+     */
+    if (isSamePassword) {
+      return {
+        status: "internal_error",
+        reason: "same_password",
+      };
+    }
+
+    /**
+     * 그 외 updateUser 실패는 내부 오류로만 처리한다.
+     * provider 세부 오류는 사용자에게 노출하지 않는다.
+     */
     return {
       status: "internal_error",
-      reason: "same_password",
     };
   }
 
