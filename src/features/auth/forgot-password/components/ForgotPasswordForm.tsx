@@ -7,10 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RATE_LIMIT_TOAST_MESSAGE } from "@/features/auth/errors/rateLimitError";
-import {
-  forgotPasswordAction,
-  type ForgotPasswordActionState,
-} from "@/features/auth/forgot-password/actions/forgotPasswordAction";
+import { type ForgotPasswordActionState } from "@/features/auth/forgot-password/actions/forgotPasswordAction";
 import { consumeForgotPasswordPrefillEmail } from "@/features/auth/forgot-password/lib/forgotPasswordPrefillMemory";
 import { forgotPasswordFormSchema } from "@/features/auth/forgot-password/schemas/forgotPasswordFormSchema";
 import { useDebouncedCallback } from "@/features/auth/hooks/useDebouncedCallback";
@@ -27,6 +24,13 @@ const GLOBAL_ERROR_MESSAGE =
 const INVALID_RESET_LINK_MESSAGE =
   "비밀번호 재설정 링크가 만료되었거나 유효하지 않습니다. 다시 요청해 주세요.";
 
+type ForgotPasswordFormProps = {
+  action: (
+    prevState: ForgotPasswordActionState,
+    formData: FormData,
+  ) => Promise<ForgotPasswordActionState>;
+};
+
 // schema 결과를 UI가 바로 사용할 수 있는 단일 에러 메시지 형태로 정규화한다.
 function validateEmail(
   email: string,
@@ -41,7 +45,7 @@ function validateEmail(
   return { ok: false, message };
 }
 
-export function ForgotPasswordForm() {
+export function ForgotPasswordForm({ action }: ForgotPasswordFormProps) {
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isClientValid, setIsClientValid] = useState(false);
@@ -52,11 +56,8 @@ export function ForgotPasswordForm() {
   const hasHandledPrefillRef = useRef(false);
   const formRef = useRef<HTMLFormElement>(null);
 
-  const [state, formAction, isPending] = useActionState<
-    ForgotPasswordActionState,
-    FormData
-  >(
-    forgotPasswordAction.bind(null, null),
+  const [state, formAction, isPending] = useActionState(
+    action,
     INITIAL_FORGOT_PASSWORD_ACTION_STATE,
   );
 

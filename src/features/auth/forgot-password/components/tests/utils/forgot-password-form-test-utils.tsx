@@ -3,7 +3,10 @@ import userEvent from "@testing-library/user-event";
 import type { ComponentProps, ReactNode } from "react";
 import { vi } from "vitest";
 
+import { ForgotPasswordForm } from "@/features/auth/forgot-password/components/ForgotPasswordForm";
 import { showToast } from "@/lib/utils/showToast";
+
+import { ForgotPasswordActionState } from "../../../actions/forgotPasswordAction";
 
 type ForgotPasswordFormActionState =
   | { status: "idle"; fieldErrors: null }
@@ -83,7 +86,15 @@ vi.mock(
   }),
 );
 
-import { ForgotPasswordForm } from "@/features/auth/forgot-password/components/ForgotPasswordForm";
+const mockAction = vi.fn(
+  async (
+    _prevState: ForgotPasswordActionState,
+    _formData: FormData,
+  ): Promise<ForgotPasswordActionState> => ({
+    status: "idle",
+    fieldErrors: null,
+  }),
+);
 
 type ForgotPasswordState =
   | { status: "idle"; fieldErrors: null }
@@ -184,11 +195,11 @@ export function resetToastMock() {
 export function renderForgotPasswordForm(
   _options?: Partial<ComponentProps<typeof ForgotPasswordForm>>,
 ) {
-  return render(<ForgotPasswordForm />);
+  return render(<ForgotPasswordForm action={mockAction} />);
 }
 
 export function rerenderForgotPasswordForm(rerender: (ui: ReactNode) => void) {
-  rerender(<ForgotPasswordForm />);
+  rerender(<ForgotPasswordForm action={mockAction} />);
 }
 
 export function getEmailInput() {
