@@ -54,7 +54,6 @@ export async function resetPasswordAction(
   const parsed = resetPasswordActionSchema.safeParse(payload);
 
   if (!parsed.success) {
-    console.log("reset-password schema issues", parsed.error.issues);
     logAuthEvent(AUTH_EVENTS.AUTH_RESET_PASSWORD_INVALID_INPUT, {
       path: ROUTES.RESET_PASSWORD,
       method: "POST",
