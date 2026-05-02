@@ -160,7 +160,7 @@ export async function forgotPasswordAction(
     }
 
     try {
-      await sendAuthEmail(email, tokenHash, "recovery");
+      await sendAuthEmail(email, tokenHash, "recovery", redirectPath);
     } catch {
       logAuthError(AUTH_EVENTS.AUTH_FORGOT_PASSWORD_FAILED, {
         path: FORGOT_PASSWORD_PATH,

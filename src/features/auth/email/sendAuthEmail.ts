@@ -53,6 +53,7 @@ export async function sendAuthEmail(
   email: string,
   tokenHash: string,
   type: AuthEmailType,
+  redirectPath: string | null = null,
 ): Promise<void> {
   const appUrl = process.env["APP_URL"];
 
@@ -60,9 +61,19 @@ export async function sendAuthEmail(
     throw new Error("APP_URL is not set");
   }
 
-  // Supabase 표준 파라미터를 직접 사용해 커스텀 ticket 없이 callback을 처리한다.
-  const link = `${appUrl}/api/auth/callback?token_hash=${tokenHash}&type=${type}`;
-  const html = await render(React.createElement(AuthEmailTemplate, { link }));
+  // Supabase 표준 파라미터(token_hash, type)를 사용해 callback 링크를 구성한다.
+  // redirectPath가 있으면 비밀번호 재설정 이후 이동할 경로를 callback까지 보존한다.
+  const url = new URL("/api/auth/callback", appUrl);
+  url.searchParams.set("token_hash", tokenHash);
+  url.searchParams.set("type", type);
+
+  if (redirectPath) {
+    url.searchParams.set("redirect", redirectPath);
+  }
+
+  const html = await render(
+    React.createElement(AuthEmailTemplate, { link: url.toString() }),
+  );
 
   const subject = type === "recovery" ? "비밀번호 재설정" : "이메일 인증";
 
