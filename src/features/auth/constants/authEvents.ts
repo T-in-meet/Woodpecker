@@ -89,11 +89,12 @@ export type AuthCompletedEvent =
 
 /**
  * logAuthEvent에서 처리하는 이벤트 유니온
- * success / blocked / invalid_input 결과에 해당한다
+ * success / rejected / blocked / invalid_input / rate_limited 결과에 해당한다
  */
 export type AuthNonFailureEvent =
   | AuthCompletedEvent
   | typeof AUTH_EVENTS.AUTH_RESET_PASSWORD_REJECTED
+  | typeof AUTH_EVENTS.AUTH_FORGOT_PASSWORD_REJECTED
   | typeof AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED
   | typeof AUTH_EVENTS.AUTH_INVALID_INPUT
   | typeof AUTH_EVENTS.AUTH_RESET_PASSWORD_INVALID_INPUT
