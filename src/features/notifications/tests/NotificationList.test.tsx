@@ -31,12 +31,7 @@ function createNotificationItem(): NotificationListItemType {
 
 describe("NotificationList", () => {
   it("renders notification items with review links", () => {
-    render(
-      <NotificationList
-        items={[createNotificationItem()]}
-        onMarkAsRead={vi.fn()}
-      />,
-    );
+    render(<NotificationList items={[createNotificationItem()]} />);
 
     expect(screen.getByText("복습할 시간이에요!")).toBeInTheDocument();
     expect(screen.getByText("간격 반복 정리")).toBeInTheDocument();
@@ -47,36 +42,14 @@ describe("NotificationList", () => {
     );
   });
 
-  it("marks unread notifications as read from the icon button", async () => {
-    const user = userEvent.setup();
-    const onMarkAsRead = vi.fn();
-
-    render(
-      <NotificationList
-        items={[createNotificationItem()]}
-        onMarkAsRead={onMarkAsRead}
-      />,
-    );
-
-    await user.click(
-      screen.getByRole("button", {
-        name: "복습할 시간이에요! 읽음 처리",
-      }),
-    );
-
-    expect(onMarkAsRead).toHaveBeenCalledWith(NOTIFICATION_ID);
-  });
-
   it("notifies navigation without marking linked notifications as read", async () => {
     const user = userEvent.setup();
     const onItemNavigate = vi.fn();
-    const onMarkAsRead = vi.fn();
 
     render(
       <NotificationList
         items={[createNotificationItem()]}
         onItemNavigate={onItemNavigate}
-        onMarkAsRead={onMarkAsRead}
       />,
     );
 
@@ -85,14 +58,17 @@ describe("NotificationList", () => {
 
     await user.click(link);
 
-    expect(onMarkAsRead).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole("button", {
+        name: "복습할 시간이에요! 읽음 처리",
+      }),
+    ).not.toBeInTheDocument();
     expect(onItemNavigate).toHaveBeenCalledOnce();
   });
 
   it("does not mark already-read linked notifications again", async () => {
     const user = userEvent.setup();
     const onItemNavigate = vi.fn();
-    const onMarkAsRead = vi.fn();
 
     render(
       <NotificationList
@@ -104,7 +80,6 @@ describe("NotificationList", () => {
           },
         ]}
         onItemNavigate={onItemNavigate}
-        onMarkAsRead={onMarkAsRead}
       />,
     );
 
@@ -113,12 +88,11 @@ describe("NotificationList", () => {
 
     await user.click(link);
 
-    expect(onMarkAsRead).not.toHaveBeenCalled();
     expect(onItemNavigate).toHaveBeenCalledOnce();
   });
 
   it("renders an empty state", () => {
-    render(<NotificationList items={[]} onMarkAsRead={vi.fn()} />);
+    render(<NotificationList items={[]} />);
 
     expect(screen.getByText("새 알림이 없습니다.")).toBeInTheDocument();
   });

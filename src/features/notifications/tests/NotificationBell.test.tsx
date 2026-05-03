@@ -8,15 +8,8 @@ import {
   NOTIFICATION_TYPES,
 } from "@/lib/constants/notifications";
 
-const { markNotificationAsReadActionMock, usePathnameMock } = vi.hoisted(
-  () => ({
-    markNotificationAsReadActionMock: vi.fn(),
-    usePathnameMock: vi.fn(),
-  }),
-);
-
-vi.mock("../actions", () => ({
-  markNotificationAsReadAction: markNotificationAsReadActionMock,
+const { usePathnameMock } = vi.hoisted(() => ({
+  usePathnameMock: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -79,11 +72,6 @@ function renderNotificationBell({
 
 describe("NotificationBell", () => {
   beforeEach(() => {
-    markNotificationAsReadActionMock.mockReset();
-    markNotificationAsReadActionMock.mockResolvedValue({
-      success: true,
-      updated: true,
-    });
     usePathnameMock.mockReset();
     usePathnameMock.mockReturnValue("/notes");
     vi.stubGlobal(
@@ -109,7 +97,7 @@ describe("NotificationBell", () => {
     });
   });
 
-  it("closes the list without marking the item as read when a notification link is clicked", async () => {
+  it("closes the list without exposing manual read controls when a notification link is clicked", async () => {
     const user = userEvent.setup();
     renderNotificationBell();
 
@@ -117,31 +105,12 @@ describe("NotificationBell", () => {
 
     const link = await screen.findByRole("link");
     link.addEventListener("click", (event) => event.preventDefault());
+    expect(
+      screen.queryByRole("button", { name: /Review reminder/ }),
+    ).not.toBeInTheDocument();
 
     await user.click(link);
 
-    expect(markNotificationAsReadActionMock).not.toHaveBeenCalled();
-    expect(screen.queryByText("Interval note")).not.toBeInTheDocument();
-  });
-
-  it("removes an item from the open list when it is manually marked as read", async () => {
-    const user = userEvent.setup();
-    renderNotificationBell();
-
-    await user.click(await screen.findByRole("button"));
-    expect(await screen.findByText("Interval note")).toBeInTheDocument();
-
-    await user.click(
-      screen.getByRole("button", {
-        name: /Review reminder/,
-      }),
-    );
-
-    await waitFor(() => {
-      expect(markNotificationAsReadActionMock).toHaveBeenCalledWith(
-        "33333333-3333-4333-8333-333333333333",
-      );
-    });
     expect(screen.queryByText("Interval note")).not.toBeInTheDocument();
   });
 

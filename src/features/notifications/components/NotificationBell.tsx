@@ -6,10 +6,8 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { NOTIFICATION_STATUS } from "@/lib/constants/notifications";
 import { cn } from "@/lib/utils/cn";
 
-import { markNotificationAsReadAction } from "../actions";
 import {
   notificationsResponseSchema,
   type NotificationsResponseType,
@@ -47,34 +45,12 @@ async function fetchNotifications(): Promise<NotificationsResponseType> {
   return parsed.data;
 }
 
-function removeMarkedNotificationFromCache(
-  data: NotificationsResponseType,
-  notificationId: string,
-  updated: boolean,
-): NotificationsResponseType {
-  if (!updated) return data;
-
-  const target = data.items.find((item) => item.id === notificationId);
-  const shouldReduceUnread = target?.status === NOTIFICATION_STATUS.SENT;
-
-  return {
-    unreadCount: shouldReduceUnread
-      ? Math.max(data.unreadCount - 1, 0)
-      : data.unreadCount,
-    items: data.items.filter((item) => item.id !== notificationId),
-  };
-}
-
 type NotificationBellProps = {
   userId: string;
 };
 
 export function NotificationBell({ userId }: NotificationBellProps) {
   const [open, setOpen] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [markingNotificationId, setMarkingNotificationId] = useState<
-    string | null
-  >(null);
   const queryClient = useQueryClient();
   const pathname = usePathname();
   const ref = useRef<HTMLDivElement>(null);
@@ -100,8 +76,6 @@ export function NotificationBell({ userId }: NotificationBellProps) {
     if (previousPathnameRef.current === pathname) return;
 
     previousPathnameRef.current = pathname;
-    setActionError(null);
-
     const notificationsQueryState = queryClient.getQueryState([
       "notifications",
       userId,
@@ -149,40 +123,7 @@ export function NotificationBell({ userId }: NotificationBellProps) {
     setOpen(nextOpen);
 
     if (nextOpen) {
-      setActionError(null);
       void refetch();
-    }
-  };
-
-  const handleMarkAsRead = async (notificationId: string) => {
-    if (markingNotificationId === notificationId) return;
-
-    setActionError(null);
-    setMarkingNotificationId(notificationId);
-
-    try {
-      const result = await markNotificationAsReadAction(notificationId);
-
-      if (!result.success) {
-        setActionError(result.error);
-        return;
-      }
-
-      queryClient.setQueryData<NotificationsResponseType>(
-        notificationsQueryKey,
-        (current) =>
-          current
-            ? removeMarkedNotificationFromCache(
-                current,
-                notificationId,
-                result.updated,
-              )
-            : current,
-      );
-    } catch {
-      setActionError("알림 읽음 처리에 실패했습니다.");
-    } finally {
-      setMarkingNotificationId(null);
     }
   };
 
@@ -238,22 +179,11 @@ export function NotificationBell({ userId }: NotificationBellProps) {
             )}
           </div>
 
-          {actionError && (
-            <p
-              role="alert"
-              className="border-t border-border/60 px-4 py-2 text-sm text-destructive"
-            >
-              {actionError}
-            </p>
-          )}
-
           <NotificationList
             items={data.items}
             isError={isError}
             isLoading={isLoading}
-            markingNotificationId={markingNotificationId}
             onItemNavigate={handleItemNavigate}
-            onMarkAsRead={handleMarkAsRead}
           />
 
           {hasHiddenUnreadNotifications && (

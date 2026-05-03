@@ -1,9 +1,7 @@
 "use client";
 
-import { Check, Loader2 } from "lucide-react";
 import Link from "next/link";
 
-import { Button } from "@/components/ui/button";
 import { NOTIFICATION_STATUS } from "@/lib/constants/notifications";
 import { getNoteReviewRoute } from "@/lib/constants/routes";
 import { formatDateTime } from "@/lib/utils/formatDate";
@@ -14,9 +12,7 @@ type NotificationListProps = {
   items: NotificationListItemType[];
   isError?: boolean;
   isLoading?: boolean;
-  markingNotificationId?: string | null;
   onItemNavigate?: () => void;
-  onMarkAsRead: (notificationId: string) => Promise<void> | void;
 };
 
 function getStatusLabel(status: NotificationListItemType["status"]) {
@@ -33,9 +29,7 @@ export function NotificationList({
   items,
   isError = false,
   isLoading = false,
-  markingNotificationId = null,
   onItemNavigate,
-  onMarkAsRead,
 }: NotificationListProps) {
   if (isLoading) {
     return (
@@ -69,7 +63,6 @@ export function NotificationList({
   return (
     <ul className="max-h-96 overflow-y-auto" aria-label="알림 목록">
       {items.map((item) => {
-        const isUnread = item.status === NOTIFICATION_STATUS.SENT;
         const description = getNotificationDescription(item);
         const reviewHref = item.note_id
           ? getNoteReviewRoute(item.note_id)
@@ -110,27 +103,6 @@ export function NotificationList({
               </Link>
             ) : (
               <div className="min-w-0 flex-1">{content}</div>
-            )}
-
-            {isUnread && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className="mt-1"
-                aria-label={`${item.title} 읽음 처리`}
-                title="읽음 처리"
-                disabled={markingNotificationId === item.id}
-                onClick={() => {
-                  void onMarkAsRead(item.id);
-                }}
-              >
-                {markingNotificationId === item.id ? (
-                  <Loader2 className="animate-spin" aria-hidden="true" />
-                ) : (
-                  <Check aria-hidden="true" />
-                )}
-              </Button>
             )}
           </li>
         );
