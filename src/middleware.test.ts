@@ -70,7 +70,7 @@ describe("middleware auth page access policy", () => {
     ROUTES.VERIFY_EMAIL,
     ROUTES.FORGOT_PASSWORD,
   ])(
-    "세션이 있는 사용자가 %s에 접근하면 HOME으로 redirect한다",
+    "세션이 있는 사용자가 %s에 접근하면 MYPAGE으로 redirect한다",
     async (pathname) => {
       const baseResponse = createBaseResponse();
 
@@ -85,7 +85,7 @@ describe("middleware auth page access policy", () => {
       expect(getSessionFromMiddlewareRequestMock).toHaveBeenCalledTimes(1);
       expect(response.status).toBe(307);
       expect(response.headers.get("location")).toBe(
-        `http://localhost:3000${ROUTES.HOME}`,
+        `http://localhost:3000${ROUTES.MYPAGE}`,
       );
       expect(response.cookies.get("test-cookie")?.value).toBe("test-value");
     },

@@ -75,7 +75,7 @@ describe("authPageAccessPolicy", () => {
           pathname,
           hasSession: true,
         }),
-      ).toBe(ROUTES.HOME);
+      ).toBe(ROUTES.MYPAGE);
     });
 
     it.each([

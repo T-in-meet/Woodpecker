@@ -76,7 +76,7 @@ export function getBlockedAuthPageRedirectPath({
   hasSession: boolean;
 }): string | null {
   if (isGuestOnlyAuthPath(pathname) && hasSession) {
-    return ROUTES.HOME;
+    return ROUTES.MYPAGE;
   }
 
   if (isSessionRequiredAuthPath(pathname) && !hasSession) {
