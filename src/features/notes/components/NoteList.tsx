@@ -1,6 +1,8 @@
 import type { NoteSummary } from "../queries";
+import type { NotesView } from "../utils/buildNotesUrl";
 import { NoteCard } from "./NoteCard";
 import { NoteCardCompact } from "./NoteCardCompact";
+import { NotesEmptyState } from "./NotesEmptyState";
 import { NotesPagination } from "./NotesPagination";
 
 type NoteListProps = {
@@ -8,7 +10,7 @@ type NoteListProps = {
   total: number;
   currentPage: number;
   pageSize: number;
-  view: "list" | "cards";
+  view: NotesView;
   query: string;
 };
 
@@ -21,20 +23,7 @@ export function NoteList({
   query,
 }: NoteListProps) {
   if (total === 0) {
-    return (
-      <div className="rounded-xl border border-dashed bg-muted/20 px-6 py-12 text-center">
-        <p className="text-base font-medium text-foreground">
-          {query
-            ? `"${query}"에 대한 검색 결과가 없습니다.`
-            : "아직 저장한 노트가 없습니다."}
-        </p>
-        <p className="mt-2 text-sm text-muted-foreground">
-          {query
-            ? "다른 검색어를 입력해보세요."
-            : "첫 노트를 작성하고 복습 흐름을 시작해보세요."}
-        </p>
-      </div>
-    );
+    return <NotesEmptyState query={query} />;
   }
 
   const totalPages = Math.ceil(total / pageSize);
@@ -46,17 +35,17 @@ export function NoteList({
       </p>
 
       {view === "cards" ? (
-        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <ul className="grid list-none grid-cols-2 gap-3 sm:grid-cols-3">
           {notes.map((note) => (
-            <li key={note.id} className="list-none">
+            <li key={note.id}>
               <NoteCardCompact note={note} />
             </li>
           ))}
         </ul>
       ) : (
-        <ul className="flex flex-col gap-3">
+        <ul className="flex list-none flex-col gap-3">
           {notes.map((note) => (
-            <li key={note.id} className="list-none">
+            <li key={note.id}>
               <NoteCard note={note} />
             </li>
           ))}

@@ -1,69 +1,30 @@
 "use client";
 
 import { CalendarClock, Play, RotateCcw, Trash2 } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useTransition } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
-import { getNoteDetailRoute, getNoteReviewRoute } from "@/lib/constants/routes";
 import { formatDateKST } from "@/lib/utils/formatDate";
 
-import { deleteNoteAction } from "../actions";
+import { useNoteCardActions } from "../hooks/useNoteCardActions";
 import type { NoteSummary } from "../queries";
-
-type ReviewStatus = "available" | "completed" | "scheduled" | "pending";
-
-function getReviewStatus(note: NoteSummary): ReviewStatus {
-  if (note.review_round >= MAX_REVIEW_ROUND && note.next_review_at === null)
-    return "completed";
-  if (!note.next_review_at) return "pending";
-  if (new Date(note.next_review_at).getTime() <= Date.now()) return "available";
-  return "scheduled";
-}
+import { getNextReviewText, getReviewStatus } from "../utils/noteStatus";
 
 export function NoteCardCompact({ note }: { note: NoteSummary }) {
-  const router = useRouter();
-  const [isDeleting, startDeleteTransition] = useTransition();
-
   const status = getReviewStatus(note);
-
-  const nextReviewText =
-    status === "completed"
-      ? "완료"
-      : status === "pending"
-        ? "준비 중"
-        : note.next_review_at
-          ? formatDateKST(note.next_review_at)
-          : "-";
-
+  const nextReviewText = getNextReviewText(status, note.next_review_at);
   const canReview = status === "available";
 
-  function handleCardClick() {
-    router.push(getNoteDetailRoute(note.id));
-  }
-
-  function handleStartReview(e: React.MouseEvent) {
-    e.stopPropagation();
-    router.push(getNoteReviewRoute(note.id));
-  }
-
-  function handleDelete(e: React.MouseEvent) {
-    e.stopPropagation();
-    if (!window.confirm("이 노트를 삭제하시겠습니까?")) return;
-    startDeleteTransition(async () => {
-      await deleteNoteAction(note.id);
-      router.refresh();
-    });
-  }
+  const { isDeleting, navigateToDetail, handleStartReview, handleDelete } =
+    useNoteCardActions(note.id);
 
   return (
     <div
       role="link"
       tabIndex={0}
-      onClick={handleCardClick}
+      onClick={navigateToDetail}
       onKeyDown={(e) => {
-        if (e.key === "Enter") handleCardClick();
+        if (e.key === "Enter") navigateToDetail();
       }}
       className="group block h-full cursor-pointer rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >

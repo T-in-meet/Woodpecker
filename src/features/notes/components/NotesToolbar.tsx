@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils/cn";
 
-type View = "list" | "cards";
+import { buildNotesUrl, type NotesView as View } from "../utils/buildNotesUrl";
 
 type NotesToolbarProps = {
   initialQuery: string;
@@ -24,39 +24,30 @@ export function NotesToolbar({ initialQuery, initialView }: NotesToolbarProps) {
 
   useEffect(() => {
     const q = searchParams.get("q") ?? "";
-    const v = (searchParams.get("view") ?? "list") as View;
+    const v: View = searchParams.get("view") === "cards" ? "cards" : "list";
     setQuery(q);
     setView(v);
   }, [searchParams]);
-
-  function buildUrl(q: string, v: View, page = 1) {
-    const params = new URLSearchParams();
-    if (q.trim()) params.set("q", q.trim());
-    if (v !== "list") params.set("view", v);
-    if (page > 1) params.set("page", String(page));
-    const qs = params.toString();
-    return `/notes${qs ? `?${qs}` : ""}`;
-  }
 
   function handleQueryChange(e: React.ChangeEvent<HTMLInputElement>) {
     const q = e.target.value;
     setQuery(q);
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      router.push(buildUrl(q, view));
+      router.push(buildNotesUrl({ query: q, view }));
     }, 300);
   }
 
   function handleClear() {
     setQuery("");
     clearTimeout(debounceRef.current);
-    router.push(buildUrl("", view));
+    router.push(buildNotesUrl({ view }));
   }
 
   function handleViewChange(v: View) {
     clearTimeout(debounceRef.current);
     setView(v);
-    router.push(buildUrl(query, v));
+    router.push(buildNotesUrl({ query, view: v }));
   }
 
   useEffect(() => () => clearTimeout(debounceRef.current), []);

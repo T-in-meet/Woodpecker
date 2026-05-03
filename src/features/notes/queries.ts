@@ -48,13 +48,21 @@ export async function getNotes(
     .order("updated_at", { ascending: false });
 
   if (search.trim()) {
-    const term = search.trim().replace(/%/g, "\\%").replace(/_/g, "\\_");
+    const term = search
+      .trim()
+      .replace(/\\/g, "\\\\")
+      .replace(/%/g, "\\%")
+      .replace(/_/g, "\\_");
     query = query.or(`title.ilike.%${term}%,content.ilike.%${term}%`);
   }
 
   const { data, count } = await query.range(from, to);
 
   const parsed = z.array(noteSummarySchema).safeParse(data);
+
+  if (!parsed.success) {
+    console.error("[getNotes] noteSummarySchema 파싱 실패:", parsed.error);
+  }
 
   return { notes: parsed.success ? parsed.data : [], total: count ?? 0 };
 }

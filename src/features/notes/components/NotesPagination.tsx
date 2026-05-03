@@ -2,39 +2,35 @@ import Link from "next/link";
 
 import { cn } from "@/lib/utils/cn";
 
+import { buildNotesUrl, type NotesView } from "../utils/buildNotesUrl";
+
+const ELLIPSIS = "..." as const;
+type PageItem = number | typeof ELLIPSIS;
+
 type NotesPaginationProps = {
   currentPage: number;
   totalPages: number;
-  view: "list" | "cards";
+  view: NotesView;
   query: string;
 };
 
-function getPageNumbers(current: number, total: number): (number | "...")[] {
+function getPageNumbers(current: number, total: number): PageItem[] {
   if (total <= 7) {
     return Array.from({ length: total }, (_, i) => i + 1);
   }
 
-  const pages: (number | "...")[] = [1];
+  const pages: PageItem[] = [1];
 
-  if (current > 3) pages.push("...");
+  if (current > 3) pages.push(ELLIPSIS);
 
   const start = Math.max(2, current - 1);
   const end = Math.min(total - 1, current + 1);
   for (let i = start; i <= end; i++) pages.push(i);
 
-  if (current < total - 2) pages.push("...");
+  if (current < total - 2) pages.push(ELLIPSIS);
   pages.push(total);
 
   return pages;
-}
-
-function buildPageUrl(page: number, view: "list" | "cards", query: string) {
-  const params = new URLSearchParams();
-  if (query.trim()) params.set("q", query.trim());
-  if (view !== "list") params.set("view", view);
-  if (page > 1) params.set("page", String(page));
-  const qs = params.toString();
-  return `/notes${qs ? `?${qs}` : ""}`;
 }
 
 export function NotesPagination({
@@ -55,7 +51,7 @@ export function NotesPagination({
       className="flex items-center justify-center gap-1 pt-2"
     >
       <PaginationLink
-        href={buildPageUrl(currentPage - 1, view, query)}
+        href={buildNotesUrl({ page: currentPage - 1, view, query })}
         disabled={!hasPrev}
         aria-label="이전 페이지"
       >
@@ -63,7 +59,7 @@ export function NotesPagination({
       </PaginationLink>
 
       {pages.map((page, i) =>
-        page === "..." ? (
+        page === ELLIPSIS ? (
           <span
             key={`ellipsis-${i}`}
             className="flex h-8 w-8 items-center justify-center text-sm text-muted-foreground"
@@ -73,7 +69,7 @@ export function NotesPagination({
         ) : (
           <PaginationLink
             key={page}
-            href={buildPageUrl(page, view, query)}
+            href={buildNotesUrl({ page, view, query })}
             active={page === currentPage}
             aria-label={`${page} 페이지`}
             aria-current={page === currentPage ? "page" : undefined}
@@ -84,7 +80,7 @@ export function NotesPagination({
       )}
 
       <PaginationLink
-        href={buildPageUrl(currentPage + 1, view, query)}
+        href={buildNotesUrl({ page: currentPage + 1, view, query })}
         disabled={!hasNext}
         aria-label="다음 페이지"
       >
