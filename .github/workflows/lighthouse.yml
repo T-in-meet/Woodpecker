@@ -14,6 +14,8 @@ jobs:
   lighthouse:
     name: Lighthouse
     runs-on: ubuntu-latest
+    environment: develope
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
