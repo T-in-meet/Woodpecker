@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { resetPasswordFormSchema } from "@/features/auth/reset-password/schemas/resetPasswordFormSchema";
+import { usePreventPageLeave } from "@/hooks/usePreventPageLeave";
 
 import { INPUT_DEBOUNCE_DELAY_MS } from "../../constants/ui";
 import { useDebouncedCallback } from "../../hooks/useDebouncedCallback";
@@ -16,6 +17,7 @@ import {
 } from "../actions/resetPasswordActionState";
 import {
   RESET_PASSWORD_GLOBAL_ERROR_MESSAGE,
+  RESET_PASSWORD_PAGE_LEAVE_CONFIRM_MESSAGE,
   RESET_PASSWORD_SAME_PASSWORD_MESSAGE,
 } from "../constants/messages";
 
@@ -101,6 +103,27 @@ export function ResetPasswordForm({ action }: ResetPasswordFormProps) {
   const passwordErrorId = "reset-password-password-error";
   const confirmPasswordErrorId = "reset-password-confirm-password-error";
   const globalErrorId = "reset-password-global-error";
+
+  /**
+   * reset-password 페이지 이탈 제어
+   *
+   * 정책 변경:
+   * - 기존: 비밀번호 변경 전까지 페이지 이동 자체를 차단
+   * - 변경: 이동은 허용하되 메시지로 사용자에게 안내
+   *
+   * 적용 방식:
+   * - 페이지 진입 시점부터 항상 이탈 경고 활성화
+   * - 단, 비밀번호 변경 submit 진행 중(isPending)은 정상 흐름이므로 예외 처리
+   */
+  const shouldPreventPageLeave = !isPending;
+
+  /**
+   * 페이지 이탈 시 비밀번호 재설정 흐름 중단을 안내하는 confirm 표시
+   */
+  usePreventPageLeave(
+    shouldPreventPageLeave,
+    RESET_PASSWORD_PAGE_LEAVE_CONFIRM_MESSAGE,
+  );
 
   /**
    * 입력 변경 시 즉시 검증하지 않고 debounce 후 현재 폼 값을 검증한다.

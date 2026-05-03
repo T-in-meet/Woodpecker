@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-const PAGE_LEAVE_CONFIRM_MESSAGE =
+const DEFAULT_PAGE_LEAVE_CONFIRM_MESSAGE =
   "페이지를 떠나시겠습니까? 작성 중인 내용이 저장되지 않습니다.";
 
 function resolveHistoryUrl(url?: string | URL | null) {
@@ -13,7 +13,19 @@ function resolveHistoryUrl(url?: string | URL | null) {
   return new URL(url, window.location.href).href;
 }
 
-export function usePreventPageLeave(shouldPrevent: boolean) {
+/**
+ * 페이지 이탈 방지 훅
+ *
+ * 기본 메시지를 제공하지만,
+ * 화면별로 이탈 경고 문구가 달라질 수 있으므로 message를 선택적으로 주입할 수 있도록 확장.
+ *
+ * - 기존 사용처는 기본 메시지를 그대로 사용
+ * - 특정 화면(예: reset-password)에서는 문맥에 맞는 메시지를 전달
+ */
+export function usePreventPageLeave(
+  shouldPrevent: boolean,
+  message = DEFAULT_PAGE_LEAVE_CONFIRM_MESSAGE,
+) {
   useEffect(() => {
     if (!shouldPrevent) return;
 
@@ -27,7 +39,7 @@ export function usePreventPageLeave(shouldPrevent: boolean) {
       currentHistoryState = window.history.state;
     };
 
-    const confirmPageLeave = () => window.confirm(PAGE_LEAVE_CONFIRM_MESSAGE);
+    const confirmPageLeave = () => window.confirm(message);
 
     // Next.js App Router가 같은 URL에서 state만 변경하는 pushState를 내부적으로 사용하므로 허용
     const canChangeUrl = (nextUrl: string) =>
@@ -96,5 +108,5 @@ export function usePreventPageLeave(shouldPrevent: boolean) {
       window.history.replaceState = originalReplaceState;
       window.removeEventListener("popstate", handlePopState, { capture: true });
     };
-  }, [shouldPrevent]);
+  }, [shouldPrevent, message]);
 }
