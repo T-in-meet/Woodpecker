@@ -39,17 +39,22 @@ jobs:
           VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
 
       - name: Start server
-        run: npm run start &
+        run: |
+          npm run start > server.log 2>&1 &
+          sleep 5
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.DEVELOP_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.DEVELOP_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.DEVELOP_SUPABASE_SERVICE_ROLE_KEY }}
           NEXT_PUBLIC_APP_URL: ${{ secrets.DEVELOP_APP_URL }}
+          NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${{ secrets.NEXT_PUBLIC_VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
 
       - name: Check server
         run: |
           curl -i http://localhost:3000 || true
           echo "===== SERVER LOG ====="
-          cat server.log
+          cat server.log || true
 
       # Lighthouse CI 실행 (랜딩 페이지 대상)
       - name: Run Lighthouse CI
