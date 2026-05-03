@@ -1,6 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server";
 
-import { ROUTES } from "@/lib/constants/routes";
+import {
+  getBlockedAuthPageRedirectPath,
+  isAuthAccessControlledPath,
+} from "@/features/auth/utils/authPageAccessPolicy";
 import {
   getSessionFromMiddlewareRequest,
   updateSession,
@@ -15,13 +18,6 @@ function getPathname(request: NextRequest): string {
 }
 
 /**
- * reset-password 경로 여부
- */
-function isResetPasswordPath(path: string): boolean {
-  return path === ROUTES.RESET_PASSWORD;
-}
-
-/**
  * redirect 시 baseResponse의 cookie를 보존
  *
  * 이유:
@@ -30,7 +26,7 @@ function isResetPasswordPath(path: string): boolean {
  * - 따라서 redirect 응답에도 기존 cookie 변경사항을 복사한다
  *
  * 현재 사용처:
- * - /reset-password 접근 시 session이 없으면 /forgot-password로 보냄
+ * - 인증 페이지 접근 정책에 따라 redirect가 필요한 경우
  */
 function redirectWithPreservedResponse(
   baseResponse: NextResponse,
@@ -44,34 +40,42 @@ function redirectWithPreservedResponse(
 }
 
 /**
- * reset-password 접근 제어 middleware
+ * 인증 페이지 접근 제어 middleware
  *
  * 정책:
- * - /reset-password 접근 가능 여부는 Supabase session만 기준으로 판단
- * - /reset-password 외 경로는 강제 차단하지 않고 그대로 통과
+ * - 로그인 사용자는 guest-only 인증 페이지에 접근할 수 없음
+ * - 비로그인 사용자는 session-required 인증 페이지에 접근할 수 없음
+ * - 접근 제어 대상이 아닌 경로는 강제 차단하지 않고 그대로 통과
  *
  * 흐름:
  * 1. updateSession(request)로 session refresh / cookie sync 수행
- * 2. /reset-password가 아니면 그대로 통과
- * 3. /reset-password인데 session이 없으면 /forgot-password로 redirect
- * 4. /reset-password이고 session이 있으면 통과
+ * 2. 접근 제어 대상 auth page가 아니면 그대로 통과
+ * 3. 접근 제어 대상이면 Supabase session을 조회
+ * 4. 정책상 차단 대상이면 지정된 경로로 redirect
+ * 5. 차단 대상이 아니면 통과
  */
 export async function middleware(request: NextRequest) {
   const baseResponse = await updateSession(request);
-  const path = getPathname(request);
+  const pathname = getPathname(request);
 
-  if (!isResetPasswordPath(path)) {
+  if (!isAuthAccessControlledPath(pathname)) {
     return baseResponse;
   }
 
   const session = await getSessionFromMiddlewareRequest(request);
 
-  if (!session) {
-    const redirectUrl = new URL(ROUTES.FORGOT_PASSWORD, request.url);
-    return redirectWithPreservedResponse(baseResponse, redirectUrl);
+  const redirectPath = getBlockedAuthPageRedirectPath({
+    pathname,
+    hasSession: Boolean(session),
+  });
+
+  if (!redirectPath) {
+    return baseResponse;
   }
 
-  return baseResponse;
+  const redirectUrl = new URL(redirectPath, request.url);
+
+  return redirectWithPreservedResponse(baseResponse, redirectUrl);
 }
 
 export const config = {
