@@ -1,0 +1,208 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import {
+  NOTIFICATION_STATUS,
+  NOTIFICATION_TYPES,
+} from "@/lib/constants/notifications";
+
+const { usePathnameMock } = vi.hoisted(() => ({
+  usePathnameMock: vi.fn(),
+}));
+
+vi.mock("next/navigation", () => ({
+  usePathname: usePathnameMock,
+}));
+
+import { NotificationBell } from "../components/NotificationBell";
+
+const USER_A_ID = "11111111-1111-4111-8111-111111111111";
+const USER_B_ID = "22222222-2222-4222-8222-222222222222";
+
+const NOTIFICATION_RESPONSE = {
+  unreadCount: 1,
+  items: [
+    {
+      id: "33333333-3333-4333-8333-333333333333",
+      title: "Review reminder",
+      body: "Review body",
+      type: NOTIFICATION_TYPES.REVIEW,
+      status: NOTIFICATION_STATUS.SENT,
+      sent_at: "2026-04-28T03:00:00.000Z",
+      read_at: null,
+      note_id: "44444444-4444-4444-8444-444444444444",
+      review_log_id: "55555555-5555-4555-8555-555555555555",
+      noteTitle: "Interval note",
+    },
+  ],
+};
+
+function createJsonResponse(payload: unknown, status = 200) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+function createTestQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  });
+}
+
+function renderNotificationBell({
+  queryClient = createTestQueryClient(),
+  userId = USER_A_ID,
+}: {
+  queryClient?: QueryClient;
+  userId?: string;
+} = {}) {
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <NotificationBell userId={userId} />
+    </QueryClientProvider>,
+  );
+}
+
+describe("NotificationBell", () => {
+  beforeEach(() => {
+    usePathnameMock.mockReset();
+    usePathnameMock.mockReturnValue("/notes");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(createJsonResponse(NOTIFICATION_RESPONSE)),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("fetches notifications and opens the bell list", async () => {
+    const user = userEvent.setup();
+    renderNotificationBell();
+
+    await user.click(await screen.findByRole("button"));
+
+    expect(await screen.findByText("Review reminder")).toBeInTheDocument();
+    expect(screen.getByText("Interval note")).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith("/api/notifications", {
+      credentials: "same-origin",
+    });
+  });
+
+  it("closes the list without exposing manual read controls when a notification link is clicked", async () => {
+    const user = userEvent.setup();
+    renderNotificationBell();
+
+    await user.click(await screen.findByRole("button"));
+
+    const link = await screen.findByRole("link");
+    link.addEventListener("click", (event) => event.preventDefault());
+    expect(
+      screen.queryByRole("button", { name: /Review reminder/ }),
+    ).not.toBeInTheDocument();
+
+    await user.click(link);
+
+    expect(screen.queryByText("Interval note")).not.toBeInTheDocument();
+  });
+
+  it("refetches notifications when the route changes after the cooldown", async () => {
+    const queryClient = createTestQueryClient();
+
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(createJsonResponse(NOTIFICATION_RESPONSE))
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          unreadCount: 0,
+          items: [],
+        }),
+      );
+
+    const { rerender } = renderNotificationBell({ queryClient });
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(screen.getByText("1")).toBeInTheDocument();
+    });
+    queryClient.setQueryData(
+      ["notifications", USER_A_ID],
+      NOTIFICATION_RESPONSE,
+      {
+        updatedAt: Date.now() - 30_001,
+      },
+    );
+
+    usePathnameMock.mockReturnValue(
+      "/notes/44444444-4444-4444-8444-444444444444",
+    );
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <NotificationBell userId={USER_A_ID} />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledTimes(2);
+    });
+    expect(screen.queryByText("1")).not.toBeInTheDocument();
+  });
+
+  it("shows an error state instead of treating unauthorized responses as empty", async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetch).mockResolvedValue(
+      createJsonResponse({ error: "unauthorized" }, 401),
+    );
+    renderNotificationBell();
+
+    await user.click(await screen.findByRole("button"));
+
+    expect(
+      await screen.findByText("알림을 불러오지 못했습니다."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+
+  it("does not reuse cached notifications when the user id changes", async () => {
+    const user = userEvent.setup();
+    const queryClient = createTestQueryClient();
+
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(createJsonResponse(NOTIFICATION_RESPONSE))
+      .mockResolvedValueOnce(createJsonResponse(NOTIFICATION_RESPONSE))
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          unreadCount: 0,
+          items: [],
+        }),
+      );
+
+    const { rerender } = renderNotificationBell({
+      queryClient,
+      userId: USER_A_ID,
+    });
+
+    await user.click(await screen.findByRole("button"));
+    expect(await screen.findByText("Interval note")).toBeInTheDocument();
+
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <NotificationBell userId={USER_B_ID} />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledTimes(3);
+    });
+    expect(screen.queryByText("Interval note")).not.toBeInTheDocument();
+  });
+});

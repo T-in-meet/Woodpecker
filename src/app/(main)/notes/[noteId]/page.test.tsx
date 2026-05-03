@@ -2,24 +2,49 @@ import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getNoteReviewRoute, ROUTES } from "@/lib/constants/routes";
+import { formatDateTime } from "@/lib/utils/formatDate";
 
 const REDIRECT_ERROR = new Error("NEXT_REDIRECT");
 const NOT_FOUND_ERROR = new Error("NEXT_NOT_FOUND");
 
-const { createClientMock, getNoteByIdMock, notFoundMock, redirectMock } =
-  vi.hoisted(() => ({
-    createClientMock: vi.fn(),
-    getNoteByIdMock: vi.fn(),
-    notFoundMock: vi.fn(),
-    redirectMock: vi.fn(),
-  }));
+const {
+  createClientMock,
+  getNoteByIdMock,
+  hasCompletedReviewForNoteTodayMock,
+  notFoundMock,
+  redirectMock,
+} = vi.hoisted(() => ({
+  createClientMock: vi.fn(),
+  getNoteByIdMock: vi.fn(),
+  hasCompletedReviewForNoteTodayMock: vi.fn(),
+  notFoundMock: vi.fn(),
+  redirectMock: vi.fn(),
+}));
 
 vi.mock("@/lib/supabase/server", () => ({
   createServerComponentClient: createClientMock,
 }));
 
+vi.mock("@/features/notifications/components/NotificationTimePicker", () => ({
+  NotificationTimePicker: ({
+    initialTime,
+    noteId,
+  }: {
+    initialTime: string | null;
+    noteId: string;
+  }) => (
+    <div data-testid="notification-time-picker">
+      {noteId}:{initialTime ?? "default"}
+    </div>
+  ),
+}));
+
 vi.mock("@/features/notes/queries", () => ({
   getNoteById: getNoteByIdMock,
+}));
+
+vi.mock("@/features/review/queries", () => ({
+  hasCompletedReviewForNoteToday: hasCompletedReviewForNoteTodayMock,
 }));
 
 vi.mock("@/features/notes/components/NoteViewer", () => ({
@@ -62,6 +87,8 @@ describe("NoteDetailPage", () => {
 
     createClientMock.mockReset();
     getNoteByIdMock.mockReset();
+    hasCompletedReviewForNoteTodayMock.mockReset();
+    hasCompletedReviewForNoteTodayMock.mockResolvedValue(false);
     redirectMock.mockReset();
     notFoundMock.mockReset();
 
@@ -111,6 +138,7 @@ describe("NoteDetailPage", () => {
       title: "Test note",
       content: "note body",
       next_review_at: "2026-03-29T09:00:00.000Z",
+      notification_time_of_day: "21:30:00",
       review_round: 1,
       created_at: "2026-03-29T00:00:00.000Z",
       updated_at: "2026-03-29T01:00:00.000Z",
@@ -126,6 +154,9 @@ describe("NoteDetailPage", () => {
       screen.getByRole("heading", { name: "Test note" }),
     ).toBeInTheDocument();
     expect(screen.getByTestId("note-viewer")).toHaveTextContent("note body");
+    expect(screen.getByTestId("notification-time-picker")).toHaveTextContent(
+      "note-123:21:30:00",
+    );
     expect(
       screen.getByText("지금 백지 테스트를 진행할 수 있습니다."),
     ).toBeInTheDocument();
@@ -144,6 +175,7 @@ describe("NoteDetailPage", () => {
       title: "Future review note",
       content: "note body",
       next_review_at: "2026-03-30T09:00:00.000Z",
+      notification_time_of_day: null,
       review_round: 1,
       created_at: "2026-03-29T00:00:00.000Z",
       updated_at: "2026-03-29T01:00:00.000Z",
@@ -154,13 +186,71 @@ describe("NoteDetailPage", () => {
       await NoteDetailPage({ params: Promise.resolve({ noteId: "note-123" }) }),
     );
 
-    expect(screen.getByText(/다음 백지 테스트 예정/)).toBeInTheDocument();
     expect(
-      screen.getByText(/원하면 지금 미리 진행할 수 있습니다\./),
+      screen.getByText(
+        `다음 예정: ${formatDateTime("2026-03-30T09:00:00.000Z")}`,
+      ),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "백지 테스트 시작" }),
     ).toHaveAttribute("href", getNoteReviewRoute("note-123"));
+  });
+
+  it("hides the start button and reflects the daily limit when already completed today", async () => {
+    createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
+    getNoteByIdMock.mockResolvedValue({
+      id: "note-123",
+      title: "Already done today",
+      content: "note body",
+      next_review_at: "2026-03-30T09:00:00.000Z",
+      notification_time_of_day: null,
+      review_round: 1,
+      created_at: "2026-03-29T00:00:00.000Z",
+      updated_at: "2026-03-29T01:00:00.000Z",
+      user_id: "user-123",
+    });
+    hasCompletedReviewForNoteTodayMock.mockResolvedValue(true);
+
+    render(
+      await NoteDetailPage({ params: Promise.resolve({ noteId: "note-123" }) }),
+    );
+
+    expect(
+      screen.getByText(
+        `오늘 백지 테스트 완료. 다음 예정: ${formatDateTime(
+          "2026-03-30T09:00:00.000Z",
+        )}`,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "백지 테스트 시작" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("falls back to allowing review when the daily-completion lookup fails", async () => {
+    createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
+    getNoteByIdMock.mockResolvedValue({
+      id: "note-123",
+      title: "Future review note",
+      content: "note body",
+      next_review_at: "2026-03-30T09:00:00.000Z",
+      notification_time_of_day: null,
+      review_round: 1,
+      created_at: "2026-03-29T00:00:00.000Z",
+      updated_at: "2026-03-29T01:00:00.000Z",
+      user_id: "user-123",
+    });
+    hasCompletedReviewForNoteTodayMock.mockRejectedValue(new Error("boom"));
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    render(
+      await NoteDetailPage({ params: Promise.resolve({ noteId: "note-123" }) }),
+    );
+
+    expect(
+      screen.getByRole("link", { name: "백지 테스트 시작" }),
+    ).toHaveAttribute("href", getNoteReviewRoute("note-123"));
+    errorSpy.mockRestore();
   });
 
   it("shows a completed badge when the note finished every review round", async () => {
@@ -170,6 +260,7 @@ describe("NoteDetailPage", () => {
       title: "Completed note",
       content: "note body",
       next_review_at: null,
+      notification_time_of_day: null,
       review_round: 3,
       created_at: "2026-03-29T00:00:00.000Z",
       updated_at: "2026-03-29T01:00:00.000Z",
