@@ -56,6 +56,7 @@ function redirectWithPreservedResponse(
  */
 export async function middleware(request: NextRequest) {
   const baseResponse = await updateSession(request);
+
   const pathname = getPathname(request);
 
   if (!isAuthAccessControlledPath(pathname)) {
