@@ -146,22 +146,28 @@ export function NotificationTimePicker({
     }
 
     startTransition(async () => {
-      const result = await setNotificationTimeAction(noteId, nextTime);
+      try {
+        const result = await setNotificationTimeAction(noteId, nextTime);
 
-      if (!result.success) {
-        setError(result.error);
-        return;
+        if (!result.success) {
+          setError(result.error);
+          return;
+        }
+
+        const nextSavedTime = nextTime ?? "";
+        setSavedTime(nextSavedTime);
+        setDraftFromTime(nextSavedTime);
+        setMessage(
+          nextTime
+            ? `알림 시간이 저장되었습니다. (${nextTime})`
+            : "기본 복습 예정 시간을 사용합니다.",
+        );
+        router.refresh();
+      } catch {
+        setError(
+          "알림 시간 저장 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
+        );
       }
-
-      const nextSavedTime = nextTime ?? "";
-      setSavedTime(nextSavedTime);
-      setDraftFromTime(nextSavedTime);
-      setMessage(
-        nextTime
-          ? `알림 시간이 저장되었습니다. (${nextTime})`
-          : "기본 복습 예정 시간을 사용합니다.",
-      );
-      router.refresh();
     });
   };
 

@@ -205,6 +205,43 @@ describe("NotificationTimePicker", () => {
     expect(screen.getByLabelText("분")).toHaveValue("30");
   });
 
+  it("shows a fallback error message when the server action rejects", async () => {
+    setNotificationTimeActionMock.mockRejectedValueOnce(
+      new Error("network error"),
+    );
+    const user = userEvent.setup();
+    render(
+      <NotificationTimePicker
+        noteId={NOTE_ID}
+        initialTime={null}
+        nextReviewAt={null}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "다음 알림 시간 설정" }),
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: "오전 오후 전환, 현재 오전",
+      }),
+    );
+    fireEvent.change(screen.getByLabelText("시"), {
+      target: { value: "9" },
+    });
+    fireEvent.change(screen.getByLabelText("분"), {
+      target: { value: "30" },
+    });
+    await user.click(screen.getByRole("button", { name: /저장/ }));
+
+    expect(
+      await screen.findByText(
+        "알림 시간 저장 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
+      ),
+    ).toBeInTheDocument();
+    expect(refreshMock).not.toHaveBeenCalled();
+  });
+
   it("clears the override and falls back to the default review time", async () => {
     const user = userEvent.setup();
     render(
