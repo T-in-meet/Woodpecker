@@ -10,6 +10,7 @@ import {
   Dialog,
   DialogClose,
   DialogContent,
+  DialogDescription,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
@@ -95,7 +96,6 @@ export function LegalDialogWrapper({
 
       <DialogContent
         className="flex max-h-[85vh] flex-col overflow-hidden"
-        aria-describedby={`${agreementType}-description`}
         onCloseAutoFocus={(event) => {
           // preventCloseAutoFocus와 onCloseComplete는 독립적인 책임:
           // 전자는 Radix 기본 복원(DialogTrigger 포커스) 억제,
@@ -109,9 +109,9 @@ export function LegalDialogWrapper({
         <DialogTitle className="mb-4">{dialogTitle}</DialogTitle>
 
         {/* 스크린리더용 설명 텍스트 */}
-        <div id={`${agreementType}-description`} className="sr-only">
+        <DialogDescription className="sr-only">
           {dialogTitle} 전문을 확인하고 동의할 수 있습니다.
-        </div>
+        </DialogDescription>
 
         {/* 법적 콘텐츠 — 스크롤 가능한 영역 */}
         <div className="relative mb-4 min-h-0 flex-1 overflow-y-auto">

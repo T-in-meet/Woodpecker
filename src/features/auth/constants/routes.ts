@@ -1,0 +1,6 @@
+import { ROUTES } from "@/lib/constants/routes";
+
+export const AUTH_CALLBACK_PATH = "/api/auth/callback";
+export const RESET_PASSWORD_PATH = ROUTES.RESET_PASSWORD;
+export const FORGOT_PASSWORD_PATH = ROUTES.FORGOT_PASSWORD;
+export const DEFAULT_POST_RESET_PATH = ROUTES.MYPAGE;

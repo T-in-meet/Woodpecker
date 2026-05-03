@@ -1,0 +1,203 @@
+"use client";
+
+import { useSearchParams } from "next/navigation";
+import { useActionState, useEffect, useRef, useState } from "react";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { INPUT_DEBOUNCE_DELAY_MS } from "@/features/auth/constants/ui";
+import { RATE_LIMIT_TOAST_MESSAGE } from "@/features/auth/errors/rateLimitError";
+import {
+  ForgotPasswordActionState,
+  INITIAL_FORGOT_PASSWORD_ACTION_STATE,
+} from "@/features/auth/forgot-password/actions/forgotPasswordActionState";
+import {
+  FORGOT_PASSWORD_GLOBAL_ERROR_MESSAGE,
+  FORGOT_PASSWORD_INVALID_RESET_LINK_MESSAGE,
+  FORGOT_PASSWORD_SUCCESS_MESSAGE,
+} from "@/features/auth/forgot-password/constants/messages";
+import { consumeForgotPasswordPrefillEmail } from "@/features/auth/forgot-password/lib/forgotPasswordPrefillMemory";
+import { forgotPasswordFormSchema } from "@/features/auth/forgot-password/schemas/forgotPasswordFormSchema";
+import { useDebouncedCallback } from "@/features/auth/hooks/useDebouncedCallback";
+import { showToast } from "@/lib/utils/showToast";
+
+type ForgotPasswordFormProps = {
+  action: (
+    prevState: ForgotPasswordActionState,
+    formData: FormData,
+  ) => Promise<ForgotPasswordActionState>;
+};
+
+// schema 결과를 UI가 바로 사용할 수 있는 단일 에러 메시지 형태로 정규화한다.
+function validateEmail(
+  email: string,
+): { ok: true } | { ok: false; message: string } {
+  const parsed = forgotPasswordFormSchema.safeParse({ email });
+  if (parsed.success) {
+    return { ok: true };
+  }
+
+  const message =
+    parsed.error.flatten().fieldErrors.email?.[0] ??
+    FORGOT_PASSWORD_GLOBAL_ERROR_MESSAGE;
+  return { ok: false, message };
+}
+
+export function ForgotPasswordForm({ action }: ForgotPasswordFormProps) {
+  const [email, setEmail] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isClientValid, setIsClientValid] = useState(false);
+  const emailRef = useRef("");
+
+  const searchParams = useSearchParams();
+  const hasHandledQueryErrorRef = useRef(false);
+  const hasHandledPrefillRef = useRef(false);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  const [state, formAction, isPending] = useActionState(
+    action,
+    INITIAL_FORGOT_PASSWORD_ACTION_STATE,
+  );
+
+  useEffect(() => {
+    // query 기반 toast는 최초 1회만 처리한다.
+    if (hasHandledQueryErrorRef.current) return;
+    hasHandledQueryErrorRef.current = true;
+
+    if (searchParams.get("error") === "invalid_reset_link") {
+      showToast(FORGOT_PASSWORD_INVALID_RESET_LINK_MESSAGE);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    // prefill은 최초 렌더링 시점에만 소비하고 이후 재주입하지 않는다.
+    if (hasHandledPrefillRef.current) return;
+    hasHandledPrefillRef.current = true;
+
+    const prefillEmail = consumeForgotPasswordPrefillEmail();
+    if (!prefillEmail) return;
+
+    const result = validateEmail(prefillEmail);
+    if (result.ok) {
+      emailRef.current = prefillEmail;
+      setEmail(prefillEmail);
+      setError(null);
+      setIsClientValid(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (state.status === "completed") {
+      showToast(FORGOT_PASSWORD_SUCCESS_MESSAGE);
+    }
+    if (state.status === "blocked") {
+      showToast(RATE_LIMIT_TOAST_MESSAGE, {
+        variant: "destructive",
+        dedupeKey: "auth-rate-limit",
+      });
+    }
+    if (state.status === "internal_error") {
+      showToast(FORGOT_PASSWORD_GLOBAL_ERROR_MESSAGE);
+    }
+  }, [state]);
+
+  const { schedule, cancel } = useDebouncedCallback(() => {
+    // debounce 시점에는 최신 입력값(ref)을 기준으로 검증한다.
+    const result = validateEmail(emailRef.current);
+    if (result.ok) {
+      setError(null);
+      setIsClientValid(true);
+    } else {
+      setError(result.message);
+      setIsClientValid(false);
+    }
+  }, INPUT_DEBOUNCE_DELAY_MS);
+
+  const onChangeEmail = (value: string) => {
+    emailRef.current = value;
+    setEmail(value);
+    setIsClientValid(value.trim().length > 0);
+    schedule();
+  };
+
+  const onSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    cancel();
+
+    const trimmedEmail = email.trim();
+    const result = validateEmail(trimmedEmail);
+
+    if (!result.ok) {
+      event.preventDefault();
+      setError(result.message);
+      setIsClientValid(false);
+      return;
+    }
+
+    const emailInput = event.currentTarget.elements.namedItem("email");
+    if (emailInput instanceof HTMLInputElement) {
+      emailInput.value = trimmedEmail;
+    }
+
+    emailRef.current = trimmedEmail;
+    setEmail(trimmedEmail);
+    setError(null);
+    setIsClientValid(true);
+  };
+
+  const onEmailKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== "Enter") return;
+
+    event.preventDefault();
+    formRef.current?.requestSubmit();
+  };
+
+  return (
+    <div className="mx-auto my-0 max-w-md overflow-hidden rounded-none border-0 bg-white p-16 shadow-none md:my-8 md:max-w-2xl md:rounded-xl md:border md:border-outline-variant md:shadow-sm">
+      <form
+        ref={formRef}
+        action={formAction}
+        onSubmit={onSubmit}
+        className="space-y-3 md:grid md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-start md:gap-x-4 md:space-y-0"
+        noValidate
+      >
+        <Label
+          htmlFor="forgot-password-email"
+          className="md:h-10 md:leading-10"
+        >
+          이메일
+        </Label>
+
+        <div className="space-y-2">
+          <Input
+            id="forgot-password-email"
+            name="email"
+            type="email"
+            value={email}
+            onChange={(event) => onChangeEmail(event.target.value)}
+            onKeyDown={onEmailKeyDown}
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? "forgot-password-email-error" : undefined}
+          />
+          {error ? (
+            <p
+              id="forgot-password-email-error"
+              role="alert"
+              className="text-sm text-destructive"
+            >
+              {error}
+            </p>
+          ) : null}
+        </div>
+
+        <Button
+          type="submit"
+          disabled={isPending || !isClientValid}
+          className="md:h-10 md:shrink-0"
+        >
+          {isPending ? "전송 중..." : "비밀번호 재설정 메일 받기"}
+        </Button>
+      </form>
+    </div>
+  );
+}

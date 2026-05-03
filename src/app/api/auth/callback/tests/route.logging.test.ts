@@ -9,7 +9,7 @@ import {
 } from "@/features/auth/lib/authLogger";
 import { createClient } from "@/lib/supabase/server";
 
-import { GET } from "./route";
+import { GET } from "../route";
 
 vi.mock("@/features/auth/lib/applyMinimumResponseTime", () => ({
   applyMinimumResponseTime: vi.fn(
