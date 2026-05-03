@@ -7,7 +7,7 @@ import {
   updateSession,
 } from "@/lib/supabase/middleware";
 
-import { middleware } from "./middleware";
+import { middleware } from "../middleware";
 
 vi.mock("@/lib/supabase/middleware", () => ({
   updateSession: vi.fn(),
