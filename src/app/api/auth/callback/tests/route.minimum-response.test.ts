@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MIN_RESPONSE_MS } from "@/features/auth/lib/applyMinimumResponseTime";
 import { createClient } from "@/lib/supabase/server";
 
-import { GET } from "./route";
+import { GET } from "../route";
 
 vi.mock("@/lib/supabase/server");
 

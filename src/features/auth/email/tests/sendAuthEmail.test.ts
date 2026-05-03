@@ -2,7 +2,7 @@
  * sendAuthEmail - 이메일 발송 통합 함수 테스트
  *
  * 검증 범위:
- * - 콜백 링크 생성: ${APP_URL}/api/auth/callback?token_hash=<tokenHash>&type=<type>
+ * - 콜백 링크 생성: ${APP_URL}/api/auth/callback?token_hash=<tokenHash>&type=<type>[&redirect=<redirectPath>]
  * - React Email 템플릿 렌더링 호출
  * - nodemailer provider 호출(현 정책: 전 환경 nodemailer 고정)
  * - 외부 서비스 실패 시 에러 전파
@@ -44,13 +44,13 @@ beforeEach(() => {
 });
 
 describe("sendAuthEmail - 이메일 발송 핵심 흐름", () => {
-  it("TC-01. AuthEmailTemplate에 APP_URL/api/auth/callback?token_hash=<hash>&type=magiclink 형태의 link가 전달된다", async () => {
-    await sendAuthEmail(TEST_EMAIL, TEST_TOKEN_HASH, "magiclink");
+  it("TC-01c. redirectPath가 있으면 callback link에 redirect query가 포함된다", async () => {
+    await sendAuthEmail(TEST_EMAIL, TEST_TOKEN_HASH, "recovery", "/notes");
 
     expect(vi.mocked(render)).toHaveBeenCalledWith(
       expect.objectContaining({
         props: expect.objectContaining({
-          link: `http://localhost:3000/api/auth/callback?token_hash=${TEST_TOKEN_HASH}&type=magiclink`,
+          link: `http://localhost:3000/api/auth/callback?token_hash=${TEST_TOKEN_HASH}&type=recovery&redirect=%2Fnotes`,
         }),
       }),
     );

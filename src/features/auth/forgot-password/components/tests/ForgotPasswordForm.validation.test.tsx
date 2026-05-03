@@ -1,0 +1,76 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { INPUT_DEBOUNCE_DELAY_MS } from "@/features/auth/constants/ui";
+import {
+  getFormActionMock,
+  getSubmitButtonByDefaultLabel,
+  MESSAGES,
+  renderForgotPasswordForm,
+  resetToastMock,
+  setDefaultValidSafeParse,
+  setInvalidSafeParse,
+  setupForgotPasswordFormTest,
+  submitByFormEvent,
+  submitForm,
+  typeValidEmail,
+} from "@/features/auth/forgot-password/components/tests/utils/forgot-password-form-test-utils";
+
+describe("ForgotPasswordForm.validation", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetToastMock();
+    setupForgotPasswordFormTest();
+  });
+
+  it("TC5: empty submit이면 validation error를 표시하고 action 호출이 없다", async () => {
+    setInvalidSafeParse(MESSAGES.required);
+    renderForgotPasswordForm();
+
+    submitByFormEvent();
+
+    expect(document.body).toHaveTextContent(MESSAGES.required);
+    expect(getFormActionMock()).not.toHaveBeenCalled();
+  });
+
+  it("TC6: invalid format submit이면 validation error를 표시하고 action 호출이 없다", async () => {
+    setInvalidSafeParse(MESSAGES.invalidFormat);
+    renderForgotPasswordForm();
+
+    submitByFormEvent();
+
+    expect(document.body).toHaveTextContent(MESSAGES.invalidFormat);
+    expect(getFormActionMock()).not.toHaveBeenCalled();
+  });
+
+  it("TC7: valid 입력이면 validation error가 없다", async () => {
+    setDefaultValidSafeParse();
+    renderForgotPasswordForm();
+
+    await typeValidEmail();
+
+    expect(document.body).not.toHaveTextContent(MESSAGES.required);
+    expect(document.body).not.toHaveTextContent(MESSAGES.invalidFormat);
+  });
+
+  it("TC9: invalid 상태에서는 버튼이 disabled다", async () => {
+    setInvalidSafeParse(MESSAGES.invalidFormat);
+    renderForgotPasswordForm();
+
+    await submitForm();
+
+    expect(getSubmitButtonByDefaultLabel()).toBeDisabled();
+  });
+
+  it("TC10: valid 상태에서는 버튼이 enabled다", async () => {
+    setDefaultValidSafeParse();
+    renderForgotPasswordForm();
+
+    await typeValidEmail();
+
+    await new Promise((resolve) =>
+      setTimeout(resolve, INPUT_DEBOUNCE_DELAY_MS),
+    );
+
+    expect(getSubmitButtonByDefaultLabel()).toBeEnabled();
+  });
+});

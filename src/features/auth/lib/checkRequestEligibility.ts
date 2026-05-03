@@ -63,7 +63,7 @@ export const EMAIL_LONG_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 /**
  * 요청 적격성 확인 — 단일 결정 권한(single decision authority)
  *
- * @param route - "signup" | "resend" | "login" (어떤 API가 차단되었는지 로깅 목적)
+ * @param route - "signup" | "resend" | "login" | "forgot-password" (어떤 API가 차단되었는지 로깅 목적)
  * @param ip - 클라이언트 IP 주소 (IP 저장소에 그대로 사용됨)
  * @param canonicalEmail - caller에서 canonicalizeEmail() 적용된 값
  *
@@ -123,8 +123,19 @@ export function mapBlockedByToReason(blockedBy: BlockedBy): RateLimitReason {
   }
 }
 
+function getEmailEligibilityKey(
+  route: "signup" | "resend" | "login" | "forgot-password",
+  canonicalEmail: string,
+): string {
+  if (route === "forgot-password") {
+    return `forgotPassword:${canonicalEmail}`;
+  }
+
+  return canonicalEmail;
+}
+
 export function checkRequestEligibility(
-  route: "signup" | "resend" | "login",
+  route: "signup" | "resend" | "login" | "forgot-password",
   ip: string,
   canonicalEmail: string,
 ): EligibilityResult {
@@ -138,7 +149,8 @@ export function checkRequestEligibility(
 
   // [이유: ipStore 구조가 IpEligibilityEntry로 변경됨 — shortWindow/longWindow 별도 접근]
   const ipEntry = ipStore.get(ip);
-  const emailEntry = emailStore.get(canonicalEmail) ?? {
+  const emailKey = getEmailEligibilityKey(route, canonicalEmail);
+  const emailEntry = emailStore.get(emailKey) ?? {
     shortWindow: null,
     longWindow: null,
   };
@@ -215,11 +227,11 @@ export function checkRequestEligibility(
     // login은 short window 카운터를 업데이트하지 않음 — 적용하지 않은 윈도우를 오염시키지 않기 위해
     shortWindow:
       route === "login"
-        ? (emailStore.get(canonicalEmail)?.shortWindow ?? null)
+        ? (emailStore.get(emailKey)?.shortWindow ?? null)
         : { timestamps: shortEval.next },
     longWindow: { timestamps: longEval.next },
   };
-  emailStore.set(canonicalEmail, nextEmailEntry);
+  emailStore.set(emailKey, nextEmailEntry);
 
   /**
    * 기회주의적 cleanup 실행

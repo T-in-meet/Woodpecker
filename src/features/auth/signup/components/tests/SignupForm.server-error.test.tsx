@@ -1,4 +1,10 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -51,17 +57,31 @@ describe("서버 유효성 검사 에러 매핑", () => {
   async function fillValidFormAndSubmit(
     user: ReturnType<typeof userEvent.setup>,
   ) {
-    await user.type(screen.getByLabelText(/이메일/i), "test@example.com");
-    await user.type(screen.getByLabelText(/^비밀번호$/i), "password123");
-    await user.type(screen.getByLabelText(/비밀번호 확인/i), "password123");
-    await user.type(screen.getByLabelText(/닉네임/i), "tester");
+    fireEvent.change(screen.getByLabelText(/이메일/i), {
+      target: { value: "test@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText(/^비밀번호$/i), {
+      target: { value: "password123" },
+    });
+    fireEvent.change(screen.getByLabelText(/비밀번호 확인/i), {
+      target: { value: "password123" },
+    });
+    fireEvent.change(screen.getByLabelText(/닉네임/i), {
+      target: { value: "tester" },
+    });
     // 이유: interactionEnabled=false 상태에서 체크박스 직접 클릭이 차단되므로 모달 경유
     await user.click(screen.getByRole("button", { name: /이용약관 보기/i }));
     await user.click(screen.getByRole("button", { name: /동의하기/i }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
     await user.click(
       screen.getByRole("button", { name: /개인정보처리방침 보기/i }),
     );
     await user.click(screen.getByRole("button", { name: /동의하기/i }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
     await user.click(screen.getByRole("button", { name: /회원가입/i }));
   }
 

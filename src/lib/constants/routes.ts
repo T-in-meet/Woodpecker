@@ -9,6 +9,8 @@ export const ROUTES = {
   TERMS: "/terms",
   PRIVACY: "/privacy",
   CALLBACK: "/auth/callback",
+  RESET_PASSWORD: "/reset-password",
+  FORGOT_PASSWORD: "/forgot-password",
 } as const;
 
 export type Route = (typeof ROUTES)[keyof typeof ROUTES];

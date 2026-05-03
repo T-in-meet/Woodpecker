@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { PASSWORD_MIN_LENGTH_MESSAGE } from "@/features/auth/constants/messages";
 import { PASSWORD_MIN_LENGTH } from "@/lib/constants/user";
 
 /**
@@ -34,7 +35,4 @@ export const passwordSchema = z.string().min(PASSWORD_MIN_LENGTH);
  */
 export const passwordFieldSchema = z
   .string()
-  .min(
-    PASSWORD_MIN_LENGTH,
-    `비밀번호는 ${PASSWORD_MIN_LENGTH}자 이상이어야 합니다`,
-  );
+  .min(PASSWORD_MIN_LENGTH, PASSWORD_MIN_LENGTH_MESSAGE);
