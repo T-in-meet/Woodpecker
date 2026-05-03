@@ -3,6 +3,7 @@ import { Suspense } from "react";
 
 import { forgotPasswordAction } from "@/features/auth/forgot-password/actions/forgotPasswordAction";
 import { ForgotPasswordForm } from "@/features/auth/forgot-password/components/ForgotPasswordForm";
+import { requireGuestPage } from "@/features/auth/utils/requireGuestPage";
 
 // 검색 엔진 인덱싱 방지 (robots.txt Disallow보다 확실함 — 삭제 금지)
 export const metadata: Metadata = {
@@ -31,6 +32,11 @@ type Props = {
  * 오류가 발생한다.
  */
 export default async function ForgotPasswordPage({ searchParams }: Props) {
+  /**
+   * 로그인된 사용자는 접근 불가 (mypage로 redirect)
+   */
+  await requireGuestPage();
+
   /**
    * redirect query 전달
    *
