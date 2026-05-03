@@ -2,6 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, Loader2 } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ const EMPTY_NOTIFICATIONS: NotificationsResponseType = {
   items: [],
   unreadCount: 0,
 };
+const ROUTE_CHANGE_REFETCH_COOLDOWN_MS = 30_000;
 
 class UnauthorizedNotificationError extends Error {}
 
@@ -45,7 +47,7 @@ async function fetchNotifications(): Promise<NotificationsResponseType> {
   return parsed.data;
 }
 
-function markAsReadInCache(
+function removeMarkedNotificationFromCache(
   data: NotificationsResponseType,
   notificationId: string,
   updated: boolean,
@@ -59,15 +61,7 @@ function markAsReadInCache(
     unreadCount: shouldReduceUnread
       ? Math.max(data.unreadCount - 1, 0)
       : data.unreadCount,
-    items: data.items.map((item) =>
-      item.id === notificationId
-        ? {
-            ...item,
-            status: NOTIFICATION_STATUS.READ,
-            read_at: item.read_at ?? new Date().toISOString(),
-          }
-        : item,
-    ),
+    items: data.items.filter((item) => item.id !== notificationId),
   };
 }
 
@@ -82,7 +76,9 @@ export function NotificationBell({ userId }: NotificationBellProps) {
     string | null
   >(null);
   const queryClient = useQueryClient();
+  const pathname = usePathname();
   const ref = useRef<HTMLDivElement>(null);
+  const previousPathnameRef = useRef(pathname);
   const notificationsQueryKey = ["notifications", userId] as const;
 
   const {
@@ -99,6 +95,28 @@ export function NotificationBell({ userId }: NotificationBellProps) {
       !(error instanceof UnauthorizedNotificationError) && failureCount < 1,
     staleTime: 30_000,
   });
+
+  useEffect(() => {
+    if (previousPathnameRef.current === pathname) return;
+
+    previousPathnameRef.current = pathname;
+    setActionError(null);
+
+    const notificationsQueryState = queryClient.getQueryState([
+      "notifications",
+      userId,
+    ] as const);
+    const lastFetchedAt = notificationsQueryState?.dataUpdatedAt ?? 0;
+
+    if (
+      notificationsQueryState?.fetchStatus === "fetching" ||
+      Date.now() - lastFetchedAt < ROUTE_CHANGE_REFETCH_COOLDOWN_MS
+    ) {
+      return;
+    }
+
+    void refetch();
+  }, [pathname, queryClient, refetch, userId]);
 
   useEffect(() => {
     if (!open) return;
@@ -154,7 +172,11 @@ export function NotificationBell({ userId }: NotificationBellProps) {
         notificationsQueryKey,
         (current) =>
           current
-            ? markAsReadInCache(current, notificationId, result.updated)
+            ? removeMarkedNotificationFromCache(
+                current,
+                notificationId,
+                result.updated,
+              )
             : current,
       );
     } catch {

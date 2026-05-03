@@ -8,12 +8,19 @@ import {
   NOTIFICATION_TYPES,
 } from "@/lib/constants/notifications";
 
-const { markNotificationAsReadActionMock } = vi.hoisted(() => ({
-  markNotificationAsReadActionMock: vi.fn(),
-}));
+const { markNotificationAsReadActionMock, usePathnameMock } = vi.hoisted(
+  () => ({
+    markNotificationAsReadActionMock: vi.fn(),
+    usePathnameMock: vi.fn(),
+  }),
+);
 
 vi.mock("../actions", () => ({
   markNotificationAsReadAction: markNotificationAsReadActionMock,
+}));
+
+vi.mock("next/navigation", () => ({
+  usePathname: usePathnameMock,
 }));
 
 import { NotificationBell } from "../components/NotificationBell";
@@ -77,6 +84,8 @@ describe("NotificationBell", () => {
       success: true,
       updated: true,
     });
+    usePathnameMock.mockReset();
+    usePathnameMock.mockReturnValue("/notes");
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(createJsonResponse(NOTIFICATION_RESPONSE)),
@@ -100,7 +109,7 @@ describe("NotificationBell", () => {
     });
   });
 
-  it("closes the list and marks the item as read when a notification link is clicked", async () => {
+  it("closes the list without marking the item as read when a notification link is clicked", async () => {
     const user = userEvent.setup();
     renderNotificationBell();
 
@@ -111,12 +120,72 @@ describe("NotificationBell", () => {
 
     await user.click(link);
 
+    expect(markNotificationAsReadActionMock).not.toHaveBeenCalled();
+    expect(screen.queryByText("Interval note")).not.toBeInTheDocument();
+  });
+
+  it("removes an item from the open list when it is manually marked as read", async () => {
+    const user = userEvent.setup();
+    renderNotificationBell();
+
+    await user.click(await screen.findByRole("button"));
+    expect(await screen.findByText("Interval note")).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", {
+        name: /Review reminder/,
+      }),
+    );
+
     await waitFor(() => {
       expect(markNotificationAsReadActionMock).toHaveBeenCalledWith(
         "33333333-3333-4333-8333-333333333333",
       );
     });
     expect(screen.queryByText("Interval note")).not.toBeInTheDocument();
+  });
+
+  it("refetches notifications when the route changes after the cooldown", async () => {
+    const queryClient = createTestQueryClient();
+
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(createJsonResponse(NOTIFICATION_RESPONSE))
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          unreadCount: 0,
+          items: [],
+        }),
+      );
+
+    const { rerender } = renderNotificationBell({ queryClient });
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(screen.getByText("1")).toBeInTheDocument();
+    });
+    queryClient.setQueryData(
+      ["notifications", USER_A_ID],
+      NOTIFICATION_RESPONSE,
+      {
+        updatedAt: Date.now() - 30_001,
+      },
+    );
+
+    usePathnameMock.mockReturnValue(
+      "/notes/44444444-4444-4444-8444-444444444444",
+    );
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <NotificationBell userId={USER_A_ID} />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledTimes(2);
+    });
+    expect(screen.queryByText("1")).not.toBeInTheDocument();
   });
 
   it("shows an error state instead of treating unauthorized responses as empty", async () => {

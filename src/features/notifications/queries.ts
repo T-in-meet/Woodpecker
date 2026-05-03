@@ -117,11 +117,7 @@ export async function getNotificationList(
     )
     .eq("user_id", userId)
     .eq("type", NOTIFICATION_TYPES.REVIEW)
-    .in("status", [
-      NOTIFICATION_STATUS.SENT,
-      NOTIFICATION_STATUS.READ,
-      NOTIFICATION_STATUS.SKIPPED,
-    ])
+    .eq("status", NOTIFICATION_STATUS.SENT)
     .order("sent_at", { ascending: false })
     .limit(limit);
 

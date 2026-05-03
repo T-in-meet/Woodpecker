@@ -67,7 +67,7 @@ describe("NotificationList", () => {
     expect(onMarkAsRead).toHaveBeenCalledWith(NOTIFICATION_ID);
   });
 
-  it("marks unread linked notifications and notifies navigation", async () => {
+  it("notifies navigation without marking linked notifications as read", async () => {
     const user = userEvent.setup();
     const onItemNavigate = vi.fn();
     const onMarkAsRead = vi.fn();
@@ -85,7 +85,7 @@ describe("NotificationList", () => {
 
     await user.click(link);
 
-    expect(onMarkAsRead).toHaveBeenCalledWith(NOTIFICATION_ID);
+    expect(onMarkAsRead).not.toHaveBeenCalled();
     expect(onItemNavigate).toHaveBeenCalledOnce();
   });
 

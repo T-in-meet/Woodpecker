@@ -4,7 +4,7 @@
 
 BEGIN;
 
-SELECT plan(25);
+SELECT plan(26);
 
 SELECT set_config('test.review_complete_user_a_id', gen_random_uuid()::text, true);
 SELECT set_config('test.review_complete_user_b_id', gen_random_uuid()::text, true);
@@ -25,6 +25,7 @@ SELECT set_config('test.review_complete_log_mismatch_id', gen_random_uuid()::tex
 SELECT set_config('test.review_complete_log_unverified_id', gen_random_uuid()::text, true);
 SELECT set_config('test.review_complete_log_notification_time_id', gen_random_uuid()::text, true);
 SELECT set_config('test.review_complete_log_cleared_notification_time_id', gen_random_uuid()::text, true);
+SELECT set_config('test.review_complete_notification_round1_id', gen_random_uuid()::text, true);
 
 INSERT INTO auth.users (id, email, email_confirmed_at, raw_user_meta_data)
 VALUES
@@ -187,6 +188,27 @@ VALUES
     TIMESTAMPTZ '2026-05-01 14:30:00+09'
   );
 
+INSERT INTO public.notifications (
+  id,
+  user_id,
+  type,
+  title,
+  body,
+  status,
+  note_id,
+  review_log_id
+)
+VALUES (
+  current_setting('test.review_complete_notification_round1_id')::uuid,
+  current_setting('test.review_complete_user_a_id')::uuid,
+  'REVIEW',
+  'round1 notification',
+  'round1 body',
+  'SENT',
+  current_setting('test.review_complete_note_round1_id')::uuid,
+  current_setting('test.review_complete_log_round1_id')::uuid
+);
+
 SET LOCAL ROLE anon;
 SELECT set_config('request.jwt.claims', '{}'::text, true);
 
@@ -266,6 +288,15 @@ SELECT ok(
     WHERE id = current_setting('test.review_complete_log_round1_id')::uuid
   ),
   $$round 1 log should be marked as completed$$
+);
+
+SELECT ok(
+  (
+    SELECT status = 'READ' AND read_at IS NOT NULL
+    FROM public.notifications
+    WHERE id = current_setting('test.review_complete_notification_round1_id')::uuid
+  ),
+  $$round 1 notification should be marked as read after completion$$
 );
 
 SELECT ok(

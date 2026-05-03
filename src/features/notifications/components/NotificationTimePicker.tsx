@@ -28,6 +28,14 @@ import { Label } from "@/components/ui/label";
 import { formatDateTime } from "@/lib/utils/formatDate";
 
 import { setNotificationTimeAction } from "../actions";
+import {
+  clampTimePart,
+  getNumericInput,
+  getTimeParts,
+  type PeriodType,
+  toInputTime,
+  toTimeValue,
+} from "../lib/time";
 import { notificationTimeSchema } from "../schema";
 
 type NotificationTimePickerProps = {
@@ -36,90 +44,8 @@ type NotificationTimePickerProps = {
   nextReviewAt: string | null;
 };
 
-type PeriodType = "am" | "pm";
-
-function toInputTime(time: string | null) {
-  return time ? time.slice(0, 5) : "";
-}
-
 function getCurrentSettingLabel(time: string) {
   return time ? `${time} KST` : "기본 복습 예정 시간";
-}
-
-function padTimePart(value: number) {
-  return String(value).padStart(2, "0");
-}
-
-function getTimeParts(time: string): {
-  hour: string;
-  minute: string;
-  period: PeriodType;
-} {
-  if (time === "") {
-    return { hour: "", minute: "", period: "am" };
-  }
-
-  const [hour = "0", minute = "00"] = time.split(":");
-  const hour24 = Number(hour);
-  const hour12 = hour24 % 12 || 12;
-
-  return {
-    hour: padTimePart(hour12),
-    minute,
-    period: hour24 >= 12 ? "pm" : "am",
-  };
-}
-
-function toTimeValue(period: PeriodType, hour: string, minute: string) {
-  const trimmedHour = hour.trim();
-  const trimmedMinute = minute.trim();
-
-  if (trimmedHour === "" && trimmedMinute === "") {
-    return "";
-  }
-
-  const hourNumber = Number(trimmedHour);
-  const minuteNumber = Number(trimmedMinute);
-
-  if (
-    !Number.isInteger(hourNumber) ||
-    !Number.isInteger(minuteNumber) ||
-    hourNumber < 1 ||
-    hourNumber > 12 ||
-    minuteNumber < 0 ||
-    minuteNumber > 59
-  ) {
-    return null;
-  }
-
-  const hour24 =
-    period === "pm"
-      ? hourNumber === 12
-        ? 12
-        : hourNumber + 12
-      : hourNumber === 12
-        ? 0
-        : hourNumber;
-
-  return `${padTimePart(hour24)}:${padTimePart(minuteNumber)}`;
-}
-
-function getNumericInput(value: string) {
-  return value.replace(/\D/g, "").slice(0, 2);
-}
-
-function clampTimePart(value: string, min: number, max: number) {
-  if (value === "") {
-    return "";
-  }
-
-  const number = Number(value);
-
-  if (!Number.isInteger(number)) {
-    return "";
-  }
-
-  return padTimePart(Math.min(max, Math.max(min, number)));
 }
 
 export function NotificationTimePicker({

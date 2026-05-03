@@ -103,7 +103,6 @@ export function NotificationList({
                 href={reviewHref}
                 className="min-w-0 flex-1"
                 onClick={() => {
-                  if (isUnread) void onMarkAsRead(item.id);
                   onItemNavigate?.();
                 }}
               >

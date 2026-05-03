@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getNoteReviewRoute, ROUTES } from "@/lib/constants/routes";
+import { formatDateTime } from "@/lib/utils/formatDate";
 
 const REDIRECT_ERROR = new Error("NEXT_REDIRECT");
 const NOT_FOUND_ERROR = new Error("NEXT_NOT_FOUND");
@@ -175,7 +176,9 @@ describe("NoteDetailPage", () => {
 
     expect(
       screen.getByText(
-        "다음 백지 테스트가 예정되어 있습니다. 원하면 지금 미리 진행할 수 있습니다.",
+        `다음 백지 테스트 예정 ${formatDateTime(
+          "2026-03-30T09:00:00.000Z",
+        )}. 원하면 지금 미리 진행할 수 있습니다.`,
       ),
     ).toBeInTheDocument();
     expect(
