@@ -1,12 +1,13 @@
 "use client";
 
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useSearchParams } from "next/navigation";
-import { useActionState, useEffect, useRef, useState } from "react";
+import { startTransition, useActionState, useEffect, useRef } from "react";
+import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { INPUT_DEBOUNCE_DELAY_MS } from "@/features/auth/constants/ui";
 import { RATE_LIMIT_TOAST_MESSAGE } from "@/features/auth/errors/rateLimitError";
 import {
   ForgotPasswordActionState,
@@ -18,8 +19,10 @@ import {
   FORGOT_PASSWORD_SUCCESS_MESSAGE,
 } from "@/features/auth/forgot-password/constants/messages";
 import { consumeForgotPasswordPrefillEmail } from "@/features/auth/forgot-password/lib/forgotPasswordPrefillMemory";
-import { forgotPasswordFormSchema } from "@/features/auth/forgot-password/schemas/forgotPasswordFormSchema";
-import { useDebouncedCallback } from "@/features/auth/hooks/useDebouncedCallback";
+import {
+  ForgotPasswordFormInput,
+  forgotPasswordFormSchema,
+} from "@/features/auth/forgot-password/schemas/forgotPasswordFormSchema";
 import { showToast } from "@/lib/utils/showToast";
 
 type ForgotPasswordFormProps = {
@@ -29,37 +32,30 @@ type ForgotPasswordFormProps = {
   ) => Promise<ForgotPasswordActionState>;
 };
 
-// schema 결과를 UI가 바로 사용할 수 있는 단일 에러 메시지 형태로 정규화한다.
-function validateEmail(
-  email: string,
-): { ok: true } | { ok: false; message: string } {
-  const parsed = forgotPasswordFormSchema.safeParse({ email });
-  if (parsed.success) {
-    return { ok: true };
-  }
-
-  const message =
-    parsed.error.flatten().fieldErrors.email?.[0] ??
-    FORGOT_PASSWORD_GLOBAL_ERROR_MESSAGE;
-  return { ok: false, message };
-}
-
 export function ForgotPasswordForm({ action }: ForgotPasswordFormProps) {
-  const [email, setEmail] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [isClientValid, setIsClientValid] = useState(false);
-  const emailRef = useRef("");
-
   const searchParams = useSearchParams();
   const hasHandledQueryErrorRef = useRef(false);
   const hasHandledPrefillRef = useRef(false);
-  const formRef = useRef<HTMLFormElement>(null);
 
   const [state, formAction, isPending] = useActionState(
     action,
     INITIAL_FORGOT_PASSWORD_ACTION_STATE,
   );
 
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    formState: { errors },
+  } = useForm<ForgotPasswordFormInput>({
+    resolver: zodResolver(forgotPasswordFormSchema),
+    mode: "onTouched",
+    reValidateMode: "onChange",
+    defaultValues: { email: "" },
+  });
+
+  // callback에서 invalid_reset_link로 돌아온 경우 사용자에게 한 번만 안내한다.
+  // searchParams 변경이나 리렌더링으로 같은 toast가 반복 출력되지 않도록 ref로 처리 여부를 기록한다.
   useEffect(() => {
     // query 기반 toast는 최초 1회만 처리한다.
     if (hasHandledQueryErrorRef.current) return;
@@ -70,6 +66,8 @@ export function ForgotPasswordForm({ action }: ForgotPasswordFormProps) {
     }
   }, [searchParams]);
 
+  // reset link 실패 후 forgot-password로 돌아온 경우 이전 이메일을 한 번만 복원한다.
+  // react-hook-form 상태와 validation 상태를 함께 갱신하기 위해 setValue를 사용한다.
   useEffect(() => {
     // prefill은 최초 렌더링 시점에만 소비하고 이후 재주입하지 않는다.
     if (hasHandledPrefillRef.current) return;
@@ -78,15 +76,18 @@ export function ForgotPasswordForm({ action }: ForgotPasswordFormProps) {
     const prefillEmail = consumeForgotPasswordPrefillEmail();
     if (!prefillEmail) return;
 
-    const result = validateEmail(prefillEmail);
-    if (result.ok) {
-      emailRef.current = prefillEmail;
-      setEmail(prefillEmail);
-      setError(null);
-      setIsClientValid(true);
-    }
-  }, []);
+    const parsed = forgotPasswordFormSchema.safeParse({ email: prefillEmail });
+    if (!parsed.success) return;
 
+    setValue("email", parsed.data.email, {
+      shouldValidate: true,
+      shouldDirty: true,
+      shouldTouch: true,
+    });
+  }, [setValue]);
+
+  // Server Action 결과 상태에 따라 사용자 피드백을 출력한다.
+  // 필드 validation은 react-hook-form이 담당하고, 서버 결과는 전역 toast로 처리한다.
   useEffect(() => {
     if (state.status === "completed") {
       showToast(FORGOT_PASSWORD_SUCCESS_MESSAGE);
@@ -102,61 +103,20 @@ export function ForgotPasswordForm({ action }: ForgotPasswordFormProps) {
     }
   }, [state]);
 
-  const { schedule, cancel } = useDebouncedCallback(() => {
-    // debounce 시점에는 최신 입력값(ref)을 기준으로 검증한다.
-    const result = validateEmail(emailRef.current);
-    if (result.ok) {
-      setError(null);
-      setIsClientValid(true);
-    } else {
-      setError(result.message);
-      setIsClientValid(false);
-    }
-  }, INPUT_DEBOUNCE_DELAY_MS);
+  // react-hook-form 검증을 통과한 값만 Server Action에 전달한다.
+  // native form action과 handleSubmit은 충돌할 수 있으므로 FormData를 직접 구성해 dispatch한다.
+  const onSubmit = handleSubmit((data) => {
+    const formData = new FormData();
+    formData.set("email", data.email);
 
-  const onChangeEmail = (value: string) => {
-    emailRef.current = value;
-    setEmail(value);
-    setIsClientValid(value.trim().length > 0);
-    schedule();
-  };
-
-  const onSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    cancel();
-
-    const trimmedEmail = email.trim();
-    const result = validateEmail(trimmedEmail);
-
-    if (!result.ok) {
-      event.preventDefault();
-      setError(result.message);
-      setIsClientValid(false);
-      return;
-    }
-
-    const emailInput = event.currentTarget.elements.namedItem("email");
-    if (emailInput instanceof HTMLInputElement) {
-      emailInput.value = trimmedEmail;
-    }
-
-    emailRef.current = trimmedEmail;
-    setEmail(trimmedEmail);
-    setError(null);
-    setIsClientValid(true);
-  };
-
-  const onEmailKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key !== "Enter") return;
-
-    event.preventDefault();
-    formRef.current?.requestSubmit();
-  };
+    startTransition(() => {
+      formAction(formData);
+    });
+  });
 
   return (
     <div className="mx-auto my-0 max-w-md overflow-hidden rounded-none border-0 bg-white p-16 shadow-none md:my-8 md:max-w-2xl md:rounded-xl md:border md:border-outline-variant md:shadow-sm">
       <form
-        ref={formRef}
-        action={formAction}
         onSubmit={onSubmit}
         className="space-y-3 md:grid md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-start md:gap-x-4 md:space-y-0"
         noValidate
@@ -171,28 +131,27 @@ export function ForgotPasswordForm({ action }: ForgotPasswordFormProps) {
         <div className="space-y-2">
           <Input
             id="forgot-password-email"
-            name="email"
             type="email"
-            value={email}
-            onChange={(event) => onChangeEmail(event.target.value)}
-            onKeyDown={onEmailKeyDown}
-            aria-invalid={Boolean(error)}
-            aria-describedby={error ? "forgot-password-email-error" : undefined}
+            aria-invalid={Boolean(errors.email)}
+            aria-describedby={
+              errors.email ? "forgot-password-email-error" : undefined
+            }
+            {...register("email")}
           />
-          {error ? (
+          {errors.email ? (
             <p
               id="forgot-password-email-error"
               role="alert"
               className="text-sm text-destructive"
             >
-              {error}
+              {errors.email.message}
             </p>
           ) : null}
         </div>
 
         <Button
           type="submit"
-          disabled={isPending || !isClientValid}
+          disabled={isPending}
           className="md:h-10 md:shrink-0"
         >
           {isPending ? "전송 중..." : "비밀번호 재설정 메일 받기"}

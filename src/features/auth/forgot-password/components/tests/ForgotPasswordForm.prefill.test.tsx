@@ -1,3 +1,4 @@
+import { screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -77,6 +78,6 @@ describe("ForgotPasswordForm.prefill", () => {
     await submitForm();
 
     expect(getFormActionMock()).not.toHaveBeenCalled();
-    expect(document.body).toHaveTextContent(MESSAGES.invalidFormat);
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
   });
 });

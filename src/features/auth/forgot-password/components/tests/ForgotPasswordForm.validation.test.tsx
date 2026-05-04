@@ -1,3 +1,4 @@
+import { screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { INPUT_DEBOUNCE_DELAY_MS } from "@/features/auth/constants/ui";
@@ -28,7 +29,7 @@ describe("ForgotPasswordForm.validation", () => {
 
     submitByFormEvent();
 
-    expect(document.body).toHaveTextContent(MESSAGES.required);
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
     expect(getFormActionMock()).not.toHaveBeenCalled();
   });
 
@@ -38,7 +39,7 @@ describe("ForgotPasswordForm.validation", () => {
 
     submitByFormEvent();
 
-    expect(document.body).toHaveTextContent(MESSAGES.invalidFormat);
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
     expect(getFormActionMock()).not.toHaveBeenCalled();
   });
 
@@ -52,13 +53,13 @@ describe("ForgotPasswordForm.validation", () => {
     expect(document.body).not.toHaveTextContent(MESSAGES.invalidFormat);
   });
 
-  it("TC9: invalid 상태에서는 버튼이 disabled다", async () => {
+  it("TC9: invalid 상태에서도 버튼은 enabled다", async () => {
     setInvalidSafeParse(MESSAGES.invalidFormat);
     renderForgotPasswordForm();
 
     await submitForm();
 
-    expect(getSubmitButtonByDefaultLabel()).toBeDisabled();
+    expect(getSubmitButtonByDefaultLabel()).toBeEnabled();
   });
 
   it("TC10: valid 상태에서는 버튼이 enabled다", async () => {

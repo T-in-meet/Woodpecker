@@ -67,15 +67,6 @@ vi.mock("@/lib/utils/showToast", () => ({
 }));
 
 vi.mock(
-  "@/features/auth/forgot-password/schemas/forgotPasswordFormSchema",
-  () => ({
-    forgotPasswordFormSchema: {
-      safeParse: hoisted.safeParseMock,
-    },
-  }),
-);
-
-vi.mock(
   "@/features/auth/forgot-password/lib/forgotPasswordPrefillMemory",
   () => ({
     consumeForgotPasswordPrefillEmail: vi.fn(() => {
@@ -237,7 +228,9 @@ export function submitByFormEvent() {
 }
 
 export function submitWithEnterKey() {
-  fireEvent.keyDown(getEmailInput(), { key: "Enter", code: "Enter" });
+  const input = getEmailInput();
+  fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
+  fireEvent.submit(input.closest("form")!);
 }
 
 export function getFormActionMock() {

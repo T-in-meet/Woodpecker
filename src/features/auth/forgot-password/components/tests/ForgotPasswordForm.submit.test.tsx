@@ -1,3 +1,4 @@
+import { waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -63,7 +64,7 @@ describe("ForgotPasswordForm.submit", () => {
     await typeValidEmail();
     submitWithEnterKey();
 
-    expect(getFormActionMock()).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(getFormActionMock()).toHaveBeenCalledTimes(1));
   });
 
   it('TC23: submit 중 버튼 문구는 "전송 중..."이고 disabled다', async () => {
