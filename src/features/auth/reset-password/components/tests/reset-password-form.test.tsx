@@ -1,4 +1,5 @@
 import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -129,5 +130,43 @@ describe("reset-password-form", () => {
       screen.getByText(RESET_PASSWORD_GLOBAL_ERROR_MESSAGE),
     ).toBeInTheDocument();
     expect(screen.queryByText("supabase error")).not.toBeInTheDocument();
+  });
+
+  it("TC22: idle에서는 global error UI를 표시하지 않는다", async () => {
+    const user = userEvent.setup();
+    renderResetPasswordForm();
+    await user.type(screen.getByLabelText(/^비밀번호$/i), "secret-value");
+    await user.type(screen.getByLabelText(/비밀번호 확인/i), "secret-value");
+
+    expect(
+      screen.queryByText(RESET_PASSWORD_GLOBAL_ERROR_MESSAGE),
+    ).not.toBeInTheDocument();
+  });
+
+  it("TC23: idle에서는 입력한 민감값을 화면 텍스트로 노출하지 않는다", async () => {
+    const user = userEvent.setup();
+    renderResetPasswordForm();
+    await user.type(screen.getByLabelText(/^비밀번호$/i), "secret-value");
+    await user.type(screen.getByLabelText(/비밀번호 확인/i), "secret-value");
+
+    expect(screen.queryByText("secret-value")).not.toBeInTheDocument();
+  });
+
+  it("TC24: idle에서는 성공 UI를 표시하지 않는다", async () => {
+    const user = userEvent.setup();
+    renderResetPasswordForm();
+    await user.type(screen.getByLabelText(/^비밀번호$/i), "secret-value");
+    await user.type(screen.getByLabelText(/비밀번호 확인/i), "secret-value");
+
+    expect(screen.queryByText(/변경 완료|성공/i)).not.toBeInTheDocument();
+  });
+
+  it("TC25: idle에서는 rejected UI를 표시하지 않는다", async () => {
+    const user = userEvent.setup();
+    renderResetPasswordForm();
+    await user.type(screen.getByLabelText(/^비밀번호$/i), "secret-value");
+    await user.type(screen.getByLabelText(/비밀번호 확인/i), "secret-value");
+
+    expect(screen.queryByText(/거부|rejected/i)).not.toBeInTheDocument();
   });
 });
