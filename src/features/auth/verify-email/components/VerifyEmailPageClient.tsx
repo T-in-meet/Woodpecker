@@ -71,7 +71,7 @@ export default function VerifyEmailPageClient({ email }: Props) {
     resolver: zodResolver(verifyEmailFormSchema),
     mode: "onTouched",
     reValidateMode: "onChange",
-    defaultValues: { email: "" },
+    defaultValues: { email: normalizedPrefillEmail },
   });
 
   /**
