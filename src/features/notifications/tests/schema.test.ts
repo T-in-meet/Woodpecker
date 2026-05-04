@@ -1,6 +1,25 @@
 import { describe, expect, it } from "vitest";
 
-import { notificationTimeSchema, pushSubscriptionSchema } from "../schema";
+import { NOTIFICATION_STATUS } from "@/lib/constants/notifications";
+
+import {
+  notificationStatusSchema,
+  notificationTimeSchema,
+  pushSubscriptionSchema,
+} from "../schema";
+
+describe("notificationStatusSchema", () => {
+  it.each([NOTIFICATION_STATUS.SENT, NOTIFICATION_STATUS.READ])(
+    "accepts %s",
+    (status) => {
+      expect(notificationStatusSchema.safeParse(status).success).toBe(true);
+    },
+  );
+
+  it("rejects the removed skipped status", () => {
+    expect(notificationStatusSchema.safeParse("SKIPPED").success).toBe(false);
+  });
+});
 
 describe("pushSubscriptionSchema", () => {
   it("accepts the browser push subscription JSON shape", () => {

@@ -10,7 +10,6 @@ const notificationUuidSchema = z.string().uuid();
 export const notificationStatusSchema = z.enum([
   NOTIFICATION_STATUS.SENT,
   NOTIFICATION_STATUS.READ,
-  NOTIFICATION_STATUS.SKIPPED,
 ]);
 
 export const notificationListItemSchema = z.object({
