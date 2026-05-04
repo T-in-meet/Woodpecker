@@ -2,13 +2,12 @@ import { waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  FIXTURES,
   getFormActionMock,
   getSubmitButtonByLoadingLabel,
   MESSAGES,
   renderForgotPasswordForm,
   resetToastMock,
-  setDefaultValidSafeParse,
-  setInvalidSafeParse,
   setPendingWithDeferredPromise,
   setupForgotPasswordFormTest,
   submitByFormEvent,
@@ -25,18 +24,19 @@ describe("ForgotPasswordForm.submit", () => {
 
   it("TC11: valid submit이면 action이 1회 호출된다", async () => {
     setupForgotPasswordFormTest();
-    setDefaultValidSafeParse();
     renderForgotPasswordForm();
 
     await typeValidEmail();
     await submitForm();
 
     expect(getFormActionMock()).toHaveBeenCalledTimes(1);
+    const payload = getFormActionMock().mock.calls[0]?.[0] as FormData;
+    expect(payload).toBeInstanceOf(FormData);
+    expect(payload.get("email")).toBe(FIXTURES.valid);
   });
 
   it("TC12: invalid submit이면 action이 호출되지 않는다", async () => {
     setupForgotPasswordFormTest();
-    setInvalidSafeParse(MESSAGES.invalidFormat);
     renderForgotPasswordForm();
 
     submitByFormEvent();
@@ -47,7 +47,6 @@ describe("ForgotPasswordForm.submit", () => {
   it("TC13: submit 중 버튼은 disabled + loading 상태다", async () => {
     setupForgotPasswordFormTest();
     setPendingWithDeferredPromise();
-    setDefaultValidSafeParse();
     renderForgotPasswordForm();
 
     await typeValidEmail();
@@ -58,7 +57,6 @@ describe("ForgotPasswordForm.submit", () => {
 
   it("TC20: email=valid에서 Enter submit 시 action 1회 호출", async () => {
     setupForgotPasswordFormTest();
-    setDefaultValidSafeParse();
     renderForgotPasswordForm();
 
     await typeValidEmail();
@@ -70,7 +68,6 @@ describe("ForgotPasswordForm.submit", () => {
   it('TC23: submit 중 버튼 문구는 "전송 중..."이고 disabled다', async () => {
     setupForgotPasswordFormTest();
     setPendingWithDeferredPromise();
-    setDefaultValidSafeParse();
     renderForgotPasswordForm();
 
     await typeValidEmail();

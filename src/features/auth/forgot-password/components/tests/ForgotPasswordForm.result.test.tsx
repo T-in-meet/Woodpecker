@@ -7,7 +7,6 @@ import {
   MESSAGES,
   renderForgotPasswordForm,
   resetToastMock,
-  setDefaultValidSafeParse,
   setupForgotPasswordFormTest,
   submitForm,
   typeValidEmail,
@@ -18,7 +17,6 @@ describe("ForgotPasswordForm.result", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetToastMock();
-    setDefaultValidSafeParse();
   });
 
   it("TC14: action success면 success toast를 표시한다", async () => {

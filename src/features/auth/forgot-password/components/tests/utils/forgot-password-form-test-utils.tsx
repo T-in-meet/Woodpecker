@@ -23,13 +23,11 @@ type UseActionStateMockReturn = [
 
 const hoisted = vi.hoisted(() => {
   const formActionMock = vi.fn();
-  const safeParseMock = vi.fn();
   const prefillStore = { email: null as string | null };
   const searchParamsStore = { error: null as string | null };
 
   return {
     formActionMock,
-    safeParseMock,
     useActionStateMock: vi.fn<() => UseActionStateMockReturn>(() => [
       { status: "idle", fieldErrors: null },
       formActionMock,
@@ -110,8 +108,7 @@ export const FIXTURES = {
 } as const;
 
 export const MESSAGES = {
-  required: "이메일을 입력해주세요.",
-  invalidFormat: "올바른 이메일 형식으로 입력해주세요.",
+  invalidFormat: "올바른 이메일을 입력해주세요",
   success: "가입된 이메일이라면 비밀번호 재설정 메일을 받을 수 있습니다.",
   globalError: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해주세요.",
   submit: "비밀번호 재설정 메일 받기",
@@ -119,25 +116,6 @@ export const MESSAGES = {
   invalidResetLink:
     "비밀번호 재설정 링크가 만료되었거나 유효하지 않습니다. 다시 요청해 주세요.",
 } as const;
-
-export function setDefaultValidSafeParse() {
-  hoisted.safeParseMock.mockReturnValue({
-    success: true,
-    data: { email: FIXTURES.valid },
-  });
-}
-
-export function setInvalidSafeParse(message: string) {
-  hoisted.safeParseMock.mockReturnValue({
-    success: false,
-    error: {
-      flatten: () => ({
-        formErrors: [],
-        fieldErrors: { email: [message] },
-      }),
-    },
-  });
-}
 
 export function setupForgotPasswordFormTest(options: SetupOptions = {}) {
   const { state, isPending, prefillEmail = null, queryError = null } = options;
@@ -235,8 +213,4 @@ export function submitWithEnterKey() {
 
 export function getFormActionMock() {
   return hoisted.formActionMock;
-}
-
-export function getSafeParseMock() {
-  return hoisted.safeParseMock;
 }

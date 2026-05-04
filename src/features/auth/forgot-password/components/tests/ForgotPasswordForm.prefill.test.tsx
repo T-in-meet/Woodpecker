@@ -5,13 +5,9 @@ import {
   FIXTURES,
   getEmailInput,
   getFormActionMock,
-  getSafeParseMock,
-  MESSAGES,
   renderForgotPasswordForm,
   rerenderForgotPasswordForm,
   resetToastMock,
-  setDefaultValidSafeParse,
-  setInvalidSafeParse,
   setupForgotPasswordFormTest,
   submitForm,
   typeInvalidEmail,
@@ -21,7 +17,6 @@ describe("ForgotPasswordForm.prefill", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetToastMock();
-    setDefaultValidSafeParse();
   });
 
   it("TC2: valid prefill은 input 초기값으로 반영된다", () => {
@@ -33,7 +28,6 @@ describe("ForgotPasswordForm.prefill", () => {
 
   it("TC3: invalid prefill은 무시되어 빈 값으로 렌더링된다", () => {
     setupForgotPasswordFormTest({ prefillEmail: FIXTURES.prefillInvalid });
-    setInvalidSafeParse(MESSAGES.invalidFormat);
 
     renderForgotPasswordForm();
 
@@ -54,21 +48,6 @@ describe("ForgotPasswordForm.prefill", () => {
 
   it("TC21: valid prefill 이후 invalid로 수정하면 validation error를 표시하고 action 호출이 없다", async () => {
     setupForgotPasswordFormTest({ prefillEmail: FIXTURES.prefillValid });
-
-    getSafeParseMock()
-      .mockReturnValueOnce({
-        success: true,
-        data: { email: FIXTURES.prefillValid },
-      })
-      .mockReturnValue({
-        success: false,
-        error: {
-          flatten: () => ({
-            formErrors: [],
-            fieldErrors: { email: [MESSAGES.invalidFormat] },
-          }),
-        },
-      });
 
     renderForgotPasswordForm();
 

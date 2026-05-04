@@ -6,7 +6,6 @@ import {
   MESSAGES,
   renderForgotPasswordForm,
   resetToastMock,
-  setDefaultValidSafeParse,
   setupForgotPasswordFormTest,
 } from "@/features/auth/forgot-password/components/tests/utils/forgot-password-form-test-utils";
 
@@ -15,7 +14,6 @@ describe("ForgotPasswordForm.render", () => {
     vi.clearAllMocks();
     resetToastMock();
     setupForgotPasswordFormTest();
-    setDefaultValidSafeParse();
   });
 
   it("TC1: 초기 렌더링 시 email input, submit button이 존재한다", () => {
