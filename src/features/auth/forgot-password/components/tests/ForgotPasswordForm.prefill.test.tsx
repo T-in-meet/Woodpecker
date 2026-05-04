@@ -5,6 +5,7 @@ import {
   FIXTURES,
   getEmailInput,
   getFormActionMock,
+  MESSAGES,
   renderForgotPasswordForm,
   rerenderForgotPasswordForm,
   resetToastMock,
@@ -57,6 +58,11 @@ describe("ForgotPasswordForm.prefill", () => {
     await submitForm();
 
     expect(getFormActionMock()).not.toHaveBeenCalled();
-    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        MESSAGES.invalidFormat,
+      );
+    });
   });
 });

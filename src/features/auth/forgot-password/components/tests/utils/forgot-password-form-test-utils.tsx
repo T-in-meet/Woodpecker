@@ -109,6 +109,7 @@ export const FIXTURES = {
 } as const;
 
 export const MESSAGES = {
+  required: "이메일을 입력해주세요",
   invalidFormat: "올바른 이메일을 입력해주세요",
   success: "가입된 이메일이라면 비밀번호 재설정 메일을 받을 수 있습니다.",
   globalError: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해주세요.",
@@ -190,6 +191,10 @@ export async function typeValidEmail() {
 
 export async function typeInvalidEmail() {
   fireEvent.change(getEmailInput(), { target: { value: FIXTURES.invalid } });
+}
+
+export async function typeEmail(value: string) {
+  fireEvent.change(getEmailInput(), { target: { value } });
 }
 
 export async function submitForm() {

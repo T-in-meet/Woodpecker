@@ -4,11 +4,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getFormActionMock,
   getSubmitButtonByDefaultLabel,
+  MESSAGES,
   renderForgotPasswordForm,
   resetToastMock,
   setupForgotPasswordFormTest,
   submitByFormEvent,
   submitForm,
+  typeEmail,
   typeInvalidEmail,
   typeValidEmail,
 } from "@/features/auth/forgot-password/components/tests/utils/forgot-password-form-test-utils";
@@ -25,7 +27,9 @@ describe("ForgotPasswordForm.validation", () => {
 
     submitByFormEvent();
 
-    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(MESSAGES.required);
+    });
     expect(getFormActionMock()).not.toHaveBeenCalled();
   });
 
@@ -36,7 +40,9 @@ describe("ForgotPasswordForm.validation", () => {
     submitByFormEvent();
 
     await waitFor(() => {
-      expect(screen.getByRole("alert")).toBeInTheDocument();
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        MESSAGES.invalidFormat,
+      );
     });
     expect(getFormActionMock()).not.toHaveBeenCalled();
   });
@@ -64,5 +70,17 @@ describe("ForgotPasswordForm.validation", () => {
     await typeValidEmail();
 
     expect(getSubmitButtonByDefaultLabel()).toBeEnabled();
+  });
+
+  it("TC11: 공백만 입력하면 required 에러가 표시된다", async () => {
+    renderForgotPasswordForm();
+
+    await typeEmail("   ");
+
+    await submitForm();
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(MESSAGES.required);
+    });
   });
 });

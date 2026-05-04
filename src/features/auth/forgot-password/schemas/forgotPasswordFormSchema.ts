@@ -1,10 +1,16 @@
 import { z } from "zod";
 
-import { normalizedEmailSchema } from "@/lib/validation/emailSchema";
+const forgotPasswordEmailSchema = z.preprocess(
+  (value) => (typeof value === "string" ? value.trim() : value),
+  z
+    .string()
+    .min(1, "이메일을 입력해주세요")
+    .email("올바른 이메일을 입력해주세요"),
+);
 
 export const forgotPasswordFormSchema = z
   .object({
-    email: normalizedEmailSchema,
+    email: forgotPasswordEmailSchema,
   })
   .strict();
 
