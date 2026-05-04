@@ -48,7 +48,9 @@ export function BlankTestPage({
             백지 테스트 {reviewRound} / {MAX_REVIEW_ROUND}
           </span>
         </div>
-        <h1 className="text-3xl font-bold text-foreground">{noteTitle}</h1>
+        <h1 className="break-words break-keep text-3xl font-bold text-foreground">
+          {noteTitle}
+        </h1>
         <p className="text-sm text-muted-foreground">
           먼저 기억나는 내용을 적고 제출한 뒤, 원본과 나란히 비교해보세요.
         </p>
