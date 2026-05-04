@@ -89,7 +89,7 @@ export default async function NoteDetailPage({
             </span>
           )}
         </div>
-        <h1 className="mt-4 break-all text-3xl font-bold text-foreground">
+        <h1 className="mt-4 break-words break-keep text-3xl font-bold text-foreground">
           {note.title}
         </h1>
         <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
