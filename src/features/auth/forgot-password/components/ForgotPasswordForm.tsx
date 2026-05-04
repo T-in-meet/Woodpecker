@@ -22,6 +22,7 @@ import { consumeForgotPasswordPrefillEmail } from "@/features/auth/forgot-passwo
 import {
   ForgotPasswordFormInput,
   forgotPasswordFormSchema,
+  ForgotPasswordFormValues,
 } from "@/features/auth/forgot-password/schemas/forgotPasswordFormSchema";
 import { showToast } from "@/lib/utils/showToast";
 
@@ -47,7 +48,7 @@ export function ForgotPasswordForm({ action }: ForgotPasswordFormProps) {
     handleSubmit,
     setValue,
     formState: { errors },
-  } = useForm<ForgotPasswordFormInput>({
+  } = useForm<ForgotPasswordFormInput, unknown, ForgotPasswordFormValues>({
     resolver: zodResolver(forgotPasswordFormSchema),
     mode: "onTouched",
     reValidateMode: "onChange",

@@ -101,6 +101,7 @@ type SetupOptions = {
 
 export const FIXTURES = {
   valid: "user@example.com",
+  validWithSpaces: "  user@example.com  ",
   invalid: "invalid-email",
   empty: "",
   prefillValid: "prefill@example.com",

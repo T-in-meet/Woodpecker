@@ -1,14 +1,14 @@
 import { z } from "zod";
 
-import { emailFieldSchema } from "@/lib/validation/emailSchema";
+import { normalizedEmailSchema } from "@/lib/validation/emailSchema";
 
 export const forgotPasswordFormSchema = z
   .object({
-    email: emailFieldSchema,
+    email: normalizedEmailSchema,
   })
   .strict();
 
-export type ForgotPasswordFormInput = z.infer<typeof forgotPasswordFormSchema>;
+export type ForgotPasswordFormInput = z.input<typeof forgotPasswordFormSchema>;
 export type ForgotPasswordFormValues = z.output<
   typeof forgotPasswordFormSchema
 >;

@@ -1,8 +1,9 @@
-import { waitFor } from "@testing-library/react";
+import { fireEvent, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   FIXTURES,
+  getEmailInput,
   getFormActionMock,
   getSubmitButtonByLoadingLabel,
   MESSAGES,
@@ -32,6 +33,22 @@ describe("ForgotPasswordForm.submit", () => {
     expect(getFormActionMock()).toHaveBeenCalledTimes(1);
     const payload = getFormActionMock().mock.calls[0]?.[0] as FormData;
     expect(payload).toBeInstanceOf(FormData);
+    expect(payload.get("email")).toBe(FIXTURES.valid);
+  });
+
+  it("TC11-1: 공백 포함 이메일 submit이면 trim된 값이 FormData로 전달된다", async () => {
+    setupForgotPasswordFormTest();
+    renderForgotPasswordForm();
+
+    const input = getEmailInput();
+    if (!(input instanceof HTMLInputElement)) {
+      throw new Error("email input not found");
+    }
+    fireEvent.change(input, { target: { value: FIXTURES.validWithSpaces } });
+    await submitForm();
+
+    expect(getFormActionMock()).toHaveBeenCalledTimes(1);
+    const payload = getFormActionMock().mock.calls[0]?.[0] as FormData;
     expect(payload.get("email")).toBe(FIXTURES.valid);
   });
 

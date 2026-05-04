@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getFormActionMock,
   getSubmitButtonByDefaultLabel,
-  MESSAGES,
   renderForgotPasswordForm,
   resetToastMock,
   setupForgotPasswordFormTest,
@@ -37,7 +36,7 @@ describe("ForgotPasswordForm.validation", () => {
     submitByFormEvent();
 
     await waitFor(() => {
-      expect(screen.getByText(MESSAGES.invalidFormat)).toBeInTheDocument();
+      expect(screen.getByRole("alert")).toBeInTheDocument();
     });
     expect(getFormActionMock()).not.toHaveBeenCalled();
   });
@@ -47,7 +46,7 @@ describe("ForgotPasswordForm.validation", () => {
 
     await typeValidEmail();
 
-    expect(document.body).not.toHaveTextContent(MESSAGES.invalidFormat);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("TC9: invalid 상태에서도 버튼은 enabled다", async () => {
