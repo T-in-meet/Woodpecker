@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "dev:sw": "cross-env ENABLE_SW=true next dev",
+    "dev:sw": "cross-env ENABLE_SW=true NEXT_PUBLIC_ENABLE_SW=true next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

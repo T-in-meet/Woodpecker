@@ -27,6 +27,9 @@ type PushSubscribeCardProps = {
 };
 
 const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
+const isServiceWorkerRuntimeEnabled =
+  process.env.NODE_ENV !== "development" ||
+  process.env.NEXT_PUBLIC_ENABLE_SW === "true";
 
 function isPushSupported() {
   return (
@@ -106,7 +109,8 @@ export function PushSubscribeCard({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const isRuntimeEnabled = vapidPublicKey.length > 0;
+  const isRuntimeEnabled =
+    isServiceWorkerRuntimeEnabled && vapidPublicKey.length > 0;
   // Push endpoint is origin-scoped, so a stale browser subscription left by a previous account
   // does NOT mean the current user owns it. Verify ownership against the DB before treating
   // the button as "unsubscribe".
@@ -172,11 +176,13 @@ export function PushSubscribeCard({
 
   const disabledReason = !isSupported
     ? "이 브라우저는 푸시 알림을 지원하지 않습니다."
-    : vapidPublicKey.length === 0
-      ? "VAPID 공개 키가 설정되지 않았습니다."
-      : permission === "denied"
-        ? "브라우저 사이트 설정에서 알림을 허용해 주세요."
-        : null;
+    : !isServiceWorkerRuntimeEnabled
+      ? "개발 서버에서 서비스 워커가 비활성화되어 있습니다. 로컬 알림 검증은 npm run dev:sw로 실행해주세요."
+      : vapidPublicKey.length === 0
+        ? "VAPID 공개 키가 설정되지 않았습니다."
+        : permission === "denied"
+          ? "브라우저 사이트 설정에서 알림을 허용해 주세요."
+          : null;
 
   const handleSubscribe = () => {
     setError(null);
