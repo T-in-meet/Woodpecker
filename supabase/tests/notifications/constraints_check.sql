@@ -86,17 +86,16 @@ SELECT is(
 );
 ROLLBACK TO SAVEPOINT notifications_status_insert_read;
 
--- status가 'SKIPPED'이면 INSERT가 성공해야 한다
-SAVEPOINT notifications_status_insert_skipped;
-INSERT INTO public.notifications (id, user_id, type, title, status)
-VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'REVIEW', 'skipped ok', 'SKIPPED');
-
-SELECT is(
-  (SELECT count(*) FROM public.notifications WHERE title = 'skipped ok'),
-  1::bigint,
-  $$status가 'SKIPPED'이면 INSERT가 성공해야 한다$$
+-- status = 'SKIPPED' INSERT는 notifications_status_check 제약 위반으로 차단되어야 한다
+SELECT throws_ok(
+  $sql$
+    INSERT INTO public.notifications (id, user_id, type, title, status)
+    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'REVIEW', 'skipped blocked', 'SKIPPED');
+  $sql$,
+  '23514',
+  'new row for relation "notifications" violates check constraint "notifications_status_check"',
+  $$status = 'SKIPPED' INSERT는 notifications_status_check 제약 위반으로 차단되어야 한다$$
 );
-ROLLBACK TO SAVEPOINT notifications_status_insert_skipped;
 
 -- 기존의 유효한 notifications 행을 status = 'SENT'로 UPDATE하면 성공해야 한다
 SAVEPOINT notifications_status_update_sent;
@@ -124,18 +123,20 @@ SELECT is(
 );
 ROLLBACK TO SAVEPOINT notifications_status_update_read;
 
--- 기존의 유효한 notifications 행을 status = 'SKIPPED'로 UPDATE하면 성공해야 한다
-SAVEPOINT notifications_status_update_skipped;
-UPDATE public.notifications
-SET status = 'SKIPPED'
-WHERE id = current_setting('test.notifications_constraints_check_notification_seed_id')::uuid;
-
-SELECT is(
-  (SELECT status FROM public.notifications WHERE id = current_setting('test.notifications_constraints_check_notification_seed_id')::uuid),
-  'SKIPPED',
-  $$기존의 유효한 notifications 행을 status = 'SKIPPED'로 UPDATE하면 성공해야 한다$$
+-- 기존의 유효한 notifications 행을 status = 'SKIPPED'로 UPDATE하면 차단되어야 한다
+SELECT throws_ok(
+  format(
+    $sql$
+      UPDATE public.notifications
+      SET status = 'SKIPPED'
+      WHERE id = '%s'::uuid;
+    $sql$,
+    current_setting('test.notifications_constraints_check_notification_seed_id')
+  ),
+  '23514',
+  'new row for relation "notifications" violates check constraint "notifications_status_check"',
+  $$기존의 유효한 notifications 행을 status = 'SKIPPED'로 UPDATE하면 차단되어야 한다$$
 );
-ROLLBACK TO SAVEPOINT notifications_status_update_skipped;
 
 -- [예외 조건]
 -- status가 허용 목록에 없는 값이면 notifications_status_check 제약 위반으로 저장이 차단되어야 한다
@@ -160,7 +161,7 @@ SELECT throws_ok(
   $$status가 소문자('sent', 'read', 'skipped')이면 notifications_status_check 제약 위반으로 저장이 차단되어야 한다$$
 );
 
--- status에 앞뒤 공백이 포함된 값(' SENT', 'READ ', ' SKIPPED ')이면 notifications_status_check 제약 위반으로 저장이 차단되어야 한다
+-- status에 앞뒤 공백이 포함된 값(' SENT', 'READ ')이면 notifications_status_check 제약 위반으로 저장이 차단되어야 한다
 SELECT throws_ok(
   $sql$
     INSERT INTO public.notifications (id, user_id, type, title, status)
@@ -168,7 +169,7 @@ SELECT throws_ok(
   $sql$,
   '23514',
   'new row for relation "notifications" violates check constraint "notifications_status_check"',
-  $$status에 앞뒤 공백이 포함된 값(' SENT', 'READ ', ' SKIPPED ')이면 notifications_status_check 제약 위반으로 저장이 차단되어야 한다$$
+  $$status에 앞뒤 공백이 포함된 값(' SENT', 'READ ')이면 notifications_status_check 제약 위반으로 저장이 차단되어야 한다$$
 );
 
 -- status가 빈 문자열('')이면 notifications_status_check 제약 위반으로 저장이 차단되어야 한다
@@ -311,17 +312,16 @@ SELECT is(
 );
 ROLLBACK TO SAVEPOINT notifications_status_boundary_read;
 
--- 정확히 'SKIPPED'는 허용값 경계로서 성공해야 한다
-SAVEPOINT notifications_status_boundary_skipped;
-INSERT INTO public.notifications (id, user_id, type, title, status)
-VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'REVIEW', 'boundary skipped', 'SKIPPED');
-
-SELECT is(
-  (SELECT count(*) FROM public.notifications WHERE title = 'boundary skipped'),
-  1::bigint,
-  $$정확히 'SKIPPED'는 허용값 경계로서 성공해야 한다$$
+-- 정확히 'SKIPPED'도 허용값이 아니므로 차단되어야 한다
+SELECT throws_ok(
+  $sql$
+    INSERT INTO public.notifications (id, user_id, type, title, status)
+    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'REVIEW', 'boundary skipped', 'SKIPPED');
+  $sql$,
+  '23514',
+  'new row for relation "notifications" violates check constraint "notifications_status_check"',
+  $$정확히 'SKIPPED'도 허용값이 아니므로 차단되어야 한다$$
 );
-ROLLBACK TO SAVEPOINT notifications_status_boundary_skipped;
 
 -- [불변 조건]
 -- 어떠한 경우에도 notifications_status_check를 위반하는 notifications 행의 수는 0개여야 한다 (Status)
@@ -329,7 +329,7 @@ SELECT is(
   (
     SELECT count(*)
     FROM public.notifications
-    WHERE status NOT IN ('SENT', 'READ', 'SKIPPED')
+    WHERE status NOT IN ('SENT', 'READ')
   ),
   0::bigint,
   $$어떠한 경우에도 notifications_status_check를 위반하는 notifications 행의 수는 0개여야 한다 (Status)$$

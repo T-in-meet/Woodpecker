@@ -6,7 +6,6 @@ export const NOTIFICATION_TYPES = {
 export const NOTIFICATION_STATUS = {
   SENT: "SENT",
   READ: "READ",
-  SKIPPED: "SKIPPED",
 } as const;
 
 export type NotificationKindType =
