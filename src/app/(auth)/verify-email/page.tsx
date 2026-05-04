@@ -14,6 +14,7 @@
 
 import type { Metadata } from "next";
 
+import { requireGuestPage } from "@/features/auth/utils/requireGuestPage";
 import VerifyEmailPageClient from "@/features/auth/verify-email/components/VerifyEmailPageClient";
 
 // 검색 엔진 인덱싱 방지 (robots.txt Disallow보다 확실함 - 삭제 금지)
@@ -26,6 +27,11 @@ type Props = {
 };
 
 export default async function VerifyEmailPage({ searchParams }: Props) {
+  /**
+   * 로그인된 사용자는 접근 불가 (mypage로 redirect)
+   */
+  await requireGuestPage();
+
   const { email } = await searchParams;
 
   return <VerifyEmailPageClient email={email} />;

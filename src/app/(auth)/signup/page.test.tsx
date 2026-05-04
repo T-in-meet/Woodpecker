@@ -7,6 +7,15 @@ import { describe, expect, it, vi } from "vitest";
 import SignupPage from "@/app/(auth)/signup/page";
 
 /**
+ * guest-only 접근 제어 mock
+ * - 실제 Supabase session 조회 / redirect를 막음
+ * - page 렌더링 테스트에서는 접근 제어 내부 동작이 아니라 렌더링만 검증
+ */
+vi.mock("@/features/auth/utils/requireGuestPage", () => ({
+  requireGuestPage: vi.fn(),
+}));
+
+/**
  * next/navigation mock
  * - 실제 router 동작을 막고 테스트에서 제어 가능한 mock으로 대체
  * - push 함수가 호출되는지만 검증하기 위함
@@ -30,9 +39,11 @@ vi.mock("@/features/auth/signup/hooks/useSignupMutation", () => ({
 }));
 
 describe("SignupPage", () => {
-  it("회원가입 폼을 렌더링한다", () => {
-    // 페이지 컴포넌트 렌더링
-    render(<SignupPage />);
+  it("회원가입 폼을 렌더링한다", async () => {
+    // async Server Component 실행 후 렌더링
+    const ui = await SignupPage();
+
+    render(ui);
 
     // 접근성 기준: role="form" + name="회원가입" 폼이 존재하는지 확인
     expect(screen.getByRole("form", { name: /회원가입/i })).toBeInTheDocument();
