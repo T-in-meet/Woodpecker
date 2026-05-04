@@ -45,7 +45,7 @@ export function LoginForm() {
     clearErrors,
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginFormSchema),
-    mode: "onSubmit",
+    mode: "onTouched",
     reValidateMode: "onChange",
     defaultValues: { email: "", password: "" },
   });
