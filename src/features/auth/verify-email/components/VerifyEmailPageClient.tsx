@@ -224,7 +224,11 @@ export default function VerifyEmailPageClient({ email }: Props) {
                   />
 
                   {errors.email?.message && (
-                    <p id="email-error" className="text-sm text-destructive">
+                    <p
+                      id="email-error"
+                      role="alert"
+                      className="text-sm text-destructive"
+                    >
                       {errors.email.message}
                     </p>
                   )}

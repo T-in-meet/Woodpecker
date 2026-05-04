@@ -223,9 +223,9 @@ describe("VerifyEmailPageClient", () => {
     await user.type(input, "invalid-email");
     await user.tab();
 
-    expect(
-      await screen.findByText("올바른 이메일을 입력해주세요"),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "올바른 이메일을 입력해주세요",
+    );
   });
 
   it("TC-15. invalid email submit이면 mutateAsync를 호출하지 않는다", async () => {
@@ -238,9 +238,9 @@ describe("VerifyEmailPageClient", () => {
     );
     await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
 
-    expect(
-      await screen.findByText("올바른 이메일을 입력해주세요"),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "올바른 이메일을 입력해주세요",
+    );
     expect(mockMutateAsync).not.toHaveBeenCalled();
   });
 
@@ -253,17 +253,15 @@ describe("VerifyEmailPageClient", () => {
     await user.type(input, "invalid");
     await user.tab();
 
-    expect(
-      await screen.findByText("올바른 이메일을 입력해주세요"),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "올바른 이메일을 입력해주세요",
+    );
 
     await user.clear(input);
     await user.type(input, "test@example.com");
 
     await waitFor(() => {
-      expect(
-        screen.queryByText("올바른 이메일을 입력해주세요"),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     });
 
     await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
