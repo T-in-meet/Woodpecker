@@ -78,7 +78,6 @@ export type Database = {
           read_at: string | null;
           review_log_id: string | null;
           sent_at: string;
-          skipped_at: string | null;
           status: string;
           title: string;
           type: string;
@@ -91,7 +90,6 @@ export type Database = {
           read_at?: string | null;
           review_log_id?: string | null;
           sent_at?: string;
-          skipped_at?: string | null;
           status?: string;
           title: string;
           type: string;
@@ -104,7 +102,6 @@ export type Database = {
           read_at?: string | null;
           review_log_id?: string | null;
           sent_at?: string;
-          skipped_at?: string | null;
           status?: string;
           title?: string;
           type?: string;

@@ -368,7 +368,6 @@ SELECT throws_ok(
         status,
         sent_at,
         read_at,
-        skipped_at,
         note_id
       )
       VALUES (
@@ -378,7 +377,6 @@ SELECT throws_ok(
         '%s',
         '%s',
         'READ',
-        now(),
         now(),
         now(),
         NULL
@@ -611,7 +609,7 @@ SELECT is(
 -- 타인 행(user_id ≠ auth.uid()) → 차단
 WITH updated AS (
   UPDATE public.notifications
-  SET skipped_at = now()
+  SET read_at = now()
   WHERE id = current_setting('test.notifications_rls_b1_id')::uuid
   RETURNING 1
 )
@@ -690,14 +688,14 @@ SELECT is(
   $$UPDATE 시도 전후 전체 notifications 행 수는 동일해야 한다.$$
 );
 
--- UPDATE 시도 전후 대상 행의 status, title, body, read_at, skipped_at, note_id 값은 변경되지 않아야 한다.
+-- UPDATE 시도 전후 대상 행의 status, title, body, read_at, note_id 값은 변경되지 않아야 한다.
 RESET ROLE;
 SELECT set_config(
   'test.notifications_rls_update_before_snapshot',
   (
     SELECT row_to_json(t)::text
     FROM (
-      SELECT status, title, body, read_at, skipped_at, note_id
+      SELECT status, title, body, read_at, note_id
       FROM public.notifications
       WHERE id = current_setting('test.notifications_rls_a1_id')::uuid
     ) t
@@ -725,7 +723,7 @@ SELECT set_config(
   (
     SELECT row_to_json(t)::text
     FROM (
-      SELECT status, title, body, read_at, skipped_at, note_id
+      SELECT status, title, body, read_at, note_id
       FROM public.notifications
       WHERE id = current_setting('test.notifications_rls_a1_id')::uuid
     ) t
@@ -745,7 +743,7 @@ SELECT set_config(
 
 SELECT ok(
   current_setting('test.notifications_rls_update_before_snapshot') = current_setting('test.notifications_rls_update_after_snapshot'),
-  $$UPDATE 시도 전후 대상 행의 status, title, body, read_at, skipped_at, note_id 값은 변경되지 않아야 한다.$$
+  $$UPDATE 시도 전후 대상 행의 status, title, body, read_at, note_id 값은 변경되지 않아야 한다.$$
 );
 
 -- [정답 조건]

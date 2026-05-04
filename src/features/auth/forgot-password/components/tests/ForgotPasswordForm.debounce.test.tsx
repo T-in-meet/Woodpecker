@@ -1,0 +1,53 @@
+import { act } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { INPUT_DEBOUNCE_DELAY_MS } from "@/features/auth/constants/ui";
+import {
+  MESSAGES,
+  renderForgotPasswordForm,
+  resetToastMock,
+  setDefaultValidSafeParse,
+  setInvalidSafeParse,
+  setupForgotPasswordFormTest,
+  typeInvalidEmail,
+  typeValidEmail,
+} from "@/features/auth/forgot-password/components/tests/utils/forgot-password-form-test-utils";
+
+describe("ForgotPasswordForm.debounce", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetToastMock();
+    setupForgotPasswordFormTest();
+    setDefaultValidSafeParse();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
+  });
+
+  it("TC19: invalid -> valid 변경 시 즉시 error 유지, 300ms 이후 제거된다", async () => {
+    renderForgotPasswordForm();
+
+    setInvalidSafeParse(MESSAGES.invalidFormat);
+    await typeInvalidEmail();
+
+    await act(async () => {
+      vi.advanceTimersByTime(INPUT_DEBOUNCE_DELAY_MS);
+    });
+
+    expect(document.body).toHaveTextContent(MESSAGES.invalidFormat);
+
+    setDefaultValidSafeParse();
+    await typeValidEmail();
+
+    expect(document.body).toHaveTextContent(MESSAGES.invalidFormat);
+
+    await act(async () => {
+      vi.advanceTimersByTime(INPUT_DEBOUNCE_DELAY_MS);
+    });
+
+    expect(document.body).not.toHaveTextContent(MESSAGES.invalidFormat);
+  });
+});

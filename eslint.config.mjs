@@ -30,6 +30,8 @@ const eslintConfig = [
       ".next/**",
       "out/**",
       "build/**",
+      "public/sw.js",
+      "public/sw.js.map",
       "next-env.d.ts",
     ],
   },

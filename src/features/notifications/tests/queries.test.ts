@@ -67,11 +67,11 @@ function createNotificationListMock(data: unknown) {
   const orderMock = vi.fn().mockReturnValue({
     limit: limitMock,
   });
-  const inMock = vi.fn().mockReturnValue({
+  const statusEqMock = vi.fn().mockReturnValue({
     order: orderMock,
   });
   const typeEqMock = vi.fn().mockReturnValue({
-    in: inMock,
+    eq: statusEqMock,
   });
   const userEqMock = vi.fn().mockReturnValue({
     eq: typeEqMock,
@@ -81,10 +81,10 @@ function createNotificationListMock(data: unknown) {
   });
 
   return {
-    inMock,
     limitMock,
     orderMock,
     selectMock,
+    statusEqMock,
     typeEqMock,
     userEqMock,
     supabase: withAuth(
@@ -175,7 +175,7 @@ describe("notification queries", () => {
       selectMock,
       userEqMock,
       typeEqMock,
-      inMock,
+      statusEqMock,
       orderMock,
       limitMock,
     } = createNotificationListMock([
@@ -201,11 +201,10 @@ describe("notification queries", () => {
     );
     expect(userEqMock).toHaveBeenCalledWith("user_id", USER_ID);
     expect(typeEqMock).toHaveBeenCalledWith("type", "REVIEW");
-    expect(inMock).toHaveBeenCalledWith("status", [
+    expect(statusEqMock).toHaveBeenCalledWith(
+      "status",
       NOTIFICATION_STATUS.SENT,
-      NOTIFICATION_STATUS.READ,
-      NOTIFICATION_STATUS.SKIPPED,
-    ]);
+    );
     expect(orderMock).toHaveBeenCalledWith("sent_at", { ascending: false });
     expect(limitMock).toHaveBeenCalledWith(50);
     expect(result).toEqual([

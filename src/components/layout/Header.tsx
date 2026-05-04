@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
+import { NotificationBell } from "@/features/notifications/components/NotificationBell";
 import { ROUTES } from "@/lib/constants/routes";
 import { getProfile } from "@/lib/supabase/getProfile";
 import { getUser } from "@/lib/supabase/getUser";
@@ -36,11 +37,14 @@ export async function Header() {
 
         <div className="flex justify-end gap-3 items-center">
           {profile && user ? (
-            <UserMenu
-              nickname={profile.nickname}
-              email={user.email ?? ""}
-              avatarUrl={profile.avatar_url}
-            />
+            <>
+              <NotificationBell userId={user.id} />
+              <UserMenu
+                nickname={profile.nickname}
+                email={user.email ?? ""}
+                avatarUrl={profile.avatar_url}
+              />
+            </>
           ) : (
             <>
               <Button variant="ghost" asChild>

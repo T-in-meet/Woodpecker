@@ -7,6 +7,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
+import { DevelopmentServiceWorkerCleanup } from "@/components/providers/DevelopmentServiceWorkerCleanup";
 import { QueryProvider } from "@/components/providers/QueryProvider";
 import { SessionProvider } from "@/components/providers/SessionProvider";
 import { ToasterProvider } from "@/components/providers/ToasterProvider";
@@ -91,6 +92,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <DevelopmentServiceWorkerCleanup />
         <SessionProvider>
           <QueryProvider>{children}</QueryProvider>
           <ToasterProvider />

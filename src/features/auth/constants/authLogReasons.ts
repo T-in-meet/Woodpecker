@@ -19,6 +19,7 @@ export const AUTH_LOG_REASONS = {
    * 외부 응답에서는 이 reason code가 노출되지 않는다
    */
   INVALID_CREDENTIALS: "INVALID_CREDENTIALS",
+  SAME_PASSWORD: "SAME_PASSWORD",
 } as const;
 
 export type AuthLogReason =
