@@ -127,6 +127,7 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     needs: [lint, format, type-check, test] # 앞 3개 job이 성공해야 실행됨
+    environment: ${{ github.base_ref == 'main' && 'Production' || 'develope' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
