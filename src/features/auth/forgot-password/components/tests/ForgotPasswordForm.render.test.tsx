@@ -3,11 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getEmailInput,
   getSubmitButtonByDefaultLabel,
-  MESSAGES,
   renderForgotPasswordForm,
   resetToastMock,
   setupForgotPasswordFormTest,
 } from "@/features/auth/forgot-password/components/tests/utils/forgot-password-form-test-utils";
+import { FORGOT_PASSWORD_LABEL_MESSAGES } from "@/features/auth/forgot-password/constants/messages";
 
 describe("ForgotPasswordForm.render", () => {
   beforeEach(() => {
@@ -26,6 +26,8 @@ describe("ForgotPasswordForm.render", () => {
   it('TC22: 초기 버튼 문구는 "비밀번호 재설정 메일 받기"다', () => {
     renderForgotPasswordForm();
 
-    expect(getSubmitButtonByDefaultLabel()).toHaveTextContent(MESSAGES.submit);
+    expect(getSubmitButtonByDefaultLabel()).toHaveTextContent(
+      FORGOT_PASSWORD_LABEL_MESSAGES.submit,
+    );
   });
 });

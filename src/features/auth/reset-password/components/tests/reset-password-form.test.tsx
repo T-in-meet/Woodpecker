@@ -3,16 +3,13 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  PASSWORD_MIN_LENGTH_MESSAGE,
-  PASSWORD_MISMATCH_MESSAGE,
-} from "@/features/auth/constants/messages";
-import {
   fillResetPasswordFields,
   renderResetPasswordForm,
   setIdleActionState,
   submitResetPasswordForm,
 } from "@/features/auth/reset-password/components/tests/utils/reset-password-form-test-utils";
 import { RESET_PASSWORD_GLOBAL_ERROR_MESSAGE } from "@/features/auth/reset-password/constants/messages";
+import { VALIDATION_MESSAGES } from "@/lib/validation/messages";
 
 const hoisted = vi.hoisted(() => ({
   useActionStateMock: vi.fn(),
@@ -83,7 +80,7 @@ describe("reset-password-form", () => {
     hoisted.useActionStateMock.mockReturnValue([
       {
         status: "invalid_input",
-        fieldErrors: { password: [PASSWORD_MIN_LENGTH_MESSAGE] },
+        fieldErrors: { password: [VALIDATION_MESSAGES.passwordMinLength] },
       },
       hoisted.formActionMock,
       false,
@@ -91,7 +88,9 @@ describe("reset-password-form", () => {
 
     renderResetPasswordForm();
 
-    expect(screen.getByText(PASSWORD_MIN_LENGTH_MESSAGE)).toBeInTheDocument();
+    expect(
+      screen.getByText(VALIDATION_MESSAGES.passwordMinLength),
+    ).toBeInTheDocument();
     expect(
       screen.queryByText(RESET_PASSWORD_GLOBAL_ERROR_MESSAGE),
     ).not.toBeInTheDocument();
@@ -101,7 +100,9 @@ describe("reset-password-form", () => {
     hoisted.useActionStateMock.mockReturnValue([
       {
         status: "invalid_input",
-        fieldErrors: { confirmPassword: [PASSWORD_MISMATCH_MESSAGE] },
+        fieldErrors: {
+          confirmPassword: [VALIDATION_MESSAGES.passwordMismatch],
+        },
       },
       hoisted.formActionMock,
       false,
@@ -109,7 +110,9 @@ describe("reset-password-form", () => {
 
     renderResetPasswordForm();
 
-    expect(screen.getByText(PASSWORD_MISMATCH_MESSAGE)).toBeInTheDocument();
+    expect(
+      screen.getByText(VALIDATION_MESSAGES.passwordMismatch),
+    ).toBeInTheDocument();
     expect(
       screen.queryByText(RESET_PASSWORD_GLOBAL_ERROR_MESSAGE),
     ).not.toBeInTheDocument();

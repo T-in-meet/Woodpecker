@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { AUTH_GLOBAL_ERROR_MESSAGE } from "@/features/auth/constants/messages";
 import { RATE_LIMIT_TOAST_MESSAGE } from "@/features/auth/errors/rateLimitError";
 import {
   FIXTURES,
   getEmailInput,
-  MESSAGES,
   renderForgotPasswordForm,
   resetToastMock,
   setupForgotPasswordFormTest,
@@ -12,6 +12,8 @@ import {
   typeValidEmail,
 } from "@/features/auth/forgot-password/components/tests/utils/forgot-password-form-test-utils";
 import { showToast } from "@/lib/utils/showToast";
+
+import { FORGOT_PASSWORD_UI_MESSAGES } from "../../constants/messages";
 
 describe("ForgotPasswordForm.result", () => {
   beforeEach(() => {
@@ -27,7 +29,7 @@ describe("ForgotPasswordForm.result", () => {
     renderForgotPasswordForm();
 
     expect(showToast).toHaveBeenCalledTimes(1);
-    expect(showToast).toHaveBeenCalledWith(MESSAGES.success);
+    expect(showToast).toHaveBeenCalledWith(FORGOT_PASSWORD_UI_MESSAGES.success);
   });
 
   it("TC15: success 후에도 input value를 유지한다", async () => {
@@ -50,7 +52,7 @@ describe("ForgotPasswordForm.result", () => {
     renderForgotPasswordForm();
 
     expect(showToast).toHaveBeenCalledTimes(1);
-    expect(showToast).toHaveBeenCalledWith(MESSAGES.globalError);
+    expect(showToast).toHaveBeenCalledWith(AUTH_GLOBAL_ERROR_MESSAGE);
   });
 
   it("TC18: global error 이후에도 input value를 유지한다", async () => {
@@ -88,6 +90,8 @@ describe("ForgotPasswordForm.result", () => {
     renderForgotPasswordForm();
 
     expect(showToast).toHaveBeenCalledTimes(1);
-    expect(showToast).toHaveBeenCalledWith(MESSAGES.invalidResetLink);
+    expect(showToast).toHaveBeenCalledWith(
+      FORGOT_PASSWORD_UI_MESSAGES.invalidResetLink,
+    );
   });
 });

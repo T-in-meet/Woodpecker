@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { VALIDATION_MESSAGES } from "./messages";
 import { trimIfString } from "./trimString";
 
 /**
@@ -38,7 +39,7 @@ export const normalizedEmailSchema = z.preprocess(
  */
 export const emailFieldSchema = z
   .string()
-  .email("올바른 이메일을 입력해주세요");
+  .email(VALIDATION_MESSAGES.emailInvalid);
 
 /**
  * 이메일 Form 스키마 (UI / Form 제출용)
@@ -58,8 +59,8 @@ export const emailFieldSchema = z
  * - submit 시점 validation
  *
  * 보장:
- * - 공백 입력 → "이메일을 입력해주세요"
- * - 잘못된 형식 → "올바른 이메일을 입력해주세요"
+ * - 공백 입력 → VALIDATION_MESSAGES.emailRequired
+ * - 잘못된 형식 → VALIDATION_MESSAGES.emailInvalid
  * - 정상 입력 → trim된 값으로 downstream 전달
  *
  * 권장:
@@ -69,6 +70,6 @@ export const emailFormSchema = z.preprocess(
   (value) => (typeof value === "string" ? value.trim() : value),
   z
     .string()
-    .min(1, "이메일을 입력해주세요")
-    .email("올바른 이메일을 입력해주세요"),
+    .min(1, VALIDATION_MESSAGES.emailRequired)
+    .email(VALIDATION_MESSAGES.emailInvalid),
 );

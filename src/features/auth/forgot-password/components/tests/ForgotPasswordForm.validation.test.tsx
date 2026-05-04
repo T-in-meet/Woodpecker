@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getFormActionMock,
   getSubmitButtonByDefaultLabel,
-  MESSAGES,
   renderForgotPasswordForm,
   resetToastMock,
   setupForgotPasswordFormTest,
@@ -14,6 +13,7 @@ import {
   typeInvalidEmail,
   typeValidEmail,
 } from "@/features/auth/forgot-password/components/tests/utils/forgot-password-form-test-utils";
+import { VALIDATION_MESSAGES } from "@/lib/validation/messages";
 
 describe("ForgotPasswordForm.validation", () => {
   beforeEach(() => {
@@ -28,7 +28,9 @@ describe("ForgotPasswordForm.validation", () => {
     submitByFormEvent();
 
     await waitFor(() => {
-      expect(screen.getByRole("alert")).toHaveTextContent(MESSAGES.required);
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        VALIDATION_MESSAGES.emailRequired,
+      );
     });
     expect(getFormActionMock()).not.toHaveBeenCalled();
   });
@@ -41,7 +43,7 @@ describe("ForgotPasswordForm.validation", () => {
 
     await waitFor(() => {
       expect(screen.getByRole("alert")).toHaveTextContent(
-        MESSAGES.invalidFormat,
+        VALIDATION_MESSAGES.emailInvalid,
       );
     });
     expect(getFormActionMock()).not.toHaveBeenCalled();
@@ -80,7 +82,9 @@ describe("ForgotPasswordForm.validation", () => {
     await submitForm();
 
     await waitFor(() => {
-      expect(screen.getByRole("alert")).toHaveTextContent(MESSAGES.required);
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        VALIDATION_MESSAGES.emailRequired,
+      );
     });
   });
 });

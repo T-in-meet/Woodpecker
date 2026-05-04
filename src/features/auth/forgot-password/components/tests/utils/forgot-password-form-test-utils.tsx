@@ -3,10 +3,10 @@ import userEvent from "@testing-library/user-event";
 import type { ComponentProps, ReactNode } from "react";
 import { vi } from "vitest";
 
+import { ForgotPasswordActionState } from "@/features/auth/forgot-password/actions/forgotPasswordActionState";
 import { ForgotPasswordForm } from "@/features/auth/forgot-password/components/ForgotPasswordForm";
+import { FORGOT_PASSWORD_LABEL_MESSAGES } from "@/features/auth/forgot-password/constants/messages";
 import { showToast } from "@/lib/utils/showToast";
-
-import { ForgotPasswordActionState } from "../../../actions/forgotPasswordActionState";
 
 type ForgotPasswordFormActionState =
   | { status: "idle"; fieldErrors: null }
@@ -108,17 +108,6 @@ export const FIXTURES = {
   prefillInvalid: "invalid-email",
 } as const;
 
-export const MESSAGES = {
-  required: "이메일을 입력해주세요",
-  invalidFormat: "올바른 이메일을 입력해주세요",
-  success: "가입된 이메일이라면 비밀번호 재설정 메일을 받을 수 있습니다.",
-  globalError: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해주세요.",
-  submit: "비밀번호 재설정 메일 받기",
-  loading: "전송 중...",
-  invalidResetLink:
-    "비밀번호 재설정 링크가 만료되었거나 유효하지 않습니다. 다시 요청해 주세요.",
-} as const;
-
 export function setupForgotPasswordFormTest(options: SetupOptions = {}) {
   const { state, isPending, prefillEmail = null, queryError = null } = options;
 
@@ -178,11 +167,15 @@ export function getEmailInput() {
 }
 
 export function getSubmitButtonByDefaultLabel() {
-  return screen.getByRole("button", { name: MESSAGES.submit });
+  return screen.getByRole("button", {
+    name: FORGOT_PASSWORD_LABEL_MESSAGES.submit,
+  });
 }
 
 export function getSubmitButtonByLoadingLabel() {
-  return screen.getByRole("button", { name: MESSAGES.loading });
+  return screen.getByRole("button", {
+    name: FORGOT_PASSWORD_LABEL_MESSAGES.loading,
+  });
 }
 
 export async function typeValidEmail() {
@@ -202,7 +195,9 @@ export async function submitForm() {
   const user = userEvent.setup();
   await user.click(
     screen.getByRole("button", {
-      name: new RegExp(`${MESSAGES.submit}|${MESSAGES.loading}`),
+      name: new RegExp(
+        `${FORGOT_PASSWORD_LABEL_MESSAGES.submit}|${FORGOT_PASSWORD_LABEL_MESSAGES.loading}`,
+      ),
     }),
   );
 }

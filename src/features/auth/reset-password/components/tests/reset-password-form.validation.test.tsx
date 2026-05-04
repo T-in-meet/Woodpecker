@@ -2,15 +2,12 @@ import { screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  PASSWORD_MIN_LENGTH_MESSAGE,
-  PASSWORD_MISMATCH_MESSAGE,
-} from "@/features/auth/constants/messages";
-import {
   fillResetPasswordFields,
   renderResetPasswordForm,
   setIdleActionState,
   submitResetPasswordForm,
 } from "@/features/auth/reset-password/components/tests/utils/reset-password-form-test-utils";
+import { VALIDATION_MESSAGES } from "@/lib/validation/messages";
 
 const hoisted = vi.hoisted(() => ({
   useActionStateMock: vi.fn(),
@@ -42,7 +39,7 @@ describe("reset-password-form validation", () => {
     submitResetPasswordForm();
 
     expect(
-      await screen.findByText(PASSWORD_MIN_LENGTH_MESSAGE),
+      await screen.findByText(VALIDATION_MESSAGES.passwordMinLength),
     ).toBeInTheDocument();
     expect(hoisted.formActionMock).not.toHaveBeenCalled();
   });
@@ -58,7 +55,7 @@ describe("reset-password-form validation", () => {
     submitResetPasswordForm();
 
     expect(
-      await screen.findByText(PASSWORD_MISMATCH_MESSAGE),
+      await screen.findByText(VALIDATION_MESSAGES.passwordMismatch),
     ).toBeInTheDocument();
     expect(hoisted.formActionMock).not.toHaveBeenCalled();
   });
@@ -100,7 +97,7 @@ describe("reset-password-form validation", () => {
     submitResetPasswordForm();
 
     expect(
-      await screen.findByText(PASSWORD_MIN_LENGTH_MESSAGE),
+      await screen.findByText(VALIDATION_MESSAGES.passwordMinLength),
     ).toBeInTheDocument();
     expect(screen.queryByText("서버 불일치 에러")).not.toBeInTheDocument();
   });

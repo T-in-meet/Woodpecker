@@ -5,7 +5,6 @@ import {
   FIXTURES,
   getEmailInput,
   getFormActionMock,
-  MESSAGES,
   renderForgotPasswordForm,
   rerenderForgotPasswordForm,
   resetToastMock,
@@ -13,6 +12,7 @@ import {
   submitForm,
   typeInvalidEmail,
 } from "@/features/auth/forgot-password/components/tests/utils/forgot-password-form-test-utils";
+import { VALIDATION_MESSAGES } from "@/lib/validation/messages";
 
 describe("ForgotPasswordForm.prefill", () => {
   beforeEach(() => {
@@ -61,7 +61,7 @@ describe("ForgotPasswordForm.prefill", () => {
 
     await waitFor(() => {
       expect(screen.getByRole("alert")).toHaveTextContent(
-        MESSAGES.invalidFormat,
+        VALIDATION_MESSAGES.emailInvalid,
       );
     });
   });

@@ -13,11 +13,7 @@ import {
   ForgotPasswordActionState,
   INITIAL_FORGOT_PASSWORD_ACTION_STATE,
 } from "@/features/auth/forgot-password/actions/forgotPasswordActionState";
-import {
-  FORGOT_PASSWORD_GLOBAL_ERROR_MESSAGE,
-  FORGOT_PASSWORD_INVALID_RESET_LINK_MESSAGE,
-  FORGOT_PASSWORD_SUCCESS_MESSAGE,
-} from "@/features/auth/forgot-password/constants/messages";
+import { FORGOT_PASSWORD_UI_MESSAGES } from "@/features/auth/forgot-password/constants/messages";
 import { consumeForgotPasswordPrefillEmail } from "@/features/auth/forgot-password/lib/forgotPasswordPrefillMemory";
 import {
   ForgotPasswordFormInput,
@@ -25,6 +21,8 @@ import {
   ForgotPasswordFormValues,
 } from "@/features/auth/forgot-password/schemas/forgotPasswordFormSchema";
 import { showToast } from "@/lib/utils/showToast";
+
+import { AUTH_GLOBAL_ERROR_MESSAGE } from "../../constants/messages";
 
 type ForgotPasswordFormProps = {
   action: (
@@ -63,7 +61,7 @@ export function ForgotPasswordForm({ action }: ForgotPasswordFormProps) {
     hasHandledQueryErrorRef.current = true;
 
     if (searchParams.get("error") === "invalid_reset_link") {
-      showToast(FORGOT_PASSWORD_INVALID_RESET_LINK_MESSAGE);
+      showToast(FORGOT_PASSWORD_UI_MESSAGES.invalidResetLink);
     }
   }, [searchParams]);
 
@@ -91,7 +89,7 @@ export function ForgotPasswordForm({ action }: ForgotPasswordFormProps) {
   // 필드 validation은 react-hook-form이 담당하고, 서버 결과는 전역 toast로 처리한다.
   useEffect(() => {
     if (state.status === "completed") {
-      showToast(FORGOT_PASSWORD_SUCCESS_MESSAGE);
+      showToast(FORGOT_PASSWORD_UI_MESSAGES.success);
     }
     if (state.status === "blocked") {
       showToast(RATE_LIMIT_TOAST_MESSAGE, {
@@ -100,7 +98,7 @@ export function ForgotPasswordForm({ action }: ForgotPasswordFormProps) {
       });
     }
     if (state.status === "internal_error") {
-      showToast(FORGOT_PASSWORD_GLOBAL_ERROR_MESSAGE);
+      showToast(AUTH_GLOBAL_ERROR_MESSAGE);
     }
   }, [state]);
 

@@ -6,6 +6,7 @@ import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 import { RATE_LIMIT_TOAST_MESSAGE } from "@/features/auth/errors/rateLimitError";
 import { UNKNOWN_ERROR_MESSAGE } from "@/features/auth/errors/unknownError";
 import { showToast } from "@/lib/utils/showToast";
+import { VALIDATION_MESSAGES } from "@/lib/validation/messages";
 
 import VerifyEmailPageClient from "./VerifyEmailPageClient";
 
@@ -224,7 +225,7 @@ describe("VerifyEmailPageClient", () => {
     await user.tab();
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "올바른 이메일을 입력해주세요",
+      VALIDATION_MESSAGES.emailInvalid,
     );
   });
 
@@ -239,7 +240,7 @@ describe("VerifyEmailPageClient", () => {
     await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "올바른 이메일을 입력해주세요",
+      VALIDATION_MESSAGES.emailInvalid,
     );
     expect(mockMutateAsync).not.toHaveBeenCalled();
   });
@@ -252,7 +253,7 @@ describe("VerifyEmailPageClient", () => {
     await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "이메일을 입력해주세요",
+      VALIDATION_MESSAGES.emailRequired,
     );
     expect(mockMutateAsync).not.toHaveBeenCalled();
   });
@@ -284,7 +285,7 @@ describe("VerifyEmailPageClient", () => {
     await user.tab();
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "올바른 이메일을 입력해주세요",
+      VALIDATION_MESSAGES.emailInvalid,
     );
 
     await user.clear(input);

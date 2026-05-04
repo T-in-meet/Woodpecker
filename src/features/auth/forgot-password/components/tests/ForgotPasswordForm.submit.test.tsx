@@ -6,7 +6,6 @@ import {
   getEmailInput,
   getFormActionMock,
   getSubmitButtonByLoadingLabel,
-  MESSAGES,
   renderForgotPasswordForm,
   resetToastMock,
   setPendingWithDeferredPromise,
@@ -16,6 +15,8 @@ import {
   submitWithEnterKey,
   typeValidEmail,
 } from "@/features/auth/forgot-password/components/tests/utils/forgot-password-form-test-utils";
+
+import { FORGOT_PASSWORD_LABEL_MESSAGES } from "../../constants/messages";
 
 describe("ForgotPasswordForm.submit", () => {
   beforeEach(() => {
@@ -89,7 +90,9 @@ describe("ForgotPasswordForm.submit", () => {
 
     await typeValidEmail();
 
-    expect(getSubmitButtonByLoadingLabel()).toHaveTextContent(MESSAGES.loading);
+    expect(getSubmitButtonByLoadingLabel()).toHaveTextContent(
+      FORGOT_PASSWORD_LABEL_MESSAGES.loading,
+    );
     expect(getSubmitButtonByLoadingLabel()).toBeDisabled();
   });
 });
