@@ -1,5 +1,6 @@
 "use client";
 
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
 /**
@@ -18,6 +19,7 @@ import Link from "next/link";
  */
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
+import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,10 +36,13 @@ import {
 import { UNKNOWN_ERROR_MESSAGE } from "@/features/auth/errors/unknownError";
 import { useResendVerificationEmailMutation } from "@/features/auth/resend-verification-email/hooks/useResendVerificationEmailMutation";
 import { showToast } from "@/lib/utils/showToast";
+import { emailFieldSchema } from "@/lib/validation/emailSchema";
 
-type FormValues = {
-  email: string;
-};
+const verifyEmailFormSchema = z.object({
+  email: emailFieldSchema,
+});
+
+type VerifyEmailFormValues = z.infer<typeof verifyEmailFormSchema>;
 
 type Props = {
   email?: string | undefined;
@@ -61,9 +66,12 @@ export default function VerifyEmailPageClient({ email }: Props) {
     register,
     handleSubmit,
     reset,
-    formState: { isSubmitting },
-  } = useForm<FormValues>({
-    defaultValues: { email: normalizedPrefillEmail },
+    formState: { isSubmitting, errors },
+  } = useForm<VerifyEmailFormValues>({
+    resolver: zodResolver(verifyEmailFormSchema),
+    mode: "onTouched",
+    reValidateMode: "onChange",
+    defaultValues: { email: "" },
   });
 
   /**
@@ -91,7 +99,7 @@ export default function VerifyEmailPageClient({ email }: Props) {
    */
   const isDisabled = isSubmitting || isPending;
 
-  const onSubmit = async (values: FormValues) => {
+  const onSubmit = async (values: VerifyEmailFormValues) => {
     try {
       /**
        * 재발송 요청은 mutation을 통해 수행한다.
@@ -203,13 +211,24 @@ export default function VerifyEmailPageClient({ email }: Props) {
                 <Label htmlFor="email" className="text-base shrink-0 min-w-16">
                   이메일
                 </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  autoComplete="email"
-                  {...register("email")}
-                  className="h-12 rounded-xl"
-                />
+
+                <div className="flex-1 space-y-2">
+                  <Input
+                    id="email"
+                    type="email"
+                    autoComplete="email"
+                    aria-invalid={Boolean(errors.email)}
+                    aria-describedby={errors.email ? "email-error" : undefined}
+                    {...register("email")}
+                    className="h-12 rounded-xl"
+                  />
+
+                  {errors.email?.message && (
+                    <p id="email-error" className="text-sm text-destructive">
+                      {errors.email.message}
+                    </p>
+                  )}
+                </div>
               </div>
 
               <Button

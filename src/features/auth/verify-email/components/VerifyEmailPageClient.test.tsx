@@ -213,4 +213,65 @@ describe("VerifyEmailPageClient", () => {
       });
     });
   });
+
+  it("TC-14. invalid email을 blur하면 이메일 형식 에러 메시지를 표시한다", async () => {
+    const user = userEvent.setup();
+    render(<VerifyEmailPageClient />);
+
+    const input = screen.getByRole("textbox", { name: /이메일/i });
+
+    await user.type(input, "invalid-email");
+    await user.tab();
+
+    expect(
+      await screen.findByText("올바른 이메일을 입력해주세요"),
+    ).toBeInTheDocument();
+  });
+
+  it("TC-15. invalid email submit이면 mutateAsync를 호출하지 않는다", async () => {
+    const user = userEvent.setup();
+    render(<VerifyEmailPageClient />);
+
+    await user.type(
+      screen.getByRole("textbox", { name: /이메일/i }),
+      "invalid",
+    );
+    await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
+
+    expect(
+      await screen.findByText("올바른 이메일을 입력해주세요"),
+    ).toBeInTheDocument();
+    expect(mockMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("TC-16. invalid email 에러가 표시된 뒤 valid email로 수정하면 에러 메시지가 사라지고 제출된다", async () => {
+    const user = userEvent.setup();
+    render(<VerifyEmailPageClient />);
+
+    const input = screen.getByRole("textbox", { name: /이메일/i });
+
+    await user.type(input, "invalid");
+    await user.tab();
+
+    expect(
+      await screen.findByText("올바른 이메일을 입력해주세요"),
+    ).toBeInTheDocument();
+
+    await user.clear(input);
+    await user.type(input, "test@example.com");
+
+    await waitFor(() => {
+      expect(
+        screen.queryByText("올바른 이메일을 입력해주세요"),
+      ).not.toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
+
+    await waitFor(() => {
+      expect(mockMutateAsync).toHaveBeenCalledWith({
+        email: "test@example.com",
+      });
+    });
+  });
 });
