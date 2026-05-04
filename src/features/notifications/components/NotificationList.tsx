@@ -17,7 +17,6 @@ type NotificationListProps = {
 
 function getStatusLabel(status: NotificationListItemType["status"]) {
   if (status === NOTIFICATION_STATUS.SENT) return "새 알림";
-  if (status === NOTIFICATION_STATUS.SKIPPED) return "건너뜀";
   return "읽음";
 }
 

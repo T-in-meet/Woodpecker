@@ -23,7 +23,7 @@ export type NotificationNoteId = Notification["note_id"];
 
 export type NotificationCreateInput = Omit<
   NotificationInsert,
-  "id" | "sent_at" | "read_at" | "skipped_at" | "status" | "type"
+  "id" | "sent_at" | "read_at" | "status" | "type"
 > & {
   status: NotificationStatus;
   type: NotificationType;
