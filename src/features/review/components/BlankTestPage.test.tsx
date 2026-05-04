@@ -79,6 +79,10 @@ describe("BlankTestPage", () => {
       />,
     );
 
+    expect(screen.getByRole("heading", { level: 1 })).toHaveClass(
+      "break-words",
+      "break-keep",
+    );
     expect(
       screen.getByText(
         "비교를 마쳤다면 이번 복습을 완료 처리하고 다음 간격으로 넘어가세요.",

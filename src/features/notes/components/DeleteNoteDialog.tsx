@@ -61,7 +61,7 @@ export function DeleteNoteDialog({ noteId, noteTitle }: DeleteNoteDialogProps) {
             삭제한 노트는 되돌릴 수 없습니다. 아래 노트를 영구적으로
             삭제하시겠습니까?
           </p>
-          <p className="rounded-lg bg-muted px-3 py-2 text-sm font-medium text-foreground">
+          <p className="min-w-0 max-w-full whitespace-normal break-keep rounded-lg bg-muted px-3 py-2 text-sm font-medium text-foreground [overflow-wrap:anywhere]">
             {noteTitle}
           </p>
           {error && <p className="text-sm text-destructive">{error}</p>}
