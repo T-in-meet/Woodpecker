@@ -150,7 +150,7 @@ SELECT throws_ok(
   $$status가 허용 목록에 없는 값이면 notifications_status_check 제약 위반으로 저장이 차단되어야 한다$$
 );
 
--- status가 소문자('sent', 'read', 'skipped')이면 notifications_status_check 제약 위반으로 저장이 차단되어야 한다
+-- status가 소문자('sent', 'read')이면 notifications_status_check 제약 위반으로 저장이 차단되어야 한다
 SELECT throws_ok(
   $sql$
     INSERT INTO public.notifications (id, user_id, type, title, status)
@@ -158,7 +158,7 @@ SELECT throws_ok(
   $sql$,
   '23514',
   'new row for relation "notifications" violates check constraint "notifications_status_check"',
-  $$status가 소문자('sent', 'read', 'skipped')이면 notifications_status_check 제약 위반으로 저장이 차단되어야 한다$$
+  $$status가 소문자('sent', 'read')이면 notifications_status_check 제약 위반으로 저장이 차단되어야 한다$$
 );
 
 -- status에 앞뒤 공백이 포함된 값(' SENT', 'READ ')이면 notifications_status_check 제약 위반으로 저장이 차단되어야 한다
