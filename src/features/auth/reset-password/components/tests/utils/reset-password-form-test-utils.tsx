@@ -41,14 +41,6 @@ export function fillResetPasswordFields(values: {
   });
 }
 
-export function blurPasswordField() {
-  fireEvent.blur(screen.getByLabelText(/^비밀번호$/i));
-}
-
-export function blurConfirmPasswordField() {
-  fireEvent.blur(screen.getByLabelText(/비밀번호 확인/i));
-}
-
 export function submitResetPasswordForm() {
   const submitButton = screen.getByRole("button", {
     name: "비밀번호 변경하기",

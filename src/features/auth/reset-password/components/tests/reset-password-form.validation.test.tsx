@@ -6,8 +6,6 @@ import {
   PASSWORD_MISMATCH_MESSAGE,
 } from "@/features/auth/constants/messages";
 import {
-  blurConfirmPasswordField,
-  blurPasswordField,
   fillResetPasswordFields,
   renderResetPasswordForm,
   setIdleActionState,
@@ -57,7 +55,6 @@ describe("reset-password-form validation", () => {
       confirmPassword: "different-password",
     });
 
-    blurConfirmPasswordField();
     submitResetPasswordForm();
 
     expect(
@@ -100,7 +97,7 @@ describe("reset-password-form validation", () => {
       confirmPassword: "short",
     });
 
-    blurPasswordField();
+    submitResetPasswordForm();
 
     expect(
       await screen.findByText(PASSWORD_MIN_LENGTH_MESSAGE),
