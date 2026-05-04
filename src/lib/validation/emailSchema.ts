@@ -39,3 +39,36 @@ export const normalizedEmailSchema = z.preprocess(
 export const emailFieldSchema = z
   .string()
   .email("올바른 이메일을 입력해주세요");
+
+/**
+ * 이메일 Form 스키마 (UI / Form 제출용)
+ *
+ * 목적:
+ * - Form 제출 시 최종 validation 수행
+ * - 사용자 입력값을 정제(trim)한 뒤 검증
+ * - UX 친화적인 메시지 제공 (required + format)
+ *
+ * 특징:
+ * - preprocess로 trim 적용 → " test@test.com " → "test@test.com"
+ * - 공백 입력("")에 대해 명확한 required 메시지 제공
+ * - 이메일 형식 오류에 대해 사용자 메시지 제공
+ *
+ * 사용 위치:
+ * - react-hook-form + zodResolver 기반 Form
+ * - submit 시점 validation
+ *
+ * 보장:
+ * - 공백 입력 → "이메일을 입력해주세요"
+ * - 잘못된 형식 → "올바른 이메일을 입력해주세요"
+ * - 정상 입력 → trim된 값으로 downstream 전달
+ *
+ * 권장:
+ * - Form validation에서는 emailFieldSchema 대신 이 스키마 사용
+ */
+export const emailFormSchema = z.preprocess(
+  (value) => (typeof value === "string" ? value.trim() : value),
+  z
+    .string()
+    .min(1, "이메일을 입력해주세요")
+    .email("올바른 이메일을 입력해주세요"),
+);

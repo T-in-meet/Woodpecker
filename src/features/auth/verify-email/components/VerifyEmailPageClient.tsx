@@ -3,23 +3,8 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
-/**
- * 이메일 인증 안내 페이지 클라이언트 컴포넌트
- *
- * 설계 의도:
- * - 회원가입 완료 후 이메일 인증을 유도하는 단일 진입점 역할을 한다.
- * - 인증 메일 재발송 기능을 제공하며, 남용 방지를 위해 rate limit을 처리한다.
- * - auth-rules.md 정책에 따라 회원 상태(신규/미인증/인증)를 프론트에서 구분하지 않는다.
- *   → 서버 응답 코드 기반으로도 계정 상태를 추론할 수 없도록 동일한 UX 흐름을 유지한다.
- *
- * rate limit 처리:
- * - 클라이언트는 쿨다운 타이머나 남은 시간을 추적하지 않는다.
- * - HTTP status(예: 429)에 의존하지 않고, 서버 response body의 `code`를 기준으로 처리한다.
- * - rate limit 발생 시, 이벤트 기반의 전역 토스트 메시지(showToast)로만 피드백한다.
- */
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
-import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,18 +21,31 @@ import {
 import { UNKNOWN_ERROR_MESSAGE } from "@/features/auth/errors/unknownError";
 import { useResendVerificationEmailMutation } from "@/features/auth/resend-verification-email/hooks/useResendVerificationEmailMutation";
 import { showToast } from "@/lib/utils/showToast";
-import { emailFieldSchema } from "@/lib/validation/emailSchema";
 
-const verifyEmailFormSchema = z.object({
-  email: emailFieldSchema,
-});
-
-type VerifyEmailFormValues = z.infer<typeof verifyEmailFormSchema>;
+import {
+  VerifyEmailFormInput,
+  verifyEmailFormSchema,
+  VerifyEmailFormValues,
+} from "../schemas/verifyEmailFormSchema";
 
 type Props = {
   email?: string | undefined;
 };
 
+/**
+ * 이메일 인증 안내 페이지 클라이언트 컴포넌트
+ *
+ * 설계 의도:
+ * - 회원가입 완료 후 이메일 인증을 유도하는 단일 진입점 역할을 한다.
+ * - 인증 메일 재발송 기능을 제공하며, 남용 방지를 위해 rate limit을 처리한다.
+ * - auth-rules.md 정책에 따라 회원 상태(신규/미인증/인증)를 프론트에서 구분하지 않는다.
+ *   → 서버 응답 코드 기반으로도 계정 상태를 추론할 수 없도록 동일한 UX 흐름을 유지한다.
+ *
+ * rate limit 처리:
+ * - 클라이언트는 쿨다운 타이머나 남은 시간을 추적하지 않는다.
+ * - HTTP status(예: 429)에 의존하지 않고, 서버 response body의 `code`를 기준으로 처리한다.
+ * - rate limit 발생 시, 이벤트 기반의 전역 토스트 메시지(showToast)로만 피드백한다.
+ */
 export default function VerifyEmailPageClient({ email }: Props) {
   /**
    * pre-fill 입력값 정규화
@@ -67,7 +65,7 @@ export default function VerifyEmailPageClient({ email }: Props) {
     handleSubmit,
     reset,
     formState: { isSubmitting, errors },
-  } = useForm<VerifyEmailFormValues>({
+  } = useForm<VerifyEmailFormInput, unknown, VerifyEmailFormValues>({
     resolver: zodResolver(verifyEmailFormSchema),
     mode: "onTouched",
     reValidateMode: "onChange",

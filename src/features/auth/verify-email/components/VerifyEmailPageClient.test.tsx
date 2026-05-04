@@ -244,6 +244,36 @@ describe("VerifyEmailPageClient", () => {
     expect(mockMutateAsync).not.toHaveBeenCalled();
   });
 
+  it("TC-17. 공백만 입력하면 required 에러 메시지를 표시하고 mutateAsync를 호출하지 않는다", async () => {
+    const user = userEvent.setup();
+    render(<VerifyEmailPageClient />);
+
+    await user.type(screen.getByRole("textbox", { name: /이메일/i }), "   ");
+    await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "이메일을 입력해주세요",
+    );
+    expect(mockMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("TC-18. 앞뒤 공백이 포함된 valid email submit이면 trim된 email로 mutateAsync를 호출한다", async () => {
+    const user = userEvent.setup();
+    render(<VerifyEmailPageClient />);
+
+    await user.type(
+      screen.getByRole("textbox", { name: /이메일/i }),
+      "  test@example.com  ",
+    );
+    await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
+
+    await waitFor(() => {
+      expect(mockMutateAsync).toHaveBeenCalledWith({
+        email: "test@example.com",
+      });
+    });
+  });
+
   it("TC-16. invalid email 에러가 표시된 뒤 valid email로 수정하면 에러 메시지가 사라지고 제출된다", async () => {
     const user = userEvent.setup();
     render(<VerifyEmailPageClient />);
