@@ -24,8 +24,8 @@ type Props = {
  * - Server Action을 Form이 사용할 수 있는 형태로 바인딩
  *
  * 접근 제어:
- * - /reset-password 접근 가능 여부는 middleware에서 session 기준으로 판단한다
- * - page에서는 session을 직접 조회하지 않는다
+ * - /reset-password 접근 가능 여부는 page에서 getUser 기준으로 판단한다
+ * - 비인증 접근 시 /forgot-password로 redirect한다
  *
  * redirect:
  * - 최종 이동은 Server Action에서 수행한다
