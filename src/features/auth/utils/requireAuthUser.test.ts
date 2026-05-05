@@ -55,4 +55,32 @@ describe("requireAuthUser", () => {
 
     expect(hoisted.redirectMock).toHaveBeenCalledWith(ROUTES.LOGIN);
   });
+
+  it("redirectTo 옵션이 있으면 user 없음 시 해당 경로로 redirect 한다", async () => {
+    hoisted.getUserMock.mockResolvedValue(null);
+
+    hoisted.redirectMock.mockImplementation(() => {
+      throw new Error("NEXT_REDIRECT");
+    });
+
+    await expect(
+      requireAuthUser({ redirectTo: ROUTES.FORGOT_PASSWORD }),
+    ).rejects.toThrow("NEXT_REDIRECT");
+
+    expect(hoisted.redirectMock).toHaveBeenCalledWith(ROUTES.FORGOT_PASSWORD);
+  });
+
+  it("redirectTo 옵션이 있으면 getUser 실패 시 해당 경로로 redirect 한다", async () => {
+    hoisted.getUserMock.mockRejectedValue(new Error("GET_USER_FAILED"));
+
+    hoisted.redirectMock.mockImplementation(() => {
+      throw new Error("NEXT_REDIRECT");
+    });
+
+    await expect(
+      requireAuthUser({ redirectTo: ROUTES.FORGOT_PASSWORD }),
+    ).rejects.toThrow("NEXT_REDIRECT");
+
+    expect(hoisted.redirectMock).toHaveBeenCalledWith(ROUTES.FORGOT_PASSWORD);
+  });
 });

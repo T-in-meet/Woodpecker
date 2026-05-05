@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { resetPasswordAction } from "@/features/auth/reset-password/actions/resetPasswordAction";
 import { ResetPasswordForm } from "@/features/auth/reset-password/components/ResetPasswordForm";
 import { requireAuthUser } from "@/features/auth/utils/requireAuthUser";
+import { ROUTES } from "@/lib/constants/routes";
 
 // 검색 엔진 인덱싱 방지 (robots.txt Disallow보다 확실함 — 삭제 금지)
 export const metadata: Metadata = {
@@ -39,8 +40,8 @@ type Props = {
  * 오류가 발생한다.
  */
 export default async function ResetPasswordPage({ searchParams }: Props) {
-  // 인증되지 않은 사용자는 login으로 redirect
-  await requireAuthUser();
+  // 인증되지 않은 사용자는 forgot-password로 redirect
+  await requireAuthUser({ redirectTo: ROUTES.FORGOT_PASSWORD });
 
   /**
    * redirect query 전달
