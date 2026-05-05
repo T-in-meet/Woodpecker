@@ -27,6 +27,7 @@ import {
   LoginFormValues,
 } from "@/features/auth/login/schema/loginFormSchema";
 import { LOGIN_FIELD_SET } from "@/features/auth/login/types/form.types";
+import { ROUTES } from "@/lib/constants/routes";
 import { showToast } from "@/lib/utils/showToast";
 import { isServerValidationError } from "@/lib/validation/isServerValidationError";
 import { mapReasonToMessage } from "@/lib/validation/mapReasonToMessage";
@@ -59,12 +60,8 @@ export function LoginForm() {
   const redirectParam = searchParams.get("redirect");
 
   const forgotPasswordHref = redirectParam
-    ? `/forgot-password?${new URLSearchParams({ redirect: redirectParam }).toString()}`
-    : "/forgot-password";
-
-  const signupHref = redirectParam
-    ? `/signup?${new URLSearchParams({ redirect: redirectParam }).toString()}`
-    : "/signup";
+    ? `${ROUTES.FORGOT_PASSWORD}?${new URLSearchParams({ redirect: redirectParam }).toString()}`
+    : ROUTES.FORGOT_PASSWORD;
 
   const handleValidSubmit = async (data: LoginFormValues) => {
     clearErrors();
@@ -244,7 +241,7 @@ export function LoginForm() {
             <p className="text-sm text-muted-foreground">
               아직 계정이 없으신가요?{" "}
               <Link
-                href={signupHref}
+                href={ROUTES.SIGNUP}
                 className="text-sm text-muted-foreground underline hover:text-foreground"
               >
                 회원가입하기
