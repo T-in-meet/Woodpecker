@@ -3,14 +3,11 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import {
-  PASSWORD_MIN_LENGTH_MESSAGE,
-  PASSWORD_MISMATCH_MESSAGE,
-} from "@/features/auth/constants/messages";
-import {
   NICKNAME_MAX_LENGTH,
   NICKNAME_MIN_LENGTH,
 } from "@/lib/constants/profiles";
 import { PASSWORD_MIN_LENGTH } from "@/lib/constants/user";
+import { VALIDATION_MESSAGES } from "@/lib/validation/messages";
 
 import { renderSignupForm } from "./utils/signupFormTestUtils";
 
@@ -30,13 +27,13 @@ describe("회원가입 폼 검증", () => {
     renderSignupForm();
 
     expect(
-      screen.queryByText("올바른 이메일을 입력해주세요"),
+      screen.queryByText(VALIDATION_MESSAGES.emailInvalid),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByText(PASSWORD_MIN_LENGTH_MESSAGE),
+      screen.queryByText(VALIDATION_MESSAGES.passwordMinLength),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByText(PASSWORD_MISMATCH_MESSAGE),
+      screen.queryByText(VALIDATION_MESSAGES.passwordMismatch),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByText(`닉네임은 ${NICKNAME_MIN_LENGTH}자 이상이어야 합니다`),
@@ -57,7 +54,7 @@ describe("회원가입 폼 검증", () => {
     await user.tab();
 
     expect(
-      await screen.findByText("올바른 이메일을 입력해주세요"),
+      await screen.findByText(VALIDATION_MESSAGES.emailInvalid),
     ).toBeInTheDocument();
 
     await user.click(screen.getByLabelText(/닉네임/i));
@@ -77,9 +74,11 @@ describe("회원가입 폼 검증", () => {
     await user.click(screen.getByRole("button", { name: /회원가입/i }));
 
     expect(
-      await screen.findByText("올바른 이메일을 입력해주세요"),
+      await screen.findByText(VALIDATION_MESSAGES.emailInvalid),
     ).toBeInTheDocument();
-    expect(screen.getByText(PASSWORD_MIN_LENGTH_MESSAGE)).toBeInTheDocument();
+    expect(
+      screen.getByText(VALIDATION_MESSAGES.passwordMinLength),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(`닉네임은 ${NICKNAME_MIN_LENGTH}자 이상이어야 합니다`),
     ).toBeInTheDocument();
@@ -109,7 +108,7 @@ describe("회원가입 폼 검증", () => {
     await user.tab();
 
     expect(
-      await screen.findByText(PASSWORD_MIN_LENGTH_MESSAGE),
+      await screen.findByText(VALIDATION_MESSAGES.passwordMinLength),
     ).toBeInTheDocument();
   });
 
@@ -211,7 +210,7 @@ describe("회원가입 폼 검증", () => {
     await user.type(screen.getByLabelText(/비밀번호 확인/i), "different123");
 
     expect(
-      await screen.findByText(PASSWORD_MISMATCH_MESSAGE),
+      await screen.findByText(VALIDATION_MESSAGES.passwordMismatch),
     ).toBeInTheDocument();
   });
 
@@ -224,7 +223,7 @@ describe("회원가입 폼 검증", () => {
 
     await waitFor(() => {
       expect(
-        screen.queryByText(PASSWORD_MISMATCH_MESSAGE),
+        screen.queryByText(VALIDATION_MESSAGES.passwordMismatch),
       ).not.toBeInTheDocument();
     });
   });
@@ -238,7 +237,7 @@ describe("회원가입 폼 검증", () => {
 
     await waitFor(() => {
       expect(
-        screen.queryByText(PASSWORD_MISMATCH_MESSAGE),
+        screen.queryByText(VALIDATION_MESSAGES.passwordMismatch),
       ).not.toBeInTheDocument();
     });
 
@@ -246,7 +245,7 @@ describe("회원가입 폼 검증", () => {
     await user.type(screen.getByLabelText(/^비밀번호$/i), "different456");
 
     expect(
-      await screen.findByText(PASSWORD_MISMATCH_MESSAGE),
+      await screen.findByText(VALIDATION_MESSAGES.passwordMismatch),
     ).toBeInTheDocument();
   });
 
@@ -348,20 +347,20 @@ describe("회원가입 폼 검증", () => {
     await user.type(screen.getByLabelText(/이메일/i), "not-an-email");
     await user.tab();
     expect(
-      await screen.findByText("올바른 이메일을 입력해주세요"),
+      await screen.findByText(VALIDATION_MESSAGES.emailInvalid),
     ).toBeInTheDocument();
 
     // 비밀번호: 8자 미만
     await user.type(screen.getByLabelText(/^비밀번호$/i), "short1");
     await user.tab();
     expect(
-      await screen.findByText(PASSWORD_MIN_LENGTH_MESSAGE),
+      await screen.findByText(VALIDATION_MESSAGES.passwordMinLength),
     ).toBeInTheDocument();
 
     // 비밀번호 확인: 불일치
     await user.type(screen.getByLabelText(/비밀번호 확인/i), "different");
     expect(
-      await screen.findByText(PASSWORD_MISMATCH_MESSAGE),
+      await screen.findByText(VALIDATION_MESSAGES.passwordMismatch),
     ).toBeInTheDocument();
 
     await user.clear(screen.getByLabelText(/^비밀번호$/i));
@@ -370,7 +369,7 @@ describe("회원가입 폼 검증", () => {
     await user.type(screen.getByLabelText(/비밀번호 확인/i), "password123");
     await waitFor(() => {
       expect(
-        screen.queryByText(PASSWORD_MISMATCH_MESSAGE),
+        screen.queryByText(VALIDATION_MESSAGES.passwordMismatch),
       ).not.toBeInTheDocument();
     });
 

@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import {
-  PASSWORD_MIN_LENGTH_MESSAGE,
-  PASSWORD_MISMATCH_MESSAGE,
-} from "@/features/auth/constants/messages";
+import { VALIDATION_MESSAGES } from "@/lib/validation/messages";
 
 import {
   makeFormData,
@@ -28,7 +25,7 @@ describe("resetPasswordAction - validation", () => {
     });
     expect(state).toMatchObject({
       fieldErrors: {
-        password: [PASSWORD_MIN_LENGTH_MESSAGE],
+        password: [VALIDATION_MESSAGES.passwordMinLength],
       },
     });
   });
@@ -44,7 +41,7 @@ describe("resetPasswordAction - validation", () => {
     expect(state).toMatchObject({
       status: "invalid_input",
       fieldErrors: {
-        confirmPassword: [PASSWORD_MISMATCH_MESSAGE],
+        confirmPassword: [VALIDATION_MESSAGES.passwordMismatch],
       },
     });
   });

@@ -1,16 +1,19 @@
 "use client";
 
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
-import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useActionState } from "react";
+import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { resetPasswordFormSchema } from "@/features/auth/reset-password/schemas/resetPasswordFormSchema";
+import {
+  type ResetPasswordFormInput,
+  resetPasswordFormSchema,
+} from "@/features/auth/reset-password/schemas/resetPasswordFormSchema";
 import { usePreventPageLeave } from "@/hooks/usePreventPageLeave";
 
-import { INPUT_DEBOUNCE_DELAY_MS } from "../../constants/ui";
-import { useDebouncedCallback } from "../../hooks/useDebouncedCallback";
 import {
   INITIAL_RESET_PASSWORD_ACTION_STATE,
   ResetPasswordActionState,
@@ -21,11 +24,6 @@ import {
   RESET_PASSWORD_SAME_PASSWORD_MESSAGE,
 } from "../constants/messages";
 
-type ClientFieldErrors = {
-  password?: string[];
-  confirmPassword?: string[];
-};
-
 type ResetPasswordFormProps = {
   action: (
     prevState: ResetPasswordActionState,
@@ -33,149 +31,104 @@ type ResetPasswordFormProps = {
   ) => Promise<ResetPasswordActionState>;
 };
 
-/**
- * 현재 FormData를 resetPasswordFormSchema로 검증하고,
- * UI에서 표시할 클라이언트 필드 에러 형태로 변환한다.
- */
-function toClientErrors(formData: FormData): ClientFieldErrors {
-  const parsed = resetPasswordFormSchema.safeParse({
-    password: String(formData.get("password") ?? ""),
-    confirmPassword: String(formData.get("confirmPassword") ?? ""),
-  });
-
-  if (parsed.success) {
-    return {};
-  }
-
-  const fieldErrors = parsed.error.flatten().fieldErrors;
-  const errors: ClientFieldErrors = {};
-  if (fieldErrors.password) {
-    errors.password = fieldErrors.password;
-  }
-  if (fieldErrors.confirmPassword) {
-    errors.confirmPassword = fieldErrors.confirmPassword;
-  }
-  return errors;
-}
-
-function hasClientErrors(errors: ClientFieldErrors): boolean {
-  return Boolean(errors.password?.length || errors.confirmPassword?.length);
-}
-
 export function ResetPasswordForm({ action }: ResetPasswordFormProps) {
   const [state, formAction, isPending] = useActionState(
     action,
     INITIAL_RESET_PASSWORD_ACTION_STATE,
   );
-  const [clientErrors, setClientErrors] = useState<ClientFieldErrors>({});
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const formRef = useRef<HTMLFormElement>(null);
 
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-  }, []);
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<ResetPasswordFormInput>({
+    resolver: zodResolver(resetPasswordFormSchema),
+    mode: "onTouched",
+    reValidateMode: "onChange",
+    defaultValues: {
+      password: "",
+      confirmPassword: "",
+    },
+  });
 
-  /**
-   * 클라이언트 검증 에러를 서버 액션의 invalid_input보다 우선 표시한다.
-   * 사용자가 입력을 수정한 뒤에는 현재 입력값 기준의 에러를 보여주기 위함이다.
-   */
-  const visibleFieldErrors = useMemo(() => {
-    if (hasClientErrors(clientErrors)) {
-      return clientErrors;
-    }
-    if (state.status === "invalid_input") {
-      return state.fieldErrors;
-    }
-    return {};
-  }, [clientErrors, state]);
-
-  const showGlobalError =
-    state.status === "internal_error" && !hasClientErrors(clientErrors);
-  const globalErrorMessage =
-    state.status === "internal_error" && state.reason === "same_password"
-      ? RESET_PASSWORD_SAME_PASSWORD_MESSAGE
-      : RESET_PASSWORD_GLOBAL_ERROR_MESSAGE;
   const passwordErrorId = "reset-password-password-error";
   const confirmPasswordErrorId = "reset-password-confirm-password-error";
   const globalErrorId = "reset-password-global-error";
 
+  const hasClientErrors = Boolean(
+    errors.password?.message || errors.confirmPassword?.message,
+  );
+
+  const visibleFieldErrors = hasClientErrors
+    ? {
+        password: errors.password?.message
+          ? [errors.password.message]
+          : undefined,
+        confirmPassword: errors.confirmPassword?.message
+          ? [errors.confirmPassword.message]
+          : undefined,
+      }
+    : state.status === "invalid_input"
+      ? state.fieldErrors
+      : {};
+
+  const showGlobalError = state.status === "internal_error" && !hasClientErrors;
+
+  const globalErrorMessage =
+    state.status === "internal_error" && state.reason === "same_password"
+      ? RESET_PASSWORD_SAME_PASSWORD_MESSAGE
+      : RESET_PASSWORD_GLOBAL_ERROR_MESSAGE;
+
   /**
    * reset-password 페이지 이탈 제어
    *
-   * 정책 변경:
-   * - 기존: 비밀번호 변경 전까지 페이지 이동 자체를 차단
-   * - 변경: 이동은 허용하되 메시지로 사용자에게 안내
+   * 비밀번호 변경 submit 진행 중에는 정상 흐름을 방해하지 않고,
+   * 그 외 상황에서는 페이지 이탈 시 재설정 흐름이 중단될 수 있음을 안내한다.
+   */
+  usePreventPageLeave(!isPending, RESET_PASSWORD_PAGE_LEAVE_CONFIRM_MESSAGE);
+
+  /**
+   * react-hook-form 검증을 통과한 값만 Server Action에 전달한다.
    *
-   * 적용 방식:
-   * - 페이지 진입 시점부터 항상 이탈 경고 활성화
-   * - 단, 비밀번호 변경 submit 진행 중(isPending)은 정상 흐름이므로 예외 처리
+   * ForgotPasswordForm과 동일하게 native form action을 사용하지 않고,
+   * handleSubmit으로 검증한 뒤 FormData를 직접 구성해 useActionState dispatch를 호출한다.
    */
-  const shouldPreventPageLeave = !isPending;
+  const onSubmit = handleSubmit((data) => {
+    const formData = new FormData();
+    formData.set("password", data.password);
+    formData.set("confirmPassword", data.confirmPassword);
 
-  /**
-   * 페이지 이탈 시 비밀번호 재설정 흐름 중단을 안내하는 confirm 표시
-   */
-  usePreventPageLeave(
-    shouldPreventPageLeave,
-    RESET_PASSWORD_PAGE_LEAVE_CONFIRM_MESSAGE,
-  );
-
-  /**
-   * 입력 변경 시 즉시 검증하지 않고 debounce 후 현재 폼 값을 검증한다.
-   * submit 시에는 별도로 즉시 검증하므로 예약된 검증은 handleSubmit에서 정리한다.
-   */
-  const { schedule: scheduleValidation, cancel: cancelValidation } =
-    useDebouncedCallback(() => {
-      const formElement = formRef.current;
-      if (!formElement) return;
-
-      const errors = toClientErrors(new FormData(formElement));
-      setClientErrors(errors);
-    }, INPUT_DEBOUNCE_DELAY_MS);
-
-  /**
-   * submit 직전에 클라이언트 검증을 즉시 수행한다.
-   * 에러가 있으면 서버 액션 호출을 막고 필드 에러만 표시한다.
-   */
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    cancelValidation();
-
-    const errors = toClientErrors(new FormData(event.currentTarget));
-    setClientErrors(errors);
-    if (hasClientErrors(errors)) {
-      event.preventDefault();
-    }
-  };
+    startTransition(() => {
+      formAction(formData);
+    });
+  });
 
   return (
     <div className="my-0 md:my-4 mx-auto max-w-2xl bg-white border-0 md:border md:border-outline-variant md:rounded-xl rounded-none md:shadow-sm shadow-none overflow-hidden">
       <form
-        action={formAction}
-        onSubmit={handleSubmit}
-        ref={formRef}
+        onSubmit={onSubmit}
         className="mx-auto max-w-4xl space-y-2 py-7 px-4 md:px-8"
+        noValidate
       >
-        <div className="grid grid-cols-1 md:grid-cols-[6.25rem_minmax(0,1fr)] gap-x-4">
+        <div className="grid grid-cols-1 md:grid-cols-[6.25rem_minmax(0,1fr)] gap-x-4 gap-y-2">
           <div className="flex items-center">
             <Label htmlFor="password" className="shrink-0 min-w-25">
               비밀번호
             </Label>
           </div>
+
           <Input
             id="password"
-            name="password"
             type="password"
-            onChange={scheduleValidation}
+            aria-invalid={Boolean(visibleFieldErrors.password?.length)}
             aria-describedby={
               visibleFieldErrors.password?.length ? passwordErrorId : undefined
             }
+            {...register("password")}
           />
+
           <div className="hidden md:block" />
+
           <div className="min-h-5 mt-2">
             {visibleFieldErrors.password?.map((error) => (
               <p
@@ -190,24 +143,27 @@ export function ResetPasswordForm({ action }: ResetPasswordFormProps) {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-[6.25rem_minmax(0,1fr)] gap-x-4">
+        <div className="grid grid-cols-1 md:grid-cols-[6.25rem_minmax(0,1fr)] gap-x-4 gap-y-2">
           <div className="flex items-center">
             <Label htmlFor="confirmPassword" className="shrink-0 min-w-25">
               비밀번호 확인
             </Label>
           </div>
+
           <Input
             id="confirmPassword"
-            name="confirmPassword"
             type="password"
-            onChange={scheduleValidation}
+            aria-invalid={Boolean(visibleFieldErrors.confirmPassword?.length)}
             aria-describedby={
               visibleFieldErrors.confirmPassword?.length
                 ? confirmPasswordErrorId
                 : undefined
             }
+            {...register("confirmPassword")}
           />
+
           <div className="hidden md:block" />
+
           <div className="min-h-5 mt-2">
             {visibleFieldErrors.confirmPassword?.map((error) => (
               <p
@@ -235,7 +191,7 @@ export function ResetPasswordForm({ action }: ResetPasswordFormProps) {
         </div>
 
         <Button
-          disabled={isPending || hasClientErrors(clientErrors)}
+          disabled={isPending}
           type="submit"
           className="w-full md:w-auto"
           aria-describedby={showGlobalError ? globalErrorId : undefined}
