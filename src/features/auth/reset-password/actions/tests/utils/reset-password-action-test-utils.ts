@@ -1,7 +1,7 @@
 import { vi } from "vitest";
 import { z } from "zod";
 
-import { PASSWORD_MISMATCH_MESSAGE } from "@/features/auth/constants/messages";
+import { VALIDATION_MESSAGES } from "@/lib/validation/messages";
 import { passwordFieldSchema } from "@/lib/validation/passwordSchema";
 
 import {
@@ -128,7 +128,7 @@ export function setupActionTest() {
           if (value.password !== value.confirmPassword) {
             ctx.addIssue({
               code: z.ZodIssueCode.custom,
-              message: PASSWORD_MISMATCH_MESSAGE,
+              message: VALIDATION_MESSAGES.passwordMismatch,
               path: ["confirmPassword"],
             });
           }
