@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { resetPasswordAction } from "@/features/auth/reset-password/actions/resetPasswordAction";
 import { ResetPasswordForm } from "@/features/auth/reset-password/components/ResetPasswordForm";
 import { requireAuthUser } from "@/features/auth/utils/requireAuthUser";
+import { ROUTES } from "@/lib/constants/routes";
 
 // 검색 엔진 인덱싱 방지 (robots.txt Disallow보다 확실함 — 삭제 금지)
 export const metadata: Metadata = {
@@ -23,8 +24,8 @@ type Props = {
  * - Server Action을 Form이 사용할 수 있는 형태로 바인딩
  *
  * 접근 제어:
- * - /reset-password 접근 가능 여부는 middleware에서 session 기준으로 판단한다
- * - page에서는 session을 직접 조회하지 않는다
+ * - /reset-password 접근 가능 여부는 page에서 getUser 기준으로 판단한다
+ * - 비인증 접근 시 /forgot-password로 redirect한다
  *
  * redirect:
  * - 최종 이동은 Server Action에서 수행한다
@@ -39,8 +40,8 @@ type Props = {
  * 오류가 발생한다.
  */
 export default async function ResetPasswordPage({ searchParams }: Props) {
-  // 인증되지 않은 사용자는 login으로 redirect
-  await requireAuthUser();
+  // 인증되지 않은 사용자는 forgot-password로 redirect
+  await requireAuthUser({ redirectTo: ROUTES.FORGOT_PASSWORD });
 
   /**
    * redirect query 전달
