@@ -10,23 +10,21 @@ vi.mock("@/lib/supabase/server", () => ({
 
 import { getNoteById, getNotes } from "../queries";
 
-function createNotesQueryMock(data: unknown) {
-  const orderMock = vi.fn().mockResolvedValue({ data });
-  const eqMock = vi.fn().mockReturnValue({
-    order: orderMock,
-  });
-  const selectMock = vi.fn().mockReturnValue({
-    eq: eqMock,
-  });
+function createNotesQueryMock(data: unknown, count = 0) {
+  const rangeMock = vi.fn().mockResolvedValue({ data, count });
+  const orMock = vi.fn().mockReturnValue({ range: rangeMock });
+  const orderMock = vi.fn().mockReturnValue({ or: orMock, range: rangeMock });
+  const eqMock = vi.fn().mockReturnValue({ order: orderMock });
+  const selectMock = vi.fn().mockReturnValue({ eq: eqMock });
 
   return {
+    rangeMock,
+    orMock,
     orderMock,
     eqMock,
     selectMock,
     supabase: {
-      from: vi.fn().mockReturnValue({
-        select: selectMock,
-      }),
+      from: vi.fn().mockReturnValue({ select: selectMock }),
     },
   };
 }
@@ -62,22 +60,28 @@ describe("getNotes", () => {
   });
 
   it("returns note summaries ordered by updated time", async () => {
-    const { supabase, selectMock, eqMock, orderMock } = createNotesQueryMock([
+    const notes = [
       {
         id: "11111111-1111-4111-8111-111111111111",
         title: "최근 노트",
+        content: "내용 1",
         next_review_at: "2026-03-30T09:00:00.000Z",
         review_round: 1,
+        created_at: "2026-03-29T00:00:00.000Z",
         updated_at: "2026-03-29T12:00:00.000Z",
       },
       {
         id: "22222222-2222-4222-8222-222222222222",
         title: "이전 노트",
+        content: "내용 2",
         next_review_at: null,
         review_round: 3,
+        created_at: "2026-03-28T00:00:00.000Z",
         updated_at: "2026-03-28T12:00:00.000Z",
       },
-    ]);
+    ];
+    const { supabase, selectMock, eqMock, orderMock, rangeMock } =
+      createNotesQueryMock(notes, 2);
 
     createClientMock.mockResolvedValue(supabase);
 
@@ -85,44 +89,36 @@ describe("getNotes", () => {
 
     expect(supabase.from).toHaveBeenCalledWith("notes");
     expect(selectMock).toHaveBeenCalledWith(
-      "id, title, next_review_at, review_round, updated_at",
+      "id, title, content, next_review_at, review_round, created_at, updated_at",
+      { count: "exact" },
     );
     expect(eqMock).toHaveBeenCalledWith("user_id", "user-123");
     expect(orderMock).toHaveBeenCalledWith("updated_at", { ascending: false });
-    expect(result).toEqual([
-      {
-        id: "11111111-1111-4111-8111-111111111111",
-        title: "최근 노트",
-        next_review_at: "2026-03-30T09:00:00.000Z",
-        review_round: 1,
-        updated_at: "2026-03-29T12:00:00.000Z",
-      },
-      {
-        id: "22222222-2222-4222-8222-222222222222",
-        title: "이전 노트",
-        next_review_at: null,
-        review_round: 3,
-        updated_at: "2026-03-28T12:00:00.000Z",
-      },
-    ]);
+    expect(rangeMock).toHaveBeenCalledWith(0, 4);
+    expect(result).toEqual({ notes, total: 2 });
   });
 
   it("returns an empty list when the query result does not match the schema", async () => {
-    const { supabase } = createNotesQueryMock([
-      {
-        id: "invalid-note-id",
-        title: "잘못된 노트",
-        next_review_at: null,
-        review_round: 1,
-        updated_at: "2026-03-29T12:00:00.000Z",
-      },
-    ]);
+    const { supabase } = createNotesQueryMock(
+      [
+        {
+          id: "invalid-note-id",
+          title: "잘못된 노트",
+          content: "내용",
+          next_review_at: null,
+          review_round: 1,
+          created_at: "2026-03-29T00:00:00.000Z",
+          updated_at: "2026-03-29T12:00:00.000Z",
+        },
+      ],
+      1,
+    );
 
     createClientMock.mockResolvedValue(supabase);
 
     const result = await getNotes("user-123");
 
-    expect(result).toEqual([]);
+    expect(result).toEqual({ notes: [], total: 1 });
   });
 
   it("returns note detail with notification time of day", async () => {
