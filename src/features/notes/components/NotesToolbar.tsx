@@ -21,8 +21,10 @@ export function NotesToolbar({ initialQuery, initialView }: NotesToolbarProps) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
+  const isTypingRef = useRef(false);
 
   useEffect(() => {
+    if (isTypingRef.current) return;
     const q = searchParams.get("q") ?? "";
     const v: View = searchParams.get("view") === "cards" ? "cards" : "list";
     setQuery(q);
@@ -32,8 +34,10 @@ export function NotesToolbar({ initialQuery, initialView }: NotesToolbarProps) {
   function handleQueryChange(e: React.ChangeEvent<HTMLInputElement>) {
     const q = e.target.value;
     setQuery(q);
+    isTypingRef.current = true;
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
+      isTypingRef.current = false;
       router.push(buildNotesUrl({ query: q, view }));
     }, 300);
   }

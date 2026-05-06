@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { NOTES_LIST_PAGE_SIZE } from "@/lib/constants/notes";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
+import { logError } from "@/lib/logger";
 import { createServerComponentClient } from "@/lib/supabase/server";
 
 const noteDetailSchema = z.object({
@@ -53,8 +54,9 @@ export async function getNotes(
       .trim()
       .replace(/\\/g, "\\\\")
       .replace(/%/g, "\\%")
-      .replace(/_/g, "\\_");
-    query = query.or(`title.ilike.%${term}%,content.ilike.%${term}%`);
+      .replace(/_/g, "\\_")
+      .replace(/"/g, '\\"');
+    query = query.or(`title.ilike."%${term}%",content.ilike."%${term}%"`);
   }
 
   const { data, count } = await query.range(from, to);
@@ -62,7 +64,10 @@ export async function getNotes(
   const parsed = z.array(noteSummarySchema).safeParse(data);
 
   if (!parsed.success) {
-    console.error("[getNotes] noteSummarySchema 파싱 실패:", parsed.error);
+    logError({
+      message: "[getNotes] noteSummarySchema 파싱 실패",
+      error: parsed.error,
+    });
   }
 
   return { notes: parsed.success ? parsed.data : [], total: count ?? 0 };
