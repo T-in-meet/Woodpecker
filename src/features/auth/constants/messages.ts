@@ -1,5 +1,2 @@
-import { PASSWORD_MIN_LENGTH } from "@/lib/constants/user";
-
-export const PASSWORD_MISMATCH_MESSAGE = "비밀번호가 일치하지 않습니다.";
-
-export const PASSWORD_MIN_LENGTH_MESSAGE = `비밀번호는 ${PASSWORD_MIN_LENGTH}자 이상이어야 합니다.`;
+export const AUTH_GLOBAL_ERROR_MESSAGE =
+  "요청을 처리하지 못했습니다. 잠시 후 다시 시도해주세요.";
