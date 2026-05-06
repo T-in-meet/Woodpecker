@@ -94,7 +94,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
     clearErrors,
   } = useForm<FormInput, unknown, FormValues>({
     resolver: zodResolver(signupFormSchema),
-    mode: "onBlur",
+    mode: "onTouched",
     defaultValues: {
       email: "",
       password: "",
@@ -312,7 +312,9 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
   );
 
   /**
-   * confirmPassword 변경 시 즉시 검증
+   * confirmPassword 변경 시 비밀번호 일치 여부 재검증
+   * - signup은 password / confirmPassword 간 cross-field validation이 필요하므로
+   *   onTouched 기준과 별개로 confirmPassword를 명시적으로 재검증한다.
    */
   const handleConfirmPasswordChange = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {

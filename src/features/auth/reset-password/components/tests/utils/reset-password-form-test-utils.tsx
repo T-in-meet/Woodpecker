@@ -28,18 +28,6 @@ export function setIdleActionState(
   ]);
 }
 
-export function setDefaultValidSafeParse(
-  safeParseMock: ReturnType<typeof vi.fn>,
-) {
-  safeParseMock.mockReturnValue({
-    success: true,
-    data: {
-      password: "valid-password",
-      confirmPassword: "valid-password",
-    },
-  });
-}
-
 export function fillResetPasswordFields(values: {
   password: string;
   confirmPassword: string;
@@ -47,6 +35,7 @@ export function fillResetPasswordFields(values: {
   fireEvent.change(screen.getByLabelText(/^비밀번호$/i), {
     target: { value: values.password },
   });
+
   fireEvent.change(screen.getByLabelText(/비밀번호 확인/i), {
     target: { value: values.confirmPassword },
   });

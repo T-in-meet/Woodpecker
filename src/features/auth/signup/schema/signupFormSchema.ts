@@ -1,10 +1,9 @@
 import { z } from "zod";
 
 import { emailFieldSchema } from "@/lib/validation/emailSchema";
+import { VALIDATION_MESSAGES } from "@/lib/validation/messages";
 import { nicknameFieldSchema } from "@/lib/validation/nicknameSchema";
 import { passwordFieldSchema } from "@/lib/validation/passwordSchema";
-
-import { PASSWORD_MISMATCH_MESSAGE } from "../../constants/messages";
 
 export const signupFormSchema = z
   .object({
@@ -20,6 +19,6 @@ export const signupFormSchema = z
     }),
   })
   .refine((data) => data.password === data.confirmPassword, {
-    message: PASSWORD_MISMATCH_MESSAGE,
+    message: VALIDATION_MESSAGES.passwordMismatch,
     path: ["confirmPassword"],
   });

@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  PASSWORD_MIN_LENGTH_MESSAGE,
-  PASSWORD_MISMATCH_MESSAGE,
-} from "@/features/auth/constants/messages";
+import { VALIDATION_MESSAGES } from "@/lib/validation/messages";
 
 import { resetPasswordActionSchema } from "./resetPasswordActionSchema";
 
@@ -24,7 +21,7 @@ describe("resetPasswordActionSchema", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.flatten().fieldErrors.password).toEqual([
-        PASSWORD_MIN_LENGTH_MESSAGE,
+        VALIDATION_MESSAGES.passwordMinLength,
       ]);
     }
   });
@@ -37,7 +34,7 @@ describe("resetPasswordActionSchema", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.flatten().fieldErrors.confirmPassword).toEqual([
-        PASSWORD_MISMATCH_MESSAGE,
+        VALIDATION_MESSAGES.passwordMismatch,
       ]);
     }
   });
