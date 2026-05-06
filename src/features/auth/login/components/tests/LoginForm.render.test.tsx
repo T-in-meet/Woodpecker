@@ -33,11 +33,31 @@ describe("LoginForm 렌더링", () => {
     ).toBeInTheDocument();
   });
 
-  // TODO: forgot-password 기능 구현 후 복구
-  // 현재 /forgot-password는 미구현 상태로 링크 제거됨
-  // it("비밀번호 찾기 링크가 /forgot-password로 연결된다", () => {
-  //   renderLoginForm();
-  //   const link = screen.getByRole("link", { name: /비밀번호 찾기/i });
-  //   expect(link).toHaveAttribute("href", "/forgot-password");
-  // });
+  it("비밀번호 찾기 링크가 /forgot-password로 연결된다", () => {
+    renderLoginForm();
+
+    const link = screen.getByRole("link", { name: /비밀번호 찾기/i });
+
+    expect(link).toHaveAttribute("href", "/forgot-password");
+  });
+
+  it("redirect가 있으면 비밀번호 찾기 링크에 redirect query가 유지된다", () => {
+    setupDefaultMocks({ redirectQuery: "/mypage" });
+
+    renderLoginForm();
+
+    const link = screen.getByRole("link", { name: /비밀번호 찾기/i });
+
+    expect(link).toHaveAttribute("href", "/forgot-password?redirect=%2Fmypage");
+  });
+
+  it("redirect가 있어도 회원가입 링크는 /signup으로 고정된다", () => {
+    setupDefaultMocks({ redirectQuery: "/mypage" });
+
+    renderLoginForm();
+
+    const link = screen.getByRole("link", { name: /회원가입하기/i });
+
+    expect(link).toHaveAttribute("href", "/signup");
+  });
 });
