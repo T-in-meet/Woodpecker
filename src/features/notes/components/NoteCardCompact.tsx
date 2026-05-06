@@ -1,9 +1,11 @@
 "use client";
 
 import { CalendarClock, Play, RotateCcw, Trash2 } from "lucide-react";
+import Link from "next/link";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
+import { getNoteDetailRoute } from "@/lib/constants/routes";
 import { formatDateKST } from "@/lib/utils/formatDate";
 
 import { useNoteCardActions } from "../hooks/useNoteCardActions";
@@ -15,18 +17,14 @@ export function NoteCardCompact({ note }: { note: NoteSummary }) {
   const nextReviewText = getNextReviewText(status, note.next_review_at);
   const canReview = status === "available";
 
-  const { isDeleting, navigateToDetail, handleStartReview, handleDelete } =
-    useNoteCardActions(note.id);
+  const { isDeleting, handleStartReview, handleDelete } = useNoteCardActions(
+    note.id,
+  );
 
   return (
-    <div
-      role="link"
-      tabIndex={0}
-      onClick={navigateToDetail}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") navigateToDetail();
-      }}
-      className="group block h-full cursor-pointer rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+    <Link
+      href={getNoteDetailRoute(note.id)}
+      className="group block h-full rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
       <Card className="h-full transition-shadow duration-200 hover:shadow-md">
         <CardContent className="flex h-full flex-col gap-3 p-5">
@@ -84,6 +82,6 @@ export function NoteCardCompact({ note }: { note: NoteSummary }) {
           </div>
         </CardContent>
       </Card>
-    </div>
+    </Link>
   );
 }
