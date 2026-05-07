@@ -7,6 +7,18 @@ import type { MetadataRoute } from "next";
 
 import { SITE_URL } from "@/lib/constants/site";
 
+// AI 학습/검색 크롤러를 명시적으로 허용해 디폴트 정책이 바뀌어도 차단되지 않도록 안전장치 역할.
+const AI_CRAWLERS = [
+  "GPTBot",
+  "ChatGPT-User",
+  "ClaudeBot",
+  "Claude-User",
+  "PerplexityBot",
+  "CCBot",
+  "Google-Extended",
+  "Applebot-Extended",
+] as const;
+
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
@@ -22,6 +34,11 @@ export default function robots(): MetadataRoute.Robots {
         // /login, /signup, /records, /mypage는 페이지 메타데이터의 noindex로 처리
         disallow: ["/api/"],
       },
+      ...AI_CRAWLERS.map((userAgent) => ({
+        userAgent,
+        allow: "/",
+        disallow: ["/api/"],
+      })),
     ],
 
     // 크롤러에게 sitemap 위치를 알려줌 (색인 효율 향상)

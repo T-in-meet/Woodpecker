@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import { Footer } from "@/components/layout/Footer";
@@ -7,6 +8,17 @@ import { faqs, FaqSection } from "@/features/landing/FaqSection";
 import { HeroSection } from "@/features/landing/HeroSection";
 import { LearningFlowSection } from "@/features/landing/LearningFlowSection";
 import { SITE_URL } from "@/lib/constants/site";
+
+// LLM(ChatGPT, Claude, Perplexity 등)이 토큰 효율적인 마크다운 버전을 발견할 수 있도록
+// <link rel="alternate" type="text/markdown" href="/index.md" />를 자동 삽입.
+export const metadata: Metadata = {
+  alternates: {
+    canonical: SITE_URL,
+    types: {
+      "text/markdown": `${SITE_URL}/index.md`,
+    },
+  },
+};
 
 /* ─── JSON-LD 구조화 데이터 ────────────────────────────────────────────────────
    JSON-LD는 검색엔진(구글 등)에게 "이 페이지가 무엇인지"를 기계가 이해할 수 있는
@@ -100,6 +112,11 @@ export default function Home() {
           <Header />
         </Suspense>
         <main>
+          {/* AI 에이전트가 마크다운 버전을 발견하도록 시각적으로 숨김 처리된 힌트 */}
+          <div className="sr-only">
+            이 페이지의 마크다운 버전:{" "}
+            <a href={`${SITE_URL}/index.md`}>{SITE_URL}/index.md</a>
+          </div>
           <HeroSection />
           <LearningFlowSection />
           <FaqSection />
