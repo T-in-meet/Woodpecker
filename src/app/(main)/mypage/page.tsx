@@ -49,13 +49,14 @@ export default async function MyPage({ searchParams }: Props) {
   const user = await getUser();
   if (!user) redirect(ROUTES.LOGIN);
 
-  // getProfile/getLearningStats는 내부적으로 getUser를 React.cache로 공유함
-  // 2개를 한 번에 시작해 waterfall 제거
+  // getProfile은 항상 필요 (redirect 체크). 나머지는 활성 section에서만 fetch.
   const [profile, stats, hasAnyPushSubscription, reviewWaiting] =
     await Promise.all([
       getProfile(),
-      getLearningStats(),
-      getHasAnyPushSubscription({ userId: user.id }),
+      section === "stats" ? getLearningStats() : Promise.resolve(null),
+      section === "profile"
+        ? getHasAnyPushSubscription({ userId: user.id })
+        : Promise.resolve(false),
       section === "reviews"
         ? getReviewWaitingNotes(user.id)
         : Promise.resolve([]),
@@ -114,7 +115,9 @@ export default async function MyPage({ searchParams }: Props) {
               <DeleteAccountSection userEmail={user?.email ?? ""} />
             </>
           )}
-          {section === "stats" && <LearningStatsSection stats={stats} />}
+          {section === "stats" && stats && (
+            <LearningStatsSection stats={stats} />
+          )}
           {section === "reviews" && (
             <ReviewWaitingSection notes={reviewWaiting} />
           )}
