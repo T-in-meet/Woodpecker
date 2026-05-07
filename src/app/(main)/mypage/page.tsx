@@ -11,7 +11,9 @@ import {
   type MypageSection,
 } from "@/features/mypage/components/MypageNav";
 import { ProfileSection } from "@/features/mypage/components/ProfileSection";
+import { ReviewWaitingSection } from "@/features/mypage/components/ReviewWaitingSection";
 import { getLearningStats } from "@/features/mypage/queries";
+import { getReviewWaitingNotes } from "@/features/notes/queries";
 import { PushSubscribeCard } from "@/features/notifications/components/PushSubscribeCard";
 import { getHasAnyPushSubscription } from "@/features/notifications/queries";
 import { ROUTES } from "@/lib/constants/routes";
@@ -22,15 +24,16 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-const VALID_SECTIONS: MypageSection[] = ["profile", "stats"];
+const VALID_SECTIONS: MypageSection[] = ["profile", "stats", "reviews"];
 
 function isValidSection(value: unknown): value is MypageSection {
   return VALID_SECTIONS.includes(value as MypageSection);
 }
 
 const SECTION_LABELS: Record<MypageSection, string> = {
-  profile: "프로필",
+  profile: "계정 관리",
   stats: "학습 통계",
+  reviews: "복습 대기",
 };
 
 type Props = {
@@ -41,18 +44,22 @@ export default async function MyPage({ searchParams }: Props) {
   const { section: rawSection } = await searchParams;
   const section: MypageSection = isValidSection(rawSection)
     ? rawSection
-    : "profile";
+    : "stats";
 
   const user = await getUser();
   if (!user) redirect(ROUTES.LOGIN);
 
   // getProfile/getLearningStats는 내부적으로 getUser를 React.cache로 공유함
   // 2개를 한 번에 시작해 waterfall 제거
-  const [profile, stats, hasAnyPushSubscription] = await Promise.all([
-    getProfile(),
-    getLearningStats(),
-    getHasAnyPushSubscription({ userId: user.id }),
-  ]);
+  const [profile, stats, hasAnyPushSubscription, reviewWaiting] =
+    await Promise.all([
+      getProfile(),
+      getLearningStats(),
+      getHasAnyPushSubscription({ userId: user.id }),
+      section === "reviews"
+        ? getReviewWaitingNotes(user.id)
+        : Promise.resolve([]),
+    ]);
 
   if (!profile) redirect(ROUTES.LOGIN);
 
@@ -108,6 +115,9 @@ export default async function MyPage({ searchParams }: Props) {
             </>
           )}
           {section === "stats" && <LearningStatsSection stats={stats} />}
+          {section === "reviews" && (
+            <ReviewWaitingSection notes={reviewWaiting} />
+          )}
         </div>
       </div>
     </div>

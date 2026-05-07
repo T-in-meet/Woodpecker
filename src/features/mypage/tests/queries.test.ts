@@ -72,7 +72,7 @@ describe("getLearningStats", () => {
       totalNotes: 0,
       completedReviews: 0,
       todayReviews: 0,
-      reviewsByRound: [],
+      reviewWaitingCount: 0,
       notesByRound: [],
       recentActivity: [],
       studyStreak: { current: 0, longest: 0 },
@@ -104,64 +104,6 @@ describe("getLearningStats", () => {
       { round: 2, count: 0 },
       { round: 3, count: 1 },
     ]);
-  });
-
-  it("computes reviewsByRound with both scheduled and completed counts", async () => {
-    getUserMock.mockResolvedValue({ id: "user-123" });
-
-    const { supabase } = makeSupabase({
-      notesData: [],
-      reviewLogsData: [
-        // Round 1: 4 scheduled, 2 completed
-        {
-          round: 1,
-          scheduled_at: "2026-05-01T05:00:00.000Z",
-          completed_at: "2026-05-01T08:00:00.000Z",
-        },
-        {
-          round: 1,
-          scheduled_at: "2026-04-30T05:00:00.000Z",
-          completed_at: "2026-05-01T05:00:00.000Z",
-        },
-        {
-          round: 1,
-          scheduled_at: "2026-05-02T05:00:00.000Z",
-          completed_at: null,
-        },
-        {
-          round: 1,
-          scheduled_at: "2026-05-02T16:00:00.000Z",
-          completed_at: null,
-        },
-        // Round 2: 1 scheduled, 1 completed
-        {
-          round: 2,
-          scheduled_at: "2026-05-02T05:00:00.000Z",
-          completed_at: "2026-05-02T05:30:00.000Z",
-        },
-        // Round 3: 2 scheduled, 1 completed
-        {
-          round: 3,
-          scheduled_at: "2026-05-03T01:00:00.000Z",
-          completed_at: "2026-05-03T02:00:00.000Z",
-        },
-        {
-          round: 3,
-          scheduled_at: "2026-05-04T05:00:00.000Z",
-          completed_at: null,
-        },
-      ],
-    });
-    createClientMock.mockResolvedValue(supabase);
-
-    const result = await getLearningStats();
-
-    expect(result.reviewsByRound).toEqual([
-      { round: 1, scheduled: 4, completed: 2 },
-      { round: 2, scheduled: 1, completed: 1 },
-      { round: 3, scheduled: 2, completed: 1 },
-    ]);
-    expect(result.completedReviews).toBe(4);
   });
 
   it("separates overdue (before KST today) from today's scheduled reviews", async () => {

@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { getKstDayBoundsUtc } from "@/features/review/lib/kstDay";
 import { NOTES_LIST_PAGE_SIZE } from "@/lib/constants/notes";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { logError } from "@/lib/logger";
@@ -71,6 +72,67 @@ export async function getNotes(
   }
 
   return { notes: parsed.success ? parsed.data : [], total: count ?? 0 };
+}
+
+export async function getTodayReviewNotes(
+  userId: string,
+): Promise<NoteSummary[]> {
+  const supabase = await createServerComponentClient();
+  const { startUtcIso, endUtcIso } = getKstDayBoundsUtc();
+
+  const { data } = await supabase
+    .from("notes")
+    .select(
+      "id, title, content, next_review_at, review_round, created_at, updated_at",
+    )
+    .eq("user_id", userId)
+    .gte("next_review_at", startUtcIso)
+    .lt("next_review_at", endUtcIso)
+    .order("next_review_at", { ascending: true });
+
+  const parsed = z.array(noteSummarySchema).safeParse(data);
+
+  if (!parsed.success) {
+    logError({
+      message: "[getTodayReviewNotes] noteSummarySchema 파싱 실패",
+      error: parsed.error,
+    });
+    return [];
+  }
+
+  return parsed.data;
+}
+
+export async function getReviewWaitingNotes(
+  userId: string,
+): Promise<NoteSummary[]> {
+  const supabase = await createServerComponentClient();
+  const nowIso = new Date().toISOString();
+
+  const { data } = await supabase
+    .from("notes")
+    .select(
+      "id, title, content, next_review_at, review_round, created_at, updated_at",
+    )
+    .eq("user_id", userId)
+    .or(`next_review_at.is.null,next_review_at.gt.${nowIso}`)
+    .order("next_review_at", { ascending: true, nullsFirst: false })
+    .limit(50);
+
+  const parsed = z.array(noteSummarySchema).safeParse(data);
+
+  if (!parsed.success) {
+    logError({
+      message: "[getReviewWaitingNotes] noteSummarySchema 파싱 실패",
+      error: parsed.error,
+    });
+    return [];
+  }
+
+  // next_review_at IS NULL && review_round > 0 인 경우는 완주(completed)이므로 제외
+  return parsed.data.filter(
+    (n) => n.next_review_at !== null || n.review_round === 0,
+  );
 }
 
 export async function getNoteById(
