@@ -31,4 +31,18 @@ describe("buildNotesUrl", () => {
   it("query trim 후 빈 문자열이면 q 생략", () => {
     expect(buildNotesUrl({ query: "" })).toBe("/notes");
   });
+
+  it("view=list이면 view 파라미터 생략 (기본값)", () => {
+    expect(buildNotesUrl({ view: "list" })).toBe("/notes");
+  });
+
+  it("view=cards이면 view 파라미터 추가", () => {
+    expect(buildNotesUrl({ view: "cards" })).toBe("/notes?view=cards");
+  });
+
+  it("query + view=cards 조합", () => {
+    expect(buildNotesUrl({ query: "hello", view: "cards" })).toBe(
+      "/notes?q=hello&view=cards",
+    );
+  });
 });

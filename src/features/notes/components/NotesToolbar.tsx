@@ -37,20 +37,20 @@ export function NotesToolbar({ initialQuery, initialView }: NotesToolbarProps) {
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       isTypingRef.current = false;
-      router.push(buildNotesUrl({ query: q }));
+      router.push(buildNotesUrl({ query: q, view }));
     }, 300);
   }
 
   function handleClear() {
     setQuery("");
     clearTimeout(debounceRef.current);
-    router.push(buildNotesUrl({}));
+    router.push(buildNotesUrl({ view }));
   }
 
   function handleViewChange(v: View) {
     clearTimeout(debounceRef.current);
     updateView(v);
-    router.refresh();
+    router.push(buildNotesUrl({ query, view: v }));
   }
 
   useEffect(() => () => clearTimeout(debounceRef.current), []);

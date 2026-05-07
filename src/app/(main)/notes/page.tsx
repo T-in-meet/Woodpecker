@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 };
 
 type NotesPageProps = {
-  searchParams: Promise<{ page?: string; q?: string }>;
+  searchParams: Promise<{ page?: string; q?: string; view?: string }>;
 };
 
 export default async function NotesPage({ searchParams }: NotesPageProps) {
@@ -41,8 +41,9 @@ export default async function NotesPage({ searchParams }: NotesPageProps) {
   const page = Math.max(1, Number(params.page) || 1);
   const query = params.q ?? "";
   const cookieStore = await cookies();
-  const view =
+  const cookieView =
     cookieStore.get(NOTES_VIEW_COOKIE)?.value === "cards" ? "cards" : "list";
+  const view = params.view === "cards" ? "cards" : cookieView;
   const pageSize =
     view === "cards" ? NOTES_CARDS_PAGE_SIZE : NOTES_LIST_PAGE_SIZE;
 
