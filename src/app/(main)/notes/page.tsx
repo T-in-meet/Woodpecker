@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { NoteList } from "@/features/notes/components/NoteList";
 import { NotesToolbar } from "@/features/notes/components/NotesToolbar";
 import { getNotes } from "@/features/notes/queries";
+import { NOTES_VIEW_COOKIE } from "@/hooks/useNotesView";
 import {
   NOTES_CARDS_PAGE_SIZE,
   NOTES_LIST_PAGE_SIZE,
@@ -18,7 +20,7 @@ export const metadata: Metadata = {
 };
 
 type NotesPageProps = {
-  searchParams: Promise<{ page?: string; q?: string; view?: string }>;
+  searchParams: Promise<{ page?: string; q?: string }>;
 };
 
 export default async function NotesPage({ searchParams }: NotesPageProps) {
@@ -38,7 +40,9 @@ export default async function NotesPage({ searchParams }: NotesPageProps) {
   const params = await searchParams;
   const page = Math.max(1, Number(params.page) || 1);
   const query = params.q ?? "";
-  const view = params.view === "cards" ? "cards" : "list";
+  const cookieStore = await cookies();
+  const view =
+    cookieStore.get(NOTES_VIEW_COOKIE)?.value === "cards" ? "cards" : "list";
   const pageSize =
     view === "cards" ? NOTES_CARDS_PAGE_SIZE : NOTES_LIST_PAGE_SIZE;
 

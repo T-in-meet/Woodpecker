@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { TodayNoteList } from "@/features/notes/components/TodayNoteList";
 import { getTodayReviewNotes } from "@/features/notes/queries";
+import { NOTES_VIEW_COOKIE } from "@/hooks/useNotesView";
 import { ROUTES } from "@/lib/constants/routes";
 import { createServerComponentClient } from "@/lib/supabase/server";
 
@@ -25,6 +27,10 @@ export default async function TodayReviewPage() {
     redirect(ROUTES.VERIFY_EMAIL);
   }
 
+  const cookieStore = await cookies();
+  const initialView =
+    cookieStore.get(NOTES_VIEW_COOKIE)?.value === "cards" ? "cards" : "list";
+
   const notes = await getTodayReviewNotes(user.id);
 
   return (
@@ -35,7 +41,7 @@ export default async function TodayReviewPage() {
           오늘 복습할 노트만 모았어요.
         </p>
       </div>
-      <TodayNoteList notes={notes} />
+      <TodayNoteList notes={notes} initialView={initialView} />
     </div>
   );
 }

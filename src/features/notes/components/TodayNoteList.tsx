@@ -6,15 +6,17 @@ import { useNotesView } from "@/hooks/useNotesView";
 import { cn } from "@/lib/utils/cn";
 
 import type { NoteSummary } from "../queries";
+import type { NotesView } from "../utils/buildNotesUrl";
 import { NoteCard } from "./NoteCard";
 import { NoteCardCompact } from "./NoteCardCompact";
 
 type TodayNoteListProps = {
   notes: NoteSummary[];
+  initialView: NotesView;
 };
 
-export function TodayNoteList({ notes }: TodayNoteListProps) {
-  const [view, updateView] = useNotesView();
+export function TodayNoteList({ notes, initialView }: TodayNoteListProps) {
+  const [view, updateView] = useNotesView(initialView);
 
   if (notes.length === 0) {
     return (

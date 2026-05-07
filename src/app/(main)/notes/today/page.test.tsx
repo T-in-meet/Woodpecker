@@ -5,13 +5,13 @@ import { ROUTES } from "@/lib/constants/routes";
 
 const REDIRECT_ERROR = new Error("NEXT_REDIRECT");
 
-const { createClientMock, getTodayReviewNotesMock, redirectMock } = vi.hoisted(
-  () => ({
+const { createClientMock, getTodayReviewNotesMock, redirectMock, cookiesMock } =
+  vi.hoisted(() => ({
     createClientMock: vi.fn(),
     getTodayReviewNotesMock: vi.fn(),
     redirectMock: vi.fn(),
-  }),
-);
+    cookiesMock: vi.fn(),
+  }));
 
 vi.mock("@/lib/supabase/server", () => ({
   createServerComponentClient: createClientMock,
@@ -19,6 +19,10 @@ vi.mock("@/lib/supabase/server", () => ({
 
 vi.mock("@/features/notes/queries", () => ({
   getTodayReviewNotes: getTodayReviewNotesMock,
+}));
+
+vi.mock("next/headers", () => ({
+  cookies: cookiesMock,
 }));
 
 vi.mock("next/navigation", () => ({
@@ -55,10 +59,12 @@ describe("TodayReviewPage", () => {
     createClientMock.mockReset();
     getTodayReviewNotesMock.mockReset();
     redirectMock.mockReset();
+    cookiesMock.mockReset();
 
     redirectMock.mockImplementation(() => {
       throw REDIRECT_ERROR;
     });
+    cookiesMock.mockResolvedValue({ get: vi.fn().mockReturnValue(undefined) });
   });
 
   it("미인증 사용자를 로그인 페이지로 redirect한다", async () => {

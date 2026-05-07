@@ -15,14 +15,6 @@ describe("buildNotesUrl", () => {
     expect(buildNotesUrl({ query: "   " })).toBe("/notes");
   });
 
-  it("view=list는 기본값이므로 파라미터 생략", () => {
-    expect(buildNotesUrl({ view: "list" })).toBe("/notes");
-  });
-
-  it("view=cards면 view 파라미터 추가", () => {
-    expect(buildNotesUrl({ view: "cards" })).toBe("/notes?view=cards");
-  });
-
   it("page=1은 기본값이므로 파라미터 생략", () => {
     expect(buildNotesUrl({ page: 1 })).toBe("/notes");
   });
@@ -31,9 +23,9 @@ describe("buildNotesUrl", () => {
     expect(buildNotesUrl({ page: 3 })).toBe("/notes?page=3");
   });
 
-  it("query + view + page 모두 조합", () => {
-    const url = buildNotesUrl({ query: "리액트", view: "cards", page: 2 });
-    expect(url).toBe("/notes?q=%EB%A6%AC%EC%95%A1%ED%8A%B8&view=cards&page=2");
+  it("query + page 조합", () => {
+    const url = buildNotesUrl({ query: "리액트", page: 2 });
+    expect(url).toBe("/notes?q=%EB%A6%AC%EC%95%A1%ED%8A%B8&page=2");
   });
 
   it("query trim 후 빈 문자열이면 q 생략", () => {
