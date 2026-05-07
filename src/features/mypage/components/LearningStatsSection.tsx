@@ -54,9 +54,9 @@ function formatPercent(numerator: number, denominator: number): string {
 
 function heatmapClass(count: number): string {
   if (count === 0) return "bg-muted";
-  if (count <= 2) return "bg-primary/30";
-  if (count <= 4) return "bg-primary/60";
-  return "bg-primary";
+  if (count <= 2) return "bg-orange-100";
+  if (count <= 4) return "bg-orange-200";
+  return "bg-orange-300";
 }
 
 export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
@@ -113,7 +113,7 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
                   </span>
                   <div className="h-2 flex-1 rounded-full bg-muted">
                     <div
-                      className="h-full rounded-full bg-primary"
+                      className="h-full rounded-full bg-orange-300"
                       style={{
                         width:
                           stats.totalNotes === 0
@@ -172,9 +172,9 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
             <div className="mt-2 flex items-center justify-end gap-2 text-xs text-muted-foreground">
               <span>적음</span>
               <div className="size-3 rounded-sm bg-muted" />
-              <div className="size-3 rounded-sm bg-primary/30" />
-              <div className="size-3 rounded-sm bg-primary/60" />
-              <div className="size-3 rounded-sm bg-primary" />
+              <div className="size-3 rounded-sm bg-orange-100" />
+              <div className="size-3 rounded-sm bg-orange-200" />
+              <div className="size-3 rounded-sm bg-orange-300" />
               <span>많음</span>
             </div>
           </div>
