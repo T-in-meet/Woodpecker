@@ -315,34 +315,31 @@ describe("getReviewWaitingNotes", () => {
     expect(result).toEqual([newNote]);
   });
 
-  it("next_review_at이 null이고 round > 0인 완주 노트를 제외한다", async () => {
-    const completedNote = {
-      ...BASE_NOTE,
-      next_review_at: null,
-      review_round: 3,
-    };
-    const { supabase } = createWaitingNotesQueryMock([completedNote]);
+  it("DB 쿼리에서 완주 노트(null && round>0)를 제외하는 필터를 사용한다", async () => {
+    const { supabase, orMock } = createWaitingNotesQueryMock([]);
     createClientMock.mockResolvedValue(supabase);
 
-    const result = await getReviewWaitingNotes("user-123");
+    await getReviewWaitingNotes("user-123");
 
-    expect(result).toEqual([]);
+    expect(orMock).toHaveBeenCalledWith(
+      expect.stringContaining("and(next_review_at.is.null,review_round.eq.0)"),
+    );
   });
 
-  it("미시작 노트와 완주 노트가 섞여 있을 때 완주 노트만 제외한다", async () => {
+  it("미시작 노트(null && round=0)와 미래 예약 노트를 함께 반환한다", async () => {
     const newNote = { ...BASE_NOTE, next_review_at: null, review_round: 0 };
-    const completedNote = {
+    const futureNote = {
       ...BASE_NOTE,
       id: "22222222-2222-4222-8222-222222222222",
-      next_review_at: null,
-      review_round: 3,
+      next_review_at: "2026-05-08T10:00:00.000Z",
+      review_round: 1,
     };
-    const { supabase } = createWaitingNotesQueryMock([newNote, completedNote]);
+    const { supabase } = createWaitingNotesQueryMock([newNote, futureNote]);
     createClientMock.mockResolvedValue(supabase);
 
     const result = await getReviewWaitingNotes("user-123");
 
-    expect(result).toEqual([newNote]);
+    expect(result).toEqual([newNote, futureNote]);
   });
 
   it("스키마 파싱 실패 시 빈 배열을 반환한다", async () => {

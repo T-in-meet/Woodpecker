@@ -115,7 +115,9 @@ export async function getReviewWaitingNotes(
       "id, title, content, next_review_at, review_round, created_at, updated_at",
     )
     .eq("user_id", userId)
-    .or(`next_review_at.is.null,next_review_at.gt.${nowIso}`)
+    .or(
+      `next_review_at.gt.${nowIso},and(next_review_at.is.null,review_round.eq.0)`,
+    )
     .order("next_review_at", { ascending: true, nullsFirst: false })
     .limit(50);
 
@@ -129,10 +131,7 @@ export async function getReviewWaitingNotes(
     return [];
   }
 
-  // next_review_at IS NULL && review_round > 0 인 경우는 완주(completed)이므로 제외
-  return parsed.data.filter(
-    (n) => n.next_review_at !== null || n.review_round === 0,
-  );
+  return parsed.data;
 }
 
 export async function getNoteById(

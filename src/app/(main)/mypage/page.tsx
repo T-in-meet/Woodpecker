@@ -49,20 +49,23 @@ export default async function MyPage({ searchParams }: Props) {
   const user = await getUser();
   if (!user) redirect(ROUTES.LOGIN);
 
-  // getProfile은 항상 필요 (redirect 체크). 나머지는 활성 section에서만 fetch.
-  const [profile, stats, hasAnyPushSubscription, reviewWaiting] =
-    await Promise.all([
-      getProfile(),
-      section === "stats" ? getLearningStats() : Promise.resolve(null),
-      section === "profile"
-        ? getHasAnyPushSubscription({ userId: user.id })
-        : Promise.resolve(false),
-      section === "reviews"
-        ? getReviewWaitingNotes(user.id)
-        : Promise.resolve([]),
-    ]);
-
+  const profile = await getProfile();
   if (!profile) redirect(ROUTES.LOGIN);
+
+  // 활성 section에서만 fetch
+  let stats: Awaited<ReturnType<typeof getLearningStats>> | null = null;
+  let hasAnyPushSubscription = false;
+  let reviewWaiting: Awaited<ReturnType<typeof getReviewWaitingNotes>> = [];
+
+  if (section === "stats") {
+    stats = await getLearningStats();
+  } else if (section === "profile") {
+    hasAnyPushSubscription = await getHasAnyPushSubscription({
+      userId: user.id,
+    });
+  } else if (section === "reviews") {
+    reviewWaiting = await getReviewWaitingNotes(user.id);
+  }
 
   return (
     <div className="mx-auto max-w-5xl py-7 px-6">
