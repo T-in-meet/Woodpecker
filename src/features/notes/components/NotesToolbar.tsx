@@ -4,6 +4,7 @@ import { AlignJustify, LayoutGrid, Search, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
+import { NOTES_VIEW_STORAGE_KEY } from "@/hooks/useNotesView";
 import { cn } from "@/lib/utils/cn";
 
 import { buildNotesUrl, type NotesView as View } from "../utils/buildNotesUrl";
@@ -23,6 +24,7 @@ export function NotesToolbar({ initialQuery, initialView }: NotesToolbarProps) {
   );
   const isTypingRef = useRef(false);
 
+  // URL이 변경되면 상태 동기화
   useEffect(() => {
     if (isTypingRef.current) return;
     const q = searchParams.get("q") ?? "";
@@ -30,6 +32,16 @@ export function NotesToolbar({ initialQuery, initialView }: NotesToolbarProps) {
     setQuery(q);
     setView(v);
   }, [searchParams]);
+
+  // 첫 방문 시 (URL에 view 파라미터 없음) localStorage 설정으로 복원
+  useEffect(() => {
+    if (searchParams.has("view")) return;
+    const saved = localStorage.getItem(NOTES_VIEW_STORAGE_KEY);
+    if (saved === "cards") {
+      router.replace(buildNotesUrl({ query: initialQuery, view: "cards" }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function handleQueryChange(e: React.ChangeEvent<HTMLInputElement>) {
     const q = e.target.value;
@@ -51,6 +63,7 @@ export function NotesToolbar({ initialQuery, initialView }: NotesToolbarProps) {
   function handleViewChange(v: View) {
     clearTimeout(debounceRef.current);
     setView(v);
+    localStorage.setItem(NOTES_VIEW_STORAGE_KEY, v);
     router.push(buildNotesUrl({ query, view: v }));
   }
 

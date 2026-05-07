@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
-import { NoteCard } from "@/features/notes/components/NoteCard";
+import { TodayNoteList } from "@/features/notes/components/TodayNoteList";
 import { getTodayReviewNotes } from "@/features/notes/queries";
 import { ROUTES } from "@/lib/constants/routes";
 import { createServerComponentClient } from "@/lib/supabase/server";
@@ -35,23 +35,7 @@ export default async function TodayReviewPage() {
           오늘 복습할 노트만 모았어요.
         </p>
       </div>
-
-      {notes.length === 0 ? (
-        <p className="rounded-lg border p-8 text-center text-sm text-muted-foreground">
-          오늘 예정된 복습이 없습니다.
-        </p>
-      ) : (
-        <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">총 {notes.length}개</p>
-          <ul className="flex list-none flex-col gap-3">
-            {notes.map((note) => (
-              <li key={note.id}>
-                <NoteCard note={note} />
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <TodayNoteList notes={notes} />
     </div>
   );
 }
