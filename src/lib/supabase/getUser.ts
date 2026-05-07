@@ -6,6 +6,6 @@ import { createServerComponentClient } from "./server";
 export const getUser = cache(async () => {
   const supabase = await createServerComponentClient();
   const { data, error } = await supabase.auth.getUser();
-  if (error) throw error;
+  if (error) return null;
   return data.user;
 });
