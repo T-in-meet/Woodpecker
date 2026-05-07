@@ -50,7 +50,7 @@ export function NotesToolbar({ initialQuery, initialView }: NotesToolbarProps) {
   function handleViewChange(v: View) {
     clearTimeout(debounceRef.current);
     updateView(v);
-    router.push(buildNotesUrl({ query }));
+    router.refresh();
   }
 
   useEffect(() => () => clearTimeout(debounceRef.current), []);
