@@ -152,7 +152,7 @@ describe("NoteDetailPage", () => {
     expect(getNoteByIdMock).toHaveBeenCalledWith("note-123", "user-123");
     const titleHeading = screen.getByRole("heading", { name: "Test note" });
     expect(titleHeading).toBeInTheDocument();
-    expect(titleHeading).toHaveClass("break-words", "break-keep");
+    expect(titleHeading).toHaveClass("wrap-break-word", "break-keep");
     expect(screen.getByTestId("note-viewer")).toHaveTextContent("note body");
     expect(screen.getByTestId("notification-time-picker")).toHaveTextContent(
       "note-123:21:30:00",
