@@ -1,7 +1,8 @@
 "use client";
 
+import type { Editor } from "@tiptap/react";
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { TipTapEditor } from "@/features/editor/components/TipTapEditor";
@@ -18,6 +19,8 @@ export function NoteForm() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [createdNoteId, setCreatedNoteId] = useState<string | null>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const editorRef = useRef<Editor | null>(null);
 
   const fieldErrors =
     state?.error && typeof state.error === "object" ? state.error : null;
@@ -39,34 +42,41 @@ export function NoteForm() {
     router.push(getNoteDetailRoute(createdNoteId));
   }, [createdNoteId, router]);
 
+  const focusContentStart = () => {
+    editorRef.current?.commands.focus("start");
+  };
+
+  const handleTitleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.nativeEvent.isComposing) return;
+    if (event.key === "Enter" || event.key === "ArrowDown") {
+      event.preventDefault();
+      focusContentStart();
+    }
+  };
+
+  const handleArrowUpFromContent = () => {
+    const input = titleInputRef.current;
+    if (!input) return;
+    input.focus();
+    const end = input.value.length;
+    input.setSelectionRange(end, end);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   return (
     <form
       action={formAction}
       className="mx-auto flex w-full max-w-4xl flex-col"
     >
-      <div className="flex items-center justify-end gap-2 px-12 py-4">
-        <Button
-          type="submit"
-          size="sm"
-          disabled={isPending || content.length > CONTENT_MAX_LENGTH}
-          title={
-            content.length > CONTENT_MAX_LENGTH
-              ? "내용이 최대 글자수를 초과했습니다"
-              : undefined
-          }
-        >
-          {isPending ? "저장 중..." : "저장"}
-        </Button>
-      </div>
-
       {generalError && (
-        <p role="alert" className="px-12 text-xs text-destructive">
+        <p role="alert" className="px-12 pt-4 text-xs text-destructive">
           {generalError}
         </p>
       )}
 
       <div className="px-12 pt-8 pb-6">
         <input
+          ref={titleInputRef}
           id="title"
           name="title"
           aria-label="제목"
@@ -74,7 +84,8 @@ export function NoteForm() {
           maxLength={100}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          className="w-full border-none bg-transparent text-4xl font-bold text-foreground placeholder:text-muted-foreground/30 focus:outline-none"
+          onKeyDown={handleTitleKeyDown}
+          className="w-full border-none bg-transparent text-4xl font-bold leading-snug text-foreground placeholder:text-muted-foreground/30 focus:outline-none"
         />
         {fieldErrors?.title && (
           <p role="alert" className="mt-2 text-xs text-destructive">
@@ -97,10 +108,14 @@ export function NoteForm() {
         placeholder="내용을 입력하세요..."
         autoFocus
         aria-label="내용"
+        onEditorReady={(editor) => {
+          editorRef.current = editor;
+        }}
+        onArrowUpAtStart={handleArrowUpFromContent}
         className="flex-1 rounded-none border-none focus-within:ring-0 focus-within:border-none [&_.tiptap]:min-h-[70vh] [&_.tiptap]:px-12! [&_.tiptap]:py-6!"
       />
 
-      <div className="flex justify-end px-12 py-2">
+      <div className="flex items-center justify-end gap-3 px-12 py-2">
         <span
           aria-live="polite"
           className={`text-xs tabular-nums ${
@@ -114,6 +129,18 @@ export function NoteForm() {
           {content.length.toLocaleString()} /{" "}
           {CONTENT_MAX_LENGTH.toLocaleString()}
         </span>
+        <Button
+          type="submit"
+          size="sm"
+          disabled={isPending || content.length > CONTENT_MAX_LENGTH}
+          title={
+            content.length > CONTENT_MAX_LENGTH
+              ? "내용이 최대 글자수를 초과했습니다"
+              : undefined
+          }
+        >
+          {isPending ? "저장 중..." : "저장"}
+        </Button>
       </div>
     </form>
   );
