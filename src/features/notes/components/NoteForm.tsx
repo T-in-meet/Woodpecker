@@ -85,7 +85,7 @@ export function NoteForm() {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={handleTitleKeyDown}
-          className="w-full border-none bg-transparent text-4xl font-bold text-foreground placeholder:text-muted-foreground/30 focus:outline-none"
+          className="w-full border-none bg-transparent text-4xl font-bold leading-tight text-foreground placeholder:text-muted-foreground/30 focus:outline-none"
         />
         {fieldErrors?.title && (
           <p role="alert" className="mt-2 text-xs text-destructive">
