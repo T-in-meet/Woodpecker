@@ -19,6 +19,7 @@ type TipTapEditorProps = {
   className?: string;
   "aria-label"?: string;
   onEditorReady?: (editor: Editor) => void;
+  onArrowUpAtStart?: () => void;
   extensions?: AnyExtension[];
 };
 
@@ -31,6 +32,7 @@ export function TipTapEditor({
   className,
   "aria-label": ariaLabel,
   onEditorReady,
+  onArrowUpAtStart,
   extensions,
 }: TipTapEditorProps) {
   const onEditorReadyRef = useRef(onEditorReady);
@@ -64,6 +66,42 @@ export function TipTapEditor({
       el.removeAttribute("aria-label");
     }
   }, [editor, ariaLabel]);
+
+  const onArrowUpAtStartRef = useRef(onArrowUpAtStart);
+  onArrowUpAtStartRef.current = onArrowUpAtStart;
+
+  useEffect(() => {
+    if (!editor) return;
+    if (!onArrowUpAtStart) return;
+
+    const el = editor.view.dom;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "ArrowUp") return;
+      if (event.shiftKey || event.altKey || event.metaKey || event.ctrlKey)
+        return;
+
+      const { selection, doc } = editor.state;
+      if (!selection.empty) return;
+
+      const $from = selection.$from;
+      // 첫 textblock의 첫 위치인지 — 문서의 첫 번째 자식과 동일하고 그 안의 offset이 0.
+      const isAtFirstBlockStart =
+        $from.parentOffset === 0 && $from.before(1) === 0 && doc.firstChild
+          ? $from.node(1) === doc.firstChild
+          : false;
+
+      if (!isAtFirstBlockStart) return;
+
+      event.preventDefault();
+      onArrowUpAtStartRef.current?.();
+    };
+
+    el.addEventListener("keydown", handleKeyDown);
+    return () => {
+      el.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [editor, onArrowUpAtStart]);
 
   return (
     <div
