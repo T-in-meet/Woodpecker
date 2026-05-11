@@ -33,8 +33,12 @@ type ProfileSectionProps = {
   email: string;
 };
 
-export function ProfileSection({ profile, email }: ProfileSectionProps) {
+export function ProfileSection({
+  profile: initialProfile,
+  email,
+}: ProfileSectionProps) {
   const router = useRouter();
+  const [profile, setProfile] = useState<ProfileSectionProfile>(initialProfile);
   const [isEditing, setIsEditing] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const [isPendingAvatar, startAvatarTransition] = useTransition();
@@ -44,7 +48,9 @@ export function ProfileSection({ profile, email }: ProfileSectionProps) {
     async (prevState: unknown, formData: FormData) => {
       const result = await updateProfileAction(prevState, formData);
       if (result?.data) {
+        setProfile((prev) => ({ ...prev, nickname: result.data.nickname }));
         setIsEditing(false);
+        // Header 등 다른 서버 컴포넌트 동기화는 백그라운드로 — UI는 이미 반영됨
         router.refresh();
       }
       return result;
@@ -69,6 +75,10 @@ export function ProfileSection({ profile, email }: ProfileSectionProps) {
       try {
         const result = await uploadAvatarAction(null, formData);
         if (result?.data) {
+          setProfile((prev) => ({
+            ...prev,
+            avatar_url: result.data.avatar_url,
+          }));
           router.refresh();
         } else if (result?.error) {
           setAvatarError(
@@ -91,6 +101,7 @@ export function ProfileSection({ profile, email }: ProfileSectionProps) {
       try {
         const result = await deleteAvatarAction();
         if (result?.data) {
+          setProfile((prev) => ({ ...prev, avatar_url: null }));
           router.refresh();
         } else if (result?.error) {
           setAvatarError(
