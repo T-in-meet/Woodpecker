@@ -1,4 +1,7 @@
+import Link from "next/link";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ROUTES } from "@/lib/constants/routes";
 import { cn } from "@/lib/utils/cn";
 
 import type { LearningStats } from "../queries";
@@ -7,26 +10,41 @@ type LearningStatsSectionProps = {
   stats: LearningStats;
 };
 
-function StatCard({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-lg border p-4 text-center">
+function StatCard({
+  label,
+  value,
+  href,
+}: {
+  label: string;
+  value: number;
+  href?: string;
+}) {
+  const content = (
+    <>
       <p className="text-2xl font-bold">{value}</p>
       <p className="text-sm text-muted-foreground">{label}</p>
-    </div>
+    </>
   );
-}
 
-const REVIEW_LOG_ROUND_LABELS: Record<number, string> = {
-  1: "1회차 복습",
-  2: "2회차 복습",
-  3: "3회차 복습",
-};
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className="rounded-lg border p-4 text-center cursor-pointer transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      >
+        {content}
+      </Link>
+    );
+  }
+
+  return <div className="rounded-lg border p-4 text-center">{content}</div>;
+}
 
 const NOTES_ROUND_LABELS: Record<number, string> = {
   0: "학습 전",
-  1: "1회차 완료",
-  2: "2회차 완료",
-  3: "3회차 완료",
+  1: "1회차 복습 완료",
+  2: "2회차 복습 완료",
+  3: "3회차 복습 완료",
 };
 
 function formatPercent(numerator: number, denominator: number): string {
@@ -36,21 +54,12 @@ function formatPercent(numerator: number, denominator: number): string {
 
 function heatmapClass(count: number): string {
   if (count === 0) return "bg-muted";
-  if (count <= 2) return "bg-primary/30";
-  if (count <= 4) return "bg-primary/60";
-  return "bg-primary";
+  if (count <= 2) return "bg-orange-100 dark:bg-orange-900";
+  if (count <= 4) return "bg-orange-200 dark:bg-orange-800";
+  return "bg-orange-300 dark:bg-orange-700";
 }
 
 export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
-  const maxNotesByRound = Math.max(
-    ...stats.notesByRound.map((r) => r.count),
-    1,
-  );
-
-  const reviewedNotes = stats.notesByRound
-    .filter((r) => r.round >= 1)
-    .reduce((acc, r) => acc + r.count, 0);
-
   const isEmpty =
     stats.totalNotes === 0 &&
     stats.completedReviews === 0 &&
@@ -62,10 +71,22 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
         <CardTitle>학습 통계</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="grid grid-cols-3 gap-4">
-          <StatCard label="전체 노트" value={stats.totalNotes} />
-          <StatCard label="복습한 노트" value={reviewedNotes} />
-          <StatCard label="오늘 예정 복습" value={stats.todayReviews} />
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+          <StatCard
+            label="전체 노트"
+            value={stats.totalNotes}
+            href={ROUTES.NOTES}
+          />
+          <StatCard
+            label="오늘의 복습"
+            value={stats.todayReviews}
+            href={ROUTES.NOTES_TODAY}
+          />
+          <StatCard
+            label="복습 대기 노트"
+            value={stats.reviewWaitingCount}
+            href={`${ROUTES.MYPAGE}?section=reviews`}
+          />
         </div>
 
         <div className="rounded-lg border p-4">
@@ -81,39 +102,9 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
           </div>
         </div>
 
-        {stats.reviewsByRound.some((r) => r.scheduled > 0) && (
-          <div>
-            <h4 className="mb-3 text-sm font-medium">라운드별 완료율</h4>
-            <div className="space-y-2">
-              {stats.reviewsByRound.map(({ round, scheduled, completed }) => (
-                <div key={round} className="flex items-center gap-3">
-                  <span className="w-24 text-sm text-muted-foreground">
-                    {REVIEW_LOG_ROUND_LABELS[round] ?? `${round}회차`}
-                  </span>
-                  <div className="h-2 flex-1 rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full bg-primary"
-                      style={{
-                        width:
-                          scheduled === 0
-                            ? "0%"
-                            : `${(completed / scheduled) * 100}%`,
-                      }}
-                    />
-                  </div>
-                  <span className="w-24 text-right text-sm tabular-nums">
-                    {completed}/{scheduled} (
-                    {formatPercent(completed, scheduled)})
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {stats.notesByRound.some((r) => r.count > 0) && (
           <div>
-            <h4 className="mb-3 text-sm font-medium">노트 라운드 분포</h4>
+            <h4 className="mb-3 text-sm font-medium">단계별 학습 현황</h4>
             <div className="space-y-2">
               {stats.notesByRound.map(({ round, count }) => (
                 <div key={round} className="flex items-center gap-3">
@@ -122,14 +113,17 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
                   </span>
                   <div className="h-2 flex-1 rounded-full bg-muted">
                     <div
-                      className="h-full rounded-full bg-primary"
+                      className="h-full rounded-full bg-orange-300 dark:bg-orange-700"
                       style={{
-                        width: `${(count / maxNotesByRound) * 100}%`,
+                        width:
+                          stats.totalNotes === 0
+                            ? "0%"
+                            : `${(count / stats.totalNotes) * 100}%`,
                       }}
                     />
                   </div>
-                  <span className="w-8 text-right text-sm tabular-nums">
-                    {count}
+                  <span className="w-20 text-right text-sm tabular-nums">
+                    {count} ({formatPercent(count, stats.totalNotes)})
                   </span>
                 </div>
               ))}
@@ -178,9 +172,9 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
             <div className="mt-2 flex items-center justify-end gap-2 text-xs text-muted-foreground">
               <span>적음</span>
               <div className="size-3 rounded-sm bg-muted" />
-              <div className="size-3 rounded-sm bg-primary/30" />
-              <div className="size-3 rounded-sm bg-primary/60" />
-              <div className="size-3 rounded-sm bg-primary" />
+              <div className="size-3 rounded-sm bg-orange-100 dark:bg-orange-900" />
+              <div className="size-3 rounded-sm bg-orange-200 dark:bg-orange-800" />
+              <div className="size-3 rounded-sm bg-orange-300 dark:bg-orange-700" />
               <span>많음</span>
             </div>
           </div>

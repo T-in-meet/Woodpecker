@@ -5,10 +5,10 @@ import { ROUTES } from "@/lib/constants/routes";
 
 const REDIRECT_ERROR = new Error("NEXT_REDIRECT");
 
-const { createClientMock, getNotesMock, redirectMock, cookiesMock } =
+const { createClientMock, getTodayReviewNotesMock, redirectMock, cookiesMock } =
   vi.hoisted(() => ({
     createClientMock: vi.fn(),
-    getNotesMock: vi.fn(),
+    getTodayReviewNotesMock: vi.fn(),
     redirectMock: vi.fn(),
     cookiesMock: vi.fn(),
   }));
@@ -18,7 +18,7 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 vi.mock("@/features/notes/queries", () => ({
-  getNotes: getNotesMock,
+  getTodayReviewNotes: getTodayReviewNotesMock,
 }));
 
 vi.mock("next/headers", () => ({
@@ -27,11 +27,12 @@ vi.mock("next/headers", () => ({
 
 vi.mock("next/navigation", () => ({
   redirect: redirectMock,
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/notes/today",
 }));
 
-import NotesPage from "./page";
+import TodayReviewPage from "./page";
 
 function createSupabaseMock(
   userId: string | null,
@@ -53,10 +54,10 @@ function createSupabaseMock(
   };
 }
 
-describe("NotesPage", () => {
+describe("TodayReviewPage", () => {
   beforeEach(() => {
     createClientMock.mockReset();
-    getNotesMock.mockReset();
+    getTodayReviewNotesMock.mockReset();
     redirectMock.mockReset();
     cookiesMock.mockReset();
 
@@ -66,58 +67,49 @@ describe("NotesPage", () => {
     cookiesMock.mockResolvedValue({ get: vi.fn().mockReturnValue(undefined) });
   });
 
-  it("redirects to login when the user is not authenticated", async () => {
+  it("미인증 사용자를 로그인 페이지로 redirect한다", async () => {
     createClientMock.mockResolvedValue(createSupabaseMock(null));
 
-    await expect(NotesPage({ searchParams: Promise.resolve({}) })).rejects.toBe(
-      REDIRECT_ERROR,
-    );
+    await expect(TodayReviewPage()).rejects.toBe(REDIRECT_ERROR);
 
     expect(redirectMock).toHaveBeenCalledWith(ROUTES.LOGIN);
-    expect(getNotesMock).not.toHaveBeenCalled();
+    expect(getTodayReviewNotesMock).not.toHaveBeenCalled();
   });
 
   it.each([null, undefined])(
-    "redirects to verify email when email_confirmed_at is %s",
+    "이메일 미인증 사용자(email_confirmed_at: %s)를 인증 페이지로 redirect한다",
     async (emailConfirmedAt) => {
       createClientMock.mockResolvedValue(
         createSupabaseMock("user-123", emailConfirmedAt),
       );
 
-      await expect(
-        NotesPage({ searchParams: Promise.resolve({}) }),
-      ).rejects.toBe(REDIRECT_ERROR);
+      await expect(TodayReviewPage()).rejects.toBe(REDIRECT_ERROR);
 
       expect(redirectMock).toHaveBeenCalledWith(ROUTES.VERIFY_EMAIL);
-      expect(getNotesMock).not.toHaveBeenCalled();
+      expect(getTodayReviewNotesMock).not.toHaveBeenCalled();
     },
   );
 
-  it("renders the note list for authenticated users", async () => {
+  it("인증된 사용자에게 오늘의 복습 페이지를 렌더링한다", async () => {
     createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
-    getNotesMock.mockResolvedValue({
-      notes: [
-        {
-          id: "11111111-1111-4111-8111-111111111111",
-          title: "테스트 노트",
-          content: "테스트 내용",
-          next_review_at: null,
-          review_round: 3,
-          created_at: "2026-03-01T00:00:00.000Z",
-          updated_at: "2026-03-29T12:00:00.000Z",
-        },
-      ],
-      total: 1,
-    });
+    getTodayReviewNotesMock.mockResolvedValue([]);
 
-    render(await NotesPage({ searchParams: Promise.resolve({}) }));
+    render(await TodayReviewPage());
 
-    expect(getNotesMock).toHaveBeenCalledWith("user-123", 1, "", 5);
+    expect(getTodayReviewNotesMock).toHaveBeenCalledWith("user-123");
     expect(
-      screen.getByRole("heading", { name: "노트 목록" }),
+      screen.getByRole("heading", { name: "오늘의 복습" }),
     ).toBeInTheDocument();
+  });
+
+  it("복습할 노트가 없을 때 빈 상태 메시지를 표시한다", async () => {
+    createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
+    getTodayReviewNotesMock.mockResolvedValue([]);
+
+    render(await TodayReviewPage());
+
     expect(
-      screen.getByRole("link", { name: /테스트 노트/ }),
+      screen.getByText("오늘 예정된 복습이 없습니다."),
     ).toBeInTheDocument();
   });
 });

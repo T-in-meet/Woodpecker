@@ -175,14 +175,25 @@ describe("deleteAvatarAction", () => {
     expect(result).toEqual({ error: "인증이 필요합니다" });
   });
 
-  it("storage 삭제 실패 시 에러 반환하고 DB 업데이트 안 함", async () => {
+  it("storage 삭제 실패 시 DB 업데이트 후 data 반환", async () => {
     const { supabase } = makeSupabaseMock({
       removeError: { message: "remove failed" },
     });
     createClientMock.mockResolvedValue(supabase);
 
     const result = await deleteAvatarAction();
+    expect(result).toEqual({ data: { id: "user-123" } });
+    expect(supabase.from).toHaveBeenCalled();
+  });
+
+  it("DB 업데이트 실패 시 에러 반환하고 storage 삭제 안 함", async () => {
+    const { supabase } = makeSupabaseMock({
+      updateError: { message: "update failed" },
+    });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await deleteAvatarAction();
     expect(result).toEqual({ error: "아바타 삭제에 실패했습니다" });
-    expect(supabase.from).not.toHaveBeenCalled();
+    expect(supabase.storage.from).not.toHaveBeenCalled();
   });
 });

@@ -4,6 +4,7 @@ import { AlignJustify, LayoutGrid, Search, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
+import { useNotesView } from "@/hooks/useNotesView";
 import { cn } from "@/lib/utils/cn";
 
 import { buildNotesUrl, type NotesView as View } from "../utils/buildNotesUrl";
@@ -17,18 +18,16 @@ export function NotesToolbar({ initialQuery, initialView }: NotesToolbarProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [query, setQuery] = useState(initialQuery);
-  const [view, setView] = useState<View>(initialView);
+  const [view, updateView] = useNotesView(initialView);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
   const isTypingRef = useRef(false);
 
+  // URL이 변경되면 검색어 상태 동기화
   useEffect(() => {
     if (isTypingRef.current) return;
-    const q = searchParams.get("q") ?? "";
-    const v: View = searchParams.get("view") === "cards" ? "cards" : "list";
-    setQuery(q);
-    setView(v);
+    setQuery(searchParams.get("q") ?? "");
   }, [searchParams]);
 
   function handleQueryChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -50,7 +49,7 @@ export function NotesToolbar({ initialQuery, initialView }: NotesToolbarProps) {
 
   function handleViewChange(v: View) {
     clearTimeout(debounceRef.current);
-    setView(v);
+    updateView(v);
     router.push(buildNotesUrl({ query, view: v }));
   }
 
