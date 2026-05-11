@@ -5,6 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { DeleteNoteDialog } from "@/features/notes/components/DeleteNoteDialog";
 import { NoteViewer } from "@/features/notes/components/NoteViewer";
+import { ScrollToTopOnMount } from "@/features/notes/components/ScrollToTopOnMount";
 import { getNoteById } from "@/features/notes/queries";
 import { NotificationTimePicker } from "@/features/notifications/components/NotificationTimePicker";
 import { hasCompletedReviewForNoteToday } from "@/features/review/queries";
@@ -78,6 +79,7 @@ export default async function NoteDetailPage({
 
   return (
     <div className="mx-auto w-full max-w-4xl px-6 py-10 md:px-12">
+      <ScrollToTopOnMount />
       <header className="border-b border-border/60 pb-6">
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span className="rounded-full bg-muted px-2 py-1 font-medium text-foreground">
@@ -89,7 +91,7 @@ export default async function NoteDetailPage({
             </span>
           )}
         </div>
-        <h1 className="mt-4 break-words break-keep text-3xl font-bold text-foreground">
+        <h1 className="mt-4 wrap-break-word break-keep text-3xl font-bold text-foreground">
           {note.title}
         </h1>
         <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
