@@ -15,7 +15,7 @@ vi.mock("@/lib/supabase/getUser", () => ({
 
 import { getLearningStats } from "../queries";
 
-type NotesRow = { review_round: number };
+type NotesRow = { review_round: number; next_review_at?: string | null };
 type ReviewLogsRow = {
   round: number;
   scheduled_at: string;
@@ -72,7 +72,7 @@ describe("getLearningStats", () => {
       totalNotes: 0,
       completedReviews: 0,
       todayReviews: 0,
-      reviewsByRound: [],
+      reviewWaitingCount: 0,
       notesByRound: [],
       recentActivity: [],
       studyStreak: { current: 0, longest: 0 },
@@ -104,64 +104,6 @@ describe("getLearningStats", () => {
       { round: 2, count: 0 },
       { round: 3, count: 1 },
     ]);
-  });
-
-  it("computes reviewsByRound with both scheduled and completed counts", async () => {
-    getUserMock.mockResolvedValue({ id: "user-123" });
-
-    const { supabase } = makeSupabase({
-      notesData: [],
-      reviewLogsData: [
-        // Round 1: 4 scheduled, 2 completed
-        {
-          round: 1,
-          scheduled_at: "2026-05-01T05:00:00.000Z",
-          completed_at: "2026-05-01T08:00:00.000Z",
-        },
-        {
-          round: 1,
-          scheduled_at: "2026-04-30T05:00:00.000Z",
-          completed_at: "2026-05-01T05:00:00.000Z",
-        },
-        {
-          round: 1,
-          scheduled_at: "2026-05-02T05:00:00.000Z",
-          completed_at: null,
-        },
-        {
-          round: 1,
-          scheduled_at: "2026-05-02T16:00:00.000Z",
-          completed_at: null,
-        },
-        // Round 2: 1 scheduled, 1 completed
-        {
-          round: 2,
-          scheduled_at: "2026-05-02T05:00:00.000Z",
-          completed_at: "2026-05-02T05:30:00.000Z",
-        },
-        // Round 3: 2 scheduled, 1 completed
-        {
-          round: 3,
-          scheduled_at: "2026-05-03T01:00:00.000Z",
-          completed_at: "2026-05-03T02:00:00.000Z",
-        },
-        {
-          round: 3,
-          scheduled_at: "2026-05-04T05:00:00.000Z",
-          completed_at: null,
-        },
-      ],
-    });
-    createClientMock.mockResolvedValue(supabase);
-
-    const result = await getLearningStats();
-
-    expect(result.reviewsByRound).toEqual([
-      { round: 1, scheduled: 4, completed: 2 },
-      { round: 2, scheduled: 1, completed: 1 },
-      { round: 3, scheduled: 2, completed: 1 },
-    ]);
-    expect(result.completedReviews).toBe(4);
   });
 
   it("separates overdue (before KST today) from today's scheduled reviews", async () => {
@@ -276,6 +218,73 @@ describe("getLearningStats", () => {
     // current: 오늘부터 거꾸로 연속 → 2026-05-03, 2026-05-02 → 2
     // longest: 2026-04-25,26,27 연속 3일이 최장
     expect(result.studyStreak).toEqual({ current: 2, longest: 3 });
+  });
+
+  it("reviewWaitingCount: next_review_at이 null이고 round가 0인 노트를 포함한다", async () => {
+    getUserMock.mockResolvedValue({ id: "user-123" });
+
+    const { supabase } = makeSupabase({
+      notesData: [
+        { review_round: 0, next_review_at: null }, // 미시작 → 대기
+        { review_round: 1, next_review_at: null }, // 완주 → 제외
+        { review_round: 3, next_review_at: null }, // 완주 → 제외
+      ],
+      reviewLogsData: [],
+    });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await getLearningStats();
+
+    expect(result.reviewWaitingCount).toBe(1);
+  });
+
+  it("reviewWaitingCount: 미래 next_review_at을 가진 노트를 포함한다", async () => {
+    getUserMock.mockResolvedValue({ id: "user-123" });
+
+    // 현재 시각: 2026-05-03T03:00:00.000Z
+    const { supabase } = makeSupabase({
+      notesData: [
+        {
+          review_round: 1,
+          next_review_at: "2026-05-04T00:00:00.000Z", // 미래 → 대기
+        },
+        {
+          review_round: 2,
+          next_review_at: "2026-05-02T00:00:00.000Z", // 과거(오버듀) → 제외
+        },
+      ],
+      reviewLogsData: [],
+    });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await getLearningStats();
+
+    expect(result.reviewWaitingCount).toBe(1);
+  });
+
+  it("reviewWaitingCount: 미시작·미래 혼합 케이스를 정확히 집계한다", async () => {
+    getUserMock.mockResolvedValue({ id: "user-123" });
+
+    const { supabase } = makeSupabase({
+      notesData: [
+        { review_round: 0, next_review_at: null }, // 미시작 → 대기
+        {
+          review_round: 1,
+          next_review_at: "2026-05-10T00:00:00.000Z", // 미래 → 대기
+        },
+        { review_round: 3, next_review_at: null }, // 완주 → 제외
+        {
+          review_round: 2,
+          next_review_at: "2026-05-01T00:00:00.000Z", // 과거 → 제외
+        },
+      ],
+      reviewLogsData: [],
+    });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await getLearningStats();
+
+    expect(result.reviewWaitingCount).toBe(2);
   });
 
   it("buckets recentActivity into 30 KST days ending today", async () => {

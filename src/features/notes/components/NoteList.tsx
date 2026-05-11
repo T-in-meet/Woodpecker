@@ -55,7 +55,6 @@ export function NoteList({
       <NotesPagination
         currentPage={currentPage}
         totalPages={totalPages}
-        view={view}
         query={query}
       />
     </div>

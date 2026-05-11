@@ -5,6 +5,7 @@ export const ROUTES = {
   VERIFY_EMAIL: "/verify-email",
   NOTES: "/notes",
   NOTES_NEW: "/notes/new",
+  NOTES_TODAY: "/notes/today",
   MYPAGE: "/mypage",
   TERMS: "/terms",
   PRIVACY: "/privacy",

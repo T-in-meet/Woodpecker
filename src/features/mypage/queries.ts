@@ -6,7 +6,7 @@ export type LearningStats = {
   totalNotes: number;
   completedReviews: number;
   todayReviews: number;
-  reviewsByRound: { round: number; scheduled: number; completed: number }[];
+  reviewWaitingCount: number;
   notesByRound: { round: number; count: number }[];
   recentActivity: { date: string; count: number }[];
   studyStreak: { current: number; longest: number };
@@ -76,7 +76,7 @@ export async function getLearningStats(): Promise<LearningStats> {
     totalNotes: 0,
     completedReviews: 0,
     todayReviews: 0,
-    reviewsByRound: [],
+    reviewWaitingCount: 0,
     notesByRound: [],
     recentActivity: [],
     studyStreak: { current: 0, longest: 0 },
@@ -88,7 +88,10 @@ export async function getLearningStats(): Promise<LearningStats> {
   const supabase = await createServerComponentClient();
 
   const [notesResult, reviewLogsResult] = await Promise.all([
-    supabase.from("notes").select("review_round").eq("user_id", user.id),
+    supabase
+      .from("notes")
+      .select("review_round, next_review_at")
+      .eq("user_id", user.id),
     supabase
       .from("review_logs")
       .select("round, scheduled_at, completed_at")
@@ -106,6 +109,12 @@ export async function getLearningStats(): Promise<LearningStats> {
 
   const notesRows = notesResult.data ?? [];
   const totalNotes = notesRows.length;
+
+  const reviewWaitingCount = notesRows.filter(
+    (n) =>
+      (n.next_review_at === null && n.review_round === 0) ||
+      (typeof n.next_review_at === "string" && n.next_review_at > nowIso),
+  ).length;
 
   const notesByRoundMap = new Map<number, number>([
     [0, 0],
@@ -129,25 +138,14 @@ export async function getLearningStats(): Promise<LearningStats> {
   let todayReviews = 0;
   let onTime = 0;
 
-  const byRound = new Map<number, { scheduled: number; completed: number }>([
-    [1, { scheduled: 0, completed: 0 }],
-    [2, { scheduled: 0, completed: 0 }],
-    [3, { scheduled: 0, completed: 0 }],
-  ]);
   const activityDayCounts = new Map<string, number>();
   const activityDaySet = new Set<string>();
 
   for (const row of logs) {
-    const round = row.round;
     const scheduledAt = row.scheduled_at;
     const completedAt = row.completed_at;
-    if (typeof round !== "number" || typeof scheduledAt !== "string") continue;
-
-    const bucket = byRound.get(round);
-    if (bucket) {
-      bucket.scheduled += 1;
-      if (completedAt) bucket.completed += 1;
-    }
+    if (typeof row.round !== "number" || typeof scheduledAt !== "string")
+      continue;
 
     if (typeof completedAt === "string") {
       completedReviews += 1;
@@ -171,14 +169,6 @@ export async function getLearningStats(): Promise<LearningStats> {
     }
   }
 
-  const reviewsByRound = Array.from(byRound.entries())
-    .map(([round, v]) => ({
-      round,
-      scheduled: v.scheduled,
-      completed: v.completed,
-    }))
-    .sort((a, b) => a.round - b.round);
-
   const recentActivity = Array.from({ length: ACTIVITY_DAYS }, (_, i) => {
     const dayKey = shiftKstDateKey(todayKstKey, -(ACTIVITY_DAYS - 1 - i));
     return { date: dayKey, count: activityDayCounts.get(dayKey) ?? 0 };
@@ -190,7 +180,7 @@ export async function getLearningStats(): Promise<LearningStats> {
     totalNotes,
     completedReviews,
     todayReviews,
-    reviewsByRound,
+    reviewWaitingCount,
     notesByRound,
     recentActivity,
     studyStreak,
