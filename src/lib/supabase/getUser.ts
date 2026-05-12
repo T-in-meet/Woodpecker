@@ -7,7 +7,9 @@ export const getUser = cache(async () => {
   const supabase = await createServerComponentClient();
   const { data, error } = await supabase.auth.getUser();
   if (error) {
-    console.error("[getUser] auth error:", error.message);
+    if (error.status) {
+      console.error("[getUser] auth error:", error.message);
+    }
     return null;
   }
   return data.user;

@@ -17,6 +17,7 @@ type LegalPageProps = {
     label: string;
   };
   footerNote: string;
+  markdownUrl?: string;
 };
 
 export function LegalPage({
@@ -26,9 +27,15 @@ export function LegalPage({
   sections,
   crossLink,
   footerNote,
+  markdownUrl,
 }: LegalPageProps) {
   return (
     <main className="min-h-screen bg-[#faf8f3]">
+      {markdownUrl && (
+        <div className="sr-only" aria-hidden="true">
+          이 페이지의 마크다운 버전: <a href={markdownUrl}>{markdownUrl}</a>
+        </div>
+      )}
       {/* Hero */}
       <div className="relative overflow-hidden border-b border-stone-200/60">
         <div className="absolute inset-0 bg-linear-to-br from-amber-50 via-orange-50 to-rose-50" />

@@ -1,16 +1,14 @@
 import { ChevronRight } from "lucide-react";
 import type { Metadata } from "next";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { AccountSection } from "@/features/mypage/components/AccountSection";
-import { DeleteAccountSection } from "@/features/mypage/components/DeleteAccountSection";
 import { LearningStatsSection } from "@/features/mypage/components/LearningStatsSection";
 import {
   MypageNav,
   type MypageSection,
 } from "@/features/mypage/components/MypageNav";
-import { ProfileSection } from "@/features/mypage/components/ProfileSection";
 import { ReviewWaitingSection } from "@/features/mypage/components/ReviewWaitingSection";
 import { getLearningStats } from "@/features/mypage/queries";
 import { getReviewWaitingNotes } from "@/features/notes/queries";
@@ -19,6 +17,22 @@ import { getHasAnyPushSubscription } from "@/features/notifications/queries";
 import { ROUTES } from "@/lib/constants/routes";
 import { getProfile } from "@/lib/supabase/getProfile";
 import { getUser } from "@/lib/supabase/getUser";
+
+const ProfileSection = dynamic(() =>
+  import("@/features/mypage/components/ProfileSection").then(
+    (m) => m.ProfileSection,
+  ),
+);
+const AccountSection = dynamic(() =>
+  import("@/features/mypage/components/AccountSection").then(
+    (m) => m.AccountSection,
+  ),
+);
+const DeleteAccountSection = dynamic(() =>
+  import("@/features/mypage/components/DeleteAccountSection").then(
+    (m) => m.DeleteAccountSection,
+  ),
+);
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
@@ -46,11 +60,8 @@ export default async function MyPage({ searchParams }: Props) {
     ? rawSection
     : "stats";
 
-  const user = await getUser();
-  if (!user) redirect(ROUTES.LOGIN);
-
-  const profile = await getProfile();
-  if (!profile) redirect(ROUTES.LOGIN);
+  const [user, profile] = await Promise.all([getUser(), getProfile()]);
+  if (!user || !profile) redirect(ROUTES.LOGIN);
 
   // 활성 section에서만 fetch
   let stats: Awaited<ReturnType<typeof getLearningStats>> | null = null;
