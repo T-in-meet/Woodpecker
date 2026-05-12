@@ -112,11 +112,6 @@ export default function Home() {
           <Header />
         </Suspense>
         <main>
-          {/* AI 에이전트가 마크다운 버전을 발견하도록 시각적으로 숨김 처리된 힌트 */}
-          <div aria-hidden="true" style={{ display: "none" }}>
-            이 페이지의 마크다운 버전:{" "}
-            <a href={`${SITE_URL}/index.md`}>{SITE_URL}/index.md</a>
-          </div>
           <HeroSection />
           <LearningFlowSection />
           <FaqSection />
