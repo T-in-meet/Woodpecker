@@ -102,7 +102,7 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
           </div>
         </div>
 
-        {stats.notesByRound.some((r) => r.count > 0) && (
+        {stats.notesByRound.some((r) => r.count > 0) ? (
           <div>
             <h4 className="mb-3 text-sm font-medium">단계별 학습 현황</h4>
             <div className="space-y-2">
@@ -129,9 +129,9 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
               ))}
             </div>
           </div>
-        )}
+        ) : null}
 
-        {stats.onTimeRate.completed > 0 && (
+        {stats.onTimeRate.completed > 0 ? (
           <div className="rounded-lg border p-4">
             <h4 className="mb-1 text-sm font-medium">정시 완료율</h4>
             <p className="text-sm text-muted-foreground">
@@ -147,9 +147,9 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
               )
             </p>
           </div>
-        )}
+        ) : null}
 
-        {stats.recentActivity.length > 0 && (
+        {stats.recentActivity.length > 0 ? (
           <div>
             <h4 className="mb-3 text-sm font-medium">최근 30일 활동</h4>
             <div
@@ -178,13 +178,13 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
               <span>많음</span>
             </div>
           </div>
-        )}
+        ) : null}
 
-        {isEmpty && (
+        {isEmpty ? (
           <p className="text-center text-sm text-muted-foreground">
             아직 학습 기록이 없습니다.
           </p>
-        )}
+        ) : null}
       </CardContent>
     </Card>
   );
