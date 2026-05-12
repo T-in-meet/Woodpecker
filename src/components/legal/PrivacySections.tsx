@@ -154,16 +154,8 @@ export const privacySections: LegalSection[] = [
           개인정보보호 담당자를 지정하고 있습니다.
         </p>
         <ul className="mt-2">
-          <li>담당자: 딱다구리 운영팀</li>
-          <li>
-            이메일:{" "}
-            <a
-              href="mailto:privacy@woodpecker.app"
-              className="text-amber-700 underline underline-offset-2 transition-colors hover:text-amber-900"
-            >
-              privacy@woodpecker.app
-            </a>
-          </li>
+          <li>담당자: 딱다구리 개발팀</li>
+          <li>이메일: woodpecker.dev.team@gmail.com</li>
         </ul>
       </>
     ),
