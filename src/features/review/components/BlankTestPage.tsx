@@ -4,7 +4,6 @@ import { useActionState, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { NoteLanguage } from "@/lib/constants/noteLanguages";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 
 import { submitAnswerAction } from "../actions";
@@ -14,16 +13,16 @@ import { ComparisonView } from "./ComparisonView";
 import { ReviewCompleteButton } from "./ReviewCompleteButton";
 
 type BlankTestPageProps = {
+  alreadyCompletedToday: boolean;
   noteId: string;
   noteTitle: string;
-  language: NoteLanguage | null;
   reviewRound: number;
 };
 
 export function BlankTestPage({
+  alreadyCompletedToday,
   noteId,
   noteTitle,
-  language,
   reviewRound,
 }: BlankTestPageProps) {
   const [answer, setAnswer] = useState("");
@@ -49,7 +48,9 @@ export function BlankTestPage({
             백지 테스트 {reviewRound} / {MAX_REVIEW_ROUND}
           </span>
         </div>
-        <h1 className="text-3xl font-bold text-foreground">{noteTitle}</h1>
+        <h1 className="break-words break-keep text-3xl font-bold text-foreground">
+          {noteTitle}
+        </h1>
         <p className="text-sm text-muted-foreground">
           먼저 기억나는 내용을 적고 제출한 뒤, 원본과 나란히 비교해보세요.
         </p>
@@ -58,18 +59,19 @@ export function BlankTestPage({
       {comparisonState ? (
         <section className="space-y-6">
           <ComparisonView
-            language={comparisonState.language}
             userAnswer={comparisonState.userAnswer}
             originalContent={comparisonState.originalContent}
           />
 
           <div className="rounded-xl border border-border/60 bg-muted/30 px-5 py-4">
             <p className="text-sm text-muted-foreground">
-              비교를 마쳤다면 이번 복습을 완료 처리하고 다음 간격으로
-              넘어가세요.
+              {alreadyCompletedToday
+                ? "오늘은 이미 이 노트의 복습을 완료했어요. 내일 자정(KST) 이후 다시 완료할 수 있어요."
+                : "비교를 마쳤다면 이번 복습을 완료 처리하고 다음 간격으로 넘어가세요."}
             </p>
             <div className="mt-4">
               <ReviewCompleteButton
+                disabled={alreadyCompletedToday}
                 noteId={noteId}
                 reviewLogId={comparisonState.reviewLogId}
               />
@@ -98,11 +100,7 @@ export function BlankTestPage({
                 </p>
               )}
 
-              <BlankEditor
-                language={language}
-                value={answer}
-                onChange={setAnswer}
-              />
+              <BlankEditor value={answer} onChange={setAnswer} />
 
               <div className="flex flex-col gap-3 border-t border-border/60 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <span

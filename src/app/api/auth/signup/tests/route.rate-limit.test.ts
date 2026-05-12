@@ -28,8 +28,10 @@ import {
   EMAIL_LONG_LIMIT,
   EMAIL_LONG_WINDOW_MS,
   EMAIL_SHORT_WINDOW_MS,
-  IP_LIMIT,
-  IP_WINDOW_MS,
+  // IP_SHORT_LIMIT → IP_SHORT_LIMIT, IP_SHORT_WINDOW_MS → IP_SHORT_WINDOW_MS로 rename됨
+  // [이유: IP 단일 윈도우를 short/long으로 분리하면서 상수명 변경]
+  IP_SHORT_LIMIT,
+  IP_SHORT_WINDOW_MS,
   resetEligibilityStore,
 } from "@/features/auth/lib/checkRequestEligibility";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
@@ -159,7 +161,7 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     vi.useRealTimers();
   });
 
-  it(`TC-01. 동일 IP로 ${IP_LIMIT}번까지 요청이 허용된다`, async () => {
+  it(`TC-01. 동일 IP로 ${IP_SHORT_LIMIT}번까지 요청이 허용된다`, async () => {
     const ip = "10.1.0.1";
     const startedAt = Date.now();
 
@@ -167,7 +169,7 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
      * 같은 IP에서 서로 다른 이메일로 요청
      * → IP limit만 검증
      */
-    for (let i = 0; i < IP_LIMIT; i++) {
+    for (let i = 0; i < IP_SHORT_LIMIT; i++) {
       const response = await sendRequest(ip, `tc01user${i}@example.com`);
       expect(response.status).not.toBe(429);
     }
@@ -175,15 +177,15 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     /**
      * limit 내에서는 signup 정상 호출
      */
-    expect(mockGenerateLink).toHaveBeenCalledTimes(IP_LIMIT);
-    expect(Date.now() - startedAt).toBeLessThan(IP_WINDOW_MS);
+    expect(mockGenerateLink).toHaveBeenCalledTimes(IP_SHORT_LIMIT);
+    expect(Date.now() - startedAt).toBeLessThan(IP_SHORT_WINDOW_MS);
   });
 
-  it(`TC-02. 동일 IP로 ${IP_LIMIT + 1}번째 요청은 429를 반환한다`, async () => {
+  it(`TC-02. 동일 IP로 ${IP_SHORT_LIMIT + 1}번째 요청은 429를 반환한다`, async () => {
     const ip = "10.2.0.1";
     const startedAt = Date.now();
 
-    for (let i = 0; i < IP_LIMIT; i++) {
+    for (let i = 0; i < IP_SHORT_LIMIT; i++) {
       await sendRequest(ip, `tc02user${i}@example.com`);
     }
 
@@ -204,8 +206,8 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     /**
      * 초과 요청에서는 signup이 호출되지 않아야 함
      */
-    expect(mockGenerateLink).toHaveBeenCalledTimes(IP_LIMIT);
-    expect(Date.now() - startedAt).toBeLessThan(IP_WINDOW_MS);
+    expect(mockGenerateLink).toHaveBeenCalledTimes(IP_SHORT_LIMIT);
+    expect(Date.now() - startedAt).toBeLessThan(IP_SHORT_WINDOW_MS);
   });
 
   it(`TC-03. 동일 이메일로 ${EMAIL_LONG_LIMIT}번까지 요청이 허용된다`, async () => {
@@ -259,11 +261,11 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     expect(Date.now() - startedAt).toBeLessThan(EMAIL_LONG_WINDOW_MS);
   });
 
-  it(`TC-05. 동일 IP로 ${IP_LIMIT}번째 요청이 경계값으로 허용된다`, async () => {
+  it(`TC-05. 동일 IP로 ${IP_SHORT_LIMIT}번째 요청이 경계값으로 허용된다`, async () => {
     const ip = "10.5.0.1";
     const startedAt = Date.now();
 
-    for (let i = 0; i < IP_LIMIT - 1; i++) {
+    for (let i = 0; i < IP_SHORT_LIMIT - 1; i++) {
       await sendRequest(ip, `tc05user${i}@example.com`);
     }
 
@@ -273,8 +275,8 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     const response = await sendRequest(ip, "tc05user9@example.com");
 
     expect(response.status).not.toBe(429);
-    expect(mockGenerateLink).toHaveBeenCalledTimes(IP_LIMIT);
-    expect(Date.now() - startedAt).toBeLessThan(IP_WINDOW_MS);
+    expect(mockGenerateLink).toHaveBeenCalledTimes(IP_SHORT_LIMIT);
+    expect(Date.now() - startedAt).toBeLessThan(IP_SHORT_WINDOW_MS);
   });
 
   it(`TC-06. 동일 이메일로 ${EMAIL_LONG_LIMIT}번째 요청이 경계값으로 허용된다`, async () => {
@@ -298,7 +300,7 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
   it("TC-07. IP 한도 초과 후 같은 윈도우에서 계속 차단된다", async () => {
     const ip = "10.7.0.1";
 
-    for (let i = 0; i < IP_LIMIT + 1; i++) {
+    for (let i = 0; i < IP_SHORT_LIMIT + 1; i++) {
       await sendRequest(ip, `tc07user${i}@example.com`);
     }
 
@@ -351,14 +353,14 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
   it("TC-09. 윈도우 만료 후 IP limit이 리셋된다", async () => {
     const ip = "10.9.0.1";
 
-    for (let i = 0; i < IP_LIMIT + 1; i++) {
+    for (let i = 0; i < IP_SHORT_LIMIT + 1; i++) {
       await sendRequest(ip, `tc09user${i}@example.com`);
     }
 
     /**
-     * window 만료 (IP_WINDOW_MS + 1초)
+     * window 만료 (IP_SHORT_WINDOW_MS + 1초)
      */
-    vi.advanceTimersByTime(IP_WINDOW_MS + 1000);
+    vi.advanceTimersByTime(IP_SHORT_WINDOW_MS + 1000);
 
     const response = await sendRequest(ip, "tc09reset@example.com");
 
@@ -408,7 +410,7 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
   it("TC-11A. 이메일이 달라도 IP limit은 동작한다", async () => {
     const ip = "10.11.0.1";
 
-    for (let i = 0; i < IP_LIMIT; i++) {
+    for (let i = 0; i < IP_SHORT_LIMIT; i++) {
       await sendRequest(ip, `user${i}@example.com`);
     }
 
@@ -436,7 +438,7 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
   it("TC-12. rate limit 실패 응답이 API 계약 구조를 유지한다", async () => {
     const ip = "10.12.0.1";
 
-    for (let i = 0; i < IP_LIMIT + 1; i++) {
+    for (let i = 0; i < IP_SHORT_LIMIT + 1; i++) {
       await sendRequest(ip);
     }
 
@@ -468,7 +470,7 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     const ip = "10.13.0.1";
 
     // validation 실패 요청들 (rate limit 미적용)
-    for (let i = 0; i < IP_LIMIT + 5; i++) {
+    for (let i = 0; i < IP_SHORT_LIMIT + 5; i++) {
       const responsePromise = POST(makeInvalidRequest(ip));
       await vi.advanceTimersByTimeAsync(MIN_RESPONSE_MS);
       const response = await responsePromise;
@@ -525,7 +527,7 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
   it("TC-15. IP rate limit hit 시 429 응답을 반환한다", async () => {
     const ip = "10.15.0.1";
 
-    for (let i = 0; i < IP_LIMIT; i++) {
+    for (let i = 0; i < IP_SHORT_LIMIT; i++) {
       await sendRequest(ip, `tc15user${i}@example.com`);
     }
 
@@ -583,7 +585,7 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     /**
      * IP limit 채우기
      */
-    for (let i = 0; i < IP_LIMIT; i++) {
+    for (let i = 0; i < IP_SHORT_LIMIT; i++) {
       await sendRequest(ip, `user${i}@example.com`);
     }
 
@@ -625,7 +627,7 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     /**
      * IP limit 채우기
      */
-    for (let i = 0; i < IP_LIMIT; i++) {
+    for (let i = 0; i < IP_SHORT_LIMIT; i++) {
       await sendRequest(ip, `user${i}@example.com`);
     }
 
@@ -638,7 +640,7 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     /**
      * IP window 만료 — precheck은 상태를 변경하지 않았으므로 여전히 한도 상태
      */
-    await vi.advanceTimersByTimeAsync(IP_WINDOW_MS);
+    await vi.advanceTimersByTimeAsync(IP_SHORT_WINDOW_MS);
 
     /**
      * Window 만료 후 동일 IP로 요청 — 새로운 window로 복구되어 허용

@@ -316,8 +316,7 @@ INSERT INTO public.notifications (
   body,
   status,
   sent_at,
-  read_at,
-  skipped_at
+  read_at
 )
 VALUES (
   current_setting('test.notifications_fk_user_insert_max_id')::uuid,
@@ -328,8 +327,7 @@ VALUES (
   repeat('B', 500),
   'READ',
   now(),
-  now(),
-  NULL
+  now()
 );
 
 SELECT is(

@@ -3,6 +3,8 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ROUTES } from "@/lib/constants/routes";
 
+import { heroContent } from "./content";
+
 export function HeroSection() {
   return (
     <section className="relative overflow-hidden">
@@ -13,18 +15,16 @@ export function HeroSection() {
 
       <div className="mx-auto max-w-5xl px-6 py-28 md:py-40">
         <h1 className="text-5xl font-bold tracking-tight text-center">
-          기록이 기억이 되는 공간
+          {heroContent.title}
         </h1>
 
-        <p className="mx-auto mt-6 max-w-xl text-center text-lg text-muted-foreground md:text-xl">
-          기록한 순간부터 복습이 설계됩니다.
-          <br />
-          노트 기록부터 복습 알림, 백지 테스트까지 한 곳에서.
+        <p className="mx-auto mt-6 max-w-xl whitespace-pre-line text-center text-lg text-muted-foreground md:text-xl">
+          {heroContent.description}
         </p>
 
         <div className="mt-8 flex flex-wrap justify-center gap-3">
           <Button size="2xl" asChild>
-            <Link href={ROUTES.SIGNUP}>무료로 시작하기</Link>
+            <Link href={ROUTES.SIGNUP}>{heroContent.ctaLabel}</Link>
           </Button>
         </div>
 

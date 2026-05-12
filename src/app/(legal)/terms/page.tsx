@@ -2,10 +2,17 @@ import type { Metadata } from "next";
 
 import { LegalPage } from "@/app/(legal)/LegalPage";
 import { termsSections } from "@/components/legal/TermsSections";
+import { SITE_URL } from "@/lib/constants/site";
 
 export const metadata: Metadata = {
   title: "이용약관 | 딱다구리",
   description: "딱다구리 서비스 이용약관",
+  alternates: {
+    canonical: `${SITE_URL}/terms`,
+    types: {
+      "text/markdown": `${SITE_URL}/terms.md`,
+    },
+  },
 };
 
 const EFFECTIVE_DATE = "2026년 3월 24일";
@@ -19,6 +26,7 @@ export default function TermsPage() {
       sections={termsSections}
       crossLink={{ href: "/privacy", label: "개인정보 처리방침" }}
       footerNote={`부칙: 이 약관은 ${EFFECTIVE_DATE}부터 시행합니다.`}
+      markdownUrl={`${SITE_URL}/terms.md`}
     />
   );
 }

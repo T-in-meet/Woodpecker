@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, LogOut, Plus, User } from "lucide-react";
+import { BookOpen, CalendarCheck, LogOut, Plus, User } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
@@ -20,6 +20,9 @@ export function UserMenu({ nickname, email, avatarUrl }: UserMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // 드롭다운이 열렸을 때만 리스너 등록 — 닫혀 있을 때 전역 리스너 불필요
+    if (!open) return;
+
     const handleMouseDown = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
         setOpen(false);
@@ -34,7 +37,7 @@ export function UserMenu({ nickname, email, avatarUrl }: UserMenuProps) {
       document.removeEventListener("mousedown", handleMouseDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, []);
+  }, [open]);
 
   return (
     <div ref={ref} className="relative">
@@ -78,6 +81,14 @@ export function UserMenu({ nickname, email, avatarUrl }: UserMenuProps) {
             >
               <BookOpen className="size-4" />
               노트 목록
+            </Link>
+            <Link
+              href={ROUTES.NOTES_TODAY}
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 px-4 py-2 text-sm transition-colors hover:bg-accent"
+            >
+              <CalendarCheck className="size-4" />
+              오늘의 복습
             </Link>
             <Link
               href={ROUTES.NOTES_NEW}

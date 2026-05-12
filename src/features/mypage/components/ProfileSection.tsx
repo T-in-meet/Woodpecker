@@ -2,7 +2,14 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useActionState, useRef, useState, useTransition } from "react";
+import {
+  useActionState,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,13 +24,25 @@ import {
   uploadAvatarAction,
 } from "../actions";
 
+type ProfileSectionProfile = Pick<
+  Profile,
+  "avatar_url" | "created_at" | "nickname" | "role"
+>;
+
 type ProfileSectionProps = {
-  profile: Profile;
+  profile: ProfileSectionProfile;
   email: string;
 };
 
-export function ProfileSection({ profile, email }: ProfileSectionProps) {
+export function ProfileSection({
+  profile: initialProfile,
+  email,
+}: ProfileSectionProps) {
   const router = useRouter();
+  const [profile, setProfile] = useState<ProfileSectionProfile>(initialProfile);
+  useEffect(() => {
+    setProfile(initialProfile);
+  }, [initialProfile]);
   const [isEditing, setIsEditing] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const [isPendingAvatar, startAvatarTransition] = useTransition();
@@ -33,7 +52,9 @@ export function ProfileSection({ profile, email }: ProfileSectionProps) {
     async (prevState: unknown, formData: FormData) => {
       const result = await updateProfileAction(prevState, formData);
       if (result?.data) {
+        setProfile((prev) => ({ ...prev, nickname: result.data.nickname }));
         setIsEditing(false);
+        // Header 등 다른 서버 컴포넌트 동기화는 백그라운드로 — UI는 이미 반영됨
         router.refresh();
       }
       return result;
@@ -58,6 +79,10 @@ export function ProfileSection({ profile, email }: ProfileSectionProps) {
       try {
         const result = await uploadAvatarAction(null, formData);
         if (result?.data) {
+          setProfile((prev) => ({
+            ...prev,
+            avatar_url: result.data.avatar_url,
+          }));
           router.refresh();
         } else if (result?.error) {
           setAvatarError(
@@ -80,6 +105,7 @@ export function ProfileSection({ profile, email }: ProfileSectionProps) {
       try {
         const result = await deleteAvatarAction();
         if (result?.data) {
+          setProfile((prev) => ({ ...prev, avatar_url: null }));
           router.refresh();
         } else if (result?.error) {
           setAvatarError(
@@ -93,6 +119,12 @@ export function ProfileSection({ profile, email }: ProfileSectionProps) {
       }
     });
   };
+
+  // profile.created_at은 불변값 — 매 렌더마다 Date 객체 생성 방지
+  const joinedDate = useMemo(
+    () => new Date(profile.created_at).toLocaleDateString("ko-KR"),
+    [profile.created_at],
+  );
 
   const avatarDisplay = profile.avatar_url ? (
     <Image
@@ -213,8 +245,7 @@ export function ProfileSection({ profile, email }: ProfileSectionProps) {
                 </p>
                 <p className="text-xs text-muted-foreground">{email}</p>
                 <p className="text-xs text-muted-foreground">
-                  가입일{" "}
-                  {new Date(profile.created_at).toLocaleDateString("ko-KR")}
+                  가입일 {joinedDate}
                 </p>
               </div>
             </div>

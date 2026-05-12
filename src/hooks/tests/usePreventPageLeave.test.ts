@@ -159,4 +159,17 @@ describe("usePreventPageLeave", () => {
     expect(confirmSpy).not.toHaveBeenCalled();
     expect(window.location.pathname).toBe("/allowed");
   });
+
+  it("커스텀 메시지가 전달되면 해당 메시지로 이탈 확인을 표시한다", () => {
+    const customMessage =
+      "비밀번호 변경이 완료되지 않았습니다. 페이지를 이동하시겠습니까?";
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+
+    renderHook(() => usePreventPageLeave(true, customMessage));
+
+    history.pushState(null, "", "/other");
+
+    expect(confirmSpy).toHaveBeenCalledWith(customMessage);
+    expect(window.location.pathname).toBe("/current");
+  });
 });

@@ -6,6 +6,7 @@ import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 import { RATE_LIMIT_TOAST_MESSAGE } from "@/features/auth/errors/rateLimitError";
 import { UNKNOWN_ERROR_MESSAGE } from "@/features/auth/errors/unknownError";
 import { showToast } from "@/lib/utils/showToast";
+import { VALIDATION_MESSAGES } from "@/lib/validation/messages";
 
 import VerifyEmailPageClient from "./VerifyEmailPageClient";
 
@@ -171,10 +172,10 @@ describe("VerifyEmailPageClient", () => {
     await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
 
     await waitFor(() => {
-      expect(showToast).toHaveBeenCalledWith(
-        RATE_LIMIT_TOAST_MESSAGE,
-        "destructive",
-      );
+      expect(showToast).toHaveBeenCalledWith(RATE_LIMIT_TOAST_MESSAGE, {
+        variant: "destructive",
+        dedupeKey: "auth-rate-limit",
+      });
     });
   });
 
@@ -188,10 +189,10 @@ describe("VerifyEmailPageClient", () => {
     await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
 
     await waitFor(() => {
-      expect(showToast).toHaveBeenCalledWith(
-        UNKNOWN_ERROR_MESSAGE,
-        "destructive",
-      );
+      expect(showToast).toHaveBeenCalledWith(UNKNOWN_ERROR_MESSAGE, {
+        variant: "destructive",
+        dedupeKey: "auth-unknown-error",
+      });
     });
     expect(showToast).not.toHaveBeenCalledWith(
       RATE_LIMIT_TOAST_MESSAGE,
@@ -207,10 +208,99 @@ describe("VerifyEmailPageClient", () => {
     await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
 
     await waitFor(() => {
-      expect(showToast).toHaveBeenCalledWith(
-        "잠시 후 다시 시도해주세요",
-        "destructive",
-      );
+      expect(showToast).toHaveBeenCalledWith("잠시 후 다시 시도해주세요", {
+        variant: "destructive",
+        dedupeKey: "auth-global-server",
+      });
+    });
+  });
+
+  it("TC-14. invalid email을 blur하면 이메일 형식 에러 메시지를 표시한다", async () => {
+    const user = userEvent.setup();
+    render(<VerifyEmailPageClient />);
+
+    const input = screen.getByRole("textbox", { name: /이메일/i });
+
+    await user.type(input, "invalid-email");
+    await user.tab();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      VALIDATION_MESSAGES.emailInvalid,
+    );
+  });
+
+  it("TC-15. invalid email submit이면 mutateAsync를 호출하지 않는다", async () => {
+    const user = userEvent.setup();
+    render(<VerifyEmailPageClient />);
+
+    await user.type(
+      screen.getByRole("textbox", { name: /이메일/i }),
+      "invalid",
+    );
+    await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      VALIDATION_MESSAGES.emailInvalid,
+    );
+    expect(mockMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("TC-17. 공백만 입력하면 required 에러 메시지를 표시하고 mutateAsync를 호출하지 않는다", async () => {
+    const user = userEvent.setup();
+    render(<VerifyEmailPageClient />);
+
+    await user.type(screen.getByRole("textbox", { name: /이메일/i }), "   ");
+    await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      VALIDATION_MESSAGES.emailRequired,
+    );
+    expect(mockMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("TC-18. 앞뒤 공백이 포함된 valid email submit이면 trim된 email로 mutateAsync를 호출한다", async () => {
+    const user = userEvent.setup();
+    render(<VerifyEmailPageClient />);
+
+    await user.type(
+      screen.getByRole("textbox", { name: /이메일/i }),
+      "  test@example.com  ",
+    );
+    await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
+
+    await waitFor(() => {
+      expect(mockMutateAsync).toHaveBeenCalledWith({
+        email: "test@example.com",
+      });
+    });
+  });
+
+  it("TC-16. invalid email 에러가 표시된 뒤 valid email로 수정하면 에러 메시지가 사라지고 제출된다", async () => {
+    const user = userEvent.setup();
+    render(<VerifyEmailPageClient />);
+
+    const input = screen.getByRole("textbox", { name: /이메일/i });
+
+    await user.type(input, "invalid");
+    await user.tab();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      VALIDATION_MESSAGES.emailInvalid,
+    );
+
+    await user.clear(input);
+    await user.type(input, "test@example.com");
+
+    await waitFor(() => {
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: /인증 메일 재발송/i }));
+
+    await waitFor(() => {
+      expect(mockMutateAsync).toHaveBeenCalledWith({
+        email: "test@example.com",
+      });
     });
   });
 });

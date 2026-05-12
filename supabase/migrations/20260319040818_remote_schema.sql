@@ -151,8 +151,7 @@ CREATE TABLE IF NOT EXISTS "public"."notifications" (
     "status" character varying(20) DEFAULT 'SENT'::character varying NOT NULL,
     "sent_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "read_at" timestamp with time zone,
-    "skipped_at" timestamp with time zone,
-    CONSTRAINT "notifications_status_check" CHECK ((("status")::"text" = ANY ((ARRAY['SENT'::character varying, 'READ'::character varying, 'SKIPPED'::character varying])::"text"[])))
+    CONSTRAINT "notifications_status_check" CHECK ((("status")::"text" = ANY ((ARRAY['SENT'::character varying, 'READ'::character varying])::"text"[])))
 );
 
 
@@ -639,7 +638,7 @@ alter table "public"."notifications" drop constraint "notifications_status_check
 
 alter table "public"."profiles" drop constraint "profiles_role_check";
 
-alter table "public"."notifications" add constraint "notifications_status_check" CHECK (((status)::text = ANY ((ARRAY['SENT'::character varying, 'READ'::character varying, 'SKIPPED'::character varying])::text[]))) not valid;
+alter table "public"."notifications" add constraint "notifications_status_check" CHECK (((status)::text = ANY ((ARRAY['SENT'::character varying, 'READ'::character varying])::text[]))) not valid;
 
 alter table "public"."notifications" validate constraint "notifications_status_check";
 

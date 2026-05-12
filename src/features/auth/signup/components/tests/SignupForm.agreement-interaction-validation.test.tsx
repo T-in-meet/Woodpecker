@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -14,15 +14,27 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
 // - 모달 미열람 vs 열람 상태에서의 validation 차이 확인
 
 describe("회원가입 폼 동의 상호작용 + Validation", () => {
+  function fillRequiredFields() {
+    fireEvent.change(screen.getByLabelText(/이메일/i), {
+      target: { value: "test@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText(/^비밀번호$/i), {
+      target: { value: "Test@1234" },
+    });
+    fireEvent.change(screen.getByLabelText(/비밀번호 확인/i), {
+      target: { value: "Test@1234" },
+    });
+    fireEvent.change(screen.getByLabelText(/닉네임/i), {
+      target: { value: "testuser" },
+    });
+  }
+
   it("TC-01: 모달 미열람 상태에서 폼 제출 시 약관 에러가 표시된다", async () => {
     const user = userEvent.setup();
     const { onSubmit } = renderSignupForm();
 
     // 필수 필드들을 채우되, 약관은 체크하지 않기
-    await user.type(screen.getByLabelText(/이메일/i), "test@example.com");
-    await user.type(screen.getByLabelText(/^비밀번호$/i), "Test@1234");
-    await user.type(screen.getByLabelText(/비밀번호 확인/i), "Test@1234");
-    await user.type(screen.getByLabelText(/닉네임/i), "testuser");
+    fillRequiredFields();
 
     // 약관 미체크 → 제출
     await user.click(screen.getByRole("button", { name: /회원가입/i }));
@@ -49,10 +61,7 @@ describe("회원가입 폼 동의 상호작용 + Validation", () => {
     const { onSubmit } = renderSignupForm();
 
     // 필수 필드 채우기
-    await user.type(screen.getByLabelText(/이메일/i), "test@example.com");
-    await user.type(screen.getByLabelText(/^비밀번호$/i), "Test@1234");
-    await user.type(screen.getByLabelText(/비밀번호 확인/i), "Test@1234");
-    await user.type(screen.getByLabelText(/닉네임/i), "testuser");
+    fillRequiredFields();
 
     // 이용약관 모달을 열고 닫기만 하기 (동의 없이)
     // 이유: interactionEnabled=true가 되더라도 checked=false인 경우
@@ -60,6 +69,9 @@ describe("회원가입 폼 동의 상호작용 + Validation", () => {
     const termsCheckbox = screen.getByTestId("terms-of-service-checkbox");
     await user.click(termsCheckbox);
     await user.click(screen.getByRole("button", { name: /닫기/i }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
 
     // 이제 termsCheckbox는 체크되지 않은 상태
     // (모달을 열기만 했고 "동의하기"를 누르지 않음)
@@ -83,10 +95,7 @@ describe("회원가입 폼 동의 상호작용 + Validation", () => {
     const { onSubmit } = renderSignupForm();
 
     // 필수 필드 채우기
-    await user.type(screen.getByLabelText(/이메일/i), "test@example.com");
-    await user.type(screen.getByLabelText(/^비밀번호$/i), "Test@1234");
-    await user.type(screen.getByLabelText(/비밀번호 확인/i), "Test@1234");
-    await user.type(screen.getByLabelText(/닉네임/i), "testuser");
+    fillRequiredFields();
 
     // 이용약관 모달 열기 → "동의하기" 클릭
     // 이유: onAgree에서 setValue("termsOfService", true)를 호출하므로
@@ -94,11 +103,17 @@ describe("회원가입 폼 동의 상호작용 + Validation", () => {
     const termsCheckbox = screen.getByTestId("terms-of-service-checkbox");
     await user.click(termsCheckbox);
     await user.click(screen.getByRole("button", { name: /동의하기/i }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
 
     // 개인정보도 동의하기
     const privacyCheckbox = screen.getByTestId("privacy-policy-checkbox");
     await user.click(privacyCheckbox);
     await user.click(screen.getByRole("button", { name: /동의하기/i }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
 
     // 두 체크박스 모두 체크된 상태 확인
     await waitFor(() => {
@@ -130,10 +145,7 @@ describe("회원가입 폼 동의 상호작용 + Validation", () => {
     renderSignupForm();
 
     // 필수 필드 채우되 약관 미체크
-    await user.type(screen.getByLabelText(/이메일/i), "test@example.com");
-    await user.type(screen.getByLabelText(/^비밀번호$/i), "Test@1234");
-    await user.type(screen.getByLabelText(/비밀번호 확인/i), "Test@1234");
-    await user.type(screen.getByLabelText(/닉네임/i), "testuser");
+    fillRequiredFields();
 
     // 제출 → 에러 메시지 표시
     await user.click(screen.getByRole("button", { name: /회원가입/i }));
@@ -154,13 +166,13 @@ describe("회원가입 폼 동의 상호작용 + Validation", () => {
     renderSignupForm();
 
     // 이용약관만 동의하고 개인정보는 체크 안 함
-    await user.type(screen.getByLabelText(/이메일/i), "test@example.com");
-    await user.type(screen.getByLabelText(/^비밀번호$/i), "Test@1234");
-    await user.type(screen.getByLabelText(/비밀번호 확인/i), "Test@1234");
-    await user.type(screen.getByLabelText(/닉네임/i), "testuser");
+    fillRequiredFields();
 
     await user.click(screen.getByTestId("terms-of-service-checkbox"));
     await user.click(screen.getByRole("button", { name: /동의하기/i }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
 
     // 제출 → 개인정보 에러 표시
     await user.click(screen.getByRole("button", { name: /회원가입/i }));
@@ -182,13 +194,13 @@ describe("회원가입 폼 동의 상호작용 + Validation", () => {
     const user = userEvent.setup();
     renderSignupForm();
 
-    await user.type(screen.getByLabelText(/이메일/i), "test@example.com");
-    await user.type(screen.getByLabelText(/^비밀번호$/i), "Test@1234");
-    await user.type(screen.getByLabelText(/비밀번호 확인/i), "Test@1234");
-    await user.type(screen.getByLabelText(/닉네임/i), "testuser");
+    fillRequiredFields();
 
     await user.click(screen.getByTestId("terms-of-service-checkbox"));
     await user.click(screen.getByRole("button", { name: /동의하기/i }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
 
     await user.click(screen.getByRole("button", { name: /회원가입/i }));
 
@@ -206,15 +218,15 @@ describe("회원가입 폼 동의 상호작용 + Validation", () => {
     const { onSubmit } = renderSignupForm();
 
     // 필수 필드 채우기
-    await user.type(screen.getByLabelText(/이메일/i), "test@example.com");
-    await user.type(screen.getByLabelText(/^비밀번호$/i), "Test@1234");
-    await user.type(screen.getByLabelText(/비밀번호 확인/i), "Test@1234");
-    await user.type(screen.getByLabelText(/닉네임/i), "testuser");
+    fillRequiredFields();
 
     // 이용약관 모달 열고 동의하기
     const termsCheckbox = screen.getByTestId("terms-of-service-checkbox");
     await user.click(termsCheckbox);
     await user.click(screen.getByRole("button", { name: /동의하기/i }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
 
     // 체크 상태 확인
     await waitFor(() => {
@@ -233,6 +245,9 @@ describe("회원가입 폼 동의 상호작용 + Validation", () => {
     const privacyCheckbox = screen.getByTestId("privacy-policy-checkbox");
     await user.click(privacyCheckbox);
     await user.click(screen.getByRole("button", { name: /동의하기/i }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
 
     // 폼 제출
     await user.click(screen.getByRole("button", { name: /회원가입/i }));

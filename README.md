@@ -71,6 +71,10 @@ cp .env.example .env.local
 
 팀 공유 채널에서 환경 변수 값을 받아 `.env.local`에 입력하세요.
 
+### Vercel Cron
+
+`vercel.json`의 `/api/cron/dispatch-notifications`는 복습 알림 지연을 줄이기 위해 5분 간격(`*/5 * * * *`)으로 실행합니다. 이 주기는 Vercel Pro/Team 이상 플랜을 전제로 하며, Hobby 플랜 배포 시에는 플랜 또는 스케줄 조정이 필요합니다.
+
 ---
 
 ## 4. 개발 서버 실행
@@ -85,12 +89,19 @@ npm run dev
 
 ## 5. 주요 스크립트
 
-| 명령어          | 설명                       |
-| --------------- | -------------------------- |
-| `npm run dev`   | 개발 서버 실행 (Turbopack) |
-| `npm run build` | 프로덕션 빌드              |
-| `npm run start` | 프로덕션 서버 실행         |
-| `npm run lint`  | ESLint 검사                |
+| 명령어           | 설명                                                         |
+| ---------------- | ------------------------------------------------------------ |
+| `npm run dev`    | 개발 서버 실행 (Turbopack, Service Worker 비활성화)          |
+| `npm run dev:sw` | 개발 서버 실행 (Service Worker 활성화, Web Push 로컬 검증용) |
+| `npm run build`  | 프로덕션 빌드                                                |
+| `npm run start`  | 프로덕션 서버 실행                                           |
+| `npm run lint`   | ESLint 검사                                                  |
+
+> **`dev:sw` 보충 설명**
+>
+> - 일반 `npm run dev` 는 Turbopack + Serwist 호환 이슈를 피하기 위해 개발 환경에서 Service Worker(`/sw.js`) 를 비활성화한 상태로 실행됩니다 (`next.config.ts` 의 `disable` 조건 참고).
+> - Web Push 알림 흐름을 로컬에서 검증하려면 SW 가 등록되어야 하므로, `dev:sw` 스크립트가 `ENABLE_SW=true` 환경변수를 주입해 Serwist 를 활성화합니다.
+> - 환경변수 설정에 `cross-env` 를 사용하는 이유: Windows cmd/PowerShell 에서는 `ENABLE_SW=true next dev` 같은 인라인 문법이 동작하지 않습니다. 모든 셸에서 동일하게 동작시키기 위해 `cross-env` 를 거칩니다.
 
 ---
 

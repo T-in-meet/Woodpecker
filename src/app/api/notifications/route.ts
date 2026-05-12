@@ -1,10 +1,36 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
-export async function GET(_request: NextRequest) {
-  return NextResponse.json({ notifications: [] });
-}
+import {
+  getNotificationList,
+  getUnreadCount,
+} from "@/features/notifications/queries";
+import { logError } from "@/lib/logger";
+import { createClient } from "@/lib/supabase/server";
 
-export async function POST(request: NextRequest) {
-  const body = await request.json();
-  return NextResponse.json({ success: true, data: body });
+export const dynamic = "force-dynamic";
+
+export async function GET() {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    }
+
+    const [items, unreadCount] = await Promise.all([
+      getNotificationList({ supabase, userId: user.id }),
+      getUnreadCount({ supabase, userId: user.id }),
+    ]);
+
+    return NextResponse.json({ items, unreadCount });
+  } catch (error) {
+    logError({ event: "notifications.get.failed", error });
+    return NextResponse.json(
+      { error: "notifications_lookup_failed" },
+      { status: 500 },
+    );
+  }
 }

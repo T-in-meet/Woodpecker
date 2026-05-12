@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import { Footer } from "@/components/layout/Footer";
@@ -6,8 +7,18 @@ import { CtaSection } from "@/features/landing/CtaSection";
 import { faqs, FaqSection } from "@/features/landing/FaqSection";
 import { HeroSection } from "@/features/landing/HeroSection";
 import { LearningFlowSection } from "@/features/landing/LearningFlowSection";
+import { SITE_URL } from "@/lib/constants/site";
 
-const SITE_URL = "https://woodpecker-app.vercel.app";
+// LLM(ChatGPT, Claude, Perplexity 등)이 토큰 효율적인 마크다운 버전을 발견할 수 있도록
+// <link rel="alternate" type="text/markdown" href="/index.md" />를 자동 삽입.
+export const metadata: Metadata = {
+  alternates: {
+    canonical: SITE_URL,
+    types: {
+      "text/markdown": `${SITE_URL}/index.md`,
+    },
+  },
+};
 
 /* ─── JSON-LD 구조화 데이터 ────────────────────────────────────────────────────
    JSON-LD는 검색엔진(구글 등)에게 "이 페이지가 무엇인지"를 기계가 이해할 수 있는
@@ -86,18 +97,25 @@ const jsonLd = {
   ],
 };
 
+// 모듈 로드 시 1회 직렬화 — 매 요청마다 JSON.stringify 호출 비용 제거
+const jsonLdString = JSON.stringify(jsonLd);
+
 export default function Home() {
   return (
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: jsonLdString }}
       />
       <div className="min-h-screen">
         <Suspense fallback={<HeaderSkeleton />}>
           <Header />
         </Suspense>
         <main>
+          <div className="sr-only" aria-hidden="true">
+            이 페이지의 마크다운 버전:{" "}
+            <a href={`${SITE_URL}/index.md`}>{SITE_URL}/index.md</a>
+          </div>
           <HeroSection />
           <LearningFlowSection />
           <FaqSection />

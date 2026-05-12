@@ -1,21 +1,8 @@
 "use client";
 
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
-/**
- * 이메일 인증 안내 페이지 클라이언트 컴포넌트
- *
- * 설계 의도:
- * - 회원가입 완료 후 이메일 인증을 유도하는 단일 진입점 역할을 한다.
- * - 인증 메일 재발송 기능을 제공하며, 남용 방지를 위해 rate limit을 처리한다.
- * - auth-rules.md 정책에 따라 회원 상태(신규/미인증/인증)를 프론트에서 구분하지 않는다.
- *   → 서버 응답 코드 기반으로도 계정 상태를 추론할 수 없도록 동일한 UX 흐름을 유지한다.
- *
- * rate limit 처리:
- * - 클라이언트는 쿨다운 타이머나 남은 시간을 추적하지 않는다.
- * - HTTP status(예: 429)에 의존하지 않고, 서버 response body의 `code`를 기준으로 처리한다.
- * - rate limit 발생 시, 이벤트 기반의 전역 토스트 메시지(showToast)로만 피드백한다.
- */
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 
@@ -35,14 +22,30 @@ import { UNKNOWN_ERROR_MESSAGE } from "@/features/auth/errors/unknownError";
 import { useResendVerificationEmailMutation } from "@/features/auth/resend-verification-email/hooks/useResendVerificationEmailMutation";
 import { showToast } from "@/lib/utils/showToast";
 
-type FormValues = {
-  email: string;
-};
+import {
+  VerifyEmailFormInput,
+  verifyEmailFormSchema,
+  VerifyEmailFormValues,
+} from "../schemas/verifyEmailFormSchema";
 
 type Props = {
   email?: string | undefined;
 };
 
+/**
+ * 이메일 인증 안내 페이지 클라이언트 컴포넌트
+ *
+ * 설계 의도:
+ * - 회원가입 완료 후 이메일 인증을 유도하는 단일 진입점 역할을 한다.
+ * - 인증 메일 재발송 기능을 제공하며, 남용 방지를 위해 rate limit을 처리한다.
+ * - auth-rules.md 정책에 따라 회원 상태(신규/미인증/인증)를 프론트에서 구분하지 않는다.
+ *   → 서버 응답 코드 기반으로도 계정 상태를 추론할 수 없도록 동일한 UX 흐름을 유지한다.
+ *
+ * rate limit 처리:
+ * - 클라이언트는 쿨다운 타이머나 남은 시간을 추적하지 않는다.
+ * - HTTP status(예: 429)에 의존하지 않고, 서버 response body의 `code`를 기준으로 처리한다.
+ * - rate limit 발생 시, 이벤트 기반의 전역 토스트 메시지(showToast)로만 피드백한다.
+ */
 export default function VerifyEmailPageClient({ email }: Props) {
   /**
    * pre-fill 입력값 정규화
@@ -61,8 +64,11 @@ export default function VerifyEmailPageClient({ email }: Props) {
     register,
     handleSubmit,
     reset,
-    formState: { isSubmitting },
-  } = useForm<FormValues>({
+    formState: { isSubmitting, errors },
+  } = useForm<VerifyEmailFormInput, unknown, VerifyEmailFormValues>({
+    resolver: zodResolver(verifyEmailFormSchema),
+    mode: "onTouched",
+    reValidateMode: "onChange",
     defaultValues: { email: normalizedPrefillEmail },
   });
 
@@ -91,7 +97,7 @@ export default function VerifyEmailPageClient({ email }: Props) {
    */
   const isDisabled = isSubmitting || isPending;
 
-  const onSubmit = async (values: FormValues) => {
+  const onSubmit = async (values: VerifyEmailFormValues) => {
     try {
       /**
        * 재발송 요청은 mutation을 통해 수행한다.
@@ -135,7 +141,10 @@ export default function VerifyEmailPageClient({ email }: Props) {
        * - validation / global error와 구분되는 "도메인 에러 계층"으로 취급한다.
        */
       if (isRateLimitError(e)) {
-        showToast(RATE_LIMIT_TOAST_MESSAGE, "destructive");
+        showToast(RATE_LIMIT_TOAST_MESSAGE, {
+          variant: "destructive",
+          dedupeKey: "auth-rate-limit",
+        });
         return;
       }
 
@@ -150,7 +159,10 @@ export default function VerifyEmailPageClient({ email }: Props) {
        * - 서버가 반환한 도메인 에러(response body 기반)와 구분한다.
        */
       if (isGlobalError(e)) {
-        showToast(GLOBAL_ERROR_MESSAGES[e.type], "destructive");
+        showToast(GLOBAL_ERROR_MESSAGES[e.type], {
+          variant: "destructive",
+          dedupeKey: `auth-global-${e.type}`,
+        });
         return;
       }
 
@@ -165,7 +177,10 @@ export default function VerifyEmailPageClient({ email }: Props) {
        * - 예상하지 못한 에러(contract 위반, 런타임 예외 등)에 대해
        *   최소한의 사용자 피드백을 보장한다.
        */
-      showToast(UNKNOWN_ERROR_MESSAGE, "destructive");
+      showToast(UNKNOWN_ERROR_MESSAGE, {
+        variant: "destructive",
+        dedupeKey: "auth-unknown-error",
+      });
     }
   };
 
@@ -194,13 +209,28 @@ export default function VerifyEmailPageClient({ email }: Props) {
                 <Label htmlFor="email" className="text-base shrink-0 min-w-16">
                   이메일
                 </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  autoComplete="email"
-                  {...register("email")}
-                  className="h-12 rounded-xl"
-                />
+
+                <div className="flex-1 space-y-2">
+                  <Input
+                    id="email"
+                    type="email"
+                    autoComplete="email"
+                    aria-invalid={Boolean(errors.email)}
+                    aria-describedby={errors.email ? "email-error" : undefined}
+                    {...register("email")}
+                    className="h-12 rounded-xl"
+                  />
+
+                  {errors.email?.message && (
+                    <p
+                      id="email-error"
+                      role="alert"
+                      className="text-sm text-destructive"
+                    >
+                      {errors.email.message}
+                    </p>
+                  )}
+                </div>
               </div>
 
               <Button

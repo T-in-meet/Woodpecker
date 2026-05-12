@@ -1,39 +1,23 @@
 import Image from "next/image";
 import Link from "next/link";
-import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
+import { NotificationBell } from "@/features/notifications/components/NotificationBell";
 import { ROUTES } from "@/lib/constants/routes";
+import { getProfile } from "@/lib/supabase/getProfile";
 import { getUser } from "@/lib/supabase/getUser";
-import { createServerComponentClient } from "@/lib/supabase/server";
 
 import { NotesNav } from "./NotesNav";
 import { UserMenu } from "./UserMenu";
 
-const headerProfileSchema = z.object({
-  nickname: z.string(),
-  avatar_url: z.string().nullable(),
-});
-
-type HeaderProfile = z.infer<typeof headerProfileSchema>;
-
 export async function Header() {
   let user = null;
-  let profile: HeaderProfile | null = null;
+  let profile = null;
 
   try {
-    user = await getUser();
-
-    if (user) {
-      const supabase = await createServerComponentClient();
-      const { data } = await supabase
-        .from("profiles")
-        .select("nickname, avatar_url")
-        .eq("id", user.id)
-        .single();
-      const parsed = headerProfileSchema.safeParse(data);
-      profile = parsed.success ? parsed.data : null;
-    }
+    // getProfile()은 React.cache()로 래핑되어 있어
+    // 동일 요청 내 Header와 page 컴포넌트 간 중복 쿼리가 방지됨
+    [user, profile] = await Promise.all([getUser(), getProfile()]);
   } catch {
     // 환경변수 미설정 등으로 Supabase 연결 실패 시 비로그인 상태로 fallback
   }
@@ -53,11 +37,14 @@ export async function Header() {
 
         <div className="flex justify-end gap-3 items-center">
           {profile && user ? (
-            <UserMenu
-              nickname={profile.nickname}
-              email={user.email ?? ""}
-              avatarUrl={profile.avatar_url}
-            />
+            <>
+              <NotificationBell userId={user.id} />
+              <UserMenu
+                nickname={profile.nickname}
+                email={user.email ?? ""}
+                avatarUrl={profile.avatar_url}
+              />
+            </>
           ) : (
             <>
               <Button variant="ghost" asChild>

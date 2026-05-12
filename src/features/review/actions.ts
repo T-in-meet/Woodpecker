@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import type { NoteLanguage } from "@/lib/constants/noteLanguages";
 import {
   getNoteDetailRoute,
   getNoteReviewRoute,
@@ -30,7 +29,6 @@ export type SubmitAnswerActionState =
   | {
       success: true;
       originalContent: string;
-      language: NoteLanguage | null;
       userAnswer: string;
       reviewLogId: string;
       error?: never;
@@ -38,7 +36,6 @@ export type SubmitAnswerActionState =
   | {
       success?: false;
       originalContent?: never;
-      language?: never;
       userAnswer?: never;
       error: SubmitAnswerFieldErrors | string;
     }
@@ -103,7 +100,6 @@ export async function submitAnswerAction(
   return {
     success: true,
     originalContent: note.content,
-    language: note.language,
     userAnswer: parsed.data.answer,
     reviewLogId: pendingReviewLog.id,
   };
@@ -166,6 +162,13 @@ export async function completeReviewAction(
       p_note_id: parsed.data.noteId,
       p_review_log_id: parsed.data.reviewLogId,
     });
+
+  if (completeReviewError?.code === "WP001") {
+    return {
+      error:
+        "오늘은 이미 이 노트의 복습을 완료했어요. 내일 자정(KST) 이후 다시 시도해주세요.",
+    };
+  }
 
   if (completeReviewError || !completedNoteId) {
     return {

@@ -1,12 +1,12 @@
 import { z } from "zod";
 
-import { NOTE_LANGUAGE_VALUES } from "@/lib/constants/noteLanguages";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { createServerComponentClient } from "@/lib/supabase/server";
 
+import { getKstDayBoundsUtc } from "./lib/kstDay";
+
 const reviewableNoteSchema = z.object({
   title: z.string(),
-  language: z.enum(NOTE_LANGUAGE_VALUES).nullable(),
   next_review_at: z.string().nullable(),
   review_round: z.number().int().min(0).max(MAX_REVIEW_ROUND),
 });
@@ -21,7 +21,6 @@ const pendingReviewLogSchema = z.object({
 
 const noteContentForComparisonSchema = z.object({
   content: z.string(),
-  language: z.enum(NOTE_LANGUAGE_VALUES).nullable(),
 });
 
 export type ReviewableNote = z.infer<typeof reviewableNoteSchema>;
@@ -37,7 +36,7 @@ export async function getReviewableNote(
   const supabase = await createServerComponentClient();
   const { data, error } = await supabase
     .from("notes")
-    .select("title, language, next_review_at, review_round")
+    .select("title, next_review_at, review_round")
     .eq("id", noteId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -70,6 +69,26 @@ export async function getPendingReviewLog(
   return parsed.success ? parsed.data : null;
 }
 
+export async function hasCompletedReviewForNoteToday(
+  noteId: string,
+  userId: string,
+): Promise<boolean> {
+  const { startUtcIso, endUtcIso } = getKstDayBoundsUtc();
+  const supabase = await createServerComponentClient();
+  const { count, error } = await supabase
+    .from("review_logs")
+    .select("id", { count: "exact", head: true })
+    .eq("note_id", noteId)
+    .eq("user_id", userId)
+    .not("completed_at", "is", null)
+    .gte("completed_at", startUtcIso)
+    .lt("completed_at", endUtcIso);
+
+  if (error) throw error;
+
+  return (count ?? 0) > 0;
+}
+
 export async function getNoteContentForComparison(
   noteId: string,
   userId: string,
@@ -77,7 +96,7 @@ export async function getNoteContentForComparison(
   const supabase = await createServerComponentClient();
   const { data, error } = await supabase
     .from("notes")
-    .select("content, language")
+    .select("content")
     .eq("id", noteId)
     .eq("user_id", userId)
     .maybeSingle();

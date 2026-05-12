@@ -338,8 +338,7 @@ INSERT INTO public.notifications (
   body,
   status,
   sent_at,
-  read_at,
-  skipped_at
+  read_at
 )
 VALUES (
   current_setting('test.notifications_fk_note_insert_note_max_id')::uuid,
@@ -348,8 +347,7 @@ VALUES (
   repeat('T', 50),
   repeat('X', 200),
   repeat('B', 500),
-  'SKIPPED',
-  now(),
+  'READ',
   now(),
   now()
 );

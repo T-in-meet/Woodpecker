@@ -15,7 +15,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import nextConfig from "./next.config";
+import nextConfig, { shouldDisableSerwist } from "./next.config";
 
 /**
  * headers() 반환값에서 source "/(.*)" 항목의 헤더 배열을 추출하는 헬퍼
@@ -201,6 +201,7 @@ describe("Security Headers — next.config.ts", () => {
         expect(cspReportOnly).toContain("img-src");
         expect(cspReportOnly).toContain("font-src");
         expect(cspReportOnly).toContain("connect-src");
+        expect(cspReportOnly).toContain("worker-src 'self'");
       });
 
       it("TC-CSP-09. Report-Only CSP에 강제 CSP 디렉티브(object-src, base-uri, frame-ancestors)가 없다", async () => {
@@ -239,5 +240,25 @@ describe("Security Headers — next.config.ts", () => {
         expect(typeof cspReportOnly).toBe("string");
       });
     });
+  });
+
+  describe("Serwist disable env matrix", () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it.each([
+      { enableSw: undefined, expected: true, nodeEnv: "development" },
+      { enableSw: "true", expected: false, nodeEnv: "development" },
+      { enableSw: undefined, expected: false, nodeEnv: "production" },
+    ])(
+      "returns $expected when NODE_ENV=$nodeEnv and ENABLE_SW=$enableSw",
+      ({ enableSw, expected, nodeEnv }) => {
+        vi.stubEnv("NODE_ENV", nodeEnv);
+        vi.stubEnv("ENABLE_SW", enableSw);
+
+        expect(shouldDisableSerwist()).toBe(expected);
+      },
+    );
   });
 });

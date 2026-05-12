@@ -7,6 +7,16 @@ export const API_RESULTS = {
   CONFLICT: "CONFLICT",
   INTERNAL_ERROR: "INTERNAL_ERROR",
   RATE_LIMITED: "RATE_LIMITED",
+  /**
+   * 인증 자격 증명 불일치 (잘못된 이메일/비밀번호 등)
+   *
+   * UNAUTHORIZED와 구분하는 이유:
+   * - UNAUTHORIZED는 인증 토큰 자체가 없거나 만료된 경우
+   * - INVALID_CREDENTIALS는 제공된 자격 증명이 틀린 경우
+   * - HTTP 상태는 동일하게 401이지만 API code suffix가 달라
+   *   클라이언트가 code 기반으로 명확하게 분기할 수 있다
+   */
+  INVALID_CREDENTIALS: "INVALID_CREDENTIALS",
 } as const;
 
 export type ApiResult = (typeof API_RESULTS)[keyof typeof API_RESULTS];
@@ -33,6 +43,7 @@ export const RESULT_HTTP_STATUS_MAP: Record<ApiResult, number> = {
   CONFLICT: 409,
   INTERNAL_ERROR: 500,
   RATE_LIMITED: 429,
+  INVALID_CREDENTIALS: 401,
 } as const;
 
 /**

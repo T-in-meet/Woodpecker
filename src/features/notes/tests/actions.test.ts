@@ -125,22 +125,6 @@ describe("createNoteAction", () => {
     expect(createClientMock).not.toHaveBeenCalled();
   });
 
-  it("returns a language error for unsupported languages", async () => {
-    const formData = new FormData();
-    formData.set("title", "Valid title");
-    formData.set("content", "Valid content");
-    formData.set("language", "ruby");
-
-    const result = await createNoteAction(null, formData);
-
-    expect(result).toMatchObject({
-      error: expect.objectContaining({
-        language: expect.any(Array),
-      }),
-    });
-    expect(createClientMock).not.toHaveBeenCalled();
-  });
-
   it("returns an auth error when the user is not logged in", async () => {
     const { supabase, rpcMock } = createSupabaseMock({ userId: null });
     createClientMock.mockResolvedValue(supabase);
@@ -183,30 +167,6 @@ describe("createNoteAction", () => {
     const formData = new FormData();
     formData.set("title", "Valid title");
     formData.set("content", "Valid content");
-    formData.set("language", "javascript");
-
-    const result = await createNoteAction(null, formData);
-
-    expect(rpcMock).toHaveBeenCalledWith(
-      "create_note_with_initial_review_log",
-      {
-        p_title: "Valid title",
-        p_content: "Valid content",
-        p_language: "javascript",
-        p_scheduled_at: "2026-01-02T00:00:00.000Z",
-      },
-    );
-    expect(result).toEqual({ success: true, newNoteId: "note-123" });
-  });
-
-  it("omits language from the RPC payload when the language is empty", async () => {
-    const { supabase, rpcMock } = createSupabaseMock();
-    createClientMock.mockResolvedValue(supabase);
-
-    const formData = new FormData();
-    formData.set("title", "Valid title");
-    formData.set("content", "Valid content");
-    formData.set("language", "");
 
     const result = await createNoteAction(null, formData);
 
@@ -230,7 +190,6 @@ describe("createNoteAction", () => {
     const formData = new FormData();
     formData.set("title", "Valid title");
     formData.set("content", "Valid content");
-    formData.set("language", "markdown");
 
     const result = await createNoteAction(null, formData);
 
@@ -247,7 +206,6 @@ describe("createNoteAction", () => {
     const formData = new FormData();
     formData.set("title", "Valid title");
     formData.set("content", "Valid content");
-    formData.set("language", "markdown");
 
     const result = await createNoteAction(null, formData);
 

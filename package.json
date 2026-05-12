@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
+    "dev:sw": "cross-env ENABLE_SW=true NEXT_PUBLIC_ENABLE_SW=true next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -11,14 +12,6 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@codemirror/commands": "^6.10.3",
-    "@codemirror/lang-javascript": "^6.2.5",
-    "@codemirror/lang-markdown": "^6.5.0",
-    "@codemirror/lang-python": "^6.2.1",
-    "@codemirror/language": "^6.12.2",
-    "@codemirror/legacy-modes": "^6.5.2",
-    "@codemirror/state": "^6.6.0",
-    "@codemirror/view": "^6.40.0",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-dialog": "^1.1.15",
     "@react-email/components": "^1.0.11",
@@ -77,6 +70,7 @@
     "@types/react-dom": "^19",
     "@types/web-push": "^3.6.4",
     "@vitejs/plugin-react": "^6.0.1",
+    "cross-env": "^7.0.3",
     "eslint": "^9",
     "eslint-config-next": "15.5.12",
     "eslint-plugin-simple-import-sort": "^12.1.1",

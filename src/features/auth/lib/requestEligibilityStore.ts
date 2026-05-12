@@ -2,12 +2,14 @@
  * 요청 적격성 시스템(Request Eligibility System) — 슬라이딩 윈도우 로그 기반 rate limit 저장소
  *
  * 설계:
- * - IP 기반: 과도한 요청(burst) 억제를 위한 단일 윈도우
+ * - IP 기반 (2단계): 짧은 윈도우 (burst 억제) + 긴 윈도우 (sustained 공격 방어)
+ *   [이유: 단일 윈도우만으로는 sustained credential stuffing 방어 불가.
+ *    공격자가 분당 한도 이하로 요청 시 15분간 대량 요청 가능.]
  * - 이메일 기반 (2단계): 짧은 윈도우 (즉각적인 재시도 억제) + 긴 윈도우 (사용자 계정 수준 rate limit)
  * - 회원가입과 재전송은 동일한 이메일 저장소를 공유 (API 범위가 아닌 사용자 범위)
  *
  * 상태 모델:
- * - ipStore: Map<ip, RateLimitEntry>
+ * - ipStore: Map<ip, IpEligibilityEntry>  (short + long 이중 윈도우)
  * - emailStore: Map<canonicalEmail, EmailEligibilityEntry>
  *
  * 운영 한계(중요):
@@ -34,6 +36,10 @@
  *   2) auth 요청량이 분당 1,000건 이상으로 증가해 인스턴스 간 편차가 관측되는 시점
  *   3) 보안/컴플라이언스 요구사항상 "전역 일관 rate limit"이 필수인 시점
  *
+ * IpEligibilityEntry는 burst 억제와 sustained 공격 방어를 분리합니다:
+ * - shortWindow: null | RateLimitEntry (burst 억제 — 짧은 시간 내 다수 요청 차단)
+ * - longWindow: null | RateLimitEntry (sustained 공격 방어 — 긴 시간 내 누적 요청 차단)
+ *
  * EmailEligibilityEntry는 즉시 재시도 억제와 사용자 수준 rate limiting을 분리합니다:
  * - shortWindow: null | RateLimitEntry (쿨다운 대체 — 즉각적인 재시도 억제)
  * - longWindow: null | RateLimitEntry (회원가입 + 재전송이 공유하는 계정 수준 제한)
@@ -52,6 +58,18 @@ export type RateLimitEntry = {
 };
 
 /**
+ * IP 기반 적격성 상태 (2단계)
+ * - shortWindow: burst 억제 (짧은 시간 내 다수 요청 차단)
+ * - longWindow: sustained 공격 방어 (긴 시간 내 누적 요청 차단)
+ *
+ * [이유: EmailEligibilityEntry와 동일한 패턴 — 미래 윈도우 추가 시 구조 변경 불필요]
+ */
+export type IpEligibilityEntry = {
+  shortWindow: RateLimitEntry | null;
+  longWindow: RateLimitEntry | null;
+};
+
+/**
  * 이메일 기반 적격성 상태 (2단계)
  * - shortWindow: 즉각적인 재시도 억제 (슬라이딩 윈도우 로그)
  * - longWindow: 회원가입/재전송에 걸쳐 공유되는 사용자 수준의 계정 rate limit
@@ -66,12 +84,14 @@ export type EmailEligibilityEntry = {
 /**
  * IP 기반 rate limit 저장소 (인메모리, 슬라이딩 윈도우)
  * - Key: IP 주소 (문자열 그대로)
- * - Value: RateLimitEntry (타임스탬프 배열)
+ * - Value: IpEligibilityEntry (short + long 이중 윈도우)
  * - 특성: single-process best-effort (멀티 인스턴스 간 공유되지 않음)
  *
- * 이유: 고정 윈도우의 경계 버스트 문제를 해결하기 위해 슬라이딩 윈도우 로그 방식 적용
+ * [이유: RateLimitEntry → IpEligibilityEntry로 변경.
+ *  sustained 공격 방어를 위해 short/long 이중 윈도우 필요.
+ *  EmailEligibilityEntry와 동일한 패턴으로 일관성 유지.]
  */
-export const ipStore = new Map<string, RateLimitEntry>();
+export const ipStore = new Map<string, IpEligibilityEntry>();
 
 /**
  * 이메일 기반 적격성 저장소 (인메모리, 슬라이딩 윈도우)
@@ -105,36 +125,55 @@ export function resetEligibilityStore(): void {
  * 설계:
  * - 기회주의적(Opportunistic): setInterval 없이 요청 처리 중에 호출됨
  * - 스로틀링: 최소 간격(CLEANUP_THROTTLE_MS)으로 실행 빈도 제한
- * - 부분 정리: 이메일은 양쪽 윈도우 모두 만료될 때만 항목 제거, 개별 정리는 필요시만
+ * - 부분 정리: IP/이메일 모두 양쪽 윈도우 모두 만료될 때만 항목 제거, 개별 정리는 필요시만
  *
  * 특징:
- * - IP store: pruneExpired로 타임스탬프 필터링 후 빈 배열이면 삭제, 아니면 재저장
+ * - IP store: short/long 각 윈도우별로 pruneExpired 적용, 양쪽 모두 공백이면 항목 제거
  * - Email store: 각 윈도우별로 pruneExpired 적용, 양쪽 모두 공백이면 항목 제거
  * - 불변성: 항상 새로운 배열/엔트리를 생성하여 저장 (직접 mutation 금지)
  * - 의존성 없음: windowMs 값을 파라미터로 받음 (순환 참조 방지)
  *
  * @param now - 현재 타임스탬프 (ms)
- * @param ipWindowMs - IP 윈도우 시간
+ * @param ipShortWindowMs - IP short 윈도우 시간
+ * @param ipLongWindowMs - IP long 윈도우 시간
  * @param emailShortWindowMs - 이메일 short 윈도우 시간
  * @param emailLongWindowMs - 이메일 long 윈도우 시간
  *
- * 이유: 슬라이딩 윈도우 로그로 전환하면서 pruneExpired 함수를 통해
- *       만료된 타임스탬프를 제거하고 필요시 항목을 갱신하거나 삭제
+ * [이유: IP 단일 윈도우 → short/long 이중 윈도우로 변경하면서
+ *  IP cleanup도 이메일과 동일하게 short/long 양쪽 처리 필요]
  */
 function cleanupExpiredEntries(
   now: number,
-  ipWindowMs: number,
+  ipShortWindowMs: number,
+  ipLongWindowMs: number,
   emailShortWindowMs: number,
   emailLongWindowMs: number,
 ): void {
-  // IP store 정리: pruneExpired로 타임스탬프 필터링
-  // [이유: IP는 단일 윈도우만 있으므로, pruned가 비면 항목 전체 제거]
+  // IP store 정리: short/long 각 윈도우별로 pruneExpired 적용
+  // [이유: IP가 IpEligibilityEntry로 변경되어 이메일과 동일한 two-window 패턴 적용]
   for (const [ip, entry] of ipStore.entries()) {
-    const pruned = pruneExpired(entry.timestamps, ipWindowMs, now);
-    if (pruned.length === 0) {
+    const prunedShort = entry.shortWindow
+      ? pruneExpired(entry.shortWindow.timestamps, ipShortWindowMs, now)
+      : [];
+    const prunedLong = entry.longWindow
+      ? pruneExpired(entry.longWindow.timestamps, ipLongWindowMs, now)
+      : [];
+
+    const shortExpired = prunedShort.length === 0;
+    const longExpired = prunedLong.length === 0;
+
+    // 양쪽 윈도우 모두 만료되었으면 항목 전체 제거
+    // [이유: lazy initialization — 활성 윈도우 없으면 항목 불필요]
+    if (shortExpired && longExpired) {
       ipStore.delete(ip);
     } else {
-      ipStore.set(ip, { timestamps: pruned });
+      // 한쪽 이상 유효: 새 entry 생성 후 교체
+      // [이유: direct mutation 금지 — full-replace 패턴 일관성]
+      const nextIpEntry: IpEligibilityEntry = {
+        shortWindow: shortExpired ? null : { timestamps: prunedShort },
+        longWindow: longExpired ? null : { timestamps: prunedLong },
+      };
+      ipStore.set(ip, nextIpEntry);
     }
   }
 
@@ -178,9 +217,12 @@ function cleanupExpiredEntries(
  * [설계 의도]
  * - 스로틀링: 분당 최대 1회 정리 실행 (CPU 오버헤드 방지)
  * - 파라미터 주입: 윈도우 상수를 직접 임포트하지 않음 (순환 참조 방지)
+ *
+ * [이유: ipLongWindowMs 파라미터 추가 — IP 이중 윈도우 지원]
  */
 export function tryCleanupExpiredEntries(
-  ipWindowMs: number,
+  ipShortWindowMs: number,
+  ipLongWindowMs: number,
   emailShortWindowMs: number,
   emailLongWindowMs: number,
 ): void {
@@ -193,7 +235,13 @@ export function tryCleanupExpiredEntries(
   }
 
   lastCleanupTimeMs = now;
-  cleanupExpiredEntries(now, ipWindowMs, emailShortWindowMs, emailLongWindowMs);
+  cleanupExpiredEntries(
+    now,
+    ipShortWindowMs,
+    ipLongWindowMs,
+    emailShortWindowMs,
+    emailLongWindowMs,
+  );
 }
 
 /**

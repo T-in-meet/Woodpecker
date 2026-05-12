@@ -7,9 +7,11 @@ import "./globals.css";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
+import { DevelopmentServiceWorkerCleanup } from "@/components/providers/DevelopmentServiceWorkerCleanup";
 import { QueryProvider } from "@/components/providers/QueryProvider";
 import { SessionProvider } from "@/components/providers/SessionProvider";
 import { ToasterProvider } from "@/components/providers/ToasterProvider";
+import { SITE_URL } from "@/lib/constants/site";
 
 /* ─── 폰트 ───────────────────────────────────────────────────────────────────
    Geist (본문), Geist_Mono (코드) 폰트를 CSS 변수로 등록.
@@ -24,8 +26,6 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
-
-const SITE_URL = "https://woodpecker-app.vercel.app";
 
 /* ─── SEO 메타데이터 ──────────────────────────────────────────────────────────
    Next.js가 <head>에 자동으로 삽입하는 메타 정보.
@@ -92,6 +92,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <DevelopmentServiceWorkerCleanup />
         <SessionProvider>
           <QueryProvider>{children}</QueryProvider>
           <ToasterProvider />

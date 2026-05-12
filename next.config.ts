@@ -17,6 +17,7 @@
 // - connect-src, img-src, font-src를 실제 사용 origin으로 축소
 // - supabase 및 외부 API 도메인 화이트리스트화
 
+import withSerwist from "@serwist/next";
 import type { NextConfig } from "next";
 
 const supabaseHostname =
@@ -24,6 +25,12 @@ const supabaseHostname =
   (process.env.NEXT_PUBLIC_SUPABASE_URL
     ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname
     : undefined);
+
+export function shouldDisableSerwist() {
+  return (
+    process.env.NODE_ENV === "development" && process.env.ENABLE_SW !== "true"
+  );
+}
 
 // [설계 의도] securityHeaders는 top-level에서 정의하지 않고 headers() 내부에서 생성
 // 이유: isProduction을 top-level 상수로 두면 import 시점에 고정되어 테스트에서 NODE_ENV 변경이 반영되지 않음
@@ -79,6 +86,7 @@ const nextConfig: NextConfig = {
     // 주의:
     // - 'unsafe-inline', 'unsafe-eval'은 완화된 설정 (현재는 필요하므로 유지, 추후 개선)
     // - 강제 CSP 디렉티브(object-src, base-uri, frame-ancestors)는 혼재하지 않음
+    // - worker-src는 서비스 워커 호환성 관측 후 강제 CSP 승격 여부를 판단함
     const cspReportOnly = [
       "default-src 'self'",
       "img-src 'self' data: blob: https:",
@@ -86,6 +94,7 @@ const nextConfig: NextConfig = {
       "style-src 'self' 'unsafe-inline' https:",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:",
       "connect-src 'self' https:",
+      "worker-src 'self'",
     ].join("; ");
 
     return [
@@ -188,4 +197,10 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withSerwist({
+  swSrc: "src/sw.ts",
+  swDest: "public/sw.js",
+  // dev에서는 기본적으로 SW 비활성화 (HMR 충돌 회피).
+  // 푸시 알림을 로컬에서 검증할 때만 ENABLE_SW=true로 일시 활성화.
+  disable: shouldDisableSerwist(),
+})(nextConfig);

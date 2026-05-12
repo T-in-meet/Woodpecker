@@ -6,6 +6,11 @@ import { createServerComponentClient } from "./server";
 export const getUser = cache(async () => {
   const supabase = await createServerComponentClient();
   const { data, error } = await supabase.auth.getUser();
-  if (error) throw error;
+  if (error) {
+    if (error.status) {
+      console.error("[getUser] auth error:", error.message);
+    }
+    return null;
+  }
   return data.user;
 });

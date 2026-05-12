@@ -1,6 +1,12 @@
 -- =========================================
 -- profiles / TRIGGER
 -- =========================================
+-- TODO(#162):
+-- 이번 변경 범위: 과거 signup 정책(avatar_url 반영) 기반 assertion 정리로
+-- 깨진 테스트(false negative)만 우선 복구.
+-- 이번 변경 비범위: 현재 구현 코드/DB 스키마 기준의 최종 정합화.
+-- 후속 작업: 로그인 구현 이후 auth/profiles 트리거 테스트와 스키마 검증을 재정비.
+
 
 BEGIN;
 
@@ -96,7 +102,7 @@ SELECT lives_ok(
         crypt('password123', gen_salt('bf')),
         now(),
         '{"provider":"email","providers":["email"]}'::jsonb,
-        '{"nickname":"fullauto1","avatar_url":"https://e.com/a.png"}'::jsonb,
+        '{"nickname":"fullauto1","canonical_email":"fullauto1@example.com"}'::jsonb,
         now(),
         now()
       )
@@ -129,15 +135,15 @@ SELECT is(
   $$raw_user_meta_data.nickname이 있으면 자동 생성된 profiles.nickname에 반영되어야 한다.$$
 );
 
--- raw_user_meta_data.avatar_url이 있으면 자동 생성된 profiles.avatar_url에 반영되어야 한다.
+-- raw_user_meta_data.canonical_email이 있으면 자동 생성된 profiles.canonical_email에 반영되어야 한다.
 SELECT is(
   (
-    SELECT avatar_url
+    SELECT canonical_email
     FROM public.profiles
     WHERE id = current_setting('test.profiles_trigger_auto_full_id')::uuid
   ),
-  'https://e.com/a.png',
-  $$raw_user_meta_data.avatar_url이 있으면 자동 생성된 profiles.avatar_url에 반영되어야 한다.$$
+  'fullauto1@example.com',
+  $$raw_user_meta_data.canonical_email이 있으면 자동 생성된 profiles.canonical_email에 반영되어야 한다.$$
 );
 
 -- raw_user_meta_data.nickname이 없으면 fallback nickname이 자동으로 채워져야 한다.
@@ -156,7 +162,7 @@ SELECT lives_ok(
         crypt('password123', gen_salt('bf')),
         now(),
         '{"provider":"email","providers":["email"]}'::jsonb,
-        '{"avatar_url":"https://e.com/b.png"}'::jsonb,
+        '{"canonical_email":"nickless@example.com"}'::jsonb,
         now(),
         now()
       )
@@ -207,13 +213,13 @@ SELECT is(
 );
 
 -- [경계 조건]
--- 메타데이터 완전 제공 경계: nickname, avatar_url를 모두 제공하고 회원가입하면 두 값이 그대로 반영되어야 한다.
+-- 메타데이터 완전 제공 경계: nickname, canonical_email을 모두 제공하고 회원가입하면 두 값이 그대로 반영되어야 한다.
 SELECT ok(
   (
     (SELECT nickname FROM public.profiles WHERE id = current_setting('test.profiles_trigger_auto_full_id')::uuid) = 'fullauto1'
-    AND (SELECT avatar_url FROM public.profiles WHERE id = current_setting('test.profiles_trigger_auto_full_id')::uuid) = 'https://e.com/a.png'
+    AND (SELECT canonical_email FROM public.profiles WHERE id = current_setting('test.profiles_trigger_auto_full_id')::uuid) = 'fullauto1@example.com'
   ),
-  $$메타데이터 완전 제공 경계: nickname, avatar_url를 모두 제공하고 회원가입하면 두 값이 그대로 반영되어야 한다.$$
+  $$메타데이터 완전 제공 경계: nickname, canonical_email을 모두 제공하고 회원가입하면 두 값이 그대로 반영되어야 한다.$$
 );
 
 -- nickname 누락 경계: nickname 없이 회원가입하면 fallback nickname이 채워져야 한다.
@@ -227,7 +233,7 @@ SELECT is(
   $$nickname 누락 경계: nickname 없이 회원가입하면 fallback nickname이 채워져야 한다.$$
 );
 
--- avatar_url 누락 경계: avatar_url 없이 회원가입하면 profiles.avatar_url은 NULL이어야 한다. (회원가입 요청)
+-- canonical_email 누락 경계: canonical_email 없이 회원가입하면 profiles.canonical_email은 NULL이어야 한다. (회원가입 요청)
 SELECT lives_ok(
   format(
     $sql$
@@ -251,17 +257,17 @@ SELECT lives_ok(
     current_setting('test.profiles_trigger_auto_avatarless_id'),
     current_setting('test.profiles_trigger_auto_avatarless_id')
   ),
-  $$avatar_url 누락 경계: avatar_url 없이 회원가입하면 profiles.avatar_url은 NULL이어야 한다. (회원가입 요청)$$
+  $$canonical_email 누락 경계: canonical_email 없이 회원가입하면 profiles.canonical_email은 NULL이어야 한다. (회원가입 요청)$$
 );
 
--- avatar_url 누락 경계: avatar_url 없이 회원가입하면 profiles.avatar_url은 NULL이어야 한다. (자동 생성 결과)
+-- canonical_email 누락 경계: canonical_email 없이 회원가입하면 profiles.canonical_email은 NULL이어야 한다. (자동 생성 결과)
 SELECT ok(
   (
-    SELECT avatar_url IS NULL
+    SELECT canonical_email IS NULL
     FROM public.profiles
     WHERE id = current_setting('test.profiles_trigger_auto_avatarless_id')::uuid
   ),
-  $$avatar_url 누락 경계: avatar_url 없이 회원가입하면 profiles.avatar_url은 NULL이어야 한다. (자동 생성 결과)$$
+  $$canonical_email 누락 경계: canonical_email 없이 회원가입하면 profiles.canonical_email은 NULL이어야 한다. (자동 생성 결과)$$
 );
 
 -- 메타데이터 전체 누락 경계: 메타데이터가 비어 있어도 profiles 행은 생성되어야 하며, 최소한 id와 fallback nickname이 채워져야 한다. (회원가입 요청)

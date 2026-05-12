@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { emailFieldSchema } from "@/lib/validation/emailSchema";
+import { VALIDATION_MESSAGES } from "@/lib/validation/messages";
 import { nicknameFieldSchema } from "@/lib/validation/nicknameSchema";
 import { passwordFieldSchema } from "@/lib/validation/passwordSchema";
 
@@ -18,6 +19,6 @@ export const signupFormSchema = z
     }),
   })
   .refine((data) => data.password === data.confirmPassword, {
-    message: "비밀번호가 일치하지 않습니다",
+    message: VALIDATION_MESSAGES.passwordMismatch,
     path: ["confirmPassword"],
   });

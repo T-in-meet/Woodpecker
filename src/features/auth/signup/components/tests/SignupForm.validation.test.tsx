@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -7,6 +7,7 @@ import {
   NICKNAME_MIN_LENGTH,
 } from "@/lib/constants/profiles";
 import { PASSWORD_MIN_LENGTH } from "@/lib/constants/user";
+import { VALIDATION_MESSAGES } from "@/lib/validation/messages";
 
 import { renderSignupForm } from "./utils/signupFormTestUtils";
 
@@ -26,15 +27,13 @@ describe("회원가입 폼 검증", () => {
     renderSignupForm();
 
     expect(
-      screen.queryByText("올바른 이메일을 입력해주세요"),
+      screen.queryByText(VALIDATION_MESSAGES.emailInvalid),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByText(
-        `비밀번호는 ${PASSWORD_MIN_LENGTH}자 이상이어야 합니다`,
-      ),
+      screen.queryByText(VALIDATION_MESSAGES.passwordMinLength),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByText("비밀번호가 일치하지 않습니다"),
+      screen.queryByText(VALIDATION_MESSAGES.passwordMismatch),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByText(`닉네임은 ${NICKNAME_MIN_LENGTH}자 이상이어야 합니다`),
@@ -55,7 +54,7 @@ describe("회원가입 폼 검증", () => {
     await user.tab();
 
     expect(
-      await screen.findByText("올바른 이메일을 입력해주세요"),
+      await screen.findByText(VALIDATION_MESSAGES.emailInvalid),
     ).toBeInTheDocument();
 
     await user.click(screen.getByLabelText(/닉네임/i));
@@ -75,10 +74,10 @@ describe("회원가입 폼 검증", () => {
     await user.click(screen.getByRole("button", { name: /회원가입/i }));
 
     expect(
-      await screen.findByText("올바른 이메일을 입력해주세요"),
+      await screen.findByText(VALIDATION_MESSAGES.emailInvalid),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(`비밀번호는 ${PASSWORD_MIN_LENGTH}자 이상이어야 합니다`),
+      screen.getByText(VALIDATION_MESSAGES.passwordMinLength),
     ).toBeInTheDocument();
     expect(
       screen.getByText(`닉네임은 ${NICKNAME_MIN_LENGTH}자 이상이어야 합니다`),
@@ -109,9 +108,7 @@ describe("회원가입 폼 검증", () => {
     await user.tab();
 
     expect(
-      await screen.findByText(
-        `비밀번호는 ${PASSWORD_MIN_LENGTH}자 이상이어야 합니다`,
-      ),
+      await screen.findByText(VALIDATION_MESSAGES.passwordMinLength),
     ).toBeInTheDocument();
   });
 
@@ -147,15 +144,26 @@ describe("회원가입 폼 검증", () => {
     const user = userEvent.setup();
     renderSignupForm();
 
-    await user.type(screen.getByLabelText(/이메일/i), "test@example.com");
-    await user.type(screen.getByLabelText(/^비밀번호$/i), "password123");
-    await user.type(screen.getByLabelText(/비밀번호 확인/i), "password123");
-    await user.type(screen.getByLabelText(/닉네임/i), "테스트닉");
+    fireEvent.change(screen.getByLabelText(/이메일/i), {
+      target: { value: "test@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText(/^비밀번호$/i), {
+      target: { value: "password123" },
+    });
+    fireEvent.change(screen.getByLabelText(/비밀번호 확인/i), {
+      target: { value: "password123" },
+    });
+    fireEvent.change(screen.getByLabelText(/닉네임/i), {
+      target: { value: "테스트닉" },
+    });
     // 이유: interactionEnabled=false 상태에서 체크박스 직접 클릭이 차단되므로 모달 경유
     await user.click(
       screen.getByRole("button", { name: /개인정보처리방침 보기/i }),
     );
     await user.click(screen.getByRole("button", { name: /동의하기/i }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
 
     await user.click(screen.getByRole("button", { name: /회원가입/i }));
 
@@ -168,13 +176,24 @@ describe("회원가입 폼 검증", () => {
     const user = userEvent.setup();
     renderSignupForm();
 
-    await user.type(screen.getByLabelText(/이메일/i), "test@example.com");
-    await user.type(screen.getByLabelText(/^비밀번호$/i), "password123");
-    await user.type(screen.getByLabelText(/비밀번호 확인/i), "password123");
-    await user.type(screen.getByLabelText(/닉네임/i), "테스트닉");
+    fireEvent.change(screen.getByLabelText(/이메일/i), {
+      target: { value: "test@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText(/^비밀번호$/i), {
+      target: { value: "password123" },
+    });
+    fireEvent.change(screen.getByLabelText(/비밀번호 확인/i), {
+      target: { value: "password123" },
+    });
+    fireEvent.change(screen.getByLabelText(/닉네임/i), {
+      target: { value: "테스트닉" },
+    });
     // 이유: interactionEnabled=false 상태에서 체크박스 직접 클릭이 차단되므로 모달 경유
     await user.click(screen.getByRole("button", { name: /이용약관 보기/i }));
     await user.click(screen.getByRole("button", { name: /동의하기/i }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
 
     await user.click(screen.getByRole("button", { name: /회원가입/i }));
 
@@ -191,7 +210,7 @@ describe("회원가입 폼 검증", () => {
     await user.type(screen.getByLabelText(/비밀번호 확인/i), "different123");
 
     expect(
-      await screen.findByText("비밀번호가 일치하지 않습니다"),
+      await screen.findByText(VALIDATION_MESSAGES.passwordMismatch),
     ).toBeInTheDocument();
   });
 
@@ -204,7 +223,7 @@ describe("회원가입 폼 검증", () => {
 
     await waitFor(() => {
       expect(
-        screen.queryByText("비밀번호가 일치하지 않습니다"),
+        screen.queryByText(VALIDATION_MESSAGES.passwordMismatch),
       ).not.toBeInTheDocument();
     });
   });
@@ -218,7 +237,7 @@ describe("회원가입 폼 검증", () => {
 
     await waitFor(() => {
       expect(
-        screen.queryByText("비밀번호가 일치하지 않습니다"),
+        screen.queryByText(VALIDATION_MESSAGES.passwordMismatch),
       ).not.toBeInTheDocument();
     });
 
@@ -226,7 +245,7 @@ describe("회원가입 폼 검증", () => {
     await user.type(screen.getByLabelText(/^비밀번호$/i), "different456");
 
     expect(
-      await screen.findByText("비밀번호가 일치하지 않습니다"),
+      await screen.findByText(VALIDATION_MESSAGES.passwordMismatch),
     ).toBeInTheDocument();
   });
 
@@ -235,17 +254,31 @@ describe("회원가입 폼 검증", () => {
     const onSubmit = vi.fn();
     renderSignupForm({ onSubmit });
 
-    await user.type(screen.getByLabelText(/이메일/i), "test@example.com");
-    await user.type(screen.getByLabelText(/^비밀번호$/i), "password123");
-    await user.type(screen.getByLabelText(/비밀번호 확인/i), "password123");
-    await user.type(screen.getByLabelText(/닉네임/i), "테스트닉");
+    fireEvent.change(screen.getByLabelText(/이메일/i), {
+      target: { value: "test@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText(/^비밀번호$/i), {
+      target: { value: "password123" },
+    });
+    fireEvent.change(screen.getByLabelText(/비밀번호 확인/i), {
+      target: { value: "password123" },
+    });
+    fireEvent.change(screen.getByLabelText(/닉네임/i), {
+      target: { value: "테스트닉" },
+    });
     // 이유: interactionEnabled=false 상태에서 체크박스 직접 클릭이 차단되므로 모달 경유
     await user.click(screen.getByRole("button", { name: /이용약관 보기/i }));
     await user.click(screen.getByRole("button", { name: /동의하기/i }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
     await user.click(
       screen.getByRole("button", { name: /개인정보처리방침 보기/i }),
     );
     await user.click(screen.getByRole("button", { name: /동의하기/i }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
 
     await user.click(screen.getByRole("button", { name: /회원가입/i }));
 
@@ -261,10 +294,18 @@ describe("회원가입 폼 검증", () => {
     const user = userEvent.setup();
     renderSignupForm();
 
-    await user.type(screen.getByLabelText(/이메일/i), "test@example.com");
-    await user.type(screen.getByLabelText(/^비밀번호$/i), "password123");
-    await user.type(screen.getByLabelText(/비밀번호 확인/i), "password123");
-    await user.type(screen.getByLabelText(/닉네임/i), "테스트닉");
+    fireEvent.change(screen.getByLabelText(/이메일/i), {
+      target: { value: "test@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText(/^비밀번호$/i), {
+      target: { value: "password123" },
+    });
+    fireEvent.change(screen.getByLabelText(/비밀번호 확인/i), {
+      target: { value: "password123" },
+    });
+    fireEvent.change(screen.getByLabelText(/닉네임/i), {
+      target: { value: "테스트닉" },
+    });
 
     await user.click(screen.getByRole("button", { name: /회원가입/i }));
 
@@ -306,22 +347,20 @@ describe("회원가입 폼 검증", () => {
     await user.type(screen.getByLabelText(/이메일/i), "not-an-email");
     await user.tab();
     expect(
-      await screen.findByText("올바른 이메일을 입력해주세요"),
+      await screen.findByText(VALIDATION_MESSAGES.emailInvalid),
     ).toBeInTheDocument();
 
     // 비밀번호: 8자 미만
     await user.type(screen.getByLabelText(/^비밀번호$/i), "short1");
     await user.tab();
     expect(
-      await screen.findByText(
-        `비밀번호는 ${PASSWORD_MIN_LENGTH}자 이상이어야 합니다`,
-      ),
+      await screen.findByText(VALIDATION_MESSAGES.passwordMinLength),
     ).toBeInTheDocument();
 
     // 비밀번호 확인: 불일치
     await user.type(screen.getByLabelText(/비밀번호 확인/i), "different");
     expect(
-      await screen.findByText("비밀번호가 일치하지 않습니다"),
+      await screen.findByText(VALIDATION_MESSAGES.passwordMismatch),
     ).toBeInTheDocument();
 
     await user.clear(screen.getByLabelText(/^비밀번호$/i));
@@ -330,7 +369,7 @@ describe("회원가입 폼 검증", () => {
     await user.type(screen.getByLabelText(/비밀번호 확인/i), "password123");
     await waitFor(() => {
       expect(
-        screen.queryByText("비밀번호가 일치하지 않습니다"),
+        screen.queryByText(VALIDATION_MESSAGES.passwordMismatch),
       ).not.toBeInTheDocument();
     });
 

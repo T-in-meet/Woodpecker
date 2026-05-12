@@ -81,7 +81,7 @@ function createCompleteReviewSupabaseMock({
 }: {
   userId?: string | null;
   rpcResult?: string | null;
-  rpcError?: { message: string } | null;
+  rpcError?: { code?: string; message: string } | null;
 } = {}) {
   const rpcMock = vi.fn().mockResolvedValue({
     data: rpcError ? null : rpcResult,
@@ -161,7 +161,6 @@ describe("submitAnswerAction", () => {
     createClientMock.mockResolvedValue(createAuthSupabaseMock(TEST_USER_ID));
     getNoteContentForComparisonMock.mockResolvedValue({
       content: "원본 내용",
-      language: "markdown",
     });
     getPendingReviewLogMock.mockResolvedValue(null);
 
@@ -196,7 +195,6 @@ describe("submitAnswerAction", () => {
     createClientMock.mockResolvedValue(createAuthSupabaseMock(TEST_USER_ID));
     getNoteContentForComparisonMock.mockResolvedValue({
       content: "원본 내용",
-      language: "markdown",
     });
     getPendingReviewLogMock.mockResolvedValue({
       id: REVIEW_LOG_ID,
@@ -221,7 +219,6 @@ describe("submitAnswerAction", () => {
     expect(result).toMatchObject({
       success: true,
       originalContent: "원본 내용",
-      language: "markdown",
       userAnswer: "내 답안",
       reviewLogId: REVIEW_LOG_ID,
     });
@@ -299,7 +296,6 @@ describe("completeReviewAction", () => {
     createClientMock.mockResolvedValue(createAuthSupabaseMock(TEST_USER_ID));
     getReviewableNoteMock.mockResolvedValue({
       title: "테스트 노트",
-      language: "markdown",
       review_round: 0,
     });
     getPendingReviewLogMock.mockResolvedValue(null);
@@ -318,7 +314,6 @@ describe("completeReviewAction", () => {
     createClientMock.mockResolvedValue(createAuthSupabaseMock(TEST_USER_ID));
     getReviewableNoteMock.mockResolvedValue({
       title: "테스트 노트",
-      language: "markdown",
       review_round: 0,
     });
     getPendingReviewLogMock.mockResolvedValue({
@@ -345,7 +340,6 @@ describe("completeReviewAction", () => {
     createClientMock.mockResolvedValue(supabase);
     getReviewableNoteMock.mockResolvedValue({
       title: "테스트 노트",
-      language: "markdown",
       review_round: 0,
     });
     getPendingReviewLogMock.mockResolvedValue({
@@ -379,7 +373,6 @@ describe("completeReviewAction", () => {
     createClientMock.mockResolvedValue(supabase);
     getReviewableNoteMock.mockResolvedValue({
       title: "테스트 노트",
-      language: "markdown",
       review_round: 2,
     });
     getPendingReviewLogMock.mockResolvedValue({
@@ -400,15 +393,48 @@ describe("completeReviewAction", () => {
     });
   });
 
-  it("returns an error when completing the review log fails", async () => {
+  it("returns a daily limit message when the RPC reports WP001", async () => {
     const { rpcMock, supabase } = createCompleteReviewSupabaseMock({
-      rpcError: { message: "rpc failed" },
+      rpcError: {
+        code: "WP001",
+        message: "daily review completion limit reached",
+      },
     });
 
     createClientMock.mockResolvedValue(supabase);
     getReviewableNoteMock.mockResolvedValue({
       title: "테스트 노트",
-      language: "markdown",
+      review_round: 0,
+    });
+    getPendingReviewLogMock.mockResolvedValue({
+      id: REVIEW_LOG_ID,
+      note_id: NOTE_ID,
+      round: 1,
+      scheduled_at: "2026-01-02T00:00:00.000Z",
+      completed_at: null,
+    });
+
+    const result = await completeReviewAction(
+      null,
+      createCompleteReviewFormData(),
+    );
+
+    expect(result).toEqual({
+      error:
+        "오늘은 이미 이 노트의 복습을 완료했어요. 내일 자정(KST) 이후 다시 시도해주세요.",
+    });
+    expect(rpcMock).toHaveBeenCalledOnce();
+    expect(redirectMock).not.toHaveBeenCalled();
+  });
+
+  it("returns a generic error when the RPC reports another P0001 failure", async () => {
+    const { rpcMock, supabase } = createCompleteReviewSupabaseMock({
+      rpcError: { code: "P0001", message: "pending review log not found" },
+    });
+
+    createClientMock.mockResolvedValue(supabase);
+    getReviewableNoteMock.mockResolvedValue({
+      title: "테스트 노트",
       review_round: 0,
     });
     getPendingReviewLogMock.mockResolvedValue({
@@ -455,7 +481,6 @@ describe("completeReviewAction", () => {
     createClientMock.mockResolvedValue(supabase);
     getReviewableNoteMock.mockResolvedValue({
       title: "테스트 노트",
-      language: "markdown",
       review_round: 0,
     });
     getPendingReviewLogMock.mockResolvedValue({

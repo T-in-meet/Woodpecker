@@ -21,6 +21,11 @@ import { describe, expect, it, vi } from "vitest";
 
 import VerifyEmailPage from "@/app/(auth)/verify-email/page";
 
+// 접근 제어 mock
+vi.mock("@/features/auth/utils/requireGuestPage", () => ({
+  requireGuestPage: vi.fn(),
+}));
+
 // VerifyEmailPageClient를 stub으로 대체한다.
 // 실제 클라이언트 로직은 VerifyEmailPageClient.test.tsx에서 검증한다.
 vi.mock(
