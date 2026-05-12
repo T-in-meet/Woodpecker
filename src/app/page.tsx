@@ -112,6 +112,10 @@ export default function Home() {
           <Header />
         </Suspense>
         <main>
+          <div className="sr-only" aria-hidden="true">
+            이 페이지의 마크다운 버전:{" "}
+            <a href={`${SITE_URL}/index.md`}>{SITE_URL}/index.md</a>
+          </div>
           <HeroSection />
           <LearningFlowSection />
           <FaqSection />

@@ -26,6 +26,7 @@ export default function PrivacyPage() {
       sections={privacySections}
       crossLink={{ href: "/terms", label: "이용약관" }}
       footerNote={`부칙: 이 개인정보 처리방침은 ${EFFECTIVE_DATE}부터 시행합니다.`}
+      markdownUrl={`${SITE_URL}/privacy.md`}
     />
   );
 }
