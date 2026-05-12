@@ -7,7 +7,7 @@ export const getUser = cache(async () => {
   const supabase = await createServerComponentClient();
   const { data, error } = await supabase.auth.getUser();
   if (error) {
-    if (error.message !== "Auth session missing!") {
+    if (error.status) {
       console.error("[getUser] auth error:", error.message);
     }
     return null;

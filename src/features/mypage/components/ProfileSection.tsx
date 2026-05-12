@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   useActionState,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -39,6 +40,9 @@ export function ProfileSection({
 }: ProfileSectionProps) {
   const router = useRouter();
   const [profile, setProfile] = useState<ProfileSectionProfile>(initialProfile);
+  useEffect(() => {
+    setProfile(initialProfile);
+  }, [initialProfile]);
   const [isEditing, setIsEditing] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const [isPendingAvatar, startAvatarTransition] = useTransition();

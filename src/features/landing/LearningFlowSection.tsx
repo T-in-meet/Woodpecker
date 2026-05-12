@@ -2,11 +2,14 @@ import type { ReactNode } from "react";
 
 import { learningFlowContent } from "./content";
 
-const mockupByStep: Record<string, ReactNode> = {
+const mockupByStep = {
   "01": <NoteMockup />,
   "02": <NotificationMockup />,
   "03": <TestMockup />,
-};
+} satisfies Record<
+  (typeof learningFlowContent.scenes)[number]["step"],
+  ReactNode
+>;
 
 function NoteMockup() {
   return (

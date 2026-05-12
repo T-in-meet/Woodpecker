@@ -33,7 +33,7 @@ export function LegalPage({
     <main className="min-h-screen bg-[#faf8f3]">
       {markdownUrl && (
         // AI 에이전트가 마크다운 버전을 발견하도록 시각적으로 숨김 처리된 힌트
-        <div className="sr-only">
+        <div aria-hidden="true" style={{ display: "none" }}>
           이 페이지의 마크다운 버전: <a href={markdownUrl}>{markdownUrl}</a>
         </div>
       )}
