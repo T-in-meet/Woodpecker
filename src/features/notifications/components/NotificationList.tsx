@@ -63,9 +63,7 @@ export function NotificationList({
     <ul className="max-h-96 overflow-y-auto" aria-label="알림 목록">
       {items.map((item) => {
         const description = getNotificationDescription(item);
-        const reviewHref = item.note_id
-          ? getNoteReviewRoute(item.note_id)
-          : null;
+        const reviewHref = getNoteReviewRoute(item.note_id);
         const content = (
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -90,19 +88,15 @@ export function NotificationList({
             key={item.id}
             className="flex items-start gap-2 border-t border-border/60 px-4 py-3 transition-colors hover:bg-muted/40"
           >
-            {reviewHref ? (
-              <Link
-                href={reviewHref}
-                className="min-w-0 flex-1"
-                onClick={() => {
-                  onItemNavigate?.();
-                }}
-              >
-                {content}
-              </Link>
-            ) : (
-              <div className="min-w-0 flex-1">{content}</div>
-            )}
+            <Link
+              href={reviewHref}
+              className="min-w-0 flex-1"
+              onClick={() => {
+                onItemNavigate?.();
+              }}
+            >
+              {content}
+            </Link>
           </li>
         );
       })}
