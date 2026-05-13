@@ -146,7 +146,7 @@ VALUES
     current_setting('test.notifications_fk_user_notification_user_b_id')::uuid,
     current_setting('test.notifications_fk_user_user_b_id')::uuid,
     NULL,
-    'REVIEW',
+    'ALERT',
     'user b title',
     'user b body',
     'SENT'
@@ -169,7 +169,7 @@ VALUES (
   current_setting('test.notifications_fk_user_insert_ok_id')::uuid,
   current_setting('test.notifications_fk_user_user_a_id')::uuid,
   NULL,
-  'REVIEW',
+  'ALERT',
   'insert ok',
   'body',
   'SENT'
@@ -209,7 +209,7 @@ SELECT throws_ok(
   format(
     $sql$
       INSERT INTO public.notifications (id, user_id, type, title)
-      VALUES ('%s'::uuid, '%s'::uuid, 'REVIEW', 'invalid user');
+      VALUES ('%s'::uuid, '%s'::uuid, 'ALERT', 'invalid user');
     $sql$,
     gen_random_uuid(),
     current_setting('test.notifications_fk_user_invalid_user_id')
@@ -243,7 +243,7 @@ SELECT throws_ok(
   format(
     $sql$
       INSERT INTO public.notifications (id, user_id, type, title)
-      VALUES ('%s'::uuid, '%s'::uuid, 'REVIEW', 'deleted parent');
+      VALUES ('%s'::uuid, '%s'::uuid, 'ALERT', 'deleted parent');
     $sql$,
     gen_random_uuid(),
     current_setting('test.notifications_fk_user_user_a_id')
@@ -294,7 +294,7 @@ INSERT INTO public.notifications (
 VALUES (
   current_setting('test.notifications_fk_user_insert_min_id')::uuid,
   current_setting('test.notifications_fk_user_user_a_id')::uuid,
-  'REVIEW',
+  'ALERT',
   'min title'
 );
 
@@ -342,7 +342,7 @@ SELECT throws_ok(
   format(
     $sql$
       INSERT INTO public.notifications (id, user_id, type, title)
-      VALUES ('%s'::uuid, '%s'::uuid, 'REVIEW', 'invalid uuid');
+      VALUES ('%s'::uuid, '%s'::uuid, 'ALERT', 'invalid uuid');
     $sql$,
     gen_random_uuid(),
     current_setting('test.notifications_fk_user_invalid_user_id')
@@ -420,7 +420,7 @@ SELECT ok(
   ),
   $$부모 user_a 삭제 전후를 비교했을 때, 해당 user를 참조하던 notifications는 삭제되어야 하고, 다른 user(예: user_b)의 notifications는 영향을 받지 않아야 한다.$$
 );
-ROLLBACK TO SAVEPOINT notifications_user_fk_transition;
+RELEASE SAVEPOINT notifications_user_fk_transition;
 
 SELECT * FROM finish();
 ROLLBACK;

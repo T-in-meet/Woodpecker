@@ -55,7 +55,7 @@ INSERT INTO public.notifications (
 VALUES (
   current_setting('test.notifications_constraints_default_notification_seed_id')::uuid,
   current_setting('test.notifications_constraints_default_user_a_id')::uuid,
-  'REVIEW',
+  'ALERT',
   'seed title',
   'SENT',
   now()
@@ -74,7 +74,7 @@ INSERT INTO public.notifications (
 )
 VALUES (
   current_setting('test.notifications_constraints_default_user_a_id')::uuid,
-  'REVIEW',
+  'ALERT',
   'default id',
   'SENT',
   now()
@@ -98,7 +98,7 @@ INSERT INTO public.notifications (
 VALUES (
   current_setting('test.notifications_constraints_default_status_id')::uuid,
   current_setting('test.notifications_constraints_default_user_a_id')::uuid,
-  'REVIEW',
+  'ALERT',
   'default status',
   now()
 );
@@ -123,7 +123,7 @@ INSERT INTO public.notifications (
 VALUES (
   current_setting('test.notifications_constraints_default_sent_at_id')::uuid,
   current_setting('test.notifications_constraints_default_user_a_id')::uuid,
-  'REVIEW',
+  'ALERT',
   'default sent_at',
   'SENT'
 );
@@ -147,7 +147,7 @@ ROLLBACK TO SAVEPOINT notifications_default_sent_at;
 SELECT throws_ok(
   $sql$
     INSERT INTO public.notifications (id, user_id, type, title, status, sent_at)
-    VALUES (NULL, current_setting('test.notifications_constraints_default_user_a_id')::uuid, 'REVIEW', 'null id', 'SENT', now());
+    VALUES (NULL, current_setting('test.notifications_constraints_default_user_a_id')::uuid, 'ALERT', 'null id', 'SENT', now());
   $sql$,
   '23502',
   'null value in column "id" of relation "notifications" violates not-null constraint',
@@ -158,7 +158,7 @@ SELECT throws_ok(
 SELECT throws_ok(
   $sql$
     INSERT INTO public.notifications (id, user_id, type, title, status, sent_at)
-    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_default_user_a_id')::uuid, 'REVIEW', 'null status', NULL, now());
+    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_default_user_a_id')::uuid, 'ALERT', 'null status', NULL, now());
   $sql$,
   '23502',
   'null value in column "status" of relation "notifications" violates not-null constraint',
@@ -169,7 +169,7 @@ SELECT throws_ok(
 SELECT throws_ok(
   $sql$
     INSERT INTO public.notifications (id, user_id, type, title, status, sent_at)
-    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_default_user_a_id')::uuid, 'REVIEW', 'null sent_at', 'SENT', NULL);
+    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_default_user_a_id')::uuid, 'ALERT', 'null sent_at', 'SENT', NULL);
   $sql$,
   '23502',
   'null value in column "sent_at" of relation "notifications" violates not-null constraint',
@@ -188,7 +188,7 @@ DO $$
 BEGIN
   BEGIN
     INSERT INTO public.notifications (id, user_id, type, title, status, sent_at)
-    VALUES (NULL, current_setting('test.notifications_constraints_default_user_a_id')::uuid, 'REVIEW', 'transition null id', 'SENT', now());
+    VALUES (NULL, current_setting('test.notifications_constraints_default_user_a_id')::uuid, 'ALERT', 'transition null id', 'SENT', now());
   EXCEPTION
     WHEN not_null_violation THEN
       NULL;
