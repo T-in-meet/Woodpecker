@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { NOTIFICATION_STATUS } from "@/lib/constants/notifications";
 
 import {
+  notificationListItemSchema,
   notificationStatusSchema,
   notificationTimeSchema,
   pushSubscriptionSchema,
@@ -18,6 +19,33 @@ describe("notificationStatusSchema", () => {
 
   it("rejects the removed skipped status", () => {
     expect(notificationStatusSchema.safeParse("SKIPPED").success).toBe(false);
+  });
+});
+
+describe("notificationListItemSchema", () => {
+  const baseNotification = {
+    id: "11111111-1111-4111-8111-111111111111",
+    title: "Review due",
+    body: null,
+    type: "REVIEW",
+    status: NOTIFICATION_STATUS.SENT,
+    sent_at: "2026-04-27T01:00:00.000Z",
+    read_at: null,
+    note_id: "22222222-2222-4222-8222-222222222222",
+    review_log_id: null,
+    noteTitle: "Interval note",
+  };
+
+  it("requires a note id for review notification list items", () => {
+    expect(notificationListItemSchema.safeParse(baseNotification).success).toBe(
+      true,
+    );
+    expect(
+      notificationListItemSchema.safeParse({
+        ...baseNotification,
+        note_id: null,
+      }).success,
+    ).toBe(false);
   });
 });
 

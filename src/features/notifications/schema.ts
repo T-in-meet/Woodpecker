@@ -20,7 +20,7 @@ export const notificationListItemSchema = z.object({
   status: notificationStatusSchema,
   sent_at: z.string(),
   read_at: z.string().nullable(),
-  note_id: notificationUuidSchema.nullable(),
+  note_id: notificationUuidSchema,
   review_log_id: notificationUuidSchema.nullable(),
   noteTitle: z.string().nullable(),
 });

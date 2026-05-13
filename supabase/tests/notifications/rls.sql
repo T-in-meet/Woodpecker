@@ -90,7 +90,7 @@ VALUES
   (
     current_setting('test.notifications_rls_a1_id')::uuid,
     current_setting('test.notifications_rls_user_a_id')::uuid,
-    'REVIEW',
+    'ALERT',
     'a1 title',
     'a1 body',
     'SENT'
@@ -106,7 +106,7 @@ VALUES
   (
     current_setting('test.notifications_rls_b1_id')::uuid,
     current_setting('test.notifications_rls_user_b_id')::uuid,
-    'REVIEW',
+    'ALERT',
     'b1 title',
     'b1 body',
     'SENT'
@@ -268,7 +268,7 @@ INSERT INTO public.notifications (
 VALUES (
   current_setting('test.notifications_rls_single_id')::uuid,
   current_setting('test.notifications_rls_user_a_id')::uuid,
-  'REVIEW',
+  'ALERT',
   'single title',
   'single body',
   'SENT'
@@ -345,7 +345,7 @@ SELECT throws_ok(
   format(
     $sql$
       INSERT INTO public.notifications (id, user_id, type, title)
-      VALUES ('%s'::uuid, '%s'::uuid, 'REVIEW', 'min title');
+      VALUES ('%s'::uuid, '%s'::uuid, 'ALERT', 'min title');
     $sql$,
     current_setting('test.notifications_rls_insert_min_id'),
     current_setting('test.notifications_rls_user_a_id')
@@ -445,7 +445,7 @@ SELECT set_config(
 DO $$
 BEGIN
   INSERT INTO public.notifications (id, user_id, type, title)
-  VALUES (gen_random_uuid(), current_setting('test.notifications_rls_user_a_id')::uuid, 'REVIEW', 'blocked');
+  VALUES (gen_random_uuid(), current_setting('test.notifications_rls_user_a_id')::uuid, 'ALERT', 'blocked');
 EXCEPTION
   WHEN others THEN
     NULL;
@@ -502,7 +502,7 @@ BEGIN
   VALUES (
     current_setting('test.notifications_rls_insert_transition_id')::uuid,
     current_setting('test.notifications_rls_user_a_id')::uuid,
-    'REVIEW',
+    'ALERT',
     'transition blocked'
   );
 EXCEPTION
