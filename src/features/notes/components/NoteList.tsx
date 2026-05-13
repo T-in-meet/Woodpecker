@@ -56,6 +56,7 @@ export function NoteList({
         currentPage={currentPage}
         totalPages={totalPages}
         query={query}
+        view={view}
       />
     </div>
   );
