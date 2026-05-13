@@ -82,13 +82,15 @@ function createNoteDetailQueryMock(data: unknown) {
 
 // .eq → .gte → .lt → .order → { data }
 function createTodayNotesQueryMock(data: unknown) {
-  const orderMock = vi.fn().mockResolvedValue({ data });
-  const ltMock = vi.fn().mockReturnValue({ order: orderMock });
+  const order2Mock = vi.fn().mockResolvedValue({ data });
+  const order1Mock = vi.fn().mockReturnValue({ order: order2Mock });
+  const ltMock = vi.fn().mockReturnValue({ order: order1Mock });
   const gteMock = vi.fn().mockReturnValue({ lt: ltMock });
   const eqMock = vi.fn().mockReturnValue({ gte: gteMock });
   const selectMock = vi.fn().mockReturnValue({ eq: eqMock });
   return {
-    orderMock,
+    orderMock: order1Mock,
+    order2Mock,
     ltMock,
     gteMock,
     eqMock,
@@ -238,7 +240,7 @@ describe("getTodayReviewNotes", () => {
   });
 
   it("KST 오늘 범위 내 노트를 반환한다", async () => {
-    const { supabase, eqMock, gteMock, ltMock, orderMock } =
+    const { supabase, eqMock, gteMock, ltMock, orderMock, order2Mock } =
       createTodayNotesQueryMock([BASE_NOTE]);
     createClientMock.mockResolvedValue(supabase);
 
@@ -250,6 +252,7 @@ describe("getTodayReviewNotes", () => {
     expect(orderMock).toHaveBeenCalledWith("next_review_at", {
       ascending: true,
     });
+    expect(order2Mock).toHaveBeenCalledWith("created_at", { ascending: false });
     expect(result).toEqual([BASE_NOTE]);
   });
 

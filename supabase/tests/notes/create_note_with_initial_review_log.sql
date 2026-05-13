@@ -114,14 +114,14 @@ SELECT ok(
 
 SELECT ok(
   (
-    SELECT n.next_review_at = current_setting('test.notes_rpc_scheduled_at')::timestamptz
+    SELECT n.next_review_at = public.kst_day_start(current_setting('test.notes_rpc_scheduled_at')::timestamptz)
       AND rl.scheduled_at = current_setting('test.notes_rpc_scheduled_at')::timestamptz
     FROM public.notes n
     JOIN public.review_logs rl
       ON rl.note_id = n.id
     WHERE n.id = current_setting('test.notes_rpc_note_id')::uuid
   ),
-  $$notes.next_review_at과 review_logs.scheduled_at은 p_scheduled_at과 같아야 한다$$
+  $$notes.next_review_at은 p_scheduled_at의 KST 자정, review_logs.scheduled_at은 p_scheduled_at이어야 한다$$
 );
 
 SELECT is(
