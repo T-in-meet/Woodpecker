@@ -160,7 +160,7 @@ BEGIN
 
   UPDATE public.notes
   SET review_round = v_current_round,
-      next_review_at = public.kst_day_start(v_base_next_review_at)
+      next_review_at = public.kst_day_start(v_next_review_at)
   WHERE id = p_note_id
     AND user_id = v_user_id;
 
@@ -251,9 +251,9 @@ BEGIN
       AND rl.notification_claimed_at IS NULL
       AND rl.notification_dispatched_at IS NULL
       AND rl.notification_dispatch_failed_at IS NULL
-    RETURNING COALESCE(rl.notification_base_scheduled_at, rl.scheduled_at) AS base_at
+    RETURNING rl.scheduled_at AS shifted_at
   )
-  SELECT min(public.kst_day_start(base_at))
+  SELECT min(public.kst_day_start(shifted_at))
     INTO v_pending_next_review_at
   FROM updated_pending;
 
@@ -272,15 +272,17 @@ GRANT EXECUTE ON FUNCTION public.update_notification_time_of_day(uuid, time)
   TO authenticated;
 
 -- 기존 pending 데이터 backfill:
---   완료되지 않은 review_log의 base 기준으로 notes.next_review_at을 KST 자정으로 보정
+--   완료되지 않은 review_log의 scheduled_at(실제 알림 발송 예정 시각) 기준으로
+--   notes.next_review_at을 KST 자정으로 보정
 WITH next_pending AS (
   SELECT note_id,
-         MIN(COALESCE(notification_base_scheduled_at, scheduled_at)) AS base
+         MIN(scheduled_at) AS shifted_at
   FROM public.review_logs
   WHERE completed_at IS NULL
   GROUP BY note_id
 )
 UPDATE public.notes n
-SET next_review_at = public.kst_day_start(np.base)
+SET next_review_at = public.kst_day_start(np.shifted_at)
 FROM next_pending np
-WHERE n.id = np.note_id;
+WHERE n.id = np.note_id
+  AND n.next_review_at IS DISTINCT FROM public.kst_day_start(np.shifted_at);

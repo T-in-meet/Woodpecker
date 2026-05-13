@@ -252,7 +252,7 @@ describe("getTodayReviewNotes", () => {
     expect(orderMock).toHaveBeenCalledWith("next_review_at", {
       ascending: true,
     });
-    expect(order2Mock).toHaveBeenCalledWith("created_at", { ascending: true });
+    expect(order2Mock).toHaveBeenCalledWith("created_at", { ascending: false });
     expect(result).toEqual([BASE_NOTE]);
   });
 

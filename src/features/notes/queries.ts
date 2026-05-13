@@ -89,7 +89,7 @@ export async function getTodayReviewNotes(
     .gte("next_review_at", startUtcIso)
     .lt("next_review_at", endUtcIso)
     .order("next_review_at", { ascending: true })
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: false });
 
   const parsed = z.array(noteSummarySchema).safeParse(data);
 

@@ -453,7 +453,12 @@ SELECT is(
 SELECT ok(
   (
     SELECT n.review_round = 1
-      AND n.next_review_at = public.kst_day_start(completed.completed_at + interval '3 days')
+      AND n.next_review_at = public.kst_day_start(
+        public.apply_time_of_day_not_before(
+          completed.completed_at + interval '3 days',
+          TIME '16:00'
+        )
+      )
       AND generated.scheduled_at = public.apply_time_of_day_not_before(
         completed.completed_at + interval '3 days',
         TIME '16:00'
@@ -468,7 +473,7 @@ SELECT ok(
      AND generated.completed_at IS NULL
     WHERE n.id = current_setting('test.review_complete_note_notification_time_id')::uuid
   ),
-  $$notification time should shift the log scheduled_at but keep notes.next_review_at at KST midnight$$
+  $$notification time should shift the log scheduled_at and notes.next_review_at to KST midnight of actual notification date$$
 );
 
 SELECT public.update_notification_time_of_day(
