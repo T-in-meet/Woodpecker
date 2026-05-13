@@ -7,8 +7,8 @@ import { cn } from "@/lib/utils/cn";
 
 import type { NoteSummary } from "../queries";
 import type { NotesView } from "../utils/buildNotesUrl";
-import { NoteCard } from "./NoteCard";
-import { NoteCardCompact } from "./NoteCardCompact";
+import { NoteGridCard } from "./NoteGridCard";
+import { NoteListItem } from "./NoteListItem";
 
 type TodayNoteListProps = {
   notes: NoteSummary[];
@@ -64,7 +64,7 @@ export function TodayNoteList({ notes, initialView }: TodayNoteListProps) {
         <ul className="grid list-none grid-cols-2 gap-3 sm:grid-cols-3">
           {notes.map((note) => (
             <li key={note.id}>
-              <NoteCardCompact note={note} />
+              <NoteGridCard note={note} />
             </li>
           ))}
         </ul>
@@ -72,7 +72,7 @@ export function TodayNoteList({ notes, initialView }: TodayNoteListProps) {
         <ul className="flex list-none flex-col gap-3">
           {notes.map((note) => (
             <li key={note.id}>
-              <NoteCard note={note} />
+              <NoteListItem note={note} />
             </li>
           ))}
         </ul>

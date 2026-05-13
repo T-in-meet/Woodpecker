@@ -7,7 +7,7 @@ import { getNoteReviewRoute } from "@/lib/constants/routes";
 
 import { deleteNoteAction } from "../actions";
 
-export function useNoteCardActions(noteId: string) {
+export function useNoteActions(noteId: string) {
   const router = useRouter();
   const [isDeleting, startDeleteTransition] = useTransition();
 

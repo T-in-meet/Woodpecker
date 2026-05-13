@@ -8,16 +8,16 @@ import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { getNoteDetailRoute } from "@/lib/constants/routes";
 import { formatDateKST } from "@/lib/utils/formatDate";
 
-import { useNoteCardActions } from "../hooks/useNoteCardActions";
+import { useNoteActions } from "../hooks/useNoteActions";
 import type { NoteSummary } from "../queries";
 import { getNextReviewText, getReviewStatus } from "../utils/noteStatus";
 
-export function NoteCard({ note }: { note: NoteSummary }) {
+export function NoteListItem({ note }: { note: NoteSummary }) {
   const status = getReviewStatus(note);
   const nextReviewText = getNextReviewText(status, note.next_review_at);
   const canReview = status === "available";
 
-  const { isDeleting, handleStartReview, handleDelete } = useNoteCardActions(
+  const { isDeleting, handleStartReview, handleDelete } = useNoteActions(
     note.id,
   );
 

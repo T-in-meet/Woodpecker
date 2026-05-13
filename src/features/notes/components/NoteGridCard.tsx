@@ -8,16 +8,16 @@ import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { getNoteDetailRoute } from "@/lib/constants/routes";
 import { formatDateKST } from "@/lib/utils/formatDate";
 
-import { useNoteCardActions } from "../hooks/useNoteCardActions";
+import { useNoteActions } from "../hooks/useNoteActions";
 import type { NoteSummary } from "../queries";
 import { getNextReviewText, getReviewStatus } from "../utils/noteStatus";
 
-export function NoteCardCompact({ note }: { note: NoteSummary }) {
+export function NoteGridCard({ note }: { note: NoteSummary }) {
   const status = getReviewStatus(note);
   const nextReviewText = getNextReviewText(status, note.next_review_at);
   const canReview = status === "available";
 
-  const { isDeleting, handleStartReview, handleDelete } = useNoteCardActions(
+  const { isDeleting, handleStartReview, handleDelete } = useNoteActions(
     note.id,
   );
 
@@ -29,7 +29,7 @@ export function NoteCardCompact({ note }: { note: NoteSummary }) {
       <Card className="h-full transition-shadow duration-200 hover:shadow-md">
         <CardContent className="flex h-full flex-col gap-3 p-5">
           {/* Title */}
-          <span className="line-clamp-2 min-w-0 text-base font-bold leading-snug">
+          <span className="line-clamp-1 min-w-0 break-all text-base font-bold leading-snug">
             {note.title}
           </span>
 
