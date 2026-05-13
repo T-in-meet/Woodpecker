@@ -143,8 +143,8 @@ SELECT is(
     FROM public.notes
     WHERE id = current_setting('test.notification_time_note_id')::uuid
   ),
-  TIMESTAMPTZ '2026-05-01 16:00:00+09',
-  $$notes.next_review_at should follow the shifted pending log$$
+  public.kst_day_start(TIMESTAMPTZ '2026-05-01 14:30:00+09'),
+  $$notes.next_review_at should follow KST midnight of base cadence, not the shifted notification time$$
 );
 
 SELECT lives_ok(
@@ -160,7 +160,7 @@ SELECT lives_ok(
 SELECT ok(
   (
     SELECT n.notification_time_of_day IS NULL
-      AND n.next_review_at = TIMESTAMPTZ '2026-05-01 14:30:00+09'
+      AND n.next_review_at = public.kst_day_start(TIMESTAMPTZ '2026-05-01 14:30:00+09')
       AND rl.scheduled_at = TIMESTAMPTZ '2026-05-01 14:30:00+09'
       AND rl.notification_base_scheduled_at IS NULL
     FROM public.notes n
