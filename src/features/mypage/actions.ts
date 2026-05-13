@@ -81,7 +81,10 @@ export async function uploadAvatarAction(
     .from("avatars")
     .upload(path, file, { upsert: true, contentType: file.type });
 
-  if (uploadError) return { error: "이미지 업로드에 실패했습니다" };
+  if (uploadError) {
+    console.error("[uploadAvatarAction] supabase upload failed:", uploadError);
+    return { error: "이미지 업로드에 실패했습니다" };
+  }
 
   const {
     data: { publicUrl },
