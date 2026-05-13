@@ -54,7 +54,7 @@ VALUES (
   current_setting('test.notifications_constraints_check_notification_seed_id')::uuid,
   current_setting('test.notifications_constraints_check_user_a_id')::uuid,
   NULL,
-  'REVIEW',
+  'ALERT',
   'seed title',
   'seed body',
   'SENT'
@@ -65,7 +65,7 @@ ON CONFLICT (id) DO NOTHING;
 -- status가 'SENT'이면 INSERT가 성공해야 한다
 SAVEPOINT notifications_status_insert_sent;
 INSERT INTO public.notifications (id, user_id, type, title, status)
-VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'REVIEW', 'sent ok', 'SENT');
+VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'ALERT', 'sent ok', 'SENT');
 
 SELECT is(
   (SELECT count(*) FROM public.notifications WHERE title = 'sent ok'),
@@ -77,7 +77,7 @@ ROLLBACK TO SAVEPOINT notifications_status_insert_sent;
 -- status가 'READ'이면 INSERT가 성공해야 한다
 SAVEPOINT notifications_status_insert_read;
 INSERT INTO public.notifications (id, user_id, type, title, status)
-VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'REVIEW', 'read ok', 'READ');
+VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'ALERT', 'read ok', 'READ');
 
 SELECT is(
   (SELECT count(*) FROM public.notifications WHERE title = 'read ok'),
@@ -90,7 +90,7 @@ ROLLBACK TO SAVEPOINT notifications_status_insert_read;
 SELECT throws_ok(
   $sql$
     INSERT INTO public.notifications (id, user_id, type, title, status)
-    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'REVIEW', 'skipped blocked', 'SKIPPED');
+    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'ALERT', 'skipped blocked', 'SKIPPED');
   $sql$,
   '23514',
   'new row for relation "notifications" violates check constraint "notifications_status_check"',
@@ -143,7 +143,7 @@ SELECT throws_ok(
 SELECT throws_ok(
   $sql$
     INSERT INTO public.notifications (id, user_id, type, title, status)
-    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'REVIEW', 'invalid status', 'FAILED');
+    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'ALERT', 'invalid status', 'FAILED');
   $sql$,
   '23514',
   'new row for relation "notifications" violates check constraint "notifications_status_check"',
@@ -154,7 +154,7 @@ SELECT throws_ok(
 SELECT throws_ok(
   $sql$
     INSERT INTO public.notifications (id, user_id, type, title, status)
-    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'REVIEW', 'lowercase status', 'sent');
+    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'ALERT', 'lowercase status', 'sent');
   $sql$,
   '23514',
   'new row for relation "notifications" violates check constraint "notifications_status_check"',
@@ -165,7 +165,7 @@ SELECT throws_ok(
 SELECT throws_ok(
   $sql$
     INSERT INTO public.notifications (id, user_id, type, title, status)
-    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'REVIEW', 'spaced status', ' SENT');
+    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'ALERT', 'spaced status', ' SENT');
   $sql$,
   '23514',
   'new row for relation "notifications" violates check constraint "notifications_status_check"',
@@ -176,7 +176,7 @@ SELECT throws_ok(
 SELECT throws_ok(
   $sql$
     INSERT INTO public.notifications (id, user_id, type, title, status)
-    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'REVIEW', 'empty status', '');
+    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'ALERT', 'empty status', '');
   $sql$,
   '23514',
   'new row for relation "notifications" violates check constraint "notifications_status_check"',
@@ -291,7 +291,7 @@ ROLLBACK TO SAVEPOINT notifications_status_invalid_update_transition;
 -- 정확히 'SENT'는 허용값 경계로서 성공해야 한다
 SAVEPOINT notifications_status_boundary_sent;
 INSERT INTO public.notifications (id, user_id, type, title, status)
-VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'REVIEW', 'boundary sent', 'SENT');
+VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'ALERT', 'boundary sent', 'SENT');
 
 SELECT is(
   (SELECT count(*) FROM public.notifications WHERE title = 'boundary sent'),
@@ -303,7 +303,7 @@ ROLLBACK TO SAVEPOINT notifications_status_boundary_sent;
 -- 정확히 'READ'는 허용값 경계로서 성공해야 한다
 SAVEPOINT notifications_status_boundary_read;
 INSERT INTO public.notifications (id, user_id, type, title, status)
-VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'REVIEW', 'boundary read', 'READ');
+VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'ALERT', 'boundary read', 'READ');
 
 SELECT is(
   (SELECT count(*) FROM public.notifications WHERE title = 'boundary read'),
@@ -316,7 +316,7 @@ ROLLBACK TO SAVEPOINT notifications_status_boundary_read;
 SELECT throws_ok(
   $sql$
     INSERT INTO public.notifications (id, user_id, type, title, status)
-    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'REVIEW', 'boundary skipped', 'SKIPPED');
+    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'ALERT', 'boundary skipped', 'SKIPPED');
   $sql$,
   '23514',
   'new row for relation "notifications" violates check constraint "notifications_status_check"',
