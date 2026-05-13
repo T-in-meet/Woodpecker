@@ -40,7 +40,7 @@ VALUES
   (
     current_setting('test.mark_read_notification_a_id')::uuid,
     current_setting('test.mark_read_user_a_id')::uuid,
-    'REVIEW',
+    'ALERT',
     'a title',
     'a body',
     'SENT'
@@ -48,7 +48,7 @@ VALUES
   (
     current_setting('test.mark_read_notification_b_id')::uuid,
     current_setting('test.mark_read_user_b_id')::uuid,
-    'REVIEW',
+    'ALERT',
     'b title',
     'b body',
     'SENT'
@@ -56,7 +56,7 @@ VALUES
   (
     current_setting('test.mark_read_notification_unverified_id')::uuid,
     current_setting('test.mark_read_unverified_user_id')::uuid,
-    'REVIEW',
+    'ALERT',
     'unverified title',
     'unverified body',
     'SENT'

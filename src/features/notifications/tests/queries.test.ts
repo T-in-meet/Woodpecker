@@ -233,6 +233,26 @@ describe("notification queries", () => {
         status: "SENT",
         sent_at: "2026-04-27T01:00:00.000Z",
         read_at: null,
+        note_id: "33333333-3333-4333-8333-333333333333",
+        review_log_id: null,
+        note: null,
+      },
+    ]);
+    createServerComponentClientMock.mockResolvedValue(supabase);
+
+    await expect(getNotificationList()).rejects.toThrow();
+  });
+
+  it("throws when a review notification list row has no note id", async () => {
+    const { supabase } = createNotificationListMock([
+      {
+        id: "22222222-2222-4222-8222-222222222222",
+        title: "Review due",
+        body: null,
+        type: "REVIEW",
+        status: "SENT",
+        sent_at: "2026-04-27T01:00:00.000Z",
+        read_at: null,
         note_id: null,
         review_log_id: null,
         note: null,
