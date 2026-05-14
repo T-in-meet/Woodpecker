@@ -102,11 +102,13 @@ export default async function NoteDetailPage({
                 <Link href={getNoteReviewRoute(noteId)}>백지 테스트 시작</Link>
               </Button>
             )}
-            <NotificationTimePicker
-              noteId={note.id}
-              initialTime={note.notification_time_of_day}
-              nextReviewAt={note.next_review_at}
-            />
+            {!isReviewCompleted && (
+              <NotificationTimePicker
+                noteId={note.id}
+                initialTime={note.notification_time_of_day}
+                nextReviewAt={note.next_review_at}
+              />
+            )}
             <DeleteNoteDialog noteId={note.id} noteTitle={note.title} />
           </div>
         </div>
