@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { getNoteDetailRoute } from "@/lib/constants/routes";
 import { formatDateKST } from "@/lib/utils/formatDate";
+import { stripMarkdown } from "@/lib/utils/stripMarkdown";
 
 import { useNoteCardActions } from "../hooks/useNoteCardActions";
 import type { NoteSummary } from "../queries";
@@ -36,7 +37,7 @@ export function NoteCardCompact({ note }: { note: NoteSummary }) {
           {/* Content preview */}
           {note.content.trim() && (
             <p className="line-clamp-3 text-sm text-muted-foreground">
-              {note.content}
+              {stripMarkdown(note.content)}
             </p>
           )}
 
