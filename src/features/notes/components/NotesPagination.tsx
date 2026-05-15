@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { cn } from "@/lib/utils/cn";
 
-import { buildNotesUrl } from "../utils/buildNotesUrl";
+import { buildNotesUrl, type NotesView } from "../utils/buildNotesUrl";
 
 const ELLIPSIS = "..." as const;
 type PageItem = number | typeof ELLIPSIS;
@@ -11,6 +11,7 @@ type NotesPaginationProps = {
   currentPage: number;
   totalPages: number;
   query: string;
+  view: NotesView;
 };
 
 function getPageNumbers(current: number, total: number): PageItem[] {
@@ -36,6 +37,7 @@ export function NotesPagination({
   currentPage,
   totalPages,
   query,
+  view,
 }: NotesPaginationProps) {
   if (totalPages <= 1) return null;
 
@@ -49,7 +51,7 @@ export function NotesPagination({
       className="flex items-center justify-center gap-1 pt-2"
     >
       <PaginationLink
-        href={buildNotesUrl({ page: currentPage - 1, query })}
+        href={buildNotesUrl({ page: currentPage - 1, query, view })}
         disabled={!hasPrev}
         aria-label="이전 페이지"
       >
@@ -67,7 +69,7 @@ export function NotesPagination({
         ) : (
           <PaginationLink
             key={page}
-            href={buildNotesUrl({ page, query })}
+            href={buildNotesUrl({ page, query, view })}
             active={page === currentPage}
             aria-label={`${page} 페이지`}
             aria-current={page === currentPage ? "page" : undefined}
@@ -78,7 +80,7 @@ export function NotesPagination({
       )}
 
       <PaginationLink
-        href={buildNotesUrl({ page: currentPage + 1, query })}
+        href={buildNotesUrl({ page: currentPage + 1, query, view })}
         disabled={!hasNext}
         aria-label="다음 페이지"
       >

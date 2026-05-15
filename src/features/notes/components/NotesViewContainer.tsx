@@ -1,11 +1,11 @@
 import type { NoteSummary } from "../queries";
 import type { NotesView } from "../utils/buildNotesUrl";
-import { NoteCard } from "./NoteCard";
-import { NoteCardCompact } from "./NoteCardCompact";
+import { NoteGridCard } from "./NoteGridCard";
+import { NoteListItem } from "./NoteListItem";
 import { NotesEmptyState } from "./NotesEmptyState";
 import { NotesPagination } from "./NotesPagination";
 
-type NoteListProps = {
+type NotesViewContainerProps = {
   notes: NoteSummary[];
   total: number;
   currentPage: number;
@@ -14,14 +14,14 @@ type NoteListProps = {
   query: string;
 };
 
-export function NoteList({
+export function NotesViewContainer({
   notes,
   total,
   currentPage,
   pageSize,
   view,
   query,
-}: NoteListProps) {
+}: NotesViewContainerProps) {
   if (total === 0) {
     return <NotesEmptyState query={query} />;
   }
@@ -38,7 +38,7 @@ export function NoteList({
         <ul className="grid list-none grid-cols-2 gap-3 sm:grid-cols-3">
           {notes.map((note) => (
             <li key={note.id}>
-              <NoteCardCompact note={note} />
+              <NoteGridCard note={note} />
             </li>
           ))}
         </ul>
@@ -46,7 +46,7 @@ export function NoteList({
         <ul className="flex list-none flex-col gap-3">
           {notes.map((note) => (
             <li key={note.id}>
-              <NoteCard note={note} />
+              <NoteListItem note={note} />
             </li>
           ))}
         </ul>
@@ -56,6 +56,7 @@ export function NoteList({
         currentPage={currentPage}
         totalPages={totalPages}
         query={query}
+        view={view}
       />
     </div>
   );
