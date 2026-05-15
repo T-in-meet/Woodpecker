@@ -56,6 +56,7 @@ export function NotesViewContainer({
         currentPage={currentPage}
         totalPages={totalPages}
         query={query}
+        view={view}
       />
     </div>
   );
