@@ -85,6 +85,7 @@ export function NoteForm() {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={handleTitleKeyDown}
+          autoFocus
           className="w-full border-none bg-transparent text-4xl font-bold leading-snug text-foreground placeholder:text-muted-foreground/30 focus:outline-none"
         />
         {fieldErrors?.title && (
@@ -105,8 +106,6 @@ export function NoteForm() {
       <TipTapEditor
         value={content}
         onChange={setContent}
-        placeholder="내용을 입력하세요..."
-        autoFocus
         aria-label="내용"
         onEditorReady={(editor) => {
           editorRef.current = editor;

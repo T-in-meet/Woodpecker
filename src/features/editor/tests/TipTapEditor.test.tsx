@@ -1,12 +1,28 @@
 import "./setup";
 
-import { act, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  render as rtlRender,
+  type RenderOptions,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { Editor } from "@tiptap/react";
 import { describe, expect, it, vi } from "vitest";
 
+import { TooltipProvider } from "@/components/ui/tooltip";
+
 import { TipTapEditor } from "../components/TipTapEditor";
 import { SLASH_COMMAND_ITEMS } from "../utils/slashCommand";
+
+function Wrapper({ children }: { children: React.ReactNode }) {
+  return <TooltipProvider delayDuration={0}>{children}</TooltipProvider>;
+}
+
+function render(ui: React.ReactElement, options?: RenderOptions) {
+  return rtlRender(ui, { wrapper: Wrapper, ...options });
+}
 
 function getEditorContentElement() {
   const contentElement = document.querySelector("[contenteditable]");
@@ -328,7 +344,7 @@ describe("TipTapEditor", () => {
     await user.click(getEditorContentElement());
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Open block toolbar")).toBeInTheDocument();
+      expect(screen.getByLabelText("블록 도구 열기")).toBeInTheDocument();
     });
   });
 
@@ -343,7 +359,7 @@ describe("TipTapEditor", () => {
 
     await user.click(getEditorContentElement());
 
-    const handleButton = await screen.findByLabelText("Open block toolbar");
+    const handleButton = await screen.findByLabelText("블록 도구 열기");
     await user.click(handleButton);
 
     expect(screen.getByTestId("bubble-toolbar")).toBeInTheDocument();
@@ -362,7 +378,7 @@ describe("TipTapEditor", () => {
     });
 
     await user.click(getEditorContentElement());
-    await user.click(await screen.findByLabelText("Open block toolbar"));
+    await user.click(await screen.findByLabelText("블록 도구 열기"));
     await user.click(screen.getByTestId("toolbar-delete-block"));
 
     await waitFor(() => {
@@ -382,7 +398,7 @@ describe("TipTapEditor", () => {
     });
 
     await user.click(getEditorContentElement());
-    await user.click(await screen.findByLabelText("Open block toolbar"));
+    await user.click(await screen.findByLabelText("블록 도구 열기"));
     await user.click(screen.getByTestId("toolbar-code-block"));
 
     expect(
@@ -441,9 +457,7 @@ describe("TipTapEditor", () => {
       expect(getEditorContentElement()).toBeTruthy();
     });
 
-    expect(
-      screen.queryByLabelText("Open block toolbar"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("블록 도구 열기")).not.toBeInTheDocument();
     expect(screen.queryByTestId("bubble-toolbar")).not.toBeInTheDocument();
   });
 
@@ -562,7 +576,71 @@ describe("TipTapEditor", () => {
     await user.click(image);
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Open block toolbar")).toBeInTheDocument();
+      expect(screen.getByLabelText("블록 도구 열기")).toBeInTheDocument();
     });
+  });
+
+  it("does not render the active block overlay when the block has no measurable rect", async () => {
+    const user = userEvent.setup();
+
+    render(<TipTapEditor value="" onChange={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(getEditorContentElement()).toBeTruthy();
+    });
+
+    await user.click(getEditorContentElement());
+    await user.click(await screen.findByLabelText("블록 도구 열기"));
+
+    expect(screen.getByTestId("bubble-toolbar")).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("block-handle-overlay"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders the active block overlay when the handle opens the toolbar over a measurable block", async () => {
+    const originalGetBoundingClientRect =
+      Element.prototype.getBoundingClientRect;
+    const measurableRect = {
+      x: 10,
+      y: 20,
+      width: 240,
+      height: 32,
+      top: 20,
+      right: 250,
+      bottom: 52,
+      left: 10,
+      toJSON() {
+        return this;
+      },
+    } as DOMRect;
+    Element.prototype.getBoundingClientRect = function () {
+      return measurableRect;
+    };
+
+    try {
+      const user = userEvent.setup();
+      render(<TipTapEditor value="hello" onChange={vi.fn()} />);
+
+      await waitFor(() => {
+        expect(getEditorContentElement()).toBeTruthy();
+      });
+
+      await user.click(getEditorContentElement());
+      await user.click(await screen.findByLabelText("블록 도구 열기"));
+
+      const overlay = await screen.findByTestId("block-handle-overlay");
+      expect(overlay).toBeInTheDocument();
+
+      await user.keyboard("{Escape}");
+
+      await waitFor(() => {
+        expect(
+          screen.queryByTestId("block-handle-overlay"),
+        ).not.toBeInTheDocument();
+      });
+    } finally {
+      Element.prototype.getBoundingClientRect = originalGetBoundingClientRect;
+    }
   });
 });
