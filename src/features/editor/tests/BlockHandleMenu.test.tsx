@@ -1,10 +1,32 @@
+import type { Editor } from "@tiptap/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
   type BlockAnchorPositionType,
   computeMenuPosition,
+  getActiveBlockElement,
   getBlockHandleMarkerOffset,
 } from "../components/BlockHandleMenu";
+
+function createActiveElementEditor(
+  rootElement: HTMLElement,
+  activeNode: Node,
+): Editor {
+  return {
+    isDestroyed: false,
+    isActive: () => false,
+    state: {
+      selection: {
+        from: 1,
+      },
+    },
+    view: {
+      dom: rootElement,
+      domAtPos: () => ({ node: activeNode, offset: 0 }),
+      nodeDOM: () => activeNode,
+    },
+  } as unknown as Editor;
+}
 
 describe("getBlockHandleMarkerOffset", () => {
   afterEach(() => {
@@ -39,6 +61,23 @@ describe("getBlockHandleMarkerOffset", () => {
     document.body.appendChild(paragraphElement);
 
     expect(getBlockHandleMarkerOffset(paragraphElement)).toBe(0);
+  });
+});
+
+describe("getActiveBlockElement", () => {
+  it("uses the blockquote container instead of the indented paragraph", () => {
+    const rootElement = document.createElement("div");
+    const blockquoteElement = document.createElement("blockquote");
+    const paragraphElement = document.createElement("p");
+    const textNode = document.createTextNode("quoted text");
+
+    paragraphElement.appendChild(textNode);
+    blockquoteElement.appendChild(paragraphElement);
+    rootElement.appendChild(blockquoteElement);
+
+    const editor = createActiveElementEditor(rootElement, textNode);
+
+    expect(getActiveBlockElement(editor)).toBe(blockquoteElement);
   });
 });
 

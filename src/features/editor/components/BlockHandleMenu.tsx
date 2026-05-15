@@ -416,7 +416,7 @@ function getBlockNodeRange(
   return blockRange;
 }
 
-function getActiveBlockElement(editor: Editor): HTMLElement | null {
+export function getActiveBlockElement(editor: Editor): HTMLElement | null {
   const rootElement = editor.view.dom;
   const { from } = editor.state.selection;
   const selectedNodeDom = editor.view.nodeDOM(from);
@@ -470,6 +470,15 @@ function getActiveBlockElement(editor: Editor): HTMLElement | null {
     rootElement.contains(listItemElement)
   ) {
     return listItemElement;
+  }
+
+  const blockquoteElement = activeElement.closest("blockquote");
+
+  if (
+    blockquoteElement instanceof HTMLElement &&
+    rootElement.contains(blockquoteElement)
+  ) {
+    return blockquoteElement;
   }
 
   const blockElement = activeElement.closest(
