@@ -56,7 +56,7 @@ export function NoteListItem({ note }: { note: NoteSummary }) {
             <NoteActions
               noteId={note.id}
               canReview={canReview}
-              variant="full"
+              variant="list"
             />
           </div>
         </CardContent>

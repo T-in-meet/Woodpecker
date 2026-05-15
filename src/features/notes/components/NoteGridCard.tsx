@@ -25,7 +25,7 @@ export function NoteGridCard({ note }: { note: NoteSummary }) {
       <Card className="h-full transition-shadow duration-200 hover:shadow-md">
         <CardContent className="flex h-full flex-col gap-3 p-5">
           {/* Title */}
-          <span className="line-clamp-1 min-w-0 break-all text-base font-bold leading-snug">
+          <span className="line-clamp-1 min-w-0 break-words text-base font-bold leading-snug">
             {note.title}
           </span>
 
@@ -56,7 +56,7 @@ export function NoteGridCard({ note }: { note: NoteSummary }) {
               <NoteActions
                 noteId={note.id}
                 canReview={canReview}
-                variant="compact"
+                variant="grid"
               />
             </div>
           </div>

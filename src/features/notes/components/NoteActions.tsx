@@ -2,21 +2,19 @@
 
 import { Play, Trash2 } from "lucide-react";
 
-import { cn } from "@/lib/utils/cn";
-
 import { useNoteActions } from "../hooks/useNoteActions";
 
 type NoteActionsProps = {
   noteId: string;
   canReview: boolean;
-  variant: "compact" | "full";
+  variant: "grid" | "list";
 };
 
 export function NoteActions({ noteId, canReview, variant }: NoteActionsProps) {
   const { isDeleting, handleStartReview, handleDelete } =
     useNoteActions(noteId);
 
-  const isCompact = variant === "compact";
+  const isCompact = variant === "grid";
 
   const reviewClass = isCompact
     ? "inline-flex h-7 w-7 items-center justify-center rounded-md bg-emerald-500 text-white cursor-pointer transition-colors hover:bg-emerald-600"
@@ -29,11 +27,7 @@ export function NoteActions({ noteId, canReview, variant }: NoteActionsProps) {
   const iconClass = isCompact ? "h-3.5 w-3.5" : "h-4 w-4";
 
   return (
-    <div
-      className={cn(
-        "flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100",
-      )}
-    >
+    <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
       {canReview && (
         <button
           type="button"
