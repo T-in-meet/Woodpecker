@@ -36,6 +36,7 @@ export function shouldDisableSerwist() {
 // 이유: isProduction을 top-level 상수로 두면 import 시점에 고정되어 테스트에서 NODE_ENV 변경이 반영되지 않음
 
 const nextConfig: NextConfig = {
+  poweredByHeader: false,
   experimental: {
     serverActions: {
       bodySizeLimit: "5mb",
@@ -68,6 +69,7 @@ const nextConfig: NextConfig = {
       "object-src 'none'",
       "base-uri 'self'",
       "frame-ancestors 'none'",
+      "form-action 'self'",
     ].join("; ");
 
     // [Report-Only CSP] 기존 앱 동작을 허용하면서 관측만 수행
@@ -89,11 +91,22 @@ const nextConfig: NextConfig = {
     // - worker-src는 서비스 워커 호환성 관측 후 강제 CSP 승격 여부를 판단함
     const cspReportOnly = [
       "default-src 'self'",
-      "img-src 'self' data: blob: https:",
-      "font-src 'self' data: https:",
-      "style-src 'self' 'unsafe-inline' https:",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:",
-      "connect-src 'self' https:",
+      [
+        "img-src 'self' data: blob:",
+        supabaseHostname && `https://${supabaseHostname}`,
+      ]
+        .filter(Boolean)
+        .join(" "),
+      "font-src 'self' data:",
+      "style-src 'self' 'unsafe-inline'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      [
+        "connect-src 'self'",
+        supabaseHostname && `https://${supabaseHostname}`,
+        supabaseHostname && `wss://${supabaseHostname}`,
+      ]
+        .filter(Boolean)
+        .join(" "),
       "worker-src 'self'",
     ].join("; ");
 
