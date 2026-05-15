@@ -278,6 +278,9 @@ describe("NoteDetailPage", () => {
     expect(
       screen.queryByRole("link", { name: "백지 테스트 시작" }),
     ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("notification-time-picker"),
+    ).not.toBeInTheDocument();
   });
 
   it("returns not found when the note does not exist for the current user", async () => {

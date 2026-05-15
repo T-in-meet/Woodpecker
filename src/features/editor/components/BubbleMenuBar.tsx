@@ -29,6 +29,11 @@ import {
 } from "lucide-react";
 import { useCallback, useState } from "react";
 
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { SUPPORTED_LANGUAGES } from "@/features/editor/supportedLanguages";
 import { cn } from "@/lib/utils/cn";
 
@@ -46,15 +51,35 @@ export function BubbleMenuBar({ editor, onDeleteBlock }: BubbleMenuBarProps) {
     (url: string) => {
       if (url === "") {
         editor.chain().focus().unsetLink().run();
-      } else {
-        const chain = editor.chain().focus();
-
-        if (editor.isActive("link")) {
-          chain.extendMarkRange("link");
-        }
-
-        chain.setLink({ href: url }).run();
+        setShowLinkEdit(false);
+        return;
       }
+
+      const chain = editor.chain().focus();
+
+      if (editor.isActive("link")) {
+        chain.extendMarkRange("link");
+      } else if (editor.state.selection.empty) {
+        // caret-only 상태에서는 link 마크를 입힐 텍스트 범위가 없어 시각적 변화가 없다.
+        // 다른 mark 툴과 결을 맞추기 위해 cursor가 걸친 단어를 자동 선택한다.
+        const { $from } = editor.state.selection;
+        const text = $from.parent.textContent;
+        const offset = $from.parentOffset;
+        let start = offset;
+        let end = offset;
+        while (start > 0 && !/\s/.test(text[start - 1] ?? "")) start -= 1;
+        while (end < text.length && !/\s/.test(text[end] ?? "")) end += 1;
+
+        if (end > start) {
+          const blockStart = $from.start();
+          chain.setTextSelection({
+            from: blockStart + start,
+            to: blockStart + end,
+          });
+        }
+      }
+
+      chain.setLink({ href: url }).run();
       setShowLinkEdit(false);
     },
     [editor],
@@ -87,7 +112,8 @@ export function BubbleMenuBar({ editor, onDeleteBlock }: BubbleMenuBarProps) {
             onClick={() => editor.chain().focus().undo().run()}
             disabled={!editor.can().undo()}
             data-testid="toolbar-undo"
-            aria-label="Undo"
+            aria-label="실행 취소"
+            tooltipLabel="실행 취소"
           >
             <Undo2 className="size-3.5" />
           </ToolbarButton>
@@ -95,7 +121,8 @@ export function BubbleMenuBar({ editor, onDeleteBlock }: BubbleMenuBarProps) {
             onClick={() => editor.chain().focus().redo().run()}
             disabled={!editor.can().redo()}
             data-testid="toolbar-redo"
-            aria-label="Redo"
+            aria-label="다시 실행"
+            tooltipLabel="다시 실행"
           >
             <Redo2 className="size-3.5" />
           </ToolbarButton>
@@ -108,7 +135,8 @@ export function BubbleMenuBar({ editor, onDeleteBlock }: BubbleMenuBarProps) {
             }
             active={editor.isActive("heading", { level: 1 })}
             data-testid="toolbar-heading-1"
-            aria-label="Heading 1"
+            aria-label="제목 1"
+            tooltipLabel="제목 1"
           >
             <Heading1 className="size-3.5" />
           </ToolbarButton>
@@ -118,7 +146,8 @@ export function BubbleMenuBar({ editor, onDeleteBlock }: BubbleMenuBarProps) {
             }
             active={editor.isActive("heading", { level: 2 })}
             data-testid="toolbar-heading-2"
-            aria-label="Heading 2"
+            aria-label="제목 2"
+            tooltipLabel="제목 2"
           >
             <Heading2 className="size-3.5" />
           </ToolbarButton>
@@ -128,7 +157,8 @@ export function BubbleMenuBar({ editor, onDeleteBlock }: BubbleMenuBarProps) {
             }
             active={editor.isActive("heading", { level: 3 })}
             data-testid="toolbar-heading-3"
-            aria-label="Heading 3"
+            aria-label="제목 3"
+            tooltipLabel="제목 3"
           >
             <Heading3 className="size-3.5" />
           </ToolbarButton>
@@ -139,7 +169,8 @@ export function BubbleMenuBar({ editor, onDeleteBlock }: BubbleMenuBarProps) {
             onClick={() => editor.chain().focus().toggleBold().run()}
             active={editor.isActive("bold")}
             data-testid="toolbar-bold"
-            aria-label="Bold"
+            aria-label="굵게"
+            tooltipLabel="굵게"
           >
             <Bold className="size-3.5" />
           </ToolbarButton>
@@ -147,7 +178,8 @@ export function BubbleMenuBar({ editor, onDeleteBlock }: BubbleMenuBarProps) {
             onClick={() => editor.chain().focus().toggleItalic().run()}
             active={editor.isActive("italic")}
             data-testid="toolbar-italic"
-            aria-label="Italic"
+            aria-label="기울임"
+            tooltipLabel="기울임"
           >
             <Italic className="size-3.5" />
           </ToolbarButton>
@@ -155,7 +187,8 @@ export function BubbleMenuBar({ editor, onDeleteBlock }: BubbleMenuBarProps) {
             onClick={() => editor.chain().focus().toggleStrike().run()}
             active={editor.isActive("strike")}
             data-testid="toolbar-strike"
-            aria-label="Strikethrough"
+            aria-label="취소선"
+            tooltipLabel="취소선"
           >
             <Strikethrough className="size-3.5" />
           </ToolbarButton>
@@ -163,7 +196,8 @@ export function BubbleMenuBar({ editor, onDeleteBlock }: BubbleMenuBarProps) {
             onClick={() => editor.chain().focus().toggleCode().run()}
             active={editor.isActive("code")}
             data-testid="toolbar-inline-code"
-            aria-label="Inline code"
+            aria-label="인라인 코드"
+            tooltipLabel="인라인 코드"
           >
             <Code className="size-3.5" />
           </ToolbarButton>
@@ -176,14 +210,16 @@ export function BubbleMenuBar({ editor, onDeleteBlock }: BubbleMenuBarProps) {
                 onClick={() => setShowLinkEdit(true)}
                 active
                 data-testid="toolbar-edit-link"
-                aria-label="Edit link"
+                aria-label="링크 편집"
+                tooltipLabel="링크 편집"
               >
                 <Link className="size-3.5" />
               </ToolbarButton>
               <ToolbarButton
                 onClick={() => editor.chain().focus().unsetLink().run()}
                 data-testid="toolbar-remove-link"
-                aria-label="Remove link"
+                aria-label="링크 제거"
+                tooltipLabel="링크 제거"
               >
                 <Unlink className="size-3.5" />
               </ToolbarButton>
@@ -192,7 +228,8 @@ export function BubbleMenuBar({ editor, onDeleteBlock }: BubbleMenuBarProps) {
             <ToolbarButton
               onClick={() => setShowLinkEdit(true)}
               data-testid="toolbar-add-link"
-              aria-label="Add link"
+              aria-label="링크 추가"
+              tooltipLabel="링크 추가"
             >
               <Link className="size-3.5" />
             </ToolbarButton>
@@ -204,7 +241,8 @@ export function BubbleMenuBar({ editor, onDeleteBlock }: BubbleMenuBarProps) {
             onClick={() => editor.chain().focus().toggleBulletList().run()}
             active={editor.isActive("bulletList")}
             data-testid="toolbar-bullet-list"
-            aria-label="Bullet list"
+            aria-label="글머리 기호 목록"
+            tooltipLabel="글머리 기호 목록"
           >
             <List className="size-3.5" />
           </ToolbarButton>
@@ -212,7 +250,8 @@ export function BubbleMenuBar({ editor, onDeleteBlock }: BubbleMenuBarProps) {
             onClick={() => editor.chain().focus().toggleOrderedList().run()}
             active={editor.isActive("orderedList")}
             data-testid="toolbar-ordered-list"
-            aria-label="Ordered list"
+            aria-label="번호 매기기 목록"
+            tooltipLabel="번호 매기기 목록"
           >
             <ListOrdered className="size-3.5" />
           </ToolbarButton>
@@ -220,7 +259,8 @@ export function BubbleMenuBar({ editor, onDeleteBlock }: BubbleMenuBarProps) {
             onClick={() => editor.chain().focus().toggleTaskList().run()}
             active={editor.isActive("taskList")}
             data-testid="toolbar-task-list"
-            aria-label="Task list"
+            aria-label="체크박스 목록"
+            tooltipLabel="체크박스 목록"
           >
             <ListChecks className="size-3.5" />
           </ToolbarButton>
@@ -231,7 +271,8 @@ export function BubbleMenuBar({ editor, onDeleteBlock }: BubbleMenuBarProps) {
             onClick={() => editor.chain().focus().toggleBlockquote().run()}
             active={editor.isActive("blockquote")}
             data-testid="toolbar-blockquote"
-            aria-label="Blockquote"
+            aria-label="인용문"
+            tooltipLabel="인용문"
           >
             <TextQuote className="size-3.5" />
           </ToolbarButton>
@@ -239,14 +280,16 @@ export function BubbleMenuBar({ editor, onDeleteBlock }: BubbleMenuBarProps) {
             onClick={() => editor.chain().focus().toggleCodeBlock().run()}
             active={isCodeBlock}
             data-testid="toolbar-code-block"
-            aria-label="Code block"
+            aria-label="코드 블록"
+            tooltipLabel="코드 블록"
           >
             <Code2 className="size-3.5" />
           </ToolbarButton>
           <ToolbarButton
             onClick={() => editor.chain().focus().setHorizontalRule().run()}
             data-testid="toolbar-divider"
-            aria-label="Divider"
+            aria-label="구분선"
+            tooltipLabel="구분선"
           >
             <Minus className="size-3.5" />
           </ToolbarButton>
@@ -262,7 +305,8 @@ export function BubbleMenuBar({ editor, onDeleteBlock }: BubbleMenuBarProps) {
                 .run()
             }
             data-testid="toolbar-insert-table"
-            aria-label="Insert table"
+            aria-label="표 삽입"
+            tooltipLabel="표 삽입"
           >
             <Table className="size-3.5" />
           </ToolbarButton>
@@ -272,8 +316,8 @@ export function BubbleMenuBar({ editor, onDeleteBlock }: BubbleMenuBarProps) {
           <ToolbarButton
             onClick={onDeleteBlock}
             data-testid="toolbar-delete-block"
-            aria-label="Delete block"
-            title="Delete block"
+            aria-label="블록 삭제"
+            tooltipLabel="블록 삭제"
           >
             <Trash2 className="size-3.5" />
           </ToolbarButton>
@@ -283,8 +327,8 @@ export function BubbleMenuBar({ editor, onDeleteBlock }: BubbleMenuBarProps) {
               <ToolbarButton
                 onClick={() => editor.chain().focus().addColumnAfter().run()}
                 data-testid="toolbar-add-column"
-                aria-label="Add column"
-                title="Add column"
+                aria-label="열 추가"
+                tooltipLabel="열 추가"
               >
                 <Columns3 className="size-3.5" />
                 <Plus className="size-2.5" />
@@ -292,16 +336,16 @@ export function BubbleMenuBar({ editor, onDeleteBlock }: BubbleMenuBarProps) {
               <ToolbarButton
                 onClick={() => editor.chain().focus().deleteColumn().run()}
                 data-testid="toolbar-delete-column"
-                aria-label="Delete column"
-                title="Delete column"
+                aria-label="열 삭제"
+                tooltipLabel="열 삭제"
               >
                 <TableColumnsSplit className="size-3.5" />
               </ToolbarButton>
               <ToolbarButton
                 onClick={() => editor.chain().focus().addRowAfter().run()}
                 data-testid="toolbar-add-row"
-                aria-label="Add row"
-                title="Add row"
+                aria-label="행 추가"
+                tooltipLabel="행 추가"
               >
                 <Rows3 className="size-3.5" />
                 <Plus className="size-2.5" />
@@ -309,16 +353,16 @@ export function BubbleMenuBar({ editor, onDeleteBlock }: BubbleMenuBarProps) {
               <ToolbarButton
                 onClick={() => editor.chain().focus().deleteRow().run()}
                 data-testid="toolbar-delete-row"
-                aria-label="Delete row"
-                title="Delete row"
+                aria-label="행 삭제"
+                tooltipLabel="행 삭제"
               >
                 <TableRowsSplit className="size-3.5" />
               </ToolbarButton>
               <ToolbarButton
                 onClick={() => editor.chain().focus().deleteTable().run()}
                 data-testid="toolbar-delete-table"
-                aria-label="Delete table"
-                title="Delete table"
+                aria-label="표 삭제"
+                tooltipLabel="표 삭제"
               >
                 <Trash2 className="size-3.5" />
               </ToolbarButton>
@@ -354,7 +398,7 @@ export function BubbleMenuBar({ editor, onDeleteBlock }: BubbleMenuBarProps) {
                 .run();
             }}
             className="h-8 w-full rounded-md border border-border bg-background px-2 text-sm text-foreground outline-none transition-colors focus:border-ring"
-            aria-label="Code language"
+            aria-label="코드 언어"
           >
             <option value="">Plain text</option>
             {SUPPORTED_LANGUAGES.map((language) => (
@@ -380,13 +424,19 @@ function ToolbarColumn(props: React.ComponentProps<"div">) {
   );
 }
 
+type ToolbarButtonProps = React.ComponentProps<"button"> & {
+  active?: boolean;
+  tooltipLabel: string;
+};
+
 function ToolbarButton({
   active,
   disabled,
   children,
+  tooltipLabel,
   ...props
-}: React.ComponentProps<"button"> & { active?: boolean }) {
-  return (
+}: ToolbarButtonProps) {
+  const buttonNode = (
     <button
       type="button"
       className={cn(
@@ -401,6 +451,23 @@ function ToolbarButton({
     >
       {children}
     </button>
+  );
+
+  // Radix Tooltip은 disabled trigger의 pointer/focus 이벤트를 받지 못하므로
+  // 비활성화 가능한 버튼은 포커서블 span으로 한 번 감싸 트리거를 이전한다.
+  const trigger = disabled ? (
+    <span tabIndex={0} className="inline-flex">
+      {buttonNode}
+    </span>
+  ) : (
+    buttonNode
+  );
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+      <TooltipContent side="left">{tooltipLabel}</TooltipContent>
+    </Tooltip>
   );
 }
 

@@ -3,7 +3,13 @@ import userEvent from "@testing-library/user-event";
 import type { Editor } from "@tiptap/react";
 import { describe, expect, it, type Mock, vi } from "vitest";
 
+import { TooltipProvider } from "@/components/ui/tooltip";
+
 import { BubbleMenuBar } from "../components/BubbleMenuBar";
+
+function renderWithTooltipProvider(ui: React.ReactElement) {
+  return render(<TooltipProvider delayDuration={0}>{ui}</TooltipProvider>);
+}
 
 type ChainMethodType = (...args: unknown[]) => void;
 type ChainMethodMockType = Mock<ChainMethodType>;
@@ -20,6 +26,7 @@ type MockEditorType = Editor & {
 const CHAIN_METHOD_NAMES = [
   "focus",
   "extendMarkRange",
+  "setTextSelection",
   "undo",
   "redo",
   "toggleHeading",
@@ -64,6 +71,7 @@ function createMockEditor(
   const chainMethods: ChainMethodsType = {
     focus: createChainMethodMock(),
     extendMarkRange: createChainMethodMock(),
+    setTextSelection: createChainMethodMock(),
     undo: createChainMethodMock(),
     redo: createChainMethodMock(),
     toggleHeading: createChainMethodMock(),
@@ -106,7 +114,8 @@ function createMockEditor(
     }),
     getAttributes: vi.fn((type: string) => {
       if (type === "link") {
-        return { href: "https://example.com" };
+        // tiptap getAttributes는 mark가 없는 위치에선 빈 객체를 반환한다.
+        return overrides.linkActive ? { href: "https://example.com" } : {};
       }
 
       if (type === "codeBlock") {
@@ -133,7 +142,7 @@ function createMockEditor(
 
 describe("BubbleMenuBar", () => {
   it("renders the merged formatting and block controls", () => {
-    render(<BubbleMenuBar editor={createMockEditor()} />);
+    renderWithTooltipProvider(<BubbleMenuBar editor={createMockEditor()} />);
 
     expect(screen.getByTestId("bubble-toolbar")).toBeInTheDocument();
     expect(screen.getByTestId("bubble-toolbar-columns")).toBeInTheDocument();
@@ -164,7 +173,9 @@ describe("BubbleMenuBar", () => {
   });
 
   it("shows table controls when a table is active", () => {
-    render(<BubbleMenuBar editor={createMockEditor({ tableActive: true })} />);
+    renderWithTooltipProvider(
+      <BubbleMenuBar editor={createMockEditor({ tableActive: true })} />,
+    );
 
     expect(screen.getByTestId("toolbar-add-column")).toBeInTheDocument();
     expect(screen.getByTestId("toolbar-delete-column")).toBeInTheDocument();
@@ -174,7 +185,7 @@ describe("BubbleMenuBar", () => {
   });
 
   it("hides table controls when no table is active", () => {
-    render(<BubbleMenuBar editor={createMockEditor()} />);
+    renderWithTooltipProvider(<BubbleMenuBar editor={createMockEditor()} />);
 
     expect(screen.queryByTestId("toolbar-add-column")).not.toBeInTheDocument();
     expect(
@@ -188,7 +199,9 @@ describe("BubbleMenuBar", () => {
   });
 
   it("shows link edit and remove buttons when a link is active", () => {
-    render(<BubbleMenuBar editor={createMockEditor({ linkActive: true })} />);
+    renderWithTooltipProvider(
+      <BubbleMenuBar editor={createMockEditor({ linkActive: true })} />,
+    );
 
     expect(screen.getByTestId("toolbar-edit-link")).toBeInTheDocument();
     expect(screen.getByTestId("toolbar-remove-link")).toBeInTheDocument();
@@ -198,7 +211,7 @@ describe("BubbleMenuBar", () => {
   it("opens the link editor popover when the link button is clicked", async () => {
     const user = userEvent.setup();
 
-    render(<BubbleMenuBar editor={createMockEditor()} />);
+    renderWithTooltipProvider(<BubbleMenuBar editor={createMockEditor()} />);
 
     await user.click(screen.getByTestId("toolbar-add-link"));
 
@@ -209,7 +222,7 @@ describe("BubbleMenuBar", () => {
     const user = userEvent.setup();
     const handleDeleteBlock = vi.fn();
 
-    render(
+    renderWithTooltipProvider(
       <BubbleMenuBar
         editor={createMockEditor()}
         onDeleteBlock={handleDeleteBlock}
@@ -225,7 +238,7 @@ describe("BubbleMenuBar", () => {
     const user = userEvent.setup();
     const editor = createMockEditor({ linkActive: true });
 
-    render(<BubbleMenuBar editor={editor} />);
+    renderWithTooltipProvider(<BubbleMenuBar editor={editor} />);
 
     await user.click(screen.getByTestId("toolbar-edit-link"));
 
@@ -240,8 +253,70 @@ describe("BubbleMenuBar", () => {
     });
   });
 
+  it("auto-selects the word at the caret before applying a link when nothing is selected", async () => {
+    const user = userEvent.setup();
+    // 가상의 ProseMirror 상태: "hello world" 단락에서 'r' 위치(parentOffset 7)에 캐럿
+    const editor = createMockEditor({
+      state: {
+        selection: {
+          empty: true,
+          $from: {
+            parent: { textContent: "hello world" },
+            parentOffset: 7,
+            start: () => 1,
+          },
+        },
+      },
+    });
+
+    renderWithTooltipProvider(<BubbleMenuBar editor={editor} />);
+
+    await user.click(screen.getByTestId("toolbar-add-link"));
+    const input = screen.getByLabelText("링크 URL");
+    await user.type(input, "https://example.com");
+    await user.keyboard("{Enter}");
+
+    // "world"는 parent 내 6..11, blockStart 1 적용 시 절대 위치 7..12
+    expect(editor.__chainMethods.setTextSelection).toHaveBeenCalledWith({
+      from: 7,
+      to: 12,
+    });
+    expect(editor.__chainMethods.setLink).toHaveBeenCalledWith({
+      href: "https://example.com",
+    });
+  });
+
+  it("does not call setTextSelection when the caret is not adjacent to a word", async () => {
+    const user = userEvent.setup();
+    // 빈 단락(공백 한 글자)에 캐럿이 있어 선택할 단어가 없는 경우
+    const editor = createMockEditor({
+      state: {
+        selection: {
+          empty: true,
+          $from: {
+            parent: { textContent: " " },
+            parentOffset: 0,
+            start: () => 1,
+          },
+        },
+      },
+    });
+
+    renderWithTooltipProvider(<BubbleMenuBar editor={editor} />);
+
+    await user.click(screen.getByTestId("toolbar-add-link"));
+    const input = screen.getByLabelText("링크 URL");
+    await user.type(input, "https://example.com");
+    await user.keyboard("{Enter}");
+
+    expect(editor.__chainMethods.setTextSelection).not.toHaveBeenCalled();
+    expect(editor.__chainMethods.setLink).toHaveBeenCalledWith({
+      href: "https://example.com",
+    });
+  });
+
   it("shows a code language selector when a code block is active", () => {
-    render(
+    renderWithTooltipProvider(
       <BubbleMenuBar
         editor={createMockEditor({
           codeBlockActive: true,
@@ -256,5 +331,15 @@ describe("BubbleMenuBar", () => {
     expect(screen.getByTestId("toolbar-code-language")).toHaveValue(
       "typescript",
     );
+  });
+
+  it("shows a Korean tooltip when a toolbar button is hovered", async () => {
+    const user = userEvent.setup();
+
+    renderWithTooltipProvider(<BubbleMenuBar editor={createMockEditor()} />);
+
+    await user.hover(screen.getByTestId("toolbar-bold"));
+
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("굵게");
   });
 });

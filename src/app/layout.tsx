@@ -11,6 +11,7 @@ import { DevelopmentServiceWorkerCleanup } from "@/components/providers/Developm
 import { QueryProvider } from "@/components/providers/QueryProvider";
 import { SessionProvider } from "@/components/providers/SessionProvider";
 import { ToasterProvider } from "@/components/providers/ToasterProvider";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { SITE_URL } from "@/lib/constants/site";
 
 /* ─── 폰트 ───────────────────────────────────────────────────────────────────
@@ -94,7 +95,9 @@ export default function RootLayout({
       >
         <DevelopmentServiceWorkerCleanup />
         <SessionProvider>
-          <QueryProvider>{children}</QueryProvider>
+          <QueryProvider>
+            <TooltipProvider delayDuration={300}>{children}</TooltipProvider>
+          </QueryProvider>
           <ToasterProvider />
         </SessionProvider>
       </body>
