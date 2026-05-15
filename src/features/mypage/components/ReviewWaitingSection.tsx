@@ -1,4 +1,4 @@
-import { NoteCardCompact } from "@/features/notes/components/NoteCardCompact";
+import { NoteGridCard } from "@/features/notes/components/NoteGridCard";
 import type { NoteSummary } from "@/features/notes/queries";
 
 type ReviewWaitingSectionProps = {
@@ -22,7 +22,7 @@ export function ReviewWaitingSection({ notes }: ReviewWaitingSectionProps) {
         <ul className="grid list-none grid-cols-1 gap-3 sm:grid-cols-2">
           {notes.map((note) => (
             <li key={note.id}>
-              <NoteCardCompact note={note} />
+              <NoteGridCard note={note} />
             </li>
           ))}
         </ul>

@@ -1,13 +1,13 @@
 "use client";
 
-import { AlignJustify, LayoutGrid, Search, X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { useNotesView } from "@/hooks/useNotesView";
-import { cn } from "@/lib/utils/cn";
 
 import { buildNotesUrl, type NotesView as View } from "../utils/buildNotesUrl";
+import { ViewToggle } from "./ViewToggle";
 
 type NotesToolbarProps = {
   initialQuery: string;
@@ -78,51 +78,7 @@ export function NotesToolbar({ initialQuery, initialView }: NotesToolbarProps) {
       </div>
 
       {/* View toggle */}
-      <div className="grid grid-cols-2 divide-x divide-input rounded-md border border-input">
-        <ViewButton
-          active={view === "list"}
-          onClick={() => handleViewChange("list")}
-          aria-label="리스트 보기"
-        >
-          <AlignJustify className="h-4 w-4" />
-          <span className="hidden sm:inline">List</span>
-        </ViewButton>
-        <ViewButton
-          active={view === "cards"}
-          onClick={() => handleViewChange("cards")}
-          aria-label="카드 보기"
-        >
-          <LayoutGrid className="h-4 w-4" />
-          <span className="hidden sm:inline">Cards</span>
-        </ViewButton>
-      </div>
+      <ViewToggle view={view} onChange={handleViewChange} />
     </div>
-  );
-}
-
-function ViewButton({
-  active,
-  onClick,
-  children,
-  "aria-label": ariaLabel,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-  "aria-label": string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      aria-label={ariaLabel}
-      className={cn(
-        "flex cursor-pointer items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors first:rounded-l-md last:rounded-r-md",
-        active
-          ? "bg-foreground text-background"
-          : "text-muted-foreground hover:bg-muted hover:text-foreground",
-      )}
-    >
-      {children}
-    </button>
   );
 }
