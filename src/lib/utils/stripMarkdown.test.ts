@@ -28,6 +28,7 @@ describe("stripMarkdown", () => {
   it("태스크 리스트 체크박스를 제거한다", () => {
     expect(stripMarkdown("- [ ] 미완료 작업")).toBe("미완료 작업");
     expect(stripMarkdown("- [x] 완료 작업")).toBe("완료 작업");
+    expect(stripMarkdown("- [X] 완료 작업")).toBe("완료 작업");
   });
 
   it("remove-markdown이 남긴 잔여 백틱을 제거한다", () => {
@@ -63,5 +64,21 @@ describe("stripMarkdown", () => {
 
   it("빈 문자열을 반환한다", () => {
     expect(stripMarkdown("")).toBe("");
+  });
+
+  it("복합 마크다운을 텍스트로 변환한다", () => {
+    const input = "# 제목\n\n**굵게** 텍스트\n- 항목1\n> 인용\n\n`코드` 끝";
+    const result = stripMarkdown(input);
+    expect(result).toContain("제목");
+    expect(result).toContain("굵게");
+    expect(result).toContain("텍스트");
+    expect(result).toContain("항목1");
+    expect(result).toContain("인용");
+    expect(result).toContain("코드");
+    expect(result).not.toContain("**");
+    expect(result).not.toContain("# ");
+    expect(result).not.toContain("> ");
+    expect(result).not.toContain("`");
+    expect(result).not.toMatch(/ {2,}/);
   });
 });
