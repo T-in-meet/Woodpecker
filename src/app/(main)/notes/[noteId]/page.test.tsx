@@ -29,12 +29,14 @@ vi.mock("@/features/notifications/components/NotificationTimePicker", () => ({
   NotificationTimePicker: ({
     initialTime,
     noteId,
+    nextScheduledAt,
   }: {
     initialTime: string | null;
     noteId: string;
+    nextScheduledAt: string | null;
   }) => (
     <div data-testid="notification-time-picker">
-      {noteId}:{initialTime ?? "default"}
+      {noteId}:{initialTime ?? "default"}:{nextScheduledAt ?? "no-schedule"}
     </div>
   ),
 }));
@@ -138,6 +140,7 @@ describe("NoteDetailPage", () => {
       title: "Test note",
       content: "note body",
       next_review_at: "2026-03-29T09:00:00.000Z",
+      next_scheduled_at: "2026-03-29T12:30:00.000Z",
       notification_time_of_day: "21:30:00",
       review_round: 1,
       created_at: "2026-03-29T00:00:00.000Z",
@@ -155,7 +158,7 @@ describe("NoteDetailPage", () => {
     expect(titleHeading).toHaveClass("wrap-break-word", "break-keep");
     expect(screen.getByTestId("note-viewer")).toHaveTextContent("note body");
     expect(screen.getByTestId("notification-time-picker")).toHaveTextContent(
-      "note-123:21:30:00",
+      "note-123:21:30:00:2026-03-29T12:30:00.000Z",
     );
     expect(
       screen.getByText("지금 백지 테스트를 진행할 수 있습니다."),
@@ -168,14 +171,15 @@ describe("NoteDetailPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows the next review schedule when the note is not due yet", async () => {
+  it("shows the next review schedule using the actual notification time", async () => {
     createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
     getNoteByIdMock.mockResolvedValue({
       id: "note-123",
       title: "Future review note",
       content: "note body",
-      next_review_at: "2026-03-30T09:00:00.000Z",
-      notification_time_of_day: null,
+      next_review_at: "2026-03-30T15:00:00.000Z",
+      next_scheduled_at: "2026-03-30T01:00:00.000Z",
+      notification_time_of_day: "10:00:00",
       review_round: 1,
       created_at: "2026-03-29T00:00:00.000Z",
       updated_at: "2026-03-29T01:00:00.000Z",
@@ -188,7 +192,7 @@ describe("NoteDetailPage", () => {
 
     expect(
       screen.getByText(
-        `다음 예정: ${formatDateTime("2026-03-30T09:00:00.000Z")}`,
+        `다음 예정: ${formatDateTime("2026-03-30T01:00:00.000Z")}`,
       ),
     ).toBeInTheDocument();
     expect(
@@ -202,7 +206,8 @@ describe("NoteDetailPage", () => {
       id: "note-123",
       title: "Already done today",
       content: "note body",
-      next_review_at: "2026-03-30T09:00:00.000Z",
+      next_review_at: "2026-03-30T15:00:00.000Z",
+      next_scheduled_at: "2026-03-30T09:00:00.000Z",
       notification_time_of_day: null,
       review_round: 1,
       created_at: "2026-03-29T00:00:00.000Z",
@@ -234,6 +239,7 @@ describe("NoteDetailPage", () => {
       title: "Future review note",
       content: "note body",
       next_review_at: "2026-03-30T09:00:00.000Z",
+      next_scheduled_at: "2026-03-30T09:00:00.000Z",
       notification_time_of_day: null,
       review_round: 1,
       created_at: "2026-03-29T00:00:00.000Z",
@@ -260,6 +266,7 @@ describe("NoteDetailPage", () => {
       title: "Completed note",
       content: "note body",
       next_review_at: null,
+      next_scheduled_at: null,
       notification_time_of_day: null,
       review_round: 3,
       created_at: "2026-03-29T00:00:00.000Z",

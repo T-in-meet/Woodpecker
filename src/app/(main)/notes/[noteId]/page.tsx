@@ -46,6 +46,7 @@ export default async function NoteDetailPage({
   }
 
   const nextReviewAt = note.next_review_at;
+  const nextScheduledAt = note.next_scheduled_at ?? nextReviewAt;
   const isReviewCompleted =
     note.review_round >= MAX_REVIEW_ROUND && nextReviewAt === null;
   const isReviewDue =
@@ -69,12 +70,12 @@ export default async function NoteDetailPage({
     !isReviewCompleted && nextReviewAt !== null && !alreadyCompletedToday;
   const reviewStatusMessage = isReviewCompleted
     ? "1-3-7 복습을 모두 마쳤습니다."
-    : nextReviewAt
+    : nextScheduledAt
       ? alreadyCompletedToday
-        ? `오늘 백지 테스트 완료. 다음 예정: ${formatDateTime(nextReviewAt)}`
+        ? `오늘 백지 테스트 완료. 다음 예정: ${formatDateTime(nextScheduledAt)}`
         : isReviewDue
           ? "지금 백지 테스트를 진행할 수 있습니다."
-          : `다음 예정: ${formatDateTime(nextReviewAt)}`
+          : `다음 예정: ${formatDateTime(nextScheduledAt)}`
       : "다음 복습 일정이 아직 준비되지 않았습니다.";
 
   return (
@@ -106,7 +107,7 @@ export default async function NoteDetailPage({
               <NotificationTimePicker
                 noteId={note.id}
                 initialTime={note.notification_time_of_day}
-                nextReviewAt={note.next_review_at}
+                nextScheduledAt={note.next_scheduled_at}
               />
             )}
             <DeleteNoteDialog noteId={note.id} noteTitle={note.title} />
