@@ -59,7 +59,7 @@ const nextConfig: NextConfig = {
             value: "camera=(), microphone=(), geolocation=()",
           },
           // ⚠️  HSTS(Strict-Transport-Security) 적용 전 반드시 확인사항:
-          // - HSTS는 브라우저에 max-age(300초 = 5분)동안 캐시된다
+          // - HSTS는 브라우저에 max-age(86400초 = 1일)동안 캐시된다
           // - production에서 한 번 적용되면 해당 브라우저는 HTTP 접근을 설정 기간 동안 차단한다
           // - 배포 전에 HTTPS가 정상 동작하는지 반드시 확인해야 한다
           // - 잘못 적용 시 사용자 접근이 max-age 기간 동안 차단될 수 있다
@@ -68,7 +68,7 @@ const nextConfig: NextConfig = {
             ? [
                 {
                   key: "Strict-Transport-Security",
-                  value: "max-age=300; includeSubDomains",
+                  value: "max-age=86400; includeSubDomains",
                 },
               ]
             : []),
