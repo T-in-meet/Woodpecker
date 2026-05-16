@@ -2,11 +2,13 @@
 
 import { CalendarClock, RotateCcw } from "lucide-react";
 import Link from "next/link";
+import { useMemo } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { getNoteDetailRoute } from "@/lib/constants/routes";
 import { formatDateKST } from "@/lib/utils/formatDate";
+import { stripMarkdown } from "@/lib/utils/stripMarkdown";
 
 import type { NoteSummary } from "../queries";
 import { getNextReviewText, getReviewStatus } from "../utils/noteStatus";
@@ -16,6 +18,10 @@ export function NoteGridCard({ note }: { note: NoteSummary }) {
   const status = getReviewStatus(note);
   const nextReviewText = getNextReviewText(status, note.next_review_at);
   const canReview = status === "available";
+  const contentPreview = useMemo(
+    () => stripMarkdown(note.content),
+    [note.content],
+  );
 
   return (
     <Link
@@ -32,7 +38,7 @@ export function NoteGridCard({ note }: { note: NoteSummary }) {
           {/* Content preview */}
           {note.content.trim() && (
             <p className="line-clamp-3 text-sm text-muted-foreground">
-              {note.content}
+              {contentPreview}
             </p>
           )}
 
