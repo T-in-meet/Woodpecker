@@ -23,7 +23,6 @@ export function DeleteAccountSection({ userEmail }: DeleteAccountSectionProps) {
       <Separator />
       <CardContent>
         <div className="pt-5">
-          {/* <h4 className="mb-2 text-sm font-medium">계정 삭제</h4> */}
           <p className="mb-4 text-sm text-muted-foreground">
             계정을 삭제하면 모든 데이터가 영구적으로 삭제됩니다.
           </p>

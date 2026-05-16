@@ -302,13 +302,13 @@ SELECT ok(
 SELECT ok(
   (
     SELECT n.review_round = 1
-      AND n.next_review_at = rl.completed_at + interval '3 days'
+      AND n.next_review_at = public.kst_day_start(rl.completed_at + interval '3 days')
     FROM public.notes n
     JOIN public.review_logs rl
       ON rl.id = current_setting('test.review_complete_log_round1_id')::uuid
     WHERE n.id = current_setting('test.review_complete_note_round1_id')::uuid
   ),
-  $$round 1 completion should schedule the next review three days later$$
+  $$round 1 completion should schedule the next review three days later (KST midnight)$$
 );
 
 SELECT is(
@@ -388,13 +388,13 @@ SELECT is(
 SELECT ok(
   (
     SELECT n.review_round = 2
-      AND n.next_review_at = rl.completed_at + interval '7 days'
+      AND n.next_review_at = public.kst_day_start(rl.completed_at + interval '7 days')
     FROM public.notes n
     JOIN public.review_logs rl
       ON rl.id = current_setting('test.review_complete_log_round2_id')::uuid
     WHERE n.id = current_setting('test.review_complete_note_round2_id')::uuid
   ),
-  $$round 2 completion should schedule the next review seven days later$$
+  $$round 2 completion should schedule the next review seven days later (KST midnight)$$
 );
 
 SELECT is(
@@ -453,11 +453,16 @@ SELECT is(
 SELECT ok(
   (
     SELECT n.review_round = 1
-      AND n.next_review_at = public.apply_time_of_day_not_before(
+      AND n.next_review_at = public.kst_day_start(
+        public.apply_time_of_day_not_before(
+          completed.completed_at + interval '3 days',
+          TIME '16:00'
+        )
+      )
+      AND generated.scheduled_at = public.apply_time_of_day_not_before(
         completed.completed_at + interval '3 days',
         TIME '16:00'
       )
-      AND generated.scheduled_at = n.next_review_at
       AND generated.notification_base_scheduled_at = completed.completed_at + interval '3 days'
     FROM public.notes n
     JOIN public.review_logs completed
@@ -468,7 +473,7 @@ SELECT ok(
      AND generated.completed_at IS NULL
     WHERE n.id = current_setting('test.review_complete_note_notification_time_id')::uuid
   ),
-  $$notification time should shift the generated next review and retain the base cadence timestamp$$
+  $$notification time should shift the log scheduled_at and notes.next_review_at to KST midnight of actual notification date$$
 );
 
 SELECT public.update_notification_time_of_day(
@@ -484,7 +489,7 @@ SELECT public.update_notification_time_of_day(
 SELECT ok(
   (
     SELECT n.notification_time_of_day IS NULL
-      AND n.next_review_at = TIMESTAMPTZ '2026-05-01 14:30:00+09'
+      AND n.next_review_at = public.kst_day_start(TIMESTAMPTZ '2026-05-01 14:30:00+09')
       AND rl.scheduled_at = TIMESTAMPTZ '2026-05-01 14:30:00+09'
       AND rl.notification_base_scheduled_at IS NULL
     FROM public.notes n
@@ -508,7 +513,7 @@ SELECT ok(
   (
     SELECT n.review_round = 1
       AND n.notification_time_of_day IS NULL
-      AND n.next_review_at = completed.completed_at + interval '3 days'
+      AND n.next_review_at = public.kst_day_start(completed.completed_at + interval '3 days')
       AND generated.scheduled_at = completed.completed_at + interval '3 days'
       AND generated.notification_base_scheduled_at IS NULL
     FROM public.notes n

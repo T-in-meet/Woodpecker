@@ -4,12 +4,14 @@
 
 BEGIN;
 
-SELECT plan(11);
+SELECT plan(14);
 
 SELECT set_config('test.notification_time_user_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notification_time_note_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notification_time_log_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notification_time_duplicate_log_id', gen_random_uuid()::text, true);
+SELECT set_config('test.notification_time_shift_note_id', gen_random_uuid()::text, true);
+SELECT set_config('test.notification_time_shift_log_id', gen_random_uuid()::text, true);
 
 SELECT is(
   public.apply_time_of_day(
@@ -55,12 +57,27 @@ VALUES (
   'content',
   0,
   TIMESTAMPTZ '2026-05-01 14:30:00+09'
+),
+(
+  current_setting('test.notification_time_shift_note_id')::uuid,
+  current_setting('test.notification_time_user_id')::uuid,
+  'notification time shift note',
+  'content',
+  0,
+  TIMESTAMPTZ '2026-05-01 14:30:00+09'
 );
 
 INSERT INTO public.review_logs (id, note_id, user_id, round, scheduled_at)
 VALUES (
   current_setting('test.notification_time_log_id')::uuid,
   current_setting('test.notification_time_note_id')::uuid,
+  current_setting('test.notification_time_user_id')::uuid,
+  1,
+  TIMESTAMPTZ '2026-05-01 14:30:00+09'
+),
+(
+  current_setting('test.notification_time_shift_log_id')::uuid,
+  current_setting('test.notification_time_shift_note_id')::uuid,
   current_setting('test.notification_time_user_id')::uuid,
   1,
   TIMESTAMPTZ '2026-05-01 14:30:00+09'
@@ -143,8 +160,8 @@ SELECT is(
     FROM public.notes
     WHERE id = current_setting('test.notification_time_note_id')::uuid
   ),
-  TIMESTAMPTZ '2026-05-01 16:00:00+09',
-  $$notes.next_review_at should follow the shifted pending log$$
+  public.kst_day_start(TIMESTAMPTZ '2026-05-01 16:00:00+09'),
+  $$notes.next_review_at should follow KST midnight of the actual notification date (shifted scheduled_at)$$
 );
 
 SELECT lives_ok(
@@ -160,7 +177,7 @@ SELECT lives_ok(
 SELECT ok(
   (
     SELECT n.notification_time_of_day IS NULL
-      AND n.next_review_at = TIMESTAMPTZ '2026-05-01 14:30:00+09'
+      AND n.next_review_at = public.kst_day_start(TIMESTAMPTZ '2026-05-01 14:30:00+09')
       AND rl.scheduled_at = TIMESTAMPTZ '2026-05-01 14:30:00+09'
       AND rl.notification_base_scheduled_at IS NULL
     FROM public.notes n
@@ -169,6 +186,41 @@ SELECT ok(
     WHERE n.id = current_setting('test.notification_time_note_id')::uuid
   ),
   $$clearing the custom time should restore the retained cadence timestamp$$
+);
+
+-- 알림 시각(08:00)이 base scheduled_at(14:30)보다 이른 경우에도 같은 KST 날짜를 유지해야 함.
+-- scheduled_at: 2026-05-01 14:30+09, notification_time: 08:00
+-- → apply_time_of_day → 2026-05-01 08:00+09 (같은 날)
+-- → next_review_at = kst_day_start(2026-05-01 08:00+09) = 2026-05-01 00:00+09
+
+SELECT lives_ok(
+  format(
+    $sql$
+      SELECT public.update_notification_time_of_day('%s'::uuid, TIME '08:00');
+    $sql$,
+    current_setting('test.notification_time_shift_note_id')
+  ),
+  $$setting a notification time earlier than base scheduled_at should succeed$$
+);
+
+SELECT is(
+  (
+    SELECT scheduled_at
+    FROM public.review_logs
+    WHERE id = current_setting('test.notification_time_shift_log_id')::uuid
+  ),
+  TIMESTAMPTZ '2026-05-01 08:00:00+09',
+  $$when notification time is earlier than base, scheduled_at should stay on the same KST date$$
+);
+
+SELECT is(
+  (
+    SELECT next_review_at
+    FROM public.notes
+    WHERE id = current_setting('test.notification_time_shift_note_id')::uuid
+  ),
+  public.kst_day_start(TIMESTAMPTZ '2026-05-01 08:00:00+09'),
+  $$next_review_at should follow the same KST date when notification time is earlier than base$$
 );
 
 SELECT * FROM finish();

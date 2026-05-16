@@ -5,6 +5,11 @@ import { GripVertical } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils/cn";
 
 import { BubbleMenuBar } from "./BubbleMenuBar";
@@ -21,12 +26,17 @@ type BlockHandleMenuProps = {
   editor: Editor;
 };
 
-type BlockAnchorPositionType = {
+export type BlockAnchorPositionType = {
   blockBottom: number;
+  blockHasMeasurableRect: boolean;
+  blockHeight: number;
   blockLeft: number;
   blockTop: number;
+  blockWidth: number;
   handleLeft: number;
   handleTop: number;
+  isCodeBlock: boolean;
+  markerOffset: number;
 };
 
 export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
@@ -34,6 +44,7 @@ export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
     () => !editor.isDestroyed && editor.view.hasFocus(),
   );
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isTooltipOpen, setIsTooltipOpen] = useState(false);
   const [anchorPosition, setAnchorPosition] =
     useState<BlockAnchorPositionType | null>(null);
   const handleRef = useRef<HTMLButtonElement>(null);
@@ -56,14 +67,20 @@ export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
 
     const rect = blockElement.getBoundingClientRect();
     const fallbackRect = editor.view.dom.getBoundingClientRect();
-    const effectiveRect =
-      rect.height > 0 || rect.width > 0 ? rect : fallbackRect;
+    const blockHasMeasurableRect = rect.height > 0 || rect.width > 0;
+    const effectiveRect = blockHasMeasurableRect ? rect : fallbackRect;
     const handleOffset = getBlockHandleMarkerOffset(blockElement);
+    const isCodeBlock =
+      blockElement.tagName === "PRE" ||
+      (!editor.isDestroyed && editor.isActive("codeBlock"));
 
     setAnchorPosition({
       blockBottom: effectiveRect.bottom,
+      blockHasMeasurableRect,
+      blockHeight: effectiveRect.height,
       blockLeft: effectiveRect.left,
       blockTop: effectiveRect.top,
+      blockWidth: effectiveRect.width,
       handleLeft: Math.max(
         MENU_PADDING,
         effectiveRect.left - HANDLE_SIZE - HANDLE_MARGIN - handleOffset,
@@ -73,6 +90,8 @@ export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
         effectiveRect.top +
           Math.max(0, (effectiveRect.height - HANDLE_SIZE) / 2),
       ),
+      isCodeBlock,
+      markerOffset: handleOffset,
     });
   }, [editor]);
 
@@ -211,36 +230,70 @@ export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
     }
   };
 
+  const shouldRenderOverlay =
+    isMenuOpen && anchorPosition.blockHasMeasurableRect;
+  const overlayLeft = anchorPosition.blockLeft - anchorPosition.markerOffset;
+  const overlayWidth = anchorPosition.blockWidth + anchorPosition.markerOffset;
+
   return createPortal(
     <>
-      <button
-        ref={handleRef}
-        type="button"
-        onMouseDown={(event) => {
-          event.preventDefault();
+      {shouldRenderOverlay && (
+        <div
+          aria-hidden="true"
+          className={cn(
+            "pointer-events-none fixed z-30 rounded-md ring-1 ring-ring/20",
+            !anchorPosition.isCodeBlock && "bg-muted/40",
+          )}
+          style={{
+            left: overlayLeft,
+            top: anchorPosition.blockTop,
+            width: overlayWidth,
+            height: anchorPosition.blockHeight,
+          }}
+          data-testid="block-handle-overlay"
+        />
+      )}
+
+      <Tooltip
+        open={isMenuOpen ? false : isTooltipOpen}
+        onOpenChange={(nextOpen) => {
+          if (!isMenuOpen) {
+            setIsTooltipOpen(nextOpen);
+          }
         }}
-        onClick={() => {
-          setIsMenuOpen((current) => !current);
-          scheduleSyncAnchorPosition();
-        }}
-        className={cn(
-          "fixed z-40 inline-flex items-center justify-center rounded-md border border-border/60",
-          "bg-background/95 text-muted-foreground shadow-sm backdrop-blur transition-colors",
-          "hover:bg-muted hover:text-foreground",
-          isMenuOpen && "bg-muted text-foreground",
-        )}
-        style={{
-          width: HANDLE_SIZE,
-          height: HANDLE_SIZE,
-          left: anchorPosition.handleLeft,
-          top: anchorPosition.handleTop,
-        }}
-        aria-label="Open block toolbar"
-        aria-expanded={isMenuOpen}
-        aria-haspopup="dialog"
       >
-        <GripVertical className="size-3.5" />
-      </button>
+        <TooltipTrigger asChild>
+          <button
+            ref={handleRef}
+            type="button"
+            onMouseDown={(event) => {
+              event.preventDefault();
+            }}
+            onClick={() => {
+              setIsMenuOpen((current) => !current);
+              scheduleSyncAnchorPosition();
+            }}
+            className={cn(
+              "fixed z-40 inline-flex items-center justify-center rounded-md border border-border/60",
+              "bg-background/95 text-muted-foreground shadow-sm backdrop-blur transition-colors",
+              "hover:bg-muted hover:text-foreground",
+              isMenuOpen && "bg-muted text-foreground",
+            )}
+            style={{
+              width: HANDLE_SIZE,
+              height: HANDLE_SIZE,
+              left: anchorPosition.handleLeft,
+              top: anchorPosition.handleTop,
+            }}
+            aria-label="블록 도구 열기"
+            aria-expanded={isMenuOpen}
+            aria-haspopup="dialog"
+          >
+            <GripVertical className="size-3.5" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="left">블록 도구</TooltipContent>
+      </Tooltip>
 
       {isMenuOpen && (
         <div
@@ -271,19 +324,20 @@ type MenuPositionType = {
   top: number;
 };
 
-function computeMenuPosition(
+export function computeMenuPosition(
   anchor: BlockAnchorPositionType,
   measuredWidth: number | null,
   measuredHeight: number | null,
 ): MenuPositionType {
+  // 리스트 아이템의 경우 blockLeft는 텍스트 시작점이고 마커(•, 1.)는 부모 UL/OL의
+  // padding 영역(blockLeft 왼쪽)에 위치한다. 메뉴의 우측 경계를 텍스트 기준으로 잡으면
+  // 마커를 덮으므로, 마커 좌측 가장자리(blockLeft - markerOffset)를 앵커로 사용한다.
+  const anchorLeft = anchor.blockLeft - anchor.markerOffset;
   const estimatedMenuWidth = Math.min(
     MENU_MAX_WIDTH,
     window.innerWidth - MENU_PADDING * 2,
   );
-  const availableLeftWidth = Math.max(
-    0,
-    anchor.blockLeft - MENU_GAP - MENU_PADDING,
-  );
+  const availableLeftWidth = Math.max(0, anchorLeft - MENU_GAP - MENU_PADDING);
   const canPlaceLeft = availableLeftWidth >= MIN_LEFT_MENU_WIDTH;
   const maxWidth = canPlaceLeft
     ? Math.min(MENU_MAX_WIDTH, availableLeftWidth)
@@ -292,9 +346,9 @@ function computeMenuPosition(
   const height = measuredHeight ?? 56;
 
   const left = canPlaceLeft
-    ? Math.max(MENU_PADDING, anchor.blockLeft - MENU_GAP - width)
+    ? Math.max(MENU_PADDING, anchorLeft - MENU_GAP - width)
     : Math.min(
-        Math.max(MENU_PADDING, anchor.blockLeft),
+        Math.max(MENU_PADDING, anchorLeft),
         Math.max(MENU_PADDING, window.innerWidth - width - MENU_PADDING),
       );
 
@@ -362,7 +416,7 @@ function getBlockNodeRange(
   return blockRange;
 }
 
-function getActiveBlockElement(editor: Editor): HTMLElement | null {
+export function getActiveBlockElement(editor: Editor): HTMLElement | null {
   const rootElement = editor.view.dom;
   const { from } = editor.state.selection;
   const selectedNodeDom = editor.view.nodeDOM(from);
@@ -416,6 +470,15 @@ function getActiveBlockElement(editor: Editor): HTMLElement | null {
     rootElement.contains(listItemElement)
   ) {
     return listItemElement;
+  }
+
+  const blockquoteElement = activeElement.closest("blockquote");
+
+  if (
+    blockquoteElement instanceof HTMLElement &&
+    rootElement.contains(blockquoteElement)
+  ) {
+    return blockquoteElement;
   }
 
   const blockElement = activeElement.closest(

@@ -42,9 +42,6 @@ export function FaqSection() {
   return (
     <section id="faq">
       <div className="mx-auto max-w-3xl px-6 py-20 md:py-28">
-        <p className="text-center text-sm font-medium text-muted-foreground">
-          궁금한 점이 있으신가요?
-        </p>
         <h2 className="mt-2 text-center text-3xl font-bold tracking-tight md:text-4xl">
           자주 묻는 질문
         </h2>
@@ -62,17 +59,10 @@ export function FaqSection() {
           ))}
         </Accordion>
 
-        <div className="mt-12 rounded-xl border bg-card p-6 text-center">
-          <p className="text-sm font-medium">찾으시는 답변이 없으신가요?</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            궁금한 점이 있으시다면 언제든 연락주세요.
-          </p>
-          <a
-            href="mailto:woodpecker.team.dev@gmail.com"
-            className="mt-3 inline-block text-sm font-medium text-primary hover:underline"
-          >
-            woodpecker.team.dev@gmail.com
-          </a>
+        <div className="mt-12 rounded-xl border bg-card p-6 text-center ">
+          <p>찾으시는 답변이 없으신가요?</p>
+          <p>궁금한 점이 있으시다면 언제든 연락주세요.</p>
+          <p className="mt-2 font-medium">woodpecker.dev.team@gmail.com</p>
         </div>
       </div>
     </section>
