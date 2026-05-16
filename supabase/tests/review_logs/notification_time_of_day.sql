@@ -188,10 +188,10 @@ SELECT ok(
   $$clearing the custom time should restore the retained cadence timestamp$$
 );
 
--- 알림 시각(08:00)이 base scheduled_at(14:30)보다 이른 경우 → 다음 날로 day shift
+-- 알림 시각(08:00)이 base scheduled_at(14:30)보다 이른 경우에도 같은 KST 날짜를 유지해야 함.
 -- scheduled_at: 2026-05-01 14:30+09, notification_time: 08:00
--- → apply_time_of_day_not_before → 2026-05-02 08:00+09 (다음 날)
--- → next_review_at = kst_day_start(2026-05-02 08:00+09) = 2026-05-02 00:00+09
+-- → apply_time_of_day → 2026-05-01 08:00+09 (같은 날)
+-- → next_review_at = kst_day_start(2026-05-01 08:00+09) = 2026-05-01 00:00+09
 
 SELECT lives_ok(
   format(
@@ -209,8 +209,8 @@ SELECT is(
     FROM public.review_logs
     WHERE id = current_setting('test.notification_time_shift_log_id')::uuid
   ),
-  TIMESTAMPTZ '2026-05-02 08:00:00+09',
-  $$when notification time is earlier than base, scheduled_at should shift to the next KST day$$
+  TIMESTAMPTZ '2026-05-01 08:00:00+09',
+  $$when notification time is earlier than base, scheduled_at should stay on the same KST date$$
 );
 
 SELECT is(
@@ -219,8 +219,8 @@ SELECT is(
     FROM public.notes
     WHERE id = current_setting('test.notification_time_shift_note_id')::uuid
   ),
-  public.kst_day_start(TIMESTAMPTZ '2026-05-02 08:00:00+09'),
-  $$when notification time causes a day shift, next_review_at should follow the shifted date's KST midnight$$
+  public.kst_day_start(TIMESTAMPTZ '2026-05-01 08:00:00+09'),
+  $$next_review_at should follow the same KST date when notification time is earlier than base$$
 );
 
 SELECT * FROM finish();
