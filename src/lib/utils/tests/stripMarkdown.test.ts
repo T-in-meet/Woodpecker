@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { stripMarkdown } from "./stripMarkdown";
+import { stripMarkdown } from "../stripMarkdown";
 
 describe("stripMarkdown", () => {
   it("헤딩 기호를 제거한다", () => {

@@ -2,6 +2,7 @@
 
 import { CalendarDays, RotateCcw } from "lucide-react";
 import Link from "next/link";
+import { useMemo } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
@@ -17,6 +18,10 @@ export function NoteListItem({ note }: { note: NoteSummary }) {
   const status = getReviewStatus(note);
   const nextReviewText = getNextReviewText(status, note.next_review_at);
   const canReview = status === "available";
+  const contentPreview = useMemo(
+    () => stripMarkdown(note.content),
+    [note.content],
+  );
 
   return (
     <Link
@@ -36,7 +41,7 @@ export function NoteListItem({ note }: { note: NoteSummary }) {
 
           {note.content.trim() && (
             <p className="mt-2 line-clamp-1 text-sm text-muted-foreground">
-              {stripMarkdown(note.content)}
+              {contentPreview}
             </p>
           )}
 
