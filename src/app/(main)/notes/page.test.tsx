@@ -126,8 +126,8 @@ describe("NotesPage", () => {
     createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
     getNotesMock.mockRejectedValue(dbError);
 
-    await expect(
-      NotesPage({ searchParams: Promise.resolve({}) }),
-    ).rejects.toBe(dbError);
+    await expect(NotesPage({ searchParams: Promise.resolve({}) })).rejects.toBe(
+      dbError,
+    );
   });
 });
