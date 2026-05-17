@@ -6,6 +6,7 @@ import { TodayNoteList } from "@/features/notes/components/TodayNoteList";
 import { getTodayReviewNotes } from "@/features/notes/queries";
 import { NOTES_VIEW_COOKIE } from "@/hooks/useNotesView";
 import { ROUTES } from "@/lib/constants/routes";
+import { logError } from "@/lib/logger";
 import { createServerComponentClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -31,7 +32,15 @@ export default async function TodayReviewPage() {
   const initialView =
     cookieStore.get(NOTES_VIEW_COOKIE)?.value === "cards" ? "cards" : "list";
 
-  const notes = await getTodayReviewNotes(user.id);
+  let notes: Awaited<ReturnType<typeof getTodayReviewNotes>> = [];
+  try {
+    notes = await getTodayReviewNotes(user.id);
+  } catch (err) {
+    logError({
+      message: "[TodayReviewPage] getTodayReviewNotes 실패",
+      error: err,
+    });
+  }
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-10 md:px-12">

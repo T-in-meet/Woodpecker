@@ -12,6 +12,7 @@ import {
   NOTES_LIST_PAGE_SIZE,
 } from "@/lib/constants/notes";
 import { ROUTES } from "@/lib/constants/routes";
+import { logError } from "@/lib/logger";
 import { createServerComponentClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -47,7 +48,13 @@ export default async function NotesPage({ searchParams }: NotesPageProps) {
   const pageSize =
     view === "cards" ? NOTES_CARDS_PAGE_SIZE : NOTES_LIST_PAGE_SIZE;
 
-  const { notes, total } = await getNotes(user.id, page, query, pageSize);
+  let notes: Awaited<ReturnType<typeof getNotes>>["notes"] = [];
+  let total = 0;
+  try {
+    ({ notes, total } = await getNotes(user.id, page, query, pageSize));
+  } catch (err) {
+    logError({ message: "[NotesPage] getNotes 실패", error: err });
+  }
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-10 md:px-12">

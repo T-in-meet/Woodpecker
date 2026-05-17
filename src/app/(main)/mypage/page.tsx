@@ -15,6 +15,7 @@ import { getReviewWaitingNotes } from "@/features/notes/queries";
 import { PushSubscribeCard } from "@/features/notifications/components/PushSubscribeCard";
 import { getHasAnyPushSubscription } from "@/features/notifications/queries";
 import { ROUTES } from "@/lib/constants/routes";
+import { logError } from "@/lib/logger";
 import { getProfile } from "@/lib/supabase/getProfile";
 import { getUser } from "@/lib/supabase/getUser";
 
@@ -76,7 +77,14 @@ export default async function MyPage({ searchParams }: Props) {
       userId: user.id,
     });
   } else if (section === "reviews") {
-    reviewWaiting = await getReviewWaitingNotes(user.id);
+    try {
+      reviewWaiting = await getReviewWaitingNotes(user.id);
+    } catch (err) {
+      logError({
+        message: "[MypagePage] getReviewWaitingNotes 실패",
+        error: err,
+      });
+    }
   }
 
   return (
