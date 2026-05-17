@@ -33,3 +33,27 @@ export const OTP_PURPOSE_TO_SUPABASE_TYPE: Record<OtpPurpose, SupabaseOtpType> =
  * - 이 값은 서비스 내부 입력/표현 기준으로 사용된다.
  */
 export const OTP_CODE_LENGTH = 6;
+
+/**
+ * OTP 발급 결과에 email_otp가 존재하지 않을 때 사용하는 에러 메시지
+ *
+ * generateLink 결과가 비정상적이거나
+ * OTP 발급에 실패한 상황에서 사용한다.
+ */
+export const MISSING_EMAIL_OTP_ERROR_MESSAGE = "인증 번호를 받지 못했습니다.";
+
+/**
+ * OTP 만료 시간(초 단위)
+ *
+ * 이메일 안내 문구 및
+ * OTP 인증 정책의 기준값으로 사용한다.
+ */
+export const OTP_EXPIRES_IN_SECONDS = 3600;
+
+/**
+ * OTP 만료 시간(분 단위)
+ *
+ * 사용자에게 표시할 이메일 안내 문구 등
+ * 사람이 읽기 쉬운 형태가 필요한 UI 계층에서 사용한다.
+ */
+export const OTP_EXPIRES_IN_MINUTES = Math.floor(OTP_EXPIRES_IN_SECONDS / 60);
