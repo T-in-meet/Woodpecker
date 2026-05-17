@@ -55,7 +55,10 @@ function createNotesQueryMock(data: unknown, count = 0) {
   };
 }
 
-function createNoteDetailQueryMock(data: unknown) {
+function createNoteDetailQueryMock(
+  data: unknown,
+  pendingLog: { scheduled_at: string } | null = null,
+) {
   const maybeSingleMock = vi.fn().mockResolvedValue({ data });
   const userEqMock = vi.fn().mockReturnValue({
     maybeSingle: maybeSingleMock,
@@ -63,19 +66,55 @@ function createNoteDetailQueryMock(data: unknown) {
   const idEqMock = vi.fn().mockReturnValue({
     eq: userEqMock,
   });
-  const selectMock = vi.fn().mockReturnValue({
+  const noteSelectMock = vi.fn().mockReturnValue({
     eq: idEqMock,
   });
+
+  const pendingMaybeSingleMock = vi
+    .fn()
+    .mockResolvedValue({ data: pendingLog });
+  const pendingLimitMock = vi.fn().mockReturnValue({
+    maybeSingle: pendingMaybeSingleMock,
+  });
+  const pendingOrderMock = vi.fn().mockReturnValue({
+    limit: pendingLimitMock,
+  });
+  const pendingIsMock = vi.fn().mockReturnValue({
+    order: pendingOrderMock,
+  });
+  const pendingUserEqMock = vi.fn().mockReturnValue({
+    is: pendingIsMock,
+  });
+  const pendingNoteEqMock = vi.fn().mockReturnValue({
+    eq: pendingUserEqMock,
+  });
+  const pendingSelectMock = vi.fn().mockReturnValue({
+    eq: pendingNoteEqMock,
+  });
+
+  const fromMock = vi
+    .fn()
+    .mockImplementation((table: string) =>
+      table === "review_logs"
+        ? { select: pendingSelectMock }
+        : { select: noteSelectMock },
+    );
 
   return {
     idEqMock,
     maybeSingleMock,
-    selectMock,
+    selectMock: noteSelectMock,
     userEqMock,
+    pendingSelectMock,
+    pendingNoteEqMock,
+    pendingUserEqMock,
+    pendingIsMock,
+    pendingOrderMock,
+    pendingLimitMock,
+    pendingMaybeSingleMock,
+    fromMock,
     supabase: {
-      from: vi.fn().mockReturnValue({
-        select: selectMock,
-      }),
+      from: fromMock,
     },
   };
 }
@@ -185,9 +224,21 @@ describe("getNotes", () => {
     expect(result).toEqual({ notes: [], total: 1 });
   });
 
-  it("returns note detail with notification time of day", async () => {
-    const { supabase, selectMock, idEqMock, userEqMock, maybeSingleMock } =
-      createNoteDetailQueryMock({
+  it("returns note detail with notification time of day and pending scheduled_at", async () => {
+    const {
+      supabase,
+      selectMock,
+      idEqMock,
+      userEqMock,
+      maybeSingleMock,
+      pendingSelectMock,
+      pendingNoteEqMock,
+      pendingUserEqMock,
+      pendingIsMock,
+      pendingOrderMock,
+      pendingLimitMock,
+    } = createNoteDetailQueryMock(
+      {
         id: "11111111-1111-4111-8111-111111111111",
         title: "알림 시간 노트",
         content: "note body",
@@ -197,7 +248,9 @@ describe("getNotes", () => {
         created_at: "2026-03-29T00:00:00.000Z",
         updated_at: "2026-03-29T01:00:00.000Z",
         user_id: "22222222-2222-4222-8222-222222222222",
-      });
+      },
+      { scheduled_at: "2026-03-30T12:30:00.000Z" },
+    );
 
     createClientMock.mockResolvedValue(supabase);
 
@@ -218,10 +271,53 @@ describe("getNotes", () => {
       "22222222-2222-4222-8222-222222222222",
     );
     expect(maybeSingleMock).toHaveBeenCalledOnce();
+
+    expect(pendingSelectMock).toHaveBeenCalledWith("scheduled_at");
+    expect(pendingNoteEqMock).toHaveBeenCalledWith(
+      "note_id",
+      "11111111-1111-4111-8111-111111111111",
+    );
+    expect(pendingUserEqMock).toHaveBeenCalledWith(
+      "user_id",
+      "22222222-2222-4222-8222-222222222222",
+    );
+    expect(pendingIsMock).toHaveBeenCalledWith("completed_at", null);
+    expect(pendingOrderMock).toHaveBeenCalledWith("scheduled_at", {
+      ascending: true,
+    });
+    expect(pendingLimitMock).toHaveBeenCalledWith(1);
+
     expect(result).toMatchObject({
       id: "11111111-1111-4111-8111-111111111111",
       notification_time_of_day: "21:30:00",
+      next_scheduled_at: "2026-03-30T12:30:00.000Z",
     });
+  });
+
+  it("returns next_scheduled_at as null when no pending review_log exists", async () => {
+    const { supabase } = createNoteDetailQueryMock(
+      {
+        id: "11111111-1111-4111-8111-111111111111",
+        title: "완료된 노트",
+        content: "note body",
+        next_review_at: null,
+        notification_time_of_day: null,
+        review_round: 3,
+        created_at: "2026-03-29T00:00:00.000Z",
+        updated_at: "2026-03-29T01:00:00.000Z",
+        user_id: "22222222-2222-4222-8222-222222222222",
+      },
+      null,
+    );
+
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await getNoteById(
+      "11111111-1111-4111-8111-111111111111",
+      "22222222-2222-4222-8222-222222222222",
+    );
+
+    expect(result?.next_scheduled_at).toBeNull();
   });
 });
 
