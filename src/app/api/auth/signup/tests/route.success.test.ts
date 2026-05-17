@@ -2,8 +2,9 @@
  * 회원가입 API의 기본 성공 흐름 전용 테스트
  *
  * 이 파일은 "신규 사용자가 정상 payload로 가입할 때"의 기본 계약만 검증한다.
- * - admin.generateLink 호출 여부
- * - 이메일 소문자 정규화
+ * - createUser 호출 여부
+ * - signup OTP 발송 함수 호출 여부
+ * - raw email / canonical_email 처리
  * - 200 OK 반환
  * - 성공 응답 계약(success/code/data) 유지
  *
@@ -17,7 +18,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
-import { sendAuthEmail } from "@/features/auth/email/sendAuthEmail";
+import { issueOtpAndSendEmail } from "@/features/auth/email/issueOtpAndSendEmail";
 import { resetEligibilityStore } from "@/features/auth/lib/checkRequestEligibility";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { ROUTES } from "@/lib/constants/routes";
@@ -27,12 +28,11 @@ import { POST } from "../route";
 import { makeRequest } from "./utils/signupTestHelper";
 
 vi.mock("@/features/auth/lib/getUserByEmail");
-vi.mock("@/features/auth/email/sendAuthEmail");
+vi.mock("@/features/auth/email/issueOtpAndSendEmail");
 vi.mock("@/lib/supabase/admin");
 
 describe("회원가입 API 기본 성공 흐름 검증", () => {
   const mockCreateUser = vi.fn();
-  const mockGenerateLink = vi.fn();
 
   beforeEach(() => {
     resetEligibilityStore();
@@ -41,11 +41,11 @@ describe("회원가입 API 기본 성공 흐름 검증", () => {
 
     vi.mocked(createAdminClient).mockReturnValue({
       auth: {
-        admin: { createUser: mockCreateUser, generateLink: mockGenerateLink },
+        admin: { createUser: mockCreateUser },
       },
     } as never);
     vi.mocked(getUserByEmail).mockResolvedValue(null);
-    vi.mocked(sendAuthEmail).mockResolvedValue(undefined);
+    vi.mocked(issueOtpAndSendEmail).mockResolvedValue(undefined);
     mockCreateUser.mockResolvedValue({
       data: {
         user: { id: "user-id", email: "test@example.com" },
@@ -61,43 +61,24 @@ describe("회원가입 API 기본 성공 흐름 검증", () => {
     agreements: { termsOfService: true as const, privacyPolicy: true as const },
   };
 
-  const mockSignupGenerateLinkSuccess = () => {
-    mockGenerateLink.mockResolvedValue({
-      data: {
-        user: { id: "user-id", email: "test@example.com" },
-        properties: { hashed_token: "hashed-token" },
-      },
-      error: null,
-    });
-  };
+  it("TC-01: 신규 이메일 요청 시 createUser 이후 signup OTP 발송 함수가 1회 호출된다", async () => {
+    const response = await POST(makeRequest(requestBody));
 
-  it("TC-01: 신규 이메일 요청 시 generateLink(magiclink)이 1회 호출된다", async () => {
-    mockSignupGenerateLinkSuccess();
-
-    await POST(makeRequest(requestBody));
-
-    expect(mockGenerateLink).toHaveBeenCalledTimes(1);
+    expect(response.status).toBe(200);
     expect(mockCreateUser).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(issueOtpAndSendEmail)).toHaveBeenCalledTimes(1);
   });
 
-  it("TC-02: raw email이 generateLink에 전달된다", async () => {
-    mockSignupGenerateLinkSuccess();
-
+  it("TC-02: raw email이 signup OTP 발송 함수에 전달된다", async () => {
     await POST(makeRequest(requestBody));
 
-    // canonicalization을 위해 canonical email은 내부용으로만 사용
-    // generateLink는 auth.users의 raw email 기준으로 호출
-    expect(mockGenerateLink).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "magiclink",
-        email: "Test@Example.com",
-      }),
-    );
+    expect(vi.mocked(issueOtpAndSendEmail)).toHaveBeenCalledWith({
+      email: "Test@Example.com",
+      purpose: "signup",
+    });
   });
 
   it("TC-03: createUser는 raw email을 저장하고 canonical_email은 metadata로 저장한다", async () => {
-    mockSignupGenerateLinkSuccess();
-
     await POST(makeRequest(requestBody));
 
     expect(mockCreateUser).toHaveBeenCalledWith(
@@ -112,16 +93,12 @@ describe("회원가입 API 기본 성공 흐름 검증", () => {
   });
 
   it("TC-04: API는 200 OK를 반환한다", async () => {
-    mockSignupGenerateLinkSuccess();
-
     const response = await POST(makeRequest(requestBody));
 
     expect(response.status).toBe(200);
   });
 
   it("TC-05: 성공 응답 body는 success true, code SIGNUP_SUCCESS, data 객체를 포함한다", async () => {
-    mockSignupGenerateLinkSuccess();
-
     const response = await POST(makeRequest(requestBody));
     const body = await response.json();
 
@@ -132,8 +109,6 @@ describe("회원가입 API 기본 성공 흐름 검증", () => {
   });
 
   it("TC-06: 성공 응답 data.email은 사용자 입력 이메일(raw email)을 보존한다", async () => {
-    mockSignupGenerateLinkSuccess();
-
     const response = await POST(makeRequest(requestBody));
     const body = await response.json();
 
@@ -143,14 +118,12 @@ describe("회원가입 API 기본 성공 흐름 검증", () => {
   });
 
   it("TC-07: 성공 응답 data는 email(raw)과 redirectTo만 포함한다", async () => {
-    mockSignupGenerateLinkSuccess();
-
     const response = await POST(makeRequest(requestBody));
     const body = await response.json();
 
     expect(body.data).toEqual({
       email: "Test@Example.com",
-      redirectTo: ROUTES.VERIFY_EMAIL,
+      redirectTo: `${ROUTES.VERIFY_OTP}?purpose=signup&email=${encodeURIComponent("Test@Example.com")}`,
     });
   });
 });

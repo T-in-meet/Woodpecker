@@ -14,15 +14,14 @@
  * 검증:
  * - getUserByEmail이 canonical email으로 호출되는지 확인
  * - 동일 canonical 별칭들이 기존 사용자로 감지되는지 확인
- * - 응답 계약(SIGNUP_SUCCESS)은 변경되지 않는지 확인
+ * - OTP 전환 이후에도 응답 계약(SIGNUP_SUCCESS, VERIFY_OTP redirect)이 유지되는지 확인
  * - Account enumeration 방어 원칙 유지
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
-import { issueAuthEmailLinkAndSend } from "@/features/auth/email/issueAuthEmailLinkAndSend";
-import { sendAuthEmail } from "@/features/auth/email/sendAuthEmail";
+import { issueOtpAndSendEmail } from "@/features/auth/email/issueOtpAndSendEmail";
 import { resetEligibilityStore } from "@/features/auth/lib/checkRequestEligibility";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { ROUTES } from "@/lib/constants/routes";
@@ -32,8 +31,7 @@ import { POST } from "../route";
 import { makeRequest } from "./utils/signupTestHelper";
 
 vi.mock("@/features/auth/lib/getUserByEmail");
-vi.mock("@/features/auth/email/issueAuthEmailLinkAndSend");
-vi.mock("@/features/auth/email/sendAuthEmail");
+vi.mock("@/features/auth/email/issueOtpAndSendEmail");
 vi.mock("@/lib/supabase/admin");
 
 beforeEach(() => {
@@ -42,11 +40,10 @@ beforeEach(() => {
   process.env["EMAIL_TICKET_SECRET"] = "test-ticket-secret";
 
   const mockCreateUser = vi.fn();
-  const mockGenerateLink = vi.fn();
 
   vi.mocked(createAdminClient).mockReturnValue({
     auth: {
-      admin: { createUser: mockCreateUser, generateLink: mockGenerateLink },
+      admin: { createUser: mockCreateUser },
     },
   } as never);
 
@@ -55,17 +52,8 @@ beforeEach(() => {
     error: null,
   });
 
-  mockGenerateLink.mockResolvedValue({
-    data: {
-      user: { id: "user-id", email: "test@example.com" },
-      properties: { hashed_token: "hashed-token" },
-    },
-    error: null,
-  });
-
   vi.mocked(getUserByEmail).mockResolvedValue(null);
-  vi.mocked(issueAuthEmailLinkAndSend).mockResolvedValue(undefined);
-  vi.mocked(sendAuthEmail).mockResolvedValue(undefined);
+  vi.mocked(issueOtpAndSendEmail).mockResolvedValue(undefined);
 });
 
 describe("회원가입 - Gmail alias collision (canonicalization)", () => {
@@ -104,9 +92,9 @@ describe("회원가입 - Gmail alias collision (canonicalization)", () => {
       expect(vi.mocked(getUserByEmail)).toHaveBeenCalledWith("user@gmail.com");
 
       // 발송은 canonical이 아니라 existingUser.email(raw) 기준으로 호출
-      expect(vi.mocked(issueAuthEmailLinkAndSend)).toHaveBeenCalledWith({
-        type: "magiclink",
+      expect(vi.mocked(issueOtpAndSendEmail)).toHaveBeenCalledWith({
         email: "u.s.e.r+legacy@gmail.com",
+        purpose: "signup",
       });
     });
 
@@ -128,7 +116,9 @@ describe("회원가입 - Gmail alias collision (canonicalization)", () => {
       expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
       expect(body.data).toHaveProperty("email");
       expect(body.data).toHaveProperty("redirectTo");
-      expect(body.data.redirectTo).toBe(ROUTES.VERIFY_EMAIL);
+      expect(body.data.redirectTo).toBe(
+        `${ROUTES.VERIFY_OTP}?purpose=signup&email=${encodeURIComponent("user+tag@gmail.com")}`,
+      );
     });
   });
 
@@ -271,7 +261,9 @@ describe("회원가입 - Gmail alias collision (canonicalization)", () => {
       expect(body.success).toBe(true);
       expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
       expect(body.data).toHaveProperty("email");
-      expect(body.data).toHaveProperty("redirectTo");
+      expect(body.data.redirectTo).toBe(
+        `${ROUTES.VERIFY_OTP}?purpose=signup&email=${encodeURIComponent("user+tag@gmail.com")}`,
+      );
     });
   });
 });

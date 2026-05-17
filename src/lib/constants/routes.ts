@@ -12,6 +12,7 @@ export const ROUTES = {
   CALLBACK: "/auth/callback",
   RESET_PASSWORD: "/reset-password",
   FORGOT_PASSWORD: "/forgot-password",
+  VERIFY_OTP: "/verify-otp",
 } as const;
 
 export type Route = (typeof ROUTES)[keyof typeof ROUTES];

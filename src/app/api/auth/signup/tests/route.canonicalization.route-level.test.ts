@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
-import { issueAuthEmailLinkAndSend } from "@/features/auth/email/issueAuthEmailLinkAndSend";
+import { issueOtpAndSendEmail } from "@/features/auth/email/issueOtpAndSendEmail";
 import { MIN_RESPONSE_MS } from "@/features/auth/lib/applyMinimumResponseTime";
 import {
   checkIpRateLimitPrecheck,
@@ -14,7 +14,7 @@ import { POST } from "../route";
 
 vi.mock("@/features/auth/lib/checkRequestEligibility");
 vi.mock("@/features/auth/lib/getUserByEmail");
-vi.mock("@/features/auth/email/issueAuthEmailLinkAndSend");
+vi.mock("@/features/auth/email/issueOtpAndSendEmail");
 
 function makeRequest(email: string, ip: string): NextRequest {
   return new NextRequest("http://localhost/api/auth/signup", {
@@ -53,7 +53,7 @@ describe("signup route canonical identity key contract", () => {
       email: "stored-user@example.com",
       email_confirmed_at: null,
     } as never);
-    vi.mocked(issueAuthEmailLinkAndSend).mockResolvedValue(undefined);
+    vi.mocked(issueOtpAndSendEmail).mockResolvedValue(undefined);
   });
 
   afterEach(() => {

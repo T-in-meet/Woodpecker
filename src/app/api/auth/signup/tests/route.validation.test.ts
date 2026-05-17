@@ -11,7 +11,7 @@
  * - 이메일/닉네임 trim 정규화
  * - 비밀번호 원본 유지
  * - validation 실패 응답 계약
- * - validation 실패 시 외부 호출 차단
+ * - validation 실패 시 createUser / signup OTP 발송 차단
  * - 다중 오류 수집
  *
  * 제외:
@@ -23,7 +23,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
-import { sendAuthEmail } from "@/features/auth/email/sendAuthEmail";
+import { issueOtpAndSendEmail } from "@/features/auth/email/issueOtpAndSendEmail";
 import { resetEligibilityStore } from "@/features/auth/lib/checkRequestEligibility";
 import { PASSWORD_MIN_LENGTH } from "@/lib/constants/user";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -33,7 +33,7 @@ import { POST } from "../route";
 import { makeRequest } from "./utils/signupTestHelper";
 
 vi.mock("@/features/auth/lib/getUserByEmail");
-vi.mock("@/features/auth/email/sendAuthEmail");
+vi.mock("@/features/auth/email/issueOtpAndSendEmail");
 vi.mock("@/lib/supabase/admin");
 
 // 테스트 간 rate limit store 공유 상태 제거
@@ -43,20 +43,19 @@ beforeEach(() => {
 
 describe("PR-API-02 회원가입 입력 검증 - 필수값 검증", () => {
   const mockCreateUser = vi.fn();
-  const mockGenerateLink = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(createAdminClient).mockReturnValue({
       auth: {
-        admin: { createUser: mockCreateUser, generateLink: mockGenerateLink },
+        admin: { createUser: mockCreateUser },
       },
     } as never);
     mockCreateUser.mockResolvedValue({
       data: { user: { id: "user-id", email: "test@example.com" } },
       error: null,
     });
-    vi.mocked(sendAuthEmail).mockResolvedValue(undefined);
+    vi.mocked(issueOtpAndSendEmail).mockResolvedValue(undefined);
   });
 
   // validation 실패 응답 계약을 공통 검증하는 helper
@@ -85,7 +84,9 @@ describe("PR-API-02 회원가입 입력 검증 - 필수값 검증", () => {
       "email",
       VALIDATION_REASON.REQUIRED,
     );
-    expect(mockGenerateLink).toHaveBeenCalledTimes(0);
+
+    expect(mockCreateUser).not.toHaveBeenCalled();
+    expect(vi.mocked(issueOtpAndSendEmail)).not.toHaveBeenCalled();
   });
 
   it("TC-02. 비밀번호 필드 누락 시 validation 실패를 반환한다", async () => {
@@ -98,7 +99,8 @@ describe("PR-API-02 회원가입 입력 검증 - 필수값 검증", () => {
       "password",
       VALIDATION_REASON.REQUIRED,
     );
-    expect(mockGenerateLink).toHaveBeenCalledTimes(0);
+    expect(mockCreateUser).not.toHaveBeenCalled();
+    expect(vi.mocked(issueOtpAndSendEmail)).not.toHaveBeenCalled();
   });
 
   it("TC-03. 닉네임 필드 누락 시 validation 실패를 반환한다", async () => {
@@ -111,7 +113,8 @@ describe("PR-API-02 회원가입 입력 검증 - 필수값 검증", () => {
       "nickname",
       VALIDATION_REASON.REQUIRED,
     );
-    expect(mockGenerateLink).toHaveBeenCalledTimes(0);
+    expect(mockCreateUser).not.toHaveBeenCalled();
+    expect(vi.mocked(issueOtpAndSendEmail)).not.toHaveBeenCalled();
   });
 
   // TC-04 ~ TC-06: null 입력
@@ -129,7 +132,8 @@ describe("PR-API-02 회원가입 입력 검증 - 필수값 검증", () => {
       "email",
       VALIDATION_REASON.REQUIRED,
     );
-    expect(mockGenerateLink).toHaveBeenCalledTimes(0);
+    expect(mockCreateUser).not.toHaveBeenCalled();
+    expect(vi.mocked(issueOtpAndSendEmail)).not.toHaveBeenCalled();
   });
 
   it("TC-05. 비밀번호가 null이면 validation 실패를 반환한다", async () => {
@@ -146,7 +150,8 @@ describe("PR-API-02 회원가입 입력 검증 - 필수값 검증", () => {
       "password",
       VALIDATION_REASON.REQUIRED,
     );
-    expect(mockGenerateLink).toHaveBeenCalledTimes(0);
+    expect(mockCreateUser).not.toHaveBeenCalled();
+    expect(vi.mocked(issueOtpAndSendEmail)).not.toHaveBeenCalled();
   });
 
   it("TC-06. 닉네임이 null이면 validation 실패를 반환한다", async () => {
@@ -163,7 +168,8 @@ describe("PR-API-02 회원가입 입력 검증 - 필수값 검증", () => {
       "nickname",
       VALIDATION_REASON.REQUIRED,
     );
-    expect(mockGenerateLink).toHaveBeenCalledTimes(0);
+    expect(mockCreateUser).not.toHaveBeenCalled();
+    expect(vi.mocked(issueOtpAndSendEmail)).not.toHaveBeenCalled();
   });
 
   // TC-07 ~ TC-09: 빈값 / 공백 입력
@@ -181,7 +187,8 @@ describe("PR-API-02 회원가입 입력 검증 - 필수값 검증", () => {
       "email",
       VALIDATION_REASON.REQUIRED,
     );
-    expect(mockGenerateLink).toHaveBeenCalledTimes(0);
+    expect(mockCreateUser).not.toHaveBeenCalled();
+    expect(vi.mocked(issueOtpAndSendEmail)).not.toHaveBeenCalled();
   });
 
   it("TC-08. 비밀번호가 빈 문자열이면 validation 실패를 반환한다", async () => {
@@ -198,7 +205,8 @@ describe("PR-API-02 회원가입 입력 검증 - 필수값 검증", () => {
       "password",
       VALIDATION_REASON.REQUIRED,
     );
-    expect(mockGenerateLink).toHaveBeenCalledTimes(0);
+    expect(mockCreateUser).not.toHaveBeenCalled();
+    expect(vi.mocked(issueOtpAndSendEmail)).not.toHaveBeenCalled();
   });
 
   it("TC-09. trim 후 닉네임이 빈 문자열이면 validation 실패를 반환한다", async () => {
@@ -215,38 +223,27 @@ describe("PR-API-02 회원가입 입력 검증 - 필수값 검증", () => {
       "nickname",
       VALIDATION_REASON.REQUIRED,
     );
-    expect(mockGenerateLink).toHaveBeenCalledTimes(0);
+    expect(mockCreateUser).not.toHaveBeenCalled();
+    expect(vi.mocked(issueOtpAndSendEmail)).not.toHaveBeenCalled();
   });
 });
 
 describe("PR-API-02 회원가입 입력 검증 - 형식 / 길이 / 경계값 / 정규화", () => {
   const mockCreateUser = vi.fn();
-  const mockGenerateLink = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(createAdminClient).mockReturnValue({
       auth: {
-        admin: { createUser: mockCreateUser, generateLink: mockGenerateLink },
+        admin: { createUser: mockCreateUser },
       },
     } as never);
     mockCreateUser.mockResolvedValue({
       data: { user: { id: "user-id", email: "test@example.com" } },
       error: null,
     });
-    vi.mocked(sendAuthEmail).mockResolvedValue(undefined);
+    vi.mocked(issueOtpAndSendEmail).mockResolvedValue(undefined);
   });
-
-  // 정상 케이스가 필요한 형식/경계값 테스트에서 재사용하는 generateLink 성공 mock
-  function mockGenerateLinkSuccess(email = "test@example.com") {
-    mockGenerateLink.mockResolvedValue({
-      data: {
-        user: { id: "user-id", email },
-        properties: { hashed_token: "hashed-token" },
-      },
-      error: null,
-    });
-  }
 
   // TC-10: 형식 검증
   it("TC-10. trim 후 이메일 형식이 올바르지 않으면 validation 실패를 반환한다", async () => {
@@ -270,13 +267,12 @@ describe("PR-API-02 회원가입 입력 검증 - 형식 / 길이 / 경계값 / �
         }),
       ]),
     );
-    expect(mockGenerateLink).toHaveBeenCalledTimes(0);
+    expect(mockCreateUser).not.toHaveBeenCalled();
+    expect(vi.mocked(issueOtpAndSendEmail)).not.toHaveBeenCalled();
   });
 
   // TC-11: 형식 검증 (성공)
   it("TC-11. 앞뒤 공백이 있는 정상 이메일은 trim 후 성공 처리된다", async () => {
-    mockGenerateLinkSuccess();
-
     const response = await POST(
       makeRequest({
         email: "  test@example.com  ",
@@ -288,13 +284,16 @@ describe("PR-API-02 회원가입 입력 검증 - 형식 / 길이 / 경계값 / �
     const body = await response.json();
 
     expect(response.status).not.toBe(400);
-    expect(mockGenerateLink).toHaveBeenCalledTimes(1);
-    expect(mockGenerateLink).toHaveBeenCalledWith(
-      expect.objectContaining({ email: "test@example.com" }),
+    expect(mockCreateUser).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: "test@example.com",
+      }),
     );
-    if (body.data?.email !== undefined) {
-      expect(body.data.email).toBe("test@example.com");
-    }
+    expect(vi.mocked(issueOtpAndSendEmail)).toHaveBeenCalledWith({
+      email: "test@example.com",
+      purpose: "signup",
+    });
+    expect(body.data.email).toBe("test@example.com");
   });
 
   // TC-12: 비밀번호 최소 길이 검증
@@ -320,7 +319,8 @@ describe("PR-API-02 회원가입 입력 검증 - 형식 / 길이 / 경계값 / �
         }),
       ]),
     );
-    expect(mockGenerateLink).toHaveBeenCalledTimes(0);
+    expect(mockCreateUser).not.toHaveBeenCalled();
+    expect(vi.mocked(issueOtpAndSendEmail)).not.toHaveBeenCalled();
   });
 
   // TC-13: 길이 검증
@@ -345,13 +345,12 @@ describe("PR-API-02 회원가입 입력 검증 - 형식 / 길이 / 경계값 / �
         }),
       ]),
     );
-    expect(mockGenerateLink).toHaveBeenCalledTimes(0);
+    expect(mockCreateUser).not.toHaveBeenCalled();
+    expect(vi.mocked(issueOtpAndSendEmail)).not.toHaveBeenCalled();
   });
 
   // TC-14: 경계값 검증 (min)
   it("TC-14. trim 후 닉네임 최소 길이 값은 성공 처리된다", async () => {
-    mockGenerateLinkSuccess();
-
     const response = await POST(
       makeRequest({
         email: "test@example.com",
@@ -362,20 +361,21 @@ describe("PR-API-02 회원가입 입력 검증 - 형식 / 길이 / 경계값 / �
     );
 
     expect(response.status).not.toBe(400);
-    expect(mockGenerateLink).toHaveBeenCalledTimes(1);
-    expect(mockGenerateLink).toHaveBeenCalledWith(
+    expect(mockCreateUser).toHaveBeenCalledWith(
       expect.objectContaining({
-        options: expect.objectContaining({
-          data: expect.objectContaining({ nickname: "가" }),
+        user_metadata: expect.objectContaining({
+          nickname: "가",
         }),
       }),
     );
+    expect(vi.mocked(issueOtpAndSendEmail)).toHaveBeenCalledWith({
+      email: "test@example.com",
+      purpose: "signup",
+    });
   });
 
   // TC-15: 경계값 검증 (max)
   it("TC-15. trim 후 닉네임 최대 길이 값은 성공 처리된다", async () => {
-    mockGenerateLinkSuccess();
-
     const response = await POST(
       makeRequest({
         email: "test@example.com",
@@ -386,20 +386,21 @@ describe("PR-API-02 회원가입 입력 검증 - 형식 / 길이 / 경계값 / �
     );
 
     expect(response.status).not.toBe(400);
-    expect(mockGenerateLink).toHaveBeenCalledTimes(1);
-    expect(mockGenerateLink).toHaveBeenCalledWith(
+    expect(mockCreateUser).toHaveBeenCalledWith(
       expect.objectContaining({
-        options: expect.objectContaining({
-          data: expect.objectContaining({ nickname: "가나다라마바사아자차" }),
+        user_metadata: expect.objectContaining({
+          nickname: "가나다라마바사아자차",
         }),
       }),
     );
+    expect(vi.mocked(issueOtpAndSendEmail)).toHaveBeenCalledWith({
+      email: "test@example.com",
+      purpose: "signup",
+    });
   });
 
   // TC-16 ~ TC-18: 정규화 검증
   it("TC-16. 앞뒤 공백이 있는 이메일은 trim된 값으로 처리된다", async () => {
-    mockGenerateLinkSuccess();
-
     await POST(
       makeRequest({
         email: "  test@example.com  ",
@@ -409,15 +410,18 @@ describe("PR-API-02 회원가입 입력 검증 - 형식 / 길이 / 경계값 / �
       }),
     );
 
-    expect(mockGenerateLink).toHaveBeenCalledTimes(1);
-    expect(mockGenerateLink).toHaveBeenCalledWith(
-      expect.objectContaining({ email: "test@example.com" }),
+    expect(mockCreateUser).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: "test@example.com",
+      }),
     );
+    expect(vi.mocked(issueOtpAndSendEmail)).toHaveBeenCalledWith({
+      email: "test@example.com",
+      purpose: "signup",
+    });
   });
 
   it("TC-17. 앞뒤 공백이 있는 닉네임은 trim된 값으로 처리된다", async () => {
-    mockGenerateLinkSuccess();
-
     await POST(
       makeRequest({
         email: "test@example.com",
@@ -427,19 +431,20 @@ describe("PR-API-02 회원가입 입력 검증 - 형식 / 길이 / 경계값 / �
       }),
     );
 
-    expect(mockGenerateLink).toHaveBeenCalledTimes(1);
-    expect(mockGenerateLink).toHaveBeenCalledWith(
+    expect(mockCreateUser).toHaveBeenCalledWith(
       expect.objectContaining({
-        options: expect.objectContaining({
-          data: expect.objectContaining({ nickname: "테스터" }),
+        user_metadata: expect.objectContaining({
+          nickname: "테스터",
         }),
       }),
     );
+    expect(vi.mocked(issueOtpAndSendEmail)).toHaveBeenCalledWith({
+      email: "test@example.com",
+      purpose: "signup",
+    });
   });
 
   it("TC-18. 비밀번호는 원본 값이 유지된다", async () => {
-    mockGenerateLinkSuccess();
-
     await POST(
       makeRequest({
         email: "test@example.com",
@@ -449,26 +454,29 @@ describe("PR-API-02 회원가입 입력 검증 - 형식 / 길이 / 경계값 / �
       }),
     );
 
-    expect(mockGenerateLink).toHaveBeenCalledTimes(1);
+    expect(mockCreateUser).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(issueOtpAndSendEmail)).toHaveBeenCalledWith({
+      email: "test@example.com",
+      purpose: "signup",
+    });
   });
 });
 
 describe("PR-API-02 회원가입 입력 검증 - 실패 응답 계약 / 외부 호출 차단 / 다중 오류 수집", () => {
   const mockCreateUser = vi.fn();
-  const mockGenerateLink = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(createAdminClient).mockReturnValue({
       auth: {
-        admin: { createUser: mockCreateUser, generateLink: mockGenerateLink },
+        admin: { createUser: mockCreateUser },
       },
     } as never);
     mockCreateUser.mockResolvedValue({
       data: { user: { id: "user-id", email: "test@example.com" } },
       error: null,
     });
-    vi.mocked(sendAuthEmail).mockResolvedValue(undefined);
+    vi.mocked(issueOtpAndSendEmail).mockResolvedValue(undefined);
   });
 
   // TC-19 ~ TC-22: 실패 응답 계약 검증
@@ -545,12 +553,13 @@ describe("PR-API-02 회원가입 입력 검증 - 실패 응답 계약 / 외부 �
   });
 
   // TC-23 ~ TC-24: 외부 호출 차단
-  it("TC-23. validation 실패 시 generateLink 호출이 0회여야 한다", async () => {
+  it("TC-23. validation 실패 시 signup OTP 발송 함수 호출이 0회여야 한다", async () => {
     await POST(
       makeRequest({ email: "", password: "Password123!", nickname: "테스터" }),
     );
 
-    expect(mockGenerateLink).toHaveBeenCalledTimes(0);
+    expect(mockCreateUser).not.toHaveBeenCalled();
+    expect(vi.mocked(issueOtpAndSendEmail)).not.toHaveBeenCalled();
   });
 
   it("TC-24. validation 실패 시 모든 외부 호출이 차단되어야 한다", async () => {
@@ -562,7 +571,8 @@ describe("PR-API-02 회원가입 입력 검증 - 실패 응답 계약 / 외부 �
       }),
     );
 
-    expect(mockGenerateLink).toHaveBeenCalledTimes(0);
+    expect(mockCreateUser).not.toHaveBeenCalled();
+    expect(vi.mocked(issueOtpAndSendEmail)).not.toHaveBeenCalled();
   });
 
   // TC-25: 다중 오류 수집
@@ -593,6 +603,7 @@ describe("PR-API-02 회원가입 입력 검증 - 실패 응답 계약 / 외부 �
         }),
       ]),
     );
-    expect(mockGenerateLink).toHaveBeenCalledTimes(0);
+    expect(mockCreateUser).not.toHaveBeenCalled();
+    expect(vi.mocked(issueOtpAndSendEmail)).not.toHaveBeenCalled();
   });
 });

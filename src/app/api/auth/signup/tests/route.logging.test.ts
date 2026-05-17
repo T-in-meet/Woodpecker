@@ -3,8 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_EVENTS } from "@/features/auth/constants/authEvents";
 import { AUTH_LOG_REASONS } from "@/features/auth/constants/authLogReasons";
-import { issueAuthEmailLinkAndSend } from "@/features/auth/email/issueAuthEmailLinkAndSend";
-import { sendAuthEmail } from "@/features/auth/email/sendAuthEmail";
+import { issueOtpAndSendEmail } from "@/features/auth/email/issueOtpAndSendEmail";
 import {
   logAuthError,
   logAuthEvent,
@@ -70,12 +69,8 @@ vi.mock("@/features/auth/lib/getUserByEmail", () => ({
   getUserByEmail: vi.fn(),
 }));
 
-vi.mock("@/features/auth/email/issueAuthEmailLinkAndSend", () => ({
-  issueAuthEmailLinkAndSend: vi.fn(),
-}));
-
-vi.mock("@/features/auth/email/sendAuthEmail", () => ({
-  sendAuthEmail: vi.fn(),
+vi.mock("@/features/auth/email/issueOtpAndSendEmail", () => ({
+  issueOtpAndSendEmail: vi.fn(),
 }));
 
 vi.mock("@/lib/utils/getClientIp", () => ({
@@ -83,17 +78,12 @@ vi.mock("@/lib/utils/getClientIp", () => ({
 }));
 
 const mockCreateUser = vi.fn(async () => ({ error: null }));
-const mockGenerateLink = vi.fn(async () => ({
-  data: { properties: { hashed_token: "hashed-token" } },
-  error: null,
-}));
 
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: vi.fn(() => ({
     auth: {
       admin: {
         createUser: mockCreateUser,
-        generateLink: mockGenerateLink,
       },
     },
   })),
@@ -177,13 +167,9 @@ describe("signup 라우트 인증 로깅", () => {
       email: "user@example.com",
       email_confirmed_at: null,
     });
-    vi.mocked(issueAuthEmailLinkAndSend).mockResolvedValue(undefined);
-    vi.mocked(sendAuthEmail).mockResolvedValue(undefined);
+    vi.mocked(issueOtpAndSendEmail).mockResolvedValue(undefined);
+
     mockCreateUser.mockResolvedValue({ error: null });
-    mockGenerateLink.mockResolvedValue({
-      data: { properties: { hashed_token: "hashed-token" } },
-      error: null,
-    });
   });
 
   it("입력 검증 실패면 AUTH_INVALID_INPUT이 기록되고 최종 이벤트는 정확히 1개다", async () => {
@@ -210,12 +196,8 @@ describe("signup 라우트 인증 로깅", () => {
     const terminals = terminalEvents();
     expect(terminals).toHaveLength(1);
     expect(terminals[0]).toBe(AUTH_EVENTS.AUTH_INVALID_INPUT);
-    expect(terminals).not.toEqual(
-      expect.arrayContaining([
-        AUTH_EVENTS.AUTH_SIGNUP_COMPLETED,
-        AUTH_EVENTS.AUTH_SIGNUP_FAILED,
-      ]),
-    );
+    expect(terminals).not.toContain(AUTH_EVENTS.AUTH_SIGNUP_COMPLETED);
+    expect(terminals).not.toContain(AUTH_EVENTS.AUTH_SIGNUP_FAILED);
   });
 
   it("잘못된 JSON이면 AUTH_INVALID_INPUT과 INVALID_JSON 사유코드가 기록된다", async () => {
@@ -256,12 +238,8 @@ describe("signup 라우트 인증 로깅", () => {
     const terminals = terminalEvents();
     expect(terminals).toHaveLength(1);
     expect(terminals[0]).toBe(AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED);
-    expect(terminals).not.toEqual(
-      expect.arrayContaining([
-        AUTH_EVENTS.AUTH_SIGNUP_COMPLETED,
-        AUTH_EVENTS.AUTH_SIGNUP_FAILED,
-      ]),
-    );
+    expect(terminals).not.toContain(AUTH_EVENTS.AUTH_SIGNUP_COMPLETED);
+    expect(terminals).not.toContain(AUTH_EVENTS.AUTH_SIGNUP_FAILED);
   });
 
   it("IP precheck 차단이면 AUTH_RATE_LIMIT_BLOCKED에 maskedIp가 포함된다", async () => {
@@ -331,12 +309,7 @@ describe("signup 라우트 인증 로깅", () => {
     const terminals = terminalEvents();
     expect(terminals).toHaveLength(1);
     expect(terminals[0]).toBe(AUTH_EVENTS.AUTH_SIGNUP_COMPLETED);
-    expect(terminals).not.toEqual(
-      expect.arrayContaining([
-        AUTH_EVENTS.AUTH_SIGNUP_COMPLETED,
-        AUTH_EVENTS.AUTH_SIGNUP_FAILED,
-      ]),
-    );
+    expect(terminals).not.toContain(AUTH_EVENTS.AUTH_SIGNUP_FAILED);
   });
 
   it("createUser 실패면 AUTH_SIGNUP_FAILED와 INTERNAL_ERROR가 기록된다", async () => {
@@ -359,47 +332,11 @@ describe("signup 라우트 인증 로깅", () => {
     );
   });
 
-  it("generateLink 실패면 AUTH_SIGNUP_FAILED와 INTERNAL_ERROR가 기록된다", async () => {
+  it("issueOtpAndSendEmail 실패면 AUTH_SIGNUP_FAILED와 INTERNAL_ERROR가 기록된다", async () => {
     vi.mocked(getUserByEmail).mockResolvedValueOnce(null);
-    mockGenerateLink.mockResolvedValueOnce({
-      data: { properties: {} },
-      error: new Error("generate link failed"),
-    } as never);
-
-    await POST(makeRequest());
-
-    expect(vi.mocked(logAuthError)).toHaveBeenCalledWith(
-      AUTH_EVENTS.AUTH_SIGNUP_FAILED,
-      expect.objectContaining({
-        reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
-      }),
+    vi.mocked(issueOtpAndSendEmail).mockRejectedValueOnce(
+      new Error("otp send failed"),
     );
-    expect(vi.mocked(logAuthEvent)).not.toHaveBeenCalledWith(
-      AUTH_EVENTS.AUTH_SIGNUP_COMPLETED,
-      expect.any(Object),
-    );
-  });
-
-  it("tokenHash가 없으면 AUTH_SIGNUP_FAILED와 INTERNAL_ERROR가 기록된다", async () => {
-    vi.mocked(getUserByEmail).mockResolvedValueOnce(null);
-    mockGenerateLink.mockResolvedValueOnce({
-      data: { properties: {} },
-      error: null,
-    } as never);
-
-    await POST(makeRequest());
-
-    expect(vi.mocked(logAuthError)).toHaveBeenCalledWith(
-      AUTH_EVENTS.AUTH_SIGNUP_FAILED,
-      expect.objectContaining({
-        reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
-      }),
-    );
-  });
-
-  it("sendAuthEmail 실패면 AUTH_SIGNUP_FAILED와 INTERNAL_ERROR가 기록된다", async () => {
-    vi.mocked(getUserByEmail).mockResolvedValueOnce(null);
-    vi.mocked(sendAuthEmail).mockRejectedValueOnce(new Error("smtp failure"));
 
     await POST(makeRequest());
 
@@ -430,12 +367,9 @@ describe("signup 라우트 인증 로깅", () => {
     const terminals = terminalEvents();
     expect(terminals).toHaveLength(1);
     expect(terminals[0]).toBe(AUTH_EVENTS.AUTH_SIGNUP_FAILED);
-    expect(terminals).not.toEqual(
-      expect.arrayContaining([
-        AUTH_EVENTS.AUTH_SIGNUP_COMPLETED,
-        AUTH_EVENTS.AUTH_SIGNUP_FAILED,
-      ]),
-    );
+
+    // 실패 케이스
+    expect(terminals).not.toContain(AUTH_EVENTS.AUTH_SIGNUP_COMPLETED);
   });
 
   it("route에서 authLogger로 전달되는 payload에는 금지 필드가 없다", async () => {

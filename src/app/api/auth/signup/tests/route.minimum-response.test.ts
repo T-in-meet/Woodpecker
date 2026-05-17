@@ -20,7 +20,7 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
-import { sendAuthEmail } from "@/features/auth/email/sendAuthEmail";
+import { issueOtpAndSendEmail } from "@/features/auth/email/issueOtpAndSendEmail";
 import { MIN_RESPONSE_MS } from "@/features/auth/lib/applyMinimumResponseTime";
 import { resetEligibilityStore } from "@/features/auth/lib/checkRequestEligibility";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
@@ -31,7 +31,7 @@ import { POST } from "../route";
 import { makeRequest } from "./utils/signupTestHelper";
 
 vi.mock("@/features/auth/lib/getUserByEmail");
-vi.mock("@/features/auth/email/sendAuthEmail");
+vi.mock("@/features/auth/email/issueOtpAndSendEmail");
 vi.mock("@/lib/supabase/admin");
 
 /**
@@ -41,7 +41,6 @@ const START_TIME = 1_000_000;
 
 describe("회원가입 API 최소 응답 시간 보장 검증", () => {
   const mockCreateUser = vi.fn();
-  const mockGenerateLink = vi.fn();
 
   beforeEach(() => {
     resetEligibilityStore();
@@ -52,7 +51,7 @@ describe("회원가입 API 최소 응답 시간 보장 검증", () => {
 
     vi.mocked(createAdminClient).mockReturnValue({
       auth: {
-        admin: { createUser: mockCreateUser, generateLink: mockGenerateLink },
+        admin: { createUser: mockCreateUser },
       },
     } as never);
     mockCreateUser.mockResolvedValue({
@@ -61,7 +60,7 @@ describe("회원가입 API 최소 응답 시간 보장 검증", () => {
     });
 
     vi.mocked(getUserByEmail).mockResolvedValue(null);
-    vi.mocked(sendAuthEmail).mockResolvedValue(undefined);
+    vi.mocked(issueOtpAndSendEmail).mockResolvedValue(undefined);
   });
 
   const validBody = {
@@ -126,19 +125,8 @@ describe("회원가입 API 최소 응답 시간 보장 검증", () => {
       .mockReturnValue(START_TIME + MIN_RESPONSE_MS + 500);
   }
 
-  function mockGenerateLinkSuccess() {
-    mockGenerateLink.mockResolvedValue({
-      data: {
-        user: { id: "user-id", email: "test@example.com" },
-        properties: { hashed_token: "hashed-token" },
-      },
-      error: null,
-    });
-  }
-
   it("TC-01: fast success path → 최소 응답 시간 이전에 응답하지 않는다", async () => {
     useFakeClockWithNoElapsedTime();
-    mockGenerateLinkSuccess();
 
     const promise = POST(makeRequest(validBody));
 
@@ -181,7 +169,6 @@ describe("회원가입 API 최소 응답 시간 보장 검증", () => {
   it("TC-04: elapsed time이 최소 응답 시간을 초과하면 추가 지연 없이 반환한다", async () => {
     mockSlowExecution();
     const setTimeoutSpy = vi.spyOn(global, "setTimeout");
-    mockGenerateLinkSuccess();
 
     const response = await POST(makeRequest(validBody));
 
@@ -191,7 +178,6 @@ describe("회원가입 API 최소 응답 시간 보장 검증", () => {
 
   it("TC-05: 최소 응답 시간 적용 후에도 성공 응답 계약이 유지된다", async () => {
     useFakeClockWithNoElapsedTime();
-    mockGenerateLinkSuccess();
 
     const promise = POST(makeRequest(validBody));
 
@@ -205,7 +191,7 @@ describe("회원가입 API 최소 응답 시간 보장 검증", () => {
     expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
     expect(body.data).toEqual({
       email: "test@example.com",
-      redirectTo: ROUTES.VERIFY_EMAIL,
+      redirectTo: `${ROUTES.VERIFY_OTP}?purpose=signup&email=${encodeURIComponent("test@example.com")}`,
     });
   });
 
@@ -244,7 +230,7 @@ describe("회원가입 API 최소 응답 시간 보장 검증", () => {
 
   it("TC-08: fast rate-limit path도 최소 응답 시간 이전에 응답하지 않는다", async () => {
     useFakeClockWithNoElapsedTime();
-    mockGenerateLinkSuccess();
+
     const ip = "127.0.0.1";
 
     for (let i = 0; i < 10; i++) {
