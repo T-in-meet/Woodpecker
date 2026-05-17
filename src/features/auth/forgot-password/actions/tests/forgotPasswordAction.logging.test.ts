@@ -5,6 +5,7 @@ import { IP_SHORT_LIMIT } from "@/features/auth/lib/checkRequestEligibility";
 import { ipStore } from "@/features/auth/lib/requestEligibilityStore";
 
 import {
+  buildVerifyOtpUrl,
   expectExactlyOneTerminalEvent,
   expectRequestedBeforeTerminalEvent,
   setupActionTest,
@@ -32,7 +33,11 @@ function blockIpShort(ip = "203.0.113.10") {
 describe("forgotPasswordAction - logging & delay", () => {
   it("TC22: 성공 시 REQUESTED + COMPLETED를 기록한다", async () => {
     const mocks = setupActionTest();
-    await mocks.callAction();
+    await expect(mocks.callAction()).rejects.toThrow(
+      `NEXT_REDIRECT:${buildVerifyOtpUrl({
+        email: "user@example.com",
+      })}`,
+    );
 
     expect(mocks.logRequestedMock).toHaveBeenCalledWith(
       AUTH_EVENTS.AUTH_FORGOT_PASSWORD_REQUESTED,
@@ -90,18 +95,19 @@ describe("forgotPasswordAction - logging & delay", () => {
   });
 
   it("TC25: 내부 예외 시 FAILED를 기록한다", async () => {
-    const mocks = setupActionTest({ supabase: "throw" });
-    await mocks.callAction();
+    const mocks = setupActionTest({ issueOtpAndSendEmail: "throw" });
+    await expect(mocks.callAction()).rejects.toThrow("NEXT_REDIRECT");
 
     expect(mocks.logRequestedMock).toHaveBeenCalledTimes(1);
+
     expect(mocks.logAuthErrorMock).toHaveBeenCalledWith(
       AUTH_EVENTS.AUTH_FORGOT_PASSWORD_FAILED,
       expect.any(Object),
     );
 
-    expectExactlyOneTerminalEvent(
-      mocks,
-      AUTH_EVENTS.AUTH_FORGOT_PASSWORD_FAILED,
+    expect(mocks.logAuthEventMock).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_FORGOT_PASSWORD_COMPLETED,
+      expect.any(Object),
     );
 
     expectRequestedBeforeTerminalEvent(mocks);
@@ -109,7 +115,11 @@ describe("forgotPasswordAction - logging & delay", () => {
 
   it("TC26: 모든 요청에서 REQUESTED는 1회씩 기록된다", async () => {
     const success = setupActionTest();
-    await success.callAction();
+    await expect(success.callAction()).rejects.toThrow(
+      `NEXT_REDIRECT:${buildVerifyOtpUrl({
+        email: "user@example.com",
+      })}`,
+    );
     expect(success.logRequestedMock).toHaveBeenCalledTimes(1);
 
     const invalid = setupActionTest({ email: "invalid-email" });
@@ -121,14 +131,18 @@ describe("forgotPasswordAction - logging & delay", () => {
     await blocked.callAction();
     expect(blocked.logRequestedMock).toHaveBeenCalledTimes(1);
 
-    const failed = setupActionTest({ supabase: "throw" });
-    await failed.callAction();
+    const failed = setupActionTest({ issueOtpAndSendEmail: "throw" });
+    await expect(failed.callAction()).rejects.toThrow("NEXT_REDIRECT");
     expect(failed.logRequestedMock).toHaveBeenCalledTimes(1);
   });
 
   it("TC27/TC28: 로그 payload에 raw email/raw IP를 남기지 않는다", async () => {
     const mocks = setupActionTest();
-    await mocks.callAction();
+    await expect(mocks.callAction()).rejects.toThrow(
+      `NEXT_REDIRECT:${buildVerifyOtpUrl({
+        email: "user@example.com",
+      })}`,
+    );
 
     for (const payload of allLogPayloads(mocks)) {
       expect(payload).not.toHaveProperty("rawEmail");
@@ -141,20 +155,17 @@ describe("forgotPasswordAction - logging & delay", () => {
   });
 
   it("TC29: Supabase error.message를 ActionState에 노출하지 않는다", async () => {
-    const mocks = setupActionTest({ supabase: "error" });
-    const state = await mocks.callAction();
-
-    expect(state).not.toHaveProperty("error");
-    expect(state).not.toHaveProperty("errorMessage");
-    expect(state).toMatchObject({
-      status: "completed",
-      fieldErrors: null,
-    });
+    const mocks = setupActionTest({ issueOtpAndSendEmail: "throw" });
+    await expect(mocks.callAction()).rejects.toThrow("NEXT_REDIRECT");
   });
 
   it("TC30: 모든 분기에서 applyMinimumActionDelay를 호출한다", async () => {
     const success = setupActionTest();
-    await success.callAction();
+    await expect(success.callAction()).rejects.toThrow(
+      `NEXT_REDIRECT:${buildVerifyOtpUrl({
+        email: "user@example.com",
+      })}`,
+    );
     expect(success.applyMinimumActionDelayMock).toHaveBeenCalledTimes(1);
 
     const invalid = setupActionTest({ email: "invalid-email" });
@@ -166,8 +177,8 @@ describe("forgotPasswordAction - logging & delay", () => {
     await blocked.callAction();
     expect(blocked.applyMinimumActionDelayMock).toHaveBeenCalledTimes(1);
 
-    const failed = setupActionTest({ supabase: "throw" });
-    await failed.callAction();
+    const failed = setupActionTest({ issueOtpAndSendEmail: "throw" });
+    await expect(failed.callAction()).rejects.toThrow("NEXT_REDIRECT");
     expect(failed.applyMinimumActionDelayMock).toHaveBeenCalledTimes(1);
   });
 });

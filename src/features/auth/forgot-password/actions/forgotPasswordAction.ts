@@ -1,11 +1,11 @@
 "use server";
 
+import { redirect } from "next/navigation";
+
 import { AUTH_EVENTS } from "@/features/auth/constants/authEvents";
 import { AUTH_LOG_REASONS } from "@/features/auth/constants/authLogReasons";
-import {
-  AUTH_CALLBACK_PATH,
-  FORGOT_PASSWORD_PATH,
-} from "@/features/auth/constants/routes";
+import { FORGOT_PASSWORD_PATH } from "@/features/auth/constants/routes";
+import { issueOtpAndSendEmail } from "@/features/auth/email/issueOtpAndSendEmail";
 import { forgotPasswordActionSchema } from "@/features/auth/forgot-password/schemas/forgotPasswordActionSchema";
 import { applyMinimumActionDelay } from "@/features/auth/lib/applyMinimumActionDelay";
 import {
@@ -21,18 +21,10 @@ import {
 import { maskEmailForLogging } from "@/features/auth/lib/maskEmailForLogging";
 import { maskIpForLogging } from "@/features/auth/lib/maskIpForLogging";
 import { canonicalizeEmail } from "@/features/auth/utils/canonicalizeEmail";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { ROUTES } from "@/lib/constants/routes";
 import { getServerActionClientIp } from "@/lib/utils/getServerActionClientIp";
 
-import { sendAuthEmail } from "../../email/sendAuthEmail";
 import { ForgotPasswordActionState } from "./forgotPasswordActionState";
-
-function completedState(): ForgotPasswordActionState {
-  return {
-    status: "completed",
-    fieldErrors: null,
-  };
-}
 
 function blockedState(
   reasonCode:
@@ -56,19 +48,6 @@ function internalErrorState(): ForgotPasswordActionState {
   };
 }
 
-function buildRedirectTo(redirectPath: string | null): string {
-  const appUrl = process.env["APP_URL"];
-  if (!appUrl) {
-    throw new Error("APP_URL must be set");
-  }
-  const url = new URL(AUTH_CALLBACK_PATH, appUrl);
-  url.searchParams.set("type", "recovery");
-  if (redirectPath) {
-    url.searchParams.set("redirect", redirectPath);
-  }
-  return url.toString();
-}
-
 export async function forgotPasswordAction(
   redirectPath: string | null,
   _prevState: ForgotPasswordActionState,
@@ -81,6 +60,8 @@ export async function forgotPasswordAction(
     method: "POST",
     provider: "password",
   });
+
+  let verifyOtpUrl: string | null = null;
 
   try {
     const rawEmail = formData.get("email");
@@ -130,37 +111,17 @@ export async function forgotPasswordAction(
       return blockedState(reasonCode);
     }
 
-    const redirectTo = buildRedirectTo(redirectPath);
-    const adminClient = createAdminClient();
-    const { data: linkData, error: linkError } =
-      await adminClient.auth.admin.generateLink({
-        type: "recovery",
-        email: parsed.data.email,
-        options: { redirectTo },
-      });
+    const params = new URLSearchParams({
+      purpose: "reset-password",
+      email,
+    });
 
-    if (linkError) {
-      logAuthError(AUTH_EVENTS.AUTH_FORGOT_PASSWORD_FAILED, {
-        path: FORGOT_PASSWORD_PATH,
-        method: "POST",
-        status: 500,
-        provider: "password",
-        result: "failure",
-        reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
-        maskedEmail,
-        maskedIp,
-      });
-      return completedState();
-    }
-
-    const tokenHash = linkData?.properties?.hashed_token;
-
-    if (!tokenHash) {
-      throw new Error("Missing hashed_token from generateLink");
+    if (redirectPath) {
+      params.set("redirect", redirectPath);
     }
 
     try {
-      await sendAuthEmail(email, tokenHash, "recovery", redirectPath);
+      await issueOtpAndSendEmail({ email, purpose: "reset-password" });
     } catch {
       logAuthError(AUTH_EVENTS.AUTH_FORGOT_PASSWORD_FAILED, {
         path: FORGOT_PASSWORD_PATH,
@@ -172,7 +133,6 @@ export async function forgotPasswordAction(
         maskedEmail,
         maskedIp,
       });
-      return completedState();
     }
 
     logAuthEvent(AUTH_EVENTS.AUTH_FORGOT_PASSWORD_COMPLETED, {
@@ -184,7 +144,7 @@ export async function forgotPasswordAction(
       maskedEmail,
       maskedIp,
     });
-    return completedState();
+    verifyOtpUrl = `${ROUTES.VERIFY_OTP}?${params.toString()}`;
   } catch (error) {
     const normalized = normalizeUnknownError(error);
     logAuthError(AUTH_EVENTS.AUTH_FORGOT_PASSWORD_FAILED, {
@@ -200,4 +160,6 @@ export async function forgotPasswordAction(
   } finally {
     await applyMinimumActionDelay(start);
   }
+  // 발급 성공 또는 존재하지 않는 이메일 은닉 성공
+  redirect(verifyOtpUrl!);
 }
