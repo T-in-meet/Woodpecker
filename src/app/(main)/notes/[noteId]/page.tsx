@@ -50,7 +50,8 @@ export default async function NoteDetailPage({
   const isReviewCompleted =
     note.review_round >= MAX_REVIEW_ROUND && nextReviewAt === null;
   const isReviewDue =
-    nextReviewAt !== null && new Date(nextReviewAt).getTime() <= Date.now();
+    nextScheduledAt !== null &&
+    new Date(nextScheduledAt).getTime() <= Date.now();
 
   // 1일 1회 제한 힌트. 일시적 조회 실패 시 fail-open(false) — 실제 차단은
   // DB 부분 unique 인덱스와 RPC가 보증하므로 페이지 표시를 막지 않는다.

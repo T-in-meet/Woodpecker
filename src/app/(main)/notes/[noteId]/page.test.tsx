@@ -133,14 +133,14 @@ describe("NoteDetailPage", () => {
     },
   );
 
-  it("renders a review entry point when the note is due for review", async () => {
+  it("renders a review entry point when the notification time has passed", async () => {
     createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
     getNoteByIdMock.mockResolvedValue({
       id: "note-123",
       title: "Test note",
       content: "note body",
-      next_review_at: "2026-03-29T09:00:00.000Z",
-      next_scheduled_at: "2026-03-29T12:30:00.000Z",
+      next_review_at: "2026-03-29T00:00:00.000Z",
+      next_scheduled_at: "2026-03-29T09:00:00.000Z",
       notification_time_of_day: "21:30:00",
       review_round: 1,
       created_at: "2026-03-29T00:00:00.000Z",
@@ -158,7 +158,7 @@ describe("NoteDetailPage", () => {
     expect(titleHeading).toHaveClass("wrap-break-word", "break-keep");
     expect(screen.getByTestId("note-viewer")).toHaveTextContent("note body");
     expect(screen.getByTestId("notification-time-picker")).toHaveTextContent(
-      "note-123:21:30:00:2026-03-29T12:30:00.000Z",
+      "note-123:21:30:00:2026-03-29T09:00:00.000Z",
     );
     expect(
       screen.getByText("지금 백지 테스트를 진행할 수 있습니다."),
@@ -169,6 +169,38 @@ describe("NoteDetailPage", () => {
     expect(
       screen.getByRole("button", { name: "노트 삭제" }),
     ).toBeInTheDocument();
+  });
+
+  it("shows '다음 예정' (not 'due now') when notification time is still in the future today", async () => {
+    createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
+    getNoteByIdMock.mockResolvedValue({
+      id: "note-123",
+      title: "Same-day, before notification",
+      content: "note body",
+      next_review_at: "2026-03-29T00:00:00.000Z",
+      next_scheduled_at: "2026-03-29T18:00:00.000Z",
+      notification_time_of_day: "03:00:00",
+      review_round: 1,
+      created_at: "2026-03-29T00:00:00.000Z",
+      updated_at: "2026-03-29T01:00:00.000Z",
+      user_id: "user-123",
+    });
+
+    render(
+      await NoteDetailPage({ params: Promise.resolve({ noteId: "note-123" }) }),
+    );
+
+    expect(
+      screen.getByText(
+        `다음 예정: ${formatDateTime("2026-03-29T18:00:00.000Z")}`,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("지금 백지 테스트를 진행할 수 있습니다."),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "백지 테스트 시작" }),
+    ).toHaveAttribute("href", getNoteReviewRoute("note-123"));
   });
 
   it("shows the next review schedule using the actual notification time", async () => {
