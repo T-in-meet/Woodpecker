@@ -1,16 +1,21 @@
 "use client";
 
 import { AlertCircle } from "lucide-react";
+import { useEffect } from "react";
 
 import { Button } from "@/components/ui/button";
 
 export default function Error({
-  error: _error,
+  error,
   reset,
 }: {
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  useEffect(() => {
+    console.error(error);
+  }, [error]);
+
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
       <div className="flex size-14 items-center justify-center rounded-full bg-destructive/10">
