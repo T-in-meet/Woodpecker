@@ -1,5 +1,4 @@
 import Link from "next/link";
-import type { CSSProperties } from "react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ROUTES } from "@/lib/constants/routes";
@@ -115,14 +114,15 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
                   <div className="h-2 flex-1 rounded-full bg-muted">
                     <div
                       className="h-full rounded-full bg-orange-300 dark:bg-orange-700 w-(--progress-width)"
-                      style={
-                        {
-                          "--progress-width":
-                            stats.totalNotes === 0
-                              ? "0%"
-                              : `${(count / stats.totalNotes) * 100}%`,
-                        } as CSSProperties
-                      }
+                      ref={(el) => {
+                        if (!el) return;
+                        el.style.setProperty(
+                          "--progress-width",
+                          stats.totalNotes === 0
+                            ? "0%"
+                            : `${(count / stats.totalNotes) * 100}%`,
+                        );
+                      }}
                     />
                   </div>
                   <span className="w-20 text-right text-sm tabular-nums">
@@ -157,11 +157,13 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
             <h4 className="mb-3 text-sm font-medium">최근 30일 활동</h4>
             <div
               className="grid gap-1 grid-cols-[repeat(var(--activity-days),minmax(0,1fr))]"
-              style={
-                {
-                  "--activity-days": stats.recentActivity.length,
-                } as CSSProperties
-              }
+              ref={(el) => {
+                if (!el) return;
+                el.style.setProperty(
+                  "--activity-days",
+                  String(stats.recentActivity.length),
+                );
+              }}
             >
               {stats.recentActivity.map(({ date, count }) => (
                 <div
