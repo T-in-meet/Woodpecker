@@ -1,5 +1,5 @@
+import { OtpPurpose } from "../constants/otp";
 import { issueOtp } from "../lib/issueOtp";
-import { OtpPurpose } from "../types/otp";
 import { sendOtpEmail } from "./sendOtpEmail";
 
 type issueOtpAndSendEmailProps = {

@@ -1,7 +1,7 @@
 import { render } from "@react-email/render";
 import React from "react";
 
-import { OtpPurpose } from "../types/otp";
+import { OtpPurpose } from "../constants/otp";
 import { OtpEmailTemplate } from "./OtpEmailTemplate";
 import { sendViaNodemailer } from "./providers/sendViaNodemailer";
 import { sendViaResend } from "./providers/sendViaResend";

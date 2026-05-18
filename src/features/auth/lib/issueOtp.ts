@@ -1,7 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { OTP_PURPOSE_TO_SUPABASE_TYPE } from "../constants/otp";
-import { OtpPurpose } from "../types/otp";
+import { OTP_PURPOSE_TO_SUPABASE_TYPE, OtpPurpose } from "../constants/otp";
 
 type IssueOtpProps = {
   email: string;
