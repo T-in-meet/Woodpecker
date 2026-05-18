@@ -4,7 +4,12 @@ vi.mock("@/lib/supabase/middleware", () => ({
   updateSession: vi.fn(),
 }));
 
-import { buildCspEnforced, buildCspReportOnly, config } from "./middleware";
+import {
+  buildCspEnforced,
+  buildCspReportOnly,
+  buildReportingEndpoints,
+  config,
+} from "./middleware";
 
 function matchesMiddleware(pathname: string) {
   const matcher = config.matcher[0];
@@ -55,6 +60,7 @@ describe("CSP — buildCspEnforced", () => {
         "media-src",
         "manifest-src",
         "report-uri",
+        "report-to",
       ]),
     );
   });
@@ -66,9 +72,10 @@ describe("CSP — buildCspEnforced", () => {
     );
   });
 
-  it("TC-CSP-M-03. style-src에 'unsafe-inline'이 포함된다 (단기 유지)", () => {
+  it("TC-CSP-M-03. style-src에 nonce만 포함되고 'unsafe-inline'이 없다", () => {
     const csp = buildCspEnforced(NONCE);
-    expect(csp).toContain("style-src 'self' 'unsafe-inline'");
+    expect(csp).toContain(`style-src 'self' 'nonce-${NONCE}'`);
+    expect(csp).not.toContain("'unsafe-inline'");
   });
 
   it("TC-CSP-M-04. object-src 'none', frame-ancestors 'none', frame-src 'none', media-src 'none'", () => {
@@ -79,9 +86,10 @@ describe("CSP — buildCspEnforced", () => {
     expect(csp).toContain("media-src 'none'");
   });
 
-  it("TC-CSP-M-05. report-uri /api/csp-report 포함", () => {
+  it("TC-CSP-M-05. report-uri /api/csp-report와 report-to csp-endpoint를 병기한다", () => {
     const csp = buildCspEnforced(NONCE);
     expect(csp).toContain("report-uri /api/csp-report");
+    expect(csp).toContain("report-to csp-endpoint");
   });
 
   it("TC-CSP-M-06. 모든 디렉티브가 '; ' 로 구분되고 빈 디렉티브가 없다", () => {
@@ -100,8 +108,15 @@ describe("CSP — buildCspReportOnly", () => {
     expect(csp).not.toContain("'unsafe-inline'");
   });
 
-  it("TC-CSP-RO-02. report-uri /api/csp-report 포함", () => {
+  it("TC-CSP-RO-02. report-uri /api/csp-report와 report-to csp-endpoint를 병기한다", () => {
     const csp = buildCspReportOnly(NONCE);
     expect(csp).toContain("report-uri /api/csp-report");
+    expect(csp).toContain("report-to csp-endpoint");
+  });
+});
+
+describe("Reporting-Endpoints — buildReportingEndpoints", () => {
+  it("TC-RE-01. csp-endpoint 그룹이 /api/csp-report 경로를 가리킨다", () => {
+    expect(buildReportingEndpoints()).toBe('csp-endpoint="/api/csp-report"');
   });
 });

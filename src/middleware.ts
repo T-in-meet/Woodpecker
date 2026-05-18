@@ -14,6 +14,11 @@ const supabaseHostname =
     ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname
     : undefined);
 
+// report-uri는 W3C CSP3에서 deprecated이지만 Firefox/Safari가 아직 report-to를 지원하지 않아
+// 두 지시어를 병기한다. report-to는 응답 헤더 Reporting-Endpoints의 그룹명을 참조한다.
+export const CSP_REPORT_ENDPOINT_GROUP = "csp-endpoint";
+export const CSP_REPORT_PATH = "/api/csp-report";
+
 export function buildCspEnforced(nonce: string): string {
   return [
     "default-src 'self'",
@@ -23,9 +28,7 @@ export function buildCspEnforced(nonce: string): string {
     "frame-src 'none'",
     "form-action 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
-    // 에디터 BlockHandleMenu 동적 위치 계산용 인라인 스타일 의존성으로 단기 유지.
-    // 후속 PR에서 nonce/hash 기반으로 대체.
-    "style-src 'self' 'unsafe-inline'",
+    `style-src 'self' 'nonce-${nonce}'`,
     [
       "img-src 'self' data: blob:",
       supabaseHostname && `https://${supabaseHostname}`,
@@ -43,7 +46,8 @@ export function buildCspEnforced(nonce: string): string {
     "worker-src 'self'",
     "media-src 'none'",
     "manifest-src 'self'",
-    "report-uri /api/csp-report",
+    `report-uri ${CSP_REPORT_PATH}`,
+    `report-to ${CSP_REPORT_ENDPOINT_GROUP}`,
   ].join("; ");
 }
 
@@ -76,8 +80,13 @@ export function buildCspReportOnly(nonce: string): string {
     "worker-src 'self'",
     "media-src 'none'",
     "manifest-src 'self'",
-    "report-uri /api/csp-report",
+    `report-uri ${CSP_REPORT_PATH}`,
+    `report-to ${CSP_REPORT_ENDPOINT_GROUP}`,
   ].join("; ");
+}
+
+export function buildReportingEndpoints(): string {
+  return `${CSP_REPORT_ENDPOINT_GROUP}="${CSP_REPORT_PATH}"`;
 }
 
 /**
@@ -114,6 +123,7 @@ export async function middleware(request: NextRequest) {
     "Content-Security-Policy-Report-Only",
     buildCspReportOnly(nonce),
   );
+  response.headers.set("Reporting-Endpoints", buildReportingEndpoints());
 
   if (markdownPath) {
     response.headers.append(
