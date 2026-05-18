@@ -55,6 +55,7 @@ test.describe("Security headers (HTTP response contract)", () => {
         "frame-ancestors 'none'",
         "frame-src 'none'",
         "media-src 'none'",
+        "style-src 'self' 'unsafe-inline'",
       ]),
     );
   });

@@ -72,10 +72,10 @@ describe("CSP — buildCspEnforced", () => {
     );
   });
 
-  it("TC-CSP-M-03. style-src에 nonce만 포함되고 'unsafe-inline'이 없다", () => {
+  it("TC-CSP-M-03. style-src에 'unsafe-inline'이 허용된다 (React 19 hoisting/CSS-in-JS 호환)", () => {
     const csp = buildCspEnforced(NONCE);
-    expect(csp).toContain(`style-src 'self' 'nonce-${NONCE}'`);
-    expect(csp).not.toContain("'unsafe-inline'");
+    const styleSrc = csp.split("; ").find((d) => d.startsWith("style-src "));
+    expect(styleSrc).toBe("style-src 'self' 'unsafe-inline'");
   });
 
   it("TC-CSP-M-04. object-src 'none', frame-ancestors 'none', frame-src 'none', media-src 'none'", () => {
@@ -102,10 +102,10 @@ describe("CSP — buildCspEnforced", () => {
 describe("CSP — buildCspReportOnly", () => {
   const NONCE = "test-nonce-xyz789";
 
-  it("TC-CSP-RO-01. style-src에 'unsafe-inline'이 포함되지 않고 nonce만 포함된다", () => {
+  it("TC-CSP-RO-01. style-src에 'unsafe-inline'이 허용된다", () => {
     const csp = buildCspReportOnly(NONCE);
-    expect(csp).toContain(`style-src 'self' 'nonce-${NONCE}'`);
-    expect(csp).not.toContain("'unsafe-inline'");
+    const styleSrc = csp.split("; ").find((d) => d.startsWith("style-src "));
+    expect(styleSrc).toBe("style-src 'self' 'unsafe-inline'");
   });
 
   it("TC-CSP-RO-02. report-uri /api/csp-report와 report-to csp-endpoint를 병기한다", () => {

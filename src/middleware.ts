@@ -28,7 +28,13 @@ export function buildCspEnforced(nonce: string): string {
     "frame-src 'none'",
     "form-action 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
-    `style-src 'self' 'nonce-${nonce}'`,
+    // style-src: React 19의 <style> precedence hoisting, Next.js DevOverlay,
+    //   동적 CSS-in-JS 라이브러리(toast 등), 폰트 inject 등으로 인해
+    //   런타임에 nonce 없이 <style> 태그가 head에 다수 inject된다.
+    //   현 시점에서 nonce-only 정책은 실현 불가하므로 'unsafe-inline'으로 완화한다.
+    //   XSS 방어의 핵심인 script-src는 nonce/strict-dynamic을 유지하므로
+    //   인라인 style만으로 코드 실행은 불가.
+    "style-src 'self' 'unsafe-inline'",
     [
       "img-src 'self' data: blob:",
       supabaseHostname && `https://${supabaseHostname}`,
@@ -51,8 +57,8 @@ export function buildCspEnforced(nonce: string): string {
   ].join("; ");
 }
 
-// Report-Only는 다음 강화 단계 실험용. 'unsafe-inline'을 제거하고 nonce-only로 가는
-// 정책을 관찰하여 위반이 0에 수렴하면 강제 CSP로 승격한다.
+// Report-Only는 enforced와 동일하게 발행한다. 추후 강화 실험 시
+// 이 빌더에서만 정책을 다르게 두어 위반 데이터를 수집한다.
 export function buildCspReportOnly(nonce: string): string {
   return [
     "default-src 'self'",
@@ -62,7 +68,13 @@ export function buildCspReportOnly(nonce: string): string {
     "frame-src 'none'",
     "form-action 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
-    `style-src 'self' 'nonce-${nonce}'`,
+    // style-src: React 19의 <style> precedence hoisting, Next.js DevOverlay,
+    //   동적 CSS-in-JS 라이브러리(toast 등), 폰트 inject 등으로 인해
+    //   런타임에 nonce 없이 <style> 태그가 head에 다수 inject된다.
+    //   현 시점에서 nonce-only 정책은 실현 불가하므로 'unsafe-inline'으로 완화한다.
+    //   XSS 방어의 핵심인 script-src는 nonce/strict-dynamic을 유지하므로
+    //   인라인 style만으로 코드 실행은 불가.
+    "style-src 'self' 'unsafe-inline'",
     [
       "img-src 'self' data: blob:",
       supabaseHostname && `https://${supabaseHostname}`,

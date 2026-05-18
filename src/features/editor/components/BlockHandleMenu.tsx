@@ -2,13 +2,7 @@
 
 import type { Editor } from "@tiptap/react";
 import { GripVertical } from "lucide-react";
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import {
@@ -53,7 +47,6 @@ export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
   const [isTooltipOpen, setIsTooltipOpen] = useState(false);
   const [anchorPosition, setAnchorPosition] =
     useState<BlockAnchorPositionType | null>(null);
-  const overlayRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number | null>(null);
@@ -201,47 +194,6 @@ export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
     };
   }, []);
 
-  // CSP style-src에서 'unsafe-inline'을 제거하기 위해 동적 위치 값은 React style prop 대신
-  // CSSOM API(setProperty)로 CSS 변수에 주입한다. CSSOM API는 CSP 적용 외이므로 nonce 불요.
-  useLayoutEffect(() => {
-    const el = overlayRef.current;
-    if (
-      !el ||
-      !anchorPosition ||
-      !isMenuOpen ||
-      !anchorPosition.blockHasMeasurableRect
-    ) {
-      return;
-    }
-    const overlayLeft = anchorPosition.blockLeft - anchorPosition.markerOffset;
-    const overlayWidth =
-      anchorPosition.blockWidth + anchorPosition.markerOffset;
-    el.style.setProperty("--overlay-left", `${overlayLeft}px`);
-    el.style.setProperty("--overlay-top", `${anchorPosition.blockTop}px`);
-    el.style.setProperty("--overlay-width", `${overlayWidth}px`);
-    el.style.setProperty("--overlay-height", `${anchorPosition.blockHeight}px`);
-  }, [anchorPosition, isMenuOpen]);
-
-  useLayoutEffect(() => {
-    const el = handleRef.current;
-    if (!el || !anchorPosition) return;
-    el.style.setProperty("--handle-left", `${anchorPosition.handleLeft}px`);
-    el.style.setProperty("--handle-top", `${anchorPosition.handleTop}px`);
-  }, [anchorPosition]);
-
-  useLayoutEffect(() => {
-    const el = menuRef.current;
-    if (!el || !anchorPosition || !isMenuOpen) return;
-    const pos = computeMenuPosition(
-      anchorPosition,
-      el.offsetWidth,
-      el.offsetHeight,
-    );
-    el.style.setProperty("--menu-left", `${pos.left}px`);
-    el.style.setProperty("--menu-top", `${pos.top}px`);
-    el.style.setProperty("--menu-max-width", `${pos.maxWidth}px`);
-  }, [anchorPosition, isMenuOpen]);
-
   if (typeof window === "undefined" || typeof document === "undefined") {
     return null;
   }
@@ -275,18 +227,29 @@ export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
 
   const shouldRenderOverlay =
     isMenuOpen && anchorPosition.blockHasMeasurableRect;
+  const overlayLeft = anchorPosition.blockLeft - anchorPosition.markerOffset;
+  const overlayWidth = anchorPosition.blockWidth + anchorPosition.markerOffset;
+  const menuPosition = computeMenuPosition(
+    anchorPosition,
+    menuRef.current?.offsetWidth ?? null,
+    menuRef.current?.offsetHeight ?? null,
+  );
 
   return createPortal(
     <>
       {shouldRenderOverlay && (
         <div
-          ref={overlayRef}
           aria-hidden="true"
           className={cn(
             "pointer-events-none fixed z-30 rounded-md ring-1 ring-ring/20",
-            "left-(--overlay-left) top-(--overlay-top) w-(--overlay-width) h-(--overlay-height)",
             !anchorPosition.isCodeBlock && "bg-muted/40",
           )}
+          style={{
+            left: overlayLeft,
+            top: anchorPosition.blockTop,
+            width: overlayWidth,
+            height: anchorPosition.blockHeight,
+          }}
           data-testid="block-handle-overlay"
         />
       )}
@@ -314,9 +277,14 @@ export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
               "fixed z-40 inline-flex items-center justify-center rounded-md border border-border/60",
               "bg-background/95 text-muted-foreground shadow-sm backdrop-blur transition-colors",
               "hover:bg-muted hover:text-foreground",
-              "size-5.5 left-(--handle-left) top-(--handle-top)",
               isMenuOpen && "bg-muted text-foreground",
             )}
+            style={{
+              width: HANDLE_SIZE,
+              height: HANDLE_SIZE,
+              left: anchorPosition.handleLeft,
+              top: anchorPosition.handleTop,
+            }}
             aria-label="블록 도구 열기"
             aria-expanded={isMenuOpen}
             aria-haspopup="dialog"
@@ -330,7 +298,12 @@ export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
       {isMenuOpen && (
         <div
           ref={menuRef}
-          className="fixed z-50 left-(--menu-left) top-(--menu-top) max-w-(--menu-max-width)"
+          className="fixed z-50"
+          style={{
+            left: menuPosition.left,
+            maxWidth: menuPosition.maxWidth,
+            top: menuPosition.top,
+          }}
         >
           <BubbleMenuBar editor={editor} onDeleteBlock={handleDeleteBlock} />
         </div>
