@@ -19,7 +19,7 @@ const supabaseHostname =
 export const CSP_REPORT_ENDPOINT_GROUP = "csp-endpoint";
 export const CSP_REPORT_PATH = "/api/csp-report";
 
-export function buildCspEnforced(nonce: string): string {
+function buildCspDirectives(nonce: string): string[] {
   return [
     "default-src 'self'",
     "object-src 'none'",
@@ -54,47 +54,17 @@ export function buildCspEnforced(nonce: string): string {
     "manifest-src 'self'",
     `report-uri ${CSP_REPORT_PATH}`,
     `report-to ${CSP_REPORT_ENDPOINT_GROUP}`,
-  ].join("; ");
+  ];
+}
+
+export function buildCspEnforced(nonce: string): string {
+  return buildCspDirectives(nonce).join("; ");
 }
 
 // Report-Only는 enforced와 동일하게 발행한다. 추후 강화 실험 시
-// 이 빌더에서만 정책을 다르게 두어 위반 데이터를 수집한다.
+// 이 빌더에서만 directives를 오버라이드하여 위반 데이터를 수집한다.
 export function buildCspReportOnly(nonce: string): string {
-  return [
-    "default-src 'self'",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "frame-ancestors 'none'",
-    "frame-src 'none'",
-    "form-action 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
-    // style-src: React 19의 <style> precedence hoisting, Next.js DevOverlay,
-    //   동적 CSS-in-JS 라이브러리(toast 등), 폰트 inject 등으로 인해
-    //   런타임에 nonce 없이 <style> 태그가 head에 다수 inject된다.
-    //   현 시점에서 nonce-only 정책은 실현 불가하므로 'unsafe-inline'으로 완화한다.
-    //   XSS 방어의 핵심인 script-src는 nonce/strict-dynamic을 유지하므로
-    //   인라인 style만으로 코드 실행은 불가.
-    "style-src 'self' 'unsafe-inline'",
-    [
-      "img-src 'self' data: blob:",
-      supabaseHostname && `https://${supabaseHostname}`,
-    ]
-      .filter(Boolean)
-      .join(" "),
-    [
-      "connect-src 'self'",
-      supabaseHostname && `https://${supabaseHostname}`,
-      supabaseHostname && `wss://${supabaseHostname}`,
-    ]
-      .filter(Boolean)
-      .join(" "),
-    "font-src 'self' data: https://cdn.jsdelivr.net",
-    "worker-src 'self'",
-    "media-src 'none'",
-    "manifest-src 'self'",
-    `report-uri ${CSP_REPORT_PATH}`,
-    `report-to ${CSP_REPORT_ENDPOINT_GROUP}`,
-  ].join("; ");
+  return buildCspDirectives(nonce).join("; ");
 }
 
 export function buildReportingEndpoints(): string {
@@ -127,7 +97,7 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
+  const nonce = btoa(crypto.randomUUID().replaceAll("-", ""));
   const response = await updateSession(request, { "x-nonce": nonce });
 
   response.headers.set("Content-Security-Policy", buildCspEnforced(nonce));
