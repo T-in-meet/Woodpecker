@@ -112,4 +112,12 @@ describe("TodayReviewPage", () => {
       screen.getByText("오늘 예정된 복습이 없습니다."),
     ).toBeInTheDocument();
   });
+
+  it("DB 조회 오류가 발생하면 빈 상태로 대체하지 않고 error boundary로 전파한다", async () => {
+    const dbError = new Error("DB connection failed");
+    createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
+    getTodayReviewNotesMock.mockRejectedValue(dbError);
+
+    await expect(TodayReviewPage()).rejects.toBe(dbError);
+  });
 });

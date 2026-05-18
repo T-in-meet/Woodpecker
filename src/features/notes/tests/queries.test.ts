@@ -36,8 +36,8 @@ const BASE_NOTE = {
 
 // ─── Mock 팩토리 ─────────────────────────────────────────────────────────────
 
-function createNotesQueryMock(data: unknown, count = 0) {
-  const rangeMock = vi.fn().mockResolvedValue({ data, count });
+function createNotesQueryMock(data: unknown, count = 0, error: unknown = null) {
+  const rangeMock = vi.fn().mockResolvedValue({ data, count, error });
   const orMock = vi.fn().mockReturnValue({ range: rangeMock });
   const orderMock = vi.fn().mockReturnValue({ or: orMock, range: rangeMock });
   const eqMock = vi.fn().mockReturnValue({ order: orderMock });
@@ -120,8 +120,8 @@ function createNoteDetailQueryMock(
 }
 
 // .eq → .gte → .lt → .order → { data }
-function createTodayNotesQueryMock(data: unknown) {
-  const order2Mock = vi.fn().mockResolvedValue({ data });
+function createTodayNotesQueryMock(data: unknown, error: unknown = null) {
+  const order2Mock = vi.fn().mockResolvedValue({ data, error });
   const order1Mock = vi.fn().mockReturnValue({ order: order2Mock });
   const ltMock = vi.fn().mockReturnValue({ order: order1Mock });
   const gteMock = vi.fn().mockReturnValue({ lt: ltMock });
@@ -139,8 +139,8 @@ function createTodayNotesQueryMock(data: unknown) {
 }
 
 // .eq → .or → .order → .limit → { data }
-function createWaitingNotesQueryMock(data: unknown) {
-  const limitMock = vi.fn().mockResolvedValue({ data });
+function createWaitingNotesQueryMock(data: unknown, error: unknown = null) {
+  const limitMock = vi.fn().mockResolvedValue({ data, error });
   const orderMock = vi.fn().mockReturnValue({ limit: limitMock });
   const orMock = vi.fn().mockReturnValue({ order: orderMock });
   const eqMock = vi.fn().mockReturnValue({ or: orMock });
@@ -222,6 +222,14 @@ describe("getNotes", () => {
     const result = await getNotes("user-123");
 
     expect(result).toEqual({ notes: [], total: 1 });
+  });
+
+  it("DB 쿼리 에러 발생 시 throw한다", async () => {
+    const dbError = new Error("DB connection failed");
+    const { supabase } = createNotesQueryMock(null, 0, dbError);
+    createClientMock.mockResolvedValue(supabase);
+
+    await expect(getNotes("user-123")).rejects.toThrow("DB connection failed");
   });
 
   it("returns note detail with notification time of day and pending scheduled_at", async () => {
@@ -363,6 +371,16 @@ describe("getTodayReviewNotes", () => {
     expect(result).toEqual([]);
   });
 
+  it("DB 쿼리 에러 발생 시 throw한다", async () => {
+    const dbError = new Error("DB connection failed");
+    const { supabase } = createTodayNotesQueryMock(null, dbError);
+    createClientMock.mockResolvedValue(supabase);
+
+    await expect(getTodayReviewNotes("user-123")).rejects.toThrow(
+      "DB connection failed",
+    );
+  });
+
   it("DB가 빈 배열을 반환하면 빈 배열을 반환한다", async () => {
     const { supabase } = createTodayNotesQueryMock([]);
     createClientMock.mockResolvedValue(supabase);
@@ -450,5 +468,15 @@ describe("getReviewWaitingNotes", () => {
     const result = await getReviewWaitingNotes("user-123");
 
     expect(result).toEqual([]);
+  });
+
+  it("DB 쿼리 에러 발생 시 throw한다", async () => {
+    const dbError = new Error("DB connection failed");
+    const { supabase } = createWaitingNotesQueryMock(null, dbError);
+    createClientMock.mockResolvedValue(supabase);
+
+    await expect(getReviewWaitingNotes("user-123")).rejects.toThrow(
+      "DB connection failed",
+    );
   });
 });

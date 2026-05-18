@@ -120,4 +120,14 @@ describe("NotesPage", () => {
       screen.getByRole("link", { name: /테스트 노트/ }),
     ).toBeInTheDocument();
   });
+
+  it("DB 조회 오류가 발생하면 빈 목록으로 대체하지 않고 error boundary로 전파한다", async () => {
+    const dbError = new Error("DB connection failed");
+    createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
+    getNotesMock.mockRejectedValue(dbError);
+
+    await expect(NotesPage({ searchParams: Promise.resolve({}) })).rejects.toBe(
+      dbError,
+    );
+  });
 });

@@ -65,7 +65,9 @@ export async function getNotes(
     query = query.or(`title.ilike."%${term}%",content.ilike."%${term}%"`);
   }
 
-  const { data, count } = await query.range(from, to);
+  const { data, count, error } = await query.range(from, to);
+
+  if (error) throw error;
 
   const parsed = z.array(noteSummarySchema).safeParse(data);
 
@@ -85,7 +87,7 @@ export async function getTodayReviewNotes(
   const supabase = await createServerComponentClient();
   const { startUtcIso, endUtcIso } = getKstDayBoundsUtc();
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("notes")
     .select(
       "id, title, content, next_review_at, review_round, created_at, updated_at",
@@ -95,6 +97,8 @@ export async function getTodayReviewNotes(
     .lt("next_review_at", endUtcIso)
     .order("next_review_at", { ascending: true })
     .order("created_at", { ascending: false });
+
+  if (error) throw error;
 
   const parsed = z.array(noteSummarySchema).safeParse(data);
 
@@ -115,7 +119,7 @@ export async function getReviewWaitingNotes(
   const supabase = await createServerComponentClient();
   const nowIso = new Date().toISOString();
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("notes")
     .select(
       "id, title, content, next_review_at, review_round, created_at, updated_at",
@@ -126,6 +130,8 @@ export async function getReviewWaitingNotes(
     )
     .order("next_review_at", { ascending: true, nullsFirst: false })
     .limit(50);
+
+  if (error) throw error;
 
   const parsed = z.array(noteSummarySchema).safeParse(data);
 
