@@ -1,6 +1,7 @@
 import { Metadata } from "next";
 import { redirect } from "next/navigation";
 
+import { validateRedirectPath } from "@/features/auth/lib/validateRedirectPath";
 import { requireGuestPage } from "@/features/auth/utils/requireGuestPage";
 import { verifyOtpAction } from "@/features/auth/verify-otp/actions/verifyOtpAction";
 import VerifyOtpForm from "@/features/auth/verify-otp/components/VerifyOtpForm";
@@ -43,7 +44,8 @@ const VerifyOtpPage = async ({ searchParams }: VerifyOtpPageProps) => {
    */
   const email = typeof rawEmail === "string" ? rawEmail : undefined;
   const purpose = typeof rawPurpose === "string" ? rawPurpose : undefined;
-  const redirectTo = typeof rawRedirect === "string" ? rawRedirect : undefined;
+  const redirectPath =
+    typeof rawRedirect === "string" ? validateRedirectPath(rawRedirect) : null;
 
   /**
    * purpose는 인증 흐름을 결정하는 필수 값이다.
@@ -70,8 +72,8 @@ const VerifyOtpPage = async ({ searchParams }: VerifyOtpPageProps) => {
      * reset-password 같은 후속 이동 목적지가 있으면
      * 재전송 흐름에서도 유실되지 않도록 함께 전달한다.
      */
-    if (redirectTo) {
-      params.set("redirect", redirectTo);
+    if (redirectPath) {
+      params.set("redirect", redirectPath);
     }
 
     redirect(`${ROUTES.RESEND_EMAIL}?${params.toString()}`);
@@ -80,7 +82,7 @@ const VerifyOtpPage = async ({ searchParams }: VerifyOtpPageProps) => {
   /**
    * redirect query는 인증 성공 이후 이동할 목적지로 action에 전달한다.
    */
-  const verifyOtpFormAction = verifyOtpAction.bind(null, redirectTo ?? null);
+  const verifyOtpFormAction = verifyOtpAction.bind(null, redirectPath);
 
   return (
     <div className="md:flex md:min-h-[calc(100dvh-4.5rem)] md:items-center md:justify-center">
