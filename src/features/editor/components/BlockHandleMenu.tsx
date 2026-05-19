@@ -205,11 +205,6 @@ export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
     return null;
   }
 
-  const menuPosition = computeMenuPosition(
-    anchorPosition,
-    menuRef.current?.offsetWidth ?? null,
-    menuRef.current?.offsetHeight ?? null,
-  );
   const handleDeleteBlock = () => {
     const blockElement = getActiveBlockElement(editor);
 
@@ -234,6 +229,11 @@ export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
     isMenuOpen && anchorPosition.blockHasMeasurableRect;
   const overlayLeft = anchorPosition.blockLeft - anchorPosition.markerOffset;
   const overlayWidth = anchorPosition.blockWidth + anchorPosition.markerOffset;
+  const menuPosition = computeMenuPosition(
+    anchorPosition,
+    menuRef.current?.offsetWidth ?? null,
+    menuRef.current?.offsetHeight ?? null,
+  );
 
   return createPortal(
     <>
