@@ -7,9 +7,55 @@ import {
 import { AuthLogReason } from "@/features/auth/constants/authLogReasons";
 import { logError, logInfo, logWarn } from "@/lib/logger";
 
+import { OtpPurpose } from "../constants/otp";
+
+/**
+ * 인증 요청이 시작되었음을 기록하기 위한 공통 로그 컨텍스트.
+ *
+ * 사용 목적:
+ * - 어떤 인증 경로(path)로 요청이 들어왔는지 추적
+ * - 어떤 HTTP method로 요청되었는지 확인
+ * - 어떤 인증 방식(provider)인지 구분
+ *
+ * 주로 REQUEST 단계 로그에서 사용되며,
+ * 실제 인증 성공/실패 이전의 "진입 정보"를 기록하는 역할이다.
+ *
+ * 예시:
+ * {
+ *   path: "/verify-otp",
+ *   method: "POST",
+ *   provider: "otp",
+ * }
+ */
 export type RequestedContext = {
+  /**
+   * 인증 요청이 들어온 경로.
+   *
+   * 예:
+   * - /login
+   * - /signup
+   * - /verify-otp
+   */
   path: string;
+
+  /**
+   * 요청에 사용된 HTTP method.
+   *
+   * 예:
+   * - GET
+   * - POST
+   */
   method: string;
+
+  /**
+   * 인증 방식 또는 provider 식별값.
+   *
+   * 예:
+   * - otp
+   * - oauth-google
+   * - password
+   * - recovery
+   */
   provider: string;
 };
 
@@ -21,6 +67,7 @@ type CommonLogFields = {
   userId?: string;
   maskedEmail?: string;
   maskedIp?: string;
+  purpose?: OtpPurpose;
 };
 
 type SuccessLogContext = CommonLogFields & {

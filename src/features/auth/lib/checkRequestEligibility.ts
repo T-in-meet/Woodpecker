@@ -124,7 +124,7 @@ export function mapBlockedByToReason(blockedBy: BlockedBy): RateLimitReason {
 }
 
 function getEmailEligibilityKey(
-  route: "signup" | "resend" | "login" | "forgot-password",
+  route: "signup" | "resend" | "login" | "forgot-password" | "verify-otp",
   canonicalEmail: string,
 ): string {
   if (route === "forgot-password") {
@@ -135,7 +135,7 @@ function getEmailEligibilityKey(
 }
 
 export function checkRequestEligibility(
-  route: "signup" | "resend" | "login" | "forgot-password",
+  route: "signup" | "resend" | "login" | "forgot-password" | "verify-otp",
   ip: string,
   canonicalEmail: string,
 ): EligibilityResult {

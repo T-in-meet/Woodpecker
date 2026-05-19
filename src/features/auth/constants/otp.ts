@@ -102,3 +102,18 @@ export const SUPABASE_OTP_TYPES = ["magiclink", "recovery"] as const;
  * SUPABASE_OTP_TYPES 상수를 기반으로 생성된다.
  */
 export type SupabaseOtpType = (typeof SUPABASE_OTP_TYPES)[number];
+
+/**
+ * OTP 인증 실패 안내 메시지.
+ *
+ * 사용 목적:
+ * - OTP 불일치
+ * - OTP 만료
+ * - 재발급으로 인해 이전 OTP가 무효화된 경우
+ *
+ * 보안 및 UX 정책:
+ * - 구체적인 실패 원인(불일치/만료)을 분리하지 않는다.
+ * - 사용자가 다시 입력하거나 재전송하도록 유도한다.
+ */
+export const INVALID_OTP_ERROR_MESSAGE =
+  "인증 번호가 올바르지 않거나 만료되었습니다.";
