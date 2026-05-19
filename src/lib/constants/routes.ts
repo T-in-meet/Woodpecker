@@ -13,6 +13,7 @@ export const ROUTES = {
   RESET_PASSWORD: "/reset-password",
   FORGOT_PASSWORD: "/forgot-password",
   VERIFY_OTP: "/verify-otp",
+  RESEND_EMAIL: "/resend-email",
 } as const;
 
 export type Route = (typeof ROUTES)[keyof typeof ROUTES];

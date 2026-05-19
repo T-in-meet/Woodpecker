@@ -89,10 +89,13 @@ export type VerifyOtpActionState =
   /**
    * 서버 내부 에러 상태
    *
-   * Supabase verifyOtp 실패,
-   * session 처리 실패,
-   * 예상하지 못한 시스템 예외 등
-   * 사용자가 직접 해결할 수 없는 문제를 의미한다.
+   * 사용자가 직접 해결할 수 없는
+   * 시스템 수준의 예외를 의미한다.
+   *
+   * 예:
+   * - session 처리 실패
+   * - Supabase API 예외
+   * - 예상하지 못한 서버 예외
    */
   | {
       status: "internal_error";
@@ -115,6 +118,24 @@ export type VerifyOtpActionState =
       fieldErrors: {
         otp?: string;
       };
+    }
+  /**
+   * OTP 인증 실패 상태
+   *
+   * OTP 형식 자체는 올바르지만
+   * 실제 인증에 실패한 상태를 의미한다.
+   *
+   * 사용자가 OTP를 다시 입력하거나
+   * 재전송을 통해 해결할 수 있는 문제이다.
+   *
+   * 예:
+   * - OTP 불일치
+   * - 만료된 OTP
+   * - 재발급으로 인해 무효화된 OTP
+   */
+  | {
+      status: "invalid_otp";
+      formError: string;
     };
 
 /**

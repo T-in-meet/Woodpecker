@@ -1,3 +1,5 @@
+"use server";
+
 import { ROUTES } from "@/lib/constants/routes";
 import { getServerActionClientIp } from "@/lib/utils/getServerActionClientIp";
 import { VALIDATION_MESSAGES } from "@/lib/validation/messages";
@@ -227,10 +229,8 @@ export async function verifyOtpAction(
       });
 
       return {
-        status: "invalid_input",
-        fieldErrors: {
-          otp: INVALID_OTP_ERROR_MESSAGE,
-        },
+        status: "invalid_otp",
+        formError: INVALID_OTP_ERROR_MESSAGE,
       };
     }
 

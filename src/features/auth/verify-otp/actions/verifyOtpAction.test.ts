@@ -146,6 +146,11 @@ describe("verifyOtpAction", () => {
     const result = await verifyOtpAction(null, prevState, formData);
 
     expect(result.status).toBe("invalid_input");
+
+    if (result.status !== "invalid_input") {
+      throw new Error("Expected invalid_input state");
+    }
+
     expect(result.fieldErrors?.otp).toBeDefined();
 
     expect(verifyOtp).not.toHaveBeenCalled();
@@ -162,6 +167,11 @@ describe("verifyOtpAction", () => {
     const result = await verifyOtpAction(null, prevState, formData);
 
     expect(result.status).toBe("invalid_input");
+
+    if (result.status !== "invalid_input") {
+      throw new Error("Expected invalid_input state");
+    }
+
     expect(result.fieldErrors?.otp).toBeDefined();
 
     expect(verifyOtp).not.toHaveBeenCalled();
@@ -195,7 +205,7 @@ describe("verifyOtpAction", () => {
     expect(applyMinimumActionDelay).toHaveBeenCalledTimes(1);
   });
 
-  it("verifyOtp가 error를 반환하면 invalid_input으로 처리한다", async () => {
+  it("verifyOtp가 error를 반환하면 invalid_otp로 처리한다", async () => {
     vi.mocked(verifyOtp).mockResolvedValue({
       error: new Error("invalid otp"),
     } as Awaited<ReturnType<typeof verifyOtp>>);
@@ -209,10 +219,8 @@ describe("verifyOtpAction", () => {
     const result = await verifyOtpAction(null, prevState, formData);
 
     expect(result).toEqual({
-      status: "invalid_input",
-      fieldErrors: {
-        otp: INVALID_OTP_ERROR_MESSAGE,
-      },
+      status: "invalid_otp",
+      formError: INVALID_OTP_ERROR_MESSAGE,
     });
 
     expect(applyMinimumActionDelay).toHaveBeenCalledTimes(1);

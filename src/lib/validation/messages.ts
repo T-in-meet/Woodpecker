@@ -8,5 +8,5 @@ export const VALIDATION_MESSAGES = {
   passwordMismatch: "비밀번호가 일치하지 않습니다.",
   passwordMinLength: `비밀번호는 ${PASSWORD_MIN_LENGTH}자 이상이어야 합니다.`,
   otpInvalid: "인증 번호가 올바르지 않습니다.",
-  otpLength: `인증 번호는 ${OTP_LENGTH}자이어야 합니다.`,
+  otpLength: `숫자 ${OTP_LENGTH}자리를 입력해주세요.`,
 } as const;
