@@ -68,7 +68,7 @@ export async function verifyOtpAction(
   logRequested(AUTH_EVENTS.AUTH_VERIFY_OTP_REQUESTED, {
     path: VERIFY_OTP_PATH,
     method: "POST",
-    provider: "otp",
+    provider: "password",
   });
 
   try {
@@ -96,7 +96,7 @@ export async function verifyOtpAction(
         path: VERIFY_OTP_PATH,
         method: "POST",
         status: 400,
-        provider: "otp",
+        provider: "password",
         result: "failure",
         reasonCode: AUTH_LOG_REASONS.SCHEMA_VALIDATION_FAILED,
       });
@@ -130,7 +130,7 @@ export async function verifyOtpAction(
         path: VERIFY_OTP_PATH,
         method: "POST",
         status: 422,
-        provider: "otp",
+        provider: "password",
         result: "failure",
         reasonCode: AUTH_LOG_REASONS.SCHEMA_VALIDATION_FAILED,
       });
@@ -175,7 +175,7 @@ export async function verifyOtpAction(
         path: VERIFY_OTP_PATH,
         method: "POST",
         status: 429,
-        provider: "otp",
+        provider: "password",
         result: "blocked",
         reasonCode,
         maskedEmail,
@@ -220,7 +220,7 @@ export async function verifyOtpAction(
         path: VERIFY_OTP_PATH,
         method: "POST",
         status: 401,
-        provider: "otp",
+        provider: "password",
         result: "failure",
         reasonCode: AUTH_LOG_REASONS.INVALID_OTP,
         maskedEmail,
@@ -248,7 +248,7 @@ export async function verifyOtpAction(
       path: VERIFY_OTP_PATH,
       method: "POST",
       status: 200,
-      provider: "otp",
+      provider: "password",
       result: "success",
       purpose,
       maskedEmail,
@@ -291,7 +291,7 @@ export async function verifyOtpAction(
       path: VERIFY_OTP_PATH,
       method: "POST",
       status: 500,
-      provider: "otp",
+      provider: "password",
       result: "failure",
       reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
       ...normalized,
