@@ -268,4 +268,38 @@ describe("verifyOtpAction", () => {
       otp: "123456",
     });
   });
+
+  it("reset-password OTP 인증에 성공하면 reset-password 경로로 completed 상태를 반환한다", async () => {
+    const formData = createFormData({
+      email: "user@example.com",
+      purpose: "reset-password",
+      otp: "123456",
+    });
+
+    const result = await verifyOtpAction(null, prevState, formData);
+
+    expect(result).toEqual({
+      status: "completed",
+      redirectTo: ROUTES.RESET_PASSWORD,
+      fieldErrors: null,
+    });
+  });
+
+  it("reset-password OTP 인증에 성공하고 redirectPath가 있으면 reset-password 경로에 redirect query를 포함한다", async () => {
+    const formData = createFormData({
+      email: "user@example.com",
+      purpose: "reset-password",
+      otp: "123456",
+    });
+
+    const result = await verifyOtpAction("/after-reset", prevState, formData);
+
+    expect(result).toEqual({
+      status: "completed",
+      redirectTo: `${ROUTES.RESET_PASSWORD}?redirect=${encodeURIComponent(
+        "/after-reset",
+      )}`,
+      fieldErrors: null,
+    });
+  });
 });

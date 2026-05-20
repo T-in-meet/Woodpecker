@@ -258,13 +258,21 @@ export async function verifyOtpAction(
     /**
      * OTP 인증 성공 후 이동 경로 결정
      *
-     * redirect가 있으면 해당 경로로 이동하고,
-     * redirect가 없으면 기본 인증 완료 목적지로 이동한다.
+     * signup:
+     * - 인증 흐름 마지막 단계
+     * - redirect가 있으면 이동
+     * - 없으면 기본 페이지 이동
      *
-     * 인증이 완료된 이후에는 email / purpose 컨텍스트를
-     * 다음 페이지로 넘길 필요가 없으므로 query parameter를 생성하지 않는다.
+     * reset-password:
+     * - 비밀번호 재설정 페이지로 이동
+     * - 최종 redirect는 reset-password 완료 시점에서 처리
      */
-    const nextPath = redirect ?? ROUTES.MYPAGE;
+    const nextPath =
+      purpose === "signup"
+        ? (redirect ?? ROUTES.MYPAGE)
+        : redirect
+          ? `${ROUTES.RESET_PASSWORD}?redirect=${encodeURIComponent(redirect)}`
+          : ROUTES.RESET_PASSWORD;
 
     return {
       status: "completed",

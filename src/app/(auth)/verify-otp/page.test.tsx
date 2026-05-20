@@ -96,6 +96,68 @@ describe("VerifyOtpPage", () => {
     );
   });
 
+  it("email이 없고 signup purpose와 redirect가 있으면 검증된 redirect를 포함해 resend-email 페이지로 redirect한다", async () => {
+    await expect(
+      VerifyOtpPage({
+        searchParams: Promise.resolve({
+          email: "",
+          purpose: "signup",
+          redirect: "/mypage",
+        }),
+      }),
+    ).rejects.toThrow(
+      `NEXT_REDIRECT:${ROUTES.RESEND_EMAIL}?purpose=signup&redirect=%2Fmypage`,
+    );
+
+    expect(redirectMock).toHaveBeenCalledWith(
+      `${ROUTES.RESEND_EMAIL}?purpose=signup&redirect=%2Fmypage`,
+    );
+  });
+
+  it("email이 없고 signup purpose와 외부 redirect가 있으면 fallback redirect를 포함해 resend-email 페이지로 redirect한다", async () => {
+    await expect(
+      VerifyOtpPage({
+        searchParams: Promise.resolve({
+          email: "",
+          purpose: "signup",
+          redirect: "https://evil.com",
+        }),
+      }),
+    ).rejects.toThrow(
+      `NEXT_REDIRECT:${ROUTES.RESEND_EMAIL}?purpose=signup&redirect=${encodeURIComponent(
+        ROUTES.MYPAGE,
+      )}`,
+    );
+
+    expect(redirectMock).toHaveBeenCalledWith(
+      `${ROUTES.RESEND_EMAIL}?purpose=signup&redirect=${encodeURIComponent(
+        ROUTES.MYPAGE,
+      )}`,
+    );
+  });
+
+  it("email이 없고 reset-password purpose와 redirect가 있으면 raw redirect를 포함해 resend-email 페이지로 redirect한다", async () => {
+    await expect(
+      VerifyOtpPage({
+        searchParams: Promise.resolve({
+          email: "",
+          purpose: "reset-password",
+          redirect: "https://evil.com",
+        }),
+      }),
+    ).rejects.toThrow(
+      `NEXT_REDIRECT:${ROUTES.RESEND_EMAIL}?purpose=reset-password&redirect=${encodeURIComponent(
+        "https://evil.com",
+      )}`,
+    );
+
+    expect(redirectMock).toHaveBeenCalledWith(
+      `${ROUTES.RESEND_EMAIL}?purpose=reset-password&redirect=${encodeURIComponent(
+        "https://evil.com",
+      )}`,
+    );
+  });
+
   it("정상 query면 VerifyOtpForm에 email, purpose, action을 전달한다", async () => {
     const element = await VerifyOtpPage({
       searchParams: Promise.resolve({
@@ -124,7 +186,7 @@ describe("VerifyOtpPage", () => {
     );
   });
 
-  it("redirect query가 있으면 verifyOtpAction.bind에 redirectPath를 전달한다", async () => {
+  it("reset-password 목적이면 redirect query를 검증하지 않고 그대로 verifyOtpAction.bind에 전달한다", async () => {
     const redirectPath = "/reset-password";
 
     const element = await VerifyOtpPage({
@@ -138,5 +200,35 @@ describe("VerifyOtpPage", () => {
     render(element);
 
     expect(verifyOtpActionMock.bind).toHaveBeenCalledWith(null, redirectPath);
+  });
+
+  it("signup 목적이면 redirect query를 검증한 뒤 verifyOtpAction.bind에 전달한다", async () => {
+    const redirectPath = "/mypage";
+
+    const element = await VerifyOtpPage({
+      searchParams: Promise.resolve({
+        email: "test@example.com",
+        purpose: "signup",
+        redirect: redirectPath,
+      }),
+    });
+
+    render(element);
+
+    expect(verifyOtpActionMock.bind).toHaveBeenCalledWith(null, redirectPath);
+  });
+
+  it("signup 목적이고 redirect query가 외부 URL이면 검증 결과를 verifyOtpAction.bind에 전달한다", async () => {
+    const element = await VerifyOtpPage({
+      searchParams: Promise.resolve({
+        email: "test@example.com",
+        purpose: "signup",
+        redirect: "https://evil.com",
+      }),
+    });
+
+    render(element);
+
+    expect(verifyOtpActionMock.bind).toHaveBeenCalledWith(null, ROUTES.MYPAGE);
   });
 });

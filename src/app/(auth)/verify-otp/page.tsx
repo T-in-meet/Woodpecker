@@ -44,8 +44,6 @@ const VerifyOtpPage = async ({ searchParams }: VerifyOtpPageProps) => {
    */
   const email = typeof rawEmail === "string" ? rawEmail : undefined;
   const purpose = typeof rawPurpose === "string" ? rawPurpose : undefined;
-  const redirectPath =
-    typeof rawRedirect === "string" ? validateRedirectPath(rawRedirect) : null;
 
   /**
    * purpose는 인증 흐름을 결정하는 필수 값이다.
@@ -58,6 +56,29 @@ const VerifyOtpPage = async ({ searchParams }: VerifyOtpPageProps) => {
   }
 
   const otpPurpose = parsedOtpPurpose.data;
+
+  /**
+   * redirect query 처리
+   *
+   * signup:
+   * - verify-otp가 최종 이동 직전 단계다.
+   * - 최종 이동에 사용될 값이므로 현재 단계에서 검증한다.
+   *
+   * reset-password:
+   * - verify-otp는 중간 단계다.
+   * - redirect는 reset-password 완료 이후 사용되므로
+   *   현재 단계에서는 검증하지 않고 그대로 전달한다.
+   *
+   * 정책:
+   * - signup → 검증된 redirect 사용
+   * - reset-password → raw redirect 전달
+   */
+  const redirectPath =
+    otpPurpose === "signup" && typeof rawRedirect === "string"
+      ? validateRedirectPath(rawRedirect)
+      : typeof rawRedirect === "string"
+        ? rawRedirect
+        : null;
 
   /**
    * email이 없으면 OTP 검증을 진행할 수 없다.
