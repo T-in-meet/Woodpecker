@@ -8,4 +8,5 @@ export const authEmailFormSchema = z
   })
   .strict();
 
-export type AuthEmailFormValues = z.infer<typeof authEmailFormSchema>;
+export type AuthEmailFormInput = z.input<typeof authEmailFormSchema>;
+export type AuthEmailFormValues = z.output<typeof authEmailFormSchema>;
