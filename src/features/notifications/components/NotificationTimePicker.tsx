@@ -41,7 +41,7 @@ import { notificationTimeSchema } from "../schema";
 type NotificationTimePickerProps = {
   noteId: string;
   initialTime: string | null;
-  nextReviewAt: string | null;
+  nextScheduledAt: string | null;
 };
 
 function getCurrentSettingLabel(time: string) {
@@ -51,7 +51,7 @@ function getCurrentSettingLabel(time: string) {
 export function NotificationTimePicker({
   noteId,
   initialTime,
-  nextReviewAt,
+  nextScheduledAt,
 }: NotificationTimePickerProps) {
   const inputBaseId = useId();
   const labelId = `${inputBaseId}-label`;
@@ -207,8 +207,8 @@ export function NotificationTimePicker({
             <DialogTitle>다음 알림 시간 설정</DialogTitle>
             <div className="mt-2 space-y-1 text-sm text-muted-foreground">
               <p>현재 설정: {getCurrentSettingLabel(savedTime)}</p>
-              {nextReviewAt && (
-                <p>다음 복습 예정 {formatDateTime(nextReviewAt)}</p>
+              {nextScheduledAt && (
+                <p>다음 복습 예정 {formatDateTime(nextScheduledAt)}</p>
               )}
             </div>
           </DialogHeader>

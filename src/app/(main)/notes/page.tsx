@@ -3,8 +3,8 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
-import { NoteList } from "@/features/notes/components/NoteList";
 import { NotesToolbar } from "@/features/notes/components/NotesToolbar";
+import { NotesViewContainer } from "@/features/notes/components/NotesViewContainer";
 import { getNotes } from "@/features/notes/queries";
 import { NOTES_VIEW_COOKIE } from "@/hooks/useNotesView";
 import {
@@ -63,7 +63,7 @@ export default async function NotesPage({ searchParams }: NotesPageProps) {
         </Suspense>
       </div>
 
-      <NoteList
+      <NotesViewContainer
         notes={notes}
         total={total}
         currentPage={page}

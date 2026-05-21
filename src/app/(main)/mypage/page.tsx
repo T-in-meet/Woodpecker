@@ -62,6 +62,7 @@ export default async function MyPage({ searchParams }: Props) {
 
   const [user, profile] = await Promise.all([getUser(), getProfile()]);
   if (!user || !profile) redirect(ROUTES.LOGIN);
+  if (user.email_confirmed_at == null) redirect(ROUTES.VERIFY_EMAIL);
 
   // 활성 section에서만 fetch
   let stats: Awaited<ReturnType<typeof getLearningStats>> | null = null;
