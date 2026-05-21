@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 
 import { SignupForm } from "@/features/auth/signup/components/SignupForm";
 import { useSignupMutation } from "@/features/auth/signup/hooks/useSignupMutation";
+import { ROUTES } from "@/lib/constants/routes";
 
 /**
  * 회원가입 페이지의 클라이언트 컴포넌트
@@ -68,12 +69,12 @@ export default function SignupPageClient() {
          * - 라우팅 정책은 여전히 서버 응답(redirectTo)에 따르고,
          *   클라이언트는 resend-email 케이스에서만 입력 편의 정보를 추가한다.
          */
-        if (response.data.redirectTo === "/resend-email") {
+        if (response.data.redirectTo === ROUTES.RESEND_EMAIL) {
           const query = new URLSearchParams({
             email: response.data.email,
             purpose: "signup",
           });
-          router.push(`/resend-email?${query.toString()}`);
+          router.push(`${ROUTES.RESEND_EMAIL}?${query.toString()}`);
           return;
         }
 

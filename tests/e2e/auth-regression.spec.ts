@@ -1,5 +1,7 @@
 import { APIRequestContext, expect, test } from "@playwright/test";
 
+import { ROUTES } from "@/lib/constants/routes";
+
 const SIGNUP_ENDPOINT = "/api/auth/signup";
 const CALLBACK_ENDPOINT = "/api/auth/callback";
 const SIGNUP_SUCCESS_CODE = "SIGNUP_SUCCESS";
@@ -97,7 +99,7 @@ test.describe("Auth external-observable regression", () => {
 
     expect(response.status()).toBe(307);
     expect(headers.location).toBeTruthy();
-    expect(headers.location).toContain("/resend-email");
+    expect(headers.location).toContain(ROUTES.RESEND_EMAIL);
   });
 
   test("TC-04: callback 실패 케이스(token_hash=dummy vs invalid)는 외부 observable이 동일하다", async ({

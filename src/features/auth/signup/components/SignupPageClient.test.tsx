@@ -130,7 +130,7 @@ describe("PR-UI-05: SignupPageClient redirectTo 라우팅", () => {
     await waitFor(() => {
       expect(mockPush).toHaveBeenCalledTimes(1);
       expect(mockPush).toHaveBeenCalledWith(
-        "/resend-email?email=test%40example.com",
+        "/resend-email?email=test%40example.com&purpose=signup",
       );
     });
   });
