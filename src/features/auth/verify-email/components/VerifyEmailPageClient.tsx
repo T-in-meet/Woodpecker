@@ -19,7 +19,7 @@ import {
   RATE_LIMIT_TOAST_MESSAGE,
 } from "@/features/auth/errors/rateLimitError";
 import { UNKNOWN_ERROR_MESSAGE } from "@/features/auth/errors/unknownError";
-import { useResendVerificationEmailMutation } from "@/features/auth/resend-verification-email/hooks/useResendVerificationEmailMutation";
+import { useResendVerificationEmailMutation } from "@/features/auth/verify-email/hooks/useResendVerificationEmailMutation";
 import { showToast } from "@/lib/utils/showToast";
 
 import {

@@ -16,7 +16,7 @@ const { mockMutateAsync, mockHookState } = vi.hoisted(() => ({
 }));
 
 vi.mock(
-  "@/features/auth/resend-verification-email/hooks/useResendVerificationEmailMutation",
+  "@/features/auth/verify-email/hooks/useResendVerificationEmailMutation",
   () => ({
     useResendVerificationEmailMutation: vi.fn(() => ({
       mutateAsync: mockMutateAsync,

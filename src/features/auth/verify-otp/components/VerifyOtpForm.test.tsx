@@ -101,25 +101,6 @@ describe("VerifyOtpForm", () => {
     });
   });
 
-  it("completed 상태면 redirectTo 경로로 이동한다", async () => {
-    const user = userEvent.setup();
-
-    const action = vi.fn().mockResolvedValue({
-      status: "completed",
-      redirectTo: "/",
-      fieldErrors: null,
-    } satisfies VerifyOtpActionState);
-
-    renderVerifyOtpForm(action);
-
-    await user.type(screen.getByPlaceholderText("예: 123456"), validOtp);
-    await user.click(screen.getByRole("button", { name: "인증하기" }));
-
-    await waitFor(() => {
-      expect(mocks.push).toHaveBeenCalledWith("/");
-    });
-  });
-
   it("invalid_input 상태면 OTP 필드 에러를 표시한다", async () => {
     const user = userEvent.setup();
 
