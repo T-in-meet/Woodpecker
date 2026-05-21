@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 
 import { SignupForm } from "@/features/auth/signup/components/SignupForm";
 import { useSignupMutation } from "@/features/auth/signup/hooks/useSignupMutation";
-import { ROUTES } from "@/lib/constants/routes";
 
 /**
  * 회원가입 페이지의 클라이언트 컴포넌트
@@ -18,72 +17,27 @@ import { ROUTES } from "@/lib/constants/routes";
  * - PageClient: side-effect (API 호출, 라우팅)
  */
 export default function SignupPageClient() {
-  /**
-   * Next.js 라우터 (페이지 이동)
-   */
   const router = useRouter();
 
-  /**
-   * 회원가입 mutation 훅
-   * - mutateAsync: 비동기 요청 실행
-   * - isPending: 요청 진행 상태
-   */
   const { mutateAsync, isPending } = useSignupMutation();
 
   return (
     <SignupForm
-      /**
-       * 폼 제출 핸들러
-       *
-       * 동작:
-       * 1. 폼 데이터 변환 (flat → API 구조)
-       * 2. mutation 실행
-       * 3. 응답 기반으로 리다이렉트
-       */
       onSubmit={async (values) => {
-        /**
-         * agreements 필드 분리
-         * - 폼에서는 flat 구조
-         * - API는 nested 구조 요구
-         */
         const { termsOfService, privacyPolicy, ...rest } = values;
 
-        /**
-         * 회원가입 요청
-         */
         const response = await mutateAsync({
           ...rest,
           agreements: { termsOfService, privacyPolicy },
         });
 
         /**
-         * 서버 응답 기반 리다이렉트
-         * - 프론트에서 경로를 추론하지 않음
-         *
-         * resend-email 예외 처리:
-         * - 인증 안내 페이지는 pre-fill UX를 위해 email query를 사용한다.
-         * - 서버가 내려준 redirectTo가 '/resend-email'인 경우에만
-         *   email을 querystring으로 보존해 전달한다.
-         *
-         * 설계 의도:
-         * - 라우팅 정책은 여전히 서버 응답(redirectTo)에 따르고,
-         *   클라이언트는 resend-email 케이스에서만 입력 편의 정보를 추가한다.
+         * 서버 응답 기반 라우팅
+         * - 서버가 redirect 정책을 결정한다.
+         * - 클라이언트는 전달받은 경로를 그대로 따른다.
          */
-        if (response.data.redirectTo === ROUTES.RESEND_EMAIL) {
-          const query = new URLSearchParams({
-            email: response.data.email,
-            purpose: "signup",
-          });
-          router.push(`${ROUTES.RESEND_EMAIL}?${query.toString()}`);
-          return;
-        }
-
         router.push(response.data.redirectTo);
       }}
-      /**
-       * 로딩 상태 전달
-       * - 중복 제출 방지 및 UI 상태 제어
-       */
       isPending={isPending}
     />
   );

@@ -115,13 +115,14 @@ describe("PR-UI-05: SignupPageClient redirectTo 라우팅", () => {
     });
   });
 
-  it("TC-05: redirectTo가 '/resend-email'이면 email query를 포함해 이동한다", async () => {
+  it("TC-05: 회원가입 성공 시 서버가 내려준 redirectTo로 이동한다", async () => {
     mockMutateAsync.mockResolvedValue({
       data: {
-        redirectTo: "/resend-email",
+        redirectTo: "/verify-otp?purpose=signup&email=test%40example.com",
         email: "test@example.com",
       },
     });
+
     const user = userEvent.setup();
     render(<SignupPageClient />);
 
@@ -130,7 +131,7 @@ describe("PR-UI-05: SignupPageClient redirectTo 라우팅", () => {
     await waitFor(() => {
       expect(mockPush).toHaveBeenCalledTimes(1);
       expect(mockPush).toHaveBeenCalledWith(
-        "/resend-email?email=test%40example.com&purpose=signup",
+        "/verify-otp?purpose=signup&email=test%40example.com",
       );
     });
   });
