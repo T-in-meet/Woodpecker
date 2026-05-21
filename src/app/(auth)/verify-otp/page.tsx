@@ -74,9 +74,14 @@ const VerifyOtpPage = async ({ searchParams }: VerifyOtpPageProps) => {
    * - reset-password → raw redirect 전달
    */
   const redirectPath =
-    otpPurpose === "signup" && typeof rawRedirect === "string"
+    otpPurpose === "signup" &&
+    typeof rawRedirect === "string" &&
+    rawRedirect !== "null" &&
+    rawRedirect !== "undefined"
       ? validateRedirectPath(rawRedirect)
-      : typeof rawRedirect === "string"
+      : typeof rawRedirect === "string" &&
+          rawRedirect !== "null" &&
+          rawRedirect !== "undefined"
         ? rawRedirect
         : null;
 

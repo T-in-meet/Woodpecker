@@ -54,7 +54,12 @@ export default async function ForgotPasswordPage({
    * 단일 문자열만 정상 query로 인정한다.
    */
   const email = typeof rawEmail === "string" ? rawEmail : undefined;
-  const redirectPath = typeof rawRedirect === "string" ? rawRedirect : null;
+  const redirectPath =
+    typeof rawRedirect === "string" &&
+    rawRedirect !== "null" &&
+    rawRedirect !== "undefined"
+      ? rawRedirect
+      : null;
 
   /**
    * ForgotPasswordForm에 전달할 Server Action

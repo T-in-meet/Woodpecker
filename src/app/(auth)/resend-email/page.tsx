@@ -63,7 +63,12 @@ export const ResendEmailPage = async ({
    */
   const email = typeof rawEmail === "string" ? rawEmail : undefined;
   const purpose = typeof rawPurpose === "string" ? rawPurpose : undefined;
-  const redirectPath = typeof rawRedirect === "string" ? rawRedirect : null;
+  const redirectPath =
+    typeof rawRedirect === "string" &&
+    rawRedirect !== "null" &&
+    rawRedirect !== "undefined"
+      ? rawRedirect
+      : null;
 
   /**
    * purpose는 OTP 인증 흐름을 복구하기 위한 필수 값이다.
