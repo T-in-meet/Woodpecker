@@ -74,7 +74,7 @@ export async function submitAnswerAction(
   }
 
   if (user.email_confirmed_at == null) {
-    redirect(ROUTES.VERIFY_EMAIL);
+    redirect(`${ROUTES.RESEND_EMAIL}?purpose=signup`);
   }
 
   let note, pendingReviewLog;
@@ -128,7 +128,7 @@ export async function completeReviewAction(
   }
 
   if (user.email_confirmed_at == null) {
-    redirect(ROUTES.VERIFY_EMAIL);
+    redirect(`${ROUTES.RESEND_EMAIL}?purpose=signup`);
   }
 
   let reviewableNote, pendingReviewLog;

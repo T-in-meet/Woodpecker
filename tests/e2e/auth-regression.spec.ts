@@ -3,7 +3,7 @@ import { APIRequestContext, expect, test } from "@playwright/test";
 const SIGNUP_ENDPOINT = "/api/auth/signup";
 const CALLBACK_ENDPOINT = "/api/auth/callback";
 const SIGNUP_SUCCESS_CODE = "SIGNUP_SUCCESS";
-const SIGNUP_REDIRECT_TO = "/verify-email";
+const SIGNUP_REDIRECT_TO = "/resend-email";
 const SIGNUP_INTERNAL_ERROR_CODE = "SIGNUP_INTERNAL_ERROR";
 
 type SignupResponse = {
@@ -97,7 +97,7 @@ test.describe("Auth external-observable regression", () => {
 
     expect(response.status()).toBe(307);
     expect(headers.location).toBeTruthy();
-    expect(headers.location).toContain("/verify-email");
+    expect(headers.location).toContain("/resend-email");
   });
 
   test("TC-04: callback 실패 케이스(token_hash=dummy vs invalid)는 외부 observable이 동일하다", async ({

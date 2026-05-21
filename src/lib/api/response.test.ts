@@ -12,14 +12,14 @@ import { failureResponse, successResponse } from "./response";
 describe("api response contract", () => {
   it("successResponse: success/code/data envelope과 기본 status 매핑을 보장한다", async () => {
     const code = makeApiCode("signup", API_RESULTS.SUCCESS);
-    const response = successResponse(code, { redirectTo: "/verify-email" });
+    const response = successResponse(code, { redirectTo: "/resend-email" });
     const body = await response.json();
 
     expect(response.status).toBe(200);
     expect(body).toEqual({
       success: true,
       code: "SIGNUP_SUCCESS",
-      data: { redirectTo: "/verify-email" },
+      data: { redirectTo: "/resend-email" },
     });
   });
 
@@ -80,7 +80,7 @@ describe("api response contract", () => {
   it("message는 선택 필드이며 contract 핵심(success/code/data/status)과 독립적으로 동작한다", async () => {
     const response = successResponse(
       makeApiCode("signup", API_RESULTS.SUCCESS),
-      { redirectTo: "/verify-email" },
+      { redirectTo: "/resend-email" },
       { message: "optional message" },
     );
     const body = await response.json();
@@ -88,7 +88,7 @@ describe("api response contract", () => {
     expect(response.status).toBe(200);
     expect(body.success).toBe(true);
     expect(body.code).toBe("SIGNUP_SUCCESS");
-    expect(body.data).toEqual({ redirectTo: "/verify-email" });
+    expect(body.data).toEqual({ redirectTo: "/resend-email" });
     expect(typeof body.message).toBe("string");
   });
 });

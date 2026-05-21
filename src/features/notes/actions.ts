@@ -48,7 +48,7 @@ export async function createNoteAction(
   }
 
   if (user.email_confirmed_at == null) {
-    redirect(ROUTES.VERIFY_EMAIL);
+    redirect(`${ROUTES.RESEND_EMAIL}?purpose=signup`);
   }
 
   const firstReviewDate = getNextReviewDate(0);
@@ -90,7 +90,7 @@ export async function deleteNoteAction(noteId: string) {
   }
 
   if (user.email_confirmed_at == null) {
-    redirect(ROUTES.VERIFY_EMAIL);
+    redirect(`${ROUTES.RESEND_EMAIL}?purpose=signup`);
   }
 
   const { data: deletedNote, error } = await supabase
