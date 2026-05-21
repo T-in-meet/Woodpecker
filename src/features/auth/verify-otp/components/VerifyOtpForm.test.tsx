@@ -179,11 +179,13 @@ describe("VerifyOtpForm", () => {
   it("인증번호 재전송 링크를 렌더링한다", () => {
     renderVerifyOtpForm();
 
+    const query = new URLSearchParams({
+      purpose: "signup",
+      email: defaultProps.email,
+    });
+
     expect(
       screen.getByRole("link", { name: "인증번호 재전송" }),
-    ).toHaveAttribute(
-      "href",
-      `/resend-email?purpose=signup&email=${defaultProps.email}`,
-    );
+    ).toHaveAttribute("href", `/resend-email?${query.toString()}`);
   });
 });
