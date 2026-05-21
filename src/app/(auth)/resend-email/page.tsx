@@ -39,9 +39,7 @@ type ResendEmailPageProps = {
  * - 재전송 action 연결
  * - Form 초기 상태 전달
  */
-export const ResendEmailPage = async ({
-  searchParams,
-}: ResendEmailPageProps) => {
+const ResendEmailPage = async ({ searchParams }: ResendEmailPageProps) => {
   /**
    * 이미 로그인된 사용자는
    * OTP 재발급 흐름에 접근할 수 없다.

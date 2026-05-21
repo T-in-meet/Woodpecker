@@ -7,7 +7,7 @@ import { INITIAL_RESEND_EMAIL_ACTION_STATE } from "@/features/auth/resend-email/
 import { requireGuestPage } from "@/features/auth/utils/requireGuestPage";
 import { ROUTES } from "@/lib/constants/routes";
 
-import { metadata, ResendEmailPage } from "./page";
+import ResendEmailPage, { metadata } from "./page";
 
 vi.mock("@/features/auth/utils/requireGuestPage", () => ({
   requireGuestPage: vi.fn(),
