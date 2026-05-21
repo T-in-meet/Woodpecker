@@ -30,13 +30,19 @@ vi.mock("@/features/auth/verify-otp/components/VerifyOtpForm", async () => {
   const React = await import("react");
 
   return {
-    default: (props: { action: unknown; email: string; purpose: string }) => {
+    default: (props: {
+      action: unknown;
+      email: string;
+      purpose: string;
+      redirect?: string | null;
+    }) => {
       VerifyOtpFormMock(props);
 
       return React.createElement("div", {
         "data-testid": "verify-otp-form",
         "data-email": props.email,
         "data-purpose": props.purpose,
+        "data-redirect": props.redirect ?? "",
       });
     },
   };
@@ -181,6 +187,7 @@ describe("VerifyOtpPage", () => {
       expect.objectContaining({
         email: "test@example.com",
         purpose: "signup",
+        redirect: null,
         action: verifyOtpBoundActionMock,
       }),
     );
@@ -230,5 +237,26 @@ describe("VerifyOtpPage", () => {
     render(element);
 
     expect(verifyOtpActionMock.bind).toHaveBeenCalledWith(null, ROUTES.MYPAGE);
+  });
+
+  it("정상 query에 redirect가 있으면 VerifyOtpForm에 redirect를 전달한다", async () => {
+    const element = await VerifyOtpPage({
+      searchParams: Promise.resolve({
+        email: "test@example.com",
+        purpose: "reset-password",
+        redirect: "/reset-password",
+      }),
+    });
+
+    render(element);
+
+    expect(VerifyOtpFormMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: "test@example.com",
+        purpose: "reset-password",
+        redirect: "/reset-password",
+        action: verifyOtpBoundActionMock,
+      }),
+    );
   });
 });

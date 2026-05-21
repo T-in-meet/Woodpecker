@@ -111,6 +111,7 @@ const VerifyOtpPage = async ({ searchParams }: VerifyOtpPageProps) => {
         action={verifyOtpFormAction}
         email={email}
         purpose={otpPurpose}
+        redirect={redirectPath}
       />
     </div>
   );

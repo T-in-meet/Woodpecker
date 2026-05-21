@@ -11,14 +11,7 @@ import type { VerifyOtpActionState } from "@/features/auth/verify-otp/actions/ve
 import VerifyOtpForm from "./VerifyOtpForm";
 
 const mocks = vi.hoisted(() => ({
-  push: vi.fn(),
   showToast: vi.fn(),
-}));
-
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({
-    push: mocks.push,
-  }),
 }));
 
 vi.mock("@/lib/utils/showToast", () => ({
@@ -181,5 +174,16 @@ describe("VerifyOtpForm", () => {
         dedupeKey: "auth-global-error",
       });
     });
+  });
+
+  it("인증번호 재전송 링크를 렌더링한다", () => {
+    renderVerifyOtpForm();
+
+    expect(
+      screen.getByRole("link", { name: "인증번호 재전송" }),
+    ).toHaveAttribute(
+      "href",
+      `/resend-email?purpose=signup&email=${defaultProps.email}`,
+    );
   });
 });

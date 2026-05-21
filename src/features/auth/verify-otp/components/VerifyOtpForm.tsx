@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { startTransition, useActionState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 
@@ -20,6 +20,7 @@ import {
   verifyOtpFormSchema,
   type VerifyOtpFormValues,
 } from "@/features/auth/verify-otp/schemas/verifyOtpFormSchema";
+import { ROUTES } from "@/lib/constants/routes";
 import { showToast } from "@/lib/utils/showToast";
 
 type VerifyOtpFormProps = {
@@ -29,10 +30,15 @@ type VerifyOtpFormProps = {
   ) => Promise<VerifyOtpActionState>;
   email: string;
   purpose: OtpPurpose;
+  redirect?: string | null;
 };
 
-const VerifyOtpForm = ({ action, email, purpose }: VerifyOtpFormProps) => {
-  const router = useRouter();
+const VerifyOtpForm = ({
+  action,
+  email,
+  purpose,
+  redirect,
+}: VerifyOtpFormProps) => {
   const [state, formAction, isPending] = useActionState(
     action,
     INITIAL_VERIFY_OTP_ACTION_STATE,
@@ -84,7 +90,6 @@ const VerifyOtpForm = ({ action, email, purpose }: VerifyOtpFormProps) => {
    *   일반화된 글로벌 에러 메시지를 toast로 표시한다.
    */
   useEffect(() => {
-    console.log("VerifyOtpForm effect", state);
     switch (state.status) {
       case "invalid_input": {
         const otpError = state.fieldErrors.otp;
@@ -121,7 +126,7 @@ const VerifyOtpForm = ({ action, email, purpose }: VerifyOtpFormProps) => {
       default:
         return;
     }
-  }, [state, router, setError]);
+  }, [state, setError]);
 
   /**
    * 클라이언트 유효성 검증 통과 후 OTP 인증 action 실행
@@ -147,6 +152,15 @@ const VerifyOtpForm = ({ action, email, purpose }: VerifyOtpFormProps) => {
       formAction(formData);
     });
   };
+
+  const query = new URLSearchParams({
+    purpose,
+    email,
+  });
+
+  if (redirect) {
+    query.set("redirect", redirect);
+  }
 
   return (
     /**
@@ -188,6 +202,16 @@ const VerifyOtpForm = ({ action, email, purpose }: VerifyOtpFormProps) => {
           />
           {/* 유효성 에러 */}
           <AuthFormFieldError error={errors.otp} />
+        </div>
+        <div>
+          <p className="text-sm text-muted-foreground">
+            <Link
+              href={`${ROUTES.RESEND_EMAIL}?${query.toString()}`}
+              className="text-sm text-muted-foreground underline hover:text-foreground"
+            >
+              인증번호 재전송
+            </Link>
+          </p>
         </div>
         <div className="mx-auto max-w-4xl">
           <Button className="w-full" type="submit" disabled={isPending}>
