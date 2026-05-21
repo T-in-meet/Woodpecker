@@ -1,5 +1,7 @@
 "use server";
 
+import { redirect } from "next/navigation";
+
 import { ROUTES } from "@/lib/constants/routes";
 import { getServerActionClientIp } from "@/lib/utils/getServerActionClientIp";
 import { VALIDATION_MESSAGES } from "@/lib/validation/messages";
@@ -71,6 +73,7 @@ export async function verifyOtpAction(
     provider: "password",
   });
 
+  let nextUrl = null;
   try {
     /**
      * 요청 컨텍스트 검증
@@ -108,7 +111,7 @@ export async function verifyOtpAction(
       };
     }
 
-    const { email, purpose, redirect } = contextParsed.data;
+    const { email, purpose, redirect: redirectTo } = contextParsed.data;
 
     /**
      * 사용자 입력 검증
@@ -269,16 +272,12 @@ export async function verifyOtpAction(
      */
     const nextPath =
       purpose === "signup"
-        ? (redirect ?? ROUTES.MYPAGE)
-        : redirect
-          ? `${ROUTES.RESET_PASSWORD}?redirect=${encodeURIComponent(redirect)}`
+        ? (redirectTo ?? ROUTES.MYPAGE)
+        : redirectTo
+          ? `${ROUTES.RESET_PASSWORD}?redirect=${encodeURIComponent(redirectTo)}`
           : ROUTES.RESET_PASSWORD;
 
-    return {
-      status: "completed",
-      redirectTo: nextPath,
-      fieldErrors: null,
-    };
+    nextUrl = nextPath;
   } catch (error) {
     /**
      * 예상하지 못한 시스템 예외 처리
@@ -308,4 +307,6 @@ export async function verifyOtpAction(
   } finally {
     await applyMinimumActionDelay(start);
   }
+
+  redirect(nextUrl);
 }

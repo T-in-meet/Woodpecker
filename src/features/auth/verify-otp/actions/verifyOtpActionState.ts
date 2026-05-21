@@ -10,9 +10,6 @@ import { AUTH_LOG_REASONS } from "../../constants/authLogReasons";
  * - idle:
  *   아직 인증 요청이 수행되지 않은 초기 상태
  *
- * - completed:
- *   OTP 인증 성공 상태
- *
  * - blocked:
  *   rate limit 정책에 의해 요청이 차단된 상태
  *
@@ -31,22 +28,6 @@ export type VerifyOtpActionState =
    */
   | {
       status: "idle";
-      fieldErrors: null;
-    }
-
-  /**
-   * 인증 완료 상태
-   *
-   * OTP 검증이 성공적으로 완료된 상태.
-   * redirectTo 경로를 기준으로 다음 페이지로 이동한다.
-   *
-   * 예:
-   * - signup 완료 후 메인 페이지 이동
-   * - recovery 완료 후 reset-password 페이지 이동
-   */
-  | {
-      status: "completed";
-      redirectTo: string;
       fieldErrors: null;
     }
 

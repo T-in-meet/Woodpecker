@@ -84,11 +84,8 @@ const VerifyOtpForm = ({ action, email, purpose }: VerifyOtpFormProps) => {
    *   일반화된 글로벌 에러 메시지를 toast로 표시한다.
    */
   useEffect(() => {
+    console.log("VerifyOtpForm effect", state);
     switch (state.status) {
-      case "completed":
-        router.push(state.redirectTo);
-        return;
-
       case "invalid_input": {
         const otpError = state.fieldErrors.otp;
         if (!otpError) return;

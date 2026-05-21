@@ -6,6 +6,12 @@ import { AUTH_LOG_REASONS } from "../../constants/authLogReasons";
 import { INVALID_OTP_ERROR_MESSAGE } from "../../constants/otp";
 import { verifyOtpAction } from "./verifyOtpAction";
 
+vi.mock("next/navigation", () => ({
+  redirect: vi.fn((path: string) => {
+    throw new Error(`NEXT_REDIRECT:${path}`);
+  }),
+}));
+
 vi.mock("../../lib/authLogger", () => ({
   logRequested: vi.fn(),
   logAuthEvent: vi.fn(),
@@ -31,6 +37,8 @@ vi.mock("../lib/verifyOtp", () => ({
 vi.mock("../../lib/applyMinimumActionDelay", () => ({
   applyMinimumActionDelay: vi.fn(),
 }));
+
+import { redirect } from "next/navigation";
 
 import { getServerActionClientIp } from "@/lib/utils/getServerActionClientIp";
 
@@ -78,20 +86,18 @@ describe("verifyOtpAction", () => {
     vi.mocked(applyMinimumActionDelay).mockResolvedValue(undefined);
   });
 
-  it("OTP 인증에 성공하면 completed 상태와 redirectTo를 반환한다", async () => {
+  it("OTP 인증에 성공하면 redirectPath로 redirect한다", async () => {
     const formData = createFormData({
       email: "user@example.com",
       purpose: "signup",
       otp: "123456",
     });
 
-    const result = await verifyOtpAction("/after-login", prevState, formData);
+    await expect(
+      verifyOtpAction("/after-login", prevState, formData),
+    ).rejects.toThrow("NEXT_REDIRECT:/after-login");
 
-    expect(result).toEqual({
-      status: "completed",
-      redirectTo: "/after-login",
-      fieldErrors: null,
-    });
+    expect(redirect).toHaveBeenCalledWith("/after-login");
 
     expect(verifyOtp).toHaveBeenCalledWith({
       email: "user@example.com",
@@ -102,20 +108,18 @@ describe("verifyOtpAction", () => {
     expect(applyMinimumActionDelay).toHaveBeenCalledTimes(1);
   });
 
-  it("redirectPath가 없으면 기본 경로로 completed 상태를 반환한다", async () => {
+  it("redirectPath가 없으면 기본 경로로 redirect한다", async () => {
     const formData = createFormData({
       email: "user@example.com",
       purpose: "signup",
       otp: "123456",
     });
 
-    const result = await verifyOtpAction(null, prevState, formData);
+    await expect(verifyOtpAction(null, prevState, formData)).rejects.toThrow(
+      `NEXT_REDIRECT:${ROUTES.MYPAGE}`,
+    );
 
-    expect(result).toEqual({
-      status: "completed",
-      redirectTo: ROUTES.MYPAGE,
-      fieldErrors: null,
-    });
+    expect(redirect).toHaveBeenCalledWith(ROUTES.MYPAGE);
   });
 
   it("context 검증에 실패하면 invalid_request를 반환하고 이후 검증은 실행하지 않는다", async () => {
@@ -254,7 +258,9 @@ describe("verifyOtpAction", () => {
       otp: "123456",
     });
 
-    await verifyOtpAction(null, prevState, formData);
+    await expect(verifyOtpAction(null, prevState, formData)).rejects.toThrow(
+      `NEXT_REDIRECT:${ROUTES.MYPAGE}`,
+    );
 
     expect(checkRequestEligibility).toHaveBeenCalledWith(
       "verify-otp",
@@ -269,37 +275,37 @@ describe("verifyOtpAction", () => {
     });
   });
 
-  it("reset-password OTP 인증에 성공하면 reset-password 경로로 completed 상태를 반환한다", async () => {
+  it("reset-password OTP 인증에 성공하면 reset-password 경로로 redirect한다", async () => {
     const formData = createFormData({
       email: "user@example.com",
       purpose: "reset-password",
       otp: "123456",
     });
 
-    const result = await verifyOtpAction(null, prevState, formData);
+    await expect(verifyOtpAction(null, prevState, formData)).rejects.toThrow(
+      `NEXT_REDIRECT:${ROUTES.RESET_PASSWORD}`,
+    );
 
-    expect(result).toEqual({
-      status: "completed",
-      redirectTo: ROUTES.RESET_PASSWORD,
-      fieldErrors: null,
-    });
+    expect(redirect).toHaveBeenCalledWith(ROUTES.RESET_PASSWORD);
   });
 
   it("reset-password OTP 인증에 성공하고 redirectPath가 있으면 reset-password 경로에 redirect query를 포함한다", async () => {
+    const redirectPath = "/target";
+
     const formData = createFormData({
       email: "user@example.com",
       purpose: "reset-password",
       otp: "123456",
     });
 
-    const result = await verifyOtpAction("/after-reset", prevState, formData);
+    const expectedPath = `${ROUTES.RESET_PASSWORD}?redirect=${encodeURIComponent(
+      redirectPath,
+    )}`;
 
-    expect(result).toEqual({
-      status: "completed",
-      redirectTo: `${ROUTES.RESET_PASSWORD}?redirect=${encodeURIComponent(
-        "/after-reset",
-      )}`,
-      fieldErrors: null,
-    });
+    await expect(
+      verifyOtpAction(redirectPath, prevState, formData),
+    ).rejects.toThrow(`NEXT_REDIRECT:${expectedPath}`);
+
+    expect(redirect).toHaveBeenCalledWith(expectedPath);
   });
 });
