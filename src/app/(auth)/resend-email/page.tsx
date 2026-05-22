@@ -5,6 +5,7 @@ import AuthEmailForm from "@/features/auth/components/AuthEmailForm";
 import { resendEmailAction } from "@/features/auth/resend-email/actions/resendEmailAction";
 import { INITIAL_RESEND_EMAIL_ACTION_STATE } from "@/features/auth/resend-email/actions/resendEmailActionState";
 import { requireGuestPage } from "@/features/auth/utils/requireGuestPage";
+import { requireOtpResendPage } from "@/features/auth/utils/requireOtpResendPage";
 import { ROUTES } from "@/lib/constants/routes";
 import { otpPurposeSchema } from "@/lib/validation/otpPurposeSchema";
 
@@ -40,12 +41,6 @@ type ResendEmailPageProps = {
  * - Form 초기 상태 전달
  */
 const ResendEmailPage = async ({ searchParams }: ResendEmailPageProps) => {
-  /**
-   * 이미 로그인된 사용자는
-   * OTP 재발급 흐름에 접근할 수 없다.
-   */
-  await requireGuestPage();
-
   const {
     email: rawEmail,
     purpose: rawPurpose,
@@ -82,6 +77,19 @@ const ResendEmailPage = async ({ searchParams }: ResendEmailPageProps) => {
   }
 
   const otpPurpose = parsedOtpPurpose.data;
+
+  /**
+   * signup 목적의 OTP 재전송 페이지는
+   * 비로그인 사용자와 로그인된 이메일 미인증 사용자의 접근을 허용한다.
+   *
+   * reset-password 목적의 OTP 재전송 페이지는
+   * 기존 guest-only 정책을 유지한다.
+   */
+  if (otpPurpose === "signup") {
+    await requireOtpResendPage();
+  } else {
+    await requireGuestPage();
+  }
 
   /**
    * redirect 정보를 action에 고정한다.

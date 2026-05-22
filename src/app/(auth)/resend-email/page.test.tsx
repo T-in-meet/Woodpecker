@@ -5,6 +5,7 @@ import AuthEmailForm from "@/features/auth/components/AuthEmailForm";
 import { resendEmailAction } from "@/features/auth/resend-email/actions/resendEmailAction";
 import { INITIAL_RESEND_EMAIL_ACTION_STATE } from "@/features/auth/resend-email/actions/resendEmailActionState";
 import { requireGuestPage } from "@/features/auth/utils/requireGuestPage";
+import { requireOtpResendPage } from "@/features/auth/utils/requireOtpResendPage";
 import { ROUTES } from "@/lib/constants/routes";
 
 import ResendEmailPage, { metadata } from "./page";
@@ -35,6 +36,10 @@ vi.mock("next/navigation", () => ({
   }),
 }));
 
+vi.mock("@/features/auth/utils/requireOtpResendPage", () => ({
+  requireOtpResendPage: vi.fn(),
+}));
+
 describe("ResendEmailPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -46,7 +51,7 @@ describe("ResendEmailPage", () => {
     });
   });
 
-  it("게스트 전용 페이지 검사를 수행한다", async () => {
+  it("signup 목적이면 OTP 재전송 페이지 검사를 수행한다", async () => {
     const page = await ResendEmailPage({
       searchParams: Promise.resolve({
         email: "user@example.com",
@@ -56,7 +61,22 @@ describe("ResendEmailPage", () => {
 
     render(page);
 
+    expect(requireOtpResendPage).toHaveBeenCalledTimes(1);
+    expect(requireGuestPage).not.toHaveBeenCalled();
+  });
+
+  it("reset-password 목적이면 게스트 전용 페이지 검사를 수행한다", async () => {
+    const page = await ResendEmailPage({
+      searchParams: Promise.resolve({
+        email: "user@example.com",
+        purpose: "reset-password",
+      }),
+    });
+
+    render(page);
+
     expect(requireGuestPage).toHaveBeenCalledTimes(1);
+    expect(requireOtpResendPage).not.toHaveBeenCalled();
   });
 
   it("유효한 purpose와 email을 AuthEmailForm에 전달한다", async () => {
