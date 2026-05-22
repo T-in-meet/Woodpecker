@@ -157,7 +157,7 @@ describe("resendEmailAction", () => {
     expect(mockApplyMinimumActionDelay).toHaveBeenCalledTimes(1);
   });
 
-  it("issueOtpAndSendEmail이 throw하면 internal_error를 반환하고 외부로 throw하지 않는다", async () => {
+  it("signup 목적에서 issueOtpAndSendEmail이 throw하면 internal_error를 반환한다", async () => {
     mockIssueOtpAndSendEmail.mockRejectedValue(new Error("email failed"));
 
     const formData = createFormData({
@@ -183,6 +183,57 @@ describe("resendEmailAction", () => {
       }),
     );
 
+    expect(mockApplyMinimumActionDelay).toHaveBeenCalledTimes(1);
+  });
+
+  it("reset-password 목적에서 issueOtpAndSendEmail이 throw해도 계정 탐지 방지를 위해 verify-otp로 redirect한다", async () => {
+    mockIssueOtpAndSendEmail.mockRejectedValue(new Error("email failed"));
+
+    const formData = createFormData({
+      email: "user@example.com",
+      purpose: "reset-password",
+    });
+
+    await expect(
+      resendEmailAction(
+        "/reset-password",
+        INITIAL_RESEND_EMAIL_ACTION_STATE,
+        formData,
+      ),
+    ).rejects.toThrow("NEXT_REDIRECT:");
+
+    expect(mockIssueOtpAndSendEmail).toHaveBeenCalledWith({
+      email: "user@example.com",
+      purpose: "reset-password",
+    });
+
+    expect(mockLogAuthError).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_RESEND_EMAIL_FAILED,
+      expect.objectContaining({
+        status: 500,
+        provider: "password",
+        result: "failure",
+        reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+      }),
+    );
+
+    expect(mockLogAuthEvent).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_RESEND_EMAIL_COMPLETED,
+      expect.objectContaining({
+        status: 200,
+        provider: "password",
+        result: "success",
+      }),
+    );
+
+    expect(mockRedirect).toHaveBeenCalledTimes(1);
+
+    const redirectUrl = mockRedirect.mock.calls[0]?.[0] as string;
+
+    expect(redirectUrl).toContain("/verify-otp");
+    expect(redirectUrl).toContain("purpose=reset-password");
+    expect(redirectUrl).toContain("email=user%40example.com");
+    expect(redirectUrl).toContain("redirect=%2Freset-password");
     expect(mockApplyMinimumActionDelay).toHaveBeenCalledTimes(1);
   });
 

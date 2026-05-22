@@ -216,8 +216,12 @@ export async function resendEmailAction(
      * OTP 발급 및 이메일 전송
      *
      * issueOtpAndSendEmail은 실패 시 throw하는 계약을 가진다.
-     * 따라서 발급/전송 실패는 사용자 입력 문제가 아니라
-     * internal_error 상태로 처리한다.
+     *
+     * reset-password 목적은 계정 존재 여부 노출 방지를 위해
+     * 발급/전송 실패를 외부에 드러내지 않는다.
+     *
+     * signup 목적은 실제 인증 진행 흐름이므로
+     * 발급/전송 실패를 internal_error로 처리한다.
      */
     try {
       await issueOtpAndSendEmail({ email, purpose });
@@ -232,7 +236,10 @@ export async function resendEmailAction(
         maskedEmail,
         maskedIp,
       });
-      return internalErrorState();
+
+      if (purpose !== "reset-password") {
+        return internalErrorState();
+      }
     }
 
     logAuthEvent(AUTH_EVENTS.AUTH_RESEND_EMAIL_COMPLETED, {
