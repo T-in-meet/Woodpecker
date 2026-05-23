@@ -319,6 +319,8 @@ describe("notification server actions", () => {
       subscribeToPushAction(createPushSubscriptionInput()),
     ).rejects.toBe(REDIRECT_ERROR);
 
-    expect(redirectMock).toHaveBeenCalledWith(ROUTES.VERIFY_EMAIL);
+    expect(redirectMock).toHaveBeenCalledWith(
+      `${ROUTES.RESEND_EMAIL}?purpose=signup`,
+    );
   });
 });

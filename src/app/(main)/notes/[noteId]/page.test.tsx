@@ -128,7 +128,9 @@ describe("NoteDetailPage", () => {
         NoteDetailPage({ params: Promise.resolve({ noteId: "note-123" }) }),
       ).rejects.toBe(REDIRECT_ERROR);
 
-      expect(redirectMock).toHaveBeenCalledWith(ROUTES.VERIFY_EMAIL);
+      expect(redirectMock).toHaveBeenCalledWith(
+        `${ROUTES.RESEND_EMAIL}?purpose=signup`,
+      );
       expect(getNoteByIdMock).not.toHaveBeenCalled();
     },
   );

@@ -78,7 +78,7 @@ describe("NotesPage", () => {
   });
 
   it.each([null, undefined])(
-    "redirects to verify email when email_confirmed_at is %s",
+    "redirects to resend email when email_confirmed_at is %s",
     async (emailConfirmedAt) => {
       createClientMock.mockResolvedValue(
         createSupabaseMock("user-123", emailConfirmedAt),
@@ -88,7 +88,9 @@ describe("NotesPage", () => {
         NotesPage({ searchParams: Promise.resolve({}) }),
       ).rejects.toBe(REDIRECT_ERROR);
 
-      expect(redirectMock).toHaveBeenCalledWith(ROUTES.VERIFY_EMAIL);
+      expect(redirectMock).toHaveBeenCalledWith(
+        `${ROUTES.RESEND_EMAIL}?purpose=signup`,
+      );
       expect(getNotesMock).not.toHaveBeenCalled();
     },
   );

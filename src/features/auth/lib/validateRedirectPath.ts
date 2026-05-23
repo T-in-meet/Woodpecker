@@ -32,7 +32,7 @@ const ALLOWED_EXACT_PATHS: ReadonlySet<string> = new Set([
 const BLOCKED_EXACT_PATHS: ReadonlySet<string> = new Set([
   "/login",
   "/signup",
-  "/verify-email",
+  "/resend-email",
   "/privacy",
   "/terms",
 ]);

@@ -140,7 +140,7 @@ describe("createNoteAction", () => {
   });
 
   it.each([null, undefined])(
-    "redirects unverified emails to the verify-email route when email_confirmed_at is %s",
+    "redirects unverified emails to the resend-email route when email_confirmed_at is %s",
     async (emailConfirmedAt) => {
       const { supabase, rpcMock } = createSupabaseMock({
         emailConfirmedAt,
@@ -155,7 +155,9 @@ describe("createNoteAction", () => {
         REDIRECT_ERROR,
       );
 
-      expect(redirectMock).toHaveBeenCalledWith(ROUTES.VERIFY_EMAIL);
+      expect(redirectMock).toHaveBeenCalledWith(
+        `${ROUTES.RESEND_EMAIL}?purpose=signup`,
+      );
       expect(rpcMock).not.toHaveBeenCalled();
     },
   );
@@ -249,7 +251,7 @@ describe("deleteNoteAction", () => {
   });
 
   it.each([null, undefined])(
-    "redirects unverified emails to the verify-email route when email_confirmed_at is %s",
+    "redirects unverified emails to the resend-email route when email_confirmed_at is %s",
     async (emailConfirmedAt) => {
       const { supabase, fromMock } = createSupabaseMock({
         emailConfirmedAt,
@@ -260,7 +262,9 @@ describe("deleteNoteAction", () => {
         deleteNoteAction("11111111-1111-4111-8111-111111111111"),
       ).rejects.toBe(REDIRECT_ERROR);
 
-      expect(redirectMock).toHaveBeenCalledWith(ROUTES.VERIFY_EMAIL);
+      expect(redirectMock).toHaveBeenCalledWith(
+        `${ROUTES.RESEND_EMAIL}?purpose=signup`,
+      );
       expect(fromMock).not.toHaveBeenCalled();
     },
   );

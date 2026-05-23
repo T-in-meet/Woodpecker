@@ -225,7 +225,7 @@ describe("submitAnswerAction", () => {
   });
 
   it.each(UNVERIFIED_EMAIL_STATES)(
-    "redirects unverified emails to the verify-email route when email_confirmed_at is %s",
+    "redirects unverified emails to the resend-email route when email_confirmed_at is %s",
     async (emailConfirmedAt) => {
       createClientMock.mockResolvedValue(
         createAuthSupabaseMock(TEST_USER_ID, { emailConfirmedAt }),
@@ -239,7 +239,9 @@ describe("submitAnswerAction", () => {
         REDIRECT_ERROR,
       );
 
-      expect(redirectMock).toHaveBeenCalledWith(ROUTES.VERIFY_EMAIL);
+      expect(redirectMock).toHaveBeenCalledWith(
+        `${ROUTES.RESEND_EMAIL}?purpose=signup`,
+      );
       expect(getNoteContentForComparisonMock).not.toHaveBeenCalled();
       expect(getPendingReviewLogMock).not.toHaveBeenCalled();
     },
@@ -276,7 +278,7 @@ describe("completeReviewAction", () => {
   });
 
   it.each(UNVERIFIED_EMAIL_STATES)(
-    "redirects unverified emails to the verify-email route when email_confirmed_at is %s",
+    "redirects unverified emails to the resend-email route when email_confirmed_at is %s",
     async (emailConfirmedAt) => {
       createClientMock.mockResolvedValue(
         createAuthSupabaseMock(TEST_USER_ID, { emailConfirmedAt }),
@@ -286,7 +288,9 @@ describe("completeReviewAction", () => {
         completeReviewAction(null, createCompleteReviewFormData()),
       ).rejects.toBe(REDIRECT_ERROR);
 
-      expect(redirectMock).toHaveBeenCalledWith(ROUTES.VERIFY_EMAIL);
+      expect(redirectMock).toHaveBeenCalledWith(
+        `${ROUTES.RESEND_EMAIL}?purpose=signup`,
+      );
       expect(getReviewableNoteMock).not.toHaveBeenCalled();
       expect(getPendingReviewLogMock).not.toHaveBeenCalled();
     },

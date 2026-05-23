@@ -6,14 +6,14 @@
  *
  * 검증 항목:
  * - 400 응답 및 응답 계약(success, code, data.errors) 준수
- * - malformed JSON 단계에서 후속 처리(유저 조회/링크 발급/메일 전송)가 실행되지 않음
+ * - malformed JSON 단계에서 후속 처리(유저 조회/OTP 발급 및 메일 전송)가 실행되지 않음
  */
 
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
-import { sendAuthEmail } from "@/features/auth/email/sendAuthEmail";
+import { issueOtpAndSendEmail } from "@/features/auth/email/issueOtpAndSendEmail";
 import { resetEligibilityStore } from "@/features/auth/lib/checkRequestEligibility";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -21,7 +21,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { POST } from "../route";
 
 vi.mock("@/features/auth/lib/getUserByEmail");
-vi.mock("@/features/auth/email/sendAuthEmail");
+vi.mock("@/features/auth/email/issueOtpAndSendEmail");
 vi.mock("@/lib/supabase/admin");
 
 function makeMalformedJsonRequest(): NextRequest {
@@ -62,6 +62,6 @@ describe("회원가입 - malformed JSON 처리", () => {
 
     expect(createAdminClient).toHaveBeenCalledTimes(0);
     expect(getUserByEmail).toHaveBeenCalledTimes(0);
-    expect(sendAuthEmail).toHaveBeenCalledTimes(0);
+    expect(issueOtpAndSendEmail).toHaveBeenCalledTimes(0);
   });
 });

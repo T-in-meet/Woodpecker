@@ -135,8 +135,8 @@ describe("validateRedirectPath 디코딩 후 재검사", () => {
       expect(validateRedirectPath("/signup%2Ftest")).toBe("/mypage");
     });
 
-    it("/verify-email%2Ftest는 decode 후 차단 경로 하위 → /mypage를 반환한다", () => {
-      expect(validateRedirectPath("/verify-email%2Ftest")).toBe("/mypage");
+    it("/resend-email%2Ftest는 decode 후 차단 경로 하위 → /mypage를 반환한다", () => {
+      expect(validateRedirectPath("/resend-email%2Ftest")).toBe("/mypage");
     });
 
     it("/privacy%2Ftest는 decode 후 차단 경로 하위 → /mypage를 반환한다", () => {

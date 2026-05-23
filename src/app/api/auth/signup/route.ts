@@ -3,8 +3,7 @@ import { NextRequest } from "next/server";
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 import { AUTH_EVENTS } from "@/features/auth/constants/authEvents";
 import { AUTH_LOG_REASONS } from "@/features/auth/constants/authLogReasons";
-import { issueAuthEmailLinkAndSend } from "@/features/auth/email/issueAuthEmailLinkAndSend";
-import { sendAuthEmail } from "@/features/auth/email/sendAuthEmail";
+import { issueOtpAndSendEmail } from "@/features/auth/email/issueOtpAndSendEmail";
 import { applyMinimumResponseTime } from "@/features/auth/lib/applyMinimumResponseTime";
 import {
   logAuthError,
@@ -70,7 +69,7 @@ async function resolveSignupResponse(
   const makeSignupSuccess = (email: string) =>
     successResponse(AUTH_API_CODES.SIGNUP_SUCCESS, {
       email,
-      redirectTo: ROUTES.VERIFY_EMAIL,
+      redirectTo: `${ROUTES.VERIFY_OTP}?purpose=signup&email=${encodeURIComponent(email)}`,
     });
 
   /**
@@ -183,16 +182,16 @@ async function resolveSignupResponse(
   /**
    * [기존 사용자 - 미인증]
    *
-   * 이메일 재발송 시도 (side-effect)
+   * OTP 이메일 재발송 시도 (side-effect)
    * ⚠️ 설계 의도:
-   * - signup 정책은 magiclink 단일 타입을 사용한다.
-   * - 링크 클릭 시 "이메일 인증"과 "로그인"을 한 번에 처리한다.
+   * - signup 정책은 OTP 입력 방식으로 이메일 인증을 처리한다.
+   * - 기존 미인증 사용자는 새 계정을 만들지 않고 동일 이메일로 OTP를 재발급한다.
    */
   if (existingUser && existingUser.email_confirmed_at === null) {
     const deliveryEmail = existingUser?.email ?? email;
     try {
-      await issueAuthEmailLinkAndSend({
-        type: "magiclink", // 로그인 인증 링크 생성
+      await issueOtpAndSendEmail({
+        purpose: "signup",
         email: deliveryEmail,
       });
     } catch {
@@ -208,14 +207,14 @@ async function resolveSignupResponse(
   /**
    * [기존 사용자 - 인증 완료]
    *
-   * 미인증 사용자와 동일한 email link 흐름을 적용한다.
-   * notify ticket 없이 magiclink로 통일한다.
+   * 기존 가입 사용자에게도 동일한 성공 응답을 반환한다.
+   * 계정 존재 여부 노출을 막기 위해 OTP 발송 실패 여부는 외부 응답에 반영하지 않는다.
    */
   if (existingUser && existingUser.email_confirmed_at !== null) {
     const deliveryEmail = existingUser?.email ?? email;
     try {
-      await issueAuthEmailLinkAndSend({
-        type: "magiclink",
+      await issueOtpAndSendEmail({
+        purpose: "signup",
         email: deliveryEmail,
       });
     } catch {
@@ -233,12 +232,12 @@ async function resolveSignupResponse(
    *
    * 순서:
    * 1) createUser로 auth user 생성 보장
-   * 2) magiclink 발급
-   * 3) 커스텀 메일 발송
+   * 2) signup 목적의 OTP 발급
+   * 3) 커스텀 OTP 이메일 발송
    *
    * 실패 정책:
-   * - createUser/generateLink/tokenHash/sendAuthEmail 실패는 모두 외부에 노출하지 않는다.
-   * - 내부 로깅만 남기고 동일한 SIGNUP_SUCCESS 계약을 유지한다.
+   * - createUser 또는 OTP 발급/이메일 발송 실패는 내부 예외로 처리한다.
+   * - POST 핸들러에서 SIGNUP_INTERNAL_ERROR로 정규화한다.
    */
   const adminClient = createAdminClient();
 
@@ -247,7 +246,7 @@ async function resolveSignupResponse(
    * email_confirm: false는 이메일 인증 상태만 제어하며,
    * Supabase의 자동 이메일 발송을 비활성화하는 옵션이 아니다.
    * 검증 기준(2026-04-14): 현재 운영/스테이징 설정에서는 Supabase 기본 이메일이
-   * 발송되지 않아 커스텀 magiclink 메일만 발송되고 있다.
+   * 발송되지 않아 커스텀 OTP 메일만 발송되고 있다.
    *
    * ⚠️ 주의:
    * Supabase 이메일 설정(Auth Email Provider 포함)이 변경될 경우 기본 메일이 함께
@@ -265,28 +264,13 @@ async function resolveSignupResponse(
     throw createUserError;
   }
 
-  const { data, error } = await adminClient.auth.admin.generateLink({
-    email: email, // raw email — auth.users의 실제 email
-    type: "magiclink",
-    options: {
-      data: { nickname },
-    },
-  });
-
-  if (error) {
-    throw error;
-  }
-
-  const tokenHash = data.properties?.hashed_token;
-
-  if (!tokenHash) {
-    throw new Error("Missing hashed_token from generateLink");
-  }
-
-  await sendAuthEmail(email, tokenHash, "magiclink"); // raw email 발송
+  await issueOtpAndSendEmail({ email, purpose: "signup" });
 
   /**
-   * 최종 성공 응답 (완전 통일)
+   * 최종 성공 응답
+   *
+   * 계정 존재 여부와 내부 분기 결과를 외부로 노출하지 않기 위해
+   * 성공 가능한 경로는 동일한 SIGNUP_SUCCESS 응답 계약을 유지한다.
    */
   return { response: makeSignupSuccess(email), outcome: { type: "completed" } }; // raw email 응답
 }

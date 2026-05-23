@@ -72,14 +72,14 @@ describe("forgotPasswordAction - rate limit", () => {
   it("TC6: 유효한 email이면 canonicalEmail 기준 forgot-password 전용 email bucket key를 생성한다", async () => {
     const mocks = setupActionTest({ email: "User@Example.COM" });
 
-    await mocks.callAction();
+    await expect(mocks.callAction()).rejects.toThrow("NEXT_REDIRECT");
 
     expect(emailStore.has(FORGOT_PASSWORD_EMAIL_KEY)).toBe(true);
     expect(emailStore.has("User@Example.COM")).toBe(false);
     expect(emailStore.has(CANONICAL_EMAIL)).toBe(false);
   });
 
-  it("TC7: IP short 차단 시 blocked를 반환하고 generateLink를 호출하지 않는다", async () => {
+  it("TC7: IP short 차단 시 blocked를 반환하고 OTP 발급/메일 발송을 호출하지 않는다", async () => {
     const mocks = setupActionTest();
     blockIpShort();
 
@@ -90,11 +90,11 @@ describe("forgotPasswordAction - rate limit", () => {
       fieldErrors: null,
     });
     expectNoLegacyActionFields(state);
-    expect(mocks.generateLinkMock).not.toHaveBeenCalled();
+    expect(mocks.issueOtpAndSendEmailMock).not.toHaveBeenCalled();
     expectRateLimitedLog(mocks, AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT);
   });
 
-  it("TC8: IP long 차단 시 blocked를 반환하고 generateLink를 호출하지 않는다", async () => {
+  it("TC8: IP long 차단 시 blocked를 반환하고 OTP 발급/메일 발송을 호출하지 않는다", async () => {
     const mocks = setupActionTest();
     blockIpLong();
 
@@ -105,11 +105,11 @@ describe("forgotPasswordAction - rate limit", () => {
       fieldErrors: null,
     });
     expectNoLegacyActionFields(state);
-    expect(mocks.generateLinkMock).not.toHaveBeenCalled();
+    expect(mocks.issueOtpAndSendEmailMock).not.toHaveBeenCalled();
     expectRateLimitedLog(mocks, AUTH_LOG_REASONS.RATE_LIMIT_IP_LONG);
   });
 
-  it("TC9: email short 차단 시 blocked를 반환하고 generateLink를 호출하지 않는다", async () => {
+  it("TC9: email short 차단 시 blocked를 반환하고 OTP 발급/메일 발송을 호출하지 않는다", async () => {
     const mocks = setupActionTest();
     blockEmailShort();
 
@@ -120,11 +120,11 @@ describe("forgotPasswordAction - rate limit", () => {
       fieldErrors: null,
     });
     expectNoLegacyActionFields(state);
-    expect(mocks.generateLinkMock).not.toHaveBeenCalled();
+    expect(mocks.issueOtpAndSendEmailMock).not.toHaveBeenCalled();
     expectRateLimitedLog(mocks, AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT);
   });
 
-  it("TC10: email long 차단 시 blocked를 반환하고 generateLink를 호출하지 않는다", async () => {
+  it("TC10: email long 차단 시 blocked를 반환하고 OTP 발급/메일 발송을 호출하지 않는다", async () => {
     const mocks = setupActionTest();
     blockEmailLong();
 
@@ -135,14 +135,14 @@ describe("forgotPasswordAction - rate limit", () => {
       fieldErrors: null,
     });
     expectNoLegacyActionFields(state);
-    expect(mocks.generateLinkMock).not.toHaveBeenCalled();
+    expect(mocks.issueOtpAndSendEmailMock).not.toHaveBeenCalled();
     expectRateLimitedLog(mocks, AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG);
   });
 
   it("TC11: allow 시 IP short / IP long / email short / email long을 모두 업데이트한다", async () => {
     const mocks = setupActionTest();
 
-    await mocks.callAction();
+    await expect(mocks.callAction()).rejects.toThrow("NEXT_REDIRECT");
 
     expect(ipStore.get(TEST_IP)?.shortWindow?.timestamps).toHaveLength(1);
     expect(ipStore.get(TEST_IP)?.longWindow?.timestamps).toHaveLength(1);
@@ -155,7 +155,7 @@ describe("forgotPasswordAction - rate limit", () => {
   it("TC12: IP bucket은 forgot-password 전용 key가 아니라 auth 공통 IP key를 사용한다", async () => {
     const mocks = setupActionTest();
 
-    await mocks.callAction();
+    await expect(mocks.callAction()).rejects.toThrow("NEXT_REDIRECT");
 
     expect(ipStore.has(TEST_IP)).toBe(true);
     expect(ipStore.has(`forgotPassword:${TEST_IP}`)).toBe(false);
@@ -164,7 +164,7 @@ describe("forgotPasswordAction - rate limit", () => {
   it("TC13: forgot-password email bucket은 login/signup과 분리된 전용 key를 사용한다", async () => {
     const mocks = setupActionTest();
 
-    await mocks.callAction();
+    await expect(mocks.callAction()).rejects.toThrow("NEXT_REDIRECT");
 
     expect(emailStore.has(FORGOT_PASSWORD_EMAIL_KEY)).toBe(true);
     expect(emailStore.has(CANONICAL_EMAIL)).toBe(false);
@@ -173,7 +173,7 @@ describe("forgotPasswordAction - rate limit", () => {
   it("TC13-1: IP rate limit key는 auth 공통 기준을 따른다", async () => {
     const mocks = setupActionTest();
 
-    await mocks.callAction();
+    await expect(mocks.callAction()).rejects.toThrow("NEXT_REDIRECT");
 
     expect([...ipStore.keys()]).toEqual([TEST_IP]);
   });

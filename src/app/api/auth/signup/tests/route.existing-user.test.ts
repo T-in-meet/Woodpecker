@@ -4,7 +4,7 @@
  * 이 파일은 signup API가 "이미 존재하는 계정"을 만났을 때의 분기 정책만 검증한다.
  * - 기존 미인증/인증 계정이면 200
  * - 두 경우 모두 getUserByEmail 호출 확인
- * - 두 경우 모두 issueAuthEmailLinkAndSend 호출 확인 (type: magiclink)
+ * - src\app\api\auth\signup\tests\route.existing-user.test.ts
  * - 이메일 발송 실패를 외부에 노출하지 않고 성공 계약 유지
  * - 응답 계약(success/code/data) 유지
  *
@@ -15,7 +15,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
-import { issueAuthEmailLinkAndSend } from "@/features/auth/email/issueAuthEmailLinkAndSend";
+import { issueOtpAndSendEmail } from "@/features/auth/email/issueOtpAndSendEmail";
 import { resetEligibilityStore } from "@/features/auth/lib/checkRequestEligibility";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { ROUTES } from "@/lib/constants/routes";
@@ -25,7 +25,7 @@ import { makeRequest } from "./utils/signupTestHelper";
 
 // 기존 인증/미인증 계정 분기 판단에 사용하는 기존 유저 조회 mock
 vi.mock("@/features/auth/lib/getUserByEmail");
-vi.mock("@/features/auth/email/issueAuthEmailLinkAndSend");
+vi.mock("@/features/auth/email/issueOtpAndSendEmail");
 
 // 테스트 간 rate limit store 공유 상태 제거
 beforeEach(() => {
@@ -49,7 +49,7 @@ describe("회원가입 - 기존 미인증 사용자 재요청 분기", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(getUserByEmail).mockResolvedValue(null);
-    vi.mocked(issueAuthEmailLinkAndSend).mockResolvedValue(undefined);
+    vi.mocked(issueOtpAndSendEmail).mockResolvedValue(undefined);
   });
 
   it("TC-01. 기존 미인증 사용자도 동일한 성공 응답을 반환한다", async () => {
@@ -63,34 +63,37 @@ describe("회원가입 - 기존 미인증 사용자 재요청 분기", () => {
     expect(json.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
     expect(json.data).toEqual({
       email: "test@example.com",
-      redirectTo: ROUTES.VERIFY_EMAIL,
+      redirectTo: `${ROUTES.VERIFY_OTP}?purpose=signup&email=${encodeURIComponent("test@example.com")}`,
     });
   });
 
-  it("TC-02. 기존 미인증 사용자 분기에서는 getUserByEmail이 정확히 1회 호출된다", async () => {
+  it("TC-02. 기존 인증 사용자 분기에서는 signup OTP 발송 함수가 1회 호출된다", async () => {
     vi.mocked(getUserByEmail).mockResolvedValue(unverifiedUser as never);
 
     await POST(makeRequest(requestBody));
 
-    expect(vi.mocked(getUserByEmail)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(getUserByEmail)).toHaveBeenCalledWith("test@example.com");
+    expect(vi.mocked(issueOtpAndSendEmail)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(issueOtpAndSendEmail)).toHaveBeenCalledWith({
+      email: "test@example.com",
+      purpose: "signup",
+    });
   });
 
-  it("TC-03. 기존 미인증 사용자 분기에서는 magiclink 발송 유틸이 1회 호출된다", async () => {
+  it("TC-03. 기존 미인증 사용자 분기에서는 signup OTP 발송 함수가 1회 호출된다", async () => {
     vi.mocked(getUserByEmail).mockResolvedValue(unverifiedUser as never);
 
     await POST(makeRequest(requestBody));
 
-    expect(vi.mocked(issueAuthEmailLinkAndSend)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(issueAuthEmailLinkAndSend)).toHaveBeenCalledWith({
-      type: "magiclink",
+    expect(vi.mocked(issueOtpAndSendEmail)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(issueOtpAndSendEmail)).toHaveBeenCalledWith({
       email: "test@example.com",
+      purpose: "signup",
     });
   });
 
   it("TC-04. 기존 미인증 사용자 메일 발송 실패도 외부 계약은 성공으로 유지된다", async () => {
     vi.mocked(getUserByEmail).mockResolvedValue(unverifiedUser as never);
-    vi.mocked(issueAuthEmailLinkAndSend).mockRejectedValueOnce(
+    vi.mocked(issueOtpAndSendEmail).mockRejectedValueOnce(
       new Error("mail send failed"),
     );
 
@@ -102,11 +105,11 @@ describe("회원가입 - 기존 미인증 사용자 재요청 분기", () => {
     expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
     expect(body.data).toEqual({
       email: "test@example.com",
-      redirectTo: ROUTES.VERIFY_EMAIL,
+      redirectTo: `${ROUTES.VERIFY_OTP}?purpose=signup&email=${encodeURIComponent("test@example.com")}`,
     });
   });
 
-  it("TC-05. 기존 미인증 사용자의 auth email이 null이어도 요청 email로 magiclink 발송을 시도한다", async () => {
+  it("TC-05. 기존 미인증 사용자의 auth email이 null이어도 요청 email로 signup OTP 발송을 시도한다", async () => {
     vi.mocked(getUserByEmail).mockResolvedValue({
       email: null,
       email_confirmed_at: null,
@@ -115,17 +118,17 @@ describe("회원가입 - 기존 미인증 사용자 재요청 분기", () => {
     const response = await POST(makeRequest(requestBody));
     const body = await response.json();
 
-    expect(vi.mocked(issueAuthEmailLinkAndSend)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(issueAuthEmailLinkAndSend)).toHaveBeenCalledWith({
-      type: "magiclink",
+    expect(vi.mocked(issueOtpAndSendEmail)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(issueOtpAndSendEmail)).toHaveBeenCalledWith({
       email: requestBody.email,
+      purpose: "signup",
     });
     expect(response.status).toBe(200);
     expect(body.success).toBe(true);
     expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
     expect(body.data).toEqual({
       email: requestBody.email,
-      redirectTo: ROUTES.VERIFY_EMAIL,
+      redirectTo: `${ROUTES.VERIFY_OTP}?purpose=signup&email=${encodeURIComponent("test@example.com")}`,
     });
   });
 });
@@ -148,7 +151,7 @@ describe("회원가입 - 기존 인증 사용자 재요청 분기", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(getUserByEmail).mockResolvedValue(null);
-    vi.mocked(issueAuthEmailLinkAndSend).mockResolvedValue(undefined);
+    vi.mocked(issueOtpAndSendEmail).mockResolvedValue(undefined);
   });
 
   it("TC-01. 기존 인증 사용자도 동일한 성공 응답을 반환한다", async () => {
@@ -162,21 +165,7 @@ describe("회원가입 - 기존 인증 사용자 재요청 분기", () => {
     expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
     expect(body.data).toEqual({
       email: "test@example.com",
-      redirectTo: ROUTES.VERIFY_EMAIL,
-    });
-  });
-
-  it("TC-02. 기존 인증 사용자 분기에서는 magiclink 발송 유틸이 1회 호출된다", async () => {
-    vi.mocked(getUserByEmail).mockResolvedValue(verifiedUser as never);
-
-    await POST(makeRequest(requestBody));
-
-    expect(vi.mocked(getUserByEmail)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(getUserByEmail)).toHaveBeenCalledWith("test@example.com");
-    expect(vi.mocked(issueAuthEmailLinkAndSend)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(issueAuthEmailLinkAndSend)).toHaveBeenCalledWith({
-      type: "magiclink",
-      email: "test@example.com",
+      redirectTo: `${ROUTES.VERIFY_OTP}?purpose=signup&email=${encodeURIComponent("test@example.com")}`,
     });
   });
 
@@ -192,7 +181,7 @@ describe("회원가입 - 기존 인증 사용자 재요청 분기", () => {
       code: AUTH_API_CODES.SIGNUP_SUCCESS,
       data: {
         email: "test@example.com",
-        redirectTo: ROUTES.VERIFY_EMAIL,
+        redirectTo: `${ROUTES.VERIFY_OTP}?purpose=signup&email=${encodeURIComponent("test@example.com")}`,
       },
     });
     expect(body).not.toHaveProperty("errors");
@@ -201,7 +190,7 @@ describe("회원가입 - 기존 인증 사용자 재요청 분기", () => {
 
   it("TC-04. 기존 인증 사용자 메일 발송 실패도 외부 계약은 성공으로 유지된다", async () => {
     vi.mocked(getUserByEmail).mockResolvedValue(verifiedUser as never);
-    vi.mocked(issueAuthEmailLinkAndSend).mockRejectedValueOnce(
+    vi.mocked(issueOtpAndSendEmail).mockRejectedValueOnce(
       new Error("mail send failed"),
     );
 
@@ -213,7 +202,7 @@ describe("회원가입 - 기존 인증 사용자 재요청 분기", () => {
     expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
     expect(body.data).toEqual({
       email: "test@example.com",
-      redirectTo: ROUTES.VERIFY_EMAIL,
+      redirectTo: `${ROUTES.VERIFY_OTP}?purpose=signup&email=${encodeURIComponent("test@example.com")}`,
     });
   });
 });

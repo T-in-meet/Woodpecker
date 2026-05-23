@@ -113,7 +113,7 @@ describe("NoteReviewPage", () => {
     expect(hasCompletedReviewForNoteTodayMock).not.toHaveBeenCalled();
   });
 
-  it("redirects to verify-email when the user has not confirmed email", async () => {
+  it("redirects to resend-email when the user has not confirmed email", async () => {
     createClientMock.mockResolvedValue(
       createSupabaseMock("user-123", { emailConfirmedAt: null }),
     );
@@ -126,7 +126,9 @@ describe("NoteReviewPage", () => {
       }),
     ).rejects.toBe(REDIRECT_ERROR);
 
-    expect(redirectMock).toHaveBeenCalledWith(ROUTES.VERIFY_EMAIL);
+    expect(redirectMock).toHaveBeenCalledWith(
+      `${ROUTES.RESEND_EMAIL}?purpose=signup`,
+    );
     expect(getReviewableNoteMock).not.toHaveBeenCalled();
     expect(getPendingReviewLogMock).not.toHaveBeenCalled();
     expect(hasCompletedReviewForNoteTodayMock).not.toHaveBeenCalled();

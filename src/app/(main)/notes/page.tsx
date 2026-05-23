@@ -34,7 +34,7 @@ export default async function NotesPage({ searchParams }: NotesPageProps) {
   }
 
   if (user.email_confirmed_at == null) {
-    redirect(ROUTES.VERIFY_EMAIL);
+    redirect(`${ROUTES.RESEND_EMAIL}?purpose=signup`);
   }
 
   const params = await searchParams;

@@ -1,9 +1,9 @@
 import { APIRequestContext, expect, test } from "@playwright/test";
 
+import { ROUTES } from "@/lib/constants/routes";
+
 const SIGNUP_ENDPOINT = "/api/auth/signup";
-const CALLBACK_ENDPOINT = "/api/auth/callback";
 const SIGNUP_SUCCESS_CODE = "SIGNUP_SUCCESS";
-const SIGNUP_REDIRECT_TO = "/verify-email";
 const SIGNUP_INTERNAL_ERROR_CODE = "SIGNUP_INTERNAL_ERROR";
 
 type SignupResponse = {
@@ -76,49 +76,26 @@ test.describe("Auth external-observable regression", () => {
       expect(body.code).toBe(SIGNUP_SUCCESS_CODE);
       expect(body.data).not.toBeNull();
       expect(typeof body.data?.email).toBe("string");
-      expect(body.data?.redirectTo).toBe(SIGNUP_REDIRECT_TO);
+
+      const redirectTo = body.data?.redirectTo;
+
+      expect(typeof redirectTo).toBe("string");
+
+      const redirectUrl = new URL(
+        redirectTo as string,
+        "http://localhost:3000",
+      );
+
+      expect(redirectUrl.pathname).toBe(ROUTES.VERIFY_OTP);
+      expect(redirectUrl.searchParams.get("purpose")).toBe("signup");
+      expect(redirectUrl.searchParams.get("email")).toBe(
+        "shape-check@example.com",
+      );
+
       return;
     }
 
     expect(body.code).toBe(SIGNUP_INTERNAL_ERROR_CODE);
     expect(body.data).toBeNull();
-  });
-
-  test("TC-03: callback(token_hash/type) 요청은 현재 계약대로 redirect observable(status/location)을 반환한다", async ({
-    request,
-  }) => {
-    const response = await request.get(
-      `${CALLBACK_ENDPOINT}?token_hash=dummy&type=magiclink`,
-      {
-        maxRedirects: 0,
-      },
-    );
-    const headers = response.headers();
-
-    expect(response.status()).toBe(307);
-    expect(headers.location).toBeTruthy();
-    expect(headers.location).toContain("/verify-email");
-  });
-
-  test("TC-04: callback 실패 케이스(token_hash=dummy vs invalid)는 외부 observable이 동일하다", async ({
-    request,
-  }) => {
-    const dummyResponse = await request.get(
-      `${CALLBACK_ENDPOINT}?token_hash=dummy&type=magiclink`,
-      {
-        maxRedirects: 0,
-      },
-    );
-    const invalidResponse = await request.get(
-      `${CALLBACK_ENDPOINT}?token_hash=invalid&type=magiclink`,
-      {
-        maxRedirects: 0,
-      },
-    );
-
-    expect(dummyResponse.status()).toBe(invalidResponse.status());
-    expect(dummyResponse.headers().location).toBe(
-      invalidResponse.headers().location,
-    );
   });
 });
