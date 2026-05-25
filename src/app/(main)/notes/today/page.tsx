@@ -36,7 +36,8 @@ export default async function TodayReviewPage({
   }
 
   const params = await searchParams;
-  const page = Math.max(1, Number(params.page) || 1);
+  const rawPage = Number(params.page);
+  const page = Number.isFinite(rawPage) ? Math.max(1, Math.floor(rawPage)) : 1;
 
   const cookieStore = await cookies();
   const initialView =
@@ -48,6 +49,15 @@ export default async function TodayReviewPage({
     TODAY_PAGE_SIZE,
   );
   const totalPages = Math.ceil(total / TODAY_PAGE_SIZE);
+
+  if (total > 0 && page > totalPages) {
+    const lastPage = totalPages;
+    redirect(
+      lastPage === 1
+        ? ROUTES.NOTES_TODAY
+        : `${ROUTES.NOTES_TODAY}?page=${lastPage}`,
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-10 md:px-12">
