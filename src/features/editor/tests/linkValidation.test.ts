@@ -8,6 +8,17 @@ describe("normalizeLinkHref", () => {
       "https://example.com/docs",
     );
   });
+
+  it("rejects protocol-relative URLs so they cannot bypass the protocol allowlist", () => {
+    expect(normalizeLinkHref("//evil.com")).toBeNull();
+    expect(normalizeLinkHref("//evil.com/path")).toBeNull();
+  });
+
+  it("still accepts same-origin relative paths", () => {
+    expect(normalizeLinkHref("/notes/abc")).toBe("/notes/abc");
+    expect(normalizeLinkHref("./sibling")).toBe("./sibling");
+    expect(normalizeLinkHref("#section")).toBe("#section");
+  });
 });
 
 describe("normalizeImageSrc", () => {
