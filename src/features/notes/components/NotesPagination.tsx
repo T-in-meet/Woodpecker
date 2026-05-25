@@ -2,16 +2,13 @@ import Link from "next/link";
 
 import { cn } from "@/lib/utils/cn";
 
-import { buildNotesUrl, type NotesView } from "../utils/buildNotesUrl";
-
 const ELLIPSIS = "..." as const;
 type PageItem = number | typeof ELLIPSIS;
 
 type NotesPaginationProps = {
   currentPage: number;
   totalPages: number;
-  query: string;
-  view: NotesView;
+  buildUrl: (page: number) => string;
 };
 
 function getPageNumbers(current: number, total: number): PageItem[] {
@@ -36,8 +33,7 @@ function getPageNumbers(current: number, total: number): PageItem[] {
 export function NotesPagination({
   currentPage,
   totalPages,
-  query,
-  view,
+  buildUrl,
 }: NotesPaginationProps) {
   if (totalPages <= 1) return null;
 
@@ -51,8 +47,17 @@ export function NotesPagination({
       className="flex items-center justify-center gap-1 pt-2"
     >
       <PaginationLink
-        href={buildNotesUrl({ page: currentPage - 1, query, view })}
+        href={buildUrl(1)}
         disabled={!hasPrev}
+        title="첫 페이지"
+        aria-label="첫 페이지"
+      >
+        «
+      </PaginationLink>
+      <PaginationLink
+        href={buildUrl(currentPage - 1)}
+        disabled={!hasPrev}
+        title="이전 페이지"
         aria-label="이전 페이지"
       >
         ←
@@ -69,7 +74,7 @@ export function NotesPagination({
         ) : (
           <PaginationLink
             key={page}
-            href={buildNotesUrl({ page, query, view })}
+            href={buildUrl(page)}
             active={page === currentPage}
             aria-label={`${page} 페이지`}
             aria-current={page === currentPage ? "page" : undefined}
@@ -80,11 +85,20 @@ export function NotesPagination({
       )}
 
       <PaginationLink
-        href={buildNotesUrl({ page: currentPage + 1, query, view })}
+        href={buildUrl(currentPage + 1)}
         disabled={!hasNext}
+        title="다음 페이지"
         aria-label="다음 페이지"
       >
         →
+      </PaginationLink>
+      <PaginationLink
+        href={buildUrl(totalPages)}
+        disabled={!hasNext}
+        title="마지막 페이지"
+        aria-label="마지막 페이지"
+      >
+        »
       </PaginationLink>
     </nav>
   );
@@ -95,6 +109,7 @@ type PaginationLinkProps = {
   children: React.ReactNode;
   active?: boolean;
   disabled?: boolean;
+  title?: string;
   "aria-label"?: string;
   "aria-current"?: "page" | undefined;
 };
@@ -120,14 +135,23 @@ function PaginationLink({
     );
   }
 
+  if (active) {
+    return (
+      <span
+        className={cn(base, "cursor-default bg-foreground text-background")}
+        {...props}
+      >
+        {children}
+      </span>
+    );
+  }
+
   return (
     <Link
       href={href}
       className={cn(
         base,
-        active
-          ? "bg-foreground text-background"
-          : "text-muted-foreground hover:bg-muted hover:text-foreground",
+        "text-muted-foreground hover:bg-muted hover:text-foreground",
       )}
       {...props}
     >
