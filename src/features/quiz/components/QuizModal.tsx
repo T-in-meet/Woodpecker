@@ -1,6 +1,7 @@
 "use client";
 
 import { LoaderIcon } from "lucide-react";
+import { useEffect } from "react";
 
 import {
   Dialog,
@@ -46,15 +47,14 @@ export function QuizModal({
     regenerate,
   } = useQuiz(noteId);
 
-  const handleOpenChange = (nextOpen: boolean) => {
-    onOpenChange(nextOpen);
-    if (nextOpen && phase === "idle") {
+  useEffect(() => {
+    if (open && phase === "idle") {
       startQuiz();
     }
-  };
+  }, [open, phase, startQuiz]);
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>퀴즈</DialogTitle>
