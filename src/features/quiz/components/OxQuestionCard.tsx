@@ -64,7 +64,6 @@ export function OxQuestionCard({
               ) : (
                 <XIcon className="size-6" />
               )}
-              {value === "true" ? "O" : "X"}
             </button>
           );
         })}
