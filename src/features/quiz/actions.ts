@@ -81,7 +81,8 @@ export async function generateQuiz(
       },
     });
     responseText = response.text ?? "";
-  } catch {
+  } catch (e) {
+    console.error("[generateQuiz] Gemini API 호출 실패:", e);
     return { error: "퀴즈 생성에 실패했습니다. 잠시 후 다시 시도해주세요." };
   }
 
@@ -89,7 +90,13 @@ export async function generateQuiz(
   try {
     const json: unknown = JSON.parse(responseText);
     parsed = quizResponseSchema.safeParse(json);
-  } catch {
+    if (!parsed.success) {
+      console.error("[generateQuiz] Zod 파싱 실패:", parsed.error.issues);
+      console.error("[generateQuiz] 원본 응답:", responseText);
+    }
+  } catch (e) {
+    console.error("[generateQuiz] JSON 파싱 실패:", e);
+    console.error("[generateQuiz] 원본 응답:", responseText);
     return { error: "퀴즈 생성 결과를 처리할 수 없습니다. 다시 시도해주세요." };
   }
 

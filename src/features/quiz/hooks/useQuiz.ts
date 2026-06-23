@@ -27,18 +27,23 @@ export function useQuiz(noteId: string) {
     setPhase("loading");
 
     startTransition(async () => {
-      const result = await generateQuiz(noteId);
+      try {
+        const result = await generateQuiz(noteId);
 
-      if ("error" in result) {
-        setError(result.error);
+        if ("error" in result) {
+          setError(result.error);
+          setPhase("idle");
+          return;
+        }
+
+        setQuestions(result.data.questions);
+        setCurrentIndex(0);
+        setAnswers([]);
+        setPhase("playing");
+      } catch {
+        setError("퀴즈 생성 중 오류가 발생했습니다.");
         setPhase("idle");
-        return;
       }
-
-      setQuestions(result.data.questions);
-      setCurrentIndex(0);
-      setAnswers([]);
-      setPhase("playing");
     });
   }, [noteId]);
 
@@ -91,18 +96,23 @@ export function useQuiz(noteId: string) {
     setPhase("loading");
 
     startTransition(async () => {
-      const result = await regenerateQuiz(noteId);
+      try {
+        const result = await regenerateQuiz(noteId);
 
-      if ("error" in result) {
-        setError(result.error);
+        if ("error" in result) {
+          setError(result.error);
+          setPhase("idle");
+          return;
+        }
+
+        setQuestions(result.data.questions);
+        setCurrentIndex(0);
+        setAnswers([]);
+        setPhase("playing");
+      } catch {
+        setError("퀴즈 생성 중 오류가 발생했습니다.");
         setPhase("idle");
-        return;
       }
-
-      setQuestions(result.data.questions);
-      setCurrentIndex(0);
-      setAnswers([]);
-      setPhase("playing");
     });
   }, [noteId]);
 
