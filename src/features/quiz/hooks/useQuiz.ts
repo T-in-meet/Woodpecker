@@ -2,11 +2,13 @@
 
 import { useCallback, useState, useTransition } from "react";
 
+import type { QuizType } from "@/lib/gemini/prompts";
+
 import { generateQuiz, regenerateQuiz } from "../actions";
 import type { BlankQuestion, OxQuestion, QuizQuestion } from "../schema";
 import { gradeBlankAnswer } from "../utils/grading";
 
-type QuizPhase = "idle" | "loading" | "playing" | "result";
+type QuizPhase = "select" | "loading" | "playing" | "result";
 
 type AnswerRecord = {
   questionIndex: number;
@@ -15,37 +17,42 @@ type AnswerRecord = {
 };
 
 export function useQuiz(noteId: string) {
-  const [phase, setPhase] = useState<QuizPhase>("idle");
+  const [phase, setPhase] = useState<QuizPhase>("select");
+  const [quizType, setQuizType] = useState<QuizType | null>(null);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<AnswerRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const startQuiz = useCallback(() => {
-    setError(null);
-    setPhase("loading");
+  const startQuiz = useCallback(
+    (type: QuizType) => {
+      setError(null);
+      setQuizType(type);
+      setPhase("loading");
 
-    startTransition(async () => {
-      try {
-        const result = await generateQuiz(noteId);
+      startTransition(async () => {
+        try {
+          const result = await generateQuiz(noteId, type);
 
-        if ("error" in result) {
-          setError(result.error);
-          setPhase("idle");
-          return;
+          if ("error" in result) {
+            setError(result.error);
+            setPhase("select");
+            return;
+          }
+
+          setQuestions(result.data.questions);
+          setCurrentIndex(0);
+          setAnswers([]);
+          setPhase("playing");
+        } catch {
+          setError("퀴즈 생성 중 오류가 발생했습니다.");
+          setPhase("select");
         }
-
-        setQuestions(result.data.questions);
-        setCurrentIndex(0);
-        setAnswers([]);
-        setPhase("playing");
-      } catch {
-        setError("퀴즈 생성 중 오류가 발생했습니다.");
-        setPhase("idle");
-      }
-    });
-  }, [noteId]);
+      });
+    },
+    [noteId],
+  );
 
   const submitAnswer = useCallback(
     (userAnswer: string) => {
@@ -92,16 +99,17 @@ export function useQuiz(noteId: string) {
   }, []);
 
   const regenerate = useCallback(() => {
+    if (!quizType) return;
     setError(null);
     setPhase("loading");
 
     startTransition(async () => {
       try {
-        const result = await regenerateQuiz(noteId);
+        const result = await regenerateQuiz(noteId, quizType);
 
         if ("error" in result) {
           setError(result.error);
-          setPhase("idle");
+          setPhase("select");
           return;
         }
 
@@ -111,10 +119,15 @@ export function useQuiz(noteId: string) {
         setPhase("playing");
       } catch {
         setError("퀴즈 생성 중 오류가 발생했습니다.");
-        setPhase("idle");
+        setPhase("select");
       }
     });
-  }, [noteId]);
+  }, [noteId, quizType]);
+
+  const goToSelect = useCallback(() => {
+    setPhase("select");
+    setError(null);
+  }, []);
 
   const currentQuestion = questions[currentIndex] ?? null;
   const currentAnswer = answers[currentIndex] ?? null;
@@ -135,5 +148,6 @@ export function useQuiz(noteId: string) {
     goToNext,
     retryQuiz,
     regenerate,
+    goToSelect,
   };
 }

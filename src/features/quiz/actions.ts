@@ -3,7 +3,11 @@
 import { z } from "zod";
 
 import { gemini } from "@/lib/gemini/client";
-import { buildQuizPrompt, getQuestionCount } from "@/lib/gemini/prompts";
+import {
+  buildQuizPrompt,
+  getQuestionCount,
+  type QuizType,
+} from "@/lib/gemini/prompts";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/types/database.types";
 
@@ -25,6 +29,7 @@ async function hashContent(content: string): Promise<string> {
 
 export async function generateQuiz(
   noteId: string,
+  quizType: QuizType,
 ): Promise<GenerateQuizResult> {
   const parsedId = noteIdSchema.safeParse(noteId);
   if (!parsedId.success) {
@@ -52,6 +57,7 @@ export async function generateQuiz(
   }
 
   const contentHash = await hashContent(note.content);
+  const cacheKey = `${contentHash}:${quizType}`;
 
   const { data: cached } = await supabase
     .from("quizzes")
@@ -59,7 +65,7 @@ export async function generateQuiz(
     .eq("note_id", parsedId.data)
     .maybeSingle();
 
-  if (cached && cached.note_content_hash === contentHash) {
+  if (cached && cached.note_content_hash === cacheKey) {
     const parsed = quizResponseSchema.safeParse({
       questions: cached.questions,
     });
@@ -69,7 +75,12 @@ export async function generateQuiz(
   }
 
   const questionCount = getQuestionCount(note.content.length);
-  const prompt = buildQuizPrompt(note.title, note.content, questionCount);
+  const prompt = buildQuizPrompt(
+    note.title,
+    note.content,
+    questionCount,
+    quizType,
+  );
 
   let responseText: string;
   try {
@@ -109,7 +120,7 @@ export async function generateQuiz(
       .from("quizzes")
       .update({
         questions: JSON.parse(JSON.stringify(parsed.data.questions)) as Json,
-        note_content_hash: contentHash,
+        note_content_hash: cacheKey,
       })
       .eq("note_id", parsedId.data);
   } else {
@@ -117,7 +128,7 @@ export async function generateQuiz(
       note_id: parsedId.data,
       user_id: user.id,
       questions: JSON.parse(JSON.stringify(parsed.data.questions)) as Json,
-      note_content_hash: contentHash,
+      note_content_hash: cacheKey,
     });
   }
 
@@ -126,6 +137,7 @@ export async function generateQuiz(
 
 export async function regenerateQuiz(
   noteId: string,
+  quizType: QuizType,
 ): Promise<GenerateQuizResult> {
   const parsedId = noteIdSchema.safeParse(noteId);
   if (!parsedId.success) {
@@ -143,5 +155,5 @@ export async function regenerateQuiz(
 
   await supabase.from("quizzes").delete().eq("note_id", parsedId.data);
 
-  return generateQuiz(noteId);
+  return generateQuiz(noteId, quizType);
 }

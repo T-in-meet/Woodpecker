@@ -1,7 +1,11 @@
 "use client";
 
-import { LoaderIcon } from "lucide-react";
-import { useEffect } from "react";
+import {
+  CircleIcon,
+  LoaderIcon,
+  TextCursorInputIcon,
+  XIcon,
+} from "lucide-react";
 
 import {
   Dialog,
@@ -10,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils/cn";
 
 import { useQuiz } from "../hooks/useQuiz";
 import type { BlankQuestion, OxQuestion } from "../schema";
@@ -45,13 +50,8 @@ export function QuizModal({
     goToNext,
     retryQuiz,
     regenerate,
+    goToSelect,
   } = useQuiz(noteId);
-
-  useEffect(() => {
-    if (open && phase === "idle") {
-      startQuiz();
-    }
-  }, [open, phase, startQuiz]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -63,18 +63,48 @@ export function QuizModal({
           </DialogDescription>
         </DialogHeader>
 
+        {phase === "select" && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              퀴즈 유형을 선택하세요
+            </p>
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => startQuiz("ox")}
+                className={cn(
+                  "flex cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-border p-6 transition-colors",
+                  "hover:border-primary/50 hover:bg-primary/5",
+                )}
+              >
+                <div className="flex items-center gap-1">
+                  <CircleIcon className="size-6" />
+                  <XIcon className="size-6" />
+                </div>
+                <span className="text-sm font-medium">OX 퀴즈</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => startQuiz("blank")}
+                className={cn(
+                  "flex cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-border p-6 transition-colors",
+                  "hover:border-primary/50 hover:bg-primary/5",
+                )}
+              >
+                <TextCursorInputIcon className="size-6" />
+                <span className="text-sm font-medium">빈칸 채우기</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {(phase === "loading" || isPending) && (
           <div className="flex flex-col items-center gap-3 py-12">
             <LoaderIcon className="size-8 animate-spin text-muted-foreground" />
             <p className="text-sm text-muted-foreground">
               노트 내용을 바탕으로 퀴즈를 만들고 있어요.
             </p>
-          </div>
-        )}
-
-        {phase === "idle" && error && (
-          <div className="py-8 text-center">
-            <p className="text-sm text-destructive">{error}</p>
           </div>
         )}
 
@@ -132,6 +162,7 @@ export function QuizModal({
             correctCount={correctCount}
             onRetry={retryQuiz}
             onRegenerate={regenerate}
+            onGoToSelect={goToSelect}
             isPending={isPending}
           />
         )}

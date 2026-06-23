@@ -1,6 +1,6 @@
 "use client";
 
-import { RefreshCwIcon, RotateCcwIcon } from "lucide-react";
+import { ArrowLeftIcon, RefreshCwIcon, RotateCcwIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
@@ -18,6 +18,7 @@ type QuizResultProps = {
   correctCount: number;
   onRetry: () => void;
   onRegenerate: () => void;
+  onGoToSelect: () => void;
   isPending: boolean;
 };
 
@@ -27,6 +28,7 @@ export function QuizResult({
   correctCount,
   onRetry,
   onRegenerate,
+  onGoToSelect,
   isPending,
 }: QuizResultProps) {
   const total = questions.length;
@@ -70,6 +72,10 @@ export function QuizResult({
       </div>
 
       <div className="flex gap-2">
+        <Button onClick={onGoToSelect} variant="outline" className="flex-1">
+          <ArrowLeftIcon className="size-4" />
+          유형 선택
+        </Button>
         <Button onClick={onRetry} variant="outline" className="flex-1">
           <RotateCcwIcon className="size-4" />
           다시 풀기
@@ -80,7 +86,7 @@ export function QuizResult({
           className="flex-1"
           disabled={isPending}
         >
-          <RefreshCwIcon className="size-4" />새 퀴즈 만들기
+          <RefreshCwIcon className="size-4" />새 퀴즈
         </Button>
       </div>
     </div>
