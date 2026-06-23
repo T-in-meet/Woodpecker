@@ -8,6 +8,7 @@ import { NoteViewer } from "@/features/notes/components/NoteViewer";
 import { ScrollToTopOnMount } from "@/features/notes/components/ScrollToTopOnMount";
 import { getNoteById } from "@/features/notes/queries";
 import { NotificationTimePicker } from "@/features/notifications/components/NotificationTimePicker";
+import { QuizButton } from "@/features/quiz/components/QuizButton";
 import { hasCompletedReviewForNoteToday } from "@/features/review/queries";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { getNoteReviewRoute, ROUTES } from "@/lib/constants/routes";
@@ -99,6 +100,7 @@ export default async function NoteDetailPage({
         <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-muted-foreground">{reviewStatusMessage}</p>
           <div className="flex flex-wrap items-center gap-2">
+            <QuizButton noteId={note.id} noteTitle={note.title} />
             {canStartReview && (
               <Button asChild size="sm">
                 <Link href={getNoteReviewRoute(noteId)}>백지 테스트 시작</Link>

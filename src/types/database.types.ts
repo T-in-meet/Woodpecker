@@ -234,6 +234,41 @@ export type Database = {
           },
         ];
       };
+      quizzes: {
+        Row: {
+          id: string;
+          note_id: string;
+          user_id: string;
+          questions: Json;
+          note_content_hash: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          note_id: string;
+          user_id: string;
+          questions: Json;
+          note_content_hash: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          note_id?: string;
+          user_id?: string;
+          questions?: Json;
+          note_content_hash?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "quizzes_note_id_fkey";
+            columns: ["note_id"];
+            isOneToOne: true;
+            referencedRelation: "notes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: {
       [_ in never]: never;
