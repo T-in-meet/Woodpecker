@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ROUTES } from "@/lib/constants/routes";
+
 const REDIRECT_ERROR = new Error("NEXT_REDIRECT");
 
 const {
@@ -67,6 +69,18 @@ describe("MyPage", () => {
     });
     getUserMock.mockResolvedValue(mockUser);
     getProfileMock.mockResolvedValue(mockProfile);
+  });
+
+  it("이메일 미인증 사용자는 RESEND_EMAIL?purpose=signup으로 redirect된다", async () => {
+    getUserMock.mockResolvedValue({ ...mockUser, email_confirmed_at: null });
+
+    await expect(MyPage({ searchParams: Promise.resolve({}) })).rejects.toBe(
+      REDIRECT_ERROR,
+    );
+
+    expect(redirectMock).toHaveBeenCalledWith(
+      `${ROUTES.RESEND_EMAIL}?purpose=signup`,
+    );
   });
 
   it("DB 조회 오류가 발생하면 빈 상태로 대체하지 않고 error boundary로 전파한다", async () => {

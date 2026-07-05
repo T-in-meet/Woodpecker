@@ -163,7 +163,7 @@ export function NotificationBell({ userId }: NotificationBellProps) {
       </Button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-[min(calc(100vw-2rem),24rem)] overflow-hidden rounded-lg border bg-background shadow-lg">
+        <div className="fixed inset-x-4 top-19 z-50 overflow-hidden rounded-lg border bg-background shadow-lg sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[min(calc(100vw-2rem),24rem)]">
           <div className="flex items-center justify-between gap-3 px-4 py-3">
             <div>
               <p className="text-sm font-semibold">알림</p>
