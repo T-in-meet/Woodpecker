@@ -35,15 +35,15 @@ export function QuizResult({
   const percentage = Math.round((correctCount / total) * 100);
 
   return (
-    <div className="space-y-6">
-      <div className="text-center">
+    <div className="flex min-h-0 flex-col gap-6">
+      <div className="shrink-0 text-center">
         <p className="text-4xl font-bold">
           {correctCount} / {total}
         </p>
         <p className="mt-1 text-muted-foreground">정답률 {percentage}%</p>
       </div>
 
-      <div className="space-y-2">
+      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
         {questions.map((q, i) => {
           const answer = answers[i];
           return (
@@ -71,7 +71,7 @@ export function QuizResult({
         })}
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex shrink-0 gap-2">
         <Button onClick={onGoToSelect} variant="outline" className="flex-1">
           <ArrowLeftIcon className="size-4" />
           유형 선택

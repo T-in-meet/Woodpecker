@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ArrowLeftIcon,
   CircleIcon,
   ListIcon,
   LoaderIcon,
@@ -59,10 +60,23 @@ export function QuizModal({
     goToSelect,
   } = useQuiz(noteId);
 
+  const handleClose = () => {
+    goToSelect();
+    onOpenChange(false);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
+      <DialogContent className="flex max-h-[85vh] flex-col">
+        <button
+          type="button"
+          onClick={handleClose}
+          className="absolute right-4 top-4 cursor-pointer rounded-sm text-muted-foreground hover:text-foreground"
+        >
+          <XIcon className="size-5" />
+          <span className="sr-only">닫기</span>
+        </button>
+        <DialogHeader className="shrink-0">
           <DialogTitle>퀴즈</DialogTitle>
           <DialogDescription className="truncate">
             {noteTitle}
@@ -128,6 +142,14 @@ export function QuizModal({
         {phase === "playing" && currentQuestion && (
           <div>
             <div className="mb-4 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={goToSelect}
+                className="flex cursor-pointer items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+              >
+                <ArrowLeftIcon className="size-4" />
+                처음으로
+              </button>
               <span className="text-sm text-muted-foreground">
                 {currentIndex + 1} / {questions.length}
               </span>
