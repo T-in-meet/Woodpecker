@@ -2,6 +2,7 @@
 
 import {
   CircleIcon,
+  ListIcon,
   LoaderIcon,
   TextCursorInputIcon,
   XIcon,
@@ -17,8 +18,13 @@ import {
 import { cn } from "@/lib/utils/cn";
 
 import { useQuiz } from "../hooks/useQuiz";
-import type { BlankQuestion, OxQuestion } from "../schema";
+import type {
+  BlankQuestion,
+  MultipleChoiceQuestion,
+  OxQuestion,
+} from "../schema";
 import { BlankQuestionCard } from "./BlankQuestionCard";
+import { MultipleChoiceCard } from "./MultipleChoiceCard";
 import { OxQuestionCard } from "./OxQuestionCard";
 import { QuizResult } from "./QuizResult";
 
@@ -69,7 +75,7 @@ export function QuizModal({
               퀴즈 유형을 선택하세요
             </p>
             {error && <p className="text-sm text-destructive">{error}</p>}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <button
                 type="button"
                 onClick={() => startQuiz("ox")}
@@ -95,6 +101,17 @@ export function QuizModal({
                 <TextCursorInputIcon className="size-6" />
                 <span className="text-sm font-medium">빈칸 채우기</span>
               </button>
+              <button
+                type="button"
+                onClick={() => startQuiz("multiple_choice")}
+                className={cn(
+                  "flex cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-border p-6 transition-colors",
+                  "hover:border-primary/50 hover:bg-primary/5",
+                )}
+              >
+                <ListIcon className="size-6" />
+                <span className="text-sm font-medium">객관식</span>
+              </button>
             </div>
           </div>
         )}
@@ -115,7 +132,11 @@ export function QuizModal({
                 {currentIndex + 1} / {questions.length}
               </span>
               <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                {currentQuestion.type === "ox" ? "OX 퀴즈" : "빈칸 채우기"}
+                {currentQuestion.type === "ox"
+                  ? "OX 퀴즈"
+                  : currentQuestion.type === "multiple_choice"
+                    ? "객관식"
+                    : "빈칸 채우기"}
               </span>
             </div>
 
@@ -123,6 +144,15 @@ export function QuizModal({
               <OxQuestionCard
                 key={currentIndex}
                 question={currentQuestion as OxQuestion}
+                onSubmit={submitAnswer}
+                submitted={currentAnswer !== null}
+                userAnswer={currentAnswer?.userAnswer}
+                isCorrect={currentAnswer?.isCorrect}
+              />
+            ) : currentQuestion.type === "multiple_choice" ? (
+              <MultipleChoiceCard
+                key={currentIndex}
+                question={currentQuestion as MultipleChoiceQuestion}
                 onSubmit={submitAnswer}
                 submitted={currentAnswer !== null}
                 userAnswer={currentAnswer?.userAnswer}

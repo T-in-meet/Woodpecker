@@ -5,8 +5,13 @@ import { useCallback, useState, useTransition } from "react";
 import type { QuizType } from "@/lib/gemini/prompts";
 
 import { generateQuiz, regenerateQuiz } from "../actions";
-import type { BlankQuestion, OxQuestion, QuizQuestion } from "../schema";
-import { gradeBlankAnswer } from "../utils/grading";
+import type {
+  BlankQuestion,
+  MultipleChoiceQuestion,
+  OxQuestion,
+  QuizQuestion,
+} from "../schema";
+import { gradeBlankAnswer, gradeMultipleChoiceAnswer } from "../utils/grading";
 
 type QuizPhase = "select" | "loading" | "playing" | "result";
 
@@ -64,6 +69,9 @@ export function useQuiz(noteId: string) {
       if (question.type === "ox") {
         const oxQ = question as OxQuestion;
         isCorrect = userAnswer === String(oxQ.answer);
+      } else if (question.type === "multiple_choice") {
+        const mcQ = question as MultipleChoiceQuestion;
+        isCorrect = gradeMultipleChoiceAnswer(userAnswer, mcQ.answer);
       } else {
         const blankQ = question as BlankQuestion;
         isCorrect = gradeBlankAnswer(

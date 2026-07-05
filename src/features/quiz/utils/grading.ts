@@ -6,6 +6,13 @@ export function normalizeAnswer(answer: string): string {
     .replace(/[.,;:!?'"()[\]{}]/g, "");
 }
 
+export function gradeMultipleChoiceAnswer(
+  userAnswer: string,
+  correctIndex: number,
+): boolean {
+  return Number(userAnswer) === correctIndex;
+}
+
 export function gradeBlankAnswer(
   userAnswer: string,
   correctAnswer: string,

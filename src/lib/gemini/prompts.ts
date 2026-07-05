@@ -1,4 +1,4 @@
-export type QuizType = "ox" | "blank";
+export type QuizType = "ox" | "blank" | "multiple_choice";
 
 export function getQuestionCount(contentLength: number): number {
   if (contentLength <= 300) return 3;
@@ -38,6 +38,26 @@ const QUIZ_TYPE_RULES: Record<QuizType, string> = {
       "question": "____에 들어갈 단어가 포함된 문장",
       "answer": "정답 키워드",
       "acceptedAnswers": ["허용 별칭1", "허용 별칭2"],
+      "explanation": "해설"
+    }
+  ]
+}`,
+  multiple_choice: `2. 모든 문제를 4지선다 객관식으로 생성하세요.
+3. 총 \${questionCount}문항을 생성하세요.
+4. 각 문제에 간단한 해설을 포함하세요.
+5. 선택지(options)는 반드시 4개여야 합니다.
+6. answer는 정답 선택지의 인덱스(0~3)입니다.
+7. 오답 선택지는 그럴듯하지만 명확히 틀린 내용으로 작성하세요.
+8. 반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트를 포함하지 마세요.
+
+## JSON 형식
+{
+  "questions": [
+    {
+      "type": "multiple_choice",
+      "question": "문제 문장",
+      "options": ["선택지1", "선택지2", "선택지3", "선택지4"],
+      "answer": 0,
       "explanation": "해설"
     }
   ]
