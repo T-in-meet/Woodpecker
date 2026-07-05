@@ -61,9 +61,22 @@ export function QuizResult({
               <div className="flex-1">
                 <p className="text-sm">{q.question}</p>
                 {!answer?.isCorrect && (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    정답: {q.type === "ox" ? (q.answer ? "O" : "X") : q.answer}
-                  </p>
+                  <>
+                    <p className="mt-1.5 flex items-start gap-1.5 text-xs text-muted-foreground">
+                      <span className="shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium">
+                        정답
+                      </span>
+                      <span className="pt-0.5">
+                        {q.type === "ox" ? (q.answer ? "O" : "X") : q.answer}
+                      </span>
+                    </p>
+                    <p className="mt-1 flex items-start gap-1.5 text-xs text-muted-foreground">
+                      <span className="shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium">
+                        해설
+                      </span>
+                      <span className="pt-0.5">{q.explanation}</span>
+                    </p>
+                  </>
                 )}
               </div>
             </div>

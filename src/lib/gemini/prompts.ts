@@ -1,7 +1,7 @@
 export type QuizType = "ox" | "blank" | "multiple_choice";
 
 // 프롬프트를 수정할 때마다 값을 올려서 기존 캐시된 퀴즈를 무효화하세요.
-export const PROMPT_VERSION = "6";
+export const PROMPT_VERSION = "7";
 
 export function getQuestionCount(contentLength: number): number {
   if (contentLength <= 300) return 3;
@@ -53,7 +53,7 @@ const QUIZ_TYPE_RULES: Record<QuizType, string> = {
 5. 총 \${questionCount}문항을 생성하세요.
 6. 각 문제에 간단한 해설을 포함하세요.
 7. 빈칸은 단순 변수명이나 임의의 숫자·문자열 리터럴처럼 암기 의미가 없는 값이 아니라, 개념 이해를 확인할 수 있는 핵심 요소를 대상으로 하세요. 예: 문법 키워드(var/let/const, 연산자 등), 함수나 표현식의 실행 결과(예: console.log 출력값), 자료형(type), 핵심 개념 용어.
-8. 빈칸 채우기는 허용 가능한 별칭(acceptedAnswers)도 포함하세요.
+8. acceptedAnswers에는 정답 키워드의 표기 변형을 적극적으로 포함하세요: 영문/한글 표기(예: 프로토콜 ↔ protocol), 통용되는 약어(예: 데이터베이스 ↔ DB), 대소문자·띄어쓰기 변형. 이는 노트에 없는 새로운 사실을 추가하는 것이 아니라 같은 답의 다른 표기이므로 허용됩니다. 단, 유의어나 다른 용어(예: 프로토콜 ↔ 규약)는 포함하지 마세요.
 9. 반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트를 포함하지 마세요.
 
 ## JSON 형식
