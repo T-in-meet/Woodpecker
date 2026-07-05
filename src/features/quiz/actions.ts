@@ -6,6 +6,7 @@ import { gemini } from "@/lib/gemini/client";
 import {
   buildQuizPrompt,
   getQuestionCount,
+  PROMPT_VERSION,
   type QuizType,
 } from "@/lib/gemini/prompts";
 import { createClient } from "@/lib/supabase/server";
@@ -57,7 +58,7 @@ export async function generateQuiz(
   }
 
   const contentHash = await hashContent(note.content);
-  const cacheKey = `${contentHash}:${quizType}`;
+  const cacheKey = `${contentHash}:${quizType}:${PROMPT_VERSION}`;
 
   const { data: cached } = await supabase
     .from("quizzes")
