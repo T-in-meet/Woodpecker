@@ -9,12 +9,14 @@ const NOT_FOUND_ERROR = new Error("NEXT_NOT_FOUND");
 
 const {
   createClientMock,
+  getGradingsByNoteMock,
   getNoteByIdMock,
   hasCompletedReviewForNoteTodayMock,
   notFoundMock,
   redirectMock,
 } = vi.hoisted(() => ({
   createClientMock: vi.fn(),
+  getGradingsByNoteMock: vi.fn(),
   getNoteByIdMock: vi.fn(),
   hasCompletedReviewForNoteTodayMock: vi.fn(),
   notFoundMock: vi.fn(),
@@ -46,7 +48,14 @@ vi.mock("@/features/notes/queries", () => ({
 }));
 
 vi.mock("@/features/review/queries", () => ({
+  getGradingsByNote: getGradingsByNoteMock,
   hasCompletedReviewForNoteToday: hasCompletedReviewForNoteTodayMock,
+}));
+
+// QuizButton → useQuiz → quiz/actions 경유로 gemini client가 import되므로
+// GEMINI_API_KEY 없는 테스트 환경에서도 로드되도록 mock
+vi.mock("@/lib/gemini/client", () => ({
+  gemini: { models: { generateContent: vi.fn() } },
 }));
 
 vi.mock("@/features/notes/components/NoteViewer", () => ({
@@ -91,6 +100,8 @@ describe("NoteDetailPage", () => {
     getNoteByIdMock.mockReset();
     hasCompletedReviewForNoteTodayMock.mockReset();
     hasCompletedReviewForNoteTodayMock.mockResolvedValue(false);
+    getGradingsByNoteMock.mockReset();
+    getGradingsByNoteMock.mockResolvedValue([]);
     redirectMock.mockReset();
     notFoundMock.mockReset();
 

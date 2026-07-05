@@ -10,6 +10,7 @@ import { submitAnswerAction } from "../actions";
 import { ANSWER_MAX_LENGTH } from "../schema";
 import { BlankEditor } from "./BlankEditor";
 import { ComparisonView } from "./ComparisonView";
+import { GradingPanel } from "./GradingPanel";
 import { ReviewCompleteButton } from "./ReviewCompleteButton";
 
 type BlankTestPageProps = {
@@ -61,6 +62,12 @@ export function BlankTestPage({
           <ComparisonView
             userAnswer={comparisonState.userAnswer}
             originalContent={comparisonState.originalContent}
+          />
+
+          <GradingPanel
+            noteId={noteId}
+            reviewLogId={comparisonState.reviewLogId}
+            userAnswer={comparisonState.userAnswer}
           />
 
           <div className="rounded-xl border border-border/60 bg-muted/30 px-5 py-4">

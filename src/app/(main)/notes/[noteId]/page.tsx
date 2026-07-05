@@ -9,7 +9,12 @@ import { ScrollToTopOnMount } from "@/features/notes/components/ScrollToTopOnMou
 import { getNoteById } from "@/features/notes/queries";
 import { NotificationTimePicker } from "@/features/notifications/components/NotificationTimePicker";
 import { QuizButton } from "@/features/quiz/components/QuizButton";
-import { hasCompletedReviewForNoteToday } from "@/features/review/queries";
+import { GradingHistorySection } from "@/features/review/components/GradingHistorySection";
+import {
+  getGradingsByNote,
+  hasCompletedReviewForNoteToday,
+  type ReviewGrading,
+} from "@/features/review/queries";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { getNoteReviewRoute, ROUTES } from "@/lib/constants/routes";
 import { logError } from "@/lib/logger";
@@ -68,6 +73,14 @@ export default async function NoteDetailPage({
     }
   }
 
+  // 채점 기록은 부가 정보 — 조회 실패 시 섹션만 숨기고 페이지 표시를 막지 않는다.
+  let gradings: ReviewGrading[] = [];
+  try {
+    gradings = await getGradingsByNote(noteId, user.id);
+  } catch (error) {
+    logError(error);
+  }
+
   const canStartReview =
     !isReviewCompleted && nextReviewAt !== null && !alreadyCompletedToday;
   const reviewStatusMessage = isReviewCompleted
@@ -119,6 +132,8 @@ export default async function NoteDetailPage({
       </header>
 
       <NoteViewer content={note.content} className="min-h-[60vh]" />
+
+      <GradingHistorySection gradings={gradings} />
     </div>
   );
 }

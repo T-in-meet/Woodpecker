@@ -26,6 +26,10 @@ vi.mock("./ComparisonView", () => ({
   ComparisonView: () => <div data-testid="comparison-view" />,
 }));
 
+vi.mock("./GradingPanel", () => ({
+  GradingPanel: () => <div data-testid="grading-panel" />,
+}));
+
 vi.mock("./ReviewCompleteButton", () => ({
   ReviewCompleteButton: ({
     disabled,

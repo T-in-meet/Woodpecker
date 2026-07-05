@@ -14,7 +14,13 @@
 2. `BlankTestPage`에서 답안을 작성하고 `submitAnswerAction` 호출:
    - 세션/이메일 인증/소유권 + pending 리뷰 로그 존재 확인
    - 성공 시 원본 콘텐츠, 사용자 답안, `reviewLogId`를 반환 → `ComparisonView`로 전달
-3. 비교를 마치면 `ReviewCompleteButton`의 `completeReviewAction` 호출:
+3. (선택) `GradingPanel`에서 `gradeAnswerAction` 호출 — AI 채점:
+   - 세션/이메일 인증/소유권 + `pendingReviewLog.id === reviewLogId` 일치 확인
+   - 복습 1회당 채점 1회: `review_gradings`에 기존 채점이 있으면 Gemini 호출 없이 재사용 (`review_log_id` 유니크 제약이 동시 요청도 방어)
+   - Gemini(`gemini-3.1-flash-lite`)로 회상률 점수(0~100)·빠뜨린 개념·잘못 기억한 내용을 JSON으로 받아 Zod 검증 후 `review_gradings`에 저장
+   - 채점은 부가 기능: 채점 실패/저장 실패가 복습 완료를 막지 않으며, 점수는 스케줄링(1/3/7일 고정)에 개입하지 않는다
+   - 저장된 채점 기록은 노트 상세 페이지의 `GradingHistorySection`에서 회차별로 조회
+4. 비교를 마치면 `ReviewCompleteButton`의 `completeReviewAction` 호출:
    - 세션/이메일 인증 확인
    - `getReviewableNote`(소유권 포함) + `getPendingReviewLog`를 병렬 조회
    - `pendingReviewLog.id === reviewLogId` 일치 확인 (중간에 상태가 변하지 않았는지)
@@ -26,7 +32,9 @@
 - `@/lib/supabase/server` — 서버 Supabase 클라이언트
 - `@/lib/constants/routes` — `${ROUTES.RESEND_EMAIL}?purpose=signup`, `ROUTES.LOGIN`, `getNoteDetailRoute`, `getNoteReviewRoute`
 - `@/lib/constants/reviewIntervals` — 도메인 상수
+- `@/lib/gemini/client` — AI 채점용 Gemini 클라이언트 (`GEMINI_API_KEY` 필요)
 - Supabase RPC `complete_review_and_schedule_next` — 완료 처리 및 다음 회차 스케줄링을 원자적으로 수행
+- 테이블 `review_gradings` — AI 채점 결과 저장 (RLS: 본인 데이터만, insert는 이메일 인증 사용자만)
 
 ## 주의사항
 

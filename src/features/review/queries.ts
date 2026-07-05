@@ -4,6 +4,7 @@ import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { createServerComponentClient } from "@/lib/supabase/server";
 
 import { getKstDayBoundsUtc } from "./lib/kstDay";
+import { gradingFeedbackSchema } from "./schema";
 
 const reviewableNoteSchema = z.object({
   title: z.string(),
@@ -105,4 +106,53 @@ export async function getNoteContentForComparison(
 
   const parsed = noteContentForComparisonSchema.safeParse(data);
   return parsed.success ? parsed.data : null;
+}
+
+const reviewGradingSchema = z.object({
+  id: z.string().uuid(),
+  review_log_id: z.string().uuid(),
+  round: z.number().int().min(1).max(MAX_REVIEW_ROUND),
+  score: z.number().int().min(0).max(100),
+  feedback: gradingFeedbackSchema,
+  created_at: z.string(),
+});
+
+export type ReviewGrading = z.infer<typeof reviewGradingSchema>;
+
+export async function getGradingByReviewLog(
+  reviewLogId: string,
+  userId: string,
+): Promise<ReviewGrading | null> {
+  const supabase = await createServerComponentClient();
+  const { data, error } = await supabase
+    .from("review_gradings")
+    .select("id, review_log_id, round, score, feedback, created_at")
+    .eq("review_log_id", reviewLogId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  const parsed = reviewGradingSchema.safeParse(data);
+  return parsed.success ? parsed.data : null;
+}
+
+export async function getGradingsByNote(
+  noteId: string,
+  userId: string,
+): Promise<ReviewGrading[]> {
+  const supabase = await createServerComponentClient();
+  const { data, error } = await supabase
+    .from("review_gradings")
+    .select("id, review_log_id, round, score, feedback, created_at")
+    .eq("note_id", noteId)
+    .eq("user_id", userId)
+    .order("round", { ascending: true });
+
+  if (error) throw error;
+
+  return (data ?? []).flatMap((row) => {
+    const parsed = reviewGradingSchema.safeParse(row);
+    return parsed.success ? [parsed.data] : [];
+  });
 }

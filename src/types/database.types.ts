@@ -269,6 +269,57 @@ export type Database = {
           },
         ];
       };
+      review_gradings: {
+        Row: {
+          id: string;
+          review_log_id: string;
+          note_id: string;
+          user_id: string;
+          round: number;
+          user_answer: string;
+          score: number;
+          feedback: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          review_log_id: string;
+          note_id: string;
+          user_id: string;
+          round: number;
+          user_answer: string;
+          score: number;
+          feedback: Json;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          review_log_id?: string;
+          note_id?: string;
+          user_id?: string;
+          round?: number;
+          user_answer?: string;
+          score?: number;
+          feedback?: Json;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "review_gradings_review_log_id_fkey";
+            columns: ["review_log_id"];
+            isOneToOne: true;
+            referencedRelation: "review_logs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "review_gradings_note_id_fkey";
+            columns: ["note_id"];
+            isOneToOne: false;
+            referencedRelation: "notes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: {
       [_ in never]: never;
