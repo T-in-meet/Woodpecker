@@ -12,6 +12,7 @@ import type {
   QuizQuestion,
 } from "../schema";
 import { gradeBlankAnswer, gradeMultipleChoiceAnswer } from "../utils/grading";
+import { shuffleMultipleChoiceOptions } from "../utils/shuffleOptions";
 
 type QuizPhase = "select" | "loading" | "playing" | "result";
 
@@ -46,7 +47,7 @@ export function useQuiz(noteId: string) {
             return;
           }
 
-          setQuestions(result.data.questions);
+          setQuestions(shuffleMultipleChoiceOptions(result.data.questions));
           setCurrentIndex(0);
           setAnswers([]);
           setPhase("playing");
@@ -101,6 +102,7 @@ export function useQuiz(noteId: string) {
   }, [currentIndex, questions.length]);
 
   const retryQuiz = useCallback(() => {
+    setQuestions((prev) => shuffleMultipleChoiceOptions(prev));
     setCurrentIndex(0);
     setAnswers([]);
     setPhase("playing");
