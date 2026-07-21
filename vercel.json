@@ -1,8 +1,1 @@
-{
-  "crons": [
-    {
-      "path": "/api/cron/dispatch-notifications",
-      "schedule": "*/5 * * * *"
-    }
-  ]
-}
+{}
