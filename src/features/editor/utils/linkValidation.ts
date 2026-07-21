@@ -88,6 +88,13 @@ export function normalizeLinkHref(input: string): string | null {
     return null;
   }
 
+  // `//host` is a protocol-relative reference that resolves to an external
+  // origin in the browser, not a same-origin relative path, and it would
+  // otherwise sneak through the scheme-less branch as `http://host`.
+  if (trimmed.startsWith("//")) {
+    return null;
+  }
+
   if (isRelativeLinkHref(trimmed) || hasAllowedProtocol(trimmed)) {
     return trimmed;
   }
