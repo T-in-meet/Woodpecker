@@ -24,6 +24,8 @@ export const ROUTES = {
     FEATURES: "/admin/features",
 
     EXPERIMENTS: {
+      DASHBOARD: "/admin/experiments",
+
       NOTE_RELATIONS: {
         DASHBOARD: "/admin/experiments/note-relations",
 

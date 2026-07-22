@@ -42,6 +42,12 @@ export const ADMIN_SIDEBAR_ITEMS = [
     icon: Beaker,
     children: [
       {
+        title: "대시보드",
+        href: ROUTES.ADMIN.EXPERIMENTS.DASHBOARD,
+        icon: LayoutDashboard,
+      },
+
+      {
         title: "노트 연결",
         icon: Link2,
         href: "",
