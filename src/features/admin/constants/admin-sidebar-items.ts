@@ -18,7 +18,7 @@ import type { AdminSidebarItem } from "../types/sidebar";
 
 export const ADMIN_SIDEBAR_ITEMS = [
   {
-    title: "대시보드",
+    title: "관리자",
     href: ROUTES.ADMIN.DASHBOARD,
     icon: LayoutDashboard,
   },
@@ -45,6 +45,7 @@ export const ADMIN_SIDEBAR_ITEMS = [
         title: "대시보드",
         href: ROUTES.ADMIN.EXPERIMENTS.DASHBOARD,
         icon: LayoutDashboard,
+        breadcrumbLabel: "실험 기능",
       },
 
       {
@@ -56,6 +57,7 @@ export const ADMIN_SIDEBAR_ITEMS = [
             title: "대시보드",
             href: ROUTES.ADMIN.EXPERIMENTS.NOTE_RELATIONS.DASHBOARD,
             icon: LayoutDashboard,
+            breadcrumbLabel: "노트 연결",
           },
           {
             title: "노트 관계",

@@ -10,4 +10,7 @@ export interface AdminSidebarItem {
   badge?: string;
 
   children?: AdminSidebarItem[];
+
+  // Breadcrumb에서 표시할 라벨 (미지정 시 title 사용)
+  breadcrumbLabel?: string;
 }
