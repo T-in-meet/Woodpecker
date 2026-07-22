@@ -33,6 +33,8 @@ interface AdminSidebarMenuItemProps {
 
   onOpenChange: (depth: number, itemKey: string, open: boolean) => void;
 
+  onNavigate: () => void;
+
   depth?: number;
 }
 
@@ -41,6 +43,7 @@ export function AdminSidebarMenuItem({
   pathname,
   openGroups,
   onOpenChange,
+  onNavigate,
   depth = 0,
 }: AdminSidebarMenuItemProps) {
   const children = item.children;
@@ -65,7 +68,7 @@ export function AdminSidebarMenuItem({
       return (
         <SidebarMenuItem>
           <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
-            <Link href={item.href}>
+            <Link href={item.href} onClick={onNavigate}>
               <Icon />
 
               <span>{item.title}</span>
@@ -78,7 +81,7 @@ export function AdminSidebarMenuItem({
     return (
       <SidebarMenuSubItem>
         <SidebarMenuSubButton asChild isActive={isActive}>
-          <Link href={item.href}>
+          <Link href={item.href} onClick={onNavigate}>
             <Icon />
 
             <span>{item.title}</span>
@@ -126,6 +129,7 @@ export function AdminSidebarMenuItem({
                   pathname={pathname}
                   openGroups={openGroups}
                   onOpenChange={onOpenChange}
+                  onNavigate={onNavigate}
                   depth={depth + 1}
                 />
               ))}
@@ -166,6 +170,7 @@ export function AdminSidebarMenuItem({
                 pathname={pathname}
                 openGroups={openGroups}
                 onOpenChange={onOpenChange}
+                onNavigate={onNavigate}
                 depth={depth + 1}
               />
             ))}

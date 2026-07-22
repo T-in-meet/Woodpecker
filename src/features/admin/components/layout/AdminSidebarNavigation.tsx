@@ -9,6 +9,7 @@ import {
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarMenu,
+  useSidebar,
 } from "@/components/ui/sidebar";
 
 import { ADMIN_SIDEBAR_ITEMS } from "../../constants/admin-sidebar-items";
@@ -21,6 +22,8 @@ import { AdminSidebarMenuItem } from "./AdminSidebarMenuItem";
 
 export function AdminSidebarNavigation() {
   const pathname = usePathname();
+
+  const { setOpenMobile } = useSidebar();
 
   const [openGroups, setOpenGroups] = useState<OpenGroups>(() =>
     getActiveGroups(ADMIN_SIDEBAR_ITEMS, pathname),
@@ -54,6 +57,10 @@ export function AdminSidebarNavigation() {
     });
   }
 
+  function handleNavigate() {
+    setOpenMobile(false);
+  }
+
   return (
     <SidebarContent>
       <SidebarGroup>
@@ -68,6 +75,7 @@ export function AdminSidebarNavigation() {
                 pathname={pathname}
                 openGroups={openGroups}
                 onOpenChange={handleOpenChange}
+                onNavigate={handleNavigate}
               />
             ))}
           </SidebarMenu>
