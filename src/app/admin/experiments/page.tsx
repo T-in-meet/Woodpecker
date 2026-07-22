@@ -1,5 +1,5 @@
-import { AdminNoteRelationsDashboardClient } from "@/features/admin/experiments/components/AdminNoteRelationsDashboardClient";
+import { AdminExperimentsDashboardClient } from "@/features/admin/experiments/components/AdminExperimentsDashboardClient";
 
-export default function AdminNoteRelationsDashboardPage() {
-  return <AdminNoteRelationsDashboardClient />;
+export default function AdminExperimentsDashboardPage() {
+  return <AdminExperimentsDashboardClient />;
 }
