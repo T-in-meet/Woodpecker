@@ -24,6 +24,47 @@ function isPathMatch(pathname: string, href?: string) {
 }
 
 /**
+ * Sidebar 항목을 Breadcrumb 항목으로 변환한다.
+ *
+ * 실제 이동 경로인 href를 우선 사용하고,
+ * href가 없는 그룹은 breadcrumbHref가 있을 때만 Breadcrumb에 포함한다.
+ */
+function getBreadcrumbItem(item: AdminSidebarItem): AdminBreadcrumbItem | null {
+  const href = item.href ?? item.breadcrumbHref;
+
+  if (!href) {
+    return null;
+  }
+
+  return {
+    label: item.breadcrumbLabel ?? item.title,
+    href,
+  };
+}
+
+/**
+ * 부모 Breadcrumb와 동일한 경로가 아니라면 새 항목을 추가한다.
+ */
+function appendBreadcrumbItem(
+  parents: AdminBreadcrumbItem[],
+  item: AdminSidebarItem,
+): AdminBreadcrumbItem[] {
+  const breadcrumbItem = getBreadcrumbItem(item);
+
+  if (!breadcrumbItem) {
+    return parents;
+  }
+
+  const lastParent = parents.at(-1);
+
+  if (lastParent?.href === breadcrumbItem.href) {
+    return parents;
+  }
+
+  return [...parents, breadcrumbItem];
+}
+
+/**
  * 현재 경로와 가장 구체적으로 일치하는 Breadcrumb 경로를 찾는다.
  */
 function findBreadcrumbMatch(
@@ -34,16 +75,7 @@ function findBreadcrumbMatch(
   let bestMatch: BreadcrumbMatch | null = null;
 
   for (const item of items) {
-    // href가 있는 항목만 Breadcrumb에 포함한다.
-    const currentPath = item.href
-      ? [
-          ...parents,
-          {
-            label: item.breadcrumbLabel ?? item.title,
-            href: item.href,
-          },
-        ]
-      : parents;
+    const currentPath = appendBreadcrumbItem(parents, item);
 
     if (isPathMatch(pathname, item.href)) {
       bestMatch = {
@@ -89,6 +121,11 @@ export function getAdminBreadcrumbItems(
     return matchedItems;
   }
 
+  // Sidebar에서 일치하는 관리자 경로가 없으면 Breadcrumb를 생성하지 않는다.
+  if (matchedItems.length === 0) {
+    return [];
+  }
+
   const dashboardItem = items.find(
     (item) => item.href === ROUTES.ADMIN.DASHBOARD,
   );
@@ -97,7 +134,6 @@ export function getAdminBreadcrumbItems(
     return matchedItems;
   }
 
-  // 관리자 페이지에서는 항상 대시보드를 Breadcrumb의 시작점으로 사용한다.
   return [
     {
       label: dashboardItem.title,

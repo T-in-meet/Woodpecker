@@ -40,6 +40,7 @@ export const ADMIN_SIDEBAR_ITEMS = [
   {
     title: "실험 기능",
     icon: Beaker,
+    breadcrumbHref: ROUTES.ADMIN.EXPERIMENTS.DASHBOARD,
     children: [
       {
         title: "대시보드",
@@ -51,6 +52,7 @@ export const ADMIN_SIDEBAR_ITEMS = [
       {
         title: "노트 연결",
         icon: Link2,
+        breadcrumbHref: ROUTES.ADMIN.EXPERIMENTS.NOTE_RELATIONS.DASHBOARD,
         children: [
           {
             title: "대시보드",
