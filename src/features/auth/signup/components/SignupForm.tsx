@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { OAuthButtons } from "@/features/auth/components/OAuthButtons";
 import {
   GLOBAL_ERROR_MESSAGES,
   isGlobalError,
@@ -488,6 +489,7 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
         <h1 className="text-2xl font-bold text-primary tracking-tight mb-8">
           계정 만들기
         </h1>
+
         {/* 닉네임 */}
         <div>
           <div className="grid grid-cols-[6.25rem_minmax(0,1fr)] gap-x-4">
@@ -593,6 +595,25 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
             </div>
           </div>
         </div>
+
+        <OAuthButtons
+          mode="signup"
+          beforeSignIn={() => {
+            // 이메일 가입과 동일하게 약관/개인정보 동의를 OAuth 시작 전에도 요구한다.
+            if (watchedTermsOfService && watchedPrivacyPolicy) {
+              return true;
+            }
+
+            showToast(
+              "회원가입하려면 이용약관과 개인정보 처리방침에 동의해주세요.",
+              {
+                variant: "destructive",
+                dedupeKey: "auth-signup-agreements-required",
+              },
+            );
+            return false;
+          }}
+        />
 
         {/* 약관 */}
         <div

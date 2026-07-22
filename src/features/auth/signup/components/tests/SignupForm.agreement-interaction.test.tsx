@@ -1,13 +1,30 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { showToast } from "@/lib/utils/showToast";
 
 import { renderSignupForm } from "./utils/signupFormTestUtils";
+
+const signInWithOAuthMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@tanstack/react-query", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@tanstack/react-query")>();
   return { ...actual };
 });
+
+// 소셜 회원가입 테스트는 외부 provider redirect 없이 Supabase 호출 여부만 확인한다.
+vi.mock("@/lib/supabase/client", () => ({
+  createClient: vi.fn(() => ({
+    auth: {
+      signInWithOAuth: signInWithOAuthMock,
+    },
+  })),
+}));
+
+vi.mock("@/lib/utils/showToast", () => ({
+  showToast: vi.fn(),
+}));
 
 // SignupForm 동의 상호작용 테스트
 // - interactionEnabled 상태 관리 및 전이
@@ -17,6 +34,11 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
 // - form reset 시 상태 초기화
 
 describe("회원가입 폼 동의 상호작용", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    signInWithOAuthMock.mockResolvedValue({ error: null });
+  });
+
   it('TC-01: 초기 렌더 시 이용약관 체크박스에 aria-disabled="true"가 설정된다', () => {
     renderSignupForm();
 
@@ -347,5 +369,58 @@ describe("회원가입 폼 동의 상호작용", () => {
         screen.getByRole("link", { name: /로그인/i }),
       );
     });
+  });
+
+  it("TC-20: 초기 렌더 시 소셜 회원가입 버튼은 클릭 가능한 상태로 렌더링된다", () => {
+    renderSignupForm();
+
+    expect(
+      screen.getByRole("button", { name: "Google 계정으로 계속하기" }),
+    ).not.toBeDisabled();
+  });
+
+  it("TC-21: 약관 미동의 상태에서 소셜 회원가입을 클릭하면 toast를 표시한다", async () => {
+    const user = userEvent.setup();
+    renderSignupForm();
+
+    await user.click(
+      screen.getByRole("button", { name: "Google 계정으로 계속하기" }),
+    );
+
+    expect(showToast).toHaveBeenCalledWith(
+      "회원가입하려면 이용약관과 개인정보 처리방침에 동의해주세요.",
+      {
+        variant: "destructive",
+        dedupeKey: "auth-signup-agreements-required",
+      },
+    );
+  });
+
+  it("TC-22: 이용약관과 개인정보 처리방침에 모두 동의하면 소셜 회원가입을 시작한다", async () => {
+    const user = userEvent.setup();
+    renderSignupForm();
+
+    await user.click(screen.getByTestId("terms-of-service-checkbox"));
+    await user.click(screen.getByRole("button", { name: /동의하기/i }));
+    await user.click(screen.getByTestId("privacy-policy-checkbox"));
+    await user.click(screen.getByRole("button", { name: /동의하기/i }));
+
+    // 두 약관이 모두 체크된 뒤에는 SignupForm의 beforeSignIn gate를 통과한다.
+    await user.click(
+      screen.getByRole("button", { name: "Google 계정으로 계속하기" }),
+    );
+
+    await waitFor(() => {
+      expect(signInWithOAuthMock).toHaveBeenCalledWith({
+        provider: "google",
+        options: {
+          redirectTo: expect.stringContaining("/api/auth/callback"),
+        },
+      });
+    });
+    expect(showToast).not.toHaveBeenCalledWith(
+      "회원가입하려면 이용약관과 개인정보 처리방침에 동의해주세요.",
+      expect.anything(),
+    );
   });
 });
