@@ -6,6 +6,7 @@ import { Suspense } from "react";
 import { NotesToolbar } from "@/features/notes/components/NotesToolbar";
 import { NotesViewContainer } from "@/features/notes/components/NotesViewContainer";
 import { getNotes } from "@/features/notes/queries";
+import { buildNotesUrl } from "@/features/notes/utils/buildNotesUrl";
 import { NOTES_VIEW_COOKIE } from "@/hooks/useNotesView";
 import {
   NOTES_CARDS_PAGE_SIZE,
@@ -38,7 +39,8 @@ export default async function NotesPage({ searchParams }: NotesPageProps) {
   }
 
   const params = await searchParams;
-  const page = Math.max(1, Number(params.page) || 1);
+  const rawPage = Number(params.page);
+  const page = Number.isFinite(rawPage) ? Math.max(1, Math.floor(rawPage)) : 1;
   const query = params.q ?? "";
   const cookieStore = await cookies();
   const cookieView =
@@ -48,6 +50,11 @@ export default async function NotesPage({ searchParams }: NotesPageProps) {
     view === "cards" ? NOTES_CARDS_PAGE_SIZE : NOTES_LIST_PAGE_SIZE;
 
   const { notes, total } = await getNotes(user.id, page, query, pageSize);
+  const totalPages = Math.ceil(total / pageSize);
+
+  if (total > 0 && page > totalPages) {
+    redirect(buildNotesUrl({ page: totalPages, query, view }));
+  }
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-10 md:px-12">

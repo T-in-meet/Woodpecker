@@ -1,5 +1,5 @@
 import type { NoteSummary } from "../queries";
-import type { NotesView } from "../utils/buildNotesUrl";
+import { buildNotesUrl, type NotesView } from "../utils/buildNotesUrl";
 import { NoteGridCard } from "./NoteGridCard";
 import { NoteListItem } from "./NoteListItem";
 import { NotesEmptyState } from "./NotesEmptyState";
@@ -55,8 +55,7 @@ export function NotesViewContainer({
       <NotesPagination
         currentPage={currentPage}
         totalPages={totalPages}
-        query={query}
-        view={view}
+        buildUrl={(page) => buildNotesUrl({ page, query, view })}
       />
     </div>
   );

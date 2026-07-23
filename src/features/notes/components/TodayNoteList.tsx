@@ -11,9 +11,14 @@ import { ViewToggle } from "./ViewToggle";
 type TodayNoteListProps = {
   notes: NoteSummary[];
   initialView: NotesView;
+  total: number;
 };
 
-export function TodayNoteList({ notes, initialView }: TodayNoteListProps) {
+export function TodayNoteList({
+  notes,
+  initialView,
+  total,
+}: TodayNoteListProps) {
   const [view, updateView] = useNotesView(initialView);
 
   if (notes.length === 0) {
@@ -27,7 +32,7 @@ export function TodayNoteList({ notes, initialView }: TodayNoteListProps) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">총 {notes.length}개</p>
+        <p className="text-sm text-muted-foreground">총 {total}개</p>
         <ViewToggle view={view} onChange={updateView} />
       </div>
 
