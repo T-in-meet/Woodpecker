@@ -26,6 +26,8 @@ export const ROUTES = {
     EXPERIMENTS: {
       DASHBOARD: "/admin/experiments",
 
+      COMPONENT_PLAYGROUND: "/admin/experiments/component-playground",
+
       NOTE_RELATIONS: {
         DASHBOARD: "/admin/experiments/note-relations",
 

@@ -1,5 +1,6 @@
 import {
   Beaker,
+  Blocks,
   Boxes,
   FileSearch,
   FileText,
@@ -47,6 +48,13 @@ export const ADMIN_SIDEBAR_ITEMS = [
         href: ROUTES.ADMIN.EXPERIMENTS.DASHBOARD,
         icon: LayoutDashboard,
         breadcrumbLabel: "실험 기능",
+      },
+
+      {
+        title: "컴포넌트 Playground",
+        href: ROUTES.ADMIN.EXPERIMENTS.COMPONENT_PLAYGROUND,
+        icon: Blocks,
+        breadcrumbLabel: "컴포넌트 Playground",
       },
 
       {
