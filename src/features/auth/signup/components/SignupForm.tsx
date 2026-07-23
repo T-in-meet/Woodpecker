@@ -597,10 +597,43 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
         </div>
 
         <OAuthButtons
-          beforeSignIn={() => {
+          intent="signup"
+          beforeSignIn={async () => {
             // 이메일 가입과 동일하게 약관/개인정보 동의를 OAuth 시작 전에도 요구한다.
             if (watchedTermsOfService && watchedPrivacyPolicy) {
-              return true;
+              try {
+                const response = await fetch(
+                  "/api/auth/oauth/agreement-intent",
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      agreements: {
+                        termsOfService: true,
+                        privacyPolicy: true,
+                      },
+                    }),
+                  },
+                );
+
+                if (response.ok) {
+                  // 일부 dev 환경에서 Set-Cookie 반영이 늦는 경우를 대비해 callback intent 판정용 fallback을 남긴다.
+                  document.cookie =
+                    "oauth_agreement_intent=accepted; path=/; max-age=600; samesite=lax";
+                  return true;
+                }
+              } catch {
+                // 아래 공통 toast로 OAuth 시작 실패를 안내한다.
+              }
+
+              showToast(
+                "소셜 회원가입을 시작할 수 없습니다. 잠시 후 다시 시도해주세요.",
+                {
+                  variant: "destructive",
+                  dedupeKey: "auth-oauth-agreement-intent",
+                },
+              );
+              return false;
             }
 
             showToast(

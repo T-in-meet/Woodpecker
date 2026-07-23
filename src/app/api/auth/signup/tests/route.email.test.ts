@@ -25,6 +25,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { POST } from "../route";
 import { makeRequest } from "./utils/signupTestHelper";
 
+const upsertUserAgreementMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/features/auth/lib/userAgreements", () => ({
+  upsertUserAgreement: upsertUserAgreementMock,
+}));
 vi.mock("@/features/auth/lib/getUserByEmail");
 vi.mock("@/lib/supabase/admin");
 vi.mock("@/features/auth/email/issueOtpAndSendEmail");

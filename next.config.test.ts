@@ -5,7 +5,7 @@
  * - headers() 함수 존재 여부
  * - source "/(.*)"에 각 보안 헤더 포함 여부
  * - production 환경에서 HSTS 포함, non-production에서 제외
- * - Supabase Storage remotePatterns 설정 유지
+ * - Supabase Storage 이미지 remotePatterns 설정 유지
  *
  * 전략:
  * - Vitest/jsdom 환경에서는 실제 HTTP 응답 헤더를 인터셉트할 수 없으므로
@@ -115,20 +115,52 @@ describe("Security Headers — next.config.ts", () => {
   describe("TC-SH-08: 이미지 remotePatterns 설정 유지", () => {
     it("TC-SH-08. Supabase Storage remotePatterns 설정이 정확히 유지된다", () => {
       expect(nextConfig.images).toBeDefined();
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+        ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL)
+        : null;
       const supabaseHostname = process.env.NEXT_PUBLIC_SUPABASE_HOSTNAME;
 
-      const expected = supabaseHostname
-        ? [
-            {
-              protocol: "https",
-              hostname: supabaseHostname,
-              port: "",
-              pathname: "/storage/v1/object/public/**",
-            },
-          ]
-        : [];
+      const expected = [
+        ...(supabaseUrl
+          ? [
+              {
+                protocol: supabaseUrl.protocol.replace(":", ""),
+                hostname: supabaseUrl.hostname,
+                port: supabaseUrl.port,
+                pathname: "/storage/v1/object/public/**",
+              },
+            ]
+          : supabaseHostname
+            ? [
+                {
+                  protocol: "https",
+                  hostname: supabaseHostname,
+                  port: "",
+                  pathname: "/storage/v1/object/public/**",
+                },
+              ]
+            : []),
+      ];
 
       expect(nextConfig.images?.remotePatterns).toEqual(expected);
+    });
+
+    it("TC-SH-08A. 로컬 Supabase Storage remotePatterns는 http와 port를 포함한다", async () => {
+      vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://127.0.0.1:54321");
+      vi.resetModules();
+
+      const { default: localNextConfig } = await import("./next.config");
+
+      expect(localNextConfig.images?.remotePatterns).toEqual(
+        expect.arrayContaining([
+          {
+            protocol: "http",
+            hostname: "127.0.0.1",
+            port: "54321",
+            pathname: "/storage/v1/object/public/**",
+          },
+        ]),
+      );
     });
   });
 
