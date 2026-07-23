@@ -4,6 +4,7 @@ import {
 } from "@/features/admin/components/common/AdminListState";
 
 import type { MockUser } from "../types/mock-user";
+import { MockUserTableSkeleton } from "./MockUserTableSkeleton";
 
 const USER_STATUS_LABELS = {
   active: "활성",
@@ -63,9 +64,7 @@ export function MockUserTable({
 
         <tbody>
           {isPending ? (
-            <MockUserTableMessage>
-              사용자 목록을 불러오는 중입니다.
-            </MockUserTableMessage>
+            <MockUserTableSkeleton />
           ) : isError ? (
             <tr>
               <td colSpan={8}>
