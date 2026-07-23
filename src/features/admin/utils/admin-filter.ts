@@ -57,8 +57,7 @@ export function getAdminFilterValidationError(
       const { from, to } = filter.value;
 
       /**
-       * 시작일과 종료일이 모두 선택된 경우에만
-       * 날짜 범위의 순서를 검사합니다.
+       * 잘못된 외부 데이터가 전달되는 경우를 방어합니다.
        */
       if (from !== null && to !== null && from > to) {
         return "시작일은 종료일보다 늦을 수 없습니다.";
