@@ -2,6 +2,7 @@ import type {
   AdminAppliedFilter,
   AdminFilterDefinition,
 } from "../../types/filter";
+import { AdminMultiSelectInput } from "./AdminMultiSelectInput";
 
 interface AdminFilterInputRendererProps<TField extends string> {
   /** 현재 편집할 필터 정의 */
@@ -43,15 +44,20 @@ export function AdminFilterInputRenderer<TField extends string>({
         />
       );
 
-    case "multi-select":
+    case "multi-select": {
+      const multiSelectValue =
+        value?.type === "multi-select" && value.field === filter.field
+          ? value
+          : null;
+
       return (
-        <FilterInputPlaceholder
-          label="다중 선택 필터"
-          field={filter.field}
-          value={value}
+        <AdminMultiSelectInput
+          filter={filter}
+          value={multiSelectValue}
           onChange={onChange}
         />
       );
+    }
 
     case "number-range":
       return (

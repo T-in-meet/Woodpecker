@@ -1,6 +1,7 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
+import { XIcon } from "lucide-react";
 import * as React from "react";
 
 import { cn } from "@/lib/utils/cn";
@@ -9,6 +10,7 @@ const DialogRoot = Dialog.Root;
 const DialogTrigger = Dialog.Trigger;
 const DialogClose = Dialog.Close;
 const DialogPortal = Dialog.Portal;
+
 const DialogOverlay = React.forwardRef<
   React.ElementRef<typeof Dialog.Overlay>,
   React.ComponentPropsWithoutRef<typeof Dialog.Overlay>
@@ -19,14 +21,25 @@ const DialogOverlay = React.forwardRef<
     {...props}
   />
 ));
+
 DialogOverlay.displayName = Dialog.Overlay.displayName;
+
+interface DialogContentProps extends React.ComponentPropsWithoutRef<
+  typeof Dialog.Content
+> {
+  /**
+   * 다이얼로그 우측 상단 닫기 버튼 표시 여부입니다.
+   */
+  showCloseButton?: boolean;
+}
 
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof Dialog.Content>,
-  React.ComponentPropsWithoutRef<typeof Dialog.Content>
->(({ className, children, ...props }, ref) => (
+  DialogContentProps
+>(({ className, children, showCloseButton = true, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
+
     <Dialog.Content
       ref={ref}
       className={cn(
@@ -37,9 +50,24 @@ const DialogContent = React.forwardRef<
       {...props}
     >
       {children}
+
+      {showCloseButton && (
+        <Dialog.Close
+          className={cn(
+            "absolute right-4 top-4 rounded-sm opacity-70 transition-opacity",
+            "hover:opacity-100",
+            "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+            "disabled:pointer-events-none",
+          )}
+        >
+          <XIcon className="size-4" />
+          <span className="sr-only">닫기</span>
+        </Dialog.Close>
+      )}
     </Dialog.Content>
   </DialogPortal>
 ));
+
 DialogContent.displayName = Dialog.Content.displayName;
 
 function DialogHeader({
