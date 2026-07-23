@@ -3,6 +3,7 @@ import type {
   AdminFilterDefinition,
 } from "../../types/filter";
 import { AdminMultiSelectInput } from "./AdminMultiSelectInput";
+import { AdminSelectInput } from "./AdminSelectInput";
 
 interface AdminFilterInputRendererProps<TField extends string> {
   /** 현재 편집할 필터 정의 */
@@ -34,15 +35,18 @@ export function AdminFilterInputRenderer<TField extends string>({
   onChange,
 }: AdminFilterInputRendererProps<TField>) {
   switch (filter.type) {
-    case "select":
+    case "select": {
+      const selectValue =
+        value?.type === "select" && value.field === filter.field ? value : null;
+
       return (
-        <FilterInputPlaceholder
-          label="단일 선택 필터"
-          field={filter.field}
-          value={value}
+        <AdminSelectInput
+          filter={filter}
+          value={selectValue}
           onChange={onChange}
         />
       );
+    }
 
     case "multi-select": {
       const multiSelectValue =

@@ -6,6 +6,7 @@ import type { AdminFilterDefinition } from "@/features/admin/types/filter";
 export type ComponentPlaygroundFilterField =
   | "status"
   | "roles"
+  | "grade"
   | "score"
   | "createdAt";
 
@@ -57,6 +58,26 @@ export const COMPONENT_PLAYGROUND_FILTERS = [
       {
         value: "admin",
         label: "관리자",
+      },
+    ],
+  },
+  {
+    field: "grade",
+    label: "등급",
+    type: "select",
+    placeholder: "등급을 선택하세요.",
+    options: [
+      {
+        value: "basic",
+        label: "일반",
+      },
+      {
+        value: "premium",
+        label: "프리미엄",
+      },
+      {
+        value: "vip",
+        label: "VIP",
       },
     ],
   },
