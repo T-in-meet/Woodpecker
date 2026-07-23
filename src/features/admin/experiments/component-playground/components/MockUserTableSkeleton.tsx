@@ -32,8 +32,11 @@ export function MockUserTableSkeleton({
 }: MockUserTableSkeletonProps) {
   return Array.from({ length }, (_, rowIndex) => (
     <tr key={rowIndex} aria-hidden="true" className="border-b last:border-b-0">
-      {MOCK_USER_TABLE_SKELETON_WIDTHS.map((width) => (
-        <MockUserTableSkeletonCell key={width} className={width} />
+      {MOCK_USER_TABLE_SKELETON_WIDTHS.map((width, index) => (
+        <MockUserTableSkeletonCell
+          key={`${width}-${index}`}
+          className={width}
+        />
       ))}
     </tr>
   ));

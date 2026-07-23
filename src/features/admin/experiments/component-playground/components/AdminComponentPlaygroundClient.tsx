@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { AdminAlertDialog } from "@/features/admin/components/common/AdminAlertDialog";
 import { AdminListToolbar } from "@/features/admin/components/common/AdminListToolbar";
 import { AdminPagination } from "@/features/admin/components/common/AdminPagination";
 import { AdminPageHeader } from "@/features/admin/components/layout/AdminPageHeader";
@@ -41,6 +43,8 @@ export function AdminComponentPlaygroundClient() {
   const users = data?.items ?? [];
   const totalCount = data?.pagination.total ?? 0;
 
+  function handleDelete() {}
+
   return (
     <div className="space-y-6">
       <AdminPageHeader
@@ -49,6 +53,20 @@ export function AdminComponentPlaygroundClient() {
       />
 
       <div className="space-y-4">
+        <AdminAlertDialog
+          trigger={
+            <Button type="button" variant="destructive">
+              삭제
+            </Button>
+          }
+          title="답변을 삭제하시겠습니까?"
+          description="삭제된 답변은 복구할 수 없습니다."
+          confirmLabel="삭제"
+          confirmVariant="destructive"
+          reverseActions
+          pending={isPending}
+          onConfirm={handleDelete}
+        />
         <AdminComponentPlaygroundSection
           title="AdminListToolbar / AdminSearch"
           description="검색 필드 Select와 검색어 Input의 상태 변경을 확인합니다."
