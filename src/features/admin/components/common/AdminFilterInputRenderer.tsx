@@ -1,8 +1,10 @@
 import type {
   AdminAppliedFilter,
   AdminFilterDefinition,
+  AdminNumberRangeFilterValue,
 } from "../../types/filter";
 import { AdminMultiSelectInput } from "./AdminMultiSelectInput";
+import { AdminNumberRangeInput } from "./AdminNumberRangeInput";
 import { AdminSelectInput } from "./AdminSelectInput";
 
 interface AdminFilterInputRendererProps<TField extends string> {
@@ -63,15 +65,31 @@ export function AdminFilterInputRenderer<TField extends string>({
       );
     }
 
-    case "number-range":
+    case "number-range": {
+      const numberRangeValue: AdminNumberRangeFilterValue =
+        value?.type === "number-range"
+          ? value.value
+          : {
+              min: null,
+              max: null,
+            };
+
       return (
-        <FilterInputPlaceholder
-          label="숫자 범위 필터"
-          field={filter.field}
-          value={value}
-          onChange={onChange}
+        <AdminNumberRangeInput
+          value={numberRangeValue}
+          {...(filter.min !== undefined ? { min: filter.min } : {})}
+          {...(filter.max !== undefined ? { max: filter.max } : {})}
+          {...(filter.step !== undefined ? { step: filter.step } : {})}
+          onValueChange={(nextValue) => {
+            onChange({
+              field: filter.field,
+              type: filter.type,
+              value: nextValue,
+            });
+          }}
         />
       );
+    }
 
     case "date-range":
       return (

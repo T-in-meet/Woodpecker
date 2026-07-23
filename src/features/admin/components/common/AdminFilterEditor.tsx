@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactElement } from "react";
+import { type ReactElement, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +13,7 @@ import type {
   AdminAppliedFilter,
   AdminFilterDefinition,
 } from "../../types/filter";
+import { getAdminFilterValidationError } from "../../utils/admin-filter";
 import { AdminFilterInputRenderer } from "./AdminFilterInputRenderer";
 
 interface AdminFilterEditorProps<TField extends string> {
@@ -64,6 +65,8 @@ export function AdminFilterEditor<TField extends string>({
   onApply,
   onRemove,
 }: AdminFilterEditorProps<TField>) {
+  const [validationError, setValidationError] = useState<string | null>(null);
+
   /**
    * 현재 필터를 삭제하고 Popover를 닫습니다.
    */
@@ -73,9 +76,18 @@ export function AdminFilterEditor<TField extends string>({
   }
 
   /**
-   * 현재 임시 필터 값을 적용하고 Popover를 닫습니다.
+   * 현재 임시 필터 값의 유효성을 검사한 뒤 적용하고
+   * 유효한 경우에만 Popover를 닫습니다.
    */
   function handleApply() {
+    const error = getAdminFilterValidationError(value);
+
+    if (error) {
+      setValidationError(error);
+      return;
+    }
+
+    setValidationError(null);
     onApply();
     onOpenChange(false);
   }
@@ -96,9 +108,18 @@ export function AdminFilterEditor<TField extends string>({
             <AdminFilterInputRenderer
               filter={filter}
               value={value}
-              onChange={onChange}
+              onChange={(nextValue) => {
+                setValidationError(null);
+                onChange(nextValue);
+              }}
             />
           </div>
+
+          {validationError && (
+            <p role="alert" className="text-sm text-destructive px-4 pb-4">
+              {validationError}
+            </p>
+          )}
 
           {/* 삭제와 적용 동작은 모든 필터 Editor에서 공통으로 제공합니다. */}
           <footer className="flex items-center justify-between border-t px-4 py-3">

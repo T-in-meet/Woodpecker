@@ -27,3 +27,33 @@ export function hasAdminFilterValue<TField extends string>(
       return filter.value.from !== null || filter.value.to !== null;
   }
 }
+
+/**
+ * 관리자 필터 값의 유효성을 검사하고 오류 메시지를 반환합니다.
+ *
+ * 유효한 값이면 `null`을 반환합니다.
+ *
+ * @param filter 검사할 관리자 필터
+ */
+export function getAdminFilterValidationError(
+  filter: AdminAppliedFilter | null,
+): string | null {
+  if (!filter) {
+    return null;
+  }
+
+  switch (filter.type) {
+    case "number-range": {
+      const { min, max } = filter.value;
+
+      if (min !== null && max !== null && min > max) {
+        return "최솟값은 최댓값보다 클 수 없습니다.";
+      }
+
+      return null;
+    }
+
+    default:
+      return null;
+  }
+}
