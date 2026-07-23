@@ -1,3 +1,8 @@
+import {
+  AdminListEmpty,
+  AdminListError,
+} from "@/features/admin/components/common/AdminListState";
+
 import type { MockUser } from "../types/mock-user";
 
 const USER_STATUS_LABELS = {
@@ -62,9 +67,11 @@ export function MockUserTable({
               사용자 목록을 불러오는 중입니다.
             </MockUserTableMessage>
           ) : isError ? (
-            <MockUserTableMessage className="text-destructive">
-              사용자 목록을 불러오지 못했습니다.
-            </MockUserTableMessage>
+            <tr>
+              <td colSpan={8}>
+                <AdminListError description="사용자 목록을 불러오지 못했습니다." />
+              </td>
+            </tr>
           ) : users.length > 0 ? (
             users.map((user) => (
               <tr key={user.id} className="border-b last:border-b-0">
@@ -88,9 +95,11 @@ export function MockUserTable({
               </tr>
             ))
           ) : (
-            <MockUserTableMessage>
-              검색 조건과 일치하는 사용자가 없습니다.
-            </MockUserTableMessage>
+            <tr>
+              <td colSpan={8}>
+                <AdminListEmpty description="검색 조건과 일치하는 사용자가 없습니다." />
+              </td>
+            </tr>
           )}
         </tbody>
       </table>
