@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { ReactElement } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -9,15 +9,21 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 
-interface AdminFilterEditorProps {
-  /** 사용자에게 표시할 필터 이름 */
-  label: string;
+import type {
+  AdminAppliedFilter,
+  AdminFilterDefinition,
+} from "../../types/filter";
+import { AdminFilterInputRenderer } from "./AdminFilterInputRenderer";
+
+interface AdminFilterEditorProps<TField extends string> {
+  /** 현재 편집할 필터 정의 */
+  filter: AdminFilterDefinition<TField>;
 
   /** Popover를 여는 Trigger 요소 */
-  trigger: ReactNode;
+  trigger: ReactElement;
 
-  /** 필터 값을 입력하는 영역 */
-  children: ReactNode;
+  /** 현재 편집 중인 임시 필터 값 */
+  value: AdminAppliedFilter<TField> | null;
 
   /** Popover의 열림 상태 */
   open: boolean;
@@ -25,7 +31,10 @@ interface AdminFilterEditorProps {
   /** Popover의 열림 상태가 변경될 때 호출되는 함수 */
   onOpenChange: (open: boolean) => void;
 
-  /** 사용자가 필터 값을 적용할 때 호출되는 함수 */
+  /** 임시 필터 값이 변경될 때 호출되는 함수 */
+  onChange: (value: AdminAppliedFilter<TField>) => void;
+
+  /** 사용자가 임시 필터 값을 적용할 때 호출되는 함수 */
   onApply: () => void;
 
   /** 사용자가 현재 필터를 삭제할 때 호출되는 함수 */
@@ -36,22 +45,25 @@ interface AdminFilterEditorProps {
  * 관리자 목록 필터를 확인하고 수정하는 공통 Editor입니다.
  *
  * 전달받은 Trigger를 기준으로 Popover를 표시하며,
- * 필터 이름, 입력 영역, 삭제 버튼, 적용 버튼을 제공합니다.
+ * 필터 정의의 `type`에 따라 적절한 입력 컴포넌트를 자동으로 선택합니다.
  *
- * 실제 필터 입력 UI는 `children`으로 전달받습니다.
+ * 상위 컴포넌트는 개별 입력 컴포넌트를 직접 선택하지 않고
+ * 필터 정의와 현재 값만 전달합니다.
  *
- * @param props Trigger, 필터 이름, 입력 영역 및 이벤트 처리 함수
+ * @template TField 필터 필드의 문자열 리터럴 타입
+ * @param props 필터 정의, Trigger, 현재 값 및 이벤트 처리 함수
  * @returns 관리자 필터 편집 Popover
  */
-export function AdminFilterEditor({
-  label,
+export function AdminFilterEditor<TField extends string>({
+  filter,
   trigger,
-  children,
+  value,
   open,
   onOpenChange,
+  onChange,
   onApply,
   onRemove,
-}: AdminFilterEditorProps) {
+}: AdminFilterEditorProps<TField>) {
   /**
    * 현재 필터를 삭제하고 Popover를 닫습니다.
    */
@@ -61,7 +73,7 @@ export function AdminFilterEditor({
   }
 
   /**
-   * 현재 필터 값을 적용하고 Popover를 닫습니다.
+   * 현재 임시 필터 값을 적용하고 Popover를 닫습니다.
    */
   function handleApply() {
     onApply();
@@ -76,11 +88,17 @@ export function AdminFilterEditor({
         <div className="flex flex-col">
           {/* 현재 편집 중인 필터 이름을 표시합니다. */}
           <header className="border-b px-4 py-3">
-            <h3 className="text-sm font-semibold">{label}</h3>
+            <h3 className="text-sm font-semibold">{filter.label}</h3>
           </header>
 
-          {/* 필터 종류에 맞는 입력 컴포넌트가 렌더링됩니다. */}
-          <div className="px-4 py-4">{children}</div>
+          {/* 필터 type에 맞는 입력 컴포넌트를 자동으로 선택합니다. */}
+          <div className="px-4 py-4">
+            <AdminFilterInputRenderer
+              filter={filter}
+              value={value}
+              onChange={onChange}
+            />
+          </div>
 
           {/* 삭제와 적용 동작은 모든 필터 Editor에서 공통으로 제공합니다. */}
           <footer className="flex items-center justify-between border-t px-4 py-3">

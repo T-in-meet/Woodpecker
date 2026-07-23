@@ -9,8 +9,12 @@ import { AdminListToolbar } from "@/features/admin/components/common/AdminListTo
 import { AdminPagination } from "@/features/admin/components/common/AdminPagination";
 import { AdminSearch } from "@/features/admin/components/common/AdminSearch";
 import { AdminPageHeader } from "@/features/admin/components/layout/AdminPageHeader";
-import { AdminFilterDefinition } from "@/features/admin/types/filter";
+import {
+  AdminAppliedFilter,
+  AdminFilterDefinition,
+} from "@/features/admin/types/filter";
 import type { AdminSearchValue } from "@/features/admin/types/search";
+import { hasAdminFilterValue } from "@/features/admin/utils/admin-filter";
 
 import {
   COMPONENT_PLAYGROUND_FILTERS,
@@ -61,6 +65,15 @@ export function AdminComponentPlaygroundClient() {
   const [editingFilterField, setEditingFilterField] =
     useState<ComponentPlaygroundFilterField | null>(null);
 
+  const [draftFilters, setDraftFilters] = useState<
+    Partial<
+      Record<
+        ComponentPlaygroundFilterField,
+        AdminAppliedFilter<ComponentPlaygroundFilterField>
+      >
+    >
+  >({});
+
   /**
    * 사용자가 선택한 필터를 Playground의 적용 필터 목록에 추가합니다.
    *
@@ -76,7 +89,23 @@ export function AdminComponentPlaygroundClient() {
   }
 
   /**
-   * 지정한 필터 필드를 적용 필터 목록에서 제거합니다.
+   * Editor에서 변경된 임시 필터 값을 필드별로 저장합니다.
+   *
+   * 실제 목록 조회에 사용하는 적용 값은 이후 별도 상태로 분리합니다.
+   *
+   * @param value 변경된 임시 필터 값
+   */
+  function handleDraftFilterChange(
+    value: AdminAppliedFilter<ComponentPlaygroundFilterField>,
+  ) {
+    setDraftFilters((currentFilters) => ({
+      ...currentFilters,
+      [value.field]: value,
+    }));
+  }
+
+  /**
+   * 지정한 필터를 선택 목록과 임시 값에서 제거합니다.
    *
    * @param field 제거할 필터 필드
    */
@@ -84,6 +113,14 @@ export function AdminComponentPlaygroundClient() {
     setSelectedFilters((currentFilters) =>
       currentFilters.filter((filter) => filter.field !== field),
     );
+
+    setDraftFilters((currentFilters) => {
+      const nextFilters = { ...currentFilters };
+
+      delete nextFilters[field];
+
+      return nextFilters;
+    });
   }
 
   const appliedFilterFields = selectedFilters.map((filter) => filter.field);
@@ -126,30 +163,37 @@ export function AdminComponentPlaygroundClient() {
             }
             filters={
               <>
-                {selectedFilters.map((filter) => (
-                  <AdminFilterEditor
-                    key={filter.field}
-                    label={filter.label}
-                    open={editingFilterField === filter.field}
-                    onOpenChange={(open) => {
-                      setEditingFilterField(open ? filter.field : null);
-                    }}
-                    onApply={() => {
-                      console.log("필터 적용:", filter.field);
-                    }}
-                    onRemove={() => handleFilterRemove(filter.field)}
-                    trigger={
-                      <AdminFilterBadge
-                        label={filter.label}
-                        onRemove={() => handleFilterRemove(filter.field)}
-                      />
-                    }
-                  >
-                    <p className="text-sm text-muted-foreground">
-                      필터 입력 컴포넌트 추가 예정
-                    </p>
-                  </AdminFilterEditor>
-                ))}
+                {selectedFilters.map((filter) => {
+                  const draftFilter = draftFilters[filter.field];
+
+                  const isActive = draftFilter
+                    ? hasAdminFilterValue(draftFilter)
+                    : false;
+
+                  return (
+                    <AdminFilterEditor
+                      key={filter.field}
+                      filter={filter}
+                      value={draftFilter ?? null}
+                      open={editingFilterField === filter.field}
+                      onOpenChange={(open) => {
+                        setEditingFilterField(open ? filter.field : null);
+                      }}
+                      onChange={handleDraftFilterChange}
+                      onApply={() => {
+                        console.log("필터 적용:", draftFilter);
+                      }}
+                      onRemove={() => handleFilterRemove(filter.field)}
+                      trigger={
+                        <AdminFilterBadge
+                          label={filter.label}
+                          isActive={isActive}
+                          onRemove={() => handleFilterRemove(filter.field)}
+                        />
+                      }
+                    />
+                  );
+                })}
 
                 <AdminFilterAdd
                   filters={COMPONENT_PLAYGROUND_FILTERS}
