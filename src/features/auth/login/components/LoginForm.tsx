@@ -226,18 +226,18 @@ export function LoginForm() {
               {errors.root.message}
             </p>
           )}
+
+          <Link
+            href={forgotPasswordHref}
+            className="text-sm text-muted-foreground underline hover:text-foreground"
+          >
+            비밀번호 찾기
+          </Link>
         </div>
 
         {/* 액션 영역 */}
         <div className="flex flex-col gap-5 pt-2 ">
           <div className="flex flex-col gap-3">
-            <Link
-              href={forgotPasswordHref}
-              className="text-sm text-muted-foreground underline hover:text-foreground"
-            >
-              비밀번호 찾기
-            </Link>
-
             <p className="text-sm text-muted-foreground">
               아직 계정이 없으신가요?{" "}
               <Link

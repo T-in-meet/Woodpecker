@@ -5,7 +5,7 @@
  * - headers() 함수 존재 여부
  * - source "/(.*)"에 각 보안 헤더 포함 여부
  * - production 환경에서 HSTS 포함, non-production에서 제외
- * - 기존 images.remotePatterns 설정 유지
+ * - Supabase Storage remotePatterns 설정 유지
  *
  * 전략:
  * - Vitest/jsdom 환경에서는 실제 HTTP 응답 헤더를 인터셉트할 수 없으므로
@@ -112,8 +112,8 @@ describe("Security Headers — next.config.ts", () => {
     });
   });
 
-  describe("TC-SH-08: 기존 설정 유지", () => {
-    it("TC-SH-08. 기존 images.remotePatterns 설정이 정확히 유지된다", () => {
+  describe("TC-SH-08: 이미지 remotePatterns 설정 유지", () => {
+    it("TC-SH-08. Supabase Storage remotePatterns 설정이 정확히 유지된다", () => {
       expect(nextConfig.images).toBeDefined();
       const supabaseHostname = process.env.NEXT_PUBLIC_SUPABASE_HOSTNAME;
 
