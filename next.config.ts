@@ -7,6 +7,26 @@ const supabaseHostname =
     ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname
     : undefined);
 
+const supabaseImagePattern = process.env.NEXT_PUBLIC_SUPABASE_URL
+  ? (() => {
+      const url = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!);
+
+      return {
+        protocol: url.protocol.replace(":", "") as "http" | "https",
+        hostname: url.hostname,
+        port: url.port,
+        pathname: "/storage/v1/object/public/**",
+      };
+    })()
+  : supabaseHostname
+    ? {
+        protocol: "https" as const,
+        hostname: supabaseHostname,
+        port: "",
+        pathname: "/storage/v1/object/public/**",
+      }
+    : undefined;
+
 export function shouldDisableSerwist() {
   return (
     process.env.NODE_ENV === "development" && process.env.ENABLE_SW !== "true"
@@ -24,18 +44,7 @@ const nextConfig: NextConfig = {
     },
   },
   images: {
-    remotePatterns: [
-      ...(supabaseHostname
-        ? [
-            {
-              protocol: "https" as const,
-              hostname: supabaseHostname,
-              port: "",
-              pathname: "/storage/v1/object/public/**",
-            },
-          ]
-        : []),
-    ],
+    remotePatterns: [...(supabaseImagePattern ? [supabaseImagePattern] : [])],
   },
   async headers() {
     const isProduction = process.env.NODE_ENV === "production";

@@ -37,6 +37,7 @@ describe("회원가입 폼 동의 상호작용", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     signInWithOAuthMock.mockResolvedValue({ error: null });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
   });
 
   it('TC-01: 초기 렌더 시 이용약관 체크박스에 aria-disabled="true"가 설정된다', () => {
@@ -394,6 +395,8 @@ describe("회원가입 폼 동의 상호작용", () => {
         dedupeKey: "auth-signup-agreements-required",
       },
     );
+    expect(fetch).not.toHaveBeenCalled();
+    expect(signInWithOAuthMock).not.toHaveBeenCalled();
   });
 
   it("TC-22: 이용약관과 개인정보 처리방침에 모두 동의하면 소셜 회원가입을 시작한다", async () => {
@@ -405,10 +408,23 @@ describe("회원가입 폼 동의 상호작용", () => {
     await user.click(screen.getByTestId("privacy-policy-checkbox"));
     await user.click(screen.getByRole("button", { name: /동의하기/i }));
 
-    // 두 약관이 모두 체크된 뒤에는 SignupForm의 beforeSignIn gate를 통과한다.
+    // 두 약관이 모두 체크된 뒤에는 서버에 OAuth 약관 intent를 남기고 redirect를 시작한다.
     await user.click(
       screen.getByRole("button", { name: "Google 계정으로 계속하기" }),
     );
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith("/api/auth/oauth/agreement-intent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agreements: {
+            termsOfService: true,
+            privacyPolicy: true,
+          },
+        }),
+      });
+    });
 
     await waitFor(() => {
       expect(signInWithOAuthMock).toHaveBeenCalledWith({
@@ -418,6 +434,11 @@ describe("회원가입 폼 동의 상호작용", () => {
         },
       });
     });
+
+    const [oauthOptions] = signInWithOAuthMock.mock.calls[0]!;
+    const callbackUrl = new URL(oauthOptions.options.redirectTo as string);
+
+    expect(callbackUrl.searchParams.get("intent")).toBe("signup");
     expect(showToast).not.toHaveBeenCalledWith(
       "회원가입하려면 이용약관과 개인정보 처리방침에 동의해주세요.",
       expect.anything(),

@@ -22,6 +22,10 @@ import {
   AuthJsonParseError,
   parseAuthJsonRequestBody,
 } from "@/features/auth/lib/parseAuthJsonRequestBody";
+import {
+  AGREEMENT_REQUIRED_REDIRECT,
+  hasUserAgreement,
+} from "@/features/auth/lib/userAgreements";
 import { validateRedirectPath } from "@/features/auth/lib/validateRedirectPath";
 import { loginApiSchema } from "@/features/auth/login/schema/loginApiSchema";
 import { canonicalizeEmail } from "@/features/auth/utils/canonicalizeEmail";
@@ -189,10 +193,11 @@ async function resolveLoginResponse(
    *
    */
   const supabase = await createClient();
-  const { error: authError } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
+  const { data: authData, error: authError } =
+    await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
   if (authError) {
     return {
@@ -202,6 +207,24 @@ async function resolveLoginResponse(
         reasonCode: AUTH_LOG_REASONS.INVALID_CREDENTIALS,
         maskedEmail,
       },
+    };
+  }
+
+  const userId = authData.user?.id;
+  if (!userId) {
+    throw new Error("Authenticated user id is missing.");
+  }
+
+  const hasAgreement = await hasUserAgreement(userId);
+  if (!hasAgreement) {
+    // 약관 기록이 없는 계정은 세션을 유지하지 않고 회원가입 화면에서 동의를 받는다.
+    await supabase.auth.signOut();
+
+    return {
+      response: successResponse(AUTH_API_CODES.LOGIN_SUCCESS, {
+        redirectTo: AGREEMENT_REQUIRED_REDIRECT,
+      }),
+      outcome: { type: "completed" },
     };
   }
 
