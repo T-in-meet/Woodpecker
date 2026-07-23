@@ -24,16 +24,18 @@ const nextConfig: NextConfig = {
     },
   },
   images: {
-    remotePatterns: supabaseHostname
-      ? [
-          {
-            protocol: "https",
-            hostname: supabaseHostname,
-            port: "",
-            pathname: "/storage/v1/object/public/**",
-          },
-        ]
-      : [],
+    remotePatterns: [
+      ...(supabaseHostname
+        ? [
+            {
+              protocol: "https" as const,
+              hostname: supabaseHostname,
+              port: "",
+              pathname: "/storage/v1/object/public/**",
+            },
+          ]
+        : []),
+    ],
   },
   async headers() {
     const isProduction = process.env.NODE_ENV === "production";

@@ -83,20 +83,26 @@ export async function getNotes(
 
 export async function getTodayReviewNotes(
   userId: string,
-): Promise<NoteSummary[]> {
+  page = 1,
+  pageSize = 9,
+): Promise<{ notes: NoteSummary[]; total: number }> {
   const supabase = await createServerComponentClient();
   const { startUtcIso, endUtcIso } = getKstDayBoundsUtc();
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
 
-  const { data, error } = await supabase
+  const { data, error, count } = await supabase
     .from("notes")
     .select(
       "id, title, content, next_review_at, review_round, created_at, updated_at",
+      { count: "exact" },
     )
     .eq("user_id", userId)
     .gte("next_review_at", startUtcIso)
     .lt("next_review_at", endUtcIso)
     .order("next_review_at", { ascending: true })
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .range(from, to);
 
   if (error) throw error;
 
@@ -107,10 +113,10 @@ export async function getTodayReviewNotes(
       message: "[getTodayReviewNotes] noteSummarySchema 파싱 실패",
       error: parsed.error,
     });
-    return [];
+    return { notes: [], total: 0 };
   }
 
-  return parsed.data;
+  return { notes: parsed.data, total: count ?? 0 };
 }
 
 export async function getReviewWaitingNotes(
