@@ -1,58 +1,88 @@
-import type { ReactNode } from "react";
+"use client";
 
-import { cn } from "@/lib/utils/cn";
+import { AdminFilterAdd } from "@/features/admin/components/common/AdminFilterAdd";
+import { AdminFilterBadge } from "@/features/admin/components/common/AdminFilterBadge";
+import { AdminFilterEditor } from "@/features/admin/components/common/AdminFilterEditor";
+import { AdminSearch } from "@/features/admin/components/common/AdminSearch";
+import type { UseAdminListToolbarResult } from "@/features/admin/hooks/use-admin-list-toolbar";
+import type { AdminFilterDefinition } from "@/features/admin/types/filter";
+import type { AdminSearchField } from "@/features/admin/types/search";
+import { hasAdminFilterValue } from "@/features/admin/utils/admin-filter";
 
-interface AdminListToolbarProps {
-  /** 검색 영역 */
-  search: ReactNode;
+interface AdminListToolbarProps<
+  TSearchField extends string,
+  TFilterField extends string,
+> {
+  /** 관리자 목록에서 선택할 수 있는 검색 필드 목록 */
+  searchFields: readonly AdminSearchField<TSearchField>[];
 
-  /** 활성 필터 Badge 및 필터 추가 버튼 영역 */
-  filters: ReactNode;
+  /** 관리자 목록에서 추가할 수 있는 필터 정의 목록 */
+  filterDefinitions: readonly AdminFilterDefinition<TFilterField>[];
 
-  /** Toolbar에 추가로 적용할 className */
-  className?: string;
+  /** 검색과 필터 상태 및 처리 함수 */
+  toolbar: UseAdminListToolbarResult<TSearchField, TFilterField>;
 }
 
 /**
- * 관리자 목록 페이지에서 사용하는 공통 Toolbar입니다.
+ * 관리자 목록에서 사용하는 공통 검색 및 필터 Toolbar입니다.
  *
- * 검색 영역과 필터 영역을 일관된 레이아웃으로 배치하며,
- * 검색, 필터, 조회와 관련된 상태 및 비즈니스 로직은 담당하지 않습니다.
- *
- * ### Responsibilities
- * - 검색 영역 배치
- * - 필터 영역 배치
- * - 반응형 레이아웃 제공
- *
- * ### Does NOT
- * - 검색 상태 관리
- * - 필터 상태 관리
- * - Server Action 호출
- * - URL(Search Params) 동기화
- *
- * @param props Toolbar 구성 요소
- * @returns 관리자 목록 Toolbar
+ * 검색 입력, 필터 추가, 필터 Editor 렌더링을 내부에서 조합하여
+ * 각 목록 페이지에서 반복되는 상태 연결 코드를 줄입니다.
  */
-export function AdminListToolbar({
-  search,
-  filters,
-  className,
-}: AdminListToolbarProps) {
+export function AdminListToolbar<
+  TSearchField extends string,
+  TFilterField extends string,
+>({
+  searchFields,
+  filterDefinitions,
+  toolbar,
+}: AdminListToolbarProps<TSearchField, TFilterField>) {
   return (
-    <div className={cn("flex flex-col gap-4", className)}>
-      {/* 검색은 항상 상단에 고정하여 사용한다. */}
-      <div className="w-full">{search}</div>
+    <div className="flex flex-col gap-3">
+      <AdminSearch
+        fields={searchFields}
+        value={toolbar.draftSearch}
+        onChange={toolbar.setDraftSearch}
+        onSearch={toolbar.handleSearchApply}
+      />
 
-      {/* 
-        필터는 사용자가 자유롭게 추가할 수 있으므로
-        Badge가 증가하면 자연스럽게 다음 줄로 배치되도록 한다.
-      */}
-      <div
-        className="flex flex-wrap items-center gap-2"
-        role="toolbar"
-        aria-label="관리자 목록 필터"
-      >
-        {filters}
+      <div className="flex flex-wrap items-center gap-2">
+        {toolbar.selectedFilters.map((filter) => {
+          const draftFilter = toolbar.draftFilters[filter.field];
+          const appliedFilter = toolbar.appliedFilters[filter.field];
+
+          const isActive = appliedFilter
+            ? hasAdminFilterValue(appliedFilter)
+            : false;
+
+          return (
+            <AdminFilterEditor
+              key={filter.field}
+              filter={filter}
+              value={draftFilter ?? null}
+              open={toolbar.editingFilterField === filter.field}
+              onOpenChange={(open) => {
+                toolbar.setEditingFilterField(open ? filter.field : null);
+              }}
+              onChange={toolbar.handleDraftFilterChange}
+              onApply={() => toolbar.handleFilterApply(filter.field)}
+              onRemove={() => toolbar.handleFilterRemove(filter.field)}
+              trigger={
+                <AdminFilterBadge
+                  label={filter.label}
+                  isActive={isActive}
+                  onRemove={() => toolbar.handleFilterRemove(filter.field)}
+                />
+              }
+            />
+          );
+        })}
+
+        <AdminFilterAdd
+          filters={filterDefinitions}
+          appliedFields={toolbar.appliedFilterFields}
+          onSelect={toolbar.handleFilterSelect}
+        />
       </div>
     </div>
   );
