@@ -24,6 +24,7 @@ import {
   AuthJsonParseError,
   parseAuthJsonRequestBody,
 } from "@/features/auth/lib/parseAuthJsonRequestBody";
+import { upsertUserAgreement } from "@/features/auth/lib/userAgreements";
 import { signupApiSchema } from "@/features/auth/signup/schema/signupApiSchema";
 import { canonicalizeEmail } from "@/features/auth/utils/canonicalizeEmail";
 import { failureResponse, successResponse } from "@/lib/api/response";
@@ -189,6 +190,11 @@ async function resolveSignupResponse(
    */
   if (existingUser && existingUser.email_confirmed_at === null) {
     const deliveryEmail = existingUser?.email ?? email;
+    // 약관 기록이 없는 기존 계정도 회원가입 폼 재제출을 통해 동의 기록을 보완한다.
+    if (existingUser.id) {
+      await upsertUserAgreement(existingUser.id, "email");
+    }
+
     try {
       await issueOtpAndSendEmail({
         purpose: "signup",
@@ -212,6 +218,11 @@ async function resolveSignupResponse(
    */
   if (existingUser && existingUser.email_confirmed_at !== null) {
     const deliveryEmail = existingUser?.email ?? email;
+    // 약관 기록이 없는 기존 계정도 회원가입 폼 재제출을 통해 동의 기록을 보완한다.
+    if (existingUser.id) {
+      await upsertUserAgreement(existingUser.id, "email");
+    }
+
     try {
       await issueOtpAndSendEmail({
         purpose: "signup",
@@ -253,15 +264,21 @@ async function resolveSignupResponse(
    * 발송되어 중복 전송이 발생할 수 있으므로, 설정 전제를 유지해야 한다.
    * 설정 변경 시 signup 메일 발송 회귀 테스트를 반드시 수행한다.
    */
-  const { error: createUserError } = await adminClient.auth.admin.createUser({
-    email: email, // raw email — auth.users에 사용자 입력 보존
-    password,
-    email_confirm: false,
-    user_metadata: { nickname, canonical_email: canonicalEmail }, // trigger가 profiles에 기록
-  });
+  const { data: createUserData, error: createUserError } =
+    await adminClient.auth.admin.createUser({
+      email: email, // raw email — auth.users에 사용자 입력 보존
+      password,
+      email_confirm: false,
+      user_metadata: { nickname, canonical_email: canonicalEmail }, // trigger가 profiles에 기록
+    });
 
   if (createUserError) {
     throw createUserError;
+  }
+
+  if (createUserData.user?.id) {
+    // 이메일 가입은 서버 validation을 통과한 약관 동의 사실을 user_id 기준으로 보존한다.
+    await upsertUserAgreement(createUserData.user.id, "email");
   }
 
   await issueOtpAndSendEmail({ email, purpose: "signup" });

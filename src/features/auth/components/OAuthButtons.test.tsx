@@ -28,7 +28,7 @@ describe("OAuthButtons", () => {
   });
 
   it("OAuth provider 버튼과 provider 로고를 렌더링한다", () => {
-    render(<OAuthButtons />);
+    render(<OAuthButtons intent="login" />);
 
     expect(
       screen.getByRole("button", { name: "Google 계정으로 계속하기" }),
@@ -46,7 +46,7 @@ describe("OAuthButtons", () => {
   });
 
   it("동일한 컴포넌트를 재사용 렌더링할 수 있다", () => {
-    render(<OAuthButtons />);
+    render(<OAuthButtons intent="login" />);
 
     expect(
       screen.getByRole("button", { name: "Google 계정으로 계속하기" }),
@@ -55,7 +55,7 @@ describe("OAuthButtons", () => {
 
   it("provider와 Supabase callback redirect URL로 OAuth를 시작한다", async () => {
     const user = userEvent.setup();
-    render(<OAuthButtons />);
+    render(<OAuthButtons intent="login" />);
 
     await user.click(
       screen.getByRole("button", { name: "Google 계정으로 계속하기" }),
@@ -73,9 +73,9 @@ describe("OAuthButtons", () => {
     expect(createClient).toHaveBeenCalledTimes(1);
   });
 
-  it("redirect prop을 callback URL query로 유지한다", async () => {
+  it("intent와 redirect prop을 callback URL query로 유지한다", async () => {
     const user = userEvent.setup();
-    render(<OAuthButtons redirect="/notes/today" />);
+    render(<OAuthButtons intent="signup" redirect="/notes/today" />);
 
     await user.click(
       screen.getByRole("button", { name: "Google 계정으로 계속하기" }),
@@ -96,6 +96,7 @@ describe("OAuthButtons", () => {
       },
     });
     expect(callbackUrl.pathname).toBe("/api/auth/callback");
+    expect(callbackUrl.searchParams.get("intent")).toBe("signup");
     expect(callbackUrl.searchParams.get("redirect")).toBe("/notes/today");
   });
 
@@ -105,7 +106,7 @@ describe("OAuthButtons", () => {
       error: new Error("provider is not enabled"),
     });
 
-    render(<OAuthButtons />);
+    render(<OAuthButtons intent="login" />);
 
     await user.click(
       screen.getByRole("button", { name: "Google 계정으로 계속하기" }),
@@ -126,7 +127,7 @@ describe("OAuthButtons", () => {
     const user = userEvent.setup();
     const beforeSignIn = vi.fn(() => false);
 
-    render(<OAuthButtons beforeSignIn={beforeSignIn} />);
+    render(<OAuthButtons intent="signup" beforeSignIn={beforeSignIn} />);
 
     await user.click(
       screen.getByRole("button", { name: "Google 계정으로 계속하기" }),
@@ -137,5 +138,21 @@ describe("OAuthButtons", () => {
     expect(
       screen.getByRole("button", { name: "Google 계정으로 계속하기" }),
     ).toBeInTheDocument();
+  });
+
+  it("beforeSignIn이 resolve된 뒤 OAuth 로그인을 시작한다", async () => {
+    const user = userEvent.setup();
+    const beforeSignIn = vi.fn().mockResolvedValue(true);
+
+    render(<OAuthButtons intent="signup" beforeSignIn={beforeSignIn} />);
+
+    await user.click(
+      screen.getByRole("button", { name: "Google 계정으로 계속하기" }),
+    );
+
+    await waitFor(() => {
+      expect(beforeSignIn).toHaveBeenCalledTimes(1);
+      expect(signInWithOAuthMock).toHaveBeenCalledTimes(1);
+    });
   });
 });

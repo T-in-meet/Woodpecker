@@ -9,6 +9,7 @@ import { parseAuthJsonRequestBody } from "@/features/auth/lib/parseAuthJsonReque
 import { createClient } from "@/lib/supabase/server";
 
 export const mockSignIn = vi.fn();
+export const mockSignOut = vi.fn();
 
 /**
  * 로그인 API 테스트에서 공통으로 사용하는 Supabase auth mock을 연결한다.
@@ -19,7 +20,7 @@ export const mockSignIn = vi.fn();
  */
 export function setupLoginApiMocks() {
   vi.mocked(createClient).mockResolvedValue({
-    auth: { signInWithPassword: mockSignIn },
+    auth: { signInWithPassword: mockSignIn, signOut: mockSignOut },
   } as never);
 }
 
@@ -32,6 +33,7 @@ export function setupLoginApiMocks() {
  */
 export function resetLoginApiMocks() {
   mockSignIn.mockReset();
+  mockSignOut.mockReset();
 }
 
 /**

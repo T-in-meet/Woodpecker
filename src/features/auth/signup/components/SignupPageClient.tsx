@@ -1,9 +1,20 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect } from "react";
 
+import {
+  AGREEMENT_REQUIRED_TOAST_KEY,
+  AGREEMENT_REQUIRED_TOAST_MESSAGE,
+} from "@/features/auth/constants/agreementRequired";
+import {
+  OAUTH_CALLBACK_ERROR_PARAM,
+  OAUTH_CALLBACK_ERROR_TOAST_KEY,
+  OAUTH_CALLBACK_ERROR_TOAST_MESSAGE,
+} from "@/features/auth/constants/oauthCallbackError";
 import { SignupForm } from "@/features/auth/signup/components/SignupForm";
 import { useSignupMutation } from "@/features/auth/signup/hooks/useSignupMutation";
+import { showToast } from "@/lib/utils/showToast";
 
 /**
  * 회원가입 페이지의 클라이언트 컴포넌트
@@ -18,8 +29,27 @@ import { useSignupMutation } from "@/features/auth/signup/hooks/useSignupMutatio
  */
 export default function SignupPageClient() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const { mutateAsync, isPending } = useSignupMutation();
+
+  useEffect(() => {
+    if (searchParams.get("agreement_required") !== "1") return;
+
+    showToast(AGREEMENT_REQUIRED_TOAST_MESSAGE, {
+      variant: "destructive",
+      dedupeKey: AGREEMENT_REQUIRED_TOAST_KEY,
+    });
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!searchParams.get(OAUTH_CALLBACK_ERROR_PARAM)) return;
+
+    showToast(OAUTH_CALLBACK_ERROR_TOAST_MESSAGE, {
+      variant: "destructive",
+      dedupeKey: OAUTH_CALLBACK_ERROR_TOAST_KEY,
+    });
+  }, [searchParams]);
 
   return (
     <SignupForm

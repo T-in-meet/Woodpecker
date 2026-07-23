@@ -154,6 +154,33 @@ export type Database = {
         };
         Relationships: [];
       };
+      user_agreements: {
+        Row: {
+          created_at: string;
+          privacy_agreed_at: string;
+          source: string;
+          terms_agreed_at: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          privacy_agreed_at: string;
+          source: string;
+          terms_agreed_at: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          privacy_agreed_at?: string;
+          source?: string;
+          terms_agreed_at?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       push_subscriptions: {
         Row: {
           auth: string;

@@ -12,6 +12,11 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
+import {
+  OAUTH_CALLBACK_ERROR_REASON,
+  OAUTH_CALLBACK_ERROR_TOAST_KEY,
+  OAUTH_CALLBACK_ERROR_TOAST_MESSAGE,
+} from "@/features/auth/constants/oauthCallbackError";
 import { showToast } from "@/lib/utils/showToast";
 
 import {
@@ -115,6 +120,24 @@ describe("LoginForm 전역 에러 처리", () => {
         variant: "destructive",
         dedupeKey: "auth-unknown-error",
       });
+    });
+  });
+
+  it("OAuth callback 실패 query가 있으면 소셜 로그인 실패 toast를 표시한다", async () => {
+    setupDefaultMocks({
+      oauthError: OAUTH_CALLBACK_ERROR_REASON.EXCHANGE_FAILED,
+    });
+
+    renderLoginForm();
+
+    await waitFor(() => {
+      expect(showToast).toHaveBeenCalledWith(
+        OAUTH_CALLBACK_ERROR_TOAST_MESSAGE,
+        {
+          variant: "destructive",
+          dedupeKey: OAUTH_CALLBACK_ERROR_TOAST_KEY,
+        },
+      );
     });
   });
 });

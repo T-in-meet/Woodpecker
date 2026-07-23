@@ -22,21 +22,21 @@ const OAUTH_PROVIDERS: OAuthProviderConfig[] = [
     label: "Google",
     logoSrc: "/images/logos/google.webp",
   },
-  // {
-  //   provider: "kakao",
-  //   label: "Kakao",
-  //   logoSrc: "/images/logos/kakao.webp",
-  // },
 ];
 
 type OAuthButtonsProps = {
-  beforeSignIn?: () => boolean;
+  intent: "login" | "signup";
+  beforeSignIn?: () => boolean | Promise<boolean>;
   redirect?: string | null;
 };
 
-function buildCallbackUrl(redirect?: string | null) {
+function buildCallbackUrl(
+  intent: OAuthButtonsProps["intent"],
+  redirect?: string | null,
+) {
   // Supabase OAuth code는 앱 callback route에서 session cookie로 교환한다.
   const callbackUrl = new URL("/api/auth/callback", window.location.origin);
+  callbackUrl.searchParams.set("intent", intent);
 
   if (redirect) {
     callbackUrl.searchParams.set("redirect", redirect);
@@ -45,12 +45,16 @@ function buildCallbackUrl(redirect?: string | null) {
   return callbackUrl.toString();
 }
 
-export function OAuthButtons({ beforeSignIn, redirect }: OAuthButtonsProps) {
+export function OAuthButtons({
+  intent,
+  beforeSignIn,
+  redirect,
+}: OAuthButtonsProps) {
   const [pendingProvider, setPendingProvider] = useState<Provider | null>(null);
 
   const handleOAuthSignIn = async (provider: Provider) => {
     // 회원가입 화면에서는 약관 동의 여부를 확인한 뒤 OAuth redirect를 시작한다.
-    if (beforeSignIn && !beforeSignIn()) {
+    if (beforeSignIn && !(await beforeSignIn())) {
       return;
     }
 
@@ -60,7 +64,7 @@ export function OAuthButtons({ beforeSignIn, redirect }: OAuthButtonsProps) {
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: buildCallbackUrl(redirect),
+        redirectTo: buildCallbackUrl(intent, redirect),
       },
     });
 
