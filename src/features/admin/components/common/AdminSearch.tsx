@@ -9,6 +9,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+import { ADMIN_SELECT_DEFAULTS } from "../../constants/admin-select";
 import type { AdminSearchField, AdminSearchValue } from "../../types/search";
 
 interface AdminSearchProps<TField extends string> {
@@ -85,7 +86,7 @@ export function AdminSearch<TField extends string>({
           <SelectValue />
         </SelectTrigger>
 
-        <SelectContent>
+        <SelectContent {...ADMIN_SELECT_DEFAULTS.content}>
           {fields.map((field) => (
             <SelectItem key={field.value} value={field.value}>
               {field.label}

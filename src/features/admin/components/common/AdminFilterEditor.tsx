@@ -113,7 +113,11 @@ export function AdminFilterEditor<TField extends string>({
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
 
-      <PopoverContent align="start" className="w-80 p-0">
+      <PopoverContent
+        align="start"
+        className="w-[calc(100vw-2rem)] max-w-80 p-0"
+        collisionPadding={24}
+      >
         <div className="flex flex-col">
           {/* 현재 편집 중인 필터 이름을 표시합니다. */}
           <header className="border-b px-4 py-3">

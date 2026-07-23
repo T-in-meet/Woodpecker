@@ -17,6 +17,8 @@ import type { AdminDateRangeFilterValue } from "@/features/admin/types/filter";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils/cn";
 
+import { ADMIN_MOBILE_BREAKPOINT } from "../../constants/admin-breakpoint";
+
 interface AdminDateRangeInputProps {
   /**
    * 현재 선택된 날짜 범위입니다.
@@ -62,7 +64,7 @@ export function AdminDateRangeInput({
   className,
   disabled = false,
 }: AdminDateRangeInputProps) {
-  const isMobile = useIsMobile(640);
+  const isMobile = useIsMobile(ADMIN_MOBILE_BREAKPOINT);
   /**
    * 관리자 필터의 `null` 기반 날짜 값을
    * react-day-picker의 DateRange 타입으로 변환합니다.

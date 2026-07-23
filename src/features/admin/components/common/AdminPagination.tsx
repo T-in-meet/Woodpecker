@@ -10,7 +10,9 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { useIsMobile } from "@/hooks/use-mobile";
 
+import { ADMIN_MOBILE_BREAKPOINT } from "../../constants/admin-breakpoint";
 import { ADMIN_PAGINATION } from "../../constants/admin-pagination";
 import type { AdminPaginationProps } from "../../types/pagination";
 import { getAdminPagination } from "../../utils/admin-pagination";
@@ -35,11 +37,17 @@ export function AdminPagination({
   pageCount = ADMIN_PAGINATION.DEFAULT_PAGE_COUNT,
   onPageChange,
 }: AdminPaginationProps) {
+  const isMobile = useIsMobile(ADMIN_MOBILE_BREAKPOINT);
+
+  console.log(isMobile);
+
+  const displayPageCount = isMobile ? 3 : pageCount;
+
   const pagination = getAdminPagination({
     currentPage,
     totalCount,
     pageSize,
-    pageCount,
+    pageCount: displayPageCount,
   });
 
   /*
@@ -55,33 +63,37 @@ export function AdminPagination({
       className="flex items-center justify-center gap-1"
       aria-label="페이지 이동"
     >
-      <Button
-        type="button"
-        variant="outline"
-        size="icon"
-        title="첫 페이지"
-        aria-label="첫 페이지"
-        disabled={!pagination.hasPreviousPage}
-        onClick={() => {
-          onPageChange(pagination.firstPage);
-        }}
-      >
-        <SkipBack aria-hidden="true" />
-      </Button>
+      {!isMobile && (
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            title="첫 페이지"
+            aria-label="첫 페이지"
+            disabled={!pagination.hasPreviousPage}
+            onClick={() => {
+              onPageChange(pagination.firstPage);
+            }}
+          >
+            <SkipBack aria-hidden="true" />
+          </Button>
 
-      <Button
-        type="button"
-        variant="outline"
-        size="icon"
-        title="이전 페이지 묶음"
-        aria-label="이전 페이지 묶음"
-        disabled={!pagination.hasPreviousPageGroup}
-        onClick={() => {
-          onPageChange(pagination.previousPageGroup);
-        }}
-      >
-        <ChevronsLeft aria-hidden="true" />
-      </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            title="이전 페이지 묶음"
+            aria-label="이전 페이지 묶음"
+            disabled={!pagination.hasPreviousPageGroup}
+            onClick={() => {
+              onPageChange(pagination.previousPageGroup);
+            }}
+          >
+            <ChevronsLeft aria-hidden="true" />
+          </Button>
+        </>
+      )}
 
       <Button
         type="button"
@@ -134,33 +146,37 @@ export function AdminPagination({
         <ChevronRight aria-hidden="true" />
       </Button>
 
-      <Button
-        type="button"
-        variant="outline"
-        size="icon"
-        title="다음 페이지 묶음"
-        aria-label="다음 페이지 묶음"
-        disabled={!pagination.hasNextPageGroup}
-        onClick={() => {
-          onPageChange(pagination.nextPageGroup);
-        }}
-      >
-        <ChevronsRight aria-hidden="true" />
-      </Button>
+      {!isMobile && (
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            title="다음 페이지 묶음"
+            aria-label="다음 페이지 묶음"
+            disabled={!pagination.hasNextPageGroup}
+            onClick={() => {
+              onPageChange(pagination.nextPageGroup);
+            }}
+          >
+            <ChevronsRight aria-hidden="true" />
+          </Button>
 
-      <Button
-        type="button"
-        variant="outline"
-        size="icon"
-        title="마지막 페이지"
-        aria-label="마지막 페이지"
-        disabled={!pagination.hasNextPage}
-        onClick={() => {
-          onPageChange(pagination.lastPage);
-        }}
-      >
-        <SkipForward aria-hidden="true" />
-      </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            title="마지막 페이지"
+            aria-label="마지막 페이지"
+            disabled={!pagination.hasNextPage}
+            onClick={() => {
+              onPageChange(pagination.lastPage);
+            }}
+          >
+            <SkipForward aria-hidden="true" />
+          </Button>
+        </>
+      )}
     </nav>
   );
 }
