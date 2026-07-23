@@ -8,12 +8,17 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  createEmptyAdminAppliedFilter,
+  getAdminFilterStatusMessage,
+  getAdminFilterValidationError,
+  hasAdminFilterValue,
+} from "@/features/admin/utils/admin-filter";
 
 import type {
   AdminAppliedFilter,
   AdminFilterDefinition,
 } from "../../types/filter";
-import { getAdminFilterValidationError } from "../../utils/admin-filter";
 import { AdminFilterInputRenderer } from "./AdminFilterInputRenderer";
 
 interface AdminFilterEditorProps<TField extends string> {
@@ -67,6 +72,10 @@ export function AdminFilterEditor<TField extends string>({
 }: AdminFilterEditorProps<TField>) {
   const [validationError, setValidationError] = useState<string | null>(null);
 
+  const hasValue = value ? hasAdminFilterValue(value) : false;
+
+  const statusMessage = getAdminFilterStatusMessage(filter, value);
+
   /**
    * 현재 필터를 삭제하고 Popover를 닫습니다.
    */
@@ -92,6 +101,14 @@ export function AdminFilterEditor<TField extends string>({
     onOpenChange(false);
   }
 
+  /**
+   * 현재 필터 값을 종류에 맞는 미설정 상태로 초기화합니다.
+   */
+  function handleClear() {
+    setValidationError(null);
+    onChange(createEmptyAdminAppliedFilter(filter));
+  }
+
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
@@ -105,21 +122,40 @@ export function AdminFilterEditor<TField extends string>({
 
           {/* 필터 type에 맞는 입력 컴포넌트를 자동으로 선택합니다. */}
           <div className="px-4 py-4">
-            <AdminFilterInputRenderer
-              filter={filter}
-              value={value}
-              onChange={(nextValue) => {
-                setValidationError(null);
-                onChange(nextValue);
-              }}
-            />
-          </div>
+            <div className="space-y-3">
+              <AdminFilterInputRenderer
+                filter={filter}
+                value={value}
+                onChange={(nextValue) => {
+                  setValidationError(null);
+                  onChange(nextValue);
+                }}
+              />
 
-          {validationError && (
-            <p role="alert" className="text-sm text-destructive px-4 pb-4">
-              {validationError}
-            </p>
-          )}
+              {/* 모든 필터 입력에서 공통으로 사용하는 상태 및 초기화 영역입니다. */}
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">{statusMessage}</p>
+
+                {hasValue && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs text-muted-foreground"
+                    onClick={handleClear}
+                  >
+                    초기화
+                  </Button>
+                )}
+              </div>
+
+              {validationError && (
+                <p role="alert" className="text-sm text-destructive">
+                  {validationError}
+                </p>
+              )}
+            </div>
+          </div>
 
           {/* 삭제와 적용 동작은 모든 필터 Editor에서 공통으로 제공합니다. */}
           <footer className="flex items-center justify-between border-t px-4 py-3">

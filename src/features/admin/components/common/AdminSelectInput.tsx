@@ -1,6 +1,5 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -44,18 +43,6 @@ export function AdminSelectInput<TField extends string>({
   value,
   onChange,
 }: AdminSelectInputProps<TField>) {
-  const hasValue = Boolean(value?.value);
-
-  /**
-   * 현재 선택된 값을 제거하여 필터를 미설정 상태로 되돌립니다.
-   */
-  function handleClear() {
-    onChange({
-      field: filter.field,
-      type: "select",
-      value: "",
-    });
-  }
   /**
    * 선택된 옵션을 적용 필터 형식으로 변환해 전달합니다.
    *
@@ -86,24 +73,6 @@ export function AdminSelectInput<TField extends string>({
           ))}
         </SelectContent>
       </Select>
-
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs text-muted-foreground">
-          {hasValue ? "1개 항목이 선택되었습니다." : "선택된 항목이 없습니다."}
-        </p>
-
-        {hasValue && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-xs text-muted-foreground"
-            onClick={handleClear}
-          >
-            선택 해제
-          </Button>
-        )}
-      </div>
     </div>
   );
 }

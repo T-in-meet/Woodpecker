@@ -96,18 +96,6 @@ export function AdminDateRangeInput({
     return `${formattedFrom} ~ ${formattedTo}`;
   }, [value.from, value.to]);
 
-  const statusMessage = useMemo(() => {
-    if (value.from === null) {
-      return "선택된 날짜가 없습니다.";
-    }
-
-    if (value.to === null) {
-      return "시작일이 선택되었습니다. 종료일을 선택하세요.";
-    }
-
-    return "시작일과 종료일이 선택되었습니다.";
-  }, [value.from, value.to]);
-
   /**
    * Calendar에서 선택된 날짜 범위를 관리자 필터 값으로 변환합니다.
    */
@@ -127,77 +115,44 @@ export function AdminDateRangeInput({
     });
   };
 
-  /**
-   * 현재 선택된 날짜 범위를 모두 초기화합니다.
-   */
-  const handleClear = () => {
-    onChange({
-      from: null,
-      to: null,
-    });
-  };
-
-  const hasValue = value.from !== null || value.to !== null;
-
   return (
-    <div className={cn("space-y-2", className)}>
-      <Popover>
-        <PopoverTrigger asChild>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={disabled}
-            className={cn(
-              "w-full justify-start text-left font-normal",
-              !formattedValue && "text-muted-foreground",
-            )}
-          >
-            <CalendarDays className="mr-2 size-4 shrink-0" aria-hidden="true" />
-
-            <span className="truncate">{formattedValue ?? placeholder}</span>
-          </Button>
-        </PopoverTrigger>
-
-        <PopoverContent
-          align="start"
-          className="w-auto max-w-[calc(100vw-2rem)] overflow-x-auto p-0"
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={disabled}
+          className={cn(
+            "w-full justify-start text-left font-normal",
+            !formattedValue && "text-muted-foreground",
+          )}
         >
-          <Calendar
-            mode="range"
-            selected={selectedRange}
-            onSelect={handleSelect}
-            numberOfMonths={2}
-            locale={ko}
-            autoFocus
-            classNames={{
-              /**
-               * react-day-picker는 여러 달을 기본적으로 세로 방향으로
-               * 배치할 수 있으므로 관리자 날짜 범위에서는 좌우로 고정합니다.
-               */
-              months: "flex flex-row gap-4",
-            }}
-          />
-        </PopoverContent>
-      </Popover>
+          <CalendarDays className="mr-2 size-4 shrink-0" aria-hidden="true" />
 
-      <div className="flex min-h-8 items-center justify-between gap-3">
-        <p className="text-xs text-muted-foreground" aria-live="polite">
-          {statusMessage}
-        </p>
+          <span className="truncate">{formattedValue ?? placeholder}</span>
+        </Button>
+      </PopoverTrigger>
 
-        {hasValue && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            disabled={disabled}
-            onClick={handleClear}
-            className="h-8 shrink-0 px-2 text-xs"
-          >
-            선택 해제
-          </Button>
-        )}
-      </div>
-    </div>
+      <PopoverContent
+        align="start"
+        className="w-auto max-w-[calc(100vw-2rem)] overflow-x-auto p-0"
+      >
+        <Calendar
+          mode="range"
+          selected={selectedRange}
+          onSelect={handleSelect}
+          numberOfMonths={2}
+          locale={ko}
+          autoFocus
+          classNames={{
+            /**
+             * react-day-picker는 여러 달을 기본적으로 세로 방향으로
+             * 배치할 수 있으므로 관리자 날짜 범위에서는 좌우로 고정합니다.
+             */
+            months: "flex flex-row gap-4",
+          }}
+        />
+      </PopoverContent>
+    </Popover>
   );
 }

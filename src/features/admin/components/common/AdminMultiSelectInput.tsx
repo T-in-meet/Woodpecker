@@ -77,60 +77,51 @@ export function AdminMultiSelectInput<TField extends string>({
   }
 
   return (
-    <div className="space-y-3">
-      <Command className="rounded-md border">
-        <CommandInput
-          value={searchQuery}
-          placeholder={filter.placeholder ?? "항목을 검색하세요."}
-          onValueChange={setSearchQuery}
-        />
+    <Command className="rounded-md border">
+      <CommandInput
+        value={searchQuery}
+        placeholder={filter.placeholder ?? "항목을 검색하세요."}
+        onValueChange={setSearchQuery}
+      />
 
-        <CommandList className="max-h-64">
-          <CommandEmpty>검색 결과가 없습니다.</CommandEmpty>
+      <CommandList className="max-h-64">
+        <CommandEmpty>검색 결과가 없습니다.</CommandEmpty>
 
-          <CommandGroup>
-            {filter.options.map((option) => {
-              const isSelected = selectedValues.includes(option.value);
+        <CommandGroup>
+          {filter.options.map((option) => {
+            const isSelected = selectedValues.includes(option.value);
 
-              return (
-                <CommandItem
-                  key={option.value}
-                  value={`${option.label} ${option.value}`}
-                  aria-pressed={isSelected}
-                  onSelect={() => toggleValue(option.value)}
+            return (
+              <CommandItem
+                key={option.value}
+                value={`${option.label} ${option.value}`}
+                aria-pressed={isSelected}
+                onSelect={() => toggleValue(option.value)}
+              >
+                {/* 선택 여부를 아이콘으로 명확하게 표시합니다. */}
+                <span
+                  className={cn(
+                    "flex size-4 items-center justify-center rounded-sm border",
+                    isSelected
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-muted-foreground/40",
+                  )}
+                  aria-hidden="true"
                 >
-                  {/* 선택 여부를 아이콘으로 명확하게 표시합니다. */}
-                  <span
+                  <Check
                     className={cn(
-                      "flex size-4 items-center justify-center rounded-sm border",
-                      isSelected
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-muted-foreground/40",
+                      "size-3",
+                      isSelected ? "opacity-100" : "opacity-0",
                     )}
-                    aria-hidden="true"
-                  >
-                    <Check
-                      className={cn(
-                        "size-3",
-                        isSelected ? "opacity-100" : "opacity-0",
-                      )}
-                    />
-                  </span>
+                  />
+                </span>
 
-                  <span>{option.label}</span>
-                </CommandItem>
-              );
-            })}
-          </CommandGroup>
-        </CommandList>
-      </Command>
-
-      {/* 현재 선택된 항목 수를 간단히 확인할 수 있도록 표시합니다. */}
-      <p className="text-xs text-muted-foreground">
-        {selectedValues.length > 0
-          ? `${selectedValues.length}개 선택됨`
-          : "선택된 항목이 없습니다."}
-      </p>
-    </div>
+                <span>{option.label}</span>
+              </CommandItem>
+            );
+          })}
+        </CommandGroup>
+      </CommandList>
+    </Command>
   );
 }
