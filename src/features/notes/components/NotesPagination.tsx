@@ -127,6 +127,7 @@ function PaginationLink({
   if (disabled) {
     return (
       <span
+        {...props}
         className={cn(base, "cursor-not-allowed text-muted-foreground/40")}
         aria-disabled="true"
       >
