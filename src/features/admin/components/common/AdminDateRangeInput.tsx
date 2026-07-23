@@ -14,6 +14,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import type { AdminDateRangeFilterValue } from "@/features/admin/types/filter";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils/cn";
 
 interface AdminDateRangeInputProps {
@@ -61,6 +62,7 @@ export function AdminDateRangeInput({
   className,
   disabled = false,
 }: AdminDateRangeInputProps) {
+  const isMobile = useIsMobile(640);
   /**
    * 관리자 필터의 `null` 기반 날짜 값을
    * react-day-picker의 DateRange 타입으로 변환합니다.
@@ -125,6 +127,7 @@ export function AdminDateRangeInput({
           className={cn(
             "w-full justify-start text-left font-normal",
             !formattedValue && "text-muted-foreground",
+            className,
           )}
         >
           <CalendarDays className="mr-2 size-4 shrink-0" aria-hidden="true" />
@@ -141,15 +144,15 @@ export function AdminDateRangeInput({
           mode="range"
           selected={selectedRange}
           onSelect={handleSelect}
-          numberOfMonths={2}
+          numberOfMonths={isMobile ? 1 : 2}
           locale={ko}
           autoFocus
           classNames={{
             /**
-             * react-day-picker는 여러 달을 기본적으로 세로 방향으로
-             * 배치할 수 있으므로 관리자 날짜 범위에서는 좌우로 고정합니다.
+             * 모바일에서는 한 달만 표시하며,
+             * 넓은 화면에서 표시되는 두 달은 좌우로 배치합니다.
              */
-            months: "flex flex-row gap-4",
+            months: "flex flex-col gap-4 sm:flex-row",
           }}
         />
       </PopoverContent>
