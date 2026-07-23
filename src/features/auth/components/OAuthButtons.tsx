@@ -2,6 +2,7 @@
 
 import type { Provider } from "@supabase/supabase-js";
 import { Loader2 } from "lucide-react";
+import Image from "next/image";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -31,7 +32,6 @@ const OAUTH_PROVIDERS: OAuthProviderConfig[] = [
 type OAuthButtonsProps = {
   beforeSignIn?: () => boolean;
   redirect?: string | null;
-  mode: "login" | "signup";
 };
 
 function buildCallbackUrl(redirect?: string | null) {
@@ -105,9 +105,11 @@ export function OAuthButtons({ beforeSignIn, redirect }: OAuthButtonsProps) {
               )}
               {/* 장식 로고이므로 버튼의 접근 가능한 이름은 텍스트만 사용한다. */}
               {!isPending && (
-                <img
+                <Image
                   src={logoSrc}
                   alt=""
+                  width={18}
+                  height={18}
                   aria-hidden="true"
                   className="mr-2 h-[1.125em] w-[1.125em] object-contain"
                 />

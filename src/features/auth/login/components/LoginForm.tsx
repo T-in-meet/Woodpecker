@@ -10,7 +10,6 @@ import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { OAuthButtons } from "@/features/auth/components/OAuthButtons";
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 import {
   GLOBAL_ERROR_MESSAGES,
@@ -235,9 +234,6 @@ export function LoginForm() {
             비밀번호 찾기
           </Link>
         </div>
-
-        {/* 이메일 로그인과 동일한 redirect query를 OAuth callback까지 유지한다. */}
-        <OAuthButtons mode="login" redirect={redirectParam} />
 
         {/* 액션 영역 */}
         <div className="flex flex-col gap-5 pt-2 ">

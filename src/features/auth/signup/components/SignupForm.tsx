@@ -597,7 +597,6 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
         </div>
 
         <OAuthButtons
-          mode="signup"
           beforeSignIn={() => {
             // 이메일 가입과 동일하게 약관/개인정보 동의를 OAuth 시작 전에도 요구한다.
             if (watchedTermsOfService && watchedPrivacyPolicy) {

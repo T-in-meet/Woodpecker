@@ -27,8 +27,8 @@ describe("OAuthButtons", () => {
     signInWithOAuthMock.mockResolvedValue({ error: null });
   });
 
-  it("로그인 모드에서 OAuth provider 버튼을 렌더링한다", () => {
-    render(<OAuthButtons mode="login" />);
+  it("OAuth provider 버튼과 provider 로고를 렌더링한다", () => {
+    render(<OAuthButtons />);
 
     expect(
       screen.getByRole("button", { name: "Google 계정으로 계속하기" }),
@@ -39,21 +39,23 @@ describe("OAuthButtons", () => {
     const logo = googleButton.querySelector("img");
 
     // 로고는 시각 장식이며 버튼 이름에는 포함되지 않아야 한다.
-    expect(logo).toHaveAttribute("src", "/images/logos/google.webp");
+    expect(logo?.getAttribute("src")).toContain(
+      encodeURIComponent("/images/logos/google.webp"),
+    );
     expect(logo).toHaveAttribute("aria-hidden", "true");
   });
 
-  it("회원가입 모드에서 OAuth provider 버튼을 렌더링한다", () => {
-    render(<OAuthButtons mode="signup" />);
+  it("동일한 컴포넌트를 재사용 렌더링할 수 있다", () => {
+    render(<OAuthButtons />);
 
     expect(
       screen.getByRole("button", { name: "Google 계정으로 계속하기" }),
     ).toBeInTheDocument();
   });
 
-  it("provider와 Supabase callback redirect URL로 OAuth 로그인을 시작한다", async () => {
+  it("provider와 Supabase callback redirect URL로 OAuth를 시작한다", async () => {
     const user = userEvent.setup();
-    render(<OAuthButtons mode="login" />);
+    render(<OAuthButtons />);
 
     await user.click(
       screen.getByRole("button", { name: "Google 계정으로 계속하기" }),
@@ -73,7 +75,7 @@ describe("OAuthButtons", () => {
 
   it("redirect prop을 callback URL query로 유지한다", async () => {
     const user = userEvent.setup();
-    render(<OAuthButtons mode="login" redirect="/notes/today" />);
+    render(<OAuthButtons redirect="/notes/today" />);
 
     await user.click(
       screen.getByRole("button", { name: "Google 계정으로 계속하기" }),
@@ -103,7 +105,7 @@ describe("OAuthButtons", () => {
       error: new Error("provider is not enabled"),
     });
 
-    render(<OAuthButtons mode="login" />);
+    render(<OAuthButtons />);
 
     await user.click(
       screen.getByRole("button", { name: "Google 계정으로 계속하기" }),
@@ -124,7 +126,7 @@ describe("OAuthButtons", () => {
     const user = userEvent.setup();
     const beforeSignIn = vi.fn(() => false);
 
-    render(<OAuthButtons mode="signup" beforeSignIn={beforeSignIn} />);
+    render(<OAuthButtons beforeSignIn={beforeSignIn} />);
 
     await user.click(
       screen.getByRole("button", { name: "Google 계정으로 계속하기" }),
