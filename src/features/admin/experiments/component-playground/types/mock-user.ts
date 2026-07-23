@@ -6,9 +6,13 @@ export const MOCK_USER_ROLES = ["user", "editor", "manager", "admin"] as const;
 
 export type MockUserRole = (typeof MOCK_USER_ROLES)[number];
 
+export const MOCK_USER_GRADES = ["basic", "premium", "vip"] as const;
+
+export type MockUserGrade = (typeof MOCK_USER_GRADES)[number];
+
 /**
  * Component Playground에서 검색, 필터, 페이지네이션 동작을
- * 확인하기 위해 사용하는 Mock 사용자 타입이다.
+ * 확인하기 위해 사용하는 Mock 사용자 타입입니다.
  */
 export interface MockUser {
   id: number;
@@ -18,22 +22,27 @@ export interface MockUser {
   email: string;
 
   /**
-   * Select 필터 실험에 사용한다.
+   * Multi-select 필터 실험에 사용합니다.
    */
   status: MockUserStatus;
 
   /**
-   * Multi-select 필터 실험에 사용한다.
+   * Multi-select 필터 실험에 사용합니다.
    */
   roles: MockUserRole[];
 
   /**
-   * Number range 필터 실험에 사용한다.
+   * Select 필터 실험에 사용합니다.
+   */
+  grade: MockUserGrade;
+
+  /**
+   * Number range 필터 실험에 사용합니다.
    */
   score: number;
 
   /**
-   * Date range 필터 실험에 사용한다.
+   * Date range 필터 실험에 사용합니다.
    */
   createdAt: Date;
 }

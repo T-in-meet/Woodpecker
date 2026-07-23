@@ -26,6 +26,7 @@ import {
   COMPONENT_PLAYGROUND_SEARCH_FIELDS,
   type ComponentPlaygroundSearchField,
 } from "../constants/search";
+import { filterMockUsers } from "../utils/filter-mock-users";
 import { AdminComponentPlaygroundSection } from "./AdminComponentPlaygroundSection";
 
 const USER_STATUS_LABELS = {
@@ -66,6 +67,15 @@ export function AdminComponentPlaygroundClient() {
     useState<ComponentPlaygroundFilterField | null>(null);
 
   const [draftFilters, setDraftFilters] = useState<
+    Partial<
+      Record<
+        ComponentPlaygroundFilterField,
+        AdminAppliedFilter<ComponentPlaygroundFilterField>
+      >
+    >
+  >({});
+
+  const [appliedFilters, setAppliedFilters] = useState<
     Partial<
       Record<
         ComponentPlaygroundFilterField,
@@ -121,15 +131,77 @@ export function AdminComponentPlaygroundClient() {
 
       return nextFilters;
     });
+
+    setAppliedFilters((currentFilters) => {
+      const nextFilters = { ...currentFilters };
+
+      delete nextFilters[field];
+
+      return nextFilters;
+    });
+
+    setCurrentPage(1);
+  }
+
+  /**
+   * 현재 임시 필터 값을 실제 목록 조회 조건으로 적용합니다.
+   *
+   * 값이 설정되지 않은 필터는 적용 목록에서 제거하여
+   * 빈 필터가 조회 조건에 포함되지 않도록 합니다.
+   *
+   * @param field 적용할 필터 필드
+   */
+  function handleFilterApply(field: ComponentPlaygroundFilterField) {
+    const draftFilter = draftFilters[field];
+
+    setAppliedFilters((currentFilters) => {
+      const nextFilters = {
+        ...currentFilters,
+      };
+
+      if (!draftFilter || !hasAdminFilterValue(draftFilter)) {
+        delete nextFilters[field];
+
+        return nextFilters;
+      }
+
+      nextFilters[field] = draftFilter;
+
+      return nextFilters;
+    });
+
+    setCurrentPage(1);
+  }
+
+  /**
+   * 검색 조건을 변경하고 목록 페이지를 첫 페이지로 초기화합니다.
+   *
+   * @param value 변경된 검색 필드와 검색어
+   */
+  function handleSearchChange(
+    value: AdminSearchValue<ComponentPlaygroundSearchField>,
+  ) {
+    setSearch(value);
+    setCurrentPage(1);
   }
 
   const appliedFilterFields = selectedFilters.map((filter) => filter.field);
 
   /**
-   * 현재 페이지에 해당하는 Mock 사용자 목록입니다.
-   *
-   * 이후 검색과 필터가 추가되면 필터링된 목록을 기준으로
-   * 동일한 페이지네이션 계산을 적용할 수 있습니다.
+   * 현재 검색 조건과 적용 필터를 모두 반영한 Mock 사용자 목록입니다.
+   */
+  const filteredUsers = useMemo(
+    () =>
+      filterMockUsers({
+        users: MOCK_USERS,
+        search,
+        filters: appliedFilters,
+      }),
+    [search, appliedFilters],
+  );
+
+  /**
+   * 검색과 필터가 적용된 목록 중 현재 페이지에 표시할 사용자입니다.
    */
   const users = useMemo(() => {
     const startIndex =
@@ -137,8 +209,8 @@ export function AdminComponentPlaygroundClient() {
 
     const endIndex = startIndex + COMPONENT_PLAYGROUND_PAGINATION.PAGE_SIZE;
 
-    return MOCK_USERS.slice(startIndex, endIndex);
-  }, [currentPage]);
+    return filteredUsers.slice(startIndex, endIndex);
+  }, [currentPage, filteredUsers]);
 
   return (
     <div className="space-y-6">
@@ -157,7 +229,7 @@ export function AdminComponentPlaygroundClient() {
               <AdminSearch
                 fields={COMPONENT_PLAYGROUND_SEARCH_FIELDS}
                 value={search}
-                onChange={setSearch}
+                onChange={handleSearchChange}
                 placeholder="사용자를 검색하세요."
               />
             }
@@ -165,9 +237,10 @@ export function AdminComponentPlaygroundClient() {
               <>
                 {selectedFilters.map((filter) => {
                   const draftFilter = draftFilters[filter.field];
+                  const appliedFilter = appliedFilters[filter.field];
 
-                  const isActive = draftFilter
-                    ? hasAdminFilterValue(draftFilter)
+                  const isActive = appliedFilter
+                    ? hasAdminFilterValue(appliedFilter)
                     : false;
 
                   return (
@@ -180,9 +253,7 @@ export function AdminComponentPlaygroundClient() {
                         setEditingFilterField(open ? filter.field : null);
                       }}
                       onChange={handleDraftFilterChange}
-                      onApply={() => {
-                        console.log("필터 적용:", draftFilter);
-                      }}
+                      onApply={() => handleFilterApply(filter.field)}
                       onRemove={() => handleFilterRemove(filter.field)}
                       trigger={
                         <AdminFilterBadge
@@ -263,31 +334,42 @@ export function AdminComponentPlaygroundClient() {
             </thead>
 
             <tbody>
-              {users.map((user) => (
-                <tr key={user.id} className="border-b last:border-b-0">
-                  <td className="px-4 py-3">{user.id}</td>
+              {users.length > 0 ? (
+                users.map((user) => (
+                  <tr key={user.id} className="border-b last:border-b-0">
+                    <td className="px-4 py-3">{user.id}</td>
 
-                  <td className="px-4 py-3">{user.name}</td>
+                    <td className="px-4 py-3">{user.name}</td>
 
-                  <td className="px-4 py-3">{user.email}</td>
+                    <td className="px-4 py-3">{user.email}</td>
 
-                  <td className="px-4 py-3">
-                    {USER_STATUS_LABELS[user.status]}
-                  </td>
+                    <td className="px-4 py-3">
+                      {USER_STATUS_LABELS[user.status]}
+                    </td>
 
-                  <td className="px-4 py-3">
-                    {user.roles
-                      .map((role) => USER_ROLE_LABELS[role])
-                      .join(", ")}
-                  </td>
+                    <td className="px-4 py-3">
+                      {user.roles
+                        .map((role) => USER_ROLE_LABELS[role])
+                        .join(", ")}
+                    </td>
 
-                  <td className="px-4 py-3">{user.score}</td>
+                    <td className="px-4 py-3">{user.score}</td>
 
-                  <td className="px-4 py-3">
-                    {user.createdAt.toLocaleDateString("ko-KR")}
+                    <td className="px-4 py-3">
+                      {user.createdAt.toLocaleDateString("ko-KR")}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td
+                    colSpan={8}
+                    className="px-4 py-10 text-center text-muted-foreground"
+                  >
+                    검색 조건과 일치하는 사용자가 없습니다.
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
@@ -298,7 +380,7 @@ export function AdminComponentPlaygroundClient() {
         >
           <AdminPagination
             currentPage={currentPage}
-            totalCount={MOCK_USERS.length}
+            totalCount={filteredUsers.length}
             pageSize={COMPONENT_PLAYGROUND_PAGINATION.PAGE_SIZE}
             pageCount={COMPONENT_PLAYGROUND_PAGINATION.PAGE_COUNT}
             onPageChange={setCurrentPage}
