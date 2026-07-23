@@ -2,11 +2,26 @@
 
 import { useMemo, useState } from "react";
 
+import { AdminFilterAdd } from "@/features/admin/components/common/AdminFilterAdd";
+import { AdminFilterBadge } from "@/features/admin/components/common/AdminFilterBadge";
+import { AdminFilterEditor } from "@/features/admin/components/common/AdminFilterEditor";
+import { AdminListToolbar } from "@/features/admin/components/common/AdminListToolbar";
 import { AdminPagination } from "@/features/admin/components/common/AdminPagination";
+import { AdminSearch } from "@/features/admin/components/common/AdminSearch";
 import { AdminPageHeader } from "@/features/admin/components/layout/AdminPageHeader";
+import { AdminFilterDefinition } from "@/features/admin/types/filter";
+import type { AdminSearchValue } from "@/features/admin/types/search";
 
+import {
+  COMPONENT_PLAYGROUND_FILTERS,
+  ComponentPlaygroundFilterField,
+} from "../constants/filters";
 import { MOCK_USERS } from "../constants/mock-users";
 import { COMPONENT_PLAYGROUND_PAGINATION } from "../constants/pagination";
+import {
+  COMPONENT_PLAYGROUND_SEARCH_FIELDS,
+  type ComponentPlaygroundSearchField,
+} from "../constants/search";
 import { AdminComponentPlaygroundSection } from "./AdminComponentPlaygroundSection";
 
 const USER_STATUS_LABELS = {
@@ -24,16 +39,60 @@ const USER_ROLE_LABELS = {
 
 /**
  * 관리자 페이지에서 사용하는 공통 컴포넌트의 표시 상태와
- * 사용자 상호작용을 직접 확인하기 위한 Playground다.
+ * 사용자 상호작용을 직접 확인하기 위한 Playground입니다.
+ *
+ * 공통 컴포넌트가 실제 관리자 목록 화면에서 사용되는 형태를
+ * Mock 사용자 데이터를 통해 검증합니다.
  */
 export function AdminComponentPlaygroundClient() {
   const [currentPage, setCurrentPage] = useState(1);
 
+  const [search, setSearch] = useState<
+    AdminSearchValue<ComponentPlaygroundSearchField>
+  >({
+    field: "name",
+    query: "",
+  });
+
+  const [selectedFilters, setSelectedFilters] = useState<
+    AdminFilterDefinition<ComponentPlaygroundFilterField>[]
+  >([]);
+
+  const [editingFilterField, setEditingFilterField] =
+    useState<ComponentPlaygroundFilterField | null>(null);
+
   /**
-   * 현재 페이지에 해당하는 Mock 사용자 목록이다.
+   * 사용자가 선택한 필터를 Playground의 적용 필터 목록에 추가합니다.
+   *
+   * 이미 추가된 필터는 AdminFilterAdd에서 제외되므로
+   * 이 함수에서는 단순히 새 필터를 배열에 추가합니다.
+   *
+   * @param filter 사용자가 선택한 필터 정의
+   */
+  function handleFilterSelect(
+    filter: AdminFilterDefinition<ComponentPlaygroundFilterField>,
+  ) {
+    setSelectedFilters((currentFilters) => [...currentFilters, filter]);
+  }
+
+  /**
+   * 지정한 필터 필드를 적용 필터 목록에서 제거합니다.
+   *
+   * @param field 제거할 필터 필드
+   */
+  function handleFilterRemove(field: ComponentPlaygroundFilterField) {
+    setSelectedFilters((currentFilters) =>
+      currentFilters.filter((filter) => filter.field !== field),
+    );
+  }
+
+  const appliedFilterFields = selectedFilters.map((filter) => filter.field);
+
+  /**
+   * 현재 페이지에 해당하는 Mock 사용자 목록입니다.
    *
    * 이후 검색과 필터가 추가되면 필터링된 목록을 기준으로
-   * 동일한 페이지네이션 계산을 적용할 수 있다.
+   * 동일한 페이지네이션 계산을 적용할 수 있습니다.
    */
   const users = useMemo(() => {
     const startIndex =
@@ -52,12 +111,92 @@ export function AdminComponentPlaygroundClient() {
       />
 
       <div className="space-y-4">
+        <AdminComponentPlaygroundSection
+          title="AdminListToolbar / AdminSearch"
+          description="검색 필드 Select와 검색어 Input의 상태 변경을 확인합니다."
+        >
+          <AdminListToolbar
+            search={
+              <AdminSearch
+                fields={COMPONENT_PLAYGROUND_SEARCH_FIELDS}
+                value={search}
+                onChange={setSearch}
+                placeholder="사용자를 검색하세요."
+              />
+            }
+            filters={
+              <>
+                {selectedFilters.map((filter) => (
+                  <AdminFilterEditor
+                    key={filter.field}
+                    label={filter.label}
+                    open={editingFilterField === filter.field}
+                    onOpenChange={(open) => {
+                      setEditingFilterField(open ? filter.field : null);
+                    }}
+                    onApply={() => {
+                      console.log("필터 적용:", filter.field);
+                    }}
+                    onRemove={() => handleFilterRemove(filter.field)}
+                    trigger={
+                      <AdminFilterBadge
+                        label={filter.label}
+                        onRemove={() => handleFilterRemove(filter.field)}
+                      />
+                    }
+                  >
+                    <p className="text-sm text-muted-foreground">
+                      필터 입력 컴포넌트 추가 예정
+                    </p>
+                  </AdminFilterEditor>
+                ))}
+
+                <AdminFilterAdd
+                  filters={COMPONENT_PLAYGROUND_FILTERS}
+                  appliedFields={appliedFilterFields}
+                  onSelect={handleFilterSelect}
+                />
+              </>
+            }
+          />
+
+          {/*
+           * AdminSearch가 외부에서 상태를 제어하는 컴포넌트인지
+           * Playground에서 직접 확인하기 위한 상태 표시 영역입니다.
+           */}
+          <div className="rounded-md bg-muted p-4 text-sm">
+            <dl className="grid gap-2 sm:grid-cols-3">
+              <div className="flex gap-2">
+                <dt className="font-medium">검색 필드:</dt>
+
+                <dd>{search.field}</dd>
+              </div>
+
+              <div className="flex gap-2">
+                <dt className="font-medium">검색어:</dt>
+
+                <dd>{search.query || "-"}</dd>
+              </div>
+
+              <div className="flex gap-2">
+                <dt className="font-medium">선택 필터:</dt>
+
+                <dd>
+                  {selectedFilters.length > 0
+                    ? selectedFilters.map((filter) => filter.label).join(", ")
+                    : "-"}
+                </dd>
+              </div>
+            </dl>
+          </div>
+        </AdminComponentPlaygroundSection>
+
         {/*
          * Mock 사용자 목록은 각 실험 컴포넌트의 동작 결과를
-         * 공통으로 확인하기 위한 데이터 표시 영역이다.
+         * 공통으로 확인하기 위한 데이터 표시 영역입니다.
          *
          * 페이지네이션뿐 아니라 이후 검색과 필터 실험에서도
-         * 동일한 목록을 사용한다.
+         * 동일한 목록을 사용합니다.
          */}
         <div className="overflow-hidden rounded-md border">
           <table className="w-full text-sm">
