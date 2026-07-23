@@ -1,8 +1,11 @@
+import { DateRange } from "react-day-picker";
+
 import type {
   AdminAppliedFilter,
   AdminFilterDefinition,
   AdminNumberRangeFilterValue,
 } from "../../types/filter";
+import { AdminDateRangeInput } from "./AdminDateRangeInput";
 import { AdminMultiSelectInput } from "./AdminMultiSelectInput";
 import { AdminNumberRangeInput } from "./AdminNumberRangeInput";
 import { AdminSelectInput } from "./AdminSelectInput";
@@ -91,15 +94,41 @@ export function AdminFilterInputRenderer<TField extends string>({
       );
     }
 
-    case "date-range":
+    case "date-range": {
+      const dateRangeValue: DateRange | undefined =
+        value?.type === "date-range"
+          ? {
+              from: value.value.from ?? undefined,
+              ...(value.value.to !== null && value.value.to !== undefined
+                ? { to: value.value.to }
+                : {}),
+            }
+          : undefined;
+
+      /**
+       * Calendar에서 선택한 날짜 범위를 관리자 필터 값으로 변환합니다.
+       */
+      function handleDateRangeChange(nextValue: DateRange | undefined) {
+        onChange({
+          field: filter.field,
+          type: "date-range",
+          value: {
+            from: nextValue?.from ?? null,
+            to: nextValue?.to ?? null,
+          },
+        });
+      }
+
       return (
-        <FilterInputPlaceholder
-          label="날짜 범위 필터"
-          field={filter.field}
-          value={value}
-          onChange={onChange}
+        <AdminDateRangeInput
+          value={dateRangeValue}
+          onChange={handleDateRangeChange}
+          {...(filter.placeholder !== undefined
+            ? { placeholder: filter.placeholder }
+            : {})}
         />
       );
+    }
 
     default:
       return assertNever(filter);
