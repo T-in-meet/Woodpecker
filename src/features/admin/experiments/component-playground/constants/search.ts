@@ -1,8 +1,7 @@
+import type { AdminSearchField } from "@/features/admin/types/search";
+
 /**
- * Component Playground에서 사용할 사용자 검색 필드 목록입니다.
- *
- * 실제 관리자 사용자 목록에서 검색 가능한 필드를 가정하여
- * 이름과 이메일 필드를 제공합니다.
+ * Component Playground 사용자 목록에서 선택할 수 있는 검색 필드입니다.
  */
 export const COMPONENT_PLAYGROUND_SEARCH_FIELDS = [
   {
@@ -13,10 +12,9 @@ export const COMPONENT_PLAYGROUND_SEARCH_FIELDS = [
     value: "email",
     label: "이메일",
   },
-] as const;
+] as const satisfies readonly AdminSearchField<string>[];
 
 /**
- * Component Playground에서 사용할 검색 필드 타입입니다.
+ * Component Playground 사용자 목록에서 최초로 선택할 검색 필드입니다.
  */
-export type ComponentPlaygroundSearchField =
-  (typeof COMPONENT_PLAYGROUND_SEARCH_FIELDS)[number]["value"];
+export const COMPONENT_PLAYGROUND_INITIAL_SEARCH_FIELD = "name" as const;

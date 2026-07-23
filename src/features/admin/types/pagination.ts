@@ -1,8 +1,23 @@
 /**
- * 관리자 페이지네이션 계산에 필요한 입력값이다.
+ * 관리자 목록 페이지네이션 설정입니다.
+ */
+export interface AdminPaginationConfig {
+  /** 한 페이지에 표시할 데이터 개수 */
+  pageSize: number;
+
+  /**
+   * 데스크톱에서 한 번에 표시할 페이지 번호 개수
+   *
+   * @defaultValue ADMIN_PAGINATION.DEFAULT_PAGE_COUNT
+   */
+  pageCount?: number;
+}
+
+/**
+ * 관리자 페이지네이션 계산에 필요한 입력값입니다.
  */
 export interface GetAdminPaginationParams {
-  /** 현재 페이지 번호. 1부터 시작한다. */
+  /** 현재 페이지 번호. 1부터 시작합니다. */
   currentPage: number;
 
   /** 전체 데이터 개수 */
@@ -16,7 +31,7 @@ export interface GetAdminPaginationParams {
 }
 
 /**
- * 관리자 페이지네이션에서 사용할 계산 결과다.
+ * 관리자 페이지네이션에서 사용할 계산 결과입니다.
  */
 export interface AdminPagination {
   /** 범위가 보정된 현재 페이지 번호 */
@@ -60,27 +75,20 @@ export interface AdminPagination {
 }
 
 /**
- * 관리자 페이지네이션 컴포넌트의 API다.
+ * 관리자 페이지네이션 컴포넌트의 API입니다.
  */
 export interface AdminPaginationProps {
-  /** 현재 페이지 번호. 1부터 시작한다. */
+  /** 현재 페이지 번호. 1부터 시작합니다. */
   currentPage: number;
 
   /** 전체 데이터 개수 */
   totalCount: number;
 
-  /** 한 페이지에 표시할 데이터 개수 */
-  pageSize: number;
+  /** 페이지네이션 표시 설정 */
+  config: AdminPaginationConfig;
 
   /**
-   * 한 번에 표시할 페이지 번호 개수
-   *
-   * @defaultValue 10
-   */
-  pageCount?: number;
-
-  /**
-   * 페이지가 변경될 때 호출된다.
+   * 페이지가 변경될 때 호출됩니다.
    *
    * @param page 이동할 페이지 번호
    */

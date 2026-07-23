@@ -7,15 +7,7 @@ import { AdminPagination } from "@/features/admin/components/common/AdminPaginat
 import { AdminPageHeader } from "@/features/admin/components/layout/AdminPageHeader";
 import { useAdminListToolbar } from "@/features/admin/hooks/use-admin-list-toolbar";
 
-import {
-  COMPONENT_PLAYGROUND_FILTERS,
-  type ComponentPlaygroundFilterField,
-} from "../constants/filters";
-import { COMPONENT_PLAYGROUND_PAGINATION } from "../constants/pagination";
-import {
-  COMPONENT_PLAYGROUND_SEARCH_FIELDS,
-  type ComponentPlaygroundSearchField,
-} from "../constants/search";
+import { COMPONENT_PLAYGROUND_LIST_CONFIG } from "../constants/mock-user-list";
 import { useMockUsers } from "../hooks/queries/use-mock-users";
 import { AdminComponentPlaygroundSection } from "./AdminComponentPlaygroundSection";
 import { MockUserTable } from "./MockUserTable";
@@ -30,11 +22,8 @@ import { MockUserTable } from "./MockUserTable";
 export function AdminComponentPlaygroundClient() {
   const [currentPage, setCurrentPage] = useState(1);
 
-  const toolbar = useAdminListToolbar<
-    ComponentPlaygroundSearchField,
-    ComponentPlaygroundFilterField
-  >({
-    initialSearchField: "name",
+  const toolbar = useAdminListToolbar({
+    config: COMPONENT_PLAYGROUND_LIST_CONFIG,
     onApply: () => setCurrentPage(1),
   });
 
@@ -44,7 +33,7 @@ export function AdminComponentPlaygroundClient() {
    */
   const { data, isPending, isError, isFetching } = useMockUsers({
     page: currentPage,
-    pageSize: COMPONENT_PLAYGROUND_PAGINATION.PAGE_SIZE,
+    pageSize: COMPONENT_PLAYGROUND_LIST_CONFIG.pagination.pageSize,
     search: toolbar.search,
     filters: toolbar.filters,
   });
@@ -65,8 +54,7 @@ export function AdminComponentPlaygroundClient() {
           description="검색 필드 Select와 검색어 Input의 상태 변경을 확인합니다."
         >
           <AdminListToolbar
-            searchFields={COMPONENT_PLAYGROUND_SEARCH_FIELDS}
-            filterDefinitions={COMPONENT_PLAYGROUND_FILTERS}
+            config={COMPONENT_PLAYGROUND_LIST_CONFIG}
             toolbar={toolbar}
           />
 
@@ -110,8 +98,7 @@ export function AdminComponentPlaygroundClient() {
           <AdminPagination
             currentPage={currentPage}
             totalCount={totalCount}
-            pageSize={COMPONENT_PLAYGROUND_PAGINATION.PAGE_SIZE}
-            pageCount={COMPONENT_PLAYGROUND_PAGINATION.PAGE_COUNT}
+            config={COMPONENT_PLAYGROUND_LIST_CONFIG.pagination}
             onPageChange={setCurrentPage}
           />
         </AdminComponentPlaygroundSection>

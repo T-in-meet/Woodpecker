@@ -1,7 +1,7 @@
 import type { AdminAppliedFilter } from "@/features/admin/types/filter";
 import type { AdminSearchValue } from "@/features/admin/types/search";
 
-import type { ComponentPlaygroundFilterField } from "../constants/filters";
+import type { ComponentPlaygroundFilterField } from "../constants/filter";
 import type { ComponentPlaygroundSearchField } from "../constants/search";
 import type { MockUser } from "../types/mock-user";
 

@@ -5,19 +5,15 @@ import { AdminFilterBadge } from "@/features/admin/components/common/AdminFilter
 import { AdminFilterEditor } from "@/features/admin/components/common/AdminFilterEditor";
 import { AdminSearch } from "@/features/admin/components/common/AdminSearch";
 import type { UseAdminListToolbarResult } from "@/features/admin/hooks/use-admin-list-toolbar";
-import type { AdminFilterDefinition } from "@/features/admin/types/filter";
-import type { AdminSearchField } from "@/features/admin/types/search";
+import type { AdminListConfig } from "@/features/admin/types/list";
 import { hasAdminFilterValue } from "@/features/admin/utils/admin-filter";
 
 interface AdminListToolbarProps<
   TSearchField extends string,
   TFilterField extends string,
 > {
-  /** 관리자 목록에서 선택할 수 있는 검색 필드 목록 */
-  searchFields: readonly AdminSearchField<TSearchField>[];
-
-  /** 관리자 목록에서 추가할 수 있는 필터 정의 목록 */
-  filterDefinitions: readonly AdminFilterDefinition<TFilterField>[];
+  /** 관리자 목록에서 사용할 검색, 필터 및 페이지네이션 설정 */
+  config: AdminListConfig<TSearchField, TFilterField>;
 
   /** 검색과 필터 상태 및 처리 함수 */
   toolbar: UseAdminListToolbarResult<TSearchField, TFilterField>;
@@ -32,11 +28,10 @@ interface AdminListToolbarProps<
 export function AdminListToolbar<
   TSearchField extends string,
   TFilterField extends string,
->({
-  searchFields,
-  filterDefinitions,
-  toolbar,
-}: AdminListToolbarProps<TSearchField, TFilterField>) {
+>({ config, toolbar }: AdminListToolbarProps<TSearchField, TFilterField>) {
+  const searchFields = config.search.fields;
+  const filterDefinitions = config.filters;
+
   return (
     <div className="flex flex-col gap-3">
       <AdminSearch

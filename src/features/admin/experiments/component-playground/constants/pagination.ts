@@ -1,7 +1,9 @@
+import type { AdminPaginationConfig } from "@/features/admin/types/pagination";
+
 /**
- * Component Playground에서 페이지네이션 동작을 확인하기 위한 설정이다.
+ * Component Playground 사용자 목록의 페이지네이션 설정입니다.
  */
 export const COMPONENT_PLAYGROUND_PAGINATION = {
-  PAGE_SIZE: 10,
-  PAGE_COUNT: 5,
-} as const;
+  pageSize: 10,
+  pageCount: 5,
+} as const satisfies AdminPaginationConfig;

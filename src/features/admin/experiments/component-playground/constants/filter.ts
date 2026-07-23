@@ -1,20 +1,7 @@
 import type { AdminFilterDefinition } from "@/features/admin/types/filter";
 
 /**
- * Component Playground에서 검증할 수 있는 필터 필드 목록입니다.
- */
-export type ComponentPlaygroundFilterField =
-  | "status"
-  | "roles"
-  | "grade"
-  | "score"
-  | "createdAt";
-
-/**
- * Component Playground에서 제공하는 관리자 사용자 필터 정의입니다.
- *
- * 현재 단계에서는 각 필터를 선택할 수 있는지만 확인하며,
- * 실제 값 입력과 목록 필터링은 이후 Editor 구현 단계에서 연결합니다.
+ * Component Playground 사용자 목록에서 제공하는 필터 정의입니다.
  */
 export const COMPONENT_PLAYGROUND_FILTERS = [
   {
@@ -96,4 +83,4 @@ export const COMPONENT_PLAYGROUND_FILTERS = [
     type: "date-range",
     placeholder: "가입일 범위를 선택하세요.",
   },
-] as const satisfies readonly AdminFilterDefinition<ComponentPlaygroundFilterField>[];
+] as const satisfies readonly AdminFilterDefinition[];

@@ -7,6 +7,7 @@ import type {
   AdminAppliedFilter,
   AdminFilterDefinition,
 } from "@/features/admin/types/filter";
+import type { AdminListConfig } from "@/features/admin/types/list";
 import type { AdminSearchValue } from "@/features/admin/types/search";
 import { hasAdminFilterValue } from "@/features/admin/utils/admin-filter";
 
@@ -17,9 +18,12 @@ export type AdminListToolbarFilters<TFilterField extends string> = Partial<
   Record<TFilterField, AdminAppliedFilter<TFilterField>>
 >;
 
-interface UseAdminListToolbarParams<TSearchField extends string> {
-  /** 최초 선택할 검색 필드 */
-  initialSearchField: TSearchField;
+interface UseAdminListToolbarParams<
+  TSearchField extends string,
+  TFilterField extends string,
+> {
+  /** 목록에서 사용할 검색, 필터 및 페이지네이션 설정 */
+  config: AdminListConfig<TSearchField, TFilterField>;
 
   /**
    * 검색 또는 필터 조건이 적용된 후 실행할 함수입니다.
@@ -89,15 +93,17 @@ export interface UseAdminListToolbarResult<
  * 관리자 목록 Toolbar의 검색 및 필터 상태를 관리합니다.
  */
 export function useAdminListToolbar<
-  TSearchField extends string,
-  TFilterField extends string,
+  const TSearchField extends string,
+  const TFilterField extends string,
 >({
-  initialSearchField,
+  config,
   onApply,
-}: UseAdminListToolbarParams<TSearchField>): UseAdminListToolbarResult<
+}: UseAdminListToolbarParams<
   TSearchField,
   TFilterField
-> {
+>): UseAdminListToolbarResult<TSearchField, TFilterField> {
+  const initialSearchField = config.search.initialField;
+
   const [draftSearch, setDraftSearch] = useState<
     AdminSearchValue<TSearchField>
   >({

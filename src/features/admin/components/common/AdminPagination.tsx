@@ -18,41 +18,44 @@ import type { AdminPaginationProps } from "../../types/pagination";
 import { getAdminPagination } from "../../utils/admin-pagination";
 
 /**
- * 관리자 목록에서 사용하는 공통 페이지네이션 컴포넌트다.
+ * 관리자 목록에서 사용하는 공통 페이지네이션 컴포넌트입니다.
  *
  * 첫 페이지, 이전 페이지 그룹, 이전 페이지, 페이지 번호,
- * 다음 페이지, 다음 페이지 그룹, 마지막 페이지 이동을 지원한다.
+ * 다음 페이지, 다음 페이지 그룹, 마지막 페이지 이동을 지원합니다.
+ *
+ * 모바일에서는 첫 페이지, 페이지 그룹, 마지막 페이지 버튼을 숨기고
+ * 표시하는 페이지 번호 개수를 줄입니다.
  *
  * @param props 관리자 페이지네이션 속성
  * @param props.currentPage 현재 페이지 번호
  * @param props.totalCount 전체 데이터 개수
- * @param props.pageSize 한 페이지에 표시할 데이터 개수
- * @param props.pageCount 한 번에 표시할 페이지 번호 개수
+ * @param props.config 페이지 크기 및 페이지 번호 표시 설정
  * @param props.onPageChange 페이지 변경 이벤트
  */
 export function AdminPagination({
   currentPage,
   totalCount,
-  pageSize,
-  pageCount = ADMIN_PAGINATION.DEFAULT_PAGE_COUNT,
+  config,
   onPageChange,
 }: AdminPaginationProps) {
   const isMobile = useIsMobile(ADMIN_MOBILE_BREAKPOINT);
 
-  console.log(isMobile);
+  const pageCount = config.pageCount ?? ADMIN_PAGINATION.DEFAULT_PAGE_COUNT;
 
-  const displayPageCount = isMobile ? 3 : pageCount;
+  const displayPageCount = isMobile
+    ? ADMIN_PAGINATION.MOBILE_PAGE_COUNT
+    : pageCount;
 
   const pagination = getAdminPagination({
     currentPage,
     totalCount,
-    pageSize,
+    pageSize: config.pageSize,
     pageCount: displayPageCount,
   });
 
-  /*
+  /**
    * 데이터가 없으면 이동할 페이지가 없으므로
-   * 페이지네이션 UI를 렌더링하지 않는다.
+   * 페이지네이션 UI를 렌더링하지 않습니다.
    */
   if (pagination.totalPages === ADMIN_PAGINATION.EMPTY_TOTAL_PAGES) {
     return null;

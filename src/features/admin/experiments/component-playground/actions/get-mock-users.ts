@@ -2,19 +2,19 @@
 
 import type { AdminAppliedFilter } from "@/features/admin/types/filter";
 
-import type { ComponentPlaygroundFilterField } from "../constants/filters";
 import { MOCK_USERS } from "../constants/mock-users";
+import { ComponentPlaygroundFilterField } from "../types/filter";
 import type {
-  GetMockUsersParams,
-  GetMockUsersResult,
-} from "../types/get-mock-users";
+  MockUserListQuery,
+  MockUserListResult,
+} from "../types/mock-user-list";
 
 export async function getMockUsers({
   page,
   pageSize,
   search,
   filters,
-}: GetMockUsersParams): Promise<GetMockUsersResult> {
+}: MockUserListQuery): Promise<MockUserListResult> {
   let users = [...MOCK_USERS];
 
   const normalizedQuery = search.query.trim().toLocaleLowerCase();
