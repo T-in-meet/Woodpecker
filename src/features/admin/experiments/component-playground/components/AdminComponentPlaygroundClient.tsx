@@ -42,6 +42,12 @@ const USER_ROLE_LABELS = {
   admin: "관리자",
 } as const;
 
+const USER_GRADE_LABELS = {
+  basic: "일반",
+  premium: "프리미엄",
+  vip: "VIP",
+};
+
 /**
  * 관리자 페이지에서 사용하는 공통 컴포넌트의 표시 상태와
  * 사용자 상호작용을 직접 확인하기 위한 Playground입니다.
@@ -52,7 +58,14 @@ const USER_ROLE_LABELS = {
 export function AdminComponentPlaygroundClient() {
   const [currentPage, setCurrentPage] = useState(1);
 
-  const [search, setSearch] = useState<
+  const [draftSearch, setDraftSearch] = useState<
+    AdminSearchValue<ComponentPlaygroundSearchField>
+  >({
+    field: "name",
+    query: "",
+  });
+
+  const [appliedSearch, setAppliedSearch] = useState<
     AdminSearchValue<ComponentPlaygroundSearchField>
   >({
     field: "name",
@@ -174,14 +187,18 @@ export function AdminComponentPlaygroundClient() {
   }
 
   /**
-   * 검색 조건을 변경하고 목록 페이지를 첫 페이지로 초기화합니다.
+   * 현재 입력된 검색 조건을 사용자 목록에 적용합니다.
    *
-   * @param value 변경된 검색 필드와 검색어
+   * 검색어의 앞뒤 공백을 제거하고 결과 목록을 첫 페이지부터 표시합니다.
    */
-  function handleSearchChange(
-    value: AdminSearchValue<ComponentPlaygroundSearchField>,
-  ) {
-    setSearch(value);
+  function handleSearchApply() {
+    const normalizedSearch = {
+      ...draftSearch,
+      query: draftSearch.query.trim(),
+    };
+
+    setDraftSearch(normalizedSearch);
+    setAppliedSearch(normalizedSearch);
     setCurrentPage(1);
   }
 
@@ -194,10 +211,10 @@ export function AdminComponentPlaygroundClient() {
     () =>
       filterMockUsers({
         users: MOCK_USERS,
-        search,
+        search: appliedSearch,
         filters: appliedFilters,
       }),
-    [search, appliedFilters],
+    [appliedSearch, appliedFilters],
   );
 
   /**
@@ -228,9 +245,9 @@ export function AdminComponentPlaygroundClient() {
             search={
               <AdminSearch
                 fields={COMPONENT_PLAYGROUND_SEARCH_FIELDS}
-                value={search}
-                onChange={handleSearchChange}
-                placeholder="사용자를 검색하세요."
+                value={draftSearch}
+                onChange={setDraftSearch}
+                onSearch={handleSearchApply}
               />
             }
             filters={
@@ -284,13 +301,13 @@ export function AdminComponentPlaygroundClient() {
               <div className="flex gap-2">
                 <dt className="font-medium">검색 필드:</dt>
 
-                <dd>{search.field}</dd>
+                <dd>{appliedSearch.field}</dd>
               </div>
 
               <div className="flex gap-2">
                 <dt className="font-medium">검색어:</dt>
 
-                <dd>{search.query || "-"}</dd>
+                <dd>{appliedSearch.query || "-"}</dd>
               </div>
 
               <div className="flex gap-2">
@@ -327,6 +344,8 @@ export function AdminComponentPlaygroundClient() {
 
                 <th className="px-4 py-3 text-left font-medium">역할</th>
 
+                <th className="px-4 py-3 text-left font-medium">등급</th>
+
                 <th className="px-4 py-3 text-left font-medium">점수</th>
 
                 <th className="px-4 py-3 text-left font-medium">가입일</th>
@@ -351,6 +370,10 @@ export function AdminComponentPlaygroundClient() {
                       {user.roles
                         .map((role) => USER_ROLE_LABELS[role])
                         .join(", ")}
+                    </td>
+
+                    <td className="px-4 py-3">
+                      {USER_GRADE_LABELS[user.grade]}
                     </td>
 
                     <td className="px-4 py-3">{user.score}</td>
