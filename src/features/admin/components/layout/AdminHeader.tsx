@@ -6,7 +6,7 @@ import { AdminBreadcrumbNavigation } from "./AdminBreadcrumbNavigation";
 
 export function AdminHeader() {
   return (
-    <header className="flex h-(--header-height) items-center border-b pl-5 pr-6">
+    <header className="flex items-center border-b pl-5 pr-6">
       <div className="flex items-center gap-2">
         <SidebarTrigger />
 
