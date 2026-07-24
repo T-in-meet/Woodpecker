@@ -1,8 +1,11 @@
 import type { AdminListConfig } from "@/features/admin/types/list";
 
+import { AdminBadgeConfig } from "../../types/badge";
 import type {
+  FeedbackCategory,
   FeedbackFilterField,
   FeedbackSearchField,
+  FeedbackStatus,
 } from "../types/feedback-list";
 
 /**
@@ -112,3 +115,29 @@ export const ADMIN_FEEDBACK_LIST_CONFIG = {
     pageCount: 5,
   },
 } as const satisfies AdminListConfig<FeedbackSearchField, FeedbackFilterField>;
+
+export const FEEDBACK_CATEGORY_BADGE_CONFIG = {
+  BUG: {
+    label: "버그",
+    color: "red",
+  },
+  FEATURE: {
+    label: "기능 요청",
+    color: "blue",
+  },
+  ETC: {
+    label: "기타",
+    color: "gray",
+  },
+} satisfies AdminBadgeConfig<FeedbackCategory>;
+
+export const FEEDBACK_STATUS_BADGE_CONFIG = {
+  OPEN: {
+    label: "미해결",
+    color: "yellow",
+  },
+  RESOLVED: {
+    label: "해결",
+    color: "green",
+  },
+} satisfies AdminBadgeConfig<FeedbackStatus>;

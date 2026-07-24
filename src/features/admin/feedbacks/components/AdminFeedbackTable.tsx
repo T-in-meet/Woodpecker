@@ -8,10 +8,15 @@ import {
 import { getAdminFeedbackDetailRoute } from "@/lib/constants/routes";
 import { cn } from "@/lib/utils/cn";
 
+import { AdminBadge } from "../../components/common/AdminBadge";
 import {
   FEEDBACK_CATEGORY_LABELS,
   FEEDBACK_STATUS_LABELS,
 } from "../constants/feedback-labels";
+import {
+  FEEDBACK_CATEGORY_BADGE_CONFIG,
+  FEEDBACK_STATUS_BADGE_CONFIG,
+} from "../constants/feedback-list";
 import type { AdminFeedbackListItem } from "../types/feedback-list";
 import { AdminFeedbackTableSkeleton } from "./AdminFeedbackTableSkeleton";
 
@@ -70,7 +75,7 @@ export function AdminFeedbackTable({
                   </td>
 
                   <td className="px-4 py-3 align-top">
-                    {FEEDBACK_CATEGORY_LABELS[feedback.category]}
+                    <FeedbackCategoryBadge category={feedback.category} />
                   </td>
 
                   <td className="max-w-md px-4 py-3 align-top">
@@ -126,21 +131,29 @@ export function AdminFeedbackTable({
 }
 
 /**
- * 피드백 처리 상태를 목록에서 빠르게 스캔할 수 있는 badge로 표시합니다.
+ * 피드백 처리 상태를 목록에서 빠르게 확인할 수 있는 배지로 표시합니다.
  */
 function FeedbackStatusBadge({
   status,
 }: {
   status: AdminFeedbackListItem["status"];
 }) {
-  return (
-    <Badge
-      variant={status === "OPEN" ? "default" : "secondary"}
-      className={cn(status === "RESOLVED" && "text-muted-foreground")}
-    >
-      {FEEDBACK_STATUS_LABELS[status]}
-    </Badge>
-  );
+  const badge = FEEDBACK_STATUS_BADGE_CONFIG[status];
+
+  return <AdminBadge color={badge.color}>{badge.label}</AdminBadge>;
+}
+
+/**
+ * 피드백 카테고리를 목록에서 빠르게 확인할 수 있는 배지로 표시합니다.
+ */
+function FeedbackCategoryBadge({
+  category,
+}: {
+  category: AdminFeedbackListItem["category"];
+}) {
+  const badge = FEEDBACK_CATEGORY_BADGE_CONFIG[category];
+
+  return <AdminBadge color={badge.color}>{badge.label}</AdminBadge>;
 }
 
 /**
