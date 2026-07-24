@@ -9,6 +9,7 @@ import {
   FEEDBACK_STATUS_LABELS,
 } from "../constants/feedback-labels";
 import type { AdminFeedbackDetail } from "../types/feedback-detail";
+import { AdminFeedbackImageGallery } from "./AdminFeedbackImageGallery";
 
 interface AdminFeedbackSourcePanelProps {
   /** 사용자 피드백 원문과 작성자 정보를 포함한 상세 데이터 */
@@ -77,28 +78,7 @@ export function AdminFeedbackSourcePanel({
           </div>
 
           {feedback.images.length > 0 ? (
-            <div className="space-y-3">
-              <h3 className="text-sm font-medium">사용자 첨부 이미지</h3>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {feedback.images.map((image) => (
-                  <a
-                    key={image.path}
-                    href={image.signedUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="block overflow-hidden rounded-md border bg-muted"
-                  >
-                    <Image
-                      src={image.signedUrl}
-                      alt="사용자 첨부 이미지"
-                      width={640}
-                      height={360}
-                      className="aspect-video w-full object-cover"
-                    />
-                  </a>
-                ))}
-              </div>
-            </div>
+            <AdminFeedbackImageGallery images={feedback.images} />
           ) : null}
         </CardContent>
       </Card>

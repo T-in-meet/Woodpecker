@@ -97,6 +97,30 @@ describe("CSP — buildCspEnforced", () => {
     const directives = csp.split("; ");
     expect(directives.every((d) => d.trim().length > 0)).toBe(true);
   });
+
+  it("TC-CSP-M-07.개발 환경에서는 로컬 Supabase origin을 img-src에 포함한다", () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://127.0.0.1:54321");
+
+    const csp = buildCspEnforced(NONCE);
+    const imgSrc = csp.split("; ").find((d) => d.startsWith("img-src "));
+
+    expect(imgSrc).toContain("http://127.0.0.1:54321");
+
+    vi.unstubAllEnvs();
+  });
+
+  it("TC-CSP-M-08.운영 환경에서는 로컬 Supabase origin을 img-src에 포함하지 않는다", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://127.0.0.1:54321");
+
+    const csp = buildCspEnforced(NONCE);
+    const imgSrc = csp.split("; ").find((d) => d.startsWith("img-src "));
+
+    expect(imgSrc).not.toContain("http://127.0.0.1:54321");
+
+    vi.unstubAllEnvs();
+  });
 });
 
 describe("CSP — buildCspReportOnly", () => {

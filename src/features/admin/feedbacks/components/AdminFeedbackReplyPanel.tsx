@@ -13,6 +13,8 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { AdminAlertDialog } from "@/features/admin/components/common/AdminAlertDialog";
 
+import { AdminImageLightbox } from "../../components/common/AdminImageLightbox";
+import { AdminLightboxImage } from "../../types/lightbox";
 import {
   FEEDBACK_REPLY_ALLOWED_TYPES,
   FEEDBACK_REPLY_MAX_IMAGE_COUNT,
@@ -48,8 +50,19 @@ export function AdminFeedbackReplyPanel({
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(!feedback.reply);
   const [previewImages, setPreviewImages] = useState<PreviewImage[]>([]);
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(
+    null,
+  );
   const [existingImagePaths, setExistingImagePaths] = useState(
     () => feedback.reply?.imagePaths ?? [],
+  );
+  const replyLightboxImages = useMemo<AdminLightboxImage[]>(
+    () =>
+      feedback.reply?.images.map((image, index) => ({
+        src: image.signedUrl,
+        alt: `관리자 답변 첨부 이미지 ${index + 1}`,
+      })) ?? [],
+    [feedback.reply?.images],
   );
   const saveMutation = useSaveFeedbackReply();
   const deleteMutation = useDeleteFeedbackReply();
@@ -175,6 +188,8 @@ export function AdminFeedbackReplyPanel({
       router.refresh();
     }
   }
+
+  console.log("답변", feedback);
 
   return (
     <aside className="min-w-0">
@@ -351,25 +366,33 @@ export function AdminFeedbackReplyPanel({
               </div>
 
               {feedback.reply.images.length > 0 ? (
-                <div className="grid grid-cols-2 gap-3">
-                  {feedback.reply.images.map((image) => (
-                    <a
-                      key={image.path}
-                      href={image.signedUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="block overflow-hidden rounded-md border bg-muted"
-                    >
-                      <Image
-                        src={image.signedUrl}
-                        alt="관리자 답변 첨부 이미지"
-                        width={360}
-                        height={240}
-                        className="aspect-video w-full object-cover"
-                      />
-                    </a>
-                  ))}
-                </div>
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    {feedback.reply.images.map((image, index) => (
+                      <button
+                        key={image.path}
+                        type="button"
+                        className="block overflow-hidden rounded-md border bg-muted"
+                        onClick={() => setSelectedImageIndex(index)}
+                      >
+                        <Image
+                          src={image.signedUrl}
+                          alt={`관리자 답변 첨부 이미지 ${index + 1}`}
+                          width={360}
+                          height={240}
+                          className="aspect-video w-full object-cover"
+                        />
+                      </button>
+                    ))}
+                  </div>
+
+                  <AdminImageLightbox
+                    images={replyLightboxImages}
+                    open={selectedImageIndex !== null}
+                    index={selectedImageIndex ?? 0}
+                    onClose={() => setSelectedImageIndex(null)}
+                  />
+                </>
               ) : null}
             </div>
           ) : (
@@ -380,7 +403,10 @@ export function AdminFeedbackReplyPanel({
               <Button
                 type="button"
                 className="mt-4"
-                onClick={() => setIsEditing(true)}
+                onClick={() => {
+                  setSelectedImageIndex(null);
+                  setIsEditing(true);
+                }}
               >
                 <Plus aria-hidden="true" />
                 답변 작성

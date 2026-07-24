@@ -20,6 +20,20 @@ export const CSP_REPORT_ENDPOINT_GROUP = "csp-endpoint";
 export const CSP_REPORT_PATH = "/api/csp-report";
 
 function buildCspDirectives(nonce: string): string[] {
+  const isDevelopment = process.env.NODE_ENV === "development";
+
+  /**
+   * 로컬 Supabase(Storage) 이미지는 개발 환경에서만 허용합니다.
+   *
+   * 운영 환경은 *.supabase.co만 허용하여 CSP 정책을 유지하고,
+   * 로컬 개발 시에만 Lightbox 등 일반 <img> 요청이 차단되지 않도록
+   * 개발용 Supabase origin을 img-src에 추가합니다.
+   */
+  const localSupabaseOrigin =
+    isDevelopment && process.env.NEXT_PUBLIC_SUPABASE_URL
+      ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).origin
+      : undefined;
+
   return [
     "default-src 'self'",
     "object-src 'none'",
@@ -28,16 +42,11 @@ function buildCspDirectives(nonce: string): string[] {
     "frame-src 'none'",
     "form-action 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
-    // style-src: React 19의 <style> precedence hoisting, Next.js DevOverlay,
-    //   동적 CSS-in-JS 라이브러리(toast 등), 폰트 inject 등으로 인해
-    //   런타임에 nonce 없이 <style> 태그가 head에 다수 inject된다.
-    //   현 시점에서 nonce-only 정책은 실현 불가하므로 'unsafe-inline'으로 완화한다.
-    //   XSS 방어의 핵심인 script-src는 nonce/strict-dynamic을 유지하므로
-    //   인라인 style만으로 코드 실행은 불가.
     "style-src 'self' 'unsafe-inline'",
     [
       "img-src 'self' data: blob:",
       supabaseHostname && `https://${supabaseHostname}`,
+      localSupabaseOrigin,
     ]
       .filter(Boolean)
       .join(" "),
