@@ -14,6 +14,7 @@ import {
   getAdminFilterValidationError,
   hasAdminFilterValue,
 } from "@/features/admin/utils/admin-filter";
+import { cn } from "@/lib/utils/cn";
 
 import type {
   AdminAppliedFilter,
@@ -123,7 +124,6 @@ export function AdminFilterEditor<TField extends string>({
           <header className="border-b px-4 py-3">
             <h3 className="text-sm font-semibold">{filter.label}</h3>
           </header>
-
           {/* 필터 type에 맞는 입력 컴포넌트를 자동으로 선택합니다. */}
           <div className="px-4 py-4">
             <div className="space-y-3">
@@ -134,6 +134,8 @@ export function AdminFilterEditor<TField extends string>({
                   setValidationError(null);
                   onChange(nextValue);
                 }}
+                onApply={handleApply}
+                onClear={handleClear}
               />
 
               {/* 모든 필터 입력에서 공통으로 사용하는 상태 및 초기화 영역입니다. */}
@@ -160,9 +162,13 @@ export function AdminFilterEditor<TField extends string>({
               )}
             </div>
           </div>
-
           {/* 삭제와 적용 동작은 모든 필터 Editor에서 공통으로 제공합니다. */}
-          <footer className="flex items-center justify-between border-t px-4 py-3">
+          <footer
+            className={cn(
+              "flex items-center  border-t px-4 py-3",
+              filter.type === "date-range" ? "justify-end" : "justify-between",
+            )}
+          >
             <Button
               type="button"
               variant="ghost"
@@ -172,9 +178,11 @@ export function AdminFilterEditor<TField extends string>({
               삭제
             </Button>
 
-            <Button type="button" size="sm" onClick={handleApply}>
-              적용
-            </Button>
+            {filter.type !== "date-range" && (
+              <Button type="button" size="sm" onClick={handleApply}>
+                적용
+              </Button>
+            )}
           </footer>
         </div>
       </PopoverContent>

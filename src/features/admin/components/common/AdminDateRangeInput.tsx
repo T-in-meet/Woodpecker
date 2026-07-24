@@ -48,6 +48,12 @@ interface AdminDateRangeInputProps {
    * @default false
    */
   disabled?: boolean;
+
+  /** 현재 날짜 범위 필터를 최종 적용합니다. */
+  onApply: () => void;
+
+  /** 현재 날짜 범위 필터를 삭제합니다. */
+  onClear: () => void;
 }
 
 /**
@@ -63,6 +69,8 @@ export function AdminDateRangeInput({
   placeholder = "날짜 범위를 선택하세요.",
   className,
   disabled = false,
+  onApply,
+  onClear,
 }: AdminDateRangeInputProps) {
   const isMobile = useIsMobile(ADMIN_MOBILE_BREAKPOINT);
   /**
@@ -150,13 +158,19 @@ export function AdminDateRangeInput({
           locale={ko}
           autoFocus
           classNames={{
-            /**
-             * 모바일에서는 한 달만 표시하며,
-             * 넓은 화면에서 표시되는 두 달은 좌우로 배치합니다.
-             */
             months: "flex flex-col gap-4 sm:flex-row",
           }}
         />
+
+        <div className="flex justify-end gap-2 border-t p-3">
+          <Button type="button" variant="outline" onClick={onClear}>
+            초기화
+          </Button>
+
+          <Button type="button" onClick={onApply}>
+            적용
+          </Button>
+        </div>
       </PopoverContent>
     </Popover>
   );
