@@ -9,6 +9,7 @@ import { AdminListError } from "@/features/admin/components/common/AdminListStat
 import { AdminPageHeader } from "@/features/admin/components/layout/AdminPageHeader";
 import { ROUTES } from "@/lib/constants/routes";
 
+import { AdminBreadcrumbDynamicItems } from "../../components/layout/AdminBreadcrumbDynamicItems";
 import { useFeedbackDetail } from "../hooks/use-feedback-detail";
 import { AdminFeedbackDetailSkeleton } from "./AdminFeedbackDetailSkeleton";
 import { AdminFeedbackReplyPanel } from "./AdminFeedbackReplyPanel";
@@ -28,6 +29,18 @@ export function AdminFeedbackDetailClient() {
 
   return (
     <div className="space-y-6">
+      <AdminBreadcrumbDynamicItems
+        items={
+          data
+            ? [
+                {
+                  label: data.title || "상세",
+                },
+              ]
+            : []
+        }
+        loading={isPending}
+      />
       <AdminPageHeader
         title="피드백 상세"
         description="사용자 피드백 내용을 확인하고 관리자 답변을 작성합니다."
