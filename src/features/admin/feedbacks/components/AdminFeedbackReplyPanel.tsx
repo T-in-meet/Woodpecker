@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Pencil, Plus, X } from "lucide-react";
+import { Pencil, Plus, Trash2, X } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -11,7 +11,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { AdminAlertDialog } from "@/features/admin/components/common/AdminAlertDialog";
 
+import { useDeleteFeedbackReply } from "../hooks/queries/use-delete-feedback-reply";
 import { useSaveFeedbackReply } from "../hooks/queries/use-save-feedback-reply";
 import {
   FEEDBACK_REPLY_ALLOWED_TYPES,
@@ -50,7 +52,8 @@ export function AdminFeedbackReplyPanel({
   const [existingImagePaths, setExistingImagePaths] = useState(
     () => feedback.reply?.imagePaths ?? [],
   );
-  const mutation = useSaveFeedbackReply();
+  const saveMutation = useSaveFeedbackReply();
+  const deleteMutation = useDeleteFeedbackReply();
 
   const {
     register,
@@ -99,7 +102,11 @@ export function AdminFeedbackReplyPanel({
   const imageCount = existingImagePaths.length + previewImages.length;
   const fileAccept = FEEDBACK_REPLY_ALLOWED_TYPES.join(",");
   const generalError =
-    mutation.data?.ok === false ? mutation.data.message : null;
+    saveMutation.data?.ok === false
+      ? saveMutation.data.message
+      : deleteMutation.data?.ok === false
+        ? deleteMutation.data.message
+        : null;
 
   function handleImageChange(event: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
@@ -147,13 +154,25 @@ export function AdminFeedbackReplyPanel({
     );
     previewImages.forEach((image) => formData.append("images", image.file));
 
-    const result = await mutation.mutateAsync({
+    const result = await saveMutation.mutateAsync({
       feedbackId: feedback.id,
       formData,
     });
 
     if (result.ok) {
       setIsEditing(false);
+      router.refresh();
+    }
+  }
+
+  /**
+   * 관리자 답변과 연결된 Storage 이미지를 삭제합니다.
+   */
+  async function handleReplyDelete() {
+    const result = await deleteMutation.mutateAsync(feedback.id);
+
+    if (result.ok) {
+      setIsEditing(true);
       router.refresh();
     }
   }
@@ -165,15 +184,39 @@ export function AdminFeedbackReplyPanel({
           <div className="flex items-center justify-between gap-3">
             <CardTitle>관리자 답변</CardTitle>
             {feedback.reply && !isEditing ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setIsEditing(true)}
-              >
-                <Pencil aria-hidden="true" />
-                수정
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={deleteMutation.isPending}
+                  onClick={() => setIsEditing(true)}
+                >
+                  <Pencil aria-hidden="true" />
+                  수정
+                </Button>
+
+                <AdminAlertDialog
+                  trigger={
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      disabled={deleteMutation.isPending}
+                    >
+                      <Trash2 aria-hidden="true" />
+                      삭제
+                    </Button>
+                  }
+                  title="관리자 답변을 삭제하시겠습니까?"
+                  description="삭제된 답변과 첨부 이미지는 복구할 수 없습니다. 피드백 상태는 미해결로 변경됩니다."
+                  confirmLabel="삭제"
+                  confirmVariant="destructive"
+                  reverseActions
+                  pending={deleteMutation.isPending}
+                  onConfirm={handleReplyDelete}
+                />
+              </div>
             ) : null}
           </div>
         </CardHeader>
@@ -192,7 +235,7 @@ export function AdminFeedbackReplyPanel({
                   id="reply-title"
                   maxLength={100}
                   placeholder="답변 제목"
-                  disabled={mutation.isPending}
+                  disabled={saveMutation.isPending}
                   {...register("title")}
                 />
                 {errors.title ? (
@@ -208,7 +251,7 @@ export function AdminFeedbackReplyPanel({
                   id="reply-content"
                   rows={10}
                   placeholder="사용자에게 전달할 답변을 입력하세요."
-                  disabled={mutation.isPending}
+                  disabled={saveMutation.isPending}
                   {...register("content")}
                 />
                 {errors.content ? (
@@ -232,7 +275,7 @@ export function AdminFeedbackReplyPanel({
                   accept={fileAccept}
                   multiple
                   disabled={
-                    mutation.isPending ||
+                    saveMutation.isPending ||
                     imageCount >= FEEDBACK_REPLY_MAX_IMAGE_COUNT
                   }
                   onChange={handleImageChange}
@@ -270,7 +313,7 @@ export function AdminFeedbackReplyPanel({
                   <Button
                     type="button"
                     variant="outline"
-                    disabled={mutation.isPending}
+                    disabled={saveMutation.isPending}
                     onClick={() => {
                       reset({
                         title: feedback.reply?.title ?? "",
@@ -290,8 +333,8 @@ export function AdminFeedbackReplyPanel({
                   </Button>
                 ) : null}
 
-                <Button type="submit" disabled={mutation.isPending}>
-                  {mutation.isPending ? "저장 중..." : "답변 저장"}
+                <Button type="submit" disabled={saveMutation.isPending}>
+                  {saveMutation.isPending ? "저장 중..." : "답변 저장"}
                 </Button>
               </div>
             </form>
