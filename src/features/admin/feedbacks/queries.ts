@@ -19,6 +19,11 @@ import {
   mapFeedbackRows,
 } from "./utils/feedback-query-mapper";
 import { createFeedbackSignedImages } from "./utils/feedback-reply-image";
+import {
+  applyFeedbackSort,
+  needsFeedbackItemSort,
+  sortFeedbackItems,
+} from "./utils/feedback-sort";
 import { getUserIdsForSearch } from "./utils/feedback-user-search";
 
 type FeedbackRow = {
@@ -55,6 +60,12 @@ type ReplyRow = {
   created_by: string;
   created_at: string;
   updated_at: string;
+};
+
+type ReplyAuthorProfileRow = {
+  id: string;
+  nickname: string;
+  avatar_url: string | null;
 };
 
 /**
@@ -126,6 +137,19 @@ export async function getFeedbackDetail(
   const profile = profileResult.data as ProfileRow;
   const note = noteResult.data as NoteRow | null;
   const reply = replyResult.data as ReplyRow | null;
+  const replyAuthorResult = reply
+    ? await supabase
+        .from("profiles")
+        .select("id, nickname, avatar_url")
+        .eq("id", reply.created_by)
+        .maybeSingle()
+    : { data: null, error: null };
+
+  if (replyAuthorResult.error) {
+    throw new Error("Failed to load feedback reply author.");
+  }
+
+  const replyAuthor = replyAuthorResult.data as ReplyAuthorProfileRow | null;
   const replyImages = reply
     ? await createFeedbackSignedImages("feedback_replies", reply.image_paths)
     : [];
@@ -154,6 +178,11 @@ export async function getFeedbackDetail(
           imagePaths: reply.image_paths,
           images: replyImages,
           createdBy: reply.created_by,
+          author: {
+            id: reply.created_by,
+            name: replyAuthor?.nickname ?? shortId(reply.created_by),
+            avatarUrl: replyAuthor?.avatar_url ?? null,
+          },
           createdAt: reply.created_at,
           updatedAt: reply.updated_at,
         }
@@ -193,10 +222,10 @@ export async function getFeedbacks(
     .select(
       "id, user_id, note_id, category, title, content, image_urls, status, created_at, updated_at",
       { count: "exact" },
-    )
-    .order("created_at", { ascending: false });
+    );
 
   const normalizedSearchQuery = query.search.query.trim();
+
   if (normalizedSearchQuery.length > 0) {
     const pattern = `%${escapePostgrestLikePattern(normalizedSearchQuery)}%`;
 
@@ -216,15 +245,24 @@ export async function getFeedbacks(
   // 공통 toolbar의 판별 유니온 필터를 Supabase query 조건으로 변환한다.
   feedbackQuery = applyFeedbackFilters(feedbackQuery, query.filters);
 
-  const { data, error, count } = await feedbackQuery.range(from, to);
+  // 공통 toolbar의 정렬 조건을 Supabase query에 적용한다.
+  feedbackQuery = applyFeedbackSort(feedbackQuery, query.sort);
+
+  const needsItemSort = needsFeedbackItemSort(query.sort);
+  const { data, error, count } = needsItemSort
+    ? await feedbackQuery
+    : await feedbackQuery.range(from, to);
 
   if (error) {
     throw new Error(`Failed to load feedbacks: ${error.message}`);
   }
 
   const rows = (data ?? []) as FeedbackListRow[];
-  const items = await mapFeedbackRows(rows);
-  const total = count ?? 0;
+  const mappedItems = await mapFeedbackRows(rows);
+  const items = needsItemSort
+    ? sortFeedbackItems(mappedItems, query.sort).slice(from, to + 1)
+    : mappedItems;
+  const total = count ?? rows.length;
 
   return {
     items,
@@ -235,6 +273,13 @@ export async function getFeedbacks(
       totalPages: Math.ceil(total / pageSize),
     },
   };
+}
+
+/**
+ * 프로필 정보를 찾지 못했을 때 목록/상세에서 보여줄 짧은 사용자 식별자를 만듭니다.
+ */
+function shortId(id: string) {
+  return id.slice(0, 8);
 }
 
 /**

@@ -1,23 +1,22 @@
 import Link from "next/link";
 
-import { Badge } from "@/components/ui/badge";
 import {
   AdminListEmpty,
   AdminListError,
 } from "@/features/admin/components/common/AdminListState";
 import { getAdminFeedbackDetailRoute } from "@/lib/constants/routes";
-import { cn } from "@/lib/utils/cn";
 
 import { AdminBadge } from "../../components/common/AdminBadge";
-import {
-  FEEDBACK_CATEGORY_LABELS,
-  FEEDBACK_STATUS_LABELS,
-} from "../constants/feedback-labels";
+import { AdminSortableTableHead } from "../../components/common/AdminSortableTableHead";
+import type { AdminSort } from "../../types/sort";
 import {
   FEEDBACK_CATEGORY_BADGE_CONFIG,
   FEEDBACK_STATUS_BADGE_CONFIG,
 } from "../constants/feedback-list";
-import type { AdminFeedbackListItem } from "../types/feedback-list";
+import type {
+  AdminFeedbackListItem,
+  FeedbackSortField,
+} from "../types/feedback-list";
 import { AdminFeedbackTableSkeleton } from "./AdminFeedbackTableSkeleton";
 
 interface AdminFeedbackTableProps {
@@ -29,6 +28,12 @@ interface AdminFeedbackTableProps {
 
   /** 목록 조회 실패 여부 */
   isError: boolean;
+
+  /** 현재 적용된 정렬 조건 */
+  sort: AdminSort<FeedbackSortField>;
+
+  /** 정렬 조건 변경 이벤트 */
+  onSortChange: (sort: AdminSort<FeedbackSortField>) => void;
 }
 
 /**
@@ -41,20 +46,78 @@ export function AdminFeedbackTable({
   feedbacks,
   isPending,
   isError,
+  sort,
+  onSortChange,
 }: AdminFeedbackTableProps) {
   return (
     <div className="overflow-hidden rounded-md border">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-245 text-sm">
+        <table className="w-full min-w-270 text-sm">
           <thead className="border-b bg-muted/50">
             <tr>
-              <th className="px-4 py-3 text-left font-medium">상태</th>
-              <th className="px-4 py-3 text-left font-medium">카테고리</th>
-              <th className="px-4 py-3 text-left font-medium">피드백</th>
-              <th className="px-4 py-3 text-left font-medium">사용자</th>
-              <th className="px-4 py-3 text-left font-medium">첨부</th>
-              <th className="px-4 py-3 text-left font-medium">연결 노트</th>
-              <th className="px-4 py-3 text-left font-medium">등록일</th>
+              <AdminSortableTableHead
+                field="status"
+                sort={sort}
+                onSortChange={onSortChange}
+              >
+                상태
+              </AdminSortableTableHead>
+
+              <AdminSortableTableHead
+                field="category"
+                sort={sort}
+                onSortChange={onSortChange}
+              >
+                카테고리
+              </AdminSortableTableHead>
+
+              <AdminSortableTableHead
+                field="title"
+                sort={sort}
+                onSortChange={onSortChange}
+              >
+                피드백
+              </AdminSortableTableHead>
+
+              <AdminSortableTableHead
+                field="user"
+                sort={sort}
+                onSortChange={onSortChange}
+              >
+                사용자
+              </AdminSortableTableHead>
+
+              <AdminSortableTableHead
+                field="imageCount"
+                sort={sort}
+                onSortChange={onSortChange}
+              >
+                첨부
+              </AdminSortableTableHead>
+
+              <AdminSortableTableHead
+                field="replyAuthor"
+                sort={sort}
+                onSortChange={onSortChange}
+              >
+                답변 작성자
+              </AdminSortableTableHead>
+
+              <AdminSortableTableHead
+                field="note"
+                sort={sort}
+                onSortChange={onSortChange}
+              >
+                연결 노트
+              </AdminSortableTableHead>
+
+              <AdminSortableTableHead
+                field="createdAt"
+                sort={sort}
+                onSortChange={onSortChange}
+              >
+                등록일
+              </AdminSortableTableHead>
             </tr>
           </thead>
 
@@ -63,7 +126,7 @@ export function AdminFeedbackTable({
               <AdminFeedbackTableSkeleton />
             ) : isError ? (
               <tr>
-                <td colSpan={7}>
+                <td colSpan={8}>
                   <AdminListError description="피드백 목록을 불러오지 못했습니다." />
                 </td>
               </tr>
@@ -101,6 +164,24 @@ export function AdminFeedbackTable({
                     {feedback.imageCount > 0 ? `${feedback.imageCount}개` : "-"}
                   </td>
 
+                  <td className="max-w-44 px-4 py-3 align-top">
+                    {feedback.replyAuthorLabel ? (
+                      <div className="min-w-0">
+                        <div className="font-medium">
+                          {feedback.replyAuthorLabel}
+                        </div>
+                        <div
+                          className="truncate text-xs text-muted-foreground"
+                          title={feedback.replyAuthorId ?? undefined}
+                        >
+                          {feedback.replyAuthorId}
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </td>
+
                   <td className="max-w-48 px-4 py-3 align-top">
                     {feedback.noteTitle ? (
                       <div className="truncate" title={feedback.noteTitle}>
@@ -118,7 +199,7 @@ export function AdminFeedbackTable({
               ))
             ) : (
               <tr>
-                <td colSpan={7}>
+                <td colSpan={8}>
                   <AdminListEmpty description="검색 조건과 일치하는 피드백이 없습니다." />
                 </td>
               </tr>

@@ -1,12 +1,22 @@
 import type { AdminListConfig } from "@/features/admin/types/list";
 
 import { AdminBadgeConfig } from "../../types/badge";
+import type { AdminSort } from "../../types/sort";
 import type {
   FeedbackCategory,
   FeedbackFilterField,
   FeedbackSearchField,
+  FeedbackSortField,
   FeedbackStatus,
 } from "../types/feedback-list";
+
+/**
+ * 관리자 피드백 목록의 초기 정렬 조건입니다.
+ */
+const ADMIN_FEEDBACK_INITIAL_SORT: AdminSort<FeedbackSortField> = {
+  field: "createdAt",
+  direction: "desc",
+};
 
 /**
  * 관리자 피드백 목록에서 사용하는 검색, 필터, 페이지네이션 설정입니다.
@@ -110,11 +120,17 @@ export const ADMIN_FEEDBACK_LIST_CONFIG = {
     },
   ],
 
+  initialSort: ADMIN_FEEDBACK_INITIAL_SORT,
+
   pagination: {
     pageSize: 10,
     pageCount: 5,
   },
-} as const satisfies AdminListConfig<FeedbackSearchField, FeedbackFilterField>;
+} as const satisfies AdminListConfig<
+  FeedbackSearchField,
+  FeedbackFilterField,
+  FeedbackSortField
+>;
 
 export const FEEDBACK_CATEGORY_BADGE_CONFIG = {
   BUG: {
@@ -141,3 +157,23 @@ export const FEEDBACK_STATUS_BADGE_CONFIG = {
     color: "green",
   },
 } satisfies AdminBadgeConfig<FeedbackStatus>;
+
+/**
+ * feedbacks 테이블에서 직접 정렬할 수 있는 컬럼입니다.
+ */
+type FeedbackSortColumn = "status" | "category" | "title" | "created_at";
+
+/**
+ * 관리자 피드백 정렬 필드와 feedbacks 테이블 컬럼 간의 대응 관계입니다.
+ *
+ * 사용자, 첨부 개수, 연결 노트처럼 관계 데이터 또는 계산값을 사용하는
+ * 정렬 필드는 포함하지 않습니다.
+ */
+export const ADMIN_FEEDBACK_SORT_COLUMN: Partial<
+  Record<FeedbackSortField, FeedbackSortColumn>
+> = {
+  status: "status",
+  category: "category",
+  title: "title",
+  createdAt: "created_at",
+};

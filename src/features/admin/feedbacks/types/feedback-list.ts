@@ -1,6 +1,8 @@
 import type { AdminListToolbarFilters } from "@/features/admin/hooks/use-admin-list-toolbar";
 import type { AdminSearchValue } from "@/features/admin/types/search";
 
+import type { AdminSort } from "../../types/sort";
+
 /** feedbacks.category DB 제약과 동일한 피드백 카테고리입니다. */
 export type FeedbackCategory = "BUG" | "FEATURE" | "ETC";
 
@@ -18,6 +20,17 @@ export type FeedbackFilterField =
   | "hasImages"
   | "noteLinked";
 
+/** 관리자 피드백 목록에서 정렬 가능한 필드입니다. */
+export type FeedbackSortField =
+  | "status"
+  | "category"
+  | "title"
+  | "user"
+  | "imageCount"
+  | "replyAuthor"
+  | "note"
+  | "createdAt";
+
 /**
  * 관리자 피드백 목록 Server Action에 전달하는 조회 조건입니다.
  */
@@ -33,6 +46,9 @@ export interface AdminFeedbackListQuery {
 
   /** 공통 관리자 필터 toolbar에서 적용된 필터 조건 */
   filters: AdminListToolbarFilters<FeedbackFilterField>;
+
+  /** 공통 관리자 toolbar에서 적용된 정렬 조건 */
+  sort: AdminSort<FeedbackSortField>;
 }
 
 /**
@@ -50,6 +66,12 @@ export interface AdminFeedbackListItem {
 
   /** 사용자 canonical email. 없으면 null */
   userEmail: string | null;
+
+  /** 답변을 작성한 관리자 id. 아직 답변이 없으면 null */
+  replyAuthorId: string | null;
+
+  /** 답변 작성자 닉네임 또는 fallback 식별자. 아직 답변이 없으면 null */
+  replyAuthorLabel: string | null;
 
   /** 연결된 notes.id. 연결이 없으면 null */
   noteId: string | null;

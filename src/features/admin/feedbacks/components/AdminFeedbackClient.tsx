@@ -30,6 +30,7 @@ export function AdminFeedbackClient() {
     pageSize: ADMIN_FEEDBACK_LIST_CONFIG.pagination.pageSize,
     search: toolbar.search,
     filters: toolbar.filters,
+    sort: toolbar.sort,
   });
 
   const feedbacks = data?.items ?? [];
@@ -52,6 +53,8 @@ export function AdminFeedbackClient() {
           feedbacks={feedbacks}
           isPending={isPending}
           isError={isError}
+          sort={toolbar.sort}
+          onSortChange={toolbar.handleSortChange}
         />
 
         <AdminPagination

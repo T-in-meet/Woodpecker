@@ -26,6 +26,11 @@ type FeedbackListProfileRow = {
   canonical_email: string | null;
 };
 
+type FeedbackListReplyRow = {
+  feedback_id: string;
+  created_by: string;
+};
+
 type FeedbackListNoteRow = {
   id: string;
   title: string;
@@ -42,21 +47,37 @@ export async function mapFeedbackRows(
   }
 
   const supabase = createAdminClient();
+  const feedbackIds = rows.map((row) => row.id);
   const userIds = Array.from(new Set(rows.map((row) => row.user_id)));
   const noteIds = Array.from(
     new Set(rows.flatMap((row) => (row.note_id ? [row.note_id] : []))),
   );
 
   // 현재 페이지에 표시되는 row의 참조 데이터만 조회해 목록 응답 크기를 제한한다.
-  const [profilesResult, notesResult] = await Promise.all([
+  const [repliesResult, notesResult] = await Promise.all([
     supabase
-      .from("profiles")
-      .select("id, nickname, canonical_email")
-      .in("id", userIds),
+      .from("feedback_replies")
+      .select("feedback_id, created_by")
+      .in("feedback_id", feedbackIds),
     noteIds.length > 0
       ? supabase.from("notes").select("id, title").in("id", noteIds)
       : Promise.resolve({ data: [] as FeedbackListNoteRow[], error: null }),
   ]);
+
+  if (repliesResult.error) {
+    throw new Error(
+      `Failed to load feedback replies: ${repliesResult.error.message}`,
+    );
+  }
+
+  const replies = (repliesResult.data ?? []) as FeedbackListReplyRow[];
+  const replyAuthorIds = replies.map((reply) => reply.created_by);
+  const profileIds = Array.from(new Set([...userIds, ...replyAuthorIds]));
+
+  const profilesResult = await supabase
+    .from("profiles")
+    .select("id, nickname, canonical_email")
+    .in("id", profileIds);
 
   if (profilesResult.error) {
     throw new Error(
@@ -82,9 +103,14 @@ export async function mapFeedbackRows(
       note,
     ]),
   );
+  const repliesByFeedbackId = new Map(
+    replies.map((reply) => [reply.feedback_id, reply]),
+  );
 
   return rows.map((row) => {
     const profile = profilesById.get(row.user_id);
+    const reply = repliesByFeedbackId.get(row.id);
+    const replyAuthor = reply ? profilesById.get(reply.created_by) : undefined;
     const note = row.note_id ? notesById.get(row.note_id) : undefined;
 
     return {
@@ -92,6 +118,10 @@ export async function mapFeedbackRows(
       userId: row.user_id,
       userLabel: profile?.nickname ?? shortId(row.user_id),
       userEmail: profile?.canonical_email ?? null,
+      replyAuthorId: reply?.created_by ?? null,
+      replyAuthorLabel: reply
+        ? (replyAuthor?.nickname ?? shortId(reply.created_by))
+        : null,
       noteId: row.note_id,
       noteTitle: note?.title ?? null,
       category: row.category as FeedbackCategory,

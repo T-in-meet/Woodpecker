@@ -1,12 +1,9 @@
 "use client";
 
-import { ArrowLeft } from "lucide-react";
-import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { AdminListError } from "@/features/admin/components/common/AdminListState";
-import { AdminPageHeader } from "@/features/admin/components/layout/AdminPageHeader";
 import { ROUTES } from "@/lib/constants/routes";
 
 import { AdminBreadcrumbDynamicItems } from "../../components/layout/AdminBreadcrumbDynamicItems";

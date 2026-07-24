@@ -61,6 +61,18 @@ export interface AdminFeedbackDetailReply {
   /** 답변을 작성한 관리자 auth user id */
   createdBy: string;
 
+  /** 답변 작성자 표시 정보 */
+  author: {
+    /** auth.users/profile id */
+    id: string;
+
+    /** 화면에 표시할 답변 작성자 이름 */
+    name: string;
+
+    /** 답변 작성자 avatar URL. 없으면 null */
+    avatarUrl: string | null;
+  };
+
   /** 답변 생성 시각 ISO 문자열 */
   createdAt: string;
 

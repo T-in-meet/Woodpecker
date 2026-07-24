@@ -189,8 +189,6 @@ export function AdminFeedbackReplyPanel({
     }
   }
 
-  console.log("답변", feedback);
-
   return (
     <aside className="min-w-0">
       <Card className="rounded-md lg:sticky lg:top-6">
@@ -354,11 +352,17 @@ export function AdminFeedbackReplyPanel({
             </form>
           ) : feedback.reply ? (
             <div className="space-y-5">
-              <div>
-                <h3 className="font-medium">{feedback.reply.title}</h3>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  마지막 수정 {formatDateTime(feedback.reply.updatedAt)}
-                </p>
+              <div className="space-y-3">
+                <ReplyAuthor
+                  name={feedback.reply.author.name}
+                  avatarUrl={feedback.reply.author.avatarUrl}
+                />
+                <div>
+                  <h3 className="font-medium">{feedback.reply.title}</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    마지막 수정 {formatDateTime(feedback.reply.updatedAt)}
+                  </p>
+                </div>
               </div>
 
               <div className="whitespace-pre-wrap rounded-md bg-muted/30 p-4 text-sm leading-6">
@@ -416,6 +420,40 @@ export function AdminFeedbackReplyPanel({
         </CardContent>
       </Card>
     </aside>
+  );
+}
+
+/**
+ * 답변을 작성한 관리자 정보를 표시합니다.
+ */
+function ReplyAuthor({
+  name,
+  avatarUrl,
+}: {
+  name: string;
+  avatarUrl: string | null;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      {avatarUrl ? (
+        <Image
+          src={avatarUrl}
+          alt={name}
+          width={36}
+          height={36}
+          className="size-9 rounded-full object-cover"
+        />
+      ) : (
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+          {name.charAt(0)}
+        </div>
+      )}
+
+      <div className="min-w-0">
+        <div className="text-xs text-muted-foreground">답변 작성자</div>
+        <div className="truncate text-sm font-medium">{name}</div>
+      </div>
+    </div>
   );
 }
 
