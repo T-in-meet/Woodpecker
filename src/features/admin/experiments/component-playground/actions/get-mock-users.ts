@@ -8,6 +8,7 @@ import type {
   MockUserListQuery,
   MockUserListResult,
 } from "../types/mock-user-list";
+import { sortMockUsers } from "../utils/sort-mock-users";
 
 export async function getMockUsers({
   page,
@@ -104,41 +105,7 @@ export async function getMockUsers({
     }),
   );
 
-  users.sort((left, right) => {
-    let compareResult = 0;
-
-    switch (sort.field) {
-      case "id":
-        compareResult = left.id - right.id;
-        break;
-
-      case "name":
-        compareResult = left.name.localeCompare(right.name, "ko-KR");
-        break;
-
-      case "email":
-        compareResult = left.email.localeCompare(right.email, "ko-KR");
-        break;
-
-      case "status":
-        compareResult = left.status.localeCompare(right.status, "ko-KR");
-        break;
-
-      case "grade":
-        compareResult = left.grade.localeCompare(right.grade, "ko-KR");
-        break;
-
-      case "score":
-        compareResult = left.score - right.score;
-        break;
-
-      case "createdAt":
-        compareResult = left.createdAt.getTime() - right.createdAt.getTime();
-        break;
-    }
-
-    return sort.direction === "asc" ? compareResult : -compareResult;
-  });
+  users = sortMockUsers(users, sort);
 
   const total = users.length;
   const startIndex = (page - 1) * pageSize;
