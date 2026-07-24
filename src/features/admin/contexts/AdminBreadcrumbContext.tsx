@@ -2,8 +2,9 @@
 
 import {
   createContext,
+  type Dispatch,
   type ReactNode,
-  useCallback,
+  type SetStateAction,
   useContext,
   useMemo,
   useState,
@@ -12,47 +13,46 @@ import {
 import type { AdminBreadcrumbItem } from "../types/breadcrumb";
 
 interface AdminBreadcrumbContextValue {
-  /** 현재 페이지가 정적 Breadcrumb 뒤에 추가할 동적 항목 */
+  /** 정적 Breadcrumb 뒤에 추가할 동적 항목 */
   dynamicItems: readonly AdminBreadcrumbItem[];
 
-  /** 현재 페이지의 동적 Breadcrumb 항목을 변경합니다. */
-  setDynamicItems: (items: readonly AdminBreadcrumbItem[]) => void;
-}
+  /** 동적 Breadcrumb 항목을 조회하고 있는지 여부 */
+  isDynamicItemsLoading: boolean;
 
-interface AdminBreadcrumbProviderProps {
-  /** 관리자 Breadcrumb 상태를 공유할 하위 영역 */
-  children: ReactNode;
+  /** 동적 Breadcrumb 항목을 변경합니다. */
+  setDynamicItems: Dispatch<SetStateAction<readonly AdminBreadcrumbItem[]>>;
+
+  /** 동적 Breadcrumb 로딩 상태를 변경합니다. */
+  setIsDynamicItemsLoading: Dispatch<SetStateAction<boolean>>;
 }
 
 const AdminBreadcrumbContext =
   createContext<AdminBreadcrumbContextValue | null>(null);
 
+interface AdminBreadcrumbProviderProps {
+  children: ReactNode;
+}
+
 /**
- * 관리자 페이지에서 동적으로 추가되는 Breadcrumb 항목을 관리합니다.
- *
- * 사이드바 설정을 기반으로 생성되는 정적 Breadcrumb과 별개로,
- * 상세 페이지에서 조회한 데이터의 이름과 이동 경로를 저장합니다.
+ * 관리자 페이지의 동적 Breadcrumb 상태를 제공합니다.
  */
 export function AdminBreadcrumbProvider({
   children,
 }: AdminBreadcrumbProviderProps) {
-  const [dynamicItems, setDynamicItemsState] = useState<
+  const [dynamicItems, setDynamicItems] = useState<
     readonly AdminBreadcrumbItem[]
   >([]);
 
-  const setDynamicItems = useCallback(
-    (items: readonly AdminBreadcrumbItem[]) => {
-      setDynamicItemsState(items);
-    },
-    [],
-  );
+  const [isDynamicItemsLoading, setIsDynamicItemsLoading] = useState(false);
 
   const value = useMemo(
     () => ({
       dynamicItems,
+      isDynamicItemsLoading,
       setDynamicItems,
+      setIsDynamicItemsLoading,
     }),
-    [dynamicItems, setDynamicItems],
+    [dynamicItems, isDynamicItemsLoading],
   );
 
   return (
@@ -63,9 +63,9 @@ export function AdminBreadcrumbProvider({
 }
 
 /**
- * 관리자 페이지의 동적 Breadcrumb 상태를 반환합니다.
+ * 관리자 Breadcrumb Context를 반환합니다.
  *
- * @throws AdminBreadcrumbProvider 외부에서 호출한 경우
+ * Provider 외부에서 사용하면 오류를 발생시킵니다.
  */
 export function useAdminBreadcrumb() {
   const context = useContext(AdminBreadcrumbContext);
