@@ -6,6 +6,7 @@ import { AdminBodyOverflowLock } from "@/features/admin/components/layout/AdminB
 import { AdminHeader } from "@/features/admin/components/layout/AdminHeader";
 import { AdminSidebar } from "@/features/admin/components/layout/AdminSidebar";
 import { AdminSidebarProvider } from "@/features/admin/components/layout/AdminSidebarProvider";
+import { AdminBreadcrumbProvider } from "@/features/admin/contexts/AdminBreadcrumbContext";
 
 interface Props {
   children: ReactNode;
@@ -21,13 +22,15 @@ export default function AdminLayout({ children }: Props) {
         <AdminSidebarProvider className="h-full min-h-0">
           <AdminSidebar />
 
-          <SidebarInset className="@container flex h-full min-w-0 flex-col">
-            <AdminHeader />
+          <AdminBreadcrumbProvider>
+            <SidebarInset className="@container flex h-full min-w-0 flex-col">
+              <AdminHeader />
 
-            <main className="min-h-0 min-w-0 flex-1 overflow-auto p-6">
-              {children}
-            </main>
-          </SidebarInset>
+              <main className="min-h-0 min-w-0 flex-1 overflow-auto p-6">
+                {children}
+              </main>
+            </SidebarInset>
+          </AdminBreadcrumbProvider>
         </AdminSidebarProvider>
       </div>
     </>
