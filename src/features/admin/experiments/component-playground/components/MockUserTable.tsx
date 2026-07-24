@@ -1,8 +1,14 @@
+import { AdminBadge } from "@/features/admin/components/common/AdminBadge";
 import {
   AdminListEmpty,
   AdminListError,
 } from "@/features/admin/components/common/AdminListState";
 
+import {
+  USER_GRADE_BADGE_CONFIG,
+  USER_ROLE_BADGE_CONFIG,
+  USER_STATUS_BADGE_CONFIG,
+} from "../constants/mock-user-badge";
 import type { MockUser } from "../types/mock-user";
 import { MockUserTableSkeleton } from "./MockUserTableSkeleton";
 
@@ -72,27 +78,48 @@ export function MockUserTable({
               </td>
             </tr>
           ) : users.length > 0 ? (
-            users.map((user) => (
-              <tr key={user.id} className="border-b last:border-b-0">
-                <td className="px-4 py-3">{user.id}</td>
-                <td className="px-4 py-3">{user.name}</td>
-                <td className="px-4 py-3">{user.email}</td>
+            users.map((user) => {
+              const statusBadge = USER_STATUS_BADGE_CONFIG[user.status];
+              const gradeBadge = USER_GRADE_BADGE_CONFIG[user.grade];
 
-                <td className="px-4 py-3">{USER_STATUS_LABELS[user.status]}</td>
+              return (
+                <tr key={user.id} className="border-b last:border-b-0">
+                  <td className="px-4 py-3">{user.id}</td>
+                  <td className="px-4 py-3">{user.name}</td>
+                  <td className="px-4 py-3">{user.email}</td>
 
-                <td className="px-4 py-3">
-                  {user.roles.map((role) => USER_ROLE_LABELS[role]).join(", ")}
-                </td>
+                  <td className="px-4 py-3">
+                    <AdminBadge color={statusBadge.color}>
+                      {USER_STATUS_LABELS[user.status]}
+                    </AdminBadge>
+                  </td>
 
-                <td className="px-4 py-3">{USER_GRADE_LABELS[user.grade]}</td>
+                  <td className="px-4 py-3 flex flex-col gap-2">
+                    {user.roles.map((role) => {
+                      const roleBadge = USER_ROLE_BADGE_CONFIG[role];
 
-                <td className="px-4 py-3">{user.score}</td>
+                      return (
+                        <AdminBadge key={role} color={roleBadge.color}>
+                          {USER_ROLE_LABELS[role]}
+                        </AdminBadge>
+                      );
+                    })}
+                  </td>
 
-                <td className="px-4 py-3">
-                  {new Date(user.createdAt).toLocaleDateString("ko-KR")}
-                </td>
-              </tr>
-            ))
+                  <td className="px-4 py-3">
+                    <AdminBadge color={gradeBadge.color}>
+                      {USER_GRADE_LABELS[user.grade]}
+                    </AdminBadge>
+                  </td>
+
+                  <td className="px-4 py-3">{user.score}</td>
+
+                  <td className="px-4 py-3">
+                    {new Date(user.createdAt).toLocaleDateString("ko-KR")}
+                  </td>
+                </tr>
+              );
+            })
           ) : (
             <tr>
               <td colSpan={8}>
