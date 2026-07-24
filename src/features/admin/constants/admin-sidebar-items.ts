@@ -30,7 +30,7 @@ export const ADMIN_SIDEBAR_ITEMS = [
   },
   {
     title: "사용자 피드백",
-    href: ROUTES.ADMIN.FEEDBACK,
+    href: ROUTES.ADMIN.FEEDBACKS,
     icon: MessageSquareText,
   },
   {
