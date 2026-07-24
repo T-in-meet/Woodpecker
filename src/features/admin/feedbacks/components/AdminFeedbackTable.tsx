@@ -1,8 +1,11 @@
+import Link from "next/link";
+
 import { Badge } from "@/components/ui/badge";
 import {
   AdminListEmpty,
   AdminListError,
 } from "@/features/admin/components/common/AdminListState";
+import { getAdminFeedbackDetailRoute } from "@/lib/constants/routes";
 import { cn } from "@/lib/utils/cn";
 
 import {
@@ -13,11 +16,22 @@ import type { AdminFeedbackListItem } from "../types/feedback-list";
 import { AdminFeedbackTableSkeleton } from "./AdminFeedbackTableSkeleton";
 
 interface AdminFeedbackTableProps {
+  /** 현재 페이지에 표시할 피드백 목록 */
   feedbacks: AdminFeedbackListItem[];
+
+  /** 최초 목록 조회 진행 여부 */
   isPending: boolean;
+
+  /** 목록 조회 실패 여부 */
   isError: boolean;
 }
 
+/**
+ * 관리자 피드백 목록을 테이블 형태로 표시합니다.
+ *
+ * 각 행의 제목은 상세 페이지 진입점이며, 로딩/오류/빈 결과 상태를
+ * 테이블 영역 안에서 동일한 높이와 구조로 처리합니다.
+ */
 export function AdminFeedbackTable({
   feedbacks,
   isPending,
@@ -60,7 +74,12 @@ export function AdminFeedbackTable({
                   </td>
 
                   <td className="max-w-md px-4 py-3 align-top">
-                    <div className="font-medium">{feedback.title}</div>
+                    <Link
+                      href={getAdminFeedbackDetailRoute(feedback.id)}
+                      className="font-medium underline-offset-4 hover:underline"
+                    >
+                      {feedback.title}
+                    </Link>
                     <p className="mt-1 line-clamp-2 text-muted-foreground">
                       {feedback.contentPreview}
                     </p>
@@ -106,6 +125,9 @@ export function AdminFeedbackTable({
   );
 }
 
+/**
+ * 피드백 처리 상태를 목록에서 빠르게 스캔할 수 있는 badge로 표시합니다.
+ */
 function FeedbackStatusBadge({
   status,
 }: {
@@ -121,6 +143,9 @@ function FeedbackStatusBadge({
   );
 }
 
+/**
+ * 목록 등록일을 관리자 화면 표기 형식으로 변환합니다.
+ */
 function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("ko-KR", {
     dateStyle: "medium",

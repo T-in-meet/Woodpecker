@@ -11,6 +11,12 @@ import { ADMIN_FEEDBACK_LIST_CONFIG } from "../constants/feedback-list";
 import { useFeedbacks } from "../hooks/queries/use-feedbacks";
 import { AdminFeedbackTable } from "./AdminFeedbackTable";
 
+/**
+ * 관리자 피드백 목록 페이지의 클라이언트 컨테이너입니다.
+ *
+ * 공통 관리자 toolbar 상태를 TanStack Query의 목록 조회 조건으로 연결하고,
+ * 검색/필터 적용 시 현재 페이지를 첫 페이지로 되돌립니다.
+ */
 export function AdminFeedbackClient() {
   const [currentPage, setCurrentPage] = useState(1);
 

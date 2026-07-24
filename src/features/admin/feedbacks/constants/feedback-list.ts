@@ -5,6 +5,12 @@ import type {
   FeedbackSearchField,
 } from "../types/feedback-list";
 
+/**
+ * 관리자 피드백 목록에서 사용하는 검색, 필터, 페이지네이션 설정입니다.
+ *
+ * 공통 AdminListToolbar와 AdminPagination이 이 설정을 공유하므로,
+ * 목록 조회 action의 query 타입과 항상 같은 필드 이름을 사용해야 합니다.
+ */
 export const ADMIN_FEEDBACK_LIST_CONFIG = {
   search: {
     initialField: "title",

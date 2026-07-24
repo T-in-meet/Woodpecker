@@ -40,6 +40,15 @@ type NoteRow = {
   title: string;
 };
 
+/**
+ * 관리자 피드백 목록 화면의 검색, 필터, 페이지네이션 조건에 맞는 피드백을 조회합니다.
+ *
+ * 일반 사용자 RLS 정책과 별도로 관리자 목록은 service role 조회가 필요하므로
+ * action 시작 시 관리자 권한을 먼저 확인합니다.
+ *
+ * @param query 목록 toolbar와 pagination에서 전달한 조회 조건
+ * @returns 현재 페이지의 피드백 목록과 페이지네이션 메타데이터
+ */
 export async function getFeedbacks(
   query: AdminFeedbackListQuery,
 ): Promise<AdminFeedbackListResult> {
@@ -53,6 +62,7 @@ export async function getFeedbacks(
 
   const userIds = await getUserIdsForSearch(query);
 
+  // 사용자 검색에서 매칭된 프로필이 없으면 feedbacks 조회 없이 빈 결과를 반환한다.
   if (userIds && userIds.length === 0) {
     return createEmptyResult(page, pageSize);
   }
@@ -82,6 +92,7 @@ export async function getFeedbacks(
     feedbackQuery = feedbackQuery.in("user_id", userIds);
   }
 
+  // 공통 toolbar의 판별 유니온 필터를 Supabase query 조건으로 변환한다.
   for (const filter of getAppliedFilters(query.filters)) {
     feedbackQuery = applyFeedbackFilter(feedbackQuery, filter);
   }
@@ -107,6 +118,9 @@ export async function getFeedbacks(
   };
 }
 
+/**
+ * 현재 로그인한 사용자가 관리자 목록을 조회할 수 있는지 확인합니다.
+ */
 async function assertAdmin() {
   const supabase = await createClient();
   const {
@@ -130,6 +144,12 @@ async function assertAdmin() {
   }
 }
 
+/**
+ * 사용자 검색어를 feedbacks.user_id 필터에 사용할 ID 목록으로 변환합니다.
+ *
+ * @param query 목록 조회 조건
+ * @returns 사용자 검색이 아니면 null, 사용자 검색이면 매칭 user id 목록
+ */
 async function getUserIdsForSearch({
   search,
 }: AdminFeedbackListQuery): Promise<string[] | null> {
@@ -167,6 +187,9 @@ async function getUserIdsForSearch({
   );
 }
 
+/**
+ * 공통 관리자 필터 값을 feedbacks 조회 조건으로 적용합니다.
+ */
 function applyFeedbackFilter(
   feedbackQuery: ReturnType<ReturnType<typeof createAdminClient>["from"]>,
   filter: AdminAppliedFilter<FeedbackFilterField>,
@@ -232,6 +255,9 @@ function applyFeedbackFilter(
   }
 }
 
+/**
+ * toolbar 필터 객체에서 실제 적용된 필터만 배열로 추출합니다.
+ */
 function getAppliedFilters(
   filters: AdminFeedbackListQuery["filters"],
 ): AdminAppliedFilter<FeedbackFilterField>[] {
@@ -241,6 +267,9 @@ function getAppliedFilters(
   );
 }
 
+/**
+ * feedbacks row에 현재 페이지에서 필요한 사용자/노트 표시 정보를 병합합니다.
+ */
 async function mapFeedbackRows(
   rows: FeedbackRow[],
 ): Promise<AdminFeedbackListItem[]> {
@@ -254,6 +283,7 @@ async function mapFeedbackRows(
     new Set(rows.flatMap((row) => (row.note_id ? [row.note_id] : []))),
   );
 
+  // 현재 페이지에 표시되는 row의 참조 데이터만 조회해 목록 응답 크기를 제한한다.
   const [profilesResult, notesResult] = await Promise.all([
     supabase
       .from("profiles")
@@ -308,6 +338,9 @@ async function mapFeedbackRows(
   });
 }
 
+/**
+ * 검색 결과가 없을 때 목록 응답 형태를 유지하는 빈 페이지를 생성합니다.
+ */
 function createEmptyResult(
   page: number,
   pageSize: number,
@@ -323,6 +356,9 @@ function createEmptyResult(
   };
 }
 
+/**
+ * 목록 테이블에서 표시할 본문 미리보기 문자열을 생성합니다.
+ */
 function createContentPreview(content: string) {
   const normalizedContent = content.replace(/\s+/g, " ").trim();
 
@@ -333,6 +369,9 @@ function createContentPreview(content: string) {
   return `${normalizedContent.slice(0, 80)}...`;
 }
 
+/**
+ * PostgREST ilike 패턴에서 와일드카드로 해석되는 문자를 이스케이프합니다.
+ */
 function escapeLikePattern(value: string) {
   return value
     .replaceAll("\\", "\\\\")
@@ -340,6 +379,9 @@ function escapeLikePattern(value: string) {
     .replaceAll("_", "\\_");
 }
 
+/**
+ * 날짜 범위 필터의 시작일을 해당 일자의 00:00 ISO 문자열로 변환합니다.
+ */
 function startOfDayIsoString(value: Date | string) {
   const date = new Date(value);
 
@@ -348,6 +390,9 @@ function startOfDayIsoString(value: Date | string) {
   return date.toISOString();
 }
 
+/**
+ * 날짜 범위 필터의 종료일을 다음 날 00:00 미만 조건용 ISO 문자열로 변환합니다.
+ */
 function nextDayIsoString(value: Date | string) {
   const date = new Date(value);
 
@@ -357,6 +402,9 @@ function nextDayIsoString(value: Date | string) {
   return date.toISOString();
 }
 
+/**
+ * 프로필 정보를 찾지 못했을 때 목록에서 보여줄 짧은 사용자 식별자를 만듭니다.
+ */
 function shortId(id: string) {
   return id.slice(0, 8);
 }
