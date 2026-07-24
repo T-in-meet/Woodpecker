@@ -19,10 +19,17 @@ import {
   makeLoginRequest,
   mockLoginSuccess,
   mockSignIn,
+  mockSignOut,
   resetLoginApiMocks,
   setupLoginApiMocks,
 } from "./utils/loginTestHelper";
 
+const hasUserAgreementMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/features/auth/lib/userAgreements", () => ({
+  AGREEMENT_REQUIRED_REDIRECT: "/signup?agreement_required=1",
+  hasUserAgreement: hasUserAgreementMock,
+}));
 vi.mock("@/lib/supabase/server");
 vi.mock("@/lib/utils/getClientIp", () => ({
   getClientIp: vi.fn(() => "127.0.0.1"),
@@ -34,6 +41,7 @@ describe("로그인 API 성공 흐름", () => {
     resetLoginApiMocks();
     setupLoginApiMocks();
     mockLoginSuccess();
+    hasUserAgreementMock.mockResolvedValue(true);
   });
 
   it("TC-01: 올바른 자격 증명이면 200을 반환한다", async () => {
@@ -104,5 +112,15 @@ describe("로그인 API 성공 흐름", () => {
 
     // 계정 상태를 추론할 수 있는 필드가 없어야 함
     expect(Object.keys(body.data)).toEqual(["redirectTo"]);
+  });
+
+  it("TC-09: 약관 기록이 없으면 세션을 종료하고 회원가입으로 redirect한다", async () => {
+    hasUserAgreementMock.mockResolvedValue(false);
+
+    const response = await POST(makeLoginRequest(DEFAULT_LOGIN_BODY));
+    const body = await response.json();
+
+    expect(mockSignOut).toHaveBeenCalledTimes(1);
+    expect(body.data.redirectTo).toBe("/signup?agreement_required=1");
   });
 });

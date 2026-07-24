@@ -105,9 +105,20 @@ function mockRouter() {
  * - redirect key에 대해서만 주입된 값을 반환한다
  * - 그 외 key는 null을 반환한다
  */
-function mockSearchParams(redirectQuery: string | null = null) {
+function mockSearchParams({
+  redirectQuery = null,
+  oauthError = null,
+}: {
+  redirectQuery?: string | null;
+  oauthError?: string | null;
+} = {}) {
   vi.mocked(useSearchParams).mockReturnValue({
-    get: vi.fn((key: string) => (key === "redirect" ? redirectQuery : null)),
+    get: vi.fn((key: string) => {
+      if (key === "redirect") return redirectQuery;
+      if (key === "oauth_error") return oauthError;
+
+      return null;
+    }),
   } as unknown as ReturnType<typeof useSearchParams>);
 }
 
@@ -130,14 +141,16 @@ function mockSearchParams(redirectQuery: string | null = null) {
 export function setupDefaultMocks({
   isPending = false,
   redirectQuery = null,
+  oauthError = null,
 }: {
   isPending?: boolean;
   redirectQuery?: string | null;
+  oauthError?: string | null;
 } = {}) {
   resetSharedMocks();
   mockLoginMutation(isPending);
   mockRouter();
-  mockSearchParams(redirectQuery);
+  mockSearchParams({ redirectQuery, oauthError });
 }
 
 /**
