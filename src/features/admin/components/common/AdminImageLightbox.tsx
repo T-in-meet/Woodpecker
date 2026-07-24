@@ -32,6 +32,13 @@ export function AdminImageLightbox({
   index,
   onClose,
 }: AdminImageLightboxProps) {
+  const renderControls =
+    images.length > 1
+      ? {}
+      : {
+          buttonPrev: () => null,
+          buttonNext: () => null,
+        };
   return (
     <Lightbox
       open={open}
@@ -41,6 +48,10 @@ export function AdminImageLightbox({
         src: image.src,
         alt: image.alt,
       }))}
+      carousel={{
+        finite: true,
+      }}
+      render={renderControls}
     />
   );
 }

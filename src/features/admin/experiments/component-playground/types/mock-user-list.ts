@@ -1,8 +1,10 @@
 import type { AdminSearchValue } from "@/features/admin/types/search";
+import type { AdminSort } from "@/features/admin/types/sort";
 
 import type { ComponentPlaygroundFilters } from "./filter";
 import type { MockUser } from "./mock-user";
 import type { ComponentPlaygroundSearchField } from "./search";
+import type { ComponentPlaygroundSortField } from "./sort";
 
 /**
  * Mock 사용자 목록 조회에 사용하는 조건입니다.
@@ -19,6 +21,9 @@ export interface MockUserListQuery {
 
   /** 목록에 적용된 필터 조건 */
   filters: ComponentPlaygroundFilters;
+
+  /** 목록에 적용된 정렬 조건 */
+  sort: AdminSort<ComponentPlaygroundSortField>;
 }
 
 /**

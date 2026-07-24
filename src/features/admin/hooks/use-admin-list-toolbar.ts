@@ -9,6 +9,7 @@ import type {
 } from "@/features/admin/types/filter";
 import type { AdminListConfig } from "@/features/admin/types/list";
 import type { AdminSearchValue } from "@/features/admin/types/search";
+import type { AdminSort } from "@/features/admin/types/sort";
 import { hasAdminFilterValue } from "@/features/admin/utils/admin-filter";
 
 /**
@@ -21,12 +22,13 @@ export type AdminListToolbarFilters<TFilterField extends string> = Partial<
 interface UseAdminListToolbarParams<
   TSearchField extends string,
   TFilterField extends string,
+  TSortField extends string,
 > {
-  /** 목록에서 사용할 검색, 필터 및 페이지네이션 설정 */
-  config: AdminListConfig<TSearchField, TFilterField>;
+  /** 목록에서 사용할 검색, 필터, 정렬 및 페이지네이션 설정 */
+  config: AdminListConfig<TSearchField, TFilterField, TSortField>;
 
   /**
-   * 검색 또는 필터 조건이 적용된 후 실행할 함수입니다.
+   * 검색, 필터 또는 정렬 조건이 적용된 후 실행할 함수입니다.
    *
    * 일반적으로 목록 페이지를 첫 페이지로 초기화할 때 사용합니다.
    */
@@ -39,12 +41,16 @@ interface UseAdminListToolbarParams<
 export interface UseAdminListToolbarResult<
   TSearchField extends string,
   TFilterField extends string,
+  TSortField extends string,
 > {
   /** 목록 조회에 사용할 적용된 검색 조건 */
   search: AdminSearchValue<TSearchField>;
 
   /** 목록 조회에 사용할 적용된 필터 조건 */
   filters: AdminListToolbarFilters<TFilterField>;
+
+  /** 목록 조회에 사용할 정렬 조건 */
+  sort: AdminSort<TSortField>;
 
   /** 사용자가 현재 입력 중인 검색 조건 */
   draftSearch: AdminSearchValue<TSearchField>;
@@ -87,21 +93,26 @@ export interface UseAdminListToolbarResult<
 
   /** Toolbar에서 필터 제거 */
   handleFilterRemove: (field: TFilterField) => void;
+
+  /** 목록 정렬 조건 변경 */
+  handleSortChange: (sort: AdminSort<TSortField>) => void;
 }
 
 /**
- * 관리자 목록 Toolbar의 검색 및 필터 상태를 관리합니다.
+ * 관리자 목록의 검색, 필터 및 정렬 상태를 관리합니다.
  */
 export function useAdminListToolbar<
   const TSearchField extends string,
   const TFilterField extends string,
+  const TSortField extends string,
 >({
   config,
   onApply,
 }: UseAdminListToolbarParams<
   TSearchField,
-  TFilterField
->): UseAdminListToolbarResult<TSearchField, TFilterField> {
+  TFilterField,
+  TSortField
+>): UseAdminListToolbarResult<TSearchField, TFilterField, TSortField> {
   const initialSearchField = config.search.initialField;
 
   const [draftSearch, setDraftSearch] = useState<
@@ -117,6 +128,8 @@ export function useAdminListToolbar<
     field: initialSearchField,
     query: "",
   });
+
+  const [sort, setSort] = useState<AdminSort<TSortField>>(config.initialSort);
 
   const [selectedFilters, setSelectedFilters] = useState<
     AdminFilterDefinition<TFilterField>[]
@@ -219,11 +232,20 @@ export function useAdminListToolbar<
     onApply?.();
   }
 
+  /**
+   * 목록에 적용할 정렬 조건을 변경합니다.
+   */
+  function handleSortChange(nextSort: AdminSort<TSortField>) {
+    setSort(nextSort);
+    onApply?.();
+  }
+
   const appliedFilterFields = selectedFilters.map((filter) => filter.field);
 
   return {
     search: appliedSearch,
     filters: appliedFilters,
+    sort,
 
     draftSearch,
     appliedSearch,
@@ -241,5 +263,6 @@ export function useAdminListToolbar<
     handleDraftFilterChange,
     handleFilterApply,
     handleFilterRemove,
+    handleSortChange,
   };
 }

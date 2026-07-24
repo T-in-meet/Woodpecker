@@ -17,6 +17,12 @@ interface AdminFilterInputRendererProps<TField extends string> {
 
   /** 임시 필터 값이 변경될 때 호출되는 함수 */
   onChange: (value: AdminAppliedFilter<TField>) => void;
+
+  /** 현재 날짜 범위 필터를 최종 적용합니다. */
+  onApply: () => void;
+
+  /** 현재 날짜 범위 필터를 삭제합니다. */
+  onClear: () => void;
 }
 
 /**
@@ -36,6 +42,8 @@ export function AdminFilterInputRenderer<TField extends string>({
   filter,
   value,
   onChange,
+  onApply,
+  onClear,
 }: AdminFilterInputRendererProps<TField>) {
   switch (filter.type) {
     case "select": {
@@ -111,6 +119,8 @@ export function AdminFilterInputRenderer<TField extends string>({
               value: nextValue,
             });
           }}
+          onApply={onApply}
+          onClear={onClear}
         />
       );
     }

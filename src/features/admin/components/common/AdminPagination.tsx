@@ -54,10 +54,10 @@ export function AdminPagination({
   });
 
   /**
-   * 데이터가 없으면 이동할 페이지가 없으므로
+   * 전체 페이지가 1개 이하이면 페이지 이동이 필요하지 않으므로
    * 페이지네이션 UI를 렌더링하지 않습니다.
    */
-  if (pagination.totalPages === ADMIN_PAGINATION.EMPTY_TOTAL_PAGES) {
+  if (pagination.totalPages <= 1) {
     return null;
   }
 

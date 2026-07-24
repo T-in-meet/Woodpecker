@@ -8,12 +8,14 @@ import type {
   MockUserListQuery,
   MockUserListResult,
 } from "../types/mock-user-list";
+import { sortMockUsers } from "../utils/sort-mock-users";
 
 export async function getMockUsers({
   page,
   pageSize,
   search,
   filters,
+  sort,
 }: MockUserListQuery): Promise<MockUserListResult> {
   let users = [...MOCK_USERS];
 
@@ -102,6 +104,8 @@ export async function getMockUsers({
       }
     }),
   );
+
+  users = sortMockUsers(users, sort);
 
   const total = users.length;
   const startIndex = (page - 1) * pageSize;
