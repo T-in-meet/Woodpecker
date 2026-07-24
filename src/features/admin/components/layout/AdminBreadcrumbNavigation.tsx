@@ -13,7 +13,8 @@ import { AdminBreadcrumb } from "./AdminBreadcrumb";
  */
 export function AdminBreadcrumbNavigation() {
   const pathname = usePathname();
-  const { dynamicItems, isDynamicItemsLoading } = useAdminBreadcrumb();
+  const { dynamicItems, isDynamicItemsLoading, dynamicLoadingItemCount } =
+    useAdminBreadcrumb();
 
   const staticItems = getAdminBreadcrumbItems(ADMIN_SIDEBAR_ITEMS, pathname);
 
@@ -23,5 +24,11 @@ export function AdminBreadcrumbNavigation() {
     return null;
   }
 
-  return <AdminBreadcrumb items={items} loading={isDynamicItemsLoading} />;
+  return (
+    <AdminBreadcrumb
+      items={items}
+      loading={isDynamicItemsLoading}
+      loadingItemCount={dynamicLoadingItemCount}
+    />
+  );
 }

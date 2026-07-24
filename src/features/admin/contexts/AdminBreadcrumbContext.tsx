@@ -19,11 +19,17 @@ interface AdminBreadcrumbContextValue {
   /** 동적 Breadcrumb 항목을 조회하고 있는지 여부 */
   isDynamicItemsLoading: boolean;
 
+  /** 로딩 중 표시할 동적 Breadcrumb Skeleton 항목 수 */
+  dynamicLoadingItemCount: number;
+
   /** 동적 Breadcrumb 항목을 변경합니다. */
   setDynamicItems: Dispatch<SetStateAction<readonly AdminBreadcrumbItem[]>>;
 
   /** 동적 Breadcrumb 로딩 상태를 변경합니다. */
   setIsDynamicItemsLoading: Dispatch<SetStateAction<boolean>>;
+
+  /** 로딩 중 표시할 동적 Breadcrumb Skeleton 항목 수를 변경합니다. */
+  setDynamicLoadingItemCount: Dispatch<SetStateAction<number>>;
 }
 
 const AdminBreadcrumbContext =
@@ -45,14 +51,18 @@ export function AdminBreadcrumbProvider({
 
   const [isDynamicItemsLoading, setIsDynamicItemsLoading] = useState(false);
 
-  const value = useMemo(
+  const [dynamicLoadingItemCount, setDynamicLoadingItemCount] = useState(0);
+
+  const value = useMemo<AdminBreadcrumbContextValue>(
     () => ({
       dynamicItems,
       isDynamicItemsLoading,
+      dynamicLoadingItemCount,
       setDynamicItems,
       setIsDynamicItemsLoading,
+      setDynamicLoadingItemCount,
     }),
-    [dynamicItems, isDynamicItemsLoading],
+    [dynamicItems, isDynamicItemsLoading, dynamicLoadingItemCount],
   );
 
   return (

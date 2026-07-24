@@ -18,28 +18,41 @@ interface Props {
 
   /** Breadcrumb 전체를 조회하고 있는지 여부 */
   loading?: boolean;
+
+  /** 로딩 중 표시할 동적 Breadcrumb Skeleton 항목 수 */
+  loadingItemCount?: number;
 }
 
 /**
  * 관리자 페이지의 Breadcrumb 항목을 표시합니다.
  *
- * 동적 항목을 조회하는 동안에는 전체 Breadcrumb을
- * Skeleton 형태로 표시합니다.
+ * 동적 항목을 조회하는 동안에는 정적 항목과 조회 예정인 동적 항목 수에
+ * 맞춰 전체 Breadcrumb을 Skeleton 형태로 표시합니다.
  */
-export function AdminBreadcrumb({ items, loading = false }: Props) {
+export function AdminBreadcrumb({
+  items,
+  loading = false,
+  loadingItemCount = 1,
+}: Props) {
   if (loading) {
+    const skeletonCount = items.length + loadingItemCount;
+
     return (
       <Breadcrumb>
         <BreadcrumbList>
-          <BreadcrumbItem>
-            <Skeleton className="h-4 w-16" />
-          </BreadcrumbItem>
+          {Array.from({ length: skeletonCount }).map((_, index) => {
+            const isLast = index === skeletonCount - 1;
 
-          <BreadcrumbSeparator />
+            return (
+              <div key={index} className="contents">
+                <BreadcrumbItem>
+                  <Skeleton className={index === 0 ? "h-4 w-16" : "h-4 w-24"} />
+                </BreadcrumbItem>
 
-          <BreadcrumbItem>
-            <Skeleton className="h-4 w-24" />
-          </BreadcrumbItem>
+                {!isLast && <BreadcrumbSeparator />}
+              </div>
+            );
+          })}
         </BreadcrumbList>
       </Breadcrumb>
     );
