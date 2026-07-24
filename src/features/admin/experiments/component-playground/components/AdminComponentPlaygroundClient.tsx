@@ -1,14 +1,17 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { AdminAlertDialog } from "@/features/admin/components/common/AdminAlertDialog";
+import { AdminImageLightbox } from "@/features/admin/components/common/AdminImageLightbox";
 import { AdminListToolbar } from "@/features/admin/components/common/AdminListToolbar";
 import { AdminPagination } from "@/features/admin/components/common/AdminPagination";
 import { AdminPageHeader } from "@/features/admin/components/layout/AdminPageHeader";
 import { useAdminListToolbar } from "@/features/admin/hooks/use-admin-list-toolbar";
 
+import { COMPONENT_PLAYGROUND_LIGHTBOX_IMAGES } from "../constants/lightbox-images";
 import { COMPONENT_PLAYGROUND_LIST_CONFIG } from "../constants/mock-user-list";
 import { useMockUsers } from "../hooks/queries/use-mock-users";
 import { AdminComponentPlaygroundSection } from "./AdminComponentPlaygroundSection";
@@ -23,6 +26,7 @@ import { MockUserTable } from "./MockUserTable";
  */
 export function AdminComponentPlaygroundClient() {
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
   const toolbar = useAdminListToolbar({
     config: COMPONENT_PLAYGROUND_LIST_CONFIG,
@@ -108,6 +112,41 @@ export function AdminComponentPlaygroundClient() {
         </AdminComponentPlaygroundSection>
 
         <MockUserTable users={users} isPending={isPending} isError={isError} />
+
+        <AdminComponentPlaygroundSection
+          title="이미지 Lightbox"
+          description="관리자 첨부 이미지의 확대, 슬라이드 이동, 줌 동작을 확인합니다."
+        >
+          <div className="flex flex-wrap gap-2">
+            {COMPONENT_PLAYGROUND_LIGHTBOX_IMAGES.map((image, index) => (
+              <div key={`${image.src}-${index}`} className="relative">
+                <button
+                  type="button"
+                  className="relative size-20 overflow-hidden rounded-md border cursor-pointer"
+                  onClick={() => setSelectedIndex(index)}
+                  aria-label={`${image.alt} 크게 보기`}
+                >
+                  <Image
+                    src={image.src}
+                    alt={image.alt}
+                    fill
+                    sizes="80px"
+                    className="object-cover"
+                  />
+                </button>
+
+                {/* 작성 화면이라면 이 위치에 삭제 버튼 추가 */}
+              </div>
+            ))}
+          </div>
+
+          <AdminImageLightbox
+            images={COMPONENT_PLAYGROUND_LIGHTBOX_IMAGES}
+            open={selectedIndex !== null}
+            index={selectedIndex ?? 0}
+            onClose={() => setSelectedIndex(null)}
+          />
+        </AdminComponentPlaygroundSection>
 
         <AdminComponentPlaygroundSection
           title="AdminPagination"
