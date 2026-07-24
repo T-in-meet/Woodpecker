@@ -19,7 +19,7 @@ export const ROUTES = {
 
     USERS: "/admin/users",
 
-    FEEDBACK: "/admin/feedback",
+    FEEDBACKS: "/admin/feedbacks",
 
     FEATURES: "/admin/features",
 

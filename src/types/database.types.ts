@@ -34,6 +34,53 @@ export type Database = {
   };
   public: {
     Tables: {
+      feedbacks: {
+        Row: {
+          category: string;
+          content: string;
+          created_at: string;
+          id: string;
+          image_urls: string[];
+          note_id: string | null;
+          status: string;
+          title: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          category: string;
+          content: string;
+          created_at?: string;
+          id?: string;
+          image_urls?: string[];
+          note_id?: string | null;
+          status?: string;
+          title: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          category?: string;
+          content?: string;
+          created_at?: string;
+          id?: string;
+          image_urls?: string[];
+          note_id?: string | null;
+          status?: string;
+          title?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "feedbacks_note_id_fkey";
+            columns: ["note_id"];
+            isOneToOne: false;
+            referencedRelation: "notes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       notes: {
         Row: {
           content: string;

@@ -1,0 +1,19 @@
+import { useQuery } from "@tanstack/react-query";
+
+import { getFeedbacks } from "../../actions/get-feedbacks";
+import type { AdminFeedbackListQuery } from "../../types/feedback-list";
+
+export const ADMIN_FEEDBACKS_QUERY_KEY = {
+  all: ["admin-feedbacks"] as const,
+
+  list: (query: AdminFeedbackListQuery) =>
+    [...ADMIN_FEEDBACKS_QUERY_KEY.all, "list", query] as const,
+};
+
+export function useFeedbacks(query: AdminFeedbackListQuery) {
+  return useQuery({
+    queryKey: ADMIN_FEEDBACKS_QUERY_KEY.list(query),
+    queryFn: () => getFeedbacks(query),
+    placeholderData: (previousData) => previousData,
+  });
+}
