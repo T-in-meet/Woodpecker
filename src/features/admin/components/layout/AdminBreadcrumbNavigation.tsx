@@ -13,15 +13,15 @@ import { AdminBreadcrumb } from "./AdminBreadcrumb";
  */
 export function AdminBreadcrumbNavigation() {
   const pathname = usePathname();
-  const { dynamicItems } = useAdminBreadcrumb();
+  const { dynamicItems, isDynamicItemsLoading } = useAdminBreadcrumb();
 
   const staticItems = getAdminBreadcrumbItems(ADMIN_SIDEBAR_ITEMS, pathname);
 
   const items = [...staticItems, ...dynamicItems];
 
-  if (items.length === 0) {
+  if (items.length === 0 && !isDynamicItemsLoading) {
     return null;
   }
 
-  return <AdminBreadcrumb items={items} />;
+  return <AdminBreadcrumb items={items} loading={isDynamicItemsLoading} />;
 }
