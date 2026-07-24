@@ -42,6 +42,7 @@ export function AdminComponentPlaygroundClient() {
     pageSize: COMPONENT_PLAYGROUND_LIST_CONFIG.pagination.pageSize,
     search: toolbar.search,
     filters: toolbar.filters,
+    sort: toolbar.sort,
   });
 
   const users = data?.items ?? [];
@@ -111,7 +112,13 @@ export function AdminComponentPlaygroundClient() {
           </div>
         </AdminComponentPlaygroundSection>
 
-        <MockUserTable users={users} isPending={isPending} isError={isError} />
+        <MockUserTable
+          users={users}
+          sort={toolbar.sort}
+          isPending={isPending}
+          isError={isError}
+          onSortChange={toolbar.handleSortChange}
+        />
 
         <AdminComponentPlaygroundSection
           title="이미지 Lightbox"
