@@ -1,9 +1,14 @@
 import type { AdminAppliedFilter } from "@/features/admin/types/filter";
 import type { AdminSearchValue } from "@/features/admin/types/search";
 
-import type { ComponentPlaygroundFilterField } from "../constants/filter";
-import type { ComponentPlaygroundSearchField } from "../constants/search";
+import { COMPONENT_PLAYGROUND_LIST_CONFIG } from "../constants/mock-user-list";
 import type { MockUser } from "../types/mock-user";
+
+type ComponentPlaygroundSearchField =
+  typeof COMPONENT_PLAYGROUND_LIST_CONFIG.search.initialField;
+
+type ComponentPlaygroundFilterField =
+  (typeof COMPONENT_PLAYGROUND_LIST_CONFIG.filters)[number]["field"];
 
 type ComponentPlaygroundAppliedFilters = Partial<
   Record<
