@@ -10,6 +10,7 @@ import { AdminPageHeader } from "@/features/admin/components/layout/AdminPageHea
 import { ROUTES } from "@/lib/constants/routes";
 
 import { AdminBreadcrumbDynamicItems } from "../../components/layout/AdminBreadcrumbDynamicItems";
+import { AdminDetailPageHeader } from "../../components/layout/AdminDetailPageHeader";
 import { useFeedbackDetail } from "../hooks/use-feedback-detail";
 import { AdminFeedbackDetailSkeleton } from "./AdminFeedbackDetailSkeleton";
 import { AdminFeedbackReplyPanel } from "./AdminFeedbackReplyPanel";
@@ -41,19 +42,13 @@ export function AdminFeedbackDetailClient() {
         }
         loading={isPending}
       />
-      <AdminPageHeader
+
+      <AdminDetailPageHeader
         title="피드백 상세"
         description="사용자 피드백 내용을 확인하고 관리자 답변을 작성합니다."
+        backHref={ROUTES.ADMIN.FEEDBACKS}
+        backLabel="피드백 목록"
       />
-
-      <div>
-        <Button asChild type="button" variant="outline" size="sm">
-          <Link href={ROUTES.ADMIN.FEEDBACKS}>
-            <ArrowLeft aria-hidden="true" />
-            목록
-          </Link>
-        </Button>
-      </div>
 
       {isPending ? (
         <AdminFeedbackDetailSkeleton />
