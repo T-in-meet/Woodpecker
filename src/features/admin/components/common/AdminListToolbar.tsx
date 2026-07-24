@@ -11,12 +11,13 @@ import { hasAdminFilterValue } from "@/features/admin/utils/admin-filter";
 interface AdminListToolbarProps<
   TSearchField extends string,
   TFilterField extends string,
+  TSortField extends string,
 > {
   /** 관리자 목록에서 사용할 검색, 필터 및 페이지네이션 설정 */
-  config: AdminListConfig<TSearchField, TFilterField>;
+  config: AdminListConfig<TSearchField, TFilterField, TSortField>;
 
   /** 검색과 필터 상태 및 처리 함수 */
-  toolbar: UseAdminListToolbarResult<TSearchField, TFilterField>;
+  toolbar: UseAdminListToolbarResult<TSearchField, TFilterField, TSortField>;
 }
 
 /**
@@ -28,7 +29,11 @@ interface AdminListToolbarProps<
 export function AdminListToolbar<
   TSearchField extends string,
   TFilterField extends string,
->({ config, toolbar }: AdminListToolbarProps<TSearchField, TFilterField>) {
+  TSortField extends string,
+>({
+  config,
+  toolbar,
+}: AdminListToolbarProps<TSearchField, TFilterField, TSortField>) {
   const searchFields = config.search.fields;
   const filterDefinitions = config.filters;
 
