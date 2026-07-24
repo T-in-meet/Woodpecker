@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { AdminAlertDialog } from "@/features/admin/components/common/AdminAlertDialog";
+import { cn } from "@/lib/utils/cn";
 
 import { AdminImageLightbox } from "../../components/common/AdminImageLightbox";
 import { AdminLightboxImage } from "../../types/lightbox";
@@ -27,6 +28,8 @@ import type { AdminFeedbackDetail } from "../types/feedback-detail";
 interface AdminFeedbackReplyPanelProps {
   /** 답변을 작성하거나 수정할 피드백 상세 데이터 */
   feedback: AdminFeedbackDetail;
+
+  className?: string;
 }
 
 /**
@@ -46,6 +49,7 @@ interface PreviewImage {
  */
 export function AdminFeedbackReplyPanel({
   feedback,
+  className,
 }: AdminFeedbackReplyPanelProps) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(!feedback.reply);
@@ -190,8 +194,8 @@ export function AdminFeedbackReplyPanel({
   }
 
   return (
-    <aside className="min-w-0">
-      <Card className="rounded-md lg:sticky lg:top-6">
+    <aside className={cn("min-w-0", className)}>
+      <Card className="rounded-md">
         <CardHeader>
           <div className="flex items-center justify-between gap-3">
             <CardTitle>관리자 답변</CardTitle>
@@ -264,6 +268,7 @@ export function AdminFeedbackReplyPanel({
                   rows={10}
                   placeholder="사용자에게 전달할 답변을 입력하세요."
                   disabled={saveMutation.isPending}
+                  className="min-h-32"
                   {...register("content")}
                 />
                 {errors.content ? (
@@ -352,17 +357,17 @@ export function AdminFeedbackReplyPanel({
             </form>
           ) : feedback.reply ? (
             <div className="space-y-5">
-              <div className="space-y-3">
-                <ReplyAuthor
-                  name={feedback.reply.author.name}
-                  avatarUrl={feedback.reply.author.avatarUrl}
-                />
+              <div className="flex justify-between items-center">
                 <div>
                   <h3 className="font-medium">{feedback.reply.title}</h3>
                   <p className="mt-1 text-xs text-muted-foreground">
                     마지막 수정 {formatDateTime(feedback.reply.updatedAt)}
                   </p>
                 </div>
+                <ReplyAuthor
+                  name={feedback.reply.author.name}
+                  avatarUrl={feedback.reply.author.avatarUrl}
+                />
               </div>
 
               <div className="whitespace-pre-wrap rounded-md bg-muted/30 p-4 text-sm leading-6">
@@ -376,7 +381,7 @@ export function AdminFeedbackReplyPanel({
                       <button
                         key={image.path}
                         type="button"
-                        className="block overflow-hidden rounded-md border bg-muted"
+                        className="block overflow-hidden rounded-md border bg-muted cursor-pointer"
                         onClick={() => setSelectedImageIndex(index)}
                       >
                         <Image

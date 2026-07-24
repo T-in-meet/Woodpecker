@@ -64,9 +64,21 @@ export function AdminFeedbackDetailClient() {
         />
       ) : (
         // 데스크톱에서는 답변 작성 중 원문을 계속 볼 수 있도록 2열 레이아웃을 사용한다.
-        <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(360px,480px)]">
-          <AdminFeedbackSourcePanel feedback={data} />
-          <AdminFeedbackReplyPanel feedback={data} />
+        // AdminDetailPageHeader가 스크롤에 의해 완전히 사라지고 나면,
+        // 이 컨테이너가 상단(main 기준 top:0)에 고정되면서 더 이상 페이지 스크롤이
+        // 발생하지 않는다. 이 시점부터는 각 패널 내부 overflow-y-auto가 스크롤을 담당한다.
+
+        <div className="min-w-0 lg:sticky lg:top-6 lg:h-[calc(100vh-var(--header-height)-3rem-28px)]">
+          <div className="grid min-w-0 gap-6 lg:h-full lg:grid-cols-2">
+            <AdminFeedbackSourcePanel
+              className="lg:h-full lg:min-h-0 lg:overflow-y-auto"
+              feedback={data}
+            />
+            <AdminFeedbackReplyPanel
+              className="lg:h-full lg:min-h-0 lg:overflow-y-auto"
+              feedback={data}
+            />
+          </div>
         </div>
       )}
     </div>

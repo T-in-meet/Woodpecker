@@ -3,6 +3,7 @@ import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils/cn";
 
 import {
   FEEDBACK_CATEGORY_LABELS,
@@ -14,6 +15,8 @@ import { AdminFeedbackImageGallery } from "./AdminFeedbackImageGallery";
 interface AdminFeedbackSourcePanelProps {
   /** 사용자 피드백 원문과 작성자 정보를 포함한 상세 데이터 */
   feedback: AdminFeedbackDetail;
+
+  className?: string;
 }
 
 /**
@@ -24,9 +27,10 @@ interface AdminFeedbackSourcePanelProps {
  */
 export function AdminFeedbackSourcePanel({
   feedback,
+  className,
 }: AdminFeedbackSourcePanelProps) {
   return (
-    <section className="min-w-0 space-y-4">
+    <section className={cn("min-w-0 space-y-4", className)}>
       <Card className="rounded-md">
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
