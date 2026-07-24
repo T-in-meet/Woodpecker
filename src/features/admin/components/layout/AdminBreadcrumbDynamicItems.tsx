@@ -11,6 +11,9 @@ interface AdminBreadcrumbDynamicItemsProps {
 
   /** 동적 Breadcrumb 항목을 조회하고 있는지 여부 */
   loading?: boolean;
+
+  /** 로딩 중 표시할 동적 Breadcrumb Skeleton 항목 수 */
+  loadingItemCount?: number;
 }
 
 /**
@@ -23,18 +26,32 @@ interface AdminBreadcrumbDynamicItemsProps {
 export function AdminBreadcrumbDynamicItems({
   items,
   loading = false,
+  loadingItemCount = 1,
 }: AdminBreadcrumbDynamicItemsProps) {
-  const { setDynamicItems, setIsDynamicItemsLoading } = useAdminBreadcrumb();
+  const {
+    setDynamicItems,
+    setIsDynamicItemsLoading,
+    setDynamicLoadingItemCount,
+  } = useAdminBreadcrumb();
 
   useEffect(() => {
     setDynamicItems(items);
     setIsDynamicItemsLoading(loading);
+    setDynamicLoadingItemCount(loadingItemCount);
 
     return () => {
       setDynamicItems([]);
       setIsDynamicItemsLoading(false);
+      setDynamicLoadingItemCount(0);
     };
-  }, [items, loading, setDynamicItems, setIsDynamicItemsLoading]);
+  }, [
+    items,
+    loading,
+    loadingItemCount,
+    setDynamicItems,
+    setIsDynamicItemsLoading,
+    setDynamicLoadingItemCount,
+  ]);
 
   return null;
 }
