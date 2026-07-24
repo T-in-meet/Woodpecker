@@ -24,6 +24,7 @@ vi.mock("next/navigation", () => ({
   useRouter: vi.fn(() => ({
     push: vi.fn(), // 라우팅 호출 여부 확인용 mock 함수
   })),
+  useSearchParams: vi.fn(() => new URLSearchParams()),
 }));
 
 /**

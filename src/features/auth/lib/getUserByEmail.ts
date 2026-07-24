@@ -13,7 +13,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *
  * @param canonicalEmail 정규화된 이메일 (signup/resend에서 canonicalizeEmail() 결과)
  * @returns
- *  - 존재하는 경우: { email: auth.users의 원본 이메일, email_confirmed_at }
+ *  - 존재하는 경우: { id, email: auth.users의 원본 이메일, email_confirmed_at }
  *  - 존재하지 않는 경우: null
  *
  * ⚠️ 주의사항
@@ -21,9 +21,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * - profiles 테이블에 canonical_email이 존재해야 함 (migration 필수)
  * - email_confirmed_at은 Supabase Auth가 관리하는 필드
  */
-export async function getUserByEmail(
-  canonicalEmail: string,
-): Promise<{ email: string | null; email_confirmed_at: string | null } | null> {
+export async function getUserByEmail(canonicalEmail: string): Promise<{
+  id: string;
+  email: string | null;
+  email_confirmed_at: string | null;
+} | null> {
   const adminClient = createAdminClient();
 
   /**
@@ -80,10 +82,12 @@ export async function getUserByEmail(
 
   /**
    * 사용자 정보 반환
+   * - id: user_agreements 같은 user_id 기반 후속 처리에 사용
    * - email: auth.users의 raw email (사용자 입력 보존)
    * - email_confirmed_at: 이메일 인증 상태
    */
   return {
+    id: userData.user.id,
     email: userData.user.email ?? null,
     email_confirmed_at: userData.user.email_confirmed_at ?? null,
   };

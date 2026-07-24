@@ -30,6 +30,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { POST } from "../route";
 import { makeRequest } from "./utils/signupTestHelper";
 
+const upsertUserAgreementMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/features/auth/lib/userAgreements", () => ({
+  upsertUserAgreement: upsertUserAgreementMock,
+}));
 vi.mock("@/features/auth/lib/getUserByEmail");
 vi.mock("@/features/auth/email/issueOtpAndSendEmail");
 vi.mock("@/lib/supabase/admin");
@@ -140,6 +145,7 @@ describe("회원가입 API 최소 응답 시간 보장 검증", () => {
     useFakeClockWithNoElapsedTime();
 
     vi.mocked(getUserByEmail).mockResolvedValue({
+      id: "existing-user-id",
       email: "test@example.com",
       email_confirmed_at: null,
     });
