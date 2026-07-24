@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { getFeedbacks } from "../../actions/get-feedbacks";
-import type { AdminFeedbackListQuery } from "../../types/feedback-list";
+import { getFeedbacks } from "../queries";
+import type { AdminFeedbackListQuery } from "../types/feedback-list";
 
 /**
  * 관리자 피드백 목록 query key factory입니다.

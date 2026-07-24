@@ -13,14 +13,13 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { AdminAlertDialog } from "@/features/admin/components/common/AdminAlertDialog";
 
-import { useDeleteFeedbackReply } from "../hooks/queries/use-delete-feedback-reply";
-import { useSaveFeedbackReply } from "../hooks/queries/use-save-feedback-reply";
 import {
   FEEDBACK_REPLY_ALLOWED_TYPES,
   FEEDBACK_REPLY_MAX_IMAGE_COUNT,
-  feedbackReplyFormSchema,
-  type FeedbackReplyFormValues,
-} from "../schemas/feedback-reply-schema";
+} from "../constants/feedback-reply";
+import { useDeleteFeedbackReply } from "../hooks/use-delete-feedback-reply";
+import { useSaveFeedbackReply } from "../hooks/use-save-feedback-reply";
+import { feedbackReplyFormSchema, FeedbackReplyFormValues } from "../schema";
 import type { AdminFeedbackDetail } from "../types/feedback-detail";
 
 interface AdminFeedbackReplyPanelProps {

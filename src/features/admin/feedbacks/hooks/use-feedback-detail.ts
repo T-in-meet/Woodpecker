@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { getFeedbackDetail } from "../../actions/get-feedback-detail";
+import { getFeedbackDetail } from "../queries";
 
 /**
  * 관리자 피드백 상세 조회 query key factory입니다.

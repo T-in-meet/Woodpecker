@@ -8,7 +8,7 @@ import { useAdminListToolbar } from "@/features/admin/hooks/use-admin-list-toolb
 
 import { AdminPageHeader } from "../../components/layout/AdminPageHeader";
 import { ADMIN_FEEDBACK_LIST_CONFIG } from "../constants/feedback-list";
-import { useFeedbacks } from "../hooks/queries/use-feedbacks";
+import { useFeedbacks } from "../hooks/use-feedbacks";
 import { AdminFeedbackTable } from "./AdminFeedbackTable";
 
 /**

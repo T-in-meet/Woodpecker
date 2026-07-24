@@ -9,7 +9,7 @@ import { AdminListError } from "@/features/admin/components/common/AdminListStat
 import { AdminPageHeader } from "@/features/admin/components/layout/AdminPageHeader";
 import { ROUTES } from "@/lib/constants/routes";
 
-import { useFeedbackDetail } from "../hooks/queries/use-feedback-detail";
+import { useFeedbackDetail } from "../hooks/use-feedback-detail";
 import { AdminFeedbackDetailSkeleton } from "./AdminFeedbackDetailSkeleton";
 import { AdminFeedbackReplyPanel } from "./AdminFeedbackReplyPanel";
 import { AdminFeedbackSourcePanel } from "./AdminFeedbackSourcePanel";

@@ -1,18 +1,25 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
 
+import { requireAdmin } from "../utils/require-admin";
+import { feedbackReplyFormSchema } from "./schema";
 import {
-  FEEDBACK_REPLY_ALLOWED_TYPES,
-  FEEDBACK_REPLY_MAX_IMAGE_COUNT,
-  FEEDBACK_REPLY_MAX_IMAGE_SIZE,
-  feedbackReplyFormSchema,
-} from "../schemas/feedback-reply-schema";
+  createFeedbackReplyImagePath,
+  validateFeedbackReplyImageFiles,
+} from "./utils/feedback-reply-image";
 
 export type SaveFeedbackReplyResult =
   | { ok: true }
-  | { ok: false; message: string; fieldErrors?: Record<string, string[]> };
+  | {
+      ok: false;
+      message: string;
+      fieldErrors?: Record<string, string[]>;
+    };
+
+export type DeleteFeedbackReplyResult =
+  | { ok: true }
+  | { ok: false; message: string };
 
 /**
  * 관리자 답변을 생성하거나 수정하고 피드백 상태를 해결 완료로 변경합니다.
@@ -28,7 +35,7 @@ export async function saveFeedbackReply(
   feedbackId: string,
   formData: FormData,
 ): Promise<SaveFeedbackReplyResult> {
-  const adminUserId = await assertAdmin();
+  const adminUserId = await requireAdmin();
   const parsed = feedbackReplyFormSchema.safeParse({
     title: formData.get("title"),
     content: formData.get("content"),
@@ -49,7 +56,7 @@ export async function saveFeedbackReply(
     .getAll("images")
     .filter((value): value is File => value instanceof File && value.size > 0);
 
-  const imageValidationError = validateImageFiles(
+  const imageValidationError = validateFeedbackReplyImageFiles(
     existingImagePaths.length,
     imageFiles,
   );
@@ -86,7 +93,7 @@ export async function saveFeedbackReply(
     const previousImagePaths = existingReply?.image_paths ?? [];
 
     for (const file of imageFiles) {
-      const path = createReplyImagePath(feedbackId, file);
+      const path = createFeedbackReplyImagePath(feedbackId, file);
       const { error } = await supabase.storage
         .from("feedback_replies")
         .upload(path, file, {
@@ -151,89 +158,65 @@ export async function saveFeedbackReply(
 }
 
 /**
- * 현재 세션 사용자가 관리자 답변을 저장할 수 있는지 확인합니다.
+ * 관리자 답변을 삭제하고 연결된 답변 이미지를 Storage에서 제거합니다.
  *
- * @returns 답변 created_by에 저장할 관리자 사용자 ID
- */
-async function assertAdmin() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
-  if (error || !user) {
-    throw new Error("Unauthorized");
-  }
-
-  const adminClient = createAdminClient();
-  const { data: profile, error: profileError } = await adminClient
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (profileError || profile?.role !== "ADMIN") {
-    throw new Error("Forbidden");
-  }
-
-  return user.id;
-}
-
-/**
- * 새로 첨부된 답변 이미지 파일의 개수, MIME, 크기 제약을 검증합니다.
+ * 답변이 삭제되면 해당 피드백은 다시 미해결 상태로 간주하므로
+ * feedbacks.status를 OPEN으로 되돌립니다.
  *
- * @param existingCount 유지할 기존 이미지 개수
- * @param files 새로 업로드할 이미지 파일 목록
- * @returns 유효하면 null, 그렇지 않으면 사용자 표시용 오류 문구
+ * @param feedbackId 답변을 삭제할 feedbacks.id
+ * @returns 삭제 성공 여부와 사용자 표시용 오류 메시지
  */
-function validateImageFiles(existingCount: number, files: File[]) {
-  if (existingCount + files.length > FEEDBACK_REPLY_MAX_IMAGE_COUNT) {
-    return `이미지는 최대 ${FEEDBACK_REPLY_MAX_IMAGE_COUNT}개까지 첨부할 수 있습니다.`;
+export async function deleteFeedbackReply(
+  feedbackId: string,
+): Promise<DeleteFeedbackReplyResult> {
+  await requireAdmin();
+
+  const supabase = createAdminClient();
+  const { data: reply, error: replyLoadError } = await supabase
+    .from("feedback_replies")
+    .select("id, image_paths")
+    .eq("feedback_id", feedbackId)
+    .maybeSingle();
+
+  if (replyLoadError) {
+    return { ok: false, message: "답변 정보를 불러오지 못했습니다." };
   }
 
-  for (const file of files) {
-    if (
-      !(FEEDBACK_REPLY_ALLOWED_TYPES as readonly string[]).includes(file.type)
-    ) {
-      return "JPG, PNG, GIF, WebP 형식만 업로드할 수 있습니다.";
+  if (!reply) {
+    return { ok: false, message: "삭제할 답변이 없습니다." };
+  }
+
+  const { error: deleteError } = await supabase
+    .from("feedback_replies")
+    .delete()
+    .eq("id", reply.id);
+
+  if (deleteError) {
+    return { ok: false, message: "답변 삭제에 실패했습니다." };
+  }
+
+  const { error: statusError } = await supabase
+    .from("feedbacks")
+    .update({ status: "OPEN" })
+    .eq("id", feedbackId);
+
+  if (statusError) {
+    return { ok: false, message: "피드백 상태 변경에 실패했습니다." };
+  }
+
+  // DB 삭제가 끝난 뒤 Storage object를 정리한다. 실패해도 row 삭제를 되돌리지는 않는다.
+  if (reply.image_paths.length > 0) {
+    const { error: removeError } = await supabase.storage
+      .from("feedback_replies")
+      .remove(reply.image_paths);
+
+    if (removeError) {
+      console.error(
+        "[deleteFeedbackReply] storage remove failed:",
+        removeError,
+      );
     }
-
-    if (file.size > FEEDBACK_REPLY_MAX_IMAGE_SIZE) {
-      return "이미지 파일은 5MB 이하만 업로드할 수 있습니다.";
-    }
   }
 
-  return null;
-}
-
-/**
- * feedback_replies bucket의 파일 경로 규칙에 맞는 object path를 생성합니다.
- *
- * @param feedbackId 첫 번째 폴더로 사용할 feedbacks.id
- * @param file 확장자를 결정할 업로드 파일
- * @returns `{feedback_id}/{uuid}.{ext}` 형식의 Storage object path
- */
-function createReplyImagePath(feedbackId: string, file: File) {
-  const extension = getImageExtension(file);
-  const uniqueName =
-    typeof crypto.randomUUID === "function"
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
-  return `${feedbackId}/${uniqueName}.${extension}`;
-}
-
-/**
- * Storage allowed_mime_types와 일치하는 이미지 확장자를 반환합니다.
- */
-function getImageExtension(file: File) {
-  const extensionByMime: Record<string, string> = {
-    "image/jpeg": "jpg",
-    "image/png": "png",
-    "image/gif": "gif",
-    "image/webp": "webp",
-  };
-
-  return extensionByMime[file.type] ?? "png";
+  return { ok: true };
 }

@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { deleteFeedbackReply } from "../../actions/delete-feedback-reply";
+import { deleteFeedbackReply } from "../actions";
 import { ADMIN_FEEDBACK_DETAIL_QUERY_KEY } from "./use-feedback-detail";
 import { ADMIN_FEEDBACKS_QUERY_KEY } from "./use-feedbacks";
 
