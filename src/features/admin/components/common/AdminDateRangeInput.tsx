@@ -158,7 +158,7 @@ export function AdminDateRangeInput({
           locale={ko}
           autoFocus
           classNames={{
-            months: "flex flex-col gap-4 sm:flex-row",
+            months: "flex flex-col gap-4 min-[480px]:flex-row",
           }}
         />
 
