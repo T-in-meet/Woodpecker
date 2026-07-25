@@ -105,7 +105,7 @@ export function AdminSearch<TField extends string>({
 
   return (
     <form
-      className="flex w-full flex-col gap-2 sm:flex-row"
+      className="flex w-full flex-col gap-2 sm:flex-row sm:items-center"
       role="search"
       aria-label="관리자 목록 검색"
       onSubmit={handleSubmit}
