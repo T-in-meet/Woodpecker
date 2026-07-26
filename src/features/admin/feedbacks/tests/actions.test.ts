@@ -7,6 +7,8 @@ const {
   validateFeedbackReplyImageFilesMock,
   validateFeedbackReplyImageFileSignaturesMock,
   createFeedbackReplyImagePathMock,
+  createUserNotificationMock,
+  buildFeedbackReplyNotificationDefinitionMock,
 } = vi.hoisted(() => ({
   createAdminClientMock: vi.fn(),
   requireAdminMock: vi.fn(),
@@ -14,6 +16,8 @@ const {
   validateFeedbackReplyImageFilesMock: vi.fn(),
   validateFeedbackReplyImageFileSignaturesMock: vi.fn(),
   createFeedbackReplyImagePathMock: vi.fn(),
+  createUserNotificationMock: vi.fn(),
+  buildFeedbackReplyNotificationDefinitionMock: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/admin", () => ({
@@ -37,6 +41,23 @@ vi.mock("@/features/admin/feedbacks/utils/feedback-reply-image", () => ({
   createFeedbackReplyImagePath: createFeedbackReplyImagePathMock,
 }));
 
+vi.mock("@/features/notifications/create-user-notification", () => ({
+  createUserNotification: createUserNotificationMock,
+}));
+
+vi.mock("@/features/notifications/definitions", async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import("@/features/notifications/definitions")
+    >();
+
+  return {
+    ...actual,
+    buildFeedbackReplyNotificationDefinition:
+      buildFeedbackReplyNotificationDefinitionMock,
+  };
+});
+
 import { deleteFeedbackReply, saveFeedbackReply } from "../actions";
 
 type QueryResult<T> = {
@@ -45,7 +66,11 @@ type QueryResult<T> = {
 };
 
 type SupabaseMockOptions = {
-  feedbackResult?: QueryResult<{ id: string } | null>;
+  feedbackResult?: QueryResult<{
+    id: string;
+    title: string;
+    user_id: string;
+  } | null>;
   existingReplyResult?: QueryResult<{ image_paths: string[] } | null>;
   replyLoadResult?: QueryResult<{
     id: string;
@@ -64,7 +89,11 @@ type SupabaseMockOptions = {
  */
 function createSupabaseMock(options: SupabaseMockOptions = {}) {
   const feedbackResult = options.feedbackResult ?? {
-    data: { id: "feedback-1" },
+    data: {
+      id: "feedback-1",
+      title: "테스트 피드백",
+      user_id: "user-1",
+    },
     error: null,
   };
 
@@ -237,6 +266,13 @@ describe("saveFeedbackReply", () => {
     createFeedbackReplyImagePathMock.mockImplementation(
       (feedbackId: string, file: File) => `${feedbackId}/${file.name}`,
     );
+    buildFeedbackReplyNotificationDefinitionMock.mockReturnValue({
+      clickPath: "/feedbacks/feedback-1",
+    });
+
+    createUserNotificationMock.mockResolvedValue({
+      ok: true,
+    });
   });
 
   it("입력값 검증에 실패하면 필드 오류를 반환하고 DB에 접근하지 않는다", async () => {
@@ -348,6 +384,115 @@ describe("saveFeedbackReply", () => {
       "id",
       "feedback-1",
     );
+  });
+
+  it("최초 답변 저장 시 사용자 알림을 생성한다", async () => {
+    const supabase = createSupabaseMock({
+      existingReplyResult: {
+        data: null,
+        error: null,
+      },
+    });
+
+    createAdminClientMock.mockReturnValue(supabase.client);
+
+    const result = await saveFeedbackReply("feedback-1", createValidFormData());
+
+    expect(result).toEqual({ ok: true });
+
+    expect(buildFeedbackReplyNotificationDefinitionMock).toHaveBeenCalledWith({
+      feedbackId: "feedback-1",
+    });
+
+    expect(createUserNotificationMock).toHaveBeenCalledWith({
+      actorUserId: "admin-1",
+      body: '"테스트 피드백" 피드백에 관리자 답변이 등록되었습니다.',
+      clickPath: "/feedbacks/feedback-1",
+      metadata: {
+        feedbackId: "feedback-1",
+      },
+      operation: "feedback_reply_notification",
+      pushEnabled: expect.any(Boolean),
+      title: "피드백에 답변이 등록되었습니다.",
+      type: expect.any(String),
+      userId: "user-1",
+    });
+  });
+
+  it("기존 답변 수정 시 알림을 선택하지 않으면 사용자 알림을 생성하지 않는다", async () => {
+    const supabase = createSupabaseMock({
+      existingReplyResult: {
+        data: {
+          image_paths: [],
+        },
+        error: null,
+      },
+    });
+
+    createAdminClientMock.mockReturnValue(supabase.client);
+
+    const result = await saveFeedbackReply("feedback-1", createValidFormData());
+
+    expect(result).toEqual({ ok: true });
+    expect(buildFeedbackReplyNotificationDefinitionMock).not.toHaveBeenCalled();
+    expect(createUserNotificationMock).not.toHaveBeenCalled();
+  });
+
+  it("기존 답변 수정 시 알림을 선택하면 수정 알림을 생성한다", async () => {
+    const supabase = createSupabaseMock({
+      existingReplyResult: {
+        data: {
+          image_paths: [],
+        },
+        error: null,
+      },
+    });
+
+    createAdminClientMock.mockReturnValue(supabase.client);
+
+    const formData = createValidFormData();
+    formData.set("notifyUser", "true");
+
+    const result = await saveFeedbackReply("feedback-1", formData);
+
+    expect(result).toEqual({ ok: true });
+
+    expect(createUserNotificationMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserId: "admin-1",
+        body: '"테스트 피드백" 피드백의 관리자 답변이 수정되었습니다.',
+        clickPath: "/feedbacks/feedback-1",
+        metadata: {
+          feedbackId: "feedback-1",
+        },
+        title: "피드백 답변이 수정되었습니다.",
+        userId: "user-1",
+      }),
+    );
+  });
+
+  it("사용자 알림 생성이 예외를 던져도 답변 저장 성공을 유지한다", async () => {
+    const supabase = createSupabaseMock();
+
+    createAdminClientMock.mockReturnValue(supabase.client);
+    createUserNotificationMock.mockRejectedValue(
+      new Error("notification failed"),
+    );
+
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+
+    const result = await saveFeedbackReply("feedback-1", createValidFormData());
+
+    expect(result).toEqual({ ok: true });
+    expect(createUserNotificationMock).toHaveBeenCalledOnce();
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "[saveFeedbackReply] notification failed:",
+      expect.any(Error),
+    );
+
+    consoleErrorSpy.mockRestore();
   });
 
   it("기존 이미지와 새 이미지를 함께 저장한다", async () => {

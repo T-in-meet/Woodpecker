@@ -48,6 +48,8 @@ export async function saveFeedbackReply(
     content: formData.get("content"),
   });
 
+  const notifyUser = formData.get("notifyUser") === "true";
+
   if (!parsed.success) {
     return {
       ok: false,
@@ -106,6 +108,7 @@ export async function saveFeedbackReply(
 
     const previousImagePaths = existingReply?.image_paths ?? [];
     const isFirstReply = !existingReply;
+    const shouldNotifyUser = isFirstReply || notifyUser;
 
     for (const file of imageFiles) {
       const path = createFeedbackReplyImagePath(feedbackId, file);
@@ -161,15 +164,23 @@ export async function saveFeedbackReply(
       await supabase.storage.from("feedback_replies").remove(removedImagePaths);
     }
 
-    if (isFirstReply) {
+    if (shouldNotifyUser) {
       const notificationDefinition = buildFeedbackReplyNotificationDefinition({
         feedbackId,
       });
 
+      const notificationTitle = isFirstReply
+        ? "피드백에 답변이 등록되었습니다."
+        : "피드백 답변이 수정되었습니다.";
+
+      const notificationBody = isFirstReply
+        ? `"${feedback.title}" 피드백에 관리자 답변이 등록되었습니다.`
+        : `"${feedback.title}" 피드백의 관리자 답변이 수정되었습니다.`;
+
       try {
         await createUserNotification({
           actorUserId: adminUserId,
-          body: `"${feedback.title}" 피드백에 관리자 답변이 등록되었습니다.`,
+          body: notificationBody,
           clickPath: notificationDefinition.clickPath,
           metadata: {
             feedbackId,
@@ -178,7 +189,7 @@ export async function saveFeedbackReply(
           pushEnabled:
             USER_NOTIFICATION_DEFINITIONS[NOTIFICATION_TYPES.FEEDBACK_REPLY]
               .pushEnabled,
-          title: "피드백 답변이 등록되었습니다.",
+          title: notificationTitle,
           type: NOTIFICATION_TYPES.FEEDBACK_REPLY,
           userId: feedback.user_id,
         });
