@@ -1,5 +1,11 @@
 "use server";
 
+import { createUserNotification } from "@/features/notifications/create-user-notification";
+import {
+  buildFeedbackReplyNotificationDefinition,
+  USER_NOTIFICATION_DEFINITIONS,
+} from "@/features/notifications/definitions";
+import { NOTIFICATION_TYPES } from "@/lib/constants/notifications";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { requireAdmin } from "../utils/require-admin";
@@ -76,7 +82,7 @@ export async function saveFeedbackReply(
   const supabase = createAdminClient();
   const { data: feedback, error: feedbackError } = await supabase
     .from("feedbacks")
-    .select("id")
+    .select("id, title, user_id")
     .eq("id", feedbackId)
     .single();
 
@@ -99,6 +105,7 @@ export async function saveFeedbackReply(
     }
 
     const previousImagePaths = existingReply?.image_paths ?? [];
+    const isFirstReply = !existingReply;
 
     for (const file of imageFiles) {
       const path = createFeedbackReplyImagePath(feedbackId, file);
@@ -152,6 +159,35 @@ export async function saveFeedbackReply(
     // DB 저장은 성공한 상태이므로, 제거 실패는 사용자 저장 실패로 되돌리지 않는다.
     if (removedImagePaths.length > 0) {
       await supabase.storage.from("feedback_replies").remove(removedImagePaths);
+    }
+
+    if (isFirstReply) {
+      const notificationDefinition = buildFeedbackReplyNotificationDefinition({
+        feedbackId,
+      });
+
+      try {
+        await createUserNotification({
+          actorUserId: adminUserId,
+          body: `"${feedback.title}" 피드백에 관리자 답변이 등록되었습니다.`,
+          clickPath: notificationDefinition.clickPath,
+          metadata: {
+            feedbackId,
+          },
+          operation: "feedback_reply_notification",
+          pushEnabled:
+            USER_NOTIFICATION_DEFINITIONS[NOTIFICATION_TYPES.FEEDBACK_REPLY]
+              .pushEnabled,
+          title: "피드백 답변이 등록되었습니다.",
+          type: NOTIFICATION_TYPES.FEEDBACK_REPLY,
+          userId: feedback.user_id,
+        });
+      } catch (notificationError) {
+        console.error(
+          "[saveFeedbackReply] notification failed:",
+          notificationError,
+        );
+      }
     }
 
     return { ok: true };
