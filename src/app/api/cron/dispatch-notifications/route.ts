@@ -6,6 +6,7 @@ import {
   NOTIFICATION_STATUS,
   NOTIFICATION_TYPES,
 } from "@/lib/constants/notifications";
+import { getNoteReviewRoute } from "@/lib/constants/routes";
 import { logError, logWarn } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPush, setVapidDetails } from "@/lib/webPush";
@@ -17,7 +18,6 @@ export const dynamic = "force-dynamic";
 const CLAIM_LIMIT = 200;
 const CLAIM_CONCURRENCY = 8;
 const REVIEW_NOTIFICATION_TITLE = "복습할 시간이에요!";
-const REVIEW_ROUTE_SEGMENT = "review";
 
 type ClaimedReviewLogType = {
   id: string;
@@ -91,7 +91,7 @@ function authorizeCronRequest(request: Request): NextResponse | null {
 }
 
 function buildReviewUrl(noteId: string): string {
-  return `/notes/${noteId}/${REVIEW_ROUTE_SEGMENT}`;
+  return getNoteReviewRoute(noteId);
 }
 
 function buildReviewNotificationBody(noteTitle: string): string {
@@ -154,6 +154,11 @@ async function ensureNotification(
     .upsert(
       {
         body: noteTitle,
+        click_path: buildReviewUrl(claimedLog.note_id),
+        metadata: {
+          noteId: claimedLog.note_id,
+          reviewLogId: claimedLog.id,
+        },
         note_id: claimedLog.note_id,
         review_log_id: claimedLog.id,
         status: NOTIFICATION_STATUS.SENT,

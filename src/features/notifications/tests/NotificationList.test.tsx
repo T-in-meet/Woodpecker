@@ -19,6 +19,7 @@ function createNotificationItem(): NotificationListItemType {
     id: NOTIFICATION_ID,
     title: "복습할 시간이에요!",
     body: "노트 내용을 다시 꺼내볼 차례입니다.",
+    click_path: getNoteReviewRoute(NOTE_ID),
     type: NOTIFICATION_TYPES.REVIEW,
     status: NOTIFICATION_STATUS.SENT,
     sent_at: "2026-04-28T03:00:00.000Z",

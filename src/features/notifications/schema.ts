@@ -13,14 +13,19 @@ export const notificationStatusSchema = z.enum([
 ]);
 
 export const notificationListItemSchema = z.object({
+  body: z.string().nullable(),
+  click_path: z.string().min(1),
   id: notificationUuidSchema,
   title: z.string(),
-  body: z.string().nullable(),
-  type: z.enum([NOTIFICATION_TYPES.REVIEW]),
+  type: z.enum([
+    NOTIFICATION_TYPES.FEEDBACK_REPLY,
+    NOTIFICATION_TYPES.REVIEW,
+    NOTIFICATION_TYPES.SYSTEM,
+  ]),
   status: notificationStatusSchema,
   sent_at: z.string(),
   read_at: z.string().nullable(),
-  note_id: notificationUuidSchema,
+  note_id: notificationUuidSchema.nullable(),
   review_log_id: notificationUuidSchema.nullable(),
   noteTitle: z.string().nullable(),
 });

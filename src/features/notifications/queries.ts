@@ -1,10 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
-import {
-  NOTIFICATION_STATUS,
-  NOTIFICATION_TYPES,
-} from "@/lib/constants/notifications";
+import { NOTIFICATION_STATUS } from "@/lib/constants/notifications";
 import { createServerComponentClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database.types";
 
@@ -94,7 +91,6 @@ export async function getUnreadCount(
     .from("notifications")
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
-    .eq("type", NOTIFICATION_TYPES.REVIEW)
     .eq("status", NOTIFICATION_STATUS.SENT);
 
   if (error) throw error;
@@ -113,10 +109,9 @@ export async function getNotificationList(
   const { data, error } = await supabase
     .from("notifications")
     .select(
-      "id, title, body, type, status, sent_at, read_at, note_id, review_log_id, note:notes(title)",
+      "id, title, body, type, status, sent_at, read_at, click_path, note_id, review_log_id, note:notes(title)",
     )
     .eq("user_id", userId)
-    .eq("type", NOTIFICATION_TYPES.REVIEW)
     .eq("status", NOTIFICATION_STATUS.SENT)
     .order("sent_at", { ascending: false })
     .limit(limit);
