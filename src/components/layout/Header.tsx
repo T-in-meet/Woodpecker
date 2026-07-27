@@ -43,6 +43,7 @@ export async function Header() {
                 nickname={profile.nickname}
                 email={user.email ?? ""}
                 avatarUrl={profile.avatar_url}
+                isAdmin={profile.role === "ADMIN"}
               />
             </>
           ) : (
