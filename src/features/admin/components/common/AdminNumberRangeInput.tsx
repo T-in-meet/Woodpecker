@@ -1,6 +1,7 @@
 "use client";
 
 import type { ChangeEvent } from "react";
+import { useId } from "react";
 
 import { Input } from "@/components/ui/input";
 
@@ -46,6 +47,10 @@ export function AdminNumberRangeInput({
   max,
   step,
 }: AdminNumberRangeInputProps) {
+  const inputId = useId();
+  const minInputId = `${inputId}-min`;
+  const maxInputId = `${inputId}-max`;
+
   /**
    * HTML Input의 문자열 값을 필터에서 사용하는 숫자 값으로 변환합니다.
    *
@@ -76,12 +81,12 @@ export function AdminNumberRangeInput({
   return (
     <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2">
       <div className="space-y-1.5">
-        <label htmlFor="admin-number-range-min" className="text-sm font-medium">
+        <label htmlFor={minInputId} className="text-sm font-medium">
           최소값
         </label>
 
         <Input
-          id="admin-number-range-min"
+          id={minInputId}
           type="number"
           value={value.min ?? ""}
           min={min}
@@ -97,12 +102,12 @@ export function AdminNumberRangeInput({
       </span>
 
       <div className="space-y-1.5">
-        <label htmlFor="admin-number-range-max" className="text-sm font-medium">
+        <label htmlFor={maxInputId} className="text-sm font-medium">
           최대값
         </label>
 
         <Input
-          id="admin-number-range-max"
+          id={maxInputId}
           type="number"
           value={value.max ?? ""}
           min={min}

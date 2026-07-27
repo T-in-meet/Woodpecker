@@ -28,11 +28,8 @@ interface AdminFilterInputRendererProps<TField extends string> {
 /**
  * 필터 정의의 입력 방식에 따라 적절한 입력 컴포넌트를 선택합니다.
  *
- * 현재 단계에서는 실제 입력 컴포넌트를 렌더링하지 않고,
- * 각 필터 타입이 정상적으로 분기되는지만 확인합니다.
- *
- * 이후 Select, MultiSelect, NumberRange, DateRange 입력 컴포넌트를
- * 각 case에 순차적으로 연결합니다.
+ * Select, MultiSelect, NumberRange, DateRange 필터 정의를 받아
+ * 각 타입에 대응하는 공통 입력 컴포넌트를 렌더링합니다.
  *
  * @template TField 필터 필드의 문자열 리터럴 타입
  * @param props 필터 정의, 현재 값, 값 변경 처리 함수
