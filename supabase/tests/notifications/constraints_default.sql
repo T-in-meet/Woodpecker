@@ -51,15 +51,17 @@ INSERT INTO public.notifications (
   title,
   status,
   sent_at
-)
+,
+  click_path)
 VALUES (
   current_setting('test.notifications_constraints_default_notification_seed_id')::uuid,
   current_setting('test.notifications_constraints_default_user_a_id')::uuid,
-  'ALERT',
+  'SYSTEM',
   'seed title',
   'SENT',
   now()
-)
+,
+  '/test')
 ON CONFLICT (id) DO NOTHING;
 
 -- [정답 조건]
@@ -71,14 +73,16 @@ INSERT INTO public.notifications (
   title,
   status,
   sent_at
-)
+,
+  click_path)
 VALUES (
   current_setting('test.notifications_constraints_default_user_a_id')::uuid,
-  'ALERT',
+  'SYSTEM',
   'default id',
   'SENT',
   now()
-);
+,
+  '/test');
 
 SELECT ok(
   (SELECT count(*) FROM public.notifications WHERE title = 'default id' AND id IS NOT NULL) = 1,
@@ -94,14 +98,16 @@ INSERT INTO public.notifications (
   type,
   title,
   sent_at
-)
+,
+  click_path)
 VALUES (
   current_setting('test.notifications_constraints_default_status_id')::uuid,
   current_setting('test.notifications_constraints_default_user_a_id')::uuid,
-  'ALERT',
+  'SYSTEM',
   'default status',
   now()
-);
+,
+  '/test');
 
 SELECT is(
   (SELECT status FROM public.notifications WHERE id = current_setting('test.notifications_constraints_default_status_id')::uuid),
@@ -119,14 +125,16 @@ INSERT INTO public.notifications (
   type,
   title,
   status
-)
+,
+  click_path)
 VALUES (
   current_setting('test.notifications_constraints_default_sent_at_id')::uuid,
   current_setting('test.notifications_constraints_default_user_a_id')::uuid,
-  'ALERT',
+  'SYSTEM',
   'default sent_at',
   'SENT'
-);
+,
+  '/test');
 SELECT set_config('test.notifications_constraints_default_sent_at_after', now()::text, true);
 
 SELECT ok(
@@ -146,8 +154,10 @@ ROLLBACK TO SAVEPOINT notifications_default_sent_at;
 -- id를 명시적으로 NULL로 INSERT하려는 경우: → DEFAULT 적용 대상이 아니며 NOT NULL 제약 위반으로 실패해야 한다.
 SELECT throws_ok(
   $sql$
-    INSERT INTO public.notifications (id, user_id, type, title, status, sent_at)
-    VALUES (NULL, current_setting('test.notifications_constraints_default_user_a_id')::uuid, 'ALERT', 'null id', 'SENT', now());
+    INSERT INTO public.notifications (id, user_id, type, title, status, sent_at,
+  click_path)
+    VALUES (NULL, current_setting('test.notifications_constraints_default_user_a_id')::uuid, 'SYSTEM', 'null id', 'SENT', now(),
+  '/test');
   $sql$,
   '23502',
   'null value in column "id" of relation "notifications" violates not-null constraint',
@@ -157,8 +167,10 @@ SELECT throws_ok(
 -- status를 명시적으로 NULL로 INSERT하려는 경우: → DEFAULT 적용 대상이 아니며 해당 컬럼의 NOT NULL 제약에 따라 실패해야 한다.
 SELECT throws_ok(
   $sql$
-    INSERT INTO public.notifications (id, user_id, type, title, status, sent_at)
-    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_default_user_a_id')::uuid, 'ALERT', 'null status', NULL, now());
+    INSERT INTO public.notifications (id, user_id, type, title, status, sent_at,
+  click_path)
+    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_default_user_a_id')::uuid, 'SYSTEM', 'null status', NULL, now(),
+  '/test');
   $sql$,
   '23502',
   'null value in column "status" of relation "notifications" violates not-null constraint',
@@ -168,8 +180,10 @@ SELECT throws_ok(
 -- sent_at을 명시적으로 NULL로 INSERT하려는 경우: → DEFAULT 적용 대상이 아니며 해당 컬럼의 제약 조건에 따라 실패해야 한다.
 SELECT throws_ok(
   $sql$
-    INSERT INTO public.notifications (id, user_id, type, title, status, sent_at)
-    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_default_user_a_id')::uuid, 'ALERT', 'null sent_at', 'SENT', NULL);
+    INSERT INTO public.notifications (id, user_id, type, title, status, sent_at,
+  click_path)
+    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_default_user_a_id')::uuid, 'SYSTEM', 'null sent_at', 'SENT', NULL,
+  '/test');
   $sql$,
   '23502',
   'null value in column "sent_at" of relation "notifications" violates not-null constraint',
@@ -187,8 +201,10 @@ SELECT set_config(
 DO $$
 BEGIN
   BEGIN
-    INSERT INTO public.notifications (id, user_id, type, title, status, sent_at)
-    VALUES (NULL, current_setting('test.notifications_constraints_default_user_a_id')::uuid, 'ALERT', 'transition null id', 'SENT', now());
+    INSERT INTO public.notifications (id, user_id, type, title, status, sent_at,
+  click_path)
+    VALUES (NULL, current_setting('test.notifications_constraints_default_user_a_id')::uuid, 'SYSTEM', 'transition null id', 'SENT', now(),
+  '/test');
   EXCEPTION
     WHEN not_null_violation THEN
       NULL;
