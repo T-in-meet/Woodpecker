@@ -141,7 +141,7 @@ export function FeedbackForm({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>문의하기</CardTitle>
+        <CardTitle>건의 및 문의사항</CardTitle>
       </CardHeader>
       <Separator />
       <CardContent>

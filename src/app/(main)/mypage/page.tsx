@@ -10,7 +10,6 @@ import {
   type MypageSection,
 } from "@/features/mypage/components/MypageNav";
 import { ReviewWaitingSection } from "@/features/mypage/components/ReviewWaitingSection";
-import type { SupportTab } from "@/features/mypage/components/SupportSection";
 import {
   getFeedbackNoteOptions,
   getLearningStats,
@@ -39,9 +38,9 @@ const DeleteAccountSection = dynamic(() =>
     (m) => m.DeleteAccountSection,
   ),
 );
-const SupportSection = dynamic(() =>
-  import("@/features/mypage/components/SupportSection").then(
-    (m) => m.SupportSection,
+const FeedbackSection = dynamic(() =>
+  import("@/features/mypage/components/FeedbackSection").then(
+    (m) => m.FeedbackSection,
   ),
 );
 
@@ -53,7 +52,7 @@ const VALID_SECTIONS: MypageSection[] = [
   "profile",
   "stats",
   "reviews",
-  "support",
+  "feedback",
 ];
 
 function isValidSection(value: unknown): value is MypageSection {
@@ -64,30 +63,18 @@ const SECTION_LABELS: Record<MypageSection, string> = {
   profile: "계정 관리",
   stats: "학습 통계",
   reviews: "복습 대기",
-  support: "고객센터",
-};
-
-const VALID_SUPPORT_TABS: SupportTab[] = ["faq", "inquiry"];
-
-function isValidSupportTab(value: unknown): value is SupportTab {
-  return VALID_SUPPORT_TABS.includes(value as SupportTab);
-}
-
-const SUPPORT_TAB_LABELS: Record<SupportTab, string> = {
-  faq: "FAQ",
-  inquiry: "문의하기",
+  feedback: "문의사항",
 };
 
 type Props = {
-  searchParams: Promise<{ section?: string; tab?: string }>;
+  searchParams: Promise<{ section?: string }>;
 };
 
 export default async function MyPage({ searchParams }: Props) {
-  const { section: rawSection, tab: rawTab } = await searchParams;
+  const { section: rawSection } = await searchParams;
   const section: MypageSection = isValidSection(rawSection)
     ? rawSection
     : "stats";
-  const supportTab: SupportTab = isValidSupportTab(rawTab) ? rawTab : "faq";
 
   const [user, profile] = await Promise.all([getUser(), getProfile()]);
   if (!user || !profile) redirect(ROUTES.LOGIN);
@@ -110,7 +97,7 @@ export default async function MyPage({ searchParams }: Props) {
     });
   } else if (section === "reviews") {
     reviewWaiting = await getReviewWaitingNotes(user.id);
-  } else if (section === "support" && supportTab === "inquiry") {
+  } else if (section === "feedback") {
     [feedbackResult, feedbackNoteOptions] = await Promise.all([
       getMyFeedbacks(user.id),
       getFeedbackNoteOptions(user.id),
@@ -138,24 +125,9 @@ export default async function MyPage({ searchParams }: Props) {
           마이페이지
         </Link>
         <ChevronRight className="size-3.5" />
-        {section === "support" ? (
-          <>
-            <Link
-              href={`${ROUTES.MYPAGE}?section=support`}
-              className="transition-colors hover:text-foreground"
-            >
-              {SECTION_LABELS[section]}
-            </Link>
-            <ChevronRight className="size-3.5" />
-            <span className="font-medium text-foreground">
-              {SUPPORT_TAB_LABELS[supportTab]}
-            </span>
-          </>
-        ) : (
-          <span className="font-medium text-foreground">
-            {SECTION_LABELS[section]}
-          </span>
-        )}
+        <span className="font-medium text-foreground">
+          {SECTION_LABELS[section]}
+        </span>
       </nav>
 
       {/* 페이지 타이틀 */}
@@ -189,12 +161,11 @@ export default async function MyPage({ searchParams }: Props) {
           {section === "reviews" && (
             <ReviewWaitingSection notes={reviewWaiting} />
           )}
-          {section === "support" && (
-            <SupportSection
-              activeTab={supportTab}
-              feedbacks={feedbackResult?.feedbacks ?? []}
+          {section === "feedback" && feedbackResult && (
+            <FeedbackSection
+              feedbacks={feedbackResult.feedbacks}
               noteOptions={feedbackNoteOptions}
-              hasSubmittedToday={feedbackResult?.hasSubmittedToday ?? false}
+              hasSubmittedToday={feedbackResult.hasSubmittedToday}
             />
           )}
         </div>
