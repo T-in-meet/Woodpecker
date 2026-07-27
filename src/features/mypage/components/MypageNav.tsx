@@ -1,4 +1,4 @@
-import { BarChart2, Headset, ListTodo, User } from "lucide-react";
+import { BarChart2, LifeBuoy, ListTodo, User } from "lucide-react";
 import Link from "next/link";
 
 import { ROUTES } from "@/lib/constants/routes";
@@ -9,8 +9,8 @@ export type MypageSection = "profile" | "stats" | "reviews" | "support";
 const navItems = [
   { id: "stats" as const, label: "학습 통계", icon: BarChart2 },
   { id: "reviews" as const, label: "복습 대기", icon: ListTodo },
+  { id: "support" as const, label: "고객센터", icon: LifeBuoy },
   { id: "profile" as const, label: "계정 관리", icon: User },
-  { id: "support" as const, label: "고객 센터", icon: Headset },
 ];
 
 type MypageNavProps = {
