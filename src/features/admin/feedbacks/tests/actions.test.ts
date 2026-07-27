@@ -65,6 +65,11 @@ type QueryResult<T> = {
   error: { message: string } | null;
 };
 
+type DeleteFeedbackReplyRpcRow = {
+  deleted_notification_count: number;
+  image_paths: string[];
+};
+
 type SupabaseMockOptions = {
   feedbackResult?: QueryResult<{
     id: string;
@@ -82,6 +87,7 @@ type SupabaseMockOptions = {
   deleteError?: { message: string } | null;
   openStatusError?: { message: string } | null;
   removeErrors?: Array<{ message: string } | null>;
+  rpcResult?: QueryResult<DeleteFeedbackReplyRpcRow[] | null>;
 };
 
 /**
@@ -195,6 +201,17 @@ function createSupabaseMock(options: SupabaseMockOptions = {}) {
     upload: uploadMock,
     remove: removeMock,
   }));
+  const rpcMock = vi.fn().mockResolvedValue(
+    options.rpcResult ?? {
+      data: [
+        {
+          deleted_notification_count: 1,
+          image_paths: replyLoadResult.data?.image_paths ?? [],
+        },
+      ],
+      error: null,
+    },
+  );
 
   const fromMock = vi.fn((table: string) => {
     if (table === "feedbacks") {
@@ -218,6 +235,7 @@ function createSupabaseMock(options: SupabaseMockOptions = {}) {
   return {
     client: {
       from: fromMock,
+      rpc: rpcMock,
       storage: {
         from: storageFromMock,
       },
@@ -236,6 +254,7 @@ function createSupabaseMock(options: SupabaseMockOptions = {}) {
       storageFromMock,
       uploadMock,
       removeMock,
+      rpcMock,
     },
   };
 }
@@ -701,53 +720,15 @@ describe("deleteFeedbackReply", () => {
     requireAdminMock.mockResolvedValue("admin-1");
   });
 
-  it("답변 조회에 실패하면 삭제를 중단한다", async () => {
+  it("RPC로 답변, 피드백 상태, 관련 사용자 알림을 하나의 DB 작업으로 삭제한다", async () => {
     const supabase = createSupabaseMock({
-      replyLoadResult: {
-        data: null,
-        error: {
-          message: "reply load failed",
-        },
-      },
-    });
-
-    createAdminClientMock.mockReturnValue(supabase.client);
-
-    const result = await deleteFeedbackReply("feedback-1");
-
-    expect(result).toEqual({
-      ok: false,
-      message: "답변 정보를 불러오지 못했습니다.",
-    });
-    expect(supabase.mocks.deleteMock).not.toHaveBeenCalled();
-  });
-
-  it("삭제할 답변이 없으면 안내 메시지를 반환한다", async () => {
-    const supabase = createSupabaseMock({
-      replyLoadResult: {
-        data: null,
-        error: null,
-      },
-    });
-
-    createAdminClientMock.mockReturnValue(supabase.client);
-
-    const result = await deleteFeedbackReply("feedback-1");
-
-    expect(result).toEqual({
-      ok: false,
-      message: "삭제할 답변이 없습니다.",
-    });
-    expect(supabase.mocks.deleteMock).not.toHaveBeenCalled();
-  });
-
-  it("답변을 삭제하고 피드백 상태를 OPEN으로 변경한다", async () => {
-    const supabase = createSupabaseMock({
-      replyLoadResult: {
-        data: {
-          id: "reply-1",
-          image_paths: [],
-        },
+      rpcResult: {
+        data: [
+          {
+            deleted_notification_count: 2,
+            image_paths: [],
+          },
+        ],
         error: null,
       },
     });
@@ -757,21 +738,24 @@ describe("deleteFeedbackReply", () => {
     const result = await deleteFeedbackReply("feedback-1");
 
     expect(result).toEqual({ ok: true });
-    expect(supabase.mocks.deleteMock).toHaveBeenCalledOnce();
-    expect(supabase.mocks.deleteEqMock).toHaveBeenCalledWith("id", "reply-1");
-    expect(supabase.mocks.updateMock).toHaveBeenCalledWith({
-      status: "OPEN",
-    });
-    expect(supabase.mocks.openStatusEqMock).toHaveBeenCalledWith(
-      "id",
-      "feedback-1",
+    expect(supabase.mocks.rpcMock).toHaveBeenCalledWith(
+      "delete_feedback_reply_with_notifications",
+      {
+        p_feedback_id: "feedback-1",
+      },
+    );
+    expect(supabase.mocks.fromMock).not.toHaveBeenCalledWith(
+      "feedback_replies",
     );
   });
 
-  it("답변 삭제에 실패하면 피드백 상태를 변경하지 않는다", async () => {
+  it("RPC 실패 시 삭제 실패 메시지를 반환하고 Storage를 정리하지 않는다", async () => {
     const supabase = createSupabaseMock({
-      deleteError: {
-        message: "delete failed",
+      rpcResult: {
+        data: null,
+        error: {
+          message: "feedback_reply_not_found",
+        },
       },
     });
 
@@ -783,13 +767,14 @@ describe("deleteFeedbackReply", () => {
       ok: false,
       message: "답변 삭제에 실패했습니다.",
     });
-    expect(supabase.mocks.updateMock).not.toHaveBeenCalled();
+    expect(supabase.mocks.removeMock).not.toHaveBeenCalled();
   });
 
-  it("피드백 상태 변경에 실패하면 실패 결과를 반환한다", async () => {
+  it("RPC 결과가 비어 있으면 삭제 실패 메시지를 반환한다", async () => {
     const supabase = createSupabaseMock({
-      openStatusError: {
-        message: "status update failed",
+      rpcResult: {
+        data: [],
+        error: null,
       },
     });
 
@@ -799,19 +784,21 @@ describe("deleteFeedbackReply", () => {
 
     expect(result).toEqual({
       ok: false,
-      message: "피드백 상태 변경에 실패했습니다.",
+      message: "답변 삭제에 실패했습니다.",
     });
   });
 
-  it("연결된 답변 이미지를 Storage에서 제거한다", async () => {
+  it("RPC 성공 후 연결된 답변 이미지를 Storage에서 제거한다", async () => {
     const imagePaths = ["feedback-1/a.png", "feedback-1/b.png"];
 
     const supabase = createSupabaseMock({
-      replyLoadResult: {
-        data: {
-          id: "reply-1",
-          image_paths: imagePaths,
-        },
+      rpcResult: {
+        data: [
+          {
+            deleted_notification_count: 1,
+            image_paths: imagePaths,
+          },
+        ],
         error: null,
       },
     });
@@ -826,11 +813,13 @@ describe("deleteFeedbackReply", () => {
 
   it("Storage 이미지 제거에 실패해도 DB 삭제 성공을 유지한다", async () => {
     const supabase = createSupabaseMock({
-      replyLoadResult: {
-        data: {
-          id: "reply-1",
-          image_paths: ["feedback-1/a.png"],
-        },
+      rpcResult: {
+        data: [
+          {
+            deleted_notification_count: 1,
+            image_paths: ["feedback-1/a.png"],
+          },
+        ],
         error: null,
       },
       removeErrors: [
@@ -849,11 +838,13 @@ describe("deleteFeedbackReply", () => {
 
   it("연결된 이미지가 없으면 Storage remove를 호출하지 않는다", async () => {
     const supabase = createSupabaseMock({
-      replyLoadResult: {
-        data: {
-          id: "reply-1",
-          image_paths: [],
-        },
+      rpcResult: {
+        data: [
+          {
+            deleted_notification_count: 1,
+            image_paths: [],
+          },
+        ],
         error: null,
       },
     });

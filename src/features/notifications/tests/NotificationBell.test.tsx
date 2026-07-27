@@ -24,11 +24,12 @@ import {
   NotificationBell,
   removeReadNotificationFromResponse,
 } from "../components/NotificationBell";
+import type { NotificationsResponseType } from "../schema";
 
 const USER_A_ID = "11111111-1111-4111-8111-111111111111";
 const USER_B_ID = "22222222-2222-4222-8222-222222222222";
 
-const NOTIFICATION_RESPONSE = {
+const NOTIFICATION_RESPONSE: NotificationsResponseType = {
   unreadCount: 1,
   items: [
     {

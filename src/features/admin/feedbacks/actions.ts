@@ -227,43 +227,30 @@ export async function deleteFeedbackReply(
   await requireAdmin();
 
   const supabase = createAdminClient();
-  const { data: reply, error: replyLoadError } = await supabase
-    .from("feedback_replies")
-    .select("id, image_paths")
-    .eq("feedback_id", feedbackId)
-    .maybeSingle();
+  const { data, error } = await supabase.rpc(
+    "delete_feedback_reply_with_notifications",
+    {
+      p_feedback_id: feedbackId,
+    },
+  );
 
-  if (replyLoadError) {
-    return { ok: false, message: "답변 정보를 불러오지 못했습니다." };
-  }
+  console.log("[deleteFeedbackReply] RPC 결과", {
+    feedbackId,
+    data,
+    error,
+  });
 
-  if (!reply) {
-    return { ok: false, message: "삭제할 답변이 없습니다." };
-  }
-
-  const { error: deleteError } = await supabase
-    .from("feedback_replies")
-    .delete()
-    .eq("id", reply.id);
-
-  if (deleteError) {
+  if (error || !data || data.length === 0) {
     return { ok: false, message: "답변 삭제에 실패했습니다." };
   }
 
-  const { error: statusError } = await supabase
-    .from("feedbacks")
-    .update({ status: "OPEN" })
-    .eq("id", feedbackId);
-
-  if (statusError) {
-    return { ok: false, message: "피드백 상태 변경에 실패했습니다." };
-  }
-
   // DB 삭제가 끝난 뒤 Storage object를 정리한다. 실패해도 row 삭제를 되돌리지는 않는다.
-  if (reply.image_paths.length > 0) {
+  const imagePaths = data[0]?.image_paths ?? [];
+
+  if (imagePaths.length > 0) {
     const { error: removeError } = await supabase.storage
       .from("feedback_replies")
-      .remove(reply.image_paths);
+      .remove(imagePaths);
 
     if (removeError) {
       console.error(
