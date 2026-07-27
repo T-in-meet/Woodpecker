@@ -15,16 +15,4 @@ export const COMPONENT_PLAYGROUND_LIGHTBOX_IMAGES = [
     src: "/images/lightbox/lightbox-test-2.jpg",
     alt: "Lightbox 테스트 이미지 2",
   },
-  // {
-  //   src: "/images/lightbox/lightbox-test-3.jpg",
-  //   alt: "Lightbox 테스트 이미지 3",
-  // },
-  // {
-  //   src: "/images/lightbox/lightbox-test-4.webp",
-  //   alt: "Lightbox 테스트 이미지 4",
-  // },
-  // {
-  //   src: "/images/lightbox/lightbox-test-5.webp",
-  //   alt: "Lightbox 테스트 이미지 5",
-  // },
 ] satisfies readonly AdminLightboxImage[];
