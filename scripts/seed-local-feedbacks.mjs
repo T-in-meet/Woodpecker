@@ -23,11 +23,14 @@ function loadLocalEnv() {
 
 loadLocalEnv();
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://127.0.0.1:54321";
+const SUPABASE_URL =
+  process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://127.0.0.1:54321";
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!SERVICE_ROLE_KEY) {
-  throw new Error("SUPABASE_SERVICE_ROLE_KEY is required. Add it to .env.local.");
+  throw new Error(
+    "SUPABASE_SERVICE_ROLE_KEY is required. Add it to .env.local.",
+  );
 }
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
@@ -63,7 +66,8 @@ const notes = [
     id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1",
     user_id: users[1].id,
     title: "간격 반복 설정 메모",
-    content: "복습 알림 시간이 바뀌는 상황을 확인하기 위한 로컬 seed 메모입니다.",
+    content:
+      "복습 알림 시간이 바뀌는 상황을 확인하기 위한 로컬 seed 메모입니다.",
     review_round: 1,
     next_review_at: "2026-07-25T00:00:00.000Z",
     notification_time_of_day: "09:00:00",
@@ -117,7 +121,9 @@ const feedbacks = [
     title: "모바일에서 설정 화면이 조금 답답합니다",
     content:
       "프로필과 알림 설정 사이 간격이 좁아서 스크롤 중에 항목 구분이 어렵습니다. 첨부 이미지는 모바일 화면 예시입니다.",
-    image_urls: [`${users[1].id}/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb3/mobile-settings.png`],
+    image_urls: [
+      `${users[1].id}/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb3/mobile-settings.png`,
+    ],
     status: "RESOLVED",
     created_at: "2026-07-20T11:20:00.000Z",
     updated_at: "2026-07-21T03:30:00.000Z",
@@ -156,7 +162,9 @@ const feedbacks = [
     title: "첨부 이미지 업로드 실패 메시지가 불명확합니다",
     content:
       "5MB가 넘는 이미지를 올렸을 때 실패는 하는데 왜 실패했는지 알기 어렵습니다. 제한 크기를 메시지에 보여주면 좋겠습니다.",
-    image_urls: [`${users[2].id}/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb6/upload-error.png`],
+    image_urls: [
+      `${users[2].id}/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb6/upload-error.png`,
+    ],
     status: "OPEN",
     created_at: "2026-07-16T04:55:00.000Z",
     updated_at: "2026-07-16T04:55:00.000Z",
@@ -183,7 +191,8 @@ async function assertOk(label, response) {
 
 async function seedUsers() {
   for (const user of users) {
-    const { data: existing, error: getError } = await supabase.auth.admin.getUserById(user.id);
+    const { data: existing, error: getError } =
+      await supabase.auth.admin.getUserById(user.id);
     if (getError && getError.status !== 404) {
       throw new Error(`getUserById ${user.email}: ${getError.message}`);
     }
@@ -218,11 +227,15 @@ async function seedUsers() {
 }
 
 async function seedNotes() {
-  await assertOk("upsert notes", await supabase.from("notes").upsert(notes, { onConflict: "id" }));
+  await assertOk(
+    "upsert notes",
+    await supabase.from("notes").upsert(notes, { onConflict: "id" }),
+  );
 }
 
 async function seedBucket() {
-  const { data: buckets, error: listError } = await supabase.storage.listBuckets();
+  const { data: buckets, error: listError } =
+    await supabase.storage.listBuckets();
   if (listError) throw new Error(`listBuckets: ${listError.message}`);
 
   if (!buckets.some((bucket) => bucket.id === "feedbacks")) {
@@ -277,7 +290,10 @@ async function verify() {
 
   return {
     feedbackCount: seededFeedbacks.length,
-    imageCount: seededFeedbacks.reduce((total, feedback) => total + feedback.image_urls.length, 0),
+    imageCount: seededFeedbacks.reduce(
+      (total, feedback) => total + feedback.image_urls.length,
+      0,
+    ),
     sampleStorageFiles: files.map((file) => file.name),
   };
 }
