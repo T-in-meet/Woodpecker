@@ -48,7 +48,7 @@ export const FEEDBACK_IMAGE_MAX_SIZE = 5 * 1024 * 1024;
 export const FEEDBACK_IMAGE_ALLOWED_TYPES = AVATAR_ALLOWED_TYPES;
 
 export const FEEDBACK_DAILY_LIMIT_MESSAGE =
-  "피드백은 하루에 1건만 제출할 수 있습니다. 내일 다시 시도해주세요.";
+  "문의사항은 하루에 1건만 제출할 수 있습니다. 내일 다시 시도해주세요.";
 
 export const feedbackSchema = z.object({
   category: z.enum(FEEDBACK_CATEGORIES, {
