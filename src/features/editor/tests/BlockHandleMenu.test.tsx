@@ -1,12 +1,18 @@
+import "./setup";
+
+import { Editor as TipTapEditorInstance } from "@tiptap/core";
+import { NodeSelection } from "@tiptap/pm/state";
 import type { Editor } from "@tiptap/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
   type BlockAnchorPositionType,
   computeMenuPosition,
+  createBlockSelection,
   getActiveBlockElement,
   getBlockHandleMarkerOffset,
 } from "../components/BlockHandleMenu";
+import { getTipTapExtensions } from "../utils/tiptapExtensions";
 
 function createActiveElementEditor(
   rootElement: HTMLElement,
@@ -78,6 +84,54 @@ describe("getActiveBlockElement", () => {
     const editor = createActiveElementEditor(rootElement, textNode);
 
     expect(getActiveBlockElement(editor)).toBe(blockquoteElement);
+  });
+});
+
+describe("createBlockSelection", () => {
+  function createMountedEditor(content: string) {
+    const element = document.createElement("div");
+    document.body.appendChild(element);
+
+    return new TipTapEditorInstance({
+      element,
+      extensions: getTipTapExtensions(),
+      content,
+    });
+  }
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("selects the whole block node so clipboard actions apply to it", () => {
+    const editor = createMountedEditor("first\n\nsecond");
+    const paragraphElements = editor.view.dom.querySelectorAll("p");
+    const secondParagraph = paragraphElements[1];
+
+    if (!(secondParagraph instanceof HTMLElement)) {
+      throw new Error("second paragraph not found");
+    }
+
+    const selection = createBlockSelection(
+      editor as unknown as Editor,
+      secondParagraph,
+    );
+
+    expect(selection).toBeInstanceOf(NodeSelection);
+    expect(selection?.content().content.firstChild?.textContent).toBe("second");
+
+    editor.destroy();
+  });
+
+  it("returns null when the element does not belong to the document", () => {
+    const editor = createMountedEditor("first");
+    const detachedElement = document.createElement("p");
+
+    expect(
+      createBlockSelection(editor as unknown as Editor, detachedElement),
+    ).toBeNull();
+
+    editor.destroy();
   });
 });
 

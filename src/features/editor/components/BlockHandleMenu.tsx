@@ -1,5 +1,10 @@
 "use client";
 
+import {
+  NodeSelection,
+  type Selection as ProseMirrorSelection,
+  TextSelection,
+} from "@tiptap/pm/state";
 import type { Editor } from "@tiptap/react";
 import { GripVertical } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -205,6 +210,31 @@ export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
     return null;
   }
 
+  // 오버레이는 장식용 div라 실제 selection이 아니다. 핸들로 블록을 열 때 ProseMirror
+  // selection까지 옮겨줘야 복사/잘라내기/붙여넣기가 해당 블록에 적용된다.
+  const handleSelectBlock = () => {
+    if (editor.isDestroyed) {
+      return;
+    }
+
+    const blockElement = getActiveBlockElement(editor);
+
+    if (!blockElement) {
+      return;
+    }
+
+    const selection = createBlockSelection(editor, blockElement);
+
+    if (!selection) {
+      return;
+    }
+
+    const { view } = editor;
+
+    view.dispatch(view.state.tr.setSelection(selection));
+    view.focus();
+  };
+
   const handleDeleteBlock = () => {
     const blockElement = getActiveBlockElement(editor);
 
@@ -270,7 +300,13 @@ export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
               event.preventDefault();
             }}
             onClick={() => {
-              setIsMenuOpen((current) => !current);
+              const nextMenuOpen = !isMenuOpen;
+
+              if (nextMenuOpen) {
+                handleSelectBlock();
+              }
+
+              setIsMenuOpen(nextMenuOpen);
               scheduleSyncAnchorPosition();
             }}
             className={cn(
@@ -395,6 +431,30 @@ export function getBlockHandleMarkerOffset(blockElement: HTMLElement): number {
   // Standard list markers sit inside the parent list padding, so the handle
   // needs that space added back to avoid covering the marker itself.
   return markerPadding + LIST_MARKER_CLEARANCE;
+}
+
+export function createBlockSelection(
+  editor: Editor,
+  blockElement: HTMLElement,
+): ProseMirrorSelection | null {
+  const blockRange = getBlockNodeRange(editor, blockElement);
+
+  if (!blockRange) {
+    return null;
+  }
+
+  const { doc } = editor.state;
+  const blockNode = doc.nodeAt(blockRange.from);
+
+  if (blockNode && NodeSelection.isSelectable(blockNode)) {
+    return NodeSelection.create(doc, blockRange.from);
+  }
+
+  // 표 등 NodeSelection을 허용하지 않는 노드는 블록 전체 텍스트 범위로 대신 선택한다.
+  return TextSelection.between(
+    doc.resolve(blockRange.from),
+    doc.resolve(blockRange.to),
+  );
 }
 
 function getBlockNodeRange(
