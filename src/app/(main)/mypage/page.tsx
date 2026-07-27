@@ -75,7 +75,7 @@ function isValidSupportTab(value: unknown): value is SupportTab {
 
 const SUPPORT_TAB_LABELS: Record<SupportTab, string> = {
   faq: "FAQ",
-  inquiry: "문의하기",
+  inquiry: "1:1 문의",
 };
 
 type Props = {
