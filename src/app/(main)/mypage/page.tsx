@@ -1,17 +1,24 @@
-import { ChevronRight } from "lucide-react";
 import type { Metadata } from "next";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 import { LearningStatsSection } from "@/features/mypage/components/LearningStatsSection";
 import {
   MypageNav,
   type MypageSection,
 } from "@/features/mypage/components/MypageNav";
 import { ReviewWaitingSection } from "@/features/mypage/components/ReviewWaitingSection";
+import type { SupportTab } from "@/features/mypage/components/SupportSection";
 import {
-  getFeedbackNoteOptions,
   getLearningStats,
   getMyFeedbacks,
   type MyFeedbacksResult,
@@ -38,9 +45,9 @@ const DeleteAccountSection = dynamic(() =>
     (m) => m.DeleteAccountSection,
   ),
 );
-const FeedbackSection = dynamic(() =>
-  import("@/features/mypage/components/FeedbackSection").then(
-    (m) => m.FeedbackSection,
+const SupportSection = dynamic(() =>
+  import("@/features/mypage/components/SupportSection").then(
+    (m) => m.SupportSection,
   ),
 );
 
@@ -52,7 +59,7 @@ const VALID_SECTIONS: MypageSection[] = [
   "profile",
   "stats",
   "reviews",
-  "feedback",
+  "support",
 ];
 
 function isValidSection(value: unknown): value is MypageSection {
@@ -63,18 +70,30 @@ const SECTION_LABELS: Record<MypageSection, string> = {
   profile: "계정 관리",
   stats: "학습 통계",
   reviews: "복습 대기",
-  feedback: "문의사항",
+  support: "고객센터",
+};
+
+const VALID_SUPPORT_TABS: SupportTab[] = ["faq", "inquiry"];
+
+function isValidSupportTab(value: unknown): value is SupportTab {
+  return VALID_SUPPORT_TABS.includes(value as SupportTab);
+}
+
+const SUPPORT_TAB_LABELS: Record<SupportTab, string> = {
+  faq: "FAQ",
+  inquiry: "1:1 문의",
 };
 
 type Props = {
-  searchParams: Promise<{ section?: string }>;
+  searchParams: Promise<{ section?: string; tab?: string }>;
 };
 
 export default async function MyPage({ searchParams }: Props) {
-  const { section: rawSection } = await searchParams;
+  const { section: rawSection, tab: rawTab } = await searchParams;
   const section: MypageSection = isValidSection(rawSection)
     ? rawSection
     : "stats";
+  const supportTab: SupportTab = isValidSupportTab(rawTab) ? rawTab : "faq";
 
   const [user, profile] = await Promise.all([getUser(), getProfile()]);
   if (!user || !profile) redirect(ROUTES.LOGIN);
@@ -86,8 +105,6 @@ export default async function MyPage({ searchParams }: Props) {
   let hasAnyPushSubscription = false;
   let reviewWaiting: Awaited<ReturnType<typeof getReviewWaitingNotes>> = [];
   let feedbackResult: MyFeedbacksResult | null = null;
-  let feedbackNoteOptions: Awaited<ReturnType<typeof getFeedbackNoteOptions>> =
-    [];
 
   if (section === "stats") {
     stats = await getLearningStats();
@@ -97,38 +114,52 @@ export default async function MyPage({ searchParams }: Props) {
     });
   } else if (section === "reviews") {
     reviewWaiting = await getReviewWaitingNotes(user.id);
-  } else if (section === "feedback") {
-    [feedbackResult, feedbackNoteOptions] = await Promise.all([
-      getMyFeedbacks(user.id),
-      getFeedbackNoteOptions(user.id),
-    ]);
+  } else if (section === "support" && supportTab === "inquiry") {
+    feedbackResult = await getMyFeedbacks(user.id);
   }
 
   return (
     <div className="mx-auto max-w-5xl py-7 px-6">
       {/* Breadcrumb */}
-      <nav
-        aria-label="breadcrumb"
-        className="flex items-center gap-1.5 text-sm text-muted-foreground"
-      >
-        <Link
-          href={ROUTES.HOME}
-          className="transition-colors hover:text-foreground"
-        >
-          홈
-        </Link>
-        <ChevronRight className="size-3.5" />
-        <Link
-          href={ROUTES.MYPAGE}
-          className="transition-colors hover:text-foreground"
-        >
-          마이페이지
-        </Link>
-        <ChevronRight className="size-3.5" />
-        <span className="font-medium text-foreground">
-          {SECTION_LABELS[section]}
-        </span>
-      </nav>
+      <Breadcrumb>
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            <BreadcrumbLink asChild>
+              <Link href={ROUTES.HOME}>홈</Link>
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbLink asChild>
+              <Link href={ROUTES.MYPAGE}>마이페이지</Link>
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          {section === "support" ? (
+            <>
+              <BreadcrumbItem>
+                <BreadcrumbLink asChild>
+                  <Link href={`${ROUTES.MYPAGE}?section=support`}>
+                    {SECTION_LABELS[section]}
+                  </Link>
+                </BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbPage className="font-medium">
+                  {SUPPORT_TAB_LABELS[supportTab]}
+                </BreadcrumbPage>
+              </BreadcrumbItem>
+            </>
+          ) : (
+            <BreadcrumbItem>
+              <BreadcrumbPage className="font-medium">
+                {SECTION_LABELS[section]}
+              </BreadcrumbPage>
+            </BreadcrumbItem>
+          )}
+        </BreadcrumbList>
+      </Breadcrumb>
 
       {/* 페이지 타이틀 */}
       <h1 className="mt-6 mb-6 text-3xl font-bold">마이페이지</h1>
@@ -161,11 +192,11 @@ export default async function MyPage({ searchParams }: Props) {
           {section === "reviews" && (
             <ReviewWaitingSection notes={reviewWaiting} />
           )}
-          {section === "feedback" && feedbackResult && (
-            <FeedbackSection
-              feedbacks={feedbackResult.feedbacks}
-              noteOptions={feedbackNoteOptions}
-              hasSubmittedToday={feedbackResult.hasSubmittedToday}
+          {section === "support" && (
+            <SupportSection
+              activeTab={supportTab}
+              feedbacks={feedbackResult?.feedbacks ?? []}
+              hasSubmittedToday={feedbackResult?.hasSubmittedToday ?? false}
             />
           )}
         </div>
