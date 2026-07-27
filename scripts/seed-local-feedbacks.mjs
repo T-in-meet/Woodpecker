@@ -1,5 +1,6 @@
-import { createClient } from "@supabase/supabase-js";
 import { existsSync, readFileSync } from "node:fs";
+
+import { createClient } from "@supabase/supabase-js";
 
 function loadLocalEnv() {
   if (!existsSync(".env.local")) return;
