@@ -216,16 +216,13 @@ export async function deleteAccountAction() {
 async function removeFeedbackImages(
   supabase: Awaited<ReturnType<typeof createClient>>,
   paths: string[],
-): Promise<boolean> {
-  if (paths.length === 0) return true;
+) {
+  if (paths.length === 0) return;
 
   const { error } = await supabase.storage.from("feedbacks").remove(paths);
   if (error) {
     console.error("[feedback] 이미지 정리 실패:", error.message);
-    return false;
   }
-
-  return true;
 }
 
 export async function createFeedbackAction(
@@ -358,71 +355,29 @@ export async function deleteFeedbackAction(feedbackId: string) {
     return { error: "인증이 필요합니다" };
   }
 
-  const { data: feedback, error: fetchError } = await supabase
-    .from("feedbacks")
-    .select("id, image_urls")
-    .eq("id", feedbackId)
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  if (fetchError) {
-    console.error("[deleteFeedbackAction] 조회 실패:", fetchError);
-    return { error: "문의사항 삭제에 실패했습니다" };
-  }
-
-  if (!feedback) {
-    return { error: "삭제할 수 없습니다. 이미 삭제된 문의사항입니다" };
-  }
-
-  // RLS(feedbacks_delete_own_before_reply)와 동일한 규칙을 Storage 삭제 전에
-  // 미리 확인한다. 이미지를 먼저 지운 뒤 답변 존재로 DB 삭제가 막히면
-  // 이미지만 사라지고 행은 남는 상태가 되므로, 여기서 먼저 걸러낸다.
-  const { count: replyCount, error: replyError } = await supabase
-    .from("feedback_replies")
-    .select("id", { count: "exact", head: true })
-    .eq("feedback_id", feedbackId);
-
-  if (replyError) {
-    console.error("[deleteFeedbackAction] 답변 조회 실패:", replyError);
-    return { error: "문의사항 삭제에 실패했습니다" };
-  }
-
-  if (replyCount && replyCount > 0) {
-    return { error: "삭제할 수 없습니다. 답변이 등록된 문의사항입니다" };
-  }
-
-  // 첨부 이미지 삭제가 성공한 뒤에만 DB 행을 삭제한다.
-  // Storage 삭제가 실패하면 행을 지우지 않아 재시도할 수 있게 유지한다.
-  const imagesRemoved = await removeFeedbackImages(
-    supabase,
-    feedback.image_urls,
-  );
-
-  if (!imagesRemoved) {
-    return { error: "이미지 삭제에 실패했습니다. 잠시 후 다시 시도해주세요" };
-  }
-
-  // 위에서 확인한 시점과 삭제 시점 사이에 답변이 새로 달렸을 가능성을
-  // 대비해, RLS(feedbacks_delete_own_before_reply)가 최종적으로 다시 검증한다.
+  // RLS(feedbacks_delete_own_before_reply)가 답변 달린 피드백의 삭제를 막는다.
   // 정책에 걸리면 에러 없이 0건 삭제로 끝나므로 반환 행 유무로 판별한다.
-  const { data: deleted, error: deleteError } = await supabase
+  const { data: deleted, error } = await supabase
     .from("feedbacks")
     .delete()
     .eq("id", feedbackId)
     .eq("user_id", user.id)
-    .select("id");
+    .select("id, image_urls");
 
-  if (deleteError) {
-    console.error("[deleteFeedbackAction] 삭제 실패:", deleteError);
+  if (error) {
+    console.error("[deleteFeedbackAction] 삭제 실패:", error);
     return { error: "문의사항 삭제에 실패했습니다" };
   }
 
-  if (!deleted?.[0]) {
+  const deletedRow = deleted?.[0];
+  if (!deletedRow) {
     return {
       error:
         "삭제할 수 없습니다. 답변이 등록되었거나 이미 삭제된 문의사항입니다",
     };
   }
+
+  await removeFeedbackImages(supabase, deletedRow.image_urls);
 
   return { data: { success: true as const } };
 }
