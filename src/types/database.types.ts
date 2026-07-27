@@ -34,6 +34,94 @@ export type Database = {
   };
   public: {
     Tables: {
+      feedback_replies: {
+        Row: {
+          content: string;
+          created_at: string;
+          created_by: string;
+          feedback_id: string;
+          id: string;
+          image_paths: string[];
+          title: string;
+          updated_at: string;
+        };
+        Insert: {
+          content: string;
+          created_at?: string;
+          created_by: string;
+          feedback_id: string;
+          id?: string;
+          image_paths?: string[];
+          title: string;
+          updated_at?: string;
+        };
+        Update: {
+          content?: string;
+          created_at?: string;
+          created_by?: string;
+          feedback_id?: string;
+          id?: string;
+          image_paths?: string[];
+          title?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "feedback_replies_feedback_id_fkey";
+            columns: ["feedback_id"];
+            isOneToOne: true;
+            referencedRelation: "feedbacks";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      feedbacks: {
+        Row: {
+          category: string;
+          content: string;
+          created_at: string;
+          id: string;
+          image_urls: string[];
+          note_id: string | null;
+          status: string;
+          title: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          category: string;
+          content: string;
+          created_at?: string;
+          id?: string;
+          image_urls?: string[];
+          note_id?: string | null;
+          status?: string;
+          title: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          category?: string;
+          content?: string;
+          created_at?: string;
+          id?: string;
+          image_urls?: string[];
+          note_id?: string | null;
+          status?: string;
+          title?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "feedbacks_note_id_fkey";
+            columns: ["note_id"];
+            isOneToOne: false;
+            referencedRelation: "notes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       notes: {
         Row: {
           content: string;
