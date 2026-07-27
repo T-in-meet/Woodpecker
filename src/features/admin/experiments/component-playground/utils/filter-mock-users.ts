@@ -1,21 +1,12 @@
 import type { AdminAppliedFilter } from "@/features/admin/types/filter";
 import type { AdminSearchValue } from "@/features/admin/types/search";
 
-import { COMPONENT_PLAYGROUND_LIST_CONFIG } from "../constants/mock-user-list";
+import type {
+  ComponentPlaygroundFilterField,
+  ComponentPlaygroundFilters,
+} from "../types/filter";
 import type { MockUser } from "../types/mock-user";
-
-type ComponentPlaygroundSearchField =
-  typeof COMPONENT_PLAYGROUND_LIST_CONFIG.search.initialField;
-
-type ComponentPlaygroundFilterField =
-  (typeof COMPONENT_PLAYGROUND_LIST_CONFIG.filters)[number]["field"];
-
-type ComponentPlaygroundAppliedFilters = Partial<
-  Record<
-    ComponentPlaygroundFilterField,
-    AdminAppliedFilter<ComponentPlaygroundFilterField>
-  >
->;
+import type { ComponentPlaygroundSearchField } from "../types/search";
 
 interface FilterMockUsersParams {
   /** 검색과 필터를 적용할 원본 사용자 목록 */
@@ -25,7 +16,7 @@ interface FilterMockUsersParams {
   search: AdminSearchValue<ComponentPlaygroundSearchField>;
 
   /** 사용자가 적용 버튼으로 확정한 필터 목록 */
-  filters: ComponentPlaygroundAppliedFilters;
+  filters: ComponentPlaygroundFilters;
 }
 
 /**
