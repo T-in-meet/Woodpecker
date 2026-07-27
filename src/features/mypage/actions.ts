@@ -232,13 +232,10 @@ export async function createFeedbackAction(
   _prevState: unknown,
   formData: FormData,
 ) {
-  const noteIdRaw = formData.get("noteId");
   const parsed = feedbackSchema.safeParse({
     category: formData.get("category"),
     title: formData.get("title"),
     content: formData.get("content"),
-    noteId:
-      typeof noteIdRaw === "string" && noteIdRaw !== "" ? noteIdRaw : null,
   });
 
   if (!parsed.success) {
@@ -320,7 +317,7 @@ export async function createFeedbackAction(
     .insert({
       id: feedbackId,
       user_id: user.id,
-      note_id: parsed.data.noteId,
+      note_id: null,
       category: parsed.data.category,
       title: parsed.data.title,
       content: parsed.data.content,

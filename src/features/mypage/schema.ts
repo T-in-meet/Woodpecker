@@ -70,7 +70,6 @@ export const feedbackSchema = z.object({
       FEEDBACK_CONTENT_MAX_LENGTH,
       `내용은 ${FEEDBACK_CONTENT_MAX_LENGTH.toLocaleString("ko-KR")}자 이내로 입력해주세요`,
     ),
-  noteId: z.string().uuid("연결할 노트가 올바르지 않습니다").nullable(),
 });
 
 export type FeedbackFormInput = z.infer<typeof feedbackSchema>;

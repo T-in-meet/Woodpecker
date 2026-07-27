@@ -310,14 +310,12 @@ function makeFeedbackFormData({
   category = "BUG",
   title = "버그 신고",
   content = "버튼이 동작하지 않습니다",
-  noteId = "",
   images = [] as File[],
 } = {}) {
   const formData = new FormData();
   formData.set("category", category);
   formData.set("title", title);
   formData.set("content", content);
-  formData.set("noteId", noteId);
   for (const file of images) {
     formData.append("images", file);
   }
@@ -449,7 +447,6 @@ describe("createFeedbackAction", () => {
   });
 
   it("성공 시 data 반환하고 입력값대로 insert한다", async () => {
-    const noteId = "550e8400-e29b-41d4-a716-446655440000";
     const { supabase, insertMock, uploadMock } = makeFeedbackSupabaseMock();
     createClientMock.mockResolvedValue(supabase);
 
@@ -459,7 +456,6 @@ describe("createFeedbackAction", () => {
         category: "FEATURE",
         title: "제안",
         content: "다크 모드 추가해주세요",
-        noteId,
         images: [makeFile("a.png", "image/png", 1024)],
       }),
     );
@@ -469,7 +465,7 @@ describe("createFeedbackAction", () => {
     expect(insertMock).toHaveBeenCalledWith(
       expect.objectContaining({
         user_id: "user-123",
-        note_id: noteId,
+        note_id: null,
         category: "FEATURE",
         title: "제안",
         content: "다크 모드 추가해주세요",
@@ -477,17 +473,6 @@ describe("createFeedbackAction", () => {
           expect.stringMatching(/^user-123\/.+\.png$/),
         ]),
       }),
-    );
-  });
-
-  it("noteId가 빈 문자열이면 null로 insert한다", async () => {
-    const { supabase, insertMock } = makeFeedbackSupabaseMock();
-    createClientMock.mockResolvedValue(supabase);
-
-    await createFeedbackAction(null, makeFeedbackFormData({ noteId: "" }));
-
-    expect(insertMock).toHaveBeenCalledWith(
-      expect.objectContaining({ note_id: null }),
     );
   });
 });
