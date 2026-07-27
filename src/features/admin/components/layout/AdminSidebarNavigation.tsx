@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   SidebarContent,
@@ -11,8 +11,11 @@ import {
   SidebarMenu,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { ROUTES } from "@/lib/constants/routes";
 
 import { ADMIN_SIDEBAR_ITEMS } from "../../constants/admin-sidebar-items";
+import { useAdminUnreadNotificationCounts } from "../../notifications/hooks/use-admin-unread-notification-counts";
+import type { AdminSidebarBadgeMap } from "../../types/sidebar";
 import {
   getActiveGroups,
   getItemKey,
@@ -22,6 +25,7 @@ import { AdminSidebarMenuItem } from "./AdminSidebarMenuItem";
 
 export function AdminSidebarNavigation() {
   const pathname = usePathname();
+  const { data: unreadNotificationCounts } = useAdminUnreadNotificationCounts();
 
   const { setOpenMobile } = useSidebar();
 
@@ -61,6 +65,18 @@ export function AdminSidebarNavigation() {
     setOpenMobile(false);
   }
 
+  const badgeMap = useMemo<AdminSidebarBadgeMap>(
+    () => ({
+      [ROUTES.ADMIN.FEEDBACKS]: unreadNotificationCounts?.FEEDBACK_CREATED,
+      [ROUTES.ADMIN.OPERATIONAL_ERRORS]:
+        unreadNotificationCounts?.OPERATIONAL_ERROR,
+    }),
+    [
+      unreadNotificationCounts?.FEEDBACK_CREATED,
+      unreadNotificationCounts?.OPERATIONAL_ERROR,
+    ],
+  );
+
   return (
     <SidebarContent>
       <SidebarGroup>
@@ -71,6 +87,7 @@ export function AdminSidebarNavigation() {
             {ADMIN_SIDEBAR_ITEMS.map((item) => (
               <AdminSidebarMenuItem
                 key={getItemKey(item, 0)}
+                badgeMap={badgeMap}
                 item={item}
                 pathname={pathname}
                 openGroups={openGroups}

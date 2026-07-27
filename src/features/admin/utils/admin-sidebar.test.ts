@@ -5,8 +5,10 @@ import { ROUTES } from "@/lib/constants/routes";
 
 import type { AdminSidebarItem } from "../types/sidebar";
 import {
+  formatSidebarBadgeCount,
   getActiveGroups,
   getItemKey,
+  getSidebarBadgeCount,
   hasActiveItem,
   isPathActive,
 } from "./admin-sidebar";
@@ -117,6 +119,47 @@ describe("getItemKey", () => {
 
   it("href가 없는 그룹에는 group을 사용한다", () => {
     expect(getItemKey(EXPERIMENTS_ITEM, 0)).toBe("0-실험 기능-group");
+  });
+});
+
+describe("getSidebarBadgeCount", () => {
+  it("href에 매칭되는 badge 숫자가 1 이상이면 해당 숫자를 반환한다", () => {
+    expect(
+      getSidebarBadgeCount(USERS_ITEM, {
+        [ROUTES.ADMIN.USERS]: 3,
+      }),
+    ).toBe(3);
+  });
+
+  it("badge 숫자가 없거나 0 이하이면 0을 반환한다", () => {
+    expect(getSidebarBadgeCount(USERS_ITEM, {})).toBe(0);
+    expect(
+      getSidebarBadgeCount(USERS_ITEM, {
+        [ROUTES.ADMIN.USERS]: 0,
+      }),
+    ).toBe(0);
+  });
+
+  it("href가 없는 그룹 항목은 badge 대상에서 제외한다", () => {
+    expect(
+      getSidebarBadgeCount(EXPERIMENTS_ITEM, {
+        group: 5,
+      }),
+    ).toBe(0);
+  });
+});
+
+describe("formatSidebarBadgeCount", () => {
+  it("0 이하이면 표시 문자열을 만들지 않는다", () => {
+    expect(formatSidebarBadgeCount(0)).toBeNull();
+  });
+
+  it("1 이상 99 이하는 숫자 문자열을 반환한다", () => {
+    expect(formatSidebarBadgeCount(12)).toBe("12");
+  });
+
+  it("100 이상이면 99+로 축약한다", () => {
+    expect(formatSidebarBadgeCount(100)).toBe("99+");
   });
 });
 
