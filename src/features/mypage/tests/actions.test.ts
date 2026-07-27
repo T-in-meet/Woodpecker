@@ -216,21 +216,32 @@ function makeFeedbackSupabaseMock({
   todayError = null as { message: string } | null,
   insertError = null as { message: string; code?: string } | null,
   uploadError = null as { message: string } | null,
-  deletedRows = [] as { id: string; image_urls: string[] }[],
+  fetchRow = null as { id: string; image_urls: string[] } | null,
+  fetchError = null as { message: string } | null,
+  replyCount = 0,
+  replyError = null as { message: string } | null,
+  deletedRows = [] as { id: string }[],
   deleteError = null as { message: string } | null,
+  removeError = null as { message: string } | null,
 } = {}) {
   const insertedRow = { id: "feedback-1" };
 
+  // feedbacks.select() 체인 — 오늘 제출 여부 확인과 삭제 대상 단건 조회에서 공용으로 쓰인다.
   const limitMock = vi.fn().mockResolvedValue({
     data: todayError ? null : todayRows,
     error: todayError,
   });
-  const selectChain = {
+  const maybeSingleMock = vi.fn().mockResolvedValue({
+    data: fetchError ? null : fetchRow,
+    error: fetchError,
+  });
+  const feedbackSelectMock = vi.fn().mockReturnValue({
     eq: vi.fn().mockReturnThis(),
     gte: vi.fn().mockReturnThis(),
     lt: vi.fn().mockReturnThis(),
     limit: limitMock,
-  };
+    maybeSingle: maybeSingleMock,
+  });
 
   const insertSingle = vi.fn().mockResolvedValue({
     data: insertError ? null : insertedRow,
@@ -250,14 +261,34 @@ function makeFeedbackSupabaseMock({
     }),
   });
 
+  // feedback_replies.select() 체인 — 삭제 전 답변 존재 여부를 미리 확인한다.
+  const replyEqMock = vi.fn().mockResolvedValue({
+    count: replyError ? null : replyCount,
+    error: replyError,
+  });
+  const replySelectMock = vi.fn().mockReturnValue({ eq: replyEqMock });
+
   const uploadMock = vi.fn().mockResolvedValue({ error: uploadError });
-  const removeMock = vi.fn().mockResolvedValue({ error: null });
+  const removeMock = vi.fn().mockResolvedValue({ error: removeError });
+
+  const fromMock = vi.fn((table: string) => {
+    if (table === "feedback_replies") {
+      return { select: replySelectMock };
+    }
+
+    return {
+      select: feedbackSelectMock,
+      insert: insertMock,
+      delete: deleteMock,
+    };
+  });
 
   return {
     insertMock,
     uploadMock,
     removeMock,
     deleteMock,
+    replySelectMock,
     supabase: {
       auth: {
         getUser: vi.fn().mockResolvedValue({
@@ -270,11 +301,7 @@ function makeFeedbackSupabaseMock({
           remove: removeMock,
         }),
       },
-      from: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue(selectChain),
-        insert: insertMock,
-        delete: deleteMock,
-      }),
+      from: fromMock,
     },
   };
 }
@@ -490,8 +517,80 @@ describe("deleteFeedbackAction", () => {
     expect(result).toEqual({ error: "인증이 필요합니다" });
   });
 
-  it("삭제 쿼리 실패 시 에러 반환", async () => {
+  it("조회 쿼리 실패 시 에러 반환", async () => {
+    const { supabase, removeMock, deleteMock } = makeFeedbackSupabaseMock({
+      fetchError: { message: "boom" },
+    });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await deleteFeedbackAction(feedbackId);
+    expect(result).toEqual({ error: "문의사항 삭제에 실패했습니다" });
+    expect(removeMock).not.toHaveBeenCalled();
+    expect(deleteMock).not.toHaveBeenCalled();
+  });
+
+  it("대상 행이 없으면(타인 소유·이미 삭제 등) 에러 반환", async () => {
+    const { supabase, removeMock } = makeFeedbackSupabaseMock({
+      fetchRow: null,
+    });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await deleteFeedbackAction(feedbackId);
+    expect(result).toEqual({
+      error: "삭제할 수 없습니다. 이미 삭제된 문의사항입니다",
+    });
+    expect(removeMock).not.toHaveBeenCalled();
+  });
+
+  it("답변 조회 실패 시 에러 반환", async () => {
+    const { supabase, removeMock } = makeFeedbackSupabaseMock({
+      fetchRow: { id: feedbackId, image_urls: [] },
+      replyError: { message: "boom" },
+    });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await deleteFeedbackAction(feedbackId);
+    expect(result).toEqual({ error: "문의사항 삭제에 실패했습니다" });
+    expect(removeMock).not.toHaveBeenCalled();
+  });
+
+  it("답변이 이미 등록되어 있으면 이미지 정리 없이 에러 반환", async () => {
+    const { supabase, removeMock, deleteMock } = makeFeedbackSupabaseMock({
+      fetchRow: {
+        id: feedbackId,
+        image_urls: ["user-123/feedback-1/a.png"],
+      },
+      replyCount: 1,
+    });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await deleteFeedbackAction(feedbackId);
+    expect(result).toEqual({
+      error: "삭제할 수 없습니다. 답변이 등록된 문의사항입니다",
+    });
+    expect(removeMock).not.toHaveBeenCalled();
+    expect(deleteMock).not.toHaveBeenCalled();
+  });
+
+  it("이미지 삭제 실패 시 DB 행을 지우지 않고 에러 반환", async () => {
+    const paths = ["user-123/feedback-1/a.png"];
+    const { supabase, removeMock, deleteMock } = makeFeedbackSupabaseMock({
+      fetchRow: { id: feedbackId, image_urls: paths },
+      removeError: { message: "storage down" },
+    });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await deleteFeedbackAction(feedbackId);
+    expect(result).toEqual({
+      error: "이미지 삭제에 실패했습니다. 잠시 후 다시 시도해주세요",
+    });
+    expect(removeMock).toHaveBeenCalledWith(paths);
+    expect(deleteMock).not.toHaveBeenCalled();
+  });
+
+  it("최종 삭제 쿼리 실패 시 에러 반환", async () => {
     const { supabase } = makeFeedbackSupabaseMock({
+      fetchRow: { id: feedbackId, image_urls: [] },
       deleteError: { message: "boom" },
     });
     createClientMock.mockResolvedValue(supabase);
@@ -500,8 +599,9 @@ describe("deleteFeedbackAction", () => {
     expect(result).toEqual({ error: "문의사항 삭제에 실패했습니다" });
   });
 
-  it("삭제된 행이 없으면(답변 존재 등) 에러 반환하고 storage 정리 안 함", async () => {
-    const { supabase, removeMock } = makeFeedbackSupabaseMock({
+  it("이미지 정리 후 답변이 새로 달려 최종 삭제가 막히면 에러 반환", async () => {
+    const { supabase } = makeFeedbackSupabaseMock({
+      fetchRow: { id: feedbackId, image_urls: [] },
       deletedRows: [],
     });
     createClientMock.mockResolvedValue(supabase);
@@ -511,24 +611,29 @@ describe("deleteFeedbackAction", () => {
       error:
         "삭제할 수 없습니다. 답변이 등록되었거나 이미 삭제된 문의사항입니다",
     });
-    expect(removeMock).not.toHaveBeenCalled();
   });
 
-  it("성공 시 data 반환하고 첨부 이미지를 정리한다", async () => {
+  it("성공 시 이미지를 먼저 정리한 뒤 행을 삭제하고 data를 반환한다", async () => {
     const paths = ["user-123/feedback-1/a.png", "user-123/feedback-1/b.png"];
-    const { supabase, removeMock } = makeFeedbackSupabaseMock({
-      deletedRows: [{ id: feedbackId, image_urls: paths }],
+    const { supabase, removeMock, deleteMock } = makeFeedbackSupabaseMock({
+      fetchRow: { id: feedbackId, image_urls: paths },
+      deletedRows: [{ id: feedbackId }],
     });
     createClientMock.mockResolvedValue(supabase);
 
     const result = await deleteFeedbackAction(feedbackId);
     expect(result).toEqual({ data: { success: true } });
     expect(removeMock).toHaveBeenCalledWith(paths);
+    expect(
+      removeMock.mock.invocationCallOrder[0]! <
+        deleteMock.mock.invocationCallOrder[0]!,
+    ).toBe(true);
   });
 
   it("첨부 이미지가 없으면 storage 정리를 호출하지 않는다", async () => {
     const { supabase, removeMock } = makeFeedbackSupabaseMock({
-      deletedRows: [{ id: feedbackId, image_urls: [] }],
+      fetchRow: { id: feedbackId, image_urls: [] },
+      deletedRows: [{ id: feedbackId }],
     });
     createClientMock.mockResolvedValue(supabase);
 
