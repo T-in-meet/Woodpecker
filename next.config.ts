@@ -7,42 +7,24 @@ const supabaseHostname =
     ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname
     : undefined);
 
-// Supabase Storage 이미지를 next/image로 표시하기 위한 허용 패턴입니다.
-// feedback/feedback_replies bucket은 private이므로 signed URL 경로도 함께 허용합니다.
-const supabaseImagePatterns = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseImagePattern = process.env.NEXT_PUBLIC_SUPABASE_URL
   ? (() => {
       const url = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!);
 
-      return [
-        {
-          protocol: url.protocol.replace(":", "") as "http" | "https",
-          hostname: url.hostname,
-          port: url.port,
-          pathname: "/storage/v1/object/public/**",
-        },
-        {
-          protocol: url.protocol.replace(":", "") as "http" | "https",
-          hostname: url.hostname,
-          port: url.port,
-          pathname: "/storage/v1/object/sign/**",
-        },
-      ];
+      return {
+        protocol: url.protocol.replace(":", "") as "http" | "https",
+        hostname: url.hostname,
+        port: url.port,
+        pathname: "/storage/v1/object/public/**",
+      };
     })()
   : supabaseHostname
-    ? [
-        {
-          protocol: "https" as const,
-          hostname: supabaseHostname,
-          port: "",
-          pathname: "/storage/v1/object/public/**",
-        },
-        {
-          protocol: "https" as const,
-          hostname: supabaseHostname,
-          port: "",
-          pathname: "/storage/v1/object/sign/**",
-        },
-      ]
+    ? {
+        protocol: "https" as const,
+        hostname: supabaseHostname,
+        port: "",
+        pathname: "/storage/v1/object/public/**",
+      }
     : undefined;
 
 export function shouldDisableSerwist() {
@@ -58,12 +40,11 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   experimental: {
     serverActions: {
-      // 관리자 답변은 5MB 이미지 여러 개를 FormData로 전달할 수 있어 기본 1MB보다 크게 둔다.
-      bodySizeLimit: "30mb",
+      bodySizeLimit: "5mb",
     },
   },
   images: {
-    remotePatterns: supabaseImagePatterns ?? [],
+    remotePatterns: [...(supabaseImagePattern ? [supabaseImagePattern] : [])],
   },
   async headers() {
     const isProduction = process.env.NODE_ENV === "production";
