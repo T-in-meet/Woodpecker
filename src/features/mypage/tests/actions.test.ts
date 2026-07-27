@@ -557,20 +557,19 @@ describe("deleteFeedbackAction", () => {
     expect(deleteMock).not.toHaveBeenCalled();
   });
 
-  it("이미지 삭제 실패 시 DB 행을 지우지 않고 에러 반환", async () => {
+  it("DB 행 삭제 후 이미지 정리가 실패해도 성공으로 반환한다(고아 파일 로그만 남김)", async () => {
     const paths = ["user-123/feedback-1/a.png"];
     const { supabase, removeMock, deleteMock } = makeFeedbackSupabaseMock({
       fetchRow: { id: feedbackId, image_urls: paths },
+      deletedRows: [{ id: feedbackId }],
       removeError: { message: "storage down" },
     });
     createClientMock.mockResolvedValue(supabase);
 
     const result = await deleteFeedbackAction(feedbackId);
-    expect(result).toEqual({
-      error: "이미지 삭제에 실패했습니다. 잠시 후 다시 시도해주세요",
-    });
+    expect(result).toEqual({ data: { success: true } });
+    expect(deleteMock).toHaveBeenCalled();
     expect(removeMock).toHaveBeenCalledWith(paths);
-    expect(deleteMock).not.toHaveBeenCalled();
   });
 
   it("최종 삭제 쿼리 실패 시 에러 반환", async () => {
@@ -584,7 +583,7 @@ describe("deleteFeedbackAction", () => {
     expect(result).toEqual({ error: "문의사항 삭제에 실패했습니다" });
   });
 
-  it("이미지 정리 후 답변이 새로 달려 최종 삭제가 막히면 에러 반환", async () => {
+  it("사전 확인 후 답변이 새로 달려 최종 삭제가 막히면 에러 반환", async () => {
     const { supabase } = makeFeedbackSupabaseMock({
       fetchRow: { id: feedbackId, image_urls: [] },
       deletedRows: [],
@@ -598,7 +597,7 @@ describe("deleteFeedbackAction", () => {
     });
   });
 
-  it("성공 시 이미지를 먼저 정리한 뒤 행을 삭제하고 data를 반환한다", async () => {
+  it("성공 시 행을 먼저 삭제한 뒤 이미지를 정리하고 data를 반환한다", async () => {
     const paths = ["user-123/feedback-1/a.png", "user-123/feedback-1/b.png"];
     const { supabase, removeMock, deleteMock } = makeFeedbackSupabaseMock({
       fetchRow: { id: feedbackId, image_urls: paths },
@@ -610,8 +609,8 @@ describe("deleteFeedbackAction", () => {
     expect(result).toEqual({ data: { success: true } });
     expect(removeMock).toHaveBeenCalledWith(paths);
     expect(
-      removeMock.mock.invocationCallOrder[0]! <
-        deleteMock.mock.invocationCallOrder[0]!,
+      deleteMock.mock.invocationCallOrder[0]! <
+        removeMock.mock.invocationCallOrder[0]!,
     ).toBe(true);
   });
 

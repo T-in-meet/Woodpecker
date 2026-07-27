@@ -371,9 +371,9 @@ export async function deleteFeedbackAction(feedbackId: string) {
     return { error: "삭제할 수 없습니다. 이미 삭제된 문의사항입니다" };
   }
 
-  // RLS(feedbacks_delete_own_before_reply)와 동일한 규칙을 Storage 삭제 전에
-  // 미리 확인한다. 이미지를 먼저 지운 뒤 답변 존재로 DB 삭제가 막히면
-  // 이미지만 사라지고 행은 남는 상태가 되므로, 여기서 먼저 걸러낸다.
+  // RLS(feedbacks_delete_own_before_reply)와 동일한 규칙을 미리 확인해
+  // 답변이 달린 문의에 더 친절한 에러 메시지를 준다. 최종 판단은 아래
+  // DB 삭제 시점의 RLS가 다시 내리므로 여기서 통과해도 안전이 보장되지는 않는다.
   const { count: replyCount, error: replyError } = await supabase
     .from("feedback_replies")
     .select("id", { count: "exact", head: true })
@@ -388,20 +388,11 @@ export async function deleteFeedbackAction(feedbackId: string) {
     return { error: "삭제할 수 없습니다. 답변이 등록된 문의사항입니다" };
   }
 
-  // 첨부 이미지 삭제가 성공한 뒤에만 DB 행을 삭제한다.
-  // Storage 삭제가 실패하면 행을 지우지 않아 재시도할 수 있게 유지한다.
-  const imagesRemoved = await removeFeedbackImages(
-    supabase,
-    feedback.image_urls,
-  );
-
-  if (!imagesRemoved) {
-    return { error: "이미지 삭제에 실패했습니다. 잠시 후 다시 시도해주세요" };
-  }
-
-  // 위에서 확인한 시점과 삭제 시점 사이에 답변이 새로 달렸을 가능성을
-  // 대비해, RLS(feedbacks_delete_own_before_reply)가 최종적으로 다시 검증한다.
+  // DB 행 삭제를 먼저 확정한다. RLS(feedbacks_delete_own_before_reply)가
+  // 위 사전 확인 이후 새로 달린 답변까지 최종적으로 다시 검증하며,
   // 정책에 걸리면 에러 없이 0건 삭제로 끝나므로 반환 행 유무로 판별한다.
+  // 이미지는 행 삭제가 확정된 뒤에만 지워, 삭제가 막힌 문의의 첨부
+  // 이미지가 먼저 유실되는 상황을 방지한다.
   const { data: deleted, error: deleteError } = await supabase
     .from("feedbacks")
     .delete()
@@ -419,6 +410,20 @@ export async function deleteFeedbackAction(feedbackId: string) {
       error:
         "삭제할 수 없습니다. 답변이 등록되었거나 이미 삭제된 문의사항입니다",
     };
+  }
+
+  // 행은 이미 삭제되었으므로 Storage 정리가 실패해도 사용자에게는
+  // 성공으로 응답한다. 실패 시 고아 파일이 남을 수 있어 로그만 남긴다.
+  const imagesRemoved = await removeFeedbackImages(
+    supabase,
+    feedback.image_urls,
+  );
+
+  if (!imagesRemoved) {
+    console.error(
+      "[deleteFeedbackAction] 이미지 정리 실패, 고아 파일 발생:",
+      feedbackId,
+    );
   }
 
   return { data: { success: true as const } };

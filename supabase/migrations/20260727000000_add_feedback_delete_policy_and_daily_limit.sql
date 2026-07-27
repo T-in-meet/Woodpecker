@@ -11,6 +11,9 @@
 --   Server Action에서 사전 체크로 안내 메시지를 주고,
 --   동시 요청 경합은 unique index가 최종적으로 막는다.
 --   당일 피드백을 삭제한 경우에는 같은 날 다시 제출할 수 있다.
+--   하루 1건 제한이 없던 기간에 쌓인 중복 데이터가 있으면 아래 unique index
+--   생성이 unique_violation으로 실패한다. 원인을 바로 알 수 있도록 인덱스
+--   생성 전에 중복 여부를 미리 검사해 명확한 에러 메시지로 막는다.
 
 CREATE POLICY "feedbacks_delete_own_before_reply"
     ON "public"."feedbacks"
@@ -25,6 +28,26 @@ CREATE POLICY "feedbacks_delete_own_before_reply"
         )
     );
 
+
+DO $$
+DECLARE
+    duplicate_count integer;
+BEGIN
+    SELECT count(*) INTO duplicate_count
+    FROM (
+        SELECT "user_id", "public"."kst_date"("created_at")
+        FROM "public"."feedbacks"
+        GROUP BY "user_id", "public"."kst_date"("created_at")
+        HAVING count(*) > 1
+    ) AS "duplicates";
+
+    IF duplicate_count > 0 THEN
+        RAISE EXCEPTION
+            '% 명의 사용자가 하루 1건 제한 도입 전 같은 KST 날짜에 여러 건의 피드백을 남겨 unique index를 생성할 수 없습니다. '
+            '중복 행을 정리(삭제 또는 병합)한 뒤 마이그레이션을 다시 실행하세요.',
+            duplicate_count;
+    END IF;
+END $$;
 
 CREATE UNIQUE INDEX "feedbacks_one_per_user_per_kst_day_idx"
     ON "public"."feedbacks"
