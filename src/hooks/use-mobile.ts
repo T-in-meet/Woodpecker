@@ -2,7 +2,7 @@ import * as React from "react";
 
 const MOBILE_BREAKPOINT = 768;
 
-export function useIsMobile() {
+export function useIsMobile(breakpoint = MOBILE_BREAKPOINT) {
   const [isMobile, setIsMobile] = React.useState(false);
 
   React.useEffect(() => {
@@ -12,7 +12,7 @@ export function useIsMobile() {
     // (증상: 모바일 → 데스크톱 전환 시 Sidebar가 Drawer 상태로 유지되고,
     // 새로고침 후에만 정상적으로 Desktop Sidebar로 변경됨.)
     const update = () => {
-      setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
+      setIsMobile(window.innerWidth < breakpoint);
     };
 
     update();
@@ -20,7 +20,7 @@ export function useIsMobile() {
     window.addEventListener("resize", update);
 
     return () => window.removeEventListener("resize", update);
-  }, []);
+  }, [breakpoint]);
 
   return isMobile;
 }
