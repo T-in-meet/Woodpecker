@@ -23,6 +23,22 @@ const ROUTE_CHANGE_REFETCH_COOLDOWN_MS = 30_000;
 
 class UnauthorizedNotificationError extends Error {}
 
+export function removeReadNotificationFromResponse(
+  current: NotificationsResponseType | undefined,
+  notificationId: string,
+) {
+  if (!current) return current;
+
+  const hasItem = current.items.some((item) => item.id === notificationId);
+
+  if (!hasItem) return current;
+
+  return {
+    items: current.items.filter((item) => item.id !== notificationId),
+    unreadCount: Math.max(current.unreadCount - 1, 0),
+  };
+}
+
 async function fetchNotifications(): Promise<NotificationsResponseType> {
   const response = await fetch("/api/notifications", {
     credentials: "same-origin",
@@ -131,6 +147,13 @@ export function NotificationBell({ userId }: NotificationBellProps) {
     setOpen(false);
   };
 
+  const handleItemRead = (notificationId: string) => {
+    queryClient.setQueryData<NotificationsResponseType>(
+      notificationsQueryKey,
+      (current) => removeReadNotificationFromResponse(current, notificationId),
+    );
+  };
+
   const hasHiddenUnreadNotifications = unreadCount > data.items.length;
 
   return (
@@ -183,6 +206,7 @@ export function NotificationBell({ userId }: NotificationBellProps) {
             items={data.items}
             isError={isError}
             isLoading={isLoading}
+            onItemRead={handleItemRead}
             onItemNavigate={handleItemNavigate}
           />
 

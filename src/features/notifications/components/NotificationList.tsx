@@ -1,20 +1,27 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import type { MouseEvent } from "react";
 
-import { NOTIFICATION_STATUS } from "@/lib/constants/notifications";
+import {
+  NOTIFICATION_STATUS,
+  NOTIFICATION_TYPES,
+} from "@/lib/constants/notifications";
 import { formatDateTime } from "@/lib/utils/formatDate";
 
 import {
   ADMIN_NOTIFICATION_DEFINITIONS,
   USER_NOTIFICATION_DEFINITIONS,
 } from "../definitions";
+import { markNotificationAsReadAction } from "../actions";
 import type { NotificationListItemType } from "../schema";
 
 type NotificationListProps = {
   items: NotificationListItemType[];
   isError?: boolean;
   isLoading?: boolean;
+  onItemRead?: (notificationId: string) => void;
   onItemNavigate?: () => void;
 };
 
@@ -65,12 +72,33 @@ function getNotificationDescription(item: NotificationListItemType): string {
   return USER_NOTIFICATION_DEFINITIONS[type].label;
 }
 
+function shouldMarkAsReadOnClick(item: NotificationListItemType) {
+  // REVIEW는 복습 완료 RPC에서 READ 처리한다. 그 외 알림은 클릭을 소비로 본다.
+  return (
+    item.status === NOTIFICATION_STATUS.SENT &&
+    item.type !== NOTIFICATION_TYPES.REVIEW
+  );
+}
+
+function isModifiedClick(event: MouseEvent<HTMLAnchorElement>) {
+  return (
+    event.altKey ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.shiftKey ||
+    event.button !== 0
+  );
+}
+
 export function NotificationList({
   items,
   isError = false,
   isLoading = false,
+  onItemRead,
   onItemNavigate,
 }: NotificationListProps) {
+  const router = useRouter();
+
   if (isLoading) {
     return (
       <ul className="max-h-96 overflow-y-auto" aria-label="알림 목록">
@@ -134,8 +162,26 @@ export function NotificationList({
             <Link
               href={item.click_path}
               className="min-w-0 flex-1"
-              onClick={() => {
+              onClick={async (event) => {
+                if (!shouldMarkAsReadOnClick(item) || isModifiedClick(event)) {
+                  onItemNavigate?.();
+                  return;
+                }
+
+                event.preventDefault();
+
+                try {
+                  const result = await markNotificationAsReadAction(item.id);
+
+                  if (result.success && result.updated) {
+                    onItemRead?.(item.id);
+                  }
+                } catch {
+                  // 읽음 처리는 부가 작업이므로 실패해도 알림 대상 이동은 유지한다.
+                }
+
                 onItemNavigate?.();
+                router.push(item.click_path);
               }}
             >
               {content}
