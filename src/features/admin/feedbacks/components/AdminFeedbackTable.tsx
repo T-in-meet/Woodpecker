@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { TableHead } from "@/components/ui/table";
 import {
   AdminListEmpty,
   AdminListError,
@@ -79,37 +80,13 @@ export function AdminFeedbackTable({
                 피드백
               </AdminSortableTableHead>
 
-              <AdminSortableTableHead
-                field="user"
-                sort={sort}
-                onSortChange={onSortChange}
-              >
-                사용자
-              </AdminSortableTableHead>
+              <TableHead>사용자</TableHead>
 
-              <AdminSortableTableHead
-                field="imageCount"
-                sort={sort}
-                onSortChange={onSortChange}
-              >
-                첨부
-              </AdminSortableTableHead>
+              <TableHead>첨부</TableHead>
 
-              <AdminSortableTableHead
-                field="replyAuthor"
-                sort={sort}
-                onSortChange={onSortChange}
-              >
-                답변 작성자
-              </AdminSortableTableHead>
+              <TableHead>답변 작성자</TableHead>
 
-              <AdminSortableTableHead
-                field="note"
-                sort={sort}
-                onSortChange={onSortChange}
-              >
-                연결 노트
-              </AdminSortableTableHead>
+              <TableHead>연결 노트</TableHead>
 
               <AdminSortableTableHead
                 field="createdAt"

@@ -21,15 +21,7 @@ export type FeedbackFilterField =
   | "noteLinked";
 
 /** 관리자 피드백 목록에서 정렬 가능한 필드입니다. */
-export type FeedbackSortField =
-  | "status"
-  | "category"
-  | "title"
-  | "user"
-  | "imageCount"
-  | "replyAuthor"
-  | "note"
-  | "createdAt";
+export type FeedbackSortField = "status" | "category" | "title" | "createdAt";
 
 /**
  * 관리자 피드백 목록 Server Action에 전달하는 조회 조건입니다.

@@ -9,8 +9,6 @@ const {
   mapFeedbackRowsMock,
   createFeedbackSignedImagesMock,
   applyFeedbackSortMock,
-  needsFeedbackItemSortMock,
-  sortFeedbackItemsMock,
   getUserIdsForSearchMock,
 } = vi.hoisted(() => ({
   notFoundMock: vi.fn(),
@@ -21,8 +19,6 @@ const {
   mapFeedbackRowsMock: vi.fn(),
   createFeedbackSignedImagesMock: vi.fn(),
   applyFeedbackSortMock: vi.fn(),
-  needsFeedbackItemSortMock: vi.fn(),
-  sortFeedbackItemsMock: vi.fn(),
   getUserIdsForSearchMock: vi.fn(),
 }));
 
@@ -56,8 +52,6 @@ vi.mock("@/features/admin/feedbacks/utils/feedback-reply-image", () => ({
 
 vi.mock("@/features/admin/feedbacks/utils/feedback-sort", () => ({
   applyFeedbackSort: applyFeedbackSortMock,
-  needsFeedbackItemSort: needsFeedbackItemSortMock,
-  sortFeedbackItems: sortFeedbackItemsMock,
 }));
 
 vi.mock("@/features/admin/feedbacks/utils/feedback-user-search", () => ({
@@ -531,9 +525,7 @@ describe("getFeedbacks", () => {
 
     applyFeedbackFiltersMock.mockImplementation((query) => query);
     applyFeedbackSortMock.mockImplementation((query) => query);
-    needsFeedbackItemSortMock.mockReturnValue(false);
     mapFeedbackRowsMock.mockResolvedValue([]);
-    sortFeedbackItemsMock.mockImplementation((items) => items);
   });
 
   it("사용자 검색 결과가 없으면 feedbacks를 조회하지 않고 빈 결과를 반환한다", async () => {
@@ -678,7 +670,7 @@ describe("getFeedbacks", () => {
     expect(applyFeedbackSortMock).toHaveBeenCalledWith(supabase.query, sort);
   });
 
-  it("DB 정렬을 사용하는 경우 현재 페이지 범위만 조회한다", async () => {
+  it("정렬 조건과 함께 현재 페이지 범위만 조회한다", async () => {
     const rows = [
       {
         id: "feedback-11",
@@ -707,7 +699,6 @@ describe("getFeedbacks", () => {
 
     createAdminClientMock.mockReturnValue(supabase.client);
     mapFeedbackRowsMock.mockResolvedValue(mappedItems);
-    needsFeedbackItemSortMock.mockReturnValue(false);
 
     const result = await getFeedbacks(
       createListQuery({
@@ -719,7 +710,6 @@ describe("getFeedbacks", () => {
     expect(supabase.mocks.rangeMock).toHaveBeenCalledWith(10, 19);
 
     expect(mapFeedbackRowsMock).toHaveBeenCalledWith(rows);
-    expect(sortFeedbackItemsMock).not.toHaveBeenCalled();
 
     expect(result).toEqual({
       items: mappedItems,
@@ -729,56 +719,6 @@ describe("getFeedbacks", () => {
         total: 25,
         totalPages: 3,
       },
-    });
-  });
-
-  it("항목 정렬이 필요한 경우 전체 결과를 정렬한 뒤 현재 페이지를 자른다", async () => {
-    const rows = Array.from({ length: 12 }, (_, index) => ({
-      id: `feedback-${index + 1}`,
-    }));
-
-    const mappedItems = rows.map((row) => ({
-      id: row.id,
-    }));
-
-    const sortedItems = [...mappedItems].reverse();
-
-    const supabase = createListSupabaseMock({
-      result: {
-        data: rows,
-        error: null,
-        count: 12,
-      },
-    });
-
-    createAdminClientMock.mockReturnValue(supabase.client);
-    mapFeedbackRowsMock.mockResolvedValue(mappedItems);
-    sortFeedbackItemsMock.mockReturnValue(sortedItems);
-    needsFeedbackItemSortMock.mockReturnValue(true);
-
-    const sort = {
-      field: "user",
-      direction: "asc",
-    };
-
-    const result = await getFeedbacks(
-      createListQuery({
-        page: 2,
-        pageSize: 5,
-        sort,
-      }),
-    );
-
-    expect(supabase.mocks.rangeMock).not.toHaveBeenCalled();
-
-    expect(sortFeedbackItemsMock).toHaveBeenCalledWith(mappedItems, sort);
-
-    expect(result.items).toEqual(sortedItems.slice(5, 10));
-    expect(result.pagination).toEqual({
-      page: 2,
-      pageSize: 5,
-      total: 12,
-      totalPages: 3,
     });
   });
 

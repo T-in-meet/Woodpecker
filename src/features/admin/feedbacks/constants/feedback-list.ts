@@ -166,11 +166,13 @@ type FeedbackSortColumn = "status" | "category" | "title" | "created_at";
 /**
  * 관리자 피드백 정렬 필드와 feedbacks 테이블 컬럼 간의 대응 관계입니다.
  *
- * 사용자, 첨부 개수, 연결 노트처럼 관계 데이터 또는 계산값을 사용하는
- * 정렬 필드는 포함하지 않습니다.
+ * TODO: 파생 컬럼 정렬은 전체 데이터를 메모리에서 정렬해야 해 성능 문제를 방지하기 위해 제거했다.
+ * 후속 작업에서 관리자 피드백 목록 전용 View 또는 동등한 DB 기반 조회 모델을 도입해
+ * user, replyAuthor, note, imageCount 정렬을 DB에서 처리하도록 재구현한다.
  */
-export const ADMIN_FEEDBACK_SORT_COLUMN: Partial<
-  Record<FeedbackSortField, FeedbackSortColumn>
+export const ADMIN_FEEDBACK_SORT_COLUMN: Record<
+  FeedbackSortField,
+  FeedbackSortColumn
 > = {
   status: "status",
   category: "category",

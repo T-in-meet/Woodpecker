@@ -19,11 +19,7 @@ import {
   mapFeedbackRows,
 } from "./utils/feedback-query-mapper";
 import { createFeedbackSignedImages } from "./utils/feedback-reply-image";
-import {
-  applyFeedbackSort,
-  needsFeedbackItemSort,
-  sortFeedbackItems,
-} from "./utils/feedback-sort";
+import { applyFeedbackSort } from "./utils/feedback-sort";
 import { getUserIdsForSearch } from "./utils/feedback-user-search";
 
 type FeedbackRow = {
@@ -248,10 +244,7 @@ export async function getFeedbacks(
   // 공통 toolbar의 정렬 조건을 Supabase query에 적용한다.
   feedbackQuery = applyFeedbackSort(feedbackQuery, query.sort);
 
-  const needsItemSort = needsFeedbackItemSort(query.sort);
-  const { data, error, count } = needsItemSort
-    ? await feedbackQuery
-    : await feedbackQuery.range(from, to);
+  const { data, error, count } = await feedbackQuery.range(from, to);
 
   if (error) {
     throw new Error(`Failed to load feedbacks: ${error.message}`);
@@ -259,9 +252,7 @@ export async function getFeedbacks(
 
   const rows = (data ?? []) as FeedbackListRow[];
   const mappedItems = await mapFeedbackRows(rows);
-  const items = needsItemSort
-    ? sortFeedbackItems(mappedItems, query.sort).slice(from, to + 1)
-    : mappedItems;
+  const items = mappedItems;
   const total = count ?? rows.length;
 
   return {

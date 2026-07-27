@@ -24,7 +24,11 @@ export function useSaveFeedbackReply() {
   return useMutation({
     mutationFn: ({ feedbackId, formData }: SaveFeedbackReplyVariables) =>
       saveFeedbackReply(feedbackId, formData),
-    onSuccess: async (_result, variables) => {
+    onSuccess: async (result, variables) => {
+      if (!result.ok) {
+        return;
+      }
+
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: ADMIN_FEEDBACK_DETAIL_QUERY_KEY.detail(

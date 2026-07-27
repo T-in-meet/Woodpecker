@@ -15,7 +15,11 @@ export function useDeleteFeedbackReply() {
 
   return useMutation({
     mutationFn: (feedbackId: string) => deleteFeedbackReply(feedbackId),
-    onSuccess: async (_result, feedbackId) => {
+    onSuccess: async (result, feedbackId) => {
+      if (!result.ok) {
+        return;
+      }
+
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: ADMIN_FEEDBACK_DETAIL_QUERY_KEY.detail(feedbackId),
