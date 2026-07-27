@@ -12,6 +12,14 @@ html {
   scrollbar-gutter: stable;
 }
 
+/**
+ * admin 페이지 전용: 전역 scrollbar-gutter(stable)로 예약된 여백을 해제합니다. 
+ * AdminBodyOverflowLock에서 admin 레이아웃 마운트 시에만 html에 이 클래스를 붙입니다.
+ */
+html.admin-no-gutter {
+  scrollbar-gutter: auto;
+}
+
 @theme inline {
   --font-jeju:
     "JejuStoneWall", "Noto Sans KR", sans-serif; /* 브랜드 폰트 변수 — @font-face 및 Header.tsx와 함께 관리 */
@@ -90,6 +98,7 @@ html {
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  --header-height: 70px;
 }
 
 .dark {
