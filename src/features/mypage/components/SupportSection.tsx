@@ -12,7 +12,7 @@ export type SupportTab = "faq" | "inquiry";
 
 const SUPPORT_TAB_ITEMS = [
   { id: "faq" as const, label: "FAQ", icon: HelpCircle },
-  { id: "inquiry" as const, label: "1:1 문의", icon: MessageSquare },
+  { id: "inquiry" as const, label: "문의하기", icon: MessageSquare },
 ];
 
 type SupportSectionProps = {
