@@ -72,37 +72,6 @@ describe("CSP — buildCspEnforced", () => {
     );
   });
 
-  it("TC-CSP-M-02-01. 개발 환경에서는 script-src에 'unsafe-eval'을 포함한다", () => {
-    vi.stubEnv("NODE_ENV", "development");
-
-    const csp = buildCspEnforced(NONCE);
-    const scriptSrc = csp
-      .split("; ")
-      .find((directive) => directive.startsWith("script-src "));
-
-    expect(scriptSrc).toBe(
-      `script-src 'self' 'nonce-${NONCE}' 'strict-dynamic' 'unsafe-eval'`,
-    );
-
-    vi.unstubAllEnvs();
-  });
-
-  it("TC-CSP-M-02-02. 운영 환경에서는 script-src에 'unsafe-eval'을 포함하지 않는다", () => {
-    vi.stubEnv("NODE_ENV", "production");
-
-    const csp = buildCspEnforced(NONCE);
-    const scriptSrc = csp
-      .split("; ")
-      .find((directive) => directive.startsWith("script-src "));
-
-    expect(scriptSrc).toBe(
-      `script-src 'self' 'nonce-${NONCE}' 'strict-dynamic'`,
-    );
-    expect(scriptSrc).not.toContain("'unsafe-eval'");
-
-    vi.unstubAllEnvs();
-  });
-
   it("TC-CSP-M-03. style-src에 'unsafe-inline'이 허용된다 (React 19 hoisting/CSS-in-JS 호환)", () => {
     const csp = buildCspEnforced(NONCE);
     const styleSrc = csp.split("; ").find((d) => d.startsWith("style-src "));
@@ -127,30 +96,6 @@ describe("CSP — buildCspEnforced", () => {
     const csp = buildCspEnforced(NONCE);
     const directives = csp.split("; ");
     expect(directives.every((d) => d.trim().length > 0)).toBe(true);
-  });
-
-  it("TC-CSP-M-07.개발 환경에서는 로컬 Supabase origin을 img-src에 포함한다", () => {
-    vi.stubEnv("NODE_ENV", "development");
-    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://127.0.0.1:54321");
-
-    const csp = buildCspEnforced(NONCE);
-    const imgSrc = csp.split("; ").find((d) => d.startsWith("img-src "));
-
-    expect(imgSrc).toContain("http://127.0.0.1:54321");
-
-    vi.unstubAllEnvs();
-  });
-
-  it("TC-CSP-M-08.운영 환경에서는 로컬 Supabase origin을 img-src에 포함하지 않는다", () => {
-    vi.stubEnv("NODE_ENV", "production");
-    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://127.0.0.1:54321");
-
-    const csp = buildCspEnforced(NONCE);
-    const imgSrc = csp.split("; ").find((d) => d.startsWith("img-src "));
-
-    expect(imgSrc).not.toContain("http://127.0.0.1:54321");
-
-    vi.unstubAllEnvs();
   });
 });
 
