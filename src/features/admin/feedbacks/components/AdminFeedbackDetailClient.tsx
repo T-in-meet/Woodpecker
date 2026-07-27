@@ -1,10 +1,13 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 import { Button } from "@/components/ui/button";
 import { AdminListError } from "@/features/admin/components/common/AdminListState";
-import { ROUTES } from "@/lib/constants/routes";
+import { useMarkAdminNotificationsAsRead } from "@/features/admin/notifications/hooks/use-mark-admin-notifications-as-read";
+import { ADMIN_NOTIFICATION_TYPES } from "@/lib/constants/notifications";
+import { getAdminFeedbackDetailRoute, ROUTES } from "@/lib/constants/routes";
 
 import { AdminBreadcrumbDynamicItems } from "../../components/layout/AdminBreadcrumbDynamicItems";
 import { AdminDetailPageHeader } from "../../components/layout/AdminDetailPageHeader";
@@ -24,6 +27,17 @@ export function AdminFeedbackDetailClient() {
   const router = useRouter();
   const feedbackId = params.feedbackId;
   const { data, isPending, isError } = useFeedbackDetail(feedbackId);
+  const { mutate: markAdminNotificationsAsRead } =
+    useMarkAdminNotificationsAsRead();
+
+  useEffect(() => {
+    if (!data) return;
+
+    markAdminNotificationsAsRead({
+      clickPath: getAdminFeedbackDetailRoute(feedbackId),
+      type: ADMIN_NOTIFICATION_TYPES.FEEDBACK_CREATED,
+    });
+  }, [data, feedbackId, markAdminNotificationsAsRead]);
 
   return (
     <div className="space-y-6">

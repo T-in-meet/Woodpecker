@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils/cn";
 
+import { NOTIFICATIONS_QUERY_KEY } from "../query-keys";
 import {
   notificationsResponseSchema,
   type NotificationsResponseType,
@@ -55,7 +56,7 @@ export function NotificationBell({ userId }: NotificationBellProps) {
   const pathname = usePathname();
   const ref = useRef<HTMLDivElement>(null);
   const previousPathnameRef = useRef(pathname);
-  const notificationsQueryKey = ["notifications", userId] as const;
+  const notificationsQueryKey = NOTIFICATIONS_QUERY_KEY.user(userId);
 
   const {
     data = EMPTY_NOTIFICATIONS,
@@ -76,10 +77,9 @@ export function NotificationBell({ userId }: NotificationBellProps) {
     if (previousPathnameRef.current === pathname) return;
 
     previousPathnameRef.current = pathname;
-    const notificationsQueryState = queryClient.getQueryState([
-      "notifications",
-      userId,
-    ] as const);
+    const notificationsQueryState = queryClient.getQueryState(
+      NOTIFICATIONS_QUERY_KEY.user(userId),
+    );
     const lastFetchedAt = notificationsQueryState?.dataUpdatedAt ?? 0;
 
     if (

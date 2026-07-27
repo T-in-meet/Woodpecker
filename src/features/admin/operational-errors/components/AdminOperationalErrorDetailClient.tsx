@@ -1,15 +1,21 @@
 "use client";
 
 import { useParams } from "next/navigation";
+import { useEffect } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { AdminDetailPageHeader } from "@/features/admin/components/layout/AdminDetailPageHeader";
+import { useMarkAdminNotificationsAsRead } from "@/features/admin/notifications/hooks/use-mark-admin-notifications-as-read";
 import {
   formatOperationalErrorFeatureLabel,
   formatOperationalErrorOperationLabel,
   formatOperationalErrorStageLabel,
 } from "@/features/operational-errors/utils/format-operational-error-label";
-import { ROUTES } from "@/lib/constants/routes";
+import { ADMIN_NOTIFICATION_TYPES } from "@/lib/constants/notifications";
+import {
+  getAdminOperationalErrorDetailRoute,
+  ROUTES,
+} from "@/lib/constants/routes";
 
 import { AdminBreadcrumbDynamicItems } from "../../components/layout/AdminBreadcrumbDynamicItems";
 import { useOperationalErrorDetail } from "../hooks/use-operational-error-detail";
@@ -24,6 +30,17 @@ export function AdminOperationalErrorDetailClient() {
 
   const { data, isError, isPending } =
     useOperationalErrorDetail(operationalErrorId);
+  const { mutate: markAdminNotificationsAsRead } =
+    useMarkAdminNotificationsAsRead();
+
+  useEffect(() => {
+    if (!data) return;
+
+    markAdminNotificationsAsRead({
+      clickPath: getAdminOperationalErrorDetailRoute(operationalErrorId),
+      type: ADMIN_NOTIFICATION_TYPES.OPERATIONAL_ERROR,
+    });
+  }, [data, markAdminNotificationsAsRead, operationalErrorId]);
 
   if (isPending) {
     return (
