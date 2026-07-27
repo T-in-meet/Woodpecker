@@ -18,7 +18,7 @@ const joinedNoteSchema = z.object({
 });
 
 const notificationListRowSchema = notificationListItemSchema
-  .omit({ noteTitle: true })
+  .omit({ noteTitle: true, source: true })
   .extend({
     note: joinedNoteSchema.nullable().optional(),
   });
@@ -27,6 +27,7 @@ const notificationListRowToItemSchema = notificationListRowSchema.transform(
   ({ note, ...item }) => ({
     ...item,
     noteTitle: note?.title ?? null,
+    source: "USER" as const,
   }),
 );
 

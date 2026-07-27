@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import {
+  ADMIN_NOTIFICATION_TYPES,
   NOTIFICATION_STATUS,
   NOTIFICATION_TYPES,
 } from "@/lib/constants/notifications";
@@ -12,16 +13,21 @@ export const notificationStatusSchema = z.enum([
   NOTIFICATION_STATUS.READ,
 ]);
 
+export const notificationSourceSchema = z.enum(["ADMIN", "USER"]);
+
 export const notificationListItemSchema = z.object({
   body: z.string().nullable(),
   click_path: z.string().min(1),
   id: notificationUuidSchema,
   title: z.string(),
   type: z.enum([
+    ADMIN_NOTIFICATION_TYPES.FEEDBACK_CREATED,
+    ADMIN_NOTIFICATION_TYPES.OPERATIONAL_ERROR,
     NOTIFICATION_TYPES.FEEDBACK_REPLY,
     NOTIFICATION_TYPES.REVIEW,
     NOTIFICATION_TYPES.SYSTEM,
   ]),
+  source: notificationSourceSchema,
   status: notificationStatusSchema,
   sent_at: z.string(),
   read_at: z.string().nullable(),

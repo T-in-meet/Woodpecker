@@ -10,7 +10,10 @@ vi.mock("../utils/require-admin", () => ({
   requireAdmin: requireAdminMock,
 }));
 
-import { getAdminUnreadNotificationCounts } from "./queries";
+import {
+  getAdminNotificationList,
+  getAdminUnreadNotificationCounts,
+} from "./queries";
 
 const ADMIN_USER_ID = "11111111-1111-4111-8111-111111111111";
 type QueryOptions = Parameters<typeof getAdminUnreadNotificationCounts>[0];
@@ -49,6 +52,38 @@ function createSupabaseMock({
   return {
     eventsSelect,
     from,
+    readsEq,
+    readsSelect,
+    supabase: { from } as unknown as SupabaseOption,
+  };
+}
+
+function createSupabaseListMock({
+  events,
+  reads,
+}: {
+  events: unknown[];
+  reads: unknown[];
+}) {
+  const eventsOrder = vi.fn().mockResolvedValue(createSelectResult(events));
+  const eventsSelect = vi.fn().mockReturnValue({ order: eventsOrder });
+  const readsEq = vi.fn().mockResolvedValue(createSelectResult(reads));
+  const readsSelect = vi.fn().mockReturnValue({ eq: readsEq });
+  const from = vi.fn((table: string) => {
+    if (table === "admin_notification_events") {
+      return { select: eventsSelect };
+    }
+
+    if (table === "admin_notification_reads") {
+      return { select: readsSelect };
+    }
+
+    throw new Error(`Unexpected table: ${table}`);
+  });
+
+  return {
+    eventsOrder,
+    eventsSelect,
     readsEq,
     readsSelect,
     supabase: { from } as unknown as SupabaseOption,
@@ -154,5 +189,73 @@ describe("getAdminUnreadNotificationCounts", () => {
         supabase,
       }),
     ).rejects.toBe(readsError);
+  });
+});
+
+describe("getAdminNotificationList", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    requireAdminMock.mockReset();
+  });
+
+  it("returns unread admin notifications as notification list items", async () => {
+    const { eventsOrder, eventsSelect, readsEq, supabase } =
+      createSupabaseListMock({
+        events: [
+          {
+            body: "notifications / dispatch_push / push_send",
+            click_path:
+              "/admin/operational-errors/55555555-5555-4555-8555-555555555555",
+            created_at: "2026-07-27T01:00:00.000Z",
+            id: "22222222-2222-4222-8222-222222222222",
+            title: "Push 알림 전송에 실패했습니다.",
+            type: ADMIN_NOTIFICATION_TYPES.OPERATIONAL_ERROR,
+          },
+          {
+            body: "already read",
+            click_path: "/admin/feedbacks/feedback-id",
+            created_at: "2026-07-27T00:00:00.000Z",
+            id: "33333333-3333-4333-8333-333333333333",
+            title: "새 사용자 피드백이 등록되었습니다.",
+            type: ADMIN_NOTIFICATION_TYPES.FEEDBACK_CREATED,
+          },
+        ],
+        reads: [
+          {
+            event_id: "33333333-3333-4333-8333-333333333333",
+          },
+        ],
+      });
+
+    const result = await getAdminNotificationList({
+      adminUserId: ADMIN_USER_ID,
+      limit: 10,
+      supabase,
+    });
+
+    expect(eventsSelect).toHaveBeenCalledWith(
+      "id, title, body, type, click_path, created_at",
+    );
+    expect(eventsOrder).toHaveBeenCalledWith("created_at", {
+      ascending: false,
+    });
+    expect(readsEq).toHaveBeenCalledWith("admin_user_id", ADMIN_USER_ID);
+    expect(result).toEqual([
+      {
+        body: "notifications / dispatch_push / push_send",
+        click_path:
+          "/admin/operational-errors/55555555-5555-4555-8555-555555555555",
+        id: "22222222-2222-4222-8222-222222222222",
+        note_id: null,
+        noteTitle: null,
+        read_at: null,
+        review_log_id: null,
+        sent_at: "2026-07-27T01:00:00.000Z",
+        source: "ADMIN",
+        status: "SENT",
+        title: "Push 알림 전송에 실패했습니다.",
+        type: ADMIN_NOTIFICATION_TYPES.OPERATIONAL_ERROR,
+      },
+    ]);
   });
 });

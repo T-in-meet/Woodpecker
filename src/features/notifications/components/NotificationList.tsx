@@ -19,6 +19,10 @@ function getStatusLabel(status: NotificationListItemType["status"]) {
   return "읽음";
 }
 
+function getSourceLabel(source: NotificationListItemType["source"]) {
+  return source === "ADMIN" ? "관리자" : "개인";
+}
+
 function getNotificationDescription(item: NotificationListItemType) {
   return item.noteTitle ?? item.body ?? "복습 알림";
 }
@@ -67,6 +71,9 @@ export function NotificationList({
             <div className="flex items-center gap-2">
               <span className="truncate text-sm font-medium text-foreground">
                 {item.title}
+              </span>
+              <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[0.7rem] font-medium text-primary">
+                {getSourceLabel(item.source)}
               </span>
               <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[0.7rem] font-medium text-muted-foreground">
                 {getStatusLabel(item.status)}

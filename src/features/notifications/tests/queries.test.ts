@@ -210,6 +210,7 @@ describe("notification queries", () => {
         note_id: "33333333-3333-4333-8333-333333333333",
         review_log_id: "44444444-4444-4444-8444-444444444444",
         noteTitle: "Joined note title",
+        source: "USER",
       },
     ]);
   });
@@ -263,6 +264,7 @@ describe("notification queries", () => {
         read_at: null,
         review_log_id: null,
         sent_at: "2026-04-27T01:00:00.000Z",
+        source: "USER",
         status: "SENT",
         title: "피드백 답변이 등록되었습니다.",
         type: "FEEDBACK_REPLY",

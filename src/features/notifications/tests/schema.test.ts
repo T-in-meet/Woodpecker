@@ -30,6 +30,7 @@ describe("notificationListItemSchema", () => {
     click_path: "/notes/22222222-2222-4222-8222-222222222222/review",
     type: "REVIEW",
     status: NOTIFICATION_STATUS.SENT,
+    source: "USER",
     sent_at: "2026-04-27T01:00:00.000Z",
     read_at: null,
     note_id: "22222222-2222-4222-8222-222222222222",
@@ -51,6 +52,21 @@ describe("notificationListItemSchema", () => {
         note_id: null,
         noteTitle: null,
         type: "FEEDBACK_REPLY",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("accepts admin notification list items", () => {
+    expect(
+      notificationListItemSchema.safeParse({
+        ...baseNotification,
+        click_path:
+          "/admin/operational-errors/33333333-3333-4333-8333-333333333333",
+        note_id: null,
+        noteTitle: null,
+        review_log_id: null,
+        source: "ADMIN",
+        type: "OPERATIONAL_ERROR",
       }).success,
     ).toBe(true);
   });
