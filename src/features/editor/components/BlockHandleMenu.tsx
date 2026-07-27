@@ -11,21 +11,22 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils/cn";
 
-import { BubbleMenuBar } from "./BubbleMenuBar";
+import { BlockActionMenu } from "./BlockActionMenu";
 
 const HANDLE_SIZE = 22;
 const HANDLE_MARGIN = 10;
 const LIST_MARKER_CLEARANCE = 6;
-const MENU_GAP = 8;
 const MENU_PADDING = 8;
-const MENU_MAX_WIDTH = 704;
-const MIN_LEFT_MENU_WIDTH = 220;
 
 type BlockHandleMenuProps = {
   editor: Editor;
@@ -53,7 +54,6 @@ export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
   const [anchorPosition, setAnchorPosition] =
     useState<BlockAnchorPositionType | null>(null);
   const handleRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number | null>(null);
   const blurRafRef = useRef<number | null>(null);
 
@@ -164,41 +164,6 @@ export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
     };
   }, [editor, scheduleSyncAnchorPosition]);
 
-  useEffect(() => {
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target;
-
-      if (!(target instanceof Node)) {
-        return;
-      }
-
-      if (
-        handleRef.current?.contains(target) ||
-        menuRef.current?.contains(target)
-      ) {
-        return;
-      }
-
-      setIsMenuOpen(false);
-    };
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") {
-        return;
-      }
-
-      setIsMenuOpen(false);
-    };
-
-    document.addEventListener("pointerdown", handlePointerDown, true);
-    document.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown, true);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, []);
-
   if (typeof window === "undefined" || typeof document === "undefined") {
     return null;
   }
@@ -231,8 +196,18 @@ export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
 
     const { view } = editor;
 
+    // 여기서 view.focus()를 부르면 열리는 중인 메뉴가 포커스 이탈로 곧바로 닫힌다.
+    // 에디터 포커스는 메뉴가 닫힐 때 BlockActionMenu가 되돌린다.
     view.dispatch(view.state.tr.setSelection(selection));
-    view.focus();
+  };
+
+  const handleMenuOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      handleSelectBlock();
+    }
+
+    setIsMenuOpen(nextOpen);
+    scheduleSyncAnchorPosition();
   };
 
   const handleDeleteBlock = () => {
@@ -259,11 +234,6 @@ export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
     isMenuOpen && anchorPosition.blockHasMeasurableRect;
   const overlayLeft = anchorPosition.blockLeft - anchorPosition.markerOffset;
   const overlayWidth = anchorPosition.blockWidth + anchorPosition.markerOffset;
-  const menuPosition = computeMenuPosition(
-    anchorPosition,
-    menuRef.current?.offsetWidth ?? null,
-    menuRef.current?.offsetHeight ?? null,
-  );
 
   return createPortal(
     <>
@@ -284,66 +254,47 @@ export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
         />
       )}
 
-      <Tooltip
-        open={isMenuOpen ? false : isTooltipOpen}
-        onOpenChange={(nextOpen) => {
-          if (!isMenuOpen) {
-            setIsTooltipOpen(nextOpen);
-          }
-        }}
-      >
-        <TooltipTrigger asChild>
-          <button
-            ref={handleRef}
-            type="button"
-            onMouseDown={(event) => {
-              event.preventDefault();
-            }}
-            onClick={() => {
-              const nextMenuOpen = !isMenuOpen;
-
-              if (nextMenuOpen) {
-                handleSelectBlock();
-              }
-
-              setIsMenuOpen(nextMenuOpen);
-              scheduleSyncAnchorPosition();
-            }}
-            className={cn(
-              "fixed z-40 inline-flex items-center justify-center rounded-md border border-border/60",
-              "bg-background/95 text-muted-foreground shadow-sm backdrop-blur transition-colors",
-              "hover:bg-muted hover:text-foreground",
-              isMenuOpen && "bg-muted text-foreground",
-            )}
-            style={{
-              width: HANDLE_SIZE,
-              height: HANDLE_SIZE,
-              left: anchorPosition.handleLeft,
-              top: anchorPosition.handleTop,
-            }}
-            aria-label="블록 도구 열기"
-            aria-expanded={isMenuOpen}
-            aria-haspopup="dialog"
-          >
-            <GripVertical className="size-3.5" />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="left">블록 도구</TooltipContent>
-      </Tooltip>
-
-      {isMenuOpen && (
-        <div
-          ref={menuRef}
-          className="fixed z-50"
-          style={{
-            left: menuPosition.left,
-            maxWidth: menuPosition.maxWidth,
-            top: menuPosition.top,
+      <DropdownMenu open={isMenuOpen} onOpenChange={handleMenuOpenChange}>
+        <Tooltip
+          open={isMenuOpen ? false : isTooltipOpen}
+          onOpenChange={(nextOpen) => {
+            if (!isMenuOpen) {
+              setIsTooltipOpen(nextOpen);
+            }
           }}
         >
-          <BubbleMenuBar editor={editor} onDeleteBlock={handleDeleteBlock} />
-        </div>
-      )}
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <button
+                ref={handleRef}
+                type="button"
+                className={cn(
+                  "fixed z-40 inline-flex cursor-pointer items-center justify-center rounded-md border border-border/60",
+                  "bg-background/95 text-muted-foreground shadow-sm backdrop-blur transition-colors",
+                  "hover:bg-muted hover:text-foreground",
+                  isMenuOpen && "bg-muted text-foreground",
+                )}
+                style={{
+                  width: HANDLE_SIZE,
+                  height: HANDLE_SIZE,
+                  left: anchorPosition.handleLeft,
+                  top: anchorPosition.handleTop,
+                }}
+                aria-label="블록 도구 열기"
+              >
+                <GripVertical className="size-3.5" />
+              </button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="left">블록 도구</TooltipContent>
+        </Tooltip>
+
+        <BlockActionMenu
+          editor={editor}
+          onDeleteBlock={handleDeleteBlock}
+          onCloseMenu={() => setIsMenuOpen(false)}
+        />
+      </DropdownMenu>
     </>,
     document.body,
   );
@@ -353,54 +304,6 @@ type BlockNodeRangeType = {
   from: number;
   to: number;
 };
-
-type MenuPositionType = {
-  left: number;
-  maxWidth: number;
-  top: number;
-};
-
-export function computeMenuPosition(
-  anchor: BlockAnchorPositionType,
-  measuredWidth: number | null,
-  measuredHeight: number | null,
-): MenuPositionType {
-  // 리스트 아이템의 경우 blockLeft는 텍스트 시작점이고 마커(•, 1.)는 부모 UL/OL의
-  // padding 영역(blockLeft 왼쪽)에 위치한다. 메뉴의 우측 경계를 텍스트 기준으로 잡으면
-  // 마커를 덮으므로, 마커 좌측 가장자리(blockLeft - markerOffset)를 앵커로 사용한다.
-  const anchorLeft = anchor.blockLeft - anchor.markerOffset;
-  const estimatedMenuWidth = Math.min(
-    MENU_MAX_WIDTH,
-    window.innerWidth - MENU_PADDING * 2,
-  );
-  const availableLeftWidth = Math.max(0, anchorLeft - MENU_GAP - MENU_PADDING);
-  const canPlaceLeft = availableLeftWidth >= MIN_LEFT_MENU_WIDTH;
-  const maxWidth = canPlaceLeft
-    ? Math.min(MENU_MAX_WIDTH, availableLeftWidth)
-    : estimatedMenuWidth;
-  const width = measuredWidth ?? maxWidth;
-  const height = measuredHeight ?? 56;
-
-  const left = canPlaceLeft
-    ? Math.max(MENU_PADDING, anchorLeft - MENU_GAP - width)
-    : Math.min(
-        Math.max(MENU_PADDING, anchorLeft),
-        Math.max(MENU_PADDING, window.innerWidth - width - MENU_PADDING),
-      );
-
-  const preferredTop = canPlaceLeft
-    ? anchor.handleTop + HANDLE_SIZE / 2 - height / 2
-    : anchor.blockTop - height - MENU_GAP;
-  const fallbackTop = anchor.blockBottom + MENU_GAP;
-  const rawTop =
-    !canPlaceLeft && preferredTop < MENU_PADDING ? fallbackTop : preferredTop;
-  const top = Math.min(
-    Math.max(MENU_PADDING, rawTop),
-    Math.max(MENU_PADDING, window.innerHeight - height - MENU_PADDING),
-  );
-
-  return { left, maxWidth, top };
-}
 
 export function getBlockHandleMarkerOffset(blockElement: HTMLElement): number {
   if (blockElement.tagName !== "LI") {

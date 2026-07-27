@@ -1,18 +1,25 @@
 import "./setup";
 
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { Editor as TipTapEditorInstance } from "@tiptap/core";
 import { NodeSelection } from "@tiptap/pm/state";
 import type { Editor } from "@tiptap/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 import {
-  type BlockAnchorPositionType,
-  computeMenuPosition,
+  BlockHandleMenu,
   createBlockSelection,
   getActiveBlockElement,
   getBlockHandleMarkerOffset,
 } from "../components/BlockHandleMenu";
 import { getTipTapExtensions } from "../utils/tiptapExtensions";
+
+function renderWithTooltipProvider(ui: React.ReactElement) {
+  return render(<TooltipProvider delayDuration={0}>{ui}</TooltipProvider>);
+}
 
 function createActiveElementEditor(
   rootElement: HTMLElement,
@@ -135,76 +142,49 @@ describe("createBlockSelection", () => {
   });
 });
 
-describe("computeMenuPosition", () => {
-  const originalInnerWidth = window.innerWidth;
-  const originalInnerHeight = window.innerHeight;
+describe("BlockHandleMenu", () => {
+  function createMountedEditor(content: string) {
+    const element = document.createElement("div");
+    document.body.appendChild(element);
+
+    return new TipTapEditorInstance({
+      element,
+      extensions: getTipTapExtensions(),
+      content,
+    });
+  }
 
   afterEach(() => {
-    Object.defineProperty(window, "innerWidth", {
-      configurable: true,
-      value: originalInnerWidth,
-    });
-    Object.defineProperty(window, "innerHeight", {
-      configurable: true,
-      value: originalInnerHeight,
-    });
+    cleanup();
+    document.body.innerHTML = "";
+    vi.restoreAllMocks();
   });
 
-  function setViewport(width: number, height: number) {
-    Object.defineProperty(window, "innerWidth", {
-      configurable: true,
-      value: width,
+  it("moves the editor selection to the active block when the handle opens", async () => {
+    const user = userEvent.setup();
+    const editor = createMountedEditor("first\n\nsecond");
+
+    vi.spyOn(editor.view, "hasFocus").mockReturnValue(true);
+    editor.commands.setTextSelection(8);
+
+    renderWithTooltipProvider(
+      <BlockHandleMenu editor={editor as unknown as Editor} />,
+    );
+
+    const handleButton = await screen.findByRole("button", {
+      name: "블록 도구 열기",
     });
-    Object.defineProperty(window, "innerHeight", {
-      configurable: true,
-      value: height,
+
+    await user.click(handleButton);
+
+    await waitFor(() => {
+      expect(editor.state.selection).toBeInstanceOf(NodeSelection);
     });
-  }
 
-  function makeAnchor(
-    overrides: Partial<BlockAnchorPositionType> = {},
-  ): BlockAnchorPositionType {
-    return {
-      blockBottom: 232,
-      blockHasMeasurableRect: true,
-      blockHeight: 32,
-      blockLeft: 400,
-      blockTop: 200,
-      blockWidth: 400,
-      handleLeft: 360,
-      handleTop: 205,
-      isCodeBlock: false,
-      markerOffset: 0,
-      ...overrides,
-    };
-  }
+    expect(
+      editor.state.selection.content().content.firstChild?.textContent,
+    ).toBe("second");
 
-  it("anchors a list item's menu to the left of the marker so the bullet stays visible", () => {
-    setViewport(1280, 800);
-
-    const listItemAnchor = makeAnchor({ blockLeft: 400, markerOffset: 34 });
-    const paragraphAnchor = makeAnchor({ blockLeft: 400, markerOffset: 0 });
-    const measuredWidth = 240;
-    const measuredHeight = 56;
-
-    const listPosition = computeMenuPosition(
-      listItemAnchor,
-      measuredWidth,
-      measuredHeight,
-    );
-    const paragraphPosition = computeMenuPosition(
-      paragraphAnchor,
-      measuredWidth,
-      measuredHeight,
-    );
-
-    // 메뉴 우측 경계가 마커 좌측 가장자리(blockLeft - markerOffset)보다 왼쪽이어야 마커가 가려지지 않는다.
-    expect(listPosition.left + measuredWidth).toBeLessThanOrEqual(
-      listItemAnchor.blockLeft - listItemAnchor.markerOffset,
-    );
-    // markerOffset만큼 일반 블록보다 더 왼쪽에 배치되어야 한다.
-    expect(paragraphPosition.left - listPosition.left).toBe(
-      listItemAnchor.markerOffset,
-    );
+    editor.destroy();
   });
 });
