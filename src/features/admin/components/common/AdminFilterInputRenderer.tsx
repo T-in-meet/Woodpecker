@@ -130,52 +130,6 @@ export function AdminFilterInputRenderer<TField extends string>({
   }
 }
 
-interface FilterInputPlaceholderProps<TField extends string> {
-  /** 현재 분기된 필터 입력 방식 */
-  label: string;
-
-  /** 현재 필터 필드 */
-  field: TField;
-
-  /** 현재 임시 필터 값 */
-  value: AdminAppliedFilter<TField> | null;
-
-  /** 이후 실제 Input에서 사용할 값 변경 함수 */
-  onChange: (value: AdminAppliedFilter<TField>) => void;
-}
-
-/**
- * 실제 필터 Input을 구현하기 전 사용하는 임시 표시 컴포넌트입니다.
- *
- * `value`와 `onChange`는 이후 실제 Input 연결을 위한 API를
- * 미리 확정하기 위해 전달받습니다.
- *
- * @template TField 필터 필드의 문자열 리터럴 타입
- * @param props 분기된 필터 정보
- * @returns 필터 Input Placeholder
- */
-function FilterInputPlaceholder<TField extends string>({
-  label,
-  field,
-  value,
-  onChange,
-}: FilterInputPlaceholderProps<TField>) {
-  // 실제 Input 구현 전 API 형태를 유지하기 위해 참조합니다.
-  void onChange;
-
-  return (
-    <div className="space-y-2">
-      <p className="text-sm font-medium">{label}</p>
-
-      <p className="text-sm text-muted-foreground">필드: {field}</p>
-
-      <p className="text-sm text-muted-foreground">
-        현재 값: {value ? "설정됨" : "설정되지 않음"}
-      </p>
-    </div>
-  );
-}
-
 /**
  * 판별 유니온의 모든 경우가 처리되었는지 검사합니다.
  *

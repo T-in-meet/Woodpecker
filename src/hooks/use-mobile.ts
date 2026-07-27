@@ -20,7 +20,7 @@ export function useIsMobile(breakpoint = MOBILE_BREAKPOINT) {
     window.addEventListener("resize", update);
 
     return () => window.removeEventListener("resize", update);
-  }, []);
+  }, [breakpoint]);
 
   return isMobile;
 }
