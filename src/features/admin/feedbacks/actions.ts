@@ -7,6 +7,7 @@ import { feedbackReplyFormSchema } from "./schema";
 import {
   createFeedbackReplyImagePath,
   validateFeedbackReplyImageFiles,
+  validateFeedbackReplyImageFileSignatures,
 } from "./utils/feedback-reply-image";
 
 export type SaveFeedbackReplyResult =
@@ -54,7 +55,7 @@ export async function saveFeedbackReply(
     .filter((value): value is string => typeof value === "string");
   const imageFiles = formData
     .getAll("images")
-    .filter((value): value is File => value instanceof File && value.size > 0);
+    .filter((value): value is File => value instanceof File);
 
   const imageValidationError = validateFeedbackReplyImageFiles(
     existingImagePaths.length,
@@ -63,6 +64,13 @@ export async function saveFeedbackReply(
 
   if (imageValidationError) {
     return { ok: false, message: imageValidationError };
+  }
+
+  const imageSignatureValidationError =
+    await validateFeedbackReplyImageFileSignatures(imageFiles);
+
+  if (imageSignatureValidationError) {
+    return { ok: false, message: imageSignatureValidationError };
   }
 
   const supabase = createAdminClient();

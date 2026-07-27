@@ -17,6 +17,7 @@ import {
   createFeedbackReplyImagePath,
   createFeedbackSignedImages,
   validateFeedbackReplyImageFiles,
+  validateFeedbackReplyImageFileSignatures,
 } from "../utils/feedback-reply-image";
 
 function createFile({
@@ -29,6 +30,18 @@ function createFile({
   size?: number;
 } = {}) {
   return new File([new Uint8Array(size)], name, { type });
+}
+
+function createFileFromBytes({
+  bytes,
+  name = "image.png",
+  type = "image/png",
+}: {
+  bytes: number[];
+  name?: string;
+  type?: string;
+}) {
+  return new File([new Uint8Array(bytes).buffer], name, { type });
 }
 
 describe("validateFeedbackReplyImageFiles", () => {
@@ -85,6 +98,85 @@ describe("validateFeedbackReplyImageFiles", () => {
     const result = validateFeedbackReplyImageFiles(1, files);
 
     expect(result).toBeNull();
+  });
+});
+
+describe("validateFeedbackReplyImageFileSignatures", () => {
+  it.each([
+    {
+      label: "JPEG",
+      type: "image/jpeg",
+      bytes: [0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10],
+    },
+    {
+      label: "PNG",
+      type: "image/png",
+      bytes: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+    },
+    {
+      label: "GIF87a",
+      type: "image/gif",
+      bytes: [0x47, 0x49, 0x46, 0x38, 0x37, 0x61],
+    },
+    {
+      label: "WebP",
+      type: "image/webp",
+      bytes: [
+        0x52, 0x49, 0x46, 0x46, 0x24, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50,
+      ],
+    },
+  ])("정상 $label 파일이면 null을 반환한다", async ({ bytes, type }) => {
+    const file = createFileFromBytes({
+      bytes,
+      type,
+    });
+
+    await expect(
+      validateFeedbackReplyImageFileSignatures([file]),
+    ).resolves.toBeNull();
+  });
+
+  it("이미지 MIME으로 선언된 일반 텍스트 파일이면 오류를 반환한다", async () => {
+    const file = new File(["plain text"], "image.png", {
+      type: "image/png",
+    });
+
+    await expect(
+      validateFeedbackReplyImageFileSignatures([file]),
+    ).resolves.toBe("이미지 파일 형식이 올바르지 않습니다.");
+  });
+
+  it("선언된 MIME과 실제 시그니처가 다르면 오류를 반환한다", async () => {
+    const file = createFileFromBytes({
+      bytes: [0xff, 0xd8, 0xff, 0xe0],
+      type: "image/png",
+    });
+
+    await expect(
+      validateFeedbackReplyImageFileSignatures([file]),
+    ).resolves.toBe("이미지 파일 형식이 올바르지 않습니다.");
+  });
+
+  it("빈 파일이면 오류를 반환한다", async () => {
+    const file = createFileFromBytes({
+      bytes: [],
+      type: "image/png",
+    });
+
+    await expect(
+      validateFeedbackReplyImageFileSignatures([file]),
+    ).resolves.toBe("이미지 파일 형식이 올바르지 않습니다.");
+  });
+
+  it("헤더가 너무 짧은 파일이면 오류를 반환한다", async () => {
+    const file = createFileFromBytes({
+      bytes: [0x89, 0x50, 0x4e],
+      type: "image/png",
+    });
+
+    await expect(
+      validateFeedbackReplyImageFileSignatures([file]),
+    ).resolves.toBe("이미지 파일 형식이 올바르지 않습니다.");
   });
 });
 

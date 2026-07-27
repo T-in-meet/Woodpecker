@@ -5,12 +5,14 @@ const {
   requireAdminMock,
   safeParseMock,
   validateFeedbackReplyImageFilesMock,
+  validateFeedbackReplyImageFileSignaturesMock,
   createFeedbackReplyImagePathMock,
 } = vi.hoisted(() => ({
   createAdminClientMock: vi.fn(),
   requireAdminMock: vi.fn(),
   safeParseMock: vi.fn(),
   validateFeedbackReplyImageFilesMock: vi.fn(),
+  validateFeedbackReplyImageFileSignaturesMock: vi.fn(),
   createFeedbackReplyImagePathMock: vi.fn(),
 }));
 
@@ -30,6 +32,8 @@ vi.mock("@/features/admin/feedbacks/schema", () => ({
 
 vi.mock("@/features/admin/feedbacks/utils/feedback-reply-image", () => ({
   validateFeedbackReplyImageFiles: validateFeedbackReplyImageFilesMock,
+  validateFeedbackReplyImageFileSignatures:
+    validateFeedbackReplyImageFileSignaturesMock,
   createFeedbackReplyImagePath: createFeedbackReplyImagePathMock,
 }));
 
@@ -229,6 +233,7 @@ describe("saveFeedbackReply", () => {
       },
     });
     validateFeedbackReplyImageFilesMock.mockReturnValue(null);
+    validateFeedbackReplyImageFileSignaturesMock.mockResolvedValue(null);
     createFeedbackReplyImagePathMock.mockImplementation(
       (feedbackId: string, file: File) => `${feedbackId}/${file.name}`,
     );
@@ -268,6 +273,29 @@ describe("saveFeedbackReply", () => {
     expect(result).toEqual({
       ok: false,
       message: "이미지는 최대 5개까지 등록할 수 있습니다.",
+    });
+    expect(createAdminClientMock).not.toHaveBeenCalled();
+  });
+
+  it("이미지 시그니처 검증에 실패하면 검증 메시지를 반환하고 DB에 접근하지 않는다", async () => {
+    validateFeedbackReplyImageFileSignaturesMock.mockResolvedValue(
+      "이미지 파일 형식이 올바르지 않습니다.",
+    );
+
+    const formData = createValidFormData();
+
+    formData.append(
+      "images",
+      new File(["text"], "image.png", {
+        type: "image/png",
+      }),
+    );
+
+    const result = await saveFeedbackReply("feedback-1", formData);
+
+    expect(result).toEqual({
+      ok: false,
+      message: "이미지 파일 형식이 올바르지 않습니다.",
     });
     expect(createAdminClientMock).not.toHaveBeenCalled();
   });
