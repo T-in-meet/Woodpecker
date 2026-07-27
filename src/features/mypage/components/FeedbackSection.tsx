@@ -22,7 +22,7 @@ export function FeedbackSection({
 
       <section>
         <h2 className="mb-3 text-lg font-semibold">
-          내가 남긴 문의사항{" "}
+          내 피드백{" "}
           <span className="text-sm font-normal text-muted-foreground">
             ({feedbacks.length})
           </span>

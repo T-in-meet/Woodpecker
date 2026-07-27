@@ -284,7 +284,7 @@ export async function createFeedbackAction(
 
   if (todayError) {
     console.error("[createFeedbackAction] 일일 제한 조회 실패:", todayError);
-    return { error: "문의사항 제출에 실패했습니다" };
+    return { error: "피드백 제출에 실패했습니다" };
   }
 
   if (todayRows.length > 0) {
@@ -335,7 +335,7 @@ export async function createFeedbackAction(
     }
 
     console.error("[createFeedbackAction] insert 실패:", error);
-    return { error: "문의사항 제출에 실패했습니다" };
+    return { error: "피드백 제출에 실패했습니다" };
   }
 
   return { data };
@@ -366,14 +366,13 @@ export async function deleteFeedbackAction(feedbackId: string) {
 
   if (error) {
     console.error("[deleteFeedbackAction] 삭제 실패:", error);
-    return { error: "문의사항 삭제에 실패했습니다" };
+    return { error: "피드백 삭제에 실패했습니다" };
   }
 
   const deletedRow = deleted?.[0];
   if (!deletedRow) {
     return {
-      error:
-        "삭제할 수 없습니다. 답변이 등록되었거나 이미 삭제된 문의사항입니다",
+      error: "삭제할 수 없습니다. 답변이 등록되었거나 이미 삭제된 피드백입니다",
     };
   }
 

@@ -62,7 +62,7 @@ export function FeedbackList({ feedbacks }: FeedbackListProps) {
   if (feedbacks.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        아직 제출한 문의사항이 없습니다.
+        아직 제출한 피드백이 없습니다.
       </p>
     );
   }

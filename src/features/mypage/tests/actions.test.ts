@@ -418,7 +418,7 @@ describe("createFeedbackAction", () => {
     createClientMock.mockResolvedValue(supabase);
 
     const result = await createFeedbackAction(null, makeFeedbackFormData());
-    expect(result).toEqual({ error: "문의사항 제출에 실패했습니다" });
+    expect(result).toEqual({ error: "피드백 제출에 실패했습니다" });
   });
 
   it("성공 시 data 반환하고 입력값대로 insert한다", async () => {
@@ -497,7 +497,7 @@ describe("deleteFeedbackAction", () => {
     createClientMock.mockResolvedValue(supabase);
 
     const result = await deleteFeedbackAction(feedbackId);
-    expect(result).toEqual({ error: "문의사항 삭제에 실패했습니다" });
+    expect(result).toEqual({ error: "피드백 삭제에 실패했습니다" });
   });
 
   it("삭제된 행이 없으면(답변 존재 등) 에러 반환하고 storage 정리 안 함", async () => {
@@ -508,8 +508,7 @@ describe("deleteFeedbackAction", () => {
 
     const result = await deleteFeedbackAction(feedbackId);
     expect(result).toEqual({
-      error:
-        "삭제할 수 없습니다. 답변이 등록되었거나 이미 삭제된 문의사항입니다",
+      error: "삭제할 수 없습니다. 답변이 등록되었거나 이미 삭제된 피드백입니다",
     });
     expect(removeMock).not.toHaveBeenCalled();
   });

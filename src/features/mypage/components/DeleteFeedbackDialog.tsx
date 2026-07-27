@@ -62,14 +62,14 @@ export function DeleteFeedbackDialog({
       </DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>문의사항 삭제</DialogTitle>
+          <DialogTitle>피드백 삭제</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
             <span className="font-medium text-foreground">
               &ldquo;{feedbackTitle}&rdquo;
             </span>{" "}
-            문의사항을 삭제할까요? 첨부한 이미지도 함께 삭제되며 되돌릴 수
+            피드백을 삭제할까요? 첨부한 이미지도 함께 삭제되며 되돌릴 수
             없습니다.
           </p>
           {error && <p className="text-sm text-destructive">{error}</p>}

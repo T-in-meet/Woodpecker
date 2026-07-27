@@ -133,7 +133,7 @@ export function FeedbackForm({
           setFieldErrors(result.error);
         }
       } catch {
-        setGeneralError("문의사항 제출에 실패했습니다");
+        setGeneralError("피드백 제출에 실패했습니다");
       }
     });
   };
@@ -141,14 +141,14 @@ export function FeedbackForm({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>건의 및 문의사항</CardTitle>
+        <CardTitle>피드백 보내기</CardTitle>
       </CardHeader>
       <Separator />
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4 pt-5">
           {hasSubmittedToday && (
             <p className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
-              오늘은 이미 문의사항을 제출했어요. 내일 다시 제출할 수 있습니다.
+              오늘은 이미 피드백을 제출했어요. 내일 다시 제출할 수 있습니다.
             </p>
           )}
 
@@ -294,7 +294,7 @@ export function FeedbackForm({
           )}
           {isSubmitted && (
             <p className="text-sm text-primary">
-              문의사항이 제출되었습니다. 소중한 의견 감사합니다!
+              피드백이 제출되었습니다. 소중한 의견 감사합니다!
             </p>
           )}
 
