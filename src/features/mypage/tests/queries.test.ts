@@ -13,7 +13,7 @@ vi.mock("@/lib/supabase/getUser", () => ({
   getUser: getUserMock,
 }));
 
-import { getLearningStats } from "../queries";
+import { getLearningStats, getMyFeedbacks } from "../queries";
 
 type NotesRow = { review_round: number; next_review_at?: string | null };
 type ReviewLogsRow = {
@@ -332,5 +332,195 @@ describe("getLearningStats", () => {
     expect(
       result.recentActivity.find((d) => d.date === "2026-03-29"),
     ).toBeUndefined();
+  });
+});
+
+// ---- 피드백 (#266) ----
+
+type FeedbackQueryRow = {
+  id: string;
+  category: string;
+  title: string;
+  content: string;
+  image_urls: string[];
+  status: string;
+  created_at: string;
+  note: { id: string; title: string } | null;
+  reply: {
+    title: string;
+    content: string;
+    image_paths: string[];
+    created_at: string;
+  } | null;
+};
+
+function makeFeedbackRow(
+  overrides: Partial<FeedbackQueryRow> = {},
+): FeedbackQueryRow {
+  return {
+    id: "feedback-1",
+    category: "BUG",
+    title: "버그 신고",
+    content: "동작하지 않아요",
+    image_urls: [],
+    status: "OPEN",
+    created_at: "2026-05-01T00:00:00.000Z",
+    note: null,
+    reply: null,
+    ...overrides,
+  };
+}
+
+function makeFeedbackQuerySupabase({
+  rows = [] as FeedbackQueryRow[],
+  selectError = null as { message: string } | null,
+  signedUrlError = null as { message: string } | null,
+}: {
+  rows?: FeedbackQueryRow[];
+  selectError?: { message: string } | null;
+  signedUrlError?: { message: string } | null;
+} = {}) {
+  const feedbacksOrder = vi.fn().mockResolvedValue({
+    data: selectError ? null : rows,
+    error: selectError,
+  });
+  const feedbacksEq = vi.fn().mockReturnValue({ order: feedbacksOrder });
+  const feedbacksSelect = vi.fn().mockReturnValue({ eq: feedbacksEq });
+
+  const createSignedUrlsMocks = new Map<string, ReturnType<typeof vi.fn>>();
+  const storageFrom = vi.fn((bucket: string) => {
+    const createSignedUrls =
+      createSignedUrlsMocks.get(bucket) ??
+      vi.fn().mockImplementation((paths: string[]) =>
+        Promise.resolve(
+          signedUrlError
+            ? { data: null, error: signedUrlError }
+            : {
+                data: paths.map((path) => ({
+                  path,
+                  signedUrl: `https://signed.example.com/${bucket}/${path}`,
+                })),
+                error: null,
+              },
+        ),
+      );
+    createSignedUrlsMocks.set(bucket, createSignedUrls);
+    return { createSignedUrls };
+  });
+
+  const from = vi.fn((table: string) => {
+    if (table === "feedbacks") return { select: feedbacksSelect };
+    throw new Error(`unexpected table: ${table}`);
+  });
+
+  return {
+    supabase: { from, storage: { from: storageFrom } },
+    storageFrom,
+  };
+}
+
+describe("getMyFeedbacks", () => {
+  beforeEach(() => {
+    createClientMock.mockReset();
+    // 2026-05-03 12:00 KST
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-03T03:00:00.000Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("조회 실패 시 빈 결과를 반환한다", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { supabase } = makeFeedbackQuerySupabase({
+      selectError: { message: "boom" },
+    });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await getMyFeedbacks("user-123");
+    expect(result).toEqual({ feedbacks: [], hasSubmittedToday: false });
+  });
+
+  it("피드백과 답변 이미지에 서명 URL을 매핑한다", async () => {
+    const { supabase } = makeFeedbackQuerySupabase({
+      rows: [
+        makeFeedbackRow({
+          image_urls: ["user-123/feedback-1/a.png"],
+          note: { id: "note-1", title: "노트 제목" },
+          reply: {
+            title: "답변",
+            content: "확인했습니다",
+            image_paths: ["feedback-1/r.png"],
+            created_at: "2026-05-02T00:00:00.000Z",
+          },
+        }),
+      ],
+    });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await getMyFeedbacks("user-123");
+
+    expect(result.feedbacks).toHaveLength(1);
+    const feedback = result.feedbacks[0];
+    expect(feedback?.note).toEqual({ id: "note-1", title: "노트 제목" });
+    expect(feedback?.images).toEqual([
+      {
+        path: "user-123/feedback-1/a.png",
+        url: "https://signed.example.com/feedbacks/user-123/feedback-1/a.png",
+      },
+    ]);
+    expect(feedback?.reply?.images).toEqual([
+      {
+        path: "feedback-1/r.png",
+        url: "https://signed.example.com/feedback_replies/feedback-1/r.png",
+      },
+    ]);
+  });
+
+  it("서명 URL 생성 실패 시 url을 null로 둔다", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { supabase } = makeFeedbackQuerySupabase({
+      rows: [makeFeedbackRow({ image_urls: ["user-123/feedback-1/a.png"] })],
+      signedUrlError: { message: "boom" },
+    });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await getMyFeedbacks("user-123");
+    expect(result.feedbacks[0]?.images).toEqual([
+      { path: "user-123/feedback-1/a.png", url: null },
+    ]);
+  });
+
+  it("이미지가 없으면 서명 URL을 요청하지 않는다", async () => {
+    const { supabase, storageFrom } = makeFeedbackQuerySupabase({
+      rows: [makeFeedbackRow()],
+    });
+    createClientMock.mockResolvedValue(supabase);
+
+    await getMyFeedbacks("user-123");
+    expect(storageFrom).not.toHaveBeenCalled();
+  });
+
+  it("KST 기준 오늘 제출한 피드백이 있으면 hasSubmittedToday가 true다", async () => {
+    // 2026-05-03T00:00Z = KST 2026-05-03 09:00 → 오늘
+    const { supabase } = makeFeedbackQuerySupabase({
+      rows: [makeFeedbackRow({ created_at: "2026-05-03T00:00:00.000Z" })],
+    });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await getMyFeedbacks("user-123");
+    expect(result.hasSubmittedToday).toBe(true);
+  });
+
+  it("오늘 제출한 피드백이 없으면 hasSubmittedToday가 false다", async () => {
+    const { supabase } = makeFeedbackQuerySupabase({
+      rows: [makeFeedbackRow({ created_at: "2026-05-02T00:00:00.000Z" })],
+    });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await getMyFeedbacks("user-123");
+    expect(result.hasSubmittedToday).toBe(false);
   });
 });
