@@ -1,7 +1,7 @@
 ---
 name: "🚀 Feature Request"
 about: "새로운 기능 제안 및 구현 작업을 위한 템플릿입니다."
-title: "[Feat/auth] 00 기능 구현"
+title: "[Feat/도메인 라벨] 00 기능 구현"
 labels: "enhancement"
 assignees: ""
 ---
