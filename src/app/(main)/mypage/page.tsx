@@ -1,16 +1,9 @@
+import { ChevronRight } from "lucide-react";
 import type { Metadata } from "next";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
 import { LearningStatsSection } from "@/features/mypage/components/LearningStatsSection";
 import {
   MypageNav,
@@ -19,6 +12,7 @@ import {
 import { ReviewWaitingSection } from "@/features/mypage/components/ReviewWaitingSection";
 import type { SupportTab } from "@/features/mypage/components/SupportSection";
 import {
+  getFeedbackNoteOptions,
   getLearningStats,
   getMyFeedbacks,
   type MyFeedbacksResult,
@@ -105,6 +99,8 @@ export default async function MyPage({ searchParams }: Props) {
   let hasAnyPushSubscription = false;
   let reviewWaiting: Awaited<ReturnType<typeof getReviewWaitingNotes>> = [];
   let feedbackResult: MyFeedbacksResult | null = null;
+  let feedbackNoteOptions: Awaited<ReturnType<typeof getFeedbackNoteOptions>> =
+    [];
 
   if (section === "stats") {
     stats = await getLearningStats();
@@ -115,51 +111,52 @@ export default async function MyPage({ searchParams }: Props) {
   } else if (section === "reviews") {
     reviewWaiting = await getReviewWaitingNotes(user.id);
   } else if (section === "support" && supportTab === "inquiry") {
-    feedbackResult = await getMyFeedbacks(user.id);
+    [feedbackResult, feedbackNoteOptions] = await Promise.all([
+      getMyFeedbacks(user.id),
+      getFeedbackNoteOptions(user.id),
+    ]);
   }
 
   return (
     <div className="mx-auto max-w-5xl py-7 px-6">
       {/* Breadcrumb */}
-      <Breadcrumb>
-        <BreadcrumbList>
-          <BreadcrumbItem>
-            <BreadcrumbLink asChild>
-              <Link href={ROUTES.HOME}>홈</Link>
-            </BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbLink asChild>
-              <Link href={ROUTES.MYPAGE}>마이페이지</Link>
-            </BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          {section === "support" ? (
-            <>
-              <BreadcrumbItem>
-                <BreadcrumbLink asChild>
-                  <Link href={`${ROUTES.MYPAGE}?section=support`}>
-                    {SECTION_LABELS[section]}
-                  </Link>
-                </BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem>
-                <BreadcrumbPage className="font-medium">
-                  {SUPPORT_TAB_LABELS[supportTab]}
-                </BreadcrumbPage>
-              </BreadcrumbItem>
-            </>
-          ) : (
-            <BreadcrumbItem>
-              <BreadcrumbPage className="font-medium">
-                {SECTION_LABELS[section]}
-              </BreadcrumbPage>
-            </BreadcrumbItem>
-          )}
-        </BreadcrumbList>
-      </Breadcrumb>
+      <nav
+        aria-label="breadcrumb"
+        className="flex items-center gap-1.5 text-sm text-muted-foreground"
+      >
+        <Link
+          href={ROUTES.HOME}
+          className="transition-colors hover:text-foreground"
+        >
+          홈
+        </Link>
+        <ChevronRight className="size-3.5" />
+        <Link
+          href={ROUTES.MYPAGE}
+          className="transition-colors hover:text-foreground"
+        >
+          마이페이지
+        </Link>
+        <ChevronRight className="size-3.5" />
+        {section === "support" ? (
+          <>
+            <Link
+              href={`${ROUTES.MYPAGE}?section=support`}
+              className="transition-colors hover:text-foreground"
+            >
+              {SECTION_LABELS[section]}
+            </Link>
+            <ChevronRight className="size-3.5" />
+            <span className="font-medium text-foreground">
+              {SUPPORT_TAB_LABELS[supportTab]}
+            </span>
+          </>
+        ) : (
+          <span className="font-medium text-foreground">
+            {SECTION_LABELS[section]}
+          </span>
+        )}
+      </nav>
 
       {/* 페이지 타이틀 */}
       <h1 className="mt-6 mb-6 text-3xl font-bold">마이페이지</h1>
@@ -196,6 +193,7 @@ export default async function MyPage({ searchParams }: Props) {
             <SupportSection
               activeTab={supportTab}
               feedbacks={feedbackResult?.feedbacks ?? []}
+              noteOptions={feedbackNoteOptions}
               hasSubmittedToday={feedbackResult?.hasSubmittedToday ?? false}
             />
           )}

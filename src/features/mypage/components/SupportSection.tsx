@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ROUTES } from "@/lib/constants/routes";
 import { cn } from "@/lib/utils/cn";
 
-import type { MyFeedback } from "../queries";
+import type { FeedbackNoteOption, MyFeedback } from "../queries";
 import { FaqSection } from "./FaqSection";
 import { FeedbackSection } from "./FeedbackSection";
 
@@ -18,12 +18,14 @@ const SUPPORT_TAB_ITEMS = [
 type SupportSectionProps = {
   activeTab: SupportTab;
   feedbacks: MyFeedback[];
+  noteOptions: FeedbackNoteOption[];
   hasSubmittedToday: boolean;
 };
 
 export function SupportSection({
   activeTab,
   feedbacks,
+  noteOptions,
   hasSubmittedToday,
 }: SupportSectionProps) {
   return (
@@ -50,6 +52,7 @@ export function SupportSection({
       {activeTab === "inquiry" && (
         <FeedbackSection
           feedbacks={feedbacks}
+          noteOptions={noteOptions}
           hasSubmittedToday={hasSubmittedToday}
         />
       )}

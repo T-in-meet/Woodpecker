@@ -78,11 +78,28 @@ describe("feedbackSchema", () => {
     category: "BUG",
     title: "버그 신고합니다",
     content: "복습 완료 버튼이 동작하지 않아요",
+    noteId: null,
   };
 
   it("유효한 입력을 통과시킨다", () => {
     const result = feedbackSchema.safeParse(validInput);
     expect(result.success).toBe(true);
+  });
+
+  it("noteId로 uuid를 허용한다", () => {
+    const result = feedbackSchema.safeParse({
+      ...validInput,
+      noteId: "550e8400-e29b-41d4-a716-446655440000",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("uuid가 아닌 noteId를 거부한다", () => {
+    const result = feedbackSchema.safeParse({
+      ...validInput,
+      noteId: "not-a-uuid",
+    });
+    expect(result.success).toBe(false);
   });
 
   it("허용되지 않은 카테고리를 거부한다", () => {

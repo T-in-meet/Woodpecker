@@ -13,7 +13,11 @@ vi.mock("@/lib/supabase/getUser", () => ({
   getUser: getUserMock,
 }));
 
-import { getLearningStats, getMyFeedbacks } from "../queries";
+import {
+  getFeedbackNoteOptions,
+  getLearningStats,
+  getMyFeedbacks,
+} from "../queries";
 
 type NotesRow = { review_round: number; next_review_at?: string | null };
 type ReviewLogsRow = {
@@ -522,5 +526,48 @@ describe("getMyFeedbacks", () => {
 
     const result = await getMyFeedbacks("user-123");
     expect(result.hasSubmittedToday).toBe(false);
+  });
+});
+
+describe("getFeedbackNoteOptions", () => {
+  beforeEach(() => {
+    createClientMock.mockReset();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function makeNotesSupabase({
+    data = [] as { id: string; title: string }[],
+    error = null as { message: string } | null,
+  } = {}) {
+    const limit = vi.fn().mockResolvedValue({
+      data: error ? null : data,
+      error,
+    });
+    const order = vi.fn().mockReturnValue({ limit });
+    const eq = vi.fn().mockReturnValue({ order });
+    const select = vi.fn().mockReturnValue({ eq });
+    const from = vi.fn().mockReturnValue({ select });
+    return { supabase: { from }, limit };
+  }
+
+  it("노트 id/title 목록을 반환한다", async () => {
+    const notes = [{ id: "note-1", title: "노트 제목" }];
+    const { supabase } = makeNotesSupabase({ data: notes });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await getFeedbackNoteOptions("user-123");
+    expect(result).toEqual(notes);
+  });
+
+  it("조회 실패 시 빈 배열을 반환한다", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { supabase } = makeNotesSupabase({ error: { message: "boom" } });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await getFeedbackNoteOptions("user-123");
+    expect(result).toEqual([]);
   });
 });

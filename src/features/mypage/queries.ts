@@ -312,3 +312,28 @@ export async function getMyFeedbacks(
 
   return { feedbacks, hasSubmittedToday };
 }
+
+export type FeedbackNoteOption = { id: string; title: string };
+
+// 노트 연결 셀렉터용 — 최근 수정순 상위 100개만 노출한다
+const FEEDBACK_NOTE_OPTIONS_LIMIT = 100;
+
+export async function getFeedbackNoteOptions(
+  userId: string,
+): Promise<FeedbackNoteOption[]> {
+  const supabase = await createServerComponentClient();
+
+  const { data, error } = await supabase
+    .from("notes")
+    .select("id, title")
+    .eq("user_id", userId)
+    .order("updated_at", { ascending: false })
+    .limit(FEEDBACK_NOTE_OPTIONS_LIMIT);
+
+  if (error) {
+    logError(`[getFeedbackNoteOptions] 노트 조회 실패: ${error.message}`);
+    return [];
+  }
+
+  return data ?? [];
+}
