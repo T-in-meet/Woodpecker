@@ -1,5 +1,5 @@
 import { OPERATIONAL_ERROR_SEVERITY } from "@/features/operational-errors/constants";
-import { recordOperationalError } from "@/features/operational-errors/record";
+import { reportOperationalError } from "@/features/operational-errors/report";
 import {
   NOTIFICATION_STATUS,
   type NotificationKindType,
@@ -78,7 +78,7 @@ export async function createUserNotification(
     .single();
 
   if (error) {
-    await recordOperationalError({
+    await reportOperationalError({
       ...withActorUserId(input.actorUserId),
       context: {
         clickPath: input.clickPath,

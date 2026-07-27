@@ -10,10 +10,12 @@ const {
   createAdminClientMock,
   dispatchPushToUserMock,
   recordOperationalErrorMock,
+  reportOperationalErrorMock,
 } = vi.hoisted(() => ({
   createAdminClientMock: vi.fn(),
   dispatchPushToUserMock: vi.fn(),
   recordOperationalErrorMock: vi.fn(),
+  reportOperationalErrorMock: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/admin", () => ({
@@ -22,6 +24,10 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 vi.mock("@/features/operational-errors/record", () => ({
   recordOperationalError: recordOperationalErrorMock,
+}));
+
+vi.mock("@/features/operational-errors/report", () => ({
+  reportOperationalError: reportOperationalErrorMock,
 }));
 
 vi.mock("../dispatch-push", () => ({
@@ -59,6 +65,7 @@ describe("createUserNotification", () => {
     createAdminClientMock.mockReset();
     dispatchPushToUserMock.mockReset();
     recordOperationalErrorMock.mockReset();
+    reportOperationalErrorMock.mockReset();
   });
 
   it("creates an in-app notification", async () => {
@@ -95,7 +102,7 @@ describe("createUserNotification", () => {
       type: NOTIFICATION_TYPES.FEEDBACK_REPLY,
       user_id: "22222222-2222-4222-8222-222222222222",
     });
-    expect(recordOperationalErrorMock).not.toHaveBeenCalled();
+    expect(reportOperationalErrorMock).not.toHaveBeenCalled();
   });
 
   it("keeps reserved push payload fields from being overridden by metadata", async () => {
@@ -141,7 +148,7 @@ describe("createUserNotification", () => {
     const error = { message: "insert failed" };
     const supabase = createInsertChain({ data: null, error });
     createAdminClientMock.mockReturnValue(supabase);
-    recordOperationalErrorMock.mockResolvedValue({
+    reportOperationalErrorMock.mockResolvedValue({
       id: "33333333-3333-4333-8333-333333333333",
       ok: true,
       recorded: "created",
@@ -158,7 +165,7 @@ describe("createUserNotification", () => {
     });
 
     expect(result).toEqual({ error, ok: false });
-    expect(recordOperationalErrorMock).toHaveBeenCalledWith(
+    expect(reportOperationalErrorMock).toHaveBeenCalledWith(
       expect.objectContaining({
         actorUserId: "44444444-4444-4444-8444-444444444444",
         error,
@@ -177,6 +184,7 @@ describe("createAdminNotification", () => {
     createAdminClientMock.mockReset();
     dispatchPushToUserMock.mockReset();
     recordOperationalErrorMock.mockReset();
+    reportOperationalErrorMock.mockReset();
   });
 
   it("keeps reserved admin push payload fields from being overridden by metadata", async () => {

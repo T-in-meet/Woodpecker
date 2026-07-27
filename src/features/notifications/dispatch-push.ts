@@ -1,5 +1,5 @@
 import { OPERATIONAL_ERROR_SEVERITY } from "@/features/operational-errors/constants";
-import { recordOperationalError } from "@/features/operational-errors/record";
+import { reportOperationalError } from "@/features/operational-errors/report";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   sendPush,
@@ -60,7 +60,7 @@ async function deleteExpiredSubscription(
 
   if (!error) return true;
 
-  await recordOperationalError({
+  await reportOperationalError({
     ...withActorUserId(options.actorUserId),
     context: {
       pushSubscriptionId: subscription.id,
@@ -107,7 +107,7 @@ async function dispatchPushSubscription(
       options,
     );
 
-    await recordOperationalError({
+    await reportOperationalError({
       ...withActorUserId(options.actorUserId),
       context: {
         pushSubscriptionId: subscription.id,
@@ -130,7 +130,7 @@ async function dispatchPushSubscription(
     };
   }
 
-  await recordOperationalError({
+  await reportOperationalError({
     ...withActorUserId(options.actorUserId),
     context: {
       pushSubscriptionId: subscription.id,
@@ -170,7 +170,7 @@ export async function dispatchPushToUser(
     .eq("user_id", options.userId);
 
   if (error) {
-    await recordOperationalError({
+    await reportOperationalError({
       ...withActorUserId(options.actorUserId),
       context: { userId: options.userId },
       error,
@@ -193,7 +193,7 @@ export async function dispatchPushToUser(
   try {
     setVapidDetails();
   } catch (error) {
-    await recordOperationalError({
+    await reportOperationalError({
       ...withActorUserId(options.actorUserId),
       context: { userId: options.userId },
       error,
