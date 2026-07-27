@@ -39,8 +39,6 @@ export type IdOf<T extends TableNameWithId> = Row<T>["id"];
 export type WithId<T extends TableNameWithId> = Pick<Row<T>, "id">;
 
 export const TABLES = {
-  feedbackReplies: "feedback_replies",
-  feedbacks: "feedbacks",
   notes: "notes",
   notifications: "notifications",
   profiles: "profiles",

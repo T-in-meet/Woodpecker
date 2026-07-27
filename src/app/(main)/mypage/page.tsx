@@ -10,12 +10,7 @@ import {
   type MypageSection,
 } from "@/features/mypage/components/MypageNav";
 import { ReviewWaitingSection } from "@/features/mypage/components/ReviewWaitingSection";
-import {
-  getFeedbackNoteOptions,
-  getLearningStats,
-  getMyFeedbacks,
-  type MyFeedbacksResult,
-} from "@/features/mypage/queries";
+import { getLearningStats } from "@/features/mypage/queries";
 import { getReviewWaitingNotes } from "@/features/notes/queries";
 import { PushSubscribeCard } from "@/features/notifications/components/PushSubscribeCard";
 import { getHasAnyPushSubscription } from "@/features/notifications/queries";
@@ -38,22 +33,12 @@ const DeleteAccountSection = dynamic(() =>
     (m) => m.DeleteAccountSection,
   ),
 );
-const FeedbackSection = dynamic(() =>
-  import("@/features/mypage/components/FeedbackSection").then(
-    (m) => m.FeedbackSection,
-  ),
-);
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-const VALID_SECTIONS: MypageSection[] = [
-  "profile",
-  "stats",
-  "reviews",
-  "feedback",
-];
+const VALID_SECTIONS: MypageSection[] = ["profile", "stats", "reviews"];
 
 function isValidSection(value: unknown): value is MypageSection {
   return VALID_SECTIONS.includes(value as MypageSection);
@@ -63,7 +48,6 @@ const SECTION_LABELS: Record<MypageSection, string> = {
   profile: "계정 관리",
   stats: "학습 통계",
   reviews: "복습 대기",
-  feedback: "문의사항",
 };
 
 type Props = {
@@ -85,9 +69,6 @@ export default async function MyPage({ searchParams }: Props) {
   let stats: Awaited<ReturnType<typeof getLearningStats>> | null = null;
   let hasAnyPushSubscription = false;
   let reviewWaiting: Awaited<ReturnType<typeof getReviewWaitingNotes>> = [];
-  let feedbackResult: MyFeedbacksResult | null = null;
-  let feedbackNoteOptions: Awaited<ReturnType<typeof getFeedbackNoteOptions>> =
-    [];
 
   if (section === "stats") {
     stats = await getLearningStats();
@@ -97,11 +78,6 @@ export default async function MyPage({ searchParams }: Props) {
     });
   } else if (section === "reviews") {
     reviewWaiting = await getReviewWaitingNotes(user.id);
-  } else if (section === "feedback") {
-    [feedbackResult, feedbackNoteOptions] = await Promise.all([
-      getMyFeedbacks(user.id),
-      getFeedbackNoteOptions(user.id),
-    ]);
   }
 
   return (
@@ -160,13 +136,6 @@ export default async function MyPage({ searchParams }: Props) {
           )}
           {section === "reviews" && (
             <ReviewWaitingSection notes={reviewWaiting} />
-          )}
-          {section === "feedback" && feedbackResult && (
-            <FeedbackSection
-              feedbacks={feedbackResult.feedbacks}
-              noteOptions={feedbackNoteOptions}
-              hasSubmittedToday={feedbackResult.hasSubmittedToday}
-            />
           )}
         </div>
       </div>
