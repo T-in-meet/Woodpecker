@@ -72,6 +72,37 @@ describe("CSP — buildCspEnforced", () => {
     );
   });
 
+  it("TC-CSP-M-02-01. 개발 환경에서는 script-src에 'unsafe-eval'을 포함한다", () => {
+    vi.stubEnv("NODE_ENV", "development");
+
+    const csp = buildCspEnforced(NONCE);
+    const scriptSrc = csp
+      .split("; ")
+      .find((directive) => directive.startsWith("script-src "));
+
+    expect(scriptSrc).toBe(
+      `script-src 'self' 'nonce-${NONCE}' 'strict-dynamic' 'unsafe-eval'`,
+    );
+
+    vi.unstubAllEnvs();
+  });
+
+  it("TC-CSP-M-02-02. 운영 환경에서는 script-src에 'unsafe-eval'을 포함하지 않는다", () => {
+    vi.stubEnv("NODE_ENV", "production");
+
+    const csp = buildCspEnforced(NONCE);
+    const scriptSrc = csp
+      .split("; ")
+      .find((directive) => directive.startsWith("script-src "));
+
+    expect(scriptSrc).toBe(
+      `script-src 'self' 'nonce-${NONCE}' 'strict-dynamic'`,
+    );
+    expect(scriptSrc).not.toContain("'unsafe-eval'");
+
+    vi.unstubAllEnvs();
+  });
+
   it("TC-CSP-M-03. style-src에 'unsafe-inline'이 허용된다 (React 19 hoisting/CSS-in-JS 호환)", () => {
     const csp = buildCspEnforced(NONCE);
     const styleSrc = csp.split("; ").find((d) => d.startsWith("style-src "));

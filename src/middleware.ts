@@ -23,6 +23,22 @@ function buildCspDirectives(nonce: string): string[] {
   const isDevelopment = process.env.NODE_ENV === "development";
 
   /**
+   * Next.js 및 Serwist 개발 번들은 HMR과 개발용 번들 실행 과정에서
+   * eval 계열 코드를 사용할 수 있습니다.
+   *
+   * 로컬에서 ENABLE_SW=true로 Service Worker를 활성화하면
+   * @serwist/next의 sw-entry가 CSP에 의해 차단되지 않도록
+   * 개발 환경에서만 'unsafe-eval'을 script-src에 추가합니다.
+   *
+   * 운영 환경에서는 'unsafe-eval'을 허용하지 않아 기존 CSP 강도를 유지합니다.
+   */
+  const scriptSources = ["'self'", `'nonce-${nonce}'`, "'strict-dynamic'"];
+
+  if (isDevelopment) {
+    scriptSources.push("'unsafe-eval'");
+  }
+
+  /**
    * 로컬 Supabase(Storage) 이미지는 개발 환경에서만 허용합니다.
    *
    * 운영 환경은 *.supabase.co만 허용하여 CSP 정책을 유지하고,
@@ -41,7 +57,7 @@ function buildCspDirectives(nonce: string): string[] {
     "frame-ancestors 'none'",
     "frame-src 'none'",
     "form-action 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+    `script-src ${scriptSources.join(" ")}`,
     "style-src 'self' 'unsafe-inline'",
     [
       "img-src 'self' data: blob:",

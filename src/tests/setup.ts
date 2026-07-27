@@ -57,6 +57,12 @@ if (!HTMLElement.prototype.scrollIntoView) {
   HTMLElement.prototype.scrollIntoView = () => {};
 }
 
+// jsdom은 scrollTo를 노출하지만 호출 시 not implemented 에러를 기록한다.
+Object.defineProperty(window, "scrollTo", {
+  configurable: true,
+  value: () => {},
+});
+
 if (typeof window.ResizeObserver === "undefined") {
   window.ResizeObserver = class ResizeObserver {
     observe() {}
