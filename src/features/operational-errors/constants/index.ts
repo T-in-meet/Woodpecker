@@ -1,0 +1,50 @@
+import {
+  ADMIN_OPERATIONAL_ERROR_CODES,
+  ADMIN_OPERATIONAL_ERROR_FEATURES,
+  ADMIN_OPERATIONAL_ERROR_OPERATIONS,
+  ADMIN_OPERATIONAL_ERROR_STAGES,
+} from "./admin-operational-errors";
+import {
+  NOTIFICATION_OPERATIONAL_ERROR_CODES,
+  NOTIFICATION_OPERATIONAL_ERROR_FEATURES,
+  NOTIFICATION_OPERATIONAL_ERROR_OPERATIONS,
+  NOTIFICATION_OPERATIONAL_ERROR_STAGES,
+} from "./notifications";
+
+/**
+ * 운영 오류가 발생한 기능 도메인입니다.
+ */
+export const OPERATIONAL_ERROR_FEATURES = {
+  ...NOTIFICATION_OPERATIONAL_ERROR_FEATURES,
+  ...ADMIN_OPERATIONAL_ERROR_FEATURES,
+} as const;
+
+/**
+ * 운영 오류가 발생한 작업입니다.
+ */
+export const OPERATIONAL_ERROR_OPERATIONS = {
+  ...NOTIFICATION_OPERATIONAL_ERROR_OPERATIONS,
+  ...ADMIN_OPERATIONAL_ERROR_OPERATIONS,
+} as const;
+
+/**
+ * 운영 오류가 발생한 작업 내부의 세부 단계입니다.
+ */
+export const OPERATIONAL_ERROR_STAGES = {
+  ...NOTIFICATION_OPERATIONAL_ERROR_STAGES,
+  ...ADMIN_OPERATIONAL_ERROR_STAGES,
+} as const;
+
+/**
+ * 운영 오류를 식별하기 위한 고유 코드입니다.
+ */
+export const OPERATIONAL_ERROR_CODES = {
+  ...NOTIFICATION_OPERATIONAL_ERROR_CODES,
+  ...ADMIN_OPERATIONAL_ERROR_CODES,
+} as const;
+
+export type {
+  OperationalErrorSeverityType,
+  OperationalErrorStatusType,
+} from "./common";
+export { OPERATIONAL_ERROR_SEVERITY, OPERATIONAL_ERROR_STATUS } from "./common";
