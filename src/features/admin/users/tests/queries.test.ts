@@ -1,6 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { requireAdmin } from "@/features/admin/utils/require-admin";
+import {
+  OPERATIONAL_ERROR_CODES,
+  OPERATIONAL_ERROR_FEATURES,
+  OPERATIONAL_ERROR_OPERATIONS,
+  OPERATIONAL_ERROR_SEVERITY,
+  OPERATIONAL_ERROR_STAGES,
+} from "@/features/operational-errors/constants";
+import { reportOperationalError } from "@/features/operational-errors/report";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { getAdminUsers } from "../queries";
@@ -16,6 +24,10 @@ import { applyUserFilters } from "../utils/user-query-filter";
 import type { AdminUserListRow } from "../utils/user-query-mapper";
 import { mapUserRows } from "../utils/user-query-mapper";
 import { applyUserSort } from "../utils/user-sort";
+
+vi.mock("@/features/operational-errors/report", () => ({
+  reportOperationalError: vi.fn(),
+}));
 
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: vi.fn(),
@@ -44,6 +56,7 @@ vi.mock("../utils/user-sort", () => ({
 
 const requireAdminMock = vi.mocked(requireAdmin);
 const createAdminClientMock = vi.mocked(createAdminClient);
+const reportOperationalErrorMock = vi.mocked(reportOperationalError);
 const createAdminUserListQueryMock = vi.mocked(createAdminUserListQuery);
 const escapePostgrestLikePatternMock = vi.mocked(escapePostgrestLikePattern);
 const applyUserFiltersMock = vi.mocked(applyUserFilters);
@@ -116,6 +129,7 @@ describe("getAdminUsers", () => {
       createAdminClientMock.mock.invocationCallOrder[0];
 
     expect(requireAdminCallOrder!).toBeLessThan(createAdminClientCallOrder!);
+    expect(reportOperationalErrorMock).not.toHaveBeenCalled();
   });
 
   it("닉네임 검색어의 공백을 제거하고 nickname 조건을 적용합니다.", async () => {
@@ -378,25 +392,76 @@ describe("getAdminUsers", () => {
     expect(result.items).toEqual([]);
   });
 
-  it("사용자 목록 조회가 실패하면 원본 오류 메시지를 포함해 예외를 발생시킵니다.", async () => {
+  it("사용자 목록 조회가 실패하면 운영 오류를 기록하고 원본 오류 메시지를 포함해 예외를 발생시킵니다.", async () => {
     const baseQuery = createUserQueryBuilderMock();
     const filteredQuery = createUserQueryBuilderMock();
     const sortedQuery = createUserQueryBuilderMock();
 
+    const queryError = {
+      message: "View query failed",
+    };
+
+    const query: AdminUserListQuery = {
+      ...DEFAULT_QUERY,
+      page: 2,
+      pageSize: 20,
+      search: {
+        field: "email",
+        query: "  user@example.com  ",
+      },
+      filters: {
+        role: {
+          field: "role",
+          type: "select",
+          value: "ADMIN",
+        },
+        signupMethod: {
+          field: "signupMethod",
+          type: "select",
+          value: "SOCIAL",
+        },
+      },
+      sort: {
+        field: "email",
+        direction: "asc",
+      },
+    };
+
     createAdminUserListQueryMock.mockReturnValue(baseQuery as never);
     applyUserFiltersMock.mockReturnValue(filteredQuery as never);
     applyUserSortMock.mockReturnValue(sortedQuery as never);
+    escapePostgrestLikePatternMock.mockReturnValue("user@example.com");
+
     sortedQuery.range.mockResolvedValue({
       data: null,
       count: null,
-      error: {
-        message: "View query failed",
-      },
+      error: queryError,
     });
 
-    await expect(getAdminUsers(DEFAULT_QUERY)).rejects.toThrow(
+    await expect(getAdminUsers(query)).rejects.toThrow(
       "Failed to load admin users: View query failed",
     );
+
+    expect(reportOperationalErrorMock).toHaveBeenCalledOnce();
+    expect(reportOperationalErrorMock).toHaveBeenCalledWith({
+      actorUserId: "admin-user-id",
+      context: {
+        appliedFilterFields: ["role", "signupMethod"],
+        page: 2,
+        pageSize: 20,
+        searchField: "email",
+        searchQueryApplied: true,
+        sortDirection: "asc",
+        sortField: "email",
+      },
+      error: queryError,
+      errorCode: OPERATIONAL_ERROR_CODES.ADMIN_USERS_LOAD_FAILED,
+      feature: OPERATIONAL_ERROR_FEATURES.ADMIN_USERS,
+      message: "관리자 사용자 목록 조회에 실패했습니다.",
+      operation: OPERATIONAL_ERROR_OPERATIONS.GET_ADMIN_USERS,
+      severity: OPERATIONAL_ERROR_SEVERITY.ERROR,
+      stage: OPERATIONAL_ERROR_STAGES.ADMIN_USER_LIST_QUERY,
+    });
 
     expect(mapUserRowsMock).not.toHaveBeenCalled();
   });

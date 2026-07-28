@@ -1,5 +1,13 @@
 "use server";
 
+import {
+  OPERATIONAL_ERROR_CODES,
+  OPERATIONAL_ERROR_FEATURES,
+  OPERATIONAL_ERROR_OPERATIONS,
+  OPERATIONAL_ERROR_SEVERITY,
+  OPERATIONAL_ERROR_STAGES,
+} from "@/features/operational-errors/constants";
+import { reportOperationalError } from "@/features/operational-errors/report";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { requireAdmin } from "../utils/require-admin";
@@ -28,7 +36,7 @@ import { applyUserSort } from "./utils/user-sort";
 export async function getAdminUsers(
   query: AdminUserListQuery,
 ): Promise<AdminUserListResult> {
-  await requireAdmin();
+  const adminUserId = await requireAdmin();
 
   const supabase = createAdminClient();
   const page = Math.max(1, query.page);
@@ -61,6 +69,26 @@ export async function getAdminUsers(
   const { data, error, count } = await userQuery.range(from, to);
 
   if (error) {
+    await reportOperationalError({
+      actorUserId: adminUserId,
+      context: {
+        appliedFilterFields: Object.keys(query.filters),
+        page,
+        pageSize,
+        searchField: query.search.field,
+        searchQueryApplied: normalizedSearchQuery.length > 0,
+        sortDirection: query.sort.direction,
+        sortField: query.sort.field,
+      },
+      error,
+      errorCode: OPERATIONAL_ERROR_CODES.ADMIN_USERS_LOAD_FAILED,
+      feature: OPERATIONAL_ERROR_FEATURES.ADMIN_USERS,
+      message: "관리자 사용자 목록 조회에 실패했습니다.",
+      operation: OPERATIONAL_ERROR_OPERATIONS.GET_ADMIN_USERS,
+      severity: OPERATIONAL_ERROR_SEVERITY.ERROR,
+      stage: OPERATIONAL_ERROR_STAGES.ADMIN_USER_LIST_QUERY,
+    });
+
     throw new Error(`Failed to load admin users: ${error.message}`);
   }
 

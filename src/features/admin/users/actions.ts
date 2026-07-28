@@ -2,6 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 
+import {
+  OPERATIONAL_ERROR_CODES,
+  OPERATIONAL_ERROR_FEATURES,
+  OPERATIONAL_ERROR_OPERATIONS,
+  OPERATIONAL_ERROR_SEVERITY,
+  OPERATIONAL_ERROR_STAGES,
+} from "@/features/operational-errors/constants";
+import { reportOperationalError } from "@/features/operational-errors/report";
 import { ROUTES } from "@/lib/constants/routes";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -76,9 +84,32 @@ export async function updateUserRole(
     .from("profiles")
     .select("role")
     .eq("id", userId)
-    .single();
+    .maybeSingle();
 
-  if (currentUserError || !currentUser || !isUserRole(currentUser.role)) {
+  if (currentUserError) {
+    await reportOperationalError({
+      actorUserId: adminUserId,
+      context: {
+        requestedRole: role,
+        targetUserId: userId,
+      },
+      error: currentUserError,
+      errorCode: OPERATIONAL_ERROR_CODES.ADMIN_USER_ROLE_TARGET_LOAD_FAILED,
+      feature: OPERATIONAL_ERROR_FEATURES.ADMIN_USERS,
+      message: "역할 변경 대상 사용자 조회에 실패했습니다.",
+      operation: OPERATIONAL_ERROR_OPERATIONS.UPDATE_ADMIN_USER_ROLE,
+      severity: OPERATIONAL_ERROR_SEVERITY.ERROR,
+      stage: OPERATIONAL_ERROR_STAGES.ADMIN_USER_TARGET_LOAD,
+      userId,
+    });
+
+    return {
+      message: "사용자 정보를 확인하지 못했습니다.",
+      ok: false,
+    };
+  }
+
+  if (!currentUser || !isUserRole(currentUser.role)) {
     return {
       message: "사용자를 찾을 수 없습니다.",
       ok: false,
@@ -97,6 +128,23 @@ export async function updateUserRole(
     .eq("id", userId);
 
   if (error) {
+    await reportOperationalError({
+      actorUserId: adminUserId,
+      context: {
+        previousRole: currentUser.role,
+        requestedRole: role,
+        targetUserId: userId,
+      },
+      error,
+      errorCode: OPERATIONAL_ERROR_CODES.ADMIN_USER_ROLE_UPDATE_FAILED,
+      feature: OPERATIONAL_ERROR_FEATURES.ADMIN_USERS,
+      message: "관리자 사용자 역할 변경에 실패했습니다.",
+      operation: OPERATIONAL_ERROR_OPERATIONS.UPDATE_ADMIN_USER_ROLE,
+      severity: OPERATIONAL_ERROR_SEVERITY.ERROR,
+      stage: OPERATIONAL_ERROR_STAGES.ADMIN_USER_ROLE_UPDATE,
+      userId,
+    });
+
     return {
       message: "사용자 역할 변경에 실패했습니다.",
       ok: false,
