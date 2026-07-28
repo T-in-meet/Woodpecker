@@ -446,6 +446,104 @@ describe("BulletTaskItemInputRule", () => {
   });
 });
 
+describe("OrderedBulletItemInputRule", () => {
+  it("converts an ordered list item into a bullet item", () => {
+    const editor = new Editor({
+      extensions: getTipTapExtensions(),
+      editable: true,
+      content: "1. first\n2. ",
+    });
+
+    setParagraphTextSelection(editor, 1);
+    dispatchTextInput(editor, "- ");
+    dispatchTextInput(editor, "bullet");
+
+    const result = serializeTipTapMarkdown(editor);
+
+    expect(result).toContain("1. first");
+    expect(result).toContain("- bullet");
+    // 마커가 텍스트로 남지 않아야 한다.
+    expect(result).not.toContain("\\-");
+
+    editor.destroy();
+  });
+
+  it("accepts * and + markers as well", () => {
+    for (const marker of ["*", "+"]) {
+      const editor = new Editor({
+        extensions: getTipTapExtensions(),
+        editable: true,
+        content: "1. first\n2. ",
+      });
+
+      setParagraphTextSelection(editor, 1);
+      dispatchTextInput(editor, `${marker} `);
+      dispatchTextInput(editor, "bullet");
+
+      expect(serializeTipTapMarkdown(editor)).toContain("- bullet");
+
+      editor.destroy();
+    }
+  });
+
+  it("keeps sibling items when converting a middle ordered item", () => {
+    const editor = new Editor({
+      extensions: getTipTapExtensions(),
+      editable: true,
+      content: "1. before\n2. \n3. after",
+    });
+
+    setParagraphTextSelection(editor, 1);
+    dispatchTextInput(editor, "- ");
+    dispatchTextInput(editor, "middle");
+
+    const result = serializeTipTapMarkdown(editor);
+
+    expect(result).toContain("1. before");
+    expect(result).toContain("- middle");
+    expect(result).toContain("after");
+    expect(result.indexOf("before")).toBeLessThan(result.indexOf("- middle"));
+    expect(result.indexOf("- middle")).toBeLessThan(result.indexOf("after"));
+
+    editor.destroy();
+  });
+
+  it("still creates a bullet list when the marker is typed in a plain paragraph", () => {
+    const editor = new Editor({
+      extensions: getTipTapExtensions(),
+      editable: true,
+      content: "<p></p>",
+    });
+
+    setParagraphTextSelection(editor, 0);
+    dispatchTextInput(editor, "- ");
+    dispatchTextInput(editor, "plain");
+
+    expect(serializeTipTapMarkdown(editor)).toContain("- plain");
+
+    editor.destroy();
+  });
+
+  it("leaves bullet list items untouched", () => {
+    const editor = new Editor({
+      extensions: getTipTapExtensions(),
+      editable: true,
+      content: "- first\n- ",
+    });
+
+    setParagraphTextSelection(editor, 1);
+    dispatchTextInput(editor, "- ");
+    dispatchTextInput(editor, "second");
+
+    const result = serializeTipTapMarkdown(editor);
+
+    expect(result).toContain("- first");
+    expect(editor.getHTML()).not.toContain("<ol");
+
+    editor.destroy();
+  });
+});
+
 describe("ListItemBackspaceLift", () => {
   it("does not lift the list item from the start of a later paragraph", () => {
     const editor = new Editor({

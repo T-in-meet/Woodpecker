@@ -26,10 +26,12 @@ import {
   MarkdownSerializerState,
 } from "@tiptap/pm/markdown";
 import {
+  type Attrs,
   type Node as ProseMirrorNode,
+  type NodeType,
   type ResolvedPos,
 } from "@tiptap/pm/model";
-import { TextSelection } from "@tiptap/pm/state";
+import { type EditorState, TextSelection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import go from "highlight.js/lib/languages/go";
 import javascript from "highlight.js/lib/languages/javascript";
@@ -52,6 +54,7 @@ lowlight.register("go", go);
 
 const LIST_ITEM_TYPE_NAMES = ["listItem", "taskItem"] as const;
 const TASK_MARKER_IN_BULLET_LIST_INPUT_REGEX = /^\[( |x|X)\][ ]$/;
+const BULLET_MARKER_IN_ORDERED_LIST_INPUT_REGEX = /^\s*([-+*])\s$/;
 
 type TableCellAlignmentType = "left" | "center" | "right" | null;
 
@@ -350,6 +353,117 @@ const ListItemBackspaceLift = Extension.create({
   },
 });
 
+type ListItemConversionOptionsType = {
+  state: EditorState;
+  range: { from: number; to: number };
+  sourceListType: NodeType;
+  sourceItemType: NodeType;
+  targetListType: NodeType;
+  targetItemType: NodeType;
+  targetItemAttrs: Attrs | null;
+};
+
+// 커서가 있는 리스트 항목 하나만 다른 종류의 리스트로 바꾼다. 앞뒤 형제 항목은 원래
+// 리스트로 남기므로, 목록 중간에서 마커를 바꿔도 나머지 항목이 흐트러지지 않는다.
+function convertListItemToList({
+  state,
+  range,
+  sourceListType,
+  sourceItemType,
+  targetListType,
+  targetItemType,
+  targetItemAttrs,
+}: ListItemConversionOptionsType): boolean {
+  const { $from } = state.selection;
+  const listItemDepth = findAncestorDepth($from, sourceItemType.name);
+  const listDepth = findAncestorDepth($from, sourceListType.name);
+
+  if (listItemDepth === null || listDepth === null) {
+    return false;
+  }
+
+  let itemIndex = $from.index(listDepth);
+  const listNode = $from.node(listDepth);
+  const listPosition = $from.before(listDepth);
+  const previousListItemNode =
+    itemIndex > 0 ? listNode.maybeChild(itemIndex - 1) : null;
+
+  if (
+    $from.parentOffset === 0 &&
+    previousListItemNode?.type === sourceItemType &&
+    previousListItemNode.childCount === 1 &&
+    previousListItemNode.firstChild?.type.name === "paragraph" &&
+    previousListItemNode.textContent === ""
+  ) {
+    // Empty list item boundaries resolve forward into the next item, so
+    // the marker typed in that empty item would otherwise convert its sibling.
+    itemIndex -= 1;
+  }
+
+  if (itemIndex < 0 || itemIndex >= listNode.childCount) {
+    return false;
+  }
+
+  const tr = state.tr.delete(range.from, range.to);
+  const mappedListPosition = tr.mapping.map(listPosition);
+  const nextListNode = tr.doc.nodeAt(mappedListPosition);
+  const nextListItemNode = nextListNode?.maybeChild(itemIndex);
+
+  if (
+    !nextListNode ||
+    nextListNode.type !== sourceListType ||
+    !nextListItemNode ||
+    !targetItemType.validContent(nextListItemNode.content)
+  ) {
+    return false;
+  }
+
+  const targetItemNode = targetItemType.create(
+    targetItemAttrs,
+    nextListItemNode.content,
+  );
+  const targetListNode = targetListType.create(null, targetItemNode);
+  const replacementNodes: ProseMirrorNode[] = [];
+  let targetListPosition = mappedListPosition;
+
+  if (itemIndex > 0) {
+    const previousItems = Array.from({ length: itemIndex }, (_, index) =>
+      nextListNode.child(index),
+    );
+    const previousListNode = sourceListType.create(
+      nextListNode.attrs,
+      previousItems,
+    );
+
+    replacementNodes.push(previousListNode);
+    targetListPosition += previousListNode.nodeSize;
+  }
+
+  replacementNodes.push(targetListNode);
+
+  if (itemIndex < nextListNode.childCount - 1) {
+    replacementNodes.push(
+      sourceListType.create(
+        nextListNode.attrs,
+        Array.from(
+          { length: nextListNode.childCount - itemIndex - 1 },
+          (_, index) => nextListNode.child(itemIndex + index + 1),
+        ),
+      ),
+    );
+  }
+
+  tr.replaceWith(
+    mappedListPosition,
+    mappedListPosition + nextListNode.nodeSize,
+    replacementNodes,
+  );
+  // ProseMirror 포지션은 리스트/항목/문단 경계를 각각 1칸씩 지난다.
+  tr.setSelection(TextSelection.near(tr.doc.resolve(targetListPosition + 3)));
+
+  return true;
+}
+
 const BulletTaskItemInputRule = Extension.create({
   name: "bulletTaskItemInputRule",
   priority: 1200,
@@ -374,95 +488,60 @@ const BulletTaskItemInputRule = Extension.create({
             return null;
           }
 
-          const { $from } = state.selection;
-          const listItemDepth = findAncestorDepth($from, listItemType.name);
-          const listDepth = findAncestorDepth($from, bulletListType.name);
-
-          if (listItemDepth === null || listDepth === null) {
-            return null;
-          }
-
-          let itemIndex = $from.index(listDepth);
-          const listNode = $from.node(listDepth);
-          const listPosition = $from.before(listDepth);
-          const previousListItemNode =
-            itemIndex > 0 ? listNode.maybeChild(itemIndex - 1) : null;
-
+          // 변환에 실패하면 null을 돌려줘야 TipTap이 이 규칙을 건너뛰고 다음 규칙을 본다.
           if (
-            $from.parentOffset === 0 &&
-            previousListItemNode?.type === listItemType &&
-            previousListItemNode.childCount === 1 &&
-            previousListItemNode.firstChild?.type.name === "paragraph" &&
-            previousListItemNode.textContent === ""
-          ) {
-            // Empty list item boundaries resolve forward into the next item, so
-            // the marker typed in that empty item would otherwise convert its sibling.
-            itemIndex -= 1;
-          }
-
-          if (itemIndex < 0 || itemIndex >= listNode.childCount) {
-            return null;
-          }
-
-          const tr = state.tr.delete(range.from, range.to);
-          const mappedListPosition = tr.mapping.map(listPosition);
-          const nextListNode = tr.doc.nodeAt(mappedListPosition);
-          const nextListItemNode = nextListNode?.maybeChild(itemIndex);
-
-          if (
-            !nextListNode ||
-            nextListNode.type !== bulletListType ||
-            !nextListItemNode ||
-            !taskItemType.validContent(nextListItemNode.content)
+            !convertListItemToList({
+              state,
+              range,
+              sourceListType: bulletListType,
+              sourceItemType: listItemType,
+              targetListType: taskListType,
+              targetItemType: taskItemType,
+              targetItemAttrs: { checked: marker.toLowerCase() === "x" },
+            })
           ) {
             return null;
           }
+        },
+      }),
+    ];
+  },
+});
 
-          const taskItemNode = taskItemType.create(
-            { checked: marker.toLowerCase() === "x" },
-            nextListItemNode.content,
-          );
-          const taskListNode = taskListType.create(null, taskItemNode);
-          const replacementNodes: ProseMirrorNode[] = [];
-          let taskListPosition = mappedListPosition;
+// 번호 목록 항목에서 "- "를 치면 노션처럼 그 항목만 글머리 기호 목록으로 바뀐다.
+// StarterKit의 bulletList 규칙은 wrappingInputRule이라 listItem 안에서는 findWrapping이
+// 실패해 발동하지 않고, 입력한 마커가 텍스트로 남아버린다.
+const OrderedBulletItemInputRule = Extension.create({
+  name: "orderedBulletItemInputRule",
+  priority: 1200,
+  addInputRules() {
+    return [
+      new InputRule({
+        find: BULLET_MARKER_IN_ORDERED_LIST_INPUT_REGEX,
+        handler: ({ state, range }) => {
+          const orderedListType = state.schema.nodes.orderedList;
+          const bulletListType = state.schema.nodes.bulletList;
+          const listItemType = state.schema.nodes.listItem;
 
-          if (itemIndex > 0) {
-            const previousItems = Array.from(
-              { length: itemIndex },
-              (_, index) => nextListNode.child(index),
-            );
-            const previousListNode = bulletListType.create(
-              nextListNode.attrs,
-              previousItems,
-            );
-
-            replacementNodes.push(previousListNode);
-            taskListPosition += previousListNode.nodeSize;
+          if (!orderedListType || !bulletListType || !listItemType) {
+            return null;
           }
 
-          replacementNodes.push(taskListNode);
-
-          if (itemIndex < nextListNode.childCount - 1) {
-            replacementNodes.push(
-              bulletListType.create(
-                nextListNode.attrs,
-                Array.from(
-                  { length: nextListNode.childCount - itemIndex - 1 },
-                  (_, index) => nextListNode.child(itemIndex + index + 1),
-                ),
-              ),
-            );
+          // 번호 목록 밖에서 친 "- "는 여기서 null을 돌려줘야 StarterKit의 기본
+          // bulletList 규칙이 이어서 동작한다.
+          if (
+            !convertListItemToList({
+              state,
+              range,
+              sourceListType: orderedListType,
+              sourceItemType: listItemType,
+              targetListType: bulletListType,
+              targetItemType: listItemType,
+              targetItemAttrs: null,
+            })
+          ) {
+            return null;
           }
-
-          tr.replaceWith(
-            mappedListPosition,
-            mappedListPosition + nextListNode.nodeSize,
-            replacementNodes,
-          );
-          // ProseMirror 포지션은 taskList/taskItem/paragraph 경계를 각각 1칸씩 지난다.
-          tr.setSelection(
-            TextSelection.near(tr.doc.resolve(taskListPosition + 3)),
-          );
         },
       }),
     ];
@@ -765,6 +844,7 @@ function getBaseExtensions({ readOnly = false }: { readOnly?: boolean } = {}) {
     }),
     ListItemBackspaceLift,
     BulletTaskItemInputRule,
+    OrderedBulletItemInputRule,
     CodeBlockLowlight.extend({
       renderHTML({ node, HTMLAttributes }) {
         return [
