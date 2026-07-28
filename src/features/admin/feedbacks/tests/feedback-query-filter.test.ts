@@ -114,12 +114,12 @@ describe("applyFeedbackFilters", () => {
     {
       value: "yes",
       expectedMethod: "not",
-      expectedArguments: ["image_urls", "eq", "{}"],
+      expectedArguments: ["image_urls", "eq", []],
     },
     {
       value: "no",
       expectedMethod: "eq",
-      expectedArguments: ["image_urls", "{}"],
+      expectedArguments: ["image_urls", []],
     },
   ] as const)(
     "이미지 포함 여부가 $value이면 알맞은 조건을 적용한다",
