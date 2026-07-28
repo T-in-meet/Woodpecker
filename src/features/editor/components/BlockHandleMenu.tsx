@@ -35,6 +35,10 @@ const MENU_PADDING = 8;
 const HOVER_GUTTER = HANDLE_SIZE + HANDLE_MARGIN + 12;
 // hover 대상 블록을 다시 계산하는 최소 간격. 짧으면 지나치는 줄마다 핸들이 튄다.
 const HOVER_UPDATE_INTERVAL_MS = 80;
+// 구분선처럼 높이가 거의 없는 블록도 hover로 잡히도록 보장하는 최소 판정 높이.
+const HOVER_MIN_BLOCK_HEIGHT = 20;
+// 같은 이유로, 블록 하이라이트도 이보다 얇게 그리지 않는다.
+const OVERLAY_MIN_HEIGHT = 20;
 const BLOCK_ELEMENT_SELECTOR = "p, h1, h2, h3, pre, blockquote, hr, img";
 // 리스트 항목과 표는 그 자체가 한 블록이라 hover 후보에 포함한다.
 const HOVER_BLOCK_ELEMENT_SELECTOR = `${BLOCK_ELEMENT_SELECTOR}, li, table`;
@@ -449,6 +453,13 @@ export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
     (isMenuOpen || isDragging) && anchorPosition.blockHasMeasurableRect;
   const overlayLeft = anchorPosition.blockLeft - anchorPosition.markerOffset;
   const overlayWidth = anchorPosition.blockWidth + anchorPosition.markerOffset;
+  // 구분선은 높이가 1px이라 그대로 그리면 하이라이트가 보이지 않는다.
+  const overlayHeight = Math.max(
+    anchorPosition.blockHeight,
+    OVERLAY_MIN_HEIGHT,
+  );
+  const overlayTop =
+    anchorPosition.blockTop - (overlayHeight - anchorPosition.blockHeight) / 2;
 
   return createPortal(
     <>
@@ -461,9 +472,9 @@ export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
           )}
           style={{
             left: overlayLeft,
-            top: anchorPosition.blockTop,
+            top: overlayTop,
             width: overlayWidth,
-            height: anchorPosition.blockHeight,
+            height: overlayHeight,
           }}
           data-testid="block-handle-overlay"
         />
@@ -566,9 +577,8 @@ export function getBlockHandleTop(
       : blockRect.height;
   const offsetTop = Number.isFinite(paddingTop) ? paddingTop : 0;
 
-  return (
-    blockRect.top + offsetTop + Math.max(0, (firstLineHeight - HANDLE_SIZE) / 2)
-  );
+  // 구분선처럼 핸들보다 얇은 블록에서는 값이 음수가 되어 핸들이 블록 중앙에 걸린다.
+  return blockRect.top + offsetTop + (firstLineHeight - HANDLE_SIZE) / 2;
 }
 
 export function getBlockHandleMarkerOffset(blockElement: HTMLElement): number {
@@ -691,10 +701,20 @@ export function getHoverBlockElement(
   return resolveBlockElement(rootElement, innermostElement);
 }
 
-function containsY(element: HTMLElement, clientY: number): boolean {
+// 구분선(hr)은 높이가 1px이라 그 위에 커서를 정확히 올려야만 잡힌다. 얇은 블록은
+// 위아래로 넓혀서 판정한다. 넓히는 폭이 블록 사이 여백보다 작아 이웃을 침범하지 않는다.
+export function containsY(element: HTMLElement, clientY: number): boolean {
   const rect = element.getBoundingClientRect();
 
-  return rect.height > 0 && clientY >= rect.top && clientY <= rect.bottom;
+  if (rect.height <= 0 && rect.width <= 0) {
+    return false;
+  }
+
+  const hoverPadding = Math.max(0, (HOVER_MIN_BLOCK_HEIGHT - rect.height) / 2);
+
+  return (
+    clientY >= rect.top - hoverPadding && clientY <= rect.bottom + hoverPadding
+  );
 }
 
 function findChildElementAtY(

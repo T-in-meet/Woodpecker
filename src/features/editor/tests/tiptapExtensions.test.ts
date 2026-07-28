@@ -544,6 +544,108 @@ describe("OrderedBulletItemInputRule", () => {
   });
 });
 
+describe("DividerInputRule", () => {
+  function createOrderedListEditor(texts: string[]) {
+    return new Editor({
+      extensions: getTipTapExtensions(),
+      editable: true,
+      content: {
+        type: "doc",
+        content: [
+          {
+            type: "orderedList",
+            content: texts.map((text) => ({
+              type: "listItem",
+              content: [
+                {
+                  type: "paragraph",
+                  ...(text ? { content: [{ type: "text", text }] } : {}),
+                },
+              ],
+            })),
+          },
+        ],
+      },
+    });
+  }
+
+  function setCursorAfterText(editor: Editor, text: string) {
+    let position: number | null = null;
+
+    editor.state.doc.descendants((node, pos) => {
+      if (node.type.name === "paragraph" && node.textContent === text) {
+        position = pos + 1 + text.length;
+        return false;
+      }
+
+      return true;
+    });
+
+    if (position === null) {
+      throw new Error(`paragraph not found: ${text}`);
+    }
+
+    editor.commands.setTextSelection(position);
+  }
+
+  // 기본 규칙은 항목 안에 구분선을 끼워 넣어 항목이 통째로 커진다.
+  it("replaces the list item so the list splits around the divider", () => {
+    // "--"까지 친 상태에서 마지막 "-"를 입력하는 실제 타이핑 상황.
+    const editor = createOrderedListEditor(["첫", "--", "셋"]);
+
+    setCursorAfterText(editor, "--");
+    dispatchTextInput(editor, "-");
+
+    const html = editor.getHTML();
+
+    expect(html).toContain("</ol><hr><ol");
+    expect(html).not.toContain("<hr></li>");
+    expect(html).toContain("첫");
+    expect(html).toContain("셋");
+
+    editor.destroy();
+  });
+
+  function createParagraphEditor(texts: string[]) {
+    return new Editor({
+      extensions: getTipTapExtensions(),
+      editable: true,
+      content: {
+        type: "doc",
+        content: texts.map((text) => ({
+          type: "paragraph",
+          content: [{ type: "text", text }],
+        })),
+      },
+    });
+  }
+
+  // 기본 규칙은 마커를 입력한 문단을 빈 채로 남겨 구분선 주변이 한 줄 더 벌어진다.
+  it("leaves no empty paragraph behind in a plain paragraph", () => {
+    const editor = createParagraphEditor(["위", "--", "아래"]);
+
+    setCursorAfterText(editor, "--");
+    dispatchTextInput(editor, "-");
+
+    expect(editor.getHTML()).toBe("<p>위</p><hr><p>아래</p>");
+
+    editor.destroy();
+  });
+
+  // 교체 직후에는 구분선이 선택된 상태라 그대로 두면 다음 입력이 구분선을 덮어쓴다.
+  it("moves the cursor after the divider so typing continues below it", () => {
+    const editor = createParagraphEditor(["위", "--"]);
+
+    setCursorAfterText(editor, "--");
+    dispatchTextInput(editor, "-");
+    dispatchTextInput(editor, "다음 글");
+
+    expect(editor.getHTML()).toBe("<p>위</p><hr><p>다음 글</p>");
+
+    editor.destroy();
+  });
+});
+
 describe("ListItemBackspaceLift", () => {
   it("does not lift the list item from the start of a later paragraph", () => {
     const editor = new Editor({

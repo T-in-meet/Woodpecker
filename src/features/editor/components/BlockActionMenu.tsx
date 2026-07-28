@@ -45,6 +45,7 @@ import { SUPPORTED_LANGUAGES } from "@/features/editor/supportedLanguages";
 import {
   type BlockMoveDirectionType,
   canMoveSelectedBlock,
+  insertHorizontalRule,
   moveSelectedBlock,
 } from "@/features/editor/utils/blockActions";
 
@@ -377,7 +378,7 @@ function buildBlockActionGroups({
           id: "divider",
           label: "구분선",
           icon: Minus,
-          run: () => editor.chain().focus().setHorizontalRule().run(),
+          run: () => insertHorizontalRule(editor),
         },
         {
           id: "table",

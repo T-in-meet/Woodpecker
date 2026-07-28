@@ -55,6 +55,10 @@ lowlight.register("go", go);
 const LIST_ITEM_TYPE_NAMES = ["listItem", "taskItem"] as const;
 const TASK_MARKER_IN_BULLET_LIST_INPUT_REGEX = /^\[( |x|X)\][ ]$/;
 const BULLET_MARKER_IN_ORDERED_LIST_INPUT_REGEX = /^\s*([-+*])\s$/;
+// StarterKit HorizontalRule의 입력 규칙과 같은 패턴.
+const DIVIDER_INPUT_REGEX = /^(?:---|—-|___\s|\*\*\*\s)$/;
+// 입력 중인 마커 문자만 들어 있는지 확인해 남의 항목을 지우지 않도록 한다.
+const DIVIDER_MARKER_ONLY_REGEX = /^[-_*—\s]*$/;
 
 type TableCellAlignmentType = "left" | "center" | "right" | null;
 
@@ -548,6 +552,70 @@ const OrderedBulletItemInputRule = Extension.create({
   },
 });
 
+// StarterKit 기본 규칙은 구분선을 끼워 넣기만 해서, 마커를 입력한 문단이 빈 채로 남거나
+// 목록 항목 안에 구분선이 갇힌다. 마커만 있던 블록 자체를 구분선으로 교체해 두 경우 모두
+// 군더더기 없이 만든다(블록 메뉴·슬래시 명령의 구분선 삽입과 같은 결과).
+const DividerInputRule = Extension.create({
+  name: "dividerInputRule",
+  priority: 1200,
+  addInputRules() {
+    return [
+      new InputRule({
+        find: DIVIDER_INPUT_REGEX,
+        handler: ({ state }) => {
+          const horizontalRuleType = state.schema.nodes.horizontalRule;
+
+          if (!horizontalRuleType) {
+            return null;
+          }
+
+          const { $from } = state.selection;
+          const listItemDepth = LIST_ITEM_TYPE_NAMES.reduce<number | null>(
+            (depth, itemName) => depth ?? findAncestorDepth($from, itemName),
+            null,
+          );
+          // 목록 항목이면 항목 전체를, 아니면 마커를 입력한 문단만 교체한다.
+          const targetDepth = listItemDepth ?? $from.depth;
+          const targetNode = $from.node(targetDepth);
+
+          // 중첩 목록 등 다른 내용이 딸린 항목은 통째로 지우면 안 되므로 기본 규칙에 맡긴다.
+          if (listItemDepth !== null && targetNode.childCount !== 1) {
+            return null;
+          }
+
+          // 빈 항목의 경계는 다음 항목으로 해석되는 경우가 있다. 입력 중인 마커 외에
+          // 다른 내용이 있으면 남의 블록을 지우는 셈이므로 건드리지 않는다.
+          if (!DIVIDER_MARKER_ONLY_REGEX.test(targetNode.textContent)) {
+            return null;
+          }
+
+          const targetTo = $from.after(targetDepth);
+          const tr = state.tr.replaceRangeWith(
+            $from.before(targetDepth),
+            targetTo,
+            horizontalRuleType.create(),
+          );
+          const positionAfterDivider = tr.mapping.map(targetTo);
+          const paragraphType = state.schema.nodes.paragraph;
+
+          // 교체 직후에는 구분선이 선택된 상태라, 이어서 입력하면 구분선이 덮어쓰기 된다.
+          // 뒤쪽에 쓸 자리를 만들고 커서를 그리로 옮긴다.
+          if (
+            !tr.doc.resolve(positionAfterDivider).nodeAfter &&
+            paragraphType
+          ) {
+            tr.insert(positionAfterDivider, paragraphType.create());
+          }
+
+          tr.setSelection(
+            TextSelection.near(tr.doc.resolve(positionAfterDivider), 1),
+          );
+        },
+      }),
+    ];
+  },
+});
+
 const MarkdownTable = Table.extend({
   addStorage() {
     return {
@@ -845,6 +913,7 @@ function getBaseExtensions({ readOnly = false }: { readOnly?: boolean } = {}) {
     ListItemBackspaceLift,
     BulletTaskItemInputRule,
     OrderedBulletItemInputRule,
+    DividerInputRule,
     CodeBlockLowlight.extend({
       renderHTML({ node, HTMLAttributes }) {
         return [

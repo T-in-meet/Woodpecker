@@ -257,6 +257,43 @@ describe("getHoverBlockElement", () => {
 
     expect(getHoverBlockElement(editor, 10, 400)).toBeNull();
   });
+
+  // 구분선은 높이가 1px이라 실제 사각형만 보면 사실상 hover가 불가능하다.
+  it("still finds a divider that is only one pixel tall", () => {
+    const rootElement = document.createElement("div");
+    rootElement.innerHTML = "<p>위</p><hr><p>아래</p>";
+    document.body.appendChild(rootElement);
+
+    const paragraphs = rootElement.querySelectorAll("p");
+    const divider = rootElement.querySelector("hr");
+    const [firstParagraph, lastParagraph] = Array.from(paragraphs);
+
+    if (
+      !(divider instanceof HTMLElement) ||
+      !(firstParagraph instanceof HTMLElement) ||
+      !(lastParagraph instanceof HTMLElement)
+    ) {
+      throw new Error("divider fixture is broken");
+    }
+
+    stubRect(rootElement, 0, 200);
+    stubRect(firstParagraph, 0, 30);
+    stubRect(divider, 54, 55);
+    stubRect(lastParagraph, 79, 109);
+
+    const editor = {
+      isDestroyed: false,
+      view: { dom: rootElement },
+    } as unknown as Editor;
+
+    expect(getHoverBlockElement(editor, 10, 54)).toBe(divider);
+    // 선 위아래 여백에서도 잡혀야 한다.
+    expect(getHoverBlockElement(editor, 10, 47)).toBe(divider);
+    expect(getHoverBlockElement(editor, 10, 62)).toBe(divider);
+    // 이웃 블록까지 침범하지는 않는다.
+    expect(getHoverBlockElement(editor, 10, 20)).toBe(firstParagraph);
+    expect(getHoverBlockElement(editor, 10, 90)).toBe(lastParagraph);
+  });
 });
 
 describe("getBlockHandleTop", () => {
@@ -293,6 +330,17 @@ describe("getBlockHandleTop", () => {
 
     expect(getBlockHandleTop(codeBlockElement, { top: 100, height: 200 })).toBe(
       117,
+    );
+  });
+
+  it("centers the handle on a block thinner than the handle", () => {
+    const dividerElement = document.createElement("hr");
+    dividerElement.style.lineHeight = "24px";
+    document.body.appendChild(dividerElement);
+
+    // 1px짜리 구분선: 핸들(22px)이 선 중앙에 오도록 위로 올라가야 한다.
+    expect(getBlockHandleTop(dividerElement, { top: 100, height: 1 })).toBe(
+      89.5,
     );
   });
 
