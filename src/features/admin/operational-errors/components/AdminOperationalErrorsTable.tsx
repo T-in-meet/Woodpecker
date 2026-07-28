@@ -4,6 +4,12 @@ import {
   AdminListEmpty,
   AdminListError,
 } from "@/features/admin/components/common/AdminListState";
+import {
+  formatOperationalErrorCodeLabel,
+  formatOperationalErrorFeatureLabel,
+  formatOperationalErrorOperationLabel,
+  formatOperationalErrorStageLabel,
+} from "@/features/operational-errors/utils/format-operational-error-label";
 import { getAdminOperationalErrorDetailRoute } from "@/lib/constants/routes";
 
 import { AdminBadge } from "../../components/common/AdminBadge";
@@ -114,27 +120,40 @@ export function AdminOperationalErrorsTable({
                   <td className="px-4 py-3 align-top">
                     <OperationalErrorStatusBadge status={error.status} />
                   </td>
+
                   <td className="max-w-lg px-4 py-3 align-top">
                     <Link
                       href={getAdminOperationalErrorDetailRoute(error.id)}
                       className="font-medium underline-offset-4 hover:underline"
                     >
-                      {error.errorCode}
+                      {formatOperationalErrorCodeLabel(error.errorCode)}
                     </Link>
+
                     <p className="mt-1 line-clamp-2 text-muted-foreground">
                       {error.message}
                     </p>
                   </td>
+
                   <td className="px-4 py-3 align-top">
                     <OperationalErrorSeverityBadge severity={error.severity} />
                   </td>
-                  <td className="px-4 py-3 align-top">{error.feature}</td>
-                  <td className="px-4 py-3 align-top">{error.operation}</td>
-                  <td className="px-4 py-3 align-top">{error.stage}</td>
+
+                  <td className="px-4 py-3 align-top">
+                    {formatOperationalErrorFeatureLabel(error.feature)}
+                  </td>
+
+                  <td className="px-4 py-3 align-top">
+                    {formatOperationalErrorOperationLabel(error.operation)}
+                  </td>
+
+                  <td className="px-4 py-3 align-top">
+                    {formatOperationalErrorStageLabel(error.stage)}
+                  </td>
 
                   <td className="px-4 py-3 align-top">
                     {error.occurrenceCount.toLocaleString("ko-KR")}회
                   </td>
+
                   <td className="px-4 py-3 align-top">
                     {formatDateTime(error.lastSeenAt)}
                   </td>

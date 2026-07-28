@@ -1,5 +1,11 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AdminBadge } from "@/features/admin/components/common/AdminBadge";
+import {
+  formatOperationalErrorCodeLabel,
+  formatOperationalErrorFeatureLabel,
+  formatOperationalErrorOperationLabel,
+  formatOperationalErrorStageLabel,
+} from "@/features/operational-errors/utils/format-operational-error-label";
 import { formatDateTime } from "@/lib/utils/formatDate";
 
 import {
@@ -41,10 +47,19 @@ export function AdminOperationalErrorInfoCard({
 
         <DetailGrid
           items={[
-            ["기능", operationalError.feature],
-            ["작업", operationalError.operation],
-            ["단계", operationalError.stage],
-            ["오류 코드", operationalError.errorCode],
+            [
+              "기능",
+              formatOperationalErrorFeatureLabel(operationalError.feature),
+            ],
+            [
+              "작업",
+              formatOperationalErrorOperationLabel(operationalError.operation),
+            ],
+            ["단계", formatOperationalErrorStageLabel(operationalError.stage)],
+            [
+              "오류 코드",
+              formatOperationalErrorCodeLabel(operationalError.errorCode),
+            ],
             ["사용자", operationalError.userLabel ?? "-"],
             ["작업자", operationalError.actorUserLabel ?? "-"],
             ["Fingerprint", operationalError.fingerprint],
@@ -78,7 +93,9 @@ function DetailGrid({ items }: { items: Array<[string, string]> }) {
         <div key={label} className="min-w-0 rounded-md border px-3 py-2">
           <dt className="text-xs text-muted-foreground">{label}</dt>
 
-          <dd className="mt-1 wrap-break-words text-sm font-medium">{value}</dd>
+          <dd className="mt-1 line-clamp-2 break-all text-sm font-medium">
+            {value}
+          </dd>
         </div>
       ))}
     </dl>

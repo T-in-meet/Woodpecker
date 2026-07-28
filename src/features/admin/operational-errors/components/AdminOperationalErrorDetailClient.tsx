@@ -4,6 +4,11 @@ import { useParams } from "next/navigation";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { AdminDetailPageHeader } from "@/features/admin/components/layout/AdminDetailPageHeader";
+import {
+  formatOperationalErrorFeatureLabel,
+  formatOperationalErrorOperationLabel,
+  formatOperationalErrorStageLabel,
+} from "@/features/operational-errors/utils/format-operational-error-label";
 import { ROUTES } from "@/lib/constants/routes";
 
 import { AdminBreadcrumbDynamicItems } from "../../components/layout/AdminBreadcrumbDynamicItems";
@@ -72,7 +77,11 @@ export function AdminOperationalErrorDetailClient() {
       <AdminDetailPageHeader
         backHref={ROUTES.ADMIN.OPERATIONAL_ERRORS}
         backLabel="운영 오류 목록"
-        description={`${data.feature} / ${data.operation} / ${data.stage}`}
+        description={`${formatOperationalErrorFeatureLabel(
+          data.feature,
+        )} / ${formatOperationalErrorOperationLabel(
+          data.operation,
+        )} / ${formatOperationalErrorStageLabel(data.stage)}`}
         title={data.errorCode}
       />
 

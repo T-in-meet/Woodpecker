@@ -12,12 +12,30 @@ export const OPERATIONAL_ERROR_STATUS = {
 } as const;
 
 /**
+ * 운영 오류 처리 상태의 표시 이름입니다.
+ */
+export const OPERATIONAL_ERROR_STATUS_LABELS = {
+  IGNORED: "무시",
+  OPEN: "미처리",
+  RESOLVED: "해결",
+} as const;
+
+/**
  * 운영 오류의 심각도입니다.
  */
 export const OPERATIONAL_ERROR_SEVERITY = {
   ERROR: "ERROR",
   INFO: "INFO",
   WARN: "WARN",
+} as const;
+
+/**
+ * 운영 오류 심각도의 표시 이름입니다.
+ */
+export const OPERATIONAL_ERROR_SEVERITY_LABELS = {
+  ERROR: "오류",
+  INFO: "정보",
+  WARN: "경고",
 } as const;
 
 /**
