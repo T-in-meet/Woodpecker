@@ -20,6 +20,9 @@ import {
   createBlockSelection,
   getActiveBlockElement,
   getBlockHandleMarkerOffset,
+  getBlockHandleTop,
+  getHoverBlockElement,
+  isPointerNearEditor,
   resolveBlockElement,
 } from "../components/BlockHandleMenu";
 import { getTipTapExtensions } from "../utils/tiptapExtensions";
@@ -98,6 +101,208 @@ describe("getActiveBlockElement", () => {
     const editor = createActiveElementEditor(rootElement, textNode);
 
     expect(getActiveBlockElement(editor)).toBe(blockquoteElement);
+  });
+});
+
+describe("isPointerNearEditor", () => {
+  function createRectEditor(isDestroyed = false): Editor {
+    const rootElement = document.createElement("div");
+
+    rootElement.getBoundingClientRect = () =>
+      ({ top: 100, bottom: 300, left: 200, right: 600 }) as DOMRect;
+
+    return {
+      isDestroyed,
+      view: { dom: rootElement },
+    } as unknown as Editor;
+  }
+
+  it("counts the left gutter where the handle floats as inside", () => {
+    // HOVER_GUTTER(44px)만큼 왼쪽 바깥까지 인정한다.
+    expect(isPointerNearEditor(createRectEditor(), 160, 200)).toBe(true);
+    expect(isPointerNearEditor(createRectEditor(), 150, 200)).toBe(false);
+  });
+
+  it("returns false outside the editor bounds", () => {
+    const editor = createRectEditor();
+
+    expect(isPointerNearEditor(editor, 400, 90)).toBe(false);
+    expect(isPointerNearEditor(editor, 400, 310)).toBe(false);
+    expect(isPointerNearEditor(editor, 610, 200)).toBe(false);
+  });
+
+  it("returns false for a destroyed editor", () => {
+    expect(isPointerNearEditor(createRectEditor(true), 400, 200)).toBe(false);
+  });
+});
+
+describe("getHoverBlockElement", () => {
+  function stubRect(element: Element, top: number, bottom: number): void {
+    element.getBoundingClientRect = () =>
+      ({
+        top,
+        bottom,
+        left: 0,
+        right: 500,
+        width: 500,
+        height: bottom - top,
+      }) as DOMRect;
+  }
+
+  // 바깥 항목(0~90) 안에 자기 문단(0~30)과 중첩 목록(30~90)이 들어 있는 구조.
+  function createNestedListEditor(): {
+    editor: Editor;
+    outerItem: HTMLElement;
+    innerItems: HTMLElement[];
+    tailParagraph: HTMLElement;
+  } {
+    const rootElement = document.createElement("div");
+    rootElement.innerHTML = [
+      "<ol>",
+      "<li><p>부모</p>",
+      "<ol><li><p>자식1</p></li><li><p>자식2</p></li></ol>",
+      "</li>",
+      "</ol>",
+      "<p>다음 문단</p>",
+    ].join("");
+    document.body.appendChild(rootElement);
+
+    const outerList = rootElement.querySelector("ol");
+    const outerItem = rootElement.querySelector("li");
+    const outerParagraph = rootElement.querySelector("li > p");
+    const innerList = rootElement.querySelector("li > ol");
+    const innerItems = Array.from(rootElement.querySelectorAll("li li"));
+    const tailParagraph = rootElement.querySelector(":scope > p");
+
+    if (
+      !(outerList instanceof HTMLElement) ||
+      !(outerItem instanceof HTMLElement) ||
+      !(outerParagraph instanceof HTMLElement) ||
+      !(innerList instanceof HTMLElement) ||
+      !(tailParagraph instanceof HTMLElement) ||
+      innerItems.length !== 2
+    ) {
+      throw new Error("nested list fixture is broken");
+    }
+
+    stubRect(rootElement, 0, 200);
+    stubRect(outerList, 0, 90);
+    stubRect(outerItem, 0, 90);
+    stubRect(outerParagraph, 0, 30);
+    stubRect(innerList, 30, 90);
+    stubRect(tailParagraph, 100, 130);
+
+    innerItems.forEach((item, index) => {
+      const top = 30 + index * 30;
+      stubRect(item, top, top + 30);
+
+      const paragraph = item.querySelector("p");
+
+      if (paragraph) {
+        stubRect(paragraph, top, top + 30);
+      }
+    });
+
+    const editor = {
+      isDestroyed: false,
+      view: { dom: rootElement },
+    } as unknown as Editor;
+
+    return {
+      editor,
+      outerItem,
+      innerItems: innerItems.filter(
+        (item): item is HTMLElement => item instanceof HTMLElement,
+      ),
+      tailParagraph,
+    };
+  }
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("picks the same block anywhere on the row, including blank space", () => {
+    const { editor, innerItems } = createNestedListEditor();
+    const [firstInnerItem] = innerItems;
+
+    // 글자 위, 왼쪽 들여쓰기 빈 공간, 오른쪽 여백 모두 같은 줄이면 같은 블록이어야 한다.
+    expect(getHoverBlockElement(editor, 200, 45)).toBe(firstInnerItem);
+    expect(getHoverBlockElement(editor, 10, 45)).toBe(firstInnerItem);
+    expect(getHoverBlockElement(editor, 480, 45)).toBe(firstInnerItem);
+  });
+
+  it("uses the outer item for its own line and the inner item for nested lines", () => {
+    const { editor, outerItem, innerItems } = createNestedListEditor();
+
+    expect(getHoverBlockElement(editor, 10, 15)).toBe(outerItem);
+    expect(getHoverBlockElement(editor, 10, 45)).toBe(innerItems[0]);
+    expect(getHoverBlockElement(editor, 10, 75)).toBe(innerItems[1]);
+  });
+
+  it("returns null between blocks so the caller can keep the previous one", () => {
+    const { editor } = createNestedListEditor();
+
+    expect(getHoverBlockElement(editor, 10, 95)).toBeNull();
+  });
+
+  it("finds a plain top level paragraph", () => {
+    const { editor, tailParagraph } = createNestedListEditor();
+
+    expect(getHoverBlockElement(editor, 10, 115)).toBe(tailParagraph);
+  });
+
+  it("returns null outside the editor", () => {
+    const { editor } = createNestedListEditor();
+
+    expect(getHoverBlockElement(editor, 10, 400)).toBeNull();
+  });
+});
+
+describe("getBlockHandleTop", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("aligns with the first line instead of the middle of a tall block", () => {
+    const listItemElement = document.createElement("li");
+    listItemElement.style.lineHeight = "24px";
+    document.body.appendChild(listItemElement);
+
+    // 중첩 목록이 달려 세 줄 높이인 항목: 첫 줄(24px) 기준으로 맞춰야 한다.
+    expect(getBlockHandleTop(listItemElement, { top: 100, height: 72 })).toBe(
+      101,
+    );
+  });
+
+  it("keeps centering a single line block", () => {
+    const paragraphElement = document.createElement("p");
+    paragraphElement.style.lineHeight = "24px";
+    document.body.appendChild(paragraphElement);
+
+    expect(getBlockHandleTop(paragraphElement, { top: 100, height: 24 })).toBe(
+      101,
+    );
+  });
+
+  it("adds the block padding so padded blocks align with their first line", () => {
+    const codeBlockElement = document.createElement("pre");
+    codeBlockElement.style.lineHeight = "24px";
+    codeBlockElement.style.paddingTop = "16px";
+    document.body.appendChild(codeBlockElement);
+
+    expect(getBlockHandleTop(codeBlockElement, { top: 100, height: 200 })).toBe(
+      117,
+    );
+  });
+
+  it("falls back to the block height when line-height is not a number", () => {
+    const paragraphElement = document.createElement("p");
+    document.body.appendChild(paragraphElement);
+
+    expect(getBlockHandleTop(paragraphElement, { top: 100, height: 62 })).toBe(
+      120,
+    );
   });
 });
 

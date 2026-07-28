@@ -33,6 +33,11 @@ const LIST_MARKER_CLEARANCE = 6;
 const MENU_PADDING = 8;
 // 핸들은 에디터 왼쪽 바깥에 뜨므로, 그 여백 위에 커서가 있어도 같은 줄의 블록을 가리킨다.
 const HOVER_GUTTER = HANDLE_SIZE + HANDLE_MARGIN + 12;
+// hover 대상 블록을 다시 계산하는 최소 간격. 짧으면 지나치는 줄마다 핸들이 튄다.
+const HOVER_UPDATE_INTERVAL_MS = 80;
+const BLOCK_ELEMENT_SELECTOR = "p, h1, h2, h3, pre, blockquote, hr, img";
+// 리스트 항목과 표는 그 자체가 한 블록이라 hover 후보에 포함한다.
+const HOVER_BLOCK_ELEMENT_SELECTOR = `${BLOCK_ELEMENT_SELECTOR}, li, table`;
 // 이보다 오래 누르거나 많이 움직이면 드래그 의도로 보고 메뉴를 열지 않는다.
 const CLICK_MAX_DURATION_MS = 300;
 const CLICK_MAX_DISTANCE_PX = 4;
@@ -75,7 +80,8 @@ export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
   const handleRef = useRef<HTMLButtonElement>(null);
   const rafRef = useRef<number | null>(null);
   const blurRafRef = useRef<number | null>(null);
-  const hoverRafRef = useRef<number | null>(null);
+  const hoverTimeoutRef = useRef<number | null>(null);
+  const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
   const dragEndTimeoutRef = useRef<number | null>(null);
 
   const isEditorFocusedRef = useRef(isEditorFocused);
@@ -138,8 +144,7 @@ export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
       ),
       handleTop: Math.max(
         MENU_PADDING,
-        effectiveRect.top +
-          Math.max(0, (effectiveRect.height - HANDLE_SIZE) / 2),
+        getBlockHandleTop(blockElement, effectiveRect),
       ),
       isCodeBlock,
       markerOffset: handleOffset,
@@ -186,7 +191,38 @@ export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
       });
     };
 
-    // 노션처럼 마우스를 올린 블록으로 핸들이 따라다니게 한다.
+    const applyHoveredBlockElement = () => {
+      const pointer = lastPointerRef.current;
+
+      if (!pointer) {
+        return;
+      }
+
+      const nextHoveredBlockElement = getHoverBlockElement(
+        editor,
+        pointer.x,
+        pointer.y,
+      );
+
+      // 블록 사이 여백에서는 ProseMirror가 문서 최상위를 가리켜 블록을 못 찾는다.
+      // 이때 핸들을 숨기면 줄을 옮길 때마다 깜빡이므로 직전 블록을 유지한다.
+      if (
+        !nextHoveredBlockElement &&
+        isPointerNearEditor(editor, pointer.x, pointer.y)
+      ) {
+        return;
+      }
+
+      if (nextHoveredBlockElement === hoveredBlockRef.current) {
+        return;
+      }
+
+      hoveredBlockRef.current = nextHoveredBlockElement;
+      syncAnchorPosition();
+    };
+
+    // 노션처럼 마우스를 올린 블록으로 핸들이 따라다니게 한다. 매 프레임 갱신하면
+    // 지나치는 줄마다 핸들이 튀므로, 커서가 머무는 줄에 정착하도록 간격을 둔다.
     const handlePointerMove = (event: PointerEvent) => {
       if (event.pointerType === "touch") {
         return;
@@ -196,28 +232,16 @@ export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
         return;
       }
 
-      const { clientX, clientY } = event;
+      lastPointerRef.current = { x: event.clientX, y: event.clientY };
 
-      if (hoverRafRef.current !== null) {
-        cancelAnimationFrame(hoverRafRef.current);
+      if (hoverTimeoutRef.current !== null) {
+        return;
       }
 
-      hoverRafRef.current = requestAnimationFrame(() => {
-        hoverRafRef.current = null;
-
-        const nextHoveredBlockElement = getHoverBlockElement(
-          editor,
-          clientX,
-          clientY,
-        );
-
-        if (nextHoveredBlockElement === hoveredBlockRef.current) {
-          return;
-        }
-
-        hoveredBlockRef.current = nextHoveredBlockElement;
-        syncAnchorPosition();
-      });
+      hoverTimeoutRef.current = window.setTimeout(() => {
+        hoverTimeoutRef.current = null;
+        applyHoveredBlockElement();
+      }, HOVER_UPDATE_INTERVAL_MS);
     };
 
     // 핸들을 누르면 에디터가 blur되므로 대상 블록을 고정해 두는데, 드래그 없이 손을 떼면
@@ -249,8 +273,8 @@ export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
         cancelAnimationFrame(blurRafRef.current);
       }
 
-      if (hoverRafRef.current !== null) {
-        cancelAnimationFrame(hoverRafRef.current);
+      if (hoverTimeoutRef.current !== null) {
+        window.clearTimeout(hoverTimeoutRef.current);
       }
 
       if (dragEndTimeoutRef.current !== null) {
@@ -445,7 +469,13 @@ export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
         />
       )}
 
-      <DropdownMenu open={isMenuOpen} onOpenChange={handleMenuOpenChange}>
+      {/* modal이면 메뉴가 열릴 때 body 스크롤이 잠겨 스크롤바가 사라진다. scrollbar-gutter
+          보정과 겹쳐 화면이 흔들리므로, 가볍게 뜨는 블록 메뉴에는 잠금을 쓰지 않는다. */}
+      <DropdownMenu
+        open={isMenuOpen}
+        onOpenChange={handleMenuOpenChange}
+        modal={false}
+      >
         {/* 핸들 버튼을 트리거로 쓰면 Radix가 pointerdown에서 메뉴를 열고 기본 동작을
             막아버려 드래그를 시작할 수 없다. 위치 기준용 앵커만 트리거로 둔다. */}
         <DropdownMenuTrigger asChild>
@@ -519,6 +549,27 @@ type BlockNodeRangeType = {
   from: number;
   to: number;
 };
+
+// 블록 전체 높이의 중앙에 맞추면, 중첩 목록이 달린 항목이나 여러 줄로 줄바꿈된 문단에서
+// 커서가 있는 첫 줄이 아니라 중간 줄 옆에 핸들이 뜬다. 첫 줄 높이에 맞춘다.
+export function getBlockHandleTop(
+  blockElement: HTMLElement,
+  blockRect: { top: number; height: number },
+): number {
+  const blockStyles = window.getComputedStyle(blockElement);
+  const lineHeight = Number.parseFloat(blockStyles.lineHeight);
+  const paddingTop = Number.parseFloat(blockStyles.paddingTop);
+  // line-height가 "normal"이면 숫자를 얻을 수 없으므로 기존처럼 블록 높이를 쓴다.
+  const firstLineHeight =
+    Number.isFinite(lineHeight) && lineHeight > 0
+      ? Math.min(lineHeight, blockRect.height)
+      : blockRect.height;
+  const offsetTop = Number.isFinite(paddingTop) ? paddingTop : 0;
+
+  return (
+    blockRect.top + offsetTop + Math.max(0, (firstLineHeight - HANDLE_SIZE) / 2)
+  );
+}
 
 export function getBlockHandleMarkerOffset(blockElement: HTMLElement): number {
   if (blockElement.tagName !== "LI") {
@@ -594,44 +645,109 @@ function getBlockNodeRange(
   return blockRange;
 }
 
-// 마우스 위치에서 블록을 찾는다. 좌측 여백(핸들 자리)에 있어도 같은 줄의 블록을 잡도록
-// x 좌표를 콘텐츠 영역 안으로 당긴 뒤 ProseMirror에게 위치를 물어본다.
+// 핸들이 에디터 왼쪽 바깥에 뜨므로 그 여백까지는 에디터 위에 있는 것으로 본다.
+export function isPointerNearEditor(
+  editor: Editor,
+  clientX: number,
+  clientY: number,
+): boolean {
+  if (editor.isDestroyed) {
+    return false;
+  }
+
+  const rootRect = editor.view.dom.getBoundingClientRect();
+
+  return (
+    clientY >= rootRect.top &&
+    clientY <= rootRect.bottom &&
+    clientX >= rootRect.left - HOVER_GUTTER &&
+    clientX <= rootRect.right
+  );
+}
+
+// 마우스가 올라간 블록을 세로 위치(줄)로 찾는다. ProseMirror의 posAtCoords는 브라우저
+// 캐럿 API를 쓰기 때문에 글자가 없는 빈 공간(들여쓰기, 마커 자리, 문단 오른쪽 여백)에서
+// 엉뚱한 노드를 돌려준다. 같은 줄이면 x가 어디든 같은 블록이 잡히도록 직접 찾는다.
 export function getHoverBlockElement(
   editor: Editor,
   clientX: number,
   clientY: number,
 ): HTMLElement | null {
-  if (editor.isDestroyed) {
+  if (!isPointerNearEditor(editor, clientX, clientY)) {
     return null;
   }
 
   const rootElement = editor.view.dom;
-  const rootRect = rootElement.getBoundingClientRect();
+  const containerElement = findChildElementAtY(rootElement, clientY);
 
-  if (clientY < rootRect.top || clientY > rootRect.bottom) {
+  if (!containerElement) {
     return null;
   }
 
-  if (clientX < rootRect.left - HOVER_GUTTER || clientX > rootRect.right) {
-    return null;
+  // 중첩 목록처럼 블록 안에 블록이 있으면 가장 안쪽(= 그 줄에 해당하는) 것을 쓴다.
+  const innermostElement =
+    findInnermostBlockElementAtY(containerElement, clientY) ?? containerElement;
+
+  return resolveBlockElement(rootElement, innermostElement);
+}
+
+function containsY(element: HTMLElement, clientY: number): boolean {
+  const rect = element.getBoundingClientRect();
+
+  return rect.height > 0 && clientY >= rect.top && clientY <= rect.bottom;
+}
+
+function findChildElementAtY(
+  parentElement: HTMLElement,
+  clientY: number,
+): HTMLElement | null {
+  for (const child of parentElement.children) {
+    if (child instanceof HTMLElement && containsY(child, clientY)) {
+      return child;
+    }
   }
 
-  const probeX = Math.min(
-    Math.max(clientX, rootRect.left + 1),
-    Math.max(rootRect.right - 1, rootRect.left + 1),
-  );
-  const coords = editor.view.posAtCoords({ left: probeX, top: clientY });
+  return null;
+}
 
-  if (!coords) {
-    return null;
+function findInnermostBlockElementAtY(
+  containerElement: HTMLElement,
+  clientY: number,
+): HTMLElement | null {
+  let innermostElement: HTMLElement | null = null;
+  let innermostDepth = -1;
+
+  for (const candidate of containerElement.querySelectorAll(
+    HOVER_BLOCK_ELEMENT_SELECTOR,
+  )) {
+    if (!(candidate instanceof HTMLElement) || !containsY(candidate, clientY)) {
+      continue;
+    }
+
+    const depth = getElementDepth(containerElement, candidate);
+
+    if (depth > innermostDepth) {
+      innermostElement = candidate;
+      innermostDepth = depth;
+    }
   }
 
-  const domNode =
-    coords.inside >= 0
-      ? editor.view.nodeDOM(coords.inside)
-      : editor.view.domAtPos(coords.pos).node;
+  return innermostElement;
+}
 
-  return resolveBlockElement(rootElement, toHTMLElement(domNode));
+function getElementDepth(
+  rootElement: HTMLElement,
+  element: HTMLElement,
+): number {
+  let depth = 0;
+  let currentElement: HTMLElement | null = element;
+
+  while (currentElement && currentElement !== rootElement) {
+    depth += 1;
+    currentElement = currentElement.parentElement;
+  }
+
+  return depth;
 }
 
 export function resolveBlockElement(
@@ -673,9 +789,7 @@ export function resolveBlockElement(
     return blockquoteElement;
   }
 
-  const blockElement = element.closest(
-    "p, h1, h2, h3, pre, blockquote, hr, img",
-  );
+  const blockElement = element.closest(BLOCK_ELEMENT_SELECTOR);
 
   if (
     blockElement instanceof HTMLElement &&
