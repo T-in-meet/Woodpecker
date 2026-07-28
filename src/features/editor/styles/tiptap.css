@@ -64,10 +64,55 @@
   margin-bottom: 0.5rem;
 }
 
+/* 노트 보기 화면은 .tiptap의 좌우 패딩을 없애므로, 두 자리 이상 마커("18.")가 놓일
+   공간이 이 padding-left뿐이다. 좁으면 overflow-hidden에 잘려 보인다. */
 .tiptap-wrapper .tiptap ol {
   list-style-type: decimal;
-  padding-left: 1.5rem;
+  padding-left: 2rem;
   margin-bottom: 0.5rem;
+}
+
+/* 중첩 깊이에 따라 마커를 바꾼다(노션 기본 동작). 마크다운에는 마커 종류를 담을 문법이
+   없으므로 표현만 바꾸고 문서 구조는 건드리지 않는다. */
+.tiptap-wrapper .tiptap ol ol {
+  list-style-type: lower-alpha;
+  padding-left: 1.5rem;
+}
+
+.tiptap-wrapper .tiptap ol ol ol {
+  list-style-type: lower-roman;
+}
+
+.tiptap-wrapper .tiptap ol ol ol ol {
+  list-style-type: decimal;
+}
+
+.tiptap-wrapper .tiptap ol ol ol ol ol {
+  list-style-type: lower-alpha;
+}
+
+.tiptap-wrapper .tiptap ol ol ol ol ol ol {
+  list-style-type: lower-roman;
+}
+
+.tiptap-wrapper .tiptap ul ul {
+  list-style-type: circle;
+}
+
+.tiptap-wrapper .tiptap ul ul ul {
+  list-style-type: square;
+}
+
+.tiptap-wrapper .tiptap ul ul ul ul {
+  list-style-type: disc;
+}
+
+.tiptap-wrapper .tiptap ul ul ul ul ul {
+  list-style-type: circle;
+}
+
+.tiptap-wrapper .tiptap ul ul ul ul ul ul {
+  list-style-type: square;
 }
 
 .tiptap-wrapper .tiptap li {
