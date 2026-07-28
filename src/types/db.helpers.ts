@@ -43,6 +43,8 @@ export const TABLES = {
   feedbacks: "feedbacks",
   notes: "notes",
   notifications: "notifications",
+  operationalErrorStatusHistory: "operational_error_status_history",
+  operationalErrors: "operational_errors",
   profiles: "profiles",
   pushSubscriptions: "push_subscriptions",
   reviewLogs: "review_logs",
