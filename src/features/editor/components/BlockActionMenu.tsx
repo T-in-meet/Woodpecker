@@ -30,7 +30,7 @@ import {
   Undo2,
   Unlink,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import {
   DropdownMenuContent,
@@ -54,7 +54,6 @@ type BlockActionType = {
   id: string;
   label: string;
   icon: LucideIcon;
-  keywords: string;
   shortcut?: string;
   active?: boolean;
   disabled?: boolean;
@@ -84,19 +83,7 @@ export function BlockActionMenu({
   onDeleteBlock,
   onCloseMenu,
 }: BlockActionMenuProps) {
-  const [query, setQuery] = useState("");
   const [showLinkEdit, setShowLinkEdit] = useState(false);
-  const searchInputRef = useRef<HTMLInputElement>(null);
-
-  // Radix 메뉴는 열릴 때 첫 항목으로 포커스를 옮긴다. 노션처럼 바로 검색할 수 있도록
-  // 다음 프레임에 검색창으로 포커스를 되가져온다.
-  useEffect(() => {
-    const frameId = requestAnimationFrame(() => {
-      searchInputRef.current?.focus();
-    });
-
-    return () => cancelAnimationFrame(frameId);
-  }, []);
 
   const handleLinkSubmit = useCallback(
     (url: string) => {
@@ -118,6 +105,19 @@ export function BlockActionMenu({
     [editor, onCloseMenu],
   );
 
+  // 메뉴가 열린 상태에서 Del/Backspace로 바로 블록을 지운다.
+  const handleDeleteShortcut = useCallback(
+    (event: React.KeyboardEvent) => {
+      if (event.key !== "Delete" && event.key !== "Backspace") {
+        return;
+      }
+
+      event.preventDefault();
+      onDeleteBlock();
+    },
+    [onDeleteBlock],
+  );
+
   const groups = useMemo(
     () =>
       buildBlockActionGroups({
@@ -127,24 +127,6 @@ export function BlockActionMenu({
       }),
     [editor, onDeleteBlock],
   );
-
-  const normalizedQuery = query.trim().toLowerCase();
-  const searchResults = useMemo(() => {
-    if (!normalizedQuery) {
-      return [];
-    }
-
-    return groups
-      .flatMap((group) =>
-        group.actions.map((action) => ({ group, action }) as const),
-      )
-      .filter(
-        ({ group, action }) =>
-          action.label.toLowerCase().includes(normalizedQuery) ||
-          action.keywords.toLowerCase().includes(normalizedQuery) ||
-          group.label.toLowerCase().includes(normalizedQuery),
-      );
-  }, [groups, normalizedQuery]);
 
   if (showLinkEdit) {
     return (
@@ -170,6 +152,7 @@ export function BlockActionMenu({
       side="left"
       sideOffset={8}
       className="w-64"
+      onKeyDown={handleDeleteShortcut}
       onCloseAutoFocus={(event) => {
         // Radix 기본 동작은 트리거(핸들 버튼)로 포커스를 되돌리는데, 그러면 블록이
         // 선택된 상태여도 Ctrl+C가 에디터에 닿지 않는다.
@@ -180,71 +163,37 @@ export function BlockActionMenu({
         }
       }}
     >
-      <div className="px-1 pt-0.5 pb-1.5">
-        <input
-          ref={searchInputRef}
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          // 메뉴의 타이핑 탐색 기능이 입력을 가로채지 않도록 막는다.
-          onKeyDown={(event) => {
-            if (event.key !== "Escape") {
-              event.stopPropagation();
-            }
-          }}
-          placeholder="작업 검색..."
-          aria-label="작업 검색"
-          className="h-8 w-full rounded-md border border-border bg-background px-2 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-ring"
-        />
-      </div>
-
-      {normalizedQuery ? (
-        searchResults.length > 0 ? (
-          searchResults.map(({ group, action }) => (
-            <BlockActionMenuItem
-              key={`${group.id}-${action.id}`}
-              action={action}
-              hint={group.label}
-            />
-          ))
-        ) : (
-          <p className="px-2 py-3 text-center text-xs text-muted-foreground">
-            검색 결과가 없습니다
-          </p>
-        )
-      ) : (
-        groups.map((group, groupIndex) => (
-          <div key={group.id}>
-            {groupIndex > 0 && <DropdownMenuSeparator />}
-            {group.submenu ? (
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger className="cursor-pointer">
-                  <group.icon />
-                  {group.label}
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="w-52">
-                  {group.actions.map((action) => (
-                    <BlockActionMenuItem key={action.id} action={action} />
-                  ))}
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-            ) : (
-              group.actions.map((action) => (
-                <BlockActionMenuItem key={action.id} action={action} />
-              ))
-            )}
-          </div>
-        ))
-      )}
+      {groups.map((group, groupIndex) => (
+        <div key={group.id}>
+          {groupIndex > 0 && <DropdownMenuSeparator />}
+          {group.submenu ? (
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger className="cursor-pointer">
+                <group.icon />
+                {group.label}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-52">
+                {group.actions.map((action) => (
+                  <BlockActionMenuItem key={action.id} action={action} />
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          ) : (
+            group.actions.map((action) => (
+              <BlockActionMenuItem key={action.id} action={action} />
+            ))
+          )}
+        </div>
+      ))}
     </DropdownMenuContent>
   );
 }
 
 type BlockActionMenuItemProps = {
   action: BlockActionType;
-  hint?: string;
 };
 
-function BlockActionMenuItem({ action, hint }: BlockActionMenuItemProps) {
+function BlockActionMenuItem({ action }: BlockActionMenuItemProps) {
   const { icon: Icon } = action;
 
   return (
@@ -263,9 +212,6 @@ function BlockActionMenuItem({ action, hint }: BlockActionMenuItemProps) {
     >
       <Icon />
       <span className="flex-1 truncate">{action.label}</span>
-      {hint && (
-        <span className="text-[10px] text-muted-foreground">{hint}</span>
-      )}
       {action.shortcut && (
         <DropdownMenuShortcut>{action.shortcut}</DropdownMenuShortcut>
       )}
@@ -304,7 +250,6 @@ function buildBlockActionGroups({
           id: "paragraph",
           label: "본문",
           icon: Type,
-          keywords: "paragraph text 본문 문단",
           active: editor.isActive("paragraph"),
           run: () => editor.chain().focus().setParagraph().run(),
         },
@@ -312,7 +257,6 @@ function buildBlockActionGroups({
           id: "heading-1",
           label: "제목 1",
           icon: Heading1,
-          keywords: "heading h1 제목",
           active: editor.isActive("heading", { level: 1 }),
           run: () => editor.chain().focus().toggleHeading({ level: 1 }).run(),
         },
@@ -320,7 +264,6 @@ function buildBlockActionGroups({
           id: "heading-2",
           label: "제목 2",
           icon: Heading2,
-          keywords: "heading h2 제목",
           active: editor.isActive("heading", { level: 2 }),
           run: () => editor.chain().focus().toggleHeading({ level: 2 }).run(),
         },
@@ -328,7 +271,6 @@ function buildBlockActionGroups({
           id: "heading-3",
           label: "제목 3",
           icon: Heading3,
-          keywords: "heading h3 제목",
           active: editor.isActive("heading", { level: 3 }),
           run: () => editor.chain().focus().toggleHeading({ level: 3 }).run(),
         },
@@ -336,7 +278,6 @@ function buildBlockActionGroups({
           id: "bullet-list",
           label: "글머리 기호 목록",
           icon: List,
-          keywords: "bullet list 목록 리스트",
           active: editor.isActive("bulletList"),
           run: () => editor.chain().focus().toggleBulletList().run(),
         },
@@ -344,7 +285,6 @@ function buildBlockActionGroups({
           id: "ordered-list",
           label: "번호 매기기 목록",
           icon: ListOrdered,
-          keywords: "ordered number list 번호 목록",
           active: editor.isActive("orderedList"),
           run: () => editor.chain().focus().toggleOrderedList().run(),
         },
@@ -352,7 +292,6 @@ function buildBlockActionGroups({
           id: "task-list",
           label: "체크박스 목록",
           icon: ListChecks,
-          keywords: "task todo check 체크 할일",
           active: editor.isActive("taskList"),
           run: () => editor.chain().focus().toggleTaskList().run(),
         },
@@ -360,7 +299,6 @@ function buildBlockActionGroups({
           id: "blockquote",
           label: "인용문",
           icon: TextQuote,
-          keywords: "quote blockquote 인용",
           active: editor.isActive("blockquote"),
           run: () => editor.chain().focus().toggleBlockquote().run(),
         },
@@ -368,7 +306,6 @@ function buildBlockActionGroups({
           id: "code-block",
           label: "코드 블록",
           icon: Code2,
-          keywords: "code block 코드",
           active: isCodeBlock,
           run: () => editor.chain().focus().toggleCodeBlock().run(),
         },
@@ -384,7 +321,6 @@ function buildBlockActionGroups({
           id: "bold",
           label: "굵게",
           icon: Bold,
-          keywords: "bold strong 굵게",
           shortcut: "Ctrl+B",
           active: editor.isActive("bold"),
           run: () => editor.chain().focus().toggleBold().run(),
@@ -393,7 +329,6 @@ function buildBlockActionGroups({
           id: "italic",
           label: "기울임",
           icon: Italic,
-          keywords: "italic 기울임",
           shortcut: "Ctrl+I",
           active: editor.isActive("italic"),
           run: () => editor.chain().focus().toggleItalic().run(),
@@ -402,7 +337,6 @@ function buildBlockActionGroups({
           id: "strike",
           label: "취소선",
           icon: Strikethrough,
-          keywords: "strike 취소선",
           active: editor.isActive("strike"),
           run: () => editor.chain().focus().toggleStrike().run(),
         },
@@ -410,7 +344,6 @@ function buildBlockActionGroups({
           id: "inline-code",
           label: "인라인 코드",
           icon: Code,
-          keywords: "inline code 코드",
           active: editor.isActive("code"),
           run: () => editor.chain().focus().toggleCode().run(),
         },
@@ -418,7 +351,6 @@ function buildBlockActionGroups({
           id: "link",
           label: isLink ? "링크 편집" : "링크 추가",
           icon: Link,
-          keywords: "link url 링크",
           active: isLink,
           keepOpen: true,
           run: onEditLink,
@@ -429,7 +361,6 @@ function buildBlockActionGroups({
                 id: "unlink",
                 label: "링크 제거",
                 icon: Unlink,
-                keywords: "unlink 링크 제거",
                 run: () => editor.chain().focus().unsetLink().run(),
               } satisfies BlockActionType,
             ]
@@ -446,14 +377,12 @@ function buildBlockActionGroups({
           id: "divider",
           label: "구분선",
           icon: Minus,
-          keywords: "divider hr 구분선",
           run: () => editor.chain().focus().setHorizontalRule().run(),
         },
         {
           id: "table",
           label: "표 삽입",
           icon: Table,
-          keywords: "table 표",
           run: () =>
             editor
               .chain()
@@ -476,7 +405,6 @@ function buildBlockActionGroups({
           id: "language-plain",
           label: "Plain text",
           icon: Code2,
-          keywords: "plain text 코드 언어",
           active: codeBlockLanguage === "",
           run: () =>
             editor
@@ -491,7 +419,6 @@ function buildBlockActionGroups({
               id: `language-${language}`,
               label: language,
               icon: Code2,
-              keywords: `${language} 코드 언어`,
               active: codeBlockLanguage === language,
               run: () =>
                 editor
@@ -516,35 +443,30 @@ function buildBlockActionGroups({
           id: "add-column",
           label: "열 추가",
           icon: Columns3,
-          keywords: "column add 열 추가",
           run: () => editor.chain().focus().addColumnAfter().run(),
         },
         {
           id: "delete-column",
           label: "열 삭제",
           icon: TableColumnsSplit,
-          keywords: "column delete 열 삭제",
           run: () => editor.chain().focus().deleteColumn().run(),
         },
         {
           id: "add-row",
           label: "행 추가",
           icon: Rows3,
-          keywords: "row add 행 추가",
           run: () => editor.chain().focus().addRowAfter().run(),
         },
         {
           id: "delete-row",
           label: "행 삭제",
           icon: TableRowsSplit,
-          keywords: "row delete 행 삭제",
           run: () => editor.chain().focus().deleteRow().run(),
         },
         {
           id: "delete-table",
           label: "표 삭제",
           icon: Trash2,
-          keywords: "table delete 표 삭제",
           destructive: true,
           run: () => editor.chain().focus().deleteTable().run(),
         },
@@ -562,7 +484,6 @@ function buildBlockActionGroups({
         id: "move-up",
         label: "위로 이동",
         icon: ArrowUp,
-        keywords: "move up 위로 이동",
         disabled: !canMoveSelectedBlock(editor, "up"),
         run: () => moveBlock(editor, "up"),
       },
@@ -570,7 +491,6 @@ function buildBlockActionGroups({
         id: "move-down",
         label: "아래로 이동",
         icon: ArrowDown,
-        keywords: "move down 아래로 이동",
         disabled: !canMoveSelectedBlock(editor, "down"),
         run: () => moveBlock(editor, "down"),
       },
@@ -578,7 +498,6 @@ function buildBlockActionGroups({
         id: "delete-block",
         label: "블록 삭제",
         icon: Trash2,
-        keywords: "delete remove 삭제",
         shortcut: "Del",
         destructive: true,
         run: onDeleteBlock,
@@ -596,7 +515,6 @@ function buildBlockActionGroups({
         id: "undo",
         label: "실행 취소",
         icon: Undo2,
-        keywords: "undo 실행 취소",
         shortcut: "Ctrl+Z",
         disabled: !editor.can().undo(),
         run: () => editor.chain().focus().undo().run(),
@@ -605,7 +523,6 @@ function buildBlockActionGroups({
         id: "redo",
         label: "다시 실행",
         icon: Redo2,
-        keywords: "redo 다시 실행",
         shortcut: "Ctrl+Y",
         disabled: !editor.can().redo(),
         run: () => editor.chain().focus().redo().run(),

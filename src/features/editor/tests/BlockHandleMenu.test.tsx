@@ -486,6 +486,43 @@ describe("BlockHandleMenu", () => {
     editor.destroy();
   });
 
+  async function openHandleMenu(editor: TipTapEditorInstance) {
+    renderWithTooltipProvider(
+      <BlockHandleMenu editor={editor as unknown as Editor} />,
+    );
+
+    const handleButton = await screen.findByRole("button", {
+      name: "블록 도구 열기",
+    });
+
+    fireEvent.pointerDown(handleButton, { clientX: 40, clientY: 40 });
+    fireEvent.click(handleButton, { clientX: 40, clientY: 40 });
+
+    return screen.findByRole("menu");
+  }
+
+  it.each(["Delete", "Backspace"])(
+    "deletes the block when %s is pressed while the menu is open",
+    async (key) => {
+      const editor = createMountedEditor("first\n\nsecond");
+
+      vi.spyOn(editor.view, "hasFocus").mockReturnValue(true);
+      editor.commands.setTextSelection(8);
+
+      const menu = await openHandleMenu(editor);
+
+      fireEvent.keyDown(menu, { key });
+
+      await waitFor(() => {
+        expect(editor.getText()).not.toContain("second");
+      });
+
+      expect(editor.getText()).toContain("first");
+
+      editor.destroy();
+    },
+  );
+
   it("starts a ProseMirror drag for the handled block", async () => {
     const editor = createMountedEditor("first\n\nsecond");
 

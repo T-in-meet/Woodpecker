@@ -362,30 +362,9 @@ describe("TipTapEditor", () => {
     const handleButton = await screen.findByLabelText("블록 도구 열기");
     await user.click(handleButton);
 
-    expect(await screen.findByLabelText("작업 검색")).toBeInTheDocument();
+    expect(await screen.findByRole("menu")).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: /유형 변경/ })).toBeVisible();
     expect(screen.getByRole("menuitem", { name: /블록 삭제/ })).toBeVisible();
-  });
-
-  it("filters the block action menu with the search box", async () => {
-    const user = userEvent.setup();
-
-    render(<TipTapEditor value="" onChange={vi.fn()} />);
-
-    await waitFor(() => {
-      expect(getEditorContentElement()).toBeTruthy();
-    });
-
-    await user.click(getEditorContentElement());
-    await user.click(await screen.findByLabelText("블록 도구 열기"));
-    await user.type(await screen.findByLabelText("작업 검색"), "인용");
-
-    expect(
-      await screen.findByRole("menuitem", { name: /인용문/ }),
-    ).toBeVisible();
-    expect(
-      screen.queryByRole("menuitem", { name: /블록 삭제/ }),
-    ).not.toBeInTheDocument();
   });
 
   it("deletes the current block from the block action menu", async () => {
@@ -597,7 +576,7 @@ describe("TipTapEditor", () => {
     await user.click(getEditorContentElement());
     await user.click(await screen.findByLabelText("블록 도구 열기"));
 
-    expect(await screen.findByLabelText("작업 검색")).toBeInTheDocument();
+    expect(await screen.findByRole("menu")).toBeInTheDocument();
     expect(
       screen.queryByTestId("block-handle-overlay"),
     ).not.toBeInTheDocument();
