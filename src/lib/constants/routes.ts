@@ -19,7 +19,7 @@ export const ROUTES = {
 
     USERS: "/admin/users",
 
-    FEEDBACK: "/admin/feedback",
+    FEEDBACKS: "/admin/feedbacks",
 
     FEATURES: "/admin/features",
 
@@ -76,4 +76,14 @@ export function getNoteDetailRoute(noteId: string) {
 
 export function getNoteReviewRoute(noteId: string) {
   return `${getNoteDetailRoute(noteId)}/review`;
+}
+
+/**
+ * 관리자 피드백 상세 페이지 경로를 생성합니다.
+ *
+ * @param feedbackId 상세 조회할 feedbacks.id
+ * @returns `/admin/feedbacks/{feedbackId}` 형식의 route path
+ */
+export function getAdminFeedbackDetailRoute(feedbackId: string) {
+  return `${ROUTES.ADMIN.FEEDBACKS}/${feedbackId}`;
 }
