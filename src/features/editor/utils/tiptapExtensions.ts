@@ -3,6 +3,7 @@ import {
   InputRule,
   isAtStartOfNode,
   isNodeActive,
+  Mark,
   mergeAttributes,
   nodeInputRule,
   nodePasteRule,
@@ -27,11 +28,19 @@ import {
 } from "@tiptap/pm/markdown";
 import {
   type Attrs,
+  type Fragment,
+  type Mark as ProseMirrorMark,
   type Node as ProseMirrorNode,
   type NodeType,
   type ResolvedPos,
 } from "@tiptap/pm/model";
-import { type EditorState, TextSelection } from "@tiptap/pm/state";
+import {
+  type EditorState,
+  Plugin,
+  PluginKey,
+  TextSelection,
+} from "@tiptap/pm/state";
+import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import StarterKit from "@tiptap/starter-kit";
 import go from "highlight.js/lib/languages/go";
 import javascript from "highlight.js/lib/languages/javascript";
@@ -42,8 +51,31 @@ import { createLowlight } from "lowlight";
 import { Markdown } from "tiptap-markdown";
 
 import { slashCommandSuggestionRender } from "../components/SlashCommandMenu";
+import { normalizeNoteColorToken } from "../noteColors";
 import { isSafeLinkHref, normalizeImageSrc } from "./linkValidation";
+import {
+  hoistNoteBlockBackgroundMarkers,
+  NOTE_BLOCK_BACKGROUND_ATTRIBUTE_NAME,
+  NOTE_BLOCK_BACKGROUND_TYPE_NAMES,
+} from "./noteBlockBackground";
+import {
+  buildNoteTextColorCloseMarkup,
+  buildNoteTextColorOpenMarkup,
+  NOTE_BLOCK_BACKGROUND_ATTRIBUTE,
+  NOTE_COLOR_ATTRIBUTE,
+  NOTE_LINE_COLOR_ATTRIBUTE,
+  NOTE_TEXT_COLOR_MARK_NAME,
+  type NoteColorMarkdownItType,
+  setupNoteColorMarkdownIt,
+  stripNoteColorSyntax,
+} from "./noteColorMarkdown";
+import {
+  getUniformNoteTextColor,
+  NOTE_LINE_COLOR_TYPE_NAMES,
+} from "./noteLineTextColor";
 import { SlashCommand } from "./slashCommand";
+
+const LINE_COLOR_TYPES = new Set<string>(NOTE_LINE_COLOR_TYPE_NAMES);
 
 const lowlight = createLowlight();
 lowlight.register("javascript", javascript);
@@ -902,6 +934,169 @@ const SafeImage = Image.extend({
   },
 });
 
+// 글자색은 문자 단위라 인라인 마크로, 배경색은 블록 전체를 칠해야 해서
+// 블록 노드의 attribute로 다룬다.
+const NoteTextColorMark = Mark.create({
+  name: NOTE_TEXT_COLOR_MARK_NAME,
+  addAttributes() {
+    return {
+      token: {
+        default: null,
+        parseHTML: (element: HTMLElement) =>
+          normalizeNoteColorToken(element.getAttribute(NOTE_COLOR_ATTRIBUTE)),
+        renderHTML: (attributes: Record<string, unknown>) => {
+          const token = normalizeNoteColorToken(attributes.token);
+
+          return token ? { [NOTE_COLOR_ATTRIBUTE]: token } : {};
+        },
+      },
+    };
+  },
+  parseHTML() {
+    return [{ tag: `span[${NOTE_COLOR_ATTRIBUTE}]` }];
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ["span", HTMLAttributes, 0];
+  },
+  addStorage() {
+    return {
+      markdown: {
+        serialize: {
+          open: (_state: MarkdownSerializerState, mark: ProseMirrorMark) =>
+            buildNoteTextColorOpenMarkup(
+              normalizeNoteColorToken(mark.attrs.token),
+            ),
+          close: (_state: MarkdownSerializerState, mark: ProseMirrorMark) =>
+            buildNoteTextColorCloseMarkup(
+              normalizeNoteColorToken(mark.attrs.token),
+            ),
+          mixable: true,
+          expelEnclosingWhitespace: true,
+        },
+        parse: {
+          setup(md: NoteColorMarkdownItType) {
+            setupNoteColorMarkdownIt(md);
+          },
+        },
+      },
+    };
+  },
+});
+
+// 목록 마커는 항목의 color를 따르므로 인라인 마크만으로는 색이 입혀지지 않는다.
+// 항목 전체가 한 색일 때만 항목에 표시를 붙여 CSS가 마커까지 물들이게 한다.
+// 저장되는 값이 아니라 문서에서 매번 계산하는 파생 상태라 decoration으로 처리한다.
+const NoteLineTextColor = Extension.create({
+  name: "noteLineTextColor",
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey("noteLineTextColor"),
+        props: {
+          decorations(state) {
+            const decorations: Decoration[] = [];
+
+            state.doc.descendants((node, pos) => {
+              if (!LINE_COLOR_TYPES.has(node.type.name)) return true;
+
+              const token = getUniformNoteTextColor(node);
+
+              if (token) {
+                decorations.push(
+                  Decoration.node(pos, pos + node.nodeSize, {
+                    [NOTE_LINE_COLOR_ATTRIBUTE]: token,
+                  }),
+                );
+              }
+
+              return true;
+            });
+
+            return DecorationSet.create(state.doc, decorations);
+          },
+        },
+      }),
+    ];
+  },
+});
+
+const NoteBlockBackground = Extension.create({
+  name: "noteBlockBackground",
+  addGlobalAttributes() {
+    return [
+      {
+        types: [...NOTE_BLOCK_BACKGROUND_TYPE_NAMES],
+        attributes: {
+          [NOTE_BLOCK_BACKGROUND_ATTRIBUTE_NAME]: {
+            default: null,
+            parseHTML: (element: HTMLElement) =>
+              normalizeNoteColorToken(
+                element.getAttribute(NOTE_BLOCK_BACKGROUND_ATTRIBUTE),
+              ),
+            renderHTML: (attributes: Record<string, unknown>) => {
+              const token = normalizeNoteColorToken(
+                attributes[NOTE_BLOCK_BACKGROUND_ATTRIBUTE_NAME],
+              );
+
+              return token ? { [NOTE_BLOCK_BACKGROUND_ATTRIBUTE]: token } : {};
+            },
+          },
+        },
+      },
+    ];
+  },
+  addStorage() {
+    return {
+      markdown: {
+        parse: {
+          updateDOM(element: HTMLElement) {
+            hoistNoteBlockBackgroundMarkers(element);
+          },
+        },
+      },
+    };
+  },
+});
+
+type MarkdownSerializerStorageType = {
+  serializer?: {
+    serialize: (content: Fragment) => string;
+  };
+};
+
+// tiptap-markdown은 transformCopiedText 옵션으로 복사한 평문을 마크다운으로 직렬화한다.
+// 그대로 두면 다른 편집기에 붙여넣을 때 색 문법이 그대로 노출되므로 먼저 걷어낸다.
+const NoteColorClipboardText = Extension.create({
+  name: "noteColorClipboardText",
+  // tiptap-markdown(기본 priority 100)보다 먼저 clipboardTextSerializer를 제공해야 한다.
+  priority: 200,
+  addProseMirrorPlugins() {
+    const { editor } = this;
+
+    return [
+      new Plugin({
+        key: new PluginKey("noteColorClipboardText"),
+        props: {
+          clipboardTextSerializer: (slice) => {
+            const storage = editor.storage as {
+              markdown?: MarkdownSerializerStorageType;
+            };
+            const markdownSerializer = storage.markdown?.serializer;
+
+            if (!markdownSerializer) {
+              return slice.content.textBetween(0, slice.content.size, "\n\n");
+            }
+
+            return stripNoteColorSyntax(
+              markdownSerializer.serialize(slice.content),
+            );
+          },
+        },
+      }),
+    ];
+  },
+});
+
 function getBaseExtensions({ readOnly = false }: { readOnly?: boolean } = {}) {
   return [
     StarterKit.configure({
@@ -943,6 +1138,10 @@ function getBaseExtensions({ readOnly = false }: { readOnly?: boolean } = {}) {
       openOnClick: readOnly,
       HTMLAttributes: { class: "tiptap-link" },
     }),
+    NoteTextColorMark,
+    NoteLineTextColor,
+    NoteBlockBackground,
+    NoteColorClipboardText,
     TaskList,
     MarkdownTaskItem.configure({
       nested: true,

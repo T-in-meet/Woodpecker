@@ -286,3 +286,169 @@
     padding: 1rem 3rem 1.5rem;
   }
 }
+
+/* 글자색 / 배경색 팔레트
+   토큰 목록은 src/features/editor/noteColors.ts가 정본이며, 여기 변수와 짝이 맞아야 한다.
+   "기본"은 토큰이 없는 상태이므로 별도 변수를 두지 않는다. */
+:root {
+  --note-text-gray: #6b7280;
+  --note-text-orange: #c2410c;
+  --note-text-yellow: #a16207;
+  --note-text-green: #15803d;
+  --note-text-blue: #1d4ed8;
+  --note-text-purple: #7e22ce;
+  --note-text-red: #b91c1c;
+
+  --note-bg-gray: #f3f4f6;
+  --note-bg-orange: #ffedd5;
+  --note-bg-yellow: #fef9c3;
+  --note-bg-green: #dcfce7;
+  --note-bg-blue: #dbeafe;
+  --note-bg-purple: #f3e8ff;
+  --note-bg-red: #fee2e2;
+}
+
+.dark {
+  --note-text-gray: #9ca3af;
+  --note-text-orange: #fdba74;
+  --note-text-yellow: #fde047;
+  --note-text-green: #86efac;
+  --note-text-blue: #93c5fd;
+  --note-text-purple: #d8b4fe;
+  --note-text-red: #fca5a5;
+
+  --note-bg-gray: #374151;
+  --note-bg-orange: #7c2d12;
+  --note-bg-yellow: #713f12;
+  --note-bg-green: #14532d;
+  --note-bg-blue: #1e3a8a;
+  --note-bg-purple: #581c87;
+  --note-bg-red: #7f1d1d;
+}
+
+/* 줄 전체가 한 색이면 목록 마커(1. / a. / •)도 같은 색이 되도록 항목 자체를 물들인다.
+   data-note-line-color는 문서에서 계산해 붙이는 표시라 저장되지 않는다. */
+.tiptap-wrapper .tiptap [data-note-line-color="gray"] {
+  color: var(--note-text-gray);
+}
+.tiptap-wrapper .tiptap [data-note-line-color="orange"] {
+  color: var(--note-text-orange);
+}
+.tiptap-wrapper .tiptap [data-note-line-color="yellow"] {
+  color: var(--note-text-yellow);
+}
+.tiptap-wrapper .tiptap [data-note-line-color="green"] {
+  color: var(--note-text-green);
+}
+.tiptap-wrapper .tiptap [data-note-line-color="blue"] {
+  color: var(--note-text-blue);
+}
+.tiptap-wrapper .tiptap [data-note-line-color="purple"] {
+  color: var(--note-text-purple);
+}
+.tiptap-wrapper .tiptap [data-note-line-color="red"] {
+  color: var(--note-text-red);
+}
+
+.tiptap-wrapper .tiptap [data-note-color="gray"] {
+  color: var(--note-text-gray);
+}
+.tiptap-wrapper .tiptap [data-note-color="orange"] {
+  color: var(--note-text-orange);
+}
+.tiptap-wrapper .tiptap [data-note-color="yellow"] {
+  color: var(--note-text-yellow);
+}
+.tiptap-wrapper .tiptap [data-note-color="green"] {
+  color: var(--note-text-green);
+}
+.tiptap-wrapper .tiptap [data-note-color="blue"] {
+  color: var(--note-text-blue);
+}
+.tiptap-wrapper .tiptap [data-note-color="purple"] {
+  color: var(--note-text-purple);
+}
+.tiptap-wrapper .tiptap [data-note-color="red"] {
+  color: var(--note-text-red);
+}
+
+/* 배경색은 블록 단위다. 블록 폭 전체를 채우고, 같은 색 블록이 이어지면
+   경계 없이 한 덩어리로 보이도록 사이 여백과 모서리를 없앤다. */
+.tiptap-wrapper .tiptap [data-note-block-bg] {
+  border-radius: 0.375rem;
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+
+.tiptap-wrapper .tiptap [data-note-block-bg]:not(li) {
+  padding-left: 0.375rem;
+  padding-right: 0.375rem;
+  margin-left: -0.375rem;
+  margin-right: -0.375rem;
+}
+
+/* 목록 항목의 번호/불릿은 부모 목록의 padding-left 영역, 즉 li 상자 바깥에 그려진다.
+   레이아웃을 건드리면 마커와 본문 간격이 틀어지므로, 배경만 왼쪽으로 연장해 마커를 덮는다.
+   box-shadow는 자리를 차지하지 않아 목록 정렬에 영향이 없다.
+   체크박스 목록은 마커가 없어 제외한다. */
+.tiptap-wrapper
+  .tiptap
+  ul:not([data-type="taskList"])
+  > li[data-note-block-bg] {
+  box-shadow: -1.5rem 0 0 0 var(--note-block-bg);
+}
+
+.tiptap-wrapper .tiptap ol > li[data-note-block-bg] {
+  box-shadow: -2rem 0 0 0 var(--note-block-bg);
+}
+
+.tiptap-wrapper .tiptap ol ol > li[data-note-block-bg] {
+  box-shadow: -1.5rem 0 0 0 var(--note-block-bg);
+}
+
+/* 배경 안쪽 마지막 요소의 아래 여백은 배경에 포함돼 위아래 균형을 깨뜨린다.
+   (중첩 목록의 margin-bottom이 대표적) */
+.tiptap-wrapper .tiptap [data-note-block-bg] > *:last-child,
+.tiptap-wrapper .tiptap [data-note-block-bg] > *:last-child > li:last-child {
+  margin-bottom: 0;
+}
+
+.tiptap-wrapper .tiptap [data-note-block-bg]:has(+ [data-note-block-bg]) {
+  margin-bottom: 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.tiptap-wrapper .tiptap [data-note-block-bg] + [data-note-block-bg] {
+  margin-top: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+/* 토큰별로 --note-block-bg만 정하고, 실제 칠하기는 위 공통 규칙이 맡는다.
+   목록의 box-shadow도 같은 변수를 쓰므로 색이 한 곳에서 관리된다. */
+.tiptap-wrapper .tiptap [data-note-block-bg] {
+  background-color: var(--note-block-bg);
+}
+
+.tiptap-wrapper .tiptap [data-note-block-bg="gray"] {
+  --note-block-bg: var(--note-bg-gray);
+}
+.tiptap-wrapper .tiptap [data-note-block-bg="orange"] {
+  --note-block-bg: var(--note-bg-orange);
+}
+.tiptap-wrapper .tiptap [data-note-block-bg="yellow"] {
+  --note-block-bg: var(--note-bg-yellow);
+}
+.tiptap-wrapper .tiptap [data-note-block-bg="green"] {
+  --note-block-bg: var(--note-bg-green);
+}
+.tiptap-wrapper .tiptap [data-note-block-bg="blue"] {
+  --note-block-bg: var(--note-bg-blue);
+}
+.tiptap-wrapper .tiptap [data-note-block-bg="purple"] {
+  --note-block-bg: var(--note-bg-purple);
+}
+.tiptap-wrapper .tiptap [data-note-block-bg="red"] {
+  --note-block-bg: var(--note-bg-red);
+}

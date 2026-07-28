@@ -4,6 +4,7 @@ import type { Editor } from "@tiptap/react";
 import {
   ArrowDown,
   ArrowUp,
+  Baseline,
   Bold,
   Code,
   Code2,
@@ -11,6 +12,7 @@ import {
   Heading1,
   Heading2,
   Heading3,
+  Highlighter,
   Italic,
   Link,
   List,
@@ -41,6 +43,13 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  normalizeNoteColorToken,
+  NOTE_COLOR_DEFAULT_LABEL,
+  NOTE_COLOR_LABELS,
+  NOTE_COLOR_TOKENS,
+  type NoteColorTokenType,
+} from "@/features/editor/noteColors";
 import { SUPPORTED_LANGUAGES } from "@/features/editor/supportedLanguages";
 import {
   type BlockMoveDirectionType,
@@ -48,13 +57,28 @@ import {
   insertHorizontalRule,
   moveSelectedBlock,
 } from "@/features/editor/utils/blockActions";
+import {
+  applyNoteBlockBackground,
+  getSelectedNoteBlockBackground,
+} from "@/features/editor/utils/noteBlockBackground";
+import { NOTE_TEXT_COLOR_MARK_NAME } from "@/features/editor/utils/noteColorMarkdown";
 
 import { LinkEditPopover } from "./LinkEditPopover";
+
+// 글자색은 선택한 문자에, 배경색은 블록 전체에 적용된다.
+type NoteColorKindType = "color" | "background";
+
+type NoteColorSwatchType = {
+  kind: NoteColorKindType;
+  token: NoteColorTokenType | null;
+};
 
 type BlockActionType = {
   id: string;
   label: string;
-  icon: LucideIcon;
+  // 색상 항목은 아이콘 대신 색 견본(swatch)을 보여준다.
+  icon?: LucideIcon;
+  swatch?: NoteColorSwatchType;
   shortcut?: string;
   active?: boolean;
   disabled?: boolean;
@@ -195,7 +219,7 @@ type BlockActionMenuItemProps = {
 };
 
 function BlockActionMenuItem({ action }: BlockActionMenuItemProps) {
-  const { icon: Icon } = action;
+  const { icon: Icon, swatch } = action;
 
   return (
     <DropdownMenuItem
@@ -211,13 +235,87 @@ function BlockActionMenuItem({ action }: BlockActionMenuItemProps) {
         action.run();
       }}
     >
-      <Icon />
+      {swatch ? <NoteColorSwatch swatch={swatch} /> : Icon ? <Icon /> : null}
       <span className="flex-1 truncate">{action.label}</span>
       {action.shortcut && (
         <DropdownMenuShortcut>{action.shortcut}</DropdownMenuShortcut>
       )}
     </DropdownMenuItem>
   );
+}
+
+type NoteColorSwatchProps = {
+  swatch: NoteColorSwatchType;
+};
+
+function NoteColorSwatch({ swatch }: NoteColorSwatchProps) {
+  const { kind, token } = swatch;
+
+  // "기본"은 색이 없는 상태라 테두리만 있는 빈 견본으로 보여준다.
+  const style =
+    token === null
+      ? undefined
+      : kind === "color"
+        ? { color: `var(--note-text-${token})` }
+        : { backgroundColor: `var(--note-bg-${token})` };
+
+  return (
+    <span
+      aria-hidden="true"
+      className="flex size-4 shrink-0 items-center justify-center rounded-[0.25rem] border border-border text-[0.625rem] font-semibold"
+      style={style}
+    >
+      가
+    </span>
+  );
+}
+
+function buildNoteColorActions(
+  editor: Editor,
+  kind: NoteColorKindType,
+): BlockActionType[] {
+  const currentToken =
+    kind === "background"
+      ? getSelectedNoteBlockBackground(editor)
+      : normalizeNoteColorToken(
+          editor.getAttributes(NOTE_TEXT_COLOR_MARK_NAME).token,
+        );
+
+  const applyToken = (token: NoteColorTokenType | null) => {
+    if (kind === "background") {
+      applyNoteBlockBackground(editor, token);
+      return;
+    }
+
+    const chain = editor.chain().focus();
+
+    if (token === null) {
+      chain.unsetMark(NOTE_TEXT_COLOR_MARK_NAME).run();
+      return;
+    }
+
+    chain.setMark(NOTE_TEXT_COLOR_MARK_NAME, { token }).run();
+  };
+
+  return [
+    {
+      id: `note-${kind}-default`,
+      label: NOTE_COLOR_DEFAULT_LABEL,
+      swatch: { kind, token: null },
+      active: currentToken === null,
+      run: () => applyToken(null),
+    },
+    ...NOTE_COLOR_TOKENS.map(
+      (token) =>
+        ({
+          id: `note-${kind}-${token}`,
+          label: NOTE_COLOR_LABELS[token],
+          swatch: { kind, token },
+          active: currentToken === token,
+          run: () => applyToken(token),
+        }) satisfies BlockActionType,
+    ),
+  ];
 }
 
 type BuildBlockActionGroupsOptions = {
@@ -367,6 +465,20 @@ function buildBlockActionGroups({
             ]
           : []),
       ],
+    },
+    {
+      id: "text-color",
+      label: "글자 색",
+      icon: Baseline,
+      submenu: true,
+      actions: buildNoteColorActions(editor, "color"),
+    },
+    {
+      id: "background-color",
+      label: "배경 색",
+      icon: Highlighter,
+      submenu: true,
+      actions: buildNoteColorActions(editor, "background"),
     },
     {
       id: "insert",
