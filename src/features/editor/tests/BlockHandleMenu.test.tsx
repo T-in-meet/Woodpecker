@@ -1,6 +1,12 @@
 import "./setup";
 
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Editor as TipTapEditorInstance } from "@tiptap/core";
 import { NodeSelection } from "@tiptap/pm/state";
@@ -14,6 +20,7 @@ import {
   createBlockSelection,
   getActiveBlockElement,
   getBlockHandleMarkerOffset,
+  resolveBlockElement,
 } from "../components/BlockHandleMenu";
 import { getTipTapExtensions } from "../utils/tiptapExtensions";
 
@@ -91,6 +98,40 @@ describe("getActiveBlockElement", () => {
     const editor = createActiveElementEditor(rootElement, textNode);
 
     expect(getActiveBlockElement(editor)).toBe(blockquoteElement);
+  });
+});
+
+describe("resolveBlockElement", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("uses the list item instead of the paragraph inside it", () => {
+    const rootElement = document.createElement("div");
+    rootElement.innerHTML = "<ul><li><p>item</p></li></ul>";
+    document.body.appendChild(rootElement);
+
+    const paragraphElement = rootElement.querySelector("p");
+    const listItemElement = rootElement.querySelector("li");
+
+    expect(resolveBlockElement(rootElement, paragraphElement)).toBe(
+      listItemElement,
+    );
+  });
+
+  it("returns null for the editor root so the handle hides outside blocks", () => {
+    const rootElement = document.createElement("div");
+    document.body.appendChild(rootElement);
+
+    expect(resolveBlockElement(rootElement, rootElement)).toBeNull();
+  });
+
+  it("returns null for elements outside the editor", () => {
+    const rootElement = document.createElement("div");
+    const outsideElement = document.createElement("p");
+    document.body.append(rootElement, outsideElement);
+
+    expect(resolveBlockElement(rootElement, outsideElement)).toBeNull();
   });
 });
 
@@ -184,6 +225,89 @@ describe("BlockHandleMenu", () => {
     expect(
       editor.state.selection.content().content.firstChild?.textContent,
     ).toBe("second");
+
+    editor.destroy();
+  });
+
+  it("keeps the menu closed when the handle is held down like a drag", async () => {
+    const editor = createMountedEditor("first\n\nsecond");
+
+    vi.spyOn(editor.view, "hasFocus").mockReturnValue(true);
+    editor.commands.setTextSelection(8);
+
+    renderWithTooltipProvider(
+      <BlockHandleMenu editor={editor as unknown as Editor} />,
+    );
+
+    const handleButton = await screen.findByRole("button", {
+      name: "블록 도구 열기",
+    });
+
+    let now = 1_000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+
+    fireEvent.pointerDown(handleButton, { clientX: 40, clientY: 40 });
+    now += 500;
+    fireEvent.click(handleButton, { clientX: 40, clientY: 40 });
+
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+
+    editor.destroy();
+  });
+
+  it("opens the menu on a quick click", async () => {
+    const editor = createMountedEditor("first\n\nsecond");
+
+    vi.spyOn(editor.view, "hasFocus").mockReturnValue(true);
+    editor.commands.setTextSelection(8);
+
+    renderWithTooltipProvider(
+      <BlockHandleMenu editor={editor as unknown as Editor} />,
+    );
+
+    const handleButton = await screen.findByRole("button", {
+      name: "블록 도구 열기",
+    });
+
+    let now = 1_000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+
+    fireEvent.pointerDown(handleButton, { clientX: 40, clientY: 40 });
+    now += 80;
+    fireEvent.click(handleButton, { clientX: 40, clientY: 40 });
+
+    expect(await screen.findByRole("menu")).toBeInTheDocument();
+
+    editor.destroy();
+  });
+
+  it("starts a ProseMirror drag for the handled block", async () => {
+    const editor = createMountedEditor("first\n\nsecond");
+
+    vi.spyOn(editor.view, "hasFocus").mockReturnValue(true);
+    editor.commands.setTextSelection(8);
+
+    renderWithTooltipProvider(
+      <BlockHandleMenu editor={editor as unknown as Editor} />,
+    );
+
+    const handleButton = await screen.findByRole("button", {
+      name: "블록 도구 열기",
+    });
+
+    const dataTransfer = {
+      effectAllowed: "none",
+      clearData: vi.fn(),
+      setData: vi.fn(),
+      setDragImage: vi.fn(),
+    };
+
+    fireEvent.dragStart(handleButton, { dataTransfer });
+
+    expect(editor.view.dragging?.move).toBe(true);
+    expect(editor.view.dragging?.slice.content.firstChild?.textContent).toBe(
+      "second",
+    );
 
     editor.destroy();
   });

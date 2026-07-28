@@ -760,6 +760,8 @@ function getBaseExtensions({ readOnly = false }: { readOnly?: boolean } = {}) {
     StarterKit.configure({
       codeBlock: false,
       link: false,
+      // 블록 핸들 드래그 시 표시되는 드롭 위치선.
+      dropcursor: { width: 2, color: "var(--primary)" },
     }),
     ListItemBackspaceLift,
     BulletTaskItemInputRule,
