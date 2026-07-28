@@ -523,7 +523,22 @@ export type Database = {
       };
     };
     Views: {
-      [_ in never]: never;
+      admin_user_list: {
+        Row: {
+          agreement_source: string | null;
+          agreement_status: string | null;
+          avatar_url: string | null;
+          canonical_email: string | null;
+          created_at: string | null;
+          id: string | null;
+          nickname: string | null;
+          privacy_agreed: boolean | null;
+          role: string | null;
+          signup_method: string | null;
+          terms_agreed: boolean | null;
+        };
+        Relationships: [];
+      };
     };
     Functions: {
       apply_time_of_day: { Args: { t: string; ts: string }; Returns: string };
