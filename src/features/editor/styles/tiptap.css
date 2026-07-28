@@ -326,27 +326,29 @@
   --note-bg-red: #7f1d1d;
 }
 
-/* 줄 전체가 한 색이면 목록 마커(1. / a. / •)도 같은 색이 되도록 항목 자체를 물들인다.
+/* 줄 전체가 한 색이면 목록 마커(1. / a. / •)도 같은 색으로 맞춘다.
+   본문 글자는 이미 인라인 마크가 칠하므로 여기서는 ::marker만 건드린다.
+   항목 전체에 color를 주면 중첩된 무채색 항목까지 색을 물려받는다.
    data-note-line-color는 문서에서 계산해 붙이는 표시라 저장되지 않는다. */
-.tiptap-wrapper .tiptap [data-note-line-color="gray"] {
+.tiptap-wrapper .tiptap [data-note-line-color="gray"]::marker {
   color: var(--note-text-gray);
 }
-.tiptap-wrapper .tiptap [data-note-line-color="orange"] {
+.tiptap-wrapper .tiptap [data-note-line-color="orange"]::marker {
   color: var(--note-text-orange);
 }
-.tiptap-wrapper .tiptap [data-note-line-color="yellow"] {
+.tiptap-wrapper .tiptap [data-note-line-color="yellow"]::marker {
   color: var(--note-text-yellow);
 }
-.tiptap-wrapper .tiptap [data-note-line-color="green"] {
+.tiptap-wrapper .tiptap [data-note-line-color="green"]::marker {
   color: var(--note-text-green);
 }
-.tiptap-wrapper .tiptap [data-note-line-color="blue"] {
+.tiptap-wrapper .tiptap [data-note-line-color="blue"]::marker {
   color: var(--note-text-blue);
 }
-.tiptap-wrapper .tiptap [data-note-line-color="purple"] {
+.tiptap-wrapper .tiptap [data-note-line-color="purple"]::marker {
   color: var(--note-text-purple);
 }
-.tiptap-wrapper .tiptap [data-note-line-color="red"] {
+.tiptap-wrapper .tiptap [data-note-line-color="red"]::marker {
   color: var(--note-text-red);
 }
 
@@ -413,13 +415,62 @@
   margin-bottom: 0;
 }
 
-.tiptap-wrapper .tiptap [data-note-block-bg]:has(+ [data-note-block-bg]) {
+/* 이어 붙이는 것은 색이 같을 때만이다. CSS는 두 속성 값을 비교할 수 없어
+   토큰마다 규칙을 따로 쓴다. 색이 다르면 경계가 그대로 남아 구분된다. */
+.tiptap-wrapper
+  .tiptap
+  [data-note-block-bg="gray"]:has(+ [data-note-block-bg="gray"]),
+.tiptap-wrapper
+  .tiptap
+  [data-note-block-bg="orange"]:has(+ [data-note-block-bg="orange"]),
+.tiptap-wrapper
+  .tiptap
+  [data-note-block-bg="yellow"]:has(+ [data-note-block-bg="yellow"]),
+.tiptap-wrapper
+  .tiptap
+  [data-note-block-bg="green"]:has(+ [data-note-block-bg="green"]),
+.tiptap-wrapper
+  .tiptap
+  [data-note-block-bg="blue"]:has(+ [data-note-block-bg="blue"]),
+.tiptap-wrapper
+  .tiptap
+  [data-note-block-bg="purple"]:has(+ [data-note-block-bg="purple"]),
+.tiptap-wrapper
+  .tiptap
+  [data-note-block-bg="red"]:has(+ [data-note-block-bg="red"]) {
   margin-bottom: 0;
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
 }
 
-.tiptap-wrapper .tiptap [data-note-block-bg] + [data-note-block-bg] {
+.tiptap-wrapper
+  .tiptap
+  [data-note-block-bg="gray"]
+  + [data-note-block-bg="gray"],
+.tiptap-wrapper
+  .tiptap
+  [data-note-block-bg="orange"]
+  + [data-note-block-bg="orange"],
+.tiptap-wrapper
+  .tiptap
+  [data-note-block-bg="yellow"]
+  + [data-note-block-bg="yellow"],
+.tiptap-wrapper
+  .tiptap
+  [data-note-block-bg="green"]
+  + [data-note-block-bg="green"],
+.tiptap-wrapper
+  .tiptap
+  [data-note-block-bg="blue"]
+  + [data-note-block-bg="blue"],
+.tiptap-wrapper
+  .tiptap
+  [data-note-block-bg="purple"]
+  + [data-note-block-bg="purple"],
+.tiptap-wrapper
+  .tiptap
+  [data-note-block-bg="red"]
+  + [data-note-block-bg="red"] {
   margin-top: 0;
   border-top-left-radius: 0;
   border-top-right-radius: 0;

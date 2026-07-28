@@ -198,6 +198,29 @@ describe("배경색 적용 대상", () => {
     expect(result).toContain("{bg=green}둘째 문단");
     expect(result).not.toContain("{bg=green}첫 문단");
   });
+
+  it("배경색이 있는 문단을 목록으로 바꾼 뒤 다시 칠해도 마커가 겹치지 않는다", () => {
+    const editor = new Editor({
+      extensions: getTipTapExtensions(),
+      content: "{bg=red}hello",
+    });
+
+    editor.commands.setTextSelection(2);
+    editor.commands.toggleBulletList();
+    applyNoteBlockBackground(editor, "blue");
+
+    const result = serializeTipTapMarkdown(editor);
+    editor.destroy();
+
+    expect(result).toBe("- {bg=blue}hello");
+  });
+
+  it("마커가 겹쳐 저장된 노트를 열어도 본문에 마커가 노출되지 않는다", () => {
+    const html = getHTML("- {bg=blue}{bg=red}hello");
+
+    expect(html).toMatch(/<li[^>]*data-note-block-bg="blue"/);
+    expect(html).not.toContain("{bg=");
+  });
 });
 
 describe("줄 전체 글자색 (목록 마커)", () => {
@@ -232,6 +255,23 @@ describe("줄 전체 글자색 (목록 마커)", () => {
 
   it("색이 없으면 null을 반환한다", () => {
     expect(getListItemLineColor("- 그냥 항목")).toBeNull();
+  });
+
+  it("중첩 항목의 색은 바깥 항목의 줄색 판정에 영향을 주지 않는다", () => {
+    const editor = createEditor("- {c=red}바깥{/c}\n\n    - {c=blue}안쪽{/c}");
+    const tokens: (string | null)[] = [];
+
+    editor.state.doc.descendants((node) => {
+      if (node.type.name === "listItem") {
+        tokens.push(getUniformNoteTextColor(node));
+      }
+
+      return true;
+    });
+
+    editor.destroy();
+
+    expect(tokens).toEqual(["red", "blue"]);
   });
 });
 

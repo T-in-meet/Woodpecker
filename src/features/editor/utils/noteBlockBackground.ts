@@ -63,22 +63,38 @@ function prependBackgroundMarker(
 // 마크다운으로 내보내기 직전에 블록 배경 attribute를 본문 앞 마커 텍스트로 바꾼다.
 // 이렇게 하면 제목의 "## "이나 목록의 "- " 뒤에 마커가 자연스럽게 놓여
 // 노드별 직렬화기를 따로 손대지 않아도 된다.
+//
+// 조상의 마커는 첫 자식을 따라 내려가 첫 텍스트 블록에 놓인다. 그 텍스트 블록이
+// 자기 배경까지 함께 내보내면 "{bg=blue}{bg=red}"처럼 마커가 겹치므로,
+// 마커가 도달할 경로에 있는 텍스트 블록은 자기 것을 내보내지 않는다.
 export function withNoteBlockBackgroundMarkers(
   doc: ProseMirrorNode,
 ): ProseMirrorNode {
-  const mapNode = (node: ProseMirrorNode): ProseMirrorNode => {
+  const mapNode = (
+    node: ProseMirrorNode,
+    hasIncomingMarker: boolean,
+  ): ProseMirrorNode => {
     if (node.isText) return node;
 
+    const token =
+      hasIncomingMarker && node.isTextblock
+        ? null
+        : getNoteBlockBackground(node);
+    // 컨테이너면 마커(자기 것이든 조상 것이든)가 첫 자식으로 계속 내려간다.
+    const passesMarkerDown =
+      !node.isTextblock && (token !== null || hasIncomingMarker);
+
     const children: ProseMirrorNode[] = [];
-    node.forEach((child) => children.push(mapNode(child)));
+    node.forEach((child, _offset, index) =>
+      children.push(mapNode(child, passesMarkerDown && index === 0)),
+    );
 
     const mapped = node.copy(Fragment.fromArray(children));
-    const token = getNoteBlockBackground(mapped);
 
     return token ? prependBackgroundMarker(mapped, token) : mapped;
   };
 
-  return mapNode(doc);
+  return mapNode(doc, false);
 }
 
 function resolveBackgroundTargetElement(block: Element): Element {
@@ -123,15 +139,25 @@ export function hoistNoteBlockBackgroundMarkers(element: HTMLElement): void {
 
     if (!textNode) continue;
 
-    const text = textNode.textContent ?? "";
-    const match = NOTE_BLOCK_BACKGROUND_PATTERN.exec(text);
+    let text = textNode.textContent ?? "";
+    let token: NoteColorTokenType | null = null;
 
-    if (!match) continue;
+    // 과거 버전이 마커를 겹쳐 저장한 노트가 있을 수 있다. 연달아 붙은 마커는
+    // 모두 걷어내고 맨 앞의 것만 배경으로 인정해 본문에 노출되지 않게 한다.
+    for (;;) {
+      const match = NOTE_BLOCK_BACKGROUND_PATTERN.exec(text);
+      if (!match) break;
 
-    const token = normalizeNoteColorToken(match[1]);
+      const matched = normalizeNoteColorToken(match[1]);
+      if (!matched) break;
+
+      token ??= matched;
+      text = text.slice(match[0].length);
+    }
+
     if (!token) continue;
 
-    textNode.textContent = text.slice(match[0].length);
+    textNode.textContent = text;
     resolveBackgroundTargetElement(block).setAttribute(
       NOTE_BLOCK_BACKGROUND_ATTRIBUTE,
       token,
@@ -191,10 +217,29 @@ export function applyNoteBlockBackground(
   if (targets.length > 0) {
     const tr = editor.state.tr;
 
-    for (const { node, pos } of targets) {
+    const setBackground = (
+      node: ProseMirrorNode,
+      pos: number,
+      value: NoteColorTokenType | null,
+    ) => {
       tr.setNodeMarkup(pos, undefined, {
         ...node.attrs,
-        [NOTE_BLOCK_BACKGROUND_ATTRIBUTE_NAME]: token,
+        [NOTE_BLOCK_BACKGROUND_ATTRIBUTE_NAME]: value,
+      });
+    };
+
+    for (const { node, pos } of targets) {
+      setBackground(node, pos, token);
+
+      if (!CONTAINER_TYPES.has(node.type.name)) continue;
+
+      // 목록 항목에 배경을 걸면 항목 전체가 칠해지므로, 안쪽 문단에 남아 있던
+      // 배경은 정리한다. 그대로 두면 저장할 때 마커가 겹쳐 본문에 노출된다.
+      node.forEach((child, offset) => {
+        if (!TEXT_BLOCK_TYPES.has(child.type.name)) return;
+        if (getNoteBlockBackground(child) === null) return;
+
+        setBackground(child, pos + 1 + offset, null);
       });
     }
 

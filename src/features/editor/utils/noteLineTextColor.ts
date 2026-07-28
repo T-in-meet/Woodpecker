@@ -17,31 +17,37 @@ export function getUniformNoteTextColor(
   let hasText = false;
   let isUniform = true;
 
-  node.descendants((child) => {
-    if (!isUniform) return false;
-    if (!child.isText) return true;
-    // 공백만 있는 조각은 색 판단에서 제외한다.
-    if ((child.text ?? "").trim() === "") return true;
+  // 중첩 목록은 그 자체가 별도의 줄이므로 판단에서 제외한다.
+  // 자식 항목의 색 때문에 바깥 항목의 마커 색이 풀리면 안 된다.
+  node.forEach((child) => {
+    if (!isUniform) return;
+    if (!child.isTextblock) return;
 
-    const mark = child.marks.find(
-      (candidate) => candidate.type.name === NOTE_TEXT_COLOR_MARK_NAME,
-    );
-    const childToken = normalizeNoteColorToken(mark?.attrs.token);
+    child.forEach((inline) => {
+      if (!isUniform) return;
+      if (!inline.isText) return;
+      // 공백만 있는 조각은 색 판단에서 제외한다.
+      if ((inline.text ?? "").trim() === "") return;
 
-    if (childToken === null) {
-      isUniform = false;
-      return false;
-    }
+      const mark = inline.marks.find(
+        (candidate) => candidate.type.name === NOTE_TEXT_COLOR_MARK_NAME,
+      );
+      const inlineToken = normalizeNoteColorToken(mark?.attrs.token);
 
-    if (token === null) {
-      token = childToken;
-    } else if (token !== childToken) {
-      isUniform = false;
-      return false;
-    }
+      if (inlineToken === null) {
+        isUniform = false;
+        return;
+      }
 
-    hasText = true;
-    return true;
+      if (token === null) {
+        token = inlineToken;
+      } else if (token !== inlineToken) {
+        isUniform = false;
+        return;
+      }
+
+      hasText = true;
+    });
   });
 
   return isUniform && hasText ? token : null;
