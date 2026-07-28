@@ -284,13 +284,13 @@ describe("getOperationalErrorDetail", () => {
   });
 
   it("운영 오류 상세와 사용자 표시 이름 및 처리 이력을 반환한다", async () => {
-    const operationalErrorSingleMock = vi.fn().mockResolvedValue({
+    const operationalErrorMaybeSingleMock = vi.fn().mockResolvedValue({
       data: operationalErrorRow,
       error: null,
     });
 
     const operationalErrorEqMock = vi.fn().mockReturnValue({
-      single: operationalErrorSingleMock,
+      maybeSingle: operationalErrorMaybeSingleMock,
     });
 
     const historyOrderMock = vi.fn().mockResolvedValue({
@@ -423,7 +423,7 @@ describe("getOperationalErrorDetail", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
+              maybeSingle: vi.fn().mockResolvedValue({
                 data: operationalErrorRow,
                 error: null,
               }),
@@ -479,11 +479,9 @@ describe("getOperationalErrorDetail", () => {
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({
+            maybeSingle: vi.fn().mockResolvedValue({
               data: null,
-              error: {
-                message: "not found",
-              },
+              error: null,
             }),
           }),
         }),
@@ -503,7 +501,7 @@ describe("getOperationalErrorDetail", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
+              maybeSingle: vi.fn().mockResolvedValue({
                 data: operationalErrorRow,
                 error: null,
               }),
@@ -547,7 +545,7 @@ describe("getOperationalErrorDetail", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
+              maybeSingle: vi.fn().mockResolvedValue({
                 data: operationalErrorRow,
                 error: null,
               }),
@@ -609,7 +607,7 @@ describe("getOperationalErrorDetail", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
+              maybeSingle: vi.fn().mockResolvedValue({
                 data: rowWithoutProfiles,
                 error: null,
               }),

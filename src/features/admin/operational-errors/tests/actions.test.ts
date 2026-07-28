@@ -7,20 +7,22 @@ import { OPERATIONAL_ERROR_STATUS } from "@/features/operational-errors/constant
 import { updateOperationalErrorStatus } from "../actions";
 
 const {
-  eqMock,
   insertMock,
+  maybeSingleMock,
   requireAdminMock,
   revalidatePathMock,
+  selectEqMock,
   selectMock,
-  singleMock,
+  updateEqMock,
   updateMock,
 } = vi.hoisted(() => ({
-  eqMock: vi.fn(),
   insertMock: vi.fn(),
+  maybeSingleMock: vi.fn(),
   requireAdminMock: vi.fn(),
   revalidatePathMock: vi.fn(),
+  selectEqMock: vi.fn(),
   selectMock: vi.fn(),
-  singleMock: vi.fn(),
+  updateEqMock: vi.fn(),
   updateMock: vi.fn(),
 }));
 
@@ -31,7 +33,6 @@ vi.mock("next/cache", () => ({
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from: vi.fn(() => ({
-      eq: eqMock,
       insert: insertMock,
       select: selectMock,
       update: updateMock,
@@ -46,22 +47,42 @@ vi.mock("@/features/admin/utils/require-admin", () => ({
 describe("updateOperationalErrorStatus", () => {
   beforeEach(() => {
     requireAdminMock.mockReset();
-    requireAdminMock.mockResolvedValue("admin-user-id");
     revalidatePathMock.mockReset();
     insertMock.mockReset();
     selectMock.mockReset();
-    singleMock.mockReset();
+    selectEqMock.mockReset();
+    maybeSingleMock.mockReset();
     updateMock.mockReset();
-    eqMock.mockReset();
-    updateMock.mockReturnValue({ eq: eqMock });
-    selectMock.mockReturnValue({ eq: eqMock });
-    eqMock.mockReturnValueOnce({ single: singleMock });
-    eqMock.mockResolvedValueOnce({ error: null });
-    singleMock.mockResolvedValue({
-      data: { status: OPERATIONAL_ERROR_STATUS.OPEN },
+    updateEqMock.mockReset();
+
+    requireAdminMock.mockResolvedValue("admin-user-id");
+
+    selectMock.mockReturnValue({
+      eq: selectEqMock,
+    });
+
+    selectEqMock.mockReturnValue({
+      maybeSingle: maybeSingleMock,
+    });
+
+    maybeSingleMock.mockResolvedValue({
+      data: {
+        status: OPERATIONAL_ERROR_STATUS.OPEN,
+      },
       error: null,
     });
-    insertMock.mockResolvedValue({ error: null });
+
+    updateMock.mockReturnValue({
+      eq: updateEqMock,
+    });
+
+    updateEqMock.mockResolvedValue({
+      error: null,
+    });
+
+    insertMock.mockResolvedValue({
+      error: null,
+    });
   });
 
   it("sets resolved fields when closing an operational error", async () => {
@@ -72,6 +93,11 @@ describe("updateOperationalErrorStatus", () => {
     );
 
     expect(result).toEqual({ ok: true });
+
+    expect(selectMock).toHaveBeenCalledWith("status");
+    expect(selectEqMock).toHaveBeenCalledWith("id", "error-id");
+    expect(maybeSingleMock).toHaveBeenCalledOnce();
+
     expect(updateMock).toHaveBeenCalledWith(
       expect.objectContaining({
         resolution_note: "배포 후 정상화 확인",
@@ -80,7 +106,9 @@ describe("updateOperationalErrorStatus", () => {
         status: OPERATIONAL_ERROR_STATUS.RESOLVED,
       }),
     );
-    expect(eqMock).toHaveBeenCalledWith("id", "error-id");
+
+    expect(updateEqMock).toHaveBeenCalledWith("id", "error-id");
+
     expect(insertMock).toHaveBeenCalledWith({
       changed_by: "admin-user-id",
       from_status: OPERATIONAL_ERROR_STATUS.OPEN,
@@ -91,6 +119,13 @@ describe("updateOperationalErrorStatus", () => {
   });
 
   it("clears resolved fields when reopening an operational error", async () => {
+    maybeSingleMock.mockResolvedValue({
+      data: {
+        status: OPERATIONAL_ERROR_STATUS.RESOLVED,
+      },
+      error: null,
+    });
+
     const result = await updateOperationalErrorStatus(
       "error-id",
       OPERATIONAL_ERROR_STATUS.OPEN,
@@ -98,6 +133,7 @@ describe("updateOperationalErrorStatus", () => {
     );
 
     expect(result).toEqual({ ok: true });
+
     expect(updateMock).toHaveBeenCalledWith(
       expect.objectContaining({
         resolution_note: null,
@@ -106,6 +142,16 @@ describe("updateOperationalErrorStatus", () => {
         status: OPERATIONAL_ERROR_STATUS.OPEN,
       }),
     );
+
+    expect(updateEqMock).toHaveBeenCalledWith("id", "error-id");
+
+    expect(insertMock).toHaveBeenCalledWith({
+      changed_by: "admin-user-id",
+      from_status: OPERATIONAL_ERROR_STATUS.RESOLVED,
+      note: "다시 확인",
+      operational_error_id: "error-id",
+      to_status: OPERATIONAL_ERROR_STATUS.OPEN,
+    });
   });
 
   it("rejects an unknown status", async () => {
@@ -119,6 +165,9 @@ describe("updateOperationalErrorStatus", () => {
       message: "상태 값이 올바르지 않습니다.",
       ok: false,
     });
+
+    expect(selectMock).not.toHaveBeenCalled();
     expect(updateMock).not.toHaveBeenCalled();
+    expect(insertMock).not.toHaveBeenCalled();
   });
 });

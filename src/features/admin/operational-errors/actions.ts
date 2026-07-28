@@ -3,6 +3,9 @@
 import { revalidatePath } from "next/cache";
 
 import {
+  ADMIN_OPERATIONAL_ERROR_CODES,
+  ADMIN_OPERATIONAL_ERROR_OPERATIONS,
+  ADMIN_OPERATIONAL_ERROR_STAGES,
   OPERATIONAL_ERROR_STATUS,
   type OperationalErrorStatusType,
 } from "@/features/operational-errors/constants";
@@ -10,6 +13,7 @@ import { ROUTES } from "@/lib/constants/routes";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { requireAdmin } from "../utils/require-admin";
+import { recordAdminOperationalError } from "./utils/record-admin-operational-error";
 
 /** 운영 오류 처리 메모의 최대 입력 길이 */
 const MAX_RESOLUTION_NOTE_LENGTH = 2_000;
@@ -84,17 +88,30 @@ export async function updateOperationalErrorStatus(
     .from("operational_errors")
     .select("status")
     .eq("id", operationalErrorId)
-    .single();
+    .maybeSingle();
 
-  /**
-   * 운영 오류가 없거나 저장된 상태 값이 올바르지 않으면
-   * 이후 변경 작업을 진행하지 않습니다.
-   */
-  if (
-    currentErrorError ||
-    !currentError ||
-    !isOperationalErrorStatus(currentError.status)
-  ) {
+  if (currentErrorError) {
+    await recordAdminOperationalError({
+      actorUserId: adminUserId,
+      code: ADMIN_OPERATIONAL_ERROR_CODES.OPERATIONAL_ERROR_STATUS_QUERY_FAILED,
+      context: {
+        operationalErrorId,
+        requestedStatus: status,
+      },
+      error: currentErrorError,
+      message: "운영 오류 현재 상태를 조회하지 못했습니다.",
+      operation:
+        ADMIN_OPERATIONAL_ERROR_OPERATIONS.UPDATE_OPERATIONAL_ERROR_STATUS,
+      stage: ADMIN_OPERATIONAL_ERROR_STAGES.CURRENT_STATUS_QUERY,
+    });
+
+    return {
+      message: "운영 오류 조회에 실패했습니다.",
+      ok: false,
+    };
+  }
+
+  if (!currentError || !isOperationalErrorStatus(currentError.status)) {
     return {
       message: "운영 오류를 찾을 수 없습니다.",
       ok: false,
@@ -147,6 +164,22 @@ export async function updateOperationalErrorStatus(
     .eq("id", operationalErrorId);
 
   if (error) {
+    await recordAdminOperationalError({
+      actorUserId: adminUserId,
+      code: ADMIN_OPERATIONAL_ERROR_CODES.OPERATIONAL_ERROR_STATUS_UPDATE_FAILED,
+      context: {
+        fromStatus: currentError.status,
+        hasNote,
+        operationalErrorId,
+        toStatus: status,
+      },
+      error,
+      message: "운영 오류 상태를 변경하지 못했습니다.",
+      operation:
+        ADMIN_OPERATIONAL_ERROR_OPERATIONS.UPDATE_OPERATIONAL_ERROR_STATUS,
+      stage: ADMIN_OPERATIONAL_ERROR_STAGES.STATUS_UPDATE,
+    });
+
     return {
       message: "운영 오류 상태 변경에 실패했습니다.",
       ok: false,
@@ -170,6 +203,21 @@ export async function updateOperationalErrorStatus(
     });
 
   if (historyError) {
+    await recordAdminOperationalError({
+      actorUserId: adminUserId,
+      code: ADMIN_OPERATIONAL_ERROR_CODES.OPERATIONAL_ERROR_HISTORY_INSERT_FAILED,
+      context: {
+        fromStatus: currentError.status,
+        hasNote,
+        operationalErrorId,
+        toStatus: status,
+      },
+      error: historyError,
+      message: "운영 오류 처리 이력을 저장하지 못했습니다.",
+      operation:
+        ADMIN_OPERATIONAL_ERROR_OPERATIONS.UPDATE_OPERATIONAL_ERROR_STATUS,
+      stage: ADMIN_OPERATIONAL_ERROR_STAGES.STATUS_HISTORY_INSERT,
+    });
     return {
       message: "운영 오류 처리 이력 저장에 실패했습니다.",
       ok: false,

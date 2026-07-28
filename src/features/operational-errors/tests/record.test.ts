@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { OPERATIONAL_ERROR_SEVERITY } from "./constants";
-import { recordOperationalError } from "./record";
+import { OPERATIONAL_ERROR_SEVERITY } from "../constants";
+import { recordOperationalError } from "../record";
 
 const { logErrorMock } = vi.hoisted(() => ({
   logErrorMock: vi.fn(),
