@@ -6,8 +6,7 @@ import type { OperationalErrorStatusType } from "@/features/operational-errors/c
 import { showToast } from "@/lib/utils/showToast";
 
 import { updateOperationalErrorStatus } from "../actions";
-import { ADMIN_OPERATIONAL_ERROR_DETAIL_QUERY_KEY } from "./use-operational-error-detail";
-import { ADMIN_OPERATIONAL_ERRORS_QUERY_KEY } from "./use-operational-errors";
+import { ADMIN_OPERATIONAL_ERROR_QUERY_KEYS } from "../constants/query-keys";
 
 interface UpdateOperationalErrorStatusVariables {
   /** 상태를 변경할 운영 오류 ID */
@@ -48,12 +47,12 @@ export function useUpdateOperationalErrorStatus() {
 
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: ADMIN_OPERATIONAL_ERROR_DETAIL_QUERY_KEY.detail(
+          queryKey: ADMIN_OPERATIONAL_ERROR_QUERY_KEYS.detail(
             variables.operationalErrorId,
           ),
         }),
         queryClient.invalidateQueries({
-          queryKey: ADMIN_OPERATIONAL_ERRORS_QUERY_KEY.all,
+          queryKey: ADMIN_OPERATIONAL_ERROR_QUERY_KEYS.lists(),
         }),
       ]);
 
