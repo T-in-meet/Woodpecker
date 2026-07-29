@@ -141,4 +141,49 @@ describe("NoteDetailBody", () => {
 
     expect(await screen.findByText("제목을 입력해주세요")).toBeInTheDocument();
   });
+
+  it("clears the previous action error when editing is reopened", async () => {
+    const user = userEvent.setup();
+    updateNoteActionMock.mockResolvedValueOnce({
+      error: {
+        title: ["제목을 입력해주세요"],
+      },
+    });
+    renderBody();
+
+    await user.click(screen.getByRole("button", { name: "노트 수정" }));
+    await user.click(screen.getByRole("button", { name: "저장" }));
+    expect(await screen.findByText("제목을 입력해주세요")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "취소" }));
+    await user.click(screen.getByRole("button", { name: "노트 수정" }));
+
+    expect(screen.getByLabelText("제목")).toBeInTheDocument();
+    expect(screen.queryByText("제목을 입력해주세요")).not.toBeInTheDocument();
+  });
+
+  it("clears the previous general error when editing is reopened", async () => {
+    const user = userEvent.setup();
+    updateNoteActionMock.mockResolvedValueOnce({
+      error: "노트 수정에 실패했습니다. 잠시 후 다시 시도해주세요.",
+    });
+    renderBody();
+
+    await user.click(screen.getByRole("button", { name: "노트 수정" }));
+    await user.click(screen.getByRole("button", { name: "저장" }));
+    expect(
+      await screen.findByText(
+        "노트 수정에 실패했습니다. 잠시 후 다시 시도해주세요.",
+      ),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "취소" }));
+    await user.click(screen.getByRole("button", { name: "노트 수정" }));
+
+    expect(
+      screen.queryByText(
+        "노트 수정에 실패했습니다. 잠시 후 다시 시도해주세요.",
+      ),
+    ).not.toBeInTheDocument();
+  });
 });
