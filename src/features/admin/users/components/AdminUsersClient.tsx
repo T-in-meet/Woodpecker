@@ -11,10 +11,10 @@ import { ADMIN_USER_LIST_CONFIG } from "../constants/user-list";
 import { useUsers } from "../hooks/use-users";
 import { AdminUserTable } from "./AdminUserTable";
 
-interface AdminUserClientProps {
+type AdminUserClientProps = {
   /** 현재 로그인한 관리자 ID */
   currentAdminId: string;
-}
+};
 
 /**
  * 관리자 사용자 목록 페이지의 클라이언트 컨테이너입니다.

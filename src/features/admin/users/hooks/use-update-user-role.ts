@@ -4,13 +4,13 @@ import { updateUserRole } from "../actions";
 import { ADMIN_USERS_QUERY_KEY } from "../constants/query-keys";
 import type { UserRole } from "../types/user-list";
 
-interface UpdateUserRoleVariables {
+type UpdateUserRoleVariables = {
   /** 역할을 변경할 profiles.id */
   userId: string;
 
   /** 새로 적용할 사용자 역할 */
   role: UserRole;
-}
+};
 
 /**
  * 관리자 사용자 역할 변경 Mutation 훅입니다.

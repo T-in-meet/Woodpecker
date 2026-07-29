@@ -28,7 +28,7 @@ export type UserSortField = "nickname" | "email" | "role" | "createdAt";
 /**
  * 관리자 사용자 목록 Server Action에 전달하는 조회 조건입니다.
  */
-export interface AdminUserListQuery {
+export type AdminUserListQuery = {
   /** 1부터 시작하는 현재 페이지 번호 */
   page: number;
 
@@ -43,12 +43,12 @@ export interface AdminUserListQuery {
 
   /** 공통 관리자 toolbar에서 적용된 정렬 조건 */
   sort: AdminSort<UserSortField>;
-}
+};
 
 /**
  * 관리자 사용자 목록 테이블의 단일 row 표시 모델입니다.
  */
-export interface AdminUserListItem {
+export type AdminUserListItem = {
   /** profiles.id */
   id: string;
 
@@ -72,12 +72,12 @@ export interface AdminUserListItem {
 
   /** 가입 시각 ISO 문자열 */
   createdAt: string;
-}
+};
 
 /**
  * 관리자 사용자 목록 조회 결과입니다.
  */
-export interface AdminUserListResult {
+export type AdminUserListResult = {
   /** 현재 페이지에 표시할 목록 row */
   items: AdminUserListItem[];
 
@@ -88,4 +88,4 @@ export interface AdminUserListResult {
     total: number;
     totalPages: number;
   };
-}
+};

@@ -11,7 +11,7 @@ import type {
  * Supabase가 View 컬럼을 nullable 타입으로 생성하므로
  * 실제 목록 모델로 변환하기 전에 필수 값을 확인합니다.
  */
-export interface AdminUserListRow {
+export type AdminUserListRow = {
   id: string | null;
   nickname: string | null;
   avatar_url: string | null;
@@ -20,7 +20,7 @@ export interface AdminUserListRow {
   signup_method: string | null;
   agreement_status: string | null;
   created_at: string | null;
-}
+};
 
 /**
  * admin_user_list View 조회 결과를 관리자 사용자 목록 표시 모델로 변환합니다.

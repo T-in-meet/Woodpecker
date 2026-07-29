@@ -16,7 +16,7 @@ import type { AdminUserListItem, UserSortField } from "../types/user-list";
 import { AdminUserRoleSelect } from "./AdminUserRoleSelect";
 import { AdminUserTableSkeleton } from "./AdminUserTableSkeleton";
 
-interface AdminUserTableProps {
+type AdminUserTableProps = {
   /** 현재 페이지에 표시할 사용자 목록 */
   users: AdminUserListItem[];
 
@@ -34,7 +34,7 @@ interface AdminUserTableProps {
 
   /** 정렬 조건 변경 이벤트 */
   onSortChange: (sort: AdminSort<UserSortField>) => void;
-}
+};
 
 /**
  * 관리자 사용자 목록을 테이블 형태로 표시합니다.

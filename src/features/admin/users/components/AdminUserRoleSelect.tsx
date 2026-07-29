@@ -13,7 +13,7 @@ import {
 import { useUpdateUserRole } from "../hooks/use-update-user-role";
 import type { UserRole } from "../types/user-list";
 
-interface AdminUserRoleSelectProps {
+type AdminUserRoleSelectProps = {
   /** 역할을 변경할 사용자 ID */
   userId: string;
 
@@ -22,7 +22,7 @@ interface AdminUserRoleSelectProps {
 
   /** 역할 변경을 허용하지 않을지 여부 */
   disabled?: boolean | undefined;
-}
+};
 
 /**
  * 관리자 사용자 목록에서 사용자의 역할을 직접 변경하는 Select입니다.

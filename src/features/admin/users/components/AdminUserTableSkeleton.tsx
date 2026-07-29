@@ -12,10 +12,10 @@ const ADMIN_USER_TABLE_SKELETON_WIDTHS = [
   "w-32",
 ] as const;
 
-interface AdminUserTableSkeletonProps {
+type AdminUserTableSkeletonProps = {
   /** 표시할 skeleton 행 개수 */
   length?: number | undefined;
-}
+};
 
 /**
  * 관리자 사용자 목록 최초 조회 중 테이블 행 위치에 표시할
