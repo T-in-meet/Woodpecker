@@ -10,21 +10,12 @@ import { requireAdmin } from "../utils/require-admin";
 
 type AdminNotificationQueryClient = Pick<
   ReturnType<typeof createAdminClient>,
-  "from"
+  "rpc"
 >;
 
-type AdminNotificationEventRow = {
-  body?: string | null;
-  click_path?: string;
-  created_at?: string;
-  id: string;
-  read_at?: string | null;
-  title?: string;
-  type: AdminNotificationType;
-};
-
-type AdminNotificationReadRow = {
-  event_id: string;
+type AdminUnreadNotificationCountRow = {
+  type: string;
+  unread_count: number;
 };
 
 type AdminNotificationListEventRow = {
@@ -63,8 +54,9 @@ export type GetAdminNotificationListOptions =
 function incrementUnreadCount(
   counts: AdminUnreadNotificationCounts,
   type: AdminNotificationType,
+  value: number,
 ) {
-  counts[type] = (counts[type] ?? 0) + 1;
+  counts[type] = (counts[type] ?? 0) + value;
 }
 
 function isAdminNotificationType(
@@ -109,34 +101,29 @@ export async function getAdminUnreadNotificationCounts(
   const adminUserId = options.adminUserId ?? (await requireAdmin());
   const supabase = options.supabase ?? createAdminClient();
 
-  const { data: events, error: eventsError } = await supabase
-    .from("admin_notification_events")
-    .select("id, type");
-
-  if (eventsError) {
-    throw eventsError;
-  }
-
-  const { data: reads, error: readsError } = await supabase
-    .from("admin_notification_reads")
-    .select("event_id")
-    .eq("admin_user_id", adminUserId);
-
-  if (readsError) {
-    throw readsError;
-  }
-
-  const readEventIds = new Set(
-    ((reads ?? []) as AdminNotificationReadRow[]).map((read) => read.event_id),
+  const { data, error } = await supabase.rpc(
+    "get_admin_unread_notification_counts",
+    {
+      p_admin_user_id: adminUserId,
+    },
   );
+
+  if (error) {
+    throw error;
+  }
+
   const counts: AdminUnreadNotificationCounts = {};
 
-  for (const event of (events ?? []) as AdminNotificationEventRow[]) {
-    if (readEventIds.has(event.id) || !isAdminNotificationType(event.type)) {
+  for (const row of (data ?? []) as AdminUnreadNotificationCountRow[]) {
+    if (
+      !isAdminNotificationType(row.type) ||
+      !Number.isFinite(row.unread_count) ||
+      row.unread_count <= 0
+    ) {
       continue;
     }
 
-    incrementUnreadCount(counts, event.type);
+    incrementUnreadCount(counts, row.type, row.unread_count);
   }
 
   return counts;
@@ -156,39 +143,27 @@ export async function getAdminNotificationList(
 ): Promise<NotificationListItemType[]> {
   const adminUserId = options.adminUserId ?? (await requireAdmin());
   const supabase = options.supabase ?? createAdminClient();
-
-  const { data: events, error: eventsError } = await supabase
-    .from("admin_notification_events")
-    .select("id, title, body, type, click_path, created_at")
-    .order("created_at", { ascending: false });
-
-  if (eventsError) {
-    throw eventsError;
-  }
-
-  const { data: reads, error: readsError } = await supabase
-    .from("admin_notification_reads")
-    .select("event_id")
-    .eq("admin_user_id", adminUserId);
-
-  if (readsError) {
-    throw readsError;
-  }
-
-  const readEventIds = new Set(
-    ((reads ?? []) as AdminNotificationReadRow[]).map((read) => read.event_id),
-  );
   const limit = Math.max(Math.min(options.limit ?? 20, 50), 1);
 
-  return ((events ?? []) as AdminNotificationEventRow[])
+  const { data, error } = await supabase.rpc(
+    "get_admin_unread_notification_list",
+    {
+      p_admin_user_id: adminUserId,
+      p_limit: limit,
+    },
+  );
+
+  if (error) {
+    throw error;
+  }
+
+  return ((data ?? []) as AdminNotificationListEventRow[])
     .filter(
       (event): event is AdminNotificationListEventRow =>
-        !readEventIds.has(event.id) &&
         isAdminNotificationType(event.type) &&
         typeof event.title === "string" &&
         typeof event.click_path === "string" &&
         typeof event.created_at === "string",
     )
-    .slice(0, limit)
     .map(adminEventToNotificationListItem);
 }

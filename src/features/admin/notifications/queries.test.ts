@@ -19,74 +19,12 @@ const ADMIN_USER_ID = "11111111-1111-4111-8111-111111111111";
 type QueryOptions = Parameters<typeof getAdminUnreadNotificationCounts>[0];
 type SupabaseOption = NonNullable<NonNullable<QueryOptions>["supabase"]>;
 
-function createSelectResult(data: unknown, error: unknown = null) {
-  return { data, error };
-}
-
-function createSupabaseMock({
-  events,
-  reads,
-  readsError = null,
-}: {
-  events: unknown[];
-  reads: unknown[];
-  readsError?: unknown;
-}) {
-  const eventsSelect = vi.fn().mockResolvedValue(createSelectResult(events));
-  const readsEq = vi
-    .fn()
-    .mockResolvedValue(createSelectResult(reads, readsError));
-  const readsSelect = vi.fn().mockReturnValue({ eq: readsEq });
-  const from = vi.fn((table: string) => {
-    if (table === "admin_notification_events") {
-      return { select: eventsSelect };
-    }
-
-    if (table === "admin_notification_reads") {
-      return { select: readsSelect };
-    }
-
-    throw new Error(`Unexpected table: ${table}`);
-  });
+function createRpcSupabaseMock(data: unknown, error: unknown = null) {
+  const rpc = vi.fn().mockResolvedValue({ data, error });
 
   return {
-    eventsSelect,
-    from,
-    readsEq,
-    readsSelect,
-    supabase: { from } as unknown as SupabaseOption,
-  };
-}
-
-function createSupabaseListMock({
-  events,
-  reads,
-}: {
-  events: unknown[];
-  reads: unknown[];
-}) {
-  const eventsOrder = vi.fn().mockResolvedValue(createSelectResult(events));
-  const eventsSelect = vi.fn().mockReturnValue({ order: eventsOrder });
-  const readsEq = vi.fn().mockResolvedValue(createSelectResult(reads));
-  const readsSelect = vi.fn().mockReturnValue({ eq: readsEq });
-  const from = vi.fn((table: string) => {
-    if (table === "admin_notification_events") {
-      return { select: eventsSelect };
-    }
-
-    if (table === "admin_notification_reads") {
-      return { select: readsSelect };
-    }
-
-    throw new Error(`Unexpected table: ${table}`);
-  });
-
-  return {
-    eventsOrder,
-    eventsSelect,
-    readsEq,
-    readsSelect,
-    supabase: { from } as unknown as SupabaseOption,
+    rpc,
+    supabase: { rpc } as unknown as SupabaseOption,
   };
 }
 
@@ -96,28 +34,17 @@ describe("getAdminUnreadNotificationCounts", () => {
     requireAdminMock.mockReset();
   });
 
-  it("counts unread admin notifications by type", async () => {
-    const { readsEq, supabase } = createSupabaseMock({
-      events: [
-        {
-          id: "22222222-2222-4222-8222-222222222222",
-          type: ADMIN_NOTIFICATION_TYPES.OPERATIONAL_ERROR,
-        },
-        {
-          id: "33333333-3333-4333-8333-333333333333",
-          type: ADMIN_NOTIFICATION_TYPES.OPERATIONAL_ERROR,
-        },
-        {
-          id: "44444444-4444-4444-8444-444444444444",
-          type: ADMIN_NOTIFICATION_TYPES.FEEDBACK_CREATED,
-        },
-      ],
-      reads: [
-        {
-          event_id: "33333333-3333-4333-8333-333333333333",
-        },
-      ],
-    });
+  it("returns unread admin notification counts from the RPC result", async () => {
+    const { rpc, supabase } = createRpcSupabaseMock([
+      {
+        type: ADMIN_NOTIFICATION_TYPES.OPERATIONAL_ERROR,
+        unread_count: 2,
+      },
+      {
+        type: ADMIN_NOTIFICATION_TYPES.FEEDBACK_CREATED,
+        unread_count: 1,
+      },
+    ]);
 
     const result = await getAdminUnreadNotificationCounts({
       adminUserId: ADMIN_USER_ID,
@@ -126,25 +53,24 @@ describe("getAdminUnreadNotificationCounts", () => {
 
     expect(result).toEqual({
       [ADMIN_NOTIFICATION_TYPES.FEEDBACK_CREATED]: 1,
-      [ADMIN_NOTIFICATION_TYPES.OPERATIONAL_ERROR]: 1,
+      [ADMIN_NOTIFICATION_TYPES.OPERATIONAL_ERROR]: 2,
     });
-    expect(readsEq).toHaveBeenCalledWith("admin_user_id", ADMIN_USER_ID);
+    expect(rpc).toHaveBeenCalledWith("get_admin_unread_notification_counts", {
+      p_admin_user_id: ADMIN_USER_ID,
+    });
   });
 
-  it("returns a sparse map when all notifications of a type are read", async () => {
-    const { supabase } = createSupabaseMock({
-      events: [
-        {
-          id: "22222222-2222-4222-8222-222222222222",
-          type: ADMIN_NOTIFICATION_TYPES.OPERATIONAL_ERROR,
-        },
-      ],
-      reads: [
-        {
-          event_id: "22222222-2222-4222-8222-222222222222",
-        },
-      ],
-    });
+  it("returns a sparse map and ignores unsupported RPC rows", async () => {
+    const { supabase } = createRpcSupabaseMock([
+      {
+        type: ADMIN_NOTIFICATION_TYPES.OPERATIONAL_ERROR,
+        unread_count: 0,
+      },
+      {
+        type: "UNKNOWN",
+        unread_count: 10,
+      },
+    ]);
 
     const result = await getAdminUnreadNotificationCounts({
       adminUserId: ADMIN_USER_ID,
@@ -154,41 +80,16 @@ describe("getAdminUnreadNotificationCounts", () => {
     expect(result).toEqual({});
   });
 
-  it("does not treat another admin user's read row as current admin read state", async () => {
-    const { supabase } = createSupabaseMock({
-      events: [
-        {
-          id: "22222222-2222-4222-8222-222222222222",
-          type: ADMIN_NOTIFICATION_TYPES.OPERATIONAL_ERROR,
-        },
-      ],
-      reads: [],
-    });
-
-    const result = await getAdminUnreadNotificationCounts({
-      adminUserId: ADMIN_USER_ID,
-      supabase,
-    });
-
-    expect(result).toEqual({
-      [ADMIN_NOTIFICATION_TYPES.OPERATIONAL_ERROR]: 1,
-    });
-  });
-
-  it("throws when read state lookup fails", async () => {
-    const readsError = { message: "read lookup failed" };
-    const { supabase } = createSupabaseMock({
-      events: [],
-      reads: [],
-      readsError,
-    });
+  it("throws when the count RPC fails", async () => {
+    const rpcError = { message: "count lookup failed" };
+    const { supabase } = createRpcSupabaseMock(null, rpcError);
 
     await expect(
       getAdminUnreadNotificationCounts({
         adminUserId: ADMIN_USER_ID,
         supabase,
       }),
-    ).rejects.toBe(readsError);
+    ).rejects.toBe(rpcError);
   });
 });
 
@@ -199,33 +100,17 @@ describe("getAdminNotificationList", () => {
   });
 
   it("returns unread admin notifications as notification list items", async () => {
-    const { eventsOrder, eventsSelect, readsEq, supabase } =
-      createSupabaseListMock({
-        events: [
-          {
-            body: "notifications / dispatch_push / push_send",
-            click_path:
-              "/admin/operational-errors/55555555-5555-4555-8555-555555555555",
-            created_at: "2026-07-27T01:00:00.000Z",
-            id: "22222222-2222-4222-8222-222222222222",
-            title: "Push 알림 전송에 실패했습니다.",
-            type: ADMIN_NOTIFICATION_TYPES.OPERATIONAL_ERROR,
-          },
-          {
-            body: "already read",
-            click_path: "/admin/feedbacks/feedback-id",
-            created_at: "2026-07-27T00:00:00.000Z",
-            id: "33333333-3333-4333-8333-333333333333",
-            title: "새 사용자 피드백이 등록되었습니다.",
-            type: ADMIN_NOTIFICATION_TYPES.FEEDBACK_CREATED,
-          },
-        ],
-        reads: [
-          {
-            event_id: "33333333-3333-4333-8333-333333333333",
-          },
-        ],
-      });
+    const { rpc, supabase } = createRpcSupabaseMock([
+      {
+        body: "notifications / dispatch_push / push_send",
+        click_path:
+          "/admin/operational-errors/55555555-5555-4555-8555-555555555555",
+        created_at: "2026-07-27T01:00:00.000Z",
+        id: "22222222-2222-4222-8222-222222222222",
+        title: "Push 알림 전송에 실패했습니다.",
+        type: ADMIN_NOTIFICATION_TYPES.OPERATIONAL_ERROR,
+      },
+    ]);
 
     const result = await getAdminNotificationList({
       adminUserId: ADMIN_USER_ID,
@@ -233,13 +118,10 @@ describe("getAdminNotificationList", () => {
       supabase,
     });
 
-    expect(eventsSelect).toHaveBeenCalledWith(
-      "id, title, body, type, click_path, created_at",
-    );
-    expect(eventsOrder).toHaveBeenCalledWith("created_at", {
-      ascending: false,
+    expect(rpc).toHaveBeenCalledWith("get_admin_unread_notification_list", {
+      p_admin_user_id: ADMIN_USER_ID,
+      p_limit: 10,
     });
-    expect(readsEq).toHaveBeenCalledWith("admin_user_id", ADMIN_USER_ID);
     expect(result).toEqual([
       {
         body: "notifications / dispatch_push / push_send",
@@ -257,5 +139,20 @@ describe("getAdminNotificationList", () => {
         type: ADMIN_NOTIFICATION_TYPES.OPERATIONAL_ERROR,
       },
     ]);
+  });
+
+  it("normalizes the list limit before calling the RPC", async () => {
+    const { rpc, supabase } = createRpcSupabaseMock([]);
+
+    await getAdminNotificationList({
+      adminUserId: ADMIN_USER_ID,
+      limit: 100,
+      supabase,
+    });
+
+    expect(rpc).toHaveBeenCalledWith("get_admin_unread_notification_list", {
+      p_admin_user_id: ADMIN_USER_ID,
+      p_limit: 50,
+    });
   });
 });
