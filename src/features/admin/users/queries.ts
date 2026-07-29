@@ -10,15 +10,13 @@ import {
 import { reportOperationalError } from "@/features/operational-errors/report";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { escapePostgrestLikePattern } from "../utils/query";
 import { requireAdmin } from "../utils/require-admin";
 import type {
   AdminUserListQuery,
   AdminUserListResult,
 } from "./types/user-list";
-import {
-  createAdminUserListQuery,
-  escapePostgrestLikePattern,
-} from "./utils/user-query";
+import { createAdminUserListQuery } from "./utils/user-query";
 import { applyUserFilters } from "./utils/user-query-filter";
 import { type AdminUserListRow, mapUserRows } from "./utils/user-query-mapper";
 import { applyUserSort } from "./utils/user-sort";

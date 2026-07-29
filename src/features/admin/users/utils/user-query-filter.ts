@@ -1,11 +1,8 @@
 import type { AdminAppliedFilter } from "@/features/admin/types/filter";
 
+import { nextDayIsoString, startOfDayIsoString } from "../../utils/query";
 import type { AdminUserListQuery, UserFilterField } from "../types/user-list";
-import {
-  type AdminUserListQueryBuilder,
-  nextDayIsoString,
-  startOfDayIsoString,
-} from "./user-query";
+import { type AdminUserListQueryBuilder } from "./user-query";
 
 /**
  * 관리자 사용자 목록에 적용된 필터를 View 조회 조건으로 변환합니다.
