@@ -15,10 +15,10 @@ const MOCK_USER_TABLE_SKELETON_WIDTHS = [
   "w-24",
 ] as const;
 
-interface MockUserTableSkeletonProps {
+type MockUserTableSkeletonProps = {
   /** 표시할 스켈레톤 행 개수 */
   length?: number | undefined;
-}
+};
 
 /**
  * Mock 사용자 테이블의 최초 조회 중 표시할 스켈레톤 목록입니다.
@@ -42,10 +42,10 @@ export function MockUserTableSkeleton({
   ));
 }
 
-interface MockUserTableSkeletonCellProps {
+type MockUserTableSkeletonCellProps = {
   /** 셀 내부 스켈레톤에 적용할 너비 및 형태 스타일 */
   className?: string | undefined;
-}
+};
 
 /**
  * Mock 사용자 테이블의 단일 로딩 셀을 표시합니다.

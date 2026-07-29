@@ -8,7 +8,7 @@ import type {
 import type { MockUser } from "../types/mock-user";
 import type { ComponentPlaygroundSearchField } from "../types/search";
 
-interface FilterMockUsersParams {
+type FilterMockUsersParams = {
   /** 검색과 필터를 적용할 원본 사용자 목록 */
   users: readonly MockUser[];
 
@@ -17,7 +17,7 @@ interface FilterMockUsersParams {
 
   /** 사용자가 적용 버튼으로 확정한 필터 목록 */
   filters: ComponentPlaygroundFilters;
-}
+};
 
 /**
  * 검색어가 지정된 필드의 사용자 값에 포함되는지 확인합니다.

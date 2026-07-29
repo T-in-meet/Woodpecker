@@ -6,7 +6,7 @@ import Lightbox from "yet-another-react-lightbox";
 
 import type { AdminLightboxImage } from "@/features/admin/types/lightbox";
 
-interface AdminImageLightboxProps {
+type AdminImageLightboxProps = {
   /** Lightbox에 표시할 이미지 목록 */
   images: readonly AdminLightboxImage[];
 
@@ -18,7 +18,7 @@ interface AdminImageLightboxProps {
 
   /** Lightbox 닫기 콜백 */
   onClose: () => void;
-}
+};
 
 /**
  * 관리자 화면에서 공통으로 사용하는 이미지 Lightbox입니다.

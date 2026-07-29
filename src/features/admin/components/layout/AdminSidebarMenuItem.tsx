@@ -24,7 +24,7 @@ import {
   type OpenGroups,
 } from "../../utils/admin-sidebar";
 
-interface AdminSidebarMenuItemProps {
+type AdminSidebarMenuItemProps = {
   item: AdminSidebarItem;
 
   pathname: string;
@@ -36,7 +36,7 @@ interface AdminSidebarMenuItemProps {
   onNavigate: () => void;
 
   depth?: number;
-}
+};
 
 export function AdminSidebarMenuItem({
   item,

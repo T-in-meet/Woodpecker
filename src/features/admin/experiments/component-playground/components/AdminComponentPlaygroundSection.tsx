@@ -1,12 +1,12 @@
 import type { ReactNode } from "react";
 
-interface Props {
+type Props = {
   title: string;
 
   description?: string;
 
   children: ReactNode;
-}
+};
 
 /**
  * Component Playground에서 각 컴포넌트 실험 영역을 구분하는 공통 섹션이다.

@@ -64,7 +64,7 @@ type QueryError = {
   message: string;
 };
 
-interface DetailSupabaseOptions {
+type DetailSupabaseOptions = {
   feedbackResult?: {
     data: unknown;
     error: QueryError | null;
@@ -85,7 +85,7 @@ interface DetailSupabaseOptions {
     data: unknown;
     error: QueryError | null;
   };
-}
+};
 
 function createDetailSupabaseMock(options: DetailSupabaseOptions = {}) {
   const feedbackResult = options.feedbackResult ?? {
@@ -222,13 +222,13 @@ function createDetailSupabaseMock(options: DetailSupabaseOptions = {}) {
   };
 }
 
-interface ListSupabaseOptions {
+type ListSupabaseOptions = {
   result?: {
     data: unknown[] | null;
     error: QueryError | null;
     count: number | null;
   };
-}
+};
 
 function createListSupabaseMock(options: ListSupabaseOptions = {}) {
   const result = options.result ?? {

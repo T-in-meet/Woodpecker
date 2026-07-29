@@ -4,13 +4,13 @@ import { saveFeedbackReply } from "../actions";
 import { ADMIN_FEEDBACK_DETAIL_QUERY_KEY } from "./use-feedback-detail";
 import { ADMIN_FEEDBACKS_QUERY_KEY } from "./use-feedbacks";
 
-interface SaveFeedbackReplyVariables {
+type SaveFeedbackReplyVariables = {
   /** 답변을 저장할 feedbacks.id */
   feedbackId: string;
 
   /** Server Action에 전달할 답변 form payload */
   formData: FormData;
-}
+};
 
 /**
  * 관리자 답변 저장 mutation입니다.

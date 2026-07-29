@@ -15,9 +15,9 @@ import { ROUTES } from "@/lib/constants/routes";
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state";
 
-interface Props {
+type Props = {
   children: ReactNode;
-}
+};
 
 export default async function AdminLayout({ children }: Props) {
   try {

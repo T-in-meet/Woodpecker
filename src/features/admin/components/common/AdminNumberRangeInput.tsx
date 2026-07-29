@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 
 import { AdminNumberRangeFilterValue } from "../../types/filter";
 
-interface AdminNumberRangeInputProps {
+type AdminNumberRangeInputProps = {
   /**
    * 현재 입력된 최소값과 최대값입니다.
    */
@@ -32,7 +32,7 @@ interface AdminNumberRangeInputProps {
    * 숫자 입력의 증감 단위입니다.
    */
   step?: number;
-}
+};
 
 /**
  * 관리자 필터에서 숫자의 최소값과 최대값을 입력하는 컴포넌트입니다.

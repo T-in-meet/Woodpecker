@@ -8,17 +8,17 @@ import type { UseAdminListToolbarResult } from "@/features/admin/hooks/use-admin
 import type { AdminListConfig } from "@/features/admin/types/list";
 import { hasAdminFilterValue } from "@/features/admin/utils/admin-filter";
 
-interface AdminListToolbarProps<
+type AdminListToolbarProps<
   TSearchField extends string,
   TFilterField extends string,
   TSortField extends string,
-> {
+> = {
   /** 관리자 목록에서 사용할 검색, 필터 및 페이지네이션 설정 */
   config: AdminListConfig<TSearchField, TFilterField, TSortField>;
 
   /** 검색과 필터 상태 및 처리 함수 */
   toolbar: UseAdminListToolbarResult<TSearchField, TFilterField, TSortField>;
-}
+};
 
 /**
  * 관리자 목록에서 사용하는 공통 검색 및 필터 Toolbar입니다.

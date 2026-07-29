@@ -12,7 +12,7 @@ import {
 
 import type { AdminBreadcrumbItem } from "../types/breadcrumb";
 
-interface AdminBreadcrumbContextValue {
+type AdminBreadcrumbContextValue = {
   /** 정적 Breadcrumb 뒤에 추가할 동적 항목 */
   dynamicItems: readonly AdminBreadcrumbItem[];
 
@@ -30,14 +30,14 @@ interface AdminBreadcrumbContextValue {
 
   /** 로딩 중 표시할 동적 Breadcrumb Skeleton 항목 수를 변경합니다. */
   setDynamicLoadingItemCount: Dispatch<SetStateAction<number>>;
-}
+};
 
 const AdminBreadcrumbContext =
   createContext<AdminBreadcrumbContextValue | null>(null);
 
-interface AdminBreadcrumbProviderProps {
+type AdminBreadcrumbProviderProps = {
   children: ReactNode;
-}
+};
 
 /**
  * 관리자 페이지의 동적 Breadcrumb 상태를 제공합니다.

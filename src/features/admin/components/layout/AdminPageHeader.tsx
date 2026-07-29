@@ -1,12 +1,12 @@
 import type { ReactNode } from "react";
 
-interface Props {
+type Props = {
   title: string;
 
   description?: string;
 
   actions?: ReactNode;
-}
+};
 
 export function AdminPageHeader({ title, description, actions }: Props) {
   return (

@@ -16,7 +16,7 @@ import {
 import { ADMIN_SELECT_DEFAULTS } from "../../constants/admin-select";
 import type { AdminSearchField, AdminSearchValue } from "../../types/search";
 
-interface AdminSearchProps<TField extends string> {
+type AdminSearchProps<TField extends string> = {
   /** 검색에서 선택할 수 있는 필드 목록 */
   fields: readonly AdminSearchField<TField>[];
 
@@ -40,7 +40,7 @@ interface AdminSearchProps<TField extends string> {
 
   /** 검색 버튼의 접근성 이름 */
   searchButtonAriaLabel?: string;
-}
+};
 
 /**
  * 관리자 목록에서 검색 필드와 검색어를 입력하는 공통 컴포넌트입니다.

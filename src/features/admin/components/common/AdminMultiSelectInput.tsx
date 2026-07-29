@@ -18,7 +18,7 @@ import type {
   AdminMultiSelectFilterDefinition,
 } from "../../types/filter";
 
-interface AdminMultiSelectInputProps<TField extends string> {
+type AdminMultiSelectInputProps<TField extends string> = {
   /** 현재 값을 입력할 다중 선택 필터 정의 */
   filter: AdminMultiSelectFilterDefinition<TField>;
 
@@ -27,7 +27,7 @@ interface AdminMultiSelectInputProps<TField extends string> {
 
   /** 선택된 값이 변경될 때 호출되는 함수 */
   onChange: (value: AdminAppliedMultiSelectFilter<TField>) => void;
-}
+};
 
 /**
  * 관리자 목록 필터에서 여러 값을 선택하는 공통 입력 컴포넌트입니다.

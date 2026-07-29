@@ -13,10 +13,10 @@ const ADMIN_FEEDBACK_TABLE_SKELETON_WIDTHS = [
   "w-24",
 ] as const;
 
-interface AdminFeedbackTableSkeletonProps {
+type AdminFeedbackTableSkeletonProps = {
   /** 표시할 skeleton 행 개수 */
   length?: number | undefined;
-}
+};
 
 /**
  * 피드백 목록 최초 조회 중 테이블 행 위치에 표시할 skeleton row 목록입니다.

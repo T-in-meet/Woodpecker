@@ -1,7 +1,7 @@
 /**
  * 관리자 목록 페이지네이션 설정입니다.
  */
-export interface AdminPaginationConfig {
+export type AdminPaginationConfig = {
   /** 한 페이지에 표시할 데이터 개수 */
   pageSize: number;
 
@@ -11,12 +11,12 @@ export interface AdminPaginationConfig {
    * @defaultValue ADMIN_PAGINATION.DEFAULT_PAGE_COUNT
    */
   pageCount?: number;
-}
+};
 
 /**
  * 관리자 페이지네이션 계산에 필요한 입력값입니다.
  */
-export interface GetAdminPaginationParams {
+export type GetAdminPaginationParams = {
   /** 현재 페이지 번호. 1부터 시작합니다. */
   currentPage: number;
 
@@ -28,12 +28,12 @@ export interface GetAdminPaginationParams {
 
   /** 한 번에 표시할 페이지 번호 개수 */
   pageCount: number;
-}
+};
 
 /**
  * 관리자 페이지네이션에서 사용할 계산 결과입니다.
  */
-export interface AdminPagination {
+export type AdminPagination = {
   /** 범위가 보정된 현재 페이지 번호 */
   currentPage: number;
 
@@ -72,12 +72,12 @@ export interface AdminPagination {
 
   /** 다음 페이지 그룹으로 이동할 수 있는지 여부 */
   hasNextPageGroup: boolean;
-}
+};
 
 /**
  * 관리자 페이지네이션 컴포넌트의 API입니다.
  */
-export interface AdminPaginationProps {
+export type AdminPaginationProps = {
   /** 현재 페이지 번호. 1부터 시작합니다. */
   currentPage: number;
 
@@ -93,4 +93,4 @@ export interface AdminPaginationProps {
    * @param page 이동할 페이지 번호
    */
   onPageChange(page: number): void;
-}
+};

@@ -24,14 +24,14 @@ const DialogOverlay = React.forwardRef<
 
 DialogOverlay.displayName = Dialog.Overlay.displayName;
 
-interface DialogContentProps extends React.ComponentPropsWithoutRef<
+type DialogContentProps = React.ComponentPropsWithoutRef<
   typeof Dialog.Content
-> {
+> & {
   /**
    * 다이얼로그 우측 상단 닫기 버튼 표시 여부입니다.
    */
   showCloseButton?: boolean;
-}
+};
 
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof Dialog.Content>,

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 
 import { AdminPageHeader } from "./AdminPageHeader";
 
-interface Props {
+type Props = {
   /** 상세 페이지 제목 */
   title: string;
 
@@ -21,7 +21,7 @@ interface Props {
 
   /** 제목 영역 우측에 표시할 작업 요소 */
   actions?: ReactNode;
-}
+};
 
 /**
  * 관리자 상세 페이지에서 사용하는 공통 헤더입니다.

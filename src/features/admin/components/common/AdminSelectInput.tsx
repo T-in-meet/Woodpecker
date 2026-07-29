@@ -14,7 +14,7 @@ import type {
   AdminSelectFilterDefinition,
 } from "../../types/filter";
 
-interface AdminSelectInputProps<TField extends string> {
+type AdminSelectInputProps<TField extends string> = {
   /** 현재 값을 입력할 단일 선택 필터 정의 */
   filter: AdminSelectFilterDefinition<TField>;
 
@@ -23,7 +23,7 @@ interface AdminSelectInputProps<TField extends string> {
 
   /** 선택된 값이 변경될 때 호출되는 함수 */
   onChange: (value: AdminAppliedSelectFilter<TField>) => void;
-}
+};
 
 /**
  * 관리자 목록 필터에서 하나의 값을 선택하는 공통 입력 컴포넌트입니다.

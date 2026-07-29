@@ -12,12 +12,12 @@ import {
 import type { AdminFeedbackDetail } from "../types/feedback-detail";
 import { AdminFeedbackImageGallery } from "./AdminFeedbackImageGallery";
 
-interface AdminFeedbackSourcePanelProps {
+type AdminFeedbackSourcePanelProps = {
   /** 사용자 피드백 원문과 작성자 정보를 포함한 상세 데이터 */
   feedback: AdminFeedbackDetail;
 
   className?: string;
-}
+};
 
 /**
  * 관리자 상세 페이지에서 사용자가 제출한 피드백 원문을 표시합니다.

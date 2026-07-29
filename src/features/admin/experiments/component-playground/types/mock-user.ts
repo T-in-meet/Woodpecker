@@ -14,7 +14,7 @@ export type MockUserGrade = (typeof MOCK_USER_GRADES)[number];
  * Component Playground에서 검색, 필터, 페이지네이션 동작을
  * 확인하기 위해 사용하는 Mock 사용자 타입입니다.
  */
-export interface MockUser {
+export type MockUser = {
   id: number;
 
   name: string;
@@ -45,4 +45,4 @@ export interface MockUser {
    * Date range 필터 실험에 사용합니다.
    */
   createdAt: Date;
-}
+};

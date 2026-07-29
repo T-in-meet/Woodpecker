@@ -22,7 +22,7 @@ import type {
 } from "../../types/filter";
 import { AdminFilterInputRenderer } from "./AdminFilterInputRenderer";
 
-interface AdminFilterEditorProps<TField extends string> {
+type AdminFilterEditorProps<TField extends string> = {
   /** 현재 편집할 필터 정의 */
   filter: AdminFilterDefinition<TField>;
 
@@ -46,7 +46,7 @@ interface AdminFilterEditorProps<TField extends string> {
 
   /** 사용자가 현재 필터를 삭제할 때 호출되는 함수 */
   onRemove: () => void;
-}
+};
 
 /**
  * 관리자 목록 필터를 확인하고 수정하는 공통 Editor입니다.

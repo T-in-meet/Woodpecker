@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils/cn";
 
-interface AdminListStateProps {
+type AdminListStateProps = {
   /** 상태를 시각적으로 표현하는 아이콘 */
   icon: ReactNode;
 
@@ -21,7 +21,7 @@ interface AdminListStateProps {
 
   /** 상태 컨테이너에 추가할 클래스 */
   className?: string | undefined;
-}
+};
 
 /**
  * 관리자 목록에서 데이터가 없거나 오류가 발생한 경우 표시하는
@@ -58,7 +58,7 @@ export function AdminListState({
   );
 }
 
-interface AdminListEmptyProps {
+type AdminListEmptyProps = {
   /** 빈 상태 제목 */
   title?: string | undefined;
 
@@ -73,7 +73,7 @@ interface AdminListEmptyProps {
 
   /** 상태 컨테이너에 추가할 클래스 */
   className?: string | undefined;
-}
+};
 
 /**
  * 관리자 목록의 조회 결과가 없을 때 표시합니다.
@@ -96,7 +96,7 @@ export function AdminListEmpty({
   );
 }
 
-interface AdminListErrorProps {
+type AdminListErrorProps = {
   /** 오류 상태 제목 */
   title?: string | undefined;
 
@@ -111,7 +111,7 @@ interface AdminListErrorProps {
 
   /** 상태 컨테이너에 추가할 클래스 */
   className?: string | undefined;
-}
+};
 /**
  * 관리자 목록을 불러오는 과정에서 오류가 발생했을 때 표시합니다.
  */

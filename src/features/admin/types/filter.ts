@@ -15,13 +15,13 @@ export type AdminFilterType =
  *
  * @template TValue 필터가 실제로 사용하는 문자열 값 타입
  */
-export interface AdminFilterOption<TValue extends string = string> {
+export type AdminFilterOption<TValue extends string = string> = {
   /** 필터 상태와 조회 조건에 사용되는 실제 값 */
   value: TValue;
 
   /** 사용자에게 표시되는 항목 이름 */
   label: string;
-}
+};
 
 /**
  * 날짜 범위 필터의 값입니다.
@@ -29,13 +29,13 @@ export interface AdminFilterOption<TValue extends string = string> {
  * 값이 지정되지 않은 시작일과 종료일은 `null`로 표현합니다.
  * 이를 통해 시작일 또는 종료일만 지정하는 부분 범위를 지원합니다.
  */
-export interface AdminDateRangeFilterValue {
+export type AdminDateRangeFilterValue = {
   /** 조회 범위의 시작일 */
   from: Date | null;
 
   /** 조회 범위의 종료일 */
   to: Date | null;
-}
+};
 
 /**
  * 숫자 범위 필터의 값입니다.
@@ -43,13 +43,13 @@ export interface AdminDateRangeFilterValue {
  * 값이 지정되지 않은 최솟값과 최댓값은 `null`로 표현합니다.
  * 이를 통해 최솟값 또는 최댓값만 지정하는 부분 범위를 지원합니다.
  */
-export interface AdminNumberRangeFilterValue {
+export type AdminNumberRangeFilterValue = {
   /** 조회 범위의 최솟값 */
   min: number | null;
 
   /** 조회 범위의 최댓값 */
   max: number | null;
-}
+};
 
 /**
  * 모든 관리자 필터 정의가 공통으로 가지는 속성입니다.
@@ -60,10 +60,10 @@ export interface AdminNumberRangeFilterValue {
  * @template TField 필터 필드의 문자열 리터럴 타입
  * @template TType 필터 입력 방식
  */
-interface AdminFilterDefinitionBase<
+type AdminFilterDefinitionBase<
   TField extends string,
   TType extends AdminFilterType,
-> {
+> = {
   /** 조회 조건에서 필터를 식별할 때 사용하는 필드 */
   field: TField;
 
@@ -75,7 +75,7 @@ interface AdminFilterDefinitionBase<
 
   /** 필터 입력 영역에 표시할 선택적 안내 문구 */
   placeholder?: string;
-}
+};
 
 /**
  * 단일 선택 필터의 정의입니다.
@@ -83,13 +83,13 @@ interface AdminFilterDefinitionBase<
  * @template TField 필터 필드의 문자열 리터럴 타입
  * @template TValue 선택 가능한 값의 문자열 리터럴 타입
  */
-export interface AdminSelectFilterDefinition<
+export type AdminSelectFilterDefinition<
   TField extends string = string,
   TValue extends string = string,
-> extends AdminFilterDefinitionBase<TField, "select"> {
+> = AdminFilterDefinitionBase<TField, "select"> & {
   /** 단일 선택 필터에서 제공하는 항목 목록 */
   options: readonly AdminFilterOption<TValue>[];
-}
+};
 
 /**
  * 다중 선택 필터의 정의입니다.
@@ -97,13 +97,13 @@ export interface AdminSelectFilterDefinition<
  * @template TField 필터 필드의 문자열 리터럴 타입
  * @template TValue 선택 가능한 값의 문자열 리터럴 타입
  */
-export interface AdminMultiSelectFilterDefinition<
+export type AdminMultiSelectFilterDefinition<
   TField extends string = string,
   TValue extends string = string,
-> extends AdminFilterDefinitionBase<TField, "multi-select"> {
+> = AdminFilterDefinitionBase<TField, "multi-select"> & {
   /** 다중 선택 필터에서 제공하는 항목 목록 */
   options: readonly AdminFilterOption<TValue>[];
-}
+};
 
 /**
  * 날짜 범위 필터의 정의입니다.
@@ -118,18 +118,17 @@ export type AdminDateRangeFilterDefinition<TField extends string = string> =
  *
  * @template TField 필터 필드의 문자열 리터럴 타입
  */
-export interface AdminNumberRangeFilterDefinition<
-  TField extends string = string,
-> extends AdminFilterDefinitionBase<TField, "number-range"> {
-  /** 사용자가 입력할 수 있는 최솟값 */
-  min?: number;
+export type AdminNumberRangeFilterDefinition<TField extends string = string> =
+  AdminFilterDefinitionBase<TField, "number-range"> & {
+    /** 사용자가 입력할 수 있는 최솟값 */
+    min?: number;
 
-  /** 사용자가 입력할 수 있는 최댓값 */
-  max?: number;
+    /** 사용자가 입력할 수 있는 최댓값 */
+    max?: number;
 
-  /** 숫자 Input의 증감 간격 */
-  step?: number;
-}
+    /** 숫자 Input의 증감 간격 */
+    step?: number;
+  };
 
 /**
  * 관리자 목록에서 제공할 수 있는 필터 정의입니다.
@@ -154,11 +153,11 @@ export type AdminFilterDefinition<TField extends string = string> =
  * @template TType 필터 입력 방식
  * @template TValue 필터에 저장되는 값
  */
-interface AdminAppliedFilterBase<
+type AdminAppliedFilterBase<
   TField extends string,
   TType extends AdminFilterType,
   TValue,
-> {
+> = {
   /** 적용된 필터를 식별하는 필드 */
   field: TField;
 
@@ -167,7 +166,7 @@ interface AdminAppliedFilterBase<
 
   /** 사용자가 적용한 필터 값 */
   value: TValue;
-}
+};
 
 /**
  * 실제로 적용된 단일 선택 필터입니다.
