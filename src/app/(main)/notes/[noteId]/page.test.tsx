@@ -58,6 +58,7 @@ vi.mock("@/features/notes/components/NoteViewer", () => ({
 vi.mock("next/navigation", () => ({
   notFound: notFoundMock,
   redirect: redirectMock,
+  useRouter: () => ({ refresh: vi.fn() }),
 }));
 
 import NoteDetailPage from "./page";
