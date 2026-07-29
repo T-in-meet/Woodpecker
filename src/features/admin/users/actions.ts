@@ -99,7 +99,7 @@ export async function updateUserRole(
       message: "역할 변경 대상 사용자 조회에 실패했습니다.",
       operation: OPERATIONAL_ERROR_OPERATIONS.UPDATE_ADMIN_USER_ROLE,
       severity: OPERATIONAL_ERROR_SEVERITY.ERROR,
-      stage: OPERATIONAL_ERROR_STAGES.ADMIN_USER_TARGET_LOAD,
+      stage: OPERATIONAL_ERROR_STAGES.TARGET_USER_LOAD,
       userId,
     });
 
@@ -141,7 +141,7 @@ export async function updateUserRole(
       message: "관리자 사용자 역할 변경에 실패했습니다.",
       operation: OPERATIONAL_ERROR_OPERATIONS.UPDATE_ADMIN_USER_ROLE,
       severity: OPERATIONAL_ERROR_SEVERITY.ERROR,
-      stage: OPERATIONAL_ERROR_STAGES.ADMIN_USER_ROLE_UPDATE,
+      stage: OPERATIONAL_ERROR_STAGES.USER_ROLE_UPDATE,
       userId,
     });
 

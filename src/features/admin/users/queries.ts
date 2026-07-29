@@ -86,7 +86,7 @@ export async function getAdminUsers(
       message: "관리자 사용자 목록 조회에 실패했습니다.",
       operation: OPERATIONAL_ERROR_OPERATIONS.GET_ADMIN_USERS,
       severity: OPERATIONAL_ERROR_SEVERITY.ERROR,
-      stage: OPERATIONAL_ERROR_STAGES.ADMIN_USER_LIST_QUERY,
+      stage: OPERATIONAL_ERROR_STAGES.USER_LIST_QUERY,
     });
 
     throw new Error(`Failed to load admin users: ${error.message}`);
