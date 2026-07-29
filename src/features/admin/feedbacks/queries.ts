@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { escapePostgrestLikePattern } from "../utils/query";
 import { requireAdmin } from "../utils/require-admin";
 import type { AdminFeedbackDetail } from "./types/feedback-detail";
 import type {
@@ -12,7 +13,6 @@ import type {
   FeedbackCategory,
   FeedbackStatus,
 } from "./types/feedback-list";
-import { escapePostgrestLikePattern } from "./utils/feedback-query";
 import { applyFeedbackFilters } from "./utils/feedback-query-filter";
 import {
   FeedbackListRow,

@@ -34,7 +34,7 @@ vi.mock("@/features/admin/utils/require-admin", () => ({
   requireAdmin: requireAdminMock,
 }));
 
-vi.mock("@/features/admin/feedbacks/utils/feedback-query", () => ({
+vi.mock("@/features/admin/utils/query", () => ({
   escapePostgrestLikePattern: escapePostgrestLikePatternMock,
 }));
 

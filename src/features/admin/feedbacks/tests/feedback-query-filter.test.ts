@@ -5,7 +5,7 @@ const { startOfDayIsoStringMock, nextDayIsoStringMock } = vi.hoisted(() => ({
   nextDayIsoStringMock: vi.fn(),
 }));
 
-vi.mock("@/features/admin/feedbacks/utils/feedback-query", () => ({
+vi.mock("@/features/admin/utils/query", () => ({
   startOfDayIsoString: startOfDayIsoStringMock,
   nextDayIsoString: nextDayIsoStringMock,
 }));

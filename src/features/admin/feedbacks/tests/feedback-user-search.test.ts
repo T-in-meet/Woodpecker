@@ -11,7 +11,7 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: createAdminClientMock,
 }));
 
-vi.mock("@/features/admin/feedbacks/utils/feedback-query", () => ({
+vi.mock("@/features/admin/utils/query", () => ({
   escapePostgrestLikePattern: escapePostgrestLikePatternMock,
 }));
 
