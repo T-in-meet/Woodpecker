@@ -3,6 +3,7 @@ import {
   InputRule,
   isAtStartOfNode,
   isNodeActive,
+  Mark,
   mergeAttributes,
   nodeInputRule,
   nodePasteRule,
@@ -26,10 +27,20 @@ import {
   MarkdownSerializerState,
 } from "@tiptap/pm/markdown";
 import {
+  type Attrs,
+  type Fragment,
+  type Mark as ProseMirrorMark,
   type Node as ProseMirrorNode,
+  type NodeType,
   type ResolvedPos,
 } from "@tiptap/pm/model";
-import { TextSelection } from "@tiptap/pm/state";
+import {
+  type EditorState,
+  Plugin,
+  PluginKey,
+  TextSelection,
+} from "@tiptap/pm/state";
+import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import StarterKit from "@tiptap/starter-kit";
 import go from "highlight.js/lib/languages/go";
 import javascript from "highlight.js/lib/languages/javascript";
@@ -40,8 +51,31 @@ import { createLowlight } from "lowlight";
 import { Markdown } from "tiptap-markdown";
 
 import { slashCommandSuggestionRender } from "../components/SlashCommandMenu";
+import { normalizeNoteColorToken } from "../noteColors";
 import { isSafeLinkHref, normalizeImageSrc } from "./linkValidation";
+import {
+  hoistNoteBlockBackgroundMarkers,
+  NOTE_BLOCK_BACKGROUND_ATTRIBUTE_NAME,
+  NOTE_BLOCK_BACKGROUND_TYPE_NAMES,
+} from "./noteBlockBackground";
+import {
+  buildNoteTextColorCloseMarkup,
+  buildNoteTextColorOpenMarkup,
+  NOTE_BLOCK_BACKGROUND_ATTRIBUTE,
+  NOTE_COLOR_ATTRIBUTE,
+  NOTE_LINE_COLOR_ATTRIBUTE,
+  NOTE_TEXT_COLOR_MARK_NAME,
+  type NoteColorMarkdownItType,
+  setupNoteColorMarkdownIt,
+  stripNoteColorSyntax,
+} from "./noteColorMarkdown";
+import {
+  getUniformNoteTextColor,
+  NOTE_LINE_COLOR_TYPE_NAMES,
+} from "./noteLineTextColor";
 import { SlashCommand } from "./slashCommand";
+
+const LINE_COLOR_TYPES = new Set<string>(NOTE_LINE_COLOR_TYPE_NAMES);
 
 const lowlight = createLowlight();
 lowlight.register("javascript", javascript);
@@ -52,6 +86,11 @@ lowlight.register("go", go);
 
 const LIST_ITEM_TYPE_NAMES = ["listItem", "taskItem"] as const;
 const TASK_MARKER_IN_BULLET_LIST_INPUT_REGEX = /^\[( |x|X)\][ ]$/;
+const BULLET_MARKER_IN_ORDERED_LIST_INPUT_REGEX = /^\s*([-+*])\s$/;
+// StarterKit HorizontalRule의 입력 규칙과 같은 패턴.
+const DIVIDER_INPUT_REGEX = /^(?:---|—-|___\s|\*\*\*\s)$/;
+// 입력 중인 마커 문자만 들어 있는지 확인해 남의 항목을 지우지 않도록 한다.
+const DIVIDER_MARKER_ONLY_REGEX = /^[-_*—\s]*$/;
 
 type TableCellAlignmentType = "left" | "center" | "right" | null;
 
@@ -350,6 +389,117 @@ const ListItemBackspaceLift = Extension.create({
   },
 });
 
+type ListItemConversionOptionsType = {
+  state: EditorState;
+  range: { from: number; to: number };
+  sourceListType: NodeType;
+  sourceItemType: NodeType;
+  targetListType: NodeType;
+  targetItemType: NodeType;
+  targetItemAttrs: Attrs | null;
+};
+
+// 커서가 있는 리스트 항목 하나만 다른 종류의 리스트로 바꾼다. 앞뒤 형제 항목은 원래
+// 리스트로 남기므로, 목록 중간에서 마커를 바꿔도 나머지 항목이 흐트러지지 않는다.
+function convertListItemToList({
+  state,
+  range,
+  sourceListType,
+  sourceItemType,
+  targetListType,
+  targetItemType,
+  targetItemAttrs,
+}: ListItemConversionOptionsType): boolean {
+  const { $from } = state.selection;
+  const listItemDepth = findAncestorDepth($from, sourceItemType.name);
+  const listDepth = findAncestorDepth($from, sourceListType.name);
+
+  if (listItemDepth === null || listDepth === null) {
+    return false;
+  }
+
+  let itemIndex = $from.index(listDepth);
+  const listNode = $from.node(listDepth);
+  const listPosition = $from.before(listDepth);
+  const previousListItemNode =
+    itemIndex > 0 ? listNode.maybeChild(itemIndex - 1) : null;
+
+  if (
+    $from.parentOffset === 0 &&
+    previousListItemNode?.type === sourceItemType &&
+    previousListItemNode.childCount === 1 &&
+    previousListItemNode.firstChild?.type.name === "paragraph" &&
+    previousListItemNode.textContent === ""
+  ) {
+    // Empty list item boundaries resolve forward into the next item, so
+    // the marker typed in that empty item would otherwise convert its sibling.
+    itemIndex -= 1;
+  }
+
+  if (itemIndex < 0 || itemIndex >= listNode.childCount) {
+    return false;
+  }
+
+  const tr = state.tr.delete(range.from, range.to);
+  const mappedListPosition = tr.mapping.map(listPosition);
+  const nextListNode = tr.doc.nodeAt(mappedListPosition);
+  const nextListItemNode = nextListNode?.maybeChild(itemIndex);
+
+  if (
+    !nextListNode ||
+    nextListNode.type !== sourceListType ||
+    !nextListItemNode ||
+    !targetItemType.validContent(nextListItemNode.content)
+  ) {
+    return false;
+  }
+
+  const targetItemNode = targetItemType.create(
+    targetItemAttrs,
+    nextListItemNode.content,
+  );
+  const targetListNode = targetListType.create(null, targetItemNode);
+  const replacementNodes: ProseMirrorNode[] = [];
+  let targetListPosition = mappedListPosition;
+
+  if (itemIndex > 0) {
+    const previousItems = Array.from({ length: itemIndex }, (_, index) =>
+      nextListNode.child(index),
+    );
+    const previousListNode = sourceListType.create(
+      nextListNode.attrs,
+      previousItems,
+    );
+
+    replacementNodes.push(previousListNode);
+    targetListPosition += previousListNode.nodeSize;
+  }
+
+  replacementNodes.push(targetListNode);
+
+  if (itemIndex < nextListNode.childCount - 1) {
+    replacementNodes.push(
+      sourceListType.create(
+        nextListNode.attrs,
+        Array.from(
+          { length: nextListNode.childCount - itemIndex - 1 },
+          (_, index) => nextListNode.child(itemIndex + index + 1),
+        ),
+      ),
+    );
+  }
+
+  tr.replaceWith(
+    mappedListPosition,
+    mappedListPosition + nextListNode.nodeSize,
+    replacementNodes,
+  );
+  // ProseMirror 포지션은 리스트/항목/문단 경계를 각각 1칸씩 지난다.
+  tr.setSelection(TextSelection.near(tr.doc.resolve(targetListPosition + 3)));
+
+  return true;
+}
+
 const BulletTaskItemInputRule = Extension.create({
   name: "bulletTaskItemInputRule",
   priority: 1200,
@@ -374,94 +524,123 @@ const BulletTaskItemInputRule = Extension.create({
             return null;
           }
 
+          // 변환에 실패하면 null을 돌려줘야 TipTap이 이 규칙을 건너뛰고 다음 규칙을 본다.
+          if (
+            !convertListItemToList({
+              state,
+              range,
+              sourceListType: bulletListType,
+              sourceItemType: listItemType,
+              targetListType: taskListType,
+              targetItemType: taskItemType,
+              targetItemAttrs: { checked: marker.toLowerCase() === "x" },
+            })
+          ) {
+            return null;
+          }
+        },
+      }),
+    ];
+  },
+});
+
+// 번호 목록 항목에서 "- "를 치면 노션처럼 그 항목만 글머리 기호 목록으로 바뀐다.
+// StarterKit의 bulletList 규칙은 wrappingInputRule이라 listItem 안에서는 findWrapping이
+// 실패해 발동하지 않고, 입력한 마커가 텍스트로 남아버린다.
+const OrderedBulletItemInputRule = Extension.create({
+  name: "orderedBulletItemInputRule",
+  priority: 1200,
+  addInputRules() {
+    return [
+      new InputRule({
+        find: BULLET_MARKER_IN_ORDERED_LIST_INPUT_REGEX,
+        handler: ({ state, range }) => {
+          const orderedListType = state.schema.nodes.orderedList;
+          const bulletListType = state.schema.nodes.bulletList;
+          const listItemType = state.schema.nodes.listItem;
+
+          if (!orderedListType || !bulletListType || !listItemType) {
+            return null;
+          }
+
+          // 번호 목록 밖에서 친 "- "는 여기서 null을 돌려줘야 StarterKit의 기본
+          // bulletList 규칙이 이어서 동작한다.
+          if (
+            !convertListItemToList({
+              state,
+              range,
+              sourceListType: orderedListType,
+              sourceItemType: listItemType,
+              targetListType: bulletListType,
+              targetItemType: listItemType,
+              targetItemAttrs: null,
+            })
+          ) {
+            return null;
+          }
+        },
+      }),
+    ];
+  },
+});
+
+// StarterKit 기본 규칙은 구분선을 끼워 넣기만 해서, 마커를 입력한 문단이 빈 채로 남거나
+// 목록 항목 안에 구분선이 갇힌다. 마커만 있던 블록 자체를 구분선으로 교체해 두 경우 모두
+// 군더더기 없이 만든다(블록 메뉴·슬래시 명령의 구분선 삽입과 같은 결과).
+const DividerInputRule = Extension.create({
+  name: "dividerInputRule",
+  priority: 1200,
+  addInputRules() {
+    return [
+      new InputRule({
+        find: DIVIDER_INPUT_REGEX,
+        handler: ({ state }) => {
+          const horizontalRuleType = state.schema.nodes.horizontalRule;
+
+          if (!horizontalRuleType) {
+            return null;
+          }
+
           const { $from } = state.selection;
-          const listItemDepth = findAncestorDepth($from, listItemType.name);
-          const listDepth = findAncestorDepth($from, bulletListType.name);
-
-          if (listItemDepth === null || listDepth === null) {
-            return null;
-          }
-
-          let itemIndex = $from.index(listDepth);
-          const listNode = $from.node(listDepth);
-          const listPosition = $from.before(listDepth);
-          const previousListItemNode =
-            itemIndex > 0 ? listNode.maybeChild(itemIndex - 1) : null;
-
-          if (
-            $from.parentOffset === 0 &&
-            previousListItemNode?.type === listItemType &&
-            previousListItemNode.childCount === 1 &&
-            previousListItemNode.firstChild?.type.name === "paragraph" &&
-            previousListItemNode.textContent === ""
-          ) {
-            // Empty list item boundaries resolve forward into the next item, so
-            // the marker typed in that empty item would otherwise convert its sibling.
-            itemIndex -= 1;
-          }
-
-          if (itemIndex < 0 || itemIndex >= listNode.childCount) {
-            return null;
-          }
-
-          const tr = state.tr.delete(range.from, range.to);
-          const mappedListPosition = tr.mapping.map(listPosition);
-          const nextListNode = tr.doc.nodeAt(mappedListPosition);
-          const nextListItemNode = nextListNode?.maybeChild(itemIndex);
-
-          if (
-            !nextListNode ||
-            nextListNode.type !== bulletListType ||
-            !nextListItemNode ||
-            !taskItemType.validContent(nextListItemNode.content)
-          ) {
-            return null;
-          }
-
-          const taskItemNode = taskItemType.create(
-            { checked: marker.toLowerCase() === "x" },
-            nextListItemNode.content,
+          const listItemDepth = LIST_ITEM_TYPE_NAMES.reduce<number | null>(
+            (depth, itemName) => depth ?? findAncestorDepth($from, itemName),
+            null,
           );
-          const taskListNode = taskListType.create(null, taskItemNode);
-          const replacementNodes: ProseMirrorNode[] = [];
-          let taskListPosition = mappedListPosition;
+          // 목록 항목이면 항목 전체를, 아니면 마커를 입력한 문단만 교체한다.
+          const targetDepth = listItemDepth ?? $from.depth;
+          const targetNode = $from.node(targetDepth);
 
-          if (itemIndex > 0) {
-            const previousItems = Array.from(
-              { length: itemIndex },
-              (_, index) => nextListNode.child(index),
-            );
-            const previousListNode = bulletListType.create(
-              nextListNode.attrs,
-              previousItems,
-            );
-
-            replacementNodes.push(previousListNode);
-            taskListPosition += previousListNode.nodeSize;
+          // 중첩 목록 등 다른 내용이 딸린 항목은 통째로 지우면 안 되므로 기본 규칙에 맡긴다.
+          if (listItemDepth !== null && targetNode.childCount !== 1) {
+            return null;
           }
 
-          replacementNodes.push(taskListNode);
-
-          if (itemIndex < nextListNode.childCount - 1) {
-            replacementNodes.push(
-              bulletListType.create(
-                nextListNode.attrs,
-                Array.from(
-                  { length: nextListNode.childCount - itemIndex - 1 },
-                  (_, index) => nextListNode.child(itemIndex + index + 1),
-                ),
-              ),
-            );
+          // 빈 항목의 경계는 다음 항목으로 해석되는 경우가 있다. 입력 중인 마커 외에
+          // 다른 내용이 있으면 남의 블록을 지우는 셈이므로 건드리지 않는다.
+          if (!DIVIDER_MARKER_ONLY_REGEX.test(targetNode.textContent)) {
+            return null;
           }
 
-          tr.replaceWith(
-            mappedListPosition,
-            mappedListPosition + nextListNode.nodeSize,
-            replacementNodes,
+          const targetTo = $from.after(targetDepth);
+          const tr = state.tr.replaceRangeWith(
+            $from.before(targetDepth),
+            targetTo,
+            horizontalRuleType.create(),
           );
-          // ProseMirror 포지션은 taskList/taskItem/paragraph 경계를 각각 1칸씩 지난다.
+          const positionAfterDivider = tr.mapping.map(targetTo);
+          const paragraphType = state.schema.nodes.paragraph;
+
+          // 교체 직후에는 구분선이 선택된 상태라, 이어서 입력하면 구분선이 덮어쓰기 된다.
+          // 뒤쪽에 쓸 자리를 만들고 커서를 그리로 옮긴다.
+          if (
+            !tr.doc.resolve(positionAfterDivider).nodeAfter &&
+            paragraphType
+          ) {
+            tr.insert(positionAfterDivider, paragraphType.create());
+          }
+
           tr.setSelection(
-            TextSelection.near(tr.doc.resolve(taskListPosition + 3)),
+            TextSelection.near(tr.doc.resolve(positionAfterDivider), 1),
           );
         },
       }),
@@ -755,14 +934,181 @@ const SafeImage = Image.extend({
   },
 });
 
+// 글자색은 문자 단위라 인라인 마크로, 배경색은 블록 전체를 칠해야 해서
+// 블록 노드의 attribute로 다룬다.
+const NoteTextColorMark = Mark.create({
+  name: NOTE_TEXT_COLOR_MARK_NAME,
+  addAttributes() {
+    return {
+      token: {
+        default: null,
+        parseHTML: (element: HTMLElement) =>
+          normalizeNoteColorToken(element.getAttribute(NOTE_COLOR_ATTRIBUTE)),
+        renderHTML: (attributes: Record<string, unknown>) => {
+          const token = normalizeNoteColorToken(attributes.token);
+
+          return token ? { [NOTE_COLOR_ATTRIBUTE]: token } : {};
+        },
+      },
+    };
+  },
+  parseHTML() {
+    return [{ tag: `span[${NOTE_COLOR_ATTRIBUTE}]` }];
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ["span", HTMLAttributes, 0];
+  },
+  addStorage() {
+    return {
+      markdown: {
+        serialize: {
+          open: (_state: MarkdownSerializerState, mark: ProseMirrorMark) =>
+            buildNoteTextColorOpenMarkup(
+              normalizeNoteColorToken(mark.attrs.token),
+            ),
+          close: (_state: MarkdownSerializerState, mark: ProseMirrorMark) =>
+            buildNoteTextColorCloseMarkup(
+              normalizeNoteColorToken(mark.attrs.token),
+            ),
+          mixable: true,
+          expelEnclosingWhitespace: true,
+        },
+        parse: {
+          setup(md: NoteColorMarkdownItType) {
+            setupNoteColorMarkdownIt(md);
+          },
+        },
+      },
+    };
+  },
+});
+
+// 목록 마커는 항목의 color를 따르므로 인라인 마크만으로는 색이 입혀지지 않는다.
+// 항목 전체가 한 색일 때만 항목에 표시를 붙여 CSS가 마커까지 물들이게 한다.
+// 저장되는 값이 아니라 문서에서 매번 계산하는 파생 상태라 decoration으로 처리한다.
+const NoteLineTextColor = Extension.create({
+  name: "noteLineTextColor",
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey("noteLineTextColor"),
+        props: {
+          decorations(state) {
+            const decorations: Decoration[] = [];
+
+            state.doc.descendants((node, pos) => {
+              if (!LINE_COLOR_TYPES.has(node.type.name)) return true;
+
+              const token = getUniformNoteTextColor(node);
+
+              if (token) {
+                decorations.push(
+                  Decoration.node(pos, pos + node.nodeSize, {
+                    [NOTE_LINE_COLOR_ATTRIBUTE]: token,
+                  }),
+                );
+              }
+
+              return true;
+            });
+
+            return DecorationSet.create(state.doc, decorations);
+          },
+        },
+      }),
+    ];
+  },
+});
+
+const NoteBlockBackground = Extension.create({
+  name: "noteBlockBackground",
+  addGlobalAttributes() {
+    return [
+      {
+        types: [...NOTE_BLOCK_BACKGROUND_TYPE_NAMES],
+        attributes: {
+          [NOTE_BLOCK_BACKGROUND_ATTRIBUTE_NAME]: {
+            default: null,
+            parseHTML: (element: HTMLElement) =>
+              normalizeNoteColorToken(
+                element.getAttribute(NOTE_BLOCK_BACKGROUND_ATTRIBUTE),
+              ),
+            renderHTML: (attributes: Record<string, unknown>) => {
+              const token = normalizeNoteColorToken(
+                attributes[NOTE_BLOCK_BACKGROUND_ATTRIBUTE_NAME],
+              );
+
+              return token ? { [NOTE_BLOCK_BACKGROUND_ATTRIBUTE]: token } : {};
+            },
+          },
+        },
+      },
+    ];
+  },
+  addStorage() {
+    return {
+      markdown: {
+        parse: {
+          updateDOM(element: HTMLElement) {
+            hoistNoteBlockBackgroundMarkers(element);
+          },
+        },
+      },
+    };
+  },
+});
+
+type MarkdownSerializerStorageType = {
+  serializer?: {
+    serialize: (content: Fragment) => string;
+  };
+};
+
+// tiptap-markdown은 transformCopiedText 옵션으로 복사한 평문을 마크다운으로 직렬화한다.
+// 그대로 두면 다른 편집기에 붙여넣을 때 색 문법이 그대로 노출되므로 먼저 걷어낸다.
+const NoteColorClipboardText = Extension.create({
+  name: "noteColorClipboardText",
+  // tiptap-markdown(기본 priority 100)보다 먼저 clipboardTextSerializer를 제공해야 한다.
+  priority: 200,
+  addProseMirrorPlugins() {
+    const { editor } = this;
+
+    return [
+      new Plugin({
+        key: new PluginKey("noteColorClipboardText"),
+        props: {
+          clipboardTextSerializer: (slice) => {
+            const storage = editor.storage as {
+              markdown?: MarkdownSerializerStorageType;
+            };
+            const markdownSerializer = storage.markdown?.serializer;
+
+            if (!markdownSerializer) {
+              return slice.content.textBetween(0, slice.content.size, "\n\n");
+            }
+
+            return stripNoteColorSyntax(
+              markdownSerializer.serialize(slice.content),
+            );
+          },
+        },
+      }),
+    ];
+  },
+});
+
 function getBaseExtensions({ readOnly = false }: { readOnly?: boolean } = {}) {
   return [
     StarterKit.configure({
       codeBlock: false,
       link: false,
+      // 블록 핸들 드래그 시 표시되는 드롭 위치선.
+      dropcursor: { width: 2, color: "var(--primary)" },
     }),
     ListItemBackspaceLift,
     BulletTaskItemInputRule,
+    OrderedBulletItemInputRule,
+    DividerInputRule,
     CodeBlockLowlight.extend({
       renderHTML({ node, HTMLAttributes }) {
         return [
@@ -792,6 +1138,10 @@ function getBaseExtensions({ readOnly = false }: { readOnly?: boolean } = {}) {
       openOnClick: readOnly,
       HTMLAttributes: { class: "tiptap-link" },
     }),
+    NoteTextColorMark,
+    NoteLineTextColor,
+    NoteBlockBackground,
+    NoteColorClipboardText,
     TaskList,
     MarkdownTaskItem.configure({
       nested: true,
