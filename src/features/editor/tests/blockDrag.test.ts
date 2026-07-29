@@ -87,6 +87,51 @@ describe("startBlockDrag", () => {
     editor.destroy();
   });
 
+  // view.dragging은 ProseMirror 내부 상태라 버전이 올라가면 계약이 바뀔 수 있다.
+  // 드롭 이후 문서가 실제로 재배치되는지까지 확인해 조용히 깨지는 것을 막는다.
+  it("moves the block in the document once ProseMirror handles the drop", () => {
+    const editor = createMountedEditor("first\n\nsecond");
+    const blockElement = getSecondParagraph(editor);
+    const selection = createBlockSelection(
+      editor as unknown as Editor,
+      blockElement,
+    );
+
+    if (!selection) {
+      throw new Error("block selection not created");
+    }
+
+    const { dataTransfer } = createDataTransferMock();
+
+    startBlockDrag(
+      editor as unknown as Editor,
+      blockElement,
+      selection,
+      dataTransfer as unknown as DataTransfer,
+    );
+
+    expect(editor.state.doc.textContent).toBe("firstsecond");
+
+    // jsdom에는 레이아웃이 없어 좌표→위치 변환이 동작하지 않는다. 첫 문단 앞을 드롭 지점으로 고정한다.
+    vi.spyOn(editor.view, "posAtCoords").mockReturnValue({
+      pos: 0,
+      inside: -1,
+    });
+
+    const dropEvent = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(dropEvent, "dataTransfer", {
+      value: { files: [], types: [], getData: () => "" },
+    });
+    Object.defineProperty(dropEvent, "clientX", { value: 0 });
+    Object.defineProperty(dropEvent, "clientY", { value: 0 });
+
+    editor.view.dom.dispatchEvent(dropEvent);
+
+    expect(editor.state.doc.textContent).toBe("secondfirst");
+
+    editor.destroy();
+  });
+
   it("does nothing when the editor is already destroyed", () => {
     const editor = createMountedEditor("first");
     const blockElement = editor.view.dom.querySelector("p");
