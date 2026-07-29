@@ -8,7 +8,7 @@ import { showToast } from "@/lib/utils/showToast";
 import { updateOperationalErrorStatus } from "../actions";
 import { ADMIN_OPERATIONAL_ERROR_QUERY_KEYS } from "../constants/query-keys";
 
-interface UpdateOperationalErrorStatusVariables {
+type UpdateOperationalErrorStatusVariables = {
   /** 상태를 변경할 운영 오류 ID */
   operationalErrorId: string;
 
@@ -17,7 +17,7 @@ interface UpdateOperationalErrorStatusVariables {
 
   /** 이번 상태 변경에 함께 기록할 처리 메모 */
   resolutionNote: string;
-}
+};
 
 /**
  * 운영 오류 상태를 변경하고 관련 목록 및 상세 캐시를 갱신합니다.

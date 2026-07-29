@@ -4,7 +4,7 @@ import {
   escapePostgrestLikePattern,
   nextDayIsoString,
   startOfDayIsoString,
-} from "../utils/operational-error-query";
+} from "../../utils/query";
 
 describe("operational-error-query", () => {
   const originalTimezone = process.env.TZ;

@@ -4,7 +4,9 @@ import {
   formatOperationalErrorCodeLabel,
   formatOperationalErrorFeatureLabel,
   formatOperationalErrorOperationLabel,
+  formatOperationalErrorSeverityLabel,
   formatOperationalErrorStageLabel,
+  formatOperationalErrorStatusLabel,
 } from "@/features/operational-errors/utils/format-operational-error-label";
 import { formatDateTime } from "@/lib/utils/formatDate";
 
@@ -14,10 +16,10 @@ import {
 } from "../constants/operational-error-list";
 import type { OperationalErrorDetail } from "../types/operational-error-list";
 
-interface AdminOperationalErrorInfoCardProps {
+type AdminOperationalErrorInfoCardProps = {
   /** 화면에 표시할 운영 오류 상세 정보 */
   operationalError: OperationalErrorDetail;
-}
+};
 
 /**
  * 운영 오류의 상태, 심각도 및 발생 정보를 표시합니다.
@@ -38,10 +40,12 @@ export function AdminOperationalErrorInfoCard({
 
       <CardContent className="space-y-5">
         <div className="flex flex-wrap gap-2">
-          <AdminBadge color={statusBadge.color}>{statusBadge.label}</AdminBadge>
+          <AdminBadge color={statusBadge.color}>
+            {formatOperationalErrorStatusLabel(operationalError.status)}
+          </AdminBadge>
 
           <AdminBadge color={severityBadge.color}>
-            {severityBadge.label}
+            {formatOperationalErrorSeverityLabel(operationalError.severity)}
           </AdminBadge>
         </div>
 
@@ -69,6 +73,13 @@ export function AdminOperationalErrorInfoCard({
             ],
             ["최초 발생", formatDateTime(operationalError.firstSeenAt)],
             ["최근 발생", formatDateTime(operationalError.lastSeenAt)],
+            [
+              "해결/무시 처리일",
+              operationalError.resolvedAt
+                ? formatDateTime(operationalError.resolvedAt)
+                : "-",
+            ],
+            ["해결/무시 처리자", operationalError.resolvedByLabel ?? "-"],
             ["등록일", formatDateTime(operationalError.createdAt)],
             ["수정일", formatDateTime(operationalError.updatedAt)],
           ]}
@@ -81,6 +92,16 @@ export function AdminOperationalErrorInfoCard({
             {operationalError.message}
           </p>
         </div>
+
+        {operationalError.resolutionNote ? (
+          <div>
+            <h3 className="text-sm font-semibold">마지막 처리 메모</h3>
+
+            <p className="mt-2 whitespace-pre-wrap rounded-md bg-muted px-3 py-2 text-sm">
+              {operationalError.resolutionNote}
+            </p>
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );

@@ -16,7 +16,7 @@ export const OPERATIONAL_ERROR_STATUS = {
  */
 export const OPERATIONAL_ERROR_STATUS_LABELS = {
   IGNORED: "무시",
-  OPEN: "미처리",
+  OPEN: "미해결",
   RESOLVED: "해결",
 } as const;
 
@@ -35,7 +35,7 @@ export const OPERATIONAL_ERROR_SEVERITY = {
 export const OPERATIONAL_ERROR_SEVERITY_LABELS = {
   ERROR: "오류",
   INFO: "정보",
-  WARN: "경고",
+  WARN: "주의",
 } as const;
 
 /**

@@ -94,7 +94,7 @@ describe("formatOperationalErrorCodeLabel", () => {
 
 describe("formatOperationalErrorStatusLabel", () => {
   it.each([
-    ["OPEN", "미처리"],
+    ["OPEN", "미해결"],
     ["RESOLVED", "해결"],
     ["IGNORED", "무시"],
   ])("%s에 대응하는 표시 이름을 반환한다", (status, expected) => {
@@ -109,7 +109,7 @@ describe("formatOperationalErrorStatusLabel", () => {
 describe("formatOperationalErrorSeverityLabel", () => {
   it.each([
     ["INFO", "정보"],
-    ["WARN", "경고"],
+    ["WARN", "주의"],
     ["ERROR", "오류"],
   ])("%s에 대응하는 표시 이름을 반환한다", (severity, expected) => {
     expect(formatOperationalErrorSeverityLabel(severity)).toBe(expected);

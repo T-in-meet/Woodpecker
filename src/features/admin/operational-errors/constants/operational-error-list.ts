@@ -2,11 +2,16 @@ import type { AdminBadgeConfig } from "@/features/admin/types/badge";
 import type { AdminListConfig } from "@/features/admin/types/list";
 import type { AdminSort } from "@/features/admin/types/sort";
 import {
+  OPERATIONAL_ERROR_FEATURE_LABELS,
   OPERATIONAL_ERROR_SEVERITY,
   OPERATIONAL_ERROR_STATUS,
   type OperationalErrorSeverityType,
   type OperationalErrorStatusType,
 } from "@/features/operational-errors/constants";
+import {
+  formatOperationalErrorSeverityLabel,
+  formatOperationalErrorStatusLabel,
+} from "@/features/operational-errors/utils/format-operational-error-label";
 
 import type {
   OperationalErrorFilterField,
@@ -24,32 +29,32 @@ export const ADMIN_OPERATIONAL_ERROR_LIST_CONFIG = {
     {
       field: "status",
       label: "상태",
-      options: [
-        { label: "미해결", value: OPERATIONAL_ERROR_STATUS.OPEN },
-        { label: "해결", value: OPERATIONAL_ERROR_STATUS.RESOLVED },
-        { label: "무시", value: OPERATIONAL_ERROR_STATUS.IGNORED },
-      ],
+      options: Object.values(OPERATIONAL_ERROR_STATUS).map((status) => ({
+        label: formatOperationalErrorStatusLabel(status),
+        value: status,
+      })),
       placeholder: "상태를 선택하세요.",
       type: "multi-select",
     },
     {
       field: "severity",
       label: "심각도",
-      options: [
-        { label: "정보", value: OPERATIONAL_ERROR_SEVERITY.INFO },
-        { label: "주의", value: OPERATIONAL_ERROR_SEVERITY.WARN },
-        { label: "오류", value: OPERATIONAL_ERROR_SEVERITY.ERROR },
-      ],
+      options: Object.values(OPERATIONAL_ERROR_SEVERITY).map((severity) => ({
+        label: formatOperationalErrorSeverityLabel(severity),
+        value: severity,
+      })),
       placeholder: "심각도를 선택하세요.",
       type: "multi-select",
     },
     {
       field: "feature",
       label: "기능",
-      options: [
-        { label: "알림", value: "notifications" },
-        { label: "Storage", value: "storage" },
-      ],
+      options: Object.entries(OPERATIONAL_ERROR_FEATURE_LABELS).map(
+        ([value, label]) => ({
+          label,
+          value,
+        }),
+      ),
       placeholder: "기능을 선택하세요.",
       type: "multi-select",
     },
@@ -90,15 +95,35 @@ export const ADMIN_OPERATIONAL_ERROR_LIST_CONFIG = {
 >;
 
 export const OPERATIONAL_ERROR_STATUS_BADGE_CONFIG = {
-  [OPERATIONAL_ERROR_STATUS.IGNORED]: { color: "gray", label: "무시" },
-  [OPERATIONAL_ERROR_STATUS.OPEN]: { color: "yellow", label: "미해결" },
-  [OPERATIONAL_ERROR_STATUS.RESOLVED]: { color: "green", label: "해결" },
+  [OPERATIONAL_ERROR_STATUS.IGNORED]: {
+    color: "gray",
+    label: formatOperationalErrorStatusLabel(OPERATIONAL_ERROR_STATUS.IGNORED),
+  },
+  [OPERATIONAL_ERROR_STATUS.OPEN]: {
+    color: "yellow",
+    label: formatOperationalErrorStatusLabel(OPERATIONAL_ERROR_STATUS.OPEN),
+  },
+  [OPERATIONAL_ERROR_STATUS.RESOLVED]: {
+    color: "green",
+    label: formatOperationalErrorStatusLabel(OPERATIONAL_ERROR_STATUS.RESOLVED),
+  },
 } satisfies AdminBadgeConfig<OperationalErrorStatusType>;
 
 export const OPERATIONAL_ERROR_SEVERITY_BADGE_CONFIG = {
-  [OPERATIONAL_ERROR_SEVERITY.ERROR]: { color: "red", label: "오류" },
-  [OPERATIONAL_ERROR_SEVERITY.INFO]: { color: "blue", label: "정보" },
-  [OPERATIONAL_ERROR_SEVERITY.WARN]: { color: "yellow", label: "주의" },
+  [OPERATIONAL_ERROR_SEVERITY.ERROR]: {
+    color: "red",
+    label: formatOperationalErrorSeverityLabel(
+      OPERATIONAL_ERROR_SEVERITY.ERROR,
+    ),
+  },
+  [OPERATIONAL_ERROR_SEVERITY.INFO]: {
+    color: "blue",
+    label: formatOperationalErrorSeverityLabel(OPERATIONAL_ERROR_SEVERITY.INFO),
+  },
+  [OPERATIONAL_ERROR_SEVERITY.WARN]: {
+    color: "yellow",
+    label: formatOperationalErrorSeverityLabel(OPERATIONAL_ERROR_SEVERITY.WARN),
+  },
 } satisfies AdminBadgeConfig<OperationalErrorSeverityType>;
 
 type OperationalErrorSortColumn =

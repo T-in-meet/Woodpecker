@@ -1,6 +1,8 @@
+import { formatOperationalErrorStatusLabel } from "@/features/operational-errors/utils/format-operational-error-label";
+
 import { AdminBadge } from "../../components/common/AdminBadge";
 import { OPERATIONAL_ERROR_STATUS_BADGE_CONFIG } from "../constants/operational-error-list";
-import { OperationalErrorStatusHistoryItem } from "../types/operational-error-list";
+import type { OperationalErrorStatusHistoryItem } from "../types/operational-error-list";
 
 export function OperationalErrorStatusBadge({
   status,
@@ -9,5 +11,9 @@ export function OperationalErrorStatusBadge({
 }) {
   const badge = OPERATIONAL_ERROR_STATUS_BADGE_CONFIG[status];
 
-  return <AdminBadge color={badge.color}>{badge.label}</AdminBadge>;
+  return (
+    <AdminBadge color={badge.color}>
+      {formatOperationalErrorStatusLabel(status)}
+    </AdminBadge>
+  );
 }

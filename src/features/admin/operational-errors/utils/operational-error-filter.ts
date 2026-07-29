@@ -1,14 +1,14 @@
-import { createAdminClient } from "@/lib/supabase/admin";
-
-import { AdminAppliedFilter } from "../../types/filter";
-import {
-  OperationalErrorFilterField,
-  OperationalErrorListQuery,
-} from "../types/operational-error-list";
 import {
   nextDayIsoString,
   startOfDayIsoString,
-} from "./operational-error-query";
+} from "@/features/admin/utils/query";
+import type { createAdminClient } from "@/lib/supabase/admin";
+
+import type { AdminAppliedFilter } from "../../types/filter";
+import type {
+  OperationalErrorFilterField,
+  OperationalErrorListQuery,
+} from "../types/operational-error-list";
 
 function applyOperationalErrorFilter(
   query: ReturnType<ReturnType<typeof createAdminClient>["from"]>,

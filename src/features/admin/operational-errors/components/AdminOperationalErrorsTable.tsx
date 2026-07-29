@@ -8,21 +8,21 @@ import {
   formatOperationalErrorCodeLabel,
   formatOperationalErrorFeatureLabel,
   formatOperationalErrorOperationLabel,
+  formatOperationalErrorSeverityLabel,
   formatOperationalErrorStageLabel,
 } from "@/features/operational-errors/utils/format-operational-error-label";
 import { getAdminOperationalErrorDetailRoute } from "@/lib/constants/routes";
+import { formatDateTime } from "@/lib/utils/formatDate";
 
 import { AdminBadge } from "../../components/common/AdminBadge";
 import { AdminSortableTableHead } from "../../components/common/AdminSortableTableHead";
 import type { AdminSort } from "../../types/sort";
-import {
-  OPERATIONAL_ERROR_SEVERITY_BADGE_CONFIG,
-  OPERATIONAL_ERROR_STATUS_BADGE_CONFIG,
-} from "../constants/operational-error-list";
+import { OPERATIONAL_ERROR_SEVERITY_BADGE_CONFIG } from "../constants/operational-error-list";
 import type {
   OperationalErrorListItem,
   OperationalErrorSortField,
 } from "../types/operational-error-list";
+import { OperationalErrorStatusBadge } from "./OperationalErrorStatusBadge";
 
 type AdminOperationalErrorsTableProps = {
   isError: boolean;
@@ -189,16 +189,6 @@ function OperationalErrorsTableSkeleton() {
   );
 }
 
-function OperationalErrorStatusBadge({
-  status,
-}: {
-  status: OperationalErrorListItem["status"];
-}) {
-  const badge = OPERATIONAL_ERROR_STATUS_BADGE_CONFIG[status];
-
-  return <AdminBadge color={badge.color}>{badge.label}</AdminBadge>;
-}
-
 function OperationalErrorSeverityBadge({
   severity,
 }: {
@@ -206,12 +196,9 @@ function OperationalErrorSeverityBadge({
 }) {
   const badge = OPERATIONAL_ERROR_SEVERITY_BADGE_CONFIG[severity];
 
-  return <AdminBadge color={badge.color}>{badge.label}</AdminBadge>;
-}
-
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat("ko-KR", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
+  return (
+    <AdminBadge color={badge.color}>
+      {formatOperationalErrorSeverityLabel(severity)}
+    </AdminBadge>
+  );
 }

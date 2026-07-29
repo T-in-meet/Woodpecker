@@ -6,10 +6,10 @@ import {
 } from "@/components/ui/accordion";
 import { Card, CardContent } from "@/components/ui/card";
 
-interface AdminOperationalErrorContextCardProps {
+type AdminOperationalErrorContextCardProps = {
   /** 오류 발생 시 함께 저장된 진단 정보 */
   context: unknown;
-}
+};
 
 /**
  * 운영 오류 발생 시 수집된 진단 정보를 JSON 형태로 표시합니다.
@@ -22,7 +22,7 @@ export function AdminOperationalErrorContextCard({
       <CardContent className="pt-2">
         <Accordion type="multiple" className="divide-y">
           <AccordionItem value="context" className="border-b-0">
-            <AccordionTrigger className="py-4 text-base">
+            <AccordionTrigger className="cursor-pointer py-4 text-base">
               진단 정보
             </AccordionTrigger>
 

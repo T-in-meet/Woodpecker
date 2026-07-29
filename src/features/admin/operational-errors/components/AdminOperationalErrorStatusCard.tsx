@@ -17,6 +17,7 @@ import {
   OPERATIONAL_ERROR_STATUS,
   type OperationalErrorStatusType,
 } from "@/features/operational-errors/constants";
+import { formatOperationalErrorStatusLabel } from "@/features/operational-errors/utils/format-operational-error-label";
 import { formatDateTime } from "@/lib/utils/formatDate";
 
 import { AdminAlertDialog } from "../../components/common/AdminAlertDialog";
@@ -25,12 +26,21 @@ import { useUpdateOperationalErrorStatus } from "../hooks/use-update-operational
 import { OperationalErrorStatusBadge } from "./OperationalErrorStatusBadge";
 
 const STATUS_OPTIONS = [
-  { label: "미해결", value: OPERATIONAL_ERROR_STATUS.OPEN },
-  { label: "해결", value: OPERATIONAL_ERROR_STATUS.RESOLVED },
-  { label: "무시", value: OPERATIONAL_ERROR_STATUS.IGNORED },
+  {
+    label: formatOperationalErrorStatusLabel(OPERATIONAL_ERROR_STATUS.OPEN),
+    value: OPERATIONAL_ERROR_STATUS.OPEN,
+  },
+  {
+    label: formatOperationalErrorStatusLabel(OPERATIONAL_ERROR_STATUS.RESOLVED),
+    value: OPERATIONAL_ERROR_STATUS.RESOLVED,
+  },
+  {
+    label: formatOperationalErrorStatusLabel(OPERATIONAL_ERROR_STATUS.IGNORED),
+    value: OPERATIONAL_ERROR_STATUS.IGNORED,
+  },
 ] as const;
 
-interface AdminOperationalErrorStatusCardProps {
+type AdminOperationalErrorStatusCardProps = {
   /** 상태를 관리할 운영 오류 ID */
   operationalErrorId: string;
 
@@ -42,7 +52,7 @@ interface AdminOperationalErrorStatusCardProps {
 
   /** 가장 최근 처리 이력을 작성한 관리자 표시 이름 */
   lastHandledByLabel: string | null;
-}
+};
 
 /**
  * 운영 오류의 현재 상태를 확인하고 새로운 처리를 등록하는 카드입니다.
@@ -155,7 +165,7 @@ export function AdminOperationalErrorStatusCard({
               setStatus(value as OperationalErrorStatusType)
             }
           >
-            <SelectTrigger className="w-full">
+            <SelectTrigger className="w-full cursor-pointer">
               <SelectValue placeholder="변경할 상태를 선택하세요." />
             </SelectTrigger>
 

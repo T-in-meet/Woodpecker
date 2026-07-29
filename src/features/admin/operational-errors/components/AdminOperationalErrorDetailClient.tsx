@@ -24,7 +24,7 @@ export function AdminOperationalErrorDetailClient() {
 
   const { data, isError, isPending } =
     useOperationalErrorDetail(operationalErrorId);
-  console.log("이력", data?.history);
+
   if (isPending) {
     return (
       <div className="space-y-6">
@@ -50,7 +50,9 @@ export function AdminOperationalErrorDetailClient() {
 
         <Card>
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            운영 오류를 불러오지 못했습니다.
+            {isError
+              ? "운영 오류를 불러오지 못했습니다."
+              : "존재하지 않는 운영 오류입니다."}
           </CardContent>
         </Card>
       </div>

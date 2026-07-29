@@ -1,7 +1,7 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+import { escapePostgrestLikePattern } from "@/features/admin/utils/query";
+import type { createAdminClient } from "@/lib/supabase/admin";
 
-import { OperationalErrorListQuery } from "../types/operational-error-list";
-import { escapePostgrestLikePattern } from "./operational-error-query";
+import type { OperationalErrorListQuery } from "../types/operational-error-list";
 
 export function applyOperationalErrorSearch(
   query: ReturnType<ReturnType<typeof createAdminClient>["from"]>,

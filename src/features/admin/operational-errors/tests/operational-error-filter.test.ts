@@ -1,15 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AdminAppliedFilter } from "../../types/filter";
+import { nextDayIsoString, startOfDayIsoString } from "../../utils/query";
 import type {
   OperationalErrorFilterField,
   OperationalErrorListQuery,
 } from "../types/operational-error-list";
 import { applyOperationalErrorFilters } from "../utils/operational-error-filter";
-import {
-  nextDayIsoString,
-  startOfDayIsoString,
-} from "../utils/operational-error-query";
 
 const gteMock = vi.fn();
 const inMock = vi.fn();
