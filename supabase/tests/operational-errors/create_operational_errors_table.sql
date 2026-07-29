@@ -4,7 +4,7 @@
 
 BEGIN;
 
-SELECT plan(18);
+SELECT plan(24);
 
 SELECT set_config(
   'test.operational_error_open_id',
@@ -296,6 +296,33 @@ SELECT ok(
   $$updating an operational error should refresh updated_at$$
 );
 
+-- 운영 오류 집계 함수는 발생 횟수를 원자적으로 증가시키고 심각도를 낮추지 않아야 함.
+SELECT is(
+  public.increment_operational_error_occurrence(
+    current_setting('test.operational_error_open_id')::uuid,
+    'Aggregated warning message.'::text,
+    '{"retry": 1}'::jsonb,
+    'WARN'::character varying,
+    NULL::uuid,
+    NULL::uuid
+  ),
+  current_setting('test.operational_error_open_id')::uuid,
+  $$increment_operational_error_occurrence should return the updated id$$
+);
+
+SELECT ok(
+  (
+    SELECT
+      occurrence_count = 2
+      AND message = 'Aggregated warning message.'
+      AND context = '{"retry": 1}'::jsonb
+      AND severity = 'ERROR'
+    FROM public.operational_errors
+    WHERE id = current_setting('test.operational_error_open_id')::uuid
+  ),
+  $$increment_operational_error_occurrence should update occurrence data without lowering severity$$
+);
+
 -- 주요 인덱스가 존재해야 함.
 SELECT ok(
   to_regclass(
@@ -344,6 +371,42 @@ SELECT is(
   ),
   0::bigint,
   $$operational_errors should not expose authenticated RLS policies$$
+);
+
+SELECT ok(
+  NOT has_table_privilege(
+    'anon',
+    'public.operational_errors',
+    'SELECT,INSERT,UPDATE,DELETE'
+  ),
+  $$anon should not have direct privileges on operational_errors$$
+);
+
+SELECT ok(
+  NOT has_table_privilege(
+    'authenticated',
+    'public.operational_errors',
+    'SELECT,INSERT,UPDATE,DELETE'
+  ),
+  $$authenticated should not have direct privileges on operational_errors$$
+);
+
+SELECT ok(
+  NOT has_function_privilege(
+    'anon',
+    'public.increment_operational_error_occurrence(uuid,text,jsonb,character varying,uuid,uuid)',
+    'EXECUTE'
+  ),
+  $$anon should not execute increment_operational_error_occurrence$$
+);
+
+SELECT ok(
+  NOT has_function_privilege(
+    'authenticated',
+    'public.increment_operational_error_occurrence(uuid,text,jsonb,character varying,uuid,uuid)',
+    'EXECUTE'
+  ),
+  $$authenticated should not execute increment_operational_error_occurrence$$
 );
 
 SELECT * FROM finish();

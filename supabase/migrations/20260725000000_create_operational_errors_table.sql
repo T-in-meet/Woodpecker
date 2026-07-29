@@ -105,6 +105,53 @@ CREATE OR REPLACE TRIGGER "tr_operational_errors_updated_at"
     EXECUTE FUNCTION "public"."update_updated_at_column"();
 
 
+CREATE OR REPLACE FUNCTION "public"."increment_operational_error_occurrence"(
+    "p_id" "uuid",
+    "p_message" "text",
+    "p_context" "jsonb",
+    "p_severity" character varying,
+    "p_user_id" "uuid",
+    "p_actor_user_id" "uuid"
+)
+RETURNS "uuid"
+LANGUAGE "plpgsql"
+SECURITY DEFINER
+SET "search_path" = "public"
+AS $$
+DECLARE
+    "updated_id" "uuid";
+BEGIN
+    UPDATE "public"."operational_errors"
+    SET
+        "actor_user_id" = "p_actor_user_id",
+        "context" = "p_context",
+        "last_seen_at" = "now"(),
+        "message" = "p_message",
+        "occurrence_count" = "occurrence_count" + 1,
+        "severity" = CASE
+            WHEN "severity" = 'ERROR' OR "p_severity" = 'ERROR' THEN 'ERROR'
+            WHEN "severity" = 'WARN' OR "p_severity" = 'WARN' THEN 'WARN'
+            ELSE 'INFO'
+        END,
+        "user_id" = "p_user_id"
+    WHERE "id" = "p_id"
+    RETURNING "id" INTO "updated_id";
+
+    RETURN "updated_id";
+END;
+$$;
+
+
+ALTER FUNCTION "public"."increment_operational_error_occurrence"(
+    "p_id" "uuid",
+    "p_message" "text",
+    "p_context" "jsonb",
+    "p_severity" character varying,
+    "p_user_id" "uuid",
+    "p_actor_user_id" "uuid"
+) OWNER TO "postgres";
+
+
 ALTER TABLE "public"."operational_errors" ENABLE ROW LEVEL SECURITY;
 
 
@@ -112,6 +159,41 @@ ALTER TABLE "public"."operational_errors" ENABLE ROW LEVEL SECURITY;
 -- operational errors through trusted server code after explicit authorization.
 
 
-GRANT ALL ON TABLE "public"."operational_errors" TO "anon";
-GRANT ALL ON TABLE "public"."operational_errors" TO "authenticated";
+-- Operational errors can contain user IDs, context and stack traces. Keep
+-- anon/authenticated privileges revoked even though RLS is also enabled.
+REVOKE ALL ON TABLE "public"."operational_errors" FROM "anon";
+REVOKE ALL ON TABLE "public"."operational_errors" FROM "authenticated";
 GRANT ALL ON TABLE "public"."operational_errors" TO "service_role";
+
+REVOKE ALL ON FUNCTION "public"."increment_operational_error_occurrence"(
+    "p_id" "uuid",
+    "p_message" "text",
+    "p_context" "jsonb",
+    "p_severity" character varying,
+    "p_user_id" "uuid",
+    "p_actor_user_id" "uuid"
+) FROM PUBLIC;
+REVOKE ALL ON FUNCTION "public"."increment_operational_error_occurrence"(
+    "p_id" "uuid",
+    "p_message" "text",
+    "p_context" "jsonb",
+    "p_severity" character varying,
+    "p_user_id" "uuid",
+    "p_actor_user_id" "uuid"
+) FROM "anon";
+REVOKE ALL ON FUNCTION "public"."increment_operational_error_occurrence"(
+    "p_id" "uuid",
+    "p_message" "text",
+    "p_context" "jsonb",
+    "p_severity" character varying,
+    "p_user_id" "uuid",
+    "p_actor_user_id" "uuid"
+) FROM "authenticated";
+GRANT ALL ON FUNCTION "public"."increment_operational_error_occurrence"(
+    "p_id" "uuid",
+    "p_message" "text",
+    "p_context" "jsonb",
+    "p_severity" character varying,
+    "p_user_id" "uuid",
+    "p_actor_user_id" "uuid"
+) TO "service_role";

@@ -480,6 +480,17 @@ export type Database = {
         Args: { p_note_id: string; p_review_log_id: string };
         Returns: string;
       };
+      increment_operational_error_occurrence: {
+        Args: {
+          p_actor_user_id: string | null;
+          p_context: Json;
+          p_id: string;
+          p_message: string;
+          p_severity: string;
+          p_user_id: string | null;
+        };
+        Returns: string;
+      };
       create_note_with_initial_review_log: {
         Args: { p_content: string; p_scheduled_at: string; p_title: string };
         Returns: string;

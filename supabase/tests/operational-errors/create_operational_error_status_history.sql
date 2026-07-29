@@ -4,7 +4,7 @@
 
 BEGIN;
 
-SELECT plan(14);
+SELECT plan(16);
 
 SELECT set_config(
   'test.operational_error_id',
@@ -263,6 +263,24 @@ SELECT is(
   ),
   0::bigint,
   $$operational_error_status_history should not expose authenticated RLS policies$$
+);
+
+SELECT ok(
+  NOT has_table_privilege(
+    'anon',
+    'public.operational_error_status_history',
+    'SELECT,INSERT,UPDATE,DELETE'
+  ),
+  $$anon should not have direct privileges on operational_error_status_history$$
+);
+
+SELECT ok(
+  NOT has_table_privilege(
+    'authenticated',
+    'public.operational_error_status_history',
+    'SELECT,INSERT,UPDATE,DELETE'
+  ),
+  $$authenticated should not have direct privileges on operational_error_status_history$$
 );
 
 SELECT * FROM finish();

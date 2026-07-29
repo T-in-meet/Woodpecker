@@ -63,6 +63,8 @@ ALTER TABLE "public"."operational_error_status_history" ENABLE ROW LEVEL SECURIT
 -- history through trusted server code after explicit admin authorization.
 
 
-GRANT ALL ON TABLE "public"."operational_error_status_history" TO "anon";
-GRANT ALL ON TABLE "public"."operational_error_status_history" TO "authenticated";
+-- Status history may include operator notes, so only trusted server code should
+-- use the service role to read or write it.
+REVOKE ALL ON TABLE "public"."operational_error_status_history" FROM "anon";
+REVOKE ALL ON TABLE "public"."operational_error_status_history" FROM "authenticated";
 GRANT ALL ON TABLE "public"."operational_error_status_history" TO "service_role";

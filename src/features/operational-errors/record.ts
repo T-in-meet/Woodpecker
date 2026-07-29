@@ -46,7 +46,8 @@ type JsonObject = Record<string, Json>;
 type OperationalErrorClient = Pick<
   ReturnType<typeof createAdminClient>,
   "from"
->;
+> &
+  Partial<Pick<ReturnType<typeof createAdminClient>, "rpc">>;
 
 /**
  * 운영 오류 기록에 필요한 입력값입니다.
@@ -119,6 +120,19 @@ function truncateString(value: string, maxLength: number) {
 }
 
 /**
+ * 오류 메시지나 Stack Trace에 포함될 수 있는 토큰 형태의 민감 문자열을 치환합니다.
+ */
+function redactSensitiveString(value: string) {
+  return value
+    .replaceAll(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [Redacted]")
+    .replaceAll(
+      /eyJ[A-Za-z0-9._-]+\.[A-Za-z0-9._-]+\.[A-Za-z0-9._-]+/g,
+      "[Redacted]",
+    )
+    .replaceAll(/\bsb_[A-Za-z0-9_=-]{12,}\b/g, "[Redacted]");
+}
+
+/**
  * 알 수 없는 값을 Supabase JSON 컬럼에 안전하게 저장할 수 있는 값으로 변환합니다.
  *
  * 객체 깊이, 속성 개수, 배열 길이와 문자열 길이를 제한하고,
@@ -181,12 +195,18 @@ function createErrorContext(error: unknown): JsonObject | null {
 
   if (error instanceof Error) {
     const context: JsonObject = {
-      message: truncateString(error.message, MAX_STRING_LENGTH),
+      message: truncateString(
+        redactSensitiveString(error.message),
+        MAX_STRING_LENGTH,
+      ),
       name: error.name,
     };
 
     if (error.stack) {
-      context.stack = truncateString(error.stack, MAX_STACK_LENGTH);
+      context.stack = truncateString(
+        redactSensitiveString(error.stack),
+        MAX_STACK_LENGTH,
+      );
     }
 
     return context;
@@ -268,24 +288,22 @@ async function insertOperationalError(
  */
 async function aggregateOperationalError(
   client: OperationalErrorClient,
-  existingError: { id: string; occurrence_count: number },
+  existingError: { id: string },
   input: RecordOperationalErrorInput,
   context: JsonObject,
 ) {
-  return await client
-    .from("operational_errors")
-    .update({
-      actor_user_id: input.actorUserId ?? null,
-      context,
-      last_seen_at: new Date().toISOString(),
-      message: input.message,
-      occurrence_count: existingError.occurrence_count + 1,
-      severity: input.severity ?? OPERATIONAL_ERROR_SEVERITY.ERROR,
-      user_id: input.userId ?? null,
-    })
-    .eq("id", existingError.id)
-    .select("id")
-    .maybeSingle();
+  if (!client.rpc) {
+    throw new Error("Supabase RPC client is required to aggregate errors.");
+  }
+
+  return await client.rpc("increment_operational_error_occurrence", {
+    p_actor_user_id: input.actorUserId ?? null,
+    p_context: context,
+    p_id: existingError.id,
+    p_message: input.message,
+    p_severity: input.severity ?? OPERATIONAL_ERROR_SEVERITY.ERROR,
+    p_user_id: input.userId ?? null,
+  });
 }
 
 /**
@@ -333,11 +351,13 @@ function logRecordFailure(error: unknown, input: RecordOperationalErrorInput) {
  *
  * @param input 기록할 운영 오류 정보
  * @param options 테스트 또는 특수한 실행 환경에서 사용할 Supabase Client
+ * @param uniqueRetryCount Unique Constraint 충돌 재시도 횟수
  * @returns 운영 오류 생성 또는 집계 결과
  */
 export async function recordOperationalError(
   input: RecordOperationalErrorInput,
   options: { supabase?: OperationalErrorClient } = {},
+  uniqueRetryCount = 0,
 ): Promise<RecordOperationalErrorResult> {
   try {
     const supabase = options.supabase ?? createAdminClient();
@@ -347,7 +367,7 @@ export async function recordOperationalError(
     const { data: existingError, error: existingErrorLookupError } =
       await supabase
         .from("operational_errors")
-        .select("id, occurrence_count")
+        .select("id")
         .eq("fingerprint", fingerprint)
         .eq("status", OPERATIONAL_ERROR_STATUS.OPEN)
         .maybeSingle();
@@ -369,7 +389,7 @@ export async function recordOperationalError(
       }
 
       return {
-        id: data?.id ?? existingError.id,
+        id: data ?? existingError.id,
         ok: true,
         recorded: "aggregated",
       };
@@ -383,8 +403,8 @@ export async function recordOperationalError(
     );
 
     if (error) {
-      if (isUniqueViolation(error)) {
-        return recordOperationalError(input, options);
+      if (isUniqueViolation(error) && uniqueRetryCount < 1) {
+        return recordOperationalError(input, options, uniqueRetryCount + 1);
       }
 
       throw error;
