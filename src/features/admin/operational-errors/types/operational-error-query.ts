@@ -6,16 +6,13 @@ import type {
 } from "./operational-error-list";
 
 /**
- * 운영 오류 목록 및 상세 조회에 사용하는 데이터베이스 행 타입입니다.
+ * 운영 오류 목록 조회에 사용하는 데이터베이스 행 타입입니다.
  */
-export type OperationalErrorRow = {
-  actor_user_id: string | null;
-  context: Json;
+export type OperationalErrorListRow = {
   created_at: string;
   error_code: string;
   feature: string;
   fingerprint: string;
-  first_seen_at: string;
   id: string;
   last_seen_at: string;
   message: string;
@@ -27,16 +24,20 @@ export type OperationalErrorRow = {
   severity: OperationalErrorListItem["severity"];
   stage: string;
   status: OperationalErrorListItem["status"];
-  updated_at: string;
   user_id: string | null;
 };
 
 /**
- * 사용자 ID와 표시용 닉네임을 조회한 프로필 행 타입입니다.
+ * 운영 오류 상세 조회에 사용하는 데이터베이스 행 타입입니다.
  */
-export type ProfileLabelRow = {
-  id: string;
-  nickname: string;
+export type OperationalErrorRow = OperationalErrorListRow & {
+  actor_user_id: string | null;
+  context: Json;
+  first_seen_at: string;
+  resolution_note: string | null;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  updated_at: string;
 };
 
 /**

@@ -1,7 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-
 import {
   ADMIN_OPERATIONAL_ERROR_CODES,
   ADMIN_OPERATIONAL_ERROR_OPERATIONS,
@@ -9,7 +7,6 @@ import {
   OPERATIONAL_ERROR_STATUS,
   type OperationalErrorStatusType,
 } from "@/features/operational-errors/constants";
-import { ROUTES } from "@/lib/constants/routes";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { requireAdmin } from "../utils/require-admin";
@@ -86,7 +83,7 @@ export async function updateOperationalErrorStatus(
    */
   const { data: currentError, error: currentErrorError } = await supabase
     .from("operational_errors")
-    .select("status")
+    .select("fingerprint, status")
     .eq("id", operationalErrorId)
     .maybeSingle();
 
@@ -133,6 +130,53 @@ export async function updateOperationalErrorStatus(
       message: "변경할 상태 또는 처리 메모를 입력해주세요.",
       ok: false,
     };
+  }
+
+  /**
+   * 해결된 과거 오류를 다시 OPEN으로 되돌릴 때 같은 fingerprint의
+   * 새 OPEN 오류가 이미 있으면 부분 unique index와 충돌하므로 사전에 막습니다.
+   */
+  if (
+    currentError.status !== OPERATIONAL_ERROR_STATUS.OPEN &&
+    status === OPERATIONAL_ERROR_STATUS.OPEN
+  ) {
+    const { data: openDuplicate, error: openDuplicateError } = await supabase
+      .from("operational_errors")
+      .select("id")
+      .eq("fingerprint", currentError.fingerprint)
+      .eq("status", OPERATIONAL_ERROR_STATUS.OPEN)
+      .neq("id", operationalErrorId)
+      .maybeSingle();
+
+    if (openDuplicateError) {
+      await recordAdminOperationalError({
+        actorUserId: adminUserId,
+        code: ADMIN_OPERATIONAL_ERROR_CODES.OPERATIONAL_ERROR_STATUS_QUERY_FAILED,
+        context: {
+          fingerprint: currentError.fingerprint,
+          operationalErrorId,
+          requestedStatus: status,
+        },
+        error: openDuplicateError,
+        message: "동일한 운영 오류의 미해결 항목을 조회하지 못했습니다.",
+        operation:
+          ADMIN_OPERATIONAL_ERROR_OPERATIONS.UPDATE_OPERATIONAL_ERROR_STATUS,
+        stage: ADMIN_OPERATIONAL_ERROR_STAGES.CURRENT_STATUS_QUERY,
+      });
+
+      return {
+        message: "운영 오류 조회에 실패했습니다.",
+        ok: false,
+      };
+    }
+
+    if (openDuplicate) {
+      return {
+        message:
+          "같은 오류가 이미 재발해 미해결 항목으로 추적 중입니다. 새 항목에서 처리해주세요.",
+        ok: false,
+      };
+    }
   }
 
   /**
@@ -223,9 +267,6 @@ export async function updateOperationalErrorStatus(
       ok: false,
     };
   }
-
-  /** 서버에서 직접 접근하는 운영 오류 목록 경로의 캐시를 갱신합니다. */
-  revalidatePath(ROUTES.ADMIN.OPERATIONAL_ERRORS);
 
   return { ok: true };
 }

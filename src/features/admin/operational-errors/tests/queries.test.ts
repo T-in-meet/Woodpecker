@@ -4,20 +4,20 @@ const mocks = vi.hoisted(() => ({
   applyOperationalErrorFilters: vi.fn(),
   applyOperationalErrorSearch: vi.fn(),
   createAdminClient: vi.fn(),
+  logError: vi.fn(),
   mapHistoryRow: vi.fn(),
   mapOperationalErrorRow: vi.fn(),
-  notFound: vi.fn(),
   requireAdmin: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
 
-vi.mock("next/navigation", () => ({
-  notFound: mocks.notFound,
-}));
-
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: mocks.createAdminClient,
+}));
+
+vi.mock("@/lib/logger", () => ({
+  logError: mocks.logError,
 }));
 
 vi.mock("@/features/admin/utils/require-admin", () => ({
@@ -91,6 +91,21 @@ const historyRow = {
   note: "처리 완료",
   to_status: "RESOLVED",
 } as OperationalErrorStatusHistoryRow;
+
+/**
+ * 상세 조회 결과가 존재하는 테스트에서 null 가능성을 제거합니다.
+ */
+function expectOperationalErrorDetail(
+  result: Awaited<ReturnType<typeof getOperationalErrorDetail>>,
+) {
+  expect(result).not.toBeNull();
+
+  if (!result) {
+    throw new Error("Expected operational error detail.");
+  }
+
+  return result;
+}
 
 describe("getOperationalErrors", () => {
   beforeEach(() => {
@@ -352,7 +367,9 @@ describe("getOperationalErrorDetail", () => {
       from: fromMock,
     });
 
-    const result = await getOperationalErrorDetail("operational-error-id");
+    const result = expectOperationalErrorDetail(
+      await getOperationalErrorDetail("operational-error-id"),
+    );
 
     expect(mocks.requireAdmin).toHaveBeenCalledOnce();
 
@@ -463,18 +480,16 @@ describe("getOperationalErrorDetail", () => {
       from: fromMock,
     });
 
-    const result = await getOperationalErrorDetail("operational-error-id");
+    const result = expectOperationalErrorDetail(
+      await getOperationalErrorDetail("operational-error-id"),
+    );
 
     expect(result.userLabel).toBe("target-user-id");
     expect(result.actorUserLabel).toBe("actor-user-id");
     expect(result.resolvedByLabel).toBe("resolver-user-id");
   });
 
-  it("운영 오류가 없으면 notFound를 호출한다", async () => {
-    mocks.notFound.mockImplementation(() => {
-      throw new Error("NEXT_NOT_FOUND");
-    });
-
+  it("운영 오류가 없으면 null을 반환한다", async () => {
     mocks.createAdminClient.mockReturnValue({
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnValue({
@@ -488,11 +503,7 @@ describe("getOperationalErrorDetail", () => {
       }),
     });
 
-    await expect(getOperationalErrorDetail("missing-id")).rejects.toThrow(
-      "NEXT_NOT_FOUND",
-    );
-
-    expect(mocks.notFound).toHaveBeenCalledOnce();
+    await expect(getOperationalErrorDetail("missing-id")).resolves.toBeNull();
   });
 
   it("처리 이력 조회에 실패하면 오류를 던진다", async () => {
@@ -636,7 +647,9 @@ describe("getOperationalErrorDetail", () => {
       from: fromMock,
     });
 
-    const result = await getOperationalErrorDetail("operational-error-id");
+    const result = expectOperationalErrorDetail(
+      await getOperationalErrorDetail("operational-error-id"),
+    );
 
     expect(fromMock).not.toHaveBeenCalledWith("profiles");
     expect(result.userLabel).toBeNull();

@@ -5,7 +5,6 @@ import type {
   OperationalErrorSeverityType,
   OperationalErrorStatusType,
 } from "@/features/operational-errors/constants";
-import type { Json } from "@/types/db.helpers";
 
 /**
  * 운영 오류 목록에서 검색할 수 있는 필드입니다.
@@ -72,9 +71,6 @@ export type OperationalErrorListQuery = {
 export type OperationalErrorListItem = {
   /** 운영 오류 ID */
   id: string;
-
-  /** 오류 분석에 필요한 추가 실행 정보 */
-  context: Json;
 
   /** 운영 오류 레코드가 처음 생성된 시각 */
   createdAt: string;
@@ -148,6 +144,9 @@ export type OperationalErrorDetail = OperationalErrorListItem & {
 
   /** 오류 발생 주체를 화면에 표시하기 위한 이름 또는 이메일 */
   actorUserLabel: string | null;
+
+  /** 오류 분석에 필요한 추가 실행 정보 */
+  context: unknown;
 
   /** 해당 오류가 최초로 발생한 시각 */
   firstSeenAt: string;

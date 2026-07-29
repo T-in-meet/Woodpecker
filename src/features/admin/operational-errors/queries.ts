@@ -1,12 +1,6 @@
 "use server";
 
-import { notFound } from "next/navigation";
-
-import {
-  ADMIN_OPERATIONAL_ERROR_CODES,
-  ADMIN_OPERATIONAL_ERROR_OPERATIONS,
-  ADMIN_OPERATIONAL_ERROR_STAGES,
-} from "@/features/operational-errors/constants";
+import { logError } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { requireAdmin } from "../utils/require-admin";
@@ -17,6 +11,7 @@ import type {
   OperationalErrorListResult,
 } from "./types/operational-error-list";
 import type {
+  OperationalErrorListRow,
   OperationalErrorRow,
   OperationalErrorStatusHistoryRow,
 } from "./types/operational-error-query";
@@ -26,12 +21,11 @@ import {
   mapOperationalErrorRow,
 } from "./utils/operational-error-mapper";
 import { applyOperationalErrorSearch } from "./utils/operational-error-search";
-import { recordAdminOperationalError } from "./utils/record-admin-operational-error";
 
 export async function getOperationalErrors(
   listQuery: OperationalErrorListQuery,
 ): Promise<OperationalErrorListResult> {
-  const adminUserId = await requireAdmin();
+  await requireAdmin();
 
   const supabase = createAdminClient();
   const page = Math.max(1, listQuery.page);
@@ -43,7 +37,7 @@ export async function getOperationalErrors(
   let query = supabase
     .from("operational_errors")
     .select(
-      "id, feature, operation, stage, error_code, severity, status, message, user_id, fingerprint, occurrence_count, last_seen_at, created_at, context",
+      "id, feature, operation, stage, error_code, severity, status, message, user_id, fingerprint, occurrence_count, last_seen_at, created_at",
       { count: "exact" },
     );
 
@@ -55,26 +49,22 @@ export async function getOperationalErrors(
     .range(from, to);
 
   if (error) {
-    await recordAdminOperationalError({
-      actorUserId: adminUserId,
-      code: ADMIN_OPERATIONAL_ERROR_CODES.OPERATIONAL_ERROR_LIST_FAILED,
-      context: {
+    logError({
+      error,
+      event: "adminOperationalErrors.list.failed",
+      fallback: {
         page,
         pageSize,
         searchField: listQuery.search.field,
         sortDirection: listQuery.sort.direction,
         sortField: listQuery.sort.field,
       },
-      error,
-      message: "운영 오류 목록을 불러오지 못했습니다.",
-      operation: ADMIN_OPERATIONAL_ERROR_OPERATIONS.LIST_OPERATIONAL_ERRORS,
-      stage: ADMIN_OPERATIONAL_ERROR_STAGES.LIST_QUERY,
     });
 
     throw new Error(`Failed to load operational errors: ${error.message}`);
   }
 
-  const rows = (data ?? []) as OperationalErrorRow[];
+  const rows = (data ?? []) as OperationalErrorListRow[];
 
   return {
     items: rows.map(mapOperationalErrorRow),
@@ -98,9 +88,9 @@ export async function getOperationalErrors(
  */
 export async function getOperationalErrorDetail(
   operationalErrorId: string,
-): Promise<OperationalErrorDetail> {
+): Promise<OperationalErrorDetail | null> {
   /** 관리자 권한이 있는 사용자만 운영 오류 상세 정보를 조회할 수 있습니다. */
-  const adminUserId = await requireAdmin();
+  await requireAdmin();
 
   const supabase = createAdminClient();
 
@@ -120,17 +110,12 @@ export async function getOperationalErrorDetail(
 
   /** 운영 오류 조회 실패를 기록한 후 예외로 처리합니다. */
   if (error) {
-    await recordAdminOperationalError({
-      actorUserId: adminUserId,
-      code: ADMIN_OPERATIONAL_ERROR_CODES.OPERATIONAL_ERROR_DETAIL_FAILED,
-      context: {
+    logError({
+      error,
+      event: "adminOperationalErrors.detail.failed",
+      fallback: {
         operationalErrorId,
       },
-      error,
-      message: "운영 오류 상세 정보를 불러오지 못했습니다.",
-      operation:
-        ADMIN_OPERATIONAL_ERROR_OPERATIONS.GET_OPERATIONAL_ERROR_DETAIL,
-      stage: ADMIN_OPERATIONAL_ERROR_STAGES.DETAIL_QUERY,
     });
 
     throw new Error(
@@ -140,7 +125,7 @@ export async function getOperationalErrorDetail(
 
   /** 요청한 운영 오류가 존재하지 않으면 404 응답을 처리합니다. */
   if (!data) {
-    notFound();
+    return null;
   }
 
   const row = data as OperationalErrorRow;
@@ -159,17 +144,12 @@ export async function getOperationalErrorDetail(
 
   /** 처리 이력 조회 실패는 상세 정보 조회 실패로 처리합니다. */
   if (historyError) {
-    await recordAdminOperationalError({
-      actorUserId: adminUserId,
-      code: ADMIN_OPERATIONAL_ERROR_CODES.OPERATIONAL_ERROR_HISTORY_FAILED,
-      context: {
+    logError({
+      error: historyError,
+      event: "adminOperationalErrors.history.failed",
+      fallback: {
         operationalErrorId,
       },
-      error: historyError,
-      message: "운영 오류 처리 이력을 불러오지 못했습니다.",
-      operation:
-        ADMIN_OPERATIONAL_ERROR_OPERATIONS.GET_OPERATIONAL_ERROR_DETAIL,
-      stage: ADMIN_OPERATIONAL_ERROR_STAGES.HISTORY_QUERY,
     });
 
     throw new Error(
@@ -213,19 +193,14 @@ export async function getOperationalErrorDetail(
 
     /** 프로필 조회 실패는 상세 정보 조회 실패로 처리합니다. */
     if (profilesError) {
-      await recordAdminOperationalError({
-        actorUserId: adminUserId,
-        code: ADMIN_OPERATIONAL_ERROR_CODES.OPERATIONAL_ERROR_PROFILES_FAILED,
-        context: {
+      logError({
+        error: profilesError,
+        event: "adminOperationalErrors.profiles.failed",
+        fallback: {
           operationalErrorId,
           profileCount: profileIds.length,
           profileIds,
         },
-        error: profilesError,
-        message: "운영 오류 관련 사용자 정보를 불러오지 못했습니다.",
-        operation:
-          ADMIN_OPERATIONAL_ERROR_OPERATIONS.GET_OPERATIONAL_ERROR_DETAIL,
-        stage: ADMIN_OPERATIONAL_ERROR_STAGES.PROFILE_QUERY,
       });
 
       throw new Error(
@@ -250,6 +225,7 @@ export async function getOperationalErrorDetail(
     actorUserLabel: row.actor_user_id
       ? (profileLabels.get(row.actor_user_id) ?? row.actor_user_id)
       : null,
+    context: row.context,
     firstSeenAt: row.first_seen_at,
     history: history.map((item) => mapHistoryRow(item, profileLabels)),
     resolutionNote: row.resolution_note,

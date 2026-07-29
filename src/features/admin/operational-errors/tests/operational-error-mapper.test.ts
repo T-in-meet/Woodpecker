@@ -37,9 +37,6 @@ const operationalErrorRow: OperationalErrorRow = {
 describe("mapOperationalErrorRow", () => {
   it("운영 오류 DB 행을 목록 화면 데이터로 변환한다", () => {
     expect(mapOperationalErrorRow(operationalErrorRow)).toEqual({
-      context: {
-        route: "/api/example",
-      },
       createdAt: "2026-07-28T01:00:00.000Z",
       errorCode: "UNEXPECTED_ERROR",
       feature: "feedback",

@@ -3,15 +3,14 @@ import type {
   OperationalErrorStatusHistoryItem,
 } from "../types/operational-error-list";
 import type {
-  OperationalErrorRow,
+  OperationalErrorListRow,
   OperationalErrorStatusHistoryRow,
 } from "../types/operational-error-query";
 
 export function mapOperationalErrorRow(
-  row: OperationalErrorRow,
+  row: OperationalErrorListRow,
 ): OperationalErrorListItem {
   return {
-    context: row.context,
     createdAt: row.created_at,
     errorCode: row.error_code,
     feature: row.feature,
