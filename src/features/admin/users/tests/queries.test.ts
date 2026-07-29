@@ -35,9 +35,12 @@ vi.mock("@/features/admin/utils/require-admin", () => ({
   requireAdmin: vi.fn(),
 }));
 
+vi.mock("@/features/admin/utils/query", () => ({
+  escapePostgrestLikePattern: vi.fn(),
+}));
+
 vi.mock("../utils/user-query", () => ({
   createAdminUserListQuery: vi.fn(),
-  escapePostgrestLikePattern: vi.fn(),
 }));
 
 vi.mock("../utils/user-query-filter", () => ({
