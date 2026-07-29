@@ -50,6 +50,8 @@ const DRAG_END_CLEANUP_DELAY_MS = 50;
 
 type BlockHandleMenuProps = {
   editor: Editor;
+  // 블록 메뉴가 열려 있는 동안에는 선택 영역 기반 인라인 툴바를 감춰야 한다.
+  onMenuOpenChange?: (isOpen: boolean) => void;
 };
 
 type HandlePointerDownType = {
@@ -72,7 +74,10 @@ export type BlockAnchorPositionType = {
   markerOffset: number;
 };
 
-export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
+export function BlockHandleMenu({
+  editor,
+  onMenuOpenChange,
+}: BlockHandleMenuProps) {
   const [isEditorFocused, setIsEditorFocused] = useState(
     () => !editor.isDestroyed && editor.view.hasFocus(),
   );
@@ -341,6 +346,7 @@ export function BlockHandleMenu({ editor }: BlockHandleMenuProps) {
 
     isMenuOpenRef.current = nextOpen;
     setIsMenuOpen(nextOpen);
+    onMenuOpenChange?.(nextOpen);
     scheduleSyncAnchorPosition();
   };
 
