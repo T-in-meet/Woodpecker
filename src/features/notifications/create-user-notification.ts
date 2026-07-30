@@ -1,4 +1,10 @@
-import { OPERATIONAL_ERROR_SEVERITY } from "@/features/operational-errors/constants";
+import {
+  NOTIFICATION_OPERATIONAL_ERROR_CODES,
+  NOTIFICATION_OPERATIONAL_ERROR_FEATURES,
+  NOTIFICATION_OPERATIONAL_ERROR_STAGES,
+  type NotificationOperationalErrorOperationType,
+  OPERATIONAL_ERROR_SEVERITY,
+} from "@/features/operational-errors/constants";
 import { reportOperationalError } from "@/features/operational-errors/report";
 import {
   NOTIFICATION_STATUS,
@@ -15,7 +21,7 @@ type CreateUserNotificationInput = {
   clickPath: string;
   metadata?: Record<string, Json>;
   noteId?: string | null;
-  operation: string;
+  operation: NotificationOperationalErrorOperationType;
   pushEnabled?: boolean;
   reviewLogId?: string | null;
   title: string;
@@ -87,12 +93,13 @@ export async function createUserNotification(
         userId: input.userId,
       },
       error,
-      errorCode: "NOTIFICATION_CREATE_FAILED",
-      feature: "notifications",
+      errorCode:
+        NOTIFICATION_OPERATIONAL_ERROR_CODES.NOTIFICATION_CREATE_FAILED,
+      feature: NOTIFICATION_OPERATIONAL_ERROR_FEATURES.NOTIFICATIONS,
       message: "사용자 인앱 알림 생성에 실패했습니다.",
       operation: input.operation,
       severity: OPERATIONAL_ERROR_SEVERITY.ERROR,
-      stage: "in_app_notification_create",
+      stage: NOTIFICATION_OPERATIONAL_ERROR_STAGES.IN_APP_NOTIFICATION_CREATE,
       userId: input.userId,
     });
 

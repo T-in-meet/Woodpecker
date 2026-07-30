@@ -20,35 +20,35 @@ ALTER TABLE public.notifications
 ALTER TABLE public.notifications
   DROP CONSTRAINT IF EXISTS notifications_type_check;
 
-ALTER TABLE public.notifications
-  ADD CONSTRAINT notifications_type_check
-  CHECK (type IN ('REVIEW', 'SYSTEM', 'FEEDBACK_REPLY'))
-  NOT VALID;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM public.notifications
+    WHERE type NOT IN ('REVIEW', 'SYSTEM', 'FEEDBACK_REPLY')
+  ) THEN
+    RAISE EXCEPTION
+      'Cannot add notifications_type_check while unsupported notification types exist.';
+  END IF;
+END $$;
 
 ALTER TABLE public.notifications
-  VALIDATE CONSTRAINT notifications_type_check;
+  ADD CONSTRAINT notifications_type_check
+  CHECK (type IN ('REVIEW', 'SYSTEM', 'FEEDBACK_REPLY'));
 
 ALTER TABLE public.notifications
   DROP CONSTRAINT IF EXISTS notifications_metadata_object_check;
 
 ALTER TABLE public.notifications
   ADD CONSTRAINT notifications_metadata_object_check
-  CHECK (jsonb_typeof(metadata) = 'object')
-  NOT VALID;
-
-ALTER TABLE public.notifications
-  VALIDATE CONSTRAINT notifications_metadata_object_check;
+  CHECK (jsonb_typeof(metadata) = 'object');
 
 ALTER TABLE public.notifications
   DROP CONSTRAINT IF EXISTS notifications_click_path_not_empty_check;
 
 ALTER TABLE public.notifications
   ADD CONSTRAINT notifications_click_path_not_empty_check
-  CHECK (length(btrim(click_path)) > 0)
-  NOT VALID;
-
-ALTER TABLE public.notifications
-  VALIDATE CONSTRAINT notifications_click_path_not_empty_check;
+  CHECK (length(btrim(click_path)) > 0);
 
 CREATE INDEX IF NOT EXISTS notifications_user_status_sent_at_idx
   ON public.notifications (user_id, status, sent_at DESC);

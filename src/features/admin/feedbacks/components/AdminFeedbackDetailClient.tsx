@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
 import { AdminListError } from "@/features/admin/components/common/AdminListState";
@@ -29,9 +29,12 @@ export function AdminFeedbackDetailClient() {
   const { data, isPending, isError } = useFeedbackDetail(feedbackId);
   const { mutate: markAdminNotificationsAsRead } =
     useMarkAdminNotificationsAsRead();
+  const markedFeedbackIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!data) return;
+    if (!data || markedFeedbackIdRef.current === feedbackId) return;
+
+    markedFeedbackIdRef.current = feedbackId;
 
     markAdminNotificationsAsRead({
       clickPath: getAdminFeedbackDetailRoute(feedbackId),

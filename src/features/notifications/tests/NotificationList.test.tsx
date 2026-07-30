@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  ADMIN_NOTIFICATION_TYPES,
   NOTIFICATION_STATUS,
   NOTIFICATION_TYPES,
 } from "@/lib/constants/notifications";
@@ -69,6 +70,39 @@ describe("NotificationList", () => {
     expect(
       screen.getByText("notifications / dispatch_push / push_send"),
     ).toBeInTheDocument();
+  });
+
+  it("uses type labels when a notification has no body or note title", () => {
+    render(
+      <NotificationList
+        items={[
+          {
+            ...createNotificationItem(),
+            body: null,
+            note_id: null,
+            noteTitle: null,
+            review_log_id: null,
+            source: "ADMIN",
+            title: "새 피드백이 도착했습니다.",
+            type: ADMIN_NOTIFICATION_TYPES.FEEDBACK_CREATED,
+          },
+          {
+            ...createNotificationItem(),
+            body: null,
+            click_path: "/",
+            note_id: null,
+            noteTitle: null,
+            review_log_id: null,
+            title: "공지",
+            type: NOTIFICATION_TYPES.SYSTEM,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("사용자 피드백")).toBeInTheDocument();
+    expect(screen.getByText("시스템")).toBeInTheDocument();
+    expect(screen.queryByText("복습 알림")).not.toBeInTheDocument();
   });
 
   it("notifies navigation without marking linked notifications as read", async () => {

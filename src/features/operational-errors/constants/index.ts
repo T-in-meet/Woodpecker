@@ -93,6 +93,7 @@ export type {
   OperationalErrorSeverityType,
   OperationalErrorStatusType,
 } from "./common";
+export type { NotificationOperationalErrorOperationType } from "./notifications";
 
 export {
   OPERATIONAL_ERROR_SEVERITY,

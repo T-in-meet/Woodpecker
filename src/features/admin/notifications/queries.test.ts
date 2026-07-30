@@ -2,9 +2,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ADMIN_NOTIFICATION_TYPES } from "@/lib/constants/notifications";
 
-const { requireAdminMock } = vi.hoisted(() => ({
+const { createAdminClientMock, requireAdminMock } = vi.hoisted(() => ({
+  createAdminClientMock: vi.fn(),
   requireAdminMock: vi.fn(),
 }));
+
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: createAdminClientMock,
+}));
+
+vi.mock("server-only", () => ({}));
 
 vi.mock("../utils/require-admin", () => ({
   requireAdmin: requireAdminMock,
@@ -14,9 +21,13 @@ import {
   getAdminNotificationList,
   getAdminUnreadNotificationCounts,
 } from "./queries";
+import {
+  getAdminNotificationListFor,
+  getAdminUnreadNotificationCountsFor,
+} from "./queries.internal";
 
 const ADMIN_USER_ID = "11111111-1111-4111-8111-111111111111";
-type QueryOptions = Parameters<typeof getAdminUnreadNotificationCounts>[0];
+type QueryOptions = Parameters<typeof getAdminUnreadNotificationCountsFor>[1];
 type SupabaseOption = NonNullable<NonNullable<QueryOptions>["supabase"]>;
 
 function createRpcSupabaseMock(data: unknown, error: unknown = null) {
@@ -31,7 +42,21 @@ function createRpcSupabaseMock(data: unknown, error: unknown = null) {
 describe("getAdminUnreadNotificationCounts", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    createAdminClientMock.mockReset();
     requireAdminMock.mockReset();
+  });
+
+  it("requires the current admin before querying unread counts", async () => {
+    const { rpc, supabase } = createRpcSupabaseMock([]);
+    createAdminClientMock.mockReturnValue(supabase);
+    requireAdminMock.mockResolvedValue(ADMIN_USER_ID);
+
+    await expect(getAdminUnreadNotificationCounts()).resolves.toEqual({});
+
+    expect(requireAdminMock).toHaveBeenCalledOnce();
+    expect(rpc).toHaveBeenCalledWith("get_admin_unread_notification_counts", {
+      p_admin_user_id: ADMIN_USER_ID,
+    });
   });
 
   it("returns unread admin notification counts from the RPC result", async () => {
@@ -46,8 +71,7 @@ describe("getAdminUnreadNotificationCounts", () => {
       },
     ]);
 
-    const result = await getAdminUnreadNotificationCounts({
-      adminUserId: ADMIN_USER_ID,
+    const result = await getAdminUnreadNotificationCountsFor(ADMIN_USER_ID, {
       supabase,
     });
 
@@ -60,7 +84,7 @@ describe("getAdminUnreadNotificationCounts", () => {
     });
   });
 
-  it("returns a sparse map and ignores unsupported RPC rows", async () => {
+  it("throws when the count RPC returns unsupported rows", async () => {
     const { supabase } = createRpcSupabaseMock([
       {
         type: ADMIN_NOTIFICATION_TYPES.OPERATIONAL_ERROR,
@@ -72,12 +96,11 @@ describe("getAdminUnreadNotificationCounts", () => {
       },
     ]);
 
-    const result = await getAdminUnreadNotificationCounts({
-      adminUserId: ADMIN_USER_ID,
-      supabase,
-    });
-
-    expect(result).toEqual({});
+    await expect(
+      getAdminUnreadNotificationCountsFor(ADMIN_USER_ID, {
+        supabase,
+      }),
+    ).rejects.toThrow();
   });
 
   it("throws when the count RPC fails", async () => {
@@ -85,8 +108,7 @@ describe("getAdminUnreadNotificationCounts", () => {
     const { supabase } = createRpcSupabaseMock(null, rpcError);
 
     await expect(
-      getAdminUnreadNotificationCounts({
-        adminUserId: ADMIN_USER_ID,
+      getAdminUnreadNotificationCountsFor(ADMIN_USER_ID, {
         supabase,
       }),
     ).rejects.toBe(rpcError);
@@ -96,7 +118,22 @@ describe("getAdminUnreadNotificationCounts", () => {
 describe("getAdminNotificationList", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    createAdminClientMock.mockReset();
     requireAdminMock.mockReset();
+  });
+
+  it("requires the current admin before querying notification list", async () => {
+    const { rpc, supabase } = createRpcSupabaseMock([]);
+    createAdminClientMock.mockReturnValue(supabase);
+    requireAdminMock.mockResolvedValue(ADMIN_USER_ID);
+
+    await expect(getAdminNotificationList({ limit: 10 })).resolves.toEqual([]);
+
+    expect(requireAdminMock).toHaveBeenCalledOnce();
+    expect(rpc).toHaveBeenCalledWith("get_admin_unread_notification_list", {
+      p_admin_user_id: ADMIN_USER_ID,
+      p_limit: 10,
+    });
   });
 
   it("returns unread admin notifications as notification list items", async () => {
@@ -112,8 +149,7 @@ describe("getAdminNotificationList", () => {
       },
     ]);
 
-    const result = await getAdminNotificationList({
-      adminUserId: ADMIN_USER_ID,
+    const result = await getAdminNotificationListFor(ADMIN_USER_ID, {
       limit: 10,
       supabase,
     });
@@ -144,8 +180,7 @@ describe("getAdminNotificationList", () => {
   it("normalizes the list limit before calling the RPC", async () => {
     const { rpc, supabase } = createRpcSupabaseMock([]);
 
-    await getAdminNotificationList({
-      adminUserId: ADMIN_USER_ID,
+    await getAdminNotificationListFor(ADMIN_USER_ID, {
       limit: 100,
       supabase,
     });

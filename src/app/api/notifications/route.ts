@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 
 import {
-  getAdminNotificationList,
-  getAdminUnreadNotificationCounts,
-} from "@/features/admin/notifications/queries";
+  getAdminNotificationListFor,
+  getAdminUnreadNotificationCountsFor,
+} from "@/features/admin/notifications/queries.internal";
 import {
   getNotificationList,
   getUnreadCount,
@@ -33,7 +33,7 @@ async function getIsAdmin(userId: string) {
 }
 
 function sumAdminUnreadCounts(
-  counts: Awaited<ReturnType<typeof getAdminUnreadNotificationCounts>>,
+  counts: Awaited<ReturnType<typeof getAdminUnreadNotificationCountsFor>>,
 ) {
   return Object.values(counts).reduce((sum, count) => sum + (count ?? 0), 0);
 }
@@ -71,13 +71,12 @@ export async function GET() {
         }),
         getUnreadCount({ supabase, userId: user.id }),
         isAdmin
-          ? getAdminNotificationList({
-              adminUserId: user.id,
+          ? getAdminNotificationListFor(user.id, {
               limit: NOTIFICATION_LIST_LIMIT,
             })
           : Promise.resolve([]),
         isAdmin
-          ? getAdminUnreadNotificationCounts({ adminUserId: user.id })
+          ? getAdminUnreadNotificationCountsFor(user.id)
           : Promise.resolve({}),
       ]);
 

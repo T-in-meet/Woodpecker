@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { AdminDetailPageHeader } from "@/features/admin/components/layout/AdminDetailPageHeader";
@@ -32,9 +32,14 @@ export function AdminOperationalErrorDetailClient() {
     useOperationalErrorDetail(operationalErrorId);
   const { mutate: markAdminNotificationsAsRead } =
     useMarkAdminNotificationsAsRead();
+  const markedOperationalErrorIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!data) return;
+    if (!data || markedOperationalErrorIdRef.current === operationalErrorId) {
+      return;
+    }
+
+    markedOperationalErrorIdRef.current = operationalErrorId;
 
     markAdminNotificationsAsRead({
       clickPath: getAdminOperationalErrorDetailRoute(operationalErrorId),

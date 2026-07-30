@@ -1,19 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ADMIN_NOTIFICATION_TYPES } from "@/lib/constants/notifications";
-import { ROUTES } from "@/lib/constants/routes";
 
 import { markAdminNotificationsAsReadAction } from "./actions";
 
-const { createAdminClientMock, requireAdminMock, revalidatePathMock } =
-  vi.hoisted(() => ({
-    createAdminClientMock: vi.fn(),
-    requireAdminMock: vi.fn(),
-    revalidatePathMock: vi.fn(),
-  }));
-
-vi.mock("next/cache", () => ({
-  revalidatePath: revalidatePathMock,
+const { createAdminClientMock, requireAdminMock } = vi.hoisted(() => ({
+  createAdminClientMock: vi.fn(),
+  requireAdminMock: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/admin", () => ({
@@ -77,7 +70,6 @@ describe("markAdminNotificationsAsReadAction", () => {
     vi.restoreAllMocks();
     createAdminClientMock.mockReset();
     requireAdminMock.mockReset();
-    revalidatePathMock.mockReset();
     requireAdminMock.mockResolvedValue("admin-user-id");
   });
 
@@ -115,7 +107,6 @@ describe("markAdminNotificationsAsReadAction", () => {
       ],
       { onConflict: "event_id,admin_user_id" },
     );
-    expect(revalidatePathMock).toHaveBeenCalledWith(ROUTES.ADMIN.DASHBOARD);
   });
 
   it("returns success without upsert when there are no matching events", async () => {
@@ -131,7 +122,6 @@ describe("markAdminNotificationsAsReadAction", () => {
 
     expect(result).toEqual({ ok: true, updated: 0 });
     expect(supabaseMock.readsUpsert).not.toHaveBeenCalled();
-    expect(revalidatePathMock).not.toHaveBeenCalled();
   });
 
   it("returns a validation error for an invalid target", async () => {
@@ -183,6 +173,5 @@ describe("markAdminNotificationsAsReadAction", () => {
       message: "관리자 알림 읽음 처리에 실패했습니다.",
       ok: false,
     });
-    expect(revalidatePathMock).not.toHaveBeenCalled();
   });
 });

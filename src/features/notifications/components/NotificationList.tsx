@@ -5,6 +5,10 @@ import Link from "next/link";
 import { NOTIFICATION_STATUS } from "@/lib/constants/notifications";
 import { formatDateTime } from "@/lib/utils/formatDate";
 
+import {
+  ADMIN_NOTIFICATION_DEFINITIONS,
+  USER_NOTIFICATION_DEFINITIONS,
+} from "../definitions";
 import type { NotificationListItemType } from "../schema";
 
 type NotificationListProps = {
@@ -14,17 +18,51 @@ type NotificationListProps = {
   onItemNavigate?: () => void;
 };
 
-function getStatusLabel(status: NotificationListItemType["status"]) {
+/**
+ * 알림 상태에 대한 표시 라벨을 반환합니다.
+ *
+ * @param status 알림 읽음 상태
+ * @returns 사용자에게 보여줄 상태 라벨
+ */
+function getStatusLabel(status: NotificationListItemType["status"]): string {
   if (status === NOTIFICATION_STATUS.SENT) return "새 알림";
   return "읽음";
 }
 
-function getSourceLabel(source: NotificationListItemType["source"]) {
+/**
+ * 알림 출처에 대한 표시 라벨을 반환합니다.
+ *
+ * @param source 알림 생성 출처
+ * @returns 사용자에게 보여줄 출처 라벨
+ */
+function getSourceLabel(source: NotificationListItemType["source"]): string {
   return source === "ADMIN" ? "관리자" : "개인";
 }
 
-function getNotificationDescription(item: NotificationListItemType) {
-  return item.noteTitle ?? item.body ?? "복습 알림";
+/**
+ * 본문이나 노트 제목이 없는 알림에 사용할 타입별 fallback 라벨을 반환합니다.
+ *
+ * @param item 표시할 알림 item
+ * @returns 알림 설명 문구
+ */
+function getNotificationDescription(item: NotificationListItemType): string {
+  if (item.noteTitle) return item.noteTitle;
+  if (item.body) return item.body;
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      ADMIN_NOTIFICATION_DEFINITIONS,
+      item.type,
+    )
+  ) {
+    const type = item.type as keyof typeof ADMIN_NOTIFICATION_DEFINITIONS;
+
+    return ADMIN_NOTIFICATION_DEFINITIONS[type].label;
+  }
+
+  const type = item.type as keyof typeof USER_NOTIFICATION_DEFINITIONS;
+
+  return USER_NOTIFICATION_DEFINITIONS[type].label;
 }
 
 export function NotificationList({

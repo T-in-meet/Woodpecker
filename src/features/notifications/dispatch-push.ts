@@ -1,4 +1,10 @@
-import { OPERATIONAL_ERROR_SEVERITY } from "@/features/operational-errors/constants";
+import {
+  NOTIFICATION_OPERATIONAL_ERROR_CODES,
+  NOTIFICATION_OPERATIONAL_ERROR_FEATURES,
+  NOTIFICATION_OPERATIONAL_ERROR_STAGES,
+  type NotificationOperationalErrorOperationType,
+  OPERATIONAL_ERROR_SEVERITY,
+} from "@/features/operational-errors/constants";
 import { reportOperationalError } from "@/features/operational-errors/report";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -15,7 +21,7 @@ type DispatchPushResult = {
 
 type DispatchPushOptions = {
   actorUserId?: string | null;
-  operation: string;
+  operation: NotificationOperationalErrorOperationType;
   userId: string;
 };
 
@@ -67,12 +73,13 @@ async function deleteExpiredSubscription(
       userId: options.userId,
     },
     error,
-    errorCode: "PUSH_SUBSCRIPTION_DELETE_FAILED",
-    feature: "notifications",
+    errorCode:
+      NOTIFICATION_OPERATIONAL_ERROR_CODES.PUSH_SUBSCRIPTION_DELETE_FAILED,
+    feature: NOTIFICATION_OPERATIONAL_ERROR_FEATURES.NOTIFICATIONS,
     message: "만료된 Push 구독 삭제에 실패했습니다.",
     operation: options.operation,
     severity: OPERATIONAL_ERROR_SEVERITY.WARN,
-    stage: "push_subscription_cleanup",
+    stage: NOTIFICATION_OPERATIONAL_ERROR_STAGES.PUSH_SUBSCRIPTION_CLEANUP,
     userId: options.userId,
   });
 
@@ -114,12 +121,12 @@ async function dispatchPushSubscription(
         statusCode: result.statusCode ?? null,
         userId: options.userId,
       },
-      errorCode: "PUSH_SUBSCRIPTION_GONE",
-      feature: "notifications",
+      errorCode: NOTIFICATION_OPERATIONAL_ERROR_CODES.PUSH_SUBSCRIPTION_GONE,
+      feature: NOTIFICATION_OPERATIONAL_ERROR_FEATURES.NOTIFICATIONS,
       message: "만료된 Push 구독이 확인되었습니다.",
       operation: options.operation,
       severity: OPERATIONAL_ERROR_SEVERITY.INFO,
-      stage: "push_subscription_cleanup",
+      stage: NOTIFICATION_OPERATIONAL_ERROR_STAGES.PUSH_SUBSCRIPTION_CLEANUP,
       userId: options.userId,
     });
 
@@ -138,12 +145,12 @@ async function dispatchPushSubscription(
       statusCode: result.statusCode ?? null,
       userId: options.userId,
     },
-    errorCode: "PUSH_SEND_FAILED",
-    feature: "notifications",
+    errorCode: NOTIFICATION_OPERATIONAL_ERROR_CODES.PUSH_SEND_FAILED,
+    feature: NOTIFICATION_OPERATIONAL_ERROR_FEATURES.NOTIFICATIONS,
     message: "Push 알림 전송에 실패했습니다.",
     operation: options.operation,
     severity: OPERATIONAL_ERROR_SEVERITY.WARN,
-    stage: "push_send",
+    stage: NOTIFICATION_OPERATIONAL_ERROR_STAGES.PUSH_SEND,
     userId: options.userId,
   });
 
@@ -174,12 +181,13 @@ export async function dispatchPushToUser(
       ...withActorUserId(options.actorUserId),
       context: { userId: options.userId },
       error,
-      errorCode: "PUSH_SUBSCRIPTIONS_LOOKUP_FAILED",
-      feature: "notifications",
+      errorCode:
+        NOTIFICATION_OPERATIONAL_ERROR_CODES.PUSH_SUBSCRIPTIONS_LOOKUP_FAILED,
+      feature: NOTIFICATION_OPERATIONAL_ERROR_FEATURES.NOTIFICATIONS,
       message: "Push 구독 조회에 실패했습니다.",
       operation: options.operation,
       severity: OPERATIONAL_ERROR_SEVERITY.WARN,
-      stage: "push_subscription_lookup",
+      stage: NOTIFICATION_OPERATIONAL_ERROR_STAGES.PUSH_SUBSCRIPTION_LOOKUP,
       userId: options.userId,
     });
 
@@ -197,12 +205,12 @@ export async function dispatchPushToUser(
       ...withActorUserId(options.actorUserId),
       context: { userId: options.userId },
       error,
-      errorCode: "PUSH_VAPID_CONFIG_FAILED",
-      feature: "notifications",
+      errorCode: NOTIFICATION_OPERATIONAL_ERROR_CODES.PUSH_VAPID_CONFIG_FAILED,
+      feature: NOTIFICATION_OPERATIONAL_ERROR_FEATURES.NOTIFICATIONS,
       message: "Push VAPID 설정에 실패했습니다.",
       operation: options.operation,
       severity: OPERATIONAL_ERROR_SEVERITY.ERROR,
-      stage: "push_vapid_setup",
+      stage: NOTIFICATION_OPERATIONAL_ERROR_STAGES.PUSH_VAPID_SETUP,
       userId: options.userId,
     });
 

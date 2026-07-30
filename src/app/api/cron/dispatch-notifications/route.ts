@@ -3,6 +3,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { dispatchPushToUser } from "@/features/notifications/dispatch-push";
+import { NOTIFICATION_OPERATIONAL_ERROR_OPERATIONS } from "@/features/operational-errors/constants";
 import {
   NOTIFICATION_STATUS,
   NOTIFICATION_TYPES,
@@ -349,7 +350,7 @@ async function dispatchClaimedReviewLog(
     // Push 구독 조회, 전송, 만료 구독 삭제 및 오류 기록은
     // 공통 Push 전송 계층에서 처리합니다.
     const pushResult = await dispatchPushToUser(payload, {
-      operation: "dispatch_push",
+      operation: NOTIFICATION_OPERATIONAL_ERROR_OPERATIONS.DISPATCH_PUSH,
       userId: claimedLog.user_id,
     });
 

@@ -11,8 +11,19 @@ SELECT set_config('test.admin_notification_rpc_read_event_id', gen_random_uuid()
 SELECT set_config('test.admin_notification_rpc_error_event_id', gen_random_uuid()::text, true);
 SELECT set_config('test.admin_notification_rpc_feedback_event_id', gen_random_uuid()::text, true);
 
-DELETE FROM public.admin_notification_reads;
-DELETE FROM public.admin_notification_events;
+DELETE FROM public.admin_notification_reads
+WHERE event_id IN (
+  current_setting('test.admin_notification_rpc_read_event_id')::uuid,
+  current_setting('test.admin_notification_rpc_error_event_id')::uuid,
+  current_setting('test.admin_notification_rpc_feedback_event_id')::uuid
+);
+
+DELETE FROM public.admin_notification_events
+WHERE id IN (
+  current_setting('test.admin_notification_rpc_read_event_id')::uuid,
+  current_setting('test.admin_notification_rpc_error_event_id')::uuid,
+  current_setting('test.admin_notification_rpc_feedback_event_id')::uuid
+);
 
 INSERT INTO auth.users (
   id,

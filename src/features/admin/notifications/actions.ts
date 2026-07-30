@@ -1,10 +1,8 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { ADMIN_NOTIFICATION_TYPES } from "@/lib/constants/notifications";
-import { ROUTES } from "@/lib/constants/routes";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { requireAdmin } from "../utils/require-admin";
@@ -91,8 +89,6 @@ export async function markAdminNotificationsAsReadAction(
       ok: false,
     };
   }
-
-  revalidatePath(ROUTES.ADMIN.DASHBOARD);
 
   return { ok: true, updated: events.length };
 }

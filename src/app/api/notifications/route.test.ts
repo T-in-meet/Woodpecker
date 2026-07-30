@@ -29,9 +29,9 @@ vi.mock("@/features/notifications/queries", () => ({
   getUnreadCount: getUnreadCountMock,
 }));
 
-vi.mock("@/features/admin/notifications/queries", () => ({
-  getAdminNotificationList: getAdminNotificationListMock,
-  getAdminUnreadNotificationCounts: getAdminUnreadNotificationCountsMock,
+vi.mock("@/features/admin/notifications/queries.internal", () => ({
+  getAdminNotificationListFor: getAdminNotificationListMock,
+  getAdminUnreadNotificationCountsFor: getAdminUnreadNotificationCountsMock,
 }));
 
 import * as notificationsRoute from "./route";
@@ -170,13 +170,10 @@ describe("/api/notifications", () => {
       unreadCount: 3,
     });
     expect(response.status).toBe(200);
-    expect(getAdminNotificationListMock).toHaveBeenCalledWith({
-      adminUserId: USER_ID,
+    expect(getAdminNotificationListMock).toHaveBeenCalledWith(USER_ID, {
       limit: 20,
     });
-    expect(getAdminUnreadNotificationCountsMock).toHaveBeenCalledWith({
-      adminUserId: USER_ID,
-    });
+    expect(getAdminUnreadNotificationCountsMock).toHaveBeenCalledWith(USER_ID);
   });
 
   it("returns unauthorized when there is no logged-in user", async () => {

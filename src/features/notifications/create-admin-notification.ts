@@ -1,4 +1,10 @@
-import { OPERATIONAL_ERROR_SEVERITY } from "@/features/operational-errors/constants";
+import {
+  NOTIFICATION_OPERATIONAL_ERROR_CODES,
+  NOTIFICATION_OPERATIONAL_ERROR_FEATURES,
+  NOTIFICATION_OPERATIONAL_ERROR_OPERATIONS,
+  NOTIFICATION_OPERATIONAL_ERROR_STAGES,
+  OPERATIONAL_ERROR_SEVERITY,
+} from "@/features/operational-errors/constants";
 import { recordOperationalError } from "@/features/operational-errors/record";
 import {
   ADMIN_NOTIFICATION_TYPES,
@@ -32,10 +38,10 @@ export type CreateAdminNotificationResult =
 
 function getAdminNotificationOperation(type: AdminNotificationKindType) {
   if (type === ADMIN_NOTIFICATION_TYPES.OPERATIONAL_ERROR) {
-    return "create_admin_operational_error_notification";
+    return NOTIFICATION_OPERATIONAL_ERROR_OPERATIONS.CREATE_ADMIN_OPERATIONAL_ERROR_NOTIFICATION;
   }
 
-  return "create_admin_feedback_notification";
+  return NOTIFICATION_OPERATIONAL_ERROR_OPERATIONS.CREATE_ADMIN_FEEDBACK_NOTIFICATION;
 }
 
 function withCreatedBy(createdBy: string | null | undefined) {
@@ -98,12 +104,14 @@ export async function createAdminNotification(
         notificationType: input.type,
       },
       error: adminsError,
-      errorCode: "ADMIN_NOTIFICATION_TARGET_LOOKUP_FAILED",
-      feature: "notifications",
+      errorCode:
+        NOTIFICATION_OPERATIONAL_ERROR_CODES.ADMIN_NOTIFICATION_TARGET_LOOKUP_FAILED,
+      feature: NOTIFICATION_OPERATIONAL_ERROR_FEATURES.NOTIFICATIONS,
       message: "관리자 알림 Push 대상 조회에 실패했습니다.",
       operation: getAdminNotificationOperation(input.type),
       severity: OPERATIONAL_ERROR_SEVERITY.WARN,
-      stage: "admin_notification_target_lookup",
+      stage:
+        NOTIFICATION_OPERATIONAL_ERROR_STAGES.ADMIN_NOTIFICATION_TARGET_LOOKUP,
     });
 
     return { error: adminsError, ok: false };

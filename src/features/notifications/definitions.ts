@@ -7,7 +7,6 @@ import {
 import {
   getAdminFeedbackDetailRoute,
   getAdminOperationalErrorDetailRoute,
-  getNoteReviewRoute,
   ROUTES,
 } from "@/lib/constants/routes";
 import type { Json } from "@/types/db.helpers";
@@ -21,10 +20,6 @@ type NotificationDefinition = {
 
 type BuildFeedbackReplyDefinitionInput = {
   feedbackId: string;
-};
-
-type BuildReviewDefinitionInput = {
-  noteId: string;
 };
 
 type BuildAdminFeedbackCreatedDefinitionInput = {
@@ -84,18 +79,11 @@ export const ADMIN_NOTIFICATION_DEFINITIONS = {
 } satisfies Record<AdminNotificationKindType, NotificationDefinition>;
 
 /**
- * REVIEW 알림은 복습 완료 RPC에서 READ 처리되므로 클릭 경로는
- * 사용자가 복습을 수행할 수 있는 상세 복습 화면을 가리킵니다.
+ * 피드백 답변 알림의 클릭 경로와 표현 정의를 생성합니다.
+ *
+ * @param feedbackId 답변이 달린 feedbacks.id
+ * @returns 피드백 답변 사용자 알림 정의
  */
-export function buildReviewNotificationDefinition({
-  noteId,
-}: BuildReviewDefinitionInput) {
-  return {
-    ...USER_NOTIFICATION_DEFINITIONS[NOTIFICATION_TYPES.REVIEW],
-    clickPath: getNoteReviewRoute(noteId),
-  };
-}
-
 export function buildFeedbackReplyNotificationDefinition({
   feedbackId,
 }: BuildFeedbackReplyDefinitionInput) {
@@ -105,6 +93,12 @@ export function buildFeedbackReplyNotificationDefinition({
   };
 }
 
+/**
+ * 새 피드백 관리자 알림의 클릭 경로와 표현 정의를 생성합니다.
+ *
+ * @param feedbackId 새로 생성된 feedbacks.id
+ * @returns 새 피드백 관리자 알림 정의
+ */
 export function buildAdminFeedbackCreatedNotificationDefinition({
   feedbackId,
 }: BuildAdminFeedbackCreatedDefinitionInput) {
@@ -116,6 +110,12 @@ export function buildAdminFeedbackCreatedNotificationDefinition({
   };
 }
 
+/**
+ * 운영 오류 관리자 알림의 클릭 경로와 표현 정의를 생성합니다.
+ *
+ * @param operationalErrorId 운영 오류 ID
+ * @returns 운영 오류 관리자 알림 정의
+ */
 export function buildAdminOperationalErrorNotificationDefinition({
   operationalErrorId,
 }: BuildAdminOperationalErrorDefinitionInput) {
