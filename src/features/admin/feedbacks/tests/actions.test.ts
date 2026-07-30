@@ -39,12 +39,12 @@ vi.mock("@/features/admin/feedbacks/utils/feedback-reply-image", () => ({
 
 import { deleteFeedbackReply, saveFeedbackReply } from "../actions";
 
-interface QueryResult<T> {
+type QueryResult<T> = {
   data: T;
   error: { message: string } | null;
-}
+};
 
-interface SupabaseMockOptions {
+type SupabaseMockOptions = {
   feedbackResult?: QueryResult<{ id: string } | null>;
   existingReplyResult?: QueryResult<{ image_paths: string[] } | null>;
   replyLoadResult?: QueryResult<{
@@ -57,7 +57,7 @@ interface SupabaseMockOptions {
   deleteError?: { message: string } | null;
   openStatusError?: { message: string } | null;
   removeErrors?: Array<{ message: string } | null>;
-}
+};
 
 /**
  * actions에서 사용하는 Supabase 체이닝만 최소한으로 구현합니다.

@@ -1,10 +1,10 @@
 import {
+  AlertTriangle,
   Beaker,
   Blocks,
   Boxes,
   FileSearch,
   FileText,
-  FlaskConical,
   GitBranch,
   LayoutDashboard,
   Link2,
@@ -34,9 +34,9 @@ export const ADMIN_SIDEBAR_ITEMS = [
     icon: MessageSquareText,
   },
   {
-    title: "기능 운영",
-    href: ROUTES.ADMIN.FEATURES,
-    icon: FlaskConical,
+    title: "운영 오류",
+    href: ROUTES.ADMIN.OPERATIONAL_ERRORS,
+    icon: AlertTriangle,
   },
   {
     title: "실험 기능",

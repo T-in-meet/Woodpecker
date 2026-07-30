@@ -1,11 +1,11 @@
 import type { AdminAppliedFilter } from "@/features/admin/types/filter";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { nextDayIsoString, startOfDayIsoString } from "../../utils/query";
 import type {
   AdminFeedbackListQuery,
   FeedbackFilterField,
 } from "../types/feedback-list";
-import { nextDayIsoString, startOfDayIsoString } from "./feedback-query";
 
 /**
  * 관리자 피드백 목록에 적용된 필터를 Supabase 조회 조건으로 변환합니다.

@@ -2,19 +2,26 @@ import { existsSync, readFileSync } from "node:fs";
 
 import { createClient } from "@supabase/supabase-js";
 
+/**
+ * `.env.local`의 환경 변수를 현재 Node.js 프로세스에 불러옵니다.
+ */
 function loadLocalEnv() {
   if (!existsSync(".env.local")) return;
 
   const lines = readFileSync(".env.local", "utf8").split(/\r?\n/);
+
   for (const line of lines) {
     const trimmed = line.trim();
+
     if (!trimmed || trimmed.startsWith("#")) continue;
 
     const separatorIndex = trimmed.indexOf("=");
+
     if (separatorIndex === -1) continue;
 
     const key = trimmed.slice(0, separatorIndex).trim();
     const value = trimmed.slice(separatorIndex + 1).trim();
+
     if (key && process.env[key] === undefined) {
       process.env[key] = value;
     }
@@ -182,17 +189,30 @@ const pngByName = {
     "iVBORw0KGgoAAAANSUhEUgAAAEAAAAAwCAIAAAAtp4yBAAAAOUlEQVR4nO3PAQ0AAAgDINc/9C3hHaQKVrPzJpmZmT0AAL+YC0aYEGFC2GBC2GBC2GBC2GBC2GBC2GBCKwB1KgHgAByDOAAAAABJRU5ErkJggg==",
 };
 
+/**
+ * Supabase 요청 결과에 오류가 있으면 예외를 발생시킵니다.
+ *
+ * @param {string} label 오류 메시지에 표시할 작업 이름
+ * @param {{ data: unknown; error: { message: string } | null }} response
+ * Supabase 요청 결과
+ * @returns {Promise<unknown>} 요청 결과 데이터
+ */
 async function assertOk(label, response) {
   if (response.error) {
     throw new Error(`${label}: ${response.error.message}`);
   }
+
   return response.data;
 }
 
+/**
+ * 로컬 Auth 사용자와 profiles 데이터를 생성합니다.
+ */
 async function seedUsers() {
   for (const user of users) {
     const { data: existing, error: getError } =
       await supabase.auth.admin.getUserById(user.id);
+
     if (getError && getError.status !== 404) {
       throw new Error(`getUserById ${user.email}: ${getError.message}`);
     }
@@ -208,6 +228,7 @@ async function seedUsers() {
           canonical_email: user.email,
         },
       });
+
       await assertOk(`createUser ${user.email}`, created);
     }
   }
@@ -226,6 +247,30 @@ async function seedUsers() {
   );
 }
 
+/**
+ * 생성한 로컬 사용자들의 약관 및 개인정보 처리방침 동의 정보를 생성합니다.
+ */
+async function seedUserAgreements() {
+  const agreedAt = new Date().toISOString();
+
+  await assertOk(
+    "upsert user agreements",
+    await supabase.from("user_agreements").upsert(
+      users.map((user) => ({
+        user_id: user.id,
+        terms_agreed_at: agreedAt,
+        privacy_agreed_at: agreedAt,
+        source: "email_backfill",
+        updated_at: agreedAt,
+      })),
+      { onConflict: "user_id" },
+    ),
+  );
+}
+
+/**
+ * 피드백 연결 테스트에 사용할 노트를 생성합니다.
+ */
 async function seedNotes() {
   await assertOk(
     "upsert notes",
@@ -233,10 +278,16 @@ async function seedNotes() {
   );
 }
 
+/**
+ * 피드백 이미지 Storage 버킷이 없으면 생성합니다.
+ */
 async function seedBucket() {
   const { data: buckets, error: listError } =
     await supabase.storage.listBuckets();
-  if (listError) throw new Error(`listBuckets: ${listError.message}`);
+
+  if (listError) {
+    throw new Error(`listBuckets: ${listError.message}`);
+  }
 
   if (!buckets.some((bucket) => bucket.id === "feedbacks")) {
     const created = await supabase.storage.createBucket("feedbacks", {
@@ -244,17 +295,24 @@ async function seedBucket() {
       fileSizeLimit: 5 * 1024 * 1024,
       allowedMimeTypes: ["image/jpeg", "image/png", "image/gif", "image/webp"],
     });
+
     await assertOk("create feedbacks bucket", created);
   }
 }
 
+/**
+ * 피드백에 연결된 테스트 PNG 이미지를 Storage에 업로드합니다.
+ */
 async function seedImages() {
   const imagePaths = feedbacks.flatMap((feedback) => feedback.image_urls);
 
   for (const path of imagePaths) {
     const fileName = path.split("/").at(-1);
     const base64 = pngByName[fileName];
-    if (!base64) throw new Error(`No PNG fixture for ${fileName}`);
+
+    if (!base64) {
+      throw new Error(`No PNG fixture for ${fileName}`);
+    }
 
     const uploaded = await supabase.storage
       .from("feedbacks")
@@ -262,10 +320,14 @@ async function seedImages() {
         contentType: "image/png",
         upsert: true,
       });
+
     await assertOk(`upload ${path}`, uploaded);
   }
 }
 
+/**
+ * 관리자 피드백 화면 테스트에 사용할 피드백 데이터를 생성합니다.
+ */
 async function seedFeedbacks() {
   await assertOk(
     "upsert feedbacks",
@@ -273,6 +335,16 @@ async function seedFeedbacks() {
   );
 }
 
+/**
+ * 생성된 피드백, 동의 정보와 Storage 파일을 확인합니다.
+ *
+ * @returns {Promise<{
+ *   agreementCount: number;
+ *   feedbackCount: number;
+ *   imageCount: number;
+ *   sampleStorageFiles: string[];
+ * }>} 생성 결과 요약
+ */
 async function verify() {
   const feedbackResult = await supabase
     .from("feedbacks")
@@ -281,14 +353,32 @@ async function verify() {
       "id",
       feedbacks.map((feedback) => feedback.id),
     );
+
   const seededFeedbacks = await assertOk("verify feedbacks", feedbackResult);
+
+  const agreementResult = await supabase
+    .from("user_agreements")
+    .select("user_id, terms_agreed_at, privacy_agreed_at, source")
+    .in(
+      "user_id",
+      users.map((user) => user.id),
+    );
+
+  const seededAgreements = await assertOk(
+    "verify user agreements",
+    agreementResult,
+  );
 
   const { data: files, error } = await supabase.storage
     .from("feedbacks")
     .list(`${users[1].id}/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1`);
-  if (error) throw new Error(`verify storage list: ${error.message}`);
+
+  if (error) {
+    throw new Error(`verify storage list: ${error.message}`);
+  }
 
   return {
+    agreementCount: seededAgreements.length,
     feedbackCount: seededFeedbacks.length,
     imageCount: seededFeedbacks.reduce(
       (total, feedback) => total + feedback.image_urls.length,
@@ -298,14 +388,19 @@ async function verify() {
   };
 }
 
+/**
+ * 로컬 관리자 피드백 테스트 데이터를 순서대로 생성합니다.
+ */
 async function main() {
   await seedUsers();
+  await seedUserAgreements();
   await seedNotes();
   await seedBucket();
   await seedImages();
   await seedFeedbacks();
 
   const result = await verify();
+
   console.log(JSON.stringify(result, null, 2));
 }
 

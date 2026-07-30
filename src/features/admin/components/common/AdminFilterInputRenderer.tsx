@@ -8,7 +8,7 @@ import { AdminMultiSelectInput } from "./AdminMultiSelectInput";
 import { AdminNumberRangeInput } from "./AdminNumberRangeInput";
 import { AdminSelectInput } from "./AdminSelectInput";
 
-interface AdminFilterInputRendererProps<TField extends string> {
+type AdminFilterInputRendererProps<TField extends string> = {
   /** 현재 편집할 필터 정의 */
   filter: AdminFilterDefinition<TField>;
 
@@ -23,7 +23,7 @@ interface AdminFilterInputRendererProps<TField extends string> {
 
   /** 현재 날짜 범위 필터를 삭제합니다. */
   onClear: () => void;
-}
+};
 
 /**
  * 필터 정의의 입력 방식에 따라 적절한 입력 컴포넌트를 선택합니다.

@@ -3,18 +3,18 @@ import type { FeedbackCategory, FeedbackStatus } from "./feedback-list";
 /**
  * private Storage object를 브라우저에서 표시하기 위한 signed URL 정보입니다.
  */
-export interface FeedbackSignedImage {
+export type FeedbackSignedImage = {
   /** DB에 저장된 bucket 내부 object path */
   path: string;
 
   /** 제한 시간 동안 접근 가능한 서명 URL */
   signedUrl: string;
-}
+};
 
 /**
  * 피드백 작성자 표시 정보입니다.
  */
-export interface AdminFeedbackDetailUser {
+export type AdminFeedbackDetailUser = {
   /** auth.users/profile id */
   id: string;
 
@@ -26,23 +26,23 @@ export interface AdminFeedbackDetailUser {
 
   /** 사용자 avatar URL. 없으면 null */
   avatarUrl: string | null;
-}
+};
 
 /**
  * 피드백에 연결된 노트 표시 정보입니다.
  */
-export interface AdminFeedbackDetailNote {
+export type AdminFeedbackDetailNote = {
   /** notes.id */
   id: string;
 
   /** notes.title */
   title: string;
-}
+};
 
 /**
  * 관리자 답변 상세 표시 모델입니다.
  */
-export interface AdminFeedbackDetailReply {
+export type AdminFeedbackDetailReply = {
   /** feedback_replies.id */
   id: string;
 
@@ -78,12 +78,12 @@ export interface AdminFeedbackDetailReply {
 
   /** 답변 수정 시각 ISO 문자열 */
   updatedAt: string;
-}
+};
 
 /**
  * 관리자 피드백 상세 화면에서 사용하는 전체 표시 모델입니다.
  */
-export interface AdminFeedbackDetail {
+export type AdminFeedbackDetail = {
   /** feedbacks.id */
   id: string;
 
@@ -116,4 +116,4 @@ export interface AdminFeedbackDetail {
 
   /** 관리자 답변. 아직 없으면 null */
   reply: AdminFeedbackDetailReply | null;
-}
+};

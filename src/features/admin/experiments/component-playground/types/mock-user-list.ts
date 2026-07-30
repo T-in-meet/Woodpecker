@@ -9,7 +9,7 @@ import type { ComponentPlaygroundSortField } from "./sort";
 /**
  * Mock 사용자 목록 조회에 사용하는 조건입니다.
  */
-export interface MockUserListQuery {
+export type MockUserListQuery = {
   /** 조회할 페이지 번호 */
   page: number;
 
@@ -24,12 +24,12 @@ export interface MockUserListQuery {
 
   /** 목록에 적용된 정렬 조건 */
   sort: AdminSort<ComponentPlaygroundSortField>;
-}
+};
 
 /**
  * Mock 사용자 목록 조회 결과입니다.
  */
-export interface MockUserListResult {
+export type MockUserListResult = {
   /** 현재 페이지에 표시할 사용자 목록 */
   items: MockUser[];
 
@@ -47,4 +47,4 @@ export interface MockUserListResult {
     /** 전체 페이지 수 */
     totalPages: number;
   };
-}
+};

@@ -12,7 +12,7 @@ import {
 
 import type { AdminFilterDefinition } from "../../types/filter";
 
-interface AdminFilterAddProps<TField extends string> {
+type AdminFilterAddProps<TField extends string> = {
   /** 현재 관리자 목록에서 사용할 수 있는 전체 필터 정의 */
   filters: readonly AdminFilterDefinition<TField>[];
 
@@ -24,7 +24,7 @@ interface AdminFilterAddProps<TField extends string> {
 
   /** 필터 추가 버튼에 표시할 문구 */
   label?: string;
-}
+};
 
 /**
  * 관리자 목록에 새로운 필터를 추가하기 위한 공통 컴포넌트입니다.

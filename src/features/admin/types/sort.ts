@@ -8,10 +8,10 @@ export type AdminSortDirection = "asc" | "desc";
  *
  * @template TField 정렬 가능한 필드의 문자열 리터럴 타입
  */
-export interface AdminSort<TField extends string> {
+export type AdminSort<TField extends string> = {
   /** 정렬할 필드 */
   field: TField;
 
   /** 정렬 방향 */
   direction: AdminSortDirection;
-}
+};

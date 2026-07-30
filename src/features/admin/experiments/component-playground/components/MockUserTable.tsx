@@ -36,7 +36,7 @@ const USER_GRADE_LABELS = {
   vip: "VIP",
 } as const;
 
-interface MockUserTableProps {
+type MockUserTableProps = {
   /** 현재 페이지에 표시할 Mock 사용자 목록 */
   users: MockUser[];
 
@@ -51,7 +51,7 @@ interface MockUserTableProps {
 
   /** 목록 정렬 조건 변경 함수 */
   onSortChange: (sort: AdminSort<ComponentPlaygroundSortField>) => void;
-}
+};
 
 /**
  * Component Playground에서 조회한 Mock 사용자 목록을 표시합니다.

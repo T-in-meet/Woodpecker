@@ -3,10 +3,10 @@ import { ROUTES } from "@/lib/constants/routes";
 import type { AdminBreadcrumbItem } from "../types/breadcrumb";
 import type { AdminSidebarItem } from "../types/sidebar";
 
-interface BreadcrumbMatch {
+type BreadcrumbMatch = {
   items: AdminBreadcrumbItem[];
   matchedHrefLength: number;
-}
+};
 
 /**
  * 현재 경로가 Sidebar 항목의 경로와 일치하는지 확인한다.

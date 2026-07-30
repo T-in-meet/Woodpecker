@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils/cn";
 
 import { ADMIN_MOBILE_BREAKPOINT } from "../../constants/admin-breakpoint";
 
-interface AdminDateRangeInputProps {
+type AdminDateRangeInputProps = {
   /**
    * 현재 선택된 날짜 범위입니다.
    */
@@ -54,7 +54,7 @@ interface AdminDateRangeInputProps {
 
   /** 현재 날짜 범위 필터를 삭제합니다. */
   onClear: () => void;
-}
+};
 
 /**
  * 관리자 필터에서 사용하는 날짜 범위 입력입니다.

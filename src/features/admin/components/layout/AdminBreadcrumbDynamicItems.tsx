@@ -5,7 +5,7 @@ import { useEffect } from "react";
 import { useAdminBreadcrumb } from "../../contexts/AdminBreadcrumbContext";
 import type { AdminBreadcrumbItem } from "../../types/breadcrumb";
 
-interface AdminBreadcrumbDynamicItemsProps {
+type AdminBreadcrumbDynamicItemsProps = {
   /** 정적 Breadcrumb 뒤에 추가할 현재 페이지의 동적 항목 */
   items: readonly AdminBreadcrumbItem[];
 
@@ -14,7 +14,7 @@ interface AdminBreadcrumbDynamicItemsProps {
 
   /** 로딩 중 표시할 동적 Breadcrumb Skeleton 항목 수 */
   loadingItemCount?: number;
-}
+};
 
 /**
  * 현재 페이지의 동적 Breadcrumb 항목과 로딩 상태를

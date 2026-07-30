@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 import type { AdminBreadcrumbItem } from "../../types/breadcrumb";
 
-interface Props {
+type Props = {
   /** 화면에 표시할 Breadcrumb 항목 */
   items: readonly AdminBreadcrumbItem[];
 
@@ -21,7 +21,7 @@ interface Props {
 
   /** 로딩 중 표시할 동적 Breadcrumb Skeleton 항목 수 */
   loadingItemCount?: number;
-}
+};
 
 /**
  * 관리자 페이지의 Breadcrumb 항목을 표시합니다.

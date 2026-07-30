@@ -21,7 +21,7 @@ export const ROUTES = {
 
     FEEDBACKS: "/admin/feedbacks",
 
-    FEATURES: "/admin/features",
+    OPERATIONAL_ERRORS: "/admin/operational-errors",
 
     EXPERIMENTS: {
       DASHBOARD: "/admin/experiments",
@@ -86,4 +86,10 @@ export function getNoteReviewRoute(noteId: string) {
  */
 export function getAdminFeedbackDetailRoute(feedbackId: string) {
   return `${ROUTES.ADMIN.FEEDBACKS}/${feedbackId}`;
+}
+
+export function getAdminOperationalErrorDetailRoute(
+  operationalErrorId: string,
+) {
+  return `${ROUTES.ADMIN.OPERATIONAL_ERRORS}/${operationalErrorId}`;
 }

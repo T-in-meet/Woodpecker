@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  createFeedbackContentPreview,
   escapePostgrestLikePattern,
   nextDayIsoString,
   startOfDayIsoString,
-} from "../utils/feedback-query";
+} from "../../utils/query";
+import { createFeedbackContentPreview } from "../utils/feedback-query";
 
 describe("createFeedbackContentPreview", () => {
   it("연속된 공백과 줄바꿈을 하나의 공백으로 정규화한다", () => {

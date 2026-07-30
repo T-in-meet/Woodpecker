@@ -26,7 +26,7 @@ export type FeedbackSortField = "status" | "category" | "title" | "createdAt";
 /**
  * 관리자 피드백 목록 Server Action에 전달하는 조회 조건입니다.
  */
-export interface AdminFeedbackListQuery {
+export type AdminFeedbackListQuery = {
   /** 1부터 시작하는 현재 페이지 번호 */
   page: number;
 
@@ -41,12 +41,12 @@ export interface AdminFeedbackListQuery {
 
   /** 공통 관리자 toolbar에서 적용된 정렬 조건 */
   sort: AdminSort<FeedbackSortField>;
-}
+};
 
 /**
  * 관리자 피드백 목록 테이블의 단일 row 표시 모델입니다.
  */
-export interface AdminFeedbackListItem {
+export type AdminFeedbackListItem = {
   /** feedbacks.id */
   id: string;
 
@@ -91,12 +91,12 @@ export interface AdminFeedbackListItem {
 
   /** 피드백 수정 시각 ISO 문자열 */
   updatedAt: string;
-}
+};
 
 /**
  * 관리자 피드백 목록 조회 결과입니다.
  */
-export interface AdminFeedbackListResult {
+export type AdminFeedbackListResult = {
   /** 현재 페이지에 표시할 목록 row */
   items: AdminFeedbackListItem[];
 
@@ -107,4 +107,4 @@ export interface AdminFeedbackListResult {
     total: number;
     totalPages: number;
   };
-}
+};

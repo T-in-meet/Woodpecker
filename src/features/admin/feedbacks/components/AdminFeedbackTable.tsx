@@ -20,7 +20,7 @@ import type {
 } from "../types/feedback-list";
 import { AdminFeedbackTableSkeleton } from "./AdminFeedbackTableSkeleton";
 
-interface AdminFeedbackTableProps {
+type AdminFeedbackTableProps = {
   /** 현재 페이지에 표시할 피드백 목록 */
   feedbacks: AdminFeedbackListItem[];
 
@@ -35,7 +35,7 @@ interface AdminFeedbackTableProps {
 
   /** 정렬 조건 변경 이벤트 */
   onSortChange: (sort: AdminSort<FeedbackSortField>) => void;
-}
+};
 
 /**
  * 관리자 피드백 목록을 테이블 형태로 표시합니다.

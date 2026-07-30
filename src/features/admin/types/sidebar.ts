@@ -1,6 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 
-export interface AdminSidebarItem {
+export type AdminSidebarItem = {
   title: string;
 
   href?: string;
@@ -12,4 +12,4 @@ export interface AdminSidebarItem {
   breadcrumbHref?: string;
 
   children?: readonly AdminSidebarItem[];
-}
+};

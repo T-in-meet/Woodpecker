@@ -10,7 +10,7 @@ import { ADMIN_SORT_DIRECTION } from "../../constants/admin-sort";
 import type { AdminSort } from "../../types/sort";
 import { getNextAdminSortDirection } from "../../utils/admin-sort";
 
-interface AdminSortableTableHeadProps<TField extends string> {
+type AdminSortableTableHeadProps<TField extends string> = {
   /** 헤더에 표시할 내용 */
   children: ReactNode;
 
@@ -28,7 +28,7 @@ interface AdminSortableTableHeadProps<TField extends string> {
 
   /** TableHead에 추가할 className */
   className?: string;
-}
+};
 
 /**
  * 관리자 테이블에서 정렬 기능을 제공하는 공통 헤더입니다.

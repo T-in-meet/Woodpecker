@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils/cn";
 
-interface AdminFilterBadgeProps extends ComponentPropsWithoutRef<typeof Badge> {
+type AdminFilterBadgeProps = ComponentPropsWithoutRef<typeof Badge> & {
   /** 사용자에게 표시할 필터 필드명 */
   label: string;
 
@@ -21,7 +21,7 @@ interface AdminFilterBadgeProps extends ComponentPropsWithoutRef<typeof Badge> {
 
   /** 필터를 삭제할 때 호출되는 함수 */
   onRemove: () => void;
-}
+};
 
 /**
  * 관리자 목록에 추가된 필터를 표시하는 공통 Badge입니다.

@@ -19,7 +19,7 @@ import { buttonVariants } from "@/components/ui/button";
 /**
  * 관리자 확인 대화상자가 공통으로 사용하는 속성입니다.
  */
-interface AdminAlertDialogBaseProps {
+type AdminAlertDialogBaseProps = {
   /** AlertDialog를 여는 Trigger 요소 */
   trigger: ReactElement;
 
@@ -49,17 +49,17 @@ interface AdminAlertDialogBaseProps {
 
   /** 확인 버튼을 선택했을 때 호출됩니다. */
   onConfirm: () => void;
-}
+};
 
-interface AdminAlertDialogUncontrolledProps extends AdminAlertDialogBaseProps {
+type AdminAlertDialogUncontrolledProps = AdminAlertDialogBaseProps & {
   open?: never;
   onOpenChange?: never;
-}
+};
 
-interface AdminAlertDialogControlledProps extends AdminAlertDialogBaseProps {
+type AdminAlertDialogControlledProps = AdminAlertDialogBaseProps & {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-}
+};
 
 type AdminAlertDialogProps =
   | AdminAlertDialogUncontrolledProps

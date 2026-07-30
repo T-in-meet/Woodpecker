@@ -5,13 +5,10 @@ import { cn } from "@/lib/utils/cn";
 
 import type { AdminBadgeColor } from "../../types/badge";
 
-interface AdminBadgeProps extends Omit<
-  ComponentProps<typeof Badge>,
-  "variant"
-> {
+type AdminBadgeProps = Omit<ComponentProps<typeof Badge>, "variant"> & {
   /** 관리자 배지에 적용할 색상 */
   color?: AdminBadgeColor;
-}
+};
 
 const ADMIN_BADGE_COLOR_CLASS_NAME: Record<AdminBadgeColor, string> = {
   gray: "border-gray-200 bg-gray-100 text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200",

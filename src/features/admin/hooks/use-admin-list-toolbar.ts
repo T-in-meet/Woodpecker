@@ -19,11 +19,11 @@ export type AdminListToolbarFilters<TFilterField extends string> = Partial<
   Record<TFilterField, AdminAppliedFilter<TFilterField>>
 >;
 
-interface UseAdminListToolbarParams<
+type UseAdminListToolbarParams<
   TSearchField extends string,
   TFilterField extends string,
   TSortField extends string,
-> {
+> = {
   /** 목록에서 사용할 검색, 필터, 정렬 및 페이지네이션 설정 */
   config: AdminListConfig<TSearchField, TFilterField, TSortField>;
 
@@ -33,16 +33,16 @@ interface UseAdminListToolbarParams<
    * 일반적으로 목록 페이지를 첫 페이지로 초기화할 때 사용합니다.
    */
   onApply?: () => void;
-}
+};
 
 /**
  * 관리자 목록 Toolbar Hook이 반환하는 상태와 동작입니다.
  */
-export interface UseAdminListToolbarResult<
+export type UseAdminListToolbarResult<
   TSearchField extends string,
   TFilterField extends string,
   TSortField extends string,
-> {
+> = {
   /** 목록 조회에 사용할 적용된 검색 조건 */
   search: AdminSearchValue<TSearchField>;
 
@@ -96,7 +96,7 @@ export interface UseAdminListToolbarResult<
 
   /** 목록 정렬 조건 변경 */
   handleSortChange: (sort: AdminSort<TSortField>) => void;
-}
+};
 
 /**
  * 관리자 목록의 검색, 필터 및 정렬 상태를 관리합니다.

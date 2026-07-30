@@ -212,6 +212,113 @@ export type Database = {
           },
         ];
       };
+      operational_errors: {
+        Row: {
+          actor_user_id: string | null;
+          context: Json;
+          created_at: string;
+          error_code: string;
+          feature: string;
+          fingerprint: string;
+          first_seen_at: string;
+          id: string;
+          last_seen_at: string;
+          message: string;
+          occurrence_count: number;
+          operation: string;
+          resolution_note: string | null;
+          resolved_at: string | null;
+          resolved_by: string | null;
+          severity: string;
+          stage: string;
+          status: string;
+          updated_at: string;
+          user_id: string | null;
+        };
+        Insert: {
+          actor_user_id?: string | null;
+          context?: Json;
+          created_at?: string;
+          error_code: string;
+          feature: string;
+          fingerprint: string;
+          first_seen_at?: string;
+          id?: string;
+          last_seen_at?: string;
+          message: string;
+          occurrence_count?: number;
+          operation: string;
+          resolution_note?: string | null;
+          resolved_at?: string | null;
+          resolved_by?: string | null;
+          severity: string;
+          stage: string;
+          status?: string;
+          updated_at?: string;
+          user_id?: string | null;
+        };
+        Update: {
+          actor_user_id?: string | null;
+          context?: Json;
+          created_at?: string;
+          error_code?: string;
+          feature?: string;
+          fingerprint?: string;
+          first_seen_at?: string;
+          id?: string;
+          last_seen_at?: string;
+          message?: string;
+          occurrence_count?: number;
+          operation?: string;
+          resolution_note?: string | null;
+          resolved_at?: string | null;
+          resolved_by?: string | null;
+          severity?: string;
+          stage?: string;
+          status?: string;
+          updated_at?: string;
+          user_id?: string | null;
+        };
+        Relationships: [];
+      };
+      operational_error_status_history: {
+        Row: {
+          changed_by: string | null;
+          created_at: string;
+          from_status: string | null;
+          id: string;
+          note: string | null;
+          operational_error_id: string;
+          to_status: string;
+        };
+        Insert: {
+          changed_by?: string | null;
+          created_at?: string;
+          from_status?: string | null;
+          id?: string;
+          note?: string | null;
+          operational_error_id: string;
+          to_status: string;
+        };
+        Update: {
+          changed_by?: string | null;
+          created_at?: string;
+          from_status?: string | null;
+          id?: string;
+          note?: string | null;
+          operational_error_id?: string;
+          to_status?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "operational_error_status_history_error_id_fkey";
+            columns: ["operational_error_id"];
+            isOneToOne: false;
+            referencedRelation: "operational_errors";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       profiles: {
         Row: {
           avatar_url: string | null;
@@ -371,6 +478,17 @@ export type Database = {
       };
       complete_review_and_schedule_next: {
         Args: { p_note_id: string; p_review_log_id: string };
+        Returns: string;
+      };
+      increment_operational_error_occurrence: {
+        Args: {
+          p_actor_user_id: string | null;
+          p_context: Json;
+          p_id: string;
+          p_message: string;
+          p_severity: string;
+          p_user_id: string | null;
+        };
         Returns: string;
       };
       create_note_with_initial_review_log: {

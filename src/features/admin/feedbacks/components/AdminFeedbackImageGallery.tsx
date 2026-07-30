@@ -6,18 +6,18 @@ import { useState } from "react";
 import { AdminImageLightbox } from "@/features/admin/components/common/AdminImageLightbox";
 import type { AdminLightboxImage } from "@/features/admin/types/lightbox";
 
-interface AdminFeedbackImage {
+type AdminFeedbackImage = {
   /** Storage 내부 이미지 경로 */
   path: string;
 
   /** 이미지를 조회할 수 있는 signed URL */
   signedUrl: string;
-}
+};
 
-interface AdminFeedbackImageGalleryProps {
+type AdminFeedbackImageGalleryProps = {
   /** 사용자 피드백에 첨부된 이미지 목록 */
   images: readonly AdminFeedbackImage[];
-}
+};
 
 /**
  * 관리자 피드백 상세 화면에서 사용자 첨부 이미지를 표시합니다.

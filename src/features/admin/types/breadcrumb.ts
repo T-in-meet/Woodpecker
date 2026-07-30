@@ -1,5 +1,5 @@
-export interface AdminBreadcrumbItem {
+export type AdminBreadcrumbItem = {
   label: string;
 
   href?: string;
-}
+};

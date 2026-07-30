@@ -25,21 +25,21 @@ import { useSaveFeedbackReply } from "../hooks/use-save-feedback-reply";
 import { feedbackReplyFormSchema, FeedbackReplyFormValues } from "../schema";
 import type { AdminFeedbackDetail } from "../types/feedback-detail";
 
-interface AdminFeedbackReplyPanelProps {
+type AdminFeedbackReplyPanelProps = {
   /** 답변을 작성하거나 수정할 피드백 상세 데이터 */
   feedback: AdminFeedbackDetail;
 
   className?: string;
-}
+};
 
 /**
  * 아직 업로드하지 않은 새 답변 이미지의 클라이언트 미리보기 상태입니다.
  */
-interface PreviewImage {
+type PreviewImage = {
   id: string;
   file: File;
   url: string;
-}
+};
 
 /**
  * 관리자 답변 조회, 작성, 수정을 담당하는 상세 페이지 우측 패널입니다.
