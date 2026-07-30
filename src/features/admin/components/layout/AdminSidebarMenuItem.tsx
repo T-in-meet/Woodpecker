@@ -16,9 +16,14 @@ import {
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar";
 
-import type { AdminSidebarItem } from "../../types/sidebar";
+import type {
+  AdminSidebarBadgeMap,
+  AdminSidebarItem,
+} from "../../types/sidebar";
 import {
+  formatSidebarBadgeCount,
   getItemKey,
+  getSidebarBadgeCount,
   hasActiveItem,
   isPathActive,
   type OpenGroups,
@@ -26,6 +31,8 @@ import {
 
 type AdminSidebarMenuItemProps = {
   item: AdminSidebarItem;
+
+  badgeMap?: AdminSidebarBadgeMap | undefined;
 
   pathname: string;
 
@@ -40,6 +47,7 @@ type AdminSidebarMenuItemProps = {
 
 export function AdminSidebarMenuItem({
   item,
+  badgeMap,
   pathname,
   openGroups,
   onOpenChange,
@@ -58,6 +66,17 @@ export function AdminSidebarMenuItem({
   const Icon = item.icon;
 
   const chevronRotation = isOpen ? "rotate-90" : "rotate-0";
+  const badgeCount = getSidebarBadgeCount(item, badgeMap);
+  const badgeLabel = formatSidebarBadgeCount(badgeCount);
+
+  const badge = badgeLabel ? (
+    <span
+      aria-label={`${badgeCount}개의 읽지 않은 관리자 알림`}
+      className="ml-auto inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-sidebar-primary px-1.5 text-[11px] font-medium leading-none text-sidebar-primary-foreground tabular-nums group-data-[collapsible=icon]:hidden"
+    >
+      {badgeLabel}
+    </span>
+  ) : null;
 
   if (!hasChildren) {
     if (!item.href) {
@@ -71,7 +90,9 @@ export function AdminSidebarMenuItem({
             <Link href={item.href} onClick={onNavigate}>
               <Icon />
 
-              <span>{item.title}</span>
+              <span className="min-w-0 flex-1 truncate">{item.title}</span>
+
+              {badge}
             </Link>
           </SidebarMenuButton>
         </SidebarMenuItem>
@@ -84,7 +105,9 @@ export function AdminSidebarMenuItem({
           <Link href={item.href} onClick={onNavigate}>
             <Icon />
 
-            <span>{item.title}</span>
+            <span className="min-w-0 flex-1 truncate">{item.title}</span>
+
+            {badge}
           </Link>
         </SidebarMenuSubButton>
       </SidebarMenuSubItem>
@@ -112,10 +135,12 @@ export function AdminSidebarMenuItem({
             >
               <Icon />
 
-              <span>{item.title}</span>
+              <span className="min-w-0 flex-1 truncate">{item.title}</span>
+
+              {badge}
 
               <ChevronRight
-                className={`ml-auto transition-transform duration-200 ${chevronRotation}`}
+                className={`shrink-0 transition-transform duration-200 ${chevronRotation}`}
               />
             </SidebarMenuButton>
           </CollapsibleTrigger>
@@ -125,6 +150,7 @@ export function AdminSidebarMenuItem({
               {children.map((child) => (
                 <AdminSidebarMenuItem
                   key={getItemKey(child, depth + 1)}
+                  badgeMap={badgeMap}
                   item={child}
                   pathname={pathname}
                   openGroups={openGroups}
@@ -153,10 +179,12 @@ export function AdminSidebarMenuItem({
           <SidebarMenuSubButton isActive={containsActiveItem}>
             <Icon />
 
-            <span>{item.title}</span>
+            <span className="min-w-0 flex-1 truncate">{item.title}</span>
+
+            {badge}
 
             <ChevronRight
-              className={`ml-auto transition-transform duration-200 ${chevronRotation}`}
+              className={`shrink-0 transition-transform duration-200 ${chevronRotation}`}
             />
           </SidebarMenuSubButton>
         </CollapsibleTrigger>
@@ -166,6 +194,7 @@ export function AdminSidebarMenuItem({
             {children.map((child) => (
               <AdminSidebarMenuItem
                 key={getItemKey(child, depth + 1)}
+                badgeMap={badgeMap}
                 item={child}
                 pathname={pathname}
                 openGroups={openGroups}

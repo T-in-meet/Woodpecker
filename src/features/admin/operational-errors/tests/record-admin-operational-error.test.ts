@@ -7,13 +7,13 @@ import {
   ADMIN_OPERATIONAL_ERROR_STAGES,
   OPERATIONAL_ERROR_SEVERITY,
 } from "@/features/operational-errors/constants";
-import { recordOperationalError } from "@/features/operational-errors/record";
+import { reportOperationalError } from "@/features/operational-errors/report";
 import { getOperationalErrorContext } from "@/features/operational-errors/utils/get-operational-error-context";
 
 import { recordAdminOperationalError } from "../utils/record-admin-operational-error";
 
-vi.mock("@/features/operational-errors/record", () => ({
-  recordOperationalError: vi.fn(),
+vi.mock("@/features/operational-errors/report", () => ({
+  reportOperationalError: vi.fn(),
 }));
 
 vi.mock(
@@ -25,14 +25,14 @@ vi.mock(
 
 const ACTOR_USER_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 
-const mockedRecordOperationalError = vi.mocked(recordOperationalError);
+const mockedReportOperationalError = vi.mocked(reportOperationalError);
 const mockedGetOperationalErrorContext = vi.mocked(getOperationalErrorContext);
 
 describe("recordAdminOperationalError", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    mockedRecordOperationalError.mockResolvedValue({
+    mockedReportOperationalError.mockResolvedValue({
       id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
       ok: true,
       recorded: "created",
@@ -44,7 +44,7 @@ describe("recordAdminOperationalError", () => {
     });
   });
 
-  it("관리자 운영 오류 정보를 공통 기록 함수에 전달한다", async () => {
+  it("관리자 운영 오류 정보를 공통 보고 함수에 전달한다", async () => {
     const error = {
       code: "42703",
       message: "column does not exist",
@@ -65,8 +65,8 @@ describe("recordAdminOperationalError", () => {
       "Unknown admin operational error",
     );
 
-    expect(mockedRecordOperationalError).toHaveBeenCalledOnce();
-    expect(mockedRecordOperationalError).toHaveBeenCalledWith({
+    expect(mockedReportOperationalError).toHaveBeenCalledOnce();
+    expect(mockedReportOperationalError).toHaveBeenCalledWith({
       actorUserId: ACTOR_USER_ID,
       context: {
         error: {
@@ -102,7 +102,7 @@ describe("recordAdminOperationalError", () => {
       stage: ADMIN_OPERATIONAL_ERROR_STAGES.LIST_QUERY,
     });
 
-    expect(mockedRecordOperationalError).toHaveBeenCalledWith({
+    expect(mockedReportOperationalError).toHaveBeenCalledWith({
       actorUserId: ACTOR_USER_ID,
       context: {
         error: {
@@ -124,7 +124,7 @@ describe("recordAdminOperationalError", () => {
     });
   });
 
-  it("관리자 ID를 공통 기록 함수에 전달한다", async () => {
+  it("관리자 ID를 공통 보고 함수에 전달한다", async () => {
     await recordAdminOperationalError({
       actorUserId: ACTOR_USER_ID,
       code: ADMIN_OPERATIONAL_ERROR_CODES.OPERATIONAL_ERROR_STATUS_UPDATE_FAILED,
@@ -135,7 +135,7 @@ describe("recordAdminOperationalError", () => {
       stage: ADMIN_OPERATIONAL_ERROR_STAGES.STATUS_UPDATE,
     });
 
-    expect(mockedRecordOperationalError).toHaveBeenCalledWith(
+    expect(mockedReportOperationalError).toHaveBeenCalledWith(
       expect.objectContaining({
         actorUserId: ACTOR_USER_ID,
       }),

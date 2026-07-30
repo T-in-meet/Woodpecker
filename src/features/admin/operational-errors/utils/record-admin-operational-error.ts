@@ -5,7 +5,7 @@ import {
   ADMIN_OPERATIONAL_ERROR_STAGES,
   OPERATIONAL_ERROR_SEVERITY,
 } from "@/features/operational-errors/constants";
-import { recordOperationalError } from "@/features/operational-errors/record";
+import { reportOperationalError } from "@/features/operational-errors/report";
 import {
   getOperationalErrorContext,
   type OperationalErrorContext,
@@ -38,7 +38,7 @@ type RecordAdminOperationalErrorInput = {
 export async function recordAdminOperationalError(
   input: RecordAdminOperationalErrorInput,
 ): Promise<void> {
-  await recordOperationalError({
+  await reportOperationalError({
     actorUserId: input.actorUserId,
     errorCode: input.code,
     feature: ADMIN_OPERATIONAL_ERROR_FEATURES.ADMIN_OPERATIONAL_ERRORS,

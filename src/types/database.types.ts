@@ -34,6 +34,65 @@ export type Database = {
   };
   public: {
     Tables: {
+      admin_notification_events: {
+        Row: {
+          body: string | null;
+          click_path: string;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          metadata: Json;
+          title: string;
+          type: string;
+        };
+        Insert: {
+          body?: string | null;
+          click_path: string;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          metadata?: Json;
+          title: string;
+          type: string;
+        };
+        Update: {
+          body?: string | null;
+          click_path?: string;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          metadata?: Json;
+          title?: string;
+          type?: string;
+        };
+        Relationships: [];
+      };
+      admin_notification_reads: {
+        Row: {
+          admin_user_id: string;
+          event_id: string;
+          read_at: string;
+        };
+        Insert: {
+          admin_user_id: string;
+          event_id: string;
+          read_at?: string;
+        };
+        Update: {
+          admin_user_id?: string;
+          event_id?: string;
+          read_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "admin_notification_reads_event_id_fkey";
+            columns: ["event_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_notification_events";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       feedbacks: {
         Row: {
           category: string;
@@ -161,7 +220,9 @@ export type Database = {
       notifications: {
         Row: {
           body: string | null;
+          click_path: string;
           id: string;
+          metadata: Json;
           note_id: string | null;
           read_at: string | null;
           review_log_id: string | null;
@@ -173,7 +234,9 @@ export type Database = {
         };
         Insert: {
           body?: string | null;
+          click_path: string;
           id?: string;
+          metadata?: Json;
           note_id?: string | null;
           read_at?: string | null;
           review_log_id?: string | null;
@@ -185,7 +248,9 @@ export type Database = {
         };
         Update: {
           body?: string | null;
+          click_path?: string;
           id?: string;
+          metadata?: Json;
           note_id?: string | null;
           read_at?: string | null;
           review_log_id?: string | null;
@@ -480,6 +545,24 @@ export type Database = {
         Args: { p_note_id: string; p_review_log_id: string };
         Returns: string;
       };
+      get_admin_unread_notification_counts: {
+        Args: { p_admin_user_id: string };
+        Returns: {
+          type: string;
+          unread_count: number;
+        }[];
+      };
+      get_admin_unread_notification_list: {
+        Args: { p_admin_user_id: string; p_limit?: number };
+        Returns: {
+          body: string | null;
+          click_path: string;
+          created_at: string;
+          id: string;
+          title: string;
+          type: string;
+        }[];
+      };
       increment_operational_error_occurrence: {
         Args: {
           p_actor_user_id: string | null;
@@ -488,6 +571,15 @@ export type Database = {
           p_message: string;
           p_severity: string;
           p_user_id: string | null;
+        };
+        Returns: string;
+      };
+      update_operational_error_status_with_history: {
+        Args: {
+          p_admin_user_id: string;
+          p_operational_error_id: string;
+          p_resolution_note: string;
+          p_status: string;
         };
         Returns: string;
       };

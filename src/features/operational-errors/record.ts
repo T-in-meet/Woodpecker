@@ -109,6 +109,14 @@ export type RecordOperationalErrorResult =
     };
 
 /**
+ * 운영 오류 기록 동작을 제어하는 옵션입니다.
+ */
+export type RecordOperationalErrorOptions = {
+  /** 테스트 또는 특수한 실행 환경에서 사용할 Supabase Client */
+  supabase?: OperationalErrorClient;
+};
+
+/**
  * 문자열이 최대 길이를 초과하면 잘라내고 생략 표시를 추가합니다.
  */
 function truncateString(value: string, maxLength: number) {

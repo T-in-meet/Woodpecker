@@ -36,11 +36,8 @@ function withAuth<T extends Record<string, unknown>>(
 
 function createUnreadCountMock(count: number | null) {
   const statusEqMock = vi.fn().mockResolvedValue({ count, error: null });
-  const typeEqMock = vi.fn().mockReturnValue({
-    eq: statusEqMock,
-  });
   const userEqMock = vi.fn().mockReturnValue({
-    eq: typeEqMock,
+    eq: statusEqMock,
   });
   const selectMock = vi.fn().mockReturnValue({
     eq: userEqMock,
@@ -49,7 +46,6 @@ function createUnreadCountMock(count: number | null) {
   return {
     selectMock,
     statusEqMock,
-    typeEqMock,
     userEqMock,
     supabase: withAuth(
       {
@@ -70,11 +66,8 @@ function createNotificationListMock(data: unknown) {
   const statusEqMock = vi.fn().mockReturnValue({
     order: orderMock,
   });
-  const typeEqMock = vi.fn().mockReturnValue({
-    eq: statusEqMock,
-  });
   const userEqMock = vi.fn().mockReturnValue({
-    eq: typeEqMock,
+    eq: statusEqMock,
   });
   const selectMock = vi.fn().mockReturnValue({
     eq: userEqMock,
@@ -85,7 +78,6 @@ function createNotificationListMock(data: unknown) {
     orderMock,
     selectMock,
     statusEqMock,
-    typeEqMock,
     userEqMock,
     supabase: withAuth(
       {
@@ -130,7 +122,7 @@ describe("notification queries", () => {
   });
 
   it("counts SENT notifications for the current user", async () => {
-    const { supabase, selectMock, userEqMock, typeEqMock, statusEqMock } =
+    const { supabase, selectMock, userEqMock, statusEqMock } =
       createUnreadCountMock(3);
     createServerComponentClientMock.mockResolvedValue(supabase);
 
@@ -142,7 +134,6 @@ describe("notification queries", () => {
       head: true,
     });
     expect(userEqMock).toHaveBeenCalledWith("user_id", USER_ID);
-    expect(typeEqMock).toHaveBeenCalledWith("type", "REVIEW");
     expect(statusEqMock).toHaveBeenCalledWith(
       "status",
       NOTIFICATION_STATUS.SENT,
@@ -174,7 +165,6 @@ describe("notification queries", () => {
       supabase,
       selectMock,
       userEqMock,
-      typeEqMock,
       statusEqMock,
       orderMock,
       limitMock,
@@ -183,6 +173,7 @@ describe("notification queries", () => {
         id: "22222222-2222-4222-8222-222222222222",
         title: "복습할 시간이에요!",
         body: "Notification body",
+        click_path: "/notes/33333333-3333-4333-8333-333333333333/review",
         type: "REVIEW",
         status: NOTIFICATION_STATUS.SENT,
         sent_at: "2026-04-27T01:00:00.000Z",
@@ -197,10 +188,9 @@ describe("notification queries", () => {
     const result = await getNotificationList({ limit: 100 });
 
     expect(selectMock).toHaveBeenCalledWith(
-      "id, title, body, type, status, sent_at, read_at, note_id, review_log_id, note:notes(title)",
+      "id, title, body, type, status, sent_at, read_at, click_path, note_id, review_log_id, note:notes(title)",
     );
     expect(userEqMock).toHaveBeenCalledWith("user_id", USER_ID);
-    expect(typeEqMock).toHaveBeenCalledWith("type", "REVIEW");
     expect(statusEqMock).toHaveBeenCalledWith(
       "status",
       NOTIFICATION_STATUS.SENT,
@@ -212,6 +202,7 @@ describe("notification queries", () => {
         id: "22222222-2222-4222-8222-222222222222",
         title: "복습할 시간이에요!",
         body: "Notification body",
+        click_path: "/notes/33333333-3333-4333-8333-333333333333/review",
         type: "REVIEW",
         status: NOTIFICATION_STATUS.SENT,
         sent_at: "2026-04-27T01:00:00.000Z",
@@ -219,6 +210,7 @@ describe("notification queries", () => {
         note_id: "33333333-3333-4333-8333-333333333333",
         review_log_id: "44444444-4444-4444-8444-444444444444",
         noteTitle: "Joined note title",
+        source: "USER",
       },
     ]);
   });
@@ -229,6 +221,7 @@ describe("notification queries", () => {
         id: "22222222-2222-4222-8222-222222222222",
         title: "Review due",
         body: null,
+        click_path: "/notes/33333333-3333-4333-8333-333333333333/review",
         type: "UNKNOWN",
         status: "SENT",
         sent_at: "2026-04-27T01:00:00.000Z",
@@ -243,13 +236,14 @@ describe("notification queries", () => {
     await expect(getNotificationList()).rejects.toThrow();
   });
 
-  it("throws when a review notification list row has no note id", async () => {
+  it("returns a feedback reply notification without a note id", async () => {
     const { supabase } = createNotificationListMock([
       {
         id: "22222222-2222-4222-8222-222222222222",
-        title: "Review due",
-        body: null,
-        type: "REVIEW",
+        title: "피드백 답변이 등록되었습니다.",
+        body: "답변이 등록되었습니다.",
+        click_path: "/mypage?feedbackId=55555555-5555-4555-8555-555555555555",
+        type: "FEEDBACK_REPLY",
         status: "SENT",
         sent_at: "2026-04-27T01:00:00.000Z",
         read_at: null,
@@ -260,7 +254,22 @@ describe("notification queries", () => {
     ]);
     createServerComponentClientMock.mockResolvedValue(supabase);
 
-    await expect(getNotificationList()).rejects.toThrow();
+    await expect(getNotificationList()).resolves.toEqual([
+      {
+        body: "답변이 등록되었습니다.",
+        click_path: "/mypage?feedbackId=55555555-5555-4555-8555-555555555555",
+        id: "22222222-2222-4222-8222-222222222222",
+        note_id: null,
+        noteTitle: null,
+        read_at: null,
+        review_log_id: null,
+        sent_at: "2026-04-27T01:00:00.000Z",
+        source: "USER",
+        status: "SENT",
+        title: "피드백 답변이 등록되었습니다.",
+        type: "FEEDBACK_REPLY",
+      },
+    ]);
   });
 
   it("returns whether the current user has any push subscription", async () => {

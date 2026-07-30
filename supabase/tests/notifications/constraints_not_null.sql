@@ -72,17 +72,19 @@ INSERT INTO public.notifications (
   body,
   status,
   sent_at
-)
+,
+  click_path)
 VALUES (
   current_setting('test.notifications_constraints_not_null_notification_seed_id')::uuid,
   current_setting('test.notifications_constraints_not_null_user_a_id')::uuid,
   NULL,
-  'ALERT',
+  'SYSTEM',
   'seed title',
   'seed body',
   'SENT',
   now()
-)
+,
+  '/test')
 ON CONFLICT (id) DO NOTHING;
 
 -- [정답 조건]
@@ -95,15 +97,17 @@ INSERT INTO public.notifications (
   title,
   status,
   sent_at
-)
+,
+  click_path)
 VALUES (
   current_setting('test.notifications_constraints_not_null_notification_insert_id')::uuid,
   current_setting('test.notifications_constraints_not_null_user_a_id')::uuid,
-  'REMINDER',
+  'SYSTEM',
   'valid insert',
   'READ',
   now()
-);
+,
+  '/test');
 
 SELECT is(
   (SELECT count(*) FROM public.notifications WHERE id = current_setting('test.notifications_constraints_not_null_notification_insert_id')::uuid),
@@ -122,16 +126,18 @@ INSERT INTO public.notifications (
   status,
   sent_at,
   read_at
-)
+,
+  click_path)
 VALUES (
   current_setting('test.notifications_constraints_not_null_read_at_null_id')::uuid,
   current_setting('test.notifications_constraints_not_null_user_a_id')::uuid,
-  'ALERT',
+  'SYSTEM',
   'read_at null',
   'SENT',
   now(),
   NULL
-);
+,
+  '/test');
 
 SELECT is(
   (SELECT count(*) FROM public.notifications WHERE id = current_setting('test.notifications_constraints_not_null_read_at_null_id')::uuid),
@@ -156,12 +162,12 @@ ROLLBACK TO SAVEPOINT notifications_not_null_update_user;
 -- 유효한 기존 알림 행에서 type을 다른 유효한 비NULL 문자열로 UPDATE할 수 있어야 한다.
 SAVEPOINT notifications_not_null_update_type;
 UPDATE public.notifications
-SET type = 'ALERT'
+SET type = 'SYSTEM'
 WHERE id = current_setting('test.notifications_constraints_not_null_notification_seed_id')::uuid;
 
 SELECT is(
   (SELECT type FROM public.notifications WHERE id = current_setting('test.notifications_constraints_not_null_notification_seed_id')::uuid),
-  'ALERT',
+  'SYSTEM',
   $$유효한 기존 알림 행에서 type을 다른 유효한 비NULL 문자열로 UPDATE할 수 있어야 한다.$$
 );
 ROLLBACK TO SAVEPOINT notifications_not_null_update_type;
@@ -225,15 +231,17 @@ INSERT INTO public.notifications (
   title,
   status,
   sent_at
-)
+,
+  click_path)
 VALUES (
   current_setting('test.notifications_constraints_not_null_notification_insert_explicit_id')::uuid,
   current_setting('test.notifications_constraints_not_null_user_a_id')::uuid,
-  'ALERT',
+  'SYSTEM',
   'explicit id',
   'SENT',
   now()
-);
+,
+  '/test');
 
 SELECT is(
   (SELECT count(*) FROM public.notifications WHERE id = current_setting('test.notifications_constraints_not_null_notification_insert_explicit_id')::uuid),
@@ -246,8 +254,10 @@ ROLLBACK TO SAVEPOINT notifications_not_null_insert_explicit_id;
 -- id를 NULL로 명시한 알림 행은 저장되면 안 된다.
 SELECT throws_ok(
   $sql$
-    INSERT INTO public.notifications (id, user_id, type, title, status, sent_at)
-    VALUES (NULL, current_setting('test.notifications_constraints_not_null_user_a_id')::uuid, 'ALERT', 'null id', 'SENT', now());
+    INSERT INTO public.notifications (id, user_id, type, title, status, sent_at,
+  click_path)
+    VALUES (NULL, current_setting('test.notifications_constraints_not_null_user_a_id')::uuid, 'SYSTEM', 'null id', 'SENT', now(),
+  '/test');
   $sql$,
   '23502',
   'null value in column "id" of relation "notifications" violates not-null constraint',
@@ -257,8 +267,10 @@ SELECT throws_ok(
 -- user_id를 NULL로 명시한 알림 행은 저장되면 안 된다.
 SELECT throws_ok(
   $sql$
-    INSERT INTO public.notifications (id, user_id, type, title, status, sent_at)
-    VALUES (gen_random_uuid(), NULL, 'ALERT', 'null user', 'SENT', now());
+    INSERT INTO public.notifications (id, user_id, type, title, status, sent_at,
+  click_path)
+    VALUES (gen_random_uuid(), NULL, 'SYSTEM', 'null user', 'SENT', now(),
+  '/test');
   $sql$,
   '23502',
   'null value in column "user_id" of relation "notifications" violates not-null constraint',
@@ -268,8 +280,10 @@ SELECT throws_ok(
 -- type을 NULL로 명시한 알림 행은 저장되면 안 된다.
 SELECT throws_ok(
   $sql$
-    INSERT INTO public.notifications (id, user_id, type, title, status, sent_at)
-    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_not_null_user_a_id')::uuid, NULL, 'null type', 'SENT', now());
+    INSERT INTO public.notifications (id, user_id, type, title, status, sent_at,
+  click_path)
+    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_not_null_user_a_id')::uuid, NULL, 'null type', 'SENT', now(),
+  '/test');
   $sql$,
   '23502',
   'null value in column "type" of relation "notifications" violates not-null constraint',
@@ -279,8 +293,10 @@ SELECT throws_ok(
 -- title을 NULL로 명시한 알림 행은 저장되면 안 된다.
 SELECT throws_ok(
   $sql$
-    INSERT INTO public.notifications (id, user_id, type, title, status, sent_at)
-    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_not_null_user_a_id')::uuid, 'ALERT', NULL, 'SENT', now());
+    INSERT INTO public.notifications (id, user_id, type, title, status, sent_at,
+  click_path)
+    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_not_null_user_a_id')::uuid, 'SYSTEM', NULL, 'SENT', now(),
+  '/test');
   $sql$,
   '23502',
   'null value in column "title" of relation "notifications" violates not-null constraint',
@@ -290,8 +306,10 @@ SELECT throws_ok(
 -- status를 NULL로 명시한 알림 행은 저장되면 안 된다.
 SELECT throws_ok(
   $sql$
-    INSERT INTO public.notifications (id, user_id, type, title, status, sent_at)
-    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_not_null_user_a_id')::uuid, 'ALERT', 'null status', NULL, now());
+    INSERT INTO public.notifications (id, user_id, type, title, status, sent_at,
+  click_path)
+    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_not_null_user_a_id')::uuid, 'SYSTEM', 'null status', NULL, now(),
+  '/test');
   $sql$,
   '23502',
   'null value in column "status" of relation "notifications" violates not-null constraint',
@@ -301,8 +319,10 @@ SELECT throws_ok(
 -- sent_at을 NULL로 명시한 알림 행은 저장되면 안 된다.
 SELECT throws_ok(
   $sql$
-    INSERT INTO public.notifications (id, user_id, type, title, status, sent_at)
-    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_not_null_user_a_id')::uuid, 'ALERT', 'null sent_at', 'SENT', NULL);
+    INSERT INTO public.notifications (id, user_id, type, title, status, sent_at,
+  click_path)
+    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_not_null_user_a_id')::uuid, 'SYSTEM', 'null sent_at', 'SENT', NULL,
+  '/test');
   $sql$,
   '23502',
   'null value in column "sent_at" of relation "notifications" violates not-null constraint',
@@ -409,15 +429,17 @@ INSERT INTO public.notifications (
   title,
   status,
   sent_at
-)
+,
+  click_path)
 VALUES (
   current_setting('test.notifications_constraints_not_null_notification_boundary_id')::uuid,
   current_setting('test.notifications_constraints_not_null_user_a_id')::uuid,
-  'A',
+  'SYSTEM',
   'boundary title',
   'SENT',
   now()
-);
+,
+  '/test');
 
 SELECT is(
   (SELECT count(*) FROM public.notifications WHERE id = current_setting('test.notifications_constraints_not_null_notification_boundary_id')::uuid),
@@ -435,15 +457,17 @@ INSERT INTO public.notifications (
   title,
   status,
   sent_at
-)
+,
+  click_path)
 VALUES (
   gen_random_uuid(),
   current_setting('test.notifications_constraints_not_null_user_a_id')::uuid,
-  'ALERT',
+  'SYSTEM',
   'T',
   'SENT',
   now()
-);
+,
+  '/test');
 
 SELECT is(
   (SELECT count(*) FROM public.notifications WHERE title = 'T'),
@@ -461,15 +485,17 @@ INSERT INTO public.notifications (
   title,
   status,
   sent_at
-)
+,
+  click_path)
 VALUES (
   gen_random_uuid(),
   current_setting('test.notifications_constraints_not_null_user_a_id')::uuid,
-  'ALERT',
+  'SYSTEM',
   'boundary status',
   'SENT',
   now()
-);
+,
+  '/test');
 
 SELECT is(
   (SELECT count(*) FROM public.notifications WHERE title = 'boundary status'),
@@ -487,15 +513,17 @@ INSERT INTO public.notifications (
   title,
   status,
   sent_at
-)
+,
+  click_path)
 VALUES (
   gen_random_uuid(),
   current_setting('test.notifications_constraints_not_null_user_a_id')::uuid,
-  'ALERT',
+  'SYSTEM',
   'boundary sent_at',
   'READ',
   now()
-);
+,
+  '/test');
 
 SELECT ok(
   (SELECT sent_at FROM public.notifications WHERE title = 'boundary sent_at') IS NOT NULL,
@@ -512,15 +540,17 @@ INSERT INTO public.notifications (
   title,
   status,
   sent_at
-)
+,
+  click_path)
 VALUES (
   gen_random_uuid(),
   current_setting('test.notifications_constraints_not_null_user_a_id')::uuid,
-  'ALERT',
+  'SYSTEM',
   'boundary user',
   'READ',
   now()
-);
+,
+  '/test');
 
 SELECT is(
   (SELECT count(*) FROM public.notifications WHERE title = 'boundary user'),
@@ -538,15 +568,17 @@ INSERT INTO public.notifications (
   title,
   status,
   sent_at
-)
+,
+  click_path)
 VALUES (
   gen_random_uuid(),
   current_setting('test.notifications_constraints_not_null_user_a_id')::uuid,
-  'ALERT',
+  'SYSTEM',
   'boundary id',
   'READ',
   now()
-);
+,
+  '/test');
 
 SELECT is(
   (SELECT count(*) FROM public.notifications WHERE title = 'boundary id'),
@@ -558,8 +590,10 @@ ROLLBACK TO SAVEPOINT notifications_not_null_boundary_id;
 -- DEFAULT가 있는 id, status, sent_at는 NOT NULL 관점에서 생략 시 유효하게 채워질 수 있지만, 명시적 NULL 지정은 허용되면 안 된다.
 SELECT throws_ok(
   $sql$
-    INSERT INTO public.notifications (id, user_id, type, title, status, sent_at)
-    VALUES (NULL, current_setting('test.notifications_constraints_not_null_user_a_id')::uuid, 'ALERT', 'default null', NULL, NULL);
+    INSERT INTO public.notifications (id, user_id, type, title, status, sent_at,
+  click_path)
+    VALUES (NULL, current_setting('test.notifications_constraints_not_null_user_a_id')::uuid, 'SYSTEM', 'default null', NULL, NULL,
+  '/test');
   $sql$,
   '23502',
   'null value in column "id" of relation "notifications" violates not-null constraint',
@@ -595,7 +629,7 @@ SELECT results_eq(
   ),
   format(
     $sql$
-      SELECT '%s'::text, 'ALERT'::text, 'seed title'::text, 'SENT'::text,
+      SELECT '%s'::text, 'SYSTEM'::text, 'seed title'::text, 'SENT'::text,
              sent_at::text
       FROM public.notifications
       WHERE id = '%s'::uuid

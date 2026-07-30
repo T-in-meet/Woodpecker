@@ -41,6 +41,8 @@ export type WithId<T extends TableNameWithId> = Pick<Row<T>, "id">;
 export const TABLES = {
   feedbackReplies: "feedback_replies",
   feedbacks: "feedbacks",
+  adminNotificationEvents: "admin_notification_events",
+  adminNotificationReads: "admin_notification_reads",
   notes: "notes",
   notifications: "notifications",
   operationalErrorStatusHistory: "operational_error_status_history",

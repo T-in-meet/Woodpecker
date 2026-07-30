@@ -6,33 +6,16 @@ import { OPERATIONAL_ERROR_STATUS } from "@/features/operational-errors/constant
 
 import { updateOperationalErrorStatus } from "../actions";
 
-const {
-  insertMock,
-  maybeSingleMock,
-  neqMock,
-  requireAdminMock,
-  selectEqMock,
-  selectMock,
-  updateEqMock,
-  updateMock,
-} = vi.hoisted(() => ({
-  insertMock: vi.fn(),
-  maybeSingleMock: vi.fn(),
-  neqMock: vi.fn(),
-  requireAdminMock: vi.fn(),
-  selectEqMock: vi.fn(),
-  selectMock: vi.fn(),
-  updateEqMock: vi.fn(),
-  updateMock: vi.fn(),
-}));
+const { recordAdminOperationalErrorMock, requireAdminMock, rpcMock } =
+  vi.hoisted(() => ({
+    recordAdminOperationalErrorMock: vi.fn(),
+    requireAdminMock: vi.fn(),
+    rpcMock: vi.fn(),
+  }));
 
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
-    from: vi.fn(() => ({
-      insert: insertMock,
-      select: selectMock,
-      update: updateMock,
-    })),
+    rpc: rpcMock,
   }),
 }));
 
@@ -40,153 +23,48 @@ vi.mock("@/features/admin/utils/require-admin", () => ({
   requireAdmin: requireAdminMock,
 }));
 
+vi.mock("../utils/record-admin-operational-error", () => ({
+  recordAdminOperationalError: recordAdminOperationalErrorMock,
+}));
+
 describe("updateOperationalErrorStatus", () => {
   beforeEach(() => {
     requireAdminMock.mockReset();
-    insertMock.mockReset();
-    selectMock.mockReset();
-    selectEqMock.mockReset();
-    neqMock.mockReset();
-    maybeSingleMock.mockReset();
-    updateMock.mockReset();
-    updateEqMock.mockReset();
+    recordAdminOperationalErrorMock.mockReset();
+    rpcMock.mockReset();
 
     requireAdminMock.mockResolvedValue("admin-user-id");
-
-    selectMock.mockReturnValue({
-      eq: selectEqMock,
-    });
-
-    const selectBuilder = {
-      eq: selectEqMock,
-      maybeSingle: maybeSingleMock,
-      neq: neqMock,
-    };
-
-    selectEqMock.mockReturnValue(selectBuilder);
-    neqMock.mockReturnValue(selectBuilder);
-
-    maybeSingleMock.mockResolvedValue({
-      data: {
-        fingerprint: "fingerprint",
-        status: OPERATIONAL_ERROR_STATUS.OPEN,
-      },
-      error: null,
-    });
-
-    updateMock.mockReturnValue({
-      eq: updateEqMock,
-    });
-
-    updateEqMock.mockResolvedValue({
-      error: null,
-    });
-
-    insertMock.mockResolvedValue({
+    rpcMock.mockResolvedValue({
+      data: "OK",
       error: null,
     });
   });
 
-  it("sets resolved fields when closing an operational error", async () => {
+  it("updates status and history through one RPC", async () => {
     const result = await updateOperationalErrorStatus(
       "error-id",
       OPERATIONAL_ERROR_STATUS.RESOLVED,
-      "배포 후 정상화 확인",
+      " 배포 후 정상화 확인 ",
     );
 
     expect(result).toEqual({ ok: true });
-
-    expect(selectMock).toHaveBeenCalledWith("fingerprint, status");
-    expect(selectEqMock).toHaveBeenCalledWith("id", "error-id");
-    expect(maybeSingleMock).toHaveBeenCalledOnce();
-
-    expect(updateMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        resolution_note: "배포 후 정상화 확인",
-        resolved_at: expect.any(String),
-        resolved_by: "admin-user-id",
-        status: OPERATIONAL_ERROR_STATUS.RESOLVED,
-      }),
-    );
-
-    expect(updateEqMock).toHaveBeenCalledWith("id", "error-id");
-
-    expect(insertMock).toHaveBeenCalledWith({
-      changed_by: "admin-user-id",
-      from_status: OPERATIONAL_ERROR_STATUS.OPEN,
-      note: "배포 후 정상화 확인",
-      operational_error_id: "error-id",
-      to_status: OPERATIONAL_ERROR_STATUS.RESOLVED,
-    });
-  });
-
-  it("clears resolved fields when reopening an operational error", async () => {
-    maybeSingleMock.mockResolvedValue({
-      data: null,
-      error: null,
-    });
-    maybeSingleMock.mockResolvedValueOnce({
-      data: {
-        fingerprint: "fingerprint",
-        status: OPERATIONAL_ERROR_STATUS.RESOLVED,
+    expect(rpcMock).toHaveBeenCalledWith(
+      "update_operational_error_status_with_history",
+      {
+        p_admin_user_id: "admin-user-id",
+        p_operational_error_id: "error-id",
+        p_resolution_note: "배포 후 정상화 확인",
+        p_status: OPERATIONAL_ERROR_STATUS.RESOLVED,
       },
+    );
+  });
+
+  it("returns the existing no changes message from the RPC result", async () => {
+    rpcMock.mockResolvedValue({
+      data: "NO_CHANGES",
       error: null,
     });
 
-    const result = await updateOperationalErrorStatus(
-      "error-id",
-      OPERATIONAL_ERROR_STATUS.OPEN,
-      "다시 확인",
-    );
-
-    expect(result).toEqual({ ok: true });
-
-    expect(updateMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        resolution_note: null,
-        resolved_at: null,
-        resolved_by: null,
-        status: OPERATIONAL_ERROR_STATUS.OPEN,
-      }),
-    );
-
-    expect(updateEqMock).toHaveBeenCalledWith("id", "error-id");
-
-    expect(insertMock).toHaveBeenCalledWith({
-      changed_by: "admin-user-id",
-      from_status: OPERATIONAL_ERROR_STATUS.RESOLVED,
-      note: "다시 확인",
-      operational_error_id: "error-id",
-      to_status: OPERATIONAL_ERROR_STATUS.OPEN,
-    });
-  });
-
-  it("상태가 같고 메모만 있으면 처리 이력만 추가한다", async () => {
-    const result = await updateOperationalErrorStatus(
-      "error-id",
-      OPERATIONAL_ERROR_STATUS.OPEN,
-      "조사 내용 추가",
-    );
-
-    expect(result).toEqual({ ok: true });
-    expect(updateMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        resolution_note: null,
-        resolved_at: null,
-        resolved_by: null,
-        status: OPERATIONAL_ERROR_STATUS.OPEN,
-      }),
-    );
-    expect(insertMock).toHaveBeenCalledWith({
-      changed_by: "admin-user-id",
-      from_status: OPERATIONAL_ERROR_STATUS.OPEN,
-      note: "조사 내용 추가",
-      operational_error_id: "error-id",
-      to_status: OPERATIONAL_ERROR_STATUS.OPEN,
-    });
-  });
-
-  it("상태와 메모가 모두 없으면 변경을 거부한다", async () => {
     const result = await updateOperationalErrorStatus(
       "error-id",
       OPERATIONAL_ERROR_STATUS.OPEN,
@@ -197,35 +75,11 @@ describe("updateOperationalErrorStatus", () => {
       message: "변경할 상태 또는 처리 메모를 입력해주세요.",
       ok: false,
     });
-    expect(updateMock).not.toHaveBeenCalled();
-    expect(insertMock).not.toHaveBeenCalled();
   });
 
-  it("처리 메모가 최대 길이를 넘으면 변경을 거부한다", async () => {
-    const result = await updateOperationalErrorStatus(
-      "error-id",
-      OPERATIONAL_ERROR_STATUS.RESOLVED,
-      "a".repeat(2001),
-    );
-
-    expect(result).toEqual({
-      message: "처리 메모는 2,000자 이하로 입력해주세요.",
-      ok: false,
-    });
-    expect(selectMock).not.toHaveBeenCalled();
-    expect(updateMock).not.toHaveBeenCalled();
-  });
-
-  it("같은 fingerprint의 OPEN 오류가 있으면 재오픈을 거부한다", async () => {
-    maybeSingleMock.mockResolvedValueOnce({
-      data: {
-        fingerprint: "fingerprint",
-        status: OPERATIONAL_ERROR_STATUS.RESOLVED,
-      },
-      error: null,
-    });
-    maybeSingleMock.mockResolvedValueOnce({
-      data: { id: "duplicate-id" },
+  it("returns the existing duplicate open message from the RPC result", async () => {
+    rpcMock.mockResolvedValue({
+      data: "OPEN_DUPLICATE",
       error: null,
     });
 
@@ -240,14 +94,38 @@ describe("updateOperationalErrorStatus", () => {
         "같은 오류가 이미 재발해 미해결 항목으로 추적 중입니다. 새 항목에서 처리해주세요.",
       ok: false,
     });
-    expect(selectEqMock).toHaveBeenCalledWith("fingerprint", "fingerprint");
-    expect(selectEqMock).toHaveBeenCalledWith(
-      "status",
-      OPERATIONAL_ERROR_STATUS.OPEN,
+  });
+
+  it("returns not found when the RPC cannot find the operational error", async () => {
+    rpcMock.mockResolvedValue({
+      data: "NOT_FOUND",
+      error: null,
+    });
+
+    const result = await updateOperationalErrorStatus(
+      "error-id",
+      OPERATIONAL_ERROR_STATUS.RESOLVED,
+      "처리",
     );
-    expect(neqMock).toHaveBeenCalledWith("id", "error-id");
-    expect(updateMock).not.toHaveBeenCalled();
-    expect(insertMock).not.toHaveBeenCalled();
+
+    expect(result).toEqual({
+      message: "운영 오류를 찾을 수 없습니다.",
+      ok: false,
+    });
+  });
+
+  it("처리 메모가 최대 길이를 넘으면 변경을 거부한다", async () => {
+    const result = await updateOperationalErrorStatus(
+      "error-id",
+      OPERATIONAL_ERROR_STATUS.RESOLVED,
+      "a".repeat(2001),
+    );
+
+    expect(result).toEqual({
+      message: "처리 메모는 2,000자 이하로 입력해주세요.",
+      ok: false,
+    });
+    expect(rpcMock).not.toHaveBeenCalled();
   });
 
   it("rejects an unknown status", async () => {
@@ -262,8 +140,32 @@ describe("updateOperationalErrorStatus", () => {
       ok: false,
     });
 
-    expect(selectMock).not.toHaveBeenCalled();
-    expect(updateMock).not.toHaveBeenCalled();
-    expect(insertMock).not.toHaveBeenCalled();
+    expect(rpcMock).not.toHaveBeenCalled();
+  });
+
+  it("records an admin operational error when the RPC fails", async () => {
+    const error = { message: "rpc failed" };
+    rpcMock.mockResolvedValue({
+      data: null,
+      error,
+    });
+
+    const result = await updateOperationalErrorStatus(
+      "error-id",
+      OPERATIONAL_ERROR_STATUS.RESOLVED,
+      "처리",
+    );
+
+    expect(result).toEqual({
+      message: "운영 오류 상태 변경에 실패했습니다.",
+      ok: false,
+    });
+    expect(recordAdminOperationalErrorMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserId: "admin-user-id",
+        error,
+        message: "운영 오류 상태 변경과 처리 이력 저장에 실패했습니다.",
+      }),
+    );
   });
 });
