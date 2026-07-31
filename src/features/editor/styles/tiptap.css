@@ -1,6 +1,9 @@
 /* TipTap editor base styles */
 
 .tiptap-wrapper .tiptap {
+  /* 목록 마커가 놓이는 고정폭 칸. 이 폭이 곧 목록의 들여쓰기이며,
+     목록 배경(--note-block-bg-marker)도 같은 값을 써야 왼쪽 끝이 맞는다. */
+  --note-list-marker-width: 1.5rem;
   min-height: 20rem;
   padding: 1rem 1rem 1.5rem;
   outline: none;
@@ -58,68 +61,109 @@
 }
 
 /* Lists */
-/* ol과 마커 좌측 위치를 맞추기 위해 최상위 padding-left를 ol과 동일하게 둔다.
-   중첩 단계별 값은 아래 "ul ul" 규칙이 ol ol과 같은 폭으로 맞춘다. */
-.tiptap-wrapper .tiptap ul {
-  list-style-type: disc;
-  padding-left: 2rem;
+/* 기본 마커(::marker)는 오른쪽 끝이 글자 시작점에 맞춰 정렬돼, 자릿수에 따라 마커가
+   시작하는 위치가 달라진다("1."과 "18."의 왼쪽 끝이 서로 다르다). 헤딩·문단과 글
+   시작 위치를 맞추려면 폭이 고정된 칸이 필요하므로, 기본 마커를 끄고 ::before로 그린다. */
+.tiptap-wrapper .tiptap ul:not([data-type="taskList"]),
+.tiptap-wrapper .tiptap ol {
+  list-style: none;
+  padding-left: var(--note-list-marker-width);
   margin-bottom: 0.5rem;
 }
 
-/* 노트 보기 화면은 .tiptap의 좌우 패딩을 없애므로, 두 자리 이상 마커("18.")가 놓일
-   공간이 이 padding-left뿐이다. 좁으면 overflow-hidden에 잘려 보인다. */
+/* 번호는 목록마다 새로 센다. 중첩 목록은 자기 counter-reset으로 별도 scope를 만들어
+   바깥 목록의 번호를 건드리지 않는다.
+   브라우저 내장 list-item counter를 쓰면 ol의 start 속성까지 반영되지만 Safari 17
+   미만에서 0으로 나오므로, 지원 범위가 넓은 직접 counter를 쓴다. 대신 start는
+   반영되지 않고 항상 1부터 센다(미리보기 stripMarkdown도 같은 동작이다). */
 .tiptap-wrapper .tiptap ol {
-  list-style-type: decimal;
-  padding-left: 2rem;
-  margin-bottom: 0.5rem;
+  counter-reset: note-list-item;
+}
+
+.tiptap-wrapper .tiptap ol > li {
+  counter-increment: note-list-item;
+}
+
+/* li의 첫 자식이 블록(p)이라 ::before를 흐름에 두면 마커가 본문 윗줄로 떨어진다.
+   absolute로 흐름에서 빼되 top은 지정하지 않는다. 그래야 정상 흐름에서의 위치,
+   즉 첫 줄에 그대로 놓여 배경 블록의 padding-top이 붙어도 본문과 같이 내려간다. */
+.tiptap-wrapper .tiptap li {
+  position: relative;
+  margin-bottom: 0.125rem;
+}
+
+.tiptap-wrapper .tiptap ul:not([data-type="taskList"]) > li::before,
+.tiptap-wrapper .tiptap ol > li::before {
+  position: absolute;
+  left: calc(-1 * var(--note-list-marker-width));
+  width: var(--note-list-marker-width);
 }
 
 /* 중첩 깊이에 따라 마커를 바꾼다(노션 기본 동작). 마크다운에는 마커 종류를 담을 문법이
-   없으므로 표현만 바꾸고 문서 구조는 건드리지 않는다. */
-.tiptap-wrapper .tiptap ol ol {
-  list-style-type: lower-alpha;
-  padding-left: 1.5rem;
+   없으므로 표현만 바꾸고 문서 구조는 건드리지 않는다.
+   표기 순서는 미리보기(src/lib/utils/stripMarkdown.ts)와 짝을 맞춘다. */
+.tiptap-wrapper .tiptap ol > li::before {
+  content: counter(note-list-item, decimal) ".";
 }
 
-.tiptap-wrapper .tiptap ol ol ol {
-  list-style-type: lower-roman;
+.tiptap-wrapper .tiptap ol ol > li::before {
+  content: counter(note-list-item, lower-alpha) ".";
 }
 
-.tiptap-wrapper .tiptap ol ol ol ol {
-  list-style-type: decimal;
+.tiptap-wrapper .tiptap ol ol ol > li::before {
+  content: counter(note-list-item, lower-roman) ".";
 }
 
-.tiptap-wrapper .tiptap ol ol ol ol ol {
-  list-style-type: lower-alpha;
+.tiptap-wrapper .tiptap ol ol ol ol > li::before {
+  content: counter(note-list-item, decimal) ".";
 }
 
-.tiptap-wrapper .tiptap ol ol ol ol ol ol {
-  list-style-type: lower-roman;
+.tiptap-wrapper .tiptap ol ol ol ol ol > li::before {
+  content: counter(note-list-item, lower-alpha) ".";
 }
 
-.tiptap-wrapper .tiptap ul ul {
-  list-style-type: circle;
-  padding-left: 1.5rem;
+.tiptap-wrapper .tiptap ol ol ol ol ol ol > li::before {
+  content: counter(note-list-item, lower-roman) ".";
 }
 
-.tiptap-wrapper .tiptap ul ul ul {
-  list-style-type: square;
+/* 중첩 ul 규칙에서 :not()을 빼면 명시도가 위 규칙에 밀려 적용되지 않는다. */
+.tiptap-wrapper .tiptap ul:not([data-type="taskList"]) > li::before {
+  content: "•";
 }
 
-.tiptap-wrapper .tiptap ul ul ul ul {
-  list-style-type: disc;
+.tiptap-wrapper .tiptap ul ul:not([data-type="taskList"]) > li::before {
+  content: "◦";
 }
 
-.tiptap-wrapper .tiptap ul ul ul ul ul {
-  list-style-type: circle;
+.tiptap-wrapper .tiptap ul ul ul:not([data-type="taskList"]) > li::before {
+  content: "▪";
 }
 
-.tiptap-wrapper .tiptap ul ul ul ul ul ul {
-  list-style-type: square;
+.tiptap-wrapper .tiptap ul ul ul ul:not([data-type="taskList"]) > li::before {
+  content: "•";
 }
 
-.tiptap-wrapper .tiptap li {
-  margin-bottom: 0.125rem;
+.tiptap-wrapper
+  .tiptap
+  ul
+  ul
+  ul
+  ul
+  ul:not([data-type="taskList"])
+  > li::before {
+  content: "◦";
+}
+
+.tiptap-wrapper
+  .tiptap
+  ul
+  ul
+  ul
+  ul
+  ul
+  ul:not([data-type="taskList"])
+  > li::before {
+  content: "▪";
 }
 
 .tiptap-wrapper .tiptap li p {
@@ -334,28 +378,29 @@
 }
 
 /* 줄 전체가 한 색이면 목록 마커(1. / a. / •)도 같은 색으로 맞춘다.
-   본문 글자는 이미 인라인 마크가 칠하므로 여기서는 ::marker만 건드린다.
-   항목 전체에 color를 주면 중첩된 무채색 항목까지 색을 물려받는다.
+   마커는 ::before로 그리므로 여기서도 ::before만 건드린다. 항목 전체에 color를 주면
+   중첩된 무채색 항목까지 색을 물려받는다.
+   체크박스 목록은 ::before에 content가 없어 이 규칙이 아무것도 만들지 않는다.
    data-note-line-color는 문서에서 계산해 붙이는 표시라 저장되지 않는다. */
-.tiptap-wrapper .tiptap [data-note-line-color="gray"]::marker {
+.tiptap-wrapper .tiptap [data-note-line-color="gray"]::before {
   color: var(--note-text-gray);
 }
-.tiptap-wrapper .tiptap [data-note-line-color="orange"]::marker {
+.tiptap-wrapper .tiptap [data-note-line-color="orange"]::before {
   color: var(--note-text-orange);
 }
-.tiptap-wrapper .tiptap [data-note-line-color="yellow"]::marker {
+.tiptap-wrapper .tiptap [data-note-line-color="yellow"]::before {
   color: var(--note-text-yellow);
 }
-.tiptap-wrapper .tiptap [data-note-line-color="green"]::marker {
+.tiptap-wrapper .tiptap [data-note-line-color="green"]::before {
   color: var(--note-text-green);
 }
-.tiptap-wrapper .tiptap [data-note-line-color="blue"]::marker {
+.tiptap-wrapper .tiptap [data-note-line-color="blue"]::before {
   color: var(--note-text-blue);
 }
-.tiptap-wrapper .tiptap [data-note-line-color="purple"]::marker {
+.tiptap-wrapper .tiptap [data-note-line-color="purple"]::before {
   color: var(--note-text-purple);
 }
-.tiptap-wrapper .tiptap [data-note-line-color="red"]::marker {
+.tiptap-wrapper .tiptap [data-note-line-color="red"]::before {
   color: var(--note-text-red);
 }
 
@@ -405,20 +450,11 @@
     var(--note-block-bg-bleed) 0 0 0 var(--note-block-bg);
 }
 
-/* 최상위 목록. 체크박스 목록은 마커가 없어 기본값 0rem을 그대로 쓴다. */
+/* 마커 칸은 깊이와 무관하게 폭이 같으므로 한 규칙으로 모든 단계를 덮는다.
+   체크박스 목록은 마커가 없어 기본값 0rem을 그대로 쓴다. */
 .tiptap-wrapper .tiptap ul:not([data-type="taskList"]) > li[data-note-block-bg],
 .tiptap-wrapper .tiptap ol > li[data-note-block-bg] {
-  --note-block-bg-marker: 2rem;
-}
-
-/* 중첩 목록. ul 쪽 :not()을 빼면 명시도가 위 규칙에 밀려 적용되지 않는다. */
-.tiptap-wrapper
-  .tiptap
-  ul
-  ul:not([data-type="taskList"])
-  > li[data-note-block-bg],
-.tiptap-wrapper .tiptap ol ol > li[data-note-block-bg] {
-  --note-block-bg-marker: 1.5rem;
+  --note-block-bg-marker: var(--note-list-marker-width);
 }
 
 /* 배경 안쪽 마지막 요소의 아래 여백은 배경에 포함돼 위아래 균형을 깨뜨린다.
