@@ -136,33 +136,19 @@ export async function markAdminNotificationsAsReadAction(
 export async function markAllAdminNotificationsAsReadAction(): Promise<MarkAdminNotificationsAsReadResult> {
   const adminUserId = await requireAdmin();
   const supabase = createAdminClient();
-  const { data: events, error: eventsError } = await supabase
-    .from("admin_notification_events")
-    .select("id");
-
-  if (eventsError) {
-    return {
-      message: "관리자 알림 조회에 실패했습니다.",
-      ok: false,
-    };
-  }
-
-  if (!events || events.length === 0) {
-    return { ok: true, updated: 0 };
-  }
-
-  const { error: readsError } = await upsertAdminNotificationReads(
-    supabase,
-    adminUserId,
-    events.map((event) => event.id),
+  const { data, error } = await supabase.rpc(
+    "mark_all_admin_notifications_as_read",
+    {
+      p_admin_user_id: adminUserId,
+    },
   );
 
-  if (readsError) {
+  if (error) {
     return {
       message: "관리자 알림 읽음 처리에 실패했습니다.",
       ok: false,
     };
   }
 
-  return { ok: true, updated: events.length };
+  return { ok: true, updated: data ?? 0 };
 }

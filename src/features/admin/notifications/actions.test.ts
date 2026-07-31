@@ -20,14 +20,21 @@ vi.mock("../utils/require-admin", () => ({
   requireAdmin: requireAdminMock,
 }));
 
+/**
+ * 관리자 알림 읽음 처리 액션에서 사용하는 Supabase mock을 생성합니다.
+ */
 function createSupabaseMock({
   events,
   eventsError = null,
   readsError = null,
+  rpcData = 0,
+  rpcError = null,
 }: {
   events: unknown[] | null;
   eventsError?: unknown;
   readsError?: unknown;
+  rpcData?: number | null;
+  rpcError?: unknown;
 }) {
   const eventsSelectResult = {
     eq: vi.fn(),
@@ -50,6 +57,10 @@ function createSupabaseMock({
   });
   const readsUpsert = vi.fn().mockResolvedValue({
     error: readsError,
+  });
+  const rpc = vi.fn().mockResolvedValue({
+    data: rpcError ? null : rpcData,
+    error: rpcError,
   });
   const from = vi.fn((table: string) => {
     if (table === "admin_notification_events") {
@@ -74,7 +85,8 @@ function createSupabaseMock({
     eventsTypeEq,
     from,
     readsUpsert,
-    supabase: { from },
+    rpc,
+    supabase: { from, rpc },
   };
 }
 
@@ -188,36 +200,29 @@ describe("markAdminNotificationsAsReadAction", () => {
     });
   });
 
-  it("marks all admin notification events as read without touching user notifications", async () => {
+  it("marks all unread admin notification events as read through the RPC", async () => {
     const supabaseMock = createSupabaseMock({
       events: [{ id: "event-1" }, { id: "event-2" }],
+      rpcData: 2,
     });
     createAdminClientMock.mockReturnValue(supabaseMock.supabase);
 
     const result = await markAllAdminNotificationsAsReadAction();
 
     expect(result).toEqual({ ok: true, updated: 2 });
-    expect(supabaseMock.from).toHaveBeenCalledWith("admin_notification_events");
-    expect(supabaseMock.eventsSelect).toHaveBeenCalledWith("id");
-    expect(supabaseMock.readsUpsert).toHaveBeenCalledWith(
-      [
-        {
-          admin_user_id: "admin-user-id",
-          event_id: "event-1",
-        },
-        {
-          admin_user_id: "admin-user-id",
-          event_id: "event-2",
-        },
-      ],
-      { onConflict: "event_id,admin_user_id" },
+    expect(supabaseMock.rpc).toHaveBeenCalledWith(
+      "mark_all_admin_notifications_as_read",
+      {
+        p_admin_user_id: "admin-user-id",
+      },
     );
-    expect(supabaseMock.from).not.toHaveBeenCalledWith("notifications");
+    expect(supabaseMock.from).not.toHaveBeenCalled();
   });
 
-  it("returns success without upsert when there are no admin notification events", async () => {
+  it("returns success when the mark-all RPC has no unread events to insert", async () => {
     const supabaseMock = createSupabaseMock({
       events: [],
+      rpcData: 0,
     });
     createAdminClientMock.mockReturnValue(supabaseMock.supabase);
 
@@ -225,5 +230,20 @@ describe("markAdminNotificationsAsReadAction", () => {
 
     expect(result).toEqual({ ok: true, updated: 0 });
     expect(supabaseMock.readsUpsert).not.toHaveBeenCalled();
+  });
+
+  it("returns an error when the mark-all RPC fails", async () => {
+    const supabaseMock = createSupabaseMock({
+      events: [],
+      rpcError: { message: "rpc failed" },
+    });
+    createAdminClientMock.mockReturnValue(supabaseMock.supabase);
+
+    const result = await markAllAdminNotificationsAsReadAction();
+
+    expect(result).toEqual({
+      message: "관리자 알림 읽음 처리에 실패했습니다.",
+      ok: false,
+    });
   });
 });

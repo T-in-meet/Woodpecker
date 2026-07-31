@@ -601,6 +601,10 @@ export type Database = {
         Args: { p_notification_id: string };
         Returns: boolean;
       };
+      mark_all_admin_notifications_as_read: {
+        Args: { p_admin_user_id: string };
+        Returns: number;
+      };
       update_notification_time_of_day: {
         Args: { p_note_id: string; p_time?: string };
         Returns: undefined;
