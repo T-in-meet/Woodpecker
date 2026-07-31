@@ -1,9 +1,9 @@
 import type { AdminSort } from "@/features/admin/types/sort";
-import { createAdminClient } from "@/lib/supabase/admin";
 
 import { ADMIN_SORT_DIRECTION } from "../../constants/admin-sort";
 import { ADMIN_FEEDBACK_SORT_COLUMN } from "../constants/feedback-list";
 import type { FeedbackSortField } from "../types/feedback-list";
+import type { FeedbackListQueryBuilder } from "./feedback-query";
 
 /**
  * 관리자 피드백 목록의 정렬 조건을 Supabase 조회에 적용합니다.
@@ -19,7 +19,7 @@ import type { FeedbackSortField } from "../types/feedback-list";
  * @returns 정렬 조건이 반영된 feedbacks 조회 객체
  */
 export function applyFeedbackSort(
-  feedbackQuery: ReturnType<ReturnType<typeof createAdminClient>["from"]>,
+  feedbackQuery: FeedbackListQueryBuilder,
   sort: AdminSort<FeedbackSortField>,
 ) {
   const sortColumn = ADMIN_FEEDBACK_SORT_COLUMN[sort.field];

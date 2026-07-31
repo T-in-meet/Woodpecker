@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { OAUTH_CALLBACK_ERROR_REASON } from "@/features/auth/constants/oauthCallbackError";
 import { ROUTES } from "@/lib/constants/routes";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 import { GET } from "./route";
 
@@ -10,6 +11,8 @@ const hasUserAgreementMock = vi.hoisted(() => vi.fn());
 const upsertUserAgreementMock = vi.hoisted(() => vi.fn());
 const exchangeCodeForSessionMock = vi.fn();
 const signOutMock = vi.fn();
+const updateProfileMock = vi.fn();
+const updateProfileEqMock = vi.fn();
 
 vi.mock("@/features/auth/lib/userAgreements", () => ({
   AGREEMENT_REQUIRED_REDIRECT: "/signup?agreement_required=1",
@@ -26,21 +29,44 @@ vi.mock("@/lib/supabase/server", () => ({
   })),
 }));
 
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: vi.fn(),
+}));
+
+const createAdminClientMock = vi.mocked(createAdminClient);
+
 describe("auth callback route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
     exchangeCodeForSessionMock.mockResolvedValue({
       data: {
-        user: { id: "user-id", user_metadata: {} },
+        user: {
+          id: "user-id",
+          email: "oauth.user@example.com",
+          user_metadata: {},
+        },
       },
       error: null,
     });
     hasUserAgreementMock.mockResolvedValue(true);
     upsertUserAgreementMock.mockResolvedValue(undefined);
     signOutMock.mockResolvedValue({ error: null });
+    updateProfileMock.mockReturnValue({ eq: updateProfileEqMock });
+    updateProfileEqMock.mockResolvedValue({ error: null });
+    createAdminClientMock.mockReturnValue({
+      from: vi.fn(() => ({
+        update: updateProfileMock,
+      })),
+      storage: {
+        from: vi.fn(),
+      },
+    } as never);
   });
 
+  /**
+   * 테스트용 callback 요청 객체를 생성합니다.
+   */
   function createRequest(path: string, headers?: HeadersInit) {
     return new NextRequest(
       `http://localhost:3000${path}`,
@@ -159,6 +185,30 @@ describe("auth callback route", () => {
     expect(upsertUserAgreementMock).toHaveBeenCalledWith("user-id", "oauth");
   });
 
+  it("signup intent에서 약관 intent cookie가 있으면 OAuth 이메일을 정규화해 프로필에 저장한다", async () => {
+    exchangeCodeForSessionMock.mockResolvedValue({
+      data: {
+        user: {
+          id: "user-id",
+          email: "OAuth.User+alias@Gmail.com",
+          user_metadata: {},
+        },
+      },
+      error: null,
+    });
+
+    await GET(
+      createRequest("/api/auth/callback?code=oauth-code&intent=signup", {
+        Cookie: "oauth_agreement_intent=accepted",
+      }),
+    );
+
+    expect(updateProfileMock).toHaveBeenCalledWith({
+      canonical_email: "oauthuser@gmail.com",
+    });
+    expect(updateProfileEqMock).toHaveBeenCalledWith("id", "user-id");
+  });
+
   it("intent query가 없어도 signup 약관 cookie가 있으면 약관 기록을 저장한다", async () => {
     const response = await GET(
       createRequest("/api/auth/callback?code=oauth-code", {
@@ -182,5 +232,31 @@ describe("auth callback route", () => {
     expect(response.headers.get("location")).toBe(
       "http://localhost:3000/signup?agreement_required=1",
     );
+  });
+
+  it("login intent에서 약관 기록이 있으면 OAuth 이메일을 프로필에 저장한다", async () => {
+    await GET(createRequest("/api/auth/callback?code=oauth-code&intent=login"));
+
+    expect(updateProfileMock).toHaveBeenCalledWith({
+      canonical_email: "oauth.user@example.com",
+    });
+    expect(updateProfileEqMock).toHaveBeenCalledWith("id", "user-id");
+  });
+
+  it("OAuth 이메일이 없으면 프로필 이메일 업데이트를 생략한다", async () => {
+    exchangeCodeForSessionMock.mockResolvedValue({
+      data: {
+        user: {
+          id: "user-id",
+          user_metadata: {},
+        },
+      },
+      error: null,
+    });
+
+    await GET(createRequest("/api/auth/callback?code=oauth-code&intent=login"));
+
+    expect(updateProfileMock).not.toHaveBeenCalled();
+    expect(updateProfileEqMock).not.toHaveBeenCalled();
   });
 });

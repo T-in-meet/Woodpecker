@@ -5,6 +5,7 @@ const {
   createAdminClientMock,
   requireAdminMock,
   escapePostgrestLikePatternMock,
+  createFeedbackListQueryMock,
   applyFeedbackFiltersMock,
   mapFeedbackRowsMock,
   createFeedbackSignedImagesMock,
@@ -15,6 +16,7 @@ const {
   createAdminClientMock: vi.fn(),
   requireAdminMock: vi.fn(),
   escapePostgrestLikePatternMock: vi.fn(),
+  createFeedbackListQueryMock: vi.fn(),
   applyFeedbackFiltersMock: vi.fn(),
   mapFeedbackRowsMock: vi.fn(),
   createFeedbackSignedImagesMock: vi.fn(),
@@ -555,7 +557,7 @@ describe("getFeedbacks", () => {
       },
     });
 
-    expect(supabase.mocks.fromMock).not.toHaveBeenCalled();
+    expect(createFeedbackListQueryMock).not.toHaveBeenCalled();
   });
 
   it("페이지가 1보다 작으면 1로 보정하고 범위 조회한다", async () => {
@@ -568,6 +570,7 @@ describe("getFeedbacks", () => {
     });
 
     createAdminClientMock.mockReturnValue(supabase.client);
+    createFeedbackListQueryMock.mockReturnValue(supabase.query);
 
     const result = await getFeedbacks(
       createListQuery({
@@ -584,6 +587,7 @@ describe("getFeedbacks", () => {
     const supabase = createListSupabaseMock();
 
     createAdminClientMock.mockReturnValue(supabase.client);
+    createFeedbackListQueryMock.mockReturnValue(supabase.query);
     escapePostgrestLikePatternMock.mockReturnValue("제목\\_검색");
 
     await getFeedbacks(
@@ -603,6 +607,7 @@ describe("getFeedbacks", () => {
     const supabase = createListSupabaseMock();
 
     createAdminClientMock.mockReturnValue(supabase.client);
+    createFeedbackListQueryMock.mockReturnValue(supabase.query);
 
     await getFeedbacks(
       createListQuery({
@@ -620,6 +625,7 @@ describe("getFeedbacks", () => {
     const supabase = createListSupabaseMock();
 
     createAdminClientMock.mockReturnValue(supabase.client);
+    createFeedbackListQueryMock.mockReturnValue(supabase.query);
     getUserIdsForSearchMock.mockResolvedValue(["user-1", "user-2"]);
 
     await getFeedbacks(
@@ -641,6 +647,7 @@ describe("getFeedbacks", () => {
     const supabase = createListSupabaseMock();
 
     createAdminClientMock.mockReturnValue(supabase.client);
+    createFeedbackListQueryMock.mockReturnValue(supabase.query);
 
     const filters = {
       status: {
@@ -698,6 +705,7 @@ describe("getFeedbacks", () => {
     });
 
     createAdminClientMock.mockReturnValue(supabase.client);
+    createFeedbackListQueryMock.mockReturnValue(supabase.query);
     mapFeedbackRowsMock.mockResolvedValue(mappedItems);
 
     const result = await getFeedbacks(
@@ -741,6 +749,7 @@ describe("getFeedbacks", () => {
     });
 
     createAdminClientMock.mockReturnValue(supabase.client);
+    createFeedbackListQueryMock.mockReturnValue(supabase.query);
     mapFeedbackRowsMock.mockResolvedValue(rows);
 
     const result = await getFeedbacks(
@@ -769,6 +778,7 @@ describe("getFeedbacks", () => {
     });
 
     createAdminClientMock.mockReturnValue(supabase.client);
+    createFeedbackListQueryMock.mockReturnValue(supabase.query);
 
     await expect(getFeedbacks(createListQuery())).rejects.toThrow(
       "Failed to load feedbacks: database failed",
