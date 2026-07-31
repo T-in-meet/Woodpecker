@@ -298,10 +298,9 @@
   /* orange는 대비(WCAG AA)를 지키려고 어둡게 잡으면 갈색처럼 보인다.
      대비를 살짝 낮추는 대신(4.4:1 — 여전히 3:1 이상) 채도·명도를 올려
      이름값에 더 가까운 색으로 보이게 한다.
-     yellow는 흰 배경 위 순수 노랑(#ffffff 대비 1.07:1) 요청으로, 가독성보다
-     정확한 색상 표현을 우선한 선택이다. */
+     yellow는 노션의 텍스트 노랑(#dfab01)을 참고했다. */
   --note-text-orange: #d24a0c;
-  --note-text-yellow: #ffff00;
+  --note-text-yellow: #dfab01;
   --note-text-green: #15803d;
   --note-text-blue: #1d4ed8;
   --note-text-purple: #7e22ce;
