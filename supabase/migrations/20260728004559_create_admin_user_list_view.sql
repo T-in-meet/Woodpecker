@@ -1,3 +1,49 @@
+-- 기존 OAuth 사용자는 auth callback에서 canonical_email metadata가 기록되지 않았으므로
+-- 관리자 목록 이메일 표시와 검색을 위해 auth.users.email 기준으로 보정합니다.
+--
+-- canonical_email unique index 충돌로 마이그레이션이 중단되지 않도록
+-- 동일 canonical_email 후보가 여러 개면 가장 먼저 생성된 사용자만 보정합니다.
+WITH auth_user_email_candidates AS (
+  SELECT
+    u.id,
+    u.created_at,
+    CASE
+      WHEN split_part(lower(trim(u.email)), '@', 2) IN ('gmail.com', 'googlemail.com')
+        THEN regexp_replace(
+          replace(split_part(lower(trim(u.email)), '@', 1), '.', ''),
+          '\+.*$',
+          ''
+        ) || '@gmail.com'
+      ELSE lower(trim(u.email))
+    END AS canonical_email
+  FROM auth.users AS u
+  WHERE u.email IS NOT NULL
+    AND length(trim(u.email)) > 0
+),
+normalized_auth_users AS (
+  SELECT
+    id,
+    canonical_email,
+    row_number() OVER (
+      PARTITION BY canonical_email
+      ORDER BY created_at ASC, id ASC
+    ) AS canonical_rank
+  FROM auth_user_email_candidates
+)
+UPDATE public.profiles AS p
+SET canonical_email = normalized_auth_users.canonical_email
+FROM normalized_auth_users
+WHERE p.id = normalized_auth_users.id
+  AND p.canonical_email IS NULL
+  AND normalized_auth_users.canonical_rank = 1
+  AND NOT EXISTS (
+    SELECT 1
+    FROM public.profiles AS existing_profile
+    WHERE existing_profile.canonical_email = normalized_auth_users.canonical_email
+      AND existing_profile.id <> p.id
+  );
+
+
 -- 관리자 사용자 목록 조회에 필요한 사용자 정보와 약관 정보를 하나로 결합합니다.
 --
 -- 검색, 필터, 정렬, 페이지네이션을 애플리케이션 메모리가 아닌
