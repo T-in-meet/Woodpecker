@@ -234,12 +234,6 @@ export async function deleteFeedbackReply(
     },
   );
 
-  console.log("[deleteFeedbackReply] RPC 결과", {
-    feedbackId,
-    data,
-    error,
-  });
-
   if (error || !data || data.length === 0) {
     return { ok: false, message: "답변 삭제에 실패했습니다." };
   }

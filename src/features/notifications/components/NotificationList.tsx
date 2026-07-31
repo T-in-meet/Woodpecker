@@ -10,11 +10,11 @@ import {
 } from "@/lib/constants/notifications";
 import { formatDateTime } from "@/lib/utils/formatDate";
 
+import { markNotificationAsReadAction } from "../actions";
 import {
   ADMIN_NOTIFICATION_DEFINITIONS,
   USER_NOTIFICATION_DEFINITIONS,
 } from "../definitions";
-import { markNotificationAsReadAction } from "../actions";
 import type { NotificationListItemType } from "../schema";
 
 type NotificationListProps = {
