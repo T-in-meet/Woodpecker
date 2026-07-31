@@ -1,4 +1,5 @@
 import type {
+  AdminNotificationKindType,
   NotificationKindType,
   NotificationStatusType,
 } from "@/lib/constants/notifications";
@@ -6,6 +7,7 @@ import type { InsertDto, Row, UpdateDto } from "@/types/db.helpers";
 
 export type NotificationStatus = NotificationStatusType;
 export type NotificationType = NotificationKindType;
+export type AdminNotificationType = AdminNotificationKindType;
 
 // DB Row를 베이스로 status/type을 리터럴 유니온으로 override
 type NotificationRow = Omit<Row<"notifications">, "status" | "type"> & {
@@ -37,3 +39,16 @@ export type NotificationPatchInput = Partial<
 };
 
 export type NotificationMarkReadInput = Pick<NotificationUpdate, "read_at">;
+
+type AdminNotificationEventRow = Omit<
+  Row<"admin_notification_events">,
+  "type"
+> & {
+  type: AdminNotificationType;
+};
+
+export type AdminNotificationEvent = AdminNotificationEventRow;
+export type AdminNotificationEventInsert =
+  InsertDto<"admin_notification_events">;
+export type AdminNotificationRead = Row<"admin_notification_reads">;
+export type AdminNotificationReadInsert = InsertDto<"admin_notification_reads">;

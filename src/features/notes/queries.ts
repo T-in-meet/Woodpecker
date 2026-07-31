@@ -28,7 +28,12 @@ const noteSummarySchema = z.object({
   updated_at: z.string(),
 });
 
-export type NoteDetail = z.infer<typeof noteDetailSchema>;
+// next_scheduled_at는 notes 테이블 컬럼이 아니라 pending review_logs.scheduled_at에서
+// 파생된 실제 알림 발송 시각이다. notes.next_review_at은 KST 자정 마커이므로 시:분
+// 표시에는 사용할 수 없어 별도 필드로 합쳐 반환한다 (이슈 #215 설계 결정).
+export type NoteDetail = z.infer<typeof noteDetailSchema> & {
+  next_scheduled_at: string | null;
+};
 export type NoteSummary = z.infer<typeof noteSummarySchema>;
 
 export async function getNotes(
@@ -60,7 +65,9 @@ export async function getNotes(
     query = query.or(`title.ilike."%${term}%",content.ilike."%${term}%"`);
   }
 
-  const { data, count } = await query.range(from, to);
+  const { data, count, error } = await query.range(from, to);
+
+  if (error) throw error;
 
   const parsed = z.array(noteSummarySchema).safeParse(data);
 
@@ -76,20 +83,28 @@ export async function getNotes(
 
 export async function getTodayReviewNotes(
   userId: string,
-): Promise<NoteSummary[]> {
+  page = 1,
+  pageSize = 9,
+): Promise<{ notes: NoteSummary[]; total: number }> {
   const supabase = await createServerComponentClient();
   const { startUtcIso, endUtcIso } = getKstDayBoundsUtc();
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
 
-  const { data } = await supabase
+  const { data, error, count } = await supabase
     .from("notes")
     .select(
       "id, title, content, next_review_at, review_round, created_at, updated_at",
+      { count: "exact" },
     )
     .eq("user_id", userId)
     .gte("next_review_at", startUtcIso)
     .lt("next_review_at", endUtcIso)
     .order("next_review_at", { ascending: true })
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .range(from, to);
+
+  if (error) throw error;
 
   const parsed = z.array(noteSummarySchema).safeParse(data);
 
@@ -98,10 +113,10 @@ export async function getTodayReviewNotes(
       message: "[getTodayReviewNotes] noteSummarySchema 파싱 실패",
       error: parsed.error,
     });
-    return [];
+    return { notes: [], total: 0 };
   }
 
-  return parsed.data;
+  return { notes: parsed.data, total: count ?? 0 };
 }
 
 export async function getReviewWaitingNotes(
@@ -110,7 +125,7 @@ export async function getReviewWaitingNotes(
   const supabase = await createServerComponentClient();
   const nowIso = new Date().toISOString();
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("notes")
     .select(
       "id, title, content, next_review_at, review_round, created_at, updated_at",
@@ -121,6 +136,8 @@ export async function getReviewWaitingNotes(
     )
     .order("next_review_at", { ascending: true, nullsFirst: false })
     .limit(50);
+
+  if (error) throw error;
 
   const parsed = z.array(noteSummarySchema).safeParse(data);
 
@@ -150,5 +167,23 @@ export async function getNoteById(
     .maybeSingle();
 
   const parsed = noteDetailSchema.safeParse(data);
-  return parsed.success ? parsed.data : null;
+  if (!parsed.success) return null;
+
+  const { data: pendingLog } = await supabase
+    .from("review_logs")
+    .select("scheduled_at")
+    .eq("note_id", noteId)
+    .eq("user_id", userId)
+    .is("completed_at", null)
+    .order("scheduled_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  return {
+    ...parsed.data,
+    next_scheduled_at:
+      typeof pendingLog?.scheduled_at === "string"
+        ? pendingLog.scheduled_at
+        : null,
+  };
 }

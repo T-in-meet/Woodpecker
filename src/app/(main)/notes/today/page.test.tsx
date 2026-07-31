@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { TODAY_PAGE_SIZE } from "@/lib/constants/notes";
 import { ROUTES } from "@/lib/constants/routes";
 
 const REDIRECT_ERROR = new Error("NEXT_REDIRECT");
@@ -33,6 +34,8 @@ vi.mock("next/navigation", () => ({
 }));
 
 import TodayReviewPage from "./page";
+
+const DEFAULT_SEARCH_PARAMS = { searchParams: Promise.resolve({}) };
 
 function createSupabaseMock(
   userId: string | null,
@@ -70,7 +73,9 @@ describe("TodayReviewPage", () => {
   it("미인증 사용자를 로그인 페이지로 redirect한다", async () => {
     createClientMock.mockResolvedValue(createSupabaseMock(null));
 
-    await expect(TodayReviewPage()).rejects.toBe(REDIRECT_ERROR);
+    await expect(TodayReviewPage(DEFAULT_SEARCH_PARAMS)).rejects.toBe(
+      REDIRECT_ERROR,
+    );
 
     expect(redirectMock).toHaveBeenCalledWith(ROUTES.LOGIN);
     expect(getTodayReviewNotesMock).not.toHaveBeenCalled();
@@ -83,20 +88,28 @@ describe("TodayReviewPage", () => {
         createSupabaseMock("user-123", emailConfirmedAt),
       );
 
-      await expect(TodayReviewPage()).rejects.toBe(REDIRECT_ERROR);
+      await expect(TodayReviewPage(DEFAULT_SEARCH_PARAMS)).rejects.toBe(
+        REDIRECT_ERROR,
+      );
 
-      expect(redirectMock).toHaveBeenCalledWith(ROUTES.VERIFY_EMAIL);
+      expect(redirectMock).toHaveBeenCalledWith(
+        `${ROUTES.RESEND_EMAIL}?purpose=signup`,
+      );
       expect(getTodayReviewNotesMock).not.toHaveBeenCalled();
     },
   );
 
   it("인증된 사용자에게 오늘의 복습 페이지를 렌더링한다", async () => {
     createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
-    getTodayReviewNotesMock.mockResolvedValue([]);
+    getTodayReviewNotesMock.mockResolvedValue({ notes: [], total: 0 });
 
-    render(await TodayReviewPage());
+    render(await TodayReviewPage(DEFAULT_SEARCH_PARAMS));
 
-    expect(getTodayReviewNotesMock).toHaveBeenCalledWith("user-123");
+    expect(getTodayReviewNotesMock).toHaveBeenCalledWith(
+      "user-123",
+      1,
+      TODAY_PAGE_SIZE,
+    );
     expect(
       screen.getByRole("heading", { name: "오늘의 복습" }),
     ).toBeInTheDocument();
@@ -104,12 +117,20 @@ describe("TodayReviewPage", () => {
 
   it("복습할 노트가 없을 때 빈 상태 메시지를 표시한다", async () => {
     createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
-    getTodayReviewNotesMock.mockResolvedValue([]);
+    getTodayReviewNotesMock.mockResolvedValue({ notes: [], total: 0 });
 
-    render(await TodayReviewPage());
+    render(await TodayReviewPage(DEFAULT_SEARCH_PARAMS));
 
     expect(
       screen.getByText("오늘 예정된 복습이 없습니다."),
     ).toBeInTheDocument();
+  });
+
+  it("DB 조회 오류가 발생하면 빈 상태로 대체하지 않고 error boundary로 전파한다", async () => {
+    const dbError = new Error("DB connection failed");
+    createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
+    getTodayReviewNotesMock.mockRejectedValue(dbError);
+
+    await expect(TodayReviewPage(DEFAULT_SEARCH_PARAMS)).rejects.toBe(dbError);
   });
 });

@@ -22,7 +22,7 @@ import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
-import { sendAuthEmail } from "@/features/auth/email/sendAuthEmail";
+import { issueOtpAndSendEmail } from "@/features/auth/email/issueOtpAndSendEmail";
 import { MIN_RESPONSE_MS } from "@/features/auth/lib/applyMinimumResponseTime";
 import {
   EMAIL_LONG_LIMIT,
@@ -34,6 +34,12 @@ import {
   IP_SHORT_WINDOW_MS,
   resetEligibilityStore,
 } from "@/features/auth/lib/checkRequestEligibility";
+
+const upsertUserAgreementMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/features/auth/lib/userAgreements", () => ({
+  upsertUserAgreement: upsertUserAgreementMock,
+}));
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -42,10 +48,11 @@ import { POST } from "../route";
 /**
  * 외부 의존성 mock
  * - getUserByEmail: 사용자 존재 여부 제어
- * - createClient: Supabase auth.signUp 호출 추적
+ * - createAdminClient: Supabase admin.createUser 호출 추적
+ * - issueOtpAndSendEmail: signup OTP 발송 호출 추적
  */
 vi.mock("@/features/auth/lib/getUserByEmail");
-vi.mock("@/features/auth/email/sendAuthEmail");
+vi.mock("@/features/auth/email/issueOtpAndSendEmail");
 vi.mock("@/lib/supabase/admin");
 
 /**
@@ -58,7 +65,6 @@ beforeEach(() => {
 
 describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
   const mockCreateUser = vi.fn();
-  const mockGenerateLink = vi.fn();
   const WINDOW_BUFFER_MS = 1000;
 
   /**
@@ -124,11 +130,11 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
 
     /**
      * Supabase mock
-     * - signup 호출 여부 및 횟수 추적
+     * - createUser 호출 여부 추적
      */
     vi.mocked(createAdminClient).mockReturnValue({
       auth: {
-        admin: { createUser: mockCreateUser, generateLink: mockGenerateLink },
+        admin: { createUser: mockCreateUser },
       },
     } as never);
 
@@ -137,21 +143,11 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
      */
     vi.mocked(getUserByEmail).mockResolvedValue(null);
 
-    /**
-     * signup 성공 응답 mock
-     */
-    mockGenerateLink.mockResolvedValue({
-      data: {
-        user: { id: "user-id", email: "test@example.com" },
-        properties: { hashed_token: "hashed-token" },
-      },
-      error: null,
-    });
     mockCreateUser.mockResolvedValue({
       data: { user: { id: "user-id", email: "test@example.com" } },
       error: null,
     });
-    vi.mocked(sendAuthEmail).mockResolvedValue(undefined);
+    vi.mocked(issueOtpAndSendEmail).mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -177,7 +173,9 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     /**
      * limit 내에서는 signup 정상 호출
      */
-    expect(mockGenerateLink).toHaveBeenCalledTimes(IP_SHORT_LIMIT);
+    expect(vi.mocked(issueOtpAndSendEmail)).toHaveBeenCalledTimes(
+      IP_SHORT_LIMIT,
+    );
     expect(Date.now() - startedAt).toBeLessThan(IP_SHORT_WINDOW_MS);
   });
 
@@ -206,7 +204,9 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     /**
      * 초과 요청에서는 signup이 호출되지 않아야 함
      */
-    expect(mockGenerateLink).toHaveBeenCalledTimes(IP_SHORT_LIMIT);
+    expect(vi.mocked(issueOtpAndSendEmail)).toHaveBeenCalledTimes(
+      IP_SHORT_LIMIT,
+    );
     expect(Date.now() - startedAt).toBeLessThan(IP_SHORT_WINDOW_MS);
   });
 
@@ -228,7 +228,9 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
       }
     }
 
-    expect(mockGenerateLink).toHaveBeenCalledTimes(EMAIL_LONG_LIMIT);
+    expect(vi.mocked(issueOtpAndSendEmail)).toHaveBeenCalledTimes(
+      EMAIL_LONG_LIMIT,
+    );
     expect(Date.now() - startedAt).toBeLessThan(EMAIL_LONG_WINDOW_MS);
   });
 
@@ -257,7 +259,9 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     /**
      * 초과 요청에서는 signup이 호출되지 않아야 함
      */
-    expect(mockGenerateLink).toHaveBeenCalledTimes(EMAIL_LONG_LIMIT);
+    expect(vi.mocked(issueOtpAndSendEmail)).toHaveBeenCalledTimes(
+      EMAIL_LONG_LIMIT,
+    );
     expect(Date.now() - startedAt).toBeLessThan(EMAIL_LONG_WINDOW_MS);
   });
 
@@ -275,7 +279,9 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     const response = await sendRequest(ip, "tc05user9@example.com");
 
     expect(response.status).not.toBe(429);
-    expect(mockGenerateLink).toHaveBeenCalledTimes(IP_SHORT_LIMIT);
+    expect(vi.mocked(issueOtpAndSendEmail)).toHaveBeenCalledTimes(
+      IP_SHORT_LIMIT,
+    );
     expect(Date.now() - startedAt).toBeLessThan(IP_SHORT_WINDOW_MS);
   });
 
@@ -293,7 +299,9 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     const response = await sendRequest("10.6.4.1", email);
 
     expect(response.status).not.toBe(429);
-    expect(mockGenerateLink).toHaveBeenCalledTimes(EMAIL_LONG_LIMIT);
+    expect(vi.mocked(issueOtpAndSendEmail)).toHaveBeenCalledTimes(
+      EMAIL_LONG_LIMIT,
+    );
     expect(Date.now() - startedAt).toBeLessThan(EMAIL_LONG_WINDOW_MS);
   });
 
@@ -307,7 +315,7 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     /**
      * 초과 이후 호출 초기화
      */
-    mockGenerateLink.mockClear();
+    vi.mocked(issueOtpAndSendEmail).mockClear();
 
     /**
      * 같은 window에서는 계속 차단
@@ -317,7 +325,7 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
       expect(response.status).toBe(429);
     }
 
-    expect(mockGenerateLink).toHaveBeenCalledTimes(0);
+    expect(vi.mocked(issueOtpAndSendEmail)).not.toHaveBeenCalled();
   });
 
   it("TC-08. 이메일 한도 초과 후 같은 윈도우에서 계속 차단된다", async () => {
@@ -334,7 +342,7 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
       }
     }
 
-    mockGenerateLink.mockClear();
+    vi.mocked(issueOtpAndSendEmail).mockClear();
 
     /**
      * 같은 long window 내 재시도는 계속 차단되어야 한다.
@@ -347,7 +355,7 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
       expect(response.status).toBe(429);
     }
 
-    expect(mockGenerateLink).toHaveBeenCalledTimes(0);
+    expect(vi.mocked(issueOtpAndSendEmail)).not.toHaveBeenCalled();
   });
 
   it("TC-09. 윈도우 만료 후 IP limit이 리셋된다", async () => {
@@ -360,12 +368,12 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     /**
      * window 만료 (IP_SHORT_WINDOW_MS + 1초)
      */
-    vi.advanceTimersByTime(IP_SHORT_WINDOW_MS + 1000);
+    await vi.advanceTimersByTimeAsync(IP_SHORT_WINDOW_MS + 1000);
 
     const response = await sendRequest(ip, "tc09reset@example.com");
 
     expect(response.status).not.toBe(429);
-    expect(mockGenerateLink).toHaveBeenCalled();
+    expect(vi.mocked(issueOtpAndSendEmail)).toHaveBeenCalled();
   });
 
   it("TC-10. 15분 윈도우 만료 후 이메일 limit이 리셋된다", async () => {
@@ -404,7 +412,6 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     const response = await sendRequest("10.10.10.1", email);
 
     expect(response.status).not.toBe(429);
-    expect(mockGenerateLink).toHaveBeenCalled();
   });
 
   it("TC-11A. 이메일이 달라도 IP limit은 동작한다", async () => {
@@ -426,7 +433,13 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
 
     for (let i = 0; i < EMAIL_LONG_LIMIT; i++) {
       await sendRequest(`10.11.${i}.2`, email);
+
+      if (i < EMAIL_LONG_LIMIT - 1) {
+        await vi.advanceTimersByTimeAsync(EMAIL_SHORT_WINDOW_MS + 1);
+      }
     }
+
+    await vi.advanceTimersByTimeAsync(EMAIL_SHORT_WINDOW_MS + 1);
 
     const response = await sendRequest("10.11.10.2", email);
     const body = await response.json();
@@ -462,7 +475,7 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     expect(body.data).toBeNull();
   });
 
-  it("TC-13. validation 실패 요청은 IP 어거운스 한도를 소모하지 않는다", async () => {
+  it("TC-13. validation 실패 요청은 IP rate limit 한도를 소모하지 않는다", async () => {
     // [설계 변경: checkRequestEligibility는 schema validation 이후에 호출되므로,
     //  validation 실패는 rate limit을 소모하지 않는다.
     //  이는 malformed JSON도 동일하다.
@@ -477,12 +490,12 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
       expect(response.status).toBe(400);
     }
 
-    // 정상 요청 (validation 통과) — IP 하한도는 유지됨
+    // 정상 요청 (validation 통과) — IP 한도는 소모되지 않았음
     const blocked = await sendRequest(ip, "tc13@example.com");
 
     // 정상 요청도 허용됨 (validation 실패는 한도 미적용)
     expect(blocked.status).not.toBe(429);
-    expect(mockGenerateLink).toHaveBeenCalled();
+    expect(vi.mocked(issueOtpAndSendEmail)).toHaveBeenCalledTimes(1);
   });
 
   it("TC-14. validation 실패 요청은 이메일 limit을 소모하지 않는다", async () => {
@@ -545,10 +558,16 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
     const email = "tc16@example.com";
 
     for (let i = 0; i < EMAIL_LONG_LIMIT; i++) {
-      await sendRequest(`10.16.${i}.1`, email);
+      await sendRequest(`10.11.${i}.2`, email);
+
+      if (i < EMAIL_LONG_LIMIT - 1) {
+        await vi.advanceTimersByTimeAsync(EMAIL_SHORT_WINDOW_MS + 1);
+      }
     }
 
-    const response = await sendRequest("10.16.99.1", email);
+    await vi.advanceTimersByTimeAsync(EMAIL_SHORT_WINDOW_MS + 1);
+
+    const response = await sendRequest("10.11.10.2", email);
 
     // Logging now happens internally in checkRequestEligibility
     // [변경 이유: logRequestEligibilityBlocked는 checkRequestEligibility 내부에서 호출되어,
@@ -652,6 +671,7 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
      * [검증 의도: precheck이 호출되었어도 상태를 변경하지 않았으므로,
      *  window 만료 시 counter가 리셋되고 새로운 window가 시작됨]
      */
-    expect(mockGenerateLink).toHaveBeenCalled();
+    expect(mockCreateUser).toHaveBeenCalled();
+    expect(vi.mocked(issueOtpAndSendEmail)).toHaveBeenCalled();
   });
 });

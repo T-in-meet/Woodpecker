@@ -39,6 +39,13 @@ import {
   setupLoginApiMocks,
 } from "./utils/loginTestHelper";
 
+const hasUserAgreementMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/features/auth/lib/userAgreements", () => ({
+  AGREEMENT_REQUIRED_REDIRECT: "/signup?agreement_required=1",
+  hasUserAgreement: hasUserAgreementMock,
+}));
+
 // applyMinimumResponseTime을 우회하여 타이밍 영향 제거
 vi.mock("@/features/auth/lib/applyMinimumResponseTime", () => ({
   applyMinimumResponseTime: vi.fn(
@@ -168,6 +175,7 @@ describe("로그인 API 로깅 검증", () => {
     mockParsedLoginBody();
     mockIpPrecheckAllowed();
     mockEligibilityAllowed();
+    hasUserAgreementMock.mockResolvedValue(true);
   });
 
   it("AUTH_LOGIN_REQUESTED가 1회 기록된다", async () => {

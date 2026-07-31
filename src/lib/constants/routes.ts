@@ -2,7 +2,6 @@ export const ROUTES = {
   HOME: "/",
   LOGIN: "/login",
   SIGNUP: "/signup",
-  VERIFY_EMAIL: "/verify-email",
   NOTES: "/notes",
   NOTES_NEW: "/notes/new",
   NOTES_TODAY: "/notes/today",
@@ -12,6 +11,61 @@ export const ROUTES = {
   CALLBACK: "/auth/callback",
   RESET_PASSWORD: "/reset-password",
   FORGOT_PASSWORD: "/forgot-password",
+  VERIFY_OTP: "/verify-otp",
+  RESEND_EMAIL: "/resend-email",
+
+  ADMIN: {
+    DASHBOARD: "/admin",
+
+    USERS: "/admin/users",
+
+    FEEDBACKS: "/admin/feedbacks",
+
+    OPERATIONAL_ERRORS: "/admin/operational-errors",
+
+    EXPERIMENTS: {
+      DASHBOARD: "/admin/experiments",
+
+      COMPONENT_PLAYGROUND: "/admin/experiments/component-playground",
+
+      NOTE_RELATIONS: {
+        DASHBOARD: "/admin/experiments/note-relations",
+
+        NOTE_RELATIONS: "/admin/experiments/note-relations/relations",
+
+        PROMPTS: "/admin/experiments/note-relations/prompts",
+
+        PROMPTS_NEW: "/admin/experiments/note-relations/prompts/new",
+
+        KNOWLEDGE_EXTRACTIONS:
+          "/admin/experiments/note-relations/knowledge-extractions",
+
+        KNOWLEDGE_EXTRACTIONS_PREVIEW:
+          "/admin/experiments/note-relations/knowledge-extractions/preview",
+
+        KNOWLEDGE_EXTRACTIONS_NEW:
+          "/admin/experiments/note-relations/knowledge-extractions/new",
+
+        KNOWLEDGE_OBJECTS:
+          "/admin/experiments/note-relations/knowledge-objects",
+
+        KNOWLEDGE_OBJECTS_NEW:
+          "/admin/experiments/note-relations/knowledge-objects/new",
+
+        KNOWLEDGE_OBJECT_GENERATIONS:
+          "/admin/experiments/note-relations/knowledge-object-generations",
+
+        KNOWLEDGE_OBJECT_RELATIONS:
+          "/admin/experiments/note-relations/knowledge-object-relations",
+
+        KNOWLEDGE_OBJECT_RELATION_GENERATIONS:
+          "/admin/experiments/note-relations/knowledge-object-relation-generations",
+
+        KNOWLEDGE_OBJECT_RELATION_GENERATIONS_NEW:
+          "/admin/experiments/note-relations/knowledge-object-relation-generations/new",
+      },
+    },
+  },
 } as const;
 
 export type Route = (typeof ROUTES)[keyof typeof ROUTES];
@@ -22,4 +76,20 @@ export function getNoteDetailRoute(noteId: string) {
 
 export function getNoteReviewRoute(noteId: string) {
   return `${getNoteDetailRoute(noteId)}/review`;
+}
+
+/**
+ * 관리자 피드백 상세 페이지 경로를 생성합니다.
+ *
+ * @param feedbackId 상세 조회할 feedbacks.id
+ * @returns `/admin/feedbacks/{feedbackId}` 형식의 route path
+ */
+export function getAdminFeedbackDetailRoute(feedbackId: string) {
+  return `${ROUTES.ADMIN.FEEDBACKS}/${feedbackId}`;
+}
+
+export function getAdminOperationalErrorDetailRoute(
+  operationalErrorId: string,
+) {
+  return `${ROUTES.ADMIN.OPERATIONAL_ERRORS}/${operationalErrorId}`;
 }

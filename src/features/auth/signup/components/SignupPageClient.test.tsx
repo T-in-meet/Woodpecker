@@ -8,13 +8,25 @@ import {
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import {
+  OAUTH_CALLBACK_ERROR_REASON,
+  OAUTH_CALLBACK_ERROR_TOAST_KEY,
+  OAUTH_CALLBACK_ERROR_TOAST_MESSAGE,
+} from "@/features/auth/constants/oauthCallbackError";
 import SignupPageClient from "@/features/auth/signup/components/SignupPageClient";
+import { showToast } from "@/lib/utils/showToast";
 
 const mockPush = vi.fn();
 const mockMutateAsync = vi.fn();
+const mockSearchParams = vi.fn(() => new URLSearchParams());
 
 vi.mock("next/navigation", () => ({
   useRouter: vi.fn(() => ({ push: mockPush })),
+  useSearchParams: vi.fn(() => mockSearchParams()),
+}));
+
+vi.mock("@/lib/utils/showToast", () => ({
+  showToast: vi.fn(),
 }));
 
 vi.mock("@/features/auth/signup/hooks/useSignupMutation", () => ({
@@ -68,6 +80,7 @@ describe("PR-UI-05: SignupPageClient redirectTo 라우팅", () => {
   beforeEach(() => {
     mockPush.mockReset();
     mockMutateAsync.mockReset();
+    mockSearchParams.mockReturnValue(new URLSearchParams());
   });
 
   afterEach(() => {
@@ -110,18 +123,19 @@ describe("PR-UI-05: SignupPageClient redirectTo 라우팅", () => {
     await waitFor(() => {
       expect(mockPush).toHaveBeenCalledTimes(1);
       expect(mockPush).toHaveBeenCalledWith(redirectTo);
-      expect(mockPush).not.toHaveBeenCalledWith("/verify-email");
+      expect(mockPush).not.toHaveBeenCalledWith("/resend-email");
       expect(mockPush).not.toHaveBeenCalledWith("/login");
     });
   });
 
-  it("TC-05: redirectTo가 '/verify-email'이면 email query를 포함해 이동한다", async () => {
+  it("TC-05: 회원가입 성공 시 서버가 내려준 redirectTo로 이동한다", async () => {
     mockMutateAsync.mockResolvedValue({
       data: {
-        redirectTo: "/verify-email",
+        redirectTo: "/verify-otp?purpose=signup&email=test%40example.com",
         email: "test@example.com",
       },
     });
+
     const user = userEvent.setup();
     render(<SignupPageClient />);
 
@@ -130,7 +144,65 @@ describe("PR-UI-05: SignupPageClient redirectTo 라우팅", () => {
     await waitFor(() => {
       expect(mockPush).toHaveBeenCalledTimes(1);
       expect(mockPush).toHaveBeenCalledWith(
-        "/verify-email?email=test%40example.com",
+        "/verify-otp?purpose=signup&email=test%40example.com",
+      );
+    });
+  });
+});
+
+describe("SignupPageClient agreement_required 안내", () => {
+  beforeEach(() => {
+    mockPush.mockReset();
+    mockMutateAsync.mockReset();
+    mockSearchParams.mockReturnValue(
+      new URLSearchParams({ agreement_required: "1" }),
+    );
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("agreement_required=1이면 약관 동의 안내 toast를 표시한다", async () => {
+    render(<SignupPageClient />);
+
+    await waitFor(() => {
+      expect(showToast).toHaveBeenCalledWith(
+        "약관과 개인정보 처리방침 확인 및 동의가 필요합니다.",
+        {
+          variant: "destructive",
+          dedupeKey: "auth-agreement-required",
+        },
+      );
+    });
+  });
+});
+
+describe("SignupPageClient OAuth callback 실패 안내", () => {
+  beforeEach(() => {
+    mockPush.mockReset();
+    mockMutateAsync.mockReset();
+    mockSearchParams.mockReturnValue(
+      new URLSearchParams({
+        oauth_error: OAUTH_CALLBACK_ERROR_REASON.EXCHANGE_FAILED,
+      }),
+    );
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("oauth_error query가 있으면 소셜 로그인 실패 toast를 표시한다", async () => {
+    render(<SignupPageClient />);
+
+    await waitFor(() => {
+      expect(showToast).toHaveBeenCalledWith(
+        OAUTH_CALLBACK_ERROR_TOAST_MESSAGE,
+        {
+          variant: "destructive",
+          dedupeKey: OAUTH_CALLBACK_ERROR_TOAST_KEY,
+        },
       );
     });
   });
@@ -140,6 +212,7 @@ describe("PR-UI-13: SignupPageClient submit → mutateAsync → redirectTo 연�
   beforeEach(() => {
     mockPush.mockReset();
     mockMutateAsync.mockReset();
+    mockSearchParams.mockReturnValue(new URLSearchParams());
   });
 
   afterEach(() => {

@@ -30,14 +30,25 @@ export type TableMap = {
   };
 };
 
-export type IdOf<T extends TableName> = Row<T>["id"];
+type TableNameWithId = {
+  [K in TableName]: Row<K> extends { id: unknown } ? K : never;
+}[TableName];
 
-export type WithId<T extends TableName> = Pick<Row<T>, "id">;
+export type IdOf<T extends TableNameWithId> = Row<T>["id"];
+
+export type WithId<T extends TableNameWithId> = Pick<Row<T>, "id">;
 
 export const TABLES = {
+  feedbackReplies: "feedback_replies",
+  feedbacks: "feedbacks",
+  adminNotificationEvents: "admin_notification_events",
+  adminNotificationReads: "admin_notification_reads",
   notes: "notes",
   notifications: "notifications",
+  operationalErrorStatusHistory: "operational_error_status_history",
+  operationalErrors: "operational_errors",
   profiles: "profiles",
   pushSubscriptions: "push_subscriptions",
   reviewLogs: "review_logs",
+  userAgreements: "user_agreements",
 } as const;

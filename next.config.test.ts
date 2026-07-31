@@ -5,7 +5,7 @@
  * - headers() 함수 존재 여부
  * - source "/(.*)"에 각 보안 헤더 포함 여부
  * - production 환경에서 HSTS 포함, non-production에서 제외
- * - 기존 images.remotePatterns 설정 유지
+ * - Supabase Storage 이미지 remotePatterns 설정 유지
  *
  * 전략:
  * - Vitest/jsdom 환경에서는 실제 HTTP 응답 헤더를 인터셉트할 수 없으므로
@@ -26,15 +26,8 @@ async function getGlobalHeaders(): Promise<{ key: string; value: string }[]> {
   return (globalGroup?.headers ?? []) as { key: string; value: string }[];
 }
 
-/**
- * CSP 헤더 값을 추출하는 헬퍼
- */
-async function getCspHeader(
-  key: "Content-Security-Policy" | "Content-Security-Policy-Report-Only",
-): Promise<string | undefined> {
-  const headers = await getGlobalHeaders();
-  return headers.find((h) => h.key === key)?.value;
-}
+// CSP 헤더는 요청별 nonce 생성을 위해 미들웨어(src/middleware.ts)에서 동적으로 설정한다.
+// 따라서 CSP 검증은 src/middleware.test.ts에서 수행한다.
 
 describe("Security Headers — next.config.ts", () => {
   describe("TC-SH-01: headers() 함수 정의", () => {
@@ -105,7 +98,7 @@ describe("Security Headers — next.config.ts", () => {
         expect.arrayContaining([
           expect.objectContaining({
             key: "Strict-Transport-Security",
-            value: "max-age=300; includeSubDomains",
+            value: "max-age=86400; includeSubDomains",
           }),
         ]),
       );
@@ -119,126 +112,67 @@ describe("Security Headers — next.config.ts", () => {
     });
   });
 
-  describe("TC-SH-08: 기존 설정 유지", () => {
-    it("TC-SH-08. 기존 images.remotePatterns 설정이 정확히 유지된다", () => {
+  describe("TC-SH-08: 이미지 remotePatterns 설정 유지", () => {
+    it("TC-SH-08. Supabase Storage remotePatterns 설정이 정확히 유지된다", () => {
       expect(nextConfig.images).toBeDefined();
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+        ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL)
+        : null;
       const supabaseHostname = process.env.NEXT_PUBLIC_SUPABASE_HOSTNAME;
 
-      const expected = supabaseHostname
-        ? [
-            {
-              protocol: "https",
-              hostname: supabaseHostname,
-              port: "",
-              pathname: "/storage/v1/object/public/**",
-            },
-          ]
-        : [];
+      const expected = [
+        ...(supabaseUrl
+          ? [
+              {
+                protocol: supabaseUrl.protocol.replace(":", ""),
+                hostname: supabaseUrl.hostname,
+                port: supabaseUrl.port,
+                pathname: "/storage/v1/object/public/**",
+              },
+            ]
+          : supabaseHostname
+            ? [
+                {
+                  protocol: "https",
+                  hostname: supabaseHostname,
+                  port: "",
+                  pathname: "/storage/v1/object/public/**",
+                },
+              ]
+            : []),
+      ];
 
       expect(nextConfig.images?.remotePatterns).toEqual(expected);
     });
+
+    it("TC-SH-08A. 로컬 Supabase Storage remotePatterns는 http와 port를 포함한다", async () => {
+      vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://127.0.0.1:54321");
+      vi.resetModules();
+
+      const { default: localNextConfig } = await import("./next.config");
+
+      expect(localNextConfig.images?.remotePatterns).toEqual(
+        expect.arrayContaining([
+          {
+            protocol: "http",
+            hostname: "127.0.0.1",
+            port: "54321",
+            pathname: "/storage/v1/object/public/**",
+          },
+        ]),
+      );
+    });
   });
 
-  describe("CSP 헤더 — next.config.ts", () => {
-    describe("TC-CSP-01~05: Content-Security-Policy (강제)", () => {
-      it("TC-CSP-01. Content-Security-Policy 헤더가 존재한다", async () => {
-        const cspEnforced = await getCspHeader("Content-Security-Policy");
-        expect(cspEnforced).toBeDefined();
-        expect(typeof cspEnforced).toBe("string");
-      });
-
-      it("TC-CSP-02. 강제 CSP에 object-src 'none' 디렉티브가 포함된다", async () => {
-        const cspEnforced = await getCspHeader("Content-Security-Policy");
-        expect(cspEnforced).toContain("object-src 'none'");
-      });
-
-      it("TC-CSP-03. 강제 CSP에 base-uri 'self' 디렉티브가 포함된다", async () => {
-        const cspEnforced = await getCspHeader("Content-Security-Policy");
-        expect(cspEnforced).toContain("base-uri 'self'");
-      });
-
-      it("TC-CSP-04. 강제 CSP에 frame-ancestors 'none' 디렉티브가 포함된다", async () => {
-        const cspEnforced = await getCspHeader("Content-Security-Policy");
-        expect(cspEnforced).toContain("frame-ancestors 'none'");
-      });
-
-      it("TC-CSP-05. 강제 CSP 값이 정확히 3개 디렉티브만 포함한다", async () => {
-        const cspEnforced = await getCspHeader("Content-Security-Policy");
-        const directives = (cspEnforced?.split("; ") ?? []).filter(Boolean);
-
-        expect(new Set(directives)).toEqual(
-          new Set([
-            "object-src 'none'",
-            "base-uri 'self'",
-            "frame-ancestors 'none'",
-          ]),
-        );
-      });
-    });
-
-    describe("TC-CSP-06~09: Content-Security-Policy-Report-Only (관측)", () => {
-      it("TC-CSP-06. Content-Security-Policy-Report-Only 헤더가 존재한다", async () => {
-        const cspReportOnly = await getCspHeader(
-          "Content-Security-Policy-Report-Only",
-        );
-        expect(cspReportOnly).toBeDefined();
-        expect(typeof cspReportOnly).toBe("string");
-      });
-
-      it("TC-CSP-07. Report-Only CSP에 default-src 'self' 포함", async () => {
-        const cspReportOnly = await getCspHeader(
-          "Content-Security-Policy-Report-Only",
-        );
-        expect(cspReportOnly).toContain("default-src 'self'");
-      });
-
-      it("TC-CSP-08. Report-Only CSP에 script-src, style-src, img-src, font-src, connect-src 포함", async () => {
-        const cspReportOnly = await getCspHeader(
-          "Content-Security-Policy-Report-Only",
-        );
-        expect(cspReportOnly).toContain("script-src");
-        expect(cspReportOnly).toContain("style-src");
-        expect(cspReportOnly).toContain("img-src");
-        expect(cspReportOnly).toContain("font-src");
-        expect(cspReportOnly).toContain("connect-src");
-        expect(cspReportOnly).toContain("worker-src 'self'");
-      });
-
-      it("TC-CSP-09. Report-Only CSP에 강제 CSP 디렉티브(object-src, base-uri, frame-ancestors)가 없다", async () => {
-        const cspReportOnly = await getCspHeader(
-          "Content-Security-Policy-Report-Only",
-        );
-        expect(cspReportOnly).not.toContain("object-src 'none'");
-        expect(cspReportOnly).not.toContain("base-uri 'self'");
-        expect(cspReportOnly).not.toContain("frame-ancestors 'none'");
-      });
-    });
-
-    describe("TC-CSP-10~12: 형식 및 중복 검증", () => {
-      it("TC-CSP-10. CSP 헤더 중복 없음 — Content-Security-Policy는 정확히 1개", async () => {
-        const headers = await getGlobalHeaders();
-        const cspCount = headers.filter(
-          (h) => h.key === "Content-Security-Policy",
-        ).length;
-        expect(cspCount).toBe(1);
-      });
-
-      it("TC-CSP-11. Report-Only 헤더 중복 없음 — Content-Security-Policy-Report-Only는 정확히 1개", async () => {
-        const headers = await getGlobalHeaders();
-        const reportOnlyCount = headers.filter(
-          (h) => h.key === "Content-Security-Policy-Report-Only",
-        ).length;
-        expect(reportOnlyCount).toBe(1);
-      });
-
-      it("TC-CSP-12. 두 CSP 헤더 값 모두 string 타입이다", async () => {
-        const cspEnforced = await getCspHeader("Content-Security-Policy");
-        const cspReportOnly = await getCspHeader(
-          "Content-Security-Policy-Report-Only",
-        );
-        expect(typeof cspEnforced).toBe("string");
-        expect(typeof cspReportOnly).toBe("string");
-      });
+  describe("TC-CSP-NOT-IN-CONFIG: CSP는 next.config.ts에서 정의하지 않는다", () => {
+    it("CSP/CSP-Report-Only 헤더는 next.config.ts headers()에 없다 (미들웨어에서 동적 설정)", async () => {
+      const headers = await getGlobalHeaders();
+      const csp = headers.find((h) => h.key === "Content-Security-Policy");
+      const cspRo = headers.find(
+        (h) => h.key === "Content-Security-Policy-Report-Only",
+      );
+      expect(csp).toBeUndefined();
+      expect(cspRo).toBeUndefined();
     });
   });
 

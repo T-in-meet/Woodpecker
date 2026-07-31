@@ -64,10 +64,55 @@
   margin-bottom: 0.5rem;
 }
 
+/* 노트 보기 화면은 .tiptap의 좌우 패딩을 없애므로, 두 자리 이상 마커("18.")가 놓일
+   공간이 이 padding-left뿐이다. 좁으면 overflow-hidden에 잘려 보인다. */
 .tiptap-wrapper .tiptap ol {
   list-style-type: decimal;
-  padding-left: 1.5rem;
+  padding-left: 2rem;
   margin-bottom: 0.5rem;
+}
+
+/* 중첩 깊이에 따라 마커를 바꾼다(노션 기본 동작). 마크다운에는 마커 종류를 담을 문법이
+   없으므로 표현만 바꾸고 문서 구조는 건드리지 않는다. */
+.tiptap-wrapper .tiptap ol ol {
+  list-style-type: lower-alpha;
+  padding-left: 1.5rem;
+}
+
+.tiptap-wrapper .tiptap ol ol ol {
+  list-style-type: lower-roman;
+}
+
+.tiptap-wrapper .tiptap ol ol ol ol {
+  list-style-type: decimal;
+}
+
+.tiptap-wrapper .tiptap ol ol ol ol ol {
+  list-style-type: lower-alpha;
+}
+
+.tiptap-wrapper .tiptap ol ol ol ol ol ol {
+  list-style-type: lower-roman;
+}
+
+.tiptap-wrapper .tiptap ul ul {
+  list-style-type: circle;
+}
+
+.tiptap-wrapper .tiptap ul ul ul {
+  list-style-type: square;
+}
+
+.tiptap-wrapper .tiptap ul ul ul ul {
+  list-style-type: disc;
+}
+
+.tiptap-wrapper .tiptap ul ul ul ul ul {
+  list-style-type: circle;
+}
+
+.tiptap-wrapper .tiptap ul ul ul ul ul ul {
+  list-style-type: square;
 }
 
 .tiptap-wrapper .tiptap li {
@@ -172,7 +217,7 @@
 .tiptap-wrapper .tiptap hr {
   border: none;
   border-top: 1px solid var(--border);
-  margin: 1.5rem 0;
+  margin: 1rem 0;
 }
 
 /* Links */
@@ -240,4 +285,221 @@
   .tiptap-wrapper .tiptap {
     padding: 1rem 3rem 1.5rem;
   }
+}
+
+/* 글자색 / 배경색 팔레트
+   토큰 목록은 src/features/editor/noteColors.ts가 정본이며, 여기 변수와 짝이 맞아야 한다.
+   "기본"은 토큰이 없는 상태이므로 별도 변수를 두지 않는다. */
+:root {
+  --note-text-gray: #6b7280;
+  --note-text-orange: #c2410c;
+  --note-text-yellow: #a16207;
+  --note-text-green: #15803d;
+  --note-text-blue: #1d4ed8;
+  --note-text-purple: #7e22ce;
+  --note-text-red: #b91c1c;
+
+  --note-bg-gray: #f3f4f6;
+  --note-bg-orange: #ffedd5;
+  --note-bg-yellow: #fef9c3;
+  --note-bg-green: #dcfce7;
+  --note-bg-blue: #dbeafe;
+  --note-bg-purple: #f3e8ff;
+  --note-bg-red: #fee2e2;
+}
+
+.dark {
+  --note-text-gray: #9ca3af;
+  --note-text-orange: #fdba74;
+  --note-text-yellow: #fde047;
+  --note-text-green: #86efac;
+  --note-text-blue: #93c5fd;
+  --note-text-purple: #d8b4fe;
+  --note-text-red: #fca5a5;
+
+  --note-bg-gray: #374151;
+  --note-bg-orange: #7c2d12;
+  --note-bg-yellow: #713f12;
+  --note-bg-green: #14532d;
+  --note-bg-blue: #1e3a8a;
+  --note-bg-purple: #581c87;
+  --note-bg-red: #7f1d1d;
+}
+
+/* 줄 전체가 한 색이면 목록 마커(1. / a. / •)도 같은 색으로 맞춘다.
+   본문 글자는 이미 인라인 마크가 칠하므로 여기서는 ::marker만 건드린다.
+   항목 전체에 color를 주면 중첩된 무채색 항목까지 색을 물려받는다.
+   data-note-line-color는 문서에서 계산해 붙이는 표시라 저장되지 않는다. */
+.tiptap-wrapper .tiptap [data-note-line-color="gray"]::marker {
+  color: var(--note-text-gray);
+}
+.tiptap-wrapper .tiptap [data-note-line-color="orange"]::marker {
+  color: var(--note-text-orange);
+}
+.tiptap-wrapper .tiptap [data-note-line-color="yellow"]::marker {
+  color: var(--note-text-yellow);
+}
+.tiptap-wrapper .tiptap [data-note-line-color="green"]::marker {
+  color: var(--note-text-green);
+}
+.tiptap-wrapper .tiptap [data-note-line-color="blue"]::marker {
+  color: var(--note-text-blue);
+}
+.tiptap-wrapper .tiptap [data-note-line-color="purple"]::marker {
+  color: var(--note-text-purple);
+}
+.tiptap-wrapper .tiptap [data-note-line-color="red"]::marker {
+  color: var(--note-text-red);
+}
+
+.tiptap-wrapper .tiptap [data-note-color="gray"] {
+  color: var(--note-text-gray);
+}
+.tiptap-wrapper .tiptap [data-note-color="orange"] {
+  color: var(--note-text-orange);
+}
+.tiptap-wrapper .tiptap [data-note-color="yellow"] {
+  color: var(--note-text-yellow);
+}
+.tiptap-wrapper .tiptap [data-note-color="green"] {
+  color: var(--note-text-green);
+}
+.tiptap-wrapper .tiptap [data-note-color="blue"] {
+  color: var(--note-text-blue);
+}
+.tiptap-wrapper .tiptap [data-note-color="purple"] {
+  color: var(--note-text-purple);
+}
+.tiptap-wrapper .tiptap [data-note-color="red"] {
+  color: var(--note-text-red);
+}
+
+/* 배경색은 블록 단위다. 블록 폭 전체를 채우고, 같은 색 블록이 이어지면
+   경계 없이 한 덩어리로 보이도록 사이 여백과 모서리를 없앤다. */
+.tiptap-wrapper .tiptap [data-note-block-bg] {
+  border-radius: 0.375rem;
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+
+.tiptap-wrapper .tiptap [data-note-block-bg]:not(li) {
+  padding-left: 0.375rem;
+  padding-right: 0.375rem;
+  margin-left: -0.375rem;
+  margin-right: -0.375rem;
+}
+
+/* 목록 항목의 번호/불릿은 부모 목록의 padding-left 영역, 즉 li 상자 바깥에 그려진다.
+   레이아웃을 건드리면 마커와 본문 간격이 틀어지므로, 배경만 왼쪽으로 연장해 마커를 덮는다.
+   box-shadow는 자리를 차지하지 않아 목록 정렬에 영향이 없다.
+   체크박스 목록은 마커가 없어 제외한다. */
+.tiptap-wrapper
+  .tiptap
+  ul:not([data-type="taskList"])
+  > li[data-note-block-bg] {
+  box-shadow: -1.5rem 0 0 0 var(--note-block-bg);
+}
+
+.tiptap-wrapper .tiptap ol > li[data-note-block-bg] {
+  box-shadow: -2rem 0 0 0 var(--note-block-bg);
+}
+
+.tiptap-wrapper .tiptap ol ol > li[data-note-block-bg] {
+  box-shadow: -1.5rem 0 0 0 var(--note-block-bg);
+}
+
+/* 배경 안쪽 마지막 요소의 아래 여백은 배경에 포함돼 위아래 균형을 깨뜨린다.
+   (중첩 목록의 margin-bottom이 대표적) */
+.tiptap-wrapper .tiptap [data-note-block-bg] > *:last-child,
+.tiptap-wrapper .tiptap [data-note-block-bg] > *:last-child > li:last-child {
+  margin-bottom: 0;
+}
+
+/* 이어 붙이는 것은 색이 같을 때만이다. CSS는 두 속성 값을 비교할 수 없어
+   토큰마다 규칙을 따로 쓴다. 색이 다르면 경계가 그대로 남아 구분된다. */
+.tiptap-wrapper
+  .tiptap
+  [data-note-block-bg="gray"]:has(+ [data-note-block-bg="gray"]),
+.tiptap-wrapper
+  .tiptap
+  [data-note-block-bg="orange"]:has(+ [data-note-block-bg="orange"]),
+.tiptap-wrapper
+  .tiptap
+  [data-note-block-bg="yellow"]:has(+ [data-note-block-bg="yellow"]),
+.tiptap-wrapper
+  .tiptap
+  [data-note-block-bg="green"]:has(+ [data-note-block-bg="green"]),
+.tiptap-wrapper
+  .tiptap
+  [data-note-block-bg="blue"]:has(+ [data-note-block-bg="blue"]),
+.tiptap-wrapper
+  .tiptap
+  [data-note-block-bg="purple"]:has(+ [data-note-block-bg="purple"]),
+.tiptap-wrapper
+  .tiptap
+  [data-note-block-bg="red"]:has(+ [data-note-block-bg="red"]) {
+  margin-bottom: 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.tiptap-wrapper
+  .tiptap
+  [data-note-block-bg="gray"]
+  + [data-note-block-bg="gray"],
+.tiptap-wrapper
+  .tiptap
+  [data-note-block-bg="orange"]
+  + [data-note-block-bg="orange"],
+.tiptap-wrapper
+  .tiptap
+  [data-note-block-bg="yellow"]
+  + [data-note-block-bg="yellow"],
+.tiptap-wrapper
+  .tiptap
+  [data-note-block-bg="green"]
+  + [data-note-block-bg="green"],
+.tiptap-wrapper
+  .tiptap
+  [data-note-block-bg="blue"]
+  + [data-note-block-bg="blue"],
+.tiptap-wrapper
+  .tiptap
+  [data-note-block-bg="purple"]
+  + [data-note-block-bg="purple"],
+.tiptap-wrapper
+  .tiptap
+  [data-note-block-bg="red"]
+  + [data-note-block-bg="red"] {
+  margin-top: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+/* 토큰별로 --note-block-bg만 정하고, 실제 칠하기는 위 공통 규칙이 맡는다.
+   목록의 box-shadow도 같은 변수를 쓰므로 색이 한 곳에서 관리된다. */
+.tiptap-wrapper .tiptap [data-note-block-bg] {
+  background-color: var(--note-block-bg);
+}
+
+.tiptap-wrapper .tiptap [data-note-block-bg="gray"] {
+  --note-block-bg: var(--note-bg-gray);
+}
+.tiptap-wrapper .tiptap [data-note-block-bg="orange"] {
+  --note-block-bg: var(--note-bg-orange);
+}
+.tiptap-wrapper .tiptap [data-note-block-bg="yellow"] {
+  --note-block-bg: var(--note-bg-yellow);
+}
+.tiptap-wrapper .tiptap [data-note-block-bg="green"] {
+  --note-block-bg: var(--note-bg-green);
+}
+.tiptap-wrapper .tiptap [data-note-block-bg="blue"] {
+  --note-block-bg: var(--note-bg-blue);
+}
+.tiptap-wrapper .tiptap [data-note-block-bg="purple"] {
+  --note-block-bg: var(--note-bg-purple);
+}
+.tiptap-wrapper .tiptap [data-note-block-bg="red"] {
+  --note-block-bg: var(--note-bg-red);
 }

@@ -100,8 +100,8 @@ describe("validateRedirectPath 디코딩 전 위험 패턴 차단", () => {
       expect(validateRedirectPath("/signup")).toBe("/mypage");
     });
 
-    it("/verify-email은 /mypage를 반환한다", () => {
-      expect(validateRedirectPath("/verify-email")).toBe("/mypage");
+    it("/resend-email은 /mypage를 반환한다", () => {
+      expect(validateRedirectPath("/resend-email")).toBe("/mypage");
     });
 
     it("/privacy는 /mypage를 반환한다", () => {

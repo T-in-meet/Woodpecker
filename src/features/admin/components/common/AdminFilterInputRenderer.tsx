@@ -1,0 +1,141 @@
+import type {
+  AdminAppliedFilter,
+  AdminFilterDefinition,
+  AdminNumberRangeFilterValue,
+} from "../../types/filter";
+import { AdminDateRangeInput } from "./AdminDateRangeInput";
+import { AdminMultiSelectInput } from "./AdminMultiSelectInput";
+import { AdminNumberRangeInput } from "./AdminNumberRangeInput";
+import { AdminSelectInput } from "./AdminSelectInput";
+
+type AdminFilterInputRendererProps<TField extends string> = {
+  /** 현재 편집할 필터 정의 */
+  filter: AdminFilterDefinition<TField>;
+
+  /** 현재 편집 중인 임시 필터 값 */
+  value: AdminAppliedFilter<TField> | null;
+
+  /** 임시 필터 값이 변경될 때 호출되는 함수 */
+  onChange: (value: AdminAppliedFilter<TField>) => void;
+
+  /** 현재 날짜 범위 필터를 최종 적용합니다. */
+  onApply: () => void;
+
+  /** 현재 날짜 범위 필터를 삭제합니다. */
+  onClear: () => void;
+};
+
+/**
+ * 필터 정의의 입력 방식에 따라 적절한 입력 컴포넌트를 선택합니다.
+ *
+ * Select, MultiSelect, NumberRange, DateRange 필터 정의를 받아
+ * 각 타입에 대응하는 공통 입력 컴포넌트를 렌더링합니다.
+ *
+ * @template TField 필터 필드의 문자열 리터럴 타입
+ * @param props 필터 정의, 현재 값, 값 변경 처리 함수
+ * @returns 필터 타입에 대응하는 입력 영역
+ */
+export function AdminFilterInputRenderer<TField extends string>({
+  filter,
+  value,
+  onChange,
+  onApply,
+  onClear,
+}: AdminFilterInputRendererProps<TField>) {
+  switch (filter.type) {
+    case "select": {
+      const selectValue =
+        value?.type === "select" && value.field === filter.field ? value : null;
+
+      return (
+        <AdminSelectInput
+          filter={filter}
+          value={selectValue}
+          onChange={onChange}
+        />
+      );
+    }
+
+    case "multi-select": {
+      const multiSelectValue =
+        value?.type === "multi-select" && value.field === filter.field
+          ? value
+          : null;
+
+      return (
+        <AdminMultiSelectInput
+          filter={filter}
+          value={multiSelectValue}
+          onChange={onChange}
+        />
+      );
+    }
+
+    case "number-range": {
+      const numberRangeValue: AdminNumberRangeFilterValue =
+        value?.type === "number-range"
+          ? value.value
+          : {
+              min: null,
+              max: null,
+            };
+
+      return (
+        <AdminNumberRangeInput
+          value={numberRangeValue}
+          {...(filter.min !== undefined ? { min: filter.min } : {})}
+          {...(filter.max !== undefined ? { max: filter.max } : {})}
+          {...(filter.step !== undefined ? { step: filter.step } : {})}
+          onValueChange={(nextValue) => {
+            onChange({
+              field: filter.field,
+              type: filter.type,
+              value: nextValue,
+            });
+          }}
+        />
+      );
+    }
+
+    case "date-range": {
+      const dateRangeValue =
+        value?.type === "date-range"
+          ? value.value
+          : {
+              from: null,
+              to: null,
+            };
+
+      return (
+        <AdminDateRangeInput
+          value={dateRangeValue}
+          onChange={(nextValue) => {
+            onChange({
+              field: filter.field,
+              type: "date-range",
+              value: nextValue,
+            });
+          }}
+          onApply={onApply}
+          onClear={onClear}
+        />
+      );
+    }
+
+    default:
+      return assertNever(filter);
+  }
+}
+
+/**
+ * 판별 유니온의 모든 경우가 처리되었는지 검사합니다.
+ *
+ * 새로운 필터 타입을 추가하고 Renderer에 case를 작성하지 않으면
+ * TypeScript 오류가 발생합니다.
+ *
+ * @param value 처리되지 않아야 하는 값
+ * @returns 반환되지 않음
+ */
+function assertNever(value: never): never {
+  throw new Error(`지원하지 않는 필터 타입입니다: ${JSON.stringify(value)}`);
+}

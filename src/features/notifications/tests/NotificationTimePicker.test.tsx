@@ -34,7 +34,7 @@ describe("NotificationTimePicker", () => {
       <NotificationTimePicker
         noteId={NOTE_ID}
         initialTime="21:30:00"
-        nextReviewAt="2026-04-30T12:30:00.000Z"
+        nextScheduledAt="2026-04-30T12:30:00.000Z"
       />,
     );
 
@@ -65,7 +65,7 @@ describe("NotificationTimePicker", () => {
       <NotificationTimePicker
         noteId={NOTE_ID}
         initialTime={null}
-        nextReviewAt={null}
+        nextScheduledAt={null}
       />,
     );
 
@@ -103,7 +103,7 @@ describe("NotificationTimePicker", () => {
       <NotificationTimePicker
         noteId={NOTE_ID}
         initialTime={null}
-        nextReviewAt={null}
+        nextScheduledAt={null}
       />,
     );
 
@@ -139,7 +139,7 @@ describe("NotificationTimePicker", () => {
       <NotificationTimePicker
         noteId={NOTE_ID}
         initialTime={null}
-        nextReviewAt={null}
+        nextScheduledAt={null}
       />,
     );
 
@@ -179,7 +179,7 @@ describe("NotificationTimePicker", () => {
       <NotificationTimePicker
         noteId={NOTE_ID}
         initialTime="09:30:00"
-        nextReviewAt={null}
+        nextScheduledAt={null}
       />,
     );
 
@@ -187,7 +187,7 @@ describe("NotificationTimePicker", () => {
       <NotificationTimePicker
         noteId={NOTE_ID}
         initialTime="21:30:00"
-        nextReviewAt={null}
+        nextScheduledAt={null}
       />,
     );
 
@@ -214,7 +214,7 @@ describe("NotificationTimePicker", () => {
       <NotificationTimePicker
         noteId={NOTE_ID}
         initialTime={null}
-        nextReviewAt={null}
+        nextScheduledAt={null}
       />,
     );
 
@@ -248,7 +248,7 @@ describe("NotificationTimePicker", () => {
       <NotificationTimePicker
         noteId={NOTE_ID}
         initialTime="21:30:00"
-        nextReviewAt={null}
+        nextScheduledAt={null}
       />,
     );
 

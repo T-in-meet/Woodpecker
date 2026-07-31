@@ -2,6 +2,8 @@ import { type Editor, Extension } from "@tiptap/core";
 import { PluginKey } from "@tiptap/pm/state";
 import Suggestion, { type SuggestionOptions } from "@tiptap/suggestion";
 
+import { insertHorizontalRule } from "./blockActions";
+
 export type SlashCommandItem = {
   title: string;
   description: string;
@@ -65,7 +67,7 @@ export const SLASH_COMMAND_ITEMS: SlashCommandItem[] = [
     title: "구분선",
     description: "수평 구분선",
     icon: "minus",
-    command: (editor) => editor.chain().focus().setHorizontalRule().run(),
+    command: (editor) => insertHorizontalRule(editor),
   },
   {
     title: "표",

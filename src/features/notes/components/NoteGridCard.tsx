@@ -2,11 +2,13 @@
 
 import { CalendarClock, RotateCcw } from "lucide-react";
 import Link from "next/link";
+import { useMemo } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { getNoteDetailRoute } from "@/lib/constants/routes";
 import { formatDateKST } from "@/lib/utils/formatDate";
+import { stripMarkdown } from "@/lib/utils/stripMarkdown";
 
 import type { NoteSummary } from "../queries";
 import { getNextReviewText, getReviewStatus } from "../utils/noteStatus";
@@ -16,6 +18,10 @@ export function NoteGridCard({ note }: { note: NoteSummary }) {
   const status = getReviewStatus(note);
   const nextReviewText = getNextReviewText(status, note.next_review_at);
   const canReview = status === "available";
+  const contentPreview = useMemo(
+    () => stripMarkdown(note.content),
+    [note.content],
+  );
 
   return (
     <Link
@@ -25,14 +31,14 @@ export function NoteGridCard({ note }: { note: NoteSummary }) {
       <Card className="h-full transition-shadow duration-200 hover:shadow-md">
         <CardContent className="flex h-full flex-col gap-3 p-5">
           {/* Title */}
-          <span className="line-clamp-1 min-w-0 break-words text-base font-bold leading-snug">
+          <span className="line-clamp-1 min-w-0 wrap-break-word text-base font-bold leading-snug">
             {note.title}
           </span>
 
           {/* Content preview */}
           {note.content.trim() && (
             <p className="line-clamp-3 text-sm text-muted-foreground">
-              {note.content}
+              {contentPreview}
             </p>
           )}
 

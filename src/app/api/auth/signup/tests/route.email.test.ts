@@ -1,18 +1,22 @@
 /**
- * 회원가입 API - 이메일 발송 분기 테스트 (정책 기준)
+ * 회원가입 API - OTP 이메일 발송 분기 테스트
  *
  * 정책:
- * - 신규 사용자: magiclink generateLink → sendAuthEmail(email, tokenHash, "magiclink")
- * - 기존 미인증 사용자: magiclink generateLink → sendAuthEmail(email, tokenHash, "magiclink")
- * - 기존 인증 사용자: magiclink generateLink → sendAuthEmail(email, tokenHash, "magiclink")
+ * - 신규 사용자: createUser 이후 signup OTP 이메일 발송
+ * - 기존 미인증 사용자: 새 계정을 만들지 않고 signup OTP 이메일 재발송
+ * - 기존 인증 사용자: 계정 존재 여부 노출을 막기 위해 동일한 성공 응답 유지
  *
- * ticket 암호화 없음. Supabase hashed_token을 직접 사용.
+ * 검증:
+ * - 분기별 issueOtpAndSendEmail 호출 여부
+ * - 발송 email은 canonicalEmail이 아니라 실제 전송 대상 email 기준
+ * - 신규 사용자 발송 실패는 SIGNUP_INTERNAL_ERROR
+ * - 기존 사용자 발송 실패는 외부 응답 계약을 성공으로 유지
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
-import { sendAuthEmail } from "@/features/auth/email/sendAuthEmail";
+import { issueOtpAndSendEmail } from "@/features/auth/email/issueOtpAndSendEmail";
 import { resetEligibilityStore } from "@/features/auth/lib/checkRequestEligibility";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { ROUTES } from "@/lib/constants/routes";
@@ -21,11 +25,14 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { POST } from "../route";
 import { makeRequest } from "./utils/signupTestHelper";
 
+const upsertUserAgreementMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/features/auth/lib/userAgreements", () => ({
+  upsertUserAgreement: upsertUserAgreementMock,
+}));
 vi.mock("@/features/auth/lib/getUserByEmail");
 vi.mock("@/lib/supabase/admin");
-vi.mock("@/features/auth/email/sendAuthEmail");
-
-const TEST_TOKEN_HASH = "raw-token-hash-abc123";
+vi.mock("@/features/auth/email/issueOtpAndSendEmail");
 
 const requestBody = {
   email: "Test@Example.com",
@@ -45,7 +52,6 @@ const verifiedUser = {
 };
 
 const mockCreateUser = vi.fn();
-const mockGenerateLink = vi.fn();
 
 beforeEach(() => {
   resetEligibilityStore();
@@ -55,23 +61,12 @@ beforeEach(() => {
     auth: {
       admin: {
         createUser: mockCreateUser,
-        generateLink: mockGenerateLink,
       },
     },
   } as never);
 
   vi.mocked(getUserByEmail).mockResolvedValue(null);
-  vi.mocked(sendAuthEmail).mockResolvedValue(undefined);
-
-  mockGenerateLink.mockResolvedValue({
-    data: {
-      properties: {
-        hashed_token: TEST_TOKEN_HASH,
-      },
-      user: { id: "user-id", email: "test@example.com" },
-    },
-    error: null,
-  });
+  vi.mocked(issueOtpAndSendEmail).mockResolvedValue(undefined);
 
   mockCreateUser.mockResolvedValue({
     data: {
@@ -82,32 +77,24 @@ beforeEach(() => {
 });
 
 describe("회원가입 이메일 발송 - 신규 사용자", () => {
-  it("TC-01. 신규 사용자 분기에서 magiclink generateLink가 호출된다", async () => {
+  it("TC-01. 신규 사용자 분기에서 createUser 이후 signup OTP 이메일 발송 함수가 호출된다", async () => {
     await POST(makeRequest(requestBody));
 
-    expect(mockGenerateLink).toHaveBeenCalledTimes(1);
     expect(mockCreateUser).toHaveBeenCalledTimes(1);
-    expect(mockGenerateLink).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "magiclink",
-        email: "Test@Example.com",
-      }),
-    );
+    expect(vi.mocked(issueOtpAndSendEmail)).toHaveBeenCalledTimes(1);
   });
 
-  it("TC-02. 신규 사용자 분기에서 sendAuthEmail이 raw email로 호출된다", async () => {
+  it("TC-02. 신규 사용자 분기에서 issueOtpAndSendEmail이 raw email로 호출된다", async () => {
     await POST(makeRequest(requestBody));
 
-    expect(vi.mocked(sendAuthEmail)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(sendAuthEmail)).toHaveBeenCalledWith(
-      "Test@Example.com",
-      TEST_TOKEN_HASH,
-      "magiclink",
-    );
+    expect(vi.mocked(issueOtpAndSendEmail)).toHaveBeenCalledWith({
+      email: "Test@Example.com",
+      purpose: "signup",
+    });
   });
 
   it("TC-03. 신규 사용자 이메일 발송 실패면 SIGNUP_INTERNAL_ERROR를 반환한다", async () => {
-    vi.mocked(sendAuthEmail).mockRejectedValue(new Error("SMTP error"));
+    vi.mocked(issueOtpAndSendEmail).mockRejectedValue(new Error("SMTP error"));
 
     const response = await POST(makeRequest(requestBody));
     const body = await response.json();
@@ -134,48 +121,7 @@ describe("회원가입 이메일 발송 - 신규 사용자", () => {
     expect(response.status).toBe(500);
     expect(body.success).toBe(false);
     expect(body.code).toBe(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR);
-    expect(vi.mocked(sendAuthEmail)).not.toHaveBeenCalled();
-  });
-
-  it("TC-03B. 신규 사용자 generateLink 실패면 SIGNUP_INTERNAL_ERROR를 반환한다", async () => {
-    mockGenerateLink.mockResolvedValueOnce({
-      data: {
-        properties: null,
-        user: null,
-      },
-      error: {
-        message: "generate link failed",
-        status: 500,
-        code: "internal_error",
-        name: "AuthApiError",
-      },
-    });
-
-    const response = await POST(makeRequest(requestBody));
-    const body = await response.json();
-
-    expect(response.status).toBe(500);
-    expect(body.success).toBe(false);
-    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR);
-    expect(vi.mocked(sendAuthEmail)).not.toHaveBeenCalled();
-  });
-
-  it("TC-03C. 신규 사용자 hashed_token 누락이면 SIGNUP_INTERNAL_ERROR를 반환한다", async () => {
-    mockGenerateLink.mockResolvedValueOnce({
-      data: {
-        properties: {},
-        user: { id: "user-id", email: "test@example.com" },
-      },
-      error: null,
-    });
-
-    const response = await POST(makeRequest(requestBody));
-    const body = await response.json();
-
-    expect(response.status).toBe(500);
-    expect(body.success).toBe(false);
-    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR);
-    expect(vi.mocked(sendAuthEmail)).not.toHaveBeenCalled();
+    expect(vi.mocked(issueOtpAndSendEmail)).not.toHaveBeenCalled();
   });
 });
 
@@ -184,62 +130,32 @@ describe("회원가입 이메일 발송 - 기존 미인증 사용자", () => {
     vi.mocked(getUserByEmail).mockResolvedValue(unverifiedUser as never);
   });
 
-  it("TC-04. 기존 미인증 사용자 분기에서 magiclink generateLink가 호출된다", async () => {
+  it("TC-04. 기존 미인증 사용자 분기에서는 createUser 없이 signup OTP 이메일을 발송한다", async () => {
     await POST(makeRequest(requestBody));
 
-    expect(mockGenerateLink).toHaveBeenCalledTimes(1);
     expect(mockCreateUser).not.toHaveBeenCalled();
-    expect(mockGenerateLink).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "magiclink",
-        email: "test@example.com",
-      }),
-    );
+    expect(vi.mocked(issueOtpAndSendEmail)).toHaveBeenCalledTimes(1);
   });
 
-  it("TC-05. 기존 미인증 사용자 분기에서 sendAuthEmail이 tokenHash와 type=magiclink으로 호출된다", async () => {
+  it("TC-05. 기존 미인증 사용자 분기에서 existingUser.email로 signup OTP 이메일을 발송한다", async () => {
     await POST(makeRequest(requestBody));
 
-    expect(vi.mocked(sendAuthEmail)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(sendAuthEmail)).toHaveBeenCalledWith(
-      "test@example.com",
-      TEST_TOKEN_HASH,
-      "magiclink",
+    expect(vi.mocked(issueOtpAndSendEmail)).toHaveBeenCalledWith({
+      email: "test@example.com",
+      purpose: "signup",
+    });
+  });
+
+  it("TC-06. 기존 미인증 사용자 OTP 발송 실패도 외부 응답은 성공으로 유지된다", async () => {
+    vi.mocked(getUserByEmail).mockResolvedValue({
+      id: "existing-user-id",
+      email: "test@example.com",
+      email_confirmed_at: null,
+    } as never);
+
+    vi.mocked(issueOtpAndSendEmail).mockRejectedValueOnce(
+      new Error("otp send failed"),
     );
-  });
-});
-
-describe("회원가입 이메일 발송 - 기존 인증 사용자", () => {
-  beforeEach(() => {
-    vi.mocked(getUserByEmail).mockResolvedValue(verifiedUser as never);
-  });
-
-  it("TC-06. 기존 인증 사용자 분기에서도 magiclink generateLink가 호출된다", async () => {
-    await POST(makeRequest(requestBody));
-
-    expect(mockGenerateLink).toHaveBeenCalledTimes(1);
-    expect(mockCreateUser).not.toHaveBeenCalled();
-    expect(mockGenerateLink).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "magiclink",
-        email: "test@example.com",
-      }),
-    );
-  });
-
-  it("TC-07. 기존 인증 사용자 분기에서 sendAuthEmail이 existingUser.email로 호출된다", async () => {
-    await POST(makeRequest(requestBody));
-
-    expect(vi.mocked(sendAuthEmail)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(sendAuthEmail)).toHaveBeenCalledWith(
-      "test@example.com",
-      TEST_TOKEN_HASH,
-      "magiclink",
-    );
-  });
-
-  it("TC-08. 기존 인증 사용자 메일 전송 실패는 외부 응답을 실패로 바꾸지 않는다", async () => {
-    vi.mocked(sendAuthEmail).mockRejectedValue(new Error("SMTP error"));
 
     const response = await POST(makeRequest(requestBody));
     const body = await response.json();
@@ -249,7 +165,49 @@ describe("회원가입 이메일 발송 - 기존 인증 사용자", () => {
     expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
     expect(body.data).toEqual({
       email: "Test@Example.com",
-      redirectTo: ROUTES.VERIFY_EMAIL,
+      redirectTo: `${ROUTES.VERIFY_OTP}?purpose=signup&email=${encodeURIComponent("Test@Example.com")}`,
+    });
+
+    expect(vi.mocked(issueOtpAndSendEmail)).toHaveBeenCalledWith({
+      email: "test@example.com",
+      purpose: "signup",
+    });
+  });
+});
+
+describe("회원가입 이메일 발송 - 기존 인증 사용자", () => {
+  beforeEach(() => {
+    vi.mocked(getUserByEmail).mockResolvedValue(verifiedUser as never);
+  });
+
+  it("TC-06. 기존 인증 사용자 분기에서도 createUser 없이 signup OTP 이메일을 발송한다", async () => {
+    await POST(makeRequest(requestBody));
+
+    expect(mockCreateUser).not.toHaveBeenCalled();
+    expect(vi.mocked(issueOtpAndSendEmail)).toHaveBeenCalledTimes(1);
+  });
+
+  it("TC-07. 기존 인증 사용자 분기에서 existingUser.email로 signup OTP 이메일을 발송한다", async () => {
+    await POST(makeRequest(requestBody));
+
+    expect(vi.mocked(issueOtpAndSendEmail)).toHaveBeenCalledWith({
+      email: "test@example.com",
+      purpose: "signup",
+    });
+  });
+
+  it("TC-08. 기존 인증 사용자 메일 전송 실패는 외부 응답을 실패로 바꾸지 않는다", async () => {
+    vi.mocked(issueOtpAndSendEmail).mockRejectedValue(new Error("SMTP error"));
+
+    const response = await POST(makeRequest(requestBody));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
+    expect(body.data).toEqual({
+      email: "Test@Example.com",
+      redirectTo: `${ROUTES.VERIFY_OTP}?purpose=signup&email=${encodeURIComponent("Test@Example.com")}`,
     });
   });
 });

@@ -35,32 +35,36 @@ VALUES
   )
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO public.notifications (id, user_id, type, title, body, status)
+INSERT INTO public.notifications (id, user_id, type, title, body, status,
+  click_path)
 VALUES
   (
     current_setting('test.mark_read_notification_a_id')::uuid,
     current_setting('test.mark_read_user_a_id')::uuid,
-    'ALERT',
+    'SYSTEM',
     'a title',
     'a body',
     'SENT'
-  ),
+  ,
+  '/test'),
   (
     current_setting('test.mark_read_notification_b_id')::uuid,
     current_setting('test.mark_read_user_b_id')::uuid,
-    'ALERT',
+    'SYSTEM',
     'b title',
     'b body',
     'SENT'
-  ),
+  ,
+  '/test'),
   (
     current_setting('test.mark_read_notification_unverified_id')::uuid,
     current_setting('test.mark_read_unverified_user_id')::uuid,
-    'ALERT',
+    'SYSTEM',
     'unverified title',
     'unverified body',
     'SENT'
-  );
+  ,
+  '/test');
 
 SET LOCAL ROLE authenticated;
 SELECT set_config(
