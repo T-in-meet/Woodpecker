@@ -1063,6 +1063,37 @@ const NoteBlockBackground = Extension.create({
   },
 });
 
+// 목록 번호는 tiptap.css가 직접 만든 counter로 그린다. 그 counter는 늘 0에서
+// 시작하므로 "100."처럼 1이 아닌 번호로 시작하는 목록이 화면에서만 1부터 세진다.
+// (브라우저 내장 counter(list-item)은 start를 반영하지만 Safari 17 미만에서 깨진다.)
+// ol을 그릴 때 start에서 계산한 리셋값을 인라인 스타일로 붙여 CSS 규칙을 덮어쓴다.
+// 저장되는 값이 아니라 start에서 파생되는 표시용 속성이라 마크다운에는 나가지 않는다.
+const NoteOrderedListCounter = Extension.create({
+  name: "noteOrderedListCounter",
+  addGlobalAttributes() {
+    return [
+      {
+        types: ["orderedList"],
+        attributes: {
+          noteListCounterStart: {
+            default: null,
+            parseHTML: () => null,
+            renderHTML: (attributes: Record<string, unknown>) => {
+              const start = Number(attributes.start ?? 1);
+
+              if (!Number.isFinite(start) || start === 1) return {};
+
+              return {
+                style: `counter-reset: note-list-item ${start - 1}`,
+              };
+            },
+          },
+        },
+      },
+    ];
+  },
+});
+
 type MarkdownSerializerStorageType = {
   serializer?: {
     serialize: (content: Fragment) => string;
@@ -1146,6 +1177,7 @@ function getBaseExtensions({ readOnly = false }: { readOnly?: boolean } = {}) {
     NoteTextColorMark,
     NoteLineTextColor,
     NoteBlockBackground,
+    NoteOrderedListCounter,
     NoteColorClipboardText,
     TaskList,
     MarkdownTaskItem.configure({
