@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ADMIN_NOTIFICATION_TYPES } from "@/lib/constants/notifications";
 
-import { markAdminNotificationsAsReadAction } from "./actions";
+import {
+  markAdminNotificationsAsReadAction,
+  markAllAdminNotificationsAsReadAction,
+} from "./actions";
 
 const { createAdminClientMock, requireAdminMock } = vi.hoisted(() => ({
   createAdminClientMock: vi.fn(),
@@ -26,6 +29,13 @@ function createSupabaseMock({
   eventsError?: unknown;
   readsError?: unknown;
 }) {
+  const eventsSelectResult = {
+    eq: vi.fn(),
+    then: vi.fn(
+      (resolve: (value: { data: unknown[] | null; error: unknown }) => void) =>
+        resolve({ data: events, error: eventsError }),
+    ),
+  };
   const eventsClickPathEq = vi.fn().mockResolvedValue({
     data: events,
     error: eventsError,
@@ -33,8 +43,10 @@ function createSupabaseMock({
   const eventsTypeEq = vi.fn().mockReturnValue({
     eq: eventsClickPathEq,
   });
+  eventsSelectResult.eq = eventsTypeEq;
   const eventsSelect = vi.fn().mockReturnValue({
-    eq: eventsTypeEq,
+    eq: eventsSelectResult.eq,
+    then: eventsSelectResult.then,
   });
   const readsUpsert = vi.fn().mockResolvedValue({
     error: readsError,
@@ -58,6 +70,7 @@ function createSupabaseMock({
   return {
     eventsClickPathEq,
     eventsSelect,
+    eventsSelectResult,
     eventsTypeEq,
     from,
     readsUpsert,
@@ -173,5 +186,44 @@ describe("markAdminNotificationsAsReadAction", () => {
       message: "관리자 알림 읽음 처리에 실패했습니다.",
       ok: false,
     });
+  });
+
+  it("marks all admin notification events as read without touching user notifications", async () => {
+    const supabaseMock = createSupabaseMock({
+      events: [{ id: "event-1" }, { id: "event-2" }],
+    });
+    createAdminClientMock.mockReturnValue(supabaseMock.supabase);
+
+    const result = await markAllAdminNotificationsAsReadAction();
+
+    expect(result).toEqual({ ok: true, updated: 2 });
+    expect(supabaseMock.from).toHaveBeenCalledWith("admin_notification_events");
+    expect(supabaseMock.eventsSelect).toHaveBeenCalledWith("id");
+    expect(supabaseMock.readsUpsert).toHaveBeenCalledWith(
+      [
+        {
+          admin_user_id: "admin-user-id",
+          event_id: "event-1",
+        },
+        {
+          admin_user_id: "admin-user-id",
+          event_id: "event-2",
+        },
+      ],
+      { onConflict: "event_id,admin_user_id" },
+    );
+    expect(supabaseMock.from).not.toHaveBeenCalledWith("notifications");
+  });
+
+  it("returns success without upsert when there are no admin notification events", async () => {
+    const supabaseMock = createSupabaseMock({
+      events: [],
+    });
+    createAdminClientMock.mockReturnValue(supabaseMock.supabase);
+
+    const result = await markAllAdminNotificationsAsReadAction();
+
+    expect(result).toEqual({ ok: true, updated: 0 });
+    expect(supabaseMock.readsUpsert).not.toHaveBeenCalled();
   });
 });

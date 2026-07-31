@@ -7,18 +7,21 @@ import type { MouseEvent } from "react";
 import {
   NOTIFICATION_STATUS,
   NOTIFICATION_TYPES,
+  type NotificationKindType,
 } from "@/lib/constants/notifications";
 import { formatDateTime } from "@/lib/utils/formatDate";
 
 import { markNotificationAsReadAction } from "../actions";
-import {
-  ADMIN_NOTIFICATION_DEFINITIONS,
-  USER_NOTIFICATION_DEFINITIONS,
-} from "../definitions";
+import { USER_NOTIFICATION_DEFINITIONS } from "../definitions";
 import type { NotificationListItemType } from "../schema";
 
+export type UserNotificationListItemType = NotificationListItemType & {
+  source: "USER";
+  type: NotificationKindType;
+};
+
 type NotificationListProps = {
-  items: NotificationListItemType[];
+  items: UserNotificationListItemType[];
   isError?: boolean;
   isLoading?: boolean;
   onItemRead?: (notificationId: string) => void;
@@ -37,42 +40,27 @@ function getStatusLabel(status: NotificationListItemType["status"]): string {
 }
 
 /**
- * 알림 출처에 대한 표시 라벨을 반환합니다.
- *
- * @param source 알림 생성 출처
- * @returns 사용자에게 보여줄 출처 라벨
- */
-function getSourceLabel(source: NotificationListItemType["source"]): string {
-  return source === "ADMIN" ? "관리자" : "개인";
-}
-
-/**
  * 본문이나 노트 제목이 없는 알림에 사용할 타입별 fallback 라벨을 반환합니다.
  *
  * @param item 표시할 알림 item
  * @returns 알림 설명 문구
  */
-function getNotificationDescription(item: NotificationListItemType): string {
+function getNotificationDescription(
+  item: UserNotificationListItemType,
+): string {
   if (item.noteTitle) return item.noteTitle;
   if (item.body) return item.body;
 
-  if (
-    Object.prototype.hasOwnProperty.call(
-      ADMIN_NOTIFICATION_DEFINITIONS,
-      item.type,
-    )
-  ) {
-    const type = item.type as keyof typeof ADMIN_NOTIFICATION_DEFINITIONS;
-
-    return ADMIN_NOTIFICATION_DEFINITIONS[type].label;
-  }
-
-  const type = item.type as keyof typeof USER_NOTIFICATION_DEFINITIONS;
-
-  return USER_NOTIFICATION_DEFINITIONS[type].label;
+  return USER_NOTIFICATION_DEFINITIONS[item.type].label;
 }
 
-function shouldMarkAsReadOnClick(item: NotificationListItemType) {
+/**
+ * 사용자 알림 클릭 시 즉시 읽음 처리할 대상인지 확인합니다.
+ *
+ * @param item 클릭한 사용자 알림 item
+ * @returns 클릭 시 읽음 처리해야 하면 true
+ */
+function shouldMarkAsReadOnClick(item: UserNotificationListItemType) {
   // REVIEW는 복습 완료 RPC에서 READ 처리한다. 그 외 알림은 클릭을 소비로 본다.
   return (
     item.status === NOTIFICATION_STATUS.SENT &&
@@ -80,6 +68,12 @@ function shouldMarkAsReadOnClick(item: NotificationListItemType) {
   );
 }
 
+/**
+ * 사용자 알림 링크 클릭이 새 탭, 새 창, 보조 클릭인지 확인합니다.
+ *
+ * @param event 링크 클릭 이벤트
+ * @returns 기본 링크 동작을 유지해야 하는 수정 클릭 여부
+ */
 function isModifiedClick(event: MouseEvent<HTMLAnchorElement>) {
   return (
     event.altKey ||
@@ -137,9 +131,6 @@ export function NotificationList({
             <div className="flex items-center gap-2">
               <span className="truncate text-sm font-medium text-foreground">
                 {item.title}
-              </span>
-              <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[0.7rem] font-medium text-primary">
-                {getSourceLabel(item.source)}
               </span>
               <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[0.7rem] font-medium text-muted-foreground">
                 {getStatusLabel(item.status)}

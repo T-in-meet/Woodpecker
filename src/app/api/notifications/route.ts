@@ -1,55 +1,19 @@
 import { NextResponse } from "next/server";
 
 import {
-  getAdminNotificationListFor,
-  getAdminUnreadNotificationCountsFor,
-} from "@/features/admin/notifications/queries.internal";
-import {
   getNotificationList,
   getUnreadCount,
-  type NotificationListItemType,
 } from "@/features/notifications/queries";
 import { logError } from "@/lib/logger";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 const NOTIFICATION_LIST_LIMIT = 20;
 
-async function getIsAdmin(userId: string) {
-  const adminClient = createAdminClient();
-  const { data, error } = await adminClient
-    .from("profiles")
-    .select("role")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (error) {
-    throw error;
-  }
-
-  return data?.role === "ADMIN";
-}
-
-function sumAdminUnreadCounts(
-  counts: Awaited<ReturnType<typeof getAdminUnreadNotificationCountsFor>>,
-) {
-  return Object.values(counts).reduce((sum, count) => sum + (count ?? 0), 0);
-}
-
-function mergeNotificationLists(
-  items: NotificationListItemType[],
-  adminItems: NotificationListItemType[],
-) {
-  return [...items, ...adminItems]
-    .sort(
-      (left, right) =>
-        new Date(right.sent_at).getTime() - new Date(left.sent_at).getTime(),
-    )
-    .slice(0, NOTIFICATION_LIST_LIMIT);
-}
-
+/**
+ * Returns unread user notifications for the current session user.
+ */
 export async function GET() {
   try {
     const supabase = await createClient();
@@ -61,28 +25,18 @@ export async function GET() {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
 
-    const isAdmin = await getIsAdmin(user.id);
-    const [items, unreadCount, adminItems, adminUnreadCounts] =
-      await Promise.all([
-        getNotificationList({
-          limit: NOTIFICATION_LIST_LIMIT,
-          supabase,
-          userId: user.id,
-        }),
-        getUnreadCount({ supabase, userId: user.id }),
-        isAdmin
-          ? getAdminNotificationListFor(user.id, {
-              limit: NOTIFICATION_LIST_LIMIT,
-            })
-          : Promise.resolve([]),
-        isAdmin
-          ? getAdminUnreadNotificationCountsFor(user.id)
-          : Promise.resolve({}),
-      ]);
+    const [items, unreadCount] = await Promise.all([
+      getNotificationList({
+        limit: NOTIFICATION_LIST_LIMIT,
+        supabase,
+        userId: user.id,
+      }),
+      getUnreadCount({ supabase, userId: user.id }),
+    ]);
 
     return NextResponse.json({
-      items: mergeNotificationLists(items, adminItems),
-      unreadCount: unreadCount + sumAdminUnreadCounts(adminUnreadCounts),
+      items,
+      unreadCount,
     });
   } catch (error) {
     logError({ event: "notifications.get.failed", error });

@@ -13,7 +13,10 @@ import {
   notificationsResponseSchema,
   type NotificationsResponseType,
 } from "../schema";
-import { NotificationList } from "./NotificationList";
+import {
+  NotificationList,
+  type UserNotificationListItemType,
+} from "./NotificationList";
 
 const EMPTY_NOTIFICATIONS: NotificationsResponseType = {
   items: [],
@@ -60,6 +63,18 @@ async function fetchNotifications(): Promise<NotificationsResponseType> {
   }
 
   return parsed.data;
+}
+
+/**
+ * 알림 응답 item이 사용자 알림 item인지 확인합니다.
+ *
+ * @param item 확인할 알림 item
+ * @returns 사용자 알림 item 여부
+ */
+function isUserNotificationListItem(
+  item: NotificationsResponseType["items"][number],
+): item is UserNotificationListItemType {
+  return item.source === "USER";
 }
 
 type NotificationBellProps = {
@@ -133,6 +148,7 @@ export function NotificationBell({ userId }: NotificationBellProps) {
   const displayCount = unreadCount > 99 ? "99+" : String(unreadCount);
   const buttonLabel =
     unreadCount > 0 ? `읽지 않은 알림 ${unreadCount}개` : "알림";
+  const userItems = data.items.filter(isUserNotificationListItem);
 
   const handleToggle = () => {
     const nextOpen = !open;
@@ -154,7 +170,7 @@ export function NotificationBell({ userId }: NotificationBellProps) {
     );
   };
 
-  const hasHiddenUnreadNotifications = unreadCount > data.items.length;
+  const hasHiddenUnreadNotifications = unreadCount > userItems.length;
 
   return (
     <div ref={ref} className="relative">
@@ -203,7 +219,7 @@ export function NotificationBell({ userId }: NotificationBellProps) {
           </div>
 
           <NotificationList
-            items={data.items}
+            items={userItems}
             isError={isError}
             isLoading={isLoading}
             onItemRead={handleItemRead}
@@ -212,7 +228,7 @@ export function NotificationBell({ userId }: NotificationBellProps) {
 
           {hasHiddenUnreadNotifications && (
             <p className="border-t border-border/60 px-4 py-2 text-xs text-muted-foreground">
-              최근 {data.items.length}개만 표시됩니다.
+              최근 {userItems.length}개만 표시됩니다.
             </p>
           )}
         </div>
