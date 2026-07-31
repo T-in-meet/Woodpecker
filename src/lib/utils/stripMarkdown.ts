@@ -1,6 +1,6 @@
 import removeMd from "remove-markdown";
 
-// 저장된 마크다운에 목록 마커는 항상 "1." / "-" 형태로만 남는다.
+// 저장된 마크다운의 목록 마커는 "1." / "-" 같은 기본 표기로만 남는다.
 // 화면에 보이는 a. / i. / ◦ 같은 표기는 tiptap.css가 중첩 깊이로 만들어내므로,
 // 미리보기에서도 같은 마커를 보여주려면 여기서 깊이를 계산해 직접 붙여야 한다.
 // 깊이별 표기 규칙은 tiptap.css의 ol/ul 중첩 규칙과 짝을 맞춘다.
@@ -105,6 +105,12 @@ function restoreListMarkers(markdown: string): string {
       const [, indentText = "", marker = "", content = ""] = match;
       const indent = indentText.length;
       const ordered = marker.endsWith(".");
+      // 목록의 시작 번호는 마커가 그대로 들고 있다(예: "100."). 화면도 ol의 start를
+      // 반영해 그 번호부터 세므로, 목록이 새로 열릴 때는 1이 아니라 이 번호에서 시작한다.
+      // 자릿수가 달라 마커가 오른쪽 정렬로 저장된 목록(" 9." / "10.")은 줄마다 들여쓰기가
+      // 달라 아래에서 단계를 다시 열게 되는데, 그때도 이 번호 덕분에 순번이 이어진다.
+      const parsedStart = Number.parseInt(marker, 10);
+      const startOrder = Number.isFinite(parsedStart) ? parsedStart : 1;
 
       while (levels.length > 0) {
         const deepest = levels[levels.length - 1];
@@ -117,11 +123,11 @@ function restoreListMarkers(markdown: string): string {
       const deepest = levels[levels.length - 1];
 
       if (!deepest || deepest.indent < indent) {
-        levels.push({ indent, ordered, order: 1 });
+        levels.push({ indent, ordered, order: startOrder });
       } else if (deepest.ordered !== ordered) {
         // 같은 깊이에서 목록 종류가 바뀌면 새 목록으로 보고 번호를 다시 센다.
         deepest.ordered = ordered;
-        deepest.order = 1;
+        deepest.order = startOrder;
       } else {
         deepest.order += 1;
       }

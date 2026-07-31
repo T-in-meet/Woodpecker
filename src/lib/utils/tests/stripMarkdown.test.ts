@@ -65,6 +65,33 @@ describe("stripMarkdown", () => {
     expect(result).toContain("ii. 3단계-2");
   });
 
+  it("1이 아닌 번호로 시작하는 목록은 그 번호부터 센다", () => {
+    expect(stripMarkdown("100. 항목\n101. 다음")).toBe("100. 항목\n101. 다음");
+  });
+
+  it("자릿수가 달라 오른쪽 정렬된 마커도 같은 단계로 센다", () => {
+    // tiptap-markdown은 목록 안에서 가장 긴 번호에 맞춰 마커를 오른쪽 정렬한다.
+    expect(stripMarkdown(" 9. 항목\n10. 다음\n11. 마지막")).toBe(
+      "9. 항목\n10. 다음\n11. 마지막",
+    );
+  });
+
+  it("중첩 목록의 시작 번호도 유지한다", () => {
+    expect(stripMarkdown("1. 상위\n   100. 하위\n   101. 하위2")).toBe(
+      "1. 상위\ncv. 하위\ncw. 하위2",
+    );
+
+    expect(stripMarkdown("1. 상위\n    9. 하위\n   10. 하위2")).toBe(
+      "1. 상위\ni. 하위\nj. 하위2",
+    );
+  });
+
+  it("중첩 목록 다음에 오는 새 목록은 마커가 길어도 최상위로 본다", () => {
+    expect(stripMarkdown("- 상위\n  - 하위\n\n10. 새 목록\n11. 다음")).toBe(
+      "• 상위\n◦ 하위\n\n10. 새 목록\n11. 다음",
+    );
+  });
+
   it("불릿 목록 안의 번호 목록은 두 번째 깊이 마커를 쓴다", () => {
     expect(stripMarkdown("- 상위\n  1. 하위\n  2. 하위2")).toBe(
       "• 상위\na. 하위\nb. 하위2",
