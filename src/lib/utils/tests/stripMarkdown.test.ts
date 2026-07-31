@@ -25,10 +25,10 @@ describe("stripMarkdown", () => {
     expect(stripMarkdown("`코드`")).toBe("코드");
   });
 
-  it("태스크 리스트 체크박스를 제거한다", () => {
-    expect(stripMarkdown("- [ ] 미완료 작업")).toBe("미완료 작업");
-    expect(stripMarkdown("- [x] 완료 작업")).toBe("완료 작업");
-    expect(stripMarkdown("- [X] 완료 작업")).toBe("완료 작업");
+  it("태스크 리스트 체크박스를 제거하고 불릿을 남긴다", () => {
+    expect(stripMarkdown("- [ ] 미완료 작업")).toBe("• 미완료 작업");
+    expect(stripMarkdown("- [x] 완료 작업")).toBe("• 완료 작업");
+    expect(stripMarkdown("- [X] 완료 작업")).toBe("• 완료 작업");
   });
 
   it("remove-markdown이 남긴 잔여 백틱을 제거한다", () => {
@@ -39,10 +39,64 @@ describe("stripMarkdown", () => {
     expect(stripMarkdown("```\nconst x = 1;\n```")).toBe("const x = 1;");
   });
 
-  it("목록 마커를 제거한다", () => {
-    expect(stripMarkdown("- 항목1")).toBe("항목1");
-    expect(stripMarkdown("* 항목2")).toBe("항목2");
-    expect(stripMarkdown("1. 번호항목")).toBe("번호항목");
+  it("불릿 목록 마커를 기호로 남긴다", () => {
+    expect(stripMarkdown("- 항목1")).toBe("• 항목1");
+    expect(stripMarkdown("* 항목2")).toBe("• 항목2");
+  });
+
+  it("번호 목록은 번호를 그대로 남긴다", () => {
+    expect(stripMarkdown("1. 번호항목")).toBe("1. 번호항목");
+    expect(stripMarkdown("1. 첫째\n2. 둘째\n3. 셋째")).toBe(
+      "1. 첫째\n2. 둘째\n3. 셋째",
+    );
+  });
+
+  it("중첩 번호 목록은 화면 표기와 같은 a. / i. 마커로 바꾼다", () => {
+    const input = "1. 문제\n   1. 보기1\n   2. 보기2\n2. 다음 문제";
+    expect(stripMarkdown(input)).toBe(
+      "1. 문제\na. 보기1\nb. 보기2\n2. 다음 문제",
+    );
+  });
+
+  it("중첩 3단계 번호 목록은 로마자 마커를 쓴다", () => {
+    const input = "1. 1단계\n   1. 2단계\n      1. 3단계\n      2. 3단계-2";
+    const result = stripMarkdown(input);
+    expect(result).toContain("i. 3단계");
+    expect(result).toContain("ii. 3단계-2");
+  });
+
+  it("중첩 불릿 목록은 깊이별로 다른 기호를 쓴다", () => {
+    const input = "- 부모\n  - 자식\n    - 손자";
+    const result = stripMarkdown(input);
+    expect(result).toContain("• 부모");
+    expect(result).toContain("◦ 자식");
+    expect(result).toContain("▪ 손자");
+  });
+
+  it("헤딩 안에 사용자가 직접 쓴 번호는 건드리지 않는다", () => {
+    expect(stripMarkdown("# 1. 컴퓨터 네트워크 시작하기")).toBe(
+      "1. 컴퓨터 네트워크 시작하기",
+    );
+  });
+
+  it("문제/보기 형태의 중첩 목록을 화면과 같은 마커로 유지한다", () => {
+    const input = [
+      "1. 다음 중 웹 3.0의 주요 특징으로 잘못 묶인 것을 고르세요",
+      "   1. 탈중앙성, DAO, 개방성",
+      "   2. 중앙집중관리, 단방향, 정보제공",
+      "2. URL에 대한 설명으로 적절하지 않은 것을 고르세요",
+      "   1. 80은 Fragment를 나타낸다",
+    ].join("\n");
+
+    expect(stripMarkdown(input)).toBe(
+      [
+        "1. 다음 중 웹 3.0의 주요 특징으로 잘못 묶인 것을 고르세요",
+        "a. 탈중앙성, DAO, 개방성",
+        "b. 중앙집중관리, 단방향, 정보제공",
+        "2. URL에 대한 설명으로 적절하지 않은 것을 고르세요",
+        "a. 80은 Fragment를 나타낸다",
+      ].join("\n"),
+    );
   });
 
   it("인용 기호를 제거한다", () => {
