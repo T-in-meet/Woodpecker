@@ -776,6 +776,26 @@ function getElementDepth(
   return depth;
 }
 
+// 인용문처럼 블록이 블록을 감싸면 closest()는 안쪽 문단을 먼저 돌려준다. 핸들은 감싸는
+// 블록 전체를 다뤄야 하므로 컨테이너 바로 아래까지 올라가며 가장 바깥 블록을 찾는다.
+function findOutermostBlockElement(
+  containerElement: HTMLElement,
+  element: HTMLElement,
+): HTMLElement | null {
+  let outermostElement: HTMLElement | null = null;
+  let currentElement: HTMLElement | null = element;
+
+  while (currentElement && currentElement !== containerElement) {
+    if (currentElement.matches(BLOCK_ELEMENT_SELECTOR)) {
+      outermostElement = currentElement;
+    }
+
+    currentElement = currentElement.parentElement;
+  }
+
+  return outermostElement;
+}
+
 export function resolveBlockElement(
   rootElement: HTMLElement,
   element: HTMLElement | null,
@@ -806,11 +826,10 @@ export function resolveBlockElement(
     // 항목의 첫 블록은 마커와 함께 움직여야 하므로 항목 전체를 대상으로 둔다.
     // 뒤따르는 블록(항목 안에 들어온 헤딩 등)은 그 블록 자체를 잡아야
     // 핸들이 그 줄 앞에 놓이고 따로 드래그해 빼낼 수 있다.
-    const ownBlockElement = element.closest(BLOCK_ELEMENT_SELECTOR);
+    const ownBlockElement = findOutermostBlockElement(listItemElement, element);
 
     if (
-      !(ownBlockElement instanceof HTMLElement) ||
-      !listItemElement.contains(ownBlockElement) ||
+      !ownBlockElement ||
       listItemElement.querySelector(BLOCK_ELEMENT_SELECTOR) === ownBlockElement
     ) {
       return listItemElement;

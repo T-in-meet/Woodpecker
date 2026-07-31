@@ -384,6 +384,36 @@ describe("resolveBlockElement", () => {
     );
   });
 
+  it("uses the whole blockquote for a quote inside a list item", () => {
+    const rootElement = document.createElement("div");
+    rootElement.innerHTML =
+      "<ul><li><p>item</p><blockquote><p>quote</p></blockquote></li></ul>";
+    document.body.appendChild(rootElement);
+
+    const quoteParagraphElement =
+      rootElement.querySelector<HTMLElement>("blockquote p");
+    const blockquoteElement = rootElement.querySelector("blockquote");
+
+    expect(resolveBlockElement(rootElement, quoteParagraphElement)).toBe(
+      blockquoteElement,
+    );
+  });
+
+  it("keeps using the list item when the quote is its first block", () => {
+    const rootElement = document.createElement("div");
+    rootElement.innerHTML =
+      "<ul><li><blockquote><p>quote</p></blockquote></li></ul>";
+    document.body.appendChild(rootElement);
+
+    const quoteParagraphElement =
+      rootElement.querySelector<HTMLElement>("blockquote p");
+    const listItemElement = rootElement.querySelector("li");
+
+    expect(resolveBlockElement(rootElement, quoteParagraphElement)).toBe(
+      listItemElement,
+    );
+  });
+
   it("keeps using the innermost list item for nested lists", () => {
     const rootElement = document.createElement("div");
     rootElement.innerHTML =
@@ -447,6 +477,32 @@ describe("createBlockSelection", () => {
 
     expect(selection).toBeInstanceOf(NodeSelection);
     expect(selection?.content().content.firstChild?.textContent).toBe("second");
+
+    editor.destroy();
+  });
+
+  it("selects the whole blockquote nested in a list item", () => {
+    const editor = createMountedEditor("- item\n\n  > quote");
+    const quoteParagraph =
+      editor.view.dom.querySelector<HTMLElement>("li blockquote p");
+
+    if (!quoteParagraph) {
+      throw new Error("quote paragraph not found");
+    }
+
+    const blockElement = resolveBlockElement(editor.view.dom, quoteParagraph);
+
+    expect(blockElement?.tagName).toBe("BLOCKQUOTE");
+
+    const selection = createBlockSelection(
+      editor as unknown as Editor,
+      blockElement as HTMLElement,
+    );
+
+    expect(selection).toBeInstanceOf(NodeSelection);
+    expect(selection?.content().content.firstChild?.type.name).toBe(
+      "blockquote",
+    );
 
     editor.destroy();
   });
