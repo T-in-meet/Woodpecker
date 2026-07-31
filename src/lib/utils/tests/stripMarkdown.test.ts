@@ -65,6 +65,18 @@ describe("stripMarkdown", () => {
     expect(result).toContain("ii. 3단계-2");
   });
 
+  it("불릿 목록 안의 번호 목록은 두 번째 깊이 마커를 쓴다", () => {
+    expect(stripMarkdown("- 상위\n  1. 하위\n  2. 하위2")).toBe(
+      "• 상위\na. 하위\nb. 하위2",
+    );
+  });
+
+  it("번호 목록 안의 불릿 목록은 두 번째 깊이 기호를 쓴다", () => {
+    expect(stripMarkdown("1. 상위\n   - 하위\n   - 하위2")).toBe(
+      "1. 상위\n◦ 하위\n◦ 하위2",
+    );
+  });
+
   it("중첩 불릿 목록은 깊이별로 다른 기호를 쓴다", () => {
     const input = "- 부모\n  - 자식\n    - 손자";
     const result = stripMarkdown(input);

@@ -130,28 +130,45 @@
 
 /* 중첩 깊이에 따라 마커를 바꾼다(노션 기본 동작). 마크다운에는 마커 종류를 담을 문법이
    없으므로 표현만 바꾸고 문서 구조는 건드리지 않는다.
-   표기 순서는 미리보기(src/lib/utils/stripMarkdown.ts)와 짝을 맞춘다. */
+   깊이는 목록 종류를 가리지 않고 조상 목록 수로 센다(불릿 목록 안의 번호 목록도 2단계).
+   같은 종류의 조상만 세면 미리보기와 마커가 어긋나므로 조상은 :is(ul, ol)로 받는다.
+   표기 순서와 깊이 계산은 미리보기(src/lib/utils/stripMarkdown.ts)와 짝을 맞춘다. */
 .tiptap-wrapper .tiptap ol > li::before {
   content: counter(note-list-item, decimal) ".";
 }
 
-.tiptap-wrapper .tiptap ol ol > li::before {
+.tiptap-wrapper .tiptap :is(ul, ol) ol > li::before {
   content: counter(note-list-item, lower-alpha) ".";
 }
 
-.tiptap-wrapper .tiptap ol ol ol > li::before {
+.tiptap-wrapper .tiptap :is(ul, ol) :is(ul, ol) ol > li::before {
   content: counter(note-list-item, lower-roman) ".";
 }
 
-.tiptap-wrapper .tiptap ol ol ol ol > li::before {
+.tiptap-wrapper .tiptap :is(ul, ol) :is(ul, ol) :is(ul, ol) ol > li::before {
   content: counter(note-list-item, decimal) ".";
 }
 
-.tiptap-wrapper .tiptap ol ol ol ol ol > li::before {
+.tiptap-wrapper
+  .tiptap
+  :is(ul, ol)
+  :is(ul, ol)
+  :is(ul, ol)
+  :is(ul, ol)
+  ol
+  > li::before {
   content: counter(note-list-item, lower-alpha) ".";
 }
 
-.tiptap-wrapper .tiptap ol ol ol ol ol ol > li::before {
+.tiptap-wrapper
+  .tiptap
+  :is(ul, ol)
+  :is(ul, ol)
+  :is(ul, ol)
+  :is(ul, ol)
+  :is(ul, ol)
+  ol
+  > li::before {
   content: counter(note-list-item, lower-roman) ".";
 }
 
@@ -160,24 +177,9 @@
   content: "•";
 }
 
-.tiptap-wrapper .tiptap ul ul:not([data-type="taskList"]) > li::before {
-  content: "◦";
-}
-
-.tiptap-wrapper .tiptap ul ul ul:not([data-type="taskList"]) > li::before {
-  content: "▪";
-}
-
-.tiptap-wrapper .tiptap ul ul ul ul:not([data-type="taskList"]) > li::before {
-  content: "•";
-}
-
 .tiptap-wrapper
   .tiptap
-  ul
-  ul
-  ul
-  ul
+  :is(ul, ol)
   ul:not([data-type="taskList"])
   > li::before {
   content: "◦";
@@ -185,11 +187,41 @@
 
 .tiptap-wrapper
   .tiptap
-  ul
-  ul
-  ul
-  ul
-  ul
+  :is(ul, ol)
+  :is(ul, ol)
+  ul:not([data-type="taskList"])
+  > li::before {
+  content: "▪";
+}
+
+.tiptap-wrapper
+  .tiptap
+  :is(ul, ol)
+  :is(ul, ol)
+  :is(ul, ol)
+  ul:not([data-type="taskList"])
+  > li::before {
+  content: "•";
+}
+
+.tiptap-wrapper
+  .tiptap
+  :is(ul, ol)
+  :is(ul, ol)
+  :is(ul, ol)
+  :is(ul, ol)
+  ul:not([data-type="taskList"])
+  > li::before {
+  content: "◦";
+}
+
+.tiptap-wrapper
+  .tiptap
+  :is(ul, ol)
+  :is(ul, ol)
+  :is(ul, ol)
+  :is(ul, ol)
+  :is(ul, ol)
   ul:not([data-type="taskList"])
   > li::before {
   content: "▪";
