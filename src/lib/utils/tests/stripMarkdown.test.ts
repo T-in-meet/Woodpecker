@@ -160,6 +160,21 @@ describe("stripMarkdown", () => {
     expect(stripMarkdown("> 인용문")).toBe("인용문");
   });
 
+  it("인용문 안의 목록도 마커를 복원한다", () => {
+    expect(stripMarkdown("> 1. 인용된 번호")).toBe("1. 인용된 번호");
+    expect(stripMarkdown("> - 인용된 불릿")).toBe("• 인용된 불릿");
+  });
+
+  it("목록 안 인용문의 목록은 바깥 목록 깊이를 이어서 센다", () => {
+    expect(stripMarkdown("- 상위\n\n  > 1. 인용된 하위")).toBe(
+      "• 상위\n\na. 인용된 하위",
+    );
+
+    expect(stripMarkdown("1. 상위\n\n   > - a\n   > - b")).toBe(
+      "1. 상위\n\n◦ a\n◦ b",
+    );
+  });
+
   it("마크다운이 없는 평문은 그대로 반환한다", () => {
     expect(stripMarkdown("일반 텍스트입니다.")).toBe("일반 텍스트입니다.");
   });

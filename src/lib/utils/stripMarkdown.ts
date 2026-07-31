@@ -11,7 +11,9 @@ const ORDERED_MARKER_STYLES = [
 ] as const;
 const BULLET_MARKERS = ["•", "◦", "▪"] as const;
 
-const LIST_ITEM_PATTERN = /^(\s*)([-+*]|\d+\.)\s+(.*)$/;
+// 인용문 안의 목록은 "  > - "처럼 인용 기호가 마커 앞에 붙는다. 화면에서는 인용문이
+// 목록 깊이를 끊지 않고 바깥 목록까지 세므로(tiptap.css), 인용 기호도 들여쓰기로 본다.
+const LIST_ITEM_PATTERN = /^([\s>]*)([-+*]|\d+\.)\s+(.*)$/;
 const CODE_FENCE_PATTERN = /^\s*(?:```|~~~)/;
 
 const ROMAN_UNITS = [
