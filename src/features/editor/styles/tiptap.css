@@ -58,9 +58,11 @@
 }
 
 /* Lists */
+/* ol과 마커 좌측 위치를 맞추기 위해 최상위 padding-left를 ol과 동일하게 둔다.
+   중첩 단계별 값은 아래 "ul ul" 규칙이 ol ol과 같은 폭으로 맞춘다. */
 .tiptap-wrapper .tiptap ul {
   list-style-type: disc;
-  padding-left: 1.5rem;
+  padding-left: 2rem;
   margin-bottom: 0.5rem;
 }
 
@@ -97,6 +99,7 @@
 
 .tiptap-wrapper .tiptap ul ul {
   list-style-type: circle;
+  padding-left: 1.5rem;
 }
 
 .tiptap-wrapper .tiptap ul ul ul {
@@ -292,8 +295,11 @@
    "기본"은 토큰이 없는 상태이므로 별도 변수를 두지 않는다. */
 :root {
   --note-text-gray: #6b7280;
-  --note-text-orange: #c2410c;
-  --note-text-yellow: #a16207;
+  /* orange/yellow은 대비(WCAG AA)를 지키려고 어둡게 잡으면 갈색/황토색처럼 보인다.
+     대비를 살짝 낮추는 대신(4.4:1, 4.0:1 — 여전히 3:1 이상) 채도·명도를 올려
+     이름값에 더 가까운 색으로 보이게 한다. */
+  --note-text-orange: #d24a0c;
+  --note-text-yellow: #b17206;
   --note-text-green: #15803d;
   --note-text-blue: #1d4ed8;
   --note-text-purple: #7e22ce;
