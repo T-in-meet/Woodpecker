@@ -455,8 +455,8 @@
   color: var(--note-text-red);
 }
 
-/* 배경색은 블록 단위다. 블록 폭 전체를 채우고, 같은 색 블록이 이어지면
-   경계 없이 한 덩어리로 보이도록 사이 여백과 모서리를 없앤다.
+/* 배경색은 블록 단위다. 블록 폭 전체를 채우되, 색이 같은 블록이 이어져도 각자
+   모서리와 사이 여백을 유지해 서로 다른 블록임이 드러나게 둔다.
    여기서 --note-block-bg-bleed는 배경이 글자 상자 밖으로 삐져나오는 폭이며,
    블록 종류와 무관하게 같은 값을 써야 너비가 서로 어긋나지 않는다. */
 :root {
@@ -484,67 +484,6 @@
 .tiptap-wrapper .tiptap [data-note-block-bg] > *:last-child,
 .tiptap-wrapper .tiptap [data-note-block-bg] > *:last-child > li:last-child {
   margin-bottom: 0;
-}
-
-/* 이어 붙이는 것은 색이 같을 때만이다. CSS는 두 속성 값을 비교할 수 없어
-   토큰마다 규칙을 따로 쓴다. 색이 다르면 경계가 그대로 남아 구분된다. */
-.tiptap-wrapper
-  .tiptap
-  [data-note-block-bg="gray"]:has(+ [data-note-block-bg="gray"]),
-.tiptap-wrapper
-  .tiptap
-  [data-note-block-bg="orange"]:has(+ [data-note-block-bg="orange"]),
-.tiptap-wrapper
-  .tiptap
-  [data-note-block-bg="yellow"]:has(+ [data-note-block-bg="yellow"]),
-.tiptap-wrapper
-  .tiptap
-  [data-note-block-bg="green"]:has(+ [data-note-block-bg="green"]),
-.tiptap-wrapper
-  .tiptap
-  [data-note-block-bg="blue"]:has(+ [data-note-block-bg="blue"]),
-.tiptap-wrapper
-  .tiptap
-  [data-note-block-bg="purple"]:has(+ [data-note-block-bg="purple"]),
-.tiptap-wrapper
-  .tiptap
-  [data-note-block-bg="red"]:has(+ [data-note-block-bg="red"]) {
-  margin-bottom: 0;
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
-}
-
-.tiptap-wrapper
-  .tiptap
-  [data-note-block-bg="gray"]
-  + [data-note-block-bg="gray"],
-.tiptap-wrapper
-  .tiptap
-  [data-note-block-bg="orange"]
-  + [data-note-block-bg="orange"],
-.tiptap-wrapper
-  .tiptap
-  [data-note-block-bg="yellow"]
-  + [data-note-block-bg="yellow"],
-.tiptap-wrapper
-  .tiptap
-  [data-note-block-bg="green"]
-  + [data-note-block-bg="green"],
-.tiptap-wrapper
-  .tiptap
-  [data-note-block-bg="blue"]
-  + [data-note-block-bg="blue"],
-.tiptap-wrapper
-  .tiptap
-  [data-note-block-bg="purple"]
-  + [data-note-block-bg="purple"],
-.tiptap-wrapper
-  .tiptap
-  [data-note-block-bg="red"]
-  + [data-note-block-bg="red"] {
-  margin-top: 0;
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
 }
 
 /* 토큰별로 --note-block-bg만 정하고, 실제 칠하기는 위 공통 규칙이 맡는다.
