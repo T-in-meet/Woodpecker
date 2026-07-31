@@ -24,6 +24,12 @@ function getTaskItemIndent(line: string | undefined): string | null {
   return match?.[1] ?? null;
 }
 
+// 저장 본문은 LF로 통일한다. CRLF가 섞이면 줄 단위로 도는 후처리와
+// 미리보기의 목록 마커 복원이 줄 끝 \r 때문에 어긋난다.
+function normalizeLineEndings(markdown: string): string {
+  return markdown.replace(/\r\n?/g, "\n");
+}
+
 function normalizeTaskListSpacing(markdown: string): string {
   const lines = markdown.split("\n");
   const normalizedLines: string[] = [];
@@ -117,7 +123,9 @@ function getRawTipTapMarkdown(editor: Editor): string {
 // TipTap 직렬화기가 자기 출력에 주입하는 공백/줄바꿈 아티팩트를 정리한다.
 // 여기서는 사용자가 입력한 escape(예: literal `\[x\]`)를 건드리지 않는다.
 export function normalizeTipTapSerializerOutput(markdown: string): string {
-  return normalizeBlockquoteLineBreaks(normalizeTaskListSpacing(markdown));
+  return normalizeBlockquoteLineBreaks(
+    normalizeTaskListSpacing(normalizeLineEndings(markdown)),
+  );
 }
 
 // 과거 저장 사이클에서 task marker가 `\[x\]` 형태로 이스케이프되어 굳은 데이터를 복구한다.

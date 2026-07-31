@@ -144,6 +144,8 @@ function restoreListMarkers(markdown: string): string {
 export function stripMarkdown(text: string): string {
   const preprocessed = restoreListMarkers(
     text
+      // CRLF가 섞여 저장된 본문은 줄 끝에 남은 \r 때문에 목록 마커 패턴이 어긋난다.
+      .replace(/\r\n?/g, "\n")
       .replace(/\[[ xX]\]/g, "")
       .replace(/^\|[\s\-|:]+\|$/gm, "")
       .replace(/\|/g, " "),

@@ -73,6 +73,24 @@ describe("stripMarkdown", () => {
     expect(result).toContain("▪ 손자");
   });
 
+  it("CRLF로 저장된 본문에서도 목록 마커를 복원한다", () => {
+    const input = [
+      "1. 과일",
+      "   1. 사과",
+      "   2. 바나나",
+      "",
+      "- 동물",
+      "  - 소",
+      "  - 돼지",
+    ].join("\r\n");
+
+    expect(stripMarkdown(input)).toBe(
+      ["1. 과일", "a. 사과", "b. 바나나", "", "• 동물", "◦ 소", "◦ 돼지"].join(
+        "\n",
+      ),
+    );
+  });
+
   it("헤딩 안에 사용자가 직접 쓴 번호는 건드리지 않는다", () => {
     expect(stripMarkdown("# 1. 컴퓨터 네트워크 시작하기")).toBe(
       "1. 컴퓨터 네트워크 시작하기",
