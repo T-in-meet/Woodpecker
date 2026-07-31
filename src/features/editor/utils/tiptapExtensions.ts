@@ -1029,6 +1029,11 @@ const NoteBlockBackground = Extension.create({
         attributes: {
           [NOTE_BLOCK_BACKGROUND_ATTRIBUTE_NAME]: {
             default: null,
+            // Enter로 만든 다음 블록은 배경을 물려받지 않는다. 물려받으면 색 블록이
+            // 문서 끝에 있을 때 무색 블록으로 빠져나갈 방법이 없다.
+            // splitBlock과 splitListItem이 모두 이 값을 보므로 문단·헤딩·목록 항목에
+            // 함께 적용된다.
+            keepOnSplit: false,
             parseHTML: (element: HTMLElement) =>
               normalizeNoteColorToken(
                 element.getAttribute(NOTE_BLOCK_BACKGROUND_ATTRIBUTE),
