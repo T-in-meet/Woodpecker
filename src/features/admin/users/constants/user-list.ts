@@ -133,6 +133,10 @@ export const USER_SIGNUP_METHOD_BADGE_CONFIG = {
     label: "소셜 로그인",
     color: "purple",
   },
+  UNKNOWN: {
+    label: "알 수 없음",
+    color: "gray",
+  },
 } satisfies AdminBadgeConfig<UserSignupMethod>;
 
 export const USER_AGREEMENT_STATUS_BADGE_CONFIG = {

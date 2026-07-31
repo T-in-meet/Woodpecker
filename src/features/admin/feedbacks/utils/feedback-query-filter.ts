@@ -56,11 +56,11 @@ function applyFeedbackFilter(
 
     case "hasImages":
       if (filter.type === "select" && filter.value === "yes") {
-        return feedbackQuery.not("image_urls", "eq", []);
+        return feedbackQuery.not("image_urls", "eq", "{}");
       }
 
       if (filter.type === "select" && filter.value === "no") {
-        return feedbackQuery.eq("image_urls", []);
+        return feedbackQuery.filter("image_urls", "eq", "{}");
       }
 
       return feedbackQuery;

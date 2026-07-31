@@ -41,9 +41,7 @@ function mapUserRow(row: AdminUserListRow): AdminUserListItem {
   if (
     !row.id ||
     !row.nickname ||
-    !row.canonical_email ||
     !row.role ||
-    !row.signup_method ||
     !row.agreement_status ||
     !row.created_at
   ) {
@@ -56,7 +54,7 @@ function mapUserRow(row: AdminUserListRow): AdminUserListItem {
     avatarUrl: row.avatar_url,
     email: row.canonical_email,
     role: row.role as UserRole,
-    signupMethod: row.signup_method as UserSignupMethod,
+    signupMethod: (row.signup_method ?? "UNKNOWN") as UserSignupMethod,
     agreementStatus: row.agreement_status as UserAgreementStatus,
     createdAt: row.created_at,
   };

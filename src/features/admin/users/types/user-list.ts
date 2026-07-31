@@ -7,7 +7,7 @@ import type { AdminSort } from "../../types/sort";
 export type UserRole = "USER" | "ADMIN";
 
 /** 관리자 사용자 목록에서 표시하는 가입 방법입니다. */
-export type UserSignupMethod = "EMAIL" | "OAUTH";
+export type UserSignupMethod = "EMAIL" | "OAUTH" | "UNKNOWN";
 
 /** 관리자 사용자 목록에서 표시하는 약관 동의 상태입니다. */
 export type UserAgreementStatus = "COMPLETED" | "PARTIAL" | "NOT_AGREED";
@@ -58,8 +58,8 @@ export type AdminUserListItem = {
   /** 프로필 이미지 URL. 없으면 null */
   avatarUrl: string | null;
 
-  /** canonical email */
-  email: string;
+  /** canonical email. 기존 사용자 데이터에는 없을 수 있습니다. */
+  email: string | null;
 
   /** 사용자 권한 */
   role: UserRole;
