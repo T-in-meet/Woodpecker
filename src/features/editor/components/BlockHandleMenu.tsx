@@ -803,7 +803,20 @@ export function resolveBlockElement(
     listItemElement instanceof HTMLElement &&
     rootElement.contains(listItemElement)
   ) {
-    return listItemElement;
+    // 항목의 첫 블록은 마커와 함께 움직여야 하므로 항목 전체를 대상으로 둔다.
+    // 뒤따르는 블록(항목 안에 들어온 헤딩 등)은 그 블록 자체를 잡아야
+    // 핸들이 그 줄 앞에 놓이고 따로 드래그해 빼낼 수 있다.
+    const ownBlockElement = element.closest(BLOCK_ELEMENT_SELECTOR);
+
+    if (
+      !(ownBlockElement instanceof HTMLElement) ||
+      !listItemElement.contains(ownBlockElement) ||
+      listItemElement.querySelector(BLOCK_ELEMENT_SELECTOR) === ownBlockElement
+    ) {
+      return listItemElement;
+    }
+
+    return ownBlockElement;
   }
 
   const blockquoteElement = element.closest("blockquote");

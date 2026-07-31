@@ -372,6 +372,33 @@ describe("resolveBlockElement", () => {
     );
   });
 
+  it("uses the block itself for a later block inside a list item", () => {
+    const rootElement = document.createElement("div");
+    rootElement.innerHTML = "<ol><li><p>item</p><h1>heading</h1></li></ol>";
+    document.body.appendChild(rootElement);
+
+    const headingElement = rootElement.querySelector("h1");
+
+    expect(resolveBlockElement(rootElement, headingElement)).toBe(
+      headingElement,
+    );
+  });
+
+  it("keeps using the innermost list item for nested lists", () => {
+    const rootElement = document.createElement("div");
+    rootElement.innerHTML =
+      "<ol><li><p>parent</p><ol><li><p>child</p></li></ol></li></ol>";
+    document.body.appendChild(rootElement);
+
+    const childParagraphElement =
+      rootElement.querySelector<HTMLElement>("ol ol p");
+    const childListItemElement = rootElement.querySelector("ol ol li");
+
+    expect(resolveBlockElement(rootElement, childParagraphElement)).toBe(
+      childListItemElement,
+    );
+  });
+
   it("returns null for the editor root so the handle hides outside blocks", () => {
     const rootElement = document.createElement("div");
     document.body.appendChild(rootElement);
