@@ -37,6 +37,8 @@ vi.mock("@/features/auth/signup/hooks/useSignupMutation", () => ({
 }));
 
 async function submitValidSignupForm(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("button", { name: /이메일로 가입/i }));
+
   fireEvent.change(screen.getByLabelText(/이메일/i), {
     target: { value: "test@example.com" },
   });

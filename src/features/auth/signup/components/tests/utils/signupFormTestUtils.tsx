@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { vi } from "vitest";
 
@@ -9,19 +9,34 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
   return { ...actual };
 });
 
-// SignupForm 테스트 공통 유틸
-// - 반복되는 렌더링 코드를 한 곳으로 모아 테스트 파일 간 중복을 줄인다.
-// - 기본 onSubmit mock과 isPending 기본값을 제공해 각 테스트가 의도에만 집중하도록 돕는다.
-// - 구조/검증/제출/반응형 테스트에서 공통으로 사용한다.
+type InitialSignupMethod = "email" | "google" | null;
 
-// SignupForm을 기본 props와 함께 렌더링하는 헬퍼
-// - 필요한 경우 onSubmit, isPending만 override해서 사용한다.
+type RenderSignupFormOptions = Partial<ComponentProps<typeof SignupForm>> & {
+  initialSignupMethod?: InitialSignupMethod;
+};
+
+/**
+ * SignupForm을 기본 props와 함께 렌더링하는 테스트 헬퍼
+ */
 export function renderSignupForm({
   onSubmit = vi.fn(),
   isPending = false,
-}: Partial<ComponentProps<typeof SignupForm>> = {}) {
+  initialSignupMethod = "email",
+}: RenderSignupFormOptions = {}) {
+  const result = render(
+    <SignupForm onSubmit={onSubmit} isPending={isPending} />,
+  );
+
+  if (initialSignupMethod === "email") {
+    fireEvent.click(screen.getByRole("button", { name: /이메일로 가입/i }));
+  }
+
+  if (initialSignupMethod === "google") {
+    fireEvent.click(screen.getByRole("button", { name: /Google로 가입/i }));
+  }
+
   return {
     onSubmit,
-    ...render(<SignupForm onSubmit={onSubmit} isPending={isPending} />),
+    ...result,
   };
 }
