@@ -13,6 +13,9 @@ const exchangeCodeForSessionMock = vi.fn();
 const signOutMock = vi.fn();
 const updateProfileMock = vi.fn();
 const updateProfileEqMock = vi.fn();
+const selectProfileMock = vi.fn();
+const selectProfileEqMock = vi.fn();
+const selectProfileSingleMock = vi.fn();
 
 vi.mock("@/features/auth/lib/userAgreements", () => ({
   AGREEMENT_REQUIRED_REDIRECT: "/signup?agreement_required=1",
@@ -54,9 +57,16 @@ describe("auth callback route", () => {
     signOutMock.mockResolvedValue({ error: null });
     updateProfileMock.mockReturnValue({ eq: updateProfileEqMock });
     updateProfileEqMock.mockResolvedValue({ error: null });
+    selectProfileMock.mockReturnValue({ eq: selectProfileEqMock });
+    selectProfileEqMock.mockReturnValue({ single: selectProfileSingleMock });
+    selectProfileSingleMock.mockResolvedValue({
+      data: { nickname: "사용자" },
+      error: null,
+    });
     createAdminClientMock.mockReturnValue({
       from: vi.fn(() => ({
         update: updateProfileMock,
+        select: selectProfileMock,
       })),
       storage: {
         from: vi.fn(),
@@ -183,6 +193,60 @@ describe("auth callback route", () => {
       `http://localhost:3000${ROUTES.MYPAGE}`,
     );
     expect(upsertUserAgreementMock).toHaveBeenCalledWith("user-id", "oauth");
+  });
+
+  it("signup intent에서 provider 이름이 nickname으로 저장되었으면 프로필 안내 query를 추가한다", async () => {
+    exchangeCodeForSessionMock.mockResolvedValue({
+      data: {
+        user: {
+          id: "user-id",
+          email: "oauth.user@example.com",
+          user_metadata: { name: "GoogleName" },
+        },
+      },
+      error: null,
+    });
+    selectProfileSingleMock.mockResolvedValue({
+      data: { nickname: "GoogleName" },
+      error: null,
+    });
+
+    const response = await GET(
+      createRequest("/api/auth/callback?code=oauth-code&intent=signup", {
+        Cookie: "oauth_agreement_intent=accepted",
+      }),
+    );
+
+    expect(response.headers.get("location")).toBe(
+      `http://localhost:3000${ROUTES.MYPAGE}?section=profile&profile_nickname=provider`,
+    );
+  });
+
+  it("signup intent에서 fallback nickname이면 프로필 안내 query를 추가한다", async () => {
+    exchangeCodeForSessionMock.mockResolvedValue({
+      data: {
+        user: {
+          id: "abcde-user-id",
+          email: "oauth.user@example.com",
+          user_metadata: { name: "Christopher Kim" },
+        },
+      },
+      error: null,
+    });
+    selectProfileSingleMock.mockResolvedValue({
+      data: { nickname: "user_abcde" },
+      error: null,
+    });
+
+    const response = await GET(
+      createRequest("/api/auth/callback?code=oauth-code&intent=signup", {
+        Cookie: "oauth_agreement_intent=accepted",
+      }),
+    );
+
+    expect(response.headers.get("location")).toBe(
+      `http://localhost:3000${ROUTES.MYPAGE}?section=profile&profile_nickname=fallback`,
+    );
   });
 
   it("signup intent에서 약관 intent cookie가 있으면 OAuth 이메일을 정규화해 프로필에 저장한다", async () => {

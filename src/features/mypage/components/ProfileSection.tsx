@@ -23,6 +23,10 @@ import {
   updateProfileAction,
   uploadAvatarAction,
 } from "../actions";
+import {
+  DismissibleProfileNicknameNotice,
+  type ProfileNicknameNotice,
+} from "./DismissibleProfileNicknameNotice";
 
 type ProfileSectionProfile = Pick<
   Profile,
@@ -32,11 +36,13 @@ type ProfileSectionProfile = Pick<
 type ProfileSectionProps = {
   profile: ProfileSectionProfile;
   email: string;
+  nicknameNotice?: ProfileNicknameNotice | null;
 };
 
 export function ProfileSection({
   profile: initialProfile,
   email,
+  nicknameNotice = null,
 }: ProfileSectionProps) {
   const router = useRouter();
   const [profile, setProfile] = useState<ProfileSectionProfile>(initialProfile);
@@ -160,6 +166,7 @@ export function ProfileSection({
 
       <CardContent>
         <div className="pt-5">
+          <DismissibleProfileNicknameNotice notice={nicknameNotice} />
           {isEditing ? (
             <div className="space-y-4">
               <div className="space-y-2">
