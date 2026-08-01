@@ -38,7 +38,7 @@ import {
 const upsertUserAgreementMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/features/auth/lib/userAgreements", () => ({
-  upsertUserAgreement: upsertUserAgreementMock,
+  ensureUserAgreement: upsertUserAgreementMock,
 }));
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { createAdminClient } from "@/lib/supabase/admin";

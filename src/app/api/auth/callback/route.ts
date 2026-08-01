@@ -11,8 +11,8 @@ import {
 } from "@/features/auth/lib/oauthAgreementIntent";
 import {
   AGREEMENT_REQUIRED_REDIRECT,
+  ensureUserAgreement,
   hasUserAgreement,
-  upsertUserAgreement,
 } from "@/features/auth/lib/userAgreements";
 import { validateRedirectPath } from "@/features/auth/lib/validateRedirectPath";
 import { canonicalizeEmail } from "@/features/auth/utils/canonicalizeEmail";
@@ -350,7 +350,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    await upsertUserAgreement(data.user.id, "oauth");
+    await ensureUserAgreement(data.user.id, "oauth");
     await trySyncOAuthCanonicalEmailToProfile(data.user);
 
     try {

@@ -20,7 +20,7 @@ const selectProfileSingleMock = vi.fn();
 vi.mock("@/features/auth/lib/userAgreements", () => ({
   AGREEMENT_REQUIRED_REDIRECT: "/signup?agreement_required=1",
   hasUserAgreement: hasUserAgreementMock,
-  upsertUserAgreement: upsertUserAgreementMock,
+  ensureUserAgreement: upsertUserAgreementMock,
 }));
 
 vi.mock("@/lib/supabase/server", () => ({

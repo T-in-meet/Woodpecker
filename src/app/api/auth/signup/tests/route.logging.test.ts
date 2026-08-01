@@ -24,7 +24,7 @@ import { POST } from "../route";
 const upsertUserAgreementMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/features/auth/lib/userAgreements", () => ({
-  upsertUserAgreement: upsertUserAgreementMock,
+  ensureUserAgreement: upsertUserAgreementMock,
 }));
 
 vi.mock("@/features/auth/lib/applyMinimumResponseTime", () => ({
@@ -173,6 +173,8 @@ describe("signup 라우트 인증 로깅", () => {
       id: "existing-user-id",
       email: "user@example.com",
       email_confirmed_at: null,
+      auth_providers: ["email"],
+      has_password_login: true,
     });
     vi.mocked(issueOtpAndSendEmail).mockResolvedValue(undefined);
 

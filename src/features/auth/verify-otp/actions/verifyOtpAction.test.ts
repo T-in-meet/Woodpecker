@@ -34,6 +34,10 @@ vi.mock("../lib/verifyOtp", () => ({
   verifyOtp: vi.fn(),
 }));
 
+vi.mock("../../lib/getUserByEmail", () => ({
+  getUserByEmail: vi.fn(),
+}));
+
 vi.mock("../../lib/applyMinimumActionDelay", () => ({
   applyMinimumActionDelay: vi.fn(),
 }));
@@ -48,6 +52,7 @@ import {
   checkRequestEligibility,
   mapBlockedByToReason,
 } from "../../lib/checkRequestEligibility";
+import { getUserByEmail } from "../../lib/getUserByEmail";
 import { verifyOtp } from "../lib/verifyOtp";
 
 const prevState = {
@@ -82,6 +87,8 @@ describe("verifyOtpAction", () => {
     vi.mocked(verifyOtp).mockResolvedValue({
       error: null,
     } as Awaited<ReturnType<typeof verifyOtp>>);
+
+    vi.mocked(getUserByEmail).mockResolvedValue(null);
 
     vi.mocked(applyMinimumActionDelay).mockResolvedValue(undefined);
   });
@@ -120,6 +127,53 @@ describe("verifyOtpAction", () => {
     );
 
     expect(redirect).toHaveBeenCalledWith(ROUTES.MYPAGE);
+  });
+
+  it("signup OTP 인증 전 기존 OAuth-only 사용자로 확인되면 비밀번호 설정 페이지로 redirect한다", async () => {
+    vi.mocked(getUserByEmail).mockResolvedValue({
+      id: "oauth-user-id",
+      email: "user@example.com",
+      email_confirmed_at: "2026-03-29T00:00:00.000Z",
+      auth_providers: ["google"],
+      has_password_login: false,
+    });
+
+    const formData = createFormData({
+      email: "user@example.com",
+      purpose: "signup",
+      otp: "123456",
+    });
+
+    await expect(verifyOtpAction(null, prevState, formData)).rejects.toThrow(
+      `NEXT_REDIRECT:${ROUTES.SET_PASSWORD}`,
+    );
+
+    expect(redirect).toHaveBeenCalledWith(ROUTES.SET_PASSWORD);
+  });
+
+  it("signup OTP 인증 전 기존 OAuth-only 사용자로 확인되고 redirectPath가 있으면 비밀번호 설정 완료 후 이동 경로를 전달한다", async () => {
+    vi.mocked(getUserByEmail).mockResolvedValue({
+      id: "oauth-user-id",
+      email: "user@example.com",
+      email_confirmed_at: "2026-03-29T00:00:00.000Z",
+      auth_providers: ["google"],
+      has_password_login: false,
+    });
+
+    const formData = createFormData({
+      email: "user@example.com",
+      purpose: "signup",
+      otp: "123456",
+    });
+    const expectedPath = `${ROUTES.SET_PASSWORD}?redirect=${encodeURIComponent(
+      "/target",
+    )}`;
+
+    await expect(
+      verifyOtpAction("/target", prevState, formData),
+    ).rejects.toThrow(`NEXT_REDIRECT:${expectedPath}`);
+
+    expect(redirect).toHaveBeenCalledWith(expectedPath);
   });
 
   it("context 검증에 실패하면 invalid_request를 반환하고 이후 검증은 실행하지 않는다", async () => {

@@ -1,4 +1,42 @@
+import type { User } from "@supabase/supabase-js";
+
 import { createAdminClient } from "@/lib/supabase/admin";
+
+const PASSWORD_AUTH_PROVIDER = "email";
+
+/**
+ * unknown metadata 값을 문자열 배열로 정규화합니다.
+ */
+function toStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
+/**
+ * Supabase Auth user에서 연결된 인증 provider 목록을 추출합니다.
+ */
+function getAuthProviders(user: User): string[] {
+  const providers = new Set<string>();
+  const metadataProviders = toStringArray(user.app_metadata["providers"]);
+  const metadataProvider = user.app_metadata["provider"];
+
+  for (const provider of metadataProviders) {
+    providers.add(provider);
+  }
+
+  if (typeof metadataProvider === "string") {
+    providers.add(metadataProvider);
+  }
+
+  for (const identity of user.identities ?? []) {
+    if (typeof identity.provider === "string") {
+      providers.add(identity.provider);
+    }
+  }
+
+  return [...providers];
+}
 
 /**
  * canonical_email으로 사용자 조회
@@ -25,6 +63,8 @@ export async function getUserByEmail(canonicalEmail: string): Promise<{
   id: string;
   email: string | null;
   email_confirmed_at: string | null;
+  auth_providers: string[];
+  has_password_login: boolean;
 } | null> {
   const adminClient = createAdminClient();
 
@@ -86,9 +126,13 @@ export async function getUserByEmail(canonicalEmail: string): Promise<{
    * - email: auth.users의 raw email (사용자 입력 보존)
    * - email_confirmed_at: 이메일 인증 상태
    */
+  const authProviders = getAuthProviders(userData.user);
+
   return {
     id: userData.user.id,
     email: userData.user.email ?? null,
     email_confirmed_at: userData.user.email_confirmed_at ?? null,
+    auth_providers: authProviders,
+    has_password_login: authProviders.includes(PASSWORD_AUTH_PROVIDER),
   };
 }

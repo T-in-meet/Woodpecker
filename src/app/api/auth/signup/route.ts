@@ -24,7 +24,7 @@ import {
   AuthJsonParseError,
   parseAuthJsonRequestBody,
 } from "@/features/auth/lib/parseAuthJsonRequestBody";
-import { upsertUserAgreement } from "@/features/auth/lib/userAgreements";
+import { ensureUserAgreement } from "@/features/auth/lib/userAgreements";
 import { signupApiSchema } from "@/features/auth/signup/schema/signupApiSchema";
 import { canonicalizeEmail } from "@/features/auth/utils/canonicalizeEmail";
 import { failureResponse, successResponse } from "@/lib/api/response";
@@ -192,7 +192,7 @@ async function resolveSignupResponse(
     const deliveryEmail = existingUser?.email ?? email;
     // 약관 기록이 없는 기존 계정도 회원가입 폼 재제출을 통해 동의 기록을 보완한다.
     if (existingUser.id) {
-      await upsertUserAgreement(existingUser.id, "email");
+      await ensureUserAgreement(existingUser.id, "email");
     }
 
     try {
@@ -220,7 +220,7 @@ async function resolveSignupResponse(
     const deliveryEmail = existingUser?.email ?? email;
     // 약관 기록이 없는 기존 계정도 회원가입 폼 재제출을 통해 동의 기록을 보완한다.
     if (existingUser.id) {
-      await upsertUserAgreement(existingUser.id, "email");
+      await ensureUserAgreement(existingUser.id, "email");
     }
 
     try {
@@ -278,7 +278,7 @@ async function resolveSignupResponse(
 
   if (createUserData.user?.id) {
     // 이메일 가입은 서버 validation을 통과한 약관 동의 사실을 user_id 기준으로 보존한다.
-    await upsertUserAgreement(createUserData.user.id, "email");
+    await ensureUserAgreement(createUserData.user.id, "email");
   }
 
   await issueOtpAndSendEmail({ email, purpose: "signup" });
