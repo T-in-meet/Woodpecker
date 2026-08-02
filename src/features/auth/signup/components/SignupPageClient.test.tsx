@@ -8,6 +8,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { AGREEMENT_REQUIRED_NOTICE_MESSAGE } from "@/features/auth/constants/agreementRequired";
 import {
   OAUTH_CALLBACK_ERROR_REASON,
   OAUTH_CALLBACK_ERROR_TOAST_KEY,
@@ -165,18 +166,34 @@ describe("SignupPageClient agreement_required 안내", () => {
     vi.clearAllMocks();
   });
 
-  it("agreement_required=1이면 약관 동의 안내 toast를 표시한다", async () => {
+  it("agreement_required=1이면 약관 동의 안내 toast를 표시하지 않는다", () => {
     render(<SignupPageClient />);
 
-    await waitFor(() => {
-      expect(showToast).toHaveBeenCalledWith(
-        "약관과 개인정보 처리방침 확인 및 동의가 필요합니다.",
-        {
-          variant: "destructive",
-          dedupeKey: "auth-agreement-required",
-        },
-      );
-    });
+    expect(showToast).not.toHaveBeenCalled();
+  });
+
+  it("agreement_required=1이면 회원가입 폼 상단에 안내를 고정 표시한다", () => {
+    render(<SignupPageClient />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      AGREEMENT_REQUIRED_NOTICE_MESSAGE,
+    );
+  });
+
+  it("agreement_required=1이면 Google 가입 방식이 처음부터 선택된다", () => {
+    render(<SignupPageClient />);
+
+    expect(
+      screen.getByRole("button", { name: /Google로 가입/i }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(
+      screen.getByText(
+        /Google 계정으로 가입합니다\. 계속하기 전에 아래 필수 약관 동의가 필요합니다\./i,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Google 계정으로 계속하기/i }),
+    ).toBeInTheDocument();
   });
 });
 

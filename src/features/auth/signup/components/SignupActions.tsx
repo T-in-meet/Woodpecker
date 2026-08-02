@@ -49,7 +49,7 @@ export function SignupActions({
           type="submit"
           disabled={isPending}
           className={cn(
-            "w-full sm:w-auto transition-colors duration-200",
+            "w-full transition-colors duration-200",
             isSubmitButtonVisuallyEnabled
               ? "hover:bg-primary"
               : "bg-primary/45 text-primary-foreground/85 hover:bg-primary/55",

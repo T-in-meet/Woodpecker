@@ -1,6 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { AlertCircle } from "lucide-react";
 import Link from "next/link";
 import type { ChangeEvent } from "react";
 import { useCallback, useRef, useState } from "react";
@@ -68,9 +69,11 @@ type SubmitPayload = Omit<FormValues, "confirmPassword">;
 /**
  * SignupForm Props
  */
-type SignupFormProps = {
+export type SignupFormProps = {
   onSubmit: (values: SubmitPayload) => void | Promise<void>;
   isPending?: boolean;
+  initialSignupMethod?: SignupMethod;
+  signupNotice?: string;
 };
 
 /**
@@ -90,8 +93,15 @@ function normalizeChecked(value: unknown) {
 /**
  * 회원가입 폼 컴포넌트
  */
-export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
-  const [signupMethod, setSignupMethod] = useState<SignupMethod | null>(null);
+export function SignupForm({
+  onSubmit,
+  isPending = false,
+  initialSignupMethod,
+  signupNotice,
+}: SignupFormProps) {
+  const [signupMethod, setSignupMethod] = useState<SignupMethod | null>(
+    initialSignupMethod ?? null,
+  );
 
   const {
     control,
@@ -294,6 +304,19 @@ export function SignupForm({ onSubmit, isPending = false }: SignupFormProps) {
             가입 방식을 선택하고 필수 약관에 동의해주세요.
           </p>
         </div>
+
+        {signupNotice ? (
+          <div
+            role="alert"
+            className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+          >
+            <AlertCircle
+              aria-hidden="true"
+              className="mt-0.5 h-4 w-4 shrink-0"
+            />
+            <p>{signupNotice}</p>
+          </div>
+        ) : null}
 
         <section aria-labelledby="signup-method-heading" className="space-y-3">
           <h2
