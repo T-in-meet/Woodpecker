@@ -13,8 +13,13 @@ const BULLET_MARKERS = ["•", "◦", "▪"] as const;
 
 // 인용문 안의 목록은 "  > - "처럼 인용 기호가 마커 앞에 붙는다. 화면에서는 인용문이
 // 목록 깊이를 끊지 않고 바깥 목록까지 세므로(tiptap.css), 인용 기호도 들여쓰기로 본다.
+// 코드 펜스도 인용문 안에 들어갈 수 있으므로 목록과 같은 접두사 규칙을 쓴다.
+// 접두사를 허용하지 않으면 "> ```" 안의 "> - literal"이 목록으로 잘못 잡힌다.
 const LIST_ITEM_PATTERN = /^([\s>]*)([-+*]|\d+\.)\s+(.*)$/;
-const CODE_FENCE_PATTERN = /^\s*(?:```|~~~)/;
+const CODE_FENCE_PATTERN = /^[\s>]*(?:```|~~~)/;
+// remove-markdown은 코드블록 안을 그대로 두므로 인용 기호가 남는다. 코드 펜스 안에서는
+// 여기서 직접 걷어낸다.
+const QUOTE_PREFIX_PATTERN = /^\s*(?:>\s?)+/;
 
 const ROMAN_UNITS = [
   [1000, "m"],
@@ -89,10 +94,13 @@ function restoreListMarkers(markdown: string): string {
     .map((line) => {
       if (CODE_FENCE_PATTERN.test(line)) {
         isInsideCodeFence = !isInsideCodeFence;
-        return line;
+
+        // 백틱 펜스는 마지막 정리 단계에서 지워지지만 "~~~"는 취소선으로 오인돼
+        // "~"가 남으므로 여기서 걷어낸다.
+        return line.replace(QUOTE_PREFIX_PATTERN, "").replace(/^~~~+/, "");
       }
 
-      if (isInsideCodeFence) return line;
+      if (isInsideCodeFence) return line.replace(QUOTE_PREFIX_PATTERN, "");
 
       const match = LIST_ITEM_PATTERN.exec(line);
 

@@ -37,6 +37,13 @@ describe("stripMarkdown", () => {
 
   it("코드 블록 펜스를 제거하고 내용 텍스트만 남긴다", () => {
     expect(stripMarkdown("```\nconst x = 1;\n```")).toBe("const x = 1;");
+    expect(stripMarkdown("~~~\nconst x = 1;\n~~~")).toBe("const x = 1;");
+  });
+
+  it("코드 블록 안의 목록 마커는 복원하지 않는다", () => {
+    expect(stripMarkdown("```\n- literal\n1. one\n```")).toBe(
+      "- literal\n1. one",
+    );
   });
 
   it("불릿 목록 마커를 기호로 남긴다", () => {
@@ -163,6 +170,21 @@ describe("stripMarkdown", () => {
   it("인용문 안의 목록도 마커를 복원한다", () => {
     expect(stripMarkdown("> 1. 인용된 번호")).toBe("1. 인용된 번호");
     expect(stripMarkdown("> - 인용된 불릿")).toBe("• 인용된 불릿");
+  });
+
+  it("인용문 안 코드 블록의 목록 마커는 복원하지 않는다", () => {
+    expect(stripMarkdown("> ```\n> - literal\n> 1. one\n> ```")).toBe(
+      "- literal\n1. one",
+    );
+    expect(stripMarkdown("> ~~~\n> - literal\n> 1. one\n> ~~~")).toBe(
+      "- literal\n1. one",
+    );
+  });
+
+  it("목록 안 인용문의 코드 블록도 목록 마커를 복원하지 않는다", () => {
+    expect(
+      stripMarkdown("- 상위\n\n  > ```\n  > - literal\n  > ```\n\n- 다음"),
+    ).toBe("• 상위\n\n- literal\n\n• 다음");
   });
 
   it("목록 안 인용문의 목록은 바깥 목록 깊이를 이어서 센다", () => {
