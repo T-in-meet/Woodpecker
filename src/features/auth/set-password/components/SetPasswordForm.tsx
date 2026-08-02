@@ -43,7 +43,7 @@ export function SetPasswordForm({ action }: SetPasswordFormProps) {
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<ResetPasswordFormInput>({
     resolver: zodResolver(resetPasswordFormSchema),
     mode: "onTouched",
@@ -81,7 +81,10 @@ export function SetPasswordForm({ action }: SetPasswordFormProps) {
       ? SET_PASSWORD_SAME_PASSWORD_MESSAGE
       : SET_PASSWORD_GLOBAL_ERROR_MESSAGE;
 
-  usePreventPageLeave(!isPending, SET_PASSWORD_PAGE_LEAVE_CONFIRM_MESSAGE);
+  usePreventPageLeave(
+    isDirty && !isPending,
+    SET_PASSWORD_PAGE_LEAVE_CONFIRM_MESSAGE,
+  );
 
   /**
    * 클라이언트 검증을 통과한 비밀번호만 Server Action으로 전달합니다.
