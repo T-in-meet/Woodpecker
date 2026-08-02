@@ -13,7 +13,10 @@ import {
   notificationsResponseSchema,
   type NotificationsResponseType,
 } from "../schema";
-import { NotificationList } from "./NotificationList";
+import {
+  NotificationList,
+  type UserNotificationListItemType,
+} from "./NotificationList";
 
 const EMPTY_NOTIFICATIONS: NotificationsResponseType = {
   items: [],
@@ -22,6 +25,22 @@ const EMPTY_NOTIFICATIONS: NotificationsResponseType = {
 const ROUTE_CHANGE_REFETCH_COOLDOWN_MS = 30_000;
 
 class UnauthorizedNotificationError extends Error {}
+
+export function removeReadNotificationFromResponse(
+  current: NotificationsResponseType | undefined,
+  notificationId: string,
+) {
+  if (!current) return current;
+
+  const hasItem = current.items.some((item) => item.id === notificationId);
+
+  if (!hasItem) return current;
+
+  return {
+    items: current.items.filter((item) => item.id !== notificationId),
+    unreadCount: Math.max(current.unreadCount - 1, 0),
+  };
+}
 
 async function fetchNotifications(): Promise<NotificationsResponseType> {
   const response = await fetch("/api/notifications", {
@@ -44,6 +63,18 @@ async function fetchNotifications(): Promise<NotificationsResponseType> {
   }
 
   return parsed.data;
+}
+
+/**
+ * 알림 응답 item이 사용자 알림 item인지 확인합니다.
+ *
+ * @param item 확인할 알림 item
+ * @returns 사용자 알림 item 여부
+ */
+function isUserNotificationListItem(
+  item: NotificationsResponseType["items"][number],
+): item is UserNotificationListItemType {
+  return item.source === "USER";
 }
 
 type NotificationBellProps = {
@@ -117,6 +148,7 @@ export function NotificationBell({ userId }: NotificationBellProps) {
   const displayCount = unreadCount > 99 ? "99+" : String(unreadCount);
   const buttonLabel =
     unreadCount > 0 ? `읽지 않은 알림 ${unreadCount}개` : "알림";
+  const userItems = data.items.filter(isUserNotificationListItem);
 
   const handleToggle = () => {
     const nextOpen = !open;
@@ -131,7 +163,14 @@ export function NotificationBell({ userId }: NotificationBellProps) {
     setOpen(false);
   };
 
-  const hasHiddenUnreadNotifications = unreadCount > data.items.length;
+  const handleItemRead = (notificationId: string) => {
+    queryClient.setQueryData<NotificationsResponseType>(
+      notificationsQueryKey,
+      (current) => removeReadNotificationFromResponse(current, notificationId),
+    );
+  };
+
+  const hasHiddenUnreadNotifications = unreadCount > userItems.length;
 
   return (
     <div ref={ref} className="relative">
@@ -180,15 +219,16 @@ export function NotificationBell({ userId }: NotificationBellProps) {
           </div>
 
           <NotificationList
-            items={data.items}
+            items={userItems}
             isError={isError}
             isLoading={isLoading}
+            onItemRead={handleItemRead}
             onItemNavigate={handleItemNavigate}
           />
 
           {hasHiddenUnreadNotifications && (
             <p className="border-t border-border/60 px-4 py-2 text-xs text-muted-foreground">
-              최근 {data.items.length}개만 표시됩니다.
+              최근 {userItems.length}개만 표시됩니다.
             </p>
           )}
         </div>

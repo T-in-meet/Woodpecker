@@ -17,12 +17,21 @@ const serwist = new Serwist({
 
 serwist.addEventListeners();
 
+const NOTIFICATION_READ_API_PATH = "/api/notifications/read";
+const REVIEW_NOTIFICATION_TYPE = "REVIEW";
+
+/**
+ * Returns an object record when the push data shape can be inspected.
+ */
 function getRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null
     ? (value as Record<string, unknown>)
     : null;
 }
 
+/**
+ * Normalizes a web push payload into Notification API fields.
+ */
 function getPushPayload(data: PushMessageData | null) {
   if (!data) {
     return {
@@ -52,6 +61,9 @@ function getPushPayload(data: PushMessageData | null) {
   return { body, notificationData, tag, title };
 }
 
+/**
+ * Resolves a safe same-origin URL from notification click data.
+ */
 function getNotificationUrl(data: unknown) {
   const record = getRecord(data);
   const url = typeof record?.url === "string" ? record.url : "/";
@@ -66,6 +78,9 @@ function getNotificationUrl(data: unknown) {
   }
 }
 
+/**
+ * Checks whether a client is a same-origin browser window.
+ */
 function isSameOriginWindowClient(client: Client): client is WindowClient {
   return (
     client.type === "window" &&
@@ -73,6 +88,9 @@ function isSameOriginWindowClient(client: Client): client is WindowClient {
   );
 }
 
+/**
+ * Focuses an existing same-origin tab or opens a new one for the notification.
+ */
 async function openOrFocusNotificationUrl(url: string) {
   const windowClients = await self.clients.matchAll({
     type: "window",
@@ -93,6 +111,36 @@ async function openOrFocusNotificationUrl(url: string) {
   await self.clients.openWindow(url);
 }
 
+/**
+ * Marks a clicked non-review notification as read without blocking navigation.
+ */
+async function markNotificationReadOnClick(data: unknown) {
+  const record = getRecord(data);
+  const notificationId = record?.notificationId;
+  const type = record?.type;
+
+  if (
+    typeof notificationId !== "string" ||
+    typeof type !== "string" ||
+    type === REVIEW_NOTIFICATION_TYPE
+  ) {
+    return;
+  }
+
+  try {
+    await fetch(NOTIFICATION_READ_API_PATH, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ notificationId, type }),
+    });
+  } catch {
+    // 읽음 처리는 부가 작업이므로 실패해도 알림 대상 이동은 유지한다.
+  }
+}
+
 self.addEventListener("push", (event) => {
   const { body, notificationData, tag, title } = getPushPayload(event.data);
   const options: NotificationOptions = {
@@ -108,8 +156,14 @@ self.addEventListener("push", (event) => {
 });
 
 self.addEventListener("notificationclick", (event) => {
+  const notificationData = event.notification.data;
   const url = getNotificationUrl(event.notification.data);
 
   event.notification.close();
-  event.waitUntil(openOrFocusNotificationUrl(url));
+  event.waitUntil(
+    Promise.all([
+      markNotificationReadOnClick(notificationData),
+      openOrFocusNotificationUrl(url),
+    ]).then(() => undefined),
+  );
 });

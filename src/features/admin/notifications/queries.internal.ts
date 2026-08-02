@@ -76,7 +76,7 @@ function incrementUnreadCount(
 }
 
 /**
- * 관리자 알림 이벤트 row를 공용 알림 목록 item으로 변환합니다.
+ * 관리자 알림 이벤트 row를 관리자 Bell에서 사용하는 알림 item으로 변환합니다.
  *
  * @param event 관리자 알림 RPC에서 반환한 이벤트 row
  * @returns 알림 목록 컴포넌트가 사용하는 item

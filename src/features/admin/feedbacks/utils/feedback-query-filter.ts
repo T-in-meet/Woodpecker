@@ -1,11 +1,11 @@
 import type { AdminAppliedFilter } from "@/features/admin/types/filter";
-import { createAdminClient } from "@/lib/supabase/admin";
 
 import { nextDayIsoString, startOfDayIsoString } from "../../utils/query";
 import type {
   AdminFeedbackListQuery,
   FeedbackFilterField,
 } from "../types/feedback-list";
+import { type FeedbackListQueryBuilder } from "./feedback-query";
 
 /**
  * 관리자 피드백 목록에 적용된 필터를 Supabase 조회 조건으로 변환합니다.
@@ -15,7 +15,7 @@ import type {
  * @returns 필터 조건이 반영된 feedbacks 조회 객체
  */
 function applyFeedbackFilter(
-  feedbackQuery: ReturnType<ReturnType<typeof createAdminClient>["from"]>,
+  feedbackQuery: FeedbackListQueryBuilder,
   filter: AdminAppliedFilter<FeedbackFilterField>,
 ) {
   switch (filter.field) {
@@ -60,7 +60,7 @@ function applyFeedbackFilter(
       }
 
       if (filter.type === "select" && filter.value === "no") {
-        return feedbackQuery.eq("image_urls", "{}");
+        return feedbackQuery.filter("image_urls", "eq", "{}");
       }
 
       return feedbackQuery;
@@ -91,7 +91,7 @@ function applyFeedbackFilter(
  * @returns 모든 적용 필터가 반영된 feedbacks 조회 객체
  */
 export function applyFeedbackFilters(
-  feedbackQuery: ReturnType<ReturnType<typeof createAdminClient>["from"]>,
+  feedbackQuery: FeedbackListQueryBuilder,
   filters: AdminFeedbackListQuery["filters"],
 ) {
   let filteredQuery = feedbackQuery;
