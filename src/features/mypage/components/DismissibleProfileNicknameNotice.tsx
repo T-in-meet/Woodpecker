@@ -51,7 +51,7 @@ export function DismissibleProfileNicknameNotice({
   };
 
   return (
-    <div className="mb-4 flex items-start gap-3 rounded-md border border-outline-variant bg-destructive px-3 py-2 text-sm text-muted-foreground">
+    <div className="mb-4 flex items-start gap-3 rounded-md border border-outline-variant bg-muted px-3 py-2 text-sm text-muted-foreground">
       <p className="min-w-0 flex-1">{message}</p>
       <Button
         type="button"
