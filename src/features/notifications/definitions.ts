@@ -85,11 +85,11 @@ export const ADMIN_NOTIFICATION_DEFINITIONS = {
  * @returns 피드백 답변 사용자 알림 정의
  */
 export function buildFeedbackReplyNotificationDefinition({
-  feedbackId,
+  feedbackId: _feedbackId,
 }: BuildFeedbackReplyDefinitionInput) {
   return {
     ...USER_NOTIFICATION_DEFINITIONS[NOTIFICATION_TYPES.FEEDBACK_REPLY],
-    clickPath: `${ROUTES.MYPAGE}?feedbackId=${encodeURIComponent(feedbackId)}`,
+    clickPath: `${ROUTES.MYPAGE}?section=support&tab=inquiry`,
   };
 }
 

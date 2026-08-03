@@ -19,6 +19,7 @@ function createFeedbackQueryMock() {
     lt: vi.fn(),
     not: vi.fn(),
     eq: vi.fn(),
+    filter: vi.fn(),
     is: vi.fn(),
   };
 
@@ -27,6 +28,7 @@ function createFeedbackQueryMock() {
   query.lt.mockReturnValue(query);
   query.not.mockReturnValue(query);
   query.eq.mockReturnValue(query);
+  query.filter.mockReturnValue(query);
   query.is.mockReturnValue(query);
 
   return query;
@@ -118,8 +120,8 @@ describe("applyFeedbackFilters", () => {
     },
     {
       value: "no",
-      expectedMethod: "eq",
-      expectedArguments: ["image_urls", "{}"],
+      expectedMethod: "filter",
+      expectedArguments: ["image_urls", "eq", "{}"],
     },
   ] as const)(
     "이미지 포함 여부가 $value이면 알맞은 조건을 적용한다",
@@ -176,6 +178,7 @@ describe("applyFeedbackFilters", () => {
     expect(query.lt).not.toHaveBeenCalled();
     expect(query.not).not.toHaveBeenCalled();
     expect(query.eq).not.toHaveBeenCalled();
+    expect(query.filter).not.toHaveBeenCalled();
     expect(query.is).not.toHaveBeenCalled();
     expect(result).toBe(query);
   });

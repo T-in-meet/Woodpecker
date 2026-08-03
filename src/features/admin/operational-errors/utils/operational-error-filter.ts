@@ -2,16 +2,16 @@ import {
   nextDayIsoString,
   startOfDayIsoString,
 } from "@/features/admin/utils/query";
-import type { createAdminClient } from "@/lib/supabase/admin";
 
 import type { AdminAppliedFilter } from "../../types/filter";
 import type {
   OperationalErrorFilterField,
   OperationalErrorListQuery,
 } from "../types/operational-error-list";
+import { OperationalErrorListQueryBuilder } from "./operational-error-query";
 
 function applyOperationalErrorFilter(
-  query: ReturnType<ReturnType<typeof createAdminClient>["from"]>,
+  query: OperationalErrorListQueryBuilder,
   filter: AdminAppliedFilter<OperationalErrorFilterField>,
 ) {
   switch (filter.field) {
@@ -75,7 +75,7 @@ function applyOperationalErrorFilter(
 }
 
 export function applyOperationalErrorFilters(
-  query: ReturnType<ReturnType<typeof createAdminClient>["from"]>,
+  query: OperationalErrorListQueryBuilder,
   filters: OperationalErrorListQuery["filters"],
 ) {
   let filteredQuery = query;

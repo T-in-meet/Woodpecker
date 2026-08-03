@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -53,6 +54,7 @@ export function AdminFeedbackReplyPanel({
 }: AdminFeedbackReplyPanelProps) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(!feedback.reply);
+  const [notifyUser, setNotifyUser] = useState(false);
   const [previewImages, setPreviewImages] = useState<PreviewImage[]>([]);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(
     null,
@@ -95,6 +97,7 @@ export function AdminFeedbackReplyPanel({
       currentImages.forEach((image) => URL.revokeObjectURL(image.url));
       return [];
     });
+    setNotifyUser(false);
     setIsEditing(!feedback.reply);
   }, [feedback.reply, reset]);
 
@@ -165,6 +168,7 @@ export function AdminFeedbackReplyPanel({
     // 기존 이미지 path와 새 File을 분리해 보내면 Server Action이 유지/추가/삭제를 판별할 수 있다.
     formData.set("title", values.title);
     formData.set("content", values.content);
+    formData.set("notifyUser", String(notifyUser));
     existingImagePaths.forEach((path) =>
       formData.append("existingImagePaths", path),
     );
@@ -176,6 +180,7 @@ export function AdminFeedbackReplyPanel({
     });
 
     if (result.ok) {
+      setNotifyUser(false);
       setIsEditing(false);
       router.refresh();
     }
@@ -206,7 +211,10 @@ export function AdminFeedbackReplyPanel({
                   variant="outline"
                   size="sm"
                   disabled={deleteMutation.isPending}
-                  onClick={() => setIsEditing(true)}
+                  onClick={() => {
+                    setNotifyUser(false);
+                    setIsEditing(true);
+                  }}
                 >
                   <Pencil aria-hidden="true" />
                   수정
@@ -321,6 +329,31 @@ export function AdminFeedbackReplyPanel({
                 ) : null}
               </div>
 
+              {feedback.reply ? (
+                <div className="flex items-start gap-3 rounded-md border p-4">
+                  <Checkbox
+                    id="reply-notify-user"
+                    checked={notifyUser}
+                    disabled={saveMutation.isPending}
+                    onCheckedChange={(checked) =>
+                      setNotifyUser(checked === true)
+                    }
+                  />
+
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+                    <Label
+                      htmlFor="reply-notify-user"
+                      className="cursor-pointer font-medium"
+                    >
+                      사용자에게 알림 전송
+                    </Label>
+                    <p className="text-xs text-muted-foreground sm:whitespace-nowrap">
+                      수정된 답변을 사용자에게 다시 알립니다.
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+
               {generalError ? (
                 <p className="text-sm text-destructive">{generalError}</p>
               ) : null}
@@ -343,6 +376,7 @@ export function AdminFeedbackReplyPanel({
                         );
                         return [];
                       });
+                      setNotifyUser(false);
                       setIsEditing(false);
                     }}
                   >

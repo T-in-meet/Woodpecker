@@ -4,7 +4,7 @@
 
 BEGIN;
 
-SELECT plan(9);
+SELECT plan(13);
 
 SELECT set_config('test.admin_notification_rpc_admin_id', gen_random_uuid()::text, true);
 SELECT set_config('test.admin_notification_rpc_read_event_id', gen_random_uuid()::text, true);
@@ -52,6 +52,23 @@ VALUES (
   now()
 )
 ON CONFLICT (id) DO NOTHING;
+
+-- Isolate this test user from admin notification events that may already exist
+-- in the local database before this pgTAP file runs.
+INSERT INTO public.admin_notification_reads (
+  event_id,
+  admin_user_id
+)
+SELECT
+  event.id,
+  current_setting('test.admin_notification_rpc_admin_id')::uuid
+FROM public.admin_notification_events AS event
+WHERE event.id NOT IN (
+  current_setting('test.admin_notification_rpc_read_event_id')::uuid,
+  current_setting('test.admin_notification_rpc_error_event_id')::uuid,
+  current_setting('test.admin_notification_rpc_feedback_event_id')::uuid
+)
+ON CONFLICT (event_id, admin_user_id) DO NOTHING;
 
 INSERT INTO public.admin_notification_events (
   id,
@@ -188,6 +205,43 @@ SELECT is(
   ),
   1::bigint,
   $$list RPC should clamp non-positive limits to one row$$
+);
+
+SELECT ok(
+  to_regprocedure('public.mark_all_admin_notifications_as_read(uuid)') IS NOT NULL,
+  $$mark_all_admin_notifications_as_read should exist$$
+);
+
+SELECT is(
+  public.mark_all_admin_notifications_as_read(
+    current_setting('test.admin_notification_rpc_admin_id')::uuid
+  ),
+  2,
+  $$mark all RPC should insert read rows only for unread events$$
+);
+
+SELECT is(
+  (
+    SELECT count(*)::integer
+    FROM public.admin_notification_reads
+    WHERE admin_user_id =
+      current_setting('test.admin_notification_rpc_admin_id')::uuid
+      AND event_id IN (
+        current_setting('test.admin_notification_rpc_read_event_id')::uuid,
+        current_setting('test.admin_notification_rpc_error_event_id')::uuid,
+        current_setting('test.admin_notification_rpc_feedback_event_id')::uuid
+      )
+  ),
+  3,
+  $$mark all RPC should keep the existing read row and add only unread rows$$
+);
+
+SELECT is(
+  public.mark_all_admin_notifications_as_read(
+    current_setting('test.admin_notification_rpc_admin_id')::uuid
+  ),
+  0,
+  $$mark all RPC should be idempotent after all events are read$$
 );
 
 SELECT * FROM finish();

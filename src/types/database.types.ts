@@ -93,6 +93,47 @@ export type Database = {
           },
         ];
       };
+      feedback_replies: {
+        Row: {
+          content: string;
+          created_at: string;
+          created_by: string;
+          feedback_id: string;
+          id: string;
+          image_paths: string[];
+          title: string;
+          updated_at: string;
+        };
+        Insert: {
+          content: string;
+          created_at?: string;
+          created_by: string;
+          feedback_id: string;
+          id?: string;
+          image_paths?: string[];
+          title: string;
+          updated_at?: string;
+        };
+        Update: {
+          content?: string;
+          created_at?: string;
+          created_by?: string;
+          feedback_id?: string;
+          id?: string;
+          image_paths?: string[];
+          title?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "feedback_replies_feedback_id_fkey";
+            columns: ["feedback_id"];
+            isOneToOne: true;
+            referencedRelation: "feedbacks";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       feedbacks: {
         Row: {
           category: string;
@@ -136,47 +177,6 @@ export type Database = {
             columns: ["note_id"];
             isOneToOne: false;
             referencedRelation: "notes";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      feedback_replies: {
-        Row: {
-          content: string;
-          created_at: string;
-          created_by: string;
-          feedback_id: string;
-          id: string;
-          image_paths: string[];
-          title: string;
-          updated_at: string;
-        };
-        Insert: {
-          content: string;
-          created_at?: string;
-          created_by: string;
-          feedback_id: string;
-          id?: string;
-          image_paths?: string[];
-          title: string;
-          updated_at?: string;
-        };
-        Update: {
-          content?: string;
-          created_at?: string;
-          created_by?: string;
-          feedback_id?: string;
-          id?: string;
-          image_paths?: string[];
-          title?: string;
-          updated_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "feedback_replies_feedback_id_fkey";
-            columns: ["feedback_id"];
-            isOneToOne: true;
-            referencedRelation: "feedbacks";
             referencedColumns: ["id"];
           },
         ];
@@ -277,6 +277,44 @@ export type Database = {
           },
         ];
       };
+      operational_error_status_history: {
+        Row: {
+          changed_by: string | null;
+          created_at: string;
+          from_status: string | null;
+          id: string;
+          note: string | null;
+          operational_error_id: string;
+          to_status: string;
+        };
+        Insert: {
+          changed_by?: string | null;
+          created_at?: string;
+          from_status?: string | null;
+          id?: string;
+          note?: string | null;
+          operational_error_id: string;
+          to_status: string;
+        };
+        Update: {
+          changed_by?: string | null;
+          created_at?: string;
+          from_status?: string | null;
+          id?: string;
+          note?: string | null;
+          operational_error_id?: string;
+          to_status?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "operational_error_status_history_error_id_fkey";
+            columns: ["operational_error_id"];
+            isOneToOne: false;
+            referencedRelation: "operational_errors";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       operational_errors: {
         Row: {
           actor_user_id: string | null;
@@ -346,44 +384,6 @@ export type Database = {
         };
         Relationships: [];
       };
-      operational_error_status_history: {
-        Row: {
-          changed_by: string | null;
-          created_at: string;
-          from_status: string | null;
-          id: string;
-          note: string | null;
-          operational_error_id: string;
-          to_status: string;
-        };
-        Insert: {
-          changed_by?: string | null;
-          created_at?: string;
-          from_status?: string | null;
-          id?: string;
-          note?: string | null;
-          operational_error_id: string;
-          to_status: string;
-        };
-        Update: {
-          changed_by?: string | null;
-          created_at?: string;
-          from_status?: string | null;
-          id?: string;
-          note?: string | null;
-          operational_error_id?: string;
-          to_status?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "operational_error_status_history_error_id_fkey";
-            columns: ["operational_error_id"];
-            isOneToOne: false;
-            referencedRelation: "operational_errors";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
       profiles: {
         Row: {
           avatar_url: string | null;
@@ -411,33 +411,6 @@ export type Database = {
           nickname?: string;
           role?: string;
           updated_at?: string;
-        };
-        Relationships: [];
-      };
-      user_agreements: {
-        Row: {
-          created_at: string;
-          privacy_agreed_at: string;
-          source: string;
-          terms_agreed_at: string;
-          updated_at: string;
-          user_id: string;
-        };
-        Insert: {
-          created_at?: string;
-          privacy_agreed_at: string;
-          source: string;
-          terms_agreed_at: string;
-          updated_at?: string;
-          user_id: string;
-        };
-        Update: {
-          created_at?: string;
-          privacy_agreed_at?: string;
-          source?: string;
-          terms_agreed_at?: string;
-          updated_at?: string;
-          user_id?: string;
         };
         Relationships: [];
       };
@@ -521,9 +494,51 @@ export type Database = {
           },
         ];
       };
+      user_agreements: {
+        Row: {
+          created_at: string;
+          privacy_agreed_at: string;
+          source: string;
+          terms_agreed_at: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          privacy_agreed_at: string;
+          source: string;
+          terms_agreed_at: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          privacy_agreed_at?: string;
+          source?: string;
+          terms_agreed_at?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
-      [_ in never]: never;
+      admin_user_list: {
+        Row: {
+          agreement_source: string | null;
+          agreement_status: string | null;
+          avatar_url: string | null;
+          canonical_email: string | null;
+          created_at: string | null;
+          id: string | null;
+          nickname: string | null;
+          privacy_agreed: boolean | null;
+          role: string | null;
+          signup_method: string | null;
+          terms_agreed: boolean | null;
+        };
+        Relationships: [];
+      };
     };
     Functions: {
       apply_time_of_day: { Args: { t: string; ts: string }; Returns: string };
@@ -587,11 +602,23 @@ export type Database = {
         Args: { p_content: string; p_scheduled_at: string; p_title: string };
         Returns: string;
       };
+      delete_feedback_reply_with_notifications: {
+        Args: { p_feedback_id: string };
+        Returns: {
+          deleted_notification_count: number;
+          image_paths: string[];
+        }[];
+      };
       is_current_user_email_confirmed: { Args: never; Returns: boolean };
       kst_date: { Args: { ts: string }; Returns: string };
+      kst_day_start: { Args: { ts: string }; Returns: string };
       mark_notification_as_read: {
         Args: { p_notification_id: string };
         Returns: boolean;
+      };
+      mark_all_admin_notifications_as_read: {
+        Args: { p_admin_user_id: string };
+        Returns: number;
       };
       update_notification_time_of_day: {
         Args: { p_note_id: string; p_time?: string };
