@@ -25,6 +25,7 @@ import {
 import { getUserByEmail } from "../../lib/getUserByEmail";
 import { maskEmailForLogging } from "../../lib/maskEmailForLogging";
 import { maskIpForLogging } from "../../lib/maskIpForLogging";
+import { setResetPasswordIntentCookie } from "../../lib/resetPasswordIntent";
 import { canonicalizeEmail } from "../../utils/canonicalizeEmail";
 import { verifyOtp } from "../lib/verifyOtp";
 import { verifyOtpContextSchema } from "../schemas/verifyOtpContextSchema";
@@ -286,6 +287,10 @@ export async function verifyOtpAction(
         : redirectTo
           ? `${ROUTES.RESET_PASSWORD}?redirect=${encodeURIComponent(redirectTo)}`
           : ROUTES.RESET_PASSWORD;
+
+    if (purpose === "reset-password") {
+      await setResetPasswordIntentCookie();
+    }
 
     nextUrl = nextPath;
   } catch (error) {

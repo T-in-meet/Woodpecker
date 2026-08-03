@@ -38,6 +38,10 @@ vi.mock("../../lib/getUserByEmail", () => ({
   getUserByEmail: vi.fn(),
 }));
 
+vi.mock("../../lib/resetPasswordIntent", () => ({
+  setResetPasswordIntentCookie: vi.fn(),
+}));
+
 vi.mock("../../lib/applyMinimumActionDelay", () => ({
   applyMinimumActionDelay: vi.fn(),
 }));
@@ -53,6 +57,7 @@ import {
   mapBlockedByToReason,
 } from "../../lib/checkRequestEligibility";
 import { getUserByEmail } from "../../lib/getUserByEmail";
+import { setResetPasswordIntentCookie } from "../../lib/resetPasswordIntent";
 import { verifyOtp } from "../lib/verifyOtp";
 
 const prevState = {
@@ -341,6 +346,7 @@ describe("verifyOtpAction", () => {
     );
 
     expect(redirect).toHaveBeenCalledWith(ROUTES.RESET_PASSWORD);
+    expect(setResetPasswordIntentCookie).toHaveBeenCalledTimes(1);
   });
 
   it("reset-password OTP 인증에 성공하고 redirectPath가 있으면 reset-password 경로에 redirect query를 포함한다", async () => {
@@ -361,5 +367,6 @@ describe("verifyOtpAction", () => {
     ).rejects.toThrow(`NEXT_REDIRECT:${expectedPath}`);
 
     expect(redirect).toHaveBeenCalledWith(expectedPath);
+    expect(setResetPasswordIntentCookie).toHaveBeenCalledTimes(1);
   });
 });

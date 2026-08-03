@@ -10,6 +10,7 @@ import {
   logRequested,
   normalizeUnknownError,
 } from "@/features/auth/lib/authLogger";
+import { hasPasswordLogin } from "@/features/auth/lib/authProviders";
 import { validateRedirectPath } from "@/features/auth/lib/validateRedirectPath";
 import { resetPasswordActionSchema } from "@/features/auth/reset-password/schemas/resetPasswordActionSchema";
 import { ROUTES } from "@/lib/constants/routes";
@@ -118,6 +119,18 @@ export async function setPasswordAction(
       reasonCode: AUTH_LOG_REASONS.INVALID_CREDENTIALS,
     });
     redirect(ROUTES.SIGNUP);
+  }
+
+  if (hasPasswordLogin(session.user)) {
+    logAuthEvent(AUTH_EVENTS.AUTH_SET_PASSWORD_REJECTED, {
+      path: ROUTES.SET_PASSWORD,
+      method: "POST",
+      status: 303,
+      provider: "password",
+      result: "rejected",
+      reasonCode: AUTH_LOG_REASONS.INVALID_CREDENTIALS,
+    });
+    redirect(ROUTES.MYPAGE);
   }
 
   let updateError: unknown = null;

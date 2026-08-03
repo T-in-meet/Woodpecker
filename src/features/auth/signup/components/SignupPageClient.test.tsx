@@ -195,6 +195,16 @@ describe("SignupPageClient agreement_required 안내", () => {
       screen.getByRole("button", { name: /Google 계정으로 계속하기/i }),
     ).toBeInTheDocument();
   });
+
+  it("signup_required=oauth만 있으면 약관 동의 안내를 표시하지 않는다", () => {
+    mockSearchParams.mockReturnValue(
+      new URLSearchParams({ signup_required: "oauth" }),
+    );
+
+    render(<SignupPageClient />);
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
 });
 
 describe("SignupPageClient OAuth callback 실패 안내", () => {

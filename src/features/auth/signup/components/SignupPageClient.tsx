@@ -28,8 +28,7 @@ export default function SignupPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const hasAgreementRequiredNotice =
-    searchParams.get("agreement_required") === "1" ||
-    searchParams.get("signup_required") === "oauth";
+    searchParams.get("agreement_required") === "1";
 
   const { mutateAsync, isPending } = useSignupMutation();
 

@@ -16,6 +16,7 @@ import {
 } from "@/features/auth/lib/userAgreements";
 import { validateRedirectPath } from "@/features/auth/lib/validateRedirectPath";
 import { canonicalizeEmail } from "@/features/auth/utils/canonicalizeEmail";
+import { NICKNAME_MAX_LENGTH } from "@/lib/constants/profiles";
 import { ROUTES } from "@/lib/constants/routes";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -25,7 +26,6 @@ const OAUTH_NICKNAME_NOTICE = {
   provider: "provider",
   fallback: "fallback",
 } as const;
-const NICKNAME_MAX_LENGTH = 10;
 
 type OAuthNicknameNotice =
   (typeof OAUTH_NICKNAME_NOTICE)[keyof typeof OAUTH_NICKNAME_NOTICE];

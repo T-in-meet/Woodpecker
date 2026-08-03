@@ -74,6 +74,7 @@ describe("setPasswordAction", () => {
       data: {
         session: {
           user: {
+            app_metadata: { providers: ["google"] },
             email: "oauth.user@example.com",
           },
         },
@@ -140,6 +141,33 @@ describe("setPasswordAction", () => {
 
     expect(updateUserMock).not.toHaveBeenCalled();
     expect(redirectMock).toHaveBeenCalledWith(ROUTES.SIGNUP);
+  });
+
+  it("password provider가 있으면 mypage로 redirect하고 password를 설정하지 않는다", async () => {
+    getSessionMock.mockResolvedValue({
+      data: {
+        session: {
+          user: {
+            app_metadata: { providers: ["google", "email"] },
+            email: "password.user@example.com",
+          },
+        },
+      },
+    });
+
+    await expect(
+      setPasswordAction(
+        null,
+        INITIAL_SET_PASSWORD_ACTION_STATE,
+        makeFormData({
+          password: "Password123!",
+          confirmPassword: "Password123!",
+        }),
+      ),
+    ).rejects.toBe(REDIRECT_ERROR);
+
+    expect(updateUserMock).not.toHaveBeenCalled();
+    expect(redirectMock).toHaveBeenCalledWith(ROUTES.MYPAGE);
   });
 
   it("비밀번호 검증에 실패하면 invalid_input을 반환한다", async () => {
