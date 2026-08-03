@@ -12,10 +12,13 @@ const ORDERED_MARKER_STYLES = [
 const BULLET_MARKERS = ["•", "◦", "▪"] as const;
 
 // 인용문 안의 목록은 "  > - "처럼 인용 기호가 마커 앞에 붙는다. 화면에서는 인용문이
-// 목록 깊이를 끊지 않고 바깥 목록까지 세므로(tiptap.css), 인용 기호도 들여쓰기로 본다.
+// 목록 깊이를 끊지 않고 바깥 목록까지 세므로(tiptap.css), 목록 항목 안에 들어간
+// 인용문("  > - ")은 앞의 들여쓰기만큼 깊이를 이어받는다. 반면 열 0에서 시작하는
+// 인용문은 앞 목록의 자식이 아니라 형제 블록이므로, 인용 기호 자체는 깊이로 세지 않고
+// 인용 기호 앞뒤의 공백만 들여쓰기로 본다.
 // 코드 펜스도 인용문 안에 들어갈 수 있으므로 목록과 같은 접두사 규칙을 쓴다.
 // 접두사를 허용하지 않으면 "> ```" 안의 "> - literal"이 목록으로 잘못 잡힌다.
-const LIST_ITEM_PATTERN = /^([\s>]*)([-+*]|\d+\.)\s+(.*)$/;
+const LIST_ITEM_PATTERN = /^([ \t]*)(?:>[ \t]?)*([ \t]*)([-+*]|\d+\.)\s+(.*)$/;
 const CODE_FENCE_PATTERN = /^[\s>]*(?:```|~~~)/;
 // remove-markdown은 코드블록 안을 그대로 두므로 인용 기호가 남는다. 코드 펜스 안에서는
 // 여기서 직접 걷어낸다.
@@ -88,10 +91,20 @@ type ListLevelType = {
 function restoreListMarkers(markdown: string): string {
   const levels: ListLevelType[] = [];
   let isInsideCodeFence = false;
+  // 열 0에서 시작하는 인용문은 앞뒤 목록과 형제 블록이라 목록을 끊는다. 빈 줄은
+  // 블록 안에서도 나오므로 경계 판정에서 제외한다.
+  let wasInsideRootQuote = false;
 
   return markdown
     .split("\n")
     .map((line) => {
+      const isBlankLine = line.trim() === "";
+      const isRootQuoteLine = line.startsWith(">");
+      const isRootQuoteBoundary =
+        !isBlankLine && isRootQuoteLine !== wasInsideRootQuote;
+
+      if (!isBlankLine) wasInsideRootQuote = isRootQuoteLine;
+
       if (CODE_FENCE_PATTERN.test(line)) {
         isInsideCodeFence = !isInsideCodeFence;
 
@@ -112,8 +125,11 @@ function restoreListMarkers(markdown: string): string {
         return line;
       }
 
-      const [, indentText = "", marker = "", content = ""] = match;
-      const indent = indentText.length;
+      if (isRootQuoteBoundary) levels.length = 0;
+
+      const [, leadingText = "", innerText = "", marker = "", content = ""] =
+        match;
+      const indent = leadingText.length + innerText.length;
       const ordered = marker.endsWith(".");
       // 목록의 시작 번호는 마커가 그대로 들고 있다(예: "100."). 화면도 ol의 start를
       // 반영해 그 번호부터 세므로, 목록이 새로 열릴 때는 1이 아니라 이 번호에서 시작한다.

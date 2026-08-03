@@ -197,6 +197,28 @@ describe("stripMarkdown", () => {
     );
   });
 
+  it("루트 인용문 안의 목록은 앞 목록의 하위로 보지 않는다", () => {
+    expect(stripMarkdown("- 상위\n\n> - 인용")).toBe("• 상위\n\n• 인용");
+
+    expect(stripMarkdown("1. 상위\n\n> 1. 인용")).toBe("1. 상위\n\n1. 인용");
+
+    expect(stripMarkdown("- 상위\n  - 하위\n\n> - 인용")).toBe(
+      "• 상위\n◦ 하위\n\n• 인용",
+    );
+  });
+
+  it("루트 인용문을 벗어난 목록은 새 목록으로 센다", () => {
+    expect(stripMarkdown("1. 상위\n\n> 1. 인용\n\n1. 새 목록")).toBe(
+      "1. 상위\n\n1. 인용\n\n1. 새 목록",
+    );
+  });
+
+  it("루트 인용문 안에서도 중첩 목록은 깊이별 마커를 쓴다", () => {
+    expect(stripMarkdown("> - a\n>   - b")).toBe("• a\n◦ b");
+
+    expect(stripMarkdown("> 1. a\n>    1. b")).toBe("1. a\na. b");
+  });
+
   it("마크다운이 없는 평문은 그대로 반환한다", () => {
     expect(stripMarkdown("일반 텍스트입니다.")).toBe("일반 텍스트입니다.");
   });
