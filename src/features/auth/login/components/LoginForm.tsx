@@ -231,6 +231,13 @@ export function LoginForm() {
           </div>
         </div>
 
+        <Button type="submit" disabled={isPending} className="w-full">
+          {isPending && (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+          )}
+          {isPending ? "로그인 중..." : "로그인"}
+        </Button>
+
         {/* 인증 실패 / 서버 에러 */}
         <div className="min-h-5">
           {errors.root && (
@@ -267,20 +274,6 @@ export function LoginForm() {
               </Link>
             </p>
           </div>
-
-          <Button
-            type="submit"
-            disabled={isPending}
-            className="w-full sm:w-auto"
-          >
-            {isPending && (
-              <Loader2
-                className="mr-2 h-4 w-4 animate-spin"
-                aria-hidden="true"
-              />
-            )}
-            {isPending ? "로그인 중..." : "로그인"}
-          </Button>
         </div>
       </form>
     </div>

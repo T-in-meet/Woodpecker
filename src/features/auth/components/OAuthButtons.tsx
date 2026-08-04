@@ -28,8 +28,12 @@ type OAuthButtonsProps = {
   intent: "login" | "signup";
   beforeSignIn?: () => boolean | Promise<boolean>;
   redirect?: string | null;
+  showSeparator?: boolean;
 };
 
+/**
+ * OAuth callback URL을 생성한다.
+ */
 function buildCallbackUrl(
   intent: OAuthButtonsProps["intent"],
   redirect?: string | null,
@@ -45,13 +49,20 @@ function buildCallbackUrl(
   return callbackUrl.toString();
 }
 
+/**
+ * OAuth provider 버튼 목록을 렌더링한다.
+ */
 export function OAuthButtons({
   intent,
   beforeSignIn,
   redirect,
+  showSeparator = true,
 }: OAuthButtonsProps) {
   const [pendingProvider, setPendingProvider] = useState<Provider | null>(null);
 
+  /**
+   * 선택한 OAuth provider로 로그인 또는 회원가입을 시작한다.
+   */
   const handleOAuthSignIn = async (provider: Provider) => {
     // 회원가입 화면에서는 약관 동의 여부를 확인한 뒤 OAuth redirect를 시작한다.
     if (beforeSignIn && !(await beforeSignIn())) {
@@ -82,11 +93,13 @@ export function OAuthButtons({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3" aria-hidden="true">
-        <div className="h-px flex-1 bg-outline-variant" />
-        <span className="text-xs text-muted-foreground">또는</span>
-        <div className="h-px flex-1 bg-outline-variant" />
-      </div>
+      {showSeparator && (
+        <div className="flex items-center gap-3" aria-hidden="true">
+          <div className="h-px flex-1 bg-outline-variant" />
+          <span className="text-xs text-muted-foreground">또는</span>
+          <div className="h-px flex-1 bg-outline-variant" />
+        </div>
+      )}
 
       <div className="flex flex-col gap-2">
         {OAUTH_PROVIDERS.map(({ provider, label, logoSrc }) => {

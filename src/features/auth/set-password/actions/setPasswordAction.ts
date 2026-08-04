@@ -10,28 +10,35 @@ import {
   logRequested,
   normalizeUnknownError,
 } from "@/features/auth/lib/authLogger";
-import {
-  clearResetPasswordIntentCookie,
-  hasResetPasswordIntentCookie,
-} from "@/features/auth/lib/resetPasswordIntent";
+import { hasPasswordLogin } from "@/features/auth/lib/authProviders";
 import { validateRedirectPath } from "@/features/auth/lib/validateRedirectPath";
 import { resetPasswordActionSchema } from "@/features/auth/reset-password/schemas/resetPasswordActionSchema";
 import { ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 
-import { ResetPasswordActionState } from "./resetPasswordActionState";
+import { SetPasswordActionState } from "./setPasswordActionState";
 
+/**
+ * FormData를 schema 검증용 plain object로 변환합니다.
+ */
 function toPayload(formData: FormData) {
   return Object.fromEntries(formData.entries());
 }
 
+/**
+ * 최종 이동 경로를 안전한 내부 경로로 정규화합니다.
+ */
 function resolveRedirectPath(redirectPath: string | null): string {
   if (!redirectPath) {
     return ROUTES.MYPAGE;
   }
+
   return validateRedirectPath(redirectPath);
 }
 
+/**
+ * Supabase same_password 오류인지 확인합니다.
+ */
 function isSamePasswordError(error: unknown) {
   return (
     typeof error === "object" &&
@@ -43,13 +50,16 @@ function isSamePasswordError(error: unknown) {
   );
 }
 
-export async function resetPasswordAction(
+/**
+ * OAuth 가입 후 이메일/비밀번호 로그인을 추가하기 위한 비밀번호 설정 Action입니다.
+ */
+export async function setPasswordAction(
   redirectPath: string | null,
-  _prevState: ResetPasswordActionState,
+  _prevState: SetPasswordActionState,
   formData: FormData,
-): Promise<ResetPasswordActionState> {
-  logRequested(AUTH_EVENTS.AUTH_RESET_PASSWORD_REQUESTED, {
-    path: ROUTES.RESET_PASSWORD,
+): Promise<SetPasswordActionState> {
+  logRequested(AUTH_EVENTS.AUTH_SET_PASSWORD_REQUESTED, {
+    path: ROUTES.SET_PASSWORD,
     method: "POST",
     provider: "password",
   });
@@ -58,8 +68,8 @@ export async function resetPasswordAction(
   const parsed = resetPasswordActionSchema.safeParse(payload);
 
   if (!parsed.success) {
-    logAuthEvent(AUTH_EVENTS.AUTH_RESET_PASSWORD_INVALID_INPUT, {
-      path: ROUTES.RESET_PASSWORD,
+    logAuthEvent(AUTH_EVENTS.AUTH_SET_PASSWORD_INVALID_INPUT, {
+      path: ROUTES.SET_PASSWORD,
       method: "POST",
       status: 422,
       provider: "password",
@@ -85,8 +95,8 @@ export async function resetPasswordAction(
     session = currentSession;
   } catch (error) {
     const normalized = normalizeUnknownError(error);
-    logAuthError(AUTH_EVENTS.AUTH_RESET_PASSWORD_FAILED, {
-      path: ROUTES.RESET_PASSWORD,
+    logAuthError(AUTH_EVENTS.AUTH_SET_PASSWORD_FAILED, {
+      path: ROUTES.SET_PASSWORD,
       method: "POST",
       status: 500,
       provider: "password",
@@ -99,28 +109,28 @@ export async function resetPasswordAction(
     };
   }
 
-  if (!session) {
-    logAuthEvent(AUTH_EVENTS.AUTH_RESET_PASSWORD_REJECTED, {
-      path: ROUTES.RESET_PASSWORD,
+  if (!session?.user?.email) {
+    logAuthEvent(AUTH_EVENTS.AUTH_SET_PASSWORD_REJECTED, {
+      path: ROUTES.SET_PASSWORD,
       method: "POST",
       status: 303,
       provider: "password",
       result: "rejected",
       reasonCode: AUTH_LOG_REASONS.INVALID_CREDENTIALS,
     });
-    redirect(ROUTES.FORGOT_PASSWORD);
+    redirect(ROUTES.SIGNUP);
   }
 
-  if (!(await hasResetPasswordIntentCookie())) {
-    logAuthEvent(AUTH_EVENTS.AUTH_RESET_PASSWORD_REJECTED, {
-      path: ROUTES.RESET_PASSWORD,
+  if (hasPasswordLogin(session.user)) {
+    logAuthEvent(AUTH_EVENTS.AUTH_SET_PASSWORD_REJECTED, {
+      path: ROUTES.SET_PASSWORD,
       method: "POST",
       status: 303,
       provider: "password",
       result: "rejected",
       reasonCode: AUTH_LOG_REASONS.INVALID_CREDENTIALS,
     });
-    redirect(ROUTES.FORGOT_PASSWORD);
+    redirect(ROUTES.MYPAGE);
   }
 
   let updateError: unknown = null;
@@ -131,8 +141,8 @@ export async function resetPasswordAction(
     updateError = error;
   } catch (error) {
     const normalized = normalizeUnknownError(error);
-    logAuthError(AUTH_EVENTS.AUTH_RESET_PASSWORD_FAILED, {
-      path: ROUTES.RESET_PASSWORD,
+    logAuthError(AUTH_EVENTS.AUTH_SET_PASSWORD_FAILED, {
+      path: ROUTES.SET_PASSWORD,
       method: "POST",
       status: 500,
       provider: "password",
@@ -148,8 +158,8 @@ export async function resetPasswordAction(
   if (updateError) {
     const isSamePassword = isSamePasswordError(updateError);
 
-    logAuthError(AUTH_EVENTS.AUTH_RESET_PASSWORD_FAILED, {
-      path: ROUTES.RESET_PASSWORD,
+    logAuthError(AUTH_EVENTS.AUTH_SET_PASSWORD_FAILED, {
+      path: ROUTES.SET_PASSWORD,
       method: "POST",
       status: isSamePassword ? 422 : 500,
       provider: "password",
@@ -159,12 +169,6 @@ export async function resetPasswordAction(
         : AUTH_LOG_REASONS.INTERNAL_ERROR,
     });
 
-    /**
-     * Supabase는 기존 비밀번호와 동일한 경우 updateUser를 422 same_password로 실패시킨다.
-     *
-     * 외부 상태는 reset-password 실패로 동일하게 처리하되,
-     * UI에서 전용 안내 문구를 보여줄 수 있도록 same_password인 경우에만 reason을 함께 반환한다.
-     */
     if (isSamePassword) {
       return {
         status: "internal_error",
@@ -172,26 +176,18 @@ export async function resetPasswordAction(
       };
     }
 
-    /**
-     * 그 외 updateUser 실패는 내부 오류로만 처리한다.
-     * provider 세부 오류는 사용자에게 노출하지 않는다.
-     */
     return {
       status: "internal_error",
     };
   }
 
-  const finalRedirectPath = resolveRedirectPath(redirectPath);
-
-  logAuthEvent(AUTH_EVENTS.AUTH_RESET_PASSWORD_COMPLETED, {
-    path: ROUTES.RESET_PASSWORD,
+  logAuthEvent(AUTH_EVENTS.AUTH_SET_PASSWORD_COMPLETED, {
+    path: ROUTES.SET_PASSWORD,
     method: "POST",
     status: 303,
     provider: "password",
     result: "success",
   });
 
-  await clearResetPasswordIntentCookie();
-
-  redirect(finalRedirectPath);
+  redirect(resolveRedirectPath(redirectPath));
 }

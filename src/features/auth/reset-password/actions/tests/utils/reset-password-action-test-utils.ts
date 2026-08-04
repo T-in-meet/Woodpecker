@@ -20,6 +20,8 @@ const hoisted = vi.hoisted(() => ({
   logRequested: vi.fn(),
   logAuthEvent: vi.fn(),
   logAuthError: vi.fn(),
+  hasResetPasswordIntentCookie: vi.fn(),
+  clearResetPasswordIntentCookie: vi.fn(),
   resetPasswordActionSchema: { safeParse: vi.fn() },
   changePasswordSchema: { safeParse: vi.fn() },
   checkRequestEligibility: vi.fn(),
@@ -46,6 +48,11 @@ vi.mock("@/features/auth/lib/authLogger", () => ({
       ? { errorMessage: error.message, errorName: error.name }
       : { errorMessage: String(error), errorName: "UnknownError" },
   ),
+}));
+
+vi.mock("@/features/auth/lib/resetPasswordIntent", () => ({
+  hasResetPasswordIntentCookie: hoisted.hasResetPasswordIntentCookie,
+  clearResetPasswordIntentCookie: hoisted.clearResetPasswordIntentCookie,
 }));
 
 vi.mock(
@@ -111,6 +118,8 @@ export function setupActionTest() {
 
   mockSession({});
   mockUpdateUser("success");
+  hoisted.hasResetPasswordIntentCookie.mockResolvedValue(true);
+  hoisted.clearResetPasswordIntentCookie.mockResolvedValue(undefined);
 
   hoisted.validateRedirectPath.mockImplementation((input: unknown) =>
     typeof input === "string" && input.startsWith("/") ? input : "/mypage",
@@ -158,6 +167,8 @@ export function setupActionTest() {
     logRequested: hoisted.logRequested,
     logAuthEvent: hoisted.logAuthEvent,
     logAuthError: hoisted.logAuthError,
+    hasResetPasswordIntentCookie: hoisted.hasResetPasswordIntentCookie,
+    clearResetPasswordIntentCookie: hoisted.clearResetPasswordIntentCookie,
     changePasswordSchema: hoisted.changePasswordSchema,
     checkRequestEligibility: hoisted.checkRequestEligibility,
     resetPasswordActionSchema: hoisted.resetPasswordActionSchema,

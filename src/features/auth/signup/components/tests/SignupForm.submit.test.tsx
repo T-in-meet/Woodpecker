@@ -21,6 +21,8 @@ describe("회원가입 폼 제출 및 pending 상태", () => {
     const onSubmit = vi.fn();
     renderSignupForm({ onSubmit });
 
+    await user.click(screen.getByRole("button", { name: /이메일로 가입/i }));
+
     fireEvent.change(screen.getByLabelText(/이메일/i), {
       target: { value: "test@example.com" },
     });
@@ -59,6 +61,8 @@ describe("회원가입 폼 제출 및 pending 상태", () => {
     const onSubmit = vi.fn();
     renderSignupForm({ onSubmit });
 
+    await user.click(screen.getByRole("button", { name: /이메일로 가입/i }));
+
     await user.click(screen.getByRole("button", { name: /회원가입/i }));
 
     await waitFor(() => {
@@ -68,18 +72,22 @@ describe("회원가입 폼 제출 및 pending 상태", () => {
 
   it("TC-03: isPending이 true이면 제출 버튼이 비활성화된다", () => {
     renderSignupForm({ isPending: true });
+    fireEvent.click(screen.getByRole("button", { name: /이메일로 가입/i }));
 
     expect(screen.getByRole("button", { name: /가입 중/i })).toBeDisabled();
   });
 
   it("TC-04: isPending이 true이면 제출 영역에 로딩 인디케이터가 표시된다", () => {
     renderSignupForm({ isPending: true });
+    fireEvent.click(screen.getByRole("button", { name: /이메일로 가입/i }));
   });
 
   it("TC-05: isPending이 true인 상태에서 제출 버튼을 여러 번 클릭해도 onSubmit이 호출되지 않는다", async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();
     renderSignupForm({ onSubmit, isPending: true });
+
+    await user.click(screen.getByRole("button", { name: /이메일로 가입/i }));
 
     const submitButton = screen.getByRole("button", { name: /가입 중/i });
     await user.click(submitButton);

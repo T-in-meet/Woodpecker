@@ -28,7 +28,7 @@ import { makeRequest } from "./utils/signupTestHelper";
 const upsertUserAgreementMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/features/auth/lib/userAgreements", () => ({
-  upsertUserAgreement: upsertUserAgreementMock,
+  ensureUserAgreement: upsertUserAgreementMock,
 }));
 vi.mock("@/features/auth/lib/getUserByEmail");
 vi.mock("@/lib/supabase/admin");

@@ -70,4 +70,20 @@ describe("resetPasswordAction - redirect", () => {
       ),
     ).rejects.toBe(REDIRECT_ERROR);
   });
+
+  it("비밀번호 재설정 완료 후 reset-password intent cookie를 삭제한다", async () => {
+    const mocks = setupActionTest();
+
+    await expect(
+      runResetPasswordAction(
+        null,
+        makeFormData({
+          password: "valid-password",
+          confirmPassword: "valid-password",
+        }),
+      ),
+    ).rejects.toBe(REDIRECT_ERROR);
+
+    expect(mocks.clearResetPasswordIntentCookie).toHaveBeenCalledTimes(1);
+  });
 });
