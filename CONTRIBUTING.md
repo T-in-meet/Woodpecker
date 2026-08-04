@@ -120,7 +120,8 @@ npm run dev
 
 ## 6. 테스트
 
-- 단위/컴포넌트 테스트는 Vitest(`jsdom` 환경)를 사용하며, 테스트 파일은 대상 파일 옆 `tests/` 폴더에 `*.test.ts(x)`로 둡니다.
+- 단위/컴포넌트 테스트는 Vitest(`jsdom` 환경)를 사용하며 파일 이름은 `*.test.ts(x)`로 둡니다. 배치는 도메인 로직·유틸·컴포넌트는 대상 파일 옆 `tests/` 폴더를 기본으로 하고, App Router 페이지 테스트(`page.test.tsx`)와 `src/middleware.test.ts`는 대상 파일 옆에 직접 둡니다.
+- 공용 Supabase 쿼리 mock은 `src/tests/supabaseQueryMock.ts`를 사용합니다.
 - E2E는 `tests/e2e/`의 Playwright 테스트입니다.
 - 변경 범위가 작아도 관련 테스트는 실행하고 PR을 올립니다.
 
@@ -233,7 +234,12 @@ hotfix/<kebab-summary>         →  main (+ development 반영)
 
 Server Action은 Zod `safeParse`로 입력을 검증하고 `{ data: T } | { error: string | fieldErrors }` 형태로 반환합니다. 인증이 필요한 작업은 `supabase.auth.getUser()`로 사용자를 확인한 뒤 수행합니다.
 
-DB를 변경할 때는 `supabase/migrations/`에 `YYYYMMDDHHMMSS_설명.sql` 형식으로 migration을 추가하고, RLS·제약·RPC에 영향이 있으면 `supabase/tests/`도 함께 갱신합니다. 마이그레이션은 Supabase 대시보드에서 수동 적용합니다.
+DB를 변경할 때는 `supabase/migrations/`에 `YYYYMMDDHHMMSS_설명.sql` 형식으로 migration을 추가하고, RLS·제약·RPC에 영향이 있으면 `supabase/tests/`도 함께 갱신합니다.
+
+마이그레이션 적용 경로는 DB에 따라 다릅니다.
+
+- **운영 DB**: `main`에 `supabase/migrations/**` 변경이 푸시되면 `.github/workflows/migrate.yml`이 `supabase db push`로 자동 적용합니다. 대시보드에서 손으로 적용하지 마세요 — push 히스토리에 남지 않아 이후 자동 배포가 충돌합니다.
+- **개발 DB**: 운영과 별도 Supabase 프로젝트이며, 개발 중에는 대시보드 SQL Editor로 직접 적용해 테스트합니다.
 
 ---
 
