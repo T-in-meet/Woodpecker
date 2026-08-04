@@ -1029,6 +1029,11 @@ const NoteBlockBackground = Extension.create({
         attributes: {
           [NOTE_BLOCK_BACKGROUND_ATTRIBUTE_NAME]: {
             default: null,
+            // Enter로 만든 다음 블록은 배경을 물려받지 않는다. 물려받으면 색 블록이
+            // 문서 끝에 있을 때 무색 블록으로 빠져나갈 방법이 없다.
+            // splitBlock과 splitListItem이 모두 이 값을 보므로 문단·헤딩·목록 항목에
+            // 함께 적용된다.
+            keepOnSplit: false,
             parseHTML: (element: HTMLElement) =>
               normalizeNoteColorToken(
                 element.getAttribute(NOTE_BLOCK_BACKGROUND_ATTRIBUTE),
@@ -1055,6 +1060,37 @@ const NoteBlockBackground = Extension.create({
         },
       },
     };
+  },
+});
+
+// 목록 번호는 tiptap.css가 직접 만든 counter로 그린다. 그 counter는 늘 0에서
+// 시작하므로 "100."처럼 1이 아닌 번호로 시작하는 목록이 화면에서만 1부터 세진다.
+// (브라우저 내장 counter(list-item)은 start를 반영하지만 Safari 17 미만에서 깨진다.)
+// ol을 그릴 때 start에서 계산한 리셋값을 인라인 스타일로 붙여 CSS 규칙을 덮어쓴다.
+// 저장되는 값이 아니라 start에서 파생되는 표시용 속성이라 마크다운에는 나가지 않는다.
+const NoteOrderedListCounter = Extension.create({
+  name: "noteOrderedListCounter",
+  addGlobalAttributes() {
+    return [
+      {
+        types: ["orderedList"],
+        attributes: {
+          noteListCounterStart: {
+            default: null,
+            parseHTML: () => null,
+            renderHTML: (attributes: Record<string, unknown>) => {
+              const start = Number(attributes.start ?? 1);
+
+              if (!Number.isFinite(start) || start === 1) return {};
+
+              return {
+                style: `counter-reset: note-list-item ${start - 1}`,
+              };
+            },
+          },
+        },
+      },
+    ];
   },
 });
 
@@ -1141,6 +1177,7 @@ function getBaseExtensions({ readOnly = false }: { readOnly?: boolean } = {}) {
     NoteTextColorMark,
     NoteLineTextColor,
     NoteBlockBackground,
+    NoteOrderedListCounter,
     NoteColorClipboardText,
     TaskList,
     MarkdownTaskItem.configure({

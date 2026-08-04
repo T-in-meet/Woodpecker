@@ -48,6 +48,24 @@ describe("recoverLegacyTaskMarkers", () => {
 });
 
 describe("normalizeTipTapSerializerOutput", () => {
+  describe("line endings", () => {
+    it("converts CRLF to LF", () => {
+      const input = "1. 과일\r\n   1. 사과\r\n\r\n- 동물\r\n  - 소";
+      expect(normalizeTipTapSerializerOutput(input)).toBe(
+        "1. 과일\n   1. 사과\n\n- 동물\n  - 소",
+      );
+    });
+
+    it("converts a lone CR to LF", () => {
+      expect(normalizeTipTapSerializerOutput("- a\r- b")).toBe("- a\n- b");
+    });
+
+    it("removes blank CRLF lines between same-indent task items", () => {
+      const input = "- [ ] a\r\n\r\n- [ ] b";
+      expect(normalizeTipTapSerializerOutput(input)).toBe("- [ ] a\n- [ ] b");
+    });
+  });
+
   describe("task list spacing", () => {
     it("removes blank lines between same-indent task items", () => {
       const input = "- [ ] a\n\n- [ ] b";
