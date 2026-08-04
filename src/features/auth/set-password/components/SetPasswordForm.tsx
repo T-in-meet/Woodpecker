@@ -15,26 +15,29 @@ import {
 import { usePreventPageLeave } from "@/hooks/usePreventPageLeave";
 
 import {
-  INITIAL_RESET_PASSWORD_ACTION_STATE,
-  ResetPasswordActionState,
-} from "../actions/resetPasswordActionState";
+  INITIAL_SET_PASSWORD_ACTION_STATE,
+  SetPasswordActionState,
+} from "../actions/setPasswordActionState";
 import {
-  RESET_PASSWORD_GLOBAL_ERROR_MESSAGE,
-  RESET_PASSWORD_PAGE_LEAVE_CONFIRM_MESSAGE,
-  RESET_PASSWORD_SAME_PASSWORD_MESSAGE,
+  SET_PASSWORD_GLOBAL_ERROR_MESSAGE,
+  SET_PASSWORD_PAGE_LEAVE_CONFIRM_MESSAGE,
+  SET_PASSWORD_SAME_PASSWORD_MESSAGE,
 } from "../constants/messages";
 
-type ResetPasswordFormProps = {
+type SetPasswordFormProps = {
   action: (
-    prevState: ResetPasswordActionState,
+    prevState: SetPasswordActionState,
     formData: FormData,
-  ) => Promise<ResetPasswordActionState>;
+  ) => Promise<SetPasswordActionState>;
 };
 
-export function ResetPasswordForm({ action }: ResetPasswordFormProps) {
+/**
+ * OAuth 계정에 이메일/비밀번호 로그인을 추가하는 비밀번호 설정 폼입니다.
+ */
+export function SetPasswordForm({ action }: SetPasswordFormProps) {
   const [state, formAction, isPending] = useActionState(
     action,
-    INITIAL_RESET_PASSWORD_ACTION_STATE,
+    INITIAL_SET_PASSWORD_ACTION_STATE,
   );
 
   const {
@@ -51,9 +54,9 @@ export function ResetPasswordForm({ action }: ResetPasswordFormProps) {
     },
   });
 
-  const passwordErrorId = "reset-password-password-error";
-  const confirmPasswordErrorId = "reset-password-confirm-password-error";
-  const globalErrorId = "reset-password-global-error";
+  const passwordErrorId = "set-password-password-error";
+  const confirmPasswordErrorId = "set-password-confirm-password-error";
+  const globalErrorId = "set-password-global-error";
 
   const hasClientErrors = Boolean(
     errors.password?.message || errors.confirmPassword?.message,
@@ -73,28 +76,18 @@ export function ResetPasswordForm({ action }: ResetPasswordFormProps) {
       : {};
 
   const showGlobalError = state.status === "internal_error" && !hasClientErrors;
-
   const globalErrorMessage =
     state.status === "internal_error" && state.reason === "same_password"
-      ? RESET_PASSWORD_SAME_PASSWORD_MESSAGE
-      : RESET_PASSWORD_GLOBAL_ERROR_MESSAGE;
+      ? SET_PASSWORD_SAME_PASSWORD_MESSAGE
+      : SET_PASSWORD_GLOBAL_ERROR_MESSAGE;
 
-  /**
-   * reset-password 페이지 이탈 제어
-   *
-   * 비밀번호 변경 submit 진행 중에는 정상 흐름을 방해하지 않고,
-   * 그 외 상황에서는 페이지 이탈 시 재설정 흐름이 중단될 수 있음을 안내한다.
-   */
   usePreventPageLeave(
     isDirty && !isPending,
-    RESET_PASSWORD_PAGE_LEAVE_CONFIRM_MESSAGE,
+    SET_PASSWORD_PAGE_LEAVE_CONFIRM_MESSAGE,
   );
 
   /**
-   * react-hook-form 검증을 통과한 값만 Server Action에 전달한다.
-   *
-   * ForgotPasswordForm과 동일하게 native form action을 사용하지 않고,
-   * handleSubmit으로 검증한 뒤 FormData를 직접 구성해 useActionState dispatch를 호출한다.
+   * 클라이언트 검증을 통과한 비밀번호만 Server Action으로 전달합니다.
    */
   const onSubmit = handleSubmit((data) => {
     const formData = new FormData();
@@ -113,6 +106,15 @@ export function ResetPasswordForm({ action }: ResetPasswordFormProps) {
         className="mx-auto max-w-4xl space-y-2 py-7 px-4 md:px-8"
         noValidate
       >
+        <div className="mb-5 space-y-2">
+          <h1 className="text-2xl font-bold tracking-tight text-primary">
+            이메일 로그인 추가
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            앞으로 같은 이메일과 비밀번호로도 로그인할 수 있습니다.
+          </p>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-[6.25rem_minmax(0,1fr)] gap-x-4 gap-y-2">
           <div className="flex items-center">
             <Label htmlFor="password" className="shrink-0 min-w-25">
@@ -202,7 +204,7 @@ export function ResetPasswordForm({ action }: ResetPasswordFormProps) {
           {isPending && (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
           )}
-          {isPending ? "변경 중..." : "비밀번호 변경하기"}
+          {isPending ? "설정 중..." : "비밀번호 설정하기"}
         </Button>
       </form>
     </div>

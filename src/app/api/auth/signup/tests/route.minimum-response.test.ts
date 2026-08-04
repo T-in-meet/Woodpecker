@@ -33,7 +33,7 @@ import { makeRequest } from "./utils/signupTestHelper";
 const upsertUserAgreementMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/features/auth/lib/userAgreements", () => ({
-  upsertUserAgreement: upsertUserAgreementMock,
+  ensureUserAgreement: upsertUserAgreementMock,
 }));
 vi.mock("@/features/auth/lib/getUserByEmail");
 vi.mock("@/features/auth/email/issueOtpAndSendEmail");
@@ -148,6 +148,8 @@ describe("회원가입 API 최소 응답 시간 보장 검증", () => {
       id: "existing-user-id",
       email: "test@example.com",
       email_confirmed_at: null,
+      auth_providers: ["email"],
+      has_password_login: true,
     });
 
     const promise = POST(makeRequest(validBody));

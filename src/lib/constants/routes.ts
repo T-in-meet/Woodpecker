@@ -10,6 +10,7 @@ export const ROUTES = {
   PRIVACY: "/privacy",
   CALLBACK: "/auth/callback",
   RESET_PASSWORD: "/reset-password",
+  SET_PASSWORD: "/set-password",
   FORGOT_PASSWORD: "/forgot-password",
   VERIFY_OTP: "/verify-otp",
   RESEND_EMAIL: "/resend-email",

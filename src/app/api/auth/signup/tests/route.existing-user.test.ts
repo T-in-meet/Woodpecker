@@ -26,7 +26,7 @@ import { makeRequest } from "./utils/signupTestHelper";
 const upsertUserAgreementMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/features/auth/lib/userAgreements", () => ({
-  upsertUserAgreement: upsertUserAgreementMock,
+  ensureUserAgreement: upsertUserAgreementMock,
 }));
 // 기존 인증/미인증 계정 분기 판단에 사용하는 기존 유저 조회 mock
 vi.mock("@/features/auth/lib/getUserByEmail");

@@ -11,14 +11,24 @@ import {
 } from "@/features/auth/lib/oauthAgreementIntent";
 import {
   AGREEMENT_REQUIRED_REDIRECT,
+  ensureUserAgreement,
   hasUserAgreement,
-  upsertUserAgreement,
 } from "@/features/auth/lib/userAgreements";
 import { validateRedirectPath } from "@/features/auth/lib/validateRedirectPath";
 import { canonicalizeEmail } from "@/features/auth/utils/canonicalizeEmail";
+import { NICKNAME_MAX_LENGTH } from "@/lib/constants/profiles";
 import { ROUTES } from "@/lib/constants/routes";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+
+const OAUTH_NICKNAME_NOTICE_PARAM = "profile_nickname";
+const OAUTH_NICKNAME_NOTICE = {
+  provider: "provider",
+  fallback: "fallback",
+} as const;
+
+type OAuthNicknameNotice =
+  (typeof OAUTH_NICKNAME_NOTICE)[keyof typeof OAUTH_NICKNAME_NOTICE];
 
 /**
  * OAuth provider가 제공한 이메일을 프로필 canonical email로 변환합니다.
@@ -69,6 +79,104 @@ async function trySyncOAuthCanonicalEmailToProfile(user: User): Promise<void> {
       userId: user.id,
     });
   }
+}
+
+/**
+ * OAuth provider metadata에서 nickname 후보 문자열을 정규화합니다.
+ *
+ * @param value provider metadata 후보 값
+ * @returns 프로젝트 nickname 제약을 만족하면 정규화된 문자열, 아니면 null
+ */
+function normalizeOAuthNicknameCandidate(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+
+  const candidate = value.trim();
+  if (candidate.length < 1 || candidate.length > NICKNAME_MAX_LENGTH) {
+    return null;
+  }
+
+  return candidate;
+}
+
+/**
+ * OAuth provider metadata 기준 닉네임 후보를 계산합니다.
+ *
+ * DB trigger와 동일하게 nickname → name → full_name 순서로 유효한 값을 선택합니다.
+ *
+ * @param user OAuth callback에서 세션 교환으로 받은 Supabase 사용자
+ * @returns 유효한 provider nickname 후보가 있으면 문자열, 없으면 null
+ */
+function getOAuthProviderNicknameCandidate(user: User): string | null {
+  return (
+    normalizeOAuthNicknameCandidate(user.user_metadata["nickname"]) ??
+    normalizeOAuthNicknameCandidate(user.user_metadata["name"]) ??
+    normalizeOAuthNicknameCandidate(user.user_metadata["full_name"])
+  );
+}
+
+/**
+ * profile nickname이 DB fallback 패턴인지 확인합니다.
+ *
+ * @param userId Supabase auth user id
+ * @param nickname profiles.nickname 값
+ * @returns 현재 trigger fallback 값과 일치하면 true
+ */
+function isFallbackNickname(userId: string, nickname: string): boolean {
+  return nickname === `user_${userId.slice(0, 5)}`;
+}
+
+/**
+ * OAuth 가입 완료 후 보여줄 nickname 안내 종류를 결정합니다.
+ *
+ * @param user OAuth callback에서 세션 교환으로 받은 Supabase 사용자
+ * @returns provider 이름 사용 또는 fallback 사용 안내가 필요하면 notice 값, 아니면 null
+ */
+async function getOAuthNicknameNotice(
+  user: User,
+): Promise<OAuthNicknameNotice | null> {
+  const adminClient = createAdminClient();
+  const { data, error } = await adminClient
+    .from("profiles")
+    .select("nickname")
+    .eq("id", user.id)
+    .single();
+
+  if (error || !data || typeof data.nickname !== "string") {
+    if (error) {
+      console.warn("[auth callback] OAuth nickname notice lookup failed", {
+        error,
+        userId: user.id,
+      });
+    }
+    return null;
+  }
+
+  const providerNickname = getOAuthProviderNicknameCandidate(user);
+  if (providerNickname && data.nickname === providerNickname) {
+    return OAUTH_NICKNAME_NOTICE.provider;
+  }
+
+  if (isFallbackNickname(user.id, data.nickname)) {
+    return OAUTH_NICKNAME_NOTICE.fallback;
+  }
+
+  return null;
+}
+
+/**
+ * OAuth nickname 안내가 필요한 경우 redirect URL에 query를 추가합니다.
+ *
+ * @param url 기본 redirect URL
+ * @param notice nickname 안내 종류
+ * @returns query가 반영된 redirect URL
+ */
+function addOAuthNicknameNotice(url: URL, notice: OAuthNicknameNotice | null) {
+  if (!notice || url.pathname !== ROUTES.MYPAGE) return url;
+
+  url.searchParams.set("section", "profile");
+  url.searchParams.set(OAUTH_NICKNAME_NOTICE_PARAM, notice);
+
+  return url;
 }
 
 /**
@@ -242,7 +350,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    await upsertUserAgreement(data.user.id, "oauth");
+    await ensureUserAgreement(data.user.id, "oauth");
     await trySyncOAuthCanonicalEmailToProfile(data.user);
 
     try {
@@ -252,7 +360,14 @@ export async function GET(request: NextRequest) {
       // 아바타 동기화 실패가 인증 성공 흐름을 막지 않도록 한다.
     }
 
-    return redirectWithClearedIntent(new URL(redirectPath, requestUrl.origin));
+    const nicknameNotice = await getOAuthNicknameNotice(data.user);
+
+    return redirectWithClearedIntent(
+      addOAuthNicknameNotice(
+        new URL(redirectPath, requestUrl.origin),
+        nicknameNotice,
+      ),
+    );
   }
 
   const hasAgreement = await hasUserAgreement(data.user.id);
