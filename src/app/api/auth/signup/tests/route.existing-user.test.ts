@@ -23,6 +23,11 @@ import { ROUTES } from "@/lib/constants/routes";
 import { POST } from "../route";
 import { makeRequest } from "./utils/signupTestHelper";
 
+const upsertUserAgreementMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/features/auth/lib/userAgreements", () => ({
+  ensureUserAgreement: upsertUserAgreementMock,
+}));
 // 기존 인증/미인증 계정 분기 판단에 사용하는 기존 유저 조회 mock
 vi.mock("@/features/auth/lib/getUserByEmail");
 vi.mock("@/features/auth/email/issueOtpAndSendEmail");
@@ -42,6 +47,7 @@ describe("회원가입 - 기존 미인증 사용자 재요청 분기", () => {
 
   // 기존 미인증 계정: 이메일은 존재하지만 아직 인증되지 않은 상태
   const unverifiedUser = {
+    id: "unverified-user-id",
     email: "test@example.com",
     email_confirmed_at: null,
   };
@@ -91,6 +97,17 @@ describe("회원가입 - 기존 미인증 사용자 재요청 분기", () => {
     });
   });
 
+  it("TC-03A. 기존 미인증 사용자도 약관 동의 기록을 저장한다", async () => {
+    vi.mocked(getUserByEmail).mockResolvedValue(unverifiedUser as never);
+
+    await POST(makeRequest(requestBody));
+
+    expect(upsertUserAgreementMock).toHaveBeenCalledWith(
+      "unverified-user-id",
+      "email",
+    );
+  });
+
   it("TC-04. 기존 미인증 사용자 메일 발송 실패도 외부 계약은 성공으로 유지된다", async () => {
     vi.mocked(getUserByEmail).mockResolvedValue(unverifiedUser as never);
     vi.mocked(issueOtpAndSendEmail).mockRejectedValueOnce(
@@ -111,9 +128,10 @@ describe("회원가입 - 기존 미인증 사용자 재요청 분기", () => {
 
   it("TC-05. 기존 미인증 사용자의 auth email이 null이어도 요청 email로 signup OTP 발송을 시도한다", async () => {
     vi.mocked(getUserByEmail).mockResolvedValue({
+      id: "user-without-email-id",
       email: null,
       email_confirmed_at: null,
-    });
+    } as never);
 
     const response = await POST(makeRequest(requestBody));
     const body = await response.json();
@@ -186,6 +204,14 @@ describe("회원가입 - 기존 인증 사용자 재요청 분기", () => {
     });
     expect(body).not.toHaveProperty("errors");
     expect(body).not.toHaveProperty("error");
+  });
+
+  it("TC-03A. 기존 인증 사용자도 약관 동의 기록을 저장한다", async () => {
+    vi.mocked(getUserByEmail).mockResolvedValue(verifiedUser as never);
+
+    await POST(makeRequest(requestBody));
+
+    expect(upsertUserAgreementMock).toHaveBeenCalledWith("user-123", "email");
   });
 
   it("TC-04. 기존 인증 사용자 메일 발송 실패도 외부 계약은 성공으로 유지된다", async () => {

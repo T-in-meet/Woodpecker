@@ -49,23 +49,27 @@ INSERT INTO public.notifications (
   title,
   body,
   status
-)
+,
+  click_path)
 VALUES (
   current_setting('test.notifications_constraints_check_notification_seed_id')::uuid,
   current_setting('test.notifications_constraints_check_user_a_id')::uuid,
   NULL,
-  'ALERT',
+  'SYSTEM',
   'seed title',
   'seed body',
   'SENT'
-)
+,
+  '/test')
 ON CONFLICT (id) DO NOTHING;
 
 -- [정답 조건]
 -- status가 'SENT'이면 INSERT가 성공해야 한다
 SAVEPOINT notifications_status_insert_sent;
-INSERT INTO public.notifications (id, user_id, type, title, status)
-VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'ALERT', 'sent ok', 'SENT');
+INSERT INTO public.notifications (id, user_id, type, title, status,
+  click_path)
+VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'SYSTEM', 'sent ok', 'SENT',
+  '/test');
 
 SELECT is(
   (SELECT count(*) FROM public.notifications WHERE title = 'sent ok'),
@@ -76,8 +80,10 @@ ROLLBACK TO SAVEPOINT notifications_status_insert_sent;
 
 -- status가 'READ'이면 INSERT가 성공해야 한다
 SAVEPOINT notifications_status_insert_read;
-INSERT INTO public.notifications (id, user_id, type, title, status)
-VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'ALERT', 'read ok', 'READ');
+INSERT INTO public.notifications (id, user_id, type, title, status,
+  click_path)
+VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'SYSTEM', 'read ok', 'READ',
+  '/test');
 
 SELECT is(
   (SELECT count(*) FROM public.notifications WHERE title = 'read ok'),
@@ -89,8 +95,10 @@ ROLLBACK TO SAVEPOINT notifications_status_insert_read;
 -- status = 'SKIPPED' INSERT는 notifications_status_check 제약 위반으로 차단되어야 한다
 SELECT throws_ok(
   $sql$
-    INSERT INTO public.notifications (id, user_id, type, title, status)
-    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'ALERT', 'skipped blocked', 'SKIPPED');
+    INSERT INTO public.notifications (id, user_id, type, title, status,
+  click_path)
+    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'SYSTEM', 'skipped blocked', 'SKIPPED',
+  '/test');
   $sql$,
   '23514',
   'new row for relation "notifications" violates check constraint "notifications_status_check"',
@@ -142,8 +150,10 @@ SELECT throws_ok(
 -- status가 허용 목록에 없는 값이면 notifications_status_check 제약 위반으로 저장이 차단되어야 한다
 SELECT throws_ok(
   $sql$
-    INSERT INTO public.notifications (id, user_id, type, title, status)
-    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'ALERT', 'invalid status', 'FAILED');
+    INSERT INTO public.notifications (id, user_id, type, title, status,
+  click_path)
+    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'SYSTEM', 'invalid status', 'FAILED',
+  '/test');
   $sql$,
   '23514',
   'new row for relation "notifications" violates check constraint "notifications_status_check"',
@@ -153,8 +163,10 @@ SELECT throws_ok(
 -- status가 소문자('sent', 'read')이면 notifications_status_check 제약 위반으로 저장이 차단되어야 한다
 SELECT throws_ok(
   $sql$
-    INSERT INTO public.notifications (id, user_id, type, title, status)
-    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'ALERT', 'lowercase status', 'sent');
+    INSERT INTO public.notifications (id, user_id, type, title, status,
+  click_path)
+    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'SYSTEM', 'lowercase status', 'sent',
+  '/test');
   $sql$,
   '23514',
   'new row for relation "notifications" violates check constraint "notifications_status_check"',
@@ -164,8 +176,10 @@ SELECT throws_ok(
 -- status에 앞뒤 공백이 포함된 값(' SENT', 'READ ')이면 notifications_status_check 제약 위반으로 저장이 차단되어야 한다
 SELECT throws_ok(
   $sql$
-    INSERT INTO public.notifications (id, user_id, type, title, status)
-    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'ALERT', 'spaced status', ' SENT');
+    INSERT INTO public.notifications (id, user_id, type, title, status,
+  click_path)
+    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'SYSTEM', 'spaced status', ' SENT',
+  '/test');
   $sql$,
   '23514',
   'new row for relation "notifications" violates check constraint "notifications_status_check"',
@@ -175,8 +189,10 @@ SELECT throws_ok(
 -- status가 빈 문자열('')이면 notifications_status_check 제약 위반으로 저장이 차단되어야 한다
 SELECT throws_ok(
   $sql$
-    INSERT INTO public.notifications (id, user_id, type, title, status)
-    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'ALERT', 'empty status', '');
+    INSERT INTO public.notifications (id, user_id, type, title, status,
+  click_path)
+    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'SYSTEM', 'empty status', '',
+  '/test');
   $sql$,
   '23514',
   'new row for relation "notifications" violates check constraint "notifications_status_check"',
@@ -290,8 +306,10 @@ ROLLBACK TO SAVEPOINT notifications_status_invalid_update_transition;
 -- [경계 조건]
 -- 정확히 'SENT'는 허용값 경계로서 성공해야 한다
 SAVEPOINT notifications_status_boundary_sent;
-INSERT INTO public.notifications (id, user_id, type, title, status)
-VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'ALERT', 'boundary sent', 'SENT');
+INSERT INTO public.notifications (id, user_id, type, title, status,
+  click_path)
+VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'SYSTEM', 'boundary sent', 'SENT',
+  '/test');
 
 SELECT is(
   (SELECT count(*) FROM public.notifications WHERE title = 'boundary sent'),
@@ -302,8 +320,10 @@ ROLLBACK TO SAVEPOINT notifications_status_boundary_sent;
 
 -- 정확히 'READ'는 허용값 경계로서 성공해야 한다
 SAVEPOINT notifications_status_boundary_read;
-INSERT INTO public.notifications (id, user_id, type, title, status)
-VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'ALERT', 'boundary read', 'READ');
+INSERT INTO public.notifications (id, user_id, type, title, status,
+  click_path)
+VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'SYSTEM', 'boundary read', 'READ',
+  '/test');
 
 SELECT is(
   (SELECT count(*) FROM public.notifications WHERE title = 'boundary read'),
@@ -315,8 +335,10 @@ ROLLBACK TO SAVEPOINT notifications_status_boundary_read;
 -- 정확히 'SKIPPED'도 허용값이 아니므로 차단되어야 한다
 SELECT throws_ok(
   $sql$
-    INSERT INTO public.notifications (id, user_id, type, title, status)
-    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'ALERT', 'boundary skipped', 'SKIPPED');
+    INSERT INTO public.notifications (id, user_id, type, title, status,
+  click_path)
+    VALUES (gen_random_uuid(), current_setting('test.notifications_constraints_check_user_a_id')::uuid, 'SYSTEM', 'boundary skipped', 'SKIPPED',
+  '/test');
   $sql$,
   '23514',
   'new row for relation "notifications" violates check constraint "notifications_status_check"',

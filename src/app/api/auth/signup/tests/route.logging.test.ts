@@ -21,6 +21,12 @@ import {
 
 import { POST } from "../route";
 
+const upsertUserAgreementMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/features/auth/lib/userAgreements", () => ({
+  ensureUserAgreement: upsertUserAgreementMock,
+}));
+
 vi.mock("@/features/auth/lib/applyMinimumResponseTime", () => ({
   applyMinimumResponseTime: vi.fn(
     async (_start: number, response: Response) => response,
@@ -164,8 +170,11 @@ describe("signup 라우트 인증 로깅", () => {
       agreements: { termsOfService: true, privacyPolicy: true },
     });
     vi.mocked(getUserByEmail).mockResolvedValue({
+      id: "existing-user-id",
       email: "user@example.com",
       email_confirmed_at: null,
+      auth_providers: ["email"],
+      has_password_login: true,
     });
     vi.mocked(issueOtpAndSendEmail).mockResolvedValue(undefined);
 

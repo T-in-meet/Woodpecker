@@ -348,7 +348,7 @@ describe("TipTapEditor", () => {
     });
   });
 
-  it("opens the toolbar from the block handle button", async () => {
+  it("opens the block action menu from the block handle button", async () => {
     const user = userEvent.setup();
 
     render(<TipTapEditor value="" onChange={vi.fn()} />);
@@ -362,12 +362,12 @@ describe("TipTapEditor", () => {
     const handleButton = await screen.findByLabelText("블록 도구 열기");
     await user.click(handleButton);
 
-    expect(screen.getByTestId("bubble-toolbar")).toBeInTheDocument();
-    expect(screen.getByTestId("toolbar-undo")).toBeInTheDocument();
-    expect(screen.getByTestId("toolbar-bold")).toBeInTheDocument();
+    expect(await screen.findByRole("menu")).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /유형 변경/ })).toBeVisible();
+    expect(screen.getByRole("menuitem", { name: /블록 삭제/ })).toBeVisible();
   });
 
-  it("deletes the current block from the toolbar", async () => {
+  it("deletes the current block from the block action menu", async () => {
     const user = userEvent.setup();
     const handleChange = vi.fn();
 
@@ -379,31 +379,15 @@ describe("TipTapEditor", () => {
 
     await user.click(getEditorContentElement());
     await user.click(await screen.findByLabelText("블록 도구 열기"));
-    await user.click(screen.getByTestId("toolbar-delete-block"));
+    await user.click(
+      await screen.findByRole("menuitem", { name: /블록 삭제/ }),
+    );
 
     await waitFor(() => {
       expect(getEditorContentElement().textContent).not.toContain("Delete me");
     });
 
     expect(handleChange).toHaveBeenCalled();
-  });
-
-  it("shows the language selector after turning the current block into a code block", async () => {
-    const user = userEvent.setup();
-
-    render(<TipTapEditor value="" onChange={vi.fn()} />);
-
-    await waitFor(() => {
-      expect(getEditorContentElement()).toBeTruthy();
-    });
-
-    await user.click(getEditorContentElement());
-    await user.click(await screen.findByLabelText("블록 도구 열기"));
-    await user.click(screen.getByTestId("toolbar-code-block"));
-
-    expect(
-      await screen.findByTestId("toolbar-code-language"),
-    ).toBeInTheDocument();
   });
 
   it("prevents edits while readOnly is enabled", async () => {
@@ -592,7 +576,7 @@ describe("TipTapEditor", () => {
     await user.click(getEditorContentElement());
     await user.click(await screen.findByLabelText("블록 도구 열기"));
 
-    expect(screen.getByTestId("bubble-toolbar")).toBeInTheDocument();
+    expect(await screen.findByRole("menu")).toBeInTheDocument();
     expect(
       screen.queryByTestId("block-handle-overlay"),
     ).not.toBeInTheDocument();

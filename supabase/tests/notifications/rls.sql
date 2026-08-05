@@ -85,32 +85,36 @@ INSERT INTO public.notifications (
   title,
   body,
   status
-)
+,
+  click_path)
 VALUES
   (
     current_setting('test.notifications_rls_a1_id')::uuid,
     current_setting('test.notifications_rls_user_a_id')::uuid,
-    'ALERT',
+    'SYSTEM',
     'a1 title',
     'a1 body',
     'SENT'
-  ),
+  ,
+  '/test'),
   (
     current_setting('test.notifications_rls_a2_id')::uuid,
     current_setting('test.notifications_rls_user_a_id')::uuid,
-    'REMINDER',
+    'SYSTEM',
     'a2 title',
     'a2 body',
     'SENT'
-  ),
+  ,
+  '/test'),
   (
     current_setting('test.notifications_rls_b1_id')::uuid,
     current_setting('test.notifications_rls_user_b_id')::uuid,
-    'ALERT',
+    'SYSTEM',
     'b1 title',
     'b1 body',
     'SENT'
-  )
+  ,
+  '/test')
 ON CONFLICT (id) DO NOTHING;
 
 RESET ROLE;
@@ -264,15 +268,17 @@ INSERT INTO public.notifications (
   title,
   body,
   status
-)
+,
+  click_path)
 VALUES (
   current_setting('test.notifications_rls_single_id')::uuid,
   current_setting('test.notifications_rls_user_a_id')::uuid,
-  'ALERT',
+  'SYSTEM',
   'single title',
   'single body',
   'SENT'
-)
+,
+  '/test')
 ON CONFLICT (id) DO NOTHING;
 
 SET LOCAL ROLE authenticated;
@@ -328,8 +334,10 @@ SELECT set_config(
 SELECT throws_ok(
   format(
     $sql$
-      INSERT INTO public.notifications (id, user_id, type, title, body, status)
-      VALUES ('%s'::uuid, '%s'::uuid, 'ALERT', 'insert denied', 'body', 'SENT');
+      INSERT INTO public.notifications (id, user_id, type, title, body, status,
+  click_path)
+      VALUES ('%s'::uuid, '%s'::uuid, 'SYSTEM', 'insert denied', 'body', 'SENT',
+  '/test');
     $sql$,
     gen_random_uuid(),
     current_setting('test.notifications_rls_user_a_id')
@@ -344,8 +352,10 @@ SELECT throws_ok(
 SELECT throws_ok(
   format(
     $sql$
-      INSERT INTO public.notifications (id, user_id, type, title)
-      VALUES ('%s'::uuid, '%s'::uuid, 'ALERT', 'min title');
+      INSERT INTO public.notifications (id, user_id, type, title,
+  click_path)
+      VALUES ('%s'::uuid, '%s'::uuid, 'SYSTEM', 'min title',
+  '/test');
     $sql$,
     current_setting('test.notifications_rls_insert_min_id'),
     current_setting('test.notifications_rls_user_a_id')
@@ -369,7 +379,8 @@ SELECT throws_ok(
         sent_at,
         read_at,
         note_id
-      )
+      ,
+  click_path)
       VALUES (
         '%s'::uuid,
         '%s'::uuid,
@@ -380,11 +391,12 @@ SELECT throws_ok(
         now(),
         now(),
         NULL
-      );
+      ,
+  '/test');
     $sql$,
     current_setting('test.notifications_rls_insert_max_id'),
     current_setting('test.notifications_rls_user_a_id'),
-    repeat('T', 50),
+    'SYSTEM',
     repeat('X', 200),
     repeat('B', 500)
   ),
@@ -397,8 +409,10 @@ SELECT throws_ok(
 SELECT throws_ok(
   format(
     $sql$
-      INSERT INTO public.notifications (id, user_id, type, title)
-      VALUES ('%s'::uuid, '%s'::uuid, 'REMINDER', 'own denied');
+      INSERT INTO public.notifications (id, user_id, type, title,
+  click_path)
+      VALUES ('%s'::uuid, '%s'::uuid, 'SYSTEM', 'own denied',
+  '/test');
     $sql$,
     current_setting('test.notifications_rls_insert_own_id'),
     current_setting('test.notifications_rls_user_a_id')
@@ -412,8 +426,10 @@ SELECT throws_ok(
 SELECT throws_ok(
   format(
     $sql$
-      INSERT INTO public.notifications (id, user_id, type, title)
-      VALUES ('%s'::uuid, '%s'::uuid, 'REMINDER', 'other denied');
+      INSERT INTO public.notifications (id, user_id, type, title,
+  click_path)
+      VALUES ('%s'::uuid, '%s'::uuid, 'SYSTEM', 'other denied',
+  '/test');
     $sql$,
     current_setting('test.notifications_rls_insert_other_id'),
     current_setting('test.notifications_rls_user_b_id')
@@ -444,8 +460,10 @@ SELECT set_config(
 
 DO $$
 BEGIN
-  INSERT INTO public.notifications (id, user_id, type, title)
-  VALUES (gen_random_uuid(), current_setting('test.notifications_rls_user_a_id')::uuid, 'ALERT', 'blocked');
+  INSERT INTO public.notifications (id, user_id, type, title,
+  click_path)
+  VALUES (gen_random_uuid(), current_setting('test.notifications_rls_user_a_id')::uuid, 'SYSTEM', 'blocked',
+  '/test');
 EXCEPTION
   WHEN others THEN
     NULL;
@@ -498,13 +516,15 @@ SELECT set_config(
 
 DO $$
 BEGIN
-  INSERT INTO public.notifications (id, user_id, type, title)
+  INSERT INTO public.notifications (id, user_id, type, title,
+  click_path)
   VALUES (
     current_setting('test.notifications_rls_insert_transition_id')::uuid,
     current_setting('test.notifications_rls_user_a_id')::uuid,
-    'ALERT',
+    'SYSTEM',
     'transition blocked'
-  );
+  ,
+  '/test');
 EXCEPTION
   WHEN others THEN
     NULL;

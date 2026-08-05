@@ -34,6 +34,12 @@ import {
   IP_SHORT_WINDOW_MS,
   resetEligibilityStore,
 } from "@/features/auth/lib/checkRequestEligibility";
+
+const upsertUserAgreementMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/features/auth/lib/userAgreements", () => ({
+  ensureUserAgreement: upsertUserAgreementMock,
+}));
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { createAdminClient } from "@/lib/supabase/admin";
 

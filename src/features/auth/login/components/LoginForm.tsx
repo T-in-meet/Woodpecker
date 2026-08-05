@@ -5,12 +5,19 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { OAuthButtons } from "@/features/auth/components/OAuthButtons";
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
+import {
+  OAUTH_CALLBACK_ERROR_PARAM,
+  OAUTH_CALLBACK_ERROR_TOAST_KEY,
+  OAUTH_CALLBACK_ERROR_TOAST_MESSAGE,
+} from "@/features/auth/constants/oauthCallbackError";
 import {
   GLOBAL_ERROR_MESSAGES,
   isGlobalError,
@@ -58,6 +65,15 @@ export function LoginForm() {
   };
 
   const redirectParam = searchParams.get("redirect");
+
+  useEffect(() => {
+    if (!searchParams.get(OAUTH_CALLBACK_ERROR_PARAM)) return;
+
+    showToast(OAUTH_CALLBACK_ERROR_TOAST_MESSAGE, {
+      variant: "destructive",
+      dedupeKey: OAUTH_CALLBACK_ERROR_TOAST_KEY,
+    });
+  }, [searchParams]);
 
   const forgotPasswordHref = redirectParam
     ? `${ROUTES.FORGOT_PASSWORD}?${new URLSearchParams({ redirect: redirectParam }).toString()}`
@@ -215,6 +231,13 @@ export function LoginForm() {
           </div>
         </div>
 
+        <Button type="submit" disabled={isPending} className="w-full">
+          {isPending && (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+          )}
+          {isPending ? "로그인 중..." : "로그인"}
+        </Button>
+
         {/* 인증 실패 / 서버 에러 */}
         <div className="min-h-5">
           {errors.root && (
@@ -226,18 +249,21 @@ export function LoginForm() {
               {errors.root.message}
             </p>
           )}
+
+          <Link
+            href={forgotPasswordHref}
+            className="text-sm text-muted-foreground underline hover:text-foreground"
+          >
+            비밀번호 찾기
+          </Link>
         </div>
+
+        {/* 이메일 로그인과 동일한 redirect query를 OAuth callback까지 유지한다. */}
+        <OAuthButtons intent="login" redirect={redirectParam} />
 
         {/* 액션 영역 */}
         <div className="flex flex-col gap-5 pt-2 ">
           <div className="flex flex-col gap-3">
-            <Link
-              href={forgotPasswordHref}
-              className="text-sm text-muted-foreground underline hover:text-foreground"
-            >
-              비밀번호 찾기
-            </Link>
-
             <p className="text-sm text-muted-foreground">
               아직 계정이 없으신가요?{" "}
               <Link
@@ -248,20 +274,6 @@ export function LoginForm() {
               </Link>
             </p>
           </div>
-
-          <Button
-            type="submit"
-            disabled={isPending}
-            className="w-full sm:w-auto"
-          >
-            {isPending && (
-              <Loader2
-                className="mr-2 h-4 w-4 animate-spin"
-                aria-hidden="true"
-              />
-            )}
-            {isPending ? "로그인 중..." : "로그인"}
-          </Button>
         </div>
       </form>
     </div>

@@ -54,6 +54,16 @@ const unknownFieldError = {
 
 // TC-01 ~ TC-07: 서버 validation 에러 매핑
 describe("서버 유효성 검사 에러 매핑", () => {
+  /**
+   * 이메일 가입 방식을 선택한다.
+   */
+  function selectEmailSignupMethod() {
+    fireEvent.click(screen.getByRole("button", { name: /이메일로 가입/i }));
+  }
+
+  /**
+   * 유효한 이메일 회원가입 폼을 채우고 제출한다.
+   */
   async function fillValidFormAndSubmit(
     user: ReturnType<typeof userEvent.setup>,
   ) {
@@ -85,10 +95,14 @@ describe("서버 유효성 검사 에러 매핑", () => {
     await user.click(screen.getByRole("button", { name: /회원가입/i }));
   }
 
+  /**
+   * 서버 에러를 반환하는 submit handler로 폼을 렌더링하고 제출한다.
+   */
   async function renderAndSubmitWithServerError(serverError: unknown) {
     const user = userEvent.setup();
     const onSubmit = vi.fn().mockRejectedValue(serverError);
     render(<SignupForm onSubmit={onSubmit} />);
+    selectEmailSignupMethod();
     await fillValidFormAndSubmit(user);
     return { user, onSubmit };
   }
@@ -129,6 +143,7 @@ describe("서버 유효성 검사 에러 매핑", () => {
       .mockRejectedValueOnce(emailRequiredError)
       .mockRejectedValueOnce(secondError);
     render(<SignupForm onSubmit={onSubmit} />);
+    selectEmailSignupMethod();
 
     await fillValidFormAndSubmit(user);
 

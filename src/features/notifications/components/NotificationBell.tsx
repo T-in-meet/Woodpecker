@@ -8,11 +8,15 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils/cn";
 
+import { NOTIFICATIONS_QUERY_KEY } from "../query-keys";
 import {
   notificationsResponseSchema,
   type NotificationsResponseType,
 } from "../schema";
-import { NotificationList } from "./NotificationList";
+import {
+  NotificationList,
+  type UserNotificationListItemType,
+} from "./NotificationList";
 
 const EMPTY_NOTIFICATIONS: NotificationsResponseType = {
   items: [],
@@ -21,6 +25,22 @@ const EMPTY_NOTIFICATIONS: NotificationsResponseType = {
 const ROUTE_CHANGE_REFETCH_COOLDOWN_MS = 30_000;
 
 class UnauthorizedNotificationError extends Error {}
+
+export function removeReadNotificationFromResponse(
+  current: NotificationsResponseType | undefined,
+  notificationId: string,
+) {
+  if (!current) return current;
+
+  const hasItem = current.items.some((item) => item.id === notificationId);
+
+  if (!hasItem) return current;
+
+  return {
+    items: current.items.filter((item) => item.id !== notificationId),
+    unreadCount: Math.max(current.unreadCount - 1, 0),
+  };
+}
 
 async function fetchNotifications(): Promise<NotificationsResponseType> {
   const response = await fetch("/api/notifications", {
@@ -45,6 +65,18 @@ async function fetchNotifications(): Promise<NotificationsResponseType> {
   return parsed.data;
 }
 
+/**
+ * 알림 응답 item이 사용자 알림 item인지 확인합니다.
+ *
+ * @param item 확인할 알림 item
+ * @returns 사용자 알림 item 여부
+ */
+function isUserNotificationListItem(
+  item: NotificationsResponseType["items"][number],
+): item is UserNotificationListItemType {
+  return item.source === "USER";
+}
+
 type NotificationBellProps = {
   userId: string;
 };
@@ -55,7 +87,7 @@ export function NotificationBell({ userId }: NotificationBellProps) {
   const pathname = usePathname();
   const ref = useRef<HTMLDivElement>(null);
   const previousPathnameRef = useRef(pathname);
-  const notificationsQueryKey = ["notifications", userId] as const;
+  const notificationsQueryKey = NOTIFICATIONS_QUERY_KEY.user(userId);
 
   const {
     data = EMPTY_NOTIFICATIONS,
@@ -76,10 +108,9 @@ export function NotificationBell({ userId }: NotificationBellProps) {
     if (previousPathnameRef.current === pathname) return;
 
     previousPathnameRef.current = pathname;
-    const notificationsQueryState = queryClient.getQueryState([
-      "notifications",
-      userId,
-    ] as const);
+    const notificationsQueryState = queryClient.getQueryState(
+      NOTIFICATIONS_QUERY_KEY.user(userId),
+    );
     const lastFetchedAt = notificationsQueryState?.dataUpdatedAt ?? 0;
 
     if (
@@ -117,6 +148,7 @@ export function NotificationBell({ userId }: NotificationBellProps) {
   const displayCount = unreadCount > 99 ? "99+" : String(unreadCount);
   const buttonLabel =
     unreadCount > 0 ? `읽지 않은 알림 ${unreadCount}개` : "알림";
+  const userItems = data.items.filter(isUserNotificationListItem);
 
   const handleToggle = () => {
     const nextOpen = !open;
@@ -131,7 +163,14 @@ export function NotificationBell({ userId }: NotificationBellProps) {
     setOpen(false);
   };
 
-  const hasHiddenUnreadNotifications = unreadCount > data.items.length;
+  const handleItemRead = (notificationId: string) => {
+    queryClient.setQueryData<NotificationsResponseType>(
+      notificationsQueryKey,
+      (current) => removeReadNotificationFromResponse(current, notificationId),
+    );
+  };
+
+  const hasHiddenUnreadNotifications = unreadCount > userItems.length;
 
   return (
     <div ref={ref} className="relative">
@@ -163,7 +202,7 @@ export function NotificationBell({ userId }: NotificationBellProps) {
       </Button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-[min(calc(100vw-2rem),24rem)] overflow-hidden rounded-lg border bg-background shadow-lg">
+        <div className="fixed inset-x-4 top-19 z-50 overflow-hidden rounded-lg border bg-background shadow-lg sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[min(calc(100vw-2rem),24rem)]">
           <div className="flex items-center justify-between gap-3 px-4 py-3">
             <div>
               <p className="text-sm font-semibold">알림</p>
@@ -180,15 +219,16 @@ export function NotificationBell({ userId }: NotificationBellProps) {
           </div>
 
           <NotificationList
-            items={data.items}
+            items={userItems}
             isError={isError}
             isLoading={isLoading}
+            onItemRead={handleItemRead}
             onItemNavigate={handleItemNavigate}
           />
 
           {hasHiddenUnreadNotifications && (
             <p className="border-t border-border/60 px-4 py-2 text-xs text-muted-foreground">
-              최근 {data.items.length}개만 표시됩니다.
+              최근 {userItems.length}개만 표시됩니다.
             </p>
           )}
         </div>

@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
+import { AdminNotificationBell } from "@/features/admin/notifications/components/AdminNotificationBell";
 import { NotificationBell } from "@/features/notifications/components/NotificationBell";
 import { ROUTES } from "@/lib/constants/routes";
 import { getProfile } from "@/lib/supabase/getProfile";
@@ -39,10 +40,14 @@ export async function Header() {
           {profile && user ? (
             <>
               <NotificationBell userId={user.id} />
+              {profile.role === "ADMIN" ? (
+                <AdminNotificationBell adminUserId={user.id} />
+              ) : null}
               <UserMenu
                 nickname={profile.nickname}
                 email={user.email ?? ""}
                 avatarUrl={profile.avatar_url}
+                isAdmin={profile.role === "ADMIN"}
               />
             </>
           ) : (

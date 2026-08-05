@@ -158,6 +158,25 @@ export const AUTH_API_CODES = {
    * - 예상하지 못한 런타임 예외 (500)
    */
   LOGIN_INTERNAL_ERROR: makeApiCode("login", API_RESULTS.INTERNAL_ERROR),
+
+  /**
+   * OAuth 회원가입 약관 동의 intent 저장 성공
+   * - 실제 동의 기록은 OAuth callback에서 user_id와 함께 저장한다.
+   */
+  OAUTH_AGREEMENT_INTENT_SUCCESS: makeApiActionCode(
+    "oauth",
+    "agreement-intent",
+    API_RESULTS.SUCCESS,
+  ),
+
+  /**
+   * OAuth 회원가입 약관 동의 intent 입력값 오류
+   */
+  OAUTH_AGREEMENT_INTENT_INVALID_INPUT: makeApiActionCode(
+    "oauth",
+    "agreement-intent",
+    API_RESULTS.INVALID_INPUT,
+  ),
 } as const;
 
 /**

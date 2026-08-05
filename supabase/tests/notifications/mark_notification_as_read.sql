@@ -4,13 +4,15 @@
 
 BEGIN;
 
-SELECT plan(6);
+SELECT plan(8);
 
 SELECT set_config('test.mark_read_user_a_id', gen_random_uuid()::text, true);
 SELECT set_config('test.mark_read_user_b_id', gen_random_uuid()::text, true);
 SELECT set_config('test.mark_read_unverified_user_id', gen_random_uuid()::text, true);
 SELECT set_config('test.mark_read_notification_a_id', gen_random_uuid()::text, true);
 SELECT set_config('test.mark_read_notification_b_id', gen_random_uuid()::text, true);
+SELECT set_config('test.mark_read_review_notification_id', gen_random_uuid()::text, true);
+SELECT set_config('test.mark_read_review_note_id', gen_random_uuid()::text, true);
 SELECT set_config('test.mark_read_notification_unverified_id', gen_random_uuid()::text, true);
 
 INSERT INTO auth.users (id, email, email_confirmed_at, raw_user_meta_data)
@@ -35,31 +37,56 @@ VALUES
   )
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO public.notifications (id, user_id, type, title, body, status)
+INSERT INTO public.notes (id, user_id, title, content)
+VALUES (
+  current_setting('test.mark_read_review_note_id')::uuid,
+  current_setting('test.mark_read_user_a_id')::uuid,
+  'review note',
+  'review note content'
+);
+
+INSERT INTO public.notifications (id, user_id, type, title, body, status,
+  click_path, note_id)
 VALUES
   (
     current_setting('test.mark_read_notification_a_id')::uuid,
     current_setting('test.mark_read_user_a_id')::uuid,
-    'ALERT',
+    'SYSTEM',
     'a title',
     'a body',
-    'SENT'
+    'SENT',
+    '/test',
+    NULL
   ),
   (
     current_setting('test.mark_read_notification_b_id')::uuid,
     current_setting('test.mark_read_user_b_id')::uuid,
-    'ALERT',
+    'SYSTEM',
     'b title',
     'b body',
-    'SENT'
+    'SENT',
+    '/test',
+    NULL
+  ),
+  (
+    current_setting('test.mark_read_review_notification_id')::uuid,
+    current_setting('test.mark_read_user_a_id')::uuid,
+    'REVIEW',
+    'review title',
+    'review body',
+    'SENT',
+    '/notes/' || current_setting('test.mark_read_review_note_id') || '/review',
+    current_setting('test.mark_read_review_note_id')::uuid
   ),
   (
     current_setting('test.mark_read_notification_unverified_id')::uuid,
     current_setting('test.mark_read_unverified_user_id')::uuid,
-    'ALERT',
+    'SYSTEM',
     'unverified title',
     'unverified body',
-    'SENT'
+    'SENT',
+    '/test',
+    NULL
   );
 
 SET LOCAL ROLE authenticated;
@@ -95,6 +122,23 @@ SELECT is(
   ),
   false,
   $$mark_notification_as_read should return false when the notification is already READ$$
+);
+
+SELECT is(
+  public.mark_notification_as_read(
+    current_setting('test.mark_read_review_notification_id')::uuid
+  ),
+  false,
+  $$mark_notification_as_read should return false for REVIEW notifications$$
+);
+
+SELECT ok(
+  (
+    SELECT status = 'SENT' AND read_at IS NULL
+    FROM public.notifications
+    WHERE id = current_setting('test.mark_read_review_notification_id')::uuid
+  ),
+  $$mark_notification_as_read should leave REVIEW notifications unread$$
 );
 
 SELECT is(

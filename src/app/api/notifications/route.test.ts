@@ -49,6 +49,7 @@ describe("/api/notifications", () => {
     getNotificationListMock.mockResolvedValue([
       {
         id: "22222222-2222-4222-8222-222222222222",
+        sent_at: "2026-07-27T01:00:00.000Z",
         title: "복습할 시간이에요!",
       },
     ]);
@@ -60,6 +61,7 @@ describe("/api/notifications", () => {
       items: [
         {
           id: "22222222-2222-4222-8222-222222222222",
+          sent_at: "2026-07-27T01:00:00.000Z",
           title: "복습할 시간이에요!",
         },
       ],
@@ -67,10 +69,43 @@ describe("/api/notifications", () => {
     });
     expect(response.status).toBe(200);
     expect(getNotificationListMock).toHaveBeenCalledWith({
+      limit: 20,
       supabase,
       userId: USER_ID,
     });
     expect(getUnreadCountMock).toHaveBeenCalledWith({
+      supabase,
+      userId: USER_ID,
+    });
+  });
+
+  it("keeps admin notifications out of the user notification response", async () => {
+    const supabase = createSupabaseMock();
+    createClientMock.mockResolvedValue(supabase);
+    getNotificationListMock.mockResolvedValue([
+      {
+        id: "22222222-2222-4222-8222-222222222222",
+        sent_at: "2026-07-27T01:00:00.000Z",
+        title: "사용자 알림",
+      },
+    ]);
+    getUnreadCountMock.mockResolvedValue(1);
+
+    const response = await notificationsRoute.GET();
+
+    await expect(response.json()).resolves.toEqual({
+      items: [
+        {
+          id: "22222222-2222-4222-8222-222222222222",
+          sent_at: "2026-07-27T01:00:00.000Z",
+          title: "사용자 알림",
+        },
+      ],
+      unreadCount: 1,
+    });
+    expect(response.status).toBe(200);
+    expect(getNotificationListMock).toHaveBeenCalledWith({
+      limit: 20,
       supabase,
       userId: USER_ID,
     });

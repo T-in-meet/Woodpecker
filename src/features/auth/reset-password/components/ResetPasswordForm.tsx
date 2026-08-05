@@ -40,7 +40,7 @@ export function ResetPasswordForm({ action }: ResetPasswordFormProps) {
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<ResetPasswordFormInput>({
     resolver: zodResolver(resetPasswordFormSchema),
     mode: "onTouched",
@@ -85,7 +85,10 @@ export function ResetPasswordForm({ action }: ResetPasswordFormProps) {
    * 비밀번호 변경 submit 진행 중에는 정상 흐름을 방해하지 않고,
    * 그 외 상황에서는 페이지 이탈 시 재설정 흐름이 중단될 수 있음을 안내한다.
    */
-  usePreventPageLeave(!isPending, RESET_PASSWORD_PAGE_LEAVE_CONFIRM_MESSAGE);
+  usePreventPageLeave(
+    isDirty && !isPending,
+    RESET_PASSWORD_PAGE_LEAVE_CONFIRM_MESSAGE,
+  );
 
   /**
    * react-hook-form 검증을 통과한 값만 Server Action에 전달한다.

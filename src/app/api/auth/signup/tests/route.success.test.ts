@@ -27,6 +27,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { POST } from "../route";
 import { makeRequest } from "./utils/signupTestHelper";
 
+const upsertUserAgreementMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/features/auth/lib/userAgreements", () => ({
+  ensureUserAgreement: upsertUserAgreementMock,
+}));
 vi.mock("@/features/auth/lib/getUserByEmail");
 vi.mock("@/features/auth/email/issueOtpAndSendEmail");
 vi.mock("@/lib/supabase/admin");
@@ -52,6 +57,7 @@ describe("회원가입 API 기본 성공 흐름 검증", () => {
       },
       error: null,
     });
+    upsertUserAgreementMock.mockResolvedValue(undefined);
   });
 
   const requestBody = {
@@ -76,6 +82,12 @@ describe("회원가입 API 기본 성공 흐름 검증", () => {
       email: "Test@Example.com",
       purpose: "signup",
     });
+  });
+
+  it("TC-02A: 신규 이메일 가입 시 약관 동의 기록을 저장한다", async () => {
+    await POST(makeRequest(requestBody));
+
+    expect(upsertUserAgreementMock).toHaveBeenCalledWith("user-id", "email");
   });
 
   it("TC-03: createUser는 raw email을 저장하고 canonical_email은 metadata로 저장한다", async () => {

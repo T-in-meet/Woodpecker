@@ -96,6 +96,7 @@ export function LegalDialogWrapper({
 
       <DialogContent
         className="flex max-h-[85vh] flex-col overflow-hidden"
+        showCloseButton={false}
         onCloseAutoFocus={(event) => {
           // preventCloseAutoFocus와 onCloseComplete는 독립적인 책임:
           // 전자는 Radix 기본 복원(DialogTrigger 포커스) 억제,

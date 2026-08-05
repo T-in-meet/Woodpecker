@@ -8,28 +8,38 @@ import {
   NOTIFICATION_TYPES,
 } from "@/lib/constants/notifications";
 
-const { usePathnameMock } = vi.hoisted(() => ({
+const { routerPushMock, usePathnameMock } = vi.hoisted(() => ({
+  routerPushMock: vi.fn(),
   usePathnameMock: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
   usePathname: usePathnameMock,
+  useRouter: () => ({
+    push: routerPushMock,
+  }),
 }));
 
-import { NotificationBell } from "../components/NotificationBell";
+import {
+  NotificationBell,
+  removeReadNotificationFromResponse,
+} from "../components/NotificationBell";
+import type { NotificationsResponseType } from "../schema";
 
 const USER_A_ID = "11111111-1111-4111-8111-111111111111";
 const USER_B_ID = "22222222-2222-4222-8222-222222222222";
 
-const NOTIFICATION_RESPONSE = {
+const NOTIFICATION_RESPONSE: NotificationsResponseType = {
   unreadCount: 1,
   items: [
     {
       id: "33333333-3333-4333-8333-333333333333",
       title: "Review reminder",
       body: "Review body",
+      click_path: "/notes/44444444-4444-4444-8444-444444444444/review",
       type: NOTIFICATION_TYPES.REVIEW,
       status: NOTIFICATION_STATUS.SENT,
+      source: "USER",
       sent_at: "2026-04-28T03:00:00.000Z",
       read_at: null,
       note_id: "44444444-4444-4444-8444-444444444444",
@@ -38,6 +48,7 @@ const NOTIFICATION_RESPONSE = {
     },
   ],
 };
+const NOTIFICATION_ITEM = NOTIFICATION_RESPONSE.items[0]!;
 
 function createJsonResponse(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {
@@ -73,6 +84,7 @@ function renderNotificationBell({
 describe("NotificationBell", () => {
   beforeEach(() => {
     usePathnameMock.mockReset();
+    routerPushMock.mockReset();
     usePathnameMock.mockReturnValue("/notes");
     vi.stubGlobal(
       "fetch",
@@ -204,5 +216,47 @@ describe("NotificationBell", () => {
       expect(fetch).toHaveBeenCalledTimes(3);
     });
     expect(screen.queryByText("Interval note")).not.toBeInTheDocument();
+  });
+});
+
+describe("removeReadNotificationFromResponse", () => {
+  it("removes the matched notification and decreases the unread count", () => {
+    expect(
+      removeReadNotificationFromResponse(
+        {
+          unreadCount: 2,
+          items: [
+            NOTIFICATION_ITEM,
+            {
+              ...NOTIFICATION_ITEM,
+              id: "66666666-6666-4666-8666-666666666666",
+            },
+          ],
+        },
+        "33333333-3333-4333-8333-333333333333",
+      ),
+    ).toEqual({
+      unreadCount: 1,
+      items: [
+        {
+          ...NOTIFICATION_ITEM,
+          id: "66666666-6666-4666-8666-666666666666",
+        },
+      ],
+    });
+  });
+
+  it("keeps the unread count unchanged when the notification is not cached", () => {
+    const response = {
+      unreadCount: 2,
+      items: [NOTIFICATION_ITEM],
+    };
+
+    expect(
+      removeReadNotificationFromResponse(
+        response,
+        "77777777-7777-4777-8777-777777777777",
+      ),
+    ).toBe(response);
   });
 });
