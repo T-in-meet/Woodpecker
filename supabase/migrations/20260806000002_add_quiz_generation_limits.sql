@@ -10,6 +10,10 @@
 --
 -- 한도 값은 반드시 이 함수 안에 상수로 둔다. 인자로 받으면 PostgREST를 통해
 -- 인증된 사용자가 직접 큰 값을 넘겨 우회할 수 있다.
+--
+-- 같은 이유로 사용 기록을 되돌리는 함수는 두지 않는다. 인증 사용자가 실행할 수 있으면
+-- 성공한 생성 직후에 직접 호출해 기록을 지우고 한도를 무한정 늘릴 수 있다.
+-- Gemini 호출이 실패해도 사용량은 그대로 차감된다.
 
 create table public.quiz_generations (
   id uuid primary key default gen_random_uuid(),
@@ -114,44 +118,6 @@ begin
 end;
 $$;
 
-/**
- * 선점한 사용량을 되돌린다.
- *
- * Gemini 호출 자체가 실패해 토큰이 소비되지 않은 경우에만 쓴다.
- * 응답이 왔는데 파싱에 실패한 경우는 이미 과금됐으므로 되돌리지 않는다.
- * 가장 최근 기록 1건만 지운다.
- */
-create or replace function public.release_quiz_generation(
-  p_note_id uuid,
-  p_quiz_type text
-)
-returns void
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_user_id uuid := auth.uid();
-begin
-  if v_user_id is null then
-    return;
-  end if;
-
-  delete from public.quiz_generations
-  where id = (
-    select g.id
-    from public.quiz_generations g
-    where g.user_id = v_user_id
-      and g.note_id = p_note_id
-      and g.quiz_type = p_quiz_type
-    order by g.created_at desc
-    limit 1
-  );
-end;
-$$;
-
 revoke all on function public.claim_quiz_generation(uuid, text) from public;
-revoke all on function public.release_quiz_generation(uuid, text) from public;
 
 grant execute on function public.claim_quiz_generation(uuid, text) to authenticated;
-grant execute on function public.release_quiz_generation(uuid, text) to authenticated;

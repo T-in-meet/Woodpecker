@@ -634,10 +634,6 @@ export type Database = {
         Args: { p_note_id: string; p_review_log_id: string };
         Returns: string;
       };
-      release_quiz_generation: {
-        Args: { p_note_id: string; p_quiz_type: string };
-        Returns: undefined;
-      };
       get_admin_unread_notification_counts: {
         Args: { p_admin_user_id: string };
         Returns: {

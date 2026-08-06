@@ -375,22 +375,23 @@ describe("generateQuiz", () => {
       expect(rpcNames(second.rpc)).not.toContain("claim_quiz_generation");
     });
 
-    it("Gemini 호출이 실패하면 사용량을 되돌린다", async () => {
+    it("Gemini 호출이 실패해도 사용량을 되돌리지 않는다", async () => {
       const query = setupSupabase();
       generateContentMock.mockRejectedValue(new Error("boom"));
 
       await generateQuiz(NOTE_ID, "ox");
 
-      expect(rpcNames(query.rpc)).toContain("release_quiz_generation");
+      // 되돌리는 RPC가 있으면 사용자가 직접 호출해 한도를 무력화할 수 있다.
+      expect(rpcNames(query.rpc)).toEqual(["claim_quiz_generation"]);
     });
 
-    it("응답 파싱에 실패하면 사용량을 되돌리지 않는다", async () => {
+    it("응답 파싱에 실패해도 사용량을 되돌리지 않는다", async () => {
       const query = setupSupabase();
       generateContentMock.mockResolvedValue({ text: "not json" });
 
       await generateQuiz(NOTE_ID, "ox");
 
-      expect(rpcNames(query.rpc)).not.toContain("release_quiz_generation");
+      expect(rpcNames(query.rpc)).toEqual(["claim_quiz_generation"]);
     });
 
     it("사용량 조회 자체가 실패하면 생성 실패로 처리한다", async () => {
