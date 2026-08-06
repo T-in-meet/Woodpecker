@@ -1,4 +1,6 @@
-export type QuizType = "ox" | "blank" | "choice";
+export const QUIZ_TYPES = ["ox", "blank", "choice"] as const;
+
+export type QuizType = (typeof QUIZ_TYPES)[number];
 
 export const CHOICE_OPTION_COUNT = 4;
 

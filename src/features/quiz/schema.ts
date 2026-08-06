@@ -1,6 +1,9 @@
 import { z } from "zod";
 
-import { CHOICE_OPTION_COUNT } from "@/lib/gemini/prompts";
+import { CHOICE_OPTION_COUNT, QUIZ_TYPES } from "@/lib/gemini/prompts";
+
+// Server Action 인자는 조작될 수 있으므로 타입이 아니라 런타임에서 검증한다.
+export const quizTypeSchema = z.enum(QUIZ_TYPES);
 
 const oxQuestionSchema = z.object({
   type: z.literal("ox"),
