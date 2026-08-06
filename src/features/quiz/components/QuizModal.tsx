@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ArrowLeftIcon,
   CircleIcon,
   ListChecksIcon,
   LoaderIcon,
@@ -66,8 +67,17 @@ export function QuizModal({
     goToSelect,
   } = useQuiz(noteId);
 
+  // 모달은 계속 마운트돼 있으므로 닫을 때 직접 초기화해야 다음에 선택 화면부터 시작한다.
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      goToSelect();
+    }
+
+    onOpenChange(nextOpen);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="flex max-h-[85dvh] flex-col overflow-hidden">
         <DialogHeader className="shrink-0">
           <DialogTitle>퀴즈</DialogTitle>
@@ -131,13 +141,24 @@ export function QuizModal({
 
         {phase === "playing" && currentQuestion && (
           <div className="min-h-0 flex-1 overflow-y-auto">
-            <div className="mb-4 flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">
-                {currentIndex + 1} / {questions.length}
-              </span>
-              <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                {QUIZ_TYPE_LABELS[currentQuestion.type]}
-              </span>
+            <div className="mb-4 flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={goToSelect}
+                className="flex cursor-pointer items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <ArrowLeftIcon className="size-4" />
+                유형 선택
+              </button>
+
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">
+                  {currentIndex + 1} / {questions.length}
+                </span>
+                <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                  {QUIZ_TYPE_LABELS[currentQuestion.type]}
+                </span>
+              </div>
             </div>
 
             {currentQuestion.type === "ox" && (
