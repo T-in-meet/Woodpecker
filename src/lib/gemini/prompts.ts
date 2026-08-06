@@ -100,15 +100,80 @@ ${QUESTION_COUNT_RULE}
 }`,
 };
 
+/**
+ * 출제 관점 축. 요청마다 하나를 무작위로 골라 프롬프트에 넣는다.
+ * 프롬프트가 매번 완전히 같으면 모델이 늘 같은 출제 지점으로 수렴해서
+ * 문장 표현과 어미만 다른 퀴즈가 반복되기 때문이다.
+ */
+export const QUIZ_PERSPECTIVES = [
+  "정의와 용어 — 개념이 무엇을 뜻하는지, 용어가 무엇을 가리키는지 묻습니다.",
+  "구분과 비교 — 노트에 함께 나오는 개념들 사이의 차이나 관계를 묻습니다.",
+  "인과와 이유 — 왜 그렇게 되는지, 무엇 때문에 그런 결과가 나오는지 묻습니다.",
+  "절차와 순서 — 어떤 단계를 거치는지, 무엇이 먼저이고 무엇이 나중인지 묻습니다.",
+  "역할과 구성 — 각 요소가 무엇을 담당하는지, 무엇으로 이루어져 있는지 묻습니다.",
+  "적용과 판단 — 노트 내용을 구체적인 상황에 대입하면 어떻게 되는지 묻습니다.",
+] as const;
+
+export type QuizPerspective = (typeof QUIZ_PERSPECTIVES)[number];
+
+export function pickPerspective(): QuizPerspective {
+  const index = Math.floor(Math.random() * QUIZ_PERSPECTIVES.length);
+  return QUIZ_PERSPECTIVES[index] ?? QUIZ_PERSPECTIVES[0];
+}
+
+export type QuizPromptOptions = {
+  perspective?: QuizPerspective;
+  previousQuestions?: readonly string[];
+};
+
+function buildPerspectiveSection(perspective?: QuizPerspective): string {
+  if (!perspective) {
+    return "";
+  }
+
+  return `
+
+## 이번 출제 관점
+${perspective}
+- 이 관점을 우선으로 출제하세요.
+- 다만 노트에 이 관점으로 물을 재료가 없으면 억지로 만들지 말고 다른 관점으로 출제하세요. 규칙 1이 우선입니다.`;
+}
+
+function buildPreviousQuestionsSection(
+  previousQuestions?: readonly string[],
+): string {
+  if (!previousQuestions || previousQuestions.length === 0) {
+    return "";
+  }
+
+  const list = previousQuestions.map((question) => `- ${question}`).join("\n");
+
+  return `
+
+## 이미 출제된 문제
+${list}
+
+- 위 문제들이 다룬 지점은 다시 묻지 마세요.
+- 표현·어순·어미만 바꾼 재출제는 금지합니다. 묻는 대상 자체가 달라야 합니다.
+- 객관식이라면 선택지도 위 문제와 겹치지 않게 새로 구성하세요.
+- 노트에 남은 재료가 부족하면 문항 수를 줄이세요. 같은 내용을 다시 내는 것보다 낫습니다.`;
+}
+
 export function buildQuizPrompt(
   noteTitle: string,
   noteContent: string,
   questionRange: QuestionRange,
   quizType: QuizType,
+  options: QuizPromptOptions = {},
 ): string {
   const rules = QUIZ_TYPE_RULES[quizType]
     .replace("${minQuestions}", String(questionRange.min))
     .replace("${maxQuestions}", String(questionRange.max));
+
+  // 노트 내용이 길어도 마지막에 놓인 지시가 더 잘 지켜지므로 노트 뒤에 붙인다.
+  const trailingSections =
+    buildPerspectiveSection(options.perspective) +
+    buildPreviousQuestionsSection(options.previousQuestions);
 
   return `당신은 학습 퀴즈 생성 전문가입니다.
 아래 노트 내용을 바탕으로 퀴즈를 생성하세요.
@@ -124,5 +189,5 @@ ${rules}
 ${noteTitle}
 
 ## 노트 내용
-${noteContent}`;
+${noteContent}${trailingSections}`;
 }

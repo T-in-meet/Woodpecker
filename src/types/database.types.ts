@@ -533,6 +533,7 @@ export type Database = {
           user_id: string;
           quiz_type: string;
           questions: Json;
+          recent_questions: Json;
           note_content_hash: string;
           created_at: string;
         };
@@ -542,6 +543,7 @@ export type Database = {
           user_id: string;
           quiz_type: string;
           questions: Json;
+          recent_questions?: Json;
           note_content_hash: string;
           created_at?: string;
         };
@@ -551,6 +553,7 @@ export type Database = {
           user_id?: string;
           quiz_type?: string;
           questions?: Json;
+          recent_questions?: Json;
           note_content_hash?: string;
           created_at?: string;
         };

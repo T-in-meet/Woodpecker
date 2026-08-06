@@ -6,6 +6,7 @@ import { getGemini } from "@/lib/gemini/client";
 import {
   buildQuizPrompt,
   getQuestionRange,
+  pickPerspective,
   type QuizType,
 } from "@/lib/gemini/prompts";
 import { createClient } from "@/lib/supabase/server";
@@ -19,6 +20,27 @@ import {
 } from "./schema";
 
 const noteIdSchema = z.string().uuid();
+
+/**
+ * 재생성은 온도를 더 올린다.
+ * 이미 한 번 본 퀴즈와 달라지는 것이 정확도보다 중요하기 때문이다.
+ */
+const TEMPERATURE = {
+  initial: 1.0,
+  regenerate: 1.2,
+} as const;
+
+/**
+ * 출제 이력을 몇 세트까지 남길지.
+ * 더 늘리면 회피 대상이 쌓여 노트에 남은 재료가 금방 바닥난다.
+ */
+const MAX_HISTORY_SETS = 3;
+
+/** 이력이 길어져도 프롬프트가 노트 내용을 밀어내지 않도록 두는 상한. */
+const MAX_PREVIOUS_QUESTIONS = 45;
+
+// recent_questions는 jsonb라 DB가 형식을 보장하지 않는다.
+const questionHistorySchema = z.array(z.array(z.string()));
 
 // claim_quiz_generation의 반환값을 사용자 메시지로 옮긴다.
 const CLAIM_ERROR_MESSAGES: Record<string, string> = {
@@ -73,13 +95,23 @@ function parseInput(
 
 type RequestQuestionsResult = { data: QuizQuestion[] } | { error: string };
 
+type RequestQuestionsParams = {
+  title: string;
+  content: string;
+  quizType: QuizType;
+  previousQuestions: string[];
+  temperature: number;
+};
+
 async function requestQuestions(
-  title: string,
-  content: string,
-  quizType: QuizType,
+  params: RequestQuestionsParams,
 ): Promise<RequestQuestionsResult> {
+  const { title, content, quizType, previousQuestions, temperature } = params;
   const questionRange = getQuestionRange(content.length);
-  const prompt = buildQuizPrompt(title, content, questionRange, quizType);
+  const prompt = buildQuizPrompt(title, content, questionRange, quizType, {
+    perspective: pickPerspective(),
+    previousQuestions,
+  });
 
   let responseText: string;
   try {
@@ -89,6 +121,7 @@ async function requestQuestions(
       contents: prompt,
       config: {
         responseMimeType: "application/json",
+        temperature,
       },
     });
     responseText = response.text ?? "";
@@ -124,6 +157,69 @@ async function requestQuestions(
   return { data: parsed.data.questions };
 }
 
+type QuizCache = {
+  /** 형식이 깨진 캐시는 null이다. 이력은 그대로 쓸 수 있으므로 캐시 전체를 버리지는 않는다. */
+  questions: QuizQuestion[] | null;
+  /** 최신 세트가 앞에 오는 출제 이력. */
+  history: string[][];
+};
+
+/**
+ * 캐시된 퀴즈와 출제 이력을 읽는다. 노트가 바뀌었으면(해시 불일치) null이다.
+ * 재생성에서도 호출한다. 최근에 낸 문제를 알아야 같은 지점을 다시 묻지 않게 지시할 수 있다.
+ */
+async function loadCache(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  params: { noteId: string; quizType: QuizType; cacheKey: string },
+): Promise<QuizCache | null> {
+  const { data: cached } = await supabase
+    .from("quizzes")
+    .select("questions, recent_questions, note_content_hash")
+    .eq("note_id", params.noteId)
+    .eq("quiz_type", params.quizType)
+    .maybeSingle();
+
+  if (!cached || cached.note_content_hash !== params.cacheKey) {
+    return null;
+  }
+
+  const questions = quizResponseSchema.safeParse({
+    questions: cached.questions,
+  });
+  const history = questionHistorySchema.safeParse(cached.recent_questions);
+
+  return {
+    questions: questions.success ? questions.data.questions : null,
+    history: history.success ? history.data : [],
+  };
+}
+
+/**
+ * 이력을 프롬프트에 넣을 문장 목록으로 편다.
+ * 최신 세트부터 채우므로, 상한에 걸려 잘리는 것은 항상 오래된 회차다.
+ */
+function flattenHistory(history: string[][]): string[] {
+  const seen = new Set<string>();
+  const questions: string[] = [];
+
+  for (const set of history) {
+    for (const question of set) {
+      if (seen.has(question)) {
+        continue;
+      }
+
+      seen.add(question);
+      questions.push(question);
+
+      if (questions.length >= MAX_PREVIOUS_QUESTIONS) {
+        return questions;
+      }
+    }
+  }
+
+  return questions;
+}
+
 /**
  * 생성된 퀴즈를 캐시에 저장한다.
  * 저장에 실패해도 퀴즈 자체는 사용자에게 돌려주므로 에러는 로그만 남긴다.
@@ -135,15 +231,23 @@ async function saveQuiz(
     userId: string;
     quizType: QuizType;
     questions: QuizQuestion[];
+    history: string[][];
     cacheKey: string;
   },
 ): Promise<void> {
+  // 이번 세트를 맨 앞에 쌓고 오래된 세트부터 버린다.
+  const history = [
+    params.questions.map((question) => question.question),
+    ...params.history,
+  ].slice(0, MAX_HISTORY_SETS);
+
   const { error } = await supabase.from("quizzes").upsert(
     {
       note_id: params.noteId,
       user_id: params.userId,
       quiz_type: params.quizType,
       questions: JSON.parse(JSON.stringify(params.questions)) as Json,
+      recent_questions: history,
       note_content_hash: params.cacheKey,
     },
     { onConflict: "note_id,quiz_type" },
@@ -214,26 +318,18 @@ async function createQuiz(
 
   const cacheKey = await buildCacheKey(note.title, note.content);
 
-  if (options.useCache) {
-    const { data: cached } = await supabase
-      .from("quizzes")
-      .select("questions, note_content_hash")
-      .eq("note_id", parsed.data.noteId)
-      .eq("quiz_type", parsed.data.quizType)
-      .maybeSingle();
+  // 재생성일 때도 캐시를 읽는다. 반환하지는 않고 "이미 낸 문제" 목록으로만 쓴다.
+  const cache = await loadCache(supabase, {
+    noteId: parsed.data.noteId,
+    quizType: parsed.data.quizType,
+    cacheKey,
+  });
 
-    if (cached && cached.note_content_hash === cacheKey) {
-      const cachedQuestions = quizResponseSchema.safeParse({
-        questions: cached.questions,
-      });
-
-      if (cachedQuestions.success) {
-        return {
-          data: { questions: cachedQuestions.data.questions, isNew: false },
-        };
-      }
-    }
+  if (options.useCache && cache?.questions) {
+    return { data: { questions: cache.questions, isNew: false } };
   }
+
+  const history = cache?.history ?? [];
 
   // 사용량 선점은 캐시 확인 뒤에 온다. 한도를 다 써도 이미 만든 퀴즈는 볼 수 있어야 한다.
   // 선점한 사용량은 되돌리지 않는다. 되돌리는 RPC를 두면 사용자가 직접 호출해 한도를 무력화한다.
@@ -247,11 +343,15 @@ async function createQuiz(
     return { error: claimed.error };
   }
 
-  const generated = await requestQuestions(
-    note.title,
-    note.content,
-    parsed.data.quizType,
-  );
+  const generated = await requestQuestions({
+    title: note.title,
+    content: note.content,
+    quizType: parsed.data.quizType,
+    previousQuestions: flattenHistory(history),
+    temperature: options.useCache
+      ? TEMPERATURE.initial
+      : TEMPERATURE.regenerate,
+  });
 
   if ("error" in generated) {
     return { error: generated.error };
@@ -262,6 +362,7 @@ async function createQuiz(
     userId: user.id,
     quizType: parsed.data.quizType,
     questions: generated.data,
+    history,
     cacheKey,
   });
 

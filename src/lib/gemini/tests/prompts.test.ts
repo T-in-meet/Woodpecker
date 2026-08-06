@@ -1,6 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { buildQuizPrompt, getQuestionRange } from "../prompts";
+import {
+  buildQuizPrompt,
+  getQuestionRange,
+  pickPerspective,
+  QUIZ_PERSPECTIVES,
+} from "../prompts";
 
 describe("getQuestionRange", () => {
   it("min은 노트 길이와 무관하게 항상 3이다", () => {
@@ -113,5 +118,108 @@ describe("buildQuizPrompt", () => {
     expect(prompt).toContain("0부터 세는 번호");
     expect(prompt).toContain("1부터 세지 마세요");
     expect(prompt).toContain("고르게 분산");
+  });
+
+  describe("출제 관점", () => {
+    it("관점을 넘기면 프롬프트에 주입한다", () => {
+      const perspective = QUIZ_PERSPECTIVES[2];
+      const prompt = buildQuizPrompt("제목", "내용", range, "ox", {
+        perspective,
+      });
+
+      expect(prompt).toContain("## 이번 출제 관점");
+      expect(prompt).toContain(perspective);
+    });
+
+    it("관점이 없으면 관점 섹션을 넣지 않는다", () => {
+      const prompt = buildQuizPrompt("제목", "내용", range, "ox");
+
+      expect(prompt).not.toContain("## 이번 출제 관점");
+    });
+
+    it("노트에 재료가 없으면 관점을 강요하지 않도록 단서를 단다", () => {
+      const prompt = buildQuizPrompt("제목", "내용", range, "ox", {
+        perspective: QUIZ_PERSPECTIVES[0],
+      });
+
+      expect(prompt).toContain("규칙 1이 우선");
+    });
+  });
+
+  describe("이미 출제된 문제", () => {
+    it("이전 문제를 목록으로 넣고 재출제를 금지한다", () => {
+      const prompt = buildQuizPrompt("제목", "내용", range, "ox", {
+        previousQuestions: ["ALU는 연산을 담당한다.", "레지스터는 느리다."],
+      });
+
+      expect(prompt).toContain("## 이미 출제된 문제");
+      expect(prompt).toContain("- ALU는 연산을 담당한다.");
+      expect(prompt).toContain("- 레지스터는 느리다.");
+      expect(prompt).toContain("묻는 대상 자체가 달라야 합니다");
+    });
+
+    it("어미만 바꾼 재출제를 명시적으로 막는다", () => {
+      const prompt = buildQuizPrompt("제목", "내용", range, "ox", {
+        previousQuestions: ["문제"],
+      });
+
+      expect(prompt).toContain("표현·어순·어미만 바꾼 재출제는 금지");
+    });
+
+    it("재료가 부족하면 문항 수를 줄이라고 지시한다", () => {
+      const prompt = buildQuizPrompt("제목", "내용", range, "ox", {
+        previousQuestions: ["문제"],
+      });
+
+      expect(prompt).toContain("문항 수를 줄이세요");
+    });
+
+    it("빈 배열이면 섹션을 넣지 않는다", () => {
+      const prompt = buildQuizPrompt("제목", "내용", range, "ox", {
+        previousQuestions: [],
+      });
+
+      expect(prompt).not.toContain("## 이미 출제된 문제");
+    });
+
+    it("이전 문제가 없으면 섹션을 넣지 않는다", () => {
+      const prompt = buildQuizPrompt("제목", "내용", range, "ox");
+
+      expect(prompt).not.toContain("## 이미 출제된 문제");
+    });
+  });
+
+  it("추가 섹션은 노트 내용 뒤에 온다", () => {
+    const prompt = buildQuizPrompt("제목", "노트 본문", range, "ox", {
+      perspective: QUIZ_PERSPECTIVES[0],
+      previousQuestions: ["이전 문제"],
+    });
+
+    expect(prompt.indexOf("노트 본문")).toBeLessThan(
+      prompt.indexOf("## 이번 출제 관점"),
+    );
+    expect(prompt.indexOf("## 이번 출제 관점")).toBeLessThan(
+      prompt.indexOf("## 이미 출제된 문제"),
+    );
+  });
+});
+
+describe("pickPerspective", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("정의된 관점 중 하나를 반환한다", () => {
+    expect(QUIZ_PERSPECTIVES).toContain(pickPerspective());
+  });
+
+  it("난수에 따라 다른 관점을 고른다", () => {
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    expect(pickPerspective()).toBe(QUIZ_PERSPECTIVES[0]);
+
+    vi.spyOn(Math, "random").mockReturnValue(0.99);
+    expect(pickPerspective()).toBe(
+      QUIZ_PERSPECTIVES[QUIZ_PERSPECTIVES.length - 1],
+    );
   });
 });

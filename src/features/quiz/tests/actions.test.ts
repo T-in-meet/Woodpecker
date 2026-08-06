@@ -34,7 +34,11 @@ const geminiQuestions = {
 type SupabaseMockInput = {
   userId?: string | null;
   note?: { title: string; content: string } | null;
-  cached?: { questions: unknown; note_content_hash: string } | null;
+  cached?: {
+    questions: unknown;
+    note_content_hash: string;
+    recent_questions?: unknown;
+  } | null;
   upsertError?: { message: string } | null;
   claimResult?: string;
   claimError?: { message: string } | null;
@@ -88,6 +92,16 @@ function methodNames(calls: [string, unknown[]][]): string[] {
   return calls.map(([method]) => method);
 }
 
+function geminiRequest(): {
+  contents: string;
+  config: { temperature: number };
+} {
+  return generateContentMock.mock.calls[0]?.[0] as {
+    contents: string;
+    config: { temperature: number };
+  };
+}
+
 function upsertPayload(query: ReturnType<typeof setupSupabase>) {
   return query.callsFor("quizzes").find(([method]) => method === "upsert")?.[1];
 }
@@ -95,6 +109,11 @@ function upsertPayload(query: ReturnType<typeof setupSupabase>) {
 function hashOf(query: ReturnType<typeof setupSupabase>): string {
   return (upsertPayload(query)?.[0] as { note_content_hash: string })
     .note_content_hash;
+}
+
+function savedHistory(query: ReturnType<typeof setupSupabase>): string[][] {
+  return (upsertPayload(query)?.[0] as { recent_questions: string[][] })
+    .recent_questions;
 }
 
 beforeEach(() => {
@@ -483,5 +502,221 @@ describe("regenerateQuiz", () => {
     const result = await regenerateQuiz(NOTE_ID, "essay");
 
     expect(result).toEqual({ error: "유효하지 않은 퀴즈 유형입니다." });
+  });
+
+  describe("같은 퀴즈 반복 방지", () => {
+    /** 캐시 키를 모르므로 한 번 생성해서 저장된 해시를 얻는다. */
+    async function savedHash(): Promise<string> {
+      const query = setupSupabase();
+      mockGeminiSuccess();
+      await generateQuiz(NOTE_ID, "ox");
+
+      const hash = hashOf(query);
+      vi.clearAllMocks();
+
+      return hash;
+    }
+
+    it("직전에 낸 문제를 프롬프트에 넣어 재출제를 막는다", async () => {
+      const hash = await savedHash();
+
+      setupSupabase({
+        cached: {
+          questions: geminiQuestions.questions,
+          note_content_hash: hash,
+          recent_questions: [["1회차 문제"]],
+        },
+      });
+      mockGeminiSuccess();
+
+      await regenerateQuiz(NOTE_ID, "ox");
+
+      expect(geminiRequest().contents).toContain("## 이미 출제된 문제");
+      expect(geminiRequest().contents).toContain("1회차 문제");
+    });
+
+    it("여러 회차의 문제를 함께 넣는다", async () => {
+      const hash = await savedHash();
+
+      setupSupabase({
+        cached: {
+          questions: geminiQuestions.questions,
+          note_content_hash: hash,
+          recent_questions: [["3회차 문제"], ["2회차 문제"], ["1회차 문제"]],
+        },
+      });
+      mockGeminiSuccess();
+
+      await regenerateQuiz(NOTE_ID, "ox");
+
+      const prompt = geminiRequest().contents;
+      expect(prompt).toContain("3회차 문제");
+      expect(prompt).toContain("2회차 문제");
+      expect(prompt).toContain("1회차 문제");
+    });
+
+    it("같은 문제가 여러 회차에 있어도 한 번만 넣는다", async () => {
+      const hash = await savedHash();
+
+      setupSupabase({
+        cached: {
+          questions: geminiQuestions.questions,
+          note_content_hash: hash,
+          recent_questions: [["겹치는 문제"], ["겹치는 문제"]],
+        },
+      });
+      mockGeminiSuccess();
+
+      await regenerateQuiz(NOTE_ID, "ox");
+
+      const occurrences =
+        geminiRequest().contents.split("겹치는 문제").length - 1;
+      expect(occurrences).toBe(1);
+    });
+
+    it("이력이 길면 최신 회차부터 상한까지만 넣는다", async () => {
+      const hash = await savedHash();
+      const makeSet = (prefix: string) =>
+        Array.from({ length: 25 }, (_, i) => `${prefix}문제${i}`);
+
+      setupSupabase({
+        cached: {
+          questions: geminiQuestions.questions,
+          note_content_hash: hash,
+          recent_questions: [makeSet("최신"), makeSet("오래된")],
+        },
+      });
+      mockGeminiSuccess();
+
+      await regenerateQuiz(NOTE_ID, "ox");
+
+      // 상한(45)에 걸려 잘리는 것은 항상 오래된 회차 쪽이어야 한다.
+      const prompt = geminiRequest().contents;
+      expect(prompt).toContain("최신문제24");
+      expect(prompt).toContain("오래된문제0");
+      expect(prompt).not.toContain("오래된문제24");
+    });
+
+    it("이력 형식이 깨져 있으면 이전 문제 없이 생성한다", async () => {
+      const hash = await savedHash();
+
+      setupSupabase({
+        cached: {
+          questions: geminiQuestions.questions,
+          note_content_hash: hash,
+          recent_questions: { broken: true },
+        },
+      });
+      mockGeminiSuccess();
+
+      await regenerateQuiz(NOTE_ID, "ox");
+
+      expect(geminiRequest().contents).not.toContain("## 이미 출제된 문제");
+    });
+
+    it("노트가 바뀌어 해시가 다르면 이전 문제를 넣지 않는다", async () => {
+      setupSupabase({
+        cached: {
+          questions: geminiQuestions.questions,
+          note_content_hash: "stale-hash",
+          recent_questions: [["옛 노트에서 낸 문제"]],
+        },
+      });
+      mockGeminiSuccess();
+
+      await regenerateQuiz(NOTE_ID, "ox");
+
+      expect(geminiRequest().contents).not.toContain("## 이미 출제된 문제");
+    });
+
+    it("캐시가 없으면 이전 문제 없이 생성한다", async () => {
+      setupSupabase();
+      mockGeminiSuccess();
+
+      await regenerateQuiz(NOTE_ID, "ox");
+
+      expect(geminiRequest().contents).not.toContain("## 이미 출제된 문제");
+    });
+
+    it("재생성은 최초 생성보다 높은 temperature를 쓴다", async () => {
+      setupSupabase();
+      mockGeminiSuccess();
+      await generateQuiz(NOTE_ID, "ox");
+      const initial = geminiRequest().config.temperature;
+
+      vi.clearAllMocks();
+
+      setupSupabase();
+      mockGeminiSuccess();
+      await regenerateQuiz(NOTE_ID, "ox");
+
+      expect(geminiRequest().config.temperature).toBeGreaterThan(initial);
+    });
+
+    it("이번 세트를 이력 맨 앞에 쌓는다", async () => {
+      const hash = await savedHash();
+
+      const query = setupSupabase({
+        cached: {
+          questions: geminiQuestions.questions,
+          note_content_hash: hash,
+          recent_questions: [["2회차 문제"], ["1회차 문제"]],
+        },
+      });
+      mockGeminiSuccess();
+
+      await regenerateQuiz(NOTE_ID, "ox");
+
+      expect(savedHistory(query)).toEqual([
+        [geminiQuestions.questions[0]!.question],
+        ["2회차 문제"],
+        ["1회차 문제"],
+      ]);
+    });
+
+    it("이력은 최근 3세트까지만 남긴다", async () => {
+      const hash = await savedHash();
+
+      const query = setupSupabase({
+        cached: {
+          questions: geminiQuestions.questions,
+          note_content_hash: hash,
+          recent_questions: [["3회차 문제"], ["2회차 문제"], ["1회차 문제"]],
+        },
+      });
+      mockGeminiSuccess();
+
+      await regenerateQuiz(NOTE_ID, "ox");
+
+      const history = savedHistory(query);
+      expect(history).toHaveLength(3);
+      expect(history).not.toContainEqual(["1회차 문제"]);
+    });
+
+    it("노트가 바뀌면 이력을 이번 세트만 남기고 비운다", async () => {
+      const query = setupSupabase({
+        cached: {
+          questions: geminiQuestions.questions,
+          note_content_hash: "stale-hash",
+          recent_questions: [["옛 노트에서 낸 문제"]],
+        },
+      });
+      mockGeminiSuccess();
+
+      await regenerateQuiz(NOTE_ID, "ox");
+
+      expect(savedHistory(query)).toEqual([
+        [geminiQuestions.questions[0]!.question],
+      ]);
+    });
+
+    it("요청마다 출제 관점을 프롬프트에 넣는다", async () => {
+      setupSupabase();
+      mockGeminiSuccess();
+
+      await regenerateQuiz(NOTE_ID, "ox");
+
+      expect(geminiRequest().contents).toContain("## 이번 출제 관점");
+    });
   });
 });
