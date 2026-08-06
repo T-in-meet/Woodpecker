@@ -4,7 +4,7 @@
 
 BEGIN;
 
-SELECT plan(9);
+SELECT plan(8);
 
 -- 테스트용 UUID 준비
 SELECT set_config('test.quiz_gen_user_a_id', gen_random_uuid()::text, true);
@@ -121,17 +121,20 @@ SELECT is(
   $$같은 노트라도 유형이 다르면 중복 요청으로 보지 않아야 한다$$
 );
 
--- release 후에는 기록이 줄어야 한다
-SELECT public.release_quiz_generation(
-  current_setting('test.quiz_gen_note_a_id')::uuid,
-  'blank'
-);
-SELECT is(
-  (SELECT count(*) FROM public.quiz_generations
-   WHERE note_id = current_setting('test.quiz_gen_note_a_id')::uuid
-     AND quiz_type = 'blank'),
-  0::bigint,
-  $$release 후에는 기록이 줄어야 한다$$
+-- 인증 사용자는 quiz_generations에 직접 INSERT할 수 없어야 한다
+-- (기록을 마음대로 지우거나 만들 수 있으면 한도가 무의미해진다)
+SELECT throws_ok(
+  format(
+    $sql$
+      INSERT INTO public.quiz_generations (user_id, note_id, quiz_type)
+      VALUES ('%s'::uuid, '%s'::uuid, 'ox');
+    $sql$,
+    current_setting('test.quiz_gen_user_a_id'),
+    current_setting('test.quiz_gen_note_a_id')
+  ),
+  '42501',
+  NULL,
+  $$인증 사용자는 quiz_generations에 직접 INSERT할 수 없어야 한다$$
 );
 
 -- [예외 조건]
@@ -165,14 +168,19 @@ SELECT is(
 );
 
 -- 60초 안에 5회를 채우면 too_many_requests를 반환해야 한다
--- (위에서 ox 1건이 남아 있으므로 4건을 더 채운다)
+-- (위에서 ox·blank 2건이 남아 있으므로 3건을 더 채운다)
+-- quiz_generations에는 쓰기 정책이 없으므로 fixture는 원래 역할로 돌아가서 넣는다.
+RESET ROLE;
+
 INSERT INTO public.quiz_generations (user_id, note_id, quiz_type, created_at)
 SELECT
   current_setting('test.quiz_gen_user_a_id')::uuid,
   current_setting('test.quiz_gen_note_a2_id')::uuid,
   'burst_' || i,
   now() - interval '5 seconds'
-FROM generate_series(1, 4) AS i;
+FROM generate_series(1, 3) AS i;
+
+SET LOCAL ROLE authenticated;
 
 SELECT is(
   public.claim_quiz_generation(
@@ -184,6 +192,8 @@ SELECT is(
 );
 
 -- 버스트 윈도우를 벗어난 기록이 30건이면 daily_exceeded를 반환해야 한다
+RESET ROLE;
+
 UPDATE public.quiz_generations
 SET created_at = now() - interval '2 minutes'
 WHERE user_id = current_setting('test.quiz_gen_user_a_id')::uuid;
@@ -195,6 +205,8 @@ SELECT
   'daily_' || i,
   now() - interval '2 minutes'
 FROM generate_series(1, 25) AS i;
+
+SET LOCAL ROLE authenticated;
 
 SELECT is(
   public.claim_quiz_generation(
