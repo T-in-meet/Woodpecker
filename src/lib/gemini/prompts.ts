@@ -1,14 +1,36 @@
 export type QuizType = "ox" | "blank";
 
-export function getQuestionCount(contentLength: number): number {
-  if (contentLength <= 300) return 3;
-  if (contentLength <= 700) return 5;
-  return 7;
+const MIN_QUESTIONS = 3;
+const MAX_QUESTIONS = 20;
+const CHARS_PER_QUESTION = 300;
+
+export type QuestionRange = {
+  min: number;
+  max: number;
+};
+
+/**
+ * 노트 길이로 문항 수의 "안전 범위"만 정한다.
+ * 실제 개수는 이 범위 안에서 Gemini가 노트 내용의 밀도를 보고 결정한다.
+ * 길이는 셀 수 있지만 물어볼 거리가 몇 개인지는 내용을 읽어야 알 수 있기 때문이다.
+ */
+export function getQuestionRange(contentLength: number): QuestionRange {
+  const cap = Math.min(
+    Math.round(contentLength / CHARS_PER_QUESTION),
+    MAX_QUESTIONS,
+  );
+
+  return { min: MIN_QUESTIONS, max: Math.max(cap, MIN_QUESTIONS) };
 }
+
+const QUESTION_COUNT_RULE = `3. \${minQuestions}~\${maxQuestions}문항 사이에서 생성하되, 개수는 노트 내용의 밀도에 따라 정하세요.
+   - 시험 볼 가치가 있는 독립적인 사실·개념·수치가 많으면 상한에 가깝게 생성하세요.
+   - 내용이 반복되거나 서술 위주라 물어볼 거리가 적으면 적게 생성하세요.
+   - 개수를 채우기 위해 지엽적이거나 뻔한 문제를 억지로 만들지 마세요.`;
 
 const QUIZ_TYPE_RULES: Record<QuizType, string> = {
   ox: `2. 모든 문제를 OX 퀴즈로 생성하세요.
-3. 총 \${questionCount}문항을 생성하세요.
+${QUESTION_COUNT_RULE}
 4. 각 문제에 간단한 해설을 포함하세요.
 5. 반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트를 포함하지 마세요.
 
@@ -24,7 +46,7 @@ const QUIZ_TYPE_RULES: Record<QuizType, string> = {
   ]
 }`,
   blank: `2. 모든 문제를 빈칸 채우기로 생성하세요.
-3. 총 \${questionCount}문항을 생성하세요.
+${QUESTION_COUNT_RULE}
 4. 각 문제에 간단한 해설을 포함하세요.
 5. 노트 원본 문장에서 핵심 키워드를 ____로 대체하세요.
 6. 빈칸 채우기는 허용 가능한 별칭(acceptedAnswers)도 포함하세요.
@@ -47,13 +69,12 @@ const QUIZ_TYPE_RULES: Record<QuizType, string> = {
 export function buildQuizPrompt(
   noteTitle: string,
   noteContent: string,
-  questionCount: number,
+  questionRange: QuestionRange,
   quizType: QuizType,
 ): string {
-  const rules = QUIZ_TYPE_RULES[quizType].replace(
-    "${questionCount}",
-    String(questionCount),
-  );
+  const rules = QUIZ_TYPE_RULES[quizType]
+    .replace("${minQuestions}", String(questionRange.min))
+    .replace("${maxQuestions}", String(questionRange.max));
 
   return `당신은 학습 퀴즈 생성 전문가입니다.
 아래 노트 내용을 바탕으로 퀴즈를 생성하세요.

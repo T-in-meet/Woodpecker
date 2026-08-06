@@ -5,7 +5,7 @@ import { z } from "zod";
 import { getGemini } from "@/lib/gemini/client";
 import {
   buildQuizPrompt,
-  getQuestionCount,
+  getQuestionRange,
   type QuizType,
 } from "@/lib/gemini/prompts";
 import { createClient } from "@/lib/supabase/server";
@@ -74,11 +74,11 @@ export async function generateQuiz(
     }
   }
 
-  const questionCount = getQuestionCount(note.content.length);
+  const questionRange = getQuestionRange(note.content.length);
   const prompt = buildQuizPrompt(
     note.title,
     note.content,
-    questionCount,
+    questionRange,
     quizType,
   );
 

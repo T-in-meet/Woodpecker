@@ -21,7 +21,7 @@ export const quizQuestionSchema = z.discriminatedUnion("type", [
 ]);
 
 export const quizResponseSchema = z.object({
-  questions: z.array(quizQuestionSchema).min(1).max(10),
+  questions: z.array(quizQuestionSchema).min(1).max(20),
 });
 
 export type OxQuestion = z.infer<typeof oxQuestionSchema>;
