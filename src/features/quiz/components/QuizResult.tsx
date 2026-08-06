@@ -11,8 +11,9 @@ function formatAnswer(question: QuizQuestion): string {
     return question.answer ? "O" : "X";
   }
 
+  // 객관식은 본문을 그대로 옮기면 길어져서 선택지 번호만 보여준다. 내용은 해설이 설명한다.
   if (question.type === "choice") {
-    return question.options[question.answer] ?? "";
+    return `${question.answer + 1}번`;
   }
 
   return question.answer;
@@ -73,11 +74,28 @@ export function QuizResult({
               </span>
               <div className="flex-1">
                 <p className="text-sm">{q.question}</p>
-                {!answer?.isCorrect && (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    정답: {formatAnswer(q)}
-                  </p>
-                )}
+                <div className="mt-2 space-y-1.5">
+                  <div className="flex items-start gap-2">
+                    <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
+                      정답
+                    </span>
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      {formatAnswer(q)}
+                    </p>
+                  </div>
+                  {/* 해설은 틀린 문항에서만 보여 목록이 길어지지 않게 한다.
+                      빈칸은 정답 문자열이 곧 설명이라 해설을 생략한다. */}
+                  {!answer?.isCorrect && q.type !== "blank" && (
+                    <div className="flex items-start gap-2">
+                      <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
+                        해설
+                      </span>
+                      <p className="text-xs leading-5 text-muted-foreground">
+                        {q.explanation}
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           );

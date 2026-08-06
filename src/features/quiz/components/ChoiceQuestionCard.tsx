@@ -7,8 +7,6 @@ import { cn } from "@/lib/utils/cn";
 
 import type { ChoiceQuestion } from "../schema";
 
-const OPTION_LABELS = ["A", "B", "C", "D"] as const;
-
 type ChoiceQuestionCardProps = {
   question: ChoiceQuestion;
   onSubmit: (answer: string) => void;
@@ -62,8 +60,8 @@ export function ChoiceQuestionCard({
                 submitted && "cursor-default",
               )}
             >
-              <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">
-                {OPTION_LABELS[index] ?? index + 1}
+              <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xs font-semibold text-foreground dark:bg-amber-900/40">
+                {index + 1}
               </span>
               <span className="flex-1 text-sm leading-relaxed">{option}</span>
             </button>
