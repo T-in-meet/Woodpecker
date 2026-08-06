@@ -51,7 +51,14 @@ ${QUESTION_COUNT_RULE}
 ${QUESTION_COUNT_RULE}
 4. 각 문제에 간단한 해설을 포함하세요.
 5. 노트 원본 문장에서 핵심 키워드를 ____로 대체하세요.
-6. 빈칸 채우기는 허용 가능한 별칭(acceptedAnswers)도 포함하세요.
+6. acceptedAnswers에는 정답과 같은 뜻으로 인정할 표기를 빠짐없이 넣으세요.
+   - 영어 원어와 한글 표기를 반드시 서로 포함하세요. (레지스터 → register / register → 레지스터)
+   - 한글 음차 표기가 여럿이면 모두 넣으세요. (clock → 클럭, 클락, 클록)
+   - 통용되는 약어와 정식 명칭을 함께 넣으세요. (데이터베이스 → DB, database / CPU → 중앙처리장치, central processing unit)
+   - 같은 대상을 가리키는 다른 용어도 넣으세요. (주기억장치 → 메인 메모리, main memory)
+   - 노트에 나오지 않는 표기라도 일반적으로 통용되면 넣으세요.
+   - 대소문자, 띄어쓰기, 문장부호, 하이픈 차이는 채점에서 자동으로 무시되므로 그런 변형은 넣지 마세요.
+   - 뜻이 달라지는 표기는 넣지 마세요. 정답으로 인정할 수 있는 것만 넣습니다.
 7. 반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트를 포함하지 마세요.
 
 ## JSON 형식
@@ -60,8 +67,8 @@ ${QUESTION_COUNT_RULE}
     {
       "type": "blank",
       "question": "____에 들어갈 단어가 포함된 문장",
-      "answer": "정답 키워드",
-      "acceptedAnswers": ["허용 별칭1", "허용 별칭2"],
+      "answer": "레지스터",
+      "acceptedAnswers": ["register", "레지스타"],
       "explanation": "해설"
     }
   ]

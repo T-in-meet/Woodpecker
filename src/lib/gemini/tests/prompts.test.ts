@@ -91,6 +91,14 @@ describe("buildQuizPrompt", () => {
     expect(prompt).toContain("acceptedAnswers");
   });
 
+  it("blank 타입은 영문·음차·약어를 acceptedAnswers에 넣도록 지시한다", () => {
+    const prompt = buildQuizPrompt("제목", "내용", range, "blank");
+
+    expect(prompt).toContain("영어 원어와 한글 표기를 반드시 서로 포함");
+    expect(prompt).toContain("한글 음차 표기가 여럿이면 모두");
+    expect(prompt).toContain("통용되는 약어와 정식 명칭을 함께");
+  });
+
   it("choice 타입은 4지선다 규칙과 JSON 형식을 포함한다", () => {
     const prompt = buildQuizPrompt("제목", "내용", range, "choice");
 
