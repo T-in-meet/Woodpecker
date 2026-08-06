@@ -55,8 +55,8 @@ export function QuizModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
+      <DialogContent className="flex max-h-[85dvh] flex-col overflow-hidden">
+        <DialogHeader className="shrink-0">
           <DialogTitle>퀴즈</DialogTitle>
           <DialogDescription className="truncate">
             {noteTitle}
@@ -109,7 +109,7 @@ export function QuizModal({
         )}
 
         {phase === "playing" && currentQuestion && (
-          <div>
+          <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="mb-4 flex items-center justify-between">
               <span className="text-sm text-muted-foreground">
                 {currentIndex + 1} / {questions.length}
