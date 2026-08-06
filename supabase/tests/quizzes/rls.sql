@@ -4,7 +4,7 @@
 
 BEGIN;
 
-SELECT plan(8);
+SELECT plan(9);
 
 -- 테스트용 UUID 준비
 SELECT set_config('test.quizzes_rls_user_a_id', gen_random_uuid()::text, true);
@@ -75,15 +75,16 @@ VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- user_b 소유 퀴즈 (RLS 우회 상태에서 미리 넣어 둔다)
-INSERT INTO public.quizzes (id, note_id, user_id, questions, note_content_hash)
+INSERT INTO public.quizzes (id, note_id, user_id, quiz_type, questions, note_content_hash)
 VALUES (
   current_setting('test.quizzes_rls_quiz_b_id')::uuid,
   current_setting('test.quizzes_rls_note_b_id')::uuid,
   current_setting('test.quizzes_rls_user_b_id')::uuid,
+  'ox',
   '{"questions":[]}'::jsonb,
-  'hash-b:ox'
+  'hash-b'
 )
-ON CONFLICT (note_id) DO NOTHING;
+ON CONFLICT (note_id, quiz_type) DO NOTHING;
 
 -- [정답 조건]
 SET LOCAL ROLE authenticated;
@@ -100,8 +101,8 @@ SELECT set_config(
 SELECT lives_ok(
   format(
     $sql$
-      INSERT INTO public.quizzes (note_id, user_id, questions, note_content_hash)
-      VALUES ('%s'::uuid, '%s'::uuid, '{"questions":[]}'::jsonb, 'hash-a:ox');
+      INSERT INTO public.quizzes (note_id, user_id, quiz_type, questions, note_content_hash)
+      VALUES ('%s'::uuid, '%s'::uuid, 'ox', '{"questions":[]}'::jsonb, 'hash-a');
     $sql$,
     current_setting('test.quizzes_rls_note_a_id'),
     current_setting('test.quizzes_rls_user_a_id')
@@ -109,18 +110,32 @@ SELECT lives_ok(
   $$user_a로 인증 후 본인 노트에 대한 quiz를 INSERT할 수 있어야 한다$$
 );
 
--- user_a로 인증 후 본인 quiz를 SELECT하면 해당 행이 반환되어야 한다
+-- 같은 노트라도 유형이 다르면 별도 행으로 저장되어야 한다
+SELECT lives_ok(
+  format(
+    $sql$
+      INSERT INTO public.quizzes (note_id, user_id, quiz_type, questions, note_content_hash)
+      VALUES ('%s'::uuid, '%s'::uuid, 'choice', '{"questions":[]}'::jsonb, 'hash-a');
+    $sql$,
+    current_setting('test.quizzes_rls_note_a_id'),
+    current_setting('test.quizzes_rls_user_a_id')
+  ),
+  $$같은 노트라도 유형이 다르면 별도 행으로 저장되어야 한다$$
+);
+
+-- user_a로 인증 후 본인 quiz를 SELECT하면 유형별로 각각 반환되어야 한다
 SELECT is(
   (SELECT count(*) FROM public.quizzes WHERE note_id = current_setting('test.quizzes_rls_note_a_id')::uuid),
-  1::bigint,
-  $$user_a로 인증 후 본인 quiz를 SELECT하면 해당 행이 반환되어야 한다$$
+  2::bigint,
+  $$user_a로 인증 후 본인 quiz를 SELECT하면 유형별로 각각 반환되어야 한다$$
 );
 
 -- user_a로 인증 후 본인 quiz를 UPDATE할 수 있어야 한다
 WITH updated AS (
   UPDATE public.quizzes
-  SET note_content_hash = 'hash-a-updated:ox'
+  SET note_content_hash = 'hash-a-updated'
   WHERE note_id = current_setting('test.quizzes_rls_note_a_id')::uuid
+    AND quiz_type = 'ox'
   RETURNING 1
 )
 SELECT is(
@@ -129,19 +144,19 @@ SELECT is(
   $$user_a로 인증 후 본인 quiz를 UPDATE할 수 있어야 한다$$
 );
 
--- 같은 note_id로 quiz를 다시 INSERT하면 unique 제약에 걸려야 한다
+-- 같은 note_id·유형으로 quiz를 다시 INSERT하면 unique 제약에 걸려야 한다
 SELECT throws_ok(
   format(
     $sql$
-      INSERT INTO public.quizzes (note_id, user_id, questions, note_content_hash)
-      VALUES ('%s'::uuid, '%s'::uuid, '{"questions":[]}'::jsonb, 'hash-a-dup:ox');
+      INSERT INTO public.quizzes (note_id, user_id, quiz_type, questions, note_content_hash)
+      VALUES ('%s'::uuid, '%s'::uuid, 'ox', '{"questions":[]}'::jsonb, 'hash-a-dup');
     $sql$,
     current_setting('test.quizzes_rls_note_a_id'),
     current_setting('test.quizzes_rls_user_a_id')
   ),
   '23505',
   NULL,
-  $$같은 note_id로 quiz를 다시 INSERT하면 unique 제약에 걸려야 한다$$
+  $$같은 note_id·유형으로 quiz를 다시 INSERT하면 unique 제약에 걸려야 한다$$
 );
 
 -- [예외 조건]
@@ -150,8 +165,8 @@ SELECT throws_ok(
 SELECT throws_ok(
   format(
     $sql$
-      INSERT INTO public.quizzes (note_id, user_id, questions, note_content_hash)
-      VALUES ('%s'::uuid, '%s'::uuid, '{"questions":[]}'::jsonb, 'hijack:ox');
+      INSERT INTO public.quizzes (note_id, user_id, quiz_type, questions, note_content_hash)
+      VALUES ('%s'::uuid, '%s'::uuid, 'ox', '{"questions":[]}'::jsonb, 'hijack');
     $sql$,
     current_setting('test.quizzes_rls_note_b_id'),
     current_setting('test.quizzes_rls_user_a_id')
