@@ -1,5 +1,4 @@
 import type { AiTokenUsage } from "@/features/ai/providers/types";
-import type { Json } from "@/types/db.helpers";
 
 import { executeNoteChat } from "../execution/execute";
 import {
@@ -38,8 +37,8 @@ export type RunNoteChatStreamResult = {
   /** Provider가 생성한 최종 답변입니다. */
   content: string;
 
-  /** 현재 답변에서 참고한 Context 노트 순위입니다. */
-  referencedNoteRanks: number[];
+  /** 현재 답변 생성 과정에서 참고한 노트 ID 목록입니다. */
+  referencedNoteIds: string[];
 
   /** 완료된 Run ID입니다. */
   runId: string;
@@ -59,8 +58,8 @@ export type RunNoteChatStreamResult = {
  * 4. Provider 스트림이 완료되면 Assistant Message와 Run 성공 결과를 저장합니다.
  * 5. 실행 중 오류가 발생하면 Run을 실패 상태로 완료합니다.
  *
- * 현재 Context 검색은 연결되지 않았으므로 `sources`와
- * `referencedNoteRanks`는 빈 배열로 저장합니다.
+ * Context 검색 결과는 executeNoteChat 실행 결과에서 전달받아
+ * Assistant Message와 Run 결과 저장에 사용합니다.
  *
  * @param params 실행할 Run과 대화 정보
  * @param onEvent 클라이언트에 전달할 스트림 이벤트 처리 함수
@@ -90,6 +89,8 @@ export async function runNoteChatStream(
       userMessageId: params.userMessageId,
     });
 
+    const { referencedNoteIds, sources } = execution;
+
     const consumed = await consumeNoteChatProviderStream(
       execution.providerStream,
       async (event) => {
@@ -99,16 +100,9 @@ export async function runNoteChatStream(
 
     usage = consumed.result.usage;
 
-    /*
-     * Context 검색이 추가되기 전까지는 출처와 참고 순위를 비워 둡니다.
-     * 이후 Context 실행 결과를 executeNoteChat에서 반환하도록 확장합니다.
-     */
-    const sources: Json[] = [];
-    const referencedNoteRanks: number[] = [];
-
     const assistantMessageId = await completeNoteChatRunSuccess({
       content: consumed.content,
-      referencedNoteRanks,
+      referencedNoteIds,
       runId: params.runId,
       sources,
       usage,
@@ -116,7 +110,7 @@ export async function runNoteChatStream(
 
     await onEvent({
       assistantMessageId,
-      referencedNoteRanks,
+      referencedNoteIds,
       runId: params.runId,
       type: "finish",
     });
@@ -124,7 +118,7 @@ export async function runNoteChatStream(
     return {
       assistantMessageId,
       content: consumed.content,
-      referencedNoteRanks,
+      referencedNoteIds,
       runId: params.runId,
       usage,
     };

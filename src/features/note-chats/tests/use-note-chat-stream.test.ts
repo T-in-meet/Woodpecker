@@ -57,7 +57,7 @@ describe("useNoteChatStream", () => {
         },
         {
           assistantMessageId: ASSISTANT_MESSAGE_ID,
-          referencedNoteRanks: [],
+          referencedNoteIds: [],
           runId: RUN_ID,
           type: "finish",
         },
@@ -90,7 +90,7 @@ describe("useNoteChatStream", () => {
     expect(result.current.content).toBe("첫 번째 답변");
     expect(result.current.runId).toBe(RUN_ID);
     expect(result.current.assistantMessageId).toBe(ASSISTANT_MESSAGE_ID);
-    expect(result.current.referencedNoteRanks).toEqual([]);
+    expect(result.current.referencedNoteIds).toEqual([]);
     expect(result.current.error).toBeNull();
     expect(result.current.isStreaming).toBe(false);
   });
@@ -184,7 +184,7 @@ describe("useNoteChatStream", () => {
           },
           {
             assistantMessageId: ASSISTANT_MESSAGE_ID,
-            referencedNoteRanks: [],
+            referencedNoteIds: [],
             runId: RUN_ID,
             type: "finish",
           },

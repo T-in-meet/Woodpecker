@@ -40,8 +40,8 @@ export const noteChatUserMessageContentSchema = z.object({
 /**
  * AI가 생성한 노트 챗봇 메시지의 `content`를 검증합니다.
  *
- * `referencedNoteRanks`에는 답변이 실제로 참고한 Context 노트의
- * 1부터 시작하는 순위를 저장합니다. 참고한 노트가 없으면 빈 배열을 사용합니다.
+ * `referencedNoteIds`에는 답변 생성 과정에서 참고한 노트의
+ * id를 순서대로 저장합니다. 참고한 노트가 없으면 빈 배열을 사용합니다.
  */
 export const noteChatAssistantMessageContentSchema = z.object({
   text: z

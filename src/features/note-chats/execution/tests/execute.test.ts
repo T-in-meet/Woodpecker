@@ -111,6 +111,8 @@ const PREPARED_EXECUTION: PreparedNoteChatExecution = {
       updated_at: "2026-08-06T00:00:00.000Z",
     },
   },
+  referencedNoteIds: [],
+  sources: [],
   userMessageId: USER_MESSAGE_ID,
 };
 
@@ -145,6 +147,8 @@ describe("executeNoteChat", () => {
     expect(result).toEqual({
       prepared: PREPARED_EXECUTION,
       providerStream: PROVIDER_STREAM,
+      referencedNoteIds: PREPARED_EXECUTION.referencedNoteIds,
+      sources: PREPARED_EXECUTION.sources,
     });
   });
 

@@ -1,4 +1,5 @@
 import type { AiChatStreamEvent } from "@/features/ai/providers/types";
+import type { Json } from "@/types/db.helpers";
 
 import type { NoteChatRunSettings } from "../schema";
 import {
@@ -24,7 +25,8 @@ export type ExecuteNoteChatParams = {
 /**
  * 노트 챗봇 실행 시작 결과입니다.
  *
- * 준비된 실행 정보와 Provider 스트림을 함께 반환합니다.
+ * 준비된 실행 정보와 Provider 스트림,
+ * 답변 생성에 사용된 Context 정보를 함께 반환합니다.
  * 이후 Route 또는 Stream 계층에서 Provider 이벤트를 소비하고
  * Assistant Message 및 Run 결과를 저장합니다.
  */
@@ -34,6 +36,12 @@ export type NoteChatExecution = {
 
   /** Provider가 반환하는 공통 Chat 스트림입니다. */
   providerStream: AsyncGenerator<AiChatStreamEvent>;
+
+  /** 답변 생성 과정에서 참고한 노트 ID 목록입니다. */
+  referencedNoteIds: string[];
+
+  /** 실행 과정에서 생성된 Context 출처 Snapshot입니다. */
+  sources: Json[];
 };
 
 /**
@@ -44,6 +52,7 @@ export type NoteChatExecution = {
  * 1. Prompt와 Model Config를 조회·검증합니다.
  * 2. 대화 이력과 현재 질문으로 Provider 메시지를 구성합니다.
  * 3. 선택한 Chat Model의 Provider 스트림을 생성합니다.
+ * 4. 답변 생성에 필요한 Context 정보를 반환합니다.
  *
  * 이 함수는 Provider 스트림을 직접 소비하지 않으며,
  * Assistant Message 저장이나 Run 성공·실패 처리도 수행하지 않습니다.
@@ -70,5 +79,7 @@ export async function executeNoteChat(
   return {
     prepared,
     providerStream,
+    referencedNoteIds: prepared.referencedNoteIds,
+    sources: prepared.sources,
   };
 }

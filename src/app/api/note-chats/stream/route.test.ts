@@ -268,7 +268,7 @@ describe("POST /api/note-chats/stream", () => {
 
         await onEvent({
           assistantMessageId: "99999999-9999-4999-8999-999999999999",
-          referencedNoteRanks: [],
+          referencedNoteIds: [],
           runId: RUN_ID,
           type: "finish",
         });
@@ -276,7 +276,7 @@ describe("POST /api/note-chats/stream", () => {
         return {
           assistantMessageId: "99999999-9999-4999-8999-999999999999",
           content: "첫 번째 답변",
-          referencedNoteRanks: [],
+          referencedNoteIds: [],
           runId: RUN_ID,
           usage: {
             inputTokens: 5,
@@ -334,7 +334,7 @@ describe("POST /api/note-chats/stream", () => {
       },
       {
         assistantMessageId: "99999999-9999-4999-8999-999999999999",
-        referencedNoteRanks: [],
+        referencedNoteIds: [],
         runId: RUN_ID,
         type: "finish",
       },

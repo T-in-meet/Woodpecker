@@ -92,7 +92,7 @@ describe("streamNoteChatQuestion", () => {
           '{"runId":"66666666-6666-4666-8666-666666666666","type":"start"}\n',
           '{"delta":"첫 번째 ","type":"text-delta"}\n',
           '{"delta":"답변","type":"text-delta"}\n',
-          '{"assistantMessageId":"77777777-7777-4777-8777-777777777777","referencedNoteRanks":[],"runId":"66666666-6666-4666-8666-666666666666","type":"finish"}\n',
+          '{"assistantMessageId":"77777777-7777-4777-8777-777777777777","referencedNoteIds":[],"runId":"66666666-6666-4666-8666-666666666666","type":"finish"}\n',
         ]),
         {
           status: 200,
@@ -117,7 +117,7 @@ describe("streamNoteChatQuestion", () => {
       },
       {
         assistantMessageId: "77777777-7777-4777-8777-777777777777",
-        referencedNoteRanks: [],
+        referencedNoteIds: [],
         runId: "66666666-6666-4666-8666-666666666666",
         type: "finish",
       },

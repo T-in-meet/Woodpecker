@@ -44,7 +44,7 @@ describe("resolveNoteChatExecutionMessages", () => {
         role: AI_CHAT_MESSAGE_ROLE.ASSISTANT,
         content: {
           text: "첫 번째 답변",
-          referencedNoteRanks: [],
+          referencedNoteIds: [],
         },
         sequence_number: 2,
       }),
@@ -126,7 +126,7 @@ describe("resolveNoteChatExecutionMessages", () => {
           role: AI_CHAT_MESSAGE_ROLE.ASSISTANT,
           content: {
             text: "이후 답변",
-            referencedNoteRanks: [],
+            referencedNoteIds: [],
           },
           sequence_number: 3,
         }),
@@ -168,7 +168,7 @@ describe("resolveNoteChatExecutionMessages", () => {
             role: AI_CHAT_MESSAGE_ROLE.ASSISTANT,
             content: {
               text: "AI 답변",
-              referencedNoteRanks: [],
+              referencedNoteIds: [],
             },
           }),
         ],

@@ -133,7 +133,7 @@ describe("completeNoteChatRunSuccess", () => {
     const result = await completeNoteChatRunSuccess(
       {
         content: "AI 답변입니다.",
-        referencedNoteRanks: [],
+        referencedNoteIds: [],
         runId: RUN_ID,
         sources: [],
         usage: USAGE,
@@ -145,7 +145,7 @@ describe("completeNoteChatRunSuccess", () => {
 
     expect(rpc).toHaveBeenCalledWith("complete_note_chat_run_success", {
       p_content: {
-        referencedNoteRanks: [],
+        referencedNoteIds: [],
         text: "AI 답변입니다.",
       },
       p_run_id: RUN_ID,
@@ -166,7 +166,7 @@ describe("completeNoteChatRunSuccess", () => {
       completeNoteChatRunSuccess(
         {
           content: "   ",
-          referencedNoteRanks: [],
+          referencedNoteIds: [],
           runId: RUN_ID,
           sources: [],
           usage: USAGE,
@@ -192,7 +192,7 @@ describe("completeNoteChatRunSuccess", () => {
       completeNoteChatRunSuccess(
         {
           content: "AI 답변입니다.",
-          referencedNoteRanks: [],
+          referencedNoteIds: [],
           runId: RUN_ID,
           sources: [],
           usage: USAGE,
@@ -216,7 +216,7 @@ describe("completeNoteChatRunSuccess", () => {
       completeNoteChatRunSuccess(
         {
           content: "AI 답변입니다.",
-          referencedNoteRanks: [],
+          referencedNoteIds: [],
           runId: RUN_ID,
           sources: [],
           usage: USAGE,

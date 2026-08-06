@@ -91,6 +91,8 @@ describe("runNoteChatStream", () => {
           type: "finish",
         },
       ]),
+      referencedNoteIds: [],
+      sources: [],
     });
 
     const events: NoteChatStreamEvent[] = [];
@@ -117,7 +119,7 @@ describe("runNoteChatStream", () => {
 
     expect(completeNoteChatRunSuccess).toHaveBeenCalledWith({
       content: "완성된 답변",
-      referencedNoteRanks: [],
+      referencedNoteIds: [],
       runId: RUN_ID,
       sources: [],
       usage: USAGE,
@@ -140,7 +142,7 @@ describe("runNoteChatStream", () => {
       },
       {
         assistantMessageId: ASSISTANT_MESSAGE_ID,
-        referencedNoteRanks: [],
+        referencedNoteIds: [],
         runId: RUN_ID,
         type: "finish",
       },
@@ -149,7 +151,7 @@ describe("runNoteChatStream", () => {
     expect(result).toEqual({
       assistantMessageId: ASSISTANT_MESSAGE_ID,
       content: "완성된 답변",
-      referencedNoteRanks: [],
+      referencedNoteIds: [],
       runId: RUN_ID,
       usage: USAGE,
     });
@@ -207,6 +209,8 @@ describe("runNoteChatStream", () => {
           type: "finish",
         },
       ]),
+      referencedNoteIds: [],
+      sources: [],
     });
 
     vi.mocked(completeNoteChatRunSuccess).mockRejectedValue(

@@ -1,4 +1,5 @@
 import type { AiProviderChatMessage } from "@/features/ai/providers/types";
+import type { Json } from "@/types/db.helpers";
 
 import { getNoteChatConversationDetail } from "../queries";
 import type { NoteChatRunSettings } from "../schema";
@@ -22,6 +23,12 @@ export type PreparedNoteChatExecution = {
 
   /** 현재 실행을 발생시킨 사용자 메시지 ID입니다. */
   userMessageId: string;
+
+  /** 답변 생성 과정에서 참고한 노트 ID 목록입니다. */
+  referencedNoteIds: string[];
+
+  /** 실행 과정에서 생성된 Context 출처 Snapshot입니다. */
+  sources: Json[];
 };
 
 type PrepareNoteChatExecutionParams = {
@@ -81,7 +88,9 @@ export async function prepareNoteChatExecution(
   return {
     conversation: detail.conversation,
     messages,
+    referencedNoteIds: [],
     settings,
+    sources: [],
     userMessageId: params.userMessageId,
   };
 }

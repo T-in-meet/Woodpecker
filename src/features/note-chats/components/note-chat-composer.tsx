@@ -44,7 +44,7 @@ export function NoteChatComposer({
     content,
     error: streamError,
     isStreaming,
-    referencedNoteRanks,
+    referencedNoteIds,
     runId,
     start,
   } = useNoteChatStream();
@@ -182,7 +182,7 @@ export function NoteChatComposer({
         {isStreaming
           ? "AI 답변을 생성하고 있습니다."
           : assistantMessageId && runId
-            ? `답변 생성이 완료되었습니다. 참고 노트 ${referencedNoteRanks.length}개`
+            ? `답변 생성이 완료되었습니다. 참고 노트 ${referencedNoteIds.length}개`
             : ""}
       </p>
     </section>

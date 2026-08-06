@@ -37,7 +37,7 @@ export function resolveNoteChatProviderMessages(
 
       case AI_CHAT_MESSAGE_ROLE.ASSISTANT: {
         /*
-         * Assistant content에는 referencedNoteRanks도 포함되지만,
+         * Assistant content에는 referencedNoteIds도 포함되지만,
          * 이전 대화 이력에는 답변 본문만 전달합니다.
          */
         const content = noteChatAssistantMessageContentSchema.parse(

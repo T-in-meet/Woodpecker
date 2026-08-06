@@ -28,8 +28,8 @@ export type NoteChatStreamingState = {
   /** 답변 생성이 진행 중인지 여부입니다. */
   isStreaming: boolean;
 
-  /** 완료된 답변의 참고 노트 순위입니다. */
-  referencedNoteRanks: number[];
+  /** 완료된 답변의 참고 노트 ID 목록입니다. */
+  referencedNoteIds: string[];
 };
 
 /**
@@ -58,7 +58,7 @@ export function useNoteChatStream() {
     content: "",
     error: null,
     isStreaming: false,
-    referencedNoteRanks: [],
+    referencedNoteIds: [],
     runId: null,
   });
 
@@ -105,7 +105,7 @@ export function useNoteChatStream() {
           ...current,
           assistantMessageId: event.assistantMessageId,
           isStreaming: false,
-          referencedNoteRanks: event.referencedNoteRanks,
+          referencedNoteIds: event.referencedNoteIds,
           runId: event.runId,
         }));
 
@@ -145,7 +145,7 @@ export function useNoteChatStream() {
         content: "",
         error: null,
         isStreaming: true,
-        referencedNoteRanks: [],
+        referencedNoteIds: [],
         runId: null,
       });
 

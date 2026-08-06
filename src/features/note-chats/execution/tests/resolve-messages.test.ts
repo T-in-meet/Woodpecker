@@ -58,7 +58,10 @@ describe("resolveNoteChatProviderMessages", () => {
         role: AI_CHAT_MESSAGE_ROLE.ASSISTANT,
         content: {
           text: "AI 답변입니다.",
-          referencedNoteRanks: [1, 2],
+          referencedNoteIds: [
+            "77777777-7777-4777-8777-777777777777",
+            "88888888-8888-4888-8888-888888888888",
+          ],
         },
         sequence_number: 2,
       }),
@@ -85,7 +88,7 @@ describe("resolveNoteChatProviderMessages", () => {
         role: AI_CHAT_MESSAGE_ROLE.ASSISTANT,
         content: {
           text: "첫 번째 답변",
-          referencedNoteRanks: [],
+          referencedNoteIds: [],
         },
         sequence_number: 2,
       }),

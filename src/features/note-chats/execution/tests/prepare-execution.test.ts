@@ -125,7 +125,9 @@ describe("prepareNoteChatExecution", () => {
     expect(result).toEqual({
       conversation: CONVERSATION,
       messages: PROVIDER_MESSAGES,
+      referencedNoteIds: [],
       settings: RESOLVED_SETTINGS,
+      sources: [],
       userMessageId: USER_MESSAGE_ID,
     });
   });

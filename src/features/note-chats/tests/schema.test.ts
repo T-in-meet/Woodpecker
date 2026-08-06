@@ -23,6 +23,7 @@ const VALID_AGENT_ID = "33333333-3333-4333-8333-333333333333";
 const VALID_PROMPT_VERSION_ID = "44444444-4444-4444-8444-444444444444";
 const VALID_CHAT_MODEL_CONFIG_ID = "55555555-5555-4555-8555-555555555555";
 const VALID_EMBEDDING_MODEL_CONFIG_ID = "66666666-6666-4666-8666-666666666666";
+const VALID_NOTE_ID = "77777777-7777-4777-8777-777777777777";
 
 /** 유효한 노트 챗봇 실행 설정입니다. */
 const VALID_RUN_SETTINGS = {
@@ -130,31 +131,31 @@ describe("noteChatUserMessageContentSchema", () => {
 });
 
 describe("noteChatAssistantMessageContentSchema", () => {
-  it("AI 답변과 참고 노트 순위를 검증한다", () => {
+  it("AI 답변과 참고 노트 ID를 검증한다", () => {
     const result = noteChatAssistantMessageContentSchema.parse({
       text: "  답변입니다.  ",
-      referencedNoteRanks: [1, 3],
+      referencedNoteIds: [VALID_NOTE_ID],
     });
 
     expect(result).toEqual({
       text: "답변입니다.",
-      referencedNoteRanks: [1, 3],
+      referencedNoteIds: [VALID_NOTE_ID],
     });
   });
 
   it("참고 노트가 없는 빈 배열을 허용한다", () => {
     const result = noteChatAssistantMessageContentSchema.parse({
       text: "참고한 노트가 없습니다.",
-      referencedNoteRanks: [],
+      referencedNoteIds: [],
     });
 
-    expect(result.referencedNoteRanks).toEqual([]);
+    expect(result.referencedNoteIds).toEqual([]);
   });
 
   it("공백만 있는 AI 답변을 거부한다", () => {
     const result = noteChatAssistantMessageContentSchema.safeParse({
       text: "   ",
-      referencedNoteRanks: [],
+      referencedNoteIds: [],
     });
 
     expect(result.success).toBe(false);
@@ -163,17 +164,14 @@ describe("noteChatAssistantMessageContentSchema", () => {
     );
   });
 
-  it.each([0, -1, 1.5])(
-    "양의 정수가 아닌 참고 노트 순위 %s를 거부한다",
-    (rank) => {
-      const result = noteChatAssistantMessageContentSchema.safeParse({
-        text: "답변입니다.",
-        referencedNoteRanks: [rank],
-      });
+  it("유효하지 않은 참고 노트 ID를 거부한다", () => {
+    const result = noteChatAssistantMessageContentSchema.safeParse({
+      text: "답변입니다.",
+      referencedNoteIds: ["invalid-id"],
+    });
 
-      expect(result.success).toBe(false);
-    },
-  );
+    expect(result.success).toBe(false);
+  });
 });
 
 describe("noteChatRunSettingsSchema", () => {

@@ -15,7 +15,25 @@ import type { AiEmbeddingMatchRow } from "./types";
 import { formatAiVectorLiteral } from "./vector";
 
 /** AI embedding 검색 RPC 호출에 필요한 Supabase Client 최소 형태입니다. */
-type AiEmbeddingMatchClient = Pick<ReturnType<typeof createAdminClient>, "rpc">;
+type AiEmbeddingMatchClient = {
+  rpc: (
+    functionName: "match_ai_embeddings",
+    args: {
+      p_input_kind: string;
+      p_limit?: number;
+      p_min_similarity?: number | null;
+      p_model_config_id: string;
+      p_owner_user_id: string;
+      p_query_embedding: string;
+      p_source_type: string;
+    },
+  ) => Promise<{
+    data: unknown;
+    error: { message: string } | null;
+  }>;
+};
+
+const DEFAULT_MATCH_LIMIT = 10;
 
 /**
  * 저장된 AI embedding 중 query embedding과 유사한 결과를 검색합니다.
@@ -55,6 +73,8 @@ export async function matchAiEmbeddings(
    */
   const rpcArgs = {
     p_input_kind: params.inputKind,
+    p_limit: params.limit ?? DEFAULT_MATCH_LIMIT,
+    p_min_similarity: params.minSimilarity ?? null,
     p_model_config_id: params.modelConfigId,
     p_owner_user_id: params.ownerUserId,
     p_query_embedding: formatAiVectorLiteral(params.queryEmbedding),

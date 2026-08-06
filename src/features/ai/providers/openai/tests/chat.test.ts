@@ -303,7 +303,8 @@ describe("createOpenAiChatCompletion", () => {
         choices: [
           {
             message: {
-              content: '{"answer":"응답","referencedNoteRanks":[1]}',
+              content:
+                '{"answer":"응답","referencedNoteIds":["11111111-1111-4111-8111-111111111111"]}',
             },
           },
         ],
@@ -320,17 +321,13 @@ describe("createOpenAiChatCompletion", () => {
           schema: {
             additionalProperties: false,
             properties: {
-              answer: {
-                type: "string",
-              },
-              referencedNoteRanks: {
-                items: {
-                  type: "integer",
-                },
+              answer: { type: "string" },
+              referencedNoteIds: {
+                items: { type: "string" },
                 type: "array",
               },
             },
-            required: ["answer", "referencedNoteRanks"],
+            required: ["answer", "referencedNoteIds"],
             type: "object",
           },
           strict: true,
@@ -360,17 +357,13 @@ describe("createOpenAiChatCompletion", () => {
               schema: {
                 additionalProperties: false,
                 properties: {
-                  answer: {
-                    type: "string",
-                  },
-                  referencedNoteRanks: {
-                    items: {
-                      type: "integer",
-                    },
+                  answer: { type: "string" },
+                  referencedNoteIds: {
+                    items: { type: "string" },
                     type: "array",
                   },
                 },
-                required: ["answer", "referencedNoteRanks"],
+                required: ["answer", "referencedNoteIds"],
                 type: "object",
               },
               strict: true,

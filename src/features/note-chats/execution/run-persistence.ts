@@ -24,11 +24,11 @@ export type CompleteNoteChatRunSuccessParams = {
   content: string;
 
   /**
-   * 실제 답변에서 참고한 Context 노트 순위입니다.
+   * 실제 답변 생성 과정에서 참고한 노트 ID 목록입니다.
    *
    * Context 검색이 연결되기 전에는 빈 배열을 전달합니다.
    */
-  referencedNoteRanks: number[];
+  referencedNoteIds: string[];
 
   /** 실행에 사용된 Context 출처 Snapshot입니다. */
   sources: Json[];
@@ -117,10 +117,10 @@ export async function completeNoteChatRunSuccess(
 
   /*
    * RPC에 전달하기 전에 Assistant Message JSON 구조를 검증합니다.
-   * 빈 답변이나 잘못된 참고 순위가 DB에 저장되는 것을 방지합니다.
+   * 빈 답변이나 잘못된 참고 노트 ID가 DB에 저장되는 것을 방지합니다.
    */
   const content = noteChatAssistantMessageContentSchema.parse({
-    referencedNoteRanks: params.referencedNoteRanks,
+    referencedNoteIds: params.referencedNoteIds,
     text: params.content,
   });
 
