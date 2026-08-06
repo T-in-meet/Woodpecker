@@ -43,14 +43,10 @@ async function hashContent(content: string): Promise<string> {
 /**
  * 캐시 키에는 프롬프트에 실제로 들어가는 입력을 모두 반영한다.
  * 제목도 프롬프트에 포함되므로 제목만 바뀌어도 새로 생성해야 한다.
+ * 퀴즈 유형은 quizzes.quiz_type 컬럼으로 분리돼 있어 해시에 넣지 않는다.
  */
-async function buildCacheKey(
-  title: string,
-  content: string,
-  quizType: QuizType,
-): Promise<string> {
-  const hash = await hashContent(`${title}\n${content}`);
-  return `${hash}:${quizType}`;
+async function buildCacheKey(title: string, content: string): Promise<string> {
+  return hashContent(`${title}\n${content}`);
 }
 
 type ValidatedInput = {
@@ -143,6 +139,7 @@ async function saveQuiz(
   params: {
     noteId: string;
     userId: string;
+    quizType: QuizType;
     questions: QuizQuestion[];
     cacheKey: string;
   },
@@ -151,10 +148,11 @@ async function saveQuiz(
     {
       note_id: params.noteId,
       user_id: params.userId,
+      quiz_type: params.quizType,
       questions: JSON.parse(JSON.stringify(params.questions)) as Json,
       note_content_hash: params.cacheKey,
     },
-    { onConflict: "note_id" },
+    { onConflict: "note_id,quiz_type" },
   );
 
   if (error) {
@@ -235,17 +233,14 @@ async function createQuiz(
     return { error: QUIZ_ERROR_MESSAGES.noteNotFound };
   }
 
-  const cacheKey = await buildCacheKey(
-    note.title,
-    note.content,
-    parsed.data.quizType,
-  );
+  const cacheKey = await buildCacheKey(note.title, note.content);
 
   if (options.useCache) {
     const { data: cached } = await supabase
       .from("quizzes")
       .select("questions, note_content_hash")
       .eq("note_id", parsed.data.noteId)
+      .eq("quiz_type", parsed.data.quizType)
       .maybeSingle();
 
     if (cached && cached.note_content_hash === cacheKey) {
@@ -293,6 +288,7 @@ async function createQuiz(
   await saveQuiz(supabase, {
     noteId: parsed.data.noteId,
     userId: user.id,
+    quizType: parsed.data.quizType,
     questions: generated.data,
     cacheKey,
   });

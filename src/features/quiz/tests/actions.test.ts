@@ -88,6 +88,15 @@ function methodNames(calls: [string, unknown[]][]): string[] {
   return calls.map(([method]) => method);
 }
 
+function upsertPayload(query: ReturnType<typeof setupSupabase>) {
+  return query.callsFor("quizzes").find(([method]) => method === "upsert")?.[1];
+}
+
+function hashOf(query: ReturnType<typeof setupSupabase>): string {
+  return (upsertPayload(query)?.[0] as { note_content_hash: string })
+    .note_content_hash;
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -155,11 +164,7 @@ describe("generateQuiz", () => {
       mockGeminiSuccess();
       await generateQuiz(NOTE_ID, "ox");
 
-      const upsertCall = first
-        .callsFor("quizzes")
-        .find(([method]) => method === "upsert");
-      const savedHash = (upsertCall?.[1][0] as { note_content_hash: string })
-        .note_content_hash;
+      const savedHash = hashOf(first);
 
       vi.clearAllMocks();
 
@@ -208,19 +213,42 @@ describe("generateQuiz", () => {
       mockGeminiSuccess();
       await generateQuiz(NOTE_ID, "ox");
 
-      const hashOf = (query: ReturnType<typeof setupSupabase>) =>
-        (
-          query
-            .callsFor("quizzes")
-            .find(([method]) => method === "upsert")?.[1][0] as {
-            note_content_hash: string;
-          }
-        ).note_content_hash;
-
       expect(hashOf(first)).not.toBe(hashOf(second));
     });
 
-    it("퀴즈 유형이 다르면 캐시 키가 달라진다", async () => {
+    it("캐시를 노트·유형 조합으로 조회한다", async () => {
+      const query = setupSupabase();
+      mockGeminiSuccess();
+
+      await generateQuiz(NOTE_ID, "ox");
+
+      expect(query.callsFor("quizzes")).toContainEqual([
+        "eq",
+        ["note_id", NOTE_ID],
+      ]);
+      expect(query.callsFor("quizzes")).toContainEqual([
+        "eq",
+        ["quiz_type", "ox"],
+      ]);
+    });
+
+    it("퀴즈 유형을 별도 행으로 저장한다", async () => {
+      const query = setupSupabase();
+      mockGeminiSuccess();
+
+      await generateQuiz(NOTE_ID, "ox");
+
+      const upsertCall = query
+        .callsFor("quizzes")
+        .find(([method]) => method === "upsert");
+
+      expect(upsertCall?.[1][0]).toMatchObject({
+        note_id: NOTE_ID,
+        quiz_type: "ox",
+      });
+    });
+
+    it("유형이 달라도 내용이 같으면 같은 해시를 쓴다", async () => {
       const first = setupSupabase();
       mockGeminiSuccess();
       await generateQuiz(NOTE_ID, "ox");
@@ -239,16 +267,7 @@ describe("generateQuiz", () => {
       });
       await generateQuiz(NOTE_ID, "blank");
 
-      const hashOf = (query: ReturnType<typeof setupSupabase>) =>
-        (
-          query
-            .callsFor("quizzes")
-            .find(([method]) => method === "upsert")?.[1][0] as {
-            note_content_hash: string;
-          }
-        ).note_content_hash;
-
-      expect(hashOf(first)).not.toBe(hashOf(second));
+      expect(hashOf(first)).toBe(hashOf(second));
     });
   });
 
@@ -340,13 +359,7 @@ describe("generateQuiz", () => {
       mockGeminiSuccess();
       await generateQuiz(NOTE_ID, "ox");
 
-      const savedHash = (
-        first
-          .callsFor("quizzes")
-          .find(([method]) => method === "upsert")?.[1][0] as {
-          note_content_hash: string;
-        }
-      ).note_content_hash;
+      const savedHash = hashOf(first);
 
       vi.clearAllMocks();
 
@@ -411,11 +424,9 @@ describe("generateQuiz", () => {
 
       await generateQuiz(NOTE_ID, "ox");
 
-      const upsertCall = query
-        .callsFor("quizzes")
-        .find(([method]) => method === "upsert");
-
-      expect(upsertCall?.[1][1]).toEqual({ onConflict: "note_id" });
+      expect(upsertPayload(query)?.[1]).toEqual({
+        onConflict: "note_id,quiz_type",
+      });
     });
 
     it("저장에 실패해도 생성된 퀴즈는 반환한다", async () => {
@@ -438,13 +449,7 @@ describe("regenerateQuiz", () => {
     mockGeminiSuccess();
     await generateQuiz(NOTE_ID, "ox");
 
-    const savedHash = (
-      first
-        .callsFor("quizzes")
-        .find(([method]) => method === "upsert")?.[1][0] as {
-        note_content_hash: string;
-      }
-    ).note_content_hash;
+    const savedHash = hashOf(first);
 
     vi.clearAllMocks();
 

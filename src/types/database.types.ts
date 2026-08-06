@@ -531,6 +531,7 @@ export type Database = {
           id: string;
           note_id: string;
           user_id: string;
+          quiz_type: string;
           questions: Json;
           note_content_hash: string;
           created_at: string;
@@ -539,6 +540,7 @@ export type Database = {
           id?: string;
           note_id: string;
           user_id: string;
+          quiz_type: string;
           questions: Json;
           note_content_hash: string;
           created_at?: string;
@@ -547,6 +549,7 @@ export type Database = {
           id?: string;
           note_id?: string;
           user_id?: string;
+          quiz_type?: string;
           questions?: Json;
           note_content_hash?: string;
           created_at?: string;
@@ -555,7 +558,7 @@ export type Database = {
           {
             foreignKeyName: "quizzes_note_id_fkey";
             columns: ["note_id"];
-            isOneToOne: true;
+            isOneToOne: false;
             referencedRelation: "notes";
             referencedColumns: ["id"];
           },
