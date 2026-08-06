@@ -15,10 +15,13 @@
 -- 성공한 생성 직후에 직접 호출해 기록을 지우고 한도를 무한정 늘릴 수 있다.
 -- Gemini 호출이 실패해도 사용량은 그대로 차감된다.
 
+-- note_id는 nullable + on delete set null이다.
+-- cascade로 두면 사용자가 임시 노트를 만들어 퀴즈를 뽑은 뒤 노트를 지워
+-- 사용 기록까지 함께 없앨 수 있다. 노트가 사라져도 사용량은 남아야 한다.
 create table public.quiz_generations (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
-  note_id uuid not null references public.notes(id) on delete cascade,
+  note_id uuid references public.notes(id) on delete set null,
   quiz_type text not null,
   created_at timestamptz not null default now()
 );
