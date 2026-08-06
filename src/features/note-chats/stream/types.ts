@@ -19,7 +19,7 @@ export type NoteChatStreamTextDeltaEvent = {
  */
 export type NoteChatStreamFinishEvent = {
   assistantMessageId: string;
-  referencedNoteRanks: number[];
+  referencedNoteIds: string[];
   runId: string;
   type: "finish";
 };

@@ -23,10 +23,10 @@ export type NoteChatUserMessageContent = AiChatMessageContent;
 /**
  * AI 답변 메시지의 JSON 콘텐츠 타입입니다.
  *
- * `referencedNoteRanks`에는 실제 답변에서 참고한 Context 노트 순위를 저장합니다.
+ * `referencedNoteIds`에는 답변 생성 과정에서 실제 참고한 노트 ID를 저장합니다.
  */
 export type NoteChatAssistantMessageContent = AiChatMessageContent & {
-  referencedNoteRanks: number[];
+  referencedNoteIds: string[];
 };
 
 /** 노트 챗봇 대화 상세 조회 결과입니다. */

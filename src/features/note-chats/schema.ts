@@ -48,7 +48,7 @@ export const noteChatAssistantMessageContentSchema = z.object({
     .string()
     .trim()
     .min(1, NOTE_CHAT_VALIDATION_MESSAGE.ASSISTANT_MESSAGE_REQUIRED),
-  referencedNoteRanks: z.array(z.number().int().positive()),
+  referencedNoteIds: z.array(z.string().uuid()),
 });
 
 /**
