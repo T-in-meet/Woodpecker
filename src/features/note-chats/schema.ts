@@ -54,30 +54,20 @@ export const noteChatAssistantMessageContentSchema = z.object({
 /**
  * 노트 챗봇 실행 시 사용할 AI 설정을 검증합니다.
  *
- * 각 값은 선택 사항이며, 값이 없거나 `null`이면 실행 계층에서
- * 현재 활성 Agent, Prompt Version 또는 Model Config를 결정합니다.
+ * 모든 설정 ID는 실행 전에 확정되어야 하며,
+ * 실행 계층에서는 이 값을 기준으로 Prompt와 Model Config를 조회합니다.
  */
 export const noteChatRunSettingsSchema = z.object({
-  agentId: z
-    .string()
-    .uuid(NOTE_CHAT_VALIDATION_MESSAGE.AI_SETTING_ID_INVALID)
-    .nullable()
-    .optional(),
+  agentId: z.string().uuid(NOTE_CHAT_VALIDATION_MESSAGE.AI_SETTING_ID_INVALID),
   promptVersionId: z
     .string()
-    .uuid(NOTE_CHAT_VALIDATION_MESSAGE.AI_SETTING_ID_INVALID)
-    .nullable()
-    .optional(),
+    .uuid(NOTE_CHAT_VALIDATION_MESSAGE.AI_SETTING_ID_INVALID),
   chatModelConfigId: z
     .string()
-    .uuid(NOTE_CHAT_VALIDATION_MESSAGE.AI_SETTING_ID_INVALID)
-    .nullable()
-    .optional(),
+    .uuid(NOTE_CHAT_VALIDATION_MESSAGE.AI_SETTING_ID_INVALID),
   embeddingModelConfigId: z
     .string()
-    .uuid(NOTE_CHAT_VALIDATION_MESSAGE.AI_SETTING_ID_INVALID)
-    .nullable()
-    .optional(),
+    .uuid(NOTE_CHAT_VALIDATION_MESSAGE.AI_SETTING_ID_INVALID),
 });
 
 /**
@@ -97,7 +87,7 @@ export const createNoteChatQuestionInputSchema = z.object({
     .string()
     .uuid(NOTE_CHAT_VALIDATION_MESSAGE.CONVERSATION_ID_INVALID),
   content: noteChatUserMessageContentSchema,
-  settings: noteChatRunSettingsSchema.optional(),
+  settings: noteChatRunSettingsSchema,
 });
 
 /**
@@ -109,7 +99,7 @@ export const createNoteChatQuestionInputSchema = z.object({
 export const updateNoteChatUserMessageInputSchema = z.object({
   messageId: z.string().uuid(NOTE_CHAT_VALIDATION_MESSAGE.MESSAGE_ID_INVALID),
   content: noteChatUserMessageContentSchema,
-  settings: noteChatRunSettingsSchema.optional(),
+  settings: noteChatRunSettingsSchema,
 });
 
 /**
@@ -132,7 +122,7 @@ export const deleteNoteChatConversationInputSchema = z.object({
 });
 
 /**
- * 노트 챗봇 실행 시 선택적으로 전달할 AI 설정입니다.
+ * 노트 챗봇 실행 전에 확정되어야 하는 AI 설정입니다.
  */
 export type NoteChatRunSettings = z.infer<typeof noteChatRunSettingsSchema>;
 
