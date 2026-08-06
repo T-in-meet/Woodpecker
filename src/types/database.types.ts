@@ -494,6 +494,38 @@ export type Database = {
           },
         ];
       };
+      quiz_generations: {
+        Row: {
+          id: string;
+          user_id: string;
+          note_id: string;
+          quiz_type: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          note_id: string;
+          quiz_type: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          note_id?: string;
+          quiz_type?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "quiz_generations_note_id_fkey";
+            columns: ["note_id"];
+            isOneToOne: false;
+            referencedRelation: "notes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       quizzes: {
         Row: {
           id: string;
@@ -591,9 +623,17 @@ export type Database = {
           user_id: string;
         }[];
       };
+      claim_quiz_generation: {
+        Args: { p_note_id: string; p_quiz_type: string };
+        Returns: string;
+      };
       complete_review_and_schedule_next: {
         Args: { p_note_id: string; p_review_log_id: string };
         Returns: string;
+      };
+      release_quiz_generation: {
+        Args: { p_note_id: string; p_quiz_type: string };
+        Returns: undefined;
       };
       get_admin_unread_notification_counts: {
         Args: { p_admin_user_id: string };

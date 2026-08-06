@@ -11,6 +11,7 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/types/database.types";
 
+import { QUIZ_ERROR_MESSAGES } from "./constants";
 import {
   type QuizQuestion,
   quizResponseSchema,
@@ -19,9 +20,13 @@ import {
 
 const noteIdSchema = z.string().uuid();
 
-const GENERATION_FAILED =
-  "퀴즈 생성에 실패했습니다. 잠시 후 다시 시도해주세요.";
-const PARSE_FAILED = "퀴즈 생성 결과를 처리할 수 없습니다. 다시 시도해주세요.";
+// claim_quiz_generation의 반환값을 사용자 메시지로 옮긴다.
+const CLAIM_ERROR_MESSAGES: Record<string, string> = {
+  not_found: QUIZ_ERROR_MESSAGES.noteNotFound,
+  in_flight: QUIZ_ERROR_MESSAGES.inFlight,
+  too_many_requests: QUIZ_ERROR_MESSAGES.tooManyRequests,
+  daily_exceeded: QUIZ_ERROR_MESSAGES.dailyExceeded,
+};
 
 type GenerateQuizResult =
   | { data: { questions: QuizQuestion[]; isNew: boolean } }
@@ -59,22 +64,30 @@ function parseInput(
 ): { data: ValidatedInput } | { error: string } {
   const parsedId = noteIdSchema.safeParse(noteId);
   if (!parsedId.success) {
-    return { error: "유효하지 않은 노트입니다." };
+    return { error: QUIZ_ERROR_MESSAGES.invalidNote };
   }
 
   const parsedType = quizTypeSchema.safeParse(quizType);
   if (!parsedType.success) {
-    return { error: "유효하지 않은 퀴즈 유형입니다." };
+    return { error: QUIZ_ERROR_MESSAGES.invalidQuizType };
   }
 
   return { data: { noteId: parsedId.data, quizType: parsedType.data } };
 }
 
+/**
+ * refundable은 Gemini 토큰이 소비되지 않아 사용량을 되돌려도 되는지를 뜻한다.
+ * 호출 자체가 실패하면 되돌리고, 응답이 온 뒤의 파싱 실패는 이미 과금됐으므로 되돌리지 않는다.
+ */
+type RequestQuestionsResult =
+  | { data: QuizQuestion[] }
+  | { error: string; refundable: boolean };
+
 async function requestQuestions(
   title: string,
   content: string,
   quizType: QuizType,
-): Promise<{ data: QuizQuestion[] } | { error: string }> {
+): Promise<RequestQuestionsResult> {
   const questionRange = getQuestionRange(content.length);
   const prompt = buildQuizPrompt(title, content, questionRange, quizType);
 
@@ -91,7 +104,7 @@ async function requestQuestions(
     responseText = response.text ?? "";
   } catch (e) {
     console.error("[generateQuiz] Gemini API 호출 실패:", e);
-    return { error: GENERATION_FAILED };
+    return { error: QUIZ_ERROR_MESSAGES.generationFailed, refundable: true };
   }
 
   // 응답 원문에는 노트 내용이 그대로 담기므로 로그에 남기지 않는다.
@@ -103,7 +116,7 @@ async function requestQuestions(
     console.error(
       `[generateQuiz] JSON 파싱 실패 (응답 길이 ${responseText.length})`,
     );
-    return { error: PARSE_FAILED };
+    return { error: QUIZ_ERROR_MESSAGES.parseFailed, refundable: false };
   }
 
   const parsed = quizResponseSchema.safeParse(json);
@@ -115,7 +128,7 @@ async function requestQuestions(
         code: issue.code,
       })),
     );
-    return { error: PARSE_FAILED };
+    return { error: QUIZ_ERROR_MESSAGES.parseFailed, refundable: false };
   }
 
   return { data: parsed.data.questions };
@@ -149,6 +162,49 @@ async function saveQuiz(
   }
 }
 
+/**
+ * Gemini 호출 1회를 선점한다.
+ * 한도 값은 DB 함수가 들고 있다. 여기서 인자로 넘기면 PostgREST로 우회할 수 있다.
+ */
+async function claimGeneration(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  noteId: string,
+  quizType: QuizType,
+): Promise<{ ok: true } | { error: string }> {
+  const { data, error } = await supabase.rpc("claim_quiz_generation", {
+    p_note_id: noteId,
+    p_quiz_type: quizType,
+  });
+
+  if (error) {
+    console.error("[generateQuiz] 사용량 확인 실패:", error.message);
+    return { error: QUIZ_ERROR_MESSAGES.generationFailed };
+  }
+
+  if (data === "ok") {
+    return { ok: true };
+  }
+
+  return {
+    error: CLAIM_ERROR_MESSAGES[data] ?? QUIZ_ERROR_MESSAGES.generationFailed,
+  };
+}
+
+async function releaseGeneration(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  noteId: string,
+  quizType: QuizType,
+): Promise<void> {
+  const { error } = await supabase.rpc("release_quiz_generation", {
+    p_note_id: noteId,
+    p_quiz_type: quizType,
+  });
+
+  if (error) {
+    console.error("[generateQuiz] 사용량 롤백 실패:", error.message);
+  }
+}
+
 async function createQuiz(
   noteId: string,
   quizType: string,
@@ -165,7 +221,7 @@ async function createQuiz(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return { error: "로그인이 필요합니다." };
+    return { error: QUIZ_ERROR_MESSAGES.unauthenticated };
   }
 
   const { data: note } = await supabase
@@ -176,7 +232,7 @@ async function createQuiz(
     .maybeSingle();
 
   if (!note) {
-    return { error: "노트를 찾을 수 없습니다." };
+    return { error: QUIZ_ERROR_MESSAGES.noteNotFound };
   }
 
   const cacheKey = await buildCacheKey(
@@ -205,6 +261,17 @@ async function createQuiz(
     }
   }
 
+  // 사용량 선점은 캐시 확인 뒤에 온다. 한도를 다 써도 이미 만든 퀴즈는 볼 수 있어야 한다.
+  const claimed = await claimGeneration(
+    supabase,
+    parsed.data.noteId,
+    parsed.data.quizType,
+  );
+
+  if ("error" in claimed) {
+    return { error: claimed.error };
+  }
+
   const generated = await requestQuestions(
     note.title,
     note.content,
@@ -212,6 +279,14 @@ async function createQuiz(
   );
 
   if ("error" in generated) {
+    if (generated.refundable) {
+      await releaseGeneration(
+        supabase,
+        parsed.data.noteId,
+        parsed.data.quizType,
+      );
+    }
+
     return { error: generated.error };
   }
 

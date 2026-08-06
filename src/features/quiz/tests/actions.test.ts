@@ -36,6 +36,8 @@ type SupabaseMockInput = {
   note?: { title: string; content: string } | null;
   cached?: { questions: unknown; note_content_hash: string } | null;
   upsertError?: { message: string } | null;
+  claimResult?: string;
+  claimError?: { message: string } | null;
 };
 
 function setupSupabase(input: SupabaseMockInput = {}) {
@@ -44,6 +46,8 @@ function setupSupabase(input: SupabaseMockInput = {}) {
     note = { title: "제목", content: "내용" },
     cached = null,
     upsertError = null,
+    claimResult = "ok",
+    claimError = null,
   } = input;
 
   const query = createSupabaseQueryMock({
@@ -55,12 +59,25 @@ function setupSupabase(input: SupabaseMockInput = {}) {
     data: { user: userId ? { id: userId } : null },
   });
 
+  const rpc = vi.fn((name: string) => {
+    if (name === "claim_quiz_generation") {
+      return Promise.resolve({ data: claimResult, error: claimError });
+    }
+
+    return Promise.resolve({ data: null, error: null });
+  });
+
   createClientMock.mockResolvedValue({
     ...query.supabase,
     auth: { getUser },
+    rpc,
   });
 
-  return query;
+  return { ...query, rpc };
+}
+
+function rpcNames(rpc: ReturnType<typeof setupSupabase>["rpc"]): string[] {
+  return rpc.mock.calls.map(([name]) => name);
 }
 
 function mockGeminiSuccess(payload: unknown = geminiQuestions) {
@@ -280,6 +297,110 @@ describe("generateQuiz", () => {
 
       const logged = vi.mocked(console.error).mock.calls.flat().join(" ");
       expect(logged).not.toContain(secret);
+    });
+  });
+
+  describe("사용량 제한", () => {
+    it("일일 한도를 넘으면 Gemini를 호출하지 않는다", async () => {
+      setupSupabase({ claimResult: "daily_exceeded" });
+
+      const result = await generateQuiz(NOTE_ID, "ox");
+
+      expect(result).toEqual({
+        error:
+          "오늘 만들 수 있는 퀴즈를 모두 사용했습니다. 내일 다시 시도해주세요.",
+      });
+      expect(generateContentMock).not.toHaveBeenCalled();
+    });
+
+    it("짧은 시간에 너무 많이 요청하면 거부한다", async () => {
+      setupSupabase({ claimResult: "too_many_requests" });
+
+      const result = await generateQuiz(NOTE_ID, "ox");
+
+      expect(result).toEqual({
+        error: "요청이 너무 잦습니다. 잠시 후 다시 시도해주세요.",
+      });
+      expect(generateContentMock).not.toHaveBeenCalled();
+    });
+
+    it("같은 노트·유형을 연속 요청하면 거부한다", async () => {
+      setupSupabase({ claimResult: "in_flight" });
+
+      const result = await generateQuiz(NOTE_ID, "ox");
+
+      expect(result).toEqual({
+        error: "퀴즈를 만들고 있습니다. 잠시만 기다려주세요.",
+      });
+      expect(generateContentMock).not.toHaveBeenCalled();
+    });
+
+    it("캐시가 적중하면 사용량을 선점하지 않는다", async () => {
+      const first = setupSupabase();
+      mockGeminiSuccess();
+      await generateQuiz(NOTE_ID, "ox");
+
+      const savedHash = (
+        first
+          .callsFor("quizzes")
+          .find(([method]) => method === "upsert")?.[1][0] as {
+          note_content_hash: string;
+        }
+      ).note_content_hash;
+
+      vi.clearAllMocks();
+
+      const second = setupSupabase({
+        cached: {
+          questions: geminiQuestions.questions,
+          note_content_hash: savedHash,
+        },
+      });
+
+      await generateQuiz(NOTE_ID, "ox");
+
+      expect(rpcNames(second.rpc)).not.toContain("claim_quiz_generation");
+    });
+
+    it("Gemini 호출이 실패하면 사용량을 되돌린다", async () => {
+      const query = setupSupabase();
+      generateContentMock.mockRejectedValue(new Error("boom"));
+
+      await generateQuiz(NOTE_ID, "ox");
+
+      expect(rpcNames(query.rpc)).toContain("release_quiz_generation");
+    });
+
+    it("응답 파싱에 실패하면 사용량을 되돌리지 않는다", async () => {
+      const query = setupSupabase();
+      generateContentMock.mockResolvedValue({ text: "not json" });
+
+      await generateQuiz(NOTE_ID, "ox");
+
+      expect(rpcNames(query.rpc)).not.toContain("release_quiz_generation");
+    });
+
+    it("사용량 조회 자체가 실패하면 생성 실패로 처리한다", async () => {
+      setupSupabase({ claimError: { message: "db down" } });
+
+      const result = await generateQuiz(NOTE_ID, "ox");
+
+      expect(result).toEqual({
+        error: "퀴즈 생성에 실패했습니다. 잠시 후 다시 시도해주세요.",
+      });
+      expect(generateContentMock).not.toHaveBeenCalled();
+    });
+
+    it("재생성도 같은 한도를 사용한다", async () => {
+      setupSupabase({ claimResult: "daily_exceeded" });
+
+      const result = await regenerateQuiz(NOTE_ID, "ox");
+
+      expect(result).toEqual({
+        error:
+          "오늘 만들 수 있는 퀴즈를 모두 사용했습니다. 내일 다시 시도해주세요.",
+      });
+      expect(generateContentMock).not.toHaveBeenCalled();
     });
   });
 
