@@ -4,7 +4,7 @@
 
 BEGIN;
 
-SELECT plan(8);
+SELECT plan(12);
 
 -- 테스트용 UUID 준비
 SELECT set_config('test.quiz_gen_user_a_id', gen_random_uuid()::text, true);
@@ -215,6 +215,44 @@ SELECT is(
   ),
   'daily_exceeded',
   $$하루 30회를 채우면 daily_exceeded를 반환해야 한다$$
+);
+
+-- 노트를 지워도 사용량이 초기화되면 안 된다
+-- (임시 노트를 만들고 지우는 방식으로 한도를 우회할 수 있기 때문이다)
+SELECT set_config(
+  'test.quiz_gen_before_delete',
+  (SELECT count(*) FROM public.quiz_generations
+   WHERE user_id = current_setting('test.quiz_gen_user_a_id')::uuid)::text,
+  true
+);
+
+DELETE FROM public.notes
+WHERE id = current_setting('test.quiz_gen_note_a_id')::uuid;
+
+SELECT is(
+  (SELECT count(*) FROM public.quiz_generations
+   WHERE user_id = current_setting('test.quiz_gen_user_a_id')::uuid),
+  current_setting('test.quiz_gen_before_delete')::bigint,
+  $$노트를 삭제해도 사용 기록 수가 유지되어야 한다$$
+);
+
+-- 삭제된 노트의 기록은 note_id만 비워져야 한다 (위에서 ox·blank 2건을 만들었다)
+SELECT is(
+  (SELECT count(*) FROM public.quiz_generations
+   WHERE user_id = current_setting('test.quiz_gen_user_a_id')::uuid
+     AND note_id IS NULL),
+  2::bigint,
+  $$삭제된 노트의 사용 기록은 note_id가 NULL이 되어야 한다$$
+);
+
+-- 노트를 지운 뒤에도 일일 한도는 그대로 걸려야 한다
+SELECT is(
+  public.claim_quiz_generation(
+    current_setting('test.quiz_gen_note_a2_id')::uuid,
+    'choice'
+  ),
+  'daily_exceeded',
+  $$노트를 지운 뒤에도 일일 한도는 그대로 걸려야 한다$$
 );
 
 SELECT * FROM finish();
