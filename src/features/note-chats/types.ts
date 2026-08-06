@@ -28,3 +28,9 @@ export type NoteChatUserMessageContent = AiChatMessageContent;
 export type NoteChatAssistantMessageContent = AiChatMessageContent & {
   referencedNoteRanks: number[];
 };
+
+/** 노트 챗봇 대화 상세 조회 결과입니다. */
+export type NoteChatConversationDetail = {
+  conversation: NoteChatConversation;
+  messages: NoteChatMessage[];
+};
