@@ -1,4 +1,6 @@
-export type QuizType = "ox" | "blank";
+export type QuizType = "ox" | "blank" | "choice";
+
+export const CHOICE_OPTION_COUNT = 4;
 
 const MIN_QUESTIONS = 3;
 const MAX_QUESTIONS = 20;
@@ -60,6 +62,29 @@ ${QUESTION_COUNT_RULE}
       "question": "____에 들어갈 단어가 포함된 문장",
       "answer": "정답 키워드",
       "acceptedAnswers": ["허용 별칭1", "허용 별칭2"],
+      "explanation": "해설"
+    }
+  ]
+}`,
+  choice: `2. 모든 문제를 ${CHOICE_OPTION_COUNT}지선다 객관식으로 생성하세요.
+${QUESTION_COUNT_RULE}
+4. 각 문제에 간단한 해설을 포함하세요.
+5. options는 반드시 ${CHOICE_OPTION_COUNT}개이며, 정답 1개와 오답 ${CHOICE_OPTION_COUNT - 1}개로 구성하세요.
+6. 오답은 노트 내용과 관련된 그럴듯한 내용으로 만들되 명백히 틀린 것이어야 합니다.
+7. answer는 정답 선택지의 위치를 0부터 세는 번호로 적으세요.
+   - 첫 번째 선택지가 정답이면 0, 마지막 선택지가 정답이면 ${CHOICE_OPTION_COUNT - 1}입니다.
+   - 1부터 세지 마세요.
+8. 정답 위치를 문제마다 고르게 분산시키세요. 특정 번호에 정답을 몰지 마세요.
+9. 반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트를 포함하지 마세요.
+
+## JSON 형식
+{
+  "questions": [
+    {
+      "type": "choice",
+      "question": "문제 문장",
+      "options": ["선택지1", "선택지2", "선택지3", "선택지4"],
+      "answer": 0,
       "explanation": "해설"
     }
   ]

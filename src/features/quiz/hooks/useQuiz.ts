@@ -5,7 +5,7 @@ import { useCallback, useState, useTransition } from "react";
 import type { QuizType } from "@/lib/gemini/prompts";
 
 import { generateQuiz, regenerateQuiz } from "../actions";
-import type { BlankQuestion, OxQuestion, QuizQuestion } from "../schema";
+import type { QuizQuestion } from "../schema";
 import { gradeBlankAnswer } from "../utils/grading";
 
 type QuizPhase = "select" | "loading" | "playing" | "result";
@@ -59,19 +59,15 @@ export function useQuiz(noteId: string) {
       const question = questions[currentIndex];
       if (!question) return;
 
-      let isCorrect: boolean;
-
-      if (question.type === "ox") {
-        const oxQ = question as OxQuestion;
-        isCorrect = userAnswer === String(oxQ.answer);
-      } else {
-        const blankQ = question as BlankQuestion;
-        isCorrect = gradeBlankAnswer(
-          userAnswer,
-          blankQ.answer,
-          blankQ.acceptedAnswers,
-        );
-      }
+      // ox는 "true"/"false", choice는 선택지 번호를 문자열로 받으므로 단순 비교로 충분하다.
+      const isCorrect =
+        question.type === "blank"
+          ? gradeBlankAnswer(
+              userAnswer,
+              question.answer,
+              question.acceptedAnswers,
+            )
+          : userAnswer === String(question.answer);
 
       const record: AnswerRecord = {
         questionIndex: currentIndex,

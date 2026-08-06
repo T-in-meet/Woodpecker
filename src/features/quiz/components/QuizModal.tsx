@@ -2,6 +2,7 @@
 
 import {
   CircleIcon,
+  ListChecksIcon,
   LoaderIcon,
   TextCursorInputIcon,
   XIcon,
@@ -14,13 +15,25 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import type { QuizType } from "@/lib/gemini/prompts";
 import { cn } from "@/lib/utils/cn";
 
 import { useQuiz } from "../hooks/useQuiz";
-import type { BlankQuestion, OxQuestion } from "../schema";
 import { BlankQuestionCard } from "./BlankQuestionCard";
+import { ChoiceQuestionCard } from "./ChoiceQuestionCard";
 import { OxQuestionCard } from "./OxQuestionCard";
 import { QuizResult } from "./QuizResult";
+
+const QUIZ_TYPE_LABELS: Record<QuizType, string> = {
+  ox: "OX 퀴즈",
+  blank: "빈칸 채우기",
+  choice: "객관식",
+};
+
+const TYPE_BUTTON_CLASS = cn(
+  "flex cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-border p-4 transition-colors",
+  "hover:border-primary/50 hover:bg-primary/5",
+);
 
 type QuizModalProps = {
   noteId: string;
@@ -69,31 +82,39 @@ export function QuizModal({
               퀴즈 유형을 선택하세요
             </p>
             {error && <p className="text-sm text-destructive">{error}</p>}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <button
                 type="button"
                 onClick={() => startQuiz("ox")}
-                className={cn(
-                  "flex cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-border p-6 transition-colors",
-                  "hover:border-primary/50 hover:bg-primary/5",
-                )}
+                className={TYPE_BUTTON_CLASS}
               >
                 <div className="flex items-center gap-1">
                   <CircleIcon className="size-6" />
                   <XIcon className="size-6" />
                 </div>
-                <span className="text-sm font-medium">OX 퀴즈</span>
+                <span className="text-center text-sm font-medium">
+                  {QUIZ_TYPE_LABELS.ox}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => startQuiz("choice")}
+                className={TYPE_BUTTON_CLASS}
+              >
+                <ListChecksIcon className="size-6" />
+                <span className="text-center text-sm font-medium">
+                  {QUIZ_TYPE_LABELS.choice}
+                </span>
               </button>
               <button
                 type="button"
                 onClick={() => startQuiz("blank")}
-                className={cn(
-                  "flex cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-border p-6 transition-colors",
-                  "hover:border-primary/50 hover:bg-primary/5",
-                )}
+                className={TYPE_BUTTON_CLASS}
               >
                 <TextCursorInputIcon className="size-6" />
-                <span className="text-sm font-medium">빈칸 채우기</span>
+                <span className="text-center text-sm font-medium">
+                  {QUIZ_TYPE_LABELS.blank}
+                </span>
               </button>
             </div>
           </div>
@@ -115,23 +136,36 @@ export function QuizModal({
                 {currentIndex + 1} / {questions.length}
               </span>
               <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                {currentQuestion.type === "ox" ? "OX 퀴즈" : "빈칸 채우기"}
+                {QUIZ_TYPE_LABELS[currentQuestion.type]}
               </span>
             </div>
 
-            {currentQuestion.type === "ox" ? (
+            {currentQuestion.type === "ox" && (
               <OxQuestionCard
                 key={currentIndex}
-                question={currentQuestion as OxQuestion}
+                question={currentQuestion}
                 onSubmit={submitAnswer}
                 submitted={currentAnswer !== null}
                 userAnswer={currentAnswer?.userAnswer}
                 isCorrect={currentAnswer?.isCorrect}
               />
-            ) : (
+            )}
+
+            {currentQuestion.type === "choice" && (
+              <ChoiceQuestionCard
+                key={currentIndex}
+                question={currentQuestion}
+                onSubmit={submitAnswer}
+                submitted={currentAnswer !== null}
+                userAnswer={currentAnswer?.userAnswer}
+                isCorrect={currentAnswer?.isCorrect}
+              />
+            )}
+
+            {currentQuestion.type === "blank" && (
               <BlankQuestionCard
                 key={currentIndex}
-                question={currentQuestion as BlankQuestion}
+                question={currentQuestion}
                 onSubmit={submitAnswer}
                 submitted={currentAnswer !== null}
                 userAnswer={currentAnswer?.userAnswer}

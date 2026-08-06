@@ -90,4 +90,20 @@ describe("buildQuizPrompt", () => {
     expect(prompt).toContain('"type": "blank"');
     expect(prompt).toContain("acceptedAnswers");
   });
+
+  it("choice 타입은 4지선다 규칙과 JSON 형식을 포함한다", () => {
+    const prompt = buildQuizPrompt("제목", "내용", range, "choice");
+
+    expect(prompt).toContain("모든 문제를 4지선다 객관식으로 생성하세요");
+    expect(prompt).toContain('"type": "choice"');
+    expect(prompt).toContain("options는 반드시 4개");
+  });
+
+  it("choice 타입은 0부터 세는 정답 번호 규칙을 명시한다", () => {
+    const prompt = buildQuizPrompt("제목", "내용", range, "choice");
+
+    expect(prompt).toContain("0부터 세는 번호");
+    expect(prompt).toContain("1부터 세지 마세요");
+    expect(prompt).toContain("고르게 분산");
+  });
 });

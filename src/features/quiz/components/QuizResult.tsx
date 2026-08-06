@@ -6,6 +6,18 @@ import { Button } from "@/components/ui/button";
 
 import type { QuizQuestion } from "../schema";
 
+function formatAnswer(question: QuizQuestion): string {
+  if (question.type === "ox") {
+    return question.answer ? "O" : "X";
+  }
+
+  if (question.type === "choice") {
+    return question.options[question.answer] ?? "";
+  }
+
+  return question.answer;
+}
+
 type AnswerRecord = {
   questionIndex: number;
   userAnswer: string;
@@ -63,7 +75,7 @@ export function QuizResult({
                 <p className="text-sm">{q.question}</p>
                 {!answer?.isCorrect && (
                   <p className="mt-1 text-xs text-muted-foreground">
-                    정답: {q.type === "ox" ? (q.answer ? "O" : "X") : q.answer}
+                    정답: {formatAnswer(q)}
                   </p>
                 )}
               </div>
