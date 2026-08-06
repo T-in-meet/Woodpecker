@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 
-import { gemini } from "@/lib/gemini/client";
+import { getGemini } from "@/lib/gemini/client";
 import {
   buildQuizPrompt,
   getQuestionCount,
@@ -84,7 +84,8 @@ export async function generateQuiz(
 
   let responseText: string;
   try {
-    const response = await gemini.models.generateContent({
+    // 키가 없으면 이 줄에서 에러가 나고 아래 catch가 받아 준다.
+    const response = await getGemini().models.generateContent({
       model: "gemini-3.1-flash-lite",
       contents: prompt,
       config: {
