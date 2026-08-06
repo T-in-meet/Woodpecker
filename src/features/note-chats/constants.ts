@@ -28,3 +28,8 @@ export const NOTE_CHAT_VALIDATION_MESSAGE = {
   MESSAGE_ID_INVALID: "올바른 메시지 ID가 아닙니다.",
   AI_SETTING_ID_INVALID: "올바른 AI 설정 ID가 아닙니다.",
 } as const;
+
+/**
+ * 노트 챗봇 답변 생성에 사용하는 기본 temperature입니다.
+ */
+export const NOTE_CHAT_DEFAULT_TEMPERATURE = 0.2;
