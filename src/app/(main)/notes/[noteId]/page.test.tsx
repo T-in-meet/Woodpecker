@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
@@ -185,6 +185,43 @@ describe("NoteDetailPage", () => {
       notificationTimeOfDay: "21:30:00",
       nextScheduledAt: "2026-03-29T09:00:00.000Z",
     });
+  });
+
+  it("renders a breadcrumb linking back to home and the notes list", async () => {
+    // 공백이 없어 줄바꿈으로 도망갈 수 없는 제목. truncate가 빠지면 breadcrumb 줄을 밀어버린다.
+    const longTitle =
+      "SupabaseRowLevelSecurityPolicyMigrationChecklistForNoteReviewSchedulingRpcAndPartialUniqueIndexes";
+    createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
+    getNoteByIdMock.mockResolvedValue({
+      id: "note-123",
+      title: longTitle,
+      content: "note body",
+      next_review_at: "2026-03-29T00:00:00.000Z",
+      next_scheduled_at: "2026-03-29T09:00:00.000Z",
+      notification_time_of_day: "21:30:00",
+      review_round: 1,
+      created_at: "2026-03-29T00:00:00.000Z",
+      updated_at: "2026-03-29T01:00:00.000Z",
+      user_id: "user-123",
+    });
+
+    render(
+      await NoteDetailPage({ params: Promise.resolve({ noteId: "note-123" }) }),
+    );
+
+    const breadcrumb = screen.getByRole("navigation", { name: "breadcrumb" });
+    expect(
+      within(breadcrumb).getByRole("link", { name: "홈" }),
+    ).toHaveAttribute("href", ROUTES.HOME);
+    expect(
+      within(breadcrumb).getByRole("link", { name: "노트 목록" }),
+    ).toHaveAttribute("href", ROUTES.NOTES);
+
+    // 마지막 항목은 링크가 아닌 현재 위치이며, 잘린 제목 대신 title로 전체 제목을 노출한다.
+    const currentPage = within(breadcrumb).getByText(longTitle);
+    expect(currentPage).toHaveAttribute("aria-current", "page");
+    expect(currentPage).toHaveAttribute("title", longTitle);
+    expect(currentPage).toHaveClass("truncate");
   });
 
   it("shows '다음 예정' (not 'due now') when notification time is still in the future today", async () => {
