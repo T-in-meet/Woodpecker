@@ -57,6 +57,32 @@ describe("normalizeAnswer", () => {
   it("남기는 문자와 지우는 문자가 섞여 있어도 구분한다", () => {
     expect(normalizeAnswer("C#, 그리고...")).toBe("c#그리고");
   });
+
+  describe("수치를 가르는 문장부호는 남긴다", () => {
+    it("숫자 사이의 소수점·슬래시·콜론·하이픈을 남긴다", () => {
+      expect(normalizeAnswer("3.14")).toBe("3.14");
+      expect(normalizeAnswer("1/2")).toBe("1/2");
+      expect(normalizeAnswer("1:2")).toBe("1:2");
+      expect(normalizeAnswer("2-3")).toBe("2-3");
+      expect(normalizeAnswer("v1.2")).toBe("v1.2");
+    });
+
+    it("맨 앞의 부호를 남긴다", () => {
+      expect(normalizeAnswer("-1")).toBe("-1");
+    });
+
+    it("숫자에 붙지 않은 같은 문자는 그대로 지운다", () => {
+      // 끝에 온 마침표는 값을 가르지 않는다.
+      expect(normalizeAnswer("3.14.")).toBe("3.14");
+      // 문자와 숫자를 잇는 하이픈까지 남기면 하이픈을 뺀 입력이 오답이 된다.
+      expect(normalizeAnswer("COVID-19")).toBe("covid19");
+      expect(normalizeAnswer("RS-232")).toBe("rs232");
+    });
+
+    it("자릿수 쉼표는 지운다", () => {
+      expect(normalizeAnswer("1,000")).toBe("1000");
+    });
+  });
 });
 
 describe("gradeBlankAnswer", () => {
@@ -115,6 +141,18 @@ describe("gradeBlankAnswer", () => {
     it("샵을 빼고 입력하면 오답이다", () => {
       expect(gradeBlankAnswer("C", "C#", [])).toBe(false);
       expect(gradeBlankAnswer("F", "F#", [])).toBe(false);
+    });
+
+    it("수치의 문장부호를 빼고 입력하면 오답이다", () => {
+      expect(gradeBlankAnswer("314", "3.14", [])).toBe(false);
+      expect(gradeBlankAnswer("12", "1/2", [])).toBe(false);
+      expect(gradeBlankAnswer("12", "1:2", [])).toBe(false);
+      expect(gradeBlankAnswer("1", "-1", [])).toBe(false);
+      expect(gradeBlankAnswer("v12", "v1.2", [])).toBe(false);
+    });
+
+    it("하이픈을 빼고 입력해도 인정한다", () => {
+      expect(gradeBlankAnswer("covid19", "COVID-19", [])).toBe(true);
     });
   });
 });
