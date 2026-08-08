@@ -45,6 +45,18 @@ describe("normalizeAnswer", () => {
     expect(normalizeAnswer("C++")).toBe("c++");
     expect(normalizeAnswer("a=b")).toBe("a=b");
   });
+
+  it("뜻을 담는 문장부호는 남긴다", () => {
+    expect(normalizeAnswer("C#")).toBe("c#");
+    expect(normalizeAnswer("F#")).toBe("f#");
+    expect(normalizeAnswer("50%")).toBe("50%");
+    expect(normalizeAnswer("R&D")).toBe("r&d");
+    expect(normalizeAnswer("A*")).toBe("a*");
+  });
+
+  it("남기는 문자와 지우는 문자가 섞여 있어도 구분한다", () => {
+    expect(normalizeAnswer("C#, 그리고...")).toBe("c#그리고");
+  });
 });
 
 describe("gradeBlankAnswer", () => {
@@ -98,6 +110,11 @@ describe("gradeBlankAnswer", () => {
 
     it("기호가 다르면 오답이다", () => {
       expect(gradeBlankAnswer("C", "C++", [])).toBe(false);
+    });
+
+    it("샵을 빼고 입력하면 오답이다", () => {
+      expect(gradeBlankAnswer("C", "C#", [])).toBe(false);
+      expect(gradeBlankAnswer("F", "F#", [])).toBe(false);
     });
   });
 });

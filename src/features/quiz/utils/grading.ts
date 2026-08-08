@@ -3,9 +3,18 @@
 //
 // 문장부호는 목록으로 열거하지 않고 유니코드 분류(\p{P})로 잡는다.
 // 열거하면 TCP/IP의 슬래시처럼 빠뜨린 문자가 그대로 오답 처리로 이어진다.
-// 기호(\p{S})는 남긴다. +를 지우면 C++와 C가 같은 답이 된다.
+//
+// 다만 뜻을 담는 문자는 남긴다. 지우면 서로 다른 답이 같은 답이 되기 때문이다.
+// - \p{P}에 속하지만 남기는 것: # % & @ * (C#, 50%, R&D, A* …)
+// - \p{S}는 애초에 지우지 않는다. + 를 지우면 C++와 C가 같아진다.
+const IGNORABLE_PUNCTUATION = /(?![#%&@*])\p{P}/gu;
+
 export function normalizeAnswer(answer: string): string {
-  return answer.trim().toLowerCase().replace(/\s+/g, "").replace(/\p{P}/gu, "");
+  return answer
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(IGNORABLE_PUNCTUATION, "");
 }
 
 export function gradeBlankAnswer(
