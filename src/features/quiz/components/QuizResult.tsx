@@ -59,7 +59,7 @@ export function QuizResult({
       {/* 문항이 많아도 점수와 하단 버튼이 가려지지 않도록 이 목록만 스크롤한다. */}
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
         {questions.map((q, i) => {
-          const answer = answers[i];
+          const answer = answers.find((record) => record.questionIndex === i);
           return (
             <div
               key={i}

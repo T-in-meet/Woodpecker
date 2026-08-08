@@ -165,6 +165,30 @@ describe("useQuiz", () => {
       expect(result.current.correctCount).toBe(0);
     });
 
+    it("currentAnswer는 현재 문항의 답안만 가리킨다", async () => {
+      mockSuccess();
+      const { result } = await startPlaying();
+
+      act(() => {
+        result.current.submitAnswer("true");
+      });
+
+      expect(result.current.currentAnswer?.questionIndex).toBe(0);
+
+      act(() => {
+        result.current.goToNext();
+      });
+
+      // 아직 답하지 않은 문항이므로 이전 답안이 넘어오면 안 된다.
+      expect(result.current.currentAnswer).toBeNull();
+
+      act(() => {
+        result.current.submitAnswer("false");
+      });
+
+      expect(result.current.currentAnswer?.questionIndex).toBe(1);
+    });
+
     it("choice는 선택지 번호로 채점한다", async () => {
       generateQuizMock.mockResolvedValue({
         data: {

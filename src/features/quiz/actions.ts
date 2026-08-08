@@ -15,7 +15,7 @@ import type { Json } from "@/types/database.types";
 import { QUIZ_ERROR_MESSAGES } from "./constants";
 import {
   type QuizQuestion,
-  quizResponseSchema,
+  quizResponseSchemaFor,
   quizTypeSchema,
 } from "./schema";
 
@@ -142,7 +142,8 @@ async function requestQuestions(
     return { error: QUIZ_ERROR_MESSAGES.parseFailed };
   }
 
-  const parsed = quizResponseSchema.safeParse(json);
+  // 요청한 유형으로 검증한다. 유형이 섞인 응답은 프롬프트를 무시했다는 뜻이라 세트째 버린다.
+  const parsed = quizResponseSchemaFor(quizType).safeParse(json);
   if (!parsed.success) {
     console.error(
       `[generateQuiz] Zod 파싱 실패 (응답 길이 ${responseText.length}):`,
@@ -158,7 +159,7 @@ async function requestQuestions(
 }
 
 type QuizCache = {
-  /** 형식이 깨진 캐시는 null이다. 이력은 그대로 쓸 수 있으므로 캐시 전체를 버리지는 않는다. */
+  /** 형식이 깨졌거나 유형이 맞지 않는 캐시는 null이다. 이력은 그대로 쓸 수 있으므로 캐시 전체를 버리지는 않는다. */
   questions: QuizQuestion[] | null;
   /** 최신 세트가 앞에 오는 출제 이력. */
   history: string[][];
@@ -183,7 +184,8 @@ async function loadCache(
     return null;
   }
 
-  const questions = quizResponseSchema.safeParse({
+  // 검증이 없던 시절에 저장된 행을 대비해 읽을 때도 유형을 확인한다. 어긋나면 새로 생성한다.
+  const questions = quizResponseSchemaFor(params.quizType).safeParse({
     questions: cached.questions,
   });
   const history = questionHistorySchema.safeParse(cached.recent_questions);

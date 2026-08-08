@@ -150,7 +150,9 @@ export function useQuiz(noteId: string) {
   }, []);
 
   const currentQuestion = questions[currentIndex] ?? null;
-  const currentAnswer = answers[currentIndex] ?? null;
+  // 배열 위치가 아니라 questionIndex로 찾는다. "답안 순서 == 문항 순서"에 기대지 않기 위해서다.
+  const currentAnswer =
+    answers.find((answer) => answer.questionIndex === currentIndex) ?? null;
   const correctCount = answers.filter((a) => a.isCorrect).length;
 
   return {

@@ -219,6 +219,40 @@ describe("generateQuiz", () => {
       });
     });
 
+    it("캐시에 다른 유형의 문항이 들어 있으면 새로 생성한다", async () => {
+      const first = setupSupabase();
+      mockGeminiSuccess();
+      await generateQuiz(NOTE_ID, "ox");
+
+      const savedHash = hashOf(first);
+
+      vi.clearAllMocks();
+
+      // 유형 검증이 없던 시절에 저장된 행을 가정한다.
+      setupSupabase({
+        cached: {
+          questions: [
+            {
+              type: "blank",
+              question: "____는 산술 연산을 담당한다.",
+              answer: "ALU",
+              acceptedAnswers: [],
+              explanation: "ALU다.",
+            },
+          ],
+          note_content_hash: savedHash,
+        },
+      });
+      mockGeminiSuccess();
+
+      const result = await generateQuiz(NOTE_ID, "ox");
+
+      expect(generateContentMock).toHaveBeenCalledOnce();
+      expect(result).toEqual({
+        data: { questions: geminiQuestions.questions, isNew: true },
+      });
+    });
+
     it("제목만 바뀌어도 캐시 키가 달라진다", async () => {
       const first = setupSupabase({
         note: { title: "제목1", content: "내용" },
@@ -324,6 +358,51 @@ describe("generateQuiz", () => {
       expect(result).toEqual({
         error: "퀴즈 생성 결과를 처리할 수 없습니다. 다시 시도해주세요.",
       });
+    });
+
+    it("요청한 유형과 다른 문항이 오면 저장하지 않는다", async () => {
+      const query = setupSupabase();
+      mockGeminiSuccess({
+        questions: [
+          {
+            type: "choice",
+            question: "산술 연산 장치는?",
+            options: ["ALU", "PC", "IR", "MAR"],
+            answer: 0,
+            explanation: "ALU다.",
+          },
+        ],
+      });
+
+      const result = await generateQuiz(NOTE_ID, "ox");
+
+      expect(result).toEqual({
+        error: "퀴즈 생성 결과를 처리할 수 없습니다. 다시 시도해주세요.",
+      });
+      expect(methodNames(query.callsFor("quizzes"))).not.toContain("upsert");
+    });
+
+    it("한 문항만 유형이 달라도 세트 전체를 거부한다", async () => {
+      const query = setupSupabase();
+      mockGeminiSuccess({
+        questions: [
+          ...geminiQuestions.questions,
+          {
+            type: "blank",
+            question: "____는 산술 연산을 담당한다.",
+            answer: "ALU",
+            acceptedAnswers: [],
+            explanation: "ALU다.",
+          },
+        ],
+      });
+
+      const result = await generateQuiz(NOTE_ID, "ox");
+
+      expect(result).toEqual({
+        error: "퀴즈 생성 결과를 처리할 수 없습니다. 다시 시도해주세요.",
+      });
+      expect(methodNames(query.callsFor("quizzes"))).not.toContain("upsert");
     });
 
     it("응답 원문을 로그에 남기지 않는다", async () => {
