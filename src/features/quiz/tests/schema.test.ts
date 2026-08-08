@@ -70,6 +70,63 @@ describe("choiceQuestionSchema", () => {
   });
 });
 
+describe("choiceQuestionSchema — 선택지 중복", () => {
+  it("같은 선택지가 둘이면 거부한다", () => {
+    const result = quizQuestionSchema.safeParse({
+      ...validChoice,
+      options: ["ALU", "ALU", "레지스터", "버스"],
+    });
+
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("blankQuestionSchema", () => {
+  const validBlank = {
+    type: "blank",
+    question: "CPU의 동작 속도를 나타내는 단위는 ____이다.",
+    answer: "클럭",
+    acceptedAnswers: ["clock"],
+    explanation: "클럭이다.",
+  };
+
+  it("빈칸이 있는 문항을 통과시킨다", () => {
+    const result = quizQuestionSchema.safeParse(validBlank);
+
+    expect(result.success).toBe(true);
+  });
+
+  it("빈칸이 없으면 거부한다", () => {
+    const result = quizQuestionSchema.safeParse({
+      ...validBlank,
+      question: "CPU의 동작 속도를 나타내는 단위는?",
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("밑줄 개수가 달라도 통과시킨다", () => {
+    const result = quizQuestionSchema.safeParse({
+      ...validBlank,
+      question: "CPU의 동작 속도를 나타내는 단위는 __이다.",
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("acceptedAnswers가 없으면 빈 배열로 채운다", () => {
+    const { acceptedAnswers: _omitted, ...withoutAccepted } = validBlank;
+    const result = quizQuestionSchema.safeParse(withoutAccepted);
+
+    expect(result.success).toBe(true);
+    expect(
+      result.success && result.data.type === "blank"
+        ? result.data.acceptedAnswers
+        : null,
+    ).toEqual([]);
+  });
+});
+
 describe("quizResponseSchemaFor", () => {
   it("객관식 문항 배열을 통과시킨다", () => {
     const result = quizResponseSchemaFor("choice").safeParse({

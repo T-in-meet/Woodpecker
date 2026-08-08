@@ -5,10 +5,11 @@ import { z } from "zod";
 import { getGemini } from "@/lib/gemini/client";
 import {
   buildQuizPrompt,
-  getQuestionRange,
+  getMaxQuestions,
   pickPerspective,
   type QuizType,
 } from "@/lib/gemini/prompts";
+import { toGeminiResponseSchema } from "@/lib/gemini/responseSchema";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/types/database.types";
 
@@ -107,11 +108,19 @@ async function requestQuestions(
   params: RequestQuestionsParams,
 ): Promise<RequestQuestionsResult> {
   const { title, content, quizType, previousQuestions, temperature } = params;
-  const questionRange = getQuestionRange(content.length);
-  const prompt = buildQuizPrompt(title, content, questionRange, quizType, {
-    perspective: pickPerspective(),
-    previousQuestions,
-  });
+  const prompt = buildQuizPrompt(
+    title,
+    content,
+    getMaxQuestions(content.length),
+    quizType,
+    {
+      perspective: pickPerspective(),
+      previousQuestions,
+    },
+  );
+
+  // 프롬프트만으로 형식을 지시하면 유형·필드가 어긋난 응답이 나온다. 디코딩 단계에서 막는다.
+  const responseSchema = quizResponseSchemaFor(quizType);
 
   let responseText: string;
   try {
@@ -121,6 +130,7 @@ async function requestQuestions(
       contents: prompt,
       config: {
         responseMimeType: "application/json",
+        responseJsonSchema: toGeminiResponseSchema(responseSchema),
         temperature,
       },
     });
@@ -143,7 +153,7 @@ async function requestQuestions(
   }
 
   // 요청한 유형으로 검증한다. 유형이 섞인 응답은 프롬프트를 무시했다는 뜻이라 세트째 버린다.
-  const parsed = quizResponseSchemaFor(quizType).safeParse(json);
+  const parsed = responseSchema.safeParse(json);
   if (!parsed.success) {
     console.error(
       `[generateQuiz] Zod 파싱 실패 (응답 길이 ${responseText.length}):`,

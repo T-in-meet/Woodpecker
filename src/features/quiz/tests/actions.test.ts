@@ -92,14 +92,27 @@ function methodNames(calls: [string, unknown[]][]): string[] {
   return calls.map(([method]) => method);
 }
 
-function geminiRequest(): {
+type GeminiRequest = {
   contents: string;
-  config: { temperature: number };
-} {
-  return generateContentMock.mock.calls[0]?.[0] as {
-    contents: string;
-    config: { temperature: number };
+  config: {
+    temperature: number;
+    responseMimeType: string;
+    responseJsonSchema: unknown;
   };
+};
+
+function geminiRequest(): GeminiRequest {
+  return generateContentMock.mock.calls[0]?.[0] as GeminiRequest;
+}
+
+function responseQuestionType(): unknown {
+  const schema = geminiRequest().config.responseJsonSchema as {
+    properties: {
+      questions: { items: { properties: { type: unknown } } };
+    };
+  };
+
+  return schema.properties.questions.items.properties.type;
 }
 
 function upsertPayload(query: ReturnType<typeof setupSupabase>) {
@@ -321,6 +334,51 @@ describe("generateQuiz", () => {
       await generateQuiz(NOTE_ID, "blank");
 
       expect(hashOf(first)).toBe(hashOf(second));
+    });
+  });
+
+  describe("응답 스키마", () => {
+    it("JSON 응답 형식을 지정한다", async () => {
+      setupSupabase();
+      mockGeminiSuccess();
+
+      await generateQuiz(NOTE_ID, "ox");
+
+      expect(geminiRequest().config.responseMimeType).toBe("application/json");
+    });
+
+    it("요청한 유형을 응답 스키마로 고정한다", async () => {
+      setupSupabase();
+      mockGeminiSuccess();
+
+      await generateQuiz(NOTE_ID, "ox");
+
+      expect(responseQuestionType()).toEqual({
+        type: "string",
+        enum: ["ox"],
+      });
+    });
+
+    it("유형이 다르면 다른 스키마를 보낸다", async () => {
+      setupSupabase();
+      mockGeminiSuccess({
+        questions: [
+          {
+            type: "blank",
+            question: "____는 산술 연산을 담당한다.",
+            answer: "ALU",
+            acceptedAnswers: [],
+            explanation: "ALU다.",
+          },
+        ],
+      });
+
+      await generateQuiz(NOTE_ID, "blank");
+
+      expect(responseQuestionType()).toEqual({
+        type: "string",
+        enum: ["blank"],
+      });
     });
   });
 

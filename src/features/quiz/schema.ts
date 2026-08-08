@@ -16,19 +16,24 @@ const oxQuestionSchema = z.object({
   explanation: z.string().min(1),
 });
 
+// 빈칸이 없으면 빈칸 채우기가 아니라 단답형 질문이 된다. UI는 그대로 입력창을 띄우므로 여기서 막는다.
 const blankQuestionSchema = z.object({
   type: z.literal("blank"),
-  question: z.string().min(1),
+  question: z.string().min(1).regex(/_{2,}/),
   answer: z.string().min(1),
   acceptedAnswers: z.array(z.string()).default([]),
   explanation: z.string().min(1),
 });
 
 // answer는 options 안에서 정답의 위치(0부터 시작)를 가리킨다.
+// 채점이 위치 기준이라 같은 선택지가 둘이면 맞은 답이 오답 처리된다. 중복은 받지 않는다.
 const choiceQuestionSchema = z.object({
   type: z.literal("choice"),
   question: z.string().min(1),
-  options: z.array(z.string().min(1)).length(CHOICE_OPTION_COUNT),
+  options: z
+    .array(z.string().min(1))
+    .length(CHOICE_OPTION_COUNT)
+    .refine((options) => new Set(options).size === options.length),
   answer: z
     .number()
     .int()
