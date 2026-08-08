@@ -7,6 +7,9 @@ import { buildNoteChatProviderMessages } from "./build-provider-messages";
 import { resolveNoteChatProviderMessages } from "./resolve-messages";
 
 type ResolveNoteChatExecutionMessagesParams = {
+  /** 검색된 노트로 구성한 Context입니다. */
+  context: string;
+
   /** 대화 순서대로 정렬된 전체 메시지입니다. */
   messages: NoteChatMessage[];
 
@@ -25,6 +28,8 @@ type ResolveNoteChatExecutionMessagesParams = {
  * AI Provider에 전달할 최종 메시지 목록을 생성합니다.
  *
  * 현재 사용자 메시지는 Prompt Template의 `question` 변수로 전달하고,
+ * 검색된 Note Context는 `context` 변수로 전달합니다.
+ *
  * 해당 메시지보다 이전에 생성된 메시지만 대화 이력으로 포함합니다.
  *
  * @param params 전체 대화 메시지와 현재 실행 정보
@@ -70,6 +75,7 @@ export function resolveNoteChatExecutionMessages(
     resolveNoteChatProviderMessages(historyMessages);
 
   return buildNoteChatProviderMessages({
+    context: params.context,
     historyMessages: providerHistoryMessages,
     question: currentContent.text,
     systemTemplate: params.systemTemplate,

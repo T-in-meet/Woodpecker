@@ -1,41 +1,8 @@
-import { AI_MODEL_PROVIDER } from "@/features/ai/constants/models";
 import { streamAiChatCompletionWithProvider } from "@/features/ai/providers";
 import type { AiChatStreamEvent } from "@/features/ai/providers/types";
+import { getProviderApiKey } from "@/features/ai/providers/utils/api-key";
 
 import type { PreparedNoteChatExecution } from "./prepare-execution";
-
-/**
- * AI Provider별 API Key를 서버 환경 변수에서 조회합니다.
- *
- * @param provider 실행할 AI Provider
- * @returns Provider API Key
- */
-function getNoteChatProviderApiKey(provider: string): string {
-  switch (provider) {
-    case AI_MODEL_PROVIDER.OPENAI: {
-      const apiKey = process.env.OPENAI_API_KEY;
-
-      if (!apiKey) {
-        throw new Error("OPENAI_API_KEY is not configured.");
-      }
-
-      return apiKey;
-    }
-
-    case AI_MODEL_PROVIDER.GOOGLE: {
-      const apiKey = process.env.GOOGLE_API_KEY;
-
-      if (!apiKey) {
-        throw new Error("GOOGLE_API_KEY is not configured.");
-      }
-
-      return apiKey;
-    }
-
-    default:
-      throw new Error(`Unsupported AI provider: ${provider}`);
-  }
-}
 
 /**
  * 준비된 노트 챗봇 실행 정보로 AI Provider 스트림을 시작합니다.
@@ -53,7 +20,7 @@ export function startNoteChatProviderStream(
   const chatModel = chatConfiguration.model;
 
   return streamAiChatCompletionWithProvider({
-    apiKey: getNoteChatProviderApiKey(chatModel.provider),
+    apiKey: getProviderApiKey(chatModel.provider),
     messages: prepared.messages,
     model: chatModel.model,
     provider: chatModel.provider,

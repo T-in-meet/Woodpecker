@@ -1,3 +1,4 @@
+import { AI_CHAT_MESSAGE_ROLE } from "@/features/ai/chats/constants";
 import type { AiProviderChatMessage } from "@/features/ai/providers/types";
 import type {
   AiRuntimeChatConfiguration,
@@ -6,8 +7,13 @@ import type {
 import type { Json } from "@/types/db.helpers";
 
 import { getNoteChatConversationDetail } from "../queries";
+import { noteChatUserMessageContentSchema } from "../schema";
 import type { NoteChatConversation } from "../types";
+import { buildNoteChatContext } from "./build-note-context";
+import { buildNoteChatSources } from "./build-note-sources";
+import { getMatchedNoteChatNotes } from "./get-matched-notes";
 import { resolveNoteChatExecutionMessages } from "./resolve-execution-messages";
+import { searchNoteChatEmbeddings } from "./search-note-embeddings";
 
 /**
  * 노트 챗봇 한 번의 실행에서 확정된 AI Runtime 설정입니다.
@@ -33,14 +39,11 @@ export type PreparedNoteChatExecution = {
   /** AI Foundation Runtime에서 확정된 실행 설정입니다. */
   settings: NoteChatExecutionSettings;
 
+  /** 실행 과정에서 LLM Context에 주입한 Note Source Snapshot입니다. */
+  sources: Json[];
+
   /** 현재 실행을 발생시킨 사용자 메시지 ID입니다. */
   userMessageId: string;
-
-  /** 답변 생성 과정에서 참고한 노트 ID 목록입니다. */
-  referencedNoteIds: string[];
-
-  /** 실행 과정에서 생성된 Context 출처 Snapshot입니다. */
-  sources: Json[];
 };
 
 type PrepareNoteChatExecutionParams = {
@@ -60,13 +63,17 @@ type PrepareNoteChatExecutionParams = {
  * 다음 작업을 수행합니다.
  *
  * 1. 현재 사용자가 접근할 수 있는 대화와 전체 메시지를 조회합니다.
- * 2. Runtime에서 확정된 Prompt Template을 사용합니다.
- * 3. 현재 사용자 메시지 이전의 대화 이력과 Prompt를 조합합니다.
+ * 2. 현재 사용자 메시지에서 질문을 추출합니다.
+ * 3. Runtime Embedding Model로 질문 Embedding을 생성합니다.
+ * 4. 현재 사용자의 유사한 Note Embedding을 검색합니다.
+ * 5. 검색된 Embedding에 해당하는 실제 노트를 조회합니다.
+ * 6. 검색된 노트로 Prompt Context와 Source Snapshot을 구성합니다.
+ * 7. Runtime Prompt Template에 question과 context를 전달하여
+ *    Provider 메시지를 생성합니다.
  *
- * AI Runtime Configuration은 Route에서 이미 조회·검증되었으므로
- * 이 함수에서는 다시 조회하지 않습니다.
- *
- * 이 함수는 Provider를 호출하거나 Run 상태를 변경하지 않습니다.
+ * 실제 답변에서 참고한 Note ID는 이 단계에서 결정하지 않습니다.
+ * LLM 응답의 참고 Context 순번을 응답 처리 단계에서 Source와 매핑하여
+ * referencedNoteIds를 확정합니다.
  *
  * @param params 대화, 사용자 메시지 및 확정된 Runtime 설정
  * @returns Provider 호출 직전에 확정된 실행 정보
@@ -82,12 +89,45 @@ export async function prepareNoteChatExecution(
     );
   }
 
-  /*
-   * 현재 사용자 메시지를 기준으로 이전 대화 이력과 현재 질문을 분리하고,
-   * Runtime에서 확정된 Prompt Version의 Template을 사용해
-   * 최종 Provider 메시지를 생성합니다.
-   */
+  const currentUserMessage = detail.messages.find(
+    (message) => message.id === params.userMessageId,
+  );
+
+  if (!currentUserMessage) {
+    throw new Error(
+      `Note chat user message not found: ${params.userMessageId}`,
+    );
+  }
+
+  if (currentUserMessage.role !== AI_CHAT_MESSAGE_ROLE.USER) {
+    throw new Error(
+      `Note chat execution message is not a user message: ${params.userMessageId}`,
+    );
+  }
+
+  const currentUserContent = noteChatUserMessageContentSchema.parse(
+    currentUserMessage.content,
+  );
+
+  const embeddingMatches = await searchNoteChatEmbeddings({
+    embeddingConfiguration: params.settings.embedding,
+    ownerUserId: detail.conversation.user_id,
+    question: currentUserContent.text,
+  });
+
+  const matchedNotes = await getMatchedNoteChatNotes({
+    matches: embeddingMatches,
+    ownerUserId: detail.conversation.user_id,
+  });
+
+  const context = buildNoteChatContext({
+    notes: matchedNotes,
+  });
+
+  const sources = buildNoteChatSources(matchedNotes);
+
   const messages = resolveNoteChatExecutionMessages({
+    context,
     messages: detail.messages,
     systemTemplate: params.settings.chat.prompt.version.system_template,
     userMessageId: params.userMessageId,
@@ -97,9 +137,8 @@ export async function prepareNoteChatExecution(
   return {
     conversation: detail.conversation,
     messages,
-    referencedNoteIds: [],
     settings: params.settings,
-    sources: [],
+    sources,
     userMessageId: params.userMessageId,
   };
 }

@@ -3,6 +3,9 @@ import { AI_PROVIDER_CHAT_MESSAGE_ROLE } from "@/features/ai/providers/constants
 import type { AiProviderChatMessage } from "@/features/ai/providers/types";
 
 type BuildNoteChatProviderMessagesParams = {
+  /** 검색된 노트로 구성한 Context입니다. */
+  context: string;
+
   /** 현재 질문을 제외하고 대화 순서대로 정렬된 이전 메시지입니다. */
   historyMessages: AiProviderChatMessage[];
 
@@ -28,17 +31,16 @@ type BuildNoteChatProviderMessagesParams = {
  * 현재 질문은 `historyMessages`에 포함하지 않고 `question`으로 따로 전달해야
  * 같은 질문이 Provider 요청에 중복해서 포함되지 않습니다.
  *
- * @param params Prompt Template과 이전 대화 이력, 현재 질문
+ * Prompt Template에서는 `question`과 `context` 변수를 사용할 수 있습니다.
+ *
+ * @param params Prompt Template, 이전 대화 이력, 현재 질문 및 Note Context
  * @returns AI Provider에 전달할 최종 메시지 목록
  */
 export function buildNoteChatProviderMessages(
   params: BuildNoteChatProviderMessagesParams,
 ): AiProviderChatMessage[] {
-  /*
-   * 현재 단계에서는 Prompt Template에 `question`만 전달합니다.
-   * 이후 노트 Context가 추가되면 Note Chat 전용 변수도 이 위치에 확장합니다.
-   */
   const templateVariables = {
+    context: params.context,
     question: params.question,
   };
 

@@ -32,9 +32,6 @@ export type NoteChatExecution = {
   /** Provider가 반환하는 공통 Chat 스트림입니다. */
   providerStream: AsyncGenerator<AiChatStreamEvent>;
 
-  /** 답변 생성 과정에서 참고한 노트 ID 목록입니다. */
-  referencedNoteIds: string[];
-
   /** 실행 과정에서 생성된 Context 출처 Snapshot입니다. */
   sources: Json[];
 };
@@ -73,7 +70,6 @@ export async function executeNoteChat(
   return {
     prepared,
     providerStream,
-    referencedNoteIds: prepared.referencedNoteIds,
     sources: prepared.sources,
   };
 }
