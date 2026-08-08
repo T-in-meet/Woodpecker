@@ -82,6 +82,47 @@ describe("normalizeAnswer", () => {
     it("자릿수 쉼표는 지운다", () => {
       expect(normalizeAnswer("1,000")).toBe("1000");
     });
+
+    it("지수부의 부호를 남긴다", () => {
+      // 1e-3과 1e3은 1000배 차이다.
+      expect(normalizeAnswer("1e-3")).toBe("1e-3");
+      expect(normalizeAnswer("1e3")).toBe("1e3");
+    });
+
+    it("정수부를 생략한 소수를 0으로 채운다", () => {
+      expect(normalizeAnswer(".5")).toBe("0.5");
+      expect(normalizeAnswer("-.5")).toBe("-0.5");
+    });
+  });
+
+  describe("전각·유니코드 변형을 ASCII로 맞춘다", () => {
+    it("전각 문장부호를 반각으로 편다", () => {
+      expect(normalizeAnswer("1／2")).toBe("1/2");
+      expect(normalizeAnswer("3．14")).toBe("3.14");
+      expect(normalizeAnswer("1：2")).toBe("1:2");
+    });
+
+    it("전각 숫자를 반각으로 편다", () => {
+      expect(normalizeAnswer("３．１４")).toBe("3.14");
+    });
+
+    it("dash 변형을 하이픈으로 통일한다", () => {
+      expect(normalizeAnswer("2–3")).toBe("2-3");
+      expect(normalizeAnswer("2—3")).toBe("2-3");
+      expect(normalizeAnswer("－1")).toBe("-1");
+      expect(normalizeAnswer("−1")).toBe("-1");
+    });
+
+    it("위첨자를 지수 표기로 바꾼다", () => {
+      // NFKC에 그냥 맡기면 10²가 102로 펴져 102와 같은 답이 된다.
+      expect(normalizeAnswer("10²")).toBe("10^2");
+      expect(normalizeAnswer("2¹⁰")).toBe("2^10");
+      expect(normalizeAnswer("10^2")).toBe("10^2");
+    });
+
+    it("분수 기호를 슬래시 표기로 바꾼다", () => {
+      expect(normalizeAnswer("½")).toBe("1/2");
+    });
   });
 });
 
@@ -153,6 +194,25 @@ describe("gradeBlankAnswer", () => {
 
     it("하이픈을 빼고 입력해도 인정한다", () => {
       expect(gradeBlankAnswer("covid19", "COVID-19", [])).toBe(true);
+    });
+
+    it("지수부 부호가 다르면 오답이다", () => {
+      expect(gradeBlankAnswer("1e3", "1e-3", [])).toBe(false);
+    });
+
+    it("정수부를 생략한 소수를 인정한다", () => {
+      expect(gradeBlankAnswer(".5", "0.5", [])).toBe(true);
+      expect(gradeBlankAnswer("5", "0.5", [])).toBe(false);
+    });
+
+    it("전각으로 입력해도 인정한다", () => {
+      expect(gradeBlankAnswer("１／２", "1/2", [])).toBe(true);
+      expect(gradeBlankAnswer("ＴＣＰ／ＩＰ", "TCP/IP", [])).toBe(true);
+    });
+
+    it("위첨자 대신 캐럿으로 입력해도 인정한다", () => {
+      expect(gradeBlankAnswer("10^2", "10²", [])).toBe(true);
+      expect(gradeBlankAnswer("102", "10²", [])).toBe(false);
     });
   });
 });
