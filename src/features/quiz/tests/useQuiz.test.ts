@@ -189,6 +189,69 @@ describe("useQuiz", () => {
       expect(result.current.currentAnswer?.questionIndex).toBe(1);
     });
 
+    it("같은 문항에 중복 제출해도 답안과 점수가 늘지 않는다", async () => {
+      mockSuccess();
+      const { result } = await startPlaying();
+
+      act(() => {
+        result.current.submitAnswer("true");
+      });
+      act(() => {
+        result.current.submitAnswer("true");
+      });
+
+      expect(result.current.answers).toHaveLength(1);
+      expect(result.current.correctCount).toBe(1);
+    });
+
+    it("중복 제출 시 첫 답안을 유지한다", async () => {
+      mockSuccess();
+      const { result } = await startPlaying();
+
+      act(() => {
+        result.current.submitAnswer("true");
+      });
+      act(() => {
+        result.current.submitAnswer("false");
+      });
+
+      expect(result.current.answers).toHaveLength(1);
+      expect(result.current.currentAnswer?.userAnswer).toBe("true");
+      expect(result.current.currentAnswer?.isCorrect).toBe(true);
+      expect(result.current.correctCount).toBe(1);
+    });
+
+    it("모든 문항을 중복 제출해도 정답 수가 문항 수를 넘지 않는다", async () => {
+      mockSuccess();
+      const { result } = await startPlaying();
+
+      act(() => {
+        result.current.submitAnswer("true");
+      });
+      act(() => {
+        result.current.submitAnswer("true");
+      });
+      act(() => {
+        result.current.goToNext();
+      });
+      act(() => {
+        result.current.submitAnswer("false");
+      });
+      act(() => {
+        result.current.submitAnswer("false");
+      });
+      act(() => {
+        result.current.goToNext();
+      });
+
+      expect(result.current.phase).toBe("result");
+      expect(result.current.answers).toHaveLength(2);
+      expect(result.current.correctCount).toBe(2);
+      expect(result.current.correctCount).toBeLessThanOrEqual(
+        result.current.questions.length,
+      );
+    });
+
     it("choice는 선택지 번호로 채점한다", async () => {
       generateQuizMock.mockResolvedValue({
         data: {

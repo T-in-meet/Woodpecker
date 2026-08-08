@@ -83,7 +83,13 @@ export function useQuiz(noteId: string) {
         isCorrect,
       };
 
-      setAnswers((prev) => [...prev, record]);
+      setAnswers((prev) => {
+        // 더블클릭·Enter 반복 등으로 같은 문항이 여러 번 제출돼도 첫 답안만 남긴다.
+        if (prev.some((answer) => answer.questionIndex === currentIndex)) {
+          return prev;
+        }
+        return [...prev, record];
+      });
     },
     [questions, currentIndex],
   );
