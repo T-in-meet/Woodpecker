@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
+import { AdminNotificationBell } from "@/features/admin/notifications/components/AdminNotificationBell";
 import { NotificationBell } from "@/features/notifications/components/NotificationBell";
 import { ROUTES } from "@/lib/constants/routes";
 import { getProfile } from "@/lib/supabase/getProfile";
@@ -24,7 +25,8 @@ export async function Header() {
 
   return (
     <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-sm">
-      <div className="flex justify-between md:grid md:grid-cols-3 items-center max-w-5xl mx-auto px-6 py-3.5">
+      {/* 가운데 열은 auto — 1fr 균등 분할 시 768~917px 구간에서 NotesNav가 줄바꿈됨 */}
+      <div className="flex justify-between md:grid md:grid-cols-[1fr_auto_1fr] items-center max-w-5xl mx-auto px-6 py-3.5">
         <Link href={ROUTES.HOME} className="flex items-center gap-2">
           <Image src="/favicon.svg" alt="딱다구리" width={28} height={28} />
           {/* font-jeju: 브랜드 폰트(JejuStoneWall), globals.css @font-face 참조 */}
@@ -39,10 +41,14 @@ export async function Header() {
           {profile && user ? (
             <>
               <NotificationBell userId={user.id} />
+              {profile.role === "ADMIN" ? (
+                <AdminNotificationBell adminUserId={user.id} />
+              ) : null}
               <UserMenu
                 nickname={profile.nickname}
                 email={user.email ?? ""}
                 avatarUrl={profile.avatar_url}
+                isAdmin={profile.role === "ADMIN"}
               />
             </>
           ) : (
@@ -64,13 +70,14 @@ export async function Header() {
 export function HeaderSkeleton() {
   return (
     <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-sm">
-      <div className="grid grid-cols-3 items-center max-w-5xl mx-auto px-6 py-3.5">
+      {/* 레이아웃 클래스는 Header와 동일하게 유지 — 로딩 → 렌더 전환 시 위치가 흔들리지 않도록 */}
+      <div className="flex justify-between md:grid md:grid-cols-[1fr_auto_1fr] items-center max-w-5xl mx-auto px-6 py-3.5">
         <div className="flex items-center gap-2">
           <div className="size-7 rounded bg-muted animate-pulse" />
           <div className="h-6 w-20 rounded bg-muted animate-pulse" />
         </div>
         <div />
-        <div className="flex justify-end gap-3">
+        <div className="flex justify-end gap-3 items-center">
           <div className="h-9 w-16 rounded bg-muted animate-pulse" />
           <div className="h-9 w-20 rounded bg-muted animate-pulse" />
         </div>

@@ -26,6 +26,12 @@ import {
   setupLoginApiMocks,
 } from "./utils/loginTestHelper";
 
+const hasUserAgreementMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/features/auth/lib/userAgreements", () => ({
+  AGREEMENT_REQUIRED_REDIRECT: "/signup?agreement_required=1",
+  hasUserAgreement: hasUserAgreementMock,
+}));
 vi.mock("@/lib/supabase/server");
 vi.mock("@/lib/utils/getClientIp", () => ({
   getClientIp: vi.fn(() => "127.0.0.1"),
@@ -37,6 +43,7 @@ describe("로그인 API 인증 실패 통합 처리", () => {
     resetLoginApiMocks();
     setupLoginApiMocks();
     mockLoginSuccess();
+    hasUserAgreementMock.mockResolvedValue(true);
   });
 
   describe("인증 실패 응답 통합 — account enumeration 방어", () => {

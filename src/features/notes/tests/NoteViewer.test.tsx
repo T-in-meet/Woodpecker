@@ -23,7 +23,7 @@ describe("NoteViewer", () => {
       document
         .querySelector("[contenteditable='false']")
         ?.closest(".tiptap-wrapper")?.className,
-    ).toContain("[&_.tiptap]:px-0!");
+    ).toContain("[&_.tiptap]:px-1.5!");
   });
 
   it("preserves escaped task markers as literal markdown text", async () => {

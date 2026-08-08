@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { redirect as nextRedirect } from "next/navigation";
 import { Suspense } from "react";
 
+import { hasResetPasswordIntentCookie } from "@/features/auth/lib/resetPasswordIntent";
 import { resetPasswordAction } from "@/features/auth/reset-password/actions/resetPasswordAction";
 import { ResetPasswordForm } from "@/features/auth/reset-password/components/ResetPasswordForm";
 import { requireAuthUser } from "@/features/auth/utils/requireAuthUser";
@@ -43,6 +45,10 @@ export default async function ResetPasswordPage({ searchParams }: Props) {
   // 인증되지 않은 사용자는 forgot-password로 redirect
   await requireAuthUser({ redirectTo: ROUTES.FORGOT_PASSWORD });
 
+  if (!(await hasResetPasswordIntentCookie())) {
+    nextRedirect(ROUTES.FORGOT_PASSWORD);
+  }
+
   /**
    * redirect query 전달
    *
@@ -54,9 +60,9 @@ export default async function ResetPasswordPage({ searchParams }: Props) {
    *
    * - 값이 없으면 action 내부 fallback 경로를 사용한다
    */
-  const { redirect } = await searchParams;
+  const { redirect: redirectQuery } = await searchParams;
 
-  const redirectPath = redirect ?? null;
+  const redirectPath = redirectQuery ?? null;
 
   /**
    * ResetPasswordForm에 전달할 Server Action

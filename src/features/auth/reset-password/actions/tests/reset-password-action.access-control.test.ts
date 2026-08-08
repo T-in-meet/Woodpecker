@@ -33,4 +33,21 @@ describe("resetPasswordAction - access control", () => {
     expect(mocks.redirect).toHaveBeenCalledWith(ROUTES.FORGOT_PASSWORD);
     expect(mocks.updateUser).not.toHaveBeenCalled();
   });
+
+  it("reset-password intent cookie가 없으면 ROUTES.FORGOT_PASSWORD로 redirect한다", async () => {
+    mocks.hasResetPasswordIntentCookie.mockResolvedValue(false);
+
+    await expect(
+      runResetPasswordAction(
+        null,
+        makeFormData({
+          password: "valid-password",
+          confirmPassword: "valid-password",
+        }),
+      ),
+    ).rejects.toBe(REDIRECT_ERROR);
+
+    expect(mocks.redirect).toHaveBeenCalledWith(ROUTES.FORGOT_PASSWORD);
+    expect(mocks.updateUser).not.toHaveBeenCalled();
+  });
 });

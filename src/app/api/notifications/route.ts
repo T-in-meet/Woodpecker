@@ -9,6 +9,11 @@ import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
+const NOTIFICATION_LIST_LIMIT = 20;
+
+/**
+ * Returns unread user notifications for the current session user.
+ */
 export async function GET() {
   try {
     const supabase = await createClient();
@@ -21,11 +26,18 @@ export async function GET() {
     }
 
     const [items, unreadCount] = await Promise.all([
-      getNotificationList({ supabase, userId: user.id }),
+      getNotificationList({
+        limit: NOTIFICATION_LIST_LIMIT,
+        supabase,
+        userId: user.id,
+      }),
       getUnreadCount({ supabase, userId: user.id }),
     ]);
 
-    return NextResponse.json({ items, unreadCount });
+    return NextResponse.json({
+      items,
+      unreadCount,
+    });
   } catch (error) {
     logError({ event: "notifications.get.failed", error });
     return NextResponse.json(

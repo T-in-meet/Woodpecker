@@ -38,7 +38,7 @@ vi.mock("@/lib/supabase/server", () => ({
 
 // actions.ts가 gemini client를 import하므로 GEMINI_API_KEY 없이도 로드되도록 mock
 vi.mock("@/lib/gemini/client", () => ({
-  gemini: { models: { generateContent: vi.fn() } },
+  getGemini: () => ({ models: { generateContent: vi.fn() } }),
 }));
 
 vi.mock("next/cache", () => ({

@@ -1,6 +1,13 @@
 "use client";
 
-import { BookOpen, CalendarCheck, LogOut, Plus, User } from "lucide-react";
+import {
+  BookOpen,
+  CalendarCheck,
+  LogOut,
+  Plus,
+  Shield,
+  User,
+} from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
@@ -12,9 +19,15 @@ type UserMenuProps = {
   nickname: string;
   email: string;
   avatarUrl: string | null;
+  isAdmin: boolean;
 };
 
-export function UserMenu({ nickname, email, avatarUrl }: UserMenuProps) {
+export function UserMenu({
+  nickname,
+  email,
+  avatarUrl,
+  isAdmin,
+}: UserMenuProps) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const ref = useRef<HTMLDivElement>(null);
@@ -111,6 +124,18 @@ export function UserMenu({ nickname, email, avatarUrl }: UserMenuProps) {
               <User className="size-4" />
               마이페이지
             </Link>
+
+            {/* 관리자 페이지 */}
+            {isAdmin && (
+              <Link
+                href={ROUTES.ADMIN.DASHBOARD}
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-2 px-4 py-2 text-sm transition-colors hover:bg-accent"
+              >
+                <Shield className="size-4" />
+                관리자 페이지
+              </Link>
+            )}
           </div>
 
           <div className="border-t" />

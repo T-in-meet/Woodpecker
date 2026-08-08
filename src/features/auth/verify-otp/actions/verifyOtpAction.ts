@@ -22,8 +22,10 @@ import {
   checkRequestEligibility,
   mapBlockedByToReason,
 } from "../../lib/checkRequestEligibility";
+import { getUserByEmail } from "../../lib/getUserByEmail";
 import { maskEmailForLogging } from "../../lib/maskEmailForLogging";
 import { maskIpForLogging } from "../../lib/maskIpForLogging";
+import { setResetPasswordIntentCookie } from "../../lib/resetPasswordIntent";
 import { canonicalizeEmail } from "../../utils/canonicalizeEmail";
 import { verifyOtp } from "../lib/verifyOtp";
 import { verifyOtpContextSchema } from "../schemas/verifyOtpContextSchema";
@@ -188,6 +190,12 @@ export async function verifyOtpAction(
       return blockedState(reasonCode);
     }
 
+    const existingSignupUser =
+      purpose === "signup" ? await getUserByEmail(canonicalEmail) : null;
+
+    const shouldSetPasswordAfterSignup =
+      existingSignupUser !== null && !existingSignupUser.has_password_login;
+
     /**
      * Supabase OTP 인증 검증 수행
      *
@@ -270,12 +278,19 @@ export async function verifyOtpAction(
      * - 비밀번호 재설정 페이지로 이동
      * - 최종 redirect는 reset-password 완료 시점에서 처리
      */
-    const nextPath =
-      purpose === "signup"
+    const nextPath = shouldSetPasswordAfterSignup
+      ? redirectTo
+        ? `${ROUTES.SET_PASSWORD}?redirect=${encodeURIComponent(redirectTo)}`
+        : ROUTES.SET_PASSWORD
+      : purpose === "signup"
         ? (redirectTo ?? ROUTES.MYPAGE)
         : redirectTo
           ? `${ROUTES.RESET_PASSWORD}?redirect=${encodeURIComponent(redirectTo)}`
           : ROUTES.RESET_PASSWORD;
+
+    if (purpose === "reset-password") {
+      await setResetPasswordIntentCookie();
+    }
 
     nextUrl = nextPath;
   } catch (error) {

@@ -10,6 +10,10 @@ import {
   logRequested,
   normalizeUnknownError,
 } from "@/features/auth/lib/authLogger";
+import {
+  clearResetPasswordIntentCookie,
+  hasResetPasswordIntentCookie,
+} from "@/features/auth/lib/resetPasswordIntent";
 import { validateRedirectPath } from "@/features/auth/lib/validateRedirectPath";
 import { resetPasswordActionSchema } from "@/features/auth/reset-password/schemas/resetPasswordActionSchema";
 import { ROUTES } from "@/lib/constants/routes";
@@ -107,6 +111,18 @@ export async function resetPasswordAction(
     redirect(ROUTES.FORGOT_PASSWORD);
   }
 
+  if (!(await hasResetPasswordIntentCookie())) {
+    logAuthEvent(AUTH_EVENTS.AUTH_RESET_PASSWORD_REJECTED, {
+      path: ROUTES.RESET_PASSWORD,
+      method: "POST",
+      status: 303,
+      provider: "password",
+      result: "rejected",
+      reasonCode: AUTH_LOG_REASONS.INVALID_CREDENTIALS,
+    });
+    redirect(ROUTES.FORGOT_PASSWORD);
+  }
+
   let updateError: unknown = null;
   try {
     const { error } = await supabase.auth.updateUser({
@@ -174,6 +190,8 @@ export async function resetPasswordAction(
     provider: "password",
     result: "success",
   });
+
+  await clearResetPasswordIntentCookie();
 
   redirect(finalRedirectPath);
 }

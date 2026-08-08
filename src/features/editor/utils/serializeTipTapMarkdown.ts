@@ -1,9 +1,14 @@
 import type { Editor } from "@tiptap/core";
+import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
+
+import { withNoteBlockBackgroundMarkers } from "./noteBlockBackground";
 
 type MarkdownStorage = {
   markdown:
     | {
-        getMarkdown: () => string;
+        serializer: {
+          serialize: (content: ProseMirrorNode) => string;
+        };
       }
     | undefined;
 };
@@ -17,6 +22,12 @@ function getTaskItemIndent(line: string | undefined): string | null {
   const match = line.match(/^(\s*)- \[[ xX]\] /);
 
   return match?.[1] ?? null;
+}
+
+// 저장 본문은 LF로 통일한다. CRLF가 섞이면 줄 단위로 도는 후처리와
+// 미리보기의 목록 마커 복원이 줄 끝 \r 때문에 어긋난다.
+function normalizeLineEndings(markdown: string): string {
+  return markdown.replace(/\r\n?/g, "\n");
 }
 
 function normalizeTaskListSpacing(markdown: string): string {
@@ -96,19 +107,25 @@ function normalizeBlockquoteLineBreaks(markdown: string): string {
 function getRawTipTapMarkdown(editor: Editor): string {
   const storage = editor.storage as Partial<MarkdownStorage> | undefined;
 
-  if (!storage?.markdown?.getMarkdown) {
+  if (!storage?.markdown?.serializer) {
     throw new Error(
       "TipTap Markdown extension is required to serialize editor content.",
     );
   }
 
-  return storage.markdown.getMarkdown();
+  // 블록 배경 attribute는 마크다운에 직접 표현할 수 없어, 직렬화 직전에
+  // 본문 앞 마커 텍스트로 바꿔 넣는다.
+  return storage.markdown.serializer.serialize(
+    withNoteBlockBackgroundMarkers(editor.state.doc),
+  );
 }
 
 // TipTap 직렬화기가 자기 출력에 주입하는 공백/줄바꿈 아티팩트를 정리한다.
 // 여기서는 사용자가 입력한 escape(예: literal `\[x\]`)를 건드리지 않는다.
 export function normalizeTipTapSerializerOutput(markdown: string): string {
-  return normalizeBlockquoteLineBreaks(normalizeTaskListSpacing(markdown));
+  return normalizeBlockquoteLineBreaks(
+    normalizeTaskListSpacing(normalizeLineEndings(markdown)),
+  );
 }
 
 // 과거 저장 사이클에서 task marker가 `\[x\]` 형태로 이스케이프되어 굳은 데이터를 복구한다.

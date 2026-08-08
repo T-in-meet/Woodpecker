@@ -40,7 +40,7 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 vi.mock("@/lib/gemini/client", () => ({
-  gemini: { models: { generateContent: generateContentMock } },
+  getGemini: () => ({ models: { generateContent: generateContentMock } }),
 }));
 
 vi.mock("next/cache", () => ({

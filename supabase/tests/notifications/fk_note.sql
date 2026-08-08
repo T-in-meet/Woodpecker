@@ -102,7 +102,8 @@ INSERT INTO public.notifications (
   title,
   body,
   status
-)
+,
+  click_path)
 VALUES
   (
     current_setting('test.notifications_fk_note_a1_id')::uuid,
@@ -112,16 +113,18 @@ VALUES
     'a1 title',
     'a1 body',
     'SENT'
-  ),
+  ,
+  '/test'),
   (
     current_setting('test.notifications_fk_note_a2_id')::uuid,
     current_setting('test.notifications_fk_note_user_a_id')::uuid,
     current_setting('test.notifications_fk_note_note_a_id')::uuid,
-    'REMINDER',
+    'SYSTEM',
     'a2 title',
     'a2 body',
     'SENT'
-  ),
+  ,
+  '/test'),
   (
     current_setting('test.notifications_fk_note_b1_id')::uuid,
     current_setting('test.notifications_fk_note_user_a_id')::uuid,
@@ -130,16 +133,18 @@ VALUES
     'b1 title',
     'b1 body',
     'SENT'
-  ),
+  ,
+  '/test'),
   (
     current_setting('test.notifications_fk_note_null_id')::uuid,
     current_setting('test.notifications_fk_note_user_a_id')::uuid,
     NULL,
-    'ALERT',
+    'SYSTEM',
     'null note title',
     'null note body',
     'SENT'
-  )
+  ,
+  '/test')
 ON CONFLICT (id) DO NOTHING;
 
 
@@ -154,7 +159,8 @@ INSERT INTO public.notifications (
   title,
   body,
   status
-)
+,
+  click_path)
 VALUES (
   current_setting('test.notifications_fk_note_insert_note_ok_id')::uuid,
   current_setting('test.notifications_fk_note_user_a_id')::uuid,
@@ -163,7 +169,8 @@ VALUES (
   'note ok',
   'body',
   'SENT'
-);
+,
+  '/test');
 
 SELECT is(
   (SELECT count(*) FROM public.notifications WHERE id = current_setting('test.notifications_fk_note_insert_note_ok_id')::uuid),
@@ -176,8 +183,10 @@ ROLLBACK TO SAVEPOINT notifications_note_fk_insert_ok;
 SELECT throws_ok(
   format(
     $sql$
-      INSERT INTO public.notifications (id, user_id, note_id, type, title)
-      VALUES ('%s'::uuid, '%s'::uuid, NULL, 'REVIEW', 'null review note');
+      INSERT INTO public.notifications (id, user_id, note_id, type, title,
+  click_path)
+      VALUES ('%s'::uuid, '%s'::uuid, NULL, 'REVIEW', 'null review note',
+  '/test');
     $sql$,
     current_setting('test.notifications_fk_note_insert_note_null_id'),
     current_setting('test.notifications_fk_note_user_a_id')
@@ -217,8 +226,10 @@ ROLLBACK TO SAVEPOINT notifications_note_fk_delete_cascade;
 SELECT throws_ok(
   format(
     $sql$
-      INSERT INTO public.notifications (id, user_id, note_id, type, title)
-      VALUES ('%s'::uuid, '%s'::uuid, '%s'::uuid, 'REVIEW', 'invalid note');
+      INSERT INTO public.notifications (id, user_id, note_id, type, title,
+  click_path)
+      VALUES ('%s'::uuid, '%s'::uuid, '%s'::uuid, 'REVIEW', 'invalid note',
+  '/test');
     $sql$,
     gen_random_uuid(),
     current_setting('test.notifications_fk_note_user_a_id'),
@@ -252,8 +263,10 @@ WHERE id = current_setting('test.notifications_fk_note_note_a_id')::uuid;
 SELECT throws_ok(
   format(
     $sql$
-      INSERT INTO public.notifications (id, user_id, note_id, type, title)
-      VALUES ('%s'::uuid, '%s'::uuid, '%s'::uuid, 'REVIEW', 'deleted note');
+      INSERT INTO public.notifications (id, user_id, note_id, type, title,
+  click_path)
+      VALUES ('%s'::uuid, '%s'::uuid, '%s'::uuid, 'REVIEW', 'deleted note',
+  '/test');
     $sql$,
     gen_random_uuid(),
     current_setting('test.notifications_fk_note_user_a_id'),
@@ -298,8 +311,10 @@ ROLLBACK TO SAVEPOINT notifications_note_fk_update_valid;
 SELECT throws_ok(
   format(
     $sql$
-      INSERT INTO public.notifications (id, user_id, note_id, type, title)
-      VALUES ('%s'::uuid, '%s'::uuid, NULL, 'REVIEW', 'min note null');
+      INSERT INTO public.notifications (id, user_id, note_id, type, title,
+  click_path)
+      VALUES ('%s'::uuid, '%s'::uuid, NULL, 'REVIEW', 'min note null',
+  '/test');
     $sql$,
     current_setting('test.notifications_fk_note_insert_note_min_id'),
     current_setting('test.notifications_fk_note_user_a_id')
@@ -321,18 +336,20 @@ INSERT INTO public.notifications (
   status,
   sent_at,
   read_at
-)
+,
+  click_path)
 VALUES (
   current_setting('test.notifications_fk_note_insert_note_max_id')::uuid,
   current_setting('test.notifications_fk_note_user_a_id')::uuid,
   current_setting('test.notifications_fk_note_note_b_id')::uuid,
-  repeat('T', 50),
+  'SYSTEM',
   repeat('X', 200),
   repeat('B', 500),
   'READ',
   now(),
   now()
-);
+,
+  '/test');
 
 SELECT is(
   (SELECT count(*) FROM public.notifications WHERE id = current_setting('test.notifications_fk_note_insert_note_max_id')::uuid),
@@ -345,8 +362,10 @@ ROLLBACK TO SAVEPOINT notifications_note_fk_max_insert;
 SELECT throws_ok(
   format(
     $sql$
-      INSERT INTO public.notifications (id, user_id, note_id, type, title)
-      VALUES ('%s'::uuid, '%s'::uuid, '%s'::uuid, 'REVIEW', 'invalid note uuid');
+      INSERT INTO public.notifications (id, user_id, note_id, type, title,
+  click_path)
+      VALUES ('%s'::uuid, '%s'::uuid, '%s'::uuid, 'REVIEW', 'invalid note uuid',
+  '/test');
     $sql$,
     gen_random_uuid(),
     current_setting('test.notifications_fk_note_user_a_id'),

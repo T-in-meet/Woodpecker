@@ -1,20 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { createAdminClientMock, sendPushMock, setVapidDetailsMock } = vi.hoisted(
-  () => ({
-    createAdminClientMock: vi.fn(),
-    sendPushMock: vi.fn(),
-    setVapidDetailsMock: vi.fn(),
-  }),
-);
+const { createAdminClientMock, dispatchPushToUserMock } = vi.hoisted(() => ({
+  createAdminClientMock: vi.fn(),
+  dispatchPushToUserMock: vi.fn(),
+}));
 
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: createAdminClientMock,
 }));
 
-vi.mock("@/lib/webPush", () => ({
-  sendPush: sendPushMock,
-  setVapidDetails: setVapidDetailsMock,
+vi.mock("@/features/notifications/dispatch-push", () => ({
+  dispatchPushToUser: dispatchPushToUserMock,
 }));
 
 import * as dispatchRoute from "./route";
@@ -23,8 +19,6 @@ const USER_ID = "11111111-1111-4111-8111-111111111111";
 const NOTE_ID = "22222222-2222-4222-8222-222222222222";
 const REVIEW_LOG_ID = "33333333-3333-4333-8333-333333333333";
 const NOTIFICATION_ID = "44444444-4444-4444-8444-444444444444";
-const SUBSCRIPTION_ID = "55555555-5555-4555-8555-555555555555";
-const ENDPOINT = "https://push.example.test/subscription-id";
 const CRON_URL = "http://localhost/api/cron/dispatch-notifications";
 
 const CLAIMED_LOG = {
@@ -48,25 +42,11 @@ function createSupabaseMock({
   existingNotification = { id: NOTIFICATION_ID },
   insertedNotification = { id: NOTIFICATION_ID },
   note = { title: "알림 노트" },
-  subscriptions = [
-    {
-      auth: "auth-secret",
-      endpoint: ENDPOINT,
-      id: SUBSCRIPTION_ID,
-      p256dh: "p256dh-key",
-    },
-  ],
 }: {
   claimedLogs?: (typeof CLAIMED_LOG)[] | null;
   existingNotification?: { id: string } | null;
   insertedNotification?: { id: string } | null;
   note?: { title: string } | null;
-  subscriptions?: {
-    auth: string;
-    endpoint: string;
-    id: string;
-    p256dh: string;
-  }[];
 } = {}) {
   const rpcMock = vi.fn().mockResolvedValue({
     data: claimedLogs,
@@ -85,18 +65,6 @@ function createSupabaseMock({
   });
   const notesSelectMock = vi.fn().mockReturnValue({
     eq: notesIdEqMock,
-  });
-
-  const subscriptionsEqMock = vi.fn().mockResolvedValue({
-    data: subscriptions,
-    error: null,
-  });
-  const subscriptionsSelectMock = vi.fn().mockReturnValue({
-    eq: subscriptionsEqMock,
-  });
-  const deleteSubscriptionEqMock = vi.fn().mockResolvedValue({ error: null });
-  const deleteSubscriptionMock = vi.fn().mockReturnValue({
-    eq: deleteSubscriptionEqMock,
   });
 
   const notificationUpsertMaybeSingleMock = vi.fn().mockResolvedValue({
@@ -138,13 +106,6 @@ function createSupabaseMock({
       };
     }
 
-    if (table === "push_subscriptions") {
-      return {
-        delete: deleteSubscriptionMock,
-        select: subscriptionsSelectMock,
-      };
-    }
-
     if (table === "notifications") {
       return {
         select: notificationSelectMock,
@@ -162,7 +123,6 @@ function createSupabaseMock({
   });
 
   return {
-    deleteSubscriptionEqMock,
     fromMock,
     notificationSelectMock,
     notificationUpsertMock,
@@ -178,10 +138,13 @@ function createSupabaseMock({
 describe("/api/cron/dispatch-notifications", () => {
   beforeEach(() => {
     createAdminClientMock.mockReset();
-    sendPushMock.mockReset();
-    setVapidDetailsMock.mockReset();
+    dispatchPushToUserMock.mockReset();
     vi.stubEnv("CRON_SECRET", "cron-secret");
-    sendPushMock.mockResolvedValue({ ok: true });
+    dispatchPushToUserMock.mockResolvedValue({
+      expiredSubscriptions: 0,
+      failed: 0,
+      sent: 1,
+    });
   });
 
   afterEach(() => {
@@ -225,13 +188,17 @@ describe("/api/cron/dispatch-notifications", () => {
       pushed: 1,
     });
     expect(response.status).toBe(200);
-    expect(setVapidDetailsMock).toHaveBeenCalledTimes(1);
     expect(rpcMock).toHaveBeenCalledWith("claim_due_review_logs", {
       p_limit: 200,
     });
     expect(notificationUpsertMock).toHaveBeenCalledWith(
       {
         body: "알림 노트",
+        click_path: `/notes/${NOTE_ID}/review`,
+        metadata: {
+          noteId: NOTE_ID,
+          reviewLogId: REVIEW_LOG_ID,
+        },
         note_id: NOTE_ID,
         review_log_id: REVIEW_LOG_ID,
         status: "SENT",
@@ -244,14 +211,7 @@ describe("/api/cron/dispatch-notifications", () => {
     expect(reviewLogUpdateMock).toHaveBeenCalledWith({
       notification_dispatched_at: expect.any(String),
     });
-    expect(sendPushMock).toHaveBeenCalledWith(
-      {
-        endpoint: ENDPOINT,
-        keys: {
-          auth: "auth-secret",
-          p256dh: "p256dh-key",
-        },
-      },
+    expect(dispatchPushToUserMock).toHaveBeenCalledWith(
       {
         body: '"알림 노트" 복습할 시간이에요.',
         data: {
@@ -261,6 +221,10 @@ describe("/api/cron/dispatch-notifications", () => {
           url: `/notes/${NOTE_ID}/review`,
         },
         title: "복습할 시간이에요!",
+      },
+      {
+        operation: "dispatch_push",
+        userId: USER_ID,
       },
     );
   });
@@ -285,10 +249,14 @@ describe("/api/cron/dispatch-notifications", () => {
     expect(fromMock).not.toHaveBeenCalled();
   });
 
-  it("deletes expired push subscriptions", async () => {
-    const { deleteSubscriptionEqMock, supabase } = createSupabaseMock();
+  it("includes expired push subscription stats from push dispatch", async () => {
+    const { supabase } = createSupabaseMock();
     createAdminClientMock.mockReturnValue(supabase);
-    sendPushMock.mockResolvedValue({ gone: true, ok: false });
+    dispatchPushToUserMock.mockResolvedValue({
+      expiredSubscriptions: 1,
+      failed: 0,
+      sent: 0,
+    });
 
     const response = await dispatchRoute.GET(createAuthorizedRequest());
 
@@ -297,10 +265,6 @@ describe("/api/cron/dispatch-notifications", () => {
       pushFailed: 0,
       pushed: 0,
     });
-    expect(deleteSubscriptionEqMock).toHaveBeenCalledWith(
-      "id",
-      SUBSCRIPTION_ID,
-    );
   });
 
   it("retries push when the notification already exists but the review log is still due", async () => {
@@ -317,14 +281,17 @@ describe("/api/cron/dispatch-notifications", () => {
       pushed: 1,
     });
     expect(notificationSelectMock).toHaveBeenCalledWith("id");
-    expect(sendPushMock).toHaveBeenCalledWith(
-      expect.anything(),
+    expect(dispatchPushToUserMock).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           notificationId: NOTIFICATION_ID,
           reviewLogId: REVIEW_LOG_ID,
         }),
       }),
+      {
+        operation: "dispatch_push",
+        userId: USER_ID,
+      },
     );
     expect(reviewLogUpdateMock).toHaveBeenCalledWith({
       notification_dispatched_at: expect.any(String),
@@ -347,34 +314,16 @@ describe("/api/cron/dispatch-notifications", () => {
     });
     expect(notificationUpsertMock).not.toHaveBeenCalled();
     expect(reviewLogUpdateMock).not.toHaveBeenCalled();
-    expect(sendPushMock).not.toHaveBeenCalled();
+    expect(dispatchPushToUserMock).not.toHaveBeenCalled();
   });
 
   it("leaves review logs retryable when a non-expired push fails", async () => {
-    const consoleWarnSpy = vi
-      .spyOn(console, "warn")
-      .mockImplementation(() => undefined);
-    const { reviewLogUpdateMock, supabase } = createSupabaseMock({
-      subscriptions: [
-        {
-          auth: "auth-secret",
-          endpoint: ENDPOINT,
-          id: SUBSCRIPTION_ID,
-          p256dh: "p256dh-key",
-        },
-        {
-          auth: "second-auth-secret",
-          endpoint: "https://push.example.test/second-subscription-id",
-          id: "66666666-6666-4666-8666-666666666666",
-          p256dh: "second-p256dh-key",
-        },
-      ],
-    });
+    const { reviewLogUpdateMock, supabase } = createSupabaseMock();
     createAdminClientMock.mockReturnValue(supabase);
-    sendPushMock.mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce({
-      ok: false,
-      reason: "temporary provider failure",
-      statusCode: 503,
+    dispatchPushToUserMock.mockResolvedValue({
+      expiredSubscriptions: 0,
+      failed: 1,
+      sent: 1,
     });
 
     const response = await dispatchRoute.GET(createAuthorizedRequest());
@@ -386,12 +335,5 @@ describe("/api/cron/dispatch-notifications", () => {
       pushed: 1,
     });
     expect(reviewLogUpdateMock).not.toHaveBeenCalled();
-    expect(consoleWarnSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        event: "cron.dispatchNotifications.pushFailed",
-        reason: "temporary provider failure",
-        statusCode: 503,
-      }),
-    );
   });
 });

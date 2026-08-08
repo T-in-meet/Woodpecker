@@ -3,7 +3,7 @@
 import {
   ArrowLeftIcon,
   CircleIcon,
-  ListIcon,
+  ListChecksIcon,
   LoaderIcon,
   TextCursorInputIcon,
   XIcon,
@@ -16,18 +16,25 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import type { QuizType } from "@/lib/gemini/prompts";
 import { cn } from "@/lib/utils/cn";
 
 import { useQuiz } from "../hooks/useQuiz";
-import type {
-  BlankQuestion,
-  MultipleChoiceQuestion,
-  OxQuestion,
-} from "../schema";
 import { BlankQuestionCard } from "./BlankQuestionCard";
-import { MultipleChoiceCard } from "./MultipleChoiceCard";
+import { ChoiceQuestionCard } from "./ChoiceQuestionCard";
 import { OxQuestionCard } from "./OxQuestionCard";
 import { QuizResult } from "./QuizResult";
+
+const QUIZ_TYPE_LABELS: Record<QuizType, string> = {
+  ox: "OX 퀴즈",
+  blank: "빈칸 채우기",
+  choice: "객관식",
+};
+
+const TYPE_BUTTON_CLASS = cn(
+  "flex cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-border p-4 transition-colors",
+  "hover:border-primary/50 hover:bg-primary/5",
+);
 
 type QuizModalProps = {
   noteId: string;
@@ -60,22 +67,18 @@ export function QuizModal({
     goToSelect,
   } = useQuiz(noteId);
 
-  const handleClose = () => {
-    goToSelect();
-    onOpenChange(false);
+  // 모달은 계속 마운트돼 있으므로 닫을 때 직접 초기화해야 다음에 선택 화면부터 시작한다.
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      goToSelect();
+    }
+
+    onOpenChange(nextOpen);
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[85vh] flex-col">
-        <button
-          type="button"
-          onClick={handleClose}
-          className="absolute right-4 top-4 cursor-pointer rounded-sm text-muted-foreground hover:text-foreground"
-        >
-          <XIcon className="size-5" />
-          <span className="sr-only">닫기</span>
-        </button>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="flex max-h-[85dvh] flex-col overflow-hidden">
         <DialogHeader className="shrink-0">
           <DialogTitle>퀴즈</DialogTitle>
           <DialogDescription className="truncate">
@@ -93,38 +96,35 @@ export function QuizModal({
               <button
                 type="button"
                 onClick={() => startQuiz("ox")}
-                className={cn(
-                  "flex cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-border p-6 transition-colors",
-                  "hover:border-primary/50 hover:bg-primary/5",
-                )}
+                className={TYPE_BUTTON_CLASS}
               >
                 <div className="flex items-center gap-1">
                   <CircleIcon className="size-6" />
                   <XIcon className="size-6" />
                 </div>
-                <span className="text-sm font-medium">OX 퀴즈</span>
+                <span className="text-center text-sm font-medium">
+                  {QUIZ_TYPE_LABELS.ox}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => startQuiz("choice")}
+                className={TYPE_BUTTON_CLASS}
+              >
+                <ListChecksIcon className="size-6" />
+                <span className="text-center text-sm font-medium">
+                  {QUIZ_TYPE_LABELS.choice}
+                </span>
               </button>
               <button
                 type="button"
                 onClick={() => startQuiz("blank")}
-                className={cn(
-                  "flex cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-border p-6 transition-colors",
-                  "hover:border-primary/50 hover:bg-primary/5",
-                )}
+                className={TYPE_BUTTON_CLASS}
               >
                 <TextCursorInputIcon className="size-6" />
-                <span className="text-sm font-medium">빈칸 채우기</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => startQuiz("multiple_choice")}
-                className={cn(
-                  "flex cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-border p-6 transition-colors",
-                  "hover:border-primary/50 hover:bg-primary/5",
-                )}
-              >
-                <ListIcon className="size-6" />
-                <span className="text-sm font-medium">객관식</span>
+                <span className="text-center text-sm font-medium">
+                  {QUIZ_TYPE_LABELS.blank}
+                </span>
               </button>
             </div>
           </div>
@@ -140,50 +140,53 @@ export function QuizModal({
         )}
 
         {phase === "playing" && currentQuestion && (
-          <div>
-            <div className="mb-4 flex items-center justify-between">
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="mb-4 flex items-center justify-between gap-2">
               <button
                 type="button"
                 onClick={goToSelect}
-                className="flex cursor-pointer items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+                className="flex cursor-pointer items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
               >
                 <ArrowLeftIcon className="size-4" />
-                처음으로
+                유형 선택
               </button>
-              <span className="text-sm text-muted-foreground">
-                {currentIndex + 1} / {questions.length}
-              </span>
-              <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                {currentQuestion.type === "ox"
-                  ? "OX 퀴즈"
-                  : currentQuestion.type === "multiple_choice"
-                    ? "객관식"
-                    : "빈칸 채우기"}
-              </span>
+
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">
+                  {currentIndex + 1} / {questions.length}
+                </span>
+                <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                  {QUIZ_TYPE_LABELS[currentQuestion.type]}
+                </span>
+              </div>
             </div>
 
-            {currentQuestion.type === "ox" ? (
+            {currentQuestion.type === "ox" && (
               <OxQuestionCard
                 key={currentIndex}
-                question={currentQuestion as OxQuestion}
+                question={currentQuestion}
                 onSubmit={submitAnswer}
                 submitted={currentAnswer !== null}
                 userAnswer={currentAnswer?.userAnswer}
                 isCorrect={currentAnswer?.isCorrect}
               />
-            ) : currentQuestion.type === "multiple_choice" ? (
-              <MultipleChoiceCard
+            )}
+
+            {currentQuestion.type === "choice" && (
+              <ChoiceQuestionCard
                 key={currentIndex}
-                question={currentQuestion as MultipleChoiceQuestion}
+                question={currentQuestion}
                 onSubmit={submitAnswer}
                 submitted={currentAnswer !== null}
                 userAnswer={currentAnswer?.userAnswer}
                 isCorrect={currentAnswer?.isCorrect}
               />
-            ) : (
+            )}
+
+            {currentQuestion.type === "blank" && (
               <BlankQuestionCard
                 key={currentIndex}
-                question={currentQuestion as BlankQuestion}
+                question={currentQuestion}
                 onSubmit={submitAnswer}
                 submitted={currentAnswer !== null}
                 userAnswer={currentAnswer?.userAnswer}

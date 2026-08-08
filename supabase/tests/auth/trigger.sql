@@ -10,7 +10,7 @@
 
 BEGIN;
 
-SELECT plan(23);
+SELECT plan(31);
 
 -- 테스트 데이터 준비: auth.users UUID를 미리 생성해 관리
 -- (auth.users는 set_config 방식으로 ID를 참조하기 어려워 temp table 사용)
@@ -27,7 +27,11 @@ INSERT INTO _test_ids (label, id) VALUES
   ('u6', gen_random_uuid()),
   ('u7', gen_random_uuid()),
   ('u9', gen_random_uuid()),
-  ('u10', gen_random_uuid());
+  ('u10', gen_random_uuid()),
+  ('u11', gen_random_uuid()),
+  ('u12', gen_random_uuid()),
+  ('u13', gen_random_uuid()),
+  ('u14', gen_random_uuid());
 
 -- [정답 조건]
 -- auth.users에 새 사용자가 생성되면 profiles가 자동 생성되어야 한다
@@ -202,6 +206,75 @@ SELECT is(
   (SELECT canonical_email IS NULL FROM public.profiles WHERE id = (SELECT id FROM _test_ids WHERE label = 'u7')),
   true,
   'canonical_email이 null일 때 profiles.canonical_email도 null로 저장되어야 한다'
+);
+
+-- nickname이 없고 name이 유효하면 profiles.nickname에 name을 저장해야 한다
+SELECT lives_ok($$
+  INSERT INTO auth.users (id, email, raw_user_meta_data)
+  VALUES (
+    (SELECT id FROM _test_ids WHERE label = 'u11'),
+    (SELECT 'u11_' || id::text || '@example.com' FROM _test_ids WHERE label = 'u11'),
+    '{"name":"GoogleName"}'::jsonb
+  )
+  ON CONFLICT (id) DO NOTHING;
+$$, 'nickname이 없고 name이 유효하면 INSERT가 성공해야 한다');
+
+SELECT is(
+  (SELECT nickname FROM public.profiles WHERE id = (SELECT id FROM _test_ids WHERE label = 'u11')),
+  'GoogleName',
+  'nickname이 없고 name이 유효하면 profiles.nickname에 name을 저장해야 한다'
+);
+
+-- nickname과 name이 없고 full_name이 유효하면 profiles.nickname에 full_name을 저장해야 한다
+SELECT lives_ok($$
+  INSERT INTO auth.users (id, email, raw_user_meta_data)
+  VALUES (
+    (SELECT id FROM _test_ids WHERE label = 'u12'),
+    (SELECT 'u12_' || id::text || '@example.com' FROM _test_ids WHERE label = 'u12'),
+    '{"full_name":"Full Name"}'::jsonb
+  )
+  ON CONFLICT (id) DO NOTHING;
+$$, 'nickname과 name이 없고 full_name이 유효하면 INSERT가 성공해야 한다');
+
+SELECT is(
+  (SELECT nickname FROM public.profiles WHERE id = (SELECT id FROM _test_ids WHERE label = 'u12')),
+  'Full Name',
+  'nickname과 name이 없고 full_name이 유효하면 profiles.nickname에 full_name을 저장해야 한다'
+);
+
+-- nickname이 유효하면 name보다 nickname을 우선해야 한다
+SELECT lives_ok($$
+  INSERT INTO auth.users (id, email, raw_user_meta_data)
+  VALUES (
+    (SELECT id FROM _test_ids WHERE label = 'u13'),
+    (SELECT 'u13_' || id::text || '@example.com' FROM _test_ids WHERE label = 'u13'),
+    '{"nickname":"Nick","name":"GoogleName"}'::jsonb
+  )
+  ON CONFLICT (id) DO NOTHING;
+$$, 'nickname과 name이 모두 유효하면 INSERT가 성공해야 한다');
+
+SELECT is(
+  (SELECT nickname FROM public.profiles WHERE id = (SELECT id FROM _test_ids WHERE label = 'u13')),
+  'Nick',
+  'nickname이 유효하면 name보다 nickname을 우선해야 한다'
+);
+
+-- provider 이름이 10자를 초과하면 자르지 않고 fallback nickname을 생성해야 한다
+SELECT lives_ok($$
+  INSERT INTO auth.users (id, email, raw_user_meta_data)
+  VALUES (
+    (SELECT id FROM _test_ids WHERE label = 'u14'),
+    (SELECT 'u14_' || id::text || '@example.com' FROM _test_ids WHERE label = 'u14'),
+    '{"name":"Christopher Kim"}'::jsonb
+  )
+  ON CONFLICT (id) DO NOTHING;
+$$, 'provider 이름이 10자를 초과해도 INSERT가 성공해야 한다');
+
+SELECT ok(
+  (SELECT nickname LIKE 'user_%'
+   FROM public.profiles
+   WHERE id = (SELECT id FROM _test_ids WHERE label = 'u14')),
+  'provider 이름이 10자를 초과하면 자르지 않고 fallback nickname을 생성해야 한다'
 );
 
 -- [불변 조건]

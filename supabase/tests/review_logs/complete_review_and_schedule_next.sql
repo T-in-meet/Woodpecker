@@ -197,7 +197,8 @@ INSERT INTO public.notifications (
   status,
   note_id,
   review_log_id
-)
+,
+  click_path)
 VALUES (
   current_setting('test.review_complete_notification_round1_id')::uuid,
   current_setting('test.review_complete_user_a_id')::uuid,
@@ -207,7 +208,8 @@ VALUES (
   'SENT',
   current_setting('test.review_complete_note_round1_id')::uuid,
   current_setting('test.review_complete_log_round1_id')::uuid
-);
+,
+  '/test');
 
 SET LOCAL ROLE anon;
 SELECT set_config('request.jwt.claims', '{}'::text, true);

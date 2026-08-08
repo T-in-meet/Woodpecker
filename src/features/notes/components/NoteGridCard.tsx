@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useMemo } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { stripNoteColorSyntax } from "@/features/editor/utils/noteColorMarkdown";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { getNoteDetailRoute } from "@/lib/constants/routes";
 import { formatDateKST } from "@/lib/utils/formatDate";
@@ -19,7 +20,7 @@ export function NoteGridCard({ note }: { note: NoteSummary }) {
   const nextReviewText = getNextReviewText(status, note.next_review_at);
   const canReview = status === "available";
   const contentPreview = useMemo(
-    () => stripMarkdown(note.content),
+    () => stripMarkdown(stripNoteColorSyntax(note.content)),
     [note.content],
   );
 

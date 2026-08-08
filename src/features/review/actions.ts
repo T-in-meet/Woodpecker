@@ -8,7 +8,7 @@ import {
   getNoteReviewRoute,
   ROUTES,
 } from "@/lib/constants/routes";
-import { gemini } from "@/lib/gemini/client";
+import { getGemini } from "@/lib/gemini/client";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/types/database.types";
 
@@ -267,7 +267,7 @@ export async function gradeAnswerAction(
 
   let responseText: string;
   try {
-    const response = await gemini.models.generateContent({
+    const response = await getGemini().models.generateContent({
       model: "gemini-3.1-flash-lite",
       contents: prompt,
       config: {

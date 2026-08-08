@@ -34,6 +34,153 @@ export type Database = {
   };
   public: {
     Tables: {
+      admin_notification_events: {
+        Row: {
+          body: string | null;
+          click_path: string;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          metadata: Json;
+          title: string;
+          type: string;
+        };
+        Insert: {
+          body?: string | null;
+          click_path: string;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          metadata?: Json;
+          title: string;
+          type: string;
+        };
+        Update: {
+          body?: string | null;
+          click_path?: string;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          metadata?: Json;
+          title?: string;
+          type?: string;
+        };
+        Relationships: [];
+      };
+      admin_notification_reads: {
+        Row: {
+          admin_user_id: string;
+          event_id: string;
+          read_at: string;
+        };
+        Insert: {
+          admin_user_id: string;
+          event_id: string;
+          read_at?: string;
+        };
+        Update: {
+          admin_user_id?: string;
+          event_id?: string;
+          read_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "admin_notification_reads_event_id_fkey";
+            columns: ["event_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_notification_events";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      feedback_replies: {
+        Row: {
+          content: string;
+          created_at: string;
+          created_by: string;
+          feedback_id: string;
+          id: string;
+          image_paths: string[];
+          title: string;
+          updated_at: string;
+        };
+        Insert: {
+          content: string;
+          created_at?: string;
+          created_by: string;
+          feedback_id: string;
+          id?: string;
+          image_paths?: string[];
+          title: string;
+          updated_at?: string;
+        };
+        Update: {
+          content?: string;
+          created_at?: string;
+          created_by?: string;
+          feedback_id?: string;
+          id?: string;
+          image_paths?: string[];
+          title?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "feedback_replies_feedback_id_fkey";
+            columns: ["feedback_id"];
+            isOneToOne: true;
+            referencedRelation: "feedbacks";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      feedbacks: {
+        Row: {
+          category: string;
+          content: string;
+          created_at: string;
+          id: string;
+          image_urls: string[];
+          note_id: string | null;
+          status: string;
+          title: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          category: string;
+          content: string;
+          created_at?: string;
+          id?: string;
+          image_urls?: string[];
+          note_id?: string | null;
+          status?: string;
+          title: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          category?: string;
+          content?: string;
+          created_at?: string;
+          id?: string;
+          image_urls?: string[];
+          note_id?: string | null;
+          status?: string;
+          title?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "feedbacks_note_id_fkey";
+            columns: ["note_id"];
+            isOneToOne: false;
+            referencedRelation: "notes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       notes: {
         Row: {
           content: string;
@@ -73,7 +220,9 @@ export type Database = {
       notifications: {
         Row: {
           body: string | null;
+          click_path: string;
           id: string;
+          metadata: Json;
           note_id: string | null;
           read_at: string | null;
           review_log_id: string | null;
@@ -85,7 +234,9 @@ export type Database = {
         };
         Insert: {
           body?: string | null;
+          click_path: string;
           id?: string;
+          metadata?: Json;
           note_id?: string | null;
           read_at?: string | null;
           review_log_id?: string | null;
@@ -97,7 +248,9 @@ export type Database = {
         };
         Update: {
           body?: string | null;
+          click_path?: string;
           id?: string;
+          metadata?: Json;
           note_id?: string | null;
           read_at?: string | null;
           review_log_id?: string | null;
@@ -123,6 +276,113 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      operational_error_status_history: {
+        Row: {
+          changed_by: string | null;
+          created_at: string;
+          from_status: string | null;
+          id: string;
+          note: string | null;
+          operational_error_id: string;
+          to_status: string;
+        };
+        Insert: {
+          changed_by?: string | null;
+          created_at?: string;
+          from_status?: string | null;
+          id?: string;
+          note?: string | null;
+          operational_error_id: string;
+          to_status: string;
+        };
+        Update: {
+          changed_by?: string | null;
+          created_at?: string;
+          from_status?: string | null;
+          id?: string;
+          note?: string | null;
+          operational_error_id?: string;
+          to_status?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "operational_error_status_history_error_id_fkey";
+            columns: ["operational_error_id"];
+            isOneToOne: false;
+            referencedRelation: "operational_errors";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      operational_errors: {
+        Row: {
+          actor_user_id: string | null;
+          context: Json;
+          created_at: string;
+          error_code: string;
+          feature: string;
+          fingerprint: string;
+          first_seen_at: string;
+          id: string;
+          last_seen_at: string;
+          message: string;
+          occurrence_count: number;
+          operation: string;
+          resolution_note: string | null;
+          resolved_at: string | null;
+          resolved_by: string | null;
+          severity: string;
+          stage: string;
+          status: string;
+          updated_at: string;
+          user_id: string | null;
+        };
+        Insert: {
+          actor_user_id?: string | null;
+          context?: Json;
+          created_at?: string;
+          error_code: string;
+          feature: string;
+          fingerprint: string;
+          first_seen_at?: string;
+          id?: string;
+          last_seen_at?: string;
+          message: string;
+          occurrence_count?: number;
+          operation: string;
+          resolution_note?: string | null;
+          resolved_at?: string | null;
+          resolved_by?: string | null;
+          severity: string;
+          stage: string;
+          status?: string;
+          updated_at?: string;
+          user_id?: string | null;
+        };
+        Update: {
+          actor_user_id?: string | null;
+          context?: Json;
+          created_at?: string;
+          error_code?: string;
+          feature?: string;
+          fingerprint?: string;
+          first_seen_at?: string;
+          id?: string;
+          last_seen_at?: string;
+          message?: string;
+          occurrence_count?: number;
+          operation?: string;
+          resolution_note?: string | null;
+          resolved_at?: string | null;
+          resolved_by?: string | null;
+          severity?: string;
+          stage?: string;
+          status?: string;
+          updated_at?: string;
+          user_id?: string | null;
+        };
+        Relationships: [];
       };
       profiles: {
         Row: {
@@ -234,41 +494,6 @@ export type Database = {
           },
         ];
       };
-      quizzes: {
-        Row: {
-          id: string;
-          note_id: string;
-          user_id: string;
-          questions: Json;
-          note_content_hash: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          note_id: string;
-          user_id: string;
-          questions: Json;
-          note_content_hash: string;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          note_id?: string;
-          user_id?: string;
-          questions?: Json;
-          note_content_hash?: string;
-          created_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "quizzes_note_id_fkey";
-            columns: ["note_id"];
-            isOneToOne: true;
-            referencedRelation: "notes";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
       review_gradings: {
         Row: {
           id: string;
@@ -320,9 +545,124 @@ export type Database = {
           },
         ];
       };
+      quiz_generations: {
+        Row: {
+          id: string;
+          user_id: string;
+          note_id: string | null;
+          quiz_type: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          note_id?: string | null;
+          quiz_type: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          note_id?: string | null;
+          quiz_type?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "quiz_generations_note_id_fkey";
+            columns: ["note_id"];
+            isOneToOne: false;
+            referencedRelation: "notes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      quizzes: {
+        Row: {
+          id: string;
+          note_id: string;
+          user_id: string;
+          quiz_type: string;
+          questions: Json;
+          recent_questions: Json;
+          note_content_hash: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          note_id: string;
+          user_id: string;
+          quiz_type: string;
+          questions: Json;
+          recent_questions?: Json;
+          note_content_hash: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          note_id?: string;
+          user_id?: string;
+          quiz_type?: string;
+          questions?: Json;
+          recent_questions?: Json;
+          note_content_hash?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "quizzes_note_id_fkey";
+            columns: ["note_id"];
+            isOneToOne: false;
+            referencedRelation: "notes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      user_agreements: {
+        Row: {
+          created_at: string;
+          privacy_agreed_at: string;
+          source: string;
+          terms_agreed_at: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          privacy_agreed_at: string;
+          source: string;
+          terms_agreed_at: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          privacy_agreed_at?: string;
+          source?: string;
+          terms_agreed_at?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
-      [_ in never]: never;
+      admin_user_list: {
+        Row: {
+          agreement_source: string | null;
+          agreement_status: string | null;
+          avatar_url: string | null;
+          canonical_email: string | null;
+          created_at: string | null;
+          id: string | null;
+          nickname: string | null;
+          privacy_agreed: boolean | null;
+          role: string | null;
+          signup_method: string | null;
+          terms_agreed: boolean | null;
+        };
+        Relationships: [];
+      };
     };
     Functions: {
       apply_time_of_day: { Args: { t: string; ts: string }; Returns: string };
@@ -340,19 +680,73 @@ export type Database = {
           user_id: string;
         }[];
       };
+      claim_quiz_generation: {
+        Args: { p_note_id: string; p_quiz_type: string };
+        Returns: string;
+      };
       complete_review_and_schedule_next: {
         Args: { p_note_id: string; p_review_log_id: string };
+        Returns: string;
+      };
+      get_admin_unread_notification_counts: {
+        Args: { p_admin_user_id: string };
+        Returns: {
+          type: string;
+          unread_count: number;
+        }[];
+      };
+      get_admin_unread_notification_list: {
+        Args: { p_admin_user_id: string; p_limit?: number };
+        Returns: {
+          body: string | null;
+          click_path: string;
+          created_at: string;
+          id: string;
+          title: string;
+          type: string;
+        }[];
+      };
+      increment_operational_error_occurrence: {
+        Args: {
+          p_actor_user_id: string | null;
+          p_context: Json;
+          p_id: string;
+          p_message: string;
+          p_severity: string;
+          p_user_id: string | null;
+        };
+        Returns: string;
+      };
+      update_operational_error_status_with_history: {
+        Args: {
+          p_admin_user_id: string;
+          p_operational_error_id: string;
+          p_resolution_note: string;
+          p_status: string;
+        };
         Returns: string;
       };
       create_note_with_initial_review_log: {
         Args: { p_content: string; p_scheduled_at: string; p_title: string };
         Returns: string;
       };
+      delete_feedback_reply_with_notifications: {
+        Args: { p_feedback_id: string };
+        Returns: {
+          deleted_notification_count: number;
+          image_paths: string[];
+        }[];
+      };
       is_current_user_email_confirmed: { Args: never; Returns: boolean };
       kst_date: { Args: { ts: string }; Returns: string };
+      kst_day_start: { Args: { ts: string }; Returns: string };
       mark_notification_as_read: {
         Args: { p_notification_id: string };
         Returns: boolean;
+      };
+      mark_all_admin_notifications_as_read: {
+        Args: { p_admin_user_id: string };
+        Returns: number;
       };
       update_notification_time_of_day: {
         Args: { p_note_id: string; p_time?: string };

@@ -3,12 +3,13 @@
 import type { AnyExtension } from "@tiptap/core";
 import type { Editor } from "@tiptap/react";
 import { EditorContent } from "@tiptap/react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils/cn";
 
 import { useTipTapEditor } from "../hooks/useTipTapEditor";
 import { BlockHandleMenu } from "./BlockHandleMenu";
+import { InlineFormatToolbar } from "./InlineFormatToolbar";
 
 type TipTapEditorProps = {
   value: string;
@@ -38,6 +39,7 @@ export function TipTapEditor({
   const onEditorReadyRef = useRef(onEditorReady);
   onEditorReadyRef.current = onEditorReady;
   const editorReadyFired = useRef(false);
+  const [isBlockMenuOpen, setIsBlockMenuOpen] = useState(false);
 
   const editor = useTipTapEditor({
     value,
@@ -112,7 +114,18 @@ export function TipTapEditor({
         className,
       )}
     >
-      {editor && !readOnly && <BlockHandleMenu editor={editor} />}
+      {editor && !readOnly && (
+        <>
+          <BlockHandleMenu
+            editor={editor}
+            onMenuOpenChange={setIsBlockMenuOpen}
+          />
+          <InlineFormatToolbar
+            editor={editor}
+            isBlockMenuOpen={isBlockMenuOpen}
+          />
+        </>
+      )}
       <EditorContent editor={editor} />
     </div>
   );

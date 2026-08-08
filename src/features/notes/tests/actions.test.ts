@@ -17,7 +17,11 @@ vi.mock("next/navigation", () => ({
   redirect: redirectMock,
 }));
 
-import { createNoteAction, deleteNoteAction } from "../actions";
+import {
+  createNoteAction,
+  deleteNoteAction,
+  updateNoteAction,
+} from "../actions";
 
 function createSupabaseMock(
   input: {
@@ -27,6 +31,8 @@ function createSupabaseMock(
     rpcResult?: string | null;
     deleteError?: { message: string } | null;
     deletedNote?: { id: string } | null;
+    updateError?: { message: string } | null;
+    updatedNote?: { id: string } | null;
   } = {},
 ) {
   const {
@@ -36,6 +42,8 @@ function createSupabaseMock(
     rpcResult = "note-123",
     deleteError = null,
     deletedNote = { id: "11111111-1111-4111-8111-111111111111" },
+    updateError = null,
+    updatedNote = { id: "11111111-1111-4111-8111-111111111111" },
   } = input;
   const resolvedEmailConfirmedAt = Object.prototype.hasOwnProperty.call(
     input,
@@ -64,8 +72,27 @@ function createSupabaseMock(
   const deleteMock = vi.fn().mockReturnValue({
     eq: noteEqMock,
   });
+
+  const updateMaybeSingleMock = vi.fn().mockResolvedValue({
+    data: updateError ? null : updatedNote,
+    error: updateError,
+  });
+  const updateSelectMock = vi.fn().mockReturnValue({
+    maybeSingle: updateMaybeSingleMock,
+  });
+  const updateUserEqMock = vi.fn().mockReturnValue({
+    select: updateSelectMock,
+  });
+  const updateNoteEqMock = vi.fn().mockReturnValue({
+    eq: updateUserEqMock,
+  });
+  const updateMock = vi.fn().mockReturnValue({
+    eq: updateNoteEqMock,
+  });
+
   const fromMock = vi.fn().mockReturnValue({
     delete: deleteMock,
+    update: updateMock,
   });
 
   return {
@@ -76,6 +103,11 @@ function createSupabaseMock(
     userEqMock,
     selectMock,
     maybeSingleMock,
+    updateMock,
+    updateNoteEqMock,
+    updateUserEqMock,
+    updateSelectMock,
+    updateMaybeSingleMock,
     supabase: {
       auth: {
         getUser: vi.fn().mockResolvedValue({
@@ -323,5 +355,149 @@ describe("deleteNoteAction", () => {
     });
     expect(maybeSingleMock).toHaveBeenCalledOnce();
     expect(redirectMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateNoteAction", () => {
+  const validNoteId = "11111111-1111-4111-8111-111111111111";
+
+  beforeEach(() => {
+    createClientMock.mockReset();
+    redirectMock.mockReset();
+    redirectMock.mockImplementation(() => {
+      throw REDIRECT_ERROR;
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("returns an error when the note id is invalid", async () => {
+    const formData = new FormData();
+    formData.set("title", "Valid title");
+    formData.set("content", "Valid content");
+
+    const result = await updateNoteAction("invalid-note-id", null, formData);
+
+    expect(result).toEqual({ error: "수정할 노트를 찾을 수 없습니다." });
+    expect(createClientMock).not.toHaveBeenCalled();
+  });
+
+  it("returns field errors for invalid note data", async () => {
+    const formData = new FormData();
+    formData.set("title", "");
+    formData.set("content", "");
+
+    const result = await updateNoteAction(validNoteId, null, formData);
+
+    expect(result).toMatchObject({
+      error: expect.objectContaining({
+        title: expect.any(Array),
+        content: expect.any(Array),
+      }),
+    });
+    expect(createClientMock).not.toHaveBeenCalled();
+  });
+
+  it("returns an auth error when the user is not logged in", async () => {
+    const { supabase, fromMock } = createSupabaseMock({ userId: null });
+    createClientMock.mockResolvedValue(supabase);
+
+    const formData = new FormData();
+    formData.set("title", "Valid title");
+    formData.set("content", "Valid content");
+
+    const result = await updateNoteAction(validNoteId, null, formData);
+
+    expect(result).toEqual({ error: "로그인이 필요합니다." });
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it.each([null, undefined])(
+    "redirects unverified emails to the resend-email route when email_confirmed_at is %s",
+    async (emailConfirmedAt) => {
+      const { supabase, fromMock } = createSupabaseMock({
+        emailConfirmedAt,
+      });
+      createClientMock.mockResolvedValue(supabase);
+
+      const formData = new FormData();
+      formData.set("title", "Valid title");
+      formData.set("content", "Valid content");
+
+      await expect(updateNoteAction(validNoteId, null, formData)).rejects.toBe(
+        REDIRECT_ERROR,
+      );
+
+      expect(redirectMock).toHaveBeenCalledWith(
+        `${ROUTES.RESEND_EMAIL}?purpose=signup`,
+      );
+      expect(fromMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it("updates the note title and content for the owning user", async () => {
+    const {
+      supabase,
+      fromMock,
+      updateMock,
+      updateNoteEqMock,
+      updateUserEqMock,
+      updateSelectMock,
+    } = createSupabaseMock({
+      updatedNote: { id: validNoteId },
+    });
+    createClientMock.mockResolvedValue(supabase);
+
+    const formData = new FormData();
+    formData.set("title", "Updated title");
+    formData.set("content", "Updated content");
+
+    const result = await updateNoteAction(validNoteId, null, formData);
+
+    expect(fromMock).toHaveBeenCalledWith("notes");
+    expect(updateMock).toHaveBeenCalledWith({
+      title: "Updated title",
+      content: "Updated content",
+    });
+    expect(updateNoteEqMock).toHaveBeenCalledWith("id", validNoteId);
+    expect(updateUserEqMock).toHaveBeenCalledWith("user_id", "user-123");
+    expect(updateSelectMock).toHaveBeenCalledWith("id");
+    expect(result).toEqual({ success: true });
+  });
+
+  it("returns a not-found error when no matching note is updated", async () => {
+    const { supabase, updateMaybeSingleMock } = createSupabaseMock({
+      updatedNote: null,
+    });
+    createClientMock.mockResolvedValue(supabase);
+
+    const formData = new FormData();
+    formData.set("title", "Updated title");
+    formData.set("content", "Updated content");
+
+    const result = await updateNoteAction(validNoteId, null, formData);
+
+    expect(result).toEqual({ error: "수정할 노트를 찾을 수 없습니다." });
+    expect(updateMaybeSingleMock).toHaveBeenCalledOnce();
+  });
+
+  it("returns a general error when note update fails", async () => {
+    const { supabase, updateMaybeSingleMock } = createSupabaseMock({
+      updateError: { message: "update failed" },
+    });
+    createClientMock.mockResolvedValue(supabase);
+
+    const formData = new FormData();
+    formData.set("title", "Updated title");
+    formData.set("content", "Updated content");
+
+    const result = await updateNoteAction(validNoteId, null, formData);
+
+    expect(result).toEqual({
+      error: "노트 수정에 실패했습니다. 잠시 후 다시 시도해주세요.",
+    });
+    expect(updateMaybeSingleMock).toHaveBeenCalledOnce();
   });
 });
