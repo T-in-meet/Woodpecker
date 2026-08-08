@@ -1,12 +1,12 @@
 import type { AiTokenUsage } from "@/features/ai/providers/types";
 
 import { executeNoteChat } from "../execution/execute";
+import type { NoteChatExecutionSettings } from "../execution/prepare-execution";
 import {
   completeNoteChatRunFailure,
   completeNoteChatRunSuccess,
   markNoteChatRunRunning,
 } from "../execution/run-persistence";
-import type { NoteChatRunSettings } from "../schema";
 import { consumeNoteChatProviderStream } from "./consume-provider-stream";
 import type { NoteChatStreamEvent } from "./types";
 
@@ -20,8 +20,8 @@ export type RunNoteChatStreamParams = {
   /** 질문 생성 또는 수정 RPC가 반환한 Run ID입니다. */
   runId: string;
 
-  /** 실행 전에 확정된 AI 설정 ID입니다. */
-  settings: NoteChatRunSettings;
+  /** Route에서 확정된 AI Runtime 설정입니다. */
+  settings: NoteChatExecutionSettings;
 
   /** 현재 실행을 발생시킨 사용자 메시지 ID입니다. */
   userMessageId: string;
@@ -53,7 +53,7 @@ export type RunNoteChatStreamResult = {
  * 처리 순서는 다음과 같습니다.
  *
  * 1. Pending Run을 Running 상태로 변경합니다.
- * 2. Prompt·Model·대화 이력을 준비하고 Provider 스트림을 생성합니다.
+ * 2. 확정된 Runtime 설정과 대화 이력으로 Provider 스트림을 생성합니다.
  * 3. 텍스트 조각을 노트 챗봇 스트림 이벤트로 전달합니다.
  * 4. Provider 스트림이 완료되면 Assistant Message와 Run 성공 결과를 저장합니다.
  * 5. 실행 중 오류가 발생하면 Run을 실패 상태로 완료합니다.
@@ -61,7 +61,7 @@ export type RunNoteChatStreamResult = {
  * Context 검색 결과는 executeNoteChat 실행 결과에서 전달받아
  * Assistant Message와 Run 결과 저장에 사용합니다.
  *
- * @param params 실행할 Run과 대화 정보
+ * @param params 실행할 Run, 대화 및 확정된 Runtime 설정
  * @param onEvent 클라이언트에 전달할 스트림 이벤트 처리 함수
  * @returns 저장까지 완료된 노트 챗봇 실행 결과
  */

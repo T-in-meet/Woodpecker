@@ -2,7 +2,6 @@
 
 import { useCallback, useRef, useState } from "react";
 
-import type { NoteChatRunSettings } from "../schema";
 import {
   streamNoteChatQuestion,
   type StreamNoteChatQuestionInput,
@@ -38,7 +37,6 @@ export type NoteChatStreamingState = {
 export type StartNoteChatStreamInput = {
   conversationId: string;
   question: string;
-  settings: NoteChatRunSettings;
 };
 
 /**
@@ -87,7 +85,6 @@ export function useNoteChatStream() {
           ...current,
           runId: event.runId,
         }));
-
         break;
       }
 
@@ -96,7 +93,6 @@ export function useNoteChatStream() {
           ...current,
           content: current.content + event.delta,
         }));
-
         break;
       }
 
@@ -108,7 +104,6 @@ export function useNoteChatStream() {
           referencedNoteIds: event.referencedNoteIds,
           runId: event.runId,
         }));
-
         break;
       }
 
@@ -119,7 +114,6 @@ export function useNoteChatStream() {
           isStreaming: false,
           runId: event.runId,
         }));
-
         break;
       }
     }
@@ -128,7 +122,7 @@ export function useNoteChatStream() {
   /**
    * 새로운 노트 챗봇 질문 스트리밍을 시작합니다.
    *
-   * @param input 대화 ID, 질문 및 AI 설정
+   * @param input 대화 ID와 질문
    */
   const start = useCallback(
     async (input: StartNoteChatStreamInput): Promise<void> => {
@@ -154,7 +148,6 @@ export function useNoteChatStream() {
         content: {
           text: input.question,
         },
-        settings: input.settings,
       };
 
       try {

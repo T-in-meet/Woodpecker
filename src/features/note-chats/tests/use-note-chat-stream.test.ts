@@ -2,20 +2,12 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useNoteChatStream } from "../hooks/use-note-chat-stream";
-import type { NoteChatRunSettings } from "../schema";
 import { streamNoteChatQuestion } from "../stream/client";
 import type { NoteChatStreamEvent } from "../stream/types";
 
 vi.mock("../stream/client", () => ({
   streamNoteChatQuestion: vi.fn(),
 }));
-
-const SETTINGS: NoteChatRunSettings = {
-  agentId: "11111111-1111-4111-8111-111111111111",
-  promptVersionId: "22222222-2222-4222-8222-222222222222",
-  chatModelConfigId: "33333333-3333-4333-8333-333333333333",
-  embeddingModelConfigId: "44444444-4444-4444-8444-444444444444",
-};
 
 const CONVERSATION_ID = "55555555-5555-4555-8555-555555555555";
 const RUN_ID = "66666666-6666-4666-8666-666666666666";
@@ -70,7 +62,6 @@ describe("useNoteChatStream", () => {
       await result.current.start({
         conversationId: CONVERSATION_ID,
         question: "질문입니다.",
-        settings: SETTINGS,
       });
     });
 
@@ -80,7 +71,6 @@ describe("useNoteChatStream", () => {
         content: {
           text: "질문입니다.",
         },
-        settings: SETTINGS,
       },
       {
         signal: expect.any(AbortSignal),
@@ -116,7 +106,6 @@ describe("useNoteChatStream", () => {
       await result.current.start({
         conversationId: CONVERSATION_ID,
         question: "질문입니다.",
-        settings: SETTINGS,
       });
     });
 
@@ -137,7 +126,6 @@ describe("useNoteChatStream", () => {
       await result.current.start({
         conversationId: CONVERSATION_ID,
         question: "질문입니다.",
-        settings: SETTINGS,
       });
     });
 
@@ -162,7 +150,6 @@ describe("useNoteChatStream", () => {
       const startPromise = result.current.start({
         conversationId: CONVERSATION_ID,
         question: "질문입니다.",
-        settings: SETTINGS,
       });
 
       result.current.cancel();
@@ -198,7 +185,6 @@ describe("useNoteChatStream", () => {
       await result.current.start({
         conversationId: CONVERSATION_ID,
         question: "첫 번째 질문",
-        settings: SETTINGS,
       });
     });
 
@@ -208,7 +194,6 @@ describe("useNoteChatStream", () => {
       await result.current.start({
         conversationId: CONVERSATION_ID,
         question: "두 번째 질문",
-        settings: SETTINGS,
       });
     });
 

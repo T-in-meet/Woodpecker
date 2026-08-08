@@ -14,7 +14,6 @@ import { useNoteChatStream } from "../hooks/use-note-chat-stream";
 import {
   type CreateNoteChatQuestionInput,
   createNoteChatQuestionInputSchema,
-  type NoteChatRunSettings,
 } from "../schema";
 
 /**
@@ -23,9 +22,6 @@ import {
 type NoteChatComposerProps = {
   /** 질문을 추가할 노트 챗봇 대화 ID입니다. */
   conversationId: string;
-
-  /** 노트 챗봇 실행에 사용할 AI 설정입니다. */
-  settings: NoteChatRunSettings;
 };
 
 /**
@@ -34,10 +30,7 @@ type NoteChatComposerProps = {
  * 질문 폼은 React Hook Form과 Zod로 관리하며,
  * 답변 생성 상태는 `useNoteChatStream` 커스텀 훅으로 관리합니다.
  */
-export function NoteChatComposer({
-  conversationId,
-  settings,
-}: NoteChatComposerProps) {
+export function NoteChatComposer({ conversationId }: NoteChatComposerProps) {
   const {
     assistantMessageId,
     cancel,
@@ -56,7 +49,6 @@ export function NoteChatComposer({
       content: {
         text: "",
       },
-      settings,
     },
   });
 
@@ -78,13 +70,11 @@ export function NoteChatComposer({
       content: {
         text: "",
       },
-      settings,
     });
 
     await start({
       conversationId: values.conversationId,
       question: submittedQuestion,
-      settings: values.settings,
     });
   });
 
@@ -111,19 +101,6 @@ export function NoteChatComposer({
       ) : null}
 
       <form className="space-y-3" onSubmit={handleSubmit}>
-        <input type="hidden" {...form.register("conversationId")} />
-
-        <input type="hidden" {...form.register("settings.agentId")} />
-
-        <input type="hidden" {...form.register("settings.promptVersionId")} />
-
-        <input type="hidden" {...form.register("settings.chatModelConfigId")} />
-
-        <input
-          type="hidden"
-          {...form.register("settings.embeddingModelConfigId")}
-        />
-
         <div className="space-y-2">
           <Textarea
             aria-describedby={

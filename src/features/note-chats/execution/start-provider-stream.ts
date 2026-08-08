@@ -2,7 +2,6 @@ import { AI_MODEL_PROVIDER } from "@/features/ai/constants/models";
 import { streamAiChatCompletionWithProvider } from "@/features/ai/providers";
 import type { AiChatStreamEvent } from "@/features/ai/providers/types";
 
-import { NOTE_CHAT_DEFAULT_TEMPERATURE } from "../constants";
 import type { PreparedNoteChatExecution } from "./prepare-execution";
 
 /**
@@ -50,13 +49,14 @@ function getNoteChatProviderApiKey(provider: string): string {
 export function startNoteChatProviderStream(
   prepared: PreparedNoteChatExecution,
 ): AsyncGenerator<AiChatStreamEvent> {
-  const chatModel = prepared.settings.chatModel;
+  const chatConfiguration = prepared.settings.chat;
+  const chatModel = chatConfiguration.model;
 
   return streamAiChatCompletionWithProvider({
     apiKey: getNoteChatProviderApiKey(chatModel.provider),
     messages: prepared.messages,
     model: chatModel.model,
     provider: chatModel.provider,
-    temperature: NOTE_CHAT_DEFAULT_TEMPERATURE,
+    temperature: chatConfiguration.temperature,
   });
 }

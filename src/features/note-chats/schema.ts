@@ -52,25 +52,6 @@ export const noteChatAssistantMessageContentSchema = z.object({
 });
 
 /**
- * 노트 챗봇 실행 시 사용할 AI 설정을 검증합니다.
- *
- * 모든 설정 ID는 실행 전에 확정되어야 하며,
- * 실행 계층에서는 이 값을 기준으로 Prompt와 Model Config를 조회합니다.
- */
-export const noteChatRunSettingsSchema = z.object({
-  agentId: z.string().uuid(NOTE_CHAT_VALIDATION_MESSAGE.AI_SETTING_ID_INVALID),
-  promptVersionId: z
-    .string()
-    .uuid(NOTE_CHAT_VALIDATION_MESSAGE.AI_SETTING_ID_INVALID),
-  chatModelConfigId: z
-    .string()
-    .uuid(NOTE_CHAT_VALIDATION_MESSAGE.AI_SETTING_ID_INVALID),
-  embeddingModelConfigId: z
-    .string()
-    .uuid(NOTE_CHAT_VALIDATION_MESSAGE.AI_SETTING_ID_INVALID),
-});
-
-/**
  * 새로운 노트 챗봇 대화를 생성할 때 사용하는 입력을 검증합니다.
  */
 export const createNoteChatConversationInputSchema = z.object({
@@ -78,28 +59,27 @@ export const createNoteChatConversationInputSchema = z.object({
 });
 
 /**
- * 기존 대화에 새로운 사용자 질문과 Run을 생성할 때 사용하는 입력을 검증합니다.
+ * 기존 대화에 새로운 사용자 질문을 생성할 때 사용하는 입력을 검증합니다.
  *
- * 검증된 값은 `create_note_chat_question` RPC의 인자로 변환하여 사용합니다.
+ * AI 실행 설정은 클라이언트 입력으로 받지 않고
+ * 서버의 AI Runtime Configuration에서 확정합니다.
  */
 export const createNoteChatQuestionInputSchema = z.object({
   conversationId: z
     .string()
     .uuid(NOTE_CHAT_VALIDATION_MESSAGE.CONVERSATION_ID_INVALID),
   content: noteChatUserMessageContentSchema,
-  settings: noteChatRunSettingsSchema,
 });
 
 /**
- * 기존 사용자 메시지를 수정하고 새로운 Run을 생성할 때 사용하는 입력을 검증합니다.
+ * 기존 사용자 메시지를 수정할 때 사용하는 입력을 검증합니다.
  *
- * 메시지를 수정하면 해당 메시지 이후의 대화 흐름이 삭제되므로,
- * 검증된 값은 `update_note_chat_user_message` RPC 호출에 사용합니다.
+ * 메시지를 수정하면 해당 메시지 이후의 대화 흐름이 삭제되며,
+ * 새로운 AI 실행 설정은 서버의 AI Runtime Configuration에서 확정합니다.
  */
 export const updateNoteChatUserMessageInputSchema = z.object({
   messageId: z.string().uuid(NOTE_CHAT_VALIDATION_MESSAGE.MESSAGE_ID_INVALID),
   content: noteChatUserMessageContentSchema,
-  settings: noteChatRunSettingsSchema,
 });
 
 /**
@@ -122,11 +102,6 @@ export const deleteNoteChatConversationInputSchema = z.object({
 });
 
 /**
- * 노트 챗봇 실행 전에 확정되어야 하는 AI 설정입니다.
- */
-export type NoteChatRunSettings = z.infer<typeof noteChatRunSettingsSchema>;
-
-/**
  * 새로운 노트 챗봇 대화를 생성할 때 사용하는 입력 타입입니다.
  */
 export type CreateNoteChatConversationInput = z.infer<
@@ -141,7 +116,7 @@ export type CreateNoteChatQuestionInput = z.infer<
 >;
 
 /**
- * 기존 사용자 메시지를 수정하고 답변을 다시 생성할 때 사용하는 입력 타입입니다.
+ * 기존 사용자 메시지를 수정할 때 사용하는 입력 타입입니다.
  */
 export type UpdateNoteChatUserMessageInput = z.infer<
   typeof updateNoteChatUserMessageInputSchema

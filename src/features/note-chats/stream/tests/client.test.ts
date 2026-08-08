@@ -1,22 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { NoteChatRunSettings } from "../../schema";
 import { NoteChatStreamRequestError, streamNoteChatQuestion } from "../client";
 import type { NoteChatStreamEvent } from "../types";
-
-const SETTINGS: NoteChatRunSettings = {
-  agentId: "11111111-1111-4111-8111-111111111111",
-  promptVersionId: "22222222-2222-4222-8222-222222222222",
-  chatModelConfigId: "33333333-3333-4333-8333-333333333333",
-  embeddingModelConfigId: "44444444-4444-4444-8444-444444444444",
-};
 
 const INPUT = {
   conversationId: "55555555-5555-4555-8555-555555555555",
   content: {
     text: "질문입니다.",
   },
-  settings: SETTINGS,
 };
 
 /**

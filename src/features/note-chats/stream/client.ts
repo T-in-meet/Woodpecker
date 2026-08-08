@@ -1,4 +1,3 @@
-import type { NoteChatRunSettings } from "../schema";
 import type { NoteChatStreamEvent } from "./types";
 
 /**
@@ -6,10 +5,10 @@ import type { NoteChatStreamEvent } from "./types";
  */
 export type StreamNoteChatQuestionInput = {
   conversationId: string;
+
   content: {
     text: string;
   };
-  settings: NoteChatRunSettings;
 };
 
 /**
@@ -33,7 +32,7 @@ export class NoteChatStreamRequestError extends Error {
  * 하나의 JSON 이벤트가 여러 네트워크 청크에 나뉘어 들어오는 경우를 위해
  * 아직 완성되지 않은 마지막 줄은 다음 청크까지 버퍼에 유지합니다.
  *
- * @param input 질문과 실행 설정
+ * @param input 질문 생성 입력
  * @param options 요청 취소에 사용할 AbortSignal
  * @returns 서버가 전달하는 노트 챗봇 이벤트 스트림
  */

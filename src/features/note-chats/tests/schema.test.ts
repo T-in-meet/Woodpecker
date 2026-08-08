@@ -11,7 +11,6 @@ import {
   deleteNoteChatConversationInputSchema,
   noteChatAssistantMessageContentSchema,
   noteChatConversationTitleSchema,
-  noteChatRunSettingsSchema,
   noteChatUserMessageContentSchema,
   updateNoteChatConversationTitleInputSchema,
   updateNoteChatUserMessageInputSchema,
@@ -19,19 +18,7 @@ import {
 
 const VALID_CONVERSATION_ID = "11111111-1111-4111-8111-111111111111";
 const VALID_MESSAGE_ID = "22222222-2222-4222-8222-222222222222";
-const VALID_AGENT_ID = "33333333-3333-4333-8333-333333333333";
-const VALID_PROMPT_VERSION_ID = "44444444-4444-4444-8444-444444444444";
-const VALID_CHAT_MODEL_CONFIG_ID = "55555555-5555-4555-8555-555555555555";
-const VALID_EMBEDDING_MODEL_CONFIG_ID = "66666666-6666-4666-8666-666666666666";
 const VALID_NOTE_ID = "77777777-7777-4777-8777-777777777777";
-
-/** 유효한 노트 챗봇 실행 설정입니다. */
-const VALID_RUN_SETTINGS = {
-  agentId: VALID_AGENT_ID,
-  promptVersionId: VALID_PROMPT_VERSION_ID,
-  chatModelConfigId: VALID_CHAT_MODEL_CONFIG_ID,
-  embeddingModelConfigId: VALID_EMBEDDING_MODEL_CONFIG_ID,
-};
 
 /**
  * 스키마 검증 실패 결과에서 첫 번째 오류 메시지를 반환합니다.
@@ -174,52 +161,6 @@ describe("noteChatAssistantMessageContentSchema", () => {
   });
 });
 
-describe("noteChatRunSettingsSchema", () => {
-  it("모든 AI 설정 ID를 허용한다", () => {
-    expect(noteChatRunSettingsSchema.parse(VALID_RUN_SETTINGS)).toEqual(
-      VALID_RUN_SETTINGS,
-    );
-  });
-
-  it("빈 설정 객체를 거부한다", () => {
-    const result = noteChatRunSettingsSchema.safeParse({});
-
-    expect(result.success).toBe(false);
-  });
-
-  it("각 AI 설정의 null 값을 거부한다", () => {
-    const result = noteChatRunSettingsSchema.safeParse({
-      agentId: null,
-      promptVersionId: null,
-      chatModelConfigId: null,
-      embeddingModelConfigId: null,
-    });
-
-    expect(result.success).toBe(false);
-  });
-
-  it.each([
-    "agentId",
-    "promptVersionId",
-    "chatModelConfigId",
-    "embeddingModelConfigId",
-  ] as const)("유효하지 않은 %s를 거부한다", (field) => {
-    /*
-     * 나머지 필드는 유효한 값을 유지하고,
-     * 검증 대상 필드 하나만 잘못된 UUID로 변경합니다.
-     */
-    const result = noteChatRunSettingsSchema.safeParse({
-      ...VALID_RUN_SETTINGS,
-      [field]: "invalid-id",
-    });
-
-    expect(result.success).toBe(false);
-    expect(getFirstErrorMessage(result)).toBe(
-      NOTE_CHAT_VALIDATION_MESSAGE.AI_SETTING_ID_INVALID,
-    );
-  });
-});
-
 describe("createNoteChatConversationInputSchema", () => {
   it("대화 생성 입력을 검증하고 제목의 공백을 제거한다", () => {
     const result = createNoteChatConversationInputSchema.parse({
@@ -250,21 +191,25 @@ describe("createNoteChatQuestionInputSchema", () => {
       content: {
         text: "질문입니다.",
       },
-      settings: VALID_RUN_SETTINGS,
     };
 
     expect(createNoteChatQuestionInputSchema.parse(input)).toEqual(input);
   });
 
-  it("settings가 없는 입력을 거부한다", () => {
-    const result = createNoteChatQuestionInputSchema.safeParse({
+  it("질문의 앞뒤 공백을 제거한다", () => {
+    const result = createNoteChatQuestionInputSchema.parse({
+      conversationId: VALID_CONVERSATION_ID,
+      content: {
+        text: "  질문입니다.  ",
+      },
+    });
+
+    expect(result).toEqual({
       conversationId: VALID_CONVERSATION_ID,
       content: {
         text: "질문입니다.",
       },
     });
-
-    expect(result.success).toBe(false);
   });
 
   it("유효하지 않은 대화 ID를 거부한다", () => {
@@ -273,7 +218,6 @@ describe("createNoteChatQuestionInputSchema", () => {
       content: {
         text: "질문입니다.",
       },
-      settings: VALID_RUN_SETTINGS,
     });
 
     expect(result.success).toBe(false);
@@ -290,21 +234,25 @@ describe("updateNoteChatUserMessageInputSchema", () => {
       content: {
         text: "수정된 질문입니다.",
       },
-      settings: VALID_RUN_SETTINGS,
     };
 
     expect(updateNoteChatUserMessageInputSchema.parse(input)).toEqual(input);
   });
 
-  it("settings가 없는 입력을 거부한다", () => {
-    const result = updateNoteChatUserMessageInputSchema.safeParse({
+  it("수정된 질문의 앞뒤 공백을 제거한다", () => {
+    const result = updateNoteChatUserMessageInputSchema.parse({
+      messageId: VALID_MESSAGE_ID,
+      content: {
+        text: "  수정된 질문입니다.  ",
+      },
+    });
+
+    expect(result).toEqual({
       messageId: VALID_MESSAGE_ID,
       content: {
         text: "수정된 질문입니다.",
       },
     });
-
-    expect(result.success).toBe(false);
   });
 
   it("유효하지 않은 메시지 ID를 거부한다", () => {
@@ -313,7 +261,6 @@ describe("updateNoteChatUserMessageInputSchema", () => {
       content: {
         text: "수정된 질문입니다.",
       },
-      settings: VALID_RUN_SETTINGS,
     });
 
     expect(result.success).toBe(false);
