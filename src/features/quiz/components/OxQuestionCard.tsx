@@ -41,6 +41,8 @@ export function OxQuestionCard({
             <button
               key={value}
               type="button"
+              // 아이콘만 있는 버튼이라 lucide가 aria-hidden을 붙이면 이름이 남지 않는다.
+              aria-label={value === "true" ? "O, 맞다" : "X, 틀리다"}
               disabled={submitted}
               onClick={() => setSelected(value)}
               className={cn(

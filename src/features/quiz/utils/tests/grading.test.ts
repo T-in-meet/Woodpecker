@@ -27,6 +27,24 @@ describe("normalizeAnswer", () => {
   it("가운뎃점을 제거한다", () => {
     expect(normalizeAnswer("산술·논리")).toBe("산술논리");
   });
+
+  it("슬래시를 제거한다", () => {
+    expect(normalizeAnswer("TCP/IP")).toBe("tcpip");
+    expect(normalizeAnswer("I/O")).toBe("io");
+    expect(normalizeAnswer("C:\\Windows")).toBe("cwindows");
+  });
+
+  it("전각 문장부호도 제거한다", () => {
+    expect(normalizeAnswer("TCP／IP")).toBe("tcpip");
+    expect(normalizeAnswer("레지스터…")).toBe("레지스터");
+    expect(normalizeAnswer("입력、출력")).toBe("입력출력");
+  });
+
+  it("기호는 남긴다", () => {
+    // +를 지우면 C++와 C가 같은 답이 된다.
+    expect(normalizeAnswer("C++")).toBe("c++");
+    expect(normalizeAnswer("a=b")).toBe("a=b");
+  });
 });
 
 describe("gradeBlankAnswer", () => {
@@ -71,6 +89,15 @@ describe("gradeBlankAnswer", () => {
 
     it("acceptedAnswers가 비어 있으면 정답만 인정한다", () => {
       expect(gradeBlankAnswer("register", "레지스터", [])).toBe(false);
+    });
+
+    it("슬래시를 빼고 입력해도 인정한다", () => {
+      // 프롬프트가 문장부호 변형은 acceptedAnswers에 넣지 말라고 하므로 채점이 흡수해야 한다.
+      expect(gradeBlankAnswer("TCPIP", "TCP/IP", [])).toBe(true);
+    });
+
+    it("기호가 다르면 오답이다", () => {
+      expect(gradeBlankAnswer("C", "C++", [])).toBe(false);
     });
   });
 });
