@@ -7,6 +7,7 @@ import { useCallback, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { NotificationTimePicker } from "@/features/notifications/components/NotificationTimePicker";
+import { QuizButton } from "@/features/quiz/components/QuizButton";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { getNoteReviewRoute } from "@/lib/constants/routes";
 
@@ -76,6 +77,7 @@ export function NoteDetailBody({
         <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-muted-foreground">{reviewStatusMessage}</p>
           <div className="flex flex-wrap items-center gap-2">
+            <QuizButton noteId={noteId} noteTitle={title} />
             {canStartReview && (
               <Button asChild size="sm">
                 <Link href={getNoteReviewRoute(noteId)}>백지 테스트 시작</Link>

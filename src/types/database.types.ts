@@ -494,6 +494,79 @@ export type Database = {
           },
         ];
       };
+      quiz_generations: {
+        Row: {
+          id: string;
+          user_id: string;
+          note_id: string | null;
+          quiz_type: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          note_id?: string | null;
+          quiz_type: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          note_id?: string | null;
+          quiz_type?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "quiz_generations_note_id_fkey";
+            columns: ["note_id"];
+            isOneToOne: false;
+            referencedRelation: "notes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      quizzes: {
+        Row: {
+          id: string;
+          note_id: string;
+          user_id: string;
+          quiz_type: string;
+          questions: Json;
+          recent_questions: Json;
+          note_content_hash: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          note_id: string;
+          user_id: string;
+          quiz_type: string;
+          questions: Json;
+          recent_questions?: Json;
+          note_content_hash: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          note_id?: string;
+          user_id?: string;
+          quiz_type?: string;
+          questions?: Json;
+          recent_questions?: Json;
+          note_content_hash?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "quizzes_note_id_fkey";
+            columns: ["note_id"];
+            isOneToOne: false;
+            referencedRelation: "notes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       user_agreements: {
         Row: {
           created_at: string;
@@ -555,6 +628,10 @@ export type Database = {
           scheduled_at: string;
           user_id: string;
         }[];
+      };
+      claim_quiz_generation: {
+        Args: { p_note_id: string; p_quiz_type: string };
+        Returns: string;
       };
       complete_review_and_schedule_next: {
         Args: { p_note_id: string; p_review_log_id: string };
