@@ -73,7 +73,7 @@ type PrepareNoteChatExecutionParams = {
  *
  * 실제 답변에서 참고한 Note ID는 이 단계에서 결정하지 않습니다.
  * LLM 응답의 참고 Context 순번을 응답 처리 단계에서 Source와 매핑하여
- * referencedNoteIds를 확정합니다.
+ * usedNoteIds를 확정합니다.
  *
  * @param params 대화, 사용자 메시지 및 확정된 Runtime 설정
  * @returns Provider 호출 직전에 확정된 실행 정보

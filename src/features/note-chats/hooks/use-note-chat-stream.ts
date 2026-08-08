@@ -28,7 +28,7 @@ export type NoteChatStreamingState = {
   isStreaming: boolean;
 
   /** 완료된 답변의 참고 노트 ID 목록입니다. */
-  referencedNoteIds: string[];
+  usedNoteIds: string[];
 };
 
 /**
@@ -56,7 +56,7 @@ export function useNoteChatStream() {
     content: "",
     error: null,
     isStreaming: false,
-    referencedNoteIds: [],
+    usedNoteIds: [],
     runId: null,
   });
 
@@ -101,7 +101,7 @@ export function useNoteChatStream() {
           ...current,
           assistantMessageId: event.assistantMessageId,
           isStreaming: false,
-          referencedNoteIds: event.referencedNoteIds,
+          usedNoteIds: event.usedNoteIds,
           runId: event.runId,
         }));
         break;
@@ -139,7 +139,7 @@ export function useNoteChatStream() {
         content: "",
         error: null,
         isStreaming: true,
-        referencedNoteIds: [],
+        usedNoteIds: [],
         runId: null,
       });
 

@@ -37,7 +37,7 @@ export function NoteChatComposer({ conversationId }: NoteChatComposerProps) {
     content,
     error: streamError,
     isStreaming,
-    referencedNoteIds,
+    usedNoteIds,
     runId,
     start,
   } = useNoteChatStream();
@@ -159,7 +159,7 @@ export function NoteChatComposer({ conversationId }: NoteChatComposerProps) {
         {isStreaming
           ? "AI 답변을 생성하고 있습니다."
           : assistantMessageId && runId
-            ? `답변 생성이 완료되었습니다. 참고 노트 ${referencedNoteIds.length}개`
+            ? `답변 생성이 완료되었습니다. 참고 노트 ${usedNoteIds.length}개`
             : ""}
       </p>
     </section>

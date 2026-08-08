@@ -28,7 +28,7 @@ export type CompleteNoteChatRunSuccessParams = {
    *
    * Context 검색이 연결되기 전에는 빈 배열을 전달합니다.
    */
-  referencedNoteIds: string[];
+  usedNoteIds: string[];
 
   /** 실행에 사용된 Context 출처 Snapshot입니다. */
   sources: Json[];
@@ -120,7 +120,7 @@ export async function completeNoteChatRunSuccess(
    * 빈 답변이나 잘못된 참고 노트 ID가 DB에 저장되는 것을 방지합니다.
    */
   const content = noteChatAssistantMessageContentSchema.parse({
-    referencedNoteIds: params.referencedNoteIds,
+    usedNoteIds: params.usedNoteIds,
     text: params.content,
   });
 

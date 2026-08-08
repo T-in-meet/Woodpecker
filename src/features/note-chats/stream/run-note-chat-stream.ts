@@ -1,7 +1,9 @@
 import type { AiTokenUsage } from "@/features/ai/providers/types";
 
 import { executeNoteChat } from "../execution/execute";
+import { parseNoteChatProviderResponse } from "../execution/parse-response";
 import type { NoteChatExecutionSettings } from "../execution/prepare-execution";
+import { resolveNoteChatUsedNoteIds } from "../execution/resolve-used-note-ids";
 import {
   completeNoteChatRunFailure,
   completeNoteChatRunSuccess,
@@ -38,7 +40,7 @@ export type RunNoteChatStreamResult = {
   content: string;
 
   /** 현재 답변 생성 과정에서 참고한 노트 ID 목록입니다. */
-  referencedNoteIds: string[];
+  usedNoteIds: string[];
 
   /** 완료된 Run ID입니다. */
   runId: string;
@@ -89,7 +91,7 @@ export async function runNoteChatStream(
       userMessageId: params.userMessageId,
     });
 
-    const { referencedNoteIds, sources } = execution;
+    const { sources } = execution;
 
     const consumed = await consumeNoteChatProviderStream(
       execution.providerStream,
@@ -100,27 +102,34 @@ export async function runNoteChatStream(
 
     usage = consumed.result.usage;
 
+    const parsedResponse = parseNoteChatProviderResponse(consumed.content);
+
+    const usedNoteIds = resolveNoteChatUsedNoteIds(
+      parsedResponse.usedContextIndexes,
+      sources,
+    );
+
     const assistantMessageId = await completeNoteChatRunSuccess({
-      content: consumed.content,
-      referencedNoteIds,
+      content: parsedResponse.answer,
       runId: params.runId,
       sources,
       usage,
+      usedNoteIds,
     });
 
     await onEvent({
       assistantMessageId,
-      referencedNoteIds,
       runId: params.runId,
       type: "finish",
+      usedNoteIds,
     });
 
     return {
       assistantMessageId,
-      content: consumed.content,
-      referencedNoteIds,
+      content: parsedResponse.answer,
       runId: params.runId,
       usage,
+      usedNoteIds,
     };
   } catch (error) {
     /*

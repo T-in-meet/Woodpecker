@@ -30,7 +30,7 @@ export function buildNoteChatContext({
   return notes
     .map((note, index) =>
       [
-        `<note index="${index + 1}" id="${note.id}">`,
+        `<note index="${index + 1}">`,
         `<title>${note.title}</title>`,
         "<content>",
         note.content,
