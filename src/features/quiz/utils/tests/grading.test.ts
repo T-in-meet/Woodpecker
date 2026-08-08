@@ -111,6 +111,16 @@ describe("normalizeAnswer", () => {
       expect(normalizeAnswer("2—3")).toBe("2-3");
       expect(normalizeAnswer("－1")).toBe("-1");
       expect(normalizeAnswer("−1")).toBe("-1");
+      // 한국어 노트의 범위 표기. \p{Pd}로 잡지 않으면 2〜3이 23이 된다.
+      expect(normalizeAnswer("2〜3")).toBe("2-3");
+    });
+
+    it("나눗셈·비율 기호를 슬래시·콜론으로 통일한다", () => {
+      // \p{Sm}·\p{Sk}라 NFKC도 문장부호 제거도 안 건드리고 그대로 남는다.
+      expect(normalizeAnswer("1∕2")).toBe("1/2");
+      expect(normalizeAnswer("1⧸2")).toBe("1/2");
+      expect(normalizeAnswer("1∶2")).toBe("1:2");
+      expect(normalizeAnswer("1꞉2")).toBe("1:2");
     });
 
     it("위첨자를 지수 표기로 바꾼다", () => {
@@ -120,9 +130,100 @@ describe("normalizeAnswer", () => {
       expect(normalizeAnswer("10^2")).toBe("10^2");
     });
 
+    it("위첨자의 부호까지 함께 올린다", () => {
+      // 부호를 두고 오면 10⁻²가 10^2가 되어 10²와 같은 답이 된다.
+      expect(normalizeAnswer("10⁻²")).toBe("10^-2");
+      expect(normalizeAnswer("10⁺²")).toBe("10^+2");
+      expect(normalizeAnswer("2⁻¹⁰")).toBe("2^-10");
+    });
+
     it("분수 기호를 슬래시 표기로 바꾼다", () => {
       expect(normalizeAnswer("½")).toBe("1/2");
     });
+
+    it("여러 변형이 섞여 들어와도 맞춘다", () => {
+      // 전각 숫자 + 전각 공백 + en dash + 위첨자
+      expect(normalizeAnswer("１０² 　– ５")).toBe("10^2-5");
+    });
+  });
+
+  // 출력 문자열이 아니라 "무엇과 같고 무엇과 다른가"를 고정한다.
+  // 정규화의 내부 표기가 바뀌어도 이 관계는 유지돼야 한다.
+  describe("같은 답으로 봐야 하는 쌍", () => {
+    it.each([
+      ["COVID-19", "covid19"],
+      ["RS-232", "rs232"],
+      ["TCP/IP", "tcpip"],
+      ["e-mail", "email"],
+      ["1,000", "1000"],
+      [".5", "0.5"],
+      ["1／2", "1/2"],
+      ["1∕2", "1/2"],
+      ["1∶2", "1:2"],
+      ["2〜3", "2-3"],
+      ["2–3", "2-3"],
+      ["−1", "-1"],
+      ["½", "1/2"],
+      ["10²", "10^2"],
+      ["10⁻²", "10^-2"],
+      ["３．１４", "3.14"],
+      ["H₂O", "h2o"],
+      ["1E-3", "1e-3"],
+    ])("%s ↔ %s", (a, b) => {
+      expect(normalizeAnswer(a)).toBe(normalizeAnswer(b));
+    });
+  });
+
+  describe("다른 답으로 봐야 하는 쌍", () => {
+    it.each([
+      ["3.14", "314"],
+      ["1/2", "12"],
+      ["1:2", "12"],
+      ["-1", "1"],
+      ["v1.2", "v12"],
+      ["1e-3", "1e3"],
+      ["10⁻²", "10²"],
+      ["10²", "102"],
+      ["½", "12"],
+      ["2–3", "23"],
+      [".5", "5"],
+      ["C#", "C"],
+      ["C++", "C"],
+      // 의도한 차이다. 콜론을 뺀 입력은 오답이 된다.
+      ["12:30", "1230"],
+    ])("%s ↮ %s", (a, b) => {
+      expect(normalizeAnswer(a)).not.toBe(normalizeAnswer(b));
+    });
+  });
+
+  it("정규화는 멱등이다", () => {
+    const corpus = [
+      "3.14",
+      "1/2",
+      "-1",
+      "v1.2",
+      "10²",
+      "10⁻²",
+      "1e-3",
+      ".5",
+      "½",
+      "COVID-19",
+      "1,000",
+      "TCP／IP",
+      "2〜3",
+      "３．１４",
+      "C#",
+      "C++",
+      "50%",
+      "H₂O",
+      "레지스터…",
+      "１０² 　– ５",
+    ];
+
+    for (const answer of corpus) {
+      const once = normalizeAnswer(answer);
+      expect(normalizeAnswer(once)).toBe(once);
+    }
   });
 });
 
