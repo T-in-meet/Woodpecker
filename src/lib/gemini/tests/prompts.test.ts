@@ -94,6 +94,24 @@ describe("buildQuizPrompt", () => {
     expect(prompt).toContain('"type": "ox"');
   });
 
+  it("ox 타입은 참·거짓을 고르게 섞도록 지시한다", () => {
+    const prompt = buildQuizPrompt("제목", "내용", MAX, "ox");
+
+    expect(prompt).toContain("참인 문장과 거짓인 문장을 고르게 섞으세요");
+    expect(prompt).toContain("참이면 true, 거짓이면 false");
+  });
+
+  it("ox 타입은 거짓 문항이 규칙 1의 예외임을 밝힌다", () => {
+    const prompt = buildQuizPrompt("제목", "내용", MAX, "ox");
+
+    expect(prompt).toContain(
+      "거짓 문항의 문제 문장은 노트 내용과 어긋나야 하므로 예외",
+    );
+    // 예시가 유효한 JSON이 아니면 모델이 형식을 흉내 내다 깨진다.
+    expect(prompt).toContain('"answer": true,');
+    expect(prompt).not.toContain("true 또는 false");
+  });
+
   it("blank 타입은 빈칸 규칙과 JSON 형식을 포함한다", () => {
     const prompt = buildQuizPrompt("제목", "내용", MAX, "blank");
 
@@ -107,7 +125,7 @@ describe("buildQuizPrompt", () => {
 
     expect(prompt).toContain("question에는 반드시 ____가 들어가야 합니다");
     // 예시 문항도 규칙을 지켜야 모델이 형식을 따라 한다.
-    expect(prompt).toContain("단위는 ____이다");
+    expect(prompt).toContain("신호는 ____이다");
   });
 
   it("blank 타입은 영문·음차·약어를 acceptedAnswers에 넣도록 지시한다", () => {
@@ -139,6 +157,19 @@ describe("buildQuizPrompt", () => {
 
     expect(prompt).toContain("오답 선택지는 노트 내용과 어긋나야 하므로 예외");
     expect(prompt).toContain("정답은 하나여야 합니다");
+  });
+
+  it("choice 타입은 오답 재료가 부족할 때의 대안을 제시한다", () => {
+    const prompt = buildQuizPrompt("제목", "내용", MAX, "choice");
+
+    expect(prompt).toContain("정답을 변형해 오답을 만드세요");
+    expect(prompt).toContain("4개를 채우기 어려우면 그 문항을 만들지 말고");
+  });
+
+  it("blank 타입은 acceptedAnswers만 규칙 1의 예외임을 밝힌다", () => {
+    const prompt = buildQuizPrompt("제목", "내용", MAX, "blank");
+
+    expect(prompt).toContain("acceptedAnswers의 동의 표기만 예외");
   });
 
   describe("출제 관점", () => {
