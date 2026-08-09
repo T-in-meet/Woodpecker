@@ -13,6 +13,19 @@ const VALID_GRADING_RESPONSE = {
   incorrectPoints: [],
 };
 
+const STORED_GRADING = {
+  id: "44444444-4444-4444-8444-444444444444",
+  review_log_id: REVIEW_LOG_ID,
+  round: 1,
+  score: 60,
+  feedback: {
+    summary: "동시 요청으로 저장된 총평",
+    missedConcepts: [],
+    incorrectPoints: [],
+  },
+  created_at: "2026-07-05T00:00:00.000Z",
+};
+
 const {
   createClientMock,
   generateContentMock,
@@ -60,21 +73,37 @@ vi.mock("../queries", () => ({
 
 import { gradeAnswerAction } from "../actions";
 
+type RpcError = { code?: string; message: string } | null;
+
 function createSupabaseMock({
   userId = TEST_USER_ID,
   emailConfirmedAt = CONFIRMED_AT,
-  insertError = null,
+  claimResult = "ok",
+  claimError = null,
+  finalizeResult = "ok",
+  finalizeError = null,
 }: {
   userId?: string | null;
   emailConfirmedAt?: string | null;
-  insertError?: { code?: string; message: string } | null;
+  claimResult?: string;
+  claimError?: RpcError;
+  finalizeResult?: string;
+  finalizeError?: RpcError;
 } = {}) {
-  const insertMock = vi.fn().mockResolvedValue({ error: insertError });
-  const fromMock = vi.fn().mockReturnValue({ insert: insertMock });
+  const rpcMock = vi.fn().mockImplementation((fn: string) => {
+    if (fn === "claim_review_grading") {
+      return Promise.resolve({ data: claimResult, error: claimError });
+    }
+
+    if (fn === "finalize_review_grading") {
+      return Promise.resolve({ data: finalizeResult, error: finalizeError });
+    }
+
+    return Promise.resolve({ data: null, error: null });
+  });
 
   return {
-    insertMock,
-    fromMock,
+    rpcMock,
     supabase: {
       auth: {
         getUser: vi.fn().mockResolvedValue({
@@ -85,9 +114,13 @@ function createSupabaseMock({
           },
         }),
       },
-      from: fromMock,
+      rpc: rpcMock,
     },
   };
+}
+
+function rpcCallsFor(rpcMock: ReturnType<typeof vi.fn>, name: string) {
+  return rpcMock.mock.calls.filter((call) => call[0] === name);
 }
 
 function createFormData({
@@ -160,7 +193,7 @@ describe("gradeAnswerAction", () => {
   });
 
   it("returns an error when the pending review log does not match", async () => {
-    const { supabase } = createSupabaseMock();
+    const { supabase, rpcMock } = createSupabaseMock();
     createClientMock.mockResolvedValue(supabase);
     mockHappyPathQueries();
     getPendingReviewLogMock.mockResolvedValue({
@@ -175,23 +208,21 @@ describe("gradeAnswerAction", () => {
 
     expect(result).toEqual({ error: "진행 중인 복습을 찾을 수 없습니다." });
     expect(generateContentMock).not.toHaveBeenCalled();
+    expect(rpcMock).not.toHaveBeenCalled();
   });
 
   it("returns the stored grading without calling Gemini when one exists", async () => {
-    const { supabase, insertMock } = createSupabaseMock();
+    const { supabase, rpcMock } = createSupabaseMock();
     createClientMock.mockResolvedValue(supabase);
     mockHappyPathQueries();
     getGradingByReviewLogMock.mockResolvedValue({
-      id: "44444444-4444-4444-8444-444444444444",
-      review_log_id: REVIEW_LOG_ID,
-      round: 1,
+      ...STORED_GRADING,
       score: 70,
       feedback: {
         summary: "이전 채점 총평",
         missedConcepts: [],
         incorrectPoints: ["잘못 기억한 내용"],
       },
-      created_at: "2026-07-04T00:00:00.000Z",
     });
 
     const result = await gradeAnswerAction(null, createFormData());
@@ -206,11 +237,11 @@ describe("gradeAnswerAction", () => {
       },
     });
     expect(generateContentMock).not.toHaveBeenCalled();
-    expect(insertMock).not.toHaveBeenCalled();
+    expect(rpcMock).not.toHaveBeenCalled();
   });
 
-  it("grades the answer, stores the result, and returns it", async () => {
-    const { supabase, fromMock, insertMock } = createSupabaseMock();
+  it("claims the grading before calling Gemini and finalizes the result", async () => {
+    const { supabase, rpcMock } = createSupabaseMock();
     createClientMock.mockResolvedValue(supabase);
     mockHappyPathQueries();
     generateContentMock.mockResolvedValue({
@@ -223,21 +254,86 @@ describe("gradeAnswerAction", () => {
       success: true,
       grading: VALID_GRADING_RESPONSE,
     });
-    expect(fromMock).toHaveBeenCalledWith("review_gradings");
-    expect(insertMock).toHaveBeenCalledWith({
-      review_log_id: REVIEW_LOG_ID,
-      note_id: NOTE_ID,
-      user_id: TEST_USER_ID,
-      round: 1,
-      user_answer: "기억나는 내용을 적었습니다.",
-      score: VALID_GRADING_RESPONSE.score,
-      feedback: {
+    expect(rpcMock).toHaveBeenNthCalledWith(1, "claim_review_grading", {
+      p_review_log_id: REVIEW_LOG_ID,
+      p_user_answer: "기억나는 내용을 적었습니다.",
+    });
+    expect(rpcMock).toHaveBeenNthCalledWith(2, "finalize_review_grading", {
+      p_review_log_id: REVIEW_LOG_ID,
+      p_score: VALID_GRADING_RESPONSE.score,
+      p_feedback: {
         summary: VALID_GRADING_RESPONSE.summary,
         missedConcepts: VALID_GRADING_RESPONSE.missedConcepts,
         incorrectPoints: VALID_GRADING_RESPONSE.incorrectPoints,
       },
     });
     expect(revalidatePathMock).toHaveBeenCalledWith(`/notes/${NOTE_ID}`);
+  });
+
+  it("skips Gemini and returns the stored grading when the claim reports it is already graded", async () => {
+    const { supabase } = createSupabaseMock({ claimResult: "already_graded" });
+    createClientMock.mockResolvedValue(supabase);
+    mockHappyPathQueries();
+    getGradingByReviewLogMock
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(STORED_GRADING);
+
+    const result = await gradeAnswerAction(null, createFormData());
+
+    expect(result).toEqual({
+      success: true,
+      grading: {
+        score: 60,
+        summary: "동시 요청으로 저장된 총평",
+        missedConcepts: [],
+        incorrectPoints: [],
+      },
+    });
+    expect(generateContentMock).not.toHaveBeenCalled();
+  });
+
+  it("skips Gemini when another request holds the claim", async () => {
+    const { supabase } = createSupabaseMock({ claimResult: "in_flight" });
+    createClientMock.mockResolvedValue(supabase);
+    mockHappyPathQueries();
+
+    const result = await gradeAnswerAction(null, createFormData());
+
+    expect(result).toEqual({
+      error: "채점이 진행 중이에요. 잠시 후 다시 시도해주세요.",
+    });
+    expect(generateContentMock).not.toHaveBeenCalled();
+  });
+
+  it("skips Gemini when the claim is rejected", async () => {
+    const { supabase } = createSupabaseMock({ claimResult: "not_found" });
+    createClientMock.mockResolvedValue(supabase);
+    mockHappyPathQueries();
+
+    const result = await gradeAnswerAction(null, createFormData());
+
+    expect(result).toEqual({ error: "진행 중인 복습을 찾을 수 없습니다." });
+    expect(generateContentMock).not.toHaveBeenCalled();
+  });
+
+  it("skips Gemini when the claim RPC fails", async () => {
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const { supabase } = createSupabaseMock({
+      claimError: { message: "rpc down" },
+    });
+    createClientMock.mockResolvedValue(supabase);
+    mockHappyPathQueries();
+
+    const result = await gradeAnswerAction(null, createFormData());
+
+    expect(result).toEqual({
+      error: "AI 채점에 실패했습니다. 잠시 후 다시 시도해주세요.",
+    });
+    expect(generateContentMock).not.toHaveBeenCalled();
+
+    consoleErrorSpy.mockRestore();
   });
 
   it("returns an error when the Gemini call fails", async () => {
@@ -262,7 +358,7 @@ describe("gradeAnswerAction", () => {
     const consoleErrorSpy = vi
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
-    const { supabase, insertMock } = createSupabaseMock();
+    const { supabase, rpcMock } = createSupabaseMock();
     createClientMock.mockResolvedValue(supabase);
     mockHappyPathQueries();
     generateContentMock.mockResolvedValue({
@@ -274,14 +370,14 @@ describe("gradeAnswerAction", () => {
     expect(result).toEqual({
       error: "채점 결과를 처리할 수 없습니다. 다시 시도해주세요.",
     });
-    expect(insertMock).not.toHaveBeenCalled();
+    expect(rpcCallsFor(rpcMock, "finalize_review_grading")).toHaveLength(0);
 
     consoleErrorSpy.mockRestore();
   });
 
-  it("returns the stored grading when a concurrent request already saved one", async () => {
+  it("returns the stored grading when finalize reports a concurrent save", async () => {
     const { supabase } = createSupabaseMock({
-      insertError: { code: "23505", message: "duplicate key" },
+      finalizeResult: "already_graded",
     });
     createClientMock.mockResolvedValue(supabase);
     mockHappyPathQueries();
@@ -290,18 +386,7 @@ describe("gradeAnswerAction", () => {
     });
     getGradingByReviewLogMock
       .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({
-        id: "44444444-4444-4444-8444-444444444444",
-        review_log_id: REVIEW_LOG_ID,
-        round: 1,
-        score: 60,
-        feedback: {
-          summary: "동시 요청으로 저장된 총평",
-          missedConcepts: [],
-          incorrectPoints: [],
-        },
-        created_at: "2026-07-05T00:00:00.000Z",
-      });
+      .mockResolvedValueOnce(STORED_GRADING);
 
     const result = await gradeAnswerAction(null, createFormData());
 
@@ -314,5 +399,25 @@ describe("gradeAnswerAction", () => {
         incorrectPoints: [],
       },
     });
+  });
+
+  it("still returns the grading when saving fails", async () => {
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const { supabase } = createSupabaseMock({
+      finalizeError: { message: "save failed" },
+    });
+    createClientMock.mockResolvedValue(supabase);
+    mockHappyPathQueries();
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify(VALID_GRADING_RESPONSE),
+    });
+
+    const result = await gradeAnswerAction(null, createFormData());
+
+    expect(result).toEqual({ success: true, grading: VALID_GRADING_RESPONSE });
+
+    consoleErrorSpy.mockRestore();
   });
 });

@@ -502,8 +502,8 @@ export type Database = {
           user_id: string;
           round: number;
           user_answer: string;
-          score: number;
-          feedback: Json;
+          score: number | null;
+          feedback: Json | null;
           created_at: string;
         };
         Insert: {
@@ -513,8 +513,8 @@ export type Database = {
           user_id: string;
           round: number;
           user_answer: string;
-          score: number;
-          feedback: Json;
+          score?: number | null;
+          feedback?: Json | null;
           created_at?: string;
         };
         Update: {
@@ -524,8 +524,8 @@ export type Database = {
           user_id?: string;
           round?: number;
           user_answer?: string;
-          score?: number;
-          feedback?: Json;
+          score?: number | null;
+          feedback?: Json | null;
           created_at?: string;
         };
         Relationships: [
@@ -682,6 +682,14 @@ export type Database = {
       };
       claim_quiz_generation: {
         Args: { p_note_id: string; p_quiz_type: string };
+        Returns: string;
+      };
+      claim_review_grading: {
+        Args: { p_review_log_id: string; p_user_answer: string };
+        Returns: string;
+      };
+      finalize_review_grading: {
+        Args: { p_review_log_id: string; p_score: number; p_feedback: Json };
         Returns: string;
       };
       complete_review_and_schedule_next: {

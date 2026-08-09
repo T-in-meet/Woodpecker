@@ -16,8 +16,9 @@
    - 성공 시 원본 콘텐츠, 사용자 답안, `reviewLogId`를 반환 → `ComparisonView`로 전달
 3. (선택) `GradingPanel`에서 `gradeAnswerAction` 호출 — AI 채점:
    - 세션/이메일 인증/소유권 + `pendingReviewLog.id === reviewLogId` 일치 확인
-   - 복습 1회당 채점 1회: `review_gradings`에 기존 채점이 있으면 Gemini 호출 없이 재사용 (`review_log_id` 유니크 제약이 동시 요청도 방어)
-   - Gemini(`gemini-3.1-flash-lite`)로 회상률 점수(0~100)·빠뜨린 개념·잘못 기억한 내용을 JSON으로 받아 Zod 검증 후 `review_gradings`에 저장
+   - 복습 1회당 채점 1회: `review_gradings`에 기존 채점이 있으면 Gemini 호출 없이 재사용
+   - 기존 채점이 없으면 **Gemini 호출 전에** `claim_review_grading` RPC로 채점 권한을 원자적으로 선점 (아래 "동시 요청과 비용 통제" 참고)
+   - Gemini(`gemini-3.1-flash-lite`)로 회상률 점수(0~100)·빠뜨린 개념·잘못 기억한 내용을 JSON으로 받아 Zod 검증 후 `finalize_review_grading` RPC로 저장
    - 채점은 부가 기능: 채점 실패/저장 실패가 복습 완료를 막지 않으며, 점수는 스케줄링(1/3/7일 고정)에 개입하지 않는다
    - 저장된 채점 기록은 노트 상세 페이지의 `GradingHistorySection`에서 회차별로 조회
 4. 비교를 마치면 `ReviewCompleteButton`의 `completeReviewAction` 호출:
@@ -34,7 +35,8 @@
 - `@/lib/constants/reviewIntervals` — 도메인 상수
 - `@/lib/gemini/client` — AI 채점용 Gemini 클라이언트 (`GEMINI_API_KEY` 필요)
 - Supabase RPC `complete_review_and_schedule_next` — 완료 처리 및 다음 회차 스케줄링을 원자적으로 수행
-- 테이블 `review_gradings` — AI 채점 결과 저장 (RLS: 본인 데이터만, insert는 이메일 인증 사용자만)
+- Supabase RPC `claim_review_grading` / `finalize_review_grading` — 채점 권한 선점 및 결과 확정
+- 테이블 `review_gradings` — AI 채점 결과 저장 (RLS: 본인 데이터 SELECT만 허용. INSERT/UPDATE/DELETE 정책 없음 — 쓰기는 위 두 SECURITY DEFINER 함수만 가능)
 
 ## 주의사항
 
@@ -49,6 +51,28 @@
 토큰이 실질적으로 막던 시나리오는 "본인이 자기 노트의 비교 단계를 건너뛰고 완료 처리"로, 자기 데이터에 대한 학습 흐름 강제 성격이었다. 보안 경계가 아니며, 대신 환경변수 배포 의존/TTL로 인한 UX 악화/유지보수 비용을 발생시켰다.
 
 타인 데이터 조작은 소유권 검증이, 결제/공유 자원은 해당 없음, 재시도/중복 완료는 pending 리뷰 로그 일치 검증이 각각 커버한다.
+
+### 동시 요청과 비용 통제 (AI 채점)
+
+`review_log_id` 유니크 제약은 **저장 중복만** 막는다. 이미 나간 Gemini 호출 비용은 되돌리지 못하므로,
+"조회 → Gemini 호출 → INSERT" 순서로는 동시 요청 N건이 모두 과금된다. 그래서 순서를 뒤집는다.
+
+1. `claim_review_grading(review_log_id, user_answer)` — `score`/`feedback`이 `NULL`인 선점 행을 넣는다.
+   `review_log_id` 단위 `pg_advisory_xact_lock`으로 "조회 → 선점"의 경합을 막는다.
+   반환값은 `ok` / `already_graded` / `in_flight` / `not_found`이며 `ok`일 때만 Gemini를 호출한다.
+2. Gemini 호출 및 Zod 검증.
+3. `finalize_review_grading(review_log_id, score, feedback)` — 선점 행에 결과를 채운다.
+
+선점을 되돌리는 함수는 두지 않는다. 인증 사용자가 실행할 수 있으면 선점 → 해제를 반복해
+Gemini를 무제한으로 호출할 수 있기 때문이다. 대신 60초가 지난 선점 행은 자동으로 재선점 대상이 되고,
+Gemini 호출이 실패하면 사용자는 그만큼 기다린 뒤 재시도한다.
+
+쓰기 권한은 위 두 SECURITY DEFINER 함수에만 있다. INSERT 정책을 열어 두면
+사용자가 `feedback = '{}'` 같은 행을 직접 넣어 조회 Zod 파싱을 `null`로 떨어뜨리고,
+액션이 미채점으로 오판해 Gemini를 다시 부르지만 저장은 계속 실패하는 상태를 만들 수 있다.
+DELETE 정책도 같은 이유로 없앴다(삭제 후 재채점 반복). 상세는 `20260809000000_harden_review_gradings.sql`.
+
+선점 행은 `getGradingByReviewLog`·`getGradingsByNote`에서 `score IS NOT NULL` 필터로 제외한다.
 
 ### 이메일 인증
 

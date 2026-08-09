@@ -193,6 +193,28 @@ export async function completeReviewAction(
   redirect(getNoteDetailRoute(parsed.data.noteId));
 }
 
+/** 이미 확정된 채점 결과를 읽어 액션 응답으로 변환한다. */
+async function readStoredGrading(
+  reviewLogId: string,
+  userId: string,
+): Promise<GradeAnswerActionState> {
+  try {
+    const existing = await getGradingByReviewLog(reviewLogId, userId);
+    if (existing) {
+      return {
+        success: true,
+        grading: { score: existing.score, ...existing.feedback },
+      };
+    }
+  } catch {
+    // 아래 공통 실패 응답으로 진행
+  }
+
+  return {
+    error: "채점 결과를 불러오는 데 실패했습니다. 잠시 후 다시 시도해주세요.",
+  };
+}
+
 export async function gradeAnswerAction(
   _prevState: GradeAnswerActionState,
   formData: FormData,
@@ -259,6 +281,34 @@ export async function gradeAnswerAction(
     };
   }
 
+  // Gemini 호출 전에 채점 권한을 원자적으로 선점한다.
+  // 앞의 조회만으로 분기하면 동시 요청이 모두 "미채점"을 보고 각자 Gemini를 호출한다
+  // (유니크 제약은 저장 중복만 막을 뿐 이미 나간 API 비용은 되돌리지 못한다).
+  const { data: claimResult, error: claimError } = await supabase.rpc(
+    "claim_review_grading",
+    {
+      p_review_log_id: parsed.data.reviewLogId,
+      p_user_answer: parsed.data.answer,
+    },
+  );
+
+  if (claimError) {
+    console.error("[gradeAnswerAction] 채점 선점 실패:", claimError);
+    return { error: "AI 채점에 실패했습니다. 잠시 후 다시 시도해주세요." };
+  }
+
+  if (claimResult === "already_graded") {
+    return await readStoredGrading(parsed.data.reviewLogId, user.id);
+  }
+
+  if (claimResult === "in_flight") {
+    return { error: "채점이 진행 중이에요. 잠시 후 다시 시도해주세요." };
+  }
+
+  if (claimResult !== "ok") {
+    return { error: "진행 중인 복습을 찾을 수 없습니다." };
+  }
+
   const prompt = buildGradingPrompt(
     reviewableNote.title,
     note.content,
@@ -301,36 +351,25 @@ export async function gradeAnswerAction(
   const { score, summary, missedConcepts, incorrectPoints } = grading.data;
   const feedback: Json = { summary, missedConcepts, incorrectPoints };
 
-  const { error: insertError } = await supabase.from("review_gradings").insert({
-    review_log_id: parsed.data.reviewLogId,
-    note_id: parsed.data.noteId,
-    user_id: user.id,
-    round: pendingReviewLog.round,
-    user_answer: parsed.data.answer,
-    score,
-    feedback,
-  });
+  const { data: finalizeResult, error: finalizeError } = await supabase.rpc(
+    "finalize_review_grading",
+    {
+      p_review_log_id: parsed.data.reviewLogId,
+      p_score: score,
+      p_feedback: feedback,
+    },
+  );
 
-  if (insertError) {
-    // 유니크 제약(review_log_id) 충돌 = 동시 요청으로 이미 저장됨 → 기존 결과 반환
-    if (insertError.code === "23505") {
-      try {
-        const existing = await getGradingByReviewLog(
-          parsed.data.reviewLogId,
-          user.id,
-        );
-        if (existing) {
-          return {
-            success: true,
-            grading: { score: existing.score, ...existing.feedback },
-          };
-        }
-      } catch {
-        // 아래 공통 처리로 진행
-      }
+  if (finalizeError || finalizeResult !== "ok") {
+    // 선점이 만료된 사이 다른 요청이 먼저 저장한 경우 → 저장된 결과를 정본으로 삼는다
+    if (finalizeResult === "already_graded") {
+      return await readStoredGrading(parsed.data.reviewLogId, user.id);
     }
     // 저장 실패해도 채점 결과 자체는 보여준다 (기록만 남지 않음)
-    console.error("[gradeAnswerAction] 채점 결과 저장 실패:", insertError);
+    console.error(
+      "[gradeAnswerAction] 채점 결과 저장 실패:",
+      finalizeError ?? finalizeResult,
+    );
   }
 
   revalidatePath(getNoteDetailRoute(parsed.data.noteId));

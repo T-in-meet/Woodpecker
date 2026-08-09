@@ -129,6 +129,8 @@ export async function getGradingByReviewLog(
     .select("id, review_log_id, round, score, feedback, created_at")
     .eq("review_log_id", reviewLogId)
     .eq("user_id", userId)
+    // score가 NULL인 행은 채점 진행 중 선점 행이므로 결과로 취급하지 않는다
+    .not("score", "is", null)
     .maybeSingle();
 
   if (error) throw error;
@@ -147,6 +149,8 @@ export async function getGradingsByNote(
     .select("id, review_log_id, round, score, feedback, created_at")
     .eq("note_id", noteId)
     .eq("user_id", userId)
+    // 채점 진행 중 선점 행은 기록에 노출하지 않는다
+    .not("score", "is", null)
     .order("round", { ascending: true });
 
   if (error) throw error;
