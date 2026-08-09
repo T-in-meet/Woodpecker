@@ -244,6 +244,7 @@ describe("gradeAnswerAction", () => {
     expect(result).toEqual({
       success: true,
       gradedOtherAnswer: false,
+      gradedAnswer: ANSWER,
       grading: {
         score: 70,
         summary: "이전 채점 총평",
@@ -268,9 +269,12 @@ describe("gradeAnswerAction", () => {
       createFormData({ answer: "새로 작성한 답안" }),
     );
 
+    // 경고만 띄우면 사용자는 어떤 문장에 대한 피드백인지 알 수 없다.
+    // 기준이 된 답안을 함께 돌려줘야 화면에서 펼쳐 보여줄 수 있다.
     expect(result).toEqual({
       success: true,
       gradedOtherAnswer: true,
+      gradedAnswer: "이전에 제출한 다른 답안",
       grading: {
         score: 60,
         summary: "동시 요청으로 저장된 총평",
@@ -292,6 +296,7 @@ describe("gradeAnswerAction", () => {
     expect(result).toEqual({
       success: true,
       gradedOtherAnswer: false,
+      gradedAnswer: ANSWER,
       grading: VALID_GRADING_RESPONSE,
     });
     expect(rpcMock).toHaveBeenNthCalledWith(1, "claim_review_grading", {
@@ -367,6 +372,7 @@ describe("gradeAnswerAction", () => {
     expect(result).toEqual({
       success: true,
       gradedOtherAnswer: false,
+      gradedAnswer: ANSWER,
       grading: {
         score: 60,
         summary: "동시 요청으로 저장된 총평",
@@ -468,6 +474,7 @@ describe("gradeAnswerAction", () => {
     expect(result).toEqual({
       success: true,
       gradedOtherAnswer: false,
+      gradedAnswer: ANSWER,
       grading: { score: STORED_GRADING.score, ...STORED_GRADING.feedback },
     });
     expect(generateContentMock).not.toHaveBeenCalled();
@@ -555,6 +562,7 @@ describe("gradeAnswerAction", () => {
     expect(result).toEqual({
       success: true,
       gradedOtherAnswer: false,
+      gradedAnswer: ANSWER,
       grading: {
         score: 60,
         summary: "동시 요청으로 저장된 총평",

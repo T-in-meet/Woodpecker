@@ -4,8 +4,13 @@ import { notFound, redirect } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BlankTestPage } from "@/features/review/components/BlankTestPage";
 import {
+  BlankTestPage,
+  type RestoredReviewSession,
+} from "@/features/review/components/BlankTestPage";
+import {
+  getGradingByReviewLog,
+  getNoteContentForComparison,
   getPendingReviewLog,
   getReviewableNote,
   hasCompletedReviewForNoteToday,
@@ -107,12 +112,38 @@ export default async function NoteReviewPage({
     logError(error);
   }
 
+  // 이미 채점을 받은 회차면 답안·채점·원본을 복원해 비교 화면부터 보여준다.
+  // 복원하지 않으면 완료 버튼을 보려고 답안을 다시 써야 하고, 그 답안은 저장된 채점
+  // 기준과 달라 "다른 답안을 채점한 결과" 안내로 이어진다.
+  // 여기도 fail-open이다. 복원에 실패해도 백지 테스트 자체는 진행할 수 있어야 한다.
+  let restoredSession: RestoredReviewSession | null = null;
+  try {
+    const grading = await getGradingByReviewLog(pendingReviewLog.id, user.id);
+
+    if (grading) {
+      const noteContent = await getNoteContentForComparison(noteId, user.id);
+
+      if (noteContent) {
+        restoredSession = {
+          originalContent: noteContent.content,
+          originalUpdatedAt: noteContent.updated_at,
+          userAnswer: grading.user_answer,
+          reviewLogId: pendingReviewLog.id,
+          grading: { score: grading.score, ...grading.feedback },
+        };
+      }
+    }
+  } catch (error) {
+    logError(error);
+  }
+
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-10 md:px-12">
       <BlankTestPage
         alreadyCompletedToday={alreadyCompletedToday}
         noteId={noteId}
         noteTitle={note.title}
+        restoredSession={restoredSession}
         reviewRound={pendingReviewLog.round}
       />
     </div>

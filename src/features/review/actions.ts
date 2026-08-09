@@ -67,12 +67,18 @@ export type GradeAnswerActionState =
        * 다른 답안을 채점한 것일 때 true. 화면에서 기준이 다르다고 알린다.
        */
       gradedOtherAnswer: boolean;
+      /**
+       * 이 결과의 기준이 된 답안. `gradedOtherAnswer`일 때 화면 답안과 다르므로,
+       * 어떤 문장에 대한 피드백인지 사용자가 볼 수 있게 함께 돌려준다.
+       */
+      gradedAnswer: string;
       error?: never;
     }
   | {
       success?: false;
       grading?: never;
       gradedOtherAnswer?: never;
+      gradedAnswer?: never;
       error: string;
     }
   | null;
@@ -269,6 +275,7 @@ async function readStoredGrading(
         success: true,
         grading: { score: existing.score, ...existing.feedback },
         gradedOtherAnswer: existing.user_answer !== userAnswer,
+        gradedAnswer: existing.user_answer,
       };
     }
   } catch {
@@ -343,6 +350,7 @@ export async function gradeAnswerAction(
         success: true,
         grading: { score: existing.score, ...existing.feedback },
         gradedOtherAnswer: existing.user_answer !== parsed.data.answer,
+        gradedAnswer: existing.user_answer,
       };
     }
   } catch {
@@ -520,5 +528,10 @@ export async function gradeAnswerAction(
 
   revalidatePath(getNoteDetailRoute(parsed.data.noteId));
 
-  return { success: true, grading: grading.data, gradedOtherAnswer: false };
+  return {
+    success: true,
+    grading: grading.data,
+    gradedOtherAnswer: false,
+    gradedAnswer: parsed.data.answer,
+  };
 }

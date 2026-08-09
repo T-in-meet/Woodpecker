@@ -11,12 +11,13 @@
    - 이메일 인증 확인 → `email_confirmed_at`이 없으면 (`null`/`undefined`) `/resend-email`로 redirect
    - `getReviewableNote`, `getPendingReviewLog` 병렬 조회
    - pending 리뷰 로그가 없으면 안내 카드(완료 노트 / 진행 중 아님) 노출
+   - 이미 채점을 받은 회차면 `getGradingByReviewLog` + `getNoteContentForComparison`으로 답안·채점·원본을 복원해 비교 화면부터 보여준다 (아래 "재진입 시 복원" 참고)
 2. `BlankTestPage`에서 답안을 작성하고 `submitAnswerAction` 호출:
    - 세션/이메일 인증/소유권 + pending 리뷰 로그 존재 확인
    - 성공 시 원본 콘텐츠, 원본 버전(`notes.updated_at`), 사용자 답안, `reviewLogId`를 반환 → `ComparisonView`로 전달
 3. (선택) `GradingPanel`에서 `gradeAnswerAction` 호출 — AI 채점:
    - 세션/이메일 인증/소유권 + `pendingReviewLog.id === reviewLogId` 일치 확인
-   - 복습 1회당 채점 1회: `review_gradings`에 기존 채점이 있으면 Gemini 호출 없이 재사용. 저장된 `user_answer`가 지금 답안과 다르면 결과와 함께 `gradedOtherAnswer: true`를 돌려 화면에서 기준이 다르다고 알린다
+   - 복습 1회당 채점 1회: `review_gradings`에 기존 채점이 있으면 Gemini 호출 없이 재사용. 저장된 `user_answer`가 지금 답안과 다르면 결과와 함께 `gradedOtherAnswer: true`를 돌려 화면에서 기준이 다르다고 알리고, 기준이 된 답안(`gradedAnswer`)도 함께 돌려 접기로 펼쳐 볼 수 있게 한다
    - 기존 채점이 없으면 화면이 보여준 원본 버전(`originalUpdatedAt`)과 지금 읽은 `notes.updated_at`을 대조 (아래 "채점 기준 원본 고정" 참고)
    - **Gemini 호출 전에** `claim_review_grading` RPC로 채점 권한을 원자적으로 선점 (아래 "동시 요청과 비용 통제" 참고)
    - Gemini(`gemini-3.1-flash-lite`)로 회상률 점수(0~100)·빠뜨린 개념·잘못 기억한 내용을 JSON으로 받아 Zod 검증 후 `finalize_review_grading` RPC로 저장. 응답 구조는 `responseJsonSchema`(퀴즈와 같은 `toGeminiResponseSchema`)로 디코딩 단계에서 한 번 더 강제한다 — 형식 이탈은 곧 사용자 에러 + 선점이 풀릴 때까지의 대기이기 때문이다
@@ -53,6 +54,23 @@
 토큰이 실질적으로 막던 시나리오는 "본인이 자기 노트의 비교 단계를 건너뛰고 완료 처리"로, 자기 데이터에 대한 학습 흐름 강제 성격이었다. 보안 경계가 아니며, 대신 환경변수 배포 의존/TTL로 인한 UX 악화/유지보수 비용을 발생시켰다.
 
 타인 데이터 조작은 소유권 검증이, 결제/공유 자원은 해당 없음, 재시도/중복 완료는 pending 리뷰 로그 일치 검증이 각각 커버한다.
+
+### 재진입 시 복원
+
+답안과 채점은 `review_gradings`에 남지만 비교 화면의 상태는 `useActionState`라 새로고침하면 사라진다.
+복원이 없으면 채점까지 마치고 완료 버튼을 누르러 다시 들어온 사용자가 **완료 버튼을 보려고 답안을 한 번 더
+써야 하고**, 그 답안은 저장된 채점 기준과 달라 "다른 답안을 채점한 결과" 안내로 이어진다.
+
+그래서 `page.tsx`가 pending 회차의 채점을 조회해 있으면 답안·채점·원본을 `restoredSession`으로 내려주고,
+`BlankTestPage`가 편집기 대신 비교 화면부터 그린다. 채점 결과는 `GradingPanel`의 `initialGrading`으로
+버튼 없이 바로 표시한다. 이 조회는 fail-open이다 — 실패해도 백지 테스트 자체는 진행할 수 있어야 한다.
+
+복원 화면에는 "답안 다시 작성" 버튼을 둔다. 복원을 넣으면서 기존에 새로고침으로 가능하던 "다시 쓰기"가
+막히기 때문이다. 다시 쓴 답안은 회차당 채점 1회 규칙 때문에 새로 채점되지 않고, 채점을 누르면 저장된
+결과가 경고와 함께 나온다. 이때 기준이 된 답안을 접기로 함께 보여준다.
+
+채점 점수·총평 자체는 노트 상세의 `GradingHistorySection`에서도 볼 수 있다. 복습 페이지의 복원이 채우는
+것은 그쪽에 없는 **답안 원문과 원본 비교**, 그리고 완료 버튼까지 이어지는 흐름이다.
 
 ### 채점 기준 원본 고정
 

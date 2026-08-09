@@ -7,8 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 import { gradeAnswerAction } from "../actions";
+import type { GradingResponse } from "../schema";
 
 type GradingPanelProps = {
+  /**
+   * 페이지 진입 시 서버가 복원한 채점 결과. 있으면 채점 버튼 없이 바로 보여준다.
+   * 이때 화면의 답안이 곧 채점 기준이므로 기준이 다르다는 안내는 필요 없다.
+   */
+  initialGrading: GradingResponse | null;
   noteId: string;
   /** 위 비교 화면에 그려진 원본의 버전. 채점 기준이 같은 버전인지 서버가 확인한다. */
   originalUpdatedAt: string;
@@ -17,6 +23,7 @@ type GradingPanelProps = {
 };
 
 export function GradingPanel({
+  initialGrading,
   noteId,
   originalUpdatedAt,
   reviewLogId,
@@ -27,8 +34,12 @@ export function GradingPanel({
     null,
   );
 
-  if (state?.success) {
-    const { score, summary, missedConcepts, incorrectPoints } = state.grading;
+  const grading = state?.success ? state.grading : initialGrading;
+  const gradedOtherAnswer = state?.success ? state.gradedOtherAnswer : false;
+  const gradedAnswer = state?.success ? state.gradedAnswer : null;
+
+  if (grading) {
+    const { score, summary, missedConcepts, incorrectPoints } = grading;
 
     return (
       <Card className="overflow-hidden">
@@ -39,15 +50,26 @@ export function GradingPanel({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-5 px-6 py-5">
-          {state.gradedOtherAnswer && (
-            <p
-              role="status"
-              className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-foreground"
-            >
-              이 결과는 이번 회차에 먼저 제출한 다른 답안을 채점한 것이에요.
-              채점은 회차당 1번만 가능해서 지금 답안으로는 다시 채점할 수
-              없어요.
-            </p>
+          {gradedOtherAnswer && (
+            <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+              <p role="status" className="text-sm text-foreground">
+                이 결과는 이번 회차에 먼저 제출한 다른 답안을 채점한 것이에요.
+                채점은 회차당 1번만 가능해서 지금 답안으로는 다시 채점할 수
+                없어요.
+              </p>
+
+              {/* 어떤 문장에 대한 피드백인지 알 수 있도록 기준이 된 답안을 함께 둔다. */}
+              {gradedAnswer && (
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                    채점 기준이 된 답안 보기
+                  </summary>
+                  <p className="mt-2 whitespace-pre-wrap break-words text-sm text-muted-foreground">
+                    {gradedAnswer}
+                  </p>
+                </details>
+              )}
+            </div>
           )}
 
           <div className="flex items-baseline gap-2">
