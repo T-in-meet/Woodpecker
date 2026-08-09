@@ -1,27 +1,70 @@
-import "server-only";
+"use server";
+
+import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
 
+import { noteChatRunSourceSchema } from "./schema";
 import type {
   NoteChatConversationDetail,
   NoteChatConversationListItem,
 } from "./types";
 
+export type GetNoteChatConversationListParams = {
+  page?: number;
+  search?: string;
+};
+
+export type NoteChatConversationListResult = {
+  items: NoteChatConversationListItem[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
 /**
  * 현재 사용자의 노트 챗봇 대화 목록을 조회합니다.
  *
- * 대화 목록 View를 사용하며, 최근 수정된 대화를 먼저 반환합니다.
- * 사용자 소유권은 View와 기반 테이블에 적용된 RLS로 제한합니다.
+ * 제목 검색과 Offset 기반 페이지네이션을 지원하며,
+ * 최근 활동 순으로 고정 정렬합니다.
  */
-export async function getNoteChatConversationList(): Promise<
-  NoteChatConversationListItem[]
-> {
+export async function getNoteChatConversationList({
+  page = 1,
+  search = "",
+}: GetNoteChatConversationListParams = {}): Promise<NoteChatConversationListResult> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
+  const pageSize = 20;
+  const normalizedPage = Math.max(1, page);
+  const from = (normalizedPage - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  let query = supabase
     .from("note_chat_conversation_list")
-    .select("*")
-    .order("updated_at", { ascending: false });
+    .select("*", {
+      count: "exact",
+    })
+    .order("updated_at", {
+      ascending: false,
+    })
+    .order("id", {
+      ascending: false,
+    });
+
+  const trimmedSearch = search.trim();
+
+  if (trimmedSearch) {
+    const term = trimmedSearch
+      .replace(/\\/g, "\\\\")
+      .replace(/%/g, "\\%")
+      .replace(/_/g, "\\_")
+      .replace(/"/g, '\\"');
+
+    query = query.ilike("title", `%${term}%`);
+  }
+
+  const { data, count, error } = await query.range(from, to);
 
   if (error) {
     throw new Error(
@@ -29,7 +72,15 @@ export async function getNoteChatConversationList(): Promise<
     );
   }
 
-  return data;
+  const total = count ?? 0;
+
+  return {
+    items: data,
+    page: normalizedPage,
+    pageSize,
+    total,
+    totalPages: Math.ceil(total / pageSize),
+  };
 }
 
 /**
@@ -74,7 +125,51 @@ export async function getNoteChatConversationDetail(
     );
   }
 
+  const assistantMessageIds = messages
+    .filter((message) => message.role === "assistant")
+    .map((message) => message.id);
+
+  let assistantSources: NoteChatConversationDetail["assistantSources"] = [];
+
+  if (assistantMessageIds.length > 0) {
+    const { data: runs, error: runsError } = await supabase
+      .from("note_chat_runs")
+      .select("assistant_message_id, sources")
+      .in("assistant_message_id", assistantMessageIds);
+
+    if (runsError) {
+      throw new Error(
+        `노트 챗봇 참고 노트 조회에 실패했습니다: ${runsError.message}`,
+      );
+    }
+
+    assistantSources = (runs ?? []).flatMap((run) => {
+      if (!run.assistant_message_id) {
+        return [];
+      }
+
+      const parsedSources = z
+        .array(noteChatRunSourceSchema)
+        .safeParse(run.sources);
+
+      if (!parsedSources.success) {
+        return [];
+      }
+
+      return [
+        {
+          assistantMessageId: run.assistant_message_id,
+          sources: parsedSources.data.map((source) => ({
+            noteId: source.noteId,
+            title: source.title,
+          })),
+        },
+      ];
+    });
+  }
+
   return {
+    assistantSources,
     conversation,
     messages,
   };

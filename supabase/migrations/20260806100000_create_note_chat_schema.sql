@@ -111,53 +111,85 @@ ALTER TABLE ONLY "public"."note_chat_runs"
 
 ALTER TABLE ONLY "public"."note_chat_conversations"
   ADD CONSTRAINT "note_chat_conversations_user_id_fkey"
-  FOREIGN KEY ("user_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
+  FOREIGN KEY ("user_id")
+  REFERENCES "public"."profiles"("id")
+  ON DELETE CASCADE;
 
 ALTER TABLE ONLY "public"."note_chat_messages"
   ADD CONSTRAINT "note_chat_messages_conversation_id_fkey"
-  FOREIGN KEY ("conversation_id") REFERENCES "public"."note_chat_conversations"("id") ON DELETE CASCADE;
+  FOREIGN KEY ("conversation_id")
+  REFERENCES "public"."note_chat_conversations"("id")
+  ON DELETE CASCADE;
 
 ALTER TABLE ONLY "public"."note_chat_runs"
   ADD CONSTRAINT "note_chat_runs_user_message_id_fkey"
-  FOREIGN KEY ("user_message_id") REFERENCES "public"."note_chat_messages"("id") ON DELETE CASCADE;
+  FOREIGN KEY ("user_message_id")
+  REFERENCES "public"."note_chat_messages"("id")
+  ON DELETE CASCADE;
 
 ALTER TABLE ONLY "public"."note_chat_runs"
   ADD CONSTRAINT "note_chat_runs_assistant_message_id_fkey"
-  FOREIGN KEY ("assistant_message_id") REFERENCES "public"."note_chat_messages"("id") ON DELETE CASCADE;
+  FOREIGN KEY ("assistant_message_id")
+  REFERENCES "public"."note_chat_messages"("id")
+  ON DELETE CASCADE;
 
 ALTER TABLE ONLY "public"."note_chat_runs"
   ADD CONSTRAINT "note_chat_runs_agent_id_fkey"
-  FOREIGN KEY ("agent_id") REFERENCES "public"."ai_prompt_agents"("id") ON DELETE SET NULL;
+  FOREIGN KEY ("agent_id")
+  REFERENCES "public"."ai_prompt_agents"("id")
+  ON DELETE SET NULL;
 
 ALTER TABLE ONLY "public"."note_chat_runs"
   ADD CONSTRAINT "note_chat_runs_prompt_version_id_fkey"
-  FOREIGN KEY ("prompt_version_id") REFERENCES "public"."ai_prompt_versions"("id") ON DELETE SET NULL;
+  FOREIGN KEY ("prompt_version_id")
+  REFERENCES "public"."ai_prompt_versions"("id")
+  ON DELETE SET NULL;
 
 ALTER TABLE ONLY "public"."note_chat_runs"
   ADD CONSTRAINT "note_chat_runs_chat_model_config_id_fkey"
-  FOREIGN KEY ("chat_model_config_id") REFERENCES "public"."ai_model_configs"("id") ON DELETE SET NULL;
+  FOREIGN KEY ("chat_model_config_id")
+  REFERENCES "public"."ai_model_configs"("id")
+  ON DELETE SET NULL;
 
 ALTER TABLE ONLY "public"."note_chat_runs"
   ADD CONSTRAINT "note_chat_runs_embedding_model_config_id_fkey"
-  FOREIGN KEY ("embedding_model_config_id") REFERENCES "public"."ai_model_configs"("id") ON DELETE SET NULL;
+  FOREIGN KEY ("embedding_model_config_id")
+  REFERENCES "public"."ai_model_configs"("id")
+  ON DELETE SET NULL;
 
 CREATE INDEX "note_chat_conversations_user_updated_at_idx"
-  ON "public"."note_chat_conversations" ("user_id", "updated_at" DESC);
+  ON "public"."note_chat_conversations" (
+    "user_id",
+    "updated_at" DESC
+  );
 
 CREATE INDEX "note_chat_conversations_title_trgm_idx"
-  ON "public"."note_chat_conversations" USING "gin" ("title" "extensions"."gin_trgm_ops");
+  ON "public"."note_chat_conversations"
+  USING "gin" ("title" "extensions"."gin_trgm_ops");
 
 CREATE INDEX "note_chat_messages_conversation_sequence_idx"
-  ON "public"."note_chat_messages" ("conversation_id", "sequence_number");
+  ON "public"."note_chat_messages" (
+    "conversation_id",
+    "sequence_number"
+  );
 
 CREATE INDEX "note_chat_runs_user_message_created_at_idx"
-  ON "public"."note_chat_runs" ("user_message_id", "created_at" DESC);
+  ON "public"."note_chat_runs" (
+    "user_message_id",
+    "created_at" DESC
+  );
 
 CREATE INDEX "note_chat_runs_status_created_at_idx"
-  ON "public"."note_chat_runs" ("status", "created_at" DESC);
+  ON "public"."note_chat_runs" (
+    "status",
+    "created_at" DESC
+  );
 
 CREATE INDEX "note_chat_runs_chat_model_config_created_at_idx"
-  ON "public"."note_chat_runs" ("chat_model_config_id", "created_at" DESC);
+  ON "public"."note_chat_runs" (
+    "chat_model_config_id",
+    "created_at" DESC
+  );
 
 CREATE INDEX "note_chat_runs_created_at_idx"
   ON "public"."note_chat_runs" ("created_at" DESC);
@@ -192,15 +224,31 @@ CREATE OR REPLACE TRIGGER "tr_note_chat_runs_updated_at"
   FOR EACH ROW
   EXECUTE FUNCTION "public"."update_updated_at_column"();
 
-ALTER TABLE "public"."note_chat_conversations" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "public"."note_chat_messages" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "public"."note_chat_runs" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."note_chat_conversations"
+  ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE "public"."note_chat_messages"
+  ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE "public"."note_chat_runs"
+  ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "note_chat_conversations_select_own"
   ON "public"."note_chat_conversations"
   FOR SELECT
   TO "authenticated"
-  USING ("auth"."uid"() = "user_id");
+  USING (
+    "auth"."uid"() = "user_id"
+  );
+
+CREATE POLICY "note_chat_conversations_insert_own_confirmed"
+  ON "public"."note_chat_conversations"
+  FOR INSERT
+  TO "authenticated"
+  WITH CHECK (
+    ("auth"."uid"() = "user_id")
+    AND "public"."is_current_user_email_confirmed"()
+  );
 
 CREATE POLICY "note_chat_conversations_update_title_own_confirmed"
   ON "public"."note_chat_conversations"
@@ -243,22 +291,56 @@ CREATE POLICY "note_chat_runs_select_own"
     )
   );
 
-REVOKE ALL ON TABLE "public"."note_chat_conversations" FROM "anon", "authenticated";
-REVOKE ALL ON TABLE "public"."note_chat_messages" FROM "anon", "authenticated";
-REVOKE ALL ON TABLE "public"."note_chat_runs" FROM "anon", "authenticated";
+REVOKE ALL
+  ON TABLE "public"."note_chat_conversations"
+  FROM "anon", "authenticated";
 
-GRANT SELECT ON TABLE "public"."note_chat_conversations" TO "authenticated";
-GRANT UPDATE ("title", "updated_at") ON TABLE "public"."note_chat_conversations" TO "authenticated";
-GRANT SELECT ON TABLE "public"."note_chat_messages" TO "authenticated";
-GRANT SELECT ON TABLE "public"."note_chat_runs" TO "authenticated";
+REVOKE ALL
+  ON TABLE "public"."note_chat_messages"
+  FROM "anon", "authenticated";
 
-GRANT ALL ON TABLE "public"."note_chat_conversations" TO "service_role";
-GRANT ALL ON TABLE "public"."note_chat_messages" TO "service_role";
-GRANT ALL ON TABLE "public"."note_chat_runs" TO "service_role";
+REVOKE ALL
+  ON TABLE "public"."note_chat_runs"
+  FROM "anon", "authenticated";
 
-REVOKE ALL ON FUNCTION "public"."update_note_chat_conversation_title_updated_at"()
+GRANT SELECT
+  ON TABLE "public"."note_chat_conversations"
+  TO "authenticated";
+
+GRANT INSERT
+  ON TABLE "public"."note_chat_conversations"
+  TO "authenticated";
+
+GRANT UPDATE ("title", "updated_at")
+  ON TABLE "public"."note_chat_conversations"
+  TO "authenticated";
+
+GRANT SELECT
+  ON TABLE "public"."note_chat_messages"
+  TO "authenticated";
+
+GRANT SELECT
+  ON TABLE "public"."note_chat_runs"
+  TO "authenticated";
+
+GRANT ALL
+  ON TABLE "public"."note_chat_conversations"
+  TO "service_role";
+
+GRANT ALL
+  ON TABLE "public"."note_chat_messages"
+  TO "service_role";
+
+GRANT ALL
+  ON TABLE "public"."note_chat_runs"
+  TO "service_role";
+
+REVOKE ALL
+  ON FUNCTION "public"."update_note_chat_conversation_title_updated_at"()
   FROM PUBLIC, "anon", "authenticated";
-GRANT ALL ON FUNCTION "public"."update_note_chat_conversation_title_updated_at"()
+
+GRANT ALL
+  ON FUNCTION "public"."update_note_chat_conversation_title_updated_at"()
   TO "service_role";
 
 COMMENT ON TABLE "public"."note_chat_conversations" IS

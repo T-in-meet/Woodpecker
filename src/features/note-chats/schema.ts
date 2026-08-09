@@ -137,3 +137,9 @@ export type UpdateNoteChatConversationTitleInput = z.infer<
 export type DeleteNoteChatConversationInput = z.infer<
   typeof deleteNoteChatConversationInputSchema
 >;
+
+export const noteChatRunSourceSchema = z.object({
+  noteId: z.string().uuid(),
+  title: z.string(),
+  type: z.literal("note"),
+});

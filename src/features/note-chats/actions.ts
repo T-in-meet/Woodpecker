@@ -134,6 +134,12 @@ export async function createNoteChatConversationAction(
     .single();
 
   if (error || !conversation) {
+    console.error("Failed to create note chat conversation", {
+      error,
+      userId: context.userId,
+      title: parsed.data.title,
+    });
+
     return {
       success: false,
       error: "노트 챗봇 대화 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.",

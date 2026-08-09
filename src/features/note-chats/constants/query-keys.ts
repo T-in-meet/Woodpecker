@@ -6,8 +6,11 @@ export const noteChatQueryKeys = {
 
   conversations: () => [...noteChatQueryKeys.all, "conversations"] as const,
 
-  conversationList: () =>
+  conversationLists: () =>
     [...noteChatQueryKeys.conversations(), "list"] as const,
+
+  conversationList: (params: { page: number; search: string }) =>
+    [...noteChatQueryKeys.conversationLists(), params] as const,
 
   conversationDetail: (conversationId: string) =>
     [...noteChatQueryKeys.conversations(), "detail", conversationId] as const,

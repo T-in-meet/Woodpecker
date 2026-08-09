@@ -33,4 +33,15 @@ export type NoteChatAssistantMessageContent = AiChatMessageContent & {
 export type NoteChatConversationDetail = {
   conversation: NoteChatConversation;
   messages: NoteChatMessage[];
+  assistantSources: NoteChatAssistantSources[];
+};
+
+export type NoteChatUsedNoteSource = {
+  noteId: string;
+  title: string;
+};
+
+export type NoteChatAssistantSources = {
+  assistantMessageId: string;
+  sources: NoteChatUsedNoteSource[];
 };
