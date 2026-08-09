@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { z } from "zod";
 
 import {
   getNoteDetailRoute,
@@ -9,6 +10,7 @@ import {
   ROUTES,
 } from "@/lib/constants/routes";
 import { getGemini } from "@/lib/gemini/client";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/types/database.types";
 
@@ -53,9 +55,29 @@ export type CompleteReviewActionState = {
 } | null;
 
 export type GradeAnswerActionState =
-  | { success: true; grading: GradingResponse; error?: never }
-  | { success?: false; grading?: never; error: string }
+  | {
+      success: true;
+      grading: GradingResponse;
+      /**
+       * 돌려준 결과가 지금 화면의 답안이 아니라 같은 회차에 먼저 제출한
+       * 다른 답안을 채점한 것일 때 true. 화면에서 기준이 다르다고 알린다.
+       */
+      gradedOtherAnswer: boolean;
+      error?: never;
+    }
+  | {
+      success?: false;
+      grading?: never;
+      gradedOtherAnswer?: never;
+      error: string;
+    }
   | null;
+
+// claim_review_grading은 상태와 선점 토큰을 jsonb로 돌려준다.
+const claimResultSchema = z.object({
+  status: z.string(),
+  claimToken: z.string().uuid().optional(),
+});
 
 export async function submitAnswerAction(
   _prevState: SubmitAnswerActionState,
@@ -197,6 +219,7 @@ export async function completeReviewAction(
 async function readStoredGrading(
   reviewLogId: string,
   userId: string,
+  userAnswer: string,
 ): Promise<GradeAnswerActionState> {
   try {
     const existing = await getGradingByReviewLog(reviewLogId, userId);
@@ -204,6 +227,7 @@ async function readStoredGrading(
       return {
         success: true,
         grading: { score: existing.score, ...existing.feedback },
+        gradedOtherAnswer: existing.user_answer !== userAnswer,
       };
     }
   } catch {
@@ -273,6 +297,7 @@ export async function gradeAnswerAction(
       return {
         success: true,
         grading: { score: existing.score, ...existing.feedback },
+        gradedOtherAnswer: existing.user_answer !== parsed.data.answer,
       };
     }
   } catch {
@@ -281,32 +306,57 @@ export async function gradeAnswerAction(
     };
   }
 
+  // 두 채점 RPC는 service_role 전용이다. authenticated에 열어 두면 사용자가 PostgREST로
+  // claim → finalize(100점)를 직접 호출해 AI 없이 점수를 확정할 수 있다.
+  // 세션·이메일 인증·노트 소유권·pending 복습 로그 일치를 모두 확인한 뒤에만 여기에 도달한다.
+  const admin = createAdminClient();
+
   // Gemini 호출 전에 채점 권한을 원자적으로 선점한다.
   // 앞의 조회만으로 분기하면 동시 요청이 모두 "미채점"을 보고 각자 Gemini를 호출한다
   // (유니크 제약은 저장 중복만 막을 뿐 이미 나간 API 비용은 되돌리지 못한다).
-  const { data: claimResult, error: claimError } = await supabase.rpc(
+  const { data: claimData, error: claimError } = await admin.rpc(
     "claim_review_grading",
     {
+      p_user_id: user.id,
       p_review_log_id: parsed.data.reviewLogId,
       p_user_answer: parsed.data.answer,
     },
   );
 
   if (claimError) {
-    console.error("[gradeAnswerAction] 채점 선점 실패:", claimError);
+    console.error("[gradeAnswerAction] 채점 선점 실패:", claimError.message);
     return { error: "AI 채점에 실패했습니다. 잠시 후 다시 시도해주세요." };
   }
 
-  if (claimResult === "already_graded") {
-    return await readStoredGrading(parsed.data.reviewLogId, user.id);
+  const claim = claimResultSchema.safeParse(claimData);
+
+  if (!claim.success) {
+    console.error("[gradeAnswerAction] 채점 선점 응답 형식이 올바르지 않음");
+    return { error: "AI 채점에 실패했습니다. 잠시 후 다시 시도해주세요." };
   }
 
-  if (claimResult === "in_flight") {
+  if (claim.data.status === "already_graded") {
+    return await readStoredGrading(
+      parsed.data.reviewLogId,
+      user.id,
+      parsed.data.answer,
+    );
+  }
+
+  if (claim.data.status === "in_flight") {
     return { error: "채점이 진행 중이에요. 잠시 후 다시 시도해주세요." };
   }
 
-  if (claimResult !== "ok") {
+  if (claim.data.status !== "ok") {
     return { error: "진행 중인 복습을 찾을 수 없습니다." };
+  }
+
+  // 확정 단계에서 이 토큰으로 "내가 선점한 세대가 맞는지"를 확인한다.
+  const claimToken = claim.data.claimToken;
+
+  if (!claimToken) {
+    console.error("[gradeAnswerAction] 선점 토큰이 비어 있음");
+    return { error: "AI 채점에 실패했습니다. 잠시 후 다시 시도해주세요." };
   }
 
   const prompt = buildGradingPrompt(
@@ -330,31 +380,40 @@ export async function gradeAnswerAction(
     return { error: "AI 채점에 실패했습니다. 잠시 후 다시 시도해주세요." };
   }
 
-  let grading;
+  // 응답 원문에는 노트·답안 내용이 그대로 담기므로 로그에 남기지 않는다.
+  let json: unknown;
   try {
-    const json: unknown = JSON.parse(responseText);
-    grading = gradingResponseSchema.safeParse(json);
-    if (!grading.success) {
-      console.error("[gradeAnswerAction] Zod 파싱 실패:", grading.error.issues);
-      console.error("[gradeAnswerAction] 원본 응답:", responseText);
-    }
-  } catch (e) {
-    console.error("[gradeAnswerAction] JSON 파싱 실패:", e);
-    console.error("[gradeAnswerAction] 원본 응답:", responseText);
+    json = JSON.parse(responseText);
+  } catch {
+    // SyntaxError 메시지에는 파싱에 실패한 원문 조각이 섞여 나오므로 함께 남기지 않는다.
+    console.error(
+      `[gradeAnswerAction] JSON 파싱 실패 (응답 길이 ${responseText.length})`,
+    );
     return { error: "채점 결과를 처리할 수 없습니다. 다시 시도해주세요." };
   }
 
+  const grading = gradingResponseSchema.safeParse(json);
+
   if (!grading.success) {
+    console.error(
+      `[gradeAnswerAction] Zod 파싱 실패 (응답 길이 ${responseText.length}):`,
+      grading.error.issues.map((issue) => ({
+        path: issue.path.join("."),
+        code: issue.code,
+      })),
+    );
     return { error: "채점 결과를 처리할 수 없습니다. 다시 시도해주세요." };
   }
 
   const { score, summary, missedConcepts, incorrectPoints } = grading.data;
   const feedback: Json = { summary, missedConcepts, incorrectPoints };
 
-  const { data: finalizeResult, error: finalizeError } = await supabase.rpc(
+  const { data: finalizeResult, error: finalizeError } = await admin.rpc(
     "finalize_review_grading",
     {
+      p_user_id: user.id,
       p_review_log_id: parsed.data.reviewLogId,
+      p_claim_token: claimToken,
       p_score: score,
       p_feedback: feedback,
     },
@@ -363,16 +422,31 @@ export async function gradeAnswerAction(
   if (finalizeError || finalizeResult !== "ok") {
     // 선점이 만료된 사이 다른 요청이 먼저 저장한 경우 → 저장된 결과를 정본으로 삼는다
     if (finalizeResult === "already_graded") {
-      return await readStoredGrading(parsed.data.reviewLogId, user.id);
+      return await readStoredGrading(
+        parsed.data.reviewLogId,
+        user.id,
+        parsed.data.answer,
+      );
     }
-    // 저장 실패해도 채점 결과 자체는 보여준다 (기록만 남지 않음)
+
     console.error(
       "[gradeAnswerAction] 채점 결과 저장 실패:",
-      finalizeError ?? finalizeResult,
+      finalizeError?.message ?? finalizeResult,
     );
+
+    // 저장에 실패한 결과를 성공으로 보여주면 새로고침 시 사라지고 기록에도 남지 않는다.
+    if (finalizeResult === "stale_claim") {
+      return {
+        error: "다른 채점 요청이 먼저 진행됐어요. 잠시 후 다시 시도해주세요.",
+      };
+    }
+
+    return {
+      error: "채점 결과를 저장하지 못했습니다. 잠시 후 다시 시도해주세요.",
+    };
   }
 
   revalidatePath(getNoteDetailRoute(parsed.data.noteId));
 
-  return { success: true, grading: grading.data };
+  return { success: true, grading: grading.data, gradedOtherAnswer: false };
 }

@@ -16,9 +16,10 @@
    - 성공 시 원본 콘텐츠, 사용자 답안, `reviewLogId`를 반환 → `ComparisonView`로 전달
 3. (선택) `GradingPanel`에서 `gradeAnswerAction` 호출 — AI 채점:
    - 세션/이메일 인증/소유권 + `pendingReviewLog.id === reviewLogId` 일치 확인
-   - 복습 1회당 채점 1회: `review_gradings`에 기존 채점이 있으면 Gemini 호출 없이 재사용
+   - 복습 1회당 채점 1회: `review_gradings`에 기존 채점이 있으면 Gemini 호출 없이 재사용. 저장된 `user_answer`가 지금 답안과 다르면 결과와 함께 `gradedOtherAnswer: true`를 돌려 화면에서 기준이 다르다고 알린다
    - 기존 채점이 없으면 **Gemini 호출 전에** `claim_review_grading` RPC로 채점 권한을 원자적으로 선점 (아래 "동시 요청과 비용 통제" 참고)
    - Gemini(`gemini-3.1-flash-lite`)로 회상률 점수(0~100)·빠뜨린 개념·잘못 기억한 내용을 JSON으로 받아 Zod 검증 후 `finalize_review_grading` RPC로 저장
+   - 저장에 실패하면 결과를 보여주지 않고 에러를 반환한다. 저장되지 않은 행은 `score = NULL`이라 새로고침하면 사라지고 기록에도 남지 않으므로, 성공으로 보여주면 화면과 DB가 어긋난다
    - 채점은 부가 기능: 채점 실패/저장 실패가 복습 완료를 막지 않으며, 점수는 스케줄링(1/3/7일 고정)에 개입하지 않는다
    - 저장된 채점 기록은 노트 상세 페이지의 `GradingHistorySection`에서 회차별로 조회
 4. 비교를 마치면 `ReviewCompleteButton`의 `completeReviewAction` 호출:
@@ -35,7 +36,7 @@
 - `@/lib/constants/reviewIntervals` — 도메인 상수
 - `@/lib/gemini/client` — AI 채점용 Gemini 클라이언트 (`GEMINI_API_KEY` 필요)
 - Supabase RPC `complete_review_and_schedule_next` — 완료 처리 및 다음 회차 스케줄링을 원자적으로 수행
-- Supabase RPC `claim_review_grading` / `finalize_review_grading` — 채점 권한 선점 및 결과 확정
+- Supabase RPC `claim_review_grading` / `finalize_review_grading` — 채점 권한 선점 및 결과 확정. **`service_role` 전용**이라 `@/lib/supabase/admin`의 admin 클라이언트로 호출한다
 - 테이블 `review_gradings` — AI 채점 결과 저장 (RLS: 본인 데이터 SELECT만 허용. INSERT/UPDATE/DELETE 정책 없음 — 쓰기는 위 두 SECURITY DEFINER 함수만 가능)
 
 ## 주의사항
@@ -57,20 +58,32 @@
 `review_log_id` 유니크 제약은 **저장 중복만** 막는다. 이미 나간 Gemini 호출 비용은 되돌리지 못하므로,
 "조회 → Gemini 호출 → INSERT" 순서로는 동시 요청 N건이 모두 과금된다. 그래서 순서를 뒤집는다.
 
-1. `claim_review_grading(review_log_id, user_answer)` — `score`/`feedback`이 `NULL`인 선점 행을 넣는다.
+1. `claim_review_grading(user_id, review_log_id, user_answer)` — `score`/`feedback`이 `NULL`인 선점 행을 넣고
+   그 선점을 식별하는 `claim_token`(uuid)을 발급한다.
    `review_log_id` 단위 `pg_advisory_xact_lock`으로 "조회 → 선점"의 경합을 막는다.
-   반환값은 `ok` / `already_graded` / `in_flight` / `not_found`이며 `ok`일 때만 Gemini를 호출한다.
+   반환값은 `{ status, claimToken }` jsonb이고, `status`가 `ok`일 때만 Gemini를 호출한다.
+   (`ok` / `already_graded` / `in_flight` / `not_found`)
 2. Gemini 호출 및 Zod 검증.
-3. `finalize_review_grading(review_log_id, score, feedback)` — 선점 행에 결과를 채운다.
+3. `finalize_review_grading(user_id, review_log_id, claim_token, score, feedback)` — 선점 행에 결과를 채운다.
+   저장된 `claim_token`과 다르면 `stale_claim`을 돌려주고 아무것도 쓰지 않는다.
 
-선점을 되돌리는 함수는 두지 않는다. 인증 사용자가 실행할 수 있으면 선점 → 해제를 반복해
-Gemini를 무제한으로 호출할 수 있기 때문이다. 대신 60초가 지난 선점 행은 자동으로 재선점 대상이 되고,
-Gemini 호출이 실패하면 사용자는 그만큼 기다린 뒤 재시도한다.
+선점을 되돌리는 함수는 두지 않는다. 선점 → 해제를 반복하면 Gemini를 무제한으로 호출할 수 있기 때문이다.
+대신 60초가 지난 선점 행은 자동으로 재선점 대상이 되고, Gemini 호출이 실패하면 사용자는 그만큼 기다린 뒤 재시도한다.
+
+`claim_token`은 이 "60초 뒤 이어받기"의 짝이다. 요청 A가 60초를 넘겨 요청 B가 선점을 이어받으면
+`user_answer`는 B의 답안으로 덮이는데, 확인 없이 두면 늦게 도착한 A도 결과를 확정할 수 있어
+"답안 B + A 기준 피드백"이 한 행에 남는다. finalize가 토큰을 compare-and-set으로 확인해 이를 막는다.
+
+두 함수의 EXECUTE 권한은 `service_role`에만 있다. `authenticated`에 열어 두면 사용자가 PostgREST로
+`claim → finalize(100점)`을 직접 호출해 AI를 거치지 않고 점수를 확정할 수 있다.
+그래서 `user_id`를 `auth.uid()`가 아니라 인자로 받는다(service_role 호출에서는 `auth.uid()`가 `NULL`이다).
+서버 액션이 세션·이메일 인증·노트 소유권·pending 복습 로그 일치를 모두 확인한 뒤에만 호출한다.
 
 쓰기 권한은 위 두 SECURITY DEFINER 함수에만 있다. INSERT 정책을 열어 두면
 사용자가 `feedback = '{}'` 같은 행을 직접 넣어 조회 Zod 파싱을 `null`로 떨어뜨리고,
 액션이 미채점으로 오판해 Gemini를 다시 부르지만 저장은 계속 실패하는 상태를 만들 수 있다.
-DELETE 정책도 같은 이유로 없앴다(삭제 후 재채점 반복). 상세는 `20260809000000_harden_review_gradings.sql`.
+DELETE 정책도 같은 이유로 없앴다(삭제 후 재채점 반복).
+상세는 `20260809000000_harden_review_gradings.sql`과 `20260809010000_secure_review_grading_rpcs.sql`.
 
 선점 행은 `getGradingByReviewLog`·`getGradingsByNote`에서 `score IS NOT NULL` 필터로 제외한다.
 

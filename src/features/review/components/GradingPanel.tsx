@@ -36,6 +36,17 @@ export function GradingPanel({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-5 px-6 py-5">
+          {state.gradedOtherAnswer && (
+            <p
+              role="status"
+              className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-foreground"
+            >
+              이 결과는 이번 회차에 먼저 제출한 다른 답안을 채점한 것이에요.
+              채점은 회차당 1번만 가능해서 지금 답안으로는 다시 채점할 수
+              없어요.
+            </p>
+          )}
+
           <div className="flex items-baseline gap-2">
             <span className="text-4xl font-bold tabular-nums">{score}</span>
             <span className="text-sm text-muted-foreground">/ 100점</span>

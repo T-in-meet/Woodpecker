@@ -504,6 +504,7 @@ export type Database = {
           user_answer: string;
           score: number | null;
           feedback: Json | null;
+          claim_token: string | null;
           created_at: string;
         };
         Insert: {
@@ -515,6 +516,7 @@ export type Database = {
           user_answer: string;
           score?: number | null;
           feedback?: Json | null;
+          claim_token?: string | null;
           created_at?: string;
         };
         Update: {
@@ -526,6 +528,7 @@ export type Database = {
           user_answer?: string;
           score?: number | null;
           feedback?: Json | null;
+          claim_token?: string | null;
           created_at?: string;
         };
         Relationships: [
@@ -685,11 +688,21 @@ export type Database = {
         Returns: string;
       };
       claim_review_grading: {
-        Args: { p_review_log_id: string; p_user_answer: string };
-        Returns: string;
+        Args: {
+          p_user_id: string;
+          p_review_log_id: string;
+          p_user_answer: string;
+        };
+        Returns: Json;
       };
       finalize_review_grading: {
-        Args: { p_review_log_id: string; p_score: number; p_feedback: Json };
+        Args: {
+          p_user_id: string;
+          p_review_log_id: string;
+          p_claim_token: string;
+          p_score: number;
+          p_feedback: Json;
+        };
         Returns: string;
       };
       complete_review_and_schedule_next: {
