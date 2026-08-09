@@ -1,6 +1,8 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Loader2, Send, Square } from "lucide-react";
+import type { KeyboardEvent } from "react";
 import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
@@ -10,38 +12,40 @@ import {
   NOTE_CHAT_QUESTION_MAX_LENGTH,
   NOTE_CHAT_VALIDATION_MESSAGE,
 } from "../constants";
-import { useNoteChatStream } from "../hooks/use-note-chat-stream";
 import {
   type CreateNoteChatQuestionInput,
   createNoteChatQuestionInputSchema,
 } from "../schema";
 
-/**
- * 노트 챗봇 질문 입력 컴포넌트 Props입니다.
- */
 type NoteChatComposerProps = {
-  /** 질문을 추가할 노트 챗봇 대화 ID입니다. */
+  /** 질문을 추가할 노트 챗봇 Conversation ID입니다. */
   conversationId: string;
+
+  /** 현재 답변 생성이 진행 중인지 여부입니다. */
+  isStreaming: boolean;
+
+  /** 진행 중인 답변 생성을 취소합니다. */
+  onCancel: () => void;
+
+  /** 검증된 사용자 질문을 전달합니다. */
+  onSubmit: (question: string) => Promise<void>;
 };
 
 /**
- * 사용자 질문 입력과 노트 챗봇 답변 스트리밍을 담당합니다.
+ * 노트 챗봇 사용자 질문 입력을 담당합니다.
  *
- * 질문 폼은 React Hook Form과 Zod로 관리하며,
- * 답변 생성 상태는 `useNoteChatStream` 커스텀 훅으로 관리합니다.
+ * 스트리밍 실행 상태는 상위 Conversation 화면이 관리하며,
+ * 이 컴포넌트는 질문 입력과 검증만 담당합니다.
+ *
+ * Enter는 질문을 전송하고,
+ * Shift + Enter는 줄바꿈을 입력합니다.
  */
-export function NoteChatComposer({ conversationId }: NoteChatComposerProps) {
-  const {
-    assistantMessageId,
-    cancel,
-    content,
-    error: streamError,
-    isStreaming,
-    usedNoteIds,
-    runId,
-    start,
-  } = useNoteChatStream();
-
+export function NoteChatComposer({
+  conversationId,
+  isStreaming,
+  onCancel,
+  onSubmit,
+}: NoteChatComposerProps) {
   const form = useForm<CreateNoteChatQuestionInput>({
     resolver: zodResolver(createNoteChatQuestionInputSchema),
     defaultValues: {
@@ -55,13 +59,6 @@ export function NoteChatComposer({ conversationId }: NoteChatComposerProps) {
   const question = form.watch("content.text");
   const questionLength = question?.length ?? 0;
 
-  /**
-   * 검증이 완료된 질문으로 노트 챗봇 스트리밍을 시작합니다.
-   *
-   * 질문은 요청을 시작한 직후 입력창에서 제거합니다.
-   * 스트림 실패 여부와 관계없이 사용자가 전송한 질문은 이미 서버의
-   * 사용자 메시지와 Run으로 생성되므로 입력값을 다시 복원하지 않습니다.
-   */
   const handleSubmit = form.handleSubmit(async (values) => {
     const submittedQuestion = values.content.text;
 
@@ -72,34 +69,38 @@ export function NoteChatComposer({ conversationId }: NoteChatComposerProps) {
       },
     });
 
-    await start({
-      conversationId: values.conversationId,
-      question: submittedQuestion,
-    });
+    await onSubmit(submittedQuestion);
   });
 
+  /**
+   * Enter는 질문을 전송하고,
+   * Shift + Enter는 기본 동작을 유지하여 줄바꿈합니다.
+   */
+  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (
+      event.key !== "Enter" ||
+      event.shiftKey ||
+      event.nativeEvent.isComposing
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (isSubmitDisabled) {
+      return;
+    }
+
+    event.currentTarget.form?.requestSubmit();
+  };
+
   const questionError = form.formState.errors.content?.text?.message;
+
   const isSubmitDisabled =
     isStreaming || form.formState.isSubmitting || question.trim().length === 0;
 
   return (
-    <section aria-label="노트 챗봇 질문 입력" className="space-y-4">
-      {content.length > 0 ? (
-        <div
-          aria-live="polite"
-          aria-label="생성 중인 AI 답변"
-          className="whitespace-pre-wrap rounded-lg border bg-muted/40 p-4 text-sm leading-7"
-        >
-          {content}
-        </div>
-      ) : null}
-
-      {streamError ? (
-        <p role="alert" className="text-sm text-destructive">
-          {streamError}
-        </p>
-      ) : null}
-
+    <section aria-label="노트 챗봇 질문 입력">
       <form className="space-y-3" onSubmit={handleSubmit}>
         <div className="space-y-2">
           <Textarea
@@ -113,7 +114,8 @@ export function NoteChatComposer({ conversationId }: NoteChatComposerProps) {
             disabled={isStreaming}
             maxLength={NOTE_CHAT_QUESTION_MAX_LENGTH}
             placeholder="노트에 관해 질문해 보세요."
-            rows={4}
+            rows={3}
+            onKeyDown={handleKeyDown}
             {...form.register("content.text")}
           />
 
@@ -130,38 +132,50 @@ export function NoteChatComposer({ conversationId }: NoteChatComposerProps) {
               id="note-chat-question-description"
               className="text-xs text-muted-foreground"
             >
-              {NOTE_CHAT_VALIDATION_MESSAGE.QUESTION_REQUIRED}
+              Enter로 전송하고 Shift + Enter로 줄바꿈할 수 있습니다.
             </p>
           )}
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground">
             {questionLength.toLocaleString()} /{" "}
             {NOTE_CHAT_QUESTION_MAX_LENGTH.toLocaleString()}
           </p>
 
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             {isStreaming ? (
-              <Button type="button" variant="outline" onClick={cancel}>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={onCancel}
+              >
+                <Square className="size-3.5" />
                 생성 중지
               </Button>
             ) : null}
 
-            <Button type="submit" disabled={isSubmitDisabled}>
-              {isStreaming ? "답변 생성 중" : "질문 보내기"}
+            <Button type="submit" size="sm" disabled={isSubmitDisabled}>
+              {isStreaming ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  답변 생성 중
+                </>
+              ) : (
+                <>
+                  <Send className="size-4" />
+                  질문 보내기
+                </>
+              )}
             </Button>
           </div>
         </div>
-      </form>
 
-      <p aria-live="polite" className="sr-only">
-        {isStreaming
-          ? "AI 답변을 생성하고 있습니다."
-          : assistantMessageId && runId
-            ? `답변 생성이 완료되었습니다. 참고 노트 ${usedNoteIds.length}개`
-            : ""}
-      </p>
+        <p className="sr-only" aria-live="polite">
+          {isStreaming ? "AI 답변을 생성하고 있습니다." : ""}
+        </p>
+      </form>
     </section>
   );
 }
