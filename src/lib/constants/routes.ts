@@ -5,6 +5,9 @@ export const ROUTES = {
   NOTES: "/notes",
   NOTES_NEW: "/notes/new",
   NOTES_TODAY: "/notes/today",
+
+  NOTE_CHATS: "/note-chats",
+
   MYPAGE: "/mypage",
   TERMS: "/terms",
   PRIVACY: "/privacy",
@@ -177,4 +180,14 @@ export function getAdminAiPromptVersionRoute(
  */
 export function getAdminAiSettingsRoute(settingId: string) {
   return `${ROUTES.ADMIN.AI.SETTINGS}/${settingId}`;
+}
+
+/**
+ * 노트 챗봇 대화 상세 페이지 경로를 생성합니다.
+ *
+ * @param conversationId 노트 챗봇 대화 ID
+ * @returns `/note-chats/{conversationId}` 형식의 route path
+ */
+export function getNoteChatConversationRoute(conversationId: string) {
+  return `${ROUTES.NOTE_CHATS}/${conversationId}`;
 }
