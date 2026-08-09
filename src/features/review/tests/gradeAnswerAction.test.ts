@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { GRADING_ERROR_MESSAGES } from "../constants";
+import { hashNoteContent } from "../lib/contentHash";
+
 const NOTE_ID = "11111111-1111-4111-8111-111111111111";
 const REVIEW_LOG_ID = "22222222-2222-4222-8222-222222222222";
 const OTHER_REVIEW_LOG_ID = "33333333-3333-4333-8333-333333333333";
@@ -7,7 +10,9 @@ const CLAIM_TOKEN = "55555555-5555-4555-8555-555555555555";
 const TEST_USER_ID = "user-123";
 const CONFIRMED_AT = "2026-01-01T00:00:00.000Z";
 const ANSWER = "기억나는 내용을 적었습니다.";
-const NOTE_UPDATED_AT = "2026-07-04T00:00:00.000Z";
+const NOTE_CONTENT = "원본 노트 내용";
+// 해시는 mock하지 않는다. 실제 함수로 만든 값이라야 액션의 대조가 의미 있다.
+const NOTE_CONTENT_HASH = hashNoteContent(NOTE_CONTENT);
 
 const VALID_GRADING_RESPONSE = {
   score: 85,
@@ -28,6 +33,7 @@ const STORED_GRADING = {
     incorrectPoints: [],
   },
   created_at: "2026-07-05T00:00:00.000Z",
+  graded_content_hash: null,
 };
 
 const {
@@ -140,19 +146,19 @@ function rpcCallsFor(rpcMock: ReturnType<typeof vi.fn>, name: string) {
 function createFormData({
   noteId = NOTE_ID,
   reviewLogId = REVIEW_LOG_ID,
-  originalUpdatedAt = NOTE_UPDATED_AT,
+  originalContentHash = NOTE_CONTENT_HASH,
   answer = ANSWER,
 }: {
   noteId?: string;
   reviewLogId?: string;
-  originalUpdatedAt?: string;
+  originalContentHash?: string;
   answer?: string;
 } = {}) {
   const formData = new FormData();
 
   formData.set("noteId", noteId);
   formData.set("reviewLogId", reviewLogId);
-  formData.set("originalUpdatedAt", originalUpdatedAt);
+  formData.set("originalContentHash", originalContentHash);
   formData.set("answer", answer);
 
   return formData;
@@ -165,8 +171,7 @@ function mockHappyPathQueries() {
     review_round: 0,
   });
   getNoteContentForComparisonMock.mockResolvedValue({
-    content: "원본 노트 내용",
-    updated_at: NOTE_UPDATED_AT,
+    content: NOTE_CONTENT,
   });
   getPendingReviewLogMock.mockResolvedValue({
     id: REVIEW_LOG_ID,
@@ -303,6 +308,8 @@ describe("gradeAnswerAction", () => {
       p_user_id: TEST_USER_ID,
       p_review_log_id: REVIEW_LOG_ID,
       p_user_answer: ANSWER,
+      // 저장해 둬야 재진입 시 "이 채점의 기준 본문이 바뀌었는지"를 판단할 수 있다
+      p_content_hash: NOTE_CONTENT_HASH,
     });
     expect(rpcMock).toHaveBeenNthCalledWith(2, "finalize_review_grading", {
       p_user_id: TEST_USER_ID,
@@ -360,6 +367,32 @@ describe("gradeAnswerAction", () => {
     );
   });
 
+  // deadline은 액션 진입 시각부터 잰다. 선점 RPC에 걸린 시간을 빼지 않으면
+  // 종료 시각이 그만큼 뒤로 밀려 "채점 deadline < maxDuration" 순서가 깨진다.
+  it("measures the abort deadline from the action entry, not from the claim", async () => {
+    setupSupabase();
+    mockHappyPathQueries();
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify(VALID_GRADING_RESPONSE),
+    });
+
+    const base = Date.now();
+    const nowSpy = vi
+      .spyOn(Date, "now")
+      // 진입 → 예산 계산(5초 경과) → abort 타이머 설정(선점에 15초 더 걸림)
+      .mockReturnValueOnce(base)
+      .mockReturnValueOnce(base + 5_000)
+      .mockReturnValue(base + 20_000);
+    const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
+
+    await gradeAnswerAction(null, createFormData());
+
+    expect(timeoutSpy).toHaveBeenCalledWith(25_000);
+
+    timeoutSpy.mockRestore();
+    nowSpy.mockRestore();
+  });
+
   it("skips Gemini and returns the stored grading when the claim reports it is already graded", async () => {
     setupSupabase({ claimResult: { status: "already_graded" } });
     mockHappyPathQueries();
@@ -389,9 +422,28 @@ describe("gradeAnswerAction", () => {
 
     const result = await gradeAnswerAction(null, createFormData());
 
-    expect(result).toEqual({
-      error: "채점이 진행 중이에요. 잠시 후 다시 시도해주세요.",
-    });
+    expect(result).toEqual({ error: GRADING_ERROR_MESSAGES.inFlight });
+    expect(generateContentMock).not.toHaveBeenCalled();
+  });
+
+  // 한도는 claim_review_grading이 판정한다. 액션은 상태를 문구로 옮기기만 한다.
+  it("skips Gemini when the daily grading limit is used up", async () => {
+    setupSupabase({ claimResult: { status: "daily_exceeded" } });
+    mockHappyPathQueries();
+
+    const result = await gradeAnswerAction(null, createFormData());
+
+    expect(result).toEqual({ error: GRADING_ERROR_MESSAGES.dailyExceeded });
+    expect(generateContentMock).not.toHaveBeenCalled();
+  });
+
+  it("skips Gemini when the requests come in too fast", async () => {
+    setupSupabase({ claimResult: { status: "too_many_requests" } });
+    mockHappyPathQueries();
+
+    const result = await gradeAnswerAction(null, createFormData());
+
+    expect(result).toEqual({ error: GRADING_ERROR_MESSAGES.tooManyRequests });
     expect(generateContentMock).not.toHaveBeenCalled();
   });
 
@@ -446,7 +498,6 @@ describe("gradeAnswerAction", () => {
     // 화면은 구 본문을 보여주는데 AI가 신 본문으로 채점하면 기준이 어긋난다.
     getNoteContentForComparisonMock.mockResolvedValue({
       content: "수정된 노트 내용",
-      updated_at: "2026-07-06T00:00:00.000Z",
     });
 
     const result = await gradeAnswerAction(null, createFormData());
@@ -464,7 +515,6 @@ describe("gradeAnswerAction", () => {
     mockHappyPathQueries();
     getNoteContentForComparisonMock.mockResolvedValue({
       content: "수정된 노트 내용",
-      updated_at: "2026-07-06T00:00:00.000Z",
     });
     getGradingByReviewLogMock.mockResolvedValue(STORED_GRADING);
 

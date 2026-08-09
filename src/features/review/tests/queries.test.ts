@@ -104,11 +104,10 @@ describe("getNoteContentForComparison", () => {
     createClientMock.mockReset();
   });
 
-  // updated_at이 빠지면 채점 액션이 원본 버전을 대조할 수 없다.
-  it("reads the note body together with its version", async () => {
+  // 채점 기준 대조는 본문 해시로 한다. updated_at은 본문과 무관한 UPDATE에도 바뀌어 쓰지 않는다.
+  it("reads only the note body", async () => {
     const { chain, supabase } = createNotesQueryMock({
       content: "원본 내용",
-      updated_at: "2026-07-04T00:00:00.000Z",
     });
 
     createClientMock.mockResolvedValue(supabase);
@@ -119,11 +118,8 @@ describe("getNoteContentForComparison", () => {
     );
 
     expect(supabase.from).toHaveBeenCalledWith("notes");
-    expect(chain.select).toHaveBeenCalledWith("content, updated_at");
-    expect(result).toEqual({
-      content: "원본 내용",
-      updated_at: "2026-07-04T00:00:00.000Z",
-    });
+    expect(chain.select).toHaveBeenCalledWith("content");
+    expect(result).toEqual({ content: "원본 내용" });
   });
 });
 

@@ -11,21 +11,27 @@ import type { GradingResponse } from "../schema";
 
 type GradingPanelProps = {
   /**
+   * 복원한 채점을 받은 뒤 노트 본문이 바뀌었는지. 답안은 그대로여도 채점 기준 원본이
+   * 지금 화면의 원본과 다르므로, 점수·피드백을 현재 내용과 대조하면 어긋난다.
+   */
+  basisContentChanged: boolean;
+  /**
    * 페이지 진입 시 서버가 복원한 채점 결과. 있으면 채점 버튼 없이 바로 보여준다.
-   * 이때 화면의 답안이 곧 채점 기준이므로 기준이 다르다는 안내는 필요 없다.
+   * 이때 화면의 답안이 곧 채점 기준이므로 답안이 다르다는 안내는 필요 없다.
    */
   initialGrading: GradingResponse | null;
   noteId: string;
-  /** 위 비교 화면에 그려진 원본의 버전. 채점 기준이 같은 버전인지 서버가 확인한다. */
-  originalUpdatedAt: string;
+  /** 위 비교 화면에 그려진 원본의 본문 해시. 채점 기준이 같은 본문인지 서버가 확인한다. */
+  originalContentHash: string;
   reviewLogId: string;
   userAnswer: string;
 };
 
 export function GradingPanel({
+  basisContentChanged,
   initialGrading,
   noteId,
-  originalUpdatedAt,
+  originalContentHash,
   reviewLogId,
   userAnswer,
 }: GradingPanelProps) {
@@ -50,6 +56,16 @@ export function GradingPanel({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-5 px-6 py-5">
+          {basisContentChanged && (
+            <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+              <p role="status" className="text-sm text-foreground">
+                이 채점은 지금 보고 있는 원본과 다른 버전을 기준으로 했어요.
+                채점 이후 노트를 수정해서 점수와 피드백이 현재 내용과 어긋날 수
+                있어요.
+              </p>
+            </div>
+          )}
+
           {gradedOtherAnswer && (
             <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3">
               <p role="status" className="text-sm text-foreground">
@@ -83,8 +99,9 @@ export function GradingPanel({
             <div>
               <h4 className="mb-2 text-sm font-medium">빠뜨린 핵심 개념</h4>
               <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-                {missedConcepts.map((concept) => (
-                  <li key={concept}>{concept}</li>
+                {/* 항목은 LLM 출력이라 같은 문자열이 두 번 나올 수 있어 index를 섞는다. */}
+                {missedConcepts.map((concept, index) => (
+                  <li key={`${index}-${concept}`}>{concept}</li>
                 ))}
               </ul>
             </div>
@@ -96,8 +113,8 @@ export function GradingPanel({
                 원본과 다르게 기억한 내용
               </h4>
               <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-                {incorrectPoints.map((point) => (
-                  <li key={point}>{point}</li>
+                {incorrectPoints.map((point, index) => (
+                  <li key={`${index}-${point}`}>{point}</li>
                 ))}
               </ul>
             </div>
@@ -124,8 +141,8 @@ export function GradingPanel({
           <input type="hidden" name="reviewLogId" value={reviewLogId} />
           <input
             type="hidden"
-            name="originalUpdatedAt"
-            value={originalUpdatedAt}
+            name="originalContentHash"
+            value={originalContentHash}
           />
           <input type="hidden" name="answer" value={userAnswer} />
           <Button

@@ -20,10 +20,12 @@ import { ReviewCompleteButton } from "./ReviewCompleteButton";
  */
 export type RestoredReviewSession = {
   originalContent: string;
-  originalUpdatedAt: string;
+  originalContentHash: string;
   userAnswer: string;
   reviewLogId: string;
   grading: GradingResponse;
+  /** 채점을 받은 뒤 노트 본문이 바뀌었는지. 화면의 원본과 채점 기준이 다르다는 뜻이다. */
+  basisContentChanged: boolean;
 };
 
 type BlankTestPageProps = {
@@ -85,9 +87,12 @@ export function BlankTestPage({
           />
 
           <GradingPanel
+            basisContentChanged={
+              restoredComparison?.basisContentChanged ?? false
+            }
             initialGrading={restoredComparison?.grading ?? null}
             noteId={noteId}
-            originalUpdatedAt={comparisonState.originalUpdatedAt}
+            originalContentHash={comparisonState.originalContentHash}
             reviewLogId={comparisonState.reviewLogId}
             userAnswer={comparisonState.userAnswer}
           />

@@ -20,11 +20,10 @@ const pendingReviewLogSchema = z.object({
   completed_at: z.string().nullable(),
 });
 
-// updated_at은 화면에 보여준 원본과 채점 기준 원본이 같은 버전인지 확인하는 토큰이다.
-// notes에는 tr_notes_updated_at(BEFORE UPDATE) 트리거가 걸려 있어 본문이 바뀌면 함께 바뀐다.
+// 화면에 보여준 원본과 채점 기준 원본이 같은지는 본문 해시(hashNoteContent)로 확인한다.
+// updated_at은 본문과 무관한 UPDATE에도 바뀌므로 쓰지 않는다. 상세는 lib/contentHash.ts.
 const noteContentForComparisonSchema = z.object({
   content: z.string(),
-  updated_at: z.string(),
 });
 
 export type ReviewableNote = z.infer<typeof reviewableNoteSchema>;
@@ -100,7 +99,7 @@ export async function getNoteContentForComparison(
   const supabase = await createServerComponentClient();
   const { data, error } = await supabase
     .from("notes")
-    .select("content, updated_at")
+    .select("content")
     .eq("id", noteId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -120,10 +119,12 @@ const reviewGradingSchema = z.object({
   created_at: z.string(),
 });
 
-// 저장된 채점이 지금 화면의 답안을 채점한 것인지 비교해야 하는 곳에서만 답안까지 읽는다.
-// 답안은 최대 5만 자라 목록 조회에서는 가져오지 않는다.
+// 저장된 채점이 지금 화면의 답안·원본을 채점한 것인지 비교해야 하는 곳에서만
+// 답안과 기준 원본 해시까지 읽는다. 답안은 최대 5만 자라 목록 조회에서는 가져오지 않는다.
+// graded_content_hash는 해시 도입 이전 행에서 NULL이므로 nullable이다.
 const reviewGradingWithAnswerSchema = reviewGradingSchema.extend({
   user_answer: z.string(),
+  graded_content_hash: z.string().nullable(),
 });
 
 export type ReviewGrading = z.infer<typeof reviewGradingSchema>;
@@ -139,7 +140,7 @@ export async function getGradingByReviewLog(
   const { data, error } = await supabase
     .from("review_gradings")
     .select(
-      "id, review_log_id, round, user_answer, score, feedback, created_at",
+      "id, review_log_id, round, user_answer, score, feedback, created_at, graded_content_hash",
     )
     .eq("review_log_id", reviewLogId)
     .eq("user_id", userId)

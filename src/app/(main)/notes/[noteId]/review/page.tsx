@@ -8,6 +8,7 @@ import {
   BlankTestPage,
   type RestoredReviewSession,
 } from "@/features/review/components/BlankTestPage";
+import { hashNoteContent } from "@/features/review/lib/contentHash";
 import {
   getGradingByReviewLog,
   getNoteContentForComparison,
@@ -124,12 +125,19 @@ export default async function NoteReviewPage({
       const noteContent = await getNoteContentForComparison(noteId, user.id);
 
       if (noteContent) {
+        const contentHash = hashNoteContent(noteContent.content);
+
         restoredSession = {
           originalContent: noteContent.content,
-          originalUpdatedAt: noteContent.updated_at,
+          originalContentHash: contentHash,
           userAnswer: grading.user_answer,
           reviewLogId: pendingReviewLog.id,
           grading: { score: grading.score, ...grading.feedback },
+          // 채점을 받은 뒤 노트를 고쳤으면 화면의 원본과 채점 기준이 다르다.
+          // 해시 도입 이전 행은 NULL이라 판단할 근거가 없으므로 알리지 않는다.
+          basisContentChanged:
+            grading.graded_content_hash !== null &&
+            grading.graded_content_hash !== contentHash,
         };
       }
     }

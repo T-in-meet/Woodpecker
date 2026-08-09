@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { hashNoteContent } from "@/features/review/lib/contentHash";
 import { ROUTES } from "@/lib/constants/routes";
 
 const REDIRECT_ERROR = new Error("NEXT_REDIRECT");
@@ -50,10 +51,17 @@ vi.mock("@/features/review/components/BlankTestPage", () => ({
     alreadyCompletedToday: boolean;
     noteId: string;
     noteTitle: string;
-    restoredSession: { userAnswer: string; grading: { score: number } } | null;
+    restoredSession: {
+      userAnswer: string;
+      grading: { score: number };
+      basisContentChanged: boolean;
+    } | null;
     reviewRound: number;
   }) => (
     <div
+      data-basis-changed={
+        restoredSession ? String(restoredSession.basisContentChanged) : ""
+      }
       data-restored={
         restoredSession
           ? `${restoredSession.userAnswer}|${restoredSession.grading.score}`
@@ -339,10 +347,10 @@ describe("NoteReviewPage", () => {
         incorrectPoints: [],
       },
       created_at: "2026-01-02T01:00:00.000Z",
+      graded_content_hash: hashNoteContent("원본 내용"),
     });
     getNoteContentForComparisonMock.mockResolvedValue({
       content: "원본 내용",
-      updated_at: "2026-01-01T00:00:00.000Z",
     });
 
     render(
@@ -357,9 +365,105 @@ describe("NoteReviewPage", () => {
       "22222222-2222-2222-2222-222222222222",
       "user-123",
     );
+
+    const blankTestPage = screen.getByTestId("blank-test-page");
+    expect(blankTestPage).toHaveAttribute("data-restored", "저장된 답안|72");
+    expect(blankTestPage).toHaveAttribute("data-basis-changed", "false");
+  });
+
+  // 채점 뒤 노트를 고치면 화면의 원본과 채점 기준이 갈린다. 그 사실을 화면에 넘겨야 한다.
+  it("flags the restored grading when the note body changed after grading", async () => {
+    createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
+    getReviewableNoteMock.mockResolvedValue({
+      title: "테스트 노트",
+      next_review_at: "2026-01-02T00:00:00.000Z",
+      review_round: 0,
+    });
+    getPendingReviewLogMock.mockResolvedValue({
+      id: "22222222-2222-2222-2222-222222222222",
+      note_id: "11111111-1111-1111-1111-111111111111",
+      round: 1,
+      scheduled_at: "2026-01-02T00:00:00.000Z",
+      completed_at: null,
+    });
+    hasCompletedReviewForNoteTodayMock.mockResolvedValue(false);
+    getGradingByReviewLogMock.mockResolvedValue({
+      id: "44444444-4444-4444-8444-444444444444",
+      review_log_id: "22222222-2222-2222-2222-222222222222",
+      round: 1,
+      user_answer: "저장된 답안",
+      score: 72,
+      feedback: {
+        summary: "저장된 총평",
+        missedConcepts: [],
+        incorrectPoints: [],
+      },
+      created_at: "2026-01-02T01:00:00.000Z",
+      graded_content_hash: hashNoteContent("채점 당시 원본"),
+    });
+    getNoteContentForComparisonMock.mockResolvedValue({
+      content: "수정된 원본",
+    });
+
+    render(
+      await NoteReviewPage({
+        params: Promise.resolve({
+          noteId: "11111111-1111-1111-1111-111111111111",
+        }),
+      }),
+    );
+
     expect(screen.getByTestId("blank-test-page")).toHaveAttribute(
-      "data-restored",
-      "저장된 답안|72",
+      "data-basis-changed",
+      "true",
+    );
+  });
+
+  // 해시 도입 이전 채점은 기준 본문을 알 수 없다. 근거 없이 경고하지 않는다.
+  it("does not flag a grading saved before the content hash existed", async () => {
+    createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
+    getReviewableNoteMock.mockResolvedValue({
+      title: "테스트 노트",
+      next_review_at: "2026-01-02T00:00:00.000Z",
+      review_round: 0,
+    });
+    getPendingReviewLogMock.mockResolvedValue({
+      id: "22222222-2222-2222-2222-222222222222",
+      note_id: "11111111-1111-1111-1111-111111111111",
+      round: 1,
+      scheduled_at: "2026-01-02T00:00:00.000Z",
+      completed_at: null,
+    });
+    hasCompletedReviewForNoteTodayMock.mockResolvedValue(false);
+    getGradingByReviewLogMock.mockResolvedValue({
+      id: "44444444-4444-4444-8444-444444444444",
+      review_log_id: "22222222-2222-2222-2222-222222222222",
+      round: 1,
+      user_answer: "저장된 답안",
+      score: 72,
+      feedback: {
+        summary: "저장된 총평",
+        missedConcepts: [],
+        incorrectPoints: [],
+      },
+      created_at: "2026-01-02T01:00:00.000Z",
+      graded_content_hash: null,
+    });
+    getNoteContentForComparisonMock.mockResolvedValue({
+      content: "수정된 원본",
+    });
+
+    render(
+      await NoteReviewPage({
+        params: Promise.resolve({
+          noteId: "11111111-1111-1111-1111-111111111111",
+        }),
+      }),
+    );
+
+    expect(screen.getByTestId("blank-test-page")).toHaveAttribute(
+      "data-basis-changed",
+      "false",
     );
   });
 

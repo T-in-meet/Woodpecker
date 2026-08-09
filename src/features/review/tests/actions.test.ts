@@ -6,6 +6,8 @@ import {
   ROUTES,
 } from "@/lib/constants/routes";
 
+import { hashNoteContent } from "../lib/contentHash";
+
 const REDIRECT_ERROR = new Error("NEXT_REDIRECT");
 const NOTE_ID = "11111111-1111-4111-8111-111111111111";
 const REVIEW_LOG_ID = "22222222-2222-4222-8222-222222222222";
@@ -200,7 +202,6 @@ describe("submitAnswerAction", () => {
     createClientMock.mockResolvedValue(createAuthSupabaseMock(TEST_USER_ID));
     getNoteContentForComparisonMock.mockResolvedValue({
       content: "원본 내용",
-      updated_at: "2026-01-02T00:00:00.000Z",
     });
     getPendingReviewLogMock.mockResolvedValue({
       id: REVIEW_LOG_ID,
@@ -222,11 +223,11 @@ describe("submitAnswerAction", () => {
     );
     expect(getPendingReviewLogMock).toHaveBeenCalledWith(NOTE_ID, TEST_USER_ID);
 
-    // 채점 요청이 이 버전을 되돌려줘야 서버가 같은 원본인지 확인할 수 있다.
+    // 채점 요청이 이 해시를 되돌려줘야 서버가 같은 원본인지 확인할 수 있다.
     expect(result).toMatchObject({
       success: true,
       originalContent: "원본 내용",
-      originalUpdatedAt: "2026-01-02T00:00:00.000Z",
+      originalContentHash: hashNoteContent("원본 내용"),
       userAnswer: "내 답안",
       reviewLogId: REVIEW_LOG_ID,
     });

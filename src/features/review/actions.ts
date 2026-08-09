@@ -15,6 +15,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/types/database.types";
 
+import { GRADING_ERROR_MESSAGES } from "./constants";
+import { hashNoteContent } from "./lib/contentHash";
 import { buildGradingPrompt } from "./lib/gradingPrompt";
 import {
   getGradingByReviewLog,
@@ -39,8 +41,8 @@ export type SubmitAnswerActionState =
   | {
       success: true;
       originalContent: string;
-      /** 화면에 보여준 원본의 버전. 채점 요청에 실어 보내 기준이 어긋나는 걸 막는다. */
-      originalUpdatedAt: string;
+      /** 화면에 보여준 원본의 본문 해시. 채점 요청에 실어 보내 기준이 어긋나는 걸 막는다. */
+      originalContentHash: string;
       userAnswer: string;
       reviewLogId: string;
       error?: never;
@@ -48,7 +50,7 @@ export type SubmitAnswerActionState =
   | {
       success?: false;
       originalContent?: never;
-      originalUpdatedAt?: never;
+      originalContentHash?: never;
       userAnswer?: never;
       error: SubmitAnswerFieldErrors | string;
     }
@@ -125,6 +127,17 @@ const claimResultSchema = z.object({
   claimToken: z.string().uuid().optional(),
 });
 
+/**
+ * 선점이 거절된 이유를 그대로 사용자 문구로 옮기는 상태들.
+ * 실제 한도 값은 claim_review_grading 함수 안에 있다(클라이언트가 넘길 수 없어야 하므로).
+ * 여기 없는 실패 상태(not_found 등)는 아래에서 공통 문구로 처리한다.
+ */
+const CLAIM_ERROR_MESSAGES: Record<string, string | undefined> = {
+  in_flight: GRADING_ERROR_MESSAGES.inFlight,
+  too_many_requests: GRADING_ERROR_MESSAGES.tooManyRequests,
+  daily_exceeded: GRADING_ERROR_MESSAGES.dailyExceeded,
+};
+
 export async function submitAnswerAction(
   _prevState: SubmitAnswerActionState,
   formData: FormData,
@@ -180,7 +193,7 @@ export async function submitAnswerAction(
   return {
     success: true,
     originalContent: note.content,
-    originalUpdatedAt: note.updated_at,
+    originalContentHash: hashNoteContent(note.content),
     userAnswer: parsed.data.answer,
     reviewLogId: pendingReviewLog.id,
   };
@@ -297,7 +310,7 @@ export async function gradeAnswerAction(
   const parsed = gradeAnswerSchema.safeParse({
     noteId: formData.get("noteId"),
     reviewLogId: formData.get("reviewLogId"),
-    originalUpdatedAt: formData.get("originalUpdatedAt"),
+    originalContentHash: formData.get("originalContentHash"),
     answer: formData.get("answer"),
   });
 
@@ -359,11 +372,13 @@ export async function gradeAnswerAction(
     };
   }
 
-  // 화면이 보여준 원본과 지금 채점할 원본이 같은 버전인지 확인한다.
+  // 화면이 보여준 원본과 지금 채점할 원본이 같은 본문인지 확인한다.
   // 비교 화면을 띄워둔 사이 다른 탭에서 노트를 고치면, 사용자는 구 본문을 보면서
-  // AI는 신 본문으로 채점하게 된다. 저장된 채점에도 어느 버전인지 남지 않는다.
+  // AI는 신 본문으로 채점하게 된다.
   // 이미 확정된 채점을 읽는 경로는 새로 채점하지 않으므로 이 검사보다 앞에 둔다.
-  if (note.updated_at !== parsed.data.originalUpdatedAt) {
+  const contentHash = hashNoteContent(note.content);
+
+  if (contentHash !== parsed.data.originalContentHash) {
     return {
       error:
         "채점을 준비하는 사이 노트가 수정됐어요. 새로고침 후 다시 비교해주세요.",
@@ -398,6 +413,7 @@ export async function gradeAnswerAction(
       p_user_id: user.id,
       p_review_log_id: parsed.data.reviewLogId,
       p_user_answer: parsed.data.answer,
+      p_content_hash: contentHash,
     },
   );
 
@@ -421,8 +437,10 @@ export async function gradeAnswerAction(
     );
   }
 
-  if (claim.data.status === "in_flight") {
-    return { error: "채점이 진행 중이에요. 잠시 후 다시 시도해주세요." };
+  const claimErrorMessage = CLAIM_ERROR_MESSAGES[claim.data.status];
+
+  if (claimErrorMessage) {
+    return { error: claimErrorMessage };
   }
 
   if (claim.data.status !== "ok") {
@@ -451,7 +469,12 @@ export async function gradeAnswerAction(
       config: {
         responseMimeType: "application/json",
         responseJsonSchema: GRADING_RESPONSE_JSON_SCHEMA,
-        abortSignal: AbortSignal.timeout(geminiBudgetMs),
+        // 예산을 여기서 다시 잰다. 위에서 계산한 값을 그대로 쓰면 타이머가 선점 RPC
+        // "이후"부터 흘러서, 종료 시각이 그 RPC에 걸린 시간만큼 뒤로 밀린다.
+        // README의 "채점 deadline < maxDuration" 순서를 지키려면 진입 시각 기준이어야 한다.
+        abortSignal: AbortSignal.timeout(
+          Math.max(0, GRADING_DEADLINE_MS - (Date.now() - startedAt)),
+        ),
       },
     });
     responseText = response.text ?? "";

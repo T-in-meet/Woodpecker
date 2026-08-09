@@ -9,7 +9,7 @@ import {
 
 const NOTE_ID = "11111111-1111-4111-8111-111111111111";
 const REVIEW_LOG_ID = "22222222-2222-4222-8222-222222222222";
-const NOTE_UPDATED_AT = "2026-07-04T00:00:00.000Z";
+const CONTENT_HASH = "a".repeat(64);
 
 describe("submitAnswerSchema", () => {
   it("accepts a valid answer payload", () => {
@@ -64,7 +64,7 @@ describe("gradeAnswerSchema", () => {
     const parsed = gradeAnswerSchema.safeParse({
       noteId: NOTE_ID,
       reviewLogId: REVIEW_LOG_ID,
-      originalUpdatedAt: NOTE_UPDATED_AT,
+      originalContentHash: CONTENT_HASH,
       answer: "기억나는 내용을 적었습니다.",
     });
 
@@ -75,7 +75,7 @@ describe("gradeAnswerSchema", () => {
     const parsed = gradeAnswerSchema.safeParse({
       noteId: NOTE_ID,
       reviewLogId: REVIEW_LOG_ID,
-      originalUpdatedAt: NOTE_UPDATED_AT,
+      originalContentHash: CONTENT_HASH,
       answer: "   ",
     });
 
@@ -86,18 +86,30 @@ describe("gradeAnswerSchema", () => {
     const parsed = gradeAnswerSchema.safeParse({
       noteId: "note-123",
       reviewLogId: "log-123",
-      originalUpdatedAt: NOTE_UPDATED_AT,
+      originalContentHash: CONTENT_HASH,
       answer: "답안",
     });
 
     expect(parsed.success).toBe(false);
   });
 
-  // 원본 버전이 빠진 요청은 채점 기준을 확인할 수 없으므로 받지 않는다.
-  it("rejects a payload without the original note version", () => {
+  // 원본 해시가 빠진 요청은 채점 기준을 확인할 수 없으므로 받지 않는다.
+  it("rejects a payload without the original content hash", () => {
     const parsed = gradeAnswerSchema.safeParse({
       noteId: NOTE_ID,
       reviewLogId: REVIEW_LOG_ID,
+      answer: "답안",
+    });
+
+    expect(parsed.success).toBe(false);
+  });
+
+  // 해시가 아닌 값(예전 updated_at ISO 문자열 등)은 형식 단계에서 걸러낸다.
+  it("rejects an original content hash that is not a sha256 hex digest", () => {
+    const parsed = gradeAnswerSchema.safeParse({
+      noteId: NOTE_ID,
+      reviewLogId: REVIEW_LOG_ID,
+      originalContentHash: "2026-07-04T00:00:00.000Z",
       answer: "답안",
     });
 

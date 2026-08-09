@@ -24,11 +24,12 @@ export const gradeAnswerSchema = z.object({
   noteId: z.string().uuid("유효한 노트 ID가 아닙니다"),
   reviewLogId: z.string().uuid("유효한 리뷰 로그 ID가 아닙니다"),
   /**
-   * 비교 화면에 보여준 원본의 버전(notes.updated_at). 채점 직전에 다시 읽은 본문과
-   * 대조해 "화면에서 본 원본"과 "AI가 채점한 원본"이 어긋나는 걸 막는다.
-   * 값 형식은 DB가 주는 그대로라 여기서는 비어 있지 않은지만 본다.
+   * 비교 화면에 보여준 원본의 본문 해시(`hashNoteContent`). 채점 직전에 다시 읽은
+   * 본문의 해시와 대조해 "화면에서 본 원본"과 "AI가 채점한 원본"이 어긋나는 걸 막는다.
    */
-  originalUpdatedAt: z.string().min(1, "원본 정보가 없습니다"),
+  originalContentHash: z
+    .string()
+    .regex(/^[0-9a-f]{64}$/, "원본 정보가 올바르지 않습니다"),
   answer: z
     .string()
     .max(ANSWER_MAX_LENGTH, "답안이 너무 깁니다")

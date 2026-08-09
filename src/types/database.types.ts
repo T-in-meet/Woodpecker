@@ -505,6 +505,7 @@ export type Database = {
           score: number | null;
           feedback: Json | null;
           claim_token: string | null;
+          graded_content_hash: string | null;
           created_at: string;
         };
         Insert: {
@@ -517,6 +518,7 @@ export type Database = {
           score?: number | null;
           feedback?: Json | null;
           claim_token?: string | null;
+          graded_content_hash?: string | null;
           created_at?: string;
         };
         Update: {
@@ -529,6 +531,7 @@ export type Database = {
           score?: number | null;
           feedback?: Json | null;
           claim_token?: string | null;
+          graded_content_hash?: string | null;
           created_at?: string;
         };
         Relationships: [
@@ -544,6 +547,35 @@ export type Database = {
             columns: ["note_id"];
             isOneToOne: false;
             referencedRelation: "notes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      review_grading_generations: {
+        Row: {
+          id: string;
+          user_id: string;
+          review_log_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          review_log_id?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          review_log_id?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "review_grading_generations_review_log_id_fkey";
+            columns: ["review_log_id"];
+            isOneToOne: false;
+            referencedRelation: "review_logs";
             referencedColumns: ["id"];
           },
         ];
@@ -692,6 +724,7 @@ export type Database = {
           p_user_id: string;
           p_review_log_id: string;
           p_user_answer: string;
+          p_content_hash: string;
         };
         Returns: Json;
       };

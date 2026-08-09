@@ -4,7 +4,10 @@
 
 BEGIN;
 
-SELECT plan(25);
+SELECT plan(26);
+
+-- 채점 기준 원본 해시. 형식(sha256 hex)만 맞으면 되므로 고정값을 쓴다.
+SELECT set_config('test.rg_content_hash', repeat('a', 64), true);
 
 -- 테스트용 UUID 준비
 SELECT set_config('test.rg_rls_user_a_id', gen_random_uuid()::text, true);
@@ -151,7 +154,8 @@ SELECT set_config(
   public.claim_review_grading(
     current_setting('test.rg_rls_user_a_id')::uuid,
     current_setting('test.rg_rls_log_a_id')::uuid,
-    'answer a'
+    'answer a',
+    current_setting('test.rg_content_hash')
   )::text,
   true
 );
@@ -182,7 +186,8 @@ SELECT is(
   public.claim_review_grading(
     current_setting('test.rg_rls_user_a_id')::uuid,
     current_setting('test.rg_rls_log_a_id')::uuid,
-    'answer a again'
+    'answer a again',
+    current_setting('test.rg_content_hash')
   ) ->> 'status',
   'in_flight',
   $$선점이 유효한 동안 다시 선점하면 in_flight여야 한다$$
@@ -219,7 +224,8 @@ SELECT is(
   public.claim_review_grading(
     current_setting('test.rg_rls_user_a_id')::uuid,
     current_setting('test.rg_rls_log_a_id')::uuid,
-    'answer a third'
+    'answer a third',
+    current_setting('test.rg_content_hash')
   ) ->> 'status',
   'already_graded',
   $$확정 후 다시 선점하면 already_graded여야 한다$$
@@ -247,7 +253,8 @@ SELECT is(
   public.claim_review_grading(
     current_setting('test.rg_rls_user_a_id')::uuid,
     current_setting('test.rg_rls_log_b_id')::uuid,
-    'hijack'
+    'hijack',
+    current_setting('test.rg_content_hash')
   ) ->> 'status',
   'not_found',
   $$user_a로는 user_b의 복습 로그를 선점할 수 없어야 한다$$
@@ -332,7 +339,8 @@ SELECT set_config(
   public.claim_review_grading(
     current_setting('test.rg_rls_user_a_id')::uuid,
     current_setting('test.rg_rls_log_a2_id')::uuid,
-    'answer a2 first'
+    'answer a2 first',
+    current_setting('test.rg_content_hash')
   )::text,
   true
 );
@@ -354,7 +362,8 @@ SELECT set_config(
   public.claim_review_grading(
     current_setting('test.rg_rls_user_a_id')::uuid,
     current_setting('test.rg_rls_log_a2_id')::uuid,
-    'answer a2 second'
+    'answer a2 second',
+    repeat('b', 64)
   )::text,
   true
 );
@@ -364,6 +373,18 @@ SELECT is(
   (current_setting('test.rg_claim_a2_second')::jsonb) ->> 'status',
   'ok',
   $$만료된 선점은 다음 요청이 이어받을 수 있어야 한다$$
+);
+
+-- 이어받은 요청의 기준 원본으로 갱신돼야 한다
+-- (답안만 덮고 해시를 두면 "답안 B + A 기준 원본"이 한 행에 남는다)
+SELECT is(
+  (
+    SELECT graded_content_hash
+    FROM public.review_gradings
+    WHERE review_log_id = current_setting('test.rg_rls_log_a2_id')::uuid
+  ),
+  repeat('b', 64),
+  $$선점을 이어받으면 기준 원본 해시도 함께 갱신돼야 한다$$
 );
 
 -- 선점을 빼앗긴 이전 요청은 확정할 수 없어야 한다
@@ -400,7 +421,7 @@ SELECT is(
 SELECT ok(
   NOT has_function_privilege(
     'authenticated',
-    'public.claim_review_grading(uuid, uuid, text)',
+    'public.claim_review_grading(uuid, uuid, text, text)',
     'EXECUTE'
   ),
   $$authenticated에는 claim_review_grading 실행 권한이 없어야 한다$$
@@ -418,7 +439,7 @@ SELECT ok(
 SELECT ok(
   has_function_privilege(
     'service_role',
-    'public.claim_review_grading(uuid, uuid, text)',
+    'public.claim_review_grading(uuid, uuid, text, text)',
     'EXECUTE'
   ),
   $$service_role에는 claim_review_grading 실행 권한이 있어야 한다$$
@@ -451,10 +472,11 @@ SELECT set_config(
 SELECT throws_ok(
   format(
     $sql$
-      SELECT public.claim_review_grading('%s'::uuid, '%s'::uuid, 'direct');
+      SELECT public.claim_review_grading('%s'::uuid, '%s'::uuid, 'direct', '%s');
     $sql$,
     current_setting('test.rg_rls_user_a_id'),
-    current_setting('test.rg_rls_log_a3_id')
+    current_setting('test.rg_rls_log_a3_id'),
+    current_setting('test.rg_content_hash')
   ),
   '42501',
   NULL,

@@ -31,13 +31,19 @@ vi.mock("./ComparisonView", () => ({
 
 vi.mock("./GradingPanel", () => ({
   GradingPanel: ({
+    basisContentChanged,
     initialGrading,
+    originalContentHash,
     userAnswer,
   }: {
+    basisContentChanged: boolean;
     initialGrading: { score: number } | null;
+    originalContentHash: string;
     userAnswer: string;
   }) => (
     <div
+      data-basis-changed={String(basisContentChanged)}
+      data-content-hash={originalContentHash}
       data-initial-score={initialGrading?.score ?? ""}
       data-testid="grading-panel"
       data-user-answer={userAnswer}
@@ -78,12 +84,15 @@ const RESTORED_GRADING: GradingResponse = {
   incorrectPoints: [],
 };
 
+const CONTENT_HASH = "a".repeat(64);
+
 const RESTORED_SESSION: RestoredReviewSession = {
   originalContent: "원본",
-  originalUpdatedAt: "2026-07-05T00:00:00.000Z",
+  originalContentHash: CONTENT_HASH,
   userAnswer: "저장된 답안",
   reviewLogId: REVIEW_LOG_ID,
   grading: RESTORED_GRADING,
+  basisContentChanged: false,
 };
 
 function mockComparisonState() {
@@ -91,7 +100,7 @@ function mockComparisonState() {
     {
       success: true,
       originalContent: "원본",
-      originalUpdatedAt: "2026-07-05T00:00:00.000Z",
+      originalContentHash: CONTENT_HASH,
       userAnswer: "답안",
       reviewLogId: "22222222-2222-4222-8222-222222222222",
     },
@@ -175,9 +184,31 @@ describe("BlankTestPage", () => {
     const gradingPanel = screen.getByTestId("grading-panel");
     expect(gradingPanel).toHaveAttribute("data-initial-score", "72");
     expect(gradingPanel).toHaveAttribute("data-user-answer", "저장된 답안");
+    expect(gradingPanel).toHaveAttribute("data-content-hash", CONTENT_HASH);
+    expect(gradingPanel).toHaveAttribute("data-basis-changed", "false");
     expect(
       screen.getByRole("button", { name: "review-complete" }),
     ).toHaveAttribute("data-review-log-id", REVIEW_LOG_ID);
+  });
+
+  // 채점 이후 노트를 고친 경우. 화면의 원본과 채점 기준이 다르다는 사실이 전달돼야 한다.
+  it("forwards the changed grading basis to the grading panel", () => {
+    useActionStateMock.mockReturnValue([null, vi.fn(), false]);
+
+    render(
+      <BlankTestPage
+        alreadyCompletedToday={false}
+        noteId={NOTE_ID}
+        noteTitle="테스트 노트"
+        restoredSession={{ ...RESTORED_SESSION, basisContentChanged: true }}
+        reviewRound={1}
+      />,
+    );
+
+    expect(screen.getByTestId("grading-panel")).toHaveAttribute(
+      "data-basis-changed",
+      "true",
+    );
   });
 
   it("returns to the blank editor when the user chooses to rewrite the answer", async () => {
