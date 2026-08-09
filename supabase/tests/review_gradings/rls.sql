@@ -4,12 +4,15 @@
 
 BEGIN;
 
-SELECT plan(12);
+SELECT plan(14);
 
 -- 테스트용 UUID 준비
 SELECT set_config('test.rg_rls_user_a_id', gen_random_uuid()::text, true);
 SELECT set_config('test.rg_rls_user_b_id', gen_random_uuid()::text, true);
 SELECT set_config('test.rg_rls_note_a_id', gen_random_uuid()::text, true);
+-- review_logs_one_pending_per_note_idx가 노트당 pending 로그를 1건으로 제한하므로
+-- user_a의 두 번째 복습 로그는 별도 노트에 붙인다.
+SELECT set_config('test.rg_rls_note_a2_id', gen_random_uuid()::text, true);
 SELECT set_config('test.rg_rls_note_b_id', gen_random_uuid()::text, true);
 SELECT set_config('test.rg_rls_log_a_id', gen_random_uuid()::text, true);
 SELECT set_config('test.rg_rls_log_a2_id', gen_random_uuid()::text, true);
@@ -68,6 +71,13 @@ VALUES
     0
   ),
   (
+    current_setting('test.rg_rls_note_a2_id')::uuid,
+    current_setting('test.rg_rls_user_a_id')::uuid,
+    'note a2',
+    'content a2',
+    0
+  ),
+  (
     current_setting('test.rg_rls_note_b_id')::uuid,
     current_setting('test.rg_rls_user_b_id')::uuid,
     'note b',
@@ -87,7 +97,7 @@ VALUES
   ),
   (
     current_setting('test.rg_rls_log_a2_id')::uuid,
-    current_setting('test.rg_rls_note_a_id')::uuid,
+    current_setting('test.rg_rls_note_a2_id')::uuid,
     current_setting('test.rg_rls_user_a_id')::uuid,
     2,
     now()
@@ -213,7 +223,8 @@ SELECT is(
   $$user_a로 인증 후 user_b의 채점 결과를 확정할 수 없어야 한다$$
 );
 
--- 잘못된 구조의 feedback으로는 확정할 수 없어야 한다
+-- 필수 키가 없는 feedback으로는 확정할 수 없어야 한다
+-- (키가 없으면 jsonb_typeof가 NULL을 반환해 조건이 NULL로 떨어지는 것을 IS NOT TRUE로 잡는다)
 SELECT throws_ok(
   format(
     $sql$SELECT public.finalize_review_grading('%s'::uuid, 50, '{}'::jsonb);$sql$,
@@ -221,7 +232,41 @@ SELECT throws_ok(
   ),
   '22023',
   NULL,
-  $$잘못된 구조의 feedback으로는 확정할 수 없어야 한다$$
+  $$필수 키가 없는 feedback으로는 확정할 수 없어야 한다$$
+);
+
+-- summary 타입이 틀린 feedback으로는 확정할 수 없어야 한다
+SELECT throws_ok(
+  format(
+    $sql$
+      SELECT public.finalize_review_grading(
+        '%s'::uuid,
+        50,
+        '{"summary":1,"missedConcepts":[],"incorrectPoints":[]}'::jsonb
+      );
+    $sql$,
+    current_setting('test.rg_rls_log_a_id')
+  ),
+  '22023',
+  NULL,
+  $$summary 타입이 틀린 feedback으로는 확정할 수 없어야 한다$$
+);
+
+-- 배열 원소가 문자열이 아닌 feedback으로는 확정할 수 없어야 한다
+SELECT throws_ok(
+  format(
+    $sql$
+      SELECT public.finalize_review_grading(
+        '%s'::uuid,
+        50,
+        '{"summary":"s","missedConcepts":[1],"incorrectPoints":[]}'::jsonb
+      );
+    $sql$,
+    current_setting('test.rg_rls_log_a_id')
+  ),
+  '22023',
+  NULL,
+  $$배열 원소가 문자열이 아닌 feedback으로는 확정할 수 없어야 한다$$
 );
 
 -- 채점 결과를 클라이언트가 직접 INSERT할 수 없어야 한다 (INSERT 정책 없음)
@@ -232,7 +277,7 @@ SELECT throws_ok(
       VALUES ('%s'::uuid, '%s'::uuid, '%s'::uuid, 2, 'direct', 100, '{"summary":"s","missedConcepts":[],"incorrectPoints":[]}'::jsonb);
     $sql$,
     current_setting('test.rg_rls_log_a2_id'),
-    current_setting('test.rg_rls_note_a_id'),
+    current_setting('test.rg_rls_note_a2_id'),
     current_setting('test.rg_rls_user_a_id')
   ),
   '42501',

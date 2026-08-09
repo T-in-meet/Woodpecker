@@ -45,6 +45,14 @@ alter table public.review_gradings
   );
 
 -- feedback JSON 구조를 DB에서도 검증한다. 앱 Zod 스키마(gradingFeedbackSchema)와 같은 모양이다.
+--
+-- 조건 전체를 IS TRUE로 감싸는 것이 핵심이다.
+-- 키가 없으면 `feedback -> 'summary'`가 SQL NULL이 되고 jsonb_typeof(NULL)도 NULL이라
+-- AND 체인 전체가 NULL로 떨어지는데, CHECK 제약은 결과가 FALSE일 때만 거부하고
+-- NULL은 통과시킨다. IS TRUE가 없으면 feedback = '{}'가 그대로 저장된다.
+--
+-- 원소 타입은 jsonpath로 본다. CHECK 제약 안에서는 서브쿼리가 금지라
+-- jsonb_array_elements를 쓸 수 없다. jsonb_typeof만으로는 missedConcepts: [1]이 통과한다.
 alter table public.review_gradings
   add constraint review_gradings_feedback_shape_check check (
     feedback is null
@@ -53,7 +61,9 @@ alter table public.review_gradings
       and jsonb_typeof(feedback -> 'summary') = 'string'
       and jsonb_typeof(feedback -> 'missedConcepts') = 'array'
       and jsonb_typeof(feedback -> 'incorrectPoints') = 'array'
-    )
+      and not jsonb_path_exists(feedback, '$.missedConcepts[*] ? (@.type() != "string")')
+      and not jsonb_path_exists(feedback, '$.incorrectPoints[*] ? (@.type() != "string")')
+    ) is true
   );
 
 -- --------------------------------------------------------------------------
@@ -207,11 +217,18 @@ begin
     raise exception 'invalid score' using errcode = '22023';
   end if;
 
+  -- 위 CHECK 제약과 같은 조건을 뒤집은 것이다.
+  -- OR 체인으로 쓰면 키가 없을 때 NULL이 섞여 IF 본문이 실행되지 않으므로
+  -- 긍정형으로 조립한 뒤 IS NOT TRUE로 판정한다.
   if p_feedback is null
-    or jsonb_typeof(p_feedback) <> 'object'
-    or jsonb_typeof(p_feedback -> 'summary') <> 'string'
-    or jsonb_typeof(p_feedback -> 'missedConcepts') <> 'array'
-    or jsonb_typeof(p_feedback -> 'incorrectPoints') <> 'array'
+    or (
+      jsonb_typeof(p_feedback) = 'object'
+      and jsonb_typeof(p_feedback -> 'summary') = 'string'
+      and jsonb_typeof(p_feedback -> 'missedConcepts') = 'array'
+      and jsonb_typeof(p_feedback -> 'incorrectPoints') = 'array'
+      and not jsonb_path_exists(p_feedback, '$.missedConcepts[*] ? (@.type() != "string")')
+      and not jsonb_path_exists(p_feedback, '$.incorrectPoints[*] ? (@.type() != "string")')
+    ) is not true
   then
     raise exception 'invalid feedback' using errcode = '22023';
   end if;
