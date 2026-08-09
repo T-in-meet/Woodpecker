@@ -10,6 +10,7 @@ import {
   ROUTES,
 } from "@/lib/constants/routes";
 import { getGemini } from "@/lib/gemini/client";
+import { toGeminiResponseSchema } from "@/lib/gemini/responseSchema";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/types/database.types";
@@ -82,6 +83,17 @@ export type GradeAnswerActionState =
  * 순서: 이 값 < maxDuration < claim_review_grading의 stale window.
  */
 const GEMINI_TIMEOUT_MS = 45_000;
+
+/**
+ * 채점 응답 구조를 디코딩 단계에서 강제한다. 검증은 그대로 Zod가 맡고,
+ * 이건 형식 이탈 자체를 줄이는 첫 번째 방어선이다.
+ * 파싱에 실패하면 사용자는 에러를 받고 선점이 풀릴 때까지 기다려야 하므로 실패를 줄이는 값이 크다.
+ *
+ * 퀴즈는 유형별로 스키마가 달라 호출마다 변환하지만 채점은 하나로 고정이라 한 번만 만든다.
+ */
+const GRADING_RESPONSE_JSON_SCHEMA = toGeminiResponseSchema(
+  gradingResponseSchema,
+);
 
 // claim_review_grading은 상태와 선점 토큰을 jsonb로 돌려준다.
 const claimResultSchema = z.object({
@@ -382,6 +394,7 @@ export async function gradeAnswerAction(
       contents: prompt,
       config: {
         responseMimeType: "application/json",
+        responseJsonSchema: GRADING_RESPONSE_JSON_SCHEMA,
         abortSignal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
       },
     });

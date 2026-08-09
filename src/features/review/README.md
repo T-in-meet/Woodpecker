@@ -18,7 +18,7 @@
    - 세션/이메일 인증/소유권 + `pendingReviewLog.id === reviewLogId` 일치 확인
    - 복습 1회당 채점 1회: `review_gradings`에 기존 채점이 있으면 Gemini 호출 없이 재사용. 저장된 `user_answer`가 지금 답안과 다르면 결과와 함께 `gradedOtherAnswer: true`를 돌려 화면에서 기준이 다르다고 알린다
    - 기존 채점이 없으면 **Gemini 호출 전에** `claim_review_grading` RPC로 채점 권한을 원자적으로 선점 (아래 "동시 요청과 비용 통제" 참고)
-   - Gemini(`gemini-3.1-flash-lite`)로 회상률 점수(0~100)·빠뜨린 개념·잘못 기억한 내용을 JSON으로 받아 Zod 검증 후 `finalize_review_grading` RPC로 저장
+   - Gemini(`gemini-3.1-flash-lite`)로 회상률 점수(0~100)·빠뜨린 개념·잘못 기억한 내용을 JSON으로 받아 Zod 검증 후 `finalize_review_grading` RPC로 저장. 응답 구조는 `responseJsonSchema`(퀴즈와 같은 `toGeminiResponseSchema`)로 디코딩 단계에서 한 번 더 강제한다 — 형식 이탈은 곧 사용자 에러 + 선점이 풀릴 때까지의 대기이기 때문이다
    - 저장에 실패하면 결과를 보여주지 않고 에러를 반환한다. 저장되지 않은 행은 `score = NULL`이라 새로고침하면 사라지고 기록에도 남지 않으므로, 성공으로 보여주면 화면과 DB가 어긋난다
    - 채점은 부가 기능: 채점 실패/저장 실패가 복습 완료를 막지 않으며, 점수는 스케줄링(1/3/7일 고정)에 개입하지 않는다
    - 저장된 채점 기록은 노트 상세 페이지의 `GradingHistorySection`에서 회차별로 조회

@@ -308,6 +308,29 @@ describe("gradeAnswerAction", () => {
     expect(revalidatePathMock).toHaveBeenCalledWith(`/notes/${NOTE_ID}`);
   });
 
+  // 형식 이탈은 곧 사용자 에러 + 선점이 풀릴 때까지의 대기다. 디코딩 단계에서 먼저 막는다
+  it("constrains the Gemini response with a JSON schema", async () => {
+    setupSupabase();
+    mockHappyPathQueries();
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify(VALID_GRADING_RESPONSE),
+    });
+
+    await gradeAnswerAction(null, createFormData());
+
+    const config = generateContentMock.mock.calls[0]?.[0]?.config;
+
+    expect(config?.responseJsonSchema).toMatchObject({
+      type: "object",
+      properties: {
+        score: expect.objectContaining({ minimum: 0, maximum: 100 }),
+        summary: expect.objectContaining({ type: "string" }),
+        missedConcepts: expect.objectContaining({ type: "array" }),
+        incorrectPoints: expect.objectContaining({ type: "array" }),
+      },
+    });
+  });
+
   // 선점 만료(60초)보다 먼저 끊겨야 같은 채점에 Gemini를 두 번 부르지 않는다
   it("aborts the Gemini call before the claim goes stale", async () => {
     setupSupabase();
