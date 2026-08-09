@@ -65,23 +65,18 @@ export function NoteChatQuestionEditDialog({
       return;
     }
 
-    setIsUpdating(true);
-    setUpdateError(null);
+    const targetMessage = message;
+
+    onClose();
 
     try {
       await onUpdateQuestion({
-        messageId: message.id,
+        messageId: targetMessage.id,
         question: nextQuestion,
-        sequenceNumber: message.sequenceNumber,
+        sequenceNumber: targetMessage.sequenceNumber,
       });
-
-      onClose();
-    } catch (error) {
-      setUpdateError(
-        error instanceof Error ? error.message : "질문 수정에 실패했습니다.",
-      );
-    } finally {
-      setIsUpdating(false);
+    } catch {
+      // 수정 실행 오류는 Conversation 화면의 스트림 오류로 표시합니다.
     }
   };
 
