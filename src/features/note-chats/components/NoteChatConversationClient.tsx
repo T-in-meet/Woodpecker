@@ -3,6 +3,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 
+import { NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE } from "../constants/execution";
 import { noteChatQueryKeys } from "../constants/query-keys";
 import { useNoteChatConversationDetailQuery } from "../hooks/use-note-chat-conversation-query";
 import { useNoteChatStream } from "../hooks/use-note-chat-stream";
@@ -56,6 +57,7 @@ export function NoteChatConversationClient({
     cancel,
     content: streamingContent,
     error: streamError,
+    errorCode: streamErrorCode,
     isStreaming,
     reset,
     start,
@@ -103,6 +105,14 @@ export function NoteChatConversationClient({
 
     if (result.success) {
       reset();
+      return;
+    }
+
+    /*
+     * 일일 실행 횟수를 모두 사용한 경우에는 실제 Run이 생성되지 않으므로
+     * 동일 질문을 다시 실행할 수 있는 재시도 대상으로 만들지 않습니다.
+     */
+    if (result.errorCode === NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE) {
       return;
     }
 
@@ -168,6 +178,14 @@ export function NoteChatConversationClient({
       return;
     }
 
+    /*
+     * 일일 실행 횟수 초과는 재시도로 해결할 수 없으므로
+     * 실패 질문으로 등록하지 않습니다.
+     */
+    if (result.errorCode === NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE) {
+      return;
+    }
+
     if (result.userMessageId) {
       setFailedQuestion({
         messageId: result.userMessageId,
@@ -207,6 +225,15 @@ export function NoteChatConversationClient({
       setFailedQuestion(null);
       setRetryCount(0);
       reset();
+      return;
+    }
+
+    /*
+     * 재시도 과정에서 일일 실행 횟수에 도달한 경우
+     * 더 이상 재시도할 수 있는 상태로 유지하지 않습니다.
+     */
+    if (result.errorCode === NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE) {
+      setFailedQuestion(null);
       return;
     }
 
@@ -294,6 +321,7 @@ export function NoteChatConversationClient({
               pendingQuestion={pendingQuestion}
               streamingContent={streamingContent}
               streamError={streamError}
+              streamErrorCode={streamErrorCode}
               isStreaming={isStreaming}
               canRetry={failedQuestion !== null && retryCount < 2}
               retryCount={retryCount}

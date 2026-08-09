@@ -15,6 +15,7 @@ type NoteChatConversationContentProps = {
   pendingQuestion: string | null;
   streamingContent: string;
   streamError: string | null;
+  streamErrorCode: string | null;
   isStreaming: boolean;
   canRetry: boolean;
   retryCount: number;
@@ -39,6 +40,7 @@ type NoteChatConversationContentProps = {
  * @param props.messages 화면에 표시할 Conversation 메시지 목록
  * @param props.pendingQuestion 아직 Query에 반영되지 않은 현재 사용자 질문
  * @param props.streamingContent 현재까지 수신한 Assistant 답변 내용
+ * @param props.streamErrorCode 현재 스트리밍 요청의 구분 가능한 오류 코드
  * @param props.streamError 현재 스트리밍 오류
  * @param props.isStreaming 답변 생성 진행 여부
  * @param props.canRetry 실패한 답변을 다시 실행할 수 있는지 여부
@@ -58,6 +60,7 @@ export function NoteChatConversationContent({
   pendingQuestion,
   streamingContent,
   streamError,
+  streamErrorCode,
   isStreaming,
   canRetry,
   retryCount,
@@ -87,6 +90,7 @@ export function NoteChatConversationContent({
           pendingQuestion={pendingQuestion}
           streamingContent={streamingContent}
           streamError={streamError}
+          streamErrorCode={streamErrorCode}
           isStreaming={isStreaming}
           canRetry={canRetry}
           retryCount={retryCount}

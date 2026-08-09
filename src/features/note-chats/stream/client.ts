@@ -19,12 +19,14 @@ type StreamNoteChatOptions = {
 };
 
 export class NoteChatStreamRequestError extends Error {
+  readonly code: string | null;
   readonly status: number;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, code: string | null = null) {
     super(message);
 
     this.name = "NoteChatStreamRequestError";
+    this.code = code;
     this.status = status;
   }
 }
@@ -140,23 +142,32 @@ function parseNoteChatStreamEvent(line: string): NoteChatStreamEvent {
 
 /**
  * 실패 HTTP 응답을 사용자 표시 가능한 요청 오류로 변환합니다.
+ *
+ * Route에서 오류 코드를 함께 반환한 경우
+ * 사용자 UX에서 오류 유형을 구분할 수 있도록 보존합니다.
  */
 async function createNoteChatStreamRequestError(
   response: Response,
 ): Promise<NoteChatStreamRequestError> {
   let message = `노트 챗봇 요청에 실패했습니다. (${response.status})`;
+  let code: string | null = null;
 
   try {
     const body = (await response.json()) as {
+      code?: unknown;
       error?: unknown;
     };
 
     if (typeof body.error === "string" && body.error.length > 0) {
       message = body.error;
     }
+
+    if (typeof body.code === "string" && body.code.length > 0) {
+      code = body.code;
+    }
   } catch {
     // JSON 오류 본문이 아니면 기본 메시지를 사용합니다.
   }
 
-  return new NoteChatStreamRequestError(message, response.status);
+  return new NoteChatStreamRequestError(message, response.status, code);
 }

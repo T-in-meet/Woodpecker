@@ -4,9 +4,13 @@ import { createAiEmbeddingWithProvider } from "@/features/ai/providers";
 import { getProviderApiKey } from "@/features/ai/providers/utils/api-key";
 import type { AiRuntimeEmbeddingConfiguration } from "@/features/ai/runtimes/types";
 
+import {
+  NOTE_CHAT_MATCH_LIMIT,
+  NOTE_CHAT_MIN_SIMILARITY,
+} from "../constants/execution";
+
 const NOTE_CHAT_EMBEDDING_INPUT_KIND = "rag_note_content";
 const NOTE_CHAT_EMBEDDING_SOURCE_TYPE = "note";
-const NOTE_CHAT_MATCH_LIMIT = 5;
 
 /**
  * 노트 챗봇의 Note Embedding 검색 입력입니다.
@@ -58,6 +62,7 @@ export async function searchNoteChatEmbeddings({
   return matchAiEmbeddings({
     inputKind: NOTE_CHAT_EMBEDDING_INPUT_KIND,
     limit: NOTE_CHAT_MATCH_LIMIT,
+    minSimilarity: NOTE_CHAT_MIN_SIMILARITY,
     modelConfigId: embeddingModel.id,
     ownerUserId,
     queryEmbedding: queryEmbedding.embedding,

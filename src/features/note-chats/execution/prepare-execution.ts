@@ -6,6 +6,7 @@ import type {
 } from "@/features/ai/runtimes/types";
 import type { Json } from "@/types/db.helpers";
 
+import { NOTE_CHAT_CONTEXT_LIMIT } from "../constants/execution";
 import { getNoteChatConversationDetail } from "../queries";
 import { noteChatUserMessageContentSchema } from "../schema";
 import type { NoteChatConversation } from "../types";
@@ -120,16 +121,22 @@ export async function prepareNoteChatExecution(
     ownerUserId: detail.conversation.user_id,
   });
 
+  /*
+   * 검색 후보 중 유사도가 높은 순서대로
+   * 실제 Prompt Context에 사용할 노트만 선택합니다.
+   */
+  const contextNotes = matchedNotes.slice(0, NOTE_CHAT_CONTEXT_LIMIT);
+
   // TODO: 검색된 노트가 없는 경우 Chat Provider를 호출하지 않고,
   // 서버에서 고정된 안내 답변을 생성하여 Run을 성공 처리하는 경로를 추가한다.
   // 불필요한 LLM 호출과 토큰 사용을 방지하고,
   // Context 없이 일반 지식으로 답변하는 동작도 차단한다.
 
   const context = buildNoteChatContext({
-    notes: matchedNotes,
+    notes: contextNotes,
   });
 
-  const sources = buildNoteChatSources(matchedNotes);
+  const sources = buildNoteChatSources(contextNotes);
 
   const messages = resolveNoteChatExecutionMessages({
     context,

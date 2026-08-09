@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 
 import {
+  NoteChatStreamRequestError,
   streamNoteChatQuestion,
   type StreamNoteChatQuestionInput,
   streamNoteChatUserMessageUpdate,
@@ -34,6 +35,9 @@ export type NoteChatStreamingState = {
 
   /** 현재 실행을 발생시킨 사용자 메시지 ID입니다. */
   userMessageId: string | null;
+
+  /** 스트리밍 요청에서 발생한 구분 가능한 오류 코드입니다. */
+  errorCode: string | null;
 };
 
 /**
@@ -45,6 +49,9 @@ export type NoteChatStreamExecutionResult = {
 
   /** 현재 실행을 발생시킨 사용자 메시지 ID입니다. */
   userMessageId: string | null;
+
+  /** 실행 실패 시 서버에서 반환한 구분 가능한 오류 코드입니다. */
+  errorCode: string | null;
 };
 
 /**
@@ -75,6 +82,7 @@ export function useNoteChatStream() {
     assistantMessageId: null,
     content: "",
     error: null,
+    errorCode: null,
     isStreaming: false,
     runId: null,
     usedNoteIds: [],
@@ -105,6 +113,7 @@ export function useNoteChatStream() {
       assistantMessageId: null,
       content: "",
       error: null,
+      errorCode: null,
       isStreaming: false,
       runId: null,
       usedNoteIds: [],
@@ -149,6 +158,7 @@ export function useNoteChatStream() {
         setState((current) => ({
           ...current,
           error: event.message,
+          errorCode: null,
           isStreaming: false,
           runId: event.runId,
         }));
@@ -173,6 +183,7 @@ export function useNoteChatStream() {
         assistantMessageId: null,
         content: "",
         error: null,
+        errorCode: null,
         isStreaming: true,
         runId: null,
         usedNoteIds: [],
@@ -207,14 +218,19 @@ export function useNoteChatStream() {
         return {
           success: succeeded,
           userMessageId: currentUserMessageId,
+          errorCode: null,
         };
       } catch (error) {
         if (abortController.signal.aborted) {
           return {
             success: false,
             userMessageId: currentUserMessageId,
+            errorCode: null,
           };
         }
+
+        const errorCode =
+          error instanceof NoteChatStreamRequestError ? error.code : null;
 
         setState((current) => ({
           ...current,
@@ -222,12 +238,14 @@ export function useNoteChatStream() {
             error instanceof Error
               ? error.message
               : "답변 생성 중 오류가 발생했습니다.",
+          errorCode,
           isStreaming: false,
         }));
 
         return {
           success: false,
           userMessageId: currentUserMessageId,
+          errorCode,
         };
       } finally {
         if (abortControllerRef.current === abortController) {
@@ -261,6 +279,7 @@ export function useNoteChatStream() {
         assistantMessageId: null,
         content: "",
         error: null,
+        errorCode: null,
         isStreaming: true,
         runId: null,
         usedNoteIds: [],
@@ -298,14 +317,19 @@ export function useNoteChatStream() {
         return {
           success: succeeded,
           userMessageId: currentUserMessageId,
+          errorCode: null,
         };
       } catch (error) {
         if (abortController.signal.aborted) {
           return {
             success: false,
             userMessageId: currentUserMessageId,
+            errorCode: null,
           };
         }
+
+        const errorCode =
+          error instanceof NoteChatStreamRequestError ? error.code : null;
 
         setState((current) => ({
           ...current,
@@ -313,12 +337,14 @@ export function useNoteChatStream() {
             error instanceof Error
               ? error.message
               : "질문 수정 후 답변 생성 중 오류가 발생했습니다.",
+          errorCode,
           isStreaming: false,
         }));
 
         return {
           success: false,
           userMessageId: currentUserMessageId,
+          errorCode,
         };
       } finally {
         if (abortControllerRef.current === abortController) {

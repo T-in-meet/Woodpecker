@@ -8,6 +8,8 @@ import {
   NOTE_CHAT_AI_FEATURE_KEY,
   NOTE_CHAT_AI_ROLE_KEY,
 } from "@/features/note-chats/constants/ai";
+import { NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE } from "@/features/note-chats/constants/execution";
+import { assertNoteChatDailyExecutionLimit } from "@/features/note-chats/execution/assert-daily-execution-limit";
 import { createNoteChatQuestionInputSchema } from "@/features/note-chats/schema";
 import { runNoteChatStream } from "@/features/note-chats/stream/run-note-chat-stream";
 import { encodeNoteChatStreamEvent } from "@/features/note-chats/stream/serialize";
@@ -80,6 +82,42 @@ export async function POST(request: Request): Promise<Response> {
       },
       {
         status: 403,
+      },
+    );
+  }
+
+  /*
+   * Note Chat의 일일 AI 실행 횟수를 제한합니다.
+   *
+   * 실제 Run을 생성하기 전에 검사하여 일일 사용량을 모두 사용한 경우
+   * 새로운 AI 실행을 시작하지 않습니다.
+   */
+  try {
+    await assertNoteChatDailyExecutionLimit(user.id);
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE
+    ) {
+      return NextResponse.json(
+        {
+          code: NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE,
+          error: "오늘 사용할 수 있는 노트 챗봇 횟수를 모두 사용했습니다.",
+        },
+        {
+          status: 429,
+        },
+      );
+    }
+
+    console.error("Failed to check note chat daily execution limit", error);
+
+    return NextResponse.json(
+      {
+        error: "노트 챗봇 사용량을 확인하지 못했습니다.",
+      },
+      {
+        status: 500,
       },
     );
   }

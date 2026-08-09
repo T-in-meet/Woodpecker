@@ -4,12 +4,14 @@ import { useState } from "react";
 
 import { AI_CHAT_MESSAGE_ROLE } from "@/features/ai/chats/constants";
 
+import { NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE } from "../constants/execution";
 import {
   noteChatAssistantMessageContentSchema,
   noteChatUserMessageContentSchema,
 } from "../schema";
 import type { NoteChatAssistantSources, NoteChatMessage } from "../types";
 import { NoteChatAssistantMessage } from "./NoteChatAssistantMessage";
+import { NoteChatDailyExecutionLimitError } from "./NoteChatDailyExecutionLimitError";
 import { NoteChatEmptyState } from "./NoteChatEmptyState";
 import { NoteChatQuestionEditDialog } from "./NoteChatQuestionEditDialog";
 import { NoteChatStreamError } from "./NoteChatStreamError";
@@ -29,6 +31,9 @@ type NoteChatMessageListProps = {
 
   /** 현재 스트리밍 오류입니다. */
   streamError?: string | null;
+
+  /** 현재 스트리밍 요청의 구분 가능한 오류 코드입니다. */
+  streamErrorCode?: string | null;
 
   /** 답변 생성이 진행 중인지 여부입니다. */
   isStreaming?: boolean;
@@ -65,6 +70,7 @@ type EditingMessage = {
  * @param props.pendingQuestion 아직 Query에 반영되지 않은 현재 사용자 질문
  * @param props.streamingContent 현재까지 수신한 Assistant 답변 내용
  * @param props.streamError 현재 스트리밍 오류
+ * @param props.streamErrorCode 현재 스트리밍 요청의 구분 가능한 오류 코드
  * @param props.isStreaming 답변 생성 진행 여부
  * @param props.canRetry 실패한 답변을 다시 실행할 수 있는지 여부
  * @param props.retryCount 현재 질문의 재시도 횟수
@@ -78,6 +84,7 @@ export function NoteChatMessageList({
   pendingQuestion = null,
   streamingContent = "",
   streamError = null,
+  streamErrorCode = null,
   isStreaming = false,
   canRetry = false,
   retryCount = 0,
@@ -101,6 +108,9 @@ export function NoteChatMessageList({
   if (messages.length === 0 && !hasTransientMessage) {
     return <NoteChatEmptyState />;
   }
+
+  const isDailyExecutionLimitExceeded =
+    streamErrorCode === NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE;
 
   return (
     <>
@@ -163,12 +173,16 @@ export function NoteChatMessageList({
         />
 
         {streamError ? (
-          <NoteChatStreamError
-            retryCount={retryCount}
-            canRetry={canRetry}
-            isStreaming={isStreaming}
-            {...(onRetry ? { onRetry } : {})}
-          />
+          isDailyExecutionLimitExceeded ? (
+            <NoteChatDailyExecutionLimitError />
+          ) : (
+            <NoteChatStreamError
+              retryCount={retryCount}
+              canRetry={canRetry}
+              isStreaming={isStreaming}
+              {...(onRetry ? { onRetry } : {})}
+            />
+          )
         ) : null}
       </ul>
 
