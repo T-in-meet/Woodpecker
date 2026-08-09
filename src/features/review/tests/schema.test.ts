@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
 
+import { toGeminiResponseSchema } from "@/lib/gemini/responseSchema";
+
 import {
   completeReviewSchema,
+  FEEDBACK_ITEMS_MAX,
   gradeAnswerSchema,
+  gradingGenerationSchema,
   gradingResponseSchema,
+  normalizeGradingResponse,
   submitAnswerSchema,
 } from "../schema";
 
@@ -158,5 +163,105 @@ describe("gradingResponseSchema", () => {
     });
 
     expect(parsed.success).toBe(false);
+  });
+
+  // 개수 초과로 채점 전체를 버리면 하루 한도 1회가 영구 소모되고 60초간 재시도가 막힌다.
+  // 항목 하나 때문에 치를 값이 아니라 수신은 관대하게 두고 정규화로 맞춘다.
+  it("accepts more feedback items than the limit", () => {
+    const parsed = gradingResponseSchema.safeParse({
+      score: 85,
+      summary: "총평",
+      missedConcepts: Array.from(
+        { length: FEEDBACK_ITEMS_MAX + 1 },
+        (_, index) => `개념 ${index}`,
+      ),
+      incorrectPoints: [],
+    });
+
+    expect(parsed.success).toBe(true);
+  });
+
+  it("still rejects non-string feedback items", () => {
+    const parsed = gradingResponseSchema.safeParse({
+      score: 85,
+      summary: "총평",
+      missedConcepts: ["개념 A", 42],
+      incorrectPoints: [],
+    });
+
+    expect(parsed.success).toBe(false);
+  });
+});
+
+describe("gradingGenerationSchema", () => {
+  it("rejects more feedback items than the limit", () => {
+    const overLimit = Array.from(
+      { length: FEEDBACK_ITEMS_MAX + 1 },
+      (_, index) => `개념 ${index}`,
+    );
+
+    expect(
+      gradingGenerationSchema.safeParse({
+        score: 85,
+        summary: "총평",
+        missedConcepts: overLimit,
+        incorrectPoints: [],
+      }).success,
+    ).toBe(false);
+    expect(
+      gradingGenerationSchema.safeParse({
+        score: 85,
+        summary: "총평",
+        missedConcepts: [],
+        incorrectPoints: overLimit,
+      }).success,
+    ).toBe(false);
+  });
+
+  // 이 스키마의 존재 이유는 Gemini에 넘길 JSON Schema에 maxItems를 싣는 것이다.
+  // 변환 과정에서 빠지면 생성 단계 강제가 사라지고 정규화만 남는다.
+  it("carries maxItems into the Gemini response schema", () => {
+    const jsonSchema = toGeminiResponseSchema(gradingGenerationSchema);
+
+    expect(jsonSchema).toMatchObject({
+      properties: {
+        missedConcepts: { maxItems: FEEDBACK_ITEMS_MAX },
+        incorrectPoints: { maxItems: FEEDBACK_ITEMS_MAX },
+      },
+    });
+  });
+});
+
+describe("normalizeGradingResponse", () => {
+  it("truncates both feedback arrays to the limit", () => {
+    const overLimit = Array.from(
+      { length: FEEDBACK_ITEMS_MAX + 3 },
+      (_, index) => `항목 ${index}`,
+    );
+
+    const normalized = normalizeGradingResponse({
+      score: 85,
+      summary: "총평",
+      missedConcepts: overLimit,
+      incorrectPoints: overLimit,
+    });
+
+    expect(normalized.missedConcepts).toEqual(
+      overLimit.slice(0, FEEDBACK_ITEMS_MAX),
+    );
+    expect(normalized.incorrectPoints).toEqual(
+      overLimit.slice(0, FEEDBACK_ITEMS_MAX),
+    );
+  });
+
+  it("leaves responses within the limit untouched", () => {
+    const response = {
+      score: 85,
+      summary: "총평",
+      missedConcepts: ["개념 A"],
+      incorrectPoints: [],
+    };
+
+    expect(normalizeGradingResponse(response)).toEqual(response);
   });
 });

@@ -194,6 +194,28 @@ DELETE 정책도 같은 이유로 없앴다(삭제 후 재채점 반복).
   이 순서를 지키는 한 두 함수 사이에 교착이 생기지 않는다.
 - 사용자 문구는 `constants.ts`의 `GRADING_ERROR_MESSAGES`에 있다. 한도 값은 여기 적지 않는다.
 
+#### 피드백 항목 개수 (생성은 엄격하게, 수신은 관대하게)
+
+프롬프트가 `missedConcepts`·`incorrectPoints`를 최대 `FEEDBACK_ITEMS_MAX`(5)개로 요청한다.
+이 상한을 지키는 층이 셋이고 역할이 다르다.
+
+1. **생성** — `gradingGenerationSchema`(`.max()`)를 `toGeminiResponseSchema`에 넘겨
+   `responseJsonSchema`에 `maxItems: 5`를 싣는다. Gemini가 문서상 지원하는 제약이라 여기서 끝나는 게 정상이다.
+2. **수신** — `gradingResponseSchema`는 개수를 **제한하지 않는다.** 타입 검증(문자열 배열)만 한다.
+3. **정규화** — 파싱에 성공한 값을 `normalizeGradingResponse`가 `slice(0, 5)`로 자른 뒤 저장·표시한다.
+
+2번이 관대한 이유는 실패 비용의 비대칭이다. 개수 초과로 응답 전체를 거부하면
+`review_grading_generations` 행이 이미 선점 시점에 들어가 있고 되돌리는 함수가 없으므로 **하루 한도
+1회가 영구 소모**되고, 선점이 만료될 때까지 60초간 재시도가 막히며, 이미 나간 Gemini 비용은 재시도 때
+다시 든다. 얻는 것은 "항목이 6개 대신 5개로 보인다"뿐이라 값이 맞지 않는다.
+
+`slice`는 은폐가 아니다. 프롬프트가 제품 계약으로 선언한 개수를 집행하는 것이고, 1번이 예외적으로
+깨졌을 때만 동작한다. 반대로 배열에 숫자·객체가 섞인 응답은 2번에서 그대로 거부한다 —
+`unknown`을 먼저 자르면 타입을 확인하지 않은 값을 저장하게 되므로 **검증 → 절단** 순서를 지킨다.
+
+DB CHECK(`review_gradings_feedback_shape_check`)에는 개수 제약을 넣지 않는다.
+기존 행 호환성을 깨고, 신규 저장값은 이미 3번이 보장한다.
+
 ### 이메일 인증
 
 회원가입 플로우에서 magiclink 클릭 전까지 `email_confirmed_at`이 비어 있다. Supabase `User` shape에서는 이 값이 `null` 또는 `undefined`일 수 있으므로, 복습 관련 모든 엔트리포인트(페이지, `submitAnswerAction`, `completeReviewAction`)에서 `email_confirmed_at == null` 기준으로 `/resend-email`로 redirect한다.

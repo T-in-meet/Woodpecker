@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { FEEDBACK_ITEMS_MAX } from "../schema";
 import { buildGradingPrompt } from "./gradingPrompt";
 
 describe("buildGradingPrompt", () => {
@@ -23,5 +24,12 @@ describe("buildGradingPrompt", () => {
 
     expect(prompt).toContain("원본 노트 내용만을 채점 기준");
     expect(prompt).toContain("JSON 형식으로만 응답");
+  });
+
+  // 문구의 개수와 생성 스키마의 maxItems가 갈리면 "요청한 개수"와 "강제하는 개수"가 달라진다.
+  it("states the shared feedback item limit", () => {
+    const prompt = buildGradingPrompt("내용", "답안");
+
+    expect(prompt).toContain(`최대 ${FEEDBACK_ITEMS_MAX}개까지`);
   });
 });

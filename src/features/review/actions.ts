@@ -27,8 +27,10 @@ import {
 import {
   completeReviewSchema,
   gradeAnswerSchema,
+  gradingGenerationSchema,
   type GradingResponse,
   gradingResponseSchema,
+  normalizeGradingResponse,
   type SubmitAnswerInput,
   submitAnswerSchema,
 } from "./schema";
@@ -122,10 +124,13 @@ const MIN_GEMINI_BUDGET_MS = 10_000;
  * 이건 형식 이탈 자체를 줄이는 첫 번째 방어선이다.
  * 파싱에 실패하면 사용자는 에러를 받고 선점이 풀릴 때까지 기다려야 하므로 실패를 줄이는 값이 크다.
  *
+ * 수신 스키마가 아니라 `gradingGenerationSchema`를 넘긴다. 항목 개수 상한(`maxItems`)은
+ * 생성 단계에서 강제할 값이지, 이미 나간 호출의 결과를 버릴 이유는 아니기 때문이다.
+ *
  * 퀴즈는 유형별로 스키마가 달라 호출마다 변환하지만 채점은 하나로 고정이라 한 번만 만든다.
  */
 const GRADING_RESPONSE_JSON_SCHEMA = toGeminiResponseSchema(
-  gradingResponseSchema,
+  gradingGenerationSchema,
 );
 
 // claim_review_grading은 상태와 선점 토큰을 jsonb로 돌려준다.
@@ -536,7 +541,10 @@ export async function gradeAnswerAction(
     return { error: "채점 결과를 처리할 수 없습니다. 다시 시도해주세요." };
   }
 
-  const { score, summary, missedConcepts, incorrectPoints } = grading.data;
+  // 프롬프트와 생성 스키마가 약속한 개수를 넘겼다면 여기서 맞춘다.
+  // 저장 전에 자르지 않으면 UI에도 DB에도 상한을 넘긴 값이 그대로 남는다.
+  const normalized = normalizeGradingResponse(grading.data);
+  const { score, summary, missedConcepts, incorrectPoints } = normalized;
   const feedback: Json = { summary, missedConcepts, incorrectPoints };
 
   const { data: finalizeResult, error: finalizeError } = await admin.rpc(
@@ -582,7 +590,7 @@ export async function gradeAnswerAction(
 
   return {
     success: true,
-    grading: grading.data,
+    grading: normalized,
     gradedOtherAnswer: false,
     gradedAnswer: parsed.data.answer,
     // 방금 이 본문으로 채점했으므로 기준이 갈릴 여지가 없다.
