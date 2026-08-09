@@ -1,6 +1,6 @@
 -- review_gradings 보안·동시성 보강
 --
--- 20260705000000_create_review_gradings_table.sql이 남긴 세 가지 구멍을 닫는다.
+-- 20260808000000_create_review_gradings_table.sql이 남긴 세 가지 구멍을 닫는다.
 --
 --   1. DELETE 정책 — 사용자가 REST로 자기 채점 결과를 지운 뒤 다시 채점을 요청할 수 있었다.
 --      "복습 1회당 채점 1회" 계약이 무력화되고 Gemini 호출도 무제한이 된다.
