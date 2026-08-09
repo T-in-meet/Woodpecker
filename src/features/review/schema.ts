@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+/**
+ * DB의 review_gradings_user_answer_length_check와 같은 값이다.
+ * 바꿀 때 마이그레이션도 함께 올린다.
+ * 답안은 노트 본문과 함께 채점 프롬프트에 그대로 들어가므로 이 값이 곧 호출당 비용 상한이다.
+ */
 export const ANSWER_MAX_LENGTH = 50000;
 
 export const submitAnswerSchema = z.object({
