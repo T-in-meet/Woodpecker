@@ -4,6 +4,7 @@ import { getNoteChatConversationRoute } from "@/lib/constants/routes";
 import { cn } from "@/lib/utils/cn";
 
 import type { NoteChatConversationListItem } from "../types";
+import { NoteChatConversationMenu } from "./NoteChatConversationMenu";
 
 type NoteChatConversationListProps = {
   conversations: NoteChatConversationListItem[];
@@ -24,18 +25,14 @@ export function NoteChatConversationList({
 }: NoteChatConversationListProps) {
   if (conversations.length === 0) {
     return (
-      <div className="px-3 py-8 text-center">
-        <p className="text-sm text-muted-foreground">
-          {isSearching
-            ? "검색 결과가 없습니다."
-            : "아직 생성된 대화가 없습니다."}
-        </p>
-      </div>
+      <p className="px-3 py-4 text-sm text-muted-foreground">
+        {isSearching ? "검색 결과가 없습니다." : "대화가 없습니다."}
+      </p>
     );
   }
 
   return (
-    <ul className="flex list-none flex-col gap-1">
+    <ul className="space-y-1">
       {conversations.map((conversation) => {
         if (!conversation.id) {
           return null;
@@ -47,14 +44,17 @@ export function NoteChatConversationList({
         );
 
         return (
-          <li key={conversation.id}>
+          <li
+            key={conversation.id}
+            className={cn(
+              "flex items-center gap-2 rounded-md transition-colors hover:bg-muted",
+              isSelected && "bg-muted",
+            )}
+          >
             <Link
               href={getNoteChatConversationRoute(conversation.id)}
               aria-current={isSelected ? "page" : undefined}
-              className={cn(
-                "block rounded-md px-3 py-3 transition-colors hover:bg-muted",
-                isSelected && "bg-muted",
-              )}
+              className="min-w-0 flex-1 px-3 py-3"
             >
               <p className="truncate text-sm font-medium">
                 {conversation.title}
@@ -64,6 +64,13 @@ export function NoteChatConversationList({
                 {lastMessage ?? "아직 메시지가 없습니다."}
               </p>
             </Link>
+
+            <div className="shrink-0 pr-2">
+              <NoteChatConversationMenu
+                conversationId={conversation.id}
+                title={conversation.title ?? ""}
+              />
+            </div>
           </li>
         );
       })}

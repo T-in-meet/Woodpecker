@@ -91,13 +91,9 @@ export function NoteChatConversationMenu({
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            aria-label="대화 메뉴"
-          >
+          <Button type="button" variant="ghost" size="icon">
             <MoreHorizontal className="size-4" />
+            <span className="sr-only">대화 메뉴</span>
           </Button>
         </DropdownMenuTrigger>
 
@@ -192,12 +188,9 @@ export function NoteChatConversationMenu({
             </p>
           ) : null}
 
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleteMutation.isPending}>
-              취소
-            </AlertDialogCancel>
-
+          <AlertDialogFooter className="sm:justify-between">
             <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={deleteMutation.isPending}
               onClick={(event) => {
                 event.preventDefault();
@@ -206,6 +199,10 @@ export function NoteChatConversationMenu({
             >
               {deleteMutation.isPending ? "삭제 중..." : "삭제"}
             </AlertDialogAction>
+
+            <AlertDialogCancel autoFocus disabled={deleteMutation.isPending}>
+              취소
+            </AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

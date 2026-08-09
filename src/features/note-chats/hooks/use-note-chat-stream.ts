@@ -80,6 +80,23 @@ export function useNoteChatStream() {
   }, []);
 
   /**
+   * 완료된 스트림의 임시 상태를 초기화합니다.
+   *
+   * Conversation 상세 데이터를 다시 조회한 뒤 호출하여
+   * 스트리밍 중 표시하던 임시 답변을 저장된 메시지로 교체합니다.
+   */
+  const reset = useCallback(() => {
+    setState({
+      assistantMessageId: null,
+      content: "",
+      error: null,
+      isStreaming: false,
+      runId: null,
+      usedNoteIds: [],
+    });
+  }, []);
+
+  /**
    * 서버 스트림 이벤트를 현재 상태에 반영합니다.
    */
   const applyStreamEvent = useCallback((event: NoteChatStreamEvent) => {
@@ -249,6 +266,7 @@ export function useNoteChatStream() {
   return {
     ...state,
     cancel,
+    reset,
     start,
     update,
   };

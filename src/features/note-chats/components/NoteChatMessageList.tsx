@@ -1,18 +1,7 @@
 "use client";
 
-import { Pencil } from "lucide-react";
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
 import { AI_CHAT_MESSAGE_ROLE } from "@/features/ai/chats/constants";
 
 import {
@@ -20,7 +9,9 @@ import {
   noteChatUserMessageContentSchema,
 } from "../schema";
 import type { NoteChatAssistantSources, NoteChatMessage } from "../types";
-import { NoteChatReferenceNotes } from "./NoteChatReferenceNotes";
+import { NoteChatAssistantMessage } from "./NoteChatAssistantMessage";
+import { NoteChatQuestionEditDialog } from "./NoteChatQuestionEditDialog";
+import { NoteChatUserMessage } from "./NoteChatUserMessage";
 
 type NoteChatMessageListProps = {
   assistantSources: NoteChatAssistantSources[];
@@ -47,6 +38,12 @@ type NoteChatMessageListProps = {
   }) => Promise<void>;
 };
 
+type EditingMessage = {
+  id: string;
+  sequenceNumber: number;
+  text: string;
+};
+
 /**
  * 저장된 메시지와 현재 진행 중인 노트 챗봇 메시지를 표시합니다.
  */
@@ -59,15 +56,9 @@ export function NoteChatMessageList({
   isStreaming = false,
   onUpdateQuestion,
 }: NoteChatMessageListProps) {
-  const [editingMessage, setEditingMessage] = useState<{
-    id: string;
-    sequenceNumber: number;
-    text: string;
-  } | null>(null);
-
-  const [editingQuestion, setEditingQuestion] = useState("");
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [editingMessage, setEditingMessage] = useState<EditingMessage | null>(
+    null,
+  );
 
   const sourcesByAssistantMessageId = new Map(
     assistantSources.map((item) => [item.assistantMessageId, item.sources]),
@@ -82,8 +73,8 @@ export function NoteChatMessageList({
   if (messages.length === 0 && !hasTransientMessage) {
     return (
       <div className="flex min-h-80 items-center justify-center px-6 py-12">
-        <div className="max-w-md space-y-3 text-center">
-          <div className="space-y-1">
+        <div className="w-full max-w-lg space-y-6 text-center">
+          <div className="space-y-2">
             <p className="text-lg font-semibold">무엇이 궁금한가요?</p>
 
             <p className="text-sm leading-6 text-muted-foreground">
@@ -106,51 +97,9 @@ export function NoteChatMessageList({
     );
   }
 
-  const handleUpdate = async () => {
-    if (!editingMessage) {
-      return;
-    }
-
-    const question = editingQuestion.trim();
-
-    if (!question || question === editingMessage.text.trim()) {
-      return;
-    }
-
-    setIsUpdating(true);
-    setUpdateError(null);
-
-    try {
-      await onUpdateQuestion({
-        messageId: editingMessage.id,
-        question,
-        sequenceNumber: editingMessage.sequenceNumber,
-      });
-
-      setEditingMessage(null);
-      setEditingQuestion("");
-    } catch (error) {
-      setUpdateError(
-        error instanceof Error ? error.message : "질문 수정에 실패했습니다.",
-      );
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
-  const closeEditDialog = () => {
-    if (isUpdating) {
-      return;
-    }
-
-    setEditingMessage(null);
-    setEditingQuestion("");
-    setUpdateError(null);
-  };
-
   return (
     <>
-      <ul className="flex list-none flex-col gap-6 px-4 py-6 md:px-6">
+      <ul className="space-y-6 px-4 py-6 md:px-6">
         {messages.map((message) => {
           if (message.role === AI_CHAT_MESSAGE_ROLE.USER) {
             const parsed = noteChatUserMessageContentSchema.safeParse(
@@ -162,34 +111,18 @@ export function NoteChatMessageList({
             }
 
             return (
-              <li key={message.id} className="group flex justify-end">
-                <div className="flex max-w-[85%] items-start gap-1 md:max-w-[75%]">
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    className="size-8 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
-                    aria-label="질문 수정"
-                    disabled={isStreaming}
-                    onClick={() => {
-                      setEditingMessage({
-                        id: message.id,
-                        sequenceNumber: message.sequence_number,
-                        text: parsed.data.text,
-                      });
-
-                      setEditingQuestion(parsed.data.text);
-                      setUpdateError(null);
-                    }}
-                  >
-                    <Pencil className="size-3.5" />
-                  </Button>
-
-                  <div className="rounded-2xl rounded-br-sm bg-primary px-4 py-3 text-sm leading-7 text-primary-foreground">
-                    <p className="whitespace-pre-wrap">{parsed.data.text}</p>
-                  </div>
-                </div>
-              </li>
+              <NoteChatUserMessage
+                key={message.id}
+                text={parsed.data.text}
+                isStreaming={isStreaming}
+                onEdit={() => {
+                  setEditingMessage({
+                    id: message.id,
+                    sequenceNumber: message.sequence_number,
+                    text: parsed.data.text,
+                  });
+                }}
+              />
             );
           }
 
@@ -203,18 +136,12 @@ export function NoteChatMessageList({
             }
 
             return (
-              <li key={message.id} className="flex justify-start">
-                <div className="max-w-[90%] space-y-3 md:max-w-[80%]">
-                  <div className="rounded-2xl rounded-bl-sm border bg-muted/40 px-4 py-3 text-sm leading-7">
-                    <p className="whitespace-pre-wrap">{parsed.data.text}</p>
-                  </div>
-
-                  <NoteChatReferenceNotes
-                    sources={sourcesByAssistantMessageId.get(message.id) ?? []}
-                    usedNoteIds={parsed.data.usedNoteIds}
-                  />
-                </div>
-              </li>
+              <NoteChatAssistantMessage
+                key={message.id}
+                text={parsed.data.text}
+                sources={sourcesByAssistantMessageId.get(message.id) ?? []}
+                usedNoteIds={parsed.data.usedNoteIds}
+              />
             );
           }
 
@@ -222,30 +149,20 @@ export function NoteChatMessageList({
         })}
 
         {pendingQuestion ? (
-          <li className="flex justify-end">
-            <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-primary px-4 py-3 text-sm leading-7 text-primary-foreground md:max-w-[75%]">
-              <p className="whitespace-pre-wrap">{pendingQuestion}</p>
-            </div>
-          </li>
+          <NoteChatUserMessage text={pendingQuestion} />
         ) : null}
 
         {streamingContent.length > 0 ? (
-          <li className="flex justify-start">
-            <div className="max-w-[90%] md:max-w-[80%]">
-              <div
-                aria-live="polite"
-                className="rounded-2xl rounded-bl-sm border bg-muted/40 px-4 py-3 text-sm leading-7"
-              >
-                <p className="whitespace-pre-wrap">{streamingContent}</p>
-              </div>
-            </div>
-          </li>
+          <NoteChatAssistantMessage text={streamingContent} isStreaming />
         ) : isStreaming ? (
-          <li className="flex justify-start">
-            <div className="rounded-2xl rounded-bl-sm border bg-muted/40 px-4 py-3">
-              <p className="text-sm text-muted-foreground">
-                답변을 생성하고 있습니다...
-              </p>
+          <li className="flex justify-center">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>답변 생성 중</span>
+              <span className="flex items-center gap-1" aria-hidden="true">
+                <span className="size-1 animate-pulse rounded-full bg-current" />
+                <span className="size-1 animate-pulse rounded-full bg-current [animation-delay:0.2s]" />
+                <span className="size-1 animate-pulse rounded-full bg-current [animation-delay:0.4s]" />
+              </span>
             </div>
           </li>
         ) : null}
@@ -259,67 +176,13 @@ export function NoteChatMessageList({
         ) : null}
       </ul>
 
-      <Dialog
-        open={editingMessage !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            closeEditDialog();
-          }
+      <NoteChatQuestionEditDialog
+        message={editingMessage}
+        onClose={() => {
+          setEditingMessage(null);
         }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>질문 수정</DialogTitle>
-
-            <DialogDescription>
-              이 질문을 수정하면 이후 대화는 삭제되고 수정된 질문으로 새로운
-              답변을 생성합니다.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-2">
-            <Textarea
-              value={editingQuestion}
-              disabled={isUpdating}
-              rows={5}
-              onChange={(event) => {
-                setEditingQuestion(event.target.value);
-              }}
-            />
-
-            {updateError ? (
-              <p role="alert" className="text-sm text-destructive">
-                {updateError}
-              </p>
-            ) : null}
-          </div>
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={isUpdating}
-              onClick={closeEditDialog}
-            >
-              취소
-            </Button>
-
-            <Button
-              type="button"
-              disabled={
-                isUpdating ||
-                editingQuestion.trim().length === 0 ||
-                editingQuestion.trim() === editingMessage?.text.trim()
-              }
-              onClick={() => {
-                void handleUpdate();
-              }}
-            >
-              {isUpdating ? "수정 중..." : "수정하고 다시 답변받기"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        onUpdateQuestion={onUpdateQuestion}
+      />
     </>
   );
 }

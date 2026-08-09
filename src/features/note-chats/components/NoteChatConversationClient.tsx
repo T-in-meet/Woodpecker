@@ -14,7 +14,6 @@ import { useNoteChatConversationDetailQuery } from "../hooks/use-note-chat-conve
 import { useNoteChatStream } from "../hooks/use-note-chat-stream";
 import { NoteChatComposer } from "./NoteChatComposer";
 import { NoteChatConversationMenu } from "./NoteChatConversationMenu";
-import { NoteChatConversationSidebar } from "./NoteChatConversationSidebar";
 import { NoteChatMessageList } from "./NoteChatMessageList";
 
 type NoteChatConversationClientProps = {
@@ -29,8 +28,12 @@ export function NoteChatConversationClient({
 }: NoteChatConversationClientProps) {
   const queryClient = useQueryClient();
 
+  const conversationContainerRef = useRef<HTMLDivElement | null>(null);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
 
+  const [conversationHeight, setConversationHeight] = useState<number | null>(
+    null,
+  );
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
 
   /**
@@ -48,6 +51,7 @@ export function NoteChatConversationClient({
     content: streamingContent,
     error: streamError,
     isStreaming,
+    reset,
     start,
     update,
   } = useNoteChatStream();
@@ -84,6 +88,7 @@ export function NoteChatConversationClient({
       ]);
 
       setPendingQuestion(null);
+      reset();
     }
   };
 
@@ -129,6 +134,7 @@ export function NoteChatConversationClient({
 
       setEditingSequenceNumber(null);
       setPendingQuestion(null);
+      reset();
     }
   };
 
@@ -148,6 +154,32 @@ export function NoteChatConversationClient({
     editingSequenceNumber,
   ]);
 
+  /**
+   * 현재 Conversation 영역의 시작 위치부터 viewport 하단까지의
+   * 실제 사용 가능 높이를 계산합니다.
+   */
+  useEffect(() => {
+    const updateConversationHeight = () => {
+      const container = conversationContainerRef.current;
+
+      if (!container) {
+        return;
+      }
+
+      const top = container.getBoundingClientRect().top;
+
+      setConversationHeight(Math.max(0, window.innerHeight - top));
+    };
+
+    updateConversationHeight();
+
+    window.addEventListener("resize", updateConversationHeight);
+
+    return () => {
+      window.removeEventListener("resize", updateConversationHeight);
+    };
+  }, []);
+
   const visibleMessages =
     detail && editingSequenceNumber !== null
       ? detail.messages.filter(
@@ -156,11 +188,17 @@ export function NoteChatConversationClient({
       : (detail?.messages ?? []);
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col px-4 py-6 md:px-12 md:py-10">
-      <div className="grid min-h-[calc(100dvh-10rem)] overflow-hidden rounded-lg border md:grid-cols-[280px_minmax(0,1fr)]">
-        <NoteChatConversationSidebar selectedConversationId={conversationId} />
-
-        <section className="flex min-h-0 min-w-0 flex-col">
+    <div className="mx-auto -mb-16 flex w-full max-w-6xl flex-col px-4 md:mb-0 md:px-12">
+      <div
+        ref={conversationContainerRef}
+        className="flex min-h-0 flex-col overflow-hidden border border-b-0"
+        style={
+          conversationHeight !== null
+            ? { height: conversationHeight }
+            : undefined
+        }
+      >
+        <section className="flex min-h-0 flex-1 flex-col">
           {conversationQuery.isLoading ? (
             <ConversationDetailSkeleton />
           ) : conversationQuery.isError ? (
@@ -210,18 +248,18 @@ export function NoteChatConversationClient({
             </div>
           ) : (
             <>
-              <div className="flex shrink-0 items-center justify-between gap-4 border-b px-4 py-3 md:px-6 md:py-4">
-                <h1 className="min-w-0 truncate text-base font-semibold md:text-lg">
-                  {detail.conversation.title}
-                </h1>
-
-                <NoteChatConversationMenu
-                  conversationId={detail.conversation.id}
-                  title={detail.conversation.title}
-                />
-              </div>
-
               <ScrollArea className="min-h-0 flex-1">
+                <div className="flex items-center justify-between gap-4 border-b px-4 py-3 md:px-6 md:py-4">
+                  <h1 className="min-w-0 truncate text-base font-semibold md:text-lg">
+                    {detail.conversation.title}
+                  </h1>
+
+                  <NoteChatConversationMenu
+                    conversationId={detail.conversation.id}
+                    title={detail.conversation.title}
+                  />
+                </div>
+
                 <NoteChatMessageList
                   assistantSources={detail.assistantSources}
                   messages={visibleMessages}

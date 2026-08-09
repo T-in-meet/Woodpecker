@@ -171,11 +171,10 @@ export function NoteChatComposer({
             </Button>
           </div>
         </div>
-
-        <p className="sr-only" aria-live="polite">
-          {isStreaming ? "AI 답변을 생성하고 있습니다." : ""}
-        </p>
       </form>
+      <p className="sr-only" aria-live="polite">
+        {isStreaming ? "AI 답변을 생성하고 있습니다." : ""}
+      </p>
     </section>
   );
 }
