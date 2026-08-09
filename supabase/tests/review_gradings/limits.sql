@@ -8,7 +8,7 @@
 
 BEGIN;
 
-SELECT plan(9);
+SELECT plan(10);
 
 SELECT set_config('test.rgl_user_id', gen_random_uuid()::text, true);
 SELECT set_config('test.rgl_other_user_id', gen_random_uuid()::text, true);
@@ -168,12 +168,19 @@ SELECT is(
 );
 
 -- 확정된 채점을 다시 부르면 already_graded다. 저장된 결과를 읽을 뿐이라 사용량도 그대로다.
-SELECT public.finalize_review_grading(
-  current_setting('test.rgl_user_id')::uuid,
-  current_setting('test.rgl_log_id')::uuid,
-  ((current_setting('test.rgl_claim')::jsonb) ->> 'claimToken')::uuid,
-  80,
-  '{"summary":"s","missedConcepts":[],"incorrectPoints":[]}'::jsonb
+--
+-- 결과를 버리는 bare SELECT로 두면 안 된다. 반환값 'ok'가 그대로 출력되고
+-- prove가 그 줄을 TAP 결과로 읽어 테스트 번호가 어긋난다. 단언으로 감싼다.
+SELECT is(
+  public.finalize_review_grading(
+    current_setting('test.rgl_user_id')::uuid,
+    current_setting('test.rgl_log_id')::uuid,
+    ((current_setting('test.rgl_claim')::jsonb) ->> 'claimToken')::uuid,
+    80,
+    '{"summary":"s","missedConcepts":[],"incorrectPoints":[]}'::jsonb
+  ),
+  'ok',
+  $$선점한 채점을 확정할 수 있어야 한다$$
 );
 
 SELECT is(

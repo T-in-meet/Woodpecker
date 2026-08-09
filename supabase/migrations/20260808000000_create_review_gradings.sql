@@ -301,7 +301,13 @@ $$;
 
 -- authenticated에 열어 두면 사용자가 PostgREST로 임의의 user_answer로 선점 행을 덮어써
 -- 진행 중인 채점을 무효화할 수 있다. 클라이언트에서 부를 이유도 없다.
-revoke all on function public.claim_review_grading(uuid, uuid, text, text) from public;
+--
+-- PUBLIC만 revoke하면 안 된다. Supabase는 public 스키마에 ALTER DEFAULT PRIVILEGES로
+-- anon·authenticated·service_role에게 함수 EXECUTE를 "직접" 부여하므로, 새로 만든 함수의
+-- proacl에 세 역할이 그대로 들어간다. PUBLIC revoke는 이 직접 grant를 건드리지 않는다.
+-- 역할을 명시해서 회수해야 실제로 닫힌다. (update_notification_time_of_day와 같은 패턴)
+revoke all on function public.claim_review_grading(uuid, uuid, text, text)
+  from public, anon, authenticated, service_role;
 grant execute on function public.claim_review_grading(uuid, uuid, text, text) to service_role;
 
 -- --------------------------------------------------------------------------
@@ -396,5 +402,7 @@ $$;
 -- authenticated에 열어 두면 사용자가 PostgREST로 claim → finalize(100점)를 직접 호출해
 -- AI를 거치지 않고 점수를 확정할 수 있다. 서버 액션이 세션·이메일 인증·노트 소유권·
 -- pending 복습 로그 일치를 모두 확인한 뒤에만 admin 클라이언트로 호출한다.
-revoke all on function public.finalize_review_grading(uuid, uuid, uuid, integer, jsonb) from public;
+-- 역할을 명시해 회수하는 이유는 위 claim_review_grading과 같다.
+revoke all on function public.finalize_review_grading(uuid, uuid, uuid, integer, jsonb)
+  from public, anon, authenticated, service_role;
 grant execute on function public.finalize_review_grading(uuid, uuid, uuid, integer, jsonb) to service_role;
