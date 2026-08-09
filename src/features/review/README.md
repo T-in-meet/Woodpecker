@@ -74,15 +74,23 @@
 
 | 값                      | 현재 | 위치                                                        |
 | ----------------------- | ---- | ----------------------------------------------------------- |
-| Gemini 호출 타임아웃    | 45초 | `GEMINI_TIMEOUT_MS` (`actions.ts`)                          |
+| 채점 deadline           | 45초 | `GRADING_DEADLINE_MS` (`actions.ts`)                        |
+| 최소 Gemini 예산        | 10초 | `MIN_GEMINI_BUDGET_MS` (`actions.ts`)                       |
 | 함수 실행 상한          | 55초 | `maxDuration` (`app/(main)/notes/[noteId]/review/page.tsx`) |
 | 선점 만료(stale window) | 60초 | `c_stale_window` (`claim_review_grading`)                   |
 
-**Gemini 타임아웃 < maxDuration < 선점 만료** 순서를 유지한다.
+**채점 deadline < maxDuration < 선점 만료** 순서를 유지한다.
 
-- Gemini 타임아웃이 maxDuration보다 크면 느린 호출이 함수와 함께 죽어서 원인을 남기지 않는다.
+- 채점 deadline은 **액션 진입 시각**부터 잰다. Gemini 호출 직전에 타이머를 걸면 앞의 인증·조회·선점이
+  느릴 때 abort보다 maxDuration이 먼저 걸려서, 선점만 잡힌 채 함수가 죽고 그 회차의 채점이
+  선점 만료까지 막힌다. 그래서 선점 직전에 남은 예산을 계산하고, `MIN_GEMINI_BUDGET_MS`보다
+  적게 남았으면 선점하지 않고 실패시킨다. 실제 `AbortSignal`도 이 남은 예산으로 건다.
 - maxDuration이 선점 만료보다 크면, 호출이 진행 중인 사이 선점이 만료돼 사용자의 재시도가
   선점을 이어받고 원래 결과는 `stale_claim`으로 버려진다. 채점 1건에 Gemini를 두 번 부르는 셈이다.
+
+`AbortSignal`은 클라이언트 요청만 끊는다. Gemini는 서비스 쪽 작업을 취소하지 않고 과금도 그대로
+발생한다(`@google/genai`의 `GenerateContentConfig.abortSignal` 주석). 타임아웃으로 중복 과금을 막을 수는
+없으므로, 비용은 "선점을 잡기 전에 못 쓸 호출을 걸러내는 것"으로 통제한다.
 
 `maxDuration`은 Vercel 플랜별 기본값이 다르고 그 기본값이 60초를 넘는 구성도 있다.
 명시하지 않으면 위 순서가 배포 환경에 따라 깨지므로 페이지에 항상 적어 둔다.

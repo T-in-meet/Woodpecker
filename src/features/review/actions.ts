@@ -75,14 +75,29 @@ export type GradeAnswerActionState =
   | null;
 
 /**
- * Gemini 호출 타임아웃.
+ * 채점 한 건에 허용하는 전체 시간. Gemini 호출 시점이 아니라 액션 진입 시각부터 잰다.
  *
- * 복습 페이지의 maxDuration(55초)보다 짧게 둔다. 이 타임아웃이 없으면 느린 호출이
- * 함수 자체와 함께 죽어서 원인을 남기지 않고, 반대로 이 값이 선점 만료(60초)를 넘기면
- * 다른 요청이 선점을 이어받아 같은 채점에 Gemini를 두 번 부르게 된다.
+ * 호출 직전에 타이머를 걸면 앞의 인증·조회·선점이 느릴 때 abort보다 플랫폼 제한이
+ * 먼저 걸린다. 그러면 선점만 잡힌 채 함수가 죽어서, 사용자는 정상 오류도 못 받고
+ * 선점이 만료될 때까지 재시도조차 막힌다.
+ *
+ * 복습 페이지의 maxDuration(55초)보다 짧게 두고, 선점 만료(60초)는 넘기지 않는다.
+ * 이 값이 선점 만료를 넘기면 다른 요청이 선점을 이어받아 같은 채점에 Gemini를 두 번 부른다.
  * 순서: 이 값 < maxDuration < claim_review_grading의 stale window.
+ *
+ * abort는 클라이언트 요청만 끊는다. Gemini는 서비스 쪽 작업을 취소하지 않고 과금도 그대로
+ * 발생하므로(@google/genai `GenerateContentConfig.abortSignal` 주석), 이 타임아웃의 목적은
+ * 비용 절감이 아니라 원인을 남기고 선점 만료 전에 끝내는 것이다.
  */
-const GEMINI_TIMEOUT_MS = 45_000;
+const GRADING_DEADLINE_MS = 45_000;
+
+/**
+ * 선점 시점에 남은 시간이 이보다 적으면 Gemini를 부르지 않고 실패시킨다.
+ *
+ * 어차피 완주하지 못할 호출로 선점을 잡으면 그 회차의 채점이 stale window(60초)가
+ * 지날 때까지 통째로 막힌다. 과금만 발생하고 결과는 버려지는 호출이기도 하다.
+ */
+const MIN_GEMINI_BUDGET_MS = 10_000;
 
 /**
  * 채점 응답 구조를 디코딩 단계에서 강제한다. 검증은 그대로 Zod가 맡고,
@@ -265,6 +280,9 @@ export async function gradeAnswerAction(
   _prevState: GradeAnswerActionState,
   formData: FormData,
 ): Promise<GradeAnswerActionState> {
+  // 선점 전에 남은 예산을 계산하는 기준점. 플랫폼의 maxDuration도 여기서부터 흐른다.
+  const startedAt = Date.now();
+
   const parsed = gradeAnswerSchema.safeParse({
     noteId: formData.get("noteId"),
     reviewLogId: formData.get("reviewLogId"),
@@ -325,6 +343,20 @@ export async function gradeAnswerAction(
   } catch {
     return {
       error: "데이터를 불러오는 데 실패했습니다. 잠시 후 다시 시도해주세요.",
+    };
+  }
+
+  // 선점하기 전에 Gemini를 완주시킬 시간이 남았는지 확인한다.
+  // 여기서 잡은 선점은 이 요청이 끝나거나 stale window가 지나기 전까지
+  // 같은 회차의 다른 채점 시도를 모두 막으므로, 못 쓸 선점은 아예 잡지 않는다.
+  const geminiBudgetMs = GRADING_DEADLINE_MS - (Date.now() - startedAt);
+
+  if (geminiBudgetMs < MIN_GEMINI_BUDGET_MS) {
+    console.error(
+      `[gradeAnswerAction] 남은 시간이 부족해 채점을 시작하지 않음 (${geminiBudgetMs}ms)`,
+    );
+    return {
+      error: "서버 응답이 지연되고 있어요. 잠시 후 다시 시도해주세요.",
     };
   }
 
@@ -395,7 +427,7 @@ export async function gradeAnswerAction(
       config: {
         responseMimeType: "application/json",
         responseJsonSchema: GRADING_RESPONSE_JSON_SCHEMA,
-        abortSignal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
+        abortSignal: AbortSignal.timeout(geminiBudgetMs),
       },
     });
     responseText = response.text ?? "";

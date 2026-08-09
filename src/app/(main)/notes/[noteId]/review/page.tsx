@@ -24,8 +24,9 @@ export const metadata: Metadata = {
  * AI 채점 서버 액션은 이 페이지의 요청으로 실행되므로 여기의 maxDuration을 따른다.
  *
  * 세 값의 순서를 지켜야 한다.
- *   Gemini 타임아웃(45초, gradeAnswerAction) < 이 값(55초) < 선점 만료(60초, claim_review_grading)
+ *   채점 deadline(45초, gradeAnswerAction) < 이 값(55초) < 선점 만료(60초, claim_review_grading)
  *
+ * 채점 deadline은 액션 진입 시각부터 재므로 이 값보다 먼저 걸리는 것이 보장된다.
  * 이 값이 선점 만료보다 커지면, 느린 Gemini 호출이 진행 중인 사이 선점이 만료돼
  * 사용자의 재시도가 선점을 이어받고 원래 요청 결과는 stale_claim으로 버려진다.
  * 채점 1건에 Gemini를 두 번 부르는 셈이라 느린 요청일수록 비용이 두 배가 된다.

@@ -428,6 +428,33 @@ describe("gradeAnswerAction", () => {
     consoleErrorSpy.mockRestore();
   });
 
+  it("skips the claim when too little time is left to finish Gemini", async () => {
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const { rpcMock } = setupSupabase();
+    mockHappyPathQueries();
+
+    // 인증·조회가 40초를 먹은 상황. 남은 5초로는 채점을 끝낼 수 없으므로
+    // 선점을 잡지 않고 실패해야 한다. 잡아 버리면 선점 만료까지 재시도가 막힌다.
+    const base = Date.now();
+    const nowSpy = vi
+      .spyOn(Date, "now")
+      .mockReturnValueOnce(base)
+      .mockReturnValue(base + 40_000);
+
+    const result = await gradeAnswerAction(null, createFormData());
+
+    expect(result).toEqual({
+      error: "서버 응답이 지연되고 있어요. 잠시 후 다시 시도해주세요.",
+    });
+    expect(rpcMock).not.toHaveBeenCalled();
+    expect(generateContentMock).not.toHaveBeenCalled();
+
+    nowSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
+  });
+
   it("returns an error when the Gemini call fails", async () => {
     const consoleErrorSpy = vi
       .spyOn(console, "error")
