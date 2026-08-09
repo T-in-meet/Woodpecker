@@ -34,6 +34,9 @@ export function parseNoteChatProviderResponse(
   try {
     parsed = JSON.parse(content);
   } catch {
+    console.error("Note chat provider response is not valid JSON.", {
+      content,
+    });
     throw new Error("Note chat provider response is not valid JSON.");
   }
 

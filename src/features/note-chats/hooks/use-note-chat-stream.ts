@@ -5,6 +5,8 @@ import { useCallback, useRef, useState } from "react";
 import {
   streamNoteChatQuestion,
   type StreamNoteChatQuestionInput,
+  streamNoteChatUserMessageUpdate,
+  type StreamNoteChatUserMessageUpdateInput,
 } from "../stream/client";
 import type { NoteChatStreamEvent } from "../stream/types";
 
@@ -27,12 +29,12 @@ export type NoteChatStreamingState = {
   /** 답변 생성이 진행 중인지 여부입니다. */
   isStreaming: boolean;
 
-  /** 완료된 답변의 참고 노트 ID 목록입니다. */
+  /** 완료된 답변에서 실제 사용한 노트 ID 목록입니다. */
   usedNoteIds: string[];
 };
 
 /**
- * 노트 챗봇 스트리밍 요청 입력입니다.
+ * 새로운 질문 스트리밍 요청 입력입니다.
  */
 export type StartNoteChatStreamInput = {
   conversationId: string;
@@ -40,13 +42,17 @@ export type StartNoteChatStreamInput = {
 };
 
 /**
+ * 기존 사용자 질문 수정 스트리밍 요청 입력입니다.
+ */
+export type UpdateNoteChatStreamInput = {
+  messageId: string;
+  question: string;
+};
+
+/**
  * 노트 챗봇 질문 스트리밍을 관리합니다.
  *
- * 새 요청이 시작되면 이전 실행 상태를 초기화하고,
- * 서버에서 전달되는 NDJSON 이벤트를 순서대로 상태에 반영합니다.
- *
- * 컴포넌트 언마운트 또는 사용자의 명시적 취소 시
- * AbortController를 통해 진행 중인 HTTP 요청을 취소합니다.
+ * 새 질문과 기존 질문 수정 모두 동일한 스트림 상태에 반영합니다.
  */
 export function useNoteChatStream() {
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -56,8 +62,8 @@ export function useNoteChatStream() {
     content: "",
     error: null,
     isStreaming: false,
-    usedNoteIds: [],
     runId: null,
+    usedNoteIds: [],
   });
 
   /**
@@ -75,8 +81,6 @@ export function useNoteChatStream() {
 
   /**
    * 서버 스트림 이벤트를 현재 상태에 반영합니다.
-   *
-   * @param event 서버에서 전달된 노트 챗봇 스트림 이벤트
    */
   const applyStreamEvent = useCallback((event: NoteChatStreamEvent) => {
     switch (event.type) {
@@ -101,8 +105,8 @@ export function useNoteChatStream() {
           ...current,
           assistantMessageId: event.assistantMessageId,
           isStreaming: false,
-          usedNoteIds: event.usedNoteIds,
           runId: event.runId,
+          usedNoteIds: event.usedNoteIds,
         }));
         break;
       }
@@ -121,14 +125,9 @@ export function useNoteChatStream() {
 
   /**
    * 새로운 노트 챗봇 질문 스트리밍을 시작합니다.
-   *
-   * @param input 대화 ID와 질문
    */
   const start = useCallback(
     async (input: StartNoteChatStreamInput): Promise<void> => {
-      /*
-       * 중복 실행을 방지하기 위해 기존 요청이 남아 있으면 먼저 취소합니다.
-       */
       abortControllerRef.current?.abort();
 
       const abortController = new AbortController();
@@ -139,8 +138,8 @@ export function useNoteChatStream() {
         content: "",
         error: null,
         isStreaming: true,
-        usedNoteIds: [],
         runId: null,
+        usedNoteIds: [],
       });
 
       const requestInput: StreamNoteChatQuestionInput = {
@@ -183,9 +182,74 @@ export function useNoteChatStream() {
     [applyStreamEvent],
   );
 
+  /**
+   * 기존 사용자 질문을 수정하고 새로운 답변 스트리밍을 시작합니다.
+   *
+   * 수정 대상 메시지 이후의 대화 정리는 서버의 수정 RPC가 담당합니다.
+   */
+  const update = useCallback(
+    async (input: UpdateNoteChatStreamInput): Promise<void> => {
+      abortControllerRef.current?.abort();
+
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+
+      setState({
+        assistantMessageId: null,
+        content: "",
+        error: null,
+        isStreaming: true,
+        runId: null,
+        usedNoteIds: [],
+      });
+
+      const requestInput: StreamNoteChatUserMessageUpdateInput = {
+        messageId: input.messageId,
+        content: {
+          text: input.question,
+        },
+      };
+
+      try {
+        for await (const event of streamNoteChatUserMessageUpdate(
+          requestInput,
+          {
+            signal: abortController.signal,
+          },
+        )) {
+          applyStreamEvent(event);
+        }
+      } catch (error) {
+        if (abortController.signal.aborted) {
+          return;
+        }
+
+        setState((current) => ({
+          ...current,
+          error:
+            error instanceof Error
+              ? error.message
+              : "질문 수정 후 답변 생성 중 오류가 발생했습니다.",
+          isStreaming: false,
+        }));
+      } finally {
+        if (abortControllerRef.current === abortController) {
+          abortControllerRef.current = null;
+
+          setState((current) => ({
+            ...current,
+            isStreaming: false,
+          }));
+        }
+      }
+    },
+    [applyStreamEvent],
+  );
+
   return {
     ...state,
     cancel,
     start,
+    update,
   };
 }

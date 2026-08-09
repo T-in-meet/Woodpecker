@@ -2,28 +2,6 @@ import { renderPromptTemplate } from "@/features/ai/prompts/render";
 import { AI_PROVIDER_CHAT_MESSAGE_ROLE } from "@/features/ai/providers/constants";
 import type { AiProviderChatMessage } from "@/features/ai/providers/types";
 
-/**
- * 노트 챗봇 LLM 응답 형식 지시입니다.
- *
- * 실제 Note ID는 Provider에 노출하지 않고 Context index만 반환받습니다.
- * 반환된 index는 실행 완료 단계에서 실제 Note ID로 변환합니다.
- */
-const NOTE_CHAT_RESPONSE_INSTRUCTION = `
-응답은 반드시 다음 JSON 형식으로만 반환하세요.
-
-{
-  "answer": "사용자에게 보여줄 최종 답변",
-  "usedContextIndexes": [1, 2]
-}
-
-규칙:
-- answer에는 사용자에게 보여줄 최종 답변만 작성합니다.
-- usedContextIndexes에는 실제 답변 생성에 사용한 <note index="...">의 index만 포함합니다.
-- Context에 존재하지 않는 index를 생성하지 않습니다.
-- 사용한 Context가 없으면 usedContextIndexes는 빈 배열 []로 반환합니다.
-- JSON 외의 설명, 마크다운 코드 블록, 접두사, 접미사를 출력하지 않습니다.
-`.trim();
-
 type BuildNoteChatProviderMessagesParams = {
   /** 검색된 노트로 구성한 Context입니다. */
   context: string;
@@ -48,15 +26,17 @@ type BuildNoteChatProviderMessagesParams = {
  *
  * 1. 렌더링된 System Prompt
  * 2. 검색된 Note Context
- * 3. Note Chat 응답 형식 지시
- * 4. 이전 사용자·AI 대화 이력
- * 5. 렌더링된 현재 User Prompt
+ * 3. 이전 사용자·AI 대화 이력
+ * 4. 렌더링된 현재 User Prompt
  *
  * 현재 질문은 `historyMessages`에 포함하지 않고 `question`으로 따로 전달하여
  * 같은 질문이 Provider 요청에 중복해서 포함되지 않도록 합니다.
  *
- * Note Context와 응답 형식은 289 실행 코드가 직접 관리하며,
+ * Note Context는 289 실행 코드가 직접 관리하며,
  * Prompt Template에는 현재 질문만 변수로 전달합니다.
+ *
+ * Provider 응답 형식은 Prompt 문자열에서 지시하지 않고,
+ * Prompt Version의 response_schema를 Provider structured output 설정으로 전달합니다.
  *
  * @param params Prompt Template, 이전 대화 이력, 현재 질문 및 Note Context
  * @returns AI Provider에 전달할 최종 메시지 목록
@@ -87,11 +67,7 @@ export function buildNoteChatProviderMessages(
         ].join("\n")
       : "사용 가능한 사용자 노트 Context가 없습니다.";
 
-  const systemPrompt = [
-    renderedSystemPrompt,
-    contextSection,
-    NOTE_CHAT_RESPONSE_INSTRUCTION,
-  ].join("\n\n");
+  const systemPrompt = [renderedSystemPrompt, contextSection].join("\n\n");
 
   return [
     {

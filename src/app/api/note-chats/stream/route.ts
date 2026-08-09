@@ -106,7 +106,8 @@ export async function POST(request: Request): Promise<Response> {
         roleKey: NOTE_CHAT_AI_ROLE_KEY.NOTE_RETRIEVAL,
       }),
     ]);
-  } catch {
+  } catch (error) {
+    console.error("Failed to load note chat AI configuration", error);
     return NextResponse.json(
       {
         error: "노트 챗봇 AI 설정을 불러오지 못했습니다.",
@@ -181,7 +182,8 @@ export async function POST(request: Request): Promise<Response> {
             },
             enqueueEvent,
           );
-        } catch {
+        } catch (error) {
+          console.log("답변 에러", error);
           if (!errorEventSent && !streamClosed) {
             enqueueEvent({
               message: "답변 생성에 실패했습니다.",
