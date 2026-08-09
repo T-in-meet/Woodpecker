@@ -88,7 +88,8 @@ SELECT is(
   public.claim_review_grading(
     current_setting('test.rg_len_user_id')::uuid,
     current_setting('test.rg_len_log_max_id')::uuid,
-    repeat('a', 50000)
+    repeat('a', 50000),
+    repeat('a', 64)
   ) ->> 'status',
   'ok',
   $$50000자 답안은 선점에 성공해야 한다 (최대값)$$
@@ -99,7 +100,7 @@ SELECT is(
 SELECT throws_ok(
   format(
     $sql$
-      SELECT public.claim_review_grading('%s'::uuid, '%s'::uuid, repeat('a', 50001));
+      SELECT public.claim_review_grading('%s'::uuid, '%s'::uuid, repeat('a', 50001), repeat('a', 64));
     $sql$,
     current_setting('test.rg_len_user_id'),
     current_setting('test.rg_len_log_over_id')

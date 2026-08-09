@@ -101,7 +101,7 @@ BEFORE UPDATE 트리거다. `update_notification_time_of_day`가 `notification_t
 같은 해시를 `claim_review_grading`이 `review_gradings.graded_content_hash`에 저장한다. 그래야 채점을
 받은 뒤 노트를 고치고 다시 들어왔을 때 "이 채점의 기준 본문이 지금 화면의 본문과 다르다"를 판단할 수
 있다(위 "재진입 시 복원"의 `basisContentChanged`). 이 컬럼이 없으면 현재 본문과 과거 채점이 아무 안내
-없이 한 화면에 놓인다. 해시 도입(20260810000000) 이전 행은 `NULL`이고, 근거가 없으므로 경고하지 않는다.
+없이 한 화면에 놓인다. 이 컬럼이 없던 시절에 저장된 행은 `NULL`이고, 근거가 없으므로 경고하지 않는다.
 
 ### 동시 요청과 비용 통제 (AI 채점)
 
@@ -159,7 +159,7 @@ BEFORE UPDATE 트리거다. `update_notification_time_of_day`가 `notification_t
 사용자가 `feedback = '{}'` 같은 행을 직접 넣어 조회 Zod 파싱을 `null`로 떨어뜨리고,
 액션이 미채점으로 오판해 Gemini를 다시 부르지만 저장은 계속 실패하는 상태를 만들 수 있다.
 DELETE 정책도 같은 이유로 없앴다(삭제 후 재채점 반복).
-상세는 `20260809000000_harden_review_gradings.sql`과 `20260809010000_secure_review_grading_rpcs.sql`.
+상세는 `20260808000000_create_review_gradings.sql`.
 
 선점 행은 `getGradingByReviewLog`·`getGradingsByNote`에서 `score IS NOT NULL` 필터로 제외한다.
 

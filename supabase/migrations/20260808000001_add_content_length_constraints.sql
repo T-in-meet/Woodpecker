@@ -14,7 +14,6 @@
 --
 -- 기존 데이터가 이 값을 넘으면 아래 ALTER가 실패한다. 적용 전에 확인한다.
 --   select count(*) from public.notes where char_length(content) > 50000;
---   select count(*) from public.review_gradings where char_length(user_answer) > 50000;
 
 -- src/features/notes/schema.ts의 noteSchema.content와 같은 값이다. 함께 바꾼다.
 alter table public.notes
