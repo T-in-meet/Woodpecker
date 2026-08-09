@@ -13,6 +13,9 @@ type GradingPanelProps = {
   /**
    * 복원한 채점을 받은 뒤 노트 본문이 바뀌었는지. 답안은 그대로여도 채점 기준 원본이
    * 지금 화면의 원본과 다르므로, 점수·피드백을 현재 내용과 대조하면 어긋난다.
+   *
+   * 페이지 복원 화면에만 해당한다. 채점 버튼을 눌러 저장된 결과를 돌려받는 경로는
+   * 액션 응답의 `basisContentChanged`가 같은 판단을 실어 온다.
    */
   basisContentChanged: boolean;
   /**
@@ -43,6 +46,11 @@ export function GradingPanel({
   const grading = state?.success ? state.grading : initialGrading;
   const gradedOtherAnswer = state?.success ? state.gradedOtherAnswer : false;
   const gradedAnswer = state?.success ? state.gradedAnswer : null;
+  // 액션이 돌려준 결과를 그리는 동안에는 그 응답의 판단을 따른다.
+  // prop은 페이지가 복원한 채점(`initialGrading`)에 대한 판단이라 여기선 근거가 아니다.
+  const basisChanged = state?.success
+    ? state.basisContentChanged
+    : basisContentChanged;
 
   if (grading) {
     const { score, summary, missedConcepts, incorrectPoints } = grading;
@@ -56,7 +64,7 @@ export function GradingPanel({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-5 px-6 py-5">
-          {basisContentChanged && (
+          {basisChanged && (
             <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3">
               <p role="status" className="text-sm text-foreground">
                 이 채점은 지금 보고 있는 원본과 다른 버전을 기준으로 했어요.

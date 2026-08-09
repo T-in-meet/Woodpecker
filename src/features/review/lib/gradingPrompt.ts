@@ -1,5 +1,12 @@
+/**
+ * 채점 입력은 본문과 답안뿐이다. 노트 제목은 넣지 않는다.
+ *
+ * 채점 기준을 고정하는 `hashNoteContent`가 보는 값이 본문뿐이라, 제목을 프롬프트에
+ * 넣으면 제목만 바뀐 노트가 해시 검사를 통과해 "화면에 보인 제목"과 "채점에 쓰인 제목"이
+ * 갈린다. 채점 후 제목만 고치고 다시 들어와도 기준 변경 안내가 뜨지 않는다.
+ * 제목은 백지 테스트 화면에 이미 노출되는 힌트라 회상 평가 대상도 아니다.
+ */
 export function buildGradingPrompt(
-  noteTitle: string,
   originalContent: string,
   userAnswer: string,
 ): string {
@@ -26,9 +33,6 @@ export function buildGradingPrompt(
   "missedConcepts": ["빠뜨린 핵심 개념"],
   "incorrectPoints": ["원본과 다르게 기억한 내용"]
 }
-
-## 노트 제목
-${noteTitle}
 
 ## 원본 노트
 ${originalContent}

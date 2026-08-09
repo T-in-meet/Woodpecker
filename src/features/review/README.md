@@ -76,6 +76,12 @@
 막히기 때문이다. 다시 쓴 답안은 회차당 채점 1회 규칙 때문에 새로 채점되지 않고, 채점을 누르면 저장된
 결과가 경고와 함께 나온다. 이때 기준이 된 답안을 접기로 함께 보여준다.
 
+이 경로에서는 화면이 `restoredSession`을 버리고 `submitAnswerAction`의 결과를 그리므로 **페이지가 계산한
+`basisContentChanged`가 닿지 않는다.** 그래서 `gradeAnswerAction`도 저장된 채점을 돌려줄 때 같은 판단을
+응답에 실어 보내고, `GradingPanel`은 액션 응답이 있으면 그쪽을 우선한다. 이게 없으면 "본문 수정 → 답안
+다시 작성 → 채점"에서 바뀐 원본 옆에 과거 기준 피드백이 아무 경고 없이 놓인다(답안까지 같으면
+`gradedOtherAnswer` 경고도 뜨지 않는다).
+
 채점 점수·총평 자체는 노트 상세의 `GradingHistorySection`에서도 볼 수 있다. 복습 페이지의 복원이 채우는
 것은 그쪽에 없는 **답안 원문과 원본 비교**, 그리고 완료 버튼까지 이어지는 흐름이다.
 
@@ -88,6 +94,12 @@
 그래서 `submitAnswerAction`이 본문 해시(`hashNoteContent`, sha256 hex)를 함께 돌려주고,
 `GradingPanel`이 이를 `originalContentHash` hidden field로 되돌려 보내며, 채점 직전에 다시 읽은 본문의
 해시와 다르면 채점하지 않고 새로고침을 안내한다.
+
+**채점 입력은 본문과 답안뿐이다.** 해시가 지키는 범위와 채점에 들어가는 범위가 어긋나면 검사에 구멍이
+생긴다. 노트 제목을 프롬프트에 넣었을 때가 그랬다 — 제목만 바꾸면 본문 해시 검사를 그대로 통과하면서
+화면에 없던 제목으로 채점되고, 채점 후 제목만 고쳐 다시 들어와도 기준 변경 안내가 뜨지 않았다. 제목은
+백지 테스트 화면에 이미 노출되는 힌트라 회상 평가 대상도 아니어서 `buildGradingPrompt`에서 뺐다.
+채점 입력에 무언가를 더할 때는 해시 범위도 함께 넓혀야 한다.
 
 **`notes.updated_at`을 쓰지 않는 이유.** `tr_notes_updated_at`은 notes 행의 _모든_ UPDATE에 붙는
 BEFORE UPDATE 트리거다. `update_notification_time_of_day`가 `notification_time_of_day`·`next_review_at`을

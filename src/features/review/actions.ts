@@ -74,6 +74,12 @@ export type GradeAnswerActionState =
        * 어떤 문장에 대한 피드백인지 사용자가 볼 수 있게 함께 돌려준다.
        */
       gradedAnswer: string;
+      /**
+       * 돌려준 결과의 기준 원본이 지금 화면의 원본과 다를 때 true.
+       * 저장된 채점을 재사용하는 경로에서만 참이 될 수 있다. 페이지 복원 경로의
+       * `basisContentChanged`와 같은 판단이며, 그쪽은 서버 컴포넌트가 계산한다.
+       */
+      basisContentChanged: boolean;
       error?: never;
     }
   | {
@@ -81,6 +87,7 @@ export type GradeAnswerActionState =
       grading?: never;
       gradedOtherAnswer?: never;
       gradedAnswer?: never;
+      basisContentChanged?: never;
       error: string;
     }
   | null;
@@ -275,11 +282,23 @@ export async function completeReviewAction(
   redirect(getNoteDetailRoute(parsed.data.noteId));
 }
 
+/**
+ * 저장된 채점의 기준 원본이 지금 화면의 원본과 다른지.
+ * 해시 도입 이전 행은 NULL이라 판단할 근거가 없으므로 알리지 않는다.
+ */
+function isBasisContentChanged(
+  gradedContentHash: string | null,
+  currentContentHash: string,
+): boolean {
+  return gradedContentHash !== null && gradedContentHash !== currentContentHash;
+}
+
 /** 이미 확정된 채점 결과를 읽어 액션 응답으로 변환한다. */
 async function readStoredGrading(
   reviewLogId: string,
   userId: string,
   userAnswer: string,
+  currentContentHash: string,
 ): Promise<GradeAnswerActionState> {
   try {
     const existing = await getGradingByReviewLog(reviewLogId, userId);
@@ -289,6 +308,10 @@ async function readStoredGrading(
         grading: { score: existing.score, ...existing.feedback },
         gradedOtherAnswer: existing.user_answer !== userAnswer,
         gradedAnswer: existing.user_answer,
+        basisContentChanged: isBasisContentChanged(
+          existing.graded_content_hash,
+          currentContentHash,
+        ),
       };
     }
   } catch {
@@ -352,6 +375,10 @@ export async function gradeAnswerAction(
     return { error: "진행 중인 복습을 찾을 수 없습니다." };
   }
 
+  // 저장된 채점을 돌려줄 때도 "그 채점의 기준 원본이 지금 화면의 원본과 같은지"를
+  // 판단해야 하므로, 아래 재사용 분기보다 앞에서 계산한다.
+  const contentHash = hashNoteContent(note.content);
+
   // 복습 1회당 채점 1회 — 이미 채점했다면 저장된 결과를 재사용 (비용 통제 + 점수 일관성)
   try {
     const existing = await getGradingByReviewLog(
@@ -364,6 +391,10 @@ export async function gradeAnswerAction(
         grading: { score: existing.score, ...existing.feedback },
         gradedOtherAnswer: existing.user_answer !== parsed.data.answer,
         gradedAnswer: existing.user_answer,
+        basisContentChanged: isBasisContentChanged(
+          existing.graded_content_hash,
+          contentHash,
+        ),
       };
     }
   } catch {
@@ -376,8 +407,6 @@ export async function gradeAnswerAction(
   // 비교 화면을 띄워둔 사이 다른 탭에서 노트를 고치면, 사용자는 구 본문을 보면서
   // AI는 신 본문으로 채점하게 된다.
   // 이미 확정된 채점을 읽는 경로는 새로 채점하지 않으므로 이 검사보다 앞에 둔다.
-  const contentHash = hashNoteContent(note.content);
-
   if (contentHash !== parsed.data.originalContentHash) {
     return {
       error:
@@ -434,6 +463,7 @@ export async function gradeAnswerAction(
       parsed.data.reviewLogId,
       user.id,
       parsed.data.answer,
+      contentHash,
     );
   }
 
@@ -455,11 +485,9 @@ export async function gradeAnswerAction(
     return { error: "AI 채점에 실패했습니다. 잠시 후 다시 시도해주세요." };
   }
 
-  const prompt = buildGradingPrompt(
-    reviewableNote.title,
-    note.content,
-    parsed.data.answer,
-  );
+  // 제목은 채점 입력에 넣지 않는다. 해시가 지키는 범위가 본문뿐이라, 제목을 넣으면
+  // 제목만 바뀐 노트가 해시 검사를 통과하면서 화면에 없던 제목으로 채점된다.
+  const prompt = buildGradingPrompt(note.content, parsed.data.answer);
 
   let responseText: string;
   try {
@@ -529,6 +557,7 @@ export async function gradeAnswerAction(
         parsed.data.reviewLogId,
         user.id,
         parsed.data.answer,
+        contentHash,
       );
     }
 
@@ -556,5 +585,7 @@ export async function gradeAnswerAction(
     grading: grading.data,
     gradedOtherAnswer: false,
     gradedAnswer: parsed.data.answer,
+    // 방금 이 본문으로 채점했으므로 기준이 갈릴 여지가 없다.
+    basisContentChanged: false,
   };
 }

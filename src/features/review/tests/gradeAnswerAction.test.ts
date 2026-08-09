@@ -250,6 +250,7 @@ describe("gradeAnswerAction", () => {
       success: true,
       gradedOtherAnswer: false,
       gradedAnswer: ANSWER,
+      basisContentChanged: false,
       grading: {
         score: 70,
         summary: "이전 채점 총평",
@@ -280,6 +281,7 @@ describe("gradeAnswerAction", () => {
       success: true,
       gradedOtherAnswer: true,
       gradedAnswer: "이전에 제출한 다른 답안",
+      basisContentChanged: false,
       grading: {
         score: 60,
         summary: "동시 요청으로 저장된 총평",
@@ -302,6 +304,7 @@ describe("gradeAnswerAction", () => {
       success: true,
       gradedOtherAnswer: false,
       gradedAnswer: ANSWER,
+      basisContentChanged: false,
       grading: VALID_GRADING_RESPONSE,
     });
     expect(rpcMock).toHaveBeenNthCalledWith(1, "claim_review_grading", {
@@ -406,6 +409,7 @@ describe("gradeAnswerAction", () => {
       success: true,
       gradedOtherAnswer: false,
       gradedAnswer: ANSWER,
+      basisContentChanged: false,
       grading: {
         score: 60,
         summary: "동시 요청으로 저장된 총평",
@@ -521,13 +525,59 @@ describe("gradeAnswerAction", () => {
     const result = await gradeAnswerAction(null, createFormData());
 
     // 이미 확정된 결과는 새로 채점하지 않으므로 버전이 달라도 막지 않는다.
+    // 해시 도입 이전 행(graded_content_hash: null)은 판단 근거가 없어 경고하지 않는다.
     expect(result).toEqual({
       success: true,
       gradedOtherAnswer: false,
       gradedAnswer: ANSWER,
+      basisContentChanged: false,
       grading: { score: STORED_GRADING.score, ...STORED_GRADING.feedback },
     });
     expect(generateContentMock).not.toHaveBeenCalled();
+  });
+
+  // "답안 다시 작성" 뒤 채점을 누르면 복원 화면이 아니라 이 경로로 결과가 나온다.
+  // 여기서 기준 원본 비교를 빠뜨리면 바뀐 원본 옆에 과거 기준 피드백이 경고 없이 놓인다.
+  it("flags the stored grading when it was graded from a different note version", async () => {
+    setupSupabase();
+    mockHappyPathQueries();
+    getNoteContentForComparisonMock.mockResolvedValue({
+      content: "수정된 노트 내용",
+    });
+    getGradingByReviewLogMock.mockResolvedValue({
+      ...STORED_GRADING,
+      graded_content_hash: NOTE_CONTENT_HASH,
+    });
+
+    const result = await gradeAnswerAction(
+      null,
+      createFormData({
+        originalContentHash: hashNoteContent("수정된 노트 내용"),
+      }),
+    );
+
+    expect(result).toMatchObject({
+      success: true,
+      gradedOtherAnswer: false,
+      basisContentChanged: true,
+    });
+    expect(generateContentMock).not.toHaveBeenCalled();
+  });
+
+  it("does not flag the stored grading when the note version still matches", async () => {
+    setupSupabase();
+    mockHappyPathQueries();
+    getGradingByReviewLogMock.mockResolvedValue({
+      ...STORED_GRADING,
+      graded_content_hash: NOTE_CONTENT_HASH,
+    });
+
+    const result = await gradeAnswerAction(null, createFormData());
+
+    expect(result).toMatchObject({
+      success: true,
+      basisContentChanged: false,
+    });
   });
 
   it("skips the claim when too little time is left to finish Gemini", async () => {
@@ -613,6 +663,7 @@ describe("gradeAnswerAction", () => {
       success: true,
       gradedOtherAnswer: false,
       gradedAnswer: ANSWER,
+      basisContentChanged: false,
       grading: {
         score: 60,
         summary: "동시 요청으로 저장된 총평",
