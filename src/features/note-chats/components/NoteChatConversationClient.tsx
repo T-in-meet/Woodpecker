@@ -1,20 +1,15 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { Link } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-
-import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Skeleton } from "@/components/ui/skeleton";
-import { ROUTES } from "@/lib/constants/routes";
 
 import { noteChatQueryKeys } from "../constants/query-keys";
 import { useNoteChatConversationDetailQuery } from "../hooks/use-note-chat-conversation-query";
 import { useNoteChatStream } from "../hooks/use-note-chat-stream";
-import { NoteChatComposer } from "./NoteChatComposer";
-import { NoteChatConversationMenu } from "./NoteChatConversationMenu";
-import { NoteChatMessageList } from "./NoteChatMessageList";
+import { NoteChatConversationContent } from "./NoteChatConversationContent";
+import { NoteChatConversationError } from "./NoteChatConversationError";
+import { NoteChatConversationNotFound } from "./NoteChatConversationNotFound";
+import { NoteChatConversationSkeleton } from "./NoteChatConversationSkeleton";
 
 type NoteChatConversationClientProps = {
   conversationId: string;
@@ -22,6 +17,10 @@ type NoteChatConversationClientProps = {
 
 /**
  * 선택한 노트 챗봇 Conversation 화면을 렌더링합니다.
+ *
+ * @param props 컴포넌트 속성
+ * @param props.conversationId 현재 Conversation ID
+ * @returns 선택한 노트 챗봇 Conversation 화면 UI
  */
 export function NoteChatConversationClient({
   conversationId,
@@ -46,6 +45,13 @@ export function NoteChatConversationClient({
     number | null
   >(null);
 
+  const [failedQuestion, setFailedQuestion] = useState<{
+    messageId: string;
+    question: string;
+  } | null>(null);
+
+  const [retryCount, setRetryCount] = useState(0);
+
   const {
     cancel,
     content: streamingContent,
@@ -63,38 +69,60 @@ export function NoteChatConversationClient({
   /**
    * 새로운 질문을 전송하고 스트리밍 완료 후
    * Conversation 상세와 목록 데이터를 다시 조회합니다.
+   *
+   * 실행 실패 시 동일 User Message를 다시 실행할 수 있도록
+   * 실패한 질문 정보를 유지합니다.
+   *
+   * @param question 새로 전송할 사용자 질문
+   * @returns 질문 전송 및 서버 상태 동기화 완료 시점의 Promise
    */
   const handleQuestionSubmit = async (question: string) => {
     setPendingQuestion(question);
+    setFailedQuestion(null);
+    setRetryCount(0);
 
-    try {
-      await start({
-        conversationId,
+    const result = await start({
+      conversationId,
+      question,
+    });
+
+    /*
+     * 질문 Route가 User Message를 먼저 저장하므로
+     * 성공 여부와 관계없이 서버 상태를 다시 가져옵니다.
+     */
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: noteChatQueryKeys.conversationDetail(conversationId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: noteChatQueryKeys.conversationLists(),
+      }),
+    ]);
+
+    setPendingQuestion(null);
+
+    if (result.success) {
+      reset();
+      return;
+    }
+
+    if (result.userMessageId) {
+      setFailedQuestion({
+        messageId: result.userMessageId,
         question,
       });
-    } finally {
-      /*
-       * 질문 Route가 User Message를 먼저 저장하고,
-       * 성공 시 Assistant Message까지 저장하므로
-       * 스트림 종료 후 서버 상태를 다시 가져옵니다.
-       */
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: noteChatQueryKeys.conversationDetail(conversationId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: noteChatQueryKeys.conversationLists(),
-        }),
-      ]);
-
-      setPendingQuestion(null);
-      reset();
     }
   };
 
   /**
    * 기존 사용자 질문을 수정하고 해당 질문 이후의 화면을
    * 새로운 대화 흐름으로 교체합니다.
+   *
+   * @param params 수정할 사용자 질문 정보
+   * @param params.messageId 수정할 User Message ID
+   * @param params.question 수정한 사용자 질문
+   * @param params.sequenceNumber 수정할 메시지의 sequence 번호
+   * @returns 질문 수정 및 서버 상태 동기화 완료 시점의 Promise
    */
   const handleQuestionUpdate = async ({
     messageId,
@@ -111,31 +139,78 @@ export function NoteChatConversationClient({
      */
     setEditingSequenceNumber(sequenceNumber);
     setPendingQuestion(question);
+    setFailedQuestion(null);
+    setRetryCount(0);
 
-    try {
-      await update({
-        messageId,
+    const result = await update({
+      messageId,
+      question,
+    });
+
+    /*
+     * 수정 Route가 User Message 수정과 이후 Message 삭제,
+     * 새 Run 생성을 처리하므로 실행 후 Conversation 데이터를 다시 조회합니다.
+     */
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: noteChatQueryKeys.conversationDetail(conversationId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: noteChatQueryKeys.conversationLists(),
+      }),
+    ]);
+
+    setEditingSequenceNumber(null);
+    setPendingQuestion(null);
+
+    if (result.success) {
+      reset();
+      return;
+    }
+
+    if (result.userMessageId) {
+      setFailedQuestion({
+        messageId: result.userMessageId,
         question,
       });
-    } finally {
-      /*
-       * 수정 Route가 User Message 수정과 이후 Message 삭제,
-       * 새 Assistant Message 저장까지 처리하므로
-       * 스트림 종료 후 Conversation 데이터를 다시 조회합니다.
-       */
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: noteChatQueryKeys.conversationDetail(conversationId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: noteChatQueryKeys.conversationLists(),
-        }),
-      ]);
-
-      setEditingSequenceNumber(null);
-      setPendingQuestion(null);
-      reset();
     }
+  };
+
+  /**
+   * 실패한 사용자 질문을 동일한 User Message에서 다시 실행합니다.
+   *
+   * 새로운 User Message를 생성하지 않고 기존 질문 수정 Route를 사용하며,
+   * 사용자 재시도는 최대 2회까지만 허용합니다.
+   *
+   * @returns 재시도 및 서버 상태 동기화 완료 시점의 Promise
+   */
+  const handleRetry = async () => {
+    if (!failedQuestion || retryCount >= 2 || isStreaming) {
+      return;
+    }
+
+    const result = await update({
+      messageId: failedQuestion.messageId,
+      question: failedQuestion.question,
+    });
+
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: noteChatQueryKeys.conversationDetail(conversationId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: noteChatQueryKeys.conversationLists(),
+      }),
+    ]);
+
+    if (result.success) {
+      setFailedQuestion(null);
+      setRetryCount(0);
+      reset();
+      return;
+    }
+
+    setRetryCount((current) => current + 1);
   };
 
   /**
@@ -200,117 +275,36 @@ export function NoteChatConversationClient({
       >
         <section className="flex min-h-0 flex-1 flex-col">
           {conversationQuery.isLoading ? (
-            <ConversationDetailSkeleton />
+            <NoteChatConversationSkeleton />
           ) : conversationQuery.isError ? (
-            <div className="flex flex-1 items-center justify-center p-6">
-              <div className="space-y-4 text-center">
-                <div className="space-y-1">
-                  <p className="text-sm font-medium">
-                    대화를 불러오지 못했습니다.
-                  </p>
-
-                  <p className="text-sm text-muted-foreground">
-                    잠시 후 다시 시도해 주세요.
-                  </p>
-                </div>
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={conversationQuery.isFetching}
-                  onClick={() => {
-                    void conversationQuery.refetch();
-                  }}
-                >
-                  {conversationQuery.isFetching
-                    ? "다시 불러오는 중..."
-                    : "다시 시도"}
-                </Button>
-              </div>
-            </div>
+            <NoteChatConversationError
+              isFetching={conversationQuery.isFetching}
+              onRetry={() => {
+                void conversationQuery.refetch();
+              }}
+            />
           ) : !detail ? (
-            <div className="flex flex-1 items-center justify-center p-6">
-              <div className="space-y-4 text-center">
-                <div className="space-y-1">
-                  <p className="text-sm font-medium">
-                    대화를 찾을 수 없습니다.
-                  </p>
-
-                  <p className="text-sm text-muted-foreground">
-                    삭제되었거나 접근할 수 없는 대화입니다.
-                  </p>
-                </div>
-
-                <Button asChild variant="outline">
-                  <Link href={ROUTES.NOTE_CHATS}>대화 목록으로 돌아가기</Link>
-                </Button>
-              </div>
-            </div>
+            <NoteChatConversationNotFound />
           ) : (
-            <>
-              <ScrollArea className="min-h-0 flex-1">
-                <div className="flex items-center justify-between gap-4 border-b px-4 py-3 md:px-6 md:py-4">
-                  <h1 className="min-w-0 truncate text-base font-semibold md:text-lg">
-                    {detail.conversation.title}
-                  </h1>
-
-                  <NoteChatConversationMenu
-                    conversationId={detail.conversation.id}
-                    title={detail.conversation.title}
-                  />
-                </div>
-
-                <NoteChatMessageList
-                  assistantSources={detail.assistantSources}
-                  messages={visibleMessages}
-                  pendingQuestion={pendingQuestion}
-                  streamingContent={streamingContent}
-                  streamError={streamError}
-                  isStreaming={isStreaming}
-                  onUpdateQuestion={handleQuestionUpdate}
-                />
-
-                <div ref={messageEndRef} />
-              </ScrollArea>
-
-              <div className="shrink-0 border-t bg-background p-3 md:p-4">
-                <NoteChatComposer
-                  conversationId={conversationId}
-                  isStreaming={isStreaming}
-                  onCancel={cancel}
-                  onSubmit={handleQuestionSubmit}
-                />
-              </div>
-            </>
+            <NoteChatConversationContent
+              conversationId={conversationId}
+              title={detail.conversation.title}
+              assistantSources={detail.assistantSources}
+              messages={visibleMessages}
+              pendingQuestion={pendingQuestion}
+              streamingContent={streamingContent}
+              streamError={streamError}
+              isStreaming={isStreaming}
+              canRetry={failedQuestion !== null && retryCount < 2}
+              retryCount={retryCount}
+              messageEndRef={messageEndRef}
+              onCancel={cancel}
+              onSubmit={handleQuestionSubmit}
+              onRetry={handleRetry}
+              onUpdateQuestion={handleQuestionUpdate}
+            />
           )}
         </section>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Conversation 상세 조회 중 표시할 Skeleton입니다.
- */
-function ConversationDetailSkeleton() {
-  return (
-    <div className="flex flex-1 flex-col">
-      <div className="border-b px-6 py-4">
-        <Skeleton className="h-6 w-48" />
-      </div>
-
-      <div className="flex flex-1 flex-col gap-6 p-6">
-        <div className="flex justify-end">
-          <Skeleton className="h-16 w-2/3 rounded-2xl" />
-        </div>
-
-        <div className="flex justify-start">
-          <Skeleton className="h-24 w-3/4 rounded-2xl" />
-        </div>
-
-        <div className="flex justify-end">
-          <Skeleton className="h-16 w-1/2 rounded-2xl" />
-        </div>
       </div>
     </div>
   );

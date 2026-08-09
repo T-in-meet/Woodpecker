@@ -33,6 +33,15 @@ type NoteChatQuestionEditDialogProps = {
 
 /**
  * 기존 사용자 질문을 수정하고 이후 대화를 다시 생성하는 Dialog입니다.
+ *
+ * 질문 수정 요청을 시작하면 Dialog를 즉시 닫고,
+ * 이후 답변 생성 상태와 오류는 Conversation 화면에서 처리합니다.
+ *
+ * @param props 질문 수정 Dialog 속성
+ * @param props.message 현재 수정할 사용자 메시지
+ * @param props.onClose Dialog 닫기 함수
+ * @param props.onUpdateQuestion 사용자 질문 수정 및 답변 재생성 함수
+ * @returns 사용자 질문 수정 Dialog
  */
 export function NoteChatQuestionEditDialog({
   message,
@@ -40,20 +49,22 @@ export function NoteChatQuestionEditDialog({
   onUpdateQuestion,
 }: NoteChatQuestionEditDialogProps) {
   const [question, setQuestion] = useState("");
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [updateError, setUpdateError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!message) {
       setQuestion("");
-      setUpdateError(null);
       return;
     }
 
     setQuestion(message.text);
-    setUpdateError(null);
   }, [message]);
 
+  /**
+   * 수정된 질문으로 기존 사용자 메시지를 갱신하고 답변 재생성을 시작합니다.
+   *
+   * 실행 상태와 오류는 Conversation 화면에서 표시하므로
+   * 요청 시작 전에 Dialog를 닫습니다.
+   */
   const handleUpdate = async () => {
     if (!message) {
       return;
@@ -65,6 +76,7 @@ export function NoteChatQuestionEditDialog({
       return;
     }
 
+    // Dialog가 닫히면 message가 null이 되므로 실행 전에 수정 대상을 보관합니다.
     const targetMessage = message;
 
     onClose();
@@ -80,20 +92,12 @@ export function NoteChatQuestionEditDialog({
     }
   };
 
-  const handleClose = () => {
-    if (isUpdating) {
-      return;
-    }
-
-    onClose();
-  };
-
   return (
     <Dialog
       open={message !== null}
       onOpenChange={(open) => {
         if (!open) {
-          handleClose();
+          onClose();
         }
       }}
     >
@@ -107,37 +111,22 @@ export function NoteChatQuestionEditDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-2">
-          <Textarea
-            value={question}
-            disabled={isUpdating}
-            rows={5}
-            onChange={(event) => {
-              setQuestion(event.target.value);
-            }}
-          />
-
-          {updateError ? (
-            <p role="alert" className="text-sm text-destructive">
-              {updateError}
-            </p>
-          ) : null}
-        </div>
+        <Textarea
+          value={question}
+          rows={5}
+          onChange={(event) => {
+            setQuestion(event.target.value);
+          }}
+        />
 
         <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={isUpdating}
-            onClick={handleClose}
-          >
+          <Button type="button" variant="outline" onClick={onClose}>
             취소
           </Button>
 
           <Button
             type="button"
             disabled={
-              isUpdating ||
               question.trim().length === 0 ||
               question.trim() === message?.text.trim()
             }
@@ -145,7 +134,7 @@ export function NoteChatQuestionEditDialog({
               void handleUpdate();
             }}
           >
-            {isUpdating ? "수정 중..." : "수정하고 다시 답변받기"}
+            수정하고 다시 답변받기
           </Button>
         </DialogFooter>
       </DialogContent>

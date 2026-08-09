@@ -10,7 +10,10 @@ import {
 } from "../schema";
 import type { NoteChatAssistantSources, NoteChatMessage } from "../types";
 import { NoteChatAssistantMessage } from "./NoteChatAssistantMessage";
+import { NoteChatEmptyState } from "./NoteChatEmptyState";
 import { NoteChatQuestionEditDialog } from "./NoteChatQuestionEditDialog";
+import { NoteChatStreamError } from "./NoteChatStreamError";
+import { NoteChatStreamStatus } from "./NoteChatStreamStatus";
 import { NoteChatUserMessage } from "./NoteChatUserMessage";
 
 type NoteChatMessageListProps = {
@@ -30,6 +33,15 @@ type NoteChatMessageListProps = {
   /** 답변 생성이 진행 중인지 여부입니다. */
   isStreaming?: boolean;
 
+  /** 실패한 답변을 다시 실행할 수 있는지 여부입니다. */
+  canRetry?: boolean;
+
+  /** 현재 질문의 재시도 횟수입니다. */
+  retryCount?: number;
+
+  /** 실패한 질문의 답변 생성을 다시 실행합니다. */
+  onRetry?: () => Promise<void>;
+
   /** 기존 사용자 질문을 수정하고 다시 실행합니다. */
   onUpdateQuestion: (params: {
     messageId: string;
@@ -45,7 +57,20 @@ type EditingMessage = {
 };
 
 /**
- * 저장된 메시지와 현재 진행 중인 노트 챗봇 메시지를 표시합니다.
+ * 저장된 메시지와 현재 진행 중인 노트 챗봇 메시지를 렌더링합니다.
+ *
+ * @param props 컴포넌트 속성
+ * @param props.assistantSources Assistant 메시지별 검색 노트 출처
+ * @param props.messages 저장된 대화 메시지 목록
+ * @param props.pendingQuestion 아직 Query에 반영되지 않은 현재 사용자 질문
+ * @param props.streamingContent 현재까지 수신한 Assistant 답변 내용
+ * @param props.streamError 현재 스트리밍 오류
+ * @param props.isStreaming 답변 생성 진행 여부
+ * @param props.canRetry 실패한 답변을 다시 실행할 수 있는지 여부
+ * @param props.retryCount 현재 질문의 재시도 횟수
+ * @param props.onRetry 실패한 답변 생성을 다시 실행하는 함수
+ * @param props.onUpdateQuestion 기존 사용자 질문을 수정하고 다시 실행하는 함수
+ * @returns 노트 챗봇 메시지 목록 UI
  */
 export function NoteChatMessageList({
   assistantSources,
@@ -54,6 +79,9 @@ export function NoteChatMessageList({
   streamingContent = "",
   streamError = null,
   isStreaming = false,
+  canRetry = false,
+  retryCount = 0,
+  onRetry,
   onUpdateQuestion,
 }: NoteChatMessageListProps) {
   const [editingMessage, setEditingMessage] = useState<EditingMessage | null>(
@@ -71,30 +99,7 @@ export function NoteChatMessageList({
     streamError !== null;
 
   if (messages.length === 0 && !hasTransientMessage) {
-    return (
-      <div className="flex min-h-80 items-center justify-center px-6 py-12">
-        <div className="w-full max-w-lg space-y-6 text-center">
-          <div className="space-y-2">
-            <p className="text-lg font-semibold">무엇이 궁금한가요?</p>
-
-            <p className="text-sm leading-6 text-muted-foreground">
-              저장한 노트를 바탕으로 질문해 보세요. 관련된 노트를 찾아 답변을
-              만들어 드립니다.
-            </p>
-          </div>
-
-          <div className="rounded-lg border bg-muted/30 px-4 py-3 text-left">
-            <p className="text-xs font-medium text-muted-foreground">예시</p>
-
-            <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
-              <li>• 내가 정리한 React Query 내용을 설명해줘.</li>
-              <li>• 이 주제와 관련된 노트들을 비교해줘.</li>
-              <li>• 이전에 공부한 내용을 간단히 복습시켜줘.</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    );
+    return <NoteChatEmptyState />;
   }
 
   return (
@@ -152,27 +157,18 @@ export function NoteChatMessageList({
           <NoteChatUserMessage text={pendingQuestion} />
         ) : null}
 
-        {streamingContent.length > 0 ? (
-          <NoteChatAssistantMessage text={streamingContent} isStreaming />
-        ) : isStreaming ? (
-          <li className="flex justify-center">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span>답변 생성 중</span>
-              <span className="flex items-center gap-1" aria-hidden="true">
-                <span className="size-1 animate-pulse rounded-full bg-current" />
-                <span className="size-1 animate-pulse rounded-full bg-current [animation-delay:0.2s]" />
-                <span className="size-1 animate-pulse rounded-full bg-current [animation-delay:0.4s]" />
-              </span>
-            </div>
-          </li>
-        ) : null}
+        <NoteChatStreamStatus
+          streamingContent={streamingContent}
+          isStreaming={isStreaming}
+        />
 
         {streamError ? (
-          <li className="flex justify-start">
-            <p role="alert" className="text-sm text-destructive">
-              {streamError}
-            </p>
-          </li>
+          <NoteChatStreamError
+            retryCount={retryCount}
+            canRetry={canRetry}
+            isStreaming={isStreaming}
+            {...(onRetry ? { onRetry } : {})}
+          />
         ) : null}
       </ul>
 

@@ -8,10 +8,7 @@ import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
-import {
-  NOTE_CHAT_QUESTION_MAX_LENGTH,
-  NOTE_CHAT_VALIDATION_MESSAGE,
-} from "../constants";
+import { NOTE_CHAT_QUESTION_MAX_LENGTH } from "../constants";
 import {
   type CreateNoteChatQuestionInput,
   createNoteChatQuestionInputSchema,

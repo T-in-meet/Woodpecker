@@ -80,6 +80,7 @@ export async function runNoteChatStream(
   await onEvent({
     runId: params.runId,
     type: "start",
+    userMessageId: params.userMessageId,
   });
 
   let usage: AiTokenUsage | null = null;

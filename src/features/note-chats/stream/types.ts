@@ -4,6 +4,7 @@
 export type NoteChatStreamStartEvent = {
   runId: string;
   type: "start";
+  userMessageId: string;
 };
 
 /**

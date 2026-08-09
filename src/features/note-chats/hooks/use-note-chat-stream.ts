@@ -31,6 +31,20 @@ export type NoteChatStreamingState = {
 
   /** 완료된 답변에서 실제 사용한 노트 ID 목록입니다. */
   usedNoteIds: string[];
+
+  /** 현재 실행을 발생시킨 사용자 메시지 ID입니다. */
+  userMessageId: string | null;
+};
+
+/**
+ * 노트 챗봇 스트리밍 실행 결과입니다.
+ */
+export type NoteChatStreamExecutionResult = {
+  /** Assistant 답변 생성이 정상 완료됐는지 여부입니다. */
+  success: boolean;
+
+  /** 현재 실행을 발생시킨 사용자 메시지 ID입니다. */
+  userMessageId: string | null;
 };
 
 /**
@@ -64,6 +78,7 @@ export function useNoteChatStream() {
     isStreaming: false,
     runId: null,
     usedNoteIds: [],
+    userMessageId: null,
   });
 
   /**
@@ -93,6 +108,7 @@ export function useNoteChatStream() {
       isStreaming: false,
       runId: null,
       usedNoteIds: [],
+      userMessageId: null,
     });
   }, []);
 
@@ -105,6 +121,7 @@ export function useNoteChatStream() {
         setState((current) => ({
           ...current,
           runId: event.runId,
+          userMessageId: event.userMessageId,
         }));
         break;
       }
@@ -144,7 +161,9 @@ export function useNoteChatStream() {
    * 새로운 노트 챗봇 질문 스트리밍을 시작합니다.
    */
   const start = useCallback(
-    async (input: StartNoteChatStreamInput): Promise<void> => {
+    async (
+      input: StartNoteChatStreamInput,
+    ): Promise<NoteChatStreamExecutionResult> => {
       abortControllerRef.current?.abort();
 
       const abortController = new AbortController();
@@ -157,6 +176,7 @@ export function useNoteChatStream() {
         isStreaming: true,
         runId: null,
         usedNoteIds: [],
+        userMessageId: null,
       });
 
       const requestInput: StreamNoteChatQuestionInput = {
@@ -166,15 +186,34 @@ export function useNoteChatStream() {
         },
       };
 
+      let succeeded = false;
+      let currentUserMessageId: string | null = null;
+
       try {
         for await (const event of streamNoteChatQuestion(requestInput, {
           signal: abortController.signal,
         })) {
+          if (event.type === "start") {
+            currentUserMessageId = event.userMessageId;
+          }
+
+          if (event.type === "finish") {
+            succeeded = true;
+          }
+
           applyStreamEvent(event);
         }
+
+        return {
+          success: succeeded,
+          userMessageId: currentUserMessageId,
+        };
       } catch (error) {
         if (abortController.signal.aborted) {
-          return;
+          return {
+            success: false,
+            userMessageId: currentUserMessageId,
+          };
         }
 
         setState((current) => ({
@@ -185,6 +224,11 @@ export function useNoteChatStream() {
               : "답변 생성 중 오류가 발생했습니다.",
           isStreaming: false,
         }));
+
+        return {
+          success: false,
+          userMessageId: currentUserMessageId,
+        };
       } finally {
         if (abortControllerRef.current === abortController) {
           abortControllerRef.current = null;
@@ -205,7 +249,9 @@ export function useNoteChatStream() {
    * 수정 대상 메시지 이후의 대화 정리는 서버의 수정 RPC가 담당합니다.
    */
   const update = useCallback(
-    async (input: UpdateNoteChatStreamInput): Promise<void> => {
+    async (
+      input: UpdateNoteChatStreamInput,
+    ): Promise<NoteChatStreamExecutionResult> => {
       abortControllerRef.current?.abort();
 
       const abortController = new AbortController();
@@ -218,6 +264,7 @@ export function useNoteChatStream() {
         isStreaming: true,
         runId: null,
         usedNoteIds: [],
+        userMessageId: null,
       });
 
       const requestInput: StreamNoteChatUserMessageUpdateInput = {
@@ -227,6 +274,9 @@ export function useNoteChatStream() {
         },
       };
 
+      let succeeded = false;
+      let currentUserMessageId: string | null = input.messageId;
+
       try {
         for await (const event of streamNoteChatUserMessageUpdate(
           requestInput,
@@ -234,11 +284,27 @@ export function useNoteChatStream() {
             signal: abortController.signal,
           },
         )) {
+          if (event.type === "start") {
+            currentUserMessageId = event.userMessageId;
+          }
+
+          if (event.type === "finish") {
+            succeeded = true;
+          }
+
           applyStreamEvent(event);
         }
+
+        return {
+          success: succeeded,
+          userMessageId: currentUserMessageId,
+        };
       } catch (error) {
         if (abortController.signal.aborted) {
-          return;
+          return {
+            success: false,
+            userMessageId: currentUserMessageId,
+          };
         }
 
         setState((current) => ({
@@ -249,6 +315,11 @@ export function useNoteChatStream() {
               : "질문 수정 후 답변 생성 중 오류가 발생했습니다.",
           isStreaming: false,
         }));
+
+        return {
+          success: false,
+          userMessageId: currentUserMessageId,
+        };
       } finally {
         if (abortControllerRef.current === abortController) {
           abortControllerRef.current = null;
