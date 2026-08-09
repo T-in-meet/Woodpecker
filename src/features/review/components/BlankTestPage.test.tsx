@@ -58,6 +58,7 @@ function mockComparisonState() {
     {
       success: true,
       originalContent: "원본",
+      originalUpdatedAt: "2026-07-05T00:00:00.000Z",
       userAnswer: "답안",
       reviewLogId: "22222222-2222-4222-8222-222222222222",
     },

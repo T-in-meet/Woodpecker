@@ -20,8 +20,11 @@ const pendingReviewLogSchema = z.object({
   completed_at: z.string().nullable(),
 });
 
+// updated_at은 화면에 보여준 원본과 채점 기준 원본이 같은 버전인지 확인하는 토큰이다.
+// notes에는 tr_notes_updated_at(BEFORE UPDATE) 트리거가 걸려 있어 본문이 바뀌면 함께 바뀐다.
 const noteContentForComparisonSchema = z.object({
   content: z.string(),
+  updated_at: z.string(),
 });
 
 export type ReviewableNote = z.infer<typeof reviewableNoteSchema>;
@@ -97,7 +100,7 @@ export async function getNoteContentForComparison(
   const supabase = await createServerComponentClient();
   const { data, error } = await supabase
     .from("notes")
-    .select("content")
+    .select("content, updated_at")
     .eq("id", noteId)
     .eq("user_id", userId)
     .maybeSingle();

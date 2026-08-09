@@ -9,6 +9,7 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 import {
+  getNoteContentForComparison,
   getPendingReviewLog,
   getReviewableNote,
   hasCompletedReviewForNoteToday,
@@ -94,6 +95,34 @@ describe("getReviewableNote", () => {
       title: "테스트 노트",
       next_review_at: "2026-01-06T09:00:00.000Z",
       review_round: 2,
+    });
+  });
+});
+
+describe("getNoteContentForComparison", () => {
+  beforeEach(() => {
+    createClientMock.mockReset();
+  });
+
+  // updated_at이 빠지면 채점 액션이 원본 버전을 대조할 수 없다.
+  it("reads the note body together with its version", async () => {
+    const { chain, supabase } = createNotesQueryMock({
+      content: "원본 내용",
+      updated_at: "2026-07-04T00:00:00.000Z",
+    });
+
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await getNoteContentForComparison(
+      "11111111-1111-4111-8111-111111111111",
+      "user-123",
+    );
+
+    expect(supabase.from).toHaveBeenCalledWith("notes");
+    expect(chain.select).toHaveBeenCalledWith("content, updated_at");
+    expect(result).toEqual({
+      content: "원본 내용",
+      updated_at: "2026-07-04T00:00:00.000Z",
     });
   });
 });

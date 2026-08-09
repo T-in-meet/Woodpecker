@@ -7,6 +7,7 @@ const CLAIM_TOKEN = "55555555-5555-4555-8555-555555555555";
 const TEST_USER_ID = "user-123";
 const CONFIRMED_AT = "2026-01-01T00:00:00.000Z";
 const ANSWER = "기억나는 내용을 적었습니다.";
+const NOTE_UPDATED_AT = "2026-07-04T00:00:00.000Z";
 
 const VALID_GRADING_RESPONSE = {
   score: 85,
@@ -139,16 +140,19 @@ function rpcCallsFor(rpcMock: ReturnType<typeof vi.fn>, name: string) {
 function createFormData({
   noteId = NOTE_ID,
   reviewLogId = REVIEW_LOG_ID,
+  originalUpdatedAt = NOTE_UPDATED_AT,
   answer = ANSWER,
 }: {
   noteId?: string;
   reviewLogId?: string;
+  originalUpdatedAt?: string;
   answer?: string;
 } = {}) {
   const formData = new FormData();
 
   formData.set("noteId", noteId);
   formData.set("reviewLogId", reviewLogId);
+  formData.set("originalUpdatedAt", originalUpdatedAt);
   formData.set("answer", answer);
 
   return formData;
@@ -162,6 +166,7 @@ function mockHappyPathQueries() {
   });
   getNoteContentForComparisonMock.mockResolvedValue({
     content: "원본 노트 내용",
+    updated_at: NOTE_UPDATED_AT,
   });
   getPendingReviewLogMock.mockResolvedValue({
     id: REVIEW_LOG_ID,
@@ -426,6 +431,46 @@ describe("gradeAnswerAction", () => {
     expect(generateContentMock).not.toHaveBeenCalled();
 
     consoleErrorSpy.mockRestore();
+  });
+
+  it("refuses to grade when the note changed after the comparison was shown", async () => {
+    const { rpcMock } = setupSupabase();
+    mockHappyPathQueries();
+    // 비교 화면을 띄운 뒤 다른 탭에서 노트를 고친 상황.
+    // 화면은 구 본문을 보여주는데 AI가 신 본문으로 채점하면 기준이 어긋난다.
+    getNoteContentForComparisonMock.mockResolvedValue({
+      content: "수정된 노트 내용",
+      updated_at: "2026-07-06T00:00:00.000Z",
+    });
+
+    const result = await gradeAnswerAction(null, createFormData());
+
+    expect(result).toEqual({
+      error:
+        "채점을 준비하는 사이 노트가 수정됐어요. 새로고침 후 다시 비교해주세요.",
+    });
+    expect(rpcMock).not.toHaveBeenCalled();
+    expect(generateContentMock).not.toHaveBeenCalled();
+  });
+
+  it("still returns an already stored grading when the note changed", async () => {
+    setupSupabase();
+    mockHappyPathQueries();
+    getNoteContentForComparisonMock.mockResolvedValue({
+      content: "수정된 노트 내용",
+      updated_at: "2026-07-06T00:00:00.000Z",
+    });
+    getGradingByReviewLogMock.mockResolvedValue(STORED_GRADING);
+
+    const result = await gradeAnswerAction(null, createFormData());
+
+    // 이미 확정된 결과는 새로 채점하지 않으므로 버전이 달라도 막지 않는다.
+    expect(result).toEqual({
+      success: true,
+      gradedOtherAnswer: false,
+      grading: { score: STORED_GRADING.score, ...STORED_GRADING.feedback },
+    });
+    expect(generateContentMock).not.toHaveBeenCalled();
   });
 
   it("skips the claim when too little time is left to finish Gemini", async () => {

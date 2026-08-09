@@ -39,6 +39,8 @@ export type SubmitAnswerActionState =
   | {
       success: true;
       originalContent: string;
+      /** 화면에 보여준 원본의 버전. 채점 요청에 실어 보내 기준이 어긋나는 걸 막는다. */
+      originalUpdatedAt: string;
       userAnswer: string;
       reviewLogId: string;
       error?: never;
@@ -46,6 +48,7 @@ export type SubmitAnswerActionState =
   | {
       success?: false;
       originalContent?: never;
+      originalUpdatedAt?: never;
       userAnswer?: never;
       error: SubmitAnswerFieldErrors | string;
     }
@@ -171,6 +174,7 @@ export async function submitAnswerAction(
   return {
     success: true,
     originalContent: note.content,
+    originalUpdatedAt: note.updated_at,
     userAnswer: parsed.data.answer,
     reviewLogId: pendingReviewLog.id,
   };
@@ -286,6 +290,7 @@ export async function gradeAnswerAction(
   const parsed = gradeAnswerSchema.safeParse({
     noteId: formData.get("noteId"),
     reviewLogId: formData.get("reviewLogId"),
+    originalUpdatedAt: formData.get("originalUpdatedAt"),
     answer: formData.get("answer"),
   });
 
@@ -343,6 +348,17 @@ export async function gradeAnswerAction(
   } catch {
     return {
       error: "데이터를 불러오는 데 실패했습니다. 잠시 후 다시 시도해주세요.",
+    };
+  }
+
+  // 화면이 보여준 원본과 지금 채점할 원본이 같은 버전인지 확인한다.
+  // 비교 화면을 띄워둔 사이 다른 탭에서 노트를 고치면, 사용자는 구 본문을 보면서
+  // AI는 신 본문으로 채점하게 된다. 저장된 채점에도 어느 버전인지 남지 않는다.
+  // 이미 확정된 채점을 읽는 경로는 새로 채점하지 않으므로 이 검사보다 앞에 둔다.
+  if (note.updated_at !== parsed.data.originalUpdatedAt) {
+    return {
+      error:
+        "채점을 준비하는 사이 노트가 수정됐어요. 새로고침 후 다시 비교해주세요.",
     };
   }
 

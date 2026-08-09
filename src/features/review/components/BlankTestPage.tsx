@@ -66,6 +66,7 @@ export function BlankTestPage({
 
           <GradingPanel
             noteId={noteId}
+            originalUpdatedAt={comparisonState.originalUpdatedAt}
             reviewLogId={comparisonState.reviewLogId}
             userAnswer={comparisonState.userAnswer}
           />

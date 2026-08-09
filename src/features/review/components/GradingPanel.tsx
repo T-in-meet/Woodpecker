@@ -10,12 +10,15 @@ import { gradeAnswerAction } from "../actions";
 
 type GradingPanelProps = {
   noteId: string;
+  /** 위 비교 화면에 그려진 원본의 버전. 채점 기준이 같은 버전인지 서버가 확인한다. */
+  originalUpdatedAt: string;
   reviewLogId: string;
   userAnswer: string;
 };
 
 export function GradingPanel({
   noteId,
+  originalUpdatedAt,
   reviewLogId,
   userAnswer,
 }: GradingPanelProps) {
@@ -97,6 +100,11 @@ export function GradingPanel({
         <form action={formAction} className="shrink-0">
           <input type="hidden" name="noteId" value={noteId} />
           <input type="hidden" name="reviewLogId" value={reviewLogId} />
+          <input
+            type="hidden"
+            name="originalUpdatedAt"
+            value={originalUpdatedAt}
+          />
           <input type="hidden" name="answer" value={userAnswer} />
           <Button
             type="submit"

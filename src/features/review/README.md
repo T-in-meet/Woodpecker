@@ -13,11 +13,12 @@
    - pending 리뷰 로그가 없으면 안내 카드(완료 노트 / 진행 중 아님) 노출
 2. `BlankTestPage`에서 답안을 작성하고 `submitAnswerAction` 호출:
    - 세션/이메일 인증/소유권 + pending 리뷰 로그 존재 확인
-   - 성공 시 원본 콘텐츠, 사용자 답안, `reviewLogId`를 반환 → `ComparisonView`로 전달
+   - 성공 시 원본 콘텐츠, 원본 버전(`notes.updated_at`), 사용자 답안, `reviewLogId`를 반환 → `ComparisonView`로 전달
 3. (선택) `GradingPanel`에서 `gradeAnswerAction` 호출 — AI 채점:
    - 세션/이메일 인증/소유권 + `pendingReviewLog.id === reviewLogId` 일치 확인
    - 복습 1회당 채점 1회: `review_gradings`에 기존 채점이 있으면 Gemini 호출 없이 재사용. 저장된 `user_answer`가 지금 답안과 다르면 결과와 함께 `gradedOtherAnswer: true`를 돌려 화면에서 기준이 다르다고 알린다
-   - 기존 채점이 없으면 **Gemini 호출 전에** `claim_review_grading` RPC로 채점 권한을 원자적으로 선점 (아래 "동시 요청과 비용 통제" 참고)
+   - 기존 채점이 없으면 화면이 보여준 원본 버전(`originalUpdatedAt`)과 지금 읽은 `notes.updated_at`을 대조 (아래 "채점 기준 원본 고정" 참고)
+   - **Gemini 호출 전에** `claim_review_grading` RPC로 채점 권한을 원자적으로 선점 (아래 "동시 요청과 비용 통제" 참고)
    - Gemini(`gemini-3.1-flash-lite`)로 회상률 점수(0~100)·빠뜨린 개념·잘못 기억한 내용을 JSON으로 받아 Zod 검증 후 `finalize_review_grading` RPC로 저장. 응답 구조는 `responseJsonSchema`(퀴즈와 같은 `toGeminiResponseSchema`)로 디코딩 단계에서 한 번 더 강제한다 — 형식 이탈은 곧 사용자 에러 + 선점이 풀릴 때까지의 대기이기 때문이다
    - 저장에 실패하면 결과를 보여주지 않고 에러를 반환한다. 저장되지 않은 행은 `score = NULL`이라 새로고침하면 사라지고 기록에도 남지 않으므로, 성공으로 보여주면 화면과 DB가 어긋난다
    - 채점은 부가 기능: 채점 실패/저장 실패가 복습 완료를 막지 않으며, 점수는 스케줄링(1/3/7일 고정)에 개입하지 않는다
@@ -52,6 +53,21 @@
 토큰이 실질적으로 막던 시나리오는 "본인이 자기 노트의 비교 단계를 건너뛰고 완료 처리"로, 자기 데이터에 대한 학습 흐름 강제 성격이었다. 보안 경계가 아니며, 대신 환경변수 배포 의존/TTL로 인한 UX 악화/유지보수 비용을 발생시켰다.
 
 타인 데이터 조작은 소유권 검증이, 결제/공유 자원은 해당 없음, 재시도/중복 완료는 pending 리뷰 로그 일치 검증이 각각 커버한다.
+
+### 채점 기준 원본 고정
+
+비교 화면은 `submitAnswerAction` 시점의 노트 본문을 보여주고, `gradeAnswerAction`은 채점할 때 본문을
+다시 읽는다. 클라이언트가 보낸 본문을 그대로 믿으면 사용자가 원본을 바꿔 보내 점수를 조작할 수 있어서
+재조회가 맞지만, 그 사이 다른 탭에서 노트를 고치면 **화면은 구 본문, AI는 신 본문**으로 갈린다.
+저장된 채점에도 어느 버전 기준인지 남지 않는다.
+
+그래서 `submitAnswerAction`이 `notes.updated_at`을 함께 돌려주고, `GradingPanel`이 이를 hidden field로
+되돌려 보내며, 채점 직전에 다시 읽은 값과 다르면 채점하지 않고 새로고침을 안내한다. `notes`에는
+`tr_notes_updated_at`(BEFORE UPDATE) 트리거가 걸려 있어 본문이 바뀌면 이 값이 반드시 함께 바뀐다.
+
+이 검사는 **이미 확정된 채점을 읽는 경로보다 뒤**에 둔다. 저장된 결과를 돌려주는 건 새 채점이 아니므로
+노트가 수정됐다고 해서 막을 이유가 없다. 값은 위조할 수 있지만 자기 노트를 자기가 채점받는 흐름이라
+보안 경계가 아니라 정합성 장치다.
 
 ### 동시 요청과 비용 통제 (AI 채점)
 
