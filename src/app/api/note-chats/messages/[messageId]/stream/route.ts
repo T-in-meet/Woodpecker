@@ -150,12 +150,6 @@ export async function POST(
     .eq("id", parsed.data.messageId)
     .single();
 
-  console.log("target message lookup", {
-    messageId: parsed.data.messageId,
-    targetMessage,
-    targetMessageError,
-  });
-
   if (targetMessageError || !targetMessage || targetMessage.role !== "user") {
     return NextResponse.json(
       {
@@ -176,19 +170,25 @@ export async function POST(
    * Model 활성 상태와 capability가 이미 검증됩니다.
    */
   let chatConfiguration;
+  let queryExpansionConfiguration;
   let embeddingConfiguration;
 
   try {
-    [chatConfiguration, embeddingConfiguration] = await Promise.all([
-      resolveAiRuntimeChatConfiguration({
-        featureKey: NOTE_CHAT_AI_FEATURE_KEY,
-        roleKey: NOTE_CHAT_AI_ROLE_KEY.ANSWER_GENERATION,
-      }),
-      resolveAiRuntimeEmbeddingConfiguration({
-        featureKey: NOTE_CHAT_AI_FEATURE_KEY,
-        roleKey: NOTE_CHAT_AI_ROLE_KEY.NOTE_RETRIEVAL,
-      }),
-    ]);
+    [chatConfiguration, queryExpansionConfiguration, embeddingConfiguration] =
+      await Promise.all([
+        resolveAiRuntimeChatConfiguration({
+          featureKey: NOTE_CHAT_AI_FEATURE_KEY,
+          roleKey: NOTE_CHAT_AI_ROLE_KEY.ANSWER_GENERATION,
+        }),
+        resolveAiRuntimeChatConfiguration({
+          featureKey: NOTE_CHAT_AI_FEATURE_KEY,
+          roleKey: NOTE_CHAT_AI_ROLE_KEY.QUERY_EXPANSION,
+        }),
+        resolveAiRuntimeEmbeddingConfiguration({
+          featureKey: NOTE_CHAT_AI_FEATURE_KEY,
+          roleKey: NOTE_CHAT_AI_ROLE_KEY.NOTE_RETRIEVAL,
+        }),
+      ]);
   } catch (error) {
     console.error("Failed to load note chat AI configuration", error);
 
@@ -232,6 +232,7 @@ export async function POST(
 
   const settings = {
     chat: chatConfiguration,
+    queryExpansion: queryExpansionConfiguration,
     embedding: embeddingConfiguration,
   };
 
@@ -267,9 +268,7 @@ export async function POST(
             },
             enqueueEvent,
           );
-        } catch (error) {
-          console.log("답변 에러", error);
-
+        } catch {
           if (!errorEventSent && !streamClosed) {
             enqueueEvent({
               message: "답변 생성에 실패했습니다.",

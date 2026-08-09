@@ -54,13 +54,13 @@ export async function assertNoteChatDailyExecutionLimit(
     .from("note_chat_runs")
     .select(
       `
-        id,
-        note_chat_messages!inner(
-          note_chat_conversations!inner(
-            user_id
-          )
+      id,
+      note_chat_messages!note_chat_runs_user_message_id_fkey!inner(
+        note_chat_conversations!inner(
+          user_id
         )
-      `,
+      )
+    `,
       {
         count: "exact",
         head: true,
@@ -71,6 +71,8 @@ export async function assertNoteChatDailyExecutionLimit(
     .lt("created_at", endAt);
 
   if (error) {
+    console.error("Failed to get note chat daily execution count", error);
+
     throw new Error(
       `Failed to get note chat daily execution count: ${error.message}`,
     );

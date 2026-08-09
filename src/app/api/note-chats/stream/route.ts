@@ -131,21 +131,28 @@ export async function POST(request: Request): Promise<Response> {
    * Model 활성 상태와 capability가 이미 검증됩니다.
    */
   let chatConfiguration;
+  let queryExpansionConfiguration;
   let embeddingConfiguration;
 
   try {
-    [chatConfiguration, embeddingConfiguration] = await Promise.all([
-      resolveAiRuntimeChatConfiguration({
-        featureKey: NOTE_CHAT_AI_FEATURE_KEY,
-        roleKey: NOTE_CHAT_AI_ROLE_KEY.ANSWER_GENERATION,
-      }),
-      resolveAiRuntimeEmbeddingConfiguration({
-        featureKey: NOTE_CHAT_AI_FEATURE_KEY,
-        roleKey: NOTE_CHAT_AI_ROLE_KEY.NOTE_RETRIEVAL,
-      }),
-    ]);
+    [chatConfiguration, queryExpansionConfiguration, embeddingConfiguration] =
+      await Promise.all([
+        resolveAiRuntimeChatConfiguration({
+          featureKey: NOTE_CHAT_AI_FEATURE_KEY,
+          roleKey: NOTE_CHAT_AI_ROLE_KEY.ANSWER_GENERATION,
+        }),
+        resolveAiRuntimeChatConfiguration({
+          featureKey: NOTE_CHAT_AI_FEATURE_KEY,
+          roleKey: NOTE_CHAT_AI_ROLE_KEY.QUERY_EXPANSION,
+        }),
+        resolveAiRuntimeEmbeddingConfiguration({
+          featureKey: NOTE_CHAT_AI_FEATURE_KEY,
+          roleKey: NOTE_CHAT_AI_ROLE_KEY.NOTE_RETRIEVAL,
+        }),
+      ]);
   } catch (error) {
     console.error("Failed to load note chat AI configuration", error);
+
     return NextResponse.json(
       {
         error: "노트 챗봇 AI 설정을 불러오지 못했습니다.",
@@ -185,6 +192,7 @@ export async function POST(request: Request): Promise<Response> {
 
   const settings = {
     chat: chatConfiguration,
+    queryExpansion: queryExpansionConfiguration,
     embedding: embeddingConfiguration,
   };
 
@@ -220,8 +228,7 @@ export async function POST(request: Request): Promise<Response> {
             },
             enqueueEvent,
           );
-        } catch (error) {
-          console.log("답변 에러", error);
+        } catch {
           if (!errorEventSent && !streamClosed) {
             enqueueEvent({
               message: "답변 생성에 실패했습니다.",

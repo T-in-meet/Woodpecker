@@ -8,10 +8,10 @@ import type { Json } from "@/types/db.helpers";
 
 import { NOTE_CHAT_CONTEXT_LIMIT } from "../constants/execution";
 import { getNoteChatConversationDetail } from "../queries";
-import { noteChatUserMessageContentSchema } from "../schema";
 import type { NoteChatConversation } from "../types";
 import { buildNoteChatContext } from "./build-note-context";
 import { buildNoteChatSources } from "./build-note-sources";
+import { expandNoteChatQuery } from "./expand-query";
 import { getMatchedNoteChatNotes } from "./get-matched-notes";
 import { resolveNoteChatExecutionMessages } from "./resolve-execution-messages";
 import { searchNoteChatEmbeddings } from "./search-note-embeddings";
@@ -23,6 +23,9 @@ export type NoteChatExecutionSettings = {
   /** 답변 생성에 사용할 Chat Runtime Configuration입니다. */
   chat: AiRuntimeChatConfiguration;
 
+  /** 문맥 기반 질의 확장에 사용할 Chat Runtime Configuration입니다. */
+  queryExpansion: AiRuntimeChatConfiguration;
+
   /** 노트 검색에 사용할 Embedding Runtime Configuration입니다. */
   embedding: AiRuntimeEmbeddingConfiguration;
 };
@@ -33,6 +36,9 @@ export type NoteChatExecutionSettings = {
 export type PreparedNoteChatExecution = {
   /** 실행 대상 대화입니다. */
   conversation: NoteChatConversation;
+
+  /** 문맥 기반 질의 확장을 통해 생성된 노트 검색용 질의입니다. */
+  expandedQuery: string;
 
   /** Provider에 전달할 System·대화 이력·현재 질문 메시지입니다. */
   messages: AiProviderChatMessage[];
@@ -65,11 +71,12 @@ type PrepareNoteChatExecutionParams = {
  *
  * 1. 현재 사용자가 접근할 수 있는 대화와 전체 메시지를 조회합니다.
  * 2. 현재 사용자 메시지에서 질문을 추출합니다.
- * 3. Runtime Embedding Model로 질문 Embedding을 생성합니다.
- * 4. 현재 사용자의 유사한 Note Embedding을 검색합니다.
- * 5. 검색된 Embedding에 해당하는 실제 노트를 조회합니다.
- * 6. 검색된 노트로 Prompt Context와 Source Snapshot을 구성합니다.
- * 7. Runtime Prompt Template에 question과 context를 전달하여
+ * 3. 이전 대화 이력을 바탕으로 문맥 기반 검색 질의를 확장합니다.
+ * 4. Runtime Embedding Model로 확장 질의 Embedding을 생성합니다.
+ * 5. 현재 사용자의 유사한 Note Embedding을 검색합니다.
+ * 6. 검색된 Embedding에 해당하는 실제 노트를 조회합니다.
+ * 7. 검색된 노트로 Prompt Context와 Source Snapshot을 구성합니다.
+ * 8. Runtime Prompt Template에 원본 question과 context를 전달하여
  *    Provider 메시지를 생성합니다.
  *
  * 실제 답변에서 참고한 Note ID는 이 단계에서 결정하지 않습니다.
@@ -90,6 +97,13 @@ export async function prepareNoteChatExecution(
     );
   }
 
+  /*
+   * 이번 실행을 발생시킨 메시지를 전체 대화에서 찾습니다.
+   *
+   * 이후 질의 확장과 최종 답변 생성은 userMessageId를 기준으로
+   * 각 단계에서 현재 질문을 추출하므로,
+   * 여기서는 실행 대상 메시지가 실제로 존재하고 User 역할인지 검증합니다.
+   */
   const currentUserMessage = detail.messages.find(
     (message) => message.id === params.userMessageId,
   );
@@ -106,14 +120,27 @@ export async function prepareNoteChatExecution(
     );
   }
 
-  const currentUserContent = noteChatUserMessageContentSchema.parse(
-    currentUserMessage.content,
-  );
+  /*
+   * 현재 사용자 질문과 이전 대화 이력을 바탕으로
+   * 노트 검색에 사용할 문맥 기반 확장 질의를 생성합니다.
+   *
+   * 확장 질의는 검색 단계에서만 사용하며,
+   * 실제 사용자 질문과 최종 답변용 Conversation Message는 변경하지 않습니다.
+   */
+  const expandedQuery = await expandNoteChatQuery({
+    configuration: params.settings.queryExpansion,
+    messages: detail.messages,
+    userMessageId: params.userMessageId,
+  });
 
+  /*
+   * 원본 사용자 질문이 아니라 문맥 기반으로 확장된 검색 질의를 Embedding하여
+   * 현재 대화 문맥을 반영한 노트 후보를 검색합니다.
+   */
   const embeddingMatches = await searchNoteChatEmbeddings({
     embeddingConfiguration: params.settings.embedding,
     ownerUserId: detail.conversation.user_id,
-    question: currentUserContent.text,
+    question: expandedQuery,
   });
 
   const matchedNotes = await getMatchedNoteChatNotes({
@@ -148,6 +175,7 @@ export async function prepareNoteChatExecution(
 
   return {
     conversation: detail.conversation,
+    expandedQuery,
     messages,
     settings: params.settings,
     sources,

@@ -8,6 +8,7 @@ import {
   completeNoteChatRunFailure,
   completeNoteChatRunSuccess,
   markNoteChatRunRunning,
+  saveNoteChatExpandedQuery,
 } from "../execution/run-persistence";
 import { consumeNoteChatProviderStream } from "./consume-provider-stream";
 import type { NoteChatStreamEvent } from "./types";
@@ -55,10 +56,11 @@ export type RunNoteChatStreamResult = {
  * 처리 순서는 다음과 같습니다.
  *
  * 1. Pending Run을 Running 상태로 변경합니다.
- * 2. 확정된 Runtime 설정과 대화 이력으로 Provider 스트림을 생성합니다.
- * 3. 텍스트 조각을 노트 챗봇 스트림 이벤트로 전달합니다.
- * 4. Provider 스트림이 완료되면 Assistant Message와 Run 성공 결과를 저장합니다.
- * 5. 실행 중 오류가 발생하면 Run을 실패 상태로 완료합니다.
+ * 2. 문맥 기반 질의 확장과 노트 검색을 포함한 실행 정보를 준비합니다.
+ * 3. 문맥 기반 확장 질의를 Run Snapshot으로 저장합니다.
+ * 4. Provider 스트림을 소비하고 텍스트 조각을 스트림 이벤트로 전달합니다.
+ * 5. Provider 스트림이 완료되면 Assistant Message와 Run 성공 결과를 저장합니다.
+ * 6. 실행 중 오류가 발생하면 Run을 실패 상태로 완료합니다.
  *
  * Context 검색 결과는 executeNoteChat 실행 결과에서 전달받아
  * Assistant Message와 Run 결과 저장에 사용합니다.
@@ -90,6 +92,17 @@ export async function runNoteChatStream(
       conversationId: params.conversationId,
       settings: params.settings,
       userMessageId: params.userMessageId,
+    });
+
+    /*
+     * 실행 준비 과정에서 생성된 문맥 기반 확장 질의를 Run에 Snapshot으로 저장합니다.
+     *
+     * 이후 Provider 응답 처리와 무관하게 이번 Run에서 실제 노트 검색에 사용한
+     * 질의를 관리자 실행 기록에서 확인할 수 있도록 보존합니다.
+     */
+    await saveNoteChatExpandedQuery({
+      expandedQuery: execution.expandedQuery,
+      runId: params.runId,
     });
 
     const { sources } = execution;

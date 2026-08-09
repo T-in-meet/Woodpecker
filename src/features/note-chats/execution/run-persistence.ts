@@ -53,6 +53,17 @@ export type CompleteNoteChatRunFailureParams = {
 };
 
 /**
+ * 문맥 기반 질의 확장 결과 저장 입력입니다.
+ */
+export type SaveNoteChatExpandedQueryParams = {
+  /** 확장 질의를 생성한 Run ID입니다. */
+  runId: string;
+
+  /** 노트 검색에 사용할 문맥 기반 확장 질의입니다. */
+  expandedQuery: string;
+};
+
+/**
  * 노트 챗봇 Run을 실행 중 상태로 변경합니다.
  *
  * `pending` 상태인 Run만 `running`으로 전환하며,
@@ -90,6 +101,54 @@ export async function markNoteChatRunRunning(
 
   if (!data) {
     throw new Error(`Pending note chat run not found: ${runId}`);
+  }
+}
+
+/**
+ * 문맥 기반 질의 확장 결과를 Run에 저장합니다.
+ *
+ * 질의 확장은 Run이 `running` 상태로 전환된 뒤 수행되므로,
+ * 현재 실행 중인 Run에만 검색에 사용할 확장 질의를 저장합니다.
+ *
+ * 이 Snapshot은 이후 노트 검색이나 답변 생성이 실패하더라도
+ * 해당 Run에서 어떤 검색 질의를 생성했는지 확인하기 위해 보존합니다.
+ *
+ * @param params 확장 질의 저장에 필요한 실행 정보
+ * @param options 테스트에서 주입할 Supabase Client
+ */
+export async function saveNoteChatExpandedQuery(
+  params: SaveNoteChatExpandedQueryParams,
+  options: {
+    supabase?: NoteChatRunPersistenceClient | undefined;
+  } = {},
+): Promise<void> {
+  const supabase = options.supabase ?? createAdminClient();
+  const updatedAt = new Date().toISOString();
+
+  /*
+   * 질의 확장은 실행이 시작된 뒤에만 생성되므로 running Run만 갱신합니다.
+   * 이미 완료되었거나 실패한 Run의 실행 Snapshot이 뒤늦게 변경되는 것을
+   * 방지하기 위해 상태 조건을 함께 사용합니다.
+   */
+  const { data, error } = await supabase
+    .from("note_chat_runs")
+    .update({
+      expanded_query: params.expandedQuery,
+      updated_at: updatedAt,
+    })
+    .eq("id", params.runId)
+    .eq("status", AI_RUN_STATUS.RUNNING)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(
+      `Failed to save note chat expanded query: ${error.message}`,
+    );
+  }
+
+  if (!data) {
+    throw new Error(`Running note chat run not found: ${params.runId}`);
   }
 }
 

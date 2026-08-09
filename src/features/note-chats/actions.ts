@@ -251,8 +251,6 @@ export async function deleteNoteChatConversationAction(
     .select("id")
     .maybeSingle();
 
-  console.log("대화 삭제 오류", error);
-
   if (error) {
     return {
       success: false,
