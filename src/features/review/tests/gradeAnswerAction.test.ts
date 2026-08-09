@@ -308,6 +308,25 @@ describe("gradeAnswerAction", () => {
     expect(revalidatePathMock).toHaveBeenCalledWith(`/notes/${NOTE_ID}`);
   });
 
+  // 선점 만료(60초)보다 먼저 끊겨야 같은 채점에 Gemini를 두 번 부르지 않는다
+  it("aborts the Gemini call before the claim goes stale", async () => {
+    setupSupabase();
+    mockHappyPathQueries();
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify(VALID_GRADING_RESPONSE),
+    });
+
+    await gradeAnswerAction(null, createFormData());
+
+    expect(generateContentMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: expect.objectContaining({
+          abortSignal: expect.any(AbortSignal),
+        }),
+      }),
+    );
+  });
+
   it("skips Gemini and returns the stored grading when the claim reports it is already graded", async () => {
     setupSupabase({ claimResult: { status: "already_graded" } });
     mockHappyPathQueries();

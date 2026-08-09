@@ -73,6 +73,16 @@ export type GradeAnswerActionState =
     }
   | null;
 
+/**
+ * Gemini 호출 타임아웃.
+ *
+ * 복습 페이지의 maxDuration(55초)보다 짧게 둔다. 이 타임아웃이 없으면 느린 호출이
+ * 함수 자체와 함께 죽어서 원인을 남기지 않고, 반대로 이 값이 선점 만료(60초)를 넘기면
+ * 다른 요청이 선점을 이어받아 같은 채점에 Gemini를 두 번 부르게 된다.
+ * 순서: 이 값 < maxDuration < claim_review_grading의 stale window.
+ */
+const GEMINI_TIMEOUT_MS = 45_000;
+
 // claim_review_grading은 상태와 선점 토큰을 jsonb로 돌려준다.
 const claimResultSchema = z.object({
   status: z.string(),
@@ -372,6 +382,7 @@ export async function gradeAnswerAction(
       contents: prompt,
       config: {
         responseMimeType: "application/json",
+        abortSignal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
       },
     });
     responseText = response.text ?? "";
