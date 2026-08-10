@@ -6,30 +6,107 @@ BEGIN;
 
 SELECT plan(15);
 
-SELECT set_config('test.note_chat_admin_user_a_id', gen_random_uuid()::text, true);
-SELECT set_config('test.note_chat_admin_user_b_id', gen_random_uuid()::text, true);
-SELECT set_config('test.note_chat_admin_conversation_a_id', gen_random_uuid()::text, true);
-SELECT set_config('test.note_chat_admin_conversation_b_id', gen_random_uuid()::text, true);
-SELECT set_config('test.note_chat_admin_message_a_id', gen_random_uuid()::text, true);
-SELECT set_config('test.note_chat_admin_message_b_id', gen_random_uuid()::text, true);
-SELECT set_config('test.note_chat_admin_message_c_id', gen_random_uuid()::text, true);
-SELECT set_config('test.note_chat_admin_run_a_id', gen_random_uuid()::text, true);
-SELECT set_config('test.note_chat_admin_run_b_id', gen_random_uuid()::text, true);
-SELECT set_config('test.note_chat_admin_run_c_id', gen_random_uuid()::text, true);
-SELECT set_config('test.note_chat_admin_chat_model_a_id', gen_random_uuid()::text, true);
-SELECT set_config('test.note_chat_admin_chat_model_b_id', gen_random_uuid()::text, true);
+-- =========================================
+-- Test fixture identifiers
+-- =========================================
+--
+-- 각 fixture는 매 실행마다 고유 UUID를 사용해 기존 데이터와 충돌하지 않도록 합니다.
+-- 목록 RPC 테스트는 아래 검색 토큰을 공통으로 사용하여 seed 데이터가 결과에
+-- 포함되지 않도록 테스트 범위를 명시적으로 격리합니다.
+-- =========================================
 
-INSERT INTO auth.users (id, email, email_confirmed_at, raw_user_meta_data)
+SELECT set_config(
+  'test.note_chat_admin_search_token',
+  'note-chat-admin-rpc',
+  true
+);
+
+SELECT set_config(
+  'test.note_chat_admin_user_a_id',
+  gen_random_uuid()::text,
+  true
+);
+SELECT set_config(
+  'test.note_chat_admin_user_b_id',
+  gen_random_uuid()::text,
+  true
+);
+SELECT set_config(
+  'test.note_chat_admin_conversation_a_id',
+  gen_random_uuid()::text,
+  true
+);
+SELECT set_config(
+  'test.note_chat_admin_conversation_b_id',
+  gen_random_uuid()::text,
+  true
+);
+SELECT set_config(
+  'test.note_chat_admin_message_a_id',
+  gen_random_uuid()::text,
+  true
+);
+SELECT set_config(
+  'test.note_chat_admin_message_b_id',
+  gen_random_uuid()::text,
+  true
+);
+SELECT set_config(
+  'test.note_chat_admin_message_c_id',
+  gen_random_uuid()::text,
+  true
+);
+SELECT set_config(
+  'test.note_chat_admin_run_a_id',
+  gen_random_uuid()::text,
+  true
+);
+SELECT set_config(
+  'test.note_chat_admin_run_b_id',
+  gen_random_uuid()::text,
+  true
+);
+SELECT set_config(
+  'test.note_chat_admin_run_c_id',
+  gen_random_uuid()::text,
+  true
+);
+SELECT set_config(
+  'test.note_chat_admin_chat_model_a_id',
+  gen_random_uuid()::text,
+  true
+);
+SELECT set_config(
+  'test.note_chat_admin_chat_model_b_id',
+  gen_random_uuid()::text,
+  true
+);
+
+
+-- =========================================
+-- Users
+-- =========================================
+
+INSERT INTO auth.users (
+  id,
+  email,
+  email_confirmed_at,
+  raw_user_meta_data
+)
 VALUES
   (
     current_setting('test.note_chat_admin_user_a_id')::uuid,
-    'note_chat_admin_a_' || current_setting('test.note_chat_admin_user_a_id') || '@example.com',
+    'note_chat_admin_a_'
+      || current_setting('test.note_chat_admin_user_a_id')
+      || '@example.com',
     now(),
     '{}'::jsonb
   ),
   (
     current_setting('test.note_chat_admin_user_b_id')::uuid,
-    'note_chat_admin_b_' || current_setting('test.note_chat_admin_user_b_id') || '@example.com',
+    'note_chat_admin_b_'
+      || current_setting('test.note_chat_admin_user_b_id')
+      || '@example.com',
     now(),
     '{}'::jsonb
   );
@@ -42,7 +119,19 @@ UPDATE public.profiles
 SET nickname = 'BetaUser'
 WHERE id = current_setting('test.note_chat_admin_user_b_id')::uuid;
 
-INSERT INTO public.ai_model_configs (id, key, display_name, provider, model, capability)
+
+-- =========================================
+-- AI models
+-- =========================================
+
+INSERT INTO public.ai_model_configs (
+  id,
+  key,
+  display_name,
+  provider,
+  model,
+  capability
+)
 VALUES
   (
     current_setting('test.note_chat_admin_chat_model_a_id')::uuid,
@@ -61,7 +150,16 @@ VALUES
     'chat'
   );
 
-INSERT INTO public.note_chat_conversations (id, user_id, title)
+
+-- =========================================
+-- Conversations
+-- =========================================
+
+INSERT INTO public.note_chat_conversations (
+  id,
+  user_id,
+  title
+)
 VALUES
   (
     current_setting('test.note_chat_admin_conversation_a_id')::uuid,
@@ -74,29 +172,62 @@ VALUES
     'Admin B conversation'
   );
 
-INSERT INTO public.note_chat_messages (id, conversation_id, role, content, sequence_number)
+
+-- =========================================
+-- Messages
+-- =========================================
+--
+-- 모든 user message에 공통 테스트 검색 토큰을 포함합니다.
+-- get_admin_note_chat_run_list의 검색 조건으로 이 토큰을 전달하면
+-- seed.sql에 저장된 실제 Note Chat Run은 목록 결과에서 제외됩니다.
+-- =========================================
+
+INSERT INTO public.note_chat_messages (
+  id,
+  conversation_id,
+  role,
+  content,
+  sequence_number
+)
 VALUES
   (
     current_setting('test.note_chat_admin_message_a_id')::uuid,
     current_setting('test.note_chat_admin_conversation_a_id')::uuid,
     'user',
-    '{"text":"alpha searchable question"}'::jsonb,
+    jsonb_build_object(
+      'text',
+      current_setting('test.note_chat_admin_search_token')
+        || ' alpha searchable question'
+    ),
     1
   ),
   (
     current_setting('test.note_chat_admin_message_b_id')::uuid,
     current_setting('test.note_chat_admin_conversation_b_id')::uuid,
     'user',
-    '{"text":"beta searchable question"}'::jsonb,
+    jsonb_build_object(
+      'text',
+      current_setting('test.note_chat_admin_search_token')
+        || ' beta searchable question'
+    ),
     1
   ),
   (
     current_setting('test.note_chat_admin_message_c_id')::uuid,
     current_setting('test.note_chat_admin_conversation_b_id')::uuid,
     'user',
-    '{"text":"gamma question"}'::jsonb,
+    jsonb_build_object(
+      'text',
+      current_setting('test.note_chat_admin_search_token')
+        || ' gamma question'
+    ),
     2
   );
+
+
+-- =========================================
+-- Runs
+-- =========================================
 
 INSERT INTO public.note_chat_runs (
   id,
@@ -132,8 +263,18 @@ VALUES
     '2026-08-03T00:00:00Z'
   );
 
+
+-- =========================================
+-- Service role context
+-- =========================================
+
 SET LOCAL ROLE service_role;
 SELECT set_config('request.jwt.claims', '{}'::text, true);
+
+
+-- =========================================
+-- Admin run detail view
+-- =========================================
 
 SELECT is(
   (
@@ -155,6 +296,8 @@ SELECT is(
   $$admin run detail should expose user nickname$$
 );
 
+-- 참조 대상 모델이 삭제되더라도 Run 자체는 보존되고,
+-- 삭제된 FK 대상의 표시 값만 NULL이 되는지 검증합니다.
 DELETE FROM public.ai_model_configs
 WHERE id = current_setting('test.note_chat_admin_chat_model_b_id')::uuid;
 
@@ -167,6 +310,11 @@ SELECT is(
   NULL::text,
   $$admin run detail should keep rows and return null display values for deleted FK targets$$
 );
+
+
+-- =========================================
+-- Admin run list: search
+-- =========================================
 
 SELECT is(
   (
@@ -188,11 +336,20 @@ SELECT is(
   $$admin run list should search user nickname and question text$$
 );
 
+
+-- =========================================
+-- Admin run list: status filter
+-- =========================================
+--
+-- 검색 토큰으로 fixture 3건만 먼저 격리한 뒤 status 필터 동작을 검증합니다.
+-- seed에 pending Run이 추가되어도 기대값이 변하지 않아야 합니다.
+-- =========================================
+
 SELECT is(
   (
     SELECT total_count
     FROM public.get_admin_note_chat_run_list(
-      '',
+      current_setting('test.note_chat_admin_search_token'),
       ARRAY['pending']::text[],
       NULL::uuid[],
       NULL::boolean,
@@ -208,13 +365,26 @@ SELECT is(
   $$admin run list should filter by statuses$$
 );
 
+
+-- =========================================
+-- Admin run list: chat model filter
+-- =========================================
+--
+-- 모델 UUID 자체가 매 테스트마다 고유하므로 이 테스트는 seed와 독립적입니다.
+-- 검색 토큰도 함께 사용해 목록 RPC 테스트의 격리 기준을 일관되게 유지합니다.
+-- =========================================
+
 SELECT is(
   (
     SELECT total_count
     FROM public.get_admin_note_chat_run_list(
-      '',
+      current_setting('test.note_chat_admin_search_token'),
       NULL::text[],
-      ARRAY[current_setting('test.note_chat_admin_chat_model_a_id')::uuid],
+      ARRAY[
+        current_setting(
+          'test.note_chat_admin_chat_model_a_id'
+        )::uuid
+      ],
       NULL::boolean,
       NULL::timestamptz,
       NULL::timestamptz,
@@ -228,11 +398,16 @@ SELECT is(
   $$admin run list should filter by chat model ids$$
 );
 
+
+-- =========================================
+-- Admin run list: memo filters
+-- =========================================
+
 SELECT is(
   (
     SELECT total_count
     FROM public.get_admin_note_chat_run_list(
-      '',
+      current_setting('test.note_chat_admin_search_token'),
       NULL::text[],
       NULL::uuid[],
       true,
@@ -252,7 +427,7 @@ SELECT is(
   (
     SELECT total_count
     FROM public.get_admin_note_chat_run_list(
-      '',
+      current_setting('test.note_chat_admin_search_token'),
       NULL::text[],
       NULL::uuid[],
       false,
@@ -268,11 +443,19 @@ SELECT is(
   $$admin run list should treat null or blank memo as no memo$$
 );
 
+
+-- =========================================
+-- Admin run list: created_at range
+-- =========================================
+--
+-- 검색 토큰으로 fixture를 격리한 상태에서 날짜 범위의 경계 동작만 검증합니다.
+-- =========================================
+
 SELECT is(
   (
     SELECT total_count
     FROM public.get_admin_note_chat_run_list(
-      '',
+      current_setting('test.note_chat_admin_search_token'),
       NULL::text[],
       NULL::uuid[],
       NULL::boolean,
@@ -288,11 +471,16 @@ SELECT is(
   $$admin run list should filter by created_at range$$
 );
 
+
+-- =========================================
+-- Admin run list: sorting
+-- =========================================
+
 SELECT is(
   (
     SELECT items->0->>'id'
     FROM public.get_admin_note_chat_run_list(
-      '',
+      current_setting('test.note_chat_admin_search_token'),
       NULL::text[],
       NULL::uuid[],
       NULL::boolean,
@@ -312,7 +500,7 @@ SELECT is(
   (
     SELECT items->0->>'user_nickname'
     FROM public.get_admin_note_chat_run_list(
-      '',
+      current_setting('test.note_chat_admin_search_token'),
       NULL::text[],
       NULL::uuid[],
       NULL::boolean,
@@ -328,11 +516,20 @@ SELECT is(
   $$admin run list should sort by user nickname$$
 );
 
+
+-- =========================================
+-- Admin run list: pagination
+-- =========================================
+--
+-- 전체 DB가 아니라 fixture 3건만 대상으로 페이지네이션을 검증합니다.
+-- seed Run 개수와 무관하게 빈 페이지의 items와 total_count 계약이 유지되어야 합니다.
+-- =========================================
+
 SELECT is(
   (
     SELECT jsonb_array_length(items)
     FROM public.get_admin_note_chat_run_list(
-      '',
+      current_setting('test.note_chat_admin_search_token'),
       NULL::text[],
       NULL::uuid[],
       NULL::boolean,
@@ -352,7 +549,7 @@ SELECT is(
   (
     SELECT total_count
     FROM public.get_admin_note_chat_run_list(
-      '',
+      current_setting('test.note_chat_admin_search_token'),
       NULL::text[],
       NULL::uuid[],
       NULL::boolean,
@@ -368,8 +565,17 @@ SELECT is(
   $$admin run list should preserve total count for empty pages$$
 );
 
+
+-- =========================================
+-- Permissions
+-- =========================================
+
 SELECT ok(
-  has_table_privilege('service_role', 'public.admin_note_chat_run_detail', 'SELECT'),
+  has_table_privilege(
+    'service_role',
+    'public.admin_note_chat_run_detail',
+    'SELECT'
+  ),
   $$service_role should select admin run detail view$$
 );
 
@@ -383,4 +589,5 @@ SELECT ok(
 );
 
 SELECT * FROM finish();
+
 ROLLBACK;
