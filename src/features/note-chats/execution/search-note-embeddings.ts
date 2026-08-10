@@ -3,11 +3,17 @@ import { matchAiEmbeddings } from "@/features/ai/embeddings/match";
 import { createAiEmbeddingWithProvider } from "@/features/ai/providers";
 import { getProviderApiKey } from "@/features/ai/providers/utils/api-key";
 import type { AiRuntimeEmbeddingConfiguration } from "@/features/ai/runtimes/types";
+import {
+  NOTE_CHAT_OPERATIONAL_ERROR_CODES,
+  NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS,
+  NOTE_CHAT_OPERATIONAL_ERROR_STAGES,
+} from "@/features/operational-errors/constants";
 
 import {
   NOTE_CHAT_MATCH_LIMIT,
   NOTE_CHAT_MIN_SIMILARITY,
 } from "../constants/execution";
+import { reportNoteChatOperationalError } from "../utils/report-operational-error";
 
 const NOTE_CHAT_EMBEDDING_INPUT_KIND = "rag_note_content";
 const NOTE_CHAT_EMBEDDING_SOURCE_TYPE = "note";
@@ -46,9 +52,33 @@ export async function searchNoteChatEmbeddings({
   const embeddingModel = embeddingConfiguration.model;
 
   if (embeddingModel.dimensions !== AI_EMBEDDING_DIMENSIONS) {
-    throw new Error(
+    const error = new Error(
       `Unsupported note chat embedding dimensions: ${embeddingModel.dimensions}`,
     );
+
+    /*
+     * Runtime에서 선택된 Embedding Model의 dimensions가
+     * 현재 Note Chat 검색 파이프라인이 지원하는 값과 다르면
+     * Provider 호출 전에 설정 오류로 실행을 중단합니다.
+     */
+    await reportNoteChatOperationalError({
+      actorUserId: ownerUserId,
+      context: {
+        embeddingModelConfigId: embeddingModel.id,
+        expectedDimensions: AI_EMBEDDING_DIMENSIONS,
+        receivedDimensions: embeddingModel.dimensions,
+      },
+      error,
+      errorCode:
+        NOTE_CHAT_OPERATIONAL_ERROR_CODES.EMBEDDING_CONFIGURATION_INVALID,
+      message: "노트 챗봇 Embedding 설정이 올바르지 않습니다.",
+      operation:
+        NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.VALIDATE_EMBEDDING_CONFIGURATION,
+      stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.CONFIGURATION,
+      userId: ownerUserId,
+    });
+
+    throw error;
   }
 
   const queryEmbedding = await createAiEmbeddingWithProvider({

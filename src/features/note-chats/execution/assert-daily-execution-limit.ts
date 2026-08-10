@@ -71,8 +71,6 @@ export async function assertNoteChatDailyExecutionLimit(
     .lt("created_at", endAt);
 
   if (error) {
-    console.error("Failed to get note chat daily execution count", error);
-
     throw new Error(
       `Failed to get note chat daily execution count: ${error.message}`,
     );

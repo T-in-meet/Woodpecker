@@ -14,6 +14,12 @@ import { updateNoteChatUserMessageInputSchema } from "@/features/note-chats/sche
 import { runNoteChatStream } from "@/features/note-chats/stream/run-note-chat-stream";
 import { encodeNoteChatStreamEvent } from "@/features/note-chats/stream/serialize";
 import type { NoteChatStreamEvent } from "@/features/note-chats/stream/types";
+import { reportNoteChatOperationalError } from "@/features/note-chats/utils/report-operational-error";
+import {
+  NOTE_CHAT_OPERATIONAL_ERROR_CODES,
+  NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS,
+  NOTE_CHAT_OPERATIONAL_ERROR_STAGES,
+} from "@/features/operational-errors/constants";
 import { createClient } from "@/lib/supabase/server";
 
 type NoteChatUserMessageStreamRouteProps = {
@@ -126,7 +132,21 @@ export async function POST(
       );
     }
 
-    console.error("Failed to check note chat daily execution limit", error);
+    /*
+     * 일일 제한 초과 자체는 정상적인 사용량 정책 결과이므로 보고하지 않습니다.
+     * 제한 확인 과정이 실패한 경우에만 운영 오류로 보고합니다.
+     */
+    await reportNoteChatOperationalError({
+      actorUserId: user.id,
+      error,
+      errorCode:
+        NOTE_CHAT_OPERATIONAL_ERROR_CODES.DAILY_EXECUTION_LIMIT_CHECK_FAILED,
+      message: "노트 챗봇 일일 실행 제한 확인에 실패했습니다.",
+      operation:
+        NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.CHECK_DAILY_EXECUTION_LIMIT,
+      stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.EXECUTION_LIMIT,
+      userId: user.id,
+    });
 
     return NextResponse.json(
       {
@@ -150,7 +170,39 @@ export async function POST(
     .eq("id", parsed.data.messageId)
     .single();
 
-  if (targetMessageError || !targetMessage || targetMessage.role !== "user") {
+  if (targetMessageError) {
+    /*
+     * 수정 대상 메시지 조회 자체가 실패한 경우에는 정상적인 404로 숨기지 않고
+     * DB 조회 장애로 운영 오류에 보고합니다.
+     */
+    await reportNoteChatOperationalError({
+      actorUserId: user.id,
+      context: {
+        messageId: parsed.data.messageId,
+      },
+      error: targetMessageError,
+      errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.USER_MESSAGE_LOAD_FAILED,
+      message: "노트 챗봇 수정 대상 메시지 조회에 실패했습니다.",
+      operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.LOAD_USER_MESSAGE,
+      stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.DATABASE,
+      userId: user.id,
+    });
+
+    return NextResponse.json(
+      {
+        error: "수정할 사용자 메시지를 확인하지 못했습니다.",
+      },
+      {
+        status: 500,
+      },
+    );
+  }
+
+  /*
+   * 메시지가 없거나 User 역할이 아닌 경우에는 수정 가능한 대상이 아니므로
+   * 운영 장애로 기록하지 않고 기존의 not-found 응답을 반환합니다.
+   */
+  if (!targetMessage || targetMessage.role !== "user") {
     return NextResponse.json(
       {
         error: "수정할 사용자 메시지를 찾을 수 없습니다.",
@@ -190,7 +242,19 @@ export async function POST(
         }),
       ]);
   } catch (error) {
-    console.error("Failed to load note chat AI configuration", error);
+    /*
+     * 답변 생성·질의 확장·노트 검색 Runtime 설정 중 하나라도
+     * 확정하지 못하면 수정된 질문의 AI 실행을 시작할 수 없습니다.
+     */
+    await reportNoteChatOperationalError({
+      actorUserId: user.id,
+      error,
+      errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.AI_CONFIGURATION_LOAD_FAILED,
+      message: "노트 챗봇 AI 실행 설정 조회에 실패했습니다.",
+      operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.LOAD_AI_CONFIGURATION,
+      stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.CONFIGURATION,
+      userId: user.id,
+    });
 
     return NextResponse.json(
       {
@@ -219,7 +283,57 @@ export async function POST(
     })
     .single();
 
-  if (updateError || !updated) {
+  if (updateError) {
+    /*
+     * 사용자 메시지 수정과 이후 대화 정리, Pending Run 생성은 하나의 RPC에서
+     * 처리하므로 트랜잭션 실패 대상을 식별할 수 있는 ID만 기록합니다.
+     * 수정된 질문 본문은 운영 오류 Context에 저장하지 않습니다.
+     */
+    await reportNoteChatOperationalError({
+      actorUserId: user.id,
+      context: {
+        conversationId,
+        messageId: parsed.data.messageId,
+      },
+      error: updateError,
+      errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.USER_MESSAGE_UPDATE_FAILED,
+      message: "노트 챗봇 사용자 메시지 수정에 실패했습니다.",
+      operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.UPDATE_USER_MESSAGE,
+      stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.DATABASE,
+      userId: user.id,
+    });
+
+    return NextResponse.json(
+      {
+        error: "질문 수정에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+      },
+      {
+        status: 500,
+      },
+    );
+  }
+
+  if (!updated) {
+    /*
+     * DB 오류 없이 RPC 결과가 반환되지 않은 경우에도 정상적인 수정 완료가 아니므로
+     * 데이터베이스 실행 결과 이상으로 운영 오류에 보고합니다.
+     */
+    await reportNoteChatOperationalError({
+      actorUserId: user.id,
+      context: {
+        conversationId,
+        messageId: parsed.data.messageId,
+      },
+      error: new Error(
+        "update_note_chat_user_message returned no updated message result.",
+      ),
+      errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.USER_MESSAGE_UPDATE_FAILED,
+      message: "노트 챗봇 사용자 메시지 수정 결과를 확인하지 못했습니다.",
+      operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.UPDATE_USER_MESSAGE,
+      stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.DATABASE,
+      userId: user.id,
+    });
+
     return NextResponse.json(
       {
         error: "질문 수정에 실패했습니다. 잠시 후 다시 시도해 주세요.",
@@ -264,6 +378,7 @@ export async function POST(
               conversationId,
               runId: updated.run_id,
               settings,
+              userId: user.id,
               userMessageId: updated.user_message_id,
             },
             enqueueEvent,

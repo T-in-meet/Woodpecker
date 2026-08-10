@@ -6,6 +6,11 @@ import { createAiChatCompletionWithProvider } from "@/features/ai/providers";
 import type { AiProviderChatMessage } from "@/features/ai/providers/types";
 import { getProviderApiKey } from "@/features/ai/providers/utils/api-key";
 import type { AiRuntimeChatConfiguration } from "@/features/ai/runtimes/types";
+import {
+  NOTE_CHAT_OPERATIONAL_ERROR_CODES,
+  NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS,
+  NOTE_CHAT_OPERATIONAL_ERROR_STAGES,
+} from "@/features/operational-errors/constants";
 import type { Json } from "@/types/db.helpers";
 
 import {
@@ -14,6 +19,7 @@ import {
 } from "../constants/execution";
 import { noteChatUserMessageContentSchema } from "../schema";
 import type { NoteChatMessage } from "../types";
+import { reportNoteChatOperationalError } from "../utils/report-operational-error";
 import { resolveNoteChatProviderMessages } from "./resolve-messages";
 
 const noteChatQueryExpansionResponseSchema = z.object({
@@ -231,15 +237,61 @@ export async function expandNoteChatQuery(
   try {
     response = JSON.parse(result.content) as unknown;
   } catch {
-    throw new Error("Note chat query expansion response is not valid JSON.");
+    const error = new Error(
+      "Note chat query expansion response is not valid JSON.",
+    );
+
+    /*
+     * Provider 호출은 정상적으로 완료됐지만 질의 확장 결과가
+     * Note Chat이 요구하는 JSON 계약을 만족하지 못한 경우입니다.
+     *
+     * Provider 응답 원문이나 사용자 질문은 운영 오류에 저장하지 않고,
+     * 실행 대상 User Message만 식별 정보로 기록합니다.
+     */
+    await reportNoteChatOperationalError({
+      context: {
+        userMessageId: params.userMessageId,
+      },
+      error,
+      errorCode:
+        NOTE_CHAT_OPERATIONAL_ERROR_CODES.QUERY_EXPANSION_RESPONSE_PARSE_FAILED,
+      message: "노트 챗봇 질의 확장 응답 JSON 파싱에 실패했습니다.",
+      operation:
+        NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.PARSE_QUERY_EXPANSION_RESPONSE,
+      stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.EXECUTION,
+    });
+
+    throw error;
   }
 
   const parsed = noteChatQueryExpansionResponseSchema.safeParse(response);
 
   if (!parsed.success) {
-    throw new Error(
+    const error = new Error(
       "Note chat query expansion response does not match the expected schema.",
     );
+
+    /*
+     * JSON 자체는 유효하지만 expandedQuery 계약을 충족하지 못하면
+     * 검색 질의를 신뢰할 수 없으므로 실행을 중단하고 운영 오류로 보고합니다.
+     *
+     * 응답 전체와 Zod 검증 데이터는 기록하지 않아 AI 출력 및 사용자 관련
+     * 텍스트가 운영 오류 Context에 복제되지 않도록 합니다.
+     */
+    await reportNoteChatOperationalError({
+      context: {
+        userMessageId: params.userMessageId,
+      },
+      error,
+      errorCode:
+        NOTE_CHAT_OPERATIONAL_ERROR_CODES.QUERY_EXPANSION_RESPONSE_PARSE_FAILED,
+      message: "노트 챗봇 질의 확장 응답 구조 검증에 실패했습니다.",
+      operation:
+        NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.PARSE_QUERY_EXPANSION_RESPONSE,
+      stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.EXECUTION,
+    });
+
+    throw error;
   }
 
   return parsed.data.expandedQuery;

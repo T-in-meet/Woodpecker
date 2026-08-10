@@ -1,7 +1,14 @@
 import { z } from "zod";
 
 import type { AiEmbeddingMatchRow } from "@/features/ai/embeddings/types";
+import {
+  NOTE_CHAT_OPERATIONAL_ERROR_CODES,
+  NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS,
+  NOTE_CHAT_OPERATIONAL_ERROR_STAGES,
+} from "@/features/operational-errors/constants";
 import { createAdminClient } from "@/lib/supabase/admin";
+
+import { reportNoteChatOperationalError } from "../utils/report-operational-error";
 
 /**
  * 노트 챗봇 Context 생성에 사용하는 검색된 노트입니다.
@@ -70,6 +77,20 @@ export async function getMatchedNoteChatNotes({
     .in("id", noteIds);
 
   if (error) {
+    /*
+     * Embedding 검색 자체는 완료되었지만 실제 Note 조회가 실패한 경우이므로
+     * 검색 결과나 노트 본문은 기록하지 않고 사용자와 DB 오류만 보고합니다.
+     */
+    await reportNoteChatOperationalError({
+      actorUserId: ownerUserId,
+      error,
+      errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.MATCHED_NOTES_LOAD_FAILED,
+      message: "노트 챗봇 검색 노트 조회에 실패했습니다.",
+      operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.GET_MATCHED_NOTES,
+      stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.DATABASE,
+      userId: ownerUserId,
+    });
+
     throw new Error(`Failed to get matched note chat notes: ${error.message}`);
   }
 

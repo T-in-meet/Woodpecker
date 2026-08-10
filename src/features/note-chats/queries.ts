@@ -2,6 +2,10 @@
 
 import { z } from "zod";
 
+import {
+  NOTE_CHAT_OPERATIONAL_ERROR_CODES,
+  NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS,
+} from "@/features/operational-errors/constants";
 import { createClient } from "@/lib/supabase/server";
 
 import { noteChatRunSourceSchema } from "./schema";
@@ -9,6 +13,7 @@ import type {
   NoteChatConversationDetail,
   NoteChatConversationListItem,
 } from "./types";
+import { reportNoteChatOperationalError } from "./utils/report-operational-error";
 
 export type GetNoteChatConversationListParams = {
   page?: number;
@@ -67,6 +72,21 @@ export async function getNoteChatConversationList({
   const { data, count, error } = await query.range(from, to);
 
   if (error) {
+    // 목록 조회 조건과 페이지 정보를 남겨 동일한 DB 오류가
+    // 어떤 조회 상황에서 발생했는지 운영 화면에서 추적할 수 있도록 한다.
+    await reportNoteChatOperationalError({
+      context: {
+        page: normalizedPage,
+        pageSize,
+        searchApplied: trimmedSearch.length > 0,
+      },
+      error,
+      errorCode:
+        NOTE_CHAT_OPERATIONAL_ERROR_CODES.CONVERSATION_LIST_LOAD_FAILED,
+      message: "노트 챗봇 대화 목록 조회에 실패했습니다.",
+      operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.GET_CONVERSATION_LIST,
+    });
+
     throw new Error(
       `노트 챗봇 대화 목록 조회에 실패했습니다: ${error.message}`,
     );
@@ -104,6 +124,18 @@ export async function getNoteChatConversationDetail(
     .maybeSingle();
 
   if (conversationError) {
+    // 상세 조회 실패 대상을 식별할 수 있도록 conversationId만 기록하고,
+    // 조회 실패 자체는 기존과 동일하게 호출자에게 예외로 전달한다.
+    await reportNoteChatOperationalError({
+      context: {
+        conversationId,
+      },
+      error: conversationError,
+      errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.CONVERSATION_LOAD_FAILED,
+      message: "노트 챗봇 대화 조회에 실패했습니다.",
+      operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.GET_CONVERSATION,
+    });
+
     throw new Error(
       `노트 챗봇 대화 조회에 실패했습니다: ${conversationError.message}`,
     );
@@ -120,6 +152,18 @@ export async function getNoteChatConversationDetail(
     .order("sequence_number", { ascending: true });
 
   if (messagesError) {
+    // 메시지 조회 실패가 발생한 대화를 식별할 수 있도록
+    // conversationId를 함께 기록한다.
+    await reportNoteChatOperationalError({
+      context: {
+        conversationId: conversation.id,
+      },
+      error: messagesError,
+      errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.MESSAGES_LOAD_FAILED,
+      message: "노트 챗봇 메시지 조회에 실패했습니다.",
+      operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.GET_MESSAGES,
+    });
+
     throw new Error(
       `노트 챗봇 메시지 조회에 실패했습니다: ${messagesError.message}`,
     );
@@ -138,6 +182,18 @@ export async function getNoteChatConversationDetail(
       .in("assistant_message_id", assistantMessageIds);
 
     if (runsError) {
+      // 참고 노트 조회 실패가 어느 대화에서 발생했는지 추적할 수 있도록
+      // conversationId를 기록하되 메시지 내용이나 sources 원문은 저장하지 않는다.
+      await reportNoteChatOperationalError({
+        context: {
+          conversationId: conversation.id,
+        },
+        error: runsError,
+        errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.SOURCES_LOAD_FAILED,
+        message: "노트 챗봇 참고 노트 조회에 실패했습니다.",
+        operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.GET_SOURCES,
+      });
+
       throw new Error(
         `노트 챗봇 참고 노트 조회에 실패했습니다: ${runsError.message}`,
       );

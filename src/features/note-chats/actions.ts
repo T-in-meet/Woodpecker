@@ -2,6 +2,10 @@
 
 import { redirect } from "next/navigation";
 
+import {
+  NOTE_CHAT_OPERATIONAL_ERROR_CODES,
+  NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS,
+} from "@/features/operational-errors/constants";
 import { ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 
@@ -11,6 +15,7 @@ import {
   updateNoteChatConversationTitleInputSchema,
 } from "./schema";
 import type { NoteChatConversation } from "./types";
+import { reportNoteChatOperationalError } from "./utils/report-operational-error";
 
 /**
  * 노트 챗봇 Conversation Action의 공통 실패 결과입니다.
@@ -133,13 +138,30 @@ export async function createNoteChatConversationAction(
     .select("*")
     .single();
 
-  if (error || !conversation) {
-    console.error("Failed to create note chat conversation", {
+  if (error) {
+    // DB 생성 실패는 사용자 요청 실패와 별개로 운영 오류에 보고하여
+    // 동일 오류를 집계하고 관리자가 장애 발생을 확인할 수 있도록 한다.
+    await reportNoteChatOperationalError({
+      actorUserId: context.userId,
+      context: {
+        title: parsed.data.title,
+      },
       error,
+      errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.CONVERSATION_CREATE_FAILED,
+      message: "노트 챗봇 대화 생성에 실패했습니다.",
+      operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.CREATE_CONVERSATION,
       userId: context.userId,
-      title: parsed.data.title,
     });
 
+    return {
+      success: false,
+      error: "노트 챗봇 대화 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+    };
+  }
+
+  // DB 오류 없이 생성 결과가 없는 경우에는 운영 장애로 단정하지 않고
+  // 기존 사용자 오류 응답만 반환한다.
+  if (!conversation) {
     return {
       success: false,
       error: "노트 챗봇 대화 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.",
@@ -194,6 +216,22 @@ export async function updateNoteChatConversationTitleAction(
     .maybeSingle();
 
   if (error) {
+    // 어떤 대화의 제목 변경에서 DB 오류가 발생했는지 추적할 수 있도록
+    // 대화 ID만 context에 포함하고 사용자 입력 제목은 기록하지 않는다.
+    await reportNoteChatOperationalError({
+      actorUserId: context.userId,
+      context: {
+        conversationId: parsed.data.conversationId,
+      },
+      error,
+      errorCode:
+        NOTE_CHAT_OPERATIONAL_ERROR_CODES.CONVERSATION_TITLE_UPDATE_FAILED,
+      message: "노트 챗봇 대화 제목 변경에 실패했습니다.",
+      operation:
+        NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.UPDATE_CONVERSATION_TITLE,
+      userId: context.userId,
+    });
+
     return {
       success: false,
       error:
@@ -252,6 +290,20 @@ export async function deleteNoteChatConversationAction(
     .maybeSingle();
 
   if (error) {
+    // 삭제 실패 대상을 운영 오류에서 추적할 수 있도록
+    // 사용자 입력 없이 conversationId만 context에 기록한다.
+    await reportNoteChatOperationalError({
+      actorUserId: context.userId,
+      context: {
+        conversationId: parsed.data.conversationId,
+      },
+      error,
+      errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.CONVERSATION_DELETE_FAILED,
+      message: "노트 챗봇 대화 삭제에 실패했습니다.",
+      operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.DELETE_CONVERSATION,
+      userId: context.userId,
+    });
+
     return {
       success: false,
       error: "노트 챗봇 대화 삭제에 실패했습니다. 잠시 후 다시 시도해 주세요.",

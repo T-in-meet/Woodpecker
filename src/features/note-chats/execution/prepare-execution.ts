@@ -4,11 +4,17 @@ import type {
   AiRuntimeChatConfiguration,
   AiRuntimeEmbeddingConfiguration,
 } from "@/features/ai/runtimes/types";
+import {
+  NOTE_CHAT_OPERATIONAL_ERROR_CODES,
+  NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS,
+  NOTE_CHAT_OPERATIONAL_ERROR_STAGES,
+} from "@/features/operational-errors/constants";
 import type { Json } from "@/types/db.helpers";
 
 import { NOTE_CHAT_CONTEXT_LIMIT } from "../constants/execution";
 import { getNoteChatConversationDetail } from "../queries";
 import type { NoteChatConversation } from "../types";
+import { reportNoteChatOperationalError } from "../utils/report-operational-error";
 import { buildNoteChatContext } from "./build-note-context";
 import { buildNoteChatSources } from "./build-note-sources";
 import { expandNoteChatQuery } from "./expand-query";
@@ -92,9 +98,28 @@ export async function prepareNoteChatExecution(
   const detail = await getNoteChatConversationDetail(params.conversationId);
 
   if (!detail) {
-    throw new Error(
+    const error = new Error(
       `Note chat conversation not found: ${params.conversationId}`,
     );
+
+    /*
+     * DB 조회 자체는 정상적으로 완료됐지만 실행 대상 Conversation을
+     * 확인할 수 없는 경우이므로 DB 장애가 아닌 실행 상태 오류로 보고합니다.
+     */
+    await reportNoteChatOperationalError({
+      context: {
+        conversationId: params.conversationId,
+        userMessageId: params.userMessageId,
+      },
+      error,
+      errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.EXECUTION_STATE_INVALID,
+      message: "노트 챗봇 실행 대상 대화를 확인하지 못했습니다.",
+      operation:
+        NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.VALIDATE_EXECUTION_STATE,
+      stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.EXECUTION,
+    });
+
+    throw error;
   }
 
   /*
@@ -109,15 +134,57 @@ export async function prepareNoteChatExecution(
   );
 
   if (!currentUserMessage) {
-    throw new Error(
+    const error = new Error(
       `Note chat user message not found: ${params.userMessageId}`,
     );
+
+    /*
+     * Conversation은 정상적으로 조회됐지만 현재 실행을 발생시킨
+     * User Message가 대화 이력에 없으면 실행 상태가 일관되지 않은 것입니다.
+     */
+    await reportNoteChatOperationalError({
+      actorUserId: detail.conversation.user_id,
+      context: {
+        conversationId: params.conversationId,
+        userMessageId: params.userMessageId,
+      },
+      error,
+      errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.EXECUTION_STATE_INVALID,
+      message: "노트 챗봇 실행 대상 사용자 메시지를 확인하지 못했습니다.",
+      operation:
+        NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.VALIDATE_EXECUTION_STATE,
+      stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.EXECUTION,
+      userId: detail.conversation.user_id,
+    });
+
+    throw error;
   }
 
   if (currentUserMessage.role !== AI_CHAT_MESSAGE_ROLE.USER) {
-    throw new Error(
+    const error = new Error(
       `Note chat execution message is not a user message: ${params.userMessageId}`,
     );
+
+    /*
+     * 실행 대상 메시지는 반드시 User 역할이어야 하므로 다른 역할이 확인되면
+     * 이후 질의 확장이나 답변 생성을 진행하지 않고 실행 상태 오류로 보고합니다.
+     */
+    await reportNoteChatOperationalError({
+      actorUserId: detail.conversation.user_id,
+      context: {
+        conversationId: params.conversationId,
+        userMessageId: params.userMessageId,
+      },
+      error,
+      errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.EXECUTION_STATE_INVALID,
+      message: "노트 챗봇 실행 대상 메시지 역할이 올바르지 않습니다.",
+      operation:
+        NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.VALIDATE_EXECUTION_STATE,
+      stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.EXECUTION,
+      userId: detail.conversation.user_id,
+    });
+
+    throw error;
   }
 
   /*
@@ -165,13 +232,42 @@ export async function prepareNoteChatExecution(
 
   const sources = buildNoteChatSources(contextNotes);
 
-  const messages = resolveNoteChatExecutionMessages({
-    context,
-    messages: detail.messages,
-    systemTemplate: params.settings.chat.prompt.version.system_template,
-    userMessageId: params.userMessageId,
-    userTemplate: params.settings.chat.prompt.version.user_template,
-  });
+  let messages: AiProviderChatMessage[];
+
+  try {
+    messages = resolveNoteChatExecutionMessages({
+      context,
+      messages: detail.messages,
+      systemTemplate: params.settings.chat.prompt.version.system_template,
+      userMessageId: params.userMessageId,
+      userTemplate: params.settings.chat.prompt.version.user_template,
+    });
+  } catch (error) {
+    /*
+     * DB 메시지를 Provider 실행 메시지로 변환하는 과정에서
+     * 저장된 content 구조나 message role 등 Note Chat 메시지 계약이
+     * 깨진 상태가 확인되면 실행을 중단하고 운영 오류로 보고합니다.
+     *
+     * 실제 메시지 본문은 운영 오류 Context에 저장하지 않습니다.
+     */
+    await reportNoteChatOperationalError({
+      actorUserId: detail.conversation.user_id,
+      context: {
+        conversationId: params.conversationId,
+        userMessageId: params.userMessageId,
+      },
+      error,
+      errorCode:
+        NOTE_CHAT_OPERATIONAL_ERROR_CODES.EXECUTION_MESSAGES_RESOLVE_FAILED,
+      message: "노트 챗봇 실행 메시지 구성에 실패했습니다.",
+      operation:
+        NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.RESOLVE_EXECUTION_MESSAGES,
+      stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.EXECUTION,
+      userId: detail.conversation.user_id,
+    });
+
+    throw error;
+  }
 
   return {
     conversation: detail.conversation,

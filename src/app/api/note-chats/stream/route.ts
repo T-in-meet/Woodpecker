@@ -14,6 +14,12 @@ import { createNoteChatQuestionInputSchema } from "@/features/note-chats/schema"
 import { runNoteChatStream } from "@/features/note-chats/stream/run-note-chat-stream";
 import { encodeNoteChatStreamEvent } from "@/features/note-chats/stream/serialize";
 import type { NoteChatStreamEvent } from "@/features/note-chats/stream/types";
+import { reportNoteChatOperationalError } from "@/features/note-chats/utils/report-operational-error";
+import {
+  NOTE_CHAT_OPERATIONAL_ERROR_CODES,
+  NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS,
+  NOTE_CHAT_OPERATIONAL_ERROR_STAGES,
+} from "@/features/operational-errors/constants";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -110,7 +116,21 @@ export async function POST(request: Request): Promise<Response> {
       );
     }
 
-    console.error("Failed to check note chat daily execution limit", error);
+    /*
+     * 일일 제한 초과 자체는 정상적인 사용량 정책 결과이므로 보고하지 않습니다.
+     * 제한 확인 과정이 실패한 경우에만 운영 오류로 보고합니다.
+     */
+    await reportNoteChatOperationalError({
+      actorUserId: user.id,
+      error,
+      errorCode:
+        NOTE_CHAT_OPERATIONAL_ERROR_CODES.DAILY_EXECUTION_LIMIT_CHECK_FAILED,
+      message: "노트 챗봇 일일 실행 제한 확인에 실패했습니다.",
+      operation:
+        NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.CHECK_DAILY_EXECUTION_LIMIT,
+      stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.EXECUTION_LIMIT,
+      userId: user.id,
+    });
 
     return NextResponse.json(
       {
@@ -151,7 +171,19 @@ export async function POST(request: Request): Promise<Response> {
         }),
       ]);
   } catch (error) {
-    console.error("Failed to load note chat AI configuration", error);
+    /*
+     * 답변 생성·질의 확장·노트 검색 설정 중 하나라도 확정할 수 없으면
+     * 실행 자체를 시작할 수 없으므로 하나의 Runtime 설정 조회 실패로 보고합니다.
+     */
+    await reportNoteChatOperationalError({
+      actorUserId: user.id,
+      error,
+      errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.AI_CONFIGURATION_LOAD_FAILED,
+      message: "노트 챗봇 AI 실행 설정 조회에 실패했습니다.",
+      operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.LOAD_AI_CONFIGURATION,
+      stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.CONFIGURATION,
+      userId: user.id,
+    });
 
     return NextResponse.json(
       {
@@ -179,7 +211,54 @@ export async function POST(request: Request): Promise<Response> {
     })
     .single();
 
-  if (createError || !created) {
+  if (createError) {
+    /*
+     * 질문과 Pending Run을 생성하는 트랜잭션 자체가 실패한 경우
+     * 대상 Conversation만 식별 정보로 남기고 질문 본문은 기록하지 않습니다.
+     */
+    await reportNoteChatOperationalError({
+      actorUserId: user.id,
+      context: {
+        conversationId,
+      },
+      error: createError,
+      errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.QUESTION_CREATE_FAILED,
+      message: "노트 챗봇 질문 생성에 실패했습니다.",
+      operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.CREATE_QUESTION,
+      stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.DATABASE,
+      userId: user.id,
+    });
+
+    return NextResponse.json(
+      {
+        error: "질문 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+      },
+      {
+        status: 500,
+      },
+    );
+  }
+
+  if (!created) {
+    /*
+     * DB 오류 없이 RPC 결과가 반환되지 않은 경우도 정상적인 생성 결과가 아니므로
+     * 데이터베이스 실행 결과 이상으로 운영 오류에 보고합니다.
+     */
+    await reportNoteChatOperationalError({
+      actorUserId: user.id,
+      context: {
+        conversationId,
+      },
+      error: new Error(
+        "create_note_chat_question returned no created question result.",
+      ),
+      errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.QUESTION_CREATE_FAILED,
+      message: "노트 챗봇 질문 생성 결과를 확인하지 못했습니다.",
+      operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.CREATE_QUESTION,
+      stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.DATABASE,
+      userId: user.id,
+    });
+
     return NextResponse.json(
       {
         error: "질문 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.",
@@ -224,6 +303,7 @@ export async function POST(request: Request): Promise<Response> {
               conversationId,
               runId: created.run_id,
               settings,
+              userId: user.id,
               userMessageId: created.user_message_id,
             },
             enqueueEvent,
