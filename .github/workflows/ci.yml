@@ -120,13 +120,35 @@ jobs:
         run: npx vitest run
 
   # ─────────────────────────────────────────
-  # Job 6: Next.js 프로덕션 빌드 검증
-  # lint, format, type-check, test 모두 통과한 후 실행
+  # Job 6: Supabase pgTAP SQL 테스트
+  # 로컬 Supabase 스택을 띄워 마이그레이션 적용 후 supabase/tests/**를 실행
+  # ─────────────────────────────────────────
+  supabase-test:
+    name: Supabase SQL Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1.6.0
+        with:
+          version: 2.67.1
+
+      - name: Start local Supabase
+        run: supabase start
+
+      - name: Run pgTAP tests
+        run: supabase test db
+
+  # ─────────────────────────────────────────
+  # Job 7: Next.js 프로덕션 빌드 검증
+  # lint, format, type-check, test, supabase-test 모두 통과한 후 실행
   # ─────────────────────────────────────────
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [lint, format, type-check, test] # 앞 3개 job이 성공해야 실행됨
+    needs: [lint, format, type-check, test, supabase-test] # 앞 job들이 성공해야 실행됨
     environment: ${{ github.base_ref == 'main' && 'Production' || 'develope' }}
     steps:
       - name: Checkout code

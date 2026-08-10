@@ -188,7 +188,8 @@ hotfix/<kebab-summary>         →  main (+ development 반영)
 | Dependency Review | `actions/dependency-review-action`      |
 | Type Check        | `npx tsc --noEmit`                      |
 | Test              | `npx vitest run`                        |
-| Build             | `npm run build` (앞의 4개 통과 후 실행) |
+| Supabase SQL Test | `supabase start` 후 `supabase test db`  |
+| Build             | `npm run build` (앞의 5개 통과 후 실행) |
 
 **CI 실패 시 머지 불가**
 
