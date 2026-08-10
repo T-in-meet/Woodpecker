@@ -133,7 +133,7 @@ jobs:
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1.6.0
         with:
-          version: 2.67.1
+          version: 2.109.1
 
       - name: Start local Supabase
         run: supabase start
