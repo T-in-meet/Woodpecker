@@ -12,14 +12,22 @@
 --
 -- title은 이미 character varying(100)이라 별도 제약이 필요 없다.
 --
--- 기존 데이터가 이 값을 넘으면 아래 ALTER가 실패한다. 적용 전에 확인한다.
+-- notes는 기존 데이터가 있으므로 not valid로 추가한다.
+-- 일반 ADD CONSTRAINT는 기존 행 전체를 즉시 검증해서, 초과 노트가 하나라도 있으면
+-- 이 마이그레이션이 실패하고 main 자동 배포(migrate.yml)가 통째로 막힌다.
+-- not valid여도 신규 INSERT/UPDATE는 즉시 차단되므로 위에 적은 비용 폭주는 여기서 막힌다.
+--
+-- 기존 데이터 정리 후 별도 마이그레이션에서 검증을 마무리한다.
 --   select count(*) from public.notes where char_length(content) > 50000;
+--   alter table public.notes validate constraint notes_content_length_check;
 
 -- src/features/notes/schema.ts의 noteSchema.content와 같은 값이다. 함께 바꾼다.
 alter table public.notes
   add constraint notes_content_length_check
-  check (char_length(content) <= 50000);
+  check (char_length(content) <= 50000) not valid;
 
+-- review_gradings는 직전 마이그레이션에서 만든 신규 테이블이라 기존 데이터가 없다.
+-- 검증 대상이 없으므로 not valid 없이 바로 추가한다.
 -- src/features/review/schema.ts의 ANSWER_MAX_LENGTH와 같은 값이다. 함께 바꾼다.
 alter table public.review_gradings
   add constraint review_gradings_user_answer_length_check
