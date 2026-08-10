@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "type-check": "tsc --noEmit",
+    "test:db": "supabase start && supabase test db",
     "prepare": "husky"
   },
   "dependencies": {
