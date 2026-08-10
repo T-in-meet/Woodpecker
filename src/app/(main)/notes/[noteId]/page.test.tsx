@@ -22,6 +22,7 @@ type NoteDetailBodyProps = {
 
 const {
   createClientMock,
+  getGradingsByNoteMock,
   getNoteByIdMock,
   hasCompletedReviewForNoteTodayMock,
   noteDetailBodyMock,
@@ -29,6 +30,7 @@ const {
   redirectMock,
 } = vi.hoisted(() => ({
   createClientMock: vi.fn(),
+  getGradingsByNoteMock: vi.fn(),
   getNoteByIdMock: vi.fn(),
   hasCompletedReviewForNoteTodayMock: vi.fn(),
   noteDetailBodyMock: vi.fn(),
@@ -54,6 +56,7 @@ vi.mock("@/features/notes/queries", () => ({
 }));
 
 vi.mock("@/features/review/queries", () => ({
+  getGradingsByNote: getGradingsByNoteMock,
   hasCompletedReviewForNoteToday: hasCompletedReviewForNoteTodayMock,
 }));
 
@@ -122,6 +125,8 @@ describe("NoteDetailPage", () => {
     getNoteByIdMock.mockReset();
     hasCompletedReviewForNoteTodayMock.mockReset();
     hasCompletedReviewForNoteTodayMock.mockResolvedValue(false);
+    getGradingsByNoteMock.mockReset();
+    getGradingsByNoteMock.mockResolvedValue([]);
     noteDetailBodyMock.mockReset();
     redirectMock.mockReset();
     notFoundMock.mockReset();

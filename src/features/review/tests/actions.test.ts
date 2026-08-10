@@ -6,6 +6,8 @@ import {
   ROUTES,
 } from "@/lib/constants/routes";
 
+import { hashNoteContent } from "../lib/contentHash";
+
 const REDIRECT_ERROR = new Error("NEXT_REDIRECT");
 const NOTE_ID = "11111111-1111-4111-8111-111111111111";
 const REVIEW_LOG_ID = "22222222-2222-4222-8222-222222222222";
@@ -34,6 +36,11 @@ const {
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: createClientMock,
+}));
+
+// actions.ts가 gemini client를 import하므로 GEMINI_API_KEY 없이도 로드되도록 mock
+vi.mock("@/lib/gemini/client", () => ({
+  getGemini: () => ({ models: { generateContent: vi.fn() } }),
 }));
 
 vi.mock("next/cache", () => ({
@@ -216,9 +223,11 @@ describe("submitAnswerAction", () => {
     );
     expect(getPendingReviewLogMock).toHaveBeenCalledWith(NOTE_ID, TEST_USER_ID);
 
+    // 채점 요청이 이 해시를 되돌려줘야 서버가 같은 원본인지 확인할 수 있다.
     expect(result).toMatchObject({
       success: true,
       originalContent: "원본 내용",
+      originalContentHash: hashNoteContent("원본 내용"),
       userAnswer: "내 답안",
       reviewLogId: REVIEW_LOG_ID,
     });

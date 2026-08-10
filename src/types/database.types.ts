@@ -494,6 +494,92 @@ export type Database = {
           },
         ];
       };
+      review_gradings: {
+        Row: {
+          id: string;
+          review_log_id: string;
+          note_id: string;
+          user_id: string;
+          round: number;
+          user_answer: string;
+          score: number | null;
+          feedback: Json | null;
+          claim_token: string | null;
+          graded_content_hash: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          review_log_id: string;
+          note_id: string;
+          user_id: string;
+          round: number;
+          user_answer: string;
+          score?: number | null;
+          feedback?: Json | null;
+          claim_token?: string | null;
+          graded_content_hash?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          review_log_id?: string;
+          note_id?: string;
+          user_id?: string;
+          round?: number;
+          user_answer?: string;
+          score?: number | null;
+          feedback?: Json | null;
+          claim_token?: string | null;
+          graded_content_hash?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "review_gradings_review_log_id_fkey";
+            columns: ["review_log_id"];
+            isOneToOne: true;
+            referencedRelation: "review_logs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "review_gradings_note_id_fkey";
+            columns: ["note_id"];
+            isOneToOne: false;
+            referencedRelation: "notes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      review_grading_generations: {
+        Row: {
+          id: string;
+          user_id: string;
+          review_log_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          review_log_id?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          review_log_id?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "review_grading_generations_review_log_id_fkey";
+            columns: ["review_log_id"];
+            isOneToOne: false;
+            referencedRelation: "review_logs";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       quiz_generations: {
         Row: {
           id: string;
@@ -631,6 +717,25 @@ export type Database = {
       };
       claim_quiz_generation: {
         Args: { p_note_id: string; p_quiz_type: string };
+        Returns: string;
+      };
+      claim_review_grading: {
+        Args: {
+          p_user_id: string;
+          p_review_log_id: string;
+          p_user_answer: string;
+          p_content_hash: string;
+        };
+        Returns: Json;
+      };
+      finalize_review_grading: {
+        Args: {
+          p_user_id: string;
+          p_review_log_id: string;
+          p_claim_token: string;
+          p_score: number;
+          p_feedback: Json;
+        };
         Returns: string;
       };
       complete_review_and_schedule_next: {
