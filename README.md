@@ -4,7 +4,7 @@
 
 노트를 저장하는 순간 복습 일정이 자동으로 잡히고, 잊어버릴 즈음 알림이 오고, 백지 테스트로 실제로 기억하는지 확인합니다.
 
-🔗 **[서비스 바로가기](https://woodpecker-app.vercel.app)**
+🔗 **[서비스 바로가기](https://woodpecker-blue.vercel.app)**
 
 <!-- TODO: 데모 GIF 또는 대표 스크린샷 추가 -->
 
