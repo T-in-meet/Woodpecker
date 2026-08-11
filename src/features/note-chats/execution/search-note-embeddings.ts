@@ -10,13 +10,14 @@ import {
 } from "@/features/operational-errors/constants";
 
 import {
+  NOTE_EMBEDDING_INPUT_KIND,
+  NOTE_EMBEDDING_SOURCE_TYPE,
+} from "../constants/embeddings";
+import {
   NOTE_CHAT_MATCH_LIMIT,
   NOTE_CHAT_MIN_SIMILARITY,
 } from "../constants/execution";
 import { reportNoteChatOperationalError } from "../utils/report-operational-error";
-
-const NOTE_CHAT_EMBEDDING_INPUT_KIND = "rag_note_content";
-const NOTE_CHAT_EMBEDDING_SOURCE_TYPE = "note";
 
 /**
  * 노트 챗봇의 Note Embedding 검색 입력입니다.
@@ -90,12 +91,12 @@ export async function searchNoteChatEmbeddings({
   });
 
   return matchAiEmbeddings({
-    inputKind: NOTE_CHAT_EMBEDDING_INPUT_KIND,
+    inputKind: NOTE_EMBEDDING_INPUT_KIND,
     limit: NOTE_CHAT_MATCH_LIMIT,
     minSimilarity: NOTE_CHAT_MIN_SIMILARITY,
     modelConfigId: embeddingModel.id,
     ownerUserId,
     queryEmbedding: queryEmbedding.embedding,
-    sourceType: NOTE_CHAT_EMBEDDING_SOURCE_TYPE,
+    sourceType: NOTE_EMBEDDING_SOURCE_TYPE,
   });
 }

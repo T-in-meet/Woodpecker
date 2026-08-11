@@ -7,6 +7,12 @@ import { getNextReviewDate } from "@/lib/constants/reviewIntervals";
 import { ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 
+import { resolveAiRuntimeEmbeddingConfiguration } from "../ai/runtimes";
+import {
+  NOTE_CHAT_AI_FEATURE_KEY,
+  NOTE_CHAT_AI_ROLE_KEY,
+} from "../note-chats/constants/ai";
+import { generateNoteEmbedding } from "../note-chats/embeddings/note";
 import { type NoteInput, noteSchema } from "./schema";
 
 type NoteActionFieldErrors = Partial<Record<keyof NoteInput, string[]>>;
@@ -70,6 +76,28 @@ export async function createNoteAction(
     return { error: "노트 저장에 실패했습니다. 잠시 후 다시 시도해주세요." };
   }
 
+  try {
+    // Note가 DB에 정상 저장된 이후 동일한 Note 내용을 RAG embedding으로 저장한다.
+    // Note Chat의 검색 대상 embedding과 동일한 Runtime 설정을 사용한다.
+    const embeddingConfiguration = await resolveAiRuntimeEmbeddingConfiguration(
+      {
+        featureKey: NOTE_CHAT_AI_FEATURE_KEY,
+        roleKey: NOTE_CHAT_AI_ROLE_KEY.NOTE_RETRIEVAL,
+      },
+    );
+
+    await generateNoteEmbedding({
+      embeddingConfiguration,
+      ownerUserId: user.id,
+      noteId: newNoteId,
+      title: parsed.data.title,
+      content: parsed.data.content,
+    });
+  } catch {
+    // Note 저장은 이미 성공했으므로 embedding 실패가 Note 생성 결과에 영향을 주지 않도록 한다.
+    // Embedding 오류 자체는 AI Foundation에서 operational error로 이미 보고된다.
+  }
+
   return { success: true, newNoteId };
 }
 
@@ -131,6 +159,28 @@ export async function updateNoteAction(
 
   if (!updatedNote) {
     return { error: "수정할 노트를 찾을 수 없습니다." };
+  }
+
+  try {
+    // 수정된 Note를 RAG 검색 대상에 즉시 반영하기 위해
+    // Note Chat과 동일한 note-retrieval Embedding Model로 새 embedding을 생성한다.
+    const embeddingConfiguration = await resolveAiRuntimeEmbeddingConfiguration(
+      {
+        featureKey: NOTE_CHAT_AI_FEATURE_KEY,
+        roleKey: NOTE_CHAT_AI_ROLE_KEY.NOTE_RETRIEVAL,
+      },
+    );
+
+    await generateNoteEmbedding({
+      embeddingConfiguration,
+      ownerUserId: user.id,
+      noteId: updatedNote.id,
+      title: parsed.data.title,
+      content: parsed.data.content,
+    });
+  } catch {
+    // Note 수정은 이미 성공했으므로 embedding 실패가 Note 수정 결과에 영향을 주지 않도록 한다.
+    // Embedding 오류 자체는 AI Foundation에서 operational error로 이미 보고된다.
   }
 
   return { success: true };
