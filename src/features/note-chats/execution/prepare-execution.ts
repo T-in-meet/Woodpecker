@@ -1,5 +1,6 @@
 import { AI_CHAT_MESSAGE_ROLE } from "@/features/ai/chats/constants";
 import type { AiProviderChatMessage } from "@/features/ai/providers/types";
+import { buildNoteContext } from "@/features/ai/rags/note/build-context";
 import { getMatchedNotes } from "@/features/ai/rags/note/get-matched-notes";
 import { searchNoteEmbeddings } from "@/features/ai/rags/note/search-embeddings";
 import type {
@@ -21,7 +22,6 @@ import {
 import { getNoteChatConversationDetail } from "../queries";
 import type { NoteChatConversation } from "../types";
 import { reportNoteChatOperationalError } from "../utils/report-operational-error";
-import { buildNoteChatContext } from "./build-note-context";
 import { buildNoteChatSources } from "./build-note-sources";
 import { expandNoteChatQuery } from "./expand-query";
 import { resolveNoteChatExecutionMessages } from "./resolve-execution-messages";
@@ -231,8 +231,7 @@ export async function prepareNoteChatExecution(
   // 서버에서 고정된 안내 답변을 생성하여 Run을 성공 처리하는 경로를 추가한다.
   // 불필요한 LLM 호출과 토큰 사용을 방지하고,
   // Context 없이 일반 지식으로 답변하는 동작도 차단한다.
-
-  const context = buildNoteChatContext({
+  const context = buildNoteContext({
     notes: contextNotes,
   });
 
