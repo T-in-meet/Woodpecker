@@ -1,17 +1,14 @@
 import { z } from "zod";
 
 import { AI_CHAT_MESSAGE_ROLE } from "@/features/ai/chats/constants";
-import { renderPromptTemplate } from "@/features/ai/prompts/render";
-import { createAiChatCompletionWithProvider } from "@/features/ai/providers";
 import type { AiProviderChatMessage } from "@/features/ai/providers/types";
-import { getProviderApiKey } from "@/features/ai/providers/utils/api-key";
+import { createQueryExpansionCompletion } from "@/features/ai/rags/query-expansion/create-query-expansion-completion";
 import type { AiRuntimeChatConfiguration } from "@/features/ai/runtimes/types";
 import {
   NOTE_CHAT_OPERATIONAL_ERROR_CODES,
   NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS,
   NOTE_CHAT_OPERATIONAL_ERROR_STAGES,
 } from "@/features/operational-errors/constants";
-import type { Json } from "@/types/db.helpers";
 
 import {
   NOTE_CHAT_HISTORY_CHAR_LIMIT,
@@ -173,62 +170,24 @@ export async function expandNoteChatQuery(
     limitedHistoryMessages,
   );
 
-  const configuration = params.configuration;
-  const model = configuration.model;
-  const promptVersion = configuration.prompt.version;
-  const responseSchema = promptVersion.response_schema;
-
   /*
-   * 질의 확장 Prompt는 검색된 Note Context를 받지 않습니다.
+   * Prompt Template과 Provider 호출은 공통 RAG Query Expansion 실행기에 위임합니다.
    *
-   * `messages`에는 현재 질문보다 이전의 대화 이력,
-   * `question`에는 현재 사용자 질문만 전달합니다.
+   * Note Chat은 대화 이력과 현재 질문을 Prompt 변수로 구성하지만,
+   * 실제 Chat Completion 실행 자체는 Note Chat에 종속되지 않습니다.
    */
-  const templateVariables = {
-    messages: serializedMessages,
-    question: currentContent.text,
-  };
-
-  const systemPrompt = renderPromptTemplate(
-    promptVersion.system_template,
-    templateVariables,
-  );
-
-  const userPrompt = renderPromptTemplate(
-    promptVersion.user_template,
-    templateVariables,
-  );
-
-  /*
-   * 질의 확장은 사용자에게 스트리밍할 응답이 아니므로
-   * 비스트리밍 Chat Completion을 사용해 전체 결과를 한 번에 받습니다.
-   *
-   * Runtime Prompt에 Response Schema가 설정되어 있으면
-   * Provider의 JSON Schema 응답 형식도 함께 강제합니다.
-   */
-  const result = await createAiChatCompletionWithProvider({
-    apiKey: getProviderApiKey(model.provider),
-    model: model.model,
-    provider: model.provider,
-    responseFormat:
-      responseSchema == null
-        ? undefined
-        : {
-            type: "json_schema",
-            jsonSchema: {
-              name: "note_chat_query_expansion_response",
-              schema: responseSchema as Json,
-              strict: true,
-            },
-          },
-    systemPrompt,
-    temperature: configuration.temperature,
-    userPrompt,
+  const result = await createQueryExpansionCompletion({
+    configuration: params.configuration,
+    responseSchemaName: "note_chat_query_expansion_response",
+    variables: {
+      messages: serializedMessages,
+      question: currentContent.text,
+    },
   });
 
   /*
    * Provider의 구조화 응답을 그대로 신뢰하지 않고
-   * JSON 파싱 후 애플리케이션 스키마로 다시 검증합니다.
+   * JSON 파싱 후 Note Chat 애플리케이션 스키마로 다시 검증합니다.
    *
    * 질의 확장 실패를 원본 질문 검색으로 숨기지 않고 실행 오류로 전파합니다.
    */
