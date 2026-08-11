@@ -29,7 +29,7 @@ vi.mock("next/navigation", () => ({
   redirect: redirectMock,
 }));
 
-vi.mock("@/features/note-chats/embeddings/note", () => ({
+vi.mock("@/features/ai/rags/note/generate-embedding", () => ({
   generateNoteEmbedding: generateNoteEmbeddingMock,
 }));
 

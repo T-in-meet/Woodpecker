@@ -7,12 +7,12 @@ import { getNextReviewDate } from "@/lib/constants/reviewIntervals";
 import { ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 
+import { generateNoteEmbedding } from "../ai/rags/note/generate-embedding";
 import { resolveAiRuntimeEmbeddingConfiguration } from "../ai/runtimes";
 import {
   NOTE_CHAT_AI_FEATURE_KEY,
   NOTE_CHAT_AI_ROLE_KEY,
 } from "../note-chats/constants/ai";
-import { generateNoteEmbedding } from "../note-chats/embeddings/note";
 import { type NoteInput, noteSchema } from "./schema";
 
 type NoteActionFieldErrors = Partial<Record<keyof NoteInput, string[]>>;

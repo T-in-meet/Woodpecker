@@ -5,7 +5,10 @@ import { deleteAiEmbeddingsBySource } from "@/features/ai/embeddings/cache";
 import { generateAiEmbedding } from "@/features/ai/embeddings/generate";
 import type { AiRuntimeEmbeddingConfiguration } from "@/features/ai/runtimes/types";
 
-import { createNoteEmbeddingInput, generateNoteEmbedding } from "../note";
+import {
+  createNoteEmbeddingInput,
+  generateNoteEmbedding,
+} from "../generate-embedding";
 
 vi.mock("@/features/ai/embeddings/cache", () => ({
   deleteAiEmbeddingsBySource: vi.fn(),
