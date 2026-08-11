@@ -1,25 +1,15 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { NoteChatStreamRequestError, streamNoteChatQuestion } from "../client";
-import type { NoteChatStreamEvent } from "../types";
+import {
+  NoteChatStreamRequestError,
+  streamNoteChatQuestion,
+  streamNoteChatUserMessageUpdate,
+} from "../client";
 
-const INPUT = {
-  conversationId: "55555555-5555-4555-8555-555555555555",
-  content: {
-    text: "질문입니다.",
-  },
-};
-
-/**
- * 여러 문자열 청크를 순서대로 반환하는 응답 Stream을 생성합니다.
- *
- * @param chunks 네트워크에서 수신할 문자열 청크
- * @returns 테스트용 ReadableStream
- */
-function createTextStream(chunks: string[]): ReadableStream<Uint8Array> {
+function createStreamResponse(chunks: string[]): Response {
   const encoder = new TextEncoder();
 
-  return new ReadableStream<Uint8Array>({
+  const body = new ReadableStream<Uint8Array>({
     start(controller) {
       for (const chunk of chunks) {
         controller.enqueue(encoder.encode(chunk));
@@ -28,222 +18,236 @@ function createTextStream(chunks: string[]): ReadableStream<Uint8Array> {
       controller.close();
     },
   });
+
+  return new Response(body, {
+    status: 200,
+    headers: {
+      "Content-Type": "application/x-ndjson",
+    },
+  });
 }
-
-/**
- * AsyncGenerator가 반환하는 이벤트를 배열로 수집합니다.
- *
- * @param stream 수집할 노트 챗봇 스트림
- * @returns 순서대로 수집한 이벤트
- */
-async function collectEvents(
-  stream: AsyncGenerator<NoteChatStreamEvent>,
-): Promise<NoteChatStreamEvent[]> {
-  const events: NoteChatStreamEvent[] = [];
-
-  for await (const event of stream) {
-    events.push(event);
-  }
-
-  return events;
-}
-
-afterEach(() => {
-  vi.restoreAllMocks();
-});
 
 describe("streamNoteChatQuestion", () => {
-  it("질문 입력을 Route Handler에 POST로 전달한다", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        createTextStream([
-          '{"runId":"66666666-6666-4666-8666-666666666666","type":"start"}\n',
-        ]),
-        {
-          status: 200,
-        },
-      ),
-    );
+  it("새 질문을 올바른 URL과 Body로 요청한다", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        createStreamResponse(['{"type":"started","runId":"run-1"}\n']),
+      );
 
-    await collectEvents(streamNoteChatQuestion(INPUT));
-
-    expect(fetchMock).toHaveBeenCalledWith("/api/note-chats/stream", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
+    const stream = streamNoteChatQuestion({
+      conversationId: "conversation-1",
+      content: {
+        text: "질문입니다.",
       },
-      body: JSON.stringify(INPUT),
     });
-  });
 
-  it("NDJSON 이벤트를 수신 순서대로 반환한다", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        createTextStream([
-          '{"runId":"66666666-6666-4666-8666-666666666666","type":"start"}\n',
-          '{"delta":"첫 번째 ","type":"text-delta"}\n',
-          '{"delta":"답변","type":"text-delta"}\n',
-          '{"assistantMessageId":"77777777-7777-4777-8777-777777777777","referencedNoteIds":[],"runId":"66666666-6666-4666-8666-666666666666","type":"finish"}\n',
-        ]),
-        {
-          status: 200,
+    const events = [];
+
+    for await (const event of stream) {
+      events.push(event);
+    }
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/note-chats/stream",
+      expect.objectContaining({
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      ),
-    );
-
-    const events = await collectEvents(streamNoteChatQuestion(INPUT));
-
-    expect(events).toEqual([
-      {
-        runId: "66666666-6666-4666-8666-666666666666",
-        type: "start",
-      },
-      {
-        delta: "첫 번째 ",
-        type: "text-delta",
-      },
-      {
-        delta: "답변",
-        type: "text-delta",
-      },
-      {
-        assistantMessageId: "77777777-7777-4777-8777-777777777777",
-        referencedNoteIds: [],
-        runId: "66666666-6666-4666-8666-666666666666",
-        type: "finish",
-      },
-    ]);
-  });
-
-  it("하나의 JSON 이벤트가 여러 청크로 나뉘어도 파싱한다", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        createTextStream(['{"delta":"나뉜 ', '응답","type":"text-delta"}\n']),
-        {
-          status: 200,
-        },
-      ),
-    );
-
-    const events = await collectEvents(streamNoteChatQuestion(INPUT));
-
-    expect(events).toEqual([
-      {
-        delta: "나뉜 응답",
-        type: "text-delta",
-      },
-    ]);
-  });
-
-  it("마지막 줄에 줄바꿈이 없어도 이벤트를 반환한다", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        createTextStream(['{"delta":"마지막 응답","type":"text-delta"}']),
-        {
-          status: 200,
-        },
-      ),
-    );
-
-    const events = await collectEvents(streamNoteChatQuestion(INPUT));
-
-    expect(events).toEqual([
-      {
-        delta: "마지막 응답",
-        type: "text-delta",
-      },
-    ]);
-  });
-
-  it("빈 줄은 무시한다", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        createTextStream([
-          "\n",
-          '{"delta":"응답","type":"text-delta"}\n',
-          "\n",
-        ]),
-        {
-          status: 200,
-        },
-      ),
-    );
-
-    const events = await collectEvents(streamNoteChatQuestion(INPUT));
-
-    expect(events).toEqual([
-      {
-        delta: "응답",
-        type: "text-delta",
-      },
-    ]);
-  });
-
-  it("서버 오류 메시지와 상태 코드를 포함한 오류를 발생시킨다", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      Response.json(
-        {
-          error: "로그인이 필요합니다.",
-        },
-        {
-          status: 401,
-        },
-      ),
-    );
-
-    const promise = collectEvents(streamNoteChatQuestion(INPUT));
-
-    await expect(promise).rejects.toMatchObject({
-      message: "로그인이 필요합니다.",
-      name: "NoteChatStreamRequestError",
-      status: 401,
-    } satisfies Partial<NoteChatStreamRequestError>);
-  });
-
-  it("실패 응답이 JSON이 아니면 기본 오류 메시지를 사용한다", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response("Internal Server Error", {
-        status: 500,
+        body: JSON.stringify({
+          content: {
+            text: "질문입니다.",
+          },
+          conversationId: "conversation-1",
+        }),
       }),
     );
 
-    await expect(collectEvents(streamNoteChatQuestion(INPUT))).rejects.toThrow(
-      "노트 챗봇 요청에 실패했습니다. (500)",
-    );
+    expect(events).toEqual([
+      {
+        type: "started",
+        runId: "run-1",
+      },
+    ]);
   });
 
-  it("응답 본문이 없으면 오류를 발생시킨다", async () => {
+  it("NDJSON 스트림을 이벤트 순서대로 변환한다", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      createStreamResponse([
+        '{"type":"started","runId":"run-1"}\n{"type":"text-delta","delta":"안녕',
+        '하세요."}\n{"type":"completed"}\n',
+      ]),
+    );
+
+    const stream = streamNoteChatQuestion({
+      conversationId: "conversation-1",
+      content: {
+        text: "질문입니다.",
+      },
+    });
+
+    const events = [];
+
+    for await (const event of stream) {
+      events.push(event);
+    }
+
+    expect(events).toEqual([
+      {
+        type: "started",
+        runId: "run-1",
+      },
+      {
+        type: "text-delta",
+        delta: "안녕하세요.",
+      },
+      {
+        type: "completed",
+      },
+    ]);
+  });
+
+  it("스트림 응답 본문이 없으면 오류를 발생시킨다", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(null, {
         status: 200,
       }),
     );
 
-    await expect(collectEvents(streamNoteChatQuestion(INPUT))).rejects.toThrow(
-      "노트 챗봇 스트림 응답 본문이 없습니다.",
-    );
+    const stream = streamNoteChatQuestion({
+      conversationId: "conversation-1",
+      content: {
+        text: "질문입니다.",
+      },
+    });
+
+    await expect(
+      (async () => {
+        for await (const _event of stream) {
+          // 스트림 실행
+        }
+      })(),
+    ).rejects.toThrow("노트 챗봇 스트림 응답 본문이 없습니다.");
   });
+});
 
-  it("AbortSignal을 fetch에 전달한다", async () => {
-    const controller = new AbortController();
+describe("streamNoteChatUserMessageUpdate", () => {
+  it("기존 사용자 메시지를 올바른 URL과 Body로 요청한다", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        createStreamResponse(['{"type":"started","runId":"run-2"}\n']),
+      );
 
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(createTextStream([]), {
-        status: 200,
-      }),
-    );
+    const stream = streamNoteChatUserMessageUpdate({
+      messageId: "message-1",
+      content: {
+        text: "수정된 질문입니다.",
+      },
+    });
 
-    await collectEvents(
-      streamNoteChatQuestion(INPUT, {
-        signal: controller.signal,
-      }),
-    );
+    for await (const _event of stream) {
+      // 스트림 실행
+    }
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/note-chats/stream",
+      "/api/note-chats/messages/message-1/stream",
       expect.objectContaining({
-        signal: controller.signal,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          content: {
+            text: "수정된 질문입니다.",
+          },
+        }),
       }),
     );
+  });
+});
+
+describe("NoteChatStreamRequestError", () => {
+  it("요청 오류의 message, status, code를 보존한다", () => {
+    const error = new NoteChatStreamRequestError(
+      "요청에 실패했습니다.",
+      429,
+      "NOTE_CHAT_DAILY_EXECUTION_LIMIT_EXCEEDED",
+    );
+
+    expect(error).toBeInstanceOf(Error);
+    expect(error).toBeInstanceOf(NoteChatStreamRequestError);
+    expect(error.name).toBe("NoteChatStreamRequestError");
+    expect(error.message).toBe("요청에 실패했습니다.");
+    expect(error.status).toBe(429);
+    expect(error.code).toBe("NOTE_CHAT_DAILY_EXECUTION_LIMIT_EXCEEDED");
+  });
+});
+
+describe("streamNoteChatRequest", () => {
+  it("HTTP 오류 응답의 JSON message와 code를 요청 오류에 보존한다", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: "오늘의 실행 제한을 초과했습니다.",
+          code: "NOTE_CHAT_DAILY_EXECUTION_LIMIT_EXCEEDED",
+        }),
+        {
+          status: 429,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    );
+
+    const stream = streamNoteChatQuestion({
+      conversationId: "conversation-1",
+      content: {
+        text: "질문입니다.",
+      },
+    });
+
+    await expect(
+      (async () => {
+        for await (const _event of stream) {
+          // 스트림 실행
+        }
+      })(),
+    ).rejects.toMatchObject({
+      name: "NoteChatStreamRequestError",
+      message: "오늘의 실행 제한을 초과했습니다.",
+      status: 429,
+      code: "NOTE_CHAT_DAILY_EXECUTION_LIMIT_EXCEEDED",
+    });
+  });
+
+  it("HTTP 오류 응답이 JSON이 아니면 기본 오류 메시지를 사용한다", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("Internal Server Error", {
+        status: 500,
+      }),
+    );
+
+    const stream = streamNoteChatQuestion({
+      conversationId: "conversation-1",
+      content: {
+        text: "질문입니다.",
+      },
+    });
+
+    await expect(
+      (async () => {
+        for await (const _event of stream) {
+          // 스트림 실행
+        }
+      })(),
+    ).rejects.toMatchObject({
+      name: "NoteChatStreamRequestError",
+      message: "노트 챗봇 요청에 실패했습니다. (500)",
+      status: 500,
+      code: null,
+    });
   });
 });

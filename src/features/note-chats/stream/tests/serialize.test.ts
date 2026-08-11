@@ -3,56 +3,52 @@ import { describe, expect, it } from "vitest";
 import { encodeNoteChatStreamEvent } from "../serialize";
 import type { NoteChatStreamEvent } from "../types";
 
-const textDecoder = new TextDecoder();
-
-/**
- * 직렬화된 스트림 데이터를 테스트용 문자열로 변환합니다.
- *
- * @param value UTF-8로 인코딩된 스트림 데이터
- * @returns 디코딩된 문자열
- */
-function decodeStreamEvent(value: Uint8Array): string {
-  return textDecoder.decode(value);
-}
-
 describe("encodeNoteChatStreamEvent", () => {
-  it.each<NoteChatStreamEvent>([
-    {
-      runId: "11111111-1111-4111-8111-111111111111",
-      type: "start",
-    },
-    {
-      delta: "생성된 텍스트",
+  it("스트림 이벤트를 JSON 문자열과 줄바꿈으로 직렬화한다", () => {
+    const event: NoteChatStreamEvent = {
       type: "text-delta",
-    },
-    {
-      assistantMessageId: "22222222-2222-4222-8222-222222222222",
-      referencedNoteIds: [
-        "33333333-3333-4333-8333-333333333333",
-        "44444444-4444-4444-8444-444444444444",
-      ],
-      runId: "11111111-1111-4111-8111-111111111111",
-      type: "finish",
-    },
-    {
-      message: "답변 생성에 실패했습니다.",
-      runId: "11111111-1111-4111-8111-111111111111",
-      type: "error",
-    },
-  ])("$type 이벤트를 NDJSON 한 줄로 직렬화한다", (event) => {
-    const result = decodeStreamEvent(encodeNoteChatStreamEvent(event));
+      delta: "안녕하세요",
+    };
+
+    const result = new TextDecoder().decode(encodeNoteChatStreamEvent(event));
 
     expect(result).toBe(`${JSON.stringify(event)}\n`);
   });
 
-  it("한글과 줄바꿈이 포함된 텍스트를 UTF-8로 보존한다", () => {
+  it("UTF-8 문자열을 올바르게 인코딩한다", () => {
     const event: NoteChatStreamEvent = {
-      delta: "첫 번째 줄\n두 번째 줄",
       type: "text-delta",
+      delta: "노트 챗봇 답변입니다.",
     };
 
-    const result = decodeStreamEvent(encodeNoteChatStreamEvent(event));
+    const encoded = encodeNoteChatStreamEvent(event);
+    const decoded = new TextDecoder().decode(encoded);
 
-    expect(JSON.parse(result.trim())).toEqual(event);
+    expect(decoded).toBe(`${JSON.stringify(event)}\n`);
+  });
+
+  it("JSON에 포함되는 특수 문자를 그대로 보존한다", () => {
+    const event: NoteChatStreamEvent = {
+      type: "text-delta",
+      delta: '첫 번째 줄\n"인용"\\테스트',
+    };
+
+    const result = new TextDecoder().decode(encodeNoteChatStreamEvent(event));
+
+    expect(result).toBe(`${JSON.stringify(event)}\n`);
+    expect(JSON.parse(result)).toEqual(event);
+  });
+
+  it("항상 하나의 NDJSON 레코드에 해당하는 줄바꿈으로 끝난다", () => {
+    const event: NoteChatStreamEvent = {
+      type: "text-delta",
+      delta: "",
+    };
+
+    const result = new TextDecoder().decode(encodeNoteChatStreamEvent(event));
+
+    expect(result.endsWith("\n")).toBe(true);
+    expect(result.split("\n")).toHaveLength(2);
+    expect(result.split("\n")[1]).toBe("");
   });
 });

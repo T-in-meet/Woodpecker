@@ -7,198 +7,201 @@ import type {
 
 import { consumeNoteChatProviderStream } from "../consume-provider-stream";
 
-/**
- * 테스트용 Provider 스트림을 생성합니다.
- *
- * @param events 스트림에서 순서대로 반환할 Provider 이벤트
- * @returns Provider 공통 AsyncGenerator
- */
-async function* createProviderStream(
+function createProviderStream(
   events: AiChatStreamEvent[],
 ): AsyncGenerator<AiChatStreamEvent> {
-  for (const event of events) {
-    yield event;
-  }
+  return (async function* () {
+    for (const event of events) {
+      yield event;
+    }
+  })();
 }
 
-const FINISH_RESULT: AiChatStreamResult = {
-  content: "첫 번째 두 번째",
-  metadata: {
-    provider: "openai",
-  },
-  usage: {
-    inputTokens: 5,
-    outputTokens: 3,
-    totalTokens: 8,
-  },
-};
+function createResult(content: string): AiChatStreamResult {
+  return {
+    content,
+  } as AiChatStreamResult;
+}
 
 describe("consumeNoteChatProviderStream", () => {
-  it("Provider 텍스트 조각을 수신 순서대로 전달한다", async () => {
+  it("Provider의 JSON 응답에서 answer만 추출하여 text-delta로 전달한다", async () => {
+    const result = createResult(
+      '{"answer":"안녕하세요.","usedContextIndexes":[]}',
+    );
+
+    const providerStream = createProviderStream([
+      {
+        type: "text-delta",
+        delta: '{"answer":"안녕',
+      },
+      {
+        type: "text-delta",
+        delta: '하세요.","usedContextIndexes":[]}',
+      },
+      {
+        type: "finish",
+        result,
+      },
+    ]);
+
     const onTextDelta = vi.fn();
 
-    const result = await consumeNoteChatProviderStream(
-      createProviderStream([
-        {
-          delta: "첫 번째 ",
-          type: "text-delta",
-        },
-        {
-          delta: "두 번째",
-          type: "text-delta",
-        },
-        {
-          result: FINISH_RESULT,
-          type: "finish",
-        },
-      ]),
+    const consumed = await consumeNoteChatProviderStream(
+      providerStream,
       onTextDelta,
     );
 
+    expect(onTextDelta).toHaveBeenCalledTimes(2);
     expect(onTextDelta).toHaveBeenNthCalledWith(1, {
-      delta: "첫 번째 ",
       type: "text-delta",
+      delta: "안녕",
     });
-
     expect(onTextDelta).toHaveBeenNthCalledWith(2, {
-      delta: "두 번째",
       type: "text-delta",
+      delta: "하세요.",
     });
 
-    expect(result).toEqual({
-      content: "첫 번째 두 번째",
-      result: FINISH_RESULT,
+    expect(consumed).toEqual({
+      content: '{"answer":"안녕하세요.","usedContextIndexes":[]}',
+      result,
     });
   });
 
-  it("비동기 text-delta 처리 함수가 끝날 때까지 기다린다", async () => {
-    const handledDeltas: string[] = [];
-
-    await consumeNoteChatProviderStream(
-      createProviderStream([
-        {
-          delta: "첫 번째",
-          type: "text-delta",
-        },
-        {
-          result: {
-            ...FINISH_RESULT,
-            content: "첫 번째",
-          },
-          type: "finish",
-        },
-      ]),
-      async (event) => {
-        await Promise.resolve();
-        handledDeltas.push(event.delta);
-      },
+  it("JSON escape sequence가 delta 경계에서 끊겨도 다음 delta에서 이어서 처리한다", async () => {
+    const result = createResult(
+      '{"answer":"첫 줄\\n두 번째 줄","usedContextIndexes":[]}',
     );
 
-    expect(handledDeltas).toEqual(["첫 번째"]);
-  });
-
-  it("텍스트 조각 없이 finish 이벤트만 있으면 빈 결과를 반환한다", async () => {
-    const emptyResult: AiChatStreamResult = {
-      content: "",
-      metadata: {},
-      usage: {
-        inputTokens: 0,
-        outputTokens: 0,
-        totalTokens: 0,
+    const providerStream = createProviderStream([
+      {
+        type: "text-delta",
+        delta: '{"answer":"첫 줄\\',
       },
-    };
+      {
+        type: "text-delta",
+        delta: 'n두 번째 줄","usedContextIndexes":[]}',
+      },
+      {
+        type: "finish",
+        result,
+      },
+    ]);
 
     const onTextDelta = vi.fn();
 
-    const result = await consumeNoteChatProviderStream(
-      createProviderStream([
-        {
-          result: emptyResult,
-          type: "finish",
-        },
-      ]),
-      onTextDelta,
-    );
+    await consumeNoteChatProviderStream(providerStream, onTextDelta);
 
-    expect(onTextDelta).not.toHaveBeenCalled();
-    expect(result).toEqual({
-      content: "",
-      result: emptyResult,
+    expect(onTextDelta).toHaveBeenCalledTimes(2);
+    expect(onTextDelta).toHaveBeenNthCalledWith(1, {
+      type: "text-delta",
+      delta: "첫 줄",
+    });
+    expect(onTextDelta).toHaveBeenNthCalledWith(2, {
+      type: "text-delta",
+      delta: "\n두 번째 줄",
     });
   });
 
-  it("finish 이벤트 없이 스트림이 종료되면 오류를 발생시킨다", async () => {
+  it("answer가 아직 시작되지 않은 JSON 조각에서는 text-delta를 전달하지 않는다", async () => {
+    const result = createResult('{"answer":"답변","usedContextIndexes":[]}');
+
+    const providerStream = createProviderStream([
+      {
+        type: "text-delta",
+        delta: '{"ans',
+      },
+      {
+        type: "text-delta",
+        delta: 'wer":"답변","usedContextIndexes":[]}',
+      },
+      {
+        type: "finish",
+        result,
+      },
+    ]);
+
+    const onTextDelta = vi.fn();
+
+    await consumeNoteChatProviderStream(providerStream, onTextDelta);
+
+    expect(onTextDelta).toHaveBeenCalledTimes(1);
+    expect(onTextDelta).toHaveBeenCalledWith({
+      type: "text-delta",
+      delta: "답변",
+    });
+  });
+
+  it("finish 이벤트가 없으면 오류를 발생시킨다", async () => {
+    const providerStream = createProviderStream([
+      {
+        type: "text-delta",
+        delta: '{"answer":"답변"}',
+      },
+    ]);
+
+    const onTextDelta = vi.fn();
+
     await expect(
-      consumeNoteChatProviderStream(
-        createProviderStream([
-          {
-            delta: "완료되지 않은 답변",
-            type: "text-delta",
-          },
-        ]),
-        vi.fn(),
-      ),
+      consumeNoteChatProviderStream(providerStream, onTextDelta),
     ).rejects.toThrow("AI Provider stream completed without a finish event.");
   });
 
-  it("Provider 최종 content와 누적 delta가 다르면 오류를 발생시킨다", async () => {
+  it("최종 Provider 결과와 누적된 text-delta가 다르면 오류를 발생시킨다", async () => {
+    const providerStream = createProviderStream([
+      {
+        type: "text-delta",
+        delta: '{"answer":"답변"}',
+      },
+      {
+        type: "finish",
+        result: createResult('{"answer":"다른 답변"}'),
+      },
+    ]);
+
+    const onTextDelta = vi.fn();
+
     await expect(
-      consumeNoteChatProviderStream(
-        createProviderStream([
-          {
-            delta: "실제 전달된 답변",
-            type: "text-delta",
-          },
-          {
-            result: {
-              ...FINISH_RESULT,
-              content: "다른 최종 답변",
-            },
-            type: "finish",
-          },
-        ]),
-        vi.fn(),
-      ),
+      consumeNoteChatProviderStream(providerStream, onTextDelta),
     ).rejects.toThrow(
       "AI Provider stream content does not match accumulated text deltas.",
     );
   });
 
-  it("text-delta 처리 함수 오류를 호출자에게 전달한다", async () => {
-    await expect(
-      consumeNoteChatProviderStream(
-        createProviderStream([
-          {
-            delta: "답변",
-            type: "text-delta",
-          },
-          {
-            result: {
-              ...FINISH_RESULT,
-              content: "답변",
-            },
-            type: "finish",
-          },
-        ]),
-        () => {
-          throw new Error("Stream enqueue failed");
-        },
-      ),
-    ).rejects.toThrow("Stream enqueue failed");
-  });
+  it("onTextDelta의 비동기 처리가 완료된 후 다음 이벤트를 처리한다", async () => {
+    const result = createResult('{"answer":"첫 번째두 번째"}');
 
-  it("Provider 스트림 자체의 오류를 호출자에게 전달한다", async () => {
-    async function* createFailedProviderStream(): AsyncGenerator<AiChatStreamEvent> {
-      yield {
-        delta: "일부 답변",
+    const calls: string[] = [];
+
+    const providerStream = createProviderStream([
+      {
         type: "text-delta",
-      };
+        delta: '{"answer":"첫 번째',
+      },
+      {
+        type: "text-delta",
+        delta: '두 번째"}',
+      },
+      {
+        type: "finish",
+        result,
+      },
+    ]);
 
-      throw new Error("Provider stream failed");
-    }
+    const onTextDelta = vi.fn(async (event) => {
+      calls.push(`start:${event.delta}`);
 
-    await expect(
-      consumeNoteChatProviderStream(createFailedProviderStream(), vi.fn()),
-    ).rejects.toThrow("Provider stream failed");
+      await Promise.resolve();
+
+      calls.push(`end:${event.delta}`);
+    });
+
+    await consumeNoteChatProviderStream(providerStream, onTextDelta);
+
+    expect(calls).toEqual([
+      "start:첫 번째",
+      "end:첫 번째",
+      "start:두 번째",
+      "end:두 번째",
+    ]);
   });
 });

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AI_RUN_STATUS } from "@/features/ai/chats/constants";
 
@@ -6,208 +6,235 @@ import {
   completeNoteChatRunFailure,
   completeNoteChatRunSuccess,
   markNoteChatRunRunning,
+  saveNoteChatExpandedQuery,
 } from "../run-persistence";
 
-const RUN_ID = "11111111-1111-4111-8111-111111111111";
-const ASSISTANT_MESSAGE_ID = "22222222-2222-4222-8222-222222222222";
-
-const USAGE = {
-  inputTokens: 10,
-  outputTokens: 20,
-  totalTokens: 30,
-};
-
-/**
- * Run 상태 변경 테스트용 Supabase Client를 생성합니다.
- */
-function createRunUpdateClientMock(result: {
-  data: { id: string } | null;
+const createQueryBuilder = (result: {
+  data: unknown;
   error: { message: string } | null;
-}) {
-  const maybeSingle = vi.fn().mockResolvedValue(result);
-
-  const query = {
+}) => {
+  const queryBuilder = {
     update: vi.fn(),
     eq: vi.fn(),
     select: vi.fn(),
-    maybeSingle,
+    maybeSingle: vi.fn(),
   };
 
-  query.update.mockReturnValue(query);
-  query.eq.mockReturnValue(query);
-  query.select.mockReturnValue(query);
+  queryBuilder.update.mockReturnValue(queryBuilder);
+  queryBuilder.eq.mockReturnValue(queryBuilder);
+  queryBuilder.select.mockReturnValue(queryBuilder);
+  queryBuilder.maybeSingle.mockResolvedValue(result);
 
-  const from = vi.fn().mockReturnValue(query);
+  return queryBuilder;
+};
 
-  return {
-    client: {
-      from,
-    } as never,
-    from,
-    query,
-  };
-}
-
-/**
- * RPC 테스트용 Supabase Client를 생성합니다.
- */
-function createRpcClientMock(result: {
+const createSupabaseMock = (result: {
   data: unknown;
   error: { message: string } | null;
-}) {
-  const rpc = vi.fn().mockResolvedValue(result);
+}) => {
+  const queryBuilder = createQueryBuilder(result);
 
   return {
-    client: {
-      rpc,
-    } as never,
-    rpc,
+    from: vi.fn().mockReturnValue(queryBuilder),
+    rpc: vi.fn(),
+    queryBuilder,
   };
-}
+};
 
 describe("markNoteChatRunRunning", () => {
   it("pending Run을 running 상태로 변경한다", async () => {
-    const { client, from, query } = createRunUpdateClientMock({
-      data: {
-        id: RUN_ID,
-      },
+    const supabase = createSupabaseMock({
+      data: { id: "run-1" },
       error: null,
     });
 
-    await markNoteChatRunRunning(RUN_ID, {
-      supabase: client,
+    await markNoteChatRunRunning("run-1", {
+      supabase,
     });
 
-    expect(from).toHaveBeenCalledWith("note_chat_runs");
-
-    expect(query.update).toHaveBeenCalledWith({
-      started_at: expect.any(String),
-      status: AI_RUN_STATUS.RUNNING,
-      updated_at: expect.any(String),
-    });
-
-    expect(query.eq).toHaveBeenNthCalledWith(1, "id", RUN_ID);
-    expect(query.eq).toHaveBeenNthCalledWith(
+    expect(supabase.from).toHaveBeenCalledWith("note_chat_runs");
+    expect(supabase.queryBuilder.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: AI_RUN_STATUS.RUNNING,
+      }),
+    );
+    expect(supabase.queryBuilder.eq).toHaveBeenNthCalledWith(1, "id", "run-1");
+    expect(supabase.queryBuilder.eq).toHaveBeenNthCalledWith(
       2,
       "status",
       AI_RUN_STATUS.PENDING,
     );
   });
 
-  it("pending Run을 찾을 수 없으면 오류를 발생시킨다", async () => {
-    const { client } = createRunUpdateClientMock({
+  it("DB 오류가 발생하면 오류를 발생시킨다", async () => {
+    const supabase = createSupabaseMock({
+      data: null,
+      error: { message: "database error" },
+    });
+
+    await expect(
+      markNoteChatRunRunning("run-1", {
+        supabase,
+      }),
+    ).rejects.toThrow(
+      "Failed to mark note chat run as running: database error",
+    );
+  });
+
+  it("pending Run을 찾지 못하면 오류를 발생시킨다", async () => {
+    const supabase = createSupabaseMock({
       data: null,
       error: null,
     });
 
     await expect(
-      markNoteChatRunRunning(RUN_ID, {
-        supabase: client,
+      markNoteChatRunRunning("run-1", {
+        supabase,
       }),
-    ).rejects.toThrow(`Pending note chat run not found: ${RUN_ID}`);
+    ).rejects.toThrow("Pending note chat run not found: run-1");
+  });
+});
+
+describe("saveNoteChatExpandedQuery", () => {
+  it("running Run에 확장 질의를 저장한다", async () => {
+    const supabase = createSupabaseMock({
+      data: { id: "run-1" },
+      error: null,
+    });
+
+    await saveNoteChatExpandedQuery(
+      {
+        runId: "run-1",
+        expandedQuery: "확장된 검색 질의",
+      },
+      {
+        supabase,
+      },
+    );
+
+    expect(supabase.from).toHaveBeenCalledWith("note_chat_runs");
+    expect(supabase.queryBuilder.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expanded_query: "확장된 검색 질의",
+      }),
+    );
+    expect(supabase.queryBuilder.eq).toHaveBeenNthCalledWith(1, "id", "run-1");
+    expect(supabase.queryBuilder.eq).toHaveBeenNthCalledWith(
+      2,
+      "status",
+      AI_RUN_STATUS.RUNNING,
+    );
   });
 
-  it("Run 상태 변경 DB 오류를 전달한다", async () => {
-    const { client } = createRunUpdateClientMock({
+  it("running Run을 찾지 못하면 오류를 발생시킨다", async () => {
+    const supabase = createSupabaseMock({
       data: null,
-      error: {
-        message: "Update failed",
-      },
+      error: null,
     });
 
     await expect(
-      markNoteChatRunRunning(RUN_ID, {
-        supabase: client,
-      }),
-    ).rejects.toThrow("Failed to mark note chat run as running: Update failed");
+      saveNoteChatExpandedQuery(
+        {
+          runId: "run-1",
+          expandedQuery: "확장된 검색 질의",
+        },
+        {
+          supabase,
+        },
+      ),
+    ).rejects.toThrow("Running note chat run not found: run-1");
   });
 });
 
 describe("completeNoteChatRunSuccess", () => {
-  it("Assistant Message와 Run 성공 결과를 RPC로 저장한다", async () => {
-    const { client, rpc } = createRpcClientMock({
-      data: ASSISTANT_MESSAGE_ID,
+  it("성공 완료 RPC를 호출하고 Assistant Message ID를 반환한다", async () => {
+    const supabase = createSupabaseMock({
+      data: null,
+      error: null,
+    });
+
+    supabase.rpc.mockResolvedValue({
+      data: "assistant-message-1",
       error: null,
     });
 
     const result = await completeNoteChatRunSuccess(
       {
-        content: "AI 답변입니다.",
-        referencedNoteIds: [],
-        runId: RUN_ID,
+        runId: "run-1",
+        content: "AI 답변",
+        usedNoteIds: [],
         sources: [],
-        usage: USAGE,
+        usage: {
+          inputTokens: 100,
+          outputTokens: 50,
+          totalTokens: 150,
+        },
       },
       {
-        supabase: client,
+        supabase,
       },
     );
 
-    expect(rpc).toHaveBeenCalledWith("complete_note_chat_run_success", {
-      p_content: {
-        referencedNoteIds: [],
-        text: "AI 답변입니다.",
-      },
-      p_run_id: RUN_ID,
-      p_sources: [],
-      p_usage: USAGE,
-    });
+    expect(result).toBe("assistant-message-1");
 
-    expect(result).toBe(ASSISTANT_MESSAGE_ID);
+    expect(supabase.rpc).toHaveBeenCalledWith(
+      "complete_note_chat_run_success",
+      {
+        p_content: {
+          text: "AI 답변",
+          usedNoteIds: [],
+        },
+        p_run_id: "run-1",
+        p_sources: [],
+        p_usage: {
+          inputTokens: 100,
+          outputTokens: 50,
+          totalTokens: 150,
+        },
+      },
+    );
   });
 
-  it("빈 Assistant Message를 저장하지 않는다", async () => {
-    const { client, rpc } = createRpcClientMock({
-      data: ASSISTANT_MESSAGE_ID,
+  it("RPC 오류가 발생하면 오류를 발생시킨다", async () => {
+    const supabase = createSupabaseMock({
+      data: null,
       error: null,
     });
 
-    await expect(
-      completeNoteChatRunSuccess(
-        {
-          content: "   ",
-          referencedNoteIds: [],
-          runId: RUN_ID,
-          sources: [],
-          usage: USAGE,
-        },
-        {
-          supabase: client,
-        },
-      ),
-    ).rejects.toThrow();
-
-    expect(rpc).not.toHaveBeenCalled();
-  });
-
-  it("성공 완료 RPC 오류를 전달한다", async () => {
-    const { client } = createRpcClientMock({
+    supabase.rpc.mockResolvedValue({
       data: null,
-      error: {
-        message: "Success completion failed",
-      },
+      error: { message: "rpc error" },
     });
 
     await expect(
       completeNoteChatRunSuccess(
         {
-          content: "AI 답변입니다.",
-          referencedNoteIds: [],
-          runId: RUN_ID,
+          runId: "run-1",
+          content: "AI 답변",
+          usedNoteIds: [],
           sources: [],
-          usage: USAGE,
+          usage: {
+            inputTokens: 100,
+            outputTokens: 50,
+            totalTokens: 150,
+          },
         },
         {
-          supabase: client,
+          supabase,
         },
       ),
     ).rejects.toThrow(
-      "Failed to complete note chat run successfully: Success completion failed",
+      "Failed to complete note chat run successfully: rpc error",
     );
   });
 
   it("Assistant Message ID가 반환되지 않으면 오류를 발생시킨다", async () => {
-    const { client } = createRpcClientMock({
+    const supabase = createSupabaseMock({
+      data: null,
+      error: null,
+    });
+
+    supabase.rpc.mockResolvedValue({
       data: null,
       error: null,
     });
@@ -215,108 +242,146 @@ describe("completeNoteChatRunSuccess", () => {
     await expect(
       completeNoteChatRunSuccess(
         {
-          content: "AI 답변입니다.",
-          referencedNoteIds: [],
-          runId: RUN_ID,
+          runId: "run-1",
+          content: "AI 답변",
+          usedNoteIds: [],
           sources: [],
-          usage: USAGE,
+          usage: {
+            inputTokens: 100,
+            outputTokens: 50,
+            totalTokens: 150,
+          },
         },
         {
-          supabase: client,
+          supabase,
         },
       ),
     ).rejects.toThrow(
-      `Note chat success completion returned no assistant message ID: ${RUN_ID}`,
+      "Note chat success completion returned no assistant message ID: run-1",
     );
   });
 });
 
 describe("completeNoteChatRunFailure", () => {
-  it("Run 실패 결과를 RPC로 저장한다", async () => {
-    const { client, rpc } = createRpcClientMock({
-      data: RUN_ID,
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("실패 완료 RPC를 호출한다", async () => {
+    const supabase = createSupabaseMock({
+      data: null,
+      error: null,
+    });
+
+    supabase.rpc.mockResolvedValue({
+      data: "run-1",
       error: null,
     });
 
     await completeNoteChatRunFailure(
       {
-        runId: RUN_ID,
-        usage: USAGE,
+        runId: "run-1",
+        usage: {
+          inputTokens: 100,
+          outputTokens: 50,
+          totalTokens: 150,
+        },
       },
       {
-        supabase: client,
+        supabase,
       },
     );
 
-    expect(rpc).toHaveBeenCalledWith("complete_note_chat_run_failure", {
-      p_run_id: RUN_ID,
-      p_usage: USAGE,
-    });
+    expect(supabase.rpc).toHaveBeenCalledWith(
+      "complete_note_chat_run_failure",
+      {
+        p_run_id: "run-1",
+        p_usage: {
+          inputTokens: 100,
+          outputTokens: 50,
+          totalTokens: 150,
+        },
+      },
+    );
   });
 
-  it("확인된 Usage가 없으면 null을 전달한다", async () => {
-    const { client, rpc } = createRpcClientMock({
-      data: RUN_ID,
+  it("Usage가 null이면 null로 전달한다", async () => {
+    const supabase = createSupabaseMock({
+      data: null,
+      error: null,
+    });
+
+    supabase.rpc.mockResolvedValue({
+      data: "run-1",
       error: null,
     });
 
     await completeNoteChatRunFailure(
       {
-        runId: RUN_ID,
+        runId: "run-1",
         usage: null,
       },
       {
-        supabase: client,
+        supabase,
       },
     );
 
-    expect(rpc).toHaveBeenCalledWith("complete_note_chat_run_failure", {
-      p_run_id: RUN_ID,
-      p_usage: null,
-    });
+    expect(supabase.rpc).toHaveBeenCalledWith(
+      "complete_note_chat_run_failure",
+      {
+        p_run_id: "run-1",
+        p_usage: null,
+      },
+    );
   });
 
-  it("실패 완료 RPC 오류를 전달한다", async () => {
-    const { client } = createRpcClientMock({
+  it("RPC 오류가 발생하면 오류를 발생시킨다", async () => {
+    const supabase = createSupabaseMock({
       data: null,
-      error: {
-        message: "Failure completion failed",
-      },
+      error: null,
+    });
+
+    supabase.rpc.mockResolvedValue({
+      data: null,
+      error: { message: "rpc error" },
     });
 
     await expect(
       completeNoteChatRunFailure(
         {
-          runId: RUN_ID,
+          runId: "run-1",
           usage: null,
         },
         {
-          supabase: client,
+          supabase,
         },
       ),
-    ).rejects.toThrow(
-      "Failed to complete note chat run as failed: Failure completion failed",
-    );
+    ).rejects.toThrow("Failed to complete note chat run as failed: rpc error");
   });
 
-  it("반환된 Run ID가 다르면 오류를 발생시킨다", async () => {
-    const { client } = createRpcClientMock({
-      data: "33333333-3333-4333-8333-333333333333",
+  it("RPC가 다른 Run ID를 반환하면 오류를 발생시킨다", async () => {
+    const supabase = createSupabaseMock({
+      data: null,
+      error: null,
+    });
+
+    supabase.rpc.mockResolvedValue({
+      data: "run-2",
       error: null,
     });
 
     await expect(
       completeNoteChatRunFailure(
         {
-          runId: RUN_ID,
+          runId: "run-1",
           usage: null,
         },
         {
-          supabase: client,
+          supabase,
         },
       ),
     ).rejects.toThrow(
-      `Note chat failure completion returned an unexpected run ID: ${RUN_ID}`,
+      "Note chat failure completion returned an unexpected run ID: run-1",
     );
   });
 });

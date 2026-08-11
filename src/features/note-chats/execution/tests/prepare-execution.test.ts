@@ -1,0 +1,252 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { AI_CHAT_MESSAGE_ROLE } from "@/features/ai/chats/constants";
+import { buildNoteContext } from "@/features/ai/rags/note/build-context";
+import { getMatchedNotes } from "@/features/ai/rags/note/get-matched-notes";
+import { searchNoteEmbeddings } from "@/features/ai/rags/note/search-embeddings";
+import { NOTE_CHAT_OPERATIONAL_ERROR_CODES } from "@/features/operational-errors/constants";
+
+import { getNoteChatConversationDetail } from "../../queries";
+import { reportNoteChatOperationalError } from "../../utils/report-operational-error";
+import { buildNoteChatSources } from "../build-note-sources";
+import { expandNoteChatQuery } from "../expand-query";
+import {
+  type NoteChatExecutionSettings,
+  prepareNoteChatExecution,
+} from "../prepare-execution";
+import { resolveNoteChatExecutionMessages } from "../resolve-execution-messages";
+
+vi.mock("../../queries", () => ({
+  getNoteChatConversationDetail: vi.fn(),
+}));
+
+vi.mock("../../utils/report-operational-error", () => ({
+  reportNoteChatOperationalError: vi.fn(),
+}));
+
+vi.mock("@/features/ai/rags/note/build-context", () => ({
+  buildNoteContext: vi.fn(),
+}));
+
+vi.mock("@/features/ai/rags/note/get-matched-notes", () => ({
+  getMatchedNotes: vi.fn(),
+}));
+
+vi.mock("@/features/ai/rags/note/search-embeddings", () => ({
+  searchNoteEmbeddings: vi.fn(),
+}));
+
+vi.mock("../build-note-sources", () => ({
+  buildNoteChatSources: vi.fn(),
+}));
+
+vi.mock("../expand-query", () => ({
+  expandNoteChatQuery: vi.fn(),
+}));
+
+vi.mock("../resolve-execution-messages", () => ({
+  resolveNoteChatExecutionMessages: vi.fn(),
+}));
+
+const settings = {
+  chat: {
+    prompt: {
+      version: {
+        system_template: "System Template",
+        user_template: "User Template",
+      },
+    },
+  },
+} as unknown as NoteChatExecutionSettings;
+
+const conversation = {
+  id: "conversation-1",
+  user_id: "user-1",
+};
+
+const userMessage = {
+  id: "message-1",
+  role: AI_CHAT_MESSAGE_ROLE.USER,
+};
+
+const messages = [userMessage];
+
+const detail = {
+  conversation,
+  messages,
+} as never;
+
+describe("prepareNoteChatExecution", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    vi.mocked(getNoteChatConversationDetail).mockResolvedValue(detail);
+
+    vi.mocked(expandNoteChatQuery).mockResolvedValue("확장된 검색 질의");
+
+    vi.mocked(searchNoteEmbeddings).mockResolvedValue([]);
+
+    vi.mocked(getMatchedNotes).mockResolvedValue([]);
+
+    vi.mocked(buildNoteContext).mockReturnValue("");
+
+    vi.mocked(buildNoteChatSources).mockReturnValue([]);
+
+    vi.mocked(resolveNoteChatExecutionMessages).mockReturnValue([]);
+
+    vi.mocked(reportNoteChatOperationalError).mockResolvedValue(undefined);
+  });
+
+  it("실행에 필요한 정보를 준비하고 PreparedNoteChatExecution을 반환한다", async () => {
+    const result = await prepareNoteChatExecution({
+      conversationId: "conversation-1",
+      settings,
+      userMessageId: "message-1",
+    });
+
+    expect(getNoteChatConversationDetail).toHaveBeenCalledWith(
+      "conversation-1",
+    );
+
+    expect(expandNoteChatQuery).toHaveBeenCalledWith({
+      configuration: settings.queryExpansion,
+      messages,
+      userMessageId: "message-1",
+    });
+
+    expect(searchNoteEmbeddings).toHaveBeenCalledWith({
+      embeddingConfiguration: settings.embedding,
+      limit: expect.any(Number),
+      minSimilarity: expect.any(Number),
+      ownerUserId: "user-1",
+      question: "확장된 검색 질의",
+    });
+
+    expect(getMatchedNotes).toHaveBeenCalledWith({
+      matches: [],
+      ownerUserId: "user-1",
+    });
+
+    expect(buildNoteContext).toHaveBeenCalledWith({
+      notes: [],
+    });
+
+    expect(buildNoteChatSources).toHaveBeenCalledWith([]);
+
+    expect(resolveNoteChatExecutionMessages).toHaveBeenCalledWith({
+      context: "",
+      messages,
+      systemTemplate: settings.chat.prompt.version.system_template,
+      userMessageId: "message-1",
+      userTemplate: settings.chat.prompt.version.user_template,
+    });
+
+    expect(result).toEqual({
+      conversation,
+      expandedQuery: "확장된 검색 질의",
+      messages: [],
+      settings,
+      sources: [],
+      userMessageId: "message-1",
+    });
+  });
+
+  it("Conversation을 찾을 수 없으면 실행 상태 오류를 보고하고 예외를 발생시킨다", async () => {
+    vi.mocked(getNoteChatConversationDetail).mockResolvedValue(null);
+
+    await expect(
+      prepareNoteChatExecution({
+        conversationId: "conversation-1",
+        settings,
+        userMessageId: "message-1",
+      }),
+    ).rejects.toThrow("Note chat conversation not found: conversation-1");
+
+    expect(reportNoteChatOperationalError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: {
+          conversationId: "conversation-1",
+          userMessageId: "message-1",
+        },
+        errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.EXECUTION_STATE_INVALID,
+      }),
+    );
+  });
+
+  it("실행 대상 User Message를 찾을 수 없으면 실행 상태 오류를 보고하고 예외를 발생시킨다", async () => {
+    vi.mocked(getNoteChatConversationDetail).mockResolvedValue({
+      conversation,
+      messages: [],
+    } as never);
+
+    await expect(
+      prepareNoteChatExecution({
+        conversationId: "conversation-1",
+        settings,
+        userMessageId: "message-1",
+      }),
+    ).rejects.toThrow("Note chat user message not found: message-1");
+
+    expect(reportNoteChatOperationalError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserId: "user-1",
+        errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.EXECUTION_STATE_INVALID,
+        userId: "user-1",
+      }),
+    );
+  });
+
+  it("실행 대상 Message가 User 역할이 아니면 실행 상태 오류를 보고하고 예외를 발생시킨다", async () => {
+    const assistantMessage = {
+      id: "message-1",
+      role: AI_CHAT_MESSAGE_ROLE.ASSISTANT,
+    };
+
+    vi.mocked(getNoteChatConversationDetail).mockResolvedValue({
+      conversation,
+      messages: [assistantMessage],
+    } as never);
+
+    await expect(
+      prepareNoteChatExecution({
+        conversationId: "conversation-1",
+        settings,
+        userMessageId: "message-1",
+      }),
+    ).rejects.toThrow(
+      "Note chat execution message is not a user message: message-1",
+    );
+
+    expect(reportNoteChatOperationalError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserId: "user-1",
+        errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.EXECUTION_STATE_INVALID,
+        userId: "user-1",
+      }),
+    );
+  });
+
+  it("Provider 메시지 구성에 실패하면 운영 오류를 보고하고 예외를 발생시킨다", async () => {
+    const error = new Error("message resolve failed");
+
+    vi.mocked(resolveNoteChatExecutionMessages).mockImplementation(() => {
+      throw error;
+    });
+
+    await expect(
+      prepareNoteChatExecution({
+        conversationId: "conversation-1",
+        settings,
+        userMessageId: "message-1",
+      }),
+    ).rejects.toThrow("message resolve failed");
+
+    expect(reportNoteChatOperationalError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserId: "user-1",
+        error,
+        userId: "user-1",
+      }),
+    );
+  });
+});

@@ -1,370 +1,424 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  AI_MODEL_CAPABILITY,
-  AI_MODEL_PROVIDER,
-} from "@/features/ai/constants/models";
-import type {
-  AiChatStreamEvent,
-  AiChatStreamResult,
-} from "@/features/ai/providers/types";
-
-import { executeNoteChat } from "../../execution/execute";
-import type { NoteChatExecutionSettings } from "../../execution/prepare-execution";
-import {
-  completeNoteChatRunFailure,
-  completeNoteChatRunSuccess,
-  markNoteChatRunRunning,
-} from "../../execution/run-persistence";
 import { runNoteChatStream } from "../run-note-chat-stream";
-import type { NoteChatStreamEvent } from "../types";
 
-vi.mock("../../execution/execute", () => ({
+const mocks = vi.hoisted(() => ({
+  markNoteChatRunRunning: vi.fn(),
   executeNoteChat: vi.fn(),
+  saveNoteChatExpandedQuery: vi.fn(),
+  consumeNoteChatProviderStream: vi.fn(),
+  parseNoteChatProviderResponse: vi.fn(),
+  resolveNoteChatUsedNoteIds: vi.fn(),
+  completeNoteChatRunSuccess: vi.fn(),
+  completeNoteChatRunFailure: vi.fn(),
+  reportNoteChatOperationalError: vi.fn(),
 }));
 
 vi.mock("../../execution/run-persistence", () => ({
-  completeNoteChatRunFailure: vi.fn(),
-  completeNoteChatRunSuccess: vi.fn(),
-  markNoteChatRunRunning: vi.fn(),
+  markNoteChatRunRunning: mocks.markNoteChatRunRunning,
+  saveNoteChatExpandedQuery: mocks.saveNoteChatExpandedQuery,
+  completeNoteChatRunSuccess: mocks.completeNoteChatRunSuccess,
+  completeNoteChatRunFailure: mocks.completeNoteChatRunFailure,
 }));
 
-const CONVERSATION_ID = "11111111-1111-4111-8111-111111111111";
-const USER_MESSAGE_ID = "22222222-2222-4222-8222-222222222222";
-const RUN_ID = "33333333-3333-4333-8333-333333333333";
-const ASSISTANT_MESSAGE_ID = "44444444-4444-4444-8444-444444444444";
+vi.mock("../../execution/execute", () => ({
+  executeNoteChat: mocks.executeNoteChat,
+}));
 
-const AGENT_ID = "55555555-5555-4555-8555-555555555555";
-const PROMPT_FAMILY_ID = "66666666-6666-4666-8666-666666666666";
-const PROMPT_VERSION_ID = "77777777-7777-4777-8777-777777777777";
-const CHAT_MODEL_CONFIG_ID = "88888888-8888-4888-8888-888888888888";
-const EMBEDDING_MODEL_CONFIG_ID = "99999999-9999-4999-8999-999999999999";
+vi.mock("../../execution/parse-response", () => ({
+  parseNoteChatProviderResponse: mocks.parseNoteChatProviderResponse,
+}));
 
-const SETTINGS: NoteChatExecutionSettings = {
-  chat: {
-    featureKey: "note-chat",
-    kind: "chat",
-    roleKey: "answer-generation",
-    temperature: 0.2,
-    prompt: {
-      agent: {
-        id: AGENT_ID,
-        key: "note.chat",
-        display_name: "노트 챗봇",
-        description: null,
-        purpose: "노트 기반 답변 생성",
-        tags: [],
-        active_prompt_version_id: PROMPT_VERSION_ID,
-        is_system_managed: true,
-        created_at: "2026-08-06T00:00:00.000Z",
-        updated_at: "2026-08-06T00:00:00.000Z",
-      },
-      family: {
-        id: PROMPT_FAMILY_ID,
-        agent_id: AGENT_ID,
-        key: "default",
-        display_name: "기본 프롬프트",
-        description: null,
-        tags: [],
-        is_system_managed: true,
-        created_at: "2026-08-06T00:00:00.000Z",
-        updated_at: "2026-08-06T00:00:00.000Z",
-      },
-      version: {
-        id: PROMPT_VERSION_ID,
-        family_id: PROMPT_FAMILY_ID,
-        version_number: 1,
-        display_name: "노트 챗봇 v1",
-        change_summary: null,
-        lifecycle_status: "published",
-        system_template: "시스템 템플릿",
-        user_template: "{{question}}",
-        response_schema: {},
-        variables: [],
-        tags: [],
-        created_by_kind: "system",
-        created_by: null,
-        is_system_managed: true,
-        created_at: "2026-08-06T00:00:00.000Z",
-      },
-    },
-    model: {
-      id: CHAT_MODEL_CONFIG_ID,
-      key: "note.chat.model",
-      display_name: "노트 챗봇 모델",
-      provider: AI_MODEL_PROVIDER.OPENAI,
-      model: "gpt-test",
-      capability: AI_MODEL_CAPABILITY.CHAT,
-      dimensions: null,
-      distance_metric: null,
-      is_active: true,
-      is_system_managed: true,
-      notes: null,
-      created_at: "2026-08-06T00:00:00.000Z",
-      updated_at: "2026-08-06T00:00:00.000Z",
-    },
-  },
+vi.mock("../../execution/resolve-used-note-ids", () => ({
+  resolveNoteChatUsedNoteIds: mocks.resolveNoteChatUsedNoteIds,
+}));
 
-  embedding: {
-    featureKey: "note-chat",
-    kind: "embedding",
-    roleKey: "note-retrieval",
-    model: {
-      id: EMBEDDING_MODEL_CONFIG_ID,
-      key: "note.chat.embedding",
-      display_name: "노트 챗봇 임베딩 모델",
-      provider: AI_MODEL_PROVIDER.OPENAI,
-      model: "text-embedding-test",
-      capability: AI_MODEL_CAPABILITY.EMBEDDING,
-      dimensions: 1536,
-      distance_metric: "cosine",
-      is_active: true,
-      is_system_managed: true,
-      notes: null,
-      created_at: "2026-08-06T00:00:00.000Z",
-      updated_at: "2026-08-06T00:00:00.000Z",
-    },
-  },
+vi.mock("../../utils/report-operational-error", () => ({
+  reportNoteChatOperationalError: mocks.reportNoteChatOperationalError,
+}));
+
+vi.mock("../consume-provider-stream", () => ({
+  consumeNoteChatProviderStream: mocks.consumeNoteChatProviderStream,
+}));
+
+const params = {
+  conversationId: "conversation-1",
+  runId: "run-1",
+  settings: {} as Parameters<typeof runNoteChatStream>[0]["settings"],
+  userId: "user-1",
+  userMessageId: "message-1",
 };
 
-const USAGE = {
+const providerStream = (async function* () {
+  yield {
+    type: "text-delta" as const,
+    delta: "답변",
+  };
+})();
+
+const sources = [
+  {
+    contextIndex: 1,
+    noteId: "11111111-1111-4111-8111-111111111111",
+    type: "note",
+  },
+];
+
+const usage = {
   inputTokens: 10,
-  outputTokens: 5,
-  totalTokens: 15,
+  outputTokens: 20,
+  totalTokens: 30,
 };
 
-const FINISH_RESULT: AiChatStreamResult = {
-  content: "완성된 답변",
-  metadata: {
-    provider: "openai",
-  },
-  usage: USAGE,
-};
+function setupSuccessfulExecution() {
+  mocks.markNoteChatRunRunning.mockResolvedValue(undefined);
 
-/**
- * 테스트용 Provider 스트림을 생성합니다.
- *
- * @param events 순서대로 반환할 Provider 이벤트
- * @returns Provider 공통 AsyncGenerator
- */
-async function* createProviderStream(
-  events: AiChatStreamEvent[],
-): AsyncGenerator<AiChatStreamEvent> {
-  for (const event of events) {
-    yield event;
-  }
+  mocks.executeNoteChat.mockResolvedValue({
+    expandedQuery: "확장된 검색 질의",
+    providerStream,
+    sources,
+  });
+
+  mocks.saveNoteChatExpandedQuery.mockResolvedValue(undefined);
+
+  mocks.consumeNoteChatProviderStream.mockResolvedValue({
+    content: '{"answer":"답변입니다.","usedContextIndexes":[1]}',
+    result: {
+      content: '{"answer":"답변입니다.","usedContextIndexes":[1]}',
+      usage,
+    },
+  });
+
+  mocks.parseNoteChatProviderResponse.mockReturnValue({
+    answer: "답변입니다.",
+    usedContextIndexes: [1],
+  });
+
+  mocks.resolveNoteChatUsedNoteIds.mockReturnValue([
+    "11111111-1111-4111-8111-111111111111",
+  ]);
+
+  mocks.completeNoteChatRunSuccess.mockResolvedValue("assistant-message-1");
 }
 
-beforeEach(() => {
-  vi.clearAllMocks();
-
-  vi.mocked(markNoteChatRunRunning).mockResolvedValue();
-  vi.mocked(completeNoteChatRunSuccess).mockResolvedValue(ASSISTANT_MESSAGE_ID);
-  vi.mocked(completeNoteChatRunFailure).mockResolvedValue();
-});
-
 describe("runNoteChatStream", () => {
-  it("Run 시작부터 Provider 스트림 소비와 성공 저장까지 처리한다", async () => {
-    vi.mocked(executeNoteChat).mockResolvedValue({
-      prepared: {} as never,
-      providerStream: createProviderStream([
-        {
-          delta: "완성된 ",
-          type: "text-delta",
-        },
-        {
-          delta: "답변",
-          type: "text-delta",
-        },
-        {
-          result: FINISH_RESULT,
-          type: "finish",
-        },
-      ]),
-      referencedNoteIds: [],
-      sources: [],
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("실행을 시작하고 Provider 결과를 저장한 뒤 성공 이벤트를 전달한다", async () => {
+    setupSuccessfulExecution();
+
+    const events: unknown[] = [];
+    const onEvent = vi.fn((event) => {
+      events.push(event);
     });
 
-    const events: NoteChatStreamEvent[] = [];
+    const result = await runNoteChatStream(params, onEvent);
 
-    const result = await runNoteChatStream(
-      {
-        conversationId: CONVERSATION_ID,
-        runId: RUN_ID,
-        settings: SETTINGS,
-        userMessageId: USER_MESSAGE_ID,
-      },
-      (event) => {
-        events.push(event);
-      },
+    expect(mocks.markNoteChatRunRunning).toHaveBeenCalledWith(params.runId);
+
+    expect(mocks.executeNoteChat).toHaveBeenCalledWith({
+      conversationId: params.conversationId,
+      settings: params.settings,
+      userMessageId: params.userMessageId,
+    });
+
+    expect(mocks.saveNoteChatExpandedQuery).toHaveBeenCalledWith({
+      expandedQuery: "확장된 검색 질의",
+      runId: params.runId,
+    });
+
+    expect(mocks.consumeNoteChatProviderStream).toHaveBeenCalledWith(
+      providerStream,
+      expect.any(Function),
     );
 
-    expect(markNoteChatRunRunning).toHaveBeenCalledWith(RUN_ID);
+    expect(mocks.parseNoteChatProviderResponse).toHaveBeenCalledWith(
+      '{"answer":"답변입니다.","usedContextIndexes":[1]}',
+    );
 
-    expect(executeNoteChat).toHaveBeenCalledWith({
-      conversationId: CONVERSATION_ID,
-      settings: SETTINGS,
-      userMessageId: USER_MESSAGE_ID,
+    expect(mocks.resolveNoteChatUsedNoteIds).toHaveBeenCalledWith([1], sources);
+
+    expect(mocks.completeNoteChatRunSuccess).toHaveBeenCalledWith({
+      content: "답변입니다.",
+      runId: params.runId,
+      sources,
+      usage,
+      usedNoteIds: ["11111111-1111-4111-8111-111111111111"],
     });
-
-    expect(completeNoteChatRunSuccess).toHaveBeenCalledWith({
-      content: "완성된 답변",
-      referencedNoteIds: [],
-      runId: RUN_ID,
-      sources: [],
-      usage: USAGE,
-    });
-
-    expect(completeNoteChatRunFailure).not.toHaveBeenCalled();
 
     expect(events).toEqual([
       {
-        runId: RUN_ID,
+        runId: params.runId,
         type: "start",
+        userMessageId: params.userMessageId,
       },
       {
-        delta: "완성된 ",
-        type: "text-delta",
-      },
-      {
-        delta: "답변",
-        type: "text-delta",
-      },
-      {
-        assistantMessageId: ASSISTANT_MESSAGE_ID,
-        referencedNoteIds: [],
-        runId: RUN_ID,
+        assistantMessageId: "assistant-message-1",
+        runId: params.runId,
         type: "finish",
+        usedNoteIds: ["11111111-1111-4111-8111-111111111111"],
       },
     ]);
 
     expect(result).toEqual({
-      assistantMessageId: ASSISTANT_MESSAGE_ID,
-      content: "완성된 답변",
-      referencedNoteIds: [],
-      runId: RUN_ID,
-      usage: USAGE,
+      assistantMessageId: "assistant-message-1",
+      content: "답변입니다.",
+      runId: params.runId,
+      usage,
+      usedNoteIds: ["11111111-1111-4111-8111-111111111111"],
     });
   });
 
-  it("Provider 실행이 실패하면 Run을 실패 처리하고 오류 이벤트를 전달한다", async () => {
-    vi.mocked(executeNoteChat).mockRejectedValue(
-      new Error("Provider execution failed"),
+  it("Provider text-delta를 onEvent로 전달한다", async () => {
+    setupSuccessfulExecution();
+
+    const onEvent = vi.fn();
+
+    mocks.consumeNoteChatProviderStream.mockImplementation(
+      async (_stream, onTextDelta) => {
+        await onTextDelta({
+          type: "text-delta",
+          delta: "안녕하세요.",
+        });
+
+        return {
+          content: '{"answer":"안녕하세요.","usedContextIndexes":[]}',
+          result: {
+            content: '{"answer":"안녕하세요.","usedContextIndexes":[]}',
+            usage,
+          },
+        };
+      },
     );
 
-    const events: NoteChatStreamEvent[] = [];
+    mocks.parseNoteChatProviderResponse.mockReturnValue({
+      answer: "안녕하세요.",
+      usedContextIndexes: [],
+    });
 
-    await expect(
-      runNoteChatStream(
-        {
-          conversationId: CONVERSATION_ID,
-          runId: RUN_ID,
-          settings: SETTINGS,
-          userMessageId: USER_MESSAGE_ID,
-        },
-        (event) => {
-          events.push(event);
-        },
-      ),
-    ).rejects.toThrow("Provider execution failed");
+    mocks.resolveNoteChatUsedNoteIds.mockReturnValue([]);
 
-    expect(completeNoteChatRunFailure).toHaveBeenCalledWith({
-      runId: RUN_ID,
+    await runNoteChatStream(params, onEvent);
+
+    expect(onEvent).toHaveBeenCalledWith({
+      type: "start",
+      runId: params.runId,
+      userMessageId: params.userMessageId,
+    });
+
+    expect(onEvent).toHaveBeenCalledWith({
+      type: "text-delta",
+      delta: "안녕하세요.",
+    });
+
+    expect(onEvent).toHaveBeenCalledWith({
+      type: "finish",
+      runId: params.runId,
+      assistantMessageId: "assistant-message-1",
+      usedNoteIds: [],
+    });
+  });
+
+  it("Run을 Running 상태로 변경하지 못하면 실행을 중단하고 운영 오류를 기록한다", async () => {
+    const error = new Error("mark running failed");
+
+    mocks.markNoteChatRunRunning.mockRejectedValue(error);
+
+    const onEvent = vi.fn();
+
+    await expect(runNoteChatStream(params, onEvent)).rejects.toThrow(
+      "mark running failed",
+    );
+
+    expect(mocks.reportNoteChatOperationalError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserId: params.userId,
+        context: {
+          conversationId: params.conversationId,
+          runId: params.runId,
+        },
+        error,
+        userId: params.userId,
+      }),
+    );
+
+    expect(mocks.executeNoteChat).not.toHaveBeenCalled();
+    expect(mocks.completeNoteChatRunFailure).not.toHaveBeenCalled();
+    expect(onEvent).not.toHaveBeenCalled();
+  });
+
+  it("확장 질의 저장에 실패하면 Run을 실패 처리한다", async () => {
+    setupSuccessfulExecution();
+
+    const error = new Error("expanded query save failed");
+
+    mocks.saveNoteChatExpandedQuery.mockRejectedValue(error);
+
+    const onEvent = vi.fn();
+
+    await expect(runNoteChatStream(params, onEvent)).rejects.toThrow(
+      "expanded query save failed",
+    );
+
+    expect(mocks.completeNoteChatRunFailure).toHaveBeenCalledWith({
+      runId: params.runId,
       usage: null,
     });
 
-    expect(events).toEqual([
-      {
-        runId: RUN_ID,
-        type: "start",
-      },
-      {
-        message: "답변 생성에 실패했습니다.",
-        runId: RUN_ID,
-        type: "error",
-      },
-    ]);
-  });
-
-  it("성공 결과 저장이 실패하면 확인된 usage로 Run 실패 처리를 시도한다", async () => {
-    vi.mocked(executeNoteChat).mockResolvedValue({
-      prepared: {} as never,
-      providerStream: createProviderStream([
-        {
-          delta: "완성된 답변",
-          type: "text-delta",
-        },
-        {
-          result: FINISH_RESULT,
-          type: "finish",
-        },
-      ]),
-      referencedNoteIds: [],
-      sources: [],
-    });
-
-    vi.mocked(completeNoteChatRunSuccess).mockRejectedValue(
-      new Error("Success persistence failed"),
-    );
-
-    await expect(
-      runNoteChatStream(
-        {
-          conversationId: CONVERSATION_ID,
-          runId: RUN_ID,
-          settings: SETTINGS,
-          userMessageId: USER_MESSAGE_ID,
-        },
-        vi.fn(),
-      ),
-    ).rejects.toThrow("Success persistence failed");
-
-    expect(completeNoteChatRunFailure).toHaveBeenCalledWith({
-      runId: RUN_ID,
-      usage: USAGE,
+    expect(onEvent).toHaveBeenCalledWith({
+      type: "error",
+      runId: params.runId,
+      message: "답변 생성에 실패했습니다.",
     });
   });
 
-  it("Run 시작 처리에 실패하면 Provider를 실행하지 않는다", async () => {
-    vi.mocked(markNoteChatRunRunning).mockRejectedValue(
-      new Error("Run start failed"),
+  it("Provider 스트림 소비에 실패하면 Run을 실패 처리한다", async () => {
+    setupSuccessfulExecution();
+
+    const error = new Error("stream consume failed");
+
+    mocks.consumeNoteChatProviderStream.mockRejectedValue(error);
+
+    const onEvent = vi.fn();
+
+    await expect(runNoteChatStream(params, onEvent)).rejects.toThrow(
+      "stream consume failed",
     );
 
-    await expect(
-      runNoteChatStream(
-        {
-          conversationId: CONVERSATION_ID,
-          runId: RUN_ID,
-          settings: SETTINGS,
-          userMessageId: USER_MESSAGE_ID,
+    expect(mocks.reportNoteChatOperationalError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserId: params.userId,
+        context: {
+          conversationId: params.conversationId,
+          runId: params.runId,
         },
-        vi.fn(),
-      ),
-    ).rejects.toThrow("Run start failed");
+        error,
+        userId: params.userId,
+      }),
+    );
 
-    expect(executeNoteChat).not.toHaveBeenCalled();
-    expect(completeNoteChatRunFailure).not.toHaveBeenCalled();
+    expect(mocks.completeNoteChatRunFailure).toHaveBeenCalledWith({
+      runId: params.runId,
+      usage: null,
+    });
   });
 
-  it("실패 완료 저장 오류가 원래 실행 오류를 덮어쓰지 않는다", async () => {
-    vi.mocked(executeNoteChat).mockRejectedValue(
-      new Error("Original execution failed"),
+  it("Provider 응답 파싱에 실패하면 Run을 실패 처리한다", async () => {
+    setupSuccessfulExecution();
+
+    const error = new Error("response parse failed");
+
+    mocks.parseNoteChatProviderResponse.mockImplementation(() => {
+      throw error;
+    });
+
+    const onEvent = vi.fn();
+
+    await expect(runNoteChatStream(params, onEvent)).rejects.toThrow(
+      "response parse failed",
     );
 
-    vi.mocked(completeNoteChatRunFailure).mockRejectedValue(
-      new Error("Failure persistence failed"),
+    expect(mocks.reportNoteChatOperationalError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserId: params.userId,
+        error,
+        userId: params.userId,
+      }),
     );
 
-    await expect(
-      runNoteChatStream(
-        {
-          conversationId: CONVERSATION_ID,
-          runId: RUN_ID,
-          settings: SETTINGS,
-          userMessageId: USER_MESSAGE_ID,
-        },
-        vi.fn(),
-      ),
-    ).rejects.toThrow("Original execution failed");
+    expect(mocks.completeNoteChatRunFailure).toHaveBeenCalledWith({
+      runId: params.runId,
+      usage,
+    });
+  });
+
+  it("사용 노트 ID 변환에 실패하면 Run을 실패 처리한다", async () => {
+    setupSuccessfulExecution();
+
+    const error = new Error("used notes resolve failed");
+
+    mocks.resolveNoteChatUsedNoteIds.mockImplementation(() => {
+      throw error;
+    });
+
+    const onEvent = vi.fn();
+
+    await expect(runNoteChatStream(params, onEvent)).rejects.toThrow(
+      "used notes resolve failed",
+    );
+
+    expect(mocks.reportNoteChatOperationalError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserId: params.userId,
+        error,
+        userId: params.userId,
+      }),
+    );
+
+    expect(mocks.completeNoteChatRunFailure).toHaveBeenCalledWith({
+      runId: params.runId,
+      usage,
+    });
+  });
+
+  it("성공 완료 저장에 실패해도 확인된 usage를 유지한 채 Run을 실패 처리한다", async () => {
+    setupSuccessfulExecution();
+
+    const error = new Error("success completion failed");
+
+    mocks.completeNoteChatRunSuccess.mockRejectedValue(error);
+
+    const onEvent = vi.fn();
+
+    await expect(runNoteChatStream(params, onEvent)).rejects.toThrow(
+      "success completion failed",
+    );
+
+    expect(mocks.completeNoteChatRunFailure).toHaveBeenCalledWith({
+      runId: params.runId,
+      usage,
+    });
+
+    expect(onEvent).toHaveBeenCalledWith({
+      type: "error",
+      runId: params.runId,
+      message: "답변 생성에 실패했습니다.",
+    });
+  });
+
+  it("실패 상태 저장에도 실패하면 해당 오류를 별도로 운영 오류로 기록한다", async () => {
+    setupSuccessfulExecution();
+
+    const executionError = new Error("stream failed");
+    const failureCompletionError = new Error("failure completion failed");
+
+    mocks.consumeNoteChatProviderStream.mockRejectedValue(executionError);
+    mocks.completeNoteChatRunFailure.mockRejectedValue(failureCompletionError);
+
+    const onEvent = vi.fn();
+
+    await expect(runNoteChatStream(params, onEvent)).rejects.toThrow(
+      "stream failed",
+    );
+
+    expect(mocks.reportNoteChatOperationalError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: executionError,
+      }),
+    );
+
+    expect(mocks.reportNoteChatOperationalError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: failureCompletionError,
+      }),
+    );
+
+    expect(onEvent).toHaveBeenCalledWith({
+      type: "error",
+      runId: params.runId,
+      message: "답변 생성에 실패했습니다.",
+    });
   });
 });

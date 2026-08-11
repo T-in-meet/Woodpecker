@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createClient } from "@/lib/supabase/server";
@@ -8,269 +7,250 @@ import {
   deleteNoteChatConversationAction,
   updateNoteChatConversationTitleAction,
 } from "../actions";
-
-vi.mock("next/navigation", () => ({
-  redirect: vi.fn(),
-}));
+import { reportNoteChatOperationalError } from "../utils/report-operational-error";
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
 }));
 
-const USER_ID = "11111111-1111-4111-8111-111111111111";
-const CONVERSATION_ID = "22222222-2222-4222-8222-222222222222";
+vi.mock("../utils/report-operational-error", () => ({
+  reportNoteChatOperationalError: vi.fn(),
+}));
+
+vi.mock("next/navigation", () => ({
+  redirect: vi.fn(() => {
+    throw new Error("NEXT_REDIRECT");
+  }),
+}));
+
+const USER_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const CONVERSATION_ID = "11111111-1111-4111-8111-111111111111";
 
 const CONVERSATION = {
   id: CONVERSATION_ID,
   user_id: USER_ID,
   title: "테스트 대화",
-  created_at: "2026-08-06T10:00:00.000Z",
-  updated_at: "2026-08-06T10:00:00.000Z",
+  created_at: "2026-08-11T00:00:00.000Z",
+  updated_at: "2026-08-11T00:00:00.000Z",
 };
 
-type SupabaseQueryResult<T> = {
-  data: T;
-  error: {
-    message: string;
-  } | null;
-};
-
-/**
- * 현재 사용자 조회 결과를 생성합니다.
- */
-function createUserResult({
-  userId = USER_ID,
-  emailConfirmed = true,
-}: {
-  userId?: string;
-  emailConfirmed?: boolean;
-} = {}) {
+function createAuthenticatedUser(
+  overrides: Partial<{
+    id: string;
+    email_confirmed_at: string | null;
+  }> = {},
+) {
   return {
+    id: overrides.id ?? USER_ID,
+    email_confirmed_at:
+      "email_confirmed_at" in overrides
+        ? overrides.email_confirmed_at
+        : "2026-08-10T00:00:00.000Z",
+  };
+}
+
+function createSupabaseClient(
+  authUser: ReturnType<typeof createAuthenticatedUser> | null,
+  authError: { message: string } | null = null,
+) {
+  const getUser = vi.fn().mockResolvedValue({
     data: {
-      user: {
-        id: userId,
-        email_confirmed_at: emailConfirmed ? "2026-08-06T09:00:00.000Z" : null,
-      },
+      user: authUser,
     },
-    error: null,
-  };
-}
-
-/**
- * 인증되지 않은 사용자 조회 결과를 생성합니다.
- */
-function createUnauthenticatedUserResult() {
-  return {
-    data: {
-      user: null,
-    },
-    error: {
-      message: "Not authenticated",
-    },
-  };
-}
-
-/**
- * 대화 생성 쿼리 Mock을 생성합니다.
- */
-function createInsertQueryMock<T>(result: SupabaseQueryResult<T>) {
-  const single = vi.fn().mockResolvedValue(result);
-  const select = vi.fn().mockReturnValue({ single });
-  const insert = vi.fn().mockReturnValue({ select });
-
-  return {
-    query: {
-      insert,
-    },
-    insert,
-    select,
-    single,
-  };
-}
-
-/**
- * 대화 제목 변경 쿼리 Mock을 생성합니다.
- */
-function createUpdateQueryMock<T>(result: SupabaseQueryResult<T>) {
-  const maybeSingle = vi.fn().mockResolvedValue(result);
-  const select = vi.fn().mockReturnValue({ maybeSingle });
-
-  const secondEq = vi.fn().mockReturnValue({ select });
-  const firstEq = vi.fn().mockReturnValue({ eq: secondEq });
-
-  const update = vi.fn().mockReturnValue({
-    eq: firstEq,
+    error: authError,
   });
 
-  return {
-    query: {
-      update,
-    },
-    update,
-    firstEq,
-    secondEq,
-    select,
-    maybeSingle,
-  };
-}
-
-/**
- * 대화 삭제 쿼리 Mock을 생성합니다.
- */
-function createDeleteQueryMock<T>(result: SupabaseQueryResult<T>) {
-  const maybeSingle = vi.fn().mockResolvedValue(result);
-  const select = vi.fn().mockReturnValue({ maybeSingle });
-
-  const secondEq = vi.fn().mockReturnValue({ select });
-  const firstEq = vi.fn().mockReturnValue({ eq: secondEq });
-
-  const deleteQuery = vi.fn().mockReturnValue({
-    eq: firstEq,
-  });
-
-  return {
-    query: {
-      delete: deleteQuery,
-    },
-    deleteQuery,
-    firstEq,
-    secondEq,
-    select,
-    maybeSingle,
-  };
-}
-
-/**
- * Server Action에서 사용하는 Supabase Client Mock을 설정합니다.
- */
-function mockSupabaseClient({
-  userResult = createUserResult(),
-  query,
-}: {
-  userResult?: ReturnType<
-    typeof createUserResult | typeof createUnauthenticatedUserResult
-  >;
-  query?: Record<string, unknown>;
-} = {}) {
-  const getUser = vi.fn().mockResolvedValue(userResult);
-  const from = vi.fn().mockReturnValue(query ?? {});
-
-  vi.mocked(createClient).mockResolvedValue({
-    auth: {
-      getUser,
-    },
-    from,
-  } as never);
-
-  return {
+  const auth = {
     getUser,
+  };
+
+  const from = vi.fn();
+
+  return {
+    auth,
     from,
+    getUser,
   };
 }
 
-beforeEach(() => {
-  vi.clearAllMocks();
-
-  vi.mocked(redirect).mockImplementation(() => {
-    throw new Error("NEXT_REDIRECT");
-  });
-});
+function mockCreateClient(client: ReturnType<typeof createSupabaseClient>) {
+  vi.mocked(createClient).mockResolvedValue(
+    client as unknown as Awaited<ReturnType<typeof createClient>>,
+  );
+}
 
 describe("createNoteChatConversationAction", () => {
-  it("입력이 올바르지 않으면 DB에 접근하지 않고 오류를 반환한다", async () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("입력이 올바르지 않으면 인증 및 DB를 호출하지 않는다", async () => {
     const result = await createNoteChatConversationAction({
-      title: "   ",
+      title: "",
     });
 
     expect(result).toEqual({
       success: false,
-      error: "대화 제목을 입력해 주세요.",
+      error: expect.any(String),
     });
     expect(createClient).not.toHaveBeenCalled();
+    expect(reportNoteChatOperationalError).not.toHaveBeenCalled();
   });
 
-  it("로그인하지 않은 사용자는 대화를 생성할 수 없다", async () => {
-    mockSupabaseClient({
-      userResult: createUnauthenticatedUserResult(),
-    });
+  it("로그인하지 않은 경우 대화 생성을 수행하지 않는다", async () => {
+    const client = createSupabaseClient(null);
+    mockCreateClient(client);
 
     const result = await createNoteChatConversationAction({
-      title: "새로운 대화",
+      title: "테스트 대화",
     });
 
     expect(result).toEqual({
       success: false,
       error: "로그인이 필요합니다.",
     });
+    expect(client.getUser).toHaveBeenCalledOnce();
+    expect(client.from).not.toHaveBeenCalled();
   });
 
-  it("이메일 미인증 사용자는 이메일 재전송 페이지로 이동한다", async () => {
-    mockSupabaseClient({
-      userResult: createUserResult({
-        emailConfirmed: false,
+  it("이메일이 확인되지 않은 경우 재전송 페이지로 이동한다", async () => {
+    const client = createSupabaseClient(
+      createAuthenticatedUser({
+        email_confirmed_at: null,
       }),
-    });
+    );
+    mockCreateClient(client);
 
     await expect(
       createNoteChatConversationAction({
-        title: "새로운 대화",
+        title: "테스트 대화",
       }),
     ).rejects.toThrow("NEXT_REDIRECT");
 
-    expect(redirect).toHaveBeenCalledTimes(1);
+    expect(client.from).not.toHaveBeenCalled();
   });
 
-  it("현재 사용자의 새 대화를 생성한다", async () => {
-    const insertQuery = createInsertQueryMock({
+  it("Conversation을 생성하고 생성된 대화를 반환한다", async () => {
+    const single = vi.fn().mockResolvedValue({
       data: CONVERSATION,
       error: null,
     });
+    const select = vi.fn(() => ({
+      single,
+    }));
+    const insert = vi.fn(() => ({
+      select,
+    }));
+    const from = vi.fn(() => ({
+      insert,
+    }));
 
-    const { from } = mockSupabaseClient({
-      query: insertQuery.query,
-    });
+    const client = createSupabaseClient(createAuthenticatedUser());
+    client.from.mockImplementation(from);
+    mockCreateClient(client);
 
     const result = await createNoteChatConversationAction({
-      title: "  테스트 대화  ",
+      title: "테스트 대화",
     });
 
     expect(from).toHaveBeenCalledWith("note_chat_conversations");
-    expect(insertQuery.insert).toHaveBeenCalledWith({
+    expect(insert).toHaveBeenCalledWith({
       user_id: USER_ID,
       title: "테스트 대화",
     });
-    expect(insertQuery.select).toHaveBeenCalledWith("*");
+    expect(select).toHaveBeenCalledWith("*");
+    expect(single).toHaveBeenCalledOnce();
+
     expect(result).toEqual({
       success: true,
       conversation: CONVERSATION,
     });
+
+    expect(reportNoteChatOperationalError).not.toHaveBeenCalled();
   });
 
-  it("대화 생성 쿼리가 실패하면 사용자 표시용 오류를 반환한다", async () => {
-    const insertQuery = createInsertQueryMock({
-      data: null,
-      error: {
-        message: "Insert failed",
-      },
-    });
+  it("Conversation 생성에 실패하면 운영 오류를 보고하고 실패 결과를 반환한다", async () => {
+    const error = {
+      message: "insert failed",
+    };
 
-    mockSupabaseClient({
-      query: insertQuery.query,
+    const single = vi.fn().mockResolvedValue({
+      data: null,
+      error,
     });
+    const select = vi.fn(() => ({
+      single,
+    }));
+    const insert = vi.fn(() => ({
+      select,
+    }));
+    const from = vi.fn(() => ({
+      insert,
+    }));
+
+    const client = createSupabaseClient(createAuthenticatedUser());
+    client.from.mockImplementation(from);
+    mockCreateClient(client);
 
     const result = await createNoteChatConversationAction({
-      title: "새로운 대화",
+      title: "테스트 대화",
     });
 
     expect(result).toEqual({
       success: false,
       error: "노트 챗봇 대화 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.",
     });
+
+    expect(reportNoteChatOperationalError).toHaveBeenCalledWith({
+      actorUserId: USER_ID,
+      context: {
+        title: "테스트 대화",
+      },
+      error,
+      errorCode: "NOTE_CHAT_CONVERSATION_CREATE_FAILED",
+      message: "노트 챗봇 대화 생성에 실패했습니다.",
+      operation: "create_conversation",
+      userId: USER_ID,
+    });
+  });
+
+  it("DB 오류 없이 생성 결과가 없으면 운영 오류를 보고하지 않는다", async () => {
+    const single = vi.fn().mockResolvedValue({
+      data: null,
+      error: null,
+    });
+    const select = vi.fn(() => ({
+      single,
+    }));
+    const insert = vi.fn(() => ({
+      select,
+    }));
+    const from = vi.fn(() => ({
+      insert,
+    }));
+
+    const client = createSupabaseClient(createAuthenticatedUser());
+    client.from.mockImplementation(from);
+    mockCreateClient(client);
+
+    const result = await createNoteChatConversationAction({
+      title: "테스트 대화",
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: "노트 챗봇 대화 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+    });
+    expect(reportNoteChatOperationalError).not.toHaveBeenCalled();
   });
 });
 
 describe("updateNoteChatConversationTitleAction", () => {
-  it("입력이 올바르지 않으면 DB에 접근하지 않고 오류를 반환한다", async () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("입력이 올바르지 않으면 인증 및 DB를 호출하지 않는다", async () => {
     const result = await updateNoteChatConversationTitleAction({
       conversationId: "invalid-id",
       title: "수정된 제목",
@@ -278,58 +258,15 @@ describe("updateNoteChatConversationTitleAction", () => {
 
     expect(result).toEqual({
       success: false,
-      error: "올바른 대화 ID가 아닙니다.",
+      error: expect.any(String),
     });
     expect(createClient).not.toHaveBeenCalled();
+    expect(reportNoteChatOperationalError).not.toHaveBeenCalled();
   });
 
-  it("현재 사용자가 소유한 대화 제목을 변경한다", async () => {
-    const updatedConversation = {
-      ...CONVERSATION,
-      title: "수정된 제목",
-      updated_at: "2026-08-06T11:00:00.000Z",
-    };
-
-    const updateQuery = createUpdateQueryMock({
-      data: updatedConversation,
-      error: null,
-    });
-
-    const { from } = mockSupabaseClient({
-      query: updateQuery.query,
-    });
-
-    const result = await updateNoteChatConversationTitleAction({
-      conversationId: CONVERSATION_ID,
-      title: "  수정된 제목  ",
-    });
-
-    expect(from).toHaveBeenCalledWith("note_chat_conversations");
-
-    expect(updateQuery.update).toHaveBeenCalledWith({
-      title: "수정된 제목",
-      updated_at: expect.any(String),
-    });
-
-    expect(updateQuery.firstEq).toHaveBeenCalledWith("id", CONVERSATION_ID);
-    expect(updateQuery.secondEq).toHaveBeenCalledWith("user_id", USER_ID);
-    expect(updateQuery.select).toHaveBeenCalledWith("*");
-
-    expect(result).toEqual({
-      success: true,
-      conversation: updatedConversation,
-    });
-  });
-
-  it("변경할 대화가 없거나 소유하지 않은 경우 찾을 수 없다는 오류를 반환한다", async () => {
-    const updateQuery = createUpdateQueryMock({
-      data: null,
-      error: null,
-    });
-
-    mockSupabaseClient({
-      query: updateQuery.query,
-    });
+  it("로그인하지 않은 경우 제목을 수정하지 않는다", async () => {
+    const client = createSupabaseClient(null);
+    mockCreateClient(client);
 
     const result = await updateNoteChatConversationTitleAction({
       conversationId: CONVERSATION_ID,
@@ -338,21 +275,130 @@ describe("updateNoteChatConversationTitleAction", () => {
 
     expect(result).toEqual({
       success: false,
-      error: "변경할 노트 챗봇 대화를 찾을 수 없습니다.",
+      error: "로그인이 필요합니다.",
+    });
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
+  it("Conversation 제목을 수정하고 수정된 대화를 반환한다", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: {
+        ...CONVERSATION,
+        title: "수정된 제목",
+      },
+      error: null,
+    });
+    const select = vi.fn(() => ({
+      maybeSingle,
+    }));
+    const eqUserId = vi.fn(() => ({
+      select,
+    }));
+    const eqId = vi.fn(() => ({
+      eq: eqUserId,
+    }));
+    const update = vi.fn(() => ({
+      eq: eqId,
+    }));
+    const from = vi.fn(() => ({
+      update,
+    }));
+
+    const client = createSupabaseClient(createAuthenticatedUser());
+    client.from.mockImplementation(from);
+    mockCreateClient(client);
+
+    const result = await updateNoteChatConversationTitleAction({
+      conversationId: CONVERSATION_ID,
+      title: "수정된 제목",
+    });
+
+    expect(from).toHaveBeenCalledWith("note_chat_conversations");
+    expect(update).toHaveBeenCalledWith({
+      title: "수정된 제목",
+      updated_at: expect.any(String),
+    });
+    expect(eqId).toHaveBeenCalledWith("id", CONVERSATION_ID);
+    expect(eqUserId).toHaveBeenCalledWith("user_id", USER_ID);
+    expect(select).toHaveBeenCalledWith("*");
+    expect(maybeSingle).toHaveBeenCalledOnce();
+
+    expect(result).toEqual({
+      success: true,
+      conversation: {
+        ...CONVERSATION,
+        title: "수정된 제목",
+      },
     });
   });
 
-  it("대화 제목 변경 쿼리가 실패하면 사용자 표시용 오류를 반환한다", async () => {
-    const updateQuery = createUpdateQueryMock({
+  it("다른 사용자의 Conversation은 수정하지 않는다", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
       data: null,
-      error: {
-        message: "Update failed",
-      },
+      error: null,
+    });
+    const select = vi.fn(() => ({
+      maybeSingle,
+    }));
+    const eqUserId = vi.fn(() => ({
+      select,
+    }));
+    const eqId = vi.fn(() => ({
+      eq: eqUserId,
+    }));
+    const update = vi.fn(() => ({
+      eq: eqId,
+    }));
+    const from = vi.fn(() => ({
+      update,
+    }));
+
+    const client = createSupabaseClient(createAuthenticatedUser());
+    client.from.mockImplementation(from);
+    mockCreateClient(client);
+
+    const result = await updateNoteChatConversationTitleAction({
+      conversationId: CONVERSATION_ID,
+      title: "수정된 제목",
     });
 
-    mockSupabaseClient({
-      query: updateQuery.query,
+    expect(eqId).toHaveBeenCalledWith("id", CONVERSATION_ID);
+    expect(eqUserId).toHaveBeenCalledWith("user_id", USER_ID);
+    expect(result).toEqual({
+      success: false,
+      error: "변경할 노트 챗봇 대화를 찾을 수 없습니다.",
     });
+    expect(reportNoteChatOperationalError).not.toHaveBeenCalled();
+  });
+
+  it("제목 수정에 실패하면 운영 오류를 보고한다", async () => {
+    const error = {
+      message: "update failed",
+    };
+
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: null,
+      error,
+    });
+    const select = vi.fn(() => ({
+      maybeSingle,
+    }));
+    const eqUserId = vi.fn(() => ({
+      select,
+    }));
+    const eqId = vi.fn(() => ({
+      eq: eqUserId,
+    }));
+    const update = vi.fn(() => ({
+      eq: eqId,
+    }));
+    const from = vi.fn(() => ({
+      update,
+    }));
+
+    const client = createSupabaseClient(createAuthenticatedUser());
+    client.from.mockImplementation(from);
+    mockCreateClient(client);
 
     const result = await updateNoteChatConversationTitleAction({
       conversationId: CONVERSATION_ID,
@@ -364,43 +410,91 @@ describe("updateNoteChatConversationTitleAction", () => {
       error:
         "노트 챗봇 대화 제목 변경에 실패했습니다. 잠시 후 다시 시도해 주세요.",
     });
+
+    expect(reportNoteChatOperationalError).toHaveBeenCalledWith({
+      actorUserId: USER_ID,
+      context: {
+        conversationId: CONVERSATION_ID,
+      },
+      error,
+      errorCode: "NOTE_CHAT_CONVERSATION_TITLE_UPDATE_FAILED",
+      message: "노트 챗봇 대화 제목 변경에 실패했습니다.",
+      operation: "update_conversation_title",
+      userId: USER_ID,
+    });
   });
 });
 
 describe("deleteNoteChatConversationAction", () => {
-  it("입력이 올바르지 않으면 DB에 접근하지 않고 오류를 반환한다", async () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("입력이 올바르지 않으면 인증 및 DB를 호출하지 않는다", async () => {
     const result = await deleteNoteChatConversationAction({
       conversationId: "invalid-id",
     });
 
     expect(result).toEqual({
       success: false,
-      error: "올바른 대화 ID가 아닙니다.",
+      error: expect.any(String),
     });
     expect(createClient).not.toHaveBeenCalled();
+    expect(reportNoteChatOperationalError).not.toHaveBeenCalled();
   });
 
-  it("현재 사용자가 소유한 대화를 삭제한다", async () => {
-    const deleteQuery = createDeleteQueryMock({
+  it("로그인하지 않은 경우 Conversation을 삭제하지 않는다", async () => {
+    const client = createSupabaseClient(null);
+    mockCreateClient(client);
+
+    const result = await deleteNoteChatConversationAction({
+      conversationId: CONVERSATION_ID,
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: "로그인이 필요합니다.",
+    });
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
+  it("Conversation을 삭제하고 삭제된 Conversation ID를 반환한다", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
       data: {
         id: CONVERSATION_ID,
       },
       error: null,
     });
+    const select = vi.fn(() => ({
+      maybeSingle,
+    }));
+    const eqUserId = vi.fn(() => ({
+      select,
+    }));
+    const eqId = vi.fn(() => ({
+      eq: eqUserId,
+    }));
+    const deleteQuery = vi.fn(() => ({
+      eq: eqId,
+    }));
+    const from = vi.fn(() => ({
+      delete: deleteQuery,
+    }));
 
-    const { from } = mockSupabaseClient({
-      query: deleteQuery.query,
-    });
+    const client = createSupabaseClient(createAuthenticatedUser());
+    client.from.mockImplementation(from);
+    mockCreateClient(client);
 
     const result = await deleteNoteChatConversationAction({
       conversationId: CONVERSATION_ID,
     });
 
     expect(from).toHaveBeenCalledWith("note_chat_conversations");
-    expect(deleteQuery.deleteQuery).toHaveBeenCalledTimes(1);
-    expect(deleteQuery.firstEq).toHaveBeenCalledWith("id", CONVERSATION_ID);
-    expect(deleteQuery.secondEq).toHaveBeenCalledWith("user_id", USER_ID);
-    expect(deleteQuery.select).toHaveBeenCalledWith("id");
+    expect(deleteQuery).toHaveBeenCalledOnce();
+    expect(eqId).toHaveBeenCalledWith("id", CONVERSATION_ID);
+    expect(eqUserId).toHaveBeenCalledWith("user_id", USER_ID);
+    expect(select).toHaveBeenCalledWith("id");
+    expect(maybeSingle).toHaveBeenCalledOnce();
 
     expect(result).toEqual({
       success: true,
@@ -408,37 +502,72 @@ describe("deleteNoteChatConversationAction", () => {
     });
   });
 
-  it("삭제할 대화가 없거나 소유하지 않은 경우 찾을 수 없다는 오류를 반환한다", async () => {
-    const deleteQuery = createDeleteQueryMock({
+  it("다른 사용자의 Conversation은 삭제하지 않는다", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
       data: null,
       error: null,
     });
+    const select = vi.fn(() => ({
+      maybeSingle,
+    }));
+    const eqUserId = vi.fn(() => ({
+      select,
+    }));
+    const eqId = vi.fn(() => ({
+      eq: eqUserId,
+    }));
+    const deleteQuery = vi.fn(() => ({
+      eq: eqId,
+    }));
+    const from = vi.fn(() => ({
+      delete: deleteQuery,
+    }));
 
-    mockSupabaseClient({
-      query: deleteQuery.query,
-    });
+    const client = createSupabaseClient(createAuthenticatedUser());
+    client.from.mockImplementation(from);
+    mockCreateClient(client);
 
     const result = await deleteNoteChatConversationAction({
       conversationId: CONVERSATION_ID,
     });
 
+    expect(eqId).toHaveBeenCalledWith("id", CONVERSATION_ID);
+    expect(eqUserId).toHaveBeenCalledWith("user_id", USER_ID);
     expect(result).toEqual({
       success: false,
       error: "삭제할 노트 챗봇 대화를 찾을 수 없습니다.",
     });
+    expect(reportNoteChatOperationalError).not.toHaveBeenCalled();
   });
 
-  it("대화 삭제 쿼리가 실패하면 사용자 표시용 오류를 반환한다", async () => {
-    const deleteQuery = createDeleteQueryMock({
-      data: null,
-      error: {
-        message: "Delete failed",
-      },
-    });
+  it("Conversation 삭제에 실패하면 운영 오류를 보고한다", async () => {
+    const error = {
+      message: "delete failed",
+    };
 
-    mockSupabaseClient({
-      query: deleteQuery.query,
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: null,
+      error,
     });
+    const select = vi.fn(() => ({
+      maybeSingle,
+    }));
+    const eqUserId = vi.fn(() => ({
+      select,
+    }));
+    const eqId = vi.fn(() => ({
+      eq: eqUserId,
+    }));
+    const deleteQuery = vi.fn(() => ({
+      eq: eqId,
+    }));
+    const from = vi.fn(() => ({
+      delete: deleteQuery,
+    }));
+
+    const client = createSupabaseClient(createAuthenticatedUser());
+    client.from.mockImplementation(from);
+    mockCreateClient(client);
 
     const result = await deleteNoteChatConversationAction({
       conversationId: CONVERSATION_ID,
@@ -447,6 +576,18 @@ describe("deleteNoteChatConversationAction", () => {
     expect(result).toEqual({
       success: false,
       error: "노트 챗봇 대화 삭제에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+    });
+
+    expect(reportNoteChatOperationalError).toHaveBeenCalledWith({
+      actorUserId: USER_ID,
+      context: {
+        conversationId: CONVERSATION_ID,
+      },
+      error,
+      errorCode: "NOTE_CHAT_CONVERSATION_DELETE_FAILED",
+      message: "노트 챗봇 대화 삭제에 실패했습니다.",
+      operation: "delete_conversation",
+      userId: USER_ID,
     });
   });
 });

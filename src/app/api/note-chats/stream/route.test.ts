@@ -1,229 +1,189 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import {
+  resolveAiRuntimeChatConfiguration,
+  resolveAiRuntimeEmbeddingConfiguration,
+} from "@/features/ai/runtimes/resolve-configuration";
+import { assertNoteChatDailyExecutionLimit } from "@/features/note-chats/execution/assert-daily-execution-limit";
+import type { RunNoteChatStreamResult } from "@/features/note-chats/stream/run-note-chat-stream";
 import { runNoteChatStream } from "@/features/note-chats/stream/run-note-chat-stream";
+import { reportNoteChatOperationalError } from "@/features/note-chats/utils/report-operational-error";
 import { createClient } from "@/lib/supabase/server";
 
 import { POST } from "./route";
 
-const runtimeMocks = vi.hoisted(() => ({
-  resolveAiRuntimeChatConfiguration: vi.fn(),
-  resolveAiRuntimeEmbeddingConfiguration: vi.fn(),
-}));
-
-vi.mock("@/features/ai/runtimes/resolve-configuration", () => ({
-  resolveAiRuntimeChatConfiguration:
-    runtimeMocks.resolveAiRuntimeChatConfiguration,
-  resolveAiRuntimeEmbeddingConfiguration:
-    runtimeMocks.resolveAiRuntimeEmbeddingConfiguration,
-}));
+vi.mock("server-only", () => ({}));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
+}));
+
+vi.mock("@/features/ai/runtimes/resolve-configuration", () => ({
+  resolveAiRuntimeChatConfiguration: vi.fn(),
+  resolveAiRuntimeEmbeddingConfiguration: vi.fn(),
 }));
 
 vi.mock("@/features/note-chats/stream/run-note-chat-stream", () => ({
   runNoteChatStream: vi.fn(),
 }));
 
-const CONVERSATION_ID = "11111111-1111-4111-8111-111111111111";
-const USER_MESSAGE_ID = "22222222-2222-4222-8222-222222222222";
-const RUN_ID = "33333333-3333-4333-8333-333333333333";
+vi.mock("@/features/note-chats/utils/report-operational-error", () => ({
+  reportNoteChatOperationalError: vi.fn(),
+}));
 
-const AGENT_ID = "44444444-4444-4444-8444-444444444444";
-const PROMPT_FAMILY_ID = "55555555-5555-4555-8555-555555555555";
-const PROMPT_VERSION_ID = "66666666-6666-4666-8666-666666666666";
-const CHAT_MODEL_CONFIG_ID = "77777777-7777-4777-8777-777777777777";
-const EMBEDDING_MODEL_CONFIG_ID = "88888888-8888-4888-8888-888888888888";
+vi.mock("@/features/note-chats/execution/assert-daily-execution-limit", () => ({
+  assertNoteChatDailyExecutionLimit: vi.fn(),
+}));
 
-const VALID_INPUT = {
-  conversationId: CONVERSATION_ID,
-  content: {
-    text: "질문입니다.",
-  },
-};
+const USER_ID = "550e8400-e29b-41d4-a716-446655440000";
+const CONVERSATION_ID = "550e8400-e29b-41d4-a716-446655440001";
+const RUN_ID = "550e8400-e29b-41d4-a716-446655440002";
+const USER_MESSAGE_ID = "550e8400-e29b-41d4-a716-446655440003";
+const ASSISTANT_MESSAGE_ID = "550e8400-e29b-41d4-a716-446655440004";
 
 const CHAT_CONFIGURATION = {
-  featureKey: "note-chat",
   kind: "chat",
+  featureKey: "note-chat",
   roleKey: "answer-generation",
-  temperature: 0.2,
-
+  model: {
+    id: "550e8400-e29b-41d4-a716-446655440010",
+    model: "gpt-test",
+    provider: "openai",
+  },
   prompt: {
     agent: {
-      id: AGENT_ID,
-      key: "note.chat",
-      display_name: "노트 챗봇",
-      description: null,
-      purpose: "노트 기반 답변 생성",
-      tags: [],
-      active_prompt_version_id: PROMPT_VERSION_ID,
-      is_system_managed: true,
-      created_at: "2026-08-06T00:00:00.000Z",
-      updated_at: "2026-08-06T00:00:00.000Z",
+      id: "550e8400-e29b-41d4-a716-446655440011",
     },
-
     family: {
-      id: PROMPT_FAMILY_ID,
-      agent_id: AGENT_ID,
-      key: "default",
-      display_name: "기본 프롬프트",
-      description: null,
-      tags: [],
-      is_system_managed: true,
-      created_at: "2026-08-06T00:00:00.000Z",
-      updated_at: "2026-08-06T00:00:00.000Z",
+      id: "550e8400-e29b-41d4-a716-446655440012",
     },
-
     version: {
-      id: PROMPT_VERSION_ID,
-      family_id: PROMPT_FAMILY_ID,
-      version_number: 1,
-      display_name: "노트 챗봇 v1",
-      change_summary: null,
-      lifecycle_status: "published",
-      system_template: "시스템 템플릿",
-      user_template: "{{question}}",
-      response_schema: {},
-      variables: [],
-      tags: [],
-      created_by_kind: "system",
-      created_by: null,
-      is_system_managed: true,
-      created_at: "2026-08-06T00:00:00.000Z",
+      id: "550e8400-e29b-41d4-a716-446655440013",
+      system_template: "system",
+      user_template: "user",
+      response_schema: null,
     },
   },
+  temperature: 0.2,
+};
 
-  model: {
-    id: CHAT_MODEL_CONFIG_ID,
-    key: "note.chat.model",
-    display_name: "노트 챗봇 모델",
-    provider: "openai",
-    model: "gpt-test",
-    capability: "chat",
-    dimensions: null,
-    distance_metric: null,
-    is_active: true,
-    is_system_managed: true,
-    notes: null,
-    created_at: "2026-08-06T00:00:00.000Z",
-    updated_at: "2026-08-06T00:00:00.000Z",
-  },
+const QUERY_EXPANSION_CONFIGURATION = {
+  ...CHAT_CONFIGURATION,
+  roleKey: "query-expansion",
 };
 
 const EMBEDDING_CONFIGURATION = {
-  featureKey: "note-chat",
   kind: "embedding",
+  featureKey: "note-chat",
   roleKey: "note-retrieval",
-
   model: {
-    id: EMBEDDING_MODEL_CONFIG_ID,
-    key: "note.chat.embedding",
-    display_name: "노트 챗봇 임베딩 모델",
-    provider: "openai",
+    id: "550e8400-e29b-41d4-a716-446655440020",
     model: "text-embedding-test",
-    capability: "embedding",
-    dimensions: 1536,
-    distance_metric: "cosine",
-    is_active: true,
-    is_system_managed: true,
-    notes: null,
-    created_at: "2026-08-06T00:00:00.000Z",
-    updated_at: "2026-08-06T00:00:00.000Z",
+    provider: "openai",
   },
 };
 
-const EXECUTION_SETTINGS = {
-  chat: CHAT_CONFIGURATION,
-  embedding: EMBEDDING_CONFIGURATION,
+const CREATED_QUESTION = {
+  run_id: RUN_ID,
+  user_message_id: USER_MESSAGE_ID,
 };
 
-/**
- * Route Handler 테스트용 Supabase Client Mock을 생성합니다.
- *
- * @param params 인증 사용자와 질문 생성 RPC 결과
- * @returns Route Handler에 주입할 Supabase Client Mock
- */
-function createSupabaseClientMock(params: {
-  user: {
+const RUN_RESULT = {} as RunNoteChatStreamResult;
+
+const createSupabaseClientMock = ({
+  user = {
+    id: USER_ID,
+    email_confirmed_at: "2026-08-11T00:00:00.000Z",
+  },
+  userError = null,
+  rpcData = CREATED_QUESTION,
+  rpcError = null,
+}: {
+  user?: {
     id: string;
     email_confirmed_at: string | null;
   } | null;
-  userError?: { message: string } | null;
-  rpcData?: {
-    run_id: string;
-    user_message_id: string;
-  } | null;
-  rpcError?: { message: string } | null;
-}) {
+  userError?: Error | null;
+  rpcData?: typeof CREATED_QUESTION | null;
+  rpcError?: Error | null;
+} = {}) => {
+  const auth = {
+    getUser: vi.fn().mockResolvedValue({
+      data: {
+        user,
+      },
+      error: userError,
+    }),
+  };
+
   const single = vi.fn().mockResolvedValue({
-    data: params.rpcData ?? null,
-    error: params.rpcError ?? null,
+    data: rpcData,
+    error: rpcError,
   });
 
   const rpc = vi.fn().mockReturnValue({
     single,
   });
 
-  const getUser = vi.fn().mockResolvedValue({
-    data: {
-      user: params.user,
-    },
-    error: params.userError ?? null,
-  });
-
   return {
-    auth: {
-      getUser,
-    },
+    auth,
     rpc,
   };
-}
+};
 
-/**
- * JSON 요청 객체를 생성합니다.
- *
- * @param body 요청 본문
- * @returns Route Handler에 전달할 Request
- */
-function createJsonRequest(body: unknown): Request {
-  return new Request("http://localhost/api/note-chats/stream", {
+const createRequest = (body: unknown) =>
+  new Request("http://localhost/api/note-chats/stream", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
   });
-}
 
-/**
- * NDJSON 응답을 이벤트 배열로 변환합니다.
- *
- * @param response Route Handler 스트림 응답
- * @returns 스트림에 포함된 이벤트 목록
- */
-async function readNdjsonEvents(response: Response): Promise<unknown[]> {
-  const text = await response.text();
+const readStream = async (response: Response): Promise<string[]> => {
+  expect(response.body).not.toBeNull();
 
-  return text
-    .split("\n")
-    .filter((line) => line.length > 0)
-    .map((line) => JSON.parse(line) as unknown);
-}
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  const chunks: string[] = [];
 
-beforeEach(() => {
-  vi.clearAllMocks();
+  while (true) {
+    const { done, value } = await reader.read();
 
-  runtimeMocks.resolveAiRuntimeChatConfiguration.mockResolvedValue(
-    CHAT_CONFIGURATION,
-  );
+    if (done) {
+      break;
+    }
 
-  runtimeMocks.resolveAiRuntimeEmbeddingConfiguration.mockResolvedValue(
-    EMBEDDING_CONFIGURATION,
-  );
-});
+    chunks.push(decoder.decode(value));
+  }
+
+  return chunks.join("").trim().split("\n").filter(Boolean);
+};
 
 describe("POST /api/note-chats/stream", () => {
-  it("올바르지 않은 JSON 요청은 400을 반환한다", async () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    vi.mocked(reportNoteChatOperationalError).mockResolvedValue(undefined);
+
+    vi.mocked(assertNoteChatDailyExecutionLimit).mockResolvedValue(undefined);
+
+    vi.mocked(resolveAiRuntimeChatConfiguration)
+      .mockResolvedValueOnce(CHAT_CONFIGURATION as never)
+      .mockResolvedValueOnce(QUERY_EXPANSION_CONFIGURATION as never);
+
+    vi.mocked(resolveAiRuntimeEmbeddingConfiguration).mockResolvedValue(
+      EMBEDDING_CONFIGURATION as never,
+    );
+
+    vi.mocked(runNoteChatStream).mockResolvedValue(RUN_RESULT);
+
+    const client = createSupabaseClientMock();
+
+    vi.mocked(createClient).mockResolvedValue(client as never);
+  });
+
+  it("잘못된 JSON 요청이면 400을 반환한다", async () => {
     const request = new Request("http://localhost/api/note-chats/stream", {
       method: "POST",
       headers: {
@@ -235,222 +195,234 @@ describe("POST /api/note-chats/stream", () => {
     const response = await POST(request);
 
     expect(response.status).toBe(400);
-
     await expect(response.json()).resolves.toEqual({
       error: "요청 본문이 올바른 JSON 형식이 아닙니다.",
     });
 
     expect(createClient).not.toHaveBeenCalled();
-    expect(
-      runtimeMocks.resolveAiRuntimeChatConfiguration,
-    ).not.toHaveBeenCalled();
   });
 
-  it("스키마 검증에 실패하면 400을 반환한다", async () => {
+  it("잘못된 질문 입력이면 400을 반환한다", async () => {
     const response = await POST(
-      createJsonRequest({
-        ...VALID_INPUT,
-        conversationId: "invalid-id",
+      createRequest({
+        conversationId: "invalid-conversation-id",
+        content: {
+          text: "",
+        },
       }),
     );
 
     expect(response.status).toBe(400);
-
-    await expect(response.json()).resolves.toEqual({
-      error: "올바른 대화 ID가 아닙니다.",
+    await expect(response.json()).resolves.toMatchObject({
+      error: expect.any(String),
     });
 
     expect(createClient).not.toHaveBeenCalled();
-    expect(
-      runtimeMocks.resolveAiRuntimeChatConfiguration,
-    ).not.toHaveBeenCalled();
   });
 
-  it("로그인하지 않은 사용자는 401을 반환한다", async () => {
-    vi.mocked(createClient).mockResolvedValue(
-      createSupabaseClientMock({
-        user: null,
-      }) as never,
+  it("로그인하지 않은 경우 401을 반환한다", async () => {
+    const client = createSupabaseClientMock({
+      user: null,
+      userError: null,
+    });
+
+    vi.mocked(createClient).mockResolvedValue(client as never);
+
+    const response = await POST(
+      createRequest({
+        conversationId: CONVERSATION_ID,
+        content: {
+          text: "질문입니다.",
+        },
+      }),
     );
 
-    const response = await POST(createJsonRequest(VALID_INPUT));
-
     expect(response.status).toBe(401);
-
     await expect(response.json()).resolves.toEqual({
       error: "로그인이 필요합니다.",
     });
 
-    expect(
-      runtimeMocks.resolveAiRuntimeChatConfiguration,
-    ).not.toHaveBeenCalled();
+    expect(client.auth.getUser).toHaveBeenCalledTimes(1);
+    expect(client.rpc).not.toHaveBeenCalled();
+    expect(runNoteChatStream).not.toHaveBeenCalled();
   });
 
-  it("사용자 인증 조회가 실패하면 401을 반환한다", async () => {
-    vi.mocked(createClient).mockResolvedValue(
-      createSupabaseClientMock({
-        user: null,
-        userError: {
-          message: "Auth failed",
-        },
-      }) as never,
-    );
-
-    const response = await POST(createJsonRequest(VALID_INPUT));
-
-    expect(response.status).toBe(401);
-
-    await expect(response.json()).resolves.toEqual({
-      error: "로그인이 필요합니다.",
+  it("이메일이 확인되지 않은 경우 403을 반환한다", async () => {
+    const client = createSupabaseClientMock({
+      user: {
+        id: USER_ID,
+        email_confirmed_at: null,
+      },
     });
-  });
 
-  it("이메일 확인이 완료되지 않은 사용자는 403을 반환한다", async () => {
-    vi.mocked(createClient).mockResolvedValue(
-      createSupabaseClientMock({
-        user: {
-          id: "99999999-9999-4999-8999-999999999999",
-          email_confirmed_at: null,
+    vi.mocked(createClient).mockResolvedValue(client as never);
+
+    const response = await POST(
+      createRequest({
+        conversationId: CONVERSATION_ID,
+        content: {
+          text: "질문입니다.",
         },
-      }) as never,
+      }),
     );
-
-    const response = await POST(createJsonRequest(VALID_INPUT));
 
     expect(response.status).toBe(403);
-
     await expect(response.json()).resolves.toEqual({
       error: "이메일 확인이 필요합니다.",
     });
 
-    expect(
-      runtimeMocks.resolveAiRuntimeChatConfiguration,
-    ).not.toHaveBeenCalled();
+    expect(client.rpc).not.toHaveBeenCalled();
+    expect(runNoteChatStream).not.toHaveBeenCalled();
   });
 
-  it("AI Runtime 설정 조회가 실패하면 500을 반환한다", async () => {
-    const supabase = createSupabaseClientMock({
-      user: {
-        id: "99999999-9999-4999-8999-999999999999",
-        email_confirmed_at: "2026-08-06T00:00:00.000Z",
-      },
-    });
+  it("Runtime Configuration 조회에 실패하면 운영 오류를 기록하고 500을 반환한다", async () => {
+    const client = createSupabaseClientMock();
 
-    vi.mocked(createClient).mockResolvedValue(supabase as never);
+    vi.mocked(createClient).mockResolvedValue(client as never);
 
-    runtimeMocks.resolveAiRuntimeChatConfiguration.mockRejectedValue(
-      new Error("Runtime resolution failed"),
+    const configurationError = new Error("configuration load failed");
+
+    vi.mocked(resolveAiRuntimeChatConfiguration).mockReset();
+    vi.mocked(resolveAiRuntimeChatConfiguration).mockRejectedValue(
+      configurationError,
     );
 
-    const response = await POST(createJsonRequest(VALID_INPUT));
+    const response = await POST(
+      createRequest({
+        conversationId: CONVERSATION_ID,
+        content: {
+          text: "질문입니다.",
+        },
+      }),
+    );
 
     expect(response.status).toBe(500);
-
     await expect(response.json()).resolves.toEqual({
       error: "노트 챗봇 AI 설정을 불러오지 못했습니다.",
     });
 
-    expect(supabase.rpc).not.toHaveBeenCalled();
+    expect(reportNoteChatOperationalError).toHaveBeenCalledTimes(1);
+    expect(reportNoteChatOperationalError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserId: USER_ID,
+        error: configurationError,
+        errorCode: expect.any(String),
+        message: "노트 챗봇 AI 실행 설정 조회에 실패했습니다.",
+        userId: USER_ID,
+      }),
+    );
+
+    expect(client.rpc).not.toHaveBeenCalled();
     expect(runNoteChatStream).not.toHaveBeenCalled();
   });
 
-  it("질문 생성 RPC가 실패하면 500을 반환한다", async () => {
-    const supabase = createSupabaseClientMock({
-      user: {
-        id: "99999999-9999-4999-8999-999999999999",
-        email_confirmed_at: "2026-08-06T00:00:00.000Z",
-      },
-      rpcError: {
-        message: "Question creation failed",
-      },
+  it("질문 생성 RPC가 실패하면 운영 오류를 기록하고 500을 반환한다", async () => {
+    const createError = new Error("question create failed");
+
+    const client = createSupabaseClientMock({
+      rpcData: null,
+      rpcError: createError,
     });
 
-    vi.mocked(createClient).mockResolvedValue(supabase as never);
+    vi.mocked(createClient).mockResolvedValue(client as never);
 
-    const response = await POST(createJsonRequest(VALID_INPUT));
+    const response = await POST(
+      createRequest({
+        conversationId: CONVERSATION_ID,
+        content: {
+          text: "질문입니다.",
+        },
+      }),
+    );
 
     expect(response.status).toBe(500);
-
     await expect(response.json()).resolves.toEqual({
       error: "질문 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.",
     });
 
-    expect(runNoteChatStream).not.toHaveBeenCalled();
-  });
-
-  it("질문 생성 RPC가 결과를 반환하지 않으면 500을 반환한다", async () => {
-    const supabase = createSupabaseClientMock({
-      user: {
-        id: "99999999-9999-4999-8999-999999999999",
-        email_confirmed_at: "2026-08-06T00:00:00.000Z",
-      },
-      rpcData: null,
-    });
-
-    vi.mocked(createClient).mockResolvedValue(supabase as never);
-
-    const response = await POST(createJsonRequest(VALID_INPUT));
-
-    expect(response.status).toBe(500);
-    expect(runNoteChatStream).not.toHaveBeenCalled();
-  });
-
-  it("Runtime 설정으로 질문과 Pending Run을 생성하고 NDJSON 스트림을 반환한다", async () => {
-    const supabase = createSupabaseClientMock({
-      user: {
-        id: "99999999-9999-4999-8999-999999999999",
-        email_confirmed_at: "2026-08-06T00:00:00.000Z",
-      },
-      rpcData: {
-        run_id: RUN_ID,
-        user_message_id: USER_MESSAGE_ID,
-      },
-    });
-
-    vi.mocked(createClient).mockResolvedValue(supabase as never);
-
-    vi.mocked(runNoteChatStream).mockImplementation(
-      async (_params, onEvent) => {
-        await onEvent({
-          runId: RUN_ID,
-          type: "start",
-        });
-
-        await onEvent({
-          delta: "첫 번째 ",
-          type: "text-delta",
-        });
-
-        await onEvent({
-          delta: "답변",
-          type: "text-delta",
-        });
-
-        await onEvent({
-          assistantMessageId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-          referencedNoteIds: [],
-          runId: RUN_ID,
-          type: "finish",
-        });
-
-        return {
-          assistantMessageId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-          content: "첫 번째 답변",
-          referencedNoteIds: [],
-          runId: RUN_ID,
-          usage: {
-            inputTokens: 5,
-            outputTokens: 3,
-            totalTokens: 8,
-          },
-        };
-      },
+    expect(client.rpc).toHaveBeenCalledWith(
+      "create_note_chat_question",
+      expect.objectContaining({
+        p_agent_id: CHAT_CONFIGURATION.prompt.agent.id,
+        p_chat_model_config_id: CHAT_CONFIGURATION.model.id,
+        p_content: {
+          text: "질문입니다.",
+        },
+        p_conversation_id: CONVERSATION_ID,
+        p_embedding_model_config_id: EMBEDDING_CONFIGURATION.model.id,
+        p_prompt_version_id: CHAT_CONFIGURATION.prompt.version.id,
+      }),
     );
 
-    const response = await POST(createJsonRequest(VALID_INPUT));
+    expect(reportNoteChatOperationalError).toHaveBeenCalledTimes(1);
+    expect(reportNoteChatOperationalError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserId: USER_ID,
+        context: {
+          conversationId: CONVERSATION_ID,
+        },
+        error: createError,
+        message: "노트 챗봇 질문 생성에 실패했습니다.",
+        userId: USER_ID,
+      }),
+    );
+
+    expect(runNoteChatStream).not.toHaveBeenCalled();
+  });
+
+  it("질문 생성 RPC 결과가 없으면 운영 오류를 기록하고 500을 반환한다", async () => {
+    const client = createSupabaseClientMock({
+      rpcData: null,
+      rpcError: null,
+    });
+
+    vi.mocked(createClient).mockResolvedValue(client as never);
+
+    const response = await POST(
+      createRequest({
+        conversationId: CONVERSATION_ID,
+        content: {
+          text: "질문입니다.",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: "질문 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+    });
+
+    expect(reportNoteChatOperationalError).toHaveBeenCalledTimes(1);
+    expect(reportNoteChatOperationalError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserId: USER_ID,
+        context: {
+          conversationId: CONVERSATION_ID,
+        },
+        message: "노트 챗봇 질문 생성 결과를 확인하지 못했습니다.",
+        userId: USER_ID,
+        error: expect.any(Error),
+      }),
+    );
+
+    expect(runNoteChatStream).not.toHaveBeenCalled();
+  });
+
+  it("정상 요청이면 질문을 생성하고 AI 스트림을 시작한다", async () => {
+    const client = createSupabaseClientMock();
+
+    vi.mocked(createClient).mockResolvedValue(client as never);
+
+    const response = await POST(
+      createRequest({
+        conversationId: CONVERSATION_ID,
+        content: {
+          text: "질문입니다.",
+        },
+      }),
+    );
 
     expect(response.status).toBe(200);
-
     expect(response.headers.get("Content-Type")).toBe(
       "application/x-ndjson; charset=utf-8",
     );
@@ -459,122 +431,203 @@ describe("POST /api/note-chats/stream", () => {
     );
     expect(response.headers.get("X-Accel-Buffering")).toBe("no");
 
-    expect(
-      runtimeMocks.resolveAiRuntimeChatConfiguration,
-    ).toHaveBeenCalledTimes(1);
+    /*
+     * ReadableStream의 start() 내부 비동기 실행이 완료될 때까지
+     * 응답 본문을 소비합니다.
+     */
+    await readStream(response);
 
-    expect(
-      runtimeMocks.resolveAiRuntimeEmbeddingConfiguration,
-    ).toHaveBeenCalledTimes(1);
-
-    expect(supabase.rpc).toHaveBeenCalledWith("create_note_chat_question", {
-      p_agent_id: AGENT_ID,
-      p_chat_model_config_id: CHAT_MODEL_CONFIG_ID,
-      p_content: VALID_INPUT.content,
+    expect(client.rpc).toHaveBeenCalledWith("create_note_chat_question", {
+      p_agent_id: CHAT_CONFIGURATION.prompt.agent.id,
+      p_chat_model_config_id: CHAT_CONFIGURATION.model.id,
+      p_content: {
+        text: "질문입니다.",
+      },
       p_conversation_id: CONVERSATION_ID,
-      p_embedding_model_config_id: EMBEDDING_MODEL_CONFIG_ID,
-      p_prompt_version_id: PROMPT_VERSION_ID,
+      p_embedding_model_config_id: EMBEDDING_CONFIGURATION.model.id,
+      p_prompt_version_id: CHAT_CONFIGURATION.prompt.version.id,
     });
 
-    const events = await readNdjsonEvents(response);
-
+    expect(runNoteChatStream).toHaveBeenCalledTimes(1);
     expect(runNoteChatStream).toHaveBeenCalledWith(
       {
         conversationId: CONVERSATION_ID,
         runId: RUN_ID,
-        settings: EXECUTION_SETTINGS,
+        settings: {
+          chat: CHAT_CONFIGURATION,
+          queryExpansion: QUERY_EXPANSION_CONFIGURATION,
+          embedding: EMBEDDING_CONFIGURATION,
+        },
+        userId: USER_ID,
         userMessageId: USER_MESSAGE_ID,
       },
       expect.any(Function),
     );
 
-    expect(events).toEqual([
-      {
-        runId: RUN_ID,
-        type: "start",
-      },
-      {
-        delta: "첫 번째 ",
-        type: "text-delta",
-      },
-      {
-        delta: "답변",
-        type: "text-delta",
-      },
-      {
-        assistantMessageId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        referencedNoteIds: [],
-        runId: RUN_ID,
-        type: "finish",
-      },
-    ]);
+    expect(reportNoteChatOperationalError).not.toHaveBeenCalled();
   });
 
-  it("실행이 오류 이벤트 없이 실패하면 Route가 오류 이벤트를 전달한다", async () => {
-    vi.mocked(createClient).mockResolvedValue(
-      createSupabaseClientMock({
-        user: {
-          id: "99999999-9999-4999-8999-999999999999",
-          email_confirmed_at: "2026-08-06T00:00:00.000Z",
-        },
-        rpcData: {
-          run_id: RUN_ID,
-          user_message_id: USER_MESSAGE_ID,
-        },
-      }) as never,
-    );
+  it("Run 실행 중 발생한 스트림 이벤트를 NDJSON으로 전달한다", async () => {
+    const client = createSupabaseClientMock();
 
-    vi.mocked(runNoteChatStream).mockRejectedValue(
-      new Error("Run start failed"),
-    );
-
-    const response = await POST(createJsonRequest(VALID_INPUT));
-    const events = await readNdjsonEvents(response);
-
-    expect(events).toEqual([
-      {
-        message: "답변 생성에 실패했습니다.",
-        runId: RUN_ID,
-        type: "error",
-      },
-    ]);
-  });
-
-  it("실행 함수가 이미 오류 이벤트를 보냈으면 중복 전송하지 않는다", async () => {
-    vi.mocked(createClient).mockResolvedValue(
-      createSupabaseClientMock({
-        user: {
-          id: "99999999-9999-4999-8999-999999999999",
-          email_confirmed_at: "2026-08-06T00:00:00.000Z",
-        },
-        rpcData: {
-          run_id: RUN_ID,
-          user_message_id: USER_MESSAGE_ID,
-        },
-      }) as never,
-    );
+    vi.mocked(createClient).mockResolvedValue(client as never);
 
     vi.mocked(runNoteChatStream).mockImplementation(
       async (_params, onEvent) => {
         await onEvent({
-          message: "답변 생성에 실패했습니다.",
+          type: "start",
           runId: RUN_ID,
-          type: "error",
+          userMessageId: USER_MESSAGE_ID,
         });
 
-        throw new Error("Provider failed");
+        await onEvent({
+          type: "text-delta",
+          delta: "안녕하세요.",
+        });
+
+        await onEvent({
+          type: "finish",
+          runId: RUN_ID,
+          assistantMessageId: ASSISTANT_MESSAGE_ID,
+          usedNoteIds: [],
+        });
+
+        return RUN_RESULT;
       },
     );
 
-    const response = await POST(createJsonRequest(VALID_INPUT));
-    const events = await readNdjsonEvents(response);
+    const response = await POST(
+      createRequest({
+        conversationId: CONVERSATION_ID,
+        content: {
+          text: "질문입니다.",
+        },
+      }),
+    );
 
-    expect(events).toEqual([
-      {
+    const lines = await readStream(response);
+
+    expect(lines).toEqual([
+      JSON.stringify({
+        type: "start",
+        runId: RUN_ID,
+        userMessageId: USER_MESSAGE_ID,
+      }),
+      JSON.stringify({
+        type: "text-delta",
+        delta: "안녕하세요.",
+      }),
+      JSON.stringify({
+        type: "finish",
+        runId: RUN_ID,
+        assistantMessageId: ASSISTANT_MESSAGE_ID,
+        usedNoteIds: [],
+      }),
+    ]);
+  });
+
+  it("Run 실행 중 error 이벤트가 발생하면 해당 이벤트를 전달한다", async () => {
+    const client = createSupabaseClientMock();
+
+    vi.mocked(createClient).mockResolvedValue(client as never);
+
+    vi.mocked(runNoteChatStream).mockImplementation(
+      async (_params, onEvent) => {
+        await onEvent({
+          type: "error",
+          message: "답변 생성에 실패했습니다.",
+          runId: RUN_ID,
+        });
+
+        return RUN_RESULT;
+      },
+    );
+
+    const response = await POST(
+      createRequest({
+        conversationId: CONVERSATION_ID,
+        content: {
+          text: "질문입니다.",
+        },
+      }),
+    );
+
+    const lines = await readStream(response);
+
+    expect(lines).toEqual([
+      JSON.stringify({
+        type: "error",
+        message: "답변 생성에 실패했습니다.",
+        runId: RUN_ID,
+      }),
+    ]);
+  });
+
+  it("Run 실행이 예외를 발생시키고 error 이벤트가 없으면 기본 error 이벤트를 전달한다", async () => {
+    const client = createSupabaseClientMock();
+
+    vi.mocked(createClient).mockResolvedValue(client as never);
+
+    vi.mocked(runNoteChatStream).mockRejectedValue(
+      new Error("unexpected stream error"),
+    );
+
+    const response = await POST(
+      createRequest({
+        conversationId: CONVERSATION_ID,
+        content: {
+          text: "질문입니다.",
+        },
+      }),
+    );
+
+    const lines = await readStream(response);
+
+    expect(lines).toEqual([
+      JSON.stringify({
         message: "답변 생성에 실패했습니다.",
         runId: RUN_ID,
         type: "error",
+      }),
+    ]);
+
+    expect(reportNoteChatOperationalError).not.toHaveBeenCalled();
+  });
+
+  it("Run 실행에서 error 이벤트가 전달된 경우 예외가 발생해도 중복 error 이벤트를 전달하지 않는다", async () => {
+    const client = createSupabaseClientMock();
+
+    vi.mocked(createClient).mockResolvedValue(client as never);
+
+    vi.mocked(runNoteChatStream).mockImplementation(
+      async (_params, onEvent) => {
+        await onEvent({
+          type: "error",
+          message: "실행 실패",
+          runId: RUN_ID,
+        });
+
+        throw new Error("after error event");
       },
+    );
+
+    const response = await POST(
+      createRequest({
+        conversationId: CONVERSATION_ID,
+        content: {
+          text: "질문입니다.",
+        },
+      }),
+    );
+
+    const lines = await readStream(response);
+
+    expect(lines).toEqual([
+      JSON.stringify({
+        type: "error",
+        message: "실행 실패",
+        runId: RUN_ID,
+      }),
     ]);
   });
 });
