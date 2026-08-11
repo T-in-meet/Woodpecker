@@ -1,11 +1,11 @@
 import { AI_EMBEDDING_INPUT_PREVIEW_MAX_LENGTH } from "@/features/ai/constants/embeddings";
 import { deleteAiEmbeddingsBySource } from "@/features/ai/embeddings/cache";
 import { generateAiEmbedding } from "@/features/ai/embeddings/generate";
-import type { AiRuntimeEmbeddingConfiguration } from "@/features/ai/runtimes/types";
 import {
   NOTE_EMBEDDING_INPUT_KIND,
   NOTE_EMBEDDING_SOURCE_TYPE,
-} from "@/features/note-chats/constants/embeddings";
+} from "@/features/ai/rags/note/constants/embeddings";
+import type { AiRuntimeEmbeddingConfiguration } from "@/features/ai/runtimes/types";
 
 /**
  * Note 내용을 RAG embedding에 사용할 입력 텍스트로 변환합니다.

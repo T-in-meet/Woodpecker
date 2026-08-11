@@ -1,6 +1,5 @@
+import type { MatchedNote } from "@/features/ai/rags/note/get-matched-notes";
 import type { Json } from "@/types/db.helpers";
-
-import type { NoteChatMatchedNote } from "./get-matched-notes";
 
 /**
  * 노트 챗봇 실행에서 LLM Context로 사용한 Note Source입니다.
@@ -39,7 +38,7 @@ export type NoteChatNoteSource = {
  * @param notes 실제 Prompt Context에 사용된 검색 노트 목록
  * @returns note_chat_runs.sources에 저장할 JSON 목록
  */
-export function buildNoteChatSources(notes: NoteChatMatchedNote[]): Json[] {
+export function buildNoteChatSources(notes: MatchedNote[]): Json[] {
   return notes.map((note, index) => ({
     contextIndex: index + 1,
     content: note.content,

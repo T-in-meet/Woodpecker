@@ -1,5 +1,7 @@
 import { AI_CHAT_MESSAGE_ROLE } from "@/features/ai/chats/constants";
 import type { AiProviderChatMessage } from "@/features/ai/providers/types";
+import { getMatchedNotes } from "@/features/ai/rags/note/get-matched-notes";
+import { searchNoteEmbeddings } from "@/features/ai/rags/note/search-embeddings";
 import type {
   AiRuntimeChatConfiguration,
   AiRuntimeEmbeddingConfiguration,
@@ -11,16 +13,18 @@ import {
 } from "@/features/operational-errors/constants";
 import type { Json } from "@/types/db.helpers";
 
-import { NOTE_CHAT_CONTEXT_LIMIT } from "../constants/execution";
+import {
+  NOTE_CHAT_CONTEXT_LIMIT,
+  NOTE_CHAT_MATCH_LIMIT,
+  NOTE_CHAT_MIN_SIMILARITY,
+} from "../constants/execution";
 import { getNoteChatConversationDetail } from "../queries";
 import type { NoteChatConversation } from "../types";
 import { reportNoteChatOperationalError } from "../utils/report-operational-error";
 import { buildNoteChatContext } from "./build-note-context";
 import { buildNoteChatSources } from "./build-note-sources";
 import { expandNoteChatQuery } from "./expand-query";
-import { getMatchedNoteChatNotes } from "./get-matched-notes";
 import { resolveNoteChatExecutionMessages } from "./resolve-execution-messages";
-import { searchNoteChatEmbeddings } from "./search-note-embeddings";
 
 /**
  * 노트 챗봇 한 번의 실행에서 확정된 AI Runtime 설정입니다.
@@ -204,13 +208,15 @@ export async function prepareNoteChatExecution(
    * 원본 사용자 질문이 아니라 문맥 기반으로 확장된 검색 질의를 Embedding하여
    * 현재 대화 문맥을 반영한 노트 후보를 검색합니다.
    */
-  const embeddingMatches = await searchNoteChatEmbeddings({
+  const embeddingMatches = await searchNoteEmbeddings({
     embeddingConfiguration: params.settings.embedding,
+    limit: NOTE_CHAT_MATCH_LIMIT,
+    minSimilarity: NOTE_CHAT_MIN_SIMILARITY,
     ownerUserId: detail.conversation.user_id,
     question: expandedQuery,
   });
 
-  const matchedNotes = await getMatchedNoteChatNotes({
+  const matchedNotes = await getMatchedNotes({
     matches: embeddingMatches,
     ownerUserId: detail.conversation.user_id,
   });

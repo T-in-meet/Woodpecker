@@ -1,11 +1,11 @@
-import type { NoteChatMatchedNote } from "./get-matched-notes";
+import type { MatchedNote } from "@/features/ai/rags/note/get-matched-notes";
 
 /**
  * 노트 챗봇 Prompt에 전달할 Note Context 생성 입력입니다.
  */
 type BuildNoteChatContextParams = {
   /** Embedding 검색 결과와 결합된 실제 노트 목록입니다. */
-  notes: NoteChatMatchedNote[];
+  notes: MatchedNote[];
 };
 
 /**
