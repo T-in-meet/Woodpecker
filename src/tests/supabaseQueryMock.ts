@@ -61,7 +61,18 @@ export function createSupabaseQueryMock(
     ]),
   );
 
-  const from = vi.fn((table: string) => builders.get(table)?.builder);
+  const from = vi.fn((table: string) => {
+    const existingBuilder = builders.get(table);
+
+    if (existingBuilder) {
+      return existingBuilder.builder;
+    }
+
+    const fallbackBuilder = createQueryBuilderMock({});
+    builders.set(table, fallbackBuilder);
+
+    return fallbackBuilder.builder;
+  });
 
   return {
     supabase: { from },

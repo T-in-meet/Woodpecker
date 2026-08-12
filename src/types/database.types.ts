@@ -855,6 +855,35 @@ export type Database = {
         };
         Relationships: [];
       };
+      note_related_recommendations: {
+        Row: {
+          created_at: string;
+          note_id: string;
+          recommendations: Json;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          note_id: string;
+          recommendations?: Json;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          note_id?: string;
+          recommendations?: Json;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "note_related_recommendations_note_id_fkey";
+            columns: ["note_id"];
+            isOneToOne: true;
+            referencedRelation: "notes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       notifications: {
         Row: {
           body: string | null;

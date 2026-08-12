@@ -15,12 +15,21 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 import { generateNoteEmbedding } from "../ai/rags/note/generate-embedding";
-import { resolveAiRuntimeEmbeddingConfiguration } from "../ai/runtimes";
 import { reportAiOperationalError } from "../ai/utils/report-ai-operational-error";
+import {
+  resolveAiRuntimeChatConfiguration,
+  resolveAiRuntimeEmbeddingConfiguration,
+} from "../ai/runtimes";
 import {
   NOTE_CHAT_AI_FEATURE_KEY,
   NOTE_CHAT_AI_ROLE_KEY,
 } from "../note-chats/constants/ai";
+import {
+  RELATED_NOTES_AI_FEATURE_KEY,
+  RELATED_NOTES_AI_ROLE_KEY,
+} from "../related-notes/constants/ai";
+import { runRelatedNoteRecommendation } from "../related-notes/execution/run-related-note-recommendation";
+import { saveRelatedNoteRecommendations } from "../related-notes/persistence/save-related-note-recommendations";
 import { type NoteInput, noteSchema } from "./schema";
 
 type NoteActionFieldErrors = Partial<Record<keyof NoteInput, string[]>>;
@@ -197,6 +206,56 @@ export async function createNoteAction(
     ownerUserId: user.id,
   });
 
+  try {
+    const embeddingConfiguration = await resolveAiRuntimeEmbeddingConfiguration(
+      {
+        featureKey: NOTE_CHAT_AI_FEATURE_KEY,
+        roleKey: NOTE_CHAT_AI_ROLE_KEY.NOTE_RETRIEVAL,
+      },
+    );
+
+    const queryExpansionConfiguration = await resolveAiRuntimeChatConfiguration(
+      {
+        featureKey: RELATED_NOTES_AI_FEATURE_KEY,
+        roleKey: RELATED_NOTES_AI_ROLE_KEY.QUERY_EXPANSION,
+      },
+    );
+
+    const answerConfiguration = await resolveAiRuntimeChatConfiguration({
+      featureKey: RELATED_NOTES_AI_FEATURE_KEY,
+      roleKey: RELATED_NOTES_AI_ROLE_KEY.ANSWER_GENERATION,
+    });
+
+    const result = await runRelatedNoteRecommendation({
+      answerConfiguration,
+      content: parsed.data.content,
+      embeddingConfiguration,
+      limit: 5,
+      minSimilarity: 0,
+      ownerUserId: user.id,
+      queryExpansionConfiguration,
+      targetNoteId: newNoteId,
+      title: parsed.data.title,
+    });
+
+    await saveRelatedNoteRecommendations({
+      noteId: newNoteId,
+      recommendations: result.recommendations,
+    });
+
+    console.log("[Related Notes Recommendation]", {
+      expandedQuery: result.expandedQuery,
+      matchedNoteIds: result.notes.map((note) => note.id),
+      recommendedNoteIds: result.recommendations.map(
+        (recommendation) => recommendation.noteId,
+      ),
+    });
+  } catch (error) {
+    // Note 저장은 이미 성공했으므로 관련 노트 추천 실패가 Note 생성 결과에 영향을 주지 않도록 한다.
+    // 추천 실행 자체의 오류 보고는 실행 계층에서 담당한다.
+    console.error("[Related Notes Recommendation Failed]", error);
+  }
+
   return {
     success: true,
     newNoteId,
@@ -261,7 +320,7 @@ export async function updateNoteAction(
     })
     .eq("id", parsedNoteId.data)
     .eq("user_id", user.id)
-    .select("id")
+    .select("id, title, content")
     .maybeSingle();
 
   if (error) {
@@ -282,6 +341,56 @@ export async function updateNoteAction(
     noteId: updatedNote.id,
     ownerUserId: user.id,
   });
+
+  try {
+    const embeddingConfiguration = await resolveAiRuntimeEmbeddingConfiguration(
+      {
+        featureKey: NOTE_CHAT_AI_FEATURE_KEY,
+        roleKey: NOTE_CHAT_AI_ROLE_KEY.NOTE_RETRIEVAL,
+      },
+    );
+
+    const queryExpansionConfiguration = await resolveAiRuntimeChatConfiguration(
+      {
+        featureKey: RELATED_NOTES_AI_FEATURE_KEY,
+        roleKey: RELATED_NOTES_AI_ROLE_KEY.QUERY_EXPANSION,
+      },
+    );
+
+    const answerConfiguration = await resolveAiRuntimeChatConfiguration({
+      featureKey: RELATED_NOTES_AI_FEATURE_KEY,
+      roleKey: RELATED_NOTES_AI_ROLE_KEY.ANSWER_GENERATION,
+    });
+
+    const result = await runRelatedNoteRecommendation({
+      answerConfiguration,
+      content: updatedNote.content,
+      embeddingConfiguration,
+      limit: 5,
+      minSimilarity: 0,
+      ownerUserId: user.id,
+      queryExpansionConfiguration,
+      targetNoteId: updatedNote.id,
+      title: updatedNote.title,
+    });
+
+    await saveRelatedNoteRecommendations({
+      noteId: updatedNote.id,
+      recommendations: result.recommendations,
+    });
+
+    console.log("[Related Notes Recommendation]", {
+      expandedQuery: result.expandedQuery,
+      matchedNoteIds: result.notes.map((note) => note.id),
+      recommendedNoteIds: result.recommendations.map(
+        (recommendation) => recommendation.noteId,
+      ),
+    });
+  } catch (error) {
+    // Note 수정은 이미 성공했으므로 관련 노트 추천 실패가 Note 수정 결과에 영향을 주지 않도록 한다.
+    // 추천 실행 자체의 오류 보고는 실행 계층에서 담당한다.
+    console.error("[Related Notes Recommendation Failed]", error);
+  }
 
   return { success: true };
 }

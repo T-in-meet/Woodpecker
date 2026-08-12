@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { AiRuntimeEmbeddingConfiguration } from "@/features/ai/runtimes/types";
+import type {
+  AiRuntimeChatConfiguration,
+  AiRuntimeEmbeddingConfiguration,
+} from "@/features/ai/runtimes/types";
 import {
   NOTE_CHAT_AI_FEATURE_KEY,
   NOTE_CHAT_AI_ROLE_KEY,
@@ -10,6 +13,10 @@ import {
   AI_OPERATIONAL_ERROR_OPERATION,
   AI_OPERATIONAL_ERROR_STAGE,
 } from "@/features/operational-errors/constants";
+import {
+  RELATED_NOTES_AI_FEATURE_KEY,
+  RELATED_NOTES_AI_ROLE_KEY,
+} from "@/features/related-notes/constants/ai";
 import { ROUTES } from "@/lib/constants/routes";
 
 const REDIRECT_ERROR = new Error("NEXT_REDIRECT");
@@ -23,7 +30,10 @@ const {
   redirectMock,
   generateNoteEmbeddingMock,
   reportAiOperationalErrorMock,
+  resolveAiRuntimeChatConfigurationMock,
   resolveAiRuntimeEmbeddingConfigurationMock,
+  runRelatedNoteRecommendationMock,
+  saveRelatedNoteRecommendationsMock,
 } = vi.hoisted(() => ({
   afterMock: vi.fn(),
   createAdminClientMock: vi.fn(),
@@ -31,7 +41,10 @@ const {
   redirectMock: vi.fn(),
   generateNoteEmbeddingMock: vi.fn(),
   reportAiOperationalErrorMock: vi.fn(),
+  resolveAiRuntimeChatConfigurationMock: vi.fn(),
   resolveAiRuntimeEmbeddingConfigurationMock: vi.fn(),
+  runRelatedNoteRecommendationMock: vi.fn(),
+  saveRelatedNoteRecommendationsMock: vi.fn(),
 }));
 
 vi.mock("next/server", () => ({
@@ -55,6 +68,7 @@ vi.mock("@/features/ai/rags/note/generate-embedding", () => ({
 }));
 
 vi.mock("@/features/ai/runtimes", () => ({
+  resolveAiRuntimeChatConfiguration: resolveAiRuntimeChatConfigurationMock,
   resolveAiRuntimeEmbeddingConfiguration:
     resolveAiRuntimeEmbeddingConfigurationMock,
 }));
@@ -62,12 +76,59 @@ vi.mock("@/features/ai/runtimes", () => ({
 vi.mock("@/features/ai/utils/report-ai-operational-error", () => ({
   reportAiOperationalError: reportAiOperationalErrorMock,
 }));
+vi.mock(
+  "@/features/related-notes/execution/run-related-note-recommendation",
+  () => ({
+    runRelatedNoteRecommendation: runRelatedNoteRecommendationMock,
+  }),
+);
+
+vi.mock(
+  "@/features/related-notes/persistence/save-related-note-recommendations",
+  () => ({
+    saveRelatedNoteRecommendations: saveRelatedNoteRecommendationsMock,
+  }),
+);
 
 import {
   createNoteAction,
   deleteNoteAction,
   updateNoteAction,
 } from "../actions";
+
+const chatConfiguration = {
+  model: {
+    id: "chat-model-id",
+    provider: "openai",
+    model: "gpt-4o-mini",
+  },
+  prompt: {
+    version: {
+      response_schema: null,
+      system_template: "system",
+      user_template: "user",
+    },
+  },
+  temperature: 0.2,
+} as unknown as AiRuntimeChatConfiguration;
+
+const relatedNoteRecommendationResult = {
+  expandedQuery: "expanded query",
+  notes: [],
+  recommendations: [],
+};
+
+beforeEach(() => {
+  resolveAiRuntimeChatConfigurationMock.mockReset();
+  runRelatedNoteRecommendationMock.mockReset();
+  saveRelatedNoteRecommendationsMock.mockReset();
+
+  resolveAiRuntimeChatConfigurationMock.mockResolvedValue(chatConfiguration);
+  runRelatedNoteRecommendationMock.mockResolvedValue(
+    relatedNoteRecommendationResult,
+  );
+  saveRelatedNoteRecommendationsMock.mockResolvedValue(undefined);
+});
 
 function createSupabaseMock(
   input: {
@@ -744,6 +805,15 @@ describe("Note embedding integration", () => {
         roleKey: NOTE_CHAT_AI_ROLE_KEY.NOTE_RETRIEVAL,
       });
 
+      expect(resolveAiRuntimeChatConfigurationMock).toHaveBeenCalledWith({
+        featureKey: RELATED_NOTES_AI_FEATURE_KEY,
+        roleKey: RELATED_NOTES_AI_ROLE_KEY.QUERY_EXPANSION,
+      });
+      expect(resolveAiRuntimeChatConfigurationMock).toHaveBeenCalledWith({
+        featureKey: RELATED_NOTES_AI_FEATURE_KEY,
+        roleKey: RELATED_NOTES_AI_ROLE_KEY.ANSWER_GENERATION,
+      });
+
       expect(generateNoteEmbeddingMock).toHaveBeenCalledWith({
         embeddingConfiguration,
         ownerUserId: "user-123",
@@ -751,6 +821,22 @@ describe("Note embedding integration", () => {
         sourceUpdatedAt: NOTE_UPDATED_AT,
         title: "Valid title",
         content: "Valid content",
+      });
+
+      expect(runRelatedNoteRecommendationMock).toHaveBeenCalledWith({
+        answerConfiguration: chatConfiguration,
+        content: "Valid content",
+        embeddingConfiguration,
+        limit: 5,
+        minSimilarity: 0,
+        ownerUserId: "user-123",
+        queryExpansionConfiguration: chatConfiguration,
+        targetNoteId: validNoteId,
+        title: "Valid title",
+      });
+      expect(saveRelatedNoteRecommendationsMock).toHaveBeenCalledWith({
+        noteId: validNoteId,
+        recommendations: [],
       });
     });
 
@@ -773,6 +859,62 @@ describe("Note embedding integration", () => {
       expect(afterMock).not.toHaveBeenCalled();
       expect(resolveAiRuntimeEmbeddingConfigurationMock).not.toHaveBeenCalled();
       expect(generateNoteEmbeddingMock).not.toHaveBeenCalled();
+    });
+
+    it("Note 생성 후 관련 노트 추천에 실패해도 Note 생성 성공을 반환한다", async () => {
+      const { supabase } = createSupabaseMock({
+        rpcResult: validNoteId,
+      });
+      const consoleErrorSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+      createClientMock.mockResolvedValue(supabase);
+      runRelatedNoteRecommendationMock.mockRejectedValueOnce(
+        new Error("related note recommendation failed"),
+      );
+
+      const formData = new FormData();
+      formData.set("title", "Valid title");
+      formData.set("content", "Valid content");
+
+      const result = await createNoteAction(null, formData);
+
+      expect(result).toEqual({
+        success: true,
+        newNoteId: validNoteId,
+      });
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        "[Related Notes Recommendation Failed]",
+        expect.any(Error),
+      );
+    });
+
+    it("Note 생성 후 관련 노트 추천 저장에 실패해도 Note 생성 성공을 반환한다", async () => {
+      const { supabase } = createSupabaseMock({
+        rpcResult: validNoteId,
+      });
+      const consoleErrorSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+      createClientMock.mockResolvedValue(supabase);
+      saveRelatedNoteRecommendationsMock.mockRejectedValueOnce(
+        new Error("save related recommendations failed"),
+      );
+
+      const formData = new FormData();
+      formData.set("title", "Valid title");
+      formData.set("content", "Valid content");
+
+      const result = await createNoteAction(null, formData);
+
+      expect(result).toEqual({
+        success: true,
+        newNoteId: validNoteId,
+      });
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        "[Related Notes Recommendation Failed]",
+        expect.any(Error),
+      );
     });
 
     it("Note 생성 후 embedding 생성에 실패해도 Note 생성 성공을 반환한다", async () => {
@@ -939,6 +1081,15 @@ describe("Note embedding integration", () => {
         roleKey: NOTE_CHAT_AI_ROLE_KEY.NOTE_RETRIEVAL,
       });
 
+      expect(resolveAiRuntimeChatConfigurationMock).toHaveBeenCalledWith({
+        featureKey: RELATED_NOTES_AI_FEATURE_KEY,
+        roleKey: RELATED_NOTES_AI_ROLE_KEY.QUERY_EXPANSION,
+      });
+      expect(resolveAiRuntimeChatConfigurationMock).toHaveBeenCalledWith({
+        featureKey: RELATED_NOTES_AI_FEATURE_KEY,
+        roleKey: RELATED_NOTES_AI_ROLE_KEY.ANSWER_GENERATION,
+      });
+
       expect(generateNoteEmbeddingMock).toHaveBeenCalledWith({
         embeddingConfiguration,
         ownerUserId: "user-123",
@@ -946,6 +1097,22 @@ describe("Note embedding integration", () => {
         sourceUpdatedAt: NOTE_UPDATED_AT,
         title: "Updated title",
         content: "Updated content",
+      });
+
+      expect(runRelatedNoteRecommendationMock).toHaveBeenCalledWith({
+        answerConfiguration: chatConfiguration,
+        content: "Updated content",
+        embeddingConfiguration,
+        limit: 5,
+        minSimilarity: 0,
+        ownerUserId: "user-123",
+        queryExpansionConfiguration: chatConfiguration,
+        targetNoteId: validNoteId,
+        title: "Updated title",
+      });
+      expect(saveRelatedNoteRecommendationsMock).toHaveBeenCalledWith({
+        noteId: validNoteId,
+        recommendations: [],
       });
     });
 
@@ -968,6 +1135,66 @@ describe("Note embedding integration", () => {
       expect(afterMock).not.toHaveBeenCalled();
       expect(resolveAiRuntimeEmbeddingConfigurationMock).not.toHaveBeenCalled();
       expect(generateNoteEmbeddingMock).not.toHaveBeenCalled();
+    });
+
+    it("Note 수정 후 관련 노트 추천에 실패해도 Note 수정 성공을 반환한다", async () => {
+      const { supabase } = createSupabaseMock({
+        updatedNote: {
+          id: validNoteId,
+          title: "수정된 제목",
+          content: "수정된 내용",
+          updated_at: "2026-08-18T00:00:00.000Z",
+        },
+      });
+      const consoleErrorSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+      createClientMock.mockResolvedValue(supabase);
+      runRelatedNoteRecommendationMock.mockRejectedValueOnce(
+        new Error("related note recommendation failed"),
+      );
+
+      const formData = new FormData();
+      formData.set("title", "Updated title");
+      formData.set("content", "Updated content");
+
+      const result = await updateNoteAction(validNoteId, null, formData);
+
+      expect(result).toEqual({ success: true });
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        "[Related Notes Recommendation Failed]",
+        expect.any(Error),
+      );
+    });
+
+    it("Note 수정 후 관련 노트 추천 저장에 실패해도 Note 수정 성공을 반환한다", async () => {
+      const { supabase } = createSupabaseMock({
+        updatedNote: {
+          id: validNoteId,
+          title: "수정된 제목",
+          content: "수정된 내용",
+          updated_at: "2026-08-18T00:00:00.000Z",
+        },
+      });
+      const consoleErrorSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+      createClientMock.mockResolvedValue(supabase);
+      saveRelatedNoteRecommendationsMock.mockRejectedValueOnce(
+        new Error("save related recommendations failed"),
+      );
+
+      const formData = new FormData();
+      formData.set("title", "Updated title");
+      formData.set("content", "Updated content");
+
+      const result = await updateNoteAction(validNoteId, null, formData);
+
+      expect(result).toEqual({ success: true });
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        "[Related Notes Recommendation Failed]",
+        expect.any(Error),
+      );
     });
 
     it("Note 수정 후 embedding 생성에 실패해도 Note 수정 성공을 반환한다", async () => {

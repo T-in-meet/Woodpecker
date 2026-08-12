@@ -48,6 +48,7 @@ export const TABLES = {
   feedbacks: "feedbacks",
   adminNotificationEvents: "admin_notification_events",
   adminNotificationReads: "admin_notification_reads",
+  noteRelatedRecommendations: "note_related_recommendations",
   notes: "notes",
   notifications: "notifications",
   operationalErrorStatusHistory: "operational_error_status_history",

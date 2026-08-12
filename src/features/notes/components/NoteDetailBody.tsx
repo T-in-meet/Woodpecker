@@ -8,12 +8,14 @@ import { useCallback, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { NotificationTimePicker } from "@/features/notifications/components/NotificationTimePicker";
 import { QuizButton } from "@/features/quiz/components/QuizButton";
+import type { RelatedNoteRecommendation } from "@/features/related-notes/types";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { getNoteReviewRoute } from "@/lib/constants/routes";
 
 import { DeleteNoteDialog } from "./DeleteNoteDialog";
 import { NoteEditForm } from "./NoteEditForm";
 import { NoteViewer } from "./NoteViewer";
+import { RelatedNotesSection } from "./RelatedNotesSection";
 
 type NoteDetailBodyProps = {
   noteId: string;
@@ -25,6 +27,7 @@ type NoteDetailBodyProps = {
   reviewStatusMessage: string;
   notificationTimeOfDay: string | null;
   nextScheduledAt: string | null;
+  relatedRecommendations?: RelatedNoteRecommendation[] | undefined;
 };
 
 export function NoteDetailBody({
@@ -37,6 +40,7 @@ export function NoteDetailBody({
   reviewStatusMessage,
   notificationTimeOfDay,
   nextScheduledAt,
+  relatedRecommendations = [],
 }: NoteDetailBodyProps) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
@@ -106,6 +110,7 @@ export function NoteDetailBody({
       </header>
 
       <NoteViewer content={content} className="min-h-[60vh]" />
+      <RelatedNotesSection recommendations={relatedRecommendations} />
     </>
   );
 }
