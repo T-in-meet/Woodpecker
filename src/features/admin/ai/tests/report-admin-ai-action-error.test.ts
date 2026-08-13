@@ -95,4 +95,34 @@ describe("reportAdminAiActionError", () => {
       stage: ADMIN_AI_OPERATIONAL_ERROR_STAGE.DATABASE,
     });
   });
+
+  it("optional 값을 전달하지 않으면 하위 입력에도 추가하지 않는다", async () => {
+    const error = new Error("model update failed");
+
+    await reportAdminAiActionError({
+      adminUserId: ADMIN_USER_ID,
+      error,
+      errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.MODEL_CONFIG_UPDATE_FAILED,
+      message: "관리자 AI 모델 수정에 실패했습니다.",
+      operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.UPDATE_MODEL_CONFIG,
+    });
+
+    const call = vi.mocked(reportAdminAiOperationalError).mock.calls[0];
+
+    expect(call).toBeDefined();
+
+    const input = call?.[0];
+
+    expect(input).toEqual({
+      actorUserId: ADMIN_USER_ID,
+      error,
+      errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.MODEL_CONFIG_UPDATE_FAILED,
+      message: "관리자 AI 모델 수정에 실패했습니다.",
+      operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.UPDATE_MODEL_CONFIG,
+      stage: ADMIN_AI_OPERATIONAL_ERROR_STAGE.DATABASE,
+    });
+
+    expect(input).not.toHaveProperty("context");
+    expect(input).not.toHaveProperty("fingerprintParts");
+  });
 });
