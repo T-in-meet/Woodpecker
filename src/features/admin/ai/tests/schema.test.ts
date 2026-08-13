@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  aiPromptFamilyRowSchema,
+  aiPromptVersionRowSchema,
+  aiPromptVersionStatusSchema,
   jsonTextSchema,
   nullableTextSchema,
   tagsSchema,
@@ -79,5 +82,116 @@ describe("jsonTextSchema", () => {
         ]),
       );
     }
+  });
+});
+
+describe("aiPromptVersionStatusSchema", () => {
+  it.each(["draft", "published", "archived"] as const)(
+    "%s 상태를 허용한다",
+    (status) => {
+      expect(aiPromptVersionStatusSchema.parse(status)).toBe(status);
+    },
+  );
+
+  it("정의되지 않은 상태를 거부한다", () => {
+    expect(aiPromptVersionStatusSchema.safeParse("deleted").success).toBe(
+      false,
+    );
+  });
+});
+
+describe("aiPromptFamilyRowSchema", () => {
+  const validFamilyRow = {
+    agent_id: UUID,
+    created_at: "2026-08-03T00:00:00.000Z",
+    description: "기본 Prompt Family",
+    display_name: "기본 프롬프트",
+    id: UUID,
+    tags: ["default"],
+    updated_at: "2026-08-03T01:00:00.000Z",
+  };
+
+  it("유효한 family DB row를 허용한다", () => {
+    expect(aiPromptFamilyRowSchema.parse(validFamilyRow)).toEqual(
+      validFamilyRow,
+    );
+  });
+
+  it("description의 null 값을 허용한다", () => {
+    expect(
+      aiPromptFamilyRowSchema.parse({
+        ...validFamilyRow,
+        description: null,
+      }).description,
+    ).toBeNull();
+  });
+
+  it("필수 필드가 없으면 거부한다", () => {
+    const { id: _id, ...rowWithoutId } = validFamilyRow;
+
+    expect(aiPromptFamilyRowSchema.safeParse(rowWithoutId).success).toBe(false);
+  });
+});
+
+describe("aiPromptVersionRowSchema", () => {
+  const validVersionRow = {
+    change_summary: "응답 형식을 개선했습니다.",
+    created_at: "2026-08-03T00:00:00.000Z",
+    created_by: UUID,
+    created_by_kind: "admin",
+    display_name: "기본 프롬프트 v1",
+    family_id: UUID,
+    id: UUID,
+    lifecycle_status: "published",
+    response_schema: {
+      type: "object",
+    },
+    system_template: "시스템 프롬프트",
+    tags: ["default"],
+    user_template: "{{question}}",
+    variables: {
+      question: {
+        required: true,
+        type: "string",
+      },
+    },
+    version_number: 1,
+  };
+
+  it("유효한 prompt version DB row를 허용한다", () => {
+    expect(aiPromptVersionRowSchema.parse(validVersionRow)).toEqual(
+      validVersionRow,
+    );
+  });
+
+  it("nullable 필드의 null 값을 허용한다", () => {
+    expect(
+      aiPromptVersionRowSchema.parse({
+        ...validVersionRow,
+        change_summary: null,
+        created_by: null,
+      }),
+    ).toMatchObject({
+      change_summary: null,
+      created_by: null,
+    });
+  });
+
+  it("허용되지 않은 lifecycle 상태를 거부한다", () => {
+    expect(
+      aiPromptVersionRowSchema.safeParse({
+        ...validVersionRow,
+        lifecycle_status: "deleted",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("version_number가 숫자가 아니면 거부한다", () => {
+    expect(
+      aiPromptVersionRowSchema.safeParse({
+        ...validVersionRow,
+        version_number: "1",
+      }).success,
+    ).toBe(false);
   });
 });
