@@ -7,8 +7,8 @@ BEGIN;
 
 
 -- 이 파일은 Prompt 도입 이후 확장되는 관리자 Agent/Prompt 조회 및 삭제 계약을 검증합니다.
--- Settings 참조에 따른 삭제 보호는 아직 이 단계의 책임이 아니며 후속 Settings migration에서 검증합니다.
-SELECT plan(20);
+-- Settings 도입 이후에는 AI Setting 참조에 따른 삭제 보호까지 함께 검증합니다.
+SELECT plan(22);
 
 
 
@@ -237,6 +237,54 @@ SELECT ok(
 );
 
 
+-- =========================================
+-- Shared Settings fixtures
+-- =========================================
+
+SELECT set_config(
+  'test.ai_admin_model_id',
+  gen_random_uuid()::text,
+  true
+);
+
+
+SELECT set_config(
+  'test.ai_admin_setting_id',
+  gen_random_uuid()::text,
+  true
+);
+
+
+-- Settings 참조 보호 테스트에서 사용할 공통 AI Model fixture를 생성합니다.
+INSERT INTO public.ai_model_configs (
+  id,
+  display_name,
+  provider,
+  model,
+  capability
+)
+VALUES (
+  current_setting('test.ai_admin_model_id')::uuid,
+  'Prompt admin delete test model',
+  'openai',
+  'prompt-admin-delete-test-model',
+  'chat'
+);
+
+
+-- Settings 참조 보호 테스트에서 사용할 공통 AI Setting fixture를 생성합니다.
+INSERT INTO public.ai_settings (
+  id,
+  key,
+  display_name
+)
+VALUES (
+  current_setting('test.ai_admin_setting_id')::uuid,
+  'prompt-admin-delete-test',
+  'Prompt admin delete test'
+);
+
+
 
 -- =========================================
 -- Family deletion:
@@ -346,6 +394,90 @@ SELECT ok(
     WHERE id = current_setting('test.ai_admin_family_id')::uuid
   ),
   'delete family RPC should remove the family'
+);
+
+
+-- =========================================
+-- Family deletion:
+-- Settings referenced Version
+-- =========================================
+
+SELECT set_config(
+  'test.ai_admin_referenced_family_id',
+  gen_random_uuid()::text,
+  true
+);
+
+
+SELECT set_config(
+  'test.ai_admin_referenced_family_version_id',
+  gen_random_uuid()::text,
+  true
+);
+
+
+-- 삭제 대상 Family가 Settings에서 참조 중인 Prompt Version을 갖도록 구성합니다.
+INSERT INTO public.ai_prompt_families (
+  id,
+  agent_id,
+  display_name
+)
+VALUES (
+  current_setting('test.ai_admin_referenced_family_id')::uuid,
+  current_setting('test.ai_admin_family_agent_id')::uuid,
+  'Referenced family'
+);
+
+
+INSERT INTO public.ai_prompt_versions (
+  id,
+  family_id,
+  version_number,
+  display_name,
+  lifecycle_status,
+  system_template,
+  user_template,
+  created_by_kind,
+  created_by
+)
+VALUES (
+  current_setting('test.ai_admin_referenced_family_version_id')::uuid,
+  current_setting('test.ai_admin_referenced_family_id')::uuid,
+  1,
+  'Referenced published version',
+  'published',
+  'system',
+  'user',
+  'system',
+  NULL
+);
+
+
+INSERT INTO public.ai_setting_configurations (
+  setting_id,
+  role_key,
+  kind,
+  model_config_id,
+  prompt_version_id,
+  temperature
+)
+VALUES (
+  current_setting('test.ai_admin_setting_id')::uuid,
+  'family-delete-test',
+  'chat',
+  current_setting('test.ai_admin_model_id')::uuid,
+  current_setting('test.ai_admin_referenced_family_version_id')::uuid,
+  0.7
+);
+
+
+-- Settings에서 참조 중인 Prompt Version이 있으면 Family 삭제를 막아야 합니다.
+SELECT is(
+  public.delete_admin_ai_prompt_family(
+    current_setting('test.ai_admin_referenced_family_id')::uuid
+  ),
+  'NOT_DELETABLE',
+  'family referenced by AI settings should not be deletable'
 );
 
 
@@ -468,6 +600,107 @@ SELECT ok(
     WHERE id = current_setting('test.ai_admin_agent_id')::uuid
   ),
   'delete agent RPC should remove the agent'
+);
+
+
+-- =========================================
+-- Agent deletion:
+-- Settings referenced Version
+-- =========================================
+
+SELECT set_config(
+  'test.ai_admin_referenced_agent_id',
+  gen_random_uuid()::text,
+  true
+);
+
+
+SELECT set_config(
+  'test.ai_admin_referenced_agent_family_id',
+  gen_random_uuid()::text,
+  true
+);
+
+
+SELECT set_config(
+  'test.ai_admin_referenced_agent_version_id',
+  gen_random_uuid()::text,
+  true
+);
+
+
+-- 삭제 대상 Agent 하위 Version이 Settings에서 참조되도록 구성합니다.
+INSERT INTO public.ai_prompt_agents (
+  id,
+  display_name
+)
+VALUES (
+  current_setting('test.ai_admin_referenced_agent_id')::uuid,
+  'Referenced agent'
+);
+
+
+INSERT INTO public.ai_prompt_families (
+  id,
+  agent_id,
+  display_name
+)
+VALUES (
+  current_setting('test.ai_admin_referenced_agent_family_id')::uuid,
+  current_setting('test.ai_admin_referenced_agent_id')::uuid,
+  'Referenced agent family'
+);
+
+
+INSERT INTO public.ai_prompt_versions (
+  id,
+  family_id,
+  version_number,
+  display_name,
+  lifecycle_status,
+  system_template,
+  user_template,
+  created_by_kind,
+  created_by
+)
+VALUES (
+  current_setting('test.ai_admin_referenced_agent_version_id')::uuid,
+  current_setting('test.ai_admin_referenced_agent_family_id')::uuid,
+  1,
+  'Referenced agent published version',
+  'published',
+  'system',
+  'user',
+  'system',
+  NULL
+);
+
+
+INSERT INTO public.ai_setting_configurations (
+  setting_id,
+  role_key,
+  kind,
+  model_config_id,
+  prompt_version_id,
+  temperature
+)
+VALUES (
+  current_setting('test.ai_admin_setting_id')::uuid,
+  'agent-delete-test',
+  'chat',
+  current_setting('test.ai_admin_model_id')::uuid,
+  current_setting('test.ai_admin_referenced_agent_version_id')::uuid,
+  0.7
+);
+
+
+-- Settings에서 참조 중인 하위 Prompt Version이 있으면 Agent 삭제를 막아야 합니다.
+SELECT is(
+  public.delete_admin_ai_agent(
+    current_setting('test.ai_admin_referenced_agent_id')::uuid
+  ),
+  'NOT_DELETABLE',
+  'agent with version referenced by AI settings should not be deletable'
 );
 
 
