@@ -578,6 +578,8 @@ export type Database = {
       };
       quiz_generations: {
         Row: {
+          claim_token: string | null;
+          completed_at: string | null;
           created_at: string;
           id: string;
           note_id: string | null;
@@ -585,6 +587,8 @@ export type Database = {
           user_id: string;
         };
         Insert: {
+          claim_token?: string | null;
+          completed_at?: string | null;
           created_at?: string;
           id?: string;
           note_id?: string | null;
@@ -592,6 +596,8 @@ export type Database = {
           user_id: string;
         };
         Update: {
+          claim_token?: string | null;
+          completed_at?: string | null;
           created_at?: string;
           id?: string;
           note_id?: string | null;
@@ -895,6 +901,10 @@ export type Database = {
         Args: { p_note_id: string; p_quiz_type: string };
         Returns: string;
       };
+      claim_quiz_generation_v2: {
+        Args: { p_user_id: string; p_note_id: string; p_quiz_type: string };
+        Returns: Json;
+      };
       claim_review_grading: {
         Args: {
           p_content_hash: string;
@@ -919,6 +929,15 @@ export type Database = {
           deleted_notification_count: number;
           image_paths: string[];
         }[];
+      };
+      finalize_quiz_generation_v2: {
+        Args: {
+          p_user_id: string;
+          p_note_id: string;
+          p_quiz_type: string;
+          p_claim_token: string;
+        };
+        Returns: string;
       };
       finalize_review_grading: {
         Args: {
