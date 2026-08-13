@@ -31,19 +31,19 @@ describe("reportAdminAiOperationalError", () => {
   it("Admin AI feature와 기본 severity를 적용해 운영 오류를 보고한다", async () => {
     await reportAdminAiOperationalError({
       actorUserId: ADMIN_USER_ID,
-      errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.LIST_RESPONSE_INVALID,
-      message: "관리자 AI 목록 응답 검증에 실패했습니다.",
-      operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.VALIDATE_LIST_RESPONSE,
+      errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.AGENT_LOAD_FAILED,
+      message: "관리자 AI agent 목록 조회에 실패했습니다.",
+      operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.GET_PROMPT_AGENT,
       stage: ADMIN_AI_OPERATIONAL_ERROR_STAGE.DATABASE,
     });
 
     expect(reportOperationalError).toHaveBeenCalledWith(
       {
         actorUserId: ADMIN_USER_ID,
-        errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.LIST_RESPONSE_INVALID,
+        errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.AGENT_LOAD_FAILED,
         feature: ADMIN_AI_OPERATIONAL_ERROR_FEATURE,
-        message: "관리자 AI 목록 응답 검증에 실패했습니다.",
-        operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.VALIDATE_LIST_RESPONSE,
+        message: "관리자 AI agent 목록 조회에 실패했습니다.",
+        operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.GET_PROMPT_AGENT,
         severity: OPERATIONAL_ERROR_SEVERITY.ERROR,
         stage: ADMIN_AI_OPERATIONAL_ERROR_STAGE.DATABASE,
         userId: null,

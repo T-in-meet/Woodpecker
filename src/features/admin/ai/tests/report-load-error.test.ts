@@ -25,22 +25,22 @@ describe("reportAdminAiLoadError", () => {
   });
 
   it("adminUserId를 actorUserId로 전달하고 기본 database stage를 적용한다", async () => {
-    const error = new Error("list validation failed");
+    const error = new Error("agent load failed");
 
     await reportAdminAiLoadError({
       adminUserId: ADMIN_USER_ID,
       error,
-      errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.LIST_RESPONSE_INVALID,
-      message: "관리자 AI 목록 응답 검증에 실패했습니다.",
-      operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.VALIDATE_LIST_RESPONSE,
+      errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.AGENT_LOAD_FAILED,
+      message: "관리자 AI agent 목록 조회에 실패했습니다.",
+      operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.GET_PROMPT_AGENT,
     });
 
     expect(reportAdminAiOperationalError).toHaveBeenCalledWith({
       actorUserId: ADMIN_USER_ID,
       error,
-      errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.LIST_RESPONSE_INVALID,
-      message: "관리자 AI 목록 응답 검증에 실패했습니다.",
-      operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.VALIDATE_LIST_RESPONSE,
+      errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.AGENT_LOAD_FAILED,
+      message: "관리자 AI agent 목록 조회에 실패했습니다.",
+      operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.GET_PROMPT_AGENT,
       stage: ADMIN_AI_OPERATIONAL_ERROR_STAGE.DATABASE,
     });
   });

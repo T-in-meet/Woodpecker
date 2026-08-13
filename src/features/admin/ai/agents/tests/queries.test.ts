@@ -303,6 +303,116 @@ describe("getAdminAiAgents", () => {
       stage: ADMIN_AI_OPERATIONAL_ERROR_STAGE.VALIDATION,
     });
   });
+
+  it("RPC가 빈 페이지를 반환해도 total count를 보존한다", async () => {
+    mockRpcClient({
+      data: [
+        {
+          items: [],
+          total_count: 12,
+        },
+      ],
+      error: null,
+    });
+
+    const result = await getAdminAiAgents(createQuery({ page: 99 }));
+
+    expect(result.items).toEqual([]);
+    expect(result.pagination.total).toBe(12);
+  });
+
+  it("page가 1보다 작으면 첫 페이지로 보정한다", async () => {
+    const rpc = mockRpcClient({
+      data: [
+        {
+          items: [],
+          total_count: 0,
+        },
+      ],
+      error: null,
+    });
+
+    const result = await getAdminAiAgents(createQuery({ page: 0 }));
+
+    expect(rpc).toHaveBeenCalledWith(
+      "get_admin_ai_agent_list",
+      expect.objectContaining({
+        p_page: 1,
+      }),
+    );
+    expect(result.pagination.page).toBe(1);
+  });
+
+  it("RPC 결과 필드 스키마가 올바르지 않으면 운영 오류를 보고하고 실패한다", async () => {
+    mockRpcClient({
+      data: [
+        {
+          items: [],
+          total_count: "invalid",
+        },
+      ],
+      error: null,
+    });
+
+    await expect(getAdminAiAgents(createQuery())).rejects.toThrow();
+
+    expect(reportAdminAiLoadError).toHaveBeenCalledWith({
+      adminUserId: ADMIN_USER_ID,
+      context: {
+        page: 1,
+        pageSize: 10,
+        searchField: "displayName",
+        searchQueryApplied: false,
+        sortDirection: "desc",
+        sortField: "updatedAt",
+      },
+      error: expect.any(Error),
+      errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.LIST_RESPONSE_INVALID,
+      message: "관리자 AI agent 목록 응답 검증에 실패했습니다.",
+      operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.VALIDATE_LIST_RESPONSE,
+      stage: ADMIN_AI_OPERATIONAL_ERROR_STAGE.VALIDATION,
+    });
+  });
+
+  it("Agent 목록 item 스키마가 올바르지 않으면 운영 오류를 보고하고 실패한다", async () => {
+    mockRpcClient({
+      data: [
+        {
+          items: [
+            {
+              created_at: "2026-08-01T00:00:00.000Z",
+              display_name: "노트 RAG 답변",
+              family_count: "invalid",
+              id: ACTIVE_AGENT_ID,
+              purpose: "노트를 기반으로 질문에 답변합니다.",
+              updated_at: "2026-08-03T00:00:00.000Z",
+            },
+          ],
+          total_count: 1,
+        },
+      ],
+      error: null,
+    });
+
+    await expect(getAdminAiAgents(createQuery())).rejects.toThrow();
+
+    expect(reportAdminAiLoadError).toHaveBeenCalledWith({
+      adminUserId: ADMIN_USER_ID,
+      context: {
+        page: 1,
+        pageSize: 10,
+        searchField: "displayName",
+        searchQueryApplied: false,
+        sortDirection: "desc",
+        sortField: "updatedAt",
+      },
+      error: expect.any(Error),
+      errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.LIST_RESPONSE_INVALID,
+      message: "관리자 AI agent 목록 응답 검증에 실패했습니다.",
+      operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.VALIDATE_LIST_RESPONSE,
+      stage: ADMIN_AI_OPERATIONAL_ERROR_STAGE.VALIDATION,
+    });
+  });
 });
 
 describe("getAdminAiAgentDetail", () => {
