@@ -146,18 +146,35 @@ function responseQuestionType(): unknown {
   return schema.properties.questions.items.properties.type;
 }
 
-function upsertPayload(query: ReturnType<typeof setupSupabase>) {
-  return query.callsFor("quizzes").find(([method]) => method === "upsert")?.[1];
+/**
+ * finalize_quiz_generation_v2가 완료 표시와 quizzes 캐시 upsert를 한 트랜잭션
+ * 안에서 함께 처리하므로(원자성 확보), 저장 여부·내용은 이 RPC 호출 인자로 검증한다.
+ * 더 이상 quizzes 테이블에 대한 별도 client upsert 호출이 없다.
+ */
+type FinalizeCallArgs = {
+  p_user_id: string;
+  p_note_id: string;
+  p_quiz_type: string;
+  p_claim_token: string;
+  p_questions: unknown;
+  p_history: string[][];
+  p_content_hash: string;
+};
+
+function finalizeArgs(
+  rpc: ReturnType<typeof setupSupabase>["rpc"],
+): FinalizeCallArgs | undefined {
+  return rpc.mock.calls.find(
+    ([name]) => name === "finalize_quiz_generation_v2",
+  )?.[1] as FinalizeCallArgs | undefined;
 }
 
 function hashOf(query: ReturnType<typeof setupSupabase>): string {
-  return (upsertPayload(query)?.[0] as { note_content_hash: string })
-    .note_content_hash;
+  return finalizeArgs(query.rpc)!.p_content_hash;
 }
 
 function savedHistory(query: ReturnType<typeof setupSupabase>): string[][] {
-  return (upsertPayload(query)?.[0] as { recent_questions: string[][] })
-    .recent_questions;
+  return finalizeArgs(query.rpc)!.p_history;
 }
 
 beforeEach(() => {
@@ -335,13 +352,9 @@ describe("generateQuiz", () => {
 
       await generateQuiz(NOTE_ID, "ox");
 
-      const upsertCall = query
-        .callsFor("quizzes")
-        .find(([method]) => method === "upsert");
-
-      expect(upsertCall?.[1][0]).toMatchObject({
-        note_id: NOTE_ID,
-        quiz_type: "ox",
+      expect(finalizeArgs(query.rpc)).toMatchObject({
+        p_note_id: NOTE_ID,
+        p_quiz_type: "ox",
       });
     });
 
@@ -424,7 +437,7 @@ describe("generateQuiz", () => {
       expect(result).toEqual({
         error: "퀴즈 생성에 실패했습니다. 잠시 후 다시 시도해주세요.",
       });
-      expect(methodNames(query.callsFor("quizzes"))).not.toContain("upsert");
+      expect(rpcNames(query.rpc)).not.toContain("finalize_quiz_generation_v2");
     });
 
     it("JSON이 아니면 에러를 반환하고 저장하지 않는다", async () => {
@@ -436,7 +449,7 @@ describe("generateQuiz", () => {
       expect(result).toEqual({
         error: "퀴즈 생성 결과를 처리할 수 없습니다. 다시 시도해주세요.",
       });
-      expect(methodNames(query.callsFor("quizzes"))).not.toContain("upsert");
+      expect(rpcNames(query.rpc)).not.toContain("finalize_quiz_generation_v2");
     });
 
     it("스키마에 맞지 않으면 에러를 반환한다", async () => {
@@ -469,7 +482,7 @@ describe("generateQuiz", () => {
       expect(result).toEqual({
         error: "퀴즈 생성 결과를 처리할 수 없습니다. 다시 시도해주세요.",
       });
-      expect(methodNames(query.callsFor("quizzes"))).not.toContain("upsert");
+      expect(rpcNames(query.rpc)).not.toContain("finalize_quiz_generation_v2");
     });
 
     it("한 문항만 유형이 달라도 세트 전체를 거부한다", async () => {
@@ -492,7 +505,7 @@ describe("generateQuiz", () => {
       expect(result).toEqual({
         error: "퀴즈 생성 결과를 처리할 수 없습니다. 다시 시도해주세요.",
       });
-      expect(methodNames(query.callsFor("quizzes"))).not.toContain("upsert");
+      expect(rpcNames(query.rpc)).not.toContain("finalize_quiz_generation_v2");
     });
 
     it("응답 원문을 로그에 남기지 않는다", async () => {
@@ -607,78 +620,59 @@ describe("generateQuiz", () => {
     });
   });
 
-  describe("저장", () => {
-    it("note_id 충돌 시 upsert하도록 지정한다", async () => {
-      const query = setupSupabase();
-      mockAiSuccess();
-
-      await generateQuiz(NOTE_ID, "ox");
-
-      expect(upsertPayload(query)?.[1]).toEqual({
-        onConflict: "note_id,quiz_type",
-      });
-    });
-
-    it("저장에 실패해도 생성된 퀴즈는 반환한다", async () => {
-      setupSupabase({ upsertError: { message: "duplicate key" } });
-      mockAiSuccess();
-
-      const result = await generateQuiz(NOTE_ID, "ox");
-
-      expect(result).toEqual({
-        data: { questions: aiQuestions.questions, isNew: true },
-      });
-      expect(console.error).toHaveBeenCalled();
-    });
-  });
-
   describe("생성 확정 (finalize)", () => {
-    it("finalize가 ok면 캐시에 저장하고 퀴즈를 반환한다", async () => {
+    it("finalize가 ok면 캐시 내용과 함께 확정을 요청하고 퀴즈를 반환한다", async () => {
       const query = setupSupabase({ finalizeResult: "ok" });
       mockAiSuccess();
 
       const result = await generateQuiz(NOTE_ID, "ox");
 
-      expect(methodNames(query.callsFor("quizzes"))).toContain("upsert");
+      // 저장(quizzes upsert)은 이제 finalize RPC 트랜잭션 안에서 원자적으로
+      // 처리된다 — completed_at 갱신과 캐시 저장 사이의 창을 없애기 위해서다
+      // (그 사이 다음 세대가 먼저 저장을 끝내면 이 세대의 저장이 최신 결과를
+      // 덮어쓸 수 있었다). 그래서 여기서는 RPC에 넘긴 인자로 검증한다.
+      expect(finalizeArgs(query.rpc)).toMatchObject({
+        p_note_id: NOTE_ID,
+        p_quiz_type: "ox",
+        p_content_hash: expect.any(String),
+      });
       expect(result).toEqual({
         data: { questions: aiQuestions.questions, isNew: true },
       });
     });
 
-    it("finalize가 already_completed면 멱등 성공으로 저장하고 반환한다", async () => {
+    it("finalize가 already_completed면 멱등 성공으로 반환한다", async () => {
       const query = setupSupabase({ finalizeResult: "already_completed" });
       mockAiSuccess();
 
       const result = await generateQuiz(NOTE_ID, "ox");
 
-      expect(methodNames(query.callsFor("quizzes"))).toContain("upsert");
+      expect(rpcNames(query.rpc)).toContain("finalize_quiz_generation_v2");
       expect(result).toEqual({
         data: { questions: aiQuestions.questions, isNew: true },
       });
     });
 
-    it("finalize가 stale_claim이면 저장하지 않고 에러를 반환한다", async () => {
-      const query = setupSupabase({ finalizeResult: "stale_claim" });
+    it("finalize가 stale_claim이면 에러를 반환한다", async () => {
+      setupSupabase({ finalizeResult: "stale_claim" });
       mockAiSuccess();
 
       const result = await generateQuiz(NOTE_ID, "ox");
 
-      expect(methodNames(query.callsFor("quizzes"))).not.toContain("upsert");
       expect(result).toEqual({
         error:
           "다른 퀴즈 생성 요청이 먼저 진행됐어요. 잠시 후 다시 시도해주세요.",
       });
     });
 
-    it("finalize RPC 통신 자체가 실패하면 저장하지 않지만 퀴즈는 반환한다", async () => {
-      const query = setupSupabase({
+    it("finalize RPC 통신 자체가 실패해도 이미 받은 퀴즈는 반환한다", async () => {
+      setupSupabase({
         finalizeError: { message: "network error" },
       });
       mockAiSuccess();
 
       const result = await generateQuiz(NOTE_ID, "ox");
 
-      expect(methodNames(query.callsFor("quizzes"))).not.toContain("upsert");
       expect(result).toEqual({
         data: { questions: aiQuestions.questions, isNew: true },
       });

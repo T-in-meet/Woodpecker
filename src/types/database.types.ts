@@ -936,6 +936,9 @@ export type Database = {
           p_note_id: string;
           p_quiz_type: string;
           p_claim_token: string;
+          p_questions: Json;
+          p_history: Json;
+          p_content_hash: string;
         };
         Returns: string;
       };

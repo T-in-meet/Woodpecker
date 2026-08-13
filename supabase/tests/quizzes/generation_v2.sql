@@ -4,11 +4,16 @@
 -- v1(claim_quiz_generation)의 in-flight 검사는 "최근 10초 내 같은 요청"일 뿐 완료 여부를
 -- 모른다. v2는 완료 상태(completed_at)를 도입해 "9초 만에 끝난 요청도 창이 닫힐 때까지
 -- 재생성이 막히는" 문제와 "느린 응답 두 건이 순서 없이 저장을 덮어쓰는" 문제를 함께 푼다.
+--
+-- finalize_quiz_generation_v2는 completed_at 갱신과 quizzes 캐시 upsert를 같은 트랜잭션
+-- 안에서 함께 처리한다(원래는 별도 왕복이었으나, 그 사이 다음 세대가 먼저 저장을 끝내고
+-- 이전 세대가 뒤늦게 덮어쓰는 경합이 있어 하나로 합쳤다). 그래서 아래 테스트는 반환값뿐
+-- 아니라 quizzes 테이블에 실제로 무엇이 쓰였는지도 함께 확인한다.
 -- =========================================
 
 BEGIN;
 
-SELECT plan(15);
+SELECT plan(21);
 
 SELECT set_config('test.qgv2_user_a_id', gen_random_uuid()::text, true);
 SELECT set_config('test.qgv2_user_b_id', gen_random_uuid()::text, true);
@@ -74,7 +79,7 @@ SELECT throws_ok(
 RESET ROLE;
 
 -- =========================================
--- 2. 정상 선점 → 완료 → 즉시 재선점
+-- 2. 정상 선점 → 완료(+캐시 저장) → 즉시 재선점
 -- =========================================
 
 SELECT set_config(
@@ -109,10 +114,21 @@ SELECT is(
     current_setting('test.qgv2_user_a_id')::uuid,
     current_setting('test.qgv2_note_a_id')::uuid,
     'ox',
-    ((current_setting('test.qgv2_claim1')::jsonb) ->> 'claimToken')::uuid
+    ((current_setting('test.qgv2_claim1')::jsonb) ->> 'claimToken')::uuid,
+    '[{"type":"ox","question":"Q1","answer":true,"explanation":"E1"}]'::jsonb,
+    '[["Q1"]]'::jsonb,
+    'hash-a-ox-1'
   ),
   'ok',
   $$선점한 행을 완료로 확정할 수 있어야 한다$$
+);
+
+-- finalize가 completed_at 갱신과 같은 트랜잭션 안에서 quizzes 캐시도 저장해야 한다
+SELECT is(
+  (SELECT note_content_hash FROM public.quizzes
+   WHERE note_id = current_setting('test.qgv2_note_a_id')::uuid AND quiz_type = 'ox'),
+  'hash-a-ox-1',
+  $$finalize ok는 quizzes 캐시를 저장해야 한다$$
 );
 
 -- 완료 상태 도입의 핵심: 완료 표시 후에는 창이 남아 있어도 즉시 재선점된다
@@ -146,10 +162,21 @@ SELECT is(
     current_setting('test.qgv2_user_a_id')::uuid,
     current_setting('test.qgv2_note_a_id')::uuid,
     'ox',
-    gen_random_uuid()
+    gen_random_uuid(),
+    '{}'::jsonb,
+    '[]'::jsonb,
+    'unused'
   ),
   'not_found',
   $$존재하지 않는 claim_token으로 확정하면 not_found여야 한다$$
+);
+
+-- not_found로 끝난 시도는 캐시를 건드리지 않아야 한다 (여전히 claim1의 내용이어야 한다)
+SELECT is(
+  (SELECT note_content_hash FROM public.quizzes
+   WHERE note_id = current_setting('test.qgv2_note_a_id')::uuid AND quiz_type = 'ox'),
+  'hash-a-ox-1',
+  $$not_found로 끝난 finalize는 quizzes 캐시를 바꾸지 않아야 한다$$
 );
 
 -- 위에서 캡처해 둔 claim2(2번 claim)를 완료해 already_completed 경로를 만든다
@@ -158,10 +185,20 @@ SELECT is(
     current_setting('test.qgv2_user_a_id')::uuid,
     current_setting('test.qgv2_note_a_id')::uuid,
     'ox',
-    ((current_setting('test.qgv2_claim2')::jsonb) ->> 'claimToken')::uuid
+    ((current_setting('test.qgv2_claim2')::jsonb) ->> 'claimToken')::uuid,
+    '[{"type":"ox","question":"Q2","answer":false,"explanation":"E2"}]'::jsonb,
+    '[["Q2"],["Q1"]]'::jsonb,
+    'hash-a-ox-2'
   ),
   'ok',
   $$두 번째 선점도 정상 확정돼야 한다$$
+);
+
+SELECT is(
+  (SELECT note_content_hash FROM public.quizzes
+   WHERE note_id = current_setting('test.qgv2_note_a_id')::uuid AND quiz_type = 'ox'),
+  'hash-a-ox-2',
+  $$두 번째 선점의 finalize ok는 캐시를 최신 내용으로 덮어써야 한다$$
 );
 
 SELECT is(
@@ -169,7 +206,10 @@ SELECT is(
     current_setting('test.qgv2_user_a_id')::uuid,
     current_setting('test.qgv2_note_a_id')::uuid,
     'ox',
-    ((current_setting('test.qgv2_claim2')::jsonb) ->> 'claimToken')::uuid
+    ((current_setting('test.qgv2_claim2')::jsonb) ->> 'claimToken')::uuid,
+    '[{"type":"ox","question":"Q2","answer":false,"explanation":"E2"}]'::jsonb,
+    '[["Q2"],["Q1"]]'::jsonb,
+    'hash-a-ox-2'
   ),
   'already_completed',
   $$이미 완료된 최신 선점을 다시 확정하면 already_completed여야 한다$$
@@ -217,10 +257,21 @@ SELECT is(
     current_setting('test.qgv2_user_a_id')::uuid,
     current_setting('test.qgv2_note_a2_id')::uuid,
     'blank',
-    ((current_setting('test.qgv2_claim_a')::jsonb) ->> 'claimToken')::uuid
+    ((current_setting('test.qgv2_claim_a')::jsonb) ->> 'claimToken')::uuid,
+    '[{"type":"blank","question":"stale ____","answer":"stale","acceptedAnswers":[],"explanation":"E"}]'::jsonb,
+    '[["stale"]]'::jsonb,
+    'hash-stale-a2-blank'
   ),
   'stale_claim',
   $$인계당한 과거 토큰으로 확정하면 stale_claim이어야 한다$$
+);
+
+-- stale_claim으로 끝난 시도는 캐시에 아무것도 남기지 않아야 한다
+SELECT is(
+  (SELECT count(*) FROM public.quizzes
+   WHERE note_id = current_setting('test.qgv2_note_a2_id')::uuid AND quiz_type = 'blank'),
+  0::bigint,
+  $$stale_claim으로 끝난 finalize는 quizzes에 아무 행도 남기지 않아야 한다$$
 );
 
 SELECT is(
@@ -228,10 +279,20 @@ SELECT is(
     current_setting('test.qgv2_user_a_id')::uuid,
     current_setting('test.qgv2_note_a2_id')::uuid,
     'blank',
-    ((current_setting('test.qgv2_claim_b')::jsonb) ->> 'claimToken')::uuid
+    ((current_setting('test.qgv2_claim_b')::jsonb) ->> 'claimToken')::uuid,
+    '[{"type":"blank","question":"fresh ____","answer":"fresh","acceptedAnswers":[],"explanation":"E"}]'::jsonb,
+    '[["fresh"]]'::jsonb,
+    'hash-fresh-a2-blank'
   ),
   'ok',
   $$최신 선점 토큰으로는 정상 확정돼야 한다$$
+);
+
+SELECT is(
+  (SELECT note_content_hash FROM public.quizzes
+   WHERE note_id = current_setting('test.qgv2_note_a2_id')::uuid AND quiz_type = 'blank'),
+  'hash-fresh-a2-blank',
+  $$최신 선점의 finalize ok는 캐시를 저장해야 한다$$
 );
 
 -- =========================================
@@ -255,7 +316,10 @@ SELECT is(
     current_setting('test.qgv2_user_a_id')::uuid,
     current_setting('test.qgv2_note_a2_id')::uuid,
     'choice',
-    ((current_setting('test.qgv2_claim_c')::jsonb) ->> 'claimToken')::uuid
+    ((current_setting('test.qgv2_claim_c')::jsonb) ->> 'claimToken')::uuid,
+    '[{"type":"choice","question":"C","options":["1","2","3","4"],"answer":0,"explanation":"E"}]'::jsonb,
+    '[["C"]]'::jsonb,
+    'hash-c-a2-choice'
   ),
   'ok',
   $$C 선점을 먼저 완료시킨다$$
@@ -275,16 +339,27 @@ SELECT set_config(
   true
 );
 
--- D가 새로 선점됐으므로, 완료됐던 C 토큰도 already_completed가 아니라 stale_claim이어야 한다
+-- D가 새로 선점됐으므로, 완료됐던 C 토큰도 already_completed가 아니라 stale_claim이어야 한다.
+-- C와 다른 내용을 넘겨서, 실제로 캐시가 안 바뀌는지까지 함께 검증한다.
 SELECT is(
   public.finalize_quiz_generation_v2(
     current_setting('test.qgv2_user_a_id')::uuid,
     current_setting('test.qgv2_note_a2_id')::uuid,
     'choice',
-    ((current_setting('test.qgv2_claim_c')::jsonb) ->> 'claimToken')::uuid
+    ((current_setting('test.qgv2_claim_c')::jsonb) ->> 'claimToken')::uuid,
+    '[{"type":"choice","question":"stale C","options":["1","2","3","4"],"answer":1,"explanation":"E"}]'::jsonb,
+    '[["stale C"]]'::jsonb,
+    'hash-stale-c-a2-choice'
   ),
   'stale_claim',
   $$완료된 과거 claim보다 새 claim이 있으면 stale_claim이 already_completed보다 우선해야 한다$$
+);
+
+SELECT is(
+  (SELECT note_content_hash FROM public.quizzes
+   WHERE note_id = current_setting('test.qgv2_note_a2_id')::uuid AND quiz_type = 'choice'),
+  'hash-c-a2-choice',
+  $$stale_claim이 된 재시도는 이미 저장된 C의 캐시를 덮어쓰지 않아야 한다$$
 );
 
 -- =========================================

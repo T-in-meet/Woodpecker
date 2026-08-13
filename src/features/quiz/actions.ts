@@ -247,41 +247,17 @@ function flattenHistory(history: string[][]): string[] {
 }
 
 /**
- * 생성된 퀴즈를 캐시에 저장한다.
- * 저장에 실패해도 퀴즈 자체는 사용자에게 돌려주므로 에러는 로그만 남긴다.
+ * 이번에 생성한 세트를 맨 앞에 쌓고 오래된 세트부터 버린다.
+ * finalize RPC에 캐시 저장을 맡기기 전에, 저장할 이력을 미리 계산해 둔다.
  */
-async function saveQuiz(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  params: {
-    noteId: string;
-    userId: string;
-    quizType: QuizType;
-    questions: QuizQuestion[];
-    history: string[][];
-    cacheKey: string;
-  },
-): Promise<void> {
-  // 이번 세트를 맨 앞에 쌓고 오래된 세트부터 버린다.
-  const history = [
-    params.questions.map((question) => question.question),
-    ...params.history,
+function buildHistory(
+  questions: QuizQuestion[],
+  previousHistory: string[][],
+): string[][] {
+  return [
+    questions.map((question) => question.question),
+    ...previousHistory,
   ].slice(0, MAX_HISTORY_SETS);
-
-  const { error } = await supabase.from("quizzes").upsert(
-    {
-      note_id: params.noteId,
-      user_id: params.userId,
-      quiz_type: params.quizType,
-      questions: JSON.parse(JSON.stringify(params.questions)) as Json,
-      recent_questions: history,
-      note_content_hash: params.cacheKey,
-    },
-    { onConflict: "note_id,quiz_type" },
-  );
-
-  if (error) {
-    console.error("[generateQuiz] 퀴즈 캐시 저장 실패:", error.message);
-  }
 }
 
 /**
@@ -328,21 +304,24 @@ async function claimGeneration(
 }
 
 type FinalizeGenerationResult =
-  /** 캐시에 저장하고 사용자에게 퀴즈를 돌려준다. */
-  | { shouldSave: true; blocked: false }
+  /** finalize RPC가 완료 표시와 캐시 저장(quizzes upsert)을 같은 트랜잭션 안에서 끝냈다. */
+  | { blocked: false }
   /**
-   * finalize RPC 자체가 실패해 "이게 최신 선점인지" 판단할 수 없다.
-   * 캐시 정합성이 우선이므로 저장은 하지 않되, 이미 받은 유효한 퀴즈까지
-   * 버릴 이유는 없으므로 사용자에게는 돌려준다.
+   * finalize RPC 자체가 실패해 "이게 최신 선점인지" 판단할 수 없었거나, 트랜잭션 안의
+   * 캐시 upsert가 실패해 함수 전체가 롤백됐다(completed_at도 함께 되돌아간다).
+   * 어느 쪽이든 캐시는 저장되지 않았지만, 이미 받은 유효한 퀴즈까지 버릴 이유는
+   * 없으므로 사용자에게는 그대로 돌려준다.
    */
-  | { shouldSave: false; blocked: false }
+  | { blocked: false; networkOrStorageError: true }
   /** 더 새로운 선점이 생겼거나 선점 행 자체를 찾지 못함 — 저장도, 반환도 하지 않는다. */
-  | { shouldSave: false; blocked: true; error: string };
+  | { blocked: true; error: string };
 
 /**
- * 선점해 둔 행을 완료로 확정한다. saveQuiz()의 게이트다.
- * stale된 요청이 최신 요청의 결과를 뒤늦게 덮어쓰지 않도록, 이 결과를 보고
- * 저장 여부를 가른다.
+ * 선점해 둔 행을 완료로 확정하면서, 같은 RPC 호출 안에서 퀴즈 캐시까지 저장한다.
+ *
+ * 완료 표시와 캐시 저장을 별도 왕복으로 나누면, 그 사이 다른 요청이 "완료 표시 후 즉시
+ * 재선점 가능" 규칙에 따라 새로 선점·생성·저장까지 끝낸 뒤, 이 요청의 뒤늦은 저장이
+ * 그 최신 결과를 덮어쓸 수 있다. 하나의 DB 트랜잭션으로 묶어 그 창을 없앤다.
  */
 async function finalizeGeneration(
   admin: ReturnType<typeof createAdminClient>,
@@ -351,6 +330,9 @@ async function finalizeGeneration(
     noteId: string;
     quizType: QuizType;
     claimToken: string;
+    questions: QuizQuestion[];
+    history: string[][];
+    cacheKey: string;
   },
 ): Promise<FinalizeGenerationResult> {
   const { data, error } = await admin.rpc("finalize_quiz_generation_v2", {
@@ -358,32 +340,27 @@ async function finalizeGeneration(
     p_note_id: params.noteId,
     p_quiz_type: params.quizType,
     p_claim_token: params.claimToken,
+    p_questions: JSON.parse(JSON.stringify(params.questions)) as Json,
+    p_history: params.history as unknown as Json,
+    p_content_hash: params.cacheKey,
   });
 
   if (error) {
-    console.error("[generateQuiz] 생성 확정 실패:", error.message);
-    return { shouldSave: false, blocked: false };
+    console.error("[generateQuiz] 생성 확정·캐시 저장 실패:", error.message);
+    return { blocked: false, networkOrStorageError: true };
   }
 
   if (data === "ok" || data === "already_completed") {
-    return { shouldSave: true, blocked: false };
+    return { blocked: false };
   }
 
   if (data === "stale_claim") {
-    return {
-      shouldSave: false,
-      blocked: true,
-      error: QUIZ_ERROR_MESSAGES.staleClaim,
-    };
+    return { blocked: true, error: QUIZ_ERROR_MESSAGES.staleClaim };
   }
 
   // not_found 등 예상 밖 상태. 선점 자체가 이 함수 안에서 방금 만든 것이라 정상 경로에서는 나오지 않는다.
   console.error(`[generateQuiz] 예상치 못한 finalize 상태: ${String(data)}`);
-  return {
-    shouldSave: false,
-    blocked: true,
-    error: QUIZ_ERROR_MESSAGES.generationFailed,
-  };
+  return { blocked: true, error: QUIZ_ERROR_MESSAGES.generationFailed };
 }
 
 async function createQuiz(
@@ -471,18 +448,10 @@ async function createQuiz(
     noteId: parsed.data.noteId,
     quizType: parsed.data.quizType,
     claimToken: claimed.claimToken,
+    questions: generated.data,
+    history: buildHistory(generated.data, history),
+    cacheKey,
   });
-
-  if (finalized.shouldSave) {
-    await saveQuiz(supabase, {
-      noteId: parsed.data.noteId,
-      userId: user.id,
-      quizType: parsed.data.quizType,
-      questions: generated.data,
-      history,
-      cacheKey,
-    });
-  }
 
   if (finalized.blocked) {
     return { error: finalized.error };

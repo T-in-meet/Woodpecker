@@ -141,15 +141,21 @@ grant execute on function public.claim_quiz_generation_v2(uuid, uuid, text) to s
 -- --------------------------------------------------------------------------
 
 /**
- * 선점해 둔 행을 완료로 표시한다. saveQuiz()의 게이트다 — 이 호출이 'ok'나
- * 'already_completed'를 반환할 때만 캐시에 저장한다. 그러지 않으면 stale된 요청이
- * 최신 요청의 결과를 뒤늦게 덮어쓸 수 있다.
+ * 선점해 둔 행을 완료로 표시하고, 같은 트랜잭션 안에서 퀴즈 캐시(quizzes)까지 upsert한다.
+ *
+ * 처음에는 완료 표시(이 함수)와 캐시 저장(호출부의 별도 upsert)이 나뉘어 있었다.
+ * 그 사이 간격에 진짜 경합이 있었다 — A가 이 함수로 completed_at을 찍은 직후,
+ * "완료 표시 후 즉시 재선점 가능" 규칙에 따라 B가 새로 선점·생성·확정까지 끝내고 캐시에
+ * 먼저 저장할 수 있다. 그 뒤에야 A의 (더 오래된) 캐시 저장이 도착하면 B의 최신 결과를
+ * 덮어쓴다 — completed_at 갱신만으로는 막지 못하는, "다음 세대가 이미 저장을 끝낸 뒤
+ * 이전 세대가 뒤늦게 저장하는" 경로다. 캐시 저장까지 이 함수 안으로 옮기고 advisory lock으로
+ * 감싸면, 다른 트랜잭션이 이 사이에 끼어들 수 없어 이 경로 자체가 성립하지 않는다.
  *
  * 반환값
- *   'ok'                : 완료 표시 성공
- *   'already_completed' : 최신 선점이며 이미 완료됨 (같은 세대의 재호출 — 멱등 성공으로 다룬다)
- *   'stale_claim'       : 더 새로운 선점이 생겼다 — 이 응답은 버려진 세대다
- *   'not_found'         : 해당 선점 행이 없다
+ *   'ok'                : 완료 표시 + 캐시 저장 성공
+ *   'already_completed' : 최신 선점이며 이미 완료됨 (같은 세대의 재호출) — 캐시도 다시 저장한다(멱등)
+ *   'stale_claim'       : 더 새로운 선점이 생겼다 — 이 응답은 버려진 세대다. 캐시에 손대지 않는다
+ *   'not_found'         : 해당 선점 행이 없다. 캐시에 손대지 않는다
  *
  * quiz_generations는 사용량 집계용 append-only 로그라 같은 (user, note, quiz_type)에
  * 선점 행이 여러 개 쌓인다. review_gradings(복습 로그당 1행)와 달리 토큰 일치만으로는
@@ -161,14 +167,23 @@ grant execute on function public.claim_quiz_generation_v2(uuid, uuid, text) to s
  * 오인된다. 이 순서 덕분에 already_completed는 "최신 선점이며 이미 완료됨"으로 뜻이
  * 명확해지고, 호출부가 멱등 성공으로 다뤄도 안전하다.
  *
- * claim과 같은 키(p_user_id)로 advisory lock을 잡는다. "최신 선점 확인 → 완료 갱신"
- * 사이에 새 claim이 끼어드는 경합을 막기 위해서다.
+ * claim과 같은 키(p_user_id)로 advisory lock을 잡는다. "최신 선점 확인 → 완료 갱신 →
+ * 캐시 저장" 전체가 새 claim과 경합하지 않도록 하기 위해서다.
+ *
+ * upsert가 제약 위반 등으로 실패하면 함수 전체가 예외로 롤백된다 — completed_at도
+ * 함께 되돌아가 선점이 미완료로 남는다. 캐시 저장 실패를 조용히 넘기던 이전 동작보다
+ * 엄격해진 것은 의도된 트레이드오프다. 미완료 행은 in-flight 창(300초)이 지나면
+ * 자연히 재선점 대상이 되므로 사용자는 그만큼 기다린 뒤 재시도한다. 호출부는 이 예외를
+ * PostgREST 에러로 받아 "저장은 실패했지만 이미 받은 퀴즈는 반환한다"로 처리한다.
  */
 create function public.finalize_quiz_generation_v2(
   p_user_id uuid,
   p_note_id uuid,
   p_quiz_type text,
-  p_claim_token uuid
+  p_claim_token uuid,
+  p_questions jsonb,
+  p_history jsonb,
+  p_content_hash text
 )
 returns text
 language plpgsql
@@ -179,6 +194,7 @@ declare
   v_id uuid;
   v_created_at timestamptz;
   v_completed_at timestamptz;
+  v_result text;
 begin
   if p_user_id is null or p_claim_token is null then
     return 'not_found';
@@ -210,17 +226,33 @@ begin
   end if;
 
   if v_completed_at is not null then
-    return 'already_completed';
+    v_result := 'already_completed';
+  else
+    update public.quiz_generations
+    set completed_at = now()
+    where id = v_id;
+
+    v_result := 'ok';
   end if;
 
-  update public.quiz_generations
-  set completed_at = now()
-  where id = v_id;
+  -- completed_at 갱신과 같은 트랜잭션·같은 advisory lock 안에서 실행된다.
+  -- 여기서 실패하면 위 completed_at 갱신도 함께 롤백된다(주석 참고).
+  insert into public.quizzes (
+    note_id, user_id, quiz_type, questions, recent_questions, note_content_hash
+  )
+  values (
+    p_note_id, p_user_id, p_quiz_type, p_questions, p_history, p_content_hash
+  )
+  on conflict (note_id, quiz_type) do update
+  set questions = excluded.questions,
+      recent_questions = excluded.recent_questions,
+      note_content_hash = excluded.note_content_hash,
+      user_id = excluded.user_id;
 
-  return 'ok';
+  return v_result;
 end;
 $$;
 
-revoke all on function public.finalize_quiz_generation_v2(uuid, uuid, text, uuid)
+revoke all on function public.finalize_quiz_generation_v2(uuid, uuid, text, uuid, jsonb, jsonb, text)
   from public, anon, authenticated, service_role;
-grant execute on function public.finalize_quiz_generation_v2(uuid, uuid, text, uuid) to service_role;
+grant execute on function public.finalize_quiz_generation_v2(uuid, uuid, text, uuid, jsonb, jsonb, text) to service_role;
