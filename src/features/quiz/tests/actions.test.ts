@@ -93,7 +93,7 @@ function setupSupabase(input: SupabaseMockInput = {}) {
     auth: { getUser },
   });
 
-  const adminRpc = vi.fn((name: string) => {
+  const adminRpc = vi.fn((name: string, _params?: Record<string, unknown>) => {
     if (name === "claim_quiz_generation_v2") {
       return Promise.resolve({
         data: normalizedClaimResult,
