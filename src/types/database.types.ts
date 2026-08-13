@@ -93,6 +93,54 @@ export type Database = {
           },
         ];
       };
+      ai_embeddings: {
+        Row: {
+          content_hash: string;
+          created_at: string;
+          embedding: string;
+          id: string;
+          input_hash: string;
+          input_kind: string;
+          input_preview: string;
+          input_text: string;
+          model_config_id: string;
+          owner_user_id: string;
+          source_id: string;
+          source_type: string;
+          token_count: number | null;
+        };
+        Insert: {
+          content_hash: string;
+          created_at?: string;
+          embedding: string;
+          id?: string;
+          input_hash: string;
+          input_kind: string;
+          input_preview: string;
+          input_text: string;
+          model_config_id: string;
+          owner_user_id: string;
+          source_id: string;
+          source_type: string;
+          token_count?: number | null;
+        };
+        Update: {
+          content_hash?: string;
+          created_at?: string;
+          embedding?: string;
+          id?: string;
+          input_hash?: string;
+          input_kind?: string;
+          input_preview?: string;
+          input_text?: string;
+          model_config_id?: string;
+          owner_user_id?: string;
+          source_id?: string;
+          source_type?: string;
+          token_count?: number | null;
+        };
+        Relationships: [];
+      };
       feedback_replies: {
         Row: {
           content: string;
@@ -441,6 +489,165 @@ export type Database = {
         };
         Relationships: [];
       };
+      quiz_generations: {
+        Row: {
+          created_at: string;
+          id: string;
+          note_id: string | null;
+          quiz_type: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          note_id?: string | null;
+          quiz_type: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          note_id?: string | null;
+          quiz_type?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "quiz_generations_note_id_fkey";
+            columns: ["note_id"];
+            isOneToOne: false;
+            referencedRelation: "notes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      quizzes: {
+        Row: {
+          created_at: string;
+          id: string;
+          note_content_hash: string;
+          note_id: string;
+          questions: Json;
+          quiz_type: string;
+          recent_questions: Json;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          note_content_hash: string;
+          note_id: string;
+          questions: Json;
+          quiz_type: string;
+          recent_questions?: Json;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          note_content_hash?: string;
+          note_id?: string;
+          questions?: Json;
+          quiz_type?: string;
+          recent_questions?: Json;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "quizzes_note_id_fkey";
+            columns: ["note_id"];
+            isOneToOne: false;
+            referencedRelation: "notes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      review_grading_generations: {
+        Row: {
+          created_at: string;
+          id: string;
+          review_log_id: string | null;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          review_log_id?: string | null;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          review_log_id?: string | null;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "review_grading_generations_review_log_id_fkey";
+            columns: ["review_log_id"];
+            isOneToOne: false;
+            referencedRelation: "review_logs";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      review_gradings: {
+        Row: {
+          claim_token: string | null;
+          created_at: string;
+          feedback: Json | null;
+          graded_content_hash: string | null;
+          id: string;
+          note_id: string;
+          review_log_id: string;
+          round: number;
+          score: number | null;
+          user_answer: string;
+          user_id: string;
+        };
+        Insert: {
+          claim_token?: string | null;
+          created_at?: string;
+          feedback?: Json | null;
+          graded_content_hash?: string | null;
+          id?: string;
+          note_id: string;
+          review_log_id: string;
+          round: number;
+          score?: number | null;
+          user_answer: string;
+          user_id: string;
+        };
+        Update: {
+          claim_token?: string | null;
+          created_at?: string;
+          feedback?: Json | null;
+          graded_content_hash?: string | null;
+          id?: string;
+          note_id?: string;
+          review_log_id?: string;
+          round?: number;
+          score?: number | null;
+          user_answer?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "review_gradings_note_id_fkey";
+            columns: ["note_id"];
+            isOneToOne: false;
+            referencedRelation: "notes";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "review_gradings_review_log_id_fkey";
+            columns: ["review_log_id"];
+            isOneToOne: false;
+            referencedRelation: "review_logs";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       review_logs: {
         Row: {
           completed_at: string | null;
@@ -487,165 +694,6 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "review_logs_note_id_fkey";
-            columns: ["note_id"];
-            isOneToOne: false;
-            referencedRelation: "notes";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      review_gradings: {
-        Row: {
-          id: string;
-          review_log_id: string;
-          note_id: string;
-          user_id: string;
-          round: number;
-          user_answer: string;
-          score: number | null;
-          feedback: Json | null;
-          claim_token: string | null;
-          graded_content_hash: string | null;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          review_log_id: string;
-          note_id: string;
-          user_id: string;
-          round: number;
-          user_answer: string;
-          score?: number | null;
-          feedback?: Json | null;
-          claim_token?: string | null;
-          graded_content_hash?: string | null;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          review_log_id?: string;
-          note_id?: string;
-          user_id?: string;
-          round?: number;
-          user_answer?: string;
-          score?: number | null;
-          feedback?: Json | null;
-          claim_token?: string | null;
-          graded_content_hash?: string | null;
-          created_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "review_gradings_review_log_id_fkey";
-            columns: ["review_log_id"];
-            isOneToOne: true;
-            referencedRelation: "review_logs";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "review_gradings_note_id_fkey";
-            columns: ["note_id"];
-            isOneToOne: false;
-            referencedRelation: "notes";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      review_grading_generations: {
-        Row: {
-          id: string;
-          user_id: string;
-          review_log_id: string | null;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          review_log_id?: string | null;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          user_id?: string;
-          review_log_id?: string | null;
-          created_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "review_grading_generations_review_log_id_fkey";
-            columns: ["review_log_id"];
-            isOneToOne: false;
-            referencedRelation: "review_logs";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      quiz_generations: {
-        Row: {
-          id: string;
-          user_id: string;
-          note_id: string | null;
-          quiz_type: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          note_id?: string | null;
-          quiz_type: string;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          user_id?: string;
-          note_id?: string | null;
-          quiz_type?: string;
-          created_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "quiz_generations_note_id_fkey";
-            columns: ["note_id"];
-            isOneToOne: false;
-            referencedRelation: "notes";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      quizzes: {
-        Row: {
-          id: string;
-          note_id: string;
-          user_id: string;
-          quiz_type: string;
-          questions: Json;
-          recent_questions: Json;
-          note_content_hash: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          note_id: string;
-          user_id: string;
-          quiz_type: string;
-          questions: Json;
-          recent_questions?: Json;
-          note_content_hash: string;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          note_id?: string;
-          user_id?: string;
-          quiz_type?: string;
-          questions?: Json;
-          recent_questions?: Json;
-          note_content_hash?: string;
-          created_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "quizzes_note_id_fkey";
             columns: ["note_id"];
             isOneToOne: false;
             referencedRelation: "notes";
@@ -721,63 +769,15 @@ export type Database = {
       };
       claim_review_grading: {
         Args: {
-          p_user_id: string;
+          p_content_hash: string;
           p_review_log_id: string;
           p_user_answer: string;
-          p_content_hash: string;
+          p_user_id: string;
         };
         Returns: Json;
       };
-      finalize_review_grading: {
-        Args: {
-          p_user_id: string;
-          p_review_log_id: string;
-          p_claim_token: string;
-          p_score: number;
-          p_feedback: Json;
-        };
-        Returns: string;
-      };
       complete_review_and_schedule_next: {
         Args: { p_note_id: string; p_review_log_id: string };
-        Returns: string;
-      };
-      get_admin_unread_notification_counts: {
-        Args: { p_admin_user_id: string };
-        Returns: {
-          type: string;
-          unread_count: number;
-        }[];
-      };
-      get_admin_unread_notification_list: {
-        Args: { p_admin_user_id: string; p_limit?: number };
-        Returns: {
-          body: string | null;
-          click_path: string;
-          created_at: string;
-          id: string;
-          title: string;
-          type: string;
-        }[];
-      };
-      increment_operational_error_occurrence: {
-        Args: {
-          p_actor_user_id: string | null;
-          p_context: Json;
-          p_id: string;
-          p_message: string;
-          p_severity: string;
-          p_user_id: string | null;
-        };
-        Returns: string;
-      };
-      update_operational_error_status_with_history: {
-        Args: {
-          p_admin_user_id: string;
-          p_operational_error_id: string;
-          p_resolution_note: string;
-          p_status: string;
-        };
         Returns: string;
       };
       create_note_with_initial_review_log: {
@@ -791,20 +791,85 @@ export type Database = {
           image_paths: string[];
         }[];
       };
+      finalize_review_grading: {
+        Args: {
+          p_claim_token: string;
+          p_feedback: Json;
+          p_review_log_id: string;
+          p_score: number;
+          p_user_id: string;
+        };
+        Returns: string;
+      };
+      get_admin_unread_notification_counts: {
+        Args: { p_admin_user_id: string };
+        Returns: {
+          type: string;
+          unread_count: number;
+        }[];
+      };
+      get_admin_unread_notification_list: {
+        Args: { p_admin_user_id: string; p_limit?: number };
+        Returns: {
+          body: string;
+          click_path: string;
+          created_at: string;
+          id: string;
+          title: string;
+          type: string;
+        }[];
+      };
+      increment_operational_error_occurrence: {
+        Args: {
+          p_actor_user_id: string;
+          p_context: Json;
+          p_id: string;
+          p_message: string;
+          p_severity: string;
+          p_user_id: string;
+        };
+        Returns: string;
+      };
       is_current_user_email_confirmed: { Args: never; Returns: boolean };
       kst_date: { Args: { ts: string }; Returns: string };
       kst_day_start: { Args: { ts: string }; Returns: string };
-      mark_notification_as_read: {
-        Args: { p_notification_id: string };
-        Returns: boolean;
-      };
       mark_all_admin_notifications_as_read: {
         Args: { p_admin_user_id: string };
         Returns: number;
       };
+      mark_notification_as_read: {
+        Args: { p_notification_id: string };
+        Returns: boolean;
+      };
+      match_ai_embeddings: {
+        Args: {
+          p_input_kind: string;
+          p_limit?: number;
+          p_min_similarity?: number;
+          p_model_config_id: string;
+          p_owner_user_id: string;
+          p_query_embedding: string;
+          p_source_type: string;
+        };
+        Returns: {
+          distance: number;
+          embedding_id: string;
+          similarity: number;
+          source_id: string;
+        }[];
+      };
       update_notification_time_of_day: {
         Args: { p_note_id: string; p_time?: string };
         Returns: undefined;
+      };
+      update_operational_error_status_with_history: {
+        Args: {
+          p_admin_user_id: string;
+          p_operational_error_id: string;
+          p_resolution_note: string;
+          p_status: string;
+        };
+        Returns: string;
       };
     };
     Enums: {
