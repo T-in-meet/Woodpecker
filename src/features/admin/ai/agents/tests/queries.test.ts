@@ -8,6 +8,7 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { requireAdmin } from "../../../utils/require-admin";
+import { loadAdminAiPromptGraph } from "../../utils/load-admin-prompt-graph";
 import { reportAdminAiLoadError } from "../../utils/report-load-error";
 import {
   getAdminAiAgentDetail,
@@ -24,6 +25,10 @@ vi.mock("../../../utils/require-admin", () => ({
   requireAdmin: vi.fn(),
 }));
 
+vi.mock("../../utils/load-admin-prompt-graph", () => ({
+  loadAdminAiPromptGraph: vi.fn(),
+}));
+
 vi.mock("../../utils/report-load-error", () => ({
   reportAdminAiLoadError: vi.fn(),
 }));
@@ -31,26 +36,48 @@ vi.mock("../../utils/report-load-error", () => ({
 const ADMIN_USER_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const ACTIVE_AGENT_ID = "11111111-1111-4111-8111-111111111111";
 const INACTIVE_AGENT_ID = "22222222-2222-4222-8222-222222222222";
+const FAMILY_ID = "44444444-4444-4444-8444-444444444444";
 
-const agentRow = {
-  created_at: "2026-08-01T00:00:00.000Z",
-  description: "노트 RAG 답변 Agent",
-  display_name: "노트 RAG 답변",
-  id: ACTIVE_AGENT_ID,
-  purpose: "노트를 기반으로 질문에 답변합니다.",
-  tags: ["notes", "rag"],
-  updated_at: "2026-08-03T03:00:00.000Z",
-};
+const agents = [
+  {
+    createdAt: "2026-08-01T00:00:00.000Z",
+    description: "노트 RAG 답변 Agent",
+    displayName: "노트 RAG 답변",
+    familyCount: 1,
+    id: ACTIVE_AGENT_ID,
+    purpose: "노트를 기반으로 질문에 답변합니다.",
+    tags: ["notes", "rag"],
+    updatedAt: "2026-08-03T03:00:00.000Z",
+    versionCount: 2,
+  },
+  {
+    createdAt: "2026-08-01T00:00:00.000Z",
+    description: null,
+    displayName: "노트 요약",
+    familyCount: 0,
+    id: INACTIVE_AGENT_ID,
+    purpose: "노트를 요약합니다.",
+    tags: ["notes"],
+    updatedAt: "2026-08-03T01:00:00.000Z",
+    versionCount: 0,
+  },
+];
 
-const inactiveAgentRow = {
-  ...agentRow,
-  description: null,
-  display_name: "노트 요약",
-  id: INACTIVE_AGENT_ID,
-  purpose: "노트를 요약합니다.",
-  tags: ["notes"],
-  updated_at: "2026-08-03T01:00:00.000Z",
-};
+const families = [
+  {
+    agentDisplayName: "노트 RAG 답변",
+    agentId: ACTIVE_AGENT_ID,
+    archivedVersionCount: 0,
+    createdAt: "2026-08-01T00:00:00.000Z",
+    description: "기본 답변 Family",
+    displayName: "기본 답변",
+    draftVersionCount: 1,
+    id: FAMILY_ID,
+    publishedVersionCount: 1,
+    tags: ["default"],
+    updatedAt: "2026-08-03T00:00:00.000Z",
+  },
+];
 
 /**
  * Agent 목록 조회 조건 fixture를 생성합니다.
@@ -78,6 +105,17 @@ function createQuery(
 }
 
 /**
+ * Prompt graph 조회를 mock합니다.
+ */
+function mockPromptGraph() {
+  vi.mocked(loadAdminAiPromptGraph).mockResolvedValue({
+    agents,
+    families,
+    versionsByFamilyId: new Map(),
+  });
+}
+
+/**
  * Supabase admin client의 rpc 호출을 mock합니다.
  *
  * @param result rpc 반환값
@@ -94,58 +132,6 @@ function mockRpcClient(result: {
   } as unknown as ReturnType<typeof createAdminClient>);
 
   return rpc;
-}
-
-/**
- * Agent 상세 및 선택 목록 조회용 Supabase client를 mock합니다.
- *
- * @param results 상세 및 목록 조회 결과
- * @returns Supabase query method mocks
- */
-function mockAgentQueryClient(results: {
-  detail?: {
-    data: unknown;
-    error: { message: string } | null;
-  };
-  options?: {
-    data: unknown;
-    error: { message: string } | null;
-  };
-}) {
-  const maybeSingle = vi.fn().mockResolvedValue(
-    results.detail ?? {
-      data: agentRow,
-      error: null,
-    },
-  );
-  const eq = vi.fn(() => ({
-    maybeSingle,
-  }));
-  const order = vi.fn().mockResolvedValue(
-    results.options ?? {
-      data: [inactiveAgentRow, agentRow],
-      error: null,
-    },
-  );
-  const select = vi.fn(() => ({
-    eq,
-    order,
-  }));
-  const from = vi.fn(() => ({
-    select,
-  }));
-
-  vi.mocked(createAdminClient).mockReturnValue({
-    from,
-  } as unknown as ReturnType<typeof createAdminClient>);
-
-  return {
-    eq,
-    from,
-    maybeSingle,
-    order,
-    select,
-  };
 }
 
 describe("getAdminAiAgents", () => {
@@ -246,6 +232,23 @@ describe("getAdminAiAgents", () => {
     );
   });
 
+  it("RPC가 빈 페이지를 반환해도 total count를 보존한다", async () => {
+    mockRpcClient({
+      data: [
+        {
+          items: [],
+          total_count: 12,
+        },
+      ],
+      error: null,
+    });
+
+    const result = await getAdminAiAgents(createQuery({ page: 99 }));
+
+    expect(result.items).toEqual([]);
+    expect(result.pagination.total).toBe(12);
+  });
+
   it("Agent 목록 조회에 실패하면 운영 오류를 보고하고 예외를 던진다", async () => {
     const error = {
       message: "agent list failed",
@@ -276,6 +279,28 @@ describe("getAdminAiAgents", () => {
       operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.GET_PROMPT_AGENT,
       stage: ADMIN_AI_OPERATIONAL_ERROR_STAGE.DATABASE,
     });
+  });
+
+  it("page가 1보다 작으면 첫 페이지로 보정한다", async () => {
+    const rpc = mockRpcClient({
+      data: [
+        {
+          items: [],
+          total_count: 0,
+        },
+      ],
+      error: null,
+    });
+
+    const result = await getAdminAiAgents(createQuery({ page: 0 }));
+
+    expect(rpc).toHaveBeenCalledWith(
+      "get_admin_ai_agent_list",
+      expect.objectContaining({
+        p_page: 1,
+      }),
+    );
+    expect(result.pagination.page).toBe(1);
   });
 
   it("RPC 최상위 결과 스키마가 올바르지 않으면 운영 오류를 보고하고 실패한다", async () => {
@@ -419,75 +444,24 @@ describe("getAdminAiAgentDetail", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(requireAdmin).mockResolvedValue(ADMIN_USER_ID);
+    mockPromptGraph();
   });
 
-  it("Agent 상세를 직접 조회하고 Prompt family 목록은 비워둔다", async () => {
-    const { eq, from, maybeSingle, select } = mockAgentQueryClient({});
-
+  it("Agent와 해당 Agent의 Family 목록을 반환한다", async () => {
     const result = await getAdminAiAgentDetail(ACTIVE_AGENT_ID);
 
-    expect(from).toHaveBeenCalledWith("ai_prompt_agents");
-    expect(select).toHaveBeenCalledWith(
-      "id,display_name,description,purpose,tags,created_at,updated_at",
-    );
-    expect(eq).toHaveBeenCalledWith("id", ACTIVE_AGENT_ID);
-    expect(maybeSingle).toHaveBeenCalledOnce();
     expect(result).toEqual({
-      createdAt: agentRow.created_at,
-      description: agentRow.description,
-      displayName: agentRow.display_name,
-      families: [],
-      familyCount: 0,
-      id: ACTIVE_AGENT_ID,
-      purpose: agentRow.purpose,
-      tags: agentRow.tags,
-      updatedAt: agentRow.updated_at,
-      versionCount: 0,
+      ...agents[0],
+      families,
     });
   });
 
   it("Agent가 없으면 null을 반환한다", async () => {
-    mockAgentQueryClient({
-      detail: {
-        data: null,
-        error: null,
-      },
-    });
-
     const result = await getAdminAiAgentDetail(
       "99999999-9999-4999-8999-999999999999",
     );
 
     expect(result).toBeNull();
-  });
-
-  it("Agent 상세 조회에 실패하면 운영 오류를 보고하고 예외를 던진다", async () => {
-    const error = {
-      message: "agent detail failed",
-    };
-
-    mockAgentQueryClient({
-      detail: {
-        data: null,
-        error,
-      },
-    });
-
-    await expect(getAdminAiAgentDetail(ACTIVE_AGENT_ID)).rejects.toThrow(
-      "Failed to load admin AI agent: agent detail failed",
-    );
-
-    expect(reportAdminAiLoadError).toHaveBeenCalledWith({
-      adminUserId: ADMIN_USER_ID,
-      context: {
-        agentId: ACTIVE_AGENT_ID,
-      },
-      error,
-      errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.AGENT_LOAD_FAILED,
-      message: "관리자 AI agent 상세 조회에 실패했습니다.",
-      operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.GET_PROMPT_AGENT,
-      stage: ADMIN_AI_OPERATIONAL_ERROR_STAGE.DATABASE,
-    });
   });
 });
 
@@ -495,16 +469,12 @@ describe("getAdminAiAgentOptions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(requireAdmin).mockResolvedValue(ADMIN_USER_ID);
+    mockPromptGraph();
   });
 
-  it("Agent 선택 항목을 display name 오름차순으로 조회한다", async () => {
-    const { from, order, select } = mockAgentQueryClient({});
-
+  it("Agent 선택 항목을 display name 오름차순으로 반환한다", async () => {
     const result = await getAdminAiAgentOptions();
 
-    expect(from).toHaveBeenCalledWith("ai_prompt_agents");
-    expect(select).toHaveBeenCalledWith("id,display_name");
-    expect(order).toHaveBeenCalledWith("display_name", { ascending: true });
     expect(result).toEqual([
       {
         displayName: "노트 요약",
@@ -515,31 +485,5 @@ describe("getAdminAiAgentOptions", () => {
         id: ACTIVE_AGENT_ID,
       },
     ]);
-  });
-
-  it("Agent 선택 목록 조회에 실패하면 운영 오류를 보고하고 예외를 던진다", async () => {
-    const error = {
-      message: "agent options failed",
-    };
-
-    mockAgentQueryClient({
-      options: {
-        data: null,
-        error,
-      },
-    });
-
-    await expect(getAdminAiAgentOptions()).rejects.toThrow(
-      "Failed to load admin AI agent options: agent options failed",
-    );
-
-    expect(reportAdminAiLoadError).toHaveBeenCalledWith({
-      adminUserId: ADMIN_USER_ID,
-      error,
-      errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.AGENT_LOAD_FAILED,
-      message: "관리자 AI agent 선택 목록 조회에 실패했습니다.",
-      operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.GET_PROMPT_AGENT_OPTIONS,
-      stage: ADMIN_AI_OPERATIONAL_ERROR_STAGE.DATABASE,
-    });
   });
 });

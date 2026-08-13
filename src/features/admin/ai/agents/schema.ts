@@ -17,12 +17,6 @@ export const updateAgentSchema = z.object({
   tags: tagsSchema,
 });
 
-/** Agent 삭제 RPC가 반환하는 허용된 결과 코드입니다. */
-export const adminAiAgentDeleteRpcResultSchema = z.union([
-  z.literal("NOT_FOUND"),
-  z.literal("OK"),
-]);
-
 export const adminAiAgentListRpcRowSchema = z.object({
   created_at: z.string(),
   display_name: z.string(),
@@ -40,19 +34,3 @@ export const adminAiAgentListRpcResultSchema = z
     }),
   )
   .length(1);
-
-export const adminAiAgentRowSchema = z.object({
-  created_at: z.string(),
-  description: z.string().nullable(),
-  display_name: z.string(),
-  id: z.string(),
-  purpose: z.string().nullable(),
-  tags: z.array(z.string()),
-  updated_at: z.string(),
-});
-
-/** Agent 선택 목록 조회에 필요한 최소 DB row 구조입니다. */
-export const adminAiAgentOptionRowSchema = z.object({
-  display_name: z.string(),
-  id: z.string(),
-});

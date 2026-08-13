@@ -17,19 +17,17 @@ import {
   getNumberRangeRpcMax,
   getNumberRangeRpcMin,
 } from "../utils/list-rpc";
+import { loadAdminAiPromptGraph } from "../utils/load-admin-prompt-graph";
 import { reportAdminAiLoadError } from "../utils/report-load-error";
 import {
   adminAiAgentListRpcResultSchema,
   adminAiAgentListRpcRowSchema,
-  adminAiAgentOptionRowSchema,
-  adminAiAgentRowSchema,
 } from "./schema";
 import type {
   AdminAiAgentDetail,
   AdminAiAgentListQuery,
   AdminAiAgentListResult,
   AdminAiAgentListRow,
-  AdminAiAgentRow,
 } from "./types";
 
 type GetAdminAiAgentListRpcArgs =
@@ -51,28 +49,6 @@ function mapAgentListRpcRow(
     id: row.id,
     purpose: row.purpose,
     updatedAt: row.updated_at,
-  };
-}
-
-/**
- * Agent DB row를 상세 화면 모델로 변환합니다.
- *
- * @param row Agent DB row
- * @returns 관리자 Agent 상세 행
- */
-function mapAgentRow(
-  row: z.infer<typeof adminAiAgentRowSchema>,
-): AdminAiAgentRow {
-  return {
-    createdAt: row.created_at,
-    description: row.description,
-    displayName: row.display_name,
-    familyCount: 0,
-    id: row.id,
-    purpose: row.purpose,
-    tags: row.tags,
-    updatedAt: row.updated_at,
-    versionCount: 0,
   };
 }
 
@@ -236,38 +212,16 @@ export async function getAdminAiAgentDetail(
   agentId: string,
 ): Promise<AdminAiAgentDetail | null> {
   const adminUserId = await requireAdmin();
-  const supabase = createAdminClient();
-  const { data, error } = await supabase
-    .from("ai_prompt_agents")
-    .select("id,display_name,description,purpose,tags,created_at,updated_at")
-    .eq("id", agentId)
-    .maybeSingle();
+  const graph = await loadAdminAiPromptGraph(adminUserId);
+  const agent = graph.agents.find((row) => row.id === agentId) ?? null;
 
-  if (error) {
-    await reportAdminAiLoadError({
-      adminUserId,
-      context: {
-        agentId,
-      },
-      error,
-      errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.AGENT_LOAD_FAILED,
-      message: "관리자 AI agent 상세 조회에 실패했습니다.",
-      operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.GET_PROMPT_AGENT,
-      stage: ADMIN_AI_OPERATIONAL_ERROR_STAGE.DATABASE,
-    });
-
-    throw new Error(`Failed to load admin AI agent: ${error.message}`);
-  }
-
-  if (!data) {
+  if (!agent) {
     return null;
   }
 
-  const agent = mapAgentRow(adminAiAgentRowSchema.parse(data));
-
   return {
     ...agent,
-    families: [],
+    families: graph.families.filter((family) => family.agentId === agentId),
   };
 }
 
@@ -278,30 +232,12 @@ export async function getAdminAiAgentDetail(
  */
 export async function getAdminAiAgentOptions() {
   const adminUserId = await requireAdmin();
-  const supabase = createAdminClient();
-  const { data, error } = await supabase
-    .from("ai_prompt_agents")
-    .select("id,display_name")
-    .order("display_name", { ascending: true });
+  const graph = await loadAdminAiPromptGraph(adminUserId);
 
-  if (error) {
-    await reportAdminAiLoadError({
-      adminUserId,
-      error,
-      errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.AGENT_LOAD_FAILED,
-      message: "관리자 AI agent 선택 목록 조회에 실패했습니다.",
-      operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.GET_PROMPT_AGENT_OPTIONS,
-      stage: ADMIN_AI_OPERATIONAL_ERROR_STAGE.DATABASE,
-    });
-
-    throw new Error(`Failed to load admin AI agent options: ${error.message}`);
-  }
-
-  return z
-    .array(adminAiAgentOptionRowSchema)
-    .parse(data ?? [])
+  return graph.agents
     .map((agent) => ({
-      displayName: agent.display_name,
+      displayName: agent.displayName,
       id: agent.id,
-    }));
+    }))
+    .sort((left, right) => left.displayName.localeCompare(right.displayName));
 }
