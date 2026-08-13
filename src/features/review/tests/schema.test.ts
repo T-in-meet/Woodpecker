@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { toGeminiResponseSchema } from "@/lib/gemini/responseSchema";
+import { toCloudflareResponseSchema } from "@/lib/ai/responseSchema";
 
 import {
   completeReviewSchema,
@@ -123,7 +123,7 @@ describe("gradeAnswerSchema", () => {
 });
 
 describe("gradingResponseSchema", () => {
-  it("accepts a valid Gemini grading response", () => {
+  it("accepts a valid AI grading response", () => {
     const parsed = gradingResponseSchema.safeParse({
       score: 85,
       summary: "핵심 개념을 대부분 회상했어요.",
@@ -218,10 +218,10 @@ describe("gradingGenerationSchema", () => {
     ).toBe(false);
   });
 
-  // 이 스키마의 존재 이유는 Gemini에 넘길 JSON Schema에 maxItems를 싣는 것이다.
+  // 이 스키마의 존재 이유는 구조화 출력 JSON Schema에 maxItems를 싣는 것이다.
   // 변환 과정에서 빠지면 생성 단계 강제가 사라지고 정규화만 남는다.
-  it("carries maxItems into the Gemini response schema", () => {
-    const jsonSchema = toGeminiResponseSchema(gradingGenerationSchema);
+  it("carries maxItems into the AI response schema", () => {
+    const jsonSchema = toCloudflareResponseSchema(gradingGenerationSchema);
 
     expect(jsonSchema).toMatchObject({
       properties: {

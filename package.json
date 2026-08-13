@@ -13,7 +13,6 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@google/genai": "^2.16.0",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-dialog": "^1.1.15",
     "@react-email/components": "^1.0.11",

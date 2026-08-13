@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState, useTransition } from "react";
 
-import type { QuizType } from "@/lib/gemini/prompts";
+import type { QuizType } from "@/lib/ai/prompts";
 
 import { generateQuiz, regenerateQuiz } from "../actions";
 import type { QuizQuestion } from "../schema";

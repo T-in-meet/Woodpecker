@@ -17,10 +17,10 @@
    - 성공 시 원본 콘텐츠, 원본 본문 해시(`hashNoteContent`), 사용자 답안, `reviewLogId`를 반환 → `ComparisonView`로 전달
 3. (선택) `GradingPanel`에서 `gradeAnswerAction` 호출 — AI 채점:
    - 세션/이메일 인증/소유권 + `pendingReviewLog.id === reviewLogId` 일치 확인
-   - 복습 1회당 채점 1회: `review_gradings`에 기존 채점이 있으면 Gemini 호출 없이 재사용. 저장된 `user_answer`가 지금 답안과 다르면 결과와 함께 `gradedOtherAnswer: true`를 돌려 화면에서 기준이 다르다고 알리고, 기준이 된 답안(`gradedAnswer`)도 함께 돌려 접기로 펼쳐 볼 수 있게 한다
+   - 복습 1회당 채점 1회: `review_gradings`에 기존 채점이 있으면 AI 호출 없이 재사용. 저장된 `user_answer`가 지금 답안과 다르면 결과와 함께 `gradedOtherAnswer: true`를 돌려 화면에서 기준이 다르다고 알리고, 기준이 된 답안(`gradedAnswer`)도 함께 돌려 접기로 펼쳐 볼 수 있게 한다
    - 기존 채점이 없으면 화면이 보여준 원본 해시(`originalContentHash`)와 지금 읽은 본문의 해시를 대조 (아래 "채점 기준 원본 고정" 참고)
-   - **Gemini 호출 전에** `claim_review_grading` RPC로 채점 권한을 원자적으로 선점하고 사용자 단위 한도를 검사 (아래 "동시 요청과 비용 통제" 참고)
-   - Gemini(`gemini-3.1-flash-lite`)로 회상률 점수(0~100)·빠뜨린 개념·잘못 기억한 내용을 JSON으로 받아 Zod 검증 후 `finalize_review_grading` RPC로 저장. 응답 구조는 `responseJsonSchema`(퀴즈와 같은 `toGeminiResponseSchema`)로 디코딩 단계에서 한 번 더 강제한다 — 형식 이탈은 곧 사용자 에러 + 선점이 풀릴 때까지의 대기이기 때문이다
+   - **AI 호출 전에** `claim_review_grading` RPC로 채점 권한을 원자적으로 선점하고 사용자 단위 한도를 검사 (아래 "동시 요청과 비용 통제" 참고)
+   - Cloudflare Workers AI(`@cf/openai/gpt-oss-120b`)로 회상률 점수(0~100)·빠뜨린 개념·잘못 기억한 내용을 JSON으로 받아 Zod 검증 후 `finalize_review_grading` RPC로 저장. 응답 구조는 `response_format.json_schema`(퀴즈와 같은 `toCloudflareResponseSchema`)로 디코딩 단계에서 한 번 더 강제한다 — 형식 이탈은 곧 사용자 에러 + 선점이 풀릴 때까지의 대기이기 때문이다
    - 저장에 실패하면 결과를 보여주지 않고 에러를 반환한다. 저장되지 않은 행은 `score = NULL`이라 새로고침하면 사라지고 기록에도 남지 않으므로, 성공으로 보여주면 화면과 DB가 어긋난다
    - 채점은 부가 기능: 채점 실패/저장 실패가 복습 완료를 막지 않으며, 점수는 스케줄링(1/3/7일 고정)에 개입하지 않는다
    - 저장된 채점 기록은 노트 상세 페이지의 `GradingHistorySection`에서 회차별로 조회
@@ -36,7 +36,8 @@
 - `@/lib/supabase/server` — 서버 Supabase 클라이언트
 - `@/lib/constants/routes` — `${ROUTES.RESEND_EMAIL}?purpose=signup`, `ROUTES.LOGIN`, `getNoteDetailRoute`, `getNoteReviewRoute`
 - `@/lib/constants/reviewIntervals` — 도메인 상수
-- `@/lib/gemini/client` — AI 채점용 Gemini 클라이언트 (`GEMINI_API_KEY` 필요)
+- `@/lib/ai/client` — AI 채점용 Cloudflare Workers AI 클라이언트 (`CLOUDFLARE_ACCOUNT_ID`·`CLOUDFLARE_API_TOKEN` 필요)
+- `@/lib/ai/failureReason` — 실패 원인(`CloudflareAiError`의 `kind`·`code`)을 사용자 문구로 옮길 때 쓰는 판별 함수
 - Supabase RPC `complete_review_and_schedule_next` — 완료 처리 및 다음 회차 스케줄링을 원자적으로 수행
 - Supabase RPC `claim_review_grading` / `finalize_review_grading` — 채점 권한 선점 및 결과 확정. **`service_role` 전용**이라 `@/lib/supabase/admin`의 admin 클라이언트로 호출한다
 - 테이블 `review_gradings` — AI 채점 결과 저장 (RLS: 본인 데이터 SELECT만 허용. INSERT/UPDATE/DELETE 정책 없음 — 쓰기는 위 두 SECURITY DEFINER 함수만 가능)
@@ -117,46 +118,51 @@ BEFORE UPDATE 트리거다. `update_notification_time_of_day`가 `notification_t
 
 ### 동시 요청과 비용 통제 (AI 채점)
 
-`review_log_id` 유니크 제약은 **저장 중복만** 막는다. 이미 나간 Gemini 호출 비용은 되돌리지 못하므로,
-"조회 → Gemini 호출 → INSERT" 순서로는 동시 요청 N건이 모두 과금된다. 그래서 순서를 뒤집는다.
+`review_log_id` 유니크 제약은 **저장 중복만** 막는다. 이미 나간 AI 호출 비용은 되돌리지 못하므로,
+"조회 → AI 호출 → INSERT" 순서로는 동시 요청 N건이 모두 과금된다. 그래서 순서를 뒤집는다.
 
 1. `claim_review_grading(user_id, review_log_id, user_answer, content_hash)` — `score`/`feedback`이 `NULL`인
    선점 행을 넣고 그 선점을 식별하는 `claim_token`(uuid)을 발급한다.
    `review_log_id` 단위 `pg_advisory_xact_lock`으로 "조회 → 선점"의 경합을 막는다.
-   반환값은 `{ status, claimToken }` jsonb이고, `status`가 `ok`일 때만 Gemini를 호출한다.
+   반환값은 `{ status, claimToken }` jsonb이고, `status`가 `ok`일 때만 AI를 호출한다.
    (`ok` / `already_graded` / `in_flight` / `too_many_requests` / `daily_exceeded` / `not_found`)
-2. Gemini 호출 및 Zod 검증.
+2. AI 호출 및 Zod 검증.
 3. `finalize_review_grading(user_id, review_log_id, claim_token, score, feedback)` — 선점 행에 결과를 채운다.
    저장된 `claim_token`과 다르면 `stale_claim`을 돌려주고 아무것도 쓰지 않는다.
 
-선점을 되돌리는 함수는 두지 않는다. 선점 → 해제를 반복하면 Gemini를 무제한으로 호출할 수 있기 때문이다.
-대신 60초가 지난 선점 행은 자동으로 재선점 대상이 되고, Gemini 호출이 실패하면 사용자는 그만큼 기다린 뒤 재시도한다.
+선점을 되돌리는 함수는 두지 않는다. 선점 → 해제를 반복하면 AI를 무제한으로 호출할 수 있기 때문이다.
+대신 60초가 지난 선점 행은 자동으로 재선점 대상이 되고, AI 호출이 실패하면 사용자는 그만큼 기다린 뒤 재시도한다.
 
 #### 타임아웃 순서 (바꿀 때 셋을 함께 본다)
 
-| 값                      | 현재 | 위치                                                        |
-| ----------------------- | ---- | ----------------------------------------------------------- |
-| 채점 deadline           | 45초 | `GRADING_DEADLINE_MS` (`actions.ts`)                        |
-| 최소 Gemini 예산        | 10초 | `MIN_GEMINI_BUDGET_MS` (`actions.ts`)                       |
-| 함수 실행 상한          | 55초 | `maxDuration` (`app/(main)/notes/[noteId]/review/page.tsx`) |
-| 선점 만료(stale window) | 60초 | `c_stale_window` (`claim_review_grading`)                   |
+| 값                      | 현재  | 위치                                                        |
+| ----------------------- | ----- | ----------------------------------------------------------- |
+| 채점 deadline           | 240초 | `GRADING_DEADLINE_MS` (`actions.ts`)                        |
+| 최소 AI 예산            | 30초  | `MIN_AI_BUDGET_MS` (`actions.ts`)                           |
+| 함수 실행 상한          | 280초 | `maxDuration` (`app/(main)/notes/[noteId]/review/page.tsx`) |
+| 선점 만료(stale window) | 300초 | `c_stale_window` (`claim_review_grading`)                   |
 
 **채점 deadline < maxDuration < 선점 만료** 순서를 유지한다.
 
-- 채점 deadline은 **액션 진입 시각**부터 잰다. Gemini 호출 직전에 타이머를 걸면 앞의 인증·조회·선점이
+이 값들은 원래 45초/55초/60초였다. Cloudflare Workers AI(gpt-oss-120b)로 교체한 뒤 canary로
+실측한 채점 지연이 프로덕션 규모 입력(노트 10,000~30,000자)에서 최대 119.7초까지 나와,
+기존 값으로는 정상 채점도 timeout에 걸렸다. Vercel Hobby 플랜이 Fluid Compute 기본 활성화로
+함수 실행 상한 300초를 지원해 이 범위로 늘릴 수 있었다(`20260812130000_widen_review_grading_stale_window.sql`).
+
+- 채점 deadline은 **액션 진입 시각**부터 잰다. AI 호출 직전에 타이머를 걸면 앞의 인증·조회·선점이
   느릴 때 abort보다 maxDuration이 먼저 걸려서, 선점만 잡힌 채 함수가 죽고 그 회차의 채점이
-  선점 만료까지 막힌다. 그래서 선점 직전에 남은 예산을 계산하고, `MIN_GEMINI_BUDGET_MS`보다
+  선점 만료까지 막힌다. 그래서 선점 직전에 남은 예산을 계산하고, `MIN_AI_BUDGET_MS`보다
   적게 남았으면 선점하지 않고 실패시킨다. `AbortSignal`의 값도 호출 직전에 **다시** 계산한다 —
   선점 전에 잰 예산을 그대로 쓰면 타이머가 선점 RPC 이후부터 흘러서 종료 시각이 그만큼 밀린다.
 - maxDuration이 선점 만료보다 크면, 호출이 진행 중인 사이 선점이 만료돼 사용자의 재시도가
-  선점을 이어받고 원래 결과는 `stale_claim`으로 버려진다. 채점 1건에 Gemini를 두 번 부르는 셈이다.
+  선점을 이어받고 원래 결과는 `stale_claim`으로 버려진다. 채점 1건에 AI를 두 번 부르는 셈이다.
 
-`AbortSignal`은 클라이언트 요청만 끊는다. Gemini는 서비스 쪽 작업을 취소하지 않고 과금도 그대로
-발생한다(`@google/genai`의 `GenerateContentConfig.abortSignal` 주석). 타임아웃으로 중복 과금을 막을 수는
-없으므로, 비용은 "선점을 잡기 전에 못 쓸 호출을 걸러내는 것"으로 통제한다.
+`AbortSignal`은 이쪽 요청만 끊는다. Cloudflare가 서버 쪽 추론과 Neurons 소비를 즉시 멈춘다는
+보장은 문서에 없다 — 공식 문서는 오류 `3008`(Aborted)과 실사용량 기준만 설명한다. 타임아웃으로
+중복 과금을 막을 수 있다고 가정하지 않고, 비용은 "선점을 잡기 전에 못 쓸 호출을 걸러내는 것"으로 통제한다.
 
-`maxDuration`은 Vercel 플랜별 기본값이 다르고 그 기본값이 60초를 넘는 구성도 있다.
-명시하지 않으면 위 순서가 배포 환경에 따라 깨지므로 페이지에 항상 적어 둔다.
+`maxDuration`은 Vercel 플랜별 기본값이 다르다. 명시하지 않으면 위 순서가 배포 환경에 따라
+깨지므로 페이지에 항상 적어 둔다.
 
 `claim_token`은 이 "60초 뒤 이어받기"의 짝이다. 요청 A가 60초를 넘겨 요청 B가 선점을 이어받으면
 `user_answer`는 B의 답안으로 덮이는데, 확인 없이 두면 늦게 도착한 A도 결과를 확정할 수 있어
@@ -169,7 +175,7 @@ BEFORE UPDATE 트리거다. `update_notification_time_of_day`가 `notification_t
 
 쓰기 권한은 위 두 SECURITY DEFINER 함수에만 있다. INSERT 정책을 열어 두면
 사용자가 `feedback = '{}'` 같은 행을 직접 넣어 조회 Zod 파싱을 `null`로 떨어뜨리고,
-액션이 미채점으로 오판해 Gemini를 다시 부르지만 저장은 계속 실패하는 상태를 만들 수 있다.
+액션이 미채점으로 오판해 AI를 다시 부르지만 저장은 계속 실패하는 상태를 만들 수 있다.
 DELETE 정책도 같은 이유로 없앴다(삭제 후 재채점 반복).
 상세는 `20260808000000_create_review_gradings.sql`.
 
@@ -186,8 +192,8 @@ DELETE 정책도 같은 이유로 없앴다(삭제 후 재채점 반복).
 **하루 30회 / 60초 10회**를 검사한다(값은 함수 안 상수 — 인자로 받으면 호출자가 우회할 수 있다).
 퀴즈의 `claim_quiz_generation`(20260806000002)과 같은 구조다.
 
-- 기록은 **Gemini를 부르는 경로에서만** 남긴다. `already_graded`·`in_flight`는 저장된 결과를 읽거나
-  기다릴 뿐이므로 사용량을 깎지 않는다. 60초 뒤 선점을 이어받는 경로는 Gemini를 한 번 더 부르므로 깎는다.
+- 기록은 **AI를 부르는 경로에서만** 남긴다. `already_graded`·`in_flight`는 저장된 결과를 읽거나
+  기다릴 뿐이므로 사용량을 깎지 않는다. 60초 뒤 선점을 이어받는 경로는 AI를 한 번 더 부르므로 깎는다.
 - `review_log_id`는 `on delete set null`이다. `cascade`로 두면 노트를 지워 사용 기록까지 없앨 수 있다.
   `review_gradings` 자체를 카운터로 쓸 수 없는 이유도 같다(노트 삭제 시 cascade로 사라진다).
 - 락 순서는 **review_log → user**로 고정한다. `finalize_review_grading`은 앞의 것만 잡으므로
@@ -199,14 +205,15 @@ DELETE 정책도 같은 이유로 없앴다(삭제 후 재채점 반복).
 프롬프트가 `missedConcepts`·`incorrectPoints`를 최대 `FEEDBACK_ITEMS_MAX`(5)개로 요청한다.
 이 상한을 지키는 층이 셋이고 역할이 다르다.
 
-1. **생성** — `gradingGenerationSchema`(`.max()`)를 `toGeminiResponseSchema`에 넘겨
-   `responseJsonSchema`에 `maxItems: 5`를 싣는다. Gemini가 문서상 지원하는 제약이라 여기서 끝나는 게 정상이다.
+1. **생성** — `gradingGenerationSchema`(`.max()`)를 `toCloudflareResponseSchema`에 넘겨
+   `response_format.json_schema`에 `maxItems: 5`를 싣는다. 다만 Cloudflare는 모델이 스키마를
+   지킨다고 보장하지 않는다고 문서에 명시하므로, 여기서 끝난다고 보지 않고 아래 두 층을 함께 둔다.
 2. **수신** — `gradingResponseSchema`는 개수를 **제한하지 않는다.** 타입 검증(문자열 배열)만 한다.
 3. **정규화** — 파싱에 성공한 값을 `normalizeGradingResponse`가 `slice(0, 5)`로 자른 뒤 저장·표시한다.
 
 2번이 관대한 이유는 실패 비용의 비대칭이다. 개수 초과로 응답 전체를 거부하면
 `review_grading_generations` 행이 이미 선점 시점에 들어가 있고 되돌리는 함수가 없으므로 **하루 한도
-1회가 영구 소모**되고, 선점이 만료될 때까지 60초간 재시도가 막히며, 이미 나간 Gemini 비용은 재시도 때
+1회가 영구 소모**되고, 선점이 만료될 때까지 60초간 재시도가 막히며, 이미 나간 AI 비용은 재시도 때
 다시 든다. 얻는 것은 "항목이 6개 대신 5개로 보인다"뿐이라 값이 맞지 않는다.
 
 `slice`는 은폐가 아니다. 프롬프트가 제품 계약으로 선언한 개수를 집행하는 것이고, 1번이 예외적으로

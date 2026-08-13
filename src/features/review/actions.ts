@@ -4,18 +4,22 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import { generateJson } from "@/lib/ai/client";
+import { toAiFailureReason } from "@/lib/ai/failureReason";
+import { toCloudflareResponseSchema } from "@/lib/ai/responseSchema";
 import {
   getNoteDetailRoute,
   getNoteReviewRoute,
   ROUTES,
 } from "@/lib/constants/routes";
-import { getGemini } from "@/lib/gemini/client";
-import { toGeminiResponseSchema } from "@/lib/gemini/responseSchema";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/types/database.types";
 
-import { GRADING_ERROR_MESSAGES } from "./constants";
+import {
+  GRADING_AI_FAILURE_MESSAGES,
+  GRADING_ERROR_MESSAGES,
+} from "./constants";
 import { hashNoteContent } from "./lib/contentHash";
 import { buildGradingPrompt } from "./lib/gradingPrompt";
 import {
@@ -95,29 +99,36 @@ export type GradeAnswerActionState =
   | null;
 
 /**
- * 채점 한 건에 허용하는 전체 시간. Gemini 호출 시점이 아니라 액션 진입 시각부터 잰다.
+ * 채점 한 건에 허용하는 전체 시간. AI 호출 시점이 아니라 액션 진입 시각부터 잰다.
  *
  * 호출 직전에 타이머를 걸면 앞의 인증·조회·선점이 느릴 때 abort보다 플랫폼 제한이
  * 먼저 걸린다. 그러면 선점만 잡힌 채 함수가 죽어서, 사용자는 정상 오류도 못 받고
  * 선점이 만료될 때까지 재시도조차 막힌다.
  *
- * 복습 페이지의 maxDuration(55초)보다 짧게 두고, 선점 만료(60초)는 넘기지 않는다.
- * 이 값이 선점 만료를 넘기면 다른 요청이 선점을 이어받아 같은 채점에 Gemini를 두 번 부른다.
+ * 복습 페이지의 maxDuration(280초)보다 짧게 두고, 선점 만료(300초)는 넘기지 않는다.
+ * 이 값이 선점 만료를 넘기면 다른 요청이 선점을 이어받아 같은 채점에 AI를 두 번 부른다.
  * 순서: 이 값 < maxDuration < claim_review_grading의 stale window.
  *
- * abort는 클라이언트 요청만 끊는다. Gemini는 서비스 쪽 작업을 취소하지 않고 과금도 그대로
- * 발생하므로(@google/genai `GenerateContentConfig.abortSignal` 주석), 이 타임아웃의 목적은
- * 비용 절감이 아니라 원인을 남기고 선점 만료 전에 끝내는 것이다.
+ * 값 근거: Cloudflare Workers AI(gpt-oss-120b) 실측 결과 프로덕션 규모 입력(노트
+ * 10,000~30,000자)에서 채점 지연이 최대 119.7초까지 나왔다. 240초는 그 실측치에
+ * 여유를 두면서, maxDuration(280초)까지 인증·조회·선점에 쓸 40초를 남긴다.
+ *
+ * abort는 이쪽 요청만 끊는다. Cloudflare가 서버 쪽 추론과 Neurons 소비를 즉시 멈춘다는
+ * 보장은 문서에 없다(공식 문서는 오류 `3008`과 실사용량 기준만 설명한다). 따라서 이
+ * 타임아웃의 목적은 비용 절감이 아니라, 원인을 남기고 선점 만료 전에 끝내는 것이다.
  */
-const GRADING_DEADLINE_MS = 45_000;
+const GRADING_DEADLINE_MS = 240_000;
 
 /**
- * 선점 시점에 남은 시간이 이보다 적으면 Gemini를 부르지 않고 실패시킨다.
+ * 선점 시점에 남은 시간이 이보다 적으면 AI를 부르지 않고 실패시킨다.
  *
- * 어차피 완주하지 못할 호출로 선점을 잡으면 그 회차의 채점이 stale window(60초)가
+ * 어차피 완주하지 못할 호출로 선점을 잡으면 그 회차의 채점이 stale window(300초)가
  * 지날 때까지 통째로 막힌다. 과금만 발생하고 결과는 버려지는 호출이기도 하다.
+ *
+ * 값 근거: canary 실측에서 완주까지 가장 짧았던 호출도 57초였다(노트 10,000자 퀴즈).
+ * 30초 미만이 남았으면 완주 가능성이 낮다고 보고 아예 시도하지 않는다.
  */
-const MIN_GEMINI_BUDGET_MS = 10_000;
+const MIN_AI_BUDGET_MS = 30_000;
 
 /**
  * 채점 응답 구조를 디코딩 단계에서 강제한다. 검증은 그대로 Zod가 맡고,
@@ -129,7 +140,7 @@ const MIN_GEMINI_BUDGET_MS = 10_000;
  *
  * 퀴즈는 유형별로 스키마가 달라 호출마다 변환하지만 채점은 하나로 고정이라 한 번만 만든다.
  */
-const GRADING_RESPONSE_JSON_SCHEMA = toGeminiResponseSchema(
+const GRADING_RESPONSE_JSON_SCHEMA = toCloudflareResponseSchema(
   gradingGenerationSchema,
 );
 
@@ -419,14 +430,14 @@ export async function gradeAnswerAction(
     };
   }
 
-  // 선점하기 전에 Gemini를 완주시킬 시간이 남았는지 확인한다.
+  // 선점하기 전에 AI 호출을 완주시킬 시간이 남았는지 확인한다.
   // 여기서 잡은 선점은 이 요청이 끝나거나 stale window가 지나기 전까지
   // 같은 회차의 다른 채점 시도를 모두 막으므로, 못 쓸 선점은 아예 잡지 않는다.
-  const geminiBudgetMs = GRADING_DEADLINE_MS - (Date.now() - startedAt);
+  const aiBudgetMs = GRADING_DEADLINE_MS - (Date.now() - startedAt);
 
-  if (geminiBudgetMs < MIN_GEMINI_BUDGET_MS) {
+  if (aiBudgetMs < MIN_AI_BUDGET_MS) {
     console.error(
-      `[gradeAnswerAction] 남은 시간이 부족해 채점을 시작하지 않음 (${geminiBudgetMs}ms)`,
+      `[gradeAnswerAction] 남은 시간이 부족해 채점을 시작하지 않음 (${aiBudgetMs}ms)`,
     );
     return {
       error: "서버 응답이 지연되고 있어요. 잠시 후 다시 시도해주세요.",
@@ -438,8 +449,8 @@ export async function gradeAnswerAction(
   // 세션·이메일 인증·노트 소유권·pending 복습 로그 일치를 모두 확인한 뒤에만 여기에 도달한다.
   const admin = createAdminClient();
 
-  // Gemini 호출 전에 채점 권한을 원자적으로 선점한다.
-  // 앞의 조회만으로 분기하면 동시 요청이 모두 "미채점"을 보고 각자 Gemini를 호출한다
+  // AI 호출 전에 채점 권한을 원자적으로 선점한다.
+  // 앞의 조회만으로 분기하면 동시 요청이 모두 "미채점"을 보고 각자 AI를 호출한다
   // (유니크 제약은 저장 중복만 막을 뿐 이미 나간 API 비용은 되돌리지 못한다).
   const { data: claimData, error: claimError } = await admin.rpc(
     "claim_review_grading",
@@ -496,24 +507,20 @@ export async function gradeAnswerAction(
 
   let responseText: string;
   try {
-    const response = await getGemini().models.generateContent({
-      model: "gemini-3.1-flash-lite",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseJsonSchema: GRADING_RESPONSE_JSON_SCHEMA,
-        // 예산을 여기서 다시 잰다. 위에서 계산한 값을 그대로 쓰면 타이머가 선점 RPC
-        // "이후"부터 흘러서, 종료 시각이 그 RPC에 걸린 시간만큼 뒤로 밀린다.
-        // README의 "채점 deadline < maxDuration" 순서를 지키려면 진입 시각 기준이어야 한다.
-        abortSignal: AbortSignal.timeout(
-          Math.max(0, GRADING_DEADLINE_MS - (Date.now() - startedAt)),
-        ),
-      },
+    responseText = await generateJson({
+      prompt,
+      responseSchema: GRADING_RESPONSE_JSON_SCHEMA,
+      // 예산을 여기서 다시 잰다. 위에서 계산한 값을 그대로 쓰면 타이머가 선점 RPC
+      // "이후"부터 흘러서, 종료 시각이 그 RPC에 걸린 시간만큼 뒤로 밀린다.
+      // README의 "채점 deadline < maxDuration" 순서를 지키려면 진입 시각 기준이어야 한다.
+      abortSignal: AbortSignal.timeout(
+        Math.max(0, GRADING_DEADLINE_MS - (Date.now() - startedAt)),
+      ),
     });
-    responseText = response.text ?? "";
   } catch (e) {
-    console.error("[gradeAnswerAction] Gemini API 호출 실패:", e);
-    return { error: "AI 채점에 실패했습니다. 잠시 후 다시 시도해주세요." };
+    // CloudflareAiError는 프롬프트·노트·답안을 담지 않으므로 그대로 남겨도 안전하다.
+    console.error("[gradeAnswerAction] AI 호출 실패:", e);
+    return { error: GRADING_AI_FAILURE_MESSAGES[toAiFailureReason(e)] };
   }
 
   // 응답 원문에는 노트·답안 내용이 그대로 담기므로 로그에 남기지 않는다.

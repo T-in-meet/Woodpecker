@@ -181,7 +181,7 @@ SELECT is(
   $$선점 직후 행은 score/feedback이 NULL이고 선점 토큰이 발급돼야 한다$$
 );
 
--- 선점이 유효한 동안 다시 선점하면 in_flight여야 한다 (Gemini 중복 호출 차단)
+-- 선점이 유효한 동안 다시 선점하면 in_flight여야 한다 (AI 중복 호출 차단)
 SELECT is(
   public.claim_review_grading(
     current_setting('test.rg_rls_user_a_id')::uuid,
@@ -352,9 +352,9 @@ SELECT is(
   $$두 번째 복습 로그도 선점할 수 있어야 한다$$
 );
 
--- 60초가 지나 선점이 만료된 상태를 만든다
+-- stale window(300초)가 지나 선점이 만료된 상태를 만든다
 UPDATE public.review_gradings
-SET created_at = now() - interval '2 minutes'
+SET created_at = now() - interval '6 minutes'
 WHERE review_log_id = current_setting('test.rg_rls_log_a2_id')::uuid;
 
 SELECT set_config(

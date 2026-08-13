@@ -16,7 +16,7 @@ const MIN_QUESTION_CAP = 3;
 
 /**
  * 노트 길이로 문항 수의 "상한"만 정한다.
- * 실제 개수는 이 상한 아래에서 Gemini가 노트 내용의 밀도를 보고 결정한다.
+ * 실제 개수는 이 상한 아래에서 모델이 노트 내용의 밀도를 보고 결정한다.
  * 길이는 셀 수 있지만 물어볼 거리가 몇 개인지는 내용을 읽어야 알 수 있기 때문이다.
  */
 export function getMaxQuestions(contentLength: number): number {

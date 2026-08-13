@@ -16,7 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { QuizType } from "@/lib/gemini/prompts";
+import type { QuizType } from "@/lib/ai/prompts";
 import { cn } from "@/lib/utils/cn";
 
 import { useQuiz } from "../hooks/useQuiz";

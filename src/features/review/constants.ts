@@ -5,3 +5,20 @@ export const GRADING_ERROR_MESSAGES = {
   tooManyRequests: "요청이 너무 잦습니다. 잠시 후 다시 시도해주세요.",
   inFlight: "채점이 진행 중이에요. 잠시 후 다시 시도해주세요.",
 } as const;
+
+/**
+ * AI 호출 실패 이유별 문구.
+ *
+ * `dailyExceeded`(사용자별 한도)와 `quotaExhausted`(서비스 전체 한도)는 다른 상태다.
+ * 전자는 이 사용자만, 후자는 모두가 막힌다. 초기화 시점도 다르다 —
+ * 사용자별 한도는 KST 자정, Cloudflare 무료 할당은 00:00 UTC(KST 오전 9시)다.
+ * 그래서 후자에는 "내일"이라고 쓰지 않는다.
+ */
+export const GRADING_AI_FAILURE_MESSAGES = {
+  delayed: "AI 응답이 지연됐어요. 다시 시도해주세요.",
+  quotaExhausted:
+    "서비스의 오늘 AI 사용량이 모두 소진됐어요. 잠시 후 다시 시도해주세요.",
+  busy: "AI 서버가 혼잡해요. 잠시 후 다시 시도해주세요.",
+  tooLarge: "노트나 답안이 너무 길어 AI가 처리할 수 없어요.",
+  unknown: "AI 채점에 실패했습니다. 잠시 후 다시 시도해주세요.",
+} as const;
