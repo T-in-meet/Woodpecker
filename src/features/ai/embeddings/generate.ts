@@ -2,6 +2,7 @@
 
 import { createAiEmbeddingWithProvider } from "@/features/ai/providers";
 import { getProviderApiKey } from "@/features/ai/providers/utils/api-key";
+import type { AiRuntimeEmbeddingConfiguration } from "@/features/ai/runtimes/types";
 import {
   AI_OPERATIONAL_ERROR_CODE,
   AI_OPERATIONAL_ERROR_OPERATION,
@@ -12,11 +13,11 @@ import { AI_EMBEDDING_DIMENSIONS } from "../constants/embeddings";
 import { reportAiOperationalError } from "../utils/report-ai-operational-error";
 import { getAiEmbeddingCache, insertAiEmbedding } from "./cache";
 import { createAiSha256Hash } from "./hash";
-import type { AiEmbeddingRow, AiEmbeddingRuntimeConfiguration } from "./types";
+import type { AiEmbeddingRow } from "./types";
 
 type GenerateAiEmbeddingParams = {
   /** Embedding Runtime Configuration입니다. */
-  embeddingConfiguration: AiEmbeddingRuntimeConfiguration;
+  embeddingConfiguration: AiRuntimeEmbeddingConfiguration;
 
   /** Embedding을 생성하는 사용자의 ID입니다. */
   ownerUserId: string;
