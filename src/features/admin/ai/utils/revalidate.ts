@@ -9,4 +9,5 @@ export function revalidateAdminAiPaths() {
   revalidatePath(ROUTES.ADMIN.AI.DASHBOARD);
   revalidatePath(ROUTES.ADMIN.AI.MODELS);
   revalidatePath(ROUTES.ADMIN.AI.AGENTS);
+  revalidatePath(ROUTES.ADMIN.AI.PROMPTS);
 }
