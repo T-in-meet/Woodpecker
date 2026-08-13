@@ -55,7 +55,7 @@ export const gradingFeedbackSchema = z.object({
  * 개수 초과를 여기서 거부하면 채점 전체가 버려진다. 그 비용이 크다 —
  * `review_grading_generations` 행은 AI 호출 전 선점 시점에 INSERT되고 되돌리는 함수가
  * 없어서(20260808000000_create_review_gradings.sql) 하루 한도 1회가 영구 소모되고,
- * 선점이 만료될 때까지 60초간 재시도가 막히며, 이미 나간 AI 비용은 재시도 때 다시 든다.
+ * 선점이 만료될 때까지 300초간 재시도가 막히며, 이미 나간 AI 비용은 재시도 때 다시 든다.
  * 6번째 항목 하나 때문에 치를 값이 아니다. 초과분은 아래 `normalizeGradingResponse`가 잘라낸다.
  *
  * 타입 검증은 그대로다. 배열에 숫자·객체가 섞인 malformed 응답은 여기서 거부된다.

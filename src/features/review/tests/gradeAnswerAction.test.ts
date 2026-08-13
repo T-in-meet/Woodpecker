@@ -355,7 +355,7 @@ describe("gradeAnswerAction", () => {
     });
   });
 
-  // 선점 만료(60초)보다 먼저 끊겨야 같은 채점에 AI를 두 번 부르지 않는다
+  // 선점 만료(300초)보다 먼저 끊겨야 같은 채점에 AI를 두 번 부르지 않는다
   it("aborts the AI call before the claim goes stale", async () => {
     setupSupabase();
     mockHappyPathQueries();
