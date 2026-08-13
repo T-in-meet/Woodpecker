@@ -2,18 +2,20 @@
 
 import { z } from "zod";
 
-import { getGemini } from "@/lib/gemini/client";
+import { generateJson } from "@/lib/ai/client";
+import { toAiFailureReason } from "@/lib/ai/failureReason";
 import {
   buildQuizPrompt,
   getMaxQuestions,
   pickPerspective,
   type QuizType,
-} from "@/lib/gemini/prompts";
-import { toGeminiResponseSchema } from "@/lib/gemini/responseSchema";
+} from "@/lib/ai/prompts";
+import { toCloudflareResponseSchema } from "@/lib/ai/responseSchema";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/types/database.types";
 
-import { QUIZ_ERROR_MESSAGES } from "./constants";
+import { QUIZ_AI_FAILURE_MESSAGES, QUIZ_ERROR_MESSAGES } from "./constants";
 import {
   type QuizQuestion,
   quizResponseSchemaFor,
@@ -43,7 +45,13 @@ const MAX_PREVIOUS_QUESTIONS = 45;
 // recent_questions는 jsonb라 DB가 형식을 보장하지 않는다.
 const questionHistorySchema = z.array(z.array(z.string()));
 
-// claim_quiz_generation의 반환값을 사용자 메시지로 옮긴다.
+// claim_quiz_generation_v2는 상태와 선점 토큰을 jsonb로 돌려준다.
+const claimResultSchema = z.object({
+  status: z.string(),
+  claimToken: z.string().uuid().optional(),
+});
+
+// claim_quiz_generation_v2의 반환값을 사용자 메시지로 옮긴다.
 const CLAIM_ERROR_MESSAGES: Record<string, string> = {
   not_found: QUIZ_ERROR_MESSAGES.noteNotFound,
   in_flight: QUIZ_ERROR_MESSAGES.inFlight,
@@ -102,6 +110,15 @@ type RequestQuestionsParams = {
   quizType: QuizType;
   previousQuestions: string[];
   temperature: number;
+  /**
+   * 호출을 끊을 신호.
+   *
+   * 아직 호출부에서 넘기지 않는다. 퀴즈 deadline은 노트 상세 페이지의 `maxDuration`,
+   * `claim_quiz_generation`의 in-flight 창과 함께 "deadline < maxDuration < in-flight 창"
+   * 순서를 이뤄야 하는데, 그 값들이 긴 노트·최대 문항 실측 뒤에야 정해지기 때문이다.
+   * 여기까지 배선해 두고 값이 나오면 채운다.
+   */
+  abortSignal?: AbortSignal;
 };
 
 async function requestQuestions(
@@ -125,19 +142,16 @@ async function requestQuestions(
   let responseText: string;
   try {
     // 키가 없으면 이 줄에서 에러가 나고 아래 catch가 받아 준다.
-    const response = await getGemini().models.generateContent({
-      model: "gemini-3.1-flash-lite",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseJsonSchema: toGeminiResponseSchema(responseSchema),
-        temperature,
-      },
+    responseText = await generateJson({
+      prompt,
+      responseSchema: toCloudflareResponseSchema(responseSchema),
+      temperature,
+      abortSignal: params.abortSignal,
     });
-    responseText = response.text ?? "";
   } catch (e) {
-    console.error("[generateQuiz] Gemini API 호출 실패:", e);
-    return { error: QUIZ_ERROR_MESSAGES.generationFailed };
+    // CloudflareAiError는 프롬프트·노트 내용을 담지 않으므로 그대로 남겨도 안전하다.
+    console.error("[generateQuiz] AI 호출 실패:", e);
+    return { error: QUIZ_AI_FAILURE_MESSAGES[toAiFailureReason(e)] };
   }
 
   // 응답 원문에는 노트 내용이 그대로 담기므로 로그에 남기지 않는다.
@@ -271,15 +285,21 @@ async function saveQuiz(
 }
 
 /**
- * Gemini 호출 1회를 선점한다.
+ * AI 호출 1회를 선점한다 (claim_quiz_generation_v2).
  * 한도 값은 DB 함수가 들고 있다. 여기서 인자로 넘기면 PostgREST로 우회할 수 있다.
+ *
+ * v2는 service_role 전용이라 admin 클라이언트로 부른다. authenticated에 열린
+ * v1(claim_quiz_generation)과 달리, 클라이언트가 PostgREST로 직접 호출해 토큰을
+ * 읽을 수 없어야 finalize의 선점 확인이 보안 경계로 성립한다.
  */
 async function claimGeneration(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
   noteId: string,
   quizType: QuizType,
-): Promise<{ ok: true } | { error: string }> {
-  const { data, error } = await supabase.rpc("claim_quiz_generation", {
+): Promise<{ ok: true; claimToken: string } | { error: string }> {
+  const { data, error } = await admin.rpc("claim_quiz_generation_v2", {
+    p_user_id: userId,
     p_note_id: noteId,
     p_quiz_type: quizType,
   });
@@ -289,12 +309,80 @@ async function claimGeneration(
     return { error: QUIZ_ERROR_MESSAGES.generationFailed };
   }
 
-  if (data === "ok") {
-    return { ok: true };
+  const claim = claimResultSchema.safeParse(data);
+
+  if (!claim.success) {
+    console.error("[generateQuiz] 선점 응답 형식이 올바르지 않음");
+    return { error: QUIZ_ERROR_MESSAGES.generationFailed };
+  }
+
+  if (claim.data.status === "ok" && claim.data.claimToken) {
+    return { ok: true, claimToken: claim.data.claimToken };
   }
 
   return {
-    error: CLAIM_ERROR_MESSAGES[data] ?? QUIZ_ERROR_MESSAGES.generationFailed,
+    error:
+      CLAIM_ERROR_MESSAGES[claim.data.status] ??
+      QUIZ_ERROR_MESSAGES.generationFailed,
+  };
+}
+
+type FinalizeGenerationResult =
+  /** 캐시에 저장하고 사용자에게 퀴즈를 돌려준다. */
+  | { shouldSave: true; blocked: false }
+  /**
+   * finalize RPC 자체가 실패해 "이게 최신 선점인지" 판단할 수 없다.
+   * 캐시 정합성이 우선이므로 저장은 하지 않되, 이미 받은 유효한 퀴즈까지
+   * 버릴 이유는 없으므로 사용자에게는 돌려준다.
+   */
+  | { shouldSave: false; blocked: false }
+  /** 더 새로운 선점이 생겼거나 선점 행 자체를 찾지 못함 — 저장도, 반환도 하지 않는다. */
+  | { shouldSave: false; blocked: true; error: string };
+
+/**
+ * 선점해 둔 행을 완료로 확정한다. saveQuiz()의 게이트다.
+ * stale된 요청이 최신 요청의 결과를 뒤늦게 덮어쓰지 않도록, 이 결과를 보고
+ * 저장 여부를 가른다.
+ */
+async function finalizeGeneration(
+  admin: ReturnType<typeof createAdminClient>,
+  params: {
+    userId: string;
+    noteId: string;
+    quizType: QuizType;
+    claimToken: string;
+  },
+): Promise<FinalizeGenerationResult> {
+  const { data, error } = await admin.rpc("finalize_quiz_generation_v2", {
+    p_user_id: params.userId,
+    p_note_id: params.noteId,
+    p_quiz_type: params.quizType,
+    p_claim_token: params.claimToken,
+  });
+
+  if (error) {
+    console.error("[generateQuiz] 생성 확정 실패:", error.message);
+    return { shouldSave: false, blocked: false };
+  }
+
+  if (data === "ok" || data === "already_completed") {
+    return { shouldSave: true, blocked: false };
+  }
+
+  if (data === "stale_claim") {
+    return {
+      shouldSave: false,
+      blocked: true,
+      error: QUIZ_ERROR_MESSAGES.staleClaim,
+    };
+  }
+
+  // not_found 등 예상 밖 상태. 선점 자체가 이 함수 안에서 방금 만든 것이라 정상 경로에서는 나오지 않는다.
+  console.error(`[generateQuiz] 예상치 못한 finalize 상태: ${String(data)}`);
+  return {
+    shouldSave: false,
+    blocked: true,
+    error: QUIZ_ERROR_MESSAGES.generationFailed,
   };
 }
 
@@ -343,10 +431,16 @@ async function createQuiz(
 
   const history = cache?.history ?? [];
 
+  // 두 RPC는 service_role 전용이다. authenticated에 열어 두면 사용자가 PostgREST로
+  // claim → finalize를 직접 호출해 AI 없이 캐시를 채울 수 있다. 위에서 이미 세션·노트
+  // 소유권을 확인했으므로 여기서만 admin 클라이언트를 쓴다.
+  const admin = createAdminClient();
+
   // 사용량 선점은 캐시 확인 뒤에 온다. 한도를 다 써도 이미 만든 퀴즈는 볼 수 있어야 한다.
   // 선점한 사용량은 되돌리지 않는다. 되돌리는 RPC를 두면 사용자가 직접 호출해 한도를 무력화한다.
   const claimed = await claimGeneration(
-    supabase,
+    admin,
+    user.id,
     parsed.data.noteId,
     parsed.data.quizType,
   );
@@ -369,14 +463,30 @@ async function createQuiz(
     return { error: generated.error };
   }
 
-  await saveQuiz(supabase, {
-    noteId: parsed.data.noteId,
+  // AI 호출 → JSON.parse → Zod 검증을 통과한 직후에만 finalize를 부른다.
+  // 그 전 단계가 실패하면 선점 행은 미완료로 남아 in-flight 창이 지날 때까지
+  // 재시도를 막는다 — 의도된 동작이다(과금만 나가고 결과가 없는 반복 호출을 막는다).
+  const finalized = await finalizeGeneration(admin, {
     userId: user.id,
+    noteId: parsed.data.noteId,
     quizType: parsed.data.quizType,
-    questions: generated.data,
-    history,
-    cacheKey,
+    claimToken: claimed.claimToken,
   });
+
+  if (finalized.shouldSave) {
+    await saveQuiz(supabase, {
+      noteId: parsed.data.noteId,
+      userId: user.id,
+      quizType: parsed.data.quizType,
+      questions: generated.data,
+      history,
+      cacheKey,
+    });
+  }
+
+  if (finalized.blocked) {
+    return { error: finalized.error };
+  }
 
   return { data: { questions: generated.data, isNew: true } };
 }
