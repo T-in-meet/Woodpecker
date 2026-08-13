@@ -30,6 +30,25 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+/**
+ * AI 퀴즈 생성 서버 액션(generateQuiz·regenerateQuiz)은 이 페이지의 요청으로 실행되므로
+ * 여기의 maxDuration을 따른다.
+ *
+ * claim_quiz_generation_v2의 in-flight 창(300초, 20260813070000)보다 짧아야 한다.
+ * 이 값이 그 창보다 커지면, 느린 AI 호출이 진행 중인 사이 선점이 만료돼 사용자의
+ * 재시도가 선점을 이어받고 원래 요청 결과는 stale_claim으로 버려진다. 퀴즈 1건에
+ * AI를 두 번 부르는 셈이라 느린 요청일수록 비용이 두 배가 된다.
+ *
+ * 채점 페이지(review/page.tsx)와 같은 280초를 쓴다. Vercel Hobby 플랜은 Fluid Compute
+ * 기본 활성화로 함수 실행 상한이 300초이므로, 이 값은 그 상한에서 20초 여유를 둔 것이다.
+ * 퀴즈 canary 실측 지연은 현재까지 최대 126.5초(2026-08-13, 노트 50,000자)로 이 값에
+ * 여유가 있지만, in-flight 창(300초)과 마찬가지로 stress case(canary Day 3: 20문항 강제,
+ * 재생성 temperature 1.2)로 확정한 뒤 필요하면 값을 조정한다.
+ *
+ * Next.js가 정적으로 읽는 값이라 상수를 import해서 쓸 수 없다.
+ */
+export const maxDuration = 280;
+
 export default async function NoteDetailPage({
   params,
 }: {
