@@ -923,6 +923,7 @@ async function runCompare(options) {
     `# Cloudflare Workers AI 품질 비교 (${new Date().toISOString()})`,
     "",
     `대상 모델: ${options.models.map((m) => `\`${m}\``).join(", ")}`,
+    `reasoning effort: ${options.reasoningEffort ?? "(지정 안 함 — 모델 기본값)"}`,
     "",
   );
 
@@ -965,7 +966,10 @@ async function runCompare(options) {
       console.log(`=== ${testCase.title} / ${task.label} ===`);
 
       const calls = options.models.map(
-        (model) => () => callCloudflare(model, task.prompt, task.schema),
+        (model) => () =>
+          callCloudflare(model, task.prompt, task.schema, {
+            reasoningEffort: options.reasoningEffort,
+          }),
       );
 
       for (const call of calls) {
