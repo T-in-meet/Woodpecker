@@ -46,6 +46,11 @@ jobs:
       - name: Check formatting
         run: npx prettier --check .
 
+      - name: Generate Next.js route types
+        run: |
+          npx next typegen
+          test -n "$(find .next/types -type f -print -quit)"
+
       - name: Run type check
         run: npm run type-check
 
@@ -154,6 +159,7 @@ jobs:
       - name: Build
         run: npm run build
         env:
+          SKIP_NEXT_TYPE_CHECK: "1"
           NEXT_PUBLIC_SUPABASE_URL: ${{ github.base_ref == 'main' && secrets.PROD_SUPABASE_URL || secrets.DEVELOP_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ github.base_ref == 'main' && secrets.PROD_SUPABASE_ANON_KEY || secrets.DEVELOP_SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ github.base_ref == 'main' && secrets.PROD_SUPABASE_SERVICE_ROLE_KEY || secrets.DEVELOP_SUPABASE_SERVICE_ROLE_KEY }}

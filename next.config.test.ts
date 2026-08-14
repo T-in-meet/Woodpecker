@@ -15,7 +15,10 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import nextConfig, { shouldDisableSerwist } from "./next.config";
+import nextConfig, {
+  shouldDisableSerwist,
+  shouldSkipNextTypeCheck,
+} from "./next.config";
 
 /**
  * headers() 반환값에서 source "/(.*)" 항목의 헤더 배열을 추출하는 헬퍼
@@ -192,6 +195,25 @@ describe("Security Headers — next.config.ts", () => {
         vi.stubEnv("ENABLE_SW", enableSw);
 
         expect(shouldDisableSerwist()).toBe(expected);
+      },
+    );
+  });
+
+  describe("Next.js build type check", () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it.each([
+      { value: undefined, expected: false },
+      { value: "0", expected: false },
+      { value: "1", expected: true },
+    ])(
+      "returns $expected when SKIP_NEXT_TYPE_CHECK=$value",
+      ({ value, expected }) => {
+        vi.stubEnv("SKIP_NEXT_TYPE_CHECK", value);
+
+        expect(shouldSkipNextTypeCheck()).toBe(expected);
       },
     );
   });
