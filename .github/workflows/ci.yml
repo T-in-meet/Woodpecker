@@ -43,8 +43,16 @@ jobs:
       - name: Run ESLint
         run: npm run lint
 
+      - name: Restore Prettier cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/prettier
+          key: prettier-v1-${{ runner.os }}-node20-${{ hashFiles('package-lock.json', '.gitignore') }}-${{ github.sha }}
+          restore-keys: |
+            prettier-v1-${{ runner.os }}-node20-${{ hashFiles('package-lock.json', '.gitignore') }}-
+
       - name: Check formatting
-        run: npx prettier --check .
+        run: npx prettier --check . --cache --cache-location .cache/prettier --cache-strategy content
 
       - name: Generate Next.js route types
         run: |
