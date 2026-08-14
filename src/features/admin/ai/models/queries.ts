@@ -27,7 +27,6 @@ import {
   adminAiModelConfigOptionRowSchema,
   adminAiModelListRpcResultSchema,
   adminAiModelListRpcRowSchema,
-  aiEmbeddingReferenceRowSchema,
   aiModelConfigRowSchema,
 } from "./schema";
 import type {
@@ -251,9 +250,9 @@ export async function getAdminAiModelDetail(modelConfigId: string) {
     return null;
   }
 
-  const { data: embeddingRows, error: embeddingError } = await supabase
+  const { count: embeddingCount, error: embeddingError } = await supabase
     .from("ai_embeddings")
-    .select("model_config_id")
+    .select("*", { count: "exact", head: true })
     .eq("model_config_id", modelConfigId);
 
   if (embeddingError) {
@@ -272,9 +271,7 @@ export async function getAdminAiModelDetail(modelConfigId: string) {
     );
   }
 
-  const embeddingReferenceCount = z
-    .array(aiEmbeddingReferenceRowSchema)
-    .parse(embeddingRows ?? []).length;
+  const embeddingReferenceCount = embeddingCount ?? 0;
 
   return mapModelRow(
     aiModelConfigRowSchema.parse(modelRow),

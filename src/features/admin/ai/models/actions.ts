@@ -87,15 +87,18 @@ export async function createAdminAiModel(
 }
 
 /**
- * AI 모델 설정의 운영 필드를 수정합니다.
+ * 관리자 AI 모델 설정을 수정합니다.
  *
- * @param formData 모델 수정 입력
- * @returns mutation 결과
+ * 수정 가능한 필드만 갱신하며, 존재하지 않는 모델은 성공으로 처리하지 않습니다.
+ *
+ * @param formData 수정할 AI 모델 설정 FormData
+ * @returns 수정 성공 여부와 실패 시 메시지
  */
 export async function updateAdminAiModel(
   formData: FormData,
 ): Promise<AdminAiActionResult> {
   const adminUserId = await requireAdmin();
+
   const parsedInput = updateModelSchema.safeParse({
     displayName: readFormString(formData, "displayName"),
     isActive: readFormBoolean(formData, "isActive"),
@@ -111,15 +114,28 @@ export async function updateAdminAiModel(
   }
 
   const supabase = createAdminClient();
-  const { error } = await supabase
+
+  /*
+   * update만 호출하면 조건에 해당하는 row가 0개여도
+   * Supabase가 오류를 반환하지 않을 수 있다.
+   *
+   * 따라서 수정된 row의 id를 함께 반환받아 실제 수정 대상이
+   * 존재했는지 확인한다.
+   */
+  const { data: updatedModel, error } = await supabase
     .from("ai_model_configs")
     .update({
       display_name: parsedInput.data.displayName,
       is_active: parsedInput.data.isActive,
       notes: parsedInput.data.notes,
     })
-    .eq("id", parsedInput.data.modelConfigId);
+    .eq("id", parsedInput.data.modelConfigId)
+    .select("id")
+    .maybeSingle();
 
+  /*
+   * DB 요청 자체가 실패한 경우에는 운영 오류로 기록한다.
+   */
   if (error) {
     await reportAdminAiActionError({
       adminUserId,
@@ -129,9 +145,29 @@ export async function updateAdminAiModel(
       operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.UPDATE_MODEL_CONFIG,
     });
 
-    return { message: error.message, ok: false };
+    return {
+      message: error.message,
+      ok: false,
+    };
   }
 
+  /*
+   * DB 요청은 정상적으로 처리됐지만 수정된 row가 없다면
+   * 존재하지 않는 모델을 수정하려 한 것이므로 성공으로 처리하지 않는다.
+   *
+   * 시스템 장애가 아니라 유효하지 않은 수정 대상에 대한 정상적인
+   * 실패 케이스이므로 운영 오류 보고 대상에는 포함하지 않는다.
+   */
+  if (!updatedModel) {
+    return {
+      message: "수정할 AI 모델을 찾을 수 없습니다.",
+      ok: false,
+    };
+  }
+
+  /*
+   * 실제 수정이 완료된 경우에만 관리자 AI 관련 캐시를 무효화한다.
+   */
   revalidateAdminAiPaths();
 
   return { ok: true };

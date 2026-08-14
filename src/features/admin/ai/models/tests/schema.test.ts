@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   adminAiModelConfigOptionRowSchema,
   adminAiModelListRpcRowSchema,
-  aiEmbeddingReferenceRowSchema,
   aiModelConfigRowSchema,
   createModelSchema,
   updateModelSchema,
@@ -256,26 +255,6 @@ describe("aiModelConfigRowSchema", () => {
       aiModelConfigRowSchema.safeParse({
         ...validRow,
         provider: "invalid",
-      }).success,
-    ).toBe(false);
-  });
-});
-
-describe("aiEmbeddingReferenceRowSchema", () => {
-  it("model_config_id 문자열을 허용한다", () => {
-    expect(
-      aiEmbeddingReferenceRowSchema.parse({
-        model_config_id: MODEL_CONFIG_ID,
-      }),
-    ).toEqual({
-      model_config_id: MODEL_CONFIG_ID,
-    });
-  });
-
-  it("model_config_id가 문자열이 아니면 거부한다", () => {
-    expect(
-      aiEmbeddingReferenceRowSchema.safeParse({
-        model_config_id: null,
       }).success,
     ).toBe(false);
   });

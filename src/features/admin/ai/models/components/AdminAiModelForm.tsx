@@ -250,7 +250,7 @@ export function AdminAiModelForm({ model }: AdminAiModelFormProps) {
                 },
                 {
                   label: "Euclidean",
-                  value: "12",
+                  value: "l2",
                 },
                 {
                   label: "Inner Product",

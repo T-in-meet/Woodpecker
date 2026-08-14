@@ -109,13 +109,6 @@ export const aiModelConfigRowSchema = z.object({
 });
 
 /**
- * AI 모델을 참조하는 Embedding 조회 Row를 검증합니다.
- */
-export const aiEmbeddingReferenceRowSchema = z.object({
-  model_config_id: z.string(),
-});
-
-/**
  * 관리자 AI 모델 목록 RPC의 개별 Row를 검증합니다.
  */
 export const adminAiModelListRpcRowSchema = z.object({

@@ -240,12 +240,25 @@ describe("updateAdminAiModel", () => {
   });
 
   it("모델 운영 필드를 수정하고 경로를 재검증한다", async () => {
-    const eq = vi.fn().mockResolvedValue({
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: {
+        id: MODEL_CONFIG_ID,
+      },
       error: null,
     });
+
+    const select = vi.fn(() => ({
+      maybeSingle,
+    }));
+
+    const eq = vi.fn(() => ({
+      select,
+    }));
+
     const update = vi.fn(() => ({
       eq,
     }));
+
     const from = vi.fn(() => ({
       update,
     }));
@@ -263,9 +276,13 @@ describe("updateAdminAiModel", () => {
       notes: "수정된 설명",
     });
     expect(eq).toHaveBeenCalledWith("id", MODEL_CONFIG_ID);
+    expect(select).toHaveBeenCalledWith("id");
+    expect(maybeSingle).toHaveBeenCalledOnce();
+
     expect(result).toEqual({
       ok: true,
     });
+
     expect(revalidateAdminAiPaths).toHaveBeenCalledOnce();
   });
 
@@ -273,9 +290,20 @@ describe("updateAdminAiModel", () => {
     const error = {
       message: "update failed",
     };
-    const eq = vi.fn().mockResolvedValue({
+
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: null,
       error,
     });
+
+    const select = vi.fn(() => ({
+      maybeSingle,
+    }));
+
+    const eq = vi.fn(() => ({
+      select,
+    }));
+
     const update = vi.fn(() => ({
       eq,
     }));
@@ -292,6 +320,7 @@ describe("updateAdminAiModel", () => {
       message: "update failed",
       ok: false,
     });
+
     expect(reportAdminAiActionError).toHaveBeenCalledWith({
       adminUserId: ADMIN_USER_ID,
       error,
@@ -299,6 +328,42 @@ describe("updateAdminAiModel", () => {
       message: "관리자 AI 모델 수정에 실패했습니다.",
       operation: "update_model_config",
     });
+
+    expect(revalidateAdminAiPaths).not.toHaveBeenCalled();
+  });
+
+  it("수정할 모델이 존재하지 않으면 실패하고 경로를 재검증하지 않는다", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: null,
+      error: null,
+    });
+
+    const select = vi.fn(() => ({
+      maybeSingle,
+    }));
+
+    const eq = vi.fn(() => ({
+      select,
+    }));
+
+    const update = vi.fn(() => ({
+      eq,
+    }));
+
+    vi.mocked(createAdminClient).mockReturnValue({
+      from: vi.fn(() => ({
+        update,
+      })),
+    } as unknown as ReturnType<typeof createAdminClient>);
+
+    const result = await updateAdminAiModel(createUpdateFormData());
+
+    expect(result).toEqual({
+      message: "수정할 AI 모델을 찾을 수 없습니다.",
+      ok: false,
+    });
+
+    expect(reportAdminAiActionError).not.toHaveBeenCalled();
     expect(revalidateAdminAiPaths).not.toHaveBeenCalled();
   });
 });

@@ -378,7 +378,7 @@ describe("getAdminAiModelDetail", () => {
     vi.mocked(requireAdmin).mockResolvedValue(ADMIN_USER_ID);
   });
 
-  it("ID와 일치하는 모델 상세와 참조 수를 반환한다", async () => {
+  it("ID와 일치하는 모델 상세와 Embedding 참조 수를 count 조회로 반환한다", async () => {
     const maybeSingle = vi.fn().mockResolvedValue({
       data: {
         capability: "chat",
@@ -401,18 +401,21 @@ describe("getAdminAiModelDetail", () => {
     }));
 
     const embeddingEq = vi.fn().mockResolvedValue({
-      data: [
-        {
-          model_config_id: CHAT_MODEL_ID,
-        },
-      ],
+      count: 3,
+      data: null,
       error: null,
     });
 
+    const modelSelect = vi.fn(() => ({
+      eq: modelEq,
+    }));
+
+    const embeddingSelect = vi.fn(() => ({
+      eq: embeddingEq,
+    }));
+
     const from = vi.fn((table: string) => ({
-      select: vi.fn(() => ({
-        eq: table === "ai_model_configs" ? modelEq : embeddingEq,
-      })),
+      select: table === "ai_model_configs" ? modelSelect : embeddingSelect,
     }));
 
     vi.mocked(createAdminClient).mockReturnValue({
@@ -421,9 +424,20 @@ describe("getAdminAiModelDetail", () => {
 
     const result = await getAdminAiModelDetail(CHAT_MODEL_ID);
 
+    /*
+     * 상세 화면에서는 Embedding row 본문이 필요하지 않으므로
+     * 전체 row를 가져오지 않고 count만 조회해야 한다.
+     */
+    expect(embeddingSelect).toHaveBeenCalledWith("*", {
+      count: "exact",
+      head: true,
+    });
+
+    expect(embeddingEq).toHaveBeenCalledWith("model_config_id", CHAT_MODEL_ID);
+
     expect(result).toEqual(
       expect.objectContaining({
-        embeddingReferenceCount: 1,
+        embeddingReferenceCount: 3,
         id: CHAT_MODEL_ID,
       }),
     );
