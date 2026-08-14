@@ -12,38 +12,20 @@ concurrency:
   group: ci-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+permissions:
+  contents: read
+
+env:
+  HUSKY: 0
+  NEXT_TELEMETRY_DISABLED: 1
+
 jobs:
   # ─────────────────────────────────────────
-  # Job 1: ESLint로 코드 스타일/오류 검사
+  # Job 1: 정적 품질 검사
+  # ESLint, Prettier, TypeScript를 한 runner에서 실행해 설치 비용을 공유
   # ─────────────────────────────────────────
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    steps:
-      # 레포 코드를 GitHub 서버에 내려받음
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      # Node.js 환경 설정 (package.json의 engines 필드 또는 지정 버전)
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: "npm" # node_modules 캐싱으로 설치 속도 향상
-
-      # 의존성 설치 (npm ci는 package-lock.json 기준으로 정확히 설치)
-      - name: Install dependencies
-        run: npm ci
-
-      # ESLint 실행 (eslint.config.mjs 기준)
-      - name: Run ESLint
-        run: npm run lint
-
-  # ─────────────────────────────────────────
-  # Job 2: Prettier 포맷 검사
-  # ─────────────────────────────────────────
-  format:
-    name: Format Check
+  quality:
+    name: Quality
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -56,14 +38,41 @@ jobs:
           cache: "npm"
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --prefer-offline --no-audit --no-fund
 
-      # prettier --check: 포맷 불일치 파일이 있으면 실패
+      - name: Run ESLint
+        run: npm run lint
+
       - name: Check formatting
         run: npx prettier --check .
 
+      - name: Run type check
+        run: npm run type-check
+
   # ─────────────────────────────────────────
-  # Job 3: 취약점 검사
+  # 기존 required check 전환용 임시 호환 gate
+  # Quality context를 required로 등록한 뒤 제거한다.
+  # ─────────────────────────────────────────
+  legacy-lint:
+    name: Lint
+    needs: quality
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Propagate Quality result
+        run: test "${{ needs.quality.result }}" = "success"
+
+  legacy-type-check:
+    name: Type Check
+    needs: quality
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Propagate Quality result
+        run: test "${{ needs.quality.result }}" = "success"
+
+  # ─────────────────────────────────────────
+  # Job 2: 취약점 검사
   # PR에 새 패키지 추가 시 알려진 취약점 체크
   # ─────────────────────────────────────────
   dependency-review:
@@ -71,37 +80,11 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
       - name: Dependency review
         uses: actions/dependency-review-action@v4
 
   # ─────────────────────────────────────────
-  # Job 4: TypeScript 타입 오류 검사
-  # ─────────────────────────────────────────
-  type-check:
-    name: Type Check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: "npm"
-
-      - name: Install dependencies
-        run: npm ci
-
-      # tsc --noEmit: 실제 파일 생성 없이 타입만 체크
-      - name: Run type check
-        run: npx tsc --noEmit
-
-  # ─────────────────────────────────────────
-  # Job 5: Vitest 단위 테스트 실행
+  # Job 3: Vitest 단위 테스트 실행
   # ─────────────────────────────────────────
   test:
     name: Test
@@ -117,14 +100,14 @@ jobs:
           cache: "npm"
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --prefer-offline --no-audit --no-fund
 
       # vitest run: watch 모드 없이 1회 실행 후 종료
       - name: Run tests
         run: npx vitest run
 
   # ─────────────────────────────────────────
-  # Job 6: Supabase pgTAP SQL 테스트
+  # Job 4: Supabase pgTAP SQL 테스트
   # 로컬 Supabase 스택을 띄워 마이그레이션 적용 후 supabase/tests/**를 실행
   # ─────────────────────────────────────────
   supabase-test:
@@ -146,8 +129,8 @@ jobs:
         run: supabase test db
 
   # ─────────────────────────────────────────
-  # Job 7: Next.js 프로덕션 빌드 검증
-  # lint, format, type-check, test, supabase-test 모두 통과한 후 실행
+  # Job 5: Next.js 프로덕션 빌드 검증
+  # 다른 검증과 독립적으로 병렬 실행
   # ─────────────────────────────────────────
   build:
     name: Build
@@ -164,7 +147,7 @@ jobs:
           cache: "npm"
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --prefer-offline --no-audit --no-fund
 
       # 빌드 시 필요한 환경변수 주입 (Secrets에서 가져옴)
       # PR이 develop → main이면 PROD, 그 외엔 DEVELOP 값 사용
