@@ -42,7 +42,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: node_modules
-          key: node-modules-v3-${{ runner.os }}-node20-${{ hashFiles('package-lock.json') }}
+          key: node-modules-v4-${{ runner.os }}-node20-${{ hashFiles('package-lock.json') }}
 
       - name: Install dependencies
         if: steps.node-modules-cache.outputs.cache-hit != 'true'
@@ -59,9 +59,9 @@ jobs:
         uses: actions/cache@v6
         with:
           path: .cache/prettier
-          key: prettier-v3-${{ runner.os }}-node20-${{ hashFiles('package-lock.json', '.gitignore') }}-${{ github.sha }}
+          key: prettier-v4-${{ runner.os }}-node20-${{ hashFiles('package-lock.json', '.gitignore') }}-${{ github.sha }}
           restore-keys: |
-            prettier-v3-${{ runner.os }}-node20-${{ hashFiles('package-lock.json', '.gitignore') }}-
+            prettier-v4-${{ runner.os }}-node20-${{ hashFiles('package-lock.json', '.gitignore') }}-
 
       - name: Check formatting
         run: npx prettier --check . --cache --cache-location .cache/prettier --cache-strategy content
@@ -75,9 +75,9 @@ jobs:
         uses: actions/cache@v6
         with:
           path: .cache/tsconfig.tsbuildinfo
-          key: typescript-v3-${{ runner.os }}-node20-${{ hashFiles('package-lock.json', 'tsconfig.json') }}-${{ github.sha }}
+          key: typescript-v4-${{ runner.os }}-node20-${{ hashFiles('package-lock.json', 'tsconfig.json') }}-${{ github.sha }}
           restore-keys: |
-            typescript-v3-${{ runner.os }}-node20-${{ hashFiles('package-lock.json', 'tsconfig.json') }}-
+            typescript-v4-${{ runner.os }}-node20-${{ hashFiles('package-lock.json', 'tsconfig.json') }}-
 
       - name: Run type check
         run: npx tsc --noEmit --incremental --tsBuildInfoFile .cache/tsconfig.tsbuildinfo
@@ -115,7 +115,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: node_modules
-          key: node-modules-v3-${{ runner.os }}-node20-${{ hashFiles('package-lock.json') }}
+          key: node-modules-v4-${{ runner.os }}-node20-${{ hashFiles('package-lock.json') }}
 
       - name: Install dependencies
         if: steps.node-modules-cache.outputs.cache-hit != 'true'
@@ -141,7 +141,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Setup Supabase CLI
-        uses: supabase/setup-cli@v3.0.0
+        uses: supabase/setup-cli@v1.6.0
         with:
           version: 2.109.1
 
@@ -174,7 +174,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: node_modules
-          key: node-modules-v3-${{ runner.os }}-node20-${{ hashFiles('package-lock.json') }}
+          key: node-modules-v4-${{ runner.os }}-node20-${{ hashFiles('package-lock.json') }}
 
       - name: Install dependencies
         if: steps.node-modules-cache.outputs.cache-hit != 'true'
