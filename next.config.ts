@@ -51,11 +51,19 @@ export function shouldDisableSerwist() {
   );
 }
 
+export function shouldSkipNextTypeCheck() {
+  return process.env.SKIP_NEXT_TYPE_CHECK === "1";
+}
+
 // [설계 의도] securityHeaders는 top-level에서 정의하지 않고 headers() 내부에서 생성
 // 이유: isProduction을 top-level 상수로 두면 import 시점에 고정되어 테스트에서 NODE_ENV 변경이 반영되지 않음
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  typescript: {
+    // GitHub Actions의 Build step에서만 활성화한다. 타입 검사는 Quality가 담당한다.
+    ignoreBuildErrors: shouldSkipNextTypeCheck(),
+  },
   experimental: {
     serverActions: {
       // 관리자 답변은 5MB 이미지 여러 개를 FormData로 전달할 수 있어 기본 1MB보다 크게 둔다.
