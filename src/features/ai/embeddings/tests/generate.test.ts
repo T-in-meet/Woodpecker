@@ -9,6 +9,7 @@ import {
   AI_OPERATIONAL_ERROR_STAGE,
 } from "@/features/operational-errors/constants";
 
+import { AI_EMBEDDING_DIMENSIONS } from "../../constants/embeddings";
 import { getAiEmbeddingCache, insertAiEmbedding } from "../cache";
 import { generateAiEmbedding } from "../generate";
 import type { AiEmbeddingRuntimeConfiguration } from "../types";
@@ -35,7 +36,7 @@ const EMBEDDING_CONFIGURATION = {
     id: "embedding-model-id",
     provider: "openai",
     model: "text-embedding-3-small",
-    dimensions: 1536,
+    dimensions: AI_EMBEDDING_DIMENSIONS,
   },
 } as AiEmbeddingRuntimeConfiguration;
 
@@ -182,6 +183,47 @@ describe("generateAiEmbedding", () => {
         modelConfigId: "embedding-model-id",
         model: "text-embedding-3-small",
         provider: "openai",
+      },
+    });
+  });
+
+  it("cache miss에서 지원하지 않는 dimensions이면 Provider를 호출하지 않고 오류를 발생시킨다", async () => {
+    const configuration = {
+      ...EMBEDDING_CONFIGURATION,
+      model: {
+        ...EMBEDDING_CONFIGURATION.model,
+        dimensions: 768,
+      },
+    } as AiEmbeddingRuntimeConfiguration;
+
+    vi.mocked(getAiEmbeddingCache).mockResolvedValue(null);
+
+    await expect(
+      generateAiEmbedding({
+        embeddingConfiguration: configuration,
+        ...INPUT,
+      }),
+    ).rejects.toThrow("현재 지원하지 않는 Embedding dimensions입니다: 768");
+
+    expect(getAiEmbeddingCache).toHaveBeenCalled();
+    expect(getProviderApiKey).not.toHaveBeenCalled();
+    expect(createAiEmbeddingWithProvider).not.toHaveBeenCalled();
+    expect(insertAiEmbedding).not.toHaveBeenCalled();
+
+    expect(reportAiOperationalError).toHaveBeenCalledWith({
+      error: expect.objectContaining({
+        message: "현재 지원하지 않는 Embedding dimensions입니다: 768",
+      }),
+      errorCode: AI_OPERATIONAL_ERROR_CODE.EMBEDDING_DIMENSIONS_UNSUPPORTED,
+      message: "현재 지원하지 않는 AI embedding dimensions입니다.",
+      operation: AI_OPERATIONAL_ERROR_OPERATION.CREATE_EMBEDDING,
+      stage: AI_OPERATIONAL_ERROR_STAGE.VALIDATION,
+      context: {
+        modelConfigId: "embedding-model-id",
+        model: "text-embedding-3-small",
+        provider: "openai",
+        dimensions: 768,
+        supportedDimensions: AI_EMBEDDING_DIMENSIONS,
       },
     });
   });

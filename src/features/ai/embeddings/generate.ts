@@ -8,6 +8,7 @@ import {
   AI_OPERATIONAL_ERROR_STAGE,
 } from "@/features/operational-errors/constants";
 
+import { AI_EMBEDDING_DIMENSIONS } from "../constants/embeddings";
 import { reportAiOperationalError } from "../utils/report-ai-operational-error";
 import { getAiEmbeddingCache, insertAiEmbedding } from "./cache";
 import { createAiSha256Hash } from "./hash";
@@ -108,6 +109,36 @@ export async function generateAiEmbedding({
         modelConfigId: embeddingModel.id,
         model: embeddingModel.model,
         provider: embeddingModel.provider,
+      },
+    });
+
+    throw error;
+  }
+
+  /*
+   * 현재 AI Foundation은 DB의 vector(1536) 계약에 맞춰
+   * AI_EMBEDDING_DIMENSIONS에 정의된 dimension만 지원합니다.
+   *
+   * Provider를 호출한 이후 저장 단계에서 dimension 불일치가 발생하면
+   * 이미 Provider 비용이 발생할 수 있으므로, Provider 호출 전에 검증합니다.
+   */
+  if (embeddingModel.dimensions !== AI_EMBEDDING_DIMENSIONS) {
+    const error = new Error(
+      `현재 지원하지 않는 Embedding dimensions입니다: ${embeddingModel.dimensions}`,
+    );
+
+    await reportAiOperationalError({
+      error,
+      errorCode: AI_OPERATIONAL_ERROR_CODE.EMBEDDING_DIMENSIONS_UNSUPPORTED,
+      message: "현재 지원하지 않는 AI embedding dimensions입니다.",
+      operation: AI_OPERATIONAL_ERROR_OPERATION.CREATE_EMBEDDING,
+      stage: AI_OPERATIONAL_ERROR_STAGE.VALIDATION,
+      context: {
+        modelConfigId: embeddingModel.id,
+        model: embeddingModel.model,
+        provider: embeddingModel.provider,
+        dimensions: embeddingModel.dimensions,
+        supportedDimensions: AI_EMBEDDING_DIMENSIONS,
       },
     });
 
