@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { reportAiOperationalError } from "@/features/ai/utils/report-ai-operational-error";
 import {
@@ -9,6 +9,10 @@ import {
 
 import { createOpenAiEmbedding } from "../embeddings";
 
+vi.mock("@/features/ai/utils/report-ai-operational-error", () => ({
+  reportAiOperationalError: vi.fn().mockResolvedValue(undefined),
+}));
+
 const originalFetch = globalThis.fetch;
 
 const baseParams = {
@@ -18,9 +22,14 @@ const baseParams = {
   model: "text-embedding-3-small",
 };
 
-vi.mock("@/features/ai/utils/report-ai-operational-error", () => ({
-  reportAiOperationalError: vi.fn(),
-}));
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+  vi.restoreAllMocks();
+});
 
 /**
  * 테스트용 fetch 응답을 생성합니다.
@@ -44,12 +53,6 @@ function createJsonResponse(
     text: vi.fn().mockResolvedValue(options.text ?? ""),
   } as unknown as Response;
 }
-
-afterEach(() => {
-  globalThis.fetch = originalFetch;
-  vi.clearAllMocks();
-  vi.restoreAllMocks();
-});
 
 describe("createOpenAiEmbedding", () => {
   it("Embedding 요청을 보내고 정규화된 결과를 반환한다", async () => {
@@ -106,6 +109,8 @@ describe("createOpenAiEmbedding", () => {
         totalTokens: 10,
       },
     });
+
+    expect(reportAiOperationalError).not.toHaveBeenCalled();
   });
 
   it("usage가 없으면 토큰 수를 0으로 반환한다", async () => {
@@ -139,6 +144,8 @@ describe("createOpenAiEmbedding", () => {
         totalTokens: 0,
       },
     });
+
+    expect(reportAiOperationalError).not.toHaveBeenCalled();
   });
 
   it("total_tokens가 없으면 prompt_tokens를 사용한다", async () => {
@@ -162,9 +169,11 @@ describe("createOpenAiEmbedding", () => {
       outputTokens: 0,
       totalTokens: 7,
     });
+
+    expect(reportAiOperationalError).not.toHaveBeenCalled();
   });
 
-  it("OpenAI 응답이 실패하면 운영 오류를 기록하고 상태와 응답 본문을 포함한 예외를 던진다", async () => {
+  it("OpenAI 응답이 실패하면 운영 오류를 한 번 기록하고 상태와 응답 본문을 포함한 예외를 던진다", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue(
       createJsonResponse(null, {
         ok: false,
@@ -177,16 +186,44 @@ describe("createOpenAiEmbedding", () => {
       "OpenAI embedding failed: 429 rate limit exceeded",
     );
 
+    expect(reportAiOperationalError).toHaveBeenCalledTimes(1);
     expect(reportAiOperationalError).toHaveBeenCalledWith(
       expect.objectContaining({
         errorCode: AI_OPERATIONAL_ERROR_CODE.OPENAI_EMBEDDING_FAILED,
         operation: AI_OPERATIONAL_ERROR_OPERATION.CREATE_EMBEDDING,
         stage: AI_OPERATIONAL_ERROR_STAGE.PROVIDER,
+        context: {
+          model: baseParams.model,
+          status: 429,
+        },
       }),
     );
   });
 
-  it("응답이 스키마와 일치하지 않으면 예외를 던진다", async () => {
+  it("네트워크 요청이 실패하면 운영 오류를 기록하고 오류를 전달한다", async () => {
+    const error = new Error("network failed");
+
+    globalThis.fetch = vi.fn().mockRejectedValue(error);
+
+    await expect(createOpenAiEmbedding(baseParams)).rejects.toThrow(
+      "network failed",
+    );
+
+    expect(reportAiOperationalError).toHaveBeenCalledTimes(1);
+    expect(reportAiOperationalError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error,
+        errorCode: AI_OPERATIONAL_ERROR_CODE.OPENAI_EMBEDDING_FAILED,
+        operation: AI_OPERATIONAL_ERROR_OPERATION.CREATE_EMBEDDING,
+        stage: AI_OPERATIONAL_ERROR_STAGE.PROVIDER,
+        context: {
+          model: baseParams.model,
+        },
+      }),
+    );
+  });
+
+  it("응답이 스키마와 일치하지 않으면 운영 오류를 기록하고 예외를 던진다", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue(
       createJsonResponse({
         data: [],
@@ -194,9 +231,22 @@ describe("createOpenAiEmbedding", () => {
     );
 
     await expect(createOpenAiEmbedding(baseParams)).rejects.toThrow();
+
+    expect(reportAiOperationalError).toHaveBeenCalledTimes(1);
+    expect(reportAiOperationalError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        errorCode: AI_OPERATIONAL_ERROR_CODE.OPENAI_EMBEDDING_FAILED,
+        operation: AI_OPERATIONAL_ERROR_OPERATION.CREATE_EMBEDDING,
+        stage: AI_OPERATIONAL_ERROR_STAGE.PROVIDER,
+        context: {
+          model: baseParams.model,
+          status: 200,
+        },
+      }),
+    );
   });
 
-  it("빈 embedding을 반환하면 오류를 발생시킨다", async () => {
+  it("빈 embedding을 반환하면 운영 오류를 기록하고 오류를 전달한다", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue(
       createJsonResponse({
         data: [
@@ -215,9 +265,22 @@ describe("createOpenAiEmbedding", () => {
     await expect(createOpenAiEmbedding(baseParams)).rejects.toThrow(
       "OpenAI embedding returned empty values.",
     );
+
+    expect(reportAiOperationalError).toHaveBeenCalledTimes(1);
+    expect(reportAiOperationalError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        errorCode: AI_OPERATIONAL_ERROR_CODE.OPENAI_EMBEDDING_FAILED,
+        operation: AI_OPERATIONAL_ERROR_OPERATION.CREATE_EMBEDDING,
+        stage: AI_OPERATIONAL_ERROR_STAGE.PROVIDER,
+        context: {
+          model: baseParams.model,
+          status: 200,
+        },
+      }),
+    );
   });
 
-  it("요청한 dimensions와 반환된 embedding 차원이 다르면 오류를 발생시킨다", async () => {
+  it("요청한 dimensions와 반환된 embedding 차원이 다르면 운영 오류를 기록하고 오류를 전달한다", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue(
       createJsonResponse({
         data: [
@@ -235,6 +298,19 @@ describe("createOpenAiEmbedding", () => {
 
     await expect(createOpenAiEmbedding(baseParams)).rejects.toThrow(
       "OpenAI embedding dimension mismatch: expected 3, received 2.",
+    );
+
+    expect(reportAiOperationalError).toHaveBeenCalledTimes(1);
+    expect(reportAiOperationalError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        errorCode: AI_OPERATIONAL_ERROR_CODE.OPENAI_EMBEDDING_FAILED,
+        operation: AI_OPERATIONAL_ERROR_OPERATION.CREATE_EMBEDDING,
+        stage: AI_OPERATIONAL_ERROR_STAGE.PROVIDER,
+        context: {
+          model: baseParams.model,
+          status: 200,
+        },
+      }),
     );
   });
 });
