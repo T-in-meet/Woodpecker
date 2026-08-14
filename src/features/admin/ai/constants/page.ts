@@ -13,27 +13,25 @@ type AdminAiPage = {
 export const ADMIN_AI_PAGES: AdminAiPage[] = [
   {
     description:
-      "기능에서 명시적으로 참조할 모델 key와 capability를 확인합니다.",
+      "AI 기능에서 사용할 Chat, Embedding 모델과 활성 상태를 관리합니다.",
     href: ROUTES.ADMIN.AI.MODELS,
     icon: Bot,
     title: "모델 설정",
   },
   {
-    description:
-      "기능 코드가 참조하는 agent key와 active prompt 슬롯을 관리합니다.",
+    description: "AI 기능에서 사용할 에이전트와 적용할 프롬프트를 관리합니다.",
     href: ROUTES.ADMIN.AI.AGENTS,
     icon: BrainCircuit,
     title: "에이전트",
   },
   {
-    description: "Agent에 적용할 prompt family와 version 이력을 관리합니다.",
+    description: "에이전트별 프롬프트 Family와 Version 이력을 관리합니다.",
     href: ROUTES.ADMIN.AI.PROMPTS,
     icon: FileText,
     title: "프롬프트",
   },
   {
-    description:
-      "기능별로 사용할 Chat, Embedding 모델과 Prompt 구성을 관리합니다.",
+    description: "기능별 역할에 사용할 모델과 프롬프트 구성을 관리합니다.",
     href: ROUTES.ADMIN.AI.SETTINGS,
     icon: Settings2,
     title: "AI 설정",
