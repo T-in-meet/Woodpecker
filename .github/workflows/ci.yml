@@ -8,6 +8,10 @@ on:
       - main
   merge_group:
 
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   # ─────────────────────────────────────────
   # Job 1: ESLint로 코드 스타일/오류 검사
@@ -148,7 +152,6 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [lint, format, type-check, test, supabase-test] # 앞 job들이 성공해야 실행됨
     environment: ${{ github.base_ref == 'main' && 'Production' || 'develope' }}
     steps:
       - name: Checkout code
