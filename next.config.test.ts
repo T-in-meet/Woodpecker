@@ -36,6 +36,17 @@ describe("Security Headers — next.config.ts", () => {
   describe("TC-SH-01: headers() 함수 정의", () => {
     it("TC-SH-01. headers() 함수가 정의되어 있다", () => {
       expect(typeof nextConfig.headers).toBe("function");
+
+      try {
+        vi.stubEnv("SKIP_NEXT_TYPE_CHECK", undefined);
+        expect(shouldSkipNextTypeCheck()).toBe(false);
+        vi.stubEnv("SKIP_NEXT_TYPE_CHECK", "0");
+        expect(shouldSkipNextTypeCheck()).toBe(false);
+        vi.stubEnv("SKIP_NEXT_TYPE_CHECK", "1");
+        expect(shouldSkipNextTypeCheck()).toBe(true);
+      } finally {
+        vi.unstubAllEnvs();
+      }
     });
   });
 
@@ -195,25 +206,6 @@ describe("Security Headers — next.config.ts", () => {
         vi.stubEnv("ENABLE_SW", enableSw);
 
         expect(shouldDisableSerwist()).toBe(expected);
-      },
-    );
-  });
-
-  describe("Next.js build type check", () => {
-    afterEach(() => {
-      vi.unstubAllEnvs();
-    });
-
-    it.each([
-      { value: undefined, expected: false },
-      { value: "0", expected: false },
-      { value: "1", expected: true },
-    ])(
-      "returns $expected when SKIP_NEXT_TYPE_CHECK=$value",
-      ({ value, expected }) => {
-        vi.stubEnv("SKIP_NEXT_TYPE_CHECK", value);
-
-        expect(shouldSkipNextTypeCheck()).toBe(expected);
       },
     );
   });
