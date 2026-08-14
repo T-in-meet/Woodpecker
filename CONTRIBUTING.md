@@ -114,7 +114,9 @@ npm run dev
 
 ## 6. 테스트
 
-- 단위/컴포넌트 테스트는 Vitest(`jsdom` 환경)를 사용하며 파일 이름은 `*.test.ts(x)`로 둡니다. 배치는 도메인 로직·유틸·컴포넌트는 대상 파일 옆 `tests/` 폴더를 기본으로 하고, App Router 페이지 테스트(`page.test.tsx`)와 `src/middleware.test.ts`는 대상 파일 옆에 직접 둡니다.
+- 단위/컴포넌트 테스트는 Vitest를 사용하며 파일 이름은 `*.test.ts(x)`로 둡니다. `*.test.tsx`는 `jsdom`, 순수 로직인 `*.test.ts`는 `node` 환경에서 실행합니다.
+- DOM이나 브라우저 API를 사용하는 `*.test.ts`를 추가할 때는 `vitest.config.ts`의 `JSDOM_TEST_FILES`에도 등록합니다. 등록하지 않으면 Node 환경에서 실행됩니다.
+- 테스트 배치는 도메인 로직·유틸·컴포넌트는 대상 파일 옆 `tests/` 폴더를 기본으로 하고, App Router 페이지 테스트(`page.test.tsx`)와 `src/middleware.test.ts`는 대상 파일 옆에 직접 둡니다.
 - 공용 Supabase 쿼리 mock은 `src/tests/supabaseQueryMock.ts`를 사용합니다.
 - E2E는 `tests/e2e/`의 Playwright 테스트입니다.
 - 변경 범위가 작아도 관련 테스트는 실행하고 PR을 올립니다.
