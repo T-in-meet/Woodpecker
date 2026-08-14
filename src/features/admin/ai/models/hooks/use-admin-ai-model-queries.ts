@@ -21,6 +21,9 @@ export function useAdminAiModels(query: AdminAiModelListQuery) {
     queryKey: ADMIN_AI_MODELS_QUERY_KEY.list(query),
     queryFn: () => getAdminAiModels(query),
     placeholderData: keepPreviousData,
+    // 서버 조회 함수가 운영 오류를 보고한 뒤 throw하므로 React Query retry 시 동일 실패가 중복 기록된다.
+    // 모델 조회 실패는 한 번만 보고하도록 이 query에서는 자동 retry를 비활성화한다.
+    retry: false,
   });
 }
 
@@ -34,6 +37,9 @@ export function useAdminAiModelDetail(modelConfigId: string) {
   return useQuery({
     queryKey: ADMIN_AI_MODELS_QUERY_KEY.detail(modelConfigId),
     queryFn: () => getAdminAiModelDetail(modelConfigId),
+    // 서버 조회 함수가 운영 오류를 보고한 뒤 throw하므로 React Query retry 시 동일 실패가 중복 기록된다.
+    // 모델 조회 실패는 한 번만 보고하도록 이 query에서는 자동 retry를 비활성화한다.
+    retry: false,
   });
 }
 
@@ -47,5 +53,8 @@ export function useAdminAiModelOptions(capability: AiModelCapability) {
   return useQuery({
     queryKey: ADMIN_AI_MODELS_QUERY_KEY.options(capability),
     queryFn: () => getAdminAiModelOptions(capability),
+    // 서버 조회 함수가 운영 오류를 보고한 뒤 throw하므로 React Query retry 시 동일 실패가 중복 기록된다.
+    // 모델 조회 실패는 한 번만 보고하도록 이 query에서는 자동 retry를 비활성화한다.
+    retry: false,
   });
 }
