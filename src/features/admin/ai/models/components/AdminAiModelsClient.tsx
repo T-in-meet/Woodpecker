@@ -39,6 +39,7 @@ export function AdminAiModelsClient() {
 
   const models = data?.items ?? [];
   const totalCount = data?.pagination.total ?? 0;
+  const isInitialLoading = isPending || data === undefined;
 
   return (
     <div className="space-y-6">
@@ -66,7 +67,7 @@ export function AdminAiModelsClient() {
         <AdminAiModelsTable
           models={models}
           isError={isError}
-          isPending={isPending}
+          isPending={isInitialLoading}
           sort={toolbar.sort}
           onSortChange={toolbar.handleSortChange}
         />
