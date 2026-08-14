@@ -140,7 +140,7 @@ jobs:
           version: 2.109.1
 
       - name: Start local Supabase
-        run: supabase start
+        run: supabase db start
 
       - name: Run pgTAP tests
         run: supabase test db
