@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 import { logError } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { Database } from "@/types/database.types";
 import type { Json } from "@/types/db.helpers";
 
 import {
@@ -9,6 +10,9 @@ import {
   OPERATIONAL_ERROR_STATUS,
   type OperationalErrorSeverityType,
 } from "./constants";
+
+type IncrementOperationalErrorOccurrenceRpcArgs =
+  Database["public"]["Functions"]["increment_operational_error_occurrence"]["Args"];
 
 /** 운영 오류 Context에 저장할 수 있는 최대 객체 중첩 깊이 */
 const MAX_CONTEXT_DEPTH = 4;
@@ -304,14 +308,19 @@ async function aggregateOperationalError(
     throw new Error("Supabase RPC client is required to aggregate errors.");
   }
 
-  return await client.rpc("increment_operational_error_occurrence", {
+  const rpcArgs = {
     p_actor_user_id: input.actorUserId ?? null,
     p_context: context,
     p_id: existingError.id,
     p_message: input.message,
     p_severity: input.severity ?? OPERATIONAL_ERROR_SEVERITY.ERROR,
     p_user_id: input.userId ?? null,
-  });
+  };
+
+  return await client.rpc(
+    "increment_operational_error_occurrence",
+    rpcArgs as IncrementOperationalErrorOccurrenceRpcArgs,
+  );
 }
 
 /**

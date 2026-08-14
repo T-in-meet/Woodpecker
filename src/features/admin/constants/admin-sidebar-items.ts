@@ -2,7 +2,9 @@ import {
   AlertTriangle,
   Beaker,
   Blocks,
+  Bot,
   Boxes,
+  BrainCircuit,
   FileSearch,
   FileText,
   GitBranch,
@@ -10,6 +12,7 @@ import {
   Link2,
   MessageSquareText,
   Network,
+  Settings2,
   Users,
 } from "lucide-react";
 
@@ -37,6 +40,39 @@ export const ADMIN_SIDEBAR_ITEMS = [
     title: "운영 오류",
     href: ROUTES.ADMIN.OPERATIONAL_ERRORS,
     icon: AlertTriangle,
+  },
+  {
+    title: "AI 관리",
+    icon: Bot,
+    breadcrumbHref: ROUTES.ADMIN.AI.DASHBOARD,
+    children: [
+      {
+        title: "대시보드",
+        href: ROUTES.ADMIN.AI.DASHBOARD,
+        icon: LayoutDashboard,
+        breadcrumbLabel: "AI 관리",
+      },
+      {
+        title: "모델",
+        href: ROUTES.ADMIN.AI.MODELS,
+        icon: Bot,
+      },
+      {
+        title: "에이전트",
+        href: ROUTES.ADMIN.AI.AGENTS,
+        icon: BrainCircuit,
+      },
+      {
+        title: "프롬프트",
+        href: ROUTES.ADMIN.AI.PROMPTS,
+        icon: FileText,
+      },
+      {
+        title: "AI 설정",
+        href: ROUTES.ADMIN.AI.SETTINGS,
+        icon: Settings2,
+      },
+    ],
   },
   {
     title: "실험 기능",
