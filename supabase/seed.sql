@@ -34228,9 +34228,52 @@ options: readonly AdminSelectFieldOption[];
 
 **장점**
 
+- \
+  모든 읽기 전용 배열을 그대로 사용할 수 있다.
+- \
+  불필요한 배열 복사가 발생하지 않는다.
 
+**단점**
 
---
+- \
+  기존 공통 컴포넌트를 수정해야 한다.
+- \
+  이번 작업 범위를 넘어서는 변경이 된다.
+
+---
+
+### 2. 사용하는 곳에서 일반 배열로 변환
+
+AI 설정 폼에서 `readonly` 배열을 일반 배열로 변환하여 전달한다.
+
+```
+```
+
+```
+options={AI_SETTING_FEATURE_OPTIONS.map(({ label, value }) => ({
+  label,
+  value,
+}))}
+```
+
+또는
+
+```
+```
+
+```
+options={[...AI_SETTING_FEATURE_OPTIONS]}
+```
+
+---
+
+## 선택한 해결 방법
+
+이번 작업에서는 **두 번째 방법**을 선택하였다.
+
+이유는 이번 변경은 AI 설정 기능을 추가하는 작업이며, 기존 공통 컴포넌트(`AdminSelectField`)의 동작이나 인터페이스를 변경할 필요는 없다고 판단했기 때문이다.
+
+따라서 **추가되는 기능에서 필요한 형태로 데이터를 변환하여 전달**하는 방식으로 구현하였다.', 0, '2026-08-07 15:00:00+00', '2026-08-07 01:50:10.327364+00', '2026-08-07 01:50:10.327364+00', NULL);
 -- Data for Name: webauthn_credentials; Type: TABLE DATA; Schema: auth; Owner: supabase_auth_admin
 --
 
