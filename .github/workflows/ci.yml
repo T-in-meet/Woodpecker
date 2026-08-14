@@ -59,8 +59,16 @@ jobs:
           npx next typegen
           test -n "$(find .next/types -type f -print -quit)"
 
+      - name: Restore TypeScript cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/tsconfig.tsbuildinfo
+          key: typescript-v1-${{ runner.os }}-node20-${{ hashFiles('package-lock.json', 'tsconfig.json') }}-${{ github.sha }}
+          restore-keys: |
+            typescript-v1-${{ runner.os }}-node20-${{ hashFiles('package-lock.json', 'tsconfig.json') }}-
+
       - name: Run type check
-        run: npm run type-check
+        run: npx tsc --noEmit --incremental --tsBuildInfoFile .cache/tsconfig.tsbuildinfo
 
   # ─────────────────────────────────────────
   # 기존 required check 전환용 임시 호환 gate
