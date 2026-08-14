@@ -126,7 +126,6 @@ WHERE id = current_setting('test.note_chat_admin_user_b_id')::uuid;
 
 INSERT INTO public.ai_model_configs (
   id,
-  key,
   display_name,
   provider,
   model,
@@ -135,7 +134,6 @@ INSERT INTO public.ai_model_configs (
 VALUES
   (
     current_setting('test.note_chat_admin_chat_model_a_id')::uuid,
-    'tests.note-chat-admin-chat-a',
     'Admin Chat A',
     'test',
     'admin-chat-a',
@@ -143,7 +141,6 @@ VALUES
   ),
   (
     current_setting('test.note_chat_admin_chat_model_b_id')::uuid,
-    'tests.note-chat-admin-chat-b',
     'Admin Chat B',
     'test',
     'admin-chat-b',
