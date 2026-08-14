@@ -83,28 +83,6 @@ jobs:
         run: npx tsc --noEmit --incremental --tsBuildInfoFile .cache/tsconfig.tsbuildinfo
 
   # ─────────────────────────────────────────
-  # 기존 required check 전환용 임시 호환 gate
-  # Quality context를 required로 등록한 뒤 제거한다.
-  # ─────────────────────────────────────────
-  legacy-lint:
-    name: Lint
-    needs: quality
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Propagate Quality result
-        run: test "${{ needs.quality.result }}" = "success"
-
-  legacy-type-check:
-    name: Type Check
-    needs: quality
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Propagate Quality result
-        run: test "${{ needs.quality.result }}" = "success"
-
-  # ─────────────────────────────────────────
   # Job 2: 취약점 검사
   # PR에 새 패키지 추가 시 알려진 취약점 체크
   # ─────────────────────────────────────────
