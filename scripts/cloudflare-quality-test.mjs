@@ -81,6 +81,8 @@ function parseArgs(argv) {
     maxTokens: DEFAULT_MAX_TOKENS,
     dryRun: false,
     chars: null,
+    reasoningEffort: null,
+    dump: null,
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -99,6 +101,10 @@ function parseArgs(argv) {
       options.maxTokens = Number(argv[++i]);
     } else if (arg === "--chars") {
       options.chars = Number(argv[++i]);
+    } else if (arg === "--reasoning-effort") {
+      options.reasoningEffort = argv[++i] ?? null;
+    } else if (arg === "--dump") {
+      options.dump = argv[++i] ?? null;
     } else if (arg === "--dry-run") {
       options.dryRun = true;
     } else if (!arg.startsWith("--")) {
@@ -769,6 +775,7 @@ async function callCloudflare(model, prompt, jsonSchema, callOptions = {}) {
     temperature,
     maxTokens = DEFAULT_MAX_TOKENS,
     requestTimeoutMs = 180_000,
+    reasoningEffort,
   } = callOptions;
   const start = Date.now();
   const url = `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/ai/run/${model}`;
@@ -780,6 +787,17 @@ async function callCloudflare(model, prompt, jsonSchema, callOptions = {}) {
     max_tokens: maxTokens,
   };
   if (temperature !== undefined) body.temperature = temperature;
+
+  // gpt-oss의 추론 토큰 예산을 낮춰 max_tokens 절단을 피할 수 있는지 확인하는 프로브다.
+  // Cloudflare 문서의 예시는 전부 /ai/v1/responses(Responses API) 기준이고
+  // 우리가 쓰는 /ai/run에 이 파라미터가 있는지는 문서화돼 있지 않다.
+  // Responses API 형태(reasoning.effort)와 Chat Completions 형태(reasoning_effort)를
+  // 한 번에 보내 어느 쪽이든 걸리게 한다. 둘 다 무시되면 결과가 그대로일 것이고,
+  // 엄격 검증이면 3003으로 거절돼 추론 전에 끝나므로 어느 쪽이든 1콜로 판명된다.
+  if (reasoningEffort) {
+    body.reasoning = { effort: reasoningEffort };
+    body.reasoning_effort = reasoningEffort;
+  }
 
   let res;
   try {
@@ -858,6 +876,12 @@ async function callCloudflare(model, prompt, jsonSchema, callOptions = {}) {
     neurons: usage.neurons ?? null,
     promptTokens: usage.prompt_tokens ?? null,
     completionTokens: usage.completion_tokens ?? null,
+    // gpt-oss는 답변 전 추론 토큰을 completion_tokens 안에서 함께 쓴다.
+    // 응답이 이 내역을 주면 "절단의 원인이 추론인가"를 직접 확인할 수 있다.
+    reasoningTokens:
+      usage.completion_tokens_details?.reasoning_tokens ??
+      usage.reasoning_tokens ??
+      null,
   };
 }
 
@@ -1314,7 +1338,10 @@ async function runGradingBisect(options) {
   console.log(
     `grading-bisect — 노트 목표 ${options.chars.toLocaleString()}자 ` +
       `(실제 노트 ${note.length.toLocaleString()}자 + 답안 ${answer.length.toLocaleString()}자) · ` +
-      `예상 최소 ${estimate.toFixed(0)} Neurons (max_tokens까지 차면 더 든다)`,
+      `예상 최소 ${estimate.toFixed(0)} Neurons (max_tokens까지 차면 더 든다)` +
+      (options.reasoningEffort
+        ? ` · reasoning effort=${options.reasoningEffort}`
+        : ""),
   );
 
   if (options.dryRun) return;
@@ -1331,6 +1358,7 @@ async function runGradingBisect(options) {
   const item = await callCloudflare(CANARY_MODEL, prompt, GRADING_JSON_SCHEMA, {
     maxTokens: options.maxTokens,
     requestTimeoutMs: 260_000,
+    reasoningEffort: options.reasoningEffort,
   });
   const { json, parseError } = parseResult(item);
   const problems = json ? validateGrading(json) : [];
@@ -1341,7 +1369,11 @@ async function runGradingBisect(options) {
   console.log(
     `${ok ? "✅ OK" : "❌ FAIL"} ${item.ms}ms · ` +
       `입력 ${totalChars.toLocaleString()}자 / ${item.promptTokens ?? "?"}tok · ` +
-      `출력 ${item.completionTokens ?? "?"}tok${truncated ? " (max_tokens에서 잘림)" : ""} · ` +
+      `출력 ${item.completionTokens ?? "?"}tok${truncated ? " (max_tokens에서 잘림)" : ""}` +
+      (item.reasoningTokens !== null && item.reasoningTokens !== undefined
+        ? ` (추론 ${item.reasoningTokens}tok)`
+        : "") +
+      ` · ` +
       `${item.neurons?.toFixed(1) ?? "?"} Neurons` +
       (item.code ? ` · code=${item.code}` : "") +
       (parseError ? ` — ${parseError.split("\n")[0]}` : ""),
@@ -1353,6 +1385,49 @@ async function runGradingBisect(options) {
     console.log("규칙 위반:");
     for (const p of problems) console.log(`  - ${p}`);
   }
+
+  // 형식 통과 여부만으로는 reasoning effort를 낮춰도 되는지 판단할 수 없다.
+  // 채점 본문을 파일로 남겨 사람이 직접 읽고 품질 저하를 판정한다.
+  if (options.dump) {
+    writeFileSync(options.dump, buildBisectDump(options, note, answer, item));
+    console.log(`덤프 저장: ${options.dump}`);
+  }
+}
+
+/** 사람이 읽고 채점 품질을 판정하기 위한 덤프. 입력 발췌 + 채점 결과 전문. */
+function buildBisectDump(options, note, answer, item) {
+  const excerpt = (text, chars) =>
+    text.length <= chars ? text : `${text.slice(0, chars)}\n… (이하 생략)`;
+
+  return [
+    `# grading-bisect 덤프 — effort=${options.reasoningEffort ?? "(없음)"}`,
+    "",
+    `- 노트 목표 ${options.chars.toLocaleString()}자 / 실제 노트 ${note.length.toLocaleString()}자 + 답안 ${answer.length.toLocaleString()}자`,
+    `- 지연 ${item.ms}ms · 입력 ${item.promptTokens ?? "?"}tok · 출력 ${item.completionTokens ?? "?"}tok` +
+      (item.reasoningTokens != null
+        ? ` (추론 ${item.reasoningTokens}tok)`
+        : ""),
+    `- ${item.neurons?.toFixed(1) ?? "?"} Neurons · finish_reason=${item.finishReason ?? "?"}`,
+    "",
+    "## 노트 (발췌)",
+    "",
+    "```text",
+    excerpt(note, 1200),
+    "```",
+    "",
+    "## 답안 (발췌) — 노트 문장 일부만, 숫자는 0~2씩 틀림",
+    "",
+    "```text",
+    excerpt(answer, 1200),
+    "```",
+    "",
+    "## 채점 결과 (전문)",
+    "",
+    "```json",
+    item.json ? JSON.stringify(item.json, null, 2) : (item.text ?? "(없음)"),
+    "```",
+    "",
+  ].join("\n");
 }
 
 async function main() {
