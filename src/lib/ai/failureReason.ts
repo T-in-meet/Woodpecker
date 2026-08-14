@@ -25,13 +25,19 @@ export type AiFailureReason = (typeof AI_FAILURE_REASONS)[number];
 /**
  * Cloudflare 오류 코드.
  * developers.cloudflare.com/workers-ai/platform/errors
+ *
+ * 한도 소진이 3036과 4006 둘 다로 매핑돼 있다. 3036은 위 문서에 적힌 코드고,
+ * 4006은 2026-08-13 canary·이분 탐색에서 실제로 받은 코드다
+ * ("AiError: ... daily free allocation of 10,000 neurons", HTTP 429).
+ * 둘이 별개 상황인지 같은 상황의 다른 표기인지 확인되지 않아 한쪽을 지우지 않고 둘 다 둔다.
  */
 const REASON_BY_CODE: Record<number, AiFailureReason> = {
   3006: "tooLarge", // Request too large (413)
   3007: "delayed", // Timeout
   3008: "delayed", // Aborted
-  3036: "quotaExhausted", // 일일 무료 10,000 Neurons 소진 (429)
+  3036: "quotaExhausted", // 일일 무료 10,000 Neurons 소진 (429, 문서 기준)
   3040: "busy", // Out of capacity (429)
+  4006: "quotaExhausted", // 일일 무료 10,000 Neurons 소진 (429, 실측)
 };
 
 export function toAiFailureReason(error: unknown): AiFailureReason {

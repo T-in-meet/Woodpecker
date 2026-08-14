@@ -22,10 +22,19 @@ describe("toAiFailureReason", () => {
     [3008, "delayed"],
     [3036, "quotaExhausted"],
     [3040, "busy"],
+    [4006, "quotaExhausted"],
   ] as const)("Cloudflare 코드 %i는 %s로 옮긴다", (code, expected) => {
     expect(toAiFailureReason(new CloudflareAiError("provider", code))).toBe(
       expected,
     );
+  });
+
+  it("실측된 한도 소진 코드(4006)도 문서 코드(3036)와 같게 다룬다", () => {
+    // 문서에는 3036만 있으나 실제 응답은 4006이었다(2026-08-13).
+    // 어느 쪽이 오든 사용자에게는 "오늘 사용량 소진"으로 안내해야 한다.
+    expect(
+      toAiFailureReason(new CloudflareAiError("provider", 4006, 429)),
+    ).toBe(toAiFailureReason(new CloudflareAiError("provider", 3036, 429)));
   });
 
   it("일일 한도 소진(3036)과 요청 과대(3006)를 구분한다", () => {
