@@ -450,9 +450,21 @@ describe("deleteAdminAiModel", () => {
       updatedAt: "2026-08-03T00:00:00.000Z",
     });
 
-    const eq = vi.fn().mockResolvedValue({
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: {
+        id: MODEL_CONFIG_ID,
+      },
       error: null,
     });
+    const select = vi.fn(() => ({
+      maybeSingle,
+    }));
+    const isActiveEq = vi.fn(() => ({
+      select,
+    }));
+    const eq = vi.fn(() => ({
+      eq: isActiveEq,
+    }));
     const deleteQuery = vi.fn(() => ({
       eq,
     }));
@@ -469,10 +481,62 @@ describe("deleteAdminAiModel", () => {
     expect(from).toHaveBeenCalledWith("ai_model_configs");
     expect(deleteQuery).toHaveBeenCalledOnce();
     expect(eq).toHaveBeenCalledWith("id", MODEL_CONFIG_ID);
+    expect(isActiveEq).toHaveBeenCalledWith("is_active", false);
+    expect(select).toHaveBeenCalledWith("id");
+    expect(maybeSingle).toHaveBeenCalledOnce();
     expect(result).toEqual({
       ok: true,
     });
     expect(revalidateAdminAiPaths).toHaveBeenCalledOnce();
+  });
+
+  it("사전 조회 후 모델이 활성화되어 삭제되지 않으면 실패한다", async () => {
+    vi.mocked(getAdminAiModelDetail).mockResolvedValue({
+      capability: "chat",
+      createdAt: "2026-08-03T00:00:00.000Z",
+      dimensions: null,
+      displayName: "GPT-4o",
+      distanceMetric: null,
+      embeddingReferenceCount: 0,
+      id: MODEL_CONFIG_ID,
+      isActive: false,
+      model: "gpt-4o",
+      notes: null,
+      provider: "openai",
+      updatedAt: "2026-08-03T00:00:00.000Z",
+    });
+
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: null,
+      error: null,
+    });
+    const select = vi.fn(() => ({
+      maybeSingle,
+    }));
+    const isActiveEq = vi.fn(() => ({
+      select,
+    }));
+    const eq = vi.fn(() => ({
+      eq: isActiveEq,
+    }));
+    const deleteQuery = vi.fn(() => ({
+      eq,
+    }));
+
+    vi.mocked(createAdminClient).mockReturnValue({
+      from: vi.fn(() => ({
+        delete: deleteQuery,
+      })),
+    } as unknown as ReturnType<typeof createAdminClient>);
+
+    const result = await deleteAdminAiModel(MODEL_CONFIG_ID);
+
+    expect(result).toEqual({
+      message: "삭제할 수 있는 AI 모델을 찾을 수 없습니다.",
+      ok: false,
+    });
+    expect(reportAdminAiActionError).not.toHaveBeenCalled();
+    expect(revalidateAdminAiPaths).not.toHaveBeenCalled();
   });
 
   it("모델 삭제에 실패하면 운영 오류를 보고한다", async () => {
@@ -495,9 +559,19 @@ describe("deleteAdminAiModel", () => {
       updatedAt: "2026-08-03T00:00:00.000Z",
     });
 
-    const eq = vi.fn().mockResolvedValue({
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: null,
       error,
     });
+    const select = vi.fn(() => ({
+      maybeSingle,
+    }));
+    const isActiveEq = vi.fn(() => ({
+      select,
+    }));
+    const eq = vi.fn(() => ({
+      eq: isActiveEq,
+    }));
     const deleteQuery = vi.fn(() => ({
       eq,
     }));

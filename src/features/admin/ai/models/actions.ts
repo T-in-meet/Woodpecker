@@ -203,10 +203,18 @@ export async function deleteAdminAiModel(
   }
 
   const supabase = createAdminClient();
-  const { error } = await supabase
+  /*
+   * 삭제 가능 여부를 사전 조회한 뒤 실제 delete까지 시간이 벌어질 수 있다.
+   * 그 사이 모델이 다시 활성화되면 활성 모델 삭제 금지 규칙이 우회되므로,
+   * delete 조건에도 비활성 상태를 포함하고 삭제된 row를 확인한다.
+   */
+  const { data: deletedModel, error } = await supabase
     .from("ai_model_configs")
     .delete()
-    .eq("id", parsedId.data);
+    .eq("id", parsedId.data)
+    .eq("is_active", false)
+    .select("id")
+    .maybeSingle();
 
   if (error) {
     await reportAdminAiActionError({
@@ -218,6 +226,13 @@ export async function deleteAdminAiModel(
     });
 
     return { message: error.message, ok: false };
+  }
+
+  if (!deletedModel) {
+    return {
+      message: "삭제할 수 있는 AI 모델을 찾을 수 없습니다.",
+      ok: false,
+    };
   }
 
   revalidateAdminAiPaths();
