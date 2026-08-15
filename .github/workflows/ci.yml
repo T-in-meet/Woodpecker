@@ -161,7 +161,7 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    environment: ${{ github.base_ref == 'main' && 'Production' || 'develope' }}
+    environment: ${{ (github.base_ref == 'main' || github.event.merge_group.base_ref == 'refs/heads/main') && 'Production' || 'develope' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -187,15 +187,35 @@ jobs:
         if: steps.node-modules-cache.outputs.cache-hit == 'true'
         run: npm ls --all > /dev/null
 
+      # main 대상 빌드(pull_request 또는 merge_group)에서 PROD secret이 비어 있으면
+      # env의 && || 폴백 패턴이 조용히 DEVELOP secret으로 넘어가므로 사전에 명시적으로 실패시킨다
+      - name: Validate PROD secrets
+        if: github.base_ref == 'main' || github.event.merge_group.base_ref == 'refs/heads/main'
+        run: |
+          missing=""
+          [ -z "$PROD_SUPABASE_URL" ] && missing="$missing PROD_SUPABASE_URL"
+          [ -z "$PROD_SUPABASE_ANON_KEY" ] && missing="$missing PROD_SUPABASE_ANON_KEY"
+          [ -z "$PROD_SUPABASE_SERVICE_ROLE_KEY" ] && missing="$missing PROD_SUPABASE_SERVICE_ROLE_KEY"
+          [ -z "$PROD_APP_URL" ] && missing="$missing PROD_APP_URL"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing PROD secrets for main build:$missing"
+            exit 1
+          fi
+        env:
+          PROD_SUPABASE_URL: ${{ secrets.PROD_SUPABASE_URL }}
+          PROD_SUPABASE_ANON_KEY: ${{ secrets.PROD_SUPABASE_ANON_KEY }}
+          PROD_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.PROD_SUPABASE_SERVICE_ROLE_KEY }}
+          PROD_APP_URL: ${{ secrets.PROD_APP_URL }}
+
       # 빌드 시 필요한 환경변수 주입 (Secrets에서 가져옴)
       # PR이 develop → main이면 PROD, 그 외엔 DEVELOP 값 사용
       - name: Build
         run: npm run build
         env:
           SKIP_NEXT_TYPE_CHECK: "1"
-          NEXT_PUBLIC_SUPABASE_URL: ${{ github.base_ref == 'main' && secrets.PROD_SUPABASE_URL || secrets.DEVELOP_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ github.base_ref == 'main' && secrets.PROD_SUPABASE_ANON_KEY || secrets.DEVELOP_SUPABASE_ANON_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ github.base_ref == 'main' && secrets.PROD_SUPABASE_SERVICE_ROLE_KEY || secrets.DEVELOP_SUPABASE_SERVICE_ROLE_KEY }}
-          NEXT_PUBLIC_APP_URL: ${{ github.base_ref == 'main' && secrets.PROD_APP_URL || secrets.DEVELOP_APP_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ (github.base_ref == 'main' || github.event.merge_group.base_ref == 'refs/heads/main') && secrets.PROD_SUPABASE_URL || secrets.DEVELOP_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ (github.base_ref == 'main' || github.event.merge_group.base_ref == 'refs/heads/main') && secrets.PROD_SUPABASE_ANON_KEY || secrets.DEVELOP_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ (github.base_ref == 'main' || github.event.merge_group.base_ref == 'refs/heads/main') && secrets.PROD_SUPABASE_SERVICE_ROLE_KEY || secrets.DEVELOP_SUPABASE_SERVICE_ROLE_KEY }}
+          NEXT_PUBLIC_APP_URL: ${{ (github.base_ref == 'main' || github.event.merge_group.base_ref == 'refs/heads/main') && secrets.PROD_APP_URL || secrets.DEVELOP_APP_URL }}
           NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${{ secrets.NEXT_PUBLIC_VAPID_PUBLIC_KEY }}
           VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
