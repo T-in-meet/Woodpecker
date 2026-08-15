@@ -17,6 +17,7 @@ export function useAdminAiSettingDetail(settingId: string) {
     queryKey: ADMIN_AI_SETTINGS_QUERY_KEY.detail(settingId),
     queryFn: () => getAdminAiSettingDetail(settingId),
     enabled: Boolean(settingId),
+    retry: false,
   });
 }
 
@@ -31,5 +32,6 @@ export function useAdminAiSettings(query: AdminAiSettingListQuery) {
     queryKey: ADMIN_AI_SETTINGS_QUERY_KEY.list(query),
     queryFn: () => getAdminAiSettings(query),
     placeholderData: (previousData) => previousData,
+    retry: false,
   });
 }

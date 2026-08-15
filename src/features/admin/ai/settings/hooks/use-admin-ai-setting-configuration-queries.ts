@@ -13,5 +13,6 @@ export function useAdminAiSettingConfigurations(settingId: string) {
     queryKey: ADMIN_AI_SETTING_CONFIGURATIONS_QUERY_KEY.bySetting(settingId),
     queryFn: () => getAdminAiSettingConfigurations(settingId),
     enabled: Boolean(settingId),
+    retry: false,
   });
 }
