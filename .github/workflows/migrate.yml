@@ -7,6 +7,12 @@ on:
     paths:
       - "supabase/migrations/**"
   workflow_dispatch:
+    inputs:
+      include_all:
+        description: "Apply out-of-order migrations missing from remote history"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -38,4 +44,9 @@ jobs:
           SUPABASE_DB_PASSWORD: ${{ secrets.PROD_SUPABASE_DB_PASSWORD }}
         run: |
           supabase link --project-ref ${{ secrets.PROD_SUPABASE_PROJECT_REF }}
-          supabase db push
+          if [[ "${{ inputs.include_all }}" == "true" ]]; then
+            supabase db push --include-all --dry-run
+            supabase db push --include-all
+          else
+            supabase db push
+          fi
