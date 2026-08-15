@@ -4,8 +4,8 @@
 
 BEGIN;
 
--- 이 파일에서 수행할 pgTAP assertion 수가 16개인지 선언합니다.
-SELECT plan(16);
+-- 이 파일에서 수행할 pgTAP assertion 수가 17개인지 선언합니다.
+SELECT plan(17);
 
 -- =========================================
 -- Test fixtures
@@ -40,6 +40,24 @@ VALUES (
   now()
 );
 
+-- ai_embeddings.model_config_id Foreign Key 검증에 사용할
+-- 테스트 전용 AI Model fixture를 생성합니다.
+INSERT INTO public.ai_model_configs (
+  id,
+  display_name,
+  provider,
+  model,
+  capability,
+  is_active
+)
+VALUES (
+  current_setting('test.ai_embedding_model_id')::uuid,
+  'Embedding Test Model',
+  'openai',
+  'embedding-test-model',
+  'chat',
+  true
+);
 
 -- =========================================
 -- Table / column structure
@@ -110,6 +128,16 @@ SELECT ok(
   'owner_user_id foreign key should exist'
 );
 
+SELECT ok(
+  EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conrelid = 'public.ai_embeddings'::regclass
+      AND conname = 'ai_embeddings_model_config_id_fkey'
+      AND contype = 'f'
+  ),
+  'model_config_id foreign key should exist after models migration'
+);
 
 -- =========================================
 -- Indexes

@@ -9,10 +9,32 @@ BEGIN;
 SELECT plan(10);
 
 -- 테스트마다 독립적인 사용자/모델/소스 식별자를 사용합니다.
--- Common 단계에서는 ai_model_configs Foreign Key가 아직 없으므로
--- model_config_id에는 테스트 전용 UUID만 사용합니다.
+-- Models 단계부터 ai_embeddings.model_config_id가 ai_model_configs를
+-- 참조하므로 테스트 전용 모델 식별자를 준비합니다.
 SELECT set_config('test.ai_match_user_id', gen_random_uuid()::text, true);
 SELECT set_config('test.ai_match_model_id', gen_random_uuid()::text, true);
+
+-- Models 단계부터 ai_embeddings.model_config_id가 ai_model_configs를
+-- 참조하므로 테스트 전용 Embedding 모델 fixture를 생성합니다.
+INSERT INTO public.ai_model_configs (
+  id,
+  display_name,
+  provider,
+  model,
+  capability,
+  dimensions,
+  distance_metric
+)
+VALUES (
+  current_setting('test.ai_match_model_id')::uuid,
+  'AI Match Test Embedding Model',
+  'test',
+  'ai-match-test-embedding-model',
+  'embedding',
+  1536,
+  'cosine'
+);
+
 SELECT set_config('test.ai_match_source_a', gen_random_uuid()::text, true);
 SELECT set_config('test.ai_match_source_b', gen_random_uuid()::text, true);
 

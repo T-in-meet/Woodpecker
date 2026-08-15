@@ -139,6 +139,63 @@ export type Database = {
           source_type?: string;
           token_count?: number | null;
         };
+        Relationships: [
+          {
+            foreignKeyName: "ai_embeddings_model_config_id_fkey";
+            columns: ["model_config_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_ai_model_list";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ai_embeddings_model_config_id_fkey";
+            columns: ["model_config_id"];
+            isOneToOne: false;
+            referencedRelation: "ai_model_configs";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      ai_model_configs: {
+        Row: {
+          capability: string;
+          created_at: string;
+          dimensions: number | null;
+          display_name: string;
+          distance_metric: string | null;
+          id: string;
+          is_active: boolean;
+          model: string;
+          notes: string | null;
+          provider: string;
+          updated_at: string;
+        };
+        Insert: {
+          capability: string;
+          created_at?: string;
+          dimensions?: number | null;
+          display_name: string;
+          distance_metric?: string | null;
+          id?: string;
+          is_active?: boolean;
+          model: string;
+          notes?: string | null;
+          provider: string;
+          updated_at?: string;
+        };
+        Update: {
+          capability?: string;
+          created_at?: string;
+          dimensions?: number | null;
+          display_name?: string;
+          distance_metric?: string | null;
+          id?: string;
+          is_active?: boolean;
+          model?: string;
+          notes?: string | null;
+          provider?: string;
+          updated_at?: string;
+        };
         Relationships: [];
       };
       feedback_replies: {
@@ -730,6 +787,20 @@ export type Database = {
       };
     };
     Views: {
+      admin_ai_model_list: {
+        Row: {
+          capability: string | null;
+          created_at: string | null;
+          display_name: string | null;
+          embedding_reference_count: number | null;
+          id: string | null;
+          is_active: boolean | null;
+          model: string | null;
+          provider: string | null;
+          updated_at: string | null;
+        };
+        Relationships: [];
+      };
       admin_user_list: {
         Row: {
           agreement_source: string | null;
@@ -800,6 +871,29 @@ export type Database = {
           p_user_id: string;
         };
         Returns: string;
+      };
+      get_admin_ai_model_list: {
+        Args: {
+          p_capability_filters: string[];
+          p_created_from: string;
+          p_created_to: string;
+          p_is_active_filter: boolean;
+          p_page: number;
+          p_page_size: number;
+          p_provider_filters: string[];
+          p_reference_count_max: number;
+          p_reference_count_min: number;
+          p_search_field: string;
+          p_search_query: string;
+          p_sort_direction: string;
+          p_sort_field: string;
+          p_updated_from: string;
+          p_updated_to: string;
+        };
+        Returns: {
+          items: Json;
+          total_count: number;
+        }[];
       };
       get_admin_unread_notification_counts: {
         Args: { p_admin_user_id: string };

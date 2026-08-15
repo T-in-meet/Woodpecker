@@ -40,6 +40,7 @@ export type WithId<T extends TableNameWithId> = Pick<Row<T>, "id">;
 
 export const TABLES = {
   aiEmbeddings: "ai_embeddings",
+  aiModelConfigs: "ai_model_configs",
   feedbackReplies: "feedback_replies",
   feedbacks: "feedbacks",
   adminNotificationEvents: "admin_notification_events",
