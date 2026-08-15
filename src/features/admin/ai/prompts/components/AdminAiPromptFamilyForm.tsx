@@ -1,8 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import type { FormEvent } from "react";
 import { useState } from "react";
+import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,11 @@ import {
 } from "../hooks/use-admin-ai-prompt-family-mutations";
 import type { AdminAiPromptFamilyDetail } from "../types";
 import { AdminAiPromptFamilyBasicFields } from "./AdminAiPromptFamilyBasicFields";
+import {
+  type AdminAiPromptFamilyFormValues,
+  buildAiPromptFamilyFormData,
+  isCreateMode,
+} from "./AdminAiPromptFamilyForm.utils";
 import { AdminAiPromptInitialVersionFields } from "./AdminAiPromptInitialVersionFields";
 
 type AdminAiPromptFamilyFormProps = {
@@ -28,16 +33,6 @@ type AdminAiPromptFamilyFormProps = {
   /** 생성 화면에 기본 선택할 Agent ID입니다. */
   initialAgentId?: string;
 };
-
-/**
- * Prompt Family 생성 모드 여부를 판별합니다.
- *
- * @param family Prompt Family 상세
- * @returns 생성 모드면 true
- */
-function isCreateMode(family: AdminAiPromptFamilyDetail | undefined) {
-  return family === undefined;
-}
 
 /**
  * Prompt Family 생성·수정 및 Version 관리를 처리합니다.
@@ -56,11 +51,30 @@ export function AdminAiPromptFamilyForm({
   const updateMutation = useUpdateAdminAiPromptFamily();
   const deleteFamilyMutation = useDeleteAdminAiPromptFamily();
 
-  const [selectedAgentId, setSelectedAgentId] = useState(
-    family?.agentId ?? initialAgentId ?? "",
-  );
-  const [displayName, setDisplayName] = useState(family?.displayName ?? "");
   const [message, setMessage] = useState<string | null>(null);
+
+  const {
+    control,
+    formState: { isDirty },
+    handleSubmit,
+    register,
+    reset,
+  } = useForm<AdminAiPromptFamilyFormValues>({
+    defaultValues: {
+      agentId: family?.agentId ?? initialAgentId ?? "",
+      displayName: family?.displayName ?? "",
+      description: family?.description ?? "",
+      tags: family?.tags.join(", ") ?? "",
+      versionDisplayName: "v1 draft",
+      changeSummary: "",
+      systemTemplate: "",
+      userTemplate: "",
+      variables: "",
+      responseSchema: "",
+    },
+  });
+
+  const savePending = createMutation.isPending || updateMutation.isPending;
 
   /**
    * Prompt Family 저장을 처리합니다.
@@ -68,14 +82,13 @@ export function AdminAiPromptFamilyForm({
    * 생성과 수정의 성공 결과를 toast로 알리고,
    * 예상하지 못한 요청 실패는 공통 오류 메시지로 표시합니다.
    *
-   * @param event 폼 제출 이벤트
+   * @param values RHF에서 관리하는 폼 값
    */
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function handleSave(values: AdminAiPromptFamilyFormValues) {
     setMessage(null);
 
     try {
-      const formData = new FormData(event.currentTarget);
+      const formData = buildAiPromptFamilyFormData(values, family);
 
       const result = createMode
         ? await createMutation.mutateAsync(formData)
@@ -93,6 +106,8 @@ export function AdminAiPromptFamilyForm({
       }
 
       toast.success("AI Prompt Family를 수정했습니다.");
+
+      reset(values);
       router.refresh();
     } catch {
       toast.error(ADMIN_UNKNOWN_ERROR_MESSAGE);
@@ -129,10 +144,7 @@ export function AdminAiPromptFamilyForm({
 
   return (
     <div>
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {!createMode && family ? (
-          <input type="hidden" name="familyId" value={family.id} />
-        ) : null}
+      <form onSubmit={handleSubmit(handleSave)} className="space-y-6">
         {createMode ? (
           <div className="grid items-start gap-8 xl:grid-cols-2">
             <section className="space-y-5">
@@ -147,28 +159,20 @@ export function AdminAiPromptFamilyForm({
                 createMode
                 agentOptions={agentOptionsQuery.data ?? []}
                 isAgentOptionsPending={agentOptionsQuery.isPending}
-                selectedAgentId={selectedAgentId}
-                displayName={displayName}
-                description=""
-                tags=""
-                onAgentIdChange={setSelectedAgentId}
-                onDisplayNameChange={setDisplayName}
+                control={control}
+                register={register}
               />
             </section>
 
-            <AdminAiPromptInitialVersionFields />
+            <AdminAiPromptInitialVersionFields register={register} />
           </div>
         ) : (
           <AdminAiPromptFamilyBasicFields
             createMode={false}
             agentOptions={agentOptionsQuery.data ?? []}
             isAgentOptionsPending={agentOptionsQuery.isPending}
-            selectedAgentId={selectedAgentId}
-            displayName={displayName}
-            description={family.description ?? ""}
-            tags={family.tags.join(", ")}
-            onAgentIdChange={setSelectedAgentId}
-            onDisplayNameChange={setDisplayName}
+            control={control}
+            register={register}
           />
         )}
 
@@ -194,11 +198,8 @@ export function AdminAiPromptFamilyForm({
             </div>
           ) : null}
 
-          <Button
-            type="submit"
-            disabled={createMutation.isPending || updateMutation.isPending}
-          >
-            {createMode ? "생성" : "저장"}
+          <Button type="submit" disabled={savePending || !isDirty}>
+            {createMode ? "저장" : "수정"}
           </Button>
         </div>
       </form>

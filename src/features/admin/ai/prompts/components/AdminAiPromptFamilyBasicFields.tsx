@@ -1,6 +1,13 @@
+"use client";
+
+import type { Control, UseFormRegister } from "react-hook-form";
+import { Controller } from "react-hook-form";
+
 import { AdminSelectField } from "@/features/admin/components/common/AdminSelectField";
 import { AdminTextareaField } from "@/features/admin/components/common/AdminTextareaField";
 import { AdminTextField } from "@/features/admin/components/common/AdminTextField";
+
+import type { AdminAiPromptFamilyFormValues } from "./AdminAiPromptFamilyForm.utils";
 
 type AdminAiPromptAgentOption = {
   /** Agent 표시 이름 */
@@ -20,23 +27,11 @@ type AdminAiPromptFamilyBasicFieldsProps = {
   /** Agent 선택 목록 조회 진행 여부 */
   isAgentOptionsPending: boolean;
 
-  /** 생성 화면에서 선택할 Agent ID */
-  selectedAgentId: string;
+  /** react-hook-form control 객체 */
+  control: Control<AdminAiPromptFamilyFormValues>;
 
-  /** Family 표시 이름 */
-  displayName: string;
-
-  /** Family 설명 */
-  description: string;
-
-  /** 쉼표로 구분한 Family Tag */
-  tags: string;
-
-  /** Agent 선택 변경 이벤트 */
-  onAgentIdChange: (value: string) => void;
-
-  /** 표시 이름 변경 이벤트 */
-  onDisplayNameChange: (value: string) => void;
+  /** react-hook-form register 함수 */
+  register: UseFormRegister<AdminAiPromptFamilyFormValues>;
 };
 
 /**
@@ -51,31 +46,33 @@ export function AdminAiPromptFamilyBasicFields({
   createMode,
   agentOptions,
   isAgentOptionsPending,
-  selectedAgentId,
-  displayName,
-  description,
-  tags,
-  onAgentIdChange,
-  onDisplayNameChange,
+  control,
+  register,
 }: AdminAiPromptFamilyBasicFieldsProps) {
   return (
     <>
       {createMode ? (
-        <AdminSelectField
-          label="Agent"
+        <Controller
+          control={control}
           name="agentId"
-          value={selectedAgentId}
-          placeholder={
-            isAgentOptionsPending
-              ? "Agent 목록을 불러오는 중입니다."
-              : "Agent를 선택하세요."
-          }
-          disabled={isAgentOptionsPending}
-          onValueChange={onAgentIdChange}
-          options={agentOptions.map((agent) => ({
-            label: `${agent.displayName}`,
-            value: agent.id,
-          }))}
+          render={({ field }) => (
+            <AdminSelectField
+              label="Agent"
+              name={field.name}
+              value={field.value}
+              placeholder={
+                isAgentOptionsPending
+                  ? "Agent 목록을 불러오는 중입니다."
+                  : "Agent를 선택하세요."
+              }
+              disabled={isAgentOptionsPending}
+              onValueChange={field.onChange}
+              options={agentOptions.map((agent) => ({
+                label: agent.displayName,
+                value: agent.id,
+              }))}
+            />
+          )}
         />
       ) : (
         <div className="space-y-2">
@@ -86,27 +83,23 @@ export function AdminAiPromptFamilyBasicFields({
       <div className="grid gap-4 md:grid-cols-2">
         <AdminTextField
           label="이름"
-          name="displayName"
-          value={displayName}
           placeholder="관리자 화면에 표시할 Prompt Family 이름"
-          onChange={(event) => onDisplayNameChange(event.target.value)}
           required
+          {...register("displayName")}
         />
       </div>
 
       <AdminTextareaField
         label="설명"
-        name="description"
-        defaultValue={description}
         placeholder="Prompt Family의 목적과 사용 방식을 입력하세요."
         rows={3}
+        {...register("description")}
       />
 
       <AdminTextField
         label="Tags"
-        name="tags"
-        defaultValue={tags}
         placeholder="쉼표로 구분하여 입력하세요."
+        {...register("tags")}
       />
     </>
   );

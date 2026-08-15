@@ -1,8 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import type { FormEvent } from "react";
 import { useState } from "react";
+import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,12 @@ import {
   useUpdateAdminAiPromptVersion,
 } from "../hooks/use-admin-ai-prompt-version-mutations";
 import type { AdminAiPromptFamilyDetail } from "../types";
+import {
+  type AdminAiPromptVersionFormValues,
+  buildAiPromptVersionFormData,
+  isCreateMode,
+  stringifyJson,
+} from "./AdminAiPromptVersionForm.utils";
 
 type AdminAiPromptVersionFormProps = {
   /** Version이 속한 Prompt Family입니다. */
@@ -33,26 +39,6 @@ type AdminAiPromptVersionFormProps = {
   /** Version 삭제 요청 진행 여부입니다. */
   deletePending?: boolean;
 };
-
-/**
- * JSON 값을 Textarea 기본값으로 직렬화합니다.
- *
- * @param value JSON 값
- * @returns 들여쓰기한 JSON 문자열
- */
-function stringifyJson(value: unknown) {
-  return JSON.stringify(value, null, 2);
-}
-
-/**
- * Prompt Version 생성 모드 여부를 판별합니다.
- *
- * @param version Prompt Version
- * @returns 생성 모드면 true
- */
-function isCreateMode(version: AdminAiPromptVersionRow | undefined) {
-  return version === undefined;
-}
 
 /**
  * AI Prompt Version 생성 및 수정 폼을 렌더링합니다.
@@ -94,17 +80,36 @@ export function AdminAiPromptVersionForm({
 
   const [message, setMessage] = useState<string | null>(null);
 
+  const {
+    formState: { isDirty },
+    handleSubmit,
+    register,
+    reset,
+  } = useForm<AdminAiPromptVersionFormValues>({
+    defaultValues: {
+      versionDisplayName: sourceVersion?.displayName ?? "draft",
+      tags: sourceVersion?.tags.join(", ") ?? "",
+      changeSummary: sourceVersion?.changeSummary ?? "",
+      systemTemplate: sourceVersion?.systemTemplate ?? "",
+      userTemplate: sourceVersion?.userTemplate ?? "",
+      variables: sourceVersion ? stringifyJson(sourceVersion.variables) : "[]",
+      responseSchema: sourceVersion
+        ? stringifyJson(sourceVersion.responseSchema)
+        : "{}",
+    },
+  });
+
+  const savePending = createMutation.isPending || updateMutation.isPending;
+
   /**
    * Prompt Version 저장을 처리합니다.
    *
    * 생성과 수정의 성공 결과를 toast로 알리고,
    * 예상하지 못한 요청 실패는 공통 오류 메시지로 표시합니다.
    *
-   * @param event 폼 제출 이벤트
+   * @param values RHF에서 관리하는 폼 값
    */
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
+  async function handleSave(values: AdminAiPromptVersionFormValues) {
     if (!editable) {
       return;
     }
@@ -112,7 +117,7 @@ export function AdminAiPromptVersionForm({
     setMessage(null);
 
     try {
-      const formData = new FormData(event.currentTarget);
+      const formData = buildAiPromptVersionFormData(values, family.id, version);
 
       const result = createMode
         ? await createMutation.mutateAsync(formData)
@@ -130,73 +135,56 @@ export function AdminAiPromptVersionForm({
       }
 
       toast.success("AI Prompt Version을 수정했습니다.");
+
+      reset(values);
       router.refresh();
     } catch {
       toast.error(ADMIN_UNKNOWN_ERROR_MESSAGE);
     }
   }
 
-  const variablesDefaultValue = sourceVersion
-    ? stringifyJson(sourceVersion.variables)
-    : "[]";
-
-  const responseSchemaDefaultValue = sourceVersion
-    ? stringifyJson(sourceVersion.responseSchema)
-    : "{}";
-
   return (
-    <form className="space-y-5" onSubmit={handleSubmit}>
-      <input type="hidden" name="familyId" value={family.id} />
-
-      {!createMode && version ? (
-        <input type="hidden" name="versionId" value={version.id} />
-      ) : null}
-
+    <form className="space-y-5" onSubmit={handleSubmit(handleSave)}>
       <div className="grid gap-4 md:grid-cols-2">
         <AdminTextField
           label="이름"
-          name="versionDisplayName"
-          defaultValue={sourceVersion?.displayName ?? "draft"}
           placeholder="Prompt Version 이름"
           readOnly={!editable}
           required
+          {...register("versionDisplayName")}
         />
 
         <AdminTextField
           label="Tags"
-          name="tags"
-          defaultValue={sourceVersion?.tags.join(", ") ?? ""}
           placeholder="쉼표로 구분하여 입력하세요."
           readOnly={!editable}
+          {...register("tags")}
         />
       </div>
 
       <AdminTextField
         label="변경 요약"
-        name="changeSummary"
-        defaultValue={sourceVersion?.changeSummary ?? ""}
         placeholder="이 Version의 변경 내용을 입력하세요."
         readOnly={!editable}
+        {...register("changeSummary")}
       />
 
       <AdminTextareaField
         label="System Template"
-        name="systemTemplate"
-        defaultValue={sourceVersion?.systemTemplate ?? ""}
         placeholder="System Prompt Template을 입력하세요."
         readOnly={!templateEditable}
         rows={12}
         required
+        {...register("systemTemplate")}
       />
 
       <AdminTextareaField
         label="User Template"
-        name="userTemplate"
-        defaultValue={sourceVersion?.userTemplate ?? ""}
         placeholder="User Prompt Template을 입력하세요."
         readOnly={!templateEditable}
         rows={12}
         required
+        {...register("userTemplate")}
       />
 
       {!createMode && version?.lifecycleStatus === "published" ? (
@@ -208,20 +196,18 @@ export function AdminAiPromptVersionForm({
       <div className="grid gap-4 md:grid-cols-2">
         <AdminTextareaField
           label="Variables JSON"
-          name="variables"
-          defaultValue={variablesDefaultValue}
           placeholder="Prompt 변수 정의를 JSON 배열로 입력하세요."
           readOnly={!editable}
           rows={8}
+          {...register("variables")}
         />
 
         <AdminTextareaField
           label="Response Schema JSON"
-          name="responseSchema"
-          defaultValue={responseSchemaDefaultValue}
           placeholder="응답 Schema를 JSON 객체로 입력하세요."
           readOnly={!editable}
           rows={8}
+          {...register("responseSchema")}
         />
       </div>
 
@@ -253,11 +239,8 @@ export function AdminAiPromptVersionForm({
         ) : null}
 
         {editable ? (
-          <Button
-            type="submit"
-            disabled={createMutation.isPending || updateMutation.isPending}
-          >
-            {createMode ? "생성" : "저장"}
+          <Button type="submit" disabled={savePending || !isDirty}>
+            {createMode ? "저장" : "수정"}
           </Button>
         ) : null}
       </div>
