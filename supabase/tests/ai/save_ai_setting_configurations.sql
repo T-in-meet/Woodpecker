@@ -4,8 +4,8 @@
 
 BEGIN;
 
--- 이 파일에서 수행할 pgTAP assertion 수가 27개인지 선언합니다.
-SELECT plan(27);
+-- 이 파일에서 수행할 pgTAP assertion 수가 29개인지 선언합니다.
+SELECT plan(29);
 
 -- ============================================================================
 -- Fixtures
@@ -266,6 +266,26 @@ SELECT ok(
       AND temperature IS NULL
   ),
   'Embedding Configuration이 올바르게 저장되어야 한다'
+);
+
+-- Settings에서 참조 중인 Published Prompt Version은 archive할 수 없어야 합니다.
+SELECT is(
+  public.archive_ai_prompt_version(
+    '40000000-0000-4000-8000-000000000001'::uuid
+  ),
+  'NOT_DELETABLE',
+  'Settings에서 참조 중인 Prompt Version은 archive할 수 없어야 한다'
+);
+
+-- archive가 차단된 Prompt Version은 published 상태를 유지해야 합니다.
+SELECT is(
+  (
+    SELECT lifecycle_status
+    FROM public.ai_prompt_versions
+    WHERE id = '40000000-0000-4000-8000-000000000001'::uuid
+  ),
+  'published',
+  'Settings에서 참조 중인 Prompt Version은 published 상태를 유지해야 한다'
 );
 
 -- ============================================================================

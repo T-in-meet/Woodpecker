@@ -193,6 +193,14 @@ export async function deleteAdminAiPromptFamily(
     return { message: "Prompt family를 찾을 수 없습니다.", ok: false };
   }
 
+  if (data === "NOT_DELETABLE") {
+    return {
+      message:
+        "AI Settings에서 사용 중인 Prompt Version이 있어 Prompt Family를 삭제할 수 없습니다.",
+      ok: false,
+    };
+  }
+
   if (data !== "OK") {
     return {
       message: "Prompt Family 삭제 요청을 처리하지 못했습니다.",
@@ -462,6 +470,14 @@ export async function archiveAdminAiPromptVersion(
   }
 
   if (data !== "OK") {
+    if (data === "NOT_DELETABLE") {
+      return {
+        message:
+          "AI Settings에서 사용 중인 Prompt Version은 Archive할 수 없습니다.",
+        ok: false,
+      };
+    }
+
     return {
       message: "published version만 archive할 수 있습니다.",
       ok: false,

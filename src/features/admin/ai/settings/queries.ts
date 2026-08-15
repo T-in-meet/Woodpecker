@@ -18,7 +18,6 @@ import {
   getNumberRangeRpcMax,
   getNumberRangeRpcMin,
 } from "../utils/list-rpc";
-import { loadAdminAiPromptGraph } from "../utils/load-admin-prompt-graph";
 import { reportAdminAiLoadError } from "../utils/report-load-error";
 import {
   getAdminAiSettingConfigurationsInternal,
@@ -34,6 +33,114 @@ import type {
   AdminAiSettingListQuery,
   AdminAiSettingListResult,
 } from "./types/ai-settings-list";
+
+/** AI 설정 Chat 구성 복원에 필요한 Prompt Version 관계 row입니다. */
+const aiSettingPromptVersionRelationRowSchema = z.object({
+  ai_prompt_families: z
+    .object({
+      agent_id: z.string().uuid(),
+      ai_prompt_agents: z
+        .object({
+          display_name: z.string(),
+          id: z.string().uuid(),
+        })
+        .nullable(),
+      display_name: z.string(),
+      id: z.string().uuid(),
+    })
+    .nullable(),
+  family_id: z.string().uuid(),
+  id: z.string().uuid(),
+});
+
+/** AI 설정 Chat 구성에서 참조하는 Prompt Version 관계입니다. */
+type AiSettingPromptVersionRelation = {
+  agentDisplayName: string | null;
+  agentId: string;
+  familyDisplayName: string;
+  familyId: string;
+  promptVersionId: string;
+};
+
+/**
+ * Settings Chat 구성에서 참조하는 Prompt Version 관계만 scoped query로 조회합니다.
+ *
+ * @param params 조회 및 오류 보고에 필요한 입력값
+ * @param params.adminUserId 관리자 사용자 ID
+ * @param params.promptVersionIds 조회할 Prompt Version ID 목록
+ * @param params.settingId 조회 중인 AI Setting ID
+ * @returns Prompt Version ID별 Family/Agent 관계
+ */
+async function loadAiSettingPromptVersionRelations(params: {
+  adminUserId: string;
+  promptVersionIds: string[];
+  settingId: string;
+}) {
+  if (params.promptVersionIds.length === 0) {
+    return new Map<string, AiSettingPromptVersionRelation>();
+  }
+
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("ai_prompt_versions")
+    .select(
+      `
+        id,
+        family_id,
+        ai_prompt_families (
+          id,
+          agent_id,
+          display_name,
+          ai_prompt_agents (
+            id,
+            display_name
+          )
+        )
+      `,
+    )
+    .in("id", params.promptVersionIds);
+
+  if (error) {
+    await reportAdminAiLoadError({
+      adminUserId: params.adminUserId,
+      context: {
+        promptVersionCount: params.promptVersionIds.length,
+        settingId: params.settingId,
+      },
+      error,
+      errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.PROMPT_VERSION_LOAD_FAILED,
+      message: "관리자 AI 구성의 Prompt Version 관계 조회에 실패했습니다.",
+      operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.GET_PROMPT_VERSION,
+      stage: ADMIN_AI_OPERATIONAL_ERROR_STAGE.DATABASE,
+    });
+
+    throw new Error(
+      `Failed to load AI setting prompt version relations: ${error.message}`,
+    );
+  }
+
+  const relations = new Map<string, AiSettingPromptVersionRelation>();
+  const rows = z
+    .array(aiSettingPromptVersionRelationRowSchema)
+    .parse(data ?? []);
+
+  for (const row of rows) {
+    if (!row.ai_prompt_families) {
+      continue;
+    }
+
+    relations.set(row.id, {
+      agentDisplayName:
+        row.ai_prompt_families.ai_prompt_agents?.display_name ?? null,
+      agentId: row.ai_prompt_families.agent_id,
+      familyDisplayName: row.ai_prompt_families.display_name,
+      familyId: row.ai_prompt_families.id,
+      promptVersionId: row.id,
+    });
+  }
+
+  return relations;
+}
 
 /**
  * 관리자 AI 설정 상세를 조회합니다.
@@ -98,7 +205,21 @@ export async function getAdminAiSettingConfigurations(
     throw error;
   }
 
-  const graph = await loadAdminAiPromptGraph(adminUserId);
+  const promptVersionIds = [
+    ...new Set(
+      rows.flatMap((row) =>
+        row.kind === "chat" && row.prompt_version_id !== null
+          ? [row.prompt_version_id]
+          : [],
+      ),
+    ),
+  ];
+
+  const promptVersionRelations = await loadAiSettingPromptVersionRelations({
+    adminUserId,
+    promptVersionIds,
+    settingId,
+  });
 
   const configurations: AdminAiSettingConfiguration[] = [];
 
@@ -136,13 +257,11 @@ export async function getAdminAiSettingConfigurations(
       throw error;
     }
 
-    const family = graph.families.find((candidate) =>
-      (graph.versionsByFamilyId.get(candidate.id) ?? []).some(
-        (version) => version.id === row.prompt_version_id,
-      ),
+    const promptVersionRelation = promptVersionRelations.get(
+      row.prompt_version_id,
     );
 
-    if (!family) {
+    if (!promptVersionRelation) {
       const error = new Error(
         `Failed to resolve prompt family for AI setting configuration: ${row.id}`,
       );
@@ -169,8 +288,8 @@ export async function getAdminAiSettingConfigurations(
     configurations.push({
       kind: "chat",
       roleKey: row.role_key,
-      agentId: family.agentId,
-      promptFamilyId: family.id,
+      agentId: promptVersionRelation.agentId,
+      promptFamilyId: promptVersionRelation.familyId,
       promptVersionId: row.prompt_version_id,
       modelConfigId: row.model_config_id,
       temperature: row.temperature,

@@ -380,6 +380,49 @@ $$;
 
 
 -- ============================================================================
+-- Settings Reference Prompt Lifecycle Protection
+-- ============================================================================
+
+/**
+ * published Version을 archived 상태로 전환합니다.
+ * AI Setting에서 참조 중인 Version은 NOT_DELETABLE을 반환합니다.
+ * published 상태가 아니거나 존재하지 않는 Version은 NOT_PUBLISHED를 반환합니다.
+ *
+ * ai_setting_configurations가 생성된 뒤에 #306 Prompt lifecycle RPC를
+ * 보강하여 migration 순서상 존재하지 않는 Settings 테이블 참조를 피합니다.
+ */
+CREATE OR REPLACE FUNCTION "public"."archive_ai_prompt_version"(
+    "p_version_id" "uuid"
+)
+RETURNS "text"
+LANGUAGE "plpgsql"
+SECURITY DEFINER
+SET "search_path" = "public"
+AS $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM "public"."ai_setting_configurations"
+        WHERE "prompt_version_id" = "p_version_id"
+    ) THEN
+        RETURN 'NOT_DELETABLE';
+    END IF;
+
+    UPDATE "public"."ai_prompt_versions"
+    SET "lifecycle_status" = 'archived'
+    WHERE "id" = "p_version_id"
+      AND "lifecycle_status" = 'published';
+
+    IF NOT FOUND THEN
+        RETURN 'NOT_PUBLISHED';
+    END IF;
+
+    RETURN 'OK';
+END;
+$$;
+
+
+-- ============================================================================
 -- Admin AI Setting List RPC
 -- ============================================================================
 

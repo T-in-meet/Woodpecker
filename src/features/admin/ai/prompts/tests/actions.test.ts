@@ -528,6 +528,19 @@ describe("deleteAdminAiPromptFamily", () => {
     expect(revalidateAdminAiPaths).not.toHaveBeenCalled();
   });
 
+  it("Settings에서 참조 중이면 삭제 불가 메시지를 반환한다", async () => {
+    mockRpc("NOT_DELETABLE");
+
+    const result = await deleteAdminAiPromptFamily(FAMILY_ID);
+
+    expect(result).toEqual({
+      message:
+        "AI Settings에서 사용 중인 Prompt Version이 있어 Prompt Family를 삭제할 수 없습니다.",
+      ok: false,
+    });
+    expect(revalidateAdminAiPaths).not.toHaveBeenCalled();
+  });
+
   it("알 수 없는 삭제 RPC 결과를 반환하면 실패한다", async () => {
     mockRpc("UNKNOWN_RESULT");
 
@@ -872,6 +885,19 @@ describe("archiveAdminAiPromptVersion", () => {
       ok: true,
     });
     expect(revalidateAdminAiPaths).toHaveBeenCalledOnce();
+  });
+
+  it("Settings에서 참조 중이면 Archive 불가 메시지를 반환한다", async () => {
+    mockRpc("NOT_DELETABLE");
+
+    const result = await archiveAdminAiPromptVersion(VERSION_ID);
+
+    expect(result).toEqual({
+      message:
+        "AI Settings에서 사용 중인 Prompt Version은 Archive할 수 없습니다.",
+      ok: false,
+    });
+    expect(revalidateAdminAiPaths).not.toHaveBeenCalled();
   });
 
   it("RPC 오류가 발생하면 운영 오류를 보고한다", async () => {

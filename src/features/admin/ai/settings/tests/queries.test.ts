@@ -8,7 +8,6 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { requireAdmin } from "../../../utils/require-admin";
-import { loadAdminAiPromptGraph } from "../../utils/load-admin-prompt-graph";
 import { reportAdminAiLoadError } from "../../utils/report-load-error";
 import {
   getAdminAiSettingConfigurations,
@@ -27,10 +26,6 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 vi.mock("../../../utils/require-admin", () => ({
   requireAdmin: vi.fn(),
-}));
-
-vi.mock("../../utils/load-admin-prompt-graph", () => ({
-  loadAdminAiPromptGraph: vi.fn(),
 }));
 
 vi.mock("../../utils/report-load-error", () => ({
@@ -77,6 +72,35 @@ function mockRpcClient(result: {
   } as unknown as ReturnType<typeof createAdminClient>);
 
   return rpc;
+}
+
+/**
+ * AI Setting 구성 조회에서 사용하는 Prompt Version scoped query를 mock합니다.
+ *
+ * @param result Supabase query 반환값
+ * @returns scoped query mock
+ */
+function mockPromptVersionRelationClient(result: {
+  data: unknown;
+  error: { message: string } | null;
+}) {
+  const inQuery = vi.fn().mockResolvedValue(result);
+  const select = vi.fn(() => ({
+    in: inQuery,
+  }));
+  const from = vi.fn(() => ({
+    select,
+  }));
+
+  vi.mocked(createAdminClient).mockReturnValue({
+    from,
+  } as unknown as ReturnType<typeof createAdminClient>);
+
+  return {
+    from,
+    inQuery,
+    select,
+  };
 }
 
 describe("AI 설정 queries", () => {
@@ -135,12 +159,6 @@ describe("AI 설정 queries", () => {
         },
       ]);
 
-      vi.mocked(loadAdminAiPromptGraph).mockResolvedValue({
-        agents: [],
-        families: [],
-        versionsByFamilyId: new Map(),
-      } as never);
-
       const result = await getAdminAiSettingConfigurations(
         "44444444-4444-4444-8444-444444444444",
       );
@@ -153,6 +171,7 @@ describe("AI 설정 queries", () => {
         },
       ]);
 
+      expect(createAdminClient).not.toHaveBeenCalled();
       expect(reportAdminAiLoadError).not.toHaveBeenCalled();
     });
 
@@ -173,25 +192,24 @@ describe("AI 설정 queries", () => {
         },
       ]);
 
-      vi.mocked(loadAdminAiPromptGraph).mockResolvedValue({
-        agents: [],
-        families: [
+      const { from, inQuery, select } = mockPromptVersionRelationClient({
+        data: [
           {
-            id: familyId,
-            agentId,
+            ai_prompt_families: {
+              agent_id: agentId,
+              ai_prompt_agents: {
+                display_name: "노트 RAG 답변",
+                id: agentId,
+              },
+              display_name: "기본 Prompt",
+              id: familyId,
+            },
+            family_id: familyId,
+            id: versionId,
           },
         ],
-        versionsByFamilyId: new Map([
-          [
-            familyId,
-            [
-              {
-                id: versionId,
-              },
-            ],
-          ],
-        ]),
-      } as never);
+        error: null,
+      });
 
       const result = await getAdminAiSettingConfigurations(
         "77777777-7777-4777-8777-777777777777",
@@ -209,6 +227,12 @@ describe("AI 설정 queries", () => {
         },
       ]);
 
+      expect(from).toHaveBeenCalledWith("ai_prompt_versions");
+      expect(select).toHaveBeenCalledWith(expect.stringContaining("family_id"));
+      expect(select).toHaveBeenCalledWith(
+        expect.stringContaining("ai_prompt_families"),
+      );
+      expect(inQuery).toHaveBeenCalledWith("id", [versionId]);
       expect(reportAdminAiLoadError).not.toHaveBeenCalled();
     });
 
@@ -236,7 +260,7 @@ describe("AI 설정 queries", () => {
         stage: ADMIN_AI_OPERATIONAL_ERROR_STAGE.DATABASE,
       });
 
-      expect(loadAdminAiPromptGraph).not.toHaveBeenCalled();
+      expect(createAdminClient).not.toHaveBeenCalled();
     });
 
     it("Chat 구성에 Prompt Version 또는 temperature가 없으면 운영 오류를 보고하고 실패한다", async () => {
@@ -254,12 +278,6 @@ describe("AI 설정 queries", () => {
           sort_order: 0,
         },
       ]);
-
-      vi.mocked(loadAdminAiPromptGraph).mockResolvedValue({
-        agents: [],
-        families: [],
-        versionsByFamilyId: new Map(),
-      } as never);
 
       await expect(getAdminAiSettingConfigurations(settingId)).rejects.toThrow(
         `Invalid chat AI setting configuration: ${configurationId}`,
@@ -298,11 +316,10 @@ describe("AI 설정 queries", () => {
         },
       ]);
 
-      vi.mocked(loadAdminAiPromptGraph).mockResolvedValue({
-        agents: [],
-        families: [],
-        versionsByFamilyId: new Map(),
-      } as never);
+      mockPromptVersionRelationClient({
+        data: [],
+        error: null,
+      });
 
       await expect(getAdminAiSettingConfigurations(settingId)).rejects.toThrow(
         `Failed to resolve prompt family for AI setting configuration: ${configurationId}`,
