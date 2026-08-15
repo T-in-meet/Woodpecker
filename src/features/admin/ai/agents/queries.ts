@@ -22,6 +22,7 @@ import { reportAdminAiLoadError } from "../utils/report-load-error";
 import {
   adminAiAgentListRpcResultSchema,
   adminAiAgentListRpcRowSchema,
+  adminAiAgentOptionRowSchema,
 } from "./schema";
 import type {
   AdminAiAgentDetail,
@@ -232,12 +233,30 @@ export async function getAdminAiAgentDetail(
  */
 export async function getAdminAiAgentOptions() {
   const adminUserId = await requireAdmin();
-  const graph = await loadAdminAiPromptGraph(adminUserId);
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("ai_prompt_agents")
+    .select("id,display_name")
+    .order("display_name", { ascending: true });
 
-  return graph.agents
+  if (error) {
+    await reportAdminAiLoadError({
+      adminUserId,
+      error,
+      errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.AGENT_LOAD_FAILED,
+      message: "관리자 AI agent 선택 목록 조회에 실패했습니다.",
+      operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.GET_PROMPT_AGENT_OPTIONS,
+      stage: ADMIN_AI_OPERATIONAL_ERROR_STAGE.DATABASE,
+    });
+
+    throw new Error(`Failed to load admin AI agent options: ${error.message}`);
+  }
+
+  return z
+    .array(adminAiAgentOptionRowSchema)
+    .parse(data ?? [])
     .map((agent) => ({
-      displayName: agent.displayName,
+      displayName: agent.display_name,
       id: agent.id,
-    }))
-    .sort((left, right) => left.displayName.localeCompare(right.displayName));
+    }));
 }

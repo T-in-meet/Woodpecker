@@ -134,6 +134,35 @@ function mockRpcClient(result: {
   return rpc;
 }
 
+/**
+ * Agent 선택 목록 조회용 Supabase client를 mock합니다.
+ *
+ * @param result 선택 목록 조회 결과
+ * @returns Supabase query method mocks
+ */
+function mockAgentOptionsQueryClient(result: {
+  data: unknown;
+  error: { message: string } | null;
+}) {
+  const order = vi.fn().mockResolvedValue(result);
+  const select = vi.fn(() => ({
+    order,
+  }));
+  const from = vi.fn(() => ({
+    select,
+  }));
+
+  vi.mocked(createAdminClient).mockReturnValue({
+    from,
+  } as unknown as ReturnType<typeof createAdminClient>);
+
+  return {
+    from,
+    order,
+    select,
+  };
+}
+
 describe("getAdminAiAgents", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -469,12 +498,29 @@ describe("getAdminAiAgentOptions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(requireAdmin).mockResolvedValue(ADMIN_USER_ID);
-    mockPromptGraph();
   });
 
-  it("Agent 선택 항목을 display name 오름차순으로 반환한다", async () => {
+  it("Agent 선택 항목에 필요한 컬럼만 display name 오름차순으로 조회한다", async () => {
+    const { from, order, select } = mockAgentOptionsQueryClient({
+      data: [
+        {
+          display_name: "노트 요약",
+          id: INACTIVE_AGENT_ID,
+        },
+        {
+          display_name: "노트 RAG 답변",
+          id: ACTIVE_AGENT_ID,
+        },
+      ],
+      error: null,
+    });
+
     const result = await getAdminAiAgentOptions();
 
+    expect(loadAdminAiPromptGraph).not.toHaveBeenCalled();
+    expect(from).toHaveBeenCalledWith("ai_prompt_agents");
+    expect(select).toHaveBeenCalledWith("id,display_name");
+    expect(order).toHaveBeenCalledWith("display_name", { ascending: true });
     expect(result).toEqual([
       {
         displayName: "노트 요약",
@@ -485,5 +531,29 @@ describe("getAdminAiAgentOptions", () => {
         id: ACTIVE_AGENT_ID,
       },
     ]);
+  });
+
+  it("Agent 선택 목록 조회에 실패하면 운영 오류를 보고하고 예외를 던진다", async () => {
+    const error = {
+      message: "agent options failed",
+    };
+
+    mockAgentOptionsQueryClient({
+      data: null,
+      error,
+    });
+
+    await expect(getAdminAiAgentOptions()).rejects.toThrow(
+      "Failed to load admin AI agent options: agent options failed",
+    );
+
+    expect(reportAdminAiLoadError).toHaveBeenCalledWith({
+      adminUserId: ADMIN_USER_ID,
+      error,
+      errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.AGENT_LOAD_FAILED,
+      message: "관리자 AI agent 선택 목록 조회에 실패했습니다.",
+      operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.GET_PROMPT_AGENT_OPTIONS,
+      stage: ADMIN_AI_OPERATIONAL_ERROR_STAGE.DATABASE,
+    });
   });
 });
