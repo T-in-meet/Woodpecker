@@ -21,6 +21,12 @@ type AdminAiPromptFamilyBasicFieldsProps = {
   /** 생성 모드 여부 */
   createMode: boolean;
 
+  /** 수정 모드에서 표시할 현재 연결 Agent 이름 */
+  currentAgentDisplayName?: string;
+
+  /** 수정 모드에서 표시할 현재 연결 Agent ID */
+  currentAgentId?: string;
+
   /** Agent 선택 목록 */
   agentOptions: AdminAiPromptAgentOption[];
 
@@ -44,11 +50,23 @@ type AdminAiPromptFamilyBasicFieldsProps = {
  */
 export function AdminAiPromptFamilyBasicFields({
   createMode,
+  currentAgentDisplayName,
+  currentAgentId,
   agentOptions,
   isAgentOptionsPending,
   control,
   register,
 }: AdminAiPromptFamilyBasicFieldsProps) {
+  /**
+   * 수정 모드에서는 Agent 관계를 변경하지 않으므로 선택 입력 대신
+   * 현재 연결 정보를 읽기 전용으로 보여준다.
+   */
+  const readonlyAgentDisplayName =
+    currentAgentDisplayName !== undefined &&
+    currentAgentDisplayName.trim().length > 0
+      ? currentAgentDisplayName
+      : "-";
+
   return (
     <>
       {createMode ? (
@@ -77,6 +95,20 @@ export function AdminAiPromptFamilyBasicFields({
       ) : (
         <div className="space-y-2">
           <p className="text-sm font-medium">Agent</p>
+          <div className="rounded-md border bg-muted px-3 py-2">
+            <p className="text-sm text-muted-foreground">
+              {readonlyAgentDisplayName}
+            </p>
+
+            {currentAgentId ? (
+              <p
+                className="mt-1 truncate font-mono text-xs text-muted-foreground"
+                title={currentAgentId}
+              >
+                {currentAgentId}
+              </p>
+            ) : null}
+          </div>
         </div>
       )}
 

@@ -169,6 +169,8 @@ export function AdminAiPromptFamilyForm({
         ) : (
           <AdminAiPromptFamilyBasicFields
             createMode={false}
+            currentAgentDisplayName={family?.agentDisplayName ?? "-"}
+            currentAgentId={family?.agentId ?? ""}
             agentOptions={agentOptionsQuery.data ?? []}
             isAgentOptionsPending={agentOptionsQuery.isPending}
             control={control}

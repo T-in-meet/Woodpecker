@@ -227,6 +227,15 @@ describe("AdminAiPromptFamilyForm", () => {
     expect(submitButton).toBeEnabled();
   });
 
+  it("수정 모드에서 현재 연결된 Agent 정보를 읽기 전용으로 표시한다", () => {
+    const family = createFamilyFixture();
+
+    render(<AdminAiPromptFamilyForm family={family} />);
+
+    expect(screen.getByText(family.agentDisplayName)).toBeVisible();
+    expect(screen.getByText(family.agentId)).toBeVisible();
+  });
+
   it("수정 모드에서는 Family 수정 값과 familyId만 전송한다", async () => {
     const user = userEvent.setup();
     const family = createFamilyFixture();
