@@ -198,6 +198,36 @@ export type Database = {
         };
         Relationships: [];
       };
+      ai_prompt_agents: {
+        Row: {
+          created_at: string;
+          description: string | null;
+          display_name: string;
+          id: string;
+          purpose: string | null;
+          tags: string[];
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          description?: string | null;
+          display_name: string;
+          id?: string;
+          purpose?: string | null;
+          tags?: string[];
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          description?: string | null;
+          display_name?: string;
+          id?: string;
+          purpose?: string | null;
+          tags?: string[];
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       feedback_replies: {
         Row: {
           content: string;
@@ -787,6 +817,33 @@ export type Database = {
       };
     };
     Views: {
+      admin_ai_agent_list: {
+        Row: {
+          created_at: string | null;
+          display_name: string | null;
+          family_count: number | null;
+          id: string | null;
+          purpose: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          created_at?: string | null;
+          display_name?: string | null;
+          family_count?: never;
+          id?: string | null;
+          purpose?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          created_at?: string | null;
+          display_name?: string | null;
+          family_count?: never;
+          id?: string | null;
+          purpose?: string | null;
+          updated_at?: string | null;
+        };
+        Relationships: [];
+      };
       admin_ai_model_list: {
         Row: {
           capability: string | null;
@@ -855,6 +912,7 @@ export type Database = {
         Args: { p_content: string; p_scheduled_at: string; p_title: string };
         Returns: string;
       };
+      delete_admin_ai_agent: { Args: { p_agent_id: string }; Returns: string };
       delete_feedback_reply_with_notifications: {
         Args: { p_feedback_id: string };
         Returns: {
@@ -871,6 +929,26 @@ export type Database = {
           p_user_id: string;
         };
         Returns: string;
+      };
+      get_admin_ai_agent_list: {
+        Args: {
+          p_created_from: string;
+          p_created_to: string;
+          p_family_count_max: number;
+          p_family_count_min: number;
+          p_page: number;
+          p_page_size: number;
+          p_search_field: string;
+          p_search_query: string;
+          p_sort_direction: string;
+          p_sort_field: string;
+          p_updated_from: string;
+          p_updated_to: string;
+        };
+        Returns: {
+          items: Json;
+          total_count: number;
+        }[];
       };
       get_admin_ai_model_list: {
         Args: {
