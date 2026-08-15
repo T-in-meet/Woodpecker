@@ -30,10 +30,18 @@ vi.mock(
 
 vi.mock("@/features/admin/components/layout/AdminDetailPageHeader", () => ({
   AdminDetailPageHeader: ({
+    description,
     title,
   }: {
+    /** 헤더 설명입니다. */
+    description: string;
     /** 헤더 제목입니다. */ title: string;
-  }) => <header>{title}</header>,
+  }) => (
+    <header>
+      <h1>{title}</h1>
+      <p>{description}</p>
+    </header>
+  ),
 }));
 
 vi.mock("../hooks/use-admin-ai-prompt-queries", () => ({
@@ -96,5 +104,36 @@ describe("AdminAiPromptFamilyDetailClient", () => {
     await user.click(screen.getByRole("button", { name: "다시 시도" }));
 
     expect(refetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("Prompt Family 상세 설명에서 실제 필드 정책을 안내한다", () => {
+    mockDetailQueryState({
+      data: {
+        agentDisplayName: "Note Answer Agent",
+        agentId: "11111111-1111-4111-8111-111111111111",
+        archivedVersionCount: 0,
+        createdAt: "2026-08-03T00:00:00.000Z",
+        description: "기존 Family 설명",
+        displayName: "Note Answer",
+        draftVersionCount: 0,
+        id: "22222222-2222-4222-8222-222222222222",
+        publishedVersionCount: 0,
+        tags: [],
+        updatedAt: "2026-08-03T01:00:00.000Z",
+        versions: [],
+      },
+      isError: false,
+      isPending: false,
+      refetch: refetchMock,
+    });
+
+    render(
+      <AdminAiPromptFamilyDetailClient familyId="22222222-2222-4222-8222-222222222222" />,
+    );
+
+    expect(
+      screen.getByText(/Agent 연결은 생성 후 변경할 수 없습니다/),
+    ).toBeVisible();
+    expect(screen.queryByText(/key는 생성 후 변경할 수 없습니다/)).toBeNull();
   });
 });

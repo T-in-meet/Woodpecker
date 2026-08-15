@@ -19,6 +19,7 @@ import {
   updateFamilySchema,
   updateVersionSchema,
 } from "./schema";
+import { getAdminAiPromptVersionEditPolicy } from "./utils/version-actions";
 
 /**
  * AI prompt family와 v1 draft version을 함께 생성합니다.
@@ -313,14 +314,15 @@ export async function updateAdminAiPromptVersion(
     };
   }
 
-  if (current.version.lifecycleStatus === "archived") {
+  const lifecycleStatus = current.version.lifecycleStatus;
+  const editPolicy = getAdminAiPromptVersionEditPolicy(lifecycleStatus);
+
+  if (!editPolicy.canEditMetadata) {
     return {
       message: "Archived Version은 수정할 수 없습니다.",
       ok: false,
     };
   }
-
-  const lifecycleStatus = current.version.lifecycleStatus;
 
   const commonUpdate = {
     change_summary: parsedInput.data.changeSummary,
@@ -330,14 +332,13 @@ export async function updateAdminAiPromptVersion(
     variables: parsedInput.data.variables ?? [],
   };
 
-  const update =
-    lifecycleStatus === "draft"
-      ? {
-          ...commonUpdate,
-          system_template: parsedInput.data.systemTemplate,
-          user_template: parsedInput.data.userTemplate,
-        }
-      : commonUpdate;
+  const update = editPolicy.canEditTemplate
+    ? {
+        ...commonUpdate,
+        system_template: parsedInput.data.systemTemplate,
+        user_template: parsedInput.data.userTemplate,
+      }
+    : commonUpdate;
 
   const supabase = createAdminClient();
   const { data, error } = await supabase

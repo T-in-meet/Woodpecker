@@ -23,7 +23,7 @@ describe("createFamilySchema", () => {
     systemTemplate: "시스템 프롬프트",
     tags: "default, answer",
     userTemplate: "{{question}}",
-    variables: '{"question":{"type":"string"}}',
+    variables: '[{"name":"question","type":"string"}]',
     versionDisplayName: "기본 버전",
   };
 
@@ -48,11 +48,12 @@ describe("createFamilySchema", () => {
       systemTemplate: "시스템 프롬프트",
       tags: ["default", "answer", "strict"],
       userTemplate: "{{question}}",
-      variables: {
-        question: {
+      variables: [
+        {
+          name: "question",
           type: "string",
         },
-      },
+      ],
       versionDisplayName: "기본 버전",
     });
   });
@@ -111,6 +112,44 @@ describe("createFamilySchema", () => {
         expect.arrayContaining([
           expect.objectContaining({
             message: "JSON 형식이 올바르지 않습니다.",
+          }),
+        ]),
+      );
+    }
+  });
+
+  it("Response Schema가 JSON 배열이면 거부한다", () => {
+    const result = createFamilySchema.safeParse({
+      ...validInput,
+      responseSchema: "[]",
+    });
+
+    expect(result.success).toBe(false);
+
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            message: "Response Schema는 JSON 객체로 입력해주세요.",
+          }),
+        ]),
+      );
+    }
+  });
+
+  it("Variables가 JSON 객체이면 거부한다", () => {
+    const result = createFamilySchema.safeParse({
+      ...validInput,
+      variables: '{"question":{"type":"string"}}',
+    });
+
+    expect(result.success).toBe(false);
+
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            message: "Variables는 JSON 배열로 입력해주세요.",
           }),
         ]),
       );
@@ -196,7 +235,7 @@ describe("createVersionSchema", () => {
     systemTemplate: "시스템 프롬프트",
     tags: "default, answer",
     userTemplate: "{{question}}",
-    variables: '{"question":{"type":"string"}}',
+    variables: '[{"name":"question","type":"string"}]',
     versionDisplayName: "기본 버전",
   };
 
@@ -217,11 +256,12 @@ describe("createVersionSchema", () => {
       systemTemplate: "시스템 프롬프트",
       tags: ["default", "answer"],
       userTemplate: "{{question}}",
-      variables: {
-        question: {
+      variables: [
+        {
+          name: "question",
           type: "string",
         },
-      },
+      ],
       versionDisplayName: "버전 2",
     });
   });
@@ -270,6 +310,24 @@ describe("createVersionSchema", () => {
       createVersionSchema.safeParse({
         ...validInput,
         variables: '{"question":}',
+      }).success,
+    ).toBe(false);
+  });
+
+  it("Response Schema가 JSON 배열이면 거부한다", () => {
+    expect(
+      createVersionSchema.safeParse({
+        ...validInput,
+        responseSchema: "[]",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("Variables가 JSON 객체이면 거부한다", () => {
+    expect(
+      createVersionSchema.safeParse({
+        ...validInput,
+        variables: '{"question":{"type":"string"}}',
       }).success,
     ).toBe(false);
   });

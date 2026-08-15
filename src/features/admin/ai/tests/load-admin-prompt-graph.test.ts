@@ -60,12 +60,13 @@ const publishedVersionRow = {
   system_template: "시스템 프롬프트",
   tags: ["published"],
   user_template: "{{question}}",
-  variables: {
-    question: {
+  variables: [
+    {
+      name: "question",
       required: true,
       type: "string",
     },
-  },
+  ],
   version_number: 3,
 };
 
@@ -254,7 +255,7 @@ describe("loadAdminAiPromptGraph", () => {
       operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.GET_PROMPT_AGENT,
       stage: ADMIN_AI_OPERATIONAL_ERROR_STAGE.DATABASE,
     });
-    expect(from).toHaveBeenCalledTimes(1);
+    expect(from).toHaveBeenCalledTimes(3);
   });
 
   it("family 조회에 실패하면 운영 오류를 보고하고 예외를 던진다", async () => {
@@ -281,7 +282,7 @@ describe("loadAdminAiPromptGraph", () => {
       operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.GET_PROMPT_FAMILY,
       stage: ADMIN_AI_OPERATIONAL_ERROR_STAGE.DATABASE,
     });
-    expect(from).toHaveBeenCalledTimes(2);
+    expect(from).toHaveBeenCalledTimes(3);
   });
 
   it("version 조회에 실패하면 운영 오류를 보고하고 예외를 던진다", async () => {

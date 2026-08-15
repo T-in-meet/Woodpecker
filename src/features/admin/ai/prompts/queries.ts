@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 
+import { aiPromptAgentRowSchema } from "@/features/ai/prompts/schema";
 import {
   ADMIN_AI_OPERATIONAL_ERROR_CODE,
   ADMIN_AI_OPERATIONAL_ERROR_OPERATION,
@@ -11,6 +12,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/types/database.types";
 
 import { requireAdmin } from "../../utils/require-admin";
+import { aiPromptFamilyRowSchema, aiPromptVersionRowSchema } from "../schema";
 import {
   getDateRangeRpcFrom,
   getDateRangeRpcTo,
@@ -18,7 +20,7 @@ import {
   getNumberRangeRpcMax,
   getNumberRangeRpcMin,
 } from "../utils/list-rpc";
-import { loadAdminAiPromptGraph } from "../utils/load-admin-prompt-graph";
+import { mapFamilyRow, mapVersionRow } from "../utils/load-admin-prompt-graph";
 import { reportAdminAiLoadError } from "../utils/report-load-error";
 import {
   adminAiPromptFamilyListRpcResultSchema,
@@ -56,6 +58,52 @@ function mapPromptFamilyListRpcRow(
     publishedVersionCount: row.published_version_count,
     updatedAt: row.updated_at,
   };
+}
+
+/**
+ * Prompt Family 상세 조회 실패를 운영 오류로 보고합니다.
+ *
+ * @param input 조회 실패 정보
+ */
+async function reportPromptFamilyDetailLoadError(input: {
+  adminUserId: string;
+  error: unknown;
+  familyId: string;
+}) {
+  await reportAdminAiLoadError({
+    adminUserId: input.adminUserId,
+    context: {
+      familyId: input.familyId,
+    },
+    error: input.error,
+    errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.PROMPT_FAMILY_LOAD_FAILED,
+    message: "관리자 AI prompt family 상세 조회에 실패했습니다.",
+    operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.GET_PROMPT_FAMILY,
+    stage: ADMIN_AI_OPERATIONAL_ERROR_STAGE.DATABASE,
+  });
+}
+
+/**
+ * Prompt Version 목록 조회 실패를 운영 오류로 보고합니다.
+ *
+ * @param input 조회 실패 정보
+ */
+async function reportPromptVersionListLoadError(input: {
+  adminUserId: string;
+  error: unknown;
+  familyId: string;
+}) {
+  await reportAdminAiLoadError({
+    adminUserId: input.adminUserId,
+    context: {
+      familyId: input.familyId,
+    },
+    error: input.error,
+    errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.PROMPT_VERSION_LOAD_FAILED,
+    message: "관리자 AI prompt version 목록 조회에 실패했습니다.",
+    operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.GET_PROMPT_VERSION,
+    stage: ADMIN_AI_OPERATIONAL_ERROR_STAGE.DATABASE,
+  });
 }
 
 /**
@@ -233,16 +281,93 @@ export async function getAdminAiPromptFamilyDetail(
   familyId: string,
 ): Promise<AdminAiPromptFamilyDetail | null> {
   const adminUserId = await requireAdmin();
-  const graph = await loadAdminAiPromptGraph(adminUserId);
-  const family = graph.families.find((row) => row.id === familyId) ?? null;
+  const supabase = createAdminClient();
+  const { data: familyRow, error: familyError } = await supabase
+    .from("ai_prompt_families")
+    .select("id,agent_id,display_name,description,tags,created_at,updated_at")
+    .eq("id", familyId)
+    .maybeSingle();
 
-  if (!family) {
+  if (familyError) {
+    await reportPromptFamilyDetailLoadError({
+      adminUserId,
+      error: familyError,
+      familyId,
+    });
+
+    throw new Error(
+      `Failed to load admin AI prompt family detail: ${familyError.message}`,
+    );
+  }
+
+  if (!familyRow) {
     return null;
   }
 
+  const parsedFamilyRow = aiPromptFamilyRowSchema.parse(familyRow);
+
+  const [agentResult, versionsResult] = await Promise.all([
+    supabase
+      .from("ai_prompt_agents")
+      .select("id,display_name,description,purpose,tags,created_at,updated_at")
+      .eq("id", parsedFamilyRow.agent_id)
+      .maybeSingle(),
+    supabase
+      .from("ai_prompt_versions")
+      .select(
+        "id,family_id,version_number,display_name,change_summary,lifecycle_status,system_template,user_template,response_schema,variables,tags,created_by_kind,created_by,created_at",
+      )
+      .eq("family_id", parsedFamilyRow.id)
+      .order("version_number", { ascending: false }),
+  ]);
+
+  if (agentResult.error) {
+    await reportAdminAiLoadError({
+      adminUserId,
+      context: {
+        agentId: parsedFamilyRow.agent_id,
+        familyId,
+      },
+      error: agentResult.error,
+      errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.AGENT_LOAD_FAILED,
+      message: "관리자 AI prompt family의 agent 조회에 실패했습니다.",
+      operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.GET_PROMPT_AGENT,
+      stage: ADMIN_AI_OPERATIONAL_ERROR_STAGE.DATABASE,
+    });
+
+    throw new Error(
+      `Failed to load admin AI prompt family agent: ${agentResult.error.message}`,
+    );
+  }
+
+  if (versionsResult.error) {
+    await reportPromptVersionListLoadError({
+      adminUserId,
+      error: versionsResult.error,
+      familyId,
+    });
+
+    throw new Error(
+      `Failed to load admin AI prompt versions: ${versionsResult.error.message}`,
+    );
+  }
+
+  const parsedAgentRow = agentResult.data
+    ? aiPromptAgentRowSchema.parse(agentResult.data)
+    : null;
+  const versions = z
+    .array(aiPromptVersionRowSchema)
+    .parse(versionsResult.data ?? [])
+    .map(mapVersionRow);
+  const family = mapFamilyRow(
+    parsedFamilyRow,
+    parsedAgentRow?.display_name ?? "(missing-agent)",
+    versions,
+  );
+
   return {
     ...family,
-    versions: graph.versionsByFamilyId.get(family.id) ?? [],
+    versions,
   };
 }
 
@@ -285,16 +410,39 @@ export async function getAdminAiPromptFamilyOptions(
   agentId: string,
 ): Promise<AdminAiPromptFamilyOption[]> {
   const adminUserId = await requireAdmin();
-  const graph = await loadAdminAiPromptGraph(adminUserId);
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("ai_prompt_families")
+    .select("id,agent_id,display_name")
+    .eq("agent_id", agentId)
+    .order("display_name", { ascending: true });
 
-  return graph.families
-    .filter((family) => family.agentId === agentId)
+  if (error) {
+    await reportPromptFamilyDetailLoadError({
+      adminUserId,
+      error,
+      familyId: agentId,
+    });
+
+    throw new Error(
+      `Failed to load admin AI prompt family options: ${error.message}`,
+    );
+  }
+
+  return z
+    .array(
+      z.object({
+        agent_id: z.string().uuid(),
+        display_name: z.string(),
+        id: z.string().uuid(),
+      }),
+    )
+    .parse(data ?? [])
     .map((family) => ({
-      agentId: family.agentId,
-      displayName: family.displayName,
+      agentId: family.agent_id,
+      displayName: family.display_name,
       id: family.id,
-    }))
-    .sort((left, right) => left.displayName.localeCompare(right.displayName));
+    }));
 }
 
 /**
@@ -307,16 +455,40 @@ export async function getAdminAiPromptVersionOptions(
   familyId: string,
 ): Promise<AdminAiPromptVersionOption[]> {
   const adminUserId = await requireAdmin();
-  const graph = await loadAdminAiPromptGraph(adminUserId);
-  const versions = graph.versionsByFamilyId.get(familyId) ?? [];
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("ai_prompt_versions")
+    .select("id,family_id,display_name,version_number")
+    .eq("family_id", familyId)
+    .eq("lifecycle_status", "published")
+    .order("version_number", { ascending: false });
 
-  return versions
-    .filter((version) => version.lifecycleStatus === "published")
-    .map((version) => ({
-      displayName: version.displayName,
+  if (error) {
+    await reportPromptVersionListLoadError({
+      adminUserId,
+      error,
       familyId,
+    });
+
+    throw new Error(
+      `Failed to load admin AI prompt version options: ${error.message}`,
+    );
+  }
+
+  return z
+    .array(
+      z.object({
+        display_name: z.string(),
+        family_id: z.string().uuid(),
+        id: z.string().uuid(),
+        version_number: z.number(),
+      }),
+    )
+    .parse(data ?? [])
+    .map((version) => ({
+      displayName: version.display_name,
+      familyId: version.family_id,
       id: version.id,
-      versionNumber: version.versionNumber,
-    }))
-    .sort((left, right) => right.versionNumber - left.versionNumber);
+      versionNumber: version.version_number,
+    }));
 }

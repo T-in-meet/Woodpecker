@@ -8,7 +8,6 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { requireAdmin } from "../../../utils/require-admin";
-import { loadAdminAiPromptGraph } from "../../utils/load-admin-prompt-graph";
 import { reportAdminAiLoadError } from "../../utils/report-load-error";
 import {
   getAdminAiAgentDetail,
@@ -23,10 +22,6 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 vi.mock("../../../utils/require-admin", () => ({
   requireAdmin: vi.fn(),
-}));
-
-vi.mock("../../utils/load-admin-prompt-graph", () => ({
-  loadAdminAiPromptGraph: vi.fn(),
 }));
 
 vi.mock("../../utils/report-load-error", () => ({
@@ -104,16 +99,58 @@ function createQuery(
   };
 }
 
-/**
- * Prompt graph 조회를 mock합니다.
- */
-function mockPromptGraph() {
-  vi.mocked(loadAdminAiPromptGraph).mockResolvedValue({
-    agents,
-    families,
-    versionsByFamilyId: new Map(),
-  });
-}
+/** Agent 상세 조회용 agent DB row fixture입니다. */
+const activeAgentRow = {
+  created_at: "2026-08-01T00:00:00.000Z",
+  description: "노트 RAG 답변 Agent",
+  display_name: "노트 RAG 답변",
+  id: ACTIVE_AGENT_ID,
+  purpose: "노트를 기반으로 질문에 답변합니다.",
+  tags: ["notes", "rag"],
+  updated_at: "2026-08-03T03:00:00.000Z",
+};
+
+/** Agent 상세 조회용 family DB row fixture입니다. */
+const familyRow = {
+  agent_id: ACTIVE_AGENT_ID,
+  created_at: "2026-08-01T00:00:00.000Z",
+  description: "기본 답변 Family",
+  display_name: "기본 답변",
+  id: FAMILY_ID,
+  tags: ["default"],
+  updated_at: "2026-08-03T00:00:00.000Z",
+};
+
+/** Agent 상세 조회용 published version DB row fixture입니다. */
+const publishedVersionRow = {
+  change_summary: "published",
+  created_at: "2026-08-03T02:00:00.000Z",
+  created_by: ADMIN_USER_ID,
+  created_by_kind: "admin",
+  display_name: "v2",
+  family_id: FAMILY_ID,
+  id: "55555555-5555-4555-8555-555555555555",
+  lifecycle_status: "published",
+  response_schema: {
+    type: "object",
+  },
+  system_template: "system",
+  tags: ["published"],
+  user_template: "user",
+  variables: [],
+  version_number: 2,
+};
+
+/** Agent 상세 조회용 draft version DB row fixture입니다. */
+const draftVersionRow = {
+  ...publishedVersionRow,
+  change_summary: "draft",
+  created_at: "2026-08-03T01:00:00.000Z",
+  display_name: "v1",
+  id: "66666666-6666-4666-8666-666666666666",
+  lifecycle_status: "draft",
+  version_number: 1,
+};
 
 /**
  * Supabase admin client의 rpc 호출을 mock합니다.
@@ -132,6 +169,85 @@ function mockRpcClient(result: {
   } as unknown as ReturnType<typeof createAdminClient>);
 
   return rpc;
+}
+
+/**
+ * Supabase select query chain mock을 생성합니다.
+ *
+ * @param result 최종 query 반환 결과
+ * @returns query method mocks
+ */
+function createSelectQueryMock(result: {
+  data: unknown;
+  error: { message: string } | null;
+}) {
+  const query = {
+    eq: vi.fn(),
+    in: vi.fn().mockResolvedValue(result),
+    maybeSingle: vi.fn().mockResolvedValue(result),
+    order: vi.fn().mockResolvedValue(result),
+    select: vi.fn(),
+  };
+
+  query.select.mockReturnValue(query);
+  query.eq.mockReturnValue(query);
+
+  return query;
+}
+
+/**
+ * Agent 상세 조회에 사용할 scoped Supabase client를 mock합니다.
+ *
+ * @param overrides 테이블별 조회 결과 override
+ * @returns query method mocks
+ */
+function mockAgentDetailQueryClient(
+  overrides: {
+    agent?: { data: unknown; error: { message: string } | null };
+    families?: { data: unknown; error: { message: string } | null };
+    versions?: { data: unknown; error: { message: string } | null };
+  } = {},
+) {
+  const agentQuery = createSelectQueryMock(
+    overrides.agent ?? {
+      data: activeAgentRow,
+      error: null,
+    },
+  );
+  const familiesQuery = createSelectQueryMock(
+    overrides.families ?? {
+      data: [familyRow],
+      error: null,
+    },
+  );
+  const versionsQuery = createSelectQueryMock(
+    overrides.versions ?? {
+      data: [publishedVersionRow, draftVersionRow],
+      error: null,
+    },
+  );
+  const from = vi.fn((table: string) => {
+    if (table === "ai_prompt_agents") {
+      return agentQuery;
+    }
+
+    if (table === "ai_prompt_families") {
+      return familiesQuery;
+    }
+
+    return versionsQuery;
+  });
+
+  vi.mocked(createAdminClient).mockReturnValue({
+    from,
+  } as unknown as ReturnType<typeof createAdminClient>);
+
+  return {
+    agentQuery,
+    familiesQuery,
+    from,
+    versionsQuery,
+  };
 }
 
 /**
@@ -473,19 +589,38 @@ describe("getAdminAiAgentDetail", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(requireAdmin).mockResolvedValue(ADMIN_USER_ID);
-    mockPromptGraph();
+    mockAgentDetailQueryClient();
   });
 
-  it("Agent와 해당 Agent의 Family 목록을 반환한다", async () => {
+  it("Agent와 해당 Agent의 Family 목록을 scoped query로 반환한다", async () => {
+    const { agentQuery, familiesQuery, from, versionsQuery } =
+      mockAgentDetailQueryClient();
+
     const result = await getAdminAiAgentDetail(ACTIVE_AGENT_ID);
 
     expect(result).toEqual({
       ...agents[0],
       families,
     });
+    expect(from).toHaveBeenCalledWith("ai_prompt_agents");
+    expect(from).toHaveBeenCalledWith("ai_prompt_families");
+    expect(from).toHaveBeenCalledWith("ai_prompt_versions");
+    expect(agentQuery.eq).toHaveBeenCalledWith("id", ACTIVE_AGENT_ID);
+    expect(familiesQuery.eq).toHaveBeenCalledWith("agent_id", ACTIVE_AGENT_ID);
+    expect(familiesQuery.order).toHaveBeenCalledWith("display_name", {
+      ascending: true,
+    });
+    expect(versionsQuery.in).toHaveBeenCalledWith("family_id", [FAMILY_ID]);
   });
 
   it("Agent가 없으면 null을 반환한다", async () => {
+    mockAgentDetailQueryClient({
+      agent: {
+        data: null,
+        error: null,
+      },
+    });
+
     const result = await getAdminAiAgentDetail(
       "99999999-9999-4999-8999-999999999999",
     );
@@ -517,7 +652,6 @@ describe("getAdminAiAgentOptions", () => {
 
     const result = await getAdminAiAgentOptions();
 
-    expect(loadAdminAiPromptGraph).not.toHaveBeenCalled();
     expect(from).toHaveBeenCalledWith("ai_prompt_agents");
     expect(select).toHaveBeenCalledWith("id,display_name");
     expect(order).toHaveBeenCalledWith("display_name", { ascending: true });

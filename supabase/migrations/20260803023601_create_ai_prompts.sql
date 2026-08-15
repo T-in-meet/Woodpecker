@@ -215,8 +215,8 @@ CREATE OR REPLACE TRIGGER "tr_ai_prompt_families_updated_at"
 -- ============================================================================
 
 /**
- * published Version의 system_template과 user_template 변경을 차단합니다.
- * 배포된 Prompt의 실제 Template 이력은 보존하되, Template 이외의 수정 가능한 메타데이터는 제한하지 않습니다.
+ * published/archived Version의 system_template과 user_template 변경을 차단합니다.
+ * 배포 또는 보관된 Prompt의 실제 Template 이력은 보존하되, Template 이외의 수정 가능한 메타데이터는 제한하지 않습니다.
  */
 CREATE OR REPLACE FUNCTION "public"."prevent_published_ai_prompt_template_update"()
 RETURNS "trigger"
@@ -224,13 +224,13 @@ LANGUAGE "plpgsql"
 SET "search_path" = "public"
 AS $$
 BEGIN
-    IF OLD."lifecycle_status" = 'published'
+    IF OLD."lifecycle_status" IN ('published', 'archived')
        AND (
            NEW."system_template" IS DISTINCT FROM OLD."system_template"
            OR NEW."user_template" IS DISTINCT FROM OLD."user_template"
        )
     THEN
-        RAISE EXCEPTION 'Published AI prompt templates cannot be modified'
+        RAISE EXCEPTION 'Published or archived AI prompt templates cannot be modified'
             USING ERRCODE = '23514';
     END IF;
 
@@ -239,7 +239,7 @@ END;
 $$;
 
 /**
- * published Prompt Version의 Template 변경 시 보호 함수를 실행합니다.
+ * published/archived Prompt Version의 Template 변경 시 보호 함수를 실행합니다.
  */
 CREATE OR REPLACE TRIGGER "tr_prevent_published_ai_prompt_template_update"
     BEFORE UPDATE OF "system_template", "user_template"

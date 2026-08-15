@@ -19,6 +19,7 @@ import {
   useUpdateAdminAiPromptVersion,
 } from "../hooks/use-admin-ai-prompt-version-mutations";
 import type { AdminAiPromptFamilyDetail } from "../types";
+import { getAdminAiPromptVersionEditPolicy } from "../utils/version-actions";
 import {
   type AdminAiPromptVersionFormValues,
   buildAiPromptVersionFormData,
@@ -63,13 +64,16 @@ export function AdminAiPromptVersionForm({
   const createMutation = useCreateAdminAiPromptVersion();
   const updateMutation = useUpdateAdminAiPromptVersion();
   const sourceVersion = version ?? family.versions[0] ?? null;
+  const editPolicy = version
+    ? getAdminAiPromptVersionEditPolicy(version.lifecycleStatus)
+    : {
+        canEditMetadata: true,
+        canEditTemplate: true,
+      };
 
-  const editable =
-    createMode ||
-    version?.lifecycleStatus === "draft" ||
-    version?.lifecycleStatus === "published";
+  const editable = createMode || editPolicy.canEditMetadata;
 
-  const templateEditable = createMode || version?.lifecycleStatus === "draft";
+  const templateEditable = createMode || editPolicy.canEditTemplate;
 
   // Published Version은 배포 이력 보호를 위해 개별 삭제를 허용하지 않는다.
   const deletable =

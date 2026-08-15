@@ -4,8 +4,8 @@
 
 BEGIN;
 
--- 이 파일에서 수행할 pgTAP assertion 수가 19개인지 선언합니다.
-SELECT plan(19);
+-- 이 파일에서 수행할 pgTAP assertion 수가 21개인지 선언합니다.
+SELECT plan(21);
 
 
 -- =========================================
@@ -36,6 +36,13 @@ SELECT set_config(
 -- Published Version 수정 정책 검증에 사용할 Version ID를 생성합니다.
 SELECT set_config(
   'test.ai_version_published_id',
+  gen_random_uuid()::text,
+  true
+);
+
+-- Archived Version 수정 정책 검증에 사용할 Version ID를 생성합니다.
+SELECT set_config(
+  'test.ai_version_archived_id',
   gen_random_uuid()::text,
   true
 );
@@ -108,6 +115,38 @@ VALUES (
   '{"type":"object"}'::jsonb,
   '["question"]'::jsonb,
   ARRAY['published']::text[],
+  'user',
+  current_setting('test.ai_version_user_id')::uuid
+);
+
+-- Archived Version의 template 보호 정책을 검증하기 위한 테스트 fixture를 생성합니다.
+INSERT INTO public.ai_prompt_versions (
+  id,
+  family_id,
+  version_number,
+  display_name,
+  change_summary,
+  lifecycle_status,
+  system_template,
+  user_template,
+  response_schema,
+  variables,
+  tags,
+  created_by_kind,
+  created_by
+)
+VALUES (
+  current_setting('test.ai_version_archived_id')::uuid,
+  current_setting('test.ai_version_family_id')::uuid,
+  101,
+  'Archived test version',
+  'archived summary',
+  'archived',
+  'archived system template',
+  'archived user template',
+  '{"type":"object"}'::jsonb,
+  '["question"]'::jsonb,
+  ARRAY['archived']::text[],
   'user',
   current_setting('test.ai_version_user_id')::uuid
 );
@@ -391,7 +430,7 @@ SELECT throws_ok(
     current_setting('test.ai_version_published_id')
   ),
   '23514',
-  'Published AI prompt templates cannot be modified',
+  'Published or archived AI prompt templates cannot be modified',
   'published system_template should be immutable'
 );
 
@@ -407,8 +446,40 @@ SELECT throws_ok(
     current_setting('test.ai_version_published_id')
   ),
   '23514',
-  'Published AI prompt templates cannot be modified',
+  'Published or archived AI prompt templates cannot be modified',
   'published user_template should be immutable'
+);
+
+-- Archived Version의 system_template은 immutable이므로
+-- 변경하려 하면 보호 trigger가 거부해야 합니다.
+SELECT throws_ok(
+  format(
+    $$
+      UPDATE public.ai_prompt_versions
+      SET system_template = 'changed archived system template'
+      WHERE id = '%s'::uuid
+    $$,
+    current_setting('test.ai_version_archived_id')
+  ),
+  '23514',
+  'Published or archived AI prompt templates cannot be modified',
+  'archived system_template should be immutable'
+);
+
+-- Archived Version의 user_template은 immutable이므로
+-- 변경하려 하면 보호 trigger가 거부해야 합니다.
+SELECT throws_ok(
+  format(
+    $$
+      UPDATE public.ai_prompt_versions
+      SET user_template = 'changed archived user template'
+      WHERE id = '%s'::uuid
+    $$,
+    current_setting('test.ai_version_archived_id')
+  ),
+  '23514',
+  'Published or archived AI prompt templates cannot be modified',
+  'archived user_template should be immutable'
 );
 
 -- Published Version의 비-template 관리 필드는 수정 가능해야 합니다.

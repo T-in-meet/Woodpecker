@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { Control, UseFormRegister } from "react-hook-form";
 import { Controller } from "react-hook-form";
 
@@ -96,18 +97,18 @@ export function AdminAiPromptFamilyBasicFields({
         <div className="space-y-2">
           <p className="text-sm font-medium">Agent</p>
           <div className="rounded-md border bg-muted px-3 py-2">
-            <p className="text-sm text-muted-foreground">
-              {readonlyAgentDisplayName}
-            </p>
-
             {currentAgentId ? (
-              <p
-                className="mt-1 truncate font-mono text-xs text-muted-foreground"
-                title={currentAgentId}
+              <Link
+                href={`/admin/ai/agents/${currentAgentId}`}
+                className="text-sm text-muted-foreground underline-offset-4 hover:underline"
               >
-                {currentAgentId}
+                {readonlyAgentDisplayName}
+              </Link>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {readonlyAgentDisplayName}
               </p>
-            ) : null}
+            )}
           </div>
         </div>
       )}

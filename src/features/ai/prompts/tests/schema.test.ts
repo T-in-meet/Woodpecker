@@ -147,11 +147,12 @@ describe("aiPromptVersionRowSchema", () => {
     system_template: "시스템 프롬프트",
     tags: ["default"],
     user_template: "{{question}}",
-    variables: {
-      question: {
+    variables: [
+      {
+        name: "question",
         type: "string",
       },
-    },
+    ],
     version_number: 2,
   };
 

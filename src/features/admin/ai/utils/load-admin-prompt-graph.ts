@@ -1,5 +1,3 @@
-"use server";
-
 import { z } from "zod";
 
 import { aiPromptAgentRowSchema } from "@/features/ai/prompts/schema";
@@ -26,7 +24,7 @@ import { reportAdminAiLoadError } from "./report-load-error";
  * @param row prompt version DB row
  * @returns 관리자 prompt version 행
  */
-function mapVersionRow(
+export function mapVersionRow(
   row: z.infer<typeof aiPromptVersionRowSchema>,
 ): AdminAiPromptVersionRow {
   return {
@@ -75,7 +73,7 @@ function countVersionStatuses(versions: AdminAiPromptVersionRow[]) {
  * @param versions family에 속한 version 목록
  * @returns 관리자 prompt family 행
  */
-function mapFamilyRow(
+export function mapFamilyRow(
   row: z.infer<typeof aiPromptFamilyRowSchema>,
   agentDisplayName: string,
   versions: AdminAiPromptVersionRow[],
@@ -105,7 +103,7 @@ function mapFamilyRow(
  * @param versionsByFamilyId family별 version 목록
  * @returns 관리자 agent 행
  */
-function mapAgentRow(
+export function mapAgentRow(
   row: z.infer<typeof aiPromptAgentRowSchema>,
   families: AdminAiPromptFamilyRow[],
   versionsByFamilyId: Map<string, AdminAiPromptVersionRow[]>,
@@ -161,9 +159,23 @@ export async function loadAdminAiPromptGraph(
 ): Promise<AiPromptGraph> {
   const supabase = createAdminClient();
 
-  const { data: agentRows, error: agentError } = await supabase
-    .from("ai_prompt_agents")
-    .select("id,display_name,description,purpose,tags,created_at,updated_at");
+  const [agentResult, familyResult, versionResult] = await Promise.all([
+    supabase
+      .from("ai_prompt_agents")
+      .select("id,display_name,description,purpose,tags,created_at,updated_at"),
+    supabase
+      .from("ai_prompt_families")
+      .select(
+        "id,agent_id,display_name,description,tags,created_at,updated_at",
+      ),
+    supabase
+      .from("ai_prompt_versions")
+      .select(
+        "id,family_id,version_number,display_name,change_summary,lifecycle_status,system_template,user_template,response_schema,variables,tags,created_by_kind,created_by,created_at",
+      ),
+  ]);
+
+  const { data: agentRows, error: agentError } = agentResult;
 
   if (agentError) {
     await reportAdminAiLoadError({
@@ -178,9 +190,7 @@ export async function loadAdminAiPromptGraph(
     throw new Error(`Failed to load admin AI agents: ${agentError.message}`);
   }
 
-  const { data: familyRows, error: familyError } = await supabase
-    .from("ai_prompt_families")
-    .select("id,agent_id,display_name,description,tags,created_at,updated_at");
+  const { data: familyRows, error: familyError } = familyResult;
 
   if (familyError) {
     await reportAdminAiLoadError({
@@ -197,11 +207,7 @@ export async function loadAdminAiPromptGraph(
     );
   }
 
-  const { data: versionRows, error: versionError } = await supabase
-    .from("ai_prompt_versions")
-    .select(
-      "id,family_id,version_number,display_name,change_summary,lifecycle_status,system_template,user_template,response_schema,variables,tags,created_by_kind,created_by,created_at",
-    );
+  const { data: versionRows, error: versionError } = versionResult;
 
   if (versionError) {
     await reportAdminAiLoadError({

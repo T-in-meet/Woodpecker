@@ -7,6 +7,48 @@ export type AdminAiPromptVersionAction =
   | "publish"
   | "republish";
 
+/** Prompt Version lifecycle에 따른 편집 가능 필드 정책입니다. */
+export type AdminAiPromptVersionEditPolicy = {
+  /** Template을 제외한 관리 필드를 수정할 수 있는지 여부입니다. */
+  canEditMetadata: boolean;
+
+  /** System/User Template을 수정할 수 있는지 여부입니다. */
+  canEditTemplate: boolean;
+};
+
+/**
+ * Prompt Version의 lifecycle 상태에 따라 편집 가능 필드 정책을 반환합니다.
+ *
+ * Draft Version은 모든 필드를 수정할 수 있고, Published Version은 배포 이력
+ * 보호를 위해 Template을 제외한 관리 필드만 수정할 수 있습니다. Archived
+ * Version은 수정할 수 없습니다.
+ *
+ * @param lifecycleStatus Prompt Version lifecycle 상태
+ * @returns 편집 가능 필드 정책
+ */
+export function getAdminAiPromptVersionEditPolicy(
+  lifecycleStatus: AdminAiPromptVersionStatus,
+): AdminAiPromptVersionEditPolicy {
+  if (lifecycleStatus === "draft") {
+    return {
+      canEditMetadata: true,
+      canEditTemplate: true,
+    };
+  }
+
+  if (lifecycleStatus === "published") {
+    return {
+      canEditMetadata: true,
+      canEditTemplate: false,
+    };
+  }
+
+  return {
+    canEditMetadata: false,
+    canEditTemplate: false,
+  };
+}
+
 /**
  * Prompt Version의 lifecycle 상태에 따라 허용할 작업을 반환합니다.
  *

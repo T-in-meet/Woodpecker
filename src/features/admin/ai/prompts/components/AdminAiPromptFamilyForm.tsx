@@ -190,7 +190,7 @@ export function AdminAiPromptFamilyForm({
                   </Button>
                 }
                 title="AI Prompt Family를 삭제할까요?"
-                description="삭제한 Prompt Family와 하위 Version은 복구할 수 없습니다."
+                description="삭제한 Prompt Family와 하위 Version은 복구할 수 없으며, 하위 Published Version도 함께 삭제될 수 있습니다."
                 confirmLabel="삭제"
                 confirmVariant="destructive"
                 cancelLabel="취소"

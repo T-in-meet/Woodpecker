@@ -60,7 +60,7 @@ function createFamilyFormData() {
   formData.set("systemTemplate", "시스템 프롬프트");
   formData.set("tags", "default, answer");
   formData.set("userTemplate", "{{question}}");
-  formData.set("variables", '{"question":{"type":"string"}}');
+  formData.set("variables", '[{"name":"question","type":"string"}]');
   formData.set("versionDisplayName", "기본 버전");
 
   return formData;
@@ -96,7 +96,7 @@ function createVersionFormData() {
   formData.set("systemTemplate", "시스템 프롬프트");
   formData.set("tags", "default, draft");
   formData.set("userTemplate", "{{question}}");
-  formData.set("variables", '{"question":{"type":"string"}}');
+  formData.set("variables", '[{"name":"question","type":"string"}]');
   formData.set("versionDisplayName", "버전 2");
 
   return formData;
@@ -143,11 +143,12 @@ function createVersionRow(
     systemTemplate: "시스템 프롬프트",
     tags: ["default"],
     userTemplate: "{{question}}",
-    variables: {
-      question: {
+    variables: [
+      {
+        name: "question",
         type: "string",
       },
-    },
+    ],
     versionNumber: 1,
     ...overrides,
   };
@@ -324,11 +325,12 @@ describe("createAdminAiPromptFamily", () => {
         p_system_template: "시스템 프롬프트",
         p_tags: ["default", "answer"],
         p_user_template: "{{question}}",
-        p_variables: {
-          question: {
+        p_variables: [
+          {
+            name: "question",
             type: "string",
           },
-        },
+        ],
         p_version_display_name: "기본 버전",
       },
     );
@@ -554,11 +556,12 @@ describe("createAdminAiPromptVersion", () => {
       p_system_template: "시스템 프롬프트",
       p_tags: ["default", "draft"],
       p_user_template: "{{question}}",
-      p_variables: {
-        question: {
+      p_variables: [
+        {
+          name: "question",
           type: "string",
         },
-      },
+      ],
     });
     expect(result).toEqual({
       id: VERSION_ID,
@@ -615,11 +618,12 @@ describe("updateAdminAiPromptVersion", () => {
       system_template: "수정된 시스템 프롬프트",
       tags: ["default", "draft"],
       user_template: "수정된 사용자 프롬프트",
-      variables: {
-        question: {
+      variables: [
+        {
+          name: "question",
           type: "string",
         },
-      },
+      ],
     });
     expect(lifecycleEq).toHaveBeenCalledWith("lifecycle_status", "draft");
     expect(maybeSingle).toHaveBeenCalledOnce();
@@ -676,11 +680,12 @@ describe("updateAdminAiPromptVersion", () => {
         type: "object",
       },
       tags: ["default", "draft"],
-      variables: {
-        question: {
+      variables: [
+        {
+          name: "question",
           type: "string",
         },
-      },
+      ],
     });
     expect(update).not.toHaveBeenCalledWith(
       expect.objectContaining({

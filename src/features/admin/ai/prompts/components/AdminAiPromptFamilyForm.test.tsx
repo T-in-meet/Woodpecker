@@ -232,8 +232,16 @@ describe("AdminAiPromptFamilyForm", () => {
 
     render(<AdminAiPromptFamilyForm family={family} />);
 
-    expect(screen.getByText(family.agentDisplayName)).toBeVisible();
-    expect(screen.getByText(family.agentId)).toBeVisible();
+    const agentLink = screen.getByRole("link", {
+      name: family.agentDisplayName,
+    });
+
+    expect(agentLink).toBeVisible();
+    expect(agentLink).toHaveAttribute(
+      "href",
+      `/admin/ai/agents/${family.agentId}`,
+    );
+    expect(screen.queryByText(family.agentId)).not.toBeInTheDocument();
   });
 
   it("수정 모드에서는 Family 수정 값과 familyId만 전송한다", async () => {
@@ -294,5 +302,19 @@ describe("AdminAiPromptFamilyForm", () => {
     expect(updateMutateAsyncMock).toHaveBeenCalledTimes(1);
     expect(submitButton).toBeDisabled();
     expect(routerRefreshMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("삭제 확인 다이얼로그에서 하위 Published Version 삭제 가능성을 안내한다", async () => {
+    const user = userEvent.setup();
+
+    render(<AdminAiPromptFamilyForm family={createFamilyFixture()} />);
+
+    await user.click(screen.getByRole("button", { name: "삭제" }));
+
+    expect(
+      await screen.findByText(
+        /하위 Published Version도 함께 삭제될 수 있습니다/,
+      ),
+    ).toBeVisible();
   });
 });

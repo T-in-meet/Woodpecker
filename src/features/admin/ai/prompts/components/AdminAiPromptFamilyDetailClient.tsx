@@ -56,7 +56,7 @@ export function AdminAiPromptFamilyDetailClient({
 
       <AdminDetailPageHeader
         title="AI Prompt 상세"
-        description="Prompt Family는 Agent에 적용할 수 있는 프롬프트 스타일 묶음이며 key는 생성 후 변경할 수 없습니다."
+        description="Prompt Family는 Agent에 적용할 수 있는 프롬프트 스타일 묶음이며 Agent 연결은 생성 후 변경할 수 없습니다."
         backHref={ROUTES.ADMIN.AI.PROMPTS}
         backLabel="Prompt 목록"
         actions={

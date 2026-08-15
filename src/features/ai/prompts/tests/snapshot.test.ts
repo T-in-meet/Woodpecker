@@ -47,11 +47,12 @@ const version: AiPromptVersion = {
   system_template: "system",
   tags: ["rag", "default"],
   user_template: "user",
-  variables: {
-    question: {
+  variables: [
+    {
+      name: "question",
       type: "string",
     },
-  },
+  ],
   version_number: 2,
 };
 
@@ -75,11 +76,12 @@ describe("createAiPromptSnapshot", () => {
       systemTemplate: "system",
       tags: ["rag", "default"],
       userTemplate: "user",
-      variables: {
-        question: {
+      variables: [
+        {
+          name: "question",
           type: "string",
         },
-      },
+      ],
       versionNumber: 2,
     });
   });

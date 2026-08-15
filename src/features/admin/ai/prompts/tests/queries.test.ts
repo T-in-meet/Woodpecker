@@ -8,7 +8,6 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { requireAdmin } from "../../../utils/require-admin";
-import { loadAdminAiPromptGraph } from "../../utils/load-admin-prompt-graph";
 import { reportAdminAiLoadError } from "../../utils/report-load-error";
 import {
   getAdminAiPromptFamilies,
@@ -25,10 +24,6 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 vi.mock("../../../utils/require-admin", () => ({
   requireAdmin: vi.fn(),
-}));
-
-vi.mock("../../utils/load-admin-prompt-graph", () => ({
-  loadAdminAiPromptGraph: vi.fn(),
 }));
 
 vi.mock("../../utils/report-load-error", () => ({
@@ -84,11 +79,12 @@ const publishedVersion = {
   systemTemplate: "시스템 프롬프트 v3",
   tags: ["published"],
   userTemplate: "{{question}}",
-  variables: {
-    question: {
+  variables: [
+    {
+      name: "question",
       type: "string",
     },
-  },
+  ],
   versionNumber: 3,
 };
 
@@ -154,17 +150,74 @@ const families = [
 ];
 
 /**
- * Prompt graph 조회 결과를 설정합니다.
+ * Prompt Family 상세 조회용 agent DB row fixture입니다.
  */
-function mockPromptGraph() {
-  vi.mocked(loadAdminAiPromptGraph).mockResolvedValue({
-    agents: [],
-    families,
-    versionsByFamilyId: new Map([
-      [FAMILY_ID, [draftVersion, publishedVersion, olderPublishedVersion]],
-    ]),
-  });
-}
+const agentRow = {
+  created_at: "2026-08-01T00:00:00.000Z",
+  description: "노트 RAG 답변 Agent",
+  display_name: "노트 RAG 답변",
+  id: AGENT_ID,
+  purpose: "노트를 기반으로 질문에 답변합니다.",
+  tags: ["notes", "rag"],
+  updated_at: "2026-08-03T00:00:00.000Z",
+};
+
+/** Prompt Family 상세 조회용 family DB row fixture입니다. */
+const familyRow = {
+  agent_id: AGENT_ID,
+  created_at: "2026-08-01T00:00:00.000Z",
+  description: "기본 답변 Prompt",
+  display_name: "기본 답변",
+  id: FAMILY_ID,
+  tags: ["default"],
+  updated_at: "2026-08-03T04:00:00.000Z",
+};
+
+/** Version 상세 조회용 published version DB row fixture입니다. */
+const publishedVersionRow = {
+  change_summary: "응답 형식 개선",
+  created_at: "2026-08-03T03:00:00.000Z",
+  created_by: ADMIN_USER_ID,
+  created_by_kind: "admin",
+  display_name: "기본 답변 v3",
+  family_id: FAMILY_ID,
+  id: PUBLISHED_VERSION_ID,
+  lifecycle_status: "published",
+  response_schema: {
+    type: "object",
+  },
+  system_template: "시스템 프롬프트 v3",
+  tags: ["published"],
+  user_template: "{{question}}",
+  variables: [
+    {
+      name: "question",
+      type: "string",
+    },
+  ],
+  version_number: 3,
+};
+
+/** Version 상세 조회용 이전 published version DB row fixture입니다. */
+const olderPublishedVersionRow = {
+  ...publishedVersionRow,
+  change_summary: "이전 발행 버전",
+  created_at: "2026-08-03T02:00:00.000Z",
+  display_name: "기본 답변 v2",
+  id: OLDER_PUBLISHED_VERSION_ID,
+  version_number: 2,
+};
+
+/** Version 상세 조회용 draft version DB row fixture입니다. */
+const draftVersionRow = {
+  ...publishedVersionRow,
+  change_summary: "새 초안",
+  created_at: "2026-08-03T04:00:00.000Z",
+  display_name: "기본 답변 v4 draft",
+  id: DRAFT_VERSION_ID,
+  lifecycle_status: "draft",
+  version_number: 4,
+};
 
 /**
  * Supabase RPC client를 설정합니다.
@@ -183,6 +236,130 @@ function mockRpcClient(result: {
   } as unknown as ReturnType<typeof createAdminClient>);
 
   return rpc;
+}
+
+/**
+ * Supabase select query chain mock을 생성합니다.
+ *
+ * @param result 최종 query 반환 결과
+ * @returns query method mocks
+ */
+function createSelectQueryMock(result: {
+  data: unknown;
+  error: { message: string } | null;
+}) {
+  const query = {
+    eq: vi.fn(),
+    maybeSingle: vi.fn().mockResolvedValue(result),
+    order: vi.fn().mockResolvedValue(result),
+    select: vi.fn(),
+  };
+
+  query.select.mockReturnValue(query);
+  query.eq.mockReturnValue(query);
+
+  return query;
+}
+
+/**
+ * Prompt Family 상세 조회에 사용할 scoped Supabase client를 mock합니다.
+ *
+ * @param overrides 테이블별 조회 결과 override
+ * @returns query method mocks
+ */
+function mockFamilyDetailQueryClient(
+  overrides: {
+    agent?: { data: unknown; error: { message: string } | null };
+    family?: { data: unknown; error: { message: string } | null };
+    versions?: { data: unknown; error: { message: string } | null };
+  } = {},
+) {
+  const familyQuery = createSelectQueryMock(
+    overrides.family ?? {
+      data: familyRow,
+      error: null,
+    },
+  );
+  const agentQuery = createSelectQueryMock(
+    overrides.agent ?? {
+      data: agentRow,
+      error: null,
+    },
+  );
+  const versionsQuery = createSelectQueryMock(
+    overrides.versions ?? {
+      data: [draftVersionRow, publishedVersionRow, olderPublishedVersionRow],
+      error: null,
+    },
+  );
+  const from = vi.fn((table: string) => {
+    if (table === "ai_prompt_families") {
+      return familyQuery;
+    }
+
+    if (table === "ai_prompt_agents") {
+      return agentQuery;
+    }
+
+    return versionsQuery;
+  });
+
+  vi.mocked(createAdminClient).mockReturnValue({
+    from,
+  } as unknown as ReturnType<typeof createAdminClient>);
+
+  return {
+    agentQuery,
+    familyQuery,
+    from,
+    versionsQuery,
+  };
+}
+
+/**
+ * Prompt Family option 조회에 사용할 Supabase client를 mock합니다.
+ *
+ * @param result 조회 결과
+ * @returns query method mocks
+ */
+function mockFamilyOptionsQueryClient(result: {
+  data: unknown;
+  error: { message: string } | null;
+}) {
+  const query = createSelectQueryMock(result);
+  const from = vi.fn(() => query);
+
+  vi.mocked(createAdminClient).mockReturnValue({
+    from,
+  } as unknown as ReturnType<typeof createAdminClient>);
+
+  return {
+    from,
+    query,
+  };
+}
+
+/**
+ * Prompt Version option 조회에 사용할 Supabase client를 mock합니다.
+ *
+ * @param result 조회 결과
+ * @returns query method mocks
+ */
+function mockVersionOptionsQueryClient(result: {
+  data: unknown;
+  error: { message: string } | null;
+}) {
+  const query = createSelectQueryMock(result);
+  const from = vi.fn(() => query);
+
+  vi.mocked(createAdminClient).mockReturnValue({
+    from,
+  } as unknown as ReturnType<typeof createAdminClient>);
+
+  return {
+    from,
+    query,
+  };
 }
 
 beforeEach(() => {
@@ -525,20 +702,48 @@ describe("getAdminAiPromptFamilies", () => {
 
 describe("getAdminAiPromptFamilyDetail", () => {
   beforeEach(() => {
-    mockPromptGraph();
+    mockFamilyDetailQueryClient();
   });
 
-  it("Family와 해당 Version 목록을 반환한다", async () => {
+  it("Family와 해당 Version 목록을 scoped query로 반환한다", async () => {
+    const { agentQuery, familyQuery, from, versionsQuery } =
+      mockFamilyDetailQueryClient();
     const result = await getAdminAiPromptFamilyDetail(FAMILY_ID);
 
     expect(result).toEqual({
       ...families[0],
       versions: [draftVersion, publishedVersion, olderPublishedVersion],
     });
-    expect(loadAdminAiPromptGraph).toHaveBeenCalledWith(ADMIN_USER_ID);
+    expect(from).toHaveBeenCalledWith("ai_prompt_families");
+    expect(from).toHaveBeenCalledWith("ai_prompt_agents");
+    expect(from).toHaveBeenCalledWith("ai_prompt_versions");
+    expect(familyQuery.eq).toHaveBeenCalledWith("id", FAMILY_ID);
+    expect(agentQuery.eq).toHaveBeenCalledWith("id", AGENT_ID);
+    expect(versionsQuery.eq).toHaveBeenCalledWith("family_id", FAMILY_ID);
+    expect(versionsQuery.order).toHaveBeenCalledWith("version_number", {
+      ascending: false,
+    });
   });
 
   it("Version 목록이 없으면 빈 배열을 반환한다", async () => {
+    mockFamilyDetailQueryClient({
+      family: {
+        data: {
+          ...familyRow,
+          description: "간결한 답변 Prompt",
+          display_name: "간결한 답변",
+          id: OTHER_FAMILY_ID,
+          tags: ["concise"],
+          updated_at: "2026-08-03T01:00:00.000Z",
+        },
+        error: null,
+      },
+      versions: {
+        data: [],
+        error: null,
+      },
+    });
+
     const result = await getAdminAiPromptFamilyDetail(OTHER_FAMILY_ID);
 
     expect(result).toEqual({
@@ -548,6 +753,13 @@ describe("getAdminAiPromptFamilyDetail", () => {
   });
 
   it("Family를 찾을 수 없으면 null을 반환한다", async () => {
+    mockFamilyDetailQueryClient({
+      family: {
+        data: null,
+        error: null,
+      },
+    });
+
     const result = await getAdminAiPromptFamilyDetail(
       "99999999-9999-4999-8999-999999999999",
     );
@@ -558,7 +770,7 @@ describe("getAdminAiPromptFamilyDetail", () => {
 
 describe("getAdminAiPromptVersionDetail", () => {
   beforeEach(() => {
-    mockPromptGraph();
+    mockFamilyDetailQueryClient();
   });
 
   it("Family와 Version 상세를 반환한다", async () => {
@@ -577,6 +789,13 @@ describe("getAdminAiPromptVersionDetail", () => {
   });
 
   it("Family를 찾을 수 없으면 null을 반환한다", async () => {
+    mockFamilyDetailQueryClient({
+      family: {
+        data: null,
+        error: null,
+      },
+    });
+
     const result = await getAdminAiPromptVersionDetail(
       "99999999-9999-4999-8999-999999999999",
       PUBLISHED_VERSION_ID,
@@ -597,12 +816,47 @@ describe("getAdminAiPromptVersionDetail", () => {
 
 describe("getAdminAiPromptFamilyOptions", () => {
   beforeEach(() => {
-    mockPromptGraph();
+    mockFamilyOptionsQueryClient({
+      data: [
+        {
+          agent_id: AGENT_ID,
+          display_name: "간결한 답변",
+          id: OTHER_FAMILY_ID,
+        },
+        {
+          agent_id: AGENT_ID,
+          display_name: "기본 답변",
+          id: FAMILY_ID,
+        },
+      ],
+      error: null,
+    });
   });
 
   it("지정한 Agent의 Prompt Family만 표시 이름순으로 반환한다", async () => {
+    const { from, query } = mockFamilyOptionsQueryClient({
+      data: [
+        {
+          agent_id: AGENT_ID,
+          display_name: "간결한 답변",
+          id: OTHER_FAMILY_ID,
+        },
+        {
+          agent_id: AGENT_ID,
+          display_name: "기본 답변",
+          id: FAMILY_ID,
+        },
+      ],
+      error: null,
+    });
+
     const result = await getAdminAiPromptFamilyOptions(AGENT_ID);
 
+    expect(from).toHaveBeenCalledWith("ai_prompt_families");
+    expect(query.eq).toHaveBeenCalledWith("agent_id", AGENT_ID);
+    expect(query.order).toHaveBeenCalledWith("display_name", {
+      ascending: true,
+    });
     expect(result).toEqual([
       {
         agentId: AGENT_ID,
@@ -618,6 +872,11 @@ describe("getAdminAiPromptFamilyOptions", () => {
   });
 
   it("해당 Agent의 Prompt Family가 없으면 빈 배열을 반환한다", async () => {
+    mockFamilyOptionsQueryClient({
+      data: [],
+      error: null,
+    });
+
     const result = await getAdminAiPromptFamilyOptions(
       "99999999-9999-4999-8999-999999999999",
     );
@@ -628,12 +887,52 @@ describe("getAdminAiPromptFamilyOptions", () => {
 
 describe("getAdminAiPromptVersionOptions", () => {
   beforeEach(() => {
-    mockPromptGraph();
+    mockVersionOptionsQueryClient({
+      data: [
+        {
+          display_name: "기본 답변 v3",
+          family_id: FAMILY_ID,
+          id: PUBLISHED_VERSION_ID,
+          version_number: 3,
+        },
+        {
+          display_name: "기본 답변 v2",
+          family_id: FAMILY_ID,
+          id: OLDER_PUBLISHED_VERSION_ID,
+          version_number: 2,
+        },
+      ],
+      error: null,
+    });
   });
 
   it("Published Version만 버전 번호 내림차순으로 반환한다", async () => {
+    const { from, query } = mockVersionOptionsQueryClient({
+      data: [
+        {
+          display_name: "기본 답변 v3",
+          family_id: FAMILY_ID,
+          id: PUBLISHED_VERSION_ID,
+          version_number: 3,
+        },
+        {
+          display_name: "기본 답변 v2",
+          family_id: FAMILY_ID,
+          id: OLDER_PUBLISHED_VERSION_ID,
+          version_number: 2,
+        },
+      ],
+      error: null,
+    });
+
     const result = await getAdminAiPromptVersionOptions(FAMILY_ID);
 
+    expect(from).toHaveBeenCalledWith("ai_prompt_versions");
+    expect(query.eq).toHaveBeenCalledWith("family_id", FAMILY_ID);
+    expect(query.eq).toHaveBeenCalledWith("lifecycle_status", "published");
+    expect(query.order).toHaveBeenCalledWith("version_number", {
+      ascending: false,
+    });
     expect(result).toEqual([
       {
         displayName: "기본 답변 v3",
@@ -651,6 +950,11 @@ describe("getAdminAiPromptVersionOptions", () => {
   });
 
   it("해당 Family의 Version이 없으면 빈 배열을 반환한다", async () => {
+    mockVersionOptionsQueryClient({
+      data: [],
+      error: null,
+    });
+
     const result = await getAdminAiPromptVersionOptions(OTHER_FAMILY_ID);
 
     expect(result).toEqual([]);

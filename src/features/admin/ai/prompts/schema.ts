@@ -8,6 +8,38 @@ import {
 } from "../schema";
 
 /**
+ * 값이 JSON object로 저장 가능한 top-level object인지 확인합니다.
+ *
+ * 배열과 null은 JSON object와 별도 타입으로 취급하므로 거부합니다.
+ *
+ * @param value 검증할 JSON 파싱 결과
+ * @returns top-level JSON object 여부
+ */
+function isTopLevelJsonObject(value: z.infer<typeof jsonTextSchema>): boolean {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+/**
+ * JSON 문자열 입력을 response_schema DB 제약과 동일한 object/null로 검증합니다.
+ */
+const responseSchemaJsonTextSchema = jsonTextSchema.refine(
+  (value) => value === null || isTopLevelJsonObject(value),
+  {
+    message: "Response Schema는 JSON 객체로 입력해주세요.",
+  },
+);
+
+/**
+ * JSON 문자열 입력을 variables DB 제약과 동일한 array/null로 검증합니다.
+ */
+const variablesJsonTextSchema = jsonTextSchema.refine(
+  (value) => value === null || Array.isArray(value),
+  {
+    message: "Variables는 JSON 배열로 입력해주세요.",
+  },
+);
+
+/**
  * Prompt template이 공백만으로 구성되지 않았는지 검증합니다.
  *
  * 실제 template 값의 앞뒤 공백은 보존하고 유효성만 확인합니다.
@@ -26,11 +58,11 @@ export const createFamilySchema = z.object({
   changeSummary: nullableTextSchema,
   description: nullableTextSchema,
   displayName: z.string().trim().min(1),
-  responseSchema: jsonTextSchema,
+  responseSchema: responseSchemaJsonTextSchema,
   systemTemplate: promptTemplateSchema,
   tags: tagsSchema,
   userTemplate: promptTemplateSchema,
-  variables: jsonTextSchema,
+  variables: variablesJsonTextSchema,
   versionDisplayName: z.string().trim().min(1),
 });
 
@@ -50,11 +82,11 @@ export const updateFamilySchema = z.object({
 export const createVersionSchema = z.object({
   changeSummary: nullableTextSchema,
   familyId: uuidSchema,
-  responseSchema: jsonTextSchema,
+  responseSchema: responseSchemaJsonTextSchema,
   systemTemplate: promptTemplateSchema,
   tags: tagsSchema,
   userTemplate: promptTemplateSchema,
-  variables: jsonTextSchema,
+  variables: variablesJsonTextSchema,
   versionDisplayName: z.string().trim().min(1),
 });
 
