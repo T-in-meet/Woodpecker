@@ -1,7 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-
 import { Button } from "@/components/ui/button";
 import { AdminCollapsibleSection } from "@/features/admin/components/common/AdminCollapsibleSection";
 import { AdminListError } from "@/features/admin/components/common/AdminListState";
@@ -28,8 +26,12 @@ type AdminAiAgentDetailClientProps = {
 export function AdminAiAgentDetailClient({
   agentId,
 }: AdminAiAgentDetailClientProps) {
-  const router = useRouter();
-  const { data: agent, isError, isPending } = useAdminAiAgentDetail(agentId);
+  const {
+    data: agent,
+    isError,
+    isPending,
+    refetch,
+  } = useAdminAiAgentDetail(agentId);
 
   return (
     <div className="space-y-6">
@@ -62,7 +64,9 @@ export function AdminAiAgentDetailClient({
             <Button
               type="button"
               variant="outline"
-              onClick={() => router.refresh()}
+              onClick={() => {
+                void refetch();
+              }}
             >
               다시 시도
             </Button>
