@@ -549,7 +549,7 @@ describe("generateQuiz", () => {
 
       expect(result).toEqual({
         error:
-          "오늘 만들 수 있는 퀴즈를 모두 사용했습니다. 내일 다시 시도해주세요.",
+          "오늘 AI 퀴즈 생성 횟수를 모두 사용했습니다. 기존 퀴즈는 다시 풀 수 있어요.",
       });
       expect(generateJsonMock).not.toHaveBeenCalled();
     });
@@ -635,7 +635,7 @@ describe("generateQuiz", () => {
 
       expect(result).toEqual({
         error:
-          "오늘 만들 수 있는 퀴즈를 모두 사용했습니다. 내일 다시 시도해주세요.",
+          "오늘 AI 퀴즈 생성 횟수를 모두 사용했습니다. 기존 퀴즈는 다시 풀 수 있어요.",
       });
       expect(generateJsonMock).not.toHaveBeenCalled();
     });

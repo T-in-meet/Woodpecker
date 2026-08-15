@@ -1,7 +1,7 @@
 -- =========================================
 -- review_grading_generations / AI 채점 사용량 한도
 --
--- 한도 값은 claim_review_grading 안의 상수다(일 30회 / 60초 10회).
+-- 한도 값은 claim_review_grading 안의 상수다(일 5회 / 60초 10회).
 -- 여기서는 "기록이 남는 경로와 남지 않는 경로"를 구분하는지, 그리고 한도를 넘기면
 -- AI를 부르기 전에 막히는지를 본다.
 -- =========================================
@@ -227,9 +227,8 @@ SELECT is(
   $$60초 안에 10회를 채우면 too_many_requests를 반환해야 한다$$
 );
 
--- 버스트 윈도우를 벗어난 기록이 30건이면 daily_exceeded여야 한다
-UPDATE public.review_grading_generations
-SET created_at = now() - interval '2 minutes'
+-- 버스트 테스트의 기록을 비운 뒤, 윈도우 밖 기록이 5건이면 daily_exceeded여야 한다
+DELETE FROM public.review_grading_generations
 WHERE user_id = current_setting('test.rgl_user_id')::uuid;
 
 INSERT INTO public.review_grading_generations (user_id, review_log_id, created_at)
@@ -237,7 +236,7 @@ SELECT
   current_setting('test.rgl_user_id')::uuid,
   NULL,
   now() - interval '2 minutes'
-FROM generate_series(1, 19);
+FROM generate_series(1, 5);
 
 SELECT is(
   public.claim_review_grading(
@@ -247,7 +246,7 @@ SELECT is(
     current_setting('test.rgl_content_hash')
   ) ->> 'status',
   'daily_exceeded',
-  $$하루 30회를 채우면 다른 복습 로그도 선점할 수 없어야 한다$$
+  $$하루 5회를 채우면 다른 복습 로그도 선점할 수 없어야 한다$$
 );
 
 -- 한도는 사용자 단위다. 한 사람이 다 썼다고 다른 사람까지 막으면 안 된다.

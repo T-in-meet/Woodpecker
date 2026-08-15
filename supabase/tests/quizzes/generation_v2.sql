@@ -222,6 +222,11 @@ SELECT is(
 --    → B token으로 finalize = ok
 -- =========================================
 
+-- 앞선 시나리오의 선점 기록이 새 일일 3회 한도에 간섭하지 않게 범위 밖으로 옮긴다.
+UPDATE public.quiz_generations
+SET created_at = now() - interval '2 days'
+WHERE user_id = current_setting('test.qgv2_user_a_id')::uuid;
+
 SELECT set_config(
   'test.qgv2_claim_a',
   public.claim_quiz_generation_v2(
@@ -299,6 +304,11 @@ SELECT is(
 -- 5. 판정 순서 고정 — 완료된 과거 claim보다 새 claim이 있으면
 --    과거 token은 already_completed가 아니라 stale_claim이어야 한다
 -- =========================================
+
+-- 선점 인계 시나리오의 기록도 일일 범위 밖으로 옮겨 판정 순서만 격리해 검증한다.
+UPDATE public.quiz_generations
+SET created_at = now() - interval '2 days'
+WHERE user_id = current_setting('test.qgv2_user_a_id')::uuid;
 
 SELECT set_config(
   'test.qgv2_claim_c',
@@ -381,7 +391,7 @@ SELECT is(
 -- =========================================
 
 UPDATE public.quiz_generations
-SET created_at = now() - interval '2 minutes'
+SET created_at = now() - interval '2 days'
 WHERE user_id = current_setting('test.qgv2_user_a_id')::uuid;
 
 INSERT INTO public.quiz_generations (user_id, note_id, quiz_type, completed_at, created_at)
@@ -391,7 +401,7 @@ SELECT
   'daily_' || i,
   now() - interval '2 minutes',
   now() - interval '2 minutes'
-FROM generate_series(1, 30) AS i;
+FROM generate_series(1, 3) AS i;
 
 SELECT is(
   public.claim_quiz_generation_v2(
@@ -400,7 +410,7 @@ SELECT is(
     'daily_probe'
   ) ->> 'status',
   'daily_exceeded',
-  $$완료된 행도 일일 한도에 포함돼야 한다$$
+  $$완료된 행 3건도 일일 한도에 포함돼야 한다$$
 );
 
 SELECT * FROM finish();
