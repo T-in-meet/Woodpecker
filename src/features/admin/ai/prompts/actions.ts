@@ -184,8 +184,7 @@ export async function deleteAdminAiPromptFamily(
 
   if (data !== "OK") {
     return {
-      message:
-        "시스템 관리 Prompt Family이거나 AI 설정에서 사용 중인 Version이 있는 Family는 삭제할 수 없습니다.",
+      message: "Prompt Family 삭제 요청을 처리하지 못했습니다.",
       ok: false,
     };
   }
@@ -316,9 +315,9 @@ export async function updateAdminAiPromptVersion(
   const commonUpdate = {
     change_summary: parsedInput.data.changeSummary,
     display_name: parsedInput.data.versionDisplayName,
-    response_schema: parsedInput.data.responseSchema,
+    response_schema: parsedInput.data.responseSchema ?? {},
     tags: parsedInput.data.tags,
-    variables: parsedInput.data.variables,
+    variables: parsedInput.data.variables ?? [],
   };
 
   const update =

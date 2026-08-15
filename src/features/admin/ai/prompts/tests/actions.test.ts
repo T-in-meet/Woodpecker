@@ -452,14 +452,13 @@ describe("deleteAdminAiPromptFamily", () => {
     expect(revalidateAdminAiPaths).not.toHaveBeenCalled();
   });
 
-  it("삭제 불가 상태를 반환하면 실패한다", async () => {
-    mockRpc("NOT_DELETABLE");
+  it("알 수 없는 삭제 RPC 결과를 반환하면 실패한다", async () => {
+    mockRpc("UNKNOWN_RESULT");
 
     const result = await deleteAdminAiPromptFamily(FAMILY_ID);
 
     expect(result).toEqual({
-      message:
-        "시스템 관리 Prompt Family이거나 AI 설정에서 사용 중인 Version이 있는 Family는 삭제할 수 없습니다.",
+      message: "Prompt Family 삭제 요청을 처리하지 못했습니다.",
       ok: false,
     });
     expect(revalidateAdminAiPaths).not.toHaveBeenCalled();
@@ -570,6 +569,32 @@ describe("updateAdminAiPromptVersion", () => {
           type: "string",
         },
       },
+    });
+    expect(lifecycleEq).toHaveBeenCalledWith("lifecycle_status", "draft");
+    expect(maybeSingle).toHaveBeenCalledOnce();
+    expect(result).toEqual({ ok: true });
+    expect(revalidateAdminAiPaths).toHaveBeenCalledOnce();
+  });
+
+  it("빈 JSON 입력은 create와 동일한 기본값으로 보정해 수정한다", async () => {
+    const formData = createUpdateVersionFormData();
+    const { lifecycleEq, maybeSingle, update } = mockVersionUpdate({
+      id: VERSION_ID,
+    });
+
+    formData.set("responseSchema", "");
+    formData.set("variables", "   ");
+
+    const result = await updateAdminAiPromptVersion(formData);
+
+    expect(update).toHaveBeenCalledWith({
+      change_summary: "수정된 초안",
+      display_name: "수정된 버전",
+      response_schema: {},
+      system_template: "수정된 시스템 프롬프트",
+      tags: ["default", "draft"],
+      user_template: "수정된 사용자 프롬프트",
+      variables: [],
     });
     expect(lifecycleEq).toHaveBeenCalledWith("lifecycle_status", "draft");
     expect(maybeSingle).toHaveBeenCalledOnce();

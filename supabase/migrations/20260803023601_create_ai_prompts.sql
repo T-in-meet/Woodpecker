@@ -1167,6 +1167,9 @@ $$;
  * 관리자 Prompt Family 삭제를 원자적으로 처리합니다.
  * 하위 Version의 lifecycle과 관계없이 Version을 모두 삭제한 뒤 Family를 삭제합니다.
  *
+ * #306 정책상 draft/published/archived lifecycle은 삭제 제한 사유가 아닙니다.
+ * Settings 참조 기반 삭제 보호는 후속 #307 Settings migration에서 추가합니다.
+ *
  * AI Setting 참조 보호는 Settings 테이블 도입 후 Settings PR에서 보강합니다.
  */
 CREATE OR REPLACE FUNCTION "public"."delete_admin_ai_prompt_family"(
@@ -1200,6 +1203,9 @@ $$;
 /**
  * 관리자 Agent 삭제를 원자적으로 처리합니다.
  * 하위 Prompt Version과 Family를 모두 삭제한 뒤 Agent를 삭제합니다.
+ *
+ * #306 정책상 하위 Version의 draft/published/archived lifecycle은 삭제 제한 사유가 아닙니다.
+ * Settings 참조 기반 삭제 보호는 후속 #307 Settings migration에서 추가합니다.
  *
  * AI Setting 참조 보호는 Settings 테이블 도입 후 Settings PR에서 보강합니다.
  */
