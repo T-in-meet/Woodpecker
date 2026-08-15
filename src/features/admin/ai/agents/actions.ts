@@ -95,7 +95,11 @@ export async function updateAdminAiAgent(
   }
 
   const supabase = createAdminClient();
-  const { error } = await supabase
+  /*
+   * update만 호출하면 조건에 맞는 Agent가 없어도 오류가 반환되지 않을 수 있다.
+   * 수정된 row를 함께 조회해 존재하지 않는 Agent 수정을 성공으로 처리하지 않는다.
+   */
+  const { data: updatedAgent, error } = await supabase
     .from("ai_prompt_agents")
     .update({
       description: parsedInput.data.description,
@@ -103,7 +107,9 @@ export async function updateAdminAiAgent(
       purpose: parsedInput.data.purpose,
       tags: parsedInput.data.tags,
     })
-    .eq("id", parsedInput.data.agentId);
+    .eq("id", parsedInput.data.agentId)
+    .select("id")
+    .maybeSingle();
 
   if (error) {
     await reportAdminAiActionError({
@@ -115,6 +121,10 @@ export async function updateAdminAiAgent(
     });
 
     return { message: error.message, ok: false };
+  }
+
+  if (!updatedAgent) {
+    return { message: "수정할 AI Agent를 찾을 수 없습니다.", ok: false };
   }
 
   revalidateAdminAiPaths();

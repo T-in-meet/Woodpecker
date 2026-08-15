@@ -198,9 +198,18 @@ describe("updateAdminAiAgent", () => {
   });
 
   it("Agent 운영 필드를 수정하고 경로를 재검증한다", async () => {
-    const eq = vi.fn().mockResolvedValue({
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: {
+        id: AGENT_ID,
+      },
       error: null,
     });
+    const select = vi.fn(() => ({
+      maybeSingle,
+    }));
+    const eq = vi.fn(() => ({
+      select,
+    }));
     const update = vi.fn(() => ({
       eq,
     }));
@@ -222,6 +231,8 @@ describe("updateAdminAiAgent", () => {
       tags: ["notes", "answer"],
     });
     expect(eq).toHaveBeenCalledWith("id", AGENT_ID);
+    expect(select).toHaveBeenCalledWith("id");
+    expect(maybeSingle).toHaveBeenCalledOnce();
     expect(result).toEqual({ ok: true });
     expect(revalidateAdminAiPaths).toHaveBeenCalledOnce();
   });
@@ -230,9 +241,16 @@ describe("updateAdminAiAgent", () => {
     const error = {
       message: "update failed",
     };
-    const eq = vi.fn().mockResolvedValue({
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: null,
       error,
     });
+    const select = vi.fn(() => ({
+      maybeSingle,
+    }));
+    const eq = vi.fn(() => ({
+      select,
+    }));
     const update = vi.fn(() => ({
       eq,
     }));
@@ -256,6 +274,37 @@ describe("updateAdminAiAgent", () => {
       message: "관리자 AI agent 수정에 실패했습니다.",
       operation: "update_prompt_agent",
     });
+    expect(revalidateAdminAiPaths).not.toHaveBeenCalled();
+  });
+
+  it("수정할 Agent가 존재하지 않으면 실패하고 경로를 재검증하지 않는다", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: null,
+      error: null,
+    });
+    const select = vi.fn(() => ({
+      maybeSingle,
+    }));
+    const eq = vi.fn(() => ({
+      select,
+    }));
+    const update = vi.fn(() => ({
+      eq,
+    }));
+
+    vi.mocked(createAdminClient).mockReturnValue({
+      from: vi.fn(() => ({
+        update,
+      })),
+    } as unknown as ReturnType<typeof createAdminClient>);
+
+    const result = await updateAdminAiAgent(createUpdateAgentFormData());
+
+    expect(result).toEqual({
+      message: "수정할 AI Agent를 찾을 수 없습니다.",
+      ok: false,
+    });
+    expect(reportAdminAiActionError).not.toHaveBeenCalled();
     expect(revalidateAdminAiPaths).not.toHaveBeenCalled();
   });
 });
