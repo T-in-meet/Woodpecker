@@ -1,37 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const {
-  createAdminClientMock,
-  createClientMock,
-  getAdminNotificationListMock,
-  getAdminUnreadNotificationCountsMock,
-  getNotificationListMock,
-  getUnreadCountMock,
-} = vi.hoisted(() => ({
-  createAdminClientMock: vi.fn(),
-  createClientMock: vi.fn(),
-  getAdminNotificationListMock: vi.fn(),
-  getAdminUnreadNotificationCountsMock: vi.fn(),
-  getNotificationListMock: vi.fn(),
-  getUnreadCountMock: vi.fn(),
-}));
+const { createClientMock, getNotificationListMock, getUnreadCountMock } =
+  vi.hoisted(() => ({
+    createClientMock: vi.fn(),
+    getNotificationListMock: vi.fn(),
+    getUnreadCountMock: vi.fn(),
+  }));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: createClientMock,
 }));
 
-vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: createAdminClientMock,
-}));
-
 vi.mock("@/features/notifications/queries", () => ({
   getNotificationList: getNotificationListMock,
   getUnreadCount: getUnreadCountMock,
-}));
-
-vi.mock("@/features/admin/notifications/queries.internal", () => ({
-  getAdminNotificationListFor: getAdminNotificationListMock,
-  getAdminUnreadNotificationCountsFor: getAdminUnreadNotificationCountsMock,
 }));
 
 import * as notificationsRoute from "./route";
@@ -49,38 +31,12 @@ function createSupabaseMock(user: { id: string } | null = { id: USER_ID }) {
   };
 }
 
-function createAdminSupabaseMock(role: "ADMIN" | "USER" | null = "USER") {
-  const maybeSingle = vi.fn().mockResolvedValue({
-    data: role ? { role } : null,
-    error: null,
-  });
-  const eq = vi.fn().mockReturnValue({ maybeSingle });
-  const select = vi.fn().mockReturnValue({ eq });
-
-  return {
-    eq,
-    maybeSingle,
-    select,
-    supabase: {
-      from: vi.fn().mockReturnValue({ select }),
-    },
-  };
-}
-
 describe("/api/notifications", () => {
   beforeEach(() => {
-    createAdminClientMock.mockReset();
     createClientMock.mockReset();
-    getAdminNotificationListMock.mockReset();
-    getAdminUnreadNotificationCountsMock.mockReset();
     getNotificationListMock.mockReset();
     getUnreadCountMock.mockReset();
     createClientMock.mockResolvedValue(createSupabaseMock());
-    createAdminClientMock.mockReturnValue(
-      createAdminSupabaseMock("USER").supabase,
-    );
-    getAdminNotificationListMock.mockResolvedValue([]);
-    getAdminUnreadNotificationCountsMock.mockResolvedValue({});
   });
 
   afterEach(() => {
@@ -121,59 +77,38 @@ describe("/api/notifications", () => {
       supabase,
       userId: USER_ID,
     });
-    expect(getAdminNotificationListMock).not.toHaveBeenCalled();
-    expect(getAdminUnreadNotificationCountsMock).not.toHaveBeenCalled();
   });
 
-  it("merges admin notifications for admin users", async () => {
+  it("keeps admin notifications out of the user notification response", async () => {
     const supabase = createSupabaseMock();
     createClientMock.mockResolvedValue(supabase);
-    createAdminClientMock.mockReturnValue(
-      createAdminSupabaseMock("ADMIN").supabase,
-    );
     getNotificationListMock.mockResolvedValue([
       {
         id: "22222222-2222-4222-8222-222222222222",
         sent_at: "2026-07-27T01:00:00.000Z",
-        title: "개인 알림",
+        title: "사용자 알림",
       },
     ]);
     getUnreadCountMock.mockResolvedValue(1);
-    getAdminNotificationListMock.mockResolvedValue([
-      {
-        id: "33333333-3333-4333-8333-333333333333",
-        sent_at: "2026-07-27T02:00:00.000Z",
-        source: "ADMIN",
-        title: "운영 오류 알림",
-      },
-    ]);
-    getAdminUnreadNotificationCountsMock.mockResolvedValue({
-      OPERATIONAL_ERROR: 2,
-    });
 
     const response = await notificationsRoute.GET();
 
     await expect(response.json()).resolves.toEqual({
       items: [
         {
-          id: "33333333-3333-4333-8333-333333333333",
-          sent_at: "2026-07-27T02:00:00.000Z",
-          source: "ADMIN",
-          title: "운영 오류 알림",
-        },
-        {
           id: "22222222-2222-4222-8222-222222222222",
           sent_at: "2026-07-27T01:00:00.000Z",
-          title: "개인 알림",
+          title: "사용자 알림",
         },
       ],
-      unreadCount: 3,
+      unreadCount: 1,
     });
     expect(response.status).toBe(200);
-    expect(getAdminNotificationListMock).toHaveBeenCalledWith(USER_ID, {
+    expect(getNotificationListMock).toHaveBeenCalledWith({
       limit: 20,
+      supabase,
+      userId: USER_ID,
     });
-    expect(getAdminUnreadNotificationCountsMock).toHaveBeenCalledWith(USER_ID);
   });
 
   it("returns unauthorized when there is no logged-in user", async () => {

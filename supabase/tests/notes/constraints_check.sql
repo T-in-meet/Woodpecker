@@ -4,7 +4,7 @@
 
 BEGIN;
 
-SELECT plan(27);
+SELECT plan(32);
 
 -- 테스트용 UUID 준비
 SELECT set_config('test.notes_constraints_check_user_a_id', gen_random_uuid()::text, true);
@@ -436,6 +436,77 @@ SELECT is(
   (SELECT count(*) FROM public.notes WHERE length(title) > 100),
   0::bigint,
   $$notes 테이블에 title 길이가 100자를 초과하는 행이 존재해서는 안 된다$$
+);
+
+-- =========================================
+-- content 길이 제약
+--
+-- Zod(noteSchema)는 앱을 거치는 경로만 막는다. RLS가 본인 여부만 보므로
+-- PostgREST 직접 INSERT로 Zod를 건너뛸 수 있어 DB에서도 같은 값을 강제한다.
+-- =========================================
+
+-- [정답 조건]
+-- content가 1자이면 INSERT가 성공해야 한다
+SELECT lives_ok(
+  format(
+    $sql$
+      INSERT INTO public.notes (id, user_id, title, content, review_round)
+      VALUES (gen_random_uuid(), '%s'::uuid, 'content min', 'a', 0);
+    $sql$,
+    current_setting('test.notes_constraints_check_user_a_id')
+  ),
+  $$content가 1자이면 INSERT가 성공해야 한다$$
+);
+
+-- [경계 조건]
+-- content가 50000자이면 INSERT가 성공해야 한다 (최대값)
+SELECT lives_ok(
+  format(
+    $sql$
+      INSERT INTO public.notes (id, user_id, title, content, review_round)
+      VALUES (gen_random_uuid(), '%s'::uuid, 'content max', repeat('a', 50000), 0);
+    $sql$,
+    current_setting('test.notes_constraints_check_user_a_id')
+  ),
+  $$content가 50000자이면 INSERT가 성공해야 한다 (최대값)$$
+);
+
+-- [예외 조건]
+-- content가 50001자이면 INSERT가 실패해야 한다 (최대값 바로 위)
+SELECT throws_ok(
+  format(
+    $sql$
+      INSERT INTO public.notes (id, user_id, title, content, review_round)
+      VALUES (gen_random_uuid(), '%s'::uuid, 'content over', repeat('a', 50001), 0);
+    $sql$,
+    current_setting('test.notes_constraints_check_user_a_id')
+  ),
+  '23514',
+  NULL,
+  $$content가 50001자이면 INSERT가 실패해야 한다 (최대값 바로 위)$$
+);
+
+-- content를 50001자로 UPDATE 시 실패해야 한다 (INSERT만 막으면 우회된다)
+SELECT throws_ok(
+  format(
+    $sql$
+      UPDATE public.notes
+      SET content = repeat('a', 50001)
+      WHERE id = '%s'::uuid;
+    $sql$,
+    current_setting('test.notes_constraints_check_note_update_valid_id')
+  ),
+  '23514',
+  NULL,
+  $$content를 50001자로 UPDATE 시 실패해야 한다$$
+);
+
+-- [불변 조건]
+-- notes 테이블에 content 길이가 50000자를 초과하는 행이 존재해서는 안 된다
+SELECT is(
+  (SELECT count(*) FROM public.notes WHERE char_length(content) > 50000),
+  0::bigint,
+  $$notes 테이블에 content 길이가 50000자를 초과하는 행이 존재해서는 안 된다$$
 );
 
 SELECT * FROM finish();

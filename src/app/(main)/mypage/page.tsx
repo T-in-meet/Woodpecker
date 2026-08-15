@@ -75,8 +75,23 @@ const SECTION_LABELS: Record<MypageSection, string> = {
 
 const VALID_SUPPORT_TABS: SupportTab[] = ["faq", "inquiry"];
 
+const VALID_PROFILE_NICKNAME_NOTICES = ["provider", "fallback"] as const;
+
+type ProfileNicknameNotice = (typeof VALID_PROFILE_NICKNAME_NOTICES)[number];
+
 function isValidSupportTab(value: unknown): value is SupportTab {
   return VALID_SUPPORT_TABS.includes(value as SupportTab);
+}
+
+/**
+ * 프로필 닉네임 안내 query 값이 지원되는 값인지 확인합니다.
+ */
+function isValidProfileNicknameNotice(
+  value: unknown,
+): value is ProfileNicknameNotice {
+  return VALID_PROFILE_NICKNAME_NOTICES.includes(
+    value as ProfileNicknameNotice,
+  );
 }
 
 const SUPPORT_TAB_LABELS: Record<SupportTab, string> = {
@@ -85,15 +100,28 @@ const SUPPORT_TAB_LABELS: Record<SupportTab, string> = {
 };
 
 type Props = {
-  searchParams: Promise<{ section?: string; tab?: string }>;
+  searchParams: Promise<{
+    section?: string;
+    tab?: string;
+    profile_nickname?: string;
+  }>;
 };
 
 export default async function MyPage({ searchParams }: Props) {
-  const { section: rawSection, tab: rawTab } = await searchParams;
+  const {
+    section: rawSection,
+    tab: rawTab,
+    profile_nickname: rawProfileNicknameNotice,
+  } = await searchParams;
   const section: MypageSection = isValidSection(rawSection)
     ? rawSection
     : "stats";
   const supportTab: SupportTab = isValidSupportTab(rawTab) ? rawTab : "faq";
+  const profileNicknameNotice =
+    section === "profile" &&
+    isValidProfileNicknameNotice(rawProfileNicknameNotice)
+      ? rawProfileNicknameNotice
+      : null;
 
   const [user, profile] = await Promise.all([getUser(), getProfile()]);
   if (!user || !profile) redirect(ROUTES.LOGIN);
@@ -178,7 +206,11 @@ export default async function MyPage({ searchParams }: Props) {
         <div className="flex-1 space-y-6">
           {section === "profile" && (
             <>
-              <ProfileSection profile={profile} email={user?.email ?? ""} />
+              <ProfileSection
+                profile={profile}
+                email={user?.email ?? ""}
+                nicknameNotice={profileNicknameNotice}
+              />
               <PushSubscribeCard
                 initialHasAnySubscription={hasAnyPushSubscription}
               />

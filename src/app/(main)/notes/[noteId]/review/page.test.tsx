@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { hashNoteContent } from "@/features/review/lib/contentHash";
 import { ROUTES } from "@/lib/constants/routes";
 
 const REDIRECT_ERROR = new Error("NEXT_REDIRECT");
@@ -9,6 +10,8 @@ const CONFIRMED_AT = "2026-01-01T00:00:00.000Z";
 
 const {
   createClientMock,
+  getGradingByReviewLogMock,
+  getNoteContentForComparisonMock,
   getPendingReviewLogMock,
   getReviewableNoteMock,
   hasCompletedReviewForNoteTodayMock,
@@ -16,6 +19,8 @@ const {
   redirectMock,
 } = vi.hoisted(() => ({
   createClientMock: vi.fn(),
+  getGradingByReviewLogMock: vi.fn(),
+  getNoteContentForComparisonMock: vi.fn(),
   getPendingReviewLogMock: vi.fn(),
   getReviewableNoteMock: vi.fn(),
   hasCompletedReviewForNoteTodayMock: vi.fn(),
@@ -28,6 +33,8 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 vi.mock("@/features/review/queries", () => ({
+  getGradingByReviewLog: getGradingByReviewLogMock,
+  getNoteContentForComparison: getNoteContentForComparisonMock,
   getPendingReviewLog: getPendingReviewLogMock,
   getReviewableNote: getReviewableNoteMock,
   hasCompletedReviewForNoteToday: hasCompletedReviewForNoteTodayMock,
@@ -38,14 +45,30 @@ vi.mock("@/features/review/components/BlankTestPage", () => ({
     alreadyCompletedToday,
     noteId,
     noteTitle,
+    restoredSession,
     reviewRound,
   }: {
     alreadyCompletedToday: boolean;
     noteId: string;
     noteTitle: string;
+    restoredSession: {
+      userAnswer: string;
+      grading: { score: number };
+      basisContentChanged: boolean;
+    } | null;
     reviewRound: number;
   }) => (
-    <div data-testid="blank-test-page">
+    <div
+      data-basis-changed={
+        restoredSession ? String(restoredSession.basisContentChanged) : ""
+      }
+      data-restored={
+        restoredSession
+          ? `${restoredSession.userAnswer}|${restoredSession.grading.score}`
+          : "none"
+      }
+      data-testid="blank-test-page"
+    >
       {`${noteId}|${noteTitle}|${reviewRound}|${alreadyCompletedToday}`}
     </div>
   ),
@@ -83,11 +106,16 @@ function createSupabaseMock(
 describe("NoteReviewPage", () => {
   beforeEach(() => {
     createClientMock.mockReset();
+    getGradingByReviewLogMock.mockReset();
+    getNoteContentForComparisonMock.mockReset();
     getPendingReviewLogMock.mockReset();
     getReviewableNoteMock.mockReset();
     hasCompletedReviewForNoteTodayMock.mockReset();
     notFoundMock.mockReset();
     redirectMock.mockReset();
+
+    // 기본은 "복원할 채점 없음". 복원 흐름을 보는 테스트에서만 값을 채운다.
+    getGradingByReviewLogMock.mockResolvedValue(null);
 
     redirectMock.mockImplementation(() => {
       throw REDIRECT_ERROR;
@@ -286,5 +314,195 @@ describe("NoteReviewPage", () => {
     expect(screen.getByTestId("blank-test-page")).toHaveTextContent(
       "11111111-1111-1111-1111-111111111111|테스트 노트|1|true",
     );
+    expect(screen.getByTestId("blank-test-page")).toHaveAttribute(
+      "data-restored",
+      "none",
+    );
+  });
+
+  it("restores the saved answer and grading when the round was already graded", async () => {
+    createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
+    getReviewableNoteMock.mockResolvedValue({
+      title: "테스트 노트",
+      next_review_at: "2026-01-02T00:00:00.000Z",
+      review_round: 0,
+    });
+    getPendingReviewLogMock.mockResolvedValue({
+      id: "22222222-2222-2222-2222-222222222222",
+      note_id: "11111111-1111-1111-1111-111111111111",
+      round: 1,
+      scheduled_at: "2026-01-02T00:00:00.000Z",
+      completed_at: null,
+    });
+    hasCompletedReviewForNoteTodayMock.mockResolvedValue(false);
+    getGradingByReviewLogMock.mockResolvedValue({
+      id: "44444444-4444-4444-8444-444444444444",
+      review_log_id: "22222222-2222-2222-2222-222222222222",
+      round: 1,
+      user_answer: "저장된 답안",
+      score: 72,
+      feedback: {
+        summary: "저장된 총평",
+        missedConcepts: [],
+        incorrectPoints: [],
+      },
+      created_at: "2026-01-02T01:00:00.000Z",
+      graded_content_hash: hashNoteContent("원본 내용"),
+    });
+    getNoteContentForComparisonMock.mockResolvedValue({
+      content: "원본 내용",
+    });
+
+    render(
+      await NoteReviewPage({
+        params: Promise.resolve({
+          noteId: "11111111-1111-1111-1111-111111111111",
+        }),
+      }),
+    );
+
+    expect(getGradingByReviewLogMock).toHaveBeenCalledWith(
+      "22222222-2222-2222-2222-222222222222",
+      "user-123",
+    );
+
+    const blankTestPage = screen.getByTestId("blank-test-page");
+    expect(blankTestPage).toHaveAttribute("data-restored", "저장된 답안|72");
+    expect(blankTestPage).toHaveAttribute("data-basis-changed", "false");
+  });
+
+  // 채점 뒤 노트를 고치면 화면의 원본과 채점 기준이 갈린다. 그 사실을 화면에 넘겨야 한다.
+  it("flags the restored grading when the note body changed after grading", async () => {
+    createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
+    getReviewableNoteMock.mockResolvedValue({
+      title: "테스트 노트",
+      next_review_at: "2026-01-02T00:00:00.000Z",
+      review_round: 0,
+    });
+    getPendingReviewLogMock.mockResolvedValue({
+      id: "22222222-2222-2222-2222-222222222222",
+      note_id: "11111111-1111-1111-1111-111111111111",
+      round: 1,
+      scheduled_at: "2026-01-02T00:00:00.000Z",
+      completed_at: null,
+    });
+    hasCompletedReviewForNoteTodayMock.mockResolvedValue(false);
+    getGradingByReviewLogMock.mockResolvedValue({
+      id: "44444444-4444-4444-8444-444444444444",
+      review_log_id: "22222222-2222-2222-2222-222222222222",
+      round: 1,
+      user_answer: "저장된 답안",
+      score: 72,
+      feedback: {
+        summary: "저장된 총평",
+        missedConcepts: [],
+        incorrectPoints: [],
+      },
+      created_at: "2026-01-02T01:00:00.000Z",
+      graded_content_hash: hashNoteContent("채점 당시 원본"),
+    });
+    getNoteContentForComparisonMock.mockResolvedValue({
+      content: "수정된 원본",
+    });
+
+    render(
+      await NoteReviewPage({
+        params: Promise.resolve({
+          noteId: "11111111-1111-1111-1111-111111111111",
+        }),
+      }),
+    );
+
+    expect(screen.getByTestId("blank-test-page")).toHaveAttribute(
+      "data-basis-changed",
+      "true",
+    );
+  });
+
+  // 해시 도입 이전 채점은 기준 본문을 알 수 없다. 근거 없이 경고하지 않는다.
+  it("does not flag a grading saved before the content hash existed", async () => {
+    createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
+    getReviewableNoteMock.mockResolvedValue({
+      title: "테스트 노트",
+      next_review_at: "2026-01-02T00:00:00.000Z",
+      review_round: 0,
+    });
+    getPendingReviewLogMock.mockResolvedValue({
+      id: "22222222-2222-2222-2222-222222222222",
+      note_id: "11111111-1111-1111-1111-111111111111",
+      round: 1,
+      scheduled_at: "2026-01-02T00:00:00.000Z",
+      completed_at: null,
+    });
+    hasCompletedReviewForNoteTodayMock.mockResolvedValue(false);
+    getGradingByReviewLogMock.mockResolvedValue({
+      id: "44444444-4444-4444-8444-444444444444",
+      review_log_id: "22222222-2222-2222-2222-222222222222",
+      round: 1,
+      user_answer: "저장된 답안",
+      score: 72,
+      feedback: {
+        summary: "저장된 총평",
+        missedConcepts: [],
+        incorrectPoints: [],
+      },
+      created_at: "2026-01-02T01:00:00.000Z",
+      graded_content_hash: null,
+    });
+    getNoteContentForComparisonMock.mockResolvedValue({
+      content: "수정된 원본",
+    });
+
+    render(
+      await NoteReviewPage({
+        params: Promise.resolve({
+          noteId: "11111111-1111-1111-1111-111111111111",
+        }),
+      }),
+    );
+
+    expect(screen.getByTestId("blank-test-page")).toHaveAttribute(
+      "data-basis-changed",
+      "false",
+    );
+  });
+
+  // 복원은 부가 기능이다. 실패해도 백지 테스트 자체는 진행할 수 있어야 한다.
+  it("falls back to the blank test page when restoring the saved grading fails", async () => {
+    createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
+    getReviewableNoteMock.mockResolvedValue({
+      title: "테스트 노트",
+      next_review_at: "2026-01-02T00:00:00.000Z",
+      review_round: 0,
+    });
+    getPendingReviewLogMock.mockResolvedValue({
+      id: "22222222-2222-2222-2222-222222222222",
+      note_id: "11111111-1111-1111-1111-111111111111",
+      round: 1,
+      scheduled_at: "2026-01-02T00:00:00.000Z",
+      completed_at: null,
+    });
+    hasCompletedReviewForNoteTodayMock.mockResolvedValue(false);
+    getGradingByReviewLogMock.mockRejectedValue(new Error("grading lookup"));
+
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    render(
+      await NoteReviewPage({
+        params: Promise.resolve({
+          noteId: "11111111-1111-1111-1111-111111111111",
+        }),
+      }),
+    );
+
+    expect(screen.getByTestId("blank-test-page")).toHaveAttribute(
+      "data-restored",
+      "none",
+    );
+    expect(getNoteContentForComparisonMock).not.toHaveBeenCalled();
+
+    consoleErrorSpy.mockRestore();
   });
 });

@@ -3,10 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 
-import {
-  AGREEMENT_REQUIRED_TOAST_KEY,
-  AGREEMENT_REQUIRED_TOAST_MESSAGE,
-} from "@/features/auth/constants/agreementRequired";
+import { AGREEMENT_REQUIRED_NOTICE_MESSAGE } from "@/features/auth/constants/agreementRequired";
 import {
   OAUTH_CALLBACK_ERROR_PARAM,
   OAUTH_CALLBACK_ERROR_TOAST_KEY,
@@ -30,17 +27,10 @@ import { showToast } from "@/lib/utils/showToast";
 export default function SignupPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const hasAgreementRequiredNotice =
+    searchParams.get("agreement_required") === "1";
 
   const { mutateAsync, isPending } = useSignupMutation();
-
-  useEffect(() => {
-    if (searchParams.get("agreement_required") !== "1") return;
-
-    showToast(AGREEMENT_REQUIRED_TOAST_MESSAGE, {
-      variant: "destructive",
-      dedupeKey: AGREEMENT_REQUIRED_TOAST_KEY,
-    });
-  }, [searchParams]);
 
   useEffect(() => {
     if (!searchParams.get(OAUTH_CALLBACK_ERROR_PARAM)) return;
@@ -53,6 +43,12 @@ export default function SignupPageClient() {
 
   return (
     <SignupForm
+      {...(hasAgreementRequiredNotice
+        ? {
+            initialSignupMethod: "google" as const,
+            signupNotice: AGREEMENT_REQUIRED_NOTICE_MESSAGE,
+          }
+        : {})}
       onSubmit={async (values) => {
         const { termsOfService, privacyPolicy, ...rest } = values;
 

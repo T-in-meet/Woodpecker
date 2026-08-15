@@ -13,6 +13,7 @@
 # testing
 /coverage
 /test-results
+/.cache/
 
 # next.js
 /.next/
@@ -53,6 +54,7 @@ supabase/.temp
 .ai
 CLAUDE.md
 AGENTS.md
+docs/
 
 # ai
 .claude/

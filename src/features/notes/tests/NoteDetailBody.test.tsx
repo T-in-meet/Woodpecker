@@ -45,6 +45,10 @@ vi.mock("@/features/notifications/components/NotificationTimePicker", () => ({
   NotificationTimePicker: () => <div data-testid="notification-time-picker" />,
 }));
 
+vi.mock("@/features/quiz/components/QuizButton", () => ({
+  QuizButton: () => <div data-testid="quiz-button" />,
+}));
+
 vi.mock("./DeleteNoteDialog", () => ({
   DeleteNoteDialog: () => <button type="button">노트 삭제</button>,
 }));

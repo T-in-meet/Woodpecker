@@ -9,9 +9,11 @@
     "start": "next start",
     "lint": "eslint",
     "type-check": "tsc --noEmit",
+    "test:db": "supabase start && supabase test db",
     "prepare": "husky"
   },
   "dependencies": {
+    "@google/genai": "^2.16.0",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-dialog": "^1.1.15",
     "@react-email/components": "^1.0.11",
@@ -40,6 +42,7 @@
     "lucide-react": "^0.577.0",
     "next": "^15.5.14",
     "nodemailer": "^9.0.3",
+    "openai": "^7.4.0",
     "radix-ui": "^1.4.3",
     "react": "19.1.0",
     "react-day-picker": "^10.0.1",

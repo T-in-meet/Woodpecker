@@ -13,6 +13,7 @@ import type {
   FeedbackCategory,
   FeedbackStatus,
 } from "./types/feedback-list";
+import { createFeedbackListQuery } from "./utils/feedback-query";
 import { applyFeedbackFilters } from "./utils/feedback-query-filter";
 import {
   FeedbackListRow,
@@ -213,12 +214,7 @@ export async function getFeedbacks(
     return createEmptyResult(page, pageSize);
   }
 
-  let feedbackQuery = supabase
-    .from("feedbacks")
-    .select(
-      "id, user_id, note_id, category, title, content, image_urls, status, created_at, updated_at",
-      { count: "exact" },
-    );
+  let feedbackQuery = createFeedbackListQuery(supabase);
 
   const normalizedSearchQuery = query.search.query.trim();
 

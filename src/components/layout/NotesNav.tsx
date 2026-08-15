@@ -16,7 +16,7 @@ export function NotesNav() {
   const isNotesToday = pathname === ROUTES.NOTES_TODAY;
 
   return (
-    <nav className="flex items-center gap-6">
+    <nav className="flex items-center gap-6 whitespace-nowrap">
       <Link
         href={ROUTES.NOTES}
         aria-current={isNotesList ? "page" : undefined}

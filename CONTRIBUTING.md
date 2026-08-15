@@ -1,18 +1,16 @@
-# 기여 가이드 (개발 환경 세팅)
+# 기여 가이드
 
 딱다구리 개발에 참여하기 위한 로컬 환경 세팅과 협업 규칙을 정리한 문서입니다.
 서비스 소개는 [README.md](./README.md)를 참고하세요.
 
-## 기술 스택
+## 개발 환경
 
-| 항목         | 버전                          |
-| ------------ | ----------------------------- |
-| Node.js      | 24.14.0 (LTS)                 |
-| Next.js      | ^15.5.14                      |
-| React        | 19.1.0                        |
-| TypeScript   | ^5                            |
-| Tailwind CSS | ^4                            |
-| Supabase     | @supabase/supabase-js ^2.99.1 |
+| 항목    | 버전                     |
+| ------- | ------------------------ |
+| Node.js | 24.14.0 (`.nvmrc` 참고)  |
+| npm     | `package-lock.json` 기준 |
+
+전체 기술 스택은 [README.md](./README.md#기술-스택)를 참고하세요.
 
 ---
 
@@ -33,12 +31,13 @@ source ~/.zshrc  # zsh 사용 시
 source ~/.bashrc # bash 사용 시
 ```
 
-### Node.js 24.14.0 설치 및 적용
+### Node.js 설치 및 적용
+
+프로젝트 루트의 `.nvmrc`에 버전이 고정되어 있으므로 아래 두 명령이면 충분합니다.
 
 ```bash
-nvm install 24.14.0
-nvm use 24.14.0
-nvm alias default 24.14.0
+nvm install
+nvm use
 ```
 
 ### 버전 확인
@@ -48,7 +47,6 @@ node -v  # v24.14.0
 npm -v
 ```
 
-> 프로젝트에 `.nvmrc`는 없으므로 버전을 직접 지정해 전환합니다.
 > GitHub Actions CI는 Node 20에서 실행되므로, 로컬에서만 재현되는 문제가 있으면 Node 버전 차이를 먼저 의심하세요.
 
 ---
@@ -92,7 +90,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-브라우저에서 `http://localhost:3000` 접속
+브라우저에서 `http://localhost:3000`에 접속합니다.
 
 ---
 
@@ -110,17 +108,16 @@ npm run dev
 | `npx playwright test`         | E2E 테스트 (`tests/e2e/`)                                    |
 | `npx prettier --write <경로>` | 포맷 (CI가 `--check`로 검사)                                 |
 
-> **`dev:sw` 보충 설명**
->
-> - 일반 `npm run dev` 는 Turbopack + Serwist 호환 이슈를 피하기 위해 개발 환경에서 Service Worker(`/sw.js`) 를 비활성화한 상태로 실행됩니다 (`next.config.ts` 의 `disable` 조건 참고).
-> - Web Push 알림 흐름을 로컬에서 검증하려면 SW 가 등록되어야 하므로, `dev:sw` 스크립트가 `ENABLE_SW=true` 환경변수를 주입해 Serwist 를 활성화합니다.
-> - 환경변수 설정에 `cross-env` 를 사용하는 이유: Windows cmd/PowerShell 에서는 `ENABLE_SW=true next dev` 같은 인라인 문법이 동작하지 않습니다. 모든 셸에서 동일하게 동작시키기 위해 `cross-env` 를 거칩니다.
+> `dev:sw`로 Service Worker를 활성화해야 하는 이유와 동작 방식은 [트러블슈팅 §Web Push 알림이 로컬에서 동작하지 않음](#web-push-알림이-로컬에서-동작하지-않음)을 참고하세요.
 
 ---
 
 ## 6. 테스트
 
-- 단위/컴포넌트 테스트는 Vitest(`jsdom` 환경)를 사용하며, 테스트 파일은 대상 파일 옆 `tests/` 폴더에 `*.test.ts(x)`로 둡니다.
+- 단위/컴포넌트 테스트는 Vitest를 사용하며 파일 이름은 `*.test.ts(x)`로 둡니다. `*.test.tsx`는 `jsdom`, 순수 로직인 `*.test.ts`는 `node` 환경에서 실행합니다.
+- DOM이나 브라우저 API를 사용하는 `*.test.ts`를 추가할 때는 `vitest.config.ts`의 `JSDOM_TEST_FILES`에도 등록합니다. 등록하지 않으면 Node 환경에서 실행됩니다.
+- 테스트 배치는 도메인 로직·유틸·컴포넌트는 대상 파일 옆 `tests/` 폴더를 기본으로 하고, App Router 페이지 테스트(`page.test.tsx`)와 `src/middleware.test.ts`는 대상 파일 옆에 직접 둡니다.
+- 공용 Supabase 쿼리 mock은 `src/tests/supabaseQueryMock.ts`를 사용합니다.
 - E2E는 `tests/e2e/`의 Playwright 테스트입니다.
 - 변경 범위가 작아도 관련 테스트는 실행하고 PR을 올립니다.
 
@@ -180,14 +177,15 @@ hotfix/<kebab-summary>         →  main (+ development 반영)
 
 `development` 또는 `main`으로 PR을 열면 GitHub Actions(`.github/workflows/ci.yml`)가 자동 실행됩니다.
 
-| Job               | 명령                                    |
-| ----------------- | --------------------------------------- |
-| Lint              | `npm run lint`                          |
-| Format Check      | `npx prettier --check .`                |
-| Dependency Review | `actions/dependency-review-action`      |
-| Type Check        | `npx tsc --noEmit`                      |
-| Test              | `npx vitest run`                        |
-| Build             | `npm run build` (앞의 4개 통과 후 실행) |
+| Job               | 명령                                     |
+| ----------------- | ---------------------------------------- |
+| Lint              | `npm run lint`                           |
+| Format Check      | `npx prettier --check .`                 |
+| Dependency Review | `actions/dependency-review-action`       |
+| Type Check        | `npx tsc --noEmit`                       |
+| Test              | `npx vitest run`                         |
+| Supabase SQL Test | `supabase start` 후 `supabase test db`   |
+| Build             | `npm run build` (선행 검사 통과 후 실행) |
 
 **CI 실패 시 머지 불가**
 
@@ -233,11 +231,54 @@ hotfix/<kebab-summary>         →  main (+ development 반영)
 
 Server Action은 Zod `safeParse`로 입력을 검증하고 `{ data: T } | { error: string | fieldErrors }` 형태로 반환합니다. 인증이 필요한 작업은 `supabase.auth.getUser()`로 사용자를 확인한 뒤 수행합니다.
 
-DB를 변경할 때는 `supabase/migrations/`에 `YYYYMMDDHHMMSS_설명.sql` 형식으로 migration을 추가하고, RLS·제약·RPC에 영향이 있으면 `supabase/tests/`도 함께 갱신합니다. 마이그레이션은 Supabase 대시보드에서 수동 적용합니다.
+---
+
+## 13. DB 마이그레이션
+
+DB를 변경할 때는 `supabase/migrations/`에 `YYYYMMDDHHMMSS_설명.sql` 형식으로 migration을 추가하고, RLS·제약·RPC에 영향이 있으면 `supabase/tests/`도 함께 갱신합니다.
+
+마이그레이션 적용 경로는 DB에 따라 다릅니다.
+
+- **운영 DB**: `main`에 `supabase/migrations/**` 변경이 푸시되면 `.github/workflows/migrate.yml`이 `supabase db push`로 자동 적용합니다. 대시보드에서 손으로 적용하지 마세요 — push 히스토리에 남지 않아 이후 자동 배포가 충돌합니다.
+- **개발 DB**: 운영과 별도 Supabase 프로젝트이며, 개발 중에는 대시보드 SQL Editor로 직접 적용해 테스트합니다.
 
 ---
 
-## 13. VSCode 추천 익스텐션
+## 14. 트러블슈팅
+
+### 로컬에서만 재현되는 빌드/타입 오류
+
+GitHub Actions CI는 Node 20에서 실행되지만 로컬 권장 버전은 Node 24.14.0입니다. 로컬에서만 실패하거나 반대로 로컬은 통과하는데 CI만 실패한다면 Node 버전 차이를 가장 먼저 의심하세요. `node -v`로 확인하고 필요하면 `nvm use`.
+
+### Web Push 알림이 로컬에서 동작하지 않음
+
+`npm run dev`는 Turbopack과 Serwist 간 호환 문제를 피하기 위해 Service Worker(`/sw.js`)를 비활성화한 상태로 실행됩니다(`next.config.ts`의 `disable` 조건 참고). Web Push 흐름을 로컬에서 검증하려면 SW가 등록되어야 하므로 `npm run dev:sw`로 실행하세요.
+
+- `dev:sw` 스크립트는 `ENABLE_SW=true` 환경변수를 주입해 Serwist를 활성화합니다.
+- 환경변수 설정에 `cross-env`를 쓰는 이유: Windows cmd/PowerShell에서는 `ENABLE_SW=true next dev` 같은 인라인 문법이 동작하지 않습니다. 모든 셸에서 동일하게 동작시키기 위해 `cross-env`를 거칩니다.
+
+### `VAPID_SUBJECT` 관련 에러
+
+web-push 라이브러리는 subject 값으로 `https:` 또는 `mailto:` URL만 허용합니다. `http://localhost`는 거부되므로 로컬 `.env.local`에는 `VAPID_SUBJECT=mailto:your-email@example.com` 형식으로 입력해야 합니다.
+
+### 에디터 스타일(CSS) 변경이 화면에 반영되지 않음
+
+`@import`로 불러오는 CSS 파일(`tiptap.css` 등)은 변경해도 HMR이 감지하지 못합니다. 개발 서버를 재시작하세요.
+
+### PR CI의 Format Check 실패
+
+Format Check가 가장 자주 깨지는 job입니다. 파일을 수정했으면 커밋 전에 `npx prettier --write <수정한 파일>`을 실행하세요. (전체 파일에 `prettier --write .`를 돌리면 무관한 파일까지 diff에 섞이니 피하세요.)
+
+### PowerShell에서 라우트 경로를 다루는 명령이 깨짐
+
+Next.js App Router의 route group(`(main)`, `(auth)`, `(legal)`)과 dynamic segment(`[noteId]`)가 들어간 경로를 PowerShell에서 인자로 넘기면 괄호/대괄호가 셸에 의해 해석되어 오류가 납니다. 항상 경로를 따옴표로 감싸세요.
+
+```powershell
+git diff -- "src/app/(main)/notes/[noteId]/page.tsx"
+Get-Content -Path "src/app/(main)/notes/[noteId]/page.tsx"
+```
+
+## 15. VSCode 추천 익스텐션
 
 - ESLint
 - Prettier - Code formatter

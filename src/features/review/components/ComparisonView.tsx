@@ -25,10 +25,12 @@ function ComparisonPanel({ title, content }: ComparisonPanelProps) {
             내용이 없습니다.
           </div>
         ) : (
-          <MarkdownNoteViewerClient
-            content={content}
-            className="min-h-[50vh] rounded-none border-none focus-within:border-none focus-within:ring-0 [&_.tiptap]:min-h-[50vh] [&_.tiptap]:px-6! [&_.tiptap]:py-5!"
-          />
+          <div className="max-h-[70vh] overflow-y-auto">
+            <MarkdownNoteViewerClient
+              content={content}
+              className="min-h-[50vh] rounded-none border-none focus-within:border-none focus-within:ring-0 [&_.tiptap]:min-h-[50vh] [&_.tiptap]:px-6! [&_.tiptap]:py-5!"
+            />
+          </div>
         )}
       </CardContent>
     </Card>

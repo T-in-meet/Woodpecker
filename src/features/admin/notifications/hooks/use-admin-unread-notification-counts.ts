@@ -1,13 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { getAdminUnreadNotificationCounts } from "../queries";
+import { ADMIN_UNREAD_NOTIFICATION_COUNTS_QUERY_KEY } from "../query-keys";
 
-/**
- * 관리자 알림 unread count query key factory입니다.
- */
-export const ADMIN_UNREAD_NOTIFICATION_COUNTS_QUERY_KEY = {
-  all: ["admin-unread-notification-counts"] as const,
-};
+export { ADMIN_UNREAD_NOTIFICATION_COUNTS_QUERY_KEY };
 
 /**
  * 현재 관리자 기준 읽지 않은 관리자 알림 개수를 조회합니다.

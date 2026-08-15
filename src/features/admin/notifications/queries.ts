@@ -9,8 +9,6 @@ import {
   getAdminUnreadNotificationCountsFor,
 } from "./queries.internal";
 
-export type { AdminUnreadNotificationCounts };
-
 export type GetAdminNotificationListOptions = {
   /** 반환할 최대 알림 개수 */
   limit?: number;

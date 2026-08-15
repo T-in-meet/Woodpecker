@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -332,6 +332,7 @@ describe("회원가입 폼 동의 상호작용", () => {
     const user = userEvent.setup();
     renderSignupForm();
 
+    await user.click(screen.getByRole("button", { name: /이메일로 가입/i }));
     await user.click(screen.getByTestId("privacy-policy-checkbox"));
     await user.click(screen.getByRole("button", { name: /동의하기/i }));
 
@@ -346,6 +347,7 @@ describe("회원가입 폼 동의 상호작용", () => {
     const user = userEvent.setup();
     renderSignupForm();
 
+    await user.click(screen.getByRole("button", { name: /이메일로 가입/i }));
     await user.click(
       screen.getByRole("button", { name: /개인정보처리방침 보기/i }),
     );
@@ -362,6 +364,7 @@ describe("회원가입 폼 동의 상호작용", () => {
     const user = userEvent.setup();
     renderSignupForm({ isPending: true });
 
+    await user.click(screen.getByRole("button", { name: /이메일로 가입/i }));
     await user.click(screen.getByTestId("privacy-policy-checkbox"));
     await user.click(screen.getByRole("button", { name: /동의하기/i }));
 
@@ -374,6 +377,7 @@ describe("회원가입 폼 동의 상호작용", () => {
 
   it("TC-20: 초기 렌더 시 소셜 회원가입 버튼은 클릭 가능한 상태로 렌더링된다", () => {
     renderSignupForm();
+    fireEvent.click(screen.getByRole("button", { name: /Google로 가입/i }));
 
     expect(
       screen.getByRole("button", { name: "Google 계정으로 계속하기" }),
@@ -384,6 +388,7 @@ describe("회원가입 폼 동의 상호작용", () => {
     const user = userEvent.setup();
     renderSignupForm();
 
+    await user.click(screen.getByRole("button", { name: /Google로 가입/i }));
     await user.click(
       screen.getByRole("button", { name: "Google 계정으로 계속하기" }),
     );
@@ -403,6 +408,7 @@ describe("회원가입 폼 동의 상호작용", () => {
     const user = userEvent.setup();
     renderSignupForm();
 
+    await user.click(screen.getByRole("button", { name: /Google로 가입/i }));
     await user.click(screen.getByTestId("terms-of-service-checkbox"));
     await user.click(screen.getByRole("button", { name: /동의하기/i }));
     await user.click(screen.getByTestId("privacy-policy-checkbox"));

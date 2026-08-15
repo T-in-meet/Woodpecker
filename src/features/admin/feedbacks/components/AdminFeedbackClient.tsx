@@ -5,6 +5,7 @@ import { useState } from "react";
 import { AdminListToolbar } from "@/features/admin/components/common/AdminListToolbar";
 import { AdminPagination } from "@/features/admin/components/common/AdminPagination";
 import { useAdminListToolbar } from "@/features/admin/hooks/use-admin-list-toolbar";
+import { ROUTES } from "@/lib/constants/routes";
 
 import { AdminPageHeader } from "../../components/layout/AdminPageHeader";
 import { ADMIN_FEEDBACK_LIST_CONFIG } from "../constants/feedback-list";
@@ -41,6 +42,8 @@ export function AdminFeedbackClient() {
       <AdminPageHeader
         title="사용자 피드백"
         description="사용자가 전달한 피드백을 조회하고 관리합니다."
+        backLabel="대시보드"
+        backHref={ROUTES.ADMIN.DASHBOARD}
       />
 
       <div className="space-y-4">

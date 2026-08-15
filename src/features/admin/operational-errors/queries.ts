@@ -20,6 +20,7 @@ import {
   mapHistoryRow,
   mapOperationalErrorRow,
 } from "./utils/operational-error-mapper";
+import { createOperationalErrorListQuery } from "./utils/operational-error-query";
 import { applyOperationalErrorSearch } from "./utils/operational-error-search";
 
 export async function getOperationalErrors(
@@ -34,12 +35,7 @@ export async function getOperationalErrors(
   const to = from + pageSize - 1;
   const sortColumn = ADMIN_OPERATIONAL_ERROR_SORT_COLUMN[listQuery.sort.field];
 
-  let query = supabase
-    .from("operational_errors")
-    .select(
-      "id, feature, operation, stage, error_code, severity, status, message, user_id, fingerprint, occurrence_count, last_seen_at, created_at",
-      { count: "exact" },
-    );
+  let query = createOperationalErrorListQuery(supabase);
 
   query = applyOperationalErrorFilters(query, listQuery.filters);
   query = applyOperationalErrorSearch(query, listQuery.search);
