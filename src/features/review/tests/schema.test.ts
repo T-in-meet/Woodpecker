@@ -165,7 +165,7 @@ describe("gradingResponseSchema", () => {
     expect(parsed.success).toBe(false);
   });
 
-  // 개수 초과로 채점 전체를 버리면 하루 한도 1회가 영구 소모되고 300초간 재시도가 막힌다.
+  // 개수 초과로 채점 전체를 버리면 하루 한도 1회가 영구 소모되고 120초간 재시도가 막힌다.
   // 항목 하나 때문에 치를 값이 아니라 수신은 관대하게 두고 정규화로 맞춘다.
   it("accepts more feedback items than the limit", () => {
     const parsed = gradingResponseSchema.safeParse({

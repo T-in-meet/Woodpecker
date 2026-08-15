@@ -110,6 +110,13 @@ describe("generateJson — 요청", () => {
     expect(requestBody().max_tokens).toBe(8192);
   });
 
+  it("messages 요청에 검증된 low reasoning_effort를 명시한다", async () => {
+    await generateJson({ prompt: PROMPT, responseSchema: RESPONSE_SCHEMA });
+
+    expect(requestBody().reasoning_effort).toBe("low");
+    expect(requestBody()).not.toHaveProperty("reasoning");
+  });
+
   it("temperature를 준 경우에만 싣는다", async () => {
     await generateJson({ prompt: PROMPT, responseSchema: RESPONSE_SCHEMA });
     expect(requestBody()).not.toHaveProperty("temperature");

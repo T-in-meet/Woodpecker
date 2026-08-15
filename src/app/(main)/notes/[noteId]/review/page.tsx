@@ -30,23 +30,19 @@ export const metadata: Metadata = {
  * AI 채점 서버 액션은 이 페이지의 요청으로 실행되므로 여기의 maxDuration을 따른다.
  *
  * 세 값의 순서를 지켜야 한다.
- *   채점 deadline(240초, gradeAnswerAction) < 이 값(280초) < 선점 만료(300초, claim_review_grading)
+ *   채점 deadline(60초, gradeAnswerAction) < 이 값(90초) < 선점 만료(120초, claim_review_grading)
  *
  * 채점 deadline은 액션 진입 시각부터 재므로 이 값보다 먼저 걸리는 것이 보장된다.
  * 이 값이 선점 만료보다 커지면, 느린 AI 호출이 진행 중인 사이 선점이 만료돼
  * 사용자의 재시도가 선점을 이어받고 원래 요청 결과는 stale_claim으로 버려진다.
  * 채점 1건에 AI를 두 번 부르는 셈이라 느린 요청일수록 비용이 두 배가 된다.
  *
- * 값이 커진 이유: Cloudflare Workers AI(gpt-oss-120b)로 교체한 뒤 실측한 채점 지연이
- * 프로덕션 규모 입력(노트 10,000~30,000자)에서 최대 119.7초까지 나왔다. 기존 45초/55초/60초
- * 설계는 이 모델의 reasoning 토큰 생성 시간을 반영하지 못했다.
- *
- * Vercel Hobby 플랜은 Fluid Compute 기본 활성화로 함수 실행 상한이 300초다.
- * 이 값(280초)은 그 상한에서 20초 여유를 둔 것이다.
+ * reasoning_effort=low 적용 후 약 100,000자 채점도 8.9초에 완주했다. AI deadline과
+ * 선점 만료 사이에 플랫폼·DB 후처리 여유 30초를 두어 90초로 정했다.
  *
  * Next.js가 정적으로 읽는 값이라 상수를 import해서 쓸 수 없다.
  */
-export const maxDuration = 280;
+export const maxDuration = 90;
 
 export default async function NoteReviewPage({
   params,

@@ -233,7 +233,7 @@ SELECT set_config(
 );
 
 UPDATE public.quiz_generations
-SET created_at = now() - interval '301 seconds'
+SET created_at = now() - interval '121 seconds'
 WHERE claim_token = ((current_setting('test.qgv2_claim_a')::jsonb) ->> 'claimToken')::uuid;
 
 SELECT set_config(
@@ -326,7 +326,7 @@ SELECT is(
 );
 
 UPDATE public.quiz_generations
-SET created_at = now() - interval '301 seconds'
+SET created_at = now() - interval '121 seconds'
 WHERE claim_token = ((current_setting('test.qgv2_claim_c')::jsonb) ->> 'claimToken')::uuid;
 
 SELECT set_config(

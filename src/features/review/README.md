@@ -131,23 +131,23 @@ BEFORE UPDATE 트리거다. `update_notification_time_of_day`가 `notification_t
    저장된 `claim_token`과 다르면 `stale_claim`을 돌려주고 아무것도 쓰지 않는다.
 
 선점을 되돌리는 함수는 두지 않는다. 선점 → 해제를 반복하면 AI를 무제한으로 호출할 수 있기 때문이다.
-대신 300초가 지난 선점 행은 자동으로 재선점 대상이 되고, AI 호출이 실패하면 사용자는 그만큼 기다린 뒤 재시도한다.
+대신 120초가 지난 선점 행은 자동으로 재선점 대상이 되고, AI 호출이 실패하면 사용자는 그만큼 기다린 뒤 재시도한다.
 
 #### 타임아웃 순서 (바꿀 때 셋을 함께 본다)
 
 | 값                      | 현재  | 위치                                                        |
 | ----------------------- | ----- | ----------------------------------------------------------- |
-| 채점 deadline           | 240초 | `GRADING_DEADLINE_MS` (`actions.ts`)                        |
-| 최소 AI 예산            | 30초  | `MIN_AI_BUDGET_MS` (`actions.ts`)                           |
-| 함수 실행 상한          | 280초 | `maxDuration` (`app/(main)/notes/[noteId]/review/page.tsx`) |
-| 선점 만료(stale window) | 300초 | `c_stale_window` (`claim_review_grading`)                   |
+| 채점 deadline           | 60초  | `GRADING_DEADLINE_MS` (`actions.ts`)                        |
+| 최소 AI 예산            | 15초  | `MIN_AI_BUDGET_MS` (`actions.ts`)                           |
+| 함수 실행 상한          | 90초  | `maxDuration` (`app/(main)/notes/[noteId]/review/page.tsx`) |
+| 선점 만료(stale window) | 120초 | `c_stale_window` (`claim_review_grading`)                   |
 
 **채점 deadline < maxDuration < 선점 만료** 순서를 유지한다.
 
-이 값들은 원래 45초/55초/60초였다. Cloudflare Workers AI(gpt-oss-120b)로 교체한 뒤 canary로
-실측한 채점 지연이 프로덕션 규모 입력(노트 10,000~30,000자)에서 최대 119.7초까지 나와,
-기존 값으로는 정상 채점도 timeout에 걸렸다. Vercel Hobby 플랜이 Fluid Compute 기본 활성화로
-함수 실행 상한 300초를 지원해 이 범위로 늘릴 수 있었다(`20260812130000_widen_review_grading_stale_window.sql`).
+Cloudflare Workers AI의 기본 reasoning에서는 채점 지연이 최대 119.7초까지 나왔지만,
+`reasoning_effort=low` 적용 후 약 100,000자 입력도 8.9초에 완주했다. Day 3 퀴즈 stress
+case의 최댓값도 16.7초였다. 실행 편차와 인증·DB 후처리 여유를 포함해 60초/90초/120초로
+정했고, stale window는 새 마이그레이션으로 줄였다.
 
 - 채점 deadline은 **액션 진입 시각**부터 잰다. AI 호출 직전에 타이머를 걸면 앞의 인증·조회·선점이
   느릴 때 abort보다 maxDuration이 먼저 걸려서, 선점만 잡힌 채 함수가 죽고 그 회차의 채점이
@@ -164,7 +164,7 @@ BEFORE UPDATE 트리거다. `update_notification_time_of_day`가 `notification_t
 `maxDuration`은 Vercel 플랜별 기본값이 다르다. 명시하지 않으면 위 순서가 배포 환경에 따라
 깨지므로 페이지에 항상 적어 둔다.
 
-`claim_token`은 이 "300초 뒤 이어받기"의 짝이다. 요청 A가 300초를 넘겨 요청 B가 선점을 이어받으면
+`claim_token`은 이 "120초 뒤 이어받기"의 짝이다. 요청 A가 120초를 넘겨 요청 B가 선점을 이어받으면
 `user_answer`는 B의 답안으로 덮이는데, 확인 없이 두면 늦게 도착한 A도 결과를 확정할 수 있어
 "답안 B + A 기준 피드백"이 한 행에 남는다. finalize가 토큰을 compare-and-set으로 확인해 이를 막는다.
 
@@ -193,7 +193,7 @@ DELETE 정책도 같은 이유로 없앴다(삭제 후 재채점 반복).
 퀴즈의 `claim_quiz_generation`(20260806000002)과 같은 구조다.
 
 - 기록은 **AI를 부르는 경로에서만** 남긴다. `already_graded`·`in_flight`는 저장된 결과를 읽거나
-  기다릴 뿐이므로 사용량을 깎지 않는다. 300초 뒤 선점을 이어받는 경로는 AI를 한 번 더 부르므로 깎는다.
+  기다릴 뿐이므로 사용량을 깎지 않는다. 120초 뒤 선점을 이어받는 경로는 AI를 한 번 더 부르므로 깎는다.
 - `review_log_id`는 `on delete set null`이다. `cascade`로 두면 노트를 지워 사용 기록까지 없앨 수 있다.
   `review_gradings` 자체를 카운터로 쓸 수 없는 이유도 같다(노트 삭제 시 cascade로 사라진다).
 - 락 순서는 **review_log → user**로 고정한다. `finalize_review_grading`은 앞의 것만 잡으므로
@@ -213,7 +213,7 @@ DELETE 정책도 같은 이유로 없앴다(삭제 후 재채점 반복).
 
 2번이 관대한 이유는 실패 비용의 비대칭이다. 개수 초과로 응답 전체를 거부하면
 `review_grading_generations` 행이 이미 선점 시점에 들어가 있고 되돌리는 함수가 없으므로 **하루 한도
-1회가 영구 소모**되고, 선점이 만료될 때까지 300초간 재시도가 막히며, 이미 나간 AI 비용은 재시도 때
+1회가 영구 소모**되고, 선점이 만료될 때까지 120초간 재시도가 막히며, 이미 나간 AI 비용은 재시도 때
 다시 든다. 얻는 것은 "항목이 6개 대신 5개로 보인다"뿐이라 값이 맞지 않는다.
 
 `slice`는 은폐가 아니다. 프롬프트가 제품 계약으로 선언한 개수를 집행하는 것이고, 1번이 예외적으로

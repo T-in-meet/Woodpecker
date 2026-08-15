@@ -17,6 +17,7 @@
  *   node scripts/cloudflare-quality-test.mjs --models @cf/openai/gpt-oss-120b,@cf/zai-org/glm-5.2
  *   node scripts/cloudflare-quality-test.mjs --mode canary --day 1 --budget 7000
  *   node scripts/cloudflare-quality-test.mjs --mode canary --day 2 --budget 9000 --tokens-per-char 0.9
+ *   node scripts/cloudflare-quality-test.mjs --mode grading-bisect --chars 15000 --budget 1500 --reasoning-effort low --reasoning-format responses
  */
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -82,6 +83,7 @@ function parseArgs(argv) {
     dryRun: false,
     chars: null,
     reasoningEffort: null,
+    reasoningFormat: "chat-completions",
     dump: null,
   };
 
@@ -103,6 +105,8 @@ function parseArgs(argv) {
       options.chars = Number(argv[++i]);
     } else if (arg === "--reasoning-effort") {
       options.reasoningEffort = argv[++i] ?? null;
+    } else if (arg === "--reasoning-format") {
+      options.reasoningFormat = argv[++i] ?? "chat-completions";
     } else if (arg === "--dump") {
       options.dump = argv[++i] ?? null;
     } else if (arg === "--dry-run") {
@@ -119,6 +123,13 @@ function parseArgs(argv) {
   ) {
     throw new Error(
       `알 수 없는 --mode: ${options.mode} (compare | canary | grading-bisect)`,
+    );
+  }
+  if (
+    !["responses", "chat-completions", "both"].includes(options.reasoningFormat)
+  ) {
+    throw new Error(
+      `알 수 없는 --reasoning-format: ${options.reasoningFormat} (responses | chat-completions | both)`,
     );
   }
   if (
@@ -776,6 +787,7 @@ async function callCloudflare(model, prompt, jsonSchema, callOptions = {}) {
     maxTokens = DEFAULT_MAX_TOKENS,
     requestTimeoutMs = 180_000,
     reasoningEffort,
+    reasoningFormat = "chat-completions",
   } = callOptions;
   const start = Date.now();
   const url = `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/ai/run/${model}`;
@@ -791,12 +803,15 @@ async function callCloudflare(model, prompt, jsonSchema, callOptions = {}) {
   // gpt-oss의 추론 토큰 예산을 낮춰 max_tokens 절단을 피할 수 있는지 확인하는 프로브다.
   // Cloudflare 문서의 예시는 전부 /ai/v1/responses(Responses API) 기준이고
   // 우리가 쓰는 /ai/run에 이 파라미터가 있는지는 문서화돼 있지 않다.
-  // Responses API 형태(reasoning.effort)와 Chat Completions 형태(reasoning_effort)를
-  // 한 번에 보내 어느 쪽이든 걸리게 한다. 둘 다 무시되면 결과가 그대로일 것이고,
-  // 엄격 검증이면 3003으로 거절돼 추론 전에 끝나므로 어느 쪽이든 1콜로 판명된다.
+  // 분리 측정 결과 현재 `messages` 요청에는 Chat Completions 형태만 적용된다.
+  // `both`는 과거 측정을 재현할 때만 사용한다.
   if (reasoningEffort) {
-    body.reasoning = { effort: reasoningEffort };
-    body.reasoning_effort = reasoningEffort;
+    if (reasoningFormat === "responses" || reasoningFormat === "both") {
+      body.reasoning = { effort: reasoningEffort };
+    }
+    if (reasoningFormat === "chat-completions" || reasoningFormat === "both") {
+      body.reasoning_effort = reasoningEffort;
+    }
   }
 
   let res;
@@ -924,6 +939,7 @@ async function runCompare(options) {
     "",
     `대상 모델: ${options.models.map((m) => `\`${m}\``).join(", ")}`,
     `reasoning effort: ${options.reasoningEffort ?? "(지정 안 함 — 모델 기본값)"}`,
+    `reasoning format: ${options.reasoningFormat}`,
     "",
   );
 
@@ -969,6 +985,7 @@ async function runCompare(options) {
         (model) => () =>
           callCloudflare(model, task.prompt, task.schema, {
             reasoningEffort: options.reasoningEffort,
+            reasoningFormat: options.reasoningFormat,
           }),
       );
 
@@ -1213,7 +1230,12 @@ async function runCanary(options) {
       CANARY_MODEL,
       testCase.prompt,
       testCase.schema,
-      { temperature: testCase.temperature, maxTokens: options.maxTokens },
+      {
+        temperature: testCase.temperature,
+        maxTokens: options.maxTokens,
+        reasoningEffort: options.reasoningEffort,
+        reasoningFormat: options.reasoningFormat,
+      },
     );
 
     const { json, parseError } = parseResult(item);
@@ -1363,6 +1385,7 @@ async function runGradingBisect(options) {
     maxTokens: options.maxTokens,
     requestTimeoutMs: 260_000,
     reasoningEffort: options.reasoningEffort,
+    reasoningFormat: options.reasoningFormat,
   });
   const { json, parseError } = parseResult(item);
   const problems = json ? validateGrading(json) : [];
@@ -1404,7 +1427,7 @@ function buildBisectDump(options, note, answer, item) {
     text.length <= chars ? text : `${text.slice(0, chars)}\n… (이하 생략)`;
 
   return [
-    `# grading-bisect 덤프 — effort=${options.reasoningEffort ?? "(없음)"}`,
+    `# grading-bisect 덤프 — effort=${options.reasoningEffort ?? "(없음)"} · format=${options.reasoningFormat}`,
     "",
     `- 노트 목표 ${options.chars.toLocaleString()}자 / 실제 노트 ${note.length.toLocaleString()}자 + 답안 ${answer.length.toLocaleString()}자`,
     `- 지연 ${item.ms}ms · 입력 ${item.promptTokens ?? "?"}tok · 출력 ${item.completionTokens ?? "?"}tok` +

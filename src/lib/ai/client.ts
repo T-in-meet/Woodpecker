@@ -18,6 +18,13 @@ const MODEL = "@cf/openai/gpt-oss-120b";
 const MAX_OUTPUT_TOKENS = 8192;
 
 /**
+ * 실제 노트 품질 비교에서 형식 통과율을 유지하면서 지연과 Neurons를 줄인 값.
+ * 현재 `/ai/run`의 `messages` 요청에서는 Responses 형태의 `reasoning.effort`가 아니라
+ * Chat Completions 형태의 `reasoning_effort`만 적용되는 것을 분리 호출로 확인했다.
+ */
+const REASONING_EFFORT = "low";
+
+/**
  * 호출부가 분기할 오류 종류. Cloudflare가 주는 숫자 코드와는 층이 다르다.
  *
  * `AbortSignal`로 fetch가 끊기면 응답 envelope를 받기 전에 예외가 나므로,
@@ -179,6 +186,7 @@ export async function generateJson(
       json_schema: params.responseSchema,
     },
     max_tokens: MAX_OUTPUT_TOKENS,
+    reasoning_effort: REASONING_EFFORT,
   };
 
   if (params.temperature !== undefined) {

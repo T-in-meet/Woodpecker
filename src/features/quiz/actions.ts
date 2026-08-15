@@ -34,6 +34,13 @@ const TEMPERATURE = {
 } as const;
 
 /**
+ * 퀴즈 생성 액션 진입부터 AI 응답까지 허용하는 시간.
+ * reasoning_effort=low Day 3 stress canary의 최댓값은 16.7초였고,
+ * 네트워크·인증·DB 지연을 포함할 수 있도록 약 3.5배인 60초를 둔다.
+ */
+const QUIZ_DEADLINE_MS = 60_000;
+
+/**
  * 출제 이력을 몇 세트까지 남길지.
  * 더 늘리면 회피 대상이 쌓여 노트에 남은 재료가 금방 바닥난다.
  */
@@ -111,12 +118,8 @@ type RequestQuestionsParams = {
   previousQuestions: string[];
   temperature: number;
   /**
-   * 호출을 끊을 신호.
-   *
-   * 아직 호출부에서 넘기지 않는다. 퀴즈 deadline은 노트 상세 페이지의 `maxDuration`,
-   * `claim_quiz_generation`의 in-flight 창과 함께 "deadline < maxDuration < in-flight 창"
-   * 순서를 이뤄야 하는데, 그 값들이 긴 노트·최대 문항 실측 뒤에야 정해지기 때문이다.
-   * 여기까지 배선해 두고 값이 나오면 채운다.
+   * 액션 진입 시각 기준 deadline으로 만든 호출 중단 신호.
+   * 순서: 이 deadline(60초) < 페이지 maxDuration(90초) < in-flight 창(120초).
    */
   abortSignal?: AbortSignal;
 };
@@ -368,6 +371,7 @@ async function createQuiz(
   quizType: string,
   options: { useCache: boolean },
 ): Promise<GenerateQuizResult> {
+  const startedAt = Date.now();
   const parsed = parseInput(noteId, quizType);
   if ("error" in parsed) {
     return { error: parsed.error };
@@ -434,6 +438,10 @@ async function createQuiz(
     temperature: options.useCache
       ? TEMPERATURE.initial
       : TEMPERATURE.regenerate,
+    // 인증·조회·선점에 쓴 시간까지 포함해야 플랫폼 제한보다 먼저 중단된다.
+    abortSignal: AbortSignal.timeout(
+      Math.max(0, QUIZ_DEADLINE_MS - (Date.now() - startedAt)),
+    ),
   });
 
   if ("error" in generated) {

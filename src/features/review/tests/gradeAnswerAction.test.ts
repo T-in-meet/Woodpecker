@@ -355,7 +355,7 @@ describe("gradeAnswerAction", () => {
     });
   });
 
-  // 선점 만료(300초)보다 먼저 끊겨야 같은 채점에 AI를 두 번 부르지 않는다
+  // 선점 만료(120초)보다 먼저 끊겨야 같은 채점에 AI를 두 번 부르지 않는다
   it("aborts the AI call before the claim goes stale", async () => {
     setupSupabase();
     mockHappyPathQueries();
@@ -386,8 +386,8 @@ describe("gradeAnswerAction", () => {
 
     await gradeAnswerAction(null, createFormData());
 
-    // GRADING_DEADLINE_MS(240_000) - 경과 시간(20_000)
-    expect(timeoutSpy).toHaveBeenCalledWith(220_000);
+    // GRADING_DEADLINE_MS(60_000) - 경과 시간(20_000)
+    expect(timeoutSpy).toHaveBeenCalledWith(40_000);
 
     timeoutSpy.mockRestore();
     nowSpy.mockRestore();
@@ -584,14 +584,14 @@ describe("gradeAnswerAction", () => {
     const { rpcMock } = setupSupabase();
     mockHappyPathQueries();
 
-    // 인증·조회가 220초를 먹은 상황. 남은 20초(< MIN_AI_BUDGET_MS 30초)로는
+    // 인증·조회가 50초를 먹은 상황. 남은 10초(< MIN_AI_BUDGET_MS 15초)로는
     // 채점을 끝낼 수 없으므로 선점을 잡지 않고 실패해야 한다. 잡아 버리면
     // 선점 만료까지 재시도가 막힌다.
     const base = Date.now();
     const nowSpy = vi
       .spyOn(Date, "now")
       .mockReturnValueOnce(base)
-      .mockReturnValue(base + 220_000);
+      .mockReturnValue(base + 50_000);
 
     const result = await gradeAnswerAction(null, createFormData());
 

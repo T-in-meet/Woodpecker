@@ -352,9 +352,9 @@ SELECT is(
   $$두 번째 복습 로그도 선점할 수 있어야 한다$$
 );
 
--- stale window(300초)가 지나 선점이 만료된 상태를 만든다
+-- stale window(120초)가 지나 선점이 만료된 상태를 만든다
 UPDATE public.review_gradings
-SET created_at = now() - interval '6 minutes'
+SET created_at = now() - interval '121 seconds'
 WHERE review_log_id = current_setting('test.rg_rls_log_a2_id')::uuid;
 
 SELECT set_config(

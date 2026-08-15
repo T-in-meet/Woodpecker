@@ -130,6 +130,7 @@ type AiRequest = {
   prompt: string;
   responseSchema: unknown;
   temperature: number;
+  abortSignal: AbortSignal;
 };
 
 function aiRequest(): AiRequest {
@@ -382,6 +383,26 @@ describe("generateQuiz", () => {
   });
 
   describe("응답 스키마", () => {
+    it("액션 진입 시각 기준 60초 deadline을 AI 호출에 전달한다", async () => {
+      setupSupabase();
+      mockAiSuccess();
+
+      const base = Date.now();
+      const nowSpy = vi
+        .spyOn(Date, "now")
+        .mockReturnValueOnce(base)
+        .mockReturnValue(base + 5_000);
+      const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
+
+      await generateQuiz(NOTE_ID, "ox");
+
+      expect(timeoutSpy).toHaveBeenCalledWith(55_000);
+      expect(aiRequest().abortSignal).toBeInstanceOf(AbortSignal);
+
+      timeoutSpy.mockRestore();
+      nowSpy.mockRestore();
+    });
+
     it("응답 스키마를 함께 넘겨 형식을 강제한다", async () => {
       setupSupabase();
       mockAiSuccess();
