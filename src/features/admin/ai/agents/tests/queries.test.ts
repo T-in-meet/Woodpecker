@@ -503,9 +503,7 @@ describe("getAdminAiAgentOptions", () => {
     const result = await getAdminAiAgentOptions();
 
     expect(from).toHaveBeenCalledWith("ai_prompt_agents");
-    expect(select).toHaveBeenCalledWith(
-      "id,display_name,description,purpose,tags,created_at,updated_at",
-    );
+    expect(select).toHaveBeenCalledWith("id,display_name");
     expect(order).toHaveBeenCalledWith("display_name", { ascending: true });
     expect(result).toEqual([
       {

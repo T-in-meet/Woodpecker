@@ -346,9 +346,9 @@ describe("deleteAdminAiAgent", () => {
     });
   });
 
-  it("삭제 RPC가 NOT_DELETABLE을 반환하면 실패를 반환한다", async () => {
+  it("삭제 RPC가 알 수 없는 결과를 반환하면 운영 오류를 보고하고 실패를 반환한다", async () => {
     const rpc = vi.fn().mockResolvedValue({
-      data: "NOT_DELETABLE",
+      data: "UNKNOWN_RESULT",
       error: null,
     });
 
@@ -359,12 +359,18 @@ describe("deleteAdminAiAgent", () => {
     const result = await deleteAdminAiAgent(AGENT_ID);
 
     expect(result).toEqual({
-      message:
-        "시스템 Agent, active version이 있는 Agent, published/archived version이 있는 Agent는 삭제할 수 없습니다.",
+      message: "Agent 삭제 요청을 처리하지 못했습니다.",
       ok: false,
     });
     expect(rpc).toHaveBeenCalledWith("delete_admin_ai_agent", {
       p_agent_id: AGENT_ID,
+    });
+    expect(reportAdminAiActionError).toHaveBeenCalledWith({
+      adminUserId: ADMIN_USER_ID,
+      error: expect.any(Error),
+      errorCode: "ADMIN_AI_AGENT_DELETE_FAILED",
+      message: "관리자 AI agent 삭제 RPC 응답 검증에 실패했습니다.",
+      operation: "delete_prompt_agent",
     });
     expect(revalidateAdminAiPaths).not.toHaveBeenCalled();
   });

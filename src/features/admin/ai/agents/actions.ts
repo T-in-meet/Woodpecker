@@ -12,7 +12,11 @@ import { AdminAiActionResult } from "../types";
 import { readFormString } from "../utils/form-data";
 import { reportAdminAiActionError } from "../utils/report-admin-ai-action-error";
 import { revalidateAdminAiPaths } from "../utils/revalidate";
-import { createAgentSchema, updateAgentSchema } from "./schema";
+import {
+  adminAiAgentDeleteRpcResultSchema,
+  createAgentSchema,
+  updateAgentSchema,
+} from "./schema";
 
 /**
  * AI Agent를 생성합니다.
@@ -165,16 +169,22 @@ export async function deleteAdminAiAgent(
     return { message: error.message, ok: false };
   }
 
-  if (data === "NOT_FOUND") {
-    return { message: "Agent를 찾을 수 없습니다.", ok: false };
+  const parsedResult = adminAiAgentDeleteRpcResultSchema.safeParse(data);
+
+  if (!parsedResult.success) {
+    await reportAdminAiActionError({
+      adminUserId,
+      error: parsedResult.error,
+      errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.AGENT_DELETE_FAILED,
+      message: "관리자 AI agent 삭제 RPC 응답 검증에 실패했습니다.",
+      operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.DELETE_PROMPT_AGENT,
+    });
+
+    return { message: "Agent 삭제 요청을 처리하지 못했습니다.", ok: false };
   }
 
-  if (data !== "OK") {
-    return {
-      message:
-        "시스템 Agent, active version이 있는 Agent, published/archived version이 있는 Agent는 삭제할 수 없습니다.",
-      ok: false,
-    };
+  if (parsedResult.data === "NOT_FOUND") {
+    return { message: "Agent를 찾을 수 없습니다.", ok: false };
   }
 
   revalidateAdminAiPaths();

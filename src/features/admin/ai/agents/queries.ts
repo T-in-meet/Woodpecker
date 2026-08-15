@@ -21,6 +21,7 @@ import { reportAdminAiLoadError } from "../utils/report-load-error";
 import {
   adminAiAgentListRpcResultSchema,
   adminAiAgentListRpcRowSchema,
+  adminAiAgentOptionRowSchema,
   adminAiAgentRowSchema,
 } from "./schema";
 import type {
@@ -280,7 +281,7 @@ export async function getAdminAiAgentOptions() {
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("ai_prompt_agents")
-    .select("id,display_name,description,purpose,tags,created_at,updated_at")
+    .select("id,display_name")
     .order("display_name", { ascending: true });
 
   if (error) {
@@ -297,7 +298,7 @@ export async function getAdminAiAgentOptions() {
   }
 
   return z
-    .array(adminAiAgentRowSchema)
+    .array(adminAiAgentOptionRowSchema)
     .parse(data ?? [])
     .map((agent) => ({
       displayName: agent.display_name,
