@@ -194,7 +194,7 @@ describe("generateAiEmbedding", () => {
         ...EMBEDDING_CONFIGURATION.model,
         dimensions: 768,
       },
-    } as AiEmbeddingRuntimeConfiguration;
+    } as AiRuntimeEmbeddingConfiguration;
 
     vi.mocked(getAiEmbeddingCache).mockResolvedValue(null);
 
