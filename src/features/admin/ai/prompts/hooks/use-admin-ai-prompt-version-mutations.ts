@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { invalidateAdminAiQueries } from "../../utils/invalidate-admin-ai-queries";
+import { invalidateAdminAiQueriesOnSuccessfulResult } from "../../utils/invalidate-admin-ai-queries-on-successful-result";
 import {
   archiveAdminAiPromptVersion,
   createAdminAiPromptVersion,
@@ -19,7 +19,8 @@ export function useCreateAdminAiPromptVersion() {
 
   return useMutation({
     mutationFn: createAdminAiPromptVersion,
-    onSuccess: () => invalidateAdminAiQueries(queryClient),
+    onSuccess: (result) =>
+      invalidateAdminAiQueriesOnSuccessfulResult(queryClient, result),
   });
 }
 
@@ -33,7 +34,8 @@ export function useUpdateAdminAiPromptVersion() {
 
   return useMutation({
     mutationFn: updateAdminAiPromptVersion,
-    onSuccess: () => invalidateAdminAiQueries(queryClient),
+    onSuccess: (result) =>
+      invalidateAdminAiQueriesOnSuccessfulResult(queryClient, result),
   });
 }
 
@@ -47,7 +49,8 @@ export function usePublishAdminAiPromptVersion() {
 
   return useMutation({
     mutationFn: publishAdminAiPromptVersion,
-    onSuccess: () => invalidateAdminAiQueries(queryClient),
+    onSuccess: (result) =>
+      invalidateAdminAiQueriesOnSuccessfulResult(queryClient, result),
   });
 }
 
@@ -61,7 +64,8 @@ export function useArchiveAdminAiPromptVersion() {
 
   return useMutation({
     mutationFn: archiveAdminAiPromptVersion,
-    onSuccess: () => invalidateAdminAiQueries(queryClient),
+    onSuccess: (result) =>
+      invalidateAdminAiQueriesOnSuccessfulResult(queryClient, result),
   });
 }
 
@@ -81,6 +85,7 @@ export function useDeleteAdminAiPromptVersion() {
       familyId: string;
       versionId: string;
     }) => deleteAdminAiPromptVersion(familyId, versionId),
-    onSuccess: () => invalidateAdminAiQueries(queryClient),
+    onSuccess: (result) =>
+      invalidateAdminAiQueriesOnSuccessfulResult(queryClient, result),
   });
 }

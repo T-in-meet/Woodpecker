@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { invalidateAdminAiQueries } from "../../utils/invalidate-admin-ai-queries";
+import { invalidateAdminAiQueriesOnSuccessfulResult } from "../../utils/invalidate-admin-ai-queries-on-successful-result";
 import {
   createAdminAiPromptFamily,
   deleteAdminAiPromptFamily,
@@ -17,7 +17,8 @@ export function useCreateAdminAiPromptFamily() {
 
   return useMutation({
     mutationFn: createAdminAiPromptFamily,
-    onSuccess: () => invalidateAdminAiQueries(queryClient),
+    onSuccess: (result) =>
+      invalidateAdminAiQueriesOnSuccessfulResult(queryClient, result),
   });
 }
 
@@ -31,7 +32,8 @@ export function useUpdateAdminAiPromptFamily() {
 
   return useMutation({
     mutationFn: updateAdminAiPromptFamily,
-    onSuccess: () => invalidateAdminAiQueries(queryClient),
+    onSuccess: (result) =>
+      invalidateAdminAiQueriesOnSuccessfulResult(queryClient, result),
   });
 }
 
@@ -45,6 +47,7 @@ export function useDeleteAdminAiPromptFamily() {
 
   return useMutation({
     mutationFn: deleteAdminAiPromptFamily,
-    onSuccess: () => invalidateAdminAiQueries(queryClient),
+    onSuccess: (result) =>
+      invalidateAdminAiQueriesOnSuccessfulResult(queryClient, result),
   });
 }
