@@ -363,9 +363,18 @@ describe("createAdminAiPromptFamily", () => {
 
 describe("updateAdminAiPromptFamily", () => {
   it("Family 운영 필드를 수정한다", async () => {
-    const eq = vi.fn().mockResolvedValue({
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: {
+        id: FAMILY_ID,
+      },
       error: null,
     });
+    const select = vi.fn(() => ({
+      maybeSingle,
+    }));
+    const eq = vi.fn(() => ({
+      select,
+    }));
     const update = vi.fn(() => ({
       eq,
     }));
@@ -388,16 +397,58 @@ describe("updateAdminAiPromptFamily", () => {
       tags: ["default", "updated"],
     });
     expect(eq).toHaveBeenCalledWith("id", FAMILY_ID);
+    expect(select).toHaveBeenCalledWith("id");
+    expect(maybeSingle).toHaveBeenCalledOnce();
     expect(result).toEqual({ ok: true });
     expect(revalidateAdminAiPaths).toHaveBeenCalledOnce();
+  });
+
+  it("수정 대상 Family가 없으면 실패하고 경로를 재검증하지 않는다", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: null,
+      error: null,
+    });
+    const select = vi.fn(() => ({
+      maybeSingle,
+    }));
+    const eq = vi.fn(() => ({
+      select,
+    }));
+    const update = vi.fn(() => ({
+      eq,
+    }));
+
+    vi.mocked(createAdminClient).mockReturnValue({
+      from: vi.fn(() => ({
+        update,
+      })),
+    } as unknown as ReturnType<typeof createAdminClient>);
+
+    const result = await updateAdminAiPromptFamily(
+      createUpdateFamilyFormData(),
+    );
+
+    expect(result).toEqual({
+      message: "수정할 Prompt Family를 찾을 수 없습니다.",
+      ok: false,
+    });
+    expect(reportAdminAiActionError).not.toHaveBeenCalled();
+    expect(revalidateAdminAiPaths).not.toHaveBeenCalled();
   });
 
   it("DB 오류가 발생하면 실패하고 운영 오류를 보고한다", async () => {
     const error = { message: "family update failed" };
 
-    const eq = vi.fn().mockResolvedValue({
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: null,
       error,
     });
+    const select = vi.fn(() => ({
+      maybeSingle,
+    }));
+    const eq = vi.fn(() => ({
+      select,
+    }));
     const update = vi.fn(() => ({
       eq,
     }));

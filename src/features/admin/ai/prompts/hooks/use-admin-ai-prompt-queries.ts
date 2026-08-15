@@ -21,6 +21,9 @@ export function useAdminAiPromptFamilies(query: AdminAiPromptListQuery) {
     queryKey: ADMIN_AI_PROMPTS_QUERY_KEY.list(query),
     queryFn: () => getAdminAiPromptFamilies(query),
     placeholderData: keepPreviousData,
+    // 서버 조회 함수가 운영 오류를 보고한 뒤 throw하므로 React Query retry 시 동일 실패가 중복 기록된다.
+    // Prompt 조회 실패는 한 번만 보고하도록 이 query에서는 자동 retry를 비활성화한다.
+    retry: false,
   });
 }
 
@@ -34,6 +37,9 @@ export function useAdminAiPromptFamilyDetail(familyId: string) {
   return useQuery({
     queryKey: ADMIN_AI_PROMPTS_QUERY_KEY.familyDetail(familyId),
     queryFn: () => getAdminAiPromptFamilyDetail(familyId),
+    // 서버 조회 함수가 운영 오류를 보고한 뒤 throw하므로 React Query retry 시 동일 실패가 중복 기록된다.
+    // Prompt 조회 실패는 한 번만 보고하도록 이 query에서는 자동 retry를 비활성화한다.
+    retry: false,
   });
 }
 
@@ -51,6 +57,9 @@ export function useAdminAiPromptVersionDetail(
   return useQuery({
     queryKey: ADMIN_AI_PROMPTS_QUERY_KEY.versionDetail(familyId, versionId),
     queryFn: () => getAdminAiPromptVersionDetail(familyId, versionId),
+    // 서버 조회 함수가 운영 오류를 보고한 뒤 throw하므로 React Query retry 시 동일 실패가 중복 기록된다.
+    // Prompt 조회 실패는 한 번만 보고하도록 이 query에서는 자동 retry를 비활성화한다.
+    retry: false,
   });
 }
 
@@ -65,6 +74,9 @@ export function useAdminAiPromptFamilyOptions(agentId: string) {
     enabled: agentId.length > 0,
     queryKey: ADMIN_AI_PROMPTS_QUERY_KEY.familyOptions(agentId),
     queryFn: () => getAdminAiPromptFamilyOptions(agentId),
+    // 서버 조회 함수가 운영 오류를 보고한 뒤 throw하므로 React Query retry 시 동일 실패가 중복 기록된다.
+    // Prompt 조회 실패는 한 번만 보고하도록 이 query에서는 자동 retry를 비활성화한다.
+    retry: false,
   });
 }
 
@@ -79,5 +91,8 @@ export function useAdminAiPromptVersionOptions(familyId: string) {
     enabled: familyId.length > 0,
     queryKey: ADMIN_AI_PROMPTS_QUERY_KEY.versionOptions(familyId),
     queryFn: () => getAdminAiPromptVersionOptions(familyId),
+    // 서버 조회 함수가 운영 오류를 보고한 뒤 throw하므로 React Query retry 시 동일 실패가 중복 기록된다.
+    // Prompt 조회 실패는 한 번만 보고하도록 이 query에서는 자동 retry를 비활성화한다.
+    retry: false,
   });
 }

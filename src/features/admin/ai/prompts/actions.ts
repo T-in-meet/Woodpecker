@@ -113,14 +113,20 @@ export async function updateAdminAiPromptFamily(
   }
 
   const supabase = createAdminClient();
-  const { error } = await supabase
+  /*
+   * update만 호출하면 조건에 맞는 Family가 없어도 오류가 반환되지 않을 수 있다.
+   * 수정된 row를 함께 조회해 존재하지 않는 Prompt Family 수정을 성공으로 처리하지 않는다.
+   */
+  const { data: updatedFamily, error } = await supabase
     .from("ai_prompt_families")
     .update({
       description: parsedInput.data.description,
       display_name: parsedInput.data.displayName,
       tags: parsedInput.data.tags,
     })
-    .eq("id", parsedInput.data.familyId);
+    .eq("id", parsedInput.data.familyId)
+    .select("id")
+    .maybeSingle();
 
   if (error) {
     await reportAdminAiActionError({
@@ -135,6 +141,10 @@ export async function updateAdminAiPromptFamily(
       message: "Prompt Family를 수정하지 못했습니다.",
       ok: false,
     };
+  }
+
+  if (!updatedFamily) {
+    return { message: "수정할 Prompt Family를 찾을 수 없습니다.", ok: false };
   }
 
   revalidateAdminAiPaths();
