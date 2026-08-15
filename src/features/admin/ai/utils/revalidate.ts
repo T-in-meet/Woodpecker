@@ -8,4 +8,5 @@ import { ROUTES } from "@/lib/constants/routes";
 export function revalidateAdminAiPaths() {
   revalidatePath(ROUTES.ADMIN.AI.DASHBOARD);
   revalidatePath(ROUTES.ADMIN.AI.MODELS);
+  revalidatePath(ROUTES.ADMIN.AI.AGENTS);
 }

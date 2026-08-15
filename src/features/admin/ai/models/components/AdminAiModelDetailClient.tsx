@@ -1,7 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-
 import { Button } from "@/components/ui/button";
 import { AdminListError } from "@/features/admin/components/common/AdminListState";
 import { AdminBreadcrumbDynamicItems } from "@/features/admin/components/layout/AdminBreadcrumbDynamicItems";
@@ -26,11 +24,11 @@ type AdminAiModelDetailProps = {
 export function AdminAiModelDetailClient({
   modelConfigId,
 }: AdminAiModelDetailProps) {
-  const router = useRouter();
   const {
     data: model,
     isError,
     isPending,
+    refetch,
   } = useAdminAiModelDetail(modelConfigId);
 
   return (
@@ -64,7 +62,9 @@ export function AdminAiModelDetailClient({
             <Button
               type="button"
               variant="outline"
-              onClick={() => router.refresh()}
+              onClick={() => {
+                void refetch();
+              }}
             >
               다시 시도
             </Button>
