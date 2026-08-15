@@ -48,7 +48,7 @@ export function AdminAiAgentDetailClient({
 
       <AdminDetailPageHeader
         title="AI Agent 상세"
-        description="Agent는 기능 코드가 참조하는 실행 슬롯이며 key는 생성 후 변경할 수 없습니다."
+        description="AI 에이전트의 이름, 용도와 태그 정보를 확인하고 관리합니다."
         backHref={ROUTES.ADMIN.AI.AGENTS}
         backLabel="Agent 목록"
       />

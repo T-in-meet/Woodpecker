@@ -1,8 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import type { FormEvent } from "react";
 import { useState } from "react";
+import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -18,21 +18,16 @@ import {
 } from "../hooks/use-admin-ai-agent-mutations";
 import type { AdminAiAgentDetail } from "../types";
 import { AdminAiAgentBasicFields } from "./AdminAiAgentBasicFields";
+import {
+  type AdminAiAgentFormValues,
+  buildAiAgentFormData,
+  isCreateMode,
+} from "./AdminAiAgentForm.utils";
 
 type AdminAiAgentFormProps = {
   /** 수정할 Agent입니다. 없으면 생성 모드입니다. */
   agent?: AdminAiAgentDetail;
 };
-
-/**
- * Agent 생성 모드 여부를 판별합니다.
- *
- * @param agent Agent 상세
- * @returns 생성 모드면 true
- */
-function isCreateMode(agent: AdminAiAgentDetail | undefined) {
-  return agent === undefined;
-}
 
 /**
  * AI Agent 생성 및 수정 폼을 렌더링합니다.
@@ -46,7 +41,24 @@ export function AdminAiAgentForm({ agent }: AdminAiAgentFormProps) {
   const updateMutation = useUpdateAdminAiAgent();
   const deleteMutation = useDeleteAdminAiAgent();
   const createMode = isCreateMode(agent);
+
   const [message, setMessage] = useState<string | null>(null);
+
+  const {
+    formState: { isDirty },
+    handleSubmit,
+    register,
+    reset,
+  } = useForm<AdminAiAgentFormValues>({
+    defaultValues: {
+      displayName: agent?.displayName ?? "",
+      purpose: agent?.purpose ?? "",
+      description: agent?.description ?? "",
+      tags: agent?.tags.join(", ") ?? "",
+    },
+  });
+
+  const savePending = createMutation.isPending || updateMutation.isPending;
 
   /**
    * Agent 저장을 처리합니다.
@@ -54,14 +66,13 @@ export function AdminAiAgentForm({ agent }: AdminAiAgentFormProps) {
    * 생성과 수정의 성공 결과를 toast로 알리고,
    * 예상하지 못한 요청 실패는 공통 오류 메시지로 표시합니다.
    *
-   * @param event 폼 제출 이벤트
+   * @param values RHF에서 관리하는 폼 값
    */
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function handleSave(values: AdminAiAgentFormValues) {
     setMessage(null);
 
     try {
-      const formData = new FormData(event.currentTarget);
+      const formData = buildAiAgentFormData(values, agent);
 
       const result = createMode
         ? await createMutation.mutateAsync(formData)
@@ -79,6 +90,8 @@ export function AdminAiAgentForm({ agent }: AdminAiAgentFormProps) {
       }
 
       toast.success("AI Agent를 수정했습니다.");
+
+      reset(values);
       router.refresh();
     } catch {
       toast.error(ADMIN_UNKNOWN_ERROR_MESSAGE);
@@ -115,25 +128,17 @@ export function AdminAiAgentForm({ agent }: AdminAiAgentFormProps) {
 
   return (
     <div className="space-y-6">
-      <form className="space-y-5" onSubmit={handleSubmit}>
-        {!createMode ? (
-          <input type="hidden" name="agentId" value={agent.id} />
-        ) : null}
+      <form className="space-y-5" onSubmit={handleSubmit(handleSave)}>
+        <section className="space-y-5">
+          <div className="space-y-1">
+            <h2 className="text-base font-semibold">에이전트 정보</h2>
+            <p className="text-sm text-muted-foreground">
+              AI 기능에서 사용할 Agent의 기본 정보를 설정합니다.
+            </p>
+          </div>
 
-        {createMode ? (
-          <section className="space-y-5">
-            <div className="space-y-1">
-              <h2 className="text-base font-semibold">에이전트 정보</h2>
-              <p className="text-sm text-muted-foreground">
-                기능 코드에서 사용할 Agent의 기본 정보를 설정합니다.
-              </p>
-            </div>
-
-            <AdminAiAgentBasicFields />
-          </section>
-        ) : (
-          <AdminAiAgentBasicFields agent={agent} />
-        )}
+          <AdminAiAgentBasicFields register={register} />
+        </section>
 
         <AdminActionMessage message={message} />
 
@@ -157,11 +162,8 @@ export function AdminAiAgentForm({ agent }: AdminAiAgentFormProps) {
             </div>
           ) : null}
 
-          <Button
-            type="submit"
-            disabled={createMutation.isPending || updateMutation.isPending}
-          >
-            {createMode ? "생성" : "저장"}
+          <Button type="submit" disabled={savePending || !isDirty}>
+            {createMode ? "저장" : "수정"}
           </Button>
         </div>
       </form>

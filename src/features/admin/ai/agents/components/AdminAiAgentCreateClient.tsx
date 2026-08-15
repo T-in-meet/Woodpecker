@@ -23,7 +23,7 @@ export function AdminAiAgentCreateClient() {
       />
       <AdminDetailPageHeader
         title="AI Agent 추가"
-        description="Agent는 기능 코드가 참조하는 실행 슬롯이며 key는 생성 후 변경할 수 없습니다."
+        description="AI 기능에서 사용할 에이전트의 이름, 용도와 태그를 설정합니다."
         backHref={ROUTES.ADMIN.AI.AGENTS}
         backLabel="Agent 목록"
       />

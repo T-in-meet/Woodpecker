@@ -39,12 +39,13 @@ export function AdminAiAgentsClient() {
 
   const agents = data?.items ?? [];
   const totalCount = data?.pagination.total ?? 0;
+  const isInitialLoading = isPending || data === undefined;
 
   return (
     <div className="space-y-6">
       <AdminPageHeader
         title="AI 에이전트"
-        description="기능 코드가 참조하는 AI 실행 슬롯과 active prompt를 관리합니다."
+        description="AI 기능에서 사용하는 에이전트의 이름, 용도와 태그를 관리합니다."
         backHref={ROUTES.ADMIN.AI.DASHBOARD}
         backLabel="AI 관리"
         actions={
@@ -66,7 +67,7 @@ export function AdminAiAgentsClient() {
         <AdminAiAgentsTable
           agents={agents}
           isError={isError}
-          isPending={isPending}
+          isPending={isInitialLoading}
           sort={toolbar.sort}
           onSortChange={toolbar.handleSortChange}
         />
