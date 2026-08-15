@@ -2,7 +2,6 @@
 
 import { Plus } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { AdminCollapsibleSection } from "@/features/admin/components/common/AdminCollapsibleSection";
@@ -33,11 +32,11 @@ type AdminAiPromptFamilyDetailProps = {
 export function AdminAiPromptFamilyDetailClient({
   familyId,
 }: AdminAiPromptFamilyDetailProps) {
-  const router = useRouter();
   const {
     data: family,
     isError,
     isPending,
+    refetch,
   } = useAdminAiPromptFamilyDetail(familyId);
 
   return (
@@ -80,7 +79,9 @@ export function AdminAiPromptFamilyDetailClient({
             <Button
               type="button"
               variant="outline"
-              onClick={() => router.refresh()}
+              onClick={() => {
+                void refetch();
+              }}
             >
               다시 시도
             </Button>

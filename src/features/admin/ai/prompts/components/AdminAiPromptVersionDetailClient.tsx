@@ -42,6 +42,7 @@ export function AdminAiPromptVersionDetailClient({
     data: detail,
     isError,
     isPending,
+    refetch,
   } = useAdminAiPromptVersionDetail(familyId, versionId);
 
   const {
@@ -95,7 +96,9 @@ export function AdminAiPromptVersionDetailClient({
             <Button
               type="button"
               variant="outline"
-              onClick={() => router.refresh()}
+              onClick={() => {
+                void refetch();
+              }}
             >
               다시 시도
             </Button>
