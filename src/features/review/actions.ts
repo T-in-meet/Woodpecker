@@ -2,8 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { z } from "zod";
 
+import { claimResultSchema } from "@/lib/ai/claimResult";
 import { generateJson } from "@/lib/ai/client";
 import { toAiFailureReason } from "@/lib/ai/failureReason";
 import { toCloudflareResponseSchema } from "@/lib/ai/responseSchema";
@@ -141,12 +141,6 @@ const MIN_AI_BUDGET_MS = 15_000;
 const GRADING_RESPONSE_JSON_SCHEMA = toCloudflareResponseSchema(
   gradingGenerationSchema,
 );
-
-// claim_review_grading은 상태와 선점 토큰을 jsonb로 돌려준다.
-const claimResultSchema = z.object({
-  status: z.string(),
-  claimToken: z.string().uuid().optional(),
-});
 
 /**
  * 선점이 거절된 이유를 그대로 사용자 문구로 옮기는 상태들.
@@ -340,6 +334,34 @@ async function readStoredGrading(
   }
 }
 
+/**
+ * claim/finalize가 "already_graded"를 돌려줬을 때 저장된 채점을 찾아 반환한다.
+ * 두 RPC 모두 자신이 최신 선점이 아니라고 판단했을 때 이 상태를 쓰므로, 저장된
+ * 행이 반드시 있어야 정상이다 — 없으면 정상 경로에서는 나오지 않는 상태다.
+ */
+async function resolveAlreadyGraded(
+  reviewLogId: string,
+  userId: string,
+  userAnswer: string,
+  contentHash: string,
+): Promise<GradeAnswerActionState> {
+  const alreadyGraded = await readStoredGrading(
+    reviewLogId,
+    userId,
+    userAnswer,
+    contentHash,
+  );
+
+  if (alreadyGraded) {
+    return alreadyGraded;
+  }
+
+  console.error("[gradeAnswerAction] already_graded인데 채점 결과를 찾지 못함");
+  return {
+    error: "채점 결과를 불러오는 데 실패했습니다. 잠시 후 다시 시도해주세요.",
+  };
+}
+
 export async function gradeAnswerAction(
   _prevState: GradeAnswerActionState,
   formData: FormData,
@@ -464,24 +486,12 @@ export async function gradeAnswerAction(
   }
 
   if (claim.data.status === "already_graded") {
-    const alreadyGraded = await readStoredGrading(
+    return resolveAlreadyGraded(
       parsed.data.reviewLogId,
       user.id,
       parsed.data.answer,
       contentHash,
     );
-
-    if (alreadyGraded) {
-      return alreadyGraded;
-    }
-
-    // claim이 already_graded라고 답했는데 채점 행을 못 찾았다 — 정상 경로에서는 나오지 않는다.
-    console.error(
-      "[gradeAnswerAction] already_graded인데 채점 결과를 찾지 못함",
-    );
-    return {
-      error: "채점 결과를 불러오는 데 실패했습니다. 잠시 후 다시 시도해주세요.",
-    };
   }
 
   const claimErrorMessage = CLAIM_ERROR_MESSAGES[claim.data.status];
@@ -569,25 +579,12 @@ export async function gradeAnswerAction(
   if (finalizeError || finalizeResult !== "ok") {
     // 선점이 만료된 사이 다른 요청이 먼저 저장한 경우 → 저장된 결과를 정본으로 삼는다
     if (finalizeResult === "already_graded") {
-      const alreadyGraded = await readStoredGrading(
+      return resolveAlreadyGraded(
         parsed.data.reviewLogId,
         user.id,
         parsed.data.answer,
         contentHash,
       );
-
-      if (alreadyGraded) {
-        return alreadyGraded;
-      }
-
-      // finalize가 already_graded라고 답했는데 채점 행을 못 찾았다 — 정상 경로에서는 나오지 않는다.
-      console.error(
-        "[gradeAnswerAction] already_graded인데 채점 결과를 찾지 못함",
-      );
-      return {
-        error:
-          "채점 결과를 불러오는 데 실패했습니다. 잠시 후 다시 시도해주세요.",
-      };
     }
 
     console.error(

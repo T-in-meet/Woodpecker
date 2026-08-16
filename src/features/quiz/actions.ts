@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 
+import { claimResultSchema } from "@/lib/ai/claimResult";
 import { generateJson } from "@/lib/ai/client";
 import { toAiFailureReason } from "@/lib/ai/failureReason";
 import {
@@ -71,12 +72,6 @@ const QUIZ_RESPONSE_JSON_SCHEMA_BY_TYPE = Object.fromEntries(
     toCloudflareResponseSchema(quizResponseSchemaFor(quizType)),
   ]),
 ) as Record<QuizType, ReturnType<typeof toCloudflareResponseSchema>>;
-
-// claim_quiz_generation_v2는 상태와 선점 토큰을 jsonb로 돌려준다.
-const claimResultSchema = z.object({
-  status: z.string(),
-  claimToken: z.string().uuid().optional(),
-});
 
 // claim_quiz_generation_v2의 반환값을 사용자 메시지로 옮긴다.
 const CLAIM_ERROR_MESSAGES: Record<string, string> = {
