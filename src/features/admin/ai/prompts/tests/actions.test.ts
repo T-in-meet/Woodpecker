@@ -341,6 +341,29 @@ describe("createAdminAiPromptFamily", () => {
     expect(revalidateAdminAiPaths).toHaveBeenCalledOnce();
   });
 
+  it("빈 JSON 입력은 기본값으로 보정해 Family와 초기 Version을 생성한다", async () => {
+    const formData = createFamilyFormData();
+    const rpc = mockRpc(FAMILY_ID);
+
+    formData.set("responseSchema", "");
+    formData.set("variables", "   ");
+
+    const result = await createAdminAiPromptFamily(formData);
+
+    expect(rpc).toHaveBeenCalledWith(
+      "create_ai_prompt_family_with_initial_version",
+      expect.objectContaining({
+        p_response_schema: {},
+        p_variables: [],
+      }),
+    );
+    expect(result).toEqual({
+      id: FAMILY_ID,
+      ok: true,
+    });
+    expect(revalidateAdminAiPaths).toHaveBeenCalledOnce();
+  });
+
   it("RPC 오류가 발생하면 실패하고 운영 오류를 보고한다", async () => {
     const error = { message: "family create failed" };
 
@@ -563,6 +586,29 @@ describe("createAdminAiPromptVersion", () => {
         },
       ],
     });
+    expect(result).toEqual({
+      id: VERSION_ID,
+      ok: true,
+    });
+    expect(revalidateAdminAiPaths).toHaveBeenCalledOnce();
+  });
+
+  it("빈 JSON 입력은 기본값으로 보정해 Prompt Version을 생성한다", async () => {
+    const formData = createVersionFormData();
+    const rpc = mockRpc(VERSION_ID);
+
+    formData.set("responseSchema", "");
+    formData.set("variables", "   ");
+
+    const result = await createAdminAiPromptVersion(formData);
+
+    expect(rpc).toHaveBeenCalledWith(
+      "create_ai_prompt_version",
+      expect.objectContaining({
+        p_response_schema: {},
+        p_variables: [],
+      }),
+    );
     expect(result).toEqual({
       id: VERSION_ID,
       ok: true,

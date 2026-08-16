@@ -883,6 +883,33 @@ describe("getAdminAiPromptFamilyOptions", () => {
 
     expect(result).toEqual([]);
   });
+
+  it("조회에 실패하면 Agent context와 options operation으로 운영 오류를 보고한다", async () => {
+    const error = {
+      message: "prompt family options failed",
+    };
+
+    mockFamilyOptionsQueryClient({
+      data: null,
+      error,
+    });
+
+    await expect(getAdminAiPromptFamilyOptions(AGENT_ID)).rejects.toThrow(
+      "Failed to load admin AI prompt family options: prompt family options failed",
+    );
+
+    expect(reportAdminAiLoadError).toHaveBeenCalledWith({
+      adminUserId: ADMIN_USER_ID,
+      context: {
+        agentId: AGENT_ID,
+      },
+      error,
+      errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.PROMPT_FAMILY_LOAD_FAILED,
+      message: "관리자 AI prompt family 선택 목록 조회에 실패했습니다.",
+      operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.GET_PROMPT_FAMILY_OPTIONS,
+      stage: ADMIN_AI_OPERATIONAL_ERROR_STAGE.DATABASE,
+    });
+  });
 });
 
 describe("getAdminAiPromptVersionOptions", () => {
@@ -958,5 +985,33 @@ describe("getAdminAiPromptVersionOptions", () => {
     const result = await getAdminAiPromptVersionOptions(OTHER_FAMILY_ID);
 
     expect(result).toEqual([]);
+  });
+
+  it("조회에 실패하면 Family context와 options operation으로 운영 오류를 보고한다", async () => {
+    const error = {
+      message: "prompt version options failed",
+    };
+
+    mockVersionOptionsQueryClient({
+      data: null,
+      error,
+    });
+
+    await expect(getAdminAiPromptVersionOptions(FAMILY_ID)).rejects.toThrow(
+      "Failed to load admin AI prompt version options: prompt version options failed",
+    );
+
+    expect(reportAdminAiLoadError).toHaveBeenCalledWith({
+      adminUserId: ADMIN_USER_ID,
+      context: {
+        familyId: FAMILY_ID,
+      },
+      error,
+      errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.PROMPT_VERSION_LOAD_FAILED,
+      message: "관리자 AI prompt version 선택 목록 조회에 실패했습니다.",
+      operation:
+        ADMIN_AI_OPERATIONAL_ERROR_OPERATION.GET_PROMPT_VERSION_OPTIONS,
+      stage: ADMIN_AI_OPERATIONAL_ERROR_STAGE.DATABASE,
+    });
   });
 });

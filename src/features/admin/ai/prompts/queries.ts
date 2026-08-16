@@ -107,6 +107,52 @@ async function reportPromptVersionListLoadError(input: {
 }
 
 /**
+ * Prompt Family 선택 목록 조회 실패를 운영 오류로 보고합니다.
+ *
+ * @param input 조회 실패 정보
+ */
+async function reportPromptFamilyOptionsLoadError(input: {
+  adminUserId: string;
+  agentId: string;
+  error: unknown;
+}) {
+  await reportAdminAiLoadError({
+    adminUserId: input.adminUserId,
+    context: {
+      agentId: input.agentId,
+    },
+    error: input.error,
+    errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.PROMPT_FAMILY_LOAD_FAILED,
+    message: "관리자 AI prompt family 선택 목록 조회에 실패했습니다.",
+    operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.GET_PROMPT_FAMILY_OPTIONS,
+    stage: ADMIN_AI_OPERATIONAL_ERROR_STAGE.DATABASE,
+  });
+}
+
+/**
+ * Prompt Version 선택 목록 조회 실패를 운영 오류로 보고합니다.
+ *
+ * @param input 조회 실패 정보
+ */
+async function reportPromptVersionOptionsLoadError(input: {
+  adminUserId: string;
+  error: unknown;
+  familyId: string;
+}) {
+  await reportAdminAiLoadError({
+    adminUserId: input.adminUserId,
+    context: {
+      familyId: input.familyId,
+    },
+    error: input.error,
+    errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.PROMPT_VERSION_LOAD_FAILED,
+    message: "관리자 AI prompt version 선택 목록 조회에 실패했습니다.",
+    operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.GET_PROMPT_VERSION_OPTIONS,
+    stage: ADMIN_AI_OPERATIONAL_ERROR_STAGE.DATABASE,
+  });
+}
+
+/**
  * Prompt Family 목록 RPC에 전달할 파라미터를 생성합니다.
  *
  * @param query 목록 검색, 필터, 정렬, 페이지네이션 조건
@@ -418,10 +464,10 @@ export async function getAdminAiPromptFamilyOptions(
     .order("display_name", { ascending: true });
 
   if (error) {
-    await reportPromptFamilyDetailLoadError({
+    await reportPromptFamilyOptionsLoadError({
       adminUserId,
+      agentId,
       error,
-      familyId: agentId,
     });
 
     throw new Error(
@@ -464,7 +510,7 @@ export async function getAdminAiPromptVersionOptions(
     .order("version_number", { ascending: false });
 
   if (error) {
-    await reportPromptVersionListLoadError({
+    await reportPromptVersionOptionsLoadError({
       adminUserId,
       error,
       familyId,

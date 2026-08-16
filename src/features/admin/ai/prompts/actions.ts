@@ -60,11 +60,11 @@ export async function createAdminAiPromptFamily(
       p_change_summary: parsedInput.data.changeSummary ?? "",
       p_description: parsedInput.data.description ?? "",
       p_display_name: parsedInput.data.displayName,
-      p_response_schema: parsedInput.data.responseSchema,
+      p_response_schema: parsedInput.data.responseSchema ?? {},
       p_system_template: parsedInput.data.systemTemplate,
       p_tags: parsedInput.data.tags,
       p_user_template: parsedInput.data.userTemplate,
-      p_variables: parsedInput.data.variables,
+      p_variables: parsedInput.data.variables ?? [],
       p_version_display_name: parsedInput.data.versionDisplayName,
     },
   );
@@ -239,11 +239,11 @@ export async function createAdminAiPromptVersion(
     p_change_summary: parsedInput.data.changeSummary ?? "",
     p_display_name: parsedInput.data.versionDisplayName,
     p_family_id: parsedInput.data.familyId,
-    p_response_schema: parsedInput.data.responseSchema,
+    p_response_schema: parsedInput.data.responseSchema ?? {},
     p_system_template: parsedInput.data.systemTemplate,
     p_tags: parsedInput.data.tags,
     p_user_template: parsedInput.data.userTemplate,
-    p_variables: parsedInput.data.variables,
+    p_variables: parsedInput.data.variables ?? [],
   });
 
   if (error) {
