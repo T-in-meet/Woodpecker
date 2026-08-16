@@ -8,6 +8,7 @@ import {
   buildQuizPrompt,
   getMaxQuestions,
   pickPerspective,
+  QUIZ_TYPES,
   type QuizType,
 } from "@/lib/ai/prompts";
 import { toCloudflareResponseSchema } from "@/lib/ai/responseSchema";
@@ -54,6 +55,14 @@ const MAX_PREVIOUS_QUESTIONS = 45;
 
 // recent_questions는 jsonb라 DB가 형식을 보장하지 않는다.
 const questionHistorySchema = z.array(z.array(z.string()));
+
+// Zod -> JSON Schema 변환은 요청마다 다시 할 필요가 없다. 유형이 3개뿐이라 모듈 로드 시 한 번만 계산해 둔다.
+const QUIZ_RESPONSE_JSON_SCHEMA_BY_TYPE = Object.fromEntries(
+  QUIZ_TYPES.map((quizType) => [
+    quizType,
+    toCloudflareResponseSchema(quizResponseSchemaFor(quizType)),
+  ]),
+) as Record<QuizType, ReturnType<typeof toCloudflareResponseSchema>>;
 
 // claim_quiz_generation_v2는 상태와 선점 토큰을 jsonb로 돌려준다.
 const claimResultSchema = z.object({
@@ -142,15 +151,13 @@ async function requestQuestions(
     },
   );
 
-  // 프롬프트만으로 형식을 지시하면 유형·필드가 어긋난 응답이 나온다. 디코딩 단계에서 막는다.
-  const responseSchema = quizResponseSchemaFor(quizType);
-
   let responseText: string;
   try {
     // 키가 없으면 이 줄에서 에러가 나고 아래 catch가 받아 준다.
+    // 프롬프트만으로 형식을 지시하면 유형·필드가 어긋난 응답이 나온다. 디코딩 단계에서 막는다.
     responseText = await generateJson({
       prompt,
-      responseSchema: toCloudflareResponseSchema(responseSchema),
+      responseSchema: QUIZ_RESPONSE_JSON_SCHEMA_BY_TYPE[quizType],
       temperature,
       abortSignal: params.abortSignal,
     });
@@ -173,7 +180,7 @@ async function requestQuestions(
   }
 
   // 요청한 유형으로 검증한다. 유형이 섞인 응답은 프롬프트를 무시했다는 뜻이라 세트째 버린다.
-  const parsed = responseSchema.safeParse(json);
+  const parsed = quizResponseSchemaFor(quizType).safeParse(json);
   if (!parsed.success) {
     console.error(
       `[generateQuiz] Zod 파싱 실패 (응답 길이 ${responseText.length}):`,
@@ -314,15 +321,15 @@ async function claimGeneration(
 }
 
 type FinalizeGenerationResult =
-  /** finalize RPC가 완료 표시와 캐시 저장(quizzes upsert)을 같은 트랜잭션 안에서 끝냈다. */
-  | { blocked: false }
   /**
-   * finalize RPC 자체가 실패해 "이게 최신 선점인지" 판단할 수 없었거나, 트랜잭션 안의
-   * 캐시 upsert가 실패해 함수 전체가 롤백됐다(completed_at도 함께 되돌아간다).
-   * 어느 쪽이든 캐시는 저장되지 않았지만, 이미 받은 유효한 퀴즈까지 버릴 이유는
-   * 없으므로 사용자에게는 그대로 돌려준다.
+   * finalize RPC가 완료 표시와 캐시 저장(quizzes upsert)을 같은 트랜잭션 안에서 끝냈다.
+   *
+   * RPC 자체가 실패해 "이게 최신 선점인지" 판단할 수 없었거나, 트랜잭션 안의 캐시
+   * upsert가 실패해 함수 전체가 롤백된 경우(completed_at도 함께 되돌아간다)도 여기
+   * 포함된다. 어느 쪽이든 캐시는 저장되지 않았지만, 이미 받은 유효한 퀴즈까지 버릴
+   * 이유는 없으므로 사용자에게는 그대로 돌려준다.
    */
-  | { blocked: false; networkOrStorageError: true }
+  | { blocked: false }
   /** 더 새로운 선점이 생겼거나 선점 행 자체를 찾지 못함 — 저장도, 반환도 하지 않는다. */
   | { blocked: true; error: string };
 
@@ -350,14 +357,14 @@ async function finalizeGeneration(
     p_note_id: params.noteId,
     p_quiz_type: params.quizType,
     p_claim_token: params.claimToken,
-    p_questions: JSON.parse(JSON.stringify(params.questions)) as Json,
+    p_questions: params.questions as unknown as Json,
     p_history: params.history as unknown as Json,
     p_content_hash: params.cacheKey,
   });
 
   if (error) {
     console.error("[generateQuiz] 생성 확정·캐시 저장 실패:", error.message);
-    return { blocked: false, networkOrStorageError: true };
+    return { blocked: false };
   }
 
   if (data === "ok" || data === "already_completed") {
