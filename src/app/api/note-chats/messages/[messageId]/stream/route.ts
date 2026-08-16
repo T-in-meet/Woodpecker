@@ -4,6 +4,7 @@ import {
   resolveAiRuntimeChatConfiguration,
   resolveAiRuntimeEmbeddingConfiguration,
 } from "@/features/ai/runtimes/resolve-configuration";
+import { isReportedAiOperationalError } from "@/features/ai/utils/report-ai-operational-error";
 import {
   NOTE_CHAT_AI_FEATURE_KEY,
   NOTE_CHAT_AI_ROLE_KEY,
@@ -246,15 +247,18 @@ export async function POST(
      * 답변 생성·질의 확장·노트 검색 Runtime 설정 중 하나라도
      * 확정하지 못하면 수정된 질문의 AI 실행을 시작할 수 없습니다.
      */
-    await reportNoteChatOperationalError({
-      actorUserId: user.id,
-      error,
-      errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.AI_CONFIGURATION_LOAD_FAILED,
-      message: "노트 챗봇 AI 실행 설정 조회에 실패했습니다.",
-      operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.LOAD_AI_CONFIGURATION,
-      stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.CONFIGURATION,
-      userId: user.id,
-    });
+    if (!isReportedAiOperationalError(error)) {
+      await reportNoteChatOperationalError({
+        actorUserId: user.id,
+        error,
+        errorCode:
+          NOTE_CHAT_OPERATIONAL_ERROR_CODES.AI_CONFIGURATION_LOAD_FAILED,
+        message: "노트 챗봇 AI 실행 설정 조회에 실패했습니다.",
+        operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.LOAD_AI_CONFIGURATION,
+        stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.CONFIGURATION,
+        userId: user.id,
+      });
+    }
 
     return NextResponse.json(
       {

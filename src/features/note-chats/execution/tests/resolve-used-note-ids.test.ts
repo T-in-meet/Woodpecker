@@ -55,4 +55,8 @@ describe("resolveNoteChatUsedNoteIds", () => {
       "Note chat used context index not found: 2",
     );
   });
+
+  it("사용된 Context index가 없으면 빈 Note ID 목록을 반환한다", () => {
+    expect(resolveNoteChatUsedNoteIds([], [])).toEqual([]);
+  });
 });

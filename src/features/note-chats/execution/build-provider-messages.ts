@@ -45,6 +45,7 @@ export function buildNoteChatProviderMessages(
   params: BuildNoteChatProviderMessagesParams,
 ): AiProviderChatMessage[] {
   const templateVariables = {
+    contextNotes: params.context,
     question: params.question,
   };
 
@@ -58,16 +59,27 @@ export function buildNoteChatProviderMessages(
     templateVariables,
   );
 
-  const contextSection =
-    params.context.length > 0
-      ? [
-          "다음은 답변에 사용할 수 있는 사용자 노트 Context입니다.",
-          "",
-          params.context,
-        ].join("\n")
-      : "사용 가능한 사용자 노트 Context가 없습니다.";
+  const userTemplateIncludesContext = /\{\{\s*contextNotes\s*\}\}/.test(
+    params.userTemplate,
+  );
 
-  const systemPrompt = [renderedSystemPrompt, contextSection].join("\n\n");
+  /*
+   * Runtime Prompt가 contextNotes 변수를 직접 사용하는 경우에는 해당 위치에
+   * Context를 렌더링하고, 그렇지 않은 기존 Prompt에는 System Message에
+   * Context를 보강하여 하위 호환성을 유지합니다.
+   */
+  const systemPrompt = userTemplateIncludesContext
+    ? renderedSystemPrompt
+    : [
+        renderedSystemPrompt,
+        params.context.length > 0
+          ? [
+              "다음은 답변에 사용할 수 있는 사용자 노트 Context입니다.",
+              "",
+              params.context,
+            ].join("\n")
+          : "사용 가능한 사용자 노트 Context가 없습니다.",
+      ].join("\n\n");
 
   return [
     {

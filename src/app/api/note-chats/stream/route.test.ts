@@ -4,6 +4,7 @@ import {
   resolveAiRuntimeChatConfiguration,
   resolveAiRuntimeEmbeddingConfiguration,
 } from "@/features/ai/runtimes/resolve-configuration";
+import { markAiOperationalErrorAsReported } from "@/features/ai/utils/report-ai-operational-error";
 import { assertNoteChatDailyExecutionLimit } from "@/features/note-chats/execution/assert-daily-execution-limit";
 import type { RunNoteChatStreamResult } from "@/features/note-chats/stream/run-note-chat-stream";
 import { runNoteChatStream } from "@/features/note-chats/stream/run-note-chat-stream";
@@ -312,6 +313,39 @@ describe("POST /api/note-chats/stream", () => {
       }),
     );
 
+    expect(client.rpc).not.toHaveBeenCalled();
+    expect(runNoteChatStream).not.toHaveBeenCalled();
+  });
+
+  it("이미 AI Foundation에서 보고된 Runtime Configuration 실패는 중복 기록하지 않는다", async () => {
+    const client = createSupabaseClientMock();
+
+    vi.mocked(createClient).mockResolvedValue(client as never);
+
+    const configurationError = markAiOperationalErrorAsReported(
+      new Error("reported configuration load failed"),
+    );
+
+    vi.mocked(resolveAiRuntimeChatConfiguration).mockReset();
+    vi.mocked(resolveAiRuntimeChatConfiguration).mockRejectedValue(
+      configurationError,
+    );
+
+    const response = await POST(
+      createRequest({
+        conversationId: CONVERSATION_ID,
+        content: {
+          text: "질문입니다.",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: "노트 챗봇 AI 설정을 불러오지 못했습니다.",
+    });
+
+    expect(reportNoteChatOperationalError).not.toHaveBeenCalled();
     expect(client.rpc).not.toHaveBeenCalled();
     expect(runNoteChatStream).not.toHaveBeenCalled();
   });

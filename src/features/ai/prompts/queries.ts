@@ -8,7 +8,10 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { AI_PROMPT_LIFECYCLE_STATUS } from "../constants/prompts";
-import { reportAiOperationalError } from "../utils/report-ai-operational-error";
+import {
+  markAiOperationalErrorAsReported,
+  reportAiOperationalError,
+} from "../utils/report-ai-operational-error";
 import {
   aiPromptAgentRowSchema,
   aiPromptFamilyRowSchema,
@@ -51,7 +54,9 @@ export async function getPublishedAiPromptVersionForAgent(params: {
       },
     });
 
-    throw new Error(`Failed to load AI prompt agent: ${agentError.message}`);
+    throw markAiOperationalErrorAsReported(
+      new Error(`Failed to load AI prompt agent: ${agentError.message}`),
+    );
   }
 
   if (!agentRow) {
@@ -82,8 +87,10 @@ export async function getPublishedAiPromptVersionForAgent(params: {
       },
     });
 
-    throw new Error(
-      `Failed to load published AI prompt version: ${versionError.message}`,
+    throw markAiOperationalErrorAsReported(
+      new Error(
+        `Failed to load published AI prompt version: ${versionError.message}`,
+      ),
     );
   }
 
@@ -115,7 +122,9 @@ export async function getPublishedAiPromptVersionForAgent(params: {
       },
     });
 
-    throw new Error(`Failed to load AI prompt family: ${familyError.message}`);
+    throw markAiOperationalErrorAsReported(
+      new Error(`Failed to load AI prompt family: ${familyError.message}`),
+    );
   }
 
   if (!familyRow) {

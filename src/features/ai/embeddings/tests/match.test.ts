@@ -123,6 +123,8 @@ describe("matchAiEmbeddings", () => {
 
     expect(rpc).toHaveBeenCalledWith("match_ai_embeddings", {
       p_input_kind: "rag_note_content",
+      p_limit: 10,
+      p_min_similarity: null,
       p_model_config_id: "11111111-1111-4111-8111-111111111111",
       p_owner_user_id: "33333333-3333-4333-8333-333333333333",
       p_query_embedding: `[${createVector(0).join(",")}]`,

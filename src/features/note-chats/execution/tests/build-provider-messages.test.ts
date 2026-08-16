@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AI_PROVIDER_CHAT_MESSAGE_ROLE } from "@/features/ai/providers/constants";
 
@@ -13,6 +13,10 @@ vi.mock("@/features/ai/prompts/render", () => ({
 }));
 
 describe("buildNoteChatProviderMessages", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("System Prompt, Note Context, 이전 대화 이력, 현재 User Prompt 순서로 메시지를 구성한다", () => {
     renderPromptTemplateMock
       .mockReturnValueOnce("렌더링된 System Prompt")
@@ -53,12 +57,56 @@ describe("buildNoteChatProviderMessages", () => {
     expect(renderPromptTemplateMock).toHaveBeenNthCalledWith(
       1,
       "System: {{question}}",
-      { question: "현재 질문" },
+      {
+        contextNotes:
+          "<note>\n<title>노트</title>\n<content>내용</content>\n</note>",
+        question: "현재 질문",
+      },
     );
     expect(renderPromptTemplateMock).toHaveBeenNthCalledWith(
       2,
       "User: {{question}}",
-      { question: "현재 질문" },
+      {
+        contextNotes:
+          "<note>\n<title>노트</title>\n<content>내용</content>\n</note>",
+        question: "현재 질문",
+      },
+    );
+  });
+
+  it("User Template이 contextNotes 변수를 사용하면 User Prompt에서 Context를 렌더링한다", () => {
+    renderPromptTemplateMock
+      .mockReturnValueOnce("렌더링된 System Prompt")
+      .mockReturnValueOnce("질문과 Context가 포함된 User Prompt");
+
+    const result = buildNoteChatProviderMessages({
+      context:
+        "<note>\n<index>[1]</index>\n<title>노트</title>\n<content>내용</content>\n</note>",
+      historyMessages: [],
+      question: "현재 질문",
+      systemTemplate: "System: {{question}}",
+      userTemplate: "User: {{question}}\n{{ contextNotes }}",
+    });
+
+    expect(result).toEqual([
+      {
+        role: AI_PROVIDER_CHAT_MESSAGE_ROLE.SYSTEM,
+        content: "렌더링된 System Prompt",
+      },
+      {
+        role: AI_PROVIDER_CHAT_MESSAGE_ROLE.USER,
+        content: "질문과 Context가 포함된 User Prompt",
+      },
+    ]);
+
+    expect(renderPromptTemplateMock).toHaveBeenNthCalledWith(
+      2,
+      "User: {{question}}\n{{ contextNotes }}",
+      {
+        contextNotes:
+          "<note>\n<index>[1]</index>\n<title>노트</title>\n<content>내용</content>\n</note>",
+        question: "현재 질문",
+      },
     );
   });
 

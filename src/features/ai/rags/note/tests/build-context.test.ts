@@ -4,7 +4,7 @@ import { buildNoteContext } from "../build-context";
 import type { MatchedNote } from "../get-matched-notes";
 
 describe("buildNoteContext", () => {
-  it("검색된 Note의 제목과 본문으로 Context를 구성한다", () => {
+  it("검색된 Note의 1-based 번호, 제목, 본문으로 Context를 구성한다", () => {
     const notes: MatchedNote[] = [
       {
         id: "note-1",
@@ -17,7 +17,7 @@ describe("buildNoteContext", () => {
     ];
 
     expect(buildNoteContext({ notes })).toBe(
-      "<note>\n<title>다익스트라 알고리즘</title>\n<content>다익스트라 알고리즘은 음수 가중치를 처리할 수 없다.</content>\n</note>",
+      "<note>\n<index>[1]</index>\n<title>다익스트라 알고리즘</title>\n<content>다익스트라 알고리즘은 음수 가중치를 처리할 수 없다.</content>\n</note>",
     );
   });
 
@@ -42,7 +42,7 @@ describe("buildNoteContext", () => {
     ];
 
     expect(buildNoteContext({ notes })).toBe(
-      "<note>\n<title>첫 번째 노트</title>\n<content>첫 번째 내용</content>\n</note>\n\n<note>\n<title>두 번째 노트</title>\n<content>두 번째 내용</content>\n</note>",
+      "<note>\n<index>[1]</index>\n<title>첫 번째 노트</title>\n<content>첫 번째 내용</content>\n</note>\n\n<note>\n<index>[2]</index>\n<title>두 번째 노트</title>\n<content>두 번째 내용</content>\n</note>",
     );
   });
 

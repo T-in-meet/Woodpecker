@@ -6,6 +6,7 @@ import {
   resolveAiRuntimeChatConfiguration,
   resolveAiRuntimeEmbeddingConfiguration,
 } from "@/features/ai/runtimes/resolve-configuration";
+import { markAiOperationalErrorAsReported } from "@/features/ai/utils/report-ai-operational-error";
 import {
   NOTE_CHAT_AI_FEATURE_KEY,
   NOTE_CHAT_AI_ROLE_KEY,
@@ -594,6 +595,36 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
         userId: USER.id,
       }),
     );
+  });
+
+  it("이미 AI Foundation에서 보고된 Runtime Configuration 실패는 중복 기록하지 않는다", async () => {
+    const error = markAiOperationalErrorAsReported(
+      new Error("reported runtime configuration load failed"),
+    );
+
+    vi.mocked(resolveAiRuntimeChatConfiguration).mockReset();
+    vi.mocked(resolveAiRuntimeChatConfiguration).mockRejectedValue(error);
+
+    const response = await POST(
+      createRequest({
+        content: {
+          text: "수정된 질문",
+        },
+      }),
+      {
+        params: Promise.resolve({
+          messageId: MESSAGE_ID,
+        }),
+      },
+    );
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: "노트 챗봇 AI 설정을 불러오지 못했습니다.",
+    });
+
+    expect(reportNoteChatOperationalError).not.toHaveBeenCalled();
+    expect(runNoteChatStream).not.toHaveBeenCalled();
   });
 
   it("사용자 메시지 수정 RPC가 실패하면 운영 오류를 기록하고 500을 반환한다", async () => {
