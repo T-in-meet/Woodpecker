@@ -48,8 +48,14 @@ const QUIZ_DEADLINE_MS = 60_000;
  * 이 체크(claimGeneration 이전) 이후에도 claimGeneration RPC 왕복이 실제 AI 호출
  * 전에 한 번 더 시간을 쓴다. 16.7초(위 QUIZ_DEADLINE_MS 주석의 실측 최댓값)보다
  * 낮게 잡으면, 이미 실측으로 필요하다고 알려진 시간보다 적게 남은 요청도 통과시켜
- * 타임아웃 가능성이 높은 채로 사용량만 소진하게 된다. 그 RPC 왕복 시간은 아직
- * 실측하지 않았으므로, 16.7초 + 여유분으로 보수적으로 잡는다. 실측 후 정밀 조정한다.
+ * 타임아웃 가능성이 높은 채로 사용량만 소진하게 된다. 16.7초 + 여유분으로 보수적으로 잡는다.
+ *
+ * claimGeneration RPC(claim_quiz_generation_v2) 왕복 시간은 개발 DB에서 같은 사용자의
+ * 노트 2개에 동시 요청을 보내 실측했다(2026-08-16). 90~300ms 범위였고, 동시 요청 간
+ * advisory lock으로 인한 뚜렷한 직렬화 흔적은 없었다(순서가 매번 뒤바뀜 — 네트워크
+ * 편차로 보인다). 이 값의 1~2%도 안 되는 수준이라 이 상수를 더 낮출 필요는 없다고 보고
+ * 종결했다. 트래픽이 늘어 이 가정이 깨지면(예: 사용자 단위 락 경합이 실제로 관측되면)
+ * 재측정 스크립트를 새로 작성해 다시 잰다.
  */
 const MIN_AI_BUDGET_MS = 25_000;
 
@@ -294,11 +300,17 @@ async function claimGeneration(
   noteId: string,
   quizType: QuizType,
 ): Promise<{ ok: true; claimToken: string } | { error: string }> {
+  // MIN_AI_BUDGET_MS는 이 RPC의 왕복 시간을 반영하지 않는다(주석 참고). 락 경합 등으로
+  // 얼마나 걸리는지 실측 데이터를 쌓기 위해 매 호출마다 소요 시간을 남긴다.
+  const claimStartedAt = Date.now();
   const { data, error } = await admin.rpc("claim_quiz_generation_v2", {
     p_user_id: userId,
     p_note_id: noteId,
     p_quiz_type: quizType,
   });
+  console.log(
+    `[generateQuiz] claim_quiz_generation_v2 RPC 소요 시간: ${Date.now() - claimStartedAt}ms`,
+  );
 
   if (error) {
     console.error("[generateQuiz] 사용량 확인 실패:", error.message);

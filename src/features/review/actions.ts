@@ -125,6 +125,12 @@ const GRADING_DEADLINE_MS = 60_000;
  * 지날 때까지 통째로 막힌다. 과금만 발생하고 결과는 버려지는 호출이기도 하다.
  *
  * low effort 실측 최댓값보다 작은 15초 미만이 남았으면 완주 가능성이 낮다고 본다.
+ *
+ * claim RPC(claim_review_grading·quiz의 claim_quiz_generation_v2와 같은 사용자 단위
+ * advisory lock 사용) 왕복 시간은 개발 DB에서 동시 요청으로 실측했다(2026-08-16).
+ * 90~300ms였고, 동시 요청 간 뚜렷한 직렬화 흔적은 없었다. 이 값의 1~2%도 안 되는
+ * 수준이라 재조정 없이 종결했다. 트래픽이 늘어 이 가정이 깨지면 재측정 스크립트를
+ * 새로 작성해 다시 잰다.
  */
 const MIN_AI_BUDGET_MS = 15_000;
 
@@ -463,6 +469,9 @@ export async function gradeAnswerAction(
   // AI 호출 전에 채점 권한을 원자적으로 선점한다.
   // 앞의 조회만으로 분기하면 동시 요청이 모두 "미채점"을 보고 각자 AI를 호출한다
   // (유니크 제약은 저장 중복만 막을 뿐 이미 나간 API 비용은 되돌리지 못한다).
+  // MIN_AI_BUDGET_MS는 이 RPC의 왕복 시간을 반영하지 않는다(주석 참고). 락 경합 등으로
+  // 얼마나 걸리는지 실측 데이터를 쌓기 위해 매 호출마다 소요 시간을 남긴다.
+  const claimStartedAt = Date.now();
   const { data: claimData, error: claimError } = await admin.rpc(
     "claim_review_grading",
     {
@@ -471,6 +480,9 @@ export async function gradeAnswerAction(
       p_user_answer: parsed.data.answer,
       p_content_hash: contentHash,
     },
+  );
+  console.log(
+    `[gradeAnswerAction] claim_review_grading RPC 소요 시간: ${Date.now() - claimStartedAt}ms`,
   );
 
   if (claimError) {
