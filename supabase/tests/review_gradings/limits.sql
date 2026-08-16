@@ -1,14 +1,14 @@
 -- =========================================
 -- review_grading_generations / AI 채점 사용량 한도
 --
--- 한도 값은 claim_review_grading 안의 상수다(일 5회 / 60초 10회).
+-- 한도 값은 claim_review_grading 안의 상수다(일 5회).
 -- 여기서는 "기록이 남는 경로와 남지 않는 경로"를 구분하는지, 그리고 한도를 넘기면
 -- AI를 부르기 전에 막히는지를 본다.
 -- =========================================
 
 BEGIN;
 
-SELECT plan(10);
+SELECT plan(9);
 
 SELECT set_config('test.rgl_user_id', gen_random_uuid()::text, true);
 SELECT set_config('test.rgl_other_user_id', gen_random_uuid()::text, true);
@@ -205,29 +205,16 @@ SELECT is(
 );
 
 -- =========================================
--- 2. 버스트·일일 한도
+-- 2. 일일 한도
 --
 -- 노트를 대량으로 만들어 연속 호출하는 경로를 막는 것이 목적이다.
 -- review_log 단위 유니크 제약은 "복습 1회당 1번"만 막을 뿐 사용자 총량을 막지 못한다.
+--
+-- 버스트 한도는 20260815220000에서 제거했다. 일일 5회가 버스트 10회/60초를 포섭해
+-- 도달할 수 없는 분기였다. 배경은 그 마이그레이션 주석에 있다.
 -- =========================================
 
--- 60초 안에 10건을 채운 상태
-INSERT INTO public.review_grading_generations (user_id, review_log_id)
-SELECT current_setting('test.rgl_user_id')::uuid, NULL
-FROM generate_series(1, 10);
-
-SELECT is(
-  public.claim_review_grading(
-    current_setting('test.rgl_user_id')::uuid,
-    current_setting('test.rgl_log2_id')::uuid,
-    'answer for log2',
-    current_setting('test.rgl_content_hash')
-  ) ->> 'status',
-  'too_many_requests',
-  $$60초 안에 10회를 채우면 too_many_requests를 반환해야 한다$$
-);
-
--- 버스트 테스트의 기록을 비운 뒤, 윈도우 밖 기록이 5건이면 daily_exceeded여야 한다
+-- 앞선 시나리오의 기록을 비운 뒤, 하루 5건이면 daily_exceeded여야 한다
 DELETE FROM public.review_grading_generations
 WHERE user_id = current_setting('test.rgl_user_id')::uuid;
 

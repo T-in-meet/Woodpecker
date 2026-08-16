@@ -125,7 +125,7 @@ BEFORE UPDATE 트리거다. `update_notification_time_of_day`가 `notification_t
    선점 행을 넣고 그 선점을 식별하는 `claim_token`(uuid)을 발급한다.
    `review_log_id` 단위 `pg_advisory_xact_lock`으로 "조회 → 선점"의 경합을 막는다.
    반환값은 `{ status, claimToken }` jsonb이고, `status`가 `ok`일 때만 AI를 호출한다.
-   (`ok` / `already_graded` / `in_flight` / `too_many_requests` / `daily_exceeded` / `not_found`)
+   (`ok` / `already_graded` / `in_flight` / `daily_exceeded` / `not_found`)
 2. AI 호출 및 Zod 검증.
 3. `finalize_review_grading(user_id, review_log_id, claim_token, score, feedback)` — 선점 행에 결과를 채운다.
    저장된 `claim_token`과 다르면 `stale_claim`을 돌려주고 아무것도 쓰지 않는다.
@@ -189,8 +189,12 @@ DELETE 정책도 같은 이유로 없앴다(삭제 후 재채점 반복).
 동시에 쏘면 전부 통과한다. 채점 프롬프트는 노트 5만 자 + 답안 5만 자라 호출 1회의 비용도 크다.
 
 그래서 `claim_review_grading`이 `review_grading_generations`에 사용 기록을 남기고
-**하루 5회 / 60초 10회**를 검사한다(값은 함수 안 상수 — 인자로 받으면 호출자가 우회할 수 있다).
-퀴즈의 `claim_quiz_generation`(20260806000002)과 같은 구조다.
+**하루 5회**를 검사한다(값은 함수 안 상수 — 인자로 받으면 호출자가 우회할 수 있다).
+퀴즈의 `claim_quiz_generation_v2`(20260813070000)와 같은 구조다.
+
+버스트 한도(60초 10회)는 20260815220000에서 제거했다. 20260815212746이 일일을 30회에서
+5회로 낮추면서, 버스트를 일일보다 먼저 검사하는 순서 때문에 도달할 수 없는 분기가 됐다.
+일일 한도를 다시 올린다면 버스트 재도입을 함께 검토한다.
 
 - 기록은 **AI를 부르는 경로에서만** 남긴다. `already_graded`·`in_flight`는 저장된 결과를 읽거나
   기다릴 뿐이므로 사용량을 깎지 않는다. 120초 뒤 선점을 이어받는 경로는 AI를 한 번 더 부르므로 깎는다.

@@ -155,7 +155,6 @@ const claimResultSchema = z.object({
  */
 const CLAIM_ERROR_MESSAGES: Record<string, string | undefined> = {
   in_flight: GRADING_ERROR_MESSAGES.inFlight,
-  too_many_requests: GRADING_ERROR_MESSAGES.tooManyRequests,
   daily_exceeded: GRADING_ERROR_MESSAGES.dailyExceeded,
 };
 

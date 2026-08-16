@@ -438,16 +438,6 @@ describe("gradeAnswerAction", () => {
     expect(generateJsonMock).not.toHaveBeenCalled();
   });
 
-  it("skips the AI call when the requests come in too fast", async () => {
-    setupSupabase({ claimResult: { status: "too_many_requests" } });
-    mockHappyPathQueries();
-
-    const result = await gradeAnswerAction(null, createFormData());
-
-    expect(result).toEqual({ error: GRADING_ERROR_MESSAGES.tooManyRequests });
-    expect(generateJsonMock).not.toHaveBeenCalled();
-  });
-
   it("skips the AI call when the claim is rejected", async () => {
     setupSupabase({ claimResult: { status: "not_found" } });
     mockHappyPathQueries();
