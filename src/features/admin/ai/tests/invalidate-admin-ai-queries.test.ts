@@ -3,6 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ADMIN_AI_AGENTS_QUERY_KEY } from "../agents/constants/query-keys";
 import { ADMIN_AI_MODELS_QUERY_KEY } from "../models/constants/query-keys";
 import { ADMIN_AI_PROMPTS_QUERY_KEY } from "../prompts/constants/query-keys";
+import {
+  ADMIN_AI_SETTING_CONFIGURATIONS_QUERY_KEY,
+  ADMIN_AI_SETTINGS_QUERY_KEY,
+} from "../settings/constants/query-keys";
 import { invalidateAdminAiQueries } from "../utils/invalidate-admin-ai-queries";
 
 describe("invalidateAdminAiQueries", () => {
@@ -10,7 +14,7 @@ describe("invalidateAdminAiQueries", () => {
     vi.clearAllMocks();
   });
 
-  it("Admin AI 모델, Agent, Prompt Query 캐시를 무효화한다", async () => {
+  it("서로 참조하는 Admin AI Query 캐시를 모두 무효화한다", async () => {
     const invalidateQueries = vi.fn().mockResolvedValue(undefined);
 
     const queryClient = {
@@ -19,7 +23,7 @@ describe("invalidateAdminAiQueries", () => {
 
     await invalidateAdminAiQueries(queryClient as never);
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(3);
+    expect(invalidateQueries).toHaveBeenCalledTimes(5);
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ADMIN_AI_MODELS_QUERY_KEY.all,
     });
@@ -29,12 +33,20 @@ describe("invalidateAdminAiQueries", () => {
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ADMIN_AI_PROMPTS_QUERY_KEY.all,
     });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ADMIN_AI_SETTINGS_QUERY_KEY.all,
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ADMIN_AI_SETTING_CONFIGURATIONS_QUERY_KEY.all,
+    });
   });
 
-  it("Query invalidation이 완료될 때까지 기다린다", async () => {
+  it("모든 Query invalidation이 완료될 때까지 기다린다", async () => {
     let resolveModels: (() => void) | undefined;
     let resolveAgents: (() => void) | undefined;
     let resolvePrompts: (() => void) | undefined;
+    let resolveSettings: (() => void) | undefined;
+    let resolveConfigurations: (() => void) | undefined;
 
     const promises = [
       new Promise<void>((resolve) => {
@@ -46,13 +58,21 @@ describe("invalidateAdminAiQueries", () => {
       new Promise<void>((resolve) => {
         resolvePrompts = resolve;
       }),
+      new Promise<void>((resolve) => {
+        resolveSettings = resolve;
+      }),
+      new Promise<void>((resolve) => {
+        resolveConfigurations = resolve;
+      }),
     ];
 
     const invalidateQueries = vi
       .fn()
       .mockImplementationOnce(() => promises[0])
       .mockImplementationOnce(() => promises[1])
-      .mockImplementationOnce(() => promises[2]);
+      .mockImplementationOnce(() => promises[2])
+      .mockImplementationOnce(() => promises[3])
+      .mockImplementationOnce(() => promises[4]);
 
     const queryClient = {
       invalidateQueries,
@@ -71,18 +91,16 @@ describe("invalidateAdminAiQueries", () => {
     expect(completed).toBe(false);
 
     resolveModels?.();
-
-    await Promise.resolve();
-
-    expect(completed).toBe(false);
-
     resolveAgents?.();
+    resolvePrompts?.();
+    resolveSettings?.();
 
     await Promise.resolve();
 
+    // 하나라도 아직 완료되지 않았으면 전체 invalidation 역시 완료되면 안 된다.
     expect(completed).toBe(false);
 
-    resolvePrompts?.();
+    resolveConfigurations?.();
 
     await invalidation;
 

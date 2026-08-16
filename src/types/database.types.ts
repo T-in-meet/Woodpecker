@@ -339,6 +339,101 @@ export type Database = {
           },
         ];
       };
+      ai_setting_configurations: {
+        Row: {
+          created_at: string;
+          id: string;
+          kind: string;
+          model_config_id: string;
+          prompt_version_id: string | null;
+          role_key: string;
+          setting_id: string;
+          sort_order: number;
+          temperature: number | null;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          kind: string;
+          model_config_id: string;
+          prompt_version_id?: string | null;
+          role_key: string;
+          setting_id: string;
+          sort_order?: number;
+          temperature?: number | null;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          kind?: string;
+          model_config_id?: string;
+          prompt_version_id?: string | null;
+          role_key?: string;
+          setting_id?: string;
+          sort_order?: number;
+          temperature?: number | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ai_setting_configurations_model_config_id_fkey";
+            columns: ["model_config_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_ai_model_list";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ai_setting_configurations_model_config_id_fkey";
+            columns: ["model_config_id"];
+            isOneToOne: false;
+            referencedRelation: "ai_model_configs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ai_setting_configurations_prompt_version_id_fkey";
+            columns: ["prompt_version_id"];
+            isOneToOne: false;
+            referencedRelation: "ai_prompt_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ai_setting_configurations_setting_id_fkey";
+            columns: ["setting_id"];
+            isOneToOne: false;
+            referencedRelation: "ai_settings";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      ai_settings: {
+        Row: {
+          created_at: string;
+          description: string;
+          display_name: string;
+          id: string;
+          key: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          description?: string;
+          display_name: string;
+          id?: string;
+          key: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          description?: string;
+          display_name?: string;
+          id?: string;
+          key?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       feedback_replies: {
         Row: {
           content: string;
@@ -1178,6 +1273,30 @@ export type Database = {
           total_count: number;
         }[];
       };
+      get_admin_ai_setting_list: {
+        Args: {
+          p_chat_count_max?: number;
+          p_chat_count_min?: number;
+          p_chat_model_id_filters?: string[];
+          p_created_from?: string;
+          p_created_to?: string;
+          p_embedding_count_max?: number;
+          p_embedding_count_min?: number;
+          p_embedding_model_id_filters?: string[];
+          p_page?: number;
+          p_page_size?: number;
+          p_search_field?: string;
+          p_search_query?: string;
+          p_sort_direction?: string;
+          p_sort_field?: string;
+          p_updated_from?: string;
+          p_updated_to?: string;
+        };
+        Returns: {
+          items: Json;
+          total_count: number;
+        }[];
+      };
       get_admin_unread_notification_counts: {
         Args: { p_admin_user_id: string };
         Returns: {
@@ -1238,6 +1357,10 @@ export type Database = {
       publish_ai_prompt_version: {
         Args: { p_version_id: string };
         Returns: string;
+      };
+      save_ai_setting_configurations: {
+        Args: { p_configurations: Json; p_setting_id: string };
+        Returns: undefined;
       };
       update_notification_time_of_day: {
         Args: { p_note_id: string; p_time?: string };

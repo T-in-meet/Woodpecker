@@ -187,6 +187,14 @@ export async function deleteAdminAiAgent(
     return { message: "Agent를 찾을 수 없습니다.", ok: false };
   }
 
+  if (parsedResult.data === "NOT_DELETABLE") {
+    return {
+      message:
+        "AI Settings에서 사용 중인 Prompt Version이 있어 Agent를 삭제할 수 없습니다.",
+      ok: false,
+    };
+  }
+
   revalidateAdminAiPaths();
 
   return { ok: true };
