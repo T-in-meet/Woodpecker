@@ -135,7 +135,7 @@ export function AdminAiSettingUpdateForm({
             취소
           </Button>
 
-          <Button type="submit" disabled={isPending}>
+          <Button type="submit" disabled={isPending || !form.formState.isDirty}>
             {isPending ? "저장 중..." : "저장"}
           </Button>
         </div>
