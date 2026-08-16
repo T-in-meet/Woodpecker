@@ -1,3 +1,5 @@
+import { SHARED_AI_FAILURE_MESSAGES } from "@/lib/ai/failureMessages";
+
 export const QUIZ_ERROR_MESSAGES = {
   invalidNote: "유효하지 않은 노트입니다.",
   invalidQuizType: "유효하지 않은 퀴즈 유형입니다.",
@@ -26,10 +28,7 @@ export const QUIZ_ERROR_MESSAGES = {
  * 둘을 같은 문구로 뭉치면 "내일 다시"라고 안내해 놓고 9시에 풀리는 상황이 생긴다.
  */
 export const QUIZ_AI_FAILURE_MESSAGES = {
-  delayed: "AI 응답이 지연됐어요. 다시 시도해주세요.",
-  quotaExhausted:
-    "서비스의 오늘 AI 사용량이 모두 소진됐어요. 잠시 후 다시 시도해주세요.",
-  busy: "AI 서버가 혼잡해요. 잠시 후 다시 시도해주세요.",
+  ...SHARED_AI_FAILURE_MESSAGES,
   tooLarge: "노트가 너무 길어 AI가 처리할 수 없어요.",
   unknown: QUIZ_ERROR_MESSAGES.generationFailed,
 } as const;

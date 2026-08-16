@@ -1,3 +1,5 @@
+import { SHARED_AI_FAILURE_MESSAGES } from "@/lib/ai/failureMessages";
+
 export const GRADING_ERROR_MESSAGES = {
   // 아래 두 개의 실제 한도 값은 claim_review_grading 함수가 가지고 있다.
   dailyExceeded:
@@ -14,10 +16,7 @@ export const GRADING_ERROR_MESSAGES = {
  * 그래서 후자에는 "내일"이라고 쓰지 않는다.
  */
 export const GRADING_AI_FAILURE_MESSAGES = {
-  delayed: "AI 응답이 지연됐어요. 다시 시도해주세요.",
-  quotaExhausted:
-    "서비스의 오늘 AI 사용량이 모두 소진됐어요. 잠시 후 다시 시도해주세요.",
-  busy: "AI 서버가 혼잡해요. 잠시 후 다시 시도해주세요.",
+  ...SHARED_AI_FAILURE_MESSAGES,
   tooLarge: "노트나 답안이 너무 길어 AI가 처리할 수 없어요.",
   unknown: "AI 채점에 실패했습니다. 잠시 후 다시 시도해주세요.",
 } as const;
