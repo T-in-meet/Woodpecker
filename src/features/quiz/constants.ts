@@ -4,6 +4,7 @@ export const QUIZ_ERROR_MESSAGES = {
   unauthenticated: "로그인이 필요합니다.",
   noteNotFound: "노트를 찾을 수 없습니다.",
   generationFailed: "퀴즈 생성에 실패했습니다. 잠시 후 다시 시도해주세요.",
+  serverDelayed: "서버 응답이 지연되고 있어요. 잠시 후 다시 시도해주세요.",
   parseFailed: "퀴즈 생성 결과를 처리할 수 없습니다. 다시 시도해주세요.",
   // 아래 세 개의 실제 한도 값은 claim_quiz_generation_v2 함수가 가지고 있다.
   dailyExceeded:

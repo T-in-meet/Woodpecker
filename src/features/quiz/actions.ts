@@ -40,6 +40,9 @@ const TEMPERATURE = {
  */
 const QUIZ_DEADLINE_MS = 60_000;
 
+/** 선점 뒤 AI 호출을 완주할 가능성이 낮으면 사용량을 잡지 않는다. */
+const MIN_AI_BUDGET_MS = 15_000;
+
 /**
  * 출제 이력을 몇 세트까지 남길지.
  * 더 늘리면 회피 대상이 쌓여 노트에 남은 재료가 금방 바닥난다.
@@ -200,12 +203,16 @@ async function loadCache(
   supabase: Awaited<ReturnType<typeof createClient>>,
   params: { noteId: string; quizType: QuizType; cacheKey: string },
 ): Promise<QuizCache | null> {
-  const { data: cached } = await supabase
+  const { data: cached, error } = await supabase
     .from("quizzes")
     .select("questions, recent_questions, note_content_hash")
     .eq("note_id", params.noteId)
     .eq("quiz_type", params.quizType)
     .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
 
   if (!cached || cached.note_content_hash !== params.cacheKey) {
     return null;
@@ -400,17 +407,32 @@ async function createQuiz(
   const cacheKey = await buildCacheKey(note.title, note.content);
 
   // 재생성일 때도 캐시를 읽는다. 반환하지는 않고 "이미 낸 문제" 목록으로만 쓴다.
-  const cache = await loadCache(supabase, {
-    noteId: parsed.data.noteId,
-    quizType: parsed.data.quizType,
-    cacheKey,
-  });
+  let cache: QuizCache | null;
+  try {
+    cache = await loadCache(supabase, {
+      noteId: parsed.data.noteId,
+      quizType: parsed.data.quizType,
+      cacheKey,
+    });
+  } catch (error) {
+    console.error("[generateQuiz] 캐시 조회 실패:", error);
+    return { error: QUIZ_ERROR_MESSAGES.generationFailed };
+  }
 
   if (options.useCache && cache?.questions) {
     return { data: { questions: cache.questions, isNew: false } };
   }
 
   const history = cache?.history ?? [];
+
+  const aiBudgetMs = QUIZ_DEADLINE_MS - (Date.now() - startedAt);
+
+  if (aiBudgetMs < MIN_AI_BUDGET_MS) {
+    console.error(
+      `[generateQuiz] 남은 시간이 부족해 생성을 시작하지 않음 (${aiBudgetMs}ms)`,
+    );
+    return { error: QUIZ_ERROR_MESSAGES.serverDelayed };
+  }
 
   // 두 RPC는 service_role 전용이다. authenticated에 열어 두면 사용자가 PostgREST로
   // claim → finalize를 직접 호출해 AI 없이 캐시를 채울 수 있다. 위에서 이미 세션·노트

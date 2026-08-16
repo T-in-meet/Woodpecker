@@ -56,7 +56,7 @@ type SupabaseMockInput = {
     note_content_hash: string;
     recent_questions?: unknown;
   } | null;
-  upsertError?: { message: string } | null;
+  cacheError?: { message: string } | null;
   /** 문자열이면 { status } 로, 객체면 그대로 claim_quiz_generation_v2의 반환값이 된다. */
   claimResult?: string | { status: string; claimToken?: string };
   claimError?: { message: string } | null;
@@ -69,7 +69,7 @@ function setupSupabase(input: SupabaseMockInput = {}) {
     userId = USER_ID,
     note = { title: "제목", content: "내용" },
     cached = null,
-    upsertError = null,
+    cacheError = null,
     claimResult = { status: "ok", claimToken: CLAIM_TOKEN },
     claimError = null,
     finalizeResult = "ok",
@@ -81,7 +81,7 @@ function setupSupabase(input: SupabaseMockInput = {}) {
 
   const query = createSupabaseQueryMock({
     notes: { data: note },
-    quizzes: { data: cached, error: upsertError },
+    quizzes: { data: cached, error: cacheError },
   });
 
   const getUser = vi.fn().mockResolvedValue({
@@ -542,6 +542,17 @@ describe("generateQuiz", () => {
   });
 
   describe("사용량 제한", () => {
+    it("짧은 시간에 너무 많이 요청하면 AI를 호출하지 않는다", async () => {
+      setupSupabase({ claimResult: "too_many_requests" });
+
+      const result = await generateQuiz(NOTE_ID, "ox");
+
+      expect(result).toEqual({
+        error: "요청이 너무 잦습니다. 잠시 후 다시 시도해주세요.",
+      });
+      expect(generateJsonMock).not.toHaveBeenCalled();
+    });
+
     it("일일 한도를 넘으면 AI를 호출하지 않는다", async () => {
       setupSupabase({ claimResult: "daily_exceeded" });
 
@@ -550,17 +561,6 @@ describe("generateQuiz", () => {
       expect(result).toEqual({
         error:
           "오늘 AI 퀴즈 생성 횟수를 모두 사용했습니다. 기존 퀴즈는 다시 풀 수 있어요.",
-      });
-      expect(generateJsonMock).not.toHaveBeenCalled();
-    });
-
-    it("짧은 시간에 너무 많이 요청하면 거부한다", async () => {
-      setupSupabase({ claimResult: "too_many_requests" });
-
-      const result = await generateQuiz(NOTE_ID, "ox");
-
-      expect(result).toEqual({
-        error: "요청이 너무 잦습니다. 잠시 후 다시 시도해주세요.",
       });
       expect(generateJsonMock).not.toHaveBeenCalled();
     });
@@ -595,6 +595,39 @@ describe("generateQuiz", () => {
       await generateQuiz(NOTE_ID, "ox");
 
       expect(rpcNames(second.rpc)).not.toContain("claim_quiz_generation_v2");
+    });
+
+    it("캐시 조회가 실패하면 사용량을 선점하지 않는다", async () => {
+      const query = setupSupabase({
+        cacheError: { message: "cache read failed" },
+      });
+
+      const result = await generateQuiz(NOTE_ID, "ox");
+
+      expect(result).toEqual({
+        error: "퀴즈 생성에 실패했습니다. 잠시 후 다시 시도해주세요.",
+      });
+      expect(rpcNames(query.rpc)).not.toContain("claim_quiz_generation_v2");
+      expect(generateJsonMock).not.toHaveBeenCalled();
+    });
+
+    it("AI 호출 시간이 부족하면 사용량을 선점하지 않는다", async () => {
+      const query = setupSupabase();
+      const base = Date.now();
+      const nowSpy = vi
+        .spyOn(Date, "now")
+        .mockReturnValueOnce(base)
+        .mockReturnValue(base + 50_000);
+
+      const result = await generateQuiz(NOTE_ID, "ox");
+
+      expect(result).toEqual({
+        error: "서버 응답이 지연되고 있어요. 잠시 후 다시 시도해주세요.",
+      });
+      expect(rpcNames(query.rpc)).not.toContain("claim_quiz_generation_v2");
+      expect(generateJsonMock).not.toHaveBeenCalled();
+
+      nowSpy.mockRestore();
     });
 
     it("AI 호출이 실패해도 사용량을 되돌리지 않는다", async () => {
