@@ -206,6 +206,82 @@ INSERT INTO "public"."ai_model_configs" (
 ON CONFLICT DO NOTHING;
 
 --
+-- Data for Name: ai_prompt_agents; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+INSERT INTO "public"."ai_prompt_agents" (
+    "id",
+    "display_name",
+    "description",
+    "purpose",
+    "tags",
+    "created_at",
+    "updated_at"
+) VALUES
+    (
+        'fe4be766-0824-47a1-bf9d-3e3bf76b3971',
+        'Notes RAG Answer',
+        'Answers user questions using the user''s own notes as evidence.',
+        'Generate grounded answers for the first notes RAG user feature.',
+        '{notes,rag}',
+        '2026-08-06 07:57:05.176008+00',
+        '2026-08-06 07:57:05.550248+00'
+    )
+ON CONFLICT DO NOTHING;
+
+--
+-- Data for Name: ai_prompt_families; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+INSERT INTO "public"."ai_prompt_families" (
+    "id",
+    "agent_id",
+    "display_name",
+    "description",
+    "tags",
+    "created_at",
+    "updated_at"
+) VALUES
+    (
+        'a645ea1d-7138-4441-bf0c-d10b008dc3d1',
+        'fe4be766-0824-47a1-bf9d-3e3bf76b3971',
+        'Default',
+        'Default prompt family migrated from the original prompt version structure.',
+        '{notes,rag}',
+        '2026-08-06 07:57:05.544465+00',
+        '2026-08-06 07:57:05.544465+00'
+    )
+ON CONFLICT DO NOTHING;
+
+--
+-- Data for Name: ai_prompt_versions; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+INSERT INTO "public"."ai_prompt_versions" (
+    "id",
+    "version_number",
+    "display_name",
+    "change_summary",
+    "lifecycle_status",
+    "system_template",
+    "user_template",
+    "response_schema",
+    "variables",
+    "tags",
+    "created_by_kind",
+    "created_by",
+    "created_at",
+    "family_id"
+) VALUES
+	('53af5a74-81f6-4c0a-9f66-a7e10eb6e216', 1, 'Initial Notes RAG Answer Prompt', 'Initial system seed prompt for notes RAG answer generation.', 'published', 'You answer questions using only the provided user notes. If the notes do not contain enough evidence, say that the notes do not provide enough information. Answer in Korean.', 'Question: {{question}}
+
+Reference notes:
+{{contextNotes}}
+
+Write a concise answer grounded in the reference notes.', '{}', '["question", "contextNotes"]', '{notes,rag}', 'system', NULL, '2026-08-06 07:57:05.176008+00', 'a645ea1d-7138-4441-bf0c-d10b008dc3d1') ON CONFLICT DO NOTHING;
+
+
+--
 -- Data for Name: notes; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 

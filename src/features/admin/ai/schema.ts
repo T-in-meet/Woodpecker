@@ -50,3 +50,43 @@ export const jsonTextSchema = z.string().transform((value, context): Json => {
     return z.NEVER;
   }
 });
+
+/** 관리자 Prompt Version의 lifecycle 상태를 검증합니다. */
+export const aiPromptVersionStatusSchema = z.union([
+  z.literal("draft"),
+  z.literal("published"),
+  z.literal("archived"),
+]);
+
+/**
+ * DB에서 조회한 관리자 Prompt Family row 구조를 검증합니다.
+ */
+export const aiPromptFamilyRowSchema = z.object({
+  agent_id: z.string(),
+  created_at: z.string(),
+  description: z.string().nullable(),
+  display_name: z.string(),
+  id: z.string(),
+  tags: z.array(z.string()),
+  updated_at: z.string(),
+});
+
+/**
+ * DB에서 조회한 관리자 Prompt Version row 구조를 검증합니다.
+ */
+export const aiPromptVersionRowSchema = z.object({
+  change_summary: z.string().nullable(),
+  created_at: z.string(),
+  created_by: z.string().nullable(),
+  created_by_kind: z.string(),
+  display_name: z.string(),
+  family_id: z.string(),
+  id: z.string(),
+  lifecycle_status: aiPromptVersionStatusSchema,
+  response_schema: z.unknown(),
+  system_template: z.string(),
+  tags: z.array(z.string()),
+  user_template: z.string(),
+  variables: z.unknown(),
+  version_number: z.number(),
+});
