@@ -333,7 +333,8 @@ type FinalizeGenerationResult =
    * 이유는 없으므로 사용자에게는 그대로 돌려준다.
    */
   | { blocked: false }
-  /** 더 새로운 선점이 생겼거나 선점 행 자체를 찾지 못함 — 저장도, 반환도 하지 않는다. */
+  /** 더 새로운 선점이 생겼다(stale_claim) — 저장도, 반환도 하지 않는다. 이미 다른
+   * 요청이 더 최신 결과를 만들었으므로 지금 이 결과는 버려야 한다. */
   | { blocked: true; error: string };
 
 /**
@@ -379,8 +380,10 @@ async function finalizeGeneration(
   }
 
   // not_found 등 예상 밖 상태. 선점 자체가 이 함수 안에서 방금 만든 것이라 정상 경로에서는 나오지 않는다.
+  // 캐시 저장은 안 됐어도(위 blocked:false 케이스와 같은 이유로) 이미 받은 유효한 퀴즈까지
+  // 버릴 이유는 없으므로 사용자에게는 그대로 돌려준다.
   console.error(`[generateQuiz] 예상치 못한 finalize 상태: ${String(data)}`);
-  return { blocked: true, error: QUIZ_ERROR_MESSAGES.generationFailed };
+  return { blocked: false };
 }
 
 async function createQuiz(

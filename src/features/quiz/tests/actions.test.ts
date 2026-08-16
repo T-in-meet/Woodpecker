@@ -719,6 +719,20 @@ describe("generateQuiz", () => {
       });
     });
 
+    it("finalize가 예상 밖 상태를 반환해도 이미 받은 퀴즈는 반환한다", async () => {
+      // not_found 등은 정상 경로에서 나오지 않지만, 나오더라도 캐시만 저장하지 않을 뿐
+      // AI가 이미 만든 유효한 퀴즈까지 버리지는 않는다.
+      setupSupabase({ finalizeResult: "not_found" });
+      mockAiSuccess();
+
+      const result = await generateQuiz(NOTE_ID, "ox");
+
+      expect(result).toEqual({
+        data: { questions: aiQuestions.questions, isNew: true },
+      });
+      expect(console.error).toHaveBeenCalled();
+    });
+
     it("finalize RPC 통신 자체가 실패해도 이미 받은 퀴즈는 반환한다", async () => {
       setupSupabase({
         finalizeError: { message: "network error" },
