@@ -1,6 +1,10 @@
 import { AdminListToolbarFilters } from "../../hooks/use-admin-list-toolbar";
 import { AdminSort } from "../../types/sort";
-import { AdminAiListResult } from "../types";
+import {
+  AdminAiAgentRow,
+  AdminAiListResult,
+  AdminAiPromptFamilyRow,
+} from "../types";
 
 /** 관리자 AI agent 목록 행입니다. */
 export type AdminAiAgentListRow = {
@@ -39,34 +43,6 @@ export type AdminAiAgentListQuery = {
 
 /** 관리자 AI agent 목록 결과입니다. */
 export type AdminAiAgentListResult = AdminAiListResult<AdminAiAgentListRow>;
-
-/** 관리자 AI agent 상세 행입니다. */
-export type AdminAiAgentRow = {
-  id: string;
-  displayName: string;
-  description: string | null;
-  purpose: string | null;
-  tags: string[];
-  familyCount: number;
-  versionCount: number;
-  createdAt: string;
-  updatedAt: string;
-};
-
-/** 관리자 AI agent에 연결된 prompt family 행입니다. */
-export type AdminAiPromptFamilyRow = {
-  id: string;
-  agentDisplayName: string;
-  agentId: string;
-  displayName: string;
-  description: string | null;
-  tags: string[];
-  draftVersionCount: number;
-  publishedVersionCount: number;
-  archivedVersionCount: number;
-  createdAt: string;
-  updatedAt: string;
-};
 
 /** 관리자 AI agent 상세입니다. */
 export type AdminAiAgentDetail = AdminAiAgentRow & {

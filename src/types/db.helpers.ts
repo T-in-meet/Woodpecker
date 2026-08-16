@@ -42,6 +42,8 @@ export const TABLES = {
   aiEmbeddings: "ai_embeddings",
   aiModelConfigs: "ai_model_configs",
   aiPromptAgents: "ai_prompt_agents",
+  aiPromptFamilies: "ai_prompt_families",
+  aiPromptVersions: "ai_prompt_versions",
   feedbackReplies: "feedback_replies",
   feedbacks: "feedbacks",
   adminNotificationEvents: "admin_notification_events",

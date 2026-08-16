@@ -1,3 +1,7 @@
+import Link from "next/link";
+
+import { getAdminAiPromptFamilyRoute } from "@/lib/constants/routes";
+
 import type { AdminAiAgentDetail } from "../types";
 
 type AdminAiAgentPromptFamiliesTableProps = {
@@ -36,12 +40,13 @@ export function AdminAiAgentPromptFamiliesTable({
               {families.map((family) => (
                 <tr key={family.id} className="border-b last:border-b-0">
                   <td className="max-w-72 px-4 py-3 align-top">
-                    <span
-                      className="block truncate font-mono text-xs"
+                    <Link
+                      href={getAdminAiPromptFamilyRoute(family.id)}
+                      className="block truncate font-mono text-xs underline-offset-4 hover:underline"
                       title={family.displayName}
                     >
                       {family.displayName}
-                    </span>
+                    </Link>
                   </td>
 
                   <td className="whitespace-nowrap px-4 py-3 align-top">
