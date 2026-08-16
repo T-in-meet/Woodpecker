@@ -1,21 +1,24 @@
 -- =========================================
--- quiz_generations / v1·v2 additive 호환성
+-- quiz_generations / v2 호환성
 --
 -- 20260813070000은 기존 claim_quiz_generation(text 반환)을 건드리지 않고
--- v2 함수 두 개를 나란히 추가한 additive 마이그레이션이다. 마이그레이션 적용 직후
--- 다음 두 가지가 동시에 성립해야 롤백 안전성이 보장된다.
---   1. 기존 v1 경로가 여전히 text를 반환하며 정상 동작한다 (이전 배포로 롤백 가능)
---   2. v1이 만든 claim_token = null 행을 v2가 안전하게 처리한다
+-- v2 함수 두 개를 나란히 추가한 additive 마이그레이션이었다. 그때 이 파일은
+-- "v1 경로가 여전히 동작한다"(롤백 안전성)까지 함께 검증했지만,
+-- 20260815230000이 v1을 제거하면서 그 두 가지는 성립하지 않게 되어 삭제했다.
+-- 롤백 창이 닫혔다는 사실은 해당 마이그레이션 주석에 적혀 있다.
 --
--- 20260813120000은 finalize_quiz_generation_v2에 완료 표시+캐시 저장을 함께 하는
--- 7인자 오버로드를 추가했다. 4인자 버전(20260813070000)은 지우지 않고 그대로 뒀다 —
--- quiz/actions.ts가 7인자만 부르더라도, 이 배포 직전 커밋(캐시 저장을 별도로 처리하던
--- 버전)으로 롤백하면 4인자 버전이 여전히 필요하기 때문이다. 3번이 이걸 확인한다.
+-- 남은 두 가지는 v1이 사라져도 계속 성립해야 한다.
+--   1. v1이 남긴 claim_token = null 행이 테이블에 그대로 있고, v2가 이를
+--      안전하게 처리한다. 함수는 지웠지만 **행은 지우지 않았다.**
+--   2. 20260813120000이 7인자 오버로드를 추가한 뒤에도 4인자
+--      finalize_quiz_generation_v2(20260813070000)가 여전히 존재하고 동작한다.
+--      quiz/actions.ts가 7인자만 부르더라도, 캐시 저장을 별도로 처리하던
+--      커밋으로 롤백하면 4인자 버전이 필요하기 때문이다.
 -- =========================================
 
 BEGIN;
 
-SELECT plan(4);
+SELECT plan(2);
 
 SELECT set_config('test.qgc_user_id', gen_random_uuid()::text, true);
 SELECT set_config('test.qgc_note_id', gen_random_uuid()::text, true);
@@ -44,40 +47,21 @@ VALUES (
 )
 ON CONFLICT (id) DO NOTHING;
 
-SET LOCAL ROLE authenticated;
-SELECT set_config(
-  'request.jwt.claims',
-  json_build_object('sub', current_setting('test.qgc_user_id'), 'role', 'authenticated')::text,
-  true
+-- 1. v1이 남긴 형태의 행(claim_token·completed_at 모두 null)을 v2가 in-flight로
+-- 안전하게 잡는다. 완료 표시를 우회 수단으로 쓸 수 없게 보수적으로 막는 쪽으로
+-- 기운 의도된 동작이다.
+--
+-- v1 함수는 20260815230000에서 제거됐으므로 그 함수가 만들던 행 모양을 직접 넣는다.
+-- 운영 quiz_generations에는 이런 행이 실제로 남아 있다.
+INSERT INTO public.quiz_generations (user_id, note_id, quiz_type, claim_token, completed_at)
+VALUES (
+  current_setting('test.qgc_user_id')::uuid,
+  current_setting('test.qgc_note_id')::uuid,
+  'ox',
+  NULL,
+  NULL
 );
 
--- 1. 기존 v1 경로는 마이그레이션 이후에도 여전히 text 'ok'를 반환한다 (claim_token은 null로 남는다)
-SELECT is(
-  public.claim_quiz_generation(
-    current_setting('test.qgc_note_id')::uuid,
-    'ox'
-  ),
-  'ok',
-  $$additive 마이그레이션 이후에도 claim_quiz_generation(v1)은 text 'ok'를 반환해야 한다$$
-);
-
-RESET ROLE;
-
--- v1이 만든 행은 claim_token이 null이고 completed_at도 null이다
-SELECT is(
-  (
-    SELECT claim_token IS NULL AND completed_at IS NULL
-    FROM public.quiz_generations
-    WHERE user_id = current_setting('test.qgc_user_id')::uuid
-      AND note_id = current_setting('test.qgc_note_id')::uuid
-      AND quiz_type = 'ox'
-  ),
-  true,
-  $$v1이 만든 행은 claim_token·completed_at이 모두 null이어야 한다$$
-);
-
--- 2. v1이 만든 최근 미완료 행(claim_token = null)을 v2가 in-flight로 안전하게 잡는다.
--- 완료 표시를 우회 수단으로 쓸 수 없게 보수적으로 막는 쪽으로 기운 의도된 동작이다.
 SELECT is(
   public.claim_quiz_generation_v2(
     current_setting('test.qgc_user_id')::uuid,
@@ -85,10 +69,10 @@ SELECT is(
     'ox'
   ) ->> 'status',
   'in_flight',
-  $$v1이 만든 claim_token null 행이 최근 것이면 v2도 in_flight로 막아야 한다$$
+  $$v1이 남긴 claim_token null 행이 최근 것이면 v2도 in_flight로 막아야 한다$$
 );
 
--- 3. 4인자 finalize_quiz_generation_v2(20260813070000)가 여전히 존재하고 동작해야
+-- 2. 4인자 finalize_quiz_generation_v2(20260813070000)가 여전히 존재하고 동작해야
 -- 롤백 안전성이 성립한다. 별도 노트로 새로 선점해 7인자 오버로드와 섞이지 않게 한다.
 SELECT set_config('test.qgc_note2_id', gen_random_uuid()::text, true);
 

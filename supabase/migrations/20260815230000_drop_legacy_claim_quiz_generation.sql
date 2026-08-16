@@ -1,0 +1,35 @@
+-- v1 퀴즈 선점 함수 claim_quiz_generation(uuid, text)을 제거한다.
+--
+-- 20260813070000이 v2를 additive로 추가하면서 "기존 claim_quiz_generation 제거는
+-- 안정화 후 별도 마이그레이션으로 분리한다"고 예고한 그 마이그레이션이다.
+-- 20260815220000(채점 버스트 제거·퀴즈 버스트 유지) 주석 마지막 줄이 가리키는
+-- 후속 작업이기도 하다.
+--
+-- 앱은 이미 v2 경로만 쓴다. quiz/actions.ts는 claim_quiz_generation_v2로 선점하고
+-- finalize_quiz_generation_v2로 확정한다. v1을 부르는 코드는 남아 있지 않다.
+--
+-- 죽은 채로 두면 안 되는 이유가 셋이다.
+--   1. 20260806000002:126의 `grant execute ... to authenticated`가 그대로라
+--      인증 사용자가 PostgREST로 직접 호출할 수 있다. v2는 세 역할에서 EXECUTE를
+--      회수하고 service_role에만 부여했는데(20260813070000), v1만 열려 있다.
+--   2. v1의 일일 한도는 30회로 낡았다. 20260815212746이 v2를 3회로 낮췄지만
+--      두 함수는 같은 quiz_generations 테이블을 센다.
+--   3. v1은 claim_token을 발급하지 않고(반환형 text) completed_at이 NULL인 행만
+--      남긴다. 직접 호출하면 v2의 in-flight 검사를 그 창(120초)만큼 막을 수 있다.
+--
+-- 한도 우회는 아니다. finalize_quiz_generation_v2가 claim_token 일치를 요구하고
+-- service_role 전용이라, v1이 만든 행으로는 퀴즈를 확정할 수 없다. 실제 영향은
+-- 자기 quota를 태우는 self-harm 수준이다. 그래도 아무도 부르지 않는 함수를
+-- authenticated에 열어둘 이유가 없다.
+--
+-- **롤백 창을 여기서 닫는다.** 20260813070000이 보장하던 "이전 배포로 롤백하면
+-- v1 경로가 여전히 동작한다"는 성질은 이 마이그레이션 이후 성립하지 않는다.
+-- v1을 호출하던 커밋으로 되돌리려면 이 마이그레이션도 함께 되돌려야 한다.
+-- 4인자 finalize_quiz_generation_v2(20260813070000)는 그대로 두므로 v2 내부의
+-- 롤백 여지는 유지된다.
+--
+-- quiz_generations 테이블과 기존 행은 건드리지 않는다. v1이 남긴
+-- claim_token = NULL 행도 그대로 남고, v2가 계속 한도에 센다 —
+-- 사용 기록을 지우는 경로를 만들지 않는다는 20260806000002의 원칙 그대로다.
+
+drop function if exists public.claim_quiz_generation(uuid, text);

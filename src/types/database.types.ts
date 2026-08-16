@@ -735,7 +735,7 @@ export type Database = {
           {
             foreignKeyName: "review_gradings_review_log_id_fkey";
             columns: ["review_log_id"];
-            isOneToOne: false;
+            isOneToOne: true;
             referencedRelation: "review_logs";
             referencedColumns: ["id"];
           },
@@ -896,10 +896,6 @@ export type Database = {
           scheduled_at: string;
           user_id: string;
         }[];
-      };
-      claim_quiz_generation: {
-        Args: { p_note_id: string; p_quiz_type: string };
-        Returns: string;
       };
       claim_quiz_generation_v2: {
         Args: { p_user_id: string; p_note_id: string; p_quiz_type: string };
