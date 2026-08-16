@@ -186,8 +186,7 @@ describe("generateJson — 응답 끊김 진단 로그", () => {
     errorSpy.mockRestore();
   });
 
-  it("finish_reason=length면 content가 남아 있어도(끊긴 JSON) 진단 로그를 남긴다", async () => {
-    // content는 성공으로 반환된다 — 이 잘린 문자열의 JSON.parse 실패는 호출부 책임이다.
+  it("finish_reason=length + content가 끊긴 JSON이면 진단 로그를 남기고 truncated로 던진다", async () => {
     mockOk({
       choices: [
         { message: { content: '{"score":1' }, finish_reason: "length" },
@@ -195,9 +194,10 @@ describe("generateJson — 응답 끊김 진단 로그", () => {
       usage: { completion_tokens_details: { reasoning_tokens: 8000 } },
     });
 
-    await expect(
+    await expectKind(
       generateJson({ prompt: PROMPT, responseSchema: RESPONSE_SCHEMA }),
-    ).resolves.toBe('{"score":1');
+      "truncated",
+    );
 
     expect(errorSpy).toHaveBeenCalledWith(
       expect.stringContaining("finish_reason=length로 응답이 끊김"),
@@ -207,7 +207,7 @@ describe("generateJson — 응답 끊김 진단 로그", () => {
     );
   });
 
-  it("finish_reason=length + content가 비어 있으면 진단 로그를 남기고 provider로 던진다", async () => {
+  it("finish_reason=length + content가 비어 있으면 진단 로그를 남기고 truncated로 던진다", async () => {
     // usage.reasoning_tokens(최상위)로도 값을 읽어야 한다 — completion_tokens_details가 없는 경우.
     mockOk({
       choices: [{ message: { content: "" }, finish_reason: "length" }],
@@ -216,7 +216,7 @@ describe("generateJson — 응답 끊김 진단 로그", () => {
 
     await expectKind(
       generateJson({ prompt: PROMPT, responseSchema: RESPONSE_SCHEMA }),
-      "provider",
+      "truncated",
     );
 
     expect(errorSpy).toHaveBeenCalledWith(
@@ -225,6 +225,20 @@ describe("generateJson — 응답 끊김 진단 로그", () => {
     expect(errorSpy).toHaveBeenCalledWith(
       expect.stringContaining("content_length=0"),
     );
+  });
+
+  it("finish_reason=length여도 content가 완전한 JSON이면 정상 반환한다", async () => {
+    // max_tokens에 딱 맞게 끝나 완전한 JSON으로 남는 경계 사례.
+    mockOk({
+      choices: [
+        { message: { content: '{"score":80}' }, finish_reason: "length" },
+      ],
+      usage: { completion_tokens_details: { reasoning_tokens: 8100 } },
+    });
+
+    await expect(
+      generateJson({ prompt: PROMPT, responseSchema: RESPONSE_SCHEMA }),
+    ).resolves.toBe('{"score":80}');
   });
 
   it("finish_reason=stop(정상 종료)이면 로그를 남기지 않는다", async () => {

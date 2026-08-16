@@ -63,6 +63,13 @@ describe("toAiFailureReason", () => {
     );
   });
 
+  it("reasoning 토큰 소진으로 끊긴 응답(truncated)은 tooLarge로 본다", () => {
+    // 재시도로 해결되지 않는다는 점에서 3006(Request too large)과 사용자 안내가 같다.
+    expect(toAiFailureReason(new CloudflareAiError("truncated"))).toBe(
+      "tooLarge",
+    );
+  });
+
   it("설정 누락은 사용량 문제로 오인하지 않는다", () => {
     // 키가 없는 건 운영 실수다. 사용자에게 "한도 소진"이라고 말하면 안 된다.
     expect(toAiFailureReason(new CloudflareAiError("config"))).toBe("unknown");

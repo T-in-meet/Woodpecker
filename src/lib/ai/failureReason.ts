@@ -51,6 +51,13 @@ export function toAiFailureReason(error: unknown): AiFailureReason {
     return "delayed";
   }
 
+  // reasoning 토큰이 답변용 토큰을 다 먹어 응답이 중간에 끊긴 경우.
+  // 재시도로는 해결되지 않는다는 점에서 3006(Request too large)과 사용자에게
+  // 할 말이 같다.
+  if (error.kind === "truncated") {
+    return "tooLarge";
+  }
+
   if (error.code === undefined) {
     return "unknown";
   }

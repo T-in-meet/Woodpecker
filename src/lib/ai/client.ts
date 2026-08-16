@@ -37,6 +37,7 @@ export const AI_ERROR_KINDS = [
   "aborted",
   "network",
   "provider",
+  "truncated",
 ] as const;
 
 export type AiErrorKind = (typeof AI_ERROR_KINDS)[number];
@@ -87,6 +88,12 @@ function readCredentials(): Credentials {
   const apiToken = process.env.CLOUDFLARE_API_TOKEN;
 
   if (!accountId || !apiToken) {
+    // toAiFailureReason은 이 kind를 다른 일시적 오류와 같은 "unknown"으로 묶는다
+    // (사용자에게 보여줄 말이 다르지 않아서다). 대신 배포 오설정을 일시적 장애와
+    // 구분해 온콜이 바로 알아볼 수 있도록 여기서 명시적으로 남긴다.
+    console.error(
+      "[ai/client] CLOUDFLARE_ACCOUNT_ID 또는 CLOUDFLARE_API_TOKEN이 설정되지 않음",
+    );
     throw new CloudflareAiError("config");
   }
 
@@ -162,10 +169,11 @@ function extractJsonText(result: unknown): string {
 
     // finish_reason=length는 max_tokens에 걸려 끊겼다는 뜻이다. reasoning 토큰이
     // 답변용 토큰까지 다 먹었을 수 있다. content가 아예 비었을 수도, 중간까지만
-    // 채워진 채(끊긴 JSON) 남았을 수도 있다 — 후자는 여기서는 성공으로 반환되고
-    // 호출부의 JSON.parse에서야 실패하므로, 그 실패와 원인을 나중에 연결해 보려면
-    // 지금 여기서 남겨야 한다. finish_reason·reasoning_tokens·응답 길이는
-    // 사용자 데이터가 아니므로 그대로 남겨도 안전하다.
+    // 채워진 채(끊긴 JSON) 남았을 수도 있다. 후자를 여기서 그대로 반환하면 호출부의
+    // JSON.parse가 일반 파싱 실패로 처리해, 원인이 "노트가 너무 큼"이라는 걸 사용자가
+    // 알 방법이 없다. 그래서 끊겼다고 표시된 응답은 여기서 미리 파싱해 보고, 실제로
+    // 깨져 있으면 구분되는 오류 종류로 던진다. finish_reason·reasoning_tokens·응답
+    // 길이는 사용자 데이터가 아니므로 로그에 남겨도 안전하다.
     if (choice?.finish_reason === "length") {
       const usage = (result as { usage?: unknown }).usage as
         | {
@@ -182,6 +190,18 @@ function extractJsonText(result: unknown): string {
       console.error(
         `[ai/client] finish_reason=length로 응답이 끊김 (reasoning_tokens=${String(reasoningTokens)}, content_length=${contentLength})`,
       );
+
+      if (typeof content !== "string" || content.trim().length === 0) {
+        throw new CloudflareAiError("truncated");
+      }
+
+      try {
+        JSON.parse(content);
+      } catch {
+        throw new CloudflareAiError("truncated");
+      }
+
+      return content;
     }
 
     if (typeof content === "string" && content.trim().length > 0) {
