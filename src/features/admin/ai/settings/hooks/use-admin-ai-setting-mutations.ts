@@ -2,20 +2,17 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
+import { invalidateAdminAiQueries } from "../../utils/invalidate-admin-ai-queries";
 import {
   createAdminAiSettingAction,
   deleteAdminAiSettingAction,
   updateAdminAiSettingAction,
 } from "../actions";
-import {
-  ADMIN_AI_SETTING_CONFIGURATIONS_QUERY_KEY,
-  ADMIN_AI_SETTINGS_QUERY_KEY,
-} from "../constants/query-keys";
 
 /**
  * 관리자 AI 설정 생성 Mutation입니다.
  *
- * 생성 성공 시 AI 설정 관련 Query를 무효화합니다.
+ * 생성 성공 시 관리자 AI 관련 Query를 무효화합니다.
  *
  * @returns AI 설정 생성 Mutation
  */
@@ -29,9 +26,7 @@ export function useCreateAdminAiSetting() {
         return;
       }
 
-      await queryClient.invalidateQueries({
-        queryKey: ADMIN_AI_SETTINGS_QUERY_KEY.all,
-      });
+      await invalidateAdminAiQueries(queryClient);
     },
   });
 }
@@ -39,7 +34,7 @@ export function useCreateAdminAiSetting() {
 /**
  * 관리자 AI 설정 수정 Mutation입니다.
  *
- * 수정 성공 시 해당 설정 상세 Query를 무효화합니다.
+ * 수정 성공 시 관리자 AI 관련 Query를 무효화합니다.
  *
  * @returns AI 설정 수정 Mutation
  */
@@ -48,17 +43,12 @@ export function useUpdateAdminAiSetting() {
 
   return useMutation({
     mutationFn: updateAdminAiSettingAction,
-    onSuccess: async (result, variables) => {
+    onSuccess: async (result) => {
       if (!result.success) {
         return;
       }
 
-      await queryClient.invalidateQueries({
-        queryKey: ADMIN_AI_SETTINGS_QUERY_KEY.detail(variables.settingId),
-      });
-      await queryClient.invalidateQueries({
-        queryKey: ADMIN_AI_SETTINGS_QUERY_KEY.all,
-      });
+      await invalidateAdminAiQueries(queryClient);
     },
   });
 }
@@ -66,7 +56,7 @@ export function useUpdateAdminAiSetting() {
 /**
  * 관리자 AI 설정 삭제 Mutation입니다.
  *
- * 삭제 성공 시 AI 설정 Query를 무효화합니다.
+ * 삭제 성공 시 관리자 AI 관련 Query를 무효화합니다.
  *
  * @returns AI 설정 삭제 Mutation
  */
@@ -75,19 +65,12 @@ export function useDeleteAdminAiSetting() {
 
   return useMutation({
     mutationFn: deleteAdminAiSettingAction,
-    onSuccess: async (result, variables) => {
+    onSuccess: async (result) => {
       if (!result.success) {
         return;
       }
 
-      await queryClient.invalidateQueries({
-        queryKey: ADMIN_AI_SETTINGS_QUERY_KEY.all,
-      });
-      await queryClient.invalidateQueries({
-        queryKey: ADMIN_AI_SETTING_CONFIGURATIONS_QUERY_KEY.bySetting(
-          variables.settingId,
-        ),
-      });
+      await invalidateAdminAiQueries(queryClient);
     },
   });
 }

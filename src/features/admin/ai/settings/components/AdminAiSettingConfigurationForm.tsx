@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FormProvider, useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -49,13 +49,24 @@ export function AdminAiSettingConfigurationForm({
 
   const { append, fields, remove } = useFieldArray({
     control: form.control,
+    keyName: "fieldArrayId",
     name: "configurations",
   });
 
-  const [isRoleKeyWarningOpen, setIsRoleKeyWarningOpen] = useState(false);
-
   const [pendingValues, setPendingValues] =
     useState<AdminAiSettingConfigurationFormValues | null>(null);
+
+  const originalRoleKeyByConfigurationId = useMemo(() => {
+    const roleKeyByConfigurationId = new Map<string, string>();
+
+    for (const configuration of configurations ?? []) {
+      if (configuration.id) {
+        roleKeyByConfigurationId.set(configuration.id, configuration.roleKey);
+      }
+    }
+
+    return roleKeyByConfigurationId;
+  }, [configurations]);
 
   useEffect(() => {
     if (!configurations) {
@@ -104,18 +115,24 @@ export function AdminAiSettingConfigurationForm({
   function hasRoleKeyChanges(
     values: AdminAiSettingConfigurationFormValues,
   ): boolean {
-    if (!configurations) {
+    if (originalRoleKeyByConfigurationId.size === 0) {
       return false;
     }
 
-    return values.configurations.some((configuration, index) => {
-      const originalConfiguration = configurations[index];
-
-      if (!originalConfiguration) {
+    return values.configurations.some((configuration) => {
+      if (!configuration.id) {
         return false;
       }
 
-      return originalConfiguration.roleKey !== configuration.roleKey;
+      const originalRoleKey = originalRoleKeyByConfigurationId.get(
+        configuration.id,
+      );
+
+      if (originalRoleKey === undefined) {
+        return false;
+      }
+
+      return originalRoleKey !== configuration.roleKey;
     });
   }
 
@@ -160,7 +177,6 @@ export function AdminAiSettingConfigurationForm({
           form.reset(form.getValues());
 
           setPendingValues(null);
-          setIsRoleKeyWarningOpen(false);
 
           toast.success("AI 구성을 저장했습니다.");
         },
@@ -178,7 +194,6 @@ export function AdminAiSettingConfigurationForm({
      */
     if (hasRoleKeyChanges(values)) {
       setPendingValues(values);
-      setIsRoleKeyWarningOpen(true);
       return;
     }
 
@@ -194,6 +209,22 @@ export function AdminAiSettingConfigurationForm({
     }
 
     saveConfigurations(pendingValues);
+  }
+
+  /**
+   * Role Key 변경 경고 다이얼로그 닫힘을 처리합니다.
+   *
+   * 다이얼로그는 `pendingValues` 존재 여부로 열림 상태가 결정되므로,
+   * 닫기 동작에서는 보류 중인 제출 값만 정리합니다.
+   *
+   * @param open 다이얼로그의 다음 열림 상태입니다.
+   */
+  function handleRoleKeyWarningOpenChange(open: boolean) {
+    if (open) {
+      return;
+    }
+
+    setPendingValues(null);
   }
 
   if (isPending) {
@@ -231,8 +262,8 @@ export function AdminAiSettingConfigurationForm({
 
         <AdminAlertDialog
           trigger={<span className="hidden" aria-hidden />}
-          open={isRoleKeyWarningOpen}
-          onOpenChange={setIsRoleKeyWarningOpen}
+          open={pendingValues !== null}
+          onOpenChange={handleRoleKeyWarningOpenChange}
           title="Role Key를 변경하시겠습니까?"
           description={
             <p>

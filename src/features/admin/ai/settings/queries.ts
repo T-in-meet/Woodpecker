@@ -226,6 +226,7 @@ export async function getAdminAiSettingConfigurations(
   for (const row of rows) {
     if (row.kind === "embedding") {
       configurations.push({
+        id: row.id,
         kind: "embedding",
         roleKey: row.role_key,
         modelConfigId: row.model_config_id,
@@ -286,6 +287,7 @@ export async function getAdminAiSettingConfigurations(
     }
 
     configurations.push({
+      id: row.id,
       kind: "chat",
       roleKey: row.role_key,
       agentId: promptVersionRelation.agentId,

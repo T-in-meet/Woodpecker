@@ -11,7 +11,7 @@ import { AdminPageHeader } from "@/features/admin/components/layout/AdminPageHea
 import { useAdminListToolbar } from "@/features/admin/hooks/use-admin-list-toolbar";
 import { ROUTES } from "@/lib/constants/routes";
 
-import { useAdminAiModels } from "../../models/hooks/use-admin-ai-model-queries";
+import { useAdminAiModelOptions } from "../../models/hooks/use-admin-ai-model-queries";
 import { createAdminAiSettingListConfig } from "../constants/ai-settings-list";
 import { useAdminAiSettings } from "../hooks/use-admin-ai-setting-queries";
 import { AdminAiSettingsTable } from "./AdminAiSettingsTable";
@@ -23,61 +23,22 @@ import { AdminAiSettingsTable } from "./AdminAiSettingsTable";
 export function AdminAiSettingsClient() {
   const [currentPage, setCurrentPage] = useState(1);
 
-  const { data: chatModelsData } = useAdminAiModels({
-    page: 1,
-    pageSize: 100,
-    search: {
-      field: "displayName",
-      query: "",
-    },
-    filters: {
-      capability: {
-        field: "capability",
-        type: "multi-select",
-        value: ["chat"],
-      },
-    },
-    sort: {
-      field: "displayName",
-      direction: "asc",
-    },
-  });
-
-  const { data: embeddingModelsData } = useAdminAiModels({
-    page: 1,
-    pageSize: 100,
-    search: {
-      field: "displayName",
-      query: "",
-    },
-    filters: {
-      capability: {
-        field: "capability",
-        type: "multi-select",
-        value: ["embedding"],
-      },
-    },
-    sort: {
-      field: "displayName",
-      direction: "asc",
-    },
-  });
+  const { data: chatModels = [] } = useAdminAiModelOptions("chat");
+  const { data: embeddingModels = [] } = useAdminAiModelOptions("embedding");
 
   const listConfig = useMemo(
     () =>
       createAdminAiSettingListConfig({
-        chatModelOptions:
-          chatModelsData?.items.map((model) => ({
-            value: model.id,
-            label: model.displayName,
-          })) ?? [],
-        embeddingModelOptions:
-          embeddingModelsData?.items.map((model) => ({
-            value: model.id,
-            label: model.displayName,
-          })) ?? [],
+        chatModelOptions: chatModels.map((model) => ({
+          value: model.id,
+          label: model.displayName,
+        })),
+        embeddingModelOptions: embeddingModels.map((model) => ({
+          value: model.id,
+          label: model.displayName,
+        })),
       }),
-    [chatModelsData, embeddingModelsData],
+    [chatModels, embeddingModels],
   );
 
   const toolbar = useAdminListToolbar({

@@ -2,9 +2,25 @@ import { useEffect, useRef } from "react";
 
 /** 스크롤 대상 판별에 필요한 최소한의 필드 형태입니다. */
 type ScrollableField = {
-  /** React Hook Form의 필드 배열 항목 ID입니다. */
-  id: string;
+  /** React Hook Form의 기본 필드 배열 항목 ID입니다. */
+  id?: string;
+
+  /** `keyName`으로 분리한 React Hook Form 필드 배열 항목 ID입니다. */
+  fieldArrayId?: string;
 };
+
+/**
+ * 스크롤 ref 저장에 사용할 필드 배열 항목 ID를 반환합니다.
+ *
+ * `useFieldArray`의 기본 `id`가 도메인 ID와 충돌하는 폼에서는
+ * `fieldArrayId`를 우선 사용합니다.
+ *
+ * @param field 스크롤 대상으로 사용할 필드
+ * @returns 스크롤 ref 저장 키
+ */
+function getScrollableFieldId(field: ScrollableField): string {
+  return field.fieldArrayId ?? field.id ?? "";
+}
 
 /**
  * 요소를 기준으로 위로 순회하며 실제로 스크롤 가능한 조상 요소를 찾습니다.
@@ -95,7 +111,13 @@ export function useScrollToNewlyAddedCard<T extends ScrollableField>(
       return;
     }
 
-    const node = cardRefs.current.get(lastField.id);
+    const fieldId = getScrollableFieldId(lastField);
+
+    if (fieldId.length === 0) {
+      return;
+    }
+
+    const node = cardRefs.current.get(fieldId);
 
     if (!node) {
       return;

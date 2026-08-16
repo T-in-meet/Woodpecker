@@ -1,26 +1,24 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  ADMIN_AI_SETTING_CONFIGURATIONS_QUERY_KEY,
-  ADMIN_AI_SETTINGS_QUERY_KEY,
-} from "../constants/query-keys";
-
-const { invalidateQueriesMock } = vi.hoisted(() => ({
-  invalidateQueriesMock: vi.fn().mockResolvedValue(undefined),
+const { invalidateAdminAiQueriesMock, queryClientMock } = vi.hoisted(() => ({
+  invalidateAdminAiQueriesMock: vi.fn().mockResolvedValue(undefined),
+  queryClientMock: {},
 }));
 
 vi.mock("@tanstack/react-query", () => ({
   useMutation: vi.fn((options: AdminAiSettingMutationOptions) => options),
-  useQueryClient: vi.fn(() => ({
-    invalidateQueries: invalidateQueriesMock,
-  })),
+  useQueryClient: vi.fn(() => queryClientMock),
 }));
 
 vi.mock("../actions", () => ({
   createAdminAiSettingAction: vi.fn(),
   deleteAdminAiSettingAction: vi.fn(),
   updateAdminAiSettingAction: vi.fn(),
+}));
+
+vi.mock("../../utils/invalidate-admin-ai-queries", () => ({
+  invalidateAdminAiQueries: invalidateAdminAiQueriesMock,
 }));
 
 import {
@@ -98,12 +96,10 @@ describe("use-admin-ai-setting-mutations", () => {
       },
     );
 
-    expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ADMIN_AI_SETTINGS_QUERY_KEY.all,
-    });
+    expect(invalidateAdminAiQueriesMock).toHaveBeenCalledWith(queryClient);
   });
 
-  it("AI 설정 수정이 성공 응답으로 resolve되면 상세 및 목록 Query 캐시를 무효화한다", async () => {
+  it("AI 설정 수정이 성공 응답으로 resolve되면 관리자 AI Query 캐시를 무효화한다", async () => {
     const queryClient = useQueryClient();
 
     useUpdateAdminAiSetting();
@@ -117,12 +113,7 @@ describe("use-admin-ai-setting-mutations", () => {
       },
     );
 
-    expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ADMIN_AI_SETTINGS_QUERY_KEY.detail(SETTING_ID),
-    });
-    expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ADMIN_AI_SETTINGS_QUERY_KEY.all,
-    });
+    expect(invalidateAdminAiQueriesMock).toHaveBeenCalledWith(queryClient);
   });
 
   it("AI 설정 삭제가 실패 응답으로 resolve되면 Query 캐시를 무효화하지 않는다", async () => {
@@ -138,10 +129,10 @@ describe("use-admin-ai-setting-mutations", () => {
       },
     );
 
-    expect(invalidateQueriesMock).not.toHaveBeenCalled();
+    expect(invalidateAdminAiQueriesMock).not.toHaveBeenCalled();
   });
 
-  it("AI 설정 삭제가 성공 응답으로 resolve되면 Settings 및 해당 Configuration Query 캐시를 무효화한다", async () => {
+  it("AI 설정 삭제가 성공 응답으로 resolve되면 관리자 AI Query 캐시를 무효화한다", async () => {
     const queryClient = useQueryClient();
 
     useDeleteAdminAiSetting();
@@ -155,11 +146,6 @@ describe("use-admin-ai-setting-mutations", () => {
       },
     );
 
-    expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ADMIN_AI_SETTINGS_QUERY_KEY.all,
-    });
-    expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ADMIN_AI_SETTING_CONFIGURATIONS_QUERY_KEY.bySetting(SETTING_ID),
-    });
+    expect(invalidateAdminAiQueriesMock).toHaveBeenCalledWith(queryClient);
   });
 });

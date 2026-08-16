@@ -25,6 +25,8 @@ export type AdminAiSettingInfoFormValues = {
  */
 export type AdminAiSettingConfiguration =
   | {
+      /** 저장된 AI 설정 구성 ID입니다. 신규 구성에는 없습니다. */
+      id?: string;
       kind: "chat";
       roleKey: string;
       agentId: string;
@@ -34,6 +36,8 @@ export type AdminAiSettingConfiguration =
       temperature: number;
     }
   | {
+      /** 저장된 AI 설정 구성 ID입니다. 신규 구성에는 없습니다. */
+      id?: string;
       kind: "embedding";
       roleKey: string;
       modelConfigId: string;

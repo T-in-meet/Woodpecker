@@ -18,7 +18,7 @@ type AdminAiSettingConfigurationKind = "chat" | "embedding";
  */
 type AdminAiSettingConfigurationField = {
   /** React Hook Form의 필드 배열 항목 ID입니다. */
-  id: string;
+  fieldArrayId: string;
 
   /** AI 구성의 종류입니다. */
   kind: AdminAiSettingConfigurationKind;

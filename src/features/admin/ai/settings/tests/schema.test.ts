@@ -225,6 +225,38 @@ describe("adminAiSettingConfigurationsSaveInputSchema", () => {
 
     expect(result.success).toBe(false);
   });
+
+  it("같은 저장 요청 안에서 중복된 roleKey를 거부한다", () => {
+    const result = adminAiSettingConfigurationsSaveInputSchema.safeParse({
+      settingId: "11111111-1111-4111-8111-111111111111",
+      configurations: [
+        {
+          kind: "chat",
+          roleKey: "primary",
+          promptVersionId: "22222222-2222-4222-8222-222222222222",
+          modelConfigId: "33333333-3333-4333-8333-333333333333",
+          temperature: 0.2,
+        },
+        {
+          kind: "embedding",
+          roleKey: "primary",
+          modelConfigId: "44444444-4444-4444-8444-444444444444",
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ["configurations", 1, "roleKey"],
+          }),
+        ]),
+      );
+    }
+  });
 });
 
 describe("adminAiSettingListBadgeItemSchema", () => {
