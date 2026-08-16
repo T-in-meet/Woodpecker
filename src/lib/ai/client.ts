@@ -154,8 +154,35 @@ function extractJsonText(result: unknown): string {
 
   const choices = (result as { choices?: unknown }).choices;
   if (Array.isArray(choices) && choices.length > 0) {
-    const content = (choices[0] as { message?: { content?: unknown } })?.message
-      ?.content;
+    const choice = choices[0] as {
+      finish_reason?: unknown;
+      message?: { content?: unknown };
+    };
+    const content = choice?.message?.content;
+
+    // finish_reason=length는 max_tokens에 걸려 끊겼다는 뜻이다. reasoning 토큰이
+    // 답변용 토큰까지 다 먹었을 수 있다. content가 아예 비었을 수도, 중간까지만
+    // 채워진 채(끊긴 JSON) 남았을 수도 있다 — 후자는 여기서는 성공으로 반환되고
+    // 호출부의 JSON.parse에서야 실패하므로, 그 실패와 원인을 나중에 연결해 보려면
+    // 지금 여기서 남겨야 한다. finish_reason·reasoning_tokens·응답 길이는
+    // 사용자 데이터가 아니므로 그대로 남겨도 안전하다.
+    if (choice?.finish_reason === "length") {
+      const usage = (result as { usage?: unknown }).usage as
+        | {
+            completion_tokens_details?: { reasoning_tokens?: unknown };
+            reasoning_tokens?: unknown;
+          }
+        | undefined;
+      const reasoningTokens =
+        usage?.completion_tokens_details?.reasoning_tokens ??
+        usage?.reasoning_tokens ??
+        null;
+      const contentLength = typeof content === "string" ? content.length : 0;
+
+      console.error(
+        `[ai/client] finish_reason=length로 응답이 끊김 (reasoning_tokens=${String(reasoningTokens)}, content_length=${contentLength})`,
+      );
+    }
 
     if (typeof content === "string" && content.trim().length > 0) {
       return content;
