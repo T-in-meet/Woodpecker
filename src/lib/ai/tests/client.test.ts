@@ -175,6 +175,71 @@ describe("generateJson — 성공 응답 껍데기", () => {
   });
 });
 
+describe("generateJson — 응답 끊김 진단 로그", () => {
+  let errorSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    errorSpy.mockRestore();
+  });
+
+  it("finish_reason=length면 content가 남아 있어도(끊긴 JSON) 진단 로그를 남긴다", async () => {
+    // content는 성공으로 반환된다 — 이 잘린 문자열의 JSON.parse 실패는 호출부 책임이다.
+    mockOk({
+      choices: [
+        { message: { content: '{"score":1' }, finish_reason: "length" },
+      ],
+      usage: { completion_tokens_details: { reasoning_tokens: 8000 } },
+    });
+
+    await expect(
+      generateJson({ prompt: PROMPT, responseSchema: RESPONSE_SCHEMA }),
+    ).resolves.toBe('{"score":1');
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("finish_reason=length로 응답이 끊김"),
+    );
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("reasoning_tokens=8000"),
+    );
+  });
+
+  it("finish_reason=length + content가 비어 있으면 진단 로그를 남기고 provider로 던진다", async () => {
+    // usage.reasoning_tokens(최상위)로도 값을 읽어야 한다 — completion_tokens_details가 없는 경우.
+    mockOk({
+      choices: [{ message: { content: "" }, finish_reason: "length" }],
+      usage: { reasoning_tokens: 8192 },
+    });
+
+    await expectKind(
+      generateJson({ prompt: PROMPT, responseSchema: RESPONSE_SCHEMA }),
+      "provider",
+    );
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("reasoning_tokens=8192"),
+    );
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("content_length=0"),
+    );
+  });
+
+  it("finish_reason=stop(정상 종료)이면 로그를 남기지 않는다", async () => {
+    mockOk({
+      choices: [
+        { message: { content: '{"score":80}' }, finish_reason: "stop" },
+      ],
+    });
+
+    await generateJson({ prompt: PROMPT, responseSchema: RESPONSE_SCHEMA });
+
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
+});
+
 describe("generateJson — provider 실패", () => {
   it("HTTP 비-2xx면 code와 status를 담아 던진다", async () => {
     mockRaw(429, { success: false, errors: [{ code: 3036, message: "한도" }] });
