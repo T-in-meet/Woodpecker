@@ -13,7 +13,7 @@
 
 BEGIN;
 
-SELECT plan(21);
+SELECT plan(22);
 
 SELECT set_config('test.qgv2_user_a_id', gen_random_uuid()::text, true);
 SELECT set_config('test.qgv2_user_b_id', gen_random_uuid()::text, true);
@@ -389,6 +389,28 @@ SELECT is(
 -- =========================================
 -- 7. 완료 행도 버스트·일일 카운트에 잡힌다 (완료 표시가 한도 우회 수단이 되면 안 된다)
 -- =========================================
+
+UPDATE public.quiz_generations
+SET created_at = now() - interval '2 days'
+WHERE user_id = current_setting('test.qgv2_user_a_id')::uuid;
+
+INSERT INTO public.quiz_generations (user_id, note_id, quiz_type, completed_at)
+SELECT
+  current_setting('test.qgv2_user_a_id')::uuid,
+  current_setting('test.qgv2_note_a2_id')::uuid,
+  'burst_' || i,
+  now()
+FROM generate_series(1, 5) AS i;
+
+SELECT is(
+  public.claim_quiz_generation_v2(
+    current_setting('test.qgv2_user_a_id')::uuid,
+    current_setting('test.qgv2_note_a2_id')::uuid,
+    'burst_probe'
+  ) ->> 'status',
+  'too_many_requests',
+  $$완료된 행 5건도 60초 버스트 한도에 포함돼야 한다$$
+);
 
 UPDATE public.quiz_generations
 SET created_at = now() - interval '2 days'
