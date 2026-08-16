@@ -19,6 +19,7 @@ export const updateAgentSchema = z.object({
 
 /** Agent 삭제 RPC가 반환하는 허용된 결과 코드입니다. */
 export const adminAiAgentDeleteRpcResultSchema = z.union([
+  z.literal("NOT_DELETABLE"),
   z.literal("NOT_FOUND"),
   z.literal("OK"),
 ]);

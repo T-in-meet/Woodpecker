@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAiEmbeddingWithProvider } from "@/features/ai/providers";
 import { getProviderApiKey } from "@/features/ai/providers/utils/api-key";
+import type { AiRuntimeEmbeddingConfiguration } from "@/features/ai/runtimes/types";
 import { reportAiOperationalError } from "@/features/ai/utils/report-ai-operational-error";
 import {
   AI_OPERATIONAL_ERROR_CODE,
@@ -12,7 +13,6 @@ import {
 import { AI_EMBEDDING_DIMENSIONS } from "../../constants/embeddings";
 import { getAiEmbeddingCache, insertAiEmbedding } from "../cache";
 import { generateAiEmbedding } from "../generate";
-import type { AiEmbeddingRuntimeConfiguration } from "../types";
 
 vi.mock("@/features/ai/providers", () => ({
   createAiEmbeddingWithProvider: vi.fn(),
@@ -38,7 +38,7 @@ const EMBEDDING_CONFIGURATION = {
     model: "text-embedding-3-small",
     dimensions: AI_EMBEDDING_DIMENSIONS,
   },
-} as AiEmbeddingRuntimeConfiguration;
+} as AiRuntimeEmbeddingConfiguration;
 
 const INPUT = {
   ownerUserId: "user-id",
@@ -152,7 +152,7 @@ describe("generateAiEmbedding", () => {
         ...EMBEDDING_CONFIGURATION.model,
         dimensions: null,
       },
-    } as AiEmbeddingRuntimeConfiguration;
+    } as AiRuntimeEmbeddingConfiguration;
 
     vi.mocked(getAiEmbeddingCache).mockResolvedValue(null);
 
@@ -194,7 +194,7 @@ describe("generateAiEmbedding", () => {
         ...EMBEDDING_CONFIGURATION.model,
         dimensions: 768,
       },
-    } as AiEmbeddingRuntimeConfiguration;
+    } as AiRuntimeEmbeddingConfiguration;
 
     vi.mocked(getAiEmbeddingCache).mockResolvedValue(null);
 
@@ -235,7 +235,7 @@ describe("generateAiEmbedding", () => {
         ...EMBEDDING_CONFIGURATION.model,
         dimensions: null,
       },
-    } as AiEmbeddingRuntimeConfiguration;
+    } as AiRuntimeEmbeddingConfiguration;
 
     const cachedEmbedding = {
       id: "embedding-id",

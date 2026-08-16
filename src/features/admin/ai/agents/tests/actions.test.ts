@@ -346,6 +346,30 @@ describe("deleteAdminAiAgent", () => {
     });
   });
 
+  it("삭제 RPC가 NOT_DELETABLE을 반환하면 Settings 참조 메시지를 반환한다", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: "NOT_DELETABLE",
+      error: null,
+    });
+
+    vi.mocked(createAdminClient).mockReturnValue({
+      rpc,
+    } as unknown as ReturnType<typeof createAdminClient>);
+
+    const result = await deleteAdminAiAgent(AGENT_ID);
+
+    expect(result).toEqual({
+      message:
+        "AI Settings에서 사용 중인 Prompt Version이 있어 Agent를 삭제할 수 없습니다.",
+      ok: false,
+    });
+    expect(rpc).toHaveBeenCalledWith("delete_admin_ai_agent", {
+      p_agent_id: AGENT_ID,
+    });
+    expect(reportAdminAiActionError).not.toHaveBeenCalled();
+    expect(revalidateAdminAiPaths).not.toHaveBeenCalled();
+  });
+
   it("삭제 RPC가 알 수 없는 결과를 반환하면 운영 오류를 보고하고 실패를 반환한다", async () => {
     const rpc = vi.fn().mockResolvedValue({
       data: "UNKNOWN_RESULT",

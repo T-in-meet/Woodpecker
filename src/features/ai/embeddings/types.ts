@@ -1,6 +1,5 @@
 import type { z } from "zod";
 
-import type { AiModelProvider } from "../constants/models";
 import type { aiEmbeddingMatchRowSchema, aiEmbeddingRowSchema } from "./schema";
 
 /** DB에서 조회하고 검증한 AI embedding cache 행입니다. */
@@ -25,17 +24,4 @@ export type AiEmbeddingInput = {
   inputHash: string;
   inputText: string;
   inputPreview: string;
-};
-
-/** Embedding 생성에 필요한 AI model 설정입니다. */
-export type AiEmbeddingModelConfiguration = {
-  id: string;
-  provider: AiModelProvider;
-  model: string;
-  dimensions: number | null;
-};
-
-/** Embedding 실행에 필요한 최소 runtime 설정입니다. */
-export type AiEmbeddingRuntimeConfiguration = {
-  model: AiEmbeddingModelConfiguration;
 };
