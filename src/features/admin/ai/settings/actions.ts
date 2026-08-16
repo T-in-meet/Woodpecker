@@ -169,13 +169,15 @@ export async function updateAdminAiSettingAction(
 
   const supabase = createAdminClient();
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("ai_settings")
     .update({
       description: parsed.data.description,
       display_name: parsed.data.displayName,
     })
-    .eq("id", parsed.data.settingId);
+    .eq("id", parsed.data.settingId)
+    .select("id")
+    .maybeSingle();
 
   if (error) {
     await reportAdminAiActionError({
@@ -192,6 +194,13 @@ export async function updateAdminAiSettingAction(
     return {
       success: false,
       message: "AI 설정 수정에 실패했습니다.",
+    };
+  }
+
+  if (!data) {
+    return {
+      success: false,
+      message: "AI 설정을 찾을 수 없습니다.",
     };
   }
 
@@ -233,10 +242,12 @@ export async function deleteAdminAiSettingAction(
 
   const supabase = createAdminClient();
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("ai_settings")
     .delete()
-    .eq("id", parsed.data.settingId);
+    .eq("id", parsed.data.settingId)
+    .select("id")
+    .maybeSingle();
 
   if (error) {
     await reportAdminAiActionError({
@@ -253,6 +264,13 @@ export async function deleteAdminAiSettingAction(
     return {
       success: false,
       message: "AI 설정 삭제에 실패했습니다.",
+    };
+  }
+
+  if (!data) {
+    return {
+      success: false,
+      message: "AI 설정을 찾을 수 없습니다.",
     };
   }
 

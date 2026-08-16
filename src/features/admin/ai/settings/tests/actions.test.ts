@@ -294,8 +294,19 @@ describe("AI 설정 actions", () => {
     });
 
     it("AI 설정 기본 정보를 수정한다", async () => {
-      const eq = vi.fn().mockResolvedValue({
+      const maybeSingle = vi.fn().mockResolvedValue({
+        data: {
+          id: SETTING_ID,
+        },
         error: null,
+      });
+
+      const select = vi.fn().mockReturnValue({
+        maybeSingle,
+      });
+
+      const eq = vi.fn().mockReturnValue({
+        select,
       });
 
       const update = vi.fn().mockReturnValue({
@@ -324,6 +335,8 @@ describe("AI 설정 actions", () => {
       });
 
       expect(eq).toHaveBeenCalledWith("id", SETTING_ID);
+      expect(select).toHaveBeenCalledWith("id");
+      expect(maybeSingle).toHaveBeenCalledOnce();
 
       expect(reportAdminAiActionError).not.toHaveBeenCalled();
 
@@ -332,13 +345,62 @@ describe("AI 설정 actions", () => {
       });
     });
 
+    it("수정할 AI 설정을 찾을 수 없으면 실패하고 운영 오류로 보고하지 않는다", async () => {
+      const maybeSingle = vi.fn().mockResolvedValue({
+        data: null,
+        error: null,
+      });
+
+      const select = vi.fn().mockReturnValue({
+        maybeSingle,
+      });
+
+      const eq = vi.fn().mockReturnValue({
+        select,
+      });
+
+      const update = vi.fn().mockReturnValue({
+        eq,
+      });
+
+      const from = vi.fn().mockReturnValue({
+        update,
+      });
+
+      vi.mocked(createAdminClient).mockReturnValue({
+        from,
+      } as never);
+
+      const result = await updateAdminAiSettingAction({
+        settingId: SETTING_ID,
+        displayName: "노트 챗봇",
+        description: "",
+      });
+
+      expect(result).toEqual({
+        success: false,
+        message: "AI 설정을 찾을 수 없습니다.",
+      });
+
+      expect(reportAdminAiActionError).not.toHaveBeenCalled();
+    });
+
     it("AI 설정 수정 DB 오류가 발생하면 운영 오류를 보고하고 실패한다", async () => {
       const error = {
         message: "database error",
       };
 
-      const eq = vi.fn().mockResolvedValue({
+      const maybeSingle = vi.fn().mockResolvedValue({
+        data: null,
         error,
+      });
+
+      const select = vi.fn().mockReturnValue({
+        maybeSingle,
+      });
+
+      const eq = vi.fn().mockReturnValue({
+        select,
       });
 
       const update = vi.fn().mockReturnValue({
@@ -393,8 +455,19 @@ describe("AI 설정 actions", () => {
     });
 
     it("AI 설정을 삭제한다", async () => {
-      const eq = vi.fn().mockResolvedValue({
+      const maybeSingle = vi.fn().mockResolvedValue({
+        data: {
+          id: SETTING_ID,
+        },
         error: null,
+      });
+
+      const select = vi.fn().mockReturnValue({
+        maybeSingle,
+      });
+
+      const eq = vi.fn().mockReturnValue({
+        select,
       });
 
       const deleteQuery = vi.fn().mockReturnValue({
@@ -416,6 +489,8 @@ describe("AI 설정 actions", () => {
       expect(from).toHaveBeenCalledWith("ai_settings");
       expect(deleteQuery).toHaveBeenCalledOnce();
       expect(eq).toHaveBeenCalledWith("id", SETTING_ID);
+      expect(select).toHaveBeenCalledWith("id");
+      expect(maybeSingle).toHaveBeenCalledOnce();
 
       expect(reportAdminAiActionError).not.toHaveBeenCalled();
 
@@ -424,13 +499,60 @@ describe("AI 설정 actions", () => {
       });
     });
 
+    it("삭제할 AI 설정을 찾을 수 없으면 실패하고 운영 오류로 보고하지 않는다", async () => {
+      const maybeSingle = vi.fn().mockResolvedValue({
+        data: null,
+        error: null,
+      });
+
+      const select = vi.fn().mockReturnValue({
+        maybeSingle,
+      });
+
+      const eq = vi.fn().mockReturnValue({
+        select,
+      });
+
+      const deleteQuery = vi.fn().mockReturnValue({
+        eq,
+      });
+
+      const from = vi.fn().mockReturnValue({
+        delete: deleteQuery,
+      });
+
+      vi.mocked(createAdminClient).mockReturnValue({
+        from,
+      } as never);
+
+      const result = await deleteAdminAiSettingAction({
+        settingId: SETTING_ID,
+      });
+
+      expect(result).toEqual({
+        success: false,
+        message: "AI 설정을 찾을 수 없습니다.",
+      });
+
+      expect(reportAdminAiActionError).not.toHaveBeenCalled();
+    });
+
     it("AI 설정 삭제 DB 오류가 발생하면 운영 오류를 보고하고 실패한다", async () => {
       const error = {
         message: "database error",
       };
 
-      const eq = vi.fn().mockResolvedValue({
+      const maybeSingle = vi.fn().mockResolvedValue({
+        data: null,
         error,
+      });
+
+      const select = vi.fn().mockReturnValue({
+        maybeSingle,
+      });
+
+      const eq = vi.fn().mockReturnValue({
+        select,
       });
 
       const deleteQuery = vi.fn().mockReturnValue({
