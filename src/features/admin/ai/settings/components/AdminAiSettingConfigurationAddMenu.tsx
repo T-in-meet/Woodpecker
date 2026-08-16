@@ -37,7 +37,13 @@ export function AdminAiSettingConfigurationAddMenu({
         </Button>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="end" className="w-max min-w-max">
+      <DropdownMenuContent
+        align="end"
+        className="w-max min-w-max"
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+        }}
+      >
         <DropdownMenuItem onSelect={onAddChat}>
           <Bot aria-hidden="true" />
           Chat 구성 추가
