@@ -306,34 +306,38 @@ function isBasisContentChanged(
   return gradedContentHash !== null && gradedContentHash !== currentContentHash;
 }
 
-/** 이미 확정된 채점 결과를 읽어 액션 응답으로 변환한다. */
+/**
+ * 확정된 채점 결과를 읽어 액션 응답으로 변환한다.
+ * 저장된 결과가 없으면(아직 채점 전이면) null을 돌려준다 — 호출부가 이어서
+ * 새로 채점하는 경로로 진행할지, 아니면 못 찾은 것 자체를 오류로 볼지 판단한다.
+ */
 async function readStoredGrading(
   reviewLogId: string,
   userId: string,
   userAnswer: string,
   currentContentHash: string,
-): Promise<GradeAnswerActionState> {
+): Promise<GradeAnswerActionState | null> {
   try {
     const existing = await getGradingByReviewLog(reviewLogId, userId);
-    if (existing) {
-      return {
-        success: true,
-        grading: { score: existing.score, ...existing.feedback },
-        gradedOtherAnswer: existing.user_answer !== userAnswer,
-        gradedAnswer: existing.user_answer,
-        basisContentChanged: isBasisContentChanged(
-          existing.graded_content_hash,
-          currentContentHash,
-        ),
-      };
+    if (!existing) {
+      return null;
     }
-  } catch {
-    // 아래 공통 실패 응답으로 진행
-  }
 
-  return {
-    error: "채점 결과를 불러오는 데 실패했습니다. 잠시 후 다시 시도해주세요.",
-  };
+    return {
+      success: true,
+      grading: { score: existing.score, ...existing.feedback },
+      gradedOtherAnswer: existing.user_answer !== userAnswer,
+      gradedAnswer: existing.user_answer,
+      basisContentChanged: isBasisContentChanged(
+        existing.graded_content_hash,
+        currentContentHash,
+      ),
+    };
+  } catch {
+    return {
+      error: "채점 결과를 불러오는 데 실패했습니다. 잠시 후 다시 시도해주세요.",
+    };
+  }
 }
 
 export async function gradeAnswerAction(
@@ -393,27 +397,15 @@ export async function gradeAnswerAction(
   const contentHash = hashNoteContent(note.content);
 
   // 복습 1회당 채점 1회 — 이미 채점했다면 저장된 결과를 재사용 (비용 통제 + 점수 일관성)
-  try {
-    const existing = await getGradingByReviewLog(
-      parsed.data.reviewLogId,
-      user.id,
-    );
-    if (existing) {
-      return {
-        success: true,
-        grading: { score: existing.score, ...existing.feedback },
-        gradedOtherAnswer: existing.user_answer !== parsed.data.answer,
-        gradedAnswer: existing.user_answer,
-        basisContentChanged: isBasisContentChanged(
-          existing.graded_content_hash,
-          contentHash,
-        ),
-      };
-    }
-  } catch {
-    return {
-      error: "데이터를 불러오는 데 실패했습니다. 잠시 후 다시 시도해주세요.",
-    };
+  const stored = await readStoredGrading(
+    parsed.data.reviewLogId,
+    user.id,
+    parsed.data.answer,
+    contentHash,
+  );
+
+  if (stored) {
+    return stored;
   }
 
   // 화면이 보여준 원본과 지금 채점할 원본이 같은 본문인지 확인한다.
@@ -472,12 +464,24 @@ export async function gradeAnswerAction(
   }
 
   if (claim.data.status === "already_graded") {
-    return await readStoredGrading(
+    const alreadyGraded = await readStoredGrading(
       parsed.data.reviewLogId,
       user.id,
       parsed.data.answer,
       contentHash,
     );
+
+    if (alreadyGraded) {
+      return alreadyGraded;
+    }
+
+    // claim이 already_graded라고 답했는데 채점 행을 못 찾았다 — 정상 경로에서는 나오지 않는다.
+    console.error(
+      "[gradeAnswerAction] already_graded인데 채점 결과를 찾지 못함",
+    );
+    return {
+      error: "채점 결과를 불러오는 데 실패했습니다. 잠시 후 다시 시도해주세요.",
+    };
   }
 
   const claimErrorMessage = CLAIM_ERROR_MESSAGES[claim.data.status];
@@ -565,12 +569,25 @@ export async function gradeAnswerAction(
   if (finalizeError || finalizeResult !== "ok") {
     // 선점이 만료된 사이 다른 요청이 먼저 저장한 경우 → 저장된 결과를 정본으로 삼는다
     if (finalizeResult === "already_graded") {
-      return await readStoredGrading(
+      const alreadyGraded = await readStoredGrading(
         parsed.data.reviewLogId,
         user.id,
         parsed.data.answer,
         contentHash,
       );
+
+      if (alreadyGraded) {
+        return alreadyGraded;
+      }
+
+      // finalize가 already_graded라고 답했는데 채점 행을 못 찾았다 — 정상 경로에서는 나오지 않는다.
+      console.error(
+        "[gradeAnswerAction] already_graded인데 채점 결과를 찾지 못함",
+      );
+      return {
+        error:
+          "채점 결과를 불러오는 데 실패했습니다. 잠시 후 다시 시도해주세요.",
+      };
     }
 
     console.error(
