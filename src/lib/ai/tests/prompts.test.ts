@@ -198,6 +198,38 @@ describe("buildQuizPrompt", () => {
     });
   });
 
+  describe("출력 주의사항", () => {
+    it("모든 유형에서 마크다운 서식을 금지한다", () => {
+      for (const quizType of ["ox", "blank", "choice"] as const) {
+        const prompt = buildQuizPrompt("제목", "내용", MAX, quizType);
+
+        expect(prompt).toContain("## 출력 주의사항");
+        expect(prompt).toContain("마크다운 서식을 쓰지 마세요");
+      }
+    });
+
+    it("빈칸 채우기는 나열 항목 중 하나를 묻지 못하게 막는다", () => {
+      const prompt = buildQuizPrompt("제목", "내용", MAX, "blank");
+
+      expect(prompt).toContain("정답이 하나로 정해져야 합니다");
+      expect(prompt).toContain("중 하나는 ____이다");
+    });
+
+    it("객관식은 나열 항목을 선택지에 함께 넣지 못하게 막는다", () => {
+      const prompt = buildQuizPrompt("제목", "내용", MAX, "choice");
+
+      expect(prompt).toContain("둘 이상을 한 문항의 선택지에 함께 넣지 마세요");
+    });
+
+    // OX는 답이 true/false뿐이라 유일성 지시가 군더더기다.
+    it("OX에는 유일성 지시를 넣지 않는다", () => {
+      const prompt = buildQuizPrompt("제목", "내용", MAX, "ox");
+
+      expect(prompt).not.toContain("정답이 하나로 정해져야 합니다");
+      expect(prompt).not.toContain("선택지에 함께 넣지 마세요");
+    });
+  });
+
   describe("이미 출제된 문제", () => {
     it("이전 문제를 목록으로 넣고 재출제를 금지한다", () => {
       const prompt = buildQuizPrompt("제목", "내용", MAX, "ox", {
@@ -276,16 +308,42 @@ describe("pickPerspective", () => {
   });
 
   it("정의된 관점 중 하나를 반환한다", () => {
-    expect(QUIZ_PERSPECTIVES).toContain(pickPerspective());
+    expect(QUIZ_PERSPECTIVES).toContain(pickPerspective("ox"));
   });
 
   it("난수에 따라 다른 관점을 고른다", () => {
     vi.spyOn(Math, "random").mockReturnValue(0);
-    expect(pickPerspective()).toBe(QUIZ_PERSPECTIVES[0]);
+    expect(pickPerspective("ox")).toBe(QUIZ_PERSPECTIVES[0]);
 
     vi.spyOn(Math, "random").mockReturnValue(0.99);
-    expect(pickPerspective()).toBe(
+    expect(pickPerspective("ox")).toBe(
       QUIZ_PERSPECTIVES[QUIZ_PERSPECTIVES.length - 1],
     );
+  });
+
+  // 답이 절이 될 수밖에 없는 관점이 걸리면 빈칸이 서술형이 된다.
+  it("빈칸 채우기는 답이 한 단어로 떨어지는 관점만 고른다", () => {
+    const excluded = ["구분과 비교", "인과와 이유", "적용과 판단"];
+
+    for (const value of [0, 0.2, 0.4, 0.6, 0.8, 0.99]) {
+      vi.spyOn(Math, "random").mockReturnValue(value);
+
+      const perspective = pickPerspective("blank");
+
+      expect(QUIZ_PERSPECTIVES).toContain(perspective);
+      expect(excluded.some((axis) => perspective.startsWith(axis))).toBe(false);
+    }
+  });
+
+  it("OX·객관식은 관점을 걸러내지 않는다", () => {
+    const picked = new Set<string>();
+
+    for (const value of [0, 0.2, 0.4, 0.6, 0.8, 0.99]) {
+      vi.spyOn(Math, "random").mockReturnValue(value);
+      picked.add(pickPerspective("ox"));
+      picked.add(pickPerspective("choice"));
+    }
+
+    expect(picked.size).toBe(QUIZ_PERSPECTIVES.length);
   });
 });

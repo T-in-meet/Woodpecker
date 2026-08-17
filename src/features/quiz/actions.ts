@@ -29,10 +29,15 @@ const noteIdSchema = z.string().uuid();
 /**
  * 재생성은 온도를 더 올린다.
  * 이미 한 번 본 퀴즈와 달라지는 것이 정확도보다 중요하기 때문이다.
+ *
+ * 다만 온도를 다양성의 주된 수단으로 쓰지는 않는다. 매번 다른 퀴즈가 나오게 하는 장치는
+ * 이미 둘 있다 — 요청마다 바뀌는 출제 관점과 프롬프트에 실리는 "이미 출제된 문제" 목록.
+ * 퀴즈 생성은 노트 안에서 근거를 찾아 옮기는 작업이라 온도를 올리면 표현이 튀고
+ * 노트 밖으로 새기만 한다. 그래서 1.0/1.2에서 내렸다.
  */
 const TEMPERATURE = {
-  initial: 1.0,
-  regenerate: 1.2,
+  initial: 0.7,
+  regenerate: 0.9,
 } as const;
 
 /**
@@ -155,7 +160,7 @@ async function requestQuestions(
     getMaxQuestions(content.length),
     quizType,
     {
-      perspective: pickPerspective(),
+      perspective: pickPerspective(quizType),
       previousQuestions,
     },
   );

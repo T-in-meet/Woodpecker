@@ -56,6 +56,9 @@ ${QUESTION_COUNT_RULE}
 ${QUESTION_COUNT_RULE}
 4. 각 문제에 간단한 해설을 포함하세요.
 5. 노트 원본 문장에서 핵심 키워드를 ____로 대체하세요. question에는 반드시 ____가 들어가야 합니다.
+   - 빈칸은 한 단어 또는 짧은 어구(용어) 수준으로 만드세요. 절 전체나 서술형 문장을 빈칸으로 만들지 마세요.
+   - 노트 문장이 "용어란 정의이다"처럼 용어 뒤에 긴 정의가 오는 형태라면, 정의를 빈칸으로 두지 말고 문장을 뒤집어 용어를 빈칸으로 만드세요.
+     예: "테스트란 프로그램이 의도한 대로 동작하는지 확인하는 과정이다" → "프로그램이 의도한 대로 동작하는지 확인하는 과정을 ____라고 한다."
 6. acceptedAnswers에는 정답과 같은 뜻으로 인정할 표기를 빠짐없이 넣으세요.
    - 영어 원어와 한글 표기를 반드시 서로 포함하세요. (레지스터 → register / register → 레지스터)
    - 한글 음차 표기가 여럿이면 모두 넣으세요. (clock → 클럭, 클락, 클록)
@@ -109,31 +112,95 @@ ${QUESTION_COUNT_RULE}
 }`,
 };
 
+const PERSPECTIVE = {
+  definition:
+    "정의와 용어 — 개념이 무엇을 뜻하는지, 용어가 무엇을 가리키는지 묻습니다.",
+  contrast:
+    "구분과 비교 — 노트에 함께 나오는 개념들 사이의 차이나 관계를 묻습니다.",
+  causation:
+    "인과와 이유 — 왜 그렇게 되는지, 무엇 때문에 그런 결과가 나오는지 묻습니다.",
+  procedure:
+    "절차와 순서 — 어떤 단계를 거치는지, 무엇이 먼저이고 무엇이 나중인지 묻습니다.",
+  composition:
+    "역할과 구성 — 각 요소가 무엇을 담당하는지, 무엇으로 이루어져 있는지 묻습니다.",
+  application:
+    "적용과 판단 — 노트 내용을 구체적인 상황에 대입하면 어떻게 되는지 묻습니다.",
+} as const;
+
 /**
  * 출제 관점 축. 요청마다 하나를 무작위로 골라 프롬프트에 넣는다.
  * 프롬프트가 매번 완전히 같으면 모델이 늘 같은 출제 지점으로 수렴해서
  * 문장 표현과 어미만 다른 퀴즈가 반복되기 때문이다.
  */
 export const QUIZ_PERSPECTIVES = [
-  "정의와 용어 — 개념이 무엇을 뜻하는지, 용어가 무엇을 가리키는지 묻습니다.",
-  "구분과 비교 — 노트에 함께 나오는 개념들 사이의 차이나 관계를 묻습니다.",
-  "인과와 이유 — 왜 그렇게 되는지, 무엇 때문에 그런 결과가 나오는지 묻습니다.",
-  "절차와 순서 — 어떤 단계를 거치는지, 무엇이 먼저이고 무엇이 나중인지 묻습니다.",
-  "역할과 구성 — 각 요소가 무엇을 담당하는지, 무엇으로 이루어져 있는지 묻습니다.",
-  "적용과 판단 — 노트 내용을 구체적인 상황에 대입하면 어떻게 되는지 묻습니다.",
+  PERSPECTIVE.definition,
+  PERSPECTIVE.contrast,
+  PERSPECTIVE.causation,
+  PERSPECTIVE.procedure,
+  PERSPECTIVE.composition,
+  PERSPECTIVE.application,
 ] as const;
 
 export type QuizPerspective = (typeof QUIZ_PERSPECTIVES)[number];
 
-export function pickPerspective(): QuizPerspective {
-  const index = Math.floor(Math.random() * QUIZ_PERSPECTIVES.length);
-  return QUIZ_PERSPECTIVES[index] ?? QUIZ_PERSPECTIVES[0];
+/**
+ * 빈칸 채우기에 쓰는 관점만 따로 추린다.
+ *
+ * 나머지 셋(구분과 비교·인과와 이유·적용과 판단)은 답이 절이나 문장이 될 수밖에 없어
+ * "빈칸은 한 단어나 짧은 어구"라는 규칙과 정면으로 부딪힌다. 관점 섹션은 유형 규칙보다
+ * 뒤에 붙고 뒤에 놓인 지시가 더 잘 지켜지므로, 규칙으로 누르는 대신 후보에서 뺀다.
+ *
+ * 관점을 새로 추가할 때는 그 관점의 답이 한 단어로 떨어지는지 보고 여기 넣을지 정한다.
+ */
+const BLANK_PERSPECTIVES = [
+  PERSPECTIVE.definition,
+  PERSPECTIVE.procedure,
+  PERSPECTIVE.composition,
+] as const;
+
+const PERSPECTIVES_BY_TYPE: Record<QuizType, readonly QuizPerspective[]> = {
+  ox: QUIZ_PERSPECTIVES,
+  blank: BLANK_PERSPECTIVES,
+  choice: QUIZ_PERSPECTIVES,
+};
+
+export function pickPerspective(quizType: QuizType): QuizPerspective {
+  const pool = PERSPECTIVES_BY_TYPE[quizType];
+  const index = Math.floor(Math.random() * pool.length);
+  return pool[index] ?? QUIZ_PERSPECTIVES[0];
 }
 
 export type QuizPromptOptions = {
   perspective?: QuizPerspective;
   previousQuestions?: readonly string[];
 };
+
+/**
+ * 유형 규칙만으로는 막지 못한 두 가지를 노트·규칙 뒤에서 한 번 더 못박는다.
+ *
+ * - 마크다운: 노트 본문이 마크다운이라 모델이 그 문체를 따라 해설에 `**`를 섞는다.
+ *   카드 세 종류 모두 해설을 평문으로 렌더하므로 기호가 화면에 그대로 보인다.
+ * - 정답의 유일성: 노트에 나열된 항목 중 하나만 정답으로 박으면, 나머지를 답한
+ *   사용자가 오답 처리된다. 채점은 정확 일치라 앱에서 구제할 방법이 없다.
+ *   동의 표기 문제가 아니라 정답이 여럿인 문제라 acceptedAnswers로도 못 막는다.
+ */
+function buildOutputCautionSection(quizType: QuizType): string {
+  const uniquenessRules: Record<QuizType, string> = {
+    // OX는 답이 true/false뿐이라 유일성 문제가 생기지 않는다.
+    ox: "",
+    blank: `
+- 빈칸을 뚫고 남은 문맥만으로 정답이 하나로 정해져야 합니다. 답이 될 수 있는 것이 둘 이상이면 그 문항을 만들지 마세요.
+- 노트에 "A, B, C가 있다"처럼 항목이 나열돼 있으면 그중 하나를 묻는 문제("~ 중 하나는 ____이다")를 만들지 마세요. 어느 것을 답해도 맞아야 하는데 정답은 하나만 적을 수 있습니다.
+- 나열을 꼭 묻고 싶으면 항목 전체가 답이 되도록 만들거나, 그 문장은 건너뛰고 다른 곳에서 출제하세요.`,
+    choice: `
+- 노트에 나열된 항목 중 둘 이상을 한 문항의 선택지에 함께 넣지 마세요. 둘 다 정답이 되어 정답이 하나로 정해지지 않습니다.`,
+  };
+
+  return `
+
+## 출력 주의사항
+- question·answer·explanation에 마크다운 서식을 쓰지 마세요. 화면에 평문으로 표시되므로 **, \`, #, - 같은 기호가 그대로 보입니다. 강조가 필요하면 문장으로 풀어 쓰세요.${uniquenessRules[quizType]}`;
+}
 
 function buildPerspectiveSection(perspective?: QuizPerspective): string {
   if (!perspective) {
@@ -181,12 +248,13 @@ export function buildQuizPrompt(
   quizType: QuizType,
   options: QuizPromptOptions = {},
 ): string {
-  const rules = QUIZ_TYPE_RULES[quizType].replace(
+  const rules = QUIZ_TYPE_RULES[quizType].replaceAll(
     "${maxQuestions}",
     String(maxQuestions),
   );
 
   const trailingSections =
+    buildOutputCautionSection(quizType) +
     buildPerspectiveSection(options.perspective) +
     buildPreviousQuestionsSection(quizType, options.previousQuestions);
 
