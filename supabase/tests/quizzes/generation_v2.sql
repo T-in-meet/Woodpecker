@@ -423,7 +423,7 @@ SELECT
   'daily_' || i,
   now() - interval '2 minutes',
   now() - interval '2 minutes'
-FROM generate_series(1, 3) AS i;
+FROM generate_series(1, 5) AS i;
 
 SELECT is(
   public.claim_quiz_generation_v2(
@@ -432,7 +432,7 @@ SELECT is(
     'daily_probe'
   ) ->> 'status',
   'daily_exceeded',
-  $$완료된 행 3건도 일일 한도에 포함돼야 한다$$
+  $$완료된 행 5건도 일일 한도에 포함돼야 한다$$
 );
 
 SELECT * FROM finish();
