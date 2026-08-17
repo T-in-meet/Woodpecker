@@ -67,6 +67,7 @@ describe("matchAiEmbeddings", () => {
     const rpc = vi.fn().mockResolvedValue({
       data: [
         {
+          chunk_index: 0,
           distance: 0,
           embedding_id: "22222222-2222-4222-8222-222222222222",
           similarity: 1,
@@ -101,6 +102,7 @@ describe("matchAiEmbeddings", () => {
 
     expect(result).toEqual([
       {
+        chunk_index: 0,
         distance: 0,
         embedding_id: "22222222-2222-4222-8222-222222222222",
         similarity: 1,

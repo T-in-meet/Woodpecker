@@ -83,9 +83,9 @@ type PrepareNoteChatExecutionParams = {
  * 2. 현재 사용자 메시지에서 질문을 추출합니다.
  * 3. 이전 대화 이력을 바탕으로 문맥 기반 검색 질의를 확장합니다.
  * 4. Runtime Embedding Model로 확장 질의 Embedding을 생성합니다.
- * 5. 현재 사용자의 유사한 Note Embedding을 검색합니다.
- * 6. 검색된 Embedding에 해당하는 실제 노트를 조회합니다.
- * 7. 검색된 노트로 Prompt Context와 Source Snapshot을 구성합니다.
+ * 5. 현재 사용자의 활성 Note chunk Embedding을 검색합니다.
+ * 6. 검색된 Embedding에 해당하는 Note와 chunk snapshot을 조회합니다.
+ * 7. 검색된 Note chunk로 Prompt Context와 Source Snapshot을 구성합니다.
  * 8. Runtime Prompt Template에 원본 question과 context를 전달하여
  *    Provider 메시지를 생성합니다.
  *
@@ -222,8 +222,18 @@ export async function prepareNoteChatExecution(
   });
 
   /*
-   * 검색 후보 중 유사도가 높은 순서대로
-   * 실제 Prompt Context에 사용할 노트만 선택합니다.
+   * match_ai_embeddings는 청킹 도입 이후 Note가 아니라 chunk 단위로
+   * 유사도 Top-K를 반환합니다.
+   *
+   * 따라서 NOTE_CHAT_CONTEXT_LIMIT 역시 현재 Note 개수가 아니라
+   * 최종 Prompt Context에 포함할 최대 chunk 개수로 적용합니다.
+   *
+   * 같은 Note에서 여러 관련 chunk가 검색된 경우에도 Note Chat에서는
+   * 임의로 source_id 기준 중복 제거하지 않습니다. 실제 질문과 관련된
+   * 여러 구간을 Context에 제공하는 것이 RAG 답변 생성 목적에 맞기 때문입니다.
+   *
+   * Note 단위 결과가 필요한 관련 노트 추천 등의 기능은 이 공통 검색 결과를
+   * 사용하는 각 호출 계층에서 별도의 dedup 정책을 적용합니다.
    */
   const contextNotes = matchedNotes.slice(0, NOTE_CHAT_CONTEXT_LIMIT);
 

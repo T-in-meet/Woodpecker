@@ -9,10 +9,10 @@ export type AiEmbeddingRow = z.infer<typeof aiEmbeddingRowSchema>;
 export type AiEmbeddingMatchRow = z.infer<typeof aiEmbeddingMatchRowSchema>;
 
 /**
- * AI embedding cache 식별 정보와 embedding 생성 당시의 입력 snapshot입니다.
+ * AI embedding row 저장에 필요한 식별 정보와 입력 snapshot입니다.
  *
- * cache 조회에는 식별 필드가 사용되고, 삽입 시에는 hash와 원문 및 preview가
- * 함께 저장되어 embedding 생성 입력을 추적할 수 있도록 합니다.
+ * generationId는 한 번의 재인덱싱에서 생성된 chunk 세트를 식별하고,
+ * chunkIndex/chunkCount는 해당 generation 안에서의 위치와 전체 개수를 나타냅니다.
  */
 export type AiEmbeddingInput = {
   ownerUserId: string;
@@ -24,4 +24,7 @@ export type AiEmbeddingInput = {
   inputHash: string;
   inputText: string;
   inputPreview: string;
+  generationId: string;
+  chunkIndex: number;
+  chunkCount: number;
 };

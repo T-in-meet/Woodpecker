@@ -4,15 +4,36 @@
 
 BEGIN;
 
--- 이 테스트는 match_ai_embeddings RPC의 권한, 최신 embedding 선택,
+-- 이 테스트는 match_ai_embeddings RPC의 권한,
+-- 활성 generation의 chunk 검색,
 -- limit, similarity 보정, source/input 범위 필터링을 함께 검증합니다.
-SELECT plan(10);
+SELECT plan(12);
 
 -- 테스트마다 독립적인 사용자/모델/소스 식별자를 사용합니다.
--- Models 단계부터 ai_embeddings.model_config_id가 ai_model_configs를
--- 참조하므로 테스트 전용 모델 식별자를 준비합니다.
 SELECT set_config('test.ai_match_user_id', gen_random_uuid()::text, true);
 SELECT set_config('test.ai_match_model_id', gen_random_uuid()::text, true);
+SELECT set_config('test.ai_match_source_a', gen_random_uuid()::text, true);
+SELECT set_config('test.ai_match_source_b', gen_random_uuid()::text, true);
+
+-- source A의 비활성 과거 generation과 활성 현재 generation,
+-- source B의 활성 generation을 각각 준비합니다.
+SELECT set_config(
+  'test.ai_match_generation_a_old',
+  gen_random_uuid()::text,
+  true
+);
+
+SELECT set_config(
+  'test.ai_match_generation_a_active',
+  gen_random_uuid()::text,
+  true
+);
+
+SELECT set_config(
+  'test.ai_match_generation_b_active',
+  gen_random_uuid()::text,
+  true
+);
 
 -- Models 단계부터 ai_embeddings.model_config_id가 ai_model_configs를
 -- 참조하므로 테스트 전용 Embedding 모델 fixture를 생성합니다.
@@ -35,12 +56,13 @@ VALUES (
   'cosine'
 );
 
-SELECT set_config('test.ai_match_source_a', gen_random_uuid()::text, true);
-SELECT set_config('test.ai_match_source_b', gen_random_uuid()::text, true);
-
 -- ai_embeddings.owner_user_id Foreign Key를 만족시키기 위한
 -- 테스트 전용 Auth 사용자 fixture를 생성합니다.
-INSERT INTO auth.users (id, email, email_confirmed_at)
+INSERT INTO auth.users (
+  id,
+  email,
+  email_confirmed_at
+)
 VALUES (
   current_setting('test.ai_match_user_id')::uuid,
   'ai_match_' || current_setting('test.ai_match_user_id') || '@example.com',
@@ -86,8 +108,8 @@ SELECT ok(
   'service_role should execute match_ai_embeddings()'
 );
 
--- 동일 source에 과거/최신 embedding을 함께 저장하고,
--- 다른 source의 embedding도 추가해 최신본 선택과 거리 정렬을 검증합니다.
+-- source A에는 비활성 과거 세대와 활성 현재 세대를 함께 저장하고,
+-- source B에도 활성 세대를 저장해 활성 세대 필터와 chunk 거리 정렬을 검증합니다.
 INSERT INTO public.ai_embeddings (
   owner_user_id,
   source_type,
@@ -99,6 +121,9 @@ INSERT INTO public.ai_embeddings (
   input_text,
   input_preview,
   embedding,
+  chunk_index,
+  chunk_count,
+  generation_id,
   created_at
 )
 VALUES
@@ -117,6 +142,9 @@ VALUES
     || array_to_string(array_fill(0, ARRAY[1535]), ',')
     || ']'
   )::extensions.vector,
+  0,
+  1,
+  current_setting('test.ai_match_generation_a_old')::uuid,
   now() - interval '1 minute'
 ),
 (
@@ -125,15 +153,38 @@ VALUES
   current_setting('test.ai_match_source_a')::uuid,
   current_setting('test.ai_match_model_id')::uuid,
   'rag_note_content',
-  'source-a-new',
-  'source-a-new-input',
-  'source a new',
-  'source a new',
+  'source-a-active-0',
+  'source-a-active-0-input',
+  'source a active chunk 0',
+  'source a active chunk 0',
   (
     '[0,1,'
     || array_to_string(array_fill(0, ARRAY[1534]), ',')
     || ']'
   )::extensions.vector,
+  0,
+  2,
+  current_setting('test.ai_match_generation_a_active')::uuid,
+  now()
+),
+(
+  current_setting('test.ai_match_user_id')::uuid,
+  'note',
+  current_setting('test.ai_match_source_a')::uuid,
+  current_setting('test.ai_match_model_id')::uuid,
+  'rag_note_content',
+  'source-a-active-1',
+  'source-a-active-1-input',
+  'source a active chunk 1',
+  'source a active chunk 1',
+  (
+    '[1,'
+    || array_to_string(array_fill(0, ARRAY[1535]), ',')
+    || ']'
+  )::extensions.vector,
+  1,
+  2,
+  current_setting('test.ai_match_generation_a_active')::uuid,
   now()
 ),
 (
@@ -147,14 +198,45 @@ VALUES
   'source b',
   'source b',
   (
-    '[1,'
-    || array_to_string(array_fill(0, ARRAY[1535]), ',')
+    '[0.9,0.1,'
+    || array_to_string(array_fill(0, ARRAY[1534]), ',')
     || ']'
   )::extensions.vector,
+  0,
+  1,
+  current_setting('test.ai_match_generation_b_active')::uuid,
   now()
 );
 
--- source별로 가장 최신 embedding 하나만 후보에 포함되는지 검증합니다.
+-- source A/B의 현재 활성 model/generation을 등록합니다.
+INSERT INTO public.ai_embedding_active_generations (
+  owner_user_id,
+  source_type,
+  source_id,
+  input_kind,
+  active_model_config_id,
+  active_generation_id
+)
+VALUES
+(
+  current_setting('test.ai_match_user_id')::uuid,
+  'note',
+  current_setting('test.ai_match_source_a')::uuid,
+  'rag_note_content',
+  current_setting('test.ai_match_model_id')::uuid,
+  current_setting('test.ai_match_generation_a_active')::uuid
+),
+(
+  current_setting('test.ai_match_user_id')::uuid,
+  'note',
+  current_setting('test.ai_match_source_b')::uuid,
+  'rag_note_content',
+  current_setting('test.ai_match_model_id')::uuid,
+  current_setting('test.ai_match_generation_b_active')::uuid
+);
+
+-- 비활성 generation은 제외하고,
+-- 각 source의 활성 generation에 속한 모든 chunk가 검색되는지 검증합니다.
 SELECT is(
   (
     SELECT count(*)
@@ -172,15 +254,41 @@ SELECT is(
       NULL
     )
   ),
-  2::bigint,
-  'match should return at most one latest embedding per source'
+  3::bigint,
+  'match should return chunks only from active generations'
 );
 
--- 같은 source에 여러 embedding이 있을 때 created_at/id 기준
--- 최신 embedding이 실제 검색 결과로 선택되는지 검증합니다.
+-- 같은 source의 비활성 과거 generation은 검색 결과에서 제외되는지 검증합니다.
 SELECT is(
   (
-    SELECT embedding_id
+    SELECT count(*)
+    FROM public.match_ai_embeddings(
+      (
+        '[1,'
+        || array_to_string(array_fill(0, ARRAY[1535]), ',')
+        || ']'
+      )::extensions.vector,
+      current_setting('test.ai_match_user_id')::uuid,
+      'note',
+      current_setting('test.ai_match_model_id')::uuid,
+      'rag_note_content',
+      10,
+      NULL
+    ) AS matched
+    JOIN public.ai_embeddings AS embedding
+      ON embedding.id = matched.embedding_id
+    WHERE embedding.generation_id =
+      current_setting('test.ai_match_generation_a_old')::uuid
+  ),
+  0::bigint,
+  'match should exclude chunks from inactive generations'
+);
+
+-- 동일 source의 활성 generation에 여러 chunk가 있어도
+-- source 단위로 합치지 않고 각각의 chunk를 검색 결과로 반환하는지 검증합니다.
+SELECT is(
+  (
+    SELECT count(*)
     FROM public.match_ai_embeddings(
       (
         '[1,'
@@ -194,22 +302,17 @@ SELECT is(
       10,
       NULL
     )
-    WHERE source_id = current_setting('test.ai_match_source_a')::uuid
+    WHERE source_id =
+      current_setting('test.ai_match_source_a')::uuid
   ),
-  (
-    SELECT id
-    FROM public.ai_embeddings
-    WHERE source_id = current_setting('test.ai_match_source_a')::uuid
-    ORDER BY created_at DESC, id DESC
-    LIMIT 1
-  ),
-  'match should use the latest embedding for a source'
+  2::bigint,
+  'match should return multiple active chunks from the same source'
 );
 
--- limit이 거리 정렬 이후의 최종 결과 개수를 제한하는지 검증합니다.
+-- 가장 가까운 embedding과 함께 해당 청크의 chunk_index가 반환되는지 검증합니다.
 SELECT is(
   (
-    SELECT source_id
+    SELECT chunk_index
     FROM public.match_ai_embeddings(
       (
         '[1,'
@@ -224,8 +327,36 @@ SELECT is(
       NULL
     )
   ),
-  current_setting('test.ai_match_source_b')::uuid,
-  'limit should restrict results ordered by distance'
+  1,
+  'match should return the matched chunk index'
+);
+
+-- limit이 거리 정렬 이후 반환할 chunk 개수를 제한하는지 검증합니다.
+SELECT is(
+  (
+    SELECT embedding_id
+    FROM public.match_ai_embeddings(
+      (
+        '[1,'
+        || array_to_string(array_fill(0, ARRAY[1535]), ',')
+        || ']'
+      )::extensions.vector,
+      current_setting('test.ai_match_user_id')::uuid,
+      'note',
+      current_setting('test.ai_match_model_id')::uuid,
+      'rag_note_content',
+      1,
+      NULL
+    )
+  ),
+  (
+    SELECT id
+    FROM public.ai_embeddings
+    WHERE generation_id =
+      current_setting('test.ai_match_generation_a_active')::uuid
+      AND chunk_index = 1
+  ),
+  'limit should restrict chunk results ordered by distance'
 );
 
 -- min_similarity가 허용 범위인 1을 초과하면

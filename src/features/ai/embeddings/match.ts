@@ -79,10 +79,6 @@ export async function matchAiEmbeddings(
     p_owner_user_id: params.ownerUserId,
     p_query_embedding: formatAiVectorLiteral(params.queryEmbedding),
     p_source_type: params.sourceType,
-    ...(params.limit !== undefined ? { p_limit: params.limit } : {}),
-    ...(params.minSimilarity != null
-      ? { p_min_similarity: params.minSimilarity }
-      : {}),
   };
 
   const { data, error } = await supabase.rpc("match_ai_embeddings", rpcArgs);

@@ -77,7 +77,28 @@ export async function createNoteAction(
   }
 
   try {
-    // Note가 DB에 정상 저장된 이후 동일한 Note 내용을 RAG embedding으로 저장한다.
+    /*
+     * 생성된 Note의 현재 snapshot을 DB에서 다시 조회합니다.
+     *
+     * embedding에 사용할 title/content와 sourceUpdatedAt을 같은 DB row에서
+     * 가져와 서로 다른 Note version의 값이 섞이지 않도록 합니다.
+     *
+     * 조회 이후 Note가 다시 수정되더라도 activation RPC가 updated_at을
+     * 검증하므로 오래된 generation은 활성화되지 않습니다.
+     */
+    const { data: embeddingSource, error: embeddingSourceError } =
+      await supabase
+        .from("notes")
+        .select("id, title, content, updated_at")
+        .eq("id", newNoteId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+    if (embeddingSourceError || !embeddingSource) {
+      throw new Error("Failed to load created Note for embedding.");
+    }
+
+    // Note가 DB에 정상 저장된 이후 동일한 Note snapshot을 RAG embedding으로 저장한다.
     // Note Chat의 검색 대상 embedding과 동일한 Runtime 설정을 사용한다.
     const embeddingConfiguration = await resolveAiRuntimeEmbeddingConfiguration(
       {
@@ -89,9 +110,10 @@ export async function createNoteAction(
     await generateNoteEmbedding({
       embeddingConfiguration,
       ownerUserId: user.id,
-      noteId: newNoteId,
-      title: parsed.data.title,
-      content: parsed.data.content,
+      noteId: embeddingSource.id,
+      sourceUpdatedAt: embeddingSource.updated_at,
+      title: embeddingSource.title,
+      content: embeddingSource.content,
     });
   } catch {
     // Note 저장은 이미 성공했으므로 embedding 실패가 Note 생성 결과에 영향을 주지 않도록 한다.
@@ -145,12 +167,18 @@ export async function updateNoteAction(
     redirect(`${ROUTES.RESEND_EMAIL}?purpose=signup`);
   }
 
+  /*
+   * UPDATE가 실제로 저장한 Note snapshot을 그대로 반환받습니다.
+   *
+   * 이후 embedding에는 이 row의 title/content/updated_at을 함께 사용하여
+   * generation이 어떤 Note version에서 만들어졌는지 일관되게 유지합니다.
+   */
   const { data: updatedNote, error } = await supabase
     .from("notes")
     .update({ title: parsed.data.title, content: parsed.data.content })
     .eq("id", parsedNoteId.data)
     .eq("user_id", user.id)
-    .select("id")
+    .select("id, title, content, updated_at")
     .maybeSingle();
 
   if (error) {
@@ -175,8 +203,9 @@ export async function updateNoteAction(
       embeddingConfiguration,
       ownerUserId: user.id,
       noteId: updatedNote.id,
-      title: parsed.data.title,
-      content: parsed.data.content,
+      sourceUpdatedAt: updatedNote.updated_at,
+      title: updatedNote.title,
+      content: updatedNote.content,
     });
   } catch {
     // Note 수정은 이미 성공했으므로 embedding 실패가 Note 수정 결과에 영향을 주지 않도록 한다.

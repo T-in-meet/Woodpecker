@@ -9,7 +9,7 @@ import {
 import { AI_EMBEDDING_DIMENSIONS } from "../../constants/embeddings";
 import { reportAiOperationalError } from "../../utils/report-ai-operational-error";
 import {
-  deleteAiEmbeddingsBySource,
+  deleteInactiveAiEmbeddingGeneration,
   getAiEmbeddingCache,
   insertAiEmbedding,
 } from "../cache";
@@ -23,8 +23,13 @@ type CacheSupabase = NonNullable<
   Parameters<typeof getAiEmbeddingCache>[1]
 >["supabase"];
 
+const GENERATION_ID = "55555555-5555-4555-8555-555555555555";
+
 const CACHE_INPUT = {
+  chunkCount: 2,
+  chunkIndex: 0,
   contentHash: "content-hash",
+  generationId: GENERATION_ID,
   inputHash: "input-hash",
   inputKind: "rag_note_content",
   inputPreview: "preview",
@@ -36,9 +41,12 @@ const CACHE_INPUT = {
 };
 
 const CACHE_ROW = {
+  chunk_count: 2,
+  chunk_index: 0,
   content_hash: "content-hash",
   created_at: "2026-08-03T00:00:00.000Z",
   embedding: "[0,0]",
+  generation_id: GENERATION_ID,
   id: "33333333-3333-4333-8333-333333333333",
   input_hash: "input-hash",
   input_kind: "rag_note_content",
@@ -58,9 +66,10 @@ function createVector(value: number) {
 function createCacheReadSupabase(data: unknown, error: unknown = null) {
   const maybeSingle = vi.fn().mockResolvedValue({ data, error });
 
-  const eq6 = vi.fn().mockReturnValue({ maybeSingle });
-  const eq5 = vi.fn().mockReturnValue({ eq: eq6 });
-  const eq4 = vi.fn().mockReturnValue({ eq: eq5 });
+  const limit = vi.fn().mockReturnValue({ maybeSingle });
+  const order = vi.fn().mockReturnValue({ limit });
+
+  const eq4 = vi.fn().mockReturnValue({ order });
   const eq3 = vi.fn().mockReturnValue({ eq: eq4 });
   const eq2 = vi.fn().mockReturnValue({ eq: eq3 });
   const eq1 = vi.fn().mockReturnValue({ eq: eq2 });
@@ -69,9 +78,11 @@ function createCacheReadSupabase(data: unknown, error: unknown = null) {
   const from = vi.fn().mockReturnValue({ select });
 
   return {
-    eqMocks: [eq1, eq2, eq3, eq4, eq5, eq6],
+    eqMocks: [eq1, eq2, eq3, eq4],
     from,
+    limit,
     maybeSingle,
+    order,
     select,
     supabase: {
       from,
@@ -101,8 +112,9 @@ describe("getAiEmbeddingCache", () => {
     vi.clearAllMocks();
   });
 
-  it("전체 cache key로 조회하고 일치하는 행을 반환한다", async () => {
-    const { eqMocks, from, supabase } = createCacheReadSupabase(CACHE_ROW);
+  it("동일 사용자·모델·입력 용도·입력의 최신 cache를 조회한다", async () => {
+    const { eqMocks, from, limit, order, supabase } =
+      createCacheReadSupabase(CACHE_ROW);
 
     const result = await getAiEmbeddingCache(CACHE_INPUT, { supabase });
 
@@ -113,22 +125,22 @@ describe("getAiEmbeddingCache", () => {
       CACHE_INPUT.ownerUserId,
     );
     expect(eqMocks[1]).toHaveBeenCalledWith(
-      "source_type",
-      CACHE_INPUT.sourceType,
-    );
-    expect(eqMocks[2]).toHaveBeenCalledWith("source_id", CACHE_INPUT.sourceId);
-    expect(eqMocks[3]).toHaveBeenCalledWith(
       "model_config_id",
       CACHE_INPUT.modelConfigId,
     );
-    expect(eqMocks[4]).toHaveBeenCalledWith(
+    expect(eqMocks[2]).toHaveBeenCalledWith(
       "input_kind",
       CACHE_INPUT.inputKind,
     );
-    expect(eqMocks[5]).toHaveBeenCalledWith(
-      "content_hash",
-      CACHE_INPUT.contentHash,
+    expect(eqMocks[3]).toHaveBeenCalledWith(
+      "input_hash",
+      CACHE_INPUT.inputHash,
     );
+
+    expect(order).toHaveBeenCalledWith("created_at", {
+      ascending: false,
+    });
+    expect(limit).toHaveBeenCalledWith(1);
 
     expect(result).toEqual(CACHE_ROW);
   });
@@ -179,7 +191,7 @@ describe("insertAiEmbedding", () => {
     vi.clearAllMocks();
   });
 
-  it("embedding과 cache 정보를 저장하고 반환 행을 검증한다", async () => {
+  it("embedding과 generation 및 chunk 정보를 저장하고 반환 행을 검증한다", async () => {
     const { insert, supabase } = createCacheInsertSupabase(CACHE_ROW);
     const vector = createVector(0);
 
@@ -193,8 +205,11 @@ describe("insertAiEmbedding", () => {
     );
 
     expect(insert).toHaveBeenCalledWith({
+      chunk_count: CACHE_INPUT.chunkCount,
+      chunk_index: CACHE_INPUT.chunkIndex,
       content_hash: CACHE_INPUT.contentHash,
       embedding: `[${vector.join(",")}]`,
+      generation_id: CACHE_INPUT.generationId,
       input_hash: CACHE_INPUT.inputHash,
       input_kind: CACHE_INPUT.inputKind,
       input_preview: CACHE_INPUT.inputPreview,
@@ -296,148 +311,82 @@ describe("insertAiEmbedding", () => {
 
     expect(insert).not.toHaveBeenCalled();
   });
+});
 
-  describe("deleteAiEmbeddingsBySource", () => {
-    beforeEach(() => {
-      vi.clearAllMocks();
+describe("deleteInactiveAiEmbeddingGeneration", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const input = {
+    generationId: CACHE_INPUT.generationId,
+    inputKind: CACHE_INPUT.inputKind,
+    modelConfigId: CACHE_INPUT.modelConfigId,
+    ownerUserId: CACHE_INPUT.ownerUserId,
+    sourceId: CACHE_INPUT.sourceId,
+    sourceType: CACHE_INPUT.sourceType,
+  };
+
+  it("비활성 generation cleanup RPC를 호출하고 삭제된 chunk 수를 반환한다", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: 2,
+      error: null,
     });
 
-    it("source와 input kind가 일치하는 기존 embedding을 삭제하고 삭제 개수를 반환한다", async () => {
-      const response = {
-        count: 2,
-        error: null,
-      };
-
-      const query = {
-        delete: vi.fn(),
-        eq: vi.fn(),
-        neq: vi.fn(),
-        then: (resolve: (value: typeof response) => unknown) =>
-          Promise.resolve(resolve(response)),
-      };
-
-      query.delete.mockReturnValue(query);
-      query.eq.mockReturnValue(query);
-      query.neq.mockReturnValue(query);
-
-      const supabase = {
-        from: vi.fn().mockReturnValue(query),
-      };
-
-      const result = await deleteAiEmbeddingsBySource(
-        {
-          ownerUserId: "user-id",
-          sourceType: "note",
-          sourceId: "note-id",
-          inputKind: "rag_note_content",
-        },
-        { supabase: supabase as never },
-      );
-
-      expect(result).toBe(2);
-
-      expect(supabase.from).toHaveBeenCalledWith("ai_embeddings");
-
-      expect(query.delete).toHaveBeenCalledWith({
-        count: "exact",
-      });
-
-      expect(query.eq).toHaveBeenNthCalledWith(1, "owner_user_id", "user-id");
-      expect(query.eq).toHaveBeenNthCalledWith(2, "source_type", "note");
-      expect(query.eq).toHaveBeenNthCalledWith(3, "source_id", "note-id");
-      expect(query.eq).toHaveBeenNthCalledWith(
-        4,
-        "input_kind",
-        "rag_note_content",
-      );
-
-      expect(query.neq).not.toHaveBeenCalled();
+    const result = await deleteInactiveAiEmbeddingGeneration(input, {
+      supabase: {
+        rpc,
+      } as never,
     });
 
-    it("excludeEmbeddingId가 있으면 해당 embedding을 삭제 대상에서 제외한다", async () => {
-      const response = {
-        count: 2,
-        error: null,
-      };
+    expect(rpc).toHaveBeenCalledWith(
+      "delete_inactive_ai_embedding_generation",
+      {
+        p_generation_id: input.generationId,
+        p_input_kind: input.inputKind,
+        p_model_config_id: input.modelConfigId,
+        p_owner_user_id: input.ownerUserId,
+        p_source_id: input.sourceId,
+        p_source_type: input.sourceType,
+      },
+    );
 
-      const query = {
-        delete: vi.fn(),
-        eq: vi.fn(),
-        neq: vi.fn(),
-        then: (resolve: (value: typeof response) => unknown) =>
-          Promise.resolve(resolve(response)),
-      };
+    expect(result).toBe(2);
+  });
 
-      query.delete.mockReturnValue(query);
-      query.eq.mockReturnValue(query);
-      query.neq.mockReturnValue(query);
+  it("cleanup RPC가 실패하면 운영 오류를 보고하고 예외를 발생시킨다", async () => {
+    const databaseError = {
+      message: "cleanup failed",
+    };
 
-      const supabase = {
-        from: vi.fn().mockReturnValue(query),
-      };
-
-      const result = await deleteAiEmbeddingsBySource(
-        {
-          ownerUserId: "user-id",
-          sourceType: "note",
-          sourceId: "note-id",
-          inputKind: "rag_note_content",
-          excludeEmbeddingId: "new-embedding-id",
-        },
-        { supabase: supabase as never },
-      );
-
-      expect(result).toBe(2);
-
-      expect(query.neq).toHaveBeenCalledWith("id", "new-embedding-id");
+    const rpc = vi.fn().mockResolvedValue({
+      data: null,
+      error: databaseError,
     });
 
-    it("삭제에 실패하면 operational error를 기록하고 오류를 발생시킨다", async () => {
-      const databaseError = {
-        message: "delete failed",
-      };
+    await expect(
+      deleteInactiveAiEmbeddingGeneration(input, {
+        supabase: {
+          rpc,
+        } as never,
+      }),
+    ).rejects.toThrow(
+      "Failed to delete inactive AI embedding generation: cleanup failed",
+    );
 
-      const response = {
-        count: null,
-        error: databaseError,
-      };
-
-      const query = {
-        delete: vi.fn(),
-        eq: vi.fn(),
-        neq: vi.fn(),
-        then: (resolve: (value: typeof response) => unknown) =>
-          Promise.resolve(resolve(response)),
-      };
-
-      query.delete.mockReturnValue(query);
-      query.eq.mockReturnValue(query);
-      query.neq.mockReturnValue(query);
-
-      const supabase = {
-        from: vi.fn().mockReturnValue(query),
-      };
-
-      await expect(
-        deleteAiEmbeddingsBySource(
-          {
-            ownerUserId: "user-id",
-            sourceType: "note",
-            sourceId: "note-id",
-            inputKind: "rag_note_content",
-            excludeEmbeddingId: "new-embedding-id",
-          },
-          { supabase: supabase as never },
-        ),
-      ).rejects.toThrow("Failed to delete AI embeddings: delete failed");
-
-      expect(reportAiOperationalError).toHaveBeenCalledWith({
-        error: databaseError,
-        errorCode: AI_OPERATIONAL_ERROR_CODE.EMBEDDING_DELETE_FAILED,
-        message: "AI embedding 삭제에 실패했습니다.",
-        operation: AI_OPERATIONAL_ERROR_OPERATION.DELETE_EMBEDDING,
-        stage: AI_OPERATIONAL_ERROR_STAGE.DATABASE,
-      });
+    expect(reportAiOperationalError).toHaveBeenCalledWith({
+      error: databaseError,
+      errorCode: AI_OPERATIONAL_ERROR_CODE.EMBEDDING_DELETE_FAILED,
+      message: "AI embedding generation 정리에 실패했습니다.",
+      operation: AI_OPERATIONAL_ERROR_OPERATION.DELETE_EMBEDDING,
+      stage: AI_OPERATIONAL_ERROR_STAGE.DATABASE,
+      context: {
+        generationId: input.generationId,
+        inputKind: input.inputKind,
+        modelConfigId: input.modelConfigId,
+        sourceId: input.sourceId,
+        sourceType: input.sourceType,
+      },
     });
   });
 });

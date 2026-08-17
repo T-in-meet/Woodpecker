@@ -14,10 +14,14 @@ import { reportAiOperationalError } from "../utils/report-ai-operational-error";
 import { getAiEmbeddingCache, insertAiEmbedding } from "./cache";
 import { createAiSha256Hash } from "./hash";
 import type { AiEmbeddingRow } from "./types";
+import { parseAiVectorLiteral } from "./vector";
 
 type GenerateAiEmbeddingParams = {
   /** Embedding Runtime Configuration입니다. */
   embeddingConfiguration: AiRuntimeEmbeddingConfiguration;
+
+  /** Embedding 원본 콘텐츠 버전을 식별하는 hash입니다. */
+  contentHash: string;
 
   /** Embedding을 생성하는 사용자의 ID입니다. */
   ownerUserId: string;
@@ -36,13 +40,24 @@ type GenerateAiEmbeddingParams = {
 
   /** 관리 화면이나 디버깅에서 사용할 입력 미리보기입니다. */
   inputPreview: string;
+
+  /** 이번 재인덱싱에서 생성되는 embedding 세대 ID입니다. */
+  generationId: string;
+
+  /** 현재 입력이 generation 안에서 몇 번째 chunk인지 나타냅니다. */
+  chunkIndex: number;
+
+  /** 현재 generation을 구성하는 전체 chunk 개수입니다. */
+  chunkCount: number;
 };
 
 /**
- * Embedding 입력을 생성하거나 기존 cache를 재사용합니다.
+ * Embedding 입력을 생성하거나 기존 vector cache를 재사용하여
+ * 새 generation의 chunk embedding row를 저장합니다.
  *
- * Runtime에서 확정된 Embedding Model을 사용하여 cache를 조회하고,
- * cache가 없는 경우에만 Provider를 호출하여 새로운 embedding을 저장합니다.
+ * Runtime에서 확정된 Embedding Model과 입력 hash로 기존 embedding vector를
+ * 조회하며, cache hit 시 Provider 호출만 생략하고 기존 row 자체는 재사용하지
+ * 않습니다. 재사용한 vector도 현재 generation/chunk 정보로 새 row에 저장합니다.
  *
  * Provider API key 누락과 Embedding Model dimensions 누락은
  * Provider 호출 전에 검증하여 운영 오류로 기록합니다.
@@ -51,30 +66,38 @@ type GenerateAiEmbeddingParams = {
  * cache 조회 및 저장 실패는 cache 계층에서 각각 운영 오류를 기록하므로
  * 이 함수에서는 동일 오류를 중복 보고하지 않습니다.
  *
- * @param params Embedding 생성에 필요한 Runtime Configuration과 입력 정보입니다.
- * @returns 기존 또는 새로 생성된 AI embedding cache 행입니다.
+ * @param params Embedding 생성에 필요한 Runtime Configuration과 입력 및 chunk 정보입니다.
+ * @returns 현재 generation에 새로 저장된 AI embedding row입니다.
  * @throws Embedding Model 설정이 유효하지 않거나 Provider API key 조회,
  * Provider 호출 또는 cache 조회·저장에 실패한 경우 오류를 발생시킵니다.
  */
 export async function generateAiEmbedding({
   embeddingConfiguration,
+  contentHash,
   ownerUserId,
   sourceType,
   sourceId,
   inputKind,
   inputText,
   inputPreview,
+  generationId,
+  chunkIndex,
+  chunkCount,
 }: GenerateAiEmbeddingParams): Promise<AiEmbeddingRow> {
   const embeddingModel = embeddingConfiguration.model;
   const inputHash = createAiSha256Hash(inputText);
-  const contentHash = inputHash;
 
   /*
-   * 동일한 사용자·소스·모델·입력 용도·콘텐츠에 대해
-   * 기존 embedding을 재사용할 수 있도록 cache key를 구성합니다.
+   * cache 조회와 새 generation row 저장에 공통으로 사용하는 입력입니다.
+   *
+   * generationId/chunkIndex/chunkCount는 cache 재사용 조건이 아니라
+   * 새 row가 속할 generation과 위치를 나타냅니다.
    */
-  const cacheInput = {
+  const embeddingInput = {
+    chunkCount,
+    chunkIndex,
     contentHash,
+    generationId,
     inputHash,
     inputKind,
     inputPreview,
@@ -85,10 +108,20 @@ export async function generateAiEmbedding({
     sourceType,
   };
 
-  const cachedEmbedding = await getAiEmbeddingCache(cacheInput);
+  const cachedEmbedding = await getAiEmbeddingCache(embeddingInput);
 
   if (cachedEmbedding) {
-    return cachedEmbedding;
+    /*
+     * cache hit은 Provider 호출만 생략합니다.
+     *
+     * 기존 row는 과거 generation에 속할 수 있으므로 그대로 반환하지 않고,
+     * 저장된 vector와 token count만 재사용하여 현재 generation의 새 row를 만듭니다.
+     */
+    return insertAiEmbedding({
+      ...embeddingInput,
+      embedding: parseAiVectorLiteral(cachedEmbedding.embedding),
+      tokenCount: cachedEmbedding.token_count,
+    });
   }
 
   /*
@@ -189,7 +222,7 @@ export async function generateAiEmbedding({
    * EMBEDDING_INSERT_FAILED 운영 오류로 기록합니다.
    */
   return insertAiEmbedding({
-    ...cacheInput,
+    ...embeddingInput,
     embedding: result.embedding,
     tokenCount: result.usage.totalTokens,
   });

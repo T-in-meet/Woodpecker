@@ -4,69 +4,101 @@ import { buildNoteContext } from "../build-context";
 import type { MatchedNote } from "../get-matched-notes";
 
 describe("buildNoteContext", () => {
-  it("검색된 Note의 1-based 번호, 제목, 본문으로 Context를 구성한다", () => {
+  it("검색된 chunk snapshot을 검색 순서대로 Context에 포함한다", () => {
     const notes: MatchedNote[] = [
       {
-        id: "note-1",
-        title: "다익스트라 알고리즘",
-        content: "다익스트라 알고리즘은 음수 가중치를 처리할 수 없다.",
-        distance: 0.05,
-        embeddingId: "embedding-1",
-        similarity: 0.95,
-      },
-    ];
-
-    expect(buildNoteContext({ notes })).toBe(
-      "<note>\n<index>[1]</index>\n<title>다익스트라 알고리즘</title>\n<content>다익스트라 알고리즘은 음수 가중치를 처리할 수 없다.</content>\n</note>",
-    );
-  });
-
-  it("여러 Note를 빈 줄로 구분한다", () => {
-    const notes: MatchedNote[] = [
-      {
-        id: "note-1",
-        title: "첫 번째 노트",
-        content: "첫 번째 내용",
+        chunkText:
+          "Title:\n다익스트라 알고리즘\n\nContent:\n음수 가중치에서는 사용할 수 없다.",
         distance: 0.1,
-        embeddingId: "embedding-1",
+        embeddingId: "11111111-1111-4111-8111-111111111111",
+        id: "22222222-2222-4222-8222-222222222222",
         similarity: 0.9,
+        title: "다익스트라 알고리즘",
       },
       {
-        id: "note-2",
-        title: "두 번째 노트",
-        content: "두 번째 내용",
+        chunkText:
+          "Title:\n벨만-포드 알고리즘\n\nContent:\n음수 가중치를 처리할 수 있다.",
         distance: 0.2,
-        embeddingId: "embedding-2",
+        embeddingId: "33333333-3333-4333-8333-333333333333",
+        id: "44444444-4444-4444-8444-444444444444",
         similarity: 0.8,
+        title: "벨만-포드 알고리즘",
       },
     ];
 
     expect(buildNoteContext({ notes })).toBe(
-      "<note>\n<index>[1]</index>\n<title>첫 번째 노트</title>\n<content>첫 번째 내용</content>\n</note>\n\n<note>\n<index>[2]</index>\n<title>두 번째 노트</title>\n<content>두 번째 내용</content>\n</note>",
+      `<note>
+<index>[1]</index>
+<chunk>Title:
+다익스트라 알고리즘
+
+Content:
+음수 가중치에서는 사용할 수 없다.</chunk>
+</note>
+
+<note>
+<index>[2]</index>
+<chunk>Title:
+벨만-포드 알고리즘
+
+Content:
+음수 가중치를 처리할 수 있다.</chunk>
+</note>`,
     );
   });
 
-  it("검색 결과의 메타데이터를 Context에 포함하지 않는다", () => {
+  it("같은 Note에서 검색된 여러 chunk도 각각 별도 Context로 유지한다", () => {
     const notes: MatchedNote[] = [
       {
-        id: "note-1",
-        title: "테스트 노트",
-        content: "테스트 내용",
-        distance: 0.05,
-        embeddingId: "embedding-1",
-        similarity: 0.95,
+        chunkText: "Title:\nTest Note\n\nContent:\nchunk 0",
+        distance: 0.1,
+        embeddingId: "11111111-1111-4111-8111-111111111111",
+        id: "22222222-2222-4222-8222-222222222222",
+        similarity: 0.9,
+        title: "Test Note",
+      },
+      {
+        chunkText: "Title:\nTest Note\n\nContent:\nchunk 1",
+        distance: 0.2,
+        embeddingId: "33333333-3333-4333-8333-333333333333",
+        id: "22222222-2222-4222-8222-222222222222",
+        similarity: 0.8,
+        title: "Test Note",
       },
     ];
 
     const context = buildNoteContext({ notes });
 
-    expect(context).not.toContain("note-1");
-    expect(context).not.toContain("embedding-1");
-    expect(context).not.toContain("0.05");
-    expect(context).not.toContain("0.95");
+    expect(context).toContain("<index>[1]</index>");
+    expect(context).toContain("<index>[2]</index>");
+    expect(context).toContain("Content:\nchunk 0");
+    expect(context).toContain("Content:\nchunk 1");
   });
 
-  it("검색된 Note가 없으면 빈 문자열을 반환한다", () => {
-    expect(buildNoteContext({ notes: [] })).toBe("");
+  it("검색 결과가 없으면 빈 Context를 반환한다", () => {
+    expect(
+      buildNoteContext({
+        notes: [],
+      }),
+    ).toBe("");
+  });
+
+  it("검색 메타데이터는 Context에 포함하지 않는다", () => {
+    const notes: MatchedNote[] = [
+      {
+        chunkText: "Title:\nTest Note\n\nContent:\n검색된 내용",
+        distance: 0.123,
+        embeddingId: "11111111-1111-4111-8111-111111111111",
+        id: "22222222-2222-4222-8222-222222222222",
+        similarity: 0.877,
+        title: "Test Note",
+      },
+    ];
+
+    const context = buildNoteContext({ notes });
+
+    expect(context).not.toContain("0.123");
+    expect(context).not.toContain("0.877");
+    expect(context).not.toContain("11111111-1111-4111-8111-111111111111");
   });
 });

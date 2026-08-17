@@ -249,4 +249,68 @@ describe("prepareNoteChatExecution", () => {
       }),
     );
   });
+
+  it("같은 Note의 여러 chunk도 중복 제거하지 않고 Context와 Source에 전달한다", async () => {
+    const matchedChunks = [
+      {
+        chunkText: "Title:\n테스트 노트\n\nContent:\nchunk 0",
+        distance: 0.1,
+        embeddingId: "embedding-1",
+        id: "11111111-1111-4111-8111-111111111111",
+        similarity: 0.9,
+        title: "테스트 노트",
+      },
+      {
+        chunkText: "Title:\n테스트 노트\n\nContent:\nchunk 1",
+        distance: 0.2,
+        embeddingId: "embedding-2",
+        id: "11111111-1111-4111-8111-111111111111",
+        similarity: 0.8,
+        title: "테스트 노트",
+      },
+    ];
+
+    const context = "chunk context";
+    const sources = [
+      {
+        contextIndex: 1,
+        content: matchedChunks[0]!.chunkText,
+        embeddingId: "embedding-1",
+        noteId: matchedChunks[0]!.id,
+        type: "note",
+      },
+      {
+        contextIndex: 2,
+        content: matchedChunks[1]!.chunkText,
+        embeddingId: "embedding-2",
+        noteId: matchedChunks[1]!.id,
+        type: "note",
+      },
+    ];
+
+    vi.mocked(getMatchedNotes).mockResolvedValue(matchedChunks);
+    vi.mocked(buildNoteContext).mockReturnValue(context);
+    vi.mocked(buildNoteChatSources).mockReturnValue(sources as never);
+    vi.mocked(resolveNoteChatExecutionMessages).mockReturnValue([]);
+
+    await prepareNoteChatExecution({
+      conversationId: "conversation-1",
+      settings,
+      userMessageId: "message-1",
+    });
+
+    expect(buildNoteContext).toHaveBeenCalledWith({
+      notes: matchedChunks,
+    });
+
+    expect(buildNoteChatSources).toHaveBeenCalledWith(matchedChunks);
+
+    expect(resolveNoteChatExecutionMessages).toHaveBeenCalledWith({
+      context,
+      messages,
+      systemTemplate: settings.chat.prompt.version.system_template,
+      userMessageId: "message-1",
+      userTemplate: settings.chat.prompt.version.user_template,
+    });
+  });
 });

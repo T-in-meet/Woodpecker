@@ -9,6 +9,8 @@ import { ROUTES } from "@/lib/constants/routes";
 
 const REDIRECT_ERROR = new Error("NEXT_REDIRECT");
 
+const NOTE_UPDATED_AT = "2026-08-17T05:13:48.150038+00:00";
+
 const {
   createClientMock,
   redirectMock,
@@ -53,7 +55,21 @@ function createSupabaseMock(
     deleteError?: { message: string } | null;
     deletedNote?: { id: string } | null;
     updateError?: { message: string } | null;
-    updatedNote?: { id: string } | null;
+    updatedNote?: {
+      id: string;
+      title: string;
+      content: string;
+      updated_at: string;
+    } | null;
+
+    embeddingSource?: {
+      id: string;
+      title: string;
+      content: string;
+      updated_at: string;
+    } | null;
+
+    embeddingSourceError?: { message: string } | null;
   } = {},
 ) {
   const {
@@ -64,7 +80,19 @@ function createSupabaseMock(
     deleteError = null,
     deletedNote = { id: "11111111-1111-4111-8111-111111111111" },
     updateError = null,
-    updatedNote = { id: "11111111-1111-4111-8111-111111111111" },
+    updatedNote = {
+      id: "11111111-1111-4111-8111-111111111111",
+      title: "Updated title",
+      content: "Updated content",
+      updated_at: NOTE_UPDATED_AT,
+    },
+    embeddingSource = {
+      id: rpcResult ?? "11111111-1111-4111-8111-111111111111",
+      title: "Valid title",
+      content: "Valid content",
+      updated_at: NOTE_UPDATED_AT,
+    },
+    embeddingSourceError = null,
   } = input;
   const resolvedEmailConfirmedAt = Object.prototype.hasOwnProperty.call(
     input,
@@ -111,8 +139,26 @@ function createSupabaseMock(
     eq: updateNoteEqMock,
   });
 
+  const embeddingSourceMaybeSingleMock = vi.fn().mockResolvedValue({
+    data: embeddingSourceError ? null : embeddingSource,
+    error: embeddingSourceError,
+  });
+
+  const embeddingSourceUserEqMock = vi.fn().mockReturnValue({
+    maybeSingle: embeddingSourceMaybeSingleMock,
+  });
+
+  const embeddingSourceNoteEqMock = vi.fn().mockReturnValue({
+    eq: embeddingSourceUserEqMock,
+  });
+
+  const embeddingSourceSelectMock = vi.fn().mockReturnValue({
+    eq: embeddingSourceNoteEqMock,
+  });
+
   const fromMock = vi.fn().mockReturnValue({
     delete: deleteMock,
+    select: embeddingSourceSelectMock,
     update: updateMock,
   });
 
@@ -129,6 +175,10 @@ function createSupabaseMock(
     updateUserEqMock,
     updateSelectMock,
     updateMaybeSingleMock,
+    embeddingSourceSelectMock,
+    embeddingSourceNoteEqMock,
+    embeddingSourceUserEqMock,
+    embeddingSourceMaybeSingleMock,
     supabase: {
       auth: {
         getUser: vi.fn().mockResolvedValue({
@@ -467,7 +517,12 @@ describe("updateNoteAction", () => {
       updateUserEqMock,
       updateSelectMock,
     } = createSupabaseMock({
-      updatedNote: { id: validNoteId },
+      updatedNote: {
+        id: validNoteId,
+        title: "Updated title",
+        content: "Updated content",
+        updated_at: NOTE_UPDATED_AT,
+      },
     });
     createClientMock.mockResolvedValue(supabase);
 
@@ -484,7 +539,9 @@ describe("updateNoteAction", () => {
     });
     expect(updateNoteEqMock).toHaveBeenCalledWith("id", validNoteId);
     expect(updateUserEqMock).toHaveBeenCalledWith("user_id", "user-123");
-    expect(updateSelectMock).toHaveBeenCalledWith("id");
+    expect(updateSelectMock).toHaveBeenCalledWith(
+      "id, title, content, updated_at",
+    );
     expect(result).toEqual({ success: true });
   });
 
@@ -567,6 +624,12 @@ describe("Note embedding integration", () => {
     it("Note 생성 후 note-retrieval Runtime Configuration으로 embedding을 생성한다", async () => {
       const { supabase } = createSupabaseMock({
         rpcResult: validNoteId,
+        embeddingSource: {
+          id: validNoteId,
+          title: "Valid title",
+          content: "Valid content",
+          updated_at: NOTE_UPDATED_AT,
+        },
       });
       createClientMock.mockResolvedValue(supabase);
 
@@ -592,6 +655,7 @@ describe("Note embedding integration", () => {
         embeddingConfiguration,
         ownerUserId: "user-123",
         noteId: validNoteId,
+        sourceUpdatedAt: NOTE_UPDATED_AT,
         title: "Valid title",
         content: "Valid content",
       });
@@ -642,6 +706,7 @@ describe("Note embedding integration", () => {
         embeddingConfiguration,
         ownerUserId: "user-123",
         noteId: validNoteId,
+        sourceUpdatedAt: NOTE_UPDATED_AT,
         title: "Valid title",
         content: "Valid content",
       });
@@ -651,7 +716,12 @@ describe("Note embedding integration", () => {
   describe("updateNoteAction", () => {
     it("Note 수정 후 note-retrieval Runtime Configuration으로 embedding을 생성한다", async () => {
       const { supabase } = createSupabaseMock({
-        updatedNote: { id: validNoteId },
+        updatedNote: {
+          id: validNoteId,
+          title: "Updated title",
+          content: "Updated content",
+          updated_at: NOTE_UPDATED_AT,
+        },
       });
       createClientMock.mockResolvedValue(supabase);
 
@@ -674,6 +744,7 @@ describe("Note embedding integration", () => {
         embeddingConfiguration,
         ownerUserId: "user-123",
         noteId: validNoteId,
+        sourceUpdatedAt: NOTE_UPDATED_AT,
         title: "Updated title",
         content: "Updated content",
       });
@@ -701,7 +772,12 @@ describe("Note embedding integration", () => {
 
     it("Note 수정 후 embedding 생성에 실패해도 Note 수정 성공을 반환한다", async () => {
       const { supabase } = createSupabaseMock({
-        updatedNote: { id: validNoteId },
+        updatedNote: {
+          id: validNoteId,
+          title: "Updated title",
+          content: "Updated content",
+          updated_at: NOTE_UPDATED_AT,
+        },
       });
       createClientMock.mockResolvedValue(supabase);
 
@@ -721,6 +797,7 @@ describe("Note embedding integration", () => {
         embeddingConfiguration,
         ownerUserId: "user-123",
         noteId: validNoteId,
+        sourceUpdatedAt: NOTE_UPDATED_AT,
         title: "Updated title",
         content: "Updated content",
       });
