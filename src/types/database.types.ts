@@ -228,6 +228,212 @@ export type Database = {
         };
         Relationships: [];
       };
+      ai_prompt_families: {
+        Row: {
+          agent_id: string;
+          created_at: string;
+          description: string | null;
+          display_name: string;
+          id: string;
+          tags: string[];
+          updated_at: string;
+        };
+        Insert: {
+          agent_id: string;
+          created_at?: string;
+          description?: string | null;
+          display_name: string;
+          id?: string;
+          tags?: string[];
+          updated_at?: string;
+        };
+        Update: {
+          agent_id?: string;
+          created_at?: string;
+          description?: string | null;
+          display_name?: string;
+          id?: string;
+          tags?: string[];
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ai_prompt_families_agent_id_fkey";
+            columns: ["agent_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_ai_agent_list";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ai_prompt_families_agent_id_fkey";
+            columns: ["agent_id"];
+            isOneToOne: false;
+            referencedRelation: "ai_prompt_agents";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      ai_prompt_versions: {
+        Row: {
+          change_summary: string | null;
+          created_at: string;
+          created_by: string | null;
+          created_by_kind: string;
+          display_name: string;
+          family_id: string;
+          id: string;
+          lifecycle_status: string;
+          response_schema: Json;
+          system_template: string;
+          tags: string[];
+          user_template: string;
+          variables: Json;
+          version_number: number;
+        };
+        Insert: {
+          change_summary?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          created_by_kind?: string;
+          display_name: string;
+          family_id: string;
+          id?: string;
+          lifecycle_status?: string;
+          response_schema?: Json;
+          system_template: string;
+          tags?: string[];
+          user_template: string;
+          variables?: Json;
+          version_number: number;
+        };
+        Update: {
+          change_summary?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          created_by_kind?: string;
+          display_name?: string;
+          family_id?: string;
+          id?: string;
+          lifecycle_status?: string;
+          response_schema?: Json;
+          system_template?: string;
+          tags?: string[];
+          user_template?: string;
+          variables?: Json;
+          version_number?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ai_prompt_versions_family_id_fkey";
+            columns: ["family_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_ai_prompt_family_list";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ai_prompt_versions_family_id_fkey";
+            columns: ["family_id"];
+            isOneToOne: false;
+            referencedRelation: "ai_prompt_families";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      ai_setting_configurations: {
+        Row: {
+          created_at: string;
+          id: string;
+          kind: string;
+          model_config_id: string;
+          prompt_version_id: string | null;
+          role_key: string;
+          setting_id: string;
+          sort_order: number;
+          temperature: number | null;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          kind: string;
+          model_config_id: string;
+          prompt_version_id?: string | null;
+          role_key: string;
+          setting_id: string;
+          sort_order?: number;
+          temperature?: number | null;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          kind?: string;
+          model_config_id?: string;
+          prompt_version_id?: string | null;
+          role_key?: string;
+          setting_id?: string;
+          sort_order?: number;
+          temperature?: number | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ai_setting_configurations_model_config_id_fkey";
+            columns: ["model_config_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_ai_model_list";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ai_setting_configurations_model_config_id_fkey";
+            columns: ["model_config_id"];
+            isOneToOne: false;
+            referencedRelation: "ai_model_configs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ai_setting_configurations_prompt_version_id_fkey";
+            columns: ["prompt_version_id"];
+            isOneToOne: false;
+            referencedRelation: "ai_prompt_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ai_setting_configurations_setting_id_fkey";
+            columns: ["setting_id"];
+            isOneToOne: false;
+            referencedRelation: "ai_settings";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      ai_settings: {
+        Row: {
+          created_at: string;
+          description: string;
+          display_name: string;
+          id: string;
+          key: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          description?: string;
+          display_name: string;
+          id?: string;
+          key: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          description?: string;
+          display_name?: string;
+          id?: string;
+          key?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       feedback_replies: {
         Row: {
           content: string;
@@ -826,22 +1032,6 @@ export type Database = {
           purpose: string | null;
           updated_at: string | null;
         };
-        Insert: {
-          created_at?: string | null;
-          display_name?: string | null;
-          family_count?: never;
-          id?: string | null;
-          purpose?: string | null;
-          updated_at?: string | null;
-        };
-        Update: {
-          created_at?: string | null;
-          display_name?: string | null;
-          family_count?: never;
-          id?: string | null;
-          purpose?: string | null;
-          updated_at?: string | null;
-        };
         Relationships: [];
       };
       admin_ai_model_list: {
@@ -857,6 +1047,35 @@ export type Database = {
           updated_at: string | null;
         };
         Relationships: [];
+      };
+      admin_ai_prompt_family_list: {
+        Row: {
+          agent_display_name: string | null;
+          agent_id: string | null;
+          archived_version_count: number | null;
+          created_at: string | null;
+          display_name: string | null;
+          draft_version_count: number | null;
+          id: string | null;
+          published_version_count: number | null;
+          updated_at: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ai_prompt_families_agent_id_fkey";
+            columns: ["agent_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_ai_agent_list";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ai_prompt_families_agent_id_fkey";
+            columns: ["agent_id"];
+            isOneToOne: false;
+            referencedRelation: "ai_prompt_agents";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       admin_user_list: {
         Row: {
@@ -879,6 +1098,10 @@ export type Database = {
       apply_time_of_day: { Args: { t: string; ts: string }; Returns: string };
       apply_time_of_day_not_before: {
         Args: { t: string; ts: string };
+        Returns: string;
+      };
+      archive_ai_prompt_version: {
+        Args: { p_version_id: string };
         Returns: string;
       };
       claim_due_review_logs: {
@@ -908,11 +1131,45 @@ export type Database = {
         Args: { p_note_id: string; p_review_log_id: string };
         Returns: string;
       };
+      create_ai_prompt_family_with_initial_version: {
+        Args: {
+          p_admin_user_id: string;
+          p_agent_id: string;
+          p_change_summary: string;
+          p_description: string;
+          p_display_name: string;
+          p_response_schema: Json;
+          p_system_template: string;
+          p_tags: string[];
+          p_user_template: string;
+          p_variables: Json;
+          p_version_display_name: string;
+        };
+        Returns: string;
+      };
+      create_ai_prompt_version: {
+        Args: {
+          p_admin_user_id: string;
+          p_change_summary: string;
+          p_display_name: string;
+          p_family_id: string;
+          p_response_schema: Json;
+          p_system_template: string;
+          p_tags: string[];
+          p_user_template: string;
+          p_variables: Json;
+        };
+        Returns: string;
+      };
       create_note_with_initial_review_log: {
         Args: { p_content: string; p_scheduled_at: string; p_title: string };
         Returns: string;
       };
       delete_admin_ai_agent: { Args: { p_agent_id: string }; Returns: string };
+      delete_admin_ai_prompt_family: {
+        Args: { p_family_id: string };
+        Returns: string;
+      };
       delete_feedback_reply_with_notifications: {
         Args: { p_feedback_id: string };
         Returns: {
@@ -967,6 +1224,55 @@ export type Database = {
           p_sort_field: string;
           p_updated_from: string;
           p_updated_to: string;
+        };
+        Returns: {
+          items: Json;
+          total_count: number;
+        }[];
+      };
+      get_admin_ai_prompt_family_list: {
+        Args: {
+          p_agent_id_filters: string[];
+          p_archived_count_max: number;
+          p_archived_count_min: number;
+          p_created_from: string;
+          p_created_to: string;
+          p_draft_count_max: number;
+          p_draft_count_min: number;
+          p_page: number;
+          p_page_size: number;
+          p_published_count_max: number;
+          p_published_count_min: number;
+          p_search_field: string;
+          p_search_query: string;
+          p_sort_direction: string;
+          p_sort_field: string;
+          p_updated_from: string;
+          p_updated_to: string;
+        };
+        Returns: {
+          items: Json;
+          total_count: number;
+        }[];
+      };
+      get_admin_ai_setting_list: {
+        Args: {
+          p_chat_count_max?: number;
+          p_chat_count_min?: number;
+          p_chat_model_id_filters?: string[];
+          p_created_from?: string;
+          p_created_to?: string;
+          p_embedding_count_max?: number;
+          p_embedding_count_min?: number;
+          p_embedding_model_id_filters?: string[];
+          p_page?: number;
+          p_page_size?: number;
+          p_search_field?: string;
+          p_search_query?: string;
+          p_sort_direction?: string;
+          p_sort_field?: string;
+          p_updated_from?: string;
+          p_updated_to?: string;
         };
         Returns: {
           items: Json;
@@ -1029,6 +1335,14 @@ export type Database = {
           similarity: number;
           source_id: string;
         }[];
+      };
+      publish_ai_prompt_version: {
+        Args: { p_version_id: string };
+        Returns: string;
+      };
+      save_ai_setting_configurations: {
+        Args: { p_configurations: Json; p_setting_id: string };
+        Returns: undefined;
       };
       update_notification_time_of_day: {
         Args: { p_note_id: string; p_time?: string };

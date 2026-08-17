@@ -68,30 +68,34 @@ describe("reportAdminAiActionError", () => {
   });
 
   it("context와 fingerprintParts를 전달하면 그대로 포함한다", async () => {
-    const error = new Error("list validation failed");
+    const error = new Error("setting save failed");
 
     await reportAdminAiActionError({
       adminUserId: ADMIN_USER_ID,
       context: {
-        searchQuery: "search",
+        configurationCount: 2,
+        settingId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
       },
       error,
-      errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.LIST_RESPONSE_INVALID,
-      fingerprintParts: ["list", "validation"],
-      message: "관리자 AI 목록 응답 검증에 실패했습니다.",
-      operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.VALIDATE_LIST_RESPONSE,
+      errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.SETTING_CONFIG_SAVE_FAILED,
+      fingerprintParts: ["setting", "configurations"],
+      message: "관리자 AI 구성 저장에 실패했습니다.",
+      operation:
+        ADMIN_AI_OPERATIONAL_ERROR_OPERATION.SAVE_SETTING_CONFIGURATIONS,
     });
 
     expect(reportAdminAiOperationalError).toHaveBeenCalledWith({
       actorUserId: ADMIN_USER_ID,
       context: {
-        searchQuery: "search",
+        configurationCount: 2,
+        settingId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
       },
       error,
-      errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.LIST_RESPONSE_INVALID,
-      fingerprintParts: ["list", "validation"],
-      message: "관리자 AI 목록 응답 검증에 실패했습니다.",
-      operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.VALIDATE_LIST_RESPONSE,
+      errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.SETTING_CONFIG_SAVE_FAILED,
+      fingerprintParts: ["setting", "configurations"],
+      message: "관리자 AI 구성 저장에 실패했습니다.",
+      operation:
+        ADMIN_AI_OPERATIONAL_ERROR_OPERATION.SAVE_SETTING_CONFIGURATIONS,
       stage: ADMIN_AI_OPERATIONAL_ERROR_STAGE.DATABASE,
     });
   });

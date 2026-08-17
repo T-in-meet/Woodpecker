@@ -1,5 +1,8 @@
 "use client";
 
+import { Plus } from "lucide-react";
+import Link from "next/link";
+
 import { Button } from "@/components/ui/button";
 import { AdminCollapsibleSection } from "@/features/admin/components/common/AdminCollapsibleSection";
 import { AdminListError } from "@/features/admin/components/common/AdminListState";
@@ -53,6 +56,16 @@ export function AdminAiAgentDetailClient({
         description="AI 에이전트의 이름, 용도와 태그 정보를 확인하고 관리합니다."
         backHref={ROUTES.ADMIN.AI.AGENTS}
         backLabel="Agent 목록"
+        actions={
+          agent ? (
+            <Button asChild variant="outline">
+              <Link href={`${ROUTES.ADMIN.AI.PROMPTS_NEW}?agentId=${agent.id}`}>
+                <Plus aria-hidden="true" />
+                프롬프트 추가
+              </Link>
+            </Button>
+          ) : null
+        }
       />
 
       {isPending ? (

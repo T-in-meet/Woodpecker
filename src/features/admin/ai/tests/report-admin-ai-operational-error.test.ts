@@ -20,6 +20,7 @@ vi.mock("@/features/operational-errors/report", () => ({
 
 const ADMIN_USER_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const USER_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+const FAMILY_ID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 
 describe("reportAdminAiOperationalError", () => {
   beforeEach(() => {
@@ -79,18 +80,19 @@ describe("reportAdminAiOperationalError", () => {
   });
 
   it("optional 오류 정보를 전달하면 공통 운영 오류 입력에 포함한다", async () => {
-    const error = new Error("list response validation failed");
+    const error = new Error("prompt graph validation failed");
 
     await reportAdminAiOperationalError({
       actorUserId: ADMIN_USER_ID,
       context: {
-        searchQuery: "search",
+        familyId: FAMILY_ID,
+        graphPart: "families",
       },
       error,
-      errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.LIST_RESPONSE_INVALID,
-      fingerprintParts: ["list", "validation"],
-      message: "관리자 AI 목록 응답 검증에 실패했습니다.",
-      operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.VALIDATE_LIST_RESPONSE,
+      errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.PROMPT_GRAPH_INVALID,
+      fingerprintParts: ["families", "validation"],
+      message: "관리자 AI prompt graph 검증에 실패했습니다.",
+      operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.VALIDATE_PROMPT_GRAPH,
       stage: ADMIN_AI_OPERATIONAL_ERROR_STAGE.VALIDATION,
     });
 
@@ -98,20 +100,53 @@ describe("reportAdminAiOperationalError", () => {
       {
         actorUserId: ADMIN_USER_ID,
         context: {
-          searchQuery: "search",
+          familyId: FAMILY_ID,
+          graphPart: "families",
         },
         error,
-        errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.LIST_RESPONSE_INVALID,
+        errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.PROMPT_GRAPH_INVALID,
         feature: ADMIN_AI_OPERATIONAL_ERROR_FEATURE,
-        fingerprintParts: ["list", "validation"],
-        message: "관리자 AI 목록 응답 검증에 실패했습니다.",
-        operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.VALIDATE_LIST_RESPONSE,
+        fingerprintParts: ["families", "validation"],
+        message: "관리자 AI prompt graph 검증에 실패했습니다.",
+        operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.VALIDATE_PROMPT_GRAPH,
         severity: OPERATIONAL_ERROR_SEVERITY.ERROR,
         stage: ADMIN_AI_OPERATIONAL_ERROR_STAGE.VALIDATION,
         userId: null,
       },
       {},
     );
+  });
+
+  it("optional 오류 정보를 전달하지 않으면 공통 운영 오류 입력에 추가하지 않는다", async () => {
+    await reportAdminAiOperationalError({
+      errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.SETTING_LOAD_FAILED,
+      message: "관리자 AI 설정 조회에 실패했습니다.",
+      operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.GET_SETTING,
+      stage: ADMIN_AI_OPERATIONAL_ERROR_STAGE.DATABASE,
+    });
+
+    expect(reportOperationalError).toHaveBeenCalledOnce();
+
+    const call = vi.mocked(reportOperationalError).mock.calls[0];
+
+    expect(call).toBeDefined();
+
+    const input = call?.[0];
+
+    expect(input).toEqual({
+      actorUserId: null,
+      errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.SETTING_LOAD_FAILED,
+      feature: ADMIN_AI_OPERATIONAL_ERROR_FEATURE,
+      message: "관리자 AI 설정 조회에 실패했습니다.",
+      operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.GET_SETTING,
+      severity: OPERATIONAL_ERROR_SEVERITY.ERROR,
+      stage: ADMIN_AI_OPERATIONAL_ERROR_STAGE.DATABASE,
+      userId: null,
+    });
+
+    expect(input).not.toHaveProperty("context");
+    expect(input).not.toHaveProperty("error");
+    expect(input).not.toHaveProperty("fingerprintParts");
   });
 
   it("공유 운영 오류 보고 options를 그대로 전달한다", async () => {
@@ -121,9 +156,10 @@ describe("reportAdminAiOperationalError", () => {
 
     await reportAdminAiOperationalError(
       {
-        errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.LIST_RESPONSE_INVALID,
-        message: "관리자 AI 목록 응답 검증에 실패했습니다.",
-        operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.VALIDATE_LIST_RESPONSE,
+        actorUserId: ADMIN_USER_ID,
+        errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.SETTING_UPDATE_FAILED,
+        message: "관리자 AI 설정 수정에 실패했습니다.",
+        operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.UPDATE_SETTING,
         stage: ADMIN_AI_OPERATIONAL_ERROR_STAGE.DATABASE,
       },
       options,
@@ -131,11 +167,11 @@ describe("reportAdminAiOperationalError", () => {
 
     expect(reportOperationalError).toHaveBeenCalledWith(
       {
-        actorUserId: null,
-        errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.LIST_RESPONSE_INVALID,
+        actorUserId: ADMIN_USER_ID,
+        errorCode: ADMIN_AI_OPERATIONAL_ERROR_CODE.SETTING_UPDATE_FAILED,
         feature: ADMIN_AI_OPERATIONAL_ERROR_FEATURE,
-        message: "관리자 AI 목록 응답 검증에 실패했습니다.",
-        operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.VALIDATE_LIST_RESPONSE,
+        message: "관리자 AI 설정 수정에 실패했습니다.",
+        operation: ADMIN_AI_OPERATIONAL_ERROR_OPERATION.UPDATE_SETTING,
         severity: OPERATIONAL_ERROR_SEVERITY.ERROR,
         stage: ADMIN_AI_OPERATIONAL_ERROR_STAGE.DATABASE,
         userId: null,
