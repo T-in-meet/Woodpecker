@@ -9,8 +9,10 @@ import {
   NOTE_CHAT_AI_FEATURE_KEY,
   NOTE_CHAT_AI_ROLE_KEY,
 } from "@/features/note-chats/constants/ai";
-import { NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE } from "@/features/note-chats/constants/execution";
-import { assertNoteChatDailyExecutionLimit } from "@/features/note-chats/execution/assert-daily-execution-limit";
+import {
+  NOTE_CHAT_DAILY_EXECUTION_LIMIT,
+  NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE,
+} from "@/features/note-chats/constants/execution";
 import { createNoteChatQuestionInputSchema } from "@/features/note-chats/schema";
 import { runNoteChatStream } from "@/features/note-chats/stream/run-note-chat-stream";
 import { encodeNoteChatStreamEvent } from "@/features/note-chats/stream/serialize";
@@ -21,7 +23,21 @@ import {
   NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS,
   NOTE_CHAT_OPERATIONAL_ERROR_STAGES,
 } from "@/features/operational-errors/constants";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+
+/**
+ * DB RPC가 반환한 오류가 Note Chat 일일 실행 제한 초과인지 확인합니다.
+ *
+ * Supabase RPC 오류 객체는 PostgREST 메시지를 `message`에 담아 전달하므로,
+ * PostgreSQL에서 발생시킨 안정적인 오류 메시지를 기준으로 구분합니다.
+ */
+function isNoteChatDailyExecutionLimitError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.message.includes(NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE)
+  );
+}
 
 /**
  * 새로운 사용자 질문과 Run을 생성한 뒤 AI 답변 스트림을 반환합니다.
@@ -93,56 +109,6 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  /*
-   * Note Chat의 일일 AI 실행 횟수를 제한합니다.
-   *
-   * 실제 Run을 생성하기 전에 검사하여 일일 사용량을 모두 사용한 경우
-   * 새로운 AI 실행을 시작하지 않습니다.
-   */
-  try {
-    await assertNoteChatDailyExecutionLimit(user.id);
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message === NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE
-    ) {
-      return NextResponse.json(
-        {
-          code: NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE,
-          error: "오늘 사용할 수 있는 노트 챗봇 횟수를 모두 사용했습니다.",
-        },
-        {
-          status: 429,
-        },
-      );
-    }
-
-    /*
-     * 일일 제한 초과 자체는 정상적인 사용량 정책 결과이므로 보고하지 않습니다.
-     * 제한 확인 과정이 실패한 경우에만 운영 오류로 보고합니다.
-     */
-    await reportNoteChatOperationalError({
-      actorUserId: user.id,
-      error,
-      errorCode:
-        NOTE_CHAT_OPERATIONAL_ERROR_CODES.DAILY_EXECUTION_LIMIT_CHECK_FAILED,
-      message: "노트 챗봇 일일 실행 제한 확인에 실패했습니다.",
-      operation:
-        NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.CHECK_DAILY_EXECUTION_LIMIT,
-      stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.EXECUTION_LIMIT,
-      userId: user.id,
-    });
-
-    return NextResponse.json(
-      {
-        error: "노트 챗봇 사용량을 확인하지 못했습니다.",
-      },
-      {
-        status: 500,
-      },
-    );
-  }
-
   const { content, conversationId } = parsed.data;
 
   /*
@@ -204,18 +170,34 @@ export async function POST(request: Request): Promise<Response> {
    *
    * Run에는 이번 실행에서 실제 사용할 Agent·Prompt·Model ID를 기록합니다.
    */
-  const { data: created, error: createError } = await supabase
+  const adminClient = createAdminClient();
+
+  const { data: created, error: createError } = await adminClient
     .rpc("create_note_chat_question", {
       p_agent_id: chatConfiguration.prompt.agent.id,
       p_chat_model_config_id: chatConfiguration.model.id,
       p_content: content,
       p_conversation_id: conversationId,
+      p_daily_execution_limit: NOTE_CHAT_DAILY_EXECUTION_LIMIT,
       p_embedding_model_config_id: embeddingConfiguration.model.id,
       p_prompt_version_id: chatConfiguration.prompt.version.id,
+      p_user_id: user.id,
     })
     .single();
 
   if (createError) {
+    if (isNoteChatDailyExecutionLimitError(createError)) {
+      return NextResponse.json(
+        {
+          code: NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE,
+          error: "오늘 사용할 수 있는 노트 챗봇 횟수를 모두 사용했습니다.",
+        },
+        {
+          status: 429,
+        },
+      );
+    }
+
     /*
      * 질문과 Pending Run을 생성하는 트랜잭션 자체가 실패한 경우
      * 대상 Conversation만 식별 정보로 남기고 질문 본문은 기록하지 않습니다.

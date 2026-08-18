@@ -1562,8 +1562,10 @@ export type Database = {
           p_chat_model_config_id?: string;
           p_content: Json;
           p_conversation_id: string;
+          p_daily_execution_limit: number;
           p_embedding_model_config_id?: string;
           p_prompt_version_id?: string;
+          p_user_id: string;
         };
         Returns: {
           run_id: string;
@@ -1788,9 +1790,11 @@ export type Database = {
           p_agent_id?: string;
           p_chat_model_config_id?: string;
           p_content: Json;
+          p_daily_execution_limit: number;
           p_embedding_model_config_id?: string;
           p_message_id: string;
           p_prompt_version_id?: string;
+          p_user_id: string;
         };
         Returns: {
           run_id: string;

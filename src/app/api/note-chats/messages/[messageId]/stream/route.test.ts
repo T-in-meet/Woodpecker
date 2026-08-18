@@ -11,10 +11,13 @@ import {
   NOTE_CHAT_AI_FEATURE_KEY,
   NOTE_CHAT_AI_ROLE_KEY,
 } from "@/features/note-chats/constants/ai";
-import { NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE } from "@/features/note-chats/constants/execution";
-import { assertNoteChatDailyExecutionLimit } from "@/features/note-chats/execution/assert-daily-execution-limit";
+import {
+  NOTE_CHAT_DAILY_EXECUTION_LIMIT,
+  NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE,
+} from "@/features/note-chats/constants/execution";
 import { runNoteChatStream } from "@/features/note-chats/stream/run-note-chat-stream";
 import { reportNoteChatOperationalError } from "@/features/note-chats/utils/report-operational-error";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 import { POST } from "./route";
@@ -22,10 +25,6 @@ import { POST } from "./route";
 vi.mock("@/features/ai/runtimes/resolve-configuration", () => ({
   resolveAiRuntimeChatConfiguration: vi.fn(),
   resolveAiRuntimeEmbeddingConfiguration: vi.fn(),
-}));
-
-vi.mock("@/features/note-chats/execution/assert-daily-execution-limit", () => ({
-  assertNoteChatDailyExecutionLimit: vi.fn(),
 }));
 
 vi.mock("@/features/note-chats/stream/run-note-chat-stream", () => ({
@@ -38,6 +37,10 @@ vi.mock("@/features/note-chats/utils/report-operational-error", () => ({
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
+}));
+
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: vi.fn(),
 }));
 
 const MESSAGE_ID = "550e8400-e29b-41d4-a716-446655440001";
@@ -214,10 +217,6 @@ function createSupabaseClientMock(options: SupabaseClientMockOptions = {}) {
       : options.targetMessage;
 
   const targetMessageError = options.targetMessageError ?? null;
-  const updateResult =
-    options.updateResult === undefined ? UPDATED_RESULT : options.updateResult;
-  const updateError = options.updateError ?? null;
-
   const select = vi.fn().mockReturnValue({
     eq: vi.fn().mockReturnValue({
       maybeSingle: vi.fn().mockResolvedValue({
@@ -231,13 +230,6 @@ function createSupabaseClientMock(options: SupabaseClientMockOptions = {}) {
     select,
   });
 
-  const rpc = vi.fn().mockReturnValue({
-    single: vi.fn().mockResolvedValue({
-      data: updateResult,
-      error: updateError,
-    }),
-  });
-
   return {
     auth: {
       getUser: vi.fn().mockResolvedValue({
@@ -248,7 +240,21 @@ function createSupabaseClientMock(options: SupabaseClientMockOptions = {}) {
       }),
     },
     from,
-    rpc,
+  };
+}
+
+function createAdminClientMock(options: SupabaseClientMockOptions = {}) {
+  const updateResult =
+    options.updateResult === undefined ? UPDATED_RESULT : options.updateResult;
+  const updateError = options.updateError ?? null;
+
+  return {
+    rpc: vi.fn().mockReturnValue({
+      single: vi.fn().mockResolvedValue({
+        data: updateResult,
+        error: updateError,
+      }),
+    }),
   };
 }
 
@@ -279,8 +285,6 @@ beforeEach(() => {
 
   vi.mocked(reportNoteChatOperationalError).mockResolvedValue(undefined);
 
-  vi.mocked(assertNoteChatDailyExecutionLimit).mockResolvedValue(undefined);
-
   vi.mocked(resolveAiRuntimeChatConfiguration)
     .mockResolvedValueOnce(CHAT_CONFIGURATION as never)
     .mockResolvedValueOnce(QUERY_EXPANSION_CONFIGURATION as never);
@@ -292,8 +296,10 @@ beforeEach(() => {
   vi.mocked(runNoteChatStream).mockResolvedValue(RUN_RESULT);
 
   const client = createSupabaseClientMock();
+  const adminClient = createAdminClientMock();
 
   vi.mocked(createClient).mockResolvedValue(client as never);
+  vi.mocked(createAdminClient).mockReturnValue(adminClient as never);
 });
 
 describe("POST /api/note-chats/messages/[messageId]/stream", () => {
@@ -403,10 +409,13 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
     });
   });
 
-  it("일일 실행 제한을 초과하면 429를 반환한다", async () => {
-    vi.mocked(assertNoteChatDailyExecutionLimit).mockRejectedValue(
-      new Error(NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE),
-    );
+  it("사용자 메시지 수정 RPC가 일일 실행 제한 초과를 반환하면 429를 반환한다", async () => {
+    const adminClient = createAdminClientMock({
+      updateResult: null,
+      updateError: new Error(NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE),
+    });
+
+    vi.mocked(createAdminClient).mockReturnValue(adminClient as never);
 
     const response = await POST(
       createRequest({
@@ -428,39 +437,7 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
     });
 
     expect(reportNoteChatOperationalError).not.toHaveBeenCalled();
-  });
-
-  it("일일 실행 제한 확인에 실패하면 운영 오류를 기록하고 500을 반환한다", async () => {
-    const error = new Error("daily limit check failed");
-
-    vi.mocked(assertNoteChatDailyExecutionLimit).mockRejectedValue(error);
-
-    const response = await POST(
-      createRequest({
-        content: {
-          text: "수정된 질문",
-        },
-      }),
-      {
-        params: Promise.resolve({
-          messageId: MESSAGE_ID,
-        }),
-      },
-    );
-
-    expect(response.status).toBe(500);
-    await expect(response.json()).resolves.toEqual({
-      error: "노트 챗봇 사용량을 확인하지 못했습니다.",
-    });
-
-    expect(reportNoteChatOperationalError).toHaveBeenCalledWith(
-      expect.objectContaining({
-        actorUserId: USER.id,
-        error,
-        errorCode: "NOTE_CHAT_DAILY_EXECUTION_LIMIT_CHECK_FAILED",
-        userId: USER.id,
-      }),
-    );
+    expect(runNoteChatStream).not.toHaveBeenCalled();
   });
 
   it("수정 대상 메시지 조회에 실패하면 운영 오류를 기록하고 500을 반환한다", async () => {
@@ -630,11 +607,13 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
   it("사용자 메시지 수정 RPC가 실패하면 운영 오류를 기록하고 500을 반환한다", async () => {
     const error = new Error("update failed");
 
-    const client = createSupabaseClientMock({
+    const client = createSupabaseClientMock();
+    const adminClient = createAdminClientMock({
       updateError: error,
     });
 
     vi.mocked(createClient).mockResolvedValue(client as never);
+    vi.mocked(createAdminClient).mockReturnValue(adminClient as never);
 
     const response = await POST(
       createRequest({
@@ -669,11 +648,13 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
   });
 
   it("사용자 메시지 수정 RPC 결과가 없으면 운영 오류를 기록하고 500을 반환한다", async () => {
-    const client = createSupabaseClientMock({
+    const client = createSupabaseClientMock();
+    const adminClient = createAdminClientMock({
       updateResult: null,
     });
 
     vi.mocked(createClient).mockResolvedValue(client as never);
+    vi.mocked(createAdminClient).mockReturnValue(adminClient as never);
 
     const response = await POST(
       createRequest({
@@ -729,16 +710,24 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
       "application/x-ndjson; charset=utf-8",
     );
 
-    expect(client.rpc).toHaveBeenCalledWith("update_note_chat_user_message", {
-      p_agent_id: CHAT_CONFIGURATION.prompt.agent.id,
-      p_chat_model_config_id: CHAT_CONFIGURATION.model.id,
-      p_content: {
-        text: "수정된 질문",
+    const adminClient = vi.mocked(createAdminClient).mock.results[0]
+      ?.value as ReturnType<typeof createAdminClientMock>;
+
+    expect(adminClient.rpc).toHaveBeenCalledWith(
+      "update_note_chat_user_message",
+      {
+        p_agent_id: CHAT_CONFIGURATION.prompt.agent.id,
+        p_chat_model_config_id: CHAT_CONFIGURATION.model.id,
+        p_content: {
+          text: "수정된 질문",
+        },
+        p_daily_execution_limit: NOTE_CHAT_DAILY_EXECUTION_LIMIT,
+        p_embedding_model_config_id: EMBEDDING_CONFIGURATION.model.id,
+        p_message_id: MESSAGE_ID,
+        p_prompt_version_id: CHAT_CONFIGURATION.prompt.version.id,
+        p_user_id: USER.id,
       },
-      p_embedding_model_config_id: EMBEDDING_CONFIGURATION.model.id,
-      p_message_id: MESSAGE_ID,
-      p_prompt_version_id: CHAT_CONFIGURATION.prompt.version.id,
-    });
+    );
 
     expect(runNoteChatStream).toHaveBeenCalledWith(
       expect.objectContaining({

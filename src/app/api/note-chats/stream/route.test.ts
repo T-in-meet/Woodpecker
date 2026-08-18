@@ -5,10 +5,14 @@ import {
   resolveAiRuntimeEmbeddingConfiguration,
 } from "@/features/ai/runtimes/resolve-configuration";
 import { markAiOperationalErrorAsReported } from "@/features/ai/utils/report-ai-operational-error";
-import { assertNoteChatDailyExecutionLimit } from "@/features/note-chats/execution/assert-daily-execution-limit";
+import {
+  NOTE_CHAT_DAILY_EXECUTION_LIMIT,
+  NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE,
+} from "@/features/note-chats/constants/execution";
 import type { RunNoteChatStreamResult } from "@/features/note-chats/stream/run-note-chat-stream";
 import { runNoteChatStream } from "@/features/note-chats/stream/run-note-chat-stream";
 import { reportNoteChatOperationalError } from "@/features/note-chats/utils/report-operational-error";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 import { POST } from "./route";
@@ -17,6 +21,10 @@ vi.mock("server-only", () => ({}));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
+}));
+
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: vi.fn(),
 }));
 
 vi.mock("@/features/ai/runtimes/resolve-configuration", () => ({
@@ -30,10 +38,6 @@ vi.mock("@/features/note-chats/stream/run-note-chat-stream", () => ({
 
 vi.mock("@/features/note-chats/utils/report-operational-error", () => ({
   reportNoteChatOperationalError: vi.fn(),
-}));
-
-vi.mock("@/features/note-chats/execution/assert-daily-execution-limit", () => ({
-  assertNoteChatDailyExecutionLimit: vi.fn(),
 }));
 
 const USER_ID = "550e8400-e29b-41d4-a716-446655440000";
@@ -97,26 +101,30 @@ const createSupabaseClientMock = ({
     email_confirmed_at: "2026-08-11T00:00:00.000Z",
   },
   userError = null,
-  rpcData = CREATED_QUESTION,
-  rpcError = null,
 }: {
   user?: {
     id: string;
     email_confirmed_at: string | null;
   } | null;
   userError?: Error | null;
-  rpcData?: typeof CREATED_QUESTION | null;
-  rpcError?: Error | null;
-} = {}) => {
-  const auth = {
+} = {}) => ({
+  auth: {
     getUser: vi.fn().mockResolvedValue({
       data: {
         user,
       },
       error: userError,
     }),
-  };
+  },
+});
 
+const createAdminClientMock = ({
+  rpcData = CREATED_QUESTION,
+  rpcError = null,
+}: {
+  rpcData?: typeof CREATED_QUESTION | null;
+  rpcError?: Error | null;
+} = {}) => {
   const single = vi.fn().mockResolvedValue({
     data: rpcData,
     error: rpcError,
@@ -127,7 +135,6 @@ const createSupabaseClientMock = ({
   });
 
   return {
-    auth,
     rpc,
   };
 };
@@ -167,8 +174,6 @@ describe("POST /api/note-chats/stream", () => {
 
     vi.mocked(reportNoteChatOperationalError).mockResolvedValue(undefined);
 
-    vi.mocked(assertNoteChatDailyExecutionLimit).mockResolvedValue(undefined);
-
     vi.mocked(resolveAiRuntimeChatConfiguration)
       .mockResolvedValueOnce(CHAT_CONFIGURATION as never)
       .mockResolvedValueOnce(QUERY_EXPANSION_CONFIGURATION as never);
@@ -180,8 +185,10 @@ describe("POST /api/note-chats/stream", () => {
     vi.mocked(runNoteChatStream).mockResolvedValue(RUN_RESULT);
 
     const client = createSupabaseClientMock();
+    const adminClient = createAdminClientMock();
 
     vi.mocked(createClient).mockResolvedValue(client as never);
+    vi.mocked(createAdminClient).mockReturnValue(adminClient as never);
   });
 
   it("잘못된 JSON 요청이면 400을 반환한다", async () => {
@@ -244,7 +251,7 @@ describe("POST /api/note-chats/stream", () => {
     });
 
     expect(client.auth.getUser).toHaveBeenCalledTimes(1);
-    expect(client.rpc).not.toHaveBeenCalled();
+    expect(createAdminClient).not.toHaveBeenCalled();
     expect(runNoteChatStream).not.toHaveBeenCalled();
   });
 
@@ -272,7 +279,7 @@ describe("POST /api/note-chats/stream", () => {
       error: "이메일 확인이 필요합니다.",
     });
 
-    expect(client.rpc).not.toHaveBeenCalled();
+    expect(createAdminClient).not.toHaveBeenCalled();
     expect(runNoteChatStream).not.toHaveBeenCalled();
   });
 
@@ -313,7 +320,7 @@ describe("POST /api/note-chats/stream", () => {
       }),
     );
 
-    expect(client.rpc).not.toHaveBeenCalled();
+    expect(createAdminClient).not.toHaveBeenCalled();
     expect(runNoteChatStream).not.toHaveBeenCalled();
   });
 
@@ -346,19 +353,21 @@ describe("POST /api/note-chats/stream", () => {
     });
 
     expect(reportNoteChatOperationalError).not.toHaveBeenCalled();
-    expect(client.rpc).not.toHaveBeenCalled();
+    expect(createAdminClient).not.toHaveBeenCalled();
     expect(runNoteChatStream).not.toHaveBeenCalled();
   });
 
   it("질문 생성 RPC가 실패하면 운영 오류를 기록하고 500을 반환한다", async () => {
     const createError = new Error("question create failed");
 
-    const client = createSupabaseClientMock({
+    const client = createSupabaseClientMock();
+    const adminClient = createAdminClientMock({
       rpcData: null,
       rpcError: createError,
     });
 
     vi.mocked(createClient).mockResolvedValue(client as never);
+    vi.mocked(createAdminClient).mockReturnValue(adminClient as never);
 
     const response = await POST(
       createRequest({
@@ -374,7 +383,7 @@ describe("POST /api/note-chats/stream", () => {
       error: "질문 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.",
     });
 
-    expect(client.rpc).toHaveBeenCalledWith(
+    expect(adminClient.rpc).toHaveBeenCalledWith(
       "create_note_chat_question",
       expect.objectContaining({
         p_agent_id: CHAT_CONFIGURATION.prompt.agent.id,
@@ -383,8 +392,10 @@ describe("POST /api/note-chats/stream", () => {
           text: "질문입니다.",
         },
         p_conversation_id: CONVERSATION_ID,
+        p_daily_execution_limit: NOTE_CHAT_DAILY_EXECUTION_LIMIT,
         p_embedding_model_config_id: EMBEDDING_CONFIGURATION.model.id,
         p_prompt_version_id: CHAT_CONFIGURATION.prompt.version.id,
+        p_user_id: USER_ID,
       }),
     );
 
@@ -405,12 +416,14 @@ describe("POST /api/note-chats/stream", () => {
   });
 
   it("질문 생성 RPC 결과가 없으면 운영 오류를 기록하고 500을 반환한다", async () => {
-    const client = createSupabaseClientMock({
+    const client = createSupabaseClientMock();
+    const adminClient = createAdminClientMock({
       rpcData: null,
       rpcError: null,
     });
 
     vi.mocked(createClient).mockResolvedValue(client as never);
+    vi.mocked(createAdminClient).mockReturnValue(adminClient as never);
 
     const response = await POST(
       createRequest({
@@ -439,6 +452,35 @@ describe("POST /api/note-chats/stream", () => {
       }),
     );
 
+    expect(runNoteChatStream).not.toHaveBeenCalled();
+  });
+
+  it("질문 생성 RPC가 일일 실행 제한 초과를 반환하면 429를 반환한다", async () => {
+    const client = createSupabaseClientMock();
+    const adminClient = createAdminClientMock({
+      rpcData: null,
+      rpcError: new Error(NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE),
+    });
+
+    vi.mocked(createClient).mockResolvedValue(client as never);
+    vi.mocked(createAdminClient).mockReturnValue(adminClient as never);
+
+    const response = await POST(
+      createRequest({
+        conversationId: CONVERSATION_ID,
+        content: {
+          text: "질문입니다.",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(429);
+    await expect(response.json()).resolves.toEqual({
+      code: NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE,
+      error: "오늘 사용할 수 있는 노트 챗봇 횟수를 모두 사용했습니다.",
+    });
+
+    expect(reportNoteChatOperationalError).not.toHaveBeenCalled();
     expect(runNoteChatStream).not.toHaveBeenCalled();
   });
 
@@ -471,15 +513,20 @@ describe("POST /api/note-chats/stream", () => {
      */
     await readStream(response);
 
-    expect(client.rpc).toHaveBeenCalledWith("create_note_chat_question", {
+    const adminClient = vi.mocked(createAdminClient).mock.results[0]
+      ?.value as ReturnType<typeof createAdminClientMock>;
+
+    expect(adminClient.rpc).toHaveBeenCalledWith("create_note_chat_question", {
       p_agent_id: CHAT_CONFIGURATION.prompt.agent.id,
       p_chat_model_config_id: CHAT_CONFIGURATION.model.id,
       p_content: {
         text: "질문입니다.",
       },
       p_conversation_id: CONVERSATION_ID,
+      p_daily_execution_limit: NOTE_CHAT_DAILY_EXECUTION_LIMIT,
       p_embedding_model_config_id: EMBEDDING_CONFIGURATION.model.id,
       p_prompt_version_id: CHAT_CONFIGURATION.prompt.version.id,
+      p_user_id: USER_ID,
     });
 
     expect(runNoteChatStream).toHaveBeenCalledTimes(1);

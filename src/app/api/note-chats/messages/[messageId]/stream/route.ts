@@ -9,8 +9,10 @@ import {
   NOTE_CHAT_AI_FEATURE_KEY,
   NOTE_CHAT_AI_ROLE_KEY,
 } from "@/features/note-chats/constants/ai";
-import { NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE } from "@/features/note-chats/constants/execution";
-import { assertNoteChatDailyExecutionLimit } from "@/features/note-chats/execution/assert-daily-execution-limit";
+import {
+  NOTE_CHAT_DAILY_EXECUTION_LIMIT,
+  NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE,
+} from "@/features/note-chats/constants/execution";
 import { updateNoteChatUserMessageInputSchema } from "@/features/note-chats/schema";
 import { runNoteChatStream } from "@/features/note-chats/stream/run-note-chat-stream";
 import { encodeNoteChatStreamEvent } from "@/features/note-chats/stream/serialize";
@@ -21,6 +23,7 @@ import {
   NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS,
   NOTE_CHAT_OPERATIONAL_ERROR_STAGES,
 } from "@/features/operational-errors/constants";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 type NoteChatUserMessageStreamRouteProps = {
@@ -28,6 +31,19 @@ type NoteChatUserMessageStreamRouteProps = {
     messageId: string;
   }>;
 };
+
+/**
+ * DB RPC가 반환한 오류가 Note Chat 일일 실행 제한 초과인지 확인합니다.
+ *
+ * Supabase RPC 오류 객체는 PostgreSQL 예외 메시지를 `message`에 담아 전달하므로,
+ * 안정적인 오류 코드 문자열 포함 여부로 사용자 사용량 초과를 구분합니다.
+ */
+function isNoteChatDailyExecutionLimitError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.message.includes(NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE)
+  );
+}
 
 /**
  * 기존 사용자 질문을 수정하고 이후 대화를 제거한 뒤
@@ -105,56 +121,6 @@ export async function POST(
       },
       {
         status: 403,
-      },
-    );
-  }
-
-  /*
-   * Note Chat의 일일 AI 실행 횟수를 제한합니다.
-   *
-   * 질문 수정과 오류 재시도 역시 새로운 Run을 생성하므로
-   * 일일 사용량에 포함합니다.
-   */
-  try {
-    await assertNoteChatDailyExecutionLimit(user.id);
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message === NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE
-    ) {
-      return NextResponse.json(
-        {
-          code: NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE,
-          error: "오늘 사용할 수 있는 노트 챗봇 횟수를 모두 사용했습니다.",
-        },
-        {
-          status: 429,
-        },
-      );
-    }
-
-    /*
-     * 일일 제한 초과 자체는 정상적인 사용량 정책 결과이므로 보고하지 않습니다.
-     * 제한 확인 과정이 실패한 경우에만 운영 오류로 보고합니다.
-     */
-    await reportNoteChatOperationalError({
-      actorUserId: user.id,
-      error,
-      errorCode:
-        NOTE_CHAT_OPERATIONAL_ERROR_CODES.DAILY_EXECUTION_LIMIT_CHECK_FAILED,
-      message: "노트 챗봇 일일 실행 제한 확인에 실패했습니다.",
-      operation:
-        NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.CHECK_DAILY_EXECUTION_LIMIT,
-      stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.EXECUTION_LIMIT,
-      userId: user.id,
-    });
-
-    return NextResponse.json(
-      {
-        error: "노트 챗봇 사용량을 확인하지 못했습니다.",
-      },
-      {
-        status: 500,
       },
     );
   }
@@ -276,18 +242,34 @@ export async function POST(
    *
    * Run에는 이번 실행에서 실제 사용할 Agent·Prompt·Model ID를 기록합니다.
    */
-  const { data: updated, error: updateError } = await supabase
+  const adminClient = createAdminClient();
+
+  const { data: updated, error: updateError } = await adminClient
     .rpc("update_note_chat_user_message", {
       p_agent_id: chatConfiguration.prompt.agent.id,
       p_chat_model_config_id: chatConfiguration.model.id,
       p_content: parsed.data.content,
+      p_daily_execution_limit: NOTE_CHAT_DAILY_EXECUTION_LIMIT,
       p_embedding_model_config_id: embeddingConfiguration.model.id,
       p_message_id: parsed.data.messageId,
       p_prompt_version_id: chatConfiguration.prompt.version.id,
+      p_user_id: user.id,
     })
     .single();
 
   if (updateError) {
+    if (isNoteChatDailyExecutionLimitError(updateError)) {
+      return NextResponse.json(
+        {
+          code: NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE,
+          error: "오늘 사용할 수 있는 노트 챗봇 횟수를 모두 사용했습니다.",
+        },
+        {
+          status: 429,
+        },
+      );
+    }
+
     /*
      * 사용자 메시지 수정과 이후 대화 정리, Pending Run 생성은 하나의 RPC에서
      * 처리하므로 트랜잭션 실패 대상을 식별할 수 있는 ID만 기록합니다.

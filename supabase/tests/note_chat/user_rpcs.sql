@@ -1,10 +1,10 @@
 -- =========================================
--- note_chat / user RPCs
+-- note_chat / question RPCs
 -- =========================================
 
 BEGIN;
 
-SELECT plan(17);
+SELECT plan(25);
 
 SELECT set_config('test.note_chat_rpc_user_id', gen_random_uuid()::text, true);
 SELECT set_config('test.note_chat_rpc_other_user_id', gen_random_uuid()::text, true);
@@ -65,7 +65,7 @@ SELECT throws_ok(
   $sql$,
   '42501',
   NULL,
-  $$anon should not execute create_note_chat_question$$
+  $$anon should not execute legacy create_note_chat_question$$
 );
 
 SET LOCAL ROLE authenticated;
@@ -78,10 +78,59 @@ SELECT set_config(
   true
 );
 
+SELECT throws_ok(
+  $sql$
+    SELECT *
+    FROM public.create_note_chat_question(
+      current_setting('test.note_chat_rpc_conversation_id')::uuid,
+      '{"text":"authenticated legacy"}'::jsonb
+    );
+  $sql$,
+  '42501',
+  NULL,
+  $$authenticated should not execute legacy create_note_chat_question$$
+);
+
+SELECT throws_ok(
+  $sql$
+    SELECT *
+    FROM public.create_note_chat_question(
+      current_setting('test.note_chat_rpc_user_id')::uuid,
+      current_setting('test.note_chat_rpc_conversation_id')::uuid,
+      '{"text":"authenticated new"}'::jsonb,
+      1000000
+    );
+  $sql$,
+  '42501',
+  NULL,
+  $$authenticated should not execute service create_note_chat_question$$
+);
+
+SELECT throws_ok(
+  $sql$
+    SELECT *
+    FROM public.update_note_chat_user_message(
+      current_setting('test.note_chat_rpc_user_id')::uuid,
+      gen_random_uuid(),
+      '{"text":"authenticated update"}'::jsonb,
+      1000000
+    );
+  $sql$,
+  '42501',
+  NULL,
+  $$authenticated should not execute service update_note_chat_user_message$$
+);
+
+RESET ROLE;
+
+SET LOCAL ROLE service_role;
+
 SELECT *
 FROM public.create_note_chat_question(
+  current_setting('test.note_chat_rpc_user_id')::uuid,
   current_setting('test.note_chat_rpc_conversation_id')::uuid,
-  '{"text":"first question"}'::jsonb
+  '{"text":"first question"}'::jsonb,
+  100
 )
 \gset test_note_chat_rpc_first_
 
@@ -128,8 +177,10 @@ SELECT throws_ok(
   $sql$
     SELECT *
     FROM public.create_note_chat_question(
+      current_setting('test.note_chat_rpc_user_id')::uuid,
       current_setting('test.note_chat_rpc_other_conversation_id')::uuid,
-      '{"text":"blocked"}'::jsonb
+      '{"text":"blocked"}'::jsonb,
+      100
     );
   $sql$,
   'P0001',
@@ -141,8 +192,10 @@ SELECT throws_ok(
   $sql$
     SELECT *
     FROM public.create_note_chat_question(
+      current_setting('test.note_chat_rpc_user_id')::uuid,
       current_setting('test.note_chat_rpc_conversation_id')::uuid,
-      '[]'::jsonb
+      '[]'::jsonb,
+      100
     );
   $sql$,
   'P0001',
@@ -150,12 +203,35 @@ SELECT throws_ok(
   $$create_note_chat_question should reject non-object content$$
 );
 
+SELECT throws_ok(
+  $sql$
+    SELECT *
+    FROM public.create_note_chat_question(
+      current_setting('test.note_chat_rpc_user_id')::uuid,
+      current_setting('test.note_chat_rpc_conversation_id')::uuid,
+      '{"text":"invalid limit"}'::jsonb,
+      0
+    );
+  $sql$,
+  'P0001',
+  'daily execution limit must be positive',
+  $$create_note_chat_question should reject invalid daily limits$$
+);
+
 SELECT *
 FROM public.create_note_chat_question(
+  current_setting('test.note_chat_rpc_user_id')::uuid,
   current_setting('test.note_chat_rpc_conversation_id')::uuid,
-  '{"text":"second question"}'::jsonb
+  '{"text":"second question"}'::jsonb,
+  100
 )
 \gset test_note_chat_rpc_second_
+
+SELECT set_config(
+  'test.note_chat_rpc_second_user_message_id',
+  :'test_note_chat_rpc_second_user_message_id',
+  true
+);
 
 RESET ROLE;
 
@@ -188,20 +264,14 @@ SELECT set_config(
 INSERT INTO public.note_chat_runs (user_message_id)
 VALUES (current_setting('test.note_chat_rpc_deleted_message_id')::uuid);
 
-SET LOCAL ROLE authenticated;
-SELECT set_config(
-  'request.jwt.claims',
-  json_build_object(
-    'sub', current_setting('test.note_chat_rpc_user_id'),
-    'role', 'authenticated'
-  )::text,
-  true
-);
+SET LOCAL ROLE service_role;
 
 SELECT *
 FROM public.update_note_chat_user_message(
+  current_setting('test.note_chat_rpc_user_id')::uuid,
   :'test_note_chat_rpc_second_user_message_id'::uuid,
-  '{"text":"edited second question"}'::jsonb
+  '{"text":"edited second question"}'::jsonb,
+  100
 )
 \gset test_note_chat_rpc_edit_
 
@@ -260,8 +330,10 @@ SELECT throws_ok(
   $sql$
     SELECT *
     FROM public.update_note_chat_user_message(
+      current_setting('test.note_chat_rpc_user_id')::uuid,
       current_setting('test.note_chat_rpc_deleted_message_id')::uuid,
-      '{"text":"blocked"}'::jsonb
+      '{"text":"blocked"}'::jsonb,
+      100
     );
   $sql$,
   'P0001',
@@ -292,22 +364,16 @@ SELECT set_config(
   true
 );
 
-SET LOCAL ROLE authenticated;
-SELECT set_config(
-  'request.jwt.claims',
-  json_build_object(
-    'sub', current_setting('test.note_chat_rpc_user_id'),
-    'role', 'authenticated'
-  )::text,
-  true
-);
+SET LOCAL ROLE service_role;
 
 SELECT throws_ok(
   $sql$
     SELECT *
     FROM public.update_note_chat_user_message(
+      current_setting('test.note_chat_rpc_user_id')::uuid,
       current_setting('test.note_chat_rpc_assistant_message_id')::uuid,
-      '{"text":"blocked assistant"}'::jsonb
+      '{"text":"blocked assistant"}'::jsonb,
+      100
     );
   $sql$,
   'P0001',
@@ -315,27 +381,69 @@ SELECT throws_ok(
   $$update_note_chat_user_message should reject assistant messages$$
 );
 
-SET LOCAL ROLE authenticated;
-SELECT set_config(
-  'request.jwt.claims',
-  json_build_object(
-    'sub', current_setting('test.note_chat_rpc_unverified_id'),
-    'role', 'authenticated'
-  )::text,
-  true
+SELECT throws_ok(
+  $sql$
+    SELECT *
+    FROM public.create_note_chat_question(
+      current_setting('test.note_chat_rpc_unverified_id')::uuid,
+      current_setting('test.note_chat_rpc_unverified_conversation_id')::uuid,
+      '{"text":"unverified"}'::jsonb,
+      100
+    );
+  $sql$,
+  'P0001',
+  'email not confirmed',
+  $$unverified users should not create note chat questions$$
 );
 
 SELECT throws_ok(
   $sql$
     SELECT *
     FROM public.create_note_chat_question(
-      current_setting('test.note_chat_rpc_unverified_conversation_id')::uuid,
-      '{"text":"unverified"}'::jsonb
+      current_setting('test.note_chat_rpc_user_id')::uuid,
+      current_setting('test.note_chat_rpc_conversation_id')::uuid,
+      '{"text":"limit create"}'::jsonb,
+      1
     );
   $sql$,
   'P0001',
-  'email not confirmed',
-  $$unverified users should not create note chat questions$$
+  'DAILY_EXECUTION_LIMIT_EXCEEDED',
+  $$create_note_chat_question should reject requests at the daily limit$$
+);
+
+SELECT is(
+  (
+    SELECT count(*)
+    FROM public.note_chat_messages
+    WHERE content->>'text' = 'limit create'
+  ),
+  0::bigint,
+  $$daily limit failure should not create a user message$$
+);
+
+SELECT throws_ok(
+  $sql$
+    SELECT *
+    FROM public.update_note_chat_user_message(
+      current_setting('test.note_chat_rpc_user_id')::uuid,
+      current_setting('test.note_chat_rpc_second_user_message_id')::uuid,
+      '{"text":"limit update"}'::jsonb,
+      1
+    );
+  $sql$,
+  'P0001',
+  'DAILY_EXECUTION_LIMIT_EXCEEDED',
+  $$update_note_chat_user_message should reject requests at the daily limit$$
+);
+
+SELECT is(
+  (
+    SELECT content->>'text'
+    FROM public.note_chat_messages
+    WHERE id = :'test_note_chat_rpc_second_user_message_id'::uuid
+  ),
+  'edited second question',
+  $$daily limit failure should not edit the target message$$
 );
 
 RESET ROLE;
@@ -344,22 +452,16 @@ ALTER TABLE public.note_chat_runs
 ADD CONSTRAINT note_chat_runs_test_atomic_failure
 CHECK (status <> 'pending') NOT VALID;
 
-SET LOCAL ROLE authenticated;
-SELECT set_config(
-  'request.jwt.claims',
-  json_build_object(
-    'sub', current_setting('test.note_chat_rpc_user_id'),
-    'role', 'authenticated'
-  )::text,
-  true
-);
+SET LOCAL ROLE service_role;
 
 SELECT throws_ok(
   $sql$
     SELECT *
     FROM public.create_note_chat_question(
+      current_setting('test.note_chat_rpc_user_id')::uuid,
       current_setting('test.note_chat_rpc_conversation_id')::uuid,
-      '{"text":"atomic marker"}'::jsonb
+      '{"text":"atomic marker"}'::jsonb,
+      100
     );
   $sql$,
   '23514',
