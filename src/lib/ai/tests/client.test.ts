@@ -278,6 +278,30 @@ describe("generateJson — provider 실패", () => {
     expect(error.code).toBe(3040);
   });
 
+  // errors 원소가 객체가 아닐 때 TypeError가 새어 나가면 status·code 진단이 사라진다.
+  it("errors 원소가 null이어도 CloudflareAiError로 던진다", async () => {
+    mockRaw(500, { success: false, errors: [null] });
+
+    const error = await expectKind(
+      generateJson({ prompt: PROMPT, responseSchema: RESPONSE_SCHEMA }),
+      "provider",
+    );
+
+    expect(error.code).toBeUndefined();
+    expect(error.status).toBe(500);
+  });
+
+  it("errors 원소가 문자열이어도 CloudflareAiError로 던진다", async () => {
+    mockRaw(500, { success: false, errors: ["실패"] });
+
+    const error = await expectKind(
+      generateJson({ prompt: PROMPT, responseSchema: RESPONSE_SCHEMA }),
+      "provider",
+    );
+
+    expect(error.code).toBeUndefined();
+  });
+
   it("요청 과대(3006)도 코드로 구분된다", async () => {
     mockRaw(413, { success: false, errors: [{ code: 3006 }] });
 
@@ -371,6 +395,40 @@ describe("generateJson — 로컬 실패", () => {
     await expectKind(
       generateJson({ prompt: PROMPT, responseSchema: RESPONSE_SCHEMA }),
       "network",
+    );
+  });
+
+  // 헤더는 받았지만 본문을 읽는 사이 deadline이 걸리는 경로.
+  // provider로 뭉치면 호출부가 지연 안내 대신 일반 실패 문구를 내보낸다.
+  it("본문을 읽는 도중 끊기면 provider가 아니라 timeout으로 구분한다", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => {
+        throw namedError("TimeoutError");
+      },
+    });
+
+    const error = await expectKind(
+      generateJson({ prompt: PROMPT, responseSchema: RESPONSE_SCHEMA }),
+      "timeout",
+    );
+
+    expect(error.status).toBeUndefined();
+  });
+
+  it("본문을 읽는 도중 AbortError면 aborted로 구분한다", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => {
+        throw namedError("AbortError");
+      },
+    });
+
+    await expectKind(
+      generateJson({ prompt: PROMPT, responseSchema: RESPONSE_SCHEMA }),
+      "aborted",
     );
   });
 

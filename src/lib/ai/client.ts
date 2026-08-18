@@ -100,6 +100,18 @@ function readCredentials(): Credentials {
   return { accountId, apiToken };
 }
 
+/**
+ * 우리 쪽 `AbortSignal`로 끊긴 예외인지.
+ *
+ * fetch 호출뿐 아니라 응답 본문을 읽는 도중에도 발화한다. 본문 스트리밍 중에 끊긴 것을
+ * 파싱 실패로 뭉치면 앱 타임아웃이 provider 실패로 둔갑해 지연 안내가 나가지 않는다.
+ */
+function isLocalAbort(error: unknown): boolean {
+  const name = error instanceof Error ? error.name : "";
+
+  return name === "TimeoutError" || name === "AbortError";
+}
+
 /** fetch가 던진 예외를 오류 종류로 옮긴다. */
 function toLocalFailure(error: unknown): CloudflareAiError {
   const name = error instanceof Error ? error.name : "";
@@ -126,7 +138,14 @@ function readErrorCode(body: unknown): number | undefined {
     return undefined;
   }
 
-  const code = (errors[0] as { code?: unknown }).code;
+  // 원소가 null이거나 객체가 아닐 수 있다. 여기서 막지 않으면 TypeError가
+  // CloudflareAiError 대신 밖으로 나가 status·code 진단이 통째로 사라진다.
+  const first: unknown = errors[0];
+  if (first === null || typeof first !== "object") {
+    return undefined;
+  }
+
+  const code = (first as { code?: unknown }).code;
   return typeof code === "number" ? code : undefined;
 }
 
@@ -262,7 +281,14 @@ export async function generateJson(
   let parsed: unknown;
   try {
     parsed = await response.json();
-  } catch {
+  } catch (error) {
+    // 헤더는 받았지만 본문을 읽는 사이 우리 쪽 deadline이 걸릴 수 있다.
+    // 그 경우까지 provider 실패로 묶으면 kind가 timeout/aborted로 남지 않아
+    // 호출부가 지연 안내 대신 일반 실패 문구를 내보낸다.
+    if (isLocalAbort(error)) {
+      throw toLocalFailure(error);
+    }
+
     throw new CloudflareAiError("provider", undefined, response.status);
   }
 
