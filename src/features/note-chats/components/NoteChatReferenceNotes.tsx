@@ -33,7 +33,7 @@ export function NoteChatReferenceNotes({
   }
 
   return (
-    <div className="flex flex-wrap justify-end gap-2">
+    <div className="flex min-w-0 flex-wrap justify-end gap-2">
       {usedSources.map((source) => (
         <Button
           key={source.noteId}
@@ -41,10 +41,12 @@ export function NoteChatReferenceNotes({
           type="button"
           size="sm"
           variant="outline"
+          className="max-w-full min-w-0"
         >
           <Link href={getNoteDetailRoute(source.noteId)}>
-            <FileText className="size-4" />
-            {source.title}
+            <FileText className="size-4 shrink-0" />
+
+            <span className="min-w-0 truncate">{source.title}</span>
           </Link>
         </Button>
       ))}
