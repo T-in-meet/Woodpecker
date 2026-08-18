@@ -93,11 +93,59 @@ export type Database = {
           },
         ];
       };
+      ai_embedding_active_generations: {
+        Row: {
+          active_generation_id: string;
+          active_model_config_id: string;
+          input_kind: string;
+          owner_user_id: string;
+          source_id: string;
+          source_type: string;
+          updated_at: string;
+        };
+        Insert: {
+          active_generation_id: string;
+          active_model_config_id: string;
+          input_kind: string;
+          owner_user_id: string;
+          source_id: string;
+          source_type: string;
+          updated_at?: string;
+        };
+        Update: {
+          active_generation_id?: string;
+          active_model_config_id?: string;
+          input_kind?: string;
+          owner_user_id?: string;
+          source_id?: string;
+          source_type?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ai_embedding_active_generations_model_config_id_fkey";
+            columns: ["active_model_config_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_ai_model_list";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ai_embedding_active_generations_model_config_id_fkey";
+            columns: ["active_model_config_id"];
+            isOneToOne: false;
+            referencedRelation: "ai_model_configs";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       ai_embeddings: {
         Row: {
+          chunk_count: number;
+          chunk_index: number;
           content_hash: string;
           created_at: string;
           embedding: string;
+          generation_id: string;
           id: string;
           input_hash: string;
           input_kind: string;
@@ -110,9 +158,12 @@ export type Database = {
           token_count: number | null;
         };
         Insert: {
+          chunk_count?: number;
+          chunk_index?: number;
           content_hash: string;
           created_at?: string;
           embedding: string;
+          generation_id?: string;
           id?: string;
           input_hash: string;
           input_kind: string;
@@ -125,9 +176,12 @@ export type Database = {
           token_count?: number | null;
         };
         Update: {
+          chunk_count?: number;
+          chunk_index?: number;
           content_hash?: string;
           created_at?: string;
           embedding?: string;
+          generation_id?: string;
           id?: string;
           input_hash?: string;
           input_kind?: string;
@@ -1184,7 +1238,7 @@ export type Database = {
           {
             foreignKeyName: "review_gradings_review_log_id_fkey";
             columns: ["review_log_id"];
-            isOneToOne: true;
+            isOneToOne: false;
             referencedRelation: "review_logs";
             referencedColumns: ["id"];
           },
@@ -1477,6 +1531,18 @@ export type Database = {
       };
     };
     Functions: {
+      activate_ai_embedding_generation: {
+        Args: {
+          p_generation_id: string;
+          p_input_kind: string;
+          p_model_config_id: string;
+          p_owner_user_id: string;
+          p_source_id: string;
+          p_source_type: string;
+          p_source_updated_at: string;
+        };
+        Returns: undefined;
+      };
       apply_time_of_day: { Args: { t: string; ts: string }; Returns: string };
       apply_time_of_day_not_before: {
         Args: { t: string; ts: string };
@@ -1497,7 +1563,7 @@ export type Database = {
         }[];
       };
       claim_quiz_generation_v2: {
-        Args: { p_user_id: string; p_note_id: string; p_quiz_type: string };
+        Args: { p_note_id: string; p_quiz_type: string; p_user_id: string };
         Returns: Json;
       };
       claim_review_grading: {
@@ -1556,22 +1622,37 @@ export type Database = {
         };
         Returns: string;
       };
-      create_note_chat_question: {
-        Args: {
-          p_agent_id?: string;
-          p_chat_model_config_id?: string;
-          p_content: Json;
-          p_conversation_id: string;
-          p_daily_execution_limit: number;
-          p_embedding_model_config_id?: string;
-          p_prompt_version_id?: string;
-          p_user_id: string;
-        };
-        Returns: {
-          run_id: string;
-          user_message_id: string;
-        }[];
-      };
+      create_note_chat_question:
+        | {
+            Args: {
+              p_agent_id?: string;
+              p_chat_model_config_id?: string;
+              p_content: Json;
+              p_conversation_id: string;
+              p_embedding_model_config_id?: string;
+              p_prompt_version_id?: string;
+            };
+            Returns: {
+              run_id: string;
+              user_message_id: string;
+            }[];
+          }
+        | {
+            Args: {
+              p_agent_id?: string;
+              p_chat_model_config_id?: string;
+              p_content: Json;
+              p_conversation_id: string;
+              p_daily_execution_limit: number;
+              p_embedding_model_config_id?: string;
+              p_prompt_version_id?: string;
+              p_user_id: string;
+            };
+            Returns: {
+              run_id: string;
+              user_message_id: string;
+            }[];
+          };
       create_note_with_initial_review_log: {
         Args: { p_content: string; p_scheduled_at: string; p_title: string };
         Returns: string;
@@ -1588,18 +1669,39 @@ export type Database = {
           image_paths: string[];
         }[];
       };
-      finalize_quiz_generation_v2: {
+      delete_inactive_ai_embedding_generation: {
         Args: {
-          p_user_id: string;
-          p_note_id: string;
-          p_quiz_type: string;
-          p_claim_token: string;
-          p_questions: Json;
-          p_history: Json;
-          p_content_hash: string;
+          p_generation_id: string;
+          p_input_kind: string;
+          p_model_config_id: string;
+          p_owner_user_id: string;
+          p_source_id: string;
+          p_source_type: string;
         };
-        Returns: string;
+        Returns: number;
       };
+      finalize_quiz_generation_v2:
+        | {
+            Args: {
+              p_claim_token: string;
+              p_note_id: string;
+              p_quiz_type: string;
+              p_user_id: string;
+            };
+            Returns: string;
+          }
+        | {
+            Args: {
+              p_claim_token: string;
+              p_content_hash: string;
+              p_history: Json;
+              p_note_id: string;
+              p_questions: Json;
+              p_quiz_type: string;
+              p_user_id: string;
+            };
+            Returns: string;
+          };
       finalize_review_grading: {
         Args: {
           p_claim_token: string;
@@ -1771,6 +1873,7 @@ export type Database = {
           p_source_type: string;
         };
         Returns: {
+          chunk_index: number;
           distance: number;
           embedding_id: string;
           similarity: number;
@@ -1785,22 +1888,37 @@ export type Database = {
         Args: { p_configurations: Json; p_setting_id: string };
         Returns: undefined;
       };
-      update_note_chat_user_message: {
-        Args: {
-          p_agent_id?: string;
-          p_chat_model_config_id?: string;
-          p_content: Json;
-          p_daily_execution_limit: number;
-          p_embedding_model_config_id?: string;
-          p_message_id: string;
-          p_prompt_version_id?: string;
-          p_user_id: string;
-        };
-        Returns: {
-          run_id: string;
-          user_message_id: string;
-        }[];
-      };
+      update_note_chat_user_message:
+        | {
+            Args: {
+              p_agent_id?: string;
+              p_chat_model_config_id?: string;
+              p_content: Json;
+              p_embedding_model_config_id?: string;
+              p_message_id: string;
+              p_prompt_version_id?: string;
+            };
+            Returns: {
+              run_id: string;
+              user_message_id: string;
+            }[];
+          }
+        | {
+            Args: {
+              p_agent_id?: string;
+              p_chat_model_config_id?: string;
+              p_content: Json;
+              p_daily_execution_limit: number;
+              p_embedding_model_config_id?: string;
+              p_message_id: string;
+              p_prompt_version_id?: string;
+              p_user_id: string;
+            };
+            Returns: {
+              run_id: string;
+              user_message_id: string;
+            }[];
+          };
       update_notification_time_of_day: {
         Args: { p_note_id: string; p_time?: string };
         Returns: undefined;
