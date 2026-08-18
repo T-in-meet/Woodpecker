@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 
 import { useNoteChatConversationListQuery } from "../hooks/use-note-chat-conversation-list-query";
+import { NoteChatBreadcrumb } from "./NoteChatBreadcrumb";
 import { NoteChatConversationList } from "./NoteChatConversationList";
 import { NoteChatConversationSearch } from "./NoteChatConversationSearch";
 import { NoteChatCreateDialog } from "./NoteChatCreateDialog";
@@ -31,6 +32,7 @@ export function NoteChatsClient() {
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-8 sm:px-6">
+      <NoteChatBreadcrumb />
       <div>
         <h1 className="text-3xl font-semibold">노트 챗봇</h1>
 

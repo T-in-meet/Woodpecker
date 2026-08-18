@@ -7,6 +7,7 @@ import { NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE } from "../constants/executi
 import { noteChatQueryKeys } from "../constants/query-keys";
 import { useNoteChatConversationDetailQuery } from "../hooks/use-note-chat-conversation-query";
 import { useNoteChatStream } from "../hooks/use-note-chat-stream";
+import { NoteChatBreadcrumb } from "./NoteChatBreadcrumb";
 import { NoteChatConversationContent } from "./NoteChatConversationContent";
 import { NoteChatConversationError } from "./NoteChatConversationError";
 import { NoteChatConversationNotFound } from "./NoteChatConversationNotFound";
@@ -280,7 +281,7 @@ export function NoteChatConversationClient({
     return () => {
       window.removeEventListener("resize", updateConversationHeight);
     };
-  }, []);
+  }, [detail]);
 
   const visibleMessages =
     detail && editingSequenceNumber !== null
@@ -291,6 +292,12 @@ export function NoteChatConversationClient({
 
   return (
     <div className="mx-auto -mb-16 flex w-full max-w-6xl flex-col px-4 md:mb-0 md:px-12">
+      {detail ? (
+        <NoteChatBreadcrumb
+          className="my-4"
+          conversationTitle={detail.conversation.title}
+        />
+      ) : null}
       <div
         ref={conversationContainerRef}
         className="flex min-h-0 flex-col overflow-hidden border border-b-0"
