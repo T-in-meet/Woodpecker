@@ -24255,4 +24255,3 @@ SELECT pg_catalog.setval('"supabase_functions"."hooks_id_seq"', 1, false);
 -- \unrestrict IATxcSd8C6cibK9MLndjYwVvUNKe0uk5YBBF6ijB836QL5NkOztjenFDclc9Xq9
 
 RESET ALL;
-

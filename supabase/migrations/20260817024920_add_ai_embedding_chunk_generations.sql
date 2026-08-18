@@ -714,4 +714,3 @@ CREATE OR REPLACE TRIGGER "tr_notes_delete_embeddings"
 
 
 COMMIT;
-
