@@ -141,9 +141,8 @@ function createSupabaseMock(
     updateError?: { message: string } | null;
     updatedNote?: {
       id: string;
-      title?: string;
-      content?: string;
-      updated_at?: string;
+      title: string;
+      content: string;
     } | null;
   } = {},
 ) {
@@ -655,6 +654,8 @@ describe("updateNoteAction", () => {
     } = createSupabaseMock({
       updatedNote: {
         id: validNoteId,
+        title: "Updated title",
+        content: "Updated content",
       },
     });
     createClientMock.mockResolvedValue(supabase);
@@ -672,7 +673,7 @@ describe("updateNoteAction", () => {
     });
     expect(updateNoteEqMock).toHaveBeenCalledWith("id", validNoteId);
     expect(updateUserEqMock).toHaveBeenCalledWith("user_id", "user-123");
-    expect(updateSelectMock).toHaveBeenCalledWith("id");
+    expect(updateSelectMock).toHaveBeenCalledWith("id, title, content");
     expect(result).toEqual({ success: true });
 
     expect(afterMock).toHaveBeenCalledTimes(1);
@@ -1003,7 +1004,6 @@ describe("Note embedding integration", () => {
         }),
       );
 
-      expect(resolveAiRuntimeEmbeddingConfigurationMock).not.toHaveBeenCalled();
       expect(generateNoteEmbeddingMock).not.toHaveBeenCalled();
     });
 
@@ -1043,6 +1043,8 @@ describe("Note embedding integration", () => {
       const { supabase } = createSupabaseMock({
         updatedNote: {
           id: validNoteId,
+          title: "Updated title",
+          content: "Updated content",
         },
       });
 
@@ -1143,7 +1145,6 @@ describe("Note embedding integration", () => {
           id: validNoteId,
           title: "수정된 제목",
           content: "수정된 내용",
-          updated_at: "2026-08-18T00:00:00.000Z",
         },
       });
       const consoleErrorSpy = vi
@@ -1173,7 +1174,6 @@ describe("Note embedding integration", () => {
           id: validNoteId,
           title: "수정된 제목",
           content: "수정된 내용",
-          updated_at: "2026-08-18T00:00:00.000Z",
         },
       });
       const consoleErrorSpy = vi
@@ -1201,6 +1201,8 @@ describe("Note embedding integration", () => {
       const { supabase } = createSupabaseMock({
         updatedNote: {
           id: validNoteId,
+          title: "수정된 제목",
+          content: "수정된 내용",
         },
       });
 

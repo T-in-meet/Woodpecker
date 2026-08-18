@@ -15,11 +15,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 import { generateNoteEmbedding } from "../ai/rags/note/generate-embedding";
-import { reportAiOperationalError } from "../ai/utils/report-ai-operational-error";
 import {
   resolveAiRuntimeChatConfiguration,
   resolveAiRuntimeEmbeddingConfiguration,
 } from "../ai/runtimes";
+import { reportAiOperationalError } from "../ai/utils/report-ai-operational-error";
 import {
   NOTE_CHAT_AI_FEATURE_KEY,
   NOTE_CHAT_AI_ROLE_KEY,
