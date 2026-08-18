@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { toGeminiResponseSchema } from "../responseSchema";
+import { toCloudflareResponseSchema } from "../responseSchema";
 
 type JsonSchema = Record<string, unknown>;
 
@@ -19,7 +19,7 @@ const schema = z.object({
 });
 
 function convert(): JsonSchema {
-  return toGeminiResponseSchema(schema) as JsonSchema;
+  return toCloudflareResponseSchema(schema) as JsonSchema;
 }
 
 function questionProperties(): JsonSchema {
@@ -30,9 +30,9 @@ function questionProperties(): JsonSchema {
   return items.properties as JsonSchema;
 }
 
-describe("toGeminiResponseSchema", () => {
+describe("toCloudflareResponseSchema", () => {
   it("const를 enum으로 바꾼다", () => {
-    // Gemini는 const를 읽지 못한다. 유형 고정이 풀리면 스키마를 넘기는 의미가 없다.
+    // const 지원은 모델마다 갈린다. 유형 고정이 풀리면 스키마를 넘기는 의미가 없다.
     expect(questionProperties().type).toEqual({ type: "string", enum: ["ox"] });
   });
 

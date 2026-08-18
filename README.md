@@ -82,7 +82,7 @@ tests/e2e/             # Playwright E2E
 
 - Node.js 24.14.0 (nvm 사용 권장 — 상세는 [CONTRIBUTING.md](./CONTRIBUTING.md#1-nodejs-버전-설정))
 - Supabase 프로젝트 (URL, anon key, service role key)
-- Gemini API 키 (AI 퀴즈 생성 · 백지 테스트 채점에 사용)
+- Cloudflare 계정 ID와 Workers AI 실행 권한이 있는 API 토큰 (AI 퀴즈 생성 · 백지 테스트 채점에 사용)
 - VAPID 키 페어 (Web Push 알림 로컬 검증 시 필요, `mailto:` subject 필수)
 - 이메일 발송용 SMTP 계정 또는 Resend API 키
 - Google OAuth 클라이언트 ID/Secret (OAuth 로그인 로컬 검증 시 필요)

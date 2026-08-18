@@ -2,20 +2,24 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { z } from "zod";
 
+import { claimResultSchema } from "@/lib/ai/claimResult";
+import { generateJson } from "@/lib/ai/client";
+import { toAiFailureReason } from "@/lib/ai/failureReason";
+import { toCloudflareResponseSchema } from "@/lib/ai/responseSchema";
 import {
   getNoteDetailRoute,
   getNoteReviewRoute,
   ROUTES,
 } from "@/lib/constants/routes";
-import { getGemini } from "@/lib/gemini/client";
-import { toGeminiResponseSchema } from "@/lib/gemini/responseSchema";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/types/database.types";
 
-import { GRADING_ERROR_MESSAGES } from "./constants";
+import {
+  GRADING_AI_FAILURE_MESSAGES,
+  GRADING_ERROR_MESSAGES,
+} from "./constants";
 import { hashNoteContent } from "./lib/contentHash";
 import { buildGradingPrompt } from "./lib/gradingPrompt";
 import {
@@ -95,29 +99,40 @@ export type GradeAnswerActionState =
   | null;
 
 /**
- * 채점 한 건에 허용하는 전체 시간. Gemini 호출 시점이 아니라 액션 진입 시각부터 잰다.
+ * 채점 한 건에 허용하는 전체 시간. AI 호출 시점이 아니라 액션 진입 시각부터 잰다.
  *
  * 호출 직전에 타이머를 걸면 앞의 인증·조회·선점이 느릴 때 abort보다 플랫폼 제한이
  * 먼저 걸린다. 그러면 선점만 잡힌 채 함수가 죽어서, 사용자는 정상 오류도 못 받고
  * 선점이 만료될 때까지 재시도조차 막힌다.
  *
- * 복습 페이지의 maxDuration(55초)보다 짧게 두고, 선점 만료(60초)는 넘기지 않는다.
- * 이 값이 선점 만료를 넘기면 다른 요청이 선점을 이어받아 같은 채점에 Gemini를 두 번 부른다.
+ * 복습 페이지의 maxDuration(90초)보다 짧게 두고, 선점 만료(120초)는 넘기지 않는다.
+ * 이 값이 선점 만료를 넘기면 다른 요청이 선점을 이어받아 같은 채점에 AI를 두 번 부른다.
  * 순서: 이 값 < maxDuration < claim_review_grading의 stale window.
  *
- * abort는 클라이언트 요청만 끊는다. Gemini는 서비스 쪽 작업을 취소하지 않고 과금도 그대로
- * 발생하므로(@google/genai `GenerateContentConfig.abortSignal` 주석), 이 타임아웃의 목적은
- * 비용 절감이 아니라 원인을 남기고 선점 만료 전에 끝내는 것이다.
+ * 값 근거: reasoning_effort=low 적용 후 약 100,000자 입력도 8.9초에 완주했다.
+ * 네트워크·인증·DB 지연과 실행 편차를 포함하도록 60초를 둔다.
+ *
+ * abort는 이쪽 요청만 끊는다. Cloudflare가 서버 쪽 추론과 Neurons 소비를 즉시 멈춘다는
+ * 보장은 문서에 없다(공식 문서는 오류 `3008`과 실사용량 기준만 설명한다). 따라서 이
+ * 타임아웃의 목적은 비용 절감이 아니라, 원인을 남기고 선점 만료 전에 끝내는 것이다.
  */
-const GRADING_DEADLINE_MS = 45_000;
+const GRADING_DEADLINE_MS = 60_000;
 
 /**
- * 선점 시점에 남은 시간이 이보다 적으면 Gemini를 부르지 않고 실패시킨다.
+ * 선점 시점에 남은 시간이 이보다 적으면 AI를 부르지 않고 실패시킨다.
  *
- * 어차피 완주하지 못할 호출로 선점을 잡으면 그 회차의 채점이 stale window(60초)가
+ * 어차피 완주하지 못할 호출로 선점을 잡으면 그 회차의 채점이 stale window(120초)가
  * 지날 때까지 통째로 막힌다. 과금만 발생하고 결과는 버려지는 호출이기도 하다.
+ *
+ * low effort 실측 최댓값보다 작은 15초 미만이 남았으면 완주 가능성이 낮다고 본다.
+ *
+ * claim RPC(claim_review_grading·quiz의 claim_quiz_generation_v2와 같은 사용자 단위
+ * advisory lock 사용) 왕복 시간은 개발 DB에서 동시 요청으로 실측했다(2026-08-16).
+ * 90~300ms였고, 동시 요청 간 뚜렷한 직렬화 흔적은 없었다. 이 값의 1~2%도 안 되는
+ * 수준이라 재조정 없이 종결했다. 트래픽이 늘어 이 가정이 깨지면 재측정 스크립트를
+ * 새로 작성해 다시 잰다.
  */
-const MIN_GEMINI_BUDGET_MS = 10_000;
+const MIN_AI_BUDGET_MS = 15_000;
 
 /**
  * 채점 응답 구조를 디코딩 단계에서 강제한다. 검증은 그대로 Zod가 맡고,
@@ -129,15 +144,9 @@ const MIN_GEMINI_BUDGET_MS = 10_000;
  *
  * 퀴즈는 유형별로 스키마가 달라 호출마다 변환하지만 채점은 하나로 고정이라 한 번만 만든다.
  */
-const GRADING_RESPONSE_JSON_SCHEMA = toGeminiResponseSchema(
+const GRADING_RESPONSE_JSON_SCHEMA = toCloudflareResponseSchema(
   gradingGenerationSchema,
 );
-
-// claim_review_grading은 상태와 선점 토큰을 jsonb로 돌려준다.
-const claimResultSchema = z.object({
-  status: z.string(),
-  claimToken: z.string().uuid().optional(),
-});
 
 /**
  * 선점이 거절된 이유를 그대로 사용자 문구로 옮기는 상태들.
@@ -146,7 +155,6 @@ const claimResultSchema = z.object({
  */
 const CLAIM_ERROR_MESSAGES: Record<string, string | undefined> = {
   in_flight: GRADING_ERROR_MESSAGES.inFlight,
-  too_many_requests: GRADING_ERROR_MESSAGES.tooManyRequests,
   daily_exceeded: GRADING_ERROR_MESSAGES.dailyExceeded,
 };
 
@@ -298,31 +306,63 @@ function isBasisContentChanged(
   return gradedContentHash !== null && gradedContentHash !== currentContentHash;
 }
 
-/** 이미 확정된 채점 결과를 읽어 액션 응답으로 변환한다. */
+/**
+ * 확정된 채점 결과를 읽어 액션 응답으로 변환한다.
+ * 저장된 결과가 없으면(아직 채점 전이면) null을 돌려준다 — 호출부가 이어서
+ * 새로 채점하는 경로로 진행할지, 아니면 못 찾은 것 자체를 오류로 볼지 판단한다.
+ */
 async function readStoredGrading(
   reviewLogId: string,
   userId: string,
   userAnswer: string,
   currentContentHash: string,
-): Promise<GradeAnswerActionState> {
+): Promise<GradeAnswerActionState | null> {
   try {
     const existing = await getGradingByReviewLog(reviewLogId, userId);
-    if (existing) {
-      return {
-        success: true,
-        grading: { score: existing.score, ...existing.feedback },
-        gradedOtherAnswer: existing.user_answer !== userAnswer,
-        gradedAnswer: existing.user_answer,
-        basisContentChanged: isBasisContentChanged(
-          existing.graded_content_hash,
-          currentContentHash,
-        ),
-      };
+    if (!existing) {
+      return null;
     }
+
+    return {
+      success: true,
+      grading: { score: existing.score, ...existing.feedback },
+      gradedOtherAnswer: existing.user_answer !== userAnswer,
+      gradedAnswer: existing.user_answer,
+      basisContentChanged: isBasisContentChanged(
+        existing.graded_content_hash,
+        currentContentHash,
+      ),
+    };
   } catch {
-    // 아래 공통 실패 응답으로 진행
+    return {
+      error: "채점 결과를 불러오는 데 실패했습니다. 잠시 후 다시 시도해주세요.",
+    };
+  }
+}
+
+/**
+ * claim/finalize가 "already_graded"를 돌려줬을 때 저장된 채점을 찾아 반환한다.
+ * 두 RPC 모두 자신이 최신 선점이 아니라고 판단했을 때 이 상태를 쓰므로, 저장된
+ * 행이 반드시 있어야 정상이다 — 없으면 정상 경로에서는 나오지 않는 상태다.
+ */
+async function resolveAlreadyGraded(
+  reviewLogId: string,
+  userId: string,
+  userAnswer: string,
+  contentHash: string,
+): Promise<GradeAnswerActionState> {
+  const alreadyGraded = await readStoredGrading(
+    reviewLogId,
+    userId,
+    userAnswer,
+    contentHash,
+  );
+
+  if (alreadyGraded) {
+    return alreadyGraded;
   }
 
+  console.error("[gradeAnswerAction] already_graded인데 채점 결과를 찾지 못함");
   return {
     error: "채점 결과를 불러오는 데 실패했습니다. 잠시 후 다시 시도해주세요.",
   };
@@ -385,27 +425,15 @@ export async function gradeAnswerAction(
   const contentHash = hashNoteContent(note.content);
 
   // 복습 1회당 채점 1회 — 이미 채점했다면 저장된 결과를 재사용 (비용 통제 + 점수 일관성)
-  try {
-    const existing = await getGradingByReviewLog(
-      parsed.data.reviewLogId,
-      user.id,
-    );
-    if (existing) {
-      return {
-        success: true,
-        grading: { score: existing.score, ...existing.feedback },
-        gradedOtherAnswer: existing.user_answer !== parsed.data.answer,
-        gradedAnswer: existing.user_answer,
-        basisContentChanged: isBasisContentChanged(
-          existing.graded_content_hash,
-          contentHash,
-        ),
-      };
-    }
-  } catch {
-    return {
-      error: "데이터를 불러오는 데 실패했습니다. 잠시 후 다시 시도해주세요.",
-    };
+  const stored = await readStoredGrading(
+    parsed.data.reviewLogId,
+    user.id,
+    parsed.data.answer,
+    contentHash,
+  );
+
+  if (stored) {
+    return stored;
   }
 
   // 화면이 보여준 원본과 지금 채점할 원본이 같은 본문인지 확인한다.
@@ -419,14 +447,14 @@ export async function gradeAnswerAction(
     };
   }
 
-  // 선점하기 전에 Gemini를 완주시킬 시간이 남았는지 확인한다.
+  // 선점하기 전에 AI 호출을 완주시킬 시간이 남았는지 확인한다.
   // 여기서 잡은 선점은 이 요청이 끝나거나 stale window가 지나기 전까지
   // 같은 회차의 다른 채점 시도를 모두 막으므로, 못 쓸 선점은 아예 잡지 않는다.
-  const geminiBudgetMs = GRADING_DEADLINE_MS - (Date.now() - startedAt);
+  const aiBudgetMs = GRADING_DEADLINE_MS - (Date.now() - startedAt);
 
-  if (geminiBudgetMs < MIN_GEMINI_BUDGET_MS) {
+  if (aiBudgetMs < MIN_AI_BUDGET_MS) {
     console.error(
-      `[gradeAnswerAction] 남은 시간이 부족해 채점을 시작하지 않음 (${geminiBudgetMs}ms)`,
+      `[gradeAnswerAction] 남은 시간이 부족해 채점을 시작하지 않음 (${aiBudgetMs}ms)`,
     );
     return {
       error: "서버 응답이 지연되고 있어요. 잠시 후 다시 시도해주세요.",
@@ -438,9 +466,12 @@ export async function gradeAnswerAction(
   // 세션·이메일 인증·노트 소유권·pending 복습 로그 일치를 모두 확인한 뒤에만 여기에 도달한다.
   const admin = createAdminClient();
 
-  // Gemini 호출 전에 채점 권한을 원자적으로 선점한다.
-  // 앞의 조회만으로 분기하면 동시 요청이 모두 "미채점"을 보고 각자 Gemini를 호출한다
+  // AI 호출 전에 채점 권한을 원자적으로 선점한다.
+  // 앞의 조회만으로 분기하면 동시 요청이 모두 "미채점"을 보고 각자 AI를 호출한다
   // (유니크 제약은 저장 중복만 막을 뿐 이미 나간 API 비용은 되돌리지 못한다).
+  // MIN_AI_BUDGET_MS는 이 RPC의 왕복 시간을 반영하지 않는다(주석 참고). 락 경합 등으로
+  // 얼마나 걸리는지 실측 데이터를 쌓기 위해 매 호출마다 소요 시간을 남긴다.
+  const claimStartedAt = Date.now();
   const { data: claimData, error: claimError } = await admin.rpc(
     "claim_review_grading",
     {
@@ -449,6 +480,9 @@ export async function gradeAnswerAction(
       p_user_answer: parsed.data.answer,
       p_content_hash: contentHash,
     },
+  );
+  console.log(
+    `[gradeAnswerAction] claim_review_grading RPC 소요 시간: ${Date.now() - claimStartedAt}ms`,
   );
 
   if (claimError) {
@@ -464,7 +498,7 @@ export async function gradeAnswerAction(
   }
 
   if (claim.data.status === "already_graded") {
-    return await readStoredGrading(
+    return resolveAlreadyGraded(
       parsed.data.reviewLogId,
       user.id,
       parsed.data.answer,
@@ -496,24 +530,20 @@ export async function gradeAnswerAction(
 
   let responseText: string;
   try {
-    const response = await getGemini().models.generateContent({
-      model: "gemini-3.1-flash-lite",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseJsonSchema: GRADING_RESPONSE_JSON_SCHEMA,
-        // 예산을 여기서 다시 잰다. 위에서 계산한 값을 그대로 쓰면 타이머가 선점 RPC
-        // "이후"부터 흘러서, 종료 시각이 그 RPC에 걸린 시간만큼 뒤로 밀린다.
-        // README의 "채점 deadline < maxDuration" 순서를 지키려면 진입 시각 기준이어야 한다.
-        abortSignal: AbortSignal.timeout(
-          Math.max(0, GRADING_DEADLINE_MS - (Date.now() - startedAt)),
-        ),
-      },
+    responseText = await generateJson({
+      prompt,
+      responseSchema: GRADING_RESPONSE_JSON_SCHEMA,
+      // 예산을 여기서 다시 잰다. 위에서 계산한 값을 그대로 쓰면 타이머가 선점 RPC
+      // "이후"부터 흘러서, 종료 시각이 그 RPC에 걸린 시간만큼 뒤로 밀린다.
+      // README의 "채점 deadline < maxDuration" 순서를 지키려면 진입 시각 기준이어야 한다.
+      abortSignal: AbortSignal.timeout(
+        Math.max(0, GRADING_DEADLINE_MS - (Date.now() - startedAt)),
+      ),
     });
-    responseText = response.text ?? "";
   } catch (e) {
-    console.error("[gradeAnswerAction] Gemini API 호출 실패:", e);
-    return { error: "AI 채점에 실패했습니다. 잠시 후 다시 시도해주세요." };
+    // CloudflareAiError는 프롬프트·노트·답안을 담지 않으므로 그대로 남겨도 안전하다.
+    console.error("[gradeAnswerAction] AI 호출 실패:", e);
+    return { error: GRADING_AI_FAILURE_MESSAGES[toAiFailureReason(e)] };
   }
 
   // 응답 원문에는 노트·답안 내용이 그대로 담기므로 로그에 남기지 않는다.
@@ -561,7 +591,7 @@ export async function gradeAnswerAction(
   if (finalizeError || finalizeResult !== "ok") {
     // 선점이 만료된 사이 다른 요청이 먼저 저장한 경우 → 저장된 결과를 정본으로 삼는다
     if (finalizeResult === "already_graded") {
-      return await readStoredGrading(
+      return resolveAlreadyGraded(
         parsed.data.reviewLogId,
         user.id,
         parsed.data.answer,

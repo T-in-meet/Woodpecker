@@ -39,7 +39,7 @@ const STORED_GRADING = {
 const {
   createAdminClientMock,
   createClientMock,
-  generateContentMock,
+  generateJsonMock,
   getGradingByReviewLogMock,
   getNoteContentForComparisonMock,
   getPendingReviewLogMock,
@@ -50,7 +50,7 @@ const {
   return {
     createAdminClientMock: vi.fn(),
     createClientMock: vi.fn(),
-    generateContentMock: vi.fn(),
+    generateJsonMock: vi.fn(),
     getGradingByReviewLogMock: vi.fn(),
     getNoteContentForComparisonMock: vi.fn(),
     getPendingReviewLogMock: vi.fn(),
@@ -68,9 +68,17 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: createAdminClientMock,
 }));
 
-vi.mock("@/lib/gemini/client", () => ({
-  getGemini: () => ({ models: { generateContent: generateContentMock } }),
-}));
+// client.ts는 server-only를 import하는데 jsdom에서는 그것만으로 throw한다.
+vi.mock("server-only", () => ({}));
+
+// 호출부가 CloudflareAiError로 실패 이유를 가리므로 class도 함께 제공해야 한다.
+// generateJson만 mock하면 instanceof 분기가 조용히 unknown으로 떨어진다.
+vi.mock("@/lib/ai/client", async () => {
+  const actual =
+    await vi.importActual<typeof import("@/lib/ai/client")>("@/lib/ai/client");
+
+  return { ...actual, generateJson: generateJsonMock };
+});
 
 vi.mock("next/cache", () => ({
   revalidatePath: revalidatePathMock,
@@ -227,11 +235,11 @@ describe("gradeAnswerAction", () => {
     const result = await gradeAnswerAction(null, createFormData());
 
     expect(result).toEqual({ error: "진행 중인 복습을 찾을 수 없습니다." });
-    expect(generateContentMock).not.toHaveBeenCalled();
+    expect(generateJsonMock).not.toHaveBeenCalled();
     expect(rpcMock).not.toHaveBeenCalled();
   });
 
-  it("returns the stored grading without calling Gemini when one exists", async () => {
+  it("returns the stored grading without calling the AI when one exists", async () => {
     const { rpcMock } = setupSupabase();
     mockHappyPathQueries();
     getGradingByReviewLogMock.mockResolvedValue({
@@ -258,7 +266,7 @@ describe("gradeAnswerAction", () => {
         incorrectPoints: ["잘못 기억한 내용"],
       },
     });
-    expect(generateContentMock).not.toHaveBeenCalled();
+    expect(generateJsonMock).not.toHaveBeenCalled();
     expect(rpcMock).not.toHaveBeenCalled();
   });
 
@@ -291,12 +299,10 @@ describe("gradeAnswerAction", () => {
     });
   });
 
-  it("claims the grading before calling Gemini and finalizes with the claim token", async () => {
+  it("claims the grading before calling the AI and finalizes with the claim token", async () => {
     const { rpcMock } = setupSupabase();
     mockHappyPathQueries();
-    generateContentMock.mockResolvedValue({
-      text: JSON.stringify(VALID_GRADING_RESPONSE),
-    });
+    generateJsonMock.mockResolvedValue(JSON.stringify(VALID_GRADING_RESPONSE));
 
     const result = await gradeAnswerAction(null, createFormData());
 
@@ -329,18 +335,16 @@ describe("gradeAnswerAction", () => {
   });
 
   // 형식 이탈은 곧 사용자 에러 + 선점이 풀릴 때까지의 대기다. 디코딩 단계에서 먼저 막는다
-  it("constrains the Gemini response with a JSON schema", async () => {
+  it("constrains the AI response with a JSON schema", async () => {
     setupSupabase();
     mockHappyPathQueries();
-    generateContentMock.mockResolvedValue({
-      text: JSON.stringify(VALID_GRADING_RESPONSE),
-    });
+    generateJsonMock.mockResolvedValue(JSON.stringify(VALID_GRADING_RESPONSE));
 
     await gradeAnswerAction(null, createFormData());
 
-    const config = generateContentMock.mock.calls[0]?.[0]?.config;
+    const request = generateJsonMock.mock.calls[0]?.[0];
 
-    expect(config?.responseJsonSchema).toMatchObject({
+    expect(request?.responseSchema).toMatchObject({
       type: "object",
       properties: {
         score: expect.objectContaining({ minimum: 0, maximum: 100 }),
@@ -351,22 +355,16 @@ describe("gradeAnswerAction", () => {
     });
   });
 
-  // 선점 만료(60초)보다 먼저 끊겨야 같은 채점에 Gemini를 두 번 부르지 않는다
-  it("aborts the Gemini call before the claim goes stale", async () => {
+  // 선점 만료(120초)보다 먼저 끊겨야 같은 채점에 AI를 두 번 부르지 않는다
+  it("aborts the AI call before the claim goes stale", async () => {
     setupSupabase();
     mockHappyPathQueries();
-    generateContentMock.mockResolvedValue({
-      text: JSON.stringify(VALID_GRADING_RESPONSE),
-    });
+    generateJsonMock.mockResolvedValue(JSON.stringify(VALID_GRADING_RESPONSE));
 
     await gradeAnswerAction(null, createFormData());
 
-    expect(generateContentMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        config: expect.objectContaining({
-          abortSignal: expect.any(AbortSignal),
-        }),
-      }),
+    expect(generateJsonMock).toHaveBeenCalledWith(
+      expect.objectContaining({ abortSignal: expect.any(AbortSignal) }),
     );
   });
 
@@ -375,9 +373,7 @@ describe("gradeAnswerAction", () => {
   it("measures the abort deadline from the action entry, not from the claim", async () => {
     setupSupabase();
     mockHappyPathQueries();
-    generateContentMock.mockResolvedValue({
-      text: JSON.stringify(VALID_GRADING_RESPONSE),
-    });
+    generateJsonMock.mockResolvedValue(JSON.stringify(VALID_GRADING_RESPONSE));
 
     const base = Date.now();
     const nowSpy = vi
@@ -390,13 +386,14 @@ describe("gradeAnswerAction", () => {
 
     await gradeAnswerAction(null, createFormData());
 
-    expect(timeoutSpy).toHaveBeenCalledWith(25_000);
+    // GRADING_DEADLINE_MS(60_000) - 경과 시간(20_000)
+    expect(timeoutSpy).toHaveBeenCalledWith(40_000);
 
     timeoutSpy.mockRestore();
     nowSpy.mockRestore();
   });
 
-  it("skips Gemini and returns the stored grading when the claim reports it is already graded", async () => {
+  it("skips the AI call and returns the stored grading when the claim reports it is already graded", async () => {
     setupSupabase({ claimResult: { status: "already_graded" } });
     mockHappyPathQueries();
     getGradingByReviewLogMock
@@ -417,51 +414,41 @@ describe("gradeAnswerAction", () => {
         incorrectPoints: [],
       },
     });
-    expect(generateContentMock).not.toHaveBeenCalled();
+    expect(generateJsonMock).not.toHaveBeenCalled();
   });
 
-  it("skips Gemini when another request holds the claim", async () => {
+  it("skips the AI call when another request holds the claim", async () => {
     setupSupabase({ claimResult: { status: "in_flight" } });
     mockHappyPathQueries();
 
     const result = await gradeAnswerAction(null, createFormData());
 
     expect(result).toEqual({ error: GRADING_ERROR_MESSAGES.inFlight });
-    expect(generateContentMock).not.toHaveBeenCalled();
+    expect(generateJsonMock).not.toHaveBeenCalled();
   });
 
   // 한도는 claim_review_grading이 판정한다. 액션은 상태를 문구로 옮기기만 한다.
-  it("skips Gemini when the daily grading limit is used up", async () => {
+  it("skips the AI call when the daily grading limit is used up", async () => {
     setupSupabase({ claimResult: { status: "daily_exceeded" } });
     mockHappyPathQueries();
 
     const result = await gradeAnswerAction(null, createFormData());
 
     expect(result).toEqual({ error: GRADING_ERROR_MESSAGES.dailyExceeded });
-    expect(generateContentMock).not.toHaveBeenCalled();
+    expect(generateJsonMock).not.toHaveBeenCalled();
   });
 
-  it("skips Gemini when the requests come in too fast", async () => {
-    setupSupabase({ claimResult: { status: "too_many_requests" } });
-    mockHappyPathQueries();
-
-    const result = await gradeAnswerAction(null, createFormData());
-
-    expect(result).toEqual({ error: GRADING_ERROR_MESSAGES.tooManyRequests });
-    expect(generateContentMock).not.toHaveBeenCalled();
-  });
-
-  it("skips Gemini when the claim is rejected", async () => {
+  it("skips the AI call when the claim is rejected", async () => {
     setupSupabase({ claimResult: { status: "not_found" } });
     mockHappyPathQueries();
 
     const result = await gradeAnswerAction(null, createFormData());
 
     expect(result).toEqual({ error: "진행 중인 복습을 찾을 수 없습니다." });
-    expect(generateContentMock).not.toHaveBeenCalled();
+    expect(generateJsonMock).not.toHaveBeenCalled();
   });
 
-  it("skips Gemini when the claim response has no token", async () => {
+  it("skips the AI call when the claim response has no token", async () => {
     const consoleErrorSpy = vi
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
@@ -473,12 +460,12 @@ describe("gradeAnswerAction", () => {
     expect(result).toEqual({
       error: "AI 채점에 실패했습니다. 잠시 후 다시 시도해주세요.",
     });
-    expect(generateContentMock).not.toHaveBeenCalled();
+    expect(generateJsonMock).not.toHaveBeenCalled();
 
     consoleErrorSpy.mockRestore();
   });
 
-  it("skips Gemini when the claim RPC fails", async () => {
+  it("skips the AI call when the claim RPC fails", async () => {
     const consoleErrorSpy = vi
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
@@ -490,7 +477,7 @@ describe("gradeAnswerAction", () => {
     expect(result).toEqual({
       error: "AI 채점에 실패했습니다. 잠시 후 다시 시도해주세요.",
     });
-    expect(generateContentMock).not.toHaveBeenCalled();
+    expect(generateJsonMock).not.toHaveBeenCalled();
 
     consoleErrorSpy.mockRestore();
   });
@@ -511,7 +498,7 @@ describe("gradeAnswerAction", () => {
         "채점을 준비하는 사이 노트가 수정됐어요. 새로고침 후 다시 비교해주세요.",
     });
     expect(rpcMock).not.toHaveBeenCalled();
-    expect(generateContentMock).not.toHaveBeenCalled();
+    expect(generateJsonMock).not.toHaveBeenCalled();
   });
 
   it("still returns an already stored grading when the note changed", async () => {
@@ -533,7 +520,7 @@ describe("gradeAnswerAction", () => {
       basisContentChanged: false,
       grading: { score: STORED_GRADING.score, ...STORED_GRADING.feedback },
     });
-    expect(generateContentMock).not.toHaveBeenCalled();
+    expect(generateJsonMock).not.toHaveBeenCalled();
   });
 
   // "답안 다시 작성" 뒤 채점을 누르면 복원 화면이 아니라 이 경로로 결과가 나온다.
@@ -561,7 +548,7 @@ describe("gradeAnswerAction", () => {
       gradedOtherAnswer: false,
       basisContentChanged: true,
     });
-    expect(generateContentMock).not.toHaveBeenCalled();
+    expect(generateJsonMock).not.toHaveBeenCalled();
   });
 
   it("does not flag the stored grading when the note version still matches", async () => {
@@ -580,20 +567,21 @@ describe("gradeAnswerAction", () => {
     });
   });
 
-  it("skips the claim when too little time is left to finish Gemini", async () => {
+  it("skips the claim when too little time is left to finish the AI call", async () => {
     const consoleErrorSpy = vi
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
     const { rpcMock } = setupSupabase();
     mockHappyPathQueries();
 
-    // 인증·조회가 40초를 먹은 상황. 남은 5초로는 채점을 끝낼 수 없으므로
-    // 선점을 잡지 않고 실패해야 한다. 잡아 버리면 선점 만료까지 재시도가 막힌다.
+    // 인증·조회가 50초를 먹은 상황. 남은 10초(< MIN_AI_BUDGET_MS 15초)로는
+    // 채점을 끝낼 수 없으므로 선점을 잡지 않고 실패해야 한다. 잡아 버리면
+    // 선점 만료까지 재시도가 막힌다.
     const base = Date.now();
     const nowSpy = vi
       .spyOn(Date, "now")
       .mockReturnValueOnce(base)
-      .mockReturnValue(base + 40_000);
+      .mockReturnValue(base + 50_000);
 
     const result = await gradeAnswerAction(null, createFormData());
 
@@ -601,19 +589,19 @@ describe("gradeAnswerAction", () => {
       error: "서버 응답이 지연되고 있어요. 잠시 후 다시 시도해주세요.",
     });
     expect(rpcMock).not.toHaveBeenCalled();
-    expect(generateContentMock).not.toHaveBeenCalled();
+    expect(generateJsonMock).not.toHaveBeenCalled();
 
     nowSpy.mockRestore();
     consoleErrorSpy.mockRestore();
   });
 
-  it("returns an error when the Gemini call fails", async () => {
+  it("returns an error when the AI call fails", async () => {
     const consoleErrorSpy = vi
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
     setupSupabase();
     mockHappyPathQueries();
-    generateContentMock.mockRejectedValue(new Error("network error"));
+    generateJsonMock.mockRejectedValue(new Error("network error"));
 
     const result = await gradeAnswerAction(null, createFormData());
 
@@ -630,9 +618,9 @@ describe("gradeAnswerAction", () => {
       .mockImplementation(() => undefined);
     const { rpcMock } = setupSupabase();
     mockHappyPathQueries();
-    generateContentMock.mockResolvedValue({
-      text: JSON.stringify({ score: 200, summary: "노트에 적힌 비밀 내용" }),
-    });
+    generateJsonMock.mockResolvedValue(
+      JSON.stringify({ score: 200, summary: "노트에 적힌 비밀 내용" }),
+    );
 
     const result = await gradeAnswerAction(null, createFormData());
 
@@ -650,9 +638,7 @@ describe("gradeAnswerAction", () => {
   it("returns the stored grading when finalize reports a concurrent save", async () => {
     setupSupabase({ finalizeResult: "already_graded" });
     mockHappyPathQueries();
-    generateContentMock.mockResolvedValue({
-      text: JSON.stringify(VALID_GRADING_RESPONSE),
-    });
+    generateJsonMock.mockResolvedValue(JSON.stringify(VALID_GRADING_RESPONSE));
     getGradingByReviewLogMock
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(STORED_GRADING);
@@ -679,9 +665,7 @@ describe("gradeAnswerAction", () => {
       .mockImplementation(() => undefined);
     setupSupabase({ finalizeResult: "stale_claim" });
     mockHappyPathQueries();
-    generateContentMock.mockResolvedValue({
-      text: JSON.stringify(VALID_GRADING_RESPONSE),
-    });
+    generateJsonMock.mockResolvedValue(JSON.stringify(VALID_GRADING_RESPONSE));
 
     const result = await gradeAnswerAction(null, createFormData());
 
@@ -698,9 +682,7 @@ describe("gradeAnswerAction", () => {
       .mockImplementation(() => undefined);
     setupSupabase({ finalizeError: { message: "save failed" } });
     mockHappyPathQueries();
-    generateContentMock.mockResolvedValue({
-      text: JSON.stringify(VALID_GRADING_RESPONSE),
-    });
+    generateJsonMock.mockResolvedValue(JSON.stringify(VALID_GRADING_RESPONSE));
 
     const result = await gradeAnswerAction(null, createFormData());
 

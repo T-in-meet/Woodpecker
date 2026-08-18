@@ -2,25 +2,42 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createSupabaseQueryMock } from "@/tests/supabaseQueryMock";
 
-const { createClientMock, generateContentMock } = vi.hoisted(() => ({
-  createClientMock: vi.fn(),
-  generateContentMock: vi.fn(),
-}));
+const { createAdminClientMock, createClientMock, generateJsonMock } =
+  vi.hoisted(() => ({
+    createAdminClientMock: vi.fn(),
+    createClientMock: vi.fn(),
+    generateJsonMock: vi.fn(),
+  }));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: createClientMock,
 }));
 
-vi.mock("@/lib/gemini/client", () => ({
-  getGemini: () => ({ models: { generateContent: generateContentMock } }),
+// claim_quiz_generation_v2 · finalize_quiz_generation_v2는 service_role 전용이라
+// admin 클라이언트로만 호출된다. 일반 클라이언트는 세션·노트·캐시 조회에만 쓰인다.
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: createAdminClientMock,
 }));
+
+// client.ts는 server-only를 import하는데 jsdom에서는 그것만으로 throw한다.
+vi.mock("server-only", () => ({}));
+
+// 호출부가 CloudflareAiError로 실패 이유를 가리므로 class도 함께 제공해야 한다.
+// generateJson만 mock하면 instanceof 분기가 조용히 unknown으로 떨어진다.
+vi.mock("@/lib/ai/client", async () => {
+  const actual =
+    await vi.importActual<typeof import("@/lib/ai/client")>("@/lib/ai/client");
+
+  return { ...actual, generateJson: generateJsonMock };
+});
 
 const { generateQuiz, regenerateQuiz } = await import("../actions");
 
 const NOTE_ID = "11111111-1111-4111-8111-111111111111";
 const USER_ID = "user-123";
+const CLAIM_TOKEN = "55555555-5555-4555-8555-555555555555";
 
-const geminiQuestions = {
+const aiQuestions = {
   questions: [
     {
       type: "ox",
@@ -39,9 +56,12 @@ type SupabaseMockInput = {
     note_content_hash: string;
     recent_questions?: unknown;
   } | null;
-  upsertError?: { message: string } | null;
-  claimResult?: string;
+  cacheError?: { message: string } | null;
+  /** 문자열이면 { status } 로, 객체면 그대로 claim_quiz_generation_v2의 반환값이 된다. */
+  claimResult?: string | { status: string; claimToken?: string };
   claimError?: { message: string } | null;
+  finalizeResult?: string;
+  finalizeError?: { message: string } | null;
 };
 
 function setupSupabase(input: SupabaseMockInput = {}) {
@@ -49,64 +69,76 @@ function setupSupabase(input: SupabaseMockInput = {}) {
     userId = USER_ID,
     note = { title: "제목", content: "내용" },
     cached = null,
-    upsertError = null,
-    claimResult = "ok",
+    cacheError = null,
+    claimResult = { status: "ok", claimToken: CLAIM_TOKEN },
     claimError = null,
+    finalizeResult = "ok",
+    finalizeError = null,
   } = input;
+
+  const normalizedClaimResult =
+    typeof claimResult === "string" ? { status: claimResult } : claimResult;
 
   const query = createSupabaseQueryMock({
     notes: { data: note },
-    quizzes: { data: cached, error: upsertError },
+    quizzes: { data: cached, error: cacheError },
   });
 
   const getUser = vi.fn().mockResolvedValue({
     data: { user: userId ? { id: userId } : null },
   });
 
-  const rpc = vi.fn((name: string) => {
-    if (name === "claim_quiz_generation") {
-      return Promise.resolve({ data: claimResult, error: claimError });
+  createClientMock.mockResolvedValue({
+    ...query.supabase,
+    auth: { getUser },
+  });
+
+  const adminRpc = vi.fn((name: string, _params?: Record<string, unknown>) => {
+    if (name === "claim_quiz_generation_v2") {
+      return Promise.resolve({
+        data: normalizedClaimResult,
+        error: claimError,
+      });
+    }
+
+    if (name === "finalize_quiz_generation_v2") {
+      return Promise.resolve({ data: finalizeResult, error: finalizeError });
     }
 
     return Promise.resolve({ data: null, error: null });
   });
 
-  createClientMock.mockResolvedValue({
-    ...query.supabase,
-    auth: { getUser },
-    rpc,
-  });
+  createAdminClientMock.mockReturnValue({ rpc: adminRpc });
 
-  return { ...query, rpc };
+  return { ...query, rpc: adminRpc };
 }
 
 function rpcNames(rpc: ReturnType<typeof setupSupabase>["rpc"]): string[] {
   return rpc.mock.calls.map(([name]) => name);
 }
 
-function mockGeminiSuccess(payload: unknown = geminiQuestions) {
-  generateContentMock.mockResolvedValue({ text: JSON.stringify(payload) });
+function mockAiSuccess(payload: unknown = aiQuestions) {
+  // generateJson은 원문 JSON 문자열을 그대로 돌려준다. 파싱·검증은 액션이 맡는다.
+  generateJsonMock.mockResolvedValue(JSON.stringify(payload));
 }
 
 function methodNames(calls: [string, unknown[]][]): string[] {
   return calls.map(([method]) => method);
 }
 
-type GeminiRequest = {
-  contents: string;
-  config: {
-    temperature: number;
-    responseMimeType: string;
-    responseJsonSchema: unknown;
-  };
+type AiRequest = {
+  prompt: string;
+  responseSchema: unknown;
+  temperature: number;
+  abortSignal: AbortSignal;
 };
 
-function geminiRequest(): GeminiRequest {
-  return generateContentMock.mock.calls[0]?.[0] as GeminiRequest;
+function aiRequest(): AiRequest {
+  return generateJsonMock.mock.calls[0]?.[0] as AiRequest;
 }
 
 function responseQuestionType(): unknown {
-  const schema = geminiRequest().config.responseJsonSchema as {
+  const schema = aiRequest().responseSchema as {
     properties: {
       questions: { items: { properties: { type: unknown } } };
     };
@@ -115,18 +147,35 @@ function responseQuestionType(): unknown {
   return schema.properties.questions.items.properties.type;
 }
 
-function upsertPayload(query: ReturnType<typeof setupSupabase>) {
-  return query.callsFor("quizzes").find(([method]) => method === "upsert")?.[1];
+/**
+ * finalize_quiz_generation_v2가 완료 표시와 quizzes 캐시 upsert를 한 트랜잭션
+ * 안에서 함께 처리하므로(원자성 확보), 저장 여부·내용은 이 RPC 호출 인자로 검증한다.
+ * 더 이상 quizzes 테이블에 대한 별도 client upsert 호출이 없다.
+ */
+type FinalizeCallArgs = {
+  p_user_id: string;
+  p_note_id: string;
+  p_quiz_type: string;
+  p_claim_token: string;
+  p_questions: unknown;
+  p_history: string[][];
+  p_content_hash: string;
+};
+
+function finalizeArgs(
+  rpc: ReturnType<typeof setupSupabase>["rpc"],
+): FinalizeCallArgs | undefined {
+  return rpc.mock.calls.find(
+    ([name]) => name === "finalize_quiz_generation_v2",
+  )?.[1] as FinalizeCallArgs | undefined;
 }
 
 function hashOf(query: ReturnType<typeof setupSupabase>): string {
-  return (upsertPayload(query)?.[0] as { note_content_hash: string })
-    .note_content_hash;
+  return finalizeArgs(query.rpc)!.p_content_hash;
 }
 
 function savedHistory(query: ReturnType<typeof setupSupabase>): string[][] {
-  return (upsertPayload(query)?.[0] as { recent_questions: string[][] })
-    .recent_questions;
+  return finalizeArgs(query.rpc)!.p_history;
 }
 
 beforeEach(() => {
@@ -150,10 +199,10 @@ describe("generateQuiz", () => {
       expect(createClientMock).not.toHaveBeenCalled();
     });
 
-    it("quizType 검증 실패 시 Gemini를 호출하지 않는다", async () => {
+    it("quizType 검증 실패 시 AI를 호출하지 않는다", async () => {
       await generateQuiz(NOTE_ID, "");
 
-      expect(generateContentMock).not.toHaveBeenCalled();
+      expect(generateJsonMock).not.toHaveBeenCalled();
     });
   });
 
@@ -164,7 +213,7 @@ describe("generateQuiz", () => {
       const result = await generateQuiz(NOTE_ID, "ox");
 
       expect(result).toEqual({ error: "로그인이 필요합니다." });
-      expect(generateContentMock).not.toHaveBeenCalled();
+      expect(generateJsonMock).not.toHaveBeenCalled();
     });
 
     it("본인 노트가 아니면 거부한다", async () => {
@@ -173,7 +222,7 @@ describe("generateQuiz", () => {
       const result = await generateQuiz(NOTE_ID, "ox");
 
       expect(result).toEqual({ error: "노트를 찾을 수 없습니다." });
-      expect(generateContentMock).not.toHaveBeenCalled();
+      expect(generateJsonMock).not.toHaveBeenCalled();
     });
 
     it("노트 조회에 user_id 조건을 건다", async () => {
@@ -190,10 +239,10 @@ describe("generateQuiz", () => {
   });
 
   describe("캐시", () => {
-    it("해시가 일치하면 Gemini를 호출하지 않고 캐시를 반환한다", async () => {
+    it("해시가 일치하면 AI를 호출하지 않고 캐시를 반환한다", async () => {
       // 캐시 키를 모르므로 먼저 생성해서 저장된 해시를 얻는다.
       const first = setupSupabase();
-      mockGeminiSuccess();
+      mockAiSuccess();
       await generateQuiz(NOTE_ID, "ox");
 
       const savedHash = hashOf(first);
@@ -202,39 +251,39 @@ describe("generateQuiz", () => {
 
       setupSupabase({
         cached: {
-          questions: geminiQuestions.questions,
+          questions: aiQuestions.questions,
           note_content_hash: savedHash,
         },
       });
 
       const result = await generateQuiz(NOTE_ID, "ox");
 
-      expect(generateContentMock).not.toHaveBeenCalled();
+      expect(generateJsonMock).not.toHaveBeenCalled();
       expect(result).toEqual({
-        data: { questions: geminiQuestions.questions, isNew: false },
+        data: { questions: aiQuestions.questions, isNew: false },
       });
     });
 
     it("해시가 다르면 새로 생성한다", async () => {
       setupSupabase({
         cached: {
-          questions: geminiQuestions.questions,
+          questions: aiQuestions.questions,
           note_content_hash: "stale-hash:ox",
         },
       });
-      mockGeminiSuccess();
+      mockAiSuccess();
 
       const result = await generateQuiz(NOTE_ID, "ox");
 
-      expect(generateContentMock).toHaveBeenCalledOnce();
+      expect(generateJsonMock).toHaveBeenCalledOnce();
       expect(result).toEqual({
-        data: { questions: geminiQuestions.questions, isNew: true },
+        data: { questions: aiQuestions.questions, isNew: true },
       });
     });
 
     it("캐시에 다른 유형의 문항이 들어 있으면 새로 생성한다", async () => {
       const first = setupSupabase();
-      mockGeminiSuccess();
+      mockAiSuccess();
       await generateQuiz(NOTE_ID, "ox");
 
       const savedHash = hashOf(first);
@@ -256,13 +305,13 @@ describe("generateQuiz", () => {
           note_content_hash: savedHash,
         },
       });
-      mockGeminiSuccess();
+      mockAiSuccess();
 
       const result = await generateQuiz(NOTE_ID, "ox");
 
-      expect(generateContentMock).toHaveBeenCalledOnce();
+      expect(generateJsonMock).toHaveBeenCalledOnce();
       expect(result).toEqual({
-        data: { questions: geminiQuestions.questions, isNew: true },
+        data: { questions: aiQuestions.questions, isNew: true },
       });
     });
 
@@ -270,13 +319,13 @@ describe("generateQuiz", () => {
       const first = setupSupabase({
         note: { title: "제목1", content: "내용" },
       });
-      mockGeminiSuccess();
+      mockAiSuccess();
       await generateQuiz(NOTE_ID, "ox");
 
       const second = setupSupabase({
         note: { title: "제목2", content: "내용" },
       });
-      mockGeminiSuccess();
+      mockAiSuccess();
       await generateQuiz(NOTE_ID, "ox");
 
       expect(hashOf(first)).not.toBe(hashOf(second));
@@ -284,7 +333,7 @@ describe("generateQuiz", () => {
 
     it("캐시를 노트·유형 조합으로 조회한다", async () => {
       const query = setupSupabase();
-      mockGeminiSuccess();
+      mockAiSuccess();
 
       await generateQuiz(NOTE_ID, "ox");
 
@@ -300,27 +349,23 @@ describe("generateQuiz", () => {
 
     it("퀴즈 유형을 별도 행으로 저장한다", async () => {
       const query = setupSupabase();
-      mockGeminiSuccess();
+      mockAiSuccess();
 
       await generateQuiz(NOTE_ID, "ox");
 
-      const upsertCall = query
-        .callsFor("quizzes")
-        .find(([method]) => method === "upsert");
-
-      expect(upsertCall?.[1][0]).toMatchObject({
-        note_id: NOTE_ID,
-        quiz_type: "ox",
+      expect(finalizeArgs(query.rpc)).toMatchObject({
+        p_note_id: NOTE_ID,
+        p_quiz_type: "ox",
       });
     });
 
     it("유형이 달라도 내용이 같으면 같은 해시를 쓴다", async () => {
       const first = setupSupabase();
-      mockGeminiSuccess();
+      mockAiSuccess();
       await generateQuiz(NOTE_ID, "ox");
 
       const second = setupSupabase();
-      mockGeminiSuccess({
+      mockAiSuccess({
         questions: [
           {
             type: "blank",
@@ -338,18 +383,39 @@ describe("generateQuiz", () => {
   });
 
   describe("응답 스키마", () => {
-    it("JSON 응답 형식을 지정한다", async () => {
+    it("액션 진입 시각 기준 60초 deadline을 AI 호출에 전달한다", async () => {
       setupSupabase();
-      mockGeminiSuccess();
+      mockAiSuccess();
+
+      const base = Date.now();
+      const nowSpy = vi
+        .spyOn(Date, "now")
+        .mockReturnValueOnce(base)
+        .mockReturnValue(base + 5_000);
+      const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
 
       await generateQuiz(NOTE_ID, "ox");
 
-      expect(geminiRequest().config.responseMimeType).toBe("application/json");
+      expect(timeoutSpy).toHaveBeenCalledWith(55_000);
+      expect(aiRequest().abortSignal).toBeInstanceOf(AbortSignal);
+
+      timeoutSpy.mockRestore();
+      nowSpy.mockRestore();
+    });
+
+    it("응답 스키마를 함께 넘겨 형식을 강제한다", async () => {
+      setupSupabase();
+      mockAiSuccess();
+
+      await generateQuiz(NOTE_ID, "ox");
+
+      // 프롬프트만으로 지시하면 유형·필드가 어긋난 응답이 나온다. 디코딩 단계에서 막는다.
+      expect(aiRequest().responseSchema).toMatchObject({ type: "object" });
     });
 
     it("요청한 유형을 응답 스키마로 고정한다", async () => {
       setupSupabase();
-      mockGeminiSuccess();
+      mockAiSuccess();
 
       await generateQuiz(NOTE_ID, "ox");
 
@@ -361,7 +427,7 @@ describe("generateQuiz", () => {
 
     it("유형이 다르면 다른 스키마를 보낸다", async () => {
       setupSupabase();
-      mockGeminiSuccess({
+      mockAiSuccess({
         questions: [
           {
             type: "blank",
@@ -382,34 +448,34 @@ describe("generateQuiz", () => {
     });
   });
 
-  describe("Gemini 실패", () => {
+  describe("AI 실패", () => {
     it("API 호출이 실패하면 에러를 반환하고 저장하지 않는다", async () => {
       const query = setupSupabase();
-      generateContentMock.mockRejectedValue(new Error("boom"));
+      generateJsonMock.mockRejectedValue(new Error("boom"));
 
       const result = await generateQuiz(NOTE_ID, "ox");
 
       expect(result).toEqual({
         error: "퀴즈 생성에 실패했습니다. 잠시 후 다시 시도해주세요.",
       });
-      expect(methodNames(query.callsFor("quizzes"))).not.toContain("upsert");
+      expect(rpcNames(query.rpc)).not.toContain("finalize_quiz_generation_v2");
     });
 
     it("JSON이 아니면 에러를 반환하고 저장하지 않는다", async () => {
       const query = setupSupabase();
-      generateContentMock.mockResolvedValue({ text: "not json" });
+      generateJsonMock.mockResolvedValue({ text: "not json" });
 
       const result = await generateQuiz(NOTE_ID, "ox");
 
       expect(result).toEqual({
         error: "퀴즈 생성 결과를 처리할 수 없습니다. 다시 시도해주세요.",
       });
-      expect(methodNames(query.callsFor("quizzes"))).not.toContain("upsert");
+      expect(rpcNames(query.rpc)).not.toContain("finalize_quiz_generation_v2");
     });
 
     it("스키마에 맞지 않으면 에러를 반환한다", async () => {
       setupSupabase();
-      mockGeminiSuccess({ questions: [{ type: "ox", question: "" }] });
+      mockAiSuccess({ questions: [{ type: "ox", question: "" }] });
 
       const result = await generateQuiz(NOTE_ID, "ox");
 
@@ -420,7 +486,7 @@ describe("generateQuiz", () => {
 
     it("요청한 유형과 다른 문항이 오면 저장하지 않는다", async () => {
       const query = setupSupabase();
-      mockGeminiSuccess({
+      mockAiSuccess({
         questions: [
           {
             type: "choice",
@@ -437,14 +503,14 @@ describe("generateQuiz", () => {
       expect(result).toEqual({
         error: "퀴즈 생성 결과를 처리할 수 없습니다. 다시 시도해주세요.",
       });
-      expect(methodNames(query.callsFor("quizzes"))).not.toContain("upsert");
+      expect(rpcNames(query.rpc)).not.toContain("finalize_quiz_generation_v2");
     });
 
     it("한 문항만 유형이 달라도 세트 전체를 거부한다", async () => {
       const query = setupSupabase();
-      mockGeminiSuccess({
+      mockAiSuccess({
         questions: [
-          ...geminiQuestions.questions,
+          ...aiQuestions.questions,
           {
             type: "blank",
             question: "____는 산술 연산을 담당한다.",
@@ -460,13 +526,13 @@ describe("generateQuiz", () => {
       expect(result).toEqual({
         error: "퀴즈 생성 결과를 처리할 수 없습니다. 다시 시도해주세요.",
       });
-      expect(methodNames(query.callsFor("quizzes"))).not.toContain("upsert");
+      expect(rpcNames(query.rpc)).not.toContain("finalize_quiz_generation_v2");
     });
 
     it("응답 원문을 로그에 남기지 않는다", async () => {
       setupSupabase();
       const secret = "노트에만 있는 비밀 문장";
-      generateContentMock.mockResolvedValue({ text: secret });
+      generateJsonMock.mockResolvedValue({ text: secret });
 
       await generateQuiz(NOTE_ID, "ox");
 
@@ -476,19 +542,7 @@ describe("generateQuiz", () => {
   });
 
   describe("사용량 제한", () => {
-    it("일일 한도를 넘으면 Gemini를 호출하지 않는다", async () => {
-      setupSupabase({ claimResult: "daily_exceeded" });
-
-      const result = await generateQuiz(NOTE_ID, "ox");
-
-      expect(result).toEqual({
-        error:
-          "오늘 만들 수 있는 퀴즈를 모두 사용했습니다. 내일 다시 시도해주세요.",
-      });
-      expect(generateContentMock).not.toHaveBeenCalled();
-    });
-
-    it("짧은 시간에 너무 많이 요청하면 거부한다", async () => {
+    it("짧은 시간에 너무 많이 요청하면 AI를 호출하지 않는다", async () => {
       setupSupabase({ claimResult: "too_many_requests" });
 
       const result = await generateQuiz(NOTE_ID, "ox");
@@ -496,7 +550,19 @@ describe("generateQuiz", () => {
       expect(result).toEqual({
         error: "요청이 너무 잦습니다. 잠시 후 다시 시도해주세요.",
       });
-      expect(generateContentMock).not.toHaveBeenCalled();
+      expect(generateJsonMock).not.toHaveBeenCalled();
+    });
+
+    it("일일 한도를 넘으면 AI를 호출하지 않는다", async () => {
+      setupSupabase({ claimResult: "daily_exceeded" });
+
+      const result = await generateQuiz(NOTE_ID, "ox");
+
+      expect(result).toEqual({
+        error:
+          "오늘 AI 퀴즈 생성 횟수를 모두 사용했습니다. 기존 퀴즈는 다시 풀 수 있어요.",
+      });
+      expect(generateJsonMock).not.toHaveBeenCalled();
     });
 
     it("같은 노트·유형을 연속 요청하면 거부한다", async () => {
@@ -507,12 +573,12 @@ describe("generateQuiz", () => {
       expect(result).toEqual({
         error: "퀴즈를 만들고 있습니다. 잠시만 기다려주세요.",
       });
-      expect(generateContentMock).not.toHaveBeenCalled();
+      expect(generateJsonMock).not.toHaveBeenCalled();
     });
 
     it("캐시가 적중하면 사용량을 선점하지 않는다", async () => {
       const first = setupSupabase();
-      mockGeminiSuccess();
+      mockAiSuccess();
       await generateQuiz(NOTE_ID, "ox");
 
       const savedHash = hashOf(first);
@@ -521,33 +587,67 @@ describe("generateQuiz", () => {
 
       const second = setupSupabase({
         cached: {
-          questions: geminiQuestions.questions,
+          questions: aiQuestions.questions,
           note_content_hash: savedHash,
         },
       });
 
       await generateQuiz(NOTE_ID, "ox");
 
-      expect(rpcNames(second.rpc)).not.toContain("claim_quiz_generation");
+      expect(rpcNames(second.rpc)).not.toContain("claim_quiz_generation_v2");
     });
 
-    it("Gemini 호출이 실패해도 사용량을 되돌리지 않는다", async () => {
+    it("캐시 조회가 실패하면 사용량을 선점하지 않는다", async () => {
+      const query = setupSupabase({
+        cacheError: { message: "cache read failed" },
+      });
+
+      const result = await generateQuiz(NOTE_ID, "ox");
+
+      expect(result).toEqual({
+        error: "퀴즈 생성에 실패했습니다. 잠시 후 다시 시도해주세요.",
+      });
+      expect(rpcNames(query.rpc)).not.toContain("claim_quiz_generation_v2");
+      expect(generateJsonMock).not.toHaveBeenCalled();
+    });
+
+    it("AI 호출 시간이 부족하면 사용량을 선점하지 않는다", async () => {
       const query = setupSupabase();
-      generateContentMock.mockRejectedValue(new Error("boom"));
+      const base = Date.now();
+      const nowSpy = vi
+        .spyOn(Date, "now")
+        .mockReturnValueOnce(base)
+        .mockReturnValue(base + 50_000);
+
+      const result = await generateQuiz(NOTE_ID, "ox");
+
+      expect(result).toEqual({
+        error: "서버 응답이 지연되고 있어요. 잠시 후 다시 시도해주세요.",
+      });
+      expect(rpcNames(query.rpc)).not.toContain("claim_quiz_generation_v2");
+      expect(generateJsonMock).not.toHaveBeenCalled();
+
+      nowSpy.mockRestore();
+    });
+
+    it("AI 호출이 실패해도 사용량을 되돌리지 않는다", async () => {
+      const query = setupSupabase();
+      generateJsonMock.mockRejectedValue(new Error("boom"));
 
       await generateQuiz(NOTE_ID, "ox");
 
       // 되돌리는 RPC가 있으면 사용자가 직접 호출해 한도를 무력화할 수 있다.
-      expect(rpcNames(query.rpc)).toEqual(["claim_quiz_generation"]);
+      // finalize는 Zod 검증까지 통과해야 불리므로 여기서는 claim만 호출된다.
+      expect(rpcNames(query.rpc)).toEqual(["claim_quiz_generation_v2"]);
     });
 
     it("응답 파싱에 실패해도 사용량을 되돌리지 않는다", async () => {
       const query = setupSupabase();
-      generateContentMock.mockResolvedValue({ text: "not json" });
+      generateJsonMock.mockResolvedValue({ text: "not json" });
 
       await generateQuiz(NOTE_ID, "ox");
 
-      expect(rpcNames(query.rpc)).toEqual(["claim_quiz_generation"]);
+      expect(rpcNames(query.rpc)).toEqual(["claim_quiz_generation_v2"]);
     });
 
     it("사용량 조회 자체가 실패하면 생성 실패로 처리한다", async () => {
@@ -558,7 +658,7 @@ describe("generateQuiz", () => {
       expect(result).toEqual({
         error: "퀴즈 생성에 실패했습니다. 잠시 후 다시 시도해주세요.",
       });
-      expect(generateContentMock).not.toHaveBeenCalled();
+      expect(generateJsonMock).not.toHaveBeenCalled();
     });
 
     it("재생성도 같은 한도를 사용한다", async () => {
@@ -568,34 +668,95 @@ describe("generateQuiz", () => {
 
       expect(result).toEqual({
         error:
-          "오늘 만들 수 있는 퀴즈를 모두 사용했습니다. 내일 다시 시도해주세요.",
+          "오늘 AI 퀴즈 생성 횟수를 모두 사용했습니다. 기존 퀴즈는 다시 풀 수 있어요.",
       });
-      expect(generateContentMock).not.toHaveBeenCalled();
+      expect(generateJsonMock).not.toHaveBeenCalled();
     });
   });
 
-  describe("저장", () => {
-    it("note_id 충돌 시 upsert하도록 지정한다", async () => {
-      const query = setupSupabase();
-      mockGeminiSuccess();
+  describe("생성 확정 (finalize)", () => {
+    it("finalize가 ok면 캐시 내용과 함께 확정을 요청하고 퀴즈를 반환한다", async () => {
+      const query = setupSupabase({ finalizeResult: "ok" });
+      mockAiSuccess();
 
-      await generateQuiz(NOTE_ID, "ox");
+      const result = await generateQuiz(NOTE_ID, "ox");
 
-      expect(upsertPayload(query)?.[1]).toEqual({
-        onConflict: "note_id,quiz_type",
+      // 저장(quizzes upsert)은 이제 finalize RPC 트랜잭션 안에서 원자적으로
+      // 처리된다 — completed_at 갱신과 캐시 저장 사이의 창을 없애기 위해서다
+      // (그 사이 다음 세대가 먼저 저장을 끝내면 이 세대의 저장이 최신 결과를
+      // 덮어쓸 수 있었다). 그래서 여기서는 RPC에 넘긴 인자로 검증한다.
+      expect(finalizeArgs(query.rpc)).toMatchObject({
+        p_note_id: NOTE_ID,
+        p_quiz_type: "ox",
+        p_content_hash: expect.any(String),
+      });
+      expect(result).toEqual({
+        data: { questions: aiQuestions.questions, isNew: true },
       });
     });
 
-    it("저장에 실패해도 생성된 퀴즈는 반환한다", async () => {
-      setupSupabase({ upsertError: { message: "duplicate key" } });
-      mockGeminiSuccess();
+    it("finalize가 already_completed면 멱등 성공으로 반환한다", async () => {
+      const query = setupSupabase({ finalizeResult: "already_completed" });
+      mockAiSuccess();
+
+      const result = await generateQuiz(NOTE_ID, "ox");
+
+      expect(rpcNames(query.rpc)).toContain("finalize_quiz_generation_v2");
+      expect(result).toEqual({
+        data: { questions: aiQuestions.questions, isNew: true },
+      });
+    });
+
+    it("finalize가 stale_claim이면 에러를 반환한다", async () => {
+      setupSupabase({ finalizeResult: "stale_claim" });
+      mockAiSuccess();
 
       const result = await generateQuiz(NOTE_ID, "ox");
 
       expect(result).toEqual({
-        data: { questions: geminiQuestions.questions, isNew: true },
+        error:
+          "다른 퀴즈 생성 요청이 먼저 진행됐어요. 잠시 후 다시 시도해주세요.",
+      });
+    });
+
+    it("finalize가 예상 밖 상태를 반환해도 이미 받은 퀴즈는 반환한다", async () => {
+      // not_found 등은 정상 경로에서 나오지 않지만, 나오더라도 캐시만 저장하지 않을 뿐
+      // AI가 이미 만든 유효한 퀴즈까지 버리지는 않는다.
+      setupSupabase({ finalizeResult: "not_found" });
+      mockAiSuccess();
+
+      const result = await generateQuiz(NOTE_ID, "ox");
+
+      expect(result).toEqual({
+        data: { questions: aiQuestions.questions, isNew: true },
       });
       expect(console.error).toHaveBeenCalled();
+    });
+
+    it("finalize RPC 통신 자체가 실패해도 이미 받은 퀴즈는 반환한다", async () => {
+      setupSupabase({
+        finalizeError: { message: "network error" },
+      });
+      mockAiSuccess();
+
+      const result = await generateQuiz(NOTE_ID, "ox");
+
+      expect(result).toEqual({
+        data: { questions: aiQuestions.questions, isNew: true },
+      });
+      expect(console.error).toHaveBeenCalled();
+    });
+
+    it("claim 응답 형식이 올바르지 않으면 생성 실패로 처리한다", async () => {
+      setupSupabase({ claimResult: { status: "ok" } });
+      mockAiSuccess();
+
+      const result = await generateQuiz(NOTE_ID, "ox");
+
+      expect(result).toEqual({
+        error: "퀴즈 생성에 실패했습니다. 잠시 후 다시 시도해주세요.",
+      });
+      expect(generateJsonMock).not.toHaveBeenCalled();
     });
   });
 });
@@ -603,7 +764,7 @@ describe("generateQuiz", () => {
 describe("regenerateQuiz", () => {
   it("캐시가 일치해도 무시하고 새로 생성한다", async () => {
     const first = setupSupabase();
-    mockGeminiSuccess();
+    mockAiSuccess();
     await generateQuiz(NOTE_ID, "ox");
 
     const savedHash = hashOf(first);
@@ -612,23 +773,23 @@ describe("regenerateQuiz", () => {
 
     setupSupabase({
       cached: {
-        questions: geminiQuestions.questions,
+        questions: aiQuestions.questions,
         note_content_hash: savedHash,
       },
     });
-    mockGeminiSuccess();
+    mockAiSuccess();
 
     const result = await regenerateQuiz(NOTE_ID, "ox");
 
-    expect(generateContentMock).toHaveBeenCalledOnce();
+    expect(generateJsonMock).toHaveBeenCalledOnce();
     expect(result).toEqual({
-      data: { questions: geminiQuestions.questions, isNew: true },
+      data: { questions: aiQuestions.questions, isNew: true },
     });
   });
 
   it("기존 캐시를 미리 삭제하지 않는다", async () => {
     const query = setupSupabase();
-    generateContentMock.mockRejectedValue(new Error("boom"));
+    generateJsonMock.mockRejectedValue(new Error("boom"));
 
     await regenerateQuiz(NOTE_ID, "ox");
 
@@ -645,7 +806,7 @@ describe("regenerateQuiz", () => {
     /** 캐시 키를 모르므로 한 번 생성해서 저장된 해시를 얻는다. */
     async function savedHash(): Promise<string> {
       const query = setupSupabase();
-      mockGeminiSuccess();
+      mockAiSuccess();
       await generateQuiz(NOTE_ID, "ox");
 
       const hash = hashOf(query);
@@ -659,17 +820,17 @@ describe("regenerateQuiz", () => {
 
       setupSupabase({
         cached: {
-          questions: geminiQuestions.questions,
+          questions: aiQuestions.questions,
           note_content_hash: hash,
           recent_questions: [["1회차 문제"]],
         },
       });
-      mockGeminiSuccess();
+      mockAiSuccess();
 
       await regenerateQuiz(NOTE_ID, "ox");
 
-      expect(geminiRequest().contents).toContain("## 이미 출제된 문제");
-      expect(geminiRequest().contents).toContain("1회차 문제");
+      expect(aiRequest().prompt).toContain("## 이미 출제된 문제");
+      expect(aiRequest().prompt).toContain("1회차 문제");
     });
 
     it("여러 회차의 문제를 함께 넣는다", async () => {
@@ -677,16 +838,16 @@ describe("regenerateQuiz", () => {
 
       setupSupabase({
         cached: {
-          questions: geminiQuestions.questions,
+          questions: aiQuestions.questions,
           note_content_hash: hash,
           recent_questions: [["3회차 문제"], ["2회차 문제"], ["1회차 문제"]],
         },
       });
-      mockGeminiSuccess();
+      mockAiSuccess();
 
       await regenerateQuiz(NOTE_ID, "ox");
 
-      const prompt = geminiRequest().contents;
+      const prompt = aiRequest().prompt;
       expect(prompt).toContain("3회차 문제");
       expect(prompt).toContain("2회차 문제");
       expect(prompt).toContain("1회차 문제");
@@ -697,17 +858,16 @@ describe("regenerateQuiz", () => {
 
       setupSupabase({
         cached: {
-          questions: geminiQuestions.questions,
+          questions: aiQuestions.questions,
           note_content_hash: hash,
           recent_questions: [["겹치는 문제"], ["겹치는 문제"]],
         },
       });
-      mockGeminiSuccess();
+      mockAiSuccess();
 
       await regenerateQuiz(NOTE_ID, "ox");
 
-      const occurrences =
-        geminiRequest().contents.split("겹치는 문제").length - 1;
+      const occurrences = aiRequest().prompt.split("겹치는 문제").length - 1;
       expect(occurrences).toBe(1);
     });
 
@@ -718,17 +878,17 @@ describe("regenerateQuiz", () => {
 
       setupSupabase({
         cached: {
-          questions: geminiQuestions.questions,
+          questions: aiQuestions.questions,
           note_content_hash: hash,
           recent_questions: [makeSet("최신"), makeSet("오래된")],
         },
       });
-      mockGeminiSuccess();
+      mockAiSuccess();
 
       await regenerateQuiz(NOTE_ID, "ox");
 
       // 상한(45)에 걸려 잘리는 것은 항상 오래된 회차 쪽이어야 한다.
-      const prompt = geminiRequest().contents;
+      const prompt = aiRequest().prompt;
       expect(prompt).toContain("최신문제24");
       expect(prompt).toContain("오래된문제0");
       expect(prompt).not.toContain("오래된문제24");
@@ -739,55 +899,55 @@ describe("regenerateQuiz", () => {
 
       setupSupabase({
         cached: {
-          questions: geminiQuestions.questions,
+          questions: aiQuestions.questions,
           note_content_hash: hash,
           recent_questions: { broken: true },
         },
       });
-      mockGeminiSuccess();
+      mockAiSuccess();
 
       await regenerateQuiz(NOTE_ID, "ox");
 
-      expect(geminiRequest().contents).not.toContain("## 이미 출제된 문제");
+      expect(aiRequest().prompt).not.toContain("## 이미 출제된 문제");
     });
 
     it("노트가 바뀌어 해시가 다르면 이전 문제를 넣지 않는다", async () => {
       setupSupabase({
         cached: {
-          questions: geminiQuestions.questions,
+          questions: aiQuestions.questions,
           note_content_hash: "stale-hash",
           recent_questions: [["옛 노트에서 낸 문제"]],
         },
       });
-      mockGeminiSuccess();
+      mockAiSuccess();
 
       await regenerateQuiz(NOTE_ID, "ox");
 
-      expect(geminiRequest().contents).not.toContain("## 이미 출제된 문제");
+      expect(aiRequest().prompt).not.toContain("## 이미 출제된 문제");
     });
 
     it("캐시가 없으면 이전 문제 없이 생성한다", async () => {
       setupSupabase();
-      mockGeminiSuccess();
+      mockAiSuccess();
 
       await regenerateQuiz(NOTE_ID, "ox");
 
-      expect(geminiRequest().contents).not.toContain("## 이미 출제된 문제");
+      expect(aiRequest().prompt).not.toContain("## 이미 출제된 문제");
     });
 
     it("재생성은 최초 생성보다 높은 temperature를 쓴다", async () => {
       setupSupabase();
-      mockGeminiSuccess();
+      mockAiSuccess();
       await generateQuiz(NOTE_ID, "ox");
-      const initial = geminiRequest().config.temperature;
+      const initial = aiRequest().temperature;
 
       vi.clearAllMocks();
 
       setupSupabase();
-      mockGeminiSuccess();
+      mockAiSuccess();
       await regenerateQuiz(NOTE_ID, "ox");
 
-      expect(geminiRequest().config.temperature).toBeGreaterThan(initial);
+      expect(aiRequest().temperature).toBeGreaterThan(initial);
     });
 
     it("이번 세트를 이력 맨 앞에 쌓는다", async () => {
@@ -795,17 +955,17 @@ describe("regenerateQuiz", () => {
 
       const query = setupSupabase({
         cached: {
-          questions: geminiQuestions.questions,
+          questions: aiQuestions.questions,
           note_content_hash: hash,
           recent_questions: [["2회차 문제"], ["1회차 문제"]],
         },
       });
-      mockGeminiSuccess();
+      mockAiSuccess();
 
       await regenerateQuiz(NOTE_ID, "ox");
 
       expect(savedHistory(query)).toEqual([
-        [geminiQuestions.questions[0]!.question],
+        [aiQuestions.questions[0]!.question],
         ["2회차 문제"],
         ["1회차 문제"],
       ]);
@@ -816,12 +976,12 @@ describe("regenerateQuiz", () => {
 
       const query = setupSupabase({
         cached: {
-          questions: geminiQuestions.questions,
+          questions: aiQuestions.questions,
           note_content_hash: hash,
           recent_questions: [["3회차 문제"], ["2회차 문제"], ["1회차 문제"]],
         },
       });
-      mockGeminiSuccess();
+      mockAiSuccess();
 
       await regenerateQuiz(NOTE_ID, "ox");
 
@@ -833,27 +993,27 @@ describe("regenerateQuiz", () => {
     it("노트가 바뀌면 이력을 이번 세트만 남기고 비운다", async () => {
       const query = setupSupabase({
         cached: {
-          questions: geminiQuestions.questions,
+          questions: aiQuestions.questions,
           note_content_hash: "stale-hash",
           recent_questions: [["옛 노트에서 낸 문제"]],
         },
       });
-      mockGeminiSuccess();
+      mockAiSuccess();
 
       await regenerateQuiz(NOTE_ID, "ox");
 
       expect(savedHistory(query)).toEqual([
-        [geminiQuestions.questions[0]!.question],
+        [aiQuestions.questions[0]!.question],
       ]);
     });
 
     it("요청마다 출제 관점을 프롬프트에 넣는다", async () => {
       setupSupabase();
-      mockGeminiSuccess();
+      mockAiSuccess();
 
       await regenerateQuiz(NOTE_ID, "ox");
 
-      expect(geminiRequest().contents).toContain("## 이번 출제 관점");
+      expect(aiRequest().prompt).toContain("## 이번 출제 관점");
     });
   });
 });

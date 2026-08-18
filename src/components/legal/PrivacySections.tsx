@@ -84,6 +84,10 @@ export const privacySections: LegalSection[] = [
           <li>
             <strong>Supabase Inc.</strong> — 데이터베이스 및 인증 서비스 운영
           </li>
+          <li>
+            <strong>Cloudflare, Inc.</strong> — AI 퀴즈 생성 및 백지 테스트 채점
+            처리
+          </li>
         </ul>
       </>
     ),

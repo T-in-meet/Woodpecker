@@ -87,6 +87,37 @@ describe("buildQuizPrompt", () => {
     expect(prompt.indexOf("노트 본문")).toBeLessThan(prompt.indexOf("## 규칙"));
   });
 
+  // 번호를 문자열에 직접 쓰지 않고 순서대로 매기므로, 빠지거나 겹치지 않는지 본다.
+  it("규칙 번호를 1부터 빠짐없이 매긴다", () => {
+    for (const quizType of ["ox", "blank", "choice"] as const) {
+      const prompt = buildQuizPrompt("제목", "내용", MAX, quizType);
+      const rulesSection = prompt.slice(
+        prompt.indexOf("## 규칙"),
+        prompt.indexOf("## JSON 형식"),
+      );
+      const numbers = [...rulesSection.matchAll(/^(\d+)\. /gm)].map((match) =>
+        Number(match[1]),
+      );
+
+      expect(numbers).toEqual(
+        Array.from({ length: numbers.length }, (_, index) => index + 1),
+      );
+      // 유형 규칙 + 공통 규칙 1 + JSON 형식 지시가 모두 들어간다.
+      expect(numbers.length).toBeGreaterThanOrEqual(6);
+    }
+  });
+
+  it("JSON 형식 지시는 항상 마지막 규칙이다", () => {
+    for (const quizType of ["ox", "blank", "choice"] as const) {
+      const prompt = buildQuizPrompt("제목", "내용", MAX, quizType);
+
+      expect(prompt).toContain("반드시 아래 JSON 형식으로만 응답하세요");
+      expect(prompt.indexOf("반드시 아래 JSON 형식으로만")).toBeLessThan(
+        prompt.indexOf("## JSON 형식"),
+      );
+    }
+  });
+
   it("ox 타입은 OX 규칙과 JSON 형식을 포함한다", () => {
     const prompt = buildQuizPrompt("제목", "내용", MAX, "ox");
 
@@ -166,6 +197,27 @@ describe("buildQuizPrompt", () => {
     expect(prompt).toContain("4개를 채우기 어려우면 그 문항을 만들지 말고");
   });
 
+  it("blank 타입은 정답이 단어 하나여야 함을 명시한다", () => {
+    const prompt = buildQuizPrompt("제목", "내용", MAX, "blank");
+
+    expect(prompt).toContain(
+      "정답은 단어(명사, 용어, 숫자 등) 하나여야 합니다",
+    );
+    expect(prompt).toContain("어구나 절, 서술형 문장은 안 됩니다");
+    // 뒤집어도 단어로 안 떨어지면 포기하라는 반례까지 들어야 한다.
+    expect(prompt).toContain("기능 테스트는 ____을 확인한다");
+  });
+
+  // 해설에 ____를 그대로 복사해 넣는 사례가 있었다. 예시로 못박는다.
+  it("blank 타입은 JSON 예시의 해설에도 정답을 채워 보여준다", () => {
+    const prompt = buildQuizPrompt("제목", "내용", MAX, "blank");
+
+    expect(prompt).toContain("해설에는 ____를 남기지 말고");
+    expect(prompt).toContain(
+      '"explanation": "노트에서는 CPU의 동작을 동기화하는 주기적인 신호를 클럭이라고 설명한다."',
+    );
+  });
+
   it("blank 타입은 acceptedAnswers만 규칙 1의 예외임을 밝힌다", () => {
     const prompt = buildQuizPrompt("제목", "내용", MAX, "blank");
 
@@ -195,6 +247,45 @@ describe("buildQuizPrompt", () => {
       });
 
       expect(prompt).toContain("규칙 1이 우선");
+    });
+  });
+
+  describe("출력 주의사항", () => {
+    it("모든 유형에서 마크다운 서식을 금지한다", () => {
+      for (const quizType of ["ox", "blank", "choice"] as const) {
+        const prompt = buildQuizPrompt("제목", "내용", MAX, quizType);
+
+        expect(prompt).toContain("## 출력 주의사항");
+        expect(prompt).toContain("마크다운 서식을 쓰지 마세요");
+      }
+    });
+
+    // 선택지도 평문으로 렌더하므로 금지 대상에 들어가야 한다.
+    it("마크다운 금지 대상에 options를 포함한다", () => {
+      const prompt = buildQuizPrompt("제목", "내용", MAX, "choice");
+
+      expect(prompt).toContain("question·options·answer·explanation");
+    });
+
+    it("빈칸 채우기는 나열 항목 중 하나를 묻지 못하게 막는다", () => {
+      const prompt = buildQuizPrompt("제목", "내용", MAX, "blank");
+
+      expect(prompt).toContain("정답이 하나로 정해져야 합니다");
+      expect(prompt).toContain("중 하나는 ____이다");
+    });
+
+    it("객관식은 나열 항목을 선택지에 함께 넣지 못하게 막는다", () => {
+      const prompt = buildQuizPrompt("제목", "내용", MAX, "choice");
+
+      expect(prompt).toContain("둘 이상을 한 문항의 선택지에 함께 넣지 마세요");
+    });
+
+    // OX는 답이 true/false뿐이라 유일성 지시가 군더더기다.
+    it("OX에는 유일성 지시를 넣지 않는다", () => {
+      const prompt = buildQuizPrompt("제목", "내용", MAX, "ox");
+
+      expect(prompt).not.toContain("정답이 하나로 정해져야 합니다");
+      expect(prompt).not.toContain("선택지에 함께 넣지 마세요");
     });
   });
 
@@ -276,16 +367,53 @@ describe("pickPerspective", () => {
   });
 
   it("정의된 관점 중 하나를 반환한다", () => {
-    expect(QUIZ_PERSPECTIVES).toContain(pickPerspective());
+    expect(QUIZ_PERSPECTIVES).toContain(pickPerspective("ox"));
   });
 
   it("난수에 따라 다른 관점을 고른다", () => {
     vi.spyOn(Math, "random").mockReturnValue(0);
-    expect(pickPerspective()).toBe(QUIZ_PERSPECTIVES[0]);
+    expect(pickPerspective("ox")).toBe(QUIZ_PERSPECTIVES[0]);
 
     vi.spyOn(Math, "random").mockReturnValue(0.99);
-    expect(pickPerspective()).toBe(
+    expect(pickPerspective("ox")).toBe(
       QUIZ_PERSPECTIVES[QUIZ_PERSPECTIVES.length - 1],
     );
+  });
+
+  // 답이 절이 될 수밖에 없는 관점이 걸리면 빈칸이 서술형이 된다.
+  it("빈칸 채우기는 답이 한 단어로 떨어지는 관점만 고른다", () => {
+    const allowed = ["정의와 용어", "절차와 순서", "역할과 구성"];
+
+    for (const value of [0, 0.2, 0.4, 0.6, 0.8, 0.99]) {
+      vi.spyOn(Math, "random").mockReturnValue(value);
+
+      const perspective = pickPerspective("blank");
+
+      expect(allowed.some((axis) => perspective.startsWith(axis))).toBe(true);
+    }
+  });
+
+  // 남긴 관점도 원문 그대로면 답이 나열이 된다. 빈칸용으로 다시 쓴 문구를 쓰는지 본다.
+  it("빈칸 채우기는 나열을 부르는 관점 문구를 쓰지 않는다", () => {
+    for (const value of [0, 0.2, 0.4, 0.6, 0.8, 0.99]) {
+      vi.spyOn(Math, "random").mockReturnValue(value);
+
+      expect(pickPerspective("blank")).not.toContain(
+        "무엇으로 이루어져 있는지",
+      );
+      expect(pickPerspective("blank")).not.toContain("어떤 단계를 거치는지");
+    }
+  });
+
+  it("OX·객관식은 관점을 걸러내지 않는다", () => {
+    const picked = new Set<string>();
+
+    for (const value of [0, 0.2, 0.4, 0.6, 0.8, 0.99]) {
+      vi.spyOn(Math, "random").mockReturnValue(value);
+      picked.add(pickPerspective("ox"));
+      picked.add(pickPerspective("choice"));
+    }
+
+    expect(picked.size).toBe(QUIZ_PERSPECTIVES.length);
   });
 });
