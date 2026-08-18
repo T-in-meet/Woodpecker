@@ -16,6 +16,10 @@ import {
   saveNoteChatExpandedQuery,
 } from "../execution/run-persistence";
 import { reportNoteChatOperationalError } from "../utils/report-operational-error";
+import {
+  NOTE_CHAT_NO_CONTEXT_MESSAGE,
+  NOTE_CHAT_NO_CONTEXT_USAGE,
+} from "./constants";
 import { consumeNoteChatProviderStream } from "./consume-provider-stream";
 import type { NoteChatStreamEvent } from "./types";
 
@@ -162,6 +166,69 @@ export async function runNoteChatStream(
     }
 
     const { sources } = execution;
+
+    /*
+     * 검색된 Note Context가 없으면 Answer Provider를 호출하지 않습니다.
+     *
+     * Context 없이 일반 지식으로 답변하는 것을 방지하고 불필요한 Provider
+     * 호출 비용을 줄이면서, 클라이언트에는 기존과 동일한 text-delta /
+     * finish 이벤트 계약으로 고정 안내 답변을 전달합니다.
+     */
+    if (sources.length === 0) {
+      const content = NOTE_CHAT_NO_CONTEXT_MESSAGE;
+      const usedNoteIds: string[] = [];
+      const noContextUsage = NOTE_CHAT_NO_CONTEXT_USAGE;
+
+      await onEvent({
+        delta: content,
+        type: "text-delta",
+      });
+
+      let assistantMessageId: string;
+
+      try {
+        assistantMessageId = await completeNoteChatRunSuccess({
+          content,
+          runId: params.runId,
+          sources,
+          usage: noContextUsage,
+          usedNoteIds,
+        });
+      } catch (error) {
+        await reportNoteChatOperationalError({
+          actorUserId: params.userId,
+          context: {
+            conversationId: params.conversationId,
+            runId: params.runId,
+          },
+          error,
+          errorCode:
+            NOTE_CHAT_OPERATIONAL_ERROR_CODES.RUN_SUCCESS_COMPLETE_FAILED,
+          message: "노트 챗봇 Run 성공 완료 처리에 실패했습니다.",
+          operation:
+            NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.COMPLETE_RUN_SUCCESS,
+          stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.DATABASE,
+          userId: params.userId,
+        });
+
+        throw error;
+      }
+
+      await onEvent({
+        assistantMessageId,
+        runId: params.runId,
+        type: "finish",
+        usedNoteIds,
+      });
+
+      return {
+        assistantMessageId,
+        content,
+        runId: params.runId,
+        usage: noContextUsage,
+        usedNoteIds,
+      };
+    }
 
     let consumed;
 

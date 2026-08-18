@@ -237,10 +237,6 @@ export async function prepareNoteChatExecution(
    */
   const contextNotes = matchedNotes.slice(0, NOTE_CHAT_CONTEXT_LIMIT);
 
-  // TODO: 검색된 노트가 없는 경우 Chat Provider를 호출하지 않고,
-  // 서버에서 고정된 안내 답변을 생성하여 Run을 성공 처리하는 경로를 추가한다.
-  // 불필요한 LLM 호출과 토큰 사용을 방지하고,
-  // Context 없이 일반 지식으로 답변하는 동작도 차단한다.
   const context = buildNoteContext({
     notes: contextNotes,
   });

@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import {
+  NOTE_CHAT_NO_CONTEXT_MESSAGE,
+  NOTE_CHAT_NO_CONTEXT_USAGE,
+} from "../constants";
 import { runNoteChatStream } from "../run-note-chat-stream";
 
 const mocks = vi.hoisted(() => ({
@@ -217,6 +221,59 @@ describe("runNoteChatStream", () => {
       type: "finish",
       runId: params.runId,
       assistantMessageId: "assistant-message-1",
+      usedNoteIds: [],
+    });
+  });
+
+  it("검색된 Context가 없으면 Provider를 호출하지 않고 고정 안내 답변으로 성공 처리한다", async () => {
+    setupSuccessfulExecution();
+
+    mocks.executeNoteChat.mockResolvedValue({
+      expandedQuery: "확장된 검색 질의",
+      providerStream,
+      sources: [],
+    });
+
+    mocks.completeNoteChatRunSuccess.mockResolvedValue("assistant-message-1");
+
+    const onEvent = vi.fn();
+
+    const result = await runNoteChatStream(params, onEvent);
+
+    expect(mocks.saveNoteChatExpandedQuery).toHaveBeenCalledWith({
+      expandedQuery: "확장된 검색 질의",
+      runId: params.runId,
+    });
+
+    expect(mocks.consumeNoteChatProviderStream).not.toHaveBeenCalled();
+    expect(mocks.parseNoteChatProviderResponse).not.toHaveBeenCalled();
+    expect(mocks.resolveNoteChatUsedNoteIds).not.toHaveBeenCalled();
+
+    expect(mocks.completeNoteChatRunSuccess).toHaveBeenCalledWith({
+      content: NOTE_CHAT_NO_CONTEXT_MESSAGE,
+      runId: params.runId,
+      sources: [],
+      usage: NOTE_CHAT_NO_CONTEXT_USAGE,
+      usedNoteIds: [],
+    });
+
+    expect(onEvent).toHaveBeenCalledWith({
+      delta: NOTE_CHAT_NO_CONTEXT_MESSAGE,
+      type: "text-delta",
+    });
+
+    expect(onEvent).toHaveBeenCalledWith({
+      assistantMessageId: "assistant-message-1",
+      runId: params.runId,
+      type: "finish",
+      usedNoteIds: [],
+    });
+
+    expect(result).toEqual({
+      assistantMessageId: "assistant-message-1",
+      content: NOTE_CHAT_NO_CONTEXT_MESSAGE,
+      runId: params.runId,
+      usage: NOTE_CHAT_NO_CONTEXT_USAGE,
       usedNoteIds: [],
     });
   });
