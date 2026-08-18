@@ -1,5 +1,3 @@
-"use server";
-
 import { AI_RUN_STATUS } from "@/features/ai/chats/constants";
 import type { AiTokenUsage } from "@/features/ai/providers/types";
 import { createAdminClient } from "@/lib/supabase/admin";

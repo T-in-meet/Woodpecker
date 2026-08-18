@@ -42,10 +42,21 @@ export const NOTE_CHAT_HISTORY_CHAR_LIMIT = 12000;
 /**
  * 한 사용자가 하루 동안 실행할 수 있는 Note Chat AI 실행의 최대 횟수입니다.
  */
-export const NOTE_CHAT_DAILY_EXECUTION_LIMIT = 100;
+export const NOTE_CHAT_DAILY_EXECUTION_LIMIT = 10;
 
 /**
  * Note Chat 일일 AI 실행 횟수 초과 오류 코드입니다.
+ *
+ * 일일 실행 제한 초과 시 Route가 클라이언트에 반환하며,
+ * 클라이언트에서 제한 초과 상태를 식별하는 데 사용합니다.
  */
 export const NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE =
   "DAILY_EXECUTION_LIMIT_EXCEEDED";
+
+/**
+ * Note Chat 일일 AI 실행 횟수 초과를 식별하는 PostgreSQL SQLSTATE입니다.
+ *
+ * 일일 실행 제한 RPC가 발생시킨 오류를 Supabase/PostgREST 응답의
+ * code 필드로 판별하여 429 응답으로 변환하는 데 사용합니다.
+ */
+export const NOTE_CHAT_DAILY_EXECUTION_LIMIT_SQLSTATE = "WP002";

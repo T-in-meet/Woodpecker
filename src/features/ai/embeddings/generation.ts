@@ -1,5 +1,3 @@
-"use server";
-
 import {
   AI_OPERATIONAL_ERROR_CODE,
   AI_OPERATIONAL_ERROR_OPERATION,

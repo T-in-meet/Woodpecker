@@ -1,7 +1,10 @@
 import { z } from "zod";
 
 import { AI_CHAT_MESSAGE_ROLE } from "@/features/ai/chats/constants";
-import type { AiProviderChatMessage } from "@/features/ai/providers/types";
+import type {
+  AiProviderChatMessage,
+  AiTokenUsage,
+} from "@/features/ai/providers/types";
 import { createQueryExpansionCompletion } from "@/features/ai/rags/query-expansion/create-query-expansion-completion";
 import type { AiRuntimeChatConfiguration } from "@/features/ai/runtimes/types";
 import {
@@ -32,6 +35,17 @@ type ExpandNoteChatQueryParams = {
 
   /** 현재 실행을 발생시킨 사용자 메시지 ID입니다. */
   userMessageId: string;
+};
+
+/**
+ * 문맥 기반 질의 확장 실행 결과입니다.
+ */
+export type ExpandNoteChatQueryResult = {
+  /** Embedding 검색에 사용할 문맥 기반 확장 질의입니다. */
+  expandedQuery: string;
+
+  /** 질의 확장 Chat Completion에서 사용한 token 사용량입니다. */
+  usage: AiTokenUsage;
 };
 
 /**
@@ -109,14 +123,14 @@ function serializeNoteChatQueryExpansionHistory(
  *
  * Runtime Prompt Version의 `system_template`, `user_template`,
  * `response_schema`를 사용하며 Provider 응답은 애플리케이션 스키마로
- * 다시 검증한 뒤 `expandedQuery`만 반환합니다.
+ * 다시 검증한 뒤 확장 질의와 token 사용량을 반환합니다.
  *
  * @param params 전체 대화 메시지, 현재 사용자 메시지 및 질의 확장 Runtime 설정
- * @returns Embedding 검색에 사용할 문맥 기반 확장 질의
+ * @returns Embedding 검색에 사용할 문맥 기반 확장 질의와 token 사용량
  */
 export async function expandNoteChatQuery(
   params: ExpandNoteChatQueryParams,
-): Promise<string> {
+): Promise<ExpandNoteChatQueryResult> {
   const currentUserMessage = params.messages.find(
     (message) => message.id === params.userMessageId,
   );
@@ -253,5 +267,8 @@ export async function expandNoteChatQuery(
     throw error;
   }
 
-  return parsed.data.expandedQuery;
+  return {
+    expandedQuery: parsed.data.expandedQuery,
+    usage: result.usage,
+  };
 }

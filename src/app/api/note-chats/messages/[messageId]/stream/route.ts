@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 
+import { isAdminUser } from "@/features/admin/utils/is-admin-user";
 import {
   resolveAiRuntimeChatConfiguration,
   resolveAiRuntimeEmbeddingConfiguration,
-} from "@/features/ai/runtimes/resolve-configuration";
+} from "@/features/ai/runtimes";
 import { isReportedAiOperationalError } from "@/features/ai/utils/report-ai-operational-error";
 import {
   NOTE_CHAT_AI_FEATURE_KEY,
@@ -13,6 +14,7 @@ import {
   NOTE_CHAT_DAILY_EXECUTION_LIMIT,
   NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE,
 } from "@/features/note-chats/constants/execution";
+import { isNoteChatDailyExecutionLimitError } from "@/features/note-chats/execution/is-daily-execution-limit-error";
 import { updateNoteChatUserMessageInputSchema } from "@/features/note-chats/schema";
 import { runNoteChatStream } from "@/features/note-chats/stream/run-note-chat-stream";
 import { encodeNoteChatStreamEvent } from "@/features/note-chats/stream/serialize";
@@ -26,24 +28,22 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
+/**
+ * Note Chat AI 실행에 허용할 최대 서버 실행 시간(초)입니다.
+ *
+ * 질의 확장, 검색용 embedding 생성, 관련 Note 검색 및 답변 스트리밍까지
+ * 하나의 요청에서 처리하므로 기본 실행 시간보다 긴 90초를 허용합니다.
+ *
+ * Next.js가 이 export를 Route 설정으로 직접 사용하므로
+ * POST 함수에서 별도로 참조할 필요는 없습니다.
+ */
+export const maxDuration = 90;
+
 type NoteChatUserMessageStreamRouteProps = {
   params: Promise<{
     messageId: string;
   }>;
 };
-
-/**
- * DB RPC가 반환한 오류가 Note Chat 일일 실행 제한 초과인지 확인합니다.
- *
- * Supabase RPC 오류 객체는 PostgreSQL 예외 메시지를 `message`에 담아 전달하므로,
- * 안정적인 오류 코드 문자열 포함 여부로 사용자 사용량 초과를 구분합니다.
- */
-function isNoteChatDailyExecutionLimitError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    error.message.includes(NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE)
-  );
-}
 
 /**
  * 기존 사용자 질문을 수정하고 이후 대화를 제거한 뒤
@@ -244,9 +244,12 @@ export async function POST(
    */
   const adminClient = createAdminClient();
 
+  const isAdmin = await isAdminUser(user.id);
+
   const { data: updated, error: updateError } = await adminClient
     .rpc("update_note_chat_user_message", {
       p_agent_id: chatConfiguration.prompt.agent.id,
+      p_bypass_daily_execution_limit: isAdmin,
       p_chat_model_config_id: chatConfiguration.model.id,
       p_content: parsed.data.content,
       p_daily_execution_limit: NOTE_CHAT_DAILY_EXECUTION_LIMIT,

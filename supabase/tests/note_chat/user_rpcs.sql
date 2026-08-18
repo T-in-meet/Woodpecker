@@ -4,7 +4,7 @@
 
 BEGIN;
 
-SELECT plan(25);
+SELECT plan(27);
 
 SELECT set_config('test.note_chat_rpc_user_id', gen_random_uuid()::text, true);
 SELECT set_config('test.note_chat_rpc_other_user_id', gen_random_uuid()::text, true);
@@ -52,23 +52,24 @@ VALUES
     'Unverified RPC conversation'
   );
 
-SET LOCAL ROLE anon;
-SELECT set_config('request.jwt.claims', '{}'::text, true);
+-- 기존 6-argument RPC는 새로운 service_role 전용 RPC로 대체되어
+-- migration에서 함수 자체를 제거하므로 더 이상 존재하지 않아야 합니다.
+SELECT hasnt_function(
+  'public',
+  'create_note_chat_question',
+  ARRAY['uuid', 'jsonb', 'uuid', 'uuid', 'uuid', 'uuid'],
+  $$legacy create_note_chat_question should be removed$$
+);
 
-SELECT throws_ok(
-  $sql$
-    SELECT *
-    FROM public.create_note_chat_question(
-      current_setting('test.note_chat_rpc_conversation_id')::uuid,
-      '{"text":"anon"}'::jsonb
-    );
-  $sql$,
-  '42501',
-  NULL,
-  $$anon should not execute legacy create_note_chat_question$$
+SELECT hasnt_function(
+  'public',
+  'update_note_chat_user_message',
+  ARRAY['uuid', 'jsonb', 'uuid', 'uuid', 'uuid', 'uuid'],
+  $$legacy update_note_chat_user_message should be removed$$
 );
 
 SET LOCAL ROLE authenticated;
+
 SELECT set_config(
   'request.jwt.claims',
   json_build_object(
@@ -78,19 +79,10 @@ SELECT set_config(
   true
 );
 
-SELECT throws_ok(
-  $sql$
-    SELECT *
-    FROM public.create_note_chat_question(
-      current_setting('test.note_chat_rpc_conversation_id')::uuid,
-      '{"text":"authenticated legacy"}'::jsonb
-    );
-  $sql$,
-  '42501',
-  NULL,
-  $$authenticated should not execute legacy create_note_chat_question$$
-);
-
+-- 신규 RPC는 service_role에서만 직접 실행할 수 있습니다.
+--
+-- 일반 사용자 제한값은 실제 정책과 동일하게 10을 전달하지만,
+-- authenticated 역할에는 함수 실행 권한 자체가 없어야 합니다.
 SELECT throws_ok(
   $sql$
     SELECT *
@@ -98,7 +90,8 @@ SELECT throws_ok(
       current_setting('test.note_chat_rpc_user_id')::uuid,
       current_setting('test.note_chat_rpc_conversation_id')::uuid,
       '{"text":"authenticated new"}'::jsonb,
-      1000000
+      10,
+      false
     );
   $sql$,
   '42501',
@@ -113,7 +106,8 @@ SELECT throws_ok(
       current_setting('test.note_chat_rpc_user_id')::uuid,
       gen_random_uuid(),
       '{"text":"authenticated update"}'::jsonb,
-      1000000
+      10,
+      false
     );
   $sql$,
   '42501',
@@ -125,12 +119,15 @@ RESET ROLE;
 
 SET LOCAL ROLE service_role;
 
+-- 일반 사용자 요청을 가정하므로
+-- p_bypass_daily_execution_limit은 false를 전달합니다.
 SELECT *
 FROM public.create_note_chat_question(
   current_setting('test.note_chat_rpc_user_id')::uuid,
   current_setting('test.note_chat_rpc_conversation_id')::uuid,
   '{"text":"first question"}'::jsonb,
-  100
+  10,
+  false
 )
 \gset test_note_chat_rpc_first_
 
@@ -180,7 +177,8 @@ SELECT throws_ok(
       current_setting('test.note_chat_rpc_user_id')::uuid,
       current_setting('test.note_chat_rpc_other_conversation_id')::uuid,
       '{"text":"blocked"}'::jsonb,
-      100
+      10,
+      false
     );
   $sql$,
   'P0001',
@@ -195,7 +193,8 @@ SELECT throws_ok(
       current_setting('test.note_chat_rpc_user_id')::uuid,
       current_setting('test.note_chat_rpc_conversation_id')::uuid,
       '[]'::jsonb,
-      100
+      10,
+      false
     );
   $sql$,
   'P0001',
@@ -210,7 +209,8 @@ SELECT throws_ok(
       current_setting('test.note_chat_rpc_user_id')::uuid,
       current_setting('test.note_chat_rpc_conversation_id')::uuid,
       '{"text":"invalid limit"}'::jsonb,
-      0
+      0,
+      false
     );
   $sql$,
   'P0001',
@@ -223,7 +223,8 @@ FROM public.create_note_chat_question(
   current_setting('test.note_chat_rpc_user_id')::uuid,
   current_setting('test.note_chat_rpc_conversation_id')::uuid,
   '{"text":"second question"}'::jsonb,
-  100
+  10,
+  false
 )
 \gset test_note_chat_rpc_second_
 
@@ -271,7 +272,8 @@ FROM public.update_note_chat_user_message(
   current_setting('test.note_chat_rpc_user_id')::uuid,
   :'test_note_chat_rpc_second_user_message_id'::uuid,
   '{"text":"edited second question"}'::jsonb,
-  100
+  10,
+  false
 )
 \gset test_note_chat_rpc_edit_
 
@@ -333,7 +335,8 @@ SELECT throws_ok(
       current_setting('test.note_chat_rpc_user_id')::uuid,
       current_setting('test.note_chat_rpc_deleted_message_id')::uuid,
       '{"text":"blocked"}'::jsonb,
-      100
+      10,
+      false
     );
   $sql$,
   'P0001',
@@ -373,7 +376,8 @@ SELECT throws_ok(
       current_setting('test.note_chat_rpc_user_id')::uuid,
       current_setting('test.note_chat_rpc_assistant_message_id')::uuid,
       '{"text":"blocked assistant"}'::jsonb,
-      100
+      10,
+      false
     );
   $sql$,
   'P0001',
@@ -388,7 +392,8 @@ SELECT throws_ok(
       current_setting('test.note_chat_rpc_unverified_id')::uuid,
       current_setting('test.note_chat_rpc_unverified_conversation_id')::uuid,
       '{"text":"unverified"}'::jsonb,
-      100
+      10,
+      false
     );
   $sql$,
   'P0001',
@@ -396,6 +401,15 @@ SELECT throws_ok(
   $$unverified users should not create note chat questions$$
 );
 
+-- ============================================================================
+-- 일반 사용자 일일 제한
+-- ============================================================================
+
+-- 이미 오늘 생성된 Run이 있으므로 제한값을 1로 낮추면
+-- 일반 사용자(false)는 추가 질문을 생성할 수 없어야 합니다.
+--
+-- 일일 실행 제한 초과는 일반 예외(P0001)가 아니라
+-- Route가 429로 식별하는 전용 SQLSTATE WP002를 반환해야 합니다.
 SELECT throws_ok(
   $sql$
     SELECT *
@@ -403,10 +417,11 @@ SELECT throws_ok(
       current_setting('test.note_chat_rpc_user_id')::uuid,
       current_setting('test.note_chat_rpc_conversation_id')::uuid,
       '{"text":"limit create"}'::jsonb,
-      1
+      1,
+      false
     );
   $sql$,
-  'P0001',
+  'WP002',
   'DAILY_EXECUTION_LIMIT_EXCEEDED',
   $$create_note_chat_question should reject requests at the daily limit$$
 );
@@ -421,6 +436,7 @@ SELECT is(
   $$daily limit failure should not create a user message$$
 );
 
+-- 질문 수정도 새로운 Run을 생성하므로 동일한 제한을 적용합니다.
 SELECT throws_ok(
   $sql$
     SELECT *
@@ -428,10 +444,11 @@ SELECT throws_ok(
       current_setting('test.note_chat_rpc_user_id')::uuid,
       current_setting('test.note_chat_rpc_second_user_message_id')::uuid,
       '{"text":"limit update"}'::jsonb,
-      1
+      1,
+      false
     );
   $sql$,
-  'P0001',
+  'WP002',
   'DAILY_EXECUTION_LIMIT_EXCEEDED',
   $$update_note_chat_user_message should reject requests at the daily limit$$
 );
@@ -444,6 +461,58 @@ SELECT is(
   ),
   'edited second question',
   $$daily limit failure should not edit the target message$$
+);
+
+-- ============================================================================
+-- 관리자 일일 제한 우회
+-- ============================================================================
+
+-- DB는 관리자 여부를 직접 판단하지 않습니다.
+--
+-- Route에서 관리자로 확인된 사용자에 대해서만
+-- p_bypass_daily_execution_limit = true를 전달합니다.
+--
+-- 여기서는 제한값이 이미 초과된 상태에서도 true를 전달하면
+-- quota 검사를 건너뛰는 RPC 동작만 검증합니다.
+
+SELECT *
+FROM public.create_note_chat_question(
+  current_setting('test.note_chat_rpc_user_id')::uuid,
+  current_setting('test.note_chat_rpc_conversation_id')::uuid,
+  '{"text":"admin bypass create"}'::jsonb,
+  1,
+  true
+)
+\gset test_note_chat_rpc_admin_create_
+
+SELECT is(
+  (
+    SELECT status
+    FROM public.note_chat_runs
+    WHERE id = :'test_note_chat_rpc_admin_create_run_id'::uuid
+  ),
+  'pending',
+  $$create_note_chat_question should bypass the daily limit$$
+);
+
+SELECT *
+FROM public.update_note_chat_user_message(
+  current_setting('test.note_chat_rpc_user_id')::uuid,
+  :'test_note_chat_rpc_second_user_message_id'::uuid,
+  '{"text":"admin bypass update"}'::jsonb,
+  1,
+  true
+)
+\gset test_note_chat_rpc_admin_update_
+
+SELECT is(
+  (
+    SELECT status
+    FROM public.note_chat_runs
+    WHERE id = :'test_note_chat_rpc_admin_update_run_id'::uuid
+  ),
+  'pending',
+  $$update_note_chat_user_message should bypass the daily limit$$
 );
 
 RESET ROLE;
@@ -461,7 +530,8 @@ SELECT throws_ok(
       current_setting('test.note_chat_rpc_user_id')::uuid,
       current_setting('test.note_chat_rpc_conversation_id')::uuid,
       '{"text":"atomic marker"}'::jsonb,
-      100
+      10,
+      false
     );
   $sql$,
   '23514',
@@ -480,4 +550,5 @@ SELECT is(
 );
 
 SELECT * FROM finish();
+
 ROLLBACK;

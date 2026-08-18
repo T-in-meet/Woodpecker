@@ -32,7 +32,7 @@ type BuildNoteChatProviderMessagesParams = {
  * 현재 질문은 `historyMessages`에 포함하지 않고 `question`으로 따로 전달하여
  * 같은 질문이 Provider 요청에 중복해서 포함되지 않도록 합니다.
  *
- * Note Context는 289 실행 코드가 직접 관리하며,
+ * Note Context는 Note Chat 실행 계층에서 직접 구성하며,
  * Prompt Template에는 현재 질문만 변수로 전달합니다.
  *
  * Provider 응답 형식은 Prompt 문자열에서 지시하지 않고,

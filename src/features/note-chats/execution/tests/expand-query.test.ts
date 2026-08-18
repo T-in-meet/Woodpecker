@@ -126,9 +126,19 @@ const providerHistoryMessages = [
   },
 ];
 
+/**
+ * 질의 확장 Chat Completion에서 사용한 token 사용량입니다.
+ */
+const queryExpansionUsage = {
+  inputTokens: 10,
+  outputTokens: 20,
+  totalTokens: 30,
+};
+
 const createCompletionResult = (content: string) =>
   ({
     content,
+    usage: queryExpansionUsage,
   }) as Awaited<ReturnType<typeof createAiChatCompletionWithProvider>>;
 
 describe("expandNoteChatQuery", () => {
@@ -156,14 +166,17 @@ describe("expandNoteChatQuery", () => {
     vi.mocked(reportNoteChatOperationalError).mockResolvedValue(undefined);
   });
 
-  it("현재 질문과 이전 대화를 사용해 확장된 검색 질의를 반환한다", async () => {
+  it("현재 질문과 이전 대화를 사용해 확장된 검색 질의와 usage를 반환한다", async () => {
     const result = await expandNoteChatQuery({
       configuration,
       messages,
       userMessageId: "message-3",
     });
 
-    expect(result).toBe("확장된 검색 질의");
+    expect(result).toEqual({
+      expandedQuery: "확장된 검색 질의",
+      usage: queryExpansionUsage,
+    });
 
     expect(resolveNoteChatProviderMessages).toHaveBeenCalledWith(
       previousMessages,

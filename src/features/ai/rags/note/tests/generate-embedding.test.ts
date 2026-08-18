@@ -95,6 +95,26 @@ describe("generateNoteEmbedding", () => {
     vi.mocked(deleteInactiveAiEmbeddingGeneration).mockResolvedValue(0);
   });
 
+  it("생성할 chunk가 없으면 embedding generation을 실행하지 않는다", async () => {
+    vi.mocked(createNoteContentChunks).mockReturnValue([]);
+
+    const result = await generateNoteEmbedding({
+      embeddingConfiguration: EMBEDDING_CONFIGURATION,
+      ownerUserId: "user-id",
+      noteId: "note-id",
+      sourceUpdatedAt: SOURCE_UPDATED_AT,
+      title: "빈 노트",
+      content: "",
+    });
+
+    expect(result).toEqual([]);
+
+    expect(randomUUID).not.toHaveBeenCalled();
+    expect(generateAiEmbedding).not.toHaveBeenCalled();
+    expect(activateAiEmbeddingGeneration).not.toHaveBeenCalled();
+    expect(deleteInactiveAiEmbeddingGeneration).not.toHaveBeenCalled();
+  });
+
   it("같은 Note의 모든 chunk에 원본 Note 기준 contentHash를 전달하고 완성된 generation을 활성화한다", async () => {
     const title = "다익스트라 알고리즘";
 

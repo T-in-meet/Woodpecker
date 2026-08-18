@@ -63,11 +63,21 @@ const configurationWithSchema = {
   temperature: 0.2,
 } as unknown as AiRuntimeChatConfiguration;
 
+/**
+ * 질의 확장 Chat Completion에서 사용한 token 사용량입니다.
+ */
+const usage = {
+  inputTokens: 10,
+  outputTokens: 20,
+  totalTokens: 30,
+};
+
 const createCompletionResult = (
   content: string,
 ): Awaited<ReturnType<typeof createAiChatCompletionWithProvider>> =>
   ({
     content,
+    usage,
   }) as Awaited<ReturnType<typeof createAiChatCompletionWithProvider>>;
 
 describe("createQueryExpansionCompletion", () => {
@@ -105,6 +115,7 @@ describe("createQueryExpansionCompletion", () => {
       content: JSON.stringify({
         expandedQuery: "확장된 검색 질의",
       }),
+      usage,
     });
 
     expect(renderPromptTemplate).toHaveBeenNthCalledWith(
@@ -171,7 +182,7 @@ describe("createQueryExpansionCompletion", () => {
     );
   });
 
-  it("Provider가 반환한 content를 그대로 반환한다", async () => {
+  it("Provider가 반환한 content와 usage를 그대로 반환한다", async () => {
     const content = JSON.stringify({
       expandedQuery: "원본 Provider 응답",
     });
@@ -190,6 +201,7 @@ describe("createQueryExpansionCompletion", () => {
 
     expect(result).toEqual({
       content,
+      usage,
     });
   });
 

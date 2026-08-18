@@ -1,4 +1,7 @@
-import type { AiChatStreamEvent } from "@/features/ai/providers/types";
+import type {
+  AiChatStreamEvent,
+  AiTokenUsage,
+} from "@/features/ai/providers/types";
 import type { Json } from "@/types/db.helpers";
 
 import {
@@ -29,6 +32,9 @@ export type NoteChatExecution = {
   /** 문맥 기반 질의 확장을 통해 생성된 노트 검색용 질의입니다. */
   expandedQuery: string;
 
+  /** 질의 확장 Chat Completion에서 사용한 token 사용량입니다. */
+  queryExpansionUsage: AiTokenUsage;
+
   /** Provider 호출 직전에 확정된 실행 정보입니다. */
   prepared: PreparedNoteChatExecution;
 
@@ -47,7 +53,7 @@ export type NoteChatExecution = {
  * 1. 문맥 기반 질의 확장과 노트 검색을 포함한 실행 정보를 준비합니다.
  * 2. 확정된 Runtime 설정과 대화 이력으로 Provider 메시지를 준비합니다.
  * 3. Runtime에서 확정된 Chat Model로 Provider 스트림을 생성합니다.
- * 4. 질의 확장 결과와 답변 생성에 필요한 Context 정보를 반환합니다.
+ * 4. 질의 확장 결과와 사용량, 답변 생성에 필요한 Context 정보를 반환합니다.
  *
  * 이 함수는 Provider 스트림을 직접 소비하지 않으며,
  * Assistant Message 저장이나 Run 성공·실패 처리도 수행하지 않습니다.
@@ -75,6 +81,7 @@ export async function executeNoteChat(
     expandedQuery: prepared.expandedQuery,
     prepared,
     providerStream,
+    queryExpansionUsage: prepared.queryExpansionUsage,
     sources: prepared.sources,
   };
 }

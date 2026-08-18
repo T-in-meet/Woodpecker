@@ -7,7 +7,7 @@ BEGIN;
 -- 이 테스트는 match_ai_embeddings RPC의 권한,
 -- 활성 generation의 chunk 검색,
 -- limit, similarity 보정, source/input 범위 필터링을 함께 검증합니다.
-SELECT plan(12);
+SELECT plan(14);
 
 -- 테스트마다 독립적인 사용자/모델/소스 식별자를 사용합니다.
 SELECT set_config('test.ai_match_user_id', gen_random_uuid()::text, true);
@@ -72,7 +72,16 @@ VALUES (
 -- match_ai_embeddings RPC가 예상한 시그니처로 생성되었는지 검증합니다.
 SELECT ok(
   to_regprocedure(
-    'public.match_ai_embeddings(extensions.vector,uuid,text,uuid,text,integer,double precision)'
+    'public.match_ai_embeddings(
+  extensions.vector,
+  uuid,
+  text,
+  uuid,
+  text,
+  integer,
+  double precision,
+  uuid
+)'
   ) IS NOT NULL,
   'match_ai_embeddings() should exist'
 );
@@ -82,7 +91,16 @@ SELECT ok(
 SELECT ok(
   NOT has_function_privilege(
     'anon',
-    'public.match_ai_embeddings(extensions.vector,uuid,text,uuid,text,integer,double precision)',
+    'public.match_ai_embeddings(
+  extensions.vector,
+  uuid,
+  text,
+  uuid,
+  text,
+  integer,
+  double precision,
+  uuid
+)',
     'EXECUTE'
   ),
   'anon should not execute match_ai_embeddings()'
@@ -92,7 +110,16 @@ SELECT ok(
 SELECT ok(
   NOT has_function_privilege(
     'authenticated',
-    'public.match_ai_embeddings(extensions.vector,uuid,text,uuid,text,integer,double precision)',
+    'public.match_ai_embeddings(
+  extensions.vector,
+  uuid,
+  text,
+  uuid,
+  text,
+  integer,
+  double precision,
+  uuid
+)',
     'EXECUTE'
   ),
   'authenticated should not execute match_ai_embeddings()'
@@ -102,7 +129,16 @@ SELECT ok(
 SELECT ok(
   has_function_privilege(
     'service_role',
-    'public.match_ai_embeddings(extensions.vector,uuid,text,uuid,text,integer,double precision)',
+    'public.match_ai_embeddings(
+  extensions.vector,
+  uuid,
+  text,
+  uuid,
+  text,
+  integer,
+  double precision,
+  uuid
+)',
     'EXECUTE'
   ),
   'service_role should execute match_ai_embeddings()'
@@ -357,6 +393,57 @@ SELECT is(
       AND chunk_index = 1
   ),
   'limit should restrict chunk results ordered by distance'
+);
+
+-- p_exclude_source_id가 NULL이면 기존 검색과 동일하게
+-- 모든 활성 source의 chunk가 검색되는지 검증합니다.
+SELECT is(
+  (
+    SELECT count(*)
+    FROM public.match_ai_embeddings(
+      (
+        '[1,'
+        || array_to_string(array_fill(0, ARRAY[1535]), ',')
+        || ']'
+      )::extensions.vector,
+      current_setting('test.ai_match_user_id')::uuid,
+      'note',
+      current_setting('test.ai_match_model_id')::uuid,
+      'rag_note_content',
+      10,
+      NULL,
+      NULL
+    )
+  ),
+  3::bigint,
+  'null excluded source should preserve existing matching behavior'
+);
+
+-- 특정 source를 제외하면 해당 source의 모든 chunk를
+-- ranking 및 LIMIT 적용 전에 검색 대상에서 제거하는지 검증합니다.
+--
+-- query vector와 가장 가까운 chunk는 source A의 chunk 1이지만
+-- source A 자체를 제외하므로 limit 1 결과는 source B가 되어야 합니다.
+SELECT is(
+  (
+    SELECT source_id
+    FROM public.match_ai_embeddings(
+      (
+        '[1,'
+        || array_to_string(array_fill(0, ARRAY[1535]), ',')
+        || ']'
+      )::extensions.vector,
+      current_setting('test.ai_match_user_id')::uuid,
+      'note',
+      current_setting('test.ai_match_model_id')::uuid,
+      'rag_note_content',
+      1,
+      NULL,
+      current_setting('test.ai_match_source_a')::uuid
+    )
+  ),
+  current_setting('test.ai_match_source_b')::uuid,
+  'excluded source should be removed before ranking and limit'
 );
 
 -- min_similarity가 허용 범위인 1을 초과하면

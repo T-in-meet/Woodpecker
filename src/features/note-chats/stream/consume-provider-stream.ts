@@ -22,147 +22,218 @@ export type ConsumedNoteChatProviderStream = {
 };
 
 /**
- * JSON 문자열 안의 `answer` 필드에서 현재까지 완전히 해석할 수 있는
- * 문자열 부분을 추출합니다.
+ * 스트리밍 중 JSON의 answer 필드를 증분 파싱하기 위한 상태입니다.
+ *
+ * 이미 확인한 문자열 위치를 cursor에 저장하여 Provider delta가 추가될 때마다
+ * 전체 누적 문자열을 처음부터 다시 파싱하지 않습니다.
+ */
+type StreamingAnswerParserState = {
+  /** 다음에 파싱할 누적 content 위치입니다. */
+  cursor: number;
+
+  /** 현재 answer 파싱 단계입니다. */
+  phase: "find-key" | "after-key" | "after-colon" | "in-answer" | "completed";
+};
+
+/**
+ * 새로운 스트리밍 answer parser 상태를 생성합니다.
+ */
+function createStreamingAnswerParserState(): StreamingAnswerParserState {
+  return {
+    cursor: 0,
+    phase: "find-key",
+  };
+}
+
+/**
+ * 현재까지 누적된 Provider JSON 문자열에서 아직 확인하지 않은 부분만 파싱하여,
+ * 새롭게 완성된 answer 문자열 조각을 반환합니다.
  *
  * Provider delta는 JSON 문법이나 escape sequence 중간에서 끊길 수 있으므로,
- * 완성되지 않은 escape sequence는 다음 delta가 도착할 때까지 반환하지 않습니다.
+ * 완성되지 않은 escape sequence는 cursor를 진행시키지 않고 다음 delta를 기다립니다.
  *
  * @param content 현재까지 누적된 Provider 원본 문자열
- * @returns 현재까지 안전하게 추출할 수 있는 answer 문자열
+ * @param state 이전 delta까지의 parser 상태
+ * @returns 이번 호출에서 새롭게 해석된 answer 문자열
  */
-function extractStreamingAnswer(content: string): string {
-  const answerKeyIndex = content.indexOf('"answer"');
+function extractStreamingAnswerDelta(
+  content: string,
+  state: StreamingAnswerParserState,
+): string {
+  let delta = "";
 
-  if (answerKeyIndex < 0) {
-    return "";
-  }
+  while (state.cursor < content.length) {
+    switch (state.phase) {
+      case "find-key": {
+        const answerKey = '"answer"';
+        const answerKeyIndex = content.indexOf(answerKey, state.cursor);
 
-  let cursor = answerKeyIndex + '"answer"'.length;
+        if (answerKeyIndex < 0) {
+          /*
+           * "answer" key 자체가 Provider delta 경계에서 잘릴 수 있으므로
+           * key 길이보다 짧은 마지막 부분은 다음 delta에서 다시 확인합니다.
+           */
+          state.cursor = Math.max(
+            state.cursor,
+            content.length - (answerKey.length - 1),
+          );
 
-  /*
-   * "answer" 뒤의 공백과 ':'을 건너뛰고
-   * 실제 JSON 문자열의 시작 따옴표를 찾습니다.
-   */
-  while (cursor < content.length && /\s/.test(content[cursor] ?? "")) {
-    cursor += 1;
-  }
-
-  if (content[cursor] !== ":") {
-    return "";
-  }
-
-  cursor += 1;
-
-  while (cursor < content.length && /\s/.test(content[cursor] ?? "")) {
-    cursor += 1;
-  }
-
-  if (content[cursor] !== '"') {
-    return "";
-  }
-
-  cursor += 1;
-
-  let answer = "";
-
-  while (cursor < content.length) {
-    const character = content[cursor];
-
-    if (character === '"') {
-      /*
-       * unescaped closing quote를 만났으므로 answer가 끝났습니다.
-       */
-      return answer;
-    }
-
-    if (character !== "\\") {
-      answer += character;
-      cursor += 1;
-      continue;
-    }
-
-    /*
-     * escape 시작 직후 delta가 끝났다면 아직 해석할 수 없으므로
-     * 다음 delta가 올 때까지 현재 answer만 반환합니다.
-     */
-    const escapedCharacter = content[cursor + 1];
-
-    if (escapedCharacter === undefined) {
-      return answer;
-    }
-
-    switch (escapedCharacter) {
-      case '"':
-        answer += '"';
-        cursor += 2;
-        break;
-
-      case "\\":
-        answer += "\\";
-        cursor += 2;
-        break;
-
-      case "/":
-        answer += "/";
-        cursor += 2;
-        break;
-
-      case "b":
-        answer += "\b";
-        cursor += 2;
-        break;
-
-      case "f":
-        answer += "\f";
-        cursor += 2;
-        break;
-
-      case "n":
-        answer += "\n";
-        cursor += 2;
-        break;
-
-      case "r":
-        answer += "\r";
-        cursor += 2;
-        break;
-
-      case "t":
-        answer += "\t";
-        cursor += 2;
-        break;
-
-      case "u": {
-        /*
-         * \uXXXX가 하나의 Provider delta 경계에서 잘릴 수 있으므로
-         * 4자리 hex가 모두 도착한 경우에만 문자를 반환합니다.
-         */
-        const hexadecimal = content.slice(cursor + 2, cursor + 6);
-
-        if (hexadecimal.length < 4) {
-          return answer;
+          return delta;
         }
 
-        if (!/^[0-9a-fA-F]{4}$/.test(hexadecimal)) {
-          return answer;
-        }
-
-        answer += String.fromCharCode(Number.parseInt(hexadecimal, 16));
-        cursor += 6;
+        state.cursor = answerKeyIndex + answerKey.length;
+        state.phase = "after-key";
         break;
       }
 
-      default:
+      case "after-key": {
+        while (
+          state.cursor < content.length &&
+          /\s/.test(content[state.cursor] ?? "")
+        ) {
+          state.cursor += 1;
+        }
+
+        if (state.cursor >= content.length) {
+          return delta;
+        }
+
+        if (content[state.cursor] !== ":") {
+          return delta;
+        }
+
+        state.cursor += 1;
+        state.phase = "after-colon";
+        break;
+      }
+
+      case "after-colon": {
+        while (
+          state.cursor < content.length &&
+          /\s/.test(content[state.cursor] ?? "")
+        ) {
+          state.cursor += 1;
+        }
+
+        if (state.cursor >= content.length) {
+          return delta;
+        }
+
+        if (content[state.cursor] !== '"') {
+          return delta;
+        }
+
+        state.cursor += 1;
+        state.phase = "in-answer";
+        break;
+      }
+
+      case "in-answer": {
+        const character = content[state.cursor];
+
+        if (character === '"') {
+          state.cursor += 1;
+          state.phase = "completed";
+          return delta;
+        }
+
+        if (character !== "\\") {
+          delta += character;
+          state.cursor += 1;
+          break;
+        }
+
         /*
-         * 최종 JSON 검증은 parseNoteChatProviderResponse가 담당합니다.
-         * 스트리밍 중 잘못된 escape를 임의로 화면에 표시하지 않습니다.
+         * escape 시작 직후 delta가 끝났다면 cursor를 진행하지 않고
+         * 다음 Provider delta가 도착할 때까지 기다립니다.
          */
-        return answer;
+        const escapedCharacter = content[state.cursor + 1];
+
+        if (escapedCharacter === undefined) {
+          return delta;
+        }
+
+        switch (escapedCharacter) {
+          case '"':
+            delta += '"';
+            state.cursor += 2;
+            break;
+
+          case "\\":
+            delta += "\\";
+            state.cursor += 2;
+            break;
+
+          case "/":
+            delta += "/";
+            state.cursor += 2;
+            break;
+
+          case "b":
+            delta += "\b";
+            state.cursor += 2;
+            break;
+
+          case "f":
+            delta += "\f";
+            state.cursor += 2;
+            break;
+
+          case "n":
+            delta += "\n";
+            state.cursor += 2;
+            break;
+
+          case "r":
+            delta += "\r";
+            state.cursor += 2;
+            break;
+
+          case "t":
+            delta += "\t";
+            state.cursor += 2;
+            break;
+
+          case "u": {
+            /*
+             * \uXXXX가 Provider delta 경계에서 잘릴 수 있으므로
+             * 4자리 hex가 모두 도착할 때까지 현재 cursor를 유지합니다.
+             */
+            if (state.cursor + 6 > content.length) {
+              return delta;
+            }
+
+            const hexadecimal = content.slice(
+              state.cursor + 2,
+              state.cursor + 6,
+            );
+
+            if (!/^[0-9a-fA-F]{4}$/.test(hexadecimal)) {
+              return delta;
+            }
+
+            delta += String.fromCharCode(Number.parseInt(hexadecimal, 16));
+            state.cursor += 6;
+            break;
+          }
+
+          default:
+            /*
+             * 최종 JSON 검증은 parseNoteChatProviderResponse가 담당합니다.
+             * 스트리밍 중 잘못된 escape를 임의로 화면에 표시하지 않습니다.
+             */
+            return delta;
+        }
+
+        break;
+      }
+
+      case "completed":
+        return delta;
     }
   }
 
-  return answer;
+  return delta;
 }
 
 /**
@@ -171,6 +242,9 @@ function extractStreamingAnswer(content: string): string {
  *
  * Provider 원본 응답은 구조화 JSON 전체를 누적하고,
  * 클라이언트에는 JSON의 `answer` 필드에서 새롭게 생성된 문자열만 전달합니다.
+ *
+ * 이미 파싱한 위치를 parser state에 유지하므로,
+ * 매 delta마다 전체 누적 문자열을 처음부터 다시 파싱하지 않습니다.
  *
  * 이 함수는 DB 저장이나 Run 상태 변경을 수행하지 않습니다.
  *
@@ -183,25 +257,18 @@ export async function consumeNoteChatProviderStream(
   onTextDelta: (event: NoteChatStreamTextDeltaEvent) => void | Promise<void>,
 ): Promise<ConsumedNoteChatProviderStream> {
   let content = "";
-  let emittedAnswer = "";
   let result: AiChatStreamResult | null = null;
+
+  const parserState = createStreamingAnswerParserState();
 
   for await (const event of providerStream) {
     switch (event.type) {
       case "text-delta": {
         content += event.delta;
 
-        const currentAnswer = extractStreamingAnswer(content);
+        const delta = extractStreamingAnswerDelta(content, parserState);
 
-        /*
-         * 매 delta마다 전체 누적 응답에서 현재 answer를 다시 추출한 뒤,
-         * 아직 클라이언트에 보내지 않은 부분만 전달합니다.
-         */
-        if (currentAnswer.length > emittedAnswer.length) {
-          const delta = currentAnswer.slice(emittedAnswer.length);
-
-          emittedAnswer = currentAnswer;
-
+        if (delta.length > 0) {
           await onTextDelta({
             delta,
             type: "text-delta",

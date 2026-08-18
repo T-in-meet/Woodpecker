@@ -203,9 +203,6 @@ describe("createNoteChatConversationAction", () => {
 
     expect(reportNoteChatOperationalError).toHaveBeenCalledWith({
       actorUserId: USER_ID,
-      context: {
-        title: "테스트 대화",
-      },
       error,
       errorCode: "NOTE_CHAT_CONVERSATION_CREATE_FAILED",
       message: "노트 챗봇 대화 생성에 실패했습니다.",

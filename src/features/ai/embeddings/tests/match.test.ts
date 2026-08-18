@@ -91,6 +91,7 @@ describe("matchAiEmbeddings", () => {
     );
 
     expect(rpc).toHaveBeenCalledWith("match_ai_embeddings", {
+      p_exclude_source_id: null,
       p_input_kind: "rag_note_content",
       p_limit: 3,
       p_min_similarity: 0.2,
@@ -111,6 +112,40 @@ describe("matchAiEmbeddings", () => {
     ]);
   });
 
+  it("제외할 source ID가 지정되면 RPC에 전달한다", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [],
+      error: null,
+    });
+
+    const excludeSourceId = "44444444-4444-4444-8444-444444444444";
+
+    const result = await matchAiEmbeddings(
+      {
+        ...createMatchParams(),
+        excludeSourceId,
+      },
+      {
+        supabase: {
+          rpc,
+        },
+      },
+    );
+
+    expect(rpc).toHaveBeenCalledWith("match_ai_embeddings", {
+      p_exclude_source_id: excludeSourceId,
+      p_input_kind: "rag_note_content",
+      p_limit: 10,
+      p_min_similarity: null,
+      p_model_config_id: "11111111-1111-4111-8111-111111111111",
+      p_owner_user_id: "33333333-3333-4333-8333-333333333333",
+      p_query_embedding: `[${createVector(0).join(",")}]`,
+      p_source_type: "note",
+    });
+
+    expect(result).toEqual([]);
+  });
+
   it("검색 조건이 없으면 기본 limit과 minSimilarity를 사용한다", async () => {
     const rpc = vi.fn().mockResolvedValue({
       data: [],
@@ -124,6 +159,7 @@ describe("matchAiEmbeddings", () => {
     });
 
     expect(rpc).toHaveBeenCalledWith("match_ai_embeddings", {
+      p_exclude_source_id: null,
       p_input_kind: "rag_note_content",
       p_limit: 10,
       p_min_similarity: null,

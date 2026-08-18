@@ -136,10 +136,46 @@ describe("POST /api/admin/ai/backfill-note-embeddings", () => {
     vi.mocked(generateNoteEmbedding).mockResolvedValue([]);
   });
 
-  it("관리자 인증에 실패하면 backfill을 실행하지 않는다", async () => {
+  it("인증되지 않은 요청이면 401을 반환하고 backfill을 실행하지 않는다", async () => {
+    vi.mocked(requireAdmin).mockRejectedValue(new Error("Unauthorized"));
+
+    const response = await POST(createRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body).toEqual({
+      error: "Unauthorized",
+    });
+
+    expect(createAdminClient).not.toHaveBeenCalled();
+    expect(resolveAiRuntimeEmbeddingConfiguration).not.toHaveBeenCalled();
+    expect(generateNoteEmbedding).not.toHaveBeenCalled();
+  });
+
+  it("관리자 권한이 없는 요청이면 403을 반환하고 backfill을 실행하지 않는다", async () => {
     vi.mocked(requireAdmin).mockRejectedValue(new Error("Forbidden"));
 
-    await expect(POST(createRequest())).rejects.toThrow("Forbidden");
+    const response = await POST(createRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(body).toEqual({
+      error: "Forbidden",
+    });
+
+    expect(createAdminClient).not.toHaveBeenCalled();
+    expect(resolveAiRuntimeEmbeddingConfiguration).not.toHaveBeenCalled();
+    expect(generateNoteEmbedding).not.toHaveBeenCalled();
+  });
+
+  it("알 수 없는 관리자 인증 오류는 다시 throw한다", async () => {
+    vi.mocked(requireAdmin).mockRejectedValue(
+      new Error("Unexpected admin error"),
+    );
+
+    await expect(POST(createRequest())).rejects.toThrow(
+      "Unexpected admin error",
+    );
 
     expect(createAdminClient).not.toHaveBeenCalled();
     expect(resolveAiRuntimeEmbeddingConfiguration).not.toHaveBeenCalled();
@@ -206,10 +242,6 @@ describe("POST /api/admin/ai/backfill-note-embeddings", () => {
       ascending: true,
     });
 
-    /**
-     * batch size가 10이고 hasMore 확인을 위해 한 건을 더 조회하므로
-     * 첫 요청은 0부터 10까지 총 11개 범위를 조회합니다.
-     */
     expect(range).toHaveBeenCalledWith(0, 10);
 
     expect(generateNoteEmbedding).toHaveBeenCalledTimes(3);
@@ -322,17 +354,8 @@ describe("POST /api/admin/ai/backfill-note-embeddings", () => {
     const response = await POST(createRequest(20));
     const body = await response.json();
 
-    /**
-     * offset 20에서 batch size 10개와 다음 batch 존재 여부를 확인하기 위한
-     * sentinel 1개까지 포함해 20~30 범위를 조회합니다.
-     */
     expect(range).toHaveBeenCalledWith(20, 30);
 
-    /**
-     * 조회된 11개 중 실제 embedding 생성 대상은 첫 10개뿐이며,
-     * 마지막 Note는 다음 batch 존재 여부를 판단하기 위한 sentinel이므로
-     * 이번 요청에서는 처리하지 않습니다.
-     */
     expect(generateNoteEmbedding).toHaveBeenCalledTimes(10);
 
     expect(generateNoteEmbedding).not.toHaveBeenCalledWith(
@@ -341,9 +364,6 @@ describe("POST /api/admin/ai/backfill-note-embeddings", () => {
       }),
     );
 
-    /**
-     * 다음 batch가 존재하므로 현재 처리한 10개 이후 offset을 반환합니다.
-     */
     expect(response.status).toBe(200);
     expect(body).toEqual({
       failed: 0,

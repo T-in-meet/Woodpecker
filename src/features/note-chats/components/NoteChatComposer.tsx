@@ -5,6 +5,17 @@ import { Loader2, Send, Square } from "lucide-react";
 import type { KeyboardEvent } from "react";
 import { useForm } from "react-hook-form";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -21,7 +32,12 @@ type NoteChatComposerProps = {
   /** 현재 답변 생성이 진행 중인지 여부입니다. */
   isStreaming: boolean;
 
-  /** 진행 중인 답변 생성을 취소합니다. */
+  /**
+   * 현재 화면의 답변 스트리밍 표시를 중지합니다.
+   *
+   * 서버에서 이미 시작된 AI 실행 자체는 계속 진행되며,
+   * 해당 실행은 일일 사용 횟수에 포함됩니다.
+   */
   onCancel: () => void;
 
   /** 검증된 사용자 질문을 전달합니다. */
@@ -36,6 +52,10 @@ type NoteChatComposerProps = {
  *
  * Enter는 질문을 전송하고,
  * Shift + Enter는 줄바꿈을 입력합니다.
+ *
+ * 답변 표시 중지 버튼은 실제 서버 AI 실행을 취소하지 않으므로,
+ * 사용자가 중지 동작과 사용 횟수 차감 정책을 확인한 뒤
+ * 실행할 수 있도록 Alert Dialog를 표시합니다.
  */
 export function NoteChatComposer({
   conversationId,
@@ -142,15 +162,36 @@ export function NoteChatComposer({
 
           <div className="flex shrink-0 items-center gap-2">
             {isStreaming ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={onCancel}
-              >
-                <Square className="size-3.5" />
-                생성 중지
-              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button type="button" size="sm" variant="outline">
+                    <Square className="size-3.5" />
+                    답변 표시 중지
+                  </Button>
+                </AlertDialogTrigger>
+
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      답변 표시를 중지하시겠어요?
+                    </AlertDialogTitle>
+
+                    <AlertDialogDescription>
+                      화면의 답변 표시만 중지됩니다. 이미 시작된 AI 실행은
+                      서버에서 계속 진행되며, 이번 실행은 오늘 사용 횟수에
+                      포함됩니다.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>계속 보기</AlertDialogCancel>
+
+                    <AlertDialogAction onClick={onCancel}>
+                      표시 중지
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             ) : null}
 
             <Button type="submit" size="sm" disabled={isSubmitDisabled}>
@@ -169,6 +210,7 @@ export function NoteChatComposer({
           </div>
         </div>
       </form>
+
       <p className="sr-only" aria-live="polite">
         {isStreaming ? "AI 답변을 생성하고 있습니다." : ""}
       </p>

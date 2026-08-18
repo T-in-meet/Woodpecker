@@ -19,17 +19,28 @@ vi.mock("../start-provider-stream", () => ({
 }));
 
 describe("executeNoteChat", () => {
-  it("실행 정보를 준비하고 Provider 스트림을 시작한 뒤 실행 결과를 반환한다", async () => {
+  it("실행 정보를 준비하고 Provider 스트림을 시작한 뒤 질의 확장 usage와 실행 결과를 반환한다", async () => {
     const settings = {} as NoteChatExecutionSettings;
     const preparedConversation =
       {} as PreparedNoteChatExecution["conversation"];
     const preparedMessages: PreparedNoteChatExecution["messages"] = [];
     const preparedSources: PreparedNoteChatExecution["sources"] = [];
 
+    /**
+     * 질의 확장 Chat Completion에서 사용한 token 사용량입니다.
+     */
+    const queryExpansionUsage: PreparedNoteChatExecution["queryExpansionUsage"] =
+      {
+        inputTokens: 10,
+        outputTokens: 20,
+        totalTokens: 30,
+      };
+
     const prepared: PreparedNoteChatExecution = {
       conversation: preparedConversation,
       expandedQuery: "확장된 검색 질의",
       messages: preparedMessages,
+      queryExpansionUsage,
       settings,
       sources: preparedSources,
       userMessageId: "message-1",
@@ -58,6 +69,7 @@ describe("executeNoteChat", () => {
       expandedQuery: prepared.expandedQuery,
       prepared,
       providerStream,
+      queryExpansionUsage,
       sources: prepared.sources,
     });
   });

@@ -69,6 +69,19 @@ export async function generateNoteEmbedding({
   title: string;
   content: string;
 }) {
+  const chunks = createNoteContentChunks({ content });
+
+  /*
+   * embedding할 수 있는 본문 chunk가 없는 Note는
+   * generation 생성 및 활성화를 수행하지 않고 정상적으로 종료합니다.
+   *
+   * 빈 generation을 활성화하면 activation RPC의 row 검증에 실패하므로,
+   * Provider 호출이나 운영 오류를 발생시키지 않고 skip합니다.
+   */
+  if (chunks.length === 0) {
+    return [];
+  }
+
   const generationId = randomUUID();
 
   /*
@@ -81,7 +94,6 @@ export async function generateNoteEmbedding({
     createNoteEmbeddingInput(title, content),
   );
 
-  const chunks = createNoteContentChunks({ content });
   const chunkCount = chunks.length;
   const embeddings = [];
 

@@ -10,6 +10,13 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
+ * Note Embedding backfill은 여러 Note를 배치로 조회하고,
+ * 각 Note의 chunk embedding을 순차적으로 생성할 수 있으므로
+ * 서버리스 실행 제한 시간을 90초로 명시합니다.
+ */
+export const maxDuration = 90;
+
+/**
  * 한 번의 backfill 요청에서 처리할 최대 Note 수입니다.
  *
  * 모든 Note를 하나의 서버 요청에서 처리할 경우 Note 수와 chunk 수에 따라
@@ -38,8 +45,37 @@ export async function POST(request: Request) {
    *
    * 이 Route는 모든 사용자의 Note를 조회하고 embedding을 다시 생성하므로
    * 관리자 인증을 유일한 외부 실행 진입점으로 사용합니다.
+   *
+   * requireAdmin()의 인증/권한 실패를 각각 401/403으로 변환해
+   * 관리자 API 호출 측에서 실패 원인을 명확하게 구분할 수 있게 합니다.
    */
-  await requireAdmin();
+  try {
+    await requireAdmin();
+  } catch (error) {
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return NextResponse.json(
+        {
+          error: "Unauthorized",
+        },
+        {
+          status: 401,
+        },
+      );
+    }
+
+    if (error instanceof Error && error.message === "Forbidden") {
+      return NextResponse.json(
+        {
+          error: "Forbidden",
+        },
+        {
+          status: 403,
+        },
+      );
+    }
+
+    throw error;
+  }
 
   /**
    * backfill 진행 위치를 query parameter로 전달받습니다.

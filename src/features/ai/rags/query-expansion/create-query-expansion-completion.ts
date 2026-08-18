@@ -1,5 +1,6 @@
 import { renderPromptTemplate } from "@/features/ai/prompts/render";
 import { createAiChatCompletionWithProvider } from "@/features/ai/providers";
+import type { AiTokenUsage } from "@/features/ai/providers/types";
 import { getProviderApiKey } from "@/features/ai/providers/utils/api-key";
 import type { AiRuntimeChatConfiguration } from "@/features/ai/runtimes/types";
 import type { Json } from "@/types/db.helpers";
@@ -18,6 +19,9 @@ type CreateQueryExpansionCompletionParams = {
 export type QueryExpansionCompletionResult = {
   /** Provider가 반환한 원본 응답 내용입니다. */
   content: string;
+
+  /** 질의 확장 Chat Completion에서 사용한 token 사용량입니다. */
+  usage: AiTokenUsage;
 };
 
 /**
@@ -29,7 +33,7 @@ export type QueryExpansionCompletionResult = {
  * Provider 응답의 구체적인 JSON 구조와 의미는 호출자가 검증합니다.
  *
  * @param params Query Expansion Runtime Configuration, Prompt 변수 및 Response Schema 정보
- * @returns Provider가 반환한 질의 확장 결과
+ * @returns Provider가 반환한 질의 확장 결과와 token 사용량
  */
 export async function createQueryExpansionCompletion(
   params: CreateQueryExpansionCompletionParams,
@@ -70,5 +74,6 @@ export async function createQueryExpansionCompletion(
 
   return {
     content: result.content,
+    usage: result.usage,
   };
 }

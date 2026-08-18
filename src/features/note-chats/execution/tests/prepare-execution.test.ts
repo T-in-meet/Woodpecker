@@ -76,13 +76,25 @@ const detail = {
   messages,
 } as never;
 
+/**
+ * 질의 확장 Chat Completion에서 사용한 token 사용량입니다.
+ */
+const queryExpansionUsage = {
+  inputTokens: 10,
+  outputTokens: 20,
+  totalTokens: 30,
+};
+
 describe("prepareNoteChatExecution", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
     vi.mocked(getNoteChatConversationDetail).mockResolvedValue(detail);
 
-    vi.mocked(expandNoteChatQuery).mockResolvedValue("확장된 검색 질의");
+    vi.mocked(expandNoteChatQuery).mockResolvedValue({
+      expandedQuery: "확장된 검색 질의",
+      usage: queryExpansionUsage,
+    });
 
     vi.mocked(searchNoteEmbeddings).mockResolvedValue([]);
 
@@ -97,7 +109,7 @@ describe("prepareNoteChatExecution", () => {
     vi.mocked(reportNoteChatOperationalError).mockResolvedValue(undefined);
   });
 
-  it("실행에 필요한 정보를 준비하고 PreparedNoteChatExecution을 반환한다", async () => {
+  it("실행에 필요한 정보와 질의 확장 usage를 준비하고 PreparedNoteChatExecution을 반환한다", async () => {
     const result = await prepareNoteChatExecution({
       conversationId: "conversation-1",
       settings,
@@ -145,6 +157,7 @@ describe("prepareNoteChatExecution", () => {
       conversation,
       expandedQuery: "확장된 검색 질의",
       messages: [],
+      queryExpansionUsage,
       settings,
       sources: [],
       userMessageId: "message-1",
@@ -293,7 +306,7 @@ describe("prepareNoteChatExecution", () => {
     vi.mocked(buildNoteChatSources).mockReturnValue(sources as never);
     vi.mocked(resolveNoteChatExecutionMessages).mockReturnValue([]);
 
-    await prepareNoteChatExecution({
+    const result = await prepareNoteChatExecution({
       conversationId: "conversation-1",
       settings,
       userMessageId: "message-1",
@@ -312,5 +325,11 @@ describe("prepareNoteChatExecution", () => {
       userMessageId: "message-1",
       userTemplate: settings.chat.prompt.version.user_template,
     });
+
+    /*
+     * 검색 결과와 무관하게 질의 확장에서 사용한 token 사용량은
+     * 이후 Note Chat Run에서 합산할 수 있도록 그대로 전달합니다.
+     */
+    expect(result.queryExpansionUsage).toEqual(queryExpansionUsage);
   });
 });

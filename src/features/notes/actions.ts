@@ -1,14 +1,22 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { z } from "zod";
 
+import {
+  AI_OPERATIONAL_ERROR_CODE,
+  AI_OPERATIONAL_ERROR_OPERATION,
+  AI_OPERATIONAL_ERROR_STAGE,
+} from "@/features/operational-errors/constants";
 import { getNextReviewDate } from "@/lib/constants/reviewIntervals";
 import { ROUTES } from "@/lib/constants/routes";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 import { generateNoteEmbedding } from "../ai/rags/note/generate-embedding";
 import { resolveAiRuntimeEmbeddingConfiguration } from "../ai/runtimes";
+import { reportAiOperationalError } from "../ai/utils/report-ai-operational-error";
 import {
   NOTE_CHAT_AI_FEATURE_KEY,
   NOTE_CHAT_AI_ROLE_KEY,
@@ -16,7 +24,98 @@ import {
 import { type NoteInput, noteSchema } from "./schema";
 
 type NoteActionFieldErrors = Partial<Record<keyof NoteInput, string[]>>;
+
 const noteIdSchema = z.string().uuid();
+
+/**
+ * 저장된 Note의 embedding 생성을 응답 이후 후처리로 예약합니다.
+ *
+ * Note 저장/수정 자체와 AI embedding 생성을 분리하여,
+ * Runtime 설정 조회나 Provider 호출 시간이 사용자 저장 응답을 지연시키지 않도록 합니다.
+ *
+ * 후처리 시 DB에서 Note의 최신 snapshot을 다시 조회하며,
+ * 조회 이후 Note가 다시 수정되더라도 generation 활성화 단계에서 updated_at을
+ * 검증하므로 오래된 generation이 활성 상태가 되는 것을 방지합니다.
+ *
+ * embedding 후처리 실패는 이미 성공한 Note 저장/수정 결과에 영향을 주지 않습니다.
+ */
+function scheduleNoteEmbedding({
+  noteId,
+  ownerUserId,
+}: {
+  noteId: string;
+  ownerUserId: string;
+}) {
+  after(async () => {
+    const supabase = createAdminClient();
+
+    /*
+     * embedding에 사용할 title/content/updated_at을 하나의 DB snapshot에서
+     * 가져와 서로 다른 Note version의 값이 섞이지 않도록 합니다.
+     *
+     * service role client를 사용하지만 ownerUserId까지 함께 조건에 포함하여
+     * 인증된 사용자가 저장한 자신의 Note만 후처리 대상으로 조회합니다.
+     */
+    const { data: embeddingSource, error: embeddingSourceError } =
+      await supabase
+        .from("notes")
+        .select("id, title, content, updated_at")
+        .eq("id", noteId)
+        .eq("user_id", ownerUserId)
+        .maybeSingle();
+
+    if (embeddingSourceError || !embeddingSource) {
+      const error =
+        embeddingSourceError ??
+        new Error("Failed to load Note source for embedding.");
+
+      await reportAiOperationalError({
+        error,
+        errorCode: AI_OPERATIONAL_ERROR_CODE.EMBEDDING_SOURCE_LOAD_FAILED,
+        message: "AI embedding 생성을 위한 Note source 조회에 실패했습니다.",
+        operation: AI_OPERATIONAL_ERROR_OPERATION.GET_EMBEDDING_SOURCE,
+        stage: AI_OPERATIONAL_ERROR_STAGE.DATABASE,
+        context: {
+          noteId,
+        },
+      });
+
+      return;
+    }
+
+    try {
+      /*
+       * Note Chat의 검색 대상 embedding과 동일한 Runtime 설정을 사용합니다.
+       *
+       * Runtime 설정 조회와 Provider embedding 생성은 모두 후처리에서 실행되므로
+       * Note 저장/수정 응답 시간을 지연시키지 않습니다.
+       */
+      const embeddingConfiguration =
+        await resolveAiRuntimeEmbeddingConfiguration({
+          featureKey: NOTE_CHAT_AI_FEATURE_KEY,
+          roleKey: NOTE_CHAT_AI_ROLE_KEY.NOTE_RETRIEVAL,
+        });
+
+      await generateNoteEmbedding({
+        embeddingConfiguration,
+        ownerUserId,
+        noteId: embeddingSource.id,
+        sourceUpdatedAt: embeddingSource.updated_at,
+        title: embeddingSource.title,
+        content: embeddingSource.content,
+      });
+    } catch {
+      /*
+       * Runtime Configuration, Provider 호출, embedding 저장,
+       * generation 활성화 등의 실패는 각 AI Foundation 실행 계층에서
+       * operational error로 기록합니다.
+       *
+       * Note 자체는 이미 정상 저장되었으므로 후처리 오류를 다시 throw하여
+       * 저장/수정 결과에 영향을 주지 않습니다.
+       */
+    }
+  });
+}
 
 export type CreateNoteActionState =
   | {
@@ -76,51 +175,21 @@ export async function createNoteAction(
     return { error: "노트 저장에 실패했습니다. 잠시 후 다시 시도해주세요." };
   }
 
-  try {
-    /*
-     * 생성된 Note의 현재 snapshot을 DB에서 다시 조회합니다.
-     *
-     * embedding에 사용할 title/content와 sourceUpdatedAt을 같은 DB row에서
-     * 가져와 서로 다른 Note version의 값이 섞이지 않도록 합니다.
-     *
-     * 조회 이후 Note가 다시 수정되더라도 activation RPC가 updated_at을
-     * 검증하므로 오래된 generation은 활성화되지 않습니다.
-     */
-    const { data: embeddingSource, error: embeddingSourceError } =
-      await supabase
-        .from("notes")
-        .select("id, title, content, updated_at")
-        .eq("id", newNoteId)
-        .eq("user_id", user.id)
-        .maybeSingle();
+  /*
+   * Note 저장 성공 이후 embedding 생성을 후처리로 예약합니다.
+   *
+   * embedding Runtime 설정 조회 및 Provider 호출 완료를 기다리지 않으므로
+   * AI 후처리가 Note 생성 응답 속도나 성공 여부에 영향을 주지 않습니다.
+   */
+  scheduleNoteEmbedding({
+    noteId: newNoteId,
+    ownerUserId: user.id,
+  });
 
-    if (embeddingSourceError || !embeddingSource) {
-      throw new Error("Failed to load created Note for embedding.");
-    }
-
-    // Note가 DB에 정상 저장된 이후 동일한 Note snapshot을 RAG embedding으로 저장한다.
-    // Note Chat의 검색 대상 embedding과 동일한 Runtime 설정을 사용한다.
-    const embeddingConfiguration = await resolveAiRuntimeEmbeddingConfiguration(
-      {
-        featureKey: NOTE_CHAT_AI_FEATURE_KEY,
-        roleKey: NOTE_CHAT_AI_ROLE_KEY.NOTE_RETRIEVAL,
-      },
-    );
-
-    await generateNoteEmbedding({
-      embeddingConfiguration,
-      ownerUserId: user.id,
-      noteId: embeddingSource.id,
-      sourceUpdatedAt: embeddingSource.updated_at,
-      title: embeddingSource.title,
-      content: embeddingSource.content,
-    });
-  } catch {
-    // Note 저장은 이미 성공했으므로 embedding 실패가 Note 생성 결과에 영향을 주지 않도록 한다.
-    // Embedding 오류 자체는 AI Foundation에서 operational error로 이미 보고된다.
-  }
-
-  return { success: true, newNoteId };
+  return {
+    success: true,
+    newNoteId,
+  };
 }
 
 export type UpdateNoteActionState =
@@ -168,17 +237,20 @@ export async function updateNoteAction(
   }
 
   /*
-   * UPDATE가 실제로 저장한 Note snapshot을 그대로 반환받습니다.
+   * UPDATE가 실제로 저장한 Note의 ID를 반환받습니다.
    *
-   * 이후 embedding에는 이 row의 title/content/updated_at을 함께 사용하여
-   * generation이 어떤 Note version에서 만들어졌는지 일관되게 유지합니다.
+   * embedding 생성은 응답 이후 Note를 다시 조회하여 최신 snapshot을 사용하므로
+   * 저장 요청에서 embedding용 title/content/updated_at을 기다릴 필요가 없습니다.
    */
   const { data: updatedNote, error } = await supabase
     .from("notes")
-    .update({ title: parsed.data.title, content: parsed.data.content })
+    .update({
+      title: parsed.data.title,
+      content: parsed.data.content,
+    })
     .eq("id", parsedNoteId.data)
     .eq("user_id", user.id)
-    .select("id, title, content, updated_at")
+    .select("id")
     .maybeSingle();
 
   if (error) {
@@ -189,28 +261,16 @@ export async function updateNoteAction(
     return { error: "수정할 노트를 찾을 수 없습니다." };
   }
 
-  try {
-    // 수정된 Note를 RAG 검색 대상에 즉시 반영하기 위해
-    // Note Chat과 동일한 note-retrieval Embedding Model로 새 embedding을 생성한다.
-    const embeddingConfiguration = await resolveAiRuntimeEmbeddingConfiguration(
-      {
-        featureKey: NOTE_CHAT_AI_FEATURE_KEY,
-        roleKey: NOTE_CHAT_AI_ROLE_KEY.NOTE_RETRIEVAL,
-      },
-    );
-
-    await generateNoteEmbedding({
-      embeddingConfiguration,
-      ownerUserId: user.id,
-      noteId: updatedNote.id,
-      sourceUpdatedAt: updatedNote.updated_at,
-      title: updatedNote.title,
-      content: updatedNote.content,
-    });
-  } catch {
-    // Note 수정은 이미 성공했으므로 embedding 실패가 Note 수정 결과에 영향을 주지 않도록 한다.
-    // Embedding 오류 자체는 AI Foundation에서 operational error로 이미 보고된다.
-  }
+  /*
+   * Note 수정 성공 이후 embedding 재생성을 후처리로 예약합니다.
+   *
+   * Provider 호출이 느리거나 embedding 생성이 실패하더라도
+   * 이미 완료된 Note 수정 결과에는 영향을 주지 않습니다.
+   */
+  scheduleNoteEmbedding({
+    noteId: updatedNote.id,
+    ownerUserId: user.id,
+  });
 
   return { success: true };
 }

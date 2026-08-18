@@ -544,6 +544,10 @@ DROP FUNCTION IF EXISTS "public"."match_ai_embeddings"(
  * Related Notes처럼 source 단위 결과가 필요한 기능은 호출 계층에서
  * source_id 기준 중복 제거/오버페치 정책을 적용합니다.
  *
+ * p_exclude_source_id가 지정되면 해당 source의 모든 청크를
+ * ranking 및 LIMIT 적용 전에 검색 대상에서 제외합니다.
+ * NULL이면 기존 검색과 동일하게 어떤 source도 제외하지 않습니다.
+ *
  * 활성 포인터의 active_model_config_id가 요청 모델과 일치하지 않으면
  * 해당 source는 검색 후보에서 제외됩니다.
  */
@@ -554,7 +558,8 @@ CREATE OR REPLACE FUNCTION "public"."match_ai_embeddings"(
     "p_model_config_id" "uuid",
     "p_input_kind" "text",
     "p_limit" integer DEFAULT 10,
-    "p_min_similarity" double precision DEFAULT NULL
+    "p_min_similarity" double precision DEFAULT NULL,
+    "p_exclude_source_id" "uuid" DEFAULT NULL
 )
 RETURNS TABLE (
     "source_id" "uuid",
@@ -616,6 +621,10 @@ BEGIN
           AND "embeddings"."model_config_id" = "p_model_config_id"
           AND "embeddings"."input_kind" = "p_input_kind"
           AND "active_generations"."active_model_config_id" = "p_model_config_id"
+          AND (
+              "p_exclude_source_id" IS NULL
+              OR "embeddings"."source_id" <> "p_exclude_source_id"
+          )
     )
     SELECT
         "scored_chunks"."source_id",
@@ -644,9 +653,10 @@ COMMENT ON FUNCTION "public"."match_ai_embeddings"(
     "uuid",
     "text",
     integer,
-    double precision
+    double precision,
+    "uuid"
 ) IS
-'Returns top matching chunks from each source''s active embedding generation. Source-level deduplication is intentionally left to the caller.';
+'Returns top matching chunks from each source''s active embedding generation. Optionally excludes one source before ranking and limit. Source-level deduplication is intentionally left to the caller.';
 
 REVOKE ALL
 ON FUNCTION "public"."match_ai_embeddings"(
@@ -656,7 +666,8 @@ ON FUNCTION "public"."match_ai_embeddings"(
     "uuid",
     "text",
     integer,
-    double precision
+    double precision,
+    "uuid"
 )
 FROM PUBLIC, "anon", "authenticated";
 
@@ -668,7 +679,8 @@ ON FUNCTION "public"."match_ai_embeddings"(
     "uuid",
     "text",
     integer,
-    double precision
+    double precision,
+    "uuid"
 )
 TO "service_role";
 

@@ -143,9 +143,6 @@ export async function createNoteChatConversationAction(
     // 동일 오류를 집계하고 관리자가 장애 발생을 확인할 수 있도록 한다.
     await reportNoteChatOperationalError({
       actorUserId: context.userId,
-      context: {
-        title: parsed.data.title,
-      },
       error,
       errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.CONVERSATION_CREATE_FAILED,
       message: "노트 챗봇 대화 생성에 실패했습니다.",

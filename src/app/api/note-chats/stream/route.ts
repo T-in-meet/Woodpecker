@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 
+import { isAdminUser } from "@/features/admin/utils/is-admin-user";
 import {
   resolveAiRuntimeChatConfiguration,
   resolveAiRuntimeEmbeddingConfiguration,
-} from "@/features/ai/runtimes/resolve-configuration";
+} from "@/features/ai/runtimes";
 import { isReportedAiOperationalError } from "@/features/ai/utils/report-ai-operational-error";
 import {
   NOTE_CHAT_AI_FEATURE_KEY,
@@ -13,6 +14,7 @@ import {
   NOTE_CHAT_DAILY_EXECUTION_LIMIT,
   NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE,
 } from "@/features/note-chats/constants/execution";
+import { isNoteChatDailyExecutionLimitError } from "@/features/note-chats/execution/is-daily-execution-limit-error";
 import { createNoteChatQuestionInputSchema } from "@/features/note-chats/schema";
 import { runNoteChatStream } from "@/features/note-chats/stream/run-note-chat-stream";
 import { encodeNoteChatStreamEvent } from "@/features/note-chats/stream/serialize";
@@ -27,17 +29,15 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 /**
- * DB RPC가 반환한 오류가 Note Chat 일일 실행 제한 초과인지 확인합니다.
+ * Note Chat AI 실행에 허용할 최대 서버 실행 시간(초)입니다.
  *
- * Supabase RPC 오류 객체는 PostgREST 메시지를 `message`에 담아 전달하므로,
- * PostgreSQL에서 발생시킨 안정적인 오류 메시지를 기준으로 구분합니다.
+ * 질의 확장, 검색용 embedding 생성, 관련 Note 검색 및 답변 스트리밍까지
+ * 하나의 요청에서 처리하므로 기본 실행 시간보다 긴 90초를 허용합니다.
+ *
+ * Next.js가 이 export를 Route 설정으로 직접 사용하므로
+ * POST 함수에서 별도로 참조할 필요는 없습니다.
  */
-function isNoteChatDailyExecutionLimitError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    error.message.includes(NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE)
-  );
-}
+export const maxDuration = 90;
 
 /**
  * 새로운 사용자 질문과 Run을 생성한 뒤 AI 답변 스트림을 반환합니다.
@@ -172,9 +172,12 @@ export async function POST(request: Request): Promise<Response> {
    */
   const adminClient = createAdminClient();
 
+  const isAdmin = await isAdminUser(user.id);
+
   const { data: created, error: createError } = await adminClient
     .rpc("create_note_chat_question", {
       p_agent_id: chatConfiguration.prompt.agent.id,
+      p_bypass_daily_execution_limit: isAdmin,
       p_chat_model_config_id: chatConfiguration.model.id,
       p_content: content,
       p_conversation_id: conversationId,

@@ -16,12 +16,26 @@ import {
   saveNoteChatExpandedQuery,
 } from "../execution/run-persistence";
 import { reportNoteChatOperationalError } from "../utils/report-operational-error";
-import {
-  NOTE_CHAT_NO_CONTEXT_MESSAGE,
-  NOTE_CHAT_NO_CONTEXT_USAGE,
-} from "./constants";
+import { NOTE_CHAT_NO_CONTEXT_MESSAGE } from "./constants";
 import { consumeNoteChatProviderStream } from "./consume-provider-stream";
 import type { NoteChatStreamEvent } from "./types";
+
+/**
+ * 두 Chat Completion의 token 사용량을 합산합니다.
+ *
+ * Note Chat은 질의 확장과 최종 답변 생성에서 각각 Chat Completion을
+ * 실행하므로 Run에는 두 호출의 전체 token 사용량을 합산해 저장합니다.
+ */
+function mergeAiTokenUsage(
+  first: AiTokenUsage,
+  second: AiTokenUsage,
+): AiTokenUsage {
+  return {
+    inputTokens: first.inputTokens + second.inputTokens,
+    outputTokens: first.outputTokens + second.outputTokens,
+    totalTokens: first.totalTokens + second.totalTokens,
+  };
+}
 
 /**
  * 노트 챗봇 스트림 실행 입력입니다.
@@ -50,7 +64,7 @@ export type RunNoteChatStreamResult = {
   /** 성공 완료 RPC가 생성한 Assistant Message ID입니다. */
   assistantMessageId: string;
 
-  /** Provider가 생성한 최종 답변입니다. */
+  /** 클라이언트에 전달하고 Assistant Message로 저장되는 최종 답변 내용입니다. */
   content: string;
 
   /** 현재 답변 생성 과정에서 참고한 노트 ID 목록입니다. */
@@ -133,6 +147,16 @@ export async function runNoteChatStream(
     });
 
     /*
+     * executeNoteChat()이 완료된 시점에는 질의 확장 Provider 호출이 이미
+     * 완료되었으므로 해당 token 사용량을 이번 Run의 기본 usage로 보존합니다.
+     *
+     * 이후 Context가 없어 Answer Provider를 호출하지 않거나,
+     * 답변 생성 전에 다른 단계에서 실패하더라도 실제 소비한 질의 확장
+     * token 사용량을 Run에 기록할 수 있습니다.
+     */
+    usage = execution.queryExpansionUsage;
+
+    /*
      * 실행 준비 과정에서 생성된 문맥 기반 확장 질의를 Run에 Snapshot으로 저장합니다.
      *
      * 이후 Provider 응답 처리와 무관하게 이번 Run에서 실제 노트 검색에 사용한
@@ -177,7 +201,6 @@ export async function runNoteChatStream(
     if (sources.length === 0) {
       const content = NOTE_CHAT_NO_CONTEXT_MESSAGE;
       const usedNoteIds: string[] = [];
-      const noContextUsage = NOTE_CHAT_NO_CONTEXT_USAGE;
 
       await onEvent({
         delta: content,
@@ -191,7 +214,7 @@ export async function runNoteChatStream(
           content,
           runId: params.runId,
           sources,
-          usage: noContextUsage,
+          usage,
           usedNoteIds,
         });
       } catch (error) {
@@ -225,7 +248,7 @@ export async function runNoteChatStream(
         assistantMessageId,
         content,
         runId: params.runId,
-        usage: noContextUsage,
+        usage,
         usedNoteIds,
       };
     }
@@ -265,7 +288,10 @@ export async function runNoteChatStream(
       throw error;
     }
 
-    usage = consumed.result.usage;
+    usage = mergeAiTokenUsage(
+      execution.queryExpansionUsage,
+      consumed.result.usage,
+    );
 
     let parsedResponse;
 
@@ -377,8 +403,10 @@ export async function runNoteChatStream(
     };
   } catch (error) {
     /*
-     * Provider 완료 결과를 받기 전 실패하면 usage는 null입니다.
-     * 성공 완료 저장 자체가 실패한 경우에는 확인된 Provider usage를 보존합니다.
+     * 질의 확장 완료 이후 실패한 경우에는 질의 확장 usage를 보존하고,
+     * 최종 답변 Provider까지 완료된 경우에는 두 호출의 합산 usage를 보존합니다.
+     *
+     * 질의 확장 Provider 호출 자체가 완료되기 전에 실패한 경우에만 usage는 null입니다.
      */
     try {
       await completeNoteChatRunFailure({

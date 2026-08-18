@@ -1,5 +1,8 @@
 import { AI_CHAT_MESSAGE_ROLE } from "@/features/ai/chats/constants";
-import type { AiProviderChatMessage } from "@/features/ai/providers/types";
+import type {
+  AiProviderChatMessage,
+  AiTokenUsage,
+} from "@/features/ai/providers/types";
 import { buildNoteContext } from "@/features/ai/rags/note/build-context";
 import { getMatchedNotes } from "@/features/ai/rags/note/get-matched-notes";
 import { searchNoteEmbeddings } from "@/features/ai/rags/note/search-embeddings";
@@ -52,6 +55,9 @@ export type PreparedNoteChatExecution = {
 
   /** Provider에 전달할 System·대화 이력·현재 질문 메시지입니다. */
   messages: AiProviderChatMessage[];
+
+  /** 질의 확장 Chat Completion에서 사용한 token 사용량입니다. */
+  queryExpansionUsage: AiTokenUsage;
 
   /** AI Foundation Runtime에서 확정된 실행 설정입니다. */
   settings: NoteChatExecutionSettings;
@@ -198,11 +204,12 @@ export async function prepareNoteChatExecution(
    * 확장 질의는 검색 단계에서만 사용하며,
    * 실제 사용자 질문과 최종 답변용 Conversation Message는 변경하지 않습니다.
    */
-  const expandedQuery = await expandNoteChatQuery({
-    configuration: params.settings.queryExpansion,
-    messages: detail.messages,
-    userMessageId: params.userMessageId,
-  });
+  const { expandedQuery, usage: queryExpansionUsage } =
+    await expandNoteChatQuery({
+      configuration: params.settings.queryExpansion,
+      messages: detail.messages,
+      userMessageId: params.userMessageId,
+    });
 
   /*
    * 원본 사용자 질문이 아니라 문맥 기반으로 확장된 검색 질의를 Embedding하여
@@ -284,6 +291,7 @@ export async function prepareNoteChatExecution(
     conversation: detail.conversation,
     expandedQuery,
     messages,
+    queryExpansionUsage,
     settings: params.settings,
     sources,
     userMessageId: params.userMessageId,

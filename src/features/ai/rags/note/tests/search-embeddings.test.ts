@@ -80,6 +80,7 @@ describe("searchNoteEmbeddings", () => {
     });
 
     expect(matchAiEmbeddings).toHaveBeenCalledWith({
+      excludeSourceId: undefined,
       inputKind: NOTE_EMBEDDING_INPUT_KIND,
       limit: SEARCH_INPUT.limit,
       minSimilarity: SEARCH_INPUT.minSimilarity,
@@ -90,6 +91,34 @@ describe("searchNoteEmbeddings", () => {
     });
 
     expect(result).toBe(matchedEmbeddings);
+  });
+
+  it("제외할 Note ID가 지정되면 matchAiEmbeddings에 전달한다", async () => {
+    const queryEmbedding = {
+      embedding: [0.1, 0.2, 0.3],
+    };
+
+    vi.mocked(getProviderApiKey).mockReturnValue("test-api-key");
+    vi.mocked(createAiEmbeddingWithProvider).mockResolvedValue(
+      queryEmbedding as never,
+    );
+    vi.mocked(matchAiEmbeddings).mockResolvedValue([]);
+
+    await searchNoteEmbeddings({
+      ...SEARCH_INPUT,
+      excludeSourceId: "excluded-note-id",
+    });
+
+    expect(matchAiEmbeddings).toHaveBeenCalledWith({
+      excludeSourceId: "excluded-note-id",
+      inputKind: NOTE_EMBEDDING_INPUT_KIND,
+      limit: SEARCH_INPUT.limit,
+      minSimilarity: SEARCH_INPUT.minSimilarity,
+      modelConfigId: EMBEDDING_CONFIGURATION.model.id,
+      ownerUserId: SEARCH_INPUT.ownerUserId,
+      queryEmbedding: queryEmbedding.embedding,
+      sourceType: NOTE_EMBEDDING_SOURCE_TYPE,
+    });
   });
 
   it("지원하지 않는 Embedding dimensions이면 Provider를 호출하지 않고 오류를 발생시킨다", async () => {
