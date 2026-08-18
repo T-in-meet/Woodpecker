@@ -169,7 +169,7 @@ export async function POST(
     .from("note_chat_messages")
     .select("conversation_id, role")
     .eq("id", parsed.data.messageId)
-    .single();
+    .maybeSingle();
 
   if (targetMessageError) {
     /*

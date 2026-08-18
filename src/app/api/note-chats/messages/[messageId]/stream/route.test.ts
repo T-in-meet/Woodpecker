@@ -220,7 +220,7 @@ function createSupabaseClientMock(options: SupabaseClientMockOptions = {}) {
 
   const select = vi.fn().mockReturnValue({
     eq: vi.fn().mockReturnValue({
-      single: vi.fn().mockResolvedValue({
+      maybeSingle: vi.fn().mockResolvedValue({
         data: targetMessage,
         error: targetMessageError,
       }),
