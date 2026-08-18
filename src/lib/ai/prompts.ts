@@ -25,24 +25,40 @@ export function getMaxQuestions(contentLength: number): number {
   return Math.min(Math.max(cap, MIN_QUESTION_CAP), MAX_QUESTIONS);
 }
 
-const QUESTION_COUNT_RULE = `3. 최대 \${maxQuestions}문항까지 생성하되, 개수는 노트 내용의 밀도에 따라 정하세요.
+const QUESTION_COUNT_RULE = `최대 \${maxQuestions}문항까지 생성하되, 개수는 노트 내용의 밀도에 따라 정하세요.
    - 시험 볼 가치가 있는 독립적인 사실·개념·수치가 많으면 상한에 가깝게 생성하세요.
    - 내용이 반복되거나 서술 위주라 물어볼 거리가 적으면 적게 생성하세요. 1~2문항이어도 괜찮습니다.
    - 개수를 채우기 위해 지엽적이거나 뻔한 문제를 억지로 만들지 마세요.`;
 
-const QUIZ_TYPE_RULES: Record<QuizType, string> = {
-  ox: `2. 모든 문제를 OX 퀴즈로 생성하세요.
-${QUESTION_COUNT_RULE}
-4. 참인 문장과 거짓인 문장을 고르게 섞으세요. 한쪽으로 몰지 마세요.
-5. 거짓 문장은 노트에 나오는 개념·수치·관계를 서로 바꾸거나 뒤집어서 만드세요.
-   - 노트를 읽지 않은 사람에게는 그럴듯해 보이되, 노트에 비추면 명백히 틀려야 합니다.
-   - 규칙 1은 정답 판정과 해설에 적용됩니다. 거짓 문항의 문제 문장은 노트 내용과 어긋나야 하므로 예외입니다.
-6. answer는 문제 문장이 참이면 true, 거짓이면 false입니다.
-7. 각 문제에 간단한 해설을 포함하세요. 거짓 문항은 노트의 어떤 내용과 어긋나는지 적으세요.
-8. 반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트를 포함하지 마세요.
+const EXPLANATION_RULE = "각 문제에 간단한 해설을 포함하세요.";
 
-## JSON 형식
-{
+const JSON_FORMAT_RULE =
+  "반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트를 포함하지 마세요.";
+
+/**
+ * 유형별 규칙과 JSON 예시.
+ *
+ * 규칙 번호는 `buildQuizPrompt`가 배열 순서대로 매긴다(공통 규칙 1 다음이므로 2번부터).
+ * 번호를 문자열에 직접 쓰면 규칙을 하나 끼워 넣을 때마다 세 유형의 번호를 전부 다시 매겨야 한다.
+ */
+type QuizTypeRuleSet = {
+  rules: readonly string[];
+  jsonFormat: string;
+};
+
+const QUIZ_TYPE_RULES: Record<QuizType, QuizTypeRuleSet> = {
+  ox: {
+    rules: [
+      "모든 문제를 OX 퀴즈로 생성하세요.",
+      QUESTION_COUNT_RULE,
+      "참인 문장과 거짓인 문장을 고르게 섞으세요. 한쪽으로 몰지 마세요.",
+      `거짓 문장은 노트에 나오는 개념·수치·관계를 서로 바꾸거나 뒤집어서 만드세요.
+   - 노트를 읽지 않은 사람에게는 그럴듯해 보이되, 노트에 비추면 명백히 틀려야 합니다.
+   - 규칙 1은 정답 판정과 해설에 적용됩니다. 거짓 문항의 문제 문장은 노트 내용과 어긋나야 하므로 예외입니다.`,
+      "answer는 문제 문장이 참이면 true, 거짓이면 false입니다.",
+      `${EXPLANATION_RULE} 거짓 문항은 노트의 어떤 내용과 어긋나는지 적으세요.`,
+    ],
+    jsonFormat: `{
   "questions": [
     {
       "type": "ox",
@@ -52,14 +68,18 @@ ${QUESTION_COUNT_RULE}
     }
   ]
 }`,
-  blank: `2. 모든 문제를 빈칸 채우기로 생성하세요.
-${QUESTION_COUNT_RULE}
-4. 각 문제에 간단한 해설을 포함하세요.
-5. 노트 원본 문장에서 핵심 키워드를 ____로 대체하세요. question에는 반드시 ____가 들어가야 합니다.
-   - 빈칸은 한 단어 또는 짧은 어구(용어) 수준으로 만드세요. 절 전체나 서술형 문장을 빈칸으로 만들지 마세요.
+  },
+  blank: {
+    rules: [
+      "모든 문제를 빈칸 채우기로 생성하세요.",
+      QUESTION_COUNT_RULE,
+      `${EXPLANATION_RULE} 해설에는 ____를 남기지 말고 정답을 채워 완전한 문장으로 쓰세요.`,
+      `노트 원본 문장에서 핵심 키워드를 ____로 대체하세요. question에는 반드시 ____가 들어가야 합니다.
+   - 빈칸의 정답은 단어(명사, 용어, 숫자 등) 하나여야 합니다. 두 단어 이상 이어진 어구나 절, 서술형 문장은 안 됩니다.
    - 노트 문장이 "용어란 정의이다"처럼 용어 뒤에 긴 정의가 오는 형태라면, 정의를 빈칸으로 두지 말고 문장을 뒤집어 용어를 빈칸으로 만드세요.
      예: "테스트란 프로그램이 의도한 대로 동작하는지 확인하는 과정이다" → "프로그램이 의도한 대로 동작하는지 확인하는 과정을 ____라고 한다."
-6. acceptedAnswers에는 정답과 같은 뜻으로 인정할 표기를 빠짐없이 넣으세요.
+   - 뒤집어도 정답이 단어 하나로 떨어지지 않으면(예: "기능 테스트는 ____을 확인한다" → "기능이 요구사항대로 동작하는지") 그 문장은 건너뛰고 다른 문장에서 출제하세요.`,
+      `acceptedAnswers에는 정답과 같은 뜻으로 인정할 표기를 빠짐없이 넣으세요.
    - 영어 원어와 한글 표기를 반드시 서로 포함하세요. (레지스터 → register / register → 레지스터)
    - 한글 음차 표기가 여럿이면 모두 넣으세요. (clock → 클럭, 클락, 클록)
    - 통용되는 약어와 정식 명칭을 함께 넣으세요. (데이터베이스 → DB, database / CPU → 중앙처리장치, central processing unit)
@@ -67,39 +87,41 @@ ${QUESTION_COUNT_RULE}
    - 노트에 나오지 않는 표기라도 일반적으로 통용되면 넣으세요.
    - 규칙 1은 question·answer·explanation에 적용됩니다. acceptedAnswers의 동의 표기만 예외입니다.
    - 대소문자, 띄어쓰기, 문장부호, 하이픈 차이는 채점에서 자동으로 무시되므로 그런 변형은 넣지 마세요.
-   - 뜻이 달라지는 표기는 넣지 마세요. 정답으로 인정할 수 있는 것만 넣습니다.
-7. 반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트를 포함하지 마세요.
-
-## JSON 형식
-{
+   - 뜻이 달라지는 표기는 넣지 마세요. 정답으로 인정할 수 있는 것만 넣습니다.`,
+    ],
+    // explanation도 규칙대로 채워 둔다. 서술로 지시하는 것보다 예시가 잘 지켜진다.
+    jsonFormat: `{
   "questions": [
     {
       "type": "blank",
       "question": "CPU의 동작을 동기화하는 주기적인 신호는 ____이다.",
       "answer": "클럭",
       "acceptedAnswers": ["clock", "클락", "클록"],
-      "explanation": "해설"
+      "explanation": "노트에서는 CPU의 동작을 동기화하는 주기적인 신호를 클럭이라고 설명한다."
     }
   ]
 }`,
-  choice: `2. 모든 문제를 ${CHOICE_OPTION_COUNT}지선다 객관식으로 생성하세요.
-${QUESTION_COUNT_RULE}
-4. 각 문제에 간단한 해설을 포함하세요.
-5. options는 반드시 ${CHOICE_OPTION_COUNT}개이며, 정답 1개와 오답 ${CHOICE_OPTION_COUNT - 1}개로 구성하세요.
-6. 오답은 노트에 나오는 다른 개념·수치를 잘못 연결해서 만드세요.
+  },
+  choice: {
+    rules: [
+      `모든 문제를 ${CHOICE_OPTION_COUNT}지선다 객관식으로 생성하세요.`,
+      QUESTION_COUNT_RULE,
+      EXPLANATION_RULE,
+      `options는 반드시 ${CHOICE_OPTION_COUNT}개이며, 정답 1개와 오답 ${CHOICE_OPTION_COUNT - 1}개로 구성하세요.`,
+      `오답은 노트에 나오는 다른 개념·수치를 잘못 연결해서 만드세요.
    - 노트를 읽지 않은 사람에게는 그럴듯해 보이되, 노트에 비추면 명백히 틀려야 합니다.
    - 규칙 1은 정답과 해설에 적용됩니다. 오답 선택지는 노트 내용과 어긋나야 하므로 예외입니다.
    - 노트에 쓸 만한 다른 개념이 부족하면 정답을 변형해 오답을 만드세요. 수치·범위·순서·대상·조건 중 하나를 바꾸면 됩니다.
-   - 그래도 ${CHOICE_OPTION_COUNT}개를 채우기 어려우면 그 문항을 만들지 말고 문항 수를 줄이세요.
-7. 같은 문항 안에 뜻이 같거나 표기만 다른 선택지를 두지 마세요. 정답은 하나여야 합니다.
-8. answer는 정답 선택지의 위치를 0부터 세는 번호로 적으세요.
+   - 그래도 ${CHOICE_OPTION_COUNT}개를 채우기 어려우면 그 문항을 만들지 말고 문항 수를 줄이세요.`,
+      `정답은 하나여야 합니다.
+   - 같은 문항 안에 뜻이 같거나 표기만 다른 선택지를 두지 마세요.
+   - 노트에 나열된 항목 중 둘 이상을 한 문항의 선택지에 함께 넣지 마세요. 둘 다 정답이 되어 정답이 하나로 정해지지 않습니다.`,
+      `answer는 정답 선택지의 위치를 0부터 세는 번호로 적으세요.
    - 첫 번째 선택지가 정답이면 0, 마지막 선택지가 정답이면 ${CHOICE_OPTION_COUNT - 1}입니다.
-   - 1부터 세지 마세요.
-9. 정답 위치를 문제마다 고르게 분산시키세요. 특정 번호에 정답을 몰지 마세요.
-10. 반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트를 포함하지 마세요.
-
-## JSON 형식
-{
+   - 1부터 세지 마세요.`,
+      "정답 위치를 문제마다 고르게 분산시키세요. 특정 번호에 정답을 몰지 마세요.",
+    ],
+    jsonFormat: `{
   "questions": [
     {
       "type": "choice",
@@ -110,6 +132,7 @@ ${QUESTION_COUNT_RULE}
     }
   ]
 }`,
+  },
 };
 
 const PERSPECTIVE = {
@@ -141,22 +164,28 @@ export const QUIZ_PERSPECTIVES = [
   PERSPECTIVE.application,
 ] as const;
 
-export type QuizPerspective = (typeof QUIZ_PERSPECTIVES)[number];
-
 /**
- * 빈칸 채우기에 쓰는 관점만 따로 추린다.
+ * 빈칸 채우기 전용 관점.
  *
- * 나머지 셋(구분과 비교·인과와 이유·적용과 판단)은 답이 절이나 문장이 될 수밖에 없어
- * "빈칸은 한 단어나 짧은 어구"라는 규칙과 정면으로 부딪힌다. 관점 섹션은 유형 규칙보다
- * 뒤에 붙고 뒤에 놓인 지시가 더 잘 지켜지므로, 규칙으로 누르는 대신 후보에서 뺀다.
+ * 관점 섹션은 유형 규칙보다 뒤에 붙고 뒤에 놓인 지시가 더 잘 지켜진다.
+ * 그래서 답이 단어 하나로 떨어지지 않는 관점이 걸리면 "빈칸의 정답은 단어 하나"라는
+ * 규칙을 관점 쪽이 이겨 버린다. 규칙으로 누르는 대신 관점 자체를 손본다.
  *
- * 관점을 새로 추가할 때는 그 관점의 답이 한 단어로 떨어지는지 보고 여기 넣을지 정한다.
+ * - 구분과 비교·인과와 이유·적용과 판단: 답이 절이나 문장이 될 수밖에 없어 후보에서 뺀다.
+ * - 절차와 순서·역할과 구성: 원문 그대로면 답이 나열("무엇으로 이루어져 있는지")이 되어
+ *   유일성 규칙과도 부딪힌다. 답이 단계·요소의 "이름"으로 떨어지도록 물음을 뒤집어 쓴다.
+ *
+ * 관점을 새로 추가할 때는 그 관점의 답이 단어 하나로 떨어지는지 보고 여기 넣을지 정한다.
  */
 const BLANK_PERSPECTIVES = [
   PERSPECTIVE.definition,
-  PERSPECTIVE.procedure,
-  PERSPECTIVE.composition,
+  "절차와 순서 — 어떤 단계가 먼저이고 무엇이 나중인지, 특정 자리에 오는 단계의 이름이 무엇인지 묻습니다.",
+  "역할과 구성 — 어떤 요소가 특정 역할을 담당하는지, 그 요소의 이름이 무엇인지 묻습니다.",
 ] as const;
+
+export type QuizPerspective =
+  | (typeof QUIZ_PERSPECTIVES)[number]
+  | (typeof BLANK_PERSPECTIVES)[number];
 
 const PERSPECTIVES_BY_TYPE: Record<QuizType, readonly QuizPerspective[]> = {
   ox: QUIZ_PERSPECTIVES,
@@ -179,27 +208,24 @@ export type QuizPromptOptions = {
  * 유형 규칙만으로는 막지 못한 두 가지를 노트·규칙 뒤에서 한 번 더 못박는다.
  *
  * - 마크다운: 노트 본문이 마크다운이라 모델이 그 문체를 따라 해설에 `**`를 섞는다.
- *   카드 세 종류 모두 해설을 평문으로 렌더하므로 기호가 화면에 그대로 보인다.
- * - 정답의 유일성: 노트에 나열된 항목 중 하나만 정답으로 박으면, 나머지를 답한
- *   사용자가 오답 처리된다. 채점은 정확 일치라 앱에서 구제할 방법이 없다.
- *   동의 표기 문제가 아니라 정답이 여럿인 문제라 acceptedAnswers로도 못 막는다.
+ *   카드 세 종류 모두 문항 내용을 평문으로 렌더하므로 기호가 화면에 그대로 보인다.
+ * - 빈칸의 유일성: 나열된 항목 중 하나만 정답으로 박으면, 나머지를 답한 사용자가
+ *   오답 처리된다. 채점은 정확 일치라 앱에서 구제할 방법이 없고, 동의 표기 문제가
+ *   아니라 정답이 여럿인 문제라 acceptedAnswers로도 못 막는다.
+ *
+ * OX는 답이 true/false뿐이라 유일성 문제가 없고, 객관식은 선택지 규칙에서 이미 다룬다.
  */
 function buildOutputCautionSection(quizType: QuizType): string {
-  const uniquenessRules: Record<QuizType, string> = {
-    // OX는 답이 true/false뿐이라 유일성 문제가 생기지 않는다.
-    ox: "",
-    blank: `
-- 빈칸을 뚫고 남은 문맥만으로 정답이 하나로 정해져야 합니다. 답이 될 수 있는 것이 둘 이상이면 그 문항을 만들지 마세요.
-- 노트에 "A, B, C가 있다"처럼 항목이 나열돼 있으면 그중 하나를 묻는 문제("~ 중 하나는 ____이다")를 만들지 마세요. 어느 것을 답해도 맞아야 하는데 정답은 하나만 적을 수 있습니다.
-- 나열을 꼭 묻고 싶으면 항목 전체가 답이 되도록 만들거나, 그 문장은 건너뛰고 다른 곳에서 출제하세요.`,
-    choice: `
-- 노트에 나열된 항목 중 둘 이상을 한 문항의 선택지에 함께 넣지 마세요. 둘 다 정답이 되어 정답이 하나로 정해지지 않습니다.`,
-  };
+  const blankUniquenessRule =
+    quizType === "blank"
+      ? `
+- 빈칸을 뚫고 남은 문맥만으로 정답이 하나로 정해져야 합니다. 노트에 나열된 항목 중 하나를 묻는 문제("~ 중 하나는 ____이다")처럼 답이 될 수 있는 것이 둘 이상이면, 그 문장은 건너뛰고 다른 곳에서 출제하세요.`
+      : "";
 
   return `
 
 ## 출력 주의사항
-- question·answer·explanation에 마크다운 서식을 쓰지 마세요. 화면에 평문으로 표시되므로 **, \`, #, - 같은 기호가 그대로 보입니다. 강조가 필요하면 문장으로 풀어 쓰세요.${uniquenessRules[quizType]}`;
+- question·options·answer·explanation에 마크다운 서식을 쓰지 마세요. 화면에 평문으로 표시되므로 **, \`, #, - 같은 기호가 그대로 보입니다. 강조가 필요하면 문장으로 풀어 쓰세요.${blankUniquenessRule}`;
 }
 
 function buildPerspectiveSection(perspective?: QuizPerspective): string {
@@ -241,6 +267,26 @@ ${list}
 - 노트에 남은 재료가 부족하면 문항 수를 줄이세요. 같은 내용을 다시 내는 것보다 낫습니다.`;
 }
 
+/** 공통 규칙 1 다음부터 번호를 매긴다. JSON 형식 지시는 항상 마지막 규칙이다. */
+const FIRST_TYPE_RULE_NUMBER = 2;
+
+function buildTypeRulesSection(
+  quizType: QuizType,
+  maxQuestions: number,
+): string {
+  const { rules, jsonFormat } = QUIZ_TYPE_RULES[quizType];
+
+  const numbered = [...rules, JSON_FORMAT_RULE]
+    .map((rule, index) => `${index + FIRST_TYPE_RULE_NUMBER}. ${rule}`)
+    .join("\n")
+    .replaceAll("${maxQuestions}", String(maxQuestions));
+
+  return `${numbered}
+
+## JSON 형식
+${jsonFormat}`;
+}
+
 export function buildQuizPrompt(
   noteTitle: string,
   noteContent: string,
@@ -248,10 +294,7 @@ export function buildQuizPrompt(
   quizType: QuizType,
   options: QuizPromptOptions = {},
 ): string {
-  const rules = QUIZ_TYPE_RULES[quizType].replaceAll(
-    "${maxQuestions}",
-    String(maxQuestions),
-  );
+  const rules = buildTypeRulesSection(quizType, maxQuestions);
 
   const trailingSections =
     buildOutputCautionSection(quizType) +
