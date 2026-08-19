@@ -40,7 +40,15 @@ const EMBEDDING_CONFIGURATION = {
   },
 } as AiRuntimeEmbeddingConfiguration;
 
+const GENERATION_ID = "55555555-5555-4555-8555-555555555555";
+
+const CONTENT_HASH = "note-content-hash";
+
 const INPUT = {
+  chunkCount: 2,
+  chunkIndex: 0,
+  contentHash: CONTENT_HASH,
+  generationId: GENERATION_ID,
   ownerUserId: "user-id",
   sourceType: "note",
   sourceId: "note-id",
@@ -49,45 +57,78 @@ const INPUT = {
   inputPreview: "Title: Test Note",
 };
 
+const INPUT_HASH =
+  "08134918c0a20280867d115ef0e1a8218e1ed6faf95b4a1f7dbc0d10c56bd6b1";
+
+const CACHE_VECTOR = Array.from(
+  { length: AI_EMBEDDING_DIMENSIONS },
+  (_, index) => (index === 0 ? 1 : 0),
+);
+
+const CACHE_VECTOR_LITERAL = `[${CACHE_VECTOR.join(",")}]`;
+
 describe("generateAiEmbedding", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("cache hit이면 기존 embedding을 반환하고 Provider를 호출하지 않는다", async () => {
+  it("cache hit이면 기존 vector를 재사용해 새 generation row를 저장하고 Provider를 호출하지 않는다", async () => {
     const cachedEmbedding = {
-      id: "embedding-id",
+      embedding: CACHE_VECTOR_LITERAL,
+      token_count: 10,
+    } as never;
+
+    const insertedEmbedding = {
+      id: "new-generation-embedding-id",
     } as never;
 
     vi.mocked(getAiEmbeddingCache).mockResolvedValue(cachedEmbedding);
+    vi.mocked(insertAiEmbedding).mockResolvedValue(insertedEmbedding);
 
     const result = await generateAiEmbedding({
       embeddingConfiguration: EMBEDDING_CONFIGURATION,
       ...INPUT,
     });
 
-    expect(result).toBe(cachedEmbedding);
+    expect(result).toBe(insertedEmbedding);
 
     expect(getAiEmbeddingCache).toHaveBeenCalledWith({
-      ownerUserId: INPUT.ownerUserId,
-      sourceType: INPUT.sourceType,
-      sourceId: INPUT.sourceId,
-      modelConfigId: EMBEDDING_CONFIGURATION.model.id,
+      chunkCount: INPUT.chunkCount,
+      chunkIndex: INPUT.chunkIndex,
+      contentHash: CONTENT_HASH,
+      generationId: INPUT.generationId,
+      inputHash: INPUT_HASH,
       inputKind: INPUT.inputKind,
-      contentHash:
-        "08134918c0a20280867d115ef0e1a8218e1ed6faf95b4a1f7dbc0d10c56bd6b1",
-      inputHash:
-        "08134918c0a20280867d115ef0e1a8218e1ed6faf95b4a1f7dbc0d10c56bd6b1",
-      inputText: INPUT.inputText,
       inputPreview: INPUT.inputPreview,
+      inputText: INPUT.inputText,
+      modelConfigId: EMBEDDING_CONFIGURATION.model.id,
+      ownerUserId: INPUT.ownerUserId,
+      sourceId: INPUT.sourceId,
+      sourceType: INPUT.sourceType,
     });
 
-    expect(createAiEmbeddingWithProvider).not.toHaveBeenCalled();
+    expect(insertAiEmbedding).toHaveBeenCalledWith({
+      chunkCount: INPUT.chunkCount,
+      chunkIndex: INPUT.chunkIndex,
+      contentHash: CONTENT_HASH,
+      generationId: INPUT.generationId,
+      inputHash: INPUT_HASH,
+      inputKind: INPUT.inputKind,
+      inputPreview: INPUT.inputPreview,
+      inputText: INPUT.inputText,
+      modelConfigId: EMBEDDING_CONFIGURATION.model.id,
+      ownerUserId: INPUT.ownerUserId,
+      sourceId: INPUT.sourceId,
+      sourceType: INPUT.sourceType,
+      embedding: CACHE_VECTOR,
+      tokenCount: 10,
+    });
+
     expect(getProviderApiKey).not.toHaveBeenCalled();
-    expect(insertAiEmbedding).not.toHaveBeenCalled();
+    expect(createAiEmbeddingWithProvider).not.toHaveBeenCalled();
   });
 
-  it("cache miss이면 Provider로 embedding을 생성하고 cache에 저장한다", async () => {
+  it("cache miss이면 Provider로 embedding을 생성하고 현재 generation row에 저장한다", async () => {
     const generatedEmbedding = {
       embedding: [0.1, 0.2, 0.3],
       metadata: {},
@@ -129,17 +170,18 @@ describe("generateAiEmbedding", () => {
     });
 
     expect(insertAiEmbedding).toHaveBeenCalledWith({
-      ownerUserId: INPUT.ownerUserId,
-      sourceType: INPUT.sourceType,
-      sourceId: INPUT.sourceId,
-      modelConfigId: EMBEDDING_CONFIGURATION.model.id,
+      chunkCount: INPUT.chunkCount,
+      chunkIndex: INPUT.chunkIndex,
+      contentHash: CONTENT_HASH,
+      generationId: INPUT.generationId,
+      inputHash: INPUT_HASH,
       inputKind: INPUT.inputKind,
-      contentHash:
-        "08134918c0a20280867d115ef0e1a8218e1ed6faf95b4a1f7dbc0d10c56bd6b1",
-      inputHash:
-        "08134918c0a20280867d115ef0e1a8218e1ed6faf95b4a1f7dbc0d10c56bd6b1",
-      inputText: INPUT.inputText,
       inputPreview: INPUT.inputPreview,
+      inputText: INPUT.inputText,
+      modelConfigId: EMBEDDING_CONFIGURATION.model.id,
+      ownerUserId: INPUT.ownerUserId,
+      sourceId: INPUT.sourceId,
+      sourceType: INPUT.sourceType,
       embedding: generatedEmbedding.embedding,
       tokenCount: generatedEmbedding.usage.totalTokens,
     });
@@ -228,7 +270,7 @@ describe("generateAiEmbedding", () => {
     });
   });
 
-  it("cache hit이면 dimensions가 없어도 기존 embedding을 반환한다", async () => {
+  it("cache hit이면 dimensions가 없어도 Provider 호출 없이 기존 vector를 새 generation에 저장한다", async () => {
     const configuration = {
       ...EMBEDDING_CONFIGURATION,
       model: {
@@ -238,18 +280,35 @@ describe("generateAiEmbedding", () => {
     } as AiRuntimeEmbeddingConfiguration;
 
     const cachedEmbedding = {
-      id: "embedding-id",
+      embedding: CACHE_VECTOR_LITERAL,
+      token_count: 10,
+    } as never;
+
+    const insertedEmbedding = {
+      id: "new-generation-embedding-id",
     } as never;
 
     vi.mocked(getAiEmbeddingCache).mockResolvedValue(cachedEmbedding);
+    vi.mocked(insertAiEmbedding).mockResolvedValue(insertedEmbedding);
 
     const result = await generateAiEmbedding({
       embeddingConfiguration: configuration,
       ...INPUT,
     });
 
-    expect(result).toBe(cachedEmbedding);
+    expect(result).toBe(insertedEmbedding);
+
+    expect(insertAiEmbedding).toHaveBeenCalledWith(
+      expect.objectContaining({
+        generationId: INPUT.generationId,
+        chunkIndex: INPUT.chunkIndex,
+        chunkCount: INPUT.chunkCount,
+        embedding: CACHE_VECTOR,
+        tokenCount: 10,
+      }),
+    );
+
+    expect(getProviderApiKey).not.toHaveBeenCalled();
     expect(createAiEmbeddingWithProvider).not.toHaveBeenCalled();
-    expect(insertAiEmbedding).not.toHaveBeenCalled();
   });
 });

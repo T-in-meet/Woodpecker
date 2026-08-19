@@ -9,7 +9,10 @@ import {
 } from "@/features/operational-errors/constants";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { reportAiOperationalError } from "../utils/report-ai-operational-error";
+import {
+  markAiOperationalErrorAsReported,
+  reportAiOperationalError,
+} from "../utils/report-ai-operational-error";
 
 /**
  * AI 기능 key와 role key에 해당하는 Runtime Configuration row를 조회합니다.
@@ -76,8 +79,8 @@ export async function getAiRuntimeConfigurationRow(
       stage: AI_OPERATIONAL_ERROR_STAGE.DATABASE,
     });
 
-    throw new Error(
-      `Failed to load AI runtime configuration: ${error.message}`,
+    throw markAiOperationalErrorAsReported(
+      new Error(`Failed to load AI runtime configuration: ${error.message}`),
     );
   }
 

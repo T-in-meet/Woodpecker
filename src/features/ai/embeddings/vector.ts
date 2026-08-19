@@ -29,3 +29,37 @@ export function formatAiVectorLiteral(vector: readonly number[]): string {
 
   return `[${vector.join(",")}]`;
 }
+
+/**
+ * Supabase에서 조회한 pgvector literal을 숫자 배열로 변환합니다.
+ *
+ * DB에서 반환된 `[value1,value2,...]` 형식의 문자열을 파싱한 뒤
+ * 현재 AI Foundation이 지원하는 embedding dimension과
+ * 모든 값의 유한 숫자 여부를 검증합니다.
+ *
+ * @param vectorLiteral pgvector 컬럼에서 조회한 vector literal입니다.
+ * @returns 파싱된 embedding 숫자 배열입니다.
+ * @throws vector literal 형식이 유효하지 않거나 dimension/value 검증에 실패한 경우 오류를 발생시킵니다.
+ */
+export function parseAiVectorLiteral(vectorLiteral: string): number[] {
+  if (!vectorLiteral.startsWith("[") || !vectorLiteral.endsWith("]")) {
+    throw new Error("AI vector literal has an invalid format.");
+  }
+
+  const values = vectorLiteral
+    .slice(1, -1)
+    .split(",")
+    .map((value) => Number(value));
+
+  if (values.length !== AI_EMBEDDING_DIMENSIONS) {
+    throw new Error(
+      `AI vector must contain exactly ${AI_EMBEDDING_DIMENSIONS} dimensions.`,
+    );
+  }
+
+  if (!values.every((value) => Number.isFinite(value))) {
+    throw new Error("AI vector must contain only finite numbers.");
+  }
+
+  return values;
+}

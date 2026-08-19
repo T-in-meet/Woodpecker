@@ -15,7 +15,26 @@ import type { AiEmbeddingMatchRow } from "./types";
 import { formatAiVectorLiteral } from "./vector";
 
 /** AI embedding 검색 RPC 호출에 필요한 Supabase Client 최소 형태입니다. */
-type AiEmbeddingMatchClient = Pick<ReturnType<typeof createAdminClient>, "rpc">;
+type AiEmbeddingMatchClient = {
+  rpc: (
+    functionName: "match_ai_embeddings",
+    args: {
+      p_exclude_source_ids?: string[] | null;
+      p_input_kind: string;
+      p_limit?: number;
+      p_min_similarity?: number | null;
+      p_model_config_id: string;
+      p_owner_user_id: string;
+      p_query_embedding: string;
+      p_source_type: string;
+    },
+  ) => Promise<{
+    data: unknown;
+    error: { message: string } | null;
+  }>;
+};
+
+const DEFAULT_MATCH_LIMIT = 10;
 
 /**
  * 저장된 AI embedding 중 query embedding과 유사한 결과를 검색합니다.
@@ -23,12 +42,16 @@ type AiEmbeddingMatchClient = Pick<ReturnType<typeof createAdminClient>, "rpc">;
  * 사용자·source type·모델·input kind 범위 안에서 기존 embedding만 검색하며,
  * 누락된 embedding을 자동 생성하거나 Provider를 호출하지 않습니다.
  *
+ * excludeSourceIds가 지정되면 해당 source들에 속한 embedding은
+ * ranking 및 LIMIT 적용 전에 검색 대상에서 제외합니다.
+ *
  * @param params embedding 유사도 검색에 필요한 조건입니다.
  * @param params.queryEmbedding 검색 기준이 되는 query embedding입니다.
  * @param params.ownerUserId 검색 대상 embedding 소유 사용자 ID입니다.
  * @param params.sourceType 검색할 source 종류입니다.
  * @param params.modelConfigId 검색에 사용할 embedding 모델 설정 ID입니다.
  * @param params.inputKind 검색할 embedding 입력 용도입니다.
+ * @param params.excludeSourceIds 검색 결과에서 제외할 source ID 목록입니다.
  * @param params.limit 반환할 최대 결과 수입니다.
  * @param params.minSimilarity 결과에 요구할 최소 similarity입니다.
  * @param options 테스트 또는 호출 계층에서 주입할 Supabase Client 옵션입니다.
@@ -42,6 +65,7 @@ export async function matchAiEmbeddings(
     sourceType: string;
     modelConfigId: string;
     inputKind: string;
+    excludeSourceIds?: string[] | undefined;
     limit?: number | undefined;
     minSimilarity?: number | null | undefined;
   },
@@ -50,19 +74,18 @@ export async function matchAiEmbeddings(
   const supabase = options.supabase ?? createAdminClient();
 
   /*
-   * optional RPC 인자를 명시적으로 전달하지 않으면 DB 함수에 정의된
-   * 기본값을 그대로 사용할 수 있으므로 값이 지정된 경우에만 포함한다.
+   * optional RPC 인자는 명시적으로 null을 전달하여
+   * 호출 계층에서 제외 대상을 지정하지 않은 경우 기존 검색 동작을 유지합니다.
    */
   const rpcArgs = {
+    p_exclude_source_ids: params.excludeSourceIds ?? null,
     p_input_kind: params.inputKind,
+    p_limit: params.limit ?? DEFAULT_MATCH_LIMIT,
+    p_min_similarity: params.minSimilarity ?? null,
     p_model_config_id: params.modelConfigId,
     p_owner_user_id: params.ownerUserId,
     p_query_embedding: formatAiVectorLiteral(params.queryEmbedding),
     p_source_type: params.sourceType,
-    ...(params.limit !== undefined ? { p_limit: params.limit } : {}),
-    ...(params.minSimilarity != null
-      ? { p_min_similarity: params.minSimilarity }
-      : {}),
   };
 
   const { data, error } = await supabase.rpc("match_ai_embeddings", rpcArgs);

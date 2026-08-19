@@ -22,3 +22,10 @@ export class UnauthorizedError extends AppError {
     this.name = "UnauthorizedError";
   }
 }
+
+export class ForbiddenError extends AppError {
+  constructor() {
+    super("권한이 없습니다", "FORBIDDEN", 403);
+    this.name = "ForbiddenError";
+  }
+}

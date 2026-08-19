@@ -10,6 +10,11 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+/**
+ * Note 생성 후 after()에서 실행되는 embedding 후처리 시간을 확보합니다.
+ */
+export const maxDuration = 90;
+
 export default async function NewNotePage() {
   const supabase = await createServerComponentClient();
   const {

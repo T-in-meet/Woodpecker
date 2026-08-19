@@ -20,6 +20,7 @@ const {
   redirectMock: vi.fn(),
 }));
 
+vi.mock("server-only", () => ({}));
 vi.mock("@/lib/supabase/getUser", () => ({ getUser: getUserMock }));
 vi.mock("@/lib/supabase/getProfile", () => ({ getProfile: getProfileMock }));
 vi.mock("@/features/notes/queries", () => ({

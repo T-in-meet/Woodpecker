@@ -13,6 +13,7 @@ import { getActiveAiModelConfigById } from "../queries";
 
 vi.mock("../../utils/report-ai-operational-error", () => ({
   reportAiOperationalError: vi.fn(),
+  markAiOperationalErrorAsReported: (error: unknown) => error,
 }));
 
 const MODEL_CONFIG_ID = "44444444-4444-4444-8444-444444444444";

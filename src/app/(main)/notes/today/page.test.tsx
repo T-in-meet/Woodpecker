@@ -14,6 +14,8 @@ const { createClientMock, getTodayReviewNotesMock, redirectMock, cookiesMock } =
     cookiesMock: vi.fn(),
   }));
 
+vi.mock("server-only", () => ({}));
+
 vi.mock("@/lib/supabase/server", () => ({
   createServerComponentClient: createClientMock,
 }));

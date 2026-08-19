@@ -67,6 +67,7 @@ describe("matchAiEmbeddings", () => {
     const rpc = vi.fn().mockResolvedValue({
       data: [
         {
+          chunk_index: 0,
           distance: 0,
           embedding_id: "22222222-2222-4222-8222-222222222222",
           similarity: 1,
@@ -90,6 +91,7 @@ describe("matchAiEmbeddings", () => {
     );
 
     expect(rpc).toHaveBeenCalledWith("match_ai_embeddings", {
+      p_exclude_source_ids: null,
       p_input_kind: "rag_note_content",
       p_limit: 3,
       p_min_similarity: 0.2,
@@ -101,12 +103,50 @@ describe("matchAiEmbeddings", () => {
 
     expect(result).toEqual([
       {
+        chunk_index: 0,
         distance: 0,
         embedding_id: "22222222-2222-4222-8222-222222222222",
         similarity: 1,
         source_id: "44444444-4444-4444-8444-444444444444",
       },
     ]);
+  });
+
+  it("제외할 source ID 목록이 지정되면 RPC에 전달한다", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [],
+      error: null,
+    });
+
+    const excludeSourceIds = [
+      "44444444-4444-4444-8444-444444444444",
+      "55555555-5555-4555-8555-555555555555",
+    ];
+
+    const result = await matchAiEmbeddings(
+      {
+        ...createMatchParams(),
+        excludeSourceIds,
+      },
+      {
+        supabase: {
+          rpc,
+        },
+      },
+    );
+
+    expect(rpc).toHaveBeenCalledWith("match_ai_embeddings", {
+      p_exclude_source_ids: excludeSourceIds,
+      p_input_kind: "rag_note_content",
+      p_limit: 10,
+      p_min_similarity: null,
+      p_model_config_id: "11111111-1111-4111-8111-111111111111",
+      p_owner_user_id: "33333333-3333-4333-8333-333333333333",
+      p_query_embedding: `[${createVector(0).join(",")}]`,
+      p_source_type: "note",
+    });
+
+    expect(result).toEqual([]);
   });
 
   it("검색 조건이 없으면 기본 limit과 minSimilarity를 사용한다", async () => {
@@ -122,7 +162,10 @@ describe("matchAiEmbeddings", () => {
     });
 
     expect(rpc).toHaveBeenCalledWith("match_ai_embeddings", {
+      p_exclude_source_ids: null,
       p_input_kind: "rag_note_content",
+      p_limit: 10,
+      p_min_similarity: null,
       p_model_config_id: "11111111-1111-4111-8111-111111111111",
       p_owner_user_id: "33333333-3333-4333-8333-333333333333",
       p_query_embedding: `[${createVector(0).join(",")}]`,

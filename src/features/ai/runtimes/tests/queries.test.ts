@@ -18,6 +18,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 vi.mock("../../utils/report-ai-operational-error", () => ({
   reportAiOperationalError: vi.fn(),
+  markAiOperationalErrorAsReported: (error: unknown) => error,
 }));
 
 type MaybeSingleResult = {

@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { MessageCircle, Plus } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -8,10 +8,15 @@ import { ROUTES } from "@/lib/constants/routes";
 
 export function NotesNav() {
   const pathname = usePathname();
+
+  const isNoteChats = pathname.startsWith(ROUTES.NOTE_CHATS);
+
   const isNotesList =
     pathname.startsWith(ROUTES.NOTES) &&
     pathname !== ROUTES.NOTES_NEW &&
-    pathname !== ROUTES.NOTES_TODAY;
+    pathname !== ROUTES.NOTES_TODAY &&
+    !isNoteChats;
+
   const isNotesNew = pathname === ROUTES.NOTES_NEW;
   const isNotesToday = pathname === ROUTES.NOTES_TODAY;
 
@@ -49,6 +54,19 @@ export function NotesNav() {
         }`}
       >
         <Plus size={16} />새 노트
+      </Link>
+
+      <Link
+        href={ROUTES.NOTE_CHATS}
+        aria-current={isNoteChats ? "page" : undefined}
+        className={`flex items-center gap-1 rounded-sm text-base font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${
+          isNoteChats
+            ? "font-semibold text-foreground"
+            : "text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        <MessageCircle className="size-4" />
+        노트 챗봇
       </Link>
     </nav>
   );

@@ -4,6 +4,7 @@ import {
   BookOpen,
   CalendarCheck,
   LogOut,
+  MessageCircle,
   Plus,
   Shield,
   User,
@@ -109,6 +110,15 @@ export function UserMenu({
               className="flex items-center gap-2 px-4 py-2 text-sm transition-colors hover:bg-accent"
             >
               <Plus className="size-4" />새 노트
+            </Link>
+
+            <Link
+              href={ROUTES.NOTE_CHATS}
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 px-4 py-2 text-sm transition-colors hover:bg-accent"
+            >
+              <MessageCircle className="size-4" />
+              노트 챗봇
             </Link>
           </div>
 

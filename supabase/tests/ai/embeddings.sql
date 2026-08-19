@@ -4,8 +4,8 @@
 
 BEGIN;
 
--- 이 파일에서 수행할 pgTAP assertion 수가 17개인지 선언합니다.
-SELECT plan(17);
+-- 이 파일에서 수행할 pgTAP assertion 수가 22개인지 선언합니다.
+SELECT plan(22);
 
 -- =========================================
 -- Test fixtures
@@ -99,22 +99,45 @@ SELECT col_not_null(
   'embedding should be NOT NULL'
 );
 
+-- 청킹된 embedding 세트를 구성하는 핵심 메타데이터는
+-- 모든 embedding row에 반드시 존재해야 합니다.
+SELECT col_not_null(
+  'public',
+  'ai_embeddings',
+  'chunk_index',
+  'chunk_index should be NOT NULL'
+);
+
+SELECT col_not_null(
+  'public',
+  'ai_embeddings',
+  'chunk_count',
+  'chunk_count should be NOT NULL'
+);
+
+SELECT col_not_null(
+  'public',
+  'ai_embeddings',
+  'generation_id',
+  'generation_id should be NOT NULL'
+);
+
 
 -- =========================================
 -- Constraints
 -- =========================================
 
--- 동일 입력의 Embedding 캐시 중복을 방지하는 UNIQUE 제약과
--- 사용자 및 모델 참조 Foreign Key가 구성되어 있는지 검증합니다.
+-- 동일 source/model/input/generation 안에서
+-- 같은 chunk_index가 중복 저장되지 않도록 UNIQUE 제약이 구성되어 있는지 검증합니다.
 SELECT ok(
   EXISTS (
     SELECT 1
     FROM pg_constraint
     WHERE conrelid = 'public.ai_embeddings'::regclass
-      AND conname = 'ai_embeddings_owner_source_model_kind_hash_key'
+      AND conname = 'ai_embeddings_owner_source_model_kind_gen_chunk_key'
       AND contype = 'u'
   ),
-  'embedding cache scope should have a unique constraint'
+  'embedding generation chunk scope should have a unique constraint'
 );
 
 SELECT ok(
@@ -338,6 +361,103 @@ SELECT throws_ok(
   '23514',
   NULL,
   'negative token_count should be rejected'
+);
+
+-- chunk_index는 원문 내 청크 위치를 나타내므로 음수를 허용하지 않습니다.
+SELECT throws_ok(
+  format(
+    $sql$
+      INSERT INTO public.ai_embeddings (
+        owner_user_id,
+        source_type,
+        source_id,
+        model_config_id,
+        input_kind,
+        content_hash,
+        input_hash,
+        input_text,
+        input_preview,
+        embedding,
+        chunk_index,
+        chunk_count
+      )
+      VALUES (
+        '%s'::uuid,
+        'note',
+        gen_random_uuid(),
+        '%s'::uuid,
+        'test',
+        'content-hash-negative-chunk-index',
+        'input-hash-negative-chunk-index',
+        'input',
+        'preview',
+        (
+          '['
+          || array_to_string(
+            array_fill(0, ARRAY[1536]),
+            ','
+          )
+          || ']'
+        )::extensions.vector,
+        -1,
+        1
+      );
+    $sql$,
+    current_setting('test.ai_embedding_user_id'),
+    current_setting('test.ai_embedding_model_id')
+  ),
+  '23514',
+  NULL,
+  'negative chunk_index should be rejected'
+);
+
+-- chunk_index는 0부터 chunk_count - 1 범위 안에 있어야 하므로
+-- 총 청크 개수 이상의 index는 저장할 수 없습니다.
+SELECT throws_ok(
+  format(
+    $sql$
+      INSERT INTO public.ai_embeddings (
+        owner_user_id,
+        source_type,
+        source_id,
+        model_config_id,
+        input_kind,
+        content_hash,
+        input_hash,
+        input_text,
+        input_preview,
+        embedding,
+        chunk_index,
+        chunk_count
+      )
+      VALUES (
+        '%s'::uuid,
+        'note',
+        gen_random_uuid(),
+        '%s'::uuid,
+        'test',
+        'content-hash-invalid-chunk-count',
+        'input-hash-invalid-chunk-count',
+        'input',
+        'preview',
+        (
+          '['
+          || array_to_string(
+            array_fill(0, ARRAY[1536]),
+            ','
+          )
+          || ']'
+        )::extensions.vector,
+        1,
+        1
+      );
+    $sql$,
+    current_setting('test.ai_embedding_user_id'),
+    current_setting('test.ai_embedding_model_id')
+  ),
+  '23514',
+  NULL,
+  'chunk_index should be less than chunk_count'
 );
 
 
