@@ -1943,6 +1943,14 @@ export type Database = {
           user_message_id: string;
         }[];
       };
+      update_note_related_manual_reason: {
+        Args: {
+          p_note_id: string;
+          p_reason?: string;
+          p_related_note_id: string;
+        };
+        Returns: undefined;
+      };
       update_notification_time_of_day: {
         Args: { p_note_id: string; p_time?: string };
         Returns: undefined;

@@ -63,3 +63,27 @@ export const addManualRelatedNotesSchema = z.object({
 export type AddManualRelatedNotesInput = z.infer<
   typeof addManualRelatedNotesSchema
 >;
+
+/**
+ * manual Related Note의 연결 이유를 수정할 때 전달하는 입력을 검증합니다.
+ *
+ * 관계 존재 여부, 소유권, manual 관계 여부는 DB RPC에서 최종 검증합니다.
+ */
+export const updateManualRelatedNoteReasonSchema = z.object({
+  /** Related Note를 수정할 기준 Note ID입니다. */
+  noteId: z.string().uuid(),
+
+  /** 수정할 Related Note ID입니다. */
+  relatedNoteId: z.string().uuid(),
+
+  /** 수정할 선택적 연결 이유입니다. */
+  reason: z
+    .string()
+    .trim()
+    .max(500, "연결 이유는 500자 이하로 입력해주세요.")
+    .optional(),
+});
+
+export type UpdateManualRelatedNoteReasonInput = z.infer<
+  typeof updateManualRelatedNoteReasonSchema
+>;

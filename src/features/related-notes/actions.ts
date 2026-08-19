@@ -97,3 +97,94 @@ export async function addManualRelatedNotesAction(
     success: true,
   };
 }
+
+import {
+  type UpdateManualRelatedNoteReasonInput,
+  updateManualRelatedNoteReasonSchema,
+} from "./schemas";
+
+export type UpdateManualRelatedNoteReasonActionResult =
+  | {
+      success: true;
+      error?: never;
+    }
+  | {
+      success?: false;
+      error: string;
+    };
+
+/**
+ * manual Related Note의 선택적 연결 이유를 수정합니다.
+ *
+ * 이 Action은 Client 입력 검증과 RPC 호출만 담당합니다.
+ *
+ * 다음 규칙은 애플리케이션 계층에서 중복 구현하지 않고
+ * `update_note_related_manual_reason` RPC에서 최종 검증합니다.
+ *
+ * - 인증 사용자 확인
+ * - source/target Note 소유권 검증
+ * - manual 관계 존재 여부 검증
+ * - AI 관계 수정 방지
+ * - 기존 metadata 유지
+ * - reason 추가/수정/제거
+ *
+ * @param input manual Related Note reason 수정 입력
+ * @returns 수정 성공 여부
+ */
+export async function updateManualRelatedNoteReasonAction(
+  input: UpdateManualRelatedNoteReasonInput,
+): Promise<UpdateManualRelatedNoteReasonActionResult> {
+  const parsed = updateManualRelatedNoteReasonSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      error:
+        parsed.error.flatten().fieldErrors.reason?.[0] ??
+        "관련 노트 수정 정보가 올바르지 않습니다.",
+    };
+  }
+
+  const supabase = await createClient();
+
+  const { error } = await supabase.rpc("update_note_related_manual_reason", {
+    p_note_id: parsed.data.noteId,
+    p_related_note_id: parsed.data.relatedNoteId,
+    ...(parsed.data.reason
+      ? {
+          p_reason: parsed.data.reason,
+        }
+      : {}),
+  });
+
+  if (error) {
+    if (error.message.includes("RELATED_NOTE_AUTHENTICATION_REQUIRED")) {
+      return {
+        error: "로그인이 필요합니다.",
+      };
+    }
+
+    if (
+      error.message.includes("RELATED_NOTE_SOURCE_NOT_FOUND") ||
+      error.message.includes("RELATED_NOTE_TARGET_NOT_FOUND") ||
+      error.message.includes("RELATED_NOTE_MANUAL_RELATION_NOT_FOUND")
+    ) {
+      return {
+        error: "수정할 관련 노트를 찾을 수 없습니다.",
+      };
+    }
+
+    if (error.message.includes("RELATED_NOTE_REASON_TOO_LONG")) {
+      return {
+        error: "연결 이유는 500자 이하로 입력해주세요.",
+      };
+    }
+
+    return {
+      error: "관련 노트 수정에 실패했습니다. 잠시 후 다시 시도해주세요.",
+    };
+  }
+
+  return {
+    success: true,
+  };
+}

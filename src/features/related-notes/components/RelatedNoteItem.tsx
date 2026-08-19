@@ -5,8 +5,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { RelatedNoteRecommendation } from "@/features/related-notes/types";
 import { getNoteDetailRoute } from "@/lib/constants/routes";
+import { cn } from "@/lib/utils/cn";
+
+import { RelatedNoteReasonTooltip } from "./RelatedNoteReasonTooltip";
+import { UpdateRelatedNoteReasonDialog } from "./UpdateRelatedNoteReasonDialog";
 
 type RelatedNoteItemProps = {
+  /** Related Notes가 연결된 기준 Note ID입니다. */
+  noteId: string;
+
   /** 화면에 표시할 Related Note 관계입니다. */
   relatedNote: RelatedNoteRecommendation;
 };
@@ -24,46 +31,54 @@ type RelatedNoteItemProps = {
  *
  * @param props 표시할 Related Note 관계
  */
-export function RelatedNoteItem({ relatedNote }: RelatedNoteItemProps) {
+export function RelatedNoteItem({ noteId, relatedNote }: RelatedNoteItemProps) {
   const reason =
     typeof relatedNote.reason === "string" ? relatedNote.reason.trim() : "";
 
   const isManual = relatedNote.origin === "manual";
 
   return (
-    <div className="rounded-lg border bg-card px-4 py-3">
+    <div className="rounded-lg border bg-card px-3 py-1">
       <div className="flex min-w-0 items-center gap-3">
         <Link
           href={getNoteDetailRoute(relatedNote.noteId)}
-          className="flex min-w-0 flex-1 items-center gap-2 font-medium text-foreground hover:underline"
+          className="flex min-w-0 flex-1 items-center gap-2 text-sm font-medium text-foreground hover:underline"
         >
           <FileText className="size-4 shrink-0" />
           <span className="truncate">{relatedNote.title}</span>
         </Link>
 
-        <Badge variant="secondary" className="shrink-0">
+        {reason && <RelatedNoteReasonTooltip reason={reason} />}
+
+        <Badge
+          variant="secondary"
+          className={cn(
+            "shrink-0",
+            isManual
+              ? "bg-blue-100 text-blue-700 hover:bg-blue-100 dark:bg-blue-950 dark:text-blue-300"
+              : "bg-violet-100 text-violet-700 hover:bg-violet-100 dark:bg-violet-950 dark:text-violet-300",
+          )}
+        >
           {isManual ? "직접 연결" : "AI 추천"}
         </Badge>
 
-        {reason && (
-          <span
-            className="min-w-0 max-w-[40%] truncate text-sm text-muted-foreground"
-            title={reason}
-          >
-            {reason}
-          </span>
-        )}
-
         <div className="flex shrink-0 items-center gap-1">
           {isManual && (
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              aria-label="관련 노트 수정"
+            <UpdateRelatedNoteReasonDialog
+              noteId={noteId}
+              relatedNoteId={relatedNote.noteId}
+              title={relatedNote.title}
+              reason={reason}
             >
-              <Pencil className="size-4" />
-            </Button>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                aria-label="관련 노트 수정"
+              >
+                <Pencil className="size-4" />
+              </Button>
+            </UpdateRelatedNoteReasonDialog>
           )}
 
           <Button

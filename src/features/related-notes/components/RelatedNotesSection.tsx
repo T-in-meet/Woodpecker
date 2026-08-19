@@ -48,6 +48,7 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
           {relatedNotes.map((relatedNote) => (
             <RelatedNoteItem
               key={relatedNote.noteId}
+              noteId={noteId}
               relatedNote={relatedNote}
             />
           ))}

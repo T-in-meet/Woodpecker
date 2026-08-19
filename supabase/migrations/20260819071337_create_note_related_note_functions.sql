@@ -348,3 +348,179 @@ GRANT EXECUTE
 ON FUNCTION
     "public"."add_note_related_manual"(uuid, jsonb)
 TO "authenticated";
+
+-- ============================================================================
+-- Update Manual Related Note Reason
+-- ============================================================================
+
+/*
+ * 사용자가 직접 연결한 manual Related Note의 선택적 reason을 수정합니다.
+ *
+ * 수정 대상 관계는 반드시 현재 인증 사용자가 소유한 source Note와
+ * target Note 사이의 manual 관계여야 합니다.
+ *
+ * 기존 metadata의 title snapshot 및 다른 확장 필드는 그대로 유지하고,
+ * reason 값만 추가/수정/제거합니다.
+ *
+ * p_reason은 선택값이며 다음 경우에는 metadata에서 reason key를 제거합니다.
+ *
+ * - NULL
+ * - 빈 문자열
+ * - 공백 문자열
+ *
+ * reason은 앞뒤 공백 제거 후 최대 500자까지 허용합니다.
+ */
+CREATE OR REPLACE FUNCTION "public"."update_note_related_manual_reason"(
+    "p_note_id" uuid,
+    "p_related_note_id" uuid,
+    "p_reason" text DEFAULT NULL
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+    "v_user_id" uuid;
+    "v_reason" text;
+BEGIN
+    /*
+     * SECURITY DEFINER 함수이므로 사용자 ID를 인자로 받지 않고
+     * 현재 인증 세션의 auth.uid()를 직접 사용합니다.
+     */
+    "v_user_id" := "auth"."uid"();
+
+    IF "v_user_id" IS NULL THEN
+        RAISE EXCEPTION
+            'RELATED_NOTE_AUTHENTICATION_REQUIRED'
+            USING ERRCODE = '42501';
+    END IF;
+
+    /*
+     * reason은 저장 전에 앞뒤 공백을 제거합니다.
+     *
+     * NULL 또는 공백뿐인 문자열은 reason 제거 요청으로 처리합니다.
+     */
+    "v_reason" := NULLIF(btrim("p_reason"), '');
+
+    /*
+     * reason은 trim된 값을 기준으로 최대 500자까지 허용합니다.
+     */
+    IF "v_reason" IS NOT NULL
+       AND char_length("v_reason") > 500
+    THEN
+        RAISE EXCEPTION
+            'RELATED_NOTE_REASON_TOO_LONG'
+            USING ERRCODE = '22023';
+    END IF;
+
+    /*
+     * 기준 Note가 현재 인증 사용자의 Note인지 확인합니다.
+     *
+     * 존재하지 않는 Note와 다른 사용자의 Note를 동일하게 처리하여
+     * 다른 사용자의 Note 존재 여부를 노출하지 않습니다.
+     */
+    IF NOT EXISTS (
+        SELECT 1
+        FROM "public"."notes"
+        WHERE "id" = "p_note_id"
+          AND "user_id" = "v_user_id"
+    ) THEN
+        RAISE EXCEPTION
+            'RELATED_NOTE_SOURCE_NOT_FOUND'
+            USING ERRCODE = 'P0002';
+    END IF;
+
+    /*
+     * target Note가 현재 인증 사용자의 Note인지 확인합니다.
+     *
+     * source와 동일하게 존재 여부와 소유권 실패를 구분하지 않습니다.
+     */
+    IF NOT EXISTS (
+        SELECT 1
+        FROM "public"."notes"
+        WHERE "id" = "p_related_note_id"
+          AND "user_id" = "v_user_id"
+    ) THEN
+        RAISE EXCEPTION
+            'RELATED_NOTE_TARGET_NOT_FOUND'
+            USING ERRCODE = 'P0002';
+    END IF;
+
+    /*
+     * 수정 대상 관계가 실제로 존재하며 manual 관계인지 확인합니다.
+     *
+     * AI 추천 관계의 reason은 추천 결과에 포함된 데이터이므로
+     * 사용자가 직접 수정할 수 없습니다.
+     */
+    IF NOT EXISTS (
+        SELECT 1
+        FROM "public"."note_related_notes"
+        WHERE "note_id" = "p_note_id"
+          AND "related_note_id" = "p_related_note_id"
+          AND "origin" = 'manual'
+    ) THEN
+        RAISE EXCEPTION
+            'RELATED_NOTE_MANUAL_RELATION_NOT_FOUND'
+            USING ERRCODE = 'P0002';
+    END IF;
+
+    /*
+     * reason이 있으면 기존 metadata를 유지하면서 reason만 추가하거나 교체합니다.
+     *
+     * title snapshot 및 향후 추가될 수 있는 다른 metadata 필드는
+     * 이 수정으로 변경되지 않습니다.
+     */
+    IF "v_reason" IS NOT NULL THEN
+        UPDATE "public"."note_related_notes"
+        SET "metadata" = jsonb_set(
+            "metadata",
+            '{reason}',
+            to_jsonb("v_reason"),
+            true
+        )
+        WHERE "note_id" = "p_note_id"
+          AND "related_note_id" = "p_related_note_id"
+          AND "origin" = 'manual';
+
+        RETURN;
+    END IF;
+
+    /*
+     * reason이 없으면 metadata 전체를 덮어쓰지 않고
+     * reason key만 제거합니다.
+     */
+    UPDATE "public"."note_related_notes"
+    SET "metadata" = "metadata" - 'reason'
+    WHERE "note_id" = "p_note_id"
+      AND "related_note_id" = "p_related_note_id"
+      AND "origin" = 'manual';
+END;
+$$;
+
+
+COMMENT ON FUNCTION
+    "public"."update_note_related_manual_reason"(uuid, uuid, text)
+IS
+    '현재 사용자의 manual Related Note 관계에서 기존 metadata를 유지한 채 선택적 reason만 수정하거나 제거합니다.';
+
+
+-- ============================================================================
+-- Update Manual Related Note Reason Permissions
+-- ============================================================================
+
+/*
+ * manual Related Note 수정은 인증된 사용자가 RPC를 통해서만 수행합니다.
+ *
+ * 함수 내부에서 auth.uid()를 기준으로 source/target Note 소유권과
+ * manual 관계 여부를 검증합니다.
+ */
+REVOKE ALL
+ON FUNCTION
+    "public"."update_note_related_manual_reason"(uuid, uuid, text)
+FROM PUBLIC, "anon", "authenticated";
+
+GRANT EXECUTE
+ON FUNCTION
+    "public"."update_note_related_manual_reason"(uuid, uuid, text)
+TO "authenticated";
