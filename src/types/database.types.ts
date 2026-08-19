@@ -1714,6 +1714,10 @@ export type Database = {
         };
         Returns: number;
       };
+      delete_note_related: {
+        Args: { p_note_id: string; p_related_note_id: string };
+        Returns: undefined;
+      };
       finalize_quiz_generation_v2:
         | {
             Args: {

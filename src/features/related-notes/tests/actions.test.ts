@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 
 import {
   addManualRelatedNotesAction,
+  deleteRelatedNoteAction,
   updateManualRelatedNoteReasonAction,
 } from "../actions";
 
@@ -214,6 +215,73 @@ describe("updateManualRelatedNoteReasonAction", () => {
 
     expect(result).toEqual({
       error: "관련 노트 수정에 실패했습니다. 잠시 후 다시 시도해주세요.",
+    });
+  });
+});
+
+describe("deleteRelatedNoteAction", () => {
+  const noteId = "11111111-1111-4111-8111-111111111111";
+  const relatedNoteId = "22222222-2222-4222-8222-222222222222";
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("유효한 입력이면 Related Note 삭제 RPC를 호출한다", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      error: null,
+    });
+
+    createClientMock.mockResolvedValue({
+      rpc,
+    } as never);
+
+    const result = await deleteRelatedNoteAction({
+      noteId,
+      relatedNoteId,
+    });
+
+    expect(rpc).toHaveBeenCalledWith("delete_note_related", {
+      p_note_id: noteId,
+      p_related_note_id: relatedNoteId,
+    });
+
+    expect(result).toEqual({
+      success: true,
+    });
+  });
+
+  it("입력값이 올바르지 않으면 RPC를 호출하지 않는다", async () => {
+    const result = await deleteRelatedNoteAction({
+      noteId: "invalid-note-id",
+      relatedNoteId,
+    });
+
+    expect(result).toEqual({
+      error: "관련 노트 삭제 정보가 올바르지 않습니다.",
+    });
+
+    expect(createClientMock).not.toHaveBeenCalled();
+  });
+
+  it("RPC 호출에 실패하면 사용자용 오류를 반환한다", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      error: {
+        message: "database failed",
+      },
+    });
+
+    createClientMock.mockResolvedValue({
+      rpc,
+    } as never);
+
+    const result = await deleteRelatedNoteAction({
+      noteId,
+      relatedNoteId,
+    });
+
+    expect(result).toEqual({
+      error: "관련 노트 삭제에 실패했습니다. 잠시 후 다시 시도해주세요.",
     });
   });
 });

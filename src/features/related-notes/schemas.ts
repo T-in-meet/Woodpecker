@@ -87,3 +87,19 @@ export const updateManualRelatedNoteReasonSchema = z.object({
 export type UpdateManualRelatedNoteReasonInput = z.infer<
   typeof updateManualRelatedNoteReasonSchema
 >;
+
+/**
+ * Related Note 관계를 삭제할 때 전달하는 입력을 검증합니다.
+ *
+ * 관계의 origin과 소유권은 Client 입력을 신뢰하지 않고
+ * DB RPC에서 실제 저장된 데이터를 기준으로 최종 검증합니다.
+ */
+export const deleteRelatedNoteSchema = z.object({
+  /** Related Notes가 연결된 기준 Note ID입니다. */
+  noteId: z.string().uuid(),
+
+  /** 삭제할 Related Note ID입니다. */
+  relatedNoteId: z.string().uuid(),
+});
+
+export type DeleteRelatedNoteInput = z.infer<typeof deleteRelatedNoteSchema>;

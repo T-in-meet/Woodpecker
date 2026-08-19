@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import {
   type AddManualRelatedNotesInput,
   addManualRelatedNotesSchema,
+  type DeleteRelatedNoteInput,
+  deleteRelatedNoteSchema,
 } from "./schemas";
 
 export type AddManualRelatedNotesActionResult =
@@ -181,6 +183,75 @@ export async function updateManualRelatedNoteReasonAction(
 
     return {
       error: "관련 노트 수정에 실패했습니다. 잠시 후 다시 시도해주세요.",
+    };
+  }
+
+  return {
+    success: true,
+  };
+}
+
+export type DeleteRelatedNoteActionResult =
+  | {
+      success: true;
+      error?: never;
+    }
+  | {
+      success?: false;
+      error: string;
+    };
+
+/**
+ * 현재 Note의 Related Note 관계를 제거합니다.
+ *
+ * 이 Action은 Client 입력 검증과 RPC 호출만 담당하며,
+ * 실제 삭제 방식은 `delete_note_related` RPC에서 관계 origin에 따라 결정합니다.
+ *
+ * - manual 관계: row 삭제
+ * - AI 관계: dismissed 상태로 전환
+ *
+ * 인증 사용자와 Note 소유권 역시 RPC에서 최종 검증합니다.
+ *
+ * @param input 삭제할 Related Note 관계 정보
+ * @returns 삭제 성공 여부
+ */
+export async function deleteRelatedNoteAction(
+  input: DeleteRelatedNoteInput,
+): Promise<DeleteRelatedNoteActionResult> {
+  const parsed = deleteRelatedNoteSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      error: "관련 노트 삭제 정보가 올바르지 않습니다.",
+    };
+  }
+
+  const supabase = await createClient();
+
+  const { error } = await supabase.rpc("delete_note_related", {
+    p_note_id: parsed.data.noteId,
+    p_related_note_id: parsed.data.relatedNoteId,
+  });
+
+  if (error) {
+    if (error.message.includes("RELATED_NOTE_AUTHENTICATION_REQUIRED")) {
+      return {
+        error: "로그인이 필요합니다.",
+      };
+    }
+
+    if (
+      error.message.includes("RELATED_NOTE_SOURCE_NOT_FOUND") ||
+      error.message.includes("RELATED_NOTE_TARGET_NOT_FOUND") ||
+      error.message.includes("RELATED_NOTE_RELATION_NOT_FOUND")
+    ) {
+      return {
+        error: "삭제할 관련 노트를 찾을 수 없습니다.",
+      };
+    }
+
+    return {
+      error: "관련 노트 삭제에 실패했습니다. 잠시 후 다시 시도해주세요.",
     };
   }
 

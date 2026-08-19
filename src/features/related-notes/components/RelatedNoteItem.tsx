@@ -7,6 +7,7 @@ import type { RelatedNoteRecommendation } from "@/features/related-notes/types";
 import { getNoteDetailRoute } from "@/lib/constants/routes";
 import { cn } from "@/lib/utils/cn";
 
+import { DeleteRelatedNoteAlertDialog } from "./DeleteRelatedNoteAlertDialog";
 import { RelatedNoteReasonTooltip } from "./RelatedNoteReasonTooltip";
 import { UpdateRelatedNoteReasonDialog } from "./UpdateRelatedNoteReasonDialog";
 
@@ -48,7 +49,7 @@ export function RelatedNoteItem({ noteId, relatedNote }: RelatedNoteItemProps) {
           <span className="truncate">{relatedNote.title}</span>
         </Link>
 
-        {reason && <RelatedNoteReasonTooltip reason={reason} />}
+        <RelatedNoteReasonTooltip reason={reason} />
 
         <Badge
           variant="secondary"
@@ -62,7 +63,7 @@ export function RelatedNoteItem({ noteId, relatedNote }: RelatedNoteItemProps) {
           {isManual ? "직접 연결" : "AI 추천"}
         </Badge>
 
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex w-20 shrink-0 items-center justify-end gap-1">
           {isManual && (
             <UpdateRelatedNoteReasonDialog
               noteId={noteId}
@@ -81,14 +82,21 @@ export function RelatedNoteItem({ noteId, relatedNote }: RelatedNoteItemProps) {
             </UpdateRelatedNoteReasonDialog>
           )}
 
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            aria-label="관련 노트 삭제"
+          <DeleteRelatedNoteAlertDialog
+            noteId={noteId}
+            relatedNoteId={relatedNote.noteId}
+            title={relatedNote.title}
+            origin={relatedNote.origin}
           >
-            <Trash2 className="size-4" />
-          </Button>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              aria-label="관련 노트 삭제"
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          </DeleteRelatedNoteAlertDialog>
         </div>
       </div>
     </div>

@@ -524,3 +524,160 @@ GRANT EXECUTE
 ON FUNCTION
     "public"."update_note_related_manual_reason"(uuid, uuid, text)
 TO "authenticated";
+
+-- ============================================================================
+-- Delete Related Note
+-- ============================================================================
+
+/*
+ * 사용자가 현재 Note의 Related Note 관계를 제거합니다.
+ *
+ * 관계의 origin에 따라 삭제 의미를 다르게 처리합니다.
+ *
+ * - manual 관계:
+ *   사용자가 직접 생성한 관계이므로 row 자체를 삭제합니다.
+ *
+ * - ai 관계:
+ *   실제 row를 삭제하지 않고 dismissed 상태로 전환합니다.
+ *   이후 AI 추천이 다시 생성되더라도 동일 관계가 재노출되지 않도록
+ *   사용자의 명시적인 제외 판단을 보존하기 위함입니다.
+ *
+ * source Note와 target Note는 모두 현재 인증 사용자의 Note여야 하며,
+ * 실제 관계의 origin은 Client 입력을 신뢰하지 않고 DB에서 조회합니다.
+ */
+CREATE OR REPLACE FUNCTION "public"."delete_note_related"(
+    "p_note_id" uuid,
+    "p_related_note_id" uuid
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+    "v_user_id" uuid;
+    "v_origin" text;
+BEGIN
+    /*
+     * SECURITY DEFINER 함수이므로 사용자 ID를 인자로 받지 않고
+     * 현재 인증 세션의 auth.uid()를 직접 사용합니다.
+     */
+    "v_user_id" := "auth"."uid"();
+
+    IF "v_user_id" IS NULL THEN
+        RAISE EXCEPTION
+            'RELATED_NOTE_AUTHENTICATION_REQUIRED'
+            USING ERRCODE = '42501';
+    END IF;
+
+    /*
+     * 기준 Note가 현재 인증 사용자의 Note인지 확인합니다.
+     *
+     * 존재하지 않는 Note와 다른 사용자 소유 Note를 구분하지 않아
+     * 다른 사용자의 Note 존재 여부를 노출하지 않습니다.
+     */
+    IF NOT EXISTS (
+        SELECT 1
+        FROM "public"."notes"
+        WHERE "id" = "p_note_id"
+          AND "user_id" = "v_user_id"
+    ) THEN
+        RAISE EXCEPTION
+            'RELATED_NOTE_SOURCE_NOT_FOUND'
+            USING ERRCODE = 'P0002';
+    END IF;
+
+    /*
+     * target Note도 현재 인증 사용자의 Note인지 확인합니다.
+     */
+    IF NOT EXISTS (
+        SELECT 1
+        FROM "public"."notes"
+        WHERE "id" = "p_related_note_id"
+          AND "user_id" = "v_user_id"
+    ) THEN
+        RAISE EXCEPTION
+            'RELATED_NOTE_TARGET_NOT_FOUND'
+            USING ERRCODE = 'P0002';
+    END IF;
+
+    /*
+     * 실제 저장된 관계의 origin을 조회합니다.
+     *
+     * Client가 origin을 직접 전달하지 않도록 하여
+     * manual/ai 처리 규칙을 DB 데이터 기준으로 결정합니다.
+     */
+    SELECT "origin"
+    INTO "v_origin"
+    FROM "public"."note_related_notes"
+    WHERE "note_id" = "p_note_id"
+      AND "related_note_id" = "p_related_note_id";
+
+    IF "v_origin" IS NULL THEN
+        RAISE EXCEPTION
+            'RELATED_NOTE_RELATION_NOT_FOUND'
+            USING ERRCODE = 'P0002';
+    END IF;
+
+    /*
+     * manual 관계는 사용자가 직접 생성한 관계이므로 실제 row를 삭제합니다.
+     */
+    IF "v_origin" = 'manual' THEN
+        DELETE FROM "public"."note_related_notes"
+        WHERE "note_id" = "p_note_id"
+          AND "related_note_id" = "p_related_note_id";
+
+        RETURN;
+    END IF;
+
+    /*
+     * AI 추천 관계는 사용자가 제거했다는 판단을 보존하기 위해
+     * row를 삭제하지 않고 dismissed 상태로 변경합니다.
+     *
+     * 이미 dismissed인 관계에 다시 호출되더라도 동일 상태를 유지합니다.
+     */
+    IF "v_origin" = 'ai' THEN
+        UPDATE "public"."note_related_notes"
+        SET "status" = 'dismissed'
+        WHERE "note_id" = "p_note_id"
+          AND "related_note_id" = "p_related_note_id";
+
+        RETURN;
+    END IF;
+
+    /*
+     * 현재 schema에서는 manual/ai 외 origin이 허용되지 않지만,
+     * 향후 schema 변경이나 비정상 데이터에 대비해 명시적으로 실패시킵니다.
+     */
+    RAISE EXCEPTION
+        'RELATED_NOTE_ORIGIN_INVALID'
+        USING ERRCODE = '22023';
+END;
+$$;
+
+
+COMMENT ON FUNCTION
+    "public"."delete_note_related"(uuid, uuid)
+IS
+    '현재 사용자의 Related Note 관계를 제거합니다. manual 관계는 삭제하고 AI 관계는 dismissed 상태로 전환합니다.';
+
+
+-- ============================================================================
+-- Delete Related Note Permissions
+-- ============================================================================
+
+/*
+ * Related Note 삭제는 인증된 사용자가 RPC를 통해서만 수행합니다.
+ *
+ * 함수 내부에서 auth.uid()를 기준으로 source/target Note 소유권을
+ * 검증한 뒤 실제 저장된 origin에 따라 삭제 방식을 결정합니다.
+ */
+REVOKE ALL
+ON FUNCTION
+    "public"."delete_note_related"(uuid, uuid)
+FROM PUBLIC, "anon", "authenticated";
+
+GRANT EXECUTE
+ON FUNCTION
+    "public"."delete_note_related"(uuid, uuid)
+TO "authenticated";
