@@ -7,7 +7,7 @@ BEGIN;
 -- 이 테스트는 match_ai_embeddings RPC의 권한,
 -- 활성 generation의 chunk 검색,
 -- limit, similarity 보정, source/input 범위 필터링을 함께 검증합니다.
-SELECT plan(14);
+SELECT plan(15);
 
 -- 테스트마다 독립적인 사용자/모델/소스 식별자를 사용합니다.
 SELECT set_config('test.ai_match_user_id', gen_random_uuid()::text, true);
@@ -80,7 +80,7 @@ SELECT ok(
   text,
   integer,
   double precision,
-  uuid
+  uuid[]
 )'
   ) IS NOT NULL,
   'match_ai_embeddings() should exist'
@@ -99,7 +99,7 @@ SELECT ok(
   text,
   integer,
   double precision,
-  uuid
+  uuid[]
 )',
     'EXECUTE'
   ),
@@ -118,7 +118,7 @@ SELECT ok(
   text,
   integer,
   double precision,
-  uuid
+  uuid[]
 )',
     'EXECUTE'
   ),
@@ -137,7 +137,7 @@ SELECT ok(
   text,
   integer,
   double precision,
-  uuid
+  uuid[]
 )',
     'EXECUTE'
   ),
@@ -395,7 +395,7 @@ SELECT is(
   'limit should restrict chunk results ordered by distance'
 );
 
--- p_exclude_source_id가 NULL이면 기존 검색과 동일하게
+-- p_exclude_source_ids가 NULL이면 기존 검색과 동일하게
 -- 모든 활성 source의 chunk가 검색되는지 검증합니다.
 SELECT is(
   (
@@ -416,10 +416,10 @@ SELECT is(
     )
   ),
   3::bigint,
-  'null excluded source should preserve existing matching behavior'
+  'null excluded sources should preserve existing matching behavior'
 );
 
--- 특정 source를 제외하면 해당 source의 모든 chunk를
+-- 특정 source 하나를 제외하면 해당 source의 모든 chunk를
 -- ranking 및 LIMIT 적용 전에 검색 대상에서 제거하는지 검증합니다.
 --
 -- query vector와 가장 가까운 chunk는 source A의 chunk 1이지만
@@ -439,11 +439,40 @@ SELECT is(
       'rag_note_content',
       1,
       NULL,
-      current_setting('test.ai_match_source_a')::uuid
+      ARRAY[
+        current_setting('test.ai_match_source_a')::uuid
+      ]::uuid[]
     )
   ),
   current_setting('test.ai_match_source_b')::uuid,
   'excluded source should be removed before ranking and limit'
+);
+
+-- 여러 source를 동시에 제외하면 배열에 포함된 모든 source의 chunk를
+-- ranking 및 LIMIT 적용 전에 검색 대상에서 제거하는지 검증합니다.
+SELECT is(
+  (
+    SELECT count(*)
+    FROM public.match_ai_embeddings(
+      (
+        '[1,'
+        || array_to_string(array_fill(0, ARRAY[1535]), ',')
+        || ']'
+      )::extensions.vector,
+      current_setting('test.ai_match_user_id')::uuid,
+      'note',
+      current_setting('test.ai_match_model_id')::uuid,
+      'rag_note_content',
+      10,
+      NULL,
+      ARRAY[
+        current_setting('test.ai_match_source_a')::uuid,
+        current_setting('test.ai_match_source_b')::uuid
+      ]::uuid[]
+    )
+  ),
+  0::bigint,
+  'multiple excluded sources should all be removed before ranking and limit'
 );
 
 -- min_similarity가 허용 범위인 1을 초과하면

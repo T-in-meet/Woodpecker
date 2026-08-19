@@ -91,7 +91,7 @@ describe("matchAiEmbeddings", () => {
     );
 
     expect(rpc).toHaveBeenCalledWith("match_ai_embeddings", {
-      p_exclude_source_id: null,
+      p_exclude_source_ids: null,
       p_input_kind: "rag_note_content",
       p_limit: 3,
       p_min_similarity: 0.2,
@@ -112,18 +112,21 @@ describe("matchAiEmbeddings", () => {
     ]);
   });
 
-  it("제외할 source ID가 지정되면 RPC에 전달한다", async () => {
+  it("제외할 source ID 목록이 지정되면 RPC에 전달한다", async () => {
     const rpc = vi.fn().mockResolvedValue({
       data: [],
       error: null,
     });
 
-    const excludeSourceId = "44444444-4444-4444-8444-444444444444";
+    const excludeSourceIds = [
+      "44444444-4444-4444-8444-444444444444",
+      "55555555-5555-4555-8555-555555555555",
+    ];
 
     const result = await matchAiEmbeddings(
       {
         ...createMatchParams(),
-        excludeSourceId,
+        excludeSourceIds,
       },
       {
         supabase: {
@@ -133,7 +136,7 @@ describe("matchAiEmbeddings", () => {
     );
 
     expect(rpc).toHaveBeenCalledWith("match_ai_embeddings", {
-      p_exclude_source_id: excludeSourceId,
+      p_exclude_source_ids: excludeSourceIds,
       p_input_kind: "rag_note_content",
       p_limit: 10,
       p_min_similarity: null,
@@ -159,7 +162,7 @@ describe("matchAiEmbeddings", () => {
     });
 
     expect(rpc).toHaveBeenCalledWith("match_ai_embeddings", {
-      p_exclude_source_id: null,
+      p_exclude_source_ids: null,
       p_input_kind: "rag_note_content",
       p_limit: 10,
       p_min_similarity: null,

@@ -535,6 +535,18 @@ DROP FUNCTION IF EXISTS "public"."match_ai_embeddings"(
     double precision
 );
 
+-- 단일 source 제외 인자를 사용하던 기존 overload를 제거합니다.
+DROP FUNCTION IF EXISTS "public"."match_ai_embeddings"(
+    "extensions"."vector"(1536),
+    "uuid",
+    "text",
+    "uuid",
+    "text",
+    integer,
+    double precision,
+    "uuid"
+);
+
 /*
  * 지정한 owner/source/model/input 범위에서 현재 활성 generation에 속한 청크만
  * query embedding과 비교하여 유사도가 높은 청크 Top-K를 반환합니다.
@@ -544,7 +556,7 @@ DROP FUNCTION IF EXISTS "public"."match_ai_embeddings"(
  * Related Notes처럼 source 단위 결과가 필요한 기능은 호출 계층에서
  * source_id 기준 중복 제거/오버페치 정책을 적용합니다.
  *
- * p_exclude_source_id가 지정되면 해당 source의 모든 청크를
+ * p_exclude_source_ids가 지정되면 배열에 포함된 source의 모든 청크를
  * ranking 및 LIMIT 적용 전에 검색 대상에서 제외합니다.
  * NULL이면 기존 검색과 동일하게 어떤 source도 제외하지 않습니다.
  *
@@ -559,7 +571,7 @@ CREATE OR REPLACE FUNCTION "public"."match_ai_embeddings"(
     "p_input_kind" "text",
     "p_limit" integer DEFAULT 10,
     "p_min_similarity" double precision DEFAULT NULL,
-    "p_exclude_source_id" "uuid" DEFAULT NULL
+    "p_exclude_source_ids" "uuid"[] DEFAULT NULL
 )
 RETURNS TABLE (
     "source_id" "uuid",
@@ -622,8 +634,10 @@ BEGIN
           AND "embeddings"."input_kind" = "p_input_kind"
           AND "active_generations"."active_model_config_id" = "p_model_config_id"
           AND (
-              "p_exclude_source_id" IS NULL
-              OR "embeddings"."source_id" <> "p_exclude_source_id"
+              "p_exclude_source_ids" IS NULL
+              OR NOT (
+                  "embeddings"."source_id" = ANY("p_exclude_source_ids")
+              )
           )
     )
     SELECT
@@ -654,9 +668,9 @@ COMMENT ON FUNCTION "public"."match_ai_embeddings"(
     "text",
     integer,
     double precision,
-    "uuid"
+    "uuid"[]
 ) IS
-'Returns top matching chunks from each source''s active embedding generation. Optionally excludes one source before ranking and limit. Source-level deduplication is intentionally left to the caller.';
+'Returns top matching chunks from each source''s active embedding generation. Optionally excludes multiple sources before ranking and limit. Source-level deduplication is intentionally left to the caller.';
 
 REVOKE ALL
 ON FUNCTION "public"."match_ai_embeddings"(
@@ -667,7 +681,7 @@ ON FUNCTION "public"."match_ai_embeddings"(
     "text",
     integer,
     double precision,
-    "uuid"
+    "uuid"[]
 )
 FROM PUBLIC, "anon", "authenticated";
 
@@ -680,7 +694,7 @@ ON FUNCTION "public"."match_ai_embeddings"(
     "text",
     integer,
     double precision,
-    "uuid"
+    "uuid"[]
 )
 TO "service_role";
 

@@ -1622,37 +1622,23 @@ export type Database = {
         };
         Returns: string;
       };
-      create_note_chat_question:
-        | {
-            Args: {
-              p_agent_id?: string;
-              p_chat_model_config_id?: string;
-              p_content: Json;
-              p_conversation_id: string;
-              p_embedding_model_config_id?: string;
-              p_prompt_version_id?: string;
-            };
-            Returns: {
-              run_id: string;
-              user_message_id: string;
-            }[];
-          }
-        | {
-            Args: {
-              p_agent_id?: string;
-              p_chat_model_config_id?: string;
-              p_content: Json;
-              p_conversation_id: string;
-              p_daily_execution_limit: number;
-              p_embedding_model_config_id?: string;
-              p_prompt_version_id?: string;
-              p_user_id: string;
-            };
-            Returns: {
-              run_id: string;
-              user_message_id: string;
-            }[];
-          };
+      create_note_chat_question: {
+        Args: {
+          p_agent_id?: string;
+          p_bypass_daily_execution_limit: boolean;
+          p_chat_model_config_id?: string;
+          p_content: Json;
+          p_conversation_id: string;
+          p_daily_execution_limit: number;
+          p_embedding_model_config_id?: string;
+          p_prompt_version_id?: string;
+          p_user_id: string;
+        };
+        Returns: {
+          run_id: string;
+          user_message_id: string;
+        }[];
+      };
       create_note_with_initial_review_log: {
         Args: { p_content: string; p_scheduled_at: string; p_title: string };
         Returns: string;
@@ -1864,6 +1850,7 @@ export type Database = {
       };
       match_ai_embeddings: {
         Args: {
+          p_exclude_source_ids?: string[];
           p_input_kind: string;
           p_limit?: number;
           p_min_similarity?: number;
@@ -1888,37 +1875,23 @@ export type Database = {
         Args: { p_configurations: Json; p_setting_id: string };
         Returns: undefined;
       };
-      update_note_chat_user_message:
-        | {
-            Args: {
-              p_agent_id?: string;
-              p_chat_model_config_id?: string;
-              p_content: Json;
-              p_embedding_model_config_id?: string;
-              p_message_id: string;
-              p_prompt_version_id?: string;
-            };
-            Returns: {
-              run_id: string;
-              user_message_id: string;
-            }[];
-          }
-        | {
-            Args: {
-              p_agent_id?: string;
-              p_chat_model_config_id?: string;
-              p_content: Json;
-              p_daily_execution_limit: number;
-              p_embedding_model_config_id?: string;
-              p_message_id: string;
-              p_prompt_version_id?: string;
-              p_user_id: string;
-            };
-            Returns: {
-              run_id: string;
-              user_message_id: string;
-            }[];
-          };
+      update_note_chat_user_message: {
+        Args: {
+          p_agent_id?: string;
+          p_bypass_daily_execution_limit: boolean;
+          p_chat_model_config_id?: string;
+          p_content: Json;
+          p_daily_execution_limit: number;
+          p_embedding_model_config_id?: string;
+          p_message_id: string;
+          p_prompt_version_id?: string;
+          p_user_id: string;
+        };
+        Returns: {
+          run_id: string;
+          user_message_id: string;
+        }[];
+      };
       update_notification_time_of_day: {
         Args: { p_note_id: string; p_time?: string };
         Returns: undefined;

@@ -17,12 +17,12 @@ type SearchNoteEmbeddingsParams = {
   embeddingConfiguration: AiRuntimeEmbeddingConfiguration;
 
   /**
-   * 검색 결과에서 제외할 Note ID입니다.
+   * 검색 결과에서 제외할 Note ID 목록입니다.
    *
    * 지정하지 않으면 기존 Note Chat 검색과 동일하게
    * 모든 활성 Note chunk를 검색 대상으로 사용합니다.
    */
-  excludeSourceId?: string;
+  excludeSourceIds?: string[];
 
   /** 검색 대상 Note의 소유 사용자 ID입니다. */
   ownerUserId: string;
@@ -50,7 +50,7 @@ type SearchNoteEmbeddingsParams = {
  * 현재 Runtime에서 선택된 Embedding Model과 동일한 모델로 생성된
  * 활성 generation의 chunk만 검색합니다.
  *
- * excludeSourceId가 지정되면 해당 Note의 모든 chunk를
+ * excludeSourceIds가 지정되면 해당 Note들의 모든 chunk를
  * ranking 및 LIMIT 적용 전에 검색 대상에서 제외합니다.
  *
  * 반환 결과는 Note 단위로 중복 제거하지 않습니다.
@@ -62,7 +62,7 @@ type SearchNoteEmbeddingsParams = {
  */
 export async function searchNoteEmbeddings({
   embeddingConfiguration,
-  excludeSourceId,
+  excludeSourceIds,
   ownerUserId,
   question,
   limit,
@@ -96,11 +96,11 @@ export async function searchNoteEmbeddings({
    * matchAiEmbeddings는 현재 활성 generation의 chunk만 대상으로
    * 거리순 Top-K를 반환합니다.
    *
-   * excludeSourceId가 지정된 경우 해당 Note의 모든 chunk는
+   * excludeSourceIds가 지정된 경우 해당 Note들의 모든 chunk는
    * ranking 및 LIMIT 적용 전에 제외됩니다.
    */
   return matchAiEmbeddings({
-    excludeSourceId,
+    excludeSourceIds,
     inputKind: NOTE_EMBEDDING_INPUT_KIND,
     limit,
     minSimilarity,

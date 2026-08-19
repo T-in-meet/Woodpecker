@@ -80,7 +80,7 @@ describe("searchNoteEmbeddings", () => {
     });
 
     expect(matchAiEmbeddings).toHaveBeenCalledWith({
-      excludeSourceId: undefined,
+      excludeSourceIds: undefined,
       inputKind: NOTE_EMBEDDING_INPUT_KIND,
       limit: SEARCH_INPUT.limit,
       minSimilarity: SEARCH_INPUT.minSimilarity,
@@ -93,10 +93,12 @@ describe("searchNoteEmbeddings", () => {
     expect(result).toBe(matchedEmbeddings);
   });
 
-  it("제외할 Note ID가 지정되면 matchAiEmbeddings에 전달한다", async () => {
+  it("제외할 Note ID 목록이 지정되면 matchAiEmbeddings에 전달한다", async () => {
     const queryEmbedding = {
       embedding: [0.1, 0.2, 0.3],
     };
+
+    const excludeSourceIds = ["excluded-note-id-1", "excluded-note-id-2"];
 
     vi.mocked(getProviderApiKey).mockReturnValue("test-api-key");
     vi.mocked(createAiEmbeddingWithProvider).mockResolvedValue(
@@ -106,11 +108,11 @@ describe("searchNoteEmbeddings", () => {
 
     await searchNoteEmbeddings({
       ...SEARCH_INPUT,
-      excludeSourceId: "excluded-note-id",
+      excludeSourceIds,
     });
 
     expect(matchAiEmbeddings).toHaveBeenCalledWith({
-      excludeSourceId: "excluded-note-id",
+      excludeSourceIds,
       inputKind: NOTE_EMBEDDING_INPUT_KIND,
       limit: SEARCH_INPUT.limit,
       minSimilarity: SEARCH_INPUT.minSimilarity,
