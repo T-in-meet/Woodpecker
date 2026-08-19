@@ -2,6 +2,8 @@
 
 import { cn } from "@/lib/utils/cn";
 
+import { RelatedNoteCandidateItem } from "./RelatedNoteCandidateItem";
+
 type RelatedNoteCandidate = {
   /** 후보 Note ID입니다. */
   id: string;
@@ -10,12 +12,20 @@ type RelatedNoteCandidate = {
   title: string;
 };
 
+type SelectedRelatedNote = {
+  /** 선택된 Related Note ID입니다. */
+  relatedNoteId: string;
+
+  /** 해당 Related Note에 입력된 연결 이유입니다. */
+  reason: string;
+};
+
 type RelatedNoteCandidateListProps = {
   /** 현재 페이지에 표시할 Related Note 후보 목록입니다. */
   candidates: RelatedNoteCandidate[];
 
-  /** 현재 선택된 Related Note ID입니다. */
-  selectedRelatedNoteId: string;
+  /** 현재 선택된 Related Notes와 각 연결 이유입니다. */
+  selectedRelatedNotes: SelectedRelatedNote[];
 
   /** 최초 후보 목록을 불러오는 중인지 여부입니다. */
   isLoading: boolean;
@@ -23,14 +33,20 @@ type RelatedNoteCandidateListProps = {
   /** 검색 또는 pagination으로 후보 목록을 다시 조회 중인지 여부입니다. */
   isFetching: boolean;
 
-  /** 사용자가 후보 Note를 선택했을 때 호출됩니다. */
-  onSelect: (candidateId: string) => void;
+  /** 사용자가 후보 Note의 선택 상태를 전환했을 때 호출됩니다. */
+  onToggle: (candidateId: string) => void;
+
+  /** 선택된 Related Note의 연결 이유가 변경될 때 호출됩니다. */
+  onReasonChange: (candidateId: string, reason: string) => void;
 };
 
 /**
  * 수동 Related Note 추가 Dialog에 표시할 후보 Note 목록입니다.
  *
- * 최초 조회 중에는 로딩 상태를 표시하고,
+ * 목록 전체의 로딩/빈 상태를 처리하고,
+ * 각 후보 Note의 선택 및 reason 입력 UI는
+ * `RelatedNoteCandidateItem`에 위임합니다.
+ *
  * 검색 또는 pagination으로 목록을 다시 조회하는 동안에는
  * 기존 목록 높이를 유지한 채 비활성화하여 레이아웃 변화를 방지합니다.
  *
@@ -38,10 +54,11 @@ type RelatedNoteCandidateListProps = {
  */
 export function RelatedNoteCandidateList({
   candidates,
-  selectedRelatedNoteId,
+  selectedRelatedNotes,
   isLoading,
   isFetching,
-  onSelect,
+  onToggle,
+  onReasonChange,
 }: RelatedNoteCandidateListProps) {
   return (
     <div
@@ -65,20 +82,22 @@ export function RelatedNoteCandidateList({
       ) : (
         <div className="divide-y">
           {candidates.map((candidate) => {
-            const selected = candidate.id === selectedRelatedNoteId;
+            const selectedRelatedNote = selectedRelatedNotes.find(
+              (relatedNote) => relatedNote.relatedNoteId === candidate.id,
+            );
 
             return (
-              <button
+              <RelatedNoteCandidateItem
                 key={candidate.id}
-                type="button"
-                onClick={() => onSelect(candidate.id)}
-                className={cn(
-                  "flex w-full items-center px-4 py-3 text-left text-sm transition-colors",
-                  selected ? "bg-muted font-medium" : "hover:bg-muted/50",
-                )}
-              >
-                <span className="min-w-0 truncate">{candidate.title}</span>
-              </button>
+                id={candidate.id}
+                title={candidate.title}
+                selected={Boolean(selectedRelatedNote)}
+                reason={selectedRelatedNote?.reason ?? ""}
+                onToggle={() => onToggle(candidate.id)}
+                onReasonChange={(reason) =>
+                  onReasonChange(candidate.id, reason)
+                }
+              />
             );
           })}
         </div>

@@ -11,6 +11,17 @@ export const relatedNotesQueryKeys = {
     [...relatedNotesQueryKeys.all, "note", noteId] as const,
 
   /**
+   * 지정한 Note의 수동 Related Note 후보 목록에 대한 공통 Query key를 생성합니다.
+   *
+   * 페이지, 검색어, 페이지 크기와 관계없이 해당 Note의 모든 후보 Query를
+   * 한 번에 invalidate할 때 사용합니다.
+   *
+   * @param noteId Related Note를 추가할 기준 Note ID
+   */
+  candidateList: (noteId: string) =>
+    [...relatedNotesQueryKeys.all, "candidates", noteId] as const,
+
+  /**
    * 수동 Related Note 추가에 사용할 후보 Note 목록의 Query key를 생성합니다.
    *
    * 후보 목록은 기준 Note뿐 아니라 현재 페이지, 검색어, 페이지 크기에 따라
@@ -31,9 +42,7 @@ export const relatedNotesQueryKeys = {
     pageSize: number,
   ) =>
     [
-      ...relatedNotesQueryKeys.all,
-      "candidates",
-      noteId,
+      ...relatedNotesQueryKeys.candidateList(noteId),
       page,
       search,
       pageSize,

@@ -1588,6 +1588,10 @@ export type Database = {
         };
         Returns: undefined;
       };
+      add_note_related_manual: {
+        Args: { p_note_id: string; p_related_notes: Json };
+        Returns: undefined;
+      };
       apply_time_of_day: { Args: { t: string; ts: string }; Returns: string };
       apply_time_of_day_not_before: {
         Args: { t: string; ts: string };
