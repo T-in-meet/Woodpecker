@@ -60,7 +60,7 @@ export async function prepareRelatedNoteContext({
 
   const matches = await searchNoteEmbeddings({
     embeddingConfiguration,
-    excludeSourceId: targetNoteId,
+    excludeSourceIds: [targetNoteId],
     ownerUserId,
     question: expandedQuery,
     limit,

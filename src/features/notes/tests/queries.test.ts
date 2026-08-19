@@ -15,7 +15,6 @@ vi.mock("@/features/review/lib/kstDay", () => ({
 
 vi.mock("@/lib/logger", () => ({ logError: vi.fn() }));
 
-import { logError } from "@/lib/logger";
 import { createSupabaseQueryMock } from "@/tests/supabaseQueryMock";
 
 import {
@@ -189,98 +188,7 @@ describe("getNotes", () => {
       id: "11111111-1111-4111-8111-111111111111",
       notification_time_of_day: "21:30:00",
       next_scheduled_at: "2026-03-30T12:30:00.000Z",
-      relatedRecommendations: [],
     });
-  });
-
-  it("returns related note recommendations for note detail", async () => {
-    const { supabase, callsFor } = createSupabaseQueryMock({
-      notes: {
-        data: {
-          id: "11111111-1111-4111-8111-111111111111",
-          title: "추천이 있는 노트",
-          content: "note body",
-          next_review_at: null,
-          notification_time_of_day: null,
-          review_round: 1,
-          created_at: "2026-03-29T00:00:00.000Z",
-          updated_at: "2026-03-29T01:00:00.000Z",
-          user_id: "22222222-2222-4222-8222-222222222222",
-        },
-      },
-      review_logs: { data: null },
-      note_related_recommendations: {
-        data: {
-          recommendations: [
-            {
-              noteId: "33333333-3333-4333-8333-333333333333",
-              title: "관련 노트 제목",
-            },
-          ],
-        },
-      },
-    });
-
-    createClientMock.mockResolvedValue(supabase);
-
-    const result = await getNoteById(
-      "11111111-1111-4111-8111-111111111111",
-      "22222222-2222-4222-8222-222222222222",
-    );
-
-    expect(callsFor("note_related_recommendations")).toContainEqual([
-      "eq",
-      ["note_id", "11111111-1111-4111-8111-111111111111"],
-    ]);
-    expect(result?.relatedRecommendations).toEqual([
-      {
-        noteId: "33333333-3333-4333-8333-333333333333",
-        title: "관련 노트 제목",
-      },
-    ]);
-  });
-
-  it("returns empty related recommendations when the recommendation row is invalid", async () => {
-    const { supabase } = createSupabaseQueryMock({
-      notes: {
-        data: {
-          id: "11111111-1111-4111-8111-111111111111",
-          title: "잘못된 추천 노트",
-          content: "note body",
-          next_review_at: null,
-          notification_time_of_day: null,
-          review_round: 1,
-          created_at: "2026-03-29T00:00:00.000Z",
-          updated_at: "2026-03-29T01:00:00.000Z",
-          user_id: "22222222-2222-4222-8222-222222222222",
-        },
-      },
-      review_logs: { data: null },
-      note_related_recommendations: {
-        data: {
-          recommendations: [
-            {
-              noteId: "not-a-uuid",
-              title: "관련 노트 제목",
-            },
-          ],
-        },
-      },
-    });
-
-    createClientMock.mockResolvedValue(supabase);
-
-    const result = await getNoteById(
-      "11111111-1111-4111-8111-111111111111",
-      "22222222-2222-4222-8222-222222222222",
-    );
-
-    expect(result?.relatedRecommendations).toEqual([]);
-    expect(logError).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: "[getNoteById] relatedRecommendations 파싱 실패",
-      }),
-    );
   });
 
   it("returns next_scheduled_at as null when no pending review_log exists", async () => {

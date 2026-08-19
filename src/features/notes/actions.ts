@@ -29,7 +29,7 @@ import {
   RELATED_NOTES_AI_ROLE_KEY,
 } from "../related-notes/constants/ai";
 import { runRelatedNoteRecommendation } from "../related-notes/execution/run-related-note-recommendation";
-import { saveRelatedNoteRecommendations } from "../related-notes/persistence/save-related-note-recommendations";
+import { replaceRelatedNoteAiRecommendations } from "../related-notes/persistence/replace-related-note-ai-recommendations";
 import { type NoteInput, noteSchema } from "./schema";
 
 type NoteActionFieldErrors = Partial<Record<keyof NoteInput, string[]>>;
@@ -238,7 +238,7 @@ export async function createNoteAction(
       title: parsed.data.title,
     });
 
-    await saveRelatedNoteRecommendations({
+    await replaceRelatedNoteAiRecommendations({
       noteId: newNoteId,
       recommendations: result.recommendations,
     });
@@ -374,7 +374,7 @@ export async function updateNoteAction(
       title: updatedNote.title,
     });
 
-    await saveRelatedNoteRecommendations({
+    await replaceRelatedNoteAiRecommendations({
       noteId: updatedNote.id,
       recommendations: result.recommendations,
     });

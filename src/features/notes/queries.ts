@@ -1,42 +1,10 @@
 import { z } from "zod";
 
-import type { RelatedNoteRecommendation } from "@/features/related-notes/types";
 import { getKstDayBoundsUtc } from "@/features/review/lib/kstDay";
 import { NOTES_LIST_PAGE_SIZE } from "@/lib/constants/notes";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { logError } from "@/lib/logger";
 import { createServerComponentClient } from "@/lib/supabase/server";
-import type { Json } from "@/types/db.helpers";
-
-/**
- * 값이 JSONB에 저장 가능한 값인지 확인합니다.
- *
- * @param value 검증할 값
- * @returns Json-compatible 값이면 true
- */
-function isJsonValue(value: unknown): value is Json {
-  if (value === null) return true;
-
-  const valueType = typeof value;
-
-  if (
-    valueType === "string" ||
-    valueType === "number" ||
-    valueType === "boolean"
-  ) {
-    return true;
-  }
-
-  if (Array.isArray(value)) {
-    return value.every(isJsonValue);
-  }
-
-  if (valueType === "object") {
-    return Object.values(value as Record<string, unknown>).every(isJsonValue);
-  }
-
-  return false;
-}
 
 const noteDetailSchema = z.object({
   id: z.string().uuid(),
@@ -60,23 +28,11 @@ const noteSummarySchema = z.object({
   updated_at: z.string(),
 });
 
-const relatedNoteRecommendationSchema = z
-  .object({
-    noteId: z.string().uuid(),
-    title: z.string().trim().min(1),
-  })
-  .catchall(z.custom<Json>(isJsonValue));
-
-const relatedNoteRecommendationsRowSchema = z.object({
-  recommendations: z.array(relatedNoteRecommendationSchema),
-});
-
 // next_scheduled_at는 notes 테이블 컬럼이 아니라 pending review_logs.scheduled_at에서
 // 파생된 실제 알림 발송 시각이다. notes.next_review_at은 KST 자정 마커이므로 시:분
 // 표시에는 사용할 수 없어 별도 필드로 합쳐 반환한다 (이슈 #215 설계 결정).
 export type NoteDetail = z.infer<typeof noteDetailSchema> & {
   next_scheduled_at: string | null;
-  relatedRecommendations: RelatedNoteRecommendation[];
 };
 export type NoteSummary = z.infer<typeof noteSummarySchema>;
 
@@ -201,6 +157,7 @@ export async function getNoteById(
   userId: string,
 ): Promise<NoteDetail | null> {
   const supabase = await createServerComponentClient();
+
   const { data } = await supabase
     .from("notes")
     .select(
@@ -223,37 +180,11 @@ export async function getNoteById(
     .limit(1)
     .maybeSingle();
 
-  const { data: recommendationRow, error: recommendationError } = await supabase
-    .from("note_related_recommendations")
-    .select("recommendations")
-    .eq("note_id", noteId)
-    .maybeSingle();
-
-  if (recommendationError) {
-    logError({
-      message: "[getNoteById] 관련 노트 추천 조회 실패",
-      error: recommendationError,
-    });
-  }
-
-  const parsedRecommendations =
-    relatedNoteRecommendationsRowSchema.safeParse(recommendationRow);
-
-  if (recommendationRow != null && !parsedRecommendations.success) {
-    logError({
-      message: "[getNoteById] relatedRecommendations 파싱 실패",
-      error: parsedRecommendations.error,
-    });
-  }
-
   return {
     ...parsed.data,
     next_scheduled_at:
       typeof pendingLog?.scheduled_at === "string"
         ? pendingLog.scheduled_at
         : null,
-    relatedRecommendations: parsedRecommendations.success
-      ? parsedRecommendations.data.recommendations
-      : [],
   };
 }

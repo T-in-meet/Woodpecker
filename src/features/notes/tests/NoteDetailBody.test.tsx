@@ -53,6 +53,10 @@ vi.mock("./DeleteNoteDialog", () => ({
   DeleteNoteDialog: () => <button type="button">노트 삭제</button>,
 }));
 
+vi.mock("@/features/related-notes/components/RelatedNotesSection", () => ({
+  RelatedNotesSection: () => null,
+}));
+
 import { NoteDetailBody } from "../components/NoteDetailBody";
 
 function renderBody(props: Partial<Parameters<typeof NoteDetailBody>[0]> = {}) {
@@ -90,32 +94,6 @@ describe("NoteDetailBody", () => {
       screen.getByRole("heading", { name: "원래 제목" }),
     ).toBeInTheDocument();
     expect(screen.queryByLabelText("제목")).not.toBeInTheDocument();
-  });
-
-  it("renders related note titles when recommendations exist", () => {
-    renderBody({
-      relatedRecommendations: [
-        {
-          noteId: "11111111-1111-4111-8111-111111111111",
-          title: "연결된 노트",
-        },
-      ],
-    });
-
-    expect(screen.getByText("관련 노트")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /연결된 노트/u })).toHaveAttribute(
-      "href",
-      "/notes/11111111-1111-4111-8111-111111111111",
-    );
-    expect(
-      screen.queryByText("11111111-1111-4111-8111-111111111111"),
-    ).not.toBeInTheDocument();
-  });
-
-  it("does not render related notes section when recommendations are empty", () => {
-    renderBody({ relatedRecommendations: [] });
-
-    expect(screen.queryByText("관련 노트")).not.toBeInTheDocument();
   });
 
   it("switches into edit mode when the edit button is clicked", async () => {

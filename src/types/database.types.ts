@@ -819,6 +819,51 @@ export type Database = {
           },
         ];
       };
+      note_related_notes: {
+        Row: {
+          created_at: string;
+          metadata: Json;
+          note_id: string;
+          origin: string;
+          related_note_id: string;
+          status: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          metadata?: Json;
+          note_id: string;
+          origin: string;
+          related_note_id: string;
+          status?: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          metadata?: Json;
+          note_id?: string;
+          origin?: string;
+          related_note_id?: string;
+          status?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "note_related_notes_note_id_fkey";
+            columns: ["note_id"];
+            isOneToOne: false;
+            referencedRelation: "notes";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "note_related_notes_related_note_id_fkey";
+            columns: ["related_note_id"];
+            isOneToOne: false;
+            referencedRelation: "notes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       notes: {
         Row: {
           content: string;
@@ -854,35 +899,6 @@ export type Database = {
           user_id?: string;
         };
         Relationships: [];
-      };
-      note_related_recommendations: {
-        Row: {
-          created_at: string;
-          note_id: string;
-          recommendations: Json;
-          updated_at: string;
-        };
-        Insert: {
-          created_at?: string;
-          note_id: string;
-          recommendations?: Json;
-          updated_at?: string;
-        };
-        Update: {
-          created_at?: string;
-          note_id?: string;
-          recommendations?: Json;
-          updated_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "note_related_recommendations_note_id_fkey";
-            columns: ["note_id"];
-            isOneToOne: true;
-            referencedRelation: "notes";
-            referencedColumns: ["id"];
-          },
-        ];
       };
       notifications: {
         Row: {
@@ -1898,6 +1914,10 @@ export type Database = {
       publish_ai_prompt_version: {
         Args: { p_version_id: string };
         Returns: string;
+      };
+      replace_note_related_ai_recommendations: {
+        Args: { p_note_id: string; p_recommendations: Json };
+        Returns: undefined;
       };
       save_ai_setting_configurations: {
         Args: { p_configurations: Json; p_setting_id: string };

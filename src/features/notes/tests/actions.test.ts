@@ -33,7 +33,7 @@ const {
   resolveAiRuntimeChatConfigurationMock,
   resolveAiRuntimeEmbeddingConfigurationMock,
   runRelatedNoteRecommendationMock,
-  saveRelatedNoteRecommendationsMock,
+  replaceRelatedNoteAiRecommendationsMock,
 } = vi.hoisted(() => ({
   afterMock: vi.fn(),
   createAdminClientMock: vi.fn(),
@@ -44,7 +44,7 @@ const {
   resolveAiRuntimeChatConfigurationMock: vi.fn(),
   resolveAiRuntimeEmbeddingConfigurationMock: vi.fn(),
   runRelatedNoteRecommendationMock: vi.fn(),
-  saveRelatedNoteRecommendationsMock: vi.fn(),
+  replaceRelatedNoteAiRecommendationsMock: vi.fn(),
 }));
 
 vi.mock("next/server", () => ({
@@ -84,9 +84,10 @@ vi.mock(
 );
 
 vi.mock(
-  "@/features/related-notes/persistence/save-related-note-recommendations",
+  "@/features/related-notes/persistence/replace-related-note-ai-recommendations",
   () => ({
-    saveRelatedNoteRecommendations: saveRelatedNoteRecommendationsMock,
+    replaceRelatedNoteAiRecommendations:
+      replaceRelatedNoteAiRecommendationsMock,
   }),
 );
 
@@ -121,13 +122,13 @@ const relatedNoteRecommendationResult = {
 beforeEach(() => {
   resolveAiRuntimeChatConfigurationMock.mockReset();
   runRelatedNoteRecommendationMock.mockReset();
-  saveRelatedNoteRecommendationsMock.mockReset();
+  replaceRelatedNoteAiRecommendationsMock.mockReset();
 
   resolveAiRuntimeChatConfigurationMock.mockResolvedValue(chatConfiguration);
   runRelatedNoteRecommendationMock.mockResolvedValue(
     relatedNoteRecommendationResult,
   );
-  saveRelatedNoteRecommendationsMock.mockResolvedValue(undefined);
+  replaceRelatedNoteAiRecommendationsMock.mockResolvedValue(undefined);
 });
 
 function createSupabaseMock(
@@ -835,7 +836,7 @@ describe("Note embedding integration", () => {
         targetNoteId: validNoteId,
         title: "Valid title",
       });
-      expect(saveRelatedNoteRecommendationsMock).toHaveBeenCalledWith({
+      expect(replaceRelatedNoteAiRecommendationsMock).toHaveBeenCalledWith({
         noteId: validNoteId,
         recommendations: [],
       });
@@ -898,7 +899,7 @@ describe("Note embedding integration", () => {
         .spyOn(console, "error")
         .mockImplementation(() => undefined);
       createClientMock.mockResolvedValue(supabase);
-      saveRelatedNoteRecommendationsMock.mockRejectedValueOnce(
+      replaceRelatedNoteAiRecommendationsMock.mockRejectedValueOnce(
         new Error("save related recommendations failed"),
       );
 
@@ -1112,7 +1113,7 @@ describe("Note embedding integration", () => {
         targetNoteId: validNoteId,
         title: "Updated title",
       });
-      expect(saveRelatedNoteRecommendationsMock).toHaveBeenCalledWith({
+      expect(replaceRelatedNoteAiRecommendationsMock).toHaveBeenCalledWith({
         noteId: validNoteId,
         recommendations: [],
       });
@@ -1180,7 +1181,7 @@ describe("Note embedding integration", () => {
         .spyOn(console, "error")
         .mockImplementation(() => undefined);
       createClientMock.mockResolvedValue(supabase);
-      saveRelatedNoteRecommendationsMock.mockRejectedValueOnce(
+      replaceRelatedNoteAiRecommendationsMock.mockRejectedValueOnce(
         new Error("save related recommendations failed"),
       );
 

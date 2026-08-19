@@ -1,30 +1,37 @@
+"use client";
+
 import { FileText } from "lucide-react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
-import type { RelatedNoteRecommendation } from "@/features/related-notes/types";
 import { getNoteDetailRoute } from "@/lib/constants/routes";
 
+import { useRelatedNotes } from "../hooks/use-related-notes";
+
 type RelatedNotesSectionProps = {
-  /** 노트 하단에 표시할 관련 노트 추천 목록입니다. */
-  recommendations: RelatedNoteRecommendation[];
+  /** Related Notes를 조회할 기준 Note ID입니다. */
+  noteId: string;
 };
 
 /**
- * 노트 상세 하단에 관련 노트 추천 링크 목록을 표시합니다.
+ * 노트 상세 하단에 현재 연결된 Related Notes를 표시합니다.
  *
- * @param props 관련 노트 추천 목록
+ * Related Notes는 노트 본문과 독립적으로 조회하며,
+ * active 상태의 관계만 화면에 표시합니다.
+ *
+ * @param props Related Notes를 조회할 기준 Note ID
  */
-export function RelatedNotesSection({
-  recommendations,
-}: RelatedNotesSectionProps) {
-  if (recommendations.length === 0) {
+export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
+  const { data: recommendations = [], isLoading } = useRelatedNotes(noteId);
+
+  if (isLoading || recommendations.length === 0) {
     return null;
   }
 
   return (
     <section className="border-t border-border/60 pt-6">
       <h2 className="text-sm font-semibold text-foreground">관련 노트</h2>
+
       <div className="mt-3 flex flex-wrap gap-2">
         {recommendations.map((recommendation) => (
           <Button
