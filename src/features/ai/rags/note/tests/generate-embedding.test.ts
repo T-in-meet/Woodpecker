@@ -5,7 +5,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AI_EMBEDDING_INPUT_PREVIEW_MAX_LENGTH } from "@/features/ai/constants/embeddings";
 import { deleteInactiveAiEmbeddingGeneration } from "@/features/ai/embeddings/cache";
 import { generateAiEmbedding } from "@/features/ai/embeddings/generate";
-import { activateAiEmbeddingGeneration } from "@/features/ai/embeddings/generation";
+import {
+  activateAiEmbeddingGeneration,
+  hasActiveAiEmbeddingGenerationForContent,
+} from "@/features/ai/embeddings/generation";
 import { createAiSha256Hash } from "@/features/ai/embeddings/hash";
 import type { AiRuntimeEmbeddingConfiguration } from "@/features/ai/runtimes/types";
 
@@ -30,6 +33,7 @@ vi.mock("@/features/ai/embeddings/cache", () => ({
 
 vi.mock("@/features/ai/embeddings/generation", () => ({
   activateAiEmbeddingGeneration: vi.fn(),
+  hasActiveAiEmbeddingGenerationForContent: vi.fn(),
 }));
 
 vi.mock("@/features/ai/embeddings/generate", () => ({
@@ -91,6 +95,10 @@ describe("generateNoteEmbedding", () => {
     vi.mocked(generateAiEmbedding).mockResolvedValue(GENERATED_EMBEDDING_0);
 
     vi.mocked(activateAiEmbeddingGeneration).mockResolvedValue();
+
+    vi.mocked(hasActiveAiEmbeddingGenerationForContent).mockResolvedValue(
+      false,
+    );
 
     vi.mocked(deleteInactiveAiEmbeddingGeneration).mockResolvedValue(0);
   });
@@ -358,5 +366,40 @@ describe("generateNoteEmbedding", () => {
 
     expect(deleteInactiveAiEmbeddingGeneration).toHaveBeenCalledTimes(1);
     expect(activateAiEmbeddingGeneration).not.toHaveBeenCalled();
+  });
+
+  it("동일한 content의 활성 generation이 이미 있으면 embedding을 다시 생성하지 않는다", async () => {
+    const title = "다익스트라 알고리즘";
+    const content = "음수 가중치에서는 사용할 수 없다.";
+
+    vi.mocked(hasActiveAiEmbeddingGenerationForContent).mockResolvedValue(true);
+
+    const result = await generateNoteEmbedding({
+      embeddingConfiguration: EMBEDDING_CONFIGURATION,
+      ownerUserId: "user-id",
+      noteId: "note-id",
+      sourceUpdatedAt: SOURCE_UPDATED_AT,
+      title,
+      content,
+    });
+
+    const contentHash = createAiSha256Hash(
+      createNoteEmbeddingInput(title, content),
+    );
+
+    expect(hasActiveAiEmbeddingGenerationForContent).toHaveBeenCalledWith({
+      contentHash,
+      inputKind: "rag_note_content",
+      modelConfigId: EMBEDDING_CONFIGURATION.model.id,
+      ownerUserId: "user-id",
+      sourceId: "note-id",
+      sourceType: "note",
+    });
+
+    expect(result).toEqual([]);
+    expect(randomUUID).not.toHaveBeenCalled();
+    expect(generateAiEmbedding).not.toHaveBeenCalled();
+    expect(activateAiEmbeddingGeneration).not.toHaveBeenCalled();
+    expect(deleteInactiveAiEmbeddingGeneration).not.toHaveBeenCalled();
   });
 });

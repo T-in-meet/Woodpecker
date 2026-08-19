@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 
-import { isAdminUser } from "@/features/admin/utils/is-admin-user";
 import {
   resolveAiRuntimeChatConfiguration,
   resolveAiRuntimeEmbeddingConfiguration,
@@ -241,15 +240,14 @@ export async function POST(
    * 새로운 Pending Run을 하나의 DB 트랜잭션으로 생성합니다.
    *
    * Run에는 이번 실행에서 실제 사용할 Agent·Prompt·Model ID를 기록합니다.
+   *
+   * 일일 실행 제한 적용 여부는 RPC가 profiles.role을 기준으로 직접 판정합니다.
    */
   const adminClient = createAdminClient();
-
-  const isAdmin = await isAdminUser(user.id);
 
   const { data: updated, error: updateError } = await adminClient
     .rpc("update_note_chat_user_message", {
       p_agent_id: chatConfiguration.prompt.agent.id,
-      p_bypass_daily_execution_limit: isAdmin,
       p_chat_model_config_id: chatConfiguration.model.id,
       p_content: parsed.data.content,
       p_daily_execution_limit: NOTE_CHAT_DAILY_EXECUTION_LIMIT,

@@ -7,6 +7,7 @@ import {
   NOTE_CHAT_AI_FEATURE_KEY,
   NOTE_CHAT_AI_ROLE_KEY,
 } from "@/features/note-chats/constants/ai";
+import { ForbiddenError, UnauthorizedError } from "@/lib/errors";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -34,7 +35,7 @@ const NOTE_EMBEDDING_BACKFILL_BATCH_SIZE = 10;
  * generateNoteEmbedding()을 사용해 청킹, generation 생성/활성화 및 cleanup 정책을
  * 그대로 적용합니다.
  *
- * 모든 Note를 하나의 요청에서 처리하지 않고 offset 기반 batch로 나누어 처리합니다.
+ * 모든 Note를 하나의 요청에서 처리하지 않고 offset 기반 batch로 나눠 처리합니다.
  * 응답의 nextOffset을 다음 요청의 offset으로 전달하여 후속 batch를 실행할 수 있습니다.
  *
  * Note 자체는 수정하지 않으므로 title/content/updated_at에는 영향을 주지 않습니다.
@@ -46,30 +47,30 @@ export async function POST(request: Request) {
    * 이 Route는 모든 사용자의 Note를 조회하고 embedding을 다시 생성하므로
    * 관리자 인증을 유일한 외부 실행 진입점으로 사용합니다.
    *
-   * requireAdmin()의 인증/권한 실패를 각각 401/403으로 변환해
+   * requireAdmin()의 인증/권한 실패를 typed error로 구분해 각각 401/403으로 변환하여
    * 관리자 API 호출 측에서 실패 원인을 명확하게 구분할 수 있게 합니다.
    */
   try {
     await requireAdmin();
   } catch (error) {
-    if (error instanceof Error && error.message === "Unauthorized") {
+    if (error instanceof UnauthorizedError) {
       return NextResponse.json(
         {
           error: "Unauthorized",
         },
         {
-          status: 401,
+          status: error.status,
         },
       );
     }
 
-    if (error instanceof Error && error.message === "Forbidden") {
+    if (error instanceof ForbiddenError) {
       return NextResponse.json(
         {
           error: "Forbidden",
         },
         {
-          status: 403,
+          status: error.status,
         },
       );
     }

@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import { isAdminUser } from "@/features/admin/utils/is-admin-user";
 import {
   resolveAiRuntimeChatConfiguration,
   resolveAiRuntimeEmbeddingConfiguration,
@@ -20,10 +19,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 import { POST } from "./route";
-
-vi.mock("@/features/admin/utils/is-admin-user", () => ({
-  isAdminUser: vi.fn(),
-}));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
@@ -185,13 +180,6 @@ describe("POST /api/note-chats/stream", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    /*
-     * 기본 테스트 사용자는 일반 사용자로 취급합니다.
-     *
-     * 관리자 quota 우회가 필요한 테스트에서만 true로 덮어씁니다.
-     */
-    vi.mocked(isAdminUser).mockResolvedValue(false);
-
     vi.mocked(reportNoteChatOperationalError).mockResolvedValue(undefined);
 
     vi.mocked(resolveAiRuntimeChatConfiguration)
@@ -229,7 +217,6 @@ describe("POST /api/note-chats/stream", () => {
     });
 
     expect(createClient).not.toHaveBeenCalled();
-    expect(isAdminUser).not.toHaveBeenCalled();
   });
 
   it("잘못된 질문 입력이면 400을 반환한다", async () => {
@@ -249,7 +236,6 @@ describe("POST /api/note-chats/stream", () => {
     });
 
     expect(createClient).not.toHaveBeenCalled();
-    expect(isAdminUser).not.toHaveBeenCalled();
   });
 
   it("로그인하지 않은 경우 401을 반환한다", async () => {
@@ -276,7 +262,6 @@ describe("POST /api/note-chats/stream", () => {
     });
 
     expect(client.auth.getUser).toHaveBeenCalledTimes(1);
-    expect(isAdminUser).not.toHaveBeenCalled();
     expect(createAdminClient).not.toHaveBeenCalled();
     expect(runNoteChatStream).not.toHaveBeenCalled();
   });
@@ -306,7 +291,6 @@ describe("POST /api/note-chats/stream", () => {
       error: "이메일 확인이 필요합니다.",
     });
 
-    expect(isAdminUser).not.toHaveBeenCalled();
     expect(createAdminClient).not.toHaveBeenCalled();
     expect(runNoteChatStream).not.toHaveBeenCalled();
   });
@@ -350,7 +334,6 @@ describe("POST /api/note-chats/stream", () => {
       }),
     );
 
-    expect(isAdminUser).not.toHaveBeenCalled();
     expect(createAdminClient).not.toHaveBeenCalled();
     expect(runNoteChatStream).not.toHaveBeenCalled();
   });
@@ -385,7 +368,6 @@ describe("POST /api/note-chats/stream", () => {
     });
 
     expect(reportNoteChatOperationalError).not.toHaveBeenCalled();
-    expect(isAdminUser).not.toHaveBeenCalled();
     expect(createAdminClient).not.toHaveBeenCalled();
     expect(runNoteChatStream).not.toHaveBeenCalled();
   });
@@ -418,13 +400,10 @@ describe("POST /api/note-chats/stream", () => {
       error: "질문 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.",
     });
 
-    expect(isAdminUser).toHaveBeenCalledWith(USER_ID);
-
     expect(adminClient.rpc).toHaveBeenCalledWith(
       "create_note_chat_question",
       expect.objectContaining({
         p_agent_id: CHAT_CONFIGURATION.prompt.agent.id,
-        p_bypass_daily_execution_limit: false,
         p_chat_model_config_id: CHAT_CONFIGURATION.model.id,
         p_content: {
           text: "질문입니다.",
@@ -480,8 +459,6 @@ describe("POST /api/note-chats/stream", () => {
       error: "질문 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.",
     });
 
-    expect(isAdminUser).toHaveBeenCalledWith(USER_ID);
-
     expect(reportNoteChatOperationalError).toHaveBeenCalledTimes(1);
 
     expect(reportNoteChatOperationalError).toHaveBeenCalledWith(
@@ -531,16 +508,14 @@ describe("POST /api/note-chats/stream", () => {
       error: "오늘 사용할 수 있는 노트 챗봇 횟수를 모두 사용했습니다.",
     });
 
-    expect(isAdminUser).toHaveBeenCalledWith(USER_ID);
     expect(reportNoteChatOperationalError).not.toHaveBeenCalled();
     expect(runNoteChatStream).not.toHaveBeenCalled();
   });
 
-  it("일반 사용자는 일일 실행 제한을 적용하도록 질문 생성 RPC를 호출한다", async () => {
+  it("일일 실행 제한값을 포함하여 질문 생성 RPC를 호출한다", async () => {
     const client = createSupabaseClientMock();
 
     vi.mocked(createClient).mockResolvedValue(client as never);
-    vi.mocked(isAdminUser).mockResolvedValue(false);
 
     const response = await POST(
       createRequest({
@@ -558,46 +533,9 @@ describe("POST /api/note-chats/stream", () => {
     const adminClient = vi.mocked(createAdminClient).mock.results[0]
       ?.value as ReturnType<typeof createAdminClientMock>;
 
-    expect(isAdminUser).toHaveBeenCalledWith(USER_ID);
-
     expect(adminClient.rpc).toHaveBeenCalledWith(
       "create_note_chat_question",
       expect.objectContaining({
-        p_bypass_daily_execution_limit: false,
-        p_daily_execution_limit: NOTE_CHAT_DAILY_EXECUTION_LIMIT,
-        p_user_id: USER_ID,
-      }),
-    );
-  });
-
-  it("관리자는 일일 실행 제한을 우회하도록 질문 생성 RPC를 호출한다", async () => {
-    const client = createSupabaseClientMock();
-
-    vi.mocked(createClient).mockResolvedValue(client as never);
-    vi.mocked(isAdminUser).mockResolvedValue(true);
-
-    const response = await POST(
-      createRequest({
-        conversationId: CONVERSATION_ID,
-        content: {
-          text: "관리자 테스트 질문입니다.",
-        },
-      }),
-    );
-
-    expect(response.status).toBe(200);
-
-    await readStream(response);
-
-    const adminClient = vi.mocked(createAdminClient).mock.results[0]
-      ?.value as ReturnType<typeof createAdminClientMock>;
-
-    expect(isAdminUser).toHaveBeenCalledWith(USER_ID);
-
-    expect(adminClient.rpc).toHaveBeenCalledWith(
-      "create_note_chat_question",
-      expect.objectContaining({
-        p_bypass_daily_execution_limit: true,
         p_daily_execution_limit: NOTE_CHAT_DAILY_EXECUTION_LIMIT,
         p_user_id: USER_ID,
       }),
@@ -639,11 +577,8 @@ describe("POST /api/note-chats/stream", () => {
     const adminClient = vi.mocked(createAdminClient).mock.results[0]
       ?.value as ReturnType<typeof createAdminClientMock>;
 
-    expect(isAdminUser).toHaveBeenCalledWith(USER_ID);
-
     expect(adminClient.rpc).toHaveBeenCalledWith("create_note_chat_question", {
       p_agent_id: CHAT_CONFIGURATION.prompt.agent.id,
-      p_bypass_daily_execution_limit: false,
       p_chat_model_config_id: CHAT_CONFIGURATION.model.id,
       p_content: {
         text: "질문입니다.",

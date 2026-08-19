@@ -6,13 +6,14 @@ BEGIN;
 --
 -- Note Chat 일일 실행 제한을 Run 생성과 동일한 DB 트랜잭션 안에서 검증합니다.
 --
--- 서버가 인증된 사용자 ID와 일일 실행 제한값, quota 우회 여부를 전달합니다.
+-- 서버가 인증된 사용자 ID와 일일 실행 제한값을 전달합니다.
 -- 일반 사용자는 동일 사용자·동일 KST 날짜의 Run 생성 요청을
 -- advisory transaction lock으로 직렬화하여 count 조회와 Run 생성 사이의
 -- 경쟁 조건을 방지합니다.
 --
 -- 관리자는 운영 및 AI 기능 검증을 위해 일일 실행 제한을 적용하지 않습니다.
--- 관리자 여부는 서버에서 검증한 뒤 p_bypass_daily_execution_limit으로 전달합니다.
+-- service_role 호출에서도 관리자 여부는 RPC 내부의 profiles 정보를 기준으로
+-- 직접 검증합니다.
 --
 -- 이 RPC는 service_role에서만 실행하도록 권한을 제한합니다.
 CREATE OR REPLACE FUNCTION "public"."create_note_chat_question"(
@@ -20,7 +21,6 @@ CREATE OR REPLACE FUNCTION "public"."create_note_chat_question"(
   "p_conversation_id" "uuid",
   "p_content" "jsonb",
   "p_daily_execution_limit" integer,
-  "p_bypass_daily_execution_limit" boolean,
   "p_agent_id" "uuid" DEFAULT NULL,
   "p_prompt_version_id" "uuid" DEFAULT NULL,
   "p_chat_model_config_id" "uuid" DEFAULT NULL,
@@ -48,14 +48,9 @@ BEGIN
   END IF;
 
   -- 일일 실행 제한값은 서버에서 전달하며,
-  -- 관리자 bypass 여부와 관계없이 1 이상의 유효한 값만 허용합니다.
+  -- 1 이상의 유효한 값만 허용합니다.
   IF "p_daily_execution_limit" IS NULL OR "p_daily_execution_limit" < 1 THEN
     RAISE EXCEPTION 'daily execution limit must be positive';
-  END IF;
-
-  -- quota 우회 여부는 서버가 명시적으로 전달해야 합니다.
-  IF "p_bypass_daily_execution_limit" IS NULL THEN
-    RAISE EXCEPTION 'daily execution limit bypass flag is required';
   END IF;
 
   -- service_role은 RLS를 우회하므로 RPC 내부에서도
@@ -79,10 +74,15 @@ BEGIN
 
   -- 일반 사용자에게만 일일 실행 제한을 적용합니다.
   --
-  -- 관리자 계정은 운영 및 AI 기능 검증을 위해 quota 검사를 건너뜁니다.
-  -- bypass 여부는 service_role RPC를 호출하는 서버가 관리자 권한을
-  -- 확인한 뒤 전달하며 클라이언트는 이 RPC를 직접 실행할 수 없습니다.
-  IF NOT "p_bypass_daily_execution_limit" THEN
+  -- service_role은 RLS를 우회하므로 관리자 여부 역시 애플리케이션에서
+  -- 전달받은 값을 신뢰하지 않고 RPC 내부의 profiles 정보를 기준으로
+  -- 직접 검증합니다.
+  IF NOT EXISTS (
+    SELECT 1
+    FROM "public"."profiles" AS "profiles"
+    WHERE "profiles"."id" = "p_user_id"
+      AND "profiles"."role" = 'ADMIN'
+  ) THEN
     -- 일일 실행 횟수는 Asia/Seoul 기준으로 계산합니다.
     -- 현재 실행 시각이 속한 KST 날짜의 시작 시각과 다음 날 시작 시각을
     -- timestamptz 범위로 변환하여 Run 생성 시각과 비교합니다.
@@ -217,7 +217,6 @@ CREATE OR REPLACE FUNCTION "public"."update_note_chat_user_message"(
   "p_message_id" "uuid",
   "p_content" "jsonb",
   "p_daily_execution_limit" integer,
-  "p_bypass_daily_execution_limit" boolean,
   "p_agent_id" "uuid" DEFAULT NULL,
   "p_prompt_version_id" "uuid" DEFAULT NULL,
   "p_chat_model_config_id" "uuid" DEFAULT NULL,
@@ -245,14 +244,9 @@ BEGIN
   END IF;
 
   -- 일일 실행 제한값은 서버에서 전달하며,
-  -- 관리자 bypass 여부와 관계없이 1 이상의 유효한 값만 허용합니다.
+  -- 1 이상의 유효한 값만 허용합니다.
   IF "p_daily_execution_limit" IS NULL OR "p_daily_execution_limit" < 1 THEN
     RAISE EXCEPTION 'daily execution limit must be positive';
-  END IF;
-
-  -- quota 우회 여부는 서버가 명시적으로 전달해야 합니다.
-  IF "p_bypass_daily_execution_limit" IS NULL THEN
-    RAISE EXCEPTION 'daily execution limit bypass flag is required';
   END IF;
 
   -- service_role은 RLS를 우회하므로 RPC 내부에서도
@@ -276,8 +270,15 @@ BEGIN
 
   -- 일반 사용자에게만 일일 실행 제한을 적용합니다.
   --
-  -- 관리자 계정은 운영 및 AI 기능 검증을 위해 quota 검사를 건너뜁니다.
-  IF NOT "p_bypass_daily_execution_limit" THEN
+  -- service_role은 RLS를 우회하므로 관리자 여부 역시 애플리케이션에서
+  -- 전달받은 값을 신뢰하지 않고 RPC 내부의 profiles 정보를 기준으로
+  -- 직접 검증합니다.
+  IF NOT EXISTS (
+    SELECT 1
+    FROM "public"."profiles" AS "profiles"
+    WHERE "profiles"."id" = "p_user_id"
+      AND "profiles"."role" = 'ADMIN'
+  ) THEN
     -- 새 질문 생성과 동일하게 Asia/Seoul 날짜를 기준으로
     -- 현재 일일 사용량 조회 범위를 계산합니다.
     "v_kst_date" := ("v_now" AT TIME ZONE 'Asia/Seoul')::date;
@@ -405,14 +406,13 @@ DROP FUNCTION IF EXISTS "public"."update_note_chat_user_message"(
 -- RPC 실행 권한
 -- ============================================================================
 
--- 새로운 질문 생성 RPC는 서버가 검증한 사용자 ID, 일일 제한값 및
--- 관리자 quota 우회 여부를 전달해야 하므로 service_role에서만 실행할 수 있습니다.
+-- 새로운 질문 생성 RPC는 서버가 검증한 사용자 ID와 일일 제한값을
+-- 전달해야 하므로 service_role에서만 실행할 수 있습니다.
 REVOKE ALL ON FUNCTION "public"."create_note_chat_question"(
   "uuid",
   "uuid",
   "jsonb",
   integer,
-  boolean,
   "uuid",
   "uuid",
   "uuid",
@@ -424,7 +424,6 @@ GRANT EXECUTE ON FUNCTION "public"."create_note_chat_question"(
   "uuid",
   "jsonb",
   integer,
-  boolean,
   "uuid",
   "uuid",
   "uuid",
@@ -437,7 +436,6 @@ REVOKE ALL ON FUNCTION "public"."update_note_chat_user_message"(
   "uuid",
   "jsonb",
   integer,
-  boolean,
   "uuid",
   "uuid",
   "uuid",
@@ -449,7 +447,6 @@ GRANT EXECUTE ON FUNCTION "public"."update_note_chat_user_message"(
   "uuid",
   "jsonb",
   integer,
-  boolean,
   "uuid",
   "uuid",
   "uuid",

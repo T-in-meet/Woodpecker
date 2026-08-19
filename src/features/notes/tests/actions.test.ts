@@ -864,6 +864,36 @@ describe("Note embedding integration", () => {
       expect(resolveAiRuntimeEmbeddingConfigurationMock).not.toHaveBeenCalled();
       expect(generateNoteEmbeddingMock).not.toHaveBeenCalled();
     });
+
+    it("embedding 후처리 전에 Note가 삭제되면 운영 오류를 기록하지 않고 종료한다", async () => {
+      const { supabase } = createSupabaseMock({
+        rpcResult: validNoteId,
+      });
+
+      const { adminClient } = createEmbeddingAdminClientMock({
+        embeddingSource: null,
+      });
+
+      createClientMock.mockResolvedValue(supabase);
+      createAdminClientMock.mockReturnValue(adminClient);
+
+      const formData = new FormData();
+      formData.set("title", "Valid title");
+      formData.set("content", "Valid content");
+
+      const result = await createNoteAction(null, formData);
+
+      expect(result).toEqual({
+        success: true,
+        newNoteId: validNoteId,
+      });
+
+      await expect(runScheduledAfterCallback()).resolves.toBeUndefined();
+
+      expect(reportAiOperationalErrorMock).not.toHaveBeenCalled();
+      expect(resolveAiRuntimeEmbeddingConfigurationMock).not.toHaveBeenCalled();
+      expect(generateNoteEmbeddingMock).not.toHaveBeenCalled();
+    });
   });
 
   describe("updateNoteAction", () => {

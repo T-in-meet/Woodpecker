@@ -7,6 +7,7 @@ import {
   NOTE_CHAT_AI_FEATURE_KEY,
   NOTE_CHAT_AI_ROLE_KEY,
 } from "@/features/note-chats/constants/ai";
+import { ForbiddenError, UnauthorizedError } from "@/lib/errors";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { POST } from "./route";
@@ -137,7 +138,7 @@ describe("POST /api/admin/ai/backfill-note-embeddings", () => {
   });
 
   it("인증되지 않은 요청이면 401을 반환하고 backfill을 실행하지 않는다", async () => {
-    vi.mocked(requireAdmin).mockRejectedValue(new Error("Unauthorized"));
+    vi.mocked(requireAdmin).mockRejectedValue(new UnauthorizedError());
 
     const response = await POST(createRequest());
     const body = await response.json();
@@ -153,7 +154,7 @@ describe("POST /api/admin/ai/backfill-note-embeddings", () => {
   });
 
   it("관리자 권한이 없는 요청이면 403을 반환하고 backfill을 실행하지 않는다", async () => {
-    vi.mocked(requireAdmin).mockRejectedValue(new Error("Forbidden"));
+    vi.mocked(requireAdmin).mockRejectedValue(new ForbiddenError());
 
     const response = await POST(createRequest());
     const body = await response.json();

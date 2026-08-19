@@ -1625,7 +1625,6 @@ export type Database = {
       create_note_chat_question: {
         Args: {
           p_agent_id?: string;
-          p_bypass_daily_execution_limit: boolean;
           p_chat_model_config_id?: string;
           p_content: Json;
           p_conversation_id: string;
@@ -1878,7 +1877,6 @@ export type Database = {
       update_note_chat_user_message: {
         Args: {
           p_agent_id?: string;
-          p_bypass_daily_execution_limit: boolean;
           p_chat_model_config_id?: string;
           p_content: Json;
           p_daily_execution_limit: number;

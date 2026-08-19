@@ -3,7 +3,10 @@ import { randomUUID } from "node:crypto";
 import { AI_EMBEDDING_INPUT_PREVIEW_MAX_LENGTH } from "@/features/ai/constants/embeddings";
 import { deleteInactiveAiEmbeddingGeneration } from "@/features/ai/embeddings/cache";
 import { generateAiEmbedding } from "@/features/ai/embeddings/generate";
-import { activateAiEmbeddingGeneration } from "@/features/ai/embeddings/generation";
+import {
+  activateAiEmbeddingGeneration,
+  hasActiveAiEmbeddingGenerationForContent,
+} from "@/features/ai/embeddings/generation";
 import { createAiSha256Hash } from "@/features/ai/embeddings/hash";
 import {
   NOTE_EMBEDDING_INPUT_KIND,
@@ -82,8 +85,6 @@ export async function generateNoteEmbedding({
     return [];
   }
 
-  const generationId = randomUUID();
-
   /*
    * contentHash는 개별 chunk가 아니라 이번 generation의 원본 Note 버전을
    * 식별합니다. 같은 Note 버전에서 생성된 모든 chunk는 동일한 contentHash를
@@ -94,6 +95,31 @@ export async function generateNoteEmbedding({
     createNoteEmbeddingInput(title, content),
   );
 
+  /*
+   * 짧은 간격으로 Note가 연속 저장되면 여러 after() callback이
+   * 동일한 최신 Note snapshot을 조회할 수 있습니다.
+   *
+   * 동일한 source/input kind/model/content로 이미 활성화된 generation이 있으면
+   * Provider를 다시 호출하지 않고 기존 활성 generation을 그대로 사용합니다.
+   *
+   * 이 검사는 이미 완료된 중복 작업을 줄이기 위한 사전 검사이며,
+   * 동시에 시작된 두 generation의 생성을 완전히 직렬화하지는 않습니다.
+   * 오래된 generation의 활성화 방지는 기존 sourceUpdatedAt 검증이 담당합니다.
+   */
+  const hasActiveGeneration = await hasActiveAiEmbeddingGenerationForContent({
+    contentHash,
+    inputKind: NOTE_EMBEDDING_INPUT_KIND,
+    modelConfigId: embeddingConfiguration.model.id,
+    ownerUserId,
+    sourceId: noteId,
+    sourceType: NOTE_EMBEDDING_SOURCE_TYPE,
+  });
+
+  if (hasActiveGeneration) {
+    return [];
+  }
+
+  const generationId = randomUUID();
   const chunkCount = chunks.length;
   const embeddings = [];
 

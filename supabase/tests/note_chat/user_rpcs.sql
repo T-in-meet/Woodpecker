@@ -90,8 +90,7 @@ SELECT throws_ok(
       current_setting('test.note_chat_rpc_user_id')::uuid,
       current_setting('test.note_chat_rpc_conversation_id')::uuid,
       '{"text":"authenticated new"}'::jsonb,
-      10,
-      false
+      10
     );
   $sql$,
   '42501',
@@ -106,8 +105,7 @@ SELECT throws_ok(
       current_setting('test.note_chat_rpc_user_id')::uuid,
       gen_random_uuid(),
       '{"text":"authenticated update"}'::jsonb,
-      10,
-      false
+      10
     );
   $sql$,
   '42501',
@@ -119,15 +117,14 @@ RESET ROLE;
 
 SET LOCAL ROLE service_role;
 
--- 일반 사용자 요청을 가정하므로
--- p_bypass_daily_execution_limit은 false를 전달합니다.
+-- 일반 사용자 요청입니다.
+-- RPC 내부에서 profiles.role을 확인하여 일일 실행 제한을 적용합니다.
 SELECT *
 FROM public.create_note_chat_question(
   current_setting('test.note_chat_rpc_user_id')::uuid,
   current_setting('test.note_chat_rpc_conversation_id')::uuid,
   '{"text":"first question"}'::jsonb,
-  10,
-  false
+  10
 )
 \gset test_note_chat_rpc_first_
 
@@ -177,8 +174,7 @@ SELECT throws_ok(
       current_setting('test.note_chat_rpc_user_id')::uuid,
       current_setting('test.note_chat_rpc_other_conversation_id')::uuid,
       '{"text":"blocked"}'::jsonb,
-      10,
-      false
+      10
     );
   $sql$,
   'P0001',
@@ -193,8 +189,7 @@ SELECT throws_ok(
       current_setting('test.note_chat_rpc_user_id')::uuid,
       current_setting('test.note_chat_rpc_conversation_id')::uuid,
       '[]'::jsonb,
-      10,
-      false
+      10
     );
   $sql$,
   'P0001',
@@ -209,8 +204,7 @@ SELECT throws_ok(
       current_setting('test.note_chat_rpc_user_id')::uuid,
       current_setting('test.note_chat_rpc_conversation_id')::uuid,
       '{"text":"invalid limit"}'::jsonb,
-      0,
-      false
+      0
     );
   $sql$,
   'P0001',
@@ -223,8 +217,7 @@ FROM public.create_note_chat_question(
   current_setting('test.note_chat_rpc_user_id')::uuid,
   current_setting('test.note_chat_rpc_conversation_id')::uuid,
   '{"text":"second question"}'::jsonb,
-  10,
-  false
+  10
 )
 \gset test_note_chat_rpc_second_
 
@@ -272,8 +265,7 @@ FROM public.update_note_chat_user_message(
   current_setting('test.note_chat_rpc_user_id')::uuid,
   :'test_note_chat_rpc_second_user_message_id'::uuid,
   '{"text":"edited second question"}'::jsonb,
-  10,
-  false
+  10
 )
 \gset test_note_chat_rpc_edit_
 
@@ -335,8 +327,7 @@ SELECT throws_ok(
       current_setting('test.note_chat_rpc_user_id')::uuid,
       current_setting('test.note_chat_rpc_deleted_message_id')::uuid,
       '{"text":"blocked"}'::jsonb,
-      10,
-      false
+      10
     );
   $sql$,
   'P0001',
@@ -376,8 +367,7 @@ SELECT throws_ok(
       current_setting('test.note_chat_rpc_user_id')::uuid,
       current_setting('test.note_chat_rpc_assistant_message_id')::uuid,
       '{"text":"blocked assistant"}'::jsonb,
-      10,
-      false
+      10
     );
   $sql$,
   'P0001',
@@ -392,8 +382,7 @@ SELECT throws_ok(
       current_setting('test.note_chat_rpc_unverified_id')::uuid,
       current_setting('test.note_chat_rpc_unverified_conversation_id')::uuid,
       '{"text":"unverified"}'::jsonb,
-      10,
-      false
+      10
     );
   $sql$,
   'P0001',
@@ -406,7 +395,7 @@ SELECT throws_ok(
 -- ============================================================================
 
 -- 이미 오늘 생성된 Run이 있으므로 제한값을 1로 낮추면
--- 일반 사용자(false)는 추가 질문을 생성할 수 없어야 합니다.
+-- 일반 사용자는 추가 질문을 생성할 수 없어야 합니다.
 --
 -- 일일 실행 제한 초과는 일반 예외(P0001)가 아니라
 -- Route가 429로 식별하는 전용 SQLSTATE WP002를 반환해야 합니다.
@@ -417,8 +406,7 @@ SELECT throws_ok(
       current_setting('test.note_chat_rpc_user_id')::uuid,
       current_setting('test.note_chat_rpc_conversation_id')::uuid,
       '{"text":"limit create"}'::jsonb,
-      1,
-      false
+      1
     );
   $sql$,
   'WP002',
@@ -444,8 +432,7 @@ SELECT throws_ok(
       current_setting('test.note_chat_rpc_user_id')::uuid,
       current_setting('test.note_chat_rpc_second_user_message_id')::uuid,
       '{"text":"limit update"}'::jsonb,
-      1,
-      false
+      1
     );
   $sql$,
   'WP002',
@@ -467,21 +454,26 @@ SELECT is(
 -- 관리자 일일 제한 우회
 -- ============================================================================
 
--- DB는 관리자 여부를 직접 판단하지 않습니다.
+-- RPC는 애플리케이션에서 전달받은 boolean 값을 신뢰하지 않고
+-- profiles.role을 직접 조회하여 관리자 여부를 판정합니다.
 --
--- Route에서 관리자로 확인된 사용자에 대해서만
--- p_bypass_daily_execution_limit = true를 전달합니다.
---
--- 여기서는 제한값이 이미 초과된 상태에서도 true를 전달하면
--- quota 검사를 건너뛰는 RPC 동작만 검증합니다.
+-- 제한값이 이미 초과된 사용자의 profile role을 ADMIN으로 변경한 뒤,
+-- quota 검사를 건너뛰는 RPC 동작을 검증합니다.
+
+RESET ROLE;
+
+UPDATE public.profiles
+SET role = 'ADMIN'
+WHERE id = current_setting('test.note_chat_rpc_user_id')::uuid;
+
+SET LOCAL ROLE service_role;
 
 SELECT *
 FROM public.create_note_chat_question(
   current_setting('test.note_chat_rpc_user_id')::uuid,
   current_setting('test.note_chat_rpc_conversation_id')::uuid,
   '{"text":"admin bypass create"}'::jsonb,
-  1,
-  true
+  1
 )
 \gset test_note_chat_rpc_admin_create_
 
@@ -500,8 +492,7 @@ FROM public.update_note_chat_user_message(
   current_setting('test.note_chat_rpc_user_id')::uuid,
   :'test_note_chat_rpc_second_user_message_id'::uuid,
   '{"text":"admin bypass update"}'::jsonb,
-  1,
-  true
+  1
 )
 \gset test_note_chat_rpc_admin_update_
 
@@ -530,8 +521,7 @@ SELECT throws_ok(
       current_setting('test.note_chat_rpc_user_id')::uuid,
       current_setting('test.note_chat_rpc_conversation_id')::uuid,
       '{"text":"atomic marker"}'::jsonb,
-      10,
-      false
+      10
     );
   $sql$,
   '23514',

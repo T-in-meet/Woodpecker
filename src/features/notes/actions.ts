@@ -64,13 +64,15 @@ function scheduleNoteEmbedding({
         .eq("user_id", ownerUserId)
         .maybeSingle();
 
-    if (embeddingSourceError || !embeddingSource) {
-      const error =
-        embeddingSourceError ??
-        new Error("Failed to load Note source for embedding.");
-
+    /*
+     * DB 조회 자체가 실패한 경우에만 운영 오류로 기록합니다.
+     *
+     * embeddingSource가 없는 경우와 조회 오류를 구분하여,
+     * 실제 DB 오류만 EMBEDDING_SOURCE_LOAD_FAILED로 보고합니다.
+     */
+    if (embeddingSourceError) {
       await reportAiOperationalError({
-        error,
+        error: embeddingSourceError,
         errorCode: AI_OPERATIONAL_ERROR_CODE.EMBEDDING_SOURCE_LOAD_FAILED,
         message: "AI embedding 생성을 위한 Note source 조회에 실패했습니다.",
         operation: AI_OPERATIONAL_ERROR_OPERATION.GET_EMBEDDING_SOURCE,
@@ -80,6 +82,15 @@ function scheduleNoteEmbedding({
         },
       });
 
+      return;
+    }
+
+    /*
+     * 조회는 정상적으로 완료됐지만 Note가 존재하지 않는 경우에는
+     * 저장 이후 embedding 후처리가 실행되기 전에 사용자가 Note를 삭제한
+     * 정상적인 흐름일 수 있으므로 운영 오류를 기록하지 않고 종료합니다.
+     */
+    if (!embeddingSource) {
       return;
     }
 

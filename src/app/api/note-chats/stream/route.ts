@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 
-import { isAdminUser } from "@/features/admin/utils/is-admin-user";
 import {
   resolveAiRuntimeChatConfiguration,
   resolveAiRuntimeEmbeddingConfiguration,
@@ -172,12 +171,9 @@ export async function POST(request: Request): Promise<Response> {
    */
   const adminClient = createAdminClient();
 
-  const isAdmin = await isAdminUser(user.id);
-
   const { data: created, error: createError } = await adminClient
     .rpc("create_note_chat_question", {
       p_agent_id: chatConfiguration.prompt.agent.id,
-      p_bypass_daily_execution_limit: isAdmin,
       p_chat_model_config_id: chatConfiguration.model.id,
       p_content: content,
       p_conversation_id: conversationId,

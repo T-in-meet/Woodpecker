@@ -535,18 +535,6 @@ DROP FUNCTION IF EXISTS "public"."match_ai_embeddings"(
     double precision
 );
 
--- 단일 source 제외 인자를 사용하던 기존 overload를 제거합니다.
-DROP FUNCTION IF EXISTS "public"."match_ai_embeddings"(
-    "extensions"."vector"(1536),
-    "uuid",
-    "text",
-    "uuid",
-    "text",
-    integer,
-    double precision,
-    "uuid"
-);
-
 /*
  * 지정한 owner/source/model/input 범위에서 현재 활성 generation에 속한 청크만
  * query embedding과 비교하여 유사도가 높은 청크 Top-K를 반환합니다.

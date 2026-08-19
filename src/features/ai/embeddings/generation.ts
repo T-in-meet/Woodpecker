@@ -8,6 +8,103 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { reportAiOperationalError } from "../utils/report-ai-operational-error";
 
 /**
+ * 현재 활성 embedding generation이 동일한 원본 content로 생성되었는지 확인합니다.
+ *
+ * 동일한 source/input kind/model/content에 대해 이미 활성 generation이 존재하면
+ * Provider를 다시 호출하지 않고 기존 generation을 재사용할 수 있습니다.
+ *
+ * 이 검사는 이미 완료된 동일 generation의 불필요한 재생성을 줄이기 위한
+ * 사전 검사이며, 동시에 시작된 작업 전체를 직렬화하지는 않습니다.
+ *
+ * @param input 확인할 embedding scope와 원본 content hash입니다.
+ * @returns 동일 content hash를 가진 활성 generation이 존재하면 true입니다.
+ * @throws 활성 generation 또는 embedding 조회에 실패한 경우 오류를 발생시킵니다.
+ */
+export async function hasActiveAiEmbeddingGenerationForContent(input: {
+  ownerUserId: string;
+  sourceType: string;
+  sourceId: string;
+  modelConfigId: string;
+  inputKind: string;
+  contentHash: string;
+}): Promise<boolean> {
+  const supabase = createAdminClient();
+
+  const { data: activeGeneration, error: activeGenerationError } =
+    await supabase
+      .from("ai_embedding_active_generations")
+      .select("active_model_config_id, active_generation_id")
+      .eq("owner_user_id", input.ownerUserId)
+      .eq("source_type", input.sourceType)
+      .eq("source_id", input.sourceId)
+      .eq("input_kind", input.inputKind)
+      .maybeSingle();
+
+  if (activeGenerationError) {
+    await reportAiOperationalError({
+      error: activeGenerationError,
+      errorCode: AI_OPERATIONAL_ERROR_CODE.EMBEDDING_CACHE_READ_FAILED,
+      message: "활성 AI embedding generation 조회에 실패했습니다.",
+      operation: AI_OPERATIONAL_ERROR_OPERATION.GET_EMBEDDING_CACHE,
+      stage: AI_OPERATIONAL_ERROR_STAGE.DATABASE,
+      context: {
+        inputKind: input.inputKind,
+        modelConfigId: input.modelConfigId,
+        sourceId: input.sourceId,
+        sourceType: input.sourceType,
+      },
+    });
+
+    throw new Error(
+      `Failed to read active AI embedding generation: ${activeGenerationError.message}`,
+    );
+  }
+
+  if (
+    !activeGeneration ||
+    activeGeneration.active_model_config_id !== input.modelConfigId
+  ) {
+    return false;
+  }
+
+  const { data: activeEmbedding, error: activeEmbeddingError } = await supabase
+    .from("ai_embeddings")
+    .select("id")
+    .eq("owner_user_id", input.ownerUserId)
+    .eq("source_type", input.sourceType)
+    .eq("source_id", input.sourceId)
+    .eq("model_config_id", input.modelConfigId)
+    .eq("input_kind", input.inputKind)
+    .eq("generation_id", activeGeneration.active_generation_id)
+    .eq("content_hash", input.contentHash)
+    .limit(1)
+    .maybeSingle();
+
+  if (activeEmbeddingError) {
+    await reportAiOperationalError({
+      error: activeEmbeddingError,
+      errorCode: AI_OPERATIONAL_ERROR_CODE.EMBEDDING_CACHE_READ_FAILED,
+      message: "활성 AI embedding content 조회에 실패했습니다.",
+      operation: AI_OPERATIONAL_ERROR_OPERATION.GET_EMBEDDING_CACHE,
+      stage: AI_OPERATIONAL_ERROR_STAGE.DATABASE,
+      context: {
+        generationId: activeGeneration.active_generation_id,
+        inputKind: input.inputKind,
+        modelConfigId: input.modelConfigId,
+        sourceId: input.sourceId,
+        sourceType: input.sourceType,
+      },
+    });
+
+    throw new Error(
+      `Failed to read active AI embedding content: ${activeEmbeddingError.message}`,
+    );
+  }
+
+  return activeEmbedding !== null;
+}
+
+/**
  * 완성된 AI embedding generation을 현재 활성 generation으로 전환합니다.
  *
  * DB의 `activate_ai_embedding_generation` RPC가 대상 generation의
