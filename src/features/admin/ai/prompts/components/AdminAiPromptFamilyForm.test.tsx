@@ -158,23 +158,22 @@ describe("AdminAiPromptFamilyForm", () => {
       }),
     );
 
-    await user.type(screen.getByLabelText("이름"), "Note Answer");
-    await user.type(
-      screen.getByLabelText("설명"),
-      "노트 질문 답변에 사용하는 Prompt Family입니다.",
-    );
-    await user.type(screen.getByLabelText("Tags"), "note, answer");
+    await user.click(screen.getByLabelText("이름"));
+    await user.paste("Note Answer");
+
+    await user.click(screen.getByLabelText("설명"));
+    await user.paste("노트 질문 답변에 사용하는 Prompt Family입니다.");
+
+    await user.click(screen.getByLabelText("Tags"));
+    await user.paste("note, answer");
 
     expect(screen.getByLabelText("초기 Version 이름")).toHaveValue("v1 draft");
 
-    await user.type(
-      screen.getByLabelText("변경 요약"),
-      "초기 Draft Version 생성",
-    );
-    await user.type(
-      screen.getByLabelText("System Template"),
-      "You are a helpful assistant.",
-    );
+    await user.click(screen.getByLabelText("변경 요약"));
+    await user.paste("초기 Draft Version 생성");
+
+    await user.click(screen.getByLabelText("System Template"));
+    await user.paste("You are a helpful assistant.");
 
     await user.click(screen.getByLabelText("User Template"));
     await user.paste("{{question}}");
@@ -184,6 +183,7 @@ describe("AdminAiPromptFamilyForm", () => {
 
     await user.click(screen.getByLabelText("Response Schema JSON"));
     await user.paste('{"type":"object"}');
+
     await user.click(screen.getByRole("button", { name: "저장" }));
 
     const formData = createMutateAsyncMock.mock.calls[0]?.[0];
