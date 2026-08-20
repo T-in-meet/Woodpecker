@@ -63,6 +63,7 @@ export async function prepareRelatedNoteContext({
   // 기존 관계를 조회하여 AI 추천 검색에서 제외해야 할 Note ID를 가져옵니다.
   const excludedRelatedNoteIds = await getRelatedNoteRecommendationExcludedIds({
     noteId: targetNoteId,
+    ownerUserId,
   });
 
   // 확장된 질의를 임베딩하여 관련 Note chunk를 검색합니다.

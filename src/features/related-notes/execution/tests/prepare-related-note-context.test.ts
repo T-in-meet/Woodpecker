@@ -94,6 +94,7 @@ describe("prepareRelatedNoteContext", () => {
 
     expect(getRelatedNoteRecommendationExcludedIds).toHaveBeenCalledWith({
       noteId: "33333333-3333-4333-8333-333333333333",
+      ownerUserId: "11111111-1111-4111-8111-111111111111",
     });
 
     expect(searchNoteEmbeddings).toHaveBeenCalledWith({
