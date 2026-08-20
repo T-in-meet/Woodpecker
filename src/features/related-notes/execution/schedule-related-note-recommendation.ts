@@ -9,6 +9,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   RELATED_NOTES_AI_FEATURE_KEY,
   RELATED_NOTES_AI_ROLE_KEY,
+  RELATED_NOTES_MIN_SIMILARITY,
+  RELATED_NOTES_SEARCH_LIMIT,
 } from "../constants/ai";
 import { replaceRelatedNoteAiRecommendations } from "../persistence/replace-related-note-ai-recommendations";
 import { runRelatedNoteRecommendation } from "./run-related-note-recommendation";
@@ -124,8 +126,8 @@ export function scheduleRelatedNoteRecommendation({
         answerConfiguration,
         content: recommendationSource.content,
         embeddingConfiguration,
-        limit: 5,
-        minSimilarity: 0,
+        limit: RELATED_NOTES_SEARCH_LIMIT,
+        minSimilarity: RELATED_NOTES_MIN_SIMILARITY,
         ownerUserId,
         queryExpansionConfiguration,
         targetNoteId: recommendationSource.id,

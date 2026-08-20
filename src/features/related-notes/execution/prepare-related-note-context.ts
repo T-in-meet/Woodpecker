@@ -27,7 +27,7 @@ type PrepareRelatedNoteContextParams = {
   /** 관련 노트 검색 결과에서 제외할 추천 대상 Note ID입니다. */
   targetNoteId: string;
 
-  /** 최대 검색 Note 개수입니다. */
+  /** 벡터 검색에서 반환할 최대 Note chunk 개수입니다. */
   limit: number;
 
   /** 검색 결과에 허용할 최소 유사도입니다. */
