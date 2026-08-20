@@ -112,7 +112,10 @@ export function DeleteRelatedNoteAlertDialog({
           <AlertDialogAction
             variant="destructive"
             disabled={deleteRelatedNoteMutation.isPending}
-            onClick={handleDelete}
+            onClick={(event) => {
+              event.preventDefault();
+              void handleDelete();
+            }}
           >
             {deleteRelatedNoteMutation.isPending
               ? "삭제 중..."

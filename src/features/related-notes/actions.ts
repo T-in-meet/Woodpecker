@@ -7,6 +7,8 @@ import {
   addManualRelatedNotesSchema,
   type DeleteRelatedNoteInput,
   deleteRelatedNoteSchema,
+  type UpdateManualRelatedNoteReasonInput,
+  updateManualRelatedNoteReasonSchema,
 } from "./schemas";
 
 export type AddManualRelatedNotesActionResult =
@@ -99,11 +101,6 @@ export async function addManualRelatedNotesAction(
     success: true,
   };
 }
-
-import {
-  type UpdateManualRelatedNoteReasonInput,
-  updateManualRelatedNoteReasonSchema,
-} from "./schemas";
 
 export type UpdateManualRelatedNoteReasonActionResult =
   | {
