@@ -5,6 +5,7 @@ import { searchNoteEmbeddings } from "@/features/ai/rags/note/search-embeddings"
 
 import { buildRelatedNoteContext } from "../build-related-note-context";
 import { expandRelatedNoteQuery } from "../expand-related-note-query";
+import { getRelatedNoteRecommendationExcludedIds } from "../get-related-note-recommendation-excluded-ids";
 import { prepareRelatedNoteContext } from "../prepare-related-note-context";
 
 vi.mock("@/features/ai/rags/note/get-matched-notes", () => ({
@@ -21,6 +22,10 @@ vi.mock("../build-related-note-context", () => ({
 
 vi.mock("../expand-related-note-query", () => ({
   expandRelatedNoteQuery: vi.fn(),
+}));
+
+vi.mock("../get-related-note-recommendation-excluded-ids", () => ({
+  getRelatedNoteRecommendationExcludedIds: vi.fn(),
 }));
 
 const queryExpansionConfiguration = {
@@ -58,6 +63,12 @@ describe("prepareRelatedNoteContext", () => {
     vi.clearAllMocks();
 
     vi.mocked(expandRelatedNoteQuery).mockResolvedValue("expanded query");
+
+    vi.mocked(getRelatedNoteRecommendationExcludedIds).mockResolvedValue([
+      "44444444-4444-4444-8444-444444444444",
+      "55555555-5555-4555-8555-555555555555",
+    ]);
+
     vi.mocked(searchNoteEmbeddings).mockResolvedValue(matches as never);
     vi.mocked(getMatchedNotes).mockResolvedValue(notes);
     vi.mocked(buildRelatedNoteContext).mockReturnValue("related note context");
@@ -81,9 +92,17 @@ describe("prepareRelatedNoteContext", () => {
       content: "대상 노트 내용",
     });
 
+    expect(getRelatedNoteRecommendationExcludedIds).toHaveBeenCalledWith({
+      noteId: "33333333-3333-4333-8333-333333333333",
+    });
+
     expect(searchNoteEmbeddings).toHaveBeenCalledWith({
       embeddingConfiguration,
-      excludeSourceIds: ["33333333-3333-4333-8333-333333333333"],
+      excludeSourceIds: [
+        "33333333-3333-4333-8333-333333333333",
+        "44444444-4444-4444-8444-444444444444",
+        "55555555-5555-4555-8555-555555555555",
+      ],
       ownerUserId: "11111111-1111-4111-8111-111111111111",
       question: "expanded query",
       limit: 10,
