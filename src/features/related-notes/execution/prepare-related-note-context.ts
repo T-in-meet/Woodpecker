@@ -68,6 +68,15 @@ export async function prepareRelatedNoteContext({
 
   // 확장된 질의를 임베딩하여 관련 Note chunk를 검색합니다.
   // 추천 대상 Note 자신과 기존 관계에서 제외된 Note는 검색 후보에서 제외합니다.
+  //
+  // 현재는 Note 단위 후보 수를 보장하거나 중복 제거하지 않고,
+  // 유사도가 높은 chunk를 우선하여 Answer Agent Context에 전달합니다.
+  // 따라서 동일 Note의 여러 chunk가 검색 결과에 포함될 수 있으며,
+  // 실제 후보 Note 수는 검색 limit보다 적을 수 있습니다.
+  //
+  // 이는 동일 Note의 여러 관련 근거를 추천 판단에 함께 활용하기 위한 정책입니다.
+  // 특정 Note의 chunk 편중이 추천 품질에 영향을 주는 경우,
+  // Note 단위 grouping이나 검색 결과 다양화 방식을 별도로 검토합니다.
   const matches = await searchNoteEmbeddings({
     embeddingConfiguration,
     excludeSourceIds: [targetNoteId, ...excludedRelatedNoteIds],
