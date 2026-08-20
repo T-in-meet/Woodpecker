@@ -181,6 +181,30 @@ describe("generateRelatedNoteRecommendations", () => {
     ]);
   });
 
+  it("추천할 Note가 없으면 빈 추천 목록을 반환한다", async () => {
+    vi.mocked(createAiChatCompletionWithProvider).mockResolvedValue({
+      content: JSON.stringify({
+        recommendations: [],
+      }),
+      metadata: {},
+      usage: {
+        inputTokens: 1,
+        outputTokens: 1,
+        totalTokens: 2,
+      },
+    });
+
+    const result = await generateRelatedNoteRecommendations({
+      configuration,
+      context: "context",
+      expandedQuery: "expanded query",
+      notes,
+    });
+
+    expect(result).toEqual([]);
+    expect(reportRelatedNotesOperationalError).not.toHaveBeenCalled();
+  });
+
   it("추천 응답이 유효한 JSON이 아니면 운영 오류를 보고하고 오류를 발생시킨다", async () => {
     vi.mocked(createAiChatCompletionWithProvider).mockResolvedValue({
       content: "invalid-json",
