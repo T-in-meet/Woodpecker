@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(5);
+SELECT plan(8);
 
 
 -- ============================================================================
@@ -146,35 +146,39 @@ VALUES
         'active'
     );
 
-SELECT public.replace_note_related_ai_recommendations(
-    current_setting('test.related_notes_replace_source_id')::uuid,
-    current_setting('test.related_notes_replace_user_id')::uuid,
-    (
-        SELECT updated_at
-        FROM public.notes
-        WHERE id =
-            current_setting('test.related_notes_replace_source_id')::uuid
-    ),
-    jsonb_build_array(
-        jsonb_build_object(
-            'relatedNoteId',
-            current_setting('test.related_notes_replace_manual_id'),
-            'metadata',
-            jsonb_build_object('reason', 'manual conflict')
+SELECT is(
+    public.replace_note_related_ai_recommendations(
+        current_setting('test.related_notes_replace_source_id')::uuid,
+        current_setting('test.related_notes_replace_user_id')::uuid,
+        (
+            SELECT updated_at
+            FROM public.notes
+            WHERE id =
+                current_setting('test.related_notes_replace_source_id')::uuid
         ),
-        jsonb_build_object(
-            'relatedNoteId',
-            current_setting('test.related_notes_replace_dismissed_id'),
-            'metadata',
-            jsonb_build_object('reason', 'dismissed conflict')
-        ),
-        jsonb_build_object(
-            'relatedNoteId',
-            current_setting('test.related_notes_replace_new_ai_id'),
-            'metadata',
-            jsonb_build_object('reason', 'new recommendation')
+        jsonb_build_array(
+            jsonb_build_object(
+                'relatedNoteId',
+                current_setting('test.related_notes_replace_manual_id'),
+                'metadata',
+                jsonb_build_object('reason', 'manual conflict')
+            ),
+            jsonb_build_object(
+                'relatedNoteId',
+                current_setting('test.related_notes_replace_dismissed_id'),
+                'metadata',
+                jsonb_build_object('reason', 'dismissed conflict')
+            ),
+            jsonb_build_object(
+                'relatedNoteId',
+                current_setting('test.related_notes_replace_new_ai_id'),
+                'metadata',
+                jsonb_build_object('reason', 'new recommendation')
+            )
         )
-    )
+    ),
+    'replaced',
+    'RPC should return replaced when active AI recommendations are updated'
 );
 
 SELECT ok(
@@ -413,23 +417,27 @@ VALUES (
  * 현재 updated_at보다 과거 timestamp를 전달하여
  * 이미 오래된 Note snapshot에서 생성된 추천 결과를 재현합니다.
  */
-SELECT public.replace_note_related_ai_recommendations(
-    current_setting('test.related_notes_stale_source_id')::uuid,
-    current_setting('test.related_notes_replace_user_id')::uuid,
-    (
-        SELECT updated_at - interval '1 second'
-        FROM public.notes
-        WHERE id =
-            current_setting('test.related_notes_stale_source_id')::uuid
-    ),
-    jsonb_build_array(
-        jsonb_build_object(
-            'relatedNoteId',
-            current_setting('test.related_notes_stale_new_id'),
-            'metadata',
-            jsonb_build_object('reason', 'stale recommendation')
+SELECT is(
+    public.replace_note_related_ai_recommendations(
+        current_setting('test.related_notes_stale_source_id')::uuid,
+        current_setting('test.related_notes_replace_user_id')::uuid,
+        (
+            SELECT updated_at - interval '1 second'
+            FROM public.notes
+            WHERE id =
+                current_setting('test.related_notes_stale_source_id')::uuid
+        ),
+        jsonb_build_array(
+            jsonb_build_object(
+                'relatedNoteId',
+                current_setting('test.related_notes_stale_new_id'),
+                'metadata',
+                jsonb_build_object('reason', 'stale recommendation')
+            )
         )
-    )
+    ),
+    'stale',
+    'RPC should return stale when the source note changed after recommendation generation'
 );
 
 SELECT ok(
@@ -526,23 +534,27 @@ VALUES (
     'active'
 );
 
-SELECT public.replace_note_related_ai_recommendations(
-    current_setting('test.related_notes_source_owner_source_id')::uuid,
-    current_setting('test.related_notes_replace_foreign_user_id')::uuid,
-    (
-        SELECT updated_at
-        FROM public.notes
-        WHERE id =
-            current_setting('test.related_notes_source_owner_source_id')::uuid
-    ),
-    jsonb_build_array(
-        jsonb_build_object(
-            'relatedNoteId',
-            current_setting('test.related_notes_source_owner_new_id'),
-            'metadata',
-            jsonb_build_object('reason', 'wrong owner recommendation')
+SELECT is(
+    public.replace_note_related_ai_recommendations(
+        current_setting('test.related_notes_source_owner_source_id')::uuid,
+        current_setting('test.related_notes_replace_foreign_user_id')::uuid,
+        (
+            SELECT updated_at
+            FROM public.notes
+            WHERE id =
+                current_setting('test.related_notes_source_owner_source_id')::uuid
+        ),
+        jsonb_build_array(
+            jsonb_build_object(
+                'relatedNoteId',
+                current_setting('test.related_notes_source_owner_new_id'),
+                'metadata',
+                jsonb_build_object('reason', 'wrong owner recommendation')
+            )
         )
-    )
+    ),
+    'source_not_found',
+    'RPC should return source_not_found when source note does not belong to the supplied owner'
 );
 
 SELECT ok(

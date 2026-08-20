@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { renderPromptTemplate } from "@/features/ai/prompts/render";
 import { createAiChatCompletionWithProvider } from "@/features/ai/providers";
+import type { AiTokenUsage } from "@/features/ai/providers/types";
 import { getProviderApiKey } from "@/features/ai/providers/utils/api-key";
 import type { MatchedNote } from "@/features/ai/rags/note/get-matched-notes";
 import type { AiRuntimeChatConfiguration } from "@/features/ai/runtimes/types";
@@ -57,6 +58,25 @@ type GenerateRelatedNoteRecommendationsParams = {
    * 같은 Note에서 검색된 여러 chunk는 동일한 Note ID를 가집니다.
    */
   notes: MatchedNote[];
+
+  /**
+   * Provider 응답 직후 Token usage를 저장하기 위한 callback입니다.
+   *
+   * 응답 파싱이나 추천 Note resolve가 실패하더라도 완료된 Answer Generation
+   * 호출의 usage를 Run에 남기기 위해 검증 전에 호출합니다.
+   */
+  onUsage?: (usage: AiTokenUsage) => Promise<void>;
+};
+
+/**
+ * Related Notes Answer Generation 실행 결과입니다.
+ */
+export type GenerateRelatedNoteRecommendationsResult = {
+  /** LLM이 선택한 순서를 유지한 중복 없는 AI 관련 Note 추천 목록입니다. */
+  recommendations: RelatedNoteAiRecommendation[];
+
+  /** Answer Generation Provider 호출에서 반환된 Token 사용량입니다. */
+  usage: AiTokenUsage;
 };
 
 /**
@@ -81,16 +101,15 @@ type GenerateRelatedNoteRecommendationsParams = {
  * 생성된 추천은 저장 계층에서 AI 추천으로 저장됩니다.
  *
  * @param params 관련 노트 추천 실행에 필요한 Runtime 설정과 RAG 결과
- * @returns LLM이 선택한 순서를 유지한 중복 없는 AI 관련 Note 추천 목록
+ * @returns 추천 목록과 Provider usage
  */
 export async function generateRelatedNoteRecommendations({
   configuration,
   expandedQuery,
   context,
   notes,
-}: GenerateRelatedNoteRecommendationsParams): Promise<
-  RelatedNoteAiRecommendation[]
-> {
+  onUsage,
+}: GenerateRelatedNoteRecommendationsParams): Promise<GenerateRelatedNoteRecommendationsResult> {
   // Answer Agent 실행에 사용할 Prompt와 Model 설정을 가져옵니다.
   const promptVersion = configuration.prompt.version;
   const model = configuration.model;
@@ -135,6 +154,8 @@ export async function generateRelatedNoteRecommendations({
     temperature: configuration.temperature,
     userPrompt,
   });
+
+  await onUsage?.(result.usage);
 
   // Provider가 반환한 문자열 응답을 검증 가능한 JSON 값으로 변환합니다.
   let response: unknown;
@@ -260,5 +281,8 @@ export async function generateRelatedNoteRecommendations({
     });
   }
 
-  return recommendations;
+  return {
+    recommendations,
+    usage: result.usage,
+  };
 }

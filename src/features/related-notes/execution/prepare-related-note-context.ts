@@ -1,5 +1,6 @@
+import type { AiTokenUsage } from "@/features/ai/providers/types";
 import { getMatchedNotes } from "@/features/ai/rags/note/get-matched-notes";
-import { searchNoteEmbeddings } from "@/features/ai/rags/note/search-embeddings";
+import { searchNoteEmbeddingsWithUsage } from "@/features/ai/rags/note/search-embeddings";
 import type { AiRuntimeEmbeddingConfiguration } from "@/features/ai/runtimes/types";
 
 import { buildRelatedNoteContext } from "./build-related-note-context";
@@ -32,6 +33,15 @@ type PrepareRelatedNoteContextParams = {
 
   /** 검색 결과에 허용할 최소 유사도입니다. */
   minSimilarity: number;
+
+  /** Query Expansion Provider usage 저장 callback입니다. */
+  onQueryExpansionUsage?: (usage: AiTokenUsage) => Promise<void>;
+
+  /** 파싱과 검증을 통과한 Query Expansion 검색 질의 저장 callback입니다. */
+  onExpandedQuery?: (expandedQuery: string) => Promise<void>;
+
+  /** Query embedding usage 저장 callback입니다. */
+  onQueryEmbeddingUsage?: (usage: AiTokenUsage) => Promise<void>;
 };
 
 /**
@@ -39,6 +49,10 @@ type PrepareRelatedNoteContextParams = {
  *
  * Query Expansion으로 검색 질의를 생성한 뒤 기존 Note RAG 검색 로직을
  * 그대로 사용하여 관련 Note를 검색하고 LLM Context로 변환합니다.
+ *
+ * Query Expansion Provider usage는 응답 파싱/검증과 별도로 전달하여,
+ * 이후 파싱 또는 검증에 실패하더라도 이미 발생한 usage/cost를
+ * 실행 이력에 보존할 수 있도록 합니다.
  *
  * @param params 관련 노트 추천 실행에 필요한 입력과 Runtime 설정
  * @returns 확장 질의와 검색된 Note 및 LLM Context
@@ -52,13 +66,29 @@ export async function prepareRelatedNoteContext({
   targetNoteId,
   limit,
   minSimilarity,
+  onQueryExpansionUsage,
+  onExpandedQuery,
+  onQueryEmbeddingUsage,
 }: PrepareRelatedNoteContextParams) {
   // 대상 Note의 제목과 내용을 기반으로 Related Notes 검색에 사용할 질의를 생성합니다.
-  const expandedQuery = await expandRelatedNoteQuery({
+  const queryExpansionResult = await expandRelatedNoteQuery({
     configuration: queryExpansionConfiguration,
-    title,
     content,
+    ...(onQueryExpansionUsage !== undefined
+      ? { onUsage: onQueryExpansionUsage }
+      : {}),
+    title,
   });
+
+  const expandedQuery = queryExpansionResult.expandedQuery;
+
+  /*
+   * 파싱과 검증을 통과하여 확정된 검색 질의만 별도로 전달합니다.
+   *
+   * Provider usage는 expandRelatedNoteQuery의 onUsage 경로에서 이미
+   * 전달되므로 여기서는 usage를 다시 저장하지 않습니다.
+   */
+  await onExpandedQuery?.(expandedQuery);
 
   // 기존 관계를 조회하여 AI 추천 검색에서 제외해야 할 Note ID를 가져옵니다.
   const excludedRelatedNoteIds = await getRelatedNoteRecommendationExcludedIds({
@@ -77,7 +107,7 @@ export async function prepareRelatedNoteContext({
   // 이는 동일 Note의 여러 관련 근거를 추천 판단에 함께 활용하기 위한 정책입니다.
   // 특정 Note의 chunk 편중이 추천 품질에 영향을 주는 경우,
   // Note 단위 grouping이나 검색 결과 다양화 방식을 별도로 검토합니다.
-  const matches = await searchNoteEmbeddings({
+  const searchResult = await searchNoteEmbeddingsWithUsage({
     embeddingConfiguration,
     excludeSourceIds: [targetNoteId, ...excludedRelatedNoteIds],
     ownerUserId,
@@ -86,9 +116,11 @@ export async function prepareRelatedNoteContext({
     minSimilarity,
   });
 
+  await onQueryEmbeddingUsage?.(searchResult.usage);
+
   // 검색된 embedding 결과를 실제 Note 정보와 결합합니다.
   const notes = await getMatchedNotes({
-    matches,
+    matches: searchResult.matches,
     ownerUserId,
   });
 
@@ -102,5 +134,7 @@ export async function prepareRelatedNoteContext({
     context,
     expandedQuery,
     notes,
+    queryEmbeddingUsage: searchResult.usage,
+    queryExpansionUsage: queryExpansionResult.usage,
   };
 }

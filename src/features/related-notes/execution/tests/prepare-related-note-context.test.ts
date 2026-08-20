@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getMatchedNotes } from "@/features/ai/rags/note/get-matched-notes";
-import { searchNoteEmbeddings } from "@/features/ai/rags/note/search-embeddings";
+import { searchNoteEmbeddingsWithUsage } from "@/features/ai/rags/note/search-embeddings";
 
 import { buildRelatedNoteContext } from "../build-related-note-context";
 import { expandRelatedNoteQuery } from "../expand-related-note-query";
@@ -13,7 +13,7 @@ vi.mock("@/features/ai/rags/note/get-matched-notes", () => ({
 }));
 
 vi.mock("@/features/ai/rags/note/search-embeddings", () => ({
-  searchNoteEmbeddings: vi.fn(),
+  searchNoteEmbeddingsWithUsage: vi.fn(),
 }));
 
 vi.mock("../build-related-note-context", () => ({
@@ -58,23 +58,46 @@ const notes = [
   },
 ];
 
+const queryExpansionUsage = {
+  inputTokens: 1,
+  outputTokens: 2,
+  totalTokens: 3,
+};
+
+const queryEmbeddingUsage = {
+  inputTokens: 4,
+  outputTokens: 0,
+  totalTokens: 4,
+};
+
 describe("prepareRelatedNoteContext", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    vi.mocked(expandRelatedNoteQuery).mockResolvedValue("expanded query");
+    vi.mocked(expandRelatedNoteQuery).mockResolvedValue({
+      expandedQuery: "expanded query",
+      usage: queryExpansionUsage,
+    });
 
     vi.mocked(getRelatedNoteRecommendationExcludedIds).mockResolvedValue([
       "44444444-4444-4444-8444-444444444444",
       "55555555-5555-4555-8555-555555555555",
     ]);
 
-    vi.mocked(searchNoteEmbeddings).mockResolvedValue(matches as never);
+    vi.mocked(searchNoteEmbeddingsWithUsage).mockResolvedValue({
+      matches: matches as never,
+      usage: queryEmbeddingUsage,
+    });
+
     vi.mocked(getMatchedNotes).mockResolvedValue(notes);
     vi.mocked(buildRelatedNoteContext).mockReturnValue("related note context");
   });
 
   it("Query Expansion과 Note 검색 결과를 Related Notes Context로 구성한다", async () => {
+    const onQueryExpansionUsage = vi.fn().mockResolvedValue(undefined);
+    const onExpandedQuery = vi.fn().mockResolvedValue(undefined);
+    const onQueryEmbeddingUsage = vi.fn().mockResolvedValue(undefined);
+
     const result = await prepareRelatedNoteContext({
       title: "대상 노트",
       content: "대상 노트 내용",
@@ -84,20 +107,27 @@ describe("prepareRelatedNoteContext", () => {
       targetNoteId: "33333333-3333-4333-8333-333333333333",
       limit: 10,
       minSimilarity: 0.5,
+      onQueryExpansionUsage,
+      onExpandedQuery,
+      onQueryEmbeddingUsage,
     });
 
     expect(expandRelatedNoteQuery).toHaveBeenCalledWith({
       configuration: queryExpansionConfiguration,
       title: "대상 노트",
       content: "대상 노트 내용",
+      onUsage: onQueryExpansionUsage,
     });
+
+    expect(onExpandedQuery).toHaveBeenCalledOnce();
+    expect(onExpandedQuery).toHaveBeenCalledWith("expanded query");
 
     expect(getRelatedNoteRecommendationExcludedIds).toHaveBeenCalledWith({
       noteId: "33333333-3333-4333-8333-333333333333",
       ownerUserId: "11111111-1111-4111-8111-111111111111",
     });
 
-    expect(searchNoteEmbeddings).toHaveBeenCalledWith({
+    expect(searchNoteEmbeddingsWithUsage).toHaveBeenCalledWith({
       embeddingConfiguration,
       excludeSourceIds: [
         "33333333-3333-4333-8333-333333333333",
@@ -109,6 +139,9 @@ describe("prepareRelatedNoteContext", () => {
       limit: 10,
       minSimilarity: 0.5,
     });
+
+    expect(onQueryEmbeddingUsage).toHaveBeenCalledOnce();
+    expect(onQueryEmbeddingUsage).toHaveBeenCalledWith(queryEmbeddingUsage);
 
     expect(getMatchedNotes).toHaveBeenCalledWith({
       matches,
@@ -123,6 +156,8 @@ describe("prepareRelatedNoteContext", () => {
       context: "related note context",
       expandedQuery: "expanded query",
       notes,
+      queryEmbeddingUsage,
+      queryExpansionUsage,
     });
   });
 });

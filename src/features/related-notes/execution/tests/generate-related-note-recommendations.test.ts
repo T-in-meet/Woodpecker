@@ -46,6 +46,12 @@ const configuration = {
   temperature: 0.2,
 } as unknown as AiRuntimeChatConfiguration;
 
+const usage = {
+  inputTokens: 1,
+  outputTokens: 1,
+  totalTokens: 2,
+};
+
 /**
  * Related Notes 검색 결과 fixture입니다.
  *
@@ -107,11 +113,7 @@ describe("generateRelatedNoteRecommendations", () => {
         ],
       }),
       metadata: {},
-      usage: {
-        inputTokens: 1,
-        outputTokens: 1,
-        totalTokens: 2,
-      },
+      usage,
     });
   });
 
@@ -123,15 +125,32 @@ describe("generateRelatedNoteRecommendations", () => {
       notes,
     });
 
-    expect(result).toEqual([
-      {
-        noteId: "11111111-1111-4111-8111-111111111111",
-        reason: "첫 번째 노트와 관련된 내용을 포함합니다.",
-        title: "첫 번째 노트",
-      },
-    ]);
+    expect(result).toEqual({
+      recommendations: [
+        {
+          noteId: "11111111-1111-4111-8111-111111111111",
+          reason: "첫 번째 노트와 관련된 내용을 포함합니다.",
+          title: "첫 번째 노트",
+        },
+      ],
+      usage,
+    });
 
     expect(reportRelatedNotesOperationalError).not.toHaveBeenCalled();
+  });
+
+  it("Provider 응답 직후 usage callback을 호출한다", async () => {
+    const onUsage = vi.fn().mockResolvedValue(undefined);
+
+    await generateRelatedNoteRecommendations({
+      configuration,
+      context: "context",
+      expandedQuery: "expanded query",
+      notes,
+      onUsage,
+    });
+
+    expect(onUsage).toHaveBeenCalledWith(usage);
   });
 
   it("같은 Note ID가 여러 번 반환되어도 첫 번째 추천 이유만 유지한다", async () => {
@@ -153,11 +172,7 @@ describe("generateRelatedNoteRecommendations", () => {
         ],
       }),
       metadata: {},
-      usage: {
-        inputTokens: 1,
-        outputTokens: 1,
-        totalTokens: 2,
-      },
+      usage,
     });
 
     const result = await generateRelatedNoteRecommendations({
@@ -167,18 +182,21 @@ describe("generateRelatedNoteRecommendations", () => {
       notes,
     });
 
-    expect(result).toEqual([
-      {
-        noteId: "11111111-1111-4111-8111-111111111111",
-        reason: "첫 번째 추천 이유",
-        title: "첫 번째 노트",
-      },
-      {
-        noteId: "22222222-2222-4222-8222-222222222222",
-        reason: "두 번째 노트 추천 이유",
-        title: "두 번째 노트",
-      },
-    ]);
+    expect(result).toEqual({
+      recommendations: [
+        {
+          noteId: "11111111-1111-4111-8111-111111111111",
+          reason: "첫 번째 추천 이유",
+          title: "첫 번째 노트",
+        },
+        {
+          noteId: "22222222-2222-4222-8222-222222222222",
+          reason: "두 번째 노트 추천 이유",
+          title: "두 번째 노트",
+        },
+      ],
+      usage,
+    });
   });
 
   it("추천할 Note가 없으면 빈 추천 목록을 반환한다", async () => {
@@ -187,11 +205,7 @@ describe("generateRelatedNoteRecommendations", () => {
         recommendations: [],
       }),
       metadata: {},
-      usage: {
-        inputTokens: 1,
-        outputTokens: 1,
-        totalTokens: 2,
-      },
+      usage,
     });
 
     const result = await generateRelatedNoteRecommendations({
@@ -201,7 +215,10 @@ describe("generateRelatedNoteRecommendations", () => {
       notes,
     });
 
-    expect(result).toEqual([]);
+    expect(result).toEqual({
+      recommendations: [],
+      usage,
+    });
     expect(reportRelatedNotesOperationalError).not.toHaveBeenCalled();
   });
 
@@ -209,11 +226,7 @@ describe("generateRelatedNoteRecommendations", () => {
     vi.mocked(createAiChatCompletionWithProvider).mockResolvedValue({
       content: "invalid-json",
       metadata: {},
-      usage: {
-        inputTokens: 1,
-        outputTokens: 1,
-        totalTokens: 2,
-      },
+      usage,
     });
 
     await expect(
@@ -251,11 +264,7 @@ describe("generateRelatedNoteRecommendations", () => {
         ],
       }),
       metadata: {},
-      usage: {
-        inputTokens: 1,
-        outputTokens: 1,
-        totalTokens: 2,
-      },
+      usage,
     });
 
     await expect(
@@ -296,11 +305,7 @@ describe("generateRelatedNoteRecommendations", () => {
         ],
       }),
       metadata: {},
-      usage: {
-        inputTokens: 1,
-        outputTokens: 1,
-        totalTokens: 2,
-      },
+      usage,
     });
 
     await expect(
@@ -343,11 +348,7 @@ describe("generateRelatedNoteRecommendations", () => {
         ],
       }),
       metadata: {},
-      usage: {
-        inputTokens: 1,
-        outputTokens: 1,
-        totalTokens: 2,
-      },
+      usage,
     });
 
     await expect(

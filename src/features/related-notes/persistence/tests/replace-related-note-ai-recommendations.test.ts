@@ -22,6 +22,7 @@ describe("replaceRelatedNoteAiRecommendations", () => {
 
   it("관련 노트 추천과 source updated_at을 RPC payload로 변환해 교체한다", async () => {
     const rpc = vi.fn().mockResolvedValue({
+      data: "replaced",
       error: null,
     });
 
@@ -29,7 +30,7 @@ describe("replaceRelatedNoteAiRecommendations", () => {
       rpc,
     } as never);
 
-    await replaceRelatedNoteAiRecommendations({
+    const result = await replaceRelatedNoteAiRecommendations({
       noteId: NOTE_ID,
       ownerUserId: OWNER_USER_ID,
       recommendations: [
@@ -59,10 +60,13 @@ describe("replaceRelatedNoteAiRecommendations", () => {
         p_source_updated_at: SOURCE_UPDATED_AT,
       },
     );
+
+    expect(result).toBe("replaced");
   });
 
   it("추천 결과가 비어 있으면 빈 배열로 AI 추천을 교체한다", async () => {
     const rpc = vi.fn().mockResolvedValue({
+      data: "stale",
       error: null,
     });
 
@@ -70,7 +74,7 @@ describe("replaceRelatedNoteAiRecommendations", () => {
       rpc,
     } as never);
 
-    await replaceRelatedNoteAiRecommendations({
+    const result = await replaceRelatedNoteAiRecommendations({
       noteId: NOTE_ID,
       ownerUserId: OWNER_USER_ID,
       recommendations: [],
@@ -86,10 +90,13 @@ describe("replaceRelatedNoteAiRecommendations", () => {
         p_source_updated_at: SOURCE_UPDATED_AT,
       },
     );
+
+    expect(result).toBe("stale");
   });
 
   it("RPC 호출에 실패하면 오류를 전달한다", async () => {
     const rpc = vi.fn().mockResolvedValue({
+      data: null,
       error: {
         message: "replace failed",
       },

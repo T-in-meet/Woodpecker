@@ -18,6 +18,11 @@
  * 추천 생성 중 Note가 다시 수정된 경우 오래된 추천 결과가
  * 최신 추천을 덮어쓰지 않도록 해당 교체 작업을 수행하지 않습니다.
  *
+ * 반환 status:
+ * - replaced: 최신 source snapshot 기준으로 active AI 추천을 교체했습니다.
+ * - stale: 추천 생성 중 source Note가 수정되어 저장하지 않았습니다.
+ * - source_not_found: source Note가 삭제되었거나 owner가 일치하지 않아 저장하지 않았습니다.
+ *
  * p_recommendations 형식:
  *
  * [
@@ -41,7 +46,7 @@ CREATE OR REPLACE FUNCTION "public"."replace_note_related_ai_recommendations"(
     "p_source_updated_at" timestamp with time zone,
     "p_recommendations" jsonb
 )
-RETURNS void
+RETURNS text
 LANGUAGE plpgsql
 SECURITY INVOKER
 SET search_path = ''
@@ -76,10 +81,11 @@ BEGIN
 
     /*
      * 추천 후처리 실행 전에 Note가 삭제되었거나 전달받은 owner와
-     * source Note 소유자가 일치하지 않는 경우에는 아무것도 변경하지 않습니다.
+     * source Note 소유자가 일치하지 않는 경우에는 아무것도 변경하지 않고
+     * source_not_found 상태를 반환합니다.
      */
     IF NOT FOUND THEN
-        RETURN;
+        RETURN 'source_not_found';
     END IF;
 
     /*
@@ -89,7 +95,7 @@ BEGIN
      * 최신 Note version을 기준으로 생성된 추천을 오래된 실행이 덮어쓰지 않도록 합니다.
      */
     IF "v_current_source_updated_at" IS DISTINCT FROM "p_source_updated_at" THEN
-        RETURN;
+        RETURN 'stale';
     END IF;
 
     /*
@@ -165,6 +171,8 @@ BEGIN
      AND "target_note"."user_id" = "p_owner_user_id"
     ON CONFLICT ("note_id", "related_note_id")
     DO NOTHING;
+
+    RETURN 'replaced';
 END;
 $$;
 
@@ -177,7 +185,7 @@ COMMENT ON FUNCTION
         jsonb
     )
 IS
-    '지정한 Note의 active AI Related Notes를 새로운 추천 결과로 원자적으로 교체합니다. Note version이 변경된 stale 추천은 저장하지 않으며 manual 및 dismissed 관계는 유지합니다.';
+    '지정한 Note의 active AI Related Notes를 새로운 추천 결과로 원자적으로 교체하고 replaced, stale, source_not_found 중 하나를 반환합니다. stale/source_not_found는 저장하지 않으며 manual 및 dismissed 관계는 유지합니다.';
 
 
 -- ============================================================================

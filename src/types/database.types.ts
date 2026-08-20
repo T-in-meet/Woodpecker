@@ -1203,6 +1203,92 @@ export type Database = {
           },
         ];
       };
+      related_note_recommendation_runs: {
+        Row: {
+          answer_generation_cost_usd: number | null;
+          answer_generation_model_config_id: string | null;
+          answer_generation_usage: Json | null;
+          completed_at: string | null;
+          created_at: string;
+          embedding_model_config_id: string | null;
+          expanded_query: string | null;
+          failure_message: string | null;
+          id: string;
+          matched_note_ids: string[];
+          note_id: string;
+          query_embedding_cost_usd: number | null;
+          query_embedding_usage: Json | null;
+          query_expansion_cost_usd: number | null;
+          query_expansion_model_config_id: string | null;
+          query_expansion_usage: Json | null;
+          recommendations: Json;
+          source_updated_at: string | null;
+          started_at: string;
+          status: string;
+          total_cost_usd: number | null;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          answer_generation_cost_usd?: number | null;
+          answer_generation_model_config_id?: string | null;
+          answer_generation_usage?: Json | null;
+          completed_at?: string | null;
+          created_at?: string;
+          embedding_model_config_id?: string | null;
+          expanded_query?: string | null;
+          failure_message?: string | null;
+          id?: string;
+          matched_note_ids?: string[];
+          note_id: string;
+          query_embedding_cost_usd?: number | null;
+          query_embedding_usage?: Json | null;
+          query_expansion_cost_usd?: number | null;
+          query_expansion_model_config_id?: string | null;
+          query_expansion_usage?: Json | null;
+          recommendations?: Json;
+          source_updated_at?: string | null;
+          started_at?: string;
+          status?: string;
+          total_cost_usd?: number | null;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          answer_generation_cost_usd?: number | null;
+          answer_generation_model_config_id?: string | null;
+          answer_generation_usage?: Json | null;
+          completed_at?: string | null;
+          created_at?: string;
+          embedding_model_config_id?: string | null;
+          expanded_query?: string | null;
+          failure_message?: string | null;
+          id?: string;
+          matched_note_ids?: string[];
+          note_id?: string;
+          query_embedding_cost_usd?: number | null;
+          query_embedding_usage?: Json | null;
+          query_expansion_cost_usd?: number | null;
+          query_expansion_model_config_id?: string | null;
+          query_expansion_usage?: Json | null;
+          recommendations?: Json;
+          source_updated_at?: string | null;
+          started_at?: string;
+          status?: string;
+          total_cost_usd?: number | null;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "related_note_recommendation_runs_note_id_fkey";
+            columns: ["note_id"];
+            isOneToOne: false;
+            referencedRelation: "notes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       review_grading_generations: {
         Row: {
           created_at: string;
@@ -1930,7 +2016,7 @@ export type Database = {
           p_recommendations: Json;
           p_source_updated_at: string;
         };
-        Returns: undefined;
+        Returns: string;
       };
       save_ai_setting_configurations: {
         Args: { p_configurations: Json; p_setting_id: string };

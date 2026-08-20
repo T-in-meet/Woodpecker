@@ -1,7 +1,27 @@
+import { z } from "zod";
+
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Json } from "@/types/db.helpers";
 
 import type { RelatedNoteAiRecommendation } from "../types";
+
+/** Related Notes AI 추천 교체 RPC 반환 상태입니다. */
+export const REPLACE_RELATED_NOTE_AI_RECOMMENDATIONS_STATUS = {
+  REPLACED: "replaced",
+  SOURCE_NOT_FOUND: "source_not_found",
+  STALE: "stale",
+} as const;
+
+/** Related Notes AI 추천 교체 RPC 반환 상태 타입입니다. */
+export type ReplaceRelatedNoteAiRecommendationsStatus =
+  (typeof REPLACE_RELATED_NOTE_AI_RECOMMENDATIONS_STATUS)[keyof typeof REPLACE_RELATED_NOTE_AI_RECOMMENDATIONS_STATUS];
+
+/** Related Notes AI 추천 교체 RPC 반환 상태 검증 schema입니다. */
+const replaceRelatedNoteAiRecommendationsStatusSchema = z.enum([
+  REPLACE_RELATED_NOTE_AI_RECOMMENDATIONS_STATUS.REPLACED,
+  REPLACE_RELATED_NOTE_AI_RECOMMENDATIONS_STATUS.SOURCE_NOT_FOUND,
+  REPLACE_RELATED_NOTE_AI_RECOMMENDATIONS_STATUS.STALE,
+]);
 
 type ReplaceRelatedNoteAiRecommendationsParams = {
   /** AI 추천 결과를 교체할 대상 Note ID입니다. */
@@ -35,13 +55,14 @@ type ReplaceRelatedNoteAiRecommendationsParams = {
  * AI 관계는 RPC에서 유지합니다.
  *
  * @param params 대상 Note ID, 추천 생성에 사용한 Note version 및 새 AI 추천 결과
+ * @returns RPC가 반환한 추천 교체 적용 상태
  */
 export async function replaceRelatedNoteAiRecommendations({
   noteId,
   ownerUserId,
   sourceUpdatedAt,
   recommendations,
-}: ReplaceRelatedNoteAiRecommendationsParams): Promise<void> {
+}: ReplaceRelatedNoteAiRecommendationsParams): Promise<ReplaceRelatedNoteAiRecommendationsStatus> {
   const supabase = createAdminClient();
 
   const recommendationPayload = recommendations.map(
@@ -51,7 +72,7 @@ export async function replaceRelatedNoteAiRecommendations({
     }),
   ) satisfies Json;
 
-  const { error } = await supabase.rpc(
+  const { data, error } = await supabase.rpc(
     "replace_note_related_ai_recommendations",
     {
       p_note_id: noteId,
@@ -66,4 +87,6 @@ export async function replaceRelatedNoteAiRecommendations({
       `Failed to replace related note AI recommendations: ${error.message}`,
     );
   }
+
+  return replaceRelatedNoteAiRecommendationsStatusSchema.parse(data);
 }

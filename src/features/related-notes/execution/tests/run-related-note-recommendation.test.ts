@@ -45,6 +45,24 @@ const defaultParams = {
   title: "Source note",
 };
 
+const queryExpansionUsage = {
+  inputTokens: 1,
+  outputTokens: 2,
+  totalTokens: 3,
+};
+
+const queryEmbeddingUsage = {
+  inputTokens: 4,
+  outputTokens: 0,
+  totalTokens: 4,
+};
+
+const answerGenerationUsage = {
+  inputTokens: 5,
+  outputTokens: 6,
+  totalTokens: 11,
+};
+
 describe("runRelatedNoteRecommendation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -62,17 +80,42 @@ describe("runRelatedNoteRecommendation", () => {
       context: "<note>Related note</note>",
       expandedQuery: "expanded related note query",
       notes,
+      queryEmbeddingUsage,
+      queryExpansionUsage,
     });
 
-    mockGenerateRelatedNoteRecommendations.mockResolvedValue([
-      {
-        noteId: RELATED_NOTE_ID,
-        reason: "관련 노트 추천 이유",
-        title: "Related note",
-      },
-    ]);
+    mockGenerateRelatedNoteRecommendations.mockResolvedValue({
+      recommendations: [
+        {
+          noteId: RELATED_NOTE_ID,
+          reason: "관련 노트 추천 이유",
+          title: "Related note",
+        },
+      ],
+      usage: answerGenerationUsage,
+    });
 
-    const result = await runRelatedNoteRecommendation(defaultParams);
+    const onQueryExpansionUsage = vi.fn().mockResolvedValue(undefined);
+    const onExpandedQuery = vi.fn().mockResolvedValue(undefined);
+
+    const result = await runRelatedNoteRecommendation({
+      ...defaultParams,
+      onExpandedQuery,
+      onQueryExpansionUsage,
+    });
+
+    expect(mockPrepareRelatedNoteContext).toHaveBeenCalledWith({
+      content: "Source note content",
+      embeddingConfiguration,
+      limit: 5,
+      minSimilarity: 0,
+      onExpandedQuery,
+      onQueryExpansionUsage,
+      ownerUserId: OWNER_USER_ID,
+      queryExpansionConfiguration,
+      targetNoteId: TARGET_NOTE_ID,
+      title: "Source note",
+    });
 
     expect(mockGenerateRelatedNoteRecommendations).toHaveBeenCalledWith({
       configuration: answerConfiguration,
@@ -82,8 +125,11 @@ describe("runRelatedNoteRecommendation", () => {
     });
 
     expect(result).toEqual({
+      answerGenerationUsage,
       expandedQuery: "expanded related note query",
       notes,
+      queryEmbeddingUsage,
+      queryExpansionUsage,
       recommendations: [
         {
           noteId: RELATED_NOTE_ID,
@@ -99,15 +145,25 @@ describe("runRelatedNoteRecommendation", () => {
       context: "",
       expandedQuery: "expanded related note query",
       notes: [],
+      queryEmbeddingUsage,
+      queryExpansionUsage,
     });
 
-    const result = await runRelatedNoteRecommendation(defaultParams);
+    const onRecommendations = vi.fn().mockResolvedValue(undefined);
+
+    const result = await runRelatedNoteRecommendation({
+      ...defaultParams,
+      onRecommendations,
+    });
 
     expect(mockGenerateRelatedNoteRecommendations).not.toHaveBeenCalled();
+    expect(onRecommendations).toHaveBeenCalledWith([]);
 
     expect(result).toEqual({
       expandedQuery: "expanded related note query",
       notes: [],
+      queryEmbeddingUsage,
+      queryExpansionUsage,
       recommendations: [],
     });
   });

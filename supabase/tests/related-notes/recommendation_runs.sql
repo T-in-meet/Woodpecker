@@ -1,0 +1,271 @@
+BEGIN;
+
+SELECT plan(8);
+
+
+-- ============================================================================
+-- Test Fixtures
+-- ============================================================================
+
+SELECT set_config(
+    'test.related_note_runs_user_a_id',
+    gen_random_uuid()::text,
+    true
+);
+
+SELECT set_config(
+    'test.related_note_runs_user_b_id',
+    gen_random_uuid()::text,
+    true
+);
+
+SELECT set_config(
+    'test.related_note_runs_note_a_id',
+    gen_random_uuid()::text,
+    true
+);
+
+SELECT set_config(
+    'test.related_note_runs_note_b_id',
+    gen_random_uuid()::text,
+    true
+);
+
+SELECT set_config(
+    'test.related_note_runs_run_a_id',
+    gen_random_uuid()::text,
+    true
+);
+
+SELECT set_config(
+    'test.related_note_runs_run_b_id',
+    gen_random_uuid()::text,
+    true
+);
+
+INSERT INTO auth.users (
+    id,
+    email,
+    raw_user_meta_data
+)
+VALUES
+    (
+        current_setting('test.related_note_runs_user_a_id')::uuid,
+        'related-note-runs-a@example.com',
+        '{}'::jsonb
+    ),
+    (
+        current_setting('test.related_note_runs_user_b_id')::uuid,
+        'related-note-runs-b@example.com',
+        '{}'::jsonb
+    );
+
+INSERT INTO public.notes (
+    id,
+    user_id,
+    title,
+    content,
+    review_round
+)
+VALUES
+    (
+        current_setting('test.related_note_runs_note_a_id')::uuid,
+        current_setting('test.related_note_runs_user_a_id')::uuid,
+        'Related Note Run A',
+        'Related Note Run A Content',
+        0
+    ),
+    (
+        current_setting('test.related_note_runs_note_b_id')::uuid,
+        current_setting('test.related_note_runs_user_b_id')::uuid,
+        'Related Note Run B',
+        'Related Note Run B Content',
+        0
+    );
+
+
+-- ============================================================================
+-- 1. Table and constraints
+-- ============================================================================
+
+SELECT has_table(
+    'public',
+    'related_note_recommendation_runs',
+    'related_note_recommendation_runs table should exist'
+);
+
+SELECT col_not_null(
+    'public',
+    'related_note_recommendation_runs',
+    'recommendations',
+    'recommendations snapshot should be NOT NULL'
+);
+
+SELECT ok(
+    EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'public.related_note_recommendation_runs'::regclass
+          AND conname =
+              'related_note_recommendation_runs_recommendations_array_check'
+          AND contype = 'c'
+    ),
+    'recommendations JSON array check constraint should exist'
+);
+
+
+-- ============================================================================
+-- 2. Service role write path
+-- ============================================================================
+
+SET LOCAL ROLE service_role;
+SELECT set_config('request.jwt.claims', '{}'::text, true);
+
+SELECT lives_ok(
+    format(
+        $sql$
+            INSERT INTO public.related_note_recommendation_runs (
+                id,
+                note_id,
+                user_id,
+                status,
+                source_updated_at,
+                expanded_query,
+                matched_note_ids,
+                recommendations,
+                query_expansion_usage,
+                query_expansion_cost_usd,
+                total_cost_usd
+            )
+            VALUES (
+                '%s'::uuid,
+                '%s'::uuid,
+                '%s'::uuid,
+                'running',
+                now(),
+                'expanded related note query',
+                ARRAY['%s'::uuid],
+                jsonb_build_array(
+                    jsonb_build_object(
+                        'noteId',
+                        '%s',
+                        'title',
+                        'Related recommendation',
+                        'reason',
+                        'Shared context'
+                    )
+                ),
+                '{"inputTokens":10,"outputTokens":5,"totalTokens":15}'::jsonb,
+                0.00001,
+                0.00001
+            );
+        $sql$,
+        current_setting('test.related_note_runs_run_a_id'),
+        current_setting('test.related_note_runs_note_a_id'),
+        current_setting('test.related_note_runs_user_a_id'),
+        current_setting('test.related_note_runs_note_b_id'),
+        current_setting('test.related_note_runs_note_b_id')
+    ),
+    'service_role should insert a related note recommendation run'
+);
+
+SELECT throws_ok(
+    format(
+        $sql$
+            INSERT INTO public.related_note_recommendation_runs (
+                note_id,
+                user_id,
+                recommendations
+            )
+            VALUES (
+                '%s'::uuid,
+                '%s'::uuid,
+                '{"noteId":"not-an-array"}'::jsonb
+            );
+        $sql$,
+        current_setting('test.related_note_runs_note_a_id'),
+        current_setting('test.related_note_runs_user_a_id')
+    ),
+    '23514',
+    NULL,
+    'recommendations should reject non-array JSON'
+);
+
+INSERT INTO public.related_note_recommendation_runs (
+    id,
+    note_id,
+    user_id,
+    status,
+    recommendations
+)
+VALUES (
+    current_setting('test.related_note_runs_run_b_id')::uuid,
+    current_setting('test.related_note_runs_note_b_id')::uuid,
+    current_setting('test.related_note_runs_user_b_id')::uuid,
+    'running',
+    '[]'::jsonb
+);
+
+
+-- ============================================================================
+-- 3. RLS
+-- ============================================================================
+
+SET LOCAL ROLE authenticated;
+SELECT set_config(
+    'request.jwt.claims',
+    json_build_object(
+        'sub',
+        current_setting('test.related_note_runs_user_a_id'),
+        'role',
+        'authenticated'
+    )::text,
+    true
+);
+
+SELECT is(
+    (
+        SELECT count(*)
+        FROM public.related_note_recommendation_runs
+    ),
+    1::bigint,
+    'authenticated user should select only own related note recommendation runs'
+);
+
+SELECT throws_ok(
+    format(
+        $sql$
+            INSERT INTO public.related_note_recommendation_runs (
+                note_id,
+                user_id
+            )
+            VALUES (
+                '%s'::uuid,
+                '%s'::uuid
+            );
+        $sql$,
+        current_setting('test.related_note_runs_note_a_id'),
+        current_setting('test.related_note_runs_user_a_id')
+    ),
+    '42501',
+    NULL,
+    'authenticated user should not insert related note recommendation runs'
+);
+
+SET LOCAL ROLE anon;
+SELECT set_config('request.jwt.claims', '{}'::text, true);
+
+SELECT throws_ok(
+    $sql$
+        SELECT count(*)
+        FROM public.related_note_recommendation_runs;
+    $sql$,
+    '42501',
+    NULL,
+    'anon should not select related note recommendation runs'
+);
+
+
+SELECT * FROM finish();
+
+ROLLBACK;
