@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { AiRuntimeEmbeddingConfiguration } from "@/features/ai/runtimes/types";
 import {
-  NOTE_CHAT_AI_FEATURE_KEY,
-  NOTE_CHAT_AI_ROLE_KEY,
-} from "@/features/note-chats/constants/ai";
+  NOTE_RETRIEVAL_AI_FEATURE_KEY,
+  NOTE_RETRIEVAL_AI_ROLE_KEY,
+} from "@/features/ai/rags/note/constants/runtime";
+import type { AiRuntimeEmbeddingConfiguration } from "@/features/ai/runtimes/types";
 import {
   AI_OPERATIONAL_ERROR_CODE,
   AI_OPERATIONAL_ERROR_OPERATION,
@@ -765,11 +765,10 @@ describe("Note embedding integration", () => {
 
       await runScheduledAfterCallback();
 
-      // Note Chat의 검색에 사용하는 note-retrieval 설정과 동일한
-      // Embedding Runtime Configuration을 사용해야 Note와 질의의 vector 공간이 일치한다.
+      // 공통 Note retrieval Runtime을 사용해야 Note와 질의의 vector 공간이 일치한다.
       expect(resolveAiRuntimeEmbeddingConfigurationMock).toHaveBeenCalledWith({
-        featureKey: NOTE_CHAT_AI_FEATURE_KEY,
-        roleKey: NOTE_CHAT_AI_ROLE_KEY.NOTE_RETRIEVAL,
+        featureKey: NOTE_RETRIEVAL_AI_FEATURE_KEY,
+        roleKey: NOTE_RETRIEVAL_AI_ROLE_KEY,
       });
 
       expect(generateNoteEmbeddingMock).toHaveBeenCalledWith({
@@ -961,11 +960,10 @@ describe("Note embedding integration", () => {
 
       await runScheduledAfterCallback();
 
-      // 수정된 Note도 생성 시와 동일한 note-retrieval 설정을 사용하여
-      // Note embedding과 Note Chat 질의 embedding의 모델을 일치시킨다.
+      // 수정된 Note도 생성 시와 동일한 공통 Note retrieval Runtime을 사용한다.
       expect(resolveAiRuntimeEmbeddingConfigurationMock).toHaveBeenCalledWith({
-        featureKey: NOTE_CHAT_AI_FEATURE_KEY,
-        roleKey: NOTE_CHAT_AI_ROLE_KEY.NOTE_RETRIEVAL,
+        featureKey: NOTE_RETRIEVAL_AI_FEATURE_KEY,
+        roleKey: NOTE_RETRIEVAL_AI_ROLE_KEY,
       });
 
       expect(generateNoteEmbeddingMock).toHaveBeenCalledWith({

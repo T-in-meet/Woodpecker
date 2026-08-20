@@ -12,9 +12,6 @@ export const RELATED_NOTES_AI_ROLE_KEY = {
 
   /** Note의 제목과 내용을 관련 노트 검색 질의로 확장합니다. */
   QUERY_EXPANSION: "query-expansion",
-
-  /** 확장된 검색 질의를 사용하여 관련 Note chunk를 검색합니다. */
-  NOTE_RETRIEVAL: "note-retrieval",
 } as const;
 
 /**

@@ -14,13 +14,13 @@ import { ROUTES } from "@/lib/constants/routes";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
+import {
+  NOTE_RETRIEVAL_AI_FEATURE_KEY,
+  NOTE_RETRIEVAL_AI_ROLE_KEY,
+} from "../ai/rags/note/constants/runtime";
 import { generateNoteEmbedding } from "../ai/rags/note/generate-embedding";
 import { resolveAiRuntimeEmbeddingConfiguration } from "../ai/runtimes";
 import { reportAiOperationalError } from "../ai/utils/report-ai-operational-error";
-import {
-  NOTE_CHAT_AI_FEATURE_KEY,
-  NOTE_CHAT_AI_ROLE_KEY,
-} from "../note-chats/constants/ai";
 import { scheduleRelatedNoteRecommendation } from "../related-notes/execution/schedule-related-note-recommendation";
 import { type NoteInput, noteSchema } from "./schema";
 
@@ -97,15 +97,15 @@ function scheduleNoteEmbedding({
 
     try {
       /*
-       * Note Chat의 검색 대상 embedding과 동일한 Runtime 설정을 사용합니다.
+       * 공통 Note retrieval Runtime 설정을 사용합니다.
        *
        * Runtime 설정 조회와 Provider embedding 생성은 모두 후처리에서 실행되므로
        * Note 저장/수정 응답 시간을 지연시키지 않습니다.
        */
       const embeddingConfiguration =
         await resolveAiRuntimeEmbeddingConfiguration({
-          featureKey: NOTE_CHAT_AI_FEATURE_KEY,
-          roleKey: NOTE_CHAT_AI_ROLE_KEY.NOTE_RETRIEVAL,
+          featureKey: NOTE_RETRIEVAL_AI_FEATURE_KEY,
+          roleKey: NOTE_RETRIEVAL_AI_ROLE_KEY,
         });
 
       await generateNoteEmbedding({

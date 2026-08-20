@@ -110,7 +110,10 @@ export function AdminAiSettingsDetailClient({
 
       <div className="space-y-6">
         <AdminAiSettingInfoSection setting={setting} />
-        <AdminAiSettingConfigurationForm settingId={settingId} />
+        <AdminAiSettingConfigurationForm
+          settingId={settingId}
+          settingKey={setting.key}
+        />
       </div>
     </div>
   );

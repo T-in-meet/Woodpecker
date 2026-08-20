@@ -10,6 +10,7 @@ import {
   AdminDetailError,
   AdminDetailLoading,
 } from "@/features/admin/components/common/AdminDetailState";
+import { RELATED_NOTES_AI_FEATURE_KEY } from "@/features/related-notes/constants/ai";
 
 import { useSaveAdminAiSettingConfigurations } from "../hooks/use-admin-ai-setting-configuration-mutations";
 import { useAdminAiSettingConfigurations } from "../hooks/use-admin-ai-setting-configuration-queries";
@@ -19,6 +20,9 @@ import { AdminAiSettingConfigurationsSection } from "./AdminAiSettingConfigurati
 type AdminAiSettingConfigurationFormProps = {
   /** AI 설정 ID입니다. */
   settingId: string;
+
+  /** AI 설정 Key입니다. */
+  settingKey: string;
 };
 
 /**
@@ -27,6 +31,7 @@ type AdminAiSettingConfigurationFormProps = {
  */
 export function AdminAiSettingConfigurationForm({
   settingId,
+  settingKey,
 }: AdminAiSettingConfigurationFormProps) {
   const form = useForm<AdminAiSettingConfigurationFormValues>({
     defaultValues: {
@@ -252,6 +257,9 @@ export function AdminAiSettingConfigurationForm({
           onAddChat={appendChatConfiguration}
           onAddEmbedding={appendEmbeddingConfiguration}
           onRemove={remove}
+          showRelatedNotesEmbeddingNotice={
+            settingKey === RELATED_NOTES_AI_FEATURE_KEY
+          }
         />
 
         <div className="flex justify-end">

@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  NOTE_RETRIEVAL_AI_FEATURE_KEY,
+  NOTE_RETRIEVAL_AI_ROLE_KEY,
+} from "@/features/ai/rags/note/constants/runtime";
+import {
   resolveAiRuntimeChatConfiguration,
   resolveAiRuntimeEmbeddingConfiguration,
 } from "@/features/ai/runtimes";
@@ -186,6 +190,21 @@ describe("scheduleRelatedNoteRecommendation", () => {
         },
       ],
       sourceUpdatedAt: SOURCE_UPDATED_AT,
+    });
+
+    expect(mockResolveAiRuntimeEmbeddingConfiguration).toHaveBeenCalledWith({
+      featureKey: NOTE_RETRIEVAL_AI_FEATURE_KEY,
+      roleKey: NOTE_RETRIEVAL_AI_ROLE_KEY,
+    });
+
+    expect(mockResolveAiRuntimeChatConfiguration).toHaveBeenNthCalledWith(1, {
+      featureKey: "related-notes",
+      roleKey: "query-expansion",
+    });
+
+    expect(mockResolveAiRuntimeChatConfiguration).toHaveBeenNthCalledWith(2, {
+      featureKey: "related-notes",
+      roleKey: "answer-generation",
     });
   });
 

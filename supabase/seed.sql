@@ -521,24 +521,6 @@ INSERT INTO "public"."ai_setting_configurations" (
     "updated_at"
 ) VALUES
     (
-        '046ec729-007f-40b3-802e-89e8ffc212e2',
-        'f5af3b5e-d9c7-4608-ab93-433f429cb15f',
-        'note-retrieval',
-        'embedding',
-        (
-            SELECT "id"
-            FROM "public"."ai_model_configs"
-            WHERE "provider" = 'openai'
-              AND "model" = 'text-embedding-3-small'
-              AND "capability" = 'embedding'
-        ),
-        NULL,
-        NULL,
-        0,
-        '2026-08-11 10:27:45.881049+00',
-        '2026-08-11 10:27:45.881049+00'
-    ),
-    (
         '0a036f90-6afe-4625-8242-b4fb3fc03ee0',
         'f5af3b5e-d9c7-4608-ab93-433f429cb15f',
         'answer-generation',
@@ -589,7 +571,7 @@ INSERT INTO "public"."notes" ("id", "user_id", "title", "content", "review_round
 예를 들어 Chrome을 실행하면 하나 이상의 프로세스가 생성된다.
 ---
 ## 프로세스의 구성
-프로세스는 일반적으로 다음과 같은 메모리 영역을 가진다.
+프로세스는 일반적으로 다음과 같은 메모리 영역을 `가진다.
 ```
 ```
 ```

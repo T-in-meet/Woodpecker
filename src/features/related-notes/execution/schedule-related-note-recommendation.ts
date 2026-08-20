@@ -1,6 +1,10 @@
 import { after } from "next/server";
 
 import {
+  NOTE_RETRIEVAL_AI_FEATURE_KEY,
+  NOTE_RETRIEVAL_AI_ROLE_KEY,
+} from "@/features/ai/rags/note/constants/runtime";
+import {
   resolveAiRuntimeChatConfiguration,
   resolveAiRuntimeEmbeddingConfiguration,
 } from "@/features/ai/runtimes";
@@ -106,27 +110,16 @@ export function scheduleRelatedNoteRecommendation({
 
     try {
       /*
-       * Related Notes의 Note 검색은 Note embedding, Note Chat 검색과
-       * 동일한 Note embedding 저장소 및 embedding model을 사용합니다.
+       * Related Notes의 Note 검색은 Note embedding 생성, Note Chat 검색과
+       * 동일한 공통 Note retrieval Runtime을 사용합니다.
        *
-       * 현재 Runtime Configuration은 기능별 Settings 구성을 유지하기 위해
-       * Related Notes의 featureKey/roleKey를 사용하여 조회합니다.
-       *
-       * TODO
-       * Note embedding 생성, Note Chat 검색, Related Notes 검색이 모두
-       * 동일한 Note retrieval embedding을 사용하고 있으므로,
-       * NOTE_RETRIEVAL Runtime을 기능별 상수로 각각 유지하는 것이 적절한지
-       * 또는 공통 AI/RAG 상수로 통일하는 것이 더 명확한지 별도로 점검합니다.
-       *
-       * 통일 여부를 검토할 때에는 단순 상수 이름뿐 아니라
-       * AI Settings에서 featureKey/roleKey별 Runtime 설정을 관리하는 현재 구조와
-       * 각 기능이 동일 embedding model을 반드시 사용해야 하는 제약까지
-       * 함께 확인해야 합니다.
+       * 검색은 model_config_id가 일치하는 활성 Note embedding generation만
+       * 대상으로 삼으므로 기능별 Runtime을 분리하지 않습니다.
        */
       const embeddingConfiguration =
         await resolveAiRuntimeEmbeddingConfiguration({
-          featureKey: RELATED_NOTES_AI_FEATURE_KEY,
-          roleKey: RELATED_NOTES_AI_ROLE_KEY.NOTE_RETRIEVAL,
+          featureKey: NOTE_RETRIEVAL_AI_FEATURE_KEY,
+          roleKey: NOTE_RETRIEVAL_AI_ROLE_KEY,
         });
 
       const queryExpansionConfiguration =

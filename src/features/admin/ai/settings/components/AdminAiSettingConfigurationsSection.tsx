@@ -2,6 +2,7 @@ import { useAdminAiSettingConfigurationOptions } from "../hooks/use-admin-ai-set
 import { useScrollToNewlyAddedCard } from "../hooks/use-scroll-to-newly-added-card";
 import { AdminAiSettingConfigurationAddMenu } from "./AdminAiSettingConfigurationAddMenu";
 import { AdminAiSettingConfigurationCard } from "./AdminAiSettingConfigurationCard";
+import { AdminAiSettingRelatedNotesNotice } from "./AdminAiSettingRelatedNotesNotice";
 
 /**
  * @description AI 설정에서 지원하는 구성 종류입니다.
@@ -34,6 +35,9 @@ type AdminAiSettingConfigurationsSectionProps = {
 
   /** 지정한 위치의 AI 구성을 제거하는 함수입니다. */
   onRemove: (index: number) => void;
+
+  /** Related Notes 설정 여부입니다. */
+  showRelatedNotesEmbeddingNotice?: boolean;
 };
 
 /**
@@ -46,6 +50,7 @@ export function AdminAiSettingConfigurationsSection({
   onAddChat,
   onAddEmbedding,
   onRemove,
+  showRelatedNotesEmbeddingNotice,
 }: AdminAiSettingConfigurationsSectionProps) {
   const { agentOptions, chatModelOptions, embeddingModelOptions } =
     useAdminAiSettingConfigurationOptions();
@@ -90,6 +95,9 @@ export function AdminAiSettingConfigurationsSection({
         </div>
       ) : (
         <div className="space-y-4">
+          {showRelatedNotesEmbeddingNotice && (
+            <AdminAiSettingRelatedNotesNotice />
+          )}
           {fields.map((field, index) => (
             <AdminAiSettingConfigurationCard
               key={field.fieldArrayId}

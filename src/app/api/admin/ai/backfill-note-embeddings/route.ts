@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 
 import { requireAdmin } from "@/features/admin/utils/require-admin";
+import {
+  NOTE_RETRIEVAL_AI_FEATURE_KEY,
+  NOTE_RETRIEVAL_AI_ROLE_KEY,
+} from "@/features/ai/rags/note/constants/runtime";
 import { generateNoteEmbedding } from "@/features/ai/rags/note/generate-embedding";
 import { resolveAiRuntimeEmbeddingConfiguration } from "@/features/ai/runtimes";
-import {
-  NOTE_CHAT_AI_FEATURE_KEY,
-  NOTE_CHAT_AI_ROLE_KEY,
-} from "@/features/note-chats/constants/ai";
 import { ForbiddenError, UnauthorizedError } from "@/lib/errors";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -102,15 +102,15 @@ export async function POST(request: Request) {
   const supabase = createAdminClient();
 
   /**
-   * 실제 Note 생성/수정과 동일한 Note Retrieval Runtime 설정을 사용합니다.
+   * 실제 Note 생성/수정과 동일한 공통 Note retrieval Runtime 설정을 사용합니다.
    * Provider나 Model을 backfill 전용 코드에 별도로 하드코딩하지 않습니다.
    *
    * Runtime 설정을 찾지 못하면 Note를 처리하기 전에 예외가 발생하므로
    * 잘못된 Model/Setting으로 일부 Note만 생성되는 상태를 만들지 않습니다.
    */
   const embeddingConfiguration = await resolveAiRuntimeEmbeddingConfiguration({
-    featureKey: NOTE_CHAT_AI_FEATURE_KEY,
-    roleKey: NOTE_CHAT_AI_ROLE_KEY.NOTE_RETRIEVAL,
+    featureKey: NOTE_RETRIEVAL_AI_FEATURE_KEY,
+    roleKey: NOTE_RETRIEVAL_AI_ROLE_KEY,
   });
 
   /**
