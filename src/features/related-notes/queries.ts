@@ -51,11 +51,24 @@ export async function getRelatedNotes(
     return [];
   }
 
-  return parsed.data.map(({ related_note_id: noteId, origin, metadata }) => ({
-    noteId,
-    origin,
-    ...metadata,
-  }));
+  return parsed.data.map((row): RelatedNoteRecommendation => {
+    if (row.origin === "ai") {
+      return {
+        noteId: row.related_note_id,
+        origin: "ai",
+        ...row.metadata,
+      };
+    }
+
+    return {
+      noteId: row.related_note_id,
+      origin: "manual",
+      title: row.metadata.title,
+      ...(row.metadata.reason !== undefined
+        ? { reason: row.metadata.reason }
+        : {}),
+    };
+  });
 }
 
 /**

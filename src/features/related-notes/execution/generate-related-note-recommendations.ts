@@ -5,18 +5,23 @@ import { createAiChatCompletionWithProvider } from "@/features/ai/providers";
 import { getProviderApiKey } from "@/features/ai/providers/utils/api-key";
 import type { MatchedNote } from "@/features/ai/rags/note/get-matched-notes";
 import type { AiRuntimeChatConfiguration } from "@/features/ai/runtimes/types";
+import {
+  RELATED_NOTES_OPERATIONAL_ERROR_CODES,
+  RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS,
+} from "@/features/operational-errors/constants";
 import type { Json } from "@/types/db.helpers";
 
 import type { RelatedNoteAiRecommendation } from "../types";
+import { reportRelatedNotesOperationalError } from "../utils/report-operational-error";
 
 /*
  * LLM의 원본 JSON 응답 계약입니다.
  *
- * 현재 Answer Agent는 추천 Note ID를 직접 반환하지 않고,
- * 프롬프트에 제공된 검색 Context의 1부터 시작하는 index 목록을 반환합니다.
+ * Answer Agent는 프롬프트에 제공된 Related Notes Context의 Note ID와
+ * 해당 Note를 추천하는 이유를 반환합니다.
  *
- * buildNoteContext도 검색된 chunk에 [1], [2], ... 형태의 Context 번호를
- * 부여하므로 이 응답 계약 역시 양의 정수만 허용합니다.
+ * Note ID는 UUID 형식이어야 하며,
+ * 추천 이유는 비어 있지 않은 문자열만 허용합니다.
  *
  * LLM 반환 형태를 바꾸는 경우 함께 수정해야 하는 항목:
  * 1. 이 Zod schema
@@ -25,7 +30,14 @@ import type { RelatedNoteAiRecommendation } from "../types";
  * 4. generate-related-note-recommendations.test.ts의 mock 응답/기대값
  */
 const relatedNoteRecommendationResponseSchema = z.object({
-  usedContextIndexes: z.array(z.number().int().positive()).default([]),
+  recommendations: z
+    .array(
+      z.object({
+        noteId: z.string().uuid(),
+        reason: z.string().trim().min(1),
+      }),
+    )
+    .default([]),
 });
 
 type GenerateRelatedNoteRecommendationsParams = {
@@ -42,27 +54,27 @@ type GenerateRelatedNoteRecommendationsParams = {
    * LLM에게 Context로 제공된 검색 결과 chunk 목록입니다.
    *
    * 청킹 도입 이후 하나의 Note에서 여러 MatchedNote가 존재할 수 있으며,
-   * 배열 순서와 buildNoteContext의 1-based Context 번호가 대응합니다.
+   * 같은 Note에서 검색된 여러 chunk는 동일한 Note ID를 가집니다.
    */
   notes: MatchedNote[];
 };
 
 /**
  * 관련 노트 추천 Answer Agent의 응답을 생성하고
- * 선택된 chunk Context 순번을 실제 AI Note 추천 항목으로 변환합니다.
+ * 선택된 Note ID를 실제 AI Note 추천 항목으로 변환합니다.
  *
  * Answer Agent에는 원본 Note 전체 내용이 아니라
  * Query Expansion으로 생성된 검색 질문과 실제 검색에 매칭된 chunk Context를
  * 전달합니다.
  *
- * LLM은 1부터 시작하는 Context 번호를 반환하며,
- * 애플리케이션은 해당 번호를 MatchedNote에 다시 매핑합니다.
+ * LLM은 Context에 포함된 Note ID와 추천 이유를 반환하며,
+ * 애플리케이션은 반환된 Note ID가 실제 검색 결과에 존재하는지 다시 검증합니다.
  *
- * 청킹 이후 서로 다른 Context 번호가 동일한 Note의 chunk를 가리킬 수 있으므로,
+ * 청킹 이후 동일한 Note ID를 가진 여러 chunk가 Context에 존재할 수 있으므로,
  * 최종 추천 결과는 Note ID 기준으로 중복 제거합니다.
- * 이때 LLM이 처음 선택한 순서를 유지합니다.
+ * 이때 LLM이 처음 선택한 추천과 이유를 유지합니다.
  *
- * 존재하지 않는 Context 번호가 반환되면 잘못된 Note를 조용히 누락시키지 않고
+ * 검색 결과에 존재하지 않는 Note ID가 반환되면 잘못된 Note를 조용히 누락시키지 않고
  * Answer Agent 응답 계약 위반으로 간주하여 실행을 중단합니다.
  *
  * 이 단계에서는 관계의 origin을 결정하지 않습니다.
@@ -79,25 +91,31 @@ export async function generateRelatedNoteRecommendations({
 }: GenerateRelatedNoteRecommendationsParams): Promise<
   RelatedNoteAiRecommendation[]
 > {
+  // Answer Agent 실행에 사용할 Prompt와 Model 설정을 가져옵니다.
   const promptVersion = configuration.prompt.version;
   const model = configuration.model;
   const responseSchema = promptVersion.response_schema;
 
+  // 검색 질문과 RAG Context를 Prompt template 변수로 구성합니다.
   const templateVariables = {
     context,
     question: expandedQuery,
   };
 
+  // 저장된 Prompt template에 현재 추천 실행의 입력값을 적용합니다.
+  // Related Notes Answer Agent의 역할과 응답 규칙을 정의하는 System Prompt를 생성합니다.
   const systemPrompt = renderPromptTemplate(
     promptVersion.system_template,
     templateVariables,
   );
 
+  // 검색 질문과 RAG Context를 전달하는 User Prompt를 생성합니다.
   const userPrompt = renderPromptTemplate(
     promptVersion.user_template,
     templateVariables,
   );
 
+  // Answer Agent를 호출하여 관련 Note ID와 추천 이유를 생성합니다.
   const result = await createAiChatCompletionWithProvider({
     apiKey: getProviderApiKey(model.provider),
     model: model.model,
@@ -118,35 +136,59 @@ export async function generateRelatedNoteRecommendations({
     userPrompt,
   });
 
+  // Provider가 반환한 문자열 응답을 검증 가능한 JSON 값으로 변환합니다.
   let response: unknown;
 
   try {
     response = JSON.parse(result.content) as unknown;
-  } catch {
+  } catch (error) {
+    await reportRelatedNotesOperationalError({
+      error,
+      errorCode:
+        RELATED_NOTES_OPERATIONAL_ERROR_CODES.RECOMMENDATION_RESPONSE_PARSE_FAILED,
+      message: "Related Note 추천 응답 JSON 파싱에 실패했습니다.",
+      operation:
+        RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.PARSE_RECOMMENDATION_RESPONSE,
+      context: {
+        expandedQuery,
+      },
+    });
+
     throw new Error("Related note recommendation response is not valid JSON.");
   }
 
+  // 파싱된 응답이 Related Notes Answer Agent의 응답 계약을 만족하는지 검증합니다.
   const parsed = relatedNoteRecommendationResponseSchema.safeParse(response);
 
   if (!parsed.success) {
-    throw new Error(
+    const error = new Error(
       "Related note recommendation response does not match the expected schema.",
     );
+
+    await reportRelatedNotesOperationalError({
+      error,
+      errorCode:
+        RELATED_NOTES_OPERATIONAL_ERROR_CODES.RECOMMENDATION_RESPONSE_VALIDATION_FAILED,
+      message: "Related Note 추천 응답이 예상한 형식과 일치하지 않습니다.",
+      operation:
+        RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.VALIDATE_RECOMMENDATION_RESPONSE,
+      context: {
+        expandedQuery,
+      },
+    });
+
+    throw error;
   }
 
   /*
    * LLM 응답을 그대로 저장하지 않습니다.
    *
-   * LLM이 선택한 1-based Context index를 서버가 신뢰 가능한 MatchedNote 배열에
-   * 다시 매핑하고 `{ noteId, title }` 형태의 AI 추천 결과로 정규화합니다.
+   * LLM이 반환한 Note ID를 서버가 신뢰 가능한 MatchedNote 목록에
+   * 다시 매핑하고 `{ noteId, title, reason }` 형태의 AI 추천 결과로 정규화합니다.
    *
    * 하나의 Note에서 여러 관련 chunk가 검색될 수 있으므로,
-   * 서로 다른 Context index가 동일 Note ID를 가리키는 경우
-   * 첫 번째 선택만 유지하여 Note 단위 추천이 중복 저장되지 않도록 합니다.
-   *
-   * 향후 추천 이유, 점수 등의 필드를 LLM이 반환하도록 바꾸면
-   * 이 변환 단계에서 필드를 검증/정규화한 뒤
-   * RelatedNoteAiRecommendation에 추가해야 합니다.
+   * LLM이 동일한 Note ID를 여러 번 반환하는 경우
+   * 첫 번째 선택과 추천 이유만 유지하여 Note 단위 추천이 중복 저장되지 않도록 합니다.
    *
    * origin은 화면 조회 결과에 필요한 관계 정보이며,
    * 이 생성 단계에서는 포함하지 않습니다.
@@ -154,31 +196,66 @@ export async function generateRelatedNoteRecommendations({
   const recommendations: RelatedNoteAiRecommendation[] = [];
   const recommendedNoteIds = new Set<string>();
 
-  for (const contextIndex of parsed.data.usedContextIndexes) {
+  /*
+   * 동일 Note에서 여러 chunk가 검색된 경우에도 모두 같은 Note ID를 가지므로,
+   * Note ID를 기준으로 검색 결과를 빠르게 확인할 수 있도록 Map을 구성합니다.
+   *
+   * 동일 Note ID가 여러 번 등장하는 경우 첫 번째 MatchedNote를 유지합니다.
+   * 최종 추천에 필요한 title은 Note 단위로 동일한 snapshot을 사용하므로
+   * 어느 chunk에서 가져오더라도 동일한 Note를 가리킵니다.
+   */
+  const matchedNotesById = new Map<string, MatchedNote>();
+
+  for (const note of notes) {
+    if (!matchedNotesById.has(note.id)) {
+      matchedNotesById.set(note.id, note);
+    }
+  }
+
+  // LLM이 선택한 추천을 순서대로 실제 Note 추천으로 변환합니다.
+  for (const recommendation of parsed.data.recommendations) {
     /*
-     * buildNoteContext는 [1]부터 번호를 부여하지만
-     * JavaScript 배열은 0부터 시작하므로 1을 빼서 매핑합니다.
+     * LLM이 반환한 Note ID를 그대로 신뢰하지 않고,
+     * 실제 RAG 검색 결과에 포함된 Note인지 서버에서 다시 확인합니다.
      */
-    const note = notes[contextIndex - 1];
+    const note = matchedNotesById.get(recommendation.noteId);
 
     if (!note) {
-      throw new Error(
-        `Related note recommendation context index not found: ${contextIndex}`,
+      const error = new Error(
+        `Related note recommendation note ID not found: ${recommendation.noteId}`,
       );
+
+      await reportRelatedNotesOperationalError({
+        error,
+        errorCode:
+          RELATED_NOTES_OPERATIONAL_ERROR_CODES.RECOMMENDATIONS_RESOLVE_FAILED,
+        message: "Related Note 추천 결과에 해당하는 Note를 찾지 못했습니다.",
+        operation:
+          RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.RESOLVE_RECOMMENDATIONS,
+        context: {
+          expandedQuery,
+          noteId: recommendation.noteId,
+        },
+      });
+
+      throw error;
     }
 
     /*
-     * 동일 Note의 여러 chunk가 선택된 경우에도
+     * 동일 Note ID가 여러 번 반환된 경우에도
      * 최종 Related Notes 추천에는 해당 Note를 한 번만 포함합니다.
      */
     if (recommendedNoteIds.has(note.id)) {
       continue;
     }
 
+    // 중복 확인을 통과한 Note를 이후 추천에서 다시 추가하지 않도록 기록합니다.
     recommendedNoteIds.add(note.id);
 
+    // 선택된 Note와 추천 이유를 최종 AI Related Note 추천 항목으로 추가합니다.
     recommendations.push({
       noteId: note.id,
+      reason: recommendation.reason,
       title: note.title,
     });
   }

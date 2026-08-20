@@ -132,6 +132,7 @@ describe("scheduleRelatedNoteRecommendation", () => {
       recommendations: [
         {
           noteId: RELATED_NOTE_ID,
+          reason: "관련 노트 추천 이유",
           title: "Related note",
         },
       ],
@@ -162,6 +163,7 @@ describe("scheduleRelatedNoteRecommendation", () => {
         {
           noteId: RELATED_NOTE_ID,
           title: "Related note",
+          reason: "관련 노트 추천 이유",
         },
       ],
       sourceUpdatedAt: SOURCE_UPDATED_AT,

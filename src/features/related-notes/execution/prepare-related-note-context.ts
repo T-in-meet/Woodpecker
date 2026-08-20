@@ -1,8 +1,8 @@
-import { buildNoteContext } from "@/features/ai/rags/note/build-context";
 import { getMatchedNotes } from "@/features/ai/rags/note/get-matched-notes";
 import { searchNoteEmbeddings } from "@/features/ai/rags/note/search-embeddings";
 import type { AiRuntimeEmbeddingConfiguration } from "@/features/ai/runtimes/types";
 
+import { buildRelatedNoteContext } from "./build-related-note-context";
 import { expandRelatedNoteQuery } from "./expand-related-note-query";
 
 type PrepareRelatedNoteContextParams = {
@@ -72,7 +72,7 @@ export async function prepareRelatedNoteContext({
     ownerUserId,
   });
 
-  const context = buildNoteContext({
+  const context = buildRelatedNoteContext({
     notes,
   });
 

@@ -67,6 +67,7 @@ describe("runRelatedNoteRecommendation", () => {
     mockGenerateRelatedNoteRecommendations.mockResolvedValue([
       {
         noteId: RELATED_NOTE_ID,
+        reason: "관련 노트 추천 이유",
         title: "Related note",
       },
     ]);
@@ -87,6 +88,7 @@ describe("runRelatedNoteRecommendation", () => {
         {
           noteId: RELATED_NOTE_ID,
           title: "Related note",
+          reason: "관련 노트 추천 이유",
         },
       ],
     });

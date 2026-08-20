@@ -64,7 +64,7 @@ describe("getRelatedNotes", () => {
     ]);
     expect(calls).toContainEqual(["eq", ["status", "active"]]);
 
-    expect(result).toEqual([
+    expect(result).toStrictEqual([
       {
         noteId: "22222222-2222-4222-8222-222222222222",
         origin: "ai",
@@ -112,6 +112,7 @@ describe("getRelatedNotes", () => {
             origin: "ai",
             metadata: {
               title: "관련 노트",
+              reason: "비슷한 내용을 다룹니다.",
             },
           },
         ],

@@ -1,0 +1,87 @@
+/**
+ * Related Notes 운영 오류 기능입니다.
+ */
+export const RELATED_NOTES_OPERATIONAL_ERROR_FEATURES = {
+  RELATED_NOTES: "related-notes",
+} as const;
+
+/**
+ * Related Notes 운영 오류 기능의 표시 이름입니다.
+ */
+export const RELATED_NOTES_OPERATIONAL_ERROR_FEATURE_LABELS = {
+  [RELATED_NOTES_OPERATIONAL_ERROR_FEATURES.RELATED_NOTES]: "Related Notes",
+} as const;
+
+/**
+ * Related Notes에서 운영 오류를 기록하는 작업입니다.
+ */
+export const RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS = {
+  PARSE_RECOMMENDATION_RESPONSE: "parse_recommendation_response",
+  VALIDATE_RECOMMENDATION_RESPONSE: "validate_recommendation_response",
+  RESOLVE_RECOMMENDATIONS: "resolve_recommendations",
+} as const;
+
+/**
+ * Related Notes 운영 오류 작업의 표시 이름입니다.
+ */
+export const RELATED_NOTES_OPERATIONAL_ERROR_OPERATION_LABELS = {
+  [RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.PARSE_RECOMMENDATION_RESPONSE]:
+    "추천 응답 파싱",
+
+  [RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.VALIDATE_RECOMMENDATION_RESPONSE]:
+    "추천 응답 검증",
+
+  [RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.RESOLVE_RECOMMENDATIONS]:
+    "추천 노트 확인",
+} as const;
+
+/**
+ * Related Notes 작업 내부의 운영 오류 단계입니다.
+ */
+export const RELATED_NOTES_OPERATIONAL_ERROR_STAGES = {
+  EXECUTION: "execution",
+} as const;
+
+/**
+ * Related Notes 운영 오류 단계의 표시 이름입니다.
+ */
+export const RELATED_NOTES_OPERATIONAL_ERROR_STAGE_LABELS = {
+  [RELATED_NOTES_OPERATIONAL_ERROR_STAGES.EXECUTION]: "실행",
+} as const;
+
+/**
+ * Related Notes 운영 오류를 식별하는 코드입니다.
+ */
+export const RELATED_NOTES_OPERATIONAL_ERROR_CODES = {
+  RECOMMENDATION_RESPONSE_PARSE_FAILED:
+    "RELATED_NOTES_RECOMMENDATION_RESPONSE_PARSE_FAILED",
+
+  RECOMMENDATION_RESPONSE_VALIDATION_FAILED:
+    "RELATED_NOTES_RECOMMENDATION_RESPONSE_VALIDATION_FAILED",
+
+  RECOMMENDATIONS_RESOLVE_FAILED:
+    "RELATED_NOTES_RECOMMENDATIONS_RESOLVE_FAILED",
+} as const;
+
+/**
+ * Related Notes 운영 오류 코드의 표시 이름입니다.
+ */
+export const RELATED_NOTES_OPERATIONAL_ERROR_CODE_LABELS = {
+  [RELATED_NOTES_OPERATIONAL_ERROR_CODES.RECOMMENDATION_RESPONSE_PARSE_FAILED]:
+    "추천 응답 파싱 실패",
+
+  [RELATED_NOTES_OPERATIONAL_ERROR_CODES.RECOMMENDATION_RESPONSE_VALIDATION_FAILED]:
+    "추천 응답 검증 실패",
+
+  [RELATED_NOTES_OPERATIONAL_ERROR_CODES.RECOMMENDATIONS_RESOLVE_FAILED]:
+    "추천 노트 확인 실패",
+} as const;
+
+export type RelatedNotesOperationalErrorOperationType =
+  (typeof RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS)[keyof typeof RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS];
+
+export type RelatedNotesOperationalErrorStageType =
+  (typeof RELATED_NOTES_OPERATIONAL_ERROR_STAGES)[keyof typeof RELATED_NOTES_OPERATIONAL_ERROR_STAGES];
+
+export type RelatedNotesOperationalErrorCodeType =
+  (typeof RELATED_NOTES_OPERATIONAL_ERROR_CODES)[keyof typeof RELATED_NOTES_OPERATIONAL_ERROR_CODES];

@@ -432,7 +432,52 @@ context에는 검색된 노트들이 번호와 함께 제공됩니다.
         'user',
         '11111111-1111-4111-8111-111111111111',
         '2026-08-11 10:27:24.238715+00'
-    )
+    ),
+    (
+    'cd32eccd-fc3b-4335-b976-8212c0da3f5f',
+    '2257c284-b42e-4a20-8d16-18534cebca08',
+    2,
+    '관련 노트 답변',
+    'Context 번호 기반 추천 방식을 Note ID 기반으로 변경하고, 각 추천에 관련성 판단 이유(reason)를 포함하도록 개선했습니다. 동일 Note의 중복 추천을 방지하고, Context에 존재하는 Note만 추천하도록 제한했으며, reason은 반드시 한국어로 작성하도록 명시했습니다.',
+    'published',
+    '당신은 노트 관련성 분석을 담당하는 AI입니다.
+
+사용자가 현재 작성하거나 수정한 노트와 관련성이 높은 노트를 검색 결과에서 선택해야 합니다.
+
+입력으로 제공되는 question은 현재 노트의 제목과 내용을 기반으로 확장된 관련 노트 검색 질문입니다.
+context에는 검색된 노트들이 Note ID와 함께 제공됩니다.
+
+각 Context를 question과 비교하여 현재 노트와 의미적으로 관련성이 높은 노트를 선택하세요.
+
+같은 Note ID를 가진 여러 Context는 동일한 노트의 서로 다른 chunk입니다.
+동일한 Note ID의 노트는 한 번만 선택하세요.
+
+선택한 각 노트에 대해 현재 노트와 관련성이 있다고 판단한 이유를 간결하게 작성하세요.
+reason은 반드시 한국어로 작성하세요.
+
+반환하는 noteId는 반드시 context에 제공된 Note ID 중 하나여야 합니다.
+context에 없는 Note ID를 생성하거나 추측하지 마세요.
+
+선택할 노트가 없으면 recommendations에 빈 배열을 반환하세요.
+
+응답에는 선택한 노트의 noteId와 reason만 포함해야 합니다.
+설명이나 추가 텍스트는 반환하지 마세요.',
+        '관련 노트 검색 질문:
+
+{{question}}
+
+검색된 노트:
+
+{{context}}
+
+위 검색 결과에서 현재 노트와 관련성이 높은 노트를 선택하고, 각 노트의 noteId와 추천 이유인 reason을 반환하세요.',
+        '{"type": "object", "required": ["recommendations"], "properties": {"recommendations": {"type": "array", "items": {"type": "object", "required": ["noteId", "reason"], "properties": {"noteId": {"type": "string"}, "reason": {"type": "string", "minLength": 1}}, "additionalProperties": false}}}, "additionalProperties": false}',
+        '["question", "context"]',
+        '{노트,relation}',
+        'user',
+        '11111111-1111-4111-8111-111111111111',
+        '2026-08-20 03:17:13.283751+00'
+)
 ON CONFLICT DO NOTHING;
 
 --
@@ -505,7 +550,7 @@ INSERT INTO "public"."ai_setting_configurations" (
               AND "model" = 'gpt-4o-mini'
               AND "capability" = 'chat'
         ),
-        'b4c7b67c-43d0-45bd-b022-63aae824d037',
+        'cd32eccd-fc3b-4335-b976-8212c0da3f5f',
         0.2,
         1,
         '2026-08-11 10:27:45.881049+00',

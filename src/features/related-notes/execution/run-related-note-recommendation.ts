@@ -44,7 +44,7 @@ type RunRelatedNoteRecommendationParams = {
  * 불필요한 Answer Agent 호출 없이 빈 추천 결과를 반환합니다.
  *
  * @param params 관련 노트 추천 실행에 필요한 입력과 Runtime 설정입니다.
- * @returns 확장 질의, 검색된 Note 및 `{ noteId, title }` 추천 항목입니다.
+ * @returns 확장 질의, 검색된 Note 및 `{ noteId, title, reason }` 추천 항목입니다.
  */
 export async function runRelatedNoteRecommendation({
   title,

@@ -4,7 +4,7 @@ import { isJsonValue } from "@/lib/supabase/utils/is-json-value";
 import type { Json } from "@/types/db.helpers";
 
 /**
- * Related Note에 저장된 metadata를 검증합니다.
+ * Related Note에 공통으로 저장되는 metadata를 검증합니다.
  *
  * 화면 표시에 필요한 제목 snapshot은 필수이며,
  * 그 외 Json-compatible 확장 필드를 허용합니다.
@@ -16,13 +16,49 @@ export const relatedNoteMetadataSchema = z
   .catchall(z.custom<Json>(isJsonValue));
 
 /**
- * Related Notes 조회 결과 row를 검증합니다.
+ * manual Related Note에 저장된 metadata를 검증합니다.
+ *
+ * 사용자가 연결 이유를 입력하지 않을 수 있으므로 reason은 선택적입니다.
  */
-export const relatedNoteRowSchema = z.object({
-  related_note_id: z.string().uuid(),
-  origin: z.enum(["manual", "ai"]),
-  metadata: relatedNoteMetadataSchema,
+export const manualRelatedNoteMetadataSchema = relatedNoteMetadataSchema.extend(
+  {
+    reason: z
+      .string()
+      .trim()
+      .max(500, "연결 이유는 500자 이하로 입력해주세요.")
+      .optional(),
+  },
+);
+
+/**
+ * AI Related Note에 저장된 metadata를 검증합니다.
+ *
+ * AI 추천 결과에는 추천 이유가 항상 포함되어야 하므로 reason은 필수입니다.
+ */
+export const aiRelatedNoteMetadataSchema = relatedNoteMetadataSchema.extend({
+  reason: z.string().trim().min(1),
 });
+
+/**
+ * Related Notes 조회 결과 row를 검증합니다.
+ *
+ * 관계의 origin에 따라 metadata 계약이 다릅니다.
+ *
+ * manual 관계는 사용자가 연결 이유를 입력하지 않을 수 있지만,
+ * AI 관계는 추천 생성 시 reason을 반드시 저장합니다.
+ */
+export const relatedNoteRowSchema = z.discriminatedUnion("origin", [
+  z.object({
+    related_note_id: z.string().uuid(),
+    origin: z.literal("manual"),
+    metadata: manualRelatedNoteMetadataSchema,
+  }),
+  z.object({
+    related_note_id: z.string().uuid(),
+    origin: z.literal("ai"),
+    metadata: aiRelatedNoteMetadataSchema,
+  }),
+]);
 
 /**
  * 사용자가 수동 Related Note를 추가할 때 전달하는 입력을 검증합니다.

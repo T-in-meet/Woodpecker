@@ -9,12 +9,39 @@ export type RelatedNoteAiRecommendation = {
 
   /** 추천 생성 시점의 Note 제목 snapshot입니다. */
   title: string;
+
+  /** AI가 이 Note를 관련 노트로 추천한 이유입니다. */
+  reason: string;
 } & Record<string, Json | undefined>;
+
+/**
+ * 노트 상세 화면에 표시할 manual 관련 노트 항목입니다.
+ */
+export type ManualRelatedNoteRecommendation = {
+  /** 관련 Note ID입니다. */
+  noteId: string;
+
+  /** Related Note 제목 snapshot입니다. */
+  title: string;
+
+  /** 사용자가 작성한 선택적 연결 이유입니다. */
+  reason?: string;
+
+  /** 사용자가 직접 연결한 관계입니다. */
+  origin: "manual";
+} & Record<string, Json | undefined>;
+
+/**
+ * 노트 상세 화면에 표시할 AI 관련 노트 항목입니다.
+ */
+export type AiRelatedNoteRecommendation = RelatedNoteAiRecommendation & {
+  /** AI가 생성한 관계입니다. */
+  origin: "ai";
+};
 
 /**
  * 노트 상세 화면에 표시할 관련 노트 항목입니다.
  */
-export type RelatedNoteRecommendation = RelatedNoteAiRecommendation & {
-  /** 관련 노트 관계가 생성된 출처입니다. */
-  origin: "manual" | "ai";
-};
+export type RelatedNoteRecommendation =
+  | ManualRelatedNoteRecommendation
+  | AiRelatedNoteRecommendation;
