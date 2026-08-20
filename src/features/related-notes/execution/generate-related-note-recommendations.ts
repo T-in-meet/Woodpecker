@@ -170,9 +170,6 @@ export async function generateRelatedNoteRecommendations({
       message: "Related Note 추천 응답 JSON 파싱에 실패했습니다.",
       operation:
         RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.PARSE_RECOMMENDATION_RESPONSE,
-      context: {
-        expandedQuery,
-      },
     });
 
     throw new Error("Related note recommendation response is not valid JSON.");
@@ -193,9 +190,6 @@ export async function generateRelatedNoteRecommendations({
       message: "Related Note 추천 응답이 예상한 형식과 일치하지 않습니다.",
       operation:
         RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.VALIDATE_RECOMMENDATION_RESPONSE,
-      context: {
-        expandedQuery,
-      },
     });
 
     throw error;
@@ -254,7 +248,6 @@ export async function generateRelatedNoteRecommendations({
         operation:
           RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.RESOLVE_RECOMMENDATIONS,
         context: {
-          expandedQuery,
           noteId: recommendation.noteId,
         },
       });

@@ -357,14 +357,6 @@ export function scheduleRelatedNoteRecommendation({
           status: runStatus,
         });
       }
-
-      console.log("[Related Notes Recommendation]", {
-        expandedQuery: result.expandedQuery,
-        matchedNoteIds: result.notes.map((note) => note.id),
-        recommendedNoteIds: result.recommendations.map(
-          (recommendation) => recommendation.noteId,
-        ),
-      });
     } catch (error) {
       /*
        * 실제 추천 실행이 실패한 경우, Run이 존재하면 failed 상태 기록을 시도합니다.
