@@ -39,7 +39,7 @@ const configuration = {
       response_schema: {
         type: "object",
       },
-      system_template: "system {{question}}",
+      system_template: "system {{title}} {{content}}",
       user_template: "user {{context}}",
     },
   },
@@ -51,6 +51,10 @@ const usage = {
   outputTokens: 1,
   totalTokens: 2,
 };
+
+const TITLE = "추천 대상 노트";
+const CONTENT = "추천 대상 노트의 내용입니다.";
+const CONTEXT = "context";
 
 /**
  * Related Notes 검색 결과 fixture입니다.
@@ -120,9 +124,10 @@ describe("generateRelatedNoteRecommendations", () => {
   it("LLM이 반환한 Note ID와 추천 이유를 실제 Note 추천 항목으로 변환한다", async () => {
     const result = await generateRelatedNoteRecommendations({
       configuration,
-      context: "context",
-      expandedQuery: "expanded query",
+      content: CONTENT,
+      context: CONTEXT,
       notes,
+      title: TITLE,
     });
 
     expect(result).toEqual({
@@ -139,15 +144,46 @@ describe("generateRelatedNoteRecommendations", () => {
     expect(reportRelatedNotesOperationalError).not.toHaveBeenCalled();
   });
 
+  it("원본 Note 제목과 내용 및 검색 Context를 Prompt template에 전달한다", async () => {
+    await generateRelatedNoteRecommendations({
+      configuration,
+      content: CONTENT,
+      context: CONTEXT,
+      notes,
+      title: TITLE,
+    });
+
+    expect(renderPromptTemplate).toHaveBeenNthCalledWith(
+      1,
+      configuration.prompt.version.system_template,
+      {
+        content: CONTENT,
+        context: CONTEXT,
+        title: TITLE,
+      },
+    );
+
+    expect(renderPromptTemplate).toHaveBeenNthCalledWith(
+      2,
+      configuration.prompt.version.user_template,
+      {
+        content: CONTENT,
+        context: CONTEXT,
+        title: TITLE,
+      },
+    );
+  });
+
   it("Provider 응답 직후 usage callback을 호출한다", async () => {
     const onUsage = vi.fn().mockResolvedValue(undefined);
 
     await generateRelatedNoteRecommendations({
       configuration,
-      context: "context",
-      expandedQuery: "expanded query",
+      content: CONTENT,
+      context: CONTEXT,
       notes,
       onUsage,
+      title: TITLE,
     });
 
     expect(onUsage).toHaveBeenCalledWith(usage);
@@ -177,9 +213,10 @@ describe("generateRelatedNoteRecommendations", () => {
 
     const result = await generateRelatedNoteRecommendations({
       configuration,
-      context: "context",
-      expandedQuery: "expanded query",
+      content: CONTENT,
+      context: CONTEXT,
       notes,
+      title: TITLE,
     });
 
     expect(result).toEqual({
@@ -210,9 +247,10 @@ describe("generateRelatedNoteRecommendations", () => {
 
     const result = await generateRelatedNoteRecommendations({
       configuration,
-      context: "context",
-      expandedQuery: "expanded query",
+      content: CONTENT,
+      context: CONTEXT,
       notes,
+      title: TITLE,
     });
 
     expect(result).toEqual({
@@ -232,9 +270,10 @@ describe("generateRelatedNoteRecommendations", () => {
     await expect(
       generateRelatedNoteRecommendations({
         configuration,
-        context: "context",
-        expandedQuery: "expanded query",
+        content: CONTENT,
+        context: CONTEXT,
         notes,
+        title: TITLE,
       }),
     ).rejects.toThrow(
       "Related note recommendation response is not valid JSON.",
@@ -247,9 +286,6 @@ describe("generateRelatedNoteRecommendations", () => {
       message: "Related Note 추천 응답 JSON 파싱에 실패했습니다.",
       operation:
         RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.PARSE_RECOMMENDATION_RESPONSE,
-      context: {
-        expandedQuery: "expanded query",
-      },
     });
   });
 
@@ -270,9 +306,10 @@ describe("generateRelatedNoteRecommendations", () => {
     await expect(
       generateRelatedNoteRecommendations({
         configuration,
-        context: "context",
-        expandedQuery: "expanded query",
+        content: CONTENT,
+        context: CONTEXT,
         notes,
+        title: TITLE,
       }),
     ).rejects.toThrow(
       "Related note recommendation response does not match the expected schema.",
@@ -288,9 +325,6 @@ describe("generateRelatedNoteRecommendations", () => {
       message: "Related Note 추천 응답이 예상한 형식과 일치하지 않습니다.",
       operation:
         RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.VALIDATE_RECOMMENDATION_RESPONSE,
-      context: {
-        expandedQuery: "expanded query",
-      },
     });
   });
 
@@ -311,9 +345,10 @@ describe("generateRelatedNoteRecommendations", () => {
     await expect(
       generateRelatedNoteRecommendations({
         configuration,
-        context: "context",
-        expandedQuery: "expanded query",
+        content: CONTENT,
+        context: CONTEXT,
         notes,
+        title: TITLE,
       }),
     ).rejects.toThrow(
       "Related note recommendation response does not match the expected schema.",
@@ -329,9 +364,6 @@ describe("generateRelatedNoteRecommendations", () => {
       message: "Related Note 추천 응답이 예상한 형식과 일치하지 않습니다.",
       operation:
         RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.VALIDATE_RECOMMENDATION_RESPONSE,
-      context: {
-        expandedQuery: "expanded query",
-      },
     });
   });
 
@@ -354,9 +386,10 @@ describe("generateRelatedNoteRecommendations", () => {
     await expect(
       generateRelatedNoteRecommendations({
         configuration,
-        context: "context",
-        expandedQuery: "expanded query",
+        content: CONTENT,
+        context: CONTEXT,
         notes,
+        title: TITLE,
       }),
     ).rejects.toThrow(
       `Related note recommendation note ID not found: ${unknownNoteId}`,
@@ -372,7 +405,6 @@ describe("generateRelatedNoteRecommendations", () => {
       operation:
         RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.RESOLVE_RECOMMENDATIONS,
       context: {
-        expandedQuery: "expanded query",
         noteId: unknownNoteId,
       },
     });

@@ -275,6 +275,154 @@ context에 없는 Note ID를 생성하거나 추측하지 마세요.
 )
 ON CONFLICT DO NOTHING;
 
+-- -----------------------------------------------------------------------------
+-- Related Notes Latest Published Prompt Versions
+-- -----------------------------------------------------------------------------
+-- 기존 Prompt Version 이력은 그대로 보존하고,
+-- 현재 Related Notes Runtime에서 사용하는 최신 published Version을 추가합니다.
+--
+-- migration에서 생성되는 Prompt는 특정 auth.users 계정에 의존하지 않도록
+-- created_by_kind = 'system', created_by = NULL로 기록합니다.
+INSERT INTO "public"."ai_prompt_versions" (
+    "id",
+    "family_id",
+    "version_number",
+    "display_name",
+    "change_summary",
+    "lifecycle_status",
+    "system_template",
+    "user_template",
+    "response_schema",
+    "variables",
+    "tags",
+    "created_by_kind",
+    "created_by"
+) VALUES
+    (
+        'baff71a6-5bab-4bb4-aaaa-2d89a4bd13d3',
+        'e8dfe0c9-a246-4d1d-9ace-ec2abcd4af1d',
+        6,
+        '관련 노트 질의 확장',
+        '현재 노트의 핵심 문제·원인·해결 원리를 중심으로 검색 질의를 생성하도록 강화하고, 일반 지식 질문이나 과도한 주제 확장을 방지하도록 개선했습니다.',
+        'published',
+        '당신은 학습 노트 간의 관련성을 분석하기 위한 검색 질의를 생성하는 AI입니다.
+
+현재 사용자가 생성하거나 수정한 노트가 주어집니다.
+
+목표는 현재 노트와 직접적인 학습 관계가 있는 다른 노트를 찾을 수 있도록 하나의 검색 질의를 생성하는 것입니다.
+
+먼저 현재 노트의 유형과 구조에 맞게 핵심 학습 내용을 파악하세요.
+특정 형태의 노트라고 미리 가정하지 마세요.
+
+현재 노트가 개념을 설명한다면 핵심 개념, 원리, 구성 요소와 직접 연결된 내용을 중심으로 검색하세요.
+
+현재 노트가 문제 해결이나 트러블슈팅을 다룬다면 문제의 직접적인 원인, 해결 원리와 직접 연결된 내용을 중심으로 검색하세요.
+
+현재 노트가 알고리즘이나 구현 방법을 다룬다면 핵심 아이디어, 동작 원리, 적용 조건과 직접 연결된 내용을 중심으로 검색하세요.
+
+현재 노트가 비교나 선택을 다룬다면 비교 대상과 실제 판단 기준에 직접 연결된 내용을 중심으로 검색하세요.
+
+그 밖의 형태의 노트에서도 해당 노트가 실제로 전달하려는 핵심 학습 내용을 중심으로 검색하세요.
+
+검색 질의에는 현재 노트의 핵심 의미와 구체성을 유지하세요.
+
+현재 노트의 내용을 더 넓고 일반적인 주제로 확장하지 마세요.
+현재 노트의 구체적인 내용을 일반적인 지식 질문으로 변환하지 마세요.
+
+"무엇인가?", "어떻게 동작하는가?", "차이점은 무엇인가?", "최선의 방법은 무엇인가?"와 같이 현재 노트보다 범위가 넓어지는 일반적인 질문을 만들지 마세요.
+
+현재 노트에서 특정 기술, 도구, 프로토콜, 자료구조, 프레임워크 또는 개념이 등장하더라도 그것이 노트의 핵심 학습 주제가 아니라면 검색 질의의 중심 주제로 확대하지 마세요.
+
+부수적으로 언급되거나 사용된 요소를 독립적인 검색 주제로 확장하지 마세요.
+
+단순히 같은 프로그래밍 언어, 기술 스택, 자료구조, 도구 또는 넓은 분야에 속하는 노트를 찾기 위한 질의를 만들지 마세요.
+
+현재 노트에 명시되지 않은 새로운 사실, 개념 또는 연결 관계를 임의로 추가하지 마세요.
+
+현재 노트 자체에 대한 답변을 얻기 위한 질문을 만들지 마세요.
+현재 노트의 내용을 단순히 요약하는 데 그치지 마세요.
+
+검색 결과에서 다음과 같은 노트를 찾을 수 있도록 질의를 작성하세요.
+
+- 현재 노트의 핵심 개념을 직접 설명하거나 보완하는 노트
+- 현재 노트를 이해하는 데 필요한 구체적인 선행 개념을 다루는 노트
+- 현재 노트의 핵심 원리와 직접 연결되는 노트
+- 현재 노트의 핵심 내용을 직접 확장하거나 응용하는 노트
+
+검색 질의는 현재 노트와의 의미적 범위를 유지하면서 구체적으로 작성하세요.
+
+관련성을 만들기 위해 여러 단계의 추론이 필요한 주제로 검색 범위를 넓히지 마세요.
+
+목적은 비슷한 단어나 넓은 주제를 가진 노트를 많이 찾는 것이 아니라, 현재 노트와 직접적인 학습 관계가 있는 다른 노트를 찾는 것입니다.
+
+하나의 검색 질의만 반환하세요.
+
+응답은 지정된 JSON 형식으로만 반환하세요.',
+        '현재 노트 제목:
+
+{{title}}
+
+현재 노트 내용:
+
+{{content}}
+
+위 노트의 핵심 개념, 문제의 직접적인 원인과 해결 원리를 유지하면서
+직접적으로 연결되는 다른 노트를 검색하기 위한 질의를 하나 작성하세요.',
+        '{"type": "object", "required": ["expandedQuery"], "properties": {"expandedQuery": {"type": "string"}}, "additionalProperties": false}',
+        '["title", "content"]',
+        '{}',
+        'system',
+        NULL
+    ),
+    (
+        '3d67e020-eabe-4d73-9ca1-84170c25c279',
+        '2257c284-b42e-4a20-8d16-18534cebca08',
+        6,
+        '관련 노트 답변',
+        '후보 노트의 실제 내용과 현재 노트의 핵심 학습 주제 사이에 직접적인 관계가 있을 때만 추천하도록 강화하고, 추론으로 만들어낸 간접적 관련성과 일반적인 공통 요소 기반 추천을 제외하도록 개선했습니다.',
+        'published',
+        '당신은 노트 관련성 분석을 담당하는 AI입니다.
+
+현재 노트의 title과 content를 기준으로 핵심 학습 내용을 파악하고, context에 제공된 후보 노트 중 현재 노트와 직접적인 학습 관계가 있는 노트만 선택하세요.
+
+후보 노트의 핵심 내용을 학습하는 것이 현재 노트의 핵심 내용을 이해하거나 확장하는 데 직접적으로 도움이 되는 경우에만 추천하세요.
+
+단순히 같은 기술, 도구, 분야 또는 일부 개념을 공유한다는 이유로 추천하지 마세요.
+
+제공된 내용에서 직접 확인할 수 없는 관계를 추측하거나 만들어내지 마세요.
+
+관련성이 약하거나 불확실하면 추천하지 마세요. 적절한 후보가 없다면 아무 노트도 선택하지 않는 것이 올바른 결과입니다.
+
+같은 Note ID를 가진 여러 Context는 동일한 노트의 서로 다른 chunk이므로 동일한 Note ID는 한 번만 선택하세요.
+
+선택한 각 노트에는 context에 존재하는 noteId와 두 노트 사이의 직접적인 학습 관계를 설명하는 구체적인 한국어 reason을 작성하세요.
+
+적절한 노트가 없다면 recommendations에 빈 배열을 반환하세요.
+
+응답에는 선택한 노트의 noteId와 reason만 포함하고 다른 설명은 추가하지 마세요.
+',
+        '현재 노트 제목:
+
+{{title}}
+
+현재 노트 내용:
+
+{{content}}
+
+관련 노트 후보:
+
+{{context}}
+
+현재 노트와 직접적인 학습 관계가 있는 후보 노트를 선택하고,
+각 노트의 noteId와 추천 이유인 reason을 반환하세요.',
+        '{"type": "object", "required": ["recommendations"], "properties": {"recommendations": {"type": "array", "items": {"type": "object", "required": ["noteId", "reason"], "properties": {"noteId": {"type": "string"}, "reason": {"type": "string", "minLength": 1}}, "additionalProperties": false}}}, "additionalProperties": false}',
+        '["title", "content", "context"]',
+        '{노트,relation}',
+        'system',
+        NULL
+    )
+ON CONFLICT DO NOTHING;
+
 
 /*
  * Related Notes Runtime Setting을 생성합니다.
@@ -300,8 +448,8 @@ ON CONFLICT DO NOTHING;
 /*
  * Related Notes의 Chat Runtime Configuration을 생성합니다.
  *
- * Answer Generation은 현재 Answer Prompt v2를 사용하고,
- * Query Expansion은 현재 Query Expansion Prompt v5를 사용합니다.
+ * Answer Generation은 현재 Answer Prompt v6를 사용하고,
+ * Query Expansion은 현재 Query Expansion Prompt v6를 사용합니다.
  *
  * Note 검색용 Embedding Runtime은 Related Notes 전용 설정을 만들지 않고
  * 공통 Note Retrieval Runtime Configuration을 사용합니다.
@@ -330,7 +478,7 @@ INSERT INTO "public"."ai_setting_configurations" (
               AND "model" = 'gpt-4o-mini'
               AND "capability" = 'chat'
         ),
-        'cd32eccd-fc3b-4335-b976-8212c0da3f5f',
+        '3d67e020-eabe-4d73-9ca1-84170c25c279',
         0.2,
         1,
         '2026-08-11 10:27:45.881049+00',
@@ -348,7 +496,7 @@ INSERT INTO "public"."ai_setting_configurations" (
               AND "model" = 'gpt-4o-mini'
               AND "capability" = 'chat'
         ),
-        'c7cd013b-72c1-47a5-9afa-55e8145e6699',
+        'baff71a6-5bab-4bb4-aaaa-2d89a4bd13d3',
         0.2,
         2,
         '2026-08-11 10:27:45.881049+00',

@@ -119,9 +119,10 @@ describe("runRelatedNoteRecommendation", () => {
 
     expect(mockGenerateRelatedNoteRecommendations).toHaveBeenCalledWith({
       configuration: answerConfiguration,
+      content: "Source note content",
       context: "<note>Related note</note>",
-      expandedQuery: "expanded related note query",
       notes,
+      title: "Source note",
     });
 
     expect(result).toEqual({

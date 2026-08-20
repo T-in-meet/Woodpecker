@@ -45,8 +45,11 @@ type GenerateRelatedNoteRecommendationsParams = {
   /** 관련 노트 추천에 사용할 Answer Agent Runtime Configuration입니다. */
   configuration: AiRuntimeChatConfiguration;
 
-  /** Query Expansion으로 생성된 관련 노트 검색 질문입니다. */
-  expandedQuery: string;
+  /** 추천 대상 원본 Note의 제목입니다. */
+  title: string;
+
+  /** 추천 대상 원본 Note의 내용입니다. */
+  content: string;
 
   /** 검색된 Note chunk Context입니다. */
   context: string;
@@ -83,9 +86,11 @@ export type GenerateRelatedNoteRecommendationsResult = {
  * 관련 노트 추천 Answer Agent의 응답을 생성하고
  * 선택된 Note ID를 실제 AI Note 추천 항목으로 변환합니다.
  *
- * Answer Agent에는 원본 Note 전체 내용이 아니라
- * Query Expansion으로 생성된 검색 질문과 실제 검색에 매칭된 chunk Context를
- * 전달합니다.
+ * Answer Agent에는 추천 대상 원본 Note의 제목과 내용,
+ * 실제 검색에 매칭된 Note chunk Context를 전달합니다.
+ *
+ * Query Expansion 결과는 관련 Note 검색에만 사용하며,
+ * 최종 관련성 판단은 원본 Note와 검색된 후보 Note 내용을 기준으로 수행합니다.
  *
  * LLM은 Context에 포함된 Note ID와 추천 이유를 반환하며,
  * 애플리케이션은 반환된 Note ID가 실제 검색 결과에 존재하는지 다시 검증합니다.
@@ -100,12 +105,13 @@ export type GenerateRelatedNoteRecommendationsResult = {
  * 이 단계에서는 관계의 origin을 결정하지 않습니다.
  * 생성된 추천은 저장 계층에서 AI 추천으로 저장됩니다.
  *
- * @param params 관련 노트 추천 실행에 필요한 Runtime 설정과 RAG 결과
+ * @param params 관련 노트 추천 실행에 필요한 Runtime 설정, 원본 Note 및 RAG 결과
  * @returns 추천 목록과 Provider usage
  */
 export async function generateRelatedNoteRecommendations({
   configuration,
-  expandedQuery,
+  content,
+  title,
   context,
   notes,
   onUsage,
@@ -117,8 +123,9 @@ export async function generateRelatedNoteRecommendations({
 
   // 검색 질문과 RAG Context를 Prompt template 변수로 구성합니다.
   const templateVariables = {
+    content,
     context,
-    question: expandedQuery,
+    title,
   };
 
   // 저장된 Prompt template에 현재 추천 실행의 입력값을 적용합니다.

@@ -128,9 +128,10 @@ export async function runRelatedNoteRecommendation({
 
   const recommendationResult = await generateRelatedNoteRecommendations({
     configuration: answerConfiguration,
+    content,
     context: contextResult.context,
-    expandedQuery: contextResult.expandedQuery,
     notes: contextResult.notes,
+    title,
     ...(onAnswerGenerationUsage !== undefined
       ? { onUsage: onAnswerGenerationUsage }
       : {}),
