@@ -74,6 +74,19 @@ export function scheduleRelatedNoteRecommendation({
      * 이미 성공한 Note 저장/수정 결과에는 영향을 주지 않습니다.
      */
     if (recommendationSourceError) {
+      await reportRelatedNotesOperationalError({
+        error: recommendationSourceError,
+        errorCode:
+          RELATED_NOTES_OPERATIONAL_ERROR_CODES.RECOMMENDATION_SOURCE_LOAD_FAILED,
+        message: "Related Note 추천을 위한 Note source 조회에 실패했습니다.",
+        operation:
+          RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.LOAD_RECOMMENDATION_SOURCE,
+        context: {
+          noteId,
+        },
+        userId: ownerUserId,
+      });
+
       console.error(
         "[Related Notes Recommendation Source Load Failed]",
         recommendationSourceError,

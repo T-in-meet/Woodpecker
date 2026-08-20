@@ -262,14 +262,17 @@ describe("scheduleRelatedNoteRecommendation", () => {
     });
 
     expect(mockReplaceRelatedNoteAiRecommendations).not.toHaveBeenCalled();
+    expect(mockReportRelatedNotesOperationalError).not.toHaveBeenCalled();
   });
 
   it("Note 조회에 실패하면 추천을 실행하지 않는다", async () => {
+    const sourceLoadError = {
+      message: "Failed to load note",
+    };
+
     const supabase = createNotesQueryMock({
       data: null,
-      error: {
-        message: "Failed to load note",
-      },
+      error: sourceLoadError,
     });
 
     mockCreateAdminClient.mockReturnValue(supabase);
@@ -288,6 +291,18 @@ describe("scheduleRelatedNoteRecommendation", () => {
     });
 
     expect(mockReplaceRelatedNoteAiRecommendations).not.toHaveBeenCalled();
+    expect(mockReportRelatedNotesOperationalError).toHaveBeenCalledWith({
+      error: sourceLoadError,
+      errorCode:
+        RELATED_NOTES_OPERATIONAL_ERROR_CODES.RECOMMENDATION_SOURCE_LOAD_FAILED,
+      message: "Related Note 추천을 위한 Note source 조회에 실패했습니다.",
+      operation:
+        RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.LOAD_RECOMMENDATION_SOURCE,
+      context: {
+        noteId: NOTE_ID,
+      },
+      userId: OWNER_USER_ID,
+    });
 
     consoleErrorSpy.mockRestore();
   });
