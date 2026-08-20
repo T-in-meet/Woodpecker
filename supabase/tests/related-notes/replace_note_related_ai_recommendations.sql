@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(3);
+SELECT plan(5);
 
 
 -- ============================================================================
@@ -13,16 +13,28 @@ SELECT set_config(
     true
 );
 
+SELECT set_config(
+    'test.related_notes_replace_foreign_user_id',
+    gen_random_uuid()::text,
+    true
+);
+
 INSERT INTO auth.users (
     id,
     email,
     raw_user_meta_data
 )
-VALUES (
-    current_setting('test.related_notes_replace_user_id')::uuid,
-    'related-notes-replace@example.com',
-    '{}'::jsonb
-);
+VALUES
+    (
+        current_setting('test.related_notes_replace_user_id')::uuid,
+        'related-notes-replace@example.com',
+        '{}'::jsonb
+    ),
+    (
+        current_setting('test.related_notes_replace_foreign_user_id')::uuid,
+        'related-notes-replace-foreign@example.com',
+        '{}'::jsonb
+    );
 
 
 -- ============================================================================
@@ -136,6 +148,7 @@ VALUES
 
 SELECT public.replace_note_related_ai_recommendations(
     current_setting('test.related_notes_replace_source_id')::uuid,
+    current_setting('test.related_notes_replace_user_id')::uuid,
     (
         SELECT updated_at
         FROM public.notes
@@ -284,6 +297,7 @@ SELECT lives_ok(
                 BEGIN
                     PERFORM public.replace_note_related_ai_recommendations(
                         '%s'::uuid,
+                        '%s'::uuid,
                         (
                             SELECT updated_at
                             FROM public.notes
@@ -314,6 +328,7 @@ SELECT lives_ok(
             $block$;
         $sql$,
         current_setting('test.related_notes_atomic_source_id'),
+        current_setting('test.related_notes_replace_user_id'),
         current_setting('test.related_notes_atomic_source_id'),
         current_setting('test.related_notes_atomic_source_id'),
         current_setting('test.related_notes_atomic_existing_id')
@@ -400,6 +415,7 @@ VALUES (
  */
 SELECT public.replace_note_related_ai_recommendations(
     current_setting('test.related_notes_stale_source_id')::uuid,
+    current_setting('test.related_notes_replace_user_id')::uuid,
     (
         SELECT updated_at - interval '1 second'
         FROM public.notes
@@ -438,6 +454,257 @@ SELECT ok(
                 current_setting('test.related_notes_stale_new_id')::uuid
     ),
     'RPC should ignore stale AI recommendations and preserve existing active relationships'
+);
+
+
+-- ============================================================================
+-- 4. Ignore Source Owner Mismatch
+-- ============================================================================
+
+/*
+ * service_role 경로에서 잘못된 owner가 전달되면 source Note를 찾지 못한
+ * 비동기 경합과 동일하게 아무 관계도 변경하지 않아야 합니다.
+ */
+SELECT set_config(
+    'test.related_notes_source_owner_source_id',
+    gen_random_uuid()::text,
+    true
+);
+
+SELECT set_config(
+    'test.related_notes_source_owner_existing_id',
+    gen_random_uuid()::text,
+    true
+);
+
+SELECT set_config(
+    'test.related_notes_source_owner_new_id',
+    gen_random_uuid()::text,
+    true
+);
+
+INSERT INTO public.notes (
+    id,
+    user_id,
+    title,
+    content,
+    review_round
+)
+VALUES
+    (
+        current_setting('test.related_notes_source_owner_source_id')::uuid,
+        current_setting('test.related_notes_replace_user_id')::uuid,
+        'Source Owner Source',
+        'Source Owner Source Content',
+        0
+    ),
+    (
+        current_setting('test.related_notes_source_owner_existing_id')::uuid,
+        current_setting('test.related_notes_replace_user_id')::uuid,
+        'Source Owner Existing AI',
+        'Source Owner Existing AI Content',
+        0
+    ),
+    (
+        current_setting('test.related_notes_source_owner_new_id')::uuid,
+        current_setting('test.related_notes_replace_user_id')::uuid,
+        'Source Owner New AI',
+        'Source Owner New AI Content',
+        0
+    );
+
+INSERT INTO public.note_related_notes (
+    note_id,
+    related_note_id,
+    origin,
+    status
+)
+VALUES (
+    current_setting('test.related_notes_source_owner_source_id')::uuid,
+    current_setting('test.related_notes_source_owner_existing_id')::uuid,
+    'ai',
+    'active'
+);
+
+SELECT public.replace_note_related_ai_recommendations(
+    current_setting('test.related_notes_source_owner_source_id')::uuid,
+    current_setting('test.related_notes_replace_foreign_user_id')::uuid,
+    (
+        SELECT updated_at
+        FROM public.notes
+        WHERE id =
+            current_setting('test.related_notes_source_owner_source_id')::uuid
+    ),
+    jsonb_build_array(
+        jsonb_build_object(
+            'relatedNoteId',
+            current_setting('test.related_notes_source_owner_new_id'),
+            'metadata',
+            jsonb_build_object('reason', 'wrong owner recommendation')
+        )
+    )
+);
+
+SELECT ok(
+    EXISTS (
+        SELECT 1
+        FROM public.note_related_notes
+        WHERE note_id =
+                current_setting('test.related_notes_source_owner_source_id')::uuid
+          AND related_note_id =
+                current_setting('test.related_notes_source_owner_existing_id')::uuid
+          AND origin = 'ai'
+          AND status = 'active'
+    )
+    AND NOT EXISTS (
+        SELECT 1
+        FROM public.note_related_notes
+        WHERE note_id =
+                current_setting('test.related_notes_source_owner_source_id')::uuid
+          AND related_note_id =
+                current_setting('test.related_notes_source_owner_new_id')::uuid
+    ),
+    'RPC should ignore calls when source note does not belong to the supplied owner'
+);
+
+
+-- ============================================================================
+-- 5. Reject Foreign Target Notes
+-- ============================================================================
+
+/*
+ * payload에 다른 사용자 소유 target Note가 포함되면 service_role RPC라도
+ * 저장을 거부하고 기존 active AI 관계를 보존해야 합니다.
+ */
+SELECT set_config(
+    'test.related_notes_foreign_target_source_id',
+    gen_random_uuid()::text,
+    true
+);
+
+SELECT set_config(
+    'test.related_notes_foreign_target_existing_id',
+    gen_random_uuid()::text,
+    true
+);
+
+SELECT set_config(
+    'test.related_notes_foreign_target_id',
+    gen_random_uuid()::text,
+    true
+);
+
+INSERT INTO public.notes (
+    id,
+    user_id,
+    title,
+    content,
+    review_round
+)
+VALUES
+    (
+        current_setting('test.related_notes_foreign_target_source_id')::uuid,
+        current_setting('test.related_notes_replace_user_id')::uuid,
+        'Foreign Target Source',
+        'Foreign Target Source Content',
+        0
+    ),
+    (
+        current_setting('test.related_notes_foreign_target_existing_id')::uuid,
+        current_setting('test.related_notes_replace_user_id')::uuid,
+        'Foreign Target Existing AI',
+        'Foreign Target Existing AI Content',
+        0
+    ),
+    (
+        current_setting('test.related_notes_foreign_target_id')::uuid,
+        current_setting('test.related_notes_replace_foreign_user_id')::uuid,
+        'Foreign Target',
+        'Foreign Target Content',
+        0
+    );
+
+INSERT INTO public.note_related_notes (
+    note_id,
+    related_note_id,
+    origin,
+    status
+)
+VALUES (
+    current_setting('test.related_notes_foreign_target_source_id')::uuid,
+    current_setting('test.related_notes_foreign_target_existing_id')::uuid,
+    'ai',
+    'active'
+);
+
+SELECT lives_ok(
+    format(
+        $sql$
+            DO $block$
+            BEGIN
+                BEGIN
+                    PERFORM public.replace_note_related_ai_recommendations(
+                        '%s'::uuid,
+                        '%s'::uuid,
+                        (
+                            SELECT updated_at
+                            FROM public.notes
+                            WHERE id = '%s'::uuid
+                        ),
+                        jsonb_build_array(
+                            jsonb_build_object(
+                                'relatedNoteId',
+                                '%s',
+                                'metadata',
+                                jsonb_build_object(
+                                    'reason',
+                                    'foreign target recommendation'
+                                )
+                            )
+                        )
+                    );
+
+                    RAISE EXCEPTION
+                        'Expected replace_note_related_ai_recommendations to fail';
+                EXCEPTION
+                    WHEN no_data_found THEN
+                        NULL;
+                END;
+
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM public.note_related_notes
+                    WHERE note_id = '%s'::uuid
+                      AND related_note_id = '%s'::uuid
+                      AND origin = 'ai'
+                      AND status = 'active'
+                ) THEN
+                    RAISE EXCEPTION
+                        'Existing active AI relationship was not preserved';
+                END IF;
+
+                IF EXISTS (
+                    SELECT 1
+                    FROM public.note_related_notes
+                    WHERE note_id = '%s'::uuid
+                      AND related_note_id = '%s'::uuid
+                ) THEN
+                    RAISE EXCEPTION
+                        'Foreign target relationship was inserted';
+                END IF;
+            END;
+            $block$;
+        $sql$,
+        current_setting('test.related_notes_foreign_target_source_id'),
+        current_setting('test.related_notes_replace_user_id'),
+        current_setting('test.related_notes_foreign_target_source_id'),
+        current_setting('test.related_notes_foreign_target_id'),
+        current_setting('test.related_notes_foreign_target_source_id'),
+        current_setting('test.related_notes_foreign_target_existing_id'),
+        current_setting('test.related_notes_foreign_target_source_id'),
+        current_setting('test.related_notes_foreign_target_id')
+    ),
+    'RPC should reject foreign target notes and preserve existing active relationships'
 );
 
 

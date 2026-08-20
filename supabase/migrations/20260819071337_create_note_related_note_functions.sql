@@ -37,6 +37,7 @@
  */
 CREATE OR REPLACE FUNCTION "public"."replace_note_related_ai_recommendations"(
     "p_note_id" uuid,
+    "p_owner_user_id" uuid,
     "p_source_updated_at" timestamp with time zone,
     "p_recommendations" jsonb
 )
@@ -47,6 +48,8 @@ SET search_path = ''
 AS $$
 DECLARE
     "v_current_source_updated_at" timestamp with time zone;
+    "v_recommendation_count" integer;
+    "v_valid_target_count" integer;
 BEGIN
     /*
      * 호출 계약을 명확히 하기 위해 추천 목록은 반드시 JSON 배열이어야 합니다.
@@ -68,11 +71,12 @@ BEGIN
     INTO "v_current_source_updated_at"
     FROM "public"."notes"
     WHERE "id" = "p_note_id"
+      AND "user_id" = "p_owner_user_id"
     FOR UPDATE;
 
     /*
-     * 추천 후처리 실행 전에 Note가 삭제된 경우에는
-     * 정상적인 비동기 실행 경합으로 보고 아무것도 변경하지 않습니다.
+     * 추천 후처리 실행 전에 Note가 삭제되었거나 전달받은 owner와
+     * source Note 소유자가 일치하지 않는 경우에는 아무것도 변경하지 않습니다.
      */
     IF NOT FOUND THEN
         RETURN;
@@ -86,6 +90,40 @@ BEGIN
      */
     IF "v_current_source_updated_at" IS DISTINCT FROM "p_source_updated_at" THEN
         RETURN;
+    END IF;
+
+    /*
+     * 추천 저장은 service_role 경로에서 실행되므로, payload의 모든 target Note가
+     * 명시적으로 전달받은 owner의 Note인지 RPC 경계에서 다시 검증합니다.
+     */
+    IF EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements("p_recommendations")
+            AS "items"("recommendation")
+        WHERE jsonb_typeof("recommendation") <> 'object'
+           OR NULLIF(btrim("recommendation" ->> 'relatedNoteId'), '') IS NULL
+    ) THEN
+        RAISE EXCEPTION
+            'RELATED_NOTE_AI_RECOMMENDATION_TARGET_INVALID'
+            USING ERRCODE = '22023';
+    END IF;
+
+    SELECT count(*)
+    INTO "v_recommendation_count"
+    FROM jsonb_array_elements("p_recommendations");
+
+    SELECT count(*)
+    INTO "v_valid_target_count"
+    FROM jsonb_array_elements("p_recommendations")
+        AS "items"("recommendation")
+    INNER JOIN "public"."notes" AS "target_note"
+      ON "target_note"."id" = ("recommendation" ->> 'relatedNoteId')::uuid
+     AND "target_note"."user_id" = "p_owner_user_id";
+
+    IF "v_recommendation_count" <> "v_valid_target_count" THEN
+        RAISE EXCEPTION
+            'RELATED_NOTE_AI_RECOMMENDATION_TARGET_NOT_FOUND'
+            USING ERRCODE = 'P0002';
     END IF;
 
     /*
@@ -122,6 +160,9 @@ BEGIN
         )
     FROM jsonb_array_elements("p_recommendations")
         AS "items"("recommendation")
+    INNER JOIN "public"."notes" AS "target_note"
+      ON "target_note"."id" = ("recommendation" ->> 'relatedNoteId')::uuid
+     AND "target_note"."user_id" = "p_owner_user_id"
     ON CONFLICT ("note_id", "related_note_id")
     DO NOTHING;
 END;
@@ -130,6 +171,7 @@ $$;
 
 COMMENT ON FUNCTION
     "public"."replace_note_related_ai_recommendations"(
+        uuid,
         uuid,
         timestamp with time zone,
         jsonb
@@ -149,6 +191,7 @@ REVOKE ALL
 ON FUNCTION
     "public"."replace_note_related_ai_recommendations"(
         uuid,
+        uuid,
         timestamp with time zone,
         jsonb
     )
@@ -157,6 +200,7 @@ FROM PUBLIC, "anon", "authenticated";
 GRANT EXECUTE
 ON FUNCTION
     "public"."replace_note_related_ai_recommendations"(
+        uuid,
         uuid,
         timestamp with time zone,
         jsonb

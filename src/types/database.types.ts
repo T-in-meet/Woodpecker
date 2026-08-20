@@ -1926,6 +1926,7 @@ export type Database = {
       replace_note_related_ai_recommendations: {
         Args: {
           p_note_id: string;
+          p_owner_user_id: string;
           p_recommendations: Json;
           p_source_updated_at: string;
         };

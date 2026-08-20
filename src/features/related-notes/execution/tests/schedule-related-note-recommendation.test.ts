@@ -177,6 +177,7 @@ describe("scheduleRelatedNoteRecommendation", () => {
 
     expect(mockReplaceRelatedNoteAiRecommendations).toHaveBeenCalledWith({
       noteId: NOTE_ID,
+      ownerUserId: OWNER_USER_ID,
       recommendations: [
         {
           noteId: RELATED_NOTE_ID,

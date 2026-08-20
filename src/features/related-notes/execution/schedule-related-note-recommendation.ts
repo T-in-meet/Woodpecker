@@ -161,6 +161,7 @@ export function scheduleRelatedNoteRecommendation({
       try {
         await replaceRelatedNoteAiRecommendations({
           noteId: recommendationSource.id,
+          ownerUserId,
           recommendations: result.recommendations,
           sourceUpdatedAt: recommendationSource.updated_at,
         });

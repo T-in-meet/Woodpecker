@@ -11,6 +11,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 const createAdminClientMock = vi.mocked(createAdminClient);
 
 const NOTE_ID = "11111111-1111-4111-8111-111111111111";
+const OWNER_USER_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const RELATED_NOTE_ID = "22222222-2222-4222-8222-222222222222";
 const SOURCE_UPDATED_AT = "2026-08-20T01:00:00.000Z";
 
@@ -30,6 +31,7 @@ describe("replaceRelatedNoteAiRecommendations", () => {
 
     await replaceRelatedNoteAiRecommendations({
       noteId: NOTE_ID,
+      ownerUserId: OWNER_USER_ID,
       recommendations: [
         {
           noteId: RELATED_NOTE_ID,
@@ -44,6 +46,7 @@ describe("replaceRelatedNoteAiRecommendations", () => {
       "replace_note_related_ai_recommendations",
       {
         p_note_id: NOTE_ID,
+        p_owner_user_id: OWNER_USER_ID,
         p_recommendations: [
           {
             relatedNoteId: RELATED_NOTE_ID,
@@ -69,6 +72,7 @@ describe("replaceRelatedNoteAiRecommendations", () => {
 
     await replaceRelatedNoteAiRecommendations({
       noteId: NOTE_ID,
+      ownerUserId: OWNER_USER_ID,
       recommendations: [],
       sourceUpdatedAt: SOURCE_UPDATED_AT,
     });
@@ -77,6 +81,7 @@ describe("replaceRelatedNoteAiRecommendations", () => {
       "replace_note_related_ai_recommendations",
       {
         p_note_id: NOTE_ID,
+        p_owner_user_id: OWNER_USER_ID,
         p_recommendations: [],
         p_source_updated_at: SOURCE_UPDATED_AT,
       },
@@ -97,6 +102,7 @@ describe("replaceRelatedNoteAiRecommendations", () => {
     await expect(
       replaceRelatedNoteAiRecommendations({
         noteId: NOTE_ID,
+        ownerUserId: OWNER_USER_ID,
         recommendations: [],
         sourceUpdatedAt: SOURCE_UPDATED_AT,
       }),

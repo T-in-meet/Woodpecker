@@ -7,6 +7,9 @@ type ReplaceRelatedNoteAiRecommendationsParams = {
   /** AI 추천 결과를 교체할 대상 Note ID입니다. */
   noteId: string;
 
+  /** AI 추천 대상 Note와 추천 target Note의 소유 사용자 ID입니다. */
+  ownerUserId: string;
+
   /**
    * AI 추천 생성에 사용한 Note snapshot의 updated_at입니다.
    *
@@ -35,6 +38,7 @@ type ReplaceRelatedNoteAiRecommendationsParams = {
  */
 export async function replaceRelatedNoteAiRecommendations({
   noteId,
+  ownerUserId,
   sourceUpdatedAt,
   recommendations,
 }: ReplaceRelatedNoteAiRecommendationsParams): Promise<void> {
@@ -51,6 +55,7 @@ export async function replaceRelatedNoteAiRecommendations({
     "replace_note_related_ai_recommendations",
     {
       p_note_id: noteId,
+      p_owner_user_id: ownerUserId,
       p_source_updated_at: sourceUpdatedAt,
       p_recommendations: recommendationPayload,
     },
