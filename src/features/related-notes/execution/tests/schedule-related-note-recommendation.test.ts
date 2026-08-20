@@ -4,6 +4,10 @@ import {
   resolveAiRuntimeChatConfiguration,
   resolveAiRuntimeEmbeddingConfiguration,
 } from "@/features/ai/runtimes";
+import {
+  RELATED_NOTES_OPERATIONAL_ERROR_CODES,
+  RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS,
+} from "@/features/operational-errors/constants";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import {
@@ -11,6 +15,7 @@ import {
   RELATED_NOTES_SEARCH_LIMIT,
 } from "../../constants/ai";
 import { replaceRelatedNoteAiRecommendations } from "../../persistence/replace-related-note-ai-recommendations";
+import { reportRelatedNotesOperationalError } from "../../utils/report-operational-error";
 import { runRelatedNoteRecommendation } from "../run-related-note-recommendation";
 import { scheduleRelatedNoteRecommendation } from "../schedule-related-note-recommendation";
 
@@ -31,6 +36,10 @@ vi.mock("../../persistence/replace-related-note-ai-recommendations", () => ({
   replaceRelatedNoteAiRecommendations: vi.fn(),
 }));
 
+vi.mock("../../utils/report-operational-error", () => ({
+  reportRelatedNotesOperationalError: vi.fn(),
+}));
+
 vi.mock("../run-related-note-recommendation", () => ({
   runRelatedNoteRecommendation: vi.fn(),
 }));
@@ -47,6 +56,9 @@ const mockRunRelatedNoteRecommendation = vi.mocked(
 );
 const mockReplaceRelatedNoteAiRecommendations = vi.mocked(
   replaceRelatedNoteAiRecommendations,
+);
+const mockReportRelatedNotesOperationalError = vi.mocked(
+  reportRelatedNotesOperationalError,
 );
 
 const OWNER_USER_ID = "11111111-1111-4111-8111-111111111111";
@@ -107,6 +119,8 @@ function createNotesQueryMock({
 describe("scheduleRelatedNoteRecommendation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+
+    mockReportRelatedNotesOperationalError.mockResolvedValue(undefined);
 
     mockResolveAiRuntimeEmbeddingConfiguration.mockResolvedValue(
       embeddingConfiguration,
@@ -172,6 +186,62 @@ describe("scheduleRelatedNoteRecommendation", () => {
       ],
       sourceUpdatedAt: SOURCE_UPDATED_AT,
     });
+  });
+
+  it("추천 저장에 실패하면 운영 오류를 보고한다", async () => {
+    const supabase = createNotesQueryMock({
+      data: {
+        id: NOTE_ID,
+        title: "Source note",
+        content: "Source note content",
+        updated_at: SOURCE_UPDATED_AT,
+      },
+      error: null,
+    });
+
+    mockCreateAdminClient.mockReturnValue(supabase);
+
+    mockRunRelatedNoteRecommendation.mockResolvedValue({
+      expandedQuery: "expanded query",
+      notes: [],
+      recommendations: [
+        {
+          noteId: RELATED_NOTE_ID,
+          reason: "관련 노트 추천 이유",
+          title: "Related note",
+        },
+      ],
+    });
+
+    const replaceError = new Error("replace failed");
+
+    mockReplaceRelatedNoteAiRecommendations.mockRejectedValue(replaceError);
+
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+
+    scheduleRelatedNoteRecommendation({
+      noteId: NOTE_ID,
+      ownerUserId: OWNER_USER_ID,
+    });
+
+    await vi.waitFor(() => {
+      expect(mockReportRelatedNotesOperationalError).toHaveBeenCalledWith({
+        error: replaceError,
+        errorCode:
+          RELATED_NOTES_OPERATIONAL_ERROR_CODES.RECOMMENDATIONS_REPLACE_FAILED,
+        message: "Related Note AI 추천 교체에 실패했습니다.",
+        operation:
+          RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.REPLACE_RECOMMENDATIONS,
+        context: {
+          noteId: NOTE_ID,
+        },
+        userId: OWNER_USER_ID,
+      });
+    });
+
+    consoleErrorSpy.mockRestore();
   });
 
   it("Note가 존재하지 않으면 추천을 실행하지 않는다", async () => {

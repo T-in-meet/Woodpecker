@@ -35,7 +35,6 @@ describe("replaceRelatedNoteAiRecommendations", () => {
           noteId: RELATED_NOTE_ID,
           title: "Related Note",
           reason: "관련된 내용을 다룹니다.",
-          rank: 1,
         },
       ],
       sourceUpdatedAt: SOURCE_UPDATED_AT,
@@ -51,7 +50,6 @@ describe("replaceRelatedNoteAiRecommendations", () => {
             metadata: {
               title: "Related Note",
               reason: "관련된 내용을 다룹니다.",
-              rank: 1,
             },
           },
         ],

@@ -4,6 +4,10 @@ import {
   resolveAiRuntimeChatConfiguration,
   resolveAiRuntimeEmbeddingConfiguration,
 } from "@/features/ai/runtimes";
+import {
+  RELATED_NOTES_OPERATIONAL_ERROR_CODES,
+  RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS,
+} from "@/features/operational-errors/constants";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import {
@@ -13,6 +17,7 @@ import {
   RELATED_NOTES_SEARCH_LIMIT,
 } from "../constants/ai";
 import { replaceRelatedNoteAiRecommendations } from "../persistence/replace-related-note-ai-recommendations";
+import { reportRelatedNotesOperationalError } from "../utils/report-operational-error";
 import { runRelatedNoteRecommendation } from "./run-related-note-recommendation";
 
 type ScheduleRelatedNoteRecommendationParams = {
@@ -140,11 +145,28 @@ export function scheduleRelatedNoteRecommendation({
        * 추천 생성 중 Note가 다시 수정됐다면 RPC에서 stale 실행으로 판단하여
        * 기존 active AI 추천을 변경하지 않고 종료합니다.
        */
-      await replaceRelatedNoteAiRecommendations({
-        noteId: recommendationSource.id,
-        recommendations: result.recommendations,
-        sourceUpdatedAt: recommendationSource.updated_at,
-      });
+      try {
+        await replaceRelatedNoteAiRecommendations({
+          noteId: recommendationSource.id,
+          recommendations: result.recommendations,
+          sourceUpdatedAt: recommendationSource.updated_at,
+        });
+      } catch (error) {
+        await reportRelatedNotesOperationalError({
+          error,
+          errorCode:
+            RELATED_NOTES_OPERATIONAL_ERROR_CODES.RECOMMENDATIONS_REPLACE_FAILED,
+          message: "Related Note AI 추천 교체에 실패했습니다.",
+          operation:
+            RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.REPLACE_RECOMMENDATIONS,
+          context: {
+            noteId: recommendationSource.id,
+          },
+          userId: ownerUserId,
+        });
+
+        throw error;
+      }
 
       console.log("[Related Notes Recommendation]", {
         expandedQuery: result.expandedQuery,
