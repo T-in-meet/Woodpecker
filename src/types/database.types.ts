@@ -1924,7 +1924,11 @@ export type Database = {
         Returns: string;
       };
       replace_note_related_ai_recommendations: {
-        Args: { p_note_id: string; p_recommendations: Json };
+        Args: {
+          p_note_id: string;
+          p_recommendations: Json;
+          p_source_updated_at: string;
+        };
         Returns: undefined;
       };
       save_ai_setting_configurations: {

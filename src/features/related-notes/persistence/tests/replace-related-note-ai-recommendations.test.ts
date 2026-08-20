@@ -10,12 +10,16 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 const createAdminClientMock = vi.mocked(createAdminClient);
 
+const NOTE_ID = "11111111-1111-4111-8111-111111111111";
+const RELATED_NOTE_ID = "22222222-2222-4222-8222-222222222222";
+const SOURCE_UPDATED_AT = "2026-08-20T01:00:00.000Z";
+
 describe("replaceRelatedNoteAiRecommendations", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("관련 노트 추천을 RPC payload로 변환해 교체한다", async () => {
+  it("관련 노트 추천과 source updated_at을 RPC payload로 변환해 교체한다", async () => {
     const rpc = vi.fn().mockResolvedValue({
       error: null,
     });
@@ -25,24 +29,25 @@ describe("replaceRelatedNoteAiRecommendations", () => {
     } as never);
 
     await replaceRelatedNoteAiRecommendations({
-      noteId: "11111111-1111-4111-8111-111111111111",
+      noteId: NOTE_ID,
       recommendations: [
         {
-          noteId: "22222222-2222-4222-8222-222222222222",
+          noteId: RELATED_NOTE_ID,
           title: "Related Note",
           reason: "관련된 내용을 다룹니다.",
           rank: 1,
         },
       ],
+      sourceUpdatedAt: SOURCE_UPDATED_AT,
     });
 
     expect(rpc).toHaveBeenCalledWith(
       "replace_note_related_ai_recommendations",
       {
-        p_note_id: "11111111-1111-4111-8111-111111111111",
+        p_note_id: NOTE_ID,
         p_recommendations: [
           {
-            relatedNoteId: "22222222-2222-4222-8222-222222222222",
+            relatedNoteId: RELATED_NOTE_ID,
             metadata: {
               title: "Related Note",
               reason: "관련된 내용을 다룹니다.",
@@ -50,6 +55,7 @@ describe("replaceRelatedNoteAiRecommendations", () => {
             },
           },
         ],
+        p_source_updated_at: SOURCE_UPDATED_AT,
       },
     );
   });
@@ -64,15 +70,17 @@ describe("replaceRelatedNoteAiRecommendations", () => {
     } as never);
 
     await replaceRelatedNoteAiRecommendations({
-      noteId: "11111111-1111-4111-8111-111111111111",
+      noteId: NOTE_ID,
       recommendations: [],
+      sourceUpdatedAt: SOURCE_UPDATED_AT,
     });
 
     expect(rpc).toHaveBeenCalledWith(
       "replace_note_related_ai_recommendations",
       {
-        p_note_id: "11111111-1111-4111-8111-111111111111",
+        p_note_id: NOTE_ID,
         p_recommendations: [],
+        p_source_updated_at: SOURCE_UPDATED_AT,
       },
     );
   });
@@ -90,8 +98,9 @@ describe("replaceRelatedNoteAiRecommendations", () => {
 
     await expect(
       replaceRelatedNoteAiRecommendations({
-        noteId: "11111111-1111-4111-8111-111111111111",
+        noteId: NOTE_ID,
         recommendations: [],
+        sourceUpdatedAt: SOURCE_UPDATED_AT,
       }),
     ).rejects.toThrow(
       "Failed to replace related note AI recommendations: replace failed",

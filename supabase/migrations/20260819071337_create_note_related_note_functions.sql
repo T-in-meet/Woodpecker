@@ -11,6 +11,13 @@
  * manual 관계와 dismissed AI 관계는 사용자의 명시적인 판단이 반영된 데이터이므로
  * 이 함수에서 수정하거나 삭제하지 않습니다.
  *
+ * AI 추천은 Note 저장/수정 이후 비동기 후처리로 생성되므로,
+ * 추천 생성에 사용한 Note snapshot의 updated_at을 함께 전달받습니다.
+ *
+ * 추천 저장 직전에 현재 Note row를 잠그고 updated_at을 비교하여,
+ * 추천 생성 중 Note가 다시 수정된 경우 오래된 추천 결과가
+ * 최신 추천을 덮어쓰지 않도록 해당 교체 작업을 수행하지 않습니다.
+ *
  * p_recommendations 형식:
  *
  * [
@@ -30,6 +37,7 @@
  */
 CREATE OR REPLACE FUNCTION "public"."replace_note_related_ai_recommendations"(
     "p_note_id" uuid,
+    "p_source_updated_at" timestamp with time zone,
     "p_recommendations" jsonb
 )
 RETURNS void
@@ -37,6 +45,8 @@ LANGUAGE plpgsql
 SECURITY INVOKER
 SET search_path = ''
 AS $$
+DECLARE
+    "v_current_source_updated_at" timestamp with time zone;
 BEGIN
     /*
      * 호출 계약을 명확히 하기 위해 추천 목록은 반드시 JSON 배열이어야 합니다.
@@ -45,6 +55,37 @@ BEGIN
         RAISE EXCEPTION
             'RELATED_NOTE_RECOMMENDATIONS_MUST_BE_ARRAY'
             USING ERRCODE = '22023';
+    END IF;
+
+    /*
+     * 추천 생성에 사용한 Note snapshot이 여전히 최신 상태인지 확인합니다.
+     *
+     * Note row를 잠근 상태에서 updated_at을 검증하고 이후 추천 교체까지
+     * 같은 트랜잭션에서 수행하여, 검증 직후 다른 Note 수정이 끼어들어
+     * 오래된 추천이 저장되는 race condition을 방지합니다.
+     */
+    SELECT "updated_at"
+    INTO "v_current_source_updated_at"
+    FROM "public"."notes"
+    WHERE "id" = "p_note_id"
+    FOR UPDATE;
+
+    /*
+     * 추천 후처리 실행 전에 Note가 삭제된 경우에는
+     * 정상적인 비동기 실행 경합으로 보고 아무것도 변경하지 않습니다.
+     */
+    IF NOT FOUND THEN
+        RETURN;
+    END IF;
+
+    /*
+     * 추천 생성 이후 Note가 다시 수정되었다면 현재 실행 결과는 stale 상태입니다.
+     *
+     * 기존 active AI 추천을 삭제하기 전에 종료하여,
+     * 최신 Note version을 기준으로 생성된 추천을 오래된 실행이 덮어쓰지 않도록 합니다.
+     */
+    IF "v_current_source_updated_at" IS DISTINCT FROM "p_source_updated_at" THEN
+        RETURN;
     END IF;
 
     /*
@@ -88,9 +129,13 @@ $$;
 
 
 COMMENT ON FUNCTION
-    "public"."replace_note_related_ai_recommendations"(uuid, jsonb)
+    "public"."replace_note_related_ai_recommendations"(
+        uuid,
+        timestamp with time zone,
+        jsonb
+    )
 IS
-    '지정한 Note의 active AI Related Notes를 새로운 추천 결과로 원자적으로 교체합니다. manual 및 dismissed 관계는 유지합니다.';
+    '지정한 Note의 active AI Related Notes를 새로운 추천 결과로 원자적으로 교체합니다. Note version이 변경된 stale 추천은 저장하지 않으며 manual 및 dismissed 관계는 유지합니다.';
 
 
 -- ============================================================================
@@ -102,12 +147,20 @@ IS
  */
 REVOKE ALL
 ON FUNCTION
-    "public"."replace_note_related_ai_recommendations"(uuid, jsonb)
+    "public"."replace_note_related_ai_recommendations"(
+        uuid,
+        timestamp with time zone,
+        jsonb
+    )
 FROM PUBLIC, "anon", "authenticated";
 
 GRANT EXECUTE
 ON FUNCTION
-    "public"."replace_note_related_ai_recommendations"(uuid, jsonb)
+    "public"."replace_note_related_ai_recommendations"(
+        uuid,
+        timestamp with time zone,
+        jsonb
+    )
 TO "service_role";
 
 -- ============================================================================

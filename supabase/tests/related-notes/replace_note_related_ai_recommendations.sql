@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(2);
+SELECT plan(3);
 
 
 -- ============================================================================
@@ -136,6 +136,12 @@ VALUES
 
 SELECT public.replace_note_related_ai_recommendations(
     current_setting('test.related_notes_replace_source_id')::uuid,
+    (
+        SELECT updated_at
+        FROM public.notes
+        WHERE id =
+            current_setting('test.related_notes_replace_source_id')::uuid
+    ),
     jsonb_build_array(
         jsonb_build_object(
             'relatedNoteId',
@@ -278,6 +284,11 @@ SELECT lives_ok(
                 BEGIN
                     PERFORM public.replace_note_related_ai_recommendations(
                         '%s'::uuid,
+                        (
+                            SELECT updated_at
+                            FROM public.notes
+                            WHERE id = '%s'::uuid
+                        ),
                         '[{"relatedNoteId":"not-a-uuid","metadata":{}}]'::jsonb
                     );
 
@@ -304,9 +315,129 @@ SELECT lives_ok(
         $sql$,
         current_setting('test.related_notes_atomic_source_id'),
         current_setting('test.related_notes_atomic_source_id'),
+        current_setting('test.related_notes_atomic_source_id'),
         current_setting('test.related_notes_atomic_existing_id')
     ),
     'RPC should roll back the previous active AI deletion when inserting new recommendations fails'
+);
+
+
+-- ============================================================================
+-- 3. Ignore Stale AI Related Note Recommendations
+-- ============================================================================
+
+/*
+ * 추천 생성에 사용한 Note snapshot의 updated_at이 현재 Note와 다르면
+ * 해당 추천 결과는 stale 상태이므로 저장하지 않아야 합니다.
+ *
+ * stale 추천으로 인해 기존 active AI 추천이 삭제되거나
+ * 새로운 AI 추천이 삽입되지 않는지 함께 확인합니다.
+ */
+SELECT set_config(
+    'test.related_notes_stale_source_id',
+    gen_random_uuid()::text,
+    true
+);
+
+SELECT set_config(
+    'test.related_notes_stale_existing_id',
+    gen_random_uuid()::text,
+    true
+);
+
+SELECT set_config(
+    'test.related_notes_stale_new_id',
+    gen_random_uuid()::text,
+    true
+);
+
+INSERT INTO public.notes (
+    id,
+    user_id,
+    title,
+    content,
+    review_round
+)
+VALUES
+    (
+        current_setting('test.related_notes_stale_source_id')::uuid,
+        current_setting('test.related_notes_replace_user_id')::uuid,
+        'Stale Source',
+        'Stale Source Content',
+        0
+    ),
+    (
+        current_setting('test.related_notes_stale_existing_id')::uuid,
+        current_setting('test.related_notes_replace_user_id')::uuid,
+        'Stale Existing AI',
+        'Stale Existing AI Content',
+        0
+    ),
+    (
+        current_setting('test.related_notes_stale_new_id')::uuid,
+        current_setting('test.related_notes_replace_user_id')::uuid,
+        'Stale New AI',
+        'Stale New AI Content',
+        0
+    );
+
+INSERT INTO public.note_related_notes (
+    note_id,
+    related_note_id,
+    origin,
+    status
+)
+VALUES (
+    current_setting('test.related_notes_stale_source_id')::uuid,
+    current_setting('test.related_notes_stale_existing_id')::uuid,
+    'ai',
+    'active'
+);
+
+/*
+ * 현재 updated_at보다 과거 timestamp를 전달하여
+ * 이미 오래된 Note snapshot에서 생성된 추천 결과를 재현합니다.
+ */
+SELECT public.replace_note_related_ai_recommendations(
+    current_setting('test.related_notes_stale_source_id')::uuid,
+    (
+        SELECT updated_at - interval '1 second'
+        FROM public.notes
+        WHERE id =
+            current_setting('test.related_notes_stale_source_id')::uuid
+    ),
+    jsonb_build_array(
+        jsonb_build_object(
+            'relatedNoteId',
+            current_setting('test.related_notes_stale_new_id'),
+            'metadata',
+            jsonb_build_object('reason', 'stale recommendation')
+        )
+    )
+);
+
+SELECT ok(
+    -- stale 실행 이전의 active AI 추천은 그대로 유지되어야 합니다.
+    EXISTS (
+        SELECT 1
+        FROM public.note_related_notes
+        WHERE note_id =
+                current_setting('test.related_notes_stale_source_id')::uuid
+          AND related_note_id =
+                current_setting('test.related_notes_stale_existing_id')::uuid
+          AND origin = 'ai'
+          AND status = 'active'
+    )
+    -- stale 실행에서 전달한 새로운 추천은 저장되지 않아야 합니다.
+    AND NOT EXISTS (
+        SELECT 1
+        FROM public.note_related_notes
+        WHERE note_id =
+                current_setting('test.related_notes_stale_source_id')::uuid
+          AND related_note_id =
+                current_setting('test.related_notes_stale_new_id')::uuid
+    ),
+    'RPC should ignore stale AI recommendations and preserve existing active relationships'
 );
 
 

@@ -38,7 +38,10 @@ type RunRelatedNoteRecommendationParams = {
  *
  * Query Expansion으로 관련 노트 검색 질의를 생성하고,
  * 기존 Note RAG를 통해 Context를 구성한 뒤,
- * Answer Agent를 사용하여 추천 Note를 결정합니다.
+ * 검색된 Note가 있는 경우 Answer Agent를 사용하여 추천 Note를 결정합니다.
+ *
+ * 검색된 Note가 없으면 추천 후보가 존재하지 않으므로
+ * 불필요한 Answer Agent 호출 없이 빈 추천 결과를 반환합니다.
  *
  * @param params 관련 노트 추천 실행에 필요한 입력과 Runtime 설정입니다.
  * @returns 확장 질의, 검색된 Note 및 `{ noteId, title }` 추천 항목입니다.
@@ -64,6 +67,23 @@ export async function runRelatedNoteRecommendation({
     targetNoteId,
     title,
   });
+
+  /*
+   * 검색된 관련 Note가 없으면 Answer Agent를 호출하지 않습니다.
+   *
+   * 추천 후보 자체가 없는 상태에서 LLM을 호출해도 유효한 추천을
+   * 만들 수 없으므로 불필요한 Provider 호출과 비용을 방지합니다.
+   *
+   * 빈 추천 결과는 저장 계층에서 정상적으로 처리되며,
+   * 현재 Note에 남아 있는 active AI 추천을 제거하는 의미로 사용됩니다.
+   */
+  if (contextResult.notes.length === 0) {
+    return {
+      expandedQuery: contextResult.expandedQuery,
+      notes: [],
+      recommendations: [],
+    };
+  }
 
   const recommendations = await generateRelatedNoteRecommendations({
     configuration: answerConfiguration,

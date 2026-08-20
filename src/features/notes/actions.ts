@@ -15,21 +15,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 import { generateNoteEmbedding } from "../ai/rags/note/generate-embedding";
-import {
-  resolveAiRuntimeChatConfiguration,
-  resolveAiRuntimeEmbeddingConfiguration,
-} from "../ai/runtimes";
+import { resolveAiRuntimeEmbeddingConfiguration } from "../ai/runtimes";
 import { reportAiOperationalError } from "../ai/utils/report-ai-operational-error";
 import {
   NOTE_CHAT_AI_FEATURE_KEY,
   NOTE_CHAT_AI_ROLE_KEY,
 } from "../note-chats/constants/ai";
-import {
-  RELATED_NOTES_AI_FEATURE_KEY,
-  RELATED_NOTES_AI_ROLE_KEY,
-} from "../related-notes/constants/ai";
-import { runRelatedNoteRecommendation } from "../related-notes/execution/run-related-note-recommendation";
-import { replaceRelatedNoteAiRecommendations } from "../related-notes/persistence/replace-related-note-ai-recommendations";
+import { scheduleRelatedNoteRecommendation } from "../related-notes/execution/schedule-related-note-recommendation";
 import { type NoteInput, noteSchema } from "./schema";
 
 type NoteActionFieldErrors = Partial<Record<keyof NoteInput, string[]>>;
@@ -206,55 +198,17 @@ export async function createNoteAction(
     ownerUserId: user.id,
   });
 
-  try {
-    const embeddingConfiguration = await resolveAiRuntimeEmbeddingConfiguration(
-      {
-        featureKey: NOTE_CHAT_AI_FEATURE_KEY,
-        roleKey: NOTE_CHAT_AI_ROLE_KEY.NOTE_RETRIEVAL,
-      },
-    );
-
-    const queryExpansionConfiguration = await resolveAiRuntimeChatConfiguration(
-      {
-        featureKey: RELATED_NOTES_AI_FEATURE_KEY,
-        roleKey: RELATED_NOTES_AI_ROLE_KEY.QUERY_EXPANSION,
-      },
-    );
-
-    const answerConfiguration = await resolveAiRuntimeChatConfiguration({
-      featureKey: RELATED_NOTES_AI_FEATURE_KEY,
-      roleKey: RELATED_NOTES_AI_ROLE_KEY.ANSWER_GENERATION,
-    });
-
-    const result = await runRelatedNoteRecommendation({
-      answerConfiguration,
-      content: parsed.data.content,
-      embeddingConfiguration,
-      limit: 5,
-      minSimilarity: 0,
-      ownerUserId: user.id,
-      queryExpansionConfiguration,
-      targetNoteId: newNoteId,
-      title: parsed.data.title,
-    });
-
-    await replaceRelatedNoteAiRecommendations({
-      noteId: newNoteId,
-      recommendations: result.recommendations,
-    });
-
-    console.log("[Related Notes Recommendation]", {
-      expandedQuery: result.expandedQuery,
-      matchedNoteIds: result.notes.map((note) => note.id),
-      recommendedNoteIds: result.recommendations.map(
-        (recommendation) => recommendation.noteId,
-      ),
-    });
-  } catch (error) {
-    // Note 저장은 이미 성공했으므로 관련 노트 추천 실패가 Note 생성 결과에 영향을 주지 않도록 한다.
-    // 추천 실행 자체의 오류 보고는 실행 계층에서 담당한다.
-    console.error("[Related Notes Recommendation Failed]", error);
-  }
+  /*
+   * Related Notes AI 추천도 Note 생성 응답 이후 후처리로 예약합니다.
+   *
+   * Runtime 설정 조회, Query Expansion, RAG 검색, Answer Agent 실행 및
+   * 추천 저장을 Action 응답 경로에서 분리하여,
+   * AI 추천 처리 시간이 Note 생성 성공 응답을 지연시키지 않도록 합니다.
+   */
+  scheduleRelatedNoteRecommendation({
+    noteId: newNoteId,
+    ownerUserId: user.id,
+  });
 
   return {
     success: true,
@@ -342,55 +296,17 @@ export async function updateNoteAction(
     ownerUserId: user.id,
   });
 
-  try {
-    const embeddingConfiguration = await resolveAiRuntimeEmbeddingConfiguration(
-      {
-        featureKey: NOTE_CHAT_AI_FEATURE_KEY,
-        roleKey: NOTE_CHAT_AI_ROLE_KEY.NOTE_RETRIEVAL,
-      },
-    );
-
-    const queryExpansionConfiguration = await resolveAiRuntimeChatConfiguration(
-      {
-        featureKey: RELATED_NOTES_AI_FEATURE_KEY,
-        roleKey: RELATED_NOTES_AI_ROLE_KEY.QUERY_EXPANSION,
-      },
-    );
-
-    const answerConfiguration = await resolveAiRuntimeChatConfiguration({
-      featureKey: RELATED_NOTES_AI_FEATURE_KEY,
-      roleKey: RELATED_NOTES_AI_ROLE_KEY.ANSWER_GENERATION,
-    });
-
-    const result = await runRelatedNoteRecommendation({
-      answerConfiguration,
-      content: updatedNote.content,
-      embeddingConfiguration,
-      limit: 5,
-      minSimilarity: 0,
-      ownerUserId: user.id,
-      queryExpansionConfiguration,
-      targetNoteId: updatedNote.id,
-      title: updatedNote.title,
-    });
-
-    await replaceRelatedNoteAiRecommendations({
-      noteId: updatedNote.id,
-      recommendations: result.recommendations,
-    });
-
-    console.log("[Related Notes Recommendation]", {
-      expandedQuery: result.expandedQuery,
-      matchedNoteIds: result.notes.map((note) => note.id),
-      recommendedNoteIds: result.recommendations.map(
-        (recommendation) => recommendation.noteId,
-      ),
-    });
-  } catch (error) {
-    // Note 수정은 이미 성공했으므로 관련 노트 추천 실패가 Note 수정 결과에 영향을 주지 않도록 한다.
-    // 추천 실행 자체의 오류 보고는 실행 계층에서 담당한다.
-    console.error("[Related Notes Recommendation Failed]", error);
-  }
+  /*
+   * 수정된 Note의 Related Notes AI 추천도 응답 이후 후처리로 예약합니다.
+   *
+   * 후처리에서는 DB에서 최신 Note snapshot을 다시 조회하고,
+   * 추천 저장 시 updated_at을 검증하므로 연속 수정 중 생성된
+   * stale 추천이 최신 추천을 덮어쓰지 않도록 합니다.
+   */
+  scheduleRelatedNoteRecommendation({
+    noteId: updatedNote.id,
+    ownerUserId: user.id,
+  });
 
   return { success: true };
 }
