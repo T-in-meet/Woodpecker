@@ -33,10 +33,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # ci.yml의 supabase-test job 및 package.json devDependency와 같은 버전을 쓴다.
+      # CI에서 검증한 것과 다른 CLI로 운영 DB에 push되지 않도록 세 곳을 함께 올린다.
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1.6.0
         with:
-          version: 2.67.1
+          version: 2.109.1
 
       - name: Link Supabase project and apply migrations
         env:
