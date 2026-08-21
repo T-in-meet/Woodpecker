@@ -20,6 +20,10 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: createClientMock,
 }));
 
+vi.mock("@/features/auth/utils/requireCurrentLegalAcceptance", () => ({
+  requireCurrentLegalAcceptance: vi.fn(),
+}));
+
 vi.mock("@/features/notifications/create-admin-notification", () => ({
   createAdminNotification: createAdminNotificationMock,
 }));

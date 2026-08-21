@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(15);
+SELECT plan(17);
 
 SELECT has_table(
   'public',
@@ -120,7 +120,7 @@ SELECT results_eq(
 
 SELECT throws_ok(
   $$INSERT INTO public.user_legal_acceptances (user_id, event_type, document_version, source)
-    VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'age_14_confirmed', '2026-09-20', 'reconsent')$$,
+    VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'age_14_confirmed', '2026-09-20', 'agreements_page')$$,
   '42501',
   NULL,
   'authenticated users cannot insert'
@@ -130,7 +130,7 @@ RESET ROLE;
 
 SELECT throws_ok(
   $$INSERT INTO public.user_legal_acceptances (user_id, event_type, document_version, source)
-    VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'unknown', '2026-09-20', 'reconsent')$$,
+    VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'unknown', '2026-09-20', 'agreements_page')$$,
   '23514',
   NULL,
   'unsupported event types are rejected'
@@ -138,10 +138,24 @@ SELECT throws_ok(
 
 SELECT throws_ok(
   $$INSERT INTO public.user_legal_acceptances (user_id, event_type, document_version, source)
-    VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'age_14_confirmed', 'v1', 'reconsent')$$,
+    VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'age_14_confirmed', 'v1', 'agreements_page')$$,
   '23514',
   NULL,
   'document versions must use YYYY-MM-DD'
+);
+
+SELECT lives_ok(
+  $$INSERT INTO public.user_legal_acceptances (user_id, event_type, document_version, source)
+    VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'age_14_confirmed', '2026-09-20', 'agreements_page')$$,
+  'agreements_page is an accepted source'
+);
+
+SELECT throws_ok(
+  $$INSERT INTO public.user_legal_acceptances (user_id, event_type, document_version, source)
+    VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'age_14_confirmed', '2026-09-21', 'reconsent')$$,
+  '23514',
+  NULL,
+  'unsupported sources are rejected'
 );
 
 SELECT throws_ok(

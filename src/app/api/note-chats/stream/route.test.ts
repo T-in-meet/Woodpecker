@@ -2,6 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
+const getLegalAcceptanceRequiredPathMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/features/auth/lib/userAgreements", () => ({
+  getLegalAcceptanceRequiredPath: getLegalAcceptanceRequiredPathMock,
+}));
+
 import {
   resolveAiRuntimeChatConfiguration,
   resolveAiRuntimeEmbeddingConfiguration,
@@ -178,6 +184,7 @@ const readStream = async (response: Response): Promise<string[]> => {
 
 describe("POST /api/note-chats/stream", () => {
   beforeEach(() => {
+    getLegalAcceptanceRequiredPathMock.mockReset().mockResolvedValue(null);
     vi.clearAllMocks();
 
     vi.mocked(reportNoteChatOperationalError).mockResolvedValue(undefined);

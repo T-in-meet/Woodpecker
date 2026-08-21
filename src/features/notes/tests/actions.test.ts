@@ -46,6 +46,10 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: createAdminClientMock,
 }));
 
+vi.mock("@/features/auth/utils/requireCurrentLegalAcceptance", () => ({
+  requireCurrentLegalAcceptance: vi.fn(),
+}));
+
 vi.mock("next/navigation", () => ({
   redirect: redirectMock,
 }));
@@ -62,6 +66,8 @@ vi.mock("@/features/ai/runtimes", () => ({
 vi.mock("@/features/ai/utils/report-ai-operational-error", () => ({
   reportAiOperationalError: reportAiOperationalErrorMock,
 }));
+
+import { requireCurrentLegalAcceptance } from "@/features/auth/utils/requireCurrentLegalAcceptance";
 
 import {
   createNoteAction,
@@ -352,6 +358,10 @@ describe("createNoteAction", () => {
       },
     );
     expect(result).toEqual({ success: true, newNoteId: "note-123" });
+    expect(requireCurrentLegalAcceptance).toHaveBeenCalledWith(
+      "user-123",
+      ROUTES.NOTES_NEW,
+    );
 
     expect(afterMock).toHaveBeenCalledTimes(1);
   });

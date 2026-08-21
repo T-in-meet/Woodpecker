@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { requireCurrentLegalAcceptance } from "@/features/auth/utils/requireCurrentLegalAcceptance";
 import { getNoteDetailRoute, ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 
@@ -50,6 +51,8 @@ async function getVerifiedNotificationContext() {
   if (user.email_confirmed_at == null) {
     redirect(`${ROUTES.RESEND_EMAIL}?purpose=signup`);
   }
+
+  await requireCurrentLegalAcceptance(user.id, ROUTES.MYPAGE);
 
   return { supabase, userId: user.id } as const;
 }

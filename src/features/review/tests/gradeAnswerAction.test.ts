@@ -3,6 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GRADING_ERROR_MESSAGES } from "../constants";
 import { hashNoteContent } from "../lib/contentHash";
 
+vi.mock("@/features/auth/utils/requireCurrentLegalAcceptance", () => ({
+  requireCurrentLegalAcceptance: vi.fn(),
+}));
+
 const NOTE_ID = "11111111-1111-4111-8111-111111111111";
 const REVIEW_LOG_ID = "22222222-2222-4222-8222-222222222222";
 const OTHER_REVIEW_LOG_ID = "33333333-3333-4333-8333-333333333333";

@@ -46,8 +46,16 @@ export function LegalAcceptanceForm({
 
         <div className="space-y-4 rounded-lg border p-4">
           <div className="flex items-start gap-2">
-            <Checkbox id="termsOfService" name="termsOfService" required />
-            <Label htmlFor="termsOfService" className="leading-5">
+            <Checkbox
+              id="termsOfService"
+              name="termsOfService"
+              required
+              className="cursor-pointer"
+            />
+            <Label
+              htmlFor="termsOfService"
+              className="cursor-pointer leading-5"
+            >
               <Link
                 href={ROUTES.TERMS}
                 target="_blank"
@@ -64,8 +72,12 @@ export function LegalAcceptanceForm({
               id="privacyPolicyAcknowledged"
               name="privacyPolicyAcknowledged"
               required
+              className="cursor-pointer"
             />
-            <Label htmlFor="privacyPolicyAcknowledged" className="leading-5">
+            <Label
+              htmlFor="privacyPolicyAcknowledged"
+              className="cursor-pointer leading-5"
+            >
               <Link
                 href={ROUTES.PRIVACY}
                 target="_blank"
@@ -78,8 +90,13 @@ export function LegalAcceptanceForm({
           </div>
 
           <div className="flex items-start gap-2">
-            <Checkbox id="age14OrOlder" name="age14OrOlder" required />
-            <Label htmlFor="age14OrOlder" className="leading-5">
+            <Checkbox
+              id="age14OrOlder"
+              name="age14OrOlder"
+              required
+              className="cursor-pointer"
+            />
+            <Label htmlFor="age14OrOlder" className="cursor-pointer leading-5">
               만 14세 이상임을 확인합니다.
             </Label>
           </div>

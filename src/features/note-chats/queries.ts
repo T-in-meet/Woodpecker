@@ -2,10 +2,12 @@
 
 import { z } from "zod";
 
+import { requireCurrentLegalAcceptance } from "@/features/auth/utils/requireCurrentLegalAcceptance";
 import {
   NOTE_CHAT_OPERATIONAL_ERROR_CODES,
   NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS,
 } from "@/features/operational-errors/constants";
+import { ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 
 import { noteChatRunSourceSchema } from "./schema";
@@ -28,6 +30,22 @@ export type NoteChatConversationListResult = {
   totalPages: number;
 };
 
+async function createLegalCheckedClient() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
+  if (error || !user) {
+    throw new Error("로그인이 필요합니다.");
+  }
+
+  await requireCurrentLegalAcceptance(user.id, ROUTES.NOTE_CHATS);
+
+  return supabase;
+}
+
 /**
  * 현재 사용자의 노트 챗봇 대화 목록을 조회합니다.
  *
@@ -38,7 +56,7 @@ export async function getNoteChatConversationList({
   page = 1,
   search = "",
 }: GetNoteChatConversationListParams = {}): Promise<NoteChatConversationListResult> {
-  const supabase = await createClient();
+  const supabase = await createLegalCheckedClient();
 
   const pageSize = 20;
   const normalizedPage = Math.max(1, page);
@@ -115,7 +133,7 @@ export async function getNoteChatConversationList({
 export async function getNoteChatConversationDetail(
   conversationId: string,
 ): Promise<NoteChatConversationDetail | null> {
-  const supabase = await createClient();
+  const supabase = await createLegalCheckedClient();
 
   const { data: conversation, error: conversationError } = await supabase
     .from("note_chat_conversations")

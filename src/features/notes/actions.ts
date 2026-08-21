@@ -4,13 +4,14 @@ import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { z } from "zod";
 
+import { requireCurrentLegalAcceptance } from "@/features/auth/utils/requireCurrentLegalAcceptance";
 import {
   AI_OPERATIONAL_ERROR_CODE,
   AI_OPERATIONAL_ERROR_OPERATION,
   AI_OPERATIONAL_ERROR_STAGE,
 } from "@/features/operational-errors/constants";
 import { getNextReviewDate } from "@/lib/constants/reviewIntervals";
-import { ROUTES } from "@/lib/constants/routes";
+import { getNoteDetailRoute, ROUTES } from "@/lib/constants/routes";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -167,6 +168,8 @@ export async function createNoteAction(
     redirect(`${ROUTES.RESEND_EMAIL}?purpose=signup`);
   }
 
+  await requireCurrentLegalAcceptance(user.id, ROUTES.NOTES_NEW);
+
   const firstReviewDate = getNextReviewDate(0);
 
   if (!firstReviewDate) {
@@ -247,6 +250,8 @@ export async function updateNoteAction(
     redirect(`${ROUTES.RESEND_EMAIL}?purpose=signup`);
   }
 
+  await requireCurrentLegalAcceptance(user.id, getNoteDetailRoute(noteId));
+
   /*
    * UPDATE가 실제로 저장한 Note의 ID를 반환받습니다.
    *
@@ -305,6 +310,11 @@ export async function deleteNoteAction(noteId: string) {
   if (user.email_confirmed_at == null) {
     redirect(`${ROUTES.RESEND_EMAIL}?purpose=signup`);
   }
+
+  await requireCurrentLegalAcceptance(
+    user.id,
+    getNoteDetailRoute(parsedNoteId.data),
+  );
 
   const { data: deletedNote, error } = await supabase
     .from("notes")

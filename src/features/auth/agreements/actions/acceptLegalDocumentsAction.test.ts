@@ -60,7 +60,7 @@ describe("acceptLegalDocumentsAction", () => {
 
     expect(recordCurrentLegalAcceptancesMock).toHaveBeenCalledWith(
       "user-id",
-      "reconsent",
+      "agreements_page",
     );
   });
 });

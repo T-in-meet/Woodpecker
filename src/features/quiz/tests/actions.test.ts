@@ -13,6 +13,10 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: createClientMock,
 }));
 
+vi.mock("@/features/auth/utils/requireCurrentLegalAcceptance", () => ({
+  requireCurrentLegalAcceptance: vi.fn(),
+}));
+
 // claim_quiz_generation_v2 · finalize_quiz_generation_v2는 service_role 전용이라
 // admin 클라이언트로만 호출된다. 일반 클라이언트는 세션·노트·캐시 조회에만 쓰인다.
 vi.mock("@/lib/supabase/admin", () => ({

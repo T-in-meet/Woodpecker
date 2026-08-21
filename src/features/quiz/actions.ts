@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 
+import { requireCurrentLegalAcceptance } from "@/features/auth/utils/requireCurrentLegalAcceptance";
 import { claimResultSchema } from "@/lib/ai/claimResult";
 import { generateJson } from "@/lib/ai/client";
 import { toAiFailureReason } from "@/lib/ai/failureReason";
@@ -13,6 +14,7 @@ import {
   type QuizType,
 } from "@/lib/ai/prompts";
 import { toCloudflareResponseSchema } from "@/lib/ai/responseSchema";
+import { getNoteDetailRoute } from "@/lib/constants/routes";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/types/database.types";
@@ -422,6 +424,11 @@ async function createQuiz(
   if (!user) {
     return { error: QUIZ_ERROR_MESSAGES.unauthenticated };
   }
+
+  await requireCurrentLegalAcceptance(
+    user.id,
+    getNoteDetailRoute(parsed.data.noteId),
+  );
 
   const { data: note } = await supabase
     .from("notes")

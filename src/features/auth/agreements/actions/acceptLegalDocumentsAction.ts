@@ -45,7 +45,7 @@ export async function acceptLegalDocumentsAction(
   }
 
   try {
-    await recordCurrentLegalAcceptances(user.id, "reconsent");
+    await recordCurrentLegalAcceptances(user.id, "agreements_page");
   } catch {
     return { error: "확인 기록을 저장하지 못했습니다. 다시 시도해주세요." };
   }

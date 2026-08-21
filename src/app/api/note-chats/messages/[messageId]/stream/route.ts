@@ -5,6 +5,7 @@ import {
   resolveAiRuntimeEmbeddingConfiguration,
 } from "@/features/ai/runtimes";
 import { isReportedAiOperationalError } from "@/features/ai/utils/report-ai-operational-error";
+import { getLegalAcceptanceRequiredPath } from "@/features/auth/lib/userAgreements";
 import {
   NOTE_CHAT_AI_FEATURE_KEY,
   NOTE_CHAT_AI_ROLE_KEY,
@@ -24,6 +25,7 @@ import {
   NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS,
   NOTE_CHAT_OPERATIONAL_ERROR_STAGES,
 } from "@/features/operational-errors/constants";
+import { ROUTES } from "@/lib/constants/routes";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -121,6 +123,20 @@ export async function POST(
       {
         status: 403,
       },
+    );
+  }
+
+  const agreementRequiredPath = await getLegalAcceptanceRequiredPath(
+    user.id,
+    ROUTES.NOTE_CHATS,
+  );
+  if (agreementRequiredPath) {
+    return NextResponse.json(
+      {
+        error: "legal_acceptance_required",
+        redirectTo: agreementRequiredPath,
+      },
+      { status: 403 },
     );
   }
 

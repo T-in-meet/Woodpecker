@@ -4,7 +4,11 @@ import {
 } from "@/lib/constants/legal";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { AGREEMENT_REQUIRED_PATH } from "../constants/agreementRequired";
+import {
+  AGREEMENT_REQUIRED_PATH,
+  getAgreementRequiredPath,
+} from "../constants/agreementRequired";
+import { validateRedirectPath } from "./validateRedirectPath";
 
 export const AGREEMENT_REQUIRED_REDIRECT = AGREEMENT_REQUIRED_PATH;
 
@@ -21,7 +25,7 @@ export type LegalAcceptanceSource =
   | "email"
   | "oauth"
   | "email_backfill"
-  | "reconsent";
+  | "agreements_page";
 
 const CURRENT_REQUIREMENTS = [
   {
@@ -91,6 +95,19 @@ export async function hasCurrentLegalAcceptance(
 ): Promise<boolean> {
   const status = await getLegalAcceptanceStatus(userId, now);
   return status.canAccessService;
+}
+
+export async function getLegalAcceptanceRequiredPath(
+  userId: string,
+  redirectPath?: string | null,
+): Promise<string | null> {
+  if (!isLegalRevisionEffective()) return null;
+
+  const status = await getLegalAcceptanceStatus(userId);
+
+  if (status.canAccessService) return null;
+
+  return getAgreementRequiredPath(validateRedirectPath(redirectPath ?? null));
 }
 
 export async function recordCurrentLegalAcceptances(

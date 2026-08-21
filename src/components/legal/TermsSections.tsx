@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import type { LegalSection } from "@/components/legal/LegalContent";
 import { LEGAL_CONTACT } from "@/lib/constants/legal";
+import { ROUTES } from "@/lib/constants/routes";
 
 export const termsSections: LegalSection[] = [
   {
@@ -244,7 +245,7 @@ export const termsSections: LegalSection[] = [
       <p>
         개인정보 처리에 관한 사항은 서비스의{" "}
         <Link
-          href="/privacy"
+          href={ROUTES.PRIVACY}
           className="text-amber-700 underline underline-offset-2 hover:text-amber-900"
         >
           개인정보 처리방침

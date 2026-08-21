@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import {
+  getLegalAcceptanceRequiredPath,
   getLegalAcceptanceStatus,
   LEGAL_ACCEPTANCE_EVENT,
   recordCurrentLegalAcceptances,
@@ -21,6 +22,10 @@ beforeEach(() => {
   vi.mocked(createAdminClient).mockReturnValue({
     from: vi.fn(() => ({ select: querySelectMock, upsert: upsertMock })),
   } as never);
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("getLegalAcceptanceStatus", () => {
@@ -107,5 +112,27 @@ describe("recordCurrentLegalAcceptances", () => {
         onConflict: "user_id,event_type,document_version",
       },
     );
+  });
+});
+
+describe("getLegalAcceptanceRequiredPath", () => {
+  it("시행 후 누락 이벤트가 있으면 검증된 복귀 경로를 반환한다", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-19T15:00:00.000Z"));
+    queryInMock.mockResolvedValue({ data: [], error: null });
+
+    await expect(
+      getLegalAcceptanceRequiredPath("user-id", "/notes"),
+    ).resolves.toBe("/agreements?redirect=%2Fnotes");
+  });
+
+  it("외부 복귀 경로는 안전한 기본 경로로 제한한다", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-19T15:00:00.000Z"));
+    queryInMock.mockResolvedValue({ data: [], error: null });
+
+    await expect(
+      getLegalAcceptanceRequiredPath("user-id", "https://evil.example"),
+    ).resolves.toBe("/agreements?redirect=%2Fmypage");
   });
 });

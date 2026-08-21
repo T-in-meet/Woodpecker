@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 
+import { requireCurrentLegalAcceptance } from "@/features/auth/utils/requireCurrentLegalAcceptance";
 import {
   NOTE_CHAT_OPERATIONAL_ERROR_CODES,
   NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS,
@@ -93,6 +94,8 @@ async function getVerifiedNoteChatUserContext(): Promise<
   if (user.email_confirmed_at == null) {
     redirect(`${ROUTES.RESEND_EMAIL}?purpose=signup`);
   }
+
+  await requireCurrentLegalAcceptance(user.id, ROUTES.NOTE_CHATS);
 
   return {
     success: true,
