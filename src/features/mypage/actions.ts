@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { z } from "zod";
 
 import { FEEDBACK_CATEGORY_LABELS } from "@/features/admin/feedbacks/constants/feedback-labels";
@@ -351,7 +352,7 @@ export async function createFeedbackAction(
     return { error: "문의사항 제출에 실패했습니다" };
   }
 
-  await notifyAdminsOfNewFeedback({
+  scheduleAdminsOfNewFeedbackNotification({
     category: parsed.data.category,
     feedbackId,
     title: parsed.data.title,
@@ -361,7 +362,7 @@ export async function createFeedbackAction(
   return { data };
 }
 
-type NotifyAdminsOfNewFeedbackInput = {
+type ScheduleAdminsOfNewFeedbackNotificationInput = {
   category: FeedbackCategory;
   feedbackId: string;
   title: string;
@@ -396,37 +397,40 @@ async function recordAdminFeedbackNotificationFailure(
 }
 
 /**
- * 새 피드백이 등록됐음을 모든 관리자에게 알립니다.
+ * 새 피드백이 등록됐음을 모든 관리자에게 알리는 후처리를 예약합니다.
  *
- * 알림 실패가 피드백 제출 자체를 실패시키면 안 되므로
- * 반환된 실패는 여기서 추가 기록하거나 호출부로 전파하지 않습니다.
- * 예상하지 못한 예외만 방어적으로 운영 오류에 기록합니다.
+ * 피드백 제출 성공 응답을 알림 생성과 Push 전송이 지연하지 않도록 after()에서
+ * 실행합니다. 반환된 실패는 여기서 추가 기록하지 않고, 예상하지 못한 예외만
+ * 방어적으로 운영 오류에 기록합니다.
  *
  * @param input 알림 본문과 클릭 경로를 구성할 피드백 정보
  */
-async function notifyAdminsOfNewFeedback({
+function scheduleAdminsOfNewFeedbackNotification({
   category,
   feedbackId,
   title,
   userId,
-}: NotifyAdminsOfNewFeedbackInput) {
+}: ScheduleAdminsOfNewFeedbackNotificationInput) {
   const definition = buildAdminFeedbackCreatedNotificationDefinition({
     feedbackId,
   });
 
-  try {
-    await createAdminNotification({
-      body: `[${FEEDBACK_CATEGORY_LABELS[category]}] ${title}`,
-      clickPath: definition.clickPath,
-      createdBy: userId,
-      metadata: { category, feedbackId },
-      pushEnabled: definition.pushEnabled,
-      title: "새 피드백이 등록되었습니다.",
-      type: ADMIN_NOTIFICATION_TYPES.FEEDBACK_CREATED,
-    });
-  } catch (error) {
-    await recordAdminFeedbackNotificationFailure(error, feedbackId, userId);
-  }
+  after(async () => {
+    try {
+      await createAdminNotification({
+        body: `[${FEEDBACK_CATEGORY_LABELS[category]}] ${title}`,
+        clickPath: definition.clickPath,
+        createdBy: userId,
+        feedbackId,
+        metadata: { category, feedbackId },
+        pushEnabled: definition.pushEnabled,
+        title: "새 피드백이 등록되었습니다.",
+        type: ADMIN_NOTIFICATION_TYPES.FEEDBACK_CREATED,
+      });
+    } catch (error) {
+      await recordAdminFeedbackNotificationFailure(error, feedbackId, userId);
+    }
+  });
 }
 
 export async function deleteFeedbackAction(feedbackId: string) {

@@ -213,6 +213,7 @@ describe("createAdminNotification", () => {
 
     const result = await createAdminNotification({
       clickPath: "/admin/feedbacks/feedback-id",
+      feedbackId: "77777777-7777-4777-8777-777777777777",
       metadata: {
         adminNotificationEventId: "metadata-event-id",
         feedbackId: "feedback-id",
@@ -228,6 +229,11 @@ describe("createAdminNotification", () => {
       ok: true,
       targetAdminCount: 1,
     });
+    expect(eventChain.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        feedback_id: "77777777-7777-4777-8777-777777777777",
+      }),
+    );
     expect(dispatchPushToUserMock).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -241,6 +247,39 @@ describe("createAdminNotification", () => {
         operation: "create_admin_feedback_notification",
         userId: "11111111-1111-4111-8111-111111111111",
       }),
+    );
+  });
+
+  it("stores null feedback_id for an operational error event", async () => {
+    const eventChain = createInsertChain({
+      data: { id: "55555555-5555-4555-8555-555555555555" },
+      error: null,
+    });
+    const profilesChain = createSelectEqChain({ data: [], error: null });
+    const from = vi.fn((table: string) => {
+      if (table === "admin_notification_events") {
+        return { insert: eventChain.insert };
+      }
+
+      return { select: profilesChain.select };
+    });
+
+    createAdminClientMock.mockReturnValue({ from });
+
+    const result = await createAdminNotification({
+      clickPath: "/admin/operational-errors/error-id",
+      pushEnabled: false,
+      title: "새 운영 오류가 기록되었습니다.",
+      type: ADMIN_NOTIFICATION_TYPES.OPERATIONAL_ERROR,
+    });
+
+    expect(result).toEqual({
+      id: "55555555-5555-4555-8555-555555555555",
+      ok: true,
+      targetAdminCount: 0,
+    });
+    expect(eventChain.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ feedback_id: null }),
     );
   });
 
@@ -272,6 +311,7 @@ describe("createAdminNotification", () => {
     const result = await createAdminNotification({
       clickPath: "/admin/feedbacks/feedback-id",
       createdBy: "44444444-4444-4444-8444-444444444444",
+      feedbackId: "77777777-7777-4777-8777-777777777777",
       title: "새 사용자 피드백이 등록되었습니다.",
       type: ADMIN_NOTIFICATION_TYPES.FEEDBACK_CREATED,
     });

@@ -10,6 +10,7 @@ SELECT set_config('test.admin_notification_rpc_admin_id', gen_random_uuid()::tex
 SELECT set_config('test.admin_notification_rpc_read_event_id', gen_random_uuid()::text, true);
 SELECT set_config('test.admin_notification_rpc_error_event_id', gen_random_uuid()::text, true);
 SELECT set_config('test.admin_notification_rpc_feedback_event_id', gen_random_uuid()::text, true);
+SELECT set_config('test.admin_notification_rpc_feedback_id', gen_random_uuid()::text, true);
 
 DELETE FROM public.admin_notification_reads
 WHERE event_id IN (
@@ -53,6 +54,16 @@ VALUES (
 )
 ON CONFLICT (id) DO NOTHING;
 
+INSERT INTO public.feedbacks (id, user_id, category, title, content, status)
+VALUES (
+  current_setting('test.admin_notification_rpc_feedback_id')::uuid,
+  current_setting('test.admin_notification_rpc_admin_id')::uuid,
+  'ETC',
+  'admin notification RPC fixture',
+  'feedback fixture for the admin notification RPC tests',
+  'OPEN'
+);
+
 -- Isolate this test user from admin notification events that may already exist
 -- in the local database before this pgTAP file runs.
 INSERT INTO public.admin_notification_reads (
@@ -76,6 +87,7 @@ INSERT INTO public.admin_notification_events (
   title,
   body,
   click_path,
+  feedback_id,
   created_at
 )
 VALUES
@@ -85,6 +97,7 @@ VALUES
     '읽은 운영 오류',
     'already read',
     '/admin/operational-errors/read',
+    NULL,
     TIMESTAMPTZ '2026-07-27 00:00:00+00'
   ),
   (
@@ -93,6 +106,7 @@ VALUES
     '읽지 않은 운영 오류',
     'unread error',
     '/admin/operational-errors/unread',
+    NULL,
     TIMESTAMPTZ '2026-07-27 02:00:00+00'
   ),
   (
@@ -101,6 +115,7 @@ VALUES
     '읽지 않은 피드백',
     'unread feedback',
     '/admin/feedbacks/unread',
+    current_setting('test.admin_notification_rpc_feedback_id')::uuid,
     TIMESTAMPTZ '2026-07-27 01:00:00+00'
   );
 

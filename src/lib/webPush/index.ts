@@ -1,6 +1,8 @@
 import type { PushSubscription } from "web-push";
 import * as webpush from "web-push";
 
+const WEB_PUSH_SOCKET_TIMEOUT_MS = 10_000;
+
 export type WebPushSendResultType =
   | {
       ok: true;
@@ -104,7 +106,9 @@ export async function sendPush(
   payload: WebPushPayloadType,
 ): Promise<WebPushSendResultType> {
   try {
-    await webpush.sendNotification(subscription, JSON.stringify(payload));
+    await webpush.sendNotification(subscription, JSON.stringify(payload), {
+      timeout: WEB_PUSH_SOCKET_TIMEOUT_MS,
+    });
     return { ok: true };
   } catch (error) {
     return createFailureResult(error);

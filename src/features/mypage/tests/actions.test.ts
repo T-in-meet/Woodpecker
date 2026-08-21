@@ -1,13 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
+  afterMock,
   createAdminNotificationMock,
   createClientMock,
   recordOperationalErrorMock,
 } = vi.hoisted(() => ({
+  afterMock: vi.fn(),
   createAdminNotificationMock: vi.fn(),
   createClientMock: vi.fn(),
   recordOperationalErrorMock: vi.fn(),
+}));
+
+vi.mock("next/server", () => ({
+  after: afterMock,
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -338,8 +344,19 @@ function makeFeedbackFormData({
   return formData;
 }
 
+async function runScheduledFeedbackNotification() {
+  const callback = afterMock.mock.calls[0]?.[0];
+
+  if (typeof callback !== "function") {
+    throw new Error("Expected an after callback to be registered.");
+  }
+
+  await callback();
+}
+
 describe("createFeedbackAction", () => {
   beforeEach(() => {
+    afterMock.mockReset();
     createClientMock.mockReset();
     createAdminNotificationMock.mockReset();
     createAdminNotificationMock.mockResolvedValue({
@@ -503,14 +520,20 @@ describe("createFeedbackAction", () => {
     );
   });
 
-  it("성공 시 새 피드백 관리자 알림을 생성한다", async () => {
+  it("성공 시 관리자 알림을 후처리로 예약하고 즉시 data를 반환한다", async () => {
     const { supabase } = makeFeedbackSupabaseMock();
     createClientMock.mockResolvedValue(supabase);
 
-    await createFeedbackAction(
+    const result = await createFeedbackAction(
       null,
       makeFeedbackFormData({ category: "FEATURE", title: "제안" }),
     );
+
+    expect(result).toEqual({ data: { id: "feedback-1" } });
+    expect(afterMock).toHaveBeenCalledTimes(1);
+    expect(createAdminNotificationMock).not.toHaveBeenCalled();
+
+    await runScheduledFeedbackNotification();
 
     expect(createAdminNotificationMock).toHaveBeenCalledTimes(1);
     expect(createAdminNotificationMock).toHaveBeenCalledWith(
@@ -518,6 +541,7 @@ describe("createFeedbackAction", () => {
         body: "[기능 요청] 제안",
         clickPath: expect.stringContaining("/admin/feedbacks/"),
         createdBy: "user-123",
+        feedbackId: expect.any(String),
         metadata: expect.objectContaining({ category: "FEATURE" }),
         title: "새 피드백이 등록되었습니다.",
         type: ADMIN_NOTIFICATION_TYPES.FEEDBACK_CREATED,
@@ -531,6 +555,7 @@ describe("createFeedbackAction", () => {
     createClientMock.mockResolvedValue(supabase);
 
     await createFeedbackAction(null, makeFeedbackFormData());
+    await runScheduledFeedbackNotification();
 
     const insertedId = insertMock.mock.calls[0]?.[0]?.id as string;
     const notificationInput = createAdminNotificationMock.mock.calls[0]?.[0];
@@ -551,6 +576,7 @@ describe("createFeedbackAction", () => {
     });
 
     const result = await createFeedbackAction(null, makeFeedbackFormData());
+    await runScheduledFeedbackNotification();
 
     expect(result).toEqual({ data: { id: "feedback-1" } });
     expect(recordOperationalErrorMock).not.toHaveBeenCalled();
@@ -562,6 +588,7 @@ describe("createFeedbackAction", () => {
     createAdminNotificationMock.mockRejectedValue(new Error("boom"));
 
     const result = await createFeedbackAction(null, makeFeedbackFormData());
+    await expect(runScheduledFeedbackNotification()).resolves.toBeUndefined();
 
     expect(result).toEqual({ data: { id: "feedback-1" } });
     expect(recordOperationalErrorMock).toHaveBeenCalledTimes(1);
@@ -582,6 +609,7 @@ describe("createFeedbackAction", () => {
 
     await createFeedbackAction(null, makeFeedbackFormData());
 
+    expect(afterMock).not.toHaveBeenCalled();
     expect(createAdminNotificationMock).not.toHaveBeenCalled();
   });
 });
