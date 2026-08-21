@@ -5,16 +5,12 @@ import { after } from "next/server";
 import { z } from "zod";
 
 import { FEEDBACK_CATEGORY_LABELS } from "@/features/admin/feedbacks/constants/feedback-labels";
-import { createAdminNotification } from "@/features/notifications/create-admin-notification";
-import { buildAdminFeedbackCreatedNotificationDefinition } from "@/features/notifications/definitions";
 import {
-  NOTIFICATION_OPERATIONAL_ERROR_CODES,
-  NOTIFICATION_OPERATIONAL_ERROR_FEATURES,
-  NOTIFICATION_OPERATIONAL_ERROR_OPERATIONS,
-  NOTIFICATION_OPERATIONAL_ERROR_STAGES,
-  OPERATIONAL_ERROR_SEVERITY,
-} from "@/features/operational-errors/constants";
-import { recordOperationalError } from "@/features/operational-errors/record";
+  createAdminNotification,
+  type CreateAdminNotificationInput,
+  recordAdminNotificationCreateFailure,
+} from "@/features/notifications/create-admin-notification";
+import { buildAdminFeedbackCreatedNotificationDefinition } from "@/features/notifications/definitions";
 import { getKstDayBoundsUtc } from "@/features/review/lib/kstDay";
 import { ADMIN_NOTIFICATION_TYPES } from "@/lib/constants/notifications";
 import { ROUTES } from "@/lib/constants/routes";
@@ -370,38 +366,27 @@ type ScheduleAdminsOfNewFeedbackNotificationInput = {
 };
 
 /**
- * 새 피드백 관리자 알림 생성 실패를 운영 오류로 기록합니다.
+ * 새 피드백 관리자 알림 생성 과정의 예상치 못한 예외를 운영 오류로 기록합니다.
  *
- * @param error 알림 생성 과정에서 발생한 오류
- * @param feedbackId 알림 대상 feedbacks.id
- * @param userId 피드백을 등록한 사용자 ID
+ * createAdminNotification의 ok: false 반환은 알림 도메인 내부에서 이미 기록하므로,
+ * 이 helper는 같은 알림 도메인 기록 helper를 통해 throw된 예외만 담당합니다.
+ *
+ * @param error 알림 생성 과정에서 throw된 예외
+ * @param input 실패한 관리자 알림 생성 요청 정보
  */
 async function recordAdminFeedbackNotificationFailure(
   error: unknown,
-  feedbackId: string,
-  userId: string,
+  input: CreateAdminNotificationInput,
 ) {
-  await recordOperationalError({
-    actorUserId: userId,
-    context: { feedbackId },
-    error,
-    errorCode:
-      NOTIFICATION_OPERATIONAL_ERROR_CODES.ADMIN_NOTIFICATION_CREATE_FAILED,
-    feature: NOTIFICATION_OPERATIONAL_ERROR_FEATURES.NOTIFICATIONS,
-    message: "새 피드백 관리자 알림 생성에 실패했습니다.",
-    operation:
-      NOTIFICATION_OPERATIONAL_ERROR_OPERATIONS.CREATE_ADMIN_FEEDBACK_NOTIFICATION,
-    severity: OPERATIONAL_ERROR_SEVERITY.WARN,
-    stage: NOTIFICATION_OPERATIONAL_ERROR_STAGES.IN_APP_NOTIFICATION_CREATE,
-  });
+  await recordAdminNotificationCreateFailure(input, error);
 }
 
 /**
  * 새 피드백이 등록됐음을 모든 관리자에게 알리는 후처리를 예약합니다.
  *
  * 피드백 제출 성공 응답을 알림 생성과 Push 전송이 지연하지 않도록 after()에서
- * 실행합니다. 반환된 실패는 여기서 추가 기록하지 않고, 예상하지 못한 예외만
- * 방어적으로 운영 오류에 기록합니다.
+ * 실행합니다. ok: false 반환 실패는 알림 도메인이 기록하므로 중복 기록하지 않고,
+ * 예상하지 못한 예외만 피드백 알림 실패 운영 오류로 남깁니다.
  *
  * @param input 알림 본문과 클릭 경로를 구성할 피드백 정보
  */
@@ -416,19 +401,21 @@ function scheduleAdminsOfNewFeedbackNotification({
   });
 
   after(async () => {
+    const notificationInput = {
+      body: `[${FEEDBACK_CATEGORY_LABELS[category]}] ${title}`,
+      clickPath: definition.clickPath,
+      createdBy: userId,
+      feedbackId,
+      metadata: { category, feedbackId },
+      pushEnabled: definition.pushEnabled,
+      title: "새 피드백이 등록되었습니다.",
+      type: ADMIN_NOTIFICATION_TYPES.FEEDBACK_CREATED,
+    } satisfies CreateAdminNotificationInput;
+
     try {
-      await createAdminNotification({
-        body: `[${FEEDBACK_CATEGORY_LABELS[category]}] ${title}`,
-        clickPath: definition.clickPath,
-        createdBy: userId,
-        feedbackId,
-        metadata: { category, feedbackId },
-        pushEnabled: definition.pushEnabled,
-        title: "새 피드백이 등록되었습니다.",
-        type: ADMIN_NOTIFICATION_TYPES.FEEDBACK_CREATED,
-      });
+      await createAdminNotification(notificationInput);
     } catch (error) {
-      await recordAdminFeedbackNotificationFailure(error, feedbackId, userId);
+      await recordAdminFeedbackNotificationFailure(error, notificationInput);
     }
   });
 }
