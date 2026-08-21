@@ -3,6 +3,14 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const { routerReplaceMock } = vi.hoisted(() => ({
+  routerReplaceMock: vi.fn(),
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: routerReplaceMock }),
+}));
+
 import {
   NoteChatStreamRequestError,
   streamNoteChatQuestion,
@@ -195,6 +203,31 @@ describe("useNoteChatStream", () => {
       "NOTE_CHAT_AI_CONFIGURATION_LOAD_FAILED",
     );
     expect(result.current.isStreaming).toBe(false);
+  });
+
+  it("법적 문서 확인이 필요하면 서버가 제공한 경로로 이동한다", async () => {
+    const redirectTo = "/agreements?redirect=%2Fnote-chats";
+
+    vi.mocked(streamNoteChatQuestion).mockImplementation(async function* () {
+      throw new NoteChatStreamRequestError(
+        "법적 문서 확인이 필요합니다.",
+        403,
+        null,
+        redirectTo,
+      );
+    });
+
+    const { result } = renderHook(() => useNoteChatStream());
+
+    await act(async () => {
+      await result.current.start({
+        conversationId: CONVERSATION_ID,
+        question: "질문입니다.",
+      });
+    });
+
+    expect(routerReplaceMock).toHaveBeenCalledWith(redirectTo);
+    expect(result.current.error).toBeNull();
   });
 
   it("일반 Error가 발생하면 오류 메시지를 상태에 반영하고 오류 코드는 null로 반환한다", async () => {

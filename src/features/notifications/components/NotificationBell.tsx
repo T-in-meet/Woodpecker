@@ -2,10 +2,11 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, Loader2 } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { legalAcceptanceRequiredResponseSchema } from "@/features/auth/schemas/legalAcceptanceRequiredResponseSchema";
 import { cn } from "@/lib/utils/cn";
 
 import { NOTIFICATIONS_QUERY_KEY } from "../query-keys";
@@ -25,6 +26,16 @@ const EMPTY_NOTIFICATIONS: NotificationsResponseType = {
 const ROUTE_CHANGE_REFETCH_COOLDOWN_MS = 30_000;
 
 class UnauthorizedNotificationError extends Error {}
+
+class LegalAcceptanceRequiredNotificationError extends Error {
+  readonly redirectTo: string;
+
+  constructor(redirectTo: string) {
+    super("법적 문서 확인이 필요합니다.");
+    this.name = "LegalAcceptanceRequiredNotificationError";
+    this.redirectTo = redirectTo;
+  }
+}
 
 export function removeReadNotificationFromResponse(
   current: NotificationsResponseType | undefined,
@@ -47,15 +58,24 @@ async function fetchNotifications(): Promise<NotificationsResponseType> {
     credentials: "same-origin",
   });
 
+  const payload: unknown = await response.json().catch(() => null);
+
   if (response.status === 401) {
     throw new UnauthorizedNotificationError("로그인이 필요합니다.");
+  }
+
+  const legalAcceptanceRequired =
+    legalAcceptanceRequiredResponseSchema.safeParse(payload);
+  if (response.status === 403 && legalAcceptanceRequired.success) {
+    throw new LegalAcceptanceRequiredNotificationError(
+      legalAcceptanceRequired.data.redirectTo,
+    );
   }
 
   if (!response.ok) {
     throw new Error("알림을 불러오지 못했습니다.");
   }
 
-  const payload: unknown = await response.json();
   const parsed = notificationsResponseSchema.safeParse(payload);
 
   if (!parsed.success) {
@@ -85,12 +105,14 @@ export function NotificationBell({ userId }: NotificationBellProps) {
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
   const pathname = usePathname();
+  const router = useRouter();
   const ref = useRef<HTMLDivElement>(null);
   const previousPathnameRef = useRef(pathname);
   const notificationsQueryKey = NOTIFICATIONS_QUERY_KEY.user(userId);
 
   const {
     data = EMPTY_NOTIFICATIONS,
+    error,
     isError,
     isFetching,
     isLoading,
@@ -100,9 +122,17 @@ export function NotificationBell({ userId }: NotificationBellProps) {
     queryFn: fetchNotifications,
     refetchInterval: 60_000,
     retry: (failureCount, error) =>
-      !(error instanceof UnauthorizedNotificationError) && failureCount < 1,
+      !(error instanceof UnauthorizedNotificationError) &&
+      !(error instanceof LegalAcceptanceRequiredNotificationError) &&
+      failureCount < 1,
     staleTime: 30_000,
   });
+
+  useEffect(() => {
+    if (error instanceof LegalAcceptanceRequiredNotificationError) {
+      router.replace(error.redirectTo);
+    }
+  }, [error, router]);
 
   useEffect(() => {
     if (previousPathnameRef.current === pathname) return;

@@ -24,7 +24,17 @@ const ALLOWED_EXACT_PATHS: ReadonlySet<string> = new Set([
   "/mypage",
   "/notes",
   "/notes/new",
+  "/notes/today",
+  "/note-chats",
 ]);
+
+const ALLOWED_QUERY_KEYS_BY_PATH: Readonly<
+  Record<string, ReadonlySet<string>>
+> = {
+  "/mypage": new Set(["profile_nickname", "section", "tab"]),
+  "/notes": new Set(["page", "q", "view"]),
+  "/notes/today": new Set(["page"]),
+};
 
 /**
  * 완전 일치 기준으로 차단되는 경로 집합
@@ -49,6 +59,8 @@ const BLOCKED_EXACT_PATHS: ReadonlySet<string> = new Set([
  * [^/]+ 패턴이 슬래시를 포함하지 않으므로 하나의 segment만 허용된다
  */
 const NOTES_DYNAMIC_PATTERN = /^\/notes\/([^/]+)$/;
+const NOTE_REVIEW_DYNAMIC_PATTERN = /^\/notes\/([^/]+)\/review$/;
+const NOTE_CHAT_DYNAMIC_PATTERN = /^\/note-chats\/([^/]+)$/;
 
 /**
  * Supabase UUID v4 형식을 검증하는 정규식
@@ -70,10 +82,10 @@ const UUID_V4_PATTERN =
  * 디코딩 전 원본 문자열에서 바로 드러나는 위험 문자를 검출한다.
  * - 역슬래시
  * - 제어 문자
- * - query / fragment
+ * - fragment
  * - protocol-relative (//)
  */
-const RAW_DANGER_PATTERN = /[\\ \t\r\n?#]|^\/\//;
+const RAW_PATH_DANGER_PATTERN = /[\\ \t\r\n#]|^\/\//;
 
 /**
  * 디코딩 전 차단해야 하는 위험한 percent-encoding 값을 검출한다.
@@ -86,9 +98,9 @@ const ENCODED_DANGER_PATTERN = /%(2f|5c|2e|09|0a|0d|20)/i;
  * 1회 디코딩 후 문자열에서 다시 확인해야 하는 위험 문자를 검출한다.
  * - 역슬래시
  * - 제어 문자
- * - query / fragment
+ * - path에 섞인 query / fragment 구분자
  */
-const DECODED_DANGER_PATTERN = /[\\ \t\r\n?#]/;
+const DECODED_PATH_DANGER_PATTERN = /[\\ \t\r\n?#]/;
 
 /**
  * traversal segment 검출 정규식
@@ -120,6 +132,55 @@ function isApiPath(path: string): boolean {
   return false;
 }
 
+function hasValidDynamicIdMatch(path: string, pattern: RegExp): boolean {
+  const match = pattern.exec(path);
+  const id = match?.[1];
+
+  return id !== undefined && UUID_V4_PATTERN.test(id);
+}
+
+function validatePath(path: string): string | null {
+  if (BLOCKED_EXACT_PATHS.has(path) || isApiPath(path)) return null;
+  if (ALLOWED_EXACT_PATHS.has(path)) return path;
+
+  if (
+    hasValidDynamicIdMatch(path, NOTES_DYNAMIC_PATTERN) ||
+    hasValidDynamicIdMatch(path, NOTE_REVIEW_DYNAMIC_PATTERN) ||
+    hasValidDynamicIdMatch(path, NOTE_CHAT_DYNAMIC_PATTERN)
+  ) {
+    return path;
+  }
+
+  return null;
+}
+
+function validateSearch(path: string, rawSearch: string): string {
+  if (!rawSearch) return "";
+
+  const allowedKeys = ALLOWED_QUERY_KEYS_BY_PATH[path];
+  if (!allowedKeys || rawSearch.length > 2_000) return "";
+
+  let decodedSearch: string;
+  try {
+    decodedSearch = decodeURIComponent(rawSearch.replaceAll("+", "%20"));
+  } catch {
+    return "";
+  }
+
+  if (/[\\\t\r\n#]/.test(decodedSearch)) return "";
+
+  const searchParams = new URLSearchParams(rawSearch);
+  const seenKeys = new Set<string>();
+
+  for (const key of searchParams.keys()) {
+    if (!allowedKeys.has(key) || seenKeys.has(key)) return "";
+    seenKeys.add(key);
+  }
+
+  const normalizedSearch = searchParams.toString();
+  return normalizedSearch ? `?${normalizedSearch}` : "";
+}
+
 /**
  * redirect 경로 검증 함수
  *
@@ -131,7 +192,8 @@ function isApiPath(path: string): boolean {
  * 5. 디코딩 후 위험 패턴 재검사
  * 6. 차단 경로 체크
  * 7. exact match 또는 dynamic match 판정
- * 8. 유효하면 정규화 경로 반환, 실패하면 /mypage 반환
+ * 8. 경로별로 허용된 query만 보존
+ * 9. 유효하면 정규화 경로 반환, 실패하면 /mypage 반환
  *
  * 이 함수는 어떤 입력에도 예외를 발생시키지 않는다
  *
@@ -158,17 +220,23 @@ export function validateRedirectPath(input: unknown): string {
     return FALLBACK_PATH;
   }
 
-  // protocol-relative (//) 및 제어 문자, query string, fragment 등 위험 패턴 선제 차단
-  if (RAW_DANGER_PATTERN.test(trimmed)) return FALLBACK_PATH;
+  const queryIndex = trimmed.indexOf("?");
+  const rawPath = queryIndex === -1 ? trimmed : trimmed.slice(0, queryIndex);
+  const rawSearch = queryIndex === -1 ? "" : trimmed.slice(queryIndex + 1);
+
+  // protocol-relative (//), 제어 문자, fragment 등 위험 패턴 선제 차단
+  if (RAW_PATH_DANGER_PATTERN.test(rawPath) || trimmed.includes("#")) {
+    return FALLBACK_PATH;
+  }
 
   // percent-encoded 슬래시, 역슬래시, 공백을 디코딩 전에 차단
   // 디코딩 후 위험 패턴이 드러나는 우회를 방지하기 위해 원본 기준으로 먼저 검사한다
-  if (ENCODED_DANGER_PATTERN.test(trimmed)) {
+  if (ENCODED_DANGER_PATTERN.test(rawPath)) {
     return FALLBACK_PATH;
   }
 
   // path traversal 패턴을 디코딩 전에 먼저 검사
-  if (TRAVERSAL_SEGMENT_PATTERN.test(trimmed)) {
+  if (TRAVERSAL_SEGMENT_PATTERN.test(rawPath)) {
     return FALLBACK_PATH;
   }
 
@@ -176,7 +244,7 @@ export function validateRedirectPath(input: unknown): string {
   // 실패 시 잘못된 percent-encoding으로 간주하고 fallback
   let decoded: string;
   try {
-    decoded = decodeURIComponent(trimmed);
+    decoded = decodeURIComponent(rawPath);
   } catch {
     return FALLBACK_PATH;
   }
@@ -185,7 +253,7 @@ export function validateRedirectPath(input: unknown): string {
   // - 인코딩을 통해 숨겨졌던 위험 문자가 디코딩 후 드러나는 경우를 차단한다
   // - 이 단계에서는 역슬래시, 제어 문자, query/fragment 등 "실제 문자열 기준 위험"만 검사한다
   // - percent(%) 자체는 추가 디코딩을 하지 않으므로 검사 대상이 아니다
-  if (DECODED_DANGER_PATTERN.test(decoded)) {
+  if (DECODED_PATH_DANGER_PATTERN.test(decoded)) {
     return FALLBACK_PATH;
   }
 
@@ -193,41 +261,8 @@ export function validateRedirectPath(input: unknown): string {
     return FALLBACK_PATH;
   }
 
-  // 정책상 차단된 경로 — 완전 일치 기준
-  if (BLOCKED_EXACT_PATHS.has(decoded)) {
-    return FALLBACK_PATH;
-  }
+  const validatedPath = validatePath(decoded);
+  if (!validatedPath) return FALLBACK_PATH;
 
-  // 디코딩 후 기준으로 API 경로를 차단한다
-  // (인코딩 우회로 인해 decode 이후에만 드러나는 /api/* 케이스 방지)
-  if (isApiPath(decoded)) {
-    return FALLBACK_PATH;
-  }
-
-  // exact match 허용 경로 판정
-  if (ALLOWED_EXACT_PATHS.has(decoded)) {
-    return decoded;
-  }
-
-  // dynamic match — /notes/[noteId] 패턴 판정
-  const dynamicMatch = NOTES_DYNAMIC_PATTERN.exec(decoded);
-  if (dynamicMatch) {
-    const noteId = dynamicMatch[1];
-
-    if (noteId === undefined) {
-      return FALLBACK_PATH;
-    }
-
-    // noteId는 Supabase UUID v4 형식만 허용한다
-    // 이를 통해 '.', '..', 일반 문자열, 임의 path segment 등
-    // path traversal 및 비정상 경로를 모두 차단한다
-    if (!UUID_V4_PATTERN.test(noteId)) {
-      return FALLBACK_PATH;
-    }
-
-    return decoded;
-  }
-
-  // 어떤 허용 규칙에도 해당하지 않으면 fallback
-  return FALLBACK_PATH;
+  return `${validatedPath}${validateSearch(validatedPath, rawSearch)}`;
 }

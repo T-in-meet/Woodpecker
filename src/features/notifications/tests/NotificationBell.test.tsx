@@ -8,15 +8,19 @@ import {
   NOTIFICATION_TYPES,
 } from "@/lib/constants/notifications";
 
-const { routerPushMock, usePathnameMock } = vi.hoisted(() => ({
-  routerPushMock: vi.fn(),
-  usePathnameMock: vi.fn(),
-}));
+const { routerPushMock, routerReplaceMock, usePathnameMock } = vi.hoisted(
+  () => ({
+    routerPushMock: vi.fn(),
+    routerReplaceMock: vi.fn(),
+    usePathnameMock: vi.fn(),
+  }),
+);
 
 vi.mock("next/navigation", () => ({
   usePathname: usePathnameMock,
   useRouter: () => ({
     push: routerPushMock,
+    replace: routerReplaceMock,
   }),
 }));
 
@@ -85,6 +89,7 @@ describe("NotificationBell", () => {
   beforeEach(() => {
     usePathnameMock.mockReset();
     routerPushMock.mockReset();
+    routerReplaceMock.mockReset();
     usePathnameMock.mockReturnValue("/notes");
     vi.stubGlobal(
       "fetch",
@@ -182,6 +187,26 @@ describe("NotificationBell", () => {
       await screen.findByText("알림을 불러오지 못했습니다."),
     ).toBeInTheDocument();
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+
+  it("최신 법적 문서 확인이 필요하면 서버가 제공한 경로로 이동한다", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      createJsonResponse(
+        {
+          error: "legal_acceptance_required",
+          redirectTo: "/agreements?redirect=%2Fnotes",
+        },
+        403,
+      ),
+    );
+
+    renderNotificationBell();
+
+    await waitFor(() => {
+      expect(routerReplaceMock).toHaveBeenCalledWith(
+        "/agreements?redirect=%2Fnotes",
+      );
+    });
   });
 
   it("does not reuse cached notifications when the user id changes", async () => {
