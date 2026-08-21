@@ -15,6 +15,9 @@ import type { Json } from "@/types/db.helpers";
 
 import { dispatchPushToUser } from "./dispatch-push";
 
+/**
+ * 관리자 알림 생성 요청의 공통 입력값입니다.
+ */
 type CreateAdminNotificationCommonInput = {
   body?: string | null;
   clickPath: string;
@@ -24,7 +27,10 @@ type CreateAdminNotificationCommonInput = {
   title: string;
 };
 
-type CreateAdminNotificationInput = CreateAdminNotificationCommonInput &
+/**
+ * 관리자 알림 생성 요청 입력값입니다.
+ */
+export type CreateAdminNotificationInput = CreateAdminNotificationCommonInput &
   (
     | {
         feedbackId: string;
@@ -122,13 +128,13 @@ function createPushPayload(
 }
 
 /**
- * 관리자 알림 이벤트 생성 실패를 운영 오류로 기록합니다.
+ * 관리자 알림 생성 실패를 운영 오류로 기록합니다.
  *
  * @param input 관리자 알림 생성 요청 정보
- * @param error 이벤트 row 생성 중 발생한 오류
+ * @param error 관리자 알림 생성 중 발생한 오류
  * @returns 운영 오류 기록 성공 여부
  */
-async function recordAdminNotificationCreateFailure(
+export async function recordAdminNotificationCreateFailure(
   input: CreateAdminNotificationInput,
   error: unknown,
 ) {
