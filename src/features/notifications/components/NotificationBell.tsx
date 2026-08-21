@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { legalAcceptanceRequiredResponseSchema } from "@/features/auth/schemas/legalAcceptanceRequiredResponseSchema";
+import { ROUTES } from "@/lib/constants/routes";
 import { cn } from "@/lib/utils/cn";
 
 import { NOTIFICATIONS_QUERY_KEY } from "../query-keys";
@@ -109,6 +110,7 @@ export function NotificationBell({ userId }: NotificationBellProps) {
   const ref = useRef<HTMLDivElement>(null);
   const previousPathnameRef = useRef(pathname);
   const notificationsQueryKey = NOTIFICATIONS_QUERY_KEY.user(userId);
+  const notificationsEnabled = pathname !== ROUTES.AGREEMENTS;
 
   const {
     data = EMPTY_NOTIFICATIONS,
@@ -120,6 +122,7 @@ export function NotificationBell({ userId }: NotificationBellProps) {
   } = useQuery({
     queryKey: notificationsQueryKey,
     queryFn: fetchNotifications,
+    enabled: notificationsEnabled,
     refetchInterval: 60_000,
     retry: (failureCount, error) =>
       !(error instanceof UnauthorizedNotificationError) &&
@@ -138,6 +141,8 @@ export function NotificationBell({ userId }: NotificationBellProps) {
     if (previousPathnameRef.current === pathname) return;
 
     previousPathnameRef.current = pathname;
+    if (!notificationsEnabled) return;
+
     const notificationsQueryState = queryClient.getQueryState(
       NOTIFICATIONS_QUERY_KEY.user(userId),
     );
@@ -151,7 +156,7 @@ export function NotificationBell({ userId }: NotificationBellProps) {
     }
 
     void refetch();
-  }, [pathname, queryClient, refetch, userId]);
+  }, [notificationsEnabled, pathname, queryClient, refetch, userId]);
 
   useEffect(() => {
     if (!open) return;
@@ -184,7 +189,7 @@ export function NotificationBell({ userId }: NotificationBellProps) {
     const nextOpen = !open;
     setOpen(nextOpen);
 
-    if (nextOpen) {
+    if (nextOpen && notificationsEnabled) {
       void refetch();
     }
   };

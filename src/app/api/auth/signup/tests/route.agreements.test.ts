@@ -288,5 +288,18 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
       email: "test@example.com",
       purpose: "signup",
     });
+    expect(upsertUserAgreementMock).toHaveBeenCalledTimes(1);
+    expect(upsertUserAgreementMock).toHaveBeenCalledWith("user-id", "email");
+  });
+
+  it("TC-12. 사용자 생성에 실패하면 약관 동의를 기록하지 않는다", async () => {
+    mockCreateUser.mockResolvedValueOnce({
+      data: { user: null },
+      error: new Error("create user failed"),
+    });
+
+    await POST(makeRequest(BASE_VALID_PAYLOAD));
+
+    expect(upsertUserAgreementMock).not.toHaveBeenCalled();
   });
 });

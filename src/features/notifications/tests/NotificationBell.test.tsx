@@ -7,6 +7,7 @@ import {
   NOTIFICATION_STATUS,
   NOTIFICATION_TYPES,
 } from "@/lib/constants/notifications";
+import { ROUTES } from "@/lib/constants/routes";
 
 const { routerPushMock, routerReplaceMock, usePathnameMock } = vi.hoisted(
   () => ({
@@ -206,6 +207,37 @@ describe("NotificationBell", () => {
       expect(routerReplaceMock).toHaveBeenCalledWith(
         "/agreements?redirect=%2Fnotes",
       );
+    });
+  });
+
+  it("동의 페이지에서는 알림을 조회하거나 리다이렉트하지 않는다", async () => {
+    const user = userEvent.setup();
+    usePathnameMock.mockReturnValue(ROUTES.AGREEMENTS);
+
+    renderNotificationBell();
+    await user.click(screen.getByRole("button"));
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(routerReplaceMock).not.toHaveBeenCalled();
+  });
+
+  it("동의 페이지를 벗어나면 알림 조회를 다시 시작한다", async () => {
+    const queryClient = createTestQueryClient();
+    usePathnameMock.mockReturnValue(ROUTES.AGREEMENTS);
+
+    const { rerender } = renderNotificationBell({ queryClient });
+
+    expect(fetch).not.toHaveBeenCalled();
+
+    usePathnameMock.mockReturnValue(ROUTES.NOTES);
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <NotificationBell userId={USER_A_ID} />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledTimes(1);
     });
   });
 
