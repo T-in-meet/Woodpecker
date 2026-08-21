@@ -4,7 +4,8 @@ export const SIGNUP_FIELD_NAMES = [
   "confirmPassword",
   "nickname",
   "termsOfService",
-  "privacyPolicy",
+  "privacyPolicyAcknowledged",
+  "age14OrOlder",
 ] as const;
 
 export type SignupFieldName = (typeof SIGNUP_FIELD_NAMES)[number];

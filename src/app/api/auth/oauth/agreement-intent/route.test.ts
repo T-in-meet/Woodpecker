@@ -19,7 +19,8 @@ describe("OAuth agreement intent route", () => {
       makeRequest({
         agreements: {
           termsOfService: true,
-          privacyPolicy: true,
+          privacyPolicyAcknowledged: true,
+          age14OrOlder: true,
         },
       }),
     );
@@ -37,7 +38,8 @@ describe("OAuth agreement intent route", () => {
       makeRequest({
         agreements: {
           termsOfService: true,
-          privacyPolicy: false,
+          privacyPolicyAcknowledged: false,
+          age14OrOlder: true,
         },
       }),
     );

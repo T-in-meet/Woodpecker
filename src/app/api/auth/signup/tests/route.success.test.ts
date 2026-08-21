@@ -64,7 +64,11 @@ describe("회원가입 API 기본 성공 흐름 검증", () => {
     email: "Test@Example.com",
     password: "Password123!",
     nickname: "테스터",
-    agreements: { termsOfService: true as const, privacyPolicy: true as const },
+    agreements: {
+      termsOfService: true as const,
+      privacyPolicyAcknowledged: true as const,
+      age14OrOlder: true as const,
+    },
   };
 
   it("TC-01: 신규 이메일 요청 시 createUser 이후 signup OTP 발송 함수가 1회 호출된다", async () => {

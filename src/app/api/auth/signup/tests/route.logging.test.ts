@@ -103,7 +103,11 @@ function makeRequest(): NextRequest {
       email: "user@example.com",
       password: "Password1!",
       nickname: "user",
-      agreements: { termsOfService: true, privacyPolicy: true },
+      agreements: {
+        termsOfService: true,
+        privacyPolicyAcknowledged: true,
+        age14OrOlder: true,
+      },
     }),
   });
 }
@@ -167,7 +171,11 @@ describe("signup 라우트 인증 로깅", () => {
       email: "user@example.com",
       password: "Password1!",
       nickname: "user",
-      agreements: { termsOfService: true, privacyPolicy: true },
+      agreements: {
+        termsOfService: true,
+        privacyPolicyAcknowledged: true,
+        age14OrOlder: true,
+      },
     });
     vi.mocked(getUserByEmail).mockResolvedValue({
       id: "existing-user-id",
@@ -186,7 +194,11 @@ describe("signup 라우트 인증 로깅", () => {
       email: "invalid-email",
       password: "Password1!",
       nickname: "user",
-      agreements: { termsOfService: true, privacyPolicy: true },
+      agreements: {
+        termsOfService: true,
+        privacyPolicyAcknowledged: true,
+        age14OrOlder: true,
+      },
     });
 
     await POST(makeRequest());
@@ -400,7 +412,11 @@ describe("signup 라우트 인증 로깅", () => {
       email: "invalid-email",
       password: "Password1!",
       nickname: "user",
-      agreements: { termsOfService: true, privacyPolicy: true },
+      agreements: {
+        termsOfService: true,
+        privacyPolicyAcknowledged: true,
+        age14OrOlder: true,
+      },
     });
 
     await POST(makeRequest());

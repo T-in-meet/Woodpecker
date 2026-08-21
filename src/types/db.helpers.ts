@@ -56,4 +56,5 @@ export const TABLES = {
   pushSubscriptions: "push_subscriptions",
   reviewLogs: "review_logs",
   userAgreements: "user_agreements",
+  userLegalAcceptances: "user_legal_acceptances",
 } as const;

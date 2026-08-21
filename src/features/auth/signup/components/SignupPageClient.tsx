@@ -50,11 +50,20 @@ export default function SignupPageClient() {
           }
         : {})}
       onSubmit={async (values) => {
-        const { termsOfService, privacyPolicy, ...rest } = values;
+        const {
+          termsOfService,
+          privacyPolicyAcknowledged,
+          age14OrOlder,
+          ...rest
+        } = values;
 
         const response = await mutateAsync({
           ...rest,
-          agreements: { termsOfService, privacyPolicy },
+          agreements: {
+            termsOfService,
+            privacyPolicyAcknowledged,
+            age14OrOlder,
+          },
         });
 
         /**

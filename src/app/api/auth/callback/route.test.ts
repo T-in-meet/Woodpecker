@@ -7,7 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 import { GET } from "./route";
 
-const hasUserAgreementMock = vi.hoisted(() => vi.fn());
+const getLegalAcceptanceStatusMock = vi.hoisted(() => vi.fn());
 const upsertUserAgreementMock = vi.hoisted(() => vi.fn());
 const exchangeCodeForSessionMock = vi.fn();
 const signOutMock = vi.fn();
@@ -18,8 +18,7 @@ const selectProfileEqMock = vi.fn();
 const selectProfileSingleMock = vi.fn();
 
 vi.mock("@/features/auth/lib/userAgreements", () => ({
-  AGREEMENT_REQUIRED_REDIRECT: "/signup?agreement_required=1",
-  hasUserAgreement: hasUserAgreementMock,
+  getLegalAcceptanceStatus: getLegalAcceptanceStatusMock,
   ensureUserAgreement: upsertUserAgreementMock,
 }));
 
@@ -52,7 +51,7 @@ describe("auth callback route", () => {
       },
       error: null,
     });
-    hasUserAgreementMock.mockResolvedValue(true);
+    getLegalAcceptanceStatusMock.mockResolvedValue({ canAccessService: true });
     upsertUserAgreementMock.mockResolvedValue(undefined);
     signOutMock.mockResolvedValue({ error: null });
     updateProfileMock.mockReturnValue({ eq: updateProfileEqMock });
@@ -169,16 +168,18 @@ describe("auth callback route", () => {
     );
   });
 
-  it("login intent에서 약관 기록이 없으면 세션을 종료하고 회원가입으로 redirect한다", async () => {
-    hasUserAgreementMock.mockResolvedValue(false);
+  it("login intent에서 최신 확인 기록이 없으면 세션을 유지하고 재확인 화면으로 redirect한다", async () => {
+    getLegalAcceptanceStatusMock.mockResolvedValue({
+      canAccessService: false,
+    });
 
     const response = await GET(
       createRequest("/api/auth/callback?code=oauth-code&intent=login"),
     );
 
-    expect(signOutMock).toHaveBeenCalledTimes(1);
+    expect(signOutMock).not.toHaveBeenCalled();
     expect(response.headers.get("location")).toBe(
-      "http://localhost:3000/signup?agreement_required=1",
+      "http://localhost:3000/agreements?redirect=%2Fmypage",
     );
   });
 

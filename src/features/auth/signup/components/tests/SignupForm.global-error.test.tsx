@@ -72,6 +72,7 @@ describe("회원가입 전역 에러 처리", () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
+    await user.click(screen.getByTestId("age-14-checkbox"));
   }
 
   async function submitValidForm(

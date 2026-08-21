@@ -123,7 +123,10 @@ export async function middleware(request: NextRequest) {
   }
 
   const nonce = btoa(crypto.randomUUID().replaceAll("-", ""));
-  const response = await updateSession(request, { "x-nonce": nonce });
+  const response = await updateSession(request, {
+    "x-nonce": nonce,
+    "x-pathname": pathname,
+  });
 
   response.headers.set("Content-Security-Policy", buildCspEnforced(nonce));
   response.headers.set(

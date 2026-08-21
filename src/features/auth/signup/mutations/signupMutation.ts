@@ -7,7 +7,8 @@ type SignupPayload = {
   nickname: string;
   agreements: {
     termsOfService: boolean;
-    privacyPolicy: boolean;
+    privacyPolicyAcknowledged: boolean;
+    age14OrOlder: boolean;
   };
 };
 

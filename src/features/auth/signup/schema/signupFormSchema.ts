@@ -14,8 +14,11 @@ export const signupFormSchema = z
     termsOfService: z.boolean().refine((val) => val === true, {
       message: "이용약관에 동의해주세요",
     }),
-    privacyPolicy: z.boolean().refine((val) => val === true, {
-      message: "개인정보 처리방침에 동의해주세요",
+    privacyPolicyAcknowledged: z.boolean().refine((val) => val === true, {
+      message: "개인정보 처리방침을 확인해주세요",
+    }),
+    age14OrOlder: z.boolean().refine((val) => val === true, {
+      message: "만 14세 이상만 가입할 수 있습니다",
     }),
   })
   .refine((data) => data.password === data.confirmPassword, {

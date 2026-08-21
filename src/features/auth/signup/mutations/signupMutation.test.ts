@@ -15,7 +15,8 @@ const validSignupPayload = {
   nickname: "tester",
   agreements: {
     termsOfService: true as const,
-    privacyPolicy: true as const,
+    privacyPolicyAcknowledged: true as const,
+    age14OrOlder: true as const,
   },
 };
 

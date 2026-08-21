@@ -1,4 +1,11 @@
-export const AGREEMENT_REQUIRED_PATH = "/signup?agreement_required=1";
+export const AGREEMENT_REQUIRED_PATH = "/agreements";
+export const SIGNUP_AGREEMENT_REQUIRED_PATH = "/signup?agreement_required=1";
 
 export const AGREEMENT_REQUIRED_NOTICE_MESSAGE =
-  "소셜 로그인을 계속하려면 약관 동의가 필요합니다. 약관 동의 후 Google로 계속해주세요.";
+  "서비스를 계속 이용하려면 최신 이용약관 동의와 개인정보 처리방침 확인이 필요합니다.";
+
+export function getAgreementRequiredPath(redirectPath?: string): string {
+  if (!redirectPath) return AGREEMENT_REQUIRED_PATH;
+
+  return `${AGREEMENT_REQUIRED_PATH}?redirect=${encodeURIComponent(redirectPath)}`;
+}

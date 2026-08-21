@@ -2,7 +2,7 @@
  * 회원가입 API 약관 동의 검증 전용 테스트
  *
  * 이 파일은 agreements 필드의 구조와 값만 검증한다.
- * - termsOfService / privacyPolicy가 false인 경우 NOT_AGREED
+ * - 이용약관 동의, 처리방침 확인, 연령 확인이 false인 경우 NOT_AGREED
  * - agreements 또는 하위 필드 누락 시 REQUIRED
  * - null 입력 시 REQUIRED
  * - 잘못된 타입 입력 시 INVALID_TYPE
@@ -47,7 +47,8 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
     nickname: "테스터",
     agreements: {
       termsOfService: true,
-      privacyPolicy: true,
+      privacyPolicyAcknowledged: true,
+      age14OrOlder: true,
     },
   };
 
@@ -86,7 +87,11 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
     const response = await POST(
       makeRequest({
         ...BASE_VALID_PAYLOAD,
-        agreements: { termsOfService: false, privacyPolicy: true },
+        agreements: {
+          termsOfService: false,
+          privacyPolicyAcknowledged: true,
+          age14OrOlder: true,
+        },
       }),
     );
 
@@ -99,48 +104,44 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
     expect(vi.mocked(issueOtpAndSendEmail)).not.toHaveBeenCalled();
   });
 
-  // TC-02: privacyPolicy = false
-  it("TC-02. privacyPolicy가 false이면 NOT_AGREED 오류를 반환한다", async () => {
+  // TC-02: privacyPolicyAcknowledged = false
+  it("TC-02. 처리방침 확인이 false이면 NOT_AGREED 오류를 반환한다", async () => {
     const response = await POST(
       makeRequest({
         ...BASE_VALID_PAYLOAD,
-        agreements: { termsOfService: true, privacyPolicy: false },
+        agreements: {
+          termsOfService: true,
+          privacyPolicyAcknowledged: false,
+          age14OrOlder: true,
+        },
       }),
     );
 
     await expectAgreementFailure(
       response,
-      "agreements.privacyPolicy",
+      "agreements.privacyPolicyAcknowledged",
       VALIDATION_REASON.NOT_AGREED,
     );
     expect(mockCreateUser).not.toHaveBeenCalled();
     expect(vi.mocked(issueOtpAndSendEmail)).not.toHaveBeenCalled();
   });
 
-  // TC-03: both false
-  it("TC-03. termsOfService와 privacyPolicy 모두 false이면 두 필드 모두 NOT_AGREED 오류를 반환한다", async () => {
+  it("TC-03. 연령 확인이 false이면 NOT_AGREED 오류를 반환한다", async () => {
     const response = await POST(
       makeRequest({
         ...BASE_VALID_PAYLOAD,
-        agreements: { termsOfService: false, privacyPolicy: false },
+        agreements: {
+          termsOfService: true,
+          privacyPolicyAcknowledged: true,
+          age14OrOlder: false,
+        },
       }),
     );
-    const body = await response.json();
 
-    expect(response.status).toBe(400);
-    expect(body.success).toBe(false);
-    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_INVALID_INPUT);
-    expect(body.data.errors).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          field: "agreements.termsOfService",
-          reason: VALIDATION_REASON.NOT_AGREED,
-        }),
-        expect.objectContaining({
-          field: "agreements.privacyPolicy",
-          reason: VALIDATION_REASON.NOT_AGREED,
-        }),
-      ]),
+    await expectAgreementFailure(
+      response,
+      "agreements.age14OrOlder",
+      VALIDATION_REASON.NOT_AGREED,
     );
     expect(mockCreateUser).not.toHaveBeenCalled();
     expect(vi.mocked(issueOtpAndSendEmail)).not.toHaveBeenCalled();
@@ -151,7 +152,10 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
     const response = await POST(
       makeRequest({
         ...BASE_VALID_PAYLOAD,
-        agreements: { privacyPolicy: true },
+        agreements: {
+          privacyPolicyAcknowledged: true,
+          age14OrOlder: true,
+        },
       }),
     );
 
@@ -164,18 +168,18 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
     expect(vi.mocked(issueOtpAndSendEmail)).not.toHaveBeenCalled();
   });
 
-  // TC-05: privacyPolicy missing
-  it("TC-05. privacyPolicy가 누락되면 REQUIRED 오류를 반환한다", async () => {
+  // TC-05: privacyPolicyAcknowledged missing
+  it("TC-05. 처리방침 확인이 누락되면 REQUIRED 오류를 반환한다", async () => {
     const response = await POST(
       makeRequest({
         ...BASE_VALID_PAYLOAD,
-        agreements: { termsOfService: true },
+        agreements: { termsOfService: true, age14OrOlder: true },
       }),
     );
 
     await expectAgreementFailure(
       response,
-      "agreements.privacyPolicy",
+      "agreements.privacyPolicyAcknowledged",
       VALIDATION_REASON.REQUIRED,
     );
     expect(mockCreateUser).not.toHaveBeenCalled();
@@ -216,7 +220,11 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
     const response = await POST(
       makeRequest({
         ...BASE_VALID_PAYLOAD,
-        agreements: { termsOfService: null, privacyPolicy: true },
+        agreements: {
+          termsOfService: null,
+          privacyPolicyAcknowledged: true,
+          age14OrOlder: true,
+        },
       }),
     );
 
@@ -229,18 +237,22 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
     expect(vi.mocked(issueOtpAndSendEmail)).not.toHaveBeenCalled();
   });
 
-  // TC-09: privacyPolicy null
-  it("TC-09. privacyPolicy가 null이면 REQUIRED 오류를 반환한다", async () => {
+  // TC-09: privacyPolicyAcknowledged null
+  it("TC-09. 처리방침 확인이 null이면 REQUIRED 오류를 반환한다", async () => {
     const response = await POST(
       makeRequest({
         ...BASE_VALID_PAYLOAD,
-        agreements: { termsOfService: true, privacyPolicy: null },
+        agreements: {
+          termsOfService: true,
+          privacyPolicyAcknowledged: null,
+          age14OrOlder: true,
+        },
       }),
     );
 
     await expectAgreementFailure(
       response,
-      "agreements.privacyPolicy",
+      "agreements.privacyPolicyAcknowledged",
       VALIDATION_REASON.REQUIRED,
     );
     expect(mockCreateUser).not.toHaveBeenCalled();

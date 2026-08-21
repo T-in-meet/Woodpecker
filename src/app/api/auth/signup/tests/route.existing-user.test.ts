@@ -42,7 +42,11 @@ describe("회원가입 - 기존 미인증 사용자 재요청 분기", () => {
     email: "test@example.com",
     password: "Password123!",
     nickname: "테스터",
-    agreements: { termsOfService: true as const, privacyPolicy: true as const },
+    agreements: {
+      termsOfService: true as const,
+      privacyPolicyAcknowledged: true as const,
+      age14OrOlder: true as const,
+    },
   };
 
   // 기존 미인증 계정: 이메일은 존재하지만 아직 인증되지 않은 상태
@@ -156,7 +160,11 @@ describe("회원가입 - 기존 인증 사용자 재요청 분기", () => {
     email: "test@example.com",
     password: "Password123!",
     nickname: "tester",
-    agreements: { termsOfService: true as const, privacyPolicy: true as const },
+    agreements: {
+      termsOfService: true as const,
+      privacyPolicyAcknowledged: true as const,
+      age14OrOlder: true as const,
+    },
   };
 
   // 기존 인증 계정: 이메일 인증이 완료된 기존 가입 상태
