@@ -104,7 +104,7 @@ export async function reportOperationalError(
   } catch (error) {
     logError({
       error,
-      event: "operationalErrors.report.adminNotificationFailed",
+      event: "operationalErrors.report.adminNotificationThrew",
       operationalErrorId: result.id,
     });
   }

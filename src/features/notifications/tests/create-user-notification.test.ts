@@ -301,7 +301,7 @@ describe("createAdminNotification", () => {
         return { insert: eventChain.insert };
       }
 
-      return { select: vi.fn() };
+      throw new Error(`Unexpected table: ${table}`);
     });
 
     createAdminClientMock.mockReturnValue({ from });
@@ -322,7 +322,7 @@ describe("createAdminNotification", () => {
 
     expect(result).toEqual({
       error: insertError,
-      failureStage: "event_create",
+      failureStage: "in_app_notification_create",
       ok: false,
       operationalErrorRecorded: true,
     });
@@ -332,9 +332,15 @@ describe("createAdminNotification", () => {
     expect(recordOperationalErrorMock).toHaveBeenCalledWith(
       expect.objectContaining({
         actorUserId: "44444444-4444-4444-8444-444444444444",
+        context: {
+          clickPath: "/admin/feedbacks/feedback-id",
+          feedbackId: "77777777-7777-4777-8777-777777777777",
+          notificationType: ADMIN_NOTIFICATION_TYPES.FEEDBACK_CREATED,
+        },
         error: insertError,
         errorCode: "ADMIN_NOTIFICATION_CREATE_FAILED",
         feature: "notifications",
+        message: "새 피드백 관리자 알림 생성에 실패했습니다.",
         operation: "create_admin_feedback_notification",
         stage: "in_app_notification_create",
       }),
@@ -376,7 +382,7 @@ describe("createAdminNotification", () => {
 
     expect(result).toEqual({
       error: lookupError,
-      failureStage: "admin_target_lookup",
+      failureStage: "admin_notification_target_lookup",
       ok: false,
       operationalErrorRecorded: true,
     });
@@ -384,6 +390,12 @@ describe("createAdminNotification", () => {
     expect(recordOperationalErrorMock).toHaveBeenCalledWith(
       expect.objectContaining({
         actorUserId: "44444444-4444-4444-8444-444444444444",
+        context: {
+          adminNotificationEventId: "55555555-5555-4555-8555-555555555555",
+          clickPath: "/admin/feedbacks/feedback-id",
+          feedbackId: "77777777-7777-4777-8777-777777777777",
+          notificationType: ADMIN_NOTIFICATION_TYPES.FEEDBACK_CREATED,
+        },
         error: lookupError,
         errorCode: "ADMIN_NOTIFICATION_TARGET_LOOKUP_FAILED",
         feature: "notifications",

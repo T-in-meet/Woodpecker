@@ -165,7 +165,7 @@ describe("reportOperationalError", () => {
     expect(result).toEqual(expectedResult);
     expect(logErrorMock).toHaveBeenCalledWith({
       error: notificationError,
-      event: "operationalErrors.report.adminNotificationFailed",
+      event: "operationalErrors.report.adminNotificationThrew",
       operationalErrorId: OPERATIONAL_ERROR_ID,
     });
   });
@@ -180,7 +180,7 @@ describe("reportOperationalError", () => {
     recordOperationalErrorMock.mockResolvedValue(expectedResult);
     createAdminNotificationMock.mockResolvedValue({
       error: notificationError,
-      failureStage: "event_create",
+      failureStage: "in_app_notification_create",
       ok: false,
       operationalErrorRecorded: true,
     });
@@ -198,7 +198,7 @@ describe("reportOperationalError", () => {
     expect(logErrorMock).toHaveBeenCalledWith({
       error: notificationError,
       event: "operationalErrors.report.adminNotificationFailed",
-      failureStage: "event_create",
+      failureStage: "in_app_notification_create",
       operationalErrorRecorded: true,
       operationalErrorId: OPERATIONAL_ERROR_ID,
     });

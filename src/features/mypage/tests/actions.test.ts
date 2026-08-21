@@ -4,12 +4,12 @@ const {
   afterMock,
   createAdminNotificationMock,
   createClientMock,
-  logErrorMock,
+  recordOperationalErrorMock,
 } = vi.hoisted(() => ({
   afterMock: vi.fn(),
   createAdminNotificationMock: vi.fn(),
   createClientMock: vi.fn(),
-  logErrorMock: vi.fn(),
+  recordOperationalErrorMock: vi.fn(),
 }));
 
 vi.mock("next/server", () => ({
@@ -24,8 +24,8 @@ vi.mock("@/features/notifications/create-admin-notification", () => ({
   createAdminNotification: createAdminNotificationMock,
 }));
 
-vi.mock("@/lib/logger", () => ({
-  logError: logErrorMock,
+vi.mock("@/features/operational-errors/record", () => ({
+  recordOperationalError: recordOperationalErrorMock,
 }));
 
 import { ADMIN_NOTIFICATION_TYPES } from "@/lib/constants/notifications";
@@ -364,7 +364,12 @@ describe("createFeedbackAction", () => {
       ok: true,
       targetAdminCount: 1,
     });
-    logErrorMock.mockReset();
+    recordOperationalErrorMock.mockReset();
+    recordOperationalErrorMock.mockResolvedValue({
+      id: "operational-error-1",
+      ok: true,
+      recorded: "created",
+    });
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
@@ -543,7 +548,7 @@ describe("createFeedbackAction", () => {
         type: ADMIN_NOTIFICATION_TYPES.FEEDBACK_CREATED,
       }),
     );
-    expect(logErrorMock).not.toHaveBeenCalled();
+    expect(recordOperationalErrorMock).not.toHaveBeenCalled();
   });
 
   it("알림 클릭 경로와 metadata가 방금 만든 feedbackId를 가리킨다", async () => {
@@ -568,7 +573,7 @@ describe("createFeedbackAction", () => {
     createClientMock.mockResolvedValue(supabase);
     createAdminNotificationMock.mockResolvedValue({
       error: { message: "insert failed" },
-      failureStage: "event_create",
+      failureStage: "in_app_notification_create",
       ok: false,
       operationalErrorRecorded: true,
     });
@@ -577,10 +582,10 @@ describe("createFeedbackAction", () => {
     await runScheduledFeedbackNotification();
 
     expect(result).toEqual({ data: { id: "feedback-1" } });
-    expect(logErrorMock).not.toHaveBeenCalled();
+    expect(recordOperationalErrorMock).not.toHaveBeenCalled();
   });
 
-  it("알림 생성이 예외를 던져도 피드백 제출은 성공하고 애플리케이션 로그로 기록한다", async () => {
+  it("알림 생성이 예외를 던져도 피드백 제출은 성공하고 운영 오류로 기록한다", async () => {
     const { supabase } = makeFeedbackSupabaseMock();
     const error = new Error("boom");
     createClientMock.mockResolvedValue(supabase);
@@ -590,13 +595,20 @@ describe("createFeedbackAction", () => {
     await expect(runScheduledFeedbackNotification()).resolves.toBeUndefined();
 
     expect(result).toEqual({ data: { id: "feedback-1" } });
-    expect(logErrorMock).toHaveBeenCalledTimes(1);
-    expect(logErrorMock).toHaveBeenCalledWith({
-      error,
-      event: "mypage.feedback.adminNotificationUnexpectedFailure",
-      feedbackId: expect.any(String),
-      userId: "user-123",
-    });
+    expect(recordOperationalErrorMock).toHaveBeenCalledTimes(1);
+    expect(recordOperationalErrorMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserId: "user-123",
+        context: { feedbackId: expect.any(String) },
+        error,
+        errorCode: "ADMIN_NOTIFICATION_CREATE_FAILED",
+        feature: "notifications",
+        message: "새 피드백 관리자 알림 생성에 실패했습니다.",
+        operation: "create_admin_feedback_notification",
+        severity: "WARN",
+        stage: "in_app_notification_create",
+      }),
+    );
   });
 
   it("insert가 실패하면 관리자 알림을 만들지 않는다", async () => {
