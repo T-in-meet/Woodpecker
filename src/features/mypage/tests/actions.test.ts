@@ -542,13 +542,24 @@ describe("createFeedbackAction", () => {
     );
   });
 
-  it("알림 생성이 실패해도 피드백 제출은 성공하고 운영 오류로 기록한다", async () => {
+  it("알림 생성이 실패 결과를 반환해도 피드백 제출은 성공하고 운영 오류를 중복 기록하지 않는다", async () => {
     const { supabase } = makeFeedbackSupabaseMock();
     createClientMock.mockResolvedValue(supabase);
     createAdminNotificationMock.mockResolvedValue({
       error: { message: "insert failed" },
       ok: false,
     });
+
+    const result = await createFeedbackAction(null, makeFeedbackFormData());
+
+    expect(result).toEqual({ data: { id: "feedback-1" } });
+    expect(recordOperationalErrorMock).not.toHaveBeenCalled();
+  });
+
+  it("알림 생성이 예외를 던져도 피드백 제출은 성공하고 운영 오류로 기록한다", async () => {
+    const { supabase } = makeFeedbackSupabaseMock();
+    createClientMock.mockResolvedValue(supabase);
+    createAdminNotificationMock.mockRejectedValue(new Error("boom"));
 
     const result = await createFeedbackAction(null, makeFeedbackFormData());
 
@@ -561,17 +572,6 @@ describe("createFeedbackAction", () => {
         operation: "create_admin_feedback_notification",
       }),
     );
-  });
-
-  it("알림 생성이 예외를 던져도 피드백 제출은 성공하고 운영 오류로 기록한다", async () => {
-    const { supabase } = makeFeedbackSupabaseMock();
-    createClientMock.mockResolvedValue(supabase);
-    createAdminNotificationMock.mockRejectedValue(new Error("boom"));
-
-    const result = await createFeedbackAction(null, makeFeedbackFormData());
-
-    expect(result).toEqual({ data: { id: "feedback-1" } });
-    expect(recordOperationalErrorMock).toHaveBeenCalledTimes(1);
   });
 
   it("insert가 실패하면 관리자 알림을 만들지 않는다", async () => {

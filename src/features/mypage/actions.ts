@@ -399,7 +399,8 @@ async function recordAdminFeedbackNotificationFailure(
  * 새 피드백이 등록됐음을 모든 관리자에게 알립니다.
  *
  * 알림 실패가 피드백 제출 자체를 실패시키면 안 되므로
- * 오류는 운영 오류로만 기록하고 호출부로 전파하지 않습니다.
+ * 반환된 실패는 여기서 추가 기록하거나 호출부로 전파하지 않습니다.
+ * 예상하지 못한 예외만 방어적으로 운영 오류에 기록합니다.
  *
  * @param input 알림 본문과 클릭 경로를 구성할 피드백 정보
  */
@@ -414,7 +415,7 @@ async function notifyAdminsOfNewFeedback({
   });
 
   try {
-    const result = await createAdminNotification({
+    await createAdminNotification({
       body: `[${FEEDBACK_CATEGORY_LABELS[category]}] ${title}`,
       clickPath: definition.clickPath,
       createdBy: userId,
@@ -423,14 +424,6 @@ async function notifyAdminsOfNewFeedback({
       title: "새 피드백이 등록되었습니다.",
       type: ADMIN_NOTIFICATION_TYPES.FEEDBACK_CREATED,
     });
-
-    if (!result.ok) {
-      await recordAdminFeedbackNotificationFailure(
-        result.error,
-        feedbackId,
-        userId,
-      );
-    }
   } catch (error) {
     await recordAdminFeedbackNotificationFailure(error, feedbackId, userId);
   }
