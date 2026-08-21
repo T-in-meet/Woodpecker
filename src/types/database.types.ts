@@ -40,6 +40,7 @@ export type Database = {
           click_path: string;
           created_at: string;
           created_by: string | null;
+          feedback_id: string | null;
           id: string;
           metadata: Json;
           title: string;
@@ -50,6 +51,7 @@ export type Database = {
           click_path: string;
           created_at?: string;
           created_by?: string | null;
+          feedback_id?: string | null;
           id?: string;
           metadata?: Json;
           title: string;
@@ -60,12 +62,21 @@ export type Database = {
           click_path?: string;
           created_at?: string;
           created_by?: string | null;
+          feedback_id?: string | null;
           id?: string;
           metadata?: Json;
           title?: string;
           type?: string;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "admin_notification_events_feedback_id_fkey";
+            columns: ["feedback_id"];
+            isOneToOne: false;
+            referencedRelation: "feedbacks";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       admin_notification_reads: {
         Row: {
