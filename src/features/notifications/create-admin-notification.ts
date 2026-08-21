@@ -15,15 +15,26 @@ import type { Json } from "@/types/db.helpers";
 
 import { dispatchPushToUser } from "./dispatch-push";
 
-type CreateAdminNotificationInput = {
+type CreateAdminNotificationCommonInput = {
   body?: string | null;
   clickPath: string;
   createdBy?: string | null;
   metadata?: Record<string, Json>;
   pushEnabled?: boolean;
   title: string;
-  type: AdminNotificationKindType;
 };
+
+type CreateAdminNotificationInput = CreateAdminNotificationCommonInput &
+  (
+    | {
+        feedbackId: string;
+        type: typeof ADMIN_NOTIFICATION_TYPES.FEEDBACK_CREATED;
+      }
+    | {
+        feedbackId?: never;
+        type: typeof ADMIN_NOTIFICATION_TYPES.OPERATIONAL_ERROR;
+      }
+  );
 
 export type CreateAdminNotificationResult =
   | {
@@ -80,6 +91,10 @@ export async function createAdminNotification(
       body: input.body ?? null,
       click_path: input.clickPath,
       created_by: input.createdBy ?? null,
+      feedback_id:
+        input.type === ADMIN_NOTIFICATION_TYPES.FEEDBACK_CREATED
+          ? input.feedbackId
+          : null,
       metadata: input.metadata ?? {},
       title: input.title,
       type: input.type,
