@@ -1,22 +1,27 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { getAdminPagination } from "@/features/admin/utils/admin-pagination";
 
 type RelatedNoteCandidatePaginationProps = {
   /** 현재 페이지 번호입니다. */
   page: number;
 
-  /** 전체 페이지 수입니다. */
-  totalPages: number;
+  /** 전체 후보 Note 개수입니다. */
+  totalCount: number;
+
+  /** 한 페이지에 표시할 후보 Note 개수입니다. */
+  pageSize: number;
 
   /** 후보 목록을 다시 조회 중인지 여부입니다. */
   isFetching: boolean;
 
-  /** 이전 페이지로 이동할 때 호출됩니다. */
-  onPrevious: () => void;
-
-  /** 다음 페이지로 이동할 때 호출됩니다. */
-  onNext: () => void;
+  /**
+   * 페이지가 변경될 때 호출됩니다.
+   *
+   * @param page 이동할 페이지 번호
+   */
+  onPageChange: (page: number) => void;
 };
 
 /**
@@ -32,12 +37,19 @@ type RelatedNoteCandidatePaginationProps = {
  */
 export function RelatedNoteCandidatePagination({
   page,
-  totalPages,
+  totalCount,
+  pageSize,
   isFetching,
-  onPrevious,
-  onNext,
+  onPageChange,
 }: RelatedNoteCandidatePaginationProps) {
-  if (totalPages <= 1) {
+  const pagination = getAdminPagination({
+    currentPage: page,
+    totalCount,
+    pageSize,
+    pageCount: 1,
+  });
+
+  if (pagination.totalPages <= 1) {
     return null;
   }
 
@@ -47,22 +59,26 @@ export function RelatedNoteCandidatePagination({
         type="button"
         size="sm"
         variant="outline"
-        disabled={page <= 1 || isFetching}
-        onClick={onPrevious}
+        disabled={!pagination.hasPreviousPage || isFetching}
+        onClick={() => {
+          onPageChange(pagination.previousPage);
+        }}
       >
         이전
       </Button>
 
       <span className="text-sm text-muted-foreground">
-        {page} / {totalPages}
+        {pagination.currentPage} / {pagination.totalPages}
       </span>
 
       <Button
         type="button"
         size="sm"
         variant="outline"
-        disabled={page >= totalPages || isFetching}
-        onClick={onNext}
+        disabled={!pagination.hasNextPage || isFetching}
+        onClick={() => {
+          onPageChange(pagination.nextPage);
+        }}
       >
         다음
       </Button>

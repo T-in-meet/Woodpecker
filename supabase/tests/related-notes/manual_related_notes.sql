@@ -10,8 +10,9 @@ BEGIN;
 -- 2. 각 Related Note는 서로 다른 선택적 reason을 가질 수 있어야 합니다.
 -- 3. 기존 AI 관계를 사용자가 직접 추가하면 manual + active로 전환해야 합니다.
 -- 4. 자기 자신을 Related Note로 연결할 수 없어야 합니다.
--- 5. 다른 사용자의 Note를 Related Note로 연결할 수 없어야 합니다.
-SELECT plan(13);
+-- 5. 잘못된 입력은 조건별 SQLSTATE로 구분해야 합니다.
+-- 6. 다른 사용자의 Note를 Related Note로 연결할 수 없어야 합니다.
+SELECT plan(18);
 
 
 -- ============================================================================
@@ -254,7 +255,7 @@ SELECT ok(
 );
 
 
--- title은 Client 입력이 아니라 대상 Note의 현재 title snapshot을 사용하고,
+-- title은 metadata에 snapshot으로 저장하지 않고,
 -- 해당 Note에 입력한 reason만 metadata에 저장해야 합니다.
 SELECT is(
   (
@@ -266,12 +267,10 @@ SELECT is(
         current_setting('test.related_manual_reason_target_id')::uuid
   ),
   jsonb_build_object(
-    'title',
-    'Manual Related With Reason',
     'reason',
     '같이 참고하기 위해 연결합니다.'
   ),
-  'manual related note metadata should contain its target title and reason'
+  'manual related note metadata should contain only its reason'
 );
 
 
@@ -291,8 +290,8 @@ SELECT ok(
 );
 
 
--- reason이 없는 Note의 metadata에는 불필요한 null reason을 남기지 않고
--- 화면 표시에 필요한 title snapshot만 저장해야 합니다.
+-- reason이 없는 Note의 metadata에는 title snapshot이나 null reason을 남기지 않고
+-- 빈 JSON object만 저장해야 합니다.
 SELECT is(
   (
     SELECT metadata
@@ -302,11 +301,8 @@ SELECT is(
       AND related_note_id =
         current_setting('test.related_manual_no_reason_target_id')::uuid
   ),
-  jsonb_build_object(
-    'title',
-    'Manual Related Without Reason'
-  ),
-  'manual related note without reason should store only its target title'
+  '{}'::jsonb,
+  'manual related note without reason should store empty metadata'
 );
 
 
@@ -346,8 +342,6 @@ SELECT ok(
       AND bool_and(status = 'active')
       AND bool_and(
         metadata = jsonb_build_object(
-          'title',
-          'Existing AI Related Note',
           'reason',
           '직접 연결한 이유'
         )
@@ -384,7 +378,7 @@ SELECT throws_ok(
     current_setting('test.related_manual_source_id'),
     current_setting('test.related_manual_source_id')
   ),
-  '22023',
+  'WP007',
   NULL,
   'a note should not be related to itself'
 );
@@ -406,7 +400,129 @@ SELECT is(
 
 
 -- ============================================================================
--- 4. Other user's target rejection
+-- 4. Invalid manual input SQLSTATEs
+-- ============================================================================
+
+-- 빈 배열은 전용 SQLSTATE로 거부해야 합니다.
+SELECT throws_ok(
+  format(
+    $sql$
+      SELECT public.add_note_related_manual(
+        '%s'::uuid,
+        '[]'::jsonb
+      );
+    $sql$,
+    current_setting('test.related_manual_source_id')
+  ),
+  'WP004',
+  NULL,
+  'empty related notes should use target required SQLSTATE'
+);
+
+
+-- relatedNoteId가 UUID 형식이 아니면 전용 SQLSTATE로 거부해야 합니다.
+SELECT throws_ok(
+  format(
+    $sql$
+      SELECT public.add_note_related_manual(
+        '%s'::uuid,
+        jsonb_build_array(
+          jsonb_build_object(
+            'relatedNoteId',
+            'not-a-uuid'
+          )
+        )
+      );
+    $sql$,
+    current_setting('test.related_manual_source_id')
+  ),
+  'WP005',
+  NULL,
+  'invalid related note id should use target invalid SQLSTATE'
+);
+
+
+-- 동일한 target이 한 요청에 중복되면 전용 SQLSTATE로 거부해야 합니다.
+SELECT throws_ok(
+  format(
+    $sql$
+      SELECT public.add_note_related_manual(
+        '%s'::uuid,
+        jsonb_build_array(
+          jsonb_build_object(
+            'relatedNoteId',
+            '%s'
+          ),
+          jsonb_build_object(
+            'relatedNoteId',
+            '%s'
+          )
+        )
+      );
+    $sql$,
+    current_setting('test.related_manual_source_id'),
+    current_setting('test.related_manual_reason_target_id'),
+    current_setting('test.related_manual_reason_target_id')
+  ),
+  'WP006',
+  NULL,
+  'duplicated related note id should use duplicated SQLSTATE'
+);
+
+
+-- reason 길이가 500자를 초과하면 전용 SQLSTATE로 거부해야 합니다.
+SELECT throws_ok(
+  format(
+    $sql$
+      SELECT public.add_note_related_manual(
+        '%s'::uuid,
+        jsonb_build_array(
+          jsonb_build_object(
+            'relatedNoteId',
+            '%s',
+            'reason',
+            repeat('a', 501)
+          )
+        )
+      );
+    $sql$,
+    current_setting('test.related_manual_source_id'),
+    current_setting('test.related_manual_reason_target_id')
+  ),
+  'WP008',
+  NULL,
+  'too long reason should use reason too long SQLSTATE'
+);
+
+
+-- 한 번에 10개를 초과하는 target은 RPC 레벨에서 전용 SQLSTATE로 거부해야 합니다.
+SELECT throws_ok(
+  format(
+    $sql$
+      SELECT public.add_note_related_manual(
+        '%s'::uuid,
+        (
+          SELECT jsonb_agg(
+            jsonb_build_object(
+              'relatedNoteId',
+              '%s'
+            )
+          )
+          FROM generate_series(1, 11)
+        )
+      );
+    $sql$,
+    current_setting('test.related_manual_source_id'),
+    current_setting('test.related_manual_reason_target_id')
+  ),
+  'WP009',
+  NULL,
+  'too many related notes should use target too many SQLSTATE'
+);
+
+
+-- ============================================================================
+-- 5. Other user's target rejection
 -- ============================================================================
 
 -- 인증 사용자가 다른 사용자의 Note ID를 배열에 전달하더라도

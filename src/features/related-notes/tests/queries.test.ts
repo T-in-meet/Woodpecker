@@ -29,8 +29,11 @@ describe("getRelatedNotes", () => {
           {
             related_note_id: "22222222-2222-4222-8222-222222222222",
             origin: "ai",
+            notes: {
+              title: "현재 AI 관련 노트 제목",
+            },
             metadata: {
-              title: "관련 노트",
+              title: "예전 AI 제목 snapshot",
               reason: "비슷한 내용을 다룹니다.",
               rank: 1,
             },
@@ -38,8 +41,11 @@ describe("getRelatedNotes", () => {
           {
             related_note_id: "33333333-3333-4333-8333-333333333333",
             origin: "manual",
+            notes: {
+              title: "현재 직접 연결한 노트 제목",
+            },
             metadata: {
-              title: "직접 연결한 노트",
+              title: "예전 수동 제목 snapshot",
             },
           },
         ],
@@ -56,7 +62,9 @@ describe("getRelatedNotes", () => {
 
     expect(calls).toContainEqual([
       "select",
-      ["related_note_id, origin, metadata"],
+      [
+        "related_note_id, origin, metadata, notes!note_related_notes_related_note_id_fkey(title)",
+      ],
     ]);
     expect(calls).toContainEqual([
       "eq",
@@ -68,14 +76,14 @@ describe("getRelatedNotes", () => {
       {
         noteId: "22222222-2222-4222-8222-222222222222",
         origin: "ai",
-        title: "관련 노트",
+        title: "현재 AI 관련 노트 제목",
         reason: "비슷한 내용을 다룹니다.",
         rank: 1,
       },
       {
         noteId: "33333333-3333-4333-8333-333333333333",
         origin: "manual",
-        title: "직접 연결한 노트",
+        title: "현재 직접 연결한 노트 제목",
       },
     ]);
   });
@@ -110,8 +118,10 @@ describe("getRelatedNotes", () => {
           {
             related_note_id: "not-a-uuid",
             origin: "ai",
-            metadata: {
+            notes: {
               title: "관련 노트",
+            },
+            metadata: {
               reason: "비슷한 내용을 다룹니다.",
             },
           },

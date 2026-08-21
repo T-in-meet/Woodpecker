@@ -66,7 +66,7 @@ export async function replaceRelatedNoteAiRecommendations({
   const supabase = createAdminClient();
 
   const recommendationPayload = recommendations.map(
-    ({ noteId: relatedNoteId, ...metadata }) => ({
+    ({ noteId: relatedNoteId, title: _title, ...metadata }) => ({
       relatedNoteId,
       metadata,
     }),

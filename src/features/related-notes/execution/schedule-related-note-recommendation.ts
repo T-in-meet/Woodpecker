@@ -218,7 +218,7 @@ export function scheduleRelatedNoteRecommendation({
             noteId: recommendationSource.id,
             ownerUserId,
             runId: activeRunId,
-            step: RELATED_NOTE_RECOMMENDATION_RUN_UPDATE_STEP.RECOMMENDATIONS,
+            step: RELATED_NOTE_RECOMMENDATION_RUN_UPDATE_STEP.ANSWER_GENERATION,
             update: (runId) =>
               saveRelatedNoteRunAnswerGenerationUsage({
                 modelKey: createAiUsageModelKey(answerConfiguration.model),

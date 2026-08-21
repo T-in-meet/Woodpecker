@@ -19,9 +19,11 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getAdminPagination } from "@/features/admin/utils/admin-pagination";
 
 import { useAddManualRelatedNotes } from "../hooks/use-add-manual-related-notes";
 import { useRelatedNoteCandidates } from "../hooks/use-related-note-candidates";
+import { MAX_MANUAL_RELATED_NOTES_PER_REQUEST } from "../schemas";
 import { RelatedNoteCandidateList } from "./RelatedNoteCandidateList";
 import { RelatedNoteCandidatePagination } from "./RelatedNoteCandidatePagination";
 
@@ -38,7 +40,11 @@ const addRelatedNotesSchema = z.object({
           .max(500, "연결 이유는 500자 이하로 입력해주세요."),
       }),
     )
-    .min(1, "연결할 노트를 하나 이상 선택해주세요."),
+    .min(1, "연결할 노트를 하나 이상 선택해주세요.")
+    .max(
+      MAX_MANUAL_RELATED_NOTES_PER_REQUEST,
+      `관련 노트는 한 번에 최대 ${MAX_MANUAL_RELATED_NOTES_PER_REQUEST}개까지 추가할 수 있습니다.`,
+    ),
 });
 
 type AddRelatedNotesFormValues = z.infer<typeof addRelatedNotesSchema>;
@@ -88,7 +94,12 @@ export function AddRelatedNoteDialog({ noteId }: AddRelatedNoteDialogProps) {
 
   const candidates = data?.notes ?? [];
   const total = data?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const pagination = getAdminPagination({
+    currentPage: page,
+    totalCount: total,
+    pageSize: PAGE_SIZE,
+    pageCount: 1,
+  });
 
   /*
    * 검색 조건이 변경되면 첫 페이지부터 다시 조회합니다.
@@ -185,14 +196,14 @@ export function AddRelatedNoteDialog({ noteId }: AddRelatedNoteDialogProps) {
   }
 
   /*
-   * 검색 결과가 줄어 현재 page가 totalPages를 초과하게 된 경우
+   * 검색 결과가 줄어 현재 page가 전체 페이지 수를 초과하게 된 경우
    * 유효한 마지막 페이지로 보정합니다.
    */
   useEffect(() => {
-    if (page > totalPages) {
-      setPage(totalPages);
+    if (page > pagination.totalPages) {
+      setPage(pagination.totalPages);
     }
-  }, [page, totalPages]);
+  }, [page, pagination.totalPages]);
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -266,10 +277,10 @@ export function AddRelatedNoteDialog({ noteId }: AddRelatedNoteDialogProps) {
 
               <RelatedNoteCandidatePagination
                 page={page}
-                totalPages={totalPages}
+                totalCount={total}
+                pageSize={PAGE_SIZE}
                 isFetching={isFetching}
-                onPrevious={() => setPage((current) => current - 1)}
-                onNext={() => setPage((current) => current + 1)}
+                onPageChange={setPage}
               />
             </div>
           </div>

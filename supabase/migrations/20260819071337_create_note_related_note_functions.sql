@@ -240,8 +240,8 @@ TO "service_role";
  *
  * 각 Related Note는 서로 다른 선택적 reason을 가질 수 있습니다.
  *
- * 화면 표시용 title snapshot은 Client에서 전달받지 않고,
- * 각 연결 대상 Note의 현재 title을 DB에서 직접 조회하여 metadata에 저장합니다.
+ * 화면 표시용 title은 조회 시점에 related_note_id로 notes.title을 읽습니다.
+ * 이 함수는 연결 이유처럼 관계에 종속된 metadata만 저장합니다.
  *
  * source Note와 모든 target Note의 소유권 검증부터 관계 저장까지
  * 하나의 함수 실행 안에서 처리하므로, 하나라도 잘못된 입력이 있으면
@@ -283,7 +283,19 @@ BEGIN
     THEN
         RAISE EXCEPTION
             'RELATED_NOTE_TARGET_REQUIRED'
-            USING ERRCODE = '22023';
+            USING ERRCODE = 'WP004';
+    END IF;
+
+    /*
+     * 서버 비용을 제한하기 위해 한 번의 RPC 호출에서 처리할 target 개수를 제한합니다.
+     *
+     * Client Action도 같은 상한으로 검증하지만 SECURITY DEFINER RPC는 직접 호출될 수
+     * 있으므로 DB 경계에서도 동일하게 방어합니다.
+     */
+    IF jsonb_array_length("p_related_notes") > 10 THEN
+        RAISE EXCEPTION
+            'RELATED_NOTE_TARGET_TOO_MANY'
+            USING ERRCODE = 'WP009';
     END IF;
 
     /*
@@ -313,7 +325,7 @@ BEGIN
     ) THEN
         RAISE EXCEPTION
             'RELATED_NOTE_TARGET_INVALID'
-            USING ERRCODE = '22023';
+            USING ERRCODE = 'WP005';
     END IF;
 
     /*
@@ -330,7 +342,7 @@ BEGIN
         WHEN invalid_text_representation THEN
             RAISE EXCEPTION
                 'RELATED_NOTE_TARGET_INVALID'
-                USING ERRCODE = '22023';
+                USING ERRCODE = 'WP005';
     END;
 
     /*
@@ -346,7 +358,7 @@ BEGIN
     ) THEN
         RAISE EXCEPTION
             'RELATED_NOTE_TARGET_DUPLICATED'
-            USING ERRCODE = '22023';
+            USING ERRCODE = 'WP006';
     END IF;
 
     /*
@@ -359,7 +371,7 @@ BEGIN
     ) THEN
         RAISE EXCEPTION
             'RELATED_NOTE_SELF_RELATION_NOT_ALLOWED'
-            USING ERRCODE = '22023';
+            USING ERRCODE = 'WP007';
     END IF;
 
     /*
@@ -375,7 +387,7 @@ BEGIN
     ) THEN
         RAISE EXCEPTION
             'RELATED_NOTE_REASON_TOO_LONG'
-            USING ERRCODE = '22023';
+            USING ERRCODE = 'WP008';
     END IF;
 
     /*
@@ -400,7 +412,6 @@ BEGIN
     /*
      * 검증된 Related Notes를 한 번에 manual + active 관계로 저장합니다.
      *
-     * title은 DB의 현재 target Note 제목을 snapshot으로 사용하고,
      * reason은 각 배열 항목에 입력된 값을 개별적으로 저장합니다.
      *
      * 기존 AI 또는 dismissed 관계가 존재하면 사용자의 명시적인 수동 연결을
@@ -420,8 +431,6 @@ BEGIN
         'active',
         jsonb_strip_nulls(
             jsonb_build_object(
-                'title',
-                "target_note"."title",
                 'reason',
                 NULLIF(btrim("item" ->> 'reason'), '')
             )
@@ -442,7 +451,7 @@ $$;
 COMMENT ON FUNCTION
     "public"."add_note_related_manual"(uuid, jsonb)
 IS
-    '동일 사용자의 여러 Note를 manual Related Notes로 연결하며 각 대상 Note의 title snapshot과 개별 선택적 reason을 metadata에 저장합니다.';
+    '동일 사용자의 여러 Note를 manual Related Notes로 연결하며 각 대상 Note의 개별 선택적 reason을 metadata에 저장합니다.';
 
 REVOKE ALL
 ON FUNCTION
@@ -464,7 +473,7 @@ TO "authenticated";
  * 수정 대상 관계는 반드시 현재 인증 사용자가 소유한 source Note와
  * target Note 사이의 manual 관계여야 합니다.
  *
- * 기존 metadata의 title snapshot 및 다른 확장 필드는 그대로 유지하고,
+ * 기존 metadata의 다른 확장 필드는 그대로 유지하고,
  * reason 값만 추가/수정/제거합니다.
  *
  * p_reason은 선택값이며 다음 경우에는 metadata에서 reason key를 제거합니다.
@@ -573,7 +582,7 @@ BEGIN
     /*
      * reason이 있으면 기존 metadata를 유지하면서 reason만 추가하거나 교체합니다.
      *
-     * title snapshot 및 향후 추가될 수 있는 다른 metadata 필드는
+     * 향후 추가될 수 있는 다른 metadata 필드는
      * 이 수정으로 변경되지 않습니다.
      */
     IF "v_reason" IS NOT NULL THEN

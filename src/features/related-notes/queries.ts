@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { logError } from "@/lib/logger";
 import { createServerComponentClient } from "@/lib/supabase/server";
+import { escapePostgrestLikePattern } from "@/lib/utils/escapePostgrestLikePattern";
 
 import { relatedNoteRowSchema } from "./schemas";
 import type { RelatedNoteRecommendation } from "./types";
@@ -26,7 +27,9 @@ export async function getRelatedNotes(
 
   const { data, error } = await supabase
     .from("note_related_notes")
-    .select("related_note_id, origin, metadata")
+    .select(
+      "related_note_id, origin, metadata, notes!note_related_notes_related_note_id_fkey(title)",
+    )
     .eq("note_id", noteId)
     .eq("status", "active")
     .order("created_at", { ascending: true });
@@ -57,13 +60,14 @@ export async function getRelatedNotes(
         noteId: row.related_note_id,
         origin: "ai",
         ...row.metadata,
+        title: row.notes.title,
       };
     }
 
     return {
       noteId: row.related_note_id,
       origin: "manual",
-      title: row.metadata.title,
+      title: row.notes.title,
       ...(row.metadata.reason !== undefined
         ? { reason: row.metadata.reason }
         : {}),
@@ -235,12 +239,7 @@ export async function getRelatedNoteCandidates(
    * 사용자의 검색어 자체로 취급되도록 escape합니다.
    */
   if (search.trim()) {
-    const term = search
-      .trim()
-      .replace(/\\/g, "\\\\")
-      .replace(/%/g, "\\%")
-      .replace(/_/g, "\\_")
-      .replace(/"/g, '\\"');
+    const term = escapePostgrestLikePattern(search.trim()).replace(/"/g, '\\"');
 
     query = query.ilike("title", `%${term}%`);
   }

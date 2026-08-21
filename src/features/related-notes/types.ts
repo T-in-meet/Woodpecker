@@ -7,7 +7,7 @@ export type RelatedNoteAiRecommendation = {
   /** 추천된 Note ID입니다. */
   noteId: string;
 
-  /** 추천 생성 시점의 Note 제목 snapshot입니다. */
+  /** 추천된 Note 제목입니다. */
   title: string;
 
   /** AI가 이 Note를 관련 노트로 추천한 이유입니다. */
@@ -21,7 +21,7 @@ export type ManualRelatedNoteRecommendation = {
   /** 관련 Note ID입니다. */
   noteId: string;
 
-  /** Related Note 제목 snapshot입니다. */
+  /** 조회 시점의 Related Note 제목입니다. */
   title: string;
 
   /** 사용자가 작성한 선택적 연결 이유입니다. */

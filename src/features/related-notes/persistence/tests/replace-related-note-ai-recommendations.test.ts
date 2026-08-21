@@ -52,7 +52,6 @@ describe("replaceRelatedNoteAiRecommendations", () => {
           {
             relatedNoteId: RELATED_NOTE_ID,
             metadata: {
-              title: "Related Note",
               reason: "관련된 내용을 다룹니다.",
             },
           },

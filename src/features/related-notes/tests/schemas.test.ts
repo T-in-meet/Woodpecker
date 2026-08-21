@@ -1,16 +1,17 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  addManualRelatedNotesSchema,
   aiRelatedNoteMetadataSchema,
   manualRelatedNoteMetadataSchema,
+  MAX_MANUAL_RELATED_NOTES_PER_REQUEST,
   relatedNoteMetadataSchema,
   relatedNoteRowSchema,
 } from "../schemas";
 
 describe("relatedNoteMetadataSchema", () => {
-  it("제목과 Json-compatible 확장 필드를 허용한다", () => {
+  it("Json-compatible 확장 필드를 허용한다", () => {
     const result = relatedNoteMetadataSchema.safeParse({
-      title: "관련 노트",
       reason: "비슷한 내용을 다룹니다.",
       rank: 1,
       nested: {
@@ -21,41 +22,35 @@ describe("relatedNoteMetadataSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  it("제목이 없거나 비어 있으면 거부한다", () => {
+  it("title이 없어도 허용한다", () => {
     expect(
       relatedNoteMetadataSchema.safeParse({
         reason: "제목 없음",
       }).success,
-    ).toBe(false);
+    ).toBe(true);
 
     expect(
       relatedNoteMetadataSchema.safeParse({
         title: "   ",
       }).success,
-    ).toBe(false);
+    ).toBe(true);
   });
 });
 
 describe("manualRelatedNoteMetadataSchema", () => {
   it("reason이 없어도 허용한다", () => {
-    expect(
-      manualRelatedNoteMetadataSchema.safeParse({
-        title: "수동 관련 노트",
-      }).success,
-    ).toBe(true);
+    expect(manualRelatedNoteMetadataSchema.safeParse({}).success).toBe(true);
   });
 
   it("reason이 있으면 문자열 길이 제한을 검증한다", () => {
     expect(
       manualRelatedNoteMetadataSchema.safeParse({
-        title: "수동 관련 노트",
         reason: "직접 연결한 이유입니다.",
       }).success,
     ).toBe(true);
 
     expect(
       manualRelatedNoteMetadataSchema.safeParse({
-        title: "수동 관련 노트",
         reason: "a".repeat(501),
       }).success,
     ).toBe(false);
@@ -63,25 +58,19 @@ describe("manualRelatedNoteMetadataSchema", () => {
 });
 
 describe("aiRelatedNoteMetadataSchema", () => {
-  it("title과 reason이 모두 있으면 허용한다", () => {
+  it("reason이 있으면 허용한다", () => {
     expect(
       aiRelatedNoteMetadataSchema.safeParse({
-        title: "AI 관련 노트",
         reason: "유사한 주제를 다루고 있습니다.",
       }).success,
     ).toBe(true);
   });
 
   it("reason이 없거나 비어 있으면 거부한다", () => {
-    expect(
-      aiRelatedNoteMetadataSchema.safeParse({
-        title: "AI 관련 노트",
-      }).success,
-    ).toBe(false);
+    expect(aiRelatedNoteMetadataSchema.safeParse({}).success).toBe(false);
 
     expect(
       aiRelatedNoteMetadataSchema.safeParse({
-        title: "AI 관련 노트",
         reason: "   ",
       }).success,
     ).toBe(false);
@@ -94,9 +83,10 @@ describe("relatedNoteRowSchema", () => {
       relatedNoteRowSchema.safeParse({
         related_note_id: "11111111-1111-4111-8111-111111111111",
         origin: "manual",
-        metadata: {
+        notes: {
           title: "수동 관련 노트",
         },
+        metadata: {},
       }).success,
     ).toBe(true);
   });
@@ -106,8 +96,10 @@ describe("relatedNoteRowSchema", () => {
       relatedNoteRowSchema.safeParse({
         related_note_id: "11111111-1111-4111-8111-111111111111",
         origin: "ai",
-        metadata: {
+        notes: {
           title: "AI 관련 노트",
+        },
+        metadata: {
           reason: "관련성이 높은 노트입니다.",
         },
       }).success,
@@ -117,9 +109,10 @@ describe("relatedNoteRowSchema", () => {
       relatedNoteRowSchema.safeParse({
         related_note_id: "11111111-1111-4111-8111-111111111111",
         origin: "ai",
-        metadata: {
+        notes: {
           title: "AI 관련 노트",
         },
+        metadata: {},
       }).success,
     ).toBe(false);
   });
@@ -129,10 +122,32 @@ describe("relatedNoteRowSchema", () => {
       relatedNoteRowSchema.safeParse({
         related_note_id: "11111111-1111-4111-8111-111111111111",
         origin: "invalid",
-        metadata: {
+        notes: {
           title: "관련 노트",
         },
+        metadata: {},
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("addManualRelatedNotesSchema", () => {
+  it("한 번에 추가할 Related Notes 개수를 제한한다", () => {
+    const relatedNotes = Array.from(
+      { length: MAX_MANUAL_RELATED_NOTES_PER_REQUEST + 1 },
+      (_, index) => ({
+        relatedNoteId: `11111111-1111-4111-8111-${String(index).padStart(
+          12,
+          "0",
+        )}`,
+      }),
+    );
+
+    const result = addManualRelatedNotesSchema.safeParse({
+      noteId: "22222222-2222-4222-8222-222222222222",
+      relatedNotes,
+    });
+
+    expect(result.success).toBe(false);
   });
 });

@@ -99,6 +99,7 @@ describe("addManualRelatedNotesAction", () => {
   it("RPC 호출에 실패하면 사용자용 오류를 반환한다", async () => {
     const rpc = vi.fn().mockResolvedValue({
       error: {
+        code: "XX000",
         message: "database failed",
       },
     });
@@ -119,6 +120,58 @@ describe("addManualRelatedNotesAction", () => {
 
     expect(result).toEqual({
       error: "관련 노트 추가에 실패했습니다. 잠시 후 다시 시도해주세요.",
+    });
+  });
+
+  it("RPC가 SQLSTATE로 자기 자신 연결을 보고하면 전용 메시지를 반환한다", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      error: {
+        code: "WP007",
+        message: "message text can change",
+      },
+    });
+
+    createClientMock.mockResolvedValue({
+      rpc,
+    } as never);
+
+    const result = await addManualRelatedNotesAction({
+      noteId,
+      relatedNotes: [
+        {
+          relatedNoteId: firstRelatedNoteId,
+        },
+      ],
+    });
+
+    expect(result).toEqual({
+      error: "현재 노트는 관련 노트로 추가할 수 없습니다.",
+    });
+  });
+
+  it("RPC가 SQLSTATE로 입력 오류를 보고하면 입력 오류 메시지를 반환한다", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      error: {
+        code: "WP009",
+        message: "message text can change",
+      },
+    });
+
+    createClientMock.mockResolvedValue({
+      rpc,
+    } as never);
+
+    const result = await addManualRelatedNotesAction({
+      noteId,
+      relatedNotes: [
+        {
+          relatedNoteId: firstRelatedNoteId,
+        },
+      ],
+    });
+
+    expect(result).toEqual({
+      error: "관련 노트 추가 정보가 올바르지 않습니다.",
     });
   });
 });

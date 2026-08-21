@@ -84,6 +84,7 @@ vi.mock("../run-persistence", () => ({
     STALE: "stale",
   },
   RELATED_NOTE_RECOMMENDATION_RUN_UPDATE_STEP: {
+    ANSWER_GENERATION: "answer_generation",
     QUERY_EXPANSION: "query_expansion",
     QUERY_EMBEDDING: "query_embedding",
     MATCHED_NOTES: "matched_notes",
@@ -676,6 +677,67 @@ describe("scheduleRelatedNoteRecommendation", () => {
     expect(mockCompleteRelatedNoteRecommendationRun).toHaveBeenCalledWith({
       runId: RUN_ID,
       status: RELATED_NOTE_RECOMMENDATION_RUN_STATUS.SUCCEEDED,
+    });
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("Answer Generation usage 저장 실패를 전용 step으로 보고한다", async () => {
+    const supabase = createNotesQueryMock({
+      data: {
+        id: NOTE_ID,
+        title: "Source note",
+        content: "Source note content",
+        updated_at: SOURCE_UPDATED_AT,
+      },
+      error: null,
+    });
+
+    const runUpdateError = new Error("answer generation usage update failed");
+
+    mockCreateAdminClient.mockReturnValue(supabase);
+    mockSaveRelatedNoteRunAnswerGenerationUsage.mockRejectedValue(
+      runUpdateError,
+    );
+
+    mockRunRelatedNoteRecommendation.mockImplementation(async (params) => {
+      await params.onAnswerGenerationUsage?.(answerGenerationUsage);
+
+      return {
+        answerGenerationUsage,
+        expandedQuery: "expanded query",
+        notes: [],
+        queryEmbeddingUsage,
+        queryExpansionUsage,
+        recommendations,
+      };
+    });
+
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+
+    scheduleRelatedNoteRecommendation({
+      noteId: NOTE_ID,
+      ownerUserId: OWNER_USER_ID,
+    });
+
+    await vi.waitFor(() => {
+      expect(mockReportRelatedNotesOperationalError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: {
+            noteId: NOTE_ID,
+            runId: RUN_ID,
+            runStatus: "running",
+            runUpdateStep: "answer_generation",
+          },
+          error: runUpdateError,
+          errorCode:
+            RELATED_NOTES_OPERATIONAL_ERROR_CODES.RECOMMENDATION_RUN_UPDATE_FAILED,
+          operation:
+            RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.UPDATE_RECOMMENDATION_RUN,
+        }),
+      );
     });
 
     consoleErrorSpy.mockRestore();

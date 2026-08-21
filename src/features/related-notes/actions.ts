@@ -11,6 +11,30 @@ import {
   updateManualRelatedNoteReasonSchema,
 } from "./schemas";
 
+/** 수동 Related Notes 추가 대상이 비어 있거나 배열이 아닌 경우의 SQLSTATE입니다. */
+const RELATED_NOTE_TARGET_REQUIRED_SQLSTATE = "WP004";
+
+/** 수동 Related Notes 추가 대상 형식이 올바르지 않은 경우의 SQLSTATE입니다. */
+const RELATED_NOTE_TARGET_INVALID_SQLSTATE = "WP005";
+
+/** 수동 Related Notes 추가 대상에 중복 ID가 포함된 경우의 SQLSTATE입니다. */
+const RELATED_NOTE_TARGET_DUPLICATED_SQLSTATE = "WP006";
+
+/** 현재 Note 자신을 Related Note로 추가하려는 경우의 SQLSTATE입니다. */
+const RELATED_NOTE_SELF_RELATION_NOT_ALLOWED_SQLSTATE = "WP007";
+
+/** 수동 Related Notes 연결 이유가 허용 길이를 초과한 경우의 SQLSTATE입니다. */
+const RELATED_NOTE_REASON_TOO_LONG_SQLSTATE = "WP008";
+
+/** 수동 Related Notes 추가 대상 개수가 허용 상한을 초과한 경우의 SQLSTATE입니다. */
+const RELATED_NOTE_TARGET_TOO_MANY_SQLSTATE = "WP009";
+
+/** source 또는 target Note를 찾을 수 없는 경우 RPC가 반환하는 SQLSTATE입니다. */
+const RELATED_NOTE_NOT_FOUND_SQLSTATE = "P0002";
+
+/** 인증되지 않은 사용자가 RPC를 호출한 경우의 SQLSTATE입니다. */
+const RELATED_NOTE_AUTHENTICATION_REQUIRED_SQLSTATE = "42501";
+
 export type AddManualRelatedNotesActionResult =
   | {
       success: true;
@@ -34,8 +58,7 @@ export type AddManualRelatedNotesActionResult =
  * - source/target Note 소유권 검증
  * - 자기 자신 연결 방지
  * - 기존 AI/dismissed 관계의 manual + active 전환
- * - 대상 Note title snapshot 조회
- * - metadata의 title/reason 저장
+ * - metadata의 reason 저장
  *
  * @param input 수동 Related Notes 추가 입력
  * @returns 전체 추가 성공 여부
@@ -67,7 +90,7 @@ export async function addManualRelatedNotesAction(
      * 자기 자신 연결은 정상 UI에서는 발생하지 않지만,
      * RPC를 직접 호출하거나 Client 상태가 잘못된 경우에도 DB에서 차단합니다.
      */
-    if (error.message.includes("RELATED_NOTE_SELF_RELATION_NOT_ALLOWED")) {
+    if (error.code === RELATED_NOTE_SELF_RELATION_NOT_ALLOWED_SQLSTATE) {
       return {
         error: "현재 노트는 관련 노트로 추가할 수 없습니다.",
       };
@@ -77,18 +100,27 @@ export async function addManualRelatedNotesAction(
      * source 또는 target Note가 존재하지 않거나 현재 사용자 소유가 아닌 경우
      * 동일한 메시지를 반환하여 다른 사용자의 Note 존재 여부를 노출하지 않습니다.
      */
-    if (
-      error.message.includes("RELATED_NOTE_SOURCE_NOT_FOUND") ||
-      error.message.includes("RELATED_NOTE_TARGET_NOT_FOUND")
-    ) {
+    if (error.code === RELATED_NOTE_NOT_FOUND_SQLSTATE) {
       return {
         error: "추가할 노트를 찾을 수 없습니다.",
       };
     }
 
-    if (error.message.includes("RELATED_NOTE_AUTHENTICATION_REQUIRED")) {
+    if (error.code === RELATED_NOTE_AUTHENTICATION_REQUIRED_SQLSTATE) {
       return {
         error: "로그인이 필요합니다.",
+      };
+    }
+
+    if (
+      error.code === RELATED_NOTE_TARGET_REQUIRED_SQLSTATE ||
+      error.code === RELATED_NOTE_TARGET_INVALID_SQLSTATE ||
+      error.code === RELATED_NOTE_TARGET_DUPLICATED_SQLSTATE ||
+      error.code === RELATED_NOTE_REASON_TOO_LONG_SQLSTATE ||
+      error.code === RELATED_NOTE_TARGET_TOO_MANY_SQLSTATE
+    ) {
+      return {
+        error: "관련 노트 추가 정보가 올바르지 않습니다.",
       };
     }
 

@@ -4,15 +4,21 @@ import { isJsonValue } from "@/lib/supabase/utils/is-json-value";
 import type { Json } from "@/types/db.helpers";
 
 /**
+ * 수동 Related Notes를 한 번에 추가할 수 있는 최대 개수입니다.
+ *
+ * Client 입력 검증과 DB RPC 방어가 같은 값을 기준으로 동작해야 합니다.
+ */
+export const MAX_MANUAL_RELATED_NOTES_PER_REQUEST = 10;
+
+/**
  * Related Note에 공통으로 저장되는 metadata를 검증합니다.
  *
- * 화면 표시에 필요한 제목 snapshot은 필수이며,
- * 그 외 Json-compatible 확장 필드를 허용합니다.
+ * 화면 표시용 제목은 Related Note ID로 notes.title을 조회하여 사용하므로
+ * metadata에는 reason, rank 등 관계에 종속된 Json-compatible 확장 필드만
+ * 저장합니다.
  */
 export const relatedNoteMetadataSchema = z
-  .object({
-    title: z.string().trim().min(1),
-  })
+  .object({})
   .catchall(z.custom<Json>(isJsonValue));
 
 /**
@@ -51,11 +57,17 @@ export const relatedNoteRowSchema = z.discriminatedUnion("origin", [
   z.object({
     related_note_id: z.string().uuid(),
     origin: z.literal("manual"),
+    notes: z.object({
+      title: z.string().trim().min(1),
+    }),
     metadata: manualRelatedNoteMetadataSchema,
   }),
   z.object({
     related_note_id: z.string().uuid(),
     origin: z.literal("ai"),
+    notes: z.object({
+      title: z.string().trim().min(1),
+    }),
     metadata: aiRelatedNoteMetadataSchema,
   }),
 ]);
@@ -93,7 +105,11 @@ export const addManualRelatedNotesSchema = z.object({
   /** 한 번에 추가할 Related Notes 목록입니다. */
   relatedNotes: z
     .array(manualRelatedNoteInputSchema)
-    .min(1, "추가할 관련 노트를 하나 이상 선택해주세요."),
+    .min(1, "추가할 관련 노트를 하나 이상 선택해주세요.")
+    .max(
+      MAX_MANUAL_RELATED_NOTES_PER_REQUEST,
+      `관련 노트는 한 번에 최대 ${MAX_MANUAL_RELATED_NOTES_PER_REQUEST}개까지 추가할 수 있습니다.`,
+    ),
 });
 
 export type AddManualRelatedNotesInput = z.infer<

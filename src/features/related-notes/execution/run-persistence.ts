@@ -33,6 +33,7 @@ export type RelatedNoteRecommendationRunClaimStatus =
 
 /** Related Notes 추천 Run 갱신 단계입니다. */
 export const RELATED_NOTE_RECOMMENDATION_RUN_UPDATE_STEP = {
+  ANSWER_GENERATION: "answer_generation",
   QUERY_EXPANSION: "query_expansion",
   QUERY_EMBEDDING: "query_embedding",
   MATCHED_NOTES: "matched_notes",
@@ -486,17 +487,25 @@ async function updateRunningRun(
     (data.query_embedding_cost_usd ?? 0) +
     (data.answer_generation_cost_usd ?? 0);
 
-  const { error: totalCostError } = await supabase
+  const { data: totalCostData, error: totalCostError } = await supabase
     .from("related_note_recommendation_runs")
     .update({
       total_cost_usd: totalCostUsd,
     })
     .eq("id", runId)
-    .eq("status", RELATED_NOTE_RECOMMENDATION_RUN_STATUS.RUNNING);
+    .eq("status", RELATED_NOTE_RECOMMENDATION_RUN_STATUS.RUNNING)
+    .select("id")
+    .maybeSingle();
 
   if (totalCostError) {
     throw new Error(
       `Failed to update related note recommendation run total cost: ${totalCostError.message}`,
+    );
+  }
+
+  if (!totalCostData) {
+    throw new Error(
+      `Running related note recommendation run not found while updating total cost: ${runId}`,
     );
   }
 }
@@ -527,6 +536,5 @@ function createRecommendationsJson(
   return recommendations.map((recommendation) => ({
     noteId: recommendation.noteId,
     reason: recommendation.reason,
-    title: recommendation.title,
   }));
 }

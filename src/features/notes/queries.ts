@@ -5,6 +5,7 @@ import { NOTES_LIST_PAGE_SIZE } from "@/lib/constants/notes";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { logError } from "@/lib/logger";
 import { createServerComponentClient } from "@/lib/supabase/server";
+import { escapePostgrestLikePattern } from "@/lib/utils/escapePostgrestLikePattern";
 
 const noteDetailSchema = z.object({
   id: z.string().uuid(),
@@ -56,12 +57,7 @@ export async function getNotes(
     .order("updated_at", { ascending: false });
 
   if (search.trim()) {
-    const term = search
-      .trim()
-      .replace(/\\/g, "\\\\")
-      .replace(/%/g, "\\%")
-      .replace(/_/g, "\\_")
-      .replace(/"/g, '\\"');
+    const term = escapePostgrestLikePattern(search.trim()).replace(/"/g, '\\"');
     query = query.or(`title.ilike."%${term}%",content.ilike."%${term}%"`);
   }
 
