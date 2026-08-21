@@ -70,8 +70,11 @@ export async function prepareRelatedNoteContext({
   onExpandedQuery,
   onQueryEmbeddingUsage,
 }: PrepareRelatedNoteContextParams) {
-  // 대상 Note의 제목과 내용을 기반으로 Related Notes 검색에 사용할 질의를 생성합니다.
-  const queryExpansionResult = await expandRelatedNoteQuery({
+  /*
+   * Query Expansion과 기존 관계 조회는 서로 의존하지 않으므로 동시에 시작합니다.
+   * 확정된 expanded query 저장은 검색 query가 검증된 뒤에만 수행합니다.
+   */
+  const queryExpansionPromise = expandRelatedNoteQuery({
     configuration: queryExpansionConfiguration,
     content,
     ...(onQueryExpansionUsage !== undefined
@@ -80,6 +83,17 @@ export async function prepareRelatedNoteContext({
     title,
   });
 
+  const excludedRelatedNoteIdsPromise = getRelatedNoteRecommendationExcludedIds(
+    {
+      noteId: targetNoteId,
+      ownerUserId,
+    },
+  );
+
+  const [queryExpansionResult, excludedRelatedNoteIds] = await Promise.all([
+    queryExpansionPromise,
+    excludedRelatedNoteIdsPromise,
+  ]);
   const expandedQuery = queryExpansionResult.expandedQuery;
 
   /*
@@ -89,12 +103,6 @@ export async function prepareRelatedNoteContext({
    * 전달되므로 여기서는 usage를 다시 저장하지 않습니다.
    */
   await onExpandedQuery?.(expandedQuery);
-
-  // 기존 관계를 조회하여 AI 추천 검색에서 제외해야 할 Note ID를 가져옵니다.
-  const excludedRelatedNoteIds = await getRelatedNoteRecommendationExcludedIds({
-    noteId: targetNoteId,
-    ownerUserId,
-  });
 
   // 확장된 질의를 임베딩하여 관련 Note chunk를 검색합니다.
   // 추천 대상 Note 자신과 기존 관계에서 제외된 Note는 검색 후보에서 제외합니다.

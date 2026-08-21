@@ -1250,7 +1250,7 @@ export type Database = {
           source_updated_at?: string | null;
           started_at?: string;
           status?: string;
-          total_cost_usd?: number | null;
+          total_cost_usd?: never;
           updated_at?: string;
           user_id: string;
         };
@@ -1275,7 +1275,7 @@ export type Database = {
           source_updated_at?: string | null;
           started_at?: string;
           status?: string;
-          total_cost_usd?: number | null;
+          total_cost_usd?: never;
           updated_at?: string;
           user_id?: string;
         };

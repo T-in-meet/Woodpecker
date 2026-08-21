@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(16);
+SELECT plan(17);
 
 
 -- ============================================================================
@@ -170,8 +170,7 @@ SELECT lives_ok(
                 matched_note_ids,
                 recommendations,
                 query_expansion_usage,
-                query_expansion_cost_usd,
-                total_cost_usd
+                query_expansion_cost_usd
             )
             VALUES (
                 '%s'::uuid,
@@ -192,7 +191,6 @@ SELECT lives_ok(
                     )
                 ),
                 '{"inputTokens":10,"outputTokens":5,"totalTokens":15}'::jsonb,
-                0.00001,
                 0.00001
             );
         $sql$,
@@ -203,6 +201,16 @@ SELECT lives_ok(
         current_setting('test.related_note_runs_note_b_id')
     ),
     'service_role should insert a related note recommendation run'
+);
+
+SELECT is(
+    (
+        SELECT total_cost_usd
+        FROM public.related_note_recommendation_runs
+        WHERE id = current_setting('test.related_note_runs_run_a_id')::uuid
+    ),
+    0.00001::numeric,
+    'total_cost_usd should be generated from step costs'
 );
 
 SELECT throws_ok(
@@ -470,7 +478,7 @@ SELECT throws_ok(
             10
         );
     $sql$,
-    'P0001',
+    'WP010',
     'recommendation source not found',
     'claim RPC should reject another user source note'
 );

@@ -6,6 +6,7 @@ import type { Json } from "@/types/db.helpers";
 import {
   RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
   RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_SQLSTATE,
+  RELATED_NOTES_RECOMMENDATION_SOURCE_STALE_SQLSTATE,
 } from "../constants/ai";
 import type { RelatedNoteAiRecommendation } from "../types";
 
@@ -205,6 +206,10 @@ export async function createRelatedNoteRecommendationRun(
       throw new RelatedNoteRecommendationDailyLimitError();
     }
 
+    if (error.code === RELATED_NOTES_RECOMMENDATION_SOURCE_STALE_SQLSTATE) {
+      throw new RelatedNoteRecommendationSourceStaleError();
+    }
+
     throw new Error(
       `Failed to claim related note recommendation run: ${error.message}`,
     );
@@ -244,6 +249,16 @@ export class RelatedNoteRecommendationDailyLimitError extends Error {
   constructor() {
     super("Related Notes daily recommendation limit exceeded.");
     this.name = "RelatedNoteRecommendationDailyLimitError";
+  }
+}
+
+/**
+ * Related Notes 추천 대상 Note snapshot이 claim 시점에 더 이상 유효하지 않은 경우입니다.
+ */
+export class RelatedNoteRecommendationSourceStaleError extends Error {
+  constructor() {
+    super("Related Notes recommendation source is stale.");
+    this.name = "RelatedNoteRecommendationSourceStaleError";
   }
 }
 
@@ -440,12 +455,10 @@ export async function completeRelatedNoteRecommendationRun(
 }
 
 /**
- * running 상태인 Related Notes 추천 Run을 갱신하고 total cost를 재계산합니다.
+ * running 상태인 Related Notes 추천 Run을 갱신합니다.
  *
- * usage/cost가 아닌 snapshot 필드만 갱신하는 경우에도 공통 갱신 경로를 사용하므로
- * 기존 단계별 cost를 다시 합산하여 동일한 total_cost_usd를 저장할 수 있습니다.
- * 이는 비용 중복 누적이나 집계 오류가 아니며, 저장 로직을 단순하게 유지하기 위해
- * 허용하는 추가 UPDATE입니다.
+ * `total_cost_usd`는 DB generated column이므로 애플리케이션에서 별도로
+ * 재계산하거나 저장하지 않습니다.
  *
  * @param runId 갱신할 Run ID
  * @param values 저장할 snapshot 값
@@ -465,9 +478,7 @@ async function updateRunningRun(
     .update(values)
     .eq("id", runId)
     .eq("status", RELATED_NOTE_RECOMMENDATION_RUN_STATUS.RUNNING)
-    .select(
-      "id, query_expansion_cost_usd, query_embedding_cost_usd, answer_generation_cost_usd",
-    )
+    .select("id")
     .maybeSingle();
 
   if (error) {
@@ -479,33 +490,6 @@ async function updateRunningRun(
   if (!data) {
     throw new Error(
       `Running related note recommendation run not found: ${runId}`,
-    );
-  }
-
-  const totalCostUsd =
-    (data.query_expansion_cost_usd ?? 0) +
-    (data.query_embedding_cost_usd ?? 0) +
-    (data.answer_generation_cost_usd ?? 0);
-
-  const { data: totalCostData, error: totalCostError } = await supabase
-    .from("related_note_recommendation_runs")
-    .update({
-      total_cost_usd: totalCostUsd,
-    })
-    .eq("id", runId)
-    .eq("status", RELATED_NOTE_RECOMMENDATION_RUN_STATUS.RUNNING)
-    .select("id")
-    .maybeSingle();
-
-  if (totalCostError) {
-    throw new Error(
-      `Failed to update related note recommendation run total cost: ${totalCostError.message}`,
-    );
-  }
-
-  if (!totalCostData) {
-    throw new Error(
-      `Running related note recommendation run not found while updating total cost: ${runId}`,
     );
   }
 }

@@ -31,7 +31,11 @@ CREATE TABLE "public"."related_note_recommendation_runs" (
   "query_expansion_cost_usd" numeric,
   "query_embedding_cost_usd" numeric,
   "answer_generation_cost_usd" numeric,
-  "total_cost_usd" numeric,
+  "total_cost_usd" numeric GENERATED ALWAYS AS (
+    COALESCE("query_expansion_cost_usd", 0)
+    + COALESCE("query_embedding_cost_usd", 0)
+    + COALESCE("answer_generation_cost_usd", 0)
+  ) STORED,
   "failure_message" "text",
   "started_at" timestamp with time zone DEFAULT "now"() NOT NULL,
   "completed_at" timestamp with time zone,
@@ -220,7 +224,8 @@ BEGIN
     AND "notes"."updated_at" IS NOT DISTINCT FROM "p_source_updated_at";
 
   IF NOT FOUND THEN
-    RAISE EXCEPTION 'recommendation source not found';
+    RAISE EXCEPTION 'recommendation source not found'
+      USING ERRCODE = 'WP010';
   END IF;
 
   SELECT EXISTS (
@@ -286,7 +291,8 @@ BEGIN
     FROM "public"."related_note_recommendation_runs" AS "runs"
     WHERE "runs"."user_id" = "p_user_id"
       AND "runs"."started_at" >= "v_daily_start_at"
-      AND "runs"."started_at" < "v_daily_end_at";
+      AND "runs"."started_at" < "v_daily_end_at"
+      AND "runs"."status" IN ('running', 'succeeded');
 
     IF "v_daily_count" >= "p_daily_recommendation_limit" THEN
       RAISE EXCEPTION 'RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_EXCEEDED'

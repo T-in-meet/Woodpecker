@@ -7,6 +7,7 @@ import {
   createRelatedNoteRecommendationRun,
   RELATED_NOTE_RECOMMENDATION_RUN_CLAIM_STATUS,
   RELATED_NOTE_RECOMMENDATION_RUN_STATUS,
+  RelatedNoteRecommendationSourceStaleError,
   saveRelatedNoteRunExpandedQuery,
   saveRelatedNoteRunQueryExpansion,
   saveRelatedNoteRunRecommendations,
@@ -21,6 +22,37 @@ const createAdminClientMock = vi.mocked(createAdminClient);
 const RUN_ID = "11111111-1111-4111-8111-111111111111";
 const NOTE_ID = "22222222-2222-4222-8222-222222222222";
 const USER_ID = "33333333-3333-4333-8333-333333333333";
+
+/**
+ * running Run 단일 UPDATE query chain mock을 생성합니다.
+ *
+ * @param result UPDATE 이후 select 결과
+ * @returns update/select/from 호출 검증에 필요한 mock 묶음
+ */
+function createRunningRunUpdateMock(result: { data: unknown; error: unknown }) {
+  const maybeSingle = vi.fn().mockResolvedValue(result);
+  const select = vi.fn().mockReturnValue({
+    maybeSingle,
+  });
+  const eqStatus = vi.fn().mockReturnValue({
+    select,
+  });
+  const eqId = vi.fn().mockReturnValue({
+    eq: eqStatus,
+  });
+  const update = vi.fn().mockReturnValue({
+    eq: eqId,
+  });
+  const from = vi.fn().mockReturnValue({
+    update,
+  });
+
+  return {
+    from,
+    select,
+    update,
+  };
+}
 
 describe("related note recommendation run persistence", () => {
   beforeEach(() => {
@@ -66,57 +98,41 @@ describe("related note recommendation run persistence", () => {
     });
   });
 
-  it("Query Expansion usage와 cost를 저장하고 total cost를 갱신한다", async () => {
-    const firstMaybeSingle = vi.fn().mockResolvedValue({
-      data: {
-        id: RUN_ID,
-        answer_generation_cost_usd: null,
-        query_embedding_cost_usd: null,
-        query_expansion_cost_usd: 0.00000075,
+  it("stale source SQLSTATE는 전용 오류로 변환한다", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: null,
+      error: {
+        code: "WP010",
+        message: "recommendation source not found",
       },
-      error: null,
-    });
-    const firstSelect = vi.fn().mockReturnValue({
-      maybeSingle: firstMaybeSingle,
-    });
-    const firstEqStatus = vi.fn().mockReturnValue({
-      select: firstSelect,
-    });
-    const firstEqId = vi.fn().mockReturnValue({
-      eq: firstEqStatus,
-    });
-    const firstUpdate = vi.fn().mockReturnValue({
-      eq: firstEqId,
-    });
-
-    const secondMaybeSingle = vi.fn().mockResolvedValue({
-      data: {
-        id: RUN_ID,
-      },
-      error: null,
-    });
-    const secondSelect = vi.fn().mockReturnValue({
-      maybeSingle: secondMaybeSingle,
-    });
-    const secondEqStatus = vi.fn().mockReturnValue({
-      select: secondSelect,
-    });
-    const secondEqId = vi.fn().mockReturnValue({
-      eq: secondEqStatus,
-    });
-    const secondUpdate = vi.fn().mockReturnValue({
-      eq: secondEqId,
     });
 
     createAdminClientMock.mockReturnValue({
-      from: vi
-        .fn()
-        .mockReturnValueOnce({
-          update: firstUpdate,
-        })
-        .mockReturnValueOnce({
-          update: secondUpdate,
-        }),
+      rpc,
+    } as never);
+
+    await expect(
+      createRelatedNoteRecommendationRun({
+        answerGenerationModelConfigId: "answer-model-config-id",
+        embeddingModelConfigId: "embedding-model-config-id",
+        noteId: NOTE_ID,
+        queryExpansionModelConfigId: "query-expansion-model-config-id",
+        sourceUpdatedAt: "2026-08-20T01:00:00.000Z",
+        userId: USER_ID,
+      }),
+    ).rejects.toBeInstanceOf(RelatedNoteRecommendationSourceStaleError);
+  });
+
+  it("Query Expansion usage와 cost를 저장한다", async () => {
+    const { from, select, update } = createRunningRunUpdateMock({
+      data: {
+        id: RUN_ID,
+      },
+      error: null,
+    });
+
+    createAdminClientMock.mockReturnValue({
+      from,
     } as never);
 
     await saveRelatedNoteRunQueryExpansion({
@@ -129,7 +145,7 @@ describe("related note recommendation run persistence", () => {
       },
     });
 
-    expect(firstUpdate).toHaveBeenCalledWith({
+    expect(update).toHaveBeenCalledWith({
       query_expansion_cost_usd: 7.5e-7,
       query_expansion_usage: {
         inputTokens: 1,
@@ -137,63 +153,20 @@ describe("related note recommendation run persistence", () => {
         totalTokens: 2,
       },
     });
-
-    expect(secondUpdate).toHaveBeenCalledWith({
-      total_cost_usd: 0.00000075,
-    });
+    expect(select).toHaveBeenCalledWith("id");
+    expect(from).toHaveBeenCalledOnce();
   });
 
   it("검증된 expanded query를 별도로 저장한다", async () => {
-    const firstMaybeSingle = vi.fn().mockResolvedValue({
-      data: {
-        id: RUN_ID,
-        answer_generation_cost_usd: null,
-        query_embedding_cost_usd: null,
-        query_expansion_cost_usd: 0.00000075,
-      },
-      error: null,
-    });
-    const firstSelect = vi.fn().mockReturnValue({
-      maybeSingle: firstMaybeSingle,
-    });
-    const firstEqStatus = vi.fn().mockReturnValue({
-      select: firstSelect,
-    });
-    const firstEqId = vi.fn().mockReturnValue({
-      eq: firstEqStatus,
-    });
-    const firstUpdate = vi.fn().mockReturnValue({
-      eq: firstEqId,
-    });
-
-    const secondMaybeSingle = vi.fn().mockResolvedValue({
+    const { from, update } = createRunningRunUpdateMock({
       data: {
         id: RUN_ID,
       },
       error: null,
-    });
-    const secondSelect = vi.fn().mockReturnValue({
-      maybeSingle: secondMaybeSingle,
-    });
-    const secondEqStatus = vi.fn().mockReturnValue({
-      select: secondSelect,
-    });
-    const secondEqId = vi.fn().mockReturnValue({
-      eq: secondEqStatus,
-    });
-    const secondUpdate = vi.fn().mockReturnValue({
-      eq: secondEqId,
     });
 
     createAdminClientMock.mockReturnValue({
-      from: vi
-        .fn()
-        .mockReturnValueOnce({
-          update: firstUpdate,
-        })
-        .mockReturnValueOnce({
-          update: secondUpdate,
-        }),
+      from,
     } as never);
 
     await saveRelatedNoteRunExpandedQuery({
@@ -201,65 +174,22 @@ describe("related note recommendation run persistence", () => {
       runId: RUN_ID,
     });
 
-    expect(firstUpdate).toHaveBeenCalledWith({
+    expect(update).toHaveBeenCalledWith({
       expanded_query: "expanded query",
     });
-
-    expect(secondUpdate).toHaveBeenCalledWith({
-      total_cost_usd: 0.00000075,
-    });
+    expect(from).toHaveBeenCalledOnce();
   });
 
   it("추천 결과와 reason을 recommendations JSON snapshot으로 저장한다", async () => {
-    const maybeSingle = vi.fn().mockResolvedValue({
-      data: {
-        id: RUN_ID,
-        answer_generation_cost_usd: null,
-        query_embedding_cost_usd: null,
-        query_expansion_cost_usd: null,
-      },
-      error: null,
-    });
-    const select = vi.fn().mockReturnValue({
-      maybeSingle,
-    });
-    const eqStatus = vi.fn().mockReturnValue({
-      select,
-    });
-    const eqId = vi.fn().mockReturnValue({
-      eq: eqStatus,
-    });
-    const update = vi.fn().mockReturnValue({
-      eq: eqId,
-    });
-    const totalMaybeSingle = vi.fn().mockResolvedValue({
+    const { from, update } = createRunningRunUpdateMock({
       data: {
         id: RUN_ID,
       },
       error: null,
-    });
-    const totalSelect = vi.fn().mockReturnValue({
-      maybeSingle: totalMaybeSingle,
-    });
-    const totalEqStatus = vi.fn().mockReturnValue({
-      select: totalSelect,
-    });
-    const totalEqId = vi.fn().mockReturnValue({
-      eq: totalEqStatus,
-    });
-    const totalUpdate = vi.fn().mockReturnValue({
-      eq: totalEqId,
     });
 
     createAdminClientMock.mockReturnValue({
-      from: vi
-        .fn()
-        .mockReturnValueOnce({
-          update,
-        })
-        .mockReturnValueOnce({
-          update: totalUpdate,
-        }),
+      from,
     } as never);
 
     await saveRelatedNoteRunRecommendations({
@@ -283,55 +213,14 @@ describe("related note recommendation run persistence", () => {
     });
   });
 
-  it("total cost 갱신 대상 running Run이 없으면 실패한다", async () => {
-    const firstMaybeSingle = vi.fn().mockResolvedValue({
-      data: {
-        id: RUN_ID,
-        answer_generation_cost_usd: null,
-        query_embedding_cost_usd: null,
-        query_expansion_cost_usd: 0.00000075,
-      },
-      error: null,
-    });
-    const firstSelect = vi.fn().mockReturnValue({
-      maybeSingle: firstMaybeSingle,
-    });
-    const firstEqStatus = vi.fn().mockReturnValue({
-      select: firstSelect,
-    });
-    const firstEqId = vi.fn().mockReturnValue({
-      eq: firstEqStatus,
-    });
-    const firstUpdate = vi.fn().mockReturnValue({
-      eq: firstEqId,
-    });
-
-    const secondMaybeSingle = vi.fn().mockResolvedValue({
+  it("갱신 대상 running Run이 없으면 실패한다", async () => {
+    const { from } = createRunningRunUpdateMock({
       data: null,
       error: null,
     });
-    const secondSelect = vi.fn().mockReturnValue({
-      maybeSingle: secondMaybeSingle,
-    });
-    const secondEqStatus = vi.fn().mockReturnValue({
-      select: secondSelect,
-    });
-    const secondEqId = vi.fn().mockReturnValue({
-      eq: secondEqStatus,
-    });
-    const secondUpdate = vi.fn().mockReturnValue({
-      eq: secondEqId,
-    });
 
     createAdminClientMock.mockReturnValue({
-      from: vi
-        .fn()
-        .mockReturnValueOnce({
-          update: firstUpdate,
-        })
-        .mockReturnValueOnce({
-          update: secondUpdate,
-        }),
+      from,
     } as never);
 
     await expect(
@@ -340,7 +229,7 @@ describe("related note recommendation run persistence", () => {
         runId: RUN_ID,
       }),
     ).rejects.toThrow(
-      `Running related note recommendation run not found while updating total cost: ${RUN_ID}`,
+      `Running related note recommendation run not found: ${RUN_ID}`,
     );
   });
 

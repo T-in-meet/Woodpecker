@@ -188,23 +188,19 @@ export async function updateManualRelatedNoteReasonAction(
   });
 
   if (error) {
-    if (error.message.includes("RELATED_NOTE_AUTHENTICATION_REQUIRED")) {
+    if (error.code === RELATED_NOTE_AUTHENTICATION_REQUIRED_SQLSTATE) {
       return {
         error: "로그인이 필요합니다.",
       };
     }
 
-    if (
-      error.message.includes("RELATED_NOTE_SOURCE_NOT_FOUND") ||
-      error.message.includes("RELATED_NOTE_TARGET_NOT_FOUND") ||
-      error.message.includes("RELATED_NOTE_MANUAL_RELATION_NOT_FOUND")
-    ) {
+    if (error.code === RELATED_NOTE_NOT_FOUND_SQLSTATE) {
       return {
         error: "수정할 관련 노트를 찾을 수 없습니다.",
       };
     }
 
-    if (error.message.includes("RELATED_NOTE_REASON_TOO_LONG")) {
+    if (error.code === RELATED_NOTE_REASON_TOO_LONG_SQLSTATE) {
       return {
         error: "연결 이유는 500자 이하로 입력해주세요.",
       };
@@ -263,17 +259,13 @@ export async function deleteRelatedNoteAction(
   });
 
   if (error) {
-    if (error.message.includes("RELATED_NOTE_AUTHENTICATION_REQUIRED")) {
+    if (error.code === RELATED_NOTE_AUTHENTICATION_REQUIRED_SQLSTATE) {
       return {
         error: "로그인이 필요합니다.",
       };
     }
 
-    if (
-      error.message.includes("RELATED_NOTE_SOURCE_NOT_FOUND") ||
-      error.message.includes("RELATED_NOTE_TARGET_NOT_FOUND") ||
-      error.message.includes("RELATED_NOTE_RELATION_NOT_FOUND")
-    ) {
+    if (error.code === RELATED_NOTE_NOT_FOUND_SQLSTATE) {
       return {
         error: "삭제할 관련 노트를 찾을 수 없습니다.",
       };

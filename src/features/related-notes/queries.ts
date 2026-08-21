@@ -9,6 +9,15 @@ import { escapePostgrestLikePattern } from "@/lib/utils/escapePostgrestLikePatte
 import { relatedNoteRowSchema } from "./schemas";
 import type { RelatedNoteRecommendation } from "./types";
 
+/** Related Notes 섹션 조회 결과입니다. */
+export type RelatedNotesQueryResult = {
+  /** 현재 표시할 Related Notes 목록입니다. */
+  relatedNotes: RelatedNoteRecommendation[];
+
+  /** 현재 Note에 대해 AI 추천 Run이 진행 중인지 여부입니다. */
+  hasRunningRecommendationRun: boolean;
+};
+
 /**
  * 지정한 Note에 현재 연결되어 있는 Related Notes를 조회합니다.
  *
@@ -18,14 +27,18 @@ import type { RelatedNoteRecommendation } from "./types";
  * dismissed AI 추천은 화면에 표시하지 않습니다.
  *
  * @param noteId Related Notes를 조회할 기준 Note ID
- * @returns 현재 표시할 Related Notes 목록
+ * @returns 현재 표시할 Related Notes 목록과 AI 추천 진행 여부
  */
 export async function getRelatedNotes(
   noteId: string,
-): Promise<RelatedNoteRecommendation[]> {
+): Promise<RelatedNotesQueryResult> {
   const supabase = await createServerComponentClient();
 
-  const { data, error } = await supabase
+  /*
+   * 화면 표시 목록과 AI 추천 Run 진행 여부는 서로 독립적인 조회입니다.
+   * 같은 인증된 Supabase client를 사용하되 병렬로 실행해 페이지 진입 지연을 줄입니다.
+   */
+  const relatedNotesQuery = supabase
     .from("note_related_notes")
     .select(
       "related_note_id, origin, metadata, notes!note_related_notes_related_note_id_fkey(title)",
@@ -34,13 +47,32 @@ export async function getRelatedNotes(
     .eq("status", "active")
     .order("created_at", { ascending: true });
 
+  const runningRecommendationRunQuery = supabase
+    .from("related_note_recommendation_runs")
+    .select("id")
+    .eq("note_id", noteId)
+    .eq("status", "running")
+    .limit(1);
+
+  const [relatedNotesResult, runningRecommendationRunResult] =
+    await Promise.all([relatedNotesQuery, runningRecommendationRunQuery]);
+
+  const hasRunningRecommendationRun = resolveHasRunningRecommendationRun(
+    runningRecommendationRunResult,
+  );
+
+  const { data, error } = relatedNotesResult;
+
   if (error) {
     logError({
       message: "[getRelatedNotes] 관련 노트 조회 실패",
       error,
     });
 
-    return [];
+    return {
+      hasRunningRecommendationRun,
+      relatedNotes: [],
+    };
   }
 
   const parsed = z.array(relatedNoteRowSchema).safeParse(data);
@@ -51,28 +83,56 @@ export async function getRelatedNotes(
       error: parsed.error,
     });
 
-    return [];
+    return {
+      hasRunningRecommendationRun,
+      relatedNotes: [],
+    };
   }
 
-  return parsed.data.map((row): RelatedNoteRecommendation => {
-    if (row.origin === "ai") {
+  return {
+    hasRunningRecommendationRun,
+    relatedNotes: parsed.data.map((row): RelatedNoteRecommendation => {
+      if (row.origin === "ai") {
+        return {
+          noteId: row.related_note_id,
+          origin: "ai",
+          ...row.metadata,
+          title: row.notes.title,
+        };
+      }
+
       return {
         noteId: row.related_note_id,
-        origin: "ai",
-        ...row.metadata,
+        origin: "manual",
         title: row.notes.title,
+        ...(row.metadata.reason !== undefined
+          ? { reason: row.metadata.reason }
+          : {}),
       };
-    }
+    }),
+  };
+}
 
-    return {
-      noteId: row.related_note_id,
-      origin: "manual",
-      title: row.notes.title,
-      ...(row.metadata.reason !== undefined
-        ? { reason: row.metadata.reason }
-        : {}),
-    };
-  });
+/**
+ * Related Notes AI 추천 Run 조회 결과를 polling/UI 상태로 변환합니다.
+ *
+ * @param result running recommendation run 조회 결과
+ * @returns running Run 존재 여부
+ */
+function resolveHasRunningRecommendationRun(result: {
+  data?: unknown;
+  error?: unknown;
+}): boolean {
+  if (result.error) {
+    logError({
+      message: "[getRelatedNotes] AI 추천 진행 상태 조회 실패",
+      error: result.error,
+    });
+
+    return false;
+  }
+
+  return Array.isArray(result.data) && result.data.length > 0;
 }
 
 /**

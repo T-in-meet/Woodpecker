@@ -270,6 +270,52 @@ describe("updateManualRelatedNoteReasonAction", () => {
       error: "관련 노트 수정에 실패했습니다. 잠시 후 다시 시도해주세요.",
     });
   });
+
+  it("SQLSTATE로 reason 길이 초과 오류를 매핑한다", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      error: {
+        code: "WP008",
+        message: "changed database message",
+      },
+    });
+
+    createClientMock.mockResolvedValue({
+      rpc,
+    } as never);
+
+    const result = await updateManualRelatedNoteReasonAction({
+      noteId,
+      relatedNoteId,
+      reason: "수정된 연결 이유",
+    });
+
+    expect(result).toEqual({
+      error: "연결 이유는 500자 이하로 입력해주세요.",
+    });
+  });
+
+  it("SQLSTATE로 수정 대상 없음 오류를 매핑한다", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      error: {
+        code: "P0002",
+        message: "changed database message",
+      },
+    });
+
+    createClientMock.mockResolvedValue({
+      rpc,
+    } as never);
+
+    const result = await updateManualRelatedNoteReasonAction({
+      noteId,
+      relatedNoteId,
+      reason: "수정된 연결 이유",
+    });
+
+    expect(result).toEqual({
+      error: "수정할 관련 노트를 찾을 수 없습니다.",
+    });
+  });
 });
 
 describe("deleteRelatedNoteAction", () => {
@@ -335,6 +381,28 @@ describe("deleteRelatedNoteAction", () => {
 
     expect(result).toEqual({
       error: "관련 노트 삭제에 실패했습니다. 잠시 후 다시 시도해주세요.",
+    });
+  });
+
+  it("SQLSTATE로 삭제 대상 없음 오류를 매핑한다", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      error: {
+        code: "P0002",
+        message: "changed database message",
+      },
+    });
+
+    createClientMock.mockResolvedValue({
+      rpc,
+    } as never);
+
+    const result = await deleteRelatedNoteAction({
+      noteId,
+      relatedNoteId,
+    });
+
+    expect(result).toEqual({
+      error: "삭제할 관련 노트를 찾을 수 없습니다.",
     });
   });
 });

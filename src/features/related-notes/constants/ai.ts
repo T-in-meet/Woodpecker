@@ -55,3 +55,8 @@ export const RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_ERROR_CODE =
  * Related Notes 일일 AI 추천 횟수 초과를 식별하는 PostgreSQL SQLSTATE입니다.
  */
 export const RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_SQLSTATE = "WP003";
+
+/**
+ * Related Notes 추천 대상 Note snapshot이 더 이상 유효하지 않은 경우의 SQLSTATE입니다.
+ */
+export const RELATED_NOTES_RECOMMENDATION_SOURCE_STALE_SQLSTATE = "WP010";

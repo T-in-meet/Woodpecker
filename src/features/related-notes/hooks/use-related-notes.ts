@@ -35,8 +35,6 @@ export function useRelatedNotes(noteId: string) {
     };
   }, [noteId]);
 
-  const isPolling = Boolean(noteId) && isPollingEnabled;
-
   return useQuery({
     queryKey: relatedNotesQueryKeys.byNoteId(noteId),
     queryFn: () => getRelatedNotes(noteId),
@@ -48,7 +46,12 @@ export function useRelatedNotes(noteId: string) {
      * AI 추천은 비동기로 저장되므로 완료 시점을 클라이언트가 알 수 없습니다.
      * 화면 진입 후 최대 60초 동안만 5초 간격으로 다시 조회합니다.
      */
-    refetchInterval: isPolling ? RELATED_NOTES_AI_POLLING_INTERVAL_MS : false,
+    refetchInterval: (query) =>
+      Boolean(noteId) &&
+      isPollingEnabled &&
+      query.state.data?.hasRunningRecommendationRun === true
+        ? RELATED_NOTES_AI_POLLING_INTERVAL_MS
+        : false,
     refetchIntervalInBackground: false,
   });
 }

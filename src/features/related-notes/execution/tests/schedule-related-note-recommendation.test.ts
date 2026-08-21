@@ -26,6 +26,7 @@ import {
   RELATED_NOTE_RECOMMENDATION_RUN_CLAIM_STATUS,
   RELATED_NOTE_RECOMMENDATION_RUN_STATUS,
   RelatedNoteRecommendationDailyLimitError,
+  RelatedNoteRecommendationSourceStaleError,
   saveRelatedNoteRunAnswerGenerationUsage,
   saveRelatedNoteRunExpandedQuery,
   saveRelatedNoteRunMatchedNotes,
@@ -71,6 +72,12 @@ vi.mock("../run-persistence", () => ({
     constructor() {
       super("Related Notes daily recommendation limit exceeded.");
       this.name = "RelatedNoteRecommendationDailyLimitError";
+    }
+  },
+  RelatedNoteRecommendationSourceStaleError: class RelatedNoteRecommendationSourceStaleError extends Error {
+    constructor() {
+      super("Related Notes recommendation source is stale.");
+      this.name = "RelatedNoteRecommendationSourceStaleError";
     }
   },
   RELATED_NOTE_RECOMMENDATION_RUN_CLAIM_STATUS: {
@@ -612,6 +619,44 @@ describe("scheduleRelatedNoteRecommendation", () => {
     expect(mockCompleteRelatedNoteRecommendationRun).not.toHaveBeenCalled();
 
     consoleInfoSpy.mockRestore();
+  });
+
+  it("claim 시점에 Note snapshot이 stale이면 운영 오류 없이 추천 실행을 건너뛴다", async () => {
+    const supabase = createNotesQueryMock({
+      data: {
+        id: NOTE_ID,
+        title: "Source note",
+        content: "Source note content",
+        updated_at: SOURCE_UPDATED_AT,
+      },
+      error: null,
+    });
+
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+
+    mockCreateAdminClient.mockReturnValue(supabase);
+    mockCreateRelatedNoteRecommendationRun.mockRejectedValue(
+      new RelatedNoteRecommendationSourceStaleError(),
+    );
+
+    scheduleRelatedNoteRecommendation({
+      noteId: NOTE_ID,
+      ownerUserId: OWNER_USER_ID,
+    });
+
+    await vi.waitFor(() => {
+      expect(mockCreateRelatedNoteRecommendationRun).toHaveBeenCalledOnce();
+    });
+
+    expect(mockReportRelatedNotesOperationalError).not.toHaveBeenCalled();
+    expect(mockRunRelatedNoteRecommendation).not.toHaveBeenCalled();
+    expect(mockReplaceRelatedNoteAiRecommendations).not.toHaveBeenCalled();
+    expect(mockCompleteRelatedNoteRecommendationRun).not.toHaveBeenCalled();
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
+
+    consoleErrorSpy.mockRestore();
   });
 
   it("Run 갱신에 실패해도 추천 실행과 저장을 계속하고 운영 오류를 보고한다", async () => {

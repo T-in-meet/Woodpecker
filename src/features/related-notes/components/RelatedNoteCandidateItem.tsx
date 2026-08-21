@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
+import { getNoteDetailRoute } from "@/lib/constants/routes";
 
 type RelatedNoteCandidateItemProps = {
   /** 후보 Note ID입니다. */
@@ -66,7 +67,7 @@ export function RelatedNoteCandidateItem({
         />
 
         <Link
-          href={`/notes/${id}`}
+          href={getNoteDetailRoute(id)}
           target="_blank"
           rel="noopener noreferrer"
           className="min-w-0 flex-1 truncate text-sm hover:underline"

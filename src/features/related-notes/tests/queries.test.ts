@@ -50,6 +50,13 @@ describe("getRelatedNotes", () => {
           },
         ],
       },
+      related_note_recommendation_runs: {
+        data: [
+          {
+            id: "44444444-4444-4444-8444-444444444444",
+          },
+        ],
+      },
     });
 
     createClientMock.mockResolvedValue(supabase as never);
@@ -71,21 +78,28 @@ describe("getRelatedNotes", () => {
       ["note_id", "11111111-1111-4111-8111-111111111111"],
     ]);
     expect(calls).toContainEqual(["eq", ["status", "active"]]);
-
-    expect(result).toStrictEqual([
-      {
-        noteId: "22222222-2222-4222-8222-222222222222",
-        origin: "ai",
-        title: "현재 AI 관련 노트 제목",
-        reason: "비슷한 내용을 다룹니다.",
-        rank: 1,
-      },
-      {
-        noteId: "33333333-3333-4333-8333-333333333333",
-        origin: "manual",
-        title: "현재 직접 연결한 노트 제목",
-      },
+    expect(callsFor("related_note_recommendation_runs")).toContainEqual([
+      "eq",
+      ["status", "running"],
     ]);
+
+    expect(result).toStrictEqual({
+      hasRunningRecommendationRun: true,
+      relatedNotes: [
+        {
+          noteId: "22222222-2222-4222-8222-222222222222",
+          origin: "ai",
+          title: "현재 AI 관련 노트 제목",
+          reason: "비슷한 내용을 다룹니다.",
+          rank: 1,
+        },
+        {
+          noteId: "33333333-3333-4333-8333-333333333333",
+          origin: "manual",
+          title: "현재 직접 연결한 노트 제목",
+        },
+      ],
+    });
   });
 
   it("조회에 실패하면 오류를 기록하고 빈 배열을 반환한다", async () => {
@@ -96,6 +110,13 @@ describe("getRelatedNotes", () => {
         data: null,
         error: dbError,
       },
+      related_note_recommendation_runs: {
+        data: [
+          {
+            id: "44444444-4444-4444-8444-444444444444",
+          },
+        ],
+      },
     });
 
     createClientMock.mockResolvedValue(supabase as never);
@@ -104,7 +125,10 @@ describe("getRelatedNotes", () => {
       "11111111-1111-4111-8111-111111111111",
     );
 
-    expect(result).toEqual([]);
+    expect(result).toEqual({
+      hasRunningRecommendationRun: true,
+      relatedNotes: [],
+    });
     expect(logErrorMock).toHaveBeenCalledWith({
       message: "[getRelatedNotes] 관련 노트 조회 실패",
       error: dbError,
@@ -127,6 +151,9 @@ describe("getRelatedNotes", () => {
           },
         ],
       },
+      related_note_recommendation_runs: {
+        data: [],
+      },
     });
 
     createClientMock.mockResolvedValue(supabase as never);
@@ -135,12 +162,44 @@ describe("getRelatedNotes", () => {
       "11111111-1111-4111-8111-111111111111",
     );
 
-    expect(result).toEqual([]);
+    expect(result).toEqual({
+      hasRunningRecommendationRun: false,
+      relatedNotes: [],
+    });
     expect(logErrorMock).toHaveBeenCalledWith(
       expect.objectContaining({
         message: "[getRelatedNotes] 관련 노트 파싱 실패",
       }),
     );
+  });
+
+  it("AI 추천 진행 상태 조회에 실패하면 오류를 기록하고 false로 반환한다", async () => {
+    const dbError = new Error("running run query failed");
+
+    const { supabase } = createSupabaseQueryMock({
+      note_related_notes: {
+        data: [],
+      },
+      related_note_recommendation_runs: {
+        data: null,
+        error: dbError,
+      },
+    });
+
+    createClientMock.mockResolvedValue(supabase as never);
+
+    const result = await getRelatedNotes(
+      "11111111-1111-4111-8111-111111111111",
+    );
+
+    expect(result).toEqual({
+      hasRunningRecommendationRun: false,
+      relatedNotes: [],
+    });
+    expect(logErrorMock).toHaveBeenCalledWith({
+      message: "[getRelatedNotes] AI 추천 진행 상태 조회 실패",
+      error: dbError,
+    });
   });
 });
 

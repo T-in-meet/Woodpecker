@@ -21,11 +21,15 @@ type RelatedNotesSectionProps = {
  * @param props Related Notes를 조회할 기준 Note ID
  */
 export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
-  const { data: relatedNotes = [], isLoading } = useRelatedNotes(noteId);
+  const { data, isLoading } = useRelatedNotes(noteId);
 
   if (isLoading) {
     return null;
   }
+
+  const relatedNotes = data?.relatedNotes ?? [];
+  const hasRunningRecommendationRun =
+    data?.hasRunningRecommendationRun === true;
 
   return (
     <section className="border-t border-border/60 pt-6">
@@ -34,7 +38,15 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
           <h2 className="text-sm font-semibold text-foreground">관련 노트</h2>
         </div>
 
-        <AddRelatedNoteDialog noteId={noteId} />
+        <div className="flex min-w-0 items-center gap-3">
+          {hasRunningRecommendationRun && (
+            <p className="truncate text-xs text-muted-foreground">
+              AI 관련 노트를 추천하고 있습니다...
+            </p>
+          )}
+
+          <AddRelatedNoteDialog noteId={noteId} />
+        </div>
       </div>
 
       {relatedNotes.length === 0 ? (

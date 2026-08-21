@@ -35,6 +35,7 @@ import {
   RELATED_NOTE_RECOMMENDATION_RUN_UPDATE_STEP,
   RelatedNoteRecommendationDailyLimitError,
   type RelatedNoteRecommendationRunUpdateStep,
+  RelatedNoteRecommendationSourceStaleError,
   saveRelatedNoteRunAnswerGenerationUsage,
   saveRelatedNoteRunExpandedQuery,
   saveRelatedNoteRunMatchedNotes,
@@ -142,22 +143,24 @@ export function scheduleRelatedNoteRecommendation({
        * 검색은 model_config_id가 일치하는 활성 Note embedding generation만
        * 대상으로 삼으므로 기능별 Runtime을 분리하지 않습니다.
        */
-      const embeddingConfiguration =
-        await resolveAiRuntimeEmbeddingConfiguration({
+      const [
+        embeddingConfiguration,
+        queryExpansionConfiguration,
+        answerConfiguration,
+      ] = await Promise.all([
+        resolveAiRuntimeEmbeddingConfiguration({
           featureKey: NOTE_RETRIEVAL_AI_FEATURE_KEY,
           roleKey: NOTE_RETRIEVAL_AI_ROLE_KEY,
-        });
-
-      const queryExpansionConfiguration =
-        await resolveAiRuntimeChatConfiguration({
+        }),
+        resolveAiRuntimeChatConfiguration({
           featureKey: RELATED_NOTES_AI_FEATURE_KEY,
           roleKey: RELATED_NOTES_AI_ROLE_KEY.QUERY_EXPANSION,
-        });
-
-      const answerConfiguration = await resolveAiRuntimeChatConfiguration({
-        featureKey: RELATED_NOTES_AI_FEATURE_KEY,
-        roleKey: RELATED_NOTES_AI_ROLE_KEY.ANSWER_GENERATION,
-      });
+        }),
+        resolveAiRuntimeChatConfiguration({
+          featureKey: RELATED_NOTES_AI_FEATURE_KEY,
+          roleKey: RELATED_NOTES_AI_ROLE_KEY.ANSWER_GENERATION,
+        }),
+      ]);
 
       try {
         const claimResult = await createRelatedNoteRecommendationRun({
@@ -185,6 +188,10 @@ export function scheduleRelatedNoteRecommendation({
             ownerUserId,
           });
 
+          return;
+        }
+
+        if (error instanceof RelatedNoteRecommendationSourceStaleError) {
           return;
         }
 

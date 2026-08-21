@@ -68,10 +68,7 @@ export function createSupabaseQueryMock(
       return existingBuilder.builder;
     }
 
-    const fallbackBuilder = createQueryBuilderMock({});
-    builders.set(table, fallbackBuilder);
-
-    return fallbackBuilder.builder;
+    throw new Error(`Supabase query mock result is not configured: ${table}`);
   });
 
   return {
