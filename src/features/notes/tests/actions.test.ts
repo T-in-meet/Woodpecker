@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { AiRuntimeEmbeddingConfiguration } from "@/features/ai/runtimes/types";
 import {
-  NOTE_CHAT_AI_FEATURE_KEY,
-  NOTE_CHAT_AI_ROLE_KEY,
-} from "@/features/note-chats/constants/ai";
+  NOTE_RETRIEVAL_AI_FEATURE_KEY,
+  NOTE_RETRIEVAL_AI_ROLE_KEY,
+} from "@/features/ai/rags/note/constants/runtime";
+import type { AiRuntimeEmbeddingConfiguration } from "@/features/ai/runtimes/types";
 import {
   AI_OPERATIONAL_ERROR_CODE,
   AI_OPERATIONAL_ERROR_OPERATION,
@@ -24,6 +24,7 @@ const {
   generateNoteEmbeddingMock,
   reportAiOperationalErrorMock,
   resolveAiRuntimeEmbeddingConfigurationMock,
+  scheduleRelatedNoteRecommendationMock,
 } = vi.hoisted(() => ({
   afterMock: vi.fn(),
   createAdminClientMock: vi.fn(),
@@ -32,6 +33,7 @@ const {
   generateNoteEmbeddingMock: vi.fn(),
   reportAiOperationalErrorMock: vi.fn(),
   resolveAiRuntimeEmbeddingConfigurationMock: vi.fn(),
+  scheduleRelatedNoteRecommendationMock: vi.fn(),
 }));
 
 vi.mock("next/server", () => ({
@@ -63,6 +65,13 @@ vi.mock("@/features/ai/utils/report-ai-operational-error", () => ({
   reportAiOperationalError: reportAiOperationalErrorMock,
 }));
 
+vi.mock(
+  "@/features/related-notes/execution/schedule-related-note-recommendation",
+  () => ({
+    scheduleRelatedNoteRecommendation: scheduleRelatedNoteRecommendationMock,
+  }),
+);
+
 import {
   createNoteAction,
   deleteNoteAction,
@@ -80,9 +89,8 @@ function createSupabaseMock(
     updateError?: { message: string } | null;
     updatedNote?: {
       id: string;
-      title?: string;
-      content?: string;
-      updated_at?: string;
+      title: string;
+      content: string;
     } | null;
   } = {},
 ) {
@@ -96,6 +104,8 @@ function createSupabaseMock(
     updateError = null,
     updatedNote = {
       id: "11111111-1111-4111-8111-111111111111",
+      title: "Updated title",
+      content: "Updated content",
     },
   } = input;
 
@@ -268,6 +278,7 @@ describe("createNoteAction", () => {
     createAdminClientMock.mockReset();
     createClientMock.mockReset();
     redirectMock.mockReset();
+    scheduleRelatedNoteRecommendationMock.mockReset();
 
     redirectMock.mockImplementation(() => {
       throw REDIRECT_ERROR;
@@ -354,6 +365,10 @@ describe("createNoteAction", () => {
     expect(result).toEqual({ success: true, newNoteId: "note-123" });
 
     expect(afterMock).toHaveBeenCalledTimes(1);
+    expect(scheduleRelatedNoteRecommendationMock).toHaveBeenCalledWith({
+      noteId: "note-123",
+      ownerUserId: "user-123",
+    });
   });
 
   it("returns a general error when the RPC fails", async () => {
@@ -373,6 +388,7 @@ describe("createNoteAction", () => {
     });
     expect(rpcMock).toHaveBeenCalledOnce();
     expect(afterMock).not.toHaveBeenCalled();
+    expect(scheduleRelatedNoteRecommendationMock).not.toHaveBeenCalled();
   });
 
   it("returns a general error when the RPC returns no note id", async () => {
@@ -390,6 +406,7 @@ describe("createNoteAction", () => {
     });
     expect(rpcMock).toHaveBeenCalledOnce();
     expect(afterMock).not.toHaveBeenCalled();
+    expect(scheduleRelatedNoteRecommendationMock).not.toHaveBeenCalled();
   });
 });
 
@@ -509,6 +526,7 @@ describe("updateNoteAction", () => {
     createAdminClientMock.mockReset();
     createClientMock.mockReset();
     redirectMock.mockReset();
+    scheduleRelatedNoteRecommendationMock.mockReset();
 
     redirectMock.mockImplementation(() => {
       throw REDIRECT_ERROR;
@@ -594,6 +612,8 @@ describe("updateNoteAction", () => {
     } = createSupabaseMock({
       updatedNote: {
         id: validNoteId,
+        title: "Updated title",
+        content: "Updated content",
       },
     });
     createClientMock.mockResolvedValue(supabase);
@@ -611,10 +631,14 @@ describe("updateNoteAction", () => {
     });
     expect(updateNoteEqMock).toHaveBeenCalledWith("id", validNoteId);
     expect(updateUserEqMock).toHaveBeenCalledWith("user_id", "user-123");
-    expect(updateSelectMock).toHaveBeenCalledWith("id");
+    expect(updateSelectMock).toHaveBeenCalledWith("id, title, content");
     expect(result).toEqual({ success: true });
 
     expect(afterMock).toHaveBeenCalledTimes(1);
+    expect(scheduleRelatedNoteRecommendationMock).toHaveBeenCalledWith({
+      noteId: validNoteId,
+      ownerUserId: "user-123",
+    });
   });
 
   it("returns a not-found error when no matching note is updated", async () => {
@@ -632,6 +656,7 @@ describe("updateNoteAction", () => {
     expect(result).toEqual({ error: "수정할 노트를 찾을 수 없습니다." });
     expect(updateMaybeSingleMock).toHaveBeenCalledOnce();
     expect(afterMock).not.toHaveBeenCalled();
+    expect(scheduleRelatedNoteRecommendationMock).not.toHaveBeenCalled();
   });
 
   it("returns a general error when note update fails", async () => {
@@ -651,6 +676,7 @@ describe("updateNoteAction", () => {
     });
     expect(updateMaybeSingleMock).toHaveBeenCalledOnce();
     expect(afterMock).not.toHaveBeenCalled();
+    expect(scheduleRelatedNoteRecommendationMock).not.toHaveBeenCalled();
   });
 });
 
@@ -678,6 +704,8 @@ describe("Note embedding integration", () => {
     createAdminClientMock.mockReset();
     createClientMock.mockReset();
     redirectMock.mockReset();
+    scheduleRelatedNoteRecommendationMock.mockReset();
+
     redirectMock.mockImplementation(() => {
       throw REDIRECT_ERROR;
     });
@@ -737,11 +765,10 @@ describe("Note embedding integration", () => {
 
       await runScheduledAfterCallback();
 
-      // Note Chat의 검색에 사용하는 note-retrieval 설정과 동일한
-      // Embedding Runtime Configuration을 사용해야 Note와 질의의 vector 공간이 일치한다.
+      // 공통 Note retrieval Runtime을 사용해야 Note와 질의의 vector 공간이 일치한다.
       expect(resolveAiRuntimeEmbeddingConfigurationMock).toHaveBeenCalledWith({
-        featureKey: NOTE_CHAT_AI_FEATURE_KEY,
-        roleKey: NOTE_CHAT_AI_ROLE_KEY.NOTE_RETRIEVAL,
+        featureKey: NOTE_RETRIEVAL_AI_FEATURE_KEY,
+        roleKey: NOTE_RETRIEVAL_AI_ROLE_KEY,
       });
 
       expect(generateNoteEmbeddingMock).toHaveBeenCalledWith({
@@ -861,7 +888,6 @@ describe("Note embedding integration", () => {
         }),
       );
 
-      expect(resolveAiRuntimeEmbeddingConfigurationMock).not.toHaveBeenCalled();
       expect(generateNoteEmbeddingMock).not.toHaveBeenCalled();
     });
 
@@ -901,6 +927,8 @@ describe("Note embedding integration", () => {
       const { supabase } = createSupabaseMock({
         updatedNote: {
           id: validNoteId,
+          title: "Updated title",
+          content: "Updated content",
         },
       });
 
@@ -932,11 +960,10 @@ describe("Note embedding integration", () => {
 
       await runScheduledAfterCallback();
 
-      // 수정된 Note도 생성 시와 동일한 note-retrieval 설정을 사용하여
-      // Note embedding과 Note Chat 질의 embedding의 모델을 일치시킨다.
+      // 수정된 Note도 생성 시와 동일한 공통 Note retrieval Runtime을 사용한다.
       expect(resolveAiRuntimeEmbeddingConfigurationMock).toHaveBeenCalledWith({
-        featureKey: NOTE_CHAT_AI_FEATURE_KEY,
-        roleKey: NOTE_CHAT_AI_ROLE_KEY.NOTE_RETRIEVAL,
+        featureKey: NOTE_RETRIEVAL_AI_FEATURE_KEY,
+        roleKey: NOTE_RETRIEVAL_AI_ROLE_KEY,
       });
 
       expect(generateNoteEmbeddingMock).toHaveBeenCalledWith({
@@ -974,6 +1001,8 @@ describe("Note embedding integration", () => {
       const { supabase } = createSupabaseMock({
         updatedNote: {
           id: validNoteId,
+          title: "수정된 제목",
+          content: "수정된 내용",
         },
       });
 

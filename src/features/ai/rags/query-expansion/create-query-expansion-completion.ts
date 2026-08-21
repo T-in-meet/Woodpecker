@@ -1,6 +1,7 @@
 import { renderPromptTemplate } from "@/features/ai/prompts/render";
 import { createAiChatCompletionWithProvider } from "@/features/ai/providers";
 import type { AiTokenUsage } from "@/features/ai/providers/types";
+import type { AiChatCompletionResult } from "@/features/ai/providers/types";
 import { getProviderApiKey } from "@/features/ai/providers/utils/api-key";
 import type { AiRuntimeChatConfiguration } from "@/features/ai/runtimes/types";
 import type { Json } from "@/types/db.helpers";
@@ -52,25 +53,51 @@ export async function createQueryExpansionCompletion(
     variables,
   );
 
-  const result = await createAiChatCompletionWithProvider({
-    apiKey: getProviderApiKey(model.provider),
-    model: model.model,
-    provider: model.provider,
-    responseFormat:
-      responseSchema == null
-        ? undefined
-        : {
-            type: "json_schema",
-            jsonSchema: {
-              name: responseSchemaName,
-              schema: responseSchema as Json,
-              strict: true,
-            },
+  let apiKey: string;
+
+  try {
+    apiKey = getProviderApiKey(model.provider);
+  } catch (error) {
+    console.error(
+      "[Query Expansion Completion API Key Failed]",
+      error instanceof Error ? error.message : error,
+    );
+
+    throw error;
+  }
+
+  const responseFormat =
+    responseSchema == null
+      ? undefined
+      : {
+          type: "json_schema" as const,
+          jsonSchema: {
+            name: responseSchemaName,
+            schema: responseSchema as Json,
+            strict: true,
           },
-    systemPrompt,
-    temperature: configuration.temperature,
-    userPrompt,
-  });
+        };
+
+  let result: AiChatCompletionResult;
+
+  try {
+    result = await createAiChatCompletionWithProvider({
+      apiKey,
+      model: model.model,
+      provider: model.provider,
+      responseFormat,
+      systemPrompt,
+      temperature: configuration.temperature,
+      userPrompt,
+    });
+  } catch (error) {
+    console.error(
+      "[Query Expansion Completion Failed]",
+      error instanceof Error ? error.message : error,
+    );
+
+    throw error;
+  }
 
   return {
     content: result.content,

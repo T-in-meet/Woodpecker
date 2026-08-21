@@ -10,7 +10,10 @@ import {
   NOTE_EMBEDDING_INPUT_KIND,
   NOTE_EMBEDDING_SOURCE_TYPE,
 } from "../constants/embeddings";
-import { searchNoteEmbeddings } from "../search-embeddings";
+import {
+  searchNoteEmbeddings,
+  searchNoteEmbeddingsWithUsage,
+} from "../search-embeddings";
 
 vi.mock("@/features/ai/embeddings/match", () => ({
   matchAiEmbeddings: vi.fn(),
@@ -144,5 +147,33 @@ describe("searchNoteEmbeddings", () => {
     expect(getProviderApiKey).not.toHaveBeenCalled();
     expect(createAiEmbeddingWithProvider).not.toHaveBeenCalled();
     expect(matchAiEmbeddings).not.toHaveBeenCalled();
+  });
+
+  it("DB 검색이 실패해도 Provider usage를 먼저 전달한다", async () => {
+    const usage = {
+      inputTokens: 7,
+      outputTokens: 0,
+      totalTokens: 7,
+    };
+
+    const onUsage = vi.fn().mockResolvedValue(undefined);
+
+    vi.mocked(getProviderApiKey).mockReturnValue("test-api-key");
+    vi.mocked(createAiEmbeddingWithProvider).mockResolvedValue({
+      embedding: [0.1, 0.2, 0.3],
+      metadata: {},
+      usage,
+    });
+    vi.mocked(matchAiEmbeddings).mockRejectedValue(new Error("match failed"));
+
+    await expect(
+      searchNoteEmbeddingsWithUsage({
+        ...SEARCH_INPUT,
+        onUsage,
+      }),
+    ).rejects.toThrow("match failed");
+
+    expect(onUsage).toHaveBeenCalledOnce();
+    expect(onUsage).toHaveBeenCalledWith(usage);
   });
 });

@@ -830,6 +830,51 @@ export type Database = {
           },
         ];
       };
+      note_related_notes: {
+        Row: {
+          created_at: string;
+          metadata: Json;
+          note_id: string;
+          origin: string;
+          related_note_id: string;
+          status: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          metadata?: Json;
+          note_id: string;
+          origin: string;
+          related_note_id: string;
+          status?: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          metadata?: Json;
+          note_id?: string;
+          origin?: string;
+          related_note_id?: string;
+          status?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "note_related_notes_note_id_fkey";
+            columns: ["note_id"];
+            isOneToOne: false;
+            referencedRelation: "notes";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "note_related_notes_related_note_id_fkey";
+            columns: ["related_note_id"];
+            isOneToOne: false;
+            referencedRelation: "notes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       notes: {
         Row: {
           content: string;
@@ -1162,6 +1207,92 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "quizzes_note_id_fkey";
+            columns: ["note_id"];
+            isOneToOne: false;
+            referencedRelation: "notes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      related_note_recommendation_runs: {
+        Row: {
+          answer_generation_cost_usd: number | null;
+          answer_generation_model_config_id: string | null;
+          answer_generation_usage: Json | null;
+          completed_at: string | null;
+          created_at: string;
+          embedding_model_config_id: string | null;
+          expanded_query: string | null;
+          failure_message: string | null;
+          id: string;
+          matched_note_ids: string[];
+          note_id: string;
+          query_embedding_cost_usd: number | null;
+          query_embedding_usage: Json | null;
+          query_expansion_cost_usd: number | null;
+          query_expansion_model_config_id: string | null;
+          query_expansion_usage: Json | null;
+          recommendations: Json;
+          source_updated_at: string | null;
+          started_at: string;
+          status: string;
+          total_cost_usd: number | null;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          answer_generation_cost_usd?: number | null;
+          answer_generation_model_config_id?: string | null;
+          answer_generation_usage?: Json | null;
+          completed_at?: string | null;
+          created_at?: string;
+          embedding_model_config_id?: string | null;
+          expanded_query?: string | null;
+          failure_message?: string | null;
+          id?: string;
+          matched_note_ids?: string[];
+          note_id: string;
+          query_embedding_cost_usd?: number | null;
+          query_embedding_usage?: Json | null;
+          query_expansion_cost_usd?: number | null;
+          query_expansion_model_config_id?: string | null;
+          query_expansion_usage?: Json | null;
+          recommendations?: Json;
+          source_updated_at?: string | null;
+          started_at?: string;
+          status?: string;
+          total_cost_usd?: never;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          answer_generation_cost_usd?: number | null;
+          answer_generation_model_config_id?: string | null;
+          answer_generation_usage?: Json | null;
+          completed_at?: string | null;
+          created_at?: string;
+          embedding_model_config_id?: string | null;
+          expanded_query?: string | null;
+          failure_message?: string | null;
+          id?: string;
+          matched_note_ids?: string[];
+          note_id?: string;
+          query_embedding_cost_usd?: number | null;
+          query_embedding_usage?: Json | null;
+          query_expansion_cost_usd?: number | null;
+          query_expansion_model_config_id?: string | null;
+          query_expansion_usage?: Json | null;
+          recommendations?: Json;
+          source_updated_at?: string | null;
+          started_at?: string;
+          status?: string;
+          total_cost_usd?: never;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "related_note_recommendation_runs_note_id_fkey";
             columns: ["note_id"];
             isOneToOne: false;
             referencedRelation: "notes";
@@ -1554,6 +1685,10 @@ export type Database = {
         };
         Returns: undefined;
       };
+      add_note_related_manual: {
+        Args: { p_note_id: string; p_related_notes: Json };
+        Returns: undefined;
+      };
       apply_time_of_day: { Args: { t: string; ts: string }; Returns: string };
       apply_time_of_day_not_before: {
         Args: { t: string; ts: string };
@@ -1585,6 +1720,21 @@ export type Database = {
           p_user_id: string;
         };
         Returns: Json;
+      };
+      claim_related_note_recommendation_run: {
+        Args: {
+          p_answer_generation_model_config_id: string;
+          p_daily_recommendation_limit: number;
+          p_embedding_model_config_id: string;
+          p_note_id: string;
+          p_query_expansion_model_config_id: string;
+          p_source_updated_at: string;
+          p_user_id: string;
+        };
+        Returns: {
+          run_id: string | null;
+          status: string | null;
+        }[];
       };
       complete_note_chat_run_failure: {
         Args: { p_run_id: string; p_usage?: Json };
@@ -1675,6 +1825,10 @@ export type Database = {
           p_source_type: string;
         };
         Returns: number;
+      };
+      delete_note_related: {
+        Args: { p_note_id: string; p_related_note_id: string };
+        Returns: undefined;
       };
       finalize_quiz_generation_v2:
         | {
@@ -1881,6 +2035,15 @@ export type Database = {
         Args: { p_version_id: string };
         Returns: string;
       };
+      replace_note_related_ai_recommendations: {
+        Args: {
+          p_note_id: string;
+          p_owner_user_id: string;
+          p_recommendations: Json;
+          p_source_updated_at: string;
+        };
+        Returns: string;
+      };
       save_ai_setting_configurations: {
         Args: { p_configurations: Json; p_setting_id: string };
         Returns: undefined;
@@ -1900,6 +2063,14 @@ export type Database = {
           run_id: string;
           user_message_id: string;
         }[];
+      };
+      update_note_related_manual_reason: {
+        Args: {
+          p_note_id: string;
+          p_reason?: string;
+          p_related_note_id: string;
+        };
+        Returns: undefined;
       };
       update_notification_time_of_day: {
         Args: { p_note_id: string; p_time?: string };

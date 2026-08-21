@@ -8,6 +8,7 @@ import { useCallback, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { NotificationTimePicker } from "@/features/notifications/components/NotificationTimePicker";
 import { QuizButton } from "@/features/quiz/components/QuizButton";
+import { RelatedNotesSection } from "@/features/related-notes/components/RelatedNotesSection";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { getNoteReviewRoute } from "@/lib/constants/routes";
 
@@ -106,6 +107,7 @@ export function NoteDetailBody({
       </header>
 
       <NoteViewer content={content} className="min-h-[60vh]" />
+      <RelatedNotesSection noteId={noteId} />
     </>
   );
 }

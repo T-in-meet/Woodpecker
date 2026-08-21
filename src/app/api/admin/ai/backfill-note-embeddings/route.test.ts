@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { requireAdmin } from "@/features/admin/utils/require-admin";
+import {
+  NOTE_RETRIEVAL_AI_FEATURE_KEY,
+  NOTE_RETRIEVAL_AI_ROLE_KEY,
+} from "@/features/ai/rags/note/constants/runtime";
 import { generateNoteEmbedding } from "@/features/ai/rags/note/generate-embedding";
 import { resolveAiRuntimeEmbeddingConfiguration } from "@/features/ai/runtimes";
-import {
-  NOTE_CHAT_AI_FEATURE_KEY,
-  NOTE_CHAT_AI_ROLE_KEY,
-} from "@/features/note-chats/constants/ai";
 import { ForbiddenError, UnauthorizedError } from "@/lib/errors";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -225,8 +225,8 @@ describe("POST /api/admin/ai/backfill-note-embeddings", () => {
     expect(requireAdmin).toHaveBeenCalledTimes(1);
 
     expect(resolveAiRuntimeEmbeddingConfiguration).toHaveBeenCalledWith({
-      featureKey: NOTE_CHAT_AI_FEATURE_KEY,
-      roleKey: NOTE_CHAT_AI_ROLE_KEY.NOTE_RETRIEVAL,
+      featureKey: NOTE_RETRIEVAL_AI_FEATURE_KEY,
+      roleKey: NOTE_RETRIEVAL_AI_ROLE_KEY,
     });
 
     expect(from).toHaveBeenCalledWith("notes");

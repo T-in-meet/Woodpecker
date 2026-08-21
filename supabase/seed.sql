@@ -281,6 +281,7 @@ Reference notes:
 Write a concise answer grounded in the reference notes.', '{}', '["question", "contextNotes"]', '{notes,rag}', 'system', NULL, '2026-08-06 07:57:05.176008+00', 'a645ea1d-7138-4441-bf0c-d10b008dc3d1') ON CONFLICT DO NOTHING;
 
 
+
 --
 -- Data for Name: notes; Type: TABLE DATA; Schema: public; Owner: postgres
 --
@@ -293,7 +294,7 @@ INSERT INTO "public"."notes" ("id", "user_id", "title", "content", "review_round
 예를 들어 Chrome을 실행하면 하나 이상의 프로세스가 생성된다.
 ---
 ## 프로세스의 구성
-프로세스는 일반적으로 다음과 같은 메모리 영역을 가진다.
+프로세스는 일반적으로 다음과 같은 메모리 영역을 `가진다.
 ```
 ```
 ```
