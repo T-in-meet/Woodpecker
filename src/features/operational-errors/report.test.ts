@@ -169,4 +169,38 @@ describe("reportOperationalError", () => {
       operationalErrorId: OPERATIONAL_ERROR_ID,
     });
   });
+
+  it("logs admin notification failure details when creation returns a failure result", async () => {
+    const expectedResult = {
+      id: OPERATIONAL_ERROR_ID,
+      ok: true,
+      recorded: "created",
+    } as const;
+    const notificationError = { message: "admin notification insert failed" };
+    recordOperationalErrorMock.mockResolvedValue(expectedResult);
+    createAdminNotificationMock.mockResolvedValue({
+      error: notificationError,
+      failureStage: "event_create",
+      ok: false,
+      operationalErrorRecorded: true,
+    });
+
+    const result = await reportOperationalError({
+      errorCode: "PUSH_SEND_FAILED",
+      feature: "notifications",
+      message: "Push 알림 전송에 실패했습니다.",
+      operation: OPERATIONAL_ERROR_OPERATIONS.DISPATCH_PUSH,
+      severity: OPERATIONAL_ERROR_SEVERITY.WARN,
+      stage: "push_send",
+    });
+
+    expect(result).toEqual(expectedResult);
+    expect(logErrorMock).toHaveBeenCalledWith({
+      error: notificationError,
+      event: "operationalErrors.report.adminNotificationFailed",
+      failureStage: "event_create",
+      operationalErrorRecorded: true,
+      operationalErrorId: OPERATIONAL_ERROR_ID,
+    });
+  });
 });

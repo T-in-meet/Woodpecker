@@ -96,6 +96,8 @@ export async function reportOperationalError(
       logError({
         error: notificationResult.error,
         event: "operationalErrors.report.adminNotificationFailed",
+        failureStage: notificationResult.failureStage,
+        operationalErrorRecorded: notificationResult.operationalErrorRecorded,
         operationalErrorId: result.id,
       });
     }
