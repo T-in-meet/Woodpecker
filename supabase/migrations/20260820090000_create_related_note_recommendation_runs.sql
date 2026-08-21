@@ -148,6 +148,184 @@ CREATE INDEX "related_note_recommendation_runs_status_started_at_idx"
 
 
 /* ============================================================================
+ * Claim RPC
+ * ========================================================================== */
+
+/*
+ * Related Notes 추천 Run을 생성하기 전에 사용자 quota와 동일 Note version
+ * 중복 실행 여부를 하나의 DB transaction 안에서 검증합니다.
+ *
+ * 일반 사용자는 KST 기준 일일 추천 실행 횟수를 제한합니다. 관리자는 운영 및
+ * AI 기능 검증을 위해 이 제한을 건너뛰며, service_role 호출에서도 관리자
+ * 여부는 profiles.role을 기준으로 RPC 내부에서 직접 확인합니다.
+ *
+ * 같은 user_id, note_id, source_updated_at에 대해 running 또는 succeeded Run이
+ * 이미 있으면 새 Run을 만들지 않고 duplicate 상태를 반환하여 Provider 호출을
+ * 시작하기 전에 중복 비용 발생을 방지합니다.
+ */
+CREATE OR REPLACE FUNCTION "public"."claim_related_note_recommendation_run"(
+  "p_user_id" "uuid",
+  "p_note_id" "uuid",
+  "p_source_updated_at" timestamp with time zone,
+  "p_query_expansion_model_config_id" "uuid",
+  "p_embedding_model_config_id" "uuid",
+  "p_answer_generation_model_config_id" "uuid",
+  "p_daily_recommendation_limit" integer
+)
+RETURNS TABLE ("status" "text", "run_id" "uuid")
+LANGUAGE "plpgsql"
+SECURITY DEFINER
+SET "search_path" = "public"
+AS $$
+DECLARE
+  "v_existing_run_id" "uuid";
+  "v_is_admin" boolean;
+  "v_now" timestamp with time zone := clock_timestamp();
+  "v_kst_date" date;
+  "v_daily_start_at" timestamp with time zone;
+  "v_daily_end_at" timestamp with time zone;
+  "v_daily_count" integer;
+  "v_run_id" "uuid";
+BEGIN
+  IF "p_user_id" IS NULL THEN
+    RAISE EXCEPTION 'user_id is required';
+  END IF;
+
+  IF "p_note_id" IS NULL THEN
+    RAISE EXCEPTION 'note_id is required';
+  END IF;
+
+  IF "p_source_updated_at" IS NULL THEN
+    RAISE EXCEPTION 'source_updated_at is required';
+  END IF;
+
+  IF "p_daily_recommendation_limit" IS NULL
+     OR "p_daily_recommendation_limit" < 1 THEN
+    RAISE EXCEPTION 'daily recommendation limit must be positive';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM "auth"."users" AS "users"
+    WHERE "users"."id" = "p_user_id"
+      AND "users"."email_confirmed_at" IS NOT NULL
+  ) THEN
+    RAISE EXCEPTION 'email not confirmed';
+  END IF;
+
+  PERFORM 1
+  FROM "public"."notes" AS "notes"
+  WHERE "notes"."id" = "p_note_id"
+    AND "notes"."user_id" = "p_user_id"
+    AND "notes"."updated_at" IS NOT DISTINCT FROM "p_source_updated_at";
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'recommendation source not found';
+  END IF;
+
+  SELECT EXISTS (
+    SELECT 1
+    FROM "public"."profiles" AS "profiles"
+    WHERE "profiles"."id" = "p_user_id"
+      AND "profiles"."role" = 'ADMIN'
+  )
+  INTO "v_is_admin";
+
+  "v_kst_date" := ("v_now" AT TIME ZONE 'Asia/Seoul')::date;
+
+  /*
+   * 동일 사용자의 같은 KST 날짜 claim을 직렬화하여 quota count와 Run INSERT
+   * 사이의 경쟁 조건을 막습니다. 관리자는 quota를 건너뛰지만 같은 key 규칙을
+   * 사용해 일반 사용자에서 관리자로 role이 바뀌는 경계도 단순하게 유지합니다.
+   */
+  PERFORM "pg_advisory_xact_lock"(
+    "hashtextextended"(
+      "p_user_id"::text
+      || '|related-notes|'
+      || "v_kst_date"::text,
+      0
+    )
+  );
+
+  /*
+   * 동일 Note version claim을 직렬화하여 같은 source_updated_at에 대한
+   * running/succeeded Run 중복 생성을 방지합니다.
+   */
+  PERFORM "pg_advisory_xact_lock"(
+    "hashtextextended"(
+      "p_user_id"::text
+      || '|related-notes|'
+      || "p_note_id"::text
+      || '|'
+      || "p_source_updated_at"::text,
+      0
+    )
+  );
+
+  SELECT "runs"."id"
+  INTO "v_existing_run_id"
+  FROM "public"."related_note_recommendation_runs" AS "runs"
+  WHERE "runs"."user_id" = "p_user_id"
+    AND "runs"."note_id" = "p_note_id"
+    AND "runs"."source_updated_at" IS NOT DISTINCT FROM "p_source_updated_at"
+    AND "runs"."status" IN ('running', 'succeeded')
+  ORDER BY "runs"."started_at" DESC
+  LIMIT 1;
+
+  IF "v_existing_run_id" IS NOT NULL THEN
+    RETURN QUERY SELECT 'duplicate'::"text", "v_existing_run_id";
+    RETURN;
+  END IF;
+
+  IF NOT "v_is_admin" THEN
+    "v_daily_start_at" := "v_kst_date"::timestamp AT TIME ZONE 'Asia/Seoul';
+    "v_daily_end_at" := "v_daily_start_at" + interval '1 day';
+
+    SELECT count(*)
+    INTO "v_daily_count"
+    FROM "public"."related_note_recommendation_runs" AS "runs"
+    WHERE "runs"."user_id" = "p_user_id"
+      AND "runs"."started_at" >= "v_daily_start_at"
+      AND "runs"."started_at" < "v_daily_end_at";
+
+    IF "v_daily_count" >= "p_daily_recommendation_limit" THEN
+      RAISE EXCEPTION 'RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_EXCEEDED'
+        USING ERRCODE = 'WP003';
+    END IF;
+  END IF;
+
+  INSERT INTO "public"."related_note_recommendation_runs" (
+    "note_id",
+    "user_id",
+    "status",
+    "source_updated_at",
+    "query_expansion_model_config_id",
+    "embedding_model_config_id",
+    "answer_generation_model_config_id",
+    "started_at",
+    "created_at",
+    "updated_at"
+  )
+  VALUES (
+    "p_note_id",
+    "p_user_id",
+    'running',
+    "p_source_updated_at",
+    "p_query_expansion_model_config_id",
+    "p_embedding_model_config_id",
+    "p_answer_generation_model_config_id",
+    "v_now",
+    "v_now",
+    "v_now"
+  )
+  RETURNING "id" INTO "v_run_id";
+
+  RETURN QUERY SELECT 'claimed'::"text", "v_run_id";
+END;
+$$;
+
+
+/* ============================================================================
  * Triggers
  * ========================================================================== */
 
@@ -200,6 +378,26 @@ GRANT SELECT
 GRANT ALL
   ON TABLE "public"."related_note_recommendation_runs"
   TO "service_role";
+
+REVOKE ALL ON FUNCTION "public"."claim_related_note_recommendation_run"(
+  "uuid",
+  "uuid",
+  timestamp with time zone,
+  "uuid",
+  "uuid",
+  "uuid",
+  integer
+) FROM PUBLIC, "anon", "authenticated", "service_role";
+
+GRANT EXECUTE ON FUNCTION "public"."claim_related_note_recommendation_run"(
+  "uuid",
+  "uuid",
+  timestamp with time zone,
+  "uuid",
+  "uuid",
+  "uuid",
+  integer
+) TO "service_role";
 
 
 /* ============================================================================
@@ -259,6 +457,17 @@ COMMENT ON INDEX "public"."related_note_recommendation_runs_user_note_started_at
 
 COMMENT ON INDEX "public"."related_note_recommendation_runs_status_started_at_idx" IS
   '상태별 Related Notes 추천 실행을 최근 순으로 운영 점검하기 위한 인덱스';
+
+COMMENT ON FUNCTION "public"."claim_related_note_recommendation_run"(
+  "uuid",
+  "uuid",
+  timestamp with time zone,
+  "uuid",
+  "uuid",
+  "uuid",
+  integer
+) IS
+  'Related Notes AI 추천 Run을 quota, 관리자 bypass, 동일 Note version 중복 방지와 함께 claim합니다.';
 
 COMMENT ON POLICY "related_note_recommendation_runs_select_own"
   ON "public"."related_note_recommendation_runs" IS

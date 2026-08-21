@@ -114,9 +114,10 @@ export async function prepareRelatedNoteContext({
     question: expandedQuery,
     limit,
     minSimilarity,
+    ...(onQueryEmbeddingUsage !== undefined
+      ? { onUsage: onQueryEmbeddingUsage }
+      : {}),
   });
-
-  await onQueryEmbeddingUsage?.(searchResult.usage);
 
   // 검색된 embedding 결과를 실제 Note 정보와 결합합니다.
   const notes = await getMatchedNotes({

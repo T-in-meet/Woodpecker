@@ -41,6 +41,14 @@ export type SearchNoteEmbeddingsParams = {
 
   /** 검색 결과에 허용할 최소 유사도입니다. */
   minSimilarity: number;
+
+  /**
+   * 검색 질의 embedding Provider usage 저장 callback입니다.
+   *
+   * Provider 호출 직후 실행하여 이후 DB 검색 실패가 발생하더라도 이미 발생한
+   * usage/cost를 호출 계층에서 보존할 수 있게 합니다.
+   */
+  onUsage?: (usage: AiTokenUsage) => Promise<void>;
 };
 
 /**
@@ -108,6 +116,7 @@ export async function searchNoteEmbeddingsWithUsage({
   question,
   limit,
   minSimilarity,
+  onUsage,
 }: SearchNoteEmbeddingsParams): Promise<SearchNoteEmbeddingsWithUsageResult> {
   const embeddingModel = embeddingConfiguration.model;
 
@@ -132,6 +141,8 @@ export async function searchNoteEmbeddingsWithUsage({
     model: embeddingModel.model,
     provider: embeddingModel.provider,
   });
+
+  await onUsage?.(queryEmbedding.usage);
 
   /*
    * matchAiEmbeddings는 현재 활성 generation의 chunk만 대상으로

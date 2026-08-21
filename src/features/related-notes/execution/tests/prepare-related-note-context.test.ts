@@ -84,10 +84,16 @@ describe("prepareRelatedNoteContext", () => {
       "55555555-5555-4555-8555-555555555555",
     ]);
 
-    vi.mocked(searchNoteEmbeddingsWithUsage).mockResolvedValue({
-      matches: matches as never,
-      usage: queryEmbeddingUsage,
-    });
+    vi.mocked(searchNoteEmbeddingsWithUsage).mockImplementation(
+      async (params) => {
+        await params.onUsage?.(queryEmbeddingUsage);
+
+        return {
+          matches: matches as never,
+          usage: queryEmbeddingUsage,
+        };
+      },
+    );
 
     vi.mocked(getMatchedNotes).mockResolvedValue(notes);
     vi.mocked(buildRelatedNoteContext).mockReturnValue("related note context");
@@ -138,6 +144,7 @@ describe("prepareRelatedNoteContext", () => {
       question: "expanded query",
       limit: 10,
       minSimilarity: 0.5,
+      onUsage: onQueryEmbeddingUsage,
     });
 
     expect(onQueryEmbeddingUsage).toHaveBeenCalledOnce();

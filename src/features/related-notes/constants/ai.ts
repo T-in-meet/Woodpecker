@@ -36,3 +36,22 @@ export const RELATED_NOTES_SEARCH_LIMIT = 10;
  * Related Notes 벡터 검색 결과에 허용할 최소 유사도입니다.
  */
 export const RELATED_NOTES_MIN_SIMILARITY = 0;
+
+/**
+ * 한 사용자가 하루 동안 실행할 수 있는 Related Notes AI 추천의 최대 횟수입니다.
+ *
+ * 관리자 계정은 운영 및 AI 기능 검증을 위해 DB claim RPC 내부에서 이 제한을
+ * 건너뜁니다.
+ */
+export const RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT = 10;
+
+/**
+ * Related Notes 일일 AI 추천 횟수 초과 오류 코드입니다.
+ */
+export const RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_ERROR_CODE =
+  "RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_EXCEEDED";
+
+/**
+ * Related Notes 일일 AI 추천 횟수 초과를 식별하는 PostgreSQL SQLSTATE입니다.
+ */
+export const RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_SQLSTATE = "WP003";

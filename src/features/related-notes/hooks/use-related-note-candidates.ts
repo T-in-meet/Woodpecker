@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
 import { relatedNotesQueryKeys } from "../constants/query-keys";
 import { getRelatedNoteCandidates } from "../queries";
@@ -43,6 +43,7 @@ export function useRelatedNoteCandidates({
   return useQuery({
     queryKey: relatedNotesQueryKeys.candidates(noteId, page, search, pageSize),
     queryFn: () => getRelatedNoteCandidates(noteId, page, search, pageSize),
+    placeholderData: keepPreviousData,
 
     // 기준 Note ID가 준비된 경우에만 후보 조회를 실행합니다.
     enabled: Boolean(noteId),

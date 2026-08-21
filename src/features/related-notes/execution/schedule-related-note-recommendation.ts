@@ -17,6 +17,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   RELATED_NOTES_AI_FEATURE_KEY,
   RELATED_NOTES_AI_ROLE_KEY,
+  RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_ERROR_CODE,
   RELATED_NOTES_MIN_SIMILARITY,
   RELATED_NOTES_SEARCH_LIMIT,
 } from "../constants/ai";
@@ -29,8 +30,10 @@ import { reportRelatedNotesOperationalError } from "../utils/report-operational-
 import {
   completeRelatedNoteRecommendationRun,
   createRelatedNoteRecommendationRun,
+  RELATED_NOTE_RECOMMENDATION_RUN_CLAIM_STATUS,
   RELATED_NOTE_RECOMMENDATION_RUN_STATUS,
   RELATED_NOTE_RECOMMENDATION_RUN_UPDATE_STEP,
+  RelatedNoteRecommendationDailyLimitError,
   type RelatedNoteRecommendationRunUpdateStep,
   saveRelatedNoteRunAnswerGenerationUsage,
   saveRelatedNoteRunExpandedQuery,
@@ -64,9 +67,9 @@ type ScheduleRelatedNoteRecommendationParams = {
  * RPC는 현재 Note의 updated_at과 비교한 뒤 동일한 version일 때만
  * active AI 추천을 교체하여 stale 추천이 최신 결과를 덮어쓰지 않도록 합니다.
  *
- * Related Notes Run은 실행 이력과 usage/cost 추적을 위한 보조 기능입니다.
- * Run 생성 또는 갱신에 실패하더라도 운영 오류를 기록한 뒤
- * 실제 Related Notes 추천 실행은 계속 진행합니다.
+ * Related Notes Run claim은 quota, 관리자 bypass, 동일 Note version 중복 실행
+ * 방지를 담당합니다. Run claim에 실패하거나 중복 실행으로 판정되면
+ * Provider 호출 전에 추천 실행을 종료합니다.
  *
  * AI 추천 후처리 실패는 이미 성공한 Note 저장/수정 결과에 영향을 주지 않습니다.
  *
@@ -156,14 +159,8 @@ export function scheduleRelatedNoteRecommendation({
         roleKey: RELATED_NOTES_AI_ROLE_KEY.ANSWER_GENERATION,
       });
 
-      /*
-       * Run은 실행 이력과 usage/cost 추적을 위한 보조 기능입니다.
-       *
-       * Run 생성에 실패하더라도 실제 AI 추천 기능을 중단하지 않고,
-       * 운영 오류만 기록한 뒤 Run 없이 추천 실행을 계속합니다.
-       */
       try {
-        activeRunId = await createRelatedNoteRecommendationRun({
+        const claimResult = await createRelatedNoteRecommendationRun({
           answerGenerationModelConfigId: answerConfiguration.model.id,
           embeddingModelConfigId: embeddingConfiguration.model.id,
           noteId: recommendationSource.id,
@@ -171,7 +168,26 @@ export function scheduleRelatedNoteRecommendation({
           sourceUpdatedAt: recommendationSource.updated_at,
           userId: ownerUserId,
         });
+
+        if (
+          claimResult.status ===
+          RELATED_NOTE_RECOMMENDATION_RUN_CLAIM_STATUS.DUPLICATE
+        ) {
+          return;
+        }
+
+        activeRunId = claimResult.runId;
       } catch (error) {
+        if (error instanceof RelatedNoteRecommendationDailyLimitError) {
+          console.info("[Related Notes Recommendation Daily Limit Exceeded]", {
+            code: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_ERROR_CODE,
+            noteId: recommendationSource.id,
+            ownerUserId,
+          });
+
+          return;
+        }
+
         await reportRelatedNotesOperationalError({
           error,
           errorCode:
@@ -185,10 +201,9 @@ export function scheduleRelatedNoteRecommendation({
           userId: ownerUserId,
         });
 
-        console.error(
-          "[Related Notes Recommendation Run Create Failed]",
-          error,
-        );
+        console.error("[Related Notes Recommendation Run Claim Failed]", error);
+
+        return;
       }
 
       const result = await runRelatedNoteRecommendation({

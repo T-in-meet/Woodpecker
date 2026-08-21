@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   completeRelatedNoteRecommendationRun,
   createRelatedNoteRecommendationRun,
+  RELATED_NOTE_RECOMMENDATION_RUN_CLAIM_STATUS,
   RELATED_NOTE_RECOMMENDATION_RUN_STATUS,
   saveRelatedNoteRunExpandedQuery,
   saveRelatedNoteRunQueryExpansion,
@@ -26,24 +27,19 @@ describe("related note recommendation run persistence", () => {
     vi.clearAllMocks();
   });
 
-  it("running Run을 생성하고 생성된 ID를 반환한다", async () => {
-    const maybeSingle = vi.fn().mockResolvedValue({
-      data: {
-        id: RUN_ID,
-      },
+  it("running Run을 claim하고 생성된 ID를 반환한다", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [
+        {
+          run_id: RUN_ID,
+          status: RELATED_NOTE_RECOMMENDATION_RUN_CLAIM_STATUS.CLAIMED,
+        },
+      ],
       error: null,
-    });
-    const select = vi.fn().mockReturnValue({
-      maybeSingle,
-    });
-    const insert = vi.fn().mockReturnValue({
-      select,
     });
 
     createAdminClientMock.mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        insert,
-      }),
+      rpc,
     } as never);
 
     const result = await createRelatedNoteRecommendationRun({
@@ -55,16 +51,19 @@ describe("related note recommendation run persistence", () => {
       userId: USER_ID,
     });
 
-    expect(insert).toHaveBeenCalledWith({
-      answer_generation_model_config_id: "answer-model-config-id",
-      embedding_model_config_id: "embedding-model-config-id",
-      note_id: NOTE_ID,
-      query_expansion_model_config_id: "query-expansion-model-config-id",
-      source_updated_at: "2026-08-20T01:00:00.000Z",
-      status: RELATED_NOTE_RECOMMENDATION_RUN_STATUS.RUNNING,
-      user_id: USER_ID,
+    expect(rpc).toHaveBeenCalledWith("claim_related_note_recommendation_run", {
+      p_answer_generation_model_config_id: "answer-model-config-id",
+      p_daily_recommendation_limit: 10,
+      p_embedding_model_config_id: "embedding-model-config-id",
+      p_note_id: NOTE_ID,
+      p_query_expansion_model_config_id: "query-expansion-model-config-id",
+      p_source_updated_at: "2026-08-20T01:00:00.000Z",
+      p_user_id: USER_ID,
     });
-    expect(result).toBe(RUN_ID);
+    expect(result).toEqual({
+      runId: RUN_ID,
+      status: RELATED_NOTE_RECOMMENDATION_RUN_CLAIM_STATUS.CLAIMED,
+    });
   });
 
   it("Query Expansion usage와 cost를 저장하고 total cost를 갱신한다", async () => {

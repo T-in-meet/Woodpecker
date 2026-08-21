@@ -3,6 +3,10 @@ import { estimateAiUsageCostUsd } from "@/features/ai/usage/pricing";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Json } from "@/types/db.helpers";
 
+import {
+  RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
+  RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_SQLSTATE,
+} from "../constants/ai";
 import type { RelatedNoteAiRecommendation } from "../types";
 
 /** Related Notes 추천 Run 상태입니다. */
@@ -16,6 +20,16 @@ export const RELATED_NOTE_RECOMMENDATION_RUN_STATUS = {
 /** Related Notes 추천 Run 상태 타입입니다. */
 export type RelatedNoteRecommendationRunStatus =
   (typeof RELATED_NOTE_RECOMMENDATION_RUN_STATUS)[keyof typeof RELATED_NOTE_RECOMMENDATION_RUN_STATUS];
+
+/** Related Notes 추천 Run claim 상태입니다. */
+export const RELATED_NOTE_RECOMMENDATION_RUN_CLAIM_STATUS = {
+  CLAIMED: "claimed",
+  DUPLICATE: "duplicate",
+} as const;
+
+/** Related Notes 추천 Run claim 상태 타입입니다. */
+export type RelatedNoteRecommendationRunClaimStatus =
+  (typeof RELATED_NOTE_RECOMMENDATION_RUN_CLAIM_STATUS)[keyof typeof RELATED_NOTE_RECOMMENDATION_RUN_CLAIM_STATUS];
 
 /** Related Notes 추천 Run 갱신 단계입니다. */
 export const RELATED_NOTE_RECOMMENDATION_RUN_UPDATE_STEP = {
@@ -55,6 +69,23 @@ export type CreateRelatedNoteRecommendationRunParams = {
   /** Answer Generation Chat Model Config ID입니다. */
   answerGenerationModelConfigId: string;
 };
+
+/** Related Notes 추천 Run claim 결과입니다. */
+export type CreateRelatedNoteRecommendationRunResult =
+  | {
+      /** 새 Run을 claim했습니다. */
+      status: typeof RELATED_NOTE_RECOMMENDATION_RUN_CLAIM_STATUS.CLAIMED;
+
+      /** 생성된 Run ID입니다. */
+      runId: string;
+    }
+  | {
+      /** 같은 Note version의 실행이 이미 존재합니다. */
+      status: typeof RELATED_NOTE_RECOMMENDATION_RUN_CLAIM_STATUS.DUPLICATE;
+
+      /** 기존 running/succeeded Run ID입니다. */
+      runId: string;
+    };
 
 /** Query Expansion usage 저장 입력입니다. */
 export type SaveRelatedNoteRunQueryExpansionParams = {
@@ -135,49 +166,84 @@ export type CompleteRelatedNoteRecommendationRunParams = {
 };
 
 /**
- * Related Notes 추천 Run을 running 상태로 생성합니다.
+ * Related Notes 추천 Run을 running 상태로 claim합니다.
  *
- * Run 생성 실패 여부에 따른 추천 실행 지속 여부는 호출 계층에서 결정합니다.
+ * DB RPC에서 quota, 관리자 bypass, 동일 Note version 중복 실행 방지를
+ * 하나의 transaction 안에서 처리합니다.
  *
  * @param params Run 생성에 필요한 Note, 사용자 및 Runtime snapshot
  * @param options 테스트에서 주입할 Supabase Client
- * @returns 생성된 Run ID
+ * @returns Run claim 결과
  */
 export async function createRelatedNoteRecommendationRun(
   params: CreateRelatedNoteRecommendationRunParams,
   options: {
-    supabase?: RelatedNoteRecommendationRunPersistenceClient | undefined;
+    supabase?:
+      | (RelatedNoteRecommendationRunPersistenceClient &
+          Pick<ReturnType<typeof createAdminClient>, "rpc">)
+      | undefined;
   } = {},
-): Promise<string> {
+): Promise<CreateRelatedNoteRecommendationRunResult> {
   const supabase = options.supabase ?? createAdminClient();
 
-  const { data, error } = await supabase
-    .from("related_note_recommendation_runs")
-    .insert({
-      answer_generation_model_config_id: params.answerGenerationModelConfigId,
-      embedding_model_config_id: params.embeddingModelConfigId,
-      note_id: params.noteId,
-      query_expansion_model_config_id: params.queryExpansionModelConfigId,
-      source_updated_at: params.sourceUpdatedAt,
-      status: RELATED_NOTE_RECOMMENDATION_RUN_STATUS.RUNNING,
-      user_id: params.userId,
-    })
-    .select("id")
-    .maybeSingle();
+  const { data, error } = await supabase.rpc(
+    "claim_related_note_recommendation_run",
+    {
+      p_answer_generation_model_config_id: params.answerGenerationModelConfigId,
+      p_daily_recommendation_limit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
+      p_embedding_model_config_id: params.embeddingModelConfigId,
+      p_note_id: params.noteId,
+      p_query_expansion_model_config_id: params.queryExpansionModelConfigId,
+      p_source_updated_at: params.sourceUpdatedAt,
+      p_user_id: params.userId,
+    },
+  );
 
   if (error) {
+    if (error.code === RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_SQLSTATE) {
+      throw new RelatedNoteRecommendationDailyLimitError();
+    }
+
     throw new Error(
-      `Failed to create related note recommendation run: ${error.message}`,
+      `Failed to claim related note recommendation run: ${error.message}`,
     );
   }
 
-  if (!data) {
+  const result = data[0];
+
+  if (!result) {
+    throw new Error("Related note recommendation run claim returned no row.");
+  }
+
+  if (
+    result.status !== RELATED_NOTE_RECOMMENDATION_RUN_CLAIM_STATUS.CLAIMED &&
+    result.status !== RELATED_NOTE_RECOMMENDATION_RUN_CLAIM_STATUS.DUPLICATE
+  ) {
     throw new Error(
-      "Related note recommendation run creation returned no row.",
+      `Unexpected related note recommendation run claim status: ${result.status}`,
     );
   }
 
-  return data.id;
+  if (result.run_id === null) {
+    throw new Error(
+      "Related note recommendation run claim returned no run ID.",
+    );
+  }
+
+  return {
+    runId: result.run_id,
+    status: result.status,
+  };
+}
+
+/**
+ * Related Notes 추천 일일 실행 제한 초과를 나타내는 오류입니다.
+ */
+export class RelatedNoteRecommendationDailyLimitError extends Error {
+  constructor() {
+    super("Related Notes daily recommendation limit exceeded.");
+    this.name = "RelatedNoteRecommendationDailyLimitError";
+  }
 }
 
 /**

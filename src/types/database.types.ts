@@ -1710,6 +1710,21 @@ export type Database = {
         };
         Returns: Json;
       };
+      claim_related_note_recommendation_run: {
+        Args: {
+          p_answer_generation_model_config_id: string;
+          p_daily_recommendation_limit: number;
+          p_embedding_model_config_id: string;
+          p_note_id: string;
+          p_query_expansion_model_config_id: string;
+          p_source_updated_at: string;
+          p_user_id: string;
+        };
+        Returns: {
+          run_id: string | null;
+          status: string | null;
+        }[];
+      };
       complete_note_chat_run_failure: {
         Args: { p_run_id: string; p_usage?: Json };
         Returns: string;
