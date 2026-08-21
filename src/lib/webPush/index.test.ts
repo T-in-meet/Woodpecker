@@ -51,6 +51,7 @@ describe("web push helper", () => {
     expect(sendNotificationMock).toHaveBeenCalledWith(
       SUBSCRIPTION,
       JSON.stringify({ title: "Review due" }),
+      { timeout: 10_000 },
     );
     expect(setVapidDetailsMock).not.toHaveBeenCalled();
     expect(result).toEqual({ ok: true });
