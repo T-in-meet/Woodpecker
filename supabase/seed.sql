@@ -23802,6 +23802,19 @@ INSERT INTO "public"."user_agreements" ("user_id", "terms_agreed_at", "privacy_a
 	('33333333-3333-4333-8333-333333333333', '2026-08-06 08:03:01.745+00', '2026-08-06 08:03:01.745+00', 'email_backfill', '2026-08-06 08:03:01.758302+00', '2026-08-06 08:03:01.745+00');
 
 
+--
+-- Data for Name: user_legal_acceptances; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+INSERT INTO "public"."user_legal_acceptances" ("user_id", "event_type", "document_version", "occurred_at", "source") VALUES
+	('11111111-1111-4111-8111-111111111111', 'terms_accepted', '2026-03-24', '2026-08-06 08:03:01.745+00', 'email_backfill'),
+	('11111111-1111-4111-8111-111111111111', 'privacy_notice_acknowledged', '2026-03-24', '2026-08-06 08:03:01.745+00', 'email_backfill'),
+	('22222222-2222-4222-8222-222222222222', 'terms_accepted', '2026-03-24', '2026-08-06 08:03:01.745+00', 'email_backfill'),
+	('22222222-2222-4222-8222-222222222222', 'privacy_notice_acknowledged', '2026-03-24', '2026-08-06 08:03:01.745+00', 'email_backfill'),
+	('33333333-3333-4333-8333-333333333333', 'terms_accepted', '2026-03-24', '2026-08-06 08:03:01.745+00', 'email_backfill'),
+	('33333333-3333-4333-8333-333333333333', 'privacy_notice_acknowledged', '2026-03-24', '2026-08-06 08:03:01.745+00', 'email_backfill');
+
+
 
 
 --
