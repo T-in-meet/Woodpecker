@@ -9,6 +9,10 @@ vi.mock("@/features/auth/lib/userAgreements", () => ({
 }));
 
 import {
+  NOTE_RETRIEVAL_AI_FEATURE_KEY,
+  NOTE_RETRIEVAL_AI_ROLE_KEY,
+} from "@/features/ai/rags/note/constants/runtime";
+import {
   resolveAiRuntimeChatConfiguration,
   resolveAiRuntimeEmbeddingConfiguration,
 } from "@/features/ai/runtimes";
@@ -171,8 +175,8 @@ const QUERY_EXPANSION_CONFIGURATION = {
 
 const EMBEDDING_CONFIGURATION = {
   kind: "embedding",
-  featureKey: NOTE_CHAT_AI_FEATURE_KEY,
-  roleKey: NOTE_CHAT_AI_ROLE_KEY.NOTE_RETRIEVAL,
+  featureKey: NOTE_RETRIEVAL_AI_FEATURE_KEY,
+  roleKey: NOTE_RETRIEVAL_AI_ROLE_KEY,
   model: {
     id: "550e8400-e29b-41d4-a716-446655440019",
     model: "text-embedding-3-small",
@@ -796,6 +800,11 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
         p_user_id: USER.id,
       },
     );
+
+    expect(resolveAiRuntimeEmbeddingConfiguration).toHaveBeenCalledWith({
+      featureKey: NOTE_RETRIEVAL_AI_FEATURE_KEY,
+      roleKey: NOTE_RETRIEVAL_AI_ROLE_KEY,
+    });
 
     expect(runNoteChatStream).toHaveBeenCalledWith(
       expect.objectContaining({

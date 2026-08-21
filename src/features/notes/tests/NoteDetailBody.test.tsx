@@ -53,9 +53,13 @@ vi.mock("./DeleteNoteDialog", () => ({
   DeleteNoteDialog: () => <button type="button">노트 삭제</button>,
 }));
 
+vi.mock("@/features/related-notes/components/RelatedNotesSection", () => ({
+  RelatedNotesSection: () => null,
+}));
+
 import { NoteDetailBody } from "../components/NoteDetailBody";
 
-function renderBody() {
+function renderBody(props: Partial<Parameters<typeof NoteDetailBody>[0]> = {}) {
   return render(
     <NoteDetailBody
       noteId="note-123"
@@ -67,6 +71,7 @@ function renderBody() {
       reviewStatusMessage="다음 예정: 내일"
       notificationTimeOfDay={null}
       nextScheduledAt={null}
+      {...props}
     />,
   );
 }

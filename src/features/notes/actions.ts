@@ -15,13 +15,14 @@ import { getNoteDetailRoute, ROUTES } from "@/lib/constants/routes";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
+import {
+  NOTE_RETRIEVAL_AI_FEATURE_KEY,
+  NOTE_RETRIEVAL_AI_ROLE_KEY,
+} from "../ai/rags/note/constants/runtime";
 import { generateNoteEmbedding } from "../ai/rags/note/generate-embedding";
 import { resolveAiRuntimeEmbeddingConfiguration } from "../ai/runtimes";
 import { reportAiOperationalError } from "../ai/utils/report-ai-operational-error";
-import {
-  NOTE_CHAT_AI_FEATURE_KEY,
-  NOTE_CHAT_AI_ROLE_KEY,
-} from "../note-chats/constants/ai";
+import { scheduleRelatedNoteRecommendation } from "../related-notes/execution/schedule-related-note-recommendation";
 import { type NoteInput, noteSchema } from "./schema";
 
 type NoteActionFieldErrors = Partial<Record<keyof NoteInput, string[]>>;
@@ -97,15 +98,15 @@ function scheduleNoteEmbedding({
 
     try {
       /*
-       * Note Chat의 검색 대상 embedding과 동일한 Runtime 설정을 사용합니다.
+       * 공통 Note retrieval Runtime 설정을 사용합니다.
        *
        * Runtime 설정 조회와 Provider embedding 생성은 모두 후처리에서 실행되므로
        * Note 저장/수정 응답 시간을 지연시키지 않습니다.
        */
       const embeddingConfiguration =
         await resolveAiRuntimeEmbeddingConfiguration({
-          featureKey: NOTE_CHAT_AI_FEATURE_KEY,
-          roleKey: NOTE_CHAT_AI_ROLE_KEY.NOTE_RETRIEVAL,
+          featureKey: NOTE_RETRIEVAL_AI_FEATURE_KEY,
+          roleKey: NOTE_RETRIEVAL_AI_ROLE_KEY,
         });
 
       await generateNoteEmbedding({
@@ -200,6 +201,18 @@ export async function createNoteAction(
     ownerUserId: user.id,
   });
 
+  /*
+   * Related Notes AI 추천도 Note 생성 응답 이후 후처리로 예약합니다.
+   *
+   * Runtime 설정 조회, Query Expansion, RAG 검색, Answer Agent 실행 및
+   * 추천 저장을 Action 응답 경로에서 분리하여,
+   * AI 추천 처리 시간이 Note 생성 성공 응답을 지연시키지 않도록 합니다.
+   */
+  scheduleRelatedNoteRecommendation({
+    noteId: newNoteId,
+    ownerUserId: user.id,
+  });
+
   return {
     success: true,
     newNoteId,
@@ -266,7 +279,7 @@ export async function updateNoteAction(
     })
     .eq("id", parsedNoteId.data)
     .eq("user_id", user.id)
-    .select("id")
+    .select("id, title, content")
     .maybeSingle();
 
   if (error) {
@@ -284,6 +297,18 @@ export async function updateNoteAction(
    * 이미 완료된 Note 수정 결과에는 영향을 주지 않습니다.
    */
   scheduleNoteEmbedding({
+    noteId: updatedNote.id,
+    ownerUserId: user.id,
+  });
+
+  /*
+   * 수정된 Note의 Related Notes AI 추천도 응답 이후 후처리로 예약합니다.
+   *
+   * 후처리에서는 DB에서 최신 Note snapshot을 다시 조회하고,
+   * 추천 저장 시 updated_at을 검증하므로 연속 수정 중 생성된
+   * stale 추천이 최신 추천을 덮어쓰지 않도록 합니다.
+   */
+  scheduleRelatedNoteRecommendation({
     noteId: updatedNote.id,
     ownerUserId: user.id,
   });

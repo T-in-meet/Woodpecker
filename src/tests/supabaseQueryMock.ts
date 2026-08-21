@@ -61,7 +61,15 @@ export function createSupabaseQueryMock(
     ]),
   );
 
-  const from = vi.fn((table: string) => builders.get(table)?.builder);
+  const from = vi.fn((table: string) => {
+    const existingBuilder = builders.get(table);
+
+    if (existingBuilder) {
+      return existingBuilder.builder;
+    }
+
+    throw new Error(`Supabase query mock result is not configured: ${table}`);
+  });
 
   return {
     supabase: { from },

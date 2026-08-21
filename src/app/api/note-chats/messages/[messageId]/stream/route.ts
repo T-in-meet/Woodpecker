@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 
 import {
+  NOTE_RETRIEVAL_AI_FEATURE_KEY,
+  NOTE_RETRIEVAL_AI_ROLE_KEY,
+} from "@/features/ai/rags/note/constants/runtime";
+import {
   resolveAiRuntimeChatConfiguration,
   resolveAiRuntimeEmbeddingConfiguration,
 } from "@/features/ai/runtimes";
@@ -219,8 +223,8 @@ export async function POST(
           roleKey: NOTE_CHAT_AI_ROLE_KEY.QUERY_EXPANSION,
         }),
         resolveAiRuntimeEmbeddingConfiguration({
-          featureKey: NOTE_CHAT_AI_FEATURE_KEY,
-          roleKey: NOTE_CHAT_AI_ROLE_KEY.NOTE_RETRIEVAL,
+          featureKey: NOTE_RETRIEVAL_AI_FEATURE_KEY,
+          roleKey: NOTE_RETRIEVAL_AI_ROLE_KEY,
         }),
       ]);
   } catch (error) {

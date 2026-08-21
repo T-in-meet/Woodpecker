@@ -9,6 +9,7 @@ import {
 } from "@/features/operational-errors/constants";
 import { ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
+import { escapePostgrestLikePattern } from "@/lib/utils/escapePostgrestLikePattern";
 
 import { noteChatRunSourceSchema } from "./schema";
 import type {
@@ -78,11 +79,7 @@ export async function getNoteChatConversationList({
   const trimmedSearch = search.trim();
 
   if (trimmedSearch) {
-    const term = trimmedSearch
-      .replace(/\\/g, "\\\\")
-      .replace(/%/g, "\\%")
-      .replace(/_/g, "\\_")
-      .replace(/"/g, '\\"');
+    const term = escapePostgrestLikePattern(trimmedSearch).replace(/"/g, '\\"');
 
     query = query.ilike("title", `%${term}%`);
   }

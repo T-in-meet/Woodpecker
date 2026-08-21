@@ -1,0 +1,257 @@
+BEGIN;
+
+SELECT plan(4);
+
+
+-- ============================================================================
+-- Test Fixtures
+-- ============================================================================
+
+SELECT set_config(
+    'test.related_notes_update_user_a_id',
+    gen_random_uuid()::text,
+    true
+);
+
+SELECT set_config(
+    'test.related_notes_update_user_b_id',
+    gen_random_uuid()::text,
+    true
+);
+
+SELECT set_config(
+    'test.related_notes_update_source_id',
+    gen_random_uuid()::text,
+    true
+);
+
+SELECT set_config(
+    'test.related_notes_update_manual_target_id',
+    gen_random_uuid()::text,
+    true
+);
+
+SELECT set_config(
+    'test.related_notes_update_ai_target_id',
+    gen_random_uuid()::text,
+    true
+);
+
+SELECT set_config(
+    'test.related_notes_update_foreign_target_id',
+    gen_random_uuid()::text,
+    true
+);
+
+INSERT INTO auth.users (
+    id,
+    email,
+    raw_user_meta_data
+)
+VALUES
+    (
+        current_setting('test.related_notes_update_user_a_id')::uuid,
+        'related-notes-update-a@example.com',
+        '{}'::jsonb
+    ),
+    (
+        current_setting('test.related_notes_update_user_b_id')::uuid,
+        'related-notes-update-b@example.com',
+        '{}'::jsonb
+    );
+
+INSERT INTO public.notes (
+    id,
+    user_id,
+    title,
+    content,
+    review_round
+)
+VALUES
+    (
+        current_setting('test.related_notes_update_source_id')::uuid,
+        current_setting('test.related_notes_update_user_a_id')::uuid,
+        'Update Source',
+        'Update Source Content',
+        0
+    ),
+    (
+        current_setting('test.related_notes_update_manual_target_id')::uuid,
+        current_setting('test.related_notes_update_user_a_id')::uuid,
+        'Manual Target',
+        'Manual Target Content',
+        0
+    ),
+    (
+        current_setting('test.related_notes_update_ai_target_id')::uuid,
+        current_setting('test.related_notes_update_user_a_id')::uuid,
+        'AI Target',
+        'AI Target Content',
+        0
+    ),
+    (
+        current_setting('test.related_notes_update_foreign_target_id')::uuid,
+        current_setting('test.related_notes_update_user_b_id')::uuid,
+        'Foreign Target',
+        'Foreign Target Content',
+        0
+    );
+
+INSERT INTO public.note_related_notes (
+    note_id,
+    related_note_id,
+    origin,
+    status,
+    metadata
+)
+VALUES
+    (
+        current_setting('test.related_notes_update_source_id')::uuid,
+        current_setting('test.related_notes_update_manual_target_id')::uuid,
+        'manual',
+        'active',
+        '{
+            "title": "Manual Target",
+            "reason": "기존 이유",
+            "custom": "preserve"
+        }'::jsonb
+    ),
+    (
+        current_setting('test.related_notes_update_source_id')::uuid,
+        current_setting('test.related_notes_update_ai_target_id')::uuid,
+        'ai',
+        'active',
+        '{
+            "title": "AI Target",
+            "reason": "AI 추천 이유"
+        }'::jsonb
+    ),
+    (
+        current_setting('test.related_notes_update_source_id')::uuid,
+        current_setting('test.related_notes_update_foreign_target_id')::uuid,
+        'manual',
+        'active',
+        '{
+            "title": "Foreign Target"
+        }'::jsonb
+    );
+
+
+SET LOCAL ROLE authenticated;
+
+SELECT set_config(
+    'request.jwt.claims',
+    json_build_object(
+        'sub',
+        current_setting('test.related_notes_update_user_a_id'),
+        'role',
+        'authenticated'
+    )::text,
+    true
+);
+
+
+-- ============================================================================
+-- 1. Update Reason
+-- ============================================================================
+
+SELECT public.update_note_related_manual_reason(
+    current_setting('test.related_notes_update_source_id')::uuid,
+    current_setting('test.related_notes_update_manual_target_id')::uuid,
+    '  수정된 이유  '
+);
+
+SELECT is(
+    (
+        SELECT metadata
+        FROM public.note_related_notes
+        WHERE note_id =
+                current_setting('test.related_notes_update_source_id')::uuid
+          AND related_note_id =
+                current_setting('test.related_notes_update_manual_target_id')::uuid
+    ),
+    '{
+        "title": "Manual Target",
+        "reason": "수정된 이유",
+        "custom": "preserve"
+    }'::jsonb,
+    'updating manual reason should preserve existing metadata'
+);
+
+
+-- ============================================================================
+-- 2. Remove Reason
+-- ============================================================================
+
+SELECT public.update_note_related_manual_reason(
+    current_setting('test.related_notes_update_source_id')::uuid,
+    current_setting('test.related_notes_update_manual_target_id')::uuid,
+    '   '
+);
+
+SELECT is(
+    (
+        SELECT metadata
+        FROM public.note_related_notes
+        WHERE note_id =
+                current_setting('test.related_notes_update_source_id')::uuid
+          AND related_note_id =
+                current_setting('test.related_notes_update_manual_target_id')::uuid
+    ),
+    '{
+        "title": "Manual Target",
+        "custom": "preserve"
+    }'::jsonb,
+    'blank reason should remove only the reason metadata key'
+);
+
+
+-- ============================================================================
+-- 3. AI Relation
+-- ============================================================================
+
+SELECT throws_ok(
+    format(
+        $sql$
+            SELECT public.update_note_related_manual_reason(
+                '%s'::uuid,
+                '%s'::uuid,
+                '수정할 수 없는 이유'
+            );
+        $sql$,
+        current_setting('test.related_notes_update_source_id'),
+        current_setting('test.related_notes_update_ai_target_id')
+    ),
+    'P0002',
+    'RELATED_NOTE_MANUAL_RELATION_NOT_FOUND',
+    'AI relationship reason should not be manually editable'
+);
+
+
+-- ============================================================================
+-- 4. Target Ownership
+-- ============================================================================
+
+SELECT throws_ok(
+    format(
+        $sql$
+            SELECT public.update_note_related_manual_reason(
+                '%s'::uuid,
+                '%s'::uuid,
+                '다른 사용자 Note'
+            );
+        $sql$,
+        current_setting('test.related_notes_update_source_id'),
+        current_setting('test.related_notes_update_foreign_target_id')
+    ),
+    'P0002',
+    'RELATED_NOTE_TARGET_NOT_FOUND',
+    'manual relationship targeting another users note should not be editable'
+);
+
+
+RESET ROLE;
+
+SELECT * FROM finish();
+
+ROLLBACK;
