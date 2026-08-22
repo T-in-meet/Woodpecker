@@ -1,3 +1,5 @@
+import { legalAcceptanceRequiredResponseSchema } from "@/features/auth/schemas/legalAcceptanceRequiredResponseSchema";
+
 import type { NoteChatStreamEvent } from "./types";
 
 export type StreamNoteChatQuestionInput = {
@@ -20,13 +22,20 @@ type StreamNoteChatOptions = {
 
 export class NoteChatStreamRequestError extends Error {
   readonly code: string | null;
+  readonly redirectTo: string | null;
   readonly status: number;
 
-  constructor(message: string, status: number, code: string | null = null) {
+  constructor(
+    message: string,
+    status: number,
+    code: string | null = null,
+    redirectTo: string | null = null,
+  ) {
     super(message);
 
     this.name = "NoteChatStreamRequestError";
     this.code = code;
+    this.redirectTo = redirectTo;
     this.status = status;
   }
 }
@@ -153,17 +162,31 @@ async function createNoteChatStreamRequestError(
   let code: string | null = null;
 
   try {
-    const body = (await response.json()) as {
-      code?: unknown;
-      error?: unknown;
-    };
+    const body: unknown = await response.json();
+    const legalAcceptanceRequired =
+      legalAcceptanceRequiredResponseSchema.safeParse(body);
 
-    if (typeof body.error === "string" && body.error.length > 0) {
-      message = body.error;
+    if (response.status === 403 && legalAcceptanceRequired.success) {
+      return new NoteChatStreamRequestError(
+        "법적 문서 확인이 필요합니다.",
+        response.status,
+        null,
+        legalAcceptanceRequired.data.redirectTo,
+      );
     }
 
-    if (typeof body.code === "string" && body.code.length > 0) {
-      code = body.code;
+    if (typeof body !== "object" || body === null) {
+      return new NoteChatStreamRequestError(message, response.status);
+    }
+
+    const { code: rawCode, error: rawError } = body as Record<string, unknown>;
+
+    if (typeof rawError === "string" && rawError.length > 0) {
+      message = rawError;
+    }
+
+    if (typeof rawCode === "string" && rawCode.length > 0) {
+      code = rawCode;
     }
   } catch {
     // JSON 오류 본문이 아니면 기본 메시지를 사용합니다.

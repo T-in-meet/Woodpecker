@@ -11,6 +11,7 @@ export const ROUTES = {
   MYPAGE: "/mypage",
   TERMS: "/terms",
   PRIVACY: "/privacy",
+  AGREEMENTS: "/agreements",
   CALLBACK: "/auth/callback",
   RESET_PASSWORD: "/reset-password",
   SET_PASSWORD: "/set-password",

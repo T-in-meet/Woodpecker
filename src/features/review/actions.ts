@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { requireCurrentLegalAcceptance } from "@/features/auth/utils/requireCurrentLegalAcceptance";
 import { claimResultSchema } from "@/lib/ai/claimResult";
 import { generateJson } from "@/lib/ai/client";
 import { toAiFailureReason } from "@/lib/ai/failureReason";
@@ -190,6 +191,11 @@ export async function submitAnswerAction(
     redirect(`${ROUTES.RESEND_EMAIL}?purpose=signup`);
   }
 
+  await requireCurrentLegalAcceptance(
+    user.id,
+    getNoteReviewRoute(parsed.data.noteId),
+  );
+
   let note, pendingReviewLog;
   try {
     [note, pendingReviewLog] = await Promise.all([
@@ -244,6 +250,11 @@ export async function completeReviewAction(
   if (user.email_confirmed_at == null) {
     redirect(`${ROUTES.RESEND_EMAIL}?purpose=signup`);
   }
+
+  await requireCurrentLegalAcceptance(
+    user.id,
+    getNoteReviewRoute(parsed.data.noteId),
+  );
 
   let reviewableNote, pendingReviewLog;
   try {
@@ -398,6 +409,11 @@ export async function gradeAnswerAction(
   if (user.email_confirmed_at == null) {
     redirect(`${ROUTES.RESEND_EMAIL}?purpose=signup`);
   }
+
+  await requireCurrentLegalAcceptance(
+    user.id,
+    getNoteReviewRoute(parsed.data.noteId),
+  );
 
   let reviewableNote, note, pendingReviewLog;
   try {

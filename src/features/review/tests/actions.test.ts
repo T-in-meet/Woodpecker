@@ -38,6 +38,10 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: createClientMock,
 }));
 
+vi.mock("@/features/auth/utils/requireCurrentLegalAcceptance", () => ({
+  requireCurrentLegalAcceptance: vi.fn(),
+}));
+
 // actions.ts가 AI client를 import하므로 Cloudflare 키 없이도 로드되도록 mock.
 // client.ts는 server-only를 import하는데 jsdom에서는 그것만으로 throw한다.
 vi.mock("server-only", () => ({}));

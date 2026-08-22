@@ -21,18 +21,34 @@ describe("ensureUserAgreement", () => {
     upsertMock.mockResolvedValue({ error: null });
   });
 
-  it("기존 약관 source를 덮지 않도록 중복 행을 무시하는 upsert를 사용한다", async () => {
+  it("현재 버전의 세 법적 이벤트를 중복 없이 기록한다", async () => {
     await ensureUserAgreement("user-id", "email");
 
-    expect(fromMock).toHaveBeenCalledWith("user_agreements");
+    expect(fromMock).toHaveBeenCalledWith("user_legal_acceptances");
     expect(upsertMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        user_id: "user-id",
-        source: "email",
-      }),
+      expect.arrayContaining([
+        expect.objectContaining({
+          event_type: "terms_accepted",
+          document_version: "2026-09-20",
+          user_id: "user-id",
+          source: "email",
+        }),
+        expect.objectContaining({
+          event_type: "privacy_notice_acknowledged",
+          document_version: "2026-09-20",
+          user_id: "user-id",
+          source: "email",
+        }),
+        expect.objectContaining({
+          event_type: "age_14_confirmed",
+          document_version: "2026-09-20",
+          user_id: "user-id",
+          source: "email",
+        }),
+      ]),
       {
         ignoreDuplicates: true,
-        onConflict: "user_id",
+        onConflict: "user_id,event_type,document_version",
       },
     );
   });

@@ -42,7 +42,11 @@ describe("회원가입 - 기존 미인증 사용자 재요청 분기", () => {
     email: "test@example.com",
     password: "Password123!",
     nickname: "테스터",
-    agreements: { termsOfService: true as const, privacyPolicy: true as const },
+    agreements: {
+      termsOfService: true as const,
+      privacyPolicyAcknowledged: true as const,
+      age14OrOlder: true as const,
+    },
   };
 
   // 기존 미인증 계정: 이메일은 존재하지만 아직 인증되지 않은 상태
@@ -97,15 +101,12 @@ describe("회원가입 - 기존 미인증 사용자 재요청 분기", () => {
     });
   });
 
-  it("TC-03A. 기존 미인증 사용자도 약관 동의 기록을 저장한다", async () => {
+  it("TC-03A. 기존 미인증 사용자는 약관 동의 기록을 저장하지 않는다", async () => {
     vi.mocked(getUserByEmail).mockResolvedValue(unverifiedUser as never);
 
     await POST(makeRequest(requestBody));
 
-    expect(upsertUserAgreementMock).toHaveBeenCalledWith(
-      "unverified-user-id",
-      "email",
-    );
+    expect(upsertUserAgreementMock).not.toHaveBeenCalled();
   });
 
   it("TC-04. 기존 미인증 사용자 메일 발송 실패도 외부 계약은 성공으로 유지된다", async () => {
@@ -156,7 +157,11 @@ describe("회원가입 - 기존 인증 사용자 재요청 분기", () => {
     email: "test@example.com",
     password: "Password123!",
     nickname: "tester",
-    agreements: { termsOfService: true as const, privacyPolicy: true as const },
+    agreements: {
+      termsOfService: true as const,
+      privacyPolicyAcknowledged: true as const,
+      age14OrOlder: true as const,
+    },
   };
 
   // 기존 인증 계정: 이메일 인증이 완료된 기존 가입 상태
@@ -206,12 +211,12 @@ describe("회원가입 - 기존 인증 사용자 재요청 분기", () => {
     expect(body).not.toHaveProperty("error");
   });
 
-  it("TC-03A. 기존 인증 사용자도 약관 동의 기록을 저장한다", async () => {
+  it("TC-03A. 기존 인증 사용자는 약관 동의 기록을 저장하지 않는다", async () => {
     vi.mocked(getUserByEmail).mockResolvedValue(verifiedUser as never);
 
     await POST(makeRequest(requestBody));
 
-    expect(upsertUserAgreementMock).toHaveBeenCalledWith("user-123", "email");
+    expect(upsertUserAgreementMock).not.toHaveBeenCalled();
   });
 
   it("TC-04. 기존 인증 사용자 메일 발송 실패도 외부 계약은 성공으로 유지된다", async () => {

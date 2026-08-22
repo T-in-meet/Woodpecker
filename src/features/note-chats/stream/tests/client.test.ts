@@ -182,6 +182,7 @@ describe("NoteChatStreamRequestError", () => {
     expect(error.message).toBe("요청에 실패했습니다.");
     expect(error.status).toBe(429);
     expect(error.code).toBe("NOTE_CHAT_DAILY_EXECUTION_LIMIT_EXCEEDED");
+    expect(error.redirectTo).toBeNull();
   });
 });
 
@@ -220,6 +221,38 @@ describe("streamNoteChatRequest", () => {
       message: "오늘의 실행 제한을 초과했습니다.",
       status: 429,
       code: "NOTE_CHAT_DAILY_EXECUTION_LIMIT_EXCEEDED",
+    });
+  });
+
+  it("법적 문서 확인 403 응답의 redirectTo를 요청 오류에 보존한다", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: "legal_acceptance_required",
+          redirectTo: "/agreements?redirect=%2Fnote-chats",
+        }),
+        {
+          status: 403,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    const stream = streamNoteChatQuestion({
+      conversationId: "conversation-1",
+      content: { text: "질문입니다." },
+    });
+
+    await expect(
+      (async () => {
+        for await (const _event of stream) {
+          // 스트림 실행
+        }
+      })(),
+    ).rejects.toMatchObject({
+      name: "NoteChatStreamRequestError",
+      redirectTo: "/agreements?redirect=%2Fnote-chats",
+      status: 403,
     });
   });
 

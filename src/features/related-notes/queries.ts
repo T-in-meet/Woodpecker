@@ -2,6 +2,8 @@
 
 import { z } from "zod";
 
+import { requireCurrentLegalAcceptance } from "@/features/auth/utils/requireCurrentLegalAcceptance";
+import { getNoteDetailRoute } from "@/lib/constants/routes";
 import { logError } from "@/lib/logger";
 import { createServerComponentClient } from "@/lib/supabase/server";
 import { escapePostgrestLikePattern } from "@/lib/utils/escapePostgrestLikePattern";
@@ -33,6 +35,24 @@ export async function getRelatedNotes(
   noteId: string,
 ): Promise<RelatedNotesQueryResult> {
   const supabase = await createServerComponentClient();
+
+  /*
+   * 이 함수는 Client Component에서 Server Action으로 호출될 수 있으므로
+   * (main) layout의 재동의 게이트를 거치지 않을 수 있습니다.
+   * 조회 전 인증 사용자와 최신 법적 문서 동의 여부를 직접 확인합니다.
+   */
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return {
+      hasRunningRecommendationRun: false,
+      relatedNotes: [],
+    };
+  }
+
+  await requireCurrentLegalAcceptance(user.id, getNoteDetailRoute(noteId));
 
   /*
    * 화면 표시 목록과 AI 추천 Run 진행 여부는 서로 독립적인 조회입니다.
@@ -206,6 +226,11 @@ export async function getRelatedNoteCandidates(
       total: 0,
     };
   }
+
+  await requireCurrentLegalAcceptance(
+    user.id,
+    getNoteDetailRoute(parsedNoteId.data),
+  );
 
   /*
    * 기준 Note가 실제로 현재 사용자의 Note인지 확인합니다.

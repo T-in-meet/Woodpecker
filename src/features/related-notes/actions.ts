@@ -1,5 +1,7 @@
 "use server";
 
+import { requireCurrentLegalAcceptance } from "@/features/auth/utils/requireCurrentLegalAcceptance";
+import { getNoteDetailRoute } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 
 import {
@@ -79,6 +81,16 @@ export async function addManualRelatedNotesAction(
   const { noteId, relatedNotes } = parsed.data;
 
   const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "로그인이 필요합니다." };
+  }
+
+  await requireCurrentLegalAcceptance(user.id, getNoteDetailRoute(noteId));
 
   const { error } = await supabase.rpc("add_note_related_manual", {
     p_note_id: noteId,
@@ -177,6 +189,19 @@ export async function updateManualRelatedNoteReasonAction(
 
   const supabase = await createClient();
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "로그인이 필요합니다." };
+  }
+
+  await requireCurrentLegalAcceptance(
+    user.id,
+    getNoteDetailRoute(parsed.data.noteId),
+  );
+
   const { error } = await supabase.rpc("update_note_related_manual_reason", {
     p_note_id: parsed.data.noteId,
     p_related_note_id: parsed.data.relatedNoteId,
@@ -252,6 +277,19 @@ export async function deleteRelatedNoteAction(
   }
 
   const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "로그인이 필요합니다." };
+  }
+
+  await requireCurrentLegalAcceptance(
+    user.id,
+    getNoteDetailRoute(parsed.data.noteId),
+  );
 
   const { error } = await supabase.rpc("delete_note_related", {
     p_note_id: parsed.data.noteId,

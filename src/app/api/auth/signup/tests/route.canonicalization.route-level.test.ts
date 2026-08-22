@@ -29,7 +29,8 @@ function makeRequest(email: string, ip: string): NextRequest {
       nickname: "tester",
       agreements: {
         termsOfService: true,
-        privacyPolicy: true,
+        privacyPolicyAcknowledged: true,
+        age14OrOlder: true,
       },
     }),
   });

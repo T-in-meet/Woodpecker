@@ -28,11 +28,10 @@ import {
   setupLoginApiMocks,
 } from "./utils/loginTestHelper";
 
-const hasUserAgreementMock = vi.hoisted(() => vi.fn());
+const getLegalAcceptanceStatusMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/features/auth/lib/userAgreements", () => ({
-  AGREEMENT_REQUIRED_REDIRECT: "/signup?agreement_required=1",
-  hasUserAgreement: hasUserAgreementMock,
+  getLegalAcceptanceStatus: getLegalAcceptanceStatusMock,
 }));
 vi.mock("@/lib/supabase/server");
 vi.mock("@/lib/utils/getClientIp", () => ({
@@ -61,7 +60,7 @@ describe("로그인 API rate limit 처리", () => {
     // 기본적으로 허용 상태로 초기화
     mockIpPrecheckAllowed();
     mockEligibilityAllowed();
-    hasUserAgreementMock.mockResolvedValue(true);
+    getLegalAcceptanceStatusMock.mockResolvedValue({ canAccessService: true });
   });
 
   it("TC-01: IP precheck 차단 시 429 + LOGIN_RATE_LIMIT_EXCEEDED를 반환한다", async () => {

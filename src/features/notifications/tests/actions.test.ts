@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { requireCurrentLegalAcceptance } from "@/features/auth/utils/requireCurrentLegalAcceptance";
 import { getNoteDetailRoute, ROUTES } from "@/lib/constants/routes";
 
 const REDIRECT_ERROR = new Error("NEXT_REDIRECT");
@@ -19,6 +20,10 @@ const { createClientMock, redirectMock, revalidatePathMock } = vi.hoisted(
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: createClientMock,
+}));
+
+vi.mock("@/features/auth/utils/requireCurrentLegalAcceptance", () => ({
+  requireCurrentLegalAcceptance: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({
@@ -265,8 +270,16 @@ describe("notification server actions", () => {
     });
     createClientMock.mockResolvedValue(supabase);
 
-    const result = await markNotificationAsReadAction(NOTIFICATION_ID);
+    const redirectPath = getNoteDetailRoute(NOTE_ID);
+    const result = await markNotificationAsReadAction(
+      NOTIFICATION_ID,
+      redirectPath,
+    );
 
+    expect(requireCurrentLegalAcceptance).toHaveBeenCalledWith(
+      USER_ID,
+      redirectPath,
+    );
     expect(rpcMock).toHaveBeenCalledWith("mark_notification_as_read", {
       p_notification_id: NOTIFICATION_ID,
     });
@@ -280,6 +293,10 @@ describe("notification server actions", () => {
 
     const result = await setNotificationTimeAction(NOTE_ID, null);
 
+    expect(requireCurrentLegalAcceptance).toHaveBeenCalledWith(
+      USER_ID,
+      getNoteDetailRoute(NOTE_ID),
+    );
     expect(rpcMock).toHaveBeenCalledWith("update_notification_time_of_day", {
       p_note_id: NOTE_ID,
     });

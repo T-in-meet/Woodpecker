@@ -2,6 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
+const getLegalAcceptanceRequiredPathMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/features/auth/lib/userAgreements", () => ({
+  getLegalAcceptanceRequiredPath: getLegalAcceptanceRequiredPathMock,
+}));
+
 import {
   NOTE_RETRIEVAL_AI_FEATURE_KEY,
   NOTE_RETRIEVAL_AI_ROLE_KEY,
@@ -295,6 +301,7 @@ async function readStream(response: Response): Promise<string[]> {
 }
 
 beforeEach(() => {
+  getLegalAcceptanceRequiredPathMock.mockReset().mockResolvedValue(null);
   vi.clearAllMocks();
 
   vi.mocked(reportNoteChatOperationalError).mockResolvedValue(undefined);

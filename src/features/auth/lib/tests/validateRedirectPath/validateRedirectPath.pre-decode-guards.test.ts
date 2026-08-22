@@ -48,7 +48,7 @@ describe("validateRedirectPath 디코딩 전 위험 패턴 차단", () => {
   });
 
   describe("URL 부가 요소", () => {
-    it("query string이 포함된 경로는 /mypage를 반환한다", () => {
+    it("허용되지 않은 query string은 제거한다", () => {
       expect(validateRedirectPath("/mypage?foo=bar")).toBe("/mypage");
     });
 
@@ -56,7 +56,7 @@ describe("validateRedirectPath 디코딩 전 위험 패턴 차단", () => {
       expect(validateRedirectPath("/mypage#section")).toBe("/mypage");
     });
 
-    it('" /mypage?foo=bar " (앞뒤 공백)는 trim 후 query string 포함 → /mypage를 반환한다', () => {
+    it('" /mypage?foo=bar " (앞뒤 공백)는 trim 후 허용되지 않은 query를 제거한다', () => {
       expect(validateRedirectPath(" /mypage?foo=bar ")).toBe("/mypage");
     });
 

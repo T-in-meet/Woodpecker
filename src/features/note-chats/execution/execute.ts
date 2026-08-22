@@ -21,6 +21,9 @@ export type ExecuteNoteChatParams = {
   /** Route에서 확정된 AI Runtime 설정입니다. */
   settings: NoteChatExecutionSettings;
 
+  /** 스트림 route에서 인증과 법적동의를 확인한 사용자 ID입니다. */
+  userId: string;
+
   /** 현재 실행을 발생시킨 사용자 메시지 ID입니다. */
   userMessageId: string;
 };
@@ -67,6 +70,7 @@ export async function executeNoteChat(
   const prepared = await prepareNoteChatExecution({
     conversationId: params.conversationId,
     settings: params.settings,
+    userId: params.userId,
     userMessageId: params.userMessageId,
   });
 

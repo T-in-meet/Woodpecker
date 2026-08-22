@@ -283,7 +283,11 @@ describe("PR-API-02 회원가입 입력 검증 - 형식 / 길이 / 경계값 / �
         email: "  test@example.com  ",
         password: "Password123!",
         nickname: "테스터",
-        agreements: { termsOfService: true, privacyPolicy: true },
+        agreements: {
+          termsOfService: true,
+          privacyPolicyAcknowledged: true,
+          age14OrOlder: true,
+        },
       }),
     );
     const body = await response.json();
@@ -361,7 +365,11 @@ describe("PR-API-02 회원가입 입력 검증 - 형식 / 길이 / 경계값 / �
         email: "test@example.com",
         password: "Password123!",
         nickname: " 가 ",
-        agreements: { termsOfService: true, privacyPolicy: true },
+        agreements: {
+          termsOfService: true,
+          privacyPolicyAcknowledged: true,
+          age14OrOlder: true,
+        },
       }),
     );
 
@@ -386,7 +394,11 @@ describe("PR-API-02 회원가입 입력 검증 - 형식 / 길이 / 경계값 / �
         email: "test@example.com",
         password: "Password123!",
         nickname: " 가나다라마바사아자차 ",
-        agreements: { termsOfService: true, privacyPolicy: true },
+        agreements: {
+          termsOfService: true,
+          privacyPolicyAcknowledged: true,
+          age14OrOlder: true,
+        },
       }),
     );
 
@@ -411,7 +423,11 @@ describe("PR-API-02 회원가입 입력 검증 - 형식 / 길이 / 경계값 / �
         email: "  test@example.com  ",
         password: "Password123!",
         nickname: "테스터",
-        agreements: { termsOfService: true, privacyPolicy: true },
+        agreements: {
+          termsOfService: true,
+          privacyPolicyAcknowledged: true,
+          age14OrOlder: true,
+        },
       }),
     );
 
@@ -432,7 +448,11 @@ describe("PR-API-02 회원가입 입력 검증 - 형식 / 길이 / 경계값 / �
         email: "test@example.com",
         password: "Password123!",
         nickname: "  테스터  ",
-        agreements: { termsOfService: true, privacyPolicy: true },
+        agreements: {
+          termsOfService: true,
+          privacyPolicyAcknowledged: true,
+          age14OrOlder: true,
+        },
       }),
     );
 
@@ -455,7 +475,11 @@ describe("PR-API-02 회원가입 입력 검증 - 형식 / 길이 / 경계값 / �
         email: "test@example.com",
         password: "  Password123!  ",
         nickname: "테스터",
-        agreements: { termsOfService: true, privacyPolicy: true },
+        agreements: {
+          termsOfService: true,
+          privacyPolicyAcknowledged: true,
+          age14OrOlder: true,
+        },
       }),
     );
 

@@ -90,7 +90,7 @@ describe("회원가입 폼 동의 상호작용 + Validation", () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
-  it('TC-03: "동의하기" 후 폼 제출 시 약관 에러가 표시되지 않는다', async () => {
+  it('TC-03: "동의하기"와 연령 확인 후 폼 제출 시 약관 에러가 표시되지 않는다', async () => {
     const user = userEvent.setup();
     const { onSubmit } = renderSignupForm();
 
@@ -121,6 +121,8 @@ describe("회원가입 폼 동의 상호작용 + Validation", () => {
       expect(privacyCheckbox).toBeChecked();
     });
 
+    await user.click(screen.getByTestId("age-14-checkbox"));
+
     // 폼 제출
     await user.click(screen.getByRole("button", { name: /회원가입/i }));
 
@@ -131,7 +133,7 @@ describe("회원가입 폼 동의 상호작용 + Validation", () => {
         screen.queryByText("이용약관에 동의해주세요"),
       ).not.toBeInTheDocument();
       expect(
-        screen.queryByText("개인정보 처리방침에 동의해주세요"),
+        screen.queryByText("개인정보 처리방침을 확인해주세요"),
       ).not.toBeInTheDocument();
     });
 
@@ -179,13 +181,13 @@ describe("회원가입 폼 동의 상호작용 + Validation", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText("개인정보 처리방침에 동의해주세요"),
+        screen.getByText("개인정보 처리방침을 확인해주세요"),
       ).toBeInTheDocument();
     });
 
     // 에러 메시지 클릭 → 개인정보 모달 열림
     // 이유: 각 에러 메시지는 대응하는 약관 모달과 연결되어야 함 (단일 행동 경로 제공)
-    await user.click(screen.getByText("개인정보 처리방침에 동의해주세요"));
+    await user.click(screen.getByText("개인정보 처리방침을 확인해주세요"));
 
     expect(screen.getByText(/개인정보의 처리 목적/i)).toBeInTheDocument();
   });
@@ -205,7 +207,7 @@ describe("회원가입 폼 동의 상호작용 + Validation", () => {
     await user.click(screen.getByRole("button", { name: /회원가입/i }));
 
     const errorButton = await screen.findByRole("button", {
-      name: "개인정보 처리방침에 동의해주세요",
+      name: "개인정보 처리방침을 확인해주세요",
     });
 
     await waitFor(() => {

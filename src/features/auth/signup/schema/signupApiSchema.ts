@@ -10,6 +10,7 @@ export const signupApiSchema = z.object({
   nickname: normalizedNicknameSchema,
   agreements: z.object({
     termsOfService: z.literal(true),
-    privacyPolicy: z.literal(true),
+    privacyPolicyAcknowledged: z.literal(true),
+    age14OrOlder: z.literal(true),
   }),
 });

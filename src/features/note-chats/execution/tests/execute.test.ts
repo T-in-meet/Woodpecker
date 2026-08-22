@@ -54,12 +54,14 @@ describe("executeNoteChat", () => {
     const result = await executeNoteChat({
       conversationId: "conversation-1",
       settings,
+      userId: "user-1",
       userMessageId: "message-1",
     });
 
     expect(prepareNoteChatExecution).toHaveBeenCalledWith({
       conversationId: "conversation-1",
       settings,
+      userId: "user-1",
       userMessageId: "message-1",
     });
 

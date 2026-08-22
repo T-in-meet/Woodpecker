@@ -143,6 +143,7 @@ export async function runNoteChatStream(
     const execution = await executeNoteChat({
       conversationId: params.conversationId,
       settings: params.settings,
+      userId: params.userId,
       userMessageId: params.userMessageId,
     });
 

@@ -42,8 +42,8 @@ export const VALIDATION_REASON = {
   INVALID_TYPE: "INVALID_TYPE",
 
   /**
-   * 약관 미동의
-   * - termsOfService / privacyPolicy
+   * 필수 법적 확인 누락
+   * - termsOfService / privacyPolicyAcknowledged / age14OrOlder
    */
   NOT_AGREED: "NOT_AGREED",
 } as const;

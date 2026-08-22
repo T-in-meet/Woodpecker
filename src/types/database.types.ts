@@ -1466,6 +1466,33 @@ export type Database = {
         };
         Relationships: [];
       };
+      user_legal_acceptances: {
+        Row: {
+          document_version: string;
+          event_type: string;
+          id: number;
+          occurred_at: string;
+          source: string;
+          user_id: string;
+        };
+        Insert: {
+          document_version: string;
+          event_type: string;
+          id?: never;
+          occurred_at?: string;
+          source: string;
+          user_id: string;
+        };
+        Update: {
+          document_version?: string;
+          event_type?: string;
+          id?: never;
+          occurred_at?: string;
+          source?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       admin_ai_agent_list: {

@@ -92,6 +92,7 @@ describe("서버 유효성 검사 에러 매핑", () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
+    await user.click(screen.getByTestId("age-14-checkbox"));
     await user.click(screen.getByRole("button", { name: /회원가입/i }));
   }
 

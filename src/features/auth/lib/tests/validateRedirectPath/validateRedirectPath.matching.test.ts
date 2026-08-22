@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { validateRedirectPath } from "@/features/auth/lib/validateRedirectPath";
 
+const UUID = "550e8400-e29b-41d4-a716-446655440000";
+
 describe("validateRedirectPath 허용 경로 판정", () => {
   describe("exact match", () => {
     it("/mypage는 /mypage를 반환한다", () => {
@@ -19,6 +21,13 @@ describe("validateRedirectPath 허용 경로 판정", () => {
     it("/notes/new는 /notes/new를 반환한다", () => {
       expect(validateRedirectPath("/notes/new")).toBe("/notes/new");
     });
+
+    it.each(["/notes/today", "/note-chats"])(
+      "%s는 허용된 서비스 경로이므로 그대로 반환한다",
+      (path) => {
+        expect(validateRedirectPath(path)).toBe(path);
+      },
+    );
 
     it('" /notes/new/edit " (앞뒤 공백)는 trim 후 extra segment → /mypage를 반환한다', () => {
       expect(validateRedirectPath(" /notes/new/edit ")).toBe("/mypage");
@@ -207,6 +216,44 @@ describe("validateRedirectPath 허용 경로 판정", () => {
       it("/notes/api는 UUID v4가 아닌 noteId이므로 /mypage를 반환한다", () => {
         expect(validateRedirectPath("/notes/api")).toBe("/mypage");
       });
+    });
+  });
+
+  describe("복습 및 노트 챗봇 동적 경로", () => {
+    it.each([`/notes/${UUID}/review`, `/note-chats/${UUID}`])(
+      "%s는 그대로 반환한다",
+      (path) => {
+        expect(validateRedirectPath(path)).toBe(path);
+      },
+    );
+
+    it.each([
+      "/notes/not-a-uuid/review",
+      "/note-chats/not-a-uuid",
+      `/notes/${UUID}/review/extra`,
+      `/note-chats/${UUID}/extra`,
+    ])("%s는 /mypage로 fallback한다", (path) => {
+      expect(validateRedirectPath(path)).toBe("/mypage");
+    });
+  });
+
+  describe("허용된 화면 상태 쿼리", () => {
+    it.each([
+      ["/notes?page=3", "/notes?page=3"],
+      ["/notes?q=react&page=2&view=cards", "/notes?q=react&page=2&view=cards"],
+      ["/notes/today?page=2", "/notes/today?page=2"],
+      ["/mypage?section=reviews", "/mypage?section=reviews"],
+    ])("%s를 %s로 보존한다", (input, expected) => {
+      expect(validateRedirectPath(input)).toBe(expected);
+    });
+
+    it.each([
+      ["/mypage?foo=bar", "/mypage"],
+      ["/notes?redirect=https%3A%2F%2Fevil.com", "/notes"],
+      ["/notes?page=2&page=3", "/notes"],
+      [`/notes/${UUID}?page=2`, `/notes/${UUID}`],
+    ])("%s의 허용되지 않은 쿼리를 제거한다", (input, expected) => {
+      expect(validateRedirectPath(input)).toBe(expected);
     });
   });
 });

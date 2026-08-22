@@ -1,7 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
+import { NextRequest, NextResponse } from "next/server";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { updateSessionMock } = vi.hoisted(() => ({
+  updateSessionMock: vi.fn(),
+}));
 
 vi.mock("@/lib/supabase/middleware", () => ({
-  updateSession: vi.fn(),
+  updateSession: updateSessionMock,
 }));
 
 import {
@@ -9,6 +14,7 @@ import {
   buildCspReportOnly,
   buildReportingEndpoints,
   config,
+  middleware,
 } from "./middleware";
 
 function matchesMiddleware(pathname: string) {
@@ -20,6 +26,24 @@ function matchesMiddleware(pathname: string) {
 
   return new RegExp(`^${matcher}$`).test(pathname);
 }
+
+describe("middleware request headers", () => {
+  beforeEach(() => {
+    updateSessionMock.mockReset();
+    updateSessionMock.mockResolvedValue(NextResponse.next());
+  });
+
+  it("법적 문서 확인 후 복원할 수 있도록 pathname과 search를 함께 전달한다", async () => {
+    await middleware(new NextRequest("http://localhost/notes?page=3"));
+
+    expect(updateSessionMock).toHaveBeenCalledWith(
+      expect.any(NextRequest),
+      expect.objectContaining({
+        "x-pathname": "/notes?page=3",
+      }),
+    );
+  });
+});
 
 describe("middleware matcher", () => {
   it.each([

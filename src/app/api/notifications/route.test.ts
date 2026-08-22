@@ -1,11 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { createClientMock, getNotificationListMock, getUnreadCountMock } =
-  vi.hoisted(() => ({
-    createClientMock: vi.fn(),
-    getNotificationListMock: vi.fn(),
-    getUnreadCountMock: vi.fn(),
-  }));
+const {
+  createClientMock,
+  getLegalAcceptanceRequiredPathMock,
+  getNotificationListMock,
+  getUnreadCountMock,
+} = vi.hoisted(() => ({
+  createClientMock: vi.fn(),
+  getLegalAcceptanceRequiredPathMock: vi.fn(),
+  getNotificationListMock: vi.fn(),
+  getUnreadCountMock: vi.fn(),
+}));
+
+vi.mock("@/features/auth/lib/userAgreements", () => ({
+  getLegalAcceptanceRequiredPath: getLegalAcceptanceRequiredPathMock,
+}));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: createClientMock,
@@ -34,6 +43,7 @@ function createSupabaseMock(user: { id: string } | null = { id: USER_ID }) {
 describe("/api/notifications", () => {
   beforeEach(() => {
     createClientMock.mockReset();
+    getLegalAcceptanceRequiredPathMock.mockReset().mockResolvedValue(null);
     getNotificationListMock.mockReset();
     getUnreadCountMock.mockReset();
     createClientMock.mockResolvedValue(createSupabaseMock());
@@ -120,6 +130,22 @@ describe("/api/notifications", () => {
       error: "unauthorized",
     });
     expect(response.status).toBe(401);
+    expect(getNotificationListMock).not.toHaveBeenCalled();
+    expect(getUnreadCountMock).not.toHaveBeenCalled();
+  });
+
+  it("blocks notification lookup when current legal acceptance is missing", async () => {
+    getLegalAcceptanceRequiredPathMock.mockResolvedValue(
+      "/agreements?redirect=%2Fmypage",
+    );
+
+    const response = await notificationsRoute.GET();
+
+    await expect(response.json()).resolves.toEqual({
+      error: "legal_acceptance_required",
+      redirectTo: "/agreements?redirect=%2Fmypage",
+    });
+    expect(response.status).toBe(403);
     expect(getNotificationListMock).not.toHaveBeenCalled();
     expect(getUnreadCountMock).not.toHaveBeenCalled();
   });

@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { requireCurrentLegalAcceptance } from "@/features/auth/utils/requireCurrentLegalAcceptance";
 import {
   NOTE_CHAT_OPERATIONAL_ERROR_CODES,
   NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS,
 } from "@/features/operational-errors/constants";
+import { ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 
 import {
@@ -12,8 +14,14 @@ import {
 } from "../queries";
 import { reportNoteChatOperationalError } from "../utils/report-operational-error";
 
+vi.mock("server-only", () => ({}));
+
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
+}));
+
+vi.mock("@/features/auth/utils/requireCurrentLegalAcceptance", () => ({
+  requireCurrentLegalAcceptance: vi.fn(),
 }));
 
 vi.mock("../utils/report-operational-error", () => ({
@@ -126,6 +134,16 @@ function mockCreateClient(queries: Array<ReturnType<typeof createQueryMock>>) {
   });
 
   vi.mocked(createClient).mockResolvedValue({
+    auth: {
+      getUser: vi.fn().mockResolvedValue({
+        data: {
+          user: {
+            id: "550e8400-e29b-41d4-a716-446655440000",
+          },
+        },
+        error: null,
+      }),
+    },
     from,
   } as unknown as Awaited<ReturnType<typeof createClient>>);
 
@@ -135,6 +153,23 @@ function mockCreateClient(queries: Array<ReturnType<typeof createQueryMock>>) {
 describe("getNoteChatConversationList", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("최신 법적 동의가 없으면 대화 목록을 조회하지 않는다", async () => {
+    const legalRedirect = new Error("NEXT_REDIRECT");
+    const query = createQueryMock({
+      data: [],
+      count: 0,
+      error: null,
+    });
+    const from = mockCreateClient([query]);
+    vi.mocked(requireCurrentLegalAcceptance).mockRejectedValueOnce(
+      legalRedirect,
+    );
+
+    await expect(getNoteChatConversationList()).rejects.toBe(legalRedirect);
+
+    expect(from).not.toHaveBeenCalled();
   });
 
   it("대화 목록을 최근 수정 순으로 조회하고 페이지네이션 정보를 반환한다", async () => {
@@ -159,6 +194,10 @@ describe("getNoteChatConversationList", () => {
     });
 
     expect(from).toHaveBeenCalledWith("note_chat_conversation_list");
+    expect(requireCurrentLegalAcceptance).toHaveBeenCalledWith(
+      "550e8400-e29b-41d4-a716-446655440000",
+      ROUTES.NOTE_CHATS,
+    );
     expect(query.select).toHaveBeenCalledWith("*", {
       count: "exact",
     });
@@ -306,6 +345,16 @@ describe("getNoteChatConversationDetail", () => {
 
     const result = await getNoteChatConversationDetail(CONVERSATION_ID);
 
+    expect(conversationQuery.eq).toHaveBeenNthCalledWith(
+      1,
+      "id",
+      CONVERSATION_ID,
+    );
+    expect(conversationQuery.eq).toHaveBeenNthCalledWith(
+      2,
+      "user_id",
+      "550e8400-e29b-41d4-a716-446655440000",
+    );
     expect(messagesQuery.eq).toHaveBeenCalledWith(
       "conversation_id",
       CONVERSATION_ID,

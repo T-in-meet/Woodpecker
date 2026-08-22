@@ -42,7 +42,10 @@ describe("회원가입 폼 검증", () => {
       screen.queryByText("이용약관에 동의해주세요"),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByText("개인정보 처리방침에 동의해주세요"),
+      screen.queryByText("개인정보 처리방침을 확인해주세요"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("만 14세 이상만 가입할 수 있습니다"),
     ).not.toBeInTheDocument();
   });
 
@@ -84,7 +87,10 @@ describe("회원가입 폼 검증", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("이용약관에 동의해주세요")).toBeInTheDocument();
     expect(
-      screen.getByText("개인정보 처리방침에 동의해주세요"),
+      screen.getByText("개인정보 처리방침을 확인해주세요"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("만 14세 이상만 가입할 수 있습니다"),
     ).toBeInTheDocument();
   });
 
@@ -198,7 +204,7 @@ describe("회원가입 폼 검증", () => {
     await user.click(screen.getByRole("button", { name: /회원가입/i }));
 
     expect(
-      await screen.findByText("개인정보 처리방침에 동의해주세요"),
+      await screen.findByText("개인정보 처리방침을 확인해주세요"),
     ).toBeInTheDocument();
   });
 
@@ -279,6 +285,7 @@ describe("회원가입 폼 검증", () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
+    await user.click(screen.getByTestId("age-14-checkbox"));
 
     await user.click(screen.getByRole("button", { name: /회원가입/i }));
 
@@ -318,7 +325,7 @@ describe("회원가입 폼 검증", () => {
     ).toBeInTheDocument();
 
     expect(
-      within(privacyField).getByText("개인정보 처리방침에 동의해주세요"),
+      within(privacyField).getByText("개인정보 처리방침을 확인해주세요"),
     ).toBeInTheDocument();
 
     // 2️⃣ 접근성 연결 검증
@@ -401,7 +408,10 @@ describe("회원가입 폼 검증", () => {
     await user.click(screen.getByRole("button", { name: /회원가입/i }));
     expect(screen.getByText("이용약관에 동의해주세요")).toBeInTheDocument();
     expect(
-      screen.getByText("개인정보 처리방침에 동의해주세요"),
+      screen.getByText("개인정보 처리방침을 확인해주세요"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("만 14세 이상만 가입할 수 있습니다"),
     ).toBeInTheDocument();
   }, 15000);
 });

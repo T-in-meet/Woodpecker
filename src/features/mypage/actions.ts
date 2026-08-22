@@ -5,6 +5,7 @@ import { after } from "next/server";
 import { z } from "zod";
 
 import { FEEDBACK_CATEGORY_LABELS } from "@/features/admin/feedbacks/constants/feedback-labels";
+import { requireCurrentLegalAcceptance } from "@/features/auth/utils/requireCurrentLegalAcceptance";
 import {
   createAdminNotification,
   type CreateAdminNotificationInput,
@@ -51,6 +52,8 @@ export async function updateProfileAction(
     return { error: "인증이 필요합니다" };
   }
 
+  await requireCurrentLegalAcceptance(user.id, ROUTES.MYPAGE);
+
   const { data, error } = await supabase
     .from("profiles")
     .update({
@@ -92,6 +95,8 @@ export async function uploadAvatarAction(
 
   if (!user) return { error: "인증이 필요합니다" };
 
+  await requireCurrentLegalAcceptance(user.id, ROUTES.MYPAGE);
+
   const path = `${user.id}/avatar`;
 
   const { error: uploadError } = await supabase.storage
@@ -130,6 +135,8 @@ export async function deleteAvatarAction() {
   } = await supabase.auth.getUser();
 
   if (!user) return { error: "인증이 필요합니다" };
+
+  await requireCurrentLegalAcceptance(user.id, ROUTES.MYPAGE);
 
   const { data, error } = await supabase
     .from("profiles")
@@ -173,6 +180,8 @@ export async function changePasswordAction(
   if (!user?.email) {
     return { error: "인증이 필요합니다" };
   }
+
+  await requireCurrentLegalAcceptance(user.id, ROUTES.MYPAGE);
 
   const { error: signInError } = await supabase.auth.signInWithPassword({
     email: user.email,
@@ -281,6 +290,8 @@ export async function createFeedbackAction(
   if (!user) {
     return { error: "인증이 필요합니다" };
   }
+
+  await requireCurrentLegalAcceptance(user.id, ROUTES.MYPAGE);
 
   // 하루 1개 사전 체크 — 동시 요청 경합은 unique index가 최종적으로 막는다
   const { startUtcIso, endUtcIso } = getKstDayBoundsUtc(new Date());
@@ -433,6 +444,8 @@ export async function deleteFeedbackAction(feedbackId: string) {
   if (!user) {
     return { error: "인증이 필요합니다" };
   }
+
+  await requireCurrentLegalAcceptance(user.id, ROUTES.MYPAGE);
 
   const { data: feedback, error: fetchError } = await supabase
     .from("feedbacks")

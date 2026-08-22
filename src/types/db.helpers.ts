@@ -58,4 +58,5 @@ export const TABLES = {
   relatedNoteRecommendationRuns: "related_note_recommendation_runs",
   reviewLogs: "review_logs",
   userAgreements: "user_agreements",
+  userLegalAcceptances: "user_legal_acceptances",
 } as const;

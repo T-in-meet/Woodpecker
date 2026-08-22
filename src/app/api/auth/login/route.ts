@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 
+import { getAgreementRequiredPath } from "@/features/auth/constants/agreementRequired";
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 import { AUTH_EVENTS } from "@/features/auth/constants/authEvents";
 import { AUTH_LOG_REASONS } from "@/features/auth/constants/authLogReasons";
@@ -22,10 +23,7 @@ import {
   AuthJsonParseError,
   parseAuthJsonRequestBody,
 } from "@/features/auth/lib/parseAuthJsonRequestBody";
-import {
-  AGREEMENT_REQUIRED_REDIRECT,
-  hasUserAgreement,
-} from "@/features/auth/lib/userAgreements";
+import { getLegalAcceptanceStatus } from "@/features/auth/lib/userAgreements";
 import { validateRedirectPath } from "@/features/auth/lib/validateRedirectPath";
 import { loginApiSchema } from "@/features/auth/login/schema/loginApiSchema";
 import { canonicalizeEmail } from "@/features/auth/utils/canonicalizeEmail";
@@ -215,14 +213,11 @@ async function resolveLoginResponse(
     throw new Error("Authenticated user id is missing.");
   }
 
-  const hasAgreement = await hasUserAgreement(userId);
-  if (!hasAgreement) {
-    // 약관 기록이 없는 계정은 세션을 유지하지 않고 회원가입 화면에서 동의를 받는다.
-    await supabase.auth.signOut();
-
+  const agreementStatus = await getLegalAcceptanceStatus(userId);
+  if (!agreementStatus.canAccessService) {
     return {
       response: successResponse(AUTH_API_CODES.LOGIN_SUCCESS, {
-        redirectTo: AGREEMENT_REQUIRED_REDIRECT,
+        redirectTo: getAgreementRequiredPath(validatedRedirect),
       }),
       outcome: { type: "completed" },
     };

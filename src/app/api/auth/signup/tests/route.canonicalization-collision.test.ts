@@ -66,7 +66,8 @@ describe("회원가입 - Gmail alias collision (canonicalization)", () => {
   const validNickname = "tester";
   const agreements = {
     termsOfService: true as const,
-    privacyPolicy: true as const,
+    privacyPolicyAcknowledged: true as const,
+    age14OrOlder: true as const,
   };
 
   const unverifiedUser = {

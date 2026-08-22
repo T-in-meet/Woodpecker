@@ -30,7 +30,7 @@ vi.mock("@/lib/utils/showToast", () => ({
 // - interactionEnabled 상태 관리 및 전이
 // - 마우스 + 키보드 인터셉트
 // - 라벨/체크박스/버튼 모달 연결
-// - 독립적 상태 관리 (termsOfService/privacyPolicy 분리)
+// - 이용약관 동의, 처리방침 확인, 연령 확인의 독립적 상태 관리
 // - form reset 시 상태 초기화
 
 describe("회원가입 폼 동의 상호작용", () => {
@@ -328,7 +328,7 @@ describe("회원가입 폼 동의 상호작용", () => {
     });
   });
 
-  it('TC-17: 개인정보 모달에서 "동의하기" 후 회원가입 버튼으로 포커스가 이동한다', async () => {
+  it('TC-17: 개인정보 모달에서 "동의하기" 후 연령 확인으로 포커스가 이동한다', async () => {
     const user = userEvent.setup();
     renderSignupForm();
 
@@ -338,12 +338,12 @@ describe("회원가입 폼 동의 상호작용", () => {
 
     await waitFor(() => {
       expect(document.activeElement).toBe(
-        screen.getByRole("button", { name: /^회원가입$/i }),
+        screen.getByTestId("age-14-checkbox"),
       );
     });
   });
 
-  it('TC-18: 트리거 버튼으로 개인정보 모달을 열어 "동의하기"해도 회원가입 버튼으로 포커스가 이동한다', async () => {
+  it('TC-18: 트리거 버튼으로 개인정보 모달을 열어 "동의하기"해도 연령 확인으로 포커스가 이동한다', async () => {
     const user = userEvent.setup();
     renderSignupForm();
 
@@ -355,18 +355,19 @@ describe("회원가입 폼 동의 상호작용", () => {
 
     await waitFor(() => {
       expect(document.activeElement).toBe(
-        screen.getByRole("button", { name: /^회원가입$/i }),
+        screen.getByTestId("age-14-checkbox"),
       );
     });
   });
 
-  it("TC-19: 제출 버튼이 disabled면 개인정보 동의 후 로그인 링크로 포커스가 이동한다", async () => {
+  it("TC-19: 제출 버튼이 disabled면 연령 확인 후 로그인 링크로 포커스가 이동한다", async () => {
     const user = userEvent.setup();
     renderSignupForm({ isPending: true });
 
     await user.click(screen.getByRole("button", { name: /이메일로 가입/i }));
     await user.click(screen.getByTestId("privacy-policy-checkbox"));
     await user.click(screen.getByRole("button", { name: /동의하기/i }));
+    await user.click(screen.getByTestId("age-14-checkbox"));
 
     await waitFor(() => {
       expect(document.activeElement).toBe(
@@ -394,7 +395,7 @@ describe("회원가입 폼 동의 상호작용", () => {
     );
 
     expect(showToast).toHaveBeenCalledWith(
-      "회원가입하려면 이용약관과 개인정보 처리방침에 동의해주세요.",
+      "이용약관 동의, 개인정보 처리방침 확인, 만 14세 이상 확인이 필요합니다.",
       {
         variant: "destructive",
         dedupeKey: "auth-signup-agreements-required",
@@ -404,7 +405,7 @@ describe("회원가입 폼 동의 상호작용", () => {
     expect(signInWithOAuthMock).not.toHaveBeenCalled();
   });
 
-  it("TC-22: 이용약관과 개인정보 처리방침에 모두 동의하면 소셜 회원가입을 시작한다", async () => {
+  it("TC-22: 이용약관, 처리방침, 연령을 모두 확인하면 소셜 회원가입을 시작한다", async () => {
     const user = userEvent.setup();
     renderSignupForm();
 
@@ -413,6 +414,7 @@ describe("회원가입 폼 동의 상호작용", () => {
     await user.click(screen.getByRole("button", { name: /동의하기/i }));
     await user.click(screen.getByTestId("privacy-policy-checkbox"));
     await user.click(screen.getByRole("button", { name: /동의하기/i }));
+    await user.click(screen.getByTestId("age-14-checkbox"));
 
     // 두 약관이 모두 체크된 뒤에는 서버에 OAuth 약관 intent를 남기고 redirect를 시작한다.
     await user.click(
@@ -426,7 +428,8 @@ describe("회원가입 폼 동의 상호작용", () => {
         body: JSON.stringify({
           agreements: {
             termsOfService: true,
-            privacyPolicy: true,
+            privacyPolicyAcknowledged: true,
+            age14OrOlder: true,
           },
         }),
       });
@@ -446,7 +449,7 @@ describe("회원가입 폼 동의 상호작용", () => {
 
     expect(callbackUrl.searchParams.get("intent")).toBe("signup");
     expect(showToast).not.toHaveBeenCalledWith(
-      "회원가입하려면 이용약관과 개인정보 처리방침에 동의해주세요.",
+      "이용약관 동의, 개인정보 처리방침 확인, 만 14세 이상 확인이 필요합니다.",
       expect.anything(),
     );
   });

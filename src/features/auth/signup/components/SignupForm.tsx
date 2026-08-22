@@ -123,7 +123,8 @@ export function SignupForm({
       confirmPassword: "",
       nickname: "",
       termsOfService: false,
-      privacyPolicy: false,
+      privacyPolicyAcknowledged: false,
+      age14OrOlder: false,
     },
   });
 
@@ -141,14 +142,16 @@ export function SignupForm({
     rawConfirmPassword,
     rawNickname,
     rawTermsOfService,
-    rawPrivacyPolicy,
+    rawPrivacyPolicyAcknowledged,
+    rawAge14OrOlder,
   ] = watch([
     "email",
     "password",
     "confirmPassword",
     "nickname",
     "termsOfService",
-    "privacyPolicy",
+    "privacyPolicyAcknowledged",
+    "age14OrOlder",
   ]);
 
   const watchedEmail = normalizeText(rawEmail);
@@ -156,7 +159,10 @@ export function SignupForm({
   const watchedConfirmPassword = normalizeText(rawConfirmPassword);
   const watchedNickname = normalizeText(rawNickname);
   const watchedTermsOfService = normalizeChecked(rawTermsOfService);
-  const watchedPrivacyPolicy = normalizeChecked(rawPrivacyPolicy);
+  const watchedPrivacyPolicyAcknowledged = normalizeChecked(
+    rawPrivacyPolicyAcknowledged,
+  );
+  const watchedAge14OrOlder = normalizeChecked(rawAge14OrOlder);
 
   const isSubmitButtonVisuallyEnabled =
     watchedEmail.trim().length > 0 &&
@@ -164,7 +170,8 @@ export function SignupForm({
     watchedConfirmPassword.trim().length > 0 &&
     watchedNickname.trim().length > 0 &&
     watchedTermsOfService &&
-    watchedPrivacyPolicy;
+    watchedPrivacyPolicyAcknowledged &&
+    watchedAge14OrOlder;
 
   /**
    * 유효한 폼 제출 시 상위 submit handler를 호출한다.
@@ -250,7 +257,11 @@ export function SignupForm({
    * OAuth 회원가입 전 공통 필수 약관 동의 intent를 저장한다.
    */
   const handleOAuthBeforeSignIn = async () => {
-    if (watchedTermsOfService && watchedPrivacyPolicy) {
+    if (
+      watchedTermsOfService &&
+      watchedPrivacyPolicyAcknowledged &&
+      watchedAge14OrOlder
+    ) {
       try {
         const response = await fetch("/api/auth/oauth/agreement-intent", {
           method: "POST",
@@ -258,14 +269,13 @@ export function SignupForm({
           body: JSON.stringify({
             agreements: {
               termsOfService: true,
-              privacyPolicy: true,
+              privacyPolicyAcknowledged: true,
+              age14OrOlder: true,
             },
           }),
         });
 
         if (response.ok) {
-          document.cookie =
-            "oauth_agreement_intent=accepted; path=/; max-age=600; samesite=lax";
           return true;
         }
       } catch {
@@ -282,10 +292,13 @@ export function SignupForm({
       return false;
     }
 
-    showToast("회원가입하려면 이용약관과 개인정보 처리방침에 동의해주세요.", {
-      variant: "destructive",
-      dedupeKey: "auth-signup-agreements-required",
-    });
+    showToast(
+      "이용약관 동의, 개인정보 처리방침 확인, 만 14세 이상 확인이 필요합니다.",
+      {
+        variant: "destructive",
+        dedupeKey: "auth-signup-agreements-required",
+      },
+    );
     return false;
   };
 

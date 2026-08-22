@@ -47,10 +47,13 @@ describe("resolveFieldName", () => {
       ).toBe("termsOfService");
     });
 
-    it("중첩 필드 agreements.privacyPolicy는 privacyPolicy를 반환한다", () => {
-      expect(resolveFieldName("agreements.privacyPolicy", signupFieldSet)).toBe(
-        "privacyPolicy",
-      );
+    it("중첩 필드 agreements.privacyPolicyAcknowledged를 폼 필드로 반환한다", () => {
+      expect(
+        resolveFieldName(
+          "agreements.privacyPolicyAcknowledged",
+          signupFieldSet,
+        ),
+      ).toBe("privacyPolicyAcknowledged");
     });
 
     it("중첩 필드의 마지막 segment가 필드 집합에 없으면 null을 반환한다", () => {

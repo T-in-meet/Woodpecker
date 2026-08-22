@@ -13,6 +13,10 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
 }));
 
+vi.mock("@/features/auth/utils/requireCurrentLegalAcceptance", () => ({
+  requireCurrentLegalAcceptance: vi.fn(),
+}));
+
 vi.mock("../utils/report-operational-error", () => ({
   reportNoteChatOperationalError: vi.fn(),
 }));

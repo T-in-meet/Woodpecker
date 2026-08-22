@@ -22,7 +22,7 @@ import {
   NOTE_CHAT_MATCH_LIMIT,
   NOTE_CHAT_MIN_SIMILARITY,
 } from "../constants/execution";
-import { getNoteChatConversationDetail } from "../queries";
+import { getNoteChatConversationDetailForExecution } from "../internal-queries";
 import type { NoteChatConversation } from "../types";
 import { reportNoteChatOperationalError } from "../utils/report-operational-error";
 import { buildNoteChatSources } from "./build-note-sources";
@@ -76,6 +76,9 @@ type PrepareNoteChatExecutionParams = {
   /** Route에서 확정된 AI Runtime 설정입니다. */
   settings: NoteChatExecutionSettings;
 
+  /** 스트림 route에서 인증과 법적동의를 확인한 사용자 ID입니다. */
+  userId: string;
+
   /** 현재 실행을 발생시킨 사용자 메시지 ID입니다. */
   userMessageId: string;
 };
@@ -105,7 +108,10 @@ type PrepareNoteChatExecutionParams = {
 export async function prepareNoteChatExecution(
   params: PrepareNoteChatExecutionParams,
 ): Promise<PreparedNoteChatExecution> {
-  const detail = await getNoteChatConversationDetail(params.conversationId);
+  const detail = await getNoteChatConversationDetailForExecution(
+    params.conversationId,
+    params.userId,
+  );
 
   if (!detail) {
     const error = new Error(

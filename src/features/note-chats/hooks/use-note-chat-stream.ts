@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useRef, useState } from "react";
 
 import {
@@ -77,6 +78,7 @@ export type UpdateNoteChatStreamInput = {
  */
 export function useNoteChatStream() {
   const abortControllerRef = useRef<AbortController | null>(null);
+  const router = useRouter();
 
   const [state, setState] = useState<NoteChatStreamingState>({
     assistantMessageId: null,
@@ -229,6 +231,16 @@ export function useNoteChatStream() {
           };
         }
 
+        if (error instanceof NoteChatStreamRequestError && error.redirectTo) {
+          router.replace(error.redirectTo);
+
+          return {
+            success: false,
+            userMessageId: currentUserMessageId,
+            errorCode: null,
+          };
+        }
+
         const errorCode =
           error instanceof NoteChatStreamRequestError ? error.code : null;
 
@@ -258,7 +270,7 @@ export function useNoteChatStream() {
         }
       }
     },
-    [applyStreamEvent],
+    [applyStreamEvent, router],
   );
 
   /**
@@ -328,6 +340,16 @@ export function useNoteChatStream() {
           };
         }
 
+        if (error instanceof NoteChatStreamRequestError && error.redirectTo) {
+          router.replace(error.redirectTo);
+
+          return {
+            success: false,
+            userMessageId: currentUserMessageId,
+            errorCode: null,
+          };
+        }
+
         const errorCode =
           error instanceof NoteChatStreamRequestError ? error.code : null;
 
@@ -357,7 +379,7 @@ export function useNoteChatStream() {
         }
       }
     },
-    [applyStreamEvent],
+    [applyStreamEvent, router],
   );
 
   return {

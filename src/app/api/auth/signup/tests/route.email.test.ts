@@ -38,7 +38,11 @@ const requestBody = {
   email: "Test@Example.com",
   password: "Password123!",
   nickname: "테스터",
-  agreements: { termsOfService: true as const, privacyPolicy: true as const },
+  agreements: {
+    termsOfService: true as const,
+    privacyPolicyAcknowledged: true as const,
+    age14OrOlder: true as const,
+  },
 };
 
 const unverifiedUser = {

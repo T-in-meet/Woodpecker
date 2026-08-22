@@ -76,6 +76,7 @@ async function submitValidSignupForm(user: ReturnType<typeof userEvent.setup>) {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  await user.click(screen.getByTestId("age-14-checkbox"));
   await user.click(screen.getByRole("button", { name: /회원가입/i }));
 }
 
@@ -262,7 +263,11 @@ describe("PR-UI-13: SignupPageClient submit → mutateAsync → redirectTo 연�
           email: "test@example.com",
           password: "password123",
           nickname: "tester",
-          agreements: { termsOfService: true, privacyPolicy: true },
+          agreements: {
+            termsOfService: true,
+            privacyPolicyAcknowledged: true,
+            age14OrOlder: true,
+          },
         }),
       );
     });
