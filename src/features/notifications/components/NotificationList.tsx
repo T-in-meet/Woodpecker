@@ -162,7 +162,10 @@ export function NotificationList({
                 event.preventDefault();
 
                 try {
-                  const result = await markNotificationAsReadAction(item.id);
+                  const result = await markNotificationAsReadAction(
+                    item.id,
+                    item.click_path,
+                  );
 
                   if (result.success && result.updated) {
                     onItemRead?.(item.id);

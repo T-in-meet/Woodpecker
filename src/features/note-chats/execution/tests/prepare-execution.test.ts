@@ -6,7 +6,7 @@ import { getMatchedNotes } from "@/features/ai/rags/note/get-matched-notes";
 import { searchNoteEmbeddings } from "@/features/ai/rags/note/search-embeddings";
 import { NOTE_CHAT_OPERATIONAL_ERROR_CODES } from "@/features/operational-errors/constants";
 
-import { getNoteChatConversationDetail } from "../../queries";
+import { getNoteChatConversationDetailForExecution } from "../../internal-queries";
 import { reportNoteChatOperationalError } from "../../utils/report-operational-error";
 import { buildNoteChatSources } from "../build-note-sources";
 import { expandNoteChatQuery } from "../expand-query";
@@ -16,8 +16,8 @@ import {
 } from "../prepare-execution";
 import { resolveNoteChatExecutionMessages } from "../resolve-execution-messages";
 
-vi.mock("../../queries", () => ({
-  getNoteChatConversationDetail: vi.fn(),
+vi.mock("../../internal-queries", () => ({
+  getNoteChatConversationDetailForExecution: vi.fn(),
 }));
 
 vi.mock("../../utils/report-operational-error", () => ({
@@ -89,7 +89,9 @@ describe("prepareNoteChatExecution", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    vi.mocked(getNoteChatConversationDetail).mockResolvedValue(detail);
+    vi.mocked(getNoteChatConversationDetailForExecution).mockResolvedValue(
+      detail,
+    );
 
     vi.mocked(expandNoteChatQuery).mockResolvedValue({
       expandedQuery: "확장된 검색 질의",
@@ -113,11 +115,13 @@ describe("prepareNoteChatExecution", () => {
     const result = await prepareNoteChatExecution({
       conversationId: "conversation-1",
       settings,
+      userId: "user-1",
       userMessageId: "message-1",
     });
 
-    expect(getNoteChatConversationDetail).toHaveBeenCalledWith(
+    expect(getNoteChatConversationDetailForExecution).toHaveBeenCalledWith(
       "conversation-1",
+      "user-1",
     );
 
     expect(expandNoteChatQuery).toHaveBeenCalledWith({
@@ -165,12 +169,15 @@ describe("prepareNoteChatExecution", () => {
   });
 
   it("Conversation을 찾을 수 없으면 실행 상태 오류를 보고하고 예외를 발생시킨다", async () => {
-    vi.mocked(getNoteChatConversationDetail).mockResolvedValue(null);
+    vi.mocked(getNoteChatConversationDetailForExecution).mockResolvedValue(
+      null,
+    );
 
     await expect(
       prepareNoteChatExecution({
         conversationId: "conversation-1",
         settings,
+        userId: "user-1",
         userMessageId: "message-1",
       }),
     ).rejects.toThrow("Note chat conversation not found: conversation-1");
@@ -187,7 +194,7 @@ describe("prepareNoteChatExecution", () => {
   });
 
   it("실행 대상 User Message를 찾을 수 없으면 실행 상태 오류를 보고하고 예외를 발생시킨다", async () => {
-    vi.mocked(getNoteChatConversationDetail).mockResolvedValue({
+    vi.mocked(getNoteChatConversationDetailForExecution).mockResolvedValue({
       conversation,
       messages: [],
     } as never);
@@ -196,6 +203,7 @@ describe("prepareNoteChatExecution", () => {
       prepareNoteChatExecution({
         conversationId: "conversation-1",
         settings,
+        userId: "user-1",
         userMessageId: "message-1",
       }),
     ).rejects.toThrow("Note chat user message not found: message-1");
@@ -215,7 +223,7 @@ describe("prepareNoteChatExecution", () => {
       role: AI_CHAT_MESSAGE_ROLE.ASSISTANT,
     };
 
-    vi.mocked(getNoteChatConversationDetail).mockResolvedValue({
+    vi.mocked(getNoteChatConversationDetailForExecution).mockResolvedValue({
       conversation,
       messages: [assistantMessage],
     } as never);
@@ -224,6 +232,7 @@ describe("prepareNoteChatExecution", () => {
       prepareNoteChatExecution({
         conversationId: "conversation-1",
         settings,
+        userId: "user-1",
         userMessageId: "message-1",
       }),
     ).rejects.toThrow(
@@ -250,6 +259,7 @@ describe("prepareNoteChatExecution", () => {
       prepareNoteChatExecution({
         conversationId: "conversation-1",
         settings,
+        userId: "user-1",
         userMessageId: "message-1",
       }),
     ).rejects.toThrow("message resolve failed");
@@ -309,6 +319,7 @@ describe("prepareNoteChatExecution", () => {
     const result = await prepareNoteChatExecution({
       conversationId: "conversation-1",
       settings,
+      userId: "user-1",
       userMessageId: "message-1",
     });
 

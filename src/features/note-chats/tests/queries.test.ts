@@ -14,6 +14,8 @@ import {
 } from "../queries";
 import { reportNoteChatOperationalError } from "../utils/report-operational-error";
 
+vi.mock("server-only", () => ({}));
+
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
 }));
@@ -343,6 +345,16 @@ describe("getNoteChatConversationDetail", () => {
 
     const result = await getNoteChatConversationDetail(CONVERSATION_ID);
 
+    expect(conversationQuery.eq).toHaveBeenNthCalledWith(
+      1,
+      "id",
+      CONVERSATION_ID,
+    );
+    expect(conversationQuery.eq).toHaveBeenNthCalledWith(
+      2,
+      "user_id",
+      "550e8400-e29b-41d4-a716-446655440000",
+    );
     expect(messagesQuery.eq).toHaveBeenCalledWith(
       "conversation_id",
       CONVERSATION_ID,

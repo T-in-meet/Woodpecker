@@ -1,4 +1,6 @@
-export const AGREEMENT_REQUIRED_PATH = "/agreements";
+import { ROUTES } from "@/lib/constants/routes";
+
+export const AGREEMENT_REQUIRED_PATH = ROUTES.AGREEMENTS;
 export const SIGNUP_AGREEMENT_REQUIRED_PATH = "/signup?agreement_required=1";
 
 export const AGREEMENT_REQUIRED_NOTICE_MESSAGE =

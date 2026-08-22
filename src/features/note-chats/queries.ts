@@ -1,7 +1,5 @@
 "use server";
 
-import { z } from "zod";
-
 import { requireCurrentLegalAcceptance } from "@/features/auth/utils/requireCurrentLegalAcceptance";
 import {
   NOTE_CHAT_OPERATIONAL_ERROR_CODES,
@@ -11,7 +9,7 @@ import { ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 import { escapePostgrestLikePattern } from "@/lib/utils/escapePostgrestLikePattern";
 
-import { noteChatRunSourceSchema } from "./schema";
+import { queryNoteChatConversationDetail } from "./internal-queries";
 import type {
   NoteChatConversationDetail,
   NoteChatConversationListItem,
@@ -31,7 +29,7 @@ export type NoteChatConversationListResult = {
   totalPages: number;
 };
 
-async function createLegalCheckedClient() {
+async function createLegalCheckedContext() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -44,7 +42,7 @@ async function createLegalCheckedClient() {
 
   await requireCurrentLegalAcceptance(user.id, ROUTES.NOTE_CHATS);
 
-  return supabase;
+  return { supabase, userId: user.id };
 }
 
 /**
@@ -57,7 +55,7 @@ export async function getNoteChatConversationList({
   page = 1,
   search = "",
 }: GetNoteChatConversationListParams = {}): Promise<NoteChatConversationListResult> {
-  const supabase = await createLegalCheckedClient();
+  const { supabase } = await createLegalCheckedContext();
 
   const pageSize = 20;
   const normalizedPage = Math.max(1, page);
@@ -130,118 +128,7 @@ export async function getNoteChatConversationList({
 export async function getNoteChatConversationDetail(
   conversationId: string,
 ): Promise<NoteChatConversationDetail | null> {
-  const supabase = await createLegalCheckedClient();
+  const { supabase, userId } = await createLegalCheckedContext();
 
-  const { data: conversation, error: conversationError } = await supabase
-    .from("note_chat_conversations")
-    .select("*")
-    .eq("id", conversationId)
-    .maybeSingle();
-
-  if (conversationError) {
-    // 상세 조회 실패 대상을 식별할 수 있도록 conversationId만 기록하고,
-    // 조회 실패 자체는 기존과 동일하게 호출자에게 예외로 전달한다.
-    await reportNoteChatOperationalError({
-      context: {
-        conversationId,
-      },
-      error: conversationError,
-      errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.CONVERSATION_LOAD_FAILED,
-      message: "노트 챗봇 대화 조회에 실패했습니다.",
-      operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.GET_CONVERSATION,
-    });
-
-    throw new Error(
-      `노트 챗봇 대화 조회에 실패했습니다: ${conversationError.message}`,
-    );
-  }
-
-  if (!conversation) {
-    return null;
-  }
-
-  const { data: messages, error: messagesError } = await supabase
-    .from("note_chat_messages")
-    .select("*")
-    .eq("conversation_id", conversation.id)
-    .order("sequence_number", { ascending: true });
-
-  if (messagesError) {
-    // 메시지 조회 실패가 발생한 대화를 식별할 수 있도록
-    // conversationId를 함께 기록한다.
-    await reportNoteChatOperationalError({
-      context: {
-        conversationId: conversation.id,
-      },
-      error: messagesError,
-      errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.MESSAGES_LOAD_FAILED,
-      message: "노트 챗봇 메시지 조회에 실패했습니다.",
-      operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.GET_MESSAGES,
-    });
-
-    throw new Error(
-      `노트 챗봇 메시지 조회에 실패했습니다: ${messagesError.message}`,
-    );
-  }
-
-  const assistantMessageIds = messages
-    .filter((message) => message.role === "assistant")
-    .map((message) => message.id);
-
-  let assistantSources: NoteChatConversationDetail["assistantSources"] = [];
-
-  if (assistantMessageIds.length > 0) {
-    const { data: runs, error: runsError } = await supabase
-      .from("note_chat_runs")
-      .select("assistant_message_id, sources")
-      .in("assistant_message_id", assistantMessageIds);
-
-    if (runsError) {
-      // 참고 노트 조회 실패가 어느 대화에서 발생했는지 추적할 수 있도록
-      // conversationId를 기록하되 메시지 내용이나 sources 원문은 저장하지 않는다.
-      await reportNoteChatOperationalError({
-        context: {
-          conversationId: conversation.id,
-        },
-        error: runsError,
-        errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.SOURCES_LOAD_FAILED,
-        message: "노트 챗봇 참고 노트 조회에 실패했습니다.",
-        operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.GET_SOURCES,
-      });
-
-      throw new Error(
-        `노트 챗봇 참고 노트 조회에 실패했습니다: ${runsError.message}`,
-      );
-    }
-
-    assistantSources = (runs ?? []).flatMap((run) => {
-      if (!run.assistant_message_id) {
-        return [];
-      }
-
-      const parsedSources = z
-        .array(noteChatRunSourceSchema)
-        .safeParse(run.sources);
-
-      if (!parsedSources.success) {
-        return [];
-      }
-
-      return [
-        {
-          assistantMessageId: run.assistant_message_id,
-          sources: parsedSources.data.map((source) => ({
-            noteId: source.noteId,
-            title: source.title,
-          })),
-        },
-      ];
-    });
-  }
-
-  return {
-    assistantSources,
-    conversation,
-    messages,
-  };
+  return queryNoteChatConversationDetail(supabase, conversationId, userId);
 }

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { validateRedirectPath } from "@/features/auth/lib/validateRedirectPath";
 import { requireCurrentLegalAcceptance } from "@/features/auth/utils/requireCurrentLegalAcceptance";
 import { getNoteDetailRoute, ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
@@ -38,7 +39,7 @@ export type MarkNotificationAsReadActionResultType =
 
 export type CheckPushSubscriptionOwnedResultType = { owned: boolean };
 
-async function getVerifiedNotificationContext() {
+async function getVerifiedNotificationContext(redirectPath: string) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -52,7 +53,7 @@ async function getVerifiedNotificationContext() {
     redirect(`${ROUTES.RESEND_EMAIL}?purpose=signup`);
   }
 
-  await requireCurrentLegalAcceptance(user.id, ROUTES.MYPAGE);
+  await requireCurrentLegalAcceptance(user.id, redirectPath);
 
   return { supabase, userId: user.id } as const;
 }
@@ -69,7 +70,7 @@ export async function subscribeToPushAction(
     };
   }
 
-  const context = await getVerifiedNotificationContext();
+  const context = await getVerifiedNotificationContext(ROUTES.MYPAGE);
 
   if ("error" in context) {
     return { success: false, error: context.error };
@@ -111,7 +112,7 @@ export async function unsubscribeFromPushAction(
     };
   }
 
-  const context = await getVerifiedNotificationContext();
+  const context = await getVerifiedNotificationContext(ROUTES.MYPAGE);
 
   if ("error" in context) {
     return { success: false, error: context.error };
@@ -144,7 +145,7 @@ export async function checkPushSubscriptionOwnedAction(
     return { owned: false };
   }
 
-  const context = await getVerifiedNotificationContext();
+  const context = await getVerifiedNotificationContext(ROUTES.MYPAGE);
 
   if ("error" in context) {
     return { owned: false };
@@ -165,6 +166,7 @@ export async function checkPushSubscriptionOwnedAction(
 
 export async function markNotificationAsReadAction(
   notificationId: unknown,
+  redirectPath: unknown,
 ): Promise<MarkNotificationAsReadActionResultType> {
   const parsed = notificationIdSchema.safeParse(notificationId);
 
@@ -172,7 +174,9 @@ export async function markNotificationAsReadAction(
     return { success: false, error: "알림을 찾을 수 없습니다." };
   }
 
-  const context = await getVerifiedNotificationContext();
+  const context = await getVerifiedNotificationContext(
+    validateRedirectPath(redirectPath),
+  );
 
   if ("error" in context) {
     return { success: false, error: context.error };
@@ -215,7 +219,9 @@ export async function setNotificationTimeAction(
     return { success: false, error: "알림 시간이 올바르지 않습니다." };
   }
 
-  const context = await getVerifiedNotificationContext();
+  const context = await getVerifiedNotificationContext(
+    getNoteDetailRoute(parsed.data.noteId),
+  );
 
   if ("error" in context) {
     return { success: false, error: context.error };

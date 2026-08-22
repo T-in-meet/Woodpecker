@@ -145,6 +145,7 @@ describe("runNoteChatStream", () => {
     expect(mocks.executeNoteChat).toHaveBeenCalledWith({
       conversationId: params.conversationId,
       settings: params.settings,
+      userId: params.userId,
       userMessageId: params.userMessageId,
     });
 
