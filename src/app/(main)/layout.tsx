@@ -34,7 +34,8 @@ export default async function MainLayout({
     const pathname = (await headers()).get("x-pathname");
     redirect(getAgreementRequiredPath(validateRedirectPath(pathname)));
   }
-  const showLegalRevisionNotice = !isLegalRevisionEffective();
+  const showLegalRevisionNotice =
+    !agreementStatus.isComplete && !isLegalRevisionEffective();
 
   return (
     <div className="min-h-screen">
