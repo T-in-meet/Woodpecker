@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { requireCurrentLegalAcceptance } from "@/features/auth/utils/requireCurrentLegalAcceptance";
+import { getNoteDetailRoute } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 
 import {
@@ -12,7 +14,25 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
 }));
 
+vi.mock("@/features/auth/utils/requireCurrentLegalAcceptance", () => ({
+  requireCurrentLegalAcceptance: vi.fn(),
+}));
+
 const createClientMock = vi.mocked(createClient);
+const requireCurrentLegalAcceptanceMock = vi.mocked(
+  requireCurrentLegalAcceptance,
+);
+
+const authenticatedUserId = "99999999-9999-4999-8999-999999999999";
+
+/** 인증된 사용자를 반환하는 auth.getUser mock을 만듭니다. */
+function createAuthMock() {
+  return {
+    getUser: vi.fn().mockResolvedValue({
+      data: { user: { id: authenticatedUserId } },
+    }),
+  };
+}
 
 describe("addManualRelatedNotesAction", () => {
   const noteId = "11111111-1111-4111-8111-111111111111";
@@ -29,6 +49,7 @@ describe("addManualRelatedNotesAction", () => {
     });
 
     createClientMock.mockResolvedValue({
+      auth: createAuthMock(),
       rpc,
     } as never);
 
@@ -44,6 +65,11 @@ describe("addManualRelatedNotesAction", () => {
         },
       ],
     });
+
+    expect(requireCurrentLegalAcceptanceMock).toHaveBeenCalledWith(
+      authenticatedUserId,
+      getNoteDetailRoute(noteId),
+    );
 
     expect(rpc).toHaveBeenCalledTimes(1);
 
@@ -105,6 +131,7 @@ describe("addManualRelatedNotesAction", () => {
     });
 
     createClientMock.mockResolvedValue({
+      auth: createAuthMock(),
       rpc,
     } as never);
 
@@ -132,6 +159,7 @@ describe("addManualRelatedNotesAction", () => {
     });
 
     createClientMock.mockResolvedValue({
+      auth: createAuthMock(),
       rpc,
     } as never);
 
@@ -158,6 +186,7 @@ describe("addManualRelatedNotesAction", () => {
     });
 
     createClientMock.mockResolvedValue({
+      auth: createAuthMock(),
       rpc,
     } as never);
 
@@ -190,6 +219,7 @@ describe("updateManualRelatedNoteReasonAction", () => {
     });
 
     createClientMock.mockResolvedValue({
+      auth: createAuthMock(),
       rpc,
     } as never);
 
@@ -198,6 +228,11 @@ describe("updateManualRelatedNoteReasonAction", () => {
       relatedNoteId,
       reason: "수정된 연결 이유",
     });
+
+    expect(requireCurrentLegalAcceptanceMock).toHaveBeenCalledWith(
+      authenticatedUserId,
+      getNoteDetailRoute(noteId),
+    );
 
     expect(rpc).toHaveBeenCalledWith("update_note_related_manual_reason", {
       p_note_id: noteId,
@@ -216,6 +251,7 @@ describe("updateManualRelatedNoteReasonAction", () => {
     });
 
     createClientMock.mockResolvedValue({
+      auth: createAuthMock(),
       rpc,
     } as never);
 
@@ -257,6 +293,7 @@ describe("updateManualRelatedNoteReasonAction", () => {
     });
 
     createClientMock.mockResolvedValue({
+      auth: createAuthMock(),
       rpc,
     } as never);
 
@@ -280,6 +317,7 @@ describe("updateManualRelatedNoteReasonAction", () => {
     });
 
     createClientMock.mockResolvedValue({
+      auth: createAuthMock(),
       rpc,
     } as never);
 
@@ -303,6 +341,7 @@ describe("updateManualRelatedNoteReasonAction", () => {
     });
 
     createClientMock.mockResolvedValue({
+      auth: createAuthMock(),
       rpc,
     } as never);
 
@@ -332,6 +371,7 @@ describe("deleteRelatedNoteAction", () => {
     });
 
     createClientMock.mockResolvedValue({
+      auth: createAuthMock(),
       rpc,
     } as never);
 
@@ -339,6 +379,11 @@ describe("deleteRelatedNoteAction", () => {
       noteId,
       relatedNoteId,
     });
+
+    expect(requireCurrentLegalAcceptanceMock).toHaveBeenCalledWith(
+      authenticatedUserId,
+      getNoteDetailRoute(noteId),
+    );
 
     expect(rpc).toHaveBeenCalledWith("delete_note_related", {
       p_note_id: noteId,
@@ -371,6 +416,7 @@ describe("deleteRelatedNoteAction", () => {
     });
 
     createClientMock.mockResolvedValue({
+      auth: createAuthMock(),
       rpc,
     } as never);
 
@@ -393,6 +439,7 @@ describe("deleteRelatedNoteAction", () => {
     });
 
     createClientMock.mockResolvedValue({
+      auth: createAuthMock(),
       rpc,
     } as never);
 

@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { requireCurrentLegalAcceptance } from "@/features/auth/utils/requireCurrentLegalAcceptance";
+import { getNoteDetailRoute } from "@/lib/constants/routes";
 import { logError } from "@/lib/logger";
 import { createServerComponentClient } from "@/lib/supabase/server";
 import { createSupabaseQueryMock } from "@/tests/supabaseQueryMock";
@@ -14,8 +16,26 @@ vi.mock("@/lib/logger", () => ({
   logError: vi.fn(),
 }));
 
+vi.mock("@/features/auth/utils/requireCurrentLegalAcceptance", () => ({
+  requireCurrentLegalAcceptance: vi.fn(),
+}));
+
 const createClientMock = vi.mocked(createServerComponentClient);
 const logErrorMock = vi.mocked(logError);
+const requireCurrentLegalAcceptanceMock = vi.mocked(
+  requireCurrentLegalAcceptance,
+);
+
+const authenticatedUserId = "99999999-9999-4999-8999-999999999999";
+
+/** 인증된 사용자를 반환하는 auth.getUser mock을 만듭니다. */
+function createAuthMock() {
+  return {
+    getUser: vi.fn().mockResolvedValue({
+      data: { user: { id: authenticatedUserId } },
+    }),
+  };
+}
 
 describe("getRelatedNotes", () => {
   beforeEach(() => {
@@ -59,10 +79,18 @@ describe("getRelatedNotes", () => {
       },
     });
 
-    createClientMock.mockResolvedValue(supabase as never);
+    createClientMock.mockResolvedValue({
+      ...supabase,
+      auth: createAuthMock(),
+    } as never);
 
     const result = await getRelatedNotes(
       "11111111-1111-4111-8111-111111111111",
+    );
+
+    expect(requireCurrentLegalAcceptanceMock).toHaveBeenCalledWith(
+      authenticatedUserId,
+      getNoteDetailRoute("11111111-1111-4111-8111-111111111111"),
     );
 
     const calls = callsFor("note_related_notes");
@@ -119,7 +147,10 @@ describe("getRelatedNotes", () => {
       },
     });
 
-    createClientMock.mockResolvedValue(supabase as never);
+    createClientMock.mockResolvedValue({
+      ...supabase,
+      auth: createAuthMock(),
+    } as never);
 
     const result = await getRelatedNotes(
       "11111111-1111-4111-8111-111111111111",
@@ -156,7 +187,10 @@ describe("getRelatedNotes", () => {
       },
     });
 
-    createClientMock.mockResolvedValue(supabase as never);
+    createClientMock.mockResolvedValue({
+      ...supabase,
+      auth: createAuthMock(),
+    } as never);
 
     const result = await getRelatedNotes(
       "11111111-1111-4111-8111-111111111111",
@@ -186,7 +220,10 @@ describe("getRelatedNotes", () => {
       },
     });
 
-    createClientMock.mockResolvedValue(supabase as never);
+    createClientMock.mockResolvedValue({
+      ...supabase,
+      auth: createAuthMock(),
+    } as never);
 
     const result = await getRelatedNotes(
       "11111111-1111-4111-8111-111111111111",
@@ -309,6 +346,11 @@ describe("getRelatedNoteCandidates", () => {
     } as never);
 
     const result = await getRelatedNoteCandidates(noteId, 2, "후보", 8);
+
+    expect(requireCurrentLegalAcceptanceMock).toHaveBeenCalledWith(
+      "user-123",
+      getNoteDetailRoute(noteId),
+    );
 
     expect(fromMock).toHaveBeenNthCalledWith(1, "notes");
     expect(sourceNoteEqMock).toHaveBeenCalledWith("id", noteId);
