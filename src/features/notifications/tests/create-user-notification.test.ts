@@ -256,12 +256,17 @@ describe("createAdminNotification", () => {
       error: null,
     });
     const profilesChain = createSelectEqChain({ data: [], error: null });
+
     const from = vi.fn((table: string) => {
       if (table === "admin_notification_events") {
         return { insert: eventChain.insert };
       }
 
-      return { select: profilesChain.select };
+      if (table === "profiles") {
+        return { select: profilesChain.select };
+      }
+
+      throw new Error(`Unexpected table: ${table}`);
     });
 
     createAdminClientMock.mockReturnValue({ from });
@@ -278,8 +283,67 @@ describe("createAdminNotification", () => {
       ok: true,
       targetAdminCount: 0,
     });
+
     expect(eventChain.insert).toHaveBeenCalledWith(
       expect.objectContaining({ feedback_id: null }),
+    );
+  });
+
+  it("records an operational error when admin notification event creation fails", async () => {
+    const insertError = { message: "event insert failed" };
+    const eventChain = createInsertChain({
+      data: null,
+      error: insertError,
+    });
+
+    const from = vi.fn((table: string) => {
+      if (table === "admin_notification_events") {
+        return { insert: eventChain.insert };
+      }
+
+      throw new Error(`Unexpected table: ${table}`);
+    });
+
+    createAdminClientMock.mockReturnValue({ from });
+
+    recordOperationalErrorMock.mockResolvedValue({
+      id: "66666666-6666-4666-8666-666666666666",
+      ok: true,
+      recorded: "created",
+    });
+
+    const result = await createAdminNotification({
+      clickPath: "/admin/feedbacks/feedback-id",
+      createdBy: "44444444-4444-4444-8444-444444444444",
+      feedbackId: "77777777-7777-4777-8777-777777777777",
+      title: "새 사용자 피드백이 등록되었습니다.",
+      type: ADMIN_NOTIFICATION_TYPES.FEEDBACK_CREATED,
+    });
+
+    expect(result).toEqual({
+      error: insertError,
+      failureStage: "in_app_notification_create",
+      ok: false,
+      operationalErrorRecorded: true,
+    });
+
+    expect(dispatchPushToUserMock).not.toHaveBeenCalled();
+
+    expect(recordOperationalErrorMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserId: "44444444-4444-4444-8444-444444444444",
+        context: {
+          clickPath: "/admin/feedbacks/feedback-id",
+          feedbackId: "77777777-7777-4777-8777-777777777777",
+          notificationType: ADMIN_NOTIFICATION_TYPES.FEEDBACK_CREATED,
+        },
+        error: insertError,
+        errorCode: "ADMIN_NOTIFICATION_CREATE_FAILED",
+        feature: "notifications",
+        message: "새 피드백 관리자 알림 생성에 실패했습니다.",
+        operation: "create_admin_feedback_notification",
+        stage: "in_app_notification_create",
+      }),
     );
   });
 
@@ -316,11 +380,22 @@ describe("createAdminNotification", () => {
       type: ADMIN_NOTIFICATION_TYPES.FEEDBACK_CREATED,
     });
 
-    expect(result).toEqual({ error: lookupError, ok: false });
+    expect(result).toEqual({
+      error: lookupError,
+      failureStage: "admin_notification_target_lookup",
+      ok: false,
+      operationalErrorRecorded: true,
+    });
     expect(dispatchPushToUserMock).not.toHaveBeenCalled();
     expect(recordOperationalErrorMock).toHaveBeenCalledWith(
       expect.objectContaining({
         actorUserId: "44444444-4444-4444-8444-444444444444",
+        context: {
+          adminNotificationEventId: "55555555-5555-4555-8555-555555555555",
+          clickPath: "/admin/feedbacks/feedback-id",
+          feedbackId: "77777777-7777-4777-8777-777777777777",
+          notificationType: ADMIN_NOTIFICATION_TYPES.FEEDBACK_CREATED,
+        },
         error: lookupError,
         errorCode: "ADMIN_NOTIFICATION_TARGET_LOOKUP_FAILED",
         feature: "notifications",
