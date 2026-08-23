@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { AdminAiPromptVersionForm } from "@/features/admin/ai/prompts/components/AdminAiPromptVersionForm";
+import { AdminAiPromptVersionCreateClient } from "@/features/admin/ai/prompts/components/AdminAiPromptVersionCreateClient";
 import { getAdminAiPromptFamilyDetail } from "@/features/admin/ai/prompts/queries";
 
 type AdminAiPromptVersionNewPageProps = {
@@ -26,5 +26,5 @@ export default async function AdminAiPromptVersionNewPage({
     notFound();
   }
 
-  return <AdminAiPromptVersionForm family={family} />;
+  return <AdminAiPromptVersionCreateClient family={family} />;
 }
