@@ -3,7 +3,6 @@
 import { ChevronDown } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { Button } from "@/components/ui/button";
 import {
   Collapsible,
   CollapsibleContent,
@@ -34,24 +33,14 @@ export function AdminCollapsibleSection({
 }: AdminCollapsibleSectionProps) {
   return (
     <Collapsible defaultOpen={defaultOpen} className="rounded-lg border">
-      <div className="flex items-center justify-between gap-4 px-4 py-3">
+      <CollapsibleTrigger className="group flex w-full cursor-pointer items-center justify-between gap-4 px-4 py-3 text-left">
         <h2 className="font-semibold">{title}</h2>
 
-        <CollapsibleTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label={`${title} 접기 또는 펼치기`}
-            className="group"
-          >
-            <ChevronDown
-              aria-hidden="true"
-              className="transition-transform group-data-[state=open]:rotate-180"
-            />
-          </Button>
-        </CollapsibleTrigger>
-      </div>
+        <ChevronDown
+          aria-hidden="true"
+          className="shrink-0 transition-transform group-data-[state=open]:rotate-180"
+        />
+      </CollapsibleTrigger>
 
       <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down">
         <div className="border-t p-4">{children}</div>
