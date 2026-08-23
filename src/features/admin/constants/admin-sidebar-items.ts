@@ -3,15 +3,10 @@ import {
   Beaker,
   Blocks,
   Bot,
-  Boxes,
   BrainCircuit,
-  FileSearch,
   FileText,
-  GitBranch,
   LayoutDashboard,
-  Link2,
   MessageSquareText,
-  Network,
   Settings2,
   Users,
 } from "lucide-react";
@@ -91,71 +86,6 @@ export const ADMIN_SIDEBAR_ITEMS = [
         href: ROUTES.ADMIN.EXPERIMENTS.COMPONENT_PLAYGROUND,
         icon: Blocks,
         breadcrumbLabel: "컴포넌트 Playground",
-      },
-
-      {
-        title: "노트 연결",
-        icon: Link2,
-        breadcrumbHref: ROUTES.ADMIN.EXPERIMENTS.NOTE_RELATIONS.DASHBOARD,
-        children: [
-          {
-            title: "대시보드",
-            href: ROUTES.ADMIN.EXPERIMENTS.NOTE_RELATIONS.DASHBOARD,
-            icon: LayoutDashboard,
-            breadcrumbLabel: "노트 연결",
-          },
-          {
-            title: "프롬프트",
-            href: ROUTES.ADMIN.EXPERIMENTS.NOTE_RELATIONS.PROMPTS,
-            icon: FileText,
-          },
-          {
-            title: "지식 객체 생성",
-            icon: Network,
-            children: [
-              {
-                title: "지식 추출",
-                href: ROUTES.ADMIN.EXPERIMENTS.NOTE_RELATIONS
-                  .KNOWLEDGE_EXTRACTIONS,
-                icon: FileSearch,
-              },
-              {
-                title: "지식 객체 생성 작업",
-                href: ROUTES.ADMIN.EXPERIMENTS.NOTE_RELATIONS
-                  .KNOWLEDGE_OBJECT_GENERATIONS,
-                icon: Network,
-              },
-              {
-                title: "지식 객체",
-                href: ROUTES.ADMIN.EXPERIMENTS.NOTE_RELATIONS.KNOWLEDGE_OBJECTS,
-                icon: Boxes,
-              },
-            ],
-          },
-          {
-            title: "관계 생성",
-            icon: Network,
-            children: [
-              {
-                title: "지식 객체 관계 작업",
-                href: ROUTES.ADMIN.EXPERIMENTS.NOTE_RELATIONS
-                  .KNOWLEDGE_OBJECT_RELATION_GENERATIONS,
-                icon: Network,
-              },
-              {
-                title: "지식 객체 관계",
-                href: ROUTES.ADMIN.EXPERIMENTS.NOTE_RELATIONS
-                  .KNOWLEDGE_OBJECT_RELATIONS,
-                icon: GitBranch,
-              },
-              {
-                title: "노트 관계",
-                href: ROUTES.ADMIN.EXPERIMENTS.NOTE_RELATIONS.NOTE_RELATIONS,
-                icon: GitBranch,
-              },
-            ],
-          },
-        ],
       },
     ],
   },
