@@ -11,6 +11,11 @@ import { AdminAiPromptVersionForm } from "./AdminAiPromptVersionForm";
 type AdminAiPromptVersionCreateClientProps = {
   /** Prompt Version을 생성할 Family 정보입니다. */
   family: ComponentProps<typeof AdminAiPromptVersionForm>["family"];
+
+  /** 생성 폼 기본값으로 복사할 Prompt Version입니다. */
+  sourceVersion?: ComponentProps<
+    typeof AdminAiPromptVersionForm
+  >["sourceVersion"];
 };
 
 /**
@@ -21,6 +26,7 @@ type AdminAiPromptVersionCreateClientProps = {
  */
 export function AdminAiPromptVersionCreateClient({
   family,
+  sourceVersion,
 }: AdminAiPromptVersionCreateClientProps) {
   return (
     <div className="space-y-6">
@@ -43,7 +49,10 @@ export function AdminAiPromptVersionCreateClient({
         backLabel="Family 상세"
       />
 
-      <AdminAiPromptVersionForm family={family} />
+      <AdminAiPromptVersionForm
+        family={family}
+        {...(sourceVersion !== undefined ? { sourceVersion } : {})}
+      />
     </div>
   );
 }

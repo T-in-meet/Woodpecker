@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AdminAiPromptVersionRow } from "../../types";
@@ -25,10 +26,18 @@ vi.mock(
 
 vi.mock("@/features/admin/components/layout/AdminDetailPageHeader", () => ({
   AdminDetailPageHeader: ({
+    actions,
     title,
   }: {
+    /** 헤더 작업 영역입니다. */
+    actions?: ReactNode;
     /** 헤더 제목입니다. */ title: string;
-  }) => <header>{title}</header>,
+  }) => (
+    <header>
+      {title}
+      {actions}
+    </header>
+  ),
 }));
 
 vi.mock("../hooks/use-admin-ai-prompt-queries", () => ({
@@ -87,6 +96,54 @@ function mockDetailQueryState(state: AdminAiPromptVersionDetailQueryState) {
   useAdminAiPromptVersionDetailMock.mockReturnValue(state);
 }
 
+/**
+ * Prompt Version 상세 테스트 fixture를 생성합니다.
+ *
+ * @returns 관리자 Prompt Version 상세 데이터
+ */
+function createDetailFixture(): AdminAiPromptVersionDetail {
+  const version: AdminAiPromptVersionRow = {
+    changeSummary: "기존 변경 요약",
+    createdAt: "2026-08-03T00:00:00.000Z",
+    createdBy: null,
+    createdByKind: "admin",
+    displayName: "v1",
+    familyId: "22222222-2222-4222-8222-222222222222",
+    id: "33333333-3333-4333-8333-333333333333",
+    lifecycleStatus: "published",
+    responseSchema: {
+      type: "object",
+    },
+    systemTemplate: "기존 System Template",
+    tags: ["note", "answer"],
+    userTemplate: "기존 User Template",
+    variables: [
+      {
+        name: "question",
+      },
+    ],
+    versionNumber: 1,
+  };
+
+  return {
+    family: {
+      agentDisplayName: "Note Answer Agent",
+      agentId: "11111111-1111-4111-8111-111111111111",
+      archivedVersionCount: 0,
+      createdAt: "2026-08-03T00:00:00.000Z",
+      description: "기존 Family 설명",
+      displayName: "Note Answer",
+      draftVersionCount: 0,
+      id: "22222222-2222-4222-8222-222222222222",
+      publishedVersionCount: 1,
+      tags: ["note", "answer"],
+      updatedAt: "2026-08-03T01:00:00.000Z",
+      versions: [version],
+    },
+    version,
+  };
+}
+
 describe("AdminAiPromptVersionDetailClient", () => {
   beforeEach(() => {
     routerPushMock.mockReset();
@@ -114,5 +171,28 @@ describe("AdminAiPromptVersionDetailClient", () => {
     await user.click(screen.getByRole("button", { name: "다시 시도" }));
 
     expect(refetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("상세 조회 성공 상태에서 현재 Version을 복사 원본으로 지정하는 새 Version 링크를 표시한다", () => {
+    const detail = createDetailFixture();
+
+    mockDetailQueryState({
+      data: detail,
+      isError: false,
+      isPending: false,
+      refetch: refetchMock,
+    });
+
+    render(
+      <AdminAiPromptVersionDetailClient
+        familyId={detail.family.id}
+        versionId={detail.version.id}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "새 Version" })).toHaveAttribute(
+      "href",
+      `/admin/ai/prompts/${detail.family.id}/versions/new?sourceVersionId=${detail.version.id}`,
+    );
   });
 });

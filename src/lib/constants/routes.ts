@@ -116,10 +116,20 @@ export function getAdminAiPromptFamilyRoute(familyId: string) {
  * 관리자 AI prompt version 생성 페이지 경로를 생성합니다.
  *
  * @param familyId version을 생성할 ai_prompt_families.id
+ * @param sourceVersionId 생성 폼 기본값으로 복사할 ai_prompt_versions.id
  * @returns `/admin/ai/prompts/{familyId}/versions/new` 형식의 route path
  */
-export function getAdminAiPromptVersionNewRoute(familyId: string) {
-  return `${getAdminAiPromptFamilyRoute(familyId)}/versions/new`;
+export function getAdminAiPromptVersionNewRoute(
+  familyId: string,
+  sourceVersionId?: string,
+) {
+  const route = `${getAdminAiPromptFamilyRoute(familyId)}/versions/new`;
+
+  if (sourceVersionId === undefined) {
+    return route;
+  }
+
+  return `${route}?sourceVersionId=${encodeURIComponent(sourceVersionId)}`;
 }
 
 /**
