@@ -1,5 +1,8 @@
 "use client";
 
+import { MessageSquareText } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
 import {
   Popover,
   PopoverContent,
@@ -12,12 +15,11 @@ type RelatedNoteReasonPopoverProps = {
 };
 
 /**
- * 한 줄로 잘린 Related Note reason을 표시하고,
+ * Related Note의 연결 이유를 아이콘으로 표시하고,
  * 클릭 시 전체 내용을 Popover로 보여줍니다.
  *
- * 목록의 한 줄 레이아웃은 유지하면서
  * 데스크톱과 모바일 모두 동일한 방식으로
- * 긴 reason의 전체 내용을 확인할 수 있도록 합니다.
+ * reason의 전체 내용을 확인할 수 있도록 합니다.
  *
  * @param props 표시할 Related Note reason
  */
@@ -27,18 +29,22 @@ export function RelatedNoteReasonPopover({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button
+        <Button
           type="button"
-          className="min-w-0 w-[20%] cursor-pointer truncate text-left text-sm text-muted-foreground"
+          variant="ghost"
+          size="icon"
+          className="size-8 shrink-0"
           aria-label="관련 노트 이유 보기"
         >
-          {reason}
-        </button>
+          <MessageSquareText className="size-4" />
+        </Button>
       </PopoverTrigger>
 
       <PopoverContent
         align="center"
-        className="max-w-sm whitespace-normal rounded-sm border-amber-200 bg-amber-50 text-amber-950"
+        sideOffset={6}
+        collisionPadding={12}
+        className="w-auto max-w-[calc(100vw-1.5rem)] whitespace-normal break-words rounded-sm border-amber-200 bg-amber-50 text-amber-950 sm:max-w-sm"
       >
         {reason}
       </PopoverContent>
