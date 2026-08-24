@@ -8,7 +8,7 @@ import { getNoteDetailRoute } from "@/lib/constants/routes";
 import { cn } from "@/lib/utils/cn";
 
 import { DeleteRelatedNoteAlertDialog } from "./DeleteRelatedNoteAlertDialog";
-import { RelatedNoteReasonTooltip } from "./RelatedNoteReasonTooltip";
+import { RelatedNoteReasonPopover } from "./RelatedNoteReasonPopover";
 import { UpdateRelatedNoteReasonDialog } from "./UpdateRelatedNoteReasonDialog";
 
 type RelatedNoteItemProps = {
@@ -49,7 +49,7 @@ export function RelatedNoteItem({ noteId, relatedNote }: RelatedNoteItemProps) {
           <span className="truncate">{relatedNote.title}</span>
         </Link>
 
-        <RelatedNoteReasonTooltip reason={reason} />
+        <RelatedNoteReasonPopover reason={reason} />
 
         <Badge
           variant="secondary"
