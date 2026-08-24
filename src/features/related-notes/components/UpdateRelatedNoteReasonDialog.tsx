@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -58,6 +58,8 @@ export function UpdateRelatedNoteReasonDialog({
   reason,
   children,
 }: UpdateRelatedNoteReasonDialogProps) {
+  const [open, setOpen] = useState(false);
+
   const updateReasonMutation = useUpdateManualRelatedNoteReason();
 
   const {
@@ -79,13 +81,17 @@ export function UpdateRelatedNoteReasonDialog({
   const hasChanges = normalizedReason !== normalizedInitialReason;
 
   useEffect(() => {
-    reset({
-      reason: reason ?? "",
-    });
-  }, [reason, reset]);
+    if (open) {
+      reset({
+        reason: reason ?? "",
+      });
+    }
+  }, [open, reason, reset]);
 
-  function handleOpenChange(open: boolean) {
-    if (!open) {
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen);
+
+    if (!nextOpen) {
       reset({
         reason: reason ?? "",
       });
@@ -107,9 +113,7 @@ export function UpdateRelatedNoteReasonDialog({
           : {}),
       });
 
-      reset({
-        reason: nextReason,
-      });
+      handleOpenChange(false);
 
       toast.success("연결 이유를 수정했습니다.");
     } catch (error) {
@@ -122,7 +126,7 @@ export function UpdateRelatedNoteReasonDialog({
   }
 
   return (
-    <Dialog onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{children}</DialogTrigger>
 
       <DialogContent className="sm:max-w-md">
@@ -171,11 +175,8 @@ export function UpdateRelatedNoteReasonDialog({
             <Button
               type="button"
               variant="outline"
-              onClick={() =>
-                reset({
-                  reason: reason ?? "",
-                })
-              }
+              onClick={() => handleOpenChange(false)}
+              disabled={updateReasonMutation.isPending}
             >
               취소
             </Button>
