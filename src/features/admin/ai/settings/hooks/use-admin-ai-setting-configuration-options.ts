@@ -30,14 +30,14 @@ export function useAdminAiSettingConfigurationOptions() {
 
   const chatModelOptions: AdminAiSettingConfigurationOption[] = chatModels.map(
     (model) => ({
-      label: `${model.displayName} · ${model.provider}/${model.model}`,
+      label: model.displayName,
       value: model.id,
     }),
   );
 
   const embeddingModelOptions: AdminAiSettingConfigurationOption[] =
     embeddingModels.map((model) => ({
-      label: `${model.displayName} · ${model.provider}/${model.model}`,
+      label: model.displayName,
       value: model.id,
     }));
 
