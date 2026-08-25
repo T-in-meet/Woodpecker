@@ -84,7 +84,7 @@ export function AdminSelectField({
             <SelectItem
               key={option.value}
               value={option.value}
-              className="**:data-radix-select-item-text:min-w-0"
+              className="[&>span:last-child]:min-w-0 [&>span:last-child]:truncate"
             >
               {option.label}
             </SelectItem>
