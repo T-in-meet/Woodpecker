@@ -8,6 +8,7 @@ import { getNoteDetailRoute } from "@/lib/constants/routes";
 import { cn } from "@/lib/utils/cn";
 
 import { DeleteRelatedNoteAlertDialog } from "./DeleteRelatedNoteAlertDialog";
+import { RelatedNoteAiActionsPopover } from "./RelatedNoteAiActionsPopover";
 import { RelatedNoteReasonPopover } from "./RelatedNoteReasonPopover";
 import { UpdateRelatedNoteReasonDialog } from "./UpdateRelatedNoteReasonDialog";
 
@@ -97,6 +98,10 @@ export function RelatedNoteItem({ noteId, relatedNote }: RelatedNoteItemProps) {
               <Trash2 className="size-4" />
             </Button>
           </DeleteRelatedNoteAlertDialog>
+
+          {!isManual && (
+            <RelatedNoteAiActionsPopover relatedNoteId={relatedNote.noteId} />
+          )}
         </div>
       </div>
     </div>
