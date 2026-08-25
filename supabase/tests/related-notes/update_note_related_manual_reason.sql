@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(4);
+SELECT plan(5);
 
 
 -- ============================================================================
@@ -207,7 +207,35 @@ SELECT is(
 
 
 -- ============================================================================
--- 3. AI Relation
+-- 3. Update Reason From Reverse View
+-- ============================================================================
+
+SELECT public.update_note_related_manual_reason(
+    current_setting('test.related_notes_update_manual_target_id')::uuid,
+    current_setting('test.related_notes_update_source_id')::uuid,
+    '역방향 수정 이유'
+);
+
+SELECT is(
+    (
+        SELECT metadata
+        FROM public.note_related_notes
+        WHERE note_id =
+                current_setting('test.related_notes_update_source_id')::uuid
+          AND related_note_id =
+                current_setting('test.related_notes_update_manual_target_id')::uuid
+    ),
+    '{
+        "title": "Manual Target",
+        "reason": "역방향 수정 이유",
+        "custom": "preserve"
+    }'::jsonb,
+    'updating manual reason from reverse view should update stored relationship'
+);
+
+
+-- ============================================================================
+-- 4. AI Relation
 -- ============================================================================
 
 SELECT throws_ok(
@@ -229,7 +257,7 @@ SELECT throws_ok(
 
 
 -- ============================================================================
--- 4. Target Ownership
+-- 5. Target Ownership
 -- ============================================================================
 
 SELECT throws_ok(

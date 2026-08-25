@@ -61,10 +61,10 @@ export async function getRelatedNotes(
   const relatedNotesQuery = supabase
     .from("note_related_notes")
     .select(
-      "related_note_id, origin, metadata, notes!note_related_notes_related_note_id_fkey(title)",
+      "note_id, related_note_id, origin, metadata, source_note:notes!note_related_notes_note_id_fkey(title), related_note:notes!note_related_notes_related_note_id_fkey(title)",
     )
-    .eq("note_id", noteId)
     .eq("status", "active")
+    .or(`note_id.eq.${noteId},related_note_id.eq.${noteId}`)
     .order("created_at", { ascending: true });
 
   const runningRecommendationRunQuery = supabase
@@ -112,19 +112,30 @@ export async function getRelatedNotes(
   return {
     hasRunningRecommendationRun,
     relatedNotes: parsed.data.map((row): RelatedNoteRecommendation => {
+      const relatedNote =
+        row.note_id === noteId
+          ? {
+              id: row.related_note_id,
+              title: row.related_note.title,
+            }
+          : {
+              id: row.note_id,
+              title: row.source_note.title,
+            };
+
       if (row.origin === "ai") {
         return {
-          noteId: row.related_note_id,
+          noteId: relatedNote.id,
           origin: "ai",
           ...row.metadata,
-          title: row.notes.title,
+          title: relatedNote.title,
         };
       }
 
       return {
-        noteId: row.related_note_id,
+        noteId: relatedNote.id,
         origin: "manual",
-        title: row.notes.title,
+        title: relatedNote.title,
         ...(row.metadata.reason !== undefined
           ? { reason: row.metadata.reason }
           : {}),
@@ -274,8 +285,10 @@ export async function getRelatedNoteCandidates(
    */
   const { data: existingRelations, error: relationError } = await supabase
     .from("note_related_notes")
-    .select("related_note_id")
-    .eq("note_id", parsedNoteId.data);
+    .select("note_id, related_note_id")
+    .or(
+      `note_id.eq.${parsedNoteId.data},related_note_id.eq.${parsedNoteId.data}`,
+    );
 
   if (relationError) {
     throw relationError;
@@ -289,7 +302,11 @@ export async function getRelatedNoteCandidates(
    */
   const excludedNoteIds = [
     parsedNoteId.data,
-    ...(existingRelations ?? []).map((relation) => relation.related_note_id),
+    ...(existingRelations ?? []).map((relation) =>
+      relation.note_id === parsedNoteId.data
+        ? relation.related_note_id
+        : relation.note_id,
+    ),
   ];
 
   /*
