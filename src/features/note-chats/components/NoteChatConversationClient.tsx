@@ -255,6 +255,7 @@ export function NoteChatConversationClient({
     pendingQuestion,
     streamingContent,
     editingSequenceNumber,
+    conversationHeight,
   ]);
 
   /**
