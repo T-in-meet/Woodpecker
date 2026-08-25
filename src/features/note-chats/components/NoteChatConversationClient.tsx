@@ -291,7 +291,7 @@ export function NoteChatConversationClient({
       : (detail?.messages ?? []);
 
   return (
-    <div className="mx-auto -mb-16 flex w-full max-w-6xl flex-col px-4 md:mb-0 md:px-12">
+    <div className="mx-auto flex w-full max-w-6xl flex-col px-4 md:px-12">
       {detail ? (
         <NoteChatBreadcrumb
           className="my-4"
@@ -300,7 +300,7 @@ export function NoteChatConversationClient({
       ) : null}
       <div
         ref={conversationContainerRef}
-        className="flex min-h-0 flex-col overflow-hidden border border-b-0"
+        className="flex min-h-0 flex-col overflow-hidden border"
         style={
           conversationHeight !== null
             ? { height: conversationHeight }

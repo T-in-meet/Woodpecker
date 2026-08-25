@@ -1,0 +1,32 @@
+/**
+ * layout.tsx(수정 불가) 안에서 note-chats 라우트만 내부 스크롤을
+ * 쓰도록 하기 위한 최소한의 override.
+ *
+ * 실제 높이 계산은 NoteChatsClient/NoteChatConversationClient가
+ * getBoundingClientRect()로 스스로 측정해서 처리하므로(JS 방식),
+ * 여기서는 body > div를 강제 변형하지 않습니다.
+ * (이전에는 body > div를 :has()로 강제 flex화했으나, 이 선택자가
+ * Radix Portal(DropdownMenu/Dialog 등)이 body 끝에 추가하는
+ * wrapper div까지 함께 매칭시켜 메뉴/다이얼로그가 깨지는 문제가
+ * 반복적으로 발생함. :first-child, class selector로도 완전히
+ * 해결되지 않아 JS 측정 방식으로 전환함)
+ */
+
+:global(html):has(.scope) {
+  scrollbar-gutter: auto;
+}
+
+:global(body):has(.scope) {
+  overflow: hidden;
+  scrollbar-gutter: auto;
+}
+
+/* body 안에 <main>은 유일하므로 자식 결합자 없이도 Portal과
+   충돌하지 않음 */
+:global(body):has(.scope) main {
+  padding-bottom: 0 !important;
+}
+
+.scope {
+  height: 100%;
+}
