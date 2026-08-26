@@ -84,7 +84,7 @@ export function NotesToolbar({ initialQuery, activeView }: NotesToolbarProps) {
             variant="outline"
             size="lg"
             aria-label={activeViewOption.label}
-            className="justify-self-end rounded-md px-3 data-[state=open]:rounded-b-none data-[state=open]:border-b-transparent data-[state=open]:bg-popover data-[state=open]:text-popover-foreground sm:justify-self-auto"
+            className="w-36 justify-between justify-self-end rounded-md px-3 data-[state=open]:rounded-b-none data-[state=open]:border-b-transparent data-[state=open]:bg-popover data-[state=open]:text-popover-foreground sm:justify-self-auto"
           >
             <span className="flex items-center gap-1.5">
               <ListFilter className="text-muted-foreground" />
@@ -100,7 +100,6 @@ export function NotesToolbar({ initialQuery, activeView }: NotesToolbarProps) {
           avoidCollisions={false}
           className="min-w-(--radix-dropdown-menu-trigger-width) rounded-t-none border border-t-0 border-border ring-0"
         >
-          <DropdownMenuLabel>노트 보기</DropdownMenuLabel>
           <DropdownMenuRadioGroup
             value={activeView}
             onValueChange={handleViewChange}
@@ -109,7 +108,7 @@ export function NotesToolbar({ initialQuery, activeView }: NotesToolbarProps) {
               <DropdownMenuRadioItem
                 key={value}
                 value={value}
-                className="cursor-pointer py-2"
+                className="cursor-pointer whitespace-nowrap py-2"
               >
                 {label}
               </DropdownMenuRadioItem>

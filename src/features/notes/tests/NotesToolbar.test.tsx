@@ -44,14 +44,14 @@ describe("NotesToolbar", () => {
     expect(toolbar).toHaveClass("contents", "sm:flex");
     expect(viewButton).toHaveClass(
       "justify-self-end",
+      "justify-between",
       "rounded-md",
+      "w-36",
       "data-[state=open]:rounded-b-none",
       "data-[state=open]:border-b-transparent",
       "sm:justify-self-auto",
     );
     expect(viewButton).not.toHaveClass("w-full");
-    expect(viewButton).not.toHaveClass("min-w-36");
-    expect(viewButton).not.toHaveClass("justify-between");
     expect(searchContainer).toHaveClass(
       "col-span-2",
       "w-full",
