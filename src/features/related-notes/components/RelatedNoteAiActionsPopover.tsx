@@ -11,29 +11,23 @@ import {
 } from "@/components/ui/popover";
 import { ROUTES } from "@/lib/constants/routes";
 
-type RelatedNoteAiActionsPopoverProps = {
-  /** 신고 대상 Related Note ID입니다. */
-  relatedNoteId: string;
-};
-
 /**
  * AI 추천 Related Note에 대한 추가 액션을 표시합니다.
  *
  * 현재는 신고 이동만 제공하며,
  * 이후 AI 추천 평가 기능이 추가되면 좋아요/싫어요 액션을 함께 제공합니다.
  *
- * @param props 컴포넌트 속성
- * @param props.relatedNoteId 신고 대상 Related Note ID
  * @returns AI 추천 Related Note 액션 Popover
  */
-export function RelatedNoteAiActionsPopover({
-  relatedNoteId,
-}: RelatedNoteAiActionsPopoverProps) {
+export function RelatedNoteAiActionsPopover() {
+  /*
+   * TODO: Related Notes 신고 연결 시 신고 대상을 식별하기 위해
+   * 현재 Note, 추천된 Note, 추천 실행/관계 중 어떤 정보를 문의 흐름에
+   * 전달해야 하는지 검토합니다.
+   */
   const reportSearchParams = new URLSearchParams({
     section: "support",
     tab: "inquiry",
-    targetType: "related-note",
-    targetId: relatedNoteId,
   });
 
   const reportHref = `${ROUTES.MYPAGE}?${reportSearchParams.toString()}`;

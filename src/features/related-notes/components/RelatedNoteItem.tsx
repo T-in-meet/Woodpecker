@@ -99,9 +99,7 @@ export function RelatedNoteItem({ noteId, relatedNote }: RelatedNoteItemProps) {
             </Button>
           </DeleteRelatedNoteAlertDialog>
 
-          {!isManual && (
-            <RelatedNoteAiActionsPopover relatedNoteId={relatedNote.noteId} />
-          )}
+          {!isManual && <RelatedNoteAiActionsPopover />}
         </div>
       </div>
     </div>
