@@ -41,6 +41,12 @@ describe("routes", () => {
     );
   });
 
+  it("복사 원본 Version ID가 있는 관리자 AI 프롬프트 버전 생성 페이지 경로를 생성한다", () => {
+    expect(getAdminAiPromptVersionNewRoute("family-123", "version-123")).toBe(
+      "/admin/ai/prompts/family-123/versions/new?sourceVersionId=version-123",
+    );
+  });
+
   it("관리자 AI 프롬프트 버전 상세 페이지 경로를 생성한다", () => {
     expect(getAdminAiPromptVersionRoute("family-123", "version-123")).toBe(
       "/admin/ai/prompts/family-123/versions/version-123",

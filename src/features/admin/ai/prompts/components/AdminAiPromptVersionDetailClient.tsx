@@ -1,12 +1,17 @@
 "use client";
 
+import { Plus } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { AdminListError } from "@/features/admin/components/common/AdminListState";
 import { AdminBreadcrumbDynamicItems } from "@/features/admin/components/layout/AdminBreadcrumbDynamicItems";
 import { AdminDetailPageHeader } from "@/features/admin/components/layout/AdminDetailPageHeader";
-import { getAdminAiPromptFamilyRoute } from "@/lib/constants/routes";
+import {
+  getAdminAiPromptFamilyRoute,
+  getAdminAiPromptVersionNewRoute,
+} from "@/lib/constants/routes";
 
 import { AdminActionMessage } from "../../components/AdminActionMessage";
 import { useAdminAiPromptVersionDetail } from "../hooks/use-admin-ai-prompt-queries";
@@ -85,6 +90,20 @@ export function AdminAiPromptVersionDetailClient({
         }
         backHref={getAdminAiPromptFamilyRoute(familyId)}
         backLabel="Family 상세"
+        actions={
+          detail ? (
+            <Button asChild variant="outline">
+              <Link
+                href={getAdminAiPromptVersionNewRoute(
+                  detail.family.id,
+                  detail.version.id,
+                )}
+              >
+                <Plus aria-hidden="true" />새 Version
+              </Link>
+            </Button>
+          ) : null
+        }
       />
 
       {isPending ? (

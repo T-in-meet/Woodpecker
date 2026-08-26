@@ -34,6 +34,9 @@ type AdminAiPromptVersionFormProps = {
   /** 수정할 Version입니다. 없으면 생성 모드입니다. */
   version?: AdminAiPromptVersionRow;
 
+  /** 생성 모드에서 폼 기본값으로 복사할 Version입니다. */
+  sourceVersion?: AdminAiPromptVersionRow;
+
   /** Version 삭제 이벤트입니다. */
   onDelete?: (versionId: string) => void;
 
@@ -56,6 +59,7 @@ type AdminAiPromptVersionFormProps = {
 export function AdminAiPromptVersionForm({
   family,
   version,
+  sourceVersion: initialSourceVersion,
   onDelete,
   deletePending = false,
 }: AdminAiPromptVersionFormProps) {
@@ -63,7 +67,8 @@ export function AdminAiPromptVersionForm({
   const createMode = isCreateMode(version);
   const createMutation = useCreateAdminAiPromptVersion();
   const updateMutation = useUpdateAdminAiPromptVersion();
-  const sourceVersion = version ?? family.versions[0] ?? null;
+  const sourceVersion =
+    version ?? initialSourceVersion ?? family.versions[0] ?? null;
   const editPolicy = version
     ? getAdminAiPromptVersionEditPolicy(version.lifecycleStatus)
     : {

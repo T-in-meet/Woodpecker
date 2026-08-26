@@ -59,7 +59,7 @@ export function AdminSelectField({
   value,
 }: AdminSelectFieldProps) {
   return (
-    <div className="space-y-2">
+    <div className="min-w-0 space-y-2">
       <Label htmlFor={name}>{label}</Label>
 
       <input type="hidden" name={name} value={value} />
@@ -68,7 +68,7 @@ export function AdminSelectField({
         <SelectTrigger
           id={name}
           className={cn(
-            "w-full",
+            "w-full min-w-0 [&>span]:truncate",
             disabled &&
               "opacity-100 cursor-default bg-muted text-muted-foreground border",
           )}
@@ -76,9 +76,16 @@ export function AdminSelectField({
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
 
-        <SelectContent {...ADMIN_SELECT_DEFAULTS.content}>
+        <SelectContent
+          {...ADMIN_SELECT_DEFAULTS.content}
+          className="w-(--radix-select-trigger-width) max-w-[calc(100vw-2rem)]"
+        >
           {options.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
+            <SelectItem
+              key={option.value}
+              value={option.value}
+              className="[&>span:last-child]:min-w-0 [&>span:last-child]:truncate"
+            >
               {option.label}
             </SelectItem>
           ))}
