@@ -20,14 +20,19 @@ export function formatDateTime(date: Date | string, locale = "ko-KR"): string {
   });
 }
 
-export function formatDateKST(date: Date | string): string {
+/** "2026. 8. 24" 형태의 짧은 KST 날짜. 노트 카드처럼 폭이 좁아 긴 형식이 줄바꿈되는 곳에서 쓴다. */
+export function formatShortDateKST(date: Date | string): string {
   const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleDateString("ko-KR", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    timeZone: "Asia/Seoul",
-  });
+  // ko-KR 숫자 형식은 "2026. 8. 24."처럼 끝에 온점이 붙으므로 떼어낸다.
+  return d
+    .toLocaleDateString("ko-KR", {
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      timeZone: "Asia/Seoul",
+    })
+    .trim()
+    .replace(/\.$/, "");
 }
 
 export function formatRelativeDate(date: Date | string): string {

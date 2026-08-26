@@ -16,9 +16,10 @@ export function NoteActions({ noteId, canReview, variant }: NoteActionsProps) {
 
   const isCompact = variant === "grid";
 
+  // 아웃라인 초록. 글자색은 흰 배경 대비 AA를 위해 emerald-700을 쓰고 테두리는 한 단계 연하게 둔다.
   const reviewClass = isCompact
-    ? "inline-flex h-7 w-7 items-center justify-center rounded-md bg-emerald-500 text-white cursor-pointer transition-colors hover:bg-emerald-600"
-    : "inline-flex h-8 items-center gap-1 rounded-md bg-emerald-500 px-2.5 text-xs font-medium text-white cursor-pointer transition-colors hover:bg-emerald-600";
+    ? "inline-flex h-7 w-7 items-center justify-center rounded-md border border-emerald-600/40 text-emerald-700 cursor-pointer transition-colors hover:bg-emerald-50"
+    : "inline-flex h-8 items-center gap-1 rounded-md border border-emerald-600/40 px-2.5 text-xs font-medium text-emerald-700 cursor-pointer transition-colors hover:bg-emerald-50";
 
   const deleteClass = isCompact
     ? "inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground cursor-pointer transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50"

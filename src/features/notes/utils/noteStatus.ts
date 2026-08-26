@@ -1,5 +1,5 @@
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
-import { formatDateKST } from "@/lib/utils/formatDate";
+import { formatShortDateKST } from "@/lib/utils/formatDate";
 
 import type { NoteSummary } from "../queries";
 
@@ -13,12 +13,13 @@ export function getReviewStatus(note: NoteSummary): ReviewStatus {
   return "scheduled";
 }
 
+/** 목록(카드형·리스트형) 공통. 좁은 폭에서 줄바꿈되지 않도록 짧은 날짜 형식을 쓴다. */
 export function getNextReviewText(
   status: ReviewStatus,
   nextReviewAt: string | null,
 ): string {
   if (status === "completed") return "완료";
   if (status === "pending") return "준비 중";
-  if (nextReviewAt) return formatDateKST(nextReviewAt);
+  if (nextReviewAt) return formatShortDateKST(nextReviewAt);
   return "-";
 }

@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { stripNoteColorSyntax } from "@/features/editor/utils/noteColorMarkdown";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { getNoteDetailRoute } from "@/lib/constants/routes";
-import { formatDateKST } from "@/lib/utils/formatDate";
+import { formatShortDateKST } from "@/lib/utils/formatDate";
 import { stripMarkdown } from "@/lib/utils/stripMarkdown";
 
 import type { NoteSummary } from "../queries";
@@ -49,14 +49,15 @@ export function NoteListItem({ note }: { note: NoteSummary }) {
           <div className="my-3.5 border-t" />
 
           <div className="flex items-center justify-between gap-4 text-sm text-muted-foreground">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-1.5">
+            <div className="flex min-w-0 items-center gap-4">
+              {/* 날짜가 단어 중간에서 끊기지 않도록 nowrap을 건다. 좁은 폭에서는 부차 정보인 생성일을 숨겨 한 줄을 유지한다. */}
+              <div className="flex items-center gap-1.5 whitespace-nowrap">
                 <RotateCcw className="h-3.5 w-3.5 shrink-0" />
                 다음 복습: {nextReviewText}
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="hidden items-center gap-1.5 whitespace-nowrap sm:flex">
                 <CalendarDays className="h-3.5 w-3.5 shrink-0" />
-                생성일: {formatDateKST(note.created_at)}
+                생성일: {formatShortDateKST(note.created_at)}
               </div>
             </div>
 
