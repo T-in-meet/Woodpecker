@@ -1,10 +1,4 @@
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-import { Card, CardContent } from "@/components/ui/card";
+import { AdminCollapsibleSection } from "@/features/admin/components/common/AdminCollapsibleSection";
 import { formatDateTime } from "@/lib/utils/formatDate";
 
 import type { OperationalErrorStatusHistoryItem } from "../types/operational-error-list";
@@ -24,27 +18,15 @@ export function AdminOperationalErrorHistoryCard({
   history,
 }: AdminOperationalErrorHistoryCardProps) {
   return (
-    <Card>
-      <CardContent className="pt-2">
-        <Accordion type="multiple" className="divide-y">
-          <AccordionItem value="history" className="border-b-0">
-            <AccordionTrigger className="cursor-pointer py-4 text-base">
-              처리 이력
-            </AccordionTrigger>
-
-            <AccordionContent>
-              {history.length > 0 ? (
-                <OperationalErrorHistoryList history={history} />
-              ) : (
-                <p className="rounded-md border px-3 py-4 text-sm text-muted-foreground">
-                  아직 처리 이력이 없습니다.
-                </p>
-              )}
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
-      </CardContent>
-    </Card>
+    <AdminCollapsibleSection title="처리 이력" defaultOpen={false}>
+      {history.length > 0 ? (
+        <OperationalErrorHistoryList history={history} />
+      ) : (
+        <p className="rounded-md border px-3 py-4 text-sm text-muted-foreground">
+          아직 처리 이력이 없습니다.
+        </p>
+      )}
+    </AdminCollapsibleSection>
   );
 }
 

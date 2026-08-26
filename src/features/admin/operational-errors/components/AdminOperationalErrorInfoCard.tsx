@@ -1,5 +1,5 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AdminBadge } from "@/features/admin/components/common/AdminBadge";
+import { AdminCollapsibleSection } from "@/features/admin/components/common/AdminCollapsibleSection";
 import {
   formatOperationalErrorCodeLabel,
   formatOperationalErrorFeatureLabel,
@@ -33,12 +33,8 @@ export function AdminOperationalErrorInfoCard({
     OPERATIONAL_ERROR_SEVERITY_BADGE_CONFIG[operationalError.severity];
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>오류 정보</CardTitle>
-      </CardHeader>
-
-      <CardContent className="space-y-5">
+    <AdminCollapsibleSection title="오류 정보">
+      <div className="space-y-5">
         <div className="flex flex-wrap gap-2">
           <AdminBadge color={statusBadge.color}>
             {formatOperationalErrorStatusLabel(operationalError.status)}
@@ -102,8 +98,8 @@ export function AdminOperationalErrorInfoCard({
             </p>
           </div>
         ) : null}
-      </CardContent>
-    </Card>
+      </div>
+    </AdminCollapsibleSection>
   );
 }
 

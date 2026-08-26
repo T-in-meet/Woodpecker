@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { AdminDetailPageHeader } from "@/features/admin/components/layout/AdminDetailPageHeader";
 import { useMarkAdminNotificationsAsRead } from "@/features/admin/notifications/hooks/use-mark-admin-notifications-as-read";
 import {
+  formatOperationalErrorCodeLabel,
   formatOperationalErrorFeatureLabel,
   formatOperationalErrorOperationLabel,
   formatOperationalErrorStageLabel,
@@ -92,7 +93,7 @@ export function AdminOperationalErrorDetailClient() {
       <AdminBreadcrumbDynamicItems
         items={[
           {
-            label: data.errorCode || "상세",
+            label: formatOperationalErrorCodeLabel(data.errorCode) || "상세",
           },
         ]}
         loading={false}
@@ -106,7 +107,7 @@ export function AdminOperationalErrorDetailClient() {
         )} / ${formatOperationalErrorOperationLabel(
           data.operation,
         )} / ${formatOperationalErrorStageLabel(data.stage)}`}
-        title={data.errorCode}
+        title={formatOperationalErrorCodeLabel(data.errorCode)}
       />
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_26rem]">

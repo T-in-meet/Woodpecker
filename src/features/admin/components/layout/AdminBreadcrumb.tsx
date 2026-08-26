@@ -38,7 +38,7 @@ export function AdminBreadcrumb({
     const skeletonCount = items.length + loadingItemCount;
 
     return (
-      <Breadcrumb>
+      <Breadcrumb className="py-2">
         <BreadcrumbList>
           {Array.from({ length: skeletonCount }).map((_, index) => {
             const isLast = index === skeletonCount - 1;
@@ -59,7 +59,7 @@ export function AdminBreadcrumb({
   }
 
   return (
-    <Breadcrumb>
+    <Breadcrumb className="py-2">
       <BreadcrumbList>
         {items.map((item, index) => {
           const isLast = index === items.length - 1;

@@ -231,6 +231,49 @@ describe("AdminAiPromptVersionForm", () => {
     );
   });
 
+  it("생성 모드에서 sourceVersion이 있으면 최신 Version보다 우선해 기본값으로 사용한다", () => {
+    const latestVersion = createVersionFixture({
+      changeSummary: "최신 변경 요약",
+      displayName: "latest",
+      id: "44444444-4444-4444-8444-444444444444",
+      systemTemplate: "최신 System Template",
+      tags: ["latest"],
+      userTemplate: "최신 User Template",
+      versionNumber: 2,
+    });
+    const sourceVersion = createVersionFixture({
+      changeSummary: "복사 원본 변경 요약",
+      displayName: "source",
+      id: "55555555-5555-4555-8555-555555555555",
+      systemTemplate: "복사 원본 System Template",
+      tags: ["source", "copy"],
+      userTemplate: "복사 원본 User Template",
+      versionNumber: 1,
+    });
+
+    render(
+      <AdminAiPromptVersionForm
+        family={createFamilyFixture([latestVersion, sourceVersion])}
+        sourceVersion={sourceVersion}
+      />,
+    );
+
+    expect(screen.getByLabelText("이름")).toHaveValue(
+      sourceVersion.displayName,
+    );
+    expect(screen.getByLabelText("Tags")).toHaveValue("source, copy");
+    expect(screen.getByLabelText("변경 요약")).toHaveValue(
+      sourceVersion.changeSummary,
+    );
+    expect(screen.getByLabelText("System Template")).toHaveValue(
+      sourceVersion.systemTemplate,
+    );
+    expect(screen.getByLabelText("User Template")).toHaveValue(
+      sourceVersion.userTemplate,
+    );
+    expect(screen.getByRole("button", { name: "저장" })).toBeDisabled();
+  });
+
   it("Draft 수정 모드에서 변경 전 수정 버튼을 비활성화하고 변경 후 활성화한다", async () => {
     const user = userEvent.setup();
     const version = createVersionFixture({
