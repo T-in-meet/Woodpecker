@@ -53,12 +53,9 @@ export default async function NotesPage({ searchParams }: NotesPageProps) {
 
   return (
     <div className="-mb-8 mx-auto w-full max-w-5xl px-6 pb-2 pt-10 md:mb-0 md:px-12 md:py-10">
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-6 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-3 sm:flex sm:justify-between">
         <div className="space-y-1">
           <h1 className="text-3xl font-bold text-foreground">노트 목록</h1>
-          <p className="text-sm text-muted-foreground">
-            저장한 노트를 확인하고 다음 복습을 이어가세요.
-          </p>
         </div>
         <Suspense>
           <NotesToolbar initialQuery={query} activeView={view} />

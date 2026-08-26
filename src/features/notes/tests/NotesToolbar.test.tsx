@@ -21,14 +21,43 @@ describe("NotesToolbar", () => {
   });
 
   it.each([
-    ["due", "오늘 복습할 노트"],
-    ["scheduled", "복습 예정 노트"],
+    ["all", "전체"],
+    ["due", "오늘 복습"],
+    ["scheduled", "복습 예정"],
+    ["completed", "복습 완료"],
   ] as const)("%s 보기의 이름을 '%s'로 표시한다", (activeView, label) => {
     render(<NotesToolbar initialQuery="" activeView={activeView} />);
 
     expect(
       screen.getByRole("button", { name: new RegExp(label) }),
     ).toBeInTheDocument();
+  });
+
+  it("모바일에서는 짧은 보기 메뉴와 검색창을 제목 행 그리드에 배치한다", () => {
+    render(<NotesToolbar initialQuery="" activeView="all" />);
+
+    const viewButton = screen.getByRole("button", { name: "전체" });
+    const searchInput = screen.getByPlaceholderText("제목 또는 내용 검색");
+    const searchContainer = searchInput.parentElement;
+    const toolbar = searchContainer?.parentElement;
+
+    expect(toolbar).toHaveClass("contents", "sm:flex");
+    expect(viewButton).toHaveClass(
+      "justify-self-end",
+      "rounded-md",
+      "data-[state=open]:rounded-b-none",
+      "data-[state=open]:border-b-transparent",
+      "sm:justify-self-auto",
+    );
+    expect(viewButton).not.toHaveClass("w-full");
+    expect(viewButton).not.toHaveClass("min-w-36");
+    expect(viewButton).not.toHaveClass("justify-between");
+    expect(searchContainer).toHaveClass(
+      "col-span-2",
+      "w-full",
+      "sm:col-auto",
+      "sm:w-auto",
+    );
   });
 
   it("검색어 입력은 debounce 후 한 번만 이동한다", () => {
