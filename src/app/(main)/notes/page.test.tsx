@@ -99,12 +99,35 @@ describe("NotesPage", () => {
       1,
       "",
       NOTES_PAGE_SIZE,
+      "all",
     );
     expect(
       screen.getByRole("heading", { name: "노트 목록" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /테스트 노트/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("보기 파라미터에 따라 상태별 노트를 조회한다", async () => {
+    getUserMock.mockResolvedValue(createUser("user-123"));
+    getNotesMock.mockResolvedValue({ notes: [], total: 0 });
+
+    render(
+      await NotesPage({
+        searchParams: Promise.resolve({ view: "scheduled" }),
+      }),
+    );
+
+    expect(getNotesMock).toHaveBeenCalledWith(
+      "user-123",
+      1,
+      "",
+      NOTES_PAGE_SIZE,
+      "scheduled",
+    );
+    expect(
+      screen.getByRole("button", { name: /예정 노트/ }),
     ).toBeInTheDocument();
   });
 

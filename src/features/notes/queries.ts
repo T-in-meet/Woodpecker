@@ -1,11 +1,12 @@
 import { z } from "zod";
 
-import { getKstDayBoundsUtc } from "@/features/review/lib/kstDay";
 import { NOTES_PAGE_SIZE } from "@/lib/constants/notes";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { logError } from "@/lib/logger";
 import { createServerComponentClient } from "@/lib/supabase/server";
 import { escapePostgrestLikePattern } from "@/lib/utils/escapePostgrestLikePattern";
+
+import type { NoteView } from "./schema";
 
 const noteDetailSchema = z.object({
   id: z.string().uuid(),
@@ -57,6 +58,7 @@ export async function getNotes(
   page = 1,
   search = "",
   pageSize = NOTES_PAGE_SIZE,
+  view: NoteView = "all",
 ): Promise<{ notes: NoteSummary[]; total: number }> {
   const supabase = await createServerComponentClient();
   const from = (page - 1) * pageSize;
@@ -67,13 +69,34 @@ export async function getNotes(
     .select(NOTE_SUMMARY_SELECT, {
       count: "exact",
     })
-    .eq("user_id", userId)
-    .order("updated_at", { ascending: false });
+    .eq("user_id", userId);
+
+  const nowIso = new Date().toISOString();
+
+  if (view === "due") {
+    query = query.lte("next_review_at", nowIso);
+  } else if (view === "scheduled") {
+    query = query.or(
+      `next_review_at.gt.${nowIso},and(next_review_at.is.null,review_round.eq.0)`,
+    );
+  } else if (view === "completed") {
+    query = query
+      .is("next_review_at", null)
+      .eq("review_round", MAX_REVIEW_ROUND);
+  }
 
   if (search.trim()) {
     const term = escapePostgrestLikePattern(search.trim()).replace(/"/g, '\\"');
     query = query.or(`title.ilike."%${term}%",content.ilike."%${term}%"`);
   }
+
+  query =
+    view === "due" || view === "scheduled"
+      ? query.order("next_review_at", {
+          ascending: true,
+          nullsFirst: false,
+        })
+      : query.order("updated_at", { ascending: false });
 
   const { data, count, error } = await query.range(from, to);
 
@@ -82,37 +105,6 @@ export async function getNotes(
   const notes = parseNoteSummaries(data, "getNotes");
 
   return { notes: notes ?? [], total: count ?? 0 };
-}
-
-export async function getTodayReviewNotes(
-  userId: string,
-  page = 1,
-  pageSize = 9,
-): Promise<{ notes: NoteSummary[]; total: number }> {
-  const supabase = await createServerComponentClient();
-  const { startUtcIso, endUtcIso } = getKstDayBoundsUtc();
-  const from = (page - 1) * pageSize;
-  const to = from + pageSize - 1;
-
-  const { data, error, count } = await supabase
-    .from("notes")
-    .select(NOTE_SUMMARY_SELECT, {
-      count: "exact",
-    })
-    .eq("user_id", userId)
-    .gte("next_review_at", startUtcIso)
-    .lt("next_review_at", endUtcIso)
-    .order("next_review_at", { ascending: true })
-    .order("created_at", { ascending: false })
-    .range(from, to);
-
-  if (error) throw error;
-
-  const notes = parseNoteSummaries(data, "getTodayReviewNotes");
-
-  if (!notes) return { notes: [], total: 0 };
-
-  return { notes, total: count ?? 0 };
 }
 
 export async function getReviewWaitingNotes(

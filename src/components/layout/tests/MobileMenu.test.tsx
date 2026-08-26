@@ -44,10 +44,9 @@ describe("MobileMenu", () => {
       "aria-current",
       "page",
     );
-    expect(screen.getByRole("link", { name: "오늘의 복습" })).toHaveAttribute(
-      "href",
-      ROUTES.NOTES_TODAY,
-    );
+    expect(
+      screen.queryByRole("link", { name: "오늘의 복습" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "새 노트" })).toHaveAttribute(
       "href",
       ROUTES.NOTES_NEW,

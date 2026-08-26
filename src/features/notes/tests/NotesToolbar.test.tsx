@@ -21,7 +21,7 @@ describe("NotesToolbar", () => {
   });
 
   it("검색어 입력은 debounce 후 한 번만 이동한다", () => {
-    render(<NotesToolbar initialQuery="" />);
+    render(<NotesToolbar initialQuery="" activeView="all" />);
     const input = screen.getByPlaceholderText("제목 또는 내용 검색");
 
     fireEvent.change(input, { target: { value: "테" } });
@@ -41,7 +41,7 @@ describe("NotesToolbar", () => {
 
   it("검색어를 지우면 대기 중인 debounce를 취소하고 즉시 이동한다", () => {
     // useSearchParams가 비어 있으면 동기화 effect가 initialQuery를 덮으므로 입력으로 채운다.
-    render(<NotesToolbar initialQuery="" />);
+    render(<NotesToolbar initialQuery="" activeView="all" />);
     fireEvent.change(screen.getByPlaceholderText("제목 또는 내용 검색"), {
       target: { value: "테스트" },
     });

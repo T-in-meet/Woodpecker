@@ -2,7 +2,6 @@
 
 import {
   BookOpen,
-  CalendarCheck,
   LogOut,
   type LucideIcon,
   Menu as MenuIcon,
@@ -45,18 +44,13 @@ type MobileNavItem = {
 
 const MOBILE_NAV_ITEMS: MobileNavItem[] = [
   { href: ROUTES.NOTES, label: "노트 목록", icon: BookOpen },
-  { href: ROUTES.NOTES_TODAY, label: "오늘의 복습", icon: CalendarCheck },
   { href: ROUTES.NOTES_NEW, label: "새 노트", icon: Plus },
   { href: ROUTES.NOTE_CHATS, label: "노트 챗봇", icon: MessageCircle },
 ];
 
 function isCurrentRoute(pathname: string, href: string): boolean {
   if (href === ROUTES.NOTES) {
-    return (
-      pathname.startsWith(ROUTES.NOTES) &&
-      pathname !== ROUTES.NOTES_NEW &&
-      pathname !== ROUTES.NOTES_TODAY
-    );
+    return pathname.startsWith(ROUTES.NOTES) && pathname !== ROUTES.NOTES_NEW;
   }
 
   if (href === ROUTES.NOTE_CHATS) {

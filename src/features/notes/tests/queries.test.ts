@@ -2,29 +2,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NOTES_PAGE_SIZE } from "@/lib/constants/notes";
 
-const { createClientMock, getKstDayBoundsUtcMock } = vi.hoisted(() => ({
+const { createClientMock } = vi.hoisted(() => ({
   createClientMock: vi.fn(),
-  getKstDayBoundsUtcMock: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
   createServerComponentClient: createClientMock,
 }));
 
-vi.mock("@/features/review/lib/kstDay", () => ({
-  getKstDayBoundsUtc: getKstDayBoundsUtcMock,
-}));
-
 vi.mock("@/lib/logger", () => ({ logError: vi.fn() }));
 
 import { createSupabaseQueryMock } from "@/tests/supabaseQueryMock";
 
-import {
-  getNoteById,
-  getNotes,
-  getReviewWaitingNotes,
-  getTodayReviewNotes,
-} from "../queries";
+import { getNoteById, getNotes, getReviewWaitingNotes } from "../queries";
 
 // ─── 공통 픽스처 ────────────────────────────────────────────────────────────
 
@@ -116,6 +106,24 @@ describe("getNotes", () => {
     createClientMock.mockResolvedValue(supabase);
 
     await expect(getNotes("user-123")).rejects.toThrow("DB connection failed");
+  });
+
+  it.each([
+    ["due", "lte", ["next_review_at", expect.any(String)]],
+    ["scheduled", "or", [expect.stringContaining("next_review_at.gt.")]],
+    ["completed", "is", ["next_review_at", null]],
+  ] as const)("%s 보기에 맞는 필터를 적용한다", async (view, method, args) => {
+    const { supabase, callsFor } = createSupabaseQueryMock({
+      notes: { data: [], count: 0 },
+    });
+    createClientMock.mockResolvedValue(supabase);
+
+    await getNotes("user-123", 1, "", NOTES_PAGE_SIZE, view);
+
+    expect(callsFor("notes")).toContainEqual([method, args]);
+    if (view === "completed") {
+      expect(callsFor("notes")).toContainEqual(["eq", ["review_round", 3]]);
+    }
   });
 
   it("returns note detail with notification time of day and pending scheduled_at", async () => {
@@ -210,100 +218,6 @@ describe("getNotes", () => {
     );
 
     expect(result?.next_scheduled_at).toBeNull();
-  });
-});
-
-// ─── getTodayReviewNotes ──────────────────────────────────────────────────────
-
-describe("getTodayReviewNotes", () => {
-  const KST_START = "2026-05-07T15:00:00.000Z";
-  const KST_END = "2026-05-08T15:00:00.000Z";
-
-  beforeEach(() => {
-    createClientMock.mockReset();
-    getKstDayBoundsUtcMock.mockReturnValue({
-      startUtcIso: KST_START,
-      endUtcIso: KST_END,
-    });
-  });
-
-  it("KST 오늘 범위 내 노트를 반환한다", async () => {
-    const { supabase, callsFor } = createSupabaseQueryMock({
-      notes: { data: [BASE_NOTE], count: 1 },
-    });
-    createClientMock.mockResolvedValue(supabase);
-
-    const result = await getTodayReviewNotes("user-123");
-
-    const calls = callsFor("notes");
-    expect(calls).toContainEqual(["eq", ["user_id", "user-123"]]);
-    expect(calls).toContainEqual(["gte", ["next_review_at", KST_START]]);
-    expect(calls).toContainEqual(["lt", ["next_review_at", KST_END]]);
-    expect(calls).toContainEqual([
-      "order",
-      ["next_review_at", { ascending: true }],
-    ]);
-    expect(calls).toContainEqual([
-      "order",
-      ["created_at", { ascending: false }],
-    ]);
-    expect(result).toEqual({ notes: [BASE_NOTE], total: 1 });
-  });
-
-  it("기본 page=1은 첫 페이지 range로 조회한다", async () => {
-    const { supabase, callsFor } = createSupabaseQueryMock({
-      notes: { data: [BASE_NOTE], count: 1 },
-    });
-    createClientMock.mockResolvedValue(supabase);
-
-    await getTodayReviewNotes("user-123");
-
-    expect(callsFor("notes")).toContainEqual(["range", [0, 8]]);
-  });
-
-  it("page/pageSize에 맞는 range로 조회한다", async () => {
-    const { supabase, callsFor } = createSupabaseQueryMock({
-      notes: { data: [], count: 20 },
-    });
-    createClientMock.mockResolvedValue(supabase);
-
-    await getTodayReviewNotes("user-123", 3, 9);
-
-    expect(callsFor("notes")).toContainEqual(["range", [18, 26]]);
-  });
-
-  it("스키마 파싱 실패 시 빈 결과를 반환한다", async () => {
-    const { supabase } = createSupabaseQueryMock({
-      notes: { data: [{ ...BASE_NOTE, id: "not-a-uuid" }], count: 1 },
-    });
-    createClientMock.mockResolvedValue(supabase);
-
-    const result = await getTodayReviewNotes("user-123");
-
-    expect(result).toEqual({ notes: [], total: 0 });
-  });
-
-  it("DB 쿼리 에러 발생 시 throw한다", async () => {
-    const dbError = new Error("DB connection failed");
-    const { supabase } = createSupabaseQueryMock({
-      notes: { data: null, error: dbError },
-    });
-    createClientMock.mockResolvedValue(supabase);
-
-    await expect(getTodayReviewNotes("user-123")).rejects.toThrow(
-      "DB connection failed",
-    );
-  });
-
-  it("DB가 빈 배열을 반환하면 빈 결과를 반환한다", async () => {
-    const { supabase } = createSupabaseQueryMock({
-      notes: { data: [], count: 0 },
-    });
-    createClientMock.mockResolvedValue(supabase);
-
-    const result = await getTodayReviewNotes("user-123");
-
-    expect(result).toEqual({ notes: [], total: 0 });
   });
 });
 

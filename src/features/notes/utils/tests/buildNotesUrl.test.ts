@@ -28,6 +28,16 @@ describe("buildNotesUrl", () => {
     expect(url).toBe("/notes?q=%EB%A6%AC%EC%95%A1%ED%8A%B8&page=2");
   });
 
+  it("상태별 보기는 view 파라미터를 유지한다", () => {
+    expect(buildNotesUrl({ query: "복습", page: 2, view: "due" })).toBe(
+      "/notes?q=%EB%B3%B5%EC%8A%B5&view=due&page=2",
+    );
+  });
+
+  it("전체 보기는 기본값이므로 view 파라미터를 생략한다", () => {
+    expect(buildNotesUrl({ view: "all" })).toBe("/notes");
+  });
+
   it("query trim 후 빈 문자열이면 q 생략", () => {
     expect(buildNotesUrl({ query: "" })).toBe("/notes");
   });
