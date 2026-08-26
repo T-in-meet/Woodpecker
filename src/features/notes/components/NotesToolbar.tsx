@@ -60,6 +60,9 @@ export function NotesToolbar({ initialQuery, activeView }: NotesToolbarProps) {
   function handleClear() {
     setQuery("");
     clearTimeout(debounceRef.current);
+    // debounce 타이머를 취소하면 타이머 안의 isTypingRef 해제도 함께 사라지므로
+    // 여기서 직접 내려야 이후 URL 변경(뒤로가기 등)이 검색어 상태에 반영된다.
+    isTypingRef.current = false;
     router.push(buildNotesUrl({ view: activeView }));
   }
 

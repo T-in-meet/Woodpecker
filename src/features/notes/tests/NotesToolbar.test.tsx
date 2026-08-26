@@ -5,15 +5,18 @@ import { NotesToolbar } from "../components/NotesToolbar";
 
 const pushMock = vi.fn();
 
+let currentSearchParams = new URLSearchParams();
+
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushMock }),
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => currentSearchParams,
 }));
 
 describe("NotesToolbar", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
+    currentSearchParams = new URLSearchParams();
   });
 
   afterEach(() => {
@@ -95,5 +98,22 @@ describe("NotesToolbar", () => {
     });
 
     expect(pushMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("검색어를 지운 뒤에도 URL 변경을 검색창에 다시 반영한다", () => {
+    const { rerender } = render(
+      <NotesToolbar initialQuery="" activeView="all" />,
+    );
+    const input = screen.getByPlaceholderText("제목 또는 내용 검색");
+
+    // debounce가 끝나기 전에 지우면 타이머 안의 isTypingRef 해제가 실행되지 않는다.
+    fireEvent.change(input, { target: { value: "테스트" } });
+    fireEvent.click(screen.getByRole("button", { name: "검색어 지우기" }));
+
+    // 뒤로가기 등으로 q가 다시 붙은 URL로 돌아온 상황.
+    currentSearchParams = new URLSearchParams("q=테스트");
+    rerender(<NotesToolbar initialQuery="테스트" activeView="all" />);
+
+    expect(input).toHaveValue("테스트");
   });
 });
