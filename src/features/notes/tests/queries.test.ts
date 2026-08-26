@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { NOTES_PAGE_SIZE } from "@/lib/constants/notes";
+
 const { createClientMock, getKstDayBoundsUtcMock } = vi.hoisted(() => ({
   createClientMock: vi.fn(),
   getKstDayBoundsUtcMock: vi.fn(),
@@ -86,7 +88,7 @@ describe("getNotes", () => {
       "order",
       ["updated_at", { ascending: false }],
     ]);
-    expect(calls).toContainEqual(["range", [0, 4]]);
+    expect(calls).toContainEqual(["range", [0, NOTES_PAGE_SIZE - 1]]);
     expect(result).toEqual({ notes, total: 2 });
   });
 

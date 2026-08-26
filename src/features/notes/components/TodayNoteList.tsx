@@ -1,26 +1,12 @@
-"use client";
-
-import { useNotesView } from "@/hooks/useNotesView";
-
 import type { NoteSummary } from "../queries";
-import type { NotesView } from "../utils/buildNotesUrl";
-import { NoteGridCard } from "./NoteGridCard";
 import { NoteListItem } from "./NoteListItem";
-import { ViewToggle } from "./ViewToggle";
 
 type TodayNoteListProps = {
   notes: NoteSummary[];
-  initialView: NotesView;
   total: number;
 };
 
-export function TodayNoteList({
-  notes,
-  initialView,
-  total,
-}: TodayNoteListProps) {
-  const [view, updateView] = useNotesView(initialView);
-
+export function TodayNoteList({ notes, total }: TodayNoteListProps) {
   if (notes.length === 0) {
     return (
       <p className="rounded-lg border p-8 text-center text-sm text-muted-foreground">
@@ -31,28 +17,15 @@ export function TodayNoteList({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">총 {total}개</p>
-        <ViewToggle view={view} onChange={updateView} />
-      </div>
+      <p className="text-sm text-muted-foreground">총 {total}개</p>
 
-      {view === "cards" ? (
-        <ul className="grid list-none grid-cols-1 gap-3 sm:grid-cols-2">
-          {notes.map((note) => (
-            <li key={note.id}>
-              <NoteGridCard note={note} />
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <ul className="flex list-none flex-col gap-3">
-          {notes.map((note) => (
-            <li key={note.id}>
-              <NoteListItem note={note} />
-            </li>
-          ))}
-        </ul>
-      )}
+      <ul className="flex list-none flex-col gap-3">
+        {notes.map((note) => (
+          <li key={note.id}>
+            <NoteListItem note={note} />
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

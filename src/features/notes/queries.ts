@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { getKstDayBoundsUtc } from "@/features/review/lib/kstDay";
-import { NOTES_LIST_PAGE_SIZE } from "@/lib/constants/notes";
+import { NOTES_PAGE_SIZE } from "@/lib/constants/notes";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { logError } from "@/lib/logger";
 import { createServerComponentClient } from "@/lib/supabase/server";
@@ -41,7 +41,7 @@ export async function getNotes(
   userId: string,
   page = 1,
   search = "",
-  pageSize = NOTES_LIST_PAGE_SIZE,
+  pageSize = NOTES_PAGE_SIZE,
 ): Promise<{ notes: NoteSummary[]; total: number }> {
   const supabase = await createServerComponentClient();
   const from = (page - 1) * pageSize;

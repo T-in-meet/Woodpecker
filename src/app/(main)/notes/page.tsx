@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
@@ -7,11 +6,7 @@ import { NotesToolbar } from "@/features/notes/components/NotesToolbar";
 import { NotesViewContainer } from "@/features/notes/components/NotesViewContainer";
 import { getNotes } from "@/features/notes/queries";
 import { buildNotesUrl } from "@/features/notes/utils/buildNotesUrl";
-import { NOTES_VIEW_COOKIE } from "@/hooks/useNotesView";
-import {
-  NOTES_CARDS_PAGE_SIZE,
-  NOTES_LIST_PAGE_SIZE,
-} from "@/lib/constants/notes";
+import { NOTES_PAGE_SIZE } from "@/lib/constants/notes";
 import { ROUTES } from "@/lib/constants/routes";
 import { createServerComponentClient } from "@/lib/supabase/server";
 
@@ -21,7 +16,7 @@ export const metadata: Metadata = {
 };
 
 type NotesPageProps = {
-  searchParams: Promise<{ page?: string; q?: string; view?: string }>;
+  searchParams: Promise<{ page?: string; q?: string }>;
 };
 
 export default async function NotesPage({ searchParams }: NotesPageProps) {
@@ -42,18 +37,17 @@ export default async function NotesPage({ searchParams }: NotesPageProps) {
   const rawPage = Number(params.page);
   const page = Number.isFinite(rawPage) ? Math.max(1, Math.floor(rawPage)) : 1;
   const query = params.q ?? "";
-  const cookieStore = await cookies();
-  const cookieView =
-    cookieStore.get(NOTES_VIEW_COOKIE)?.value === "cards" ? "cards" : "list";
-  const view = params.view === "cards" ? "cards" : cookieView;
-  const pageSize =
-    view === "cards" ? NOTES_CARDS_PAGE_SIZE : NOTES_LIST_PAGE_SIZE;
 
-  const { notes, total } = await getNotes(user.id, page, query, pageSize);
-  const totalPages = Math.ceil(total / pageSize);
+  const { notes, total } = await getNotes(
+    user.id,
+    page,
+    query,
+    NOTES_PAGE_SIZE,
+  );
+  const totalPages = Math.ceil(total / NOTES_PAGE_SIZE);
 
   if (total > 0 && page > totalPages) {
-    redirect(buildNotesUrl({ page: totalPages, query, view }));
+    redirect(buildNotesUrl({ page: totalPages, query }));
   }
 
   return (
@@ -66,7 +60,7 @@ export default async function NotesPage({ searchParams }: NotesPageProps) {
           </p>
         </div>
         <Suspense>
-          <NotesToolbar initialQuery={query} initialView={view} />
+          <NotesToolbar initialQuery={query} />
         </Suspense>
       </div>
 
@@ -74,8 +68,7 @@ export default async function NotesPage({ searchParams }: NotesPageProps) {
         notes={notes}
         total={total}
         currentPage={page}
-        pageSize={pageSize}
-        view={view}
+        pageSize={NOTES_PAGE_SIZE}
         query={query}
       />
     </div>

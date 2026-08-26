@@ -1,6 +1,5 @@
 import type { NoteSummary } from "../queries";
-import { buildNotesUrl, type NotesView } from "../utils/buildNotesUrl";
-import { NoteGridCard } from "./NoteGridCard";
+import { buildNotesUrl } from "../utils/buildNotesUrl";
 import { NoteListItem } from "./NoteListItem";
 import { NotesEmptyState } from "./NotesEmptyState";
 import { NotesPagination } from "./NotesPagination";
@@ -10,7 +9,6 @@ type NotesViewContainerProps = {
   total: number;
   currentPage: number;
   pageSize: number;
-  view: NotesView;
   query: string;
 };
 
@@ -19,7 +17,6 @@ export function NotesViewContainer({
   total,
   currentPage,
   pageSize,
-  view,
   query,
 }: NotesViewContainerProps) {
   if (total === 0) {
@@ -34,28 +31,18 @@ export function NotesViewContainer({
         {query ? `"${query}" 검색 결과 ${total}개` : `총 ${total}개`}
       </p>
 
-      {view === "cards" ? (
-        <ul className="grid list-none grid-cols-1 gap-3 sm:grid-cols-2">
-          {notes.map((note) => (
-            <li key={note.id}>
-              <NoteGridCard note={note} />
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <ul className="flex list-none flex-col gap-3">
-          {notes.map((note) => (
-            <li key={note.id}>
-              <NoteListItem note={note} />
-            </li>
-          ))}
-        </ul>
-      )}
+      <ul className="flex list-none flex-col gap-3">
+        {notes.map((note) => (
+          <li key={note.id}>
+            <NoteListItem note={note} />
+          </li>
+        ))}
+      </ul>
 
       <NotesPagination
         currentPage={currentPage}
         totalPages={totalPages}
-        buildUrl={(page) => buildNotesUrl({ page, query, view })}
+        buildUrl={(page) => buildNotesUrl({ page, query })}
       />
     </div>
   );

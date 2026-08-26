@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { NOTES_PAGE_SIZE } from "@/lib/constants/notes";
 import { ROUTES } from "@/lib/constants/routes";
 
 const REDIRECT_ERROR = new Error("NEXT_REDIRECT");
@@ -116,7 +117,12 @@ describe("NotesPage", () => {
 
     render(await NotesPage({ searchParams: Promise.resolve({}) }));
 
-    expect(getNotesMock).toHaveBeenCalledWith("user-123", 1, "", 5);
+    expect(getNotesMock).toHaveBeenCalledWith(
+      "user-123",
+      1,
+      "",
+      NOTES_PAGE_SIZE,
+    );
     expect(
       screen.getByRole("heading", { name: "노트 목록" }),
     ).toBeInTheDocument();

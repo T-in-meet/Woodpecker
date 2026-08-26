@@ -1,3 +1,2 @@
-export const NOTES_LIST_PAGE_SIZE = 5;
-export const NOTES_CARDS_PAGE_SIZE = 9;
+export const NOTES_PAGE_SIZE = 10;
 export const TODAY_PAGE_SIZE = 9;
