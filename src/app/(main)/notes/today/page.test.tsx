@@ -20,7 +20,7 @@ describe("TodayReviewPage", () => {
     });
   });
 
-  it("학습할 노트 보기로 redirect한다", () => {
+  it("오늘 복습할 노트 보기로 redirect한다", () => {
     expect(() => TodayReviewPage()).toThrow(REDIRECT_ERROR);
     expect(redirectMock).toHaveBeenCalledWith("/notes?view=due");
   });

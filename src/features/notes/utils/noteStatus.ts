@@ -4,6 +4,13 @@ import { formatShortDateKST } from "@/lib/utils/formatDate";
 import type { NoteSummary } from "../queries";
 
 export type ReviewStatus = "available" | "completed" | "scheduled" | "pending";
+export type ReviewScheduleTone = "default" | "overdue" | "today" | "upcoming";
+
+export type ReviewScheduleDisplay = {
+  label: "다음 복습일" | "복습일";
+  primaryText: string;
+  tone: ReviewScheduleTone;
+};
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
@@ -20,22 +27,43 @@ export function getReviewStatus(note: NoteSummary): ReviewStatus {
   return "scheduled";
 }
 
-/** 가까운 일정은 KST 달력 날짜 기준 상대 표현을, 그 이후는 짧은 날짜를 쓴다. */
-export function getNextReviewText(
+/** KST 달력 날짜를 기준으로 복습 일정의 표시 문구와 강조 상태를 만든다. */
+export function getReviewScheduleDisplay(
   status: ReviewStatus,
   nextReviewAt: string | null,
-): string {
-  if (status === "completed") return "완료";
-  if (status === "pending") return "준비 중";
-  if (!nextReviewAt) return "-";
+): ReviewScheduleDisplay {
+  const defaultDisplay = (primaryText: string): ReviewScheduleDisplay => ({
+    label: "다음 복습일",
+    primaryText,
+    tone: "default",
+  });
+
+  if (status === "completed") return defaultDisplay("완료");
+  if (status === "pending") return defaultDisplay("준비 중");
+  if (!nextReviewAt) return defaultDisplay("-");
 
   const nextReviewDate = new Date(nextReviewAt);
   const daysUntilReview =
     getKstDayNumber(nextReviewDate) - getKstDayNumber(new Date());
 
-  if (daysUntilReview < 0) return formatShortDateKST(nextReviewDate);
-  if (daysUntilReview === 0) return "오늘";
-  if (daysUntilReview === 1) return "내일";
-  if (daysUntilReview <= 7) return `${daysUntilReview}일 후`;
-  return formatShortDateKST(nextReviewDate);
+  if (daysUntilReview < 0) {
+    return {
+      label: "복습일",
+      primaryText: `${Math.abs(daysUntilReview)}일 지남`,
+      tone: "overdue",
+    };
+  }
+  if (daysUntilReview === 0) {
+    return { ...defaultDisplay("오늘"), tone: "today" };
+  }
+  if (daysUntilReview === 1) {
+    return { ...defaultDisplay("내일"), tone: "upcoming" };
+  }
+  if (daysUntilReview <= 7) {
+    return {
+      ...defaultDisplay(`${daysUntilReview}일 후`),
+      tone: "upcoming",
+    };
+  }
+  return defaultDisplay(formatShortDateKST(nextReviewDate));
 }

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getNextReviewText, getReviewStatus } from "../noteStatus";
+import { getReviewScheduleDisplay, getReviewStatus } from "../noteStatus";
 
 const MAX_REVIEW_ROUND = 3;
 
@@ -51,7 +51,7 @@ describe("getReviewStatus", () => {
   });
 });
 
-describe("getNextReviewText", () => {
+describe("getReviewScheduleDisplay", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-01T14:30:00.000Z"));
@@ -62,31 +62,47 @@ describe("getNextReviewText", () => {
   });
 
   it("completed → '완료'", () => {
-    expect(getNextReviewText("completed", null)).toBe("완료");
+    expect(getReviewScheduleDisplay("completed", null)).toMatchObject({
+      label: "다음 복습일",
+      primaryText: "완료",
+      tone: "default",
+    });
   });
 
   it("pending → '준비 중'", () => {
-    expect(getNextReviewText("pending", null)).toBe("준비 중");
+    expect(getReviewScheduleDisplay("pending", null).primaryText).toBe(
+      "준비 중",
+    );
   });
 
   it.each([
-    ["available", "2026-04-29T15:00:00.000Z", "2026. 4. 30"],
     ["available", "2026-05-01T13:00:00.000Z", "오늘"],
     ["scheduled", "2026-05-01T14:45:00.000Z", "오늘"],
     ["scheduled", "2026-05-01T15:00:00.000Z", "내일"],
     ["scheduled", "2026-05-02T15:00:00.000Z", "2일 후"],
     ["scheduled", "2026-05-07T15:00:00.000Z", "7일 후"],
   ] as const)("%s 일정 %s → '%s'", (status, date, expected) => {
-    expect(getNextReviewText(status, date)).toBe(expected);
+    expect(getReviewScheduleDisplay(status, date).primaryText).toBe(expected);
+  });
+
+  it("지난 일정은 경과 일수를 반환한다", () => {
+    expect(
+      getReviewScheduleDisplay("available", "2026-04-28T15:00:00.000Z"),
+    ).toEqual({
+      label: "복습일",
+      primaryText: "2일 지남",
+      tone: "overdue",
+    });
   });
 
   it("8일 이후 일정 → 짧은 날짜 문자열 반환", () => {
-    expect(getNextReviewText("scheduled", "2026-05-08T15:00:00.000Z")).toBe(
-      "2026. 5. 9",
-    );
+    expect(
+      getReviewScheduleDisplay("scheduled", "2026-05-08T15:00:00.000Z")
+        .primaryText,
+    ).toBe("2026. 5. 9");
   });
 
   it("scheduled + next_review_at null → '-'", () => {
-    expect(getNextReviewText("scheduled", null)).toBe("-");
+    expect(getReviewScheduleDisplay("scheduled", null).primaryText).toBe("-");
   });
 });

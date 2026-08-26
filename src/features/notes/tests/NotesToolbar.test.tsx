@@ -20,6 +20,17 @@ describe("NotesToolbar", () => {
     vi.useRealTimers();
   });
 
+  it.each([
+    ["due", "오늘 복습할 노트"],
+    ["scheduled", "복습 예정 노트"],
+  ] as const)("%s 보기의 이름을 '%s'로 표시한다", (activeView, label) => {
+    render(<NotesToolbar initialQuery="" activeView={activeView} />);
+
+    expect(
+      screen.getByRole("button", { name: new RegExp(label) }),
+    ).toBeInTheDocument();
+  });
+
   it("검색어 입력은 debounce 후 한 번만 이동한다", () => {
     render(<NotesToolbar initialQuery="" activeView="all" />);
     const input = screen.getByPlaceholderText("제목 또는 내용 검색");

@@ -24,9 +24,9 @@ type NotesToolbarProps = {
 
 const NOTE_VIEW_OPTIONS = [
   { value: "all", label: "전체 노트" },
-  { value: "due", label: "학습할 노트" },
-  { value: "scheduled", label: "예정 노트" },
-  { value: "completed", label: "완료 노트" },
+  { value: "due", label: "오늘 복습할 노트" },
+  { value: "scheduled", label: "복습 예정 노트" },
+  { value: "completed", label: "복습 완료 노트" },
 ] as const satisfies ReadonlyArray<{ value: NoteView; label: string }>;
 
 export function NotesToolbar({ initialQuery, activeView }: NotesToolbarProps) {

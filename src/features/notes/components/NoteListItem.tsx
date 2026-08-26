@@ -8,22 +8,22 @@ import { getNoteDetailRoute } from "@/lib/constants/routes";
 import { stripMarkdown } from "@/lib/utils/stripMarkdown";
 
 import type { NoteSummary } from "../queries";
-import { getNextReviewText, getReviewStatus } from "../utils/noteStatus";
+import { getReviewScheduleDisplay, getReviewStatus } from "../utils/noteStatus";
 import { NoteActions } from "./NoteActions";
 
 export function NoteListItem({ note }: { note: NoteSummary }) {
   const status = getReviewStatus(note);
-  const nextReviewText = getNextReviewText(status, note.next_review_at);
+  const reviewSchedule = getReviewScheduleDisplay(status, note.next_review_at);
   const canReview = status === "available";
   const contentPreview = stripMarkdown(stripNoteColorSyntax(note.content));
-  const isUpcomingRelative =
-    nextReviewText === "내일" || nextReviewText.endsWith("일 후");
   const reviewTextClass =
-    nextReviewText === "오늘"
-      ? "rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800"
-      : isUpcomingRelative
-        ? "rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800"
-        : "font-medium text-foreground";
+    reviewSchedule.tone === "overdue"
+      ? "rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
+      : reviewSchedule.tone === "today"
+        ? "rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800"
+        : reviewSchedule.tone === "upcoming"
+          ? "rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800"
+          : "font-medium text-foreground";
 
   return (
     <Link
@@ -50,11 +50,12 @@ export function NoteListItem({ note }: { note: NoteSummary }) {
           <div className="my-3.5 border-t" />
 
           <div className="flex items-center justify-between gap-4 text-sm text-muted-foreground">
-            {/* 날짜가 단어 중간에서 끊기지 않도록 nowrap을 건다. */}
-            <div className="flex min-w-0 items-center gap-1.5 whitespace-nowrap">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 whitespace-nowrap">
               <CalendarClock className="h-3.5 w-3.5 shrink-0" />
-              <span>다음 복습일</span>
-              <span className={reviewTextClass}>{nextReviewText}</span>
+              <span>{reviewSchedule.label}</span>
+              <span className={reviewTextClass}>
+                {reviewSchedule.primaryText}
+              </span>
             </div>
 
             <NoteActions noteId={note.id} canReview={canReview} />

@@ -14,11 +14,11 @@ const EMPTY_STATE_COPY: Record<
     description: "첫 노트를 작성하고 복습 흐름을 시작해보세요.",
   },
   due: {
-    title: "지금 학습할 노트가 없습니다.",
-    description: "예정 노트에서 다음 복습 일정을 확인해보세요.",
+    title: "오늘 복습할 노트가 없습니다.",
+    description: "복습 예정 노트에서 다음 복습 일정을 확인해보세요.",
   },
   scheduled: {
-    title: "예정된 노트가 없습니다.",
+    title: "복습 예정 노트가 없습니다.",
     description: "노트를 학습하면 다음 복습 일정이 여기에 표시됩니다.",
   },
   completed: {

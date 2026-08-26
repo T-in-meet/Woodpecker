@@ -37,10 +37,10 @@ export function NotesViewContainer({
             ? `총 ${total}개`
             : `${
                 view === "due"
-                  ? "학습할 노트"
+                  ? "오늘 복습할 노트"
                   : view === "scheduled"
-                    ? "예정 노트"
-                    : "완료 노트"
+                    ? "복습 예정 노트"
+                    : "복습 완료 노트"
               } ${total}개`}
       </p>
 
