@@ -127,7 +127,7 @@ describe("NotesPage", () => {
       "scheduled",
     );
     expect(
-      screen.getByRole("button", { name: "복습 예정" }),
+      screen.getByRole("button", { name: "노트 보기: 복습 예정" }),
     ).toBeInTheDocument();
   });
 

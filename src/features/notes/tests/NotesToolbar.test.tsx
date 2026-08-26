@@ -32,14 +32,14 @@ describe("NotesToolbar", () => {
     render(<NotesToolbar initialQuery="" activeView={activeView} />);
 
     expect(
-      screen.getByRole("button", { name: new RegExp(label) }),
+      screen.getByRole("button", { name: `노트 보기: ${label}` }),
     ).toBeInTheDocument();
   });
 
   it("모바일에서는 짧은 보기 메뉴와 검색창을 제목 행 그리드에 배치한다", () => {
     render(<NotesToolbar initialQuery="" activeView="all" />);
 
-    const viewButton = screen.getByRole("button", { name: "전체" });
+    const viewButton = screen.getByRole("button", { name: "노트 보기: 전체" });
     const searchInput = screen.getByPlaceholderText("제목 또는 내용 검색");
     const searchContainer = searchInput.parentElement;
     const toolbar = searchContainer?.parentElement;

@@ -85,7 +85,7 @@ export function NotesToolbar({ initialQuery, activeView }: NotesToolbarProps) {
             type="button"
             variant="outline"
             size="lg"
-            aria-label={activeViewOption.label}
+            aria-label={`노트 보기: ${activeViewOption.label}`}
             className="w-36 justify-between justify-self-end rounded-md px-3 data-[state=open]:rounded-b-none data-[state=open]:border-b-transparent data-[state=open]:bg-popover data-[state=open]:text-popover-foreground sm:justify-self-auto"
           >
             <span className="flex items-center gap-1.5">
