@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarClock, RotateCcw } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { useMemo } from "react";
 
@@ -8,7 +8,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { stripNoteColorSyntax } from "@/features/editor/utils/noteColorMarkdown";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { getNoteDetailRoute } from "@/lib/constants/routes";
-import { formatShortDateKST } from "@/lib/utils/formatDate";
 import { stripMarkdown } from "@/lib/utils/stripMarkdown";
 
 import type { NoteSummary } from "../queries";
@@ -49,24 +48,17 @@ export function NoteGridCard({ note }: { note: NoteSummary }) {
           )}
 
           {/* Metadata */}
-          <div className="mt-auto space-y-2 text-sm text-muted-foreground">
-            <div className="flex items-center justify-end gap-2">
-              <div className="mr-auto flex min-w-0 items-center gap-1.5">
-                <RotateCcw className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">다음 복습: {nextReviewText}</span>
-              </div>
+          <div className="mt-auto flex items-center justify-end gap-2 text-sm text-muted-foreground">
+            <div className="mr-auto flex min-w-0 items-center gap-1.5">
+              <RotateCcw className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">다음 복습: {nextReviewText}</span>
+            </div>
 
-              <NoteActions
-                noteId={note.id}
-                canReview={canReview}
-                variant="grid"
-              />
-            </div>
-            {/* 좁은 폭에서는 부차 정보인 생성일을 숨긴다. */}
-            <div className="hidden items-center gap-1.5 sm:flex">
-              <CalendarClock className="h-3.5 w-3.5 shrink-0" />
-              생성일: {formatShortDateKST(note.created_at)}
-            </div>
+            <NoteActions
+              noteId={note.id}
+              canReview={canReview}
+              variant="grid"
+            />
           </div>
         </CardContent>
       </Card>

@@ -35,7 +35,7 @@ export function NotesViewContainer({
       </p>
 
       {view === "cards" ? (
-        <ul className="grid list-none grid-cols-2 gap-3 sm:grid-cols-3">
+        <ul className="grid list-none grid-cols-1 gap-3 sm:grid-cols-2">
           {notes.map((note) => (
             <li key={note.id}>
               <NoteGridCard note={note} />
