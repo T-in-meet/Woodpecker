@@ -27,7 +27,7 @@ export function NoteActions({ noteId, canReview, variant }: NoteActionsProps) {
   const iconClass = isCompact ? "h-3.5 w-3.5" : "h-4 w-4";
 
   return (
-    <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+    <div className="flex shrink-0 items-center gap-1">
       {canReview && (
         <button
           type="button"
