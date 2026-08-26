@@ -34,8 +34,6 @@ const BASE_NOTE = {
   content: "테스트 내용",
   next_review_at: "2026-05-07T10:00:00.000Z",
   review_round: 1,
-  created_at: "2026-05-01T00:00:00.000Z",
-  updated_at: "2026-05-06T00:00:00.000Z",
 };
 
 // ─── getNotes ────────────────────────────────────────────────────────────────
@@ -53,8 +51,6 @@ describe("getNotes", () => {
         content: "내용 1",
         next_review_at: "2026-03-30T09:00:00.000Z",
         review_round: 1,
-        created_at: "2026-03-29T00:00:00.000Z",
-        updated_at: "2026-03-29T12:00:00.000Z",
       },
       {
         id: "22222222-2222-4222-8222-222222222222",
@@ -62,8 +58,6 @@ describe("getNotes", () => {
         content: "내용 2",
         next_review_at: null,
         review_round: 3,
-        created_at: "2026-03-28T00:00:00.000Z",
-        updated_at: "2026-03-28T12:00:00.000Z",
       },
     ];
     const { supabase, from, callsFor } = createSupabaseQueryMock({
@@ -78,10 +72,7 @@ describe("getNotes", () => {
     const calls = callsFor("notes");
     expect(calls).toContainEqual([
       "select",
-      [
-        "id, title, content, next_review_at, review_round, created_at, updated_at",
-        { count: "exact" },
-      ],
+      ["id, title, content, next_review_at, review_round", { count: "exact" }],
     ]);
     expect(calls).toContainEqual(["eq", ["user_id", "user-123"]]);
     expect(calls).toContainEqual([

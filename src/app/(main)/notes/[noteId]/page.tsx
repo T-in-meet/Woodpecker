@@ -17,12 +17,11 @@ import { GradingHistorySection } from "@/features/review/components/GradingHisto
 import {
   getGradingsByNote,
   hasCompletedReviewForNoteToday,
-  type ReviewGrading,
 } from "@/features/review/queries";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { ROUTES } from "@/lib/constants/routes";
 import { logError } from "@/lib/logger";
-import { createServerComponentClient } from "@/lib/supabase/server";
+import { getUser } from "@/lib/supabase/getUser";
 import { formatDateTime } from "@/lib/utils/formatDate";
 
 export const metadata: Metadata = {
@@ -52,10 +51,7 @@ export default async function NoteDetailPage({
   params: Promise<{ noteId: string }>;
 }) {
   const { noteId } = await params;
-  const supabase = await createServerComponentClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getUser();
 
   if (!user) {
     redirect(ROUTES.LOGIN);
@@ -79,27 +75,26 @@ export default async function NoteDetailPage({
     nextScheduledAt !== null &&
     new Date(nextScheduledAt).getTime() <= Date.now();
 
-  // 1일 1회 제한 힌트. 일시적 조회 실패 시 fail-open(false) — 실제 차단은
-  // DB 부분 unique 인덱스와 RPC가 보증하므로 페이지 표시를 막지 않는다.
-  let alreadyCompletedToday = false;
-  if (!isReviewCompleted && nextReviewAt !== null) {
-    try {
-      alreadyCompletedToday = await hasCompletedReviewForNoteToday(
-        noteId,
-        user.id,
-      );
-    } catch (error) {
-      logError(error);
-    }
-  }
+  const alreadyCompletedTodayPromise =
+    !isReviewCompleted && nextReviewAt !== null
+      ? hasCompletedReviewForNoteToday(noteId, user.id).catch((error) => {
+          // 일시적 조회 실패 시 fail-open(false) — 실제 차단은 DB 부분 unique
+          // 인덱스와 RPC가 보증하므로 페이지 표시를 막지 않는다.
+          logError(error);
+          return false;
+        })
+      : Promise.resolve(false);
 
-  // 채점 기록은 부가 정보 — 조회 실패 시 섹션만 숨기고 페이지 표시를 막지 않는다.
-  let gradings: ReviewGrading[] = [];
-  try {
-    gradings = await getGradingsByNote(noteId, user.id);
-  } catch (error) {
+  const gradingsPromise = getGradingsByNote(noteId, user.id).catch((error) => {
+    // 채점 기록은 부가 정보 — 조회 실패 시 섹션만 숨기고 페이지 표시를 막지 않는다.
     logError(error);
-  }
+    return [];
+  });
+
+  const [alreadyCompletedToday, gradings] = await Promise.all([
+    alreadyCompletedTodayPromise,
+    gradingsPromise,
+  ]);
 
   const canStartReview =
     !isReviewCompleted && nextReviewAt !== null && !alreadyCompletedToday;

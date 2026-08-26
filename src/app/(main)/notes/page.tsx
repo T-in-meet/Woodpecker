@@ -8,7 +8,7 @@ import { getNotes } from "@/features/notes/queries";
 import { buildNotesUrl } from "@/features/notes/utils/buildNotesUrl";
 import { NOTES_PAGE_SIZE } from "@/lib/constants/notes";
 import { ROUTES } from "@/lib/constants/routes";
-import { createServerComponentClient } from "@/lib/supabase/server";
+import { getUser } from "@/lib/supabase/getUser";
 
 export const metadata: Metadata = {
   title: "노트 목록",
@@ -20,10 +20,7 @@ type NotesPageProps = {
 };
 
 export default async function NotesPage({ searchParams }: NotesPageProps) {
-  const supabase = await createServerComponentClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getUser();
 
   if (!user) {
     redirect(ROUTES.LOGIN);

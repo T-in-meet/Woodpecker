@@ -25,9 +25,9 @@ const noteSummarySchema = z.object({
   content: z.string(),
   next_review_at: z.string().nullable(),
   review_round: z.number().int().min(0).max(MAX_REVIEW_ROUND),
-  created_at: z.string(),
-  updated_at: z.string(),
 });
+const NOTE_SUMMARY_SELECT =
+  "id, title, content, next_review_at, review_round" as const;
 
 // next_scheduled_at는 notes 테이블 컬럼이 아니라 pending review_logs.scheduled_at에서
 // 파생된 실제 알림 발송 시각이다. notes.next_review_at은 KST 자정 마커이므로 시:분
@@ -36,6 +36,21 @@ export type NoteDetail = z.infer<typeof noteDetailSchema> & {
   next_scheduled_at: string | null;
 };
 export type NoteSummary = z.infer<typeof noteSummarySchema>;
+
+function parseNoteSummaries(
+  data: unknown,
+  queryName: string,
+): NoteSummary[] | null {
+  const parsed = z.array(noteSummarySchema).safeParse(data);
+
+  if (parsed.success) return parsed.data;
+
+  logError({
+    message: `[${queryName}] noteSummarySchema 파싱 실패`,
+    error: parsed.error,
+  });
+  return null;
+}
 
 export async function getNotes(
   userId: string,
@@ -49,10 +64,9 @@ export async function getNotes(
 
   let query = supabase
     .from("notes")
-    .select(
-      "id, title, content, next_review_at, review_round, created_at, updated_at",
-      { count: "exact" },
-    )
+    .select(NOTE_SUMMARY_SELECT, {
+      count: "exact",
+    })
     .eq("user_id", userId)
     .order("updated_at", { ascending: false });
 
@@ -65,16 +79,9 @@ export async function getNotes(
 
   if (error) throw error;
 
-  const parsed = z.array(noteSummarySchema).safeParse(data);
+  const notes = parseNoteSummaries(data, "getNotes");
 
-  if (!parsed.success) {
-    logError({
-      message: "[getNotes] noteSummarySchema 파싱 실패",
-      error: parsed.error,
-    });
-  }
-
-  return { notes: parsed.success ? parsed.data : [], total: count ?? 0 };
+  return { notes: notes ?? [], total: count ?? 0 };
 }
 
 export async function getTodayReviewNotes(
@@ -89,10 +96,9 @@ export async function getTodayReviewNotes(
 
   const { data, error, count } = await supabase
     .from("notes")
-    .select(
-      "id, title, content, next_review_at, review_round, created_at, updated_at",
-      { count: "exact" },
-    )
+    .select(NOTE_SUMMARY_SELECT, {
+      count: "exact",
+    })
     .eq("user_id", userId)
     .gte("next_review_at", startUtcIso)
     .lt("next_review_at", endUtcIso)
@@ -102,17 +108,11 @@ export async function getTodayReviewNotes(
 
   if (error) throw error;
 
-  const parsed = z.array(noteSummarySchema).safeParse(data);
+  const notes = parseNoteSummaries(data, "getTodayReviewNotes");
 
-  if (!parsed.success) {
-    logError({
-      message: "[getTodayReviewNotes] noteSummarySchema 파싱 실패",
-      error: parsed.error,
-    });
-    return { notes: [], total: 0 };
-  }
+  if (!notes) return { notes: [], total: 0 };
 
-  return { notes: parsed.data, total: count ?? 0 };
+  return { notes, total: count ?? 0 };
 }
 
 export async function getReviewWaitingNotes(
@@ -123,9 +123,7 @@ export async function getReviewWaitingNotes(
 
   const { data, error } = await supabase
     .from("notes")
-    .select(
-      "id, title, content, next_review_at, review_round, created_at, updated_at",
-    )
+    .select(NOTE_SUMMARY_SELECT)
     .eq("user_id", userId)
     .or(
       `next_review_at.gt.${nowIso},and(next_review_at.is.null,review_round.eq.0)`,
@@ -135,17 +133,7 @@ export async function getReviewWaitingNotes(
 
   if (error) throw error;
 
-  const parsed = z.array(noteSummarySchema).safeParse(data);
-
-  if (!parsed.success) {
-    logError({
-      message: "[getReviewWaitingNotes] noteSummarySchema 파싱 실패",
-      error: parsed.error,
-    });
-    return [];
-  }
-
-  return parsed.data;
+  return parseNoteSummaries(data, "getReviewWaitingNotes") ?? [];
 }
 
 export async function getNoteById(
@@ -154,7 +142,7 @@ export async function getNoteById(
 ): Promise<NoteDetail | null> {
   const supabase = await createServerComponentClient();
 
-  const { data } = await supabase
+  const notePromise = supabase
     .from("notes")
     .select(
       "id, title, content, next_review_at, notification_time_of_day, review_round, created_at, updated_at, user_id",
@@ -163,10 +151,7 @@ export async function getNoteById(
     .eq("user_id", userId)
     .maybeSingle();
 
-  const parsed = noteDetailSchema.safeParse(data);
-  if (!parsed.success) return null;
-
-  const { data: pendingLog } = await supabase
+  const pendingLogPromise = supabase
     .from("review_logs")
     .select("scheduled_at")
     .eq("note_id", noteId)
@@ -175,6 +160,14 @@ export async function getNoteById(
     .order("scheduled_at", { ascending: true })
     .limit(1)
     .maybeSingle();
+
+  const [{ data }, { data: pendingLog }] = await Promise.all([
+    notePromise,
+    pendingLogPromise,
+  ]);
+
+  const parsed = noteDetailSchema.safeParse(data);
+  if (!parsed.success) return null;
 
   return {
     ...parsed.data,

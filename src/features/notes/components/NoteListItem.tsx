@@ -1,8 +1,5 @@
-"use client";
-
 import { RotateCcw } from "lucide-react";
 import Link from "next/link";
-import { useMemo } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { stripNoteColorSyntax } from "@/features/editor/utils/noteColorMarkdown";
@@ -18,10 +15,7 @@ export function NoteListItem({ note }: { note: NoteSummary }) {
   const status = getReviewStatus(note);
   const nextReviewText = getNextReviewText(status, note.next_review_at);
   const canReview = status === "available";
-  const contentPreview = useMemo(
-    () => stripMarkdown(stripNoteColorSyntax(note.content)),
-    [note.content],
-  );
+  const contentPreview = stripMarkdown(stripNoteColorSyntax(note.content));
 
   return (
     <Link
@@ -54,11 +48,7 @@ export function NoteListItem({ note }: { note: NoteSummary }) {
               다음 복습: {nextReviewText}
             </div>
 
-            <NoteActions
-              noteId={note.id}
-              canReview={canReview}
-              variant="list"
-            />
+            <NoteActions noteId={note.id} canReview={canReview} />
           </div>
         </CardContent>
       </Card>
