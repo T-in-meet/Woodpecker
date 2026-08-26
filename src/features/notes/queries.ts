@@ -38,6 +38,14 @@ export type NoteDetail = z.infer<typeof noteDetailSchema> & {
 };
 export type NoteSummary = z.infer<typeof noteSummarySchema>;
 
+// "복습 대기 중"(아직 복습할 때가 아닌 노트) 판정 조건. 미래에 예정된 노트와
+// 아직 한 번도 복습하지 않은 노트(next_review_at이 null이면서 round 0)를 포함한다.
+// getNotes의 scheduled 보기와 getReviewWaitingNotes가 같은 기준을 써야 하므로
+// 한 곳에서 만든다.
+function buildScheduledFilter(nowIso: string): string {
+  return `next_review_at.gt.${nowIso},and(next_review_at.is.null,review_round.eq.0)`;
+}
+
 function parseNoteSummaries(
   data: unknown,
   queryName: string,
@@ -76,9 +84,7 @@ export async function getNotes(
   if (view === "due") {
     query = query.lte("next_review_at", nowIso);
   } else if (view === "scheduled") {
-    query = query.or(
-      `next_review_at.gt.${nowIso},and(next_review_at.is.null,review_round.eq.0)`,
-    );
+    query = query.or(buildScheduledFilter(nowIso));
   } else if (view === "completed") {
     query = query
       .is("next_review_at", null)
@@ -97,7 +103,8 @@ export async function getNotes(
             ascending: true,
             nullsFirst: false,
           })
-          .order("id", { ascending: true })
+          // 같은 날 예정된 노트끼리는 최근에 만든 노트를 먼저 보여준다.
+          .order("created_at", { ascending: false })
       : query.order("updated_at", { ascending: false });
 
   const { data, count, error } = await query.range(from, to);
@@ -119,9 +126,7 @@ export async function getReviewWaitingNotes(
     .from("notes")
     .select(NOTE_SUMMARY_SELECT)
     .eq("user_id", userId)
-    .or(
-      `next_review_at.gt.${nowIso},and(next_review_at.is.null,review_round.eq.0)`,
-    )
+    .or(buildScheduledFilter(nowIso))
     .order("next_review_at", { ascending: true, nullsFirst: false })
     .limit(50);
 

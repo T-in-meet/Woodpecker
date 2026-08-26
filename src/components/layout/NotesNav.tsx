@@ -4,19 +4,14 @@ import { MessageCircle, Plus } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { ROUTES } from "@/lib/constants/routes";
+import { isCurrentNavRoute, ROUTES } from "@/lib/constants/routes";
 
 export function NotesNav() {
   const pathname = usePathname();
 
-  const isNoteChats = pathname.startsWith(ROUTES.NOTE_CHATS);
-
-  const isNotesList =
-    pathname.startsWith(ROUTES.NOTES) &&
-    pathname !== ROUTES.NOTES_NEW &&
-    !isNoteChats;
-
-  const isNotesNew = pathname === ROUTES.NOTES_NEW;
+  const isNoteChats = isCurrentNavRoute(pathname, ROUTES.NOTE_CHATS);
+  const isNotesList = isCurrentNavRoute(pathname, ROUTES.NOTES);
+  const isNotesNew = isCurrentNavRoute(pathname, ROUTES.NOTES_NEW);
 
   return (
     <nav className="flex items-center gap-6 whitespace-nowrap">

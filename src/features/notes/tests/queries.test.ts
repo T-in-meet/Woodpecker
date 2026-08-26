@@ -124,7 +124,7 @@ describe("getNotes", () => {
     if (view === "due" || view === "scheduled") {
       expect(callsFor("notes")).toContainEqual([
         "order",
-        ["id", { ascending: true }],
+        ["created_at", { ascending: false }],
       ]);
     }
     if (view === "completed") {

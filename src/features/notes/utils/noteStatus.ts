@@ -1,4 +1,5 @@
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
+import { DAY_IN_MS, KST_OFFSET_MS } from "@/lib/constants/time";
 import { formatShortDateKST } from "@/lib/utils/formatDate";
 
 import type { NoteSummary } from "../queries";
@@ -11,9 +12,6 @@ export type ReviewScheduleDisplay = {
   primaryText: string;
   tone: ReviewScheduleTone;
 };
-
-const DAY_IN_MS = 24 * 60 * 60 * 1000;
-const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
 function getKstDayNumber(date: Date): number {
   return Math.floor((date.getTime() + KST_OFFSET_MS) / DAY_IN_MS);

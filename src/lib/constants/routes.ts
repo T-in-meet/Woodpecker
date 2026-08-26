@@ -58,6 +58,33 @@ export const ROUTES = {
 
 export type Route = (typeof ROUTES)[keyof typeof ROUTES];
 
+/**
+ * 내비게이션 메뉴 항목이 현재 경로에 해당하는지 판정합니다.
+ *
+ * 데스크톱(`NotesNav`)과 모바일(`MobileMenu`)이 같은 기준을 써야 하므로
+ * 판정 로직을 한 곳에 둡니다. 노트 목록은 상세 등 하위 경로까지 포함하되
+ * 새 노트 작성 경로는 제외합니다.
+ *
+ * @param pathname 현재 경로
+ * @param href 메뉴 항목의 경로
+ * @returns 현재 경로가 해당 메뉴 항목에 해당하면 `true`
+ */
+export function isCurrentNavRoute(pathname: string, href: string): boolean {
+  if (href === ROUTES.NOTES) {
+    return (
+      pathname.startsWith(ROUTES.NOTES) &&
+      pathname !== ROUTES.NOTES_NEW &&
+      !pathname.startsWith(ROUTES.NOTE_CHATS)
+    );
+  }
+
+  if (href === ROUTES.NOTE_CHATS) {
+    return pathname.startsWith(ROUTES.NOTE_CHATS);
+  }
+
+  return pathname === href;
+}
+
 export function getNoteDetailRoute(noteId: string) {
   return `${ROUTES.NOTES}/${noteId}`;
 }

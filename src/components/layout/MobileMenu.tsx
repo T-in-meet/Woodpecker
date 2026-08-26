@@ -26,7 +26,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { logoutAction } from "@/features/mypage/actions";
-import { ROUTES } from "@/lib/constants/routes";
+import { isCurrentNavRoute, ROUTES } from "@/lib/constants/routes";
 import { cn } from "@/lib/utils/cn";
 
 type MobileMenuProps = {
@@ -47,18 +47,6 @@ const MOBILE_NAV_ITEMS: MobileNavItem[] = [
   { href: ROUTES.NOTES_NEW, label: "새 노트", icon: Plus },
   { href: ROUTES.NOTE_CHATS, label: "노트 챗봇", icon: MessageCircle },
 ];
-
-function isCurrentRoute(pathname: string, href: string): boolean {
-  if (href === ROUTES.NOTES) {
-    return pathname.startsWith(ROUTES.NOTES) && pathname !== ROUTES.NOTES_NEW;
-  }
-
-  if (href === ROUTES.NOTE_CHATS) {
-    return pathname.startsWith(ROUTES.NOTE_CHATS);
-  }
-
-  return pathname === href;
-}
 
 export function MobileMenu({
   nickname,
@@ -115,7 +103,7 @@ export function MobileMenu({
           </p>
           <div className="space-y-1">
             {MOBILE_NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-              const isCurrent = isCurrentRoute(pathname, href);
+              const isCurrent = isCurrentNavRoute(pathname, href);
 
               return (
                 <Link
