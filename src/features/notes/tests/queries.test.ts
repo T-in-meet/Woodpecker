@@ -121,6 +121,12 @@ describe("getNotes", () => {
     await getNotes("user-123", 1, "", NOTES_PAGE_SIZE, view);
 
     expect(callsFor("notes")).toContainEqual([method, args]);
+    if (view === "due" || view === "scheduled") {
+      expect(callsFor("notes")).toContainEqual([
+        "order",
+        ["id", { ascending: true }],
+      ]);
+    }
     if (view === "completed") {
       expect(callsFor("notes")).toContainEqual(["eq", ["review_round", 3]]);
     }

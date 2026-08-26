@@ -92,10 +92,12 @@ export async function getNotes(
 
   query =
     view === "due" || view === "scheduled"
-      ? query.order("next_review_at", {
-          ascending: true,
-          nullsFirst: false,
-        })
+      ? query
+          .order("next_review_at", {
+            ascending: true,
+            nullsFirst: false,
+          })
+          .order("id", { ascending: true })
       : query.order("updated_at", { ascending: false });
 
   const { data, count, error } = await query.range(from, to);

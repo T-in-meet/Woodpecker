@@ -33,7 +33,8 @@ export function getNextReviewText(
   const daysUntilReview =
     getKstDayNumber(nextReviewDate) - getKstDayNumber(new Date());
 
-  if (daysUntilReview <= 0) return "오늘";
+  if (daysUntilReview < 0) return formatShortDateKST(nextReviewDate);
+  if (daysUntilReview === 0) return "오늘";
   if (daysUntilReview === 1) return "내일";
   if (daysUntilReview <= 7) return `${daysUntilReview}일 후`;
   return formatShortDateKST(nextReviewDate);
