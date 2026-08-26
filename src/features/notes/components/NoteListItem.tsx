@@ -1,4 +1,4 @@
-import { RotateCcw } from "lucide-react";
+import { CalendarClock } from "lucide-react";
 import Link from "next/link";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,6 +16,14 @@ export function NoteListItem({ note }: { note: NoteSummary }) {
   const nextReviewText = getNextReviewText(status, note.next_review_at);
   const canReview = status === "available";
   const contentPreview = stripMarkdown(stripNoteColorSyntax(note.content));
+  const isUpcomingRelative =
+    nextReviewText === "내일" || nextReviewText.endsWith("일 후");
+  const reviewTextClass =
+    nextReviewText === "오늘"
+      ? "rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800"
+      : isUpcomingRelative
+        ? "rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800"
+        : "font-medium text-foreground";
 
   return (
     <Link
@@ -44,8 +52,9 @@ export function NoteListItem({ note }: { note: NoteSummary }) {
           <div className="flex items-center justify-between gap-4 text-sm text-muted-foreground">
             {/* 날짜가 단어 중간에서 끊기지 않도록 nowrap을 건다. */}
             <div className="flex min-w-0 items-center gap-1.5 whitespace-nowrap">
-              <RotateCcw className="h-3.5 w-3.5 shrink-0" />
-              다음 복습: {nextReviewText}
+              <CalendarClock className="h-3.5 w-3.5 shrink-0" />
+              <span>다음 복습일</span>
+              <span className={reviewTextClass}>{nextReviewText}</span>
             </div>
 
             <NoteActions noteId={note.id} canReview={canReview} />

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getNextReviewText, getReviewStatus } from "../noteStatus";
 
@@ -12,8 +12,6 @@ function makeNote(overrides: {
     id: "test-id",
     title: "테스트",
     content: "내용",
-    created_at: "2026-01-01T00:00:00Z",
-    updated_at: "2026-01-01T00:00:00Z",
     review_round: 0,
     next_review_at: null,
     ...overrides,
@@ -54,6 +52,15 @@ describe("getReviewStatus", () => {
 });
 
 describe("getNextReviewText", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-01T14:30:00.000Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("completed → '완료'", () => {
     expect(getNextReviewText("completed", null)).toBe("완료");
   });
@@ -62,16 +69,20 @@ describe("getNextReviewText", () => {
     expect(getNextReviewText("pending", null)).toBe("준비 중");
   });
 
-  it("scheduled + next_review_at → 날짜 문자열 반환", () => {
-    const date = "2026-05-10T12:00:00Z";
-    const result = getNextReviewText("scheduled", date);
-    expect(result).toContain("2026");
+  it.each([
+    ["available", "2026-05-01T13:00:00.000Z", "오늘"],
+    ["scheduled", "2026-05-01T14:45:00.000Z", "오늘"],
+    ["scheduled", "2026-05-01T15:00:00.000Z", "내일"],
+    ["scheduled", "2026-05-02T15:00:00.000Z", "2일 후"],
+    ["scheduled", "2026-05-07T15:00:00.000Z", "7일 후"],
+  ] as const)("%s 일정 %s → '%s'", (status, date, expected) => {
+    expect(getNextReviewText(status, date)).toBe(expected);
   });
 
-  it("available + next_review_at → 날짜 문자열 반환", () => {
-    const date = "2026-05-01T00:00:00Z";
-    const result = getNextReviewText("available", date);
-    expect(result).toContain("2026");
+  it("8일 이후 일정 → 짧은 날짜 문자열 반환", () => {
+    expect(getNextReviewText("scheduled", "2026-05-08T15:00:00.000Z")).toBe(
+      "2026. 5. 9",
+    );
   });
 
   it("scheduled + next_review_at null → '-'", () => {
