@@ -26,11 +26,11 @@ export function NoteListItem({ note }: { note: NoteSummary }) {
           : "font-medium text-foreground";
 
   return (
-    <Link
-      href={getNoteDetailRoute(note.id)}
-      className="group block focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-xl"
-    >
-      <Card className="transition-shadow duration-200 hover:shadow-md">
+    <Card className="relative transition-shadow duration-200 hover:shadow-md">
+      <Link
+        href={getNoteDetailRoute(note.id)}
+        className="block rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      >
         <CardContent className="p-5">
           <div className="flex min-w-0 items-center justify-between gap-2">
             <span className="min-w-0 truncate text-base font-semibold leading-snug">
@@ -49,7 +49,11 @@ export function NoteListItem({ note }: { note: NoteSummary }) {
 
           <div className="my-3.5 border-t" />
 
-          <div className="flex items-center justify-between gap-4 text-sm text-muted-foreground">
+          <div
+            className={`flex items-center gap-4 text-sm text-muted-foreground ${
+              canReview ? "pr-32" : "pr-10"
+            }`}
+          >
             <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 whitespace-nowrap">
               <CalendarClock className="h-3.5 w-3.5 shrink-0" />
               <span>{reviewSchedule.label}</span>
@@ -57,11 +61,13 @@ export function NoteListItem({ note }: { note: NoteSummary }) {
                 {reviewSchedule.primaryText}
               </span>
             </div>
-
-            <NoteActions noteId={note.id} canReview={canReview} />
           </div>
         </CardContent>
-      </Card>
-    </Link>
+      </Link>
+
+      <div className="absolute right-5 bottom-5 z-10">
+        <NoteActions noteId={note.id} canReview={canReview} />
+      </div>
+    </Card>
   );
 }

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NoteListItem } from "../components/NoteListItem";
 
 vi.mock("../components/NoteActions", () => ({
-  NoteActions: () => <div data-testid="note-actions" />,
+  NoteActions: () => <button type="button">노트 액션</button>,
 }));
 
 describe("NoteListItem", () => {
@@ -34,5 +34,24 @@ describe("NoteListItem", () => {
     expect(screen.getByText("2일 지남")).toBeInTheDocument();
     expect(screen.queryByText("2026. 4. 29 예정")).not.toBeInTheDocument();
     expect(screen.queryByText("다음 복습일")).not.toBeInTheDocument();
+  });
+
+  it("노트 액션을 상세 링크 밖에 렌더링한다", () => {
+    render(
+      <NoteListItem
+        note={{
+          id: "2ae21b49-24d3-4dc2-b0e9-a399b02df514",
+          title: "연체 노트",
+          content: "복습할 내용",
+          review_round: 1,
+          next_review_at: "2026-04-28T15:00:00.000Z",
+        }}
+      />,
+    );
+
+    const detailLink = screen.getByRole("link");
+    const noteAction = screen.getByRole("button", { name: "노트 액션" });
+
+    expect(detailLink).not.toContainElement(noteAction);
   });
 });
