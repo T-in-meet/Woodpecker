@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+export const NOTE_VIEWS = ["all", "due", "scheduled", "completed"] as const;
+export const noteViewSchema = z.enum(NOTE_VIEWS);
+export type NoteView = z.infer<typeof noteViewSchema>;
+
 export const noteSchema = z.object({
   title: z
     .string()

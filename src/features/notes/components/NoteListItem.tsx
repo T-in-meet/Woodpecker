@@ -1,35 +1,36 @@
-"use client";
-
-import { CalendarDays, RotateCcw } from "lucide-react";
+import { CalendarClock } from "lucide-react";
 import Link from "next/link";
-import { useMemo } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { stripNoteColorSyntax } from "@/features/editor/utils/noteColorMarkdown";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { getNoteDetailRoute } from "@/lib/constants/routes";
-import { formatDateKST } from "@/lib/utils/formatDate";
 import { stripMarkdown } from "@/lib/utils/stripMarkdown";
 
 import type { NoteSummary } from "../queries";
-import { getNextReviewText, getReviewStatus } from "../utils/noteStatus";
+import { getReviewScheduleDisplay, getReviewStatus } from "../utils/noteStatus";
 import { NoteActions } from "./NoteActions";
 
 export function NoteListItem({ note }: { note: NoteSummary }) {
   const status = getReviewStatus(note);
-  const nextReviewText = getNextReviewText(status, note.next_review_at);
+  const reviewSchedule = getReviewScheduleDisplay(status, note.next_review_at);
   const canReview = status === "available";
-  const contentPreview = useMemo(
-    () => stripMarkdown(stripNoteColorSyntax(note.content)),
-    [note.content],
-  );
+  const contentPreview = stripMarkdown(stripNoteColorSyntax(note.content));
+  const reviewTextClass =
+    reviewSchedule.tone === "overdue"
+      ? "rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
+      : reviewSchedule.tone === "today"
+        ? "rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800"
+        : reviewSchedule.tone === "upcoming"
+          ? "rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800"
+          : "font-medium text-foreground";
 
   return (
-    <Link
-      href={getNoteDetailRoute(note.id)}
-      className="group block focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-xl"
-    >
-      <Card className="transition-shadow duration-200 hover:shadow-md">
+    <Card className="relative transition-shadow duration-200 hover:shadow-md">
+      <Link
+        href={getNoteDetailRoute(note.id)}
+        className="block rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      >
         <CardContent className="p-5">
           <div className="flex min-w-0 items-center justify-between gap-2">
             <span className="min-w-0 truncate text-base font-semibold leading-snug">
@@ -48,26 +49,25 @@ export function NoteListItem({ note }: { note: NoteSummary }) {
 
           <div className="my-3.5 border-t" />
 
-          <div className="flex items-center justify-between gap-4 text-sm text-muted-foreground">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-1.5">
-                <RotateCcw className="h-3.5 w-3.5 shrink-0" />
-                다음 복습: {nextReviewText}
-              </div>
-              <div className="flex items-center gap-1.5">
-                <CalendarDays className="h-3.5 w-3.5 shrink-0" />
-                생성일: {formatDateKST(note.created_at)}
-              </div>
+          <div
+            className={`flex items-center gap-4 text-sm text-muted-foreground ${
+              canReview ? "pr-32" : "pr-10"
+            }`}
+          >
+            <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 whitespace-nowrap">
+              <CalendarClock className="h-3.5 w-3.5 shrink-0" />
+              <span>{reviewSchedule.label}</span>
+              <span className={reviewTextClass}>
+                {reviewSchedule.primaryText}
+              </span>
             </div>
-
-            <NoteActions
-              noteId={note.id}
-              canReview={canReview}
-              variant="list"
-            />
           </div>
         </CardContent>
-      </Card>
-    </Link>
+      </Link>
+
+      <div className="absolute right-5 bottom-5 z-10">
+        <NoteActions noteId={note.id} canReview={canReview} />
+      </div>
+    </Card>
   );
 }

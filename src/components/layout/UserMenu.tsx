@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  BookOpen,
-  CalendarCheck,
-  LogOut,
-  MessageCircle,
-  Plus,
-  Shield,
-  User,
-} from "lucide-react";
+import { LogOut, Shield, User } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
@@ -60,6 +52,7 @@ export function UserMenu({
         className="flex items-center gap-2 rounded-full p-px transition-colors hover:bg-accent cursor-pointer"
         aria-expanded={open}
         aria-haspopup="true"
+        aria-label="사용자 메뉴 열기"
       >
         <div className="flex size-10 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
           {avatarUrl ? (
@@ -85,44 +78,6 @@ export function UserMenu({
           </div>
 
           <div className="border-t" />
-
-          {/* 노트 메뉴 — 모바일에서만 표시 */}
-          <div className="py-1 md:hidden">
-            <Link
-              href={ROUTES.NOTES}
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-2 px-4 py-2 text-sm transition-colors hover:bg-accent"
-            >
-              <BookOpen className="size-4" />
-              노트 목록
-            </Link>
-            <Link
-              href={ROUTES.NOTES_TODAY}
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-2 px-4 py-2 text-sm transition-colors hover:bg-accent"
-            >
-              <CalendarCheck className="size-4" />
-              오늘의 복습
-            </Link>
-            <Link
-              href={ROUTES.NOTES_NEW}
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-2 px-4 py-2 text-sm transition-colors hover:bg-accent"
-            >
-              <Plus className="size-4" />새 노트
-            </Link>
-
-            <Link
-              href={ROUTES.NOTE_CHATS}
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-2 px-4 py-2 text-sm transition-colors hover:bg-accent"
-            >
-              <MessageCircle className="size-4" />
-              노트 챗봇
-            </Link>
-          </div>
-
-          <div className="border-t md:hidden" />
 
           {/* 메뉴 항목 */}
           <div className="py-1">
