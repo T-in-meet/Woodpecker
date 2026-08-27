@@ -1,5 +1,4 @@
-const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
-const DAY_MS = 24 * 60 * 60 * 1000;
+import { DAY_IN_MS, KST_OFFSET_MS } from "@/lib/constants/time";
 
 export function getKstDayBoundsUtc(now = new Date()): {
   startUtcIso: string;
@@ -15,6 +14,6 @@ export function getKstDayBoundsUtc(now = new Date()): {
 
   return {
     startUtcIso: new Date(kstDayStartUtcMs).toISOString(),
-    endUtcIso: new Date(kstDayStartUtcMs + DAY_MS).toISOString(),
+    endUtcIso: new Date(kstDayStartUtcMs + DAY_IN_MS).toISOString(),
   };
 }

@@ -113,5 +113,4 @@ Node.js 버전, 환경 변수, Git Hook 등 상세한 개발 환경 설정은 [C
 ## 문서
 
 - [CONTRIBUTING.md](./CONTRIBUTING.md) — 개발 환경 설정, 커밋·브랜치 규칙, CI, 코드 스타일
-- [src/features/review/README.md](./src/features/review/README.md) — 복습 플로우 상세
 - [supabase/migrations/](./supabase/migrations/) — DB 스키마 변경 이력

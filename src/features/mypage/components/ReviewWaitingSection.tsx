@@ -1,4 +1,4 @@
-import { NoteGridCard } from "@/features/notes/components/NoteGridCard";
+import { NoteListItem } from "@/features/notes/components/NoteListItem";
 import type { NoteSummary } from "@/features/notes/queries";
 
 type ReviewWaitingSectionProps = {
@@ -19,10 +19,10 @@ export function ReviewWaitingSection({ notes }: ReviewWaitingSectionProps) {
           복습 대기 중인 노트가 없습니다.
         </p>
       ) : (
-        <ul className="grid list-none grid-cols-1 gap-3 sm:grid-cols-2">
+        <ul className="flex list-none flex-col gap-3">
           {notes.map((note) => (
             <li key={note.id}>
-              <NoteGridCard note={note} />
+              <NoteListItem note={note} />
             </li>
           ))}
         </ul>

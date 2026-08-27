@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { formatDate, formatDateTime, formatRelativeDate } from "../formatDate";
+import {
+  formatDate,
+  formatDateTime,
+  formatRelativeDate,
+  formatShortDateKST,
+} from "../formatDate";
 
 describe("formatDate", () => {
   it("Date 객체를 한국어 날짜 문자열로 변환한다", () => {
@@ -23,6 +28,26 @@ describe("formatDateTime", () => {
 
     expect(result).toContain("January 1, 2026");
     expect(result).toContain("09:00 AM");
+  });
+});
+
+describe("formatShortDateKST", () => {
+  it("월 이름 없이 짧은 숫자 형식으로 반환한다", () => {
+    const result = formatShortDateKST("2026-08-24T00:00:00.000Z");
+
+    expect(result).toContain("2026");
+    expect(result).toContain("8");
+    expect(result).toContain("24");
+    expect(result).not.toContain("월");
+  });
+
+  it("끝에 붙는 온점을 제거한다", () => {
+    expect(formatShortDateKST("2026-08-24T00:00:00.000Z")).toBe("2026. 8. 24");
+  });
+
+  it("서버 타임존과 무관하게 KST 기준으로 변환한다", () => {
+    // UTC 2026-08-23 16:00 = KST 2026-08-24 01:00
+    expect(formatShortDateKST("2026-08-23T16:00:00.000Z")).toContain("24");
   });
 });
 
