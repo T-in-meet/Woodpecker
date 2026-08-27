@@ -4,6 +4,10 @@ import type { AiRuntimeEmbeddingConfiguration } from "@/features/ai/runtimes/typ
 
 import { generateRelatedNoteRecommendations } from "./generate-related-note-recommendations";
 import { prepareRelatedNoteContext } from "./prepare-related-note-context";
+import {
+  type RelatedNoteVerification,
+  verifyRelatedNoteRecommendations,
+} from "./verify-related-note-recommendations";
 
 type RunRelatedNoteRecommendationParams = {
   /** 추천 대상 Note의 제목입니다. */
@@ -20,6 +24,9 @@ type RunRelatedNoteRecommendationParams = {
 
   /** 관련 Note 추천 Answer Agent에 사용할 Chat Runtime Configuration입니다. */
   answerConfiguration: AiRuntimeChatConfiguration;
+
+  /** 관련 Note 추천 Verifier Agent에 사용할 Chat Runtime Configuration입니다. */
+  verificationConfiguration: AiRuntimeChatConfiguration;
 
   /** 검색 대상 Note의 소유 사용자 ID입니다. */
   ownerUserId: string;
@@ -48,11 +55,19 @@ type RunRelatedNoteRecommendationParams = {
   /** Answer Generation usage 저장 callback입니다. */
   onAnswerGenerationUsage?: (usage: AiTokenUsage) => Promise<void>;
 
+  /** Verification usage 저장 callback입니다. */
+  onVerificationUsage?: (usage: AiTokenUsage) => Promise<void>;
+
   /** 추천 결과 snapshot 저장 callback입니다. */
   onRecommendations?: (
     recommendations: Awaited<
-      ReturnType<typeof generateRelatedNoteRecommendations>
+      ReturnType<typeof verifyRelatedNoteRecommendations>
     >["recommendations"],
+  ) => Promise<void>;
+
+  /** Verification 결과 snapshot 저장 callback입니다. */
+  onVerificationResults?: (
+    verifications: RelatedNoteVerification[],
   ) => Promise<void>;
 };
 
@@ -78,6 +93,7 @@ export async function runRelatedNoteRecommendation({
   queryExpansionConfiguration,
   embeddingConfiguration,
   answerConfiguration,
+  verificationConfiguration,
   ownerUserId,
   targetNoteId,
   limit,
@@ -87,7 +103,9 @@ export async function runRelatedNoteRecommendation({
   onQueryEmbeddingUsage,
   onMatchedNotes,
   onAnswerGenerationUsage,
+  onVerificationUsage,
   onRecommendations,
+  onVerificationResults,
 }: RunRelatedNoteRecommendationParams) {
   const contextResult = await prepareRelatedNoteContext({
     content,
@@ -137,7 +155,36 @@ export async function runRelatedNoteRecommendation({
       : {}),
   });
 
-  await onRecommendations?.(recommendationResult.recommendations);
+  /*
+   * Answer Agent가 추천을 만들지 않은 경우에는 검증할 대상이 없으므로
+   * Verifier 호출을 생략하고 빈 추천을 그대로 저장 단계로 전달합니다.
+   */
+  if (recommendationResult.recommendations.length === 0) {
+    await onRecommendations?.([]);
+
+    return {
+      answerGenerationUsage: recommendationResult.usage,
+      expandedQuery: contextResult.expandedQuery,
+      notes: contextResult.notes,
+      queryEmbeddingUsage: contextResult.queryEmbeddingUsage,
+      queryExpansionUsage: contextResult.queryExpansionUsage,
+      recommendations: [],
+    };
+  }
+
+  const verificationResult = await verifyRelatedNoteRecommendations({
+    configuration: verificationConfiguration,
+    content,
+    notes: contextResult.notes,
+    recommendations: recommendationResult.recommendations,
+    title,
+    ...(onVerificationUsage !== undefined
+      ? { onUsage: onVerificationUsage }
+      : {}),
+  });
+
+  await onVerificationResults?.(verificationResult.verifications);
+  await onRecommendations?.(verificationResult.recommendations);
 
   return {
     answerGenerationUsage: recommendationResult.usage,
@@ -145,6 +192,8 @@ export async function runRelatedNoteRecommendation({
     notes: contextResult.notes,
     queryEmbeddingUsage: contextResult.queryEmbeddingUsage,
     queryExpansionUsage: contextResult.queryExpansionUsage,
-    recommendations: recommendationResult.recommendations,
+    recommendations: verificationResult.recommendations,
+    verificationUsage: verificationResult.usage,
+    verifications: verificationResult.verifications,
   };
 }

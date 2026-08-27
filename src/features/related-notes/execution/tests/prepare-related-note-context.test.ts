@@ -120,6 +120,7 @@ describe("prepareRelatedNoteContext", () => {
 
     expect(expandRelatedNoteQuery).toHaveBeenCalledWith({
       configuration: queryExpansionConfiguration,
+      noteId: "33333333-3333-4333-8333-333333333333",
       title: "대상 노트",
       content: "대상 노트 내용",
       onUsage: onQueryExpansionUsage,

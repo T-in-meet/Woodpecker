@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(3);
+SELECT plan(5);
 
 
 -- ============================================================================
@@ -165,7 +165,60 @@ SELECT is(
 
 
 -- ============================================================================
--- 2. AI Relation Dismiss
+-- 2. Manual Relation Delete From Reverse View
+-- ============================================================================
+
+RESET ROLE;
+
+INSERT INTO public.note_related_notes (
+    note_id,
+    related_note_id,
+    origin,
+    status,
+    metadata
+)
+VALUES (
+    current_setting('test.related_notes_delete_source_id')::uuid,
+    current_setting('test.related_notes_delete_manual_target_id')::uuid,
+    'manual',
+    'active',
+    '{"title":"Manual Target"}'::jsonb
+);
+
+SET LOCAL ROLE authenticated;
+
+SELECT set_config(
+    'request.jwt.claims',
+    json_build_object(
+        'sub',
+        current_setting('test.related_notes_delete_user_a_id'),
+        'role',
+        'authenticated'
+    )::text,
+    true
+);
+
+SELECT public.delete_note_related(
+    current_setting('test.related_notes_delete_manual_target_id')::uuid,
+    current_setting('test.related_notes_delete_source_id')::uuid
+);
+
+SELECT is(
+    (
+        SELECT count(*)
+        FROM public.note_related_notes
+        WHERE note_id =
+                current_setting('test.related_notes_delete_source_id')::uuid
+          AND related_note_id =
+                current_setting('test.related_notes_delete_manual_target_id')::uuid
+    ),
+    0::bigint,
+    'manual relationship should be deleted from reverse view'
+);
+
+
+-- ============================================================================
+-- 3. AI Relation Dismiss
 -- ============================================================================
 
 SELECT public.delete_note_related(
@@ -188,7 +241,52 @@ SELECT is(
 
 
 -- ============================================================================
--- 3. Target Ownership
+-- 4. AI Relation Dismiss From Reverse View
+-- ============================================================================
+
+RESET ROLE;
+
+UPDATE public.note_related_notes
+SET status = 'active'
+WHERE note_id =
+        current_setting('test.related_notes_delete_source_id')::uuid
+  AND related_note_id =
+        current_setting('test.related_notes_delete_ai_target_id')::uuid;
+
+SET LOCAL ROLE authenticated;
+
+SELECT set_config(
+    'request.jwt.claims',
+    json_build_object(
+        'sub',
+        current_setting('test.related_notes_delete_user_a_id'),
+        'role',
+        'authenticated'
+    )::text,
+    true
+);
+
+SELECT public.delete_note_related(
+    current_setting('test.related_notes_delete_ai_target_id')::uuid,
+    current_setting('test.related_notes_delete_source_id')::uuid
+);
+
+SELECT is(
+    (
+        SELECT status
+        FROM public.note_related_notes
+        WHERE note_id =
+                current_setting('test.related_notes_delete_source_id')::uuid
+          AND related_note_id =
+                current_setting('test.related_notes_delete_ai_target_id')::uuid
+    ),
+    'dismissed',
+    'AI relationship should be dismissed from reverse view'
+);
+
+
+-- ============================================================================
+-- 5. Target Ownership
 -- ============================================================================
 
 SELECT throws_ok(

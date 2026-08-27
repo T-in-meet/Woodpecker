@@ -8,7 +8,8 @@ import {
   RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_SQLSTATE,
   RELATED_NOTES_RECOMMENDATION_SOURCE_STALE_SQLSTATE,
 } from "../constants/ai";
-import type { RelatedNoteAiRecommendation } from "../types";
+import type { StoredRelatedNoteAiRecommendation } from "../types";
+import type { RelatedNoteVerification } from "./verify-related-note-recommendations";
 
 /** Related Notes 추천 Run 상태입니다. */
 export const RELATED_NOTE_RECOMMENDATION_RUN_STATUS = {
@@ -39,6 +40,7 @@ export const RELATED_NOTE_RECOMMENDATION_RUN_UPDATE_STEP = {
   QUERY_EMBEDDING: "query_embedding",
   MATCHED_NOTES: "matched_notes",
   RECOMMENDATIONS: "recommendations",
+  VERIFICATION: "verification",
 } as const;
 
 /** Related Notes 추천 Run 갱신 단계 타입입니다. */
@@ -70,6 +72,9 @@ export type CreateRelatedNoteRecommendationRunParams = {
 
   /** Answer Generation Chat Model Config ID입니다. */
   answerGenerationModelConfigId: string;
+
+  /** Recommendation Verification Chat Model Config ID입니다. */
+  verificationModelConfigId: string;
 };
 
 /** Related Notes 추천 Run claim 결과입니다. */
@@ -137,7 +142,28 @@ export type SaveRelatedNoteRunRecommendationsParams = {
   runId: string;
 
   /** 실행 당시 추천 결과 snapshot입니다. */
-  recommendations: RelatedNoteAiRecommendation[];
+  recommendations: StoredRelatedNoteAiRecommendation[];
+};
+
+/** Verification usage 저장 입력입니다. */
+export type SaveRelatedNoteRunVerificationUsageParams = {
+  /** 갱신할 Run ID입니다. */
+  runId: string;
+
+  /** Verification Provider usage입니다. */
+  usage: AiTokenUsage;
+
+  /** 비용 추정에 사용할 model key입니다. */
+  modelKey: string;
+};
+
+/** Verification 결과 저장 입력입니다. */
+export type SaveRelatedNoteRunVerificationResultsParams = {
+  /** 갱신할 Run ID입니다. */
+  runId: string;
+
+  /** 실행 당시 추천 검증 결과 snapshot입니다. */
+  verifications: RelatedNoteVerification[];
 };
 
 /** Answer Generation usage 저장 입력입니다. */
@@ -198,6 +224,7 @@ export async function createRelatedNoteRecommendationRun(
       p_query_expansion_model_config_id: params.queryExpansionModelConfigId,
       p_source_updated_at: params.sourceUpdatedAt,
       p_user_id: params.userId,
+      p_verification_model_config_id: params.verificationModelConfigId,
     },
   );
 
@@ -413,6 +440,54 @@ export async function saveRelatedNoteRunRecommendations(
 }
 
 /**
+ * Verification usage를 Run에 저장합니다.
+ *
+ * @param params Verification usage
+ * @param options 테스트에서 주입할 Supabase Client
+ */
+export async function saveRelatedNoteRunVerificationUsage(
+  params: SaveRelatedNoteRunVerificationUsageParams,
+  options: {
+    supabase?: RelatedNoteRecommendationRunPersistenceClient | undefined;
+  } = {},
+): Promise<void> {
+  const cost = estimateAiUsageCostUsd({
+    modelKey: params.modelKey,
+    usage: params.usage,
+  });
+
+  await updateRunningRun(
+    params.runId,
+    {
+      verification_cost_usd: cost.totalCostUsd,
+      verification_usage: createTokenUsageJson(params.usage),
+    },
+    options,
+  );
+}
+
+/**
+ * Verification 결과 snapshot을 Run에 저장합니다.
+ *
+ * @param params Verification 결과 snapshot
+ * @param options 테스트에서 주입할 Supabase Client
+ */
+export async function saveRelatedNoteRunVerificationResults(
+  params: SaveRelatedNoteRunVerificationResultsParams,
+  options: {
+    supabase?: RelatedNoteRecommendationRunPersistenceClient | undefined;
+  } = {},
+): Promise<void> {
+  await updateRunningRun(
+    params.runId,
+    {
+      verification_results: createVerificationResultsJson(params.verifications),
+    },
+    options,
+  );
+}
+
+/**
  * Related Notes 추천 Run을 최종 상태로 완료합니다.
  *
  * @param params 완료할 Run ID와 완료 상태
@@ -515,10 +590,26 @@ function createTokenUsageJson(usage: AiTokenUsage): Json {
  * @returns DB에 저장 가능한 추천 snapshot
  */
 function createRecommendationsJson(
-  recommendations: RelatedNoteAiRecommendation[],
+  recommendations: StoredRelatedNoteAiRecommendation[],
 ): Json {
   return recommendations.map((recommendation) => ({
     noteId: recommendation.noteId,
     reason: recommendation.reason,
+  }));
+}
+
+/**
+ * Verification 결과를 JSON snapshot으로 변환합니다.
+ *
+ * @param verifications 실행 당시 Related Notes 추천 검증 결과
+ * @returns DB에 저장 가능한 검증 snapshot
+ */
+function createVerificationResultsJson(
+  verifications: RelatedNoteVerification[],
+): Json {
+  return verifications.map((verification) => ({
+    approved: verification.approved,
+    noteId: verification.noteId,
+    reason: verification.reason,
   }));
 }

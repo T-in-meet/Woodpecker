@@ -42,6 +42,8 @@ import {
   saveRelatedNoteRunQueryEmbedding,
   saveRelatedNoteRunQueryExpansion,
   saveRelatedNoteRunRecommendations,
+  saveRelatedNoteRunVerificationResults,
+  saveRelatedNoteRunVerificationUsage,
 } from "./run-persistence";
 import { runRelatedNoteRecommendation } from "./run-related-note-recommendation";
 
@@ -147,6 +149,7 @@ export function scheduleRelatedNoteRecommendation({
         embeddingConfiguration,
         queryExpansionConfiguration,
         answerConfiguration,
+        verificationConfiguration,
       ] = await Promise.all([
         resolveAiRuntimeEmbeddingConfiguration({
           featureKey: NOTE_RETRIEVAL_AI_FEATURE_KEY,
@@ -160,6 +163,10 @@ export function scheduleRelatedNoteRecommendation({
           featureKey: RELATED_NOTES_AI_FEATURE_KEY,
           roleKey: RELATED_NOTES_AI_ROLE_KEY.ANSWER_GENERATION,
         }),
+        resolveAiRuntimeChatConfiguration({
+          featureKey: RELATED_NOTES_AI_FEATURE_KEY,
+          roleKey: RELATED_NOTES_AI_ROLE_KEY.VERIFICATION,
+        }),
       ]);
 
       try {
@@ -170,6 +177,7 @@ export function scheduleRelatedNoteRecommendation({
           queryExpansionModelConfigId: queryExpansionConfiguration.model.id,
           sourceUpdatedAt: recommendationSource.updated_at,
           userId: ownerUserId,
+          verificationModelConfigId: verificationConfiguration.model.id,
         });
 
         if (
@@ -321,10 +329,42 @@ export function scheduleRelatedNoteRecommendation({
           });
         },
 
+        onVerificationResults: async (verifications) => {
+          await saveRunUpdateOrReport({
+            noteId: recommendationSource.id,
+            ownerUserId,
+            runId: activeRunId,
+            step: RELATED_NOTE_RECOMMENDATION_RUN_UPDATE_STEP.VERIFICATION,
+            update: (runId) =>
+              saveRelatedNoteRunVerificationResults({
+                runId,
+                verifications,
+              }),
+          });
+        },
+
+        onVerificationUsage: async (usage) => {
+          await saveRunUpdateOrReport({
+            noteId: recommendationSource.id,
+            ownerUserId,
+            runId: activeRunId,
+            step: RELATED_NOTE_RECOMMENDATION_RUN_UPDATE_STEP.VERIFICATION,
+            update: (runId) =>
+              saveRelatedNoteRunVerificationUsage({
+                modelKey: createAiUsageModelKey(
+                  verificationConfiguration.model,
+                ),
+                runId,
+                usage,
+              }),
+          });
+        },
+
         ownerUserId,
         queryExpansionConfiguration,
         targetNoteId: recommendationSource.id,
         title: recommendationSource.title,
+        verificationConfiguration,
       });
 
       /*

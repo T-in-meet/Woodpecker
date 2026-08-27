@@ -28,24 +28,26 @@ describe("getRelatedNoteRecommendationExcludedIds", () => {
   });
 
   it("소유 Note의 manual 관계와 dismissed AI 관계의 Related Note ID를 반환한다", async () => {
-    const relationOrMock = vi.fn().mockResolvedValue({
+    const relationStatusOrMock = vi.fn().mockResolvedValue({
       data: [
         {
+          note_id: noteId,
           related_note_id: "22222222-2222-4222-8222-222222222222",
         },
         {
-          related_note_id: "33333333-3333-4333-8333-333333333333",
+          note_id: "33333333-3333-4333-8333-333333333333",
+          related_note_id: noteId,
         },
       ],
       error: null,
     });
 
-    const relationEqMock = vi.fn().mockReturnValue({
-      or: relationOrMock,
+    const relationDirectionOrMock = vi.fn().mockReturnValue({
+      or: relationStatusOrMock,
     });
 
     const relationSelectMock = vi.fn().mockReturnValue({
-      eq: relationEqMock,
+      or: relationDirectionOrMock,
     });
 
     const noteMaybeSingleMock = vi.fn().mockResolvedValue({
@@ -99,9 +101,11 @@ describe("getRelatedNoteRecommendationExcludedIds", () => {
     expect(noteMaybeSingleMock).toHaveBeenCalledTimes(1);
 
     expect(fromMock).toHaveBeenCalledWith("note_related_notes");
-    expect(relationSelectMock).toHaveBeenCalledWith("related_note_id");
-    expect(relationEqMock).toHaveBeenCalledWith("note_id", noteId);
-    expect(relationOrMock).toHaveBeenCalledWith(
+    expect(relationSelectMock).toHaveBeenCalledWith("note_id, related_note_id");
+    expect(relationDirectionOrMock).toHaveBeenCalledWith(
+      `note_id.eq.${noteId},related_note_id.eq.${noteId}`,
+    );
+    expect(relationStatusOrMock).toHaveBeenCalledWith(
       "origin.eq.manual,and(origin.eq.ai,status.eq.dismissed)",
     );
 
@@ -114,17 +118,17 @@ describe("getRelatedNoteRecommendationExcludedIds", () => {
   });
 
   it("제외할 기존 관계가 없으면 빈 배열을 반환한다", async () => {
-    const relationOrMock = vi.fn().mockResolvedValue({
+    const relationStatusOrMock = vi.fn().mockResolvedValue({
       data: null,
       error: null,
     });
 
-    const relationEqMock = vi.fn().mockReturnValue({
-      or: relationOrMock,
+    const relationDirectionOrMock = vi.fn().mockReturnValue({
+      or: relationStatusOrMock,
     });
 
     const relationSelectMock = vi.fn().mockReturnValue({
-      eq: relationEqMock,
+      or: relationDirectionOrMock,
     });
 
     const noteMaybeSingleMock = vi.fn().mockResolvedValue({
@@ -276,17 +280,17 @@ describe("getRelatedNoteRecommendationExcludedIds", () => {
   it("기존 관계 조회에 실패하면 운영 오류를 보고하고 오류를 전파한다", async () => {
     const relationError = new Error("relation query failed");
 
-    const relationOrMock = vi.fn().mockResolvedValue({
+    const relationStatusOrMock = vi.fn().mockResolvedValue({
       data: null,
       error: relationError,
     });
 
-    const relationEqMock = vi.fn().mockReturnValue({
-      or: relationOrMock,
+    const relationDirectionOrMock = vi.fn().mockReturnValue({
+      or: relationStatusOrMock,
     });
 
     const relationSelectMock = vi.fn().mockReturnValue({
-      eq: relationEqMock,
+      or: relationDirectionOrMock,
     });
 
     const noteMaybeSingleMock = vi.fn().mockResolvedValue({

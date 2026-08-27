@@ -33,6 +33,8 @@ import {
   saveRelatedNoteRunQueryEmbedding,
   saveRelatedNoteRunQueryExpansion,
   saveRelatedNoteRunRecommendations,
+  saveRelatedNoteRunVerificationResults,
+  saveRelatedNoteRunVerificationUsage,
 } from "../run-persistence";
 import { runRelatedNoteRecommendation } from "../run-related-note-recommendation";
 import { scheduleRelatedNoteRecommendation } from "../schedule-related-note-recommendation";
@@ -96,6 +98,7 @@ vi.mock("../run-persistence", () => ({
     QUERY_EMBEDDING: "query_embedding",
     MATCHED_NOTES: "matched_notes",
     RECOMMENDATIONS: "recommendations",
+    VERIFICATION: "verification",
   },
   completeRelatedNoteRecommendationRun: vi.fn(),
   createRelatedNoteRecommendationRun: vi.fn(),
@@ -105,6 +108,8 @@ vi.mock("../run-persistence", () => ({
   saveRelatedNoteRunQueryEmbedding: vi.fn(),
   saveRelatedNoteRunQueryExpansion: vi.fn(),
   saveRelatedNoteRunRecommendations: vi.fn(),
+  saveRelatedNoteRunVerificationResults: vi.fn(),
+  saveRelatedNoteRunVerificationUsage: vi.fn(),
 }));
 
 const mockCreateAdminClient = vi.mocked(createAdminClient);
@@ -147,6 +152,12 @@ const mockSaveRelatedNoteRunAnswerGenerationUsage = vi.mocked(
 const mockSaveRelatedNoteRunRecommendations = vi.mocked(
   saveRelatedNoteRunRecommendations,
 );
+const mockSaveRelatedNoteRunVerificationUsage = vi.mocked(
+  saveRelatedNoteRunVerificationUsage,
+);
+const mockSaveRelatedNoteRunVerificationResults = vi.mocked(
+  saveRelatedNoteRunVerificationResults,
+);
 
 const OWNER_USER_ID = "11111111-1111-4111-8111-111111111111";
 const NOTE_ID = "22222222-2222-4222-8222-222222222222";
@@ -172,11 +183,24 @@ const answerGenerationUsage = {
   totalTokens: 11,
 };
 
+const verificationUsage = {
+  inputTokens: 7,
+  outputTokens: 8,
+  totalTokens: 15,
+};
+
 const recommendations = [
   {
     noteId: RELATED_NOTE_ID,
     reason: "관련 노트 추천 이유",
-    title: "Related note",
+  },
+];
+
+const verifications = [
+  {
+    approved: true,
+    noteId: RELATED_NOTE_ID,
+    reason: "직접적인 학습 관계입니다.",
   },
 ];
 
@@ -199,6 +223,14 @@ const queryExpansionConfiguration = {
 const answerConfiguration = {
   model: {
     id: "answer-model-config-id",
+    provider: "openai",
+    model: "gpt-4o-mini",
+  },
+} as Awaited<ReturnType<typeof resolveAiRuntimeChatConfiguration>>;
+
+const verificationConfiguration = {
+  model: {
+    id: "verification-model-config-id",
     provider: "openai",
     model: "gpt-4o-mini",
   },
@@ -253,6 +285,8 @@ function mockSuccessfulRecommendationRun() {
     queryEmbeddingUsage,
     queryExpansionUsage,
     recommendations,
+    verificationUsage,
+    verifications,
   });
 }
 
@@ -268,7 +302,8 @@ describe("scheduleRelatedNoteRecommendation", () => {
 
     mockResolveAiRuntimeChatConfiguration
       .mockResolvedValueOnce(queryExpansionConfiguration)
-      .mockResolvedValueOnce(answerConfiguration);
+      .mockResolvedValueOnce(answerConfiguration)
+      .mockResolvedValueOnce(verificationConfiguration);
 
     mockCreateRelatedNoteRecommendationRun.mockResolvedValue({
       runId: RUN_ID,
@@ -281,6 +316,8 @@ describe("scheduleRelatedNoteRecommendation", () => {
     mockSaveRelatedNoteRunQueryEmbedding.mockResolvedValue(undefined);
     mockSaveRelatedNoteRunQueryExpansion.mockResolvedValue(undefined);
     mockSaveRelatedNoteRunRecommendations.mockResolvedValue(undefined);
+    mockSaveRelatedNoteRunVerificationResults.mockResolvedValue(undefined);
+    mockSaveRelatedNoteRunVerificationUsage.mockResolvedValue(undefined);
     mockReplaceRelatedNoteAiRecommendations.mockResolvedValue("replaced");
   });
 
@@ -317,10 +354,13 @@ describe("scheduleRelatedNoteRecommendation", () => {
           onQueryEmbeddingUsage: expect.any(Function),
           onQueryExpansionUsage: expect.any(Function),
           onRecommendations: expect.any(Function),
+          onVerificationResults: expect.any(Function),
+          onVerificationUsage: expect.any(Function),
           ownerUserId: OWNER_USER_ID,
           queryExpansionConfiguration,
           targetNoteId: NOTE_ID,
           title: "Source note",
+          verificationConfiguration,
         }),
       );
     });
@@ -332,6 +372,7 @@ describe("scheduleRelatedNoteRecommendation", () => {
       queryExpansionModelConfigId: "query-expansion-model-config-id",
       sourceUpdatedAt: SOURCE_UPDATED_AT,
       userId: OWNER_USER_ID,
+      verificationModelConfigId: "verification-model-config-id",
     });
 
     expect(mockReplaceRelatedNoteAiRecommendations).toHaveBeenCalledWith({
@@ -354,6 +395,11 @@ describe("scheduleRelatedNoteRecommendation", () => {
     expect(mockResolveAiRuntimeChatConfiguration).toHaveBeenNthCalledWith(2, {
       featureKey: "related-notes",
       roleKey: "answer-generation",
+    });
+
+    expect(mockResolveAiRuntimeChatConfiguration).toHaveBeenNthCalledWith(3, {
+      featureKey: "related-notes",
+      roleKey: "recommendation-verification",
     });
 
     expect(mockCompleteRelatedNoteRecommendationRun).toHaveBeenCalledWith({
@@ -436,6 +482,8 @@ describe("scheduleRelatedNoteRecommendation", () => {
       await params.onQueryEmbeddingUsage?.(queryEmbeddingUsage);
       await params.onMatchedNotes?.([RELATED_NOTE_ID]);
       await params.onAnswerGenerationUsage?.(answerGenerationUsage);
+      await params.onVerificationUsage?.(verificationUsage);
+      await params.onVerificationResults?.(verifications);
       await params.onRecommendations?.(recommendations);
 
       return {
@@ -445,6 +493,8 @@ describe("scheduleRelatedNoteRecommendation", () => {
         queryEmbeddingUsage,
         queryExpansionUsage,
         recommendations,
+        verificationUsage,
+        verifications,
       };
     });
 
@@ -493,6 +543,17 @@ describe("scheduleRelatedNoteRecommendation", () => {
     expect(mockSaveRelatedNoteRunRecommendations).toHaveBeenCalledWith({
       recommendations,
       runId: RUN_ID,
+    });
+
+    expect(mockSaveRelatedNoteRunVerificationUsage).toHaveBeenCalledWith({
+      modelKey: "openai-gpt-4o-mini",
+      runId: RUN_ID,
+      usage: verificationUsage,
+    });
+
+    expect(mockSaveRelatedNoteRunVerificationResults).toHaveBeenCalledWith({
+      runId: RUN_ID,
+      verifications,
     });
   });
 
@@ -686,6 +747,8 @@ describe("scheduleRelatedNoteRecommendation", () => {
         queryEmbeddingUsage,
         queryExpansionUsage,
         recommendations,
+        verificationUsage,
+        verifications,
       };
     });
 
@@ -755,6 +818,8 @@ describe("scheduleRelatedNoteRecommendation", () => {
         queryEmbeddingUsage,
         queryExpansionUsage,
         recommendations,
+        verificationUsage,
+        verifications,
       };
     });
 

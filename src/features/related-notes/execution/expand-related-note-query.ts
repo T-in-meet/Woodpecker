@@ -18,6 +18,9 @@ type ExpandRelatedNoteQueryParams = {
   /** 관련 노트 검색 질문 생성에 사용할 Chat Runtime Configuration입니다. */
   configuration: AiRuntimeChatConfiguration;
 
+  /** 관련 노트를 추천할 대상 Note ID입니다. */
+  noteId: string;
+
   /** 관련 노트를 추천할 대상 노트의 제목입니다. */
   title: string;
 
@@ -81,7 +84,7 @@ export async function expandRelatedNoteQuery(
       operation:
         RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.PARSE_QUERY_EXPANSION_RESPONSE,
       context: {
-        title: params.title,
+        noteId: params.noteId,
       },
     });
 
@@ -105,7 +108,7 @@ export async function expandRelatedNoteQuery(
       operation:
         RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.VALIDATE_QUERY_EXPANSION_RESPONSE,
       context: {
-        title: params.title,
+        noteId: params.noteId,
       },
     });
 

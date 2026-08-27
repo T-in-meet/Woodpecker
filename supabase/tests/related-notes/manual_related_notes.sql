@@ -12,7 +12,7 @@ BEGIN;
 -- 4. 자기 자신을 Related Note로 연결할 수 없어야 합니다.
 -- 5. 잘못된 입력은 조건별 SQLSTATE로 구분해야 합니다.
 -- 6. 다른 사용자의 Note를 Related Note로 연결할 수 없어야 합니다.
-SELECT plan(18);
+SELECT plan(20);
 
 
 -- ============================================================================
@@ -51,6 +51,12 @@ SELECT set_config(
 
 SELECT set_config(
   'test.related_manual_ai_target_id',
+  gen_random_uuid()::text,
+  true
+);
+
+SELECT set_config(
+  'test.related_manual_reverse_ai_target_id',
   gen_random_uuid()::text,
   true
 );
@@ -124,6 +130,12 @@ VALUES
     'target content'
   ),
   (
+    current_setting('test.related_manual_reverse_ai_target_id')::uuid,
+    current_setting('test.related_manual_user_id')::uuid,
+    'Existing Reverse AI Related Note',
+    'target content'
+  ),
+  (
     current_setting('test.related_manual_other_target_id')::uuid,
     current_setting('test.related_manual_other_user_id')::uuid,
     'Other User Related Note',
@@ -150,6 +162,26 @@ VALUES (
     'Existing AI Related Note',
     'reason',
     'old ai reason'
+  )
+);
+
+INSERT INTO public.note_related_notes (
+  note_id,
+  related_note_id,
+  origin,
+  status,
+  metadata
+)
+VALUES (
+  current_setting('test.related_manual_reverse_ai_target_id')::uuid,
+  current_setting('test.related_manual_source_id')::uuid,
+  'ai',
+  'dismissed',
+  jsonb_build_object(
+    'title',
+    'Manual Related Source',
+    'reason',
+    'old reverse ai reason'
   )
 );
 
@@ -357,7 +389,62 @@ SELECT ok(
 
 
 -- ============================================================================
--- 3. Self relation rejection
+-- 3. Existing reverse AI relation -> manual active
+-- ============================================================================
+
+-- 동일한 관계가 반대 방향 AI dismissed 상태로 존재하더라도
+-- 사용자가 직접 연결하면 중복 row를 만들지 않고 기존 row를 전환해야 합니다.
+SELECT lives_ok(
+  format(
+    $sql$
+      SELECT public.add_note_related_manual(
+        '%s'::uuid,
+        jsonb_build_array(
+          jsonb_build_object(
+            'relatedNoteId',
+            '%s',
+            'reason',
+            '역방향 관계를 직접 연결'
+          )
+        )
+      );
+    $sql$,
+    current_setting('test.related_manual_source_id'),
+    current_setting('test.related_manual_reverse_ai_target_id')
+  ),
+  'existing reverse AI relation should be convertible to manual relation'
+);
+
+SELECT ok(
+  (
+    SELECT
+      count(*) = 1
+      AND bool_and(origin = 'manual')
+      AND bool_and(status = 'active')
+      AND bool_and(
+        metadata = jsonb_build_object(
+          'reason',
+          '역방향 관계를 직접 연결'
+        )
+      )
+    FROM public.note_related_notes
+    WHERE least(note_id, related_note_id) =
+        least(
+          current_setting('test.related_manual_source_id')::uuid,
+          current_setting('test.related_manual_reverse_ai_target_id')::uuid
+        )
+      AND greatest(note_id, related_note_id) =
+        greatest(
+          current_setting('test.related_manual_source_id')::uuid,
+          current_setting('test.related_manual_reverse_ai_target_id')::uuid
+        )
+  ),
+  'existing reverse AI relation should become one active manual relation'
+);
+
+
+-- ============================================================================
+-- 4. Self relation rejection
 -- ============================================================================
 
 -- 현재 Note 자신이 Related Notes 입력 배열에 포함되면
@@ -400,7 +487,7 @@ SELECT is(
 
 
 -- ============================================================================
--- 4. Invalid manual input SQLSTATEs
+-- 5. Invalid manual input SQLSTATEs
 -- ============================================================================
 
 -- 빈 배열은 전용 SQLSTATE로 거부해야 합니다.
@@ -522,7 +609,7 @@ SELECT throws_ok(
 
 
 -- ============================================================================
--- 5. Other user's target rejection
+-- 6. Other user's target rejection
 -- ============================================================================
 
 -- 인증 사용자가 다른 사용자의 Note ID를 배열에 전달하더라도

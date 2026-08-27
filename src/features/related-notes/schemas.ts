@@ -55,17 +55,25 @@ export const aiRelatedNoteMetadataSchema = relatedNoteMetadataSchema.extend({
  */
 export const relatedNoteRowSchema = z.discriminatedUnion("origin", [
   z.object({
+    note_id: z.string().uuid(),
     related_note_id: z.string().uuid(),
     origin: z.literal("manual"),
-    notes: z.object({
+    source_note: z.object({
+      title: z.string().trim().min(1),
+    }),
+    related_note: z.object({
       title: z.string().trim().min(1),
     }),
     metadata: manualRelatedNoteMetadataSchema,
   }),
   z.object({
+    note_id: z.string().uuid(),
     related_note_id: z.string().uuid(),
     origin: z.literal("ai"),
-    notes: z.object({
+    source_note: z.object({
+      title: z.string().trim().min(1),
+    }),
+    related_note: z.object({
       title: z.string().trim().min(1),
     }),
     metadata: aiRelatedNoteMetadataSchema,

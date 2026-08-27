@@ -8,7 +8,8 @@ import { getNoteDetailRoute } from "@/lib/constants/routes";
 import { cn } from "@/lib/utils/cn";
 
 import { DeleteRelatedNoteAlertDialog } from "./DeleteRelatedNoteAlertDialog";
-import { RelatedNoteReasonTooltip } from "./RelatedNoteReasonTooltip";
+import { RelatedNoteAiActionsPopover } from "./RelatedNoteAiActionsPopover";
+import { RelatedNoteReasonPopover } from "./RelatedNoteReasonPopover";
 import { UpdateRelatedNoteReasonDialog } from "./UpdateRelatedNoteReasonDialog";
 
 type RelatedNoteItemProps = {
@@ -49,8 +50,6 @@ export function RelatedNoteItem({ noteId, relatedNote }: RelatedNoteItemProps) {
           <span className="truncate">{relatedNote.title}</span>
         </Link>
 
-        <RelatedNoteReasonTooltip reason={reason} />
-
         <Badge
           variant="secondary"
           className={cn(
@@ -63,7 +62,9 @@ export function RelatedNoteItem({ noteId, relatedNote }: RelatedNoteItemProps) {
           {isManual ? "직접 연결" : "AI 추천"}
         </Badge>
 
-        <div className="flex w-20 shrink-0 items-center justify-end gap-1">
+        <div className="flex w-28 shrink-0 items-center justify-end gap-0.5">
+          {reason && <RelatedNoteReasonPopover reason={reason} />}
+
           {isManual && (
             <UpdateRelatedNoteReasonDialog
               noteId={noteId}
@@ -97,6 +98,8 @@ export function RelatedNoteItem({ noteId, relatedNote }: RelatedNoteItemProps) {
               <Trash2 className="size-4" />
             </Button>
           </DeleteRelatedNoteAlertDialog>
+
+          {!isManual && <RelatedNoteAiActionsPopover />}
         </div>
       </div>
     </div>

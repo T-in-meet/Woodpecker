@@ -3,7 +3,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Json } from "@/types/db.helpers";
 
-import type { RelatedNoteAiRecommendation } from "../types";
+import type { StoredRelatedNoteAiRecommendation } from "../types";
 
 /** Related Notes AI 추천 교체 RPC 반환 상태입니다. */
 export const REPLACE_RELATED_NOTE_AI_RECOMMENDATIONS_STATUS = {
@@ -40,7 +40,7 @@ type ReplaceRelatedNoteAiRecommendationsParams = {
   sourceUpdatedAt: string;
 
   /** 대상 Note에 새로 저장할 AI 관련 노트 추천 목록입니다. */
-  recommendations: RelatedNoteAiRecommendation[];
+  recommendations: StoredRelatedNoteAiRecommendation[];
 };
 
 /**
@@ -66,7 +66,7 @@ export async function replaceRelatedNoteAiRecommendations({
   const supabase = createAdminClient();
 
   const recommendationPayload = recommendations.map(
-    ({ noteId: relatedNoteId, title: _title, ...metadata }) => ({
+    ({ noteId: relatedNoteId, ...metadata }) => ({
       relatedNoteId,
       metadata,
     }),

@@ -5,6 +5,7 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { reportRelatedNotesOperationalError } from "../utils/report-operational-error";
+import { resolveOtherRelatedNoteId } from "../utils/resolve-other-related-note-id";
 
 type GetRelatedNoteRecommendationExcludedIdsParams = {
   /** AI 관련 노트를 추천할 기준 Note ID입니다. */
@@ -82,11 +83,12 @@ export async function getRelatedNoteRecommendationExcludedIds({
   /*
    * manual 관계와 dismissed AI 관계만 재추천 후보에서 제외합니다.
    * active AI 관계는 현재 Note 내용을 기준으로 다시 평가할 수 있도록 유지합니다.
+   * 관계 저장 방향과 관계없이 현재 기준 Note의 반대편 Note ID를 제외합니다.
    */
   const { data, error } = await supabase
     .from("note_related_notes")
-    .select("related_note_id")
-    .eq("note_id", noteId)
+    .select("note_id, related_note_id")
+    .or(`note_id.eq.${noteId},related_note_id.eq.${noteId}`)
     .or("origin.eq.manual,and(origin.eq.ai,status.eq.dismissed)");
 
   if (error) {
@@ -106,5 +108,7 @@ export async function getRelatedNoteRecommendationExcludedIds({
     throw error;
   }
 
-  return (data ?? []).map((relation) => relation.related_note_id);
+  return (data ?? []).map((relation) =>
+    resolveOtherRelatedNoteId(relation, noteId),
+  );
 }
