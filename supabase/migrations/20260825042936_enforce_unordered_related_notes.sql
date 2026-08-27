@@ -248,22 +248,6 @@ BEGIN
     INNER JOIN "public"."notes" AS "target_note"
       ON "target_note"."id" = ("recommendation" ->> 'relatedNoteId')::uuid
      AND "target_note"."user_id" = "p_owner_user_id"
-    WHERE NOT EXISTS (
-        SELECT 1
-        FROM "public"."note_related_notes" AS "existing_relation"
-        WHERE (
-                (
-                    "existing_relation"."note_id" = "p_note_id"
-                    AND "existing_relation"."related_note_id" =
-                        "target_note"."id"
-                )
-                OR (
-                    "existing_relation"."note_id" = "target_note"."id"
-                    AND "existing_relation"."related_note_id" =
-                        "p_note_id"
-                )
-            )
-    )
     ON CONFLICT DO NOTHING;
 
     RETURN 'replaced';
@@ -472,23 +456,6 @@ BEGIN
         'active',
         "manual_targets"."metadata"
     FROM "manual_targets"
-    WHERE NOT EXISTS (
-        SELECT 1
-        FROM "public"."note_related_notes" AS "existing_relation"
-        WHERE (
-                (
-                    "existing_relation"."note_id" = "p_note_id"
-                    AND "existing_relation"."related_note_id" =
-                        "manual_targets"."related_note_id"
-                )
-                OR (
-                    "existing_relation"."note_id" =
-                        "manual_targets"."related_note_id"
-                    AND "existing_relation"."related_note_id" =
-                        "p_note_id"
-                )
-            )
-    )
     ON CONFLICT DO NOTHING;
 END;
 $$;

@@ -62,7 +62,7 @@ export function RelatedNoteItem({ noteId, relatedNote }: RelatedNoteItemProps) {
           {isManual ? "직접 연결" : "AI 추천"}
         </Badge>
 
-        <div className="flex w-24 shrink-0 items-center justify-end gap-0.5">
+        <div className="flex w-28 shrink-0 items-center justify-end gap-0.5">
           {reason && <RelatedNoteReasonPopover reason={reason} />}
 
           {isManual && (

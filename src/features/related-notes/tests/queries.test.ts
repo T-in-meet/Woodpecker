@@ -42,6 +42,17 @@ describe("getRelatedNotes", () => {
     vi.clearAllMocks();
   });
 
+  it("noteId가 UUID 형식이 아니면 Supabase 조회 없이 빈 결과를 반환한다", async () => {
+    const result = await getRelatedNotes("not-a-uuid,origin.eq.ai");
+
+    expect(result).toEqual({
+      hasRunningRecommendationRun: false,
+      relatedNotes: [],
+    });
+    expect(createClientMock).not.toHaveBeenCalled();
+    expect(requireCurrentLegalAcceptanceMock).not.toHaveBeenCalled();
+  });
+
   it("active 관련 노트를 조회해 화면 표시 형식으로 반환한다", async () => {
     const { supabase, callsFor } = createSupabaseQueryMock({
       note_related_notes: {

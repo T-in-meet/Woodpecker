@@ -5,6 +5,7 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { reportRelatedNotesOperationalError } from "../utils/report-operational-error";
+import { resolveOtherRelatedNoteId } from "../utils/resolve-other-related-note-id";
 
 type GetRelatedNoteRecommendationExcludedIdsParams = {
   /** AI 관련 노트를 추천할 기준 Note ID입니다. */
@@ -108,6 +109,6 @@ export async function getRelatedNoteRecommendationExcludedIds({
   }
 
   return (data ?? []).map((relation) =>
-    relation.note_id === noteId ? relation.related_note_id : relation.note_id,
+    resolveOtherRelatedNoteId(relation, noteId),
   );
 }

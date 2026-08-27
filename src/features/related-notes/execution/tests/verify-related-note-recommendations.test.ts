@@ -32,6 +32,7 @@ vi.mock("../../utils/report-operational-error", () => ({
 const FIRST_NOTE_ID = "11111111-1111-4111-8111-111111111111";
 const SECOND_NOTE_ID = "22222222-2222-4222-8222-222222222222";
 const UNKNOWN_NOTE_ID = "33333333-3333-4333-8333-333333333333";
+const THIRD_NOTE_ID = "44444444-4444-4444-8444-444444444444";
 
 const configuration = {
   model: {
@@ -69,6 +70,13 @@ const recommendations = [
   },
 ];
 
+/** Verifier 순서 보전 검증에 사용하는 세 번째 Answer 추천 fixture입니다. */
+const thirdRecommendation = {
+  noteId: THIRD_NOTE_ID,
+  reason: "세 번째 Answer 추천 이유",
+  title: "세 번째 노트",
+};
+
 /**
  * 같은 Note ID의 여러 matched chunk를 포함한 Verifier evidence fixture입니다.
  */
@@ -96,6 +104,14 @@ const notes: MatchedNote[] = [
     id: FIRST_NOTE_ID,
     similarity: 0.7,
     title: "첫 번째 노트",
+  },
+  {
+    chunkText: "세 번째 노트의 매칭 chunk",
+    distance: 0.4,
+    embeddingId: "embedding-4",
+    id: THIRD_NOTE_ID,
+    similarity: 0.6,
+    title: "세 번째 노트",
   },
 ];
 
@@ -197,6 +213,71 @@ describe("verifyRelatedNoteRecommendations", () => {
     });
 
     expect(onUsage).toHaveBeenCalledWith(usage);
+  });
+
+  it("Verifier 응답 순서와 관계없이 Answer Agent의 추천 순서를 보전한다", async () => {
+    vi.mocked(createAiChatCompletionWithProvider).mockResolvedValue({
+      content: JSON.stringify({
+        verifications: [
+          {
+            approved: true,
+            noteId: THIRD_NOTE_ID,
+            reason: "세 번째 추천은 직접 관련이 있습니다.",
+          },
+          {
+            approved: true,
+            noteId: FIRST_NOTE_ID,
+            reason: "첫 번째 추천은 직접 관련이 있습니다.",
+          },
+          {
+            approved: false,
+            noteId: SECOND_NOTE_ID,
+            reason: "두 번째 추천은 관련성이 약합니다.",
+          },
+        ],
+      }),
+      metadata: {},
+      usage,
+    });
+
+    const result = await verifyRelatedNoteRecommendations({
+      configuration,
+      content: "현재 노트 내용",
+      notes,
+      recommendations: [...recommendations, thirdRecommendation],
+      title: "현재 노트",
+    });
+
+    expect(result).toEqual({
+      recommendations: [
+        {
+          noteId: FIRST_NOTE_ID,
+          reason: "첫 번째 Answer 추천 이유",
+        },
+        {
+          noteId: THIRD_NOTE_ID,
+          reason: "세 번째 Answer 추천 이유",
+        },
+      ],
+      usage,
+      verifications: [
+        {
+          approved: true,
+          noteId: FIRST_NOTE_ID,
+          reason: "첫 번째 추천은 직접 관련이 있습니다.",
+        },
+        {
+          approved: false,
+          noteId: SECOND_NOTE_ID,
+          reason: "두 번째 추천은 관련성이 약합니다.",
+        },
+        {
+          approved: true,
+          noteId: THIRD_NOTE_ID,
+          reason: "세 번째 추천은 직접 관련이 있습니다.",
+        },
+      ],
+    });
   });
 
   it("Verifier 응답에 누락된 noteId가 있으면 검증 실패로 처리한다", async () => {

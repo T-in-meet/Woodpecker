@@ -191,22 +191,31 @@ export async function verifyRelatedNoteRecommendations({
     verifications,
   });
 
-  const recommendationsById = new Map(
-    recommendations.map((recommendation) => [
-      recommendation.noteId,
-      recommendation,
-    ]),
+  const verificationsByNoteId = new Map(
+    verifications.map((verification) => [verification.noteId, verification]),
   );
 
+  /*
+   * Verifier LLM이 JSON 배열을 임의 순서로 반환해도 저장 snapshot의 순위는
+   * Answer Agent가 만든 원래 추천 순서를 기준으로 보존합니다.
+   */
+  const orderedVerifications = recommendations.map((recommendation) => {
+    const verification = verificationsByNoteId.get(recommendation.noteId);
+
+    if (!verification) {
+      throw new Error(
+        "Related note verification note IDs do not match recommendations.",
+      );
+    }
+
+    return verification;
+  });
+
   return {
-    recommendations: verifications.flatMap((verification) => {
-      if (!verification.approved) {
-        return [];
-      }
+    recommendations: recommendations.flatMap((recommendation) => {
+      const verification = verificationsByNoteId.get(recommendation.noteId);
 
-      const recommendation = recommendationsById.get(verification.noteId);
-
-      if (!recommendation) {
+      if (!verification?.approved) {
         return [];
       }
 
@@ -217,7 +226,7 @@ export async function verifyRelatedNoteRecommendations({
         },
       ];
     }),
-    verifications,
+    verifications: orderedVerifications,
     usage: result.usage,
   };
 }
