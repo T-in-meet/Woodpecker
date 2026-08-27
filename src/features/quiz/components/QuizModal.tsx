@@ -32,7 +32,8 @@ const QUIZ_TYPE_LABELS: Record<QuizType, string> = {
 };
 
 const TYPE_BUTTON_CLASS = cn(
-  "flex cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-border p-4 transition-colors",
+  "flex cursor-pointer flex-row items-center justify-center gap-3 rounded-lg border-2 border-border p-4 transition-colors",
+  "sm:flex-col",
   "hover:border-primary/50 hover:bg-primary/5",
 );
 
@@ -79,9 +80,9 @@ export function QuizModal({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="flex max-h-[85dvh] flex-col overflow-hidden">
-        <DialogHeader className="shrink-0">
+        <DialogHeader className="shrink-0 mb-6">
           <DialogTitle>퀴즈</DialogTitle>
-          <DialogDescription className="truncate">
+          <DialogDescription className="mt-2 truncate border-l-4 border-foreground pl-3 text-[15px] font-medium text-foreground/80">
             {noteTitle}
           </DialogDescription>
         </DialogHeader>
@@ -92,17 +93,17 @@ export function QuizModal({
               퀴즈 유형을 선택하세요
             </p>
             {error && <p className="text-sm text-destructive">{error}</p>}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <button
                 type="button"
                 onClick={() => startQuiz("ox")}
                 className={TYPE_BUTTON_CLASS}
               >
                 <div className="flex items-center gap-1">
-                  <CircleIcon className="size-6" />
+                  <CircleIcon className="size-5" />
                   <XIcon className="size-6" />
                 </div>
-                <span className="text-center text-sm font-medium">
+                <span className="text-sm font-medium sm:text-center">
                   {QUIZ_TYPE_LABELS.ox}
                 </span>
               </button>
@@ -112,7 +113,7 @@ export function QuizModal({
                 className={TYPE_BUTTON_CLASS}
               >
                 <ListChecksIcon className="size-6" />
-                <span className="text-center text-sm font-medium">
+                <span className="text-sm font-medium sm:text-center">
                   {QUIZ_TYPE_LABELS.choice}
                 </span>
               </button>
@@ -122,7 +123,7 @@ export function QuizModal({
                 className={TYPE_BUTTON_CLASS}
               >
                 <TextCursorInputIcon className="size-6" />
-                <span className="text-center text-sm font-medium">
+                <span className="text-sm font-medium sm:text-center">
                   {QUIZ_TYPE_LABELS.blank}
                 </span>
               </button>
