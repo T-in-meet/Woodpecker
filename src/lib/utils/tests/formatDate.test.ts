@@ -27,14 +27,14 @@ describe("formatDateTime", () => {
     const result = formatDateTime("2026-01-01T00:00:00.000Z", "en-US");
 
     expect(result).toContain("January 1, 2026");
-    expect(result).toContain("9:00 AM");
+    expect(result).toContain("09:00 AM");
   });
 
   it("한국어 로케일에서는 AM/PM 대신 오전·오후로 표기한다", () => {
     const result = formatDateTime("2026-08-29T08:18:00.000Z");
 
     expect(result).toContain("2026년 8월 29일");
-    expect(result).toContain("오후 5:18");
+    expect(result).toContain("오후 05:18");
     expect(result).not.toContain("PM");
   });
 });
