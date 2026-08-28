@@ -29,7 +29,7 @@ export function NotesNav() {
       <Link
         href={ROUTES.NOTES_NEW}
         aria-current={isNotesNew ? "page" : undefined}
-        className={`rounded-full px-4 py-1.5 text-base font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+        className={`rounded-sm text-base font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
           isNotesNew
             ? "text-foreground font-semibold"
             : "text-muted-foreground hover:text-foreground"

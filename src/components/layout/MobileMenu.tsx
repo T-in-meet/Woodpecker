@@ -6,6 +6,7 @@ import {
   type LucideIcon,
   Menu as MenuIcon,
   MessageCircle,
+  PenLine,
   Shield,
   User,
 } from "lucide-react";
@@ -38,12 +39,13 @@ type MobileMenuProps = {
 type MobileNavItem = {
   href: string;
   label: string;
-  icon?: LucideIcon;
+  icon: LucideIcon;
 };
 
+// 아이콘은 모든 항목이 갖는다. 일부만 비면 라벨 시작 위치가 어긋나 왼쪽 정렬이 깨진다.
 const MOBILE_NAV_ITEMS: MobileNavItem[] = [
   { href: ROUTES.NOTES, label: "노트 목록", icon: BookOpen },
-  { href: ROUTES.NOTES_NEW, label: "노트 작성" },
+  { href: ROUTES.NOTES_NEW, label: "노트 작성", icon: PenLine },
   { href: ROUTES.NOTE_CHATS, label: "노트 챗봇", icon: MessageCircle },
 ];
 
@@ -117,7 +119,7 @@ export function MobileMenu({
                       : "text-muted-foreground hover:bg-accent hover:text-foreground",
                   )}
                 >
-                  {Icon ? <Icon className="size-4" /> : null}
+                  <Icon className="size-4" aria-hidden="true" />
                   {label}
                 </Link>
               );
