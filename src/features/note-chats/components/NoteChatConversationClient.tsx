@@ -7,6 +7,7 @@ import { NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE } from "../constants/executi
 import { noteChatQueryKeys } from "../constants/query-keys";
 import { useNoteChatConversationDetailQuery } from "../hooks/use-note-chat-conversation-query";
 import { useNoteChatStream } from "../hooks/use-note-chat-stream";
+import { useViewportRemainingHeight } from "../hooks/use-viewport-remaining-height";
 import { NoteChatBreadcrumb } from "./NoteChatBreadcrumb";
 import { NoteChatConversationContent } from "./NoteChatConversationContent";
 import { NoteChatConversationError } from "./NoteChatConversationError";
@@ -29,12 +30,8 @@ export function NoteChatConversationClient({
 }: NoteChatConversationClientProps) {
   const queryClient = useQueryClient();
 
-  const conversationContainerRef = useRef<HTMLDivElement | null>(null);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
 
-  const [conversationHeight, setConversationHeight] = useState<number | null>(
-    null,
-  );
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
 
   /**
@@ -68,6 +65,8 @@ export function NoteChatConversationClient({
   const conversationQuery = useNoteChatConversationDetailQuery(conversationId);
 
   const detail = conversationQuery.data;
+  const { containerRef: conversationContainerRef, height: conversationHeight } =
+    useViewportRemainingHeight<HTMLDivElement>({ recalculationKey: detail });
 
   /**
    * 새로운 질문을 전송하고 스트리밍 완료 후
@@ -257,32 +256,6 @@ export function NoteChatConversationClient({
     editingSequenceNumber,
     conversationHeight,
   ]);
-
-  /**
-   * 현재 Conversation 영역의 시작 위치부터 viewport 하단까지의
-   * 실제 사용 가능 높이를 계산합니다.
-   */
-  useEffect(() => {
-    const updateConversationHeight = () => {
-      const container = conversationContainerRef.current;
-
-      if (!container) {
-        return;
-      }
-
-      const top = container.getBoundingClientRect().top;
-
-      setConversationHeight(Math.max(0, window.innerHeight - top));
-    };
-
-    updateConversationHeight();
-
-    window.addEventListener("resize", updateConversationHeight);
-
-    return () => {
-      window.removeEventListener("resize", updateConversationHeight);
-    };
-  }, [detail]);
 
   const visibleMessages =
     detail && editingSequenceNumber !== null

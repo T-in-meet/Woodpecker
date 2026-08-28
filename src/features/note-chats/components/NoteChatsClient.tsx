@@ -1,19 +1,28 @@
 "use client";
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 
 import { useNoteChatConversationListQuery } from "../hooks/use-note-chat-conversation-list-query";
+import { useViewportRemainingHeight } from "../hooks/use-viewport-remaining-height";
 import { NoteChatBreadcrumb } from "./NoteChatBreadcrumb";
 import { NoteChatConversationList } from "./NoteChatConversationList";
 import { NoteChatConversationSearch } from "./NoteChatConversationSearch";
 import { NoteChatCreateDialog } from "./NoteChatCreateDialog";
 
+/**
+ * 노트 챗봇 대화 목록 화면을 렌더링합니다.
+ *
+ * 대화 검색, 생성, 페이지 이동 UI를 표시하고 viewport 남은 높이에 맞춰
+ * 목록 영역이 내부에서 스크롤되도록 구성합니다.
+ *
+ * @returns 노트 챗봇 대화 목록 화면 UI
+ */
 export function NoteChatsClient() {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [containerHeight, setContainerHeight] = useState<number | null>(null);
+  const { containerRef, height: containerHeight } =
+    useViewportRemainingHeight<HTMLDivElement>();
 
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -29,26 +38,6 @@ export function NoteChatsClient() {
     setPage(1);
     setSearch(value);
   };
-
-  /**
-   * 컨테이너 시작 위치부터 viewport 하단까지의
-   * 실제 사용 가능 높이를 계산합니다.
-   * (layout.tsx를 수정할 수 없어 남은 공간을 직접 측정합니다.
-   *  NoteChatConversationClient와 동일한 패턴입니다.)
-   */
-  useEffect(() => {
-    const updateHeight = () => {
-      const el = containerRef.current;
-      if (!el) return;
-
-      const top = el.getBoundingClientRect().top;
-      setContainerHeight(Math.max(0, window.innerHeight - top));
-    };
-
-    updateHeight();
-    window.addEventListener("resize", updateHeight);
-    return () => window.removeEventListener("resize", updateHeight);
-  }, []);
 
   return (
     <div
