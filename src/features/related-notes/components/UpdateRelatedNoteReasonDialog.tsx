@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -35,11 +36,18 @@ type UpdateRelatedNoteReasonDialogProps = {
   children: React.ReactNode;
 };
 
+type UpdateRelatedNoteReasonFormValues = {
+  reason: string;
+};
+
 /**
  * manual Related Note의 선택적 연결 이유를 수정하는 Dialog입니다.
  *
  * 현재 저장된 reason을 초기값으로 표시하며,
  * 빈 값으로 저장하면 기존 reason을 제거합니다.
+ *
+ * 실제 저장값 기준으로 변경 사항이 없는 경우에는
+ * 저장 버튼을 비활성화합니다.
  *
  * @param props 수정 대상 Related Note 정보와 Dialog Trigger
  */
@@ -51,33 +59,56 @@ export function UpdateRelatedNoteReasonDialog({
   children,
 }: UpdateRelatedNoteReasonDialogProps) {
   const [open, setOpen] = useState(false);
-  const [reasonInput, setReasonInput] = useState(reason ?? "");
 
   const updateReasonMutation = useUpdateManualRelatedNoteReason();
 
+  const {
+    register,
+    handleSubmit,
+    reset,
+    watch,
+    formState: { isSubmitting },
+  } = useForm<UpdateRelatedNoteReasonFormValues>({
+    defaultValues: {
+      reason: reason ?? "",
+    },
+  });
+
+  const reasonInput = watch("reason");
+  const normalizedReason = reasonInput.trim();
+  const normalizedInitialReason = (reason ?? "").trim();
+
+  const hasChanges = normalizedReason !== normalizedInitialReason;
+
   useEffect(() => {
     if (open) {
-      setReasonInput(reason ?? "");
+      reset({
+        reason: reason ?? "",
+      });
     }
-  }, [open, reason]);
+  }, [open, reason, reset]);
 
   function handleOpenChange(nextOpen: boolean) {
     setOpen(nextOpen);
 
     if (!nextOpen) {
-      setReasonInput(reason ?? "");
+      reset({
+        reason: reason ?? "",
+      });
       updateReasonMutation.reset();
     }
   }
 
-  async function handleSubmit() {
+  async function onSubmit(values: UpdateRelatedNoteReasonFormValues) {
+    const nextReason = values.reason.trim();
+
     try {
       await updateReasonMutation.mutateAsync({
         noteId,
         relatedNoteId,
-        ...(reasonInput.trim()
+        ...(nextReason
           ? {
-              reason: reasonInput,
+              reason: nextReason,
             }
           : {}),
       });
@@ -99,61 +130,67 @@ export function UpdateRelatedNoteReasonDialog({
       <DialogTrigger asChild>{children}</DialogTrigger>
 
       <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>연결 이유 수정</DialogTitle>
-          <DialogDescription>
-            Related Note의 연결 이유를 수정할 수 있습니다.
-          </DialogDescription>
-        </DialogHeader>
+        <form onSubmit={handleSubmit(onSubmit)}>
+          <DialogHeader>
+            <DialogTitle>연결 이유 수정</DialogTitle>
+            <DialogDescription>
+              Related Note의 연결 이유를 수정할 수 있습니다.
+            </DialogDescription>
+          </DialogHeader>
 
-        <div className="space-y-4">
-          <div className="space-y-1">
-            <Label>관련 노트</Label>
-            <p className="truncate text-sm text-muted-foreground" title={title}>
-              {title}
-            </p>
+          <div className="mt-4 space-y-4">
+            <div className="space-y-1">
+              <Label>관련 노트</Label>
+              <p
+                className="truncate text-sm text-muted-foreground"
+                title={title}
+              >
+                {title}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor={`related-note-reason-${relatedNoteId}`}>
+                연결 이유
+                <span className="ml-1 text-xs font-normal text-muted-foreground">
+                  선택
+                </span>
+              </Label>
+
+              <Textarea
+                id={`related-note-reason-${relatedNoteId}`}
+                rows={4}
+                maxLength={500}
+                placeholder="이 노트를 연결하는 이유를 입력할 수 있습니다."
+                {...register("reason")}
+              />
+
+              <p className="text-right text-xs text-muted-foreground">
+                {reasonInput.length}/500
+              </p>
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor={`related-note-reason-${relatedNoteId}`}>
-              연결 이유
-              <span className="ml-1 text-xs font-normal text-muted-foreground">
-                선택
-              </span>
-            </Label>
+          <DialogFooter className="mt-6">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handleOpenChange(false)}
+              disabled={updateReasonMutation.isPending}
+            >
+              취소
+            </Button>
 
-            <Textarea
-              id={`related-note-reason-${relatedNoteId}`}
-              value={reasonInput}
-              onChange={(event) => setReasonInput(event.target.value)}
-              rows={4}
-              maxLength={500}
-              placeholder="이 노트를 연결하는 이유를 입력할 수 있습니다."
-            />
-
-            <p className="text-right text-xs text-muted-foreground">
-              {reasonInput.length}/500
-            </p>
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => handleOpenChange(false)}
-          >
-            취소
-          </Button>
-
-          <Button
-            type="button"
-            onClick={handleSubmit}
-            disabled={updateReasonMutation.isPending}
-          >
-            {updateReasonMutation.isPending ? "저장 중..." : "저장"}
-          </Button>
-        </DialogFooter>
+            <Button
+              type="submit"
+              disabled={
+                !hasChanges || isSubmitting || updateReasonMutation.isPending
+              }
+            >
+              {updateReasonMutation.isPending ? "저장 중..." : "저장"}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

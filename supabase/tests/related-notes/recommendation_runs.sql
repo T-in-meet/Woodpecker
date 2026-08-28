@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(17);
+SELECT plan(19);
 
 
 -- ============================================================================
@@ -149,6 +149,17 @@ SELECT ok(
     'recommendations JSON array check constraint should exist'
 );
 
+SELECT ok(
+    EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'public.related_note_recommendation_runs'::regclass
+          AND conname = 'related_note_runs_verification_results_array_check'
+          AND contype = 'c'
+    ),
+    'verification_results JSON array check constraint should exist'
+);
+
 
 -- ============================================================================
 -- 2. Service role write path
@@ -170,7 +181,10 @@ SELECT lives_ok(
                 matched_note_ids,
                 recommendations,
                 query_expansion_usage,
-                query_expansion_cost_usd
+                query_expansion_cost_usd,
+                verification_results,
+                verification_usage,
+                verification_cost_usd
             )
             VALUES (
                 '%s'::uuid,
@@ -184,19 +198,30 @@ SELECT lives_ok(
                     jsonb_build_object(
                         'noteId',
                         '%s',
-                        'title',
-                        'Related recommendation',
                         'reason',
                         'Shared context'
                     )
                 ),
                 '{"inputTokens":10,"outputTokens":5,"totalTokens":15}'::jsonb,
-                0.00001
+                0.00001,
+                jsonb_build_array(
+                    jsonb_build_object(
+                        'noteId',
+                        '%s',
+                        'approved',
+                        true,
+                        'reason',
+                        'Direct relation'
+                    )
+                ),
+                '{"inputTokens":6,"outputTokens":4,"totalTokens":10}'::jsonb,
+                0.00002
             );
         $sql$,
         current_setting('test.related_note_runs_run_a_id'),
         current_setting('test.related_note_runs_note_a_id'),
         current_setting('test.related_note_runs_user_a_id'),
+        current_setting('test.related_note_runs_note_b_id'),
         current_setting('test.related_note_runs_note_b_id'),
         current_setting('test.related_note_runs_note_b_id')
     ),
@@ -209,7 +234,7 @@ SELECT is(
         FROM public.related_note_recommendation_runs
         WHERE id = current_setting('test.related_note_runs_run_a_id')::uuid
     ),
-    0.00001::numeric,
+    0.00003::numeric,
     'total_cost_usd should be generated from step costs'
 );
 
@@ -233,6 +258,28 @@ SELECT throws_ok(
     '23514',
     NULL,
     'recommendations should reject non-array JSON'
+);
+
+SELECT throws_ok(
+    format(
+        $sql$
+            INSERT INTO public.related_note_recommendation_runs (
+                note_id,
+                user_id,
+                verification_results
+            )
+            VALUES (
+                '%s'::uuid,
+                '%s'::uuid,
+                '{"noteId":"not-an-array"}'::jsonb
+            );
+        $sql$,
+        current_setting('test.related_note_runs_note_a_id'),
+        current_setting('test.related_note_runs_user_a_id')
+    ),
+    '23514',
+    NULL,
+    'verification_results should reject non-array JSON'
 );
 
 INSERT INTO public.related_note_recommendation_runs (
@@ -340,6 +387,7 @@ SELECT throws_ok(
             gen_random_uuid(),
             gen_random_uuid(),
             gen_random_uuid(),
+            gen_random_uuid(),
             10
         );
     $sql$,
@@ -360,6 +408,7 @@ FROM public.claim_related_note_recommendation_run(
         FROM public.notes
         WHERE id = current_setting('test.related_note_runs_note_b_id')::uuid
     ),
+    gen_random_uuid(),
     gen_random_uuid(),
     gen_random_uuid(),
     gen_random_uuid(),
@@ -395,6 +444,7 @@ FROM public.claim_related_note_recommendation_run(
     gen_random_uuid(),
     gen_random_uuid(),
     gen_random_uuid(),
+    gen_random_uuid(),
     10
 )
 \gset test_related_note_runs_duplicate_
@@ -420,6 +470,7 @@ SELECT throws_ok(
                 FROM public.notes
                 WHERE id = current_setting('test.related_note_runs_note_a_id')::uuid
             ),
+            gen_random_uuid(),
             gen_random_uuid(),
             gen_random_uuid(),
             gen_random_uuid(),
@@ -451,6 +502,7 @@ FROM public.claim_related_note_recommendation_run(
     gen_random_uuid(),
     gen_random_uuid(),
     gen_random_uuid(),
+    gen_random_uuid(),
     1
 )
 \gset test_related_note_runs_admin_
@@ -475,6 +527,7 @@ SELECT throws_ok(
             gen_random_uuid(),
             gen_random_uuid(),
             gen_random_uuid(),
+            gen_random_uuid(),
             10
         );
     $sql$,
@@ -494,6 +547,7 @@ SELECT throws_ok(
                 FROM public.notes
                 WHERE id = current_setting('test.related_note_runs_unverified_note_id')::uuid
             ),
+            gen_random_uuid(),
             gen_random_uuid(),
             gen_random_uuid(),
             gen_random_uuid(),

@@ -45,6 +45,7 @@ describe("expandRelatedNoteQuery", () => {
   it("Query Expansion 응답에서 확장된 검색 질의를 반환한다", async () => {
     const result = await expandRelatedNoteQuery({
       configuration,
+      noteId: "33333333-3333-4333-8333-333333333333",
       title: "대상 노트",
       content: "대상 노트 내용",
     });
@@ -71,6 +72,7 @@ describe("expandRelatedNoteQuery", () => {
 
     await expandRelatedNoteQuery({
       configuration,
+      noteId: "33333333-3333-4333-8333-333333333333",
       title: "대상 노트",
       content: "대상 노트 내용",
       onUsage,
@@ -88,6 +90,7 @@ describe("expandRelatedNoteQuery", () => {
     await expect(
       expandRelatedNoteQuery({
         configuration,
+        noteId: "33333333-3333-4333-8333-333333333333",
         title: "대상 노트",
         content: "대상 노트 내용",
       }),
@@ -103,7 +106,7 @@ describe("expandRelatedNoteQuery", () => {
       operation:
         RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.PARSE_QUERY_EXPANSION_RESPONSE,
       context: {
-        title: "대상 노트",
+        noteId: "33333333-3333-4333-8333-333333333333",
       },
     });
   });
@@ -119,6 +122,7 @@ describe("expandRelatedNoteQuery", () => {
     await expect(
       expandRelatedNoteQuery({
         configuration,
+        noteId: "33333333-3333-4333-8333-333333333333",
         title: "대상 노트",
         content: "대상 노트 내용",
       }),
@@ -138,7 +142,7 @@ describe("expandRelatedNoteQuery", () => {
       operation:
         RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.VALIDATE_QUERY_EXPANSION_RESPONSE,
       context: {
-        title: "대상 노트",
+        noteId: "33333333-3333-4333-8333-333333333333",
       },
     });
   });

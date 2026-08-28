@@ -200,10 +200,15 @@ export function AddRelatedNoteDialog({ noteId }: AddRelatedNoteDialogProps) {
    * 유효한 마지막 페이지로 보정합니다.
    */
   useEffect(() => {
-    if (page > pagination.totalPages) {
-      setPage(pagination.totalPages);
+    // 아직 실제 후보 데이터가 없으면(최초 로딩 등) 보정하지 않습니다.
+    if (!data) {
+      return;
     }
-  }, [page, pagination.totalPages]);
+
+    if (page > pagination.totalPages) {
+      setPage(Math.max(pagination.totalPages, 1));
+    }
+  }, [page, pagination.totalPages, data]);
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>

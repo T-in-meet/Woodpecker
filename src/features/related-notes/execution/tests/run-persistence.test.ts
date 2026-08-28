@@ -11,6 +11,8 @@ import {
   saveRelatedNoteRunExpandedQuery,
   saveRelatedNoteRunQueryExpansion,
   saveRelatedNoteRunRecommendations,
+  saveRelatedNoteRunVerificationResults,
+  saveRelatedNoteRunVerificationUsage,
 } from "../run-persistence";
 
 vi.mock("@/lib/supabase/admin", () => ({
@@ -81,6 +83,7 @@ describe("related note recommendation run persistence", () => {
       queryExpansionModelConfigId: "query-expansion-model-config-id",
       sourceUpdatedAt: "2026-08-20T01:00:00.000Z",
       userId: USER_ID,
+      verificationModelConfigId: "verification-model-config-id",
     });
 
     expect(rpc).toHaveBeenCalledWith("claim_related_note_recommendation_run", {
@@ -91,6 +94,7 @@ describe("related note recommendation run persistence", () => {
       p_query_expansion_model_config_id: "query-expansion-model-config-id",
       p_source_updated_at: "2026-08-20T01:00:00.000Z",
       p_user_id: USER_ID,
+      p_verification_model_config_id: "verification-model-config-id",
     });
     expect(result).toEqual({
       runId: RUN_ID,
@@ -119,6 +123,7 @@ describe("related note recommendation run persistence", () => {
         queryExpansionModelConfigId: "query-expansion-model-config-id",
         sourceUpdatedAt: "2026-08-20T01:00:00.000Z",
         userId: USER_ID,
+        verificationModelConfigId: "verification-model-config-id",
       }),
     ).rejects.toBeInstanceOf(RelatedNoteRecommendationSourceStaleError);
   });
@@ -197,7 +202,6 @@ describe("related note recommendation run persistence", () => {
         {
           noteId: NOTE_ID,
           reason: "관련 노트 추천 이유",
-          title: "Related note",
         },
       ],
       runId: RUN_ID,
@@ -208,6 +212,72 @@ describe("related note recommendation run persistence", () => {
         {
           noteId: NOTE_ID,
           reason: "관련 노트 추천 이유",
+        },
+      ],
+    });
+  });
+
+  it("Verification usage와 cost를 저장한다", async () => {
+    const { from, update } = createRunningRunUpdateMock({
+      data: {
+        id: RUN_ID,
+      },
+      error: null,
+    });
+
+    createAdminClientMock.mockReturnValue({
+      from,
+    } as never);
+
+    await saveRelatedNoteRunVerificationUsage({
+      modelKey: "openai-gpt-4o-mini",
+      runId: RUN_ID,
+      usage: {
+        inputTokens: 1,
+        outputTokens: 1,
+        totalTokens: 2,
+      },
+    });
+
+    expect(update).toHaveBeenCalledWith({
+      verification_cost_usd: 7.5e-7,
+      verification_usage: {
+        inputTokens: 1,
+        outputTokens: 1,
+        totalTokens: 2,
+      },
+    });
+  });
+
+  it("Verification 결과 snapshot을 저장한다", async () => {
+    const { from, update } = createRunningRunUpdateMock({
+      data: {
+        id: RUN_ID,
+      },
+      error: null,
+    });
+
+    createAdminClientMock.mockReturnValue({
+      from,
+    } as never);
+
+    await saveRelatedNoteRunVerificationResults({
+      runId: RUN_ID,
+      verifications: [
+        {
+          approved: true,
+          noteId: NOTE_ID,
+          reason: "직접적인 학습 관계입니다.",
+        },
+      ],
+    });
+
+    expect(update).toHaveBeenCalledWith({
+      verification_results: [
+        {
+          approved: true,
+          noteId: NOTE_ID,
+          reason: "직접적인 학습 관계입니다.",
         },
       ],
     });

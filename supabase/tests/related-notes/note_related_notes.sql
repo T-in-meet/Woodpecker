@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(9);
+SELECT plan(12);
 
 
 -- ============================================================================
@@ -177,7 +177,55 @@ SELECT throws_ok(
 
 
 -- ============================================================================
--- 4. Self relation
+-- 4. Reverse duplicate relation
+-- ============================================================================
+
+SELECT throws_ok(
+    format(
+        $sql$
+            INSERT INTO public.note_related_notes (
+                note_id,
+                related_note_id,
+                origin
+            )
+            VALUES (
+                '%s'::uuid,
+                '%s'::uuid,
+                'manual'
+            );
+        $sql$,
+        current_setting('test.related_notes_note_b_id'),
+        current_setting('test.related_notes_note_a_id')
+    ),
+    '23505',
+    NULL,
+    'reverse duplicate relationship should be rejected'
+);
+
+SELECT has_function(
+    'public',
+    'lock_note_related_note_pair',
+    ARRAY['uuid', 'uuid'],
+    'lock_note_related_note_pair helper should exist'
+);
+
+SELECT ok(
+    has_function_privilege(
+        'service_role',
+        'public.lock_note_related_note_pair(uuid,uuid)',
+        'EXECUTE'
+    )
+    AND NOT has_function_privilege(
+        'authenticated',
+        'public.lock_note_related_note_pair(uuid,uuid)',
+        'EXECUTE'
+    ),
+    'pair lock helper should be callable by service_role but not directly by authenticated users'
+);
+
+
+-- ============================================================================
+-- 5. Self relation
 -- ============================================================================
 
 SELECT throws_ok(
@@ -204,7 +252,7 @@ SELECT throws_ok(
 
 
 -- ============================================================================
--- 5. Invalid origin
+-- 6. Invalid origin
 -- ============================================================================
 
 SELECT throws_ok(
@@ -231,7 +279,7 @@ SELECT throws_ok(
 
 
 -- ============================================================================
--- 6. manual + dismissed
+-- 7. manual + dismissed
 -- ============================================================================
 
 SELECT throws_ok(
@@ -260,7 +308,7 @@ SELECT throws_ok(
 
 
 -- ============================================================================
--- 7. Metadata must be an object
+-- 8. Metadata must be an object
 -- ============================================================================
 
 SELECT throws_ok(
@@ -289,7 +337,7 @@ SELECT throws_ok(
 
 
 -- ============================================================================
--- 8. RLS
+-- 9. RLS
 -- ============================================================================
 
 INSERT INTO public.note_related_notes (
@@ -331,7 +379,7 @@ RESET ROLE;
 
 
 -- ============================================================================
--- 9. Cascade
+-- 10. Cascade
 -- ============================================================================
 
 DELETE FROM public.notes

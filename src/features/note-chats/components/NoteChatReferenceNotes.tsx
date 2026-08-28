@@ -43,7 +43,11 @@ export function NoteChatReferenceNotes({
           variant="outline"
           className="max-w-full min-w-0"
         >
-          <Link href={getNoteDetailRoute(source.noteId)}>
+          <Link
+            href={getNoteDetailRoute(source.noteId)}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             <FileText className="size-4 shrink-0" />
 
             <span className="min-w-0 truncate">{source.title}</span>

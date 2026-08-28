@@ -1239,6 +1239,10 @@ export type Database = {
           total_cost_usd: number | null;
           updated_at: string;
           user_id: string;
+          verification_cost_usd: number | null;
+          verification_model_config_id: string | null;
+          verification_results: Json;
+          verification_usage: Json | null;
         };
         Insert: {
           answer_generation_cost_usd?: number | null;
@@ -1264,6 +1268,10 @@ export type Database = {
           total_cost_usd?: never;
           updated_at?: string;
           user_id: string;
+          verification_cost_usd?: number | null;
+          verification_model_config_id?: string | null;
+          verification_results?: Json;
+          verification_usage?: Json | null;
         };
         Update: {
           answer_generation_cost_usd?: number | null;
@@ -1289,6 +1297,10 @@ export type Database = {
           total_cost_usd?: never;
           updated_at?: string;
           user_id?: string;
+          verification_cost_usd?: number | null;
+          verification_model_config_id?: string | null;
+          verification_results?: Json;
+          verification_usage?: Json | null;
         };
         Relationships: [
           {
@@ -1757,6 +1769,7 @@ export type Database = {
           p_query_expansion_model_config_id: string;
           p_source_updated_at: string;
           p_user_id: string;
+          p_verification_model_config_id: string;
         };
         Returns: {
           run_id: string | null;

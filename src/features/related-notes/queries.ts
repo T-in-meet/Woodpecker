@@ -10,6 +10,7 @@ import { escapePostgrestLikePattern } from "@/lib/utils/escapePostgrestLikePatte
 
 import { relatedNoteRowSchema } from "./schemas";
 import type { RelatedNoteRecommendation } from "./types";
+import { resolveOtherRelatedNoteId } from "./utils/resolve-other-related-note-id";
 
 /** Related Notes 섹션 조회 결과입니다. */
 export type RelatedNotesQueryResult = {
@@ -34,6 +35,22 @@ export type RelatedNotesQueryResult = {
 export async function getRelatedNotes(
   noteId: string,
 ): Promise<RelatedNotesQueryResult> {
+  /*
+   * 이 함수는 Client Component에서 Server Action으로 호출될 수 있으므로
+   * Client가 전달한 noteId를 그대로 신뢰하지 않습니다.
+   *
+   * PostgREST filter 문자열에 삽입하기 전에 UUID 형식을 검증하여
+   * 예약 문자를 통한 필터 표현식 확장을 방지합니다.
+   */
+  const parsedNoteId = z.string().uuid().safeParse(noteId);
+
+  if (!parsedNoteId.success) {
+    return {
+      hasRunningRecommendationRun: false,
+      relatedNotes: [],
+    };
+  }
+
   const supabase = await createServerComponentClient();
 
   /*
@@ -52,7 +69,10 @@ export async function getRelatedNotes(
     };
   }
 
-  await requireCurrentLegalAcceptance(user.id, getNoteDetailRoute(noteId));
+  await requireCurrentLegalAcceptance(
+    user.id,
+    getNoteDetailRoute(parsedNoteId.data),
+  );
 
   /*
    * 화면 표시 목록과 AI 추천 Run 진행 여부는 서로 독립적인 조회입니다.
@@ -61,16 +81,18 @@ export async function getRelatedNotes(
   const relatedNotesQuery = supabase
     .from("note_related_notes")
     .select(
-      "related_note_id, origin, metadata, notes!note_related_notes_related_note_id_fkey(title)",
+      "note_id, related_note_id, origin, metadata, source_note:notes!note_related_notes_note_id_fkey(title), related_note:notes!note_related_notes_related_note_id_fkey(title)",
     )
-    .eq("note_id", noteId)
     .eq("status", "active")
+    .or(
+      `note_id.eq.${parsedNoteId.data},related_note_id.eq.${parsedNoteId.data}`,
+    )
     .order("created_at", { ascending: true });
 
   const runningRecommendationRunQuery = supabase
     .from("related_note_recommendation_runs")
     .select("id")
-    .eq("note_id", noteId)
+    .eq("note_id", parsedNoteId.data)
     .eq("status", "running")
     .limit(1);
 
@@ -112,19 +134,31 @@ export async function getRelatedNotes(
   return {
     hasRunningRecommendationRun,
     relatedNotes: parsed.data.map((row): RelatedNoteRecommendation => {
+      const relatedNoteId = resolveOtherRelatedNoteId(row, parsedNoteId.data);
+      const relatedNote =
+        relatedNoteId === row.related_note_id
+          ? {
+              id: row.related_note_id,
+              title: row.related_note.title,
+            }
+          : {
+              id: row.note_id,
+              title: row.source_note.title,
+            };
+
       if (row.origin === "ai") {
         return {
-          noteId: row.related_note_id,
+          noteId: relatedNote.id,
           origin: "ai",
           ...row.metadata,
-          title: row.notes.title,
+          title: relatedNote.title,
         };
       }
 
       return {
-        noteId: row.related_note_id,
+        noteId: relatedNote.id,
         origin: "manual",
-        title: row.notes.title,
+        title: relatedNote.title,
         ...(row.metadata.reason !== undefined
           ? { reason: row.metadata.reason }
           : {}),
@@ -274,8 +308,10 @@ export async function getRelatedNoteCandidates(
    */
   const { data: existingRelations, error: relationError } = await supabase
     .from("note_related_notes")
-    .select("related_note_id")
-    .eq("note_id", parsedNoteId.data);
+    .select("note_id, related_note_id")
+    .or(
+      `note_id.eq.${parsedNoteId.data},related_note_id.eq.${parsedNoteId.data}`,
+    );
 
   if (relationError) {
     throw relationError;
@@ -289,7 +325,9 @@ export async function getRelatedNoteCandidates(
    */
   const excludedNoteIds = [
     parsedNoteId.data,
-    ...(existingRelations ?? []).map((relation) => relation.related_note_id),
+    ...(existingRelations ?? []).map((relation) =>
+      resolveOtherRelatedNoteId(relation, parsedNoteId.data),
+    ),
   ];
 
   /*

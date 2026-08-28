@@ -47,9 +47,7 @@ describe("RelatedNotesSection", () => {
       <RelatedNotesSection noteId="11111111-1111-4111-8111-111111111111" />,
     );
 
-    expect(
-      screen.getByText("AI 관련 노트를 추천하고 있습니다..."),
-    ).toBeInTheDocument();
+    expect(screen.getByText("관련 노트를 찾고 있어요")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "관련 노트 추가" }),
     ).toBeInTheDocument();
@@ -63,7 +61,7 @@ describe("RelatedNotesSection", () => {
     );
 
     expect(
-      screen.queryByText("AI 관련 노트를 추천하고 있습니다..."),
+      screen.queryByText("관련 노트를 찾고 있어요"),
     ).not.toBeInTheDocument();
     expect(
       screen.getByText("아직 연결된 관련 노트가 없습니다."),

@@ -81,9 +81,13 @@ describe("relatedNoteRowSchema", () => {
   it("manual origin은 reason이 없는 metadata도 허용한다", () => {
     expect(
       relatedNoteRowSchema.safeParse({
+        note_id: "22222222-2222-4222-8222-222222222222",
         related_note_id: "11111111-1111-4111-8111-111111111111",
         origin: "manual",
-        notes: {
+        source_note: {
+          title: "기준 노트",
+        },
+        related_note: {
           title: "수동 관련 노트",
         },
         metadata: {},
@@ -94,9 +98,13 @@ describe("relatedNoteRowSchema", () => {
   it("ai origin은 reason이 포함된 metadata만 허용한다", () => {
     expect(
       relatedNoteRowSchema.safeParse({
+        note_id: "22222222-2222-4222-8222-222222222222",
         related_note_id: "11111111-1111-4111-8111-111111111111",
         origin: "ai",
-        notes: {
+        source_note: {
+          title: "기준 노트",
+        },
+        related_note: {
           title: "AI 관련 노트",
         },
         metadata: {
@@ -107,9 +115,13 @@ describe("relatedNoteRowSchema", () => {
 
     expect(
       relatedNoteRowSchema.safeParse({
+        note_id: "22222222-2222-4222-8222-222222222222",
         related_note_id: "11111111-1111-4111-8111-111111111111",
         origin: "ai",
-        notes: {
+        source_note: {
+          title: "기준 노트",
+        },
+        related_note: {
           title: "AI 관련 노트",
         },
         metadata: {},
@@ -120,9 +132,13 @@ describe("relatedNoteRowSchema", () => {
   it("지원하지 않는 origin은 거부한다", () => {
     expect(
       relatedNoteRowSchema.safeParse({
+        note_id: "22222222-2222-4222-8222-222222222222",
         related_note_id: "11111111-1111-4111-8111-111111111111",
         origin: "invalid",
-        notes: {
+        source_note: {
+          title: "기준 노트",
+        },
+        related_note: {
           title: "관련 노트",
         },
         metadata: {},

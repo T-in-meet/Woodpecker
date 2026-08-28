@@ -76,6 +76,7 @@ export async function prepareRelatedNoteContext({
    */
   const queryExpansionPromise = expandRelatedNoteQuery({
     configuration: queryExpansionConfiguration,
+    noteId: targetNoteId,
     content,
     ...(onQueryExpansionUsage !== undefined
       ? { onUsage: onQueryExpansionUsage }

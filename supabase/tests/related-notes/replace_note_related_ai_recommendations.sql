@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(8);
+SELECT plan(12);
 
 
 -- ============================================================================
@@ -717,6 +717,207 @@ SELECT lives_ok(
         current_setting('test.related_notes_foreign_target_id')
     ),
     'RPC should reject foreign target notes and preserve existing active relationships'
+);
+
+
+-- ============================================================================
+-- 6. Replace Reverse Active AI With Empty Recommendations
+-- ============================================================================
+
+/*
+ * 현재 Note가 related_note_id 쪽에 있는 active AI 관계도 현재 Note 기준
+ * 추천 재실행의 재평가 대상이므로, 빈 추천 결과에서는 제거되어야 합니다.
+ */
+SELECT set_config(
+    'test.related_notes_reverse_empty_source_id',
+    gen_random_uuid()::text,
+    true
+);
+
+SELECT set_config(
+    'test.related_notes_reverse_empty_target_id',
+    gen_random_uuid()::text,
+    true
+);
+
+INSERT INTO public.notes (
+    id,
+    user_id,
+    title,
+    content,
+    review_round
+)
+VALUES
+    (
+        current_setting('test.related_notes_reverse_empty_source_id')::uuid,
+        current_setting('test.related_notes_replace_user_id')::uuid,
+        'Reverse Empty Source',
+        'Reverse Empty Source Content',
+        0
+    ),
+    (
+        current_setting('test.related_notes_reverse_empty_target_id')::uuid,
+        current_setting('test.related_notes_replace_user_id')::uuid,
+        'Reverse Empty Target',
+        'Reverse Empty Target Content',
+        0
+    );
+
+INSERT INTO public.note_related_notes (
+    note_id,
+    related_note_id,
+    origin,
+    status
+)
+VALUES (
+    current_setting('test.related_notes_reverse_empty_target_id')::uuid,
+    current_setting('test.related_notes_reverse_empty_source_id')::uuid,
+    'ai',
+    'active'
+);
+
+SELECT is(
+    public.replace_note_related_ai_recommendations(
+        current_setting('test.related_notes_reverse_empty_source_id')::uuid,
+        current_setting('test.related_notes_replace_user_id')::uuid,
+        (
+            SELECT updated_at
+            FROM public.notes
+            WHERE id =
+                current_setting('test.related_notes_reverse_empty_source_id')::uuid
+        ),
+        '[]'::jsonb
+    ),
+    'replaced',
+    'RPC should replace reverse active AI relationships with an empty recommendation set'
+);
+
+SELECT is(
+    (
+        SELECT count(*)
+        FROM public.note_related_notes
+        WHERE least(note_id, related_note_id) =
+                least(
+                    current_setting('test.related_notes_reverse_empty_source_id')::uuid,
+                    current_setting('test.related_notes_reverse_empty_target_id')::uuid
+                )
+          AND greatest(note_id, related_note_id) =
+                greatest(
+                    current_setting('test.related_notes_reverse_empty_source_id')::uuid,
+                    current_setting('test.related_notes_reverse_empty_target_id')::uuid
+                )
+    ),
+    0::bigint,
+    'reverse active AI relationship should be removed when it is no longer recommended'
+);
+
+
+-- ============================================================================
+-- 7. Replace Reverse Active AI With Current Recommendation
+-- ============================================================================
+
+/*
+ * 반대 방향 active AI 관계가 다시 추천되면 중복 row를 만들지 않고,
+ * 현재 Note 기준 방향의 active AI 관계 하나만 남아야 합니다.
+ */
+SELECT set_config(
+    'test.related_notes_reverse_keep_source_id',
+    gen_random_uuid()::text,
+    true
+);
+
+SELECT set_config(
+    'test.related_notes_reverse_keep_target_id',
+    gen_random_uuid()::text,
+    true
+);
+
+INSERT INTO public.notes (
+    id,
+    user_id,
+    title,
+    content,
+    review_round
+)
+VALUES
+    (
+        current_setting('test.related_notes_reverse_keep_source_id')::uuid,
+        current_setting('test.related_notes_replace_user_id')::uuid,
+        'Reverse Keep Source',
+        'Reverse Keep Source Content',
+        0
+    ),
+    (
+        current_setting('test.related_notes_reverse_keep_target_id')::uuid,
+        current_setting('test.related_notes_replace_user_id')::uuid,
+        'Reverse Keep Target',
+        'Reverse Keep Target Content',
+        0
+    );
+
+INSERT INTO public.note_related_notes (
+    note_id,
+    related_note_id,
+    origin,
+    status
+)
+VALUES (
+    current_setting('test.related_notes_reverse_keep_target_id')::uuid,
+    current_setting('test.related_notes_reverse_keep_source_id')::uuid,
+    'ai',
+    'active'
+);
+
+SELECT is(
+    public.replace_note_related_ai_recommendations(
+        current_setting('test.related_notes_reverse_keep_source_id')::uuid,
+        current_setting('test.related_notes_replace_user_id')::uuid,
+        (
+            SELECT updated_at
+            FROM public.notes
+            WHERE id =
+                current_setting('test.related_notes_reverse_keep_source_id')::uuid
+        ),
+        jsonb_build_array(
+            jsonb_build_object(
+                'relatedNoteId',
+                current_setting('test.related_notes_reverse_keep_target_id'),
+                'metadata',
+                jsonb_build_object('reason', 'still related')
+            )
+        )
+    ),
+    'replaced',
+    'RPC should replace reverse active AI relationships with current-direction recommendations'
+);
+
+SELECT ok(
+    (
+        SELECT count(*) = 1
+        FROM public.note_related_notes
+        WHERE least(note_id, related_note_id) =
+                least(
+                    current_setting('test.related_notes_reverse_keep_source_id')::uuid,
+                    current_setting('test.related_notes_reverse_keep_target_id')::uuid
+                )
+          AND greatest(note_id, related_note_id) =
+                greatest(
+                    current_setting('test.related_notes_reverse_keep_source_id')::uuid,
+                    current_setting('test.related_notes_reverse_keep_target_id')::uuid
+                )
+    )
+    AND EXISTS (
+        SELECT 1
+        FROM public.note_related_notes
+        WHERE note_id =
+                current_setting('test.related_notes_reverse_keep_source_id')::uuid
+          AND related_note_id =
+                current_setting('test.related_notes_reverse_keep_target_id')::uuid
+          AND origin = 'ai'
+          AND status = 'active'
+          AND metadata = jsonb_build_object('reason', 'still related')
+    ),
+    'reverse active AI should be replaced by one current-direction active AI relationship'
 );
 
 

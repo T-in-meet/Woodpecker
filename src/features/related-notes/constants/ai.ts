@@ -12,6 +12,9 @@ export const RELATED_NOTES_AI_ROLE_KEY = {
 
   /** Note의 제목과 내용을 관련 노트 검색 질의로 확장합니다. */
   QUERY_EXPANSION: "query-expansion",
+
+  /** Answer Generation이 선택한 관련 노트 추천을 저장 전에 검증합니다. */
+  VERIFICATION: "recommendation-verification",
 } as const;
 
 /**

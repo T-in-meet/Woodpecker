@@ -40,9 +40,19 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
 
         <div className="flex min-w-0 items-center gap-3">
           {hasRunningRecommendationRun && (
-            <p className="truncate text-xs text-muted-foreground">
-              AI 관련 노트를 추천하고 있습니다...
-            </p>
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <span>관련 노트를 찾고 있어요</span>
+
+              <span className="flex gap-0.5">
+                <span className="animate-bounce">.</span>
+                <span className="animate-bounce [animation-delay:150ms]">
+                  .
+                </span>
+                <span className="animate-bounce [animation-delay:300ms]">
+                  .
+                </span>
+              </span>
+            </div>
           )}
 
           <AddRelatedNoteDialog noteId={noteId} />

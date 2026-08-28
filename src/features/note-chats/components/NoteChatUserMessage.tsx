@@ -20,7 +20,7 @@ export function NoteChatUserMessage({
 }: NoteChatUserMessageProps) {
   return (
     <li className="group flex justify-end">
-      <div className="flex max-w-[85%] items-start gap-1 md:max-w-[75%]">
+      <div className="flex max-w-[85%] items-end gap-1 md:max-w-[75%]">
         {onEdit ? (
           <Button
             type="button"
