@@ -25,12 +25,7 @@ function getDateTimeFormatter(locale: string): Intl.DateTimeFormat {
   const cached = dateTimeFormatterCache.get(locale);
   if (cached) return cached;
 
-  // ICU 78의 ko-KR은 hour+minute 조합에서 오전/오후를 "AM"/"PM"으로 축약한다
-  // ("2026년 8월 29일 PM 05:18"). "오후"를 얻으려면 dayPeriod를 명시해야 하는데,
-  // 이 옵션은 en 계열에서 "in the morning" 같은 flexible day period가 되므로
-  // 한국어 로케일에서만 붙인다. dayPeriod 자체는 Safari 16.4 미만에서 무시되므로
-  // 모든 런타임에서 같은 문자열을 보장하지는 않는다.
-  const options: Intl.DateTimeFormatOptions = {
+  const formatter = new Intl.DateTimeFormat(locale, {
     year: "numeric",
     month: "long",
     day: "numeric",
@@ -38,13 +33,7 @@ function getDateTimeFormatter(locale: string): Intl.DateTimeFormat {
     hour: "2-digit",
     minute: "2-digit",
     timeZone: "Asia/Seoul",
-  };
-
-  if (locale.startsWith("ko")) {
-    options.dayPeriod = "short";
-  }
-
-  const formatter = new Intl.DateTimeFormat(locale, options);
+  });
   dateTimeFormatterCache.set(locale, formatter);
   return formatter;
 }
@@ -69,9 +58,34 @@ export function formatDate(date: Date | string, locale = "ko-KR"): string {
   return getDateFormatter(locale).format(d);
 }
 
+/*
+ * ICU 78의 ko-KR은 hour+minute 조합에서 오전/오후를 "AM"/"PM"으로 축약한다
+ * ("2026년 8월 29일 PM 05:18"). dayPeriod 옵션으로 되돌리려 하면 flexible day period가
+ * 나와서 21시가 "밤 09:00", 자정이 "밤 12:00", 정오가 "정오 12:00"이 되어 오전/오후를
+ * 판별할 수 없다. 그래서 옵션 대신 포맷 결과의 dayPeriod 조각만 교정한다.
+ * 예전 ICU는 이미 "오전"/"오후"를 주므로 매핑에 없는 값은 그대로 둔다.
+ */
+const KO_DAY_PERIODS: Record<string, string> = {
+  AM: "오전",
+  PM: "오후",
+};
+
 export function formatDateTime(date: Date | string, locale = "ko-KR"): string {
   const d = typeof date === "string" ? new Date(date) : date;
-  return getDateTimeFormatter(locale).format(d);
+  const formatter = getDateTimeFormatter(locale);
+
+  if (!locale.startsWith("ko")) {
+    return formatter.format(d);
+  }
+
+  return formatter
+    .formatToParts(d)
+    .map((part) =>
+      part.type === "dayPeriod"
+        ? (KO_DAY_PERIODS[part.value.toUpperCase()] ?? part.value)
+        : part.value,
+    )
+    .join("");
 }
 
 /** "2026. 8. 24" 형태의 짧은 KST 날짜. 노트 카드처럼 폭이 좁아 긴 형식이 줄바꿈되는 곳에서 쓴다. */
