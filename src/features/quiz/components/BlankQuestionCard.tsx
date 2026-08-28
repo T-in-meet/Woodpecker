@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils/cn";
 
 import type { BlankQuestion } from "../schema";
+import { QuizSubmitButton } from "./QuizSubmitButton";
 
 type BlankQuestionCardProps = {
   question: BlankQuestion;
@@ -33,7 +33,9 @@ export function BlankQuestionCard({
 
   return (
     <div className="space-y-6">
-      <p className="text-lg font-medium leading-relaxed">{question.question}</p>
+      <p className="text-base font-medium leading-relaxed sm:text-lg">
+        {question.question}
+      </p>
 
       <div className="space-y-3">
         <Input
@@ -51,14 +53,7 @@ export function BlankQuestionCard({
         />
 
         {!submitted && (
-          <Button
-            onClick={handleSubmit}
-            disabled={!input.trim()}
-            size="lg"
-            className="w-full"
-          >
-            정답 확인
-          </Button>
+          <QuizSubmitButton onClick={handleSubmit} disabled={!input.trim()} />
         )}
       </div>
 
@@ -71,7 +66,7 @@ export function BlankQuestionCard({
               : "bg-red-50 dark:bg-red-950/30",
           )}
         >
-          <p className="mb-1 font-semibold">
+          <p className="mb-1 text-sm font-medium">
             {isCorrect ? "정답입니다!" : `오답입니다. 정답: ${question.answer}`}
           </p>
           <p className="text-sm text-muted-foreground">

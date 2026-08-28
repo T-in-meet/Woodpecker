@@ -28,33 +28,30 @@ import { QuizResult } from "./QuizResult";
 const QUIZ_TYPE_LABELS: Record<QuizType, string> = {
   ox: "OX 퀴즈",
   blank: "빈칸 채우기",
-  choice: "객관식",
+  choice: "객관식 문제",
 };
 
 const QUIZ_TYPE_OPTIONS = [
   {
     type: "ox",
     label: QUIZ_TYPE_LABELS.ox,
-    description: "핵심을 빠르게 확인해요",
     Icon: CircleXIcon,
   },
   {
     type: "choice",
     label: QUIZ_TYPE_LABELS.choice,
-    description: "보기에서 답을 골라요",
     Icon: ListChecksIcon,
   },
   {
     type: "blank",
     label: QUIZ_TYPE_LABELS.blank,
-    description: "직접 떠올려 완성해요",
     Icon: TextCursorInputIcon,
   },
 ] as const;
 
 const TYPE_BUTTON_CLASS = cn(
-  "flex min-h-0 cursor-pointer items-center gap-3 rounded-xl border border-border bg-background px-3 py-2.5 text-left transition-colors sm:min-h-24 sm:p-4",
-  "hover:border-primary/50 hover:bg-primary/5",
+  "flex min-h-14 cursor-pointer items-center gap-2.5 rounded-xl border border-border bg-background px-3 py-2.5 text-left transition-colors sm:h-16",
+  "hover:border-orange-200 hover:bg-orange-50 dark:hover:border-orange-900/40 dark:hover:bg-orange-950/20",
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
 );
 
@@ -83,6 +80,7 @@ export function QuizModal({
     correctCount,
     startQuiz,
     submitAnswer,
+    goToPrevious,
     goToNext,
     retryQuiz,
     regenerate,
@@ -100,7 +98,7 @@ export function QuizModal({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="flex max-h-[85dvh] max-w-3xl flex-col overflow-hidden border border-border/60 p-4 shadow-2xl sm:p-6">
+      <DialogContent className="flex max-h-[85dvh] max-w-xl flex-col overflow-hidden border border-border/60 p-4 shadow-2xl sm:p-6">
         <DialogHeader className="mb-4 shrink-0 pr-8 sm:mb-6">
           <DialogTitle className="text-xl">퀴즈 만들기</DialogTitle>
           <DialogDescription className="mt-2 flex min-w-0 items-start gap-2 text-base text-muted-foreground">
@@ -117,22 +115,17 @@ export function QuizModal({
             <p className="text-base font-medium">어떻게 복습할까요?</p>
             {error && <p className="text-sm text-destructive">{error}</p>}
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
-              {QUIZ_TYPE_OPTIONS.map(({ type, label, description, Icon }) => (
+              {QUIZ_TYPE_OPTIONS.map(({ type, label, Icon }) => (
                 <button
                   key={type}
                   type="button"
                   onClick={() => startQuiz(type)}
                   className={TYPE_BUTTON_CLASS}
                 >
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-muted sm:size-10">
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-orange-50 dark:bg-orange-950/20">
                     <Icon aria-hidden="true" className="size-5" />
                   </span>
-                  <span className="min-w-0">
-                    <span className="block text-base font-medium">{label}</span>
-                    <span className="hidden text-sm text-muted-foreground sm:mt-1 sm:block">
-                      {description}
-                    </span>
-                  </span>
+                  <span className="min-w-0 text-base font-medium">{label}</span>
                 </button>
               ))}
             </div>
@@ -206,19 +199,28 @@ export function QuizModal({
               />
             )}
 
-            {currentAnswer !== null && (
-              <div className="mt-4 flex justify-end">
+            <div className="mt-4 flex items-center gap-3">
+              {currentIndex > 0 && (
                 <button
                   type="button"
-                  onClick={goToNext}
-                  className="cursor-pointer text-sm font-medium text-primary hover:underline"
+                  onClick={goToPrevious}
+                  className="flex cursor-pointer items-center gap-1 rounded-sm text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
-                  {currentIndex + 1 < questions.length
-                    ? "다음 문제 →"
-                    : "결과 보기 →"}
+                  <ArrowLeftIcon aria-hidden="true" className="size-4" />
+                  이전 문제
                 </button>
-              </div>
-            )}
+              )}
+              <button
+                type="button"
+                onClick={goToNext}
+                disabled={currentAnswer === null}
+                className="ml-auto cursor-pointer rounded-sm text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:text-muted-foreground/50 disabled:no-underline"
+              >
+                {currentIndex + 1 < questions.length
+                  ? "다음 문제 →"
+                  : "결과 보기 →"}
+              </button>
+            </div>
           </div>
         )}
 

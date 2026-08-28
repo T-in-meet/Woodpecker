@@ -102,6 +102,10 @@ export function useQuiz(noteId: string) {
     }
   }, [currentIndex, questions.length]);
 
+  const goToPrevious = useCallback(() => {
+    setCurrentIndex((prev) => Math.max(0, prev - 1));
+  }, []);
+
   const retryQuiz = useCallback(() => {
     setCurrentIndex(0);
     setAnswers([]);
@@ -173,6 +177,7 @@ export function useQuiz(noteId: string) {
     correctCount,
     startQuiz,
     submitAnswer,
+    goToPrevious,
     goToNext,
     retryQuiz,
     regenerate,

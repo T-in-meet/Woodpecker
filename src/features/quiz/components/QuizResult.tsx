@@ -5,6 +5,7 @@ import { ArrowLeftIcon, RefreshCwIcon, RotateCcwIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 import type { QuizQuestion } from "../schema";
+import { QuizAnswerBadge } from "./QuizAnswerBadge";
 
 function formatAnswer(question: QuizQuestion): string {
   if (question.type === "ox") {
@@ -76,9 +77,7 @@ export function QuizResult({
                 <p className="text-sm">{q.question}</p>
                 <div className="mt-2 space-y-1.5">
                   <div className="flex items-start gap-2">
-                    <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
-                      정답
-                    </span>
+                    <QuizAnswerBadge />
                     <p className="text-xs leading-5 text-muted-foreground">
                       {formatAnswer(q)}
                     </p>

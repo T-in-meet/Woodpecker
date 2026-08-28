@@ -277,4 +277,41 @@ describe("useQuiz", () => {
       expect(result.current.answers[0]?.isCorrect).toBe(true);
     });
   });
+
+  describe("goToPrevious", () => {
+    it("이전 문항으로 돌아가도 답안과 채점 결과를 유지한다", async () => {
+      mockSuccess();
+      const { result } = await startPlaying();
+
+      act(() => {
+        result.current.submitAnswer("true");
+      });
+      act(() => {
+        result.current.goToNext();
+      });
+      act(() => {
+        result.current.submitAnswer("false");
+      });
+      act(() => {
+        result.current.goToPrevious();
+      });
+
+      expect(result.current.currentIndex).toBe(0);
+      expect(result.current.currentAnswer?.userAnswer).toBe("true");
+      expect(result.current.currentAnswer?.isCorrect).toBe(true);
+      expect(result.current.answers).toHaveLength(2);
+      expect(result.current.correctCount).toBe(2);
+    });
+
+    it("첫 문항에서는 인덱스를 0 아래로 내리지 않는다", async () => {
+      mockSuccess();
+      const { result } = await startPlaying();
+
+      act(() => {
+        result.current.goToPrevious();
+      });
+
+      expect(result.current.currentIndex).toBe(0);
+    });
+  });
 });
