@@ -1,5 +1,5 @@
 -- update_notification_schedule:
---   사용자가 달력에서 다음 알림(=이번 복습 회차)의 날짜와 시각을 직접 고르는 경로.
+--   사용자가 다음 알림(=이번 복습 회차)의 날짜와 시각을 직접 고르는 경로.
 --
 --   update_notification_time_of_day가 "같은 KST 날짜에 시각만" 바꾸는 것과 달리,
 --   이 함수는 날짜까지 옮긴다. 즉 이번 회차의 복습 일정 자체가 이동한다.
@@ -42,11 +42,18 @@ BEGIN
     RAISE EXCEPTION 'email not confirmed';
   END IF;
 
-  -- 클라이언트 달력의 disabled 범위를 서버에서 다시 확인한다.
+  -- 날짜 선택 UI의 disabled 범위를 서버에서 다시 확인한다.
   v_target_date := (p_scheduled_at AT TIME ZONE 'Asia/Seoul')::date;
 
   IF v_target_date < v_today OR v_target_date > v_today + 30 THEN
     RAISE EXCEPTION 'schedule out of range';
+  END IF;
+
+  -- 범위 검사는 날짜 단위라 "오늘"이면서 이미 지나간 시각을 통과시킨다.
+  -- 그대로 저장하면 claim_due_review_logs가 (scheduled_at <= clock_timestamp())
+  -- 다음 실행에서 바로 집어가 의도치 않은 즉시 발송이 된다.
+  IF p_scheduled_at <= now() THEN
+    RAISE EXCEPTION 'schedule in the past';
   END IF;
 
   UPDATE public.notes
@@ -59,17 +66,24 @@ BEGIN
   END IF;
 
   -- 이미 선점·발송된 알림은 옮길 수 없다. update_notification_time_of_day와 같은 조건.
-  UPDATE public.review_logs rl
-  SET scheduled_at = p_scheduled_at,
-      notification_base_scheduled_at =
-        COALESCE(rl.notification_base_scheduled_at, rl.scheduled_at)
-  WHERE rl.note_id = p_note_id
-    AND rl.user_id = v_user_id
-    AND rl.completed_at IS NULL
-    AND rl.notification_claimed_at IS NULL
-    AND rl.notification_dispatched_at IS NULL
-    AND rl.notification_dispatch_failed_at IS NULL
-  RETURNING rl.scheduled_at INTO v_shifted_at;
+  -- 미완료 log가 여러 건 남을 수 있으므로, 단순 RETURNING INTO(임의의 한 행)가 아니라
+  -- CTE로 모아 min()을 쓴다. update_notification_time_of_day와 같은 방식이다.
+  WITH updated_pending AS (
+    UPDATE public.review_logs rl
+    SET scheduled_at = p_scheduled_at,
+        notification_base_scheduled_at =
+          COALESCE(rl.notification_base_scheduled_at, rl.scheduled_at)
+    WHERE rl.note_id = p_note_id
+      AND rl.user_id = v_user_id
+      AND rl.completed_at IS NULL
+      AND rl.notification_claimed_at IS NULL
+      AND rl.notification_dispatched_at IS NULL
+      AND rl.notification_dispatch_failed_at IS NULL
+    RETURNING rl.scheduled_at AS shifted_at
+  )
+  SELECT min(shifted_at)
+    INTO v_shifted_at
+  FROM updated_pending;
 
   IF v_shifted_at IS NULL THEN
     RAISE EXCEPTION 'no pending review log';

@@ -4,7 +4,7 @@
 
 BEGIN;
 
-SELECT plan(7);
+SELECT plan(8);
 
 SELECT set_config('test.schedule_user_id', gen_random_uuid()::text, true);
 SELECT set_config('test.schedule_note_id', gen_random_uuid()::text, true);
@@ -140,6 +140,19 @@ SELECT throws_ok(
   ),
   'schedule out of range',
   $$dates beyond 30 days ahead should be rejected$$
+);
+
+-- 오늘 날짜라도 이미 지나간 시각이면 다음 cron 실행에서 즉시 발송되므로 막는다.
+SELECT throws_ok(
+  format(
+    $sql$
+      SELECT public.update_notification_schedule('%s'::uuid, '%s'::timestamptz);
+    $sql$,
+    current_setting('test.schedule_note_id'),
+    (now() - interval '1 minute')::text
+  ),
+  'schedule in the past',
+  $$times earlier today should be rejected$$
 );
 
 SELECT throws_ok(

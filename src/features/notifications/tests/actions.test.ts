@@ -379,6 +379,26 @@ describe("notification server actions", () => {
     expect(revalidatePathMock).not.toHaveBeenCalled();
   });
 
+  it("explains that a time earlier today can no longer be chosen", async () => {
+    const { supabase } = createSupabaseMock({
+      rpcError: { message: "schedule in the past" },
+    });
+    createClientMock.mockResolvedValue(supabase);
+    const targetDate = getKstDateKey(new Date());
+
+    const result = await setNotificationScheduleAction(
+      NOTE_ID,
+      targetDate,
+      "00:01",
+    );
+
+    expect(result).toEqual({
+      success: false,
+      error: "이미 지난 시각으로는 옮길 수 없습니다.",
+    });
+    expect(revalidatePathMock).not.toHaveBeenCalled();
+  });
+
   it("returns a note validation error before setting notification time", async () => {
     const result = await setNotificationTimeAction("not-a-uuid", "09:30");
 

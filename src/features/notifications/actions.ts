@@ -240,7 +240,7 @@ export async function setNotificationScheduleAction(
     return { success: false, error: "알림 일정이 올바르지 않습니다." };
   }
 
-  // 클라이언트 달력이 막아두는 범위지만, 액션은 직접 호출될 수 있으므로 다시 본다.
+  // 날짜 선택 UI가 막아두는 범위지만, 액션은 직접 호출될 수 있으므로 다시 본다.
   // 최종 판정은 KST "지금"을 아는 RPC가 한다.
   if (!isWithinScheduleRange(parsedDate)) {
     return {
@@ -274,6 +274,13 @@ export async function setNotificationScheduleAction(
       return {
         success: false,
         error: `오늘부터 ${MAX_NOTIFICATION_SCHEDULE_OFFSET_DAYS}일 이내로만 옮길 수 있습니다.`,
+      };
+    }
+
+    if (error.message.includes("schedule in the past")) {
+      return {
+        success: false,
+        error: "이미 지난 시각으로는 옮길 수 없습니다.",
       };
     }
 
