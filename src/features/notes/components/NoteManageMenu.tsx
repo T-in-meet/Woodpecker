@@ -42,12 +42,12 @@ export function NoteManageMenu({
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   /**
-   * 메뉴가 닫히며 트리거로 포커스를 되돌리는 동작과 다이얼로그의 초기 포커스가
-   * 같은 틱에 겹치면 다이얼로그가 포커스를 뺏길 수 있다. 한 프레임 뒤로 미뤄
-   * 포커스 복귀가 끝난 다음에 연다.
+   * 메뉴가 닫히며 트리거로 포커스를 되돌리는 동작과 항목이 여는 화면의 초기 포커스가
+   * 같은 틱에 겹치면 포커스를 뺏기거나(다이얼로그) 되돌릴 트리거 자체가 사라진다
+   * (편집 폼 전환). 한 프레임 뒤로 미뤄 포커스 복귀가 끝난 다음에 실행한다.
    */
-  const openAfterMenuCloses = (openDialog: () => void) => {
-    requestAnimationFrame(openDialog);
+  const openAfterMenuCloses = (openTarget: () => void) => {
+    requestAnimationFrame(openTarget);
   };
 
   return (
@@ -63,7 +63,9 @@ export function NoteManageMenu({
         </DropdownMenuTrigger>
 
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onSelect={onEdit}>
+          {/* 편집 폼으로 바뀌면서 이 메뉴(트리거 포함)가 언마운트되므로, 메뉴가
+              포커스를 트리거로 되돌린 다음에 전환해야 포커스가 body로 떨어지지 않는다. */}
+          <DropdownMenuItem onSelect={() => openAfterMenuCloses(onEdit)}>
             <Pencil className="size-4" aria-hidden="true" />
             노트 수정
           </DropdownMenuItem>

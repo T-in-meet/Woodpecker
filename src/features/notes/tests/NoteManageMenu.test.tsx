@@ -1,6 +1,6 @@
 import "./setup";
 
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -92,7 +92,10 @@ describe("NoteManageMenu", () => {
       await screen.findByRole("menuitem", { name: "노트 수정" }),
     );
 
-    expect(onEdit).toHaveBeenCalledOnce();
+    // 메뉴가 포커스를 트리거로 되돌린 다음 한 프레임 뒤에 호출된다.
+    await waitFor(() => {
+      expect(onEdit).toHaveBeenCalledOnce();
+    });
   });
 
   it("삭제를 선택하면 확인 다이얼로그를 연다", async () => {
