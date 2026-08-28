@@ -11,6 +11,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { NoteDetailBody } from "@/features/notes/components/NoteDetailBody";
+import { ScrollToTopButton } from "@/features/notes/components/ScrollToTopButton";
 import { ScrollToTopOnMount } from "@/features/notes/components/ScrollToTopOnMount";
 import { getNoteById } from "@/features/notes/queries";
 import { GradingHistorySection } from "@/features/review/components/GradingHistorySection";
@@ -111,6 +112,7 @@ export default async function NoteDetailPage({
   return (
     <div className="mx-auto w-full max-w-4xl px-6 py-10 md:px-12">
       <ScrollToTopOnMount />
+      <ScrollToTopButton />
       <Breadcrumb className="mb-6">
         <BreadcrumbList>
           <BreadcrumbItem>
