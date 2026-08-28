@@ -3,6 +3,7 @@
 import { Check, Copy, Siren } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { ROUTES } from "@/lib/constants/routes";
@@ -32,15 +33,20 @@ export function NoteChatAssistantMessageActions({
    *
    * 복사가 완료되면 체크 아이콘을 표시하고,
    * 일정 시간이 지난 뒤 다시 복사 아이콘으로 복원합니다.
+   * 클립보드 접근에 실패하면 오류 토스트를 표시합니다.
    */
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(content);
+    try {
+      await navigator.clipboard.writeText(content);
 
-    setCopied(true);
+      setCopied(true);
 
-    window.setTimeout(() => {
-      setCopied(false);
-    }, 2000);
+      window.setTimeout(() => {
+        setCopied(false);
+      }, 2000);
+    } catch {
+      toast.error("응답을 복사하지 못했습니다.");
+    }
   };
 
   // 신고 대상 메시지 연결 방식이 확정되기 전까지는
@@ -72,6 +78,7 @@ export function NoteChatAssistantMessageActions({
         <Link
           href={reportHref}
           target="_blank"
+          rel="noopener noreferrer"
           aria-label="응답 신고"
           title="응답 신고"
         >
