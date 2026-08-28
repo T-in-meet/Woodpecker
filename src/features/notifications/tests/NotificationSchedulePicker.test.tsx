@@ -4,7 +4,7 @@ import { type ComponentProps, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const NOTE_ID = "11111111-1111-4111-8111-111111111111";
-/** KST 2026-05-01(금) 09:00. 달력의 "오늘"이 되는 시각. */
+/** KST 2026-05-01(금) 09:00. 날짜 선택의 "오늘"이 되는 시각. */
 const NOW = new Date("2026-05-01T00:00:00.000Z");
 /** KST 2026-05-01(금) 21:30. */
 const SCHEDULED_AT = "2026-05-01T12:30:00.000Z";
@@ -62,15 +62,11 @@ async function openDialog(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: "복습 일정 변경" }));
 }
 
-/**
- * 달력은 앞뒤 달의 날짜도 함께 그려서 "5" 같은 이름이 여러 번 나온다.
- * 날짜를 특정하려면 셀의 `data-day`로 찾는다.
- */
-function getDayCell(dateKey: string) {
-  const cell = document.querySelector(`[data-day="${dateKey}"]`);
-  expect(cell).not.toBeNull();
-
-  return cell as HTMLElement;
+async function selectDate(
+  user: ReturnType<typeof userEvent.setup>,
+  label: string,
+) {
+  await user.click(screen.getByRole("option", { name: label }));
 }
 
 describe("NotificationSchedulePicker", () => {
@@ -108,11 +104,18 @@ describe("NotificationSchedulePicker", () => {
     expect(
       screen.getByText("현재 설정: 5월 1일 (금) 오후 09:30"),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "2026년 5월 1일 (금)" }),
+    ).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("button", { name: "오후 선택" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     expect(screen.getByLabelText("시")).toHaveValue("09");
     expect(screen.getByLabelText("분")).toHaveValue("30");
   });
 
-  it("달력에서 고른 날짜와 시간을 함께 저장한다", async () => {
+  it("목록에서 고른 날짜와 시간을 함께 저장한다", async () => {
     const user = userEvent.setup();
     render(
       <PickerWithTrigger
@@ -123,9 +126,7 @@ describe("NotificationSchedulePicker", () => {
     );
 
     await openDialog(user);
-    const dayButton = getDayCell("2026-05-05").querySelector("button");
-    expect(dayButton).not.toBeNull();
-    await user.click(dayButton as HTMLButtonElement);
+    await selectDate(user, "2026년 5월 5일 (화)");
     await user.click(screen.getByRole("button", { name: /저장/ }));
 
     await waitFor(() => {
@@ -166,7 +167,7 @@ describe("NotificationSchedulePicker", () => {
     });
   });
 
-  it("허용 범위 밖 날짜는 선택할 수 없다", async () => {
+  it("허용 범위의 날짜만 목록에 보여준다", async () => {
     const user = userEvent.setup();
     render(
       <PickerWithTrigger
@@ -178,9 +179,32 @@ describe("NotificationSchedulePicker", () => {
 
     await openDialog(user);
 
-    // 오늘은 5월 1일이므로 4월 30일(지난 날)은 막히고 5월 31일(+30일)은 열려 있다.
-    expect(getDayCell("2026-04-30").querySelector("button")).toBeDisabled();
-    expect(getDayCell("2026-05-31").querySelector("button")).toBeEnabled();
+    // 오늘은 5월 1일이므로 4월 30일(지난 날)은 없고 5월 31일(+30일)은 노출된다.
+    expect(
+      screen.queryByRole("option", { name: "2026년 4월 30일 (목)" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "2026년 5월 31일 (일)" }),
+    ).toBeInTheDocument();
+  });
+
+  it("방향키로 날짜 휠을 한 칸씩 이동한다", async () => {
+    const user = userEvent.setup();
+    render(
+      <PickerWithTrigger
+        noteId={NOTE_ID}
+        initialTime="21:30:00"
+        initialScheduledAt={SCHEDULED_AT}
+      />,
+    );
+
+    await openDialog(user);
+    screen.getByRole("listbox", { name: "날짜" }).focus();
+    await user.keyboard("{ArrowDown}");
+
+    expect(
+      screen.getByRole("option", { name: "2026년 5월 2일 (토)" }),
+    ).toHaveAttribute("aria-selected", "true");
   });
 
   it("시간만 바꿔도 저장할 수 있다", async () => {
@@ -194,12 +218,13 @@ describe("NotificationSchedulePicker", () => {
     );
 
     await openDialog(user);
-    fireEvent.change(screen.getByTestId("native-time-input"), {
-      target: { value: "08:15" },
+    await user.click(screen.getByRole("button", { name: "오전 선택" }));
+    fireEvent.change(screen.getByLabelText("시"), {
+      target: { value: "08" },
     });
-
-    expect(screen.getByLabelText("시")).toHaveValue("08");
-    expect(screen.getByLabelText("분")).toHaveValue("15");
+    fireEvent.change(screen.getByLabelText("분"), {
+      target: { value: "15" },
+    });
 
     await user.click(screen.getByRole("button", { name: /저장/ }));
 
@@ -212,7 +237,7 @@ describe("NotificationSchedulePicker", () => {
     });
   });
 
-  it("오전 오후를 클릭과 방향키로 전환한다", async () => {
+  it("분 입력은 1분 단위 변경을 지원한다", async () => {
     const user = userEvent.setup();
     render(
       <PickerWithTrigger
@@ -223,21 +248,65 @@ describe("NotificationSchedulePicker", () => {
     );
 
     await openDialog(user);
-
-    const eveningButton = screen.getByRole("button", {
-      name: "오전 오후 전환, 현재 오후",
+    fireEvent.change(screen.getByLabelText("분"), {
+      target: { value: "05" },
     });
-    await user.click(eveningButton);
 
+    expect(screen.getByLabelText("분")).toHaveValue("05");
     expect(
-      screen.getByRole("button", { name: "오전 오후 전환, 현재 오전" }),
-    ).toHaveTextContent("오전");
+      screen.getByText("5월 1일 (금) 오후 09:05에 알림을 보냅니다."),
+    ).toBeInTheDocument();
+  });
 
-    await user.keyboard("{ArrowDown}");
+  it("오전·시·분을 직접 변경한다", async () => {
+    const user = userEvent.setup();
+    render(
+      <PickerWithTrigger
+        noteId={NOTE_ID}
+        initialTime="21:30:00"
+        initialScheduledAt={SCHEDULED_AT}
+      />,
+    );
 
-    expect(
-      screen.getByRole("button", { name: "오전 오후 전환, 현재 오후" }),
-    ).toHaveTextContent("오후");
+    await openDialog(user);
+    await user.click(screen.getByRole("button", { name: "오전 선택" }));
+    fireEvent.change(screen.getByLabelText("시"), {
+      target: { value: "07" },
+    });
+    fireEvent.change(screen.getByLabelText("분"), {
+      target: { value: "05" },
+    });
+    await user.click(screen.getByRole("button", { name: /저장/ }));
+
+    await waitFor(() => {
+      expect(setNotificationScheduleActionMock).toHaveBeenCalledWith(
+        NOTE_ID,
+        "2026-05-01",
+        "07:05",
+      );
+    });
+  });
+
+  it("시 입력은 범위 끝에서 12와 1을 순환하지 않는다", async () => {
+    const user = userEvent.setup();
+    render(
+      <PickerWithTrigger
+        noteId={NOTE_ID}
+        initialTime="21:30:00"
+        initialScheduledAt={SCHEDULED_AT}
+      />,
+    );
+
+    await openDialog(user);
+    const hourInput = screen.getByLabelText("시");
+
+    fireEvent.change(hourInput, { target: { value: "12" } });
+    fireEvent.keyDown(hourInput, { key: "ArrowUp" });
+    expect(hourInput).toHaveValue("12");
+
+    fireEvent.change(hourInput, { target: { value: "01" } });
+    fireEvent.keyDown(hourInput, { key: "ArrowDown" });
+    expect(hourInput).toHaveValue("01");
   });
 
   it("액션이 실패하면 서버가 준 메시지를 보여준다", async () => {

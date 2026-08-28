@@ -2,21 +2,17 @@
 
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
-import { Clock, Info, Loader2, RotateCcw, Save } from "lucide-react";
+import { Loader2, RotateCcw, Save } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
-  type ChangeEvent,
   type FormEvent,
-  type KeyboardEvent,
   useEffect,
-  useId,
   useRef,
   useState,
   useTransition,
 } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
 import {
   Dialog,
   DialogClose,
@@ -26,7 +22,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MAX_NOTIFICATION_SCHEDULE_OFFSET_DAYS } from "@/lib/constants/notifications";
 
@@ -36,29 +31,26 @@ import {
 } from "../actions";
 import {
   addDaysToDateKey,
-  clampTimePart,
   fromDateKey,
   getKstDateKey,
   getKstTimeValue,
-  getNumericInput,
   getTimeParts,
-  type PeriodType,
-  toDateKey,
   toInputTime,
-  toTimeValue,
 } from "../lib/time";
+import { DateWheelPicker } from "./DateWheelPicker";
+import { ResponsiveTimePicker } from "./ResponsiveTimePicker";
 
 type NotificationSchedulePickerProps = {
   noteId: string;
   /** 사용자가 지정한 알림 시각(`notification_time_of_day`). 없으면 기본 일정을 따른다. */
   initialTime: string | null;
-  /** 다음 알림이 실제로 나갈 시각. 달력의 초기 선택 날짜가 된다. */
+  /** 다음 알림이 실제로 나갈 시각. 날짜 선택의 초기값이 된다. */
   initialScheduledAt: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
 
-/** 빠른 선택 칩. 달력을 열지 않고 끝나는 흔한 경우를 먼저 처리한다. */
+/** 빠른 선택 칩. 날짜 목록을 열지 않고 끝나는 흔한 경우를 먼저 처리한다. */
 const QUICK_OFFSETS = [
   { label: "오늘", days: 0 },
   { label: "내일", days: 1 },
@@ -79,6 +71,12 @@ function formatScheduleLabel(dateKey: string, time: string) {
   return `${format(date, "M월 d일 (E)", { locale: ko })} ${periodLabel} ${hour}:${minute}`;
 }
 
+function formatDateOption(dateKey: string) {
+  const date = fromDateKey(dateKey);
+
+  return date ? format(date, "yyyy년 M월 d일 (E)", { locale: ko }) : dateKey;
+}
+
 /**
  * 다음 복습 일정(=알림 시각) 변경 다이얼로그. 트리거는 갖지 않고 열림 상태를 밖에서 받는다.
  * 노트 상세에서는 관리 메뉴(`NoteManageMenu`)의 항목으로 열린다.
@@ -93,11 +91,6 @@ export function NotificationSchedulePicker({
   open,
   onOpenChange,
 }: NotificationSchedulePickerProps) {
-  const inputBaseId = useId();
-  const labelId = `${inputBaseId}-label`;
-  const hourInputId = `${inputBaseId}-hour`;
-  const minuteInputId = `${inputBaseId}-minute`;
-  const nativeTimeInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
   const todayKey = getKstDateKey(new Date());
@@ -112,31 +105,33 @@ export function NotificationSchedulePicker({
   const savedTime = initialScheduledAt
     ? getKstTimeValue(initialScheduledAt)
     : toInputTime(initialTime);
-  const savedTimeParts = getTimeParts(savedTime);
+  const selectableDateKeys = Array.from(
+    { length: MAX_NOTIFICATION_SCHEDULE_OFFSET_DAYS + 1 },
+    (_, offset) => addDaysToDateKey(todayKey, offset),
+  );
+  const dateOptions = selectableDateKeys.includes(savedDateKey)
+    ? selectableDateKeys
+    : [savedDateKey, ...selectableDateKeys];
+  const wheelDateOptions = dateOptions.map((optionDateKey) => ({
+    value: optionDateKey,
+    label: formatDateOption(optionDateKey),
+    disabled: optionDateKey < todayKey || optionDateKey > lastSelectableKey,
+  }));
 
   const [dateKey, setDateKey] = useState(savedDateKey);
-  const [period, setPeriod] = useState<PeriodType>(savedTimeParts.period);
-  const [hourValue, setHourValue] = useState(savedTimeParts.hour);
-  const [minuteValue, setMinuteValue] = useState(savedTimeParts.minute);
+  const [timeValue, setTimeValue] = useState(savedTime);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const hasSavedOverride = toInputTime(initialTime).length > 0;
-  const timeValue = toTimeValue(period, hourValue, minuteValue);
-  const hasChanges =
-    timeValue === null || timeValue !== savedTime || dateKey !== savedDateKey;
-  const periodLabel = period === "am" ? "오전" : "오후";
+  const hasChanges = timeValue !== savedTime || dateKey !== savedDateKey;
   const scheduleLabel =
-    timeValue === null || timeValue === ""
-      ? null
-      : formatScheduleLabel(dateKey, timeValue);
+    timeValue === "" ? null : formatScheduleLabel(dateKey, timeValue);
 
   const resetDraft = () => {
     setDateKey(savedDateKey);
-    setPeriod(savedTimeParts.period);
-    setHourValue(savedTimeParts.hour);
-    setMinuteValue(savedTimeParts.minute);
+    setTimeValue(savedTime);
   };
 
   // 여는 주체가 밖(`NoteManageMenu`)이라 열 때는 Radix가 onOpenChange를 호출하지 않는다.
@@ -153,10 +148,7 @@ export function NotificationSchedulePicker({
     setMessage(null);
     setError(null);
     setDateKey(savedRef.current.dateKey);
-    const nextTimeParts = getTimeParts(savedRef.current.time);
-    setPeriod(nextTimeParts.period);
-    setHourValue(nextTimeParts.hour);
-    setMinuteValue(nextTimeParts.minute);
+    setTimeValue(savedRef.current.time);
   }, [open]);
 
   const handleOpenChange = (nextOpen: boolean) => {
@@ -166,46 +158,12 @@ export function NotificationSchedulePicker({
     resetDraft();
   };
 
-  const togglePeriod = () => {
-    setPeriod((currentPeriod) => (currentPeriod === "am" ? "pm" : "am"));
-  };
-
-  const handlePeriodKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
-    if (
-      event.key !== "ArrowUp" &&
-      event.key !== "ArrowDown" &&
-      event.key !== "ArrowLeft" &&
-      event.key !== "ArrowRight"
-    ) {
-      return;
-    }
-
-    event.preventDefault();
-    togglePeriod();
-  };
-
-  const openNativeTimePicker = () => {
-    const nativeTimeInput = nativeTimeInputRef.current;
-
-    if (!nativeTimeInput) {
-      return;
-    }
-
-    try {
-      nativeTimeInput.showPicker();
-      return;
-    } catch {
-      nativeTimeInput.focus();
-      nativeTimeInput.click();
-    }
-  };
-
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setMessage(null);
     setError(null);
 
-    if (timeValue === null || timeValue === "") {
+    if (timeValue === "") {
       setError("알림 시간이 올바르지 않습니다.");
       return;
     }
@@ -258,46 +216,32 @@ export function NotificationSchedulePicker({
     });
   };
 
-  const handleNativeTimeChange = (event: ChangeEvent<HTMLInputElement>) => {
+  const handleTimeChange = (nextTimeValue: string) => {
     setMessage(null);
     setError(null);
-    const nextTimeParts = getTimeParts(event.target.value);
-    setPeriod(nextTimeParts.period);
-    setHourValue(nextTimeParts.hour);
-    setMinuteValue(nextTimeParts.minute);
+    setTimeValue(nextTimeValue);
   };
 
-  const handleSelectDate = (date: Date | undefined) => {
-    if (!date) {
-      return;
-    }
-
+  const handleSelectDate = (nextDateKey: string) => {
     setMessage(null);
     setError(null);
-    setDateKey(toDateKey(date));
+    setDateKey(nextDateKey);
   };
-
-  // 날짜 키는 항상 이 컴포넌트가 만든 값이라 파싱이 실패할 일은 없지만,
-  // 달력은 undefined를 받지 않으므로 오늘로 떨어뜨린다.
-  const today = new Date();
-  const selectedDate = fromDateKey(dateKey) ?? today;
-  const firstSelectable = fromDateKey(todayKey) ?? today;
-  const lastSelectable = fromDateKey(lastSelectableKey) ?? today;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       {open && (
-        <DialogContent className="max-w-md">
-          <DialogHeader>
+        <DialogContent className="max-w-sm p-4 sm:p-5">
+          <DialogHeader className="mb-3">
             <DialogTitle>다음 복습 일정 변경</DialogTitle>
-            <DialogDescription className="mt-2">
+            <DialogDescription className="mt-1.5">
               현재 설정:{" "}
               {formatScheduleLabel(savedDateKey, savedTime) ??
                 "기본 복습 예정 시간"}
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-3">
             <div className="flex flex-wrap gap-1.5">
               {QUICK_OFFSETS.map((offset) => {
                 const offsetKey = addDaysToDateKey(todayKey, offset.days);
@@ -321,115 +265,37 @@ export function NotificationSchedulePicker({
               })}
             </div>
 
-            <Calendar
-              mode="single"
-              selected={selectedDate}
-              onSelect={handleSelectDate}
-              defaultMonth={selectedDate}
-              locale={ko}
-              disabled={[
-                { before: firstSelectable },
-                { after: lastSelectable },
-              ]}
-              className="w-full rounded-md border border-input"
-            />
+            <div className="space-y-1.5">
+              <Label>날짜</Label>
+              <DateWheelPicker
+                value={dateKey}
+                options={wheelDateOptions}
+                disabled={isPending}
+                onValueChange={handleSelectDate}
+              />
+            </div>
 
-            <div className="space-y-2">
-              <Label id={labelId} htmlFor={hourInputId}>
-                알림 시간
-              </Label>
-              <div
-                role="group"
-                aria-labelledby={labelId}
-                className="flex w-full items-center gap-2 rounded-md border border-input bg-background p-1 shadow-sm"
-              >
-                <button
-                  type="button"
-                  aria-label={`오전 오후 전환, 현재 ${periodLabel}`}
-                  aria-pressed={period === "pm"}
-                  disabled={isPending}
-                  onClick={togglePeriod}
-                  onKeyDown={handlePeriodKeyDown}
-                  className="h-8 w-16 cursor-pointer rounded-md bg-muted px-2 text-sm font-medium text-foreground transition-colors hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {periodLabel}
-                </button>
-                <Input
-                  id={hourInputId}
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  aria-label="시"
-                  placeholder="시"
-                  value={hourValue}
-                  disabled={isPending}
-                  onBlur={() =>
-                    setHourValue((currentValue) =>
-                      clampTimePart(currentValue, 1, 12),
-                    )
-                  }
-                  onChange={(event) =>
-                    setHourValue(getNumericInput(event.target.value))
-                  }
-                  className="h-8 w-16 border-0 text-center shadow-none focus-visible:ring-0"
-                />
-                <span className="text-sm font-semibold text-muted-foreground">
-                  :
-                </span>
-                <Input
-                  id={minuteInputId}
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  aria-label="분"
-                  placeholder="분"
-                  value={minuteValue}
-                  disabled={isPending}
-                  onBlur={() =>
-                    setMinuteValue((currentValue) =>
-                      clampTimePart(currentValue, 0, 59),
-                    )
-                  }
-                  onChange={(event) =>
-                    setMinuteValue(getNumericInput(event.target.value))
-                  }
-                  className="h-8 w-16 border-0 text-center shadow-none focus-visible:ring-0"
-                />
-                <Input
-                  ref={nativeTimeInputRef}
-                  type="time"
-                  step={60}
-                  tabIndex={-1}
-                  value={timeValue ?? ""}
-                  onChange={handleNativeTimeChange}
-                  data-testid="native-time-input"
-                  className="sr-only"
-                />
-                <button
-                  type="button"
-                  aria-label="시간 선택하기"
-                  disabled={isPending}
-                  onClick={openNativeTimePicker}
-                  className="inline-flex size-8 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Clock className="size-4" aria-hidden="true" />
-                </button>
-              </div>
+            <div className="space-y-1.5">
+              <Label>알림 시간</Label>
+              <ResponsiveTimePicker
+                value={timeValue}
+                disabled={isPending}
+                onValueChange={handleTimeChange}
+              />
             </div>
 
             {scheduleLabel && (
-              <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                <Info className="size-4 shrink-0" aria-hidden="true" />
+              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 {scheduleLabel}에 알림을 보냅니다.
               </p>
             )}
 
-            <div aria-live="polite" className="min-h-5">
+            <div aria-live="polite">
               {message && <p className="text-sm text-green-600">{message}</p>}
               {error && <p className="text-sm text-destructive">{error}</p>}
             </div>
 
-            <DialogFooter className="mt-0 flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+            <DialogFooter className="mt-0 flex-row items-center justify-between gap-2">
               <Button
                 type="button"
                 variant="outline"
