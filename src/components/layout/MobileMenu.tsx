@@ -6,7 +6,6 @@ import {
   type LucideIcon,
   Menu as MenuIcon,
   MessageCircle,
-  Plus,
   Shield,
   User,
 } from "lucide-react";
@@ -39,12 +38,12 @@ type MobileMenuProps = {
 type MobileNavItem = {
   href: string;
   label: string;
-  icon: LucideIcon;
+  icon?: LucideIcon;
 };
 
 const MOBILE_NAV_ITEMS: MobileNavItem[] = [
   { href: ROUTES.NOTES, label: "노트 목록", icon: BookOpen },
-  { href: ROUTES.NOTES_NEW, label: "새 노트", icon: Plus },
+  { href: ROUTES.NOTES_NEW, label: "노트 작성" },
   { href: ROUTES.NOTE_CHATS, label: "노트 챗봇", icon: MessageCircle },
 ];
 
@@ -118,7 +117,7 @@ export function MobileMenu({
                       : "text-muted-foreground hover:bg-accent hover:text-foreground",
                   )}
                 >
-                  <Icon className="size-4" />
+                  {Icon ? <Icon className="size-4" /> : null}
                   {label}
                 </Link>
               );

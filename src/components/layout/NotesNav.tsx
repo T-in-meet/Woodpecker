@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageCircle, Plus } from "lucide-react";
+import { MessageCircle } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -29,13 +29,13 @@ export function NotesNav() {
       <Link
         href={ROUTES.NOTES_NEW}
         aria-current={isNotesNew ? "page" : undefined}
-        className={`text-base font-medium px-4 py-1.5 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring flex items-center gap-1 ${
+        className={`rounded-full px-4 py-1.5 text-base font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
           isNotesNew
             ? "text-foreground font-semibold"
             : "text-muted-foreground hover:text-foreground"
         }`}
       >
-        <Plus size={16} />새 노트
+        노트 작성
       </Link>
 
       <Link
