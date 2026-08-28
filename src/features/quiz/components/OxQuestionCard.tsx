@@ -26,7 +26,7 @@ export function OxQuestionCard({
   const [selected, setSelected] = useState<string | null>(null);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <p className="text-base font-medium leading-relaxed sm:text-lg">
         {question.question}
       </p>
@@ -48,7 +48,7 @@ export function OxQuestionCard({
               disabled={submitted}
               onClick={() => setSelected(value)}
               className={cn(
-                "flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border-2 p-4 text-lg font-semibold transition-colors",
+                "flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border-2 p-3 text-lg font-semibold transition-colors sm:p-4",
                 !submitted &&
                   isSelected &&
                   "border-orange-200 bg-orange-50 dark:border-orange-900/40 dark:bg-orange-950/20",

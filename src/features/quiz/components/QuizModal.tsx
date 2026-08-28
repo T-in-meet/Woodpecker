@@ -50,7 +50,7 @@ const QUIZ_TYPE_OPTIONS = [
 ] as const;
 
 const TYPE_BUTTON_CLASS = cn(
-  "flex min-h-14 cursor-pointer items-center gap-2.5 rounded-xl border border-border bg-background px-3 py-2.5 text-left transition-colors sm:h-16",
+  "flex min-h-12 cursor-pointer items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-left transition-colors sm:h-16 sm:gap-2.5 sm:py-2.5",
   "hover:border-orange-200 hover:bg-orange-50 dark:hover:border-orange-900/40 dark:hover:bg-orange-950/20",
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
 );
@@ -99,7 +99,7 @@ export function QuizModal({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="flex max-h-[85dvh] max-w-xl flex-col overflow-hidden border border-border/60 p-4 shadow-2xl sm:p-6">
-        <DialogHeader className="mb-4 shrink-0 pr-8 sm:mb-6">
+        <DialogHeader className="mb-3 shrink-0 pr-8 sm:mb-6">
           <DialogTitle className="text-xl">퀴즈 만들기</DialogTitle>
           <DialogDescription className="mt-2 flex min-w-0 items-start gap-2 text-base text-muted-foreground">
             <NotebookTextIcon
@@ -122,10 +122,12 @@ export function QuizModal({
                   onClick={() => startQuiz(type)}
                   className={TYPE_BUTTON_CLASS}
                 >
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-orange-50 dark:bg-orange-950/20">
-                    <Icon aria-hidden="true" className="size-5" />
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-orange-50 sm:size-9 sm:rounded-xl dark:bg-orange-950/20">
+                    <Icon aria-hidden="true" className="size-4 sm:size-5" />
                   </span>
-                  <span className="min-w-0 text-base font-medium">{label}</span>
+                  <span className="min-w-0 text-sm font-medium sm:text-base">
+                    {label}
+                  </span>
                 </button>
               ))}
             </div>
@@ -146,7 +148,7 @@ export function QuizModal({
 
         {phase === "playing" && currentQuestion && (
           <div className="min-h-0 flex-1 overflow-y-auto">
-            <div className="mb-4 flex items-center justify-between gap-2">
+            <div className="mb-3 flex items-center justify-between gap-2 sm:mb-4">
               <button
                 type="button"
                 onClick={goToSelect}
@@ -199,7 +201,7 @@ export function QuizModal({
               />
             )}
 
-            <div className="mt-4 flex items-center gap-3">
+            <div className="mt-3 flex items-center gap-3 sm:mt-4">
               {currentIndex > 0 && (
                 <button
                   type="button"

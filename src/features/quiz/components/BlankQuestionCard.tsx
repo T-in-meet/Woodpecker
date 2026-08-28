@@ -32,7 +32,7 @@ export function BlankQuestionCard({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <p className="text-base font-medium leading-relaxed sm:text-lg">
         {question.question}
       </p>
