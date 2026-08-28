@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -61,10 +62,11 @@ export function DeleteAccountDialog({
           <DialogTitle>계정 삭제</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">
+          {/* DialogDescription이 aria-describedby를 연결한다. */}
+          <DialogDescription>
             정말 계정을 삭제하시겠습니까? 모든 데이터가 영구적으로 삭제되며, 이
             작업은 되돌릴 수 없습니다.
-          </p>
+          </DialogDescription>
           <div className="space-y-2">
             <Label htmlFor="confirm-email" className="text-sm">
               확인을 위해 이메일 주소
