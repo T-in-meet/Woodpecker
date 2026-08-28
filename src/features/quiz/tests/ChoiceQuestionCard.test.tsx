@@ -32,6 +32,14 @@ describe("ChoiceQuestionCard", () => {
     expect(screen.getByText("오답입니다.")).toBeInTheDocument();
     expect(screen.getByText("정답")).toBeInTheDocument();
     expect(screen.getByText("1번")).toBeInTheDocument();
+    // 화면에는 번호만, 스크린리더에는 정답 선택지의 내용까지.
+    expect(
+      screen.getByText(
+        "right를 늘려 조건을 만족시키고, 조건이 만족하면 left를 늘린다.",
+        { selector: ".sr-only" },
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("정답 선택지")).toBeInTheDocument();
     expect(screen.queryByText("정답: 1번.")).not.toBeInTheDocument();
     expect(
       screen.queryByText(

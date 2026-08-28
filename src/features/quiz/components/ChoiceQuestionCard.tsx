@@ -69,6 +69,7 @@ export function ChoiceQuestionCard({
                 {index + 1}
               </span>
               <span className="flex-1 text-sm leading-relaxed">{option}</span>
+              {isCorrectAnswer && <span className="sr-only">정답 선택지</span>}
             </button>
           );
         })}
@@ -98,6 +99,11 @@ export function ChoiceQuestionCard({
               <QuizAnswerBadge />
               <span className="text-xs leading-5 text-muted-foreground">
                 {question.answer + 1}번
+              </span>
+              {/* 화면에는 번호만 둔다. 선택지 목록을 볼 수 없는 스크린리더에서는
+                  번호만으로 정답을 알 수 없으므로 내용을 함께 읽어 준다. */}
+              <span className="sr-only">
+                {question.options[question.answer]}
               </span>
             </div>
           )}
