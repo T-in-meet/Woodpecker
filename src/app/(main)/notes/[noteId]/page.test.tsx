@@ -216,7 +216,7 @@ describe("NoteDetailPage", () => {
     expect(currentPage).toHaveClass("truncate");
   });
 
-  it("shows '다음 예정' (not 'due now') when notification time is still in the future today", async () => {
+  it("shows '다음 복습 일정' (not 'due now') when notification time is still in the future today", async () => {
     getUserMock.mockResolvedValue(createUser("user-123"));
     getNoteByIdMock.mockResolvedValue(
       createNote({
@@ -230,7 +230,7 @@ describe("NoteDetailPage", () => {
 
     expect(lastBodyProps()).toMatchObject({
       canStartReview: true,
-      reviewStatusMessage: `다음 예정: ${formatDateTime(
+      reviewStatusMessage: `다음 복습 일정: ${formatDateTime(
         "2026-03-29T18:00:00.000Z",
       )}`,
     });
@@ -251,7 +251,7 @@ describe("NoteDetailPage", () => {
 
     expect(lastBodyProps()).toMatchObject({
       canStartReview: true,
-      reviewStatusMessage: `다음 예정: ${formatDateTime(
+      reviewStatusMessage: `다음 복습 일정: ${formatDateTime(
         "2026-03-30T01:00:00.000Z",
       )}`,
     });
@@ -273,7 +273,7 @@ describe("NoteDetailPage", () => {
 
     expect(lastBodyProps()).toMatchObject({
       canStartReview: false,
-      reviewStatusMessage: `오늘 백지 테스트 완료. 다음 예정: ${formatDateTime(
+      reviewStatusMessage: `오늘 백지 테스트 완료 · 다음 복습 일정: ${formatDateTime(
         "2026-03-30T09:00:00.000Z",
       )}`,
     });

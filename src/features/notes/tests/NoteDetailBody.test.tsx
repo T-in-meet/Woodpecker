@@ -70,7 +70,7 @@ function renderBody(props: Partial<Parameters<typeof NoteDetailBody>[0]> = {}) {
       reviewRound={1}
       isReviewCompleted={false}
       canStartReview={true}
-      reviewStatusMessage="다음 예정: 내일"
+      reviewStatusMessage="다음 복습 일정: 내일"
       notificationTimeOfDay={null}
       {...props}
     />,

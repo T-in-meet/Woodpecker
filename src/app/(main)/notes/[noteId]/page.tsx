@@ -102,10 +102,10 @@ export default async function NoteDetailPage({
     ? "1-3-7 복습을 모두 마쳤습니다."
     : nextScheduledAt
       ? alreadyCompletedToday
-        ? `오늘 백지 테스트 완료. 다음 예정: ${formatDateTime(nextScheduledAt)}`
+        ? `오늘 백지 테스트 완료 · 다음 복습 일정: ${formatDateTime(nextScheduledAt)}`
         : isReviewDue
           ? "지금 백지 테스트를 진행할 수 있습니다."
-          : `다음 예정: ${formatDateTime(nextScheduledAt)}`
+          : `다음 복습 일정: ${formatDateTime(nextScheduledAt)}`
       : "다음 복습 일정이 아직 준비되지 않았습니다.";
 
   return (
