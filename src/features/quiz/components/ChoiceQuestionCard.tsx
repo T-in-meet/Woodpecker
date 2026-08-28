@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils/cn";
 
 import type { ChoiceQuestion } from "../schema";
 import { QuizAnswerBadge } from "./QuizAnswerBadge";
+import { QuizFeedbackPanel } from "./QuizFeedbackPanel";
 import { QuizSubmitButton } from "./QuizSubmitButton";
 
 type ChoiceQuestionCardProps = {
@@ -83,34 +84,20 @@ export function ChoiceQuestionCard({
       )}
 
       {submitted && (
-        <div
-          className={cn(
-            "rounded-lg p-4",
-            isCorrect
-              ? "bg-green-50 dark:bg-green-950/30"
-              : "bg-red-50 dark:bg-red-950/30",
-          )}
+        <QuizFeedbackPanel
+          isCorrect={isCorrect}
+          explanation={question.explanation}
         >
-          <p className="mb-1 text-sm font-medium">
-            {isCorrect ? "정답입니다!" : "오답입니다."}
-          </p>
-          {!isCorrect && (
-            <div className="mb-2 mt-2 flex items-center gap-2">
-              <QuizAnswerBadge />
-              <span className="text-xs leading-5 text-muted-foreground">
-                {question.answer + 1}번
-              </span>
-              {/* 화면에는 번호만 둔다. 선택지 목록을 볼 수 없는 스크린리더에서는
-                  번호만으로 정답을 알 수 없으므로 내용을 함께 읽어 준다. */}
-              <span className="sr-only">
-                {question.options[question.answer]}
-              </span>
-            </div>
-          )}
-          <p className="text-sm text-muted-foreground">
-            {question.explanation}
-          </p>
-        </div>
+          <div className="mb-2 mt-2 flex items-center gap-2">
+            <QuizAnswerBadge />
+            <span className="text-xs leading-5 text-muted-foreground">
+              {question.answer + 1}번
+            </span>
+            {/* 화면에는 번호만 둔다. 선택지 목록을 볼 수 없는 스크린리더에서는
+                번호만으로 정답을 알 수 없으므로 내용을 함께 읽어 준다. */}
+            <span className="sr-only">{question.options[question.answer]}</span>
+          </div>
+        </QuizFeedbackPanel>
       )}
     </div>
   );

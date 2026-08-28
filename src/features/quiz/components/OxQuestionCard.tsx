@@ -6,6 +6,7 @@ import { useState } from "react";
 import { cn } from "@/lib/utils/cn";
 
 import type { OxQuestion } from "../schema";
+import { QuizFeedbackPanel } from "./QuizFeedbackPanel";
 import { QuizSubmitButton } from "./QuizSubmitButton";
 
 type OxQuestionCardProps = {
@@ -83,21 +84,10 @@ export function OxQuestionCard({
       )}
 
       {submitted && (
-        <div
-          className={cn(
-            "rounded-lg p-4",
-            isCorrect
-              ? "bg-green-50 dark:bg-green-950/30"
-              : "bg-red-50 dark:bg-red-950/30",
-          )}
-        >
-          <p className="mb-1 text-sm font-medium">
-            {isCorrect ? "정답입니다!" : "오답입니다."}
-          </p>
-          <p className="text-sm text-muted-foreground">
-            {question.explanation}
-          </p>
-        </div>
+        <QuizFeedbackPanel
+          isCorrect={isCorrect}
+          explanation={question.explanation}
+        />
       )}
     </div>
   );
