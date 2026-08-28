@@ -7,6 +7,7 @@ import { NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE } from "../constants/executi
 import { noteChatQueryKeys } from "../constants/query-keys";
 import { useNoteChatConversationDetailQuery } from "../hooks/use-note-chat-conversation-query";
 import { useNoteChatStream } from "../hooks/use-note-chat-stream";
+import { useViewportRemainingHeight } from "../hooks/use-viewport-remaining-height";
 import { NoteChatBreadcrumb } from "./NoteChatBreadcrumb";
 import { NoteChatConversationContent } from "./NoteChatConversationContent";
 import { NoteChatConversationError } from "./NoteChatConversationError";
@@ -29,12 +30,9 @@ export function NoteChatConversationClient({
 }: NoteChatConversationClientProps) {
   const queryClient = useQueryClient();
 
-  const conversationContainerRef = useRef<HTMLDivElement | null>(null);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
+  const hasInitialScrolledRef = useRef(false);
 
-  const [conversationHeight, setConversationHeight] = useState<number | null>(
-    null,
-  );
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
 
   /**
@@ -68,6 +66,8 @@ export function NoteChatConversationClient({
   const conversationQuery = useNoteChatConversationDetailQuery(conversationId);
 
   const detail = conversationQuery.data;
+  const { containerRef: conversationContainerRef, height: conversationHeight } =
+    useViewportRemainingHeight<HTMLDivElement>({ recalculationKey: detail });
 
   /**
    * 새로운 질문을 전송하고 스트리밍 완료 후
@@ -242,10 +242,47 @@ export function NoteChatConversationClient({
   };
 
   /**
+   * 최초 Conversation과 대화 영역 높이가 준비되면
+   * 레이아웃 반영 후 최신 메시지 위치로 한 번만 이동합니다.
+   */
+  useEffect(() => {
+    if (
+      hasInitialScrolledRef.current ||
+      !detail ||
+      conversationHeight === null
+    ) {
+      return;
+    }
+
+    const animationFrameId = window.requestAnimationFrame(() => {
+      const messageEnd = messageEndRef.current;
+
+      if (!messageEnd) {
+        return;
+      }
+
+      messageEnd.scrollIntoView({
+        behavior: "auto",
+        block: "end",
+      });
+
+      hasInitialScrolledRef.current = true;
+    });
+
+    return () => {
+      window.cancelAnimationFrame(animationFrameId);
+    };
+  }, [detail, conversationHeight]);
+
+  /**
    * 새 질문, 수정 질문, 스트리밍 답변이 추가될 때
    * 메시지 영역을 최신 메시지 위치로 이동합니다.
    */
   useEffect(() => {
+    if (!hasInitialScrolledRef.current) {
+      return;
+    }
+
     messageEndRef.current?.scrollIntoView({
       behavior: "smooth",
       block: "end",
@@ -257,32 +294,6 @@ export function NoteChatConversationClient({
     editingSequenceNumber,
   ]);
 
-  /**
-   * 현재 Conversation 영역의 시작 위치부터 viewport 하단까지의
-   * 실제 사용 가능 높이를 계산합니다.
-   */
-  useEffect(() => {
-    const updateConversationHeight = () => {
-      const container = conversationContainerRef.current;
-
-      if (!container) {
-        return;
-      }
-
-      const top = container.getBoundingClientRect().top;
-
-      setConversationHeight(Math.max(0, window.innerHeight - top));
-    };
-
-    updateConversationHeight();
-
-    window.addEventListener("resize", updateConversationHeight);
-
-    return () => {
-      window.removeEventListener("resize", updateConversationHeight);
-    };
-  }, [detail]);
-
   const visibleMessages =
     detail && editingSequenceNumber !== null
       ? detail.messages.filter(
@@ -291,7 +302,7 @@ export function NoteChatConversationClient({
       : (detail?.messages ?? []);
 
   return (
-    <div className="mx-auto -mb-16 flex w-full max-w-6xl flex-col px-4 md:mb-0 md:px-12">
+    <div className="mx-auto flex w-full max-w-6xl flex-col px-4 md:px-12">
       {detail ? (
         <NoteChatBreadcrumb
           className="my-4"
@@ -300,7 +311,7 @@ export function NoteChatConversationClient({
       ) : null}
       <div
         ref={conversationContainerRef}
-        className="flex min-h-0 flex-col overflow-hidden border border-b-0"
+        className="flex min-h-0 flex-col overflow-hidden border"
         style={
           conversationHeight !== null
             ? { height: conversationHeight }
