@@ -4,13 +4,7 @@ import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { Loader2, RotateCcw, Save } from "lucide-react";
 import { useRouter } from "next/navigation";
-import {
-  type FormEvent,
-  useEffect,
-  useRef,
-  useState,
-  useTransition,
-} from "react";
+import { type FormEvent, useEffect, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -135,11 +129,7 @@ export function NotificationSchedulePicker({
   };
 
   // 여는 주체가 밖(`NoteManageMenu`)이라 열 때는 Radix가 onOpenChange를 호출하지 않는다.
-  // 열림 자체를 신호로 삼아야 "열 때 초안 초기화"가 닫힘 경로에 의존하지 않는다.
-  // 저장 직후 effect가 다시 돌아 성공 메시지를 지우지 않도록 저장된 값은 ref로 읽는다.
-  const savedRef = useRef({ dateKey: savedDateKey, time: savedTime });
-  savedRef.current = { dateKey: savedDateKey, time: savedTime };
-
+  // 열림 자체를 신호로 삼아야 "열 때 메시지 비우기"가 닫힘 경로에 의존하지 않는다.
   useEffect(() => {
     if (!open) {
       return;
@@ -147,9 +137,19 @@ export function NotificationSchedulePicker({
 
     setMessage(null);
     setError(null);
-    setDateKey(savedRef.current.dateKey);
-    setTimeValue(savedRef.current.time);
   }, [open]);
+
+  // 초안은 저장된 값이 바뀔 때마다 다시 맞춘다. 저장 성공 직후에는 초안과 서버 값이
+  // 같아 no-op이지만, "기본 일정"으로 되돌린 뒤에는 복원된 케이던스가 휠·시간 입력·
+  // 미리보기에 그대로 반영돼야 성공 메시지와 화면이 어긋나지 않는다.
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    setDateKey(savedDateKey);
+    setTimeValue(savedTime);
+  }, [open, savedDateKey, savedTime]);
 
   const handleOpenChange = (nextOpen: boolean) => {
     onOpenChange(nextOpen);
