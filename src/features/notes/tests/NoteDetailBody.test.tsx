@@ -115,7 +115,8 @@ describe("NoteDetailBody", () => {
 
     await user.click(screen.getByRole("button", { name: "노트 수정" }));
 
-    expect(screen.getByLabelText("제목")).toHaveValue("원래 제목");
+    // NoteEditForm은 next/dynamic으로 지연 로드되므로 첫 진입에서는 청크 도착을 기다린다.
+    expect(await screen.findByLabelText("제목")).toHaveValue("원래 제목");
     expect(screen.getByTestId("tiptap-editor")).toBeInTheDocument();
   });
 

@@ -1,19 +1,37 @@
 "use client";
 
 import { NotebookPen } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { QuizButton } from "@/features/quiz/components/QuizButton";
 import { RelatedNotesSection } from "@/features/related-notes/components/RelatedNotesSection";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { getNoteReviewRoute } from "@/lib/constants/routes";
 
-import { NoteEditForm } from "./NoteEditForm";
 import { NoteManageMenu } from "./NoteManageMenu";
 import { NoteViewer } from "./NoteViewer";
+
+/**
+ * 편집 폼은 TipTap 에디터를 통째로 끌고 온다. 노트 상세는 읽기가 기본이고
+ * 편집은 관리 메뉴를 거쳐야 하는 부차적 행동이라, 에디터 번들을 초기 청크에서 뺀다.
+ */
+const NoteEditForm = dynamic(
+  () => import("./NoteEditForm").then((m) => m.NoteEditForm),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="space-y-4" aria-busy="true">
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-[60vh] w-full" />
+      </div>
+    ),
+  },
+);
 
 type NoteDetailBodyProps = {
   noteId: string;
