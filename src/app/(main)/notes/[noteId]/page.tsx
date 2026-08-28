@@ -128,7 +128,7 @@ export default async function NoteDetailPage({
           <BreadcrumbItem>
             {/* 제목이 길면 breadcrumb가 여러 줄로 밀리므로 잘라내고 전체 제목은 title로 노출한다. */}
             <BreadcrumbPage
-              className="max-w-[180px] truncate font-medium sm:max-w-xs"
+              className="max-w-45 truncate font-medium sm:max-w-xs"
               title={note.title}
             >
               {note.title}
