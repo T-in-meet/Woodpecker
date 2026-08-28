@@ -10,9 +10,6 @@ import { NoteChatReferenceNotes } from "./NoteChatReferenceNotes";
  * 노트 챗봇 Assistant 메시지 컴포넌트의 입력값입니다.
  */
 type NoteChatAssistantMessageProps = {
-  /** 저장된 Assistant 메시지의 ID입니다. 스트리밍 중인 메시지에는 존재하지 않습니다. */
-  messageId?: string;
-
   /** Assistant가 생성한 메시지 본문입니다. */
   text: string;
 
@@ -30,11 +27,10 @@ type NoteChatAssistantMessageProps = {
  * 노트 챗봇 Assistant 메시지를 본문 형태로 표시합니다.
  *
  * Markdown 형식의 답변과 참조 노트를 렌더링하며,
- * 저장이 완료되어 메시지 ID가 존재하는 응답에는 복사 및 신고 등의
- * Assistant 메시지 액션을 함께 표시합니다.
+ * 스트리밍이 완료된 응답에는 복사 및 신고 이동 등의 Assistant 메시지 액션을
+ * 함께 표시합니다.
  *
  * @param props 컴포넌트 속성
- * @param props.messageId 저장된 Assistant 메시지 ID
  * @param props.text Assistant 메시지 본문
  * @param props.sources 답변 생성에 사용된 검색 노트 출처
  * @param props.usedNoteIds 답변에서 실제로 사용한 노트 ID 목록
@@ -42,7 +38,6 @@ type NoteChatAssistantMessageProps = {
  * @returns 노트 챗봇 Assistant 메시지 UI
  */
 export function NoteChatAssistantMessage({
-  messageId,
   text,
   sources = [],
   usedNoteIds = [],
@@ -104,12 +99,10 @@ export function NoteChatAssistantMessage({
       </div>
 
       {/*
-       * 스트리밍 중인 응답은 아직 저장된 메시지 ID가 없으므로 액션을 제공하지 않습니다.
-       * 저장이 완료되어 messageId가 존재하는 Assistant 메시지에만 액션을 표시합니다.
+       * 스트리밍 중인 응답은 생성이 진행 중이므로 액션을 제공하지 않습니다.
+       * 생성이 완료된 Assistant 메시지에만 복사 및 신고 이동 액션을 표시합니다.
        */}
-      {!isStreaming && messageId ? (
-        <NoteChatAssistantMessageActions content={text} messageId={messageId} />
-      ) : null}
+      {!isStreaming ? <NoteChatAssistantMessageActions content={text} /> : null}
     </li>
   );
 }

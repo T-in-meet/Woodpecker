@@ -12,21 +12,18 @@ import { ROUTES } from "@/lib/constants/routes";
  */
 type NoteChatAssistantMessageActionsProps = {
   content: string;
-  messageId: string;
 };
 
 /**
  * 노트 챗봇 AI 응답의 액션 버튼을 표시합니다.
  *
- * 응답 복사와 신고 페이지 이동을 제공하며,
- * 신고 시 대상 메시지를 식별할 수 있도록 메시지 정보를 함께 전달합니다.
+ * 응답 복사와 신고 문의 탭 이동을 제공합니다.
  *
- * @param props AI 응답 내용과 메시지 ID
+ * @param props AI 응답 액션 속성
  * @returns AI 응답 액션 버튼 영역
  */
 export function NoteChatAssistantMessageActions({
   content,
-  messageId,
 }: NoteChatAssistantMessageActionsProps) {
   const [copied, setCopied] = useState(false);
 
@@ -46,13 +43,11 @@ export function NoteChatAssistantMessageActions({
     }, 2000);
   };
 
-  // 신고 페이지에서 대상 AI 응답을 식별할 수 있도록
-  // 메시지 유형과 ID를 query parameter로 함께 전달합니다.
+  // 신고 대상 메시지 연결 방식이 확정되기 전까지는
+  // 마이페이지의 문의 탭으로 이동하는 query parameter만 전달합니다.
   const reportSearchParams = new URLSearchParams({
     section: "support",
     tab: "inquiry",
-    targetType: "note-chat-message",
-    targetId: messageId,
   });
 
   const reportHref = `${ROUTES.MYPAGE}?${reportSearchParams.toString()}`;

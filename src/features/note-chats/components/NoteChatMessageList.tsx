@@ -169,7 +169,6 @@ export function NoteChatMessageList({
             return (
               <NoteChatAssistantMessage
                 key={message.id}
-                messageId={message.id}
                 text={parsed.data.text}
                 sources={sourcesByAssistantMessageId.get(message.id) ?? []}
                 usedNoteIds={parsed.data.usedNoteIds}
