@@ -42,6 +42,7 @@ type NoteDetailBodyProps = {
   canStartReview: boolean;
   reviewStatusMessage: string;
   notificationTimeOfDay: string | null;
+  nextScheduledAt: string | null;
 };
 
 export function NoteDetailBody({
@@ -53,6 +54,7 @@ export function NoteDetailBody({
   canStartReview,
   reviewStatusMessage,
   notificationTimeOfDay,
+  nextScheduledAt,
 }: NoteDetailBodyProps) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
@@ -115,6 +117,7 @@ export function NoteDetailBody({
               onEdit={() => setIsEditing(true)}
               canChangeNotificationTime={!isReviewCompleted}
               notificationTimeOfDay={notificationTimeOfDay}
+              nextScheduledAt={nextScheduledAt}
             />
           </div>
         </div>

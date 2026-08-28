@@ -22,3 +22,10 @@ export type AdminNotificationKindType =
 
 export type NotificationStatusType =
   (typeof NOTIFICATION_STATUS)[keyof typeof NOTIFICATION_STATUS];
+
+/**
+ * 알림 일정을 직접 옮길 수 있는 최대 일수(오늘 기준).
+ * 달력의 선택 가능 범위이자 `update_notification_schedule` RPC가 재검증하는 값이다.
+ * 값을 바꾸면 마이그레이션의 검증 범위도 함께 바꿔야 한다.
+ */
+export const MAX_NOTIFICATION_SCHEDULE_OFFSET_DAYS = 30;

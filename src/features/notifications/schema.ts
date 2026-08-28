@@ -67,6 +67,18 @@ export const setNotificationTimeSchema = z.object({
   time: notificationTimeSchema.nullable(),
 });
 
+export const notificationDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+/**
+ * 달력에서 고른 날짜와 시각. 실제 허용 범위(오늘 ~ +30일)는 KST "지금"을 알아야
+ * 판단할 수 있으므로 여기서 검증하지 않고 서버 액션과 RPC가 확인한다.
+ */
+export const setNotificationScheduleSchema = z.object({
+  noteId: notificationNoteIdSchema,
+  date: notificationDateSchema,
+  time: notificationTimeSchema,
+});
+
 export type NotificationListItemType = z.infer<
   typeof notificationListItemSchema
 >;
@@ -77,4 +89,7 @@ export type PushSubscriptionInputType = z.infer<typeof pushSubscriptionSchema>;
 export type NotificationTimeInputType = z.infer<typeof notificationTimeSchema>;
 export type SetNotificationTimeInputType = z.infer<
   typeof setNotificationTimeSchema
+>;
+export type SetNotificationScheduleInputType = z.infer<
+  typeof setNotificationScheduleSchema
 >;

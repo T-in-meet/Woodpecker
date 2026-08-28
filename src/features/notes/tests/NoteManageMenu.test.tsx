@@ -29,6 +29,7 @@ function renderMenu({
       onEdit={onEdit}
       canChangeNotificationTime={canChangeNotificationTime}
       notificationTimeOfDay="21:30:00"
+      nextScheduledAt="2026-05-01T12:30:00.000Z"
     />,
   );
 
@@ -46,27 +47,29 @@ describe("NoteManageMenu", () => {
       screen.queryByRole("menuitem", { name: "노트 수정" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("menuitem", { name: "알림 시간 변경" }),
+      screen.queryByRole("menuitem", { name: "복습 일정 변경" }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("menuitem", { name: "노트 삭제" }),
     ).not.toBeInTheDocument();
   });
 
-  it("알림 시간 변경을 선택하면 알림 다이얼로그를 연다", async () => {
+  it("복습 일정 변경을 선택하면 알림 다이얼로그를 연다", async () => {
     const user = userEvent.setup();
     renderMenu();
 
     await user.click(screen.getByRole("button", { name: "노트 관리 메뉴" }));
     await user.click(
-      await screen.findByRole("menuitem", { name: "알림 시간 변경" }),
+      await screen.findByRole("menuitem", { name: "복습 일정 변경" }),
     );
 
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
-    expect(await screen.findByText("현재 설정: 21:30 KST")).toBeInTheDocument();
+    expect(
+      await screen.findByText("현재 설정: 5월 1일 (금) 오후 09:30"),
+    ).toBeInTheDocument();
   });
 
-  it("학습을 마친 노트에는 알림 시간 변경을 노출하지 않는다", async () => {
+  it("학습을 마친 노트에는 복습 일정 변경을 노출하지 않는다", async () => {
     const user = userEvent.setup();
     renderMenu({ canChangeNotificationTime: false });
 
@@ -76,7 +79,7 @@ describe("NoteManageMenu", () => {
       await screen.findByRole("menuitem", { name: "노트 수정" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("menuitem", { name: "알림 시간 변경" }),
+      screen.queryByRole("menuitem", { name: "복습 일정 변경" }),
     ).not.toBeInTheDocument();
   });
 

@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { NotificationTimePicker } from "@/features/notifications/components/NotificationTimePicker";
+import { NotificationSchedulePicker } from "@/features/notifications/components/NotificationSchedulePicker";
 
 import { DeleteNoteDialog } from "./DeleteNoteDialog";
 
@@ -22,10 +22,12 @@ type NoteManageMenuProps = {
   /** 학습을 모두 마친 노트는 알림을 더 보내지 않으므로 항목을 감춘다. */
   canChangeNotificationTime: boolean;
   notificationTimeOfDay: string | null;
+  /** 다음 알림이 나갈 시각. 달력의 초기 선택 날짜가 된다. */
+  nextScheduledAt: string | null;
 };
 
 /**
- * 노트 수정·알림 시간 변경·삭제를 담는 관리 메뉴입니다.
+ * 노트 수정·복습 일정 변경·삭제를 담는 관리 메뉴입니다.
  * 학습 행동(백지 테스트, 퀴즈)과 같은 줄에서 경쟁하지 않도록 메뉴로 접어 둡니다.
  */
 export function NoteManageMenu({
@@ -34,6 +36,7 @@ export function NoteManageMenu({
   onEdit,
   canChangeNotificationTime,
   notificationTimeOfDay,
+  nextScheduledAt,
 }: NoteManageMenuProps) {
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -72,7 +75,7 @@ export function NoteManageMenu({
               }
             >
               <Bell className="size-4" aria-hidden="true" />
-              알림 시간 변경
+              복습 일정 변경
             </DropdownMenuItem>
           )}
 
@@ -89,9 +92,10 @@ export function NoteManageMenu({
       </DropdownMenu>
 
       {canChangeNotificationTime && (
-        <NotificationTimePicker
+        <NotificationSchedulePicker
           noteId={noteId}
           initialTime={notificationTimeOfDay}
+          initialScheduledAt={nextScheduledAt}
           open={notificationOpen}
           onOpenChange={setNotificationOpen}
         />
