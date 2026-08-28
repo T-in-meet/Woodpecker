@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -34,13 +34,13 @@ export function DeleteNoteDialog({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  function handleOpenChange(nextOpen: boolean) {
-    if (!nextOpen) {
+  // 여는 주체가 밖(`NoteManageMenu`)이라 열 때는 Radix가 onOpenChange를 호출하지 않는다.
+  // 이전 시도의 오류가 남지 않도록 열림 자체를 신호로 삼아 비운다.
+  useEffect(() => {
+    if (open) {
       setError(null);
     }
-
-    onOpenChange(nextOpen);
-  }
+  }, [open]);
 
   function handleDelete() {
     setError(null);
@@ -54,7 +54,7 @@ export function DeleteNoteDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>노트 삭제</DialogTitle>
@@ -73,7 +73,7 @@ export function DeleteNoteDialog({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => handleOpenChange(false)}
+              onClick={() => onOpenChange(false)}
               disabled={isPending}
             >
               취소

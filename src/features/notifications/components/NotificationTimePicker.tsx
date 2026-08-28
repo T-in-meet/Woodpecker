@@ -95,6 +95,25 @@ export function NotificationTimePicker({
     setMinuteValue(nextTimeParts.minute);
   }, [initialInputTime]);
 
+  // 여는 주체가 밖(`NoteManageMenu`)이라 열 때는 Radix가 onOpenChange를 호출하지 않는다.
+  // 열림 자체를 신호로 삼아야 "열 때 초안 초기화"가 닫힘 경로에 의존하지 않는다.
+  // savedTime을 deps에 넣으면 저장 직후 effect가 다시 돌아 성공 메시지를 지우므로 ref로 읽는다.
+  const savedTimeRef = useRef(savedTime);
+  savedTimeRef.current = savedTime;
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    setMessage(null);
+    setError(null);
+    const nextTimeParts = getTimeParts(savedTimeRef.current);
+    setPeriod(nextTimeParts.period);
+    setHourValue(nextTimeParts.hour);
+    setMinuteValue(nextTimeParts.minute);
+  }, [open]);
+
   const handleOpenChange = (nextOpen: boolean) => {
     onOpenChange(nextOpen);
     setMessage(null);
@@ -203,7 +222,8 @@ export function NotificationTimePicker({
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>다음 알림 시간 설정</DialogTitle>
-            {/* 다음 복습 예정 시각은 노트 상세 헤더의 배지 줄이 이미 보여준다.
+            {/* 다이얼로그는 "지금 저장된 값"만 다룬다. 다음 복습 예정 시각은 노트 상세
+                헤더가 대부분의 상태에서 함께 보여준다(복습 시점이 이미 지난 경우는 예외).
                 DialogDescription이 aria-describedby를 연결한다. */}
             <DialogDescription className="mt-2">
               현재 설정: {getCurrentSettingLabel(savedTime)}

@@ -38,6 +38,15 @@ export function NoteManageMenu({
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
+  /**
+   * 메뉴가 닫히며 트리거로 포커스를 되돌리는 동작과 다이얼로그의 초기 포커스가
+   * 같은 틱에 겹치면 다이얼로그가 포커스를 뺏길 수 있다. 한 프레임 뒤로 미뤄
+   * 포커스 복귀가 끝난 다음에 연다.
+   */
+  const openAfterMenuCloses = (openDialog: () => void) => {
+    requestAnimationFrame(openDialog);
+  };
+
   return (
     <>
       {/* modal 기본값(true)은 메뉴가 열린 동안 body 스크롤을 잠근다.
@@ -57,7 +66,11 @@ export function NoteManageMenu({
           </DropdownMenuItem>
 
           {canChangeNotificationTime && (
-            <DropdownMenuItem onSelect={() => setNotificationOpen(true)}>
+            <DropdownMenuItem
+              onSelect={() =>
+                openAfterMenuCloses(() => setNotificationOpen(true))
+              }
+            >
               <Bell className="size-4" aria-hidden="true" />
               알림 시간 변경
             </DropdownMenuItem>
@@ -67,7 +80,7 @@ export function NoteManageMenu({
 
           <DropdownMenuItem
             variant="destructive"
-            onSelect={() => setDeleteOpen(true)}
+            onSelect={() => openAfterMenuCloses(() => setDeleteOpen(true))}
           >
             <Trash2 className="size-4" aria-hidden="true" />
             노트 삭제
