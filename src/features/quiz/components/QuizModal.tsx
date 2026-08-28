@@ -2,11 +2,11 @@
 
 import {
   ArrowLeftIcon,
-  CircleIcon,
+  CircleXIcon,
   ListChecksIcon,
   LoaderIcon,
+  NotebookTextIcon,
   TextCursorInputIcon,
-  XIcon,
 } from "lucide-react";
 
 import {
@@ -31,10 +31,31 @@ const QUIZ_TYPE_LABELS: Record<QuizType, string> = {
   choice: "객관식",
 };
 
+const QUIZ_TYPE_OPTIONS = [
+  {
+    type: "ox",
+    label: QUIZ_TYPE_LABELS.ox,
+    description: "핵심을 빠르게 확인해요",
+    Icon: CircleXIcon,
+  },
+  {
+    type: "choice",
+    label: QUIZ_TYPE_LABELS.choice,
+    description: "보기에서 답을 골라요",
+    Icon: ListChecksIcon,
+  },
+  {
+    type: "blank",
+    label: QUIZ_TYPE_LABELS.blank,
+    description: "직접 떠올려 완성해요",
+    Icon: TextCursorInputIcon,
+  },
+] as const;
+
 const TYPE_BUTTON_CLASS = cn(
-  "flex cursor-pointer flex-row items-center justify-center gap-3 rounded-lg border-2 border-border p-4 transition-colors",
-  "sm:flex-col",
+  "flex min-h-0 cursor-pointer items-center gap-3 rounded-xl border border-border bg-background px-3 py-2.5 text-left transition-colors sm:min-h-24 sm:p-4",
   "hover:border-primary/50 hover:bg-primary/5",
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
 );
 
 type QuizModalProps = {
@@ -79,55 +100,45 @@ export function QuizModal({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="flex max-h-[85dvh] flex-col overflow-hidden">
-        <DialogHeader className="shrink-0 mb-6">
-          <DialogTitle>퀴즈</DialogTitle>
-          <DialogDescription className="mt-2 truncate border-l-4 border-foreground pl-3 text-[15px] font-medium text-foreground/80">
-            {noteTitle}
+      <DialogContent className="flex max-h-[85dvh] max-w-3xl flex-col overflow-hidden border border-border/60 p-4 shadow-2xl sm:p-6">
+        <DialogHeader className="mb-4 shrink-0 pr-8 sm:mb-6">
+          <DialogTitle className="text-xl">퀴즈 만들기</DialogTitle>
+          <DialogDescription className="mt-2 flex min-w-0 items-start gap-2 text-base text-muted-foreground">
+            <NotebookTextIcon
+              aria-hidden="true"
+              className="mt-0.5 size-4 shrink-0"
+            />
+            <span className="truncate">{noteTitle}</span>
           </DialogDescription>
         </DialogHeader>
 
         {phase === "select" && (
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              퀴즈 유형을 선택하세요
-            </p>
+          <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-1 sm:space-y-4 sm:pr-0">
+            <p className="text-base font-medium">어떻게 복습할까요?</p>
             {error && <p className="text-sm text-destructive">{error}</p>}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <button
-                type="button"
-                onClick={() => startQuiz("ox")}
-                className={TYPE_BUTTON_CLASS}
-              >
-                <div className="flex items-center gap-1">
-                  <CircleIcon className="size-5" />
-                  <XIcon className="size-6" />
-                </div>
-                <span className="text-sm font-medium sm:text-center">
-                  {QUIZ_TYPE_LABELS.ox}
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => startQuiz("choice")}
-                className={TYPE_BUTTON_CLASS}
-              >
-                <ListChecksIcon className="size-6" />
-                <span className="text-sm font-medium sm:text-center">
-                  {QUIZ_TYPE_LABELS.choice}
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => startQuiz("blank")}
-                className={TYPE_BUTTON_CLASS}
-              >
-                <TextCursorInputIcon className="size-6" />
-                <span className="text-sm font-medium sm:text-center">
-                  {QUIZ_TYPE_LABELS.blank}
-                </span>
-              </button>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
+              {QUIZ_TYPE_OPTIONS.map(({ type, label, description, Icon }) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => startQuiz(type)}
+                  className={TYPE_BUTTON_CLASS}
+                >
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-muted sm:size-10">
+                    <Icon aria-hidden="true" className="size-5" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-base font-medium">{label}</span>
+                    <span className="hidden text-sm text-muted-foreground sm:mt-1 sm:block">
+                      {description}
+                    </span>
+                  </span>
+                </button>
+              ))}
             </div>
+            <p className="text-sm text-muted-foreground">
+              유형을 누르면 바로 시작합니다.
+            </p>
           </div>
         )}
 
