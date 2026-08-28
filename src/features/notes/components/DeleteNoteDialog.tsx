@@ -1,16 +1,15 @@
 "use client";
 
-import { Trash2 } from "lucide-react";
 import { useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 
 import { deleteNoteAction } from "../actions";
@@ -18,10 +17,20 @@ import { deleteNoteAction } from "../actions";
 type DeleteNoteDialogProps = {
   noteId: string;
   noteTitle: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 };
 
-export function DeleteNoteDialog({ noteId, noteTitle }: DeleteNoteDialogProps) {
-  const [open, setOpen] = useState(false);
+/**
+ * 삭제 확인 다이얼로그. 트리거는 갖지 않고 열림 상태를 밖에서 받는다.
+ * 삭제는 빈도가 낮은 파괴적 행동이라 액션 바가 아니라 관리 메뉴 안에서 연다.
+ */
+export function DeleteNoteDialog({
+  noteId,
+  noteTitle,
+  open,
+  onOpenChange,
+}: DeleteNoteDialogProps) {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -30,7 +39,7 @@ export function DeleteNoteDialog({ noteId, noteTitle }: DeleteNoteDialogProps) {
       setError(null);
     }
 
-    setOpen(nextOpen);
+    onOpenChange(nextOpen);
   }
 
   function handleDelete() {
@@ -46,21 +55,16 @@ export function DeleteNoteDialog({ noteId, noteTitle }: DeleteNoteDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <Button variant="destructive" size="sm">
-          <Trash2 className="size-3.5" />
-          노트 삭제
-        </Button>
-      </DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>노트 삭제</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">
+          {/* DialogDescription이 aria-describedby를 연결한다. */}
+          <DialogDescription>
             삭제한 노트는 되돌릴 수 없습니다. 아래 노트를 영구적으로
             삭제하시겠습니까?
-          </p>
+          </DialogDescription>
           <p className="min-w-0 max-w-full whitespace-normal break-keep rounded-lg bg-muted px-3 py-2 text-sm font-medium text-foreground [overflow-wrap:anywhere]">
             {noteTitle}
           </p>

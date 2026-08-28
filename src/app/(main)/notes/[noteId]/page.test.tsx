@@ -17,7 +17,6 @@ type NoteDetailBodyProps = {
   canStartReview: boolean;
   reviewStatusMessage: string;
   notificationTimeOfDay: string | null;
-  nextScheduledAt: string | null;
 };
 
 const {
@@ -177,7 +176,6 @@ describe("NoteDetailPage", () => {
       canStartReview: true,
       reviewStatusMessage: "지금 백지 테스트를 진행할 수 있습니다.",
       notificationTimeOfDay: "21:30:00",
-      nextScheduledAt: "2026-03-29T09:00:00.000Z",
     });
   });
 
@@ -318,7 +316,6 @@ describe("NoteDetailPage", () => {
       isReviewCompleted: true,
       canStartReview: false,
       reviewStatusMessage: "1-3-7 복습을 모두 마쳤습니다.",
-      nextScheduledAt: null,
     });
     expect(hasCompletedReviewForNoteTodayMock).not.toHaveBeenCalled();
   });

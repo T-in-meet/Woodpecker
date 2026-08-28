@@ -18,14 +18,13 @@ import {
   Dialog,
   DialogClose,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { formatDateTime } from "@/lib/utils/formatDate";
 
 import { setNotificationTimeAction } from "../actions";
 import {
@@ -41,17 +40,23 @@ import { notificationTimeSchema } from "../schema";
 type NotificationTimePickerProps = {
   noteId: string;
   initialTime: string | null;
-  nextScheduledAt: string | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 };
 
 function getCurrentSettingLabel(time: string) {
   return time ? `${time} KST` : "기본 복습 예정 시간";
 }
 
+/**
+ * 알림 시간 설정 다이얼로그. 트리거는 갖지 않고 열림 상태를 밖에서 받는다.
+ * 노트 상세에서는 관리 메뉴(`NoteManageMenu`)의 항목으로 열린다.
+ */
 export function NotificationTimePicker({
   noteId,
   initialTime,
-  nextScheduledAt,
+  open,
+  onOpenChange,
 }: NotificationTimePickerProps) {
   const inputBaseId = useId();
   const labelId = `${inputBaseId}-label`;
@@ -61,7 +66,6 @@ export function NotificationTimePicker({
   const router = useRouter();
   const initialInputTime = toInputTime(initialTime);
   const initialTimeParts = getTimeParts(initialInputTime);
-  const [open, setOpen] = useState(false);
   const [period, setPeriod] = useState<PeriodType>(initialTimeParts.period);
   const [hourValue, setHourValue] = useState(initialTimeParts.hour);
   const [minuteValue, setMinuteValue] = useState(initialTimeParts.minute);
@@ -92,7 +96,7 @@ export function NotificationTimePicker({
   }, [initialInputTime]);
 
   const handleOpenChange = (nextOpen: boolean) => {
-    setOpen(nextOpen);
+    onOpenChange(nextOpen);
     setMessage(null);
     setError(null);
     setDraftFromTime(savedTime);
@@ -195,22 +199,15 @@ export function NotificationTimePicker({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <Button type="button" variant="outline" size="sm">
-          <Clock aria-hidden="true" />
-          다음 알림 시간 설정
-        </Button>
-      </DialogTrigger>
       {open && (
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>다음 알림 시간 설정</DialogTitle>
-            <div className="mt-2 space-y-1 text-sm text-muted-foreground">
-              <p>현재 설정: {getCurrentSettingLabel(savedTime)}</p>
-              {nextScheduledAt && (
-                <p>다음 복습 예정 {formatDateTime(nextScheduledAt)}</p>
-              )}
-            </div>
+            {/* 다음 복습 예정 시각은 노트 상세 헤더의 배지 줄이 이미 보여준다.
+                DialogDescription이 aria-describedby를 연결한다. */}
+            <DialogDescription className="mt-2">
+              현재 설정: {getCurrentSettingLabel(savedTime)}
+            </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="space-y-4">

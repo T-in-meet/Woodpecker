@@ -145,7 +145,6 @@ export default async function NoteDetailPage({
         canStartReview={canStartReview}
         reviewStatusMessage={reviewStatusMessage}
         notificationTimeOfDay={note.notification_time_of_day}
-        nextScheduledAt={note.next_scheduled_at}
       />
 
       <GradingHistorySection gradings={gradings} />

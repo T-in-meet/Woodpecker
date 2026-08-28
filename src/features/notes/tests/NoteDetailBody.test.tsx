@@ -41,16 +41,18 @@ vi.mock("@/features/editor/components/TipTapEditor", () => ({
   ),
 }));
 
-vi.mock("@/features/notifications/components/NotificationTimePicker", () => ({
-  NotificationTimePicker: () => <div data-testid="notification-time-picker" />,
-}));
-
 vi.mock("@/features/quiz/components/QuizButton", () => ({
   QuizButton: () => <div data-testid="quiz-button" />,
 }));
 
-vi.mock("./DeleteNoteDialog", () => ({
-  DeleteNoteDialog: () => <button type="button">노트 삭제</button>,
+// vi.mock 경로는 이 테스트 파일 기준으로 해석되므로 상대 경로("./NoteManageMenu")를
+// 쓰면 tests/ 아래를 찾다가 조용히 빗나간다. 별칭 경로로 지정한다.
+vi.mock("@/features/notes/components/NoteManageMenu", () => ({
+  NoteManageMenu: ({ onEdit }: { onEdit: () => void }) => (
+    <button type="button" onClick={onEdit}>
+      노트 수정
+    </button>
+  ),
 }));
 
 vi.mock("@/features/related-notes/components/RelatedNotesSection", () => ({
@@ -70,7 +72,6 @@ function renderBody(props: Partial<Parameters<typeof NoteDetailBody>[0]> = {}) {
       canStartReview={true}
       reviewStatusMessage="다음 예정: 내일"
       notificationTimeOfDay={null}
-      nextScheduledAt={null}
       {...props}
     />,
   );
@@ -94,6 +95,18 @@ describe("NoteDetailBody", () => {
       screen.getByRole("heading", { name: "원래 제목" }),
     ).toBeInTheDocument();
     expect(screen.queryByLabelText("제목")).not.toBeInTheDocument();
+  });
+
+  it("복습 상태 문구를 배지 줄에 함께 보여준다", () => {
+    renderBody({
+      reviewStatusMessage: "지금 백지 테스트를 진행할 수 있습니다.",
+    });
+
+    const badge = screen.getByText("복습 1 / 3");
+    const status = screen.getByText("지금 백지 테스트를 진행할 수 있습니다.");
+
+    expect(status).toBeInTheDocument();
+    expect(badge.parentElement).toBe(status.parentElement);
   });
 
   it("switches into edit mode when the edit button is clicked", async () => {

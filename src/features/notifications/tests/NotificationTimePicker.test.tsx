@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { type ComponentProps, useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const NOTE_ID = "11111111-1111-4111-8111-111111111111";
@@ -21,6 +22,28 @@ vi.mock("../actions", () => ({
 
 import { NotificationTimePicker } from "../components/NotificationTimePicker";
 
+/**
+ * 다이얼로그는 트리거를 갖지 않는다. 실제 앱에서는 노트 관리 메뉴가 열어 주므로,
+ * 테스트에서도 같은 역할을 하는 버튼을 두고 열림 상태를 넘긴다.
+ */
+function PickerWithTrigger(
+  props: Omit<
+    ComponentProps<typeof NotificationTimePicker>,
+    "open" | "onOpenChange"
+  >,
+) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)}>
+        다음 알림 시간 설정
+      </button>
+      <NotificationTimePicker {...props} open={open} onOpenChange={setOpen} />
+    </>
+  );
+}
+
 describe("NotificationTimePicker", () => {
   beforeEach(() => {
     refreshMock.mockReset();
@@ -30,13 +53,7 @@ describe("NotificationTimePicker", () => {
 
   it("opens the notification time settings in a dialog", async () => {
     const user = userEvent.setup();
-    render(
-      <NotificationTimePicker
-        noteId={NOTE_ID}
-        initialTime="21:30:00"
-        nextScheduledAt="2026-04-30T12:30:00.000Z"
-      />,
-    );
+    render(<PickerWithTrigger noteId={NOTE_ID} initialTime="21:30:00" />);
 
     expect(
       screen.getByRole("button", { name: "다음 알림 시간 설정" }),
@@ -49,7 +66,6 @@ describe("NotificationTimePicker", () => {
 
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.getByText("현재 설정: 21:30 KST")).toBeInTheDocument();
-    expect(screen.getByText(/다음 복습 예정/)).toBeInTheDocument();
     expect(
       screen.getByRole("button", {
         name: "오전 오후 전환, 현재 오후",
@@ -61,13 +77,7 @@ describe("NotificationTimePicker", () => {
 
   it("saves a changed notification time", async () => {
     const user = userEvent.setup();
-    render(
-      <NotificationTimePicker
-        noteId={NOTE_ID}
-        initialTime={null}
-        nextScheduledAt={null}
-      />,
-    );
+    render(<PickerWithTrigger noteId={NOTE_ID} initialTime={null} />);
 
     await user.click(
       screen.getByRole("button", { name: "다음 알림 시간 설정" }),
@@ -99,13 +109,7 @@ describe("NotificationTimePicker", () => {
 
   it("toggles the visible period by click and arrow keys", async () => {
     const user = userEvent.setup();
-    render(
-      <NotificationTimePicker
-        noteId={NOTE_ID}
-        initialTime={null}
-        nextScheduledAt={null}
-      />,
-    );
+    render(<PickerWithTrigger noteId={NOTE_ID} initialTime={null} />);
 
     await user.click(
       screen.getByRole("button", { name: "다음 알림 시간 설정" }),
@@ -135,13 +139,7 @@ describe("NotificationTimePicker", () => {
 
   it("syncs a selected browser time with the visible inputs", async () => {
     const user = userEvent.setup();
-    render(
-      <NotificationTimePicker
-        noteId={NOTE_ID}
-        initialTime={null}
-        nextScheduledAt={null}
-      />,
-    );
+    render(<PickerWithTrigger noteId={NOTE_ID} initialTime={null} />);
 
     await user.click(
       screen.getByRole("button", { name: "다음 알림 시간 설정" }),
@@ -176,20 +174,10 @@ describe("NotificationTimePicker", () => {
   it("syncs local state when the initial time changes after mount", async () => {
     const user = userEvent.setup();
     const { rerender } = render(
-      <NotificationTimePicker
-        noteId={NOTE_ID}
-        initialTime="09:30:00"
-        nextScheduledAt={null}
-      />,
+      <PickerWithTrigger noteId={NOTE_ID} initialTime="09:30:00" />,
     );
 
-    rerender(
-      <NotificationTimePicker
-        noteId={NOTE_ID}
-        initialTime="21:30:00"
-        nextScheduledAt={null}
-      />,
-    );
+    rerender(<PickerWithTrigger noteId={NOTE_ID} initialTime="21:30:00" />);
 
     await user.click(
       screen.getByRole("button", { name: "다음 알림 시간 설정" }),
@@ -210,13 +198,7 @@ describe("NotificationTimePicker", () => {
       new Error("network error"),
     );
     const user = userEvent.setup();
-    render(
-      <NotificationTimePicker
-        noteId={NOTE_ID}
-        initialTime={null}
-        nextScheduledAt={null}
-      />,
-    );
+    render(<PickerWithTrigger noteId={NOTE_ID} initialTime={null} />);
 
     await user.click(
       screen.getByRole("button", { name: "다음 알림 시간 설정" }),
@@ -244,13 +226,7 @@ describe("NotificationTimePicker", () => {
 
   it("clears the override and falls back to the default review time", async () => {
     const user = userEvent.setup();
-    render(
-      <NotificationTimePicker
-        noteId={NOTE_ID}
-        initialTime="21:30:00"
-        nextScheduledAt={null}
-      />,
-    );
+    render(<PickerWithTrigger noteId={NOTE_ID} initialTime="21:30:00" />);
 
     await user.click(
       screen.getByRole("button", { name: "다음 알림 시간 설정" }),
