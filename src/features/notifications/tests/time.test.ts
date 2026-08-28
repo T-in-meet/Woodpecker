@@ -10,7 +10,6 @@ import {
   getTimeParts,
   isWithinScheduleRange,
   padTimePart,
-  toDateKey,
   toInputTime,
   toScheduledAt,
   toTimeValue,
@@ -80,8 +79,7 @@ describe("notification schedule date helpers", () => {
     expect(getKstTimeValue("not-a-date")).toBe("");
   });
 
-  it("round-trips a calendar date through the date key", () => {
-    expect(toDateKey(new Date(2026, 4, 5))).toBe("2026-05-05");
+  it("turns a date key into a local Date for display", () => {
     expect(fromDateKey("2026-05-05")?.getDate()).toBe(5);
     expect(fromDateKey("nope")).toBeNull();
   });

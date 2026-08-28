@@ -86,9 +86,9 @@ export function clampTimePart(value: string, min: number, max: number) {
 }
 
 /**
- * 복습 일정은 KST 달력일이 기준이고 달력(react-day-picker)은 브라우저 로컬 Date를
- * 다룬다. 둘을 `YYYY-MM-DD` 키로 이어주되, "시각(instant)"과 "달력이 고른 날짜"는
- * 변환 방식이 다르므로 함수를 나눈다.
+ * 복습 일정은 KST 달력일이 기준이다. 날짜 선택(`DateWheelPicker`)은 브라우저 타임존과
+ * 무관하게 `YYYY-MM-DD` 문자열 키로만 날짜를 다루고, 저장된 시각(instant)과의 변환은
+ * 아래 헬퍼들이 담당한다.
  */
 
 /** 특정 시각이 KST에서 며칠인지. `now`나 저장된 scheduled_at에 쓴다. */
@@ -107,19 +107,7 @@ export function getKstTimeValue(instant: string | Date) {
   return new Date(date.getTime() + KST_OFFSET_MS).toISOString().slice(11, 16);
 }
 
-/**
- * 달력이 고른 Date(로컬 자정)를 날짜 키로 바꾼다.
- * 로컬 타임존이 KST보다 앞선 지역(예: UTC+10)에서는 오프셋을 더하는 방식이
- * 하루씩 밀리므로 로컬 연·월·일을 그대로 읽는다.
- */
-export function toDateKey(date: Date) {
-  const month = padTimePart(date.getMonth() + 1);
-  const day = padTimePart(date.getDate());
-
-  return `${date.getFullYear()}-${month}-${day}`;
-}
-
-/** 날짜 키를 달력이 다루는 로컬 자정 Date로 되돌린다. */
+/** 날짜 키를 표기용 로컬 자정 Date로 되돌린다. `date-fns`의 `format`에 넘겨 쓴다. */
 export function fromDateKey(dateKey: string) {
   const [year, month, day] = dateKey.split("-").map(Number);
 
