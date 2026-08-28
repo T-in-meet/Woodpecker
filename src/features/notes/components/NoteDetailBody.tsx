@@ -90,7 +90,7 @@ export function NoteDetailBody({
             </Button>
           )}
           <QuizButton noteId={noteId} noteTitle={title} />
-          <div className="flex items-center gap-1 sm:ml-auto">
+          <div className="sm:ml-auto">
             <NoteManageMenu
               noteId={noteId}
               noteTitle={title}
