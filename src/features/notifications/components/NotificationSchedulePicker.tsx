@@ -17,7 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { MAX_NOTIFICATION_SCHEDULE_OFFSET_DAYS } from "@/lib/constants/notifications";
+import { cn } from "@/lib/utils/cn";
 
 import {
   setNotificationScheduleAction,
@@ -31,20 +31,20 @@ import {
   getTimeParts,
   toInputTime,
 } from "../lib/time";
-import { DateWheelPicker } from "./DateWheelPicker";
+import { ResponsiveDateInput } from "./ResponsiveDateInput";
 import { ResponsiveTimePicker } from "./ResponsiveTimePicker";
 
 type NotificationSchedulePickerProps = {
   noteId: string;
   /** 사용자가 지정한 알림 시각(`notification_time_of_day`). 없으면 기본 일정을 따른다. */
   initialTime: string | null;
-  /** 다음 알림이 실제로 나갈 시각. 날짜 선택의 초기값이 된다. */
+  /** 다음 알림이 실제로 나갈 시각. 날짜 입력의 초기값이 된다. */
   initialScheduledAt: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
 
-/** 빠른 선택 칩. 날짜 목록을 열지 않고 끝나는 흔한 경우를 먼저 처리한다. */
+/** 빠른 선택 칩. 날짜를 직접 입력하지 않고 끝나는 흔한 경우를 먼저 처리한다. */
 const QUICK_OFFSETS = [
   { label: "오늘", days: 0 },
   { label: "내일", days: 1 },
@@ -65,12 +65,6 @@ function formatScheduleLabel(dateKey: string, time: string) {
   return `${format(date, "M월 d일 (E)", { locale: ko })} ${periodLabel} ${hour}:${minute}`;
 }
 
-function formatDateOption(dateKey: string) {
-  const date = fromDateKey(dateKey);
-
-  return date ? format(date, "yyyy년 M월 d일 (E)", { locale: ko }) : dateKey;
-}
-
 /**
  * 다음 복습 일정(=알림 시각) 변경 다이얼로그. 트리거는 갖지 않고 열림 상태를 밖에서 받는다.
  * 노트 상세에서는 관리 메뉴(`NoteManageMenu`)의 항목으로 열린다.
@@ -88,10 +82,6 @@ export function NotificationSchedulePicker({
   const router = useRouter();
 
   const todayKey = getKstDateKey(new Date());
-  const lastSelectableKey = addDaysToDateKey(
-    todayKey,
-    MAX_NOTIFICATION_SCHEDULE_OFFSET_DAYS,
-  );
 
   const savedDateKey = initialScheduledAt
     ? getKstDateKey(new Date(initialScheduledAt))
@@ -99,33 +89,23 @@ export function NotificationSchedulePicker({
   const savedTime = initialScheduledAt
     ? getKstTimeValue(initialScheduledAt)
     : toInputTime(initialTime);
-  const selectableDateKeys = Array.from(
-    { length: MAX_NOTIFICATION_SCHEDULE_OFFSET_DAYS + 1 },
-    (_, offset) => addDaysToDateKey(todayKey, offset),
-  );
-  const dateOptions = selectableDateKeys.includes(savedDateKey)
-    ? selectableDateKeys
-    : [savedDateKey, ...selectableDateKeys];
-  const wheelDateOptions = dateOptions.map((optionDateKey) => ({
-    value: optionDateKey,
-    label: formatDateOption(optionDateKey),
-    disabled: optionDateKey < todayKey || optionDateKey > lastSelectableKey,
-  }));
 
   const [dateKey, setDateKey] = useState(savedDateKey);
   const [timeValue, setTimeValue] = useState(savedTime);
+  const [isDateInputValid, setIsDateInputValid] = useState(
+    savedDateKey >= todayKey,
+  );
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const hasSavedOverride = toInputTime(initialTime).length > 0;
   const hasChanges = timeValue !== savedTime || dateKey !== savedDateKey;
-  const scheduleLabel =
-    timeValue === "" ? null : formatScheduleLabel(dateKey, timeValue);
 
   const resetDraft = () => {
     setDateKey(savedDateKey);
     setTimeValue(savedTime);
+    setIsDateInputValid(savedDateKey >= todayKey);
   };
 
   // 여는 주체가 밖(`NoteManageMenu`)이라 열 때는 Radix가 onOpenChange를 호출하지 않는다.
@@ -149,7 +129,8 @@ export function NotificationSchedulePicker({
 
     setDateKey(savedDateKey);
     setTimeValue(savedTime);
-  }, [open, savedDateKey, savedTime]);
+    setIsDateInputValid(savedDateKey >= todayKey);
+  }, [open, savedDateKey, savedTime, todayKey]);
 
   const handleOpenChange = (nextOpen: boolean) => {
     onOpenChange(nextOpen);
@@ -165,6 +146,11 @@ export function NotificationSchedulePicker({
 
     if (timeValue === "") {
       setError("알림 시간이 올바르지 않습니다.");
+      return;
+    }
+
+    if (!isDateInputValid) {
+      setError("알림 날짜가 올바르지 않습니다.");
       return;
     }
 
@@ -222,10 +208,17 @@ export function NotificationSchedulePicker({
     setTimeValue(nextTimeValue);
   };
 
-  const handleSelectDate = (nextDateKey: string) => {
+  const handleSelectDateKey = (nextDateKey: string) => {
     setMessage(null);
     setError(null);
     setDateKey(nextDateKey);
+    setIsDateInputValid(true);
+  };
+
+  const handleDateValidityChange = (isValid: boolean) => {
+    setMessage(null);
+    setError(null);
+    setIsDateInputValid(isValid);
   };
 
   return (
@@ -245,18 +238,19 @@ export function NotificationSchedulePicker({
             <div className="flex flex-wrap gap-1.5">
               {QUICK_OFFSETS.map((offset) => {
                 const offsetKey = addDaysToDateKey(todayKey, offset.days);
+                const isSelected = dateKey === offsetKey;
 
                 return (
                   <Button
                     key={offset.label}
                     type="button"
-                    variant={dateKey === offsetKey ? "secondary" : "outline"}
+                    variant="outline"
                     size="xs"
+                    aria-pressed={isSelected}
                     disabled={isPending}
+                    className={cn(isSelected && "bg-muted text-foreground")}
                     onClick={() => {
-                      setMessage(null);
-                      setError(null);
-                      setDateKey(offsetKey);
+                      handleSelectDateKey(offsetKey);
                     }}
                   >
                     {offset.label}
@@ -267,11 +261,12 @@ export function NotificationSchedulePicker({
 
             <div className="space-y-1.5">
               <Label>날짜</Label>
-              <DateWheelPicker
+              <ResponsiveDateInput
                 value={dateKey}
-                options={wheelDateOptions}
+                min={todayKey}
                 disabled={isPending}
-                onValueChange={handleSelectDate}
+                onValueChange={handleSelectDateKey}
+                onValidityChange={handleDateValidityChange}
               />
             </div>
 
@@ -284,18 +279,12 @@ export function NotificationSchedulePicker({
               />
             </div>
 
-            {scheduleLabel && (
-              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                {scheduleLabel}에 알림을 보냅니다.
-              </p>
-            )}
-
             <div aria-live="polite">
               {message && <p className="text-sm text-green-600">{message}</p>}
               {error && <p className="text-sm text-destructive">{error}</p>}
             </div>
 
-            <DialogFooter className="mt-0 flex-row items-center justify-between gap-2">
+            <DialogFooter className="mt-2 flex-row items-center justify-between gap-2 pt-4">
               <Button
                 type="button"
                 variant="outline"
@@ -320,7 +309,7 @@ export function NotificationSchedulePicker({
                 <Button
                   type="submit"
                   size="md"
-                  disabled={isPending || !hasChanges}
+                  disabled={isPending || !hasChanges || !isDateInputValid}
                 >
                   {isPending ? (
                     <Loader2 className="animate-spin" aria-hidden="true" />

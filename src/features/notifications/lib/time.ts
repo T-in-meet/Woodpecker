@@ -1,4 +1,3 @@
-import { MAX_NOTIFICATION_SCHEDULE_OFFSET_DAYS } from "@/lib/constants/notifications";
 import { KST_OFFSET_MS } from "@/lib/constants/time";
 
 export type PeriodType = "am" | "pm";
@@ -7,6 +6,12 @@ export type TimePartsType = {
   hour: string;
   minute: string;
   period: PeriodType;
+};
+
+export type DatePartsType = {
+  year: string;
+  month: string;
+  day: string;
 };
 
 export function toInputTime(time: string | null) {
@@ -67,8 +72,8 @@ export function toTimeValue(period: PeriodType, hour: string, minute: string) {
   return `${padTimePart(hour24)}:${padTimePart(minuteNumber)}`;
 }
 
-export function getNumericInput(value: string) {
-  return value.replace(/\D/g, "").slice(0, 2);
+export function getNumericInput(value: string, maxLength = 2) {
+  return value.replace(/\D/g, "").slice(0, maxLength);
 }
 
 export function clampTimePart(value: string, min: number, max: number) {
@@ -86,9 +91,9 @@ export function clampTimePart(value: string, min: number, max: number) {
 }
 
 /**
- * 복습 일정은 KST 달력일이 기준이다. 날짜 선택(`DateWheelPicker`)은 브라우저 타임존과
- * 무관하게 `YYYY-MM-DD` 문자열 키로만 날짜를 다루고, 저장된 시각(instant)과의 변환은
- * 아래 헬퍼들이 담당한다.
+ * 복습 일정은 KST 달력일이 기준이다. 날짜 입력은 브라우저 타임존과 무관하게
+ * `YYYY-MM-DD` 문자열 키로만 다루고, 저장된 시각(instant)과의 변환은 아래 헬퍼들이
+ * 담당한다.
  */
 
 /** 특정 시각이 KST에서 며칠인지. `now`나 저장된 scheduled_at에 쓴다. */
@@ -109,13 +114,41 @@ export function getKstTimeValue(instant: string | Date) {
 
 /** 날짜 키를 표기용 로컬 자정 Date로 되돌린다. `date-fns`의 `format`에 넘겨 쓴다. */
 export function fromDateKey(dateKey: string) {
-  const [year, month, day] = dateKey.split("-").map(Number);
-
-  if (!year || !month || !day) {
+  if (!isValidDateKey(dateKey)) {
     return null;
   }
 
+  const [year = 0, month = 0, day = 0] = dateKey.split("-").map(Number);
+
   return new Date(year, month - 1, day);
+}
+
+export function getDateParts(dateKey: string): DatePartsType {
+  const [year = "", month = "", day = ""] = dateKey.split("-");
+
+  return { year, month, day };
+}
+
+export function toDateKey(year: string, month: string, day: string) {
+  const dateKey = `${year}-${month}-${day}`;
+
+  return isValidDateKey(dateKey) ? dateKey : null;
+}
+
+export function isValidDateKey(dateKey: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+    return false;
+  }
+
+  const [year = 0, month = 0, day = 0] = dateKey.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  return (
+    year >= 1000 &&
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
 }
 
 export function addDaysToDateKey(dateKey: string, days: number) {
@@ -130,21 +163,22 @@ export function addDaysToDateKey(dateKey: string, days: number) {
   return date.toISOString().slice(0, 10);
 }
 
-/**
- * 오늘(KST) ~ +MAX_NOTIFICATION_SCHEDULE_OFFSET_DAYS 안의 날짜인지.
- * 날짜 키는 사전순 비교가 곧 날짜 비교라 문자열로 견준다.
- */
-export function isWithinScheduleRange(dateKey: string, now = new Date()) {
+/** 오늘(KST) 또는 그 이후의 유효한 날짜인지. */
+export function isScheduleDateOnOrAfterToday(
+  dateKey: string,
+  now = new Date(),
+) {
   const todayKey = getKstDateKey(now);
 
-  return (
-    dateKey >= todayKey &&
-    dateKey <= addDaysToDateKey(todayKey, MAX_NOTIFICATION_SCHEDULE_OFFSET_DAYS)
-  );
+  return isValidDateKey(dateKey) && dateKey >= todayKey;
 }
 
 /** KST 날짜 키와 `HH:mm`을 하나의 시각(ISO 문자열)으로 합친다. */
 export function toScheduledAt(dateKey: string, time: string) {
+  if (!isValidDateKey(dateKey)) {
+    return null;
+  }
+
   const scheduledAt = new Date(`${dateKey}T${time}:00+09:00`);
 
   if (Number.isNaN(scheduledAt.getTime())) {

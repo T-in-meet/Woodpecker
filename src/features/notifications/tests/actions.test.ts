@@ -329,18 +329,36 @@ describe("notification server actions", () => {
     expect(result).toEqual({ success: true });
   });
 
-  it("rejects a schedule outside the allowed range before calling supabase", async () => {
-    const outOfRangeDate = addDaysToDateKey(getKstDateKey(new Date()), 31);
+  it("allows moving a schedule one year ahead", async () => {
+    const { supabase, rpcMock } = createSupabaseMock({ rpcData: null });
+    createClientMock.mockResolvedValue(supabase);
+    const longTermDate = addDaysToDateKey(getKstDateKey(new Date()), 365);
 
     const result = await setNotificationScheduleAction(
       NOTE_ID,
-      outOfRangeDate,
+      longTermDate,
+      "21:30",
+    );
+
+    expect(rpcMock).toHaveBeenCalledWith("update_notification_schedule", {
+      p_note_id: NOTE_ID,
+      p_scheduled_at: `${longTermDate}T12:30:00.000Z`,
+    });
+    expect(result).toEqual({ success: true });
+  });
+
+  it("rejects a past date before calling supabase", async () => {
+    const pastDate = addDaysToDateKey(getKstDateKey(new Date()), -1);
+
+    const result = await setNotificationScheduleAction(
+      NOTE_ID,
+      pastDate,
       "21:30",
     );
 
     expect(result).toEqual({
       success: false,
-      error: "오늘부터 30일 이내로만 옮길 수 있습니다.",
+      error: "오늘 이후 날짜로만 옮길 수 있습니다.",
     });
     expect(createClientMock).not.toHaveBeenCalled();
   });
@@ -348,7 +366,7 @@ describe("notification server actions", () => {
   it("returns a date validation error before moving the schedule", async () => {
     const result = await setNotificationScheduleAction(
       NOTE_ID,
-      "2026-5-1",
+      "2026-02-31",
       "21:30",
     );
 

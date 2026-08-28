@@ -87,7 +87,7 @@ SELECT lives_ok(
     current_setting('test.schedule_note_id'),
     current_setting('test.schedule_target_at')
   ),
-  $$moving the schedule within the allowed window should succeed$$
+  $$moving the schedule to a future date should succeed$$
 );
 
 SELECT is(
@@ -130,16 +130,15 @@ SELECT is(
   $$notes.notification_time_of_day should store the chosen wall-clock time$$
 );
 
-SELECT throws_ok(
+SELECT lives_ok(
   format(
     $sql$
       SELECT public.update_notification_schedule('%s'::uuid, '%s'::timestamptz);
     $sql$,
     current_setting('test.schedule_note_id'),
-    (public.apply_time_of_day(now() + interval '31 days', TIME '21:30'))::text
+    (public.apply_time_of_day(now() + interval '1 year', TIME '21:30'))::text
   ),
-  'schedule out of range',
-  $$dates beyond 30 days ahead should be rejected$$
+  $$moving the schedule one year ahead should succeed$$
 );
 
 -- 오늘 날짜라도 이미 지나간 시각이면 다음 cron 실행에서 즉시 발송되므로 막는다.

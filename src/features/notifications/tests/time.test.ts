@@ -8,8 +8,10 @@ import {
   getKstTimeValue,
   getNumericInput,
   getTimeParts,
-  isWithinScheduleRange,
+  isScheduleDateOnOrAfterToday,
+  isValidDateKey,
   padTimePart,
+  toDateKey,
   toInputTime,
   toScheduledAt,
   toTimeValue,
@@ -82,6 +84,16 @@ describe("notification schedule date helpers", () => {
   it("turns a date key into a local Date for display", () => {
     expect(fromDateKey("2026-05-05")?.getDate()).toBe(5);
     expect(fromDateKey("nope")).toBeNull();
+    expect(fromDateKey("2026-02-31")).toBeNull();
+  });
+
+  it("accepts only real four-digit calendar dates", () => {
+    expect(isValidDateKey("2026-02-28")).toBe(true);
+    expect(isValidDateKey("2028-02-29")).toBe(true);
+    expect(isValidDateKey("2026-02-29")).toBe(false);
+    expect(isValidDateKey("2026-13-01")).toBe(false);
+    expect(toDateKey("2026", "05", "01")).toBe("2026-05-01");
+    expect(toDateKey("2026", "02", "31")).toBeNull();
   });
 
   it("adds days across month boundaries", () => {
@@ -94,14 +106,15 @@ describe("notification schedule date helpers", () => {
       "2026-05-01T12:30:00.000Z",
     );
     expect(toScheduledAt("2026-05-01", "24:99")).toBeNull();
+    expect(toScheduledAt("2026-02-31", "21:30")).toBeNull();
   });
 
-  it("allows only today through the 30th day ahead", () => {
+  it("allows any valid date from today onward", () => {
     const now = new Date("2026-05-01T00:00:00.000Z");
 
-    expect(isWithinScheduleRange("2026-05-01", now)).toBe(true);
-    expect(isWithinScheduleRange("2026-05-31", now)).toBe(true);
-    expect(isWithinScheduleRange("2026-04-30", now)).toBe(false);
-    expect(isWithinScheduleRange("2026-06-01", now)).toBe(false);
+    expect(isScheduleDateOnOrAfterToday("2026-05-01", now)).toBe(true);
+    expect(isScheduleDateOnOrAfterToday("2027-05-01", now)).toBe(true);
+    expect(isScheduleDateOnOrAfterToday("2026-04-30", now)).toBe(false);
+    expect(isScheduleDateOnOrAfterToday("2026-02-31", now)).toBe(false);
   });
 });

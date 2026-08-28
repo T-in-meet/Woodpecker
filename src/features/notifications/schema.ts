@@ -6,6 +6,8 @@ import {
   NOTIFICATION_TYPES,
 } from "@/lib/constants/notifications";
 
+import { isValidDateKey } from "./lib/time";
+
 const notificationUuidSchema = z.string().uuid();
 
 export const notificationStatusSchema = z.enum([
@@ -67,12 +69,12 @@ export const setNotificationTimeSchema = z.object({
   time: notificationTimeSchema.nullable(),
 });
 
-export const notificationDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+export const notificationDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine(isValidDateKey);
 
-/**
- * 달력에서 고른 날짜와 시각. 실제 허용 범위(오늘 ~ +30일)는 KST "지금"을 알아야
- * 판단할 수 있으므로 여기서 검증하지 않고 서버 액션과 RPC가 확인한다.
- */
+/** 직접 입력한 날짜와 시각. 과거 여부는 KST "지금"을 아는 액션과 RPC가 확인한다. */
 export const setNotificationScheduleSchema = z.object({
   noteId: notificationNoteIdSchema,
   date: notificationDateSchema,

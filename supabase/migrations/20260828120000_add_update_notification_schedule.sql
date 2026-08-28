@@ -9,6 +9,9 @@
 --   notification_base_scheduled_at에는 원래 케이던스 시각을 보존한다.
 --   사용자가 "기본값"으로 되돌리면 update_notification_time_of_day(p_note_id, NULL)이
 --   이 값을 그대로 복원한다.
+--
+--   미래 일정에는 별도 상한을 두지 않는다. 사용자는 이번 복습 회차를 3개월·1년 뒤로도
+--   옮길 수 있으며, 과거 시각과 이미 선점·발송된 알림만 차단한다.
 CREATE OR REPLACE FUNCTION public.update_notification_schedule(
   p_note_id uuid,
   p_scheduled_at timestamptz
@@ -21,8 +24,6 @@ AS $$
 DECLARE
   v_user_id uuid := auth.uid();
   v_email_confirmed_at timestamptz;
-  v_target_date date;
-  v_today date := (now() AT TIME ZONE 'Asia/Seoul')::date;
   v_shifted_at timestamptz;
 BEGIN
   IF v_user_id IS NULL THEN
@@ -42,16 +43,8 @@ BEGIN
     RAISE EXCEPTION 'email not confirmed';
   END IF;
 
-  -- 날짜 선택 UI의 disabled 범위를 서버에서 다시 확인한다.
-  v_target_date := (p_scheduled_at AT TIME ZONE 'Asia/Seoul')::date;
-
-  IF v_target_date < v_today OR v_target_date > v_today + 30 THEN
-    RAISE EXCEPTION 'schedule out of range';
-  END IF;
-
-  -- 범위 검사는 날짜 단위라 "오늘"이면서 이미 지나간 시각을 통과시킨다.
-  -- 그대로 저장하면 claim_due_review_logs가 (scheduled_at <= clock_timestamp())
-  -- 다음 실행에서 바로 집어가 의도치 않은 즉시 발송이 된다.
+  -- 이미 지난 시각은 claim_due_review_logs가 다음 실행에서 바로 집어가
+  -- 의도치 않게 즉시 발송할 수 있으므로 막는다.
   IF p_scheduled_at <= now() THEN
     RAISE EXCEPTION 'schedule in the past';
   END IF;

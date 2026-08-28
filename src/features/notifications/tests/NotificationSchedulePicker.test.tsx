@@ -4,7 +4,7 @@ import { type ComponentProps, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const NOTE_ID = "11111111-1111-4111-8111-111111111111";
-/** KST 2026-05-01(금) 09:00. 날짜 선택의 "오늘"이 되는 시각. */
+/** KST 2026-05-01(금) 09:00. 날짜 입력의 "오늘"이 되는 시각. */
 const NOW = new Date("2026-05-01T00:00:00.000Z");
 /** KST 2026-05-01(금) 21:30. */
 const SCHEDULED_AT = "2026-05-01T12:30:00.000Z";
@@ -62,11 +62,16 @@ async function openDialog(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: "복습 일정 변경" }));
 }
 
-async function selectDate(
-  user: ReturnType<typeof userEvent.setup>,
-  label: string,
-) {
-  await user.click(screen.getByRole("option", { name: label }));
+function enterDate(year: string, month: string, day: string) {
+  fireEvent.change(screen.getByLabelText("연도"), {
+    target: { value: year },
+  });
+  fireEvent.change(screen.getByLabelText("월"), {
+    target: { value: month },
+  });
+  fireEvent.change(screen.getByLabelText("일"), {
+    target: { value: day },
+  });
 }
 
 describe("NotificationSchedulePicker", () => {
@@ -104,9 +109,9 @@ describe("NotificationSchedulePicker", () => {
     expect(
       screen.getByText("현재 설정: 5월 1일 (금) 오후 09:30"),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("option", { name: "2026년 5월 1일 (금)" }),
-    ).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByLabelText("연도")).toHaveValue("2026");
+    expect(screen.getByLabelText("월")).toHaveValue("05");
+    expect(screen.getByLabelText("일")).toHaveValue("01");
     expect(screen.getByRole("button", { name: "오후 선택" })).toHaveAttribute(
       "aria-pressed",
       "true",
@@ -115,7 +120,7 @@ describe("NotificationSchedulePicker", () => {
     expect(screen.getByLabelText("분")).toHaveValue("30");
   });
 
-  it("목록에서 고른 날짜와 시간을 함께 저장한다", async () => {
+  it("직접 입력한 날짜와 시간을 함께 저장한다", async () => {
     const user = userEvent.setup();
     render(
       <PickerWithTrigger
@@ -126,7 +131,7 @@ describe("NotificationSchedulePicker", () => {
     );
 
     await openDialog(user);
-    await selectDate(user, "2026년 5월 5일 (화)");
+    enterDate("2026", "05", "05");
     await user.click(screen.getByRole("button", { name: /저장/ }));
 
     await waitFor(() => {
@@ -152,9 +157,22 @@ describe("NotificationSchedulePicker", () => {
     await openDialog(user);
     await user.click(screen.getByRole("button", { name: "3일 뒤" }));
 
+    expect(screen.getByRole("button", { name: "3일 뒤" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "3일 뒤" })).toHaveClass(
+      "bg-orange-50",
+    );
+    expect(screen.getByRole("button", { name: "내일" })).toHaveClass(
+      "hover:bg-orange-50",
+    );
+    expect(screen.getByLabelText("연도")).toHaveValue("2026");
+    expect(screen.getByLabelText("월")).toHaveValue("05");
+    expect(screen.getByLabelText("일")).toHaveValue("04");
     expect(
-      screen.getByText("5월 4일 (월) 오후 09:30에 알림을 보냅니다."),
-    ).toBeInTheDocument();
+      screen.queryByText("5월 4일 (월) 오후 09:30에 알림을 보냅니다."),
+    ).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /저장/ }));
 
@@ -167,7 +185,7 @@ describe("NotificationSchedulePicker", () => {
     });
   });
 
-  it("허용 범위의 날짜만 목록에 보여준다", async () => {
+  it("1년 뒤 날짜도 입력해 저장할 수 있다", async () => {
     const user = userEvent.setup();
     render(
       <PickerWithTrigger
@@ -178,17 +196,22 @@ describe("NotificationSchedulePicker", () => {
     );
 
     await openDialog(user);
-
-    // 오늘은 5월 1일이므로 4월 30일(지난 날)은 없고 5월 31일(+30일)은 노출된다.
+    enterDate("2027", "05", "01");
     expect(
-      screen.queryByRole("option", { name: "2026년 4월 30일 (목)" }),
+      screen.queryByText("5월 1일 (토) 오후 09:30에 알림을 보냅니다."),
     ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("option", { name: "2026년 5월 31일 (일)" }),
-    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /저장/ }));
+
+    await waitFor(() => {
+      expect(setNotificationScheduleActionMock).toHaveBeenCalledWith(
+        NOTE_ID,
+        "2027-05-01",
+        "21:30",
+      );
+    });
   });
 
-  it("방향키로 날짜 휠을 한 칸씩 이동한다", async () => {
+  it("연도와 월 입력을 마치면 다음 입력칸으로 이동한다", async () => {
     const user = userEvent.setup();
     render(
       <PickerWithTrigger
@@ -199,12 +222,53 @@ describe("NotificationSchedulePicker", () => {
     );
 
     await openDialog(user);
-    screen.getByRole("listbox", { name: "날짜" }).focus();
-    await user.keyboard("{ArrowDown}");
+    fireEvent.change(screen.getByLabelText("연도"), {
+      target: { value: "2027" },
+    });
+    expect(screen.getByLabelText("월")).toHaveFocus();
+
+    fireEvent.change(screen.getByLabelText("월"), {
+      target: { value: "08" },
+    });
+    expect(screen.getByLabelText("일")).toHaveFocus();
+  });
+
+  it("존재하지 않는 날짜를 저장하지 못하게 한다", async () => {
+    const user = userEvent.setup();
+    render(
+      <PickerWithTrigger
+        noteId={NOTE_ID}
+        initialTime="21:30:00"
+        initialScheduledAt={SCHEDULED_AT}
+      />,
+    );
+
+    await openDialog(user);
+    enterDate("2027", "02", "31");
+    fireEvent.blur(screen.getByLabelText("일"));
+
+    expect(screen.getByText("존재하지 않는 날짜입니다.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /저장/ })).toBeDisabled();
+  });
+
+  it("과거 날짜를 저장하지 못하게 한다", async () => {
+    const user = userEvent.setup();
+    render(
+      <PickerWithTrigger
+        noteId={NOTE_ID}
+        initialTime="21:30:00"
+        initialScheduledAt={SCHEDULED_AT}
+      />,
+    );
+
+    await openDialog(user);
+    enterDate("2026", "04", "30");
+    fireEvent.blur(screen.getByLabelText("일"));
 
     expect(
-      screen.getByRole("option", { name: "2026년 5월 2일 (토)" }),
-    ).toHaveAttribute("aria-selected", "true");
+      screen.getByText("오늘 이후 날짜를 입력해주세요."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /저장/ })).toBeDisabled();
   });
 
   it("시간만 바꿔도 저장할 수 있다", async () => {
@@ -254,8 +318,8 @@ describe("NotificationSchedulePicker", () => {
 
     expect(screen.getByLabelText("분")).toHaveValue("05");
     expect(
-      screen.getByText("5월 1일 (금) 오후 09:05에 알림을 보냅니다."),
-    ).toBeInTheDocument();
+      screen.queryByText("5월 1일 (금) 오후 09:05에 알림을 보냅니다."),
+    ).not.toBeInTheDocument();
   });
 
   it("오전·시·분을 직접 변경한다", async () => {
