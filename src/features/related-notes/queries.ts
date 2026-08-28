@@ -17,8 +17,20 @@ export type RelatedNotesQueryResult = {
   /** 현재 표시할 Related Notes 목록입니다. */
   relatedNotes: RelatedNoteRecommendation[];
 
-  /** 현재 Note에 대해 AI 추천 Run이 진행 중인지 여부입니다. */
-  hasRunningRecommendationRun: boolean;
+  /** 현재 Note에 대해 AI 추천 실행이 진행 중인지 여부입니다. */
+  hasRunningRecommendationExecution: boolean;
+
+  /** 현재 Note의 가장 최근 AI 추천 실행이 실패했는지 여부입니다. */
+  hasFailedRecommendationExecution: boolean;
+};
+
+/** Related Notes AI 추천 실행의 UI 상태입니다. */
+type RelatedNoteRecommendationExecutionUiState = {
+  /** 가장 최근 AI 추천 실행이 진행 중인지 여부입니다. */
+  hasRunningRecommendationExecution: boolean;
+
+  /** 가장 최근 AI 추천 실행이 실패했는지 여부입니다. */
+  hasFailedRecommendationExecution: boolean;
 };
 
 /**
@@ -30,7 +42,7 @@ export type RelatedNotesQueryResult = {
  * dismissed AI 추천은 화면에 표시하지 않습니다.
  *
  * @param noteId Related Notes를 조회할 기준 Note ID
- * @returns 현재 표시할 Related Notes 목록과 AI 추천 진행 여부
+ * @returns 현재 표시할 Related Notes 목록과 AI 추천 실행 상태
  */
 export async function getRelatedNotes(
   noteId: string,
@@ -46,7 +58,8 @@ export async function getRelatedNotes(
 
   if (!parsedNoteId.success) {
     return {
-      hasRunningRecommendationRun: false,
+      hasFailedRecommendationExecution: false,
+      hasRunningRecommendationExecution: false,
       relatedNotes: [],
     };
   }
@@ -64,7 +77,8 @@ export async function getRelatedNotes(
 
   if (!user) {
     return {
-      hasRunningRecommendationRun: false,
+      hasFailedRecommendationExecution: false,
+      hasRunningRecommendationExecution: false,
       relatedNotes: [],
     };
   }
@@ -75,8 +89,49 @@ export async function getRelatedNotes(
   );
 
   /*
-   * 화면 표시 목록과 AI 추천 Run 진행 여부는 서로 독립적인 조회입니다.
+   * AI 추천 execution claim은 Note의 source_updated_at 단위로 관리됩니다.
+   *
+   * 이전 Note version의 failed/running claim이 현재 Note의 UI 상태에
+   * 영향을 주지 않도록 현재 Note의 updated_at을 먼저 조회합니다.
+   */
+  const { data: sourceNote, error: sourceNoteError } = await supabase
+    .from("notes")
+    .select("updated_at")
+    .eq("id", parsedNoteId.data)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (sourceNoteError) {
+    logError({
+      message: "[getRelatedNotes] 기준 노트 조회 실패",
+      error: sourceNoteError,
+    });
+
+    return {
+      hasFailedRecommendationExecution: false,
+      hasRunningRecommendationExecution: false,
+      relatedNotes: [],
+    };
+  }
+
+  if (!sourceNote) {
+    return {
+      hasFailedRecommendationExecution: false,
+      hasRunningRecommendationExecution: false,
+      relatedNotes: [],
+    };
+  }
+
+  /*
+   * 화면 표시 목록과 AI 추천 실행 상태는 서로 독립적인 조회입니다.
    * 같은 인증된 Supabase client를 사용하되 병렬로 실행해 페이지 진입 지연을 줄입니다.
+   *
+   * 실행 상태는 운영 이력인 recommendation_runs가 아니라
+   * 기능 제어의 정본인 recommendation_execution_claims를 기준으로 판단합니다.
+   *
+   * 현재 Note version과 동일한 source_updated_at의 claim만 대상으로 하며,
+   * failed claim은 재시도 이후에도 이력으로 남을 수 있으므로
+   * 특정 status의 존재 여부가 아니라 가장 최근 claim의 status를 조회합니다.
    */
   const relatedNotesQuery = supabase
     .from("note_related_notes")
@@ -89,18 +144,22 @@ export async function getRelatedNotes(
     )
     .order("created_at", { ascending: true });
 
-  const runningRecommendationRunQuery = supabase
-    .from("related_note_recommendation_runs")
-    .select("id")
+  const latestRecommendationExecutionQuery = supabase
+    .from("related_note_recommendation_execution_claims")
+    .select("status")
     .eq("note_id", parsedNoteId.data)
-    .eq("status", "running")
+    .eq("source_updated_at", sourceNote.updated_at)
+    .order("claimed_at", { ascending: false })
     .limit(1);
 
-  const [relatedNotesResult, runningRecommendationRunResult] =
-    await Promise.all([relatedNotesQuery, runningRecommendationRunQuery]);
+  const [relatedNotesResult, latestRecommendationExecutionResult] =
+    await Promise.all([relatedNotesQuery, latestRecommendationExecutionQuery]);
 
-  const hasRunningRecommendationRun = resolveHasRunningRecommendationRun(
-    runningRecommendationRunResult,
+  const {
+    hasFailedRecommendationExecution,
+    hasRunningRecommendationExecution,
+  } = resolveRecommendationExecutionUiState(
+    latestRecommendationExecutionResult,
   );
 
   const { data, error } = relatedNotesResult;
@@ -112,7 +171,8 @@ export async function getRelatedNotes(
     });
 
     return {
-      hasRunningRecommendationRun,
+      hasFailedRecommendationExecution,
+      hasRunningRecommendationExecution,
       relatedNotes: [],
     };
   }
@@ -126,13 +186,15 @@ export async function getRelatedNotes(
     });
 
     return {
-      hasRunningRecommendationRun,
+      hasFailedRecommendationExecution,
+      hasRunningRecommendationExecution,
       relatedNotes: [],
     };
   }
 
   return {
-    hasRunningRecommendationRun,
+    hasFailedRecommendationExecution,
+    hasRunningRecommendationExecution,
     relatedNotes: parsed.data.map((row): RelatedNoteRecommendation => {
       const relatedNoteId = resolveOtherRelatedNoteId(row, parsedNoteId.data);
       const relatedNote =
@@ -168,25 +230,56 @@ export async function getRelatedNotes(
 }
 
 /**
- * Related Notes AI 추천 Run 조회 결과를 polling/UI 상태로 변환합니다.
+ * 가장 최근 Related Notes AI 추천 execution claim을 polling/UI 상태로 변환합니다.
  *
- * @param result running recommendation run 조회 결과
- * @returns running Run 존재 여부
+ * 실행 상태 조회 자체가 실패하거나 예상하지 못한 응답을 받은 경우에는
+ * Related Notes 목록 조회에 영향을 주지 않고 실행 상태만 없는 것으로 처리합니다.
+ *
+ * @param result latest recommendation execution claim 조회 결과
+ * @returns 가장 최근 AI 추천 실행의 running/failed UI 상태
  */
-function resolveHasRunningRecommendationRun(result: {
+function resolveRecommendationExecutionUiState(result: {
   data?: unknown;
   error?: unknown;
-}): boolean {
+}): RelatedNoteRecommendationExecutionUiState {
   if (result.error) {
     logError({
-      message: "[getRelatedNotes] AI 추천 진행 상태 조회 실패",
+      message: "[getRelatedNotes] AI 추천 실행 상태 조회 실패",
       error: result.error,
     });
 
-    return false;
+    return {
+      hasFailedRecommendationExecution: false,
+      hasRunningRecommendationExecution: false,
+    };
   }
 
-  return Array.isArray(result.data) && result.data.length > 0;
+  const parsed = z
+    .array(
+      z.object({
+        status: z.enum(["running", "succeeded", "failed", "stale"]),
+      }),
+    )
+    .safeParse(result.data);
+
+  if (!parsed.success) {
+    logError({
+      message: "[getRelatedNotes] AI 추천 실행 상태 파싱 실패",
+      error: parsed.error,
+    });
+
+    return {
+      hasFailedRecommendationExecution: false,
+      hasRunningRecommendationExecution: false,
+    };
+  }
+
+  const latestExecution = parsed.data[0];
+
+  return {
+    hasFailedRecommendationExecution: latestExecution?.status === "failed",
+    hasRunningRecommendationExecution: latestExecution?.status === "running",
+  };
 }
 
 /**

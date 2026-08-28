@@ -17,7 +17,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   RELATED_NOTES_AI_FEATURE_KEY,
   RELATED_NOTES_AI_ROLE_KEY,
-  RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_ERROR_CODE,
   RELATED_NOTES_MIN_SIMILARITY,
   RELATED_NOTES_SEARCH_LIMIT,
 } from "../constants/ai";
@@ -28,14 +27,18 @@ import {
 } from "../persistence/replace-related-note-ai-recommendations";
 import { reportRelatedNotesOperationalError } from "../utils/report-operational-error";
 import {
+  claimRelatedNoteRecommendationExecution,
+  completeRelatedNoteRecommendationExecutionClaim,
+  RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_COMPLETION_STATUS,
+  RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS,
+  type RelatedNoteRecommendationExecutionClaimCompletionStatus,
+} from "./execution-claim-persistence";
+import {
   completeRelatedNoteRecommendationRun,
-  createRelatedNoteRecommendationRun,
-  RELATED_NOTE_RECOMMENDATION_RUN_CLAIM_STATUS,
+  createRelatedNoteRecommendationRunRecord,
   RELATED_NOTE_RECOMMENDATION_RUN_STATUS,
   RELATED_NOTE_RECOMMENDATION_RUN_UPDATE_STEP,
-  RelatedNoteRecommendationDailyLimitError,
   type RelatedNoteRecommendationRunUpdateStep,
-  RelatedNoteRecommendationSourceStaleError,
   saveRelatedNoteRunAnswerGenerationUsage,
   saveRelatedNoteRunExpandedQuery,
   saveRelatedNoteRunMatchedNotes,
@@ -70,9 +73,8 @@ type ScheduleRelatedNoteRecommendationParams = {
  * RPC는 현재 Note의 updated_at과 비교한 뒤 동일한 version일 때만
  * active AI 추천을 교체하여 stale 추천이 최신 결과를 덮어쓰지 않도록 합니다.
  *
- * Related Notes Run claim은 quota, 관리자 bypass, 동일 Note version 중복 실행
- * 방지를 담당합니다. Run claim에 실패하거나 중복 실행으로 판정되면
- * Provider 호출 전에 추천 실행을 종료합니다.
+ * Related Notes execution claim은 quota, 관리자 bypass, 동일 Note version 중복
+ * 실행 방지를 담당합니다. run 기록은 기능 제어에 사용하지 않습니다.
  *
  * AI 추천 후처리 실패는 이미 성공한 Note 저장/수정 결과에 영향을 주지 않습니다.
  *
@@ -135,9 +137,65 @@ export function scheduleRelatedNoteRecommendation({
       return;
     }
 
+    let activeClaimId: string | null = null;
     let activeRunId: string | null = null;
 
     try {
+      let claimResult: Awaited<
+        ReturnType<typeof claimRelatedNoteRecommendationExecution>
+      >;
+
+      try {
+        claimResult = await claimRelatedNoteRecommendationExecution({
+          noteId: recommendationSource.id,
+          sourceUpdatedAt: recommendationSource.updated_at,
+          userId: ownerUserId,
+        });
+      } catch (error) {
+        await reportRelatedNotesOperationalError({
+          error,
+          errorCode:
+            RELATED_NOTES_OPERATIONAL_ERROR_CODES.RECOMMENDATION_EXECUTION_CLAIM_FAILED,
+          message: "Related Note 추천 실행 선점에 실패했습니다.",
+          operation:
+            RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.CLAIM_RECOMMENDATION_EXECUTION,
+          context: {
+            noteId: recommendationSource.id,
+          },
+          userId: ownerUserId,
+        });
+
+        console.error(
+          "[Related Notes Recommendation Execution Claim Failed]",
+          error,
+        );
+
+        return;
+      }
+
+      if (
+        claimResult.status ===
+        RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS.DAILY_LIMIT_EXCEEDED
+      ) {
+        console.info("[Related Notes Recommendation Daily Limit Exceeded]", {
+          noteId: recommendationSource.id,
+          ownerUserId,
+        });
+
+        return;
+      }
+
+      if (
+        claimResult.status ===
+          RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS.DUPLICATE ||
+        claimResult.status ===
+          RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS.STALE
+      ) {
+        return;
+      }
+
+      activeClaimId = claimResult.claimId;
+
       /*
        * Related Notes의 Note 검색은 Note embedding 생성, Note Chat 검색과
        * 동일한 공통 Note retrieval Runtime을 사용합니다.
@@ -170,7 +228,7 @@ export function scheduleRelatedNoteRecommendation({
       ]);
 
       try {
-        const claimResult = await createRelatedNoteRecommendationRun({
+        activeRunId = await createRelatedNoteRecommendationRunRecord({
           answerGenerationModelConfigId: answerConfiguration.model.id,
           embeddingModelConfigId: embeddingConfiguration.model.id,
           noteId: recommendationSource.id,
@@ -179,30 +237,7 @@ export function scheduleRelatedNoteRecommendation({
           userId: ownerUserId,
           verificationModelConfigId: verificationConfiguration.model.id,
         });
-
-        if (
-          claimResult.status ===
-          RELATED_NOTE_RECOMMENDATION_RUN_CLAIM_STATUS.DUPLICATE
-        ) {
-          return;
-        }
-
-        activeRunId = claimResult.runId;
       } catch (error) {
-        if (error instanceof RelatedNoteRecommendationDailyLimitError) {
-          console.info("[Related Notes Recommendation Daily Limit Exceeded]", {
-            code: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_ERROR_CODE,
-            noteId: recommendationSource.id,
-            ownerUserId,
-          });
-
-          return;
-        }
-
-        if (error instanceof RelatedNoteRecommendationSourceStaleError) {
-          return;
-        }
-
         await reportRelatedNotesOperationalError({
           error,
           errorCode:
@@ -216,9 +251,10 @@ export function scheduleRelatedNoteRecommendation({
           userId: ownerUserId,
         });
 
-        console.error("[Related Notes Recommendation Run Claim Failed]", error);
-
-        return;
+        console.error(
+          "[Related Notes Recommendation Run Record Create Failed]",
+          error,
+        );
       }
 
       const result = await runRelatedNoteRecommendation({
@@ -404,6 +440,11 @@ export function scheduleRelatedNoteRecommendation({
         REPLACE_RELATED_NOTE_AI_RECOMMENDATIONS_STATUS.REPLACED
           ? RELATED_NOTE_RECOMMENDATION_RUN_STATUS.SUCCEEDED
           : RELATED_NOTE_RECOMMENDATION_RUN_STATUS.STALE;
+      const claimCompletionStatus =
+        replaceStatus ===
+        REPLACE_RELATED_NOTE_AI_RECOMMENDATIONS_STATUS.REPLACED
+          ? RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_COMPLETION_STATUS.SUCCEEDED
+          : RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_COMPLETION_STATUS.STALE;
 
       /*
        * Run이 정상적으로 생성된 경우에만 완료 상태를 기록합니다.
@@ -419,6 +460,13 @@ export function scheduleRelatedNoteRecommendation({
           status: runStatus,
         });
       }
+
+      await completeExecutionClaimOrReport({
+        claimId: activeClaimId,
+        noteId: recommendationSource.id,
+        ownerUserId,
+        status: claimCompletionStatus,
+      });
     } catch (error) {
       /*
        * 실제 추천 실행이 실패한 경우, Run이 존재하면 failed 상태 기록을 시도합니다.
@@ -434,6 +482,16 @@ export function scheduleRelatedNoteRecommendation({
           ownerUserId,
           runId: activeRunId,
           status: RELATED_NOTE_RECOMMENDATION_RUN_STATUS.FAILED,
+        });
+      }
+
+      if (activeClaimId !== null) {
+        await completeExecutionClaimOrReport({
+          claimId: activeClaimId,
+          noteId,
+          ownerUserId,
+          status:
+            RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_COMPLETION_STATUS.FAILED,
         });
       }
 
@@ -546,5 +604,51 @@ async function completeRunOrReport(params: {
     });
 
     console.error("[Related Notes Recommendation Run Complete Failed]", error);
+  }
+}
+
+/**
+ * Related Notes 추천 execution claim 완료를 시도하고 실패 시 운영 오류를 기록합니다.
+ *
+ * execution claim은 run 기록과 달리 active claim 해제 책임이 있으므로,
+ * 추천 실행이 끝난 뒤 성공/실패/stale 상태를 기록합니다.
+ *
+ * @param params execution claim 완료 작업과 오류 보고 context
+ */
+async function completeExecutionClaimOrReport(params: {
+  claimId: string | null;
+  noteId: string;
+  ownerUserId: string;
+  status: RelatedNoteRecommendationExecutionClaimCompletionStatus;
+}): Promise<void> {
+  if (params.claimId === null) {
+    return;
+  }
+
+  try {
+    await completeRelatedNoteRecommendationExecutionClaim({
+      claimId: params.claimId,
+      status: params.status,
+    });
+  } catch (error) {
+    await reportRelatedNotesOperationalError({
+      error,
+      errorCode:
+        RELATED_NOTES_OPERATIONAL_ERROR_CODES.RECOMMENDATION_EXECUTION_CLAIM_COMPLETE_FAILED,
+      message: "Related Note 추천 실행 선점 완료 처리에 실패했습니다.",
+      operation:
+        RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.COMPLETE_RECOMMENDATION_EXECUTION_CLAIM,
+      context: {
+        claimId: params.claimId,
+        claimStatus: params.status,
+        noteId: params.noteId,
+      },
+      userId: params.ownerUserId,
+    });
+
+    console.error(
+      "[Related Notes Recommendation Execution Claim Complete Failed]",
+      error,
+    );
   }
 }

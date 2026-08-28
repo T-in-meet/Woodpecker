@@ -1217,6 +1217,65 @@ export type Database = {
           },
         ];
       };
+      related_note_recommendation_execution_claims: {
+        Row: {
+          claimed_at: string;
+          completed_at: string | null;
+          id: string;
+          note_id: string;
+          source_updated_at: string;
+          status: string;
+          user_id: string;
+        };
+        Insert: {
+          claimed_at?: string;
+          completed_at?: string | null;
+          id?: string;
+          note_id: string;
+          source_updated_at: string;
+          status?: string;
+          user_id: string;
+        };
+        Update: {
+          claimed_at?: string;
+          completed_at?: string | null;
+          id?: string;
+          note_id?: string;
+          source_updated_at?: string;
+          status?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "related_note_recommendation_execution_claims_note_id_fkey";
+            columns: ["note_id"];
+            isOneToOne: false;
+            referencedRelation: "notes";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "related_note_recommendation_execution_claims_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_note_chat_run_detail";
+            referencedColumns: ["user_id"];
+          },
+          {
+            foreignKeyName: "related_note_recommendation_execution_claims_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_user_list";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "related_note_recommendation_execution_claims_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       related_note_recommendation_runs: {
         Row: {
           answer_generation_cost_usd: number | null;
@@ -1268,7 +1327,7 @@ export type Database = {
           source_updated_at?: string | null;
           started_at?: string;
           status?: string;
-          total_cost_usd?: never;
+          total_cost_usd?: number | null;
           updated_at?: string;
           user_id: string;
           verification_cost_usd?: number | null;
@@ -1297,7 +1356,7 @@ export type Database = {
           source_updated_at?: string | null;
           started_at?: string;
           status?: string;
-          total_cost_usd?: never;
+          total_cost_usd?: number | null;
           updated_at?: string;
           user_id?: string;
           verification_cost_usd?: number | null;
@@ -1754,6 +1813,18 @@ export type Database = {
         Args: { p_note_id: string; p_quiz_type: string; p_user_id: string };
         Returns: Json;
       };
+      claim_related_note_recommendation_execution: {
+        Args: {
+          p_daily_recommendation_limit: number;
+          p_note_id: string;
+          p_source_updated_at: string;
+          p_user_id: string;
+        };
+        Returns: {
+          claim_id: string;
+          status: string;
+        }[];
+      };
       claim_review_grading: {
         Args: {
           p_content_hash: string;
@@ -1762,22 +1833,6 @@ export type Database = {
           p_user_id: string;
         };
         Returns: Json;
-      };
-      claim_related_note_recommendation_run: {
-        Args: {
-          p_answer_generation_model_config_id: string;
-          p_daily_recommendation_limit: number;
-          p_embedding_model_config_id: string;
-          p_note_id: string;
-          p_query_expansion_model_config_id: string;
-          p_source_updated_at: string;
-          p_user_id: string;
-          p_verification_model_config_id: string;
-        };
-        Returns: {
-          run_id: string | null;
-          status: string | null;
-        }[];
       };
       complete_note_chat_run_failure: {
         Args: { p_run_id: string; p_usage?: Json };
@@ -1790,6 +1845,10 @@ export type Database = {
           p_sources?: Json;
           p_usage?: Json;
         };
+        Returns: string;
+      };
+      complete_related_note_recommendation_execution_claim: {
+        Args: { p_claim_id: string; p_status: string };
         Returns: string;
       };
       complete_review_and_schedule_next: {
@@ -2047,6 +2106,10 @@ export type Database = {
       is_current_user_email_confirmed: { Args: never; Returns: boolean };
       kst_date: { Args: { ts: string }; Returns: string };
       kst_day_start: { Args: { ts: string }; Returns: string };
+      lock_note_related_note_pair: {
+        Args: { p_note_id: string; p_related_note_id: string };
+        Returns: undefined;
+      };
       mark_all_admin_notifications_as_read: {
         Args: { p_admin_user_id: string };
         Returns: number;

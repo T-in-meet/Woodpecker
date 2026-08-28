@@ -21,15 +21,17 @@ type RelatedNotesSectionProps = {
  * @param props Related Notes를 조회할 기준 Note ID
  */
 export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
-  const { data, isLoading } = useRelatedNotes(noteId);
+  const { data, isError, isLoading } = useRelatedNotes(noteId);
 
   if (isLoading) {
     return null;
   }
 
   const relatedNotes = data?.relatedNotes ?? [];
-  const hasRunningRecommendationRun =
-    data?.hasRunningRecommendationRun === true;
+  const hasRunningRecommendationExecution =
+    data?.hasRunningRecommendationExecution === true;
+  const hasFailedRecommendationExecution =
+    data?.hasFailedRecommendationExecution === true;
 
   return (
     <section className="border-t border-border/60 pt-6">
@@ -39,7 +41,7 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
         </div>
 
         <div className="flex min-w-0 items-center gap-3">
-          {hasRunningRecommendationRun && (
+          {hasRunningRecommendationExecution ? (
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
               <span>관련 노트를 찾고 있어요</span>
 
@@ -53,13 +55,23 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
                 </span>
               </span>
             </div>
-          )}
+          ) : hasFailedRecommendationExecution ? (
+            <p className="text-xs text-muted-foreground">
+              관련 노트 추천에 실패했습니다.
+            </p>
+          ) : null}
 
           <AddRelatedNoteDialog noteId={noteId} />
         </div>
       </div>
 
-      {relatedNotes.length === 0 ? (
+      {isError ? (
+        <div className="mt-4 rounded-lg border border-dashed px-4 py-6 text-center">
+          <p className="text-sm text-muted-foreground">
+            관련 노트를 불러오지 못했습니다.
+          </p>
+        </div>
+      ) : relatedNotes.length === 0 ? (
         <div className="mt-4 rounded-lg border border-dashed px-4 py-6 text-center">
           <p className="text-sm text-muted-foreground">
             아직 연결된 관련 노트가 없습니다.
