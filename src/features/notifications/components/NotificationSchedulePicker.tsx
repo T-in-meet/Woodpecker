@@ -4,7 +4,13 @@ import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { Loader2, RotateCcw, Save } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { type FormEvent, useEffect, useState, useTransition } from "react";
+import {
+  type FormEvent,
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+} from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +37,7 @@ import {
   getTimeParts,
   toInputTime,
 } from "../lib/time";
+import { notificationTimeSchema } from "../schema";
 import { ResponsiveDateInput } from "./ResponsiveDateInput";
 import { ResponsiveTimePicker } from "./ResponsiveTimePicker";
 
@@ -81,14 +88,22 @@ export function NotificationSchedulePicker({
 }: NotificationSchedulePickerProps) {
   const router = useRouter();
 
-  const todayKey = getKstDateKey(new Date());
+  const todayKey = useMemo(() => getKstDateKey(new Date()), []);
 
-  const savedDateKey = initialScheduledAt
-    ? getKstDateKey(new Date(initialScheduledAt))
-    : todayKey;
-  const savedTime = initialScheduledAt
-    ? getKstTimeValue(initialScheduledAt)
-    : toInputTime(initialTime);
+  const savedDateKey = useMemo(
+    () =>
+      initialScheduledAt
+        ? getKstDateKey(new Date(initialScheduledAt))
+        : todayKey,
+    [initialScheduledAt, todayKey],
+  );
+  const savedTime = useMemo(
+    () =>
+      initialScheduledAt
+        ? getKstTimeValue(initialScheduledAt)
+        : toInputTime(initialTime),
+    [initialScheduledAt, initialTime],
+  );
 
   const [dateKey, setDateKey] = useState(savedDateKey);
   const [timeValue, setTimeValue] = useState(savedTime);
@@ -101,6 +116,15 @@ export function NotificationSchedulePicker({
 
   const hasSavedOverride = toInputTime(initialTime).length > 0;
   const hasChanges = timeValue !== savedTime || dateKey !== savedDateKey;
+
+  const quickOffsetKeys = useMemo(
+    () =>
+      QUICK_OFFSETS.map((offset) => ({
+        ...offset,
+        dateKey: addDaysToDateKey(todayKey, offset.days),
+      })),
+    [todayKey],
+  );
 
   const resetDraft = () => {
     setDateKey(savedDateKey);
@@ -144,7 +168,7 @@ export function NotificationSchedulePicker({
     setMessage(null);
     setError(null);
 
-    if (timeValue === "") {
+    if (!notificationTimeSchema.safeParse(timeValue).success) {
       setError("알림 시간이 올바르지 않습니다.");
       return;
     }
@@ -236,9 +260,8 @@ export function NotificationSchedulePicker({
 
           <form onSubmit={handleSubmit} className="space-y-3">
             <div className="flex flex-wrap gap-1.5">
-              {QUICK_OFFSETS.map((offset) => {
-                const offsetKey = addDaysToDateKey(todayKey, offset.days);
-                const isSelected = dateKey === offsetKey;
+              {quickOffsetKeys.map((offset) => {
+                const isSelected = dateKey === offset.dateKey;
 
                 return (
                   <Button
@@ -250,7 +273,7 @@ export function NotificationSchedulePicker({
                     disabled={isPending}
                     className={cn(isSelected && "bg-muted text-foreground")}
                     onClick={() => {
-                      handleSelectDateKey(offsetKey);
+                      handleSelectDateKey(offset.dateKey);
                     }}
                   >
                     {offset.label}

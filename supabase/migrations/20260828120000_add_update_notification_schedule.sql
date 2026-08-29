@@ -49,12 +49,11 @@ BEGIN
     RAISE EXCEPTION 'schedule in the past';
   END IF;
 
-  UPDATE public.notes
-  SET notification_time_of_day = (p_scheduled_at AT TIME ZONE 'Asia/Seoul')::time
-  WHERE id = p_note_id
-    AND user_id = v_user_id;
-
-  IF NOT FOUND THEN
+  IF NOT EXISTS (
+    SELECT 1 FROM public.notes
+    WHERE id = p_note_id
+      AND user_id = v_user_id
+  ) THEN
     RAISE EXCEPTION 'note not found';
   END IF;
 

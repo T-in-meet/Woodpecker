@@ -5,6 +5,8 @@ import {
   type ChangeEvent,
   type KeyboardEvent,
   useEffect,
+  useId,
+  useRef,
   useState,
 } from "react";
 
@@ -33,16 +35,20 @@ export function ResponsiveTimePicker({
   disabled,
   onValueChange,
 }: ResponsiveTimePickerProps) {
+  const errorId = useId();
   const initialParts = getTimeParts(value);
   const [period, setPeriod] = useState<PeriodType>(initialParts.period);
   const [hourValue, setHourValue] = useState(initialParts.hour);
   const [minuteValue, setMinuteValue] = useState(initialParts.minute);
+  const [error, setError] = useState<string | null>(null);
+  const nativeTimeInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const nextParts = getTimeParts(value);
     setPeriod(nextParts.period);
     setHourValue(nextParts.hour);
     setMinuteValue(nextParts.minute);
+    setError(null);
   }, [value]);
 
   const commitTime = (
@@ -60,6 +66,30 @@ export function ResponsiveTimePicker({
   const handlePeriodChange = (nextPeriod: PeriodType) => {
     setPeriod(nextPeriod);
     commitTime(nextPeriod, hourValue, minuteValue);
+  };
+
+  const handleNativeTimeChange = (event: ChangeEvent<HTMLInputElement>) => {
+    if (event.target.value === "") {
+      return;
+    }
+
+    onValueChange(event.target.value);
+  };
+
+  const openNativeTimePicker = () => {
+    const nativeTimeInput = nativeTimeInputRef.current;
+
+    if (!nativeTimeInput) {
+      return;
+    }
+
+    try {
+      nativeTimeInput.showPicker();
+      return;
+    } catch {
+      nativeTimeInput.focus();
+      nativeTimeInput.click();
+    }
   };
 
   const handlePartChange = (
@@ -91,13 +121,20 @@ export function ResponsiveTimePicker({
         : clampTimePart(currentValue, 0, 59);
 
     if (normalizedValue === "") {
+      const fallbackValue =
+        part === "hour" ? currentParts.hour : currentParts.minute;
+
       if (part === "hour") {
-        setHourValue(currentParts.hour);
+        setHourValue(fallbackValue);
       } else {
-        setMinuteValue(currentParts.minute);
+        setMinuteValue(fallbackValue);
       }
+
+      setError(fallbackValue === "" ? "시·분을 모두 입력해주세요." : null);
       return;
     }
+
+    setError(null);
 
     if (part === "hour") {
       setHourValue(normalizedValue);
@@ -142,69 +179,98 @@ export function ResponsiveTimePicker({
   };
 
   return (
-    <div
-      role="group"
-      aria-label="알림 시간 입력"
-      className="flex h-11 w-full items-center gap-1.5 rounded-lg border border-input bg-background px-2 shadow-sm sm:gap-2"
-    >
-      <Clock
-        aria-hidden="true"
-        className="ml-1 size-4 shrink-0 text-muted-foreground"
-      />
+    <div className="space-y-1">
+      <div
+        role="group"
+        aria-label="알림 시간 입력"
+        aria-describedby={error ? errorId : undefined}
+        className="flex h-11 w-full items-center gap-1.5 rounded-lg border border-input bg-background px-2 shadow-sm sm:gap-2"
+      >
+        <Clock
+          aria-hidden="true"
+          className="ml-1 size-4 shrink-0 text-muted-foreground"
+        />
 
-      <div className="flex shrink-0 rounded-md bg-muted p-0.5">
-        {(["am", "pm"] as const).map((optionPeriod) => {
-          const isSelected = period === optionPeriod;
-          const label = optionPeriod === "am" ? "오전" : "오후";
+        <div className="flex shrink-0 rounded-md bg-muted p-0.5">
+          {(["am", "pm"] as const).map((optionPeriod) => {
+            const isSelected = period === optionPeriod;
+            const label = optionPeriod === "am" ? "오전" : "오후";
 
-          return (
-            <button
-              key={optionPeriod}
-              type="button"
-              aria-label={`${label} 선택`}
-              aria-pressed={isSelected}
-              disabled={disabled}
-              onClick={() => handlePeriodChange(optionPeriod)}
-              className={cn(
-                "h-7 cursor-pointer rounded px-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-2 disabled:cursor-not-allowed disabled:opacity-50",
-                isSelected
-                  ? "bg-background font-medium text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {label}
-            </button>
-          );
-        })}
+            return (
+              <button
+                key={optionPeriod}
+                type="button"
+                aria-label={`${label} 선택`}
+                aria-pressed={isSelected}
+                disabled={disabled}
+                onClick={() => handlePeriodChange(optionPeriod)}
+                className={cn(
+                  "h-7 cursor-pointer rounded px-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-2 disabled:cursor-not-allowed disabled:opacity-50",
+                  isSelected
+                    ? "bg-background font-medium text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
+        <Input
+          type="text"
+          inputMode="numeric"
+          maxLength={2}
+          aria-label="시"
+          value={hourValue}
+          disabled={disabled}
+          onFocus={(event) => event.currentTarget.select()}
+          onChange={(event) => handlePartChange("hour", event)}
+          onBlur={() => handlePartBlur("hour")}
+          onKeyDown={(event) => handlePartKeyDown("hour", event)}
+          className="h-8 w-10 border-0 px-1 text-center shadow-none focus-visible:bg-muted focus-visible:ring-0 sm:w-11"
+        />
+        <span className="text-sm font-semibold text-muted-foreground">:</span>
+        <Input
+          type="text"
+          inputMode="numeric"
+          maxLength={2}
+          aria-label="분"
+          value={minuteValue}
+          disabled={disabled}
+          onFocus={(event) => event.currentTarget.select()}
+          onChange={(event) => handlePartChange("minute", event)}
+          onBlur={() => handlePartBlur("minute")}
+          onKeyDown={(event) => handlePartKeyDown("minute", event)}
+          className="h-8 w-10 border-0 px-1 text-center shadow-none focus-visible:bg-muted focus-visible:ring-0 sm:w-11"
+        />
+        <Input
+          ref={nativeTimeInputRef}
+          type="time"
+          step={60}
+          tabIndex={-1}
+          value={value}
+          disabled={disabled}
+          onChange={handleNativeTimeChange}
+          data-testid="native-time-input"
+          className="sr-only"
+        />
+        <button
+          type="button"
+          aria-label="시간 선택하기"
+          disabled={disabled}
+          onClick={openNativeTimePicker}
+          className="inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Clock className="size-4" aria-hidden="true" />
+        </button>
       </div>
 
-      <Input
-        type="text"
-        inputMode="numeric"
-        maxLength={2}
-        aria-label="시"
-        value={hourValue}
-        disabled={disabled}
-        onFocus={(event) => event.currentTarget.select()}
-        onChange={(event) => handlePartChange("hour", event)}
-        onBlur={() => handlePartBlur("hour")}
-        onKeyDown={(event) => handlePartKeyDown("hour", event)}
-        className="h-8 w-10 border-0 px-1 text-center shadow-none focus-visible:bg-muted focus-visible:ring-0 sm:w-11"
-      />
-      <span className="text-sm font-semibold text-muted-foreground">:</span>
-      <Input
-        type="text"
-        inputMode="numeric"
-        maxLength={2}
-        aria-label="분"
-        value={minuteValue}
-        disabled={disabled}
-        onFocus={(event) => event.currentTarget.select()}
-        onChange={(event) => handlePartChange("minute", event)}
-        onBlur={() => handlePartBlur("minute")}
-        onKeyDown={(event) => handlePartKeyDown("minute", event)}
-        className="h-8 w-10 border-0 px-1 text-center shadow-none focus-visible:bg-muted focus-visible:ring-0 sm:w-11"
-      />
+      {error ? (
+        <p id={errorId} className="text-xs text-destructive">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }
