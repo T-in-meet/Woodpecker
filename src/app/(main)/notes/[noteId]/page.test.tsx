@@ -17,6 +17,7 @@ type NoteDetailBodyProps = {
   canStartReview: boolean;
   reviewStatusMessage: string;
   notificationTimeOfDay: string | null;
+  nextScheduledAt: string | null;
 };
 
 const {
@@ -257,6 +258,41 @@ describe("NoteDetailPage", () => {
     });
   });
 
+  // nextScheduledAt은 일정 변경 UI(NoteManageMenu)의 초기 날짜/시간이 되므로
+  // next_review_at이나 null이 잘못 전달되면 사용자가 엉뚱한 값을 보게 된다.
+  it("passes next_scheduled_at through as nextScheduledAt", async () => {
+    getUserMock.mockResolvedValue(createUser("user-123"));
+    getNoteByIdMock.mockResolvedValue(
+      createNote({
+        // 혼동 시 실패하도록 next_review_at과 다른 값을 쓴다.
+        next_review_at: "2026-03-30T15:00:00.000Z",
+        next_scheduled_at: "2026-03-30T01:00:00.000Z",
+      }),
+    );
+
+    await renderPage();
+
+    expect(lastBodyProps()).toMatchObject({
+      nextScheduledAt: "2026-03-30T01:00:00.000Z",
+    });
+  });
+
+  it("falls back to next_review_at when next_scheduled_at is missing", async () => {
+    getUserMock.mockResolvedValue(createUser("user-123"));
+    getNoteByIdMock.mockResolvedValue(
+      createNote({
+        next_review_at: "2026-03-30T15:00:00.000Z",
+        next_scheduled_at: null,
+      }),
+    );
+
+    await renderPage();
+
+    expect(lastBodyProps()).toMatchObject({
+      nextScheduledAt: "2026-03-30T15:00:00.000Z",
+    });
+  });
+
   it("blocks a new review and reflects the daily limit when already completed today", async () => {
     getUserMock.mockResolvedValue(createUser("user-123"));
     getNoteByIdMock.mockResolvedValue(
@@ -316,6 +352,7 @@ describe("NoteDetailPage", () => {
       isReviewCompleted: true,
       canStartReview: false,
       reviewStatusMessage: "1-3-7 복습을 모두 마쳤습니다.",
+      nextScheduledAt: null,
     });
     expect(hasCompletedReviewForNoteTodayMock).not.toHaveBeenCalled();
   });
