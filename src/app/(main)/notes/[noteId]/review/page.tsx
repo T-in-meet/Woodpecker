@@ -2,6 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -44,6 +52,48 @@ export const metadata: Metadata = {
  */
 export const maxDuration = 90;
 
+function NoteReviewBreadcrumb({
+  noteId,
+  noteTitle,
+}: {
+  noteId: string;
+  noteTitle: string;
+}) {
+  return (
+    <Breadcrumb className="mb-6">
+      <BreadcrumbList>
+        <BreadcrumbItem>
+          <BreadcrumbLink asChild>
+            <Link href={ROUTES.HOME}>홈</Link>
+          </BreadcrumbLink>
+        </BreadcrumbItem>
+        <BreadcrumbSeparator />
+        <BreadcrumbItem>
+          <BreadcrumbLink asChild>
+            <Link href={ROUTES.NOTES}>노트 목록</Link>
+          </BreadcrumbLink>
+        </BreadcrumbItem>
+        <BreadcrumbSeparator />
+        <BreadcrumbItem>
+          <BreadcrumbLink asChild>
+            <Link
+              href={getNoteDetailRoute(noteId)}
+              className="block max-w-36 truncate sm:max-w-xs"
+              title={noteTitle}
+            >
+              {noteTitle}
+            </Link>
+          </BreadcrumbLink>
+        </BreadcrumbItem>
+        <BreadcrumbSeparator />
+        <BreadcrumbItem>
+          <BreadcrumbPage className="font-medium">백지 테스트</BreadcrumbPage>
+        </BreadcrumbItem>
+      </BreadcrumbList>
+    </Breadcrumb>
+  );
+}
+
 export default async function NoteReviewPage({
   params,
 }: {
@@ -78,27 +128,30 @@ export default async function NoteReviewPage({
       note.review_round >= MAX_REVIEW_ROUND && nextReviewAt === null;
 
     return (
-      <div className="mx-auto flex min-h-[60vh] w-full max-w-3xl items-center px-6 py-10 md:px-12">
-        <Card className="w-full">
-          <CardHeader>
-            <CardTitle className="text-2xl">
-              {isCompleted
-                ? "이 노트는 모든 복습을 마쳤습니다."
-                : "진행 중인 백지 테스트가 없습니다."}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              {isCompleted
-                ? "필요하면 노트 상세 페이지에서 내용을 다시 확인해보세요."
-                : "현재 진행할 리뷰 로그를 찾지 못했습니다. 노트 상세로 돌아가 상태를 확인해주세요."}
-            </p>
+      <div className="mx-auto w-full max-w-3xl px-6 py-10 md:px-12">
+        <NoteReviewBreadcrumb noteId={noteId} noteTitle={note.title} />
+        <div className="flex min-h-[50vh] items-center">
+          <Card className="w-full">
+            <CardHeader>
+              <CardTitle className="text-2xl">
+                {isCompleted
+                  ? "이 노트는 모든 복습을 마쳤습니다."
+                  : "진행 중인 백지 테스트가 없습니다."}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                {isCompleted
+                  ? "필요하면 노트 상세 페이지에서 내용을 다시 확인해보세요."
+                  : "현재 진행할 리뷰 로그를 찾지 못했습니다. 노트 상세로 돌아가 상태를 확인해주세요."}
+              </p>
 
-            <Button asChild>
-              <Link href={getNoteDetailRoute(noteId)}>노트로 돌아가기</Link>
-            </Button>
-          </CardContent>
-        </Card>
+              <Button asChild>
+                <Link href={getNoteDetailRoute(noteId)}>노트로 돌아가기</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }
@@ -150,6 +203,7 @@ export default async function NoteReviewPage({
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-10 md:px-12">
+      <NoteReviewBreadcrumb noteId={noteId} noteTitle={note.title} />
       <BlankTestPage
         alreadyCompletedToday={alreadyCompletedToday}
         noteId={noteId}

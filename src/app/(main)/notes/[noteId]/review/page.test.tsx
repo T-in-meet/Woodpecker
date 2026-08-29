@@ -314,6 +314,14 @@ describe("NoteReviewPage", () => {
     expect(screen.getByTestId("blank-test-page")).toHaveTextContent(
       "11111111-1111-1111-1111-111111111111|테스트 노트|1|true",
     );
+    expect(
+      screen.getByRole("navigation", { name: "breadcrumb" }),
+    ).toBeVisible();
+    expect(screen.getByRole("link", { name: "테스트 노트" })).toHaveAttribute(
+      "href",
+      "/notes/11111111-1111-1111-1111-111111111111",
+    );
+    expect(screen.getByText("백지 테스트")).toBeInTheDocument();
     expect(screen.getByTestId("blank-test-page")).toHaveAttribute(
       "data-restored",
       "none",
