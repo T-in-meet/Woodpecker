@@ -2,6 +2,7 @@
 
 import {
   ArrowLeftIcon,
+  ChevronLeftIcon,
   CircleXIcon,
   ListChecksIcon,
   LoaderIcon,
@@ -154,7 +155,7 @@ export function QuizModal({
                 onClick={goToSelect}
                 className="flex cursor-pointer items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
               >
-                <ArrowLeftIcon className="size-4" />
+                <ChevronLeftIcon className="size-4" />
                 유형 선택
               </button>
 
