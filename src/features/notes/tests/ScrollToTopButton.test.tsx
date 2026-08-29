@@ -42,11 +42,10 @@ describe("ScrollToTopButton", () => {
   it("hides the button until the page is scrolled past the threshold", () => {
     render(<ScrollToTopButton />);
 
-    // aria-hidden 상태에서는 접근성 이름으로 조회되지 않으므로 label 속성으로 찾는다.
+    // jsdom은 inert를 접근성 트리에 반영하지 않으므로 label 속성으로 찾는다.
     const button = getButton();
     expect(button.classList.contains("opacity-0")).toBe(true);
-    expect(button).toHaveAttribute("aria-hidden", "true");
-    expect(button).toHaveAttribute("tabindex", "-1");
+    expect(button).toHaveAttribute("inert");
   });
 
   it("shows the button once scrolled past the threshold", () => {
@@ -56,7 +55,7 @@ describe("ScrollToTopButton", () => {
 
     const button = screen.getByRole("button", { name: "맨 위로 이동" });
     expect(button.classList.contains("opacity-100")).toBe(true);
-    expect(button).not.toHaveAttribute("aria-hidden", "true");
+    expect(button).not.toHaveAttribute("inert");
   });
 
   it("does not hide the button at desktop widths", () => {
@@ -79,9 +78,10 @@ describe("ScrollToTopButton", () => {
     scrollTo(401);
     scrollTo(100);
 
-    // aria-hidden 상태에서는 접근성 이름으로 조회되지 않으므로 label 속성으로 찾는다.
+    // jsdom은 inert를 접근성 트리에 반영하지 않으므로 label 속성으로 찾는다.
     const button = getButton();
     expect(button.classList.contains("opacity-0")).toBe(true);
+    expect(button).toHaveAttribute("inert");
   });
 
   it("scrolls to the top smoothly on click", () => {
@@ -94,6 +94,21 @@ describe("ScrollToTopButton", () => {
       top: 0,
       behavior: "smooth",
     });
+  });
+
+  // 클릭한 버튼은 포커스를 가진 채 스크롤이 0에 닿아 스스로 숨겨진다.
+  // 이때 aria-hidden이 붙으면 브라우저가 경고와 함께 적용을 차단하므로 inert여야 한다.
+  it("hides itself with inert rather than aria-hidden after being clicked", () => {
+    render(<ScrollToTopButton />);
+    scrollTo(401);
+
+    const button = screen.getByRole("button", { name: "맨 위로 이동" });
+    button.focus();
+    fireEvent.click(button);
+    scrollTo(0);
+
+    expect(getButton()).not.toHaveAttribute("aria-hidden");
+    expect(getButton()).toHaveAttribute("inert");
   });
 
   it("skips smooth scrolling when the user prefers reduced motion", () => {
