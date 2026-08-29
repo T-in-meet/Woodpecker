@@ -47,7 +47,7 @@ describe("MobileMenu", () => {
     expect(
       screen.queryByRole("link", { name: "오늘의 복습" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "새 노트" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "노트 작성" })).toHaveAttribute(
       "href",
       ROUTES.NOTES_NEW,
     );

@@ -1,0 +1,81 @@
+"use client";
+
+import { ArrowUp } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+
+import { Button } from "@/components/ui/button";
+
+/** 이 높이 이상 내려갔을 때만 버튼을 노출한다. 짧은 노트에서는 필요 없는 UI다. */
+const SHOW_THRESHOLD_PX = 400;
+
+/**
+ * 노트가 길어졌을 때 화면 크기와 관계없이 맨 위로 돌아가는 버튼.
+ *
+ * 세로 위치를 `bottom-20`으로 올린 건 toast(`fixed bottom-4 right-4`)와 겹치지 않게 하기 위해서다.
+ *
+ * 숨김 처리에 `aria-hidden` 대신 `inert`를 쓰는 건, 클릭으로 포커스를 받은 버튼이
+ * 스크롤이 0에 닿는 순간 스스로 숨겨지면서 "포커스된 요소를 aria-hidden으로 가릴 수 없다"는
+ * 브라우저 경고를 띄우기 때문이다. `inert`는 포커스를 자동으로 해제하고
+ * 탭 순서 제외·포인터 이벤트 차단까지 함께 처리한다.
+ */
+export function ScrollToTopButton() {
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    let frame = 0;
+    let isScheduled = false;
+
+    const update = () => {
+      isScheduled = false;
+      setIsVisible(window.scrollY > SHOW_THRESHOLD_PX);
+    };
+
+    const handleScroll = () => {
+      // 스크롤 이벤트마다 setState를 부르지 않도록 프레임당 한 번으로 묶는다.
+      // 예약 여부를 프레임 id가 아닌 별도 플래그로 보는 건, rAF가 동기로 실행되는
+      // 환경에서 콜백이 끝난 뒤에 id가 대입돼 영영 예약 상태로 남는 걸 막기 위해서다.
+      if (isScheduled) return;
+      isScheduled = true;
+      frame = window.requestAnimationFrame(update);
+    };
+
+    update();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      isScheduled = false;
+
+      if (frame !== 0) {
+        window.cancelAnimationFrame(frame);
+      }
+    };
+  }, []);
+
+  const handleClick = useCallback(() => {
+    const prefersReducedMotion = window.matchMedia?.(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+
+    window.scrollTo({
+      top: 0,
+      behavior: prefersReducedMotion ? "auto" : "smooth",
+    });
+  }, []);
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="icon-lg"
+      aria-label="맨 위로 이동"
+      inert={!isVisible}
+      onClick={handleClick}
+      className={`fixed right-4 bottom-20 z-40 rounded-full shadow-md transition-opacity sm:right-6 ${
+        isVisible ? "opacity-100" : "opacity-0"
+      }`}
+    >
+      <ArrowUp aria-hidden="true" />
+    </Button>
+  );
+}

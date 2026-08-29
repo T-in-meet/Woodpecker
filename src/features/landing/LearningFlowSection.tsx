@@ -18,7 +18,7 @@ function NoteMockup() {
         <div className="size-2.5 rounded-full bg-red-400/60" />
         <div className="size-2.5 rounded-full bg-yellow-400/60" />
         <div className="size-2.5 rounded-full bg-green-400/60" />
-        <span className="ml-2 text-xs text-muted-foreground">새 노트</span>
+        <span className="ml-2 text-xs text-muted-foreground">노트 작성</span>
       </div>
       <div className="p-5">
         <p className="text-sm font-semibold">클로저(Closure)란?</p>

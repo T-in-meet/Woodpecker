@@ -6,7 +6,7 @@ import { ROUTES } from "@/lib/constants/routes";
 import { createServerComponentClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
-  title: "새 노트",
+  title: "노트 작성",
   robots: { index: false, follow: false },
 };
 

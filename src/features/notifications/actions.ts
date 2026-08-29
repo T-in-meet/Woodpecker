@@ -8,10 +8,12 @@ import { requireCurrentLegalAcceptance } from "@/features/auth/utils/requireCurr
 import { getNoteDetailRoute, ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 
+import { isScheduleDateOnOrAfterToday, toScheduledAt } from "./lib/time";
 import {
   notificationIdSchema,
   pushSubscriptionEndpointSchema,
   pushSubscriptionSchema,
+  setNotificationScheduleSchema,
   setNotificationTimeSchema,
 } from "./schema";
 
@@ -198,6 +200,91 @@ export async function markNotificationAsReadAction(
 
   // Bell state refresh is handled by the client React Query cache.
   return { success: true, updated: data ?? false };
+}
+
+/**
+ * 직접 입력한 날짜·시각으로 이번 복습 회차의 알림 일정을 옮긴다.
+ * 날짜를 되돌리는 경로는 `setNotificationTimeAction(noteId, null)`이다 —
+ * RPC가 보존해둔 원래 케이던스 시각을 그대로 복원한다.
+ */
+export async function setNotificationScheduleAction(
+  noteId: unknown,
+  date: unknown,
+  time: unknown,
+): Promise<NotificationActionResultType> {
+  const parsed = setNotificationScheduleSchema.safeParse({
+    noteId,
+    date,
+    time,
+  });
+
+  if (!parsed.success) {
+    const fieldErrors = parsed.error.flatten().fieldErrors;
+
+    if (fieldErrors.noteId) {
+      return { success: false, error: "알림 대상을 찾을 수 없습니다." };
+    }
+
+    return { success: false, error: "알림 일정이 올바르지 않습니다." };
+  }
+
+  const {
+    noteId: parsedNoteId,
+    date: parsedDate,
+    time: parsedTime,
+  } = parsed.data;
+  const scheduledAt = toScheduledAt(parsedDate, parsedTime);
+
+  if (scheduledAt === null) {
+    return { success: false, error: "알림 일정이 올바르지 않습니다." };
+  }
+
+  // 날짜 입력 UI가 막아두는 과거 날짜지만, 액션은 직접 호출될 수 있으므로 다시 본다.
+  // 최종 판정은 KST "지금"을 아는 RPC가 한다.
+  if (!isScheduleDateOnOrAfterToday(parsedDate)) {
+    return {
+      success: false,
+      error: "오늘 이후 날짜로만 옮길 수 있습니다.",
+    };
+  }
+
+  const context = await getVerifiedNotificationContext(
+    getNoteDetailRoute(parsedNoteId),
+  );
+
+  if ("error" in context) {
+    return { success: false, error: context.error };
+  }
+
+  const { error } = await context.supabase.rpc("update_notification_schedule", {
+    p_note_id: parsedNoteId,
+    p_scheduled_at: scheduledAt,
+  });
+
+  if (error) {
+    if (error.message.includes("no pending review log")) {
+      return {
+        success: false,
+        error: "이미 발송된 알림은 일정을 바꿀 수 없습니다.",
+      };
+    }
+
+    if (error.message.includes("schedule in the past")) {
+      return {
+        success: false,
+        error: "이미 지난 시각으로는 옮길 수 없습니다.",
+      };
+    }
+
+    return {
+      success: false,
+      error: "알림 일정 저장에 실패했습니다. 잠시 후 다시 시도해주세요.",
+    };
+  }
+
+  revalidatePath(getNoteDetailRoute(parsedNoteId));
+
+  return { success: true };
 }
 
 export async function setNotificationTimeAction(

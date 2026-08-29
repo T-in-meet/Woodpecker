@@ -29,6 +29,22 @@ describe("formatDateTime", () => {
     expect(result).toContain("January 1, 2026");
     expect(result).toContain("09:00 AM");
   });
+
+  it("한국어 로케일에서는 AM/PM 대신 오전·오후로 표기한다", () => {
+    const result = formatDateTime("2026-08-29T08:18:00.000Z");
+
+    expect(result).toContain("2026년 8월 29일");
+    expect(result).toContain("오후 05:18");
+    expect(result).not.toContain("PM");
+  });
+
+  it("밤·정오처럼 오전/오후를 판별할 수 없는 표기를 쓰지 않는다", () => {
+    // 복습 알림 시간대로 흔한 21시, 그리고 자정·정오.
+    expect(formatDateTime("2026-08-28T12:00:00.000Z")).toContain("오후 09:00");
+    expect(formatDateTime("2026-08-28T15:00:00.000Z")).toContain("오전 12:00");
+    expect(formatDateTime("2026-08-28T03:00:00.000Z")).toContain("오후 12:00");
+    expect(formatDateTime("2026-08-28T18:00:00.000Z")).toContain("오전 03:00");
+  });
 });
 
 describe("formatShortDateKST", () => {

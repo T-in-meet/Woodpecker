@@ -11,6 +11,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { NoteDetailBody } from "@/features/notes/components/NoteDetailBody";
+import { ScrollToTopButton } from "@/features/notes/components/ScrollToTopButton";
 import { ScrollToTopOnMount } from "@/features/notes/components/ScrollToTopOnMount";
 import { getNoteById } from "@/features/notes/queries";
 import { GradingHistorySection } from "@/features/review/components/GradingHistorySection";
@@ -102,15 +103,16 @@ export default async function NoteDetailPage({
     ? "1-3-7 복습을 모두 마쳤습니다."
     : nextScheduledAt
       ? alreadyCompletedToday
-        ? `오늘 백지 테스트 완료. 다음 예정: ${formatDateTime(nextScheduledAt)}`
+        ? `오늘 백지 테스트 완료 · 다음 복습 일정: ${formatDateTime(nextScheduledAt)}`
         : isReviewDue
           ? "지금 백지 테스트를 진행할 수 있습니다."
-          : `다음 예정: ${formatDateTime(nextScheduledAt)}`
+          : `다음 복습 일정: ${formatDateTime(nextScheduledAt)}`
       : "다음 복습 일정이 아직 준비되지 않았습니다.";
 
   return (
     <div className="mx-auto w-full max-w-4xl px-6 py-10 md:px-12">
       <ScrollToTopOnMount />
+      <ScrollToTopButton />
       <Breadcrumb className="mb-6">
         <BreadcrumbList>
           <BreadcrumbItem>
@@ -128,7 +130,7 @@ export default async function NoteDetailPage({
           <BreadcrumbItem>
             {/* 제목이 길면 breadcrumb가 여러 줄로 밀리므로 잘라내고 전체 제목은 title로 노출한다. */}
             <BreadcrumbPage
-              className="max-w-[180px] truncate font-medium sm:max-w-xs"
+              className="max-w-45 truncate font-medium sm:max-w-xs"
               title={note.title}
             >
               {note.title}
@@ -145,7 +147,7 @@ export default async function NoteDetailPage({
         canStartReview={canStartReview}
         reviewStatusMessage={reviewStatusMessage}
         notificationTimeOfDay={note.notification_time_of_day}
-        nextScheduledAt={note.next_scheduled_at}
+        nextScheduledAt={nextScheduledAt}
       />
 
       <GradingHistorySection gradings={gradings} />

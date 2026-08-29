@@ -23,9 +23,6 @@ export default function Error({
       </div>
       <div className="space-y-1.5">
         <h2 className="text-xl font-semibold">오류가 발생했습니다</h2>
-        <p className="text-sm text-muted-foreground">
-          일시적인 문제일 수 있습니다. 잠시 후 다시 시도해 주세요.
-        </p>
       </div>
       <Button variant="outline" size="md" onClick={reset}>
         다시 시도

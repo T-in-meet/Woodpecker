@@ -2,11 +2,12 @@
 
 import {
   ArrowLeftIcon,
-  CircleIcon,
+  ChevronLeftIcon,
+  CircleXIcon,
   ListChecksIcon,
   LoaderIcon,
+  NotebookTextIcon,
   TextCursorInputIcon,
-  XIcon,
 } from "lucide-react";
 
 import {
@@ -28,12 +29,31 @@ import { QuizResult } from "./QuizResult";
 const QUIZ_TYPE_LABELS: Record<QuizType, string> = {
   ox: "OX 퀴즈",
   blank: "빈칸 채우기",
-  choice: "객관식",
+  choice: "객관식 문제",
 };
 
+const QUIZ_TYPE_OPTIONS = [
+  {
+    type: "ox",
+    label: QUIZ_TYPE_LABELS.ox,
+    Icon: CircleXIcon,
+  },
+  {
+    type: "choice",
+    label: QUIZ_TYPE_LABELS.choice,
+    Icon: ListChecksIcon,
+  },
+  {
+    type: "blank",
+    label: QUIZ_TYPE_LABELS.blank,
+    Icon: TextCursorInputIcon,
+  },
+] as const;
+
 const TYPE_BUTTON_CLASS = cn(
-  "flex cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-border p-4 transition-colors",
-  "hover:border-primary/50 hover:bg-primary/5",
+  "flex min-h-12 cursor-pointer items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-left transition-colors sm:h-16 sm:gap-2.5 sm:py-2.5",
+  "hover:border-orange-200 hover:bg-orange-50 dark:hover:border-orange-900/40 dark:hover:bg-orange-950/20",
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
 );
 
 type QuizModalProps = {
@@ -61,6 +81,7 @@ export function QuizModal({
     correctCount,
     startQuiz,
     submitAnswer,
+    goToPrevious,
     goToNext,
     retryQuiz,
     regenerate,
@@ -78,55 +99,39 @@ export function QuizModal({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="flex max-h-[85dvh] flex-col overflow-hidden">
-        <DialogHeader className="shrink-0">
-          <DialogTitle>퀴즈</DialogTitle>
-          <DialogDescription className="truncate">
-            {noteTitle}
+      <DialogContent className="flex max-h-[85dvh] max-w-xl flex-col overflow-hidden border border-border/60 p-4 shadow-2xl sm:p-6">
+        <DialogHeader className="mb-3 shrink-0 pr-8 sm:mb-6">
+          <DialogTitle className="text-xl">퀴즈 만들기</DialogTitle>
+          <DialogDescription className="mt-2 flex min-w-0 items-center gap-2 text-base text-muted-foreground">
+            <NotebookTextIcon aria-hidden="true" className="size-4 shrink-0" />
+            <span className="truncate">{noteTitle}</span>
           </DialogDescription>
         </DialogHeader>
 
         {phase === "select" && (
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              퀴즈 유형을 선택하세요
-            </p>
+          <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-1 sm:space-y-4 sm:pr-0">
+            <p className="text-base font-medium">어떻게 복습할까요?</p>
             {error && <p className="text-sm text-destructive">{error}</p>}
-            <div className="grid grid-cols-3 gap-3">
-              <button
-                type="button"
-                onClick={() => startQuiz("ox")}
-                className={TYPE_BUTTON_CLASS}
-              >
-                <div className="flex items-center gap-1">
-                  <CircleIcon className="size-6" />
-                  <XIcon className="size-6" />
-                </div>
-                <span className="text-center text-sm font-medium">
-                  {QUIZ_TYPE_LABELS.ox}
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => startQuiz("choice")}
-                className={TYPE_BUTTON_CLASS}
-              >
-                <ListChecksIcon className="size-6" />
-                <span className="text-center text-sm font-medium">
-                  {QUIZ_TYPE_LABELS.choice}
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => startQuiz("blank")}
-                className={TYPE_BUTTON_CLASS}
-              >
-                <TextCursorInputIcon className="size-6" />
-                <span className="text-center text-sm font-medium">
-                  {QUIZ_TYPE_LABELS.blank}
-                </span>
-              </button>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
+              {QUIZ_TYPE_OPTIONS.map(({ type, label, Icon }) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => startQuiz(type)}
+                  className={TYPE_BUTTON_CLASS}
+                >
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-orange-50 sm:size-9 sm:rounded-xl dark:bg-orange-950/20">
+                    <Icon aria-hidden="true" className="size-4 sm:size-5" />
+                  </span>
+                  <span className="min-w-0 text-sm font-medium sm:text-base">
+                    {label}
+                  </span>
+                </button>
+              ))}
             </div>
+            <p className="text-sm text-muted-foreground">
+              유형을 누르면 바로 시작합니다.
+            </p>
           </div>
         )}
 
@@ -141,13 +146,13 @@ export function QuizModal({
 
         {phase === "playing" && currentQuestion && (
           <div className="min-h-0 flex-1 overflow-y-auto">
-            <div className="mb-4 flex items-center justify-between gap-2">
+            <div className="mb-3 flex items-center justify-between gap-2 sm:mb-4">
               <button
                 type="button"
                 onClick={goToSelect}
                 className="flex cursor-pointer items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
               >
-                <ArrowLeftIcon className="size-4" />
+                <ChevronLeftIcon className="size-4" />
                 유형 선택
               </button>
 
@@ -194,19 +199,28 @@ export function QuizModal({
               />
             )}
 
-            {currentAnswer !== null && (
-              <div className="mt-4 flex justify-end">
+            <div className="mt-3 flex items-center gap-3 sm:mt-4">
+              {currentIndex > 0 && (
                 <button
                   type="button"
-                  onClick={goToNext}
-                  className="cursor-pointer text-sm font-medium text-primary hover:underline"
+                  onClick={goToPrevious}
+                  className="flex cursor-pointer items-center gap-1 rounded-sm text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
-                  {currentIndex + 1 < questions.length
-                    ? "다음 문제 →"
-                    : "결과 보기 →"}
+                  <ArrowLeftIcon aria-hidden="true" className="size-4" />
+                  이전 문제
                 </button>
-              </div>
-            )}
+              )}
+              <button
+                type="button"
+                onClick={goToNext}
+                disabled={currentAnswer === null}
+                className="ml-auto cursor-pointer rounded-sm text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:text-muted-foreground/50 disabled:no-underline"
+              >
+                {currentIndex + 1 < questions.length
+                  ? "다음 문제 →"
+                  : "결과 보기 →"}
+              </button>
+            </div>
           </div>
         )}
 

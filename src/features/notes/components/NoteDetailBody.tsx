@@ -1,20 +1,43 @@
 "use client";
 
-import { Pencil } from "lucide-react";
+import { NotebookPen } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { NotificationTimePicker } from "@/features/notifications/components/NotificationTimePicker";
+import { Skeleton } from "@/components/ui/skeleton";
 import { QuizButton } from "@/features/quiz/components/QuizButton";
 import { RelatedNotesSection } from "@/features/related-notes/components/RelatedNotesSection";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { getNoteReviewRoute } from "@/lib/constants/routes";
 
-import { DeleteNoteDialog } from "./DeleteNoteDialog";
-import { NoteEditForm } from "./NoteEditForm";
+import { NoteManageMenu } from "./NoteManageMenu";
 import { NoteViewer } from "./NoteViewer";
+
+/**
+ * 편집 폼은 TipTap 에디터를 통째로 끌고 온다. 노트 상세는 읽기가 기본이고
+ * 편집은 관리 메뉴를 거쳐야 하는 부차적 행동이라, 에디터 번들을 초기 청크에서 뺀다.
+ */
+const importNoteEditForm = () => import("./NoteEditForm");
+
+const NoteEditForm = dynamic(
+  () => importNoteEditForm().then((m) => m.NoteEditForm),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="space-y-4" aria-busy="true">
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-[60vh] w-full" />
+      </div>
+    ),
+  },
+);
+
+function preloadNoteEditForm() {
+  void importNoteEditForm();
+}
 
 type NoteDetailBodyProps = {
   noteId: string;
@@ -62,46 +85,49 @@ export function NoteDetailBody({
   return (
     <>
       <header className="border-b border-border/60 pb-6">
-        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          <span className="rounded-full bg-muted px-2 py-1 font-medium text-foreground">
+        {/* 상태 문구는 액션 바가 아니라 배지 줄에 둔다. 액션과 같은 줄에 있으면
+            핵심 행동을 찾는 시선과 경쟁한다. */}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs text-muted-foreground">
+          {/* 오렌지는 이 앱에서 학습 활동/진행량을 뜻한다(마이페이지 학습 히트맵과 동일 계열).
+              복습 회차는 그 진행도라 같은 색을 쓴다. 단계를 orange-100으로 잡은 건
+              퀴즈 선택지의 "선택됨"(orange-50)과 톤을 갈라두기 위해서다. */}
+          <span className="rounded-full bg-orange-100 px-2 py-1 font-medium text-foreground dark:bg-orange-950/40">
             복습 {reviewRound} / {MAX_REVIEW_ROUND}
           </span>
           {isReviewCompleted && (
-            <span className="rounded-full bg-emerald-100 px-2 py-1 font-medium text-emerald-700">
+            <span className="rounded-full bg-emerald-100 px-2 py-1 font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
               학습 완료
             </span>
           )}
+          <span className="min-w-0">{reviewStatusMessage}</span>
         </div>
-        <h1 className="mt-4 wrap-break-word break-keep text-3xl font-bold text-foreground">
+        {/* `text-balance`는 쓰지 않는다. 줄 길이를 균등하게 맞추느라 긴 제목이
+            컨테이너 폭을 다 쓰지 못하고 왼쪽으로 쏠려 보인다. */}
+        <h1 className="mt-4 text-prose-ko text-3xl font-bold text-foreground">
           {title}
         </h1>
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-muted-foreground">{reviewStatusMessage}</p>
-          <div className="flex flex-wrap items-center gap-2">
-            <QuizButton noteId={noteId} noteTitle={title} />
-            {canStartReview && (
-              <Button asChild size="sm">
-                <Link href={getNoteReviewRoute(noteId)}>백지 테스트 시작</Link>
-              </Button>
-            )}
-            {!isReviewCompleted && (
-              <NotificationTimePicker
-                noteId={noteId}
-                initialTime={notificationTimeOfDay}
-                nextScheduledAt={nextScheduledAt}
-              />
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsEditing(true)}
-              aria-label="노트 수정"
-              className="cursor-pointer"
-            >
-              <Pencil className="size-3.5" />
-              수정
+        {/* 왼쪽은 학습 행동, 오른쪽은 관리. 화면이 좁아지면 관리 묶음이 통째로
+            내려가서 버튼이 중간에서 쪼개지지 않는다. */}
+        <div className="mt-5 flex flex-wrap items-center gap-2">
+          {canStartReview && (
+            <Button asChild>
+              <Link href={getNoteReviewRoute(noteId)}>
+                <NotebookPen data-icon="inline-start" aria-hidden="true" />
+                백지 테스트 시작
+              </Link>
             </Button>
-            <DeleteNoteDialog noteId={noteId} noteTitle={title} />
+          )}
+          <QuizButton noteId={noteId} noteTitle={title} />
+          <div className="sm:ml-auto">
+            <NoteManageMenu
+              noteId={noteId}
+              noteTitle={title}
+              onEdit={() => setIsEditing(true)}
+              onEditIntent={preloadNoteEditForm}
+              canChangeNotificationTime={!isReviewCompleted}
+              notificationTimeOfDay={notificationTimeOfDay}
+              nextScheduledAt={nextScheduledAt}
+            />
           </div>
         </div>
       </header>

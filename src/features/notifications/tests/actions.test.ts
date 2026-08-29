@@ -37,10 +37,12 @@ vi.mock("next/navigation", () => ({
 import {
   checkPushSubscriptionOwnedAction,
   markNotificationAsReadAction,
+  setNotificationScheduleAction,
   setNotificationTimeAction,
   subscribeToPushAction,
   unsubscribeFromPushAction,
 } from "../actions";
+import { addDaysToDateKey, getKstDateKey } from "../lib/time";
 
 function createSupabaseMock({
   userId = USER_ID,
@@ -304,6 +306,115 @@ describe("notification server actions", () => {
       getNoteDetailRoute(NOTE_ID),
     );
     expect(result).toEqual({ success: true });
+  });
+
+  it("moves the pending notification to the chosen KST date and time", async () => {
+    const { supabase, rpcMock } = createSupabaseMock({ rpcData: null });
+    createClientMock.mockResolvedValue(supabase);
+    const targetDate = addDaysToDateKey(getKstDateKey(new Date()), 3);
+
+    const result = await setNotificationScheduleAction(
+      NOTE_ID,
+      targetDate,
+      "21:30",
+    );
+
+    expect(rpcMock).toHaveBeenCalledWith("update_notification_schedule", {
+      p_note_id: NOTE_ID,
+      p_scheduled_at: `${targetDate}T12:30:00.000Z`,
+    });
+    expect(revalidatePathMock).toHaveBeenCalledWith(
+      getNoteDetailRoute(NOTE_ID),
+    );
+    expect(result).toEqual({ success: true });
+  });
+
+  it("allows moving a schedule one year ahead", async () => {
+    const { supabase, rpcMock } = createSupabaseMock({ rpcData: null });
+    createClientMock.mockResolvedValue(supabase);
+    const longTermDate = addDaysToDateKey(getKstDateKey(new Date()), 365);
+
+    const result = await setNotificationScheduleAction(
+      NOTE_ID,
+      longTermDate,
+      "21:30",
+    );
+
+    expect(rpcMock).toHaveBeenCalledWith("update_notification_schedule", {
+      p_note_id: NOTE_ID,
+      p_scheduled_at: `${longTermDate}T12:30:00.000Z`,
+    });
+    expect(result).toEqual({ success: true });
+  });
+
+  it("rejects a past date before calling supabase", async () => {
+    const pastDate = addDaysToDateKey(getKstDateKey(new Date()), -1);
+
+    const result = await setNotificationScheduleAction(
+      NOTE_ID,
+      pastDate,
+      "21:30",
+    );
+
+    expect(result).toEqual({
+      success: false,
+      error: "오늘 이후 날짜로만 옮길 수 있습니다.",
+    });
+    expect(createClientMock).not.toHaveBeenCalled();
+  });
+
+  it("returns a date validation error before moving the schedule", async () => {
+    const result = await setNotificationScheduleAction(
+      NOTE_ID,
+      "2026-02-31",
+      "21:30",
+    );
+
+    expect(result).toEqual({
+      success: false,
+      error: "알림 일정이 올바르지 않습니다.",
+    });
+    expect(createClientMock).not.toHaveBeenCalled();
+  });
+
+  it("explains that a dispatched notification can no longer be moved", async () => {
+    const { supabase } = createSupabaseMock({
+      rpcError: { message: "no pending review log" },
+    });
+    createClientMock.mockResolvedValue(supabase);
+    const targetDate = addDaysToDateKey(getKstDateKey(new Date()), 1);
+
+    const result = await setNotificationScheduleAction(
+      NOTE_ID,
+      targetDate,
+      "21:30",
+    );
+
+    expect(result).toEqual({
+      success: false,
+      error: "이미 발송된 알림은 일정을 바꿀 수 없습니다.",
+    });
+    expect(revalidatePathMock).not.toHaveBeenCalled();
+  });
+
+  it("explains that a time earlier today can no longer be chosen", async () => {
+    const { supabase } = createSupabaseMock({
+      rpcError: { message: "schedule in the past" },
+    });
+    createClientMock.mockResolvedValue(supabase);
+    const targetDate = getKstDateKey(new Date());
+
+    const result = await setNotificationScheduleAction(
+      NOTE_ID,
+      targetDate,
+      "00:01",
+    );
+
+    expect(result).toEqual({
+      success: false,
+      error: "이미 지난 시각으로는 옮길 수 없습니다.",
+    });
+    expect(revalidatePathMock).not.toHaveBeenCalled();
   });
 
   it("returns a note validation error before setting notification time", async () => {

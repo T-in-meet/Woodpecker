@@ -63,7 +63,7 @@ export type Route = (typeof ROUTES)[keyof typeof ROUTES];
  *
  * 데스크톱(`NotesNav`)과 모바일(`MobileMenu`)이 같은 기준을 써야 하므로
  * 판정 로직을 한 곳에 둡니다. 노트 목록은 상세 등 하위 경로까지 포함하되
- * 새 노트 작성 경로는 제외합니다.
+ * 노트 작성 경로는 제외합니다.
  *
  * @param pathname 현재 경로
  * @param href 메뉴 항목의 경로

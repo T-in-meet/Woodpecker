@@ -26,7 +26,7 @@ describe("routes", () => {
       expect(isCurrentNavRoute("/notes?view=due", ROUTES.NOTES)).toBe(true);
     });
 
-    it("새 노트 작성과 노트 챗봇은 노트 목록으로 보지 않는다", () => {
+    it("노트 작성과 노트 챗봇은 노트 목록으로 보지 않는다", () => {
       expect(isCurrentNavRoute(ROUTES.NOTES_NEW, ROUTES.NOTES)).toBe(false);
       expect(isCurrentNavRoute(ROUTES.NOTE_CHATS, ROUTES.NOTES)).toBe(false);
     });

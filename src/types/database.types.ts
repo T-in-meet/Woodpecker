@@ -2112,6 +2112,10 @@ export type Database = {
         };
         Returns: undefined;
       };
+      update_notification_schedule: {
+        Args: { p_note_id: string; p_scheduled_at: string };
+        Returns: undefined;
+      };
       update_notification_time_of_day: {
         Args: { p_note_id: string; p_time?: string };
         Returns: undefined;

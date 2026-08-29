@@ -6,6 +6,8 @@ import {
   NOTIFICATION_TYPES,
 } from "@/lib/constants/notifications";
 
+import { isValidDateKey } from "./lib/time";
+
 const notificationUuidSchema = z.string().uuid();
 
 export const notificationStatusSchema = z.enum([
@@ -67,6 +69,18 @@ export const setNotificationTimeSchema = z.object({
   time: notificationTimeSchema.nullable(),
 });
 
+export const notificationDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine(isValidDateKey);
+
+/** 직접 입력한 날짜와 시각. 과거 여부는 KST "지금"을 아는 액션과 RPC가 확인한다. */
+export const setNotificationScheduleSchema = z.object({
+  noteId: notificationNoteIdSchema,
+  date: notificationDateSchema,
+  time: notificationTimeSchema,
+});
+
 export type NotificationListItemType = z.infer<
   typeof notificationListItemSchema
 >;
@@ -77,4 +91,7 @@ export type PushSubscriptionInputType = z.infer<typeof pushSubscriptionSchema>;
 export type NotificationTimeInputType = z.infer<typeof notificationTimeSchema>;
 export type SetNotificationTimeInputType = z.infer<
   typeof setNotificationTimeSchema
+>;
+export type SetNotificationScheduleInputType = z.infer<
+  typeof setNotificationScheduleSchema
 >;

@@ -110,7 +110,7 @@ export function FeedbackList({ feedbacks }: FeedbackListProps) {
 
               {isExpanded && (
                 <div className="space-y-4 border-t px-4 py-4">
-                  <p className="text-sm whitespace-pre-wrap break-words">
+                  <p className="text-sm whitespace-pre-wrap wrap-break-word">
                     {feedback.content}
                   </p>
 
@@ -136,7 +136,7 @@ export function FeedbackList({ feedbacks }: FeedbackListProps) {
                           {formatDate(feedback.reply.created_at)}
                         </p>
                       </div>
-                      <p className="text-sm whitespace-pre-wrap break-words text-muted-foreground">
+                      <p className="text-sm whitespace-pre-wrap wrap-break-word text-muted-foreground">
                         {feedback.reply.content}
                       </p>
                       <FeedbackImages images={feedback.reply.images} />

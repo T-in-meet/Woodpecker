@@ -177,7 +177,6 @@ describe("NoteDetailPage", () => {
       canStartReview: true,
       reviewStatusMessage: "지금 백지 테스트를 진행할 수 있습니다.",
       notificationTimeOfDay: "21:30:00",
-      nextScheduledAt: "2026-03-29T09:00:00.000Z",
     });
   });
 
@@ -218,7 +217,7 @@ describe("NoteDetailPage", () => {
     expect(currentPage).toHaveClass("truncate");
   });
 
-  it("shows '다음 예정' (not 'due now') when notification time is still in the future today", async () => {
+  it("shows '다음 복습 일정' (not 'due now') when notification time is still in the future today", async () => {
     getUserMock.mockResolvedValue(createUser("user-123"));
     getNoteByIdMock.mockResolvedValue(
       createNote({
@@ -232,7 +231,7 @@ describe("NoteDetailPage", () => {
 
     expect(lastBodyProps()).toMatchObject({
       canStartReview: true,
-      reviewStatusMessage: `다음 예정: ${formatDateTime(
+      reviewStatusMessage: `다음 복습 일정: ${formatDateTime(
         "2026-03-29T18:00:00.000Z",
       )}`,
     });
@@ -253,9 +252,44 @@ describe("NoteDetailPage", () => {
 
     expect(lastBodyProps()).toMatchObject({
       canStartReview: true,
-      reviewStatusMessage: `다음 예정: ${formatDateTime(
+      reviewStatusMessage: `다음 복습 일정: ${formatDateTime(
         "2026-03-30T01:00:00.000Z",
       )}`,
+    });
+  });
+
+  // nextScheduledAt은 일정 변경 UI(NoteManageMenu)의 초기 날짜/시간이 되므로
+  // next_review_at이나 null이 잘못 전달되면 사용자가 엉뚱한 값을 보게 된다.
+  it("passes next_scheduled_at through as nextScheduledAt", async () => {
+    getUserMock.mockResolvedValue(createUser("user-123"));
+    getNoteByIdMock.mockResolvedValue(
+      createNote({
+        // 혼동 시 실패하도록 next_review_at과 다른 값을 쓴다.
+        next_review_at: "2026-03-30T15:00:00.000Z",
+        next_scheduled_at: "2026-03-30T01:00:00.000Z",
+      }),
+    );
+
+    await renderPage();
+
+    expect(lastBodyProps()).toMatchObject({
+      nextScheduledAt: "2026-03-30T01:00:00.000Z",
+    });
+  });
+
+  it("falls back to next_review_at when next_scheduled_at is missing", async () => {
+    getUserMock.mockResolvedValue(createUser("user-123"));
+    getNoteByIdMock.mockResolvedValue(
+      createNote({
+        next_review_at: "2026-03-30T15:00:00.000Z",
+        next_scheduled_at: null,
+      }),
+    );
+
+    await renderPage();
+
+    expect(lastBodyProps()).toMatchObject({
+      nextScheduledAt: "2026-03-30T15:00:00.000Z",
     });
   });
 
@@ -275,7 +309,7 @@ describe("NoteDetailPage", () => {
 
     expect(lastBodyProps()).toMatchObject({
       canStartReview: false,
-      reviewStatusMessage: `오늘 백지 테스트 완료. 다음 예정: ${formatDateTime(
+      reviewStatusMessage: `오늘 백지 테스트 완료 · 다음 복습 일정: ${formatDateTime(
         "2026-03-30T09:00:00.000Z",
       )}`,
     });
