@@ -66,7 +66,11 @@ export function NoteListItem({ note }: { note: NoteSummary }) {
       </Link>
 
       <div className="absolute right-5 bottom-5 z-10">
-        <NoteActions noteId={note.id} canReview={canReview} />
+        <NoteActions
+          noteId={note.id}
+          noteTitle={note.title}
+          canReview={canReview}
+        />
       </div>
     </Card>
   );
