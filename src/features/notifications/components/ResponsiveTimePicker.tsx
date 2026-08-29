@@ -6,7 +6,6 @@ import {
   type KeyboardEvent,
   useEffect,
   useId,
-  useRef,
   useState,
 } from "react";
 
@@ -43,7 +42,6 @@ export function ResponsiveTimePicker({
   const [hourValue, setHourValue] = useState(initialParts.hour);
   const [minuteValue, setMinuteValue] = useState(initialParts.minute);
   const [error, setError] = useState<string | null>(null);
-  const nativeTimeInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const nextParts = getTimeParts(value);
@@ -71,32 +69,6 @@ export function ResponsiveTimePicker({
   const handlePeriodChange = (nextPeriod: PeriodType) => {
     setPeriod(nextPeriod);
     commitTime(nextPeriod, hourValue, minuteValue);
-  };
-
-  const handleNativeTimeChange = (event: ChangeEvent<HTMLInputElement>) => {
-    if (event.target.value === "") {
-      onValidityChange(false);
-      return;
-    }
-
-    onValidityChange(true);
-    onValueChange(event.target.value);
-  };
-
-  const openNativeTimePicker = () => {
-    const nativeTimeInput = nativeTimeInputRef.current;
-
-    if (!nativeTimeInput) {
-      return;
-    }
-
-    try {
-      nativeTimeInput.showPicker();
-      return;
-    } catch {
-      nativeTimeInput.focus();
-      nativeTimeInput.click();
-    }
   };
 
   const handlePartChange = (
@@ -256,26 +228,6 @@ export function ResponsiveTimePicker({
           onKeyDown={(event) => handlePartKeyDown("minute", event)}
           className="h-8 w-10 border-0 px-1 text-center shadow-none focus-visible:bg-muted focus-visible:ring-0 sm:w-11"
         />
-        <Input
-          ref={nativeTimeInputRef}
-          type="time"
-          step={60}
-          tabIndex={-1}
-          value={value}
-          disabled={disabled}
-          onChange={handleNativeTimeChange}
-          data-testid="native-time-input"
-          className="sr-only"
-        />
-        <button
-          type="button"
-          aria-label="시간 선택하기"
-          disabled={disabled}
-          onClick={openNativeTimePicker}
-          className="inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <Clock className="size-4" aria-hidden="true" />
-        </button>
       </div>
 
       {error ? (
