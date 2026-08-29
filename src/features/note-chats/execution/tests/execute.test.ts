@@ -19,7 +19,7 @@ vi.mock("../start-provider-stream", () => ({
 }));
 
 describe("executeNoteChat", () => {
-  it("실행 정보를 준비하고 Provider 스트림을 시작한 뒤 질의 확장 usage와 실행 결과를 반환한다", async () => {
+  it("실행 정보를 준비하고 Provider 스트림을 시작한 뒤 usage와 실행 결과를 반환한다", async () => {
     const settings = {} as NoteChatExecutionSettings;
     const preparedConversation =
       {} as PreparedNoteChatExecution["conversation"];
@@ -35,11 +35,20 @@ describe("executeNoteChat", () => {
         outputTokens: 20,
         totalTokens: 30,
       };
+    const queryEmbeddingUsage: PreparedNoteChatExecution["queryEmbeddingUsage"] =
+      {
+        inputTokens: 5,
+        outputTokens: 0,
+        totalTokens: 5,
+      };
+    const onQueryExpansionUsage = vi.fn();
+    const onQueryEmbeddingUsage = vi.fn();
 
     const prepared: PreparedNoteChatExecution = {
       conversation: preparedConversation,
       expandedQuery: "확장된 검색 질의",
       messages: preparedMessages,
+      queryEmbeddingUsage,
       queryExpansionUsage,
       settings,
       sources: preparedSources,
@@ -53,6 +62,8 @@ describe("executeNoteChat", () => {
 
     const result = await executeNoteChat({
       conversationId: "conversation-1",
+      onQueryEmbeddingUsage,
+      onQueryExpansionUsage,
       settings,
       userId: "user-1",
       userMessageId: "message-1",
@@ -60,6 +71,8 @@ describe("executeNoteChat", () => {
 
     expect(prepareNoteChatExecution).toHaveBeenCalledWith({
       conversationId: "conversation-1",
+      onQueryEmbeddingUsage,
+      onQueryExpansionUsage,
       settings,
       userId: "user-1",
       userMessageId: "message-1",
@@ -71,6 +84,7 @@ describe("executeNoteChat", () => {
       expandedQuery: prepared.expandedQuery,
       prepared,
       providerStream,
+      queryEmbeddingUsage,
       queryExpansionUsage,
       sources: prepared.sources,
     });

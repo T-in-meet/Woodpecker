@@ -2,7 +2,7 @@
  * 노트 챗봇 스트림이 시작됐음을 알리는 이벤트입니다.
  */
 export type NoteChatStreamStartEvent = {
-  runId: string;
+  runId: string | null;
   type: "start";
   userMessageId: string;
 };
@@ -21,7 +21,7 @@ export type NoteChatStreamTextDeltaEvent = {
 export type NoteChatStreamFinishEvent = {
   assistantMessageId: string;
   usedNoteIds: string[];
-  runId: string;
+  runId: string | null;
   type: "finish";
 };
 
@@ -30,7 +30,7 @@ export type NoteChatStreamFinishEvent = {
  */
 export type NoteChatStreamErrorEvent = {
   message: string;
-  runId: string;
+  runId: string | null;
   type: "error";
 };
 

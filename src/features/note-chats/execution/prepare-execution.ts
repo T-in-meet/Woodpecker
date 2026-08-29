@@ -5,7 +5,7 @@ import type {
 } from "@/features/ai/providers/types";
 import { buildNoteContext } from "@/features/ai/rags/note/build-context";
 import { getMatchedNotes } from "@/features/ai/rags/note/get-matched-notes";
-import { searchNoteEmbeddings } from "@/features/ai/rags/note/search-embeddings";
+import { searchNoteEmbeddingsWithUsage } from "@/features/ai/rags/note/search-embeddings";
 import type {
   AiRuntimeChatConfiguration,
   AiRuntimeEmbeddingConfiguration,
@@ -59,6 +59,9 @@ export type PreparedNoteChatExecution = {
   /** 질의 확장 Chat Completion에서 사용한 token 사용량입니다. */
   queryExpansionUsage: AiTokenUsage;
 
+  /** 검색 질의 Embedding Provider 호출에서 사용한 token 사용량입니다. */
+  queryEmbeddingUsage: AiTokenUsage;
+
   /** AI Foundation Runtime에서 확정된 실행 설정입니다. */
   settings: NoteChatExecutionSettings;
 
@@ -81,6 +84,12 @@ type PrepareNoteChatExecutionParams = {
 
   /** 현재 실행을 발생시킨 사용자 메시지 ID입니다. */
   userMessageId: string;
+
+  /** Query Expansion Provider usage 저장 callback입니다. */
+  onQueryExpansionUsage?: (usage: AiTokenUsage) => Promise<void>;
+
+  /** Query Embedding Provider usage 저장 callback입니다. */
+  onQueryEmbeddingUsage?: (usage: AiTokenUsage) => Promise<void>;
 };
 
 /**
@@ -214,6 +223,9 @@ export async function prepareNoteChatExecution(
     await expandNoteChatQuery({
       configuration: params.settings.queryExpansion,
       messages: detail.messages,
+      ...(params.onQueryExpansionUsage !== undefined
+        ? { onUsage: params.onQueryExpansionUsage }
+        : {}),
       userMessageId: params.userMessageId,
     });
 
@@ -221,16 +233,19 @@ export async function prepareNoteChatExecution(
    * 원본 사용자 질문이 아니라 문맥 기반으로 확장된 검색 질의를 Embedding하여
    * 현재 대화 문맥을 반영한 노트 후보를 검색합니다.
    */
-  const embeddingMatches = await searchNoteEmbeddings({
+  const searchResult = await searchNoteEmbeddingsWithUsage({
     embeddingConfiguration: params.settings.embedding,
     limit: NOTE_CHAT_MATCH_LIMIT,
     minSimilarity: NOTE_CHAT_MIN_SIMILARITY,
     ownerUserId: detail.conversation.user_id,
+    ...(params.onQueryEmbeddingUsage !== undefined
+      ? { onUsage: params.onQueryEmbeddingUsage }
+      : {}),
     question: expandedQuery,
   });
 
   const matchedNotes = await getMatchedNotes({
-    matches: embeddingMatches,
+    matches: searchResult.matches,
     ownerUserId: detail.conversation.user_id,
   });
 
@@ -297,6 +312,7 @@ export async function prepareNoteChatExecution(
     conversation: detail.conversation,
     expandedQuery,
     messages,
+    queryEmbeddingUsage: searchResult.usage,
     queryExpansionUsage,
     settings: params.settings,
     sources,
