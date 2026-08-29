@@ -102,11 +102,8 @@ export function QuizModal({
       <DialogContent className="flex max-h-[85dvh] max-w-xl flex-col overflow-hidden border border-border/60 p-4 shadow-2xl sm:p-6">
         <DialogHeader className="mb-3 shrink-0 pr-8 sm:mb-6">
           <DialogTitle className="text-xl">퀴즈 만들기</DialogTitle>
-          <DialogDescription className="mt-2 flex min-w-0 items-start gap-2 text-base text-muted-foreground">
-            <NotebookTextIcon
-              aria-hidden="true"
-              className="mt-0.5 size-4 shrink-0"
-            />
+          <DialogDescription className="mt-2 flex min-w-0 items-center gap-2 text-base text-muted-foreground">
+            <NotebookTextIcon aria-hidden="true" className="size-4 shrink-0" />
             <span className="truncate">{noteTitle}</span>
           </DialogDescription>
         </DialogHeader>
