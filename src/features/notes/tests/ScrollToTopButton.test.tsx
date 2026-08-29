@@ -63,6 +63,33 @@ describe("ScrollToTopButton", () => {
     expect(button.classList.contains("opacity-0")).toBe(true);
   });
 
+  it("starts tracking scroll after resizing from desktop to mobile", () => {
+    setViewportWidth(1024);
+    render(<ScrollToTopButton />);
+
+    setViewportWidth(375);
+    act(() => {
+      fireEvent.resize(window);
+    });
+    scrollTo(401);
+
+    expect(screen.getByRole("button", { name: "맨 위로 이동" })).toHaveClass(
+      "opacity-100",
+    );
+  });
+
+  it("stops showing the button after resizing from mobile to desktop", () => {
+    render(<ScrollToTopButton />);
+    scrollTo(401);
+
+    setViewportWidth(1024);
+    act(() => {
+      fireEvent.resize(window);
+    });
+
+    expect(getButton()).toHaveClass("opacity-0");
+  });
+
   it("hides the button until the page is scrolled past the threshold", () => {
     render(<ScrollToTopButton />);
 

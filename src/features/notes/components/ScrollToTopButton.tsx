@@ -21,14 +21,9 @@ export function ScrollToTopButton() {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    // 버튼은 데스크톱에서 `md:hidden`으로 절대 보이지 않으므로, 그 화면폭에서는
-    // 스크롤 리스너 자체를 붙이지 않는다.
-    if (window.innerWidth >= DESKTOP_MIN_WIDTH_PX) {
-      return;
-    }
-
     let frame = 0;
     let isScheduled = false;
+    let isScrollListening = false;
 
     const update = () => {
       isScheduled = false;
@@ -44,12 +39,40 @@ export function ScrollToTopButton() {
       frame = window.requestAnimationFrame(update);
     };
 
-    update();
-    window.addEventListener("scroll", handleScroll, { passive: true });
+    const stopListeningToScroll = () => {
+      if (!isScrollListening) return;
+
+      window.removeEventListener("scroll", handleScroll);
+      isScrollListening = false;
+      isScheduled = false;
+
+      if (frame !== 0) {
+        window.cancelAnimationFrame(frame);
+        frame = 0;
+      }
+    };
+
+    const syncViewport = () => {
+      if (window.innerWidth >= DESKTOP_MIN_WIDTH_PX) {
+        stopListeningToScroll();
+        setIsVisible(false);
+        return;
+      }
+
+      if (!isScrollListening) {
+        window.addEventListener("scroll", handleScroll, { passive: true });
+        isScrollListening = true;
+      }
+
+      update();
+    };
+
+    syncViewport();
+    window.addEventListener("resize", syncViewport);
 
     return () => {
-      window.removeEventListener("scroll", handleScroll);
-      if (frame !== 0) window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", syncViewport);
+      stopListeningToScroll();
     };
   }, []);
 

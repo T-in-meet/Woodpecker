@@ -82,7 +82,9 @@ BEGIN
   END IF;
 
   UPDATE public.notes
-  SET next_review_at = public.kst_day_start(v_shifted_at)
+  SET next_review_at = public.kst_day_start(v_shifted_at),
+      notification_time_of_day =
+        (p_scheduled_at AT TIME ZONE 'Asia/Seoul')::time
   WHERE id = p_note_id
     AND user_id = v_user_id;
 END;

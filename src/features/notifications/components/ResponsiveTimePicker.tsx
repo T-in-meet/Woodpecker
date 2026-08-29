@@ -26,6 +26,7 @@ type ResponsiveTimePickerProps = {
   value: string;
   disabled: boolean;
   onValueChange: (value: string) => void;
+  onValidityChange: (isValid: boolean) => void;
 };
 
 type TimePart = "hour" | "minute";
@@ -34,6 +35,7 @@ export function ResponsiveTimePicker({
   value,
   disabled,
   onValueChange,
+  onValidityChange,
 }: ResponsiveTimePickerProps) {
   const errorId = useId();
   const initialParts = getTimeParts(value);
@@ -57,8 +59,11 @@ export function ResponsiveTimePicker({
     nextMinute: string,
   ) => {
     const nextTime = toTimeValue(nextPeriod, nextHour, nextMinute);
+    const isValid = nextTime !== null && nextTime !== "";
 
-    if (nextTime !== null && nextTime !== "") {
+    onValidityChange(isValid);
+
+    if (isValid) {
       onValueChange(nextTime);
     }
   };
@@ -70,9 +75,11 @@ export function ResponsiveTimePicker({
 
   const handleNativeTimeChange = (event: ChangeEvent<HTMLInputElement>) => {
     if (event.target.value === "") {
+      onValidityChange(false);
       return;
     }
 
+    onValidityChange(true);
     onValueChange(event.target.value);
   };
 
@@ -102,6 +109,8 @@ export function ResponsiveTimePicker({
       setHourValue(nextValue);
       if (nextValue.length === 2) {
         commitTime(period, nextValue, minuteValue);
+      } else {
+        onValidityChange(false);
       }
       return;
     }
@@ -109,6 +118,8 @@ export function ResponsiveTimePicker({
     setMinuteValue(nextValue);
     if (nextValue.length === 2) {
       commitTime(period, hourValue, nextValue);
+    } else {
+      onValidityChange(false);
     }
   };
 
@@ -131,6 +142,7 @@ export function ResponsiveTimePicker({
       }
 
       setError(fallbackValue === "" ? "시·분을 모두 입력해주세요." : null);
+      onValidityChange(fallbackValue !== "");
       return;
     }
 

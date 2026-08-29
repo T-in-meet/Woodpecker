@@ -162,10 +162,10 @@ describe("NotificationSchedulePicker", () => {
       "true",
     );
     expect(screen.getByRole("button", { name: "3일 뒤" })).toHaveClass(
-      "bg-orange-50",
+      "bg-muted",
     );
     expect(screen.getByRole("button", { name: "내일" })).toHaveClass(
-      "hover:bg-orange-50",
+      "hover:bg-muted",
     );
     expect(screen.getByLabelText("연도")).toHaveValue("2026");
     expect(screen.getByLabelText("월")).toHaveValue("05");
@@ -299,6 +299,54 @@ describe("NotificationSchedulePicker", () => {
         "08:15",
       );
     });
+  });
+
+  it("완성되지 않은 시간 초안은 Enter로 제출하지 않는다", async () => {
+    const user = userEvent.setup();
+    render(
+      <PickerWithTrigger
+        noteId={NOTE_ID}
+        initialTime="21:30:00"
+        initialScheduledAt={SCHEDULED_AT}
+      />,
+    );
+
+    await openDialog(user);
+    await user.click(screen.getByRole("button", { name: "내일" }));
+    fireEvent.change(screen.getByLabelText("분"), {
+      target: { value: "9" },
+    });
+
+    const saveButton = screen.getByRole("button", { name: /저장/ });
+    expect(saveButton).toBeDisabled();
+
+    const form = saveButton.closest("form");
+    expect(form).not.toBeNull();
+    fireEvent.submit(form!);
+
+    expect(setNotificationScheduleActionMock).not.toHaveBeenCalled();
+    expect(
+      screen.getByText("알림 시간이 올바르지 않습니다."),
+    ).toBeInTheDocument();
+  });
+
+  it("페이지를 열어 둔 사이 자정이 지나면 오늘 날짜를 다시 계산한다", async () => {
+    const user = userEvent.setup();
+    render(
+      <PickerWithTrigger
+        noteId={NOTE_ID}
+        initialTime="21:30:00"
+        initialScheduledAt={SCHEDULED_AT}
+      />,
+    );
+
+    vi.setSystemTime(new Date("2026-05-01T15:01:00.000Z"));
+    await openDialog(user);
+    await user.click(screen.getByRole("button", { name: "오늘" }));
+
+    expect(screen.getByLabelText("연도")).toHaveValue("2026");
+    expect(screen.getByLabelText("월")).toHaveValue("05");
+    expect(screen.getByLabelText("일")).toHaveValue("02");
   });
 
   it("분 입력은 1분 단위 변경을 지원한다", async () => {

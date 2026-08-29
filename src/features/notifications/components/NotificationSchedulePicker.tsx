@@ -88,7 +88,9 @@ export function NotificationSchedulePicker({
 }: NotificationSchedulePickerProps) {
   const router = useRouter();
 
-  const todayKey = useMemo(() => getKstDateKey(new Date()), []);
+  // 다이얼로그를 열 때 부모 상태가 바뀌어 다시 렌더되므로, 페이지를 오래 열어 둬도
+  // KST 기준 오늘이 이전 마운트 시각에 고정되지 않는다.
+  const todayKey = getKstDateKey(new Date());
 
   const savedDateKey = useMemo(
     () =>
@@ -110,6 +112,9 @@ export function NotificationSchedulePicker({
   const [isDateInputValid, setIsDateInputValid] = useState(
     savedDateKey >= todayKey,
   );
+  const [isTimeInputValid, setIsTimeInputValid] = useState(
+    notificationTimeSchema.safeParse(savedTime).success,
+  );
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -130,6 +135,7 @@ export function NotificationSchedulePicker({
     setDateKey(savedDateKey);
     setTimeValue(savedTime);
     setIsDateInputValid(savedDateKey >= todayKey);
+    setIsTimeInputValid(notificationTimeSchema.safeParse(savedTime).success);
   };
 
   // 여는 주체가 밖(`NoteManageMenu`)이라 열 때는 Radix가 onOpenChange를 호출하지 않는다.
@@ -154,6 +160,7 @@ export function NotificationSchedulePicker({
     setDateKey(savedDateKey);
     setTimeValue(savedTime);
     setIsDateInputValid(savedDateKey >= todayKey);
+    setIsTimeInputValid(notificationTimeSchema.safeParse(savedTime).success);
   }, [open, savedDateKey, savedTime, todayKey]);
 
   const handleOpenChange = (nextOpen: boolean) => {
@@ -168,7 +175,10 @@ export function NotificationSchedulePicker({
     setMessage(null);
     setError(null);
 
-    if (!notificationTimeSchema.safeParse(timeValue).success) {
+    if (
+      !isTimeInputValid ||
+      !notificationTimeSchema.safeParse(timeValue).success
+    ) {
       setError("알림 시간이 올바르지 않습니다.");
       return;
     }
@@ -230,6 +240,12 @@ export function NotificationSchedulePicker({
     setMessage(null);
     setError(null);
     setTimeValue(nextTimeValue);
+  };
+
+  const handleTimeValidityChange = (isValid: boolean) => {
+    setMessage(null);
+    setError(null);
+    setIsTimeInputValid(isValid);
   };
 
   const handleSelectDateKey = (nextDateKey: string) => {
@@ -299,6 +315,7 @@ export function NotificationSchedulePicker({
                 value={timeValue}
                 disabled={isPending}
                 onValueChange={handleTimeChange}
+                onValidityChange={handleTimeValidityChange}
               />
             </div>
 
@@ -332,7 +349,12 @@ export function NotificationSchedulePicker({
                 <Button
                   type="submit"
                   size="md"
-                  disabled={isPending || !hasChanges || !isDateInputValid}
+                  disabled={
+                    isPending ||
+                    !hasChanges ||
+                    !isDateInputValid ||
+                    !isTimeInputValid
+                  }
                 >
                   {isPending ? (
                     <Loader2 className="animate-spin" aria-hidden="true" />
