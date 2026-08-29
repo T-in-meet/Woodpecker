@@ -101,7 +101,9 @@ export function NoteDetailBody({
           )}
           <span className="min-w-0">{reviewStatusMessage}</span>
         </div>
-        <h1 className="mt-4 text-prose-ko text-balance text-3xl font-bold text-foreground">
+        {/* `text-balance`는 쓰지 않는다. 줄 길이를 균등하게 맞추느라 긴 제목이
+            컨테이너 폭을 다 쓰지 못하고 왼쪽으로 쏠려 보인다. */}
+        <h1 className="mt-4 text-prose-ko text-3xl font-bold text-foreground">
           {title}
         </h1>
         {/* 왼쪽은 학습 행동, 오른쪽은 관리. 화면이 좁아지면 관리 묶음이 통째로
