@@ -101,7 +101,7 @@ export function NoteDetailBody({
           )}
           <span className="min-w-0">{reviewStatusMessage}</span>
         </div>
-        <h1 className="mt-4 wrap-break-word break-keep text-balance text-3xl font-bold text-foreground">
+        <h1 className="mt-4 text-prose-ko text-balance text-3xl font-bold text-foreground">
           {title}
         </h1>
         {/* 왼쪽은 학습 행동, 오른쪽은 관리. 화면이 좁아지면 관리 묶음이 통째로

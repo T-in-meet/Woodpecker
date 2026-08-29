@@ -127,15 +127,15 @@ describe("BlankTestPage", () => {
       />,
     );
 
+    // 제목과 안내 문구가 같은 줄바꿈 규칙을 쓰는지 확인한다.
     expect(screen.getByRole("heading", { level: 1 })).toHaveClass(
-      "break-words",
-      "break-keep",
+      "text-prose-ko",
     );
     expect(
       screen.getByText(
         "비교를 마쳤다면 이번 복습을 완료 처리하고 다음 간격으로 넘어가세요.",
       ),
-    ).toBeInTheDocument();
+    ).toHaveClass("text-prose-ko");
     expect(
       screen.getByRole("button", { name: "review-complete" }),
     ).toBeEnabled();

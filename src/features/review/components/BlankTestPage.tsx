@@ -71,10 +71,10 @@ export function BlankTestPage({
             백지 테스트 {reviewRound} / {MAX_REVIEW_ROUND}
           </span>
         </div>
-        <h1 className="break-words break-keep text-3xl font-bold text-foreground">
+        <h1 className="text-prose-ko text-3xl font-bold text-foreground">
           {noteTitle}
         </h1>
-        <p className="break-keep text-sm text-muted-foreground">
+        <p className="text-prose-ko text-sm text-muted-foreground">
           먼저 기억나는 내용을 적고 제출한 뒤, 원본과 나란히 비교해보세요.
         </p>
       </header>
@@ -98,7 +98,7 @@ export function BlankTestPage({
           />
 
           <div className="rounded-xl border border-border/60 bg-muted/30 px-5 py-4">
-            <p className="break-keep text-sm text-muted-foreground">
+            <p className="text-prose-ko text-sm text-muted-foreground">
               {alreadyCompletedToday
                 ? "오늘은 이미 이 노트의 복습을 완료했어요. 내일 자정(KST) 이후 다시 완료할 수 있어요."
                 : "비교를 마쳤다면 이번 복습을 완료 처리하고 다음 간격으로 넘어가세요."}

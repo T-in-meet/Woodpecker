@@ -212,7 +212,7 @@ export function AdminOperationalErrorStatusCard({
                 <dd className="font-medium">{nextStatusLabel}</dd>
 
                 <dt className="text-muted-foreground">처리 메모</dt>
-                <dd className="whitespace-pre-wrap wrap-break-words">
+                <dd className="whitespace-pre-wrap wrap-break-word">
                   {resolutionNote.trim() || "작성하지 않음"}
                 </dd>
               </dl>

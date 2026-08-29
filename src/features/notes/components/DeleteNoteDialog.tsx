@@ -65,6 +65,9 @@ export function DeleteNoteDialog({
             삭제한 노트는 되돌릴 수 없습니다. 아래 노트를 영구적으로
             삭제하시겠습니까?
           </DialogDescription>
+          {/* 여기만 `text-prose-ko`(overflow-wrap: break-word) 대신 `anywhere`를 쓴다.
+              사용자가 지은 제목이 공백 없는 긴 문자열일 수 있는데, `break-word`는
+              min-content 계산에 반영되지 않아 좁은 다이얼로그를 밀어낸다. */}
           <p className="min-w-0 max-w-full whitespace-normal break-keep rounded-lg bg-muted px-3 py-2 text-sm font-medium text-foreground [overflow-wrap:anywhere]">
             {noteTitle}
           </p>
