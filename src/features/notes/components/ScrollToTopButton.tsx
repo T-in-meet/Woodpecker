@@ -8,13 +8,9 @@ import { Button } from "@/components/ui/button";
 /** 이 높이 이상 내려갔을 때만 버튼을 노출한다. 짧은 노트에서는 필요 없는 UI다. */
 const SHOW_THRESHOLD_PX = 400;
 
-/** 버튼이 `md:hidden`으로 감춰지는 Tailwind `md` 브레이크포인트(768px)와 맞춘다. */
-const DESKTOP_MIN_WIDTH_PX = 768;
-
 /**
- * 노트가 길어졌을 때 맨 위로 돌아가는 모바일 전용 버튼.
+ * 노트가 길어졌을 때 화면 크기와 관계없이 맨 위로 돌아가는 버튼.
  *
- * 데스크톱은 휠·Home 키로 충분해서 `md:hidden`으로 감춘다.
  * 세로 위치를 `bottom-20`으로 올린 건 toast(`fixed bottom-4 right-4`)와 겹치지 않게 하기 위해서다.
  */
 export function ScrollToTopButton() {
@@ -23,7 +19,6 @@ export function ScrollToTopButton() {
   useEffect(() => {
     let frame = 0;
     let isScheduled = false;
-    let isScrollListening = false;
 
     const update = () => {
       isScheduled = false;
@@ -39,40 +34,16 @@ export function ScrollToTopButton() {
       frame = window.requestAnimationFrame(update);
     };
 
-    const stopListeningToScroll = () => {
-      if (!isScrollListening) return;
+    update();
+    window.addEventListener("scroll", handleScroll, { passive: true });
 
+    return () => {
       window.removeEventListener("scroll", handleScroll);
-      isScrollListening = false;
       isScheduled = false;
 
       if (frame !== 0) {
         window.cancelAnimationFrame(frame);
-        frame = 0;
       }
-    };
-
-    const syncViewport = () => {
-      if (window.innerWidth >= DESKTOP_MIN_WIDTH_PX) {
-        stopListeningToScroll();
-        setIsVisible(false);
-        return;
-      }
-
-      if (!isScrollListening) {
-        window.addEventListener("scroll", handleScroll, { passive: true });
-        isScrollListening = true;
-      }
-
-      update();
-    };
-
-    syncViewport();
-    window.addEventListener("resize", syncViewport);
-
-    return () => {
-      window.removeEventListener("resize", syncViewport);
-      stopListeningToScroll();
     };
   }, []);
 
@@ -96,7 +67,7 @@ export function ScrollToTopButton() {
       aria-hidden={!isVisible}
       tabIndex={isVisible ? undefined : -1}
       onClick={handleClick}
-      className={`fixed right-4 bottom-20 z-40 rounded-full shadow-md transition-opacity md:hidden ${
+      className={`fixed right-4 bottom-20 z-40 rounded-full shadow-md transition-opacity sm:right-6 ${
         isVisible ? "opacity-100" : "pointer-events-none opacity-0"
       }`}
     >
