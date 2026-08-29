@@ -88,7 +88,7 @@ export function GradingPanel({
                   <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
                     채점 기준이 된 답안 보기
                   </summary>
-                  <p className="mt-2 whitespace-pre-wrap break-words text-sm text-muted-foreground">
+                  <p className="mt-2 whitespace-pre-wrap wrap-break-word text-sm text-muted-foreground">
                     {gradedAnswer}
                   </p>
                 </details>
