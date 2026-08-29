@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BellRing, Loader2 } from "lucide-react";
+import { Loader2, ShieldAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -222,13 +222,14 @@ export function AdminNotificationBell({
         size="icon-lg"
         aria-label={buttonLabel}
         aria-expanded={open}
+        title="관리자 알림"
         className="relative"
         onClick={handleToggle}
       >
         {isCountLoading ? (
           <Loader2 className="animate-spin" aria-hidden="true" />
         ) : (
-          <BellRing aria-hidden="true" />
+          <ShieldAlert aria-hidden="true" />
         )}
         {unreadCount > 0 ? (
           <span

@@ -215,6 +215,7 @@ export function NotificationBell({ userId }: NotificationBellProps) {
         size="icon-lg"
         aria-label={buttonLabel}
         aria-expanded={open}
+        title="개인 알림"
         className="relative"
         onClick={handleToggle}
       >

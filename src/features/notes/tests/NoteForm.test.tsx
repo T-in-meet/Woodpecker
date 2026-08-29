@@ -6,9 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getNoteDetailRoute } from "@/lib/constants/routes";
 
-const { createNoteActionMock, routerPushMock } = vi.hoisted(() => ({
+const { createNoteActionMock, routerReplaceMock } = vi.hoisted(() => ({
   createNoteActionMock: vi.fn(),
-  routerPushMock: vi.fn(),
+  routerReplaceMock: vi.fn(),
 }));
 
 import { NoteForm } from "../components/NoteForm";
@@ -17,13 +17,16 @@ vi.mock("@/features/editor/components/TipTapEditor", () => ({
   TipTapEditor: ({
     value,
     onChange,
+    readOnly,
   }: {
     value: string;
     onChange: (value: string) => void;
+    readOnly?: boolean;
   }) => (
     <button
       type="button"
       data-testid="tiptap-editor"
+      disabled={readOnly}
       onClick={() => onChange("markdown content")}
     >
       markdown:{value}
@@ -37,7 +40,7 @@ vi.mock("../actions", () => ({
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
-    push: routerPushMock,
+    replace: routerReplaceMock,
   }),
 }));
 
@@ -65,7 +68,7 @@ describe("NoteForm", () => {
   beforeEach(() => {
     createNoteActionMock.mockReset();
     createNoteActionMock.mockResolvedValue(null);
-    routerPushMock.mockReset();
+    routerReplaceMock.mockReset();
     history.replaceState(null, "", "/notes/new");
   });
 
@@ -77,6 +80,27 @@ describe("NoteForm", () => {
     render(<NoteForm />);
 
     expect(screen.getByTestId("tiptap-editor")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("노트 제목")).toBeInTheDocument();
+    expect(
+      screen.getByText("제목과 내용을 입력하면 저장할 수 있어요"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "저장" })).toBeDisabled();
+  });
+
+  it("제목과 내용을 모두 입력해야 저장할 수 있다", async () => {
+    const user = userEvent.setup();
+
+    render(<NoteForm />);
+
+    await user.type(screen.getByLabelText("제목"), "테스트 노트");
+
+    expect(screen.getByText("내용을 입력해주세요")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "저장" })).toBeDisabled();
+
+    await user.click(screen.getByTestId("tiptap-editor"));
+
+    expect(screen.getByText("저장되지 않은 변경사항")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "저장" })).toBeEnabled();
   });
 
   it("syncs editor content into the hidden input and form data", async () => {
@@ -106,6 +130,8 @@ describe("NoteForm", () => {
 
     render(<NoteForm />);
 
+    await user.type(screen.getByLabelText("제목"), "테스트 노트");
+    await user.click(screen.getByTestId("tiptap-editor"));
     await user.click(screen.getByRole("button", { name: "저장" }));
 
     expect(await screen.findByText("제목을 입력해주세요")).toBeInTheDocument();
@@ -120,6 +146,8 @@ describe("NoteForm", () => {
 
     render(<NoteForm />);
 
+    await user.type(screen.getByLabelText("제목"), "테스트 노트");
+    await user.click(screen.getByTestId("tiptap-editor"));
     await user.click(screen.getByRole("button", { name: "저장" }));
 
     expect(await screen.findByText("로그인이 필요합니다.")).toBeInTheDocument();
@@ -132,8 +160,8 @@ describe("NoteForm", () => {
       success: true,
       newNoteId: "note-123",
     });
-    routerPushMock.mockImplementationOnce((href: string) => {
-      history.pushState(null, "", href);
+    routerReplaceMock.mockImplementationOnce((href: string) => {
+      history.replaceState(null, "", href);
     });
 
     render(<NoteForm />);
@@ -143,11 +171,17 @@ describe("NoteForm", () => {
     await user.click(screen.getByRole("button", { name: "저장" }));
 
     await waitFor(() => {
-      expect(routerPushMock).toHaveBeenCalledWith(
+      expect(routerReplaceMock).toHaveBeenCalledWith(
         getNoteDetailRoute("note-123"),
       );
     });
 
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "저장 완료 · 노트로 이동 중…",
+    );
+    expect(screen.getByRole("button", { name: "저장됨" })).toBeDisabled();
+    expect(screen.getByLabelText("제목")).toBeDisabled();
+    expect(screen.getByTestId("tiptap-editor")).toBeDisabled();
     expect(confirmSpy).not.toHaveBeenCalled();
     expect(window.location.pathname).toBe(getNoteDetailRoute("note-123"));
   });
@@ -165,10 +199,12 @@ describe("NoteForm", () => {
     render(<NoteForm />);
 
     await user.type(screen.getByLabelText("제목"), "테스트 노트");
+    await user.click(screen.getByTestId("tiptap-editor"));
     await user.click(screen.getByRole("button", { name: "저장" }));
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "저장 중..." })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "저장 중…" })).toBeDisabled();
+      expect(screen.getByRole("status")).toHaveTextContent("저장 중…");
     });
 
     history.pushState(null, "", "/after-submit");

@@ -113,6 +113,10 @@ describe("AdminNotificationBell", () => {
       }),
     );
 
+    expect(
+      screen.getByRole("button", { name: "읽지 않은 관리자 알림 1개" }),
+    ).toHaveAttribute("title", "관리자 알림");
+
     expect(await screen.findByText("운영 오류 알림")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "전체 읽음" }));

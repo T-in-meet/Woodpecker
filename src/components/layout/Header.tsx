@@ -43,7 +43,9 @@ export async function Header() {
             <>
               <NotificationBell userId={user.id} />
               {profile.role === "ADMIN" ? (
-                <AdminNotificationBell adminUserId={user.id} />
+                <div className="ml-1 border-l border-border pl-2">
+                  <AdminNotificationBell adminUserId={user.id} />
+                </div>
               ) : null}
               <MobileMenu
                 nickname={profile.nickname}
