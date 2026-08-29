@@ -27,8 +27,24 @@ export function NoteForm() {
   const generalError =
     state?.error && typeof state.error === "string" ? state.error : null;
 
+  const hasTitle = title.trim().length > 0;
+  const hasContent = content.trim().length > 0;
+  const isContentTooLong = content.length > CONTENT_MAX_LENGTH;
+  const canSubmit = hasTitle && hasContent && !isContentTooLong && !isPending;
   const isDirty = (title.length > 0 || content.length > 0) && !createdNoteId;
   usePreventPageLeave(isDirty);
+
+  const saveStatus = isPending
+    ? "저장 중…"
+    : !hasTitle && !hasContent
+      ? "제목과 내용을 입력하면 저장할 수 있어요"
+      : !hasTitle
+        ? "제목을 입력해주세요"
+        : !hasContent
+          ? "내용을 입력해주세요"
+          : isContentTooLong
+            ? "내용이 최대 글자 수를 초과했어요"
+            : "저장되지 않은 변경사항";
 
   useEffect(() => {
     if (state?.success) {
@@ -66,81 +82,101 @@ export function NoteForm() {
   return (
     <form
       action={formAction}
-      className="mx-auto flex w-full max-w-4xl flex-col"
+      className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6 md:py-10"
     >
-      {generalError && (
-        <p role="alert" className="px-12 pt-4 text-xs text-destructive">
-          {generalError}
-        </p>
-      )}
-
-      <div className="px-12 pt-8 pb-6">
-        <input
-          ref={titleInputRef}
-          id="title"
-          name="title"
-          aria-label="제목"
-          placeholder="제목 없음"
-          maxLength={100}
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onKeyDown={handleTitleKeyDown}
-          autoFocus
-          className="w-full border-none bg-transparent text-4xl font-bold leading-snug text-foreground placeholder:text-muted-foreground/30 focus:outline-none"
-        />
-        {fieldErrors?.title && (
-          <p role="alert" className="mt-2 text-xs text-destructive">
-            {fieldErrors.title.join(" ")}
+      <section aria-label="새 노트 작성" className="min-w-0">
+        {generalError ? (
+          <p
+            role="alert"
+            className="px-5 pt-4 text-xs text-destructive sm:px-8 md:px-12"
+          >
+            {generalError}
           </p>
-        )}
-      </div>
+        ) : null}
 
-      {fieldErrors?.content && (
-        <p role="alert" className="px-12 pt-2 text-xs text-destructive">
-          {fieldErrors.content.join(" ")}
-        </p>
-      )}
+        <div className="px-5 pb-6 pt-8 sm:px-8 md:px-12">
+          <input
+            ref={titleInputRef}
+            id="title"
+            name="title"
+            aria-label="제목"
+            placeholder="노트 제목"
+            autoComplete="off"
+            maxLength={100}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onKeyDown={handleTitleKeyDown}
+            autoFocus
+            className="w-full border-none bg-transparent text-4xl font-bold leading-snug text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus-visible:bg-muted/10"
+          />
+          {fieldErrors?.title ? (
+            <p role="alert" className="mt-2 text-xs text-destructive">
+              {fieldErrors.title.join(" ")}
+            </p>
+          ) : null}
+        </div>
 
-      <input type="hidden" name="content" value={content} />
+        {fieldErrors?.content ? (
+          <p
+            role="alert"
+            className="px-5 pb-2 text-xs text-destructive sm:px-8 md:px-12"
+          >
+            {fieldErrors.content.join(" ")}
+          </p>
+        ) : null}
 
-      <TipTapEditor
-        value={content}
-        onChange={setContent}
-        aria-label="내용"
-        onEditorReady={(editor) => {
-          editorRef.current = editor;
-        }}
-        onArrowUpAtStart={handleArrowUpFromContent}
-        className="flex-1 rounded-none border-none focus-within:ring-0 focus-within:border-none [&_.tiptap]:min-h-[70vh] [&_.tiptap]:px-12! [&_.tiptap]:py-6!"
-      />
+        <input type="hidden" name="content" value={content} />
 
-      <div className="flex items-center justify-end gap-3 px-12 py-2">
-        <span
-          aria-live="polite"
-          className={`text-xs tabular-nums ${
-            content.length > CONTENT_MAX_LENGTH
-              ? "text-destructive"
-              : content.length >= CONTENT_MAX_LENGTH * 0.9
-                ? "text-amber-500"
-                : "text-muted-foreground/50"
-          }`}
-        >
-          {content.length.toLocaleString()} /{" "}
-          {CONTENT_MAX_LENGTH.toLocaleString()}
-        </span>
-        <Button
-          type="submit"
-          size="sm"
-          disabled={isPending || content.length > CONTENT_MAX_LENGTH}
-          title={
-            content.length > CONTENT_MAX_LENGTH
-              ? "내용이 최대 글자수를 초과했습니다"
-              : undefined
-          }
-        >
-          {isPending ? "저장 중..." : "저장"}
-        </Button>
-      </div>
+        <TipTapEditor
+          value={content}
+          onChange={setContent}
+          aria-label="내용"
+          placeholder="학습할 내용을 입력하세요. /를 누르면 편집 메뉴가 열립니다."
+          onEditorReady={(editor) => {
+            editorRef.current = editor;
+          }}
+          onArrowUpAtStart={handleArrowUpFromContent}
+          className="rounded-none border-none focus-within:bg-muted/10 focus-within:ring-0 [&_.tiptap]:min-h-[clamp(22rem,52vh,36rem)] [&_.tiptap]:px-5! [&_.tiptap]:py-6! sm:[&_.tiptap]:px-8! md:[&_.tiptap]:px-12! [&_.tiptap_p.is-editor-empty:first-child::before]:opacity-100"
+        />
+
+        <footer className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-border/60 px-5 py-3 sm:px-8 md:px-12">
+          <span
+            id="note-save-status"
+            role="status"
+            aria-live="polite"
+            className="text-xs text-muted-foreground"
+          >
+            {saveStatus}
+          </span>
+          <div className="ml-auto flex items-center gap-3">
+            <span
+              className={`text-xs tabular-nums ${
+                isContentTooLong
+                  ? "text-destructive"
+                  : content.length >= CONTENT_MAX_LENGTH * 0.9
+                    ? "text-amber-500"
+                    : "text-muted-foreground"
+              }`}
+            >
+              {content.length.toLocaleString()} /{" "}
+              {CONTENT_MAX_LENGTH.toLocaleString()}
+            </span>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={!canSubmit}
+              aria-describedby="note-save-status"
+              title={
+                isContentTooLong
+                  ? "내용이 최대 글자수를 초과했습니다"
+                  : undefined
+              }
+            >
+              {isPending ? "저장 중…" : "저장"}
+            </Button>
+          </div>
+        </footer>
+      </section>
     </form>
   );
 }

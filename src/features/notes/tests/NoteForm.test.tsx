@@ -77,6 +77,27 @@ describe("NoteForm", () => {
     render(<NoteForm />);
 
     expect(screen.getByTestId("tiptap-editor")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("노트 제목")).toBeInTheDocument();
+    expect(
+      screen.getByText("제목과 내용을 입력하면 저장할 수 있어요"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "저장" })).toBeDisabled();
+  });
+
+  it("제목과 내용을 모두 입력해야 저장할 수 있다", async () => {
+    const user = userEvent.setup();
+
+    render(<NoteForm />);
+
+    await user.type(screen.getByLabelText("제목"), "테스트 노트");
+
+    expect(screen.getByText("내용을 입력해주세요")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "저장" })).toBeDisabled();
+
+    await user.click(screen.getByTestId("tiptap-editor"));
+
+    expect(screen.getByText("저장되지 않은 변경사항")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "저장" })).toBeEnabled();
   });
 
   it("syncs editor content into the hidden input and form data", async () => {
@@ -106,6 +127,8 @@ describe("NoteForm", () => {
 
     render(<NoteForm />);
 
+    await user.type(screen.getByLabelText("제목"), "테스트 노트");
+    await user.click(screen.getByTestId("tiptap-editor"));
     await user.click(screen.getByRole("button", { name: "저장" }));
 
     expect(await screen.findByText("제목을 입력해주세요")).toBeInTheDocument();
@@ -120,6 +143,8 @@ describe("NoteForm", () => {
 
     render(<NoteForm />);
 
+    await user.type(screen.getByLabelText("제목"), "테스트 노트");
+    await user.click(screen.getByTestId("tiptap-editor"));
     await user.click(screen.getByRole("button", { name: "저장" }));
 
     expect(await screen.findByText("로그인이 필요합니다.")).toBeInTheDocument();
@@ -165,10 +190,12 @@ describe("NoteForm", () => {
     render(<NoteForm />);
 
     await user.type(screen.getByLabelText("제목"), "테스트 노트");
+    await user.click(screen.getByTestId("tiptap-editor"));
     await user.click(screen.getByRole("button", { name: "저장" }));
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "저장 중..." })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "저장 중…" })).toBeDisabled();
+      expect(screen.getByRole("status")).toHaveTextContent("저장 중…");
     });
 
     history.pushState(null, "", "/after-submit");

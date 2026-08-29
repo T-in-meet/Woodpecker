@@ -83,6 +83,10 @@ describe("NoteForm editor integration", () => {
     await waitFor(() => {
       expect(document.querySelector("[contenteditable]")).toBeTruthy();
     });
+    expect(document.querySelector("[data-placeholder]")).toHaveAttribute(
+      "data-placeholder",
+      "학습할 내용을 입력하세요. /를 누르면 편집 메뉴가 열립니다.",
+    );
 
     typeIntoTipTap("markdown body");
 
