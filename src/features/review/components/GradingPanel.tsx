@@ -66,7 +66,10 @@ export function GradingPanel({
         <CardContent className="space-y-5 px-6 py-5">
           {basisChanged && (
             <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3">
-              <p role="status" className="text-sm text-foreground">
+              <p
+                role="status"
+                className="text-prose-ko text-sm text-foreground"
+              >
                 이 채점은 지금 보고 있는 원본과 다른 버전을 기준으로 했어요.
                 채점 이후 노트를 수정해서 점수와 피드백이 현재 내용과 어긋날 수
                 있어요.
@@ -76,7 +79,10 @@ export function GradingPanel({
 
           {gradedOtherAnswer && (
             <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3">
-              <p role="status" className="text-sm text-foreground">
+              <p
+                role="status"
+                className="text-prose-ko text-sm text-foreground"
+              >
                 이 결과는 이번 회차에 먼저 제출한 다른 답안을 채점한 것이에요.
                 채점은 회차당 1번만 가능해서 지금 답안으로는 다시 채점할 수
                 없어요.
@@ -101,12 +107,12 @@ export function GradingPanel({
             <span className="text-sm text-muted-foreground">/ 100점</span>
           </div>
 
-          <p className="text-sm text-foreground">{summary}</p>
+          <p className="text-prose-ko text-sm text-foreground">{summary}</p>
 
           {missedConcepts.length > 0 && (
             <div>
               <h4 className="mb-2 text-sm font-medium">빠뜨린 핵심 개념</h4>
-              <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+              <ul className="text-prose-ko list-disc space-y-1 pl-5 text-sm text-muted-foreground">
                 {/* 항목은 LLM 출력이라 같은 문자열이 두 번 나올 수 있어 index를 섞는다. */}
                 {missedConcepts.map((concept, index) => (
                   <li key={`${index}-${concept}`}>{concept}</li>
@@ -120,7 +126,7 @@ export function GradingPanel({
               <h4 className="mb-2 text-sm font-medium">
                 원본과 다르게 기억한 내용
               </h4>
-              <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+              <ul className="text-prose-ko list-disc space-y-1 pl-5 text-sm text-muted-foreground">
                 {incorrectPoints.map((point, index) => (
                   <li key={`${index}-${point}`}>{point}</li>
                 ))}
@@ -128,7 +134,7 @@ export function GradingPanel({
             </div>
           )}
 
-          <p className="text-xs text-muted-foreground/60">
+          <p className="text-prose-ko text-xs text-muted-foreground/60">
             AI 채점 결과는 참고용이에요. 원본과 직접 비교하며 스스로
             점검해보세요.
           </p>
@@ -140,7 +146,7 @@ export function GradingPanel({
   return (
     <div className="rounded-xl border border-border/60 bg-muted/30 px-5 py-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-prose-ko text-sm text-muted-foreground">
           AI가 원본 대비 회상률을 채점하고 빠뜨린 개념을 짚어드려요. 채점은
           회차당 1번만 가능해요.
         </p>

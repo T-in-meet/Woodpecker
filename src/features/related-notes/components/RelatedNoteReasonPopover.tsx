@@ -44,7 +44,7 @@ export function RelatedNoteReasonPopover({
         align="center"
         sideOffset={6}
         collisionPadding={12}
-        className="w-auto max-w-[calc(100vw-1.5rem)] whitespace-normal wrap-break-word rounded-sm border-amber-200 bg-amber-50 text-amber-950 sm:max-w-sm"
+        className="text-prose-ko w-auto max-w-[calc(100vw-1.5rem)] whitespace-normal rounded-sm border-amber-200 bg-amber-50 text-amber-950 sm:max-w-sm"
       >
         {reason}
       </PopoverContent>
