@@ -8,6 +8,9 @@ import { Button } from "@/components/ui/button";
 /** 이 높이 이상 내려갔을 때만 버튼을 노출한다. 짧은 노트에서는 필요 없는 UI다. */
 const SHOW_THRESHOLD_PX = 400;
 
+/** 버튼이 `md:hidden`으로 감춰지는 Tailwind `md` 브레이크포인트(768px)와 맞춘다. */
+const DESKTOP_MIN_WIDTH_PX = 768;
+
 /**
  * 노트가 길어졌을 때 맨 위로 돌아가는 모바일 전용 버튼.
  *
@@ -18,6 +21,12 @@ export function ScrollToTopButton() {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
+    // 버튼은 데스크톱에서 `md:hidden`으로 절대 보이지 않으므로, 그 화면폭에서는
+    // 스크롤 리스너 자체를 붙이지 않는다.
+    if (window.innerWidth >= DESKTOP_MIN_WIDTH_PX) {
+      return;
+    }
+
     let frame = 0;
     let isScheduled = false;
 

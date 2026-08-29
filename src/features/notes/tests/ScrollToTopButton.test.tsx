@@ -2,7 +2,7 @@ import "./setup";
 
 import { fireEvent, render, screen } from "@testing-library/react";
 import { act } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ScrollToTopButton } from "../components/ScrollToTopButton";
 
@@ -26,9 +26,19 @@ function scrollTo(y: number) {
   });
 }
 
+function setViewportWidth(width: number) {
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    writable: true,
+    value: width,
+  });
+}
+
 describe("ScrollToTopButton", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // 버튼은 모바일(<768px)에서만 실제로 보이므로, 모바일 뷰포트를 시뮬레이션한다.
+    setViewportWidth(375);
     window.scrollY = 0;
     // jsdom은 rAF를 제공하지만 콜백이 다음 틱으로 밀려 테스트가 불안정해진다.
     vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
@@ -37,6 +47,20 @@ describe("ScrollToTopButton", () => {
     });
     vi.spyOn(window, "scrollTo").mockImplementation(() => {});
     setReducedMotion(false);
+  });
+
+  afterEach(() => {
+    setViewportWidth(1024);
+  });
+
+  it("does not attach a scroll listener on desktop viewports", () => {
+    setViewportWidth(1024);
+    render(<ScrollToTopButton />);
+
+    scrollTo(401);
+
+    const button = getButton();
+    expect(button.classList.contains("opacity-0")).toBe(true);
   });
 
   it("hides the button until the page is scrolled past the threshold", () => {
