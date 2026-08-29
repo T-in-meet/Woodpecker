@@ -50,7 +50,7 @@ export function NoteListItem({ note }: { note: NoteSummary }) {
           <div className="my-3.5 border-t" />
 
           <div
-            className={`flex items-center gap-4 text-sm text-muted-foreground ${
+            className={`flex min-h-8 items-center gap-4 text-sm text-muted-foreground ${
               canReview ? "pr-32" : "pr-10"
             }`}
           >
