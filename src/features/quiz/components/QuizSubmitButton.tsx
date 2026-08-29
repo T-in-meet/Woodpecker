@@ -12,7 +12,7 @@ export function QuizSubmitButton({ disabled, onClick }: QuizSubmitButtonProps) {
       onClick={onClick}
       disabled={disabled}
       size="lg"
-      className="w-full border-orange-600 bg-orange-400 text-stone-950 hover:bg-orange-500 focus-visible:border-orange-700 focus-visible:ring-orange-500/30 disabled:border-border disabled:bg-background disabled:text-muted-foreground disabled:opacity-100 disabled:shadow-none dark:border-orange-500 dark:bg-orange-500 dark:hover:bg-orange-400 dark:disabled:border-border dark:disabled:bg-background dark:disabled:text-muted-foreground"
+      className="w-full border-neutral-900 bg-neutral-900 text-white hover:bg-neutral-800 focus-visible:border-neutral-700 focus-visible:ring-neutral-500/30 disabled:border-border disabled:bg-background disabled:text-muted-foreground disabled:opacity-100 disabled:shadow-none dark:border-neutral-900 dark:bg-neutral-900 dark:hover:bg-neutral-800 dark:disabled:border-border dark:disabled:bg-background dark:disabled:text-muted-foreground"
     >
       정답 확인
     </Button>
