@@ -6,9 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getNoteDetailRoute } from "@/lib/constants/routes";
 
-const { createNoteActionMock, routerPushMock } = vi.hoisted(() => ({
+const { createNoteActionMock, routerReplaceMock } = vi.hoisted(() => ({
   createNoteActionMock: vi.fn(),
-  routerPushMock: vi.fn(),
+  routerReplaceMock: vi.fn(),
 }));
 
 import { NoteForm } from "../components/NoteForm";
@@ -17,13 +17,16 @@ vi.mock("@/features/editor/components/TipTapEditor", () => ({
   TipTapEditor: ({
     value,
     onChange,
+    readOnly,
   }: {
     value: string;
     onChange: (value: string) => void;
+    readOnly?: boolean;
   }) => (
     <button
       type="button"
       data-testid="tiptap-editor"
+      disabled={readOnly}
       onClick={() => onChange("markdown content")}
     >
       markdown:{value}
@@ -37,7 +40,7 @@ vi.mock("../actions", () => ({
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
-    push: routerPushMock,
+    replace: routerReplaceMock,
   }),
 }));
 
@@ -65,7 +68,7 @@ describe("NoteForm", () => {
   beforeEach(() => {
     createNoteActionMock.mockReset();
     createNoteActionMock.mockResolvedValue(null);
-    routerPushMock.mockReset();
+    routerReplaceMock.mockReset();
     history.replaceState(null, "", "/notes/new");
   });
 
@@ -157,8 +160,8 @@ describe("NoteForm", () => {
       success: true,
       newNoteId: "note-123",
     });
-    routerPushMock.mockImplementationOnce((href: string) => {
-      history.pushState(null, "", href);
+    routerReplaceMock.mockImplementationOnce((href: string) => {
+      history.replaceState(null, "", href);
     });
 
     render(<NoteForm />);
@@ -168,11 +171,17 @@ describe("NoteForm", () => {
     await user.click(screen.getByRole("button", { name: "저장" }));
 
     await waitFor(() => {
-      expect(routerPushMock).toHaveBeenCalledWith(
+      expect(routerReplaceMock).toHaveBeenCalledWith(
         getNoteDetailRoute("note-123"),
       );
     });
 
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "저장 완료 · 노트로 이동 중…",
+    );
+    expect(screen.getByRole("button", { name: "저장됨" })).toBeDisabled();
+    expect(screen.getByLabelText("제목")).toBeDisabled();
+    expect(screen.getByTestId("tiptap-editor")).toBeDisabled();
     expect(confirmSpy).not.toHaveBeenCalled();
     expect(window.location.pathname).toBe(getNoteDetailRoute("note-123"));
   });

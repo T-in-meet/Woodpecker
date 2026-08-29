@@ -1,6 +1,7 @@
 "use client";
 
 import type { Editor } from "@tiptap/react";
+import { Check, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef, useState } from "react";
 
@@ -18,7 +19,6 @@ export function NoteForm() {
   const [state, formAction, isPending] = useActionState(createNoteAction, null);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [createdNoteId, setCreatedNoteId] = useState<string | null>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<Editor | null>(null);
 
@@ -30,33 +30,31 @@ export function NoteForm() {
   const hasTitle = title.trim().length > 0;
   const hasContent = content.trim().length > 0;
   const isContentTooLong = content.length > CONTENT_MAX_LENGTH;
-  const canSubmit = hasTitle && hasContent && !isContentTooLong && !isPending;
-  const isDirty = (title.length > 0 || content.length > 0) && !createdNoteId;
+  const isRedirecting = state?.success === true;
+  const isBusy = isPending || isRedirecting;
+  const canSubmit = hasTitle && hasContent && !isContentTooLong && !isBusy;
+  const isDirty = (title.length > 0 || content.length > 0) && !isRedirecting;
   usePreventPageLeave(isDirty);
 
-  const saveStatus = isPending
-    ? "저장 중…"
-    : !hasTitle && !hasContent
-      ? "제목과 내용을 입력하면 저장할 수 있어요"
-      : !hasTitle
-        ? "제목을 입력해주세요"
-        : !hasContent
-          ? "내용을 입력해주세요"
-          : isContentTooLong
-            ? "내용이 최대 글자 수를 초과했어요"
-            : "저장되지 않은 변경사항";
+  const saveStatus = isRedirecting
+    ? "저장 완료 · 노트로 이동 중…"
+    : isPending
+      ? "저장 중…"
+      : !hasTitle && !hasContent
+        ? "제목과 내용을 입력하면 저장할 수 있어요"
+        : !hasTitle
+          ? "제목을 입력해주세요"
+          : !hasContent
+            ? "내용을 입력해주세요"
+            : isContentTooLong
+              ? "내용이 최대 글자 수를 초과했어요"
+              : "저장되지 않은 변경사항";
 
   useEffect(() => {
-    if (state?.success) {
-      setCreatedNoteId(state.newNoteId);
-    }
-  }, [state]);
+    if (!state?.success) return;
 
-  useEffect(() => {
-    if (!createdNoteId) return;
-
-    router.push(getNoteDetailRoute(createdNoteId));
-  }, [createdNoteId, router]);
+    router.replace(getNoteDetailRoute(state.newNoteId));
+  }, [state, router]);
 
   const focusContentStart = () => {
     editorRef.current?.commands.focus("start");
@@ -82,6 +80,7 @@ export function NoteForm() {
   return (
     <form
       action={formAction}
+      aria-busy={isBusy}
       className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6 md:py-10"
     >
       <section aria-label="새 노트 작성" className="min-w-0">
@@ -106,8 +105,9 @@ export function NoteForm() {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             onKeyDown={handleTitleKeyDown}
+            disabled={isBusy}
             autoFocus
-            className="w-full border-none bg-transparent text-4xl font-bold leading-snug text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus-visible:bg-muted/10"
+            className="w-full border-none bg-transparent text-4xl font-bold leading-snug text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus-visible:bg-muted/10 disabled:cursor-wait disabled:opacity-70"
           />
           {fieldErrors?.title ? (
             <p role="alert" className="mt-2 text-xs text-destructive">
@@ -131,6 +131,7 @@ export function NoteForm() {
           value={content}
           onChange={setContent}
           aria-label="내용"
+          readOnly={isBusy}
           placeholder="학습할 내용을 입력하세요. /를 누르면 편집 메뉴가 열립니다."
           onEditorReady={(editor) => {
             editorRef.current = editor;
@@ -172,7 +173,23 @@ export function NoteForm() {
                   : undefined
               }
             >
-              {isPending ? "저장 중…" : "저장"}
+              {isRedirecting ? (
+                <>
+                  <Check data-icon="inline-start" aria-hidden="true" />
+                  저장됨
+                </>
+              ) : isPending ? (
+                <>
+                  <Loader2
+                    data-icon="inline-start"
+                    aria-hidden="true"
+                    className="animate-spin motion-reduce:animate-none"
+                  />
+                  저장 중…
+                </>
+              ) : (
+                "저장"
+              )}
             </Button>
           </div>
         </footer>
