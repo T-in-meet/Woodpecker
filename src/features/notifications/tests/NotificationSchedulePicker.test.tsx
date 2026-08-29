@@ -492,7 +492,7 @@ describe("NotificationSchedulePicker", () => {
     ).toBeInTheDocument();
   });
 
-  it("사용자 지정 시간이 없으면 기본 일정 버튼을 비활성화한다", async () => {
+  it("기본 일정의 수정 초안을 저장 전에도 되돌린다", async () => {
     const user = userEvent.setup();
     render(
       <PickerWithTrigger
@@ -505,5 +505,16 @@ describe("NotificationSchedulePicker", () => {
     await openDialog(user);
 
     expect(screen.getByRole("button", { name: /기본 일정/ })).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "내일" }));
+    expect(screen.getByRole("button", { name: /기본 일정/ })).toBeEnabled();
+
+    await user.click(screen.getByRole("button", { name: /기본 일정/ }));
+
+    expect(screen.getByRole("button", { name: /기본 일정/ })).toBeDisabled();
+    expect(screen.getByLabelText("연도")).toHaveValue("2026");
+    expect(screen.getByLabelText("월")).toHaveValue("05");
+    expect(screen.getByLabelText("일")).toHaveValue("01");
+    expect(setNotificationTimeActionMock).not.toHaveBeenCalled();
   });
 });

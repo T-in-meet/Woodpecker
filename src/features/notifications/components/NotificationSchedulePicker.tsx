@@ -217,6 +217,11 @@ export function NotificationSchedulePicker({
     setMessage(null);
     setError(null);
 
+    if (!hasSavedOverride) {
+      resetDraft();
+      return;
+    }
+
     startTransition(async () => {
       try {
         const result = await setNotificationTimeAction(noteId, null);
@@ -329,7 +334,7 @@ export function NotificationSchedulePicker({
                 type="button"
                 variant="outline"
                 size="md"
-                disabled={isPending || !hasSavedOverride}
+                disabled={isPending || (!hasSavedOverride && !hasChanges)}
                 onClick={handleClear}
               >
                 <RotateCcw aria-hidden="true" />
