@@ -20,8 +20,10 @@ import { NoteViewer } from "./NoteViewer";
  * 편집 폼은 TipTap 에디터를 통째로 끌고 온다. 노트 상세는 읽기가 기본이고
  * 편집은 관리 메뉴를 거쳐야 하는 부차적 행동이라, 에디터 번들을 초기 청크에서 뺀다.
  */
+const importNoteEditForm = () => import("./NoteEditForm");
+
 const NoteEditForm = dynamic(
-  () => import("./NoteEditForm").then((m) => m.NoteEditForm),
+  () => importNoteEditForm().then((m) => m.NoteEditForm),
   {
     ssr: false,
     loading: () => (
@@ -32,6 +34,10 @@ const NoteEditForm = dynamic(
     ),
   },
 );
+
+function preloadNoteEditForm() {
+  void importNoteEditForm();
+}
 
 type NoteDetailBodyProps = {
   noteId: string;
@@ -115,6 +121,7 @@ export function NoteDetailBody({
               noteId={noteId}
               noteTitle={title}
               onEdit={() => setIsEditing(true)}
+              onEditIntent={preloadNoteEditForm}
               canChangeNotificationTime={!isReviewCompleted}
               notificationTimeOfDay={notificationTimeOfDay}
               nextScheduledAt={nextScheduledAt}

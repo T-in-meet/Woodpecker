@@ -41,7 +41,7 @@ import { notificationTimeSchema } from "../schema";
 import { ResponsiveDateInput } from "./ResponsiveDateInput";
 import { ResponsiveTimePicker } from "./ResponsiveTimePicker";
 
-type NotificationSchedulePickerProps = {
+export type NotificationSchedulePickerProps = {
   noteId: string;
   /** 사용자가 지정한 알림 시각(`notification_time_of_day`). 없으면 기본 일정을 따른다. */
   initialTime: string | null;

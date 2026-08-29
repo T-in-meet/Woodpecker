@@ -11,7 +11,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { NotificationSchedulePicker } from "@/features/notifications/components/NotificationSchedulePicker";
+import {
+  LazyNotificationSchedulePicker,
+  preloadNotificationSchedulePicker,
+} from "@/features/notifications/components/LazyNotificationSchedulePicker";
 
 import { DeleteNoteDialog } from "./DeleteNoteDialog";
 
@@ -19,6 +22,7 @@ type NoteManageMenuProps = {
   noteId: string;
   noteTitle: string;
   onEdit: () => void;
+  onEditIntent: () => void;
   /** 학습을 모두 마친 노트는 알림을 더 보내지 않으므로 항목을 감춘다. */
   canChangeNotificationTime: boolean;
   notificationTimeOfDay: string | null;
@@ -34,12 +38,19 @@ export function NoteManageMenu({
   noteId,
   noteTitle,
   onEdit,
+  onEditIntent,
   canChangeNotificationTime,
   notificationTimeOfDay,
   nextScheduledAt,
 }: NoteManageMenuProps) {
   const [notificationOpen, setNotificationOpen] = useState(false);
+  const [hasNotificationOpened, setHasNotificationOpened] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+
+  const openNotificationSchedule = () => {
+    setHasNotificationOpened(true);
+    setNotificationOpen(true);
+  };
 
   /**
    * 메뉴가 닫히며 트리거로 포커스를 되돌리는 동작과 항목이 여는 화면의 초기 포커스가
@@ -65,16 +76,20 @@ export function NoteManageMenu({
         <DropdownMenuContent align="end">
           {/* 편집 폼으로 바뀌면서 이 메뉴(트리거 포함)가 언마운트되므로, 메뉴가
               포커스를 트리거로 되돌린 다음에 전환해야 포커스가 body로 떨어지지 않는다. */}
-          <DropdownMenuItem onSelect={() => openAfterMenuCloses(onEdit)}>
+          <DropdownMenuItem
+            onPointerEnter={onEditIntent}
+            onFocus={onEditIntent}
+            onSelect={() => openAfterMenuCloses(onEdit)}
+          >
             <Pencil className="size-4" aria-hidden="true" />
             노트 수정
           </DropdownMenuItem>
 
           {canChangeNotificationTime && (
             <DropdownMenuItem
-              onSelect={() =>
-                openAfterMenuCloses(() => setNotificationOpen(true))
-              }
+              onPointerEnter={preloadNotificationSchedulePicker}
+              onFocus={preloadNotificationSchedulePicker}
+              onSelect={() => openAfterMenuCloses(openNotificationSchedule)}
             >
               <Bell className="size-4" aria-hidden="true" />
               복습 일정 변경
@@ -93,15 +108,15 @@ export function NoteManageMenu({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {canChangeNotificationTime && (
-        <NotificationSchedulePicker
+      {canChangeNotificationTime && hasNotificationOpened ? (
+        <LazyNotificationSchedulePicker
           noteId={noteId}
           initialTime={notificationTimeOfDay}
           initialScheduledAt={nextScheduledAt}
           open={notificationOpen}
           onOpenChange={setNotificationOpen}
         />
-      )}
+      ) : null}
 
       <DeleteNoteDialog
         noteId={noteId}
