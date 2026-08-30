@@ -78,11 +78,18 @@ export function NoteChatConversationClient({
 
   const detail = conversationQuery.data;
 
+  /*
+   * 현재 브라우저에서 직접 소비 중인 stream뿐 아니라,
+   * 페이지 이탈 후 서버에서 계속 실행 중인 Claim도
+   * 답변 생성 중 상태로 취급합니다.
+   */
+  const isAnswerGenerating =
+    isStreaming || (detail?.hasRunningExecution ?? false);
+
   const { containerRef: conversationContainerRef, height: conversationHeight } =
     useViewportRemainingHeight<HTMLDivElement>({ recalculationKey: detail });
 
   const dailyUsage = dailyUsageQuery.data ?? null;
-
 
   /**
    * 새로운 질문을 전송하고 스트리밍 완료 후
@@ -231,7 +238,7 @@ export function NoteChatConversationClient({
    * @returns 재시도 및 서버 상태 동기화 완료 시점의 Promise
    */
   const handleRetry = async () => {
-    if (!failedQuestion || retryCount >= 2 || isStreaming) {
+    if (!failedQuestion || retryCount >= 2 || isAnswerGenerating) {
       return;
     }
 
@@ -338,7 +345,7 @@ export function NoteChatConversationClient({
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col px-4 md:px-12">
       {detail ? (
-        <div className="my-4 flex justify-between items-center">
+        <div className="my-4 flex items-center justify-between">
           <NoteChatBreadcrumb conversationTitle={detail.conversation.title} />
           <NoteChatConversationMenu
             conversationId={conversationId}
@@ -378,7 +385,10 @@ export function NoteChatConversationClient({
               streamError={streamError}
               streamErrorCode={streamErrorCode}
               isStreaming={isStreaming}
-              canRetry={failedQuestion !== null && retryCount < 2}
+              isAnswerGenerating={isAnswerGenerating}
+              canRetry={
+                failedQuestion !== null && retryCount < 2 && !isAnswerGenerating
+              }
               retryCount={retryCount}
               dailyUsage={dailyUsage}
               messageEndRef={messageEndRef}

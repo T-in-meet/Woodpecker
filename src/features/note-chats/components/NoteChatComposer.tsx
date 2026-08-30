@@ -40,8 +40,11 @@ type NoteChatComposerProps = {
    */
   dailyUsage: NoteChatDailyUsage;
 
-  /** 현재 답변 생성이 진행 중인지 여부입니다. */
+  /** 현재 브라우저에서 Assistant 답변 스트림을 수신 중인지 여부입니다. */
   isStreaming: boolean;
+
+  /** 로컬 스트림 또는 서버 Claim 기준으로 답변 생성이 진행 중인지 여부입니다. */
+  isAnswerGenerating: boolean;
 
   /**
    * 현재 화면의 답변 스트리밍 표시를 중지합니다.
@@ -58,7 +61,7 @@ type NoteChatComposerProps = {
 /**
  * 노트 챗봇 사용자 질문 입력을 담당합니다.
  *
- * 스트리밍 실행 상태는 상위 Conversation 화면이 관리하며,
+ * 답변 생성 상태는 상위 Conversation 화면이 관리하며,
  * 이 컴포넌트는 질문 입력과 검증만 담당합니다.
  *
  * 일반 사용자가 일일 AI 실행 제한에 도달한 경우
@@ -66,6 +69,9 @@ type NoteChatComposerProps = {
  *
  * Enter는 질문을 전송하고,
  * Shift + Enter는 줄바꿈을 입력합니다.
+ *
+ * 답변 표시 중지 버튼은 현재 브라우저에서 실제 스트림을
+ * 수신하고 있는 동안에만 표시합니다.
  *
  * 답변 표시 중지 버튼은 실제 서버 AI 실행을 취소하지 않으므로,
  * 사용자가 중지 동작과 사용 횟수 차감 정책을 확인한 뒤
@@ -75,6 +81,7 @@ export function NoteChatComposer({
   conversationId,
   dailyUsage,
   isStreaming,
+  isAnswerGenerating,
   onCancel,
   onSubmit,
 }: NoteChatComposerProps) {
@@ -99,7 +106,7 @@ export function NoteChatComposer({
     dailyUsage !== null && dailyUsage.used >= dailyUsage.limit;
 
   const isSubmitDisabled =
-    isStreaming ||
+    isAnswerGenerating ||
     isDailyLimitReached ||
     form.formState.isSubmitting ||
     question.trim().length === 0;
@@ -111,7 +118,7 @@ export function NoteChatComposer({
      *
      * 서버에서도 execution claim이 최종적으로 quota를 검증합니다.
      */
-    if (isDailyLimitReached) {
+    if (isDailyLimitReached || isAnswerGenerating) {
       return;
     }
 
@@ -166,7 +173,7 @@ export function NoteChatComposer({
             }
             aria-invalid={questionError ? true : undefined}
             aria-label="노트 챗봇 질문"
-            disabled={isStreaming || isDailyLimitReached}
+            disabled={isAnswerGenerating || isDailyLimitReached}
             maxLength={NOTE_CHAT_QUESTION_MAX_LENGTH}
             placeholder={
               isDailyLimitReached
@@ -177,6 +184,7 @@ export function NoteChatComposer({
             onKeyDown={handleKeyDown}
             {...form.register("content.text")}
           />
+
           <div className="flex justify-between">
             {questionError ? (
               <p
@@ -201,6 +209,7 @@ export function NoteChatComposer({
                 Enter로 전송하고 Shift + Enter로 줄바꿈할 수 있습니다.
               </p>
             )}
+
             <FeatureInfoPopover ariaLabel="Note Chat 사용 안내" align="end">
               <div className="space-y-2">
                 <p>
@@ -265,7 +274,7 @@ export function NoteChatComposer({
             ) : null}
 
             <Button type="submit" size="sm" disabled={isSubmitDisabled}>
-              {isStreaming ? (
+              {isAnswerGenerating ? (
                 <>
                   <Loader2 className="size-4 animate-spin" />
                   답변 생성 중
@@ -282,7 +291,7 @@ export function NoteChatComposer({
       </form>
 
       <p className="sr-only" aria-live="polite">
-        {isStreaming
+        {isAnswerGenerating
           ? "AI 답변을 생성하고 있습니다."
           : isDailyLimitReached
             ? "오늘의 AI 답변 생성 횟수를 모두 사용했습니다."

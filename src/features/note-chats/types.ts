@@ -34,6 +34,7 @@ export type NoteChatConversationDetail = {
   conversation: NoteChatConversation;
   messages: NoteChatMessage[];
   assistantSources: NoteChatAssistantSources[];
+  hasRunningExecution: boolean;
 };
 
 export type NoteChatUsedNoteSource = {

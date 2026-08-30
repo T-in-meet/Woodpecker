@@ -10,6 +10,7 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database.types";
 
+import { NOTE_CHAT_EXECUTION_STALE_AFTER_MS } from "./constants/execution";
 import { noteChatRunSourceSchema } from "./schema";
 import type { NoteChatConversationDetail } from "./types";
 import { reportNoteChatOperationalError } from "./utils/report-operational-error";
@@ -50,6 +51,38 @@ export async function queryNoteChatConversationDetail(
 
   if (!conversation) {
     return null;
+  }
+
+  const runningExecutionThreshold = new Date(
+    Date.now() - NOTE_CHAT_EXECUTION_STALE_AFTER_MS,
+  ).toISOString();
+
+  const { data: runningExecution, error: runningExecutionError } =
+    await supabase
+      .from("note_chat_execution_claims")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("conversation_id", conversation.id)
+      .eq("status", "running")
+      .gte("claimed_at", runningExecutionThreshold)
+      .limit(1)
+      .maybeSingle();
+
+  let hasRunningExecution = Boolean(runningExecution);
+
+  if (runningExecutionError) {
+    hasRunningExecution = false;
+
+    await reportNoteChatOperationalError({
+      context: {
+        conversationId: conversation.id,
+      },
+      error: runningExecutionError,
+      errorCode:
+        NOTE_CHAT_OPERATIONAL_ERROR_CODES.RUNNING_EXECUTION_LOAD_FAILED,
+      message: "노트 챗봇 실행 상태 조회에 실패했습니다.",
+      operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.GET_RUNNING_EXECUTION,
+    });
   }
 
   const { data: messages, error: messagesError } = await supabase
@@ -130,6 +163,7 @@ export async function queryNoteChatConversationDetail(
   return {
     assistantSources,
     conversation,
+    hasRunningExecution,
     messages,
   };
 }

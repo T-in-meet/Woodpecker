@@ -41,8 +41,11 @@ type NoteChatMessageListProps = {
   /** 현재 스트리밍 요청의 구분 가능한 오류 코드입니다. */
   streamErrorCode?: string | null;
 
-  /** 답변 생성이 진행 중인지 여부입니다. */
+  /** 현재 브라우저에서 Assistant 답변 스트림을 수신 중인지 여부입니다. */
   isStreaming?: boolean;
+
+  /** 로컬 스트림 또는 서버 Claim 기준으로 답변 생성이 진행 중인지 여부입니다. */
+  isAnswerGenerating?: boolean;
 
   /** 실패한 답변을 다시 실행할 수 있는지 여부입니다. */
   canRetry?: boolean;
@@ -91,7 +94,8 @@ type EditingMessage = {
  * @param props.streamingContent 현재까지 수신한 Assistant 답변 내용
  * @param props.streamError 현재 스트리밍 오류
  * @param props.streamErrorCode 현재 스트리밍 요청의 구분 가능한 오류 코드
- * @param props.isStreaming 답변 생성 진행 여부
+ * @param props.isStreaming 현재 브라우저에서 Assistant 답변 스트림을 수신 중인지 여부
+ * @param props.isAnswerGenerating 로컬 스트림 또는 서버 Claim 기준 답변 생성 진행 여부
  * @param props.canRetry 실패한 답변을 다시 실행할 수 있는지 여부
  * @param props.retryCount 현재 질문의 재시도 횟수
  * @param props.dailyUsage 현재 사용자의 Note Chat 일일 AI 실행 사용량
@@ -107,6 +111,7 @@ export function NoteChatMessageList({
   streamError = null,
   streamErrorCode = null,
   isStreaming = false,
+  isAnswerGenerating = false,
   canRetry = false,
   retryCount = 0,
   dailyUsage,
@@ -123,12 +128,12 @@ export function NoteChatMessageList({
     assistantSources.map((item) => [item.assistantMessageId, item.sources]),
   );
 
-  // 아직 저장되지 않은 질문이나 스트리밍 상태가 존재하는 경우에는
+  // 아직 저장되지 않은 질문이나 답변 생성 상태가 존재하는 경우에는
   // 저장된 메시지가 없어도 빈 대화 상태로 처리하지 않습니다.
   const hasTransientMessage =
     pendingQuestion !== null ||
     streamingContent.length > 0 ||
-    isStreaming ||
+    isAnswerGenerating ||
     streamError !== null;
 
   if (messages.length === 0 && !hasTransientMessage) {
@@ -165,8 +170,8 @@ export function NoteChatMessageList({
               <NoteChatUserMessage
                 key={message.id}
                 text={parsed.data.text}
-                isStreaming={isStreaming}
-                {...(!isDailyLimitReached
+                isStreaming={isAnswerGenerating}
+                {...(!isDailyLimitReached && !isAnswerGenerating
                   ? {
                       onEdit: () => {
                         setEditingMessage({
@@ -208,10 +213,10 @@ export function NoteChatMessageList({
           <NoteChatUserMessage text={pendingQuestion} />
         ) : null}
 
-        {/* 스트리밍 중인 Assistant 답변 또는 답변 생성 상태를 표시합니다. */}
+        {/* 로컬 스트림 또는 복원된 서버 실행의 답변 생성 상태를 표시합니다. */}
         <NoteChatStreamStatus
           streamingContent={streamingContent}
-          isStreaming={isStreaming}
+          isAnswerGenerating={isAnswerGenerating}
         />
 
         {/* 일일 실행 제한과 일반 스트리밍 오류는 서로 다른 오류 UI를 사용합니다. */}
