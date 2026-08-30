@@ -24,7 +24,7 @@ function StatCard({
   const content = (
     <>
       <p className="text-2xl font-bold">{value}</p>
-      <p className="text-sm text-muted-foreground">{label}</p>
+      <p className="text-prose-ko text-sm text-muted-foreground">{label}</p>
     </>
   );
 
@@ -32,14 +32,16 @@ function StatCard({
     return (
       <Link
         href={href}
-        className="rounded-lg border p-4 text-center cursor-pointer transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        className="rounded-lg border p-2 text-center cursor-pointer transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:p-4"
       >
         {content}
       </Link>
     );
   }
 
-  return <div className="rounded-lg border p-4 text-center">{content}</div>;
+  return (
+    <div className="rounded-lg border p-2 text-center sm:p-4">{content}</div>
+  );
 }
 
 const NOTES_ROUND_LABELS: Record<number, string> = {
@@ -73,7 +75,7 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
         <CardTitle>학습 통계</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-4 sm:gap-4">
           <StatCard
             label="전체 노트"
             value={stats.totalNotes}
