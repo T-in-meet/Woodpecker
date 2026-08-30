@@ -1,5 +1,8 @@
 "use client";
 
+import { FeatureInfoPopover } from "@/components/common/FeatureInfoPopover";
+
+import { RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE } from "../constants/ai";
 import { useRelatedNotes } from "../hooks/use-related-notes";
 import { AddRelatedNoteDialog } from "./AddRelatedNoteDialog";
 import { RelatedNoteItem } from "./RelatedNoteItem";
@@ -58,12 +61,26 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
 
   return (
     <section className="border-t border-border/60 pt-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h2 className="text-sm font-semibold text-foreground">관련 노트</h2>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <div className="flex gap-1">
+          <h2 className="shrink-0 text-sm font-semibold text-foreground">
+            관련 노트
+          </h2>
+          <FeatureInfoPopover ariaLabel="관련 노트 안내">
+            <div className="space-y-2">
+              <p>
+                {`AI 관련 노트 추천은 노트마다 하루 ${RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE}회 요청할 수 있으며, 매일
+          자정(KST)에 초기화됩니다.`}
+              </p>
+              <p className="text-muted-foreground">
+                AI 추천은 요청할 때마다 다시 생성되므로 기존 추천과 달라질 수
+                있습니다.
+              </p>
+            </div>
+          </FeatureInfoPopover>
         </div>
 
-        <div className="flex min-w-0 items-center gap-3">
+        <div className="flex w-full min-w-0 items-center justify-between gap-3 sm:w-auto sm:justify-start">
           {isPollingTimedOut ? (
             /*
              * execution claim은 아직 running이지만 자동 polling은 종료된 상태입니다.

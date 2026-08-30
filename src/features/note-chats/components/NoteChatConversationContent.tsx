@@ -5,12 +5,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import type { NoteChatDailyUsage } from "../queries";
 import type { NoteChatAssistantSources, NoteChatMessage } from "../types";
 import { NoteChatComposer } from "./NoteChatComposer";
-import { NoteChatConversationMenu } from "./NoteChatConversationMenu";
 import { NoteChatMessageList } from "./NoteChatMessageList";
 
 type NoteChatConversationContentProps = {
   conversationId: string;
-  title: string;
   assistantSources: NoteChatAssistantSources[];
   messages: NoteChatMessage[];
   pendingQuestion: string | null;
@@ -57,7 +55,6 @@ type NoteChatConversationContentProps = {
  */
 export function NoteChatConversationContent({
   conversationId,
-  title,
   assistantSources,
   messages,
   pendingQuestion,
@@ -80,17 +77,6 @@ export function NoteChatConversationContent({
         className="min-h-0 flex-1"
         viewportClassName="[&>div]:!block [&>div]:!w-full [&>div]:!min-w-0"
       >
-        <div className="flex items-center justify-between gap-4 border-b px-4 py-3 md:px-6 md:py-4">
-          <h1 className="min-w-0 truncate text-base font-semibold md:text-lg">
-            {title}
-          </h1>
-
-          <NoteChatConversationMenu
-            conversationId={conversationId}
-            title={title}
-          />
-        </div>
-
         <NoteChatMessageList
           assistantSources={assistantSources}
           messages={messages}
@@ -109,7 +95,7 @@ export function NoteChatConversationContent({
         <div ref={messageEndRef} />
       </ScrollArea>
 
-      <div className="shrink-0 border-t bg-background p-3 md:p-4">
+      <div className="shrink-0 bg-background px-3 pb-3 md:px-4 md:pb-4">
         <NoteChatComposer
           conversationId={conversationId}
           dailyUsage={dailyUsage}

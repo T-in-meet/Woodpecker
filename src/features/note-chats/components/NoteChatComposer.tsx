@@ -5,6 +5,7 @@ import { Loader2, Send, Square } from "lucide-react";
 import type { KeyboardEvent } from "react";
 import { useForm } from "react-hook-form";
 
+import { FeatureInfoPopover } from "@/components/common/FeatureInfoPopover";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
 import { NOTE_CHAT_QUESTION_MAX_LENGTH } from "../constants";
+import { NOTE_CHAT_DAILY_EXECUTION_LIMIT } from "../constants/execution";
 import type { NoteChatDailyUsage } from "../queries";
 import {
   type CreateNoteChatQuestionInput,
@@ -150,7 +152,10 @@ export function NoteChatComposer({
   const questionError = form.formState.errors.content?.text?.message;
 
   return (
-    <section aria-label="노트 챗봇 질문 입력">
+    <section
+      aria-label="노트 챗봇 질문 입력"
+      className="rounded-lg border bg-background p-3 shadow-sm"
+    >
       <form className="space-y-3" onSubmit={handleSubmit}>
         <div className="space-y-2">
           <Textarea
@@ -172,30 +177,43 @@ export function NoteChatComposer({
             onKeyDown={handleKeyDown}
             {...form.register("content.text")}
           />
+          <div className="flex justify-between">
+            {questionError ? (
+              <p
+                id="note-chat-question-error"
+                role="alert"
+                className="text-sm text-destructive"
+              >
+                {questionError}
+              </p>
+            ) : isDailyLimitReached ? (
+              <p
+                id="note-chat-question-description"
+                className="text-xs text-muted-foreground"
+              >
+                {`오늘은 AI 답변을 더 생성할 수 없어요. (${dailyUsage.used}/${dailyUsage.limit})`}
+              </p>
+            ) : (
+              <p
+                id="note-chat-question-description"
+                className="text-xs text-muted-foreground"
+              >
+                Enter로 전송하고 Shift + Enter로 줄바꿈할 수 있습니다.
+              </p>
+            )}
+            <FeatureInfoPopover ariaLabel="Note Chat 사용 안내" align="end">
+              <div className="space-y-2">
+                <p>
+                  {`Note Chat은 하루 최대 ${NOTE_CHAT_DAILY_EXECUTION_LIMIT}회 AI 답변을 생성할 수 있으며, 매일 자정(KST)에 초기화됩니다.`}
+                </p>
 
-          {questionError ? (
-            <p
-              id="note-chat-question-error"
-              role="alert"
-              className="text-sm text-destructive"
-            >
-              {questionError}
-            </p>
-          ) : isDailyLimitReached ? (
-            <p
-              id="note-chat-question-description"
-              className="text-xs text-muted-foreground"
-            >
-              {`오늘은 AI 답변을 더 생성할 수 없어요. (${dailyUsage.used}/${dailyUsage.limit})`}
-            </p>
-          ) : (
-            <p
-              id="note-chat-question-description"
-              className="text-xs text-muted-foreground"
-            >
-              Enter로 전송하고 Shift + Enter로 줄바꿈할 수 있습니다.
-            </p>
-          )}
+                <p className="text-muted-foreground">
+                  새 질문, 질문 수정 후 재생성, 답변 재시도는 모두 오늘의 사용
+                  횟수에 포함됩니다.
+                </p>
+              </div>
+            </FeatureInfoPopover>
+          </div>
         </div>
 
         <div className="flex items-center justify-between gap-3">

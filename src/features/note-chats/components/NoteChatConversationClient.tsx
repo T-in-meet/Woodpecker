@@ -12,6 +12,7 @@ import { useViewportRemainingHeight } from "../hooks/use-viewport-remaining-heig
 import { NoteChatBreadcrumb } from "./NoteChatBreadcrumb";
 import { NoteChatConversationContent } from "./NoteChatConversationContent";
 import { NoteChatConversationError } from "./NoteChatConversationError";
+import { NoteChatConversationMenu } from "./NoteChatConversationMenu";
 import { NoteChatConversationNotFound } from "./NoteChatConversationNotFound";
 import { NoteChatConversationSkeleton } from "./NoteChatConversationSkeleton";
 
@@ -337,15 +338,18 @@ export function NoteChatConversationClient({
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col px-4 md:px-12">
       {detail ? (
-        <NoteChatBreadcrumb
-          className="my-4"
-          conversationTitle={detail.conversation.title}
-        />
+        <div className="my-4 flex justify-between items-center">
+          <NoteChatBreadcrumb conversationTitle={detail.conversation.title} />
+          <NoteChatConversationMenu
+            conversationId={conversationId}
+            title={detail.conversation.title}
+          />
+        </div>
       ) : null}
 
       <div
         ref={conversationContainerRef}
-        className="flex min-h-0 flex-col overflow-hidden border"
+        className="flex min-h-0 flex-col overflow-hidden"
         style={
           conversationHeight !== null
             ? { height: conversationHeight }
@@ -367,7 +371,6 @@ export function NoteChatConversationClient({
           ) : (
             <NoteChatConversationContent
               conversationId={conversationId}
-              title={detail.conversation.title}
               assistantSources={detail.assistantSources}
               messages={visibleMessages}
               pendingQuestion={pendingQuestion}
