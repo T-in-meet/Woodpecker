@@ -8,9 +8,11 @@ import {
 import { ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 
+import { NOTE_CHAT_DAILY_EXECUTION_LIMIT } from "../constants/execution";
 import {
   getNoteChatConversationDetail,
   getNoteChatConversationList,
+  getNoteChatDailyUsage,
 } from "../queries";
 import { reportNoteChatOperationalError } from "../utils/report-operational-error";
 
@@ -118,7 +120,16 @@ function createQueryMock<T>(result: {
   return query;
 }
 
-function mockCreateClient(queries: Array<ReturnType<typeof createQueryMock>>) {
+function mockCreateClient(
+  queries: Array<ReturnType<typeof createQueryMock>>,
+  options?: {
+    rpcResult?: {
+      data: unknown;
+      error: { message: string } | null;
+    };
+    onRpc?: (rpc: ReturnType<typeof vi.fn>) => void;
+  },
+) {
   let index = 0;
 
   const from = vi.fn(() => {
@@ -133,6 +144,15 @@ function mockCreateClient(queries: Array<ReturnType<typeof createQueryMock>>) {
     return query;
   });
 
+  const rpc = vi.fn().mockResolvedValue(
+    options?.rpcResult ?? {
+      data: null,
+      error: null,
+    },
+  );
+
+  options?.onRpc?.(rpc);
+
   vi.mocked(createClient).mockResolvedValue({
     auth: {
       getUser: vi.fn().mockResolvedValue({
@@ -145,6 +165,7 @@ function mockCreateClient(queries: Array<ReturnType<typeof createQueryMock>>) {
       }),
     },
     from,
+    rpc,
   } as unknown as Awaited<ReturnType<typeof createClient>>);
 
   return from;
@@ -578,5 +599,154 @@ describe("getNoteChatConversationDetail", () => {
     const result = await getNoteChatConversationDetail(CONVERSATION_ID);
 
     expect(result?.assistantSources).toEqual([]);
+  });
+});
+
+describe("getNoteChatDailyUsage", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("일반 사용자의 오늘 Note Chat 사용량과 일일 제한을 반환한다", async () => {
+    const profileQuery = createQueryMock({
+      data: {
+        role: "USER",
+      },
+      error: null,
+    });
+
+    let rpc: ReturnType<typeof vi.fn> | undefined;
+
+    mockCreateClient([profileQuery], {
+      rpcResult: {
+        data: 3,
+        error: null,
+      },
+      onRpc: (mock) => {
+        rpc = mock;
+      },
+    });
+
+    const result = await getNoteChatDailyUsage();
+
+    expect(profileQuery.eq).toHaveBeenCalledWith(
+      "id",
+      "550e8400-e29b-41d4-a716-446655440000",
+    );
+    expect(rpc).toHaveBeenCalledWith("get_note_chat_daily_usage");
+
+    expect(result).toEqual({
+      used: 3,
+      limit: NOTE_CHAT_DAILY_EXECUTION_LIMIT,
+    });
+  });
+
+  it("ADMIN은 일일 사용량 RPC를 호출하지 않고 null을 반환한다", async () => {
+    const profileQuery = createQueryMock({
+      data: {
+        role: "ADMIN",
+      },
+      error: null,
+    });
+
+    let rpc: ReturnType<typeof vi.fn> | undefined;
+
+    mockCreateClient([profileQuery], {
+      onRpc: (mock) => {
+        rpc = mock;
+      },
+    });
+
+    const result = await getNoteChatDailyUsage();
+
+    expect(result).toBeNull();
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("사용자 역할 조회에 실패하면 운영 오류를 보고하고 null을 반환한다", async () => {
+    const error = {
+      message: "profile load failed",
+    };
+
+    const profileQuery = createQueryMock({
+      data: null,
+      error,
+    });
+
+    mockCreateClient([profileQuery]);
+
+    const result = await getNoteChatDailyUsage();
+
+    expect(result).toBeNull();
+
+    expect(reportNoteChatOperationalError).toHaveBeenCalledWith({
+      context: {},
+      error,
+      errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.DAILY_USAGE_LOAD_FAILED,
+      message:
+        "노트 챗봇 일일 사용량 조회를 위한 사용자 역할 조회에 실패했습니다.",
+      operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.GET_DAILY_USAGE,
+    });
+  });
+
+  it("일일 사용량 RPC 조회에 실패하면 운영 오류를 보고하고 null을 반환한다", async () => {
+    const profileQuery = createQueryMock({
+      data: {
+        role: "USER",
+      },
+      error: null,
+    });
+
+    const error = {
+      message: "daily usage load failed",
+    };
+
+    mockCreateClient([profileQuery], {
+      rpcResult: {
+        data: null,
+        error,
+      },
+    });
+
+    const result = await getNoteChatDailyUsage();
+
+    expect(result).toBeNull();
+
+    expect(reportNoteChatOperationalError).toHaveBeenCalledWith({
+      context: {},
+      error,
+      errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.DAILY_USAGE_LOAD_FAILED,
+      message: "노트 챗봇 일일 사용량 조회에 실패했습니다.",
+      operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.GET_DAILY_USAGE,
+    });
+  });
+
+  it("일일 사용량 응답이 유효하지 않으면 운영 오류를 보고하고 null을 반환한다", async () => {
+    const profileQuery = createQueryMock({
+      data: {
+        role: "USER",
+      },
+      error: null,
+    });
+
+    mockCreateClient([profileQuery], {
+      rpcResult: {
+        data: -1,
+        error: null,
+      },
+    });
+
+    const result = await getNoteChatDailyUsage();
+
+    expect(result).toBeNull();
+
+    expect(reportNoteChatOperationalError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: {},
+        errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.DAILY_USAGE_LOAD_FAILED,
+        message: "노트 챗봇 일일 사용량 응답 검증에 실패했습니다.",
+        operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.GET_DAILY_USAGE,
+      }),
+    );
   });
 });

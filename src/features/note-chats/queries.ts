@@ -1,5 +1,7 @@
 "use server";
 
+import { z } from "zod";
+
 import { requireCurrentLegalAcceptance } from "@/features/auth/utils/requireCurrentLegalAcceptance";
 import {
   NOTE_CHAT_OPERATIONAL_ERROR_CODES,
@@ -9,6 +11,7 @@ import { ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 import { escapePostgrestLikePattern } from "@/lib/utils/escapePostgrestLikePattern";
 
+import { NOTE_CHAT_DAILY_EXECUTION_LIMIT } from "./constants/execution";
 import { queryNoteChatConversationDetail } from "./internal-queries";
 import type {
   NoteChatConversationDetail,
@@ -28,6 +31,17 @@ export type NoteChatConversationListResult = {
   total: number;
   totalPages: number;
 };
+
+/**
+ * 현재 사용자의 Note Chat 일일 AI 실행 사용량입니다.
+ *
+ * 일일 실행 제한을 적용받는 일반 사용자에게만 반환하며,
+ * quota를 우회하는 ADMIN에게는 null을 반환합니다.
+ */
+export type NoteChatDailyUsage = {
+  used: number;
+  limit: number;
+} | null;
 
 async function createLegalCheckedContext() {
   const supabase = await createClient();
@@ -131,4 +145,89 @@ export async function getNoteChatConversationDetail(
   const { supabase, userId } = await createLegalCheckedContext();
 
   return queryNoteChatConversationDetail(supabase, conversationId, userId);
+}
+
+/**
+ * 현재 사용자의 KST 기준 Note Chat 일일 AI 실행 사용량을 조회합니다.
+ *
+ * 일반 사용자는 execution claim을 기준으로 계산한 오늘 사용량과
+ * 일일 실행 제한을 반환합니다.
+ *
+ * ADMIN은 일일 실행 제한을 적용받지 않으므로 사용량 RPC를 호출하지 않고
+ * null을 반환합니다.
+ *
+ * 사용량이나 사용자 역할을 조회하지 못하더라도 Note Chat 자체의 이용을
+ * 막지 않도록 사용량을 표시하지 않는 null로 처리합니다.
+ */
+export async function getNoteChatDailyUsage(): Promise<NoteChatDailyUsage> {
+  const { supabase, userId } = await createLegalCheckedContext();
+
+  /*
+   * Note Chat 일일 quota는 일반 사용자에게만 적용됩니다.
+   *
+   * ADMIN에게 유한한 일일 제한이 있는 것처럼 표시하지 않도록
+   * 먼저 현재 사용자의 role을 확인합니다.
+   */
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (profileError) {
+    await reportNoteChatOperationalError({
+      context: {},
+      error: profileError,
+      errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.DAILY_USAGE_LOAD_FAILED,
+      message:
+        "노트 챗봇 일일 사용량 조회를 위한 사용자 역할 조회에 실패했습니다.",
+      operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.GET_DAILY_USAGE,
+    });
+
+    return null;
+  }
+
+  if (profile?.role !== "USER") {
+    return null;
+  }
+
+  /*
+   * 실제 quota 판정과 동일하게 execution claim을 기준으로 계산하는
+   * DB RPC를 사용하여 현재 사용자의 KST 기준 오늘 사용량을 조회합니다.
+   *
+   * Claim RPC가 실제 실행 제한의 정본이며,
+   * 이 값은 현재 quota 상태를 사용자에게 표시하기 위한 용도로만 사용합니다.
+   */
+  const { data, error } = await supabase.rpc("get_note_chat_daily_usage");
+
+  if (error) {
+    await reportNoteChatOperationalError({
+      context: {},
+      error,
+      errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.DAILY_USAGE_LOAD_FAILED,
+      message: "노트 챗봇 일일 사용량 조회에 실패했습니다.",
+      operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.GET_DAILY_USAGE,
+    });
+
+    return null;
+  }
+
+  const parsedUsage = z.number().int().nonnegative().safeParse(data);
+
+  if (!parsedUsage.success) {
+    await reportNoteChatOperationalError({
+      context: {},
+      error: parsedUsage.error,
+      errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.DAILY_USAGE_LOAD_FAILED,
+      message: "노트 챗봇 일일 사용량 응답 검증에 실패했습니다.",
+      operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.GET_DAILY_USAGE,
+    });
+
+    return null;
+  }
+
+  return {
+    used: parsedUsage.data,
+    limit: NOTE_CHAT_DAILY_EXECUTION_LIMIT,
+  };
 }

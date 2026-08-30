@@ -2193,6 +2193,7 @@ export type Database = {
           type: string;
         }[];
       };
+      get_note_chat_daily_usage: { Args: never; Returns: number };
       get_related_note_recommendation_daily_usage: {
         Args: { p_note_id: string };
         Returns: number;

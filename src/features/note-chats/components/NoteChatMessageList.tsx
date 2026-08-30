@@ -5,6 +5,7 @@ import { useState } from "react";
 import { AI_CHAT_MESSAGE_ROLE } from "@/features/ai/chats/constants";
 
 import { NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE } from "../constants/execution";
+import type { NoteChatDailyUsage } from "../queries";
 import {
   noteChatAssistantMessageContentSchema,
   noteChatUserMessageContentSchema,
@@ -49,6 +50,14 @@ type NoteChatMessageListProps = {
   /** 현재 질문의 재시도 횟수입니다. */
   retryCount?: number;
 
+  /**
+   * 현재 사용자의 Note Chat 일일 AI 실행 사용량입니다.
+   *
+   * 일일 실행 제한을 적용받지 않는 ADMIN이나
+   * 사용량을 확인할 수 없는 경우에는 null입니다.
+   */
+  dailyUsage: NoteChatDailyUsage;
+
   /** 실패한 질문의 답변 생성을 다시 실행합니다. */
   onRetry?: () => Promise<void>;
 
@@ -85,6 +94,7 @@ type EditingMessage = {
  * @param props.isStreaming 답변 생성 진행 여부
  * @param props.canRetry 실패한 답변을 다시 실행할 수 있는지 여부
  * @param props.retryCount 현재 질문의 재시도 횟수
+ * @param props.dailyUsage 현재 사용자의 Note Chat 일일 AI 실행 사용량
  * @param props.onRetry 실패한 답변 생성을 다시 실행하는 함수
  * @param props.onUpdateQuestion 기존 사용자 질문을 수정하고 다시 실행하는 함수
  * @returns 노트 챗봇 메시지 목록 UI
@@ -99,6 +109,7 @@ export function NoteChatMessageList({
   isStreaming = false,
   canRetry = false,
   retryCount = 0,
+  dailyUsage,
   onRetry,
   onUpdateQuestion,
 }: NoteChatMessageListProps) {
@@ -128,6 +139,15 @@ export function NoteChatMessageList({
   const isDailyExecutionLimitExceeded =
     streamErrorCode === NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE;
 
+  /*
+   * 일일 사용량은 AI 실행을 시작할 수 있는 UI 진입점을 제어하기 위해 사용합니다.
+   *
+   * 실제 실행 가능 여부의 정본은 서버의 execution claim이며,
+   * ADMIN이나 사용량을 확인할 수 없는 경우에는 기존 동작을 유지합니다.
+   */
+  const isDailyLimitReached =
+    dailyUsage !== null && dailyUsage.used >= dailyUsage.limit;
+
   return (
     <>
       <ul className="space-y-6 px-4 py-6 md:px-6">
@@ -146,13 +166,17 @@ export function NoteChatMessageList({
                 key={message.id}
                 text={parsed.data.text}
                 isStreaming={isStreaming}
-                onEdit={() => {
-                  setEditingMessage({
-                    id: message.id,
-                    sequenceNumber: message.sequence_number,
-                    text: parsed.data.text,
-                  });
-                }}
+                {...(!isDailyLimitReached
+                  ? {
+                      onEdit: () => {
+                        setEditingMessage({
+                          id: message.id,
+                          sequenceNumber: message.sequence_number,
+                          text: parsed.data.text,
+                        });
+                      },
+                    }
+                  : {})}
               />
             );
           }
@@ -197,7 +221,7 @@ export function NoteChatMessageList({
           ) : (
             <NoteChatStreamError
               retryCount={retryCount}
-              canRetry={canRetry}
+              canRetry={canRetry && !isDailyLimitReached}
               isStreaming={isStreaming}
               {...(onRetry ? { onRetry } : {})}
             />

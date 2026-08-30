@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE } from "../constants/execution";
 import { noteChatQueryKeys } from "../constants/query-keys";
 import { useNoteChatConversationDetailQuery } from "../hooks/use-note-chat-conversation-query";
+import { useNoteChatDailyUsageQuery } from "../hooks/use-note-chat-daily-usage-query";
 import { useNoteChatStream } from "../hooks/use-note-chat-stream";
 import { useViewportRemainingHeight } from "../hooks/use-viewport-remaining-height";
 import { NoteChatBreadcrumb } from "./NoteChatBreadcrumb";
@@ -65,9 +66,22 @@ export function NoteChatConversationClient({
 
   const conversationQuery = useNoteChatConversationDetailQuery(conversationId);
 
+  /*
+   * Note Chat 일일 사용량은 특정 Conversation이 아니라
+   * 현재 사용자의 전체 Note Chat AI 실행을 기준으로 조회합니다.
+   *
+   * ADMIN이나 사용량을 확인할 수 없는 경우에는 null이 반환되며,
+   * Composer에서는 사용량 표시와 입력 제한을 적용하지 않습니다.
+   */
+  const dailyUsageQuery = useNoteChatDailyUsageQuery();
+
   const detail = conversationQuery.data;
+
   const { containerRef: conversationContainerRef, height: conversationHeight } =
     useViewportRemainingHeight<HTMLDivElement>({ recalculationKey: detail });
+
+  const dailyUsage = dailyUsageQuery.data ?? null;
+
 
   /**
    * 새로운 질문을 전송하고 스트리밍 완료 후
@@ -92,6 +106,9 @@ export function NoteChatConversationClient({
     /*
      * 질문 Route가 User Message를 먼저 저장하므로
      * 성공 여부와 관계없이 서버 상태를 다시 가져옵니다.
+     *
+     * 일일 사용량도 execution claim의 최종 상태를 기준으로 다시 조회하여
+     * 현재 quota 사용량을 화면에 반영합니다.
      */
     await Promise.all([
       queryClient.invalidateQueries({
@@ -99,6 +116,9 @@ export function NoteChatConversationClient({
       }),
       queryClient.invalidateQueries({
         queryKey: noteChatQueryKeys.conversationLists(),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: noteChatQueryKeys.dailyUsage(),
       }),
     ]);
 
@@ -161,6 +181,9 @@ export function NoteChatConversationClient({
     /*
      * 수정 Route가 User Message 수정과 이후 Message 삭제,
      * 새 Run 생성을 처리하므로 실행 후 Conversation 데이터를 다시 조회합니다.
+     *
+     * 새 실행의 Claim 상태에 따라 일일 사용량도 달라질 수 있으므로
+     * 사용량 Query를 함께 갱신합니다.
      */
     await Promise.all([
       queryClient.invalidateQueries({
@@ -168,6 +191,9 @@ export function NoteChatConversationClient({
       }),
       queryClient.invalidateQueries({
         queryKey: noteChatQueryKeys.conversationLists(),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: noteChatQueryKeys.dailyUsage(),
       }),
     ]);
 
@@ -213,12 +239,19 @@ export function NoteChatConversationClient({
       question: failedQuestion.question,
     });
 
+    /*
+     * 재시도에서도 새로운 execution claim이 생성될 수 있으므로
+     * Conversation 데이터와 함께 일일 사용량을 다시 조회합니다.
+     */
     await Promise.all([
       queryClient.invalidateQueries({
         queryKey: noteChatQueryKeys.conversationDetail(conversationId),
       }),
       queryClient.invalidateQueries({
         queryKey: noteChatQueryKeys.conversationLists(),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: noteChatQueryKeys.dailyUsage(),
       }),
     ]);
 
@@ -309,6 +342,7 @@ export function NoteChatConversationClient({
           conversationTitle={detail.conversation.title}
         />
       ) : null}
+
       <div
         ref={conversationContainerRef}
         className="flex min-h-0 flex-col overflow-hidden border"
@@ -343,6 +377,7 @@ export function NoteChatConversationClient({
               isStreaming={isStreaming}
               canRetry={failedQuestion !== null && retryCount < 2}
               retryCount={retryCount}
+              dailyUsage={dailyUsage}
               messageEndRef={messageEndRef}
               onCancel={cancel}
               onSubmit={handleQuestionSubmit}

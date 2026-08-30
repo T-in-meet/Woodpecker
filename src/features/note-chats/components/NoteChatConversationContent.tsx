@@ -2,6 +2,7 @@ import type { RefObject } from "react";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
 
+import type { NoteChatDailyUsage } from "../queries";
 import type { NoteChatAssistantSources, NoteChatMessage } from "../types";
 import { NoteChatComposer } from "./NoteChatComposer";
 import { NoteChatConversationMenu } from "./NoteChatConversationMenu";
@@ -19,6 +20,7 @@ type NoteChatConversationContentProps = {
   isStreaming: boolean;
   canRetry: boolean;
   retryCount: number;
+  dailyUsage: NoteChatDailyUsage;
   messageEndRef: RefObject<HTMLDivElement | null>;
   onCancel: () => void;
   onSubmit: (question: string) => Promise<void>;
@@ -45,6 +47,7 @@ type NoteChatConversationContentProps = {
  * @param props.isStreaming 답변 생성 진행 여부
  * @param props.canRetry 실패한 답변을 다시 실행할 수 있는지 여부
  * @param props.retryCount 현재 질문의 재시도 횟수
+ * @param props.dailyUsage 현재 사용자의 Note Chat 일일 AI 실행 사용량
  * @param props.messageEndRef 최신 메시지 위치를 가리키는 ref
  * @param props.onCancel 현재 답변 생성을 취소하는 함수
  * @param props.onSubmit 새로운 사용자 질문을 전송하는 함수
@@ -64,6 +67,7 @@ export function NoteChatConversationContent({
   isStreaming,
   canRetry,
   retryCount,
+  dailyUsage,
   messageEndRef,
   onCancel,
   onSubmit,
@@ -97,6 +101,7 @@ export function NoteChatConversationContent({
           isStreaming={isStreaming}
           canRetry={canRetry}
           retryCount={retryCount}
+          dailyUsage={dailyUsage}
           onRetry={onRetry}
           onUpdateQuestion={onUpdateQuestion}
         />
@@ -107,6 +112,7 @@ export function NoteChatConversationContent({
       <div className="shrink-0 border-t bg-background p-3 md:p-4">
         <NoteChatComposer
           conversationId={conversationId}
+          dailyUsage={dailyUsage}
           isStreaming={isStreaming}
           onCancel={onCancel}
           onSubmit={onSubmit}

@@ -372,6 +372,57 @@ END;
 $$;
 
 /*
+ * 현재 인증 사용자의 KST 기준 Note Chat 일일 사용량을 조회합니다.
+ *
+ * 실제 quota 판정과 동일하게 running + succeeded Claim만 사용량에 포함하고,
+ * failed/stale Claim은 제외합니다.
+ *
+ * ADMIN은 애플리케이션 query 계층에서 이 RPC를 호출하지 않으므로,
+ * 이 함수는 현재 인증 사용자의 실제 Claim 사용량만 반환합니다.
+ */
+CREATE OR REPLACE FUNCTION "public"."get_note_chat_daily_usage"()
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  "v_user_id" "uuid" := (SELECT auth.uid());
+  "v_now" timestamp with time zone := clock_timestamp();
+  "v_kst_date" date;
+  "v_daily_start_at" timestamp with time zone;
+  "v_daily_end_at" timestamp with time zone;
+  "v_daily_count" integer;
+BEGIN
+  IF "v_user_id" IS NULL THEN
+    RAISE EXCEPTION 'authentication required';
+  END IF;
+
+  "v_kst_date" := ("v_now" AT TIME ZONE 'Asia/Seoul')::date;
+  "v_daily_start_at" := "v_kst_date"::timestamp AT TIME ZONE 'Asia/Seoul';
+  "v_daily_end_at" := "v_daily_start_at" + interval '1 day';
+
+  /*
+   * claim_note_chat_execution()의 일일 quota 계산과 동일한 기준을 사용합니다.
+   *
+   * running은 현재 비용을 발생시킬 수 있는 실행이므로 포함하고,
+   * succeeded는 정상적으로 사용된 실행이므로 포함합니다.
+   * failed/stale은 일일 quota에서 제외합니다.
+   */
+  SELECT count(*)
+  INTO "v_daily_count"
+  FROM "public"."note_chat_execution_claims" AS "claims"
+  WHERE "claims"."user_id" = "v_user_id"
+    AND "claims"."claimed_at" >= "v_daily_start_at"
+    AND "claims"."claimed_at" < "v_daily_end_at"
+    AND "claims"."status" IN ('running'::text, 'succeeded'::text);
+
+  RETURN "v_daily_count";
+END;
+$$;
+
+
+/*
  * 실패하거나 만료된 Note Chat 실행의 Claim을 종료합니다.
  *
  * 성공 실행은 이 함수에서 처리하지 않습니다.
@@ -1058,6 +1109,18 @@ GRANT EXECUTE ON FUNCTION "public"."claim_note_chat_execution"(
 ) TO service_role;
 
 /*
+ * Note Chat 일일 사용량은 현재 로그인한 사용자가 자신의 사용량을
+ * 화면에서 확인하기 위한 조회 RPC이므로 authenticated에만 허용합니다.
+ *
+ * 함수 내부에서 auth.uid()를 사용해 조회 대상을 현재 사용자로 고정합니다.
+ */
+REVOKE ALL ON FUNCTION "public"."get_note_chat_daily_usage"()
+FROM PUBLIC, anon;
+
+GRANT EXECUTE ON FUNCTION "public"."get_note_chat_daily_usage"()
+TO authenticated;
+
+/*
  * 실패/stale Claim 종료 역시 서버의 실행 lifecycle 코드에서만 수행합니다.
  */
 REVOKE ALL ON FUNCTION "public"."complete_note_chat_execution_claim"(
@@ -1171,5 +1234,8 @@ COMMENT ON FUNCTION "public"."complete_note_chat_execution_success"(
   "jsonb"
 ) IS
   'Note Chat 실행 성공을 Assistant Message 저장과 Claim succeeded 전환을 하나의 transaction으로 확정합니다. Run 감사 기록은 별도 best-effort 경로에서 처리합니다.';
+
+COMMENT ON FUNCTION "public"."get_note_chat_daily_usage"() IS
+  '현재 인증 사용자의 KST 기준 Note Chat 일일 사용량을 execution claim에서 조회합니다.';
 
 COMMIT;

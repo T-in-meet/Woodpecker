@@ -14,4 +14,10 @@ export const noteChatQueryKeys = {
 
   conversationDetail: (conversationId: string) =>
     [...noteChatQueryKeys.conversations(), "detail", conversationId] as const,
+
+  /*
+   * Note Chat 일일 사용량은 특정 Conversation이 아니라
+   * 현재 사용자의 전체 Note Chat 실행을 기준으로 관리합니다.
+   */
+  dailyUsage: () => [...noteChatQueryKeys.all, "daily-usage"] as const,
 };
