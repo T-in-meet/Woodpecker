@@ -6,6 +6,7 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils/cn";
 
 import {
+  FEEDBACK_AREA_LABELS,
   FEEDBACK_CATEGORY_LABELS,
   FEEDBACK_STATUS_LABELS,
 } from "../constants/feedback-labels";
@@ -49,6 +50,9 @@ export function AdminFeedbackSourcePanel({
               </Badge>
               <Badge variant="outline">
                 {FEEDBACK_CATEGORY_LABELS[feedback.category]}
+              </Badge>
+              <Badge variant="outline">
+                {FEEDBACK_AREA_LABELS[feedback.area]}
               </Badge>
             </div>
           </div>

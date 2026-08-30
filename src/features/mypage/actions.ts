@@ -4,7 +4,10 @@ import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { z } from "zod";
 
-import { FEEDBACK_CATEGORY_LABELS } from "@/features/admin/feedbacks/constants/feedback-labels";
+import {
+  FEEDBACK_AREA_LABELS,
+  FEEDBACK_CATEGORY_LABELS,
+} from "@/features/admin/feedbacks/constants/feedback-labels";
 import { requireCurrentLegalAcceptance } from "@/features/auth/utils/requireCurrentLegalAcceptance";
 import {
   createAdminNotification,
@@ -26,6 +29,7 @@ import {
   FEEDBACK_IMAGE_ALLOWED_TYPES,
   FEEDBACK_IMAGE_MAX_COUNT,
   FEEDBACK_IMAGE_MAX_SIZE,
+  type FeedbackArea,
   type FeedbackCategory,
   feedbackSchema,
   profileSchema,
@@ -253,6 +257,7 @@ export async function createFeedbackAction(
 ) {
   const parsed = feedbackSchema.safeParse({
     category: formData.get("category"),
+    area: formData.get("area"),
     title: formData.get("title"),
     content: formData.get("content"),
   });
@@ -340,6 +345,7 @@ export async function createFeedbackAction(
       user_id: user.id,
       note_id: null,
       category: parsed.data.category,
+      area: parsed.data.area,
       title: parsed.data.title,
       content: parsed.data.content,
       image_urls: uploadedPaths,
@@ -361,6 +367,7 @@ export async function createFeedbackAction(
 
   scheduleAdminsOfNewFeedbackNotification({
     category: parsed.data.category,
+    area: parsed.data.area,
     feedbackId,
     title: parsed.data.title,
     userId: user.id,
@@ -371,6 +378,7 @@ export async function createFeedbackAction(
 
 type ScheduleAdminsOfNewFeedbackNotificationInput = {
   category: FeedbackCategory;
+  area: FeedbackArea;
   feedbackId: string;
   title: string;
   userId: string;
@@ -403,6 +411,7 @@ async function recordAdminFeedbackNotificationFailure(
  */
 function scheduleAdminsOfNewFeedbackNotification({
   category,
+  area,
   feedbackId,
   title,
   userId,
@@ -413,11 +422,11 @@ function scheduleAdminsOfNewFeedbackNotification({
 
   after(async () => {
     const notificationInput = {
-      body: `[${FEEDBACK_CATEGORY_LABELS[category]}] ${title}`,
+      body: `[${FEEDBACK_CATEGORY_LABELS[category]} · ${FEEDBACK_AREA_LABELS[area]}] ${title}`,
       clickPath: definition.clickPath,
       createdBy: userId,
       feedbackId,
-      metadata: { category, feedbackId },
+      metadata: { category, area, feedbackId },
       pushEnabled: definition.pushEnabled,
       title: "새 피드백이 등록되었습니다.",
       type: ADMIN_NOTIFICATION_TYPES.FEEDBACK_CREATED,

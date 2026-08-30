@@ -332,12 +332,14 @@ function makeFeedbackSupabaseMock({
 
 function makeFeedbackFormData({
   category = "BUG",
+  area = "REVIEW",
   title = "버그 신고",
   content = "버튼이 동작하지 않습니다",
   images = [] as File[],
 } = {}) {
   const formData = new FormData();
   formData.set("category", category);
+  formData.set("area", area);
   formData.set("title", title);
   formData.set("content", content);
   for (const file of images) {
@@ -497,6 +499,7 @@ describe("createFeedbackAction", () => {
       null,
       makeFeedbackFormData({
         category: "FEATURE",
+        area: "AI",
         title: "제안",
         content: "다크 모드 추가해주세요",
         images: [makeFile("a.png", "image/png", 1024)],
@@ -510,6 +513,7 @@ describe("createFeedbackAction", () => {
         user_id: "user-123",
         note_id: null,
         category: "FEATURE",
+        area: "AI",
         title: "제안",
         content: "다크 모드 추가해주세요",
         image_urls: expect.arrayContaining([
@@ -525,7 +529,7 @@ describe("createFeedbackAction", () => {
 
     const result = await createFeedbackAction(
       null,
-      makeFeedbackFormData({ category: "FEATURE", title: "제안" }),
+      makeFeedbackFormData({ category: "FEATURE", area: "AI", title: "제안" }),
     );
 
     expect(result).toEqual({ data: { id: "feedback-1" } });
@@ -537,11 +541,11 @@ describe("createFeedbackAction", () => {
     expect(createAdminNotificationMock).toHaveBeenCalledTimes(1);
     expect(createAdminNotificationMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        body: "[기능 요청] 제안",
+        body: "[기능 요청 · AI] 제안",
         clickPath: expect.stringContaining("/admin/feedbacks/"),
         createdBy: "user-123",
         feedbackId: expect.any(String),
-        metadata: expect.objectContaining({ category: "FEATURE" }),
+        metadata: expect.objectContaining({ category: "FEATURE", area: "AI" }),
         title: "새 피드백이 등록되었습니다.",
         type: ADMIN_NOTIFICATION_TYPES.FEEDBACK_CREATED,
       }),

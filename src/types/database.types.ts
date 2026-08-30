@@ -549,6 +549,7 @@ export type Database = {
       };
       feedbacks: {
         Row: {
+          area: string;
           category: string;
           content: string;
           created_at: string;
@@ -561,6 +562,7 @@ export type Database = {
           user_id: string;
         };
         Insert: {
+          area?: string;
           category: string;
           content: string;
           created_at?: string;
@@ -573,6 +575,7 @@ export type Database = {
           user_id: string;
         };
         Update: {
+          area?: string;
           category?: string;
           content?: string;
           created_at?: string;

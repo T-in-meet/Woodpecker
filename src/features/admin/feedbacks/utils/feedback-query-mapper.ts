@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 import {
   AdminFeedbackListItem,
+  FeedbackArea,
   FeedbackCategory,
   FeedbackStatus,
 } from "../types/feedback-list";
@@ -12,6 +13,7 @@ export type FeedbackListRow = {
   user_id: string;
   note_id: string | null;
   category: string;
+  area: string;
   title: string;
   content: string;
   image_urls: string[];
@@ -125,6 +127,7 @@ export async function mapFeedbackRows(
       noteId: row.note_id,
       noteTitle: note?.title ?? null,
       category: row.category as FeedbackCategory,
+      area: row.area as FeedbackArea,
       status: row.status as FeedbackStatus,
       title: row.title,
       contentPreview: createFeedbackContentPreview(row.content),

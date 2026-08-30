@@ -125,6 +125,12 @@ describe("getLearningStats", () => {
           scheduled_at: "2026-05-02T16:00:00.000Z",
           completed_at: null,
         },
+        // 오늘 KST 현재 시각 이후 (2026-05-03T11:00Z = 2026-05-03 20:00 KST) → 포함
+        {
+          round: 2,
+          scheduled_at: "2026-05-03T11:00:00.000Z",
+          completed_at: null,
+        },
         // 내일 이후 → 제외
         {
           round: 3,
@@ -137,7 +143,7 @@ describe("getLearningStats", () => {
 
     const result = await getLearningStats();
 
-    expect(result.todayReviews).toBe(2);
+    expect(result.todayReviews).toBe(3);
   });
 
   it("computes on-time rate based on KST date equality", async () => {

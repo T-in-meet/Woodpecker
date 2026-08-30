@@ -10,6 +10,7 @@ import type { AdminFeedbackDetail } from "./types/feedback-detail";
 import type {
   AdminFeedbackListQuery,
   AdminFeedbackListResult,
+  FeedbackArea,
   FeedbackCategory,
   FeedbackStatus,
 } from "./types/feedback-list";
@@ -28,6 +29,7 @@ type FeedbackRow = {
   user_id: string;
   note_id: string | null;
   category: string;
+  area: string;
   title: string;
   content: string;
   image_urls: string[];
@@ -84,7 +86,7 @@ export async function getFeedbackDetail(
   const { data: feedback, error } = await supabase
     .from("feedbacks")
     .select(
-      "id, user_id, note_id, category, title, content, image_urls, status, created_at, updated_at",
+      "id, user_id, note_id, category, area, title, content, image_urls, status, created_at, updated_at",
     )
     .eq("id", feedbackId)
     .single();
@@ -161,6 +163,7 @@ export async function getFeedbackDetail(
     },
     note: note ? { id: note.id, title: note.title } : null,
     category: feedbackRow.category as FeedbackCategory,
+    area: feedbackRow.area as FeedbackArea,
     status: feedbackRow.status as FeedbackStatus,
     title: feedbackRow.title,
     content: feedbackRow.content,

@@ -76,6 +76,7 @@ describe("changePasswordSchema", () => {
 describe("feedbackSchema", () => {
   const validInput = {
     category: "BUG",
+    area: "REVIEW",
     title: "버그 신고합니다",
     content: "복습 완료 버튼이 동작하지 않아요",
   };
@@ -89,6 +90,14 @@ describe("feedbackSchema", () => {
     const result = feedbackSchema.safeParse({
       ...validInput,
       category: "INVALID",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("허용되지 않은 영역을 거부한다", () => {
+    const result = feedbackSchema.safeParse({
+      ...validInput,
+      area: "INVALID",
     });
     expect(result.success).toBe(false);
   });

@@ -11,6 +11,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import { hasPasswordLogin } from "@/features/auth/lib/authProviders";
 import { LearningStatsSection } from "@/features/mypage/components/LearningStatsSection";
 import {
   MypageNav,
@@ -203,7 +204,7 @@ export default async function MyPage({ searchParams }: Props) {
               <PushSubscribeCard
                 initialHasAnySubscription={hasAnyPushSubscription}
               />
-              <AccountSection />
+              <AccountSection hasPasswordLogin={hasPasswordLogin(user)} />
               <DeleteAccountSection userEmail={user?.email ?? ""} />
             </>
           )}

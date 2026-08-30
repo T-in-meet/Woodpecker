@@ -1,3 +1,4 @@
+import { getKstDayBoundsUtc } from "@/features/review/lib/kstDay";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { logError } from "@/lib/logger";
 import { getUser } from "@/lib/supabase/getUser";
@@ -103,6 +104,7 @@ export async function getLearningStats(): Promise<LearningStats> {
 
   const now = new Date();
   const nowIso = now.toISOString();
+  const { endUtcIso: endOfTodayKstUtc } = getKstDayBoundsUtc(now);
   const todayKstKey = toKstDateKey(nowIso);
   const activityCutoffIso = new Date(
     now.getTime() - ACTIVITY_DAYS * DAY_MS,
@@ -166,7 +168,7 @@ export async function getLearningStats(): Promise<LearningStats> {
           (activityDayCounts.get(completedKey) ?? 0) + 1,
         );
       }
-    } else if (scheduledAt <= nowIso) {
+    } else if (scheduledAt < endOfTodayKstUtc) {
       // 오늘 예정뿐 아니라 기한이 지나 아직 못한 복습도 포함한다 (getNotes의 due 보기와 동일 기준)
       todayReviews += 1;
     }
@@ -206,6 +208,7 @@ export type MyFeedbackReply = {
 export type MyFeedback = {
   id: string;
   category: string;
+  area: string;
   title: string;
   content: string;
   status: string;
@@ -263,7 +266,7 @@ export async function getMyFeedbacks(
   const { data, error } = await supabase
     .from("feedbacks")
     .select(
-      "id, category, title, content, image_urls, status, created_at, note:notes(id, title), reply:feedback_replies(title, content, image_paths, created_at)",
+      "id, category, area, title, content, image_urls, status, created_at, note:notes(id, title), reply:feedback_replies(title, content, image_paths, created_at)",
     )
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
@@ -293,6 +296,7 @@ export async function getMyFeedbacks(
   const feedbacks: MyFeedback[] = rows.map((row) => ({
     id: row.id,
     category: row.category,
+    area: row.area,
     title: row.title,
     content: row.content,
     status: row.status,

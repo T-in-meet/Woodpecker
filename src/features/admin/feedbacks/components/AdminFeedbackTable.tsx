@@ -11,6 +11,7 @@ import { AdminBadge } from "../../components/common/AdminBadge";
 import { AdminSortableTableHead } from "../../components/common/AdminSortableTableHead";
 import type { AdminSort } from "../../types/sort";
 import {
+  FEEDBACK_AREA_BADGE_CONFIG,
   FEEDBACK_CATEGORY_BADGE_CONFIG,
   FEEDBACK_STATUS_BADGE_CONFIG,
 } from "../constants/feedback-list";
@@ -72,6 +73,8 @@ export function AdminFeedbackTable({
                 카테고리
               </AdminSortableTableHead>
 
+              <TableHead>영역</TableHead>
+
               <AdminSortableTableHead
                 field="title"
                 sort={sort}
@@ -103,7 +106,7 @@ export function AdminFeedbackTable({
               <AdminFeedbackTableSkeleton />
             ) : isError ? (
               <tr>
-                <td colSpan={8}>
+                <td colSpan={9}>
                   <AdminListError description="피드백 목록을 불러오지 못했습니다." />
                 </td>
               </tr>
@@ -116,6 +119,10 @@ export function AdminFeedbackTable({
 
                   <td className="px-4 py-3 align-top">
                     <FeedbackCategoryBadge category={feedback.category} />
+                  </td>
+
+                  <td className="px-4 py-3 align-top">
+                    <FeedbackAreaBadge area={feedback.area} />
                   </td>
 
                   <td className="max-w-md px-4 py-3 align-top">
@@ -210,6 +217,15 @@ function FeedbackCategoryBadge({
   category: AdminFeedbackListItem["category"];
 }) {
   const badge = FEEDBACK_CATEGORY_BADGE_CONFIG[category];
+
+  return <AdminBadge color={badge.color}>{badge.label}</AdminBadge>;
+}
+
+/**
+ * 피드백이 가리키는 기능 영역을 목록에서 배지로 표시합니다.
+ */
+function FeedbackAreaBadge({ area }: { area: AdminFeedbackListItem["area"] }) {
+  const badge = FEEDBACK_AREA_BADGE_CONFIG[area];
 
   return <AdminBadge color={badge.color}>{badge.label}</AdminBadge>;
 }

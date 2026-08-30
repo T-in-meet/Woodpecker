@@ -3,6 +3,7 @@ import type { AdminListConfig } from "@/features/admin/types/list";
 import { AdminBadgeConfig } from "../../types/badge";
 import type { AdminSort } from "../../types/sort";
 import type {
+  FeedbackArea,
   FeedbackCategory,
   FeedbackFilterField,
   FeedbackSearchField,
@@ -57,6 +58,38 @@ export const ADMIN_FEEDBACK_LIST_CONFIG = {
         {
           value: "FEATURE",
           label: "기능 요청",
+        },
+        {
+          value: "ETC",
+          label: "기타",
+        },
+      ],
+    },
+    {
+      field: "area",
+      label: "영역",
+      type: "multi-select",
+      placeholder: "영역을 선택하세요.",
+      options: [
+        {
+          value: "NOTE",
+          label: "노트",
+        },
+        {
+          value: "REVIEW",
+          label: "복습",
+        },
+        {
+          value: "AI",
+          label: "AI",
+        },
+        {
+          value: "NOTIFICATION",
+          label: "알림",
+        },
+        {
+          value: "ACCOUNT",
+          label: "계정",
         },
         {
           value: "ETC",
@@ -146,6 +179,33 @@ export const FEEDBACK_CATEGORY_BADGE_CONFIG = {
     color: "gray",
   },
 } satisfies AdminBadgeConfig<FeedbackCategory>;
+
+export const FEEDBACK_AREA_BADGE_CONFIG = {
+  NOTE: {
+    label: "노트",
+    color: "blue",
+  },
+  REVIEW: {
+    label: "복습",
+    color: "green",
+  },
+  AI: {
+    label: "AI",
+    color: "purple",
+  },
+  NOTIFICATION: {
+    label: "알림",
+    color: "yellow",
+  },
+  ACCOUNT: {
+    label: "계정",
+    color: "red",
+  },
+  ETC: {
+    label: "기타",
+    color: "gray",
+  },
+} satisfies AdminBadgeConfig<FeedbackArea>;
 
 export const FEEDBACK_STATUS_BADGE_CONFIG = {
   OPEN: {
