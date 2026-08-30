@@ -74,7 +74,7 @@ cp .env.example .env.local
 팀 공유 채널에서 환경 변수 값을 받아 `.env.local`에 입력하세요.
 새 환경 변수를 추가하면 `.env.example`에도 반드시 추가합니다.
 
-`NEXT_PUBLIC_*`만 클라이언트 번들에 노출됩니다. 그 외(`SUPABASE_SERVICE_ROLE_KEY`, `VAPID_PRIVATE_KEY`, `CRON_SECRET`, `EMAIL_TICKET_SECRET`, `SUPABASE_HOOK_SECRET`, `RESEND_API_KEY`, `SMTP_*`)는 서버 전용이므로 클라이언트 코드에서 참조하지 않습니다.
+`NEXT_PUBLIC_*`만 클라이언트 번들에 노출됩니다. 그 외(`SUPABASE_SERVICE_ROLE_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SKIP_NEXT_TYPE_CHECK`, `APP_URL`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `CRON_SECRET`, `EMAIL_TICKET_SECRET`, `SUPABASE_HOOK_SECRET`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `RESEND_API_KEY`, `AUTH_EMAIL_FROM`, `AUTH_EMAIL_PROVIDER`, `SMTP_*`, `NGROK_AUTHTOKEN`)는 서버 전용이므로 클라이언트 코드에서 참조하지 않습니다.
 
 ### 알림 발송 Cron
 
@@ -160,11 +160,17 @@ fix: #34 - 토큰 만료 처리 누락 수정
 ## 8. 브랜치 전략
 
 ```
-feat/<issue>-<kebab-summary>  →  development  →  main
-fix/<issue>-<kebab-summary>   →  development  →  main
-hotfix/<kebab-summary>         →  main (+ development 반영)
+feat/<issue>-<kebab-summary>       →  development  →  main
+fix/<issue>-<kebab-summary>        →  development  →  main
+refactor/<issue>-<kebab-summary>   →  development  →  main
+chore/<issue>-<kebab-summary>      →  development  →  main
+docs/<issue>-<kebab-summary>       →  development  →  main
+test/<issue>-<kebab-summary>       →  development  →  main
+hotfix/<kebab-summary>             →  main (+ development 반영)
 ```
 
+- 위 6개 접두사(`feat`, `fix`, `refactor`, `chore`, `docs`, `test`)는 `.github/workflows/project-automation.yml`의 push 트리거에 등록되어 있습니다. 새 브랜치를 push하면 브랜치명의 이슈번호로 프로젝트 보드가 In Progress로 자동 이동하므로 작업 종류에 맞는 접두사를 사용하세요.
+- `hotfix/*`는 트리거 패턴에 없고 이름에 이슈번호도 없어 보드 자동 이동이 동작하지 않습니다. 필요하면 이슈 상태를 직접 옮기세요.
 - `main`, `development` 브랜치 직접 push 금지
 - PR 머지 방식: **Squash Merge**
 - 머지 후 브랜치 삭제
@@ -177,15 +183,15 @@ hotfix/<kebab-summary>         →  main (+ development 반영)
 
 `development` 또는 `main`으로 PR을 열면 GitHub Actions(`.github/workflows/ci.yml`)가 자동 실행됩니다.
 
-| Job               | 명령                                     |
-| ----------------- | ---------------------------------------- |
-| Lint              | `npm run lint`                           |
-| Format Check      | `npx prettier --check .`                 |
-| Dependency Review | `actions/dependency-review-action`       |
-| Type Check        | `npx tsc --noEmit`                       |
-| Test              | `npx vitest run`                         |
-| Supabase SQL Test | `supabase start` 후 `supabase test db`   |
-| Build             | `npm run build` (선행 검사 통과 후 실행) |
+| Job               | 명령                                      |
+| ----------------- | ----------------------------------------- |
+| Lint              | `npm run lint`                            |
+| Format Check      | `npx prettier --check .`                  |
+| Dependency Review | `actions/dependency-review-action`        |
+| Type Check        | `npx tsc --noEmit`                        |
+| Test              | `npx vitest run`                          |
+| Supabase SQL Test | `supabase db start` 후 `supabase test db` |
+| Build             | `npm run build` (선행 검사 통과 후 실행)  |
 
 **CI 실패 시 머지 불가**
 
@@ -230,6 +236,13 @@ hotfix/<kebab-summary>         →  main (+ development 반영)
 | 라우팅                                 | `src/app/` — 비즈니스 로직을 두지 않습니다                         |
 
 Server Action은 Zod `safeParse`로 입력을 검증하고 `{ data: T } | { error: string | fieldErrors }` 형태로 반환합니다. 인증이 필요한 작업은 `supabase.auth.getUser()`로 사용자를 확인한 뒤 수행합니다.
+
+`auth`, `ai` 도메인은 이 평면 구조의 예외로 sub-feature 구조를 씁니다.
+
+- `auth`는 `login`·`signup`의 API Route + mutation 훅 방식과 나머지 인증 기능의 Server Action 방식이 공존합니다. 기존 sub-feature를 확장할 때는 해당 구조를 따르고, 새 인증 기능은 Server Action 방식을 기본으로 합니다.
+- `ai`는 `chats`·`embeddings`·`models`·`prompts`·`providers`·`rags`·`runtimes`·`usage` 등 기능별 하위 도메인에 필요한 `actions`·`queries`·`schema`·`types`를 선택적으로 배치합니다. 새 AI 로직은 관련 하위 도메인 안에 둡니다.
+
+새 도메인은 위 평면 구조를 기본으로 합니다.
 
 ---
 

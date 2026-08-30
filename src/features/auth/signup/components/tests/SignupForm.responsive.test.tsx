@@ -116,6 +116,7 @@ describe("SignupForm 반응형 레이아웃 (PR-UI-14)", () => {
       await waitFor(() => {
         expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
       });
+      await user.click(screen.getByTestId("age-14-checkbox"));
 
       await user.click(screen.getByRole("button", { name: /^회원가입$/i }));
 

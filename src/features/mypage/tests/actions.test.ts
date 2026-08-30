@@ -1,12 +1,36 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { createClientMock } = vi.hoisted(() => ({
+const {
+  afterMock,
+  createAdminNotificationMock,
+  createClientMock,
+  recordAdminNotificationCreateFailureMock,
+} = vi.hoisted(() => ({
+  afterMock: vi.fn(),
+  createAdminNotificationMock: vi.fn(),
   createClientMock: vi.fn(),
+  recordAdminNotificationCreateFailureMock: vi.fn(),
+}));
+
+vi.mock("next/server", () => ({
+  after: afterMock,
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: createClientMock,
 }));
+
+vi.mock("@/features/auth/utils/requireCurrentLegalAcceptance", () => ({
+  requireCurrentLegalAcceptance: vi.fn(),
+}));
+
+vi.mock("@/features/notifications/create-admin-notification", () => ({
+  createAdminNotification: createAdminNotificationMock,
+  recordAdminNotificationCreateFailure:
+    recordAdminNotificationCreateFailureMock,
+}));
+
+import { ADMIN_NOTIFICATION_TYPES } from "@/lib/constants/notifications";
 
 import {
   createFeedbackAction,
@@ -322,9 +346,28 @@ function makeFeedbackFormData({
   return formData;
 }
 
+async function runScheduledFeedbackNotification() {
+  const callback = afterMock.mock.calls[0]?.[0];
+
+  if (typeof callback !== "function") {
+    throw new Error("Expected an after callback to be registered.");
+  }
+
+  await callback();
+}
+
 describe("createFeedbackAction", () => {
   beforeEach(() => {
+    afterMock.mockReset();
     createClientMock.mockReset();
+    createAdminNotificationMock.mockReset();
+    createAdminNotificationMock.mockResolvedValue({
+      id: "admin-notification-1",
+      ok: true,
+      targetAdminCount: 1,
+    });
+    recordAdminNotificationCreateFailureMock.mockReset();
+    recordAdminNotificationCreateFailureMock.mockResolvedValue(true);
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
@@ -474,6 +517,105 @@ describe("createFeedbackAction", () => {
         ]),
       }),
     );
+  });
+
+  it("성공 시 관리자 알림을 후처리로 예약하고 즉시 data를 반환한다", async () => {
+    const { supabase } = makeFeedbackSupabaseMock();
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await createFeedbackAction(
+      null,
+      makeFeedbackFormData({ category: "FEATURE", title: "제안" }),
+    );
+
+    expect(result).toEqual({ data: { id: "feedback-1" } });
+    expect(afterMock).toHaveBeenCalledTimes(1);
+    expect(createAdminNotificationMock).not.toHaveBeenCalled();
+
+    await runScheduledFeedbackNotification();
+
+    expect(createAdminNotificationMock).toHaveBeenCalledTimes(1);
+    expect(createAdminNotificationMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: "[기능 요청] 제안",
+        clickPath: expect.stringContaining("/admin/feedbacks/"),
+        createdBy: "user-123",
+        feedbackId: expect.any(String),
+        metadata: expect.objectContaining({ category: "FEATURE" }),
+        title: "새 피드백이 등록되었습니다.",
+        type: ADMIN_NOTIFICATION_TYPES.FEEDBACK_CREATED,
+      }),
+    );
+    expect(recordAdminNotificationCreateFailureMock).not.toHaveBeenCalled();
+  });
+
+  it("알림 클릭 경로와 metadata가 방금 만든 feedbackId를 가리킨다", async () => {
+    const { supabase, insertMock } = makeFeedbackSupabaseMock();
+    createClientMock.mockResolvedValue(supabase);
+
+    await createFeedbackAction(null, makeFeedbackFormData());
+    await runScheduledFeedbackNotification();
+
+    const insertedId = insertMock.mock.calls[0]?.[0]?.id as string;
+    const notificationInput = createAdminNotificationMock.mock.calls[0]?.[0];
+
+    expect(insertedId).toBeTruthy();
+    expect(notificationInput.clickPath).toContain(insertedId);
+    expect(notificationInput.metadata).toEqual(
+      expect.objectContaining({ feedbackId: insertedId }),
+    );
+  });
+
+  it("알림 생성이 실패 결과를 반환해도 피드백 제출은 성공하고 운영 오류를 중복 기록하지 않는다", async () => {
+    const { supabase } = makeFeedbackSupabaseMock();
+    createClientMock.mockResolvedValue(supabase);
+    createAdminNotificationMock.mockResolvedValue({
+      error: { message: "insert failed" },
+      failureStage: "in_app_notification_create",
+      ok: false,
+      operationalErrorRecorded: true,
+    });
+
+    const result = await createFeedbackAction(null, makeFeedbackFormData());
+    await runScheduledFeedbackNotification();
+
+    expect(result).toEqual({ data: { id: "feedback-1" } });
+    expect(recordAdminNotificationCreateFailureMock).not.toHaveBeenCalled();
+  });
+
+  it("알림 생성이 예외를 던져도 피드백 제출은 성공하고 운영 오류로 기록한다", async () => {
+    const { supabase } = makeFeedbackSupabaseMock();
+    const error = new Error("boom");
+    createClientMock.mockResolvedValue(supabase);
+    createAdminNotificationMock.mockRejectedValue(error);
+
+    const result = await createFeedbackAction(null, makeFeedbackFormData());
+    await expect(runScheduledFeedbackNotification()).resolves.toBeUndefined();
+
+    expect(result).toEqual({ data: { id: "feedback-1" } });
+    expect(recordAdminNotificationCreateFailureMock).toHaveBeenCalledTimes(1);
+    expect(recordAdminNotificationCreateFailureMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clickPath: expect.stringContaining("/admin/feedbacks/"),
+        createdBy: "user-123",
+        feedbackId: expect.any(String),
+        metadata: expect.objectContaining({ feedbackId: expect.any(String) }),
+        type: ADMIN_NOTIFICATION_TYPES.FEEDBACK_CREATED,
+      }),
+      error,
+    );
+  });
+
+  it("insert가 실패하면 관리자 알림을 만들지 않는다", async () => {
+    const { supabase } = makeFeedbackSupabaseMock({
+      insertError: { message: "duplicate", code: "23505" },
+    });
+    createClientMock.mockResolvedValue(supabase);
+
+    await createFeedbackAction(null, makeFeedbackFormData());
+
+    expect(afterMock).not.toHaveBeenCalled();
+    expect(createAdminNotificationMock).not.toHaveBeenCalled();
   });
 });
 

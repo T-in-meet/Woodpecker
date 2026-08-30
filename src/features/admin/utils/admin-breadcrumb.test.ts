@@ -3,7 +3,6 @@ import {
   FileSearch,
   FileText,
   LayoutDashboard,
-  Link2,
   Network,
   Users,
 } from "lucide-react";
@@ -16,12 +15,11 @@ import { getAdminBreadcrumbItems } from "./admin-breadcrumb";
 
 const EXPERIMENTS_PATH = ROUTES.ADMIN.EXPERIMENTS.DASHBOARD;
 
-const NOTE_RELATIONS_PATH = ROUTES.ADMIN.EXPERIMENTS.NOTE_RELATIONS.DASHBOARD;
+const TEST_FEATURE_PATH = `${EXPERIMENTS_PATH}/test-feature`;
 
-const PROMPTS_PATH = ROUTES.ADMIN.EXPERIMENTS.NOTE_RELATIONS.PROMPTS;
+const TEST_PROMPTS_PATH = `${TEST_FEATURE_PATH}/prompts`;
 
-const KNOWLEDGE_EXTRACTIONS_PATH =
-  ROUTES.ADMIN.EXPERIMENTS.NOTE_RELATIONS.KNOWLEDGE_EXTRACTIONS;
+const TEST_KNOWLEDGE_EXTRACTIONS_PATH = `${TEST_FEATURE_PATH}/knowledge-extractions`;
 
 const DASHBOARD_ITEM: AdminSidebarItem = {
   title: "관리자",
@@ -47,19 +45,19 @@ const EXPERIMENTS_ITEM: AdminSidebarItem = {
       breadcrumbLabel: "실험 기능",
     },
     {
-      title: "노트 연결",
-      icon: Link2,
-      breadcrumbHref: NOTE_RELATIONS_PATH,
+      title: "테스트 기능",
+      icon: Network,
+      breadcrumbHref: TEST_FEATURE_PATH,
       children: [
         {
           title: "대시보드",
-          href: NOTE_RELATIONS_PATH,
+          href: TEST_FEATURE_PATH,
           icon: LayoutDashboard,
-          breadcrumbLabel: "노트 연결",
+          breadcrumbLabel: "테스트 기능",
         },
         {
           title: "프롬프트",
-          href: PROMPTS_PATH,
+          href: TEST_PROMPTS_PATH,
           icon: FileText,
         },
         {
@@ -68,7 +66,7 @@ const EXPERIMENTS_ITEM: AdminSidebarItem = {
           children: [
             {
               title: "지식 추출",
-              href: KNOWLEDGE_EXTRACTIONS_PATH,
+              href: TEST_KNOWLEDGE_EXTRACTIONS_PATH,
               icon: FileSearch,
             },
           ],
@@ -116,7 +114,7 @@ describe("getAdminBreadcrumbItems", () => {
   });
 
   it("breadcrumbHref가 있는 그룹을 breadcrumb에 포함한다", () => {
-    expect(getAdminBreadcrumbItems(SIDEBAR_ITEMS, PROMPTS_PATH)).toEqual([
+    expect(getAdminBreadcrumbItems(SIDEBAR_ITEMS, TEST_PROMPTS_PATH)).toEqual([
       {
         label: "관리자",
         href: ROUTES.ADMIN.DASHBOARD,
@@ -126,19 +124,19 @@ describe("getAdminBreadcrumbItems", () => {
         href: EXPERIMENTS_PATH,
       },
       {
-        label: "노트 연결",
-        href: NOTE_RELATIONS_PATH,
+        label: "테스트 기능",
+        href: TEST_FEATURE_PATH,
       },
       {
         label: "프롬프트",
-        href: PROMPTS_PATH,
+        href: TEST_PROMPTS_PATH,
       },
     ]);
   });
 
   it("href와 breadcrumbHref가 모두 없는 중간 그룹은 breadcrumb에서 제외한다", () => {
     expect(
-      getAdminBreadcrumbItems(SIDEBAR_ITEMS, KNOWLEDGE_EXTRACTIONS_PATH),
+      getAdminBreadcrumbItems(SIDEBAR_ITEMS, TEST_KNOWLEDGE_EXTRACTIONS_PATH),
     ).toEqual([
       {
         label: "관리자",
@@ -149,12 +147,12 @@ describe("getAdminBreadcrumbItems", () => {
         href: EXPERIMENTS_PATH,
       },
       {
-        label: "노트 연결",
-        href: NOTE_RELATIONS_PATH,
+        label: "테스트 기능",
+        href: TEST_FEATURE_PATH,
       },
       {
         label: "지식 추출",
-        href: KNOWLEDGE_EXTRACTIONS_PATH,
+        href: TEST_KNOWLEDGE_EXTRACTIONS_PATH,
       },
     ]);
   });
@@ -172,28 +170,26 @@ describe("getAdminBreadcrumbItems", () => {
     ]);
   });
 
-  it("노트 연결 대시보드에서는 동일한 breadcrumb를 중복하지 않는다", () => {
-    expect(getAdminBreadcrumbItems(SIDEBAR_ITEMS, NOTE_RELATIONS_PATH)).toEqual(
-      [
-        {
-          label: "관리자",
-          href: ROUTES.ADMIN.DASHBOARD,
-        },
-        {
-          label: "실험 기능",
-          href: EXPERIMENTS_PATH,
-        },
-        {
-          label: "노트 연결",
-          href: NOTE_RELATIONS_PATH,
-        },
-      ],
-    );
+  it("중첩 기능 대시보드에서는 동일한 breadcrumb를 중복하지 않는다", () => {
+    expect(getAdminBreadcrumbItems(SIDEBAR_ITEMS, TEST_FEATURE_PATH)).toEqual([
+      {
+        label: "관리자",
+        href: ROUTES.ADMIN.DASHBOARD,
+      },
+      {
+        label: "실험 기능",
+        href: EXPERIMENTS_PATH,
+      },
+      {
+        label: "테스트 기능",
+        href: TEST_FEATURE_PATH,
+      },
+    ]);
   });
 
   it("상세 경로에서도 목록 메뉴를 기준으로 breadcrumb를 반환한다", () => {
     expect(
-      getAdminBreadcrumbItems(SIDEBAR_ITEMS, `${PROMPTS_PATH}/123`),
+      getAdminBreadcrumbItems(SIDEBAR_ITEMS, `${TEST_PROMPTS_PATH}/123`),
     ).toEqual([
       {
         label: "관리자",
@@ -204,19 +200,22 @@ describe("getAdminBreadcrumbItems", () => {
         href: EXPERIMENTS_PATH,
       },
       {
-        label: "노트 연결",
-        href: NOTE_RELATIONS_PATH,
+        label: "테스트 기능",
+        href: TEST_FEATURE_PATH,
       },
       {
         label: "프롬프트",
-        href: PROMPTS_PATH,
+        href: TEST_PROMPTS_PATH,
       },
     ]);
   });
 
   it("더 깊은 상세 경로에서도 동일한 breadcrumb를 반환한다", () => {
     expect(
-      getAdminBreadcrumbItems(SIDEBAR_ITEMS, `${PROMPTS_PATH}/123/version/1`),
+      getAdminBreadcrumbItems(
+        SIDEBAR_ITEMS,
+        `${TEST_PROMPTS_PATH}/123/version/1`,
+      ),
     ).toEqual([
       {
         label: "관리자",
@@ -227,12 +226,12 @@ describe("getAdminBreadcrumbItems", () => {
         href: EXPERIMENTS_PATH,
       },
       {
-        label: "노트 연결",
-        href: NOTE_RELATIONS_PATH,
+        label: "테스트 기능",
+        href: TEST_FEATURE_PATH,
       },
       {
         label: "프롬프트",
-        href: PROMPTS_PATH,
+        href: TEST_PROMPTS_PATH,
       },
     ]);
   });
@@ -264,14 +263,14 @@ describe("getAdminBreadcrumbItems", () => {
     const items: readonly AdminSidebarItem[] = [
       {
         title: "프롬프트",
-        href: PROMPTS_PATH,
+        href: TEST_PROMPTS_PATH,
         icon: FileText,
       },
     ];
 
-    expect(getAdminBreadcrumbItems(items, `${PROMPTS_PATH}-archived`)).toEqual(
-      [],
-    );
+    expect(
+      getAdminBreadcrumbItems(items, `${TEST_PROMPTS_PATH}-archived`),
+    ).toEqual([]);
   });
 
   it("breadcrumbHref만 있는 그룹 자체는 경로 일치 대상으로 사용하지 않는다", () => {

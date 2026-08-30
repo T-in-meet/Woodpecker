@@ -38,9 +38,16 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: createClientMock,
 }));
 
-// actions.ts가 gemini client를 import하므로 GEMINI_API_KEY 없이도 로드되도록 mock
-vi.mock("@/lib/gemini/client", () => ({
-  getGemini: () => ({ models: { generateContent: vi.fn() } }),
+vi.mock("@/features/auth/utils/requireCurrentLegalAcceptance", () => ({
+  requireCurrentLegalAcceptance: vi.fn(),
+}));
+
+// actions.ts가 AI client를 import하므로 Cloudflare 키 없이도 로드되도록 mock.
+// client.ts는 server-only를 import하는데 jsdom에서는 그것만으로 throw한다.
+vi.mock("server-only", () => ({}));
+vi.mock("@/lib/ai/client", () => ({
+  generateJson: vi.fn(),
+  CloudflareAiError: class CloudflareAiError extends Error {},
 }));
 
 vi.mock("next/cache", () => ({

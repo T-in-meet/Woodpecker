@@ -26,8 +26,9 @@ async function postSignup(
       password: "Password123!",
       nickname: "tester",
       agreements: {
+        age14OrOlder: true,
+        privacyPolicyAcknowledged: true,
         termsOfService: true,
-        privacyPolicy: true,
       },
     },
   });

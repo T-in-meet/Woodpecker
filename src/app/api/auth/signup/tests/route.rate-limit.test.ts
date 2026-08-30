@@ -73,7 +73,11 @@ describe("PR-API-06 회원가입 - IP/이메일 기반 rate limit", () => {
   const BASE_BODY = {
     password: "Password123!",
     nickname: "tester",
-    agreements: { termsOfService: true as const, privacyPolicy: true as const },
+    agreements: {
+      termsOfService: true as const,
+      privacyPolicyAcknowledged: true as const,
+      age14OrOlder: true as const,
+    },
   };
 
   /**

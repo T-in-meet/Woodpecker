@@ -1,9 +1,19 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { z } from "zod";
 
+import { FEEDBACK_CATEGORY_LABELS } from "@/features/admin/feedbacks/constants/feedback-labels";
+import { requireCurrentLegalAcceptance } from "@/features/auth/utils/requireCurrentLegalAcceptance";
+import {
+  createAdminNotification,
+  type CreateAdminNotificationInput,
+  recordAdminNotificationCreateFailure,
+} from "@/features/notifications/create-admin-notification";
+import { buildAdminFeedbackCreatedNotificationDefinition } from "@/features/notifications/definitions";
 import { getKstDayBoundsUtc } from "@/features/review/lib/kstDay";
+import { ADMIN_NOTIFICATION_TYPES } from "@/lib/constants/notifications";
 import { ROUTES } from "@/lib/constants/routes";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -16,6 +26,7 @@ import {
   FEEDBACK_IMAGE_ALLOWED_TYPES,
   FEEDBACK_IMAGE_MAX_COUNT,
   FEEDBACK_IMAGE_MAX_SIZE,
+  type FeedbackCategory,
   feedbackSchema,
   profileSchema,
 } from "./schema";
@@ -40,6 +51,8 @@ export async function updateProfileAction(
   if (!user) {
     return { error: "인증이 필요합니다" };
   }
+
+  await requireCurrentLegalAcceptance(user.id, ROUTES.MYPAGE);
 
   const { data, error } = await supabase
     .from("profiles")
@@ -82,6 +95,8 @@ export async function uploadAvatarAction(
 
   if (!user) return { error: "인증이 필요합니다" };
 
+  await requireCurrentLegalAcceptance(user.id, ROUTES.MYPAGE);
+
   const path = `${user.id}/avatar`;
 
   const { error: uploadError } = await supabase.storage
@@ -120,6 +135,8 @@ export async function deleteAvatarAction() {
   } = await supabase.auth.getUser();
 
   if (!user) return { error: "인증이 필요합니다" };
+
+  await requireCurrentLegalAcceptance(user.id, ROUTES.MYPAGE);
 
   const { data, error } = await supabase
     .from("profiles")
@@ -163,6 +180,8 @@ export async function changePasswordAction(
   if (!user?.email) {
     return { error: "인증이 필요합니다" };
   }
+
+  await requireCurrentLegalAcceptance(user.id, ROUTES.MYPAGE);
 
   const { error: signInError } = await supabase.auth.signInWithPassword({
     email: user.email,
@@ -272,6 +291,8 @@ export async function createFeedbackAction(
     return { error: "인증이 필요합니다" };
   }
 
+  await requireCurrentLegalAcceptance(user.id, ROUTES.MYPAGE);
+
   // 하루 1개 사전 체크 — 동시 요청 경합은 unique index가 최종적으로 막는다
   const { startUtcIso, endUtcIso } = getKstDayBoundsUtc(new Date());
   const { data: todayRows, error: todayError } = await supabase
@@ -338,7 +359,76 @@ export async function createFeedbackAction(
     return { error: "문의사항 제출에 실패했습니다" };
   }
 
+  scheduleAdminsOfNewFeedbackNotification({
+    category: parsed.data.category,
+    feedbackId,
+    title: parsed.data.title,
+    userId: user.id,
+  });
+
   return { data };
+}
+
+type ScheduleAdminsOfNewFeedbackNotificationInput = {
+  category: FeedbackCategory;
+  feedbackId: string;
+  title: string;
+  userId: string;
+};
+
+/**
+ * 새 피드백 관리자 알림 생성 과정의 예상치 못한 예외를 운영 오류로 기록합니다.
+ *
+ * createAdminNotification의 ok: false 반환은 알림 도메인 내부에서 이미 기록하므로,
+ * 이 helper는 같은 알림 도메인 기록 helper를 통해 throw된 예외만 담당합니다.
+ *
+ * @param error 알림 생성 과정에서 throw된 예외
+ * @param input 실패한 관리자 알림 생성 요청 정보
+ */
+async function recordAdminFeedbackNotificationFailure(
+  error: unknown,
+  input: CreateAdminNotificationInput,
+) {
+  await recordAdminNotificationCreateFailure(input, error);
+}
+
+/**
+ * 새 피드백이 등록됐음을 모든 관리자에게 알리는 후처리를 예약합니다.
+ *
+ * 피드백 제출 성공 응답을 알림 생성과 Push 전송이 지연하지 않도록 after()에서
+ * 실행합니다. ok: false 반환 실패는 알림 도메인이 기록하므로 중복 기록하지 않고,
+ * 예상하지 못한 예외만 피드백 알림 실패 운영 오류로 남깁니다.
+ *
+ * @param input 알림 본문과 클릭 경로를 구성할 피드백 정보
+ */
+function scheduleAdminsOfNewFeedbackNotification({
+  category,
+  feedbackId,
+  title,
+  userId,
+}: ScheduleAdminsOfNewFeedbackNotificationInput) {
+  const definition = buildAdminFeedbackCreatedNotificationDefinition({
+    feedbackId,
+  });
+
+  after(async () => {
+    const notificationInput = {
+      body: `[${FEEDBACK_CATEGORY_LABELS[category]}] ${title}`,
+      clickPath: definition.clickPath,
+      createdBy: userId,
+      feedbackId,
+      metadata: { category, feedbackId },
+      pushEnabled: definition.pushEnabled,
+      title: "새 피드백이 등록되었습니다.",
+      type: ADMIN_NOTIFICATION_TYPES.FEEDBACK_CREATED,
+    } satisfies CreateAdminNotificationInput;
+
+    try {
+      await createAdminNotification(notificationInput);
+    } catch (error) {
+      await recordAdminFeedbackNotificationFailure(error, notificationInput);
+    }
+  });
 }
 
 export async function deleteFeedbackAction(feedbackId: string) {
@@ -354,6 +444,8 @@ export async function deleteFeedbackAction(feedbackId: string) {
   if (!user) {
     return { error: "인증이 필요합니다" };
   }
+
+  await requireCurrentLegalAcceptance(user.id, ROUTES.MYPAGE);
 
   const { data: feedback, error: fetchError } = await supabase
     .from("feedbacks")

@@ -70,6 +70,7 @@ vi.mock("./AdminAiSettingConfigurationsSection", async () => {
     AdminAiSettingConfigurationsSection: ({
       fields,
       onRemove,
+      showRelatedNotesEmbeddingNotice,
     }: {
       /** 테스트에서 렌더링할 필드 배열입니다. */
       fields: {
@@ -79,6 +80,9 @@ vi.mock("./AdminAiSettingConfigurationsSection", async () => {
 
       /** 지정한 index의 구성을 제거하는 함수입니다. */
       onRemove: (index: number) => void;
+
+      /** Related Notes Embedding 안내 표시 여부입니다. */
+      showRelatedNotesEmbeddingNotice?: boolean;
     }) => {
       const { register } =
         useFormContext<AdminAiSettingConfigurationFormValues>();
@@ -87,6 +91,10 @@ vi.mock("./AdminAiSettingConfigurationsSection", async () => {
 
       return (
         <section aria-label="setting configurations">
+          {showRelatedNotesEmbeddingNotice && (
+            <span data-testid="related-notes-embedding-notice" />
+          )}
+
           {fields.map((field, index) => (
             <div key={field.fieldArrayId}>
               <input
@@ -153,12 +161,35 @@ describe("AdminAiSettingConfigurationForm", () => {
     });
 
     render(
-      <AdminAiSettingConfigurationForm settingId="11111111-1111-4111-8111-111111111111" />,
+      <AdminAiSettingConfigurationForm
+        settingId="11111111-1111-4111-8111-111111111111"
+        settingKey="note-chat"
+      />,
     );
 
     await user.click(screen.getByRole("button", { name: "다시 시도" }));
 
     expect(refetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("Related Notes 설정이면 Embedding 안내 표시 상태를 전달한다", () => {
+    mockConfigurationsQueryState({
+      data: [],
+      error: null,
+      isPending: false,
+      refetch: refetchMock,
+    });
+
+    render(
+      <AdminAiSettingConfigurationForm
+        settingId="11111111-1111-4111-8111-111111111111"
+        settingKey="related-notes"
+      />,
+    );
+
+    expect(
+      screen.getByTestId("related-notes-embedding-notice"),
+    ).toBeInTheDocument();
   });
 
   it("가운데 구성을 삭제해도 남은 구성의 Role Key 변경 경고를 열지 않고 저장한다", async () => {
@@ -191,7 +222,10 @@ describe("AdminAiSettingConfigurationForm", () => {
     });
 
     render(
-      <AdminAiSettingConfigurationForm settingId="11111111-1111-4111-8111-111111111111" />,
+      <AdminAiSettingConfigurationForm
+        settingId="11111111-1111-4111-8111-111111111111"
+        settingKey="note-chat"
+      />,
     );
 
     await user.click(screen.getByRole("button", { name: "remove-1" }));
@@ -232,7 +266,10 @@ describe("AdminAiSettingConfigurationForm", () => {
     });
 
     render(
-      <AdminAiSettingConfigurationForm settingId="11111111-1111-4111-8111-111111111111" />,
+      <AdminAiSettingConfigurationForm
+        settingId="11111111-1111-4111-8111-111111111111"
+        settingKey="note-chat"
+      />,
     );
 
     await user.clear(screen.getByRole("textbox", { name: "role-key-0" }));

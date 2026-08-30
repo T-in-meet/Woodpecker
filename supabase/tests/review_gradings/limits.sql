@@ -1,14 +1,14 @@
 -- =========================================
 -- review_grading_generations / AI 채점 사용량 한도
 --
--- 한도 값은 claim_review_grading 안의 상수다(일 30회 / 60초 10회).
+-- 한도 값은 claim_review_grading 안의 상수다(일 5회).
 -- 여기서는 "기록이 남는 경로와 남지 않는 경로"를 구분하는지, 그리고 한도를 넘기면
--- Gemini를 부르기 전에 막히는지를 본다.
+-- AI를 부르기 전에 막히는지를 본다.
 -- =========================================
 
 BEGIN;
 
-SELECT plan(10);
+SELECT plan(9);
 
 SELECT set_config('test.rgl_user_id', gen_random_uuid()::text, true);
 SELECT set_config('test.rgl_other_user_id', gen_random_uuid()::text, true);
@@ -115,7 +115,7 @@ VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- =========================================
--- 1. Gemini를 부르는 경로만 사용량을 기록한다
+-- 1. AI를 부르는 경로만 사용량을 기록한다
 -- =========================================
 
 SELECT set_config(
@@ -145,7 +145,7 @@ SELECT is(
   $$선점에 성공하면 사용 기록이 1건 남아야 한다$$
 );
 
--- 진행 중인 선점을 다시 부르면 in_flight다. Gemini를 부르지 않으므로 사용량도 늘지 않는다.
+-- 진행 중인 선점을 다시 부르면 in_flight다. AI를 부르지 않으므로 사용량도 늘지 않는다.
 SELECT is(
   public.claim_review_grading(
     current_setting('test.rgl_user_id')::uuid,
@@ -205,31 +205,17 @@ SELECT is(
 );
 
 -- =========================================
--- 2. 버스트·일일 한도
+-- 2. 일일 한도
 --
 -- 노트를 대량으로 만들어 연속 호출하는 경로를 막는 것이 목적이다.
 -- review_log 단위 유니크 제약은 "복습 1회당 1번"만 막을 뿐 사용자 총량을 막지 못한다.
+--
+-- 버스트 한도는 20260815220000에서 제거했다. 일일 5회가 버스트 10회/60초를 포섭해
+-- 도달할 수 없는 분기였다. 배경은 그 마이그레이션 주석에 있다.
 -- =========================================
 
--- 60초 안에 10건을 채운 상태
-INSERT INTO public.review_grading_generations (user_id, review_log_id)
-SELECT current_setting('test.rgl_user_id')::uuid, NULL
-FROM generate_series(1, 10);
-
-SELECT is(
-  public.claim_review_grading(
-    current_setting('test.rgl_user_id')::uuid,
-    current_setting('test.rgl_log2_id')::uuid,
-    'answer for log2',
-    current_setting('test.rgl_content_hash')
-  ) ->> 'status',
-  'too_many_requests',
-  $$60초 안에 10회를 채우면 too_many_requests를 반환해야 한다$$
-);
-
--- 버스트 윈도우를 벗어난 기록이 30건이면 daily_exceeded여야 한다
-UPDATE public.review_grading_generations
-SET created_at = now() - interval '2 minutes'
+-- 앞선 시나리오의 기록을 비운 뒤, 하루 5건이면 daily_exceeded여야 한다
+DELETE FROM public.review_grading_generations
 WHERE user_id = current_setting('test.rgl_user_id')::uuid;
 
 INSERT INTO public.review_grading_generations (user_id, review_log_id, created_at)
@@ -237,7 +223,7 @@ SELECT
   current_setting('test.rgl_user_id')::uuid,
   NULL,
   now() - interval '2 minutes'
-FROM generate_series(1, 19);
+FROM generate_series(1, 5);
 
 SELECT is(
   public.claim_review_grading(
@@ -247,7 +233,7 @@ SELECT is(
     current_setting('test.rgl_content_hash')
   ) ->> 'status',
   'daily_exceeded',
-  $$하루 30회를 채우면 다른 복습 로그도 선점할 수 없어야 한다$$
+  $$하루 5회를 채우면 다른 복습 로그도 선점할 수 없어야 한다$$
 );
 
 -- 한도는 사용자 단위다. 한 사람이 다 썼다고 다른 사람까지 막으면 안 된다.

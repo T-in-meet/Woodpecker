@@ -45,7 +45,7 @@ export function GradingHistorySection({
                 </span>
               </div>
 
-              <p className="mt-2 text-sm text-muted-foreground">
+              <p className="text-prose-ko mt-2 text-sm text-muted-foreground">
                 {grading.feedback.summary}
               </p>
 
@@ -60,7 +60,7 @@ export function GradingHistorySection({
                         <h4 className="mb-1 text-xs font-medium">
                           빠뜨린 핵심 개념
                         </h4>
-                        <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+                        <ul className="text-prose-ko list-disc space-y-1 pl-5 text-xs text-muted-foreground">
                           {/* 항목은 LLM 출력이라 같은 문자열이 두 번 나올 수 있어 index를 섞는다. */}
                           {grading.feedback.missedConcepts.map(
                             (concept, index) => (
@@ -75,7 +75,7 @@ export function GradingHistorySection({
                         <h4 className="mb-1 text-xs font-medium">
                           원본과 다르게 기억한 내용
                         </h4>
-                        <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+                        <ul className="text-prose-ko list-disc space-y-1 pl-5 text-xs text-muted-foreground">
                           {grading.feedback.incorrectPoints.map(
                             (point, index) => (
                               <li key={`${index}-${point}`}>{point}</li>

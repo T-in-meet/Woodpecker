@@ -138,6 +138,7 @@ describe("NotificationList", () => {
 
     expect(markNotificationAsReadActionMock).toHaveBeenCalledWith(
       NOTIFICATION_ID,
+      item.click_path,
     );
     expect(onItemRead).toHaveBeenCalledWith(NOTIFICATION_ID);
     expect(onItemNavigate).toHaveBeenCalledOnce();
@@ -176,6 +177,7 @@ describe("NotificationList", () => {
 
     expect(markNotificationAsReadActionMock).toHaveBeenCalledWith(
       NOTIFICATION_ID,
+      item.click_path,
     );
     expect(onItemRead).not.toHaveBeenCalled();
     expect(onItemNavigate).toHaveBeenCalledOnce();

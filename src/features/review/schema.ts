@@ -42,7 +42,7 @@ export const gradeAnswerSchema = z.object({
  */
 export const FEEDBACK_ITEMS_MAX = 5;
 
-// Gemini 채점 응답 및 review_gradings.feedback(jsonb) 공용 스키마
+// AI 채점 응답 및 review_gradings.feedback(jsonb) 공용 스키마
 export const gradingFeedbackSchema = z.object({
   summary: z.string(),
   missedConcepts: z.array(z.string()),
@@ -50,12 +50,12 @@ export const gradingFeedbackSchema = z.object({
 });
 
 /**
- * Gemini 응답 "수신" 스키마. 항목 개수는 일부러 제한하지 않는다.
+ * AI 응답 "수신" 스키마. 항목 개수는 일부러 제한하지 않는다.
  *
  * 개수 초과를 여기서 거부하면 채점 전체가 버려진다. 그 비용이 크다 —
- * `review_grading_generations` 행은 Gemini 호출 전 선점 시점에 INSERT되고 되돌리는 함수가
+ * `review_grading_generations` 행은 AI 호출 전 선점 시점에 INSERT되고 되돌리는 함수가
  * 없어서(20260808000000_create_review_gradings.sql) 하루 한도 1회가 영구 소모되고,
- * 선점이 만료될 때까지 60초간 재시도가 막히며, 이미 나간 Gemini 비용은 재시도 때 다시 든다.
+ * 선점이 만료될 때까지 120초간 재시도가 막히며, 이미 나간 AI 비용은 재시도 때 다시 든다.
  * 6번째 항목 하나 때문에 치를 값이 아니다. 초과분은 아래 `normalizeGradingResponse`가 잘라낸다.
  *
  * 타입 검증은 그대로다. 배열에 숫자·객체가 섞인 malformed 응답은 여기서 거부된다.
@@ -65,7 +65,7 @@ export const gradingResponseSchema = gradingFeedbackSchema.extend({
 });
 
 /**
- * Gemini `responseJsonSchema`에만 쓰는 "생성" 스키마.
+ * 구조화 출력 JSON Schema에만 쓰는 "생성" 스키마.
  * `.max()`가 JSON Schema의 `maxItems`로 변환돼 디코딩 단계에서 개수를 강제한다.
  * 이게 1차 계약이고, 위 수신 스키마와 정규화는 이 계약이 깨졌을 때의 방어선이다.
  */

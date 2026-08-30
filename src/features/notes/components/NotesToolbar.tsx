@@ -1,24 +1,40 @@
 "use client";
 
-import { Search, X } from "lucide-react";
+import { ChevronDown, ListFilter, Search, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-import { useNotesView } from "@/hooks/useNotesView";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
-import { buildNotesUrl, type NotesView as View } from "../utils/buildNotesUrl";
-import { ViewToggle } from "./ViewToggle";
+import { type NoteView, noteViewSchema } from "../schema";
+import { buildNotesUrl } from "../utils/buildNotesUrl";
 
 type NotesToolbarProps = {
   initialQuery: string;
-  initialView: View;
+  activeView: NoteView;
 };
 
-export function NotesToolbar({ initialQuery, initialView }: NotesToolbarProps) {
+const NOTE_VIEW_OPTIONS = [
+  { value: "all", label: "전체" },
+  { value: "due", label: "오늘 복습" },
+  { value: "scheduled", label: "복습 예정" },
+  { value: "completed", label: "복습 완료" },
+] as const satisfies ReadonlyArray<{ value: NoteView; label: string }>;
+
+export function NotesToolbar({ initialQuery, activeView }: NotesToolbarProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [query, setQuery] = useState(initialQuery);
-  const [view, updateView] = useNotesView(initialView);
+  const activeViewOption =
+    NOTE_VIEW_OPTIONS.find(({ value }) => value === activeView) ??
+    NOTE_VIEW_OPTIONS[0];
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
@@ -37,36 +53,81 @@ export function NotesToolbar({ initialQuery, initialView }: NotesToolbarProps) {
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       isTypingRef.current = false;
-      router.push(buildNotesUrl({ query: q, view }));
+      router.push(buildNotesUrl({ query: q, view: activeView }));
     }, 300);
   }
 
   function handleClear() {
     setQuery("");
     clearTimeout(debounceRef.current);
-    router.push(buildNotesUrl({ view }));
+    // debounce 타이머를 취소하면 타이머 안의 isTypingRef 해제도 함께 사라지므로
+    // 여기서 직접 내려야 이후 URL 변경(뒤로가기 등)이 검색어 상태에 반영된다.
+    isTypingRef.current = false;
+    router.push(buildNotesUrl({ view: activeView }));
   }
 
-  function handleViewChange(v: View) {
+  function handleViewChange(value: string) {
+    const parsed = noteViewSchema.safeParse(value);
+    if (!parsed.success) return;
+
     clearTimeout(debounceRef.current);
-    updateView(v);
-    router.push(buildNotesUrl({ query, view: v }));
+    isTypingRef.current = false;
+    router.push(buildNotesUrl({ query, view: parsed.data }));
   }
 
   useEffect(() => () => clearTimeout(debounceRef.current), []);
 
   return (
-    <div className="flex items-center gap-2">
-      {/* Search */}
-      <div className="relative">
+    <div className="contents sm:flex sm:w-auto sm:items-center sm:gap-2">
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            aria-label={`노트 보기: ${activeViewOption.label}`}
+            className="w-36 justify-between justify-self-end rounded-md px-3 data-[state=open]:rounded-b-none data-[state=open]:border-b-transparent data-[state=open]:bg-popover data-[state=open]:text-popover-foreground sm:justify-self-auto"
+          >
+            <span className="flex items-center gap-1.5">
+              <ListFilter className="text-muted-foreground" />
+              {activeViewOption.label}
+            </span>
+            <ChevronDown className="text-muted-foreground" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="start"
+          side="bottom"
+          sideOffset={0}
+          avoidCollisions={false}
+          className="min-w-(--radix-dropdown-menu-trigger-width) rounded-t-none border border-t-0 border-border ring-0"
+        >
+          <DropdownMenuRadioGroup
+            value={activeView}
+            onValueChange={handleViewChange}
+          >
+            {NOTE_VIEW_OPTIONS.map(({ value, label }) => (
+              <DropdownMenuRadioItem
+                key={value}
+                value={value}
+                className="cursor-pointer whitespace-nowrap py-2"
+              >
+                {label}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <div className="relative col-span-2 w-full min-w-0 sm:col-auto sm:w-auto sm:flex-none">
         <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
         <input
           value={query}
           onChange={handleQueryChange}
           placeholder="제목 또는 내용 검색"
-          className="h-9 w-56 rounded-md border border-input bg-background pl-8 pr-8 text-sm outline-none ring-offset-background transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:w-64"
+          className="h-9 w-full rounded-md border border-input bg-background pl-8 pr-8 text-sm outline-none ring-offset-background transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:w-64"
         />
-        {query && (
+        {query ? (
           <button
             onClick={handleClear}
             className="absolute right-2.5 top-1/2 -translate-y-1/2 cursor-pointer text-muted-foreground hover:text-foreground"
@@ -74,11 +135,8 @@ export function NotesToolbar({ initialQuery, initialView }: NotesToolbarProps) {
           >
             <X className="h-3.5 w-3.5" />
           </button>
-        )}
+        ) : null}
       </div>
-
-      {/* View toggle */}
-      <ViewToggle view={view} onChange={handleViewChange} />
     </div>
   );
 }

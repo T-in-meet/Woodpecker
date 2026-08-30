@@ -72,7 +72,11 @@ describe("회원가입 API 최소 응답 시간 보장 검증", () => {
     email: "test@example.com",
     password: "Password123!",
     nickname: "테스터",
-    agreements: { termsOfService: true as const, privacyPolicy: true as const },
+    agreements: {
+      termsOfService: true as const,
+      privacyPolicyAcknowledged: true as const,
+      age14OrOlder: true as const,
+    },
   };
 
   function useFakeClockWithNoElapsedTime() {

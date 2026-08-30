@@ -9,7 +9,11 @@ import {
   AI_OPERATIONAL_ERROR_OPERATION,
   AI_OPERATIONAL_ERROR_STAGE,
 } from "../../../operational-errors/constants";
-import { reportAiOperationalError } from "../report-ai-operational-error";
+import {
+  isReportedAiOperationalError,
+  markAiOperationalErrorAsReported,
+  reportAiOperationalError,
+} from "../report-ai-operational-error";
 
 vi.mock("@/features/operational-errors/report", () => ({
   reportOperationalError: vi.fn(),
@@ -135,5 +139,19 @@ describe("reportAiOperationalError", () => {
     });
 
     expect(response).toEqual(result);
+  });
+
+  it("Error 객체에 AI 운영 오류 보고 완료 marker를 부여한다", () => {
+    const error = new Error("reported");
+
+    const markedError = markAiOperationalErrorAsReported(error);
+
+    expect(markedError).toBe(error);
+    expect(isReportedAiOperationalError(error)).toBe(true);
+  });
+
+  it("Error가 아닌 값은 AI 운영 오류 보고 완료로 판단하지 않는다", () => {
+    expect(isReportedAiOperationalError("reported")).toBe(false);
+    expect(isReportedAiOperationalError(null)).toBe(false);
   });
 });

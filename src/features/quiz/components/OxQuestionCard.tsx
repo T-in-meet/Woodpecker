@@ -3,10 +3,11 @@
 import { CircleIcon, XIcon } from "lucide-react";
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils/cn";
 
 import type { OxQuestion } from "../schema";
+import { QuizFeedbackPanel } from "./QuizFeedbackPanel";
+import { QuizSubmitButton } from "./QuizSubmitButton";
 
 type OxQuestionCardProps = {
   question: OxQuestion;
@@ -26,8 +27,10 @@ export function OxQuestionCard({
   const [selected, setSelected] = useState<string | null>(null);
 
   return (
-    <div className="space-y-6">
-      <p className="text-lg font-medium leading-relaxed">{question.question}</p>
+    <div className="space-y-4 sm:space-y-6">
+      <p className="text-base font-medium leading-relaxed sm:text-lg">
+        {question.question}
+      </p>
 
       <div className="flex gap-3">
         {(["true", "false"] as const).map((value) => {
@@ -46,8 +49,10 @@ export function OxQuestionCard({
               disabled={submitted}
               onClick={() => setSelected(value)}
               className={cn(
-                "flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border-2 p-4 text-lg font-semibold transition-colors",
-                !submitted && isSelected && "border-primary bg-primary/10",
+                "flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border-2 p-3 text-lg font-semibold transition-colors sm:p-4",
+                !submitted &&
+                  isSelected &&
+                  "border-orange-200 bg-orange-50 dark:border-orange-900/40 dark:bg-orange-950/20",
                 !submitted &&
                   !isSelected &&
                   "border-border hover:border-primary/50",
@@ -72,32 +77,17 @@ export function OxQuestionCard({
       </div>
 
       {!submitted && (
-        <Button
+        <QuizSubmitButton
           onClick={() => selected && onSubmit(selected)}
           disabled={!selected}
-          size="lg"
-          className="w-full"
-        >
-          정답 확인
-        </Button>
+        />
       )}
 
       {submitted && (
-        <div
-          className={cn(
-            "rounded-lg p-4",
-            isCorrect
-              ? "bg-green-50 dark:bg-green-950/30"
-              : "bg-red-50 dark:bg-red-950/30",
-          )}
-        >
-          <p className="mb-1 font-semibold">
-            {isCorrect ? "정답입니다!" : "오답입니다."}
-          </p>
-          <p className="text-sm text-muted-foreground">
-            {question.explanation}
-          </p>
-        </div>
+        <QuizFeedbackPanel
+          isCorrect={isCorrect}
+          explanation={question.explanation}
+        />
       )}
     </div>
   );

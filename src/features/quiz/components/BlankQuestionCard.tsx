@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils/cn";
 
 import type { BlankQuestion } from "../schema";
+import { QuizFeedbackPanel } from "./QuizFeedbackPanel";
+import { QuizSubmitButton } from "./QuizSubmitButton";
 
 type BlankQuestionCardProps = {
   question: BlankQuestion;
@@ -32,8 +33,10 @@ export function BlankQuestionCard({
   };
 
   return (
-    <div className="space-y-6">
-      <p className="text-lg font-medium leading-relaxed">{question.question}</p>
+    <div className="space-y-4 sm:space-y-6">
+      <p className="text-base font-medium leading-relaxed sm:text-lg">
+        {question.question}
+      </p>
 
       <div className="space-y-3">
         <Input
@@ -51,33 +54,16 @@ export function BlankQuestionCard({
         />
 
         {!submitted && (
-          <Button
-            onClick={handleSubmit}
-            disabled={!input.trim()}
-            size="lg"
-            className="w-full"
-          >
-            정답 확인
-          </Button>
+          <QuizSubmitButton onClick={handleSubmit} disabled={!input.trim()} />
         )}
       </div>
 
       {submitted && (
-        <div
-          className={cn(
-            "rounded-lg p-4",
-            isCorrect
-              ? "bg-green-50 dark:bg-green-950/30"
-              : "bg-red-50 dark:bg-red-950/30",
-          )}
-        >
-          <p className="mb-1 font-semibold">
-            {isCorrect ? "정답입니다!" : `오답입니다. 정답: ${question.answer}`}
-          </p>
-          <p className="text-sm text-muted-foreground">
-            {question.explanation}
-          </p>
-        </div>
+        <QuizFeedbackPanel
+          isCorrect={isCorrect}
+          incorrectLabel={`오답입니다. 정답: ${question.answer}`}
+          explanation={question.explanation}
+        />
       )}
     </div>
   );

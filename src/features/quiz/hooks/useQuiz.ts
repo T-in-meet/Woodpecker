@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState, useTransition } from "react";
 
-import type { QuizType } from "@/lib/gemini/prompts";
+import type { QuizType } from "@/lib/ai/prompts";
 
 import { generateQuiz, regenerateQuiz } from "../actions";
 import type { QuizQuestion } from "../schema";
@@ -102,6 +102,10 @@ export function useQuiz(noteId: string) {
     }
   }, [currentIndex, questions.length]);
 
+  const goToPrevious = useCallback(() => {
+    setCurrentIndex((prev) => Math.max(0, prev - 1));
+  }, []);
+
   const retryQuiz = useCallback(() => {
     setCurrentIndex(0);
     setAnswers([]);
@@ -173,6 +177,7 @@ export function useQuiz(noteId: string) {
     correctCount,
     startQuiz,
     submitAnswer,
+    goToPrevious,
     goToNext,
     retryQuiz,
     regenerate,

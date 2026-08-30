@@ -6,9 +6,14 @@ import { ROUTES } from "@/lib/constants/routes";
 import { createServerComponentClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
-  title: "새 노트",
+  title: "노트 작성",
   robots: { index: false, follow: false },
 };
+
+/**
+ * Note 생성 후 after()에서 실행되는 embedding 후처리 시간을 확보합니다.
+ */
+export const maxDuration = 90;
 
 export default async function NewNotePage() {
   const supabase = await createServerComponentClient();

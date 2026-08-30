@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -65,13 +66,14 @@ export function DeleteFeedbackDialog({
           <DialogTitle>문의사항 삭제</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">
+          {/* DialogDescription이 aria-describedby를 연결한다. */}
+          <DialogDescription>
             <span className="font-medium text-foreground">
               &ldquo;{feedbackTitle}&rdquo;
             </span>{" "}
             문의사항을 삭제할까요? 첨부한 이미지도 함께 삭제되며 되돌릴 수
             없습니다.
-          </p>
+          </DialogDescription>
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
         <DialogFooter>

@@ -26,11 +26,10 @@ import {
   setupLoginApiMocks,
 } from "./utils/loginTestHelper";
 
-const hasUserAgreementMock = vi.hoisted(() => vi.fn());
+const getLegalAcceptanceStatusMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/features/auth/lib/userAgreements", () => ({
-  AGREEMENT_REQUIRED_REDIRECT: "/signup?agreement_required=1",
-  hasUserAgreement: hasUserAgreementMock,
+  getLegalAcceptanceStatus: getLegalAcceptanceStatusMock,
 }));
 vi.mock("@/lib/supabase/server");
 vi.mock("@/lib/utils/getClientIp", () => ({
@@ -43,7 +42,7 @@ describe("로그인 API 인증 실패 통합 처리", () => {
     resetLoginApiMocks();
     setupLoginApiMocks();
     mockLoginSuccess();
-    hasUserAgreementMock.mockResolvedValue(true);
+    getLegalAcceptanceStatusMock.mockResolvedValue({ canAccessService: true });
   });
 
   describe("인증 실패 응답 통합 — account enumeration 방어", () => {

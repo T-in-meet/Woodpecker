@@ -110,7 +110,7 @@ export function buildReportingEndpoints(): string {
  * - x-nonce 헤더를 request에 전달하여 서버 컴포넌트에서 접근 가능하게 함
  */
 export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  const { pathname, search } = request.nextUrl;
   const markdownPath = MARKDOWN_ALTERNATES[pathname];
 
   if (markdownPath) {
@@ -123,7 +123,10 @@ export async function middleware(request: NextRequest) {
   }
 
   const nonce = btoa(crypto.randomUUID().replaceAll("-", ""));
-  const response = await updateSession(request, { "x-nonce": nonce });
+  const response = await updateSession(request, {
+    "x-nonce": nonce,
+    "x-pathname": `${pathname}${search}`,
+  });
 
   response.headers.set("Content-Security-Policy", buildCspEnforced(nonce));
   response.headers.set(

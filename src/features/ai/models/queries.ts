@@ -8,7 +8,10 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import type { AiModelCapability } from "../constants/models";
-import { reportAiOperationalError } from "../utils/report-ai-operational-error";
+import {
+  markAiOperationalErrorAsReported,
+  reportAiOperationalError,
+} from "../utils/report-ai-operational-error";
 import { aiModelConfigRowSchema } from "./schema";
 import type { AiModelConfig } from "./types";
 
@@ -46,7 +49,9 @@ export async function getActiveAiModelConfigById(params: {
       stage: AI_OPERATIONAL_ERROR_STAGE.DATABASE,
     });
 
-    throw new Error(`Failed to load AI model config: ${error.message}`);
+    throw markAiOperationalErrorAsReported(
+      new Error(`Failed to load AI model config: ${error.message}`),
+    );
   }
 
   if (!data) {

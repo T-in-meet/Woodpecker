@@ -8,6 +8,7 @@ import { ROUTES } from "@/lib/constants/routes";
 import { getProfile } from "@/lib/supabase/getProfile";
 import { getUser } from "@/lib/supabase/getUser";
 
+import { MobileMenu } from "./MobileMenu";
 import { NotesNav } from "./NotesNav";
 import { UserMenu } from "./UserMenu";
 
@@ -37,19 +38,29 @@ export async function Header() {
           {profile && user && <NotesNav />}
         </div>
 
-        <div className="flex justify-end gap-3 items-center">
+        <div className="flex items-center justify-end gap-1 md:gap-3">
           {profile && user ? (
             <>
               <NotificationBell userId={user.id} />
               {profile.role === "ADMIN" ? (
-                <AdminNotificationBell adminUserId={user.id} />
+                <div className="ml-1 border-l border-border pl-2">
+                  <AdminNotificationBell adminUserId={user.id} />
+                </div>
               ) : null}
-              <UserMenu
+              <MobileMenu
                 nickname={profile.nickname}
                 email={user.email ?? ""}
                 avatarUrl={profile.avatar_url}
                 isAdmin={profile.role === "ADMIN"}
               />
+              <div className="hidden md:block">
+                <UserMenu
+                  nickname={profile.nickname}
+                  email={user.email ?? ""}
+                  avatarUrl={profile.avatar_url}
+                  isAdmin={profile.role === "ADMIN"}
+                />
+              </div>
             </>
           ) : (
             <>

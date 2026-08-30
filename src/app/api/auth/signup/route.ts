@@ -190,10 +190,6 @@ async function resolveSignupResponse(
    */
   if (existingUser && existingUser.email_confirmed_at === null) {
     const deliveryEmail = existingUser?.email ?? email;
-    // 약관 기록이 없는 기존 계정도 회원가입 폼 재제출을 통해 동의 기록을 보완한다.
-    if (existingUser.id) {
-      await ensureUserAgreement(existingUser.id, "email");
-    }
 
     try {
       await issueOtpAndSendEmail({
@@ -218,10 +214,6 @@ async function resolveSignupResponse(
    */
   if (existingUser && existingUser.email_confirmed_at !== null) {
     const deliveryEmail = existingUser?.email ?? email;
-    // 약관 기록이 없는 기존 계정도 회원가입 폼 재제출을 통해 동의 기록을 보완한다.
-    if (existingUser.id) {
-      await ensureUserAgreement(existingUser.id, "email");
-    }
 
     try {
       await issueOtpAndSendEmail({

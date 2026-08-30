@@ -96,13 +96,15 @@ export async function reportOperationalError(
       logError({
         error: notificationResult.error,
         event: "operationalErrors.report.adminNotificationFailed",
+        failureStage: notificationResult.failureStage,
+        operationalErrorRecorded: notificationResult.operationalErrorRecorded,
         operationalErrorId: result.id,
       });
     }
   } catch (error) {
     logError({
       error,
-      event: "operationalErrors.report.adminNotificationFailed",
+      event: "operationalErrors.report.adminNotificationThrew",
       operationalErrorId: result.id,
     });
   }

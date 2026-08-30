@@ -1,30 +1,33 @@
 import "server-only";
 
+import { ForbiddenError, UnauthorizedError } from "@/lib/errors";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 /**
  * 현재 로그인한 사용자가 관리자 권한을 가졌는지 확인합니다.
  *
- * 관리자 기능은 service role 클라이언트를 사용해 RLS를 우회할 수 있으므로,
- * service role 작업 전에 반드시 이 함수를 호출해야 합니다.
+ * 인증된 사용자가 없거나 인증 조회에 실패하면 UnauthorizedError를 발생시키고,
+ * profile 조회에 실패하거나 ADMIN이 아닌 경우 ForbiddenError를 발생시킵니다.
  *
- * @returns 현재 관리자 사용자의 ID
- * @throws 로그인하지 않은 경우 Unauthorized
- * @throws 관리자 권한이 없는 경우 Forbidden
+ * @returns 관리자 사용자 ID
+ * @throws {UnauthorizedError} 로그인하지 않았거나 인증 조회에 실패한 경우
+ * @throws {ForbiddenError} 관리자 권한이 없거나 profile 조회에 실패한 경우
  */
 export async function requireAdmin(): Promise<string> {
   const supabase = await createClient();
+
   const {
     data: { user },
-    error,
+    error: authError,
   } = await supabase.auth.getUser();
 
-  if (error || !user) {
-    throw new Error("Unauthorized");
+  if (authError || !user) {
+    throw new UnauthorizedError();
   }
 
   const adminClient = createAdminClient();
+
   const { data: profile, error: profileError } = await adminClient
     .from("profiles")
     .select("role")
@@ -32,7 +35,7 @@ export async function requireAdmin(): Promise<string> {
     .single();
 
   if (profileError || profile?.role !== "ADMIN") {
-    throw new Error("Forbidden");
+    throw new ForbiddenError();
   }
 
   return user.id;

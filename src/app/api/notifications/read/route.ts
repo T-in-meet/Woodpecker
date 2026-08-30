@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { getLegalAcceptanceRequiredPath } from "@/features/auth/lib/userAgreements";
 import { NOTIFICATION_TYPES } from "@/lib/constants/notifications";
+import { ROUTES } from "@/lib/constants/routes";
 import { logError } from "@/lib/logger";
 import { createClient } from "@/lib/supabase/server";
 
@@ -47,6 +49,20 @@ export async function POST(request: Request) {
 
     if (!user) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    }
+
+    const agreementRequiredPath = await getLegalAcceptanceRequiredPath(
+      user.id,
+      ROUTES.MYPAGE,
+    );
+    if (agreementRequiredPath) {
+      return NextResponse.json(
+        {
+          error: "legal_acceptance_required",
+          redirectTo: agreementRequiredPath,
+        },
+        { status: 403 },
+      );
     }
 
     const { data, error } = await supabase.rpc("mark_notification_as_read", {

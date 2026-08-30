@@ -1,7 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { createClientMock } = vi.hoisted(() => ({
-  createClientMock: vi.fn(),
+const { createClientMock, getLegalAcceptanceRequiredPathMock } = vi.hoisted(
+  () => ({
+    createClientMock: vi.fn(),
+    getLegalAcceptanceRequiredPathMock: vi.fn(),
+  }),
+);
+
+vi.mock("@/features/auth/lib/userAgreements", () => ({
+  getLegalAcceptanceRequiredPath: getLegalAcceptanceRequiredPathMock,
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -51,6 +58,7 @@ function createReadRequest(body: unknown) {
 describe("/api/notifications/read", () => {
   beforeEach(() => {
     createClientMock.mockReset();
+    getLegalAcceptanceRequiredPathMock.mockReset().mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -116,6 +124,28 @@ describe("/api/notifications/read", () => {
 
     await expect(response.json()).resolves.toEqual({ error: "unauthorized" });
     expect(response.status).toBe(401);
+    expect(supabase.rpc).not.toHaveBeenCalled();
+  });
+
+  it("blocks the read RPC when current legal acceptance is missing", async () => {
+    const supabase = createSupabaseMock();
+    createClientMock.mockResolvedValue(supabase);
+    getLegalAcceptanceRequiredPathMock.mockResolvedValue(
+      "/agreements?redirect=%2Fmypage",
+    );
+
+    const response = await notificationsReadRoute.POST(
+      createReadRequest({
+        notificationId: NOTIFICATION_ID,
+        type: "FEEDBACK_REPLY",
+      }),
+    );
+
+    await expect(response.json()).resolves.toEqual({
+      error: "legal_acceptance_required",
+      redirectTo: "/agreements?redirect=%2Fmypage",
+    });
+    expect(response.status).toBe(403);
     expect(supabase.rpc).not.toHaveBeenCalled();
   });
 

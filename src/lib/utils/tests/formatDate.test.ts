@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { formatDate, formatDateTime, formatRelativeDate } from "../formatDate";
+import {
+  formatDate,
+  formatDateTime,
+  formatRelativeDate,
+  formatShortDateKST,
+} from "../formatDate";
 
 describe("formatDate", () => {
   it("Date 객체를 한국어 날짜 문자열로 변환한다", () => {
@@ -23,6 +28,42 @@ describe("formatDateTime", () => {
 
     expect(result).toContain("January 1, 2026");
     expect(result).toContain("09:00 AM");
+  });
+
+  it("한국어 로케일에서는 AM/PM 대신 오전·오후로 표기한다", () => {
+    const result = formatDateTime("2026-08-29T08:18:00.000Z");
+
+    expect(result).toContain("2026년 8월 29일");
+    expect(result).toContain("오후 05:18");
+    expect(result).not.toContain("PM");
+  });
+
+  it("밤·정오처럼 오전/오후를 판별할 수 없는 표기를 쓰지 않는다", () => {
+    // 복습 알림 시간대로 흔한 21시, 그리고 자정·정오.
+    expect(formatDateTime("2026-08-28T12:00:00.000Z")).toContain("오후 09:00");
+    expect(formatDateTime("2026-08-28T15:00:00.000Z")).toContain("오전 12:00");
+    expect(formatDateTime("2026-08-28T03:00:00.000Z")).toContain("오후 12:00");
+    expect(formatDateTime("2026-08-28T18:00:00.000Z")).toContain("오전 03:00");
+  });
+});
+
+describe("formatShortDateKST", () => {
+  it("월 이름 없이 짧은 숫자 형식으로 반환한다", () => {
+    const result = formatShortDateKST("2026-08-24T00:00:00.000Z");
+
+    expect(result).toContain("2026");
+    expect(result).toContain("8");
+    expect(result).toContain("24");
+    expect(result).not.toContain("월");
+  });
+
+  it("끝에 붙는 온점을 제거한다", () => {
+    expect(formatShortDateKST("2026-08-24T00:00:00.000Z")).toBe("2026. 8. 24");
+  });
+
+  it("서버 타임존과 무관하게 KST 기준으로 변환한다", () => {
+    // UTC 2026-08-23 16:00 = KST 2026-08-24 01:00
+    expect(formatShortDateKST("2026-08-23T16:00:00.000Z")).toContain("24");
   });
 });
 

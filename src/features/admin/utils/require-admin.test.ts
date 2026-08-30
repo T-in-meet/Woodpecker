@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ForbiddenError, UnauthorizedError } from "@/lib/errors";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -36,16 +37,16 @@ describe("requireAdmin", () => {
     } as never);
   });
 
-  it("로그인하지 않은 사용자는 Unauthorized를 반환한다", async () => {
+  it("로그인하지 않은 사용자는 UnauthorizedError를 발생시킨다", async () => {
     getUser.mockResolvedValue({
       data: { user: null },
       error: null,
     });
 
-    await expect(requireAdmin()).rejects.toThrow("Unauthorized");
+    await expect(requireAdmin()).rejects.toBeInstanceOf(UnauthorizedError);
   });
 
-  it("프로필 조회에 실패하면 Forbidden을 반환한다", async () => {
+  it("프로필 조회에 실패하면 ForbiddenError를 발생시킨다", async () => {
     getUser.mockResolvedValue({
       data: {
         user: {
@@ -60,10 +61,10 @@ describe("requireAdmin", () => {
       error: new Error("db error"),
     });
 
-    await expect(requireAdmin()).rejects.toThrow("Forbidden");
+    await expect(requireAdmin()).rejects.toBeInstanceOf(ForbiddenError);
   });
 
-  it("관리자가 아니면 Forbidden을 반환한다", async () => {
+  it("관리자가 아니면 ForbiddenError를 발생시킨다", async () => {
     getUser.mockResolvedValue({
       data: {
         user: {
@@ -80,7 +81,7 @@ describe("requireAdmin", () => {
       error: null,
     });
 
-    await expect(requireAdmin()).rejects.toThrow("Forbidden");
+    await expect(requireAdmin()).rejects.toBeInstanceOf(ForbiddenError);
   });
 
   it("관리자이면 사용자 ID를 반환한다", async () => {
@@ -103,12 +104,12 @@ describe("requireAdmin", () => {
     await expect(requireAdmin()).resolves.toBe("admin-id");
   });
 
-  it("인증 조회 중 오류가 발생하면 Unauthorized를 반환한다", async () => {
+  it("인증 조회 중 오류가 발생하면 UnauthorizedError를 발생시킨다", async () => {
     getUser.mockResolvedValue({
       data: { user: null },
       error: new Error("auth error"),
     });
 
-    await expect(requireAdmin()).rejects.toThrow("Unauthorized");
+    await expect(requireAdmin()).rejects.toBeInstanceOf(UnauthorizedError);
   });
 });

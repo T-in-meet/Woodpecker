@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -13,6 +12,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { AdminCollapsibleSection } from "@/features/admin/components/common/AdminCollapsibleSection";
 import {
   OPERATIONAL_ERROR_STATUS,
   type OperationalErrorStatusType,
@@ -126,12 +126,8 @@ export function AdminOperationalErrorStatusCard({
   };
 
   return (
-    <Card className="h-fit">
-      <CardHeader>
-        <CardTitle>상태 관리</CardTitle>
-      </CardHeader>
-
-      <CardContent className="space-y-5">
+    <AdminCollapsibleSection title="상태 관리">
+      <div className="space-y-5">
         <div className="grid gap-4 sm:grid-cols-3">
           <div className="space-y-1">
             <p className="text-xs text-muted-foreground">현재 상태</p>
@@ -216,7 +212,7 @@ export function AdminOperationalErrorStatusCard({
                 <dd className="font-medium">{nextStatusLabel}</dd>
 
                 <dt className="text-muted-foreground">처리 메모</dt>
-                <dd className="whitespace-pre-wrap wrap-break-words">
+                <dd className="whitespace-pre-wrap wrap-break-word">
                   {resolutionNote.trim() || "작성하지 않음"}
                 </dd>
               </dl>
@@ -226,7 +222,7 @@ export function AdminOperationalErrorStatusCard({
           pending={statusMutation.isPending}
           onConfirm={handleSave}
         />
-      </CardContent>
-    </Card>
+      </div>
+    </AdminCollapsibleSection>
   );
 }

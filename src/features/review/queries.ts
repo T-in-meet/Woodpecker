@@ -166,7 +166,7 @@ export async function getGradingsByNote(
     .eq("user_id", userId)
     // 채점 진행 중 선점 행은 기록에 노출하지 않는다
     .not("score", "is", null)
-    .order("round", { ascending: true });
+    .order("round", { ascending: false });
 
   if (error) throw error;
 

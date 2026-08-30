@@ -5,9 +5,13 @@ export const ROUTES = {
   NOTES: "/notes",
   NOTES_NEW: "/notes/new",
   NOTES_TODAY: "/notes/today",
+
+  NOTE_CHATS: "/note-chats",
+
   MYPAGE: "/mypage",
   TERMS: "/terms",
   PRIVACY: "/privacy",
+  AGREEMENTS: "/agreements",
   CALLBACK: "/auth/callback",
   RESET_PASSWORD: "/reset-password",
   SET_PASSWORD: "/set-password",
@@ -48,48 +52,38 @@ export const ROUTES = {
       DASHBOARD: "/admin/experiments",
 
       COMPONENT_PLAYGROUND: "/admin/experiments/component-playground",
-
-      NOTE_RELATIONS: {
-        DASHBOARD: "/admin/experiments/note-relations",
-
-        NOTE_RELATIONS: "/admin/experiments/note-relations/relations",
-
-        PROMPTS: "/admin/experiments/note-relations/prompts",
-
-        PROMPTS_NEW: "/admin/experiments/note-relations/prompts/new",
-
-        KNOWLEDGE_EXTRACTIONS:
-          "/admin/experiments/note-relations/knowledge-extractions",
-
-        KNOWLEDGE_EXTRACTIONS_PREVIEW:
-          "/admin/experiments/note-relations/knowledge-extractions/preview",
-
-        KNOWLEDGE_EXTRACTIONS_NEW:
-          "/admin/experiments/note-relations/knowledge-extractions/new",
-
-        KNOWLEDGE_OBJECTS:
-          "/admin/experiments/note-relations/knowledge-objects",
-
-        KNOWLEDGE_OBJECTS_NEW:
-          "/admin/experiments/note-relations/knowledge-objects/new",
-
-        KNOWLEDGE_OBJECT_GENERATIONS:
-          "/admin/experiments/note-relations/knowledge-object-generations",
-
-        KNOWLEDGE_OBJECT_RELATIONS:
-          "/admin/experiments/note-relations/knowledge-object-relations",
-
-        KNOWLEDGE_OBJECT_RELATION_GENERATIONS:
-          "/admin/experiments/note-relations/knowledge-object-relation-generations",
-
-        KNOWLEDGE_OBJECT_RELATION_GENERATIONS_NEW:
-          "/admin/experiments/note-relations/knowledge-object-relation-generations/new",
-      },
     },
   },
 } as const;
 
 export type Route = (typeof ROUTES)[keyof typeof ROUTES];
+
+/**
+ * 내비게이션 메뉴 항목이 현재 경로에 해당하는지 판정합니다.
+ *
+ * 데스크톱(`NotesNav`)과 모바일(`MobileMenu`)이 같은 기준을 써야 하므로
+ * 판정 로직을 한 곳에 둡니다. 노트 목록은 상세 등 하위 경로까지 포함하되
+ * 노트 작성 경로는 제외합니다.
+ *
+ * @param pathname 현재 경로
+ * @param href 메뉴 항목의 경로
+ * @returns 현재 경로가 해당 메뉴 항목에 해당하면 `true`
+ */
+export function isCurrentNavRoute(pathname: string, href: string): boolean {
+  if (href === ROUTES.NOTES) {
+    return (
+      pathname.startsWith(ROUTES.NOTES) &&
+      pathname !== ROUTES.NOTES_NEW &&
+      !pathname.startsWith(ROUTES.NOTE_CHATS)
+    );
+  }
+
+  if (href === ROUTES.NOTE_CHATS) {
+    return pathname.startsWith(ROUTES.NOTE_CHATS);
+  }
+
+  return pathname === href;
+}
 
 export function getNoteDetailRoute(noteId: string) {
   return `${ROUTES.NOTES}/${noteId}`;
@@ -149,10 +143,20 @@ export function getAdminAiPromptFamilyRoute(familyId: string) {
  * 관리자 AI prompt version 생성 페이지 경로를 생성합니다.
  *
  * @param familyId version을 생성할 ai_prompt_families.id
+ * @param sourceVersionId 생성 폼 기본값으로 복사할 ai_prompt_versions.id
  * @returns `/admin/ai/prompts/{familyId}/versions/new` 형식의 route path
  */
-export function getAdminAiPromptVersionNewRoute(familyId: string) {
-  return `${getAdminAiPromptFamilyRoute(familyId)}/versions/new`;
+export function getAdminAiPromptVersionNewRoute(
+  familyId: string,
+  sourceVersionId?: string,
+) {
+  const route = `${getAdminAiPromptFamilyRoute(familyId)}/versions/new`;
+
+  if (sourceVersionId === undefined) {
+    return route;
+  }
+
+  return `${route}?sourceVersionId=${encodeURIComponent(sourceVersionId)}`;
 }
 
 /**
@@ -177,4 +181,14 @@ export function getAdminAiPromptVersionRoute(
  */
 export function getAdminAiSettingsRoute(settingId: string) {
   return `${ROUTES.ADMIN.AI.SETTINGS}/${settingId}`;
+}
+
+/**
+ * 노트 챗봇 대화 상세 페이지 경로를 생성합니다.
+ *
+ * @param conversationId 노트 챗봇 대화 ID
+ * @returns `/note-chats/{conversationId}` 형식의 route path
+ */
+export function getNoteChatConversationRoute(conversationId: string) {
+  return `${ROUTES.NOTE_CHATS}/${conversationId}`;
 }

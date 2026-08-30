@@ -4,6 +4,7 @@ import { getPublishedAiPromptVersionForAgent } from "../queries";
 
 vi.mock("../../utils/report-ai-operational-error", () => ({
   reportAiOperationalError: vi.fn(),
+  markAiOperationalErrorAsReported: (error: unknown) => error,
 }));
 
 const AGENT_ID = "11111111-1111-4111-8111-111111111111";

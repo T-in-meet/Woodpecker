@@ -6,12 +6,16 @@ const EMBEDDING_ID = "11111111-1111-4111-8111-111111111111";
 const MODEL_CONFIG_ID = "22222222-2222-4222-8222-222222222222";
 const OWNER_USER_ID = "33333333-3333-4333-8333-333333333333";
 const SOURCE_ID = "44444444-4444-4444-8444-444444444444";
+const GENERATION_ID = "55555555-5555-4555-8555-555555555555";
 
 describe("aiEmbeddingRowSchema", () => {
   const validRow = {
+    chunk_count: 2,
+    chunk_index: 1,
     content_hash: "content-hash",
     created_at: "2026-08-04T00:00:00.000Z",
     embedding: "[0,0,0]",
+    generation_id: GENERATION_ID,
     id: EMBEDDING_ID,
     input_hash: "input-hash",
     input_kind: "rag_note_content",
@@ -38,6 +42,7 @@ describe("aiEmbeddingRowSchema", () => {
   });
 
   it.each([
+    ["generation_id", "invalid-id"],
     ["id", "invalid-id"],
     ["model_config_id", "invalid-id"],
     ["owner_user_id", "invalid-id"],
@@ -78,10 +83,35 @@ describe("aiEmbeddingRowSchema", () => {
       ).toBe(false);
     },
   );
+
+  it.each([-1, 1.5])(
+    "유효하지 않은 chunk_index 값 %s를 거부한다",
+    (chunkIndex) => {
+      expect(
+        aiEmbeddingRowSchema.safeParse({
+          ...validRow,
+          chunk_index: chunkIndex,
+        }).success,
+      ).toBe(false);
+    },
+  );
+
+  it.each([0, -1, 1.5])(
+    "유효하지 않은 chunk_count 값 %s를 거부한다",
+    (chunkCount) => {
+      expect(
+        aiEmbeddingRowSchema.safeParse({
+          ...validRow,
+          chunk_count: chunkCount,
+        }).success,
+      ).toBe(false);
+    },
+  );
 });
 
 describe("aiEmbeddingMatchRowSchema", () => {
   const validRow = {
+    chunk_index: 1,
     distance: 0.2,
     embedding_id: EMBEDDING_ID,
     similarity: 0.8,
@@ -115,4 +145,16 @@ describe("aiEmbeddingMatchRowSchema", () => {
       }).success,
     ).toBe(false);
   });
+
+  it.each([-1, 1.5])(
+    "유효하지 않은 chunk_index 값 %s를 거부한다",
+    (chunkIndex) => {
+      expect(
+        aiEmbeddingMatchRowSchema.safeParse({
+          ...validRow,
+          chunk_index: chunkIndex,
+        }).success,
+      ).toBe(false);
+    },
+  );
 });

@@ -26,6 +26,20 @@ type AiOperationalErrorContext = Record<string, Json>;
 type SharedOperationalErrorInput = Parameters<typeof reportOperationalError>[0];
 
 /**
+ * 이미 AI Foundation 운영 오류로 보고된 Error 객체를 식별하는 내부 marker입니다.
+ */
+const REPORTED_AI_OPERATIONAL_ERROR_MARKER = Symbol(
+  "reportedAiOperationalError",
+);
+
+/**
+ * AI Foundation 운영 오류 보고 여부를 보존하는 Error 확장 타입입니다.
+ */
+type ReportedAiOperationalError = Error & {
+  [REPORTED_AI_OPERATIONAL_ERROR_MARKER]?: true;
+};
+
+/**
  * AI Foundation 운영 오류 보고 입력입니다.
  *
  * AI 기능에서 사용하는 오류 코드와 operation/stage를 AI 전용 타입으로 제한하고,
@@ -88,4 +102,44 @@ export async function reportAiOperationalError(
   }
 
   return reportOperationalError(sharedInput, options);
+}
+
+/**
+ * Error 객체에 AI Foundation 운영 오류 보고 완료 marker를 부여합니다.
+ *
+ * 상위 계층은 이 marker만 확인하여 같은 실패를 다른 feature로 중복 보고하지
+ * 않습니다. Error가 아닌 값은 marker를 안정적으로 보존할 수 없으므로 그대로
+ * 반환합니다.
+ *
+ * @param error marker를 부여할 오류 값
+ * @returns marker가 부여된 오류 값
+ */
+export function markAiOperationalErrorAsReported<TError>(
+  error: TError,
+): TError {
+  if (error instanceof Error) {
+    Object.defineProperty(error, REPORTED_AI_OPERATIONAL_ERROR_MARKER, {
+      configurable: false,
+      enumerable: false,
+      value: true,
+      writable: false,
+    });
+  }
+
+  return error;
+}
+
+/**
+ * 전달된 오류가 이미 AI Foundation 운영 오류로 보고됐는지 확인합니다.
+ *
+ * @param error 확인할 오류 값
+ * @returns AI Foundation report marker가 있으면 true
+ */
+export function isReportedAiOperationalError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error as ReportedAiOperationalError)[
+      REPORTED_AI_OPERATIONAL_ERROR_MARKER
+    ] === true
+  );
 }

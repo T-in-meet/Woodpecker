@@ -2,6 +2,10 @@ import type { User } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 
 import {
+  getAgreementRequiredPath,
+  SIGNUP_AGREEMENT_REQUIRED_PATH,
+} from "@/features/auth/constants/agreementRequired";
+import {
   OAUTH_CALLBACK_ERROR_PARAM,
   OAUTH_CALLBACK_ERROR_REASON,
 } from "@/features/auth/constants/oauthCallbackError";
@@ -10,9 +14,8 @@ import {
   hasOAuthAgreementIntentCookie,
 } from "@/features/auth/lib/oauthAgreementIntent";
 import {
-  AGREEMENT_REQUIRED_REDIRECT,
   ensureUserAgreement,
-  hasUserAgreement,
+  getLegalAcceptanceStatus,
 } from "@/features/auth/lib/userAgreements";
 import { validateRedirectPath } from "@/features/auth/lib/validateRedirectPath";
 import { canonicalizeEmail } from "@/features/auth/utils/canonicalizeEmail";
@@ -346,7 +349,7 @@ export async function GET(request: NextRequest) {
     if (!hasSignupAgreementIntent) {
       await supabase.auth.signOut();
       return redirectWithClearedIntent(
-        new URL(AGREEMENT_REQUIRED_REDIRECT, requestUrl.origin),
+        new URL(SIGNUP_AGREEMENT_REQUIRED_PATH, requestUrl.origin),
       );
     }
 
@@ -370,11 +373,10 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const hasAgreement = await hasUserAgreement(data.user.id);
-  if (!hasAgreement) {
-    await supabase.auth.signOut();
+  const agreementStatus = await getLegalAcceptanceStatus(data.user.id);
+  if (!agreementStatus.canAccessService) {
     return redirectWithClearedIntent(
-      new URL(AGREEMENT_REQUIRED_REDIRECT, requestUrl.origin),
+      new URL(getAgreementRequiredPath(redirectPath), requestUrl.origin),
     );
   }
 

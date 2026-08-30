@@ -48,6 +48,7 @@ describe("회원가입 폼 제출 및 pending 상태", () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
+    await user.click(screen.getByTestId("age-14-checkbox"));
 
     await user.click(screen.getByRole("button", { name: /회원가입/i }));
 
