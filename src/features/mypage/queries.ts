@@ -1,4 +1,3 @@
-import { getKstDayBoundsUtc } from "@/features/review/lib/kstDay";
 import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { logError } from "@/lib/logger";
 import { getUser } from "@/lib/supabase/getUser";
@@ -104,7 +103,6 @@ export async function getLearningStats(): Promise<LearningStats> {
 
   const now = new Date();
   const nowIso = now.toISOString();
-  const { endUtcIso: endOfTodayKstUtc } = getKstDayBoundsUtc(now);
   const todayKstKey = toKstDateKey(nowIso);
   const activityCutoffIso = new Date(
     now.getTime() - ACTIVITY_DAYS * DAY_MS,
@@ -121,6 +119,14 @@ export async function getLearningStats(): Promise<LearningStats> {
 
   const completedNotesCount = notesRows.filter(
     (n) => n.next_review_at === null && n.review_round === MAX_REVIEW_ROUND,
+  ).length;
+
+  // 오늘 예정뿐 아니라 기한이 지나 아직 못한 복습도 포함한다.
+  // 통계 카드가 노트 목록의 due 보기로 링크되므로, review_logs가 아니라 목록과 같은
+  // 소스(notes.next_review_at)에 같은 판정을 써서 두 화면의 숫자가 어긋날 수 없게 한다.
+  // getNotes의 view === "due" 필터와 동일한 조건이다.
+  const todayReviews = notesRows.filter(
+    (n) => typeof n.next_review_at === "string" && n.next_review_at <= nowIso,
   ).length;
 
   const notesByRoundMap = new Map<number, number>([
@@ -142,7 +148,6 @@ export async function getLearningStats(): Promise<LearningStats> {
   const logs = reviewLogsResult.data ?? [];
 
   let completedReviews = 0;
-  let todayReviews = 0;
   let onTime = 0;
 
   const activityDayCounts = new Map<string, number>();
@@ -154,6 +159,7 @@ export async function getLearningStats(): Promise<LearningStats> {
     if (typeof row.round !== "number" || typeof scheduledAt !== "string")
       continue;
 
+    // 미완료 로그는 여기서 세지 않는다. 오늘 복습할 노트 수는 notes 기준으로 이미 셌다.
     if (typeof completedAt === "string") {
       completedReviews += 1;
 
@@ -168,9 +174,6 @@ export async function getLearningStats(): Promise<LearningStats> {
           (activityDayCounts.get(completedKey) ?? 0) + 1,
         );
       }
-    } else if (scheduledAt < endOfTodayKstUtc) {
-      // 오늘 예정뿐 아니라 기한이 지나 아직 못한 복습도 포함한다 (getNotes의 due 보기와 동일 기준)
-      todayReviews += 1;
     }
   }
 
