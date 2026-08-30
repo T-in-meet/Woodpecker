@@ -183,7 +183,7 @@ export function AdminFeedbackTable({
               ))
             ) : (
               <tr>
-                <td colSpan={8}>
+                <td colSpan={9}>
                   <AdminListEmpty description="검색 조건과 일치하는 피드백이 없습니다." />
                 </td>
               </tr>
