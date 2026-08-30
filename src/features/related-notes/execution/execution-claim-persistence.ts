@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT } from "../constants/ai";
+import { RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE } from "../constants/ai";
 
 /** Related Notes 추천 실행 claim 상태입니다. */
 export const RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS = {
@@ -105,7 +105,8 @@ export async function claimRelatedNoteRecommendationExecution(
   const { data, error } = await supabase.rpc(
     "claim_related_note_recommendation_execution",
     {
-      p_daily_recommendation_limit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
+      p_daily_recommendation_limit:
+        RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
       p_note_id: params.noteId,
       p_source_updated_at: params.sourceUpdatedAt,
       p_user_id: params.userId,
