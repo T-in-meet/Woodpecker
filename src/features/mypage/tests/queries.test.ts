@@ -73,6 +73,7 @@ describe("getLearningStats", () => {
       completedReviews: 0,
       todayReviews: 0,
       reviewWaitingCount: 0,
+      completedNotesCount: 0,
       notesByRound: [],
       recentActivity: [],
       studyStreak: { current: 0, longest: 0 },
@@ -106,25 +107,25 @@ describe("getLearningStats", () => {
     ]);
   });
 
-  it("separates overdue (before KST today) from today's scheduled reviews", async () => {
+  it("todayReviews: 오늘 예정과 기한이 지난(overdue) 미완료 복습을 함께 포함한다", async () => {
     getUserMock.mockResolvedValue({ id: "user-123" });
 
     const { supabase } = makeSupabase({
       notesData: [],
       reviewLogsData: [
-        // 어제 KST에 예정 (2026-05-02T05:00Z = 2026-05-02 14:00 KST) → overdue
+        // 어제 KST에 예정 (2026-05-02T05:00Z = 2026-05-02 14:00 KST) → overdue, 포함
         {
           round: 1,
           scheduled_at: "2026-05-02T05:00:00.000Z",
           completed_at: null,
         },
-        // 오늘 KST (2026-05-02T16:00Z = 2026-05-03 01:00 KST) → todayReviews
+        // 오늘 KST (2026-05-02T16:00Z = 2026-05-03 01:00 KST) → 포함
         {
           round: 1,
           scheduled_at: "2026-05-02T16:00:00.000Z",
           completed_at: null,
         },
-        // 내일 이후 → 둘 다 아님
+        // 내일 이후 → 제외
         {
           round: 3,
           scheduled_at: "2026-05-04T05:00:00.000Z",
@@ -136,7 +137,7 @@ describe("getLearningStats", () => {
 
     const result = await getLearningStats();
 
-    expect(result.todayReviews).toBe(1);
+    expect(result.todayReviews).toBe(2);
   });
 
   it("computes on-time rate based on KST date equality", async () => {
@@ -285,6 +286,27 @@ describe("getLearningStats", () => {
     const result = await getLearningStats();
 
     expect(result.reviewWaitingCount).toBe(2);
+  });
+
+  it("completedNotesCount: next_review_at이 null이고 round가 MAX인 노트만 포함한다", async () => {
+    getUserMock.mockResolvedValue({ id: "user-123" });
+
+    const { supabase } = makeSupabase({
+      notesData: [
+        { review_round: 3, next_review_at: null }, // 완주 → 포함
+        { review_round: 0, next_review_at: null }, // 미시작 → 제외
+        {
+          review_round: 3,
+          next_review_at: "2026-05-10T00:00:00.000Z", // 예정 있음 → 제외
+        },
+      ],
+      reviewLogsData: [],
+    });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await getLearningStats();
+
+    expect(result.completedNotesCount).toBe(1);
   });
 
   it("buckets recentActivity into 30 KST days ending today", async () => {

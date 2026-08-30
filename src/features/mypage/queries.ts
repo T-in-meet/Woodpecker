@@ -1,4 +1,4 @@
-import { getKstDayBoundsUtc } from "@/features/review/lib/kstDay";
+import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { logError } from "@/lib/logger";
 import { getUser } from "@/lib/supabase/getUser";
 import { createServerComponentClient } from "@/lib/supabase/server";
@@ -8,6 +8,7 @@ export type LearningStats = {
   completedReviews: number;
   todayReviews: number;
   reviewWaitingCount: number;
+  completedNotesCount: number;
   notesByRound: { round: number; count: number }[];
   recentActivity: { date: string; count: number }[];
   studyStreak: { current: number; longest: number };
@@ -78,6 +79,7 @@ export async function getLearningStats(): Promise<LearningStats> {
     completedReviews: 0,
     todayReviews: 0,
     reviewWaitingCount: 0,
+    completedNotesCount: 0,
     notesByRound: [],
     recentActivity: [],
     studyStreak: { current: 0, longest: 0 },
@@ -101,8 +103,6 @@ export async function getLearningStats(): Promise<LearningStats> {
 
   const now = new Date();
   const nowIso = now.toISOString();
-  const { startUtcIso: startOfTodayKstUtc, endUtcIso: endOfTodayKstUtc } =
-    getKstDayBoundsUtc(now);
   const todayKstKey = toKstDateKey(nowIso);
   const activityCutoffIso = new Date(
     now.getTime() - ACTIVITY_DAYS * DAY_MS,
@@ -115,6 +115,10 @@ export async function getLearningStats(): Promise<LearningStats> {
     (n) =>
       (n.next_review_at === null && n.review_round === 0) ||
       (typeof n.next_review_at === "string" && n.next_review_at > nowIso),
+  ).length;
+
+  const completedNotesCount = notesRows.filter(
+    (n) => n.next_review_at === null && n.review_round === MAX_REVIEW_ROUND,
   ).length;
 
   const notesByRoundMap = new Map<number, number>([
@@ -162,10 +166,8 @@ export async function getLearningStats(): Promise<LearningStats> {
           (activityDayCounts.get(completedKey) ?? 0) + 1,
         );
       }
-    } else if (
-      scheduledAt >= startOfTodayKstUtc &&
-      scheduledAt < endOfTodayKstUtc
-    ) {
+    } else if (scheduledAt <= nowIso) {
+      // 오늘 예정뿐 아니라 기한이 지나 아직 못한 복습도 포함한다 (getNotes의 due 보기와 동일 기준)
       todayReviews += 1;
     }
   }
@@ -182,6 +184,7 @@ export async function getLearningStats(): Promise<LearningStats> {
     completedReviews,
     todayReviews,
     reviewWaitingCount,
+    completedNotesCount,
     notesByRound,
     recentActivity,
     studyStreak,

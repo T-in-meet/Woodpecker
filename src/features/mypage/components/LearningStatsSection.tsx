@@ -73,21 +73,26 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
         <CardTitle>학습 통계</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <StatCard
             label="전체 노트"
             value={stats.totalNotes}
             href={ROUTES.NOTES}
           />
           <StatCard
-            label="오늘의 복습"
+            label="오늘 복습할 노트"
             value={stats.todayReviews}
-            href={ROUTES.NOTES_TODAY}
+            href={buildNotesUrl({ view: "due" })}
           />
           <StatCard
-            label="복습 대기 노트"
+            label="복습 예정 노트"
             value={stats.reviewWaitingCount}
             href={buildNotesUrl({ view: "scheduled" })}
+          />
+          <StatCard
+            label="복습 완료 노트"
+            value={stats.completedNotesCount}
+            href={buildNotesUrl({ view: "completed" })}
           />
         </div>
 
