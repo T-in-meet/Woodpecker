@@ -8,6 +8,7 @@ import {
   NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS,
 } from "@/features/operational-errors/constants";
 import { ROUTES } from "@/lib/constants/routes";
+import { logError } from "@/lib/logger";
 import { createClient } from "@/lib/supabase/server";
 import { escapePostgrestLikePattern } from "@/lib/utils/escapePostgrestLikePattern";
 
@@ -215,12 +216,15 @@ export async function getNoteChatDailyUsage(): Promise<NoteChatDailyUsage> {
   const parsedUsage = z.number().int().nonnegative().safeParse(data);
 
   if (!parsedUsage.success) {
-    await reportNoteChatOperationalError({
-      context: {},
+    /*
+     * usage RPC 자체는 성공했지만 예상한 런타임 계약과 다른 응답이므로
+     * DB operational error로 기록하지 않고 defensive validation 오류로 남깁니다.
+     *
+     * 잘못된 사용량을 표시하지 않도록 usage는 null로 처리합니다.
+     */
+    logError({
+      message: "[getNoteChatDailyUsage] 일일 사용량 응답 검증 실패",
       error: parsedUsage.error,
-      errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.DAILY_USAGE_LOAD_FAILED,
-      message: "노트 챗봇 일일 사용량 응답 검증에 실패했습니다.",
-      operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.GET_DAILY_USAGE,
     });
 
     return null;

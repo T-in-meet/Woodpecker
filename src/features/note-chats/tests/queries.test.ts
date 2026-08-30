@@ -6,6 +6,7 @@ import {
   NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS,
 } from "@/features/operational-errors/constants";
 import { ROUTES } from "@/lib/constants/routes";
+import { logError } from "@/lib/logger";
 import { createClient } from "@/lib/supabase/server";
 
 import { NOTE_CHAT_DAILY_EXECUTION_LIMIT } from "../constants/execution";
@@ -20,6 +21,10 @@ vi.mock("server-only", () => ({}));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
+}));
+
+vi.mock("@/lib/logger", () => ({
+  logError: vi.fn(),
 }));
 
 vi.mock("@/features/auth/utils/requireCurrentLegalAcceptance", () => ({
@@ -721,7 +726,7 @@ describe("getNoteChatDailyUsage", () => {
     });
   });
 
-  it("일일 사용량 응답이 유효하지 않으면 운영 오류를 보고하고 null을 반환한다", async () => {
+  it("일일 사용량 응답이 유효하지 않으면 오류를 기록하고 null을 반환한다", async () => {
     const profileQuery = createQueryMock({
       data: {
         role: "USER",
@@ -740,13 +745,12 @@ describe("getNoteChatDailyUsage", () => {
 
     expect(result).toBeNull();
 
-    expect(reportNoteChatOperationalError).toHaveBeenCalledWith(
+    expect(logError).toHaveBeenCalledWith(
       expect.objectContaining({
-        context: {},
-        errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.DAILY_USAGE_LOAD_FAILED,
-        message: "노트 챗봇 일일 사용량 응답 검증에 실패했습니다.",
-        operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.GET_DAILY_USAGE,
+        message: "[getNoteChatDailyUsage] 일일 사용량 응답 검증 실패",
       }),
     );
+
+    expect(reportNoteChatOperationalError).not.toHaveBeenCalled();
   });
 });
