@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { CSSProperties } from "react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { buildNotesUrl } from "@/features/notes/utils/buildNotesUrl";
 import { ROUTES } from "@/lib/constants/routes";
 import { cn } from "@/lib/utils/cn";
 
@@ -86,7 +87,7 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
           <StatCard
             label="복습 대기 노트"
             value={stats.reviewWaitingCount}
-            href={`${ROUTES.MYPAGE}?section=reviews`}
+            href={buildNotesUrl({ view: "scheduled" })}
           />
         </div>
 

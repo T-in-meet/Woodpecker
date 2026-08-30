@@ -16,14 +16,12 @@ import {
   MypageNav,
   type MypageSection,
 } from "@/features/mypage/components/MypageNav";
-import { ReviewWaitingSection } from "@/features/mypage/components/ReviewWaitingSection";
 import type { SupportTab } from "@/features/mypage/components/SupportSection";
 import {
   getLearningStats,
   getMyFeedbacks,
   type MyFeedbacksResult,
 } from "@/features/mypage/queries";
-import { getReviewWaitingNotes } from "@/features/notes/queries";
 import { PushSubscribeCard } from "@/features/notifications/components/PushSubscribeCard";
 import { getHasAnyPushSubscription } from "@/features/notifications/queries";
 import { ROUTES } from "@/lib/constants/routes";
@@ -55,12 +53,7 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-const VALID_SECTIONS: MypageSection[] = [
-  "profile",
-  "stats",
-  "reviews",
-  "support",
-];
+const VALID_SECTIONS: MypageSection[] = ["profile", "stats", "support"];
 
 function isValidSection(value: unknown): value is MypageSection {
   return VALID_SECTIONS.includes(value as MypageSection);
@@ -69,7 +62,6 @@ function isValidSection(value: unknown): value is MypageSection {
 const SECTION_LABELS: Record<MypageSection, string> = {
   profile: "계정 관리",
   stats: "학습 통계",
-  reviews: "복습 대기",
   support: "고객센터",
 };
 
@@ -131,7 +123,6 @@ export default async function MyPage({ searchParams }: Props) {
   // 활성 section에서만 fetch
   let stats: Awaited<ReturnType<typeof getLearningStats>> | null = null;
   let hasAnyPushSubscription = false;
-  let reviewWaiting: Awaited<ReturnType<typeof getReviewWaitingNotes>> = [];
   let feedbackResult: MyFeedbacksResult | null = null;
 
   if (section === "stats") {
@@ -140,8 +131,6 @@ export default async function MyPage({ searchParams }: Props) {
     hasAnyPushSubscription = await getHasAnyPushSubscription({
       userId: user.id,
     });
-  } else if (section === "reviews") {
-    reviewWaiting = await getReviewWaitingNotes(user.id);
   } else if (section === "support" && supportTab === "inquiry") {
     feedbackResult = await getMyFeedbacks(user.id);
   }
@@ -220,9 +209,6 @@ export default async function MyPage({ searchParams }: Props) {
           )}
           {section === "stats" && stats && (
             <LearningStatsSection stats={stats} />
-          )}
-          {section === "reviews" && (
-            <ReviewWaitingSection notes={reviewWaiting} />
           )}
           {section === "support" && (
             <SupportSection
