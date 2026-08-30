@@ -707,6 +707,13 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
         userId: USER.id,
       }),
     );
+
+    expect(completeNoteChatExecutionClaim).toHaveBeenCalledWith({
+      claimId: CLAIM_ID,
+      status: "failed",
+    });
+
+    expect(runNoteChatStream).not.toHaveBeenCalled();
   });
 
   it("사용자 메시지 수정 RPC 결과가 없으면 운영 오류를 기록하고 500을 반환한다", async () => {
@@ -749,6 +756,13 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
         userId: USER.id,
       }),
     );
+
+    expect(completeNoteChatExecutionClaim).toHaveBeenCalledWith({
+      claimId: CLAIM_ID,
+      status: "failed",
+    });
+
+    expect(runNoteChatStream).not.toHaveBeenCalled();
   });
 
   it("Claim을 선점한 뒤 사용자 메시지 수정 RPC를 호출한다", async () => {

@@ -1,4 +1,3 @@
-import type { AiTokenUsage } from "@/features/ai/providers/types";
 import {
   NOTE_CHAT_OPERATIONAL_ERROR_CODES,
   NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS,
@@ -552,17 +551,4 @@ async function completeExecutionClaimOrReport(input: {
       userId: input.params.userId,
     });
   }
-}
-
-/**
- * 사용량 누적에 필요한 빈 token usage를 생성합니다.
- *
- * @returns 모든 token 값이 0인 usage
- */
-export function createEmptyNoteChatTokenUsage(): AiTokenUsage {
-  return {
-    inputTokens: 0,
-    outputTokens: 0,
-    totalTokens: 0,
-  };
 }
