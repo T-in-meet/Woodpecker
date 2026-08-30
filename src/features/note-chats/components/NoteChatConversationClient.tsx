@@ -2,6 +2,10 @@
 
 import { useEffect, useRef } from "react";
 
+import { NavigationGuardAlertDialog } from "@/components/common/NavigationGuardAlertDialog";
+import { useBeforeUnloadGuard } from "@/hooks/useBeforeUnloadGuard";
+import { useInternalNavigationGuard } from "@/hooks/useInternalNavigationGuard";
+
 import { useNoteChatConversationExecution } from "../hooks/use-note-chat-conversation-execution";
 import { useNoteChatConversationDetailQuery } from "../hooks/use-note-chat-conversation-query";
 import { useNoteChatDailyUsageQuery } from "../hooks/use-note-chat-daily-usage-query";
@@ -61,6 +65,26 @@ export function NoteChatConversationClient({
   } = useNoteChatConversationExecution({
     conversationId,
     hasRunningExecution: detail?.hasRunningExecution ?? false,
+  });
+
+  /*
+   * 답변 생성 중 앱 내부 페이지 이동은 바로 막지 않고,
+   * 이동을 보류한 뒤 AlertDialog에서 사용자에게 이동 여부를 확인합니다.
+   *
+   * 현재 브라우저의 stream뿐 아니라 페이지 재진입 후 복원된
+   * running Claim도 동일한 이탈 경고 대상으로 취급합니다.
+   */
+  const { cancelNavigation, confirmNavigation, isNavigationPending } =
+    useInternalNavigationGuard({
+      enabled: isAnswerGenerating,
+    });
+
+  /*
+   * 새로고침, 탭 닫기 등 앱 내부 navigation으로 처리할 수 없는 이탈은
+   * 브라우저의 beforeunload 기본 경고를 사용합니다.
+   */
+  useBeforeUnloadGuard({
+    enabled: isAnswerGenerating,
   });
 
   const { containerRef: conversationContainerRef, height: conversationHeight } =
@@ -129,61 +153,71 @@ export function NoteChatConversationClient({
       : (detail?.messages ?? []);
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col px-4 md:px-12">
-      {detail ? (
-        <div className="my-4 flex items-center justify-between">
-          <NoteChatBreadcrumb conversationTitle={detail.conversation.title} />
-          <NoteChatConversationMenu
-            conversationId={conversationId}
-            title={detail.conversation.title}
-          />
-        </div>
-      ) : null}
+    <>
+      <NavigationGuardAlertDialog
+        open={isNavigationPending}
+        title="답변을 생성하고 있습니다."
+        description="페이지를 이동해도 답변 생성은 계속됩니다. 이동하시겠습니까?"
+        onCancel={cancelNavigation}
+        onConfirm={confirmNavigation}
+      />
 
-      <div
-        ref={conversationContainerRef}
-        className="flex min-h-0 flex-col overflow-hidden"
-        style={
-          conversationHeight !== null
-            ? { height: conversationHeight }
-            : undefined
-        }
-      >
-        <section className="flex min-h-0 flex-1 flex-col">
-          {conversationQuery.isLoading ? (
-            <NoteChatConversationSkeleton />
-          ) : conversationQuery.isError ? (
-            <NoteChatConversationError
-              isFetching={conversationQuery.isFetching}
-              onRetry={() => {
-                void conversationQuery.refetch();
-              }}
-            />
-          ) : !detail ? (
-            <NoteChatConversationNotFound />
-          ) : (
-            <NoteChatConversationContent
+      <div className="mx-auto flex w-full max-w-6xl flex-col px-4 md:px-12">
+        {detail ? (
+          <div className="my-4 flex items-center justify-between">
+            <NoteChatBreadcrumb conversationTitle={detail.conversation.title} />
+            <NoteChatConversationMenu
               conversationId={conversationId}
-              assistantSources={detail.assistantSources}
-              messages={visibleMessages}
-              pendingQuestion={pendingQuestion}
-              streamingContent={streamingContent}
-              streamError={streamError}
-              streamErrorCode={streamErrorCode}
-              isStreaming={isStreaming}
-              isAnswerGenerating={isAnswerGenerating}
-              canRetry={canRetry}
-              retryCount={retryCount}
-              dailyUsage={dailyUsage}
-              messageEndRef={messageEndRef}
-              onCancel={onCancel}
-              onSubmit={handleQuestionSubmit}
-              onRetry={handleRetry}
-              onUpdateQuestion={handleQuestionUpdate}
+              title={detail.conversation.title}
             />
-          )}
-        </section>
+          </div>
+        ) : null}
+
+        <div
+          ref={conversationContainerRef}
+          className="flex min-h-0 flex-col overflow-hidden"
+          style={
+            conversationHeight !== null
+              ? { height: conversationHeight }
+              : undefined
+          }
+        >
+          <section className="flex min-h-0 flex-1 flex-col">
+            {conversationQuery.isLoading ? (
+              <NoteChatConversationSkeleton />
+            ) : conversationQuery.isError ? (
+              <NoteChatConversationError
+                isFetching={conversationQuery.isFetching}
+                onRetry={() => {
+                  void conversationQuery.refetch();
+                }}
+              />
+            ) : !detail ? (
+              <NoteChatConversationNotFound />
+            ) : (
+              <NoteChatConversationContent
+                conversationId={conversationId}
+                assistantSources={detail.assistantSources}
+                messages={visibleMessages}
+                pendingQuestion={pendingQuestion}
+                streamingContent={streamingContent}
+                streamError={streamError}
+                streamErrorCode={streamErrorCode}
+                isStreaming={isStreaming}
+                isAnswerGenerating={isAnswerGenerating}
+                canRetry={canRetry}
+                retryCount={retryCount}
+                dailyUsage={dailyUsage}
+                messageEndRef={messageEndRef}
+                onCancel={onCancel}
+                onSubmit={handleQuestionSubmit}
+                onRetry={handleRetry}
+                onUpdateQuestion={handleQuestionUpdate}
+              />
+            )}
+          </section>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

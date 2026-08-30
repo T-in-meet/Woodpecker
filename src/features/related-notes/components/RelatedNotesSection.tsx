@@ -1,6 +1,9 @@
 "use client";
 
 import { FeatureInfoPopover } from "@/components/common/FeatureInfoPopover";
+import { NavigationGuardAlertDialog } from "@/components/common/NavigationGuardAlertDialog";
+import { useBeforeUnloadGuard } from "@/hooks/useBeforeUnloadGuard";
+import { useInternalNavigationGuard } from "@/hooks/useInternalNavigationGuard";
 
 import { RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE } from "../constants/ai";
 import { useRelatedNotes } from "../hooks/use-related-notes";
@@ -31,16 +34,25 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
   const { data, isError, isLoading, isPollingTimedOut } =
     useRelatedNotes(noteId);
 
+  // 최신 execution claim이 running이면 AI 추천 진행 상태를 표시합니다.
+  const hasRunningRecommendationExecution =
+    data?.hasRunningRecommendationExecution === true;
+
+  const { cancelNavigation, confirmNavigation, isNavigationPending } =
+    useInternalNavigationGuard({
+      enabled: hasRunningRecommendationExecution,
+    });
+
+  useBeforeUnloadGuard({
+    enabled: hasRunningRecommendationExecution,
+  });
+
   if (isLoading) {
     return null;
   }
 
   // 현재 Note에 연결된 active 상태의 Related Notes 목록입니다.
   const relatedNotes = data?.relatedNotes ?? [];
-
-  // 최신 execution claim이 running이면 AI 추천 진행 상태를 표시합니다.
-  const hasRunningRecommendationExecution =
-    data?.hasRunningRecommendationExecution === true;
 
   // 최신 execution claim이 failed이면 AI 추천 실패 상태를 표시합니다.
   const hasFailedRecommendationExecution =
@@ -60,101 +72,113 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
     recommendationUsage.used >= recommendationUsage.limit;
 
   return (
-    <section className="border-t border-border/60 pt-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-        <div className="flex gap-1">
-          <h2 className="shrink-0 text-sm font-semibold text-foreground">
-            관련 노트
-          </h2>
-          <FeatureInfoPopover ariaLabel="관련 노트 안내">
-            <div className="space-y-2">
-              <p>
-                {`AI 관련 노트 추천은 노트마다 하루 ${RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE}회 요청할 수 있으며, 매일
+    <>
+      <NavigationGuardAlertDialog
+        open={isNavigationPending}
+        title="관련 노트를 생성하고 있습니다."
+        description="페이지를 이동해도 관련 노트 생성은 계속됩니다. 이동하시겠습니까?"
+        onCancel={cancelNavigation}
+        onConfirm={confirmNavigation}
+      />
+
+      <section className="border-t border-border/60 pt-6">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          <div className="flex gap-1">
+            <h2 className="shrink-0 text-sm font-semibold text-foreground">
+              관련 노트
+            </h2>
+
+            <FeatureInfoPopover ariaLabel="관련 노트 안내">
+              <div className="space-y-2">
+                <p>
+                  {`AI 관련 노트 추천은 노트마다 하루 ${RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE}회 요청할 수 있으며, 매일
           자정(KST)에 초기화됩니다.`}
-              </p>
-              <p className="text-muted-foreground">
-                AI 추천은 요청할 때마다 다시 생성되므로 기존 추천과 달라질 수
-                있습니다.
-              </p>
-            </div>
-          </FeatureInfoPopover>
-        </div>
+                </p>
 
-        <div className="flex w-full min-w-0 items-center justify-between gap-3 sm:w-auto sm:justify-start">
-          {isPollingTimedOut ? (
-            /*
-             * execution claim은 아직 running이지만 자동 polling은 종료된 상태입니다.
-             *
-             * 실제 실행이 계속되고 있는지 중단됐는지는 이 화면에서 확정할 수 없으므로
-             * 실패로 표시하지 않고 처리 시간이 길어지고 있음을 안내합니다.
-             */
-            <p className="text-xs text-muted-foreground">
-              관련 노트 생성이 예상보다 오래 걸리고 있어요.
-            </p>
-          ) : hasRunningRecommendationExecution ? (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <span>관련 노트를 찾고 있어요</span>
+                <p className="text-muted-foreground">
+                  AI 추천은 요청할 때마다 다시 생성되므로 기존 추천과 달라질 수
+                  있습니다.
+                </p>
+              </div>
+            </FeatureInfoPopover>
+          </div>
 
-              <span className="flex gap-0.5">
-                <span className="animate-bounce">.</span>
-                <span className="animate-bounce [animation-delay:150ms]">
-                  .
-                </span>
-                <span className="animate-bounce [animation-delay:300ms]">
-                  .
-                </span>
-              </span>
-            </div>
-          ) : hasFailedRecommendationExecution ? (
-            <p className="text-xs text-muted-foreground">
-              관련 노트 추천에 실패했습니다.
-            </p>
-          ) : recommendationUsage ? (
-            hasReachedRecommendationLimit ? (
+          <div className="flex w-full min-w-0 items-center justify-between gap-3 sm:w-auto sm:justify-start">
+            {isPollingTimedOut ? (
               /*
-               * 일일 제한 도달은 실행 실패와 다른 정상적인 quota 상태입니다.
+               * execution claim은 아직 running이지만 자동 polling은 종료된 상태입니다.
                *
-               * 현재 Note의 AI 추천을 더 생성할 수 없다는 점과
-               * 오늘 사용한 횟수를 함께 표시합니다.
+               * 실제 실행이 계속되고 있는지 중단됐는지는 이 화면에서 확정할 수 없으므로
+               * 실패로 표시하지 않고 처리 시간이 길어지고 있음을 안내합니다.
                */
               <p className="text-xs text-muted-foreground">
-                {`오늘은 이 노트의 AI 추천을 더 생성할 수 없어요. (${recommendationUsage.used}/${recommendationUsage.limit})`}
+                관련 노트 생성이 예상보다 오래 걸리고 있어요.
               </p>
-            ) : (
+            ) : hasRunningRecommendationExecution ? (
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <span>관련 노트를 찾고 있어요</span>
+
+                <span className="flex gap-0.5">
+                  <span className="animate-bounce">.</span>
+                  <span className="animate-bounce [animation-delay:150ms]">
+                    .
+                  </span>
+                  <span className="animate-bounce [animation-delay:300ms]">
+                    .
+                  </span>
+                </span>
+              </div>
+            ) : hasFailedRecommendationExecution ? (
               <p className="text-xs text-muted-foreground">
-                오늘 {recommendationUsage.used}/{recommendationUsage.limit}회
-                사용
+                관련 노트 추천에 실패했습니다.
               </p>
-            )
-          ) : null}
+            ) : recommendationUsage ? (
+              hasReachedRecommendationLimit ? (
+                /*
+                 * 일일 제한 도달은 실행 실패와 다른 정상적인 quota 상태입니다.
+                 *
+                 * 현재 Note의 AI 추천을 더 생성할 수 없다는 점과
+                 * 오늘 사용한 횟수를 함께 표시합니다.
+                 */
+                <p className="text-xs text-muted-foreground">
+                  {`오늘은 이 노트의 AI 추천을 더 생성할 수 없어요. (${recommendationUsage.used}/${recommendationUsage.limit})`}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  오늘 {recommendationUsage.used}/{recommendationUsage.limit}회
+                  사용
+                </p>
+              )
+            ) : null}
 
-          <AddRelatedNoteDialog noteId={noteId} />
+            <AddRelatedNoteDialog noteId={noteId} />
+          </div>
         </div>
-      </div>
 
-      {isError ? (
-        <div className="mt-4 rounded-lg border border-dashed px-4 py-6 text-center">
-          <p className="text-sm text-muted-foreground">
-            관련 노트를 불러오지 못했습니다.
-          </p>
-        </div>
-      ) : relatedNotes.length === 0 ? (
-        <div className="mt-4 rounded-lg border border-dashed px-4 py-6 text-center">
-          <p className="text-sm text-muted-foreground">
-            아직 연결된 관련 노트가 없습니다.
-          </p>
-        </div>
-      ) : (
-        <div className="mt-4 space-y-2">
-          {relatedNotes.map((relatedNote) => (
-            <RelatedNoteItem
-              key={relatedNote.noteId}
-              noteId={noteId}
-              relatedNote={relatedNote}
-            />
-          ))}
-        </div>
-      )}
-    </section>
+        {isError ? (
+          <div className="mt-4 rounded-lg border border-dashed px-4 py-6 text-center">
+            <p className="text-sm text-muted-foreground">
+              관련 노트를 불러오지 못했습니다.
+            </p>
+          </div>
+        ) : relatedNotes.length === 0 ? (
+          <div className="mt-4 rounded-lg border border-dashed px-4 py-6 text-center">
+            <p className="text-sm text-muted-foreground">
+              아직 연결된 관련 노트가 없습니다.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-4 space-y-2">
+            {relatedNotes.map((relatedNote) => (
+              <RelatedNoteItem
+                key={relatedNote.noteId}
+                noteId={noteId}
+                relatedNote={relatedNote}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+    </>
   );
 }
