@@ -8,6 +8,7 @@ import { logError } from "@/lib/logger";
 import { createServerComponentClient } from "@/lib/supabase/server";
 import { escapePostgrestLikePattern } from "@/lib/utils/escapePostgrestLikePattern";
 
+import { RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE } from "./constants/ai";
 import { relatedNoteRowSchema } from "./schemas";
 import type { RelatedNoteRecommendation } from "./types";
 import { resolveOtherRelatedNoteId } from "./utils/resolve-other-related-note-id";
@@ -22,6 +23,17 @@ export type RelatedNotesQueryResult = {
 
   /** 현재 Note의 가장 최근 AI 추천 실행이 실패했는지 여부입니다. */
   hasFailedRecommendationExecution: boolean;
+
+  /**
+   * 현재 Note의 오늘 AI 추천 사용량입니다.
+   *
+   * 일일 실행 제한을 적용받는 일반 사용자에게만 반환하며,
+   * quota를 우회하는 ADMIN에게는 null을 반환합니다.
+   */
+  recommendationUsage: {
+    used: number;
+    limit: number;
+  } | null;
 };
 
 /** Related Notes AI 추천 실행의 UI 상태입니다. */
@@ -41,8 +53,11 @@ type RelatedNoteRecommendationExecutionUiState = {
  *
  * dismissed AI 추천은 화면에 표시하지 않습니다.
  *
+ * 일반 사용자는 현재 Note의 KST 기준 일일 AI 추천 사용량도 함께 조회합니다.
+ * ADMIN은 일일 실행 제한을 적용받지 않으므로 사용량 RPC를 호출하지 않습니다.
+ *
  * @param noteId Related Notes를 조회할 기준 Note ID
- * @returns 현재 표시할 Related Notes 목록과 AI 추천 실행 상태
+ * @returns 현재 표시할 Related Notes 목록, AI 추천 실행 상태와 일일 사용량
  */
 export async function getRelatedNotes(
   noteId: string,
@@ -60,6 +75,7 @@ export async function getRelatedNotes(
     return {
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
+      recommendationUsage: null,
       relatedNotes: [],
     };
   }
@@ -79,6 +95,7 @@ export async function getRelatedNotes(
     return {
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
+      recommendationUsage: null,
       relatedNotes: [],
     };
   }
@@ -93,13 +110,21 @@ export async function getRelatedNotes(
    *
    * 이전 Note version의 failed/running claim이 현재 Note의 UI 상태에
    * 영향을 주지 않도록 현재 Note의 updated_at을 먼저 조회합니다.
+   *
+   * 일일 사용량은 quota를 적용받는 일반 사용자에게만 표시하므로,
+   * 동일한 시점에 현재 사용자의 role도 함께 조회합니다.
    */
-  const { data: sourceNote, error: sourceNoteError } = await supabase
-    .from("notes")
-    .select("updated_at")
-    .eq("id", parsedNoteId.data)
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const [sourceNoteResult, profileResult] = await Promise.all([
+    supabase
+      .from("notes")
+      .select("updated_at")
+      .eq("id", parsedNoteId.data)
+      .eq("user_id", user.id)
+      .maybeSingle(),
+    supabase.from("profiles").select("role").eq("id", user.id).maybeSingle(),
+  ]);
+
+  const { data: sourceNote, error: sourceNoteError } = sourceNoteResult;
 
   if (sourceNoteError) {
     logError({
@@ -110,6 +135,7 @@ export async function getRelatedNotes(
     return {
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
+      recommendationUsage: null,
       relatedNotes: [],
     };
   }
@@ -118,20 +144,43 @@ export async function getRelatedNotes(
     return {
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
+      recommendationUsage: null,
       relatedNotes: [],
     };
   }
 
+  const { data: profile, error: profileError } = profileResult;
+
   /*
-   * 화면 표시 목록과 AI 추천 실행 상태는 서로 독립적인 조회입니다.
+   * role 조회 실패는 Related Notes 목록 자체를 조회할 수 없는 오류가 아닙니다.
+   *
+   * 다만 ADMIN에게 유한한 일일 제한이 있는 것처럼 표시하면 안 되므로,
+   * role을 확정할 수 없는 경우에는 usage RPC를 호출하지 않고
+   * 사용량을 표시하지 않습니다.
+   */
+  if (profileError) {
+    logError({
+      message: "[getRelatedNotes] 사용자 역할 조회 실패",
+      error: profileError,
+    });
+  }
+
+  const shouldQueryRecommendationUsage =
+    !profileError && profile?.role === "USER";
+
+  /*
+   * 화면 표시 목록과 AI 추천 실행 상태, 일일 사용량은 서로 독립적인 조회입니다.
    * 같은 인증된 Supabase client를 사용하되 병렬로 실행해 페이지 진입 지연을 줄입니다.
    *
-   * 실행 상태는 운영 이력인 recommendation_runs가 아니라
+   * 실행 상태와 일일 사용량은 운영 이력인 recommendation_runs가 아니라
    * 기능 제어의 정본인 recommendation_execution_claims를 기준으로 판단합니다.
    *
-   * 현재 Note version과 동일한 source_updated_at의 claim만 대상으로 하며,
+   * 실행 상태는 현재 Note version과 동일한 source_updated_at의 claim만 대상으로 하며,
    * failed claim은 재시도 이후에도 이력으로 남을 수 있으므로
    * 특정 status의 존재 여부가 아니라 가장 최근 claim의 status를 조회합니다.
+   *
+   * 일일 사용량은 일반 사용자에게만 필요하므로 USER인 경우에만 RPC를 호출합니다.
+   * ADMIN은 Claim RPC에서 일일 quota를 우회하므로 usage RPC도 호출하지 않습니다.
    */
   const relatedNotesQuery = supabase
     .from("note_related_notes")
@@ -152,8 +201,24 @@ export async function getRelatedNotes(
     .order("claimed_at", { ascending: false })
     .limit(1);
 
-  const [relatedNotesResult, latestRecommendationExecutionResult] =
-    await Promise.all([relatedNotesQuery, latestRecommendationExecutionQuery]);
+  const recommendationUsageQuery = shouldQueryRecommendationUsage
+    ? supabase.rpc("get_related_note_recommendation_daily_usage", {
+        p_note_id: parsedNoteId.data,
+      })
+    : Promise.resolve({
+        data: null,
+        error: null,
+      });
+
+  const [
+    relatedNotesResult,
+    latestRecommendationExecutionResult,
+    recommendationUsageResult,
+  ] = await Promise.all([
+    relatedNotesQuery,
+    latestRecommendationExecutionQuery,
+    recommendationUsageQuery,
+  ]);
 
   const {
     hasFailedRecommendationExecution,
@@ -161,6 +226,42 @@ export async function getRelatedNotes(
   } = resolveRecommendationExecutionUiState(
     latestRecommendationExecutionResult,
   );
+
+  /*
+   * usage 조회 실패는 Related Notes 목록이나 실행 상태 조회에 영향을 주지 않습니다.
+   *
+   * 일일 사용량을 확정할 수 없는 경우에는 잘못된 quota 정보를 표시하지 않도록
+   * recommendationUsage를 null로 유지합니다.
+   */
+  let recommendationUsage: RelatedNotesQueryResult["recommendationUsage"] =
+    null;
+
+  if (shouldQueryRecommendationUsage) {
+    if (recommendationUsageResult.error) {
+      logError({
+        message: "[getRelatedNotes] AI 추천 일일 사용량 조회 실패",
+        error: recommendationUsageResult.error,
+      });
+    } else {
+      const parsedRecommendationUsage = z
+        .number()
+        .int()
+        .nonnegative()
+        .safeParse(recommendationUsageResult.data);
+
+      if (!parsedRecommendationUsage.success) {
+        logError({
+          message: "[getRelatedNotes] AI 추천 일일 사용량 파싱 실패",
+          error: parsedRecommendationUsage.error,
+        });
+      } else {
+        recommendationUsage = {
+          used: parsedRecommendationUsage.data,
+          limit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
+        };
+      }
+    }
+  }
 
   const { data, error } = relatedNotesResult;
 
@@ -173,6 +274,7 @@ export async function getRelatedNotes(
     return {
       hasFailedRecommendationExecution,
       hasRunningRecommendationExecution,
+      recommendationUsage,
       relatedNotes: [],
     };
   }
@@ -188,6 +290,7 @@ export async function getRelatedNotes(
     return {
       hasFailedRecommendationExecution,
       hasRunningRecommendationExecution,
+      recommendationUsage,
       relatedNotes: [],
     };
   }
@@ -195,6 +298,7 @@ export async function getRelatedNotes(
   return {
     hasFailedRecommendationExecution,
     hasRunningRecommendationExecution,
+    recommendationUsage,
     relatedNotes: parsed.data.map((row): RelatedNoteRecommendation => {
       const relatedNoteId = resolveOtherRelatedNoteId(row, parsedNoteId.data);
       const relatedNote =

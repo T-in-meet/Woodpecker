@@ -18,6 +18,10 @@ type RelatedNotesSectionProps = {
  * 목록이 비어 있어도 사용자가 직접 Related Note를 추가할 수 있도록
  * 섹션 자체는 유지합니다.
  *
+ * 일일 AI 추천 제한을 적용받는 사용자는 오늘의 사용량도 함께 표시하며,
+ * ADMIN처럼 제한을 적용받지 않는 사용자는 recommendationUsage가 null이므로
+ * 별도의 role 판별 없이 사용량을 표시하지 않습니다.
+ *
  * @param props Related Notes를 조회할 기준 Note ID
  */
 export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
@@ -38,6 +42,19 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
   // 최신 execution claim이 failed이면 AI 추천 실패 상태를 표시합니다.
   const hasFailedRecommendationExecution =
     data?.hasFailedRecommendationExecution === true;
+
+  /*
+   * 일반 사용자는 오늘의 AI 추천 사용량과 제한을 전달받습니다.
+   *
+   * 일일 제한을 적용받지 않는 ADMIN은 queries 계층에서 null을 반환하므로
+   * 이 컴포넌트에서는 사용자 role을 다시 확인하지 않습니다.
+   */
+  const recommendationUsage = data?.recommendationUsage ?? null;
+
+  // 오늘 사용량이 일일 제한에 도달했는지 확인합니다.
+  const hasReachedRecommendationLimit =
+    recommendationUsage !== null &&
+    recommendationUsage.used >= recommendationUsage.limit;
 
   return (
     <section className="border-t border-border/60 pt-6">
@@ -75,6 +92,23 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
             <p className="text-xs text-muted-foreground">
               관련 노트 추천에 실패했습니다.
             </p>
+          ) : recommendationUsage ? (
+            hasReachedRecommendationLimit ? (
+              /*
+               * 일일 제한 도달은 실행 실패와 다른 정상적인 quota 상태입니다.
+               *
+               * 현재 Note의 AI 추천을 더 생성할 수 없다는 점과
+               * 오늘 사용한 횟수를 함께 표시합니다.
+               */
+              <p className="text-xs text-muted-foreground">
+                {`오늘은 이 노트의 AI 추천을 더 생성할 수 없어요. (${recommendationUsage.used}/${recommendationUsage.limit})`}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                오늘 {recommendationUsage.used}/{recommendationUsage.limit}회
+                사용
+              </p>
+            )
           ) : null}
 
           <AddRelatedNoteDialog noteId={noteId} />

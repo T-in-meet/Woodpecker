@@ -6,6 +6,7 @@ import { logError } from "@/lib/logger";
 import { createServerComponentClient } from "@/lib/supabase/server";
 import { createSupabaseQueryMock } from "@/tests/supabaseQueryMock";
 
+import { RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE } from "../constants/ai";
 import { getRelatedNoteCandidates, getRelatedNotes } from "../queries";
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -53,6 +54,27 @@ function createCurrentNoteResult() {
   };
 }
 
+/** 일반 사용자의 profile 조회 결과를 반환합니다. */
+function createUserProfileResult() {
+  return {
+    data: {
+      role: "USER",
+    },
+  };
+}
+
+/**
+ * Related Notes 일일 사용량 RPC mock을 만듭니다.
+ *
+ * 별도의 사용량을 지정하지 않으면 오늘 사용량이 없는 상태인 0을 반환합니다.
+ */
+function createRecommendationUsageRpcMock(used = 0) {
+  return vi.fn().mockResolvedValue({
+    data: used,
+    error: null,
+  });
+}
+
 describe("getRelatedNotes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -64,6 +86,7 @@ describe("getRelatedNotes", () => {
     expect(result).toEqual({
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
+      recommendationUsage: null,
       relatedNotes: [],
     });
     expect(createClientMock).not.toHaveBeenCalled();
@@ -73,6 +96,7 @@ describe("getRelatedNotes", () => {
   it("active 관련 노트를 조회해 화면 표시 형식으로 반환한다", async () => {
     const { supabase, callsFor } = createSupabaseQueryMock({
       notes: createCurrentNoteResult(),
+      profiles: createUserProfileResult(),
       note_related_notes: {
         data: [
           {
@@ -116,9 +140,12 @@ describe("getRelatedNotes", () => {
       },
     });
 
+    const rpcMock = createRecommendationUsageRpcMock();
+
     createClientMock.mockResolvedValue({
       ...supabase,
       auth: createAuthMock(),
+      rpc: rpcMock,
     } as never);
 
     const result = await getRelatedNotes(noteId);
@@ -134,6 +161,12 @@ describe("getRelatedNotes", () => {
     expect(noteCalls).toContainEqual(["eq", ["id", noteId]]);
     expect(noteCalls).toContainEqual(["eq", ["user_id", authenticatedUserId]]);
     expect(noteCalls).toContainEqual(["maybeSingle", []]);
+
+    const profileCalls = callsFor("profiles");
+
+    expect(profileCalls).toContainEqual(["select", ["role"]]);
+    expect(profileCalls).toContainEqual(["eq", ["id", authenticatedUserId]]);
+    expect(profileCalls).toContainEqual(["maybeSingle", []]);
 
     const calls = callsFor("note_related_notes");
 
@@ -165,9 +198,20 @@ describe("getRelatedNotes", () => {
     ]);
     expect(executionCalls).toContainEqual(["limit", [1]]);
 
+    expect(rpcMock).toHaveBeenCalledWith(
+      "get_related_note_recommendation_daily_usage",
+      {
+        p_note_id: noteId,
+      },
+    );
+
     expect(result).toStrictEqual({
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: true,
+      recommendationUsage: {
+        used: 0,
+        limit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
+      },
       relatedNotes: [
         {
           noteId: "22222222-2222-4222-8222-222222222222",
@@ -188,6 +232,7 @@ describe("getRelatedNotes", () => {
   it("현재 Note가 related_note_id에 있는 관계도 반대편 Note로 반환한다", async () => {
     const { supabase } = createSupabaseQueryMock({
       notes: createCurrentNoteResult(),
+      profiles: createUserProfileResult(),
       note_related_notes: {
         data: [
           {
@@ -214,6 +259,7 @@ describe("getRelatedNotes", () => {
     createClientMock.mockResolvedValue({
       ...supabase,
       auth: createAuthMock(),
+      rpc: createRecommendationUsageRpcMock(),
     } as never);
 
     const result = await getRelatedNotes(noteId);
@@ -221,6 +267,10 @@ describe("getRelatedNotes", () => {
     expect(result).toStrictEqual({
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
+      recommendationUsage: {
+        used: 0,
+        limit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
+      },
       relatedNotes: [
         {
           noteId: "22222222-2222-4222-8222-222222222222",
@@ -235,6 +285,7 @@ describe("getRelatedNotes", () => {
   it("가장 최근 AI 추천 실행이 실패했으면 실패 상태를 반환한다", async () => {
     const { supabase } = createSupabaseQueryMock({
       notes: createCurrentNoteResult(),
+      profiles: createUserProfileResult(),
       note_related_notes: {
         data: [],
       },
@@ -250,6 +301,7 @@ describe("getRelatedNotes", () => {
     createClientMock.mockResolvedValue({
       ...supabase,
       auth: createAuthMock(),
+      rpc: createRecommendationUsageRpcMock(),
     } as never);
 
     const result = await getRelatedNotes(noteId);
@@ -257,6 +309,10 @@ describe("getRelatedNotes", () => {
     expect(result).toEqual({
       hasFailedRecommendationExecution: true,
       hasRunningRecommendationExecution: false,
+      recommendationUsage: {
+        used: 0,
+        limit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
+      },
       relatedNotes: [],
     });
   });
@@ -264,6 +320,7 @@ describe("getRelatedNotes", () => {
   it("현재 Note version의 execution claim만 조회한다", async () => {
     const { supabase, callsFor } = createSupabaseQueryMock({
       notes: createCurrentNoteResult(),
+      profiles: createUserProfileResult(),
       note_related_notes: {
         data: [],
       },
@@ -275,6 +332,7 @@ describe("getRelatedNotes", () => {
     createClientMock.mockResolvedValue({
       ...supabase,
       auth: createAuthMock(),
+      rpc: createRecommendationUsageRpcMock(),
     } as never);
 
     await getRelatedNotes(noteId);
@@ -290,6 +348,112 @@ describe("getRelatedNotes", () => {
     ]);
   });
 
+  it("일반 사용자는 현재 Note의 일일 AI 추천 사용량을 반환한다", async () => {
+    const { supabase } = createSupabaseQueryMock({
+      notes: createCurrentNoteResult(),
+      profiles: createUserProfileResult(),
+      note_related_notes: {
+        data: [],
+      },
+      related_note_recommendation_execution_claims: {
+        data: [],
+      },
+    });
+
+    const rpcMock = createRecommendationUsageRpcMock(1);
+
+    createClientMock.mockResolvedValue({
+      ...supabase,
+      auth: createAuthMock(),
+      rpc: rpcMock,
+    } as never);
+
+    const result = await getRelatedNotes(noteId);
+
+    expect(rpcMock).toHaveBeenCalledWith(
+      "get_related_note_recommendation_daily_usage",
+      {
+        p_note_id: noteId,
+      },
+    );
+
+    expect(result.recommendationUsage).toEqual({
+      used: 1,
+      limit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
+    });
+  });
+
+  it("ADMIN은 일일 사용량 RPC를 호출하지 않고 사용량을 반환하지 않는다", async () => {
+    const { supabase } = createSupabaseQueryMock({
+      notes: createCurrentNoteResult(),
+      profiles: {
+        data: {
+          role: "ADMIN",
+        },
+      },
+      note_related_notes: {
+        data: [],
+      },
+      related_note_recommendation_execution_claims: {
+        data: [],
+      },
+    });
+
+    const rpcMock = vi.fn();
+
+    createClientMock.mockResolvedValue({
+      ...supabase,
+      auth: createAuthMock(),
+      rpc: rpcMock,
+    } as never);
+
+    const result = await getRelatedNotes(noteId);
+
+    expect(rpcMock).not.toHaveBeenCalled();
+
+    expect(result.recommendationUsage).toBeNull();
+  });
+
+  it("일일 사용량 조회에 실패해도 Related Notes 조회 결과에는 영향을 주지 않는다", async () => {
+    const usageError = new Error("daily usage query failed");
+
+    const { supabase } = createSupabaseQueryMock({
+      notes: createCurrentNoteResult(),
+      profiles: createUserProfileResult(),
+      note_related_notes: {
+        data: [],
+      },
+      related_note_recommendation_execution_claims: {
+        data: [],
+      },
+    });
+
+    const rpcMock = vi.fn().mockResolvedValue({
+      data: null,
+      error: usageError,
+    });
+
+    createClientMock.mockResolvedValue({
+      ...supabase,
+      auth: createAuthMock(),
+      rpc: rpcMock,
+    } as never);
+
+    const result = await getRelatedNotes(noteId);
+
+    expect(result).toEqual({
+      hasFailedRecommendationExecution: false,
+      hasRunningRecommendationExecution: false,
+      recommendationUsage: null,
+      relatedNotes: [],
+    });
+
+    expect(logErrorMock).toHaveBeenCalledWith({
+      message: "[getRelatedNotes] AI 추천 일일 사용량 조회 실패",
+      error: usageError,
+    });
+  });
+
   it("기준 Note 조회에 실패하면 오류를 기록하고 빈 결과를 반환한다", async () => {
     const dbError = new Error("source note query failed");
 
@@ -298,11 +462,13 @@ describe("getRelatedNotes", () => {
         data: null,
         error: dbError,
       },
+      profiles: createUserProfileResult(),
     });
 
     createClientMock.mockResolvedValue({
       ...supabase,
       auth: createAuthMock(),
+      rpc: createRecommendationUsageRpcMock(),
     } as never);
 
     const result = await getRelatedNotes(noteId);
@@ -310,6 +476,7 @@ describe("getRelatedNotes", () => {
     expect(result).toEqual({
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
+      recommendationUsage: null,
       relatedNotes: [],
     });
     expect(logErrorMock).toHaveBeenCalledWith({
@@ -327,11 +494,13 @@ describe("getRelatedNotes", () => {
       notes: {
         data: null,
       },
+      profiles: createUserProfileResult(),
     });
 
     createClientMock.mockResolvedValue({
       ...supabase,
       auth: createAuthMock(),
+      rpc: createRecommendationUsageRpcMock(),
     } as never);
 
     const result = await getRelatedNotes(noteId);
@@ -339,6 +508,7 @@ describe("getRelatedNotes", () => {
     expect(result).toEqual({
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
+      recommendationUsage: null,
       relatedNotes: [],
     });
     expect(callsFor("note_related_notes")).toEqual([]);
@@ -352,6 +522,7 @@ describe("getRelatedNotes", () => {
 
     const { supabase } = createSupabaseQueryMock({
       notes: createCurrentNoteResult(),
+      profiles: createUserProfileResult(),
       note_related_notes: {
         data: null,
         error: dbError,
@@ -368,6 +539,7 @@ describe("getRelatedNotes", () => {
     createClientMock.mockResolvedValue({
       ...supabase,
       auth: createAuthMock(),
+      rpc: createRecommendationUsageRpcMock(),
     } as never);
 
     const result = await getRelatedNotes(noteId);
@@ -375,6 +547,10 @@ describe("getRelatedNotes", () => {
     expect(result).toEqual({
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: true,
+      recommendationUsage: {
+        used: 0,
+        limit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
+      },
       relatedNotes: [],
     });
     expect(logErrorMock).toHaveBeenCalledWith({
@@ -386,6 +562,7 @@ describe("getRelatedNotes", () => {
   it("조회 결과가 스키마와 맞지 않으면 오류를 기록하고 빈 배열을 반환한다", async () => {
     const { supabase } = createSupabaseQueryMock({
       notes: createCurrentNoteResult(),
+      profiles: createUserProfileResult(),
       note_related_notes: {
         data: [
           {
@@ -412,6 +589,7 @@ describe("getRelatedNotes", () => {
     createClientMock.mockResolvedValue({
       ...supabase,
       auth: createAuthMock(),
+      rpc: createRecommendationUsageRpcMock(),
     } as never);
 
     const result = await getRelatedNotes(noteId);
@@ -419,6 +597,10 @@ describe("getRelatedNotes", () => {
     expect(result).toEqual({
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
+      recommendationUsage: {
+        used: 0,
+        limit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
+      },
       relatedNotes: [],
     });
     expect(logErrorMock).toHaveBeenCalledWith(
@@ -433,6 +615,7 @@ describe("getRelatedNotes", () => {
 
     const { supabase } = createSupabaseQueryMock({
       notes: createCurrentNoteResult(),
+      profiles: createUserProfileResult(),
       note_related_notes: {
         data: [],
       },
@@ -445,6 +628,7 @@ describe("getRelatedNotes", () => {
     createClientMock.mockResolvedValue({
       ...supabase,
       auth: createAuthMock(),
+      rpc: createRecommendationUsageRpcMock(),
     } as never);
 
     const result = await getRelatedNotes(noteId);
@@ -452,6 +636,10 @@ describe("getRelatedNotes", () => {
     expect(result).toEqual({
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
+      recommendationUsage: {
+        used: 0,
+        limit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
+      },
       relatedNotes: [],
     });
     expect(logErrorMock).toHaveBeenCalledWith({

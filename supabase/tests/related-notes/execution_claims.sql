@@ -483,19 +483,20 @@ SELECT is(
 -- 이전 Note version에 남은 3분 초과 running Claim
 -- ----------------------------------------------------------------------------
 --
--- 이번 migration에서 stale cleanup 범위를 동일 source version에서
--- 동일 Note 전체로 확장한 정책을 직접 검증합니다.
+-- stale cleanup은 현재 요청과 동일한 source_updated_at의 running Claim만
+-- 대상으로 합니다.
 --
 -- 1. 현재 Note version으로 running Claim을 생성합니다.
 -- 2. Claim의 claimed_at은 4분 전으로 설정하여 stale 기준을 초과시킵니다.
 -- 3. 그 뒤 Note를 수정하여 새로운 source_updated_at을 만듭니다.
 -- 4. 새로운 Note version으로 Claim RPC를 호출합니다.
 --
--- 이전 구현처럼 stale cleanup에 source_updated_at 조건이 남아 있다면
--- 4번 요청은 이전 version의 running Claim을 정리하지 못합니다.
+-- 이전 version의 오래된 running Claim은 현재 요청과 source_updated_at이 다르므로
+-- stale cleanup 대상이 아닙니다.
 --
--- 현재 정책에서는 같은 Note에 남은 오래된 running Claim을 version과 관계없이
--- stale로 종료한 뒤 새로운 version의 Claim을 정상적으로 생성해야 합니다.
+-- 동시에 duplicate 판정도 현재 source version을 기준으로 수행하므로,
+-- 이전 version의 running Claim이 남아 있어도 새로운 version의 Claim은
+-- 정상적으로 생성되어야 합니다.
 --
 
 INSERT INTO public.related_note_recommendation_execution_claims (
@@ -538,7 +539,7 @@ FROM public.claim_related_note_recommendation_execution(
 )
 \gset test_related_note_claims_expired_running_
 
--- 이전 version의 오래된 running Claim이 정리되었으므로
+-- 이전 version의 running Claim은 현재 version의 duplicate 판정 대상이 아니므로
 -- 새로운 version은 정상적으로 실행 권한을 획득해야 합니다.
 SELECT is(
     :'test_related_note_claims_expired_running_status'::text,
@@ -546,28 +547,30 @@ SELECT is(
     'expired running claim from a previous note version should allow a new execution claim'
 );
 
--- 이전 version에 남아 있던 Claim은 stale로 전환되어야 합니다.
+-- 이전 version의 Claim은 현재 source version의 stale cleanup 대상이 아니므로
+-- running 상태를 그대로 유지해야 합니다.
 SELECT is(
     (
         SELECT status
         FROM public.related_note_recommendation_execution_claims
         WHERE id = current_setting('test.related_note_claims_expired_running_claim_id')::uuid
     ),
-    'stale',
-    'expired running claim from a previous note version should be completed as stale'
+    'running',
+    'expired running claim from a previous note version should remain running'
 );
 
--- terminal 상태인 stale로 변경하면서 완료 시각도 기록되어야 합니다.
+-- 이전 version의 Claim은 stale로 완료되지 않았으므로
+-- completed_at도 기록되지 않아야 합니다.
 SELECT ok(
     (
-        SELECT completed_at IS NOT NULL
+        SELECT completed_at IS NULL
         FROM public.related_note_recommendation_execution_claims
         WHERE id = current_setting('test.related_note_claims_expired_running_claim_id')::uuid
     ),
-    'expired running claim from a previous note version should receive completed_at'
+    'expired running claim from a previous note version should not receive completed_at'
 );
 
--- stale cleanup 이후 새로 생성된 현재 version Claim은 running이어야 합니다.
+-- 새로 생성된 현재 version Claim은 running 상태여야 합니다.
 SELECT is(
     (
         SELECT status
@@ -575,7 +578,7 @@ SELECT is(
         WHERE id = :'test_related_note_claims_expired_running_claim_id'::uuid
     ),
     'running',
-    'new claim after cleaning up the previous note version should be running'
+    'new claim for the current note version should be running'
 );
 
 

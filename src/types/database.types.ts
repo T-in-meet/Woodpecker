@@ -2193,6 +2193,10 @@ export type Database = {
           type: string;
         }[];
       };
+      get_related_note_recommendation_daily_usage: {
+        Args: { p_note_id: string };
+        Returns: number;
+      };
       increment_operational_error_occurrence: {
         Args: {
           p_actor_user_id: string;
