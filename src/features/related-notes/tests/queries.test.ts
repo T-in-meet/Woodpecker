@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { requireCurrentLegalAcceptance } from "@/features/auth/utils/requireCurrentLegalAcceptance";
+import {
+  RELATED_NOTES_OPERATIONAL_ERROR_CODES,
+  RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS,
+} from "@/features/operational-errors/constants";
 import { getNoteDetailRoute } from "@/lib/constants/routes";
 import { logError } from "@/lib/logger";
 import { createServerComponentClient } from "@/lib/supabase/server";
@@ -8,6 +12,7 @@ import { createSupabaseQueryMock } from "@/tests/supabaseQueryMock";
 
 import { RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE } from "../constants/ai";
 import { getRelatedNoteCandidates, getRelatedNotes } from "../queries";
+import { reportRelatedNotesOperationalError } from "../utils/report-operational-error";
 
 vi.mock("@/lib/supabase/server", () => ({
   createServerComponentClient: vi.fn(),
@@ -21,10 +26,17 @@ vi.mock("@/features/auth/utils/requireCurrentLegalAcceptance", () => ({
   requireCurrentLegalAcceptance: vi.fn(),
 }));
 
+vi.mock("../utils/report-operational-error", () => ({
+  reportRelatedNotesOperationalError: vi.fn(),
+}));
+
 const createClientMock = vi.mocked(createServerComponentClient);
 const logErrorMock = vi.mocked(logError);
 const requireCurrentLegalAcceptanceMock = vi.mocked(
   requireCurrentLegalAcceptance,
+);
+const reportRelatedNotesOperationalErrorMock = vi.mocked(
+  reportRelatedNotesOperationalError,
 );
 
 const authenticatedUserId = "99999999-9999-4999-8999-999999999999";
@@ -414,6 +426,48 @@ describe("getRelatedNotes", () => {
     expect(result.recommendationUsage).toBeNull();
   });
 
+  it("사용자 역할 조회에 실패하면 운영 오류를 보고하고 사용량을 반환하지 않는다", async () => {
+    const profileError = new Error("profile query failed");
+
+    const { supabase } = createSupabaseQueryMock({
+      notes: createCurrentNoteResult(),
+      profiles: {
+        data: null,
+        error: profileError,
+      },
+      note_related_notes: {
+        data: [],
+      },
+      related_note_recommendation_execution_claims: {
+        data: [],
+      },
+    });
+
+    const rpcMock = vi.fn();
+
+    createClientMock.mockResolvedValue({
+      ...supabase,
+      auth: createAuthMock(),
+      rpc: rpcMock,
+    } as never);
+
+    const result = await getRelatedNotes(noteId);
+
+    expect(rpcMock).not.toHaveBeenCalled();
+
+    expect(result.recommendationUsage).toBeNull();
+
+    expect(reportRelatedNotesOperationalErrorMock).toHaveBeenCalledWith({
+      actorUserId: authenticatedUserId,
+      error: profileError,
+      errorCode: RELATED_NOTES_OPERATIONAL_ERROR_CODES.DAILY_USAGE_LOAD_FAILED,
+      message:
+        "Related Notes 일일 사용량 조회를 위한 사용자 역할 조회에 실패했습니다.",
+      operation: RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.GET_DAILY_USAGE,
+      userId: authenticatedUserId,
+    });
+  });
+
   it("일일 사용량 조회에 실패해도 Related Notes 조회 결과에는 영향을 주지 않는다", async () => {
     const usageError = new Error("daily usage query failed");
 
@@ -448,13 +502,52 @@ describe("getRelatedNotes", () => {
       relatedNotes: [],
     });
 
-    expect(logErrorMock).toHaveBeenCalledWith({
-      message: "[getRelatedNotes] AI 추천 일일 사용량 조회 실패",
+    expect(reportRelatedNotesOperationalErrorMock).toHaveBeenCalledWith({
+      actorUserId: authenticatedUserId,
       error: usageError,
+      errorCode: RELATED_NOTES_OPERATIONAL_ERROR_CODES.DAILY_USAGE_LOAD_FAILED,
+      message: "Related Notes 일일 AI 추천 사용량 조회에 실패했습니다.",
+      operation: RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.GET_DAILY_USAGE,
+      userId: authenticatedUserId,
     });
   });
 
-  it("기준 Note 조회에 실패하면 오류를 기록하고 빈 결과를 반환한다", async () => {
+  it("일일 사용량 응답이 유효하지 않으면 오류를 기록하고 사용량을 반환하지 않는다", async () => {
+    const { supabase } = createSupabaseQueryMock({
+      notes: createCurrentNoteResult(),
+      profiles: createUserProfileResult(),
+      note_related_notes: {
+        data: [],
+      },
+      related_note_recommendation_execution_claims: {
+        data: [],
+      },
+    });
+
+    const rpcMock = vi.fn().mockResolvedValue({
+      data: -1,
+      error: null,
+    });
+
+    createClientMock.mockResolvedValue({
+      ...supabase,
+      auth: createAuthMock(),
+      rpc: rpcMock,
+    } as never);
+
+    const result = await getRelatedNotes(noteId);
+
+    expect(result.recommendationUsage).toBeNull();
+
+    expect(logErrorMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "[getRelatedNotes] AI 추천 일일 사용량 파싱 실패",
+      }),
+    );
+    expect(reportRelatedNotesOperationalErrorMock).not.toHaveBeenCalled();
+  });
+
+  it("기준 Note 조회에 실패하면 운영 오류를 보고하고 빈 결과를 반환한다", async () => {
     const dbError = new Error("source note query failed");
 
     const { supabase, callsFor } = createSupabaseQueryMock({
@@ -479,9 +572,16 @@ describe("getRelatedNotes", () => {
       recommendationUsage: null,
       relatedNotes: [],
     });
-    expect(logErrorMock).toHaveBeenCalledWith({
-      message: "[getRelatedNotes] 기준 노트 조회 실패",
+    expect(reportRelatedNotesOperationalErrorMock).toHaveBeenCalledWith({
+      actorUserId: authenticatedUserId,
       error: dbError,
+      errorCode: RELATED_NOTES_OPERATIONAL_ERROR_CODES.SOURCE_NOTE_LOAD_FAILED,
+      message: "Related Notes 조회를 위한 기준 Note 조회에 실패했습니다.",
+      operation: RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.LOAD_SOURCE_NOTE,
+      context: {
+        noteId,
+      },
+      userId: authenticatedUserId,
     });
     expect(callsFor("note_related_notes")).toEqual([]);
     expect(callsFor("related_note_recommendation_execution_claims")).toEqual(
@@ -517,7 +617,7 @@ describe("getRelatedNotes", () => {
     );
   });
 
-  it("조회에 실패하면 오류를 기록하고 빈 배열을 반환한다", async () => {
+  it("Related Notes 목록 조회에 실패하면 운영 오류를 보고하고 빈 배열을 반환한다", async () => {
     const dbError = new Error("related notes query failed");
 
     const { supabase } = createSupabaseQueryMock({
@@ -553,9 +653,17 @@ describe("getRelatedNotes", () => {
       },
       relatedNotes: [],
     });
-    expect(logErrorMock).toHaveBeenCalledWith({
-      message: "[getRelatedNotes] 관련 노트 조회 실패",
+    expect(reportRelatedNotesOperationalErrorMock).toHaveBeenCalledWith({
+      actorUserId: authenticatedUserId,
       error: dbError,
+      errorCode:
+        RELATED_NOTES_OPERATIONAL_ERROR_CODES.RELATED_NOTES_LOAD_FAILED,
+      message: "Related Notes 목록 조회에 실패했습니다.",
+      operation: RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.LOAD_RELATED_NOTES,
+      context: {
+        noteId,
+      },
+      userId: authenticatedUserId,
     });
   });
 
@@ -610,7 +718,7 @@ describe("getRelatedNotes", () => {
     );
   });
 
-  it("AI 추천 실행 상태 조회에 실패하면 오류를 기록하고 실행 상태를 false로 반환한다", async () => {
+  it("AI 추천 실행 상태 조회에 실패하면 운영 오류를 보고하고 실행 상태를 false로 반환한다", async () => {
     const dbError = new Error("recommendation execution query failed");
 
     const { supabase } = createSupabaseQueryMock({
@@ -642,10 +750,60 @@ describe("getRelatedNotes", () => {
       },
       relatedNotes: [],
     });
-    expect(logErrorMock).toHaveBeenCalledWith({
-      message: "[getRelatedNotes] AI 추천 실행 상태 조회 실패",
+    expect(reportRelatedNotesOperationalErrorMock).toHaveBeenCalledWith({
+      actorUserId: authenticatedUserId,
       error: dbError,
+      errorCode:
+        RELATED_NOTES_OPERATIONAL_ERROR_CODES.RECOMMENDATION_EXECUTION_STATE_LOAD_FAILED,
+      message: "Related Notes AI 추천 실행 상태 조회에 실패했습니다.",
+      operation:
+        RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.LOAD_RECOMMENDATION_EXECUTION_STATE,
+      context: {
+        noteId,
+      },
+      userId: authenticatedUserId,
     });
+  });
+
+  it("AI 추천 실행 상태 응답이 유효하지 않으면 오류를 기록하고 실행 상태를 false로 반환한다", async () => {
+    const { supabase } = createSupabaseQueryMock({
+      notes: createCurrentNoteResult(),
+      profiles: createUserProfileResult(),
+      note_related_notes: {
+        data: [],
+      },
+      related_note_recommendation_execution_claims: {
+        data: [
+          {
+            status: "unknown",
+          },
+        ],
+      },
+    });
+
+    createClientMock.mockResolvedValue({
+      ...supabase,
+      auth: createAuthMock(),
+      rpc: createRecommendationUsageRpcMock(),
+    } as never);
+
+    const result = await getRelatedNotes(noteId);
+
+    expect(result).toEqual({
+      hasFailedRecommendationExecution: false,
+      hasRunningRecommendationExecution: false,
+      recommendationUsage: {
+        used: 0,
+        limit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
+      },
+      relatedNotes: [],
+    });
+    expect(logErrorMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "[getRelatedNotes] AI 추천 실행 상태 파싱 실패",
+      }),
+    );
+    expect(reportRelatedNotesOperationalErrorMock).not.toHaveBeenCalled();
   });
 });
 
@@ -655,6 +813,7 @@ describe("getRelatedNoteCandidates", () => {
   const candidateNoteId = "33333333-3333-4333-8333-333333333333";
 
   beforeEach(() => {
+    vi.clearAllMocks();
     createClientMock.mockReset();
   });
 
@@ -886,6 +1045,327 @@ describe("getRelatedNoteCandidates", () => {
       "in",
       `(${noteId},${relatedNoteId})`,
     );
+  });
+
+  it("기준 Note DB 조회에 실패하면 운영 오류를 보고하고 기존처럼 throw한다", async () => {
+    const dbError = new Error("source note query failed");
+
+    const sourceMaybeSingleMock = vi.fn().mockResolvedValue({
+      data: null,
+      error: dbError,
+    });
+
+    const sourceUserEqMock = vi.fn().mockReturnValue({
+      maybeSingle: sourceMaybeSingleMock,
+    });
+
+    const sourceNoteEqMock = vi.fn().mockReturnValue({
+      eq: sourceUserEqMock,
+    });
+
+    const sourceSelectMock = vi.fn().mockReturnValue({
+      eq: sourceNoteEqMock,
+    });
+
+    const fromMock = vi.fn().mockReturnValue({
+      select: sourceSelectMock,
+    });
+
+    createClientMock.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: {
+            user: {
+              id: authenticatedUserId,
+            },
+          },
+        }),
+      },
+      from: fromMock,
+    } as never);
+
+    await expect(getRelatedNoteCandidates(noteId)).rejects.toBe(dbError);
+
+    expect(reportRelatedNotesOperationalErrorMock).toHaveBeenCalledWith({
+      actorUserId: authenticatedUserId,
+      error: dbError,
+      errorCode: RELATED_NOTES_OPERATIONAL_ERROR_CODES.SOURCE_NOTE_LOAD_FAILED,
+      message: "Related Note 후보 조회를 위한 기준 Note 조회에 실패했습니다.",
+      operation: RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.LOAD_SOURCE_NOTE,
+      context: {
+        noteId,
+      },
+      userId: authenticatedUserId,
+    });
+  });
+
+  it("기존 관계 DB 조회에 실패하면 운영 오류를 보고하고 기존처럼 throw한다", async () => {
+    const dbError = new Error("existing relation query failed");
+
+    const sourceMaybeSingleMock = vi.fn().mockResolvedValue({
+      data: {
+        id: noteId,
+      },
+      error: null,
+    });
+
+    const sourceUserEqMock = vi.fn().mockReturnValue({
+      maybeSingle: sourceMaybeSingleMock,
+    });
+
+    const sourceNoteEqMock = vi.fn().mockReturnValue({
+      eq: sourceUserEqMock,
+    });
+
+    const sourceSelectMock = vi.fn().mockReturnValue({
+      eq: sourceNoteEqMock,
+    });
+
+    const relationOrMock = vi.fn().mockResolvedValue({
+      data: null,
+      error: dbError,
+    });
+
+    const relationSelectMock = vi.fn().mockReturnValue({
+      or: relationOrMock,
+    });
+
+    const fromMock = vi
+      .fn()
+      .mockImplementationOnce(() => ({
+        select: sourceSelectMock,
+      }))
+      .mockImplementationOnce(() => ({
+        select: relationSelectMock,
+      }));
+
+    createClientMock.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: {
+            user: {
+              id: authenticatedUserId,
+            },
+          },
+        }),
+      },
+      from: fromMock,
+    } as never);
+
+    await expect(getRelatedNoteCandidates(noteId)).rejects.toBe(dbError);
+
+    expect(reportRelatedNotesOperationalErrorMock).toHaveBeenCalledWith({
+      actorUserId: authenticatedUserId,
+      error: dbError,
+      errorCode:
+        RELATED_NOTES_OPERATIONAL_ERROR_CODES.RELATED_NOTES_LOAD_FAILED,
+      message: "Related Note 후보 제외를 위한 기존 관계 조회에 실패했습니다.",
+      operation: RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.LOAD_RELATED_NOTES,
+      context: {
+        noteId,
+      },
+      userId: authenticatedUserId,
+    });
+  });
+
+  it("후보 Note 목록 DB 조회에 실패하면 운영 오류를 보고하고 기존처럼 throw한다", async () => {
+    const dbError = new Error("candidate note query failed");
+
+    const sourceMaybeSingleMock = vi.fn().mockResolvedValue({
+      data: {
+        id: noteId,
+      },
+      error: null,
+    });
+
+    const sourceUserEqMock = vi.fn().mockReturnValue({
+      maybeSingle: sourceMaybeSingleMock,
+    });
+
+    const sourceNoteEqMock = vi.fn().mockReturnValue({
+      eq: sourceUserEqMock,
+    });
+
+    const sourceSelectMock = vi.fn().mockReturnValue({
+      eq: sourceNoteEqMock,
+    });
+
+    const relationOrMock = vi.fn().mockResolvedValue({
+      data: [],
+      error: null,
+    });
+
+    const relationSelectMock = vi.fn().mockReturnValue({
+      or: relationOrMock,
+    });
+
+    const candidateRangeMock = vi.fn().mockResolvedValue({
+      data: null,
+      count: null,
+      error: dbError,
+    });
+
+    const candidateIlikeMock = vi.fn().mockReturnValue({
+      range: candidateRangeMock,
+    });
+
+    const candidateOrderMock = vi.fn().mockReturnValue({
+      ilike: candidateIlikeMock,
+      range: candidateRangeMock,
+    });
+
+    const candidateNotMock = vi.fn().mockReturnValue({
+      order: candidateOrderMock,
+    });
+
+    const candidateUserEqMock = vi.fn().mockReturnValue({
+      not: candidateNotMock,
+    });
+
+    const candidateSelectMock = vi.fn().mockReturnValue({
+      eq: candidateUserEqMock,
+    });
+
+    const fromMock = vi
+      .fn()
+      .mockImplementationOnce(() => ({
+        select: sourceSelectMock,
+      }))
+      .mockImplementationOnce(() => ({
+        select: relationSelectMock,
+      }))
+      .mockImplementationOnce(() => ({
+        select: candidateSelectMock,
+      }));
+
+    createClientMock.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: {
+            user: {
+              id: authenticatedUserId,
+            },
+          },
+        }),
+      },
+      from: fromMock,
+    } as never);
+
+    await expect(getRelatedNoteCandidates(noteId, 2, "후보", 8)).rejects.toBe(
+      dbError,
+    );
+
+    expect(reportRelatedNotesOperationalErrorMock).toHaveBeenCalledWith({
+      actorUserId: authenticatedUserId,
+      error: dbError,
+      errorCode:
+        RELATED_NOTES_OPERATIONAL_ERROR_CODES.RELATED_NOTE_CANDIDATES_LOAD_FAILED,
+      message: "Related Note 후보 목록 조회에 실패했습니다.",
+      operation:
+        RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.LOAD_RELATED_NOTE_CANDIDATES,
+      context: {
+        noteId,
+        page: 2,
+        pageSize: 8,
+        searchApplied: true,
+      },
+      userId: authenticatedUserId,
+    });
+  });
+
+  it("후보 Note 응답이 유효하지 않으면 오류를 기록하고 빈 후보 목록을 반환한다", async () => {
+    const sourceMaybeSingleMock = vi.fn().mockResolvedValue({
+      data: {
+        id: noteId,
+      },
+      error: null,
+    });
+
+    const sourceUserEqMock = vi.fn().mockReturnValue({
+      maybeSingle: sourceMaybeSingleMock,
+    });
+
+    const sourceNoteEqMock = vi.fn().mockReturnValue({
+      eq: sourceUserEqMock,
+    });
+
+    const sourceSelectMock = vi.fn().mockReturnValue({
+      eq: sourceNoteEqMock,
+    });
+
+    const relationOrMock = vi.fn().mockResolvedValue({
+      data: [],
+      error: null,
+    });
+
+    const relationSelectMock = vi.fn().mockReturnValue({
+      or: relationOrMock,
+    });
+
+    const candidateRangeMock = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: "not-a-uuid",
+          title: "후보 노트",
+        },
+      ],
+      count: 1,
+      error: null,
+    });
+
+    const candidateOrderMock = vi.fn().mockReturnValue({
+      range: candidateRangeMock,
+    });
+
+    const candidateNotMock = vi.fn().mockReturnValue({
+      order: candidateOrderMock,
+    });
+
+    const candidateUserEqMock = vi.fn().mockReturnValue({
+      not: candidateNotMock,
+    });
+
+    const candidateSelectMock = vi.fn().mockReturnValue({
+      eq: candidateUserEqMock,
+    });
+
+    const fromMock = vi
+      .fn()
+      .mockImplementationOnce(() => ({
+        select: sourceSelectMock,
+      }))
+      .mockImplementationOnce(() => ({
+        select: relationSelectMock,
+      }))
+      .mockImplementationOnce(() => ({
+        select: candidateSelectMock,
+      }));
+
+    createClientMock.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: {
+            user: {
+              id: authenticatedUserId,
+            },
+          },
+        }),
+      },
+      from: fromMock,
+    } as never);
+
+    const result = await getRelatedNoteCandidates(noteId);
+
+    expect(result).toEqual({
+      notes: [],
+      total: 0,
+    });
+    expect(logErrorMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "[getRelatedNoteCandidates] 후보 Note 파싱 실패",
+      }),
+    );
+    expect(reportRelatedNotesOperationalErrorMock).not.toHaveBeenCalled();
   });
 
   it("인증된 사용자가 없으면 빈 후보 목록을 반환한다", async () => {

@@ -3,6 +3,10 @@
 import { z } from "zod";
 
 import { requireCurrentLegalAcceptance } from "@/features/auth/utils/requireCurrentLegalAcceptance";
+import {
+  RELATED_NOTES_OPERATIONAL_ERROR_CODES,
+  RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS,
+} from "@/features/operational-errors/constants";
 import { getNoteDetailRoute } from "@/lib/constants/routes";
 import { logError } from "@/lib/logger";
 import { createServerComponentClient } from "@/lib/supabase/server";
@@ -11,6 +15,7 @@ import { escapePostgrestLikePattern } from "@/lib/utils/escapePostgrestLikePatte
 import { RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE } from "./constants/ai";
 import { relatedNoteRowSchema } from "./schemas";
 import type { RelatedNoteRecommendation } from "./types";
+import { reportRelatedNotesOperationalError } from "./utils/report-operational-error";
 import { resolveOtherRelatedNoteId } from "./utils/resolve-other-related-note-id";
 
 /** Related Notes 섹션 조회 결과입니다. */
@@ -127,9 +132,20 @@ export async function getRelatedNotes(
   const { data: sourceNote, error: sourceNoteError } = sourceNoteResult;
 
   if (sourceNoteError) {
-    logError({
-      message: "[getRelatedNotes] 기준 노트 조회 실패",
+    /*
+     * 기준 Note 조회 실패는 현재 Note version을 확정할 수 없어
+     * Related Notes 조회 기능 일부를 수행할 수 없는 DB operational error입니다.
+     */
+    await reportRelatedNotesOperationalError({
+      actorUserId: user.id,
       error: sourceNoteError,
+      errorCode: RELATED_NOTES_OPERATIONAL_ERROR_CODES.SOURCE_NOTE_LOAD_FAILED,
+      message: "Related Notes 조회를 위한 기준 Note 조회에 실패했습니다.",
+      operation: RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.LOAD_SOURCE_NOTE,
+      context: {
+        noteId: parsedNoteId.data,
+      },
+      userId: user.id,
     });
 
     return {
@@ -157,11 +173,19 @@ export async function getRelatedNotes(
    * 다만 ADMIN에게 유한한 일일 제한이 있는 것처럼 표시하면 안 되므로,
    * role을 확정할 수 없는 경우에는 usage RPC를 호출하지 않고
    * 사용량을 표시하지 않습니다.
+   *
+   * 화면 기능 자체는 계속 제공하되 관리자가 실패 원인을 확인할 수 있도록
+   * structured operational error로 기록합니다.
    */
   if (profileError) {
-    logError({
-      message: "[getRelatedNotes] 사용자 역할 조회 실패",
+    await reportRelatedNotesOperationalError({
+      actorUserId: user.id,
       error: profileError,
+      errorCode: RELATED_NOTES_OPERATIONAL_ERROR_CODES.DAILY_USAGE_LOAD_FAILED,
+      message:
+        "Related Notes 일일 사용량 조회를 위한 사용자 역할 조회에 실패했습니다.",
+      operation: RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.GET_DAILY_USAGE,
+      userId: user.id,
     });
   }
 
@@ -223,8 +247,10 @@ export async function getRelatedNotes(
   const {
     hasFailedRecommendationExecution,
     hasRunningRecommendationExecution,
-  } = resolveRecommendationExecutionUiState(
+  } = await resolveRecommendationExecutionUiState(
     latestRecommendationExecutionResult,
+    parsedNoteId.data,
+    user.id,
   );
 
   /*
@@ -232,15 +258,23 @@ export async function getRelatedNotes(
    *
    * 일일 사용량을 확정할 수 없는 경우에는 잘못된 quota 정보를 표시하지 않도록
    * recommendationUsage를 null로 유지합니다.
+   *
+   * DB/RPC 조회 실패는 화면에서는 best-effort로 처리하되,
+   * 관리자가 원인을 확인할 수 있도록 structured operational error로 기록합니다.
    */
   let recommendationUsage: RelatedNotesQueryResult["recommendationUsage"] =
     null;
 
   if (shouldQueryRecommendationUsage) {
     if (recommendationUsageResult.error) {
-      logError({
-        message: "[getRelatedNotes] AI 추천 일일 사용량 조회 실패",
+      await reportRelatedNotesOperationalError({
+        actorUserId: user.id,
         error: recommendationUsageResult.error,
+        errorCode:
+          RELATED_NOTES_OPERATIONAL_ERROR_CODES.DAILY_USAGE_LOAD_FAILED,
+        message: "Related Notes 일일 AI 추천 사용량 조회에 실패했습니다.",
+        operation: RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.GET_DAILY_USAGE,
+        userId: user.id,
       });
     } else {
       const parsedRecommendationUsage = z
@@ -266,9 +300,21 @@ export async function getRelatedNotes(
   const { data, error } = relatedNotesResult;
 
   if (error) {
-    logError({
-      message: "[getRelatedNotes] 관련 노트 조회 실패",
+    /*
+     * Related Notes 목록 DB 조회 실패는 섹션의 핵심 데이터를 로드하지
+     * 못한 경우이므로 operational error로 남기고 기존처럼 빈 목록을 반환합니다.
+     */
+    await reportRelatedNotesOperationalError({
+      actorUserId: user.id,
       error,
+      errorCode:
+        RELATED_NOTES_OPERATIONAL_ERROR_CODES.RELATED_NOTES_LOAD_FAILED,
+      message: "Related Notes 목록 조회에 실패했습니다.",
+      operation: RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.LOAD_RELATED_NOTES,
+      context: {
+        noteId: parsedNoteId.data,
+      },
+      userId: user.id,
     });
 
     return {
@@ -342,14 +388,31 @@ export async function getRelatedNotes(
  * @param result latest recommendation execution claim 조회 결과
  * @returns 가장 최근 AI 추천 실행의 running/failed UI 상태
  */
-function resolveRecommendationExecutionUiState(result: {
-  data?: unknown;
-  error?: unknown;
-}): RelatedNoteRecommendationExecutionUiState {
+async function resolveRecommendationExecutionUiState(
+  result: {
+    data?: unknown;
+    error?: unknown;
+  },
+  noteId: string,
+  userId: string,
+): Promise<RelatedNoteRecommendationExecutionUiState> {
   if (result.error) {
-    logError({
-      message: "[getRelatedNotes] AI 추천 실행 상태 조회 실패",
+    /*
+     * 실행 상태는 best-effort UI 정보지만 DB 조회 자체가 실패한 경우이므로
+     * 관리자 추적이 가능하도록 operational error로 기록합니다.
+     */
+    await reportRelatedNotesOperationalError({
+      actorUserId: userId,
       error: result.error,
+      errorCode:
+        RELATED_NOTES_OPERATIONAL_ERROR_CODES.RECOMMENDATION_EXECUTION_STATE_LOAD_FAILED,
+      message: "Related Notes AI 추천 실행 상태 조회에 실패했습니다.",
+      operation:
+        RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.LOAD_RECOMMENDATION_EXECUTION_STATE,
+      context: {
+        noteId,
+      },
+      userId,
     });
 
     return {
@@ -478,6 +541,22 @@ export async function getRelatedNoteCandidates(
     .maybeSingle();
 
   if (sourceNoteError) {
+    /*
+     * 기준 Note 소유권 확인 DB 호출이 실패하면 후보 조회를 안전하게 계속할 수
+     * 없으므로 operational error로 기록하고 기존 throw 정책을 유지합니다.
+     */
+    await reportRelatedNotesOperationalError({
+      actorUserId: user.id,
+      error: sourceNoteError,
+      errorCode: RELATED_NOTES_OPERATIONAL_ERROR_CODES.SOURCE_NOTE_LOAD_FAILED,
+      message: "Related Note 후보 조회를 위한 기준 Note 조회에 실패했습니다.",
+      operation: RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.LOAD_SOURCE_NOTE,
+      context: {
+        noteId: parsedNoteId.data,
+      },
+      userId: user.id,
+    });
+
     throw sourceNoteError;
   }
 
@@ -511,6 +590,23 @@ export async function getRelatedNoteCandidates(
     );
 
   if (relationError) {
+    /*
+     * 기존 관계 조회 실패는 제외 목록을 구성할 수 없어 후보 결과가 틀릴 수
+     * 있으므로 operational error로 기록하고 기존 throw 정책을 유지합니다.
+     */
+    await reportRelatedNotesOperationalError({
+      actorUserId: user.id,
+      error: relationError,
+      errorCode:
+        RELATED_NOTES_OPERATIONAL_ERROR_CODES.RELATED_NOTES_LOAD_FAILED,
+      message: "Related Note 후보 제외를 위한 기존 관계 조회에 실패했습니다.",
+      operation: RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.LOAD_RELATED_NOTES,
+      context: {
+        noteId: parsedNoteId.data,
+      },
+      userId: user.id,
+    });
+
     throw relationError;
   }
 
@@ -571,6 +667,27 @@ export async function getRelatedNoteCandidates(
   const { data, count, error } = await query.range(from, to);
 
   if (error) {
+    /*
+     * 후보 Note 목록 DB 호출 실패는 Dialog 후보 목록을 제공할 수 없는
+     * operational error이므로 기록한 뒤 기존 throw 정책을 유지합니다.
+     */
+    await reportRelatedNotesOperationalError({
+      actorUserId: user.id,
+      error,
+      errorCode:
+        RELATED_NOTES_OPERATIONAL_ERROR_CODES.RELATED_NOTE_CANDIDATES_LOAD_FAILED,
+      message: "Related Note 후보 목록 조회에 실패했습니다.",
+      operation:
+        RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.LOAD_RELATED_NOTE_CANDIDATES,
+      context: {
+        noteId: parsedNoteId.data,
+        page,
+        pageSize,
+        searchApplied: search.trim().length > 0,
+      },
+      userId: user.id,
+    });
+
     throw error;
   }
 
