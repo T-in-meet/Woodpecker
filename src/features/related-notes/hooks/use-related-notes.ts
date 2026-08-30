@@ -7,7 +7,13 @@ import { relatedNotesQueryKeys } from "../constants/query-keys";
 import { getRelatedNotes } from "../queries";
 
 const RELATED_NOTES_AI_POLLING_INTERVAL_MS = 5_000;
-const RELATED_NOTES_AI_POLLING_TIMEOUT_MS = 60_000;
+
+/*
+ * Related Notes 후처리는 route의 maxDuration = 90초까지 실행될 수 있으므로,
+ * 정상적으로 오래 걸린 실행의 완료 상태를 놓치지 않도록
+ * 여유 시간을 포함해 최대 110초까지 polling합니다.
+ */
+const RELATED_NOTES_AI_POLLING_TIMEOUT_MS = 110_000;
 
 /**
  * 지정한 Note의 현재 Related Notes를 조회합니다.
@@ -16,7 +22,7 @@ const RELATED_NOTES_AI_POLLING_TIMEOUT_MS = 60_000;
  * Related Notes 영역에서 독립적으로 로딩/에러 상태를 관리합니다.
  *
  * AI Related Notes 추천은 Note 저장 응답 이후 비동기로 저장되므로,
- * execution claim이 running 상태인 동안 최대 60초까지
+ * execution claim이 running 상태인 동안 최대 110초까지
  * 5초 간격으로 Related Notes를 재조회합니다.
  *
  * @param noteId Related Notes를 조회할 기준 Note ID
@@ -45,7 +51,7 @@ export function useRelatedNotes(noteId: string) {
 
     /*
      * AI 추천 실행 상태는 execution claim을 기준으로 판단합니다.
-     * running 상태인 동안 최대 60초까지 5초 간격으로 다시 조회합니다.
+     * running 상태인 동안 최대 110초까지 5초 간격으로 다시 조회합니다.
      */
     refetchInterval: (query) =>
       Boolean(noteId) &&
