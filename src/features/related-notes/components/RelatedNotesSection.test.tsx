@@ -25,10 +25,12 @@ const useRelatedNotesMock = vi.mocked(useRelatedNotes);
  *
  * @param hasRunningRecommendationExecution AI 추천 실행 진행 여부
  * @param hasFailedRecommendationExecution AI 추천 실행 실패 여부
+ * @param isPollingTimedOut AI 추천 polling timeout 여부
  */
 function mockRelatedNotesSectionData(
   hasRunningRecommendationExecution: boolean,
   hasFailedRecommendationExecution = false,
+  isPollingTimedOut = false,
 ) {
   useRelatedNotesMock.mockReturnValue({
     data: {
@@ -37,6 +39,7 @@ function mockRelatedNotesSectionData(
       relatedNotes: [],
     },
     isLoading: false,
+    isPollingTimedOut,
   } as unknown as ReturnType<typeof useRelatedNotes>);
 }
 
@@ -48,6 +51,7 @@ function mockRelatedNotesSectionError() {
     data: undefined,
     isError: true,
     isLoading: false,
+    isPollingTimedOut: false,
   } as unknown as ReturnType<typeof useRelatedNotes>);
 }
 
@@ -65,6 +69,27 @@ describe("RelatedNotesSection", () => {
 
     expect(screen.getByText("관련 노트를 찾고 있어요")).toBeInTheDocument();
     expect(
+      screen.queryByText("관련 노트 생성이 예상보다 오래 걸리고 있어요."),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "관련 노트 추가" }),
+    ).toBeInTheDocument();
+  });
+
+  it("AI 추천 polling 시간이 초과되면 지연 안내 문구를 표시한다", () => {
+    mockRelatedNotesSectionData(true, false, true);
+
+    render(
+      <RelatedNotesSection noteId="11111111-1111-4111-8111-111111111111" />,
+    );
+
+    expect(
+      screen.getByText("관련 노트 생성이 예상보다 오래 걸리고 있어요."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("관련 노트를 찾고 있어요"),
+    ).not.toBeInTheDocument();
+    expect(
       screen.getByRole("button", { name: "관련 노트 추가" }),
     ).toBeInTheDocument();
   });
@@ -78,6 +103,9 @@ describe("RelatedNotesSection", () => {
 
     expect(
       screen.queryByText("관련 노트를 찾고 있어요"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("관련 노트 생성이 예상보다 오래 걸리고 있어요."),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByText("관련 노트 추천에 실패했습니다."),
@@ -99,6 +127,9 @@ describe("RelatedNotesSection", () => {
     ).toBeInTheDocument();
     expect(
       screen.queryByText("관련 노트를 찾고 있어요"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("관련 노트 생성이 예상보다 오래 걸리고 있어요."),
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "관련 노트 추가" }),

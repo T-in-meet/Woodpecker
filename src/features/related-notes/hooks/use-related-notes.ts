@@ -25,16 +25,26 @@ const RELATED_NOTES_AI_POLLING_TIMEOUT_MS = 110_000;
  * execution claim이 running 상태인 동안 최대 110초까지
  * 5초 간격으로 Related Notes를 재조회합니다.
  *
+ * polling 시간이 초과된 뒤에도 execution claim이 running이면
+ * 더 이상 자동 갱신하지 않고 timeout 상태를 호출자에게 전달합니다.
+ *
  * @param noteId Related Notes를 조회할 기준 Note ID
  */
 export function useRelatedNotes(noteId: string) {
   const [isPollingEnabled, setIsPollingEnabled] = useState(true);
+  const [isPollingTimedOut, setIsPollingTimedOut] = useState(false);
 
   useEffect(() => {
+    /*
+     * 다른 Note로 이동하면 이전 Note의 polling timeout 상태를 버리고
+     * 새 Note의 실행 상태를 다시 추적합니다.
+     */
     setIsPollingEnabled(true);
+    setIsPollingTimedOut(false);
 
     const timeoutId = window.setTimeout(() => {
       setIsPollingEnabled(false);
+      setIsPollingTimedOut(true);
     }, RELATED_NOTES_AI_POLLING_TIMEOUT_MS);
 
     return () => {
@@ -42,7 +52,7 @@ export function useRelatedNotes(noteId: string) {
     };
   }, [noteId]);
 
-  return useQuery({
+  const query = useQuery({
     queryKey: relatedNotesQueryKeys.byNoteId(noteId),
     queryFn: () => getRelatedNotes(noteId),
 
@@ -61,4 +71,19 @@ export function useRelatedNotes(noteId: string) {
         : false,
     refetchIntervalInBackground: false,
   });
+
+  return {
+    ...query,
+
+    /*
+     * polling timeout 자체와 실제 execution 상태는 서로 다른 개념입니다.
+     *
+     * timeout 이후에도 DB의 execution claim은 running일 수 있으므로,
+     * UI가 일반적인 실행 중 상태와 "자동 갱신이 종료된 상태"를
+     * 구분할 수 있도록 별도로 노출합니다.
+     */
+    isPollingTimedOut:
+      isPollingTimedOut &&
+      query.data?.hasRunningRecommendationExecution === true,
+  };
 }

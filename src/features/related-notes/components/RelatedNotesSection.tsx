@@ -21,15 +21,21 @@ type RelatedNotesSectionProps = {
  * @param props Related Notes를 조회할 기준 Note ID
  */
 export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
-  const { data, isError, isLoading } = useRelatedNotes(noteId);
+  const { data, isError, isLoading, isPollingTimedOut } =
+    useRelatedNotes(noteId);
 
   if (isLoading) {
     return null;
   }
 
+  // 현재 Note에 연결된 active 상태의 Related Notes 목록입니다.
   const relatedNotes = data?.relatedNotes ?? [];
+
+  // 최신 execution claim이 running이면 AI 추천 진행 상태를 표시합니다.
   const hasRunningRecommendationExecution =
     data?.hasRunningRecommendationExecution === true;
+
+  // 최신 execution claim이 failed이면 AI 추천 실패 상태를 표시합니다.
   const hasFailedRecommendationExecution =
     data?.hasFailedRecommendationExecution === true;
 
@@ -41,7 +47,17 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
         </div>
 
         <div className="flex min-w-0 items-center gap-3">
-          {hasRunningRecommendationExecution ? (
+          {isPollingTimedOut ? (
+            /*
+             * execution claim은 아직 running이지만 자동 polling은 종료된 상태입니다.
+             *
+             * 실제 실행이 계속되고 있는지 중단됐는지는 이 화면에서 확정할 수 없으므로
+             * 실패로 표시하지 않고 처리 시간이 길어지고 있음을 안내합니다.
+             */
+            <p className="text-xs text-muted-foreground">
+              관련 노트 생성이 예상보다 오래 걸리고 있어요.
+            </p>
+          ) : hasRunningRecommendationExecution ? (
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
               <span>관련 노트를 찾고 있어요</span>
 
