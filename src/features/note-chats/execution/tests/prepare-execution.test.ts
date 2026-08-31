@@ -134,6 +134,7 @@ describe("prepareNoteChatExecution", () => {
     expect(getNoteChatConversationDetailForExecution).toHaveBeenCalledWith(
       "conversation-1",
       "user-1",
+      "message-1",
     );
 
     expect(expandNoteChatQuery).toHaveBeenCalledWith({

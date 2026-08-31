@@ -9,10 +9,16 @@ import { ROUTES } from "@/lib/constants/routes";
 import { logError } from "@/lib/logger";
 import { createClient } from "@/lib/supabase/server";
 
-import { NOTE_CHAT_DAILY_EXECUTION_LIMIT } from "../constants/execution";
+import {
+  NOTE_CHAT_DAILY_EXECUTION_LIMIT,
+  NOTE_CHAT_HISTORY_MESSAGE_LIMIT,
+  NOTE_CHAT_MESSAGE_PAGE_SIZE,
+} from "../constants/execution";
+import { getNoteChatConversationDetailForExecution } from "../internal-queries";
 import {
   getNoteChatConversationDetail,
   getNoteChatConversationList,
+  getNoteChatConversationMessagePage,
   getNoteChatDailyUsage,
 } from "../queries";
 import { reportNoteChatOperationalError } from "../utils/report-operational-error";
@@ -99,6 +105,7 @@ function createQueryMock<T>(result: {
     ilike: vi.fn(),
     in: vi.fn(),
     limit: vi.fn(),
+    lt: vi.fn(),
     maybeSingle: vi.fn(),
     order: vi.fn(),
     range: vi.fn(),
@@ -113,6 +120,7 @@ function createQueryMock<T>(result: {
   query.ilike.mockReturnValue(query);
   query.in.mockReturnValue(query);
   query.limit.mockReturnValue(query);
+  query.lt.mockReturnValue(query);
 
   query.range.mockResolvedValue(result);
   query.maybeSingle.mockResolvedValue(result);
@@ -336,7 +344,7 @@ describe("getNoteChatConversationDetail", () => {
     vi.clearAllMocks();
   });
 
-  it("대화가 존재하지 않으면 null을 반환하고 메시지를 조회하지 않는다", async () => {
+  it("대화가 존재하지 않으면 null을 반환하고 실행 상태를 조회하지 않는다", async () => {
     const conversationQuery = createQueryMock({
       data: null,
       error: null,
@@ -351,7 +359,7 @@ describe("getNoteChatConversationDetail", () => {
     expect(from).toHaveBeenCalledWith("note_chat_conversations");
   });
 
-  it("대화와 메시지를 조회하고 Assistant Message의 Source를 반환한다", async () => {
+  it("대화와 running Claim 상태를 반환하고 메시지는 조회하지 않는다", async () => {
     const conversationQuery = createQueryMock({
       data: conversation,
       error: null,
@@ -362,27 +370,7 @@ describe("getNoteChatConversationDetail", () => {
       error: null,
     });
 
-    const messagesQuery = createQueryMock({
-      data: messages,
-      error: null,
-    });
-
-    const runsQuery = createQueryMock({
-      data: [
-        {
-          assistant_message_id: MESSAGE_ID_2,
-          sources: [source],
-        },
-      ],
-      error: null,
-    });
-
-    const from = mockCreateClient([
-      conversationQuery,
-      runningExecutionQuery,
-      messagesQuery,
-      runsQuery,
-    ]);
+    const from = mockCreateClient([conversationQuery, runningExecutionQuery]);
 
     const result = await getNoteChatConversationDetail(CONVERSATION_ID);
 
@@ -413,38 +401,11 @@ describe("getNoteChatConversationDetail", () => {
     );
     expect(runningExecutionQuery.limit).toHaveBeenCalledWith(1);
 
-    expect(from).toHaveBeenNthCalledWith(3, "note_chat_messages");
-    expect(messagesQuery.eq).toHaveBeenCalledWith(
-      "conversation_id",
-      CONVERSATION_ID,
-    );
-    expect(messagesQuery.order).toHaveBeenCalledWith("sequence_number", {
-      ascending: true,
-    });
-
-    expect(from).toHaveBeenNthCalledWith(4, "note_chat_runs");
-    expect(runsQuery.in).toHaveBeenCalledWith("assistant_message_id", [
-      MESSAGE_ID_2,
-    ]);
-
+    expect(from).not.toHaveBeenCalledWith("note_chat_messages");
     expect(result).toEqual({
       conversation,
-      messages,
-      assistantSources: [
-        {
-          assistantMessageId: MESSAGE_ID_2,
-          sources: [
-            {
-              noteId: NOTE_ID,
-              title: "테스트 노트",
-            },
-          ],
-        },
-      ],
       hasRunningExecution: false,
     });
-
-    expect(from).toHaveBeenCalledTimes(4);
   });
 
   it("유효한 running Claim이 있으면 실행 중 상태를 반환한다", async () => {
@@ -460,44 +421,12 @@ describe("getNoteChatConversationDetail", () => {
       error: null,
     });
 
-    const messagesQuery = createQueryMock({
-      data: [messages[0]],
-      error: null,
-    });
-
-    const from = mockCreateClient([
-      conversationQuery,
-      runningExecutionQuery,
-      messagesQuery,
-    ]);
+    mockCreateClient([conversationQuery, runningExecutionQuery]);
 
     const result = await getNoteChatConversationDetail(CONVERSATION_ID);
 
-    expect(from).toHaveBeenNthCalledWith(2, "note_chat_execution_claims");
-    expect(from).toHaveBeenNthCalledWith(3, "note_chat_messages");
-
-    expect(runningExecutionQuery.select).toHaveBeenCalledWith("id");
-    expect(runningExecutionQuery.eq).toHaveBeenNthCalledWith(
-      1,
-      "user_id",
-      USER_ID,
-    );
-    expect(runningExecutionQuery.eq).toHaveBeenNthCalledWith(
-      2,
-      "conversation_id",
-      CONVERSATION_ID,
-    );
-    expect(runningExecutionQuery.eq).toHaveBeenNthCalledWith(
-      3,
-      "status",
-      "running",
-    );
-    expect(runningExecutionQuery.limit).toHaveBeenCalledWith(1);
-
     expect(result).toEqual({
       conversation,
-      messages: [messages[0]],
-      assistantSources: [],
       hasRunningExecution: true,
     });
   });
@@ -517,16 +446,7 @@ describe("getNoteChatConversationDetail", () => {
         error: null,
       });
 
-      const messagesQuery = createQueryMock({
-        data: [messages[0]],
-        error: null,
-      });
-
-      mockCreateClient([
-        conversationQuery,
-        runningExecutionQuery,
-        messagesQuery,
-      ]);
+      mockCreateClient([conversationQuery, runningExecutionQuery]);
 
       const result = await getNoteChatConversationDetail(CONVERSATION_ID);
 
@@ -534,14 +454,13 @@ describe("getNoteChatConversationDetail", () => {
         "claimed_at",
         "2026-08-30T11:57:00.000Z",
       );
-
       expect(result?.hasRunningExecution).toBe(false);
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it("running Claim 조회에 실패해도 대화 상세는 반환하고 운영 오류를 보고한다", async () => {
+  it("running Claim 조회에 실패해도 대화 상세은 반환하고 운영 오류를 보고한다", async () => {
     const error = {
       message: "running execution load failed",
     };
@@ -556,19 +475,12 @@ describe("getNoteChatConversationDetail", () => {
       error,
     });
 
-    const messagesQuery = createQueryMock({
-      data: [messages[0]],
-      error: null,
-    });
-
-    mockCreateClient([conversationQuery, runningExecutionQuery, messagesQuery]);
+    mockCreateClient([conversationQuery, runningExecutionQuery]);
 
     const result = await getNoteChatConversationDetail(CONVERSATION_ID);
 
     expect(result).toEqual({
       conversation,
-      messages: [messages[0]],
-      assistantSources: [],
       hasRunningExecution: false,
     });
 
@@ -612,6 +524,130 @@ describe("getNoteChatConversationDetail", () => {
       operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.GET_CONVERSATION,
     });
   });
+});
+
+describe("getNoteChatConversationMessagePage", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("최신 메시지를 조회하고 화면 표시 순서로 반환한다", async () => {
+    const conversationQuery = createQueryMock({
+      data: conversation,
+      error: null,
+    });
+
+    const messagesQuery = createQueryMock({
+      data: [...messages].reverse(),
+      error: null,
+    });
+
+    const runsQuery = createQueryMock({
+      data: [
+        {
+          assistant_message_id: MESSAGE_ID_2,
+          sources: [source],
+        },
+      ],
+      error: null,
+    });
+
+    const from = mockCreateClient([
+      conversationQuery,
+      messagesQuery,
+      runsQuery,
+    ]);
+
+    const result = await getNoteChatConversationMessagePage({
+      conversationId: CONVERSATION_ID,
+    });
+
+    expect(from).toHaveBeenNthCalledWith(1, "note_chat_conversations");
+    expect(from).toHaveBeenNthCalledWith(2, "note_chat_messages");
+    expect(messagesQuery.order).toHaveBeenCalledWith("sequence_number", {
+      ascending: false,
+    });
+    expect(messagesQuery.limit).toHaveBeenCalledWith(
+      NOTE_CHAT_MESSAGE_PAGE_SIZE + 1,
+    );
+    expect(messagesQuery.lt).not.toHaveBeenCalled();
+
+    expect(from).toHaveBeenNthCalledWith(3, "note_chat_runs");
+    expect(runsQuery.in).toHaveBeenCalledWith("assistant_message_id", [
+      MESSAGE_ID_2,
+    ]);
+
+    expect(result).toEqual({
+      messages,
+      assistantSources: [
+        {
+          assistantMessageId: MESSAGE_ID_2,
+          sources: [
+            {
+              noteId: NOTE_ID,
+              title: "테스트 노트",
+            },
+          ],
+        },
+      ],
+      nextCursor: null,
+    });
+  });
+
+  it("cursor가 있으면 해당 sequence 이전 메시지만 조회한다", async () => {
+    const conversationQuery = createQueryMock({
+      data: conversation,
+      error: null,
+    });
+
+    const messagesQuery = createQueryMock({
+      data: [messages[0]],
+      error: null,
+    });
+
+    mockCreateClient([conversationQuery, messagesQuery]);
+
+    await getNoteChatConversationMessagePage({
+      conversationId: CONVERSATION_ID,
+      cursor: 10,
+    });
+
+    expect(messagesQuery.lt).toHaveBeenCalledWith("sequence_number", 10);
+  });
+
+  it("pageSize보다 많은 결과가 있으면 다음 cursor를 반환한다", async () => {
+    const conversationQuery = createQueryMock({
+      data: conversation,
+      error: null,
+    });
+
+    const pageMessages = Array.from(
+      { length: NOTE_CHAT_MESSAGE_PAGE_SIZE + 1 },
+      (_, index) => ({
+        ...messages[0],
+        id: `message-${NOTE_CHAT_MESSAGE_PAGE_SIZE + 1 - index}`,
+        sequence_number: NOTE_CHAT_MESSAGE_PAGE_SIZE + 1 - index,
+      }),
+    );
+
+    const messagesQuery = createQueryMock({
+      data: pageMessages,
+      error: null,
+    });
+
+    mockCreateClient([conversationQuery, messagesQuery]);
+
+    const result = await getNoteChatConversationMessagePage({
+      conversationId: CONVERSATION_ID,
+    });
+
+    expect(result?.messages).toHaveLength(NOTE_CHAT_MESSAGE_PAGE_SIZE);
+    expect(result?.messages[0]?.sequence_number).toBe(2);
+    expect(result?.messages.at(-1)?.sequence_number).toBe(
+      NOTE_CHAT_MESSAGE_PAGE_SIZE + 1,
+    );
+    expect(result?.nextCursor).toBe(2);
+  });
 
   it("메시지 조회에 실패하면 운영 오류를 보고하고 예외를 발생시킨다", async () => {
     const error = {
@@ -623,20 +659,17 @@ describe("getNoteChatConversationDetail", () => {
       error: null,
     });
 
-    const runningExecutionQuery = createQueryMock({
-      data: null,
-      error: null,
-    });
-
     const messagesQuery = createQueryMock({
       data: null,
       error,
     });
 
-    mockCreateClient([conversationQuery, runningExecutionQuery, messagesQuery]);
+    mockCreateClient([conversationQuery, messagesQuery]);
 
     await expect(
-      getNoteChatConversationDetail(CONVERSATION_ID),
+      getNoteChatConversationMessagePage({
+        conversationId: CONVERSATION_ID,
+      }),
     ).rejects.toThrow(
       "노트 챗봇 메시지 조회에 실패했습니다: messages load failed",
     );
@@ -657,37 +690,19 @@ describe("getNoteChatConversationDetail", () => {
       data: conversation,
       error: null,
     });
-
-    const runningExecutionQuery = createQueryMock({
-      data: null,
-      error: null,
-    });
-
     const messagesQuery = createQueryMock({
       data: [messages[0]],
       error: null,
     });
 
-    const from = mockCreateClient([
-      conversationQuery,
-      runningExecutionQuery,
-      messagesQuery,
-    ]);
+    const from = mockCreateClient([conversationQuery, messagesQuery]);
 
-    const result = await getNoteChatConversationDetail(CONVERSATION_ID);
-
-    expect(from).toHaveBeenCalledTimes(3);
-    expect(from).toHaveBeenNthCalledWith(1, "note_chat_conversations");
-    expect(from).toHaveBeenNthCalledWith(2, "note_chat_execution_claims");
-    expect(from).toHaveBeenNthCalledWith(3, "note_chat_messages");
-    expect(from).not.toHaveBeenCalledWith("note_chat_runs");
-
-    expect(result).toEqual({
-      conversation,
-      messages: [messages[0]],
-      assistantSources: [],
-      hasRunningExecution: false,
+    const result = await getNoteChatConversationMessagePage({
+      conversationId: CONVERSATION_ID,
     });
+
+    expect(from).not.toHaveBeenCalledWith("note_chat_runs");
+    expect(result?.assistantSources).toEqual([]);
   });
 
   it("Run Source 조회에 실패하면 운영 오류를 보고하고 예외를 발생시킨다", async () => {
@@ -699,31 +714,21 @@ describe("getNoteChatConversationDetail", () => {
       data: conversation,
       error: null,
     });
-
-    const runningExecutionQuery = createQueryMock({
-      data: null,
-      error: null,
-    });
-
     const messagesQuery = createQueryMock({
       data: messages,
       error: null,
     });
-
     const runsQuery = createQueryMock({
       data: null,
       error,
     });
 
-    mockCreateClient([
-      conversationQuery,
-      runningExecutionQuery,
-      messagesQuery,
-      runsQuery,
-    ]);
+    mockCreateClient([conversationQuery, messagesQuery, runsQuery]);
 
     await expect(
-      getNoteChatConversationDetail(CONVERSATION_ID),
+      getNoteChatConversationMessagePage({
+        conversationId: CONVERSATION_ID,
+      }),
     ).rejects.toThrow(
       "노트 챗봇 참고 노트 조회에 실패했습니다: sources load failed",
     );
@@ -744,17 +749,10 @@ describe("getNoteChatConversationDetail", () => {
       data: conversation,
       error: null,
     });
-
-    const runningExecutionQuery = createQueryMock({
-      data: null,
-      error: null,
-    });
-
     const messagesQuery = createQueryMock({
       data: messages,
       error: null,
     });
-
     const runsQuery = createQueryMock({
       data: [
         {
@@ -770,56 +768,72 @@ describe("getNoteChatConversationDetail", () => {
       error: null,
     });
 
-    mockCreateClient([
-      conversationQuery,
-      runningExecutionQuery,
-      messagesQuery,
-      runsQuery,
-    ]);
+    mockCreateClient([conversationQuery, messagesQuery, runsQuery]);
 
-    const result = await getNoteChatConversationDetail(CONVERSATION_ID);
+    const result = await getNoteChatConversationMessagePage({
+      conversationId: CONVERSATION_ID,
+    });
 
     expect(result?.assistantSources).toEqual([]);
-    expect(result?.hasRunningExecution).toBe(false);
+  });
+});
+
+describe("getNoteChatConversationDetailForExecution", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
   });
 
-  it("Assistant Message ID가 없는 Run은 Source 결과에서 제외한다", async () => {
+  it("현재 메시지와 NOTE_CHAT_HISTORY_MESSAGE_LIMIT 기준 이전 이력만 조회한다", async () => {
     const conversationQuery = createQueryMock({
       data: conversation,
       error: null,
     });
-
     const runningExecutionQuery = createQueryMock({
       data: null,
       error: null,
     });
-
-    const messagesQuery = createQueryMock({
-      data: messages,
+    const currentMessageQuery = createQueryMock({
+      data: messages[1],
+      error: null,
+    });
+    const previousMessagesQuery = createQueryMock({
+      data: [messages[0]],
       error: null,
     });
 
-    const runsQuery = createQueryMock({
-      data: [
-        {
-          assistant_message_id: null,
-          sources: [source],
-        },
-      ],
-      error: null,
-    });
-
-    mockCreateClient([
+    const from = mockCreateClient([
       conversationQuery,
       runningExecutionQuery,
-      messagesQuery,
-      runsQuery,
+      currentMessageQuery,
+      previousMessagesQuery,
     ]);
 
-    const result = await getNoteChatConversationDetail(CONVERSATION_ID);
+    const result = await getNoteChatConversationDetailForExecution(
+      CONVERSATION_ID,
+      USER_ID,
+      MESSAGE_ID_2,
+    );
 
-    expect(result?.assistantSources).toEqual([]);
-    expect(result?.hasRunningExecution).toBe(false);
+    expect(from).toHaveBeenNthCalledWith(3, "note_chat_messages");
+    expect(currentMessageQuery.eq).toHaveBeenCalledWith("id", MESSAGE_ID_2);
+
+    expect(from).toHaveBeenNthCalledWith(4, "note_chat_messages");
+    expect(previousMessagesQuery.lt).toHaveBeenCalledWith("sequence_number", 2);
+    expect(previousMessagesQuery.order).toHaveBeenCalledWith(
+      "sequence_number",
+      {
+        ascending: false,
+      },
+    );
+    expect(previousMessagesQuery.limit).toHaveBeenCalledWith(
+      NOTE_CHAT_HISTORY_MESSAGE_LIMIT,
+    );
+
+    expect(result).toEqual({
+      conversation,
+      hasRunningExecution: false,
+      messages,
+    });
   });
 });
 

@@ -3,6 +3,25 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useNoteChatConversationScroll } from "../use-note-chat-conversation-scroll";
 
+const mockLoadPreviousMessages = vi.fn();
+
+function createScrollParams(
+  overrides: Partial<Parameters<typeof useNoteChatConversationScroll>[0]> = {},
+): Parameters<typeof useNoteChatConversationScroll>[0] {
+  return {
+    conversationHeight: 500,
+    editingSequenceNumber: null,
+    hasDetail: true,
+    hasPreviousMessages: false,
+    isFetchingPreviousMessages: false,
+    messageCount: 1,
+    onLoadPreviousMessages: mockLoadPreviousMessages,
+    pendingQuestion: null,
+    streamingContent: "",
+    ...overrides,
+  };
+}
+
 describe("useNoteChatConversationScroll", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -20,14 +39,7 @@ describe("useNoteChatConversationScroll", () => {
     const scrollIntoView = vi.fn();
 
     const { result } = renderHook(() =>
-      useNoteChatConversationScroll({
-        conversationHeight: 500,
-        hasDetail: true,
-        messageCount: 1,
-        pendingQuestion: null,
-        streamingContent: "",
-        editingSequenceNumber: null,
-      }),
+      useNoteChatConversationScroll(createScrollParams()),
     );
 
     result.current.messageEndRef.current = {
@@ -40,14 +52,11 @@ describe("useNoteChatConversationScroll", () => {
      */
     const { rerender } = renderHook(
       ({ conversationHeight }) =>
-        useNoteChatConversationScroll({
-          conversationHeight,
-          hasDetail: true,
-          messageCount: 1,
-          pendingQuestion: null,
-          streamingContent: "",
-          editingSequenceNumber: null,
-        }),
+        useNoteChatConversationScroll(
+          createScrollParams({
+            conversationHeight,
+          }),
+        ),
       {
         initialProps: {
           conversationHeight: null as number | null,
@@ -67,14 +76,12 @@ describe("useNoteChatConversationScroll", () => {
 
     const { result, rerender } = renderHook(
       ({ conversationHeight, streamingContent }) =>
-        useNoteChatConversationScroll({
-          conversationHeight,
-          hasDetail: true,
-          messageCount: 1,
-          pendingQuestion: null,
-          streamingContent,
-          editingSequenceNumber: null,
-        }),
+        useNoteChatConversationScroll(
+          createScrollParams({
+            conversationHeight,
+            streamingContent,
+          }),
+        ),
       {
         initialProps: {
           conversationHeight: null as number | null,
@@ -126,14 +133,11 @@ describe("useNoteChatConversationScroll", () => {
 
     const { result, rerender } = renderHook(
       ({ streamingContent }) =>
-        useNoteChatConversationScroll({
-          conversationHeight: 500,
-          hasDetail: true,
-          messageCount: 1,
-          pendingQuestion: null,
-          streamingContent,
-          editingSequenceNumber: null,
-        }),
+        useNoteChatConversationScroll(
+          createScrollParams({
+            streamingContent,
+          }),
+        ),
       {
         initialProps: {
           streamingContent: "",
@@ -171,14 +175,12 @@ describe("useNoteChatConversationScroll", () => {
 
     const { result, rerender } = renderHook(
       ({ conversationHeight, streamingContent }) =>
-        useNoteChatConversationScroll({
-          conversationHeight,
-          hasDetail: true,
-          messageCount: 1,
-          pendingQuestion: null,
-          streamingContent,
-          editingSequenceNumber: null,
-        }),
+        useNoteChatConversationScroll(
+          createScrollParams({
+            conversationHeight,
+            streamingContent,
+          }),
+        ),
       {
         initialProps: {
           conversationHeight: null as number | null,
@@ -225,14 +227,13 @@ describe("useNoteChatConversationScroll", () => {
     const scrollIntoView = vi.fn();
 
     const { result } = renderHook(() =>
-      useNoteChatConversationScroll({
-        conversationHeight: null,
-        hasDetail: false,
-        messageCount: 0,
-        pendingQuestion: null,
-        streamingContent: "",
-        editingSequenceNumber: null,
-      }),
+      useNoteChatConversationScroll(
+        createScrollParams({
+          conversationHeight: null,
+          hasDetail: false,
+          messageCount: 0,
+        }),
+      ),
     );
 
     result.current.messageEndRef.current = {
@@ -247,5 +248,62 @@ describe("useNoteChatConversationScroll", () => {
       behavior: "smooth",
       block: "end",
     });
+  });
+
+  it("상단 근처로 스크롤하면 이전 메시지를 조회하고 prepend 후 위치를 유지한다", async () => {
+    let scrollHeight = 1000;
+    const viewport = {
+      clientHeight: 500,
+      scrollTop: 20,
+    } as HTMLDivElement;
+
+    Object.defineProperty(viewport, "scrollHeight", {
+      configurable: true,
+      get: () => scrollHeight,
+    });
+
+    mockLoadPreviousMessages.mockImplementation(async () => {
+      scrollHeight = 1300;
+    });
+
+    const { result } = renderHook(() =>
+      useNoteChatConversationScroll(
+        createScrollParams({
+          hasPreviousMessages: true,
+          onLoadPreviousMessages: mockLoadPreviousMessages,
+        }),
+      ),
+    );
+
+    result.current.scrollViewportRef.current = viewport;
+
+    await act(async () => {
+      result.current.handleViewportScroll();
+    });
+
+    expect(mockLoadPreviousMessages).toHaveBeenCalledTimes(1);
+    expect(viewport.scrollTop).toBe(320);
+  });
+
+  it("하단 스크롤은 이전 메시지 조회를 트리거하지 않는다", () => {
+    const { result } = renderHook(() =>
+      useNoteChatConversationScroll(
+        createScrollParams({
+          hasPreviousMessages: true,
+        }),
+      ),
+    );
+
+    result.current.scrollViewportRef.current = {
+      clientHeight: 500,
+      scrollHeight: 1000,
+      scrollTop: 450,
+    } as HTMLDivElement;
+
+    act(() => {
+      result.current.handleViewportScroll();
+    });
+
+    expect(mockLoadPreviousMessages).not.toHaveBeenCalled();
   });
 });

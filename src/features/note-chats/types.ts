@@ -32,16 +32,34 @@ export type NoteChatAssistantMessageContent = AiChatMessageContent & {
 /** 노트 챗봇 대화 상세 조회 결과입니다. */
 export type NoteChatConversationDetail = {
   conversation: NoteChatConversation;
-  messages: NoteChatMessage[];
-  assistantSources: NoteChatAssistantSources[];
   hasRunningExecution: boolean;
 };
 
+/** 노트 챗봇 AI 실행에 필요한 대화와 제한된 메시지 이력입니다. */
+export type NoteChatConversationExecutionDetail = NoteChatConversationDetail & {
+  messages: NoteChatMessage[];
+};
+
+/** 노트 챗봇 메시지 페이지 조회 결과입니다. */
+export type NoteChatMessagePage = {
+  messages: NoteChatMessage[];
+  assistantSources: NoteChatAssistantSources[];
+  nextCursor: number | null;
+};
+
+/** 노트 챗봇 메시지 페이지 조회 입력입니다. */
+export type NoteChatMessagePageParams = {
+  conversationId: string;
+  cursor?: number | null;
+};
+
+/** 노트 챗봇 참고 노트 출처입니다. */
 export type NoteChatUsedNoteSource = {
   noteId: string;
   title: string;
 };
 
+/** Assistant 메시지별 노트 챗봇 참고 노트 출처입니다. */
 export type NoteChatAssistantSources = {
   assistantMessageId: string;
   sources: NoteChatUsedNoteSource[];

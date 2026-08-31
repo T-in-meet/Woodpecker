@@ -76,6 +76,9 @@ export function useNoteChatConversationExecution({
         queryKey: noteChatQueryKeys.conversationDetail(conversationId),
       }),
       queryClient.invalidateQueries({
+        queryKey: noteChatQueryKeys.conversationMessages(conversationId),
+      }),
+      queryClient.invalidateQueries({
         queryKey: noteChatQueryKeys.conversationLists(),
       }),
       queryClient.invalidateQueries({

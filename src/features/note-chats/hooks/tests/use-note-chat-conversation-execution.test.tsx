@@ -89,14 +89,17 @@ describe("useNoteChatConversationExecution", () => {
       question: "새 질문",
     });
 
-    expect(mockInvalidateQueries).toHaveBeenCalledTimes(3);
+    expect(mockInvalidateQueries).toHaveBeenCalledTimes(4);
     expect(mockInvalidateQueries).toHaveBeenNthCalledWith(1, {
       queryKey: noteChatQueryKeys.conversationDetail(CONVERSATION_ID),
     });
     expect(mockInvalidateQueries).toHaveBeenNthCalledWith(2, {
-      queryKey: noteChatQueryKeys.conversationLists(),
+      queryKey: noteChatQueryKeys.conversationMessages(CONVERSATION_ID),
     });
     expect(mockInvalidateQueries).toHaveBeenNthCalledWith(3, {
+      queryKey: noteChatQueryKeys.conversationLists(),
+    });
+    expect(mockInvalidateQueries).toHaveBeenNthCalledWith(4, {
       queryKey: noteChatQueryKeys.dailyUsage(),
     });
 
@@ -182,7 +185,7 @@ describe("useNoteChatConversationExecution", () => {
     expect(result.current.pendingQuestion).toBeNull();
     expect(result.current.canRetry).toBe(false);
 
-    expect(mockInvalidateQueries).toHaveBeenCalledTimes(3);
+    expect(mockInvalidateQueries).toHaveBeenCalledTimes(4);
     expect(mockReset).toHaveBeenCalledTimes(1);
   });
 
@@ -225,7 +228,7 @@ describe("useNoteChatConversationExecution", () => {
     expect(result.current.canRetry).toBe(false);
     expect(result.current.retryCount).toBe(0);
 
-    expect(mockInvalidateQueries).toHaveBeenCalledTimes(3);
+    expect(mockInvalidateQueries).toHaveBeenCalledTimes(4);
     expect(mockReset).toHaveBeenCalledTimes(1);
   });
 

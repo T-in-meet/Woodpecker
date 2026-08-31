@@ -13,10 +13,15 @@ import { createClient } from "@/lib/supabase/server";
 import { escapePostgrestLikePattern } from "@/lib/utils/escapePostgrestLikePattern";
 
 import { NOTE_CHAT_DAILY_EXECUTION_LIMIT } from "./constants/execution";
-import { queryNoteChatConversationDetail } from "./internal-queries";
+import {
+  queryNoteChatConversationDetail,
+  queryNoteChatConversationMessagePage,
+} from "./internal-queries";
 import type {
   NoteChatConversationDetail,
   NoteChatConversationListItem,
+  NoteChatMessagePage,
+  NoteChatMessagePageParams,
 } from "./types";
 import { reportNoteChatOperationalError } from "./utils/report-operational-error";
 
@@ -134,8 +139,7 @@ export async function getNoteChatConversationList({
 /**
  * 현재 사용자의 노트 챗봇 대화 상세를 조회합니다.
  *
- * 대화 기본 정보와 해당 대화의 전체 메시지를 함께 반환합니다.
- * 메시지는 대화 순서대로 표시할 수 있도록 `sequence_number` 오름차순으로 정렬합니다.
+ * 대화 기본 정보와 실행 상태를 반환합니다.
  *
  * @param conversationId 조회할 대화 ID
  * @returns 대화가 없거나 현재 사용자가 접근할 수 없으면 `null`
@@ -146,6 +150,29 @@ export async function getNoteChatConversationDetail(
   const { supabase, userId } = await createLegalCheckedContext();
 
   return queryNoteChatConversationDetail(supabase, conversationId, userId);
+}
+
+/**
+ * 현재 사용자의 노트 챗봇 대화 메시지 페이지를 조회합니다.
+ *
+ * 최초 조회는 최신 메시지를 대상으로 하며,
+ * cursor가 전달되면 해당 sequence보다 오래된 메시지를 추가 조회합니다.
+ *
+ * @param params 메시지 페이지 조회 입력
+ * @returns 대화가 없거나 접근할 수 없으면 `null`
+ */
+export async function getNoteChatConversationMessagePage({
+  conversationId,
+  cursor = null,
+}: NoteChatMessagePageParams): Promise<NoteChatMessagePage | null> {
+  const { supabase, userId } = await createLegalCheckedContext();
+
+  return queryNoteChatConversationMessagePage(
+    supabase,
+    conversationId,
+    userId,
+    cursor,
+  );
 }
 
 /**

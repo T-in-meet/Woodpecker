@@ -97,7 +97,7 @@ type PrepareNoteChatExecutionParams = {
  *
  * 다음 작업을 수행합니다.
  *
- * 1. 현재 사용자가 접근할 수 있는 대화와 전체 메시지를 조회합니다.
+ * 1. 현재 사용자가 접근할 수 있는 대화와 실행에 필요한 메시지 이력을 조회합니다.
  * 2. 현재 사용자 메시지에서 질문을 추출합니다.
  * 3. 이전 대화 이력을 바탕으로 문맥 기반 검색 질의를 확장합니다.
  * 4. Runtime Embedding Model로 확장 질의 Embedding을 생성합니다.
@@ -120,6 +120,7 @@ export async function prepareNoteChatExecution(
   const detail = await getNoteChatConversationDetailForExecution(
     params.conversationId,
     params.userId,
+    params.userMessageId,
   );
 
   if (!detail) {
@@ -148,7 +149,7 @@ export async function prepareNoteChatExecution(
   }
 
   /*
-   * 이번 실행을 발생시킨 메시지를 전체 대화에서 찾습니다.
+   * 이번 실행을 발생시킨 메시지를 실행용 메시지 이력에서 찾습니다.
    *
    * 이후 질의 확장과 최종 답변 생성은 userMessageId를 기준으로
    * 각 단계에서 현재 질문을 추출하므로,

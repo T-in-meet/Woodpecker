@@ -44,6 +44,24 @@ vi.mock("../hooks/use-note-chat-conversation-query", () => ({
     isLoading: false,
     refetch: mockRefetch,
   }),
+  useNoteChatConversationMessagesQuery: () => ({
+    data: {
+      pages: [
+        {
+          assistantSources: [],
+          messages: mockConversationDetail?.messages ?? [],
+          nextCursor: null,
+        },
+      ],
+    },
+    fetchNextPage: vi.fn(),
+    hasNextPage: false,
+    isError: false,
+    isFetching: false,
+    isFetchingNextPage: false,
+    isLoading: false,
+    refetch: vi.fn(),
+  }),
 }));
 
 vi.mock("../hooks/use-note-chat-daily-usage-query", () => ({

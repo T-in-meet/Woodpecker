@@ -4,13 +4,29 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const LATEST_MESSAGE_BUTTON_THRESHOLD_PX = 64;
 
+/**
+ * 이전 메시지를 조회할 상단 근접 거리입니다.
+ */
+const PREVIOUS_MESSAGE_LOAD_THRESHOLD_PX = 48;
+
 type UseNoteChatConversationScrollParams = {
   conversationHeight: number | null;
+  hasPreviousMessages: boolean;
   hasDetail: boolean;
+  isFetchingPreviousMessages: boolean;
   messageCount: number;
   pendingQuestion: string | null;
   streamingContent: string;
   editingSequenceNumber: number | null;
+  onLoadPreviousMessages: () => Promise<unknown>;
+};
+
+/**
+ * 이전 메시지 prepend 전 스크롤 위치 스냅샷입니다.
+ */
+type ScrollSnapshot = {
+  scrollHeight: number;
+  scrollTop: number;
 };
 
 /**
@@ -29,22 +45,87 @@ type UseNoteChatConversationScrollParams = {
  */
 export function useNoteChatConversationScroll({
   conversationHeight,
+  hasPreviousMessages,
   hasDetail,
+  isFetchingPreviousMessages,
   messageCount,
   pendingQuestion,
   streamingContent,
   editingSequenceNumber,
+  onLoadPreviousMessages,
 }: UseNoteChatConversationScrollParams) {
   const messageEndRef = useRef<HTMLDivElement | null>(null);
   const scrollViewportRef = useRef<HTMLDivElement | null>(null);
   const hasInitialScrolledRef = useRef(false);
+  const pendingScrollRestoreRef = useRef<ScrollSnapshot | null>(null);
+  const isLoadingPreviousMessagesRef = useRef(false);
 
   const [shouldShowLatestMessageButton, setShouldShowLatestMessageButton] =
     useState(false);
 
+  const updateLatestMessageButtonVisibility = useCallback(
+    (viewport: HTMLDivElement) => {
+      const distanceFromBottom =
+        viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+
+      setShouldShowLatestMessageButton(
+        distanceFromBottom >= LATEST_MESSAGE_BUTTON_THRESHOLD_PX,
+      );
+    },
+    [],
+  );
+
   /**
-   * 현재 viewport가 최신 메시지 영역에서 충분히 멀리 떨어져 있는지
-   * 실제 scroll 위치를 기준으로 갱신합니다.
+   * 이전 메시지를 prepend한 뒤 사용자가 보고 있던 위치를 유지합니다.
+   */
+  const loadPreviousMessages = useCallback(async () => {
+    const viewport = scrollViewportRef.current;
+
+    if (
+      !viewport ||
+      !hasPreviousMessages ||
+      isFetchingPreviousMessages ||
+      isLoadingPreviousMessagesRef.current
+    ) {
+      return;
+    }
+
+    isLoadingPreviousMessagesRef.current = true;
+    pendingScrollRestoreRef.current = {
+      scrollHeight: viewport.scrollHeight,
+      scrollTop: viewport.scrollTop,
+    };
+
+    try {
+      await onLoadPreviousMessages();
+    } finally {
+      window.requestAnimationFrame(() => {
+        const latestViewport = scrollViewportRef.current;
+        const snapshot = pendingScrollRestoreRef.current;
+
+        pendingScrollRestoreRef.current = null;
+        isLoadingPreviousMessagesRef.current = false;
+
+        if (!latestViewport || !snapshot) {
+          return;
+        }
+
+        latestViewport.scrollTop =
+          snapshot.scrollTop +
+          (latestViewport.scrollHeight - snapshot.scrollHeight);
+
+        updateLatestMessageButtonVisibility(latestViewport);
+      });
+    }
+  }, [
+    hasPreviousMessages,
+    isFetchingPreviousMessages,
+    onLoadPreviousMessages,
+    updateLatestMessageButtonVisibility,
+  ]);
+
+  /**
+   * 현재 viewport의 하단 거리와 상단 이전 메시지 조회 조건을 갱신합니다.
    */
   const handleViewportScroll = useCallback(() => {
     const viewport = scrollViewportRef.current;
@@ -53,13 +134,12 @@ export function useNoteChatConversationScroll({
       return;
     }
 
-    const distanceFromBottom =
-      viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+    updateLatestMessageButtonVisibility(viewport);
 
-    setShouldShowLatestMessageButton(
-      distanceFromBottom >= LATEST_MESSAGE_BUTTON_THRESHOLD_PX,
-    );
-  }, []);
+    if (viewport.scrollTop <= PREVIOUS_MESSAGE_LOAD_THRESHOLD_PX) {
+      void loadPreviousMessages();
+    }
+  }, [loadPreviousMessages, updateLatestMessageButtonVisibility]);
 
   /**
    * 최신 메시지 위치로 부드럽게 이동합니다.

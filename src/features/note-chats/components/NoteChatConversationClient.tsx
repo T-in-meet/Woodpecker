@@ -5,7 +5,10 @@ import { useBeforeUnloadGuard } from "@/hooks/useBeforeUnloadGuard";
 import { useInternalNavigationGuard } from "@/hooks/useInternalNavigationGuard";
 
 import { useNoteChatConversationExecution } from "../hooks/use-note-chat-conversation-execution";
-import { useNoteChatConversationDetailQuery } from "../hooks/use-note-chat-conversation-query";
+import {
+  useNoteChatConversationDetailQuery,
+  useNoteChatConversationMessagesQuery,
+} from "../hooks/use-note-chat-conversation-query";
 import { useNoteChatConversationScroll } from "../hooks/use-note-chat-conversation-scroll";
 import { useNoteChatDailyUsageQuery } from "../hooks/use-note-chat-daily-usage-query";
 import { useViewportRemainingHeight } from "../hooks/use-viewport-remaining-height";
@@ -31,6 +34,7 @@ export function NoteChatConversationClient({
   conversationId,
 }: NoteChatConversationClientProps) {
   const conversationQuery = useNoteChatConversationDetailQuery(conversationId);
+  const messagesQuery = useNoteChatConversationMessagesQuery(conversationId);
 
   /*
    * Note Chat 일일 사용량은 특정 Conversation이 아니라
@@ -43,6 +47,12 @@ export function NoteChatConversationClient({
 
   const detail = conversationQuery.data;
   const dailyUsage = dailyUsageQuery.data ?? null;
+  const messagePages = messagesQuery.data?.pages ?? [];
+  const orderedMessagePages = [...messagePages].reverse();
+  const messages = orderedMessagePages.flatMap((page) => page?.messages ?? []);
+  const assistantSources = orderedMessagePages.flatMap(
+    (page) => page?.assistantSources ?? [],
+  );
 
   const {
     canRetry,
@@ -96,19 +106,25 @@ export function NoteChatConversationClient({
     shouldShowLatestMessageButton,
   } = useNoteChatConversationScroll({
     conversationHeight,
-    hasDetail: detail !== undefined && detail !== null,
-    messageCount: detail?.messages.length ?? 0,
+    hasDetail:
+      detail !== undefined &&
+      detail !== null &&
+      messagesQuery.data !== undefined,
+    hasPreviousMessages: messagesQuery.hasNextPage,
+    isFetchingPreviousMessages: messagesQuery.isFetchingNextPage,
+    messageCount: messages.length,
     pendingQuestion,
     streamingContent,
     editingSequenceNumber,
+    onLoadPreviousMessages: messagesQuery.fetchNextPage,
   });
 
   const visibleMessages =
     detail && editingSequenceNumber !== null
-      ? detail.messages.filter(
+      ? messages.filter(
           (message) => message.sequence_number < editingSequenceNumber,
         )
-      : (detail?.messages ?? []);
+      : messages;
 
   return (
     <>
@@ -141,13 +157,16 @@ export function NoteChatConversationClient({
           }
         >
           <section className="flex min-h-0 flex-1 flex-col">
-            {conversationQuery.isLoading ? (
+            {conversationQuery.isLoading || messagesQuery.isLoading ? (
               <NoteChatConversationSkeleton />
-            ) : conversationQuery.isError ? (
+            ) : conversationQuery.isError || messagesQuery.isError ? (
               <NoteChatConversationError
-                isFetching={conversationQuery.isFetching}
+                isFetching={
+                  conversationQuery.isFetching || messagesQuery.isFetching
+                }
                 onRetry={() => {
                   void conversationQuery.refetch();
+                  void messagesQuery.refetch();
                 }}
               />
             ) : !detail ? (
@@ -155,7 +174,7 @@ export function NoteChatConversationClient({
             ) : (
               <NoteChatConversationContent
                 conversationId={conversationId}
-                assistantSources={detail.assistantSources}
+                assistantSources={assistantSources}
                 messages={visibleMessages}
                 pendingQuestion={pendingQuestion}
                 streamingContent={streamingContent}
