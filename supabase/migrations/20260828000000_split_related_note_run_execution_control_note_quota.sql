@@ -279,7 +279,15 @@ BEGIN
    * complete_related_note_recommendation_execution_claim 호출 없이 종료될 수 있습니다.
    *
    * 90초 + 여유 버퍼를 초과한 running claim은 더 이상 실제 실행 중인 것으로
-   * 신뢰하지 않고 stale로 종료하여 동일 source version을 다시 claim할 수 있게 합니다.
+   * 신뢰하지 않고 stale로 종료합니다.
+   *
+   * stale cleanup은 현재 요청의 source version에 한정하지 않습니다.
+   * 이전 source version에서 남은 만료 running claim도 Note 단위 daily quota에는
+   * running으로 포함되므로, 그대로 두면 최신 version의 새 실행이
+   * daily_limit_exceeded로 차단될 수 있기 때문입니다.
+   *
+   * 동일 source version의 살아 있는 running/succeeded Claim에 대한 duplicate 판정은
+   * 아래 조회에서 계속 source_updated_at 기준으로 수행합니다.
    *
    * maxDuration 설정이 바뀌면 이 값도 함께 조정해야 합니다.
    */
@@ -289,7 +297,6 @@ BEGIN
     "completed_at" = "v_now"
   WHERE "claims"."user_id" = "p_user_id"
     AND "claims"."note_id" = "p_note_id"
-    AND "claims"."source_updated_at" IS NOT DISTINCT FROM "p_source_updated_at"
     AND "claims"."status" = 'running'
     AND "claims"."claimed_at" < "v_now" - interval '3 minutes';
 

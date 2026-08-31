@@ -483,20 +483,19 @@ SELECT is(
 -- 이전 Note version에 남은 3분 초과 running Claim
 -- ----------------------------------------------------------------------------
 --
--- stale cleanup은 현재 요청과 동일한 source_updated_at의 running Claim만
--- 대상으로 합니다.
+-- 오래된 running Claim은 source version과 관계없이 같은 Note의 일일 quota를
+-- 계속 소비할 수 있으므로, Claim RPC가 quota를 계산하기 전에 stale로 정리해야 합니다.
 --
 -- 1. 현재 Note version으로 running Claim을 생성합니다.
 -- 2. Claim의 claimed_at은 4분 전으로 설정하여 stale 기준을 초과시킵니다.
 -- 3. 그 뒤 Note를 수정하여 새로운 source_updated_at을 만듭니다.
--- 4. 새로운 Note version으로 Claim RPC를 호출합니다.
+-- 4. 이전 Claim 하나만으로 quota가 소진되는 경계 조건을 만들기 위해 limit=1로 새로운 version의 Claim을 요청합니다.
 --
--- 이전 version의 오래된 running Claim은 현재 요청과 source_updated_at이 다르므로
--- stale cleanup 대상이 아닙니다.
+-- 이전 구현처럼 stale cleanup이 동일 source_updated_at으로 제한되어 있다면
+-- 이전 version의 running Claim이 quota 1회를 차지해 daily_limit_exceeded가 반환됩니다.
 --
--- 동시에 duplicate 판정도 현재 source version을 기준으로 수행하므로,
--- 이전 version의 running Claim이 남아 있어도 새로운 version의 Claim은
--- 정상적으로 생성되어야 합니다.
+-- 현재 정책에서는 같은 Note의 만료 running Claim을 version과 관계없이 stale로
+-- 종료한 뒤 quota를 계산하므로 새로운 version의 Claim을 정상 생성해야 합니다.
 --
 
 INSERT INTO public.related_note_recommendation_execution_claims (
@@ -525,7 +524,15 @@ UPDATE public.notes
 SET title = title || ' new version'
 WHERE id = current_setting('test.related_note_claims_expired_running_note_id')::uuid;
 
--- 새로운 Note version으로 실행을 요청합니다.
+/*
+ * 실제 제품의 일일 제한값을 검증하는 테스트가 아닙니다.
+ *
+ * 이전 version의 만료 running Claim이 stale 처리되지 않으면
+ * quota를 정확히 소진하는 경계 조건을 만들기 위해 limit을 1로 설정합니다.
+ *
+ * stale cleanup이 quota 계산보다 먼저 정상 수행되면
+ * 이전 Claim은 quota에서 제외되고 새 Claim을 획득할 수 있어야 합니다.
+ */
 SELECT *
 FROM public.claim_related_note_recommendation_execution(
     current_setting('test.related_note_claims_user_id')::uuid,
@@ -535,42 +542,40 @@ FROM public.claim_related_note_recommendation_execution(
         FROM public.notes
         WHERE id = current_setting('test.related_note_claims_expired_running_note_id')::uuid
     ),
-    10
+    1
 )
 \gset test_related_note_claims_expired_running_
 
--- 이전 version의 running Claim은 현재 version의 duplicate 판정 대상이 아니므로
--- 새로운 version은 정상적으로 실행 권한을 획득해야 합니다.
+-- 이전 version의 만료 running Claim이 quota에서 제거된 뒤
+-- 현재 version은 정상적으로 실행 권한을 획득해야 합니다.
 SELECT is(
     :'test_related_note_claims_expired_running_status'::text,
     'claimed',
-    'expired running claim from a previous note version should allow a new execution claim'
+    'expired running claim from a previous note version should not block a new claim at the daily limit'
 );
 
--- 이전 version의 Claim은 현재 source version의 stale cleanup 대상이 아니므로
--- running 상태를 그대로 유지해야 합니다.
+-- 이전 version의 만료 running Claim은 source version과 관계없이 stale 처리해야 합니다.
 SELECT is(
     (
         SELECT status
         FROM public.related_note_recommendation_execution_claims
         WHERE id = current_setting('test.related_note_claims_expired_running_claim_id')::uuid
     ),
-    'running',
-    'expired running claim from a previous note version should remain running'
+    'stale',
+    'expired running claim from a previous note version should be converted to stale'
 );
 
--- 이전 version의 Claim은 stale로 완료되지 않았으므로
--- completed_at도 기록되지 않아야 합니다.
+-- stale 처리된 Claim에는 정리 시점의 completed_at이 기록되어야 합니다.
 SELECT ok(
     (
-        SELECT completed_at IS NULL
+        SELECT completed_at IS NOT NULL
         FROM public.related_note_recommendation_execution_claims
         WHERE id = current_setting('test.related_note_claims_expired_running_claim_id')::uuid
     ),
-    'expired running claim from a previous note version should not receive completed_at'
+    'expired running claim from a previous note version should receive completed_at'
 );
 
--- 새로 생성된 현재 version Claim은 running 상태여야 합니다.
+-- stale Claim은 quota를 소비하지 않으므로 새로 생성된 현재 version Claim은 running이어야 합니다.
 SELECT is(
     (
         SELECT status
@@ -578,7 +583,7 @@ SELECT is(
         WHERE id = :'test_related_note_claims_expired_running_claim_id'::uuid
     ),
     'running',
-    'new claim for the current note version should be running'
+    'new claim for the current note version should be running after stale cleanup'
 );
 
 
