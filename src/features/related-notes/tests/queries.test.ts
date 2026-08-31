@@ -77,14 +77,36 @@ function createUserProfileResult() {
 }
 
 /**
- * Related Notes 일일 사용량 RPC mock을 만듭니다.
+ * getRelatedNotes에서 사용하는 RPC mock을 만듭니다.
  *
- * 별도의 사용량을 지정하지 않으면 오늘 사용량이 없는 상태인 0을 반환합니다.
+ * stale cleanup은 실행 상태 조회 전에 항상 호출되고,
+ * 일반 사용자의 경우에만 그 뒤 일일 사용량 RPC가 호출됩니다.
  */
-function createRecommendationUsageRpcMock(used = 0) {
-  return vi.fn().mockResolvedValue({
-    data: used,
-    error: null,
+function createRelatedNotesRpcMock({
+  cleanupError = null,
+  usageData = 0,
+  usageError = null,
+}: {
+  cleanupError?: unknown;
+  usageData?: unknown;
+  usageError?: unknown;
+} = {}) {
+  return vi.fn().mockImplementation((name: string) => {
+    if (name === "cleanup_related_note_recommendation_stale_execution_claims") {
+      return Promise.resolve({
+        data: cleanupError ? null : 0,
+        error: cleanupError,
+      });
+    }
+
+    if (name === "get_related_note_recommendation_daily_usage") {
+      return Promise.resolve({
+        data: usageData,
+        error: usageError,
+      });
+    }
+
+    throw new Error(`Unexpected RPC: ${name}`);
   });
 }
 
@@ -155,7 +177,7 @@ describe("getRelatedNotes", () => {
       },
     });
 
-    const rpcMock = createRecommendationUsageRpcMock();
+    const rpcMock = createRelatedNotesRpcMock();
 
     createClientMock.mockResolvedValue({
       ...supabase,
@@ -213,6 +235,12 @@ describe("getRelatedNotes", () => {
     ]);
     expect(executionCalls).toContainEqual(["limit", [1]]);
 
+    expect(rpcMock).toHaveBeenCalledWith(
+      "cleanup_related_note_recommendation_stale_execution_claims",
+      {
+        p_note_id: noteId,
+      },
+    );
     expect(rpcMock).toHaveBeenCalledWith(
       "get_related_note_recommendation_daily_usage",
       {
@@ -278,7 +306,7 @@ describe("getRelatedNotes", () => {
     createClientMock.mockResolvedValue({
       ...supabase,
       auth: createAuthMock(),
-      rpc: createRecommendationUsageRpcMock(),
+      rpc: createRelatedNotesRpcMock(),
     } as never);
 
     const result = await getRelatedNotes(noteId);
@@ -322,7 +350,7 @@ describe("getRelatedNotes", () => {
     createClientMock.mockResolvedValue({
       ...supabase,
       auth: createAuthMock(),
-      rpc: createRecommendationUsageRpcMock(),
+      rpc: createRelatedNotesRpcMock(),
     } as never);
 
     const result = await getRelatedNotes(noteId);
@@ -357,7 +385,7 @@ describe("getRelatedNotes", () => {
     createClientMock.mockResolvedValue({
       ...supabase,
       auth: createAuthMock(),
-      rpc: createRecommendationUsageRpcMock(),
+      rpc: createRelatedNotesRpcMock(),
     } as never);
 
     await getRelatedNotes(noteId);
@@ -385,7 +413,7 @@ describe("getRelatedNotes", () => {
       },
     });
 
-    const rpcMock = createRecommendationUsageRpcMock(1);
+    const rpcMock = createRelatedNotesRpcMock({ usageData: 1 });
 
     createClientMock.mockResolvedValue({
       ...supabase,
@@ -424,7 +452,7 @@ describe("getRelatedNotes", () => {
       },
     });
 
-    const rpcMock = vi.fn();
+    const rpcMock = createRelatedNotesRpcMock();
 
     createClientMock.mockResolvedValue({
       ...supabase,
@@ -434,7 +462,16 @@ describe("getRelatedNotes", () => {
 
     const result = await getRelatedNotes(noteId);
 
-    expect(rpcMock).not.toHaveBeenCalled();
+    expect(rpcMock).toHaveBeenCalledWith(
+      "cleanup_related_note_recommendation_stale_execution_claims",
+      {
+        p_note_id: noteId,
+      },
+    );
+    expect(rpcMock).not.toHaveBeenCalledWith(
+      "get_related_note_recommendation_daily_usage",
+      expect.anything(),
+    );
 
     expect(result.recommendationUsage).toBeNull();
   });
@@ -456,7 +493,7 @@ describe("getRelatedNotes", () => {
       },
     });
 
-    const rpcMock = vi.fn();
+    const rpcMock = createRelatedNotesRpcMock();
 
     createClientMock.mockResolvedValue({
       ...supabase,
@@ -466,7 +503,16 @@ describe("getRelatedNotes", () => {
 
     const result = await getRelatedNotes(noteId);
 
-    expect(rpcMock).not.toHaveBeenCalled();
+    expect(rpcMock).toHaveBeenCalledWith(
+      "cleanup_related_note_recommendation_stale_execution_claims",
+      {
+        p_note_id: noteId,
+      },
+    );
+    expect(rpcMock).not.toHaveBeenCalledWith(
+      "get_related_note_recommendation_daily_usage",
+      expect.anything(),
+    );
 
     expect(result.recommendationUsage).toBeNull();
 
@@ -477,6 +523,71 @@ describe("getRelatedNotes", () => {
       message:
         "Related Notes 일일 사용량 조회를 위한 사용자 역할 조회에 실패했습니다.",
       operation: RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.GET_DAILY_USAGE,
+      userId: authenticatedUserId,
+    });
+  });
+
+  it("stale cleanup에 실패해도 운영 오류를 보고하고 Related Notes 조회를 계속한다", async () => {
+    const cleanupError = new Error("stale cleanup failed");
+
+    const { supabase } = createSupabaseQueryMock({
+      notes: createCurrentNoteResult(),
+      profiles: createUserProfileResult(),
+      note_related_notes: {
+        data: [],
+      },
+      related_note_recommendation_execution_claims: {
+        data: [
+          {
+            id: executionClaimId,
+            status: "running",
+          },
+        ],
+      },
+    });
+
+    const rpcMock = createRelatedNotesRpcMock({
+      cleanupError,
+    });
+
+    createClientMock.mockResolvedValue({
+      ...supabase,
+      auth: createAuthMock(),
+      rpc: rpcMock,
+    } as never);
+
+    const result = await getRelatedNotes(noteId);
+
+    expect(rpcMock).toHaveBeenCalledWith(
+      "cleanup_related_note_recommendation_stale_execution_claims",
+      {
+        p_note_id: noteId,
+      },
+    );
+    expect(result).toEqual({
+      hasFailedRecommendationExecution: false,
+      hasRunningRecommendationExecution: true,
+      latestRecommendationExecution: {
+        id: executionClaimId,
+        status: "running",
+      },
+      recommendationUsage: {
+        used: 0,
+        limit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
+      },
+      relatedNotes: [],
+    });
+    expect(reportRelatedNotesOperationalErrorMock).toHaveBeenCalledWith({
+      actorUserId: authenticatedUserId,
+      error: cleanupError,
+      errorCode:
+        RELATED_NOTES_OPERATIONAL_ERROR_CODES.RECOMMENDATION_EXECUTION_STATE_LOAD_FAILED,
+      message: "Related Notes AI 추천 만료 실행 상태 정리에 실패했습니다.",
+      operation:
+        RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.LOAD_RECOMMENDATION_EXECUTION_STATE,
+      context: {
+        noteId,
+      },
       userId: authenticatedUserId,
     });
   });
@@ -495,9 +606,8 @@ describe("getRelatedNotes", () => {
       },
     });
 
-    const rpcMock = vi.fn().mockResolvedValue({
-      data: null,
-      error: usageError,
+    const rpcMock = createRelatedNotesRpcMock({
+      usageError,
     });
 
     createClientMock.mockResolvedValue({
@@ -538,9 +648,8 @@ describe("getRelatedNotes", () => {
       },
     });
 
-    const rpcMock = vi.fn().mockResolvedValue({
-      data: -1,
-      error: null,
+    const rpcMock = createRelatedNotesRpcMock({
+      usageData: -1,
     });
 
     createClientMock.mockResolvedValue({
@@ -575,7 +684,7 @@ describe("getRelatedNotes", () => {
     createClientMock.mockResolvedValue({
       ...supabase,
       auth: createAuthMock(),
-      rpc: createRecommendationUsageRpcMock(),
+      rpc: createRelatedNotesRpcMock(),
     } as never);
 
     const result = await getRelatedNotes(noteId);
@@ -615,7 +724,7 @@ describe("getRelatedNotes", () => {
     createClientMock.mockResolvedValue({
       ...supabase,
       auth: createAuthMock(),
-      rpc: createRecommendationUsageRpcMock(),
+      rpc: createRelatedNotesRpcMock(),
     } as never);
 
     const result = await getRelatedNotes(noteId);
@@ -656,7 +765,7 @@ describe("getRelatedNotes", () => {
     createClientMock.mockResolvedValue({
       ...supabase,
       auth: createAuthMock(),
-      rpc: createRecommendationUsageRpcMock(),
+      rpc: createRelatedNotesRpcMock(),
     } as never);
 
     const result = await getRelatedNotes(noteId);
@@ -718,7 +827,7 @@ describe("getRelatedNotes", () => {
     createClientMock.mockResolvedValue({
       ...supabase,
       auth: createAuthMock(),
-      rpc: createRecommendationUsageRpcMock(),
+      rpc: createRelatedNotesRpcMock(),
     } as never);
 
     const result = await getRelatedNotes(noteId);
@@ -758,7 +867,7 @@ describe("getRelatedNotes", () => {
     createClientMock.mockResolvedValue({
       ...supabase,
       auth: createAuthMock(),
-      rpc: createRecommendationUsageRpcMock(),
+      rpc: createRelatedNotesRpcMock(),
     } as never);
 
     const result = await getRelatedNotes(noteId);
@@ -808,7 +917,7 @@ describe("getRelatedNotes", () => {
     createClientMock.mockResolvedValue({
       ...supabase,
       auth: createAuthMock(),
-      rpc: createRecommendationUsageRpcMock(),
+      rpc: createRelatedNotesRpcMock(),
     } as never);
 
     const result = await getRelatedNotes(noteId);

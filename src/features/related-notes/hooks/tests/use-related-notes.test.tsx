@@ -78,12 +78,12 @@ function createRelatedNotesResult({
 }
 
 describe("useRelatedNotes", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
   });
 
   it("페이지 진입 시 running Claim이 존재하면 자동 polling을 시작한다", async () => {
@@ -110,8 +110,6 @@ describe("useRelatedNotes", () => {
     await waitFor(() => {
       expect(result.current.isRecommendationPolling).toBe(true);
     });
-
-    expect(result.current.isPollingTimedOut).toBe(false);
   });
 
   it("새 Claim ID를 전달하면 즉시 해당 실행의 polling을 시작한다", async () => {
@@ -132,7 +130,6 @@ describe("useRelatedNotes", () => {
     });
 
     expect(result.current.isRecommendationPolling).toBe(true);
-    expect(result.current.isPollingTimedOut).toBe(false);
   });
 
   it("추적 중인 Claim이 succeeded가 되면 running 상태를 관찰하지 못했더라도 polling을 종료한다", async () => {
@@ -169,8 +166,6 @@ describe("useRelatedNotes", () => {
     await waitFor(() => {
       expect(result.current.isRecommendationPolling).toBe(false);
     });
-
-    expect(result.current.isPollingTimedOut).toBe(false);
   });
 
   it.each(["failed", "stale"] as const)(
@@ -207,8 +202,6 @@ describe("useRelatedNotes", () => {
       await waitFor(() => {
         expect(result.current.isRecommendationPolling).toBe(false);
       });
-
-      expect(result.current.isPollingTimedOut).toBe(false);
     },
   );
 
@@ -246,7 +239,7 @@ describe("useRelatedNotes", () => {
     });
   });
 
-  it("110초 timeout 이후 DB execution이 계속 running이면 timeout 상태를 노출한다", async () => {
+  it("DB execution이 running인 동안에는 Client timeout 없이 polling을 계속한다", async () => {
     vi.useFakeTimers();
 
     const queryClient = createTestQueryClient();
@@ -270,7 +263,8 @@ describe("useRelatedNotes", () => {
     });
 
     /*
-     * 최초 query 결과에서 running Claim을 발견하는 effect가 실행될 시간을 줍니다.
+     * 최초 query 결과의 running Claim을 hook이 추적 대상으로 등록하도록
+     * React effect 실행을 한 번 진행합니다.
      */
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
@@ -278,42 +272,91 @@ describe("useRelatedNotes", () => {
 
     expect(result.current.isRecommendationPolling).toBe(true);
 
+    const callsBeforePolling = getRelatedNotesMock.mock.calls.length;
+
+    /*
+     * stale 여부는 Client 시간이 아니라 DB 조회 결과로만 결정합니다.
+     * 따라서 시간이 오래 지나더라도 DB가 계속 running을 반환하는 동안에는
+     * 5초 간격 polling이 계속 유지되어야 합니다.
+     */
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(110_000);
+      await vi.advanceTimersByTimeAsync(180_000);
     });
 
-    expect(result.current.isRecommendationPolling).toBe(false);
-    expect(result.current.isPollingTimedOut).toBe(true);
+    expect(result.current.isRecommendationPolling).toBe(true);
+    expect(getRelatedNotesMock.mock.calls.length).toBeGreaterThan(
+      callsBeforePolling,
+    );
   });
 
-  it("timeout 이후 DB execution이 running이 아니면 timeout UI 상태를 노출하지 않는다", async () => {
-    vi.useFakeTimers();
-
+  it("polling 중 DB execution이 stale로 전환되면 polling을 종료한다", async () => {
     const queryClient = createTestQueryClient();
 
-    getRelatedNotesMock.mockResolvedValue(createRelatedNotesResult());
+    const runningResult = createRelatedNotesResult({
+      hasRunningRecommendationExecution: true,
+      latestRecommendationExecution: {
+        id: CLAIM_ID,
+        status: "running",
+      },
+    });
+
+    const staleResult = createRelatedNotesResult({
+      latestRecommendationExecution: {
+        id: CLAIM_ID,
+        status: "stale",
+      },
+    });
+
+    getRelatedNotesMock
+      .mockResolvedValueOnce(runningResult)
+      .mockResolvedValueOnce(staleResult)
+      .mockResolvedValue(staleResult);
 
     const { result } = renderHook(() => useRelatedNotes(NOTE_ID), {
       wrapper: createWrapper(queryClient),
     });
 
+    /*
+     * 최초 조회에서 running Claim을 발견하면
+     * hook이 해당 Claim을 polling 대상으로 추적해야 합니다.
+     */
+    await waitFor(() => {
+      expect(result.current.isRecommendationPolling).toBe(true);
+    });
+
+    expect(result.current.data?.latestRecommendationExecution).toEqual({
+      id: CLAIM_ID,
+      status: "running",
+    });
+
+    /*
+     * 실제 polling과 동일하게 같은 query를 다시 조회합니다.
+     *
+     * stale 판정은 Client가 하지 않고 getRelatedNotes의 DB cleanup 결과를
+     * 그대로 받아 terminal 상태로 처리합니다.
+     */
     await act(async () => {
-      await Promise.resolve();
+      await queryClient.refetchQueries({
+        queryKey: relatedNotesQueryKeys.byNoteId(NOTE_ID),
+        exact: true,
+      });
     });
 
-    act(() => {
-      result.current.startRecommendationPolling(CLAIM_ID);
+    await waitFor(() => {
+      expect(result.current.data?.latestRecommendationExecution).toEqual({
+        id: CLAIM_ID,
+        status: "stale",
+      });
     });
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(110_000);
+    await waitFor(() => {
+      expect(result.current.isRecommendationPolling).toBe(false);
     });
 
-    expect(result.current.isRecommendationPolling).toBe(false);
-    expect(result.current.isPollingTimedOut).toBe(false);
+    expect(getRelatedNotesMock).toHaveBeenCalledTimes(2);
   });
 
-  it("Note ID가 변경되면 이전 Note의 polling과 timeout 상태를 초기화한다", async () => {
+  it("Note ID가 변경되면 이전 Note의 polling 상태를 초기화한다", async () => {
     const queryClient = createTestQueryClient();
 
     getRelatedNotesMock.mockResolvedValue(createRelatedNotesResult());
@@ -345,7 +388,5 @@ describe("useRelatedNotes", () => {
     await waitFor(() => {
       expect(result.current.isRecommendationPolling).toBe(false);
     });
-
-    expect(result.current.isPollingTimedOut).toBe(false);
   });
 });

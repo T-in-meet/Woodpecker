@@ -169,6 +169,40 @@ export async function getRelatedNotes(
     };
   }
 
+  /*
+   * background 실행이 platform/process 종료로 중단되면 Claim completion이 실행되지 않아
+   * 실제 실행은 끝났지만 running Claim만 남을 수 있습니다.
+   *
+   * 실행 상태를 읽기 전에 DB 시간 기준 stale cleanup을 수행하여,
+   * 새 요청이 없어도 조회/polling 경로에서 orphan running Claim을 복구할 수 있게 합니다.
+   *
+   * cleanup은 실행 상태 복구를 위한 best-effort 처리입니다.
+   * cleanup 자체가 실패하더라도 기존 Related Notes 목록 조회까지 막지는 않고,
+   * 운영 오류를 기록한 뒤 현재 DB 상태를 그대로 조회합니다.
+   */
+  const { error: staleCleanupError } = await supabase.rpc(
+    "cleanup_related_note_recommendation_stale_execution_claims",
+    {
+      p_note_id: parsedNoteId.data,
+    },
+  );
+
+  if (staleCleanupError) {
+    await reportRelatedNotesOperationalError({
+      actorUserId: user.id,
+      error: staleCleanupError,
+      errorCode:
+        RELATED_NOTES_OPERATIONAL_ERROR_CODES.RECOMMENDATION_EXECUTION_STATE_LOAD_FAILED,
+      message: "Related Notes AI 추천 만료 실행 상태 정리에 실패했습니다.",
+      operation:
+        RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.LOAD_RECOMMENDATION_EXECUTION_STATE,
+      context: {
+        noteId: parsedNoteId.data,
+      },
+      userId: user.id,
+    });
+  }
+
   const { data: profile, error: profileError } = profileResult;
 
   if (profileError) {

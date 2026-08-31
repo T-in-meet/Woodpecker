@@ -69,7 +69,6 @@ type MockRelatedNotesSectionDataOptions = {
     id: string;
     status: ExecutionStatus;
   } | null;
-  isPollingTimedOut?: boolean;
   isRecommendationPolling?: boolean;
   recommendationUsage?: {
     used: number;
@@ -81,7 +80,6 @@ function mockRelatedNotesSectionData({
   hasRunningRecommendationExecution = false,
   hasFailedRecommendationExecution = false,
   latestRecommendationExecution = null,
-  isPollingTimedOut = false,
   isRecommendationPolling = false,
   recommendationUsage = null,
 }: MockRelatedNotesSectionDataOptions = {}) {
@@ -95,7 +93,6 @@ function mockRelatedNotesSectionData({
     },
     isError: false,
     isLoading: false,
-    isPollingTimedOut,
     isRecommendationPolling,
     startRecommendationPolling: startRecommendationPollingMock,
   } as never);
@@ -106,7 +103,6 @@ function mockRelatedNotesSectionError() {
     data: undefined,
     isError: true,
     isLoading: false,
-    isPollingTimedOut: false,
     isRecommendationPolling: false,
     startRecommendationPolling: startRecommendationPollingMock,
   } as never);
@@ -200,9 +196,6 @@ describe("RelatedNotesSection", () => {
     expect(screen.getByRole("button", { name: "AI 추천" })).toBeDisabled();
     expect(screen.getByText("관련 노트를 찾고 있어요")).toBeInTheDocument();
     expect(
-      screen.queryByText("관련 노트 생성이 예상보다 오래 걸리고 있어요."),
-    ).not.toBeInTheDocument();
-    expect(
       screen.getByRole("button", { name: "관련 노트 추가" }),
     ).toBeInTheDocument();
   });
@@ -234,22 +227,19 @@ describe("RelatedNotesSection", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("AI 추천 polling 시간이 초과되면 버튼을 비활성화하고 지연 안내 문구를 표시한다", () => {
+  it("AI 추천 execution이 stale로 복구되면 AI 추천 버튼을 다시 사용할 수 있다", () => {
     mockRelatedNotesSectionData({
-      hasRunningRecommendationExecution: true,
+      hasRunningRecommendationExecution: false,
       latestRecommendationExecution: {
         id: executionClaimId,
-        status: "running",
+        status: "stale",
       },
-      isPollingTimedOut: true,
+      isRecommendationPolling: false,
     });
 
     render(<RelatedNotesSection noteId={noteId} />);
 
-    expect(screen.getByRole("button", { name: "AI 추천" })).toBeDisabled();
-    expect(
-      screen.getByText("관련 노트 생성이 예상보다 오래 걸리고 있어요."),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "AI 추천" })).toBeEnabled();
     expect(
       screen.queryByText("관련 노트를 찾고 있어요"),
     ).not.toBeInTheDocument();
@@ -426,9 +416,6 @@ describe("RelatedNotesSection", () => {
 
     expect(
       screen.queryByText("관련 노트를 찾고 있어요"),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByText("관련 노트 생성이 예상보다 오래 걸리고 있어요."),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByText("관련 노트 추천에 실패했습니다."),

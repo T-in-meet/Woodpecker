@@ -22,11 +22,12 @@
 --   1. execution claim 테이블과 인덱스 생성
 --   2. 기존 Run의 실행 제어 상태를 Claim으로 이관
 --   3. RLS 설정
---   4. Claim 기반 실행 시작 RPC 생성
---   5. Claim 기반 일일 사용량 조회 RPC 생성
---   6. Claim 기반 실행 완료 RPC 생성
---   7. 권한 설정
---   8. 더 이상 사용하지 않는 기존 Run 기반 claim RPC 제거
+--   4. Claim 기반 stale cleanup RPC 생성
+--   5. Claim 기반 실행 시작 RPC 생성
+--   6. Claim 기반 일일 사용량 조회 RPC 생성
+--   7. Claim 기반 실행 완료 RPC 생성
+--   8. 권한 설정
+--   9. 더 이상 사용하지 않는 기존 Run 기반 claim RPC 제거
 
 -- ============================================================================
 -- 1. Execution Claim 테이블 생성
@@ -167,7 +168,80 @@ CREATE POLICY "related_note_recommendation_execution_claims_select_own"
   USING ((SELECT auth.uid()) = "user_id");
 
 -- ============================================================================
--- 4. 실행 시작 Claim RPC
+-- 4. 만료 Execution Claim cleanup RPC
+-- ============================================================================
+--
+-- Related Notes 조회 경로에서도 실제 실행이 종료된 orphan running Claim을
+-- DB 시간 기준으로 복구할 수 있도록 stale cleanup만 수행합니다.
+--
+-- 이 함수는 새 Claim 생성, duplicate 판정, quota 계산을 수행하지 않습니다.
+-- 실행 시작 책임은 claim_related_note_recommendation_execution에 그대로 두고,
+-- 조회/복구 경로에서는 만료 상태 정리만 수행하도록 책임을 분리합니다.
+--
+-- authenticated 사용자는 자신의 Note에 대해서만 실행할 수 있습니다.
+CREATE OR REPLACE FUNCTION "public"."cleanup_related_note_recommendation_stale_execution_claims"(
+  "p_note_id" "uuid"
+)
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  "v_user_id" "uuid" := (SELECT auth.uid());
+  "v_now" timestamp with time zone := clock_timestamp();
+  "v_cleaned_count" integer;
+BEGIN
+  IF "v_user_id" IS NULL THEN
+    RAISE EXCEPTION 'authentication required';
+  END IF;
+
+  IF "p_note_id" IS NULL THEN
+    RAISE EXCEPTION 'note_id is required';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM "public"."notes" AS "notes"
+    WHERE "notes"."id" = "p_note_id"
+      AND "notes"."user_id" = "v_user_id"
+  ) THEN
+    RAISE EXCEPTION 'note not found';
+  END IF;
+
+  /*
+   * background 실행 함수는 maxDuration = 90(초)로 제한되어 있어,
+   * provider 응답 지연이나 platform/process 강제 종료가 발생하면
+   * complete_related_note_recommendation_execution_claim 호출 없이
+   * running Claim만 남을 수 있습니다.
+   *
+   * Claim 생성 시점의 stale cleanup만으로는 사용자가 새 요청을 보낼 수 없는
+   * UI 상태에서 orphan Claim을 복구할 수 없으므로, 조회 경로에서도 동일한
+   * DB 시간 기준으로 만료 Claim을 stale로 정리할 수 있게 합니다.
+   *
+   * stale 판정은 source version과 무관하게 같은 Note의 running Claim에 적용합니다.
+   * 이전 source version의 만료 Claim도 실행 중 상태와 일일 quota에 영향을 줄 수
+   * 있기 때문입니다.
+   *
+   * maxDuration 설정이 바뀌면 claim RPC의 stale 기준과 이 값도 함께 조정해야 합니다.
+   */
+  UPDATE "public"."related_note_recommendation_execution_claims" AS "claims"
+  SET
+    "status" = 'stale',
+    "completed_at" = "v_now"
+  WHERE "claims"."user_id" = "v_user_id"
+    AND "claims"."note_id" = "p_note_id"
+    AND "claims"."status" = 'running'
+    AND "claims"."claimed_at" < "v_now" - interval '3 minutes';
+
+  GET DIAGNOSTICS "v_cleaned_count" = ROW_COUNT;
+
+  RETURN "v_cleaned_count";
+END;
+$$;
+
+-- ============================================================================
+-- 5. 실행 시작 Claim RPC
 -- ============================================================================
 --
 -- 실행 요청 하나를 실제로 시작할 수 있는지 DB transaction 안에서 판정합니다.
@@ -355,7 +429,7 @@ END;
 $$;
 
 -- ============================================================================
--- 5. 일일 사용량 조회 RPC
+-- 6. 일일 사용량 조회 RPC
 -- ============================================================================
 --
 -- 현재 인증 사용자가 특정 Note에서 오늘 사용한 Related Notes AI 추천 횟수를
@@ -405,7 +479,7 @@ END;
 $$;
 
 -- ============================================================================
--- 6. 실행 완료 Claim RPC
+-- 7. 실행 완료 Claim RPC
 -- ============================================================================
 --
 -- running Claim만 succeeded / failed / stale 중 하나의 최종 상태로 전환합니다.
@@ -447,7 +521,7 @@ END;
 $$;
 
 -- ============================================================================
--- 7. 권한 설정
+-- 8. 권한 설정
 -- ============================================================================
 --
 -- authenticated 사용자는 자신의 Claim을 SELECT만 할 수 있고,
@@ -474,6 +548,13 @@ GRANT EXECUTE ON FUNCTION "public"."claim_related_note_recommendation_execution"
   timestamp with time zone,
   integer
 ) TO service_role;
+
+REVOKE ALL ON FUNCTION "public"."cleanup_related_note_recommendation_stale_execution_claims"(
+  "uuid"
+) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION "public"."cleanup_related_note_recommendation_stale_execution_claims"(
+  "uuid"
+) TO authenticated;
 
 REVOKE ALL ON FUNCTION "public"."get_related_note_recommendation_daily_usage"(
   "uuid"
@@ -502,6 +583,11 @@ COMMENT ON FUNCTION "public"."claim_related_note_recommendation_execution"(
 ) IS
   'Related Notes 추천 실행 시작을 claim합니다. run 기록 테이블에 의존하지 않고 stale, duplicate, 사용자별 Note 단위 daily limit을 판정합니다.';
 
+COMMENT ON FUNCTION "public"."cleanup_related_note_recommendation_stale_execution_claims"(
+  "uuid"
+) IS
+  '현재 인증 사용자의 특정 Note에서 DB stale 기준을 초과한 running Related Notes execution claim을 stale로 정리합니다. 새 실행 claim, duplicate, quota 판정은 수행하지 않습니다.';
+
 COMMENT ON FUNCTION "public"."get_related_note_recommendation_daily_usage"(
   "uuid"
 ) IS
@@ -514,7 +600,7 @@ COMMENT ON FUNCTION "public"."complete_related_note_recommendation_execution_cla
   'running 상태의 Related Notes 추천 실행 claim을 최종 상태로 완료합니다.';
 
 -- ============================================================================
--- 8. 기존 Run 기반 Claim RPC 제거
+-- 9. 기존 Run 기반 Claim RPC 제거
 -- ============================================================================
 --
 -- 새 Claim 테이블과 Claim RPC가 기능 제어의 정본이 되었으므로,

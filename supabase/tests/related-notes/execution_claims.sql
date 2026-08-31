@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(25);
+SELECT plan(31);
 
 
 -- ============================================================================
@@ -45,6 +45,12 @@ SELECT set_config('test.related_note_claims_expired_running_note_id', gen_random
 
 -- succeeded Claim은 오래되더라도 stale 처리되지 않는지 검증합니다.
 SELECT set_config('test.related_note_claims_old_succeeded_note_id', gen_random_uuid()::text, true);
+
+-- 조회 경로에서 사용하는 stale cleanup RPC를 기존 Claim 테스트와 독립적으로 검증합니다.
+SELECT set_config('test.related_note_claims_cleanup_note_id', gen_random_uuid()::text, true);
+SELECT set_config('test.related_note_claims_cleanup_recent_claim_id', gen_random_uuid()::text, true);
+SELECT set_config('test.related_note_claims_cleanup_expired_claim_id', gen_random_uuid()::text, true);
+SELECT set_config('test.related_note_claims_cleanup_succeeded_claim_id', gen_random_uuid()::text, true);
 
 SELECT set_config('test.related_note_claims_recent_running_claim_id', gen_random_uuid()::text, true);
 SELECT set_config('test.related_note_claims_expired_running_claim_id', gen_random_uuid()::text, true);
@@ -168,6 +174,13 @@ VALUES
         'Related Note Claim Old Succeeded',
         'Related Note Claim Old Succeeded Content',
         0
+    ),
+    (
+        current_setting('test.related_note_claims_cleanup_note_id')::uuid,
+        current_setting('test.related_note_claims_user_id')::uuid,
+        'Related Note Claim Cleanup',
+        'Related Note Claim Cleanup Content',
+        0
     );
 
 -- ADMIN 사용자는 일반 사용자와 달리 일일 실행 제한을 적용받지 않습니다.
@@ -221,6 +234,155 @@ SELECT throws_ok(
     '42501',
     NULL,
     'authenticated should not execute recommendation execution claim RPC'
+);
+
+
+-- ============================================================================
+-- Stale cleanup RPC
+-- ============================================================================
+--
+-- 조회 경로에서는 새 Claim을 만들지 않고, DB stale 기준을 초과한 orphan
+-- running Claim만 정리해야 합니다.
+--
+-- fixture는 실제 테이블에 직접 INSERT/UPDATE해야 하므로 service_role로 준비하고,
+-- cleanup RPC 자체는 실제 호출 주체와 동일한 authenticated 권한에서 검증합니다.
+--
+-- stale 여부는 Client 시간이 아니라 DB의 clock_timestamp()를 기준으로 판단합니다.
+-- 또한 source version과 관계없이 같은 사용자 + Note의 만료 running Claim을
+-- 정리하되, 아직 실행 중일 수 있는 최근 running Claim과 이미 완료된 Claim은
+-- 변경하지 않아야 합니다.
+--
+
+RESET ROLE;
+SET LOCAL ROLE service_role;
+SELECT set_config('request.jwt.claims', '{}'::text, true);
+
+INSERT INTO public.related_note_recommendation_execution_claims (
+    id,
+    user_id,
+    note_id,
+    source_updated_at,
+    status,
+    claimed_at,
+    completed_at
+)
+VALUES
+    (
+        current_setting('test.related_note_claims_cleanup_recent_claim_id')::uuid,
+        current_setting('test.related_note_claims_user_id')::uuid,
+        current_setting('test.related_note_claims_cleanup_note_id')::uuid,
+        (
+            SELECT updated_at
+            FROM public.notes
+            WHERE id = current_setting('test.related_note_claims_cleanup_note_id')::uuid
+        ),
+        'running',
+        clock_timestamp() - interval '2 minutes',
+        NULL
+    ),
+    (
+        current_setting('test.related_note_claims_cleanup_expired_claim_id')::uuid,
+        current_setting('test.related_note_claims_user_id')::uuid,
+        current_setting('test.related_note_claims_cleanup_note_id')::uuid,
+        (
+            SELECT updated_at - interval '1 second'
+            FROM public.notes
+            WHERE id = current_setting('test.related_note_claims_cleanup_note_id')::uuid
+        ),
+        'running',
+        clock_timestamp() - interval '4 minutes',
+        NULL
+    ),
+    (
+        current_setting('test.related_note_claims_cleanup_succeeded_claim_id')::uuid,
+        current_setting('test.related_note_claims_user_id')::uuid,
+        current_setting('test.related_note_claims_cleanup_note_id')::uuid,
+        (
+            SELECT updated_at - interval '2 seconds'
+            FROM public.notes
+            WHERE id = current_setting('test.related_note_claims_cleanup_note_id')::uuid
+        ),
+        'succeeded',
+        clock_timestamp() - interval '10 minutes',
+        clock_timestamp() - interval '9 minutes'
+    );
+
+-- active Claim unique 제약은 같은 user + Note + source_updated_at 조합을 허용하지 않습니다.
+-- 따라서 각 fixture는 서로 다른 source version을 사용합니다.
+-- 특히 만료 running Claim은 현재 version보다 이전 source_updated_at을 사용해,
+-- cleanup이 source version과 무관하게 stale 처리하는 정책을 직접 검증합니다.
+
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+SELECT set_config(
+    'request.jwt.claims',
+    json_build_object(
+        'sub',
+        current_setting('test.related_note_claims_user_id'),
+        'role',
+        'authenticated'
+    )::text,
+    true
+);
+
+SELECT is(
+    public.cleanup_related_note_recommendation_stale_execution_claims(
+        current_setting('test.related_note_claims_cleanup_note_id')::uuid
+    ),
+    1,
+    'cleanup should stale only expired running claims for the current user note'
+);
+
+SELECT is(
+    (
+        SELECT status
+        FROM public.related_note_recommendation_execution_claims
+        WHERE id = current_setting('test.related_note_claims_cleanup_recent_claim_id')::uuid
+    ),
+    'running',
+    'cleanup should keep recent running claims running'
+);
+
+SELECT is(
+    (
+        SELECT status
+        FROM public.related_note_recommendation_execution_claims
+        WHERE id = current_setting('test.related_note_claims_cleanup_expired_claim_id')::uuid
+    ),
+    'stale',
+    'cleanup should stale expired running claims even from a previous note version'
+);
+
+SELECT ok(
+    (
+        SELECT completed_at IS NOT NULL
+        FROM public.related_note_recommendation_execution_claims
+        WHERE id = current_setting('test.related_note_claims_cleanup_expired_claim_id')::uuid
+    ),
+    'cleanup should set completed_at on expired running claims'
+);
+
+SELECT is(
+    (
+        SELECT status
+        FROM public.related_note_recommendation_execution_claims
+        WHERE id = current_setting('test.related_note_claims_cleanup_succeeded_claim_id')::uuid
+    ),
+    'succeeded',
+    'cleanup should not change completed claims'
+);
+
+-- authenticated 사용자는 자신의 Note만 cleanup할 수 있어야 합니다.
+-- 다른 사용자의 Note ID를 전달해도 그 사용자의 Claim 상태를 변경해서는 안 됩니다.
+SELECT throws_ok(
+    $sql$
+        SELECT public.cleanup_related_note_recommendation_stale_execution_claims(
+            current_setting('test.related_note_claims_other_note_id')::uuid
+        );
+    $sql$,
+    'P0001',
+    'note not found',
+    'cleanup should reject a note owned by another user'
 );
 
 

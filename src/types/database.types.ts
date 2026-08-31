@@ -1943,6 +1943,10 @@ export type Database = {
         };
         Returns: Json;
       };
+      cleanup_related_note_recommendation_stale_execution_claims: {
+        Args: { p_note_id: string };
+        Returns: number;
+      };
       complete_note_chat_execution_claim: {
         Args: { p_claim_id: string; p_status: string };
         Returns: string;

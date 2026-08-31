@@ -43,7 +43,6 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
     data,
     isError,
     isLoading,
-    isPollingTimedOut,
     isRecommendationPolling,
     startRecommendationPolling,
   } = useRelatedNotes(noteId);
@@ -135,8 +134,8 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
    * 현재 Note version에 대한 추천이 이미 성공했거나,
    * 일일 제한에 도달한 경우 새로운 AI 추천 요청을 막습니다.
    *
-   * timeout 상태는 useRelatedNotes에서 running execution이 남아 있는 경우에만
-   * true가 되므로 hasRunningRecommendationExecution 조건으로 함께 보호됩니다.
+   * Claim의 stale 여부는 조회 경로의 DB cleanup에서 판정하므로,
+   * Client에서는 별도의 timeout 상태를 사용하지 않습니다.
    */
   const isRecommendationRequestDisabled =
     isRecommendationRequestInProgress ||
@@ -194,18 +193,8 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
             </div>
           </div>
 
-          {isPollingTimedOut ? (
-            /*
-             * execution claim은 아직 running이지만 자동 polling은 종료된 상태입니다.
-             *
-             * 실제 실행이 계속되고 있는지 중단됐는지는 이 화면에서 확정할 수 없으므로
-             * 실패로 표시하지 않고 처리 시간이 길어지고 있음을 안내합니다.
-             */
-            <p className="text-xs text-muted-foreground">
-              관련 노트 생성이 예상보다 오래 걸리고 있어요.
-            </p>
-          ) : isRecommendationRequestInProgress ||
-            hasRunningRecommendationExecution ? (
+          {isRecommendationRequestInProgress ||
+          hasRunningRecommendationExecution ? (
             /*
              * Server Action 요청 중이거나 실제 running execution을 추적 중인 상태를
              * 동일한 진행 상태로 표시합니다.
