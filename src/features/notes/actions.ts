@@ -22,7 +22,6 @@ import {
 import { generateNoteEmbedding } from "../ai/rags/note/generate-embedding";
 import { resolveAiRuntimeEmbeddingConfiguration } from "../ai/runtimes";
 import { reportAiOperationalError } from "../ai/utils/report-ai-operational-error";
-import { scheduleRelatedNoteRecommendation } from "../related-notes/execution/schedule-related-note-recommendation";
 import { type NoteInput, noteSchema } from "./schema";
 
 type NoteActionFieldErrors = Partial<Record<keyof NoteInput, string[]>>;
@@ -201,18 +200,6 @@ export async function createNoteAction(
     ownerUserId: user.id,
   });
 
-  /*
-   * Related Notes AI 추천도 Note 생성 응답 이후 후처리로 예약합니다.
-   *
-   * Runtime 설정 조회, Query Expansion, RAG 검색, Answer Agent 실행 및
-   * 추천 저장을 Action 응답 경로에서 분리하여,
-   * AI 추천 처리 시간이 Note 생성 성공 응답을 지연시키지 않도록 합니다.
-   */
-  scheduleRelatedNoteRecommendation({
-    noteId: newNoteId,
-    ownerUserId: user.id,
-  });
-
   return {
     success: true,
     newNoteId,
@@ -297,18 +284,6 @@ export async function updateNoteAction(
    * 이미 완료된 Note 수정 결과에는 영향을 주지 않습니다.
    */
   scheduleNoteEmbedding({
-    noteId: updatedNote.id,
-    ownerUserId: user.id,
-  });
-
-  /*
-   * 수정된 Note의 Related Notes AI 추천도 응답 이후 후처리로 예약합니다.
-   *
-   * 후처리에서는 DB에서 최신 Note snapshot을 다시 조회하고,
-   * 추천 저장 시 updated_at을 검증하므로 연속 수정 중 생성된
-   * stale 추천이 최신 추천을 덮어쓰지 않도록 합니다.
-   */
-  scheduleRelatedNoteRecommendation({
     noteId: updatedNote.id,
     ownerUserId: user.id,
   });

@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -115,6 +116,7 @@ vi.mock("../run-persistence", () => ({
   saveRelatedNoteRunVerificationUsage: vi.fn(),
 }));
 
+const mockAfter = vi.mocked(after);
 const mockCreateAdminClient = vi.mocked(createAdminClient);
 const mockResolveAiRuntimeChatConfiguration = vi.mocked(
   resolveAiRuntimeChatConfiguration,
@@ -349,10 +351,16 @@ describe("scheduleRelatedNoteRecommendation", () => {
     mockCreateAdminClient.mockReturnValue(supabase);
     mockSuccessfulRecommendationRun();
 
-    scheduleRelatedNoteRecommendation({
+    const result = await scheduleRelatedNoteRecommendation({
       noteId: NOTE_ID,
       ownerUserId: OWNER_USER_ID,
     });
+
+    expect(result).toEqual({
+      claimId: CLAIM_ID,
+      status: RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS.CLAIMED,
+    });
+    expect(mockAfter).toHaveBeenCalledOnce();
 
     await vi.waitFor(() => {
       expect(mockRunRelatedNoteRecommendation).toHaveBeenCalledWith(
@@ -456,7 +464,7 @@ describe("scheduleRelatedNoteRecommendation", () => {
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
 
-    scheduleRelatedNoteRecommendation({
+    await scheduleRelatedNoteRecommendation({
       noteId: NOTE_ID,
       ownerUserId: OWNER_USER_ID,
     });
@@ -507,7 +515,7 @@ describe("scheduleRelatedNoteRecommendation", () => {
     mockSuccessfulRecommendationRun();
     mockReplaceRelatedNoteAiRecommendations.mockResolvedValue("stale");
 
-    scheduleRelatedNoteRecommendation({
+    await scheduleRelatedNoteRecommendation({
       noteId: NOTE_ID,
       ownerUserId: OWNER_USER_ID,
     });
@@ -545,7 +553,7 @@ describe("scheduleRelatedNoteRecommendation", () => {
       "source_not_found",
     );
 
-    scheduleRelatedNoteRecommendation({
+    await scheduleRelatedNoteRecommendation({
       noteId: NOTE_ID,
       ownerUserId: OWNER_USER_ID,
     });
@@ -606,7 +614,7 @@ describe("scheduleRelatedNoteRecommendation", () => {
       };
     });
 
-    scheduleRelatedNoteRecommendation({
+    await scheduleRelatedNoteRecommendation({
       noteId: NOTE_ID,
       ownerUserId: OWNER_USER_ID,
     });
@@ -685,34 +693,31 @@ describe("scheduleRelatedNoteRecommendation", () => {
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
 
-    scheduleRelatedNoteRecommendation({
-      noteId: NOTE_ID,
-      ownerUserId: OWNER_USER_ID,
+    await expect(
+      scheduleRelatedNoteRecommendation({
+        noteId: NOTE_ID,
+        ownerUserId: OWNER_USER_ID,
+      }),
+    ).rejects.toBe(claimError);
+
+    expect(mockReportRelatedNotesOperationalError).toHaveBeenCalledWith({
+      error: claimError,
+      errorCode:
+        RELATED_NOTES_OPERATIONAL_ERROR_CODES.RECOMMENDATION_EXECUTION_CLAIM_FAILED,
+      message: "Related Note 추천 실행 선점에 실패했습니다.",
+      operation:
+        RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.CLAIM_RECOMMENDATION_EXECUTION,
+      context: {
+        noteId: NOTE_ID,
+      },
+      userId: OWNER_USER_ID,
     });
 
-    await vi.waitFor(() => {
-      expect(mockReportRelatedNotesOperationalError).toHaveBeenCalledWith({
-        error: claimError,
-        errorCode:
-          RELATED_NOTES_OPERATIONAL_ERROR_CODES.RECOMMENDATION_EXECUTION_CLAIM_FAILED,
-        message: "Related Note 추천 실행 선점에 실패했습니다.",
-        operation:
-          RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.CLAIM_RECOMMENDATION_EXECUTION,
-        context: {
-          noteId: NOTE_ID,
-        },
-        userId: OWNER_USER_ID,
-      });
-    });
-
+    expect(mockAfter).not.toHaveBeenCalled();
     expect(mockResolveAiRuntimeEmbeddingConfiguration).not.toHaveBeenCalled();
     expect(mockResolveAiRuntimeChatConfiguration).not.toHaveBeenCalled();
     expect(mockRunRelatedNoteRecommendation).not.toHaveBeenCalled();
     expect(mockReplaceRelatedNoteAiRecommendations).not.toHaveBeenCalled();
-
-    /*
-     * 실행이 claim되지 않았으므로 usage/snapshot/완료 기록은 수행하지 않습니다.
-     */
     expect(mockSaveRelatedNoteRunQueryExpansion).not.toHaveBeenCalled();
     expect(mockSaveRelatedNoteRunExpandedQuery).not.toHaveBeenCalled();
     expect(mockSaveRelatedNoteRunQueryEmbedding).not.toHaveBeenCalled();
@@ -750,7 +755,7 @@ describe("scheduleRelatedNoteRecommendation", () => {
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
 
-    scheduleRelatedNoteRecommendation({
+    await scheduleRelatedNoteRecommendation({
       noteId: NOTE_ID,
       ownerUserId: OWNER_USER_ID,
     });
@@ -805,17 +810,17 @@ describe("scheduleRelatedNoteRecommendation", () => {
       status: RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS.DUPLICATE,
     });
 
-    scheduleRelatedNoteRecommendation({
+    const result = await scheduleRelatedNoteRecommendation({
       noteId: NOTE_ID,
       ownerUserId: OWNER_USER_ID,
     });
 
-    await vi.waitFor(() => {
-      expect(
-        mockClaimRelatedNoteRecommendationExecution,
-      ).toHaveBeenCalledOnce();
+    expect(result).toEqual({
+      claimId: CLAIM_ID,
+      status: RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS.DUPLICATE,
     });
-
+    expect(mockClaimRelatedNoteRecommendationExecution).toHaveBeenCalledOnce();
+    expect(mockAfter).not.toHaveBeenCalled();
     expect(mockResolveAiRuntimeEmbeddingConfiguration).not.toHaveBeenCalled();
     expect(mockResolveAiRuntimeChatConfiguration).not.toHaveBeenCalled();
     expect(mockRunRelatedNoteRecommendation).not.toHaveBeenCalled();
@@ -845,17 +850,18 @@ describe("scheduleRelatedNoteRecommendation", () => {
         RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS.DAILY_LIMIT_EXCEEDED,
     });
 
-    scheduleRelatedNoteRecommendation({
+    const result = await scheduleRelatedNoteRecommendation({
       noteId: NOTE_ID,
       ownerUserId: OWNER_USER_ID,
     });
 
-    await vi.waitFor(() => {
-      expect(
-        mockClaimRelatedNoteRecommendationExecution,
-      ).toHaveBeenCalledOnce();
+    expect(result).toEqual({
+      claimId: null,
+      status:
+        RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS.DAILY_LIMIT_EXCEEDED,
     });
-
+    expect(mockClaimRelatedNoteRecommendationExecution).toHaveBeenCalledOnce();
+    expect(mockAfter).not.toHaveBeenCalled();
     expect(mockReportRelatedNotesOperationalError).not.toHaveBeenCalled();
     expect(mockResolveAiRuntimeEmbeddingConfiguration).not.toHaveBeenCalled();
     expect(mockResolveAiRuntimeChatConfiguration).not.toHaveBeenCalled();
@@ -887,17 +893,17 @@ describe("scheduleRelatedNoteRecommendation", () => {
       status: RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS.STALE,
     });
 
-    scheduleRelatedNoteRecommendation({
+    const result = await scheduleRelatedNoteRecommendation({
       noteId: NOTE_ID,
       ownerUserId: OWNER_USER_ID,
     });
 
-    await vi.waitFor(() => {
-      expect(
-        mockClaimRelatedNoteRecommendationExecution,
-      ).toHaveBeenCalledOnce();
+    expect(result).toEqual({
+      claimId: null,
+      status: RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS.STALE,
     });
-
+    expect(mockClaimRelatedNoteRecommendationExecution).toHaveBeenCalledOnce();
+    expect(mockAfter).not.toHaveBeenCalled();
     expect(mockReportRelatedNotesOperationalError).not.toHaveBeenCalled();
     expect(mockResolveAiRuntimeEmbeddingConfiguration).not.toHaveBeenCalled();
     expect(mockResolveAiRuntimeChatConfiguration).not.toHaveBeenCalled();
@@ -945,7 +951,7 @@ describe("scheduleRelatedNoteRecommendation", () => {
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
 
-    scheduleRelatedNoteRecommendation({
+    await scheduleRelatedNoteRecommendation({
       noteId: NOTE_ID,
       ownerUserId: OWNER_USER_ID,
     });
@@ -1016,7 +1022,7 @@ describe("scheduleRelatedNoteRecommendation", () => {
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
 
-    scheduleRelatedNoteRecommendation({
+    await scheduleRelatedNoteRecommendation({
       noteId: NOTE_ID,
       ownerUserId: OWNER_USER_ID,
     });
@@ -1065,7 +1071,7 @@ describe("scheduleRelatedNoteRecommendation", () => {
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
 
-    scheduleRelatedNoteRecommendation({
+    await scheduleRelatedNoteRecommendation({
       noteId: NOTE_ID,
       ownerUserId: OWNER_USER_ID,
     });
@@ -1109,7 +1115,7 @@ describe("scheduleRelatedNoteRecommendation", () => {
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
 
-    scheduleRelatedNoteRecommendation({
+    await scheduleRelatedNoteRecommendation({
       noteId: NOTE_ID,
       ownerUserId: OWNER_USER_ID,
     });
@@ -1133,7 +1139,7 @@ describe("scheduleRelatedNoteRecommendation", () => {
     consoleErrorSpy.mockRestore();
   });
 
-  it("Note가 존재하지 않으면 추천을 실행하지 않는다", async () => {
+  it("Note가 존재하지 않으면 stale을 반환하고 추천을 예약하지 않는다", async () => {
     const supabase = createNotesQueryMock({
       data: null,
       error: null,
@@ -1141,20 +1147,23 @@ describe("scheduleRelatedNoteRecommendation", () => {
 
     mockCreateAdminClient.mockReturnValue(supabase);
 
-    scheduleRelatedNoteRecommendation({
+    const result = await scheduleRelatedNoteRecommendation({
       noteId: NOTE_ID,
       ownerUserId: OWNER_USER_ID,
     });
 
-    await vi.waitFor(() => {
-      expect(mockRunRelatedNoteRecommendation).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      claimId: null,
+      status: RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS.STALE,
     });
-
+    expect(mockClaimRelatedNoteRecommendationExecution).not.toHaveBeenCalled();
+    expect(mockAfter).not.toHaveBeenCalled();
+    expect(mockRunRelatedNoteRecommendation).not.toHaveBeenCalled();
     expect(mockReplaceRelatedNoteAiRecommendations).not.toHaveBeenCalled();
     expect(mockReportRelatedNotesOperationalError).not.toHaveBeenCalled();
   });
 
-  it("Note 조회에 실패하면 추천을 실행하지 않는다", async () => {
+  it("Note 조회에 실패하면 운영 오류를 보고하고 요청 준비를 실패시킨다", async () => {
     const sourceLoadError = {
       message: "Failed to load note",
     };
@@ -1170,16 +1179,12 @@ describe("scheduleRelatedNoteRecommendation", () => {
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
 
-    scheduleRelatedNoteRecommendation({
-      noteId: NOTE_ID,
-      ownerUserId: OWNER_USER_ID,
-    });
-
-    await vi.waitFor(() => {
-      expect(mockRunRelatedNoteRecommendation).not.toHaveBeenCalled();
-    });
-
-    expect(mockReplaceRelatedNoteAiRecommendations).not.toHaveBeenCalled();
+    await expect(
+      scheduleRelatedNoteRecommendation({
+        noteId: NOTE_ID,
+        ownerUserId: OWNER_USER_ID,
+      }),
+    ).rejects.toBe(sourceLoadError);
 
     expect(mockReportRelatedNotesOperationalError).toHaveBeenCalledWith({
       error: sourceLoadError,
@@ -1193,6 +1198,11 @@ describe("scheduleRelatedNoteRecommendation", () => {
       },
       userId: OWNER_USER_ID,
     });
+
+    expect(mockClaimRelatedNoteRecommendationExecution).not.toHaveBeenCalled();
+    expect(mockAfter).not.toHaveBeenCalled();
+    expect(mockRunRelatedNoteRecommendation).not.toHaveBeenCalled();
+    expect(mockReplaceRelatedNoteAiRecommendations).not.toHaveBeenCalled();
 
     consoleErrorSpy.mockRestore();
   });

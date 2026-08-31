@@ -2,11 +2,13 @@
 
 import { FeatureInfoPopover } from "@/components/common/FeatureInfoPopover";
 import { NavigationGuardAlertDialog } from "@/components/common/NavigationGuardAlertDialog";
+import { Button } from "@/components/ui/button";
 import { useBeforeUnloadGuard } from "@/hooks/useBeforeUnloadGuard";
 import { useInternalNavigationGuard } from "@/hooks/useInternalNavigationGuard";
 
 import { RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE } from "../constants/ai";
 import { useRelatedNotes } from "../hooks/use-related-notes";
+import { useRequestRelatedNoteRecommendation } from "../hooks/use-request-related-note-recommendation";
 import { AddRelatedNoteDialog } from "./AddRelatedNoteDialog";
 import { RelatedNoteItem } from "./RelatedNoteItem";
 
@@ -21,8 +23,14 @@ type RelatedNotesSectionProps = {
  * Related Notes는 노트 본문과 독립적으로 조회하며,
  * active 상태의 manual/ai 관계를 표시합니다.
  *
- * 목록이 비어 있어도 사용자가 직접 Related Note를 추가할 수 있도록
- * 섹션 자체는 유지합니다.
+ * 목록이 비어 있어도 사용자가 직접 Related Note를 추가하거나
+ * AI Related Notes 추천 생성을 요청할 수 있도록 섹션 자체는 유지합니다.
+ *
+ * AI 추천은 사용자의 수동 요청으로 시작하며,
+ * 요청이 받아들여진 뒤 실제 추천 생성은 비동기로 실행됩니다.
+ *
+ * 현재 Note version에 대해 이미 성공한 AI 추천 실행이 존재하면
+ * 동일한 version으로 다시 추천을 생성하지 않고 최신 상태로 표시합니다.
  *
  * 일일 AI 추천 제한을 적용받는 사용자는 오늘의 사용량도 함께 표시하며,
  * ADMIN처럼 제한을 적용받지 않는 사용자는 recommendationUsage가 null이므로
@@ -31,20 +39,70 @@ type RelatedNotesSectionProps = {
  * @param props Related Notes를 조회할 기준 Note ID
  */
 export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
-  const { data, isError, isLoading, isPollingTimedOut } =
-    useRelatedNotes(noteId);
+  const {
+    data,
+    isError,
+    isLoading,
+    isPollingTimedOut,
+    isRecommendationPolling,
+    startRecommendationPolling,
+  } = useRelatedNotes(noteId);
+
+  /*
+   * Action이 새 execution claim을 정상적으로 획득하면 query invalidate보다 먼저
+   * 해당 Claim ID에 대한 polling을 시작합니다.
+   *
+   * duplicate/stale/daily limit처럼 새 Claim이 생성되지 않는 경우에는
+   * polling을 시작하지 않고 최신 query 상태만 다시 조회합니다.
+   */
+  const requestRelatedNoteRecommendation = useRequestRelatedNoteRecommendation(
+    noteId,
+    {
+      onAccepted: startRecommendationPolling,
+    },
+  );
 
   // 최신 execution claim이 running이면 AI 추천 진행 상태를 표시합니다.
   const hasRunningRecommendationExecution =
     data?.hasRunningRecommendationExecution === true;
 
+  /*
+   * 현재 Note version의 최신 execution claim이 succeeded이면
+   * 이미 해당 version에 대한 AI 추천이 생성된 상태입니다.
+   *
+   * 동일한 Note version으로 다시 실행하면 Claim 계층에서 duplicate 처리되므로
+   * UI에서도 새로운 요청이 가능한 것처럼 보이지 않도록 버튼을 비활성화합니다.
+   */
+  const hasSucceededRecommendationExecution =
+    data?.latestRecommendationExecution?.status === "succeeded";
+
+  /*
+   * Server Action 요청 중이거나 추천 실행 상태를 polling하고 있는 동안에는
+   * 사용자가 동일한 AI 추천을 다시 요청하지 못하도록 막습니다.
+   *
+   * 새 Claim이 생성되면 Action 응답에서 받은 Claim ID를 즉시 추적하므로
+   * Client가 running 상태를 직접 관찰하지 못하더라도 완료 상태를 판정할 수 있습니다.
+   */
+  const isRecommendationRequestInProgress =
+    requestRelatedNoteRecommendation.isPending || isRecommendationPolling;
+
+  /*
+   * 추천 요청을 서버에 전달하는 시점부터 background 실행이 종료될 때까지
+   * 페이지 이탈 경고를 적용합니다.
+   *
+   * Server Action 요청 직후에는 DB query가 아직 running 상태를 반영하지 않았을 수 있으므로
+   * 요청/polling 상태도 함께 사용합니다.
+   */
+  const shouldGuardNavigation =
+    isRecommendationRequestInProgress || hasRunningRecommendationExecution;
+
   const { cancelNavigation, confirmNavigation, isNavigationPending } =
     useInternalNavigationGuard({
-      enabled: hasRunningRecommendationExecution,
+      enabled: shouldGuardNavigation,
     });
 
   useBeforeUnloadGuard({
-    enabled: hasRunningRecommendationExecution,
+    enabled: shouldGuardNavigation,
   });
 
   if (isLoading) {
@@ -71,6 +129,25 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
     recommendationUsage !== null &&
     recommendationUsage.used >= recommendationUsage.limit;
 
+  /*
+   * 실행 요청 중이거나 실행 상태를 추적 중이거나,
+   * DB에서 running 상태가 확인됐거나,
+   * 현재 Note version에 대한 추천이 이미 성공했거나,
+   * 일일 제한에 도달한 경우 새로운 AI 추천 요청을 막습니다.
+   *
+   * timeout 상태는 useRelatedNotes에서 running execution이 남아 있는 경우에만
+   * true가 되므로 hasRunningRecommendationExecution 조건으로 함께 보호됩니다.
+   */
+  const isRecommendationRequestDisabled =
+    isRecommendationRequestInProgress ||
+    hasRunningRecommendationExecution ||
+    hasSucceededRecommendationExecution ||
+    hasReachedRecommendationLimit;
+
+  const handleRequestRelatedNoteRecommendation = () => {
+    requestRelatedNoteRecommendation.mutate();
+  };
+
   return (
     <>
       <NavigationGuardAlertDialog
@@ -82,77 +159,112 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
       />
 
       <section className="border-t border-border/60 pt-6">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-          <div className="flex gap-1">
-            <h2 className="shrink-0 text-sm font-semibold text-foreground">
-              관련 노트
-            </h2>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex min-w-0 items-center gap-1">
+              <h2 className="shrink-0 text-sm font-semibold text-foreground">
+                관련 노트
+              </h2>
 
-            <FeatureInfoPopover ariaLabel="관련 노트 안내">
-              <div className="space-y-2">
-                <p>
-                  {`AI 관련 노트 추천은 노트마다 하루 ${RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE}회 요청할 수 있으며, 매일
-          자정(KST)에 초기화됩니다.`}
-                </p>
+              <FeatureInfoPopover ariaLabel="관련 노트 안내">
+                <div className="space-y-2">
+                  <p>
+                    {`AI 관련 노트 추천은 노트마다 하루 ${RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE}회 요청할 수 있으며, 매일 자정(KST)에 초기화됩니다.`}
+                  </p>
 
-                <p className="text-muted-foreground">
-                  AI 추천은 요청할 때마다 다시 생성되므로 기존 추천과 달라질 수
-                  있습니다.
-                </p>
-              </div>
-            </FeatureInfoPopover>
+                  <p className="text-muted-foreground">
+                    현재 노트 내용이 변경되면 AI 추천을 다시 생성할 수 있습니다.
+                  </p>
+                </div>
+              </FeatureInfoPopover>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isRecommendationRequestDisabled}
+                onClick={handleRequestRelatedNoteRecommendation}
+              >
+                AI 추천
+              </Button>
+
+              <AddRelatedNoteDialog noteId={noteId} />
+            </div>
           </div>
 
-          <div className="flex w-full min-w-0 items-center justify-between gap-3 sm:w-auto sm:justify-start">
-            {isPollingTimedOut ? (
+          {isPollingTimedOut ? (
+            /*
+             * execution claim은 아직 running이지만 자동 polling은 종료된 상태입니다.
+             *
+             * 실제 실행이 계속되고 있는지 중단됐는지는 이 화면에서 확정할 수 없으므로
+             * 실패로 표시하지 않고 처리 시간이 길어지고 있음을 안내합니다.
+             */
+            <p className="text-xs text-muted-foreground">
+              관련 노트 생성이 예상보다 오래 걸리고 있어요.
+            </p>
+          ) : isRecommendationRequestInProgress ||
+            hasRunningRecommendationExecution ? (
+            /*
+             * Server Action 요청 중이거나 실제 running execution을 추적 중인 상태를
+             * 동일한 진행 상태로 표시합니다.
+             */
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <span>관련 노트를 찾고 있어요</span>
+
+              <span className="flex gap-0.5">
+                <span className="animate-bounce">.</span>
+                <span className="animate-bounce [animation-delay:150ms]">
+                  .
+                </span>
+                <span className="animate-bounce [animation-delay:300ms]">
+                  .
+                </span>
+              </span>
+            </div>
+          ) : requestRelatedNoteRecommendation.isError ? (
+            /*
+             * Server Action 자체가 요청을 받아들이지 못한 경우입니다.
+             *
+             * background 실행이 시작된 뒤의 실패는 execution claim을 통해
+             * hasFailedRecommendationExecution으로 별도 표시합니다.
+             */
+            <p className="text-xs text-muted-foreground">
+              {requestRelatedNoteRecommendation.error.message}
+            </p>
+          ) : hasFailedRecommendationExecution ? (
+            <p className="text-xs text-muted-foreground">
+              관련 노트 추천에 실패했습니다.
+            </p>
+          ) : hasSucceededRecommendationExecution ? (
+            /*
+             * 현재 Note version에 대해 이미 성공한 추천 실행이 존재합니다.
+             *
+             * 동일한 version에 대한 재요청은 duplicate 처리되므로
+             * 현재 추천이 최신 상태임을 짧게 안내합니다.
+             */
+            <p className="text-xs text-muted-foreground">
+              AI 추천이 최신 상태입니다.
+            </p>
+          ) : recommendationUsage ? (
+            hasReachedRecommendationLimit ? (
               /*
-               * execution claim은 아직 running이지만 자동 polling은 종료된 상태입니다.
+               * 일일 제한 도달은 실행 실패와 다른 정상적인 quota 상태입니다.
                *
-               * 실제 실행이 계속되고 있는지 중단됐는지는 이 화면에서 확정할 수 없으므로
-               * 실패로 표시하지 않고 처리 시간이 길어지고 있음을 안내합니다.
+               * 현재 Note의 AI 추천을 더 생성할 수 없다는 점과
+               * 오늘 사용한 횟수를 함께 표시합니다.
                */
               <p className="text-xs text-muted-foreground">
-                관련 노트 생성이 예상보다 오래 걸리고 있어요.
+                {`오늘은 이 노트의 AI 추천을 더 생성할 수 없어요. (${recommendationUsage.used}/${recommendationUsage.limit})`}
               </p>
-            ) : hasRunningRecommendationExecution ? (
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                <span>관련 노트를 찾고 있어요</span>
-
-                <span className="flex gap-0.5">
-                  <span className="animate-bounce">.</span>
-                  <span className="animate-bounce [animation-delay:150ms]">
-                    .
-                  </span>
-                  <span className="animate-bounce [animation-delay:300ms]">
-                    .
-                  </span>
-                </span>
-              </div>
-            ) : hasFailedRecommendationExecution ? (
+            ) : (
               <p className="text-xs text-muted-foreground">
-                관련 노트 추천에 실패했습니다.
+                오늘 {recommendationUsage.used}/{recommendationUsage.limit}회
+                사용
               </p>
-            ) : recommendationUsage ? (
-              hasReachedRecommendationLimit ? (
-                /*
-                 * 일일 제한 도달은 실행 실패와 다른 정상적인 quota 상태입니다.
-                 *
-                 * 현재 Note의 AI 추천을 더 생성할 수 없다는 점과
-                 * 오늘 사용한 횟수를 함께 표시합니다.
-                 */
-                <p className="text-xs text-muted-foreground">
-                  {`오늘은 이 노트의 AI 추천을 더 생성할 수 없어요. (${recommendationUsage.used}/${recommendationUsage.limit})`}
-                </p>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  오늘 {recommendationUsage.used}/{recommendationUsage.limit}회
-                  사용
-                </p>
-              )
-            ) : null}
-
-            <AddRelatedNoteDialog noteId={noteId} />
-          </div>
+            )
+          ) : null}
         </div>
 
         {isError ? (

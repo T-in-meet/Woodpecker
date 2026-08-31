@@ -42,6 +42,7 @@ const reportRelatedNotesOperationalErrorMock = vi.mocked(
 const authenticatedUserId = "99999999-9999-4999-8999-999999999999";
 const noteId = "11111111-1111-4111-8111-111111111111";
 const sourceUpdatedAt = "2026-08-28T09:00:00.000Z";
+const executionClaimId = "88888888-8888-4888-8888-888888888888";
 
 /** 인증된 사용자를 반환하는 auth.getUser mock을 만듭니다. */
 function createAuthMock() {
@@ -98,6 +99,7 @@ describe("getRelatedNotes", () => {
     expect(result).toEqual({
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
+      latestRecommendationExecution: null,
       recommendationUsage: null,
       relatedNotes: [],
     });
@@ -146,6 +148,7 @@ describe("getRelatedNotes", () => {
       related_note_recommendation_execution_claims: {
         data: [
           {
+            id: executionClaimId,
             status: "running",
           },
         ],
@@ -198,7 +201,7 @@ describe("getRelatedNotes", () => {
       "related_note_recommendation_execution_claims",
     );
 
-    expect(executionCalls).toContainEqual(["select", ["status"]]);
+    expect(executionCalls).toContainEqual(["select", ["id, status"]]);
     expect(executionCalls).toContainEqual(["eq", ["note_id", noteId]]);
     expect(executionCalls).toContainEqual([
       "eq",
@@ -220,6 +223,10 @@ describe("getRelatedNotes", () => {
     expect(result).toStrictEqual({
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: true,
+      latestRecommendationExecution: {
+        id: executionClaimId,
+        status: "running",
+      },
       recommendationUsage: {
         used: 0,
         limit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
@@ -279,6 +286,7 @@ describe("getRelatedNotes", () => {
     expect(result).toStrictEqual({
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
+      latestRecommendationExecution: null,
       recommendationUsage: {
         used: 0,
         limit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
@@ -304,6 +312,7 @@ describe("getRelatedNotes", () => {
       related_note_recommendation_execution_claims: {
         data: [
           {
+            id: executionClaimId,
             status: "failed",
           },
         ],
@@ -321,6 +330,10 @@ describe("getRelatedNotes", () => {
     expect(result).toEqual({
       hasFailedRecommendationExecution: true,
       hasRunningRecommendationExecution: false,
+      latestRecommendationExecution: {
+        id: executionClaimId,
+        status: "failed",
+      },
       recommendationUsage: {
         used: 0,
         limit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
@@ -498,6 +511,7 @@ describe("getRelatedNotes", () => {
     expect(result).toEqual({
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
+      latestRecommendationExecution: null,
       recommendationUsage: null,
       relatedNotes: [],
     });
@@ -569,6 +583,7 @@ describe("getRelatedNotes", () => {
     expect(result).toEqual({
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
+      latestRecommendationExecution: null,
       recommendationUsage: null,
       relatedNotes: [],
     });
@@ -608,6 +623,7 @@ describe("getRelatedNotes", () => {
     expect(result).toEqual({
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
+      latestRecommendationExecution: null,
       recommendationUsage: null,
       relatedNotes: [],
     });
@@ -630,6 +646,7 @@ describe("getRelatedNotes", () => {
       related_note_recommendation_execution_claims: {
         data: [
           {
+            id: executionClaimId,
             status: "running",
           },
         ],
@@ -647,6 +664,10 @@ describe("getRelatedNotes", () => {
     expect(result).toEqual({
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: true,
+      latestRecommendationExecution: {
+        id: executionClaimId,
+        status: "running",
+      },
       recommendationUsage: {
         used: 0,
         limit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
@@ -705,6 +726,7 @@ describe("getRelatedNotes", () => {
     expect(result).toEqual({
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
+      latestRecommendationExecution: null,
       recommendationUsage: {
         used: 0,
         limit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
@@ -744,6 +766,7 @@ describe("getRelatedNotes", () => {
     expect(result).toEqual({
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
+      latestRecommendationExecution: null,
       recommendationUsage: {
         used: 0,
         limit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
@@ -775,6 +798,7 @@ describe("getRelatedNotes", () => {
       related_note_recommendation_execution_claims: {
         data: [
           {
+            id: executionClaimId,
             status: "unknown",
           },
         ],
@@ -792,6 +816,7 @@ describe("getRelatedNotes", () => {
     expect(result).toEqual({
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
+      latestRecommendationExecution: null,
       recommendationUsage: {
         used: 0,
         limit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,

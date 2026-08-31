@@ -136,7 +136,7 @@ describe("useInternalNavigationGuard", () => {
     expect(result.current.isNavigationPending).toBe(false);
   });
 
-  it("활성 상태가 해제되면 보류 중인 이동을 제거한다", async () => {
+  it("활성 상태가 해제되어도 이미 보류 중인 이동은 유지한다", async () => {
     const { result, rerender } = renderHook(
       ({ enabled }) =>
         useInternalNavigationGuard({
@@ -164,7 +164,80 @@ describe("useInternalNavigationGuard", () => {
       });
     });
 
-    expect(result.current.isNavigationPending).toBe(false);
+    expect(result.current.isNavigationPending).toBe(true);
     expect(window.location.pathname).toBe("/note-chats/test");
+
+    act(() => {
+      result.current.cancelNavigation();
+    });
+
+    expect(result.current.isNavigationPending).toBe(false);
+  });
+
+  it("활성 상태가 해제된 뒤의 새로운 내부 링크 이동은 보류하지 않는다", async () => {
+    const { result, rerender } = renderHook(
+      ({ enabled }) =>
+        useInternalNavigationGuard({
+          enabled,
+        }),
+      {
+        initialProps: {
+          enabled: true,
+        },
+      },
+    );
+
+    act(() => {
+      rerender({
+        enabled: false,
+      });
+    });
+
+    const link = document.createElement("a");
+    link.href = "/notes";
+
+    document.body.appendChild(link);
+
+    await dispatchLinkClick(link);
+
+    expect(result.current.isNavigationPending).toBe(false);
+  });
+
+  it("활성 상태가 해제되어도 이미 보류된 이동을 확인하면 원래 이동을 실행한다", async () => {
+    const { result, rerender } = renderHook(
+      ({ enabled }) =>
+        useInternalNavigationGuard({
+          enabled,
+        }),
+      {
+        initialProps: {
+          enabled: true,
+        },
+      },
+    );
+
+    const link = document.createElement("a");
+    link.href = "/notes";
+
+    document.body.appendChild(link);
+
+    await dispatchLinkClick(link);
+
+    const clickSpy = vi.spyOn(link, "click").mockImplementation(() => {});
+
+    act(() => {
+      rerender({
+        enabled: false,
+      });
+    });
+
+    expect(result.current.isNavigationPending).toBe(true);
+
+    act(() => {
+      result.current.confirmNavigation();
+    });
+
+    expect(result.current.isNavigationPending).toBe(false);
+    expect(clickSpy).toHaveBeenCalledOnce();
   });
 });

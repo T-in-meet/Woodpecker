@@ -1,14 +1,20 @@
 "use server";
 
+import { redirect } from "next/navigation";
+
 import { requireCurrentLegalAcceptance } from "@/features/auth/utils/requireCurrentLegalAcceptance";
-import { getNoteDetailRoute } from "@/lib/constants/routes";
+import { getNoteDetailRoute, ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 
+import { type RelatedNoteRecommendationExecutionClaimStatus } from "./execution/execution-claim-persistence";
+import { scheduleRelatedNoteRecommendation } from "./execution/schedule-related-note-recommendation";
 import {
   type AddManualRelatedNotesInput,
   addManualRelatedNotesSchema,
   type DeleteRelatedNoteInput,
   deleteRelatedNoteSchema,
+  type RequestRelatedNoteRecommendationInput,
+  requestRelatedNoteRecommendationSchema,
   type UpdateManualRelatedNoteReasonInput,
   updateManualRelatedNoteReasonSchema,
 } from "./schemas";
@@ -98,20 +104,12 @@ export async function addManualRelatedNotesAction(
   });
 
   if (error) {
-    /*
-     * 자기 자신 연결은 정상 UI에서는 발생하지 않지만,
-     * RPC를 직접 호출하거나 Client 상태가 잘못된 경우에도 DB에서 차단합니다.
-     */
     if (error.code === RELATED_NOTE_SELF_RELATION_NOT_ALLOWED_SQLSTATE) {
       return {
         error: "현재 노트는 관련 노트로 추가할 수 없습니다.",
       };
     }
 
-    /*
-     * source 또는 target Note가 존재하지 않거나 현재 사용자 소유가 아닌 경우
-     * 동일한 메시지를 반환하여 다른 사용자의 Note 존재 여부를 노출하지 않습니다.
-     */
     if (error.code === RELATED_NOTE_NOT_FOUND_SQLSTATE) {
       return {
         error: "추가할 노트를 찾을 수 없습니다.",
@@ -317,4 +315,114 @@ export async function deleteRelatedNoteAction(
   return {
     success: true,
   };
+}
+
+type RequestRelatedNoteRecommendationExecution = {
+  /** Claim RPC가 판정한 이번 추천 요청의 실행 상태입니다. */
+  status: RelatedNoteRecommendationExecutionClaimStatus;
+
+  /**
+   * 이번 요청과 연결된 Claim ID입니다.
+   *
+   * 새 실행이 claimed된 경우에는 새 Claim ID이며,
+   * duplicate가 기존 Claim을 가리키는 경우에도 해당 ID가 반환될 수 있습니다.
+   */
+  claimId: string | null;
+};
+
+export type RequestRelatedNoteRecommendationActionResult =
+  | {
+      success: true;
+      execution: RequestRelatedNoteRecommendationExecution;
+      error?: never;
+    }
+  | {
+      success?: false;
+      execution?: never;
+      error: string;
+    };
+
+/**
+ * 현재 Note의 AI Related Notes 추천 생성을 요청합니다.
+ *
+ * Client 입력과 현재 사용자의 Note 소유권을 확인한 뒤,
+ * 현재 Note snapshot에 대한 execution claim을 먼저 판정합니다.
+ *
+ * 새 Claim이 생성된 경우에만 실제 AI 추천 실행을 `after()`에 예약하며,
+ * duplicate/stale/daily limit 상태는 새로운 Provider 실행 없이
+ * 즉시 Client에 반환합니다.
+ *
+ * Client는 claimed 결과의 claimId를 기준으로 실행 상태를 추적하므로,
+ * background 실행이 빠르게 완료되어 running 상태를 직접 관찰하지 못해도
+ * 해당 Claim의 terminal 상태를 확인해 polling을 종료할 수 있습니다.
+ *
+ * @param input AI Related Notes 추천 생성 요청
+ * @returns 추천 실행 Claim 판정 결과
+ */
+export async function requestRelatedNoteRecommendationAction(
+  input: RequestRelatedNoteRecommendationInput,
+): Promise<RequestRelatedNoteRecommendationActionResult> {
+  const parsed = requestRelatedNoteRecommendationSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      error: "관련 노트 추천 요청 정보가 올바르지 않습니다.",
+    };
+  }
+
+  const { noteId } = parsed.data;
+
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "로그인이 필요합니다." };
+  }
+
+  if (user.email_confirmed_at == null) {
+    redirect(`${ROUTES.RESEND_EMAIL}?purpose=signup`);
+  }
+
+  await requireCurrentLegalAcceptance(user.id, getNoteDetailRoute(noteId));
+
+  const { data: note, error } = await supabase
+    .from("notes")
+    .select("id")
+    .eq("id", noteId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (error) {
+    return {
+      error: "관련 노트 추천 요청에 실패했습니다. 잠시 후 다시 시도해주세요.",
+    };
+  }
+
+  if (!note) {
+    return {
+      error: "추천할 노트를 찾을 수 없습니다.",
+    };
+  }
+
+  try {
+    const execution = await scheduleRelatedNoteRecommendation({
+      noteId: note.id,
+      ownerUserId: user.id,
+    });
+
+    return {
+      success: true,
+      execution: {
+        claimId: execution.claimId,
+        status: execution.status,
+      },
+    };
+  } catch {
+    return {
+      error: "관련 노트 추천 요청에 실패했습니다. 잠시 후 다시 시도해주세요.",
+    };
+  }
 }

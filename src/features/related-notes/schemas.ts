@@ -163,3 +163,17 @@ export const deleteRelatedNoteSchema = z.object({
 });
 
 export type DeleteRelatedNoteInput = z.infer<typeof deleteRelatedNoteSchema>;
+
+/**
+ * 사용자가 AI Related Notes 추천 생성을 요청할 때 전달하는 입력을 검증합니다.
+ *
+ * Note 존재 여부와 소유권은 Server Action에서 별도로 검증합니다.
+ */
+export const requestRelatedNoteRecommendationSchema = z.object({
+  /** AI Related Notes 추천을 생성할 기준 Note ID입니다. */
+  noteId: z.string().uuid(),
+});
+
+export type RequestRelatedNoteRecommendationInput = z.infer<
+  typeof requestRelatedNoteRecommendationSchema
+>;

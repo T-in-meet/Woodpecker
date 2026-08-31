@@ -7,6 +7,7 @@ import {
   MAX_MANUAL_RELATED_NOTES_PER_REQUEST,
   relatedNoteMetadataSchema,
   relatedNoteRowSchema,
+  requestRelatedNoteRecommendationSchema,
 } from "../schemas";
 
 describe("relatedNoteMetadataSchema", () => {
@@ -163,6 +164,30 @@ describe("addManualRelatedNotesSchema", () => {
       noteId: "22222222-2222-4222-8222-222222222222",
       relatedNotes,
     });
+
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("requestRelatedNoteRecommendationSchema", () => {
+  it("유효한 Note ID를 허용한다", () => {
+    const result = requestRelatedNoteRecommendationSchema.safeParse({
+      noteId: "22222222-2222-4222-8222-222222222222",
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("유효하지 않은 Note ID를 거부한다", () => {
+    const result = requestRelatedNoteRecommendationSchema.safeParse({
+      noteId: "invalid-note-id",
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("Note ID가 없으면 거부한다", () => {
+    const result = requestRelatedNoteRecommendationSchema.safeParse({});
 
     expect(result.success).toBe(false);
   });

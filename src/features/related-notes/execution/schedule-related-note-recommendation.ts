@@ -28,6 +28,7 @@ import {
 import { reportRelatedNotesOperationalError } from "../utils/report-operational-error";
 import {
   claimRelatedNoteRecommendationExecution,
+  type ClaimRelatedNoteRecommendationExecutionResult,
   completeRelatedNoteRecommendationExecutionClaim,
   RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_COMPLETION_STATUS,
   RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS,
@@ -59,14 +60,19 @@ type ScheduleRelatedNoteRecommendationParams = {
 };
 
 /**
- * 저장된 Note의 AI Related Notes 추천 생성을 응답 이후 후처리로 예약합니다.
+ * 사용자가 요청한 AI Related Notes 추천 실행을 준비하고 비동기로 예약합니다.
  *
- * Note 저장/수정 자체와 AI 추천 생성을 분리하여,
- * Runtime 설정 조회, Query Expansion, RAG 검색, Answer Agent 실행 및
- * 추천 저장 시간이 사용자 저장 응답을 지연시키지 않도록 합니다.
+ * 실행 시작 전에 현재 Note의 최신 snapshot을 조회한 뒤 execution claim을
+ * 동기적으로 획득합니다.
  *
- * 후처리 시작 시 DB에서 Note의 최신 title/content/updated_at snapshot을
- * 다시 조회하여 동일한 Note version의 데이터를 추천 생성에 사용합니다.
+ * Claim 결과가 duplicate, stale, daily_limit_exceeded인 경우에는
+ * 새로운 Provider 실행을 예약하지 않고 해당 상태를 호출자에게 즉시 반환합니다.
+ *
+ * 새 Claim을 획득한 경우에만 Runtime 설정 조회, Query Expansion,
+ * RAG 검색, Answer Agent 실행 및 추천 저장을 `after()`에서 수행합니다.
+ *
+ * 이를 통해 Client는 실제 실행 여부와 Claim ID를 Action 응답에서 확인할 수 있고,
+ * `after()` 내부에서 Claim이 생성되기를 추측하며 기다릴 필요가 없습니다.
  *
  * 추천 생성 중 Note가 다시 수정될 수 있으므로,
  * snapshot의 updated_at을 추천 저장 RPC에도 전달합니다.
@@ -76,126 +82,150 @@ type ScheduleRelatedNoteRecommendationParams = {
  * Related Notes execution claim은 quota, 관리자 bypass, 동일 Note version 중복
  * 실행 방지를 담당합니다. run 기록은 기능 제어에 사용하지 않습니다.
  *
- * AI 추천 후처리 실패는 이미 성공한 Note 저장/수정 결과에 영향을 주지 않습니다.
+ * 실제 AI 실행 실패는 이미 생성된 Claim을 failed로 완료하며,
+ * Run은 기존과 같이 관측/감사용 best-effort 기록으로 관리합니다.
  *
  * @param params 추천 대상 Note와 소유 사용자 정보
+ * @returns 실행 Claim 결과
  */
-export function scheduleRelatedNoteRecommendation({
+export async function scheduleRelatedNoteRecommendation({
   noteId,
   ownerUserId,
-}: ScheduleRelatedNoteRecommendationParams): void {
+}: ScheduleRelatedNoteRecommendationParams): Promise<ClaimRelatedNoteRecommendationExecutionResult> {
+  const supabase = createAdminClient();
+
+  /*
+   * 추천에 사용할 title/content/updated_at을 하나의 DB snapshot에서
+   * 가져와 서로 다른 Note version의 값이 섞이지 않도록 합니다.
+   *
+   * service role client를 사용하지만 ownerUserId까지 함께 조건에 포함하여
+   * 인증된 사용자의 자신의 Note만 추천 대상으로 조회합니다.
+   */
+  const { data: recommendationSource, error: recommendationSourceError } =
+    await supabase
+      .from("notes")
+      .select("id, title, content, updated_at")
+      .eq("id", noteId)
+      .eq("user_id", ownerUserId)
+      .maybeSingle();
+
+  /*
+   * 수동 추천 요청에서는 실행 준비 단계의 실패를 호출자가 알 수 있어야 합니다.
+   *
+   * 운영 오류를 기록한 뒤 다시 throw하여 Server Action이
+   * 요청 실패 상태를 Client에 반환할 수 있도록 합니다.
+   */
+  if (recommendationSourceError) {
+    await reportRelatedNotesOperationalError({
+      error: recommendationSourceError,
+      errorCode:
+        RELATED_NOTES_OPERATIONAL_ERROR_CODES.RECOMMENDATION_SOURCE_LOAD_FAILED,
+      message: "Related Note 추천을 위한 Note source 조회에 실패했습니다.",
+      operation:
+        RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.LOAD_RECOMMENDATION_SOURCE,
+      context: {
+        noteId,
+      },
+      userId: ownerUserId,
+    });
+
+    console.error(
+      "[Related Notes Recommendation Source Load Failed]",
+      recommendationSourceError,
+    );
+
+    throw recommendationSourceError;
+  }
+
+  /*
+   * Action의 소유권 확인 이후 Claim 준비 사이에 Note가 삭제될 수 있습니다.
+   *
+   * 이 경우 새 실행을 시작할 수 없으므로 stale과 동일하게
+   * 실행이 생성되지 않은 상태를 반환합니다.
+   */
+  if (!recommendationSource) {
+    return {
+      claimId: null,
+      status: RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS.STALE,
+    };
+  }
+
+  let claimResult: ClaimRelatedNoteRecommendationExecutionResult;
+
+  try {
+    claimResult = await claimRelatedNoteRecommendationExecution({
+      noteId: recommendationSource.id,
+      sourceUpdatedAt: recommendationSource.updated_at,
+      userId: ownerUserId,
+    });
+  } catch (error) {
+    await reportRelatedNotesOperationalError({
+      error,
+      errorCode:
+        RELATED_NOTES_OPERATIONAL_ERROR_CODES.RECOMMENDATION_EXECUTION_CLAIM_FAILED,
+      message: "Related Note 추천 실행 선점에 실패했습니다.",
+      operation:
+        RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.CLAIM_RECOMMENDATION_EXECUTION,
+      context: {
+        noteId: recommendationSource.id,
+      },
+      userId: ownerUserId,
+    });
+
+    console.error(
+      "[Related Notes Recommendation Execution Claim Failed]",
+      error,
+    );
+
+    throw error;
+  }
+
+  /*
+   * 일일 제한에 도달한 경우에는 Provider 실행을 시작하지 않습니다.
+   *
+   * 결과를 호출자에게 그대로 반환하여 Client가 불필요한 polling을
+   * 시작하지 않고 최신 quota 정보를 다시 조회할 수 있게 합니다.
+   */
+  if (
+    claimResult.status ===
+    RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS.DAILY_LIMIT_EXCEEDED
+  ) {
+    console.info("[Related Notes Recommendation Daily Limit Exceeded]", {
+      noteId: recommendationSource.id,
+      ownerUserId,
+    });
+
+    return claimResult;
+  }
+
+  /*
+   * 동일 Note version에 이미 running/succeeded Claim이 존재하거나,
+   * Claim 직전에 Note version이 변경된 경우에는 새 실행을 시작하지 않습니다.
+   *
+   * 기존 duplicate/stale 정책은 그대로 유지하며,
+   * 해당 결과를 Action에 반환하여 Client polling lifecycle만 정확하게 제어합니다.
+   */
+  if (
+    claimResult.status ===
+      RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS.DUPLICATE ||
+    claimResult.status ===
+      RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS.STALE
+  ) {
+    return claimResult;
+  }
+
+  const activeClaimId = claimResult.claimId;
+
+  /*
+   * Claim이 실제로 생성된 경우에만 무거운 AI 실행을 응답 이후로 분리합니다.
+   *
+   * Client에는 아래 after 작업 완료를 기다리지 않고 activeClaimId가 반환되므로,
+   * 해당 Claim ID를 기준으로 실행 완료 상태를 정확하게 추적할 수 있습니다.
+   */
   after(async () => {
-    const supabase = createAdminClient();
-
-    /*
-     * 추천에 사용할 title/content/updated_at을 하나의 DB snapshot에서
-     * 가져와 서로 다른 Note version의 값이 섞이지 않도록 합니다.
-     *
-     * service role client를 사용하지만 ownerUserId까지 함께 조건에 포함하여
-     * 인증된 사용자가 저장한 자신의 Note만 후처리 대상으로 조회합니다.
-     */
-    const { data: recommendationSource, error: recommendationSourceError } =
-      await supabase
-        .from("notes")
-        .select("id, title, content, updated_at")
-        .eq("id", noteId)
-        .eq("user_id", ownerUserId)
-        .maybeSingle();
-
-    /*
-     * Note 조회 실패는 추천 실행 자체를 중단하되,
-     * 이미 성공한 Note 저장/수정 결과에는 영향을 주지 않습니다.
-     */
-    if (recommendationSourceError) {
-      await reportRelatedNotesOperationalError({
-        error: recommendationSourceError,
-        errorCode:
-          RELATED_NOTES_OPERATIONAL_ERROR_CODES.RECOMMENDATION_SOURCE_LOAD_FAILED,
-        message: "Related Note 추천을 위한 Note source 조회에 실패했습니다.",
-        operation:
-          RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.LOAD_RECOMMENDATION_SOURCE,
-        context: {
-          noteId,
-        },
-        userId: ownerUserId,
-      });
-
-      console.error(
-        "[Related Notes Recommendation Source Load Failed]",
-        recommendationSourceError,
-      );
-
-      return;
-    }
-
-    /*
-     * 조회는 정상적으로 완료됐지만 Note가 존재하지 않는 경우에는
-     * 저장 이후 추천 후처리가 실행되기 전에 사용자가 Note를 삭제한
-     * 정상적인 비동기 실행 경합일 수 있으므로 그대로 종료합니다.
-     */
-    if (!recommendationSource) {
-      return;
-    }
-
-    let activeClaimId: string | null = null;
     let activeRunId: string | null = null;
 
     try {
-      let claimResult: Awaited<
-        ReturnType<typeof claimRelatedNoteRecommendationExecution>
-      >;
-
-      try {
-        claimResult = await claimRelatedNoteRecommendationExecution({
-          noteId: recommendationSource.id,
-          sourceUpdatedAt: recommendationSource.updated_at,
-          userId: ownerUserId,
-        });
-      } catch (error) {
-        await reportRelatedNotesOperationalError({
-          error,
-          errorCode:
-            RELATED_NOTES_OPERATIONAL_ERROR_CODES.RECOMMENDATION_EXECUTION_CLAIM_FAILED,
-          message: "Related Note 추천 실행 선점에 실패했습니다.",
-          operation:
-            RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.CLAIM_RECOMMENDATION_EXECUTION,
-          context: {
-            noteId: recommendationSource.id,
-          },
-          userId: ownerUserId,
-        });
-
-        console.error(
-          "[Related Notes Recommendation Execution Claim Failed]",
-          error,
-        );
-
-        return;
-      }
-
-      if (
-        claimResult.status ===
-        RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS.DAILY_LIMIT_EXCEEDED
-      ) {
-        console.info("[Related Notes Recommendation Daily Limit Exceeded]", {
-          noteId: recommendationSource.id,
-          ownerUserId,
-        });
-
-        return;
-      }
-
-      if (
-        claimResult.status ===
-          RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS.DUPLICATE ||
-        claimResult.status ===
-          RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS.STALE
-      ) {
-        return;
-      }
-
-      activeClaimId = claimResult.claimId;
-
       /*
        * Related Notes의 Note 검색은 Note embedding 생성, Note Chat 검색과
        * 동일한 공통 Note retrieval Runtime을 사용합니다.
@@ -440,6 +470,7 @@ export function scheduleRelatedNoteRecommendation({
         REPLACE_RELATED_NOTE_AI_RECOMMENDATIONS_STATUS.REPLACED
           ? RELATED_NOTE_RECOMMENDATION_RUN_STATUS.SUCCEEDED
           : RELATED_NOTE_RECOMMENDATION_RUN_STATUS.STALE;
+
       const claimCompletionStatus =
         replaceStatus ===
         REPLACE_RELATED_NOTE_AI_RECOMMENDATIONS_STATUS.REPLACED
@@ -485,26 +516,26 @@ export function scheduleRelatedNoteRecommendation({
         });
       }
 
-      if (activeClaimId !== null) {
-        await completeExecutionClaimOrReport({
-          claimId: activeClaimId,
-          noteId,
-          ownerUserId,
-          status:
-            RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_COMPLETION_STATUS.FAILED,
-        });
-      }
+      await completeExecutionClaimOrReport({
+        claimId: activeClaimId,
+        noteId,
+        ownerUserId,
+        status:
+          RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_COMPLETION_STATUS.FAILED,
+      });
 
       /*
        * Runtime Configuration 조회, Provider 호출, RAG 검색 또는
-       * 추천 저장이 실패하더라도 Note 자체는 이미 정상 저장된 상태입니다.
+       * 추천 저장이 실패하더라도 수동 추천 요청 자체의 응답은 이미 완료된 상태입니다.
        *
-       * 후처리 오류를 다시 throw하지 않아 Note 생성/수정 결과와
-       * AI Related Notes 추천 실행을 분리합니다.
+       * background 오류를 다시 throw하지 않고 Claim/Run 실패 상태와
+       * operational error를 통해 후속 상태를 추적합니다.
        */
       console.error("[Related Notes Recommendation Failed]", error);
     }
   });
+
+  return claimResult;
 }
 
 /**

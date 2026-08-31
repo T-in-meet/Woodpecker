@@ -18,6 +18,20 @@ import type { RelatedNoteRecommendation } from "./types";
 import { reportRelatedNotesOperationalError } from "./utils/report-operational-error";
 import { resolveOtherRelatedNoteId } from "./utils/resolve-other-related-note-id";
 
+type RelatedNoteRecommendationExecutionStatus =
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "stale";
+
+type RelatedNoteRecommendationExecution = {
+  /** execution Claim ID입니다. */
+  id: string;
+
+  /** 현재 Claim 상태입니다. */
+  status: RelatedNoteRecommendationExecutionStatus;
+};
+
 /** Related Notes 섹션 조회 결과입니다. */
 export type RelatedNotesQueryResult = {
   /** 현재 표시할 Related Notes 목록입니다. */
@@ -28,6 +42,14 @@ export type RelatedNotesQueryResult = {
 
   /** 현재 Note의 가장 최근 AI 추천 실행이 실패했는지 여부입니다. */
   hasFailedRecommendationExecution: boolean;
+
+  /**
+   * 현재 Note version의 가장 최근 AI 추천 execution Claim입니다.
+   *
+   * Client는 수동 요청에서 받은 Claim ID와 비교하여
+   * running 상태를 직접 관찰하지 못한 경우에도 완료 여부를 판정합니다.
+   */
+  latestRecommendationExecution: RelatedNoteRecommendationExecution | null;
 
   /**
    * 현재 Note의 오늘 AI 추천 사용량입니다.
@@ -48,6 +70,9 @@ type RelatedNoteRecommendationExecutionUiState = {
 
   /** 가장 최근 AI 추천 실행이 실패했는지 여부입니다. */
   hasFailedRecommendationExecution: boolean;
+
+  /** 현재 Note version의 가장 최근 execution Claim입니다. */
+  latestRecommendationExecution: RelatedNoteRecommendationExecution | null;
 };
 
 /**
@@ -67,19 +92,13 @@ type RelatedNoteRecommendationExecutionUiState = {
 export async function getRelatedNotes(
   noteId: string,
 ): Promise<RelatedNotesQueryResult> {
-  /*
-   * 이 함수는 Client Component에서 Server Action으로 호출될 수 있으므로
-   * Client가 전달한 noteId를 그대로 신뢰하지 않습니다.
-   *
-   * PostgREST filter 문자열에 삽입하기 전에 UUID 형식을 검증하여
-   * 예약 문자를 통한 필터 표현식 확장을 방지합니다.
-   */
   const parsedNoteId = z.string().uuid().safeParse(noteId);
 
   if (!parsedNoteId.success) {
     return {
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
+      latestRecommendationExecution: null,
       recommendationUsage: null,
       relatedNotes: [],
     };
@@ -87,11 +106,6 @@ export async function getRelatedNotes(
 
   const supabase = await createServerComponentClient();
 
-  /*
-   * 이 함수는 Client Component에서 Server Action으로 호출될 수 있으므로
-   * (main) layout의 재동의 게이트를 거치지 않을 수 있습니다.
-   * 조회 전 인증 사용자와 최신 법적 문서 동의 여부를 직접 확인합니다.
-   */
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -100,6 +114,7 @@ export async function getRelatedNotes(
     return {
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
+      latestRecommendationExecution: null,
       recommendationUsage: null,
       relatedNotes: [],
     };
@@ -110,15 +125,6 @@ export async function getRelatedNotes(
     getNoteDetailRoute(parsedNoteId.data),
   );
 
-  /*
-   * AI 추천 execution claim은 Note의 source_updated_at 단위로 관리됩니다.
-   *
-   * 이전 Note version의 failed/running claim이 현재 Note의 UI 상태에
-   * 영향을 주지 않도록 현재 Note의 updated_at을 먼저 조회합니다.
-   *
-   * 일일 사용량은 quota를 적용받는 일반 사용자에게만 표시하므로,
-   * 동일한 시점에 현재 사용자의 role도 함께 조회합니다.
-   */
   const [sourceNoteResult, profileResult] = await Promise.all([
     supabase
       .from("notes")
@@ -132,10 +138,6 @@ export async function getRelatedNotes(
   const { data: sourceNote, error: sourceNoteError } = sourceNoteResult;
 
   if (sourceNoteError) {
-    /*
-     * 기준 Note 조회 실패는 현재 Note version을 확정할 수 없어
-     * Related Notes 조회 기능 일부를 수행할 수 없는 DB operational error입니다.
-     */
     await reportRelatedNotesOperationalError({
       actorUserId: user.id,
       error: sourceNoteError,
@@ -151,6 +153,7 @@ export async function getRelatedNotes(
     return {
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
+      latestRecommendationExecution: null,
       recommendationUsage: null,
       relatedNotes: [],
     };
@@ -160,6 +163,7 @@ export async function getRelatedNotes(
     return {
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
+      latestRecommendationExecution: null,
       recommendationUsage: null,
       relatedNotes: [],
     };
@@ -167,16 +171,6 @@ export async function getRelatedNotes(
 
   const { data: profile, error: profileError } = profileResult;
 
-  /*
-   * role 조회 실패는 Related Notes 목록 자체를 조회할 수 없는 오류가 아닙니다.
-   *
-   * 다만 ADMIN에게 유한한 일일 제한이 있는 것처럼 표시하면 안 되므로,
-   * role을 확정할 수 없는 경우에는 usage RPC를 호출하지 않고
-   * 사용량을 표시하지 않습니다.
-   *
-   * 화면 기능 자체는 계속 제공하되 관리자가 실패 원인을 확인할 수 있도록
-   * structured operational error로 기록합니다.
-   */
   if (profileError) {
     await reportRelatedNotesOperationalError({
       actorUserId: user.id,
@@ -192,20 +186,6 @@ export async function getRelatedNotes(
   const shouldQueryRecommendationUsage =
     !profileError && profile?.role === "USER";
 
-  /*
-   * 화면 표시 목록과 AI 추천 실행 상태, 일일 사용량은 서로 독립적인 조회입니다.
-   * 같은 인증된 Supabase client를 사용하되 병렬로 실행해 페이지 진입 지연을 줄입니다.
-   *
-   * 실행 상태와 일일 사용량은 운영 이력인 recommendation_runs가 아니라
-   * 기능 제어의 정본인 recommendation_execution_claims를 기준으로 판단합니다.
-   *
-   * 실행 상태는 현재 Note version과 동일한 source_updated_at의 claim만 대상으로 하며,
-   * failed claim은 재시도 이후에도 이력으로 남을 수 있으므로
-   * 특정 status의 존재 여부가 아니라 가장 최근 claim의 status를 조회합니다.
-   *
-   * 일일 사용량은 일반 사용자에게만 필요하므로 USER인 경우에만 RPC를 호출합니다.
-   * ADMIN은 Claim RPC에서 일일 quota를 우회하므로 usage RPC도 호출하지 않습니다.
-   */
   const relatedNotesQuery = supabase
     .from("note_related_notes")
     .select(
@@ -217,9 +197,15 @@ export async function getRelatedNotes(
     )
     .order("created_at", { ascending: true });
 
+  /*
+   * boolean 상태뿐 아니라 Claim ID까지 함께 조회합니다.
+   *
+   * 수동 요청에서 반환된 claimId와 비교하면 실행이 너무 빠르게 완료되어
+   * running 상태를 놓친 경우에도 해당 Claim의 terminal 상태를 판정할 수 있습니다.
+   */
   const latestRecommendationExecutionQuery = supabase
     .from("related_note_recommendation_execution_claims")
-    .select("status")
+    .select("id, status")
     .eq("note_id", parsedNoteId.data)
     .eq("source_updated_at", sourceNote.updated_at)
     .order("claimed_at", { ascending: false })
@@ -247,21 +233,13 @@ export async function getRelatedNotes(
   const {
     hasFailedRecommendationExecution,
     hasRunningRecommendationExecution,
+    latestRecommendationExecution,
   } = await resolveRecommendationExecutionUiState(
     latestRecommendationExecutionResult,
     parsedNoteId.data,
     user.id,
   );
 
-  /*
-   * usage 조회 실패는 Related Notes 목록이나 실행 상태 조회에 영향을 주지 않습니다.
-   *
-   * 일일 사용량을 확정할 수 없는 경우에는 잘못된 quota 정보를 표시하지 않도록
-   * recommendationUsage를 null로 유지합니다.
-   *
-   * DB/RPC 조회 실패는 화면에서는 best-effort로 처리하되,
-   * 관리자가 원인을 확인할 수 있도록 structured operational error로 기록합니다.
-   */
   let recommendationUsage: RelatedNotesQueryResult["recommendationUsage"] =
     null;
 
@@ -300,10 +278,6 @@ export async function getRelatedNotes(
   const { data, error } = relatedNotesResult;
 
   if (error) {
-    /*
-     * Related Notes 목록 DB 조회 실패는 섹션의 핵심 데이터를 로드하지
-     * 못한 경우이므로 operational error로 남기고 기존처럼 빈 목록을 반환합니다.
-     */
     await reportRelatedNotesOperationalError({
       actorUserId: user.id,
       error,
@@ -320,6 +294,7 @@ export async function getRelatedNotes(
     return {
       hasFailedRecommendationExecution,
       hasRunningRecommendationExecution,
+      latestRecommendationExecution,
       recommendationUsage,
       relatedNotes: [],
     };
@@ -336,6 +311,7 @@ export async function getRelatedNotes(
     return {
       hasFailedRecommendationExecution,
       hasRunningRecommendationExecution,
+      latestRecommendationExecution,
       recommendationUsage,
       relatedNotes: [],
     };
@@ -344,9 +320,11 @@ export async function getRelatedNotes(
   return {
     hasFailedRecommendationExecution,
     hasRunningRecommendationExecution,
+    latestRecommendationExecution,
     recommendationUsage,
     relatedNotes: parsed.data.map((row): RelatedNoteRecommendation => {
       const relatedNoteId = resolveOtherRelatedNoteId(row, parsedNoteId.data);
+
       const relatedNote =
         relatedNoteId === row.related_note_id
           ? {
@@ -385,8 +363,11 @@ export async function getRelatedNotes(
  * 실행 상태 조회 자체가 실패하거나 예상하지 못한 응답을 받은 경우에는
  * Related Notes 목록 조회에 영향을 주지 않고 실행 상태만 없는 것으로 처리합니다.
  *
+ * Claim ID도 함께 반환하여 Client가 특정 수동 요청의 실행 완료 여부를
+ * 정확하게 추적할 수 있도록 합니다.
+ *
  * @param result latest recommendation execution claim 조회 결과
- * @returns 가장 최근 AI 추천 실행의 running/failed UI 상태
+ * @returns 가장 최근 AI 추천 execution과 running/failed UI 상태
  */
 async function resolveRecommendationExecutionUiState(
   result: {
@@ -397,10 +378,6 @@ async function resolveRecommendationExecutionUiState(
   userId: string,
 ): Promise<RelatedNoteRecommendationExecutionUiState> {
   if (result.error) {
-    /*
-     * 실행 상태는 best-effort UI 정보지만 DB 조회 자체가 실패한 경우이므로
-     * 관리자 추적이 가능하도록 operational error로 기록합니다.
-     */
     await reportRelatedNotesOperationalError({
       actorUserId: userId,
       error: result.error,
@@ -418,12 +395,14 @@ async function resolveRecommendationExecutionUiState(
     return {
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
+      latestRecommendationExecution: null,
     };
   }
 
   const parsed = z
     .array(
       z.object({
+        id: z.string().uuid(),
         status: z.enum(["running", "succeeded", "failed", "stale"]),
       }),
     )
@@ -438,14 +417,16 @@ async function resolveRecommendationExecutionUiState(
     return {
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
+      latestRecommendationExecution: null,
     };
   }
 
-  const latestExecution = parsed.data[0];
+  const latestExecution = parsed.data[0] ?? null;
 
   return {
     hasFailedRecommendationExecution: latestExecution?.status === "failed",
     hasRunningRecommendationExecution: latestExecution?.status === "running",
+    latestRecommendationExecution: latestExecution,
   };
 }
 
@@ -487,12 +468,6 @@ export async function getRelatedNoteCandidates(
   }>;
   total: number;
 }> {
-  /*
-   * 이 함수는 Client Component에서 Server Action으로 호출될 수 있으므로
-   * Client가 전달한 noteId를 그대로 신뢰하지 않습니다.
-   *
-   * 형식이 잘못된 ID는 DB 조회를 수행하지 않고 빈 후보 목록으로 처리합니다.
-   */
   const parsedNoteId = z.string().uuid().safeParse(noteId);
 
   if (!parsedNoteId.success) {
@@ -504,12 +479,6 @@ export async function getRelatedNoteCandidates(
 
   const supabase = await createServerComponentClient();
 
-  /*
-   * userId는 Client에서 전달받지 않고 서버의 인증 세션에서 직접 확인합니다.
-   *
-   * 이를 통해 다른 사용자의 userId를 임의로 전달하여
-   * 해당 사용자의 Note 목록을 조회하는 것을 방지합니다.
-   */
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -526,13 +495,6 @@ export async function getRelatedNoteCandidates(
     getNoteDetailRoute(parsedNoteId.data),
   );
 
-  /*
-   * 기준 Note가 실제로 현재 사용자의 Note인지 확인합니다.
-   *
-   * 이후 후보 목록 자체도 user.id로 제한하지만,
-   * 다른 사용자의 noteId를 기준 Note로 전달하는 요청 자체를 허용하지 않기 위해
-   * 먼저 소유권을 확인합니다.
-   */
   const { data: sourceNote, error: sourceNoteError } = await supabase
     .from("notes")
     .select("id")
@@ -541,10 +503,6 @@ export async function getRelatedNoteCandidates(
     .maybeSingle();
 
   if (sourceNoteError) {
-    /*
-     * 기준 Note 소유권 확인 DB 호출이 실패하면 후보 조회를 안전하게 계속할 수
-     * 없으므로 operational error로 기록하고 기존 throw 정책을 유지합니다.
-     */
     await reportRelatedNotesOperationalError({
       actorUserId: user.id,
       error: sourceNoteError,
@@ -567,21 +525,6 @@ export async function getRelatedNoteCandidates(
     };
   }
 
-  /*
-   * 이미 관계가 존재하는 Note ID를 먼저 조회합니다.
-   *
-   * 수동 추가 Dialog에서는 관계의 origin/status와 관계없이
-   * 이미 관계가 존재하는 Note를 다시 선택할 수 없도록 합니다.
-   *
-   * 따라서 다음 관계가 모두 제외 대상입니다.
-   *
-   * - manual + active
-   * - ai + active
-   * - ai + dismissed
-   *
-   * AI 재추천에서는 active AI 관계를 다시 평가할 수 있지만,
-   * 이 함수는 "수동 추가 후보"를 조회하는 함수이므로 정책이 다릅니다.
-   */
   const { data: existingRelations, error: relationError } = await supabase
     .from("note_related_notes")
     .select("note_id, related_note_id")
@@ -590,10 +533,6 @@ export async function getRelatedNoteCandidates(
     );
 
   if (relationError) {
-    /*
-     * 기존 관계 조회 실패는 제외 목록을 구성할 수 없어 후보 결과가 틀릴 수
-     * 있으므로 operational error로 기록하고 기존 throw 정책을 유지합니다.
-     */
     await reportRelatedNotesOperationalError({
       actorUserId: user.id,
       error: relationError,
@@ -610,12 +549,6 @@ export async function getRelatedNoteCandidates(
     throw relationError;
   }
 
-  /*
-   * 현재 Note 자신도 Related Note로 연결할 수 없으므로 제외합니다.
-   *
-   * 이후 notes 조회에서 한 번에 제외할 수 있도록
-   * 기존 관계 ID와 현재 Note ID를 하나의 목록으로 구성합니다.
-   */
   const excludedNoteIds = [
     parsedNoteId.data,
     ...(existingRelations ?? []).map((relation) =>
@@ -623,24 +556,9 @@ export async function getRelatedNoteCandidates(
     ),
   ];
 
-  /*
-   * Supabase range는 양 끝 index를 모두 포함합니다.
-   *
-   * 예를 들어 pageSize가 8이면:
-   * page 1 → 0 ~ 7
-   * page 2 → 8 ~ 15
-   */
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  /*
-   * Related Note 선택에 필요한 최소 정보만 조회합니다.
-   *
-   * 일반 Note 목록과 달리 content, 복습 상태, 생성일 등의 정보는
-   * 후보 선택에 필요하지 않으므로 id와 title만 반환합니다.
-   *
-   * count는 Dialog pagination의 전체 페이지 수 계산에 사용합니다.
-   */
   let query = supabase
     .from("notes")
     .select("id, title", { count: "exact" })
@@ -648,29 +566,15 @@ export async function getRelatedNoteCandidates(
     .not("id", "in", `(${excludedNoteIds.join(",")})`)
     .order("updated_at", { ascending: false });
 
-  /*
-   * 검색어가 있으면 Note 제목에 대해서만 부분 일치 검색합니다.
-   *
-   * `%`, `_` 등 LIKE 패턴에서 특별한 의미를 가지는 문자가
-   * 사용자의 검색어 자체로 취급되도록 escape합니다.
-   */
   if (search.trim()) {
     const term = escapePostgrestLikePattern(search.trim()).replace(/"/g, '\\"');
 
     query = query.ilike("title", `%${term}%`);
   }
 
-  /*
-   * 제외 및 검색 조건을 모두 적용한 뒤 pagination을 수행해야
-   * 각 페이지의 개수와 total 값이 실제 후보 목록과 일치합니다.
-   */
   const { data, count, error } = await query.range(from, to);
 
   if (error) {
-    /*
-     * 후보 Note 목록 DB 호출 실패는 Dialog 후보 목록을 제공할 수 없는
-     * operational error이므로 기록한 뒤 기존 throw 정책을 유지합니다.
-     */
     await reportRelatedNotesOperationalError({
       actorUserId: user.id,
       error,
@@ -691,12 +595,6 @@ export async function getRelatedNoteCandidates(
     throw error;
   }
 
-  /*
-   * DB 응답을 그대로 Client에 전달하지 않고 런타임에서 검증합니다.
-   *
-   * database.types.ts는 컴파일 타임 타입만 보장하므로,
-   * 예상하지 못한 DB 응답이 들어온 경우 빈 목록으로 안전하게 처리합니다.
-   */
   const parsed = z
     .array(
       z.object({
