@@ -11,7 +11,11 @@ import { createServerComponentClient } from "@/lib/supabase/server";
 import { createSupabaseQueryMock } from "@/tests/supabaseQueryMock";
 
 import { RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE } from "../constants/ai";
-import { getRelatedNoteCandidates, getRelatedNotes } from "../queries";
+import {
+  getRelatedNoteCandidates,
+  getRelatedNoteRecommendationExecutionClaim,
+  getRelatedNotes,
+} from "../queries";
 import { reportRelatedNotesOperationalError } from "../utils/report-operational-error";
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -938,6 +942,382 @@ describe("getRelatedNotes", () => {
       }),
     );
     expect(reportRelatedNotesOperationalErrorMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("getRelatedNoteRecommendationExecutionClaim", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    createClientMock.mockReset();
+  });
+
+  it("noteId 또는 claimId가 UUID 형식이 아니면 Supabase 조회 없이 null을 반환한다", async () => {
+    await expect(
+      getRelatedNoteRecommendationExecutionClaim(
+        "not-a-uuid",
+        executionClaimId,
+      ),
+    ).resolves.toBeNull();
+
+    await expect(
+      getRelatedNoteRecommendationExecutionClaim(noteId, "not-a-uuid"),
+    ).resolves.toBeNull();
+
+    expect(createClientMock).not.toHaveBeenCalled();
+    expect(requireCurrentLegalAcceptanceMock).not.toHaveBeenCalled();
+  });
+
+  it("특정 execution Claim을 source version과 독립적으로 직접 조회한다", async () => {
+    const { supabase, callsFor } = createSupabaseQueryMock({
+      notes: {
+        data: {
+          id: noteId,
+        },
+      },
+      related_note_recommendation_execution_claims: {
+        data: {
+          id: executionClaimId,
+          status: "running",
+        },
+      },
+    });
+
+    const rpcMock = createRelatedNotesRpcMock();
+
+    createClientMock.mockResolvedValue({
+      ...supabase,
+      auth: createAuthMock(),
+      rpc: rpcMock,
+    } as never);
+
+    const result = await getRelatedNoteRecommendationExecutionClaim(
+      noteId,
+      executionClaimId,
+    );
+
+    expect(requireCurrentLegalAcceptanceMock).toHaveBeenCalledWith(
+      authenticatedUserId,
+      getNoteDetailRoute(noteId),
+    );
+
+    const noteCalls = callsFor("notes");
+
+    expect(noteCalls).toContainEqual(["select", ["id"]]);
+    expect(noteCalls).toContainEqual(["eq", ["id", noteId]]);
+    expect(noteCalls).toContainEqual(["eq", ["user_id", authenticatedUserId]]);
+    expect(noteCalls).toContainEqual(["maybeSingle", []]);
+
+    const executionCalls = callsFor(
+      "related_note_recommendation_execution_claims",
+    );
+
+    expect(executionCalls).toContainEqual(["select", ["id, status"]]);
+    expect(executionCalls).toContainEqual(["eq", ["id", executionClaimId]]);
+    expect(executionCalls).toContainEqual(["eq", ["note_id", noteId]]);
+    expect(executionCalls).toContainEqual([
+      "eq",
+      ["user_id", authenticatedUserId],
+    ]);
+    expect(executionCalls).toContainEqual(["maybeSingle", []]);
+
+    /*
+     * 특정 Claim lifecycle 조회는 현재 Note version과 독립적이어야 합니다.
+     *
+     * 실행 도중 Note.updated_at이 변경돼도 기존 Claim을 계속 추적해야 하므로
+     * source_updated_at 조건을 사용하지 않는 것을 회귀 방지합니다.
+     */
+    expect(executionCalls).not.toContainEqual([
+      "eq",
+      ["source_updated_at", sourceUpdatedAt],
+    ]);
+
+    expect(rpcMock).toHaveBeenCalledWith(
+      "cleanup_related_note_recommendation_stale_execution_claims",
+      {
+        p_note_id: noteId,
+      },
+    );
+
+    expect(result).toEqual({
+      id: executionClaimId,
+      status: "running",
+    });
+  });
+
+  it("terminal execution Claim 상태도 그대로 반환한다", async () => {
+    const { supabase } = createSupabaseQueryMock({
+      notes: {
+        data: {
+          id: noteId,
+        },
+      },
+      related_note_recommendation_execution_claims: {
+        data: {
+          id: executionClaimId,
+          status: "stale",
+        },
+      },
+    });
+
+    createClientMock.mockResolvedValue({
+      ...supabase,
+      auth: createAuthMock(),
+      rpc: createRelatedNotesRpcMock(),
+    } as never);
+
+    const result = await getRelatedNoteRecommendationExecutionClaim(
+      noteId,
+      executionClaimId,
+    );
+
+    expect(result).toEqual({
+      id: executionClaimId,
+      status: "stale",
+    });
+  });
+
+  it("지정한 execution Claim이 존재하지 않으면 null을 반환한다", async () => {
+    const { supabase } = createSupabaseQueryMock({
+      notes: {
+        data: {
+          id: noteId,
+        },
+      },
+      related_note_recommendation_execution_claims: {
+        data: null,
+      },
+    });
+
+    createClientMock.mockResolvedValue({
+      ...supabase,
+      auth: createAuthMock(),
+      rpc: createRelatedNotesRpcMock(),
+    } as never);
+
+    const result = await getRelatedNoteRecommendationExecutionClaim(
+      noteId,
+      executionClaimId,
+    );
+
+    expect(result).toBeNull();
+    expect(reportRelatedNotesOperationalErrorMock).not.toHaveBeenCalled();
+  });
+
+  it("기준 Note가 현재 사용자의 Note가 아니면 Claim을 조회하지 않고 null을 반환한다", async () => {
+    const { supabase, callsFor } = createSupabaseQueryMock({
+      notes: {
+        data: null,
+      },
+    });
+
+    createClientMock.mockResolvedValue({
+      ...supabase,
+      auth: createAuthMock(),
+      rpc: createRelatedNotesRpcMock(),
+    } as never);
+
+    const result = await getRelatedNoteRecommendationExecutionClaim(
+      noteId,
+      executionClaimId,
+    );
+
+    expect(result).toBeNull();
+    expect(callsFor("related_note_recommendation_execution_claims")).toEqual(
+      [],
+    );
+  });
+
+  it("기준 Note DB 조회에 실패하면 운영 오류를 보고하고 throw한다", async () => {
+    const dbError = new Error("source note query failed");
+
+    const { supabase, callsFor } = createSupabaseQueryMock({
+      notes: {
+        data: null,
+        error: dbError,
+      },
+    });
+
+    createClientMock.mockResolvedValue({
+      ...supabase,
+      auth: createAuthMock(),
+      rpc: createRelatedNotesRpcMock(),
+    } as never);
+
+    await expect(
+      getRelatedNoteRecommendationExecutionClaim(noteId, executionClaimId),
+    ).rejects.toBe(dbError);
+
+    expect(reportRelatedNotesOperationalErrorMock).toHaveBeenCalledWith({
+      actorUserId: authenticatedUserId,
+      error: dbError,
+      errorCode: RELATED_NOTES_OPERATIONAL_ERROR_CODES.SOURCE_NOTE_LOAD_FAILED,
+      message:
+        "Related Notes AI 추천 실행 조회를 위한 기준 Note 조회에 실패했습니다.",
+      operation: RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.LOAD_SOURCE_NOTE,
+      context: {
+        claimId: executionClaimId,
+        noteId,
+      },
+      userId: authenticatedUserId,
+    });
+
+    expect(callsFor("related_note_recommendation_execution_claims")).toEqual(
+      [],
+    );
+  });
+
+  it("stale cleanup에 실패해도 운영 오류를 보고하고 Claim 조회를 계속한다", async () => {
+    const cleanupError = new Error("stale cleanup failed");
+
+    const { supabase } = createSupabaseQueryMock({
+      notes: {
+        data: {
+          id: noteId,
+        },
+      },
+      related_note_recommendation_execution_claims: {
+        data: {
+          id: executionClaimId,
+          status: "running",
+        },
+      },
+    });
+
+    const rpcMock = createRelatedNotesRpcMock({
+      cleanupError,
+    });
+
+    createClientMock.mockResolvedValue({
+      ...supabase,
+      auth: createAuthMock(),
+      rpc: rpcMock,
+    } as never);
+
+    const result = await getRelatedNoteRecommendationExecutionClaim(
+      noteId,
+      executionClaimId,
+    );
+
+    expect(result).toEqual({
+      id: executionClaimId,
+      status: "running",
+    });
+
+    expect(reportRelatedNotesOperationalErrorMock).toHaveBeenCalledWith({
+      actorUserId: authenticatedUserId,
+      error: cleanupError,
+      errorCode:
+        RELATED_NOTES_OPERATIONAL_ERROR_CODES.RECOMMENDATION_EXECUTION_STATE_LOAD_FAILED,
+      message: "Related Notes AI 추천 만료 실행 상태 정리에 실패했습니다.",
+      operation:
+        RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.LOAD_RECOMMENDATION_EXECUTION_STATE,
+      context: {
+        claimId: executionClaimId,
+        noteId,
+      },
+      userId: authenticatedUserId,
+    });
+  });
+
+  it("execution Claim DB 조회에 실패하면 운영 오류를 보고하고 throw한다", async () => {
+    const dbError = new Error("execution claim query failed");
+
+    const { supabase } = createSupabaseQueryMock({
+      notes: {
+        data: {
+          id: noteId,
+        },
+      },
+      related_note_recommendation_execution_claims: {
+        data: null,
+        error: dbError,
+      },
+    });
+
+    createClientMock.mockResolvedValue({
+      ...supabase,
+      auth: createAuthMock(),
+      rpc: createRelatedNotesRpcMock(),
+    } as never);
+
+    await expect(
+      getRelatedNoteRecommendationExecutionClaim(noteId, executionClaimId),
+    ).rejects.toBe(dbError);
+
+    expect(reportRelatedNotesOperationalErrorMock).toHaveBeenCalledWith({
+      actorUserId: authenticatedUserId,
+      error: dbError,
+      errorCode:
+        RELATED_NOTES_OPERATIONAL_ERROR_CODES.RECOMMENDATION_EXECUTION_STATE_LOAD_FAILED,
+      message: "Related Notes AI 추천 실행 상태 조회에 실패했습니다.",
+      operation:
+        RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.LOAD_RECOMMENDATION_EXECUTION_STATE,
+      context: {
+        claimId: executionClaimId,
+        noteId,
+      },
+      userId: authenticatedUserId,
+    });
+  });
+
+  it("execution Claim 응답이 유효하지 않으면 오류를 기록하고 throw한다", async () => {
+    const { supabase } = createSupabaseQueryMock({
+      notes: {
+        data: {
+          id: noteId,
+        },
+      },
+      related_note_recommendation_execution_claims: {
+        data: {
+          id: executionClaimId,
+          status: "unknown",
+        },
+      },
+    });
+
+    createClientMock.mockResolvedValue({
+      ...supabase,
+      auth: createAuthMock(),
+      rpc: createRelatedNotesRpcMock(),
+    } as never);
+
+    await expect(
+      getRelatedNoteRecommendationExecutionClaim(noteId, executionClaimId),
+    ).rejects.toBeDefined();
+
+    expect(logErrorMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message:
+          "[getRelatedNoteRecommendationExecutionClaim] AI 추천 실행 상태 파싱 실패",
+      }),
+    );
+
+    expect(reportRelatedNotesOperationalErrorMock).not.toHaveBeenCalled();
+  });
+
+  it("인증된 사용자가 없으면 Claim을 조회하지 않고 null을 반환한다", async () => {
+    const { supabase, from } = createSupabaseQueryMock({});
+
+    createClientMock.mockResolvedValue({
+      ...supabase,
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: {
+            user: null,
+          },
+        }),
+      },
+      rpc: createRelatedNotesRpcMock(),
+    } as never);
+
+    const result = await getRelatedNoteRecommendationExecutionClaim(
+      noteId,
+      executionClaimId,
+    );
+
+    expect(result).toBeNull();
+    expect(from).not.toHaveBeenCalled();
+    expect(requireCurrentLegalAcceptanceMock).not.toHaveBeenCalled();
   });
 });
 

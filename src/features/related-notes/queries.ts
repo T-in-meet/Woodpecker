@@ -32,6 +32,9 @@ type RelatedNoteRecommendationExecution = {
   status: RelatedNoteRecommendationExecutionStatus;
 };
 
+export type RelatedNoteRecommendationExecutionClaim =
+  RelatedNoteRecommendationExecution;
+
 /** Related Notes 섹션 조회 결과입니다. */
 export type RelatedNotesQueryResult = {
   /** 현재 표시할 Related Notes 목록입니다. */
@@ -462,6 +465,171 @@ async function resolveRecommendationExecutionUiState(
     hasRunningRecommendationExecution: latestExecution?.status === "running",
     latestRecommendationExecution: latestExecution,
   };
+}
+
+/**
+ * 특정 Related Notes AI 추천 execution Claim의 현재 상태를 조회합니다.
+ *
+ * 이 조회는 현재 Note version의 최신 Claim을 찾기 위한 용도가 아니라,
+ * Client가 이미 추적을 시작한 특정 Claim ID의 lifecycle을 확인하기 위한 용도입니다.
+ *
+ * 따라서 `source_updated_at`으로 필터링하지 않습니다.
+ * 추천 실행 중 Note가 수정되어 현재 version이 바뀌더라도
+ * 기존 Claim의 running/succeeded/failed/stale 상태를 계속 추적할 수 있습니다.
+ *
+ * 조회 전에 DB 시간 기준 stale cleanup을 수행하여
+ * process 종료 등으로 남은 orphan running Claim도 terminal 상태로 복구합니다.
+ *
+ * Claim이 존재하지 않는 경우에는 null을 반환하며,
+ * Claim 상태를 정상적으로 판정할 수 없는 조회/파싱 실패는 오류로 처리합니다.
+ *
+ * @param noteId Claim이 속한 기준 Note ID
+ * @param claimId 추적할 execution Claim ID
+ * @returns 지정한 Claim 상태. 존재하지 않으면 null
+ */
+export async function getRelatedNoteRecommendationExecutionClaim(
+  noteId: string,
+  claimId: string,
+): Promise<RelatedNoteRecommendationExecutionClaim | null> {
+  const parsedNoteId = z.string().uuid().safeParse(noteId);
+  const parsedClaimId = z.string().uuid().safeParse(claimId);
+
+  if (!parsedNoteId.success || !parsedClaimId.success) {
+    return null;
+  }
+
+  const supabase = await createServerComponentClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return null;
+  }
+
+  await requireCurrentLegalAcceptance(
+    user.id,
+    getNoteDetailRoute(parsedNoteId.data),
+  );
+
+  /*
+   * Claim 자체를 직접 조회하기 전에 기준 Note의 소유권을 확인합니다.
+   *
+   * execution claim에는 user_id가 존재하지만,
+   * Related Notes 조회 계약은 현재 사용자가 소유한 Note를 기준으로 하므로
+   * 기존 getRelatedNotes와 동일한 권한 경계를 유지합니다.
+   */
+  const { data: sourceNote, error: sourceNoteError } = await supabase
+    .from("notes")
+    .select("id")
+    .eq("id", parsedNoteId.data)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (sourceNoteError) {
+    await reportRelatedNotesOperationalError({
+      actorUserId: user.id,
+      error: sourceNoteError,
+      errorCode: RELATED_NOTES_OPERATIONAL_ERROR_CODES.SOURCE_NOTE_LOAD_FAILED,
+      message:
+        "Related Notes AI 추천 실행 조회를 위한 기준 Note 조회에 실패했습니다.",
+      operation: RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.LOAD_SOURCE_NOTE,
+      context: {
+        claimId: parsedClaimId.data,
+        noteId: parsedNoteId.data,
+      },
+      userId: user.id,
+    });
+
+    throw sourceNoteError;
+  }
+
+  if (!sourceNote) {
+    return null;
+  }
+
+  /*
+   * background 실행이 중단되어 running Claim만 남은 경우를
+   * polling 경로에서도 복구할 수 있도록 DB stale cleanup을 먼저 수행합니다.
+   *
+   * cleanup은 실행 상태 복구를 위한 best-effort 처리입니다.
+   * cleanup 자체가 실패하더라도 Claim 상태 조회까지 막지는 않고,
+   * 운영 오류를 기록한 뒤 현재 DB 상태를 그대로 조회합니다.
+   */
+  const { error: staleCleanupError } = await supabase.rpc(
+    "cleanup_related_note_recommendation_stale_execution_claims",
+    {
+      p_note_id: parsedNoteId.data,
+    },
+  );
+
+  if (staleCleanupError) {
+    await reportRelatedNotesOperationalError({
+      actorUserId: user.id,
+      error: staleCleanupError,
+      errorCode:
+        RELATED_NOTES_OPERATIONAL_ERROR_CODES.RECOMMENDATION_EXECUTION_STATE_LOAD_FAILED,
+      message: "Related Notes AI 추천 만료 실행 상태 정리에 실패했습니다.",
+      operation:
+        RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.LOAD_RECOMMENDATION_EXECUTION_STATE,
+      context: {
+        claimId: parsedClaimId.data,
+        noteId: parsedNoteId.data,
+      },
+      userId: user.id,
+    });
+  }
+
+  const { data, error } = await supabase
+    .from("related_note_recommendation_execution_claims")
+    .select("id, status")
+    .eq("id", parsedClaimId.data)
+    .eq("note_id", parsedNoteId.data)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (error) {
+    await reportRelatedNotesOperationalError({
+      actorUserId: user.id,
+      error,
+      errorCode:
+        RELATED_NOTES_OPERATIONAL_ERROR_CODES.RECOMMENDATION_EXECUTION_STATE_LOAD_FAILED,
+      message: "Related Notes AI 추천 실행 상태 조회에 실패했습니다.",
+      operation:
+        RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.LOAD_RECOMMENDATION_EXECUTION_STATE,
+      context: {
+        claimId: parsedClaimId.data,
+        noteId: parsedNoteId.data,
+      },
+      userId: user.id,
+    });
+
+    throw error;
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  const parsed = z
+    .object({
+      id: z.string().uuid(),
+      status: z.enum(["running", "succeeded", "failed", "stale"]),
+    })
+    .safeParse(data);
+
+  if (!parsed.success) {
+    logError({
+      message:
+        "[getRelatedNoteRecommendationExecutionClaim] AI 추천 실행 상태 파싱 실패",
+      error: parsed.error,
+    });
+
+    throw parsed.error;
+  }
+
+  return parsed.data;
 }
 
 /**
