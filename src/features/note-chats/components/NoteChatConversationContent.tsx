@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowDown } from "lucide-react";
-import { type RefObject, useRef, useState } from "react";
+import { type RefObject } from "react";
 
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -10,14 +10,6 @@ import type { NoteChatDailyUsage } from "../queries";
 import type { NoteChatAssistantSources, NoteChatMessage } from "../types";
 import { NoteChatComposer } from "./NoteChatComposer";
 import { NoteChatMessageList } from "./NoteChatMessageList";
-
-/**
- * 최신 메시지 이동 버튼을 표시하기 시작하는 하단과의 거리입니다.
- *
- * 하단에서 아주 조금 벗어난 경우까지 버튼이 나타나는 것을 막고,
- * 사용자가 대화를 위로 탐색하고 있는 경우에만 버튼을 표시합니다.
- */
-const LATEST_MESSAGE_BUTTON_THRESHOLD_PX = 64;
 
 type NoteChatConversationContentProps = {
   conversationId: string;
@@ -33,6 +25,10 @@ type NoteChatConversationContentProps = {
   retryCount: number;
   dailyUsage: NoteChatDailyUsage;
   messageEndRef: RefObject<HTMLDivElement | null>;
+  scrollViewportRef: RefObject<HTMLDivElement | null>;
+  shouldShowLatestMessageButton: boolean;
+  onViewportScroll: () => void;
+  onLatestMessageClick: () => void;
   onCancel: () => void;
   onSubmit: (question: string) => Promise<void>;
   onRetry: () => Promise<void>;
@@ -60,6 +56,10 @@ type NoteChatConversationContentProps = {
  * @param props.retryCount 현재 질문의 재시도 횟수
  * @param props.dailyUsage 현재 사용자의 Note Chat 일일 AI 실행 사용량
  * @param props.messageEndRef 최신 메시지 위치를 가리키는 ref
+ * @param props.scrollViewportRef 실제 ScrollArea Viewport를 가리키는 ref
+ * @param props.shouldShowLatestMessageButton 최신 메시지 이동 버튼 표시 여부
+ * @param props.onViewportScroll ScrollArea Viewport 스크롤 처리 함수
+ * @param props.onLatestMessageClick 최신 메시지 위치로 이동하는 함수
  * @param props.onCancel 현재 로컬 답변 스트림 표시를 중지하는 함수
  * @param props.onSubmit 새로운 사용자 질문을 전송하는 함수
  * @param props.onRetry 실패한 답변 생성을 다시 실행하는 함수
@@ -80,49 +80,15 @@ export function NoteChatConversationContent({
   retryCount,
   dailyUsage,
   messageEndRef,
+  scrollViewportRef,
+  shouldShowLatestMessageButton,
+  onViewportScroll,
+  onLatestMessageClick,
   onCancel,
   onSubmit,
   onRetry,
   onUpdateQuestion,
 }: NoteChatConversationContentProps) {
-  const scrollViewportRef = useRef<HTMLDivElement | null>(null);
-  const [shouldShowLatestMessageButton, setShouldShowLatestMessageButton] =
-    useState(false);
-
-  /**
-   * 실제 ScrollArea Viewport의 현재 위치를 기준으로
-   * 최신 메시지 이동 버튼을 표시할지 결정합니다.
-   *
-   * 하단에서 일정 거리 이상 벗어난 경우에만 버튼을 표시해
-   * 사용자가 과거 메시지를 탐색하고 있을 때 빠르게 최신 위치로
-   * 돌아갈 수 있도록 합니다.
-   */
-  const handleViewportScroll = () => {
-    const viewport = scrollViewportRef.current;
-
-    if (!viewport) {
-      return;
-    }
-
-    const distanceFromBottom =
-      viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
-
-    setShouldShowLatestMessageButton(
-      distanceFromBottom > LATEST_MESSAGE_BUTTON_THRESHOLD_PX,
-    );
-  };
-
-  /**
-   * 기존 자동 스크롤에서도 사용하는 messageEndRef를 재사용해
-   * 최신 메시지 위치로 부드럽게 이동합니다.
-   */
-  const handleLatestMessageClick = () => {
-    messageEndRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "end",
-    });
-  };
-
   return (
     <>
       <div className="relative min-h-0 flex-1">
@@ -130,7 +96,7 @@ export function NoteChatConversationContent({
           className="h-full"
           viewportClassName="[&>div]:!block [&>div]:!w-full [&>div]:!min-w-0"
           viewportRef={scrollViewportRef}
-          onViewportScroll={handleViewportScroll}
+          onViewportScroll={onViewportScroll}
         >
           <NoteChatMessageList
             assistantSources={assistantSources}
@@ -158,7 +124,7 @@ export function NoteChatConversationContent({
             size="icon"
             className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full bg-secondary/60 shadow-md hover:bg-secondary"
             aria-label="최신 메시지로 이동"
-            onClick={handleLatestMessageClick}
+            onClick={onLatestMessageClick}
           >
             <ArrowDown />
           </Button>

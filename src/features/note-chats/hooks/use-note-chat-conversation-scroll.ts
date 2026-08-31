@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+const LATEST_MESSAGE_BUTTON_THRESHOLD_PX = 64;
 
 type UseNoteChatConversationScrollParams = {
   conversationHeight: number | null;
@@ -17,17 +19,13 @@ type UseNoteChatConversationScrollParams = {
  * 최초 Conversation과 대화 영역 높이가 준비되면
  * 최신 메시지 위치로 한 번 이동합니다.
  *
- * 이후 새 질문, 수정 질문, 스트리밍 답변이 추가될 때
- * 최신 메시지 위치로 부드럽게 이동합니다.
+ * 이후 새 질문, 수정 질문, 스트리밍 답변이 추가될 때는
+ * 사용자가 최신 메시지 영역을 보고 있는 경우에만 자동으로
+ * 최신 메시지 위치를 유지합니다.
  *
- * @param params Hook 입력값
- * @param params.conversationHeight 현재 대화 영역 높이
- * @param params.hasDetail Conversation 상세 데이터 존재 여부
- * @param params.messageCount 현재 저장 메시지 수
- * @param params.pendingQuestion 화면에 임시 표시 중인 질문
- * @param params.streamingContent 현재 스트리밍 중인 답변 내용
- * @param params.editingSequenceNumber 수정 중인 메시지 sequence
- * @returns 메시지 끝 위치에 연결할 ref
+ * 사용자가 과거 메시지를 보기 위해 하단에서 일정 거리 이상
+ * 벗어난 경우에는 streaming 중에도 강제로 하단으로 이동하지 않고
+ * 최신 메시지 이동 버튼을 표시합니다.
  */
 export function useNoteChatConversationScroll({
   conversationHeight,
@@ -38,7 +36,40 @@ export function useNoteChatConversationScroll({
   editingSequenceNumber,
 }: UseNoteChatConversationScrollParams) {
   const messageEndRef = useRef<HTMLDivElement | null>(null);
+  const scrollViewportRef = useRef<HTMLDivElement | null>(null);
   const hasInitialScrolledRef = useRef(false);
+
+  const [shouldShowLatestMessageButton, setShouldShowLatestMessageButton] =
+    useState(false);
+
+  /**
+   * 현재 viewport가 최신 메시지 영역에서 충분히 멀리 떨어져 있는지
+   * 실제 scroll 위치를 기준으로 갱신합니다.
+   */
+  const handleViewportScroll = useCallback(() => {
+    const viewport = scrollViewportRef.current;
+
+    if (!viewport) {
+      return;
+    }
+
+    const distanceFromBottom =
+      viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+
+    setShouldShowLatestMessageButton(
+      distanceFromBottom >= LATEST_MESSAGE_BUTTON_THRESHOLD_PX,
+    );
+  }, []);
+
+  /**
+   * 최신 메시지 위치로 부드럽게 이동합니다.
+   */
+  const scrollToLatestMessage = useCallback(() => {
+    messageEndRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "end",
+    });
+  }, []);
 
   /**
    * 최초 Conversation과 대화 영역 높이가 준비되면
@@ -75,10 +106,13 @@ export function useNoteChatConversationScroll({
 
   /**
    * 새 질문, 수정 질문, 스트리밍 답변이 추가될 때
-   * 메시지 영역을 최신 메시지 위치로 이동합니다.
+   * 사용자가 최신 메시지 영역을 보고 있는 경우에만
+   * 최신 위치를 자동으로 유지합니다.
+   *
+   * 사용자가 과거 메시지를 탐색 중이면 자동 스크롤하지 않습니다.
    */
   useEffect(() => {
-    if (!hasInitialScrolledRef.current) {
+    if (!hasInitialScrolledRef.current || shouldShowLatestMessageButton) {
       return;
     }
 
@@ -86,9 +120,19 @@ export function useNoteChatConversationScroll({
       behavior: "smooth",
       block: "end",
     });
-  }, [messageCount, pendingQuestion, streamingContent, editingSequenceNumber]);
+  }, [
+    messageCount,
+    pendingQuestion,
+    streamingContent,
+    editingSequenceNumber,
+    shouldShowLatestMessageButton,
+  ]);
 
   return {
+    handleViewportScroll,
     messageEndRef,
+    scrollToLatestMessage,
+    scrollViewportRef,
+    shouldShowLatestMessageButton,
   };
 }

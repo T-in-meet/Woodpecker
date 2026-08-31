@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-
 import { NavigationGuardAlertDialog } from "@/components/common/NavigationGuardAlertDialog";
 import { useBeforeUnloadGuard } from "@/hooks/useBeforeUnloadGuard";
 import { useInternalNavigationGuard } from "@/hooks/useInternalNavigationGuard";
 
 import { useNoteChatConversationExecution } from "../hooks/use-note-chat-conversation-execution";
 import { useNoteChatConversationDetailQuery } from "../hooks/use-note-chat-conversation-query";
+import { useNoteChatConversationScroll } from "../hooks/use-note-chat-conversation-scroll";
 import { useNoteChatDailyUsageQuery } from "../hooks/use-note-chat-daily-usage-query";
 import { useViewportRemainingHeight } from "../hooks/use-viewport-remaining-height";
 import { NoteChatBreadcrumb } from "./NoteChatBreadcrumb";
@@ -31,9 +30,6 @@ type NoteChatConversationClientProps = {
 export function NoteChatConversationClient({
   conversationId,
 }: NoteChatConversationClientProps) {
-  const messageEndRef = useRef<HTMLDivElement | null>(null);
-  const hasInitialScrolledRef = useRef(false);
-
   const conversationQuery = useNoteChatConversationDetailQuery(conversationId);
 
   /*
@@ -92,58 +88,20 @@ export function NoteChatConversationClient({
       recalculationKey: detail,
     });
 
-  /**
-   * 최초 Conversation과 대화 영역 높이가 준비되면
-   * 레이아웃 반영 후 최신 메시지 위치로 한 번만 이동합니다.
-   */
-  useEffect(() => {
-    if (
-      hasInitialScrolledRef.current ||
-      !detail ||
-      conversationHeight === null
-    ) {
-      return;
-    }
-
-    const animationFrameId = window.requestAnimationFrame(() => {
-      const messageEnd = messageEndRef.current;
-
-      if (!messageEnd) {
-        return;
-      }
-
-      messageEnd.scrollIntoView({
-        behavior: "auto",
-        block: "end",
-      });
-
-      hasInitialScrolledRef.current = true;
-    });
-
-    return () => {
-      window.cancelAnimationFrame(animationFrameId);
-    };
-  }, [detail, conversationHeight]);
-
-  /**
-   * 새 질문, 수정 질문, 스트리밍 답변이 추가될 때
-   * 메시지 영역을 최신 메시지 위치로 이동합니다.
-   */
-  useEffect(() => {
-    if (!hasInitialScrolledRef.current) {
-      return;
-    }
-
-    messageEndRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "end",
-    });
-  }, [
-    detail?.messages.length,
+  const {
+    handleViewportScroll,
+    messageEndRef,
+    scrollToLatestMessage,
+    scrollViewportRef,
+    shouldShowLatestMessageButton,
+  } = useNoteChatConversationScroll({
+    conversationHeight,
+    hasDetail: detail !== undefined && detail !== null,
+    messageCount: detail?.messages.length ?? 0,
     pendingQuestion,
     streamingContent,
     editingSequenceNumber,
-  ]);
+  });
 
   const visibleMessages =
     detail && editingSequenceNumber !== null
@@ -209,6 +167,10 @@ export function NoteChatConversationClient({
                 retryCount={retryCount}
                 dailyUsage={dailyUsage}
                 messageEndRef={messageEndRef}
+                scrollViewportRef={scrollViewportRef}
+                shouldShowLatestMessageButton={shouldShowLatestMessageButton}
+                onViewportScroll={handleViewportScroll}
+                onLatestMessageClick={scrollToLatestMessage}
                 onCancel={onCancel}
                 onSubmit={handleQuestionSubmit}
                 onRetry={handleRetry}

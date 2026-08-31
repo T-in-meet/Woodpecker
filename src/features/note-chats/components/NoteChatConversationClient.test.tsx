@@ -11,6 +11,8 @@ const mockStart = vi.fn();
 const mockUpdate = vi.fn();
 const mockCancel = vi.fn();
 const mockReset = vi.fn();
+const mockHandleViewportScroll = vi.fn();
+const mockScrollToLatestMessage = vi.fn();
 
 let mockConversationDetail: {
   conversation: {
@@ -60,6 +62,20 @@ vi.mock("../hooks/use-note-chat-stream", () => ({
     reset: mockReset,
     start: mockStart,
     update: mockUpdate,
+  }),
+}));
+
+vi.mock("../hooks/use-note-chat-conversation-scroll", () => ({
+  useNoteChatConversationScroll: () => ({
+    handleViewportScroll: mockHandleViewportScroll,
+    messageEndRef: {
+      current: null,
+    },
+    scrollToLatestMessage: mockScrollToLatestMessage,
+    scrollViewportRef: {
+      current: null,
+    },
+    shouldShowLatestMessageButton: false,
   }),
 }));
 
@@ -131,11 +147,6 @@ describe("NoteChatConversationClient", () => {
       assistantSources: [],
       hasRunningExecution: false,
     };
-
-    Object.defineProperty(window.HTMLElement.prototype, "scrollIntoView", {
-      configurable: true,
-      value: vi.fn(),
-    });
   });
 
   it("서버에 running Claim이 있으면 답변 생성 중 상태로 복원한다", () => {

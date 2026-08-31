@@ -3,6 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useInternalNavigationGuard } from "../useInternalNavigationGuard";
 
+const NAVIGATION_GUARD_HISTORY_INDEX_KEY =
+  "__woodpeckerNavigationGuardHistoryIndex";
+
 async function dispatchLinkClick(link: HTMLAnchorElement) {
   await act(async () => {
     link.dispatchEvent(
@@ -15,6 +18,24 @@ async function dispatchLinkClick(link: HTMLAnchorElement) {
 
     await Promise.resolve();
   });
+}
+
+async function dispatchPopState(state: unknown) {
+  await act(async () => {
+    window.dispatchEvent(
+      new PopStateEvent("popstate", {
+        state,
+      }),
+    );
+
+    await Promise.resolve();
+  });
+}
+
+function createHistoryState(index: number) {
+  return {
+    [NAVIGATION_GUARD_HISTORY_INDEX_KEY]: index,
+  };
 }
 
 describe("useInternalNavigationGuard", () => {
@@ -239,5 +260,206 @@ describe("useInternalNavigationGuard", () => {
 
     expect(result.current.isNavigationPending).toBe(false);
     expect(clickSpy).toHaveBeenCalledOnce();
+  });
+
+  it("뒤로가기를 감지하면 원래 History 위치로 복귀한 뒤 이동 확인을 보류하고 취소할 수 있다", async () => {
+    /*
+     * Hook 설치 전에 원본 replaceState를 보관합니다.
+     *
+     * jsdom에서는 history.go()가 실제 브라우저처럼 popstate를
+     * 연속해서 발생시키지 않으므로 History 위치 변화는 테스트에서
+     * 직접 재현합니다.
+     */
+    const originalReplaceState = window.history.replaceState;
+
+    const historyGoSpy = vi
+      .spyOn(window.history, "go")
+      .mockImplementation(() => {});
+
+    const { result, rerender } = renderHook(
+      ({ enabled }) =>
+        useInternalNavigationGuard({
+          enabled,
+        }),
+      {
+        initialProps: {
+          enabled: false,
+        },
+      },
+    );
+
+    /*
+     * 현재 entry(index 0)에서 새 entry(index 1)로 이동합니다.
+     * guard가 비활성 상태이므로 pushState는 즉시 수행됩니다.
+     */
+    act(() => {
+      window.history.pushState({}, "", "/notes");
+    });
+
+    const currentState = window.history.state;
+
+    expect(currentState[NAVIGATION_GUARD_HISTORY_INDEX_KEY]).toBe(1);
+
+    act(() => {
+      rerender({
+        enabled: true,
+      });
+    });
+
+    /*
+     * 사용자가 뒤로가기를 눌러 index 0 entry에 도착한 상황을
+     * jsdom에서 직접 재현합니다.
+     */
+    const targetState = createHistoryState(0);
+
+    originalReplaceState.call(
+      window.history,
+      targetState,
+      "",
+      "/note-chats/test",
+    );
+
+    await dispatchPopState(targetState);
+
+    /*
+     * 뒤로가기 delta는 -1이므로 원래 index 1 위치로 복귀하기 위해
+     * history.go(1)을 요청해야 합니다.
+     */
+    expect(historyGoSpy).toHaveBeenCalledWith(1);
+    expect(result.current.isNavigationPending).toBe(false);
+
+    /*
+     * 원래 index 1 entry로 복귀하면서 발생하는 두 번째 popstate를
+     * 재현합니다.
+     */
+    originalReplaceState.call(window.history, currentState, "", "/notes");
+
+    await dispatchPopState(currentState);
+
+    expect(result.current.isNavigationPending).toBe(true);
+    expect(window.location.pathname).toBe("/notes");
+
+    act(() => {
+      result.current.cancelNavigation();
+    });
+
+    expect(result.current.isNavigationPending).toBe(false);
+
+    /*
+     * 취소했으므로 최초에 요청했던 뒤로가기를 다시 실행하지 않습니다.
+     */
+    expect(historyGoSpy).toHaveBeenCalledTimes(1);
+    expect(window.location.pathname).toBe("/notes");
+  });
+
+  it("앞으로가기를 확인하면 원래 목표 History 위치로 다시 이동하고 해당 popstate를 다시 보류하지 않는다", async () => {
+    const originalReplaceState = window.history.replaceState;
+
+    const historyGoSpy = vi
+      .spyOn(window.history, "go")
+      .mockImplementation(() => {});
+
+    const { result, rerender } = renderHook(
+      ({ enabled }) =>
+        useInternalNavigationGuard({
+          enabled,
+        }),
+      {
+        initialProps: {
+          enabled: false,
+        },
+      },
+    );
+
+    /*
+     * index 0 -> index 1 -> index 2 History를 준비합니다.
+     */
+    act(() => {
+      window.history.pushState({}, "", "/notes");
+      window.history.pushState({}, "", "/mypage");
+    });
+
+    const forwardTargetState = window.history.state;
+
+    expect(forwardTargetState[NAVIGATION_GUARD_HISTORY_INDEX_KEY]).toBe(2);
+
+    /*
+     * 현재 위치를 index 1로 옮긴 뒤 popstate를 전달해
+     * Hook 내부 currentHistoryIndex도 1로 동기화합니다.
+     *
+     * 아직 guard가 비활성 상태이므로 그대로 허용됩니다.
+     */
+    const currentState = createHistoryState(1);
+
+    originalReplaceState.call(window.history, currentState, "", "/notes");
+
+    await dispatchPopState(currentState);
+
+    act(() => {
+      rerender({
+        enabled: true,
+      });
+    });
+
+    /*
+     * 사용자가 앞으로가기를 눌러 index 2에 도착한 상황입니다.
+     */
+    originalReplaceState.call(
+      window.history,
+      forwardTargetState,
+      "",
+      "/mypage",
+    );
+
+    await dispatchPopState(forwardTargetState);
+
+    /*
+     * 앞으로가기 delta는 +1이므로 사용자 확인 전에
+     * 원래 index 1 위치로 돌아가기 위해 history.go(-1)을 요청합니다.
+     */
+    expect(historyGoSpy).toHaveBeenCalledWith(-1);
+    expect(result.current.isNavigationPending).toBe(false);
+
+    /*
+     * index 1로 복귀하면서 발생하는 popstate를 재현합니다.
+     */
+    originalReplaceState.call(window.history, currentState, "", "/notes");
+
+    await dispatchPopState(currentState);
+
+    expect(result.current.isNavigationPending).toBe(true);
+    expect(window.location.pathname).toBe("/notes");
+
+    act(() => {
+      result.current.confirmNavigation();
+    });
+
+    expect(result.current.isNavigationPending).toBe(false);
+
+    /*
+     * 사용자가 이동을 확인했으므로 최초 요청했던 앞으로가기를
+     * history.go(1)로 다시 실행합니다.
+     */
+    expect(historyGoSpy).toHaveBeenLastCalledWith(1);
+    expect(historyGoSpy).toHaveBeenCalledTimes(2);
+
+    /*
+     * 확인 후 목표 index 2에 실제로 도착하면서 발생한 popstate는
+     * 이미 허용된 이동이므로 다시 navigation guard를 열지 않습니다.
+     */
+    originalReplaceState.call(
+      window.history,
+      forwardTargetState,
+      "",
+      "/mypage",
+    );
+
+    await dispatchPopState(forwardTargetState);
+
+    expect(result.current.isNavigationPending).toBe(false);
+    expect(window.location.pathname).toBe("/mypage");
+    expect(window.history.state[NAVIGATION_GUARD_HISTORY_INDEX_KEY]).toBe(2);
+
+    expect(historyGoSpy).toHaveBeenCalledTimes(2);
   });
 });
