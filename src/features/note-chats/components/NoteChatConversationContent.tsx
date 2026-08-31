@@ -6,6 +6,7 @@ import { type RefObject } from "react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
+import { NOTE_CHAT_ASSISTANT_ACCURACY_NOTICE } from "../constants";
 import type { NoteChatDailyUsage } from "../queries";
 import type { NoteChatAssistantSources, NoteChatMessage } from "../types";
 import { NoteChatComposer } from "./NoteChatComposer";
@@ -132,6 +133,10 @@ export function NoteChatConversationContent({
       </div>
 
       <div className="shrink-0 bg-background px-3 pb-3 md:px-4 md:pb-4">
+        <p className="px-1 py-2 text-center text-xs text-muted-foreground">
+          {NOTE_CHAT_ASSISTANT_ACCURACY_NOTICE}
+        </p>
+
         <NoteChatComposer
           conversationId={conversationId}
           dailyUsage={dailyUsage}

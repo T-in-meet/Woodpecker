@@ -155,7 +155,7 @@ export function NoteChatMessageList({
 
   return (
     <>
-      <ul className="space-y-6 px-4 pb-6 md:px-6">
+      <ul className="space-y-6 px-4 pb-4">
         {messages.map((message) => {
           if (message.role === AI_CHAT_MESSAGE_ROLE.USER) {
             const parsed = noteChatUserMessageContentSchema.safeParse(
