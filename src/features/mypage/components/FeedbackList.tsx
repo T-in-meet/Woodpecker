@@ -10,7 +10,12 @@ import { ROUTES } from "@/lib/constants/routes";
 import { cn } from "@/lib/utils/cn";
 
 import type { FeedbackImage, MyFeedback } from "../queries";
-import { FEEDBACK_CATEGORY_LABELS, type FeedbackCategory } from "../schema";
+import {
+  FEEDBACK_AREA_LABELS,
+  FEEDBACK_CATEGORY_LABELS,
+  type FeedbackArea,
+  type FeedbackCategory,
+} from "../schema";
 import { DeleteFeedbackDialog } from "./DeleteFeedbackDialog";
 
 type FeedbackListProps = {
@@ -19,6 +24,10 @@ type FeedbackListProps = {
 
 function categoryLabel(category: string): string {
   return FEEDBACK_CATEGORY_LABELS[category as FeedbackCategory] ?? category;
+}
+
+function areaLabel(area: string): string {
+  return FEEDBACK_AREA_LABELS[area as FeedbackArea] ?? area;
 }
 
 function formatDate(iso: string): string {
@@ -83,6 +92,9 @@ export function FeedbackList({ feedbacks }: FeedbackListProps) {
               >
                 <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                   {categoryLabel(feedback.category)}
+                </span>
+                <span className="hidden shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground sm:inline">
+                  {areaLabel(feedback.area)}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-sm font-medium">
                   {feedback.title}

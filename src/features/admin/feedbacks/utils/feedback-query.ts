@@ -34,7 +34,7 @@ export function createFeedbackListQuery(
   return supabase
     .from("feedbacks")
     .select(
-      "id, user_id, note_id, category, title, content, image_urls, status, created_at, updated_at",
+      "id, user_id, note_id, category, area, title, content, image_urls, status, created_at, updated_at",
       { count: "exact" },
     );
 }

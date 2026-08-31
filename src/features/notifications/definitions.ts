@@ -1,3 +1,4 @@
+import { buildNotesUrl } from "@/features/notes/utils/buildNotesUrl";
 import {
   ADMIN_NOTIFICATION_TYPES,
   type AdminNotificationKindType,
@@ -46,7 +47,7 @@ export const USER_NOTIFICATION_DEFINITIONS = {
     pushEnabled: true,
   },
   [NOTIFICATION_TYPES.REVIEW]: {
-    defaultClickPath: ROUTES.NOTES_TODAY,
+    defaultClickPath: buildNotesUrl({ view: "due" }),
     icon: "bell",
     label: "복습",
     pushEnabled: true,

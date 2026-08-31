@@ -26,6 +26,13 @@ function applyFeedbackFilter(
 
       return feedbackQuery;
 
+    case "area":
+      if (filter.type === "multi-select") {
+        return feedbackQuery.in("area", filter.value);
+      }
+
+      return feedbackQuery;
+
     case "status":
       if (filter.type === "multi-select") {
         return feedbackQuery.in("status", filter.value);

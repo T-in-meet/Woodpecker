@@ -1,4 +1,8 @@
-import type { FeedbackCategory, FeedbackStatus } from "./feedback-list";
+import type {
+  FeedbackArea,
+  FeedbackCategory,
+  FeedbackStatus,
+} from "./feedback-list";
 
 /**
  * private Storage object를 브라우저에서 표시하기 위한 signed URL 정보입니다.
@@ -95,6 +99,9 @@ export type AdminFeedbackDetail = {
 
   /** 피드백 카테고리 */
   category: FeedbackCategory;
+
+  /** 피드백이 가리키는 기능 영역 */
+  area: FeedbackArea;
 
   /** 피드백 처리 상태 */
   status: FeedbackStatus;

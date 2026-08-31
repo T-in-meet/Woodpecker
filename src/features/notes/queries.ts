@@ -40,8 +40,6 @@ export type NoteSummary = z.infer<typeof noteSummarySchema>;
 
 // "복습 대기 중"(아직 복습할 때가 아닌 노트) 판정 조건. 미래에 예정된 노트와
 // 아직 한 번도 복습하지 않은 노트(next_review_at이 null이면서 round 0)를 포함한다.
-// getNotes의 scheduled 보기와 getReviewWaitingNotes가 같은 기준을 써야 하므로
-// 한 곳에서 만든다.
 function buildScheduledFilter(nowIso: string): string {
   return `next_review_at.gt.${nowIso},and(next_review_at.is.null,review_round.eq.0)`;
 }
@@ -114,25 +112,6 @@ export async function getNotes(
   const notes = parseNoteSummaries(data, "getNotes");
 
   return { notes: notes ?? [], total: count ?? 0 };
-}
-
-export async function getReviewWaitingNotes(
-  userId: string,
-): Promise<NoteSummary[]> {
-  const supabase = await createServerComponentClient();
-  const nowIso = new Date().toISOString();
-
-  const { data, error } = await supabase
-    .from("notes")
-    .select(NOTE_SUMMARY_SELECT)
-    .eq("user_id", userId)
-    .or(buildScheduledFilter(nowIso))
-    .order("next_review_at", { ascending: true, nullsFirst: false })
-    .limit(50);
-
-  if (error) throw error;
-
-  return parseNoteSummaries(data, "getReviewWaitingNotes") ?? [];
 }
 
 export async function getNoteById(

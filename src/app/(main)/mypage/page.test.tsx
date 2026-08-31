@@ -7,14 +7,12 @@ const REDIRECT_ERROR = new Error("NEXT_REDIRECT");
 const {
   getUserMock,
   getProfileMock,
-  getReviewWaitingNotesMock,
   getLearningStatsMock,
   getHasAnyPushSubscriptionMock,
   redirectMock,
 } = vi.hoisted(() => ({
   getUserMock: vi.fn(),
   getProfileMock: vi.fn(),
-  getReviewWaitingNotesMock: vi.fn(),
   getLearningStatsMock: vi.fn(),
   getHasAnyPushSubscriptionMock: vi.fn(),
   redirectMock: vi.fn(),
@@ -23,9 +21,6 @@ const {
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/supabase/getUser", () => ({ getUser: getUserMock }));
 vi.mock("@/lib/supabase/getProfile", () => ({ getProfile: getProfileMock }));
-vi.mock("@/features/notes/queries", () => ({
-  getReviewWaitingNotes: getReviewWaitingNotesMock,
-}));
 vi.mock("@/features/mypage/queries", () => ({
   getLearningStats: getLearningStatsMock,
 }));
@@ -60,7 +55,6 @@ describe("MyPage", () => {
   beforeEach(() => {
     getUserMock.mockReset();
     getProfileMock.mockReset();
-    getReviewWaitingNotesMock.mockReset();
     getLearningStatsMock.mockReset();
     getHasAnyPushSubscriptionMock.mockReset();
     redirectMock.mockReset();
@@ -86,10 +80,10 @@ describe("MyPage", () => {
 
   it("DB 조회 오류가 발생하면 빈 상태로 대체하지 않고 error boundary로 전파한다", async () => {
     const dbError = new Error("DB connection failed");
-    getReviewWaitingNotesMock.mockRejectedValue(dbError);
+    getLearningStatsMock.mockRejectedValue(dbError);
 
     await expect(
-      MyPage({ searchParams: Promise.resolve({ section: "reviews" }) }),
+      MyPage({ searchParams: Promise.resolve({ section: "stats" }) }),
     ).rejects.toBe(dbError);
   });
 });

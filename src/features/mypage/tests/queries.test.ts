@@ -73,6 +73,7 @@ describe("getLearningStats", () => {
       completedReviews: 0,
       todayReviews: 0,
       reviewWaitingCount: 0,
+      completedNotesCount: 0,
       notesByRound: [],
       recentActivity: [],
       studyStreak: { current: 0, longest: 0 },
@@ -106,28 +107,28 @@ describe("getLearningStats", () => {
     ]);
   });
 
-  it("separates overdue (before KST today) from today's scheduled reviews", async () => {
+  // notes.next_review_at은 KST 자정 마커라 "오늘 예정"이면 하루 종일 now 이전이다.
+  it("todayReviews: notes.next_review_at 기준으로 오늘 예정과 기한이 지난 복습을 함께 센다", async () => {
     getUserMock.mockResolvedValue({ id: "user-123" });
 
     const { supabase } = makeSupabase({
-      notesData: [],
+      notesData: [
+        // 2026-05-02 00:00 KST 마커 → 기한이 지남, 포함
+        { review_round: 1, next_review_at: "2026-05-01T15:00:00.000Z" },
+        // 2026-05-03 00:00 KST 마커 → 오늘 예정, 알림이 오늘 20시여도 포함
+        { review_round: 1, next_review_at: "2026-05-02T15:00:00.000Z" },
+        // 2026-05-04 00:00 KST 마커 → 내일, 제외
+        { review_round: 2, next_review_at: "2026-05-03T15:00:00.000Z" },
+        // 아직 일정이 없는 노트 → 제외
+        { review_round: 0, next_review_at: null },
+        // 복습을 모두 마친 노트 → 제외
+        { review_round: 3, next_review_at: null },
+      ],
+      // 미완료 로그는 더 이상 todayReviews에 영향을 주지 않는다.
       reviewLogsData: [
-        // 어제 KST에 예정 (2026-05-02T05:00Z = 2026-05-02 14:00 KST) → overdue
         {
           round: 1,
           scheduled_at: "2026-05-02T05:00:00.000Z",
-          completed_at: null,
-        },
-        // 오늘 KST (2026-05-02T16:00Z = 2026-05-03 01:00 KST) → todayReviews
-        {
-          round: 1,
-          scheduled_at: "2026-05-02T16:00:00.000Z",
-          completed_at: null,
-        },
-        // 내일 이후 → 둘 다 아님
-        {
-          round: 3,
-          scheduled_at: "2026-05-04T05:00:00.000Z",
           completed_at: null,
         },
       ],
@@ -136,7 +137,7 @@ describe("getLearningStats", () => {
 
     const result = await getLearningStats();
 
-    expect(result.todayReviews).toBe(1);
+    expect(result.todayReviews).toBe(2);
   });
 
   it("computes on-time rate based on KST date equality", async () => {
@@ -285,6 +286,27 @@ describe("getLearningStats", () => {
     const result = await getLearningStats();
 
     expect(result.reviewWaitingCount).toBe(2);
+  });
+
+  it("completedNotesCount: next_review_at이 null이고 round가 MAX인 노트만 포함한다", async () => {
+    getUserMock.mockResolvedValue({ id: "user-123" });
+
+    const { supabase } = makeSupabase({
+      notesData: [
+        { review_round: 3, next_review_at: null }, // 완주 → 포함
+        { review_round: 0, next_review_at: null }, // 미시작 → 제외
+        {
+          review_round: 3,
+          next_review_at: "2026-05-10T00:00:00.000Z", // 예정 있음 → 제외
+        },
+      ],
+      reviewLogsData: [],
+    });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await getLearningStats();
+
+    expect(result.completedNotesCount).toBe(1);
   });
 
   it("buckets recentActivity into 30 KST days ending today", async () => {

@@ -1,4 +1,4 @@
-import { getKstDayBoundsUtc } from "@/features/review/lib/kstDay";
+import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { logError } from "@/lib/logger";
 import { getUser } from "@/lib/supabase/getUser";
 import { createServerComponentClient } from "@/lib/supabase/server";
@@ -8,6 +8,7 @@ export type LearningStats = {
   completedReviews: number;
   todayReviews: number;
   reviewWaitingCount: number;
+  completedNotesCount: number;
   notesByRound: { round: number; count: number }[];
   recentActivity: { date: string; count: number }[];
   studyStreak: { current: number; longest: number };
@@ -78,6 +79,7 @@ export async function getLearningStats(): Promise<LearningStats> {
     completedReviews: 0,
     todayReviews: 0,
     reviewWaitingCount: 0,
+    completedNotesCount: 0,
     notesByRound: [],
     recentActivity: [],
     studyStreak: { current: 0, longest: 0 },
@@ -101,8 +103,6 @@ export async function getLearningStats(): Promise<LearningStats> {
 
   const now = new Date();
   const nowIso = now.toISOString();
-  const { startUtcIso: startOfTodayKstUtc, endUtcIso: endOfTodayKstUtc } =
-    getKstDayBoundsUtc(now);
   const todayKstKey = toKstDateKey(nowIso);
   const activityCutoffIso = new Date(
     now.getTime() - ACTIVITY_DAYS * DAY_MS,
@@ -115,6 +115,18 @@ export async function getLearningStats(): Promise<LearningStats> {
     (n) =>
       (n.next_review_at === null && n.review_round === 0) ||
       (typeof n.next_review_at === "string" && n.next_review_at > nowIso),
+  ).length;
+
+  const completedNotesCount = notesRows.filter(
+    (n) => n.next_review_at === null && n.review_round === MAX_REVIEW_ROUND,
+  ).length;
+
+  // 오늘 예정뿐 아니라 기한이 지나 아직 못한 복습도 포함한다.
+  // 통계 카드가 노트 목록의 due 보기로 링크되므로, review_logs가 아니라 목록과 같은
+  // 소스(notes.next_review_at)에 같은 판정을 써서 두 화면의 숫자가 어긋날 수 없게 한다.
+  // getNotes의 view === "due" 필터와 동일한 조건이다.
+  const todayReviews = notesRows.filter(
+    (n) => typeof n.next_review_at === "string" && n.next_review_at <= nowIso,
   ).length;
 
   const notesByRoundMap = new Map<number, number>([
@@ -136,7 +148,6 @@ export async function getLearningStats(): Promise<LearningStats> {
   const logs = reviewLogsResult.data ?? [];
 
   let completedReviews = 0;
-  let todayReviews = 0;
   let onTime = 0;
 
   const activityDayCounts = new Map<string, number>();
@@ -148,6 +159,7 @@ export async function getLearningStats(): Promise<LearningStats> {
     if (typeof row.round !== "number" || typeof scheduledAt !== "string")
       continue;
 
+    // 미완료 로그는 여기서 세지 않는다. 오늘 복습할 노트 수는 notes 기준으로 이미 셌다.
     if (typeof completedAt === "string") {
       completedReviews += 1;
 
@@ -162,11 +174,6 @@ export async function getLearningStats(): Promise<LearningStats> {
           (activityDayCounts.get(completedKey) ?? 0) + 1,
         );
       }
-    } else if (
-      scheduledAt >= startOfTodayKstUtc &&
-      scheduledAt < endOfTodayKstUtc
-    ) {
-      todayReviews += 1;
     }
   }
 
@@ -182,6 +189,7 @@ export async function getLearningStats(): Promise<LearningStats> {
     completedReviews,
     todayReviews,
     reviewWaitingCount,
+    completedNotesCount,
     notesByRound,
     recentActivity,
     studyStreak,
@@ -203,6 +211,7 @@ export type MyFeedbackReply = {
 export type MyFeedback = {
   id: string;
   category: string;
+  area: string;
   title: string;
   content: string;
   status: string;
@@ -260,7 +269,7 @@ export async function getMyFeedbacks(
   const { data, error } = await supabase
     .from("feedbacks")
     .select(
-      "id, category, title, content, image_urls, status, created_at, note:notes(id, title), reply:feedback_replies(title, content, image_paths, created_at)",
+      "id, category, area, title, content, image_urls, status, created_at, note:notes(id, title), reply:feedback_replies(title, content, image_paths, created_at)",
     )
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
@@ -290,6 +299,7 @@ export async function getMyFeedbacks(
   const feedbacks: MyFeedback[] = rows.map((row) => ({
     id: row.id,
     category: row.category,
+    area: row.area,
     title: row.title,
     content: row.content,
     status: row.status,
