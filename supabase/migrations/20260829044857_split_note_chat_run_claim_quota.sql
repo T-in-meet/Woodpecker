@@ -374,8 +374,8 @@ $$;
 /*
  * 현재 인증 사용자의 KST 기준 Note Chat 일일 사용량을 조회합니다.
  *
- * 실제 quota 판정과 동일하게 running + succeeded Claim만 사용량에 포함하고,
- * failed/stale Claim은 제외합니다.
+ * 실제 quota 판정과 동일하게 만료된 running Claim을 먼저 stale로 정리한 뒤,
+ * running + succeeded Claim만 사용량에 포함합니다.
  *
  * ADMIN은 애플리케이션 query 계층에서 이 RPC를 호출하지 않으므로,
  * 이 함수는 현재 인증 사용자의 실제 Claim 사용량만 반환합니다.
@@ -403,10 +403,41 @@ BEGIN
   "v_daily_end_at" := "v_daily_start_at" + interval '1 day';
 
   /*
+   * claim_note_chat_execution()과 동일한 사용자/KST 날짜 lock을 사용합니다.
+   *
+   * 사용량 조회에서도 stale Claim을 정리하므로,
+   * 실행 선점의 stale cleanup / quota 계산과 동시에 실행되더라도
+   * 같은 사용자 일일 실행 상태를 동일한 직렬화 경계에서 처리합니다.
+   */
+  PERFORM "pg_advisory_xact_lock"(
+    "hashtextextended"(
+      "v_user_id"::text
+      || '|note-chat-execution|'
+      || "v_kst_date"::text,
+      0
+    )
+  );
+
+  /*
+   * claim_note_chat_execution()의 stale 정책과 동일하게,
+   * 현재 사용자의 3분을 초과한 running Claim 전체를 stale로 종료합니다.
+   *
+   * cleanup 범위를 오늘 Claim으로 제한하지 않아 이전 날짜에 남은
+   * orphan running Claim도 함께 정리합니다.
+   */
+  UPDATE "public"."note_chat_execution_claims" AS "claims"
+  SET
+    "status" = 'stale',
+    "completed_at" = "v_now"
+  WHERE "claims"."user_id" = "v_user_id"
+    AND "claims"."status" = 'running'
+    AND "claims"."claimed_at" < "v_now" - interval '3 minutes';
+
+  /*
    * claim_note_chat_execution()의 일일 quota 계산과 동일한 기준을 사용합니다.
    *
-   * running은 현재 비용을 발생시킬 수 있는 실행이므로 포함하고,
-   * succeeded는 정상적으로 사용된 실행이므로 포함합니다.
+   * stale cleanup 이후 남아 있는 running은 현재 비용을 발생시킬 수 있는
+   * 실행이므로 포함하고, succeeded는 정상적으로 사용된 실행이므로 포함합니다.
    * failed/stale은 일일 quota에서 제외합니다.
    */
   SELECT count(*)
@@ -1236,6 +1267,6 @@ COMMENT ON FUNCTION "public"."complete_note_chat_execution_success"(
   'Note Chat 실행 성공을 Assistant Message 저장과 Claim succeeded 전환을 하나의 transaction으로 확정합니다. Run 감사 기록은 별도 best-effort 경로에서 처리합니다.';
 
 COMMENT ON FUNCTION "public"."get_note_chat_daily_usage"() IS
-  '현재 인증 사용자의 KST 기준 Note Chat 일일 사용량을 execution claim에서 조회합니다.';
+  '현재 인증 사용자의 만료된 running execution claim을 stale로 정리한 뒤 KST 기준 Note Chat 일일 사용량을 조회합니다.';
 
 COMMIT;

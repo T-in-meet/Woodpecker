@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(5);
+SELECT plan(7);
 
 /*
  * get_note_chat_daily_usage() 테스트용 사용자를 생성합니다.
@@ -27,7 +27,19 @@ SELECT set_config(
 );
 
 SELECT set_config(
+  'test.note_chat_daily_usage_stale_conversation_id',
+  gen_random_uuid()::text,
+  true
+);
+
+SELECT set_config(
   'test.note_chat_daily_usage_other_conversation_id',
+  gen_random_uuid()::text,
+  true
+);
+
+SELECT set_config(
+  'test.note_chat_daily_usage_stale_claim_id',
   gen_random_uuid()::text,
   true
 );
@@ -55,6 +67,9 @@ VALUES
 /*
  * execution claim의 conversation_id FK를 만족시키기 위해
  * 각 테스트 사용자의 실제 Note Chat conversation을 생성합니다.
+ *
+ * stale cleanup 테스트에서는 기존 running Claim과 active unique index가
+ * 충돌하지 않도록 현재 사용자에게 별도 conversation을 하나 더 생성합니다.
  */
 INSERT INTO public.note_chat_conversations (
   id,
@@ -66,6 +81,11 @@ VALUES
     current_setting('test.note_chat_daily_usage_conversation_id')::uuid,
     current_setting('test.note_chat_daily_usage_user_id')::uuid,
     'Daily usage conversation'
+  ),
+  (
+    current_setting('test.note_chat_daily_usage_stale_conversation_id')::uuid,
+    current_setting('test.note_chat_daily_usage_user_id')::uuid,
+    'Stale daily usage conversation'
   ),
   (
     current_setting('test.note_chat_daily_usage_other_conversation_id')::uuid,
@@ -121,10 +141,7 @@ VALUES
     current_setting('test.note_chat_daily_usage_user_id')::uuid,
     current_setting('test.note_chat_daily_usage_conversation_id')::uuid,
     'running',
-    (
-      (clock_timestamp() AT TIME ZONE 'Asia/Seoul')::date
-      + time '12:00:00'
-    ) AT TIME ZONE 'Asia/Seoul',
+    clock_timestamp(),
     NULL
   ),
   (
@@ -179,6 +196,68 @@ SELECT is(
   public.get_note_chat_daily_usage(),
   2,
   'counts only running and succeeded note chat execution claims'
+);
+
+RESET ROLE;
+
+/*
+ * 현재 사용자의 만료된 running Claim을 생성합니다.
+ *
+ * get_note_chat_daily_usage()는 실제 claim RPC와 동일하게
+ * 3분을 초과한 running Claim을 먼저 stale로 정리한 뒤
+ * 오늘 사용량을 계산해야 합니다.
+ *
+ * 기존 running Claim과 active unique index가 충돌하지 않도록
+ * 별도 conversation을 사용합니다.
+ */
+INSERT INTO public.note_chat_execution_claims (
+  id,
+  user_id,
+  conversation_id,
+  status,
+  claimed_at,
+  completed_at
+)
+VALUES (
+  current_setting('test.note_chat_daily_usage_stale_claim_id')::uuid,
+  current_setting('test.note_chat_daily_usage_user_id')::uuid,
+  current_setting('test.note_chat_daily_usage_stale_conversation_id')::uuid,
+  'running',
+  clock_timestamp() - interval '4 minutes',
+  NULL
+);
+
+SET LOCAL ROLE authenticated;
+
+SELECT set_config(
+  'request.jwt.claims',
+  json_build_object(
+    'sub',
+    current_setting('test.note_chat_daily_usage_user_id'),
+    'role',
+    'authenticated'
+  )::text,
+  true
+);
+
+-- 만료된 running Claim은 stale 처리된 뒤 오늘 사용량에서 제외됩니다.
+SELECT is(
+  public.get_note_chat_daily_usage(),
+  2,
+  'excludes expired running note chat execution claim from daily usage'
+);
+
+-- 사용량 조회 과정에서 만료된 running Claim 자체도 stale로 종료되어야 합니다.
+SELECT ok(
+  EXISTS (
+    SELECT 1
+    FROM public.note_chat_execution_claims
+    WHERE id =
+      current_setting('test.note_chat_daily_usage_stale_claim_id')::uuid
+      AND status = 'stale'
+      AND completed_at IS NOT NULL
+  ),
+  'marks expired running note chat execution claim as stale'
 );
 
 RESET ROLE;
