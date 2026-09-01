@@ -4,7 +4,7 @@
 
 BEGIN;
 
-SELECT plan(15);
+SELECT plan(20);
 
 SELECT set_config('test.review_state_user_a_id', gen_random_uuid()::text, true);
 SELECT set_config('test.review_state_user_b_id', gen_random_uuid()::text, true);
@@ -286,6 +286,14 @@ SELECT ok(
   $$a rejected completion should leave the pending log untouched$$
 );
 
+-- 완료 표시 전에 이미 알림이 나간 상태를 재현한다. 발송 상태가 남은 채로 되살아나면
+-- claim_due_review_logs가 그 log를 다시는 집어가지 않는다.
+UPDATE public.review_logs
+SET notification_claimed_at = now() - interval '2 hours',
+    notification_dispatched_at = now() - interval '2 hours',
+    notification_dispatch_attempts = 1
+WHERE id = current_setting('test.review_state_active_log_id')::uuid;
+
 SELECT is(
   public.set_note_review_completion(
     current_setting('test.review_state_active_note_id')::uuid,
@@ -293,6 +301,29 @@ SELECT is(
   ),
   false,
   $$resuming a note should return false$$
+);
+
+SELECT ok(
+  (
+    SELECT notification_claimed_at IS NULL
+      AND notification_dispatched_at IS NULL
+      AND notification_dispatch_failed_at IS NULL
+      AND notification_dispatch_attempts = 0
+    FROM public.review_logs
+    WHERE id = current_setting('test.review_state_active_log_id')::uuid
+  ),
+  $$resuming should rearm the preserved log so its notification can be sent again$$
+);
+
+SELECT is(
+  (
+    SELECT count(*)
+    FROM public.notifications
+    WHERE review_log_id = current_setting('test.review_state_active_log_id')::uuid
+      AND type = 'REVIEW'
+  ),
+  0::bigint,
+  $$resuming should drop the consumed notification row so the next dispatch creates a new one$$
 );
 
 SELECT ok(
@@ -306,6 +337,71 @@ SELECT ok(
     WHERE note.id = current_setting('test.review_state_active_note_id')::uuid
   ),
   $$resuming should reactivate the note at the preserved pending schedule$$
+);
+
+-- stale 탭이나 요청 재시도로 이미 진행 중인 노트에 재시작 요청이 다시 들어오는
+-- 상황을 재현한다. 첫 재시작 뒤 발송된 알림을 다시 무장하거나 지우면 안 된다.
+RESET ROLE;
+
+UPDATE public.review_logs
+SET notification_claimed_at = now() - interval '1 minute',
+    notification_dispatched_at = now() - interval '30 seconds',
+    notification_dispatch_attempts = 1
+WHERE id = current_setting('test.review_state_active_log_id')::uuid;
+
+INSERT INTO public.notifications (
+  user_id,
+  type,
+  title,
+  body,
+  status,
+  note_id,
+  review_log_id,
+  click_path
+)
+VALUES (
+  current_setting('test.review_state_user_a_id')::uuid,
+  'REVIEW',
+  'resumed review notification',
+  'resumed review notification body',
+  'SENT',
+  current_setting('test.review_state_active_note_id')::uuid,
+  current_setting('test.review_state_active_log_id')::uuid,
+  '/test'
+);
+
+SET LOCAL ROLE authenticated;
+
+SELECT is(
+  public.set_note_review_completion(
+    current_setting('test.review_state_active_note_id')::uuid,
+    false
+  ),
+  false,
+  $$repeating resume for an active note should be an idempotent no-op$$
+);
+
+SELECT ok(
+  (
+    SELECT notification_claimed_at IS NOT NULL
+      AND notification_dispatched_at IS NOT NULL
+      AND notification_dispatch_attempts = 1
+    FROM public.review_logs
+    WHERE id = current_setting('test.review_state_active_log_id')::uuid
+  ),
+  $$repeating resume should preserve the dispatched review log state$$
+);
+
+SELECT is(
+  (
+    SELECT count(*)
+    FROM public.notifications
+    WHERE review_log_id = current_setting('test.review_state_active_log_id')::uuid
+      AND type = 'REVIEW'
+      AND status = 'SENT'
+  ),
+  1::bigint,
+  $$repeating resume should preserve the dispatched notification row$$
 );
 
 SELECT is(

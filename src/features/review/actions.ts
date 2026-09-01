@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { requireCurrentLegalAcceptance } from "@/features/auth/utils/requireCurrentLegalAcceptance";
+import { isReviewCompleted } from "@/features/notes/utils/noteStatus";
 import { claimResultSchema } from "@/lib/ai/claimResult";
 import { generateJson } from "@/lib/ai/client";
 import { toAiFailureReason } from "@/lib/ai/failureReason";
@@ -199,10 +200,9 @@ export async function submitAnswerAction(
     getNoteReviewRoute(parsed.data.noteId),
   );
 
-  let reviewableNote, note, pendingReviewLog;
+  let note, pendingReviewLog;
   try {
-    [reviewableNote, note, pendingReviewLog] = await Promise.all([
-      getReviewableNote(parsed.data.noteId, user.id),
+    [note, pendingReviewLog] = await Promise.all([
       getNoteContentForComparison(parsed.data.noteId, user.id),
       getPendingReviewLog(parsed.data.noteId, user.id),
     ]);
@@ -212,11 +212,11 @@ export async function submitAnswerAction(
     };
   }
 
-  if (!reviewableNote || !note) {
+  if (!note) {
     return { error: "비교할 노트를 찾을 수 없습니다." };
   }
 
-  if (reviewableNote.review_completed_at) {
+  if (isReviewCompleted(note)) {
     return { error: REVIEW_COMPLETED_ERROR };
   }
 
@@ -280,7 +280,7 @@ export async function completeReviewAction(
     return { error: "노트를 찾을 수 없거나 접근 권한이 없습니다." };
   }
 
-  if (reviewableNote.review_completed_at) {
+  if (isReviewCompleted(reviewableNote)) {
     return { error: REVIEW_COMPLETED_ERROR };
   }
 
@@ -424,10 +424,9 @@ export async function gradeAnswerAction(
     getNoteReviewRoute(parsed.data.noteId),
   );
 
-  let reviewableNote, note, pendingReviewLog;
+  let note, pendingReviewLog;
   try {
-    [reviewableNote, note, pendingReviewLog] = await Promise.all([
-      getReviewableNote(parsed.data.noteId, user.id),
+    [note, pendingReviewLog] = await Promise.all([
       getNoteContentForComparison(parsed.data.noteId, user.id),
       getPendingReviewLog(parsed.data.noteId, user.id),
     ]);
@@ -437,11 +436,11 @@ export async function gradeAnswerAction(
     };
   }
 
-  if (!reviewableNote || !note) {
+  if (!note) {
     return { error: "노트를 찾을 수 없거나 접근 권한이 없습니다." };
   }
 
-  if (reviewableNote.review_completed_at) {
+  if (isReviewCompleted(note)) {
     return { error: REVIEW_COMPLETED_ERROR };
   }
 

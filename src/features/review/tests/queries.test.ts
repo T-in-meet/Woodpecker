@@ -86,9 +86,11 @@ describe("getNoteContentForComparison", () => {
   });
 
   // 채점 기준 대조는 본문 해시로 한다. updated_at은 본문과 무관한 UPDATE에도 바뀌어 쓰지 않는다.
-  it("reads only the note body", async () => {
+  // 완료 판정 컬럼도 같이 읽는다 — 같은 행을 두 번 조회하지 않기 위해서다.
+  it("reads the note body and its completion flag in one query", async () => {
     const { chain, supabase } = createNotesQueryMock({
       content: "원본 내용",
+      review_completed_at: null,
     });
 
     createClientMock.mockResolvedValue(supabase);
@@ -99,8 +101,8 @@ describe("getNoteContentForComparison", () => {
     );
 
     expect(supabase.from).toHaveBeenCalledWith("notes");
-    expect(chain.select).toHaveBeenCalledWith("content");
-    expect(result).toEqual({ content: "원본 내용" });
+    expect(chain.select).toHaveBeenCalledWith("content, review_completed_at");
+    expect(result).toEqual({ content: "원본 내용", review_completed_at: null });
   });
 });
 

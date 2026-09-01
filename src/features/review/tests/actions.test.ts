@@ -193,15 +193,13 @@ describe("submitAnswerAction", () => {
     expect(result).toEqual({ error: "진행 중인 복습을 찾을 수 없습니다." });
   });
 
+  // 완료 판정은 본문과 같은 행에서 함께 읽는다.
   it("rejects answers for a note marked as completed", async () => {
     createClientMock.mockResolvedValue(createAuthSupabaseMock(TEST_USER_ID));
-    getReviewableNoteMock.mockResolvedValue({
-      title: "테스트 노트",
-      next_review_at: "2026-01-02T00:00:00.000Z",
+    getNoteContentForComparisonMock.mockResolvedValue({
+      content: "원본 내용",
       review_completed_at: "2026-01-01T00:00:00.000Z",
-      review_round: 0,
     });
-    getNoteContentForComparisonMock.mockResolvedValue({ content: "원본 내용" });
     getPendingReviewLogMock.mockResolvedValue({
       id: REVIEW_LOG_ID,
       note_id: NOTE_ID,
@@ -244,6 +242,7 @@ describe("submitAnswerAction", () => {
     createClientMock.mockResolvedValue(createAuthSupabaseMock(TEST_USER_ID));
     getNoteContentForComparisonMock.mockResolvedValue({
       content: "원본 내용",
+      review_completed_at: null,
     });
     getPendingReviewLogMock.mockResolvedValue({
       id: REVIEW_LOG_ID,
@@ -264,6 +263,8 @@ describe("submitAnswerAction", () => {
       TEST_USER_ID,
     );
     expect(getPendingReviewLogMock).toHaveBeenCalledWith(NOTE_ID, TEST_USER_ID);
+    // 완료 판정을 본문과 같은 조회에서 얻으므로 같은 notes 행을 다시 읽지 않는다.
+    expect(getReviewableNoteMock).not.toHaveBeenCalled();
 
     // 채점 요청이 이 해시를 되돌려줘야 서버가 같은 원본인지 확인할 수 있다.
     expect(result).toMatchObject({

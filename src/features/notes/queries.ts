@@ -82,16 +82,18 @@ export async function getNotes(
 
   const nowIso = new Date().toISOString();
 
-  if (view === "due") {
-    // 완료 표시한 노트는 더 이상 할 일이 아니다.
-    query = query.lte("next_review_at", nowIso).is("review_completed_at", null);
-  } else if (view === "scheduled") {
-    query = query
-      .or(buildScheduledFilter(nowIso))
-      .is("review_completed_at", null);
-  } else if (view === "completed") {
-    // 복습을 그만두는 유일한 경로는 사용자의 완료 표시다.
+  // 복습을 그만두는 유일한 경로는 사용자의 완료 표시다. completed 보기만 완료 노트를
+  // 모으고, 할 일을 보여주는 나머지 보기는 모두 완료 노트를 뺀다. 보기가 늘어나도 이
+  // 전제를 각 분기가 따로 챙기지 않도록 분기 앞에서 한 번만 건다.
+  if (view === "completed") {
     query = query.not("review_completed_at", "is", null);
+  } else if (view === "due" || view === "scheduled") {
+    query = query.is("review_completed_at", null);
+
+    query =
+      view === "due"
+        ? query.lte("next_review_at", nowIso)
+        : query.or(buildScheduledFilter(nowIso));
   }
 
   if (search.trim()) {

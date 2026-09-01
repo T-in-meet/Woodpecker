@@ -4,13 +4,15 @@
 
 BEGIN;
 
-SELECT plan(8);
+SELECT plan(9);
 
 SELECT set_config('test.schedule_user_id', gen_random_uuid()::text, true);
 SELECT set_config('test.schedule_note_id', gen_random_uuid()::text, true);
 SELECT set_config('test.schedule_log_id', gen_random_uuid()::text, true);
 SELECT set_config('test.schedule_sent_note_id', gen_random_uuid()::text, true);
 SELECT set_config('test.schedule_sent_log_id', gen_random_uuid()::text, true);
+SELECT set_config('test.schedule_completed_note_id', gen_random_uuid()::text, true);
+SELECT set_config('test.schedule_completed_log_id', gen_random_uuid()::text, true);
 
 -- 허용 범위가 "지금(KST)" 기준이라 고정 날짜를 쓸 수 없다.
 SELECT set_config(
@@ -30,14 +32,23 @@ VALUES (
 )
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO public.notes (id, user_id, title, content, review_round, next_review_at)
+INSERT INTO public.notes (
+  id,
+  user_id,
+  title,
+  content,
+  review_round,
+  next_review_at,
+  review_completed_at
+)
 VALUES (
   current_setting('test.schedule_note_id')::uuid,
   current_setting('test.schedule_user_id')::uuid,
   'schedule note',
   'content',
   0,
-  public.kst_day_start(now())
+  public.kst_day_start(now()),
+  NULL
 ),
 (
   current_setting('test.schedule_sent_note_id')::uuid,
@@ -45,7 +56,18 @@ VALUES (
   'schedule sent note',
   'content',
   0,
-  public.kst_day_start(now())
+  public.kst_day_start(now()),
+  NULL
+),
+-- 완료 표시한 노트도 pending log를 보존하므로 log 조건만으로는 걸러지지 않는다.
+(
+  current_setting('test.schedule_completed_note_id')::uuid,
+  current_setting('test.schedule_user_id')::uuid,
+  'schedule completed note',
+  'content',
+  0,
+  public.kst_day_start(now()),
+  now() - interval '1 hour'
 );
 
 INSERT INTO public.review_logs (id, note_id, user_id, round, scheduled_at)
@@ -59,6 +81,13 @@ VALUES (
 (
   current_setting('test.schedule_sent_log_id')::uuid,
   current_setting('test.schedule_sent_note_id')::uuid,
+  current_setting('test.schedule_user_id')::uuid,
+  1,
+  public.apply_time_of_day(now(), TIME '14:30')
+),
+(
+  current_setting('test.schedule_completed_log_id')::uuid,
+  current_setting('test.schedule_completed_note_id')::uuid,
   current_setting('test.schedule_user_id')::uuid,
   1,
   public.apply_time_of_day(now(), TIME '14:30')
@@ -163,6 +192,19 @@ SELECT lives_ok(
     current_setting('test.schedule_target_at')
   ),
   $$already dispatched notifications should be rearmed at the new schedule$$
+);
+
+-- UI 가드만으로는 액션 직접 호출을 막지 못하므로 RPC가 직접 거절한다.
+SELECT throws_ok(
+  format(
+    $sql$
+      SELECT public.update_notification_schedule('%s'::uuid, '%s'::timestamptz);
+    $sql$,
+    current_setting('test.schedule_completed_note_id'),
+    current_setting('test.schedule_target_at')
+  ),
+  'review already completed',
+  $$completed notes should not be rescheduled$$
 );
 
 SELECT * FROM finish();

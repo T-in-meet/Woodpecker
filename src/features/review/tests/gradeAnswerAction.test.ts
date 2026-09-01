@@ -185,6 +185,7 @@ function mockHappyPathQueries() {
   });
   getNoteContentForComparisonMock.mockResolvedValue({
     content: NOTE_CONTENT,
+    review_completed_at: null,
   });
   getPendingReviewLogMock.mockResolvedValue({
     id: REVIEW_LOG_ID,
@@ -244,14 +245,13 @@ describe("gradeAnswerAction", () => {
     expect(rpcMock).not.toHaveBeenCalled();
   });
 
+  // 완료 판정은 본문과 같은 행에서 함께 읽는다.
   it("rejects grading for a note marked as completed", async () => {
     const { rpcMock } = setupSupabase();
     mockHappyPathQueries();
-    getReviewableNoteMock.mockResolvedValue({
-      title: "노트 제목",
-      next_review_at: "2026-07-05T00:00:00.000Z",
+    getNoteContentForComparisonMock.mockResolvedValue({
+      content: NOTE_CONTENT,
       review_completed_at: "2026-07-04T00:00:00.000Z",
-      review_round: 0,
     });
 
     const result = await gradeAnswerAction(null, createFormData());

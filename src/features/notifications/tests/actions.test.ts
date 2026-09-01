@@ -397,6 +397,28 @@ describe("notification server actions", () => {
     expect(revalidatePathMock).not.toHaveBeenCalled();
   });
 
+  // 완료 노트도 pending log를 보존하므로 RPC가 직접 거절한다. UI 가드만으로는
+  // 액션 직접 호출을 막지 못한다.
+  it("rejects rescheduling a note the user already marked as completed", async () => {
+    const { supabase } = createSupabaseMock({
+      rpcError: { message: "review already completed" },
+    });
+    createClientMock.mockResolvedValue(supabase);
+    const targetDate = addDaysToDateKey(getKstDateKey(new Date()), 1);
+
+    const result = await setNotificationScheduleAction(
+      NOTE_ID,
+      targetDate,
+      "21:30",
+    );
+
+    expect(result).toEqual({
+      success: false,
+      error: "복습을 완료한 노트의 알림 일정은 바꿀 수 없습니다.",
+    });
+    expect(revalidatePathMock).not.toHaveBeenCalled();
+  });
+
   // 발송이 진행 중일 때만 막힌다. 이미 나간 알림은 다시 옮길 수 있다.
   it("asks the user to retry while a dispatch is in flight", async () => {
     const { supabase } = createSupabaseMock({

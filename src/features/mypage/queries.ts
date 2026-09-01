@@ -1,3 +1,4 @@
+import { isReviewCompleted } from "@/features/notes/utils/noteStatus";
 import { logError } from "@/lib/logger";
 import { getUser } from "@/lib/supabase/getUser";
 import { createServerComponentClient } from "@/lib/supabase/server";
@@ -110,18 +111,16 @@ export async function getLearningStats(): Promise<LearningStats> {
   const notesRows = notesResult.data ?? [];
   const totalNotes = notesRows.length;
 
-  // 완료 표시한 노트는 대기·오늘 집계에서 뺀다. 노트 목록의 같은 이름 필터와 맞춘다.
-  const isCompletedNote = (n: { review_completed_at: string | null }) =>
-    Boolean(n.review_completed_at);
-
+  // 완료 표시한 노트는 대기·오늘 집계에서 뺀다. 노트 목록과 판정이 어긋나지 않도록
+  // 여기서 다시 정의하지 않고 noteStatus의 공용 판정을 쓴다.
   const reviewWaitingCount = notesRows.filter(
     (n) =>
-      !isCompletedNote(n) &&
+      !isReviewCompleted(n) &&
       ((n.next_review_at === null && n.review_round === 0) ||
         (typeof n.next_review_at === "string" && n.next_review_at > nowIso)),
   ).length;
 
-  const completedNotesCount = notesRows.filter(isCompletedNote).length;
+  const completedNotesCount = notesRows.filter(isReviewCompleted).length;
 
   // 오늘 예정뿐 아니라 기한이 지나 아직 못한 복습도 포함한다.
   // 통계 카드가 노트 목록의 due 보기로 링크되므로, review_logs가 아니라 목록과 같은
@@ -129,15 +128,20 @@ export async function getLearningStats(): Promise<LearningStats> {
   // getNotes의 view === "due" 필터와 동일한 조건이다.
   const todayReviews = notesRows.filter(
     (n) =>
-      !isCompletedNote(n) &&
+      !isReviewCompleted(n) &&
       typeof n.next_review_at === "string" &&
       n.next_review_at <= nowIso,
   ).length;
 
   // 복습 횟수에 상한이 없으므로 버킷을 고정하지 않고 실제 데이터에서 만든다.
   // 0회는 "학습 전" 칸이라 노트가 없어도 항상 보여준다.
+  // 완료 표시한 노트는 진행 중인 단계가 아니므로 뺀다. 특히 한 번도 복습하지 않고
+  // 완료한 노트는 review_round가 0이라 그대로 두면 "학습 전"으로 잡힌다.
+  // 그 노트들은 completedNotesCount가 따로 센다.
   const notesByRoundMap = new Map<number, number>([[0, 0]]);
   for (const row of notesRows) {
+    if (isReviewCompleted(row)) continue;
+
     const r = row.review_round;
     if (typeof r === "number" && Number.isInteger(r) && r >= 0) {
       notesByRoundMap.set(r, (notesByRoundMap.get(r) ?? 0) + 1);

@@ -22,8 +22,12 @@ const pendingReviewLogSchema = z.object({
 
 // 화면에 보여준 원본과 채점 기준 원본이 같은지는 본문 해시(hashNoteContent)로 확인한다.
 // updated_at은 본문과 무관한 UPDATE에도 바뀌므로 쓰지 않는다. 상세는 lib/contentHash.ts.
+//
+// 완료 판정에 쓰는 review_completed_at도 같이 읽는다. 같은 notes 행을 조건까지 똑같이
+// 조회하므로, 이것만 따로 getReviewableNote로 다시 읽으면 왕복만 한 번 더 생긴다.
 const noteContentForComparisonSchema = z.object({
   content: z.string(),
+  review_completed_at: z.string().nullable(),
 });
 
 export type ReviewableNote = z.infer<typeof reviewableNoteSchema>;
@@ -79,7 +83,7 @@ export async function getNoteContentForComparison(
   const supabase = await createServerComponentClient();
   const { data, error } = await supabase
     .from("notes")
-    .select("content")
+    .select("content, review_completed_at")
     .eq("id", noteId)
     .eq("user_id", userId)
     .maybeSingle();

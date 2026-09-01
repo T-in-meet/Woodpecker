@@ -269,6 +269,13 @@ export async function setNotificationScheduleAction(
       };
     }
 
+    if (error.message.includes("review already completed")) {
+      return {
+        success: false,
+        error: "복습을 완료한 노트의 알림 일정은 바꿀 수 없습니다.",
+      };
+    }
+
     if (error.message.includes("no pending review log")) {
       return {
         success: false,

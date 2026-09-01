@@ -285,6 +285,33 @@ async function markReviewLogDispatched(
 }
 
 /**
+ * claim 뒤 완료된 노트에 이미 만들어진 복습 알림을 벨에서 소비합니다.
+ *
+ * 완료 RPC보다 notification 생성이 늦게 끝난 경쟁 상황에서는 완료 RPC가 읽음
+ * 처리할 행이 없었으므로, dispatcher가 외부 Push를 건너뛰기 전에 직접 정리합니다.
+ */
+async function markReviewNotificationRead(
+  supabase: ReturnType<typeof createAdminClient>,
+  notificationId: string,
+  userId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from("notifications")
+    .update({
+      read_at: new Date().toISOString(),
+      status: NOTIFICATION_STATUS.READ,
+    })
+    .eq("id", notificationId)
+    .eq("user_id", userId)
+    .eq("type", NOTIFICATION_TYPES.REVIEW)
+    .eq("status", NOTIFICATION_STATUS.SENT);
+
+  if (error) {
+    throw error;
+  }
+}
+
+/**
  * claim된 복습 로그 하나의 알림 생성과 Push 전송을 처리합니다.
  *
  * 복습 알림의 중복 방지와 `review_logs` 상태 관리는 이 함수에서
@@ -313,7 +340,7 @@ async function dispatchClaimedReviewLog(
   try {
     const noteResult = await supabase
       .from("notes")
-      .select("title")
+      .select("title, review_completed_at")
       .eq("id", claimedLog.note_id)
       .eq("user_id", claimedLog.user_id)
       .maybeSingle();
@@ -333,12 +360,61 @@ async function dispatchClaimedReviewLog(
       return stats;
     }
 
+    if (noteResult.data.review_completed_at) {
+      logWarn({
+        event: "cron.dispatchNotifications.noteReviewCompleted",
+        noteId: claimedLog.note_id,
+        reviewLogId: claimedLog.id,
+        userId: claimedLog.user_id,
+      });
+      return stats;
+    }
+
     const noteTitle = noteResult.data.title;
     const notification = await ensureNotification(
       supabase,
       claimedLog,
       noteTitle,
     );
+
+    // claim과 첫 note 조회 뒤 사용자가 완료할 수 있으므로 외부 Push 직전에 다시
+    // 확인한다. 이 확인 뒤의 완료는 이미 외부 발송이 시작된 것으로 취급한다.
+    const finalNoteResult = await supabase
+      .from("notes")
+      .select("review_completed_at")
+      .eq("id", claimedLog.note_id)
+      .eq("user_id", claimedLog.user_id)
+      .maybeSingle();
+
+    if (finalNoteResult.error) {
+      throw finalNoteResult.error;
+    }
+
+    if (!finalNoteResult.data) {
+      stats.itemFailed += 1;
+      logWarn({
+        event: "cron.dispatchNotifications.noteMissingBeforePush",
+        noteId: claimedLog.note_id,
+        reviewLogId: claimedLog.id,
+        userId: claimedLog.user_id,
+      });
+      return stats;
+    }
+
+    if (finalNoteResult.data.review_completed_at) {
+      await markReviewNotificationRead(
+        supabase,
+        notification.id,
+        claimedLog.user_id,
+      );
+      logWarn({
+        event: "cron.dispatchNotifications.noteReviewCompletedBeforePush",
+        noteId: claimedLog.note_id,
+        reviewLogId: claimedLog.id,
+        userId: claimedLog.user_id,
+      });
+      return stats;
+    }
 
     const payload = buildPushPayload({
       noteId: claimedLog.note_id,

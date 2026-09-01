@@ -112,6 +112,33 @@ describe("getLearningStats", () => {
     ]);
   });
 
+  // 완료 표시한 노트는 진행 중인 단계가 아니다. 특히 한 번도 복습하지 않고 완료한
+  // 노트는 review_round가 0이라 그대로 두면 "학습 전"으로 잡힌다.
+  it("notesByRound: 완료 표시한 노트는 단계별 집계에서 뺀다", async () => {
+    getUserMock.mockResolvedValue({ id: "user-123" });
+
+    const { supabase } = makeSupabase({
+      notesData: [
+        { review_round: 0, review_completed_at: null },
+        // 복습 없이 바로 완료 → "학습 전"으로 새면 안 된다
+        { review_round: 0, review_completed_at: "2026-05-01T00:00:00.000Z" },
+        { review_round: 2, review_completed_at: null },
+        { review_round: 2, review_completed_at: "2026-05-01T00:00:00.000Z" },
+      ],
+      reviewLogsData: [],
+    });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await getLearningStats();
+
+    expect(result.totalNotes).toBe(4);
+    expect(result.completedNotesCount).toBe(2);
+    expect(result.notesByRound).toEqual([
+      { round: 0, count: 1 },
+      { round: 2, count: 1 },
+    ]);
+  });
+
   // notes.next_review_at은 KST 자정 마커라 "오늘 예정"이면 하루 종일 now 이전이다.
   it("todayReviews: notes.next_review_at 기준으로 오늘 예정과 기한이 지난 복습을 함께 센다", async () => {
     getUserMock.mockResolvedValue({ id: "user-123" });
