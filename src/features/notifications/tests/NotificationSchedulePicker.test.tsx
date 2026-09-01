@@ -271,6 +271,41 @@ describe("NotificationSchedulePicker", () => {
     expect(screen.getByRole("button", { name: /저장/ })).toBeDisabled();
   });
 
+  it("변경한 내용이 없으면 저장이 비활성인 이유를 알려준다", async () => {
+    const user = userEvent.setup();
+    render(
+      <PickerWithTrigger
+        noteId={NOTE_ID}
+        initialTime="21:30:00"
+        initialScheduledAt={SCHEDULED_AT}
+      />,
+    );
+
+    await openDialog(user);
+
+    expect(screen.getByRole("button", { name: /저장/ })).toBeDisabled();
+    expect(screen.getByText("변경한 내용이 없어요.")).toBeInTheDocument();
+  });
+
+  // 날짜 입력은 blur 전까지 자기 오류를 띄우지 않는다. 그 사이에도 버튼이 왜
+  // 죽어 있는지 알 수 있어야 한다.
+  it("날짜가 유효하지 않으면 blur 전에도 저장이 비활성인 이유를 알려준다", async () => {
+    const user = userEvent.setup();
+    render(
+      <PickerWithTrigger
+        noteId={NOTE_ID}
+        initialTime="21:30:00"
+        initialScheduledAt={SCHEDULED_AT}
+      />,
+    );
+
+    await openDialog(user);
+    enterDate("2027", "02", "31");
+    fireEvent.blur(screen.getByLabelText("일"));
+
+    expect(screen.getByText("날짜를 확인해주세요.")).toBeInTheDocument();
+  });
+
   it("시간만 바꿔도 저장할 수 있다", async () => {
     const user = userEvent.setup();
     render(

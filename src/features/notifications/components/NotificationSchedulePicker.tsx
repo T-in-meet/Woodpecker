@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import {
   type FormEvent,
   useEffect,
+  useId,
   useMemo,
   useState,
   useTransition,
@@ -121,6 +122,22 @@ export function NotificationSchedulePicker({
 
   const hasSavedOverride = toInputTime(initialTime).length > 0;
   const hasChanges = timeValue !== savedTime || dateKey !== savedDateKey;
+
+  /**
+   * 저장 버튼이 왜 비활성인지 알려 준다. 날짜·시간 입력은 각자 blur 시점에야
+   * 자기 오류를 띄우므로, 그 전에 저장을 누르려는 사용자에게는 버튼이 이유 없이
+   * 죽어 있는 것처럼 보인다.
+   */
+  const saveDisabledReason = !isDateInputValid
+    ? "날짜를 확인해주세요."
+    : !isTimeInputValid
+      ? "알림 시간을 확인해주세요."
+      : !hasChanges
+        ? "변경한 내용이 없어요."
+        : null;
+  // 저장 결과 문구가 있으면 그쪽이 우선이다. 두 줄이 겹쳐 보이지 않게 한다.
+  const saveHint = message || error ? null : saveDisabledReason;
+  const saveHintId = useId();
 
   const quickOffsetKeys = useMemo(
     () =>
@@ -329,6 +346,12 @@ export function NotificationSchedulePicker({
               {error && <p className="text-sm text-destructive">{error}</p>}
             </div>
 
+            {saveHint && (
+              <p id={saveHintId} className="text-xs text-muted-foreground">
+                {saveHint}
+              </p>
+            )}
+
             <DialogFooter className="mt-2 flex-row items-center justify-between gap-2 pt-4">
               <Button
                 type="button"
@@ -354,6 +377,7 @@ export function NotificationSchedulePicker({
                 <Button
                   type="submit"
                   size="md"
+                  aria-describedby={saveHint ? saveHintId : undefined}
                   disabled={
                     isPending ||
                     !hasChanges ||

@@ -83,7 +83,11 @@ describe("/api/notifications/read", () => {
     });
   });
 
-  it("skips review notifications before opening a Supabase client", async () => {
+  // 복습 알림도 확인으로 소비한다. 복습 완료를 기다리지 않는다.
+  it("marks review notifications as read", async () => {
+    const supabase = createSupabaseMock();
+    createClientMock.mockResolvedValue(supabase);
+
     const response = await notificationsReadRoute.POST(
       createReadRequest({
         notificationId: NOTIFICATION_ID,
@@ -91,9 +95,11 @@ describe("/api/notifications/read", () => {
       }),
     );
 
-    await expect(response.json()).resolves.toEqual({ updated: false });
+    await expect(response.json()).resolves.toEqual({ updated: true });
     expect(response.status).toBe(200);
-    expect(createClientMock).not.toHaveBeenCalled();
+    expect(supabase.rpc).toHaveBeenCalledWith("mark_notification_as_read", {
+      p_notification_id: NOTIFICATION_ID,
+    });
   });
 
   it("returns bad request for invalid input", async () => {

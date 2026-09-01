@@ -18,7 +18,6 @@ const serwist = new Serwist({
 serwist.addEventListeners();
 
 const NOTIFICATION_READ_API_PATH = "/api/notifications/read";
-const REVIEW_NOTIFICATION_TYPE = "REVIEW";
 
 /**
  * Returns an object record when the push data shape can be inspected.
@@ -112,18 +111,17 @@ async function openOrFocusNotificationUrl(url: string) {
 }
 
 /**
- * Marks a clicked non-review notification as read without blocking navigation.
+ * Marks a clicked notification as read without blocking navigation.
+ *
+ * 복습 알림도 포함한다. 알림을 여는 것이 곧 확인이고, 복습 완료로 읽음 처리되는
+ * 경로는 별도로 남아 있다.
  */
 async function markNotificationReadOnClick(data: unknown) {
   const record = getRecord(data);
   const notificationId = record?.notificationId;
   const type = record?.type;
 
-  if (
-    typeof notificationId !== "string" ||
-    typeof type !== "string" ||
-    type === REVIEW_NOTIFICATION_TYPE
-  ) {
+  if (typeof notificationId !== "string" || typeof type !== "string") {
     return;
   }
 
