@@ -117,7 +117,7 @@ describe("related note recommendation execution claim persistence", () => {
     );
   });
 
-  it("추천 실행 claim을 완료한다", async () => {
+  it("추천 실행 claim을 소유 사용자 ID와 함께 완료한다", async () => {
     const rpc = vi.fn().mockResolvedValue({
       data: CLAIM_ID,
       error: null,
@@ -131,6 +131,7 @@ describe("related note recommendation execution claim persistence", () => {
       claimId: CLAIM_ID,
       status:
         RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_COMPLETION_STATUS.SUCCEEDED,
+      userId: USER_ID,
     });
 
     expect(rpc).toHaveBeenCalledWith(
@@ -139,6 +140,7 @@ describe("related note recommendation execution claim persistence", () => {
         p_claim_id: CLAIM_ID,
         p_status:
           RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_COMPLETION_STATUS.SUCCEEDED,
+        p_user_id: USER_ID,
       },
     );
   });

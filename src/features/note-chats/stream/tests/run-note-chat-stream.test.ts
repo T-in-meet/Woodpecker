@@ -190,10 +190,7 @@ describe("runNoteChatStream", () => {
   it("단계별 usage와 snapshot을 저장하고 Assistant Message와 Claim 성공을 원자적으로 확정한다", async () => {
     setupSuccessfulExecution();
 
-    const events: unknown[] = [];
-    const onEvent = vi.fn((event) => {
-      events.push(event);
-    });
+    const onEvent = vi.fn();
 
     const result = await runNoteChatStream(params, onEvent);
 
@@ -236,19 +233,14 @@ describe("runNoteChatStream", () => {
      */
     expect(mocks.completeNoteChatExecutionClaim).not.toHaveBeenCalled();
 
-    expect(events).toEqual([
-      {
-        runId: params.runId,
-        type: "start",
-        userMessageId: params.userMessageId,
-      },
-      {
-        assistantMessageId: "assistant-message-1",
-        runId: params.runId,
-        type: "finish",
-        usedNoteIds: ["11111111-1111-4111-8111-111111111111"],
-      },
-    ]);
+    /*
+     * start / finish / error는 HTTP 응답 lifecycle 이벤트이므로
+     * runNoteChatStream이 직접 전달하지 않습니다.
+     *
+     * Provider의 실제 text-delta 전달 여부는 consumeNoteChatProviderStream이
+     * 전달받은 callback을 실행하는 테스트에서 별도로 검증합니다.
+     */
+    expect(onEvent).not.toHaveBeenCalled();
 
     expect(result).toEqual({
       assistantMessageId: "assistant-message-1",
@@ -256,6 +248,36 @@ describe("runNoteChatStream", () => {
       runId: params.runId,
       usedNoteIds: ["11111111-1111-4111-8111-111111111111"],
     });
+  });
+
+  it("Provider가 생성한 스트림 이벤트는 전달한다", async () => {
+    setupSuccessfulExecution();
+
+    const providerEvent = {
+      delta: "답변",
+      type: "text-delta" as const,
+    };
+
+    mocks.consumeNoteChatProviderStream.mockImplementation(
+      async (_stream, onEvent) => {
+        await onEvent(providerEvent);
+
+        return {
+          content: '{"answer":"답변입니다.","usedContextIndexes":[1]}',
+          result: {
+            content: '{"answer":"답변입니다.","usedContextIndexes":[1]}',
+            usage: answerUsage,
+          },
+        };
+      },
+    );
+
+    const onEvent = vi.fn();
+
+    await runNoteChatStream(params, onEvent);
+
+    expect(onEvent).toHaveBeenCalledTimes(1);
+    expect(onEvent).toHaveBeenCalledWith(providerEvent);
   });
 
   it("Run 중간 저장 실패는 운영 오류로 기록하고 기능 성공을 계속한다", async () => {
@@ -316,11 +338,11 @@ describe("runNoteChatStream", () => {
 
     expect(mocks.completeNoteChatRunSuccess).not.toHaveBeenCalled();
 
-    expect(onEvent).toHaveBeenCalledWith({
-      runId: null,
-      type: "start",
-      userMessageId: params.userMessageId,
-    });
+    /*
+     * runId 유무와 무관하게 start / finish lifecycle 이벤트는
+     * Route에서 처리합니다.
+     */
+    expect(onEvent).not.toHaveBeenCalled();
   });
 
   it("성공 확정 RPC 실패는 실행 실패로 처리하고 Claim failed 정리를 시도한다", async () => {
@@ -348,11 +370,11 @@ describe("runNoteChatStream", () => {
       status: "failed",
     });
 
-    expect(onEvent).toHaveBeenCalledWith({
-      message: "답변 생성에 실패했습니다.",
-      runId: params.runId,
-      type: "error",
-    });
+    /*
+     * 실행 실패를 클라이언트 error 이벤트로 변환하는 책임도
+     * Route로 이동했으므로 runNoteChatStream은 error 이벤트를 보내지 않습니다.
+     */
+    expect(onEvent).not.toHaveBeenCalled();
   });
 
   it("Run 성공 기록 실패는 기능 성공을 뒤집지 않는다", async () => {
@@ -385,12 +407,11 @@ describe("runNoteChatStream", () => {
      */
     expect(mocks.completeNoteChatExecutionClaim).not.toHaveBeenCalled();
 
-    expect(onEvent).toHaveBeenCalledWith({
-      assistantMessageId: "assistant-message-1",
-      runId: params.runId,
-      type: "finish",
-      usedNoteIds: ["11111111-1111-4111-8111-111111111111"],
-    });
+    /*
+     * Run 성공 기록 실패 여부와 관계없이 finish 이벤트는
+     * runNoteChatStream의 책임이 아닙니다.
+     */
+    expect(onEvent).not.toHaveBeenCalled();
   });
 
   it("검색 Context가 없으면 Provider 답변 생성을 건너뛰고 안내 메시지로 성공 확정한다", async () => {
@@ -415,6 +436,16 @@ describe("runNoteChatStream", () => {
 
     expect(mocks.consumeNoteChatProviderStream).not.toHaveBeenCalled();
     expect(mocks.saveNoteChatRunAnswerGeneration).not.toHaveBeenCalled();
+
+    /*
+     * Context 없음 고정 응답은 Provider stream을 거치지 않으므로
+     * runNoteChatStream이 직접 text-delta를 전달합니다.
+     */
+    expect(onEvent).toHaveBeenCalledTimes(1);
+    expect(onEvent).toHaveBeenCalledWith({
+      delta: NOTE_CHAT_NO_CONTEXT_MESSAGE,
+      type: "text-delta",
+    });
 
     expect(mocks.completeNoteChatExecutionSuccess).toHaveBeenCalledWith({
       claimId: params.claimId,
@@ -467,6 +498,12 @@ describe("runNoteChatStream", () => {
     );
 
     expect(mocks.consumeNoteChatProviderStream).not.toHaveBeenCalled();
+
+    expect(onEvent).toHaveBeenCalledWith({
+      delta: NOTE_CHAT_NO_CONTEXT_MESSAGE,
+      type: "text-delta",
+    });
+
     expect(mocks.completeNoteChatRunSuccess).not.toHaveBeenCalled();
 
     expect(mocks.completeNoteChatRunFailure).toHaveBeenCalledWith({

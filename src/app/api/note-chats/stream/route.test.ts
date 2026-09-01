@@ -123,7 +123,12 @@ const EMBEDDING_CONFIGURATION = {
 
 const CREATED_QUESTION = USER_MESSAGE_ID;
 
-const RUN_RESULT = {} as RunNoteChatStreamResult;
+const RUN_RESULT: RunNoteChatStreamResult = {
+  assistantMessageId: ASSISTANT_MESSAGE_ID,
+  content: "답변입니다.",
+  runId: RUN_ID,
+  usedNoteIds: [],
+};
 
 const createSupabaseClientMock = ({
   user = {
@@ -693,31 +698,18 @@ describe("POST /api/note-chats/stream", () => {
     );
   });
 
-  it("Run 실행 중 발생한 스트림 이벤트를 NDJSON으로 전달한다", async () => {
+  it("Route lifecycle 이벤트와 Run 스트림 이벤트를 NDJSON으로 전달한다", async () => {
     const client = createSupabaseClientMock();
 
     vi.mocked(createClient).mockResolvedValue(client as never);
 
     vi.mocked(runNoteChatStream).mockImplementation(
       async (_params, onEvent) => {
-        await onEvent({
-          type: "start",
-          runId: RUN_ID,
-          userMessageId: USER_MESSAGE_ID,
-        });
-
         await onEvent({
           type: "text-delta",
           delta: "안녕하세요.",
         });
 
-        await onEvent({
-          type: "finish",
-          runId: RUN_ID,
-          assistantMessageId: ASSISTANT_MESSAGE_ID,
-          usedNoteIds: [],
-        });
-
         return RUN_RESULT;
       },
     );
@@ -732,64 +724,185 @@ describe("POST /api/note-chats/stream", () => {
     );
 
     const lines = await readStream(response);
+    const events = lines.map((line) => JSON.parse(line));
 
-    expect(lines).toEqual([
-      JSON.stringify({
+    expect(events).toEqual([
+      {
         type: "start",
         runId: RUN_ID,
         userMessageId: USER_MESSAGE_ID,
-      }),
-      JSON.stringify({
+      },
+      {
         type: "text-delta",
         delta: "안녕하세요.",
-      }),
-      JSON.stringify({
+      },
+      {
         type: "finish",
         runId: RUN_ID,
         assistantMessageId: ASSISTANT_MESSAGE_ID,
         usedNoteIds: [],
-      }),
+      },
     ]);
   });
 
-  it("Run 실행 중 error 이벤트가 발생하면 해당 이벤트를 전달한다", async () => {
+  it("AI 실행 성공 후 finish 이벤트 전송이 실패해도 실행 성공을 실패로 되돌리지 않는다", async () => {
     const client = createSupabaseClientMock();
 
     vi.mocked(createClient).mockResolvedValue(client as never);
 
-    vi.mocked(runNoteChatStream).mockImplementation(
-      async (_params, onEvent) => {
-        await onEvent({
-          type: "error",
-          message: "답변 생성에 실패했습니다.",
-          runId: RUN_ID,
-        });
+    /*
+     * AI 실행 자체는 정상적으로 성공합니다.
+     *
+     * Assistant Message 저장과 Claim succeeded 전환은
+     * runNoteChatStream 내부에서 이미 끝났다고 보는 시점입니다.
+     */
+    vi.mocked(runNoteChatStream).mockResolvedValue(RUN_RESULT);
 
-        return RUN_RESULT;
-      },
-    );
+    const sendError = new Error("finish event send failed");
+    const originalEnqueue = ReadableStreamDefaultController.prototype.enqueue;
 
-    const response = await POST(
-      createRequest({
-        conversationId: CONVERSATION_ID,
-        content: {
-          text: "질문입니다.",
-        },
-      }),
-    );
+    const enqueueSpy = vi
+      .spyOn(ReadableStreamDefaultController.prototype, "enqueue")
+      .mockImplementation(function (
+        this: ReadableStreamDefaultController<Uint8Array>,
+        chunk: Uint8Array,
+      ) {
+        const payload = new TextDecoder().decode(chunk);
 
-    const lines = await readStream(response);
+        if (payload.includes('"type":"finish"')) {
+          throw sendError;
+        }
 
-    expect(lines).toEqual([
-      JSON.stringify({
-        type: "error",
-        message: "답변 생성에 실패했습니다.",
-        runId: RUN_ID,
-      }),
-    ]);
+        return originalEnqueue.call(this, chunk);
+      });
+
+    try {
+      const response = await POST(
+        createRequest({
+          conversationId: CONVERSATION_ID,
+          content: {
+            text: "질문입니다.",
+          },
+        }),
+      );
+
+      expect(response.status).toBe(200);
+
+      /*
+       * ReadableStream start()에서 실행한 비동기 작업이
+       * finish 전송 실패와 operational error 기록까지 완료될 때까지 기다립니다.
+       */
+      await vi.waitFor(() => {
+        expect(reportNoteChatOperationalError).toHaveBeenCalledWith(
+          expect.objectContaining({
+            actorUserId: USER_ID,
+            context: {
+              conversationId: CONVERSATION_ID,
+              eventType: "finish",
+              runId: RUN_ID,
+              userMessageId: USER_MESSAGE_ID,
+            },
+            error: sendError,
+            errorCode: "NOTE_CHAT_STREAM_EVENT_SEND_FAILED",
+            message: "노트 챗봇 스트림 이벤트 전송에 실패했습니다.",
+            operation: "send_stream_event",
+            stage: "execution",
+            userId: USER_ID,
+          }),
+        );
+      });
+
+      /*
+       * AI 실행은 정상적으로 한 번 완료됐습니다.
+       */
+      expect(runNoteChatStream).toHaveBeenCalledTimes(1);
+
+      /*
+       * finish는 AI 실행이 성공한 이후의 응답 전달 단계입니다.
+       *
+       * 따라서 전송 실패 때문에 이미 succeeded로 확정된 Claim을
+       * failed로 다시 완료하려 해서는 안 됩니다.
+       */
+      expect(completeNoteChatExecutionClaim).not.toHaveBeenCalled();
+    } finally {
+      enqueueSpy.mockRestore();
+    }
   });
 
-  it("Run 실행이 예외를 발생시키고 error 이벤트가 없으면 기본 error 이벤트를 전달한다", async () => {
+  it("start 이벤트 전송과 운영 오류 보고가 모두 실패해도 AI 실행을 계속한다", async () => {
+    const client = createSupabaseClientMock();
+
+    vi.mocked(createClient).mockResolvedValue(client as never);
+
+    /*
+     * 스트림 전송 실패 기록까지 실패하는 상황을 재현합니다.
+     *
+     * 이 오류는 AI execution으로 전파되지 않아야 하며,
+     * 이미 생성된 Claim을 고아 상태로 남기지 않도록 실행 본문은 계속 호출되어야 합니다.
+     */
+    vi.mocked(reportNoteChatOperationalError).mockRejectedValue(
+      new Error("operational error report failed"),
+    );
+    vi.mocked(runNoteChatStream).mockResolvedValue(RUN_RESULT);
+
+    const sendError = new Error("start event send failed");
+    const originalEnqueue = ReadableStreamDefaultController.prototype.enqueue;
+
+    const enqueueSpy = vi
+      .spyOn(ReadableStreamDefaultController.prototype, "enqueue")
+      .mockImplementation(function (
+        this: ReadableStreamDefaultController<Uint8Array>,
+        chunk: Uint8Array,
+      ) {
+        const payload = new TextDecoder().decode(chunk);
+
+        if (payload.includes('"type":"start"')) {
+          throw sendError;
+        }
+
+        return originalEnqueue.call(this, chunk);
+      });
+
+    try {
+      const response = await POST(
+        createRequest({
+          conversationId: CONVERSATION_ID,
+          content: {
+            text: "질문입니다.",
+          },
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(await readStream(response)).toEqual([]);
+
+      /*
+       * start 전달 실패가 try 바깥에서 발생해도
+       * runNoteChatStream 호출은 건너뛰면 안 됩니다.
+       */
+      expect(runNoteChatStream).toHaveBeenCalledTimes(1);
+
+      /*
+       * 전송 실패 보고는 시도하지만,
+       * 보고 실패가 AI execution 상태 정리로 전파되지는 않습니다.
+       */
+      expect(reportNoteChatOperationalError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: expect.objectContaining({
+            eventType: "start",
+          }),
+          error: sendError,
+          errorCode: "NOTE_CHAT_STREAM_EVENT_SEND_FAILED",
+          operation: "send_stream_event",
+        }),
+      );
+      expect(completeNoteChatExecutionClaim).not.toHaveBeenCalled();
+    } finally {
+      enqueueSpy.mockRestore();
+    }
+  });
+
+  it("Run 실행이 실패하면 start 이후 기본 error 이벤트를 전달한다", async () => {
     const client = createSupabaseClientMock();
 
     vi.mocked(createClient).mockResolvedValue(client as never);
@@ -811,6 +924,11 @@ describe("POST /api/note-chats/stream", () => {
 
     expect(lines).toEqual([
       JSON.stringify({
+        runId: RUN_ID,
+        type: "start",
+        userMessageId: USER_MESSAGE_ID,
+      }),
+      JSON.stringify({
         message: "답변 생성에 실패했습니다.",
         runId: RUN_ID,
         type: "error",
@@ -818,42 +936,5 @@ describe("POST /api/note-chats/stream", () => {
     ]);
 
     expect(reportNoteChatOperationalError).not.toHaveBeenCalled();
-  });
-
-  it("Run 실행에서 error 이벤트가 전달된 경우 예외가 발생해도 중복 error 이벤트를 전달하지 않는다", async () => {
-    const client = createSupabaseClientMock();
-
-    vi.mocked(createClient).mockResolvedValue(client as never);
-
-    vi.mocked(runNoteChatStream).mockImplementation(
-      async (_params, onEvent) => {
-        await onEvent({
-          type: "error",
-          message: "실행 실패",
-          runId: RUN_ID,
-        });
-
-        throw new Error("after error event");
-      },
-    );
-
-    const response = await POST(
-      createRequest({
-        conversationId: CONVERSATION_ID,
-        content: {
-          text: "질문입니다.",
-        },
-      }),
-    );
-
-    const lines = await readStream(response);
-
-    expect(lines).toEqual([
-      JSON.stringify({
-        type: "error",
-        message: "실행 실패",
-        runId: RUN_ID,
-      }),
-    ]);
   });
 });

@@ -435,6 +435,9 @@ $$;
 -- 현재 인증 사용자가 특정 Note에서 오늘 사용한 Related Notes AI 추천 횟수를
 -- 실행 시작 Claim RPC의 일일 quota와 동일한 기준으로 조회합니다.
 --
+-- 실행 시작 Claim RPC와 동일한 user + note + KST date advisory lock을 잡은 뒤
+-- stale 기준을 초과한 running Claim을 먼저 정리합니다.
+--
 -- 일일 범위는 KST 기준이며, running/succeeded Claim만 사용량에 포함합니다.
 -- failed/stale Claim은 실행 시작 Claim RPC와 동일하게 사용량에서 제외합니다.
 CREATE OR REPLACE FUNCTION "public"."get_related_note_recommendation_daily_usage"(
@@ -462,6 +465,49 @@ BEGIN
   END IF;
 
   "v_kst_date" := ("v_now" AT TIME ZONE 'Asia/Seoul')::date;
+
+  /*
+   * 실행 시작 Claim RPC와 동일한 user + note + KST date lock을 사용합니다.
+   *
+   * 사용량 조회 중 stale cleanup과 동시에 새 Claim이 생성되면
+   * 화면에 표시되는 사용량과 실제 quota 판정 결과가 어긋날 수 있으므로,
+   * 같은 직렬화 경계를 사용해 stale 정리와 집계를 하나의 transaction 안에서
+   * 일관되게 수행합니다.
+   */
+  PERFORM "pg_advisory_xact_lock"(
+    "hashtextextended"(
+      "v_user_id"::text
+      || '|related-notes-execution|'
+      || "p_note_id"::text
+      || '|'
+      || "v_kst_date"::text,
+      0
+    )
+  );
+
+  /*
+   * background 실행 함수는 maxDuration = 90(초)로 제한되어 있어,
+   * 실행 프로세스가 강제 종료되면 완료 RPC가 호출되지 못하고
+   * running Claim이 남을 수 있습니다.
+   *
+   * 실행 시작 Claim RPC와 동일하게 3분을 초과한 running Claim을 stale로
+   * 정리한 뒤 사용량을 집계하여, 실제 quota 판정과 표시 사용량을 맞춥니다.
+   *
+   * stale 판정은 source version과 무관하게 같은 Note의 running Claim 전체에
+   * 적용합니다.
+   *
+   * maxDuration 설정이 바뀌면 claim RPC와 cleanup RPC의 stale 기준도
+   * 함께 조정해야 합니다.
+   */
+  UPDATE "public"."related_note_recommendation_execution_claims" AS "claims"
+  SET
+    "status" = 'stale',
+    "completed_at" = "v_now"
+  WHERE "claims"."user_id" = "v_user_id"
+    AND "claims"."note_id" = "p_note_id"
+    AND "claims"."status" = 'running'
+    AND "claims"."claimed_at" < "v_now" - interval '3 minutes';
+
   "v_daily_start_at" := "v_kst_date"::timestamp AT TIME ZONE 'Asia/Seoul';
   "v_daily_end_at" := "v_daily_start_at" + interval '1 day';
 
@@ -484,7 +530,11 @@ $$;
 --
 -- running Claim만 succeeded / failed / stale 중 하나의 최종 상태로 전환합니다.
 -- 이미 완료된 Claim을 다시 완료하려 하면 예외를 발생시켜 상태 전이를 명확하게 유지합니다.
+--
+-- service_role 호출이라도 전달된 user_id와 Claim 소유자가 일치해야만
+-- 상태 변경을 허용합니다.
 CREATE OR REPLACE FUNCTION "public"."complete_related_note_recommendation_execution_claim"(
+  "p_user_id" "uuid",
   "p_claim_id" "uuid",
   "p_status" text
 )
@@ -496,6 +546,10 @@ AS $$
 DECLARE
   "v_completed_claim_id" "uuid";
 BEGIN
+  IF "p_user_id" IS NULL THEN
+    RAISE EXCEPTION 'user_id is required';
+  END IF;
+
   IF "p_claim_id" IS NULL THEN
     RAISE EXCEPTION 'claim_id is required';
   END IF;
@@ -509,6 +563,7 @@ BEGIN
     "status" = "p_status",
     "completed_at" = clock_timestamp()
   WHERE "id" = "p_claim_id"
+    AND "user_id" = "p_user_id"
     AND "status" = 'running'
   RETURNING "id" INTO "v_completed_claim_id";
 
@@ -565,9 +620,11 @@ GRANT EXECUTE ON FUNCTION "public"."get_related_note_recommendation_daily_usage"
 
 REVOKE ALL ON FUNCTION "public"."complete_related_note_recommendation_execution_claim"(
   "uuid",
+  "uuid",
   text
 ) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION "public"."complete_related_note_recommendation_execution_claim"(
+  "uuid",
   "uuid",
   text
 ) TO service_role;
@@ -591,13 +648,14 @@ COMMENT ON FUNCTION "public"."cleanup_related_note_recommendation_stale_executio
 COMMENT ON FUNCTION "public"."get_related_note_recommendation_daily_usage"(
   "uuid"
 ) IS
-  '현재 인증 사용자의 특정 Note에 대한 KST 기준 Related Notes 일일 추천 사용량을 execution claim에서 조회합니다.';
+  '현재 인증 사용자의 특정 Note에서 stale running claim을 정리한 뒤 KST 기준 Related Notes 일일 추천 사용량을 execution claim에서 조회합니다.';
 
 COMMENT ON FUNCTION "public"."complete_related_note_recommendation_execution_claim"(
   "uuid",
+  "uuid",
   text
 ) IS
-  'running 상태의 Related Notes 추천 실행 claim을 최종 상태로 완료합니다.';
+  '지정된 사용자 소유의 running Related Notes 추천 실행 claim을 최종 상태로 완료합니다.';
 
 -- ============================================================================
 -- 9. 기존 Run 기반 Claim RPC 제거

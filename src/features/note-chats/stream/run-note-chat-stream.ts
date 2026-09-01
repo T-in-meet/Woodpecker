@@ -67,7 +67,7 @@ export type RunNoteChatStreamResult = {
 };
 
 /**
- * 노트 챗봇 실행을 시작하고 Provider 스트림을 소비하여 결과를 저장합니다.
+ * 노트 챗봇 AI 실행을 수행하고 Provider 스트림을 소비하여 결과를 저장합니다.
  *
  * execution claim은 conversation 단위 in-flight와 quota를 담당합니다.
  * Run은 실행 감사 기록이므로 중간 저장 실패를 operational error로 보고하되
@@ -76,20 +76,17 @@ export type RunNoteChatStreamResult = {
  * 성공 시에는 Assistant Message 저장과 Claim succeeded 전환을
  * 하나의 DB transaction으로 확정한 뒤 Run 성공 기록을 best-effort로 남깁니다.
  *
+ * start / finish / error와 같은 HTTP 응답 lifecycle 이벤트는
+ * Route의 전송 책임이므로 이 함수에서는 처리하지 않습니다.
+ *
  * @param params 실행할 claim, Run, 대화 및 확정된 Runtime 설정
- * @param onEvent 클라이언트에 전달할 스트림 이벤트 처리 함수
+ * @param onEvent Provider가 생성한 응답 스트림 이벤트 처리 함수
  * @returns 저장까지 완료된 노트 챗봇 실행 결과
  */
 export async function runNoteChatStream(
   params: RunNoteChatStreamParams,
   onEvent: (event: NoteChatStreamEvent) => void | Promise<void>,
 ): Promise<RunNoteChatStreamResult> {
-  await onEvent({
-    runId: params.runId,
-    type: "start",
-    userMessageId: params.userMessageId,
-  });
-
   try {
     const execution = await executeNoteChat({
       conversationId: params.conversationId,
@@ -151,8 +148,12 @@ export async function runNoteChatStream(
 
     /*
      * 검색 Context가 없는 경우 Answer Provider는 호출하지 않습니다.
+     *
      * 고정 응답도 사용자에게 전달되는 정상적인 성공 결과이므로
      * 일반 답변과 동일하게 Assistant Message + Claim 성공을 원자적으로 확정합니다.
+     *
+     * text-delta는 실제 답변 내용 전달 이벤트이므로 Route가 전달한
+     * stream event handler를 통해 클라이언트에 전달합니다.
      */
     if (execution.sources.length === 0) {
       const content = NOTE_CHAT_NO_CONTEXT_MESSAGE;
@@ -173,13 +174,6 @@ export async function runNoteChatStream(
         assistantMessageId,
         params,
         sources: execution.sources,
-      });
-
-      await onEvent({
-        assistantMessageId,
-        runId: params.runId,
-        type: "finish",
-        usedNoteIds,
       });
 
       return {
@@ -301,13 +295,6 @@ export async function runNoteChatStream(
       sources: execution.sources,
     });
 
-    await onEvent({
-      assistantMessageId,
-      runId: params.runId,
-      type: "finish",
-      usedNoteIds,
-    });
-
     return {
       assistantMessageId,
       content: parsedResponse.answer,
@@ -316,7 +303,10 @@ export async function runNoteChatStream(
     };
   } catch (error) {
     /*
-     * 기능 실행이 실패한 경우 Run과 Claim을 각각 정리합니다.
+     * AI 기능 실행이 실패한 경우 Run과 Claim을 각각 정리합니다.
+     *
+     * HTTP 응답 스트림 전달 실패는 Route에서 별도로 처리하므로
+     * 이 catch는 AI 실행 및 저장 과정의 실패만 처리합니다.
      *
      * 둘 다 cleanup 성격이므로 정리 자체의 실패가 원래 실행 오류를 덮어쓰지 않도록
      * best-effort로 처리합니다.
@@ -329,12 +319,6 @@ export async function runNoteChatStream(
     await completeExecutionClaimOrReport({
       params,
       status: NOTE_CHAT_EXECUTION_CLAIM_COMPLETION_STATUS.FAILED,
-    });
-
-    await onEvent({
-      message: "답변 생성에 실패했습니다.",
-      runId: params.runId,
-      type: "error",
     });
 
     throw error;

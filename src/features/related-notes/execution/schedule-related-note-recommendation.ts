@@ -644,6 +644,9 @@ async function completeRunOrReport(params: {
  * execution claim은 run 기록과 달리 active claim 해제 책임이 있으므로,
  * 추천 실행이 끝난 뒤 성공/실패/stale 상태를 기록합니다.
  *
+ * service role RPC 호출에서도 Claim 소유권을 검증할 수 있도록
+ * Claim 소유 사용자 ID를 완료 persistence 계층에 함께 전달합니다.
+ *
  * @param params execution claim 완료 작업과 오류 보고 context
  */
 async function completeExecutionClaimOrReport(params: {
@@ -660,6 +663,7 @@ async function completeExecutionClaimOrReport(params: {
     await completeRelatedNoteRecommendationExecutionClaim({
       claimId: params.claimId,
       status: params.status,
+      userId: params.ownerUserId,
     });
   } catch (error) {
     await reportRelatedNotesOperationalError({

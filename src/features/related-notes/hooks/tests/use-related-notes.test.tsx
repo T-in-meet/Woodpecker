@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
+import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { relatedNotesQueryKeys } from "../../constants/query-keys";
@@ -9,6 +10,12 @@ import {
   getRelatedNotes,
 } from "../../queries";
 import { useRelatedNotes } from "../use-related-notes";
+
+vi.mock("sonner", () => ({
+  toast: {
+    error: vi.fn(),
+  },
+}));
 
 vi.mock("../../queries", () => ({
   getRelatedNoteRecommendationExecutionClaim: vi.fn(),
@@ -19,6 +26,7 @@ const getRelatedNotesMock = vi.mocked(getRelatedNotes);
 const getRelatedNoteRecommendationExecutionClaimMock = vi.mocked(
   getRelatedNoteRecommendationExecutionClaim,
 );
+const toastErrorMock = vi.mocked(toast.error);
 
 const NOTE_ID = "11111111-1111-4111-8111-111111111111";
 const OTHER_NOTE_ID = "22222222-2222-4222-8222-222222222222";
@@ -390,13 +398,11 @@ describe("useRelatedNotes", () => {
     });
   });
 
-  it("tracked Claim 조회에 실패하면 실행 완료로 오인하지 않고 polling 상태를 유지한다", async () => {
+  it("tracked Claim 조회가 일시적으로 실패하면 허용 횟수 전까지 polling 상태를 유지한다", async () => {
     const queryClient = createTestQueryClient();
-
     const dbError = new Error("execution claim query failed");
 
     getRelatedNotesMock.mockResolvedValue(createRelatedNotesResult());
-
     getRelatedNoteRecommendationExecutionClaimMock.mockRejectedValue(dbError);
 
     const { result } = renderHook(() => useRelatedNotes(NOTE_ID), {
@@ -411,18 +417,233 @@ describe("useRelatedNotes", () => {
       result.current.startRecommendationPolling(CLAIM_ID);
     });
 
+    /*
+     * 최초 Claim 조회 실패를 기다립니다.
+     */
     await waitFor(() => {
       expect(
         getRelatedNoteRecommendationExecutionClaimMock,
-      ).toHaveBeenCalledWith(NOTE_ID, CLAIM_ID);
+      ).toHaveBeenCalledTimes(1);
+    });
+
+    expect(result.current.isRecommendationPolling).toBe(true);
+    expect(toastErrorMock).not.toHaveBeenCalled();
+
+    /*
+     * 두 번째 연속 조회 실패까지는 일시적인 오류로 보고
+     * Claim 추적과 UI 잠금을 유지합니다.
+     */
+    await act(async () => {
+      await queryClient.refetchQueries({
+        queryKey: relatedNotesQueryKeys.executionClaim(NOTE_ID, CLAIM_ID),
+        exact: true,
+      });
+    });
+
+    expect(
+      getRelatedNoteRecommendationExecutionClaimMock,
+    ).toHaveBeenCalledTimes(2);
+
+    expect(result.current.isRecommendationPolling).toBe(true);
+    expect(toastErrorMock).not.toHaveBeenCalled();
+  });
+
+  it("tracked Claim 조회가 3회 연속 실패하면 polling을 종료하고 동일 Claim을 자동 재추적하지 않는다", async () => {
+    const queryClient = createTestQueryClient();
+    const dbError = new Error("execution claim query failed");
+
+    /*
+     * main query에는 계속 동일한 running Claim이 존재하는 상황입니다.
+     *
+     * polling을 포기한 뒤 이 값 때문에 같은 Claim이 다시 자동 추적되면
+     * UI가 즉시 재잠금되므로 이를 회귀 테스트합니다.
+     */
+    getRelatedNotesMock.mockResolvedValue(
+      createRelatedNotesResult({
+        hasRunningRecommendationExecution: true,
+        latestRecommendationExecution: {
+          id: CLAIM_ID,
+          status: "running",
+        },
+      }),
+    );
+
+    getRelatedNoteRecommendationExecutionClaimMock.mockRejectedValue(dbError);
+
+    const { result } = renderHook(() => useRelatedNotes(NOTE_ID), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    /*
+     * main query에서 running Claim을 발견하고
+     * 최초 Claim 조회가 실패할 때까지 기다립니다.
+     */
+    await waitFor(() => {
+      expect(
+        getRelatedNoteRecommendationExecutionClaimMock,
+      ).toHaveBeenCalledTimes(1);
+    });
+
+    expect(result.current.isRecommendationPolling).toBe(true);
+    expect(toastErrorMock).not.toHaveBeenCalled();
+
+    /*
+     * 두 번째 조회 실패를 발생시킵니다.
+     */
+    await act(async () => {
+      await queryClient.refetchQueries({
+        queryKey: relatedNotesQueryKeys.executionClaim(NOTE_ID, CLAIM_ID),
+        exact: true,
+      });
+    });
+
+    expect(
+      getRelatedNoteRecommendationExecutionClaimMock,
+    ).toHaveBeenCalledTimes(2);
+
+    expect(result.current.isRecommendationPolling).toBe(true);
+    expect(toastErrorMock).not.toHaveBeenCalled();
+
+    /*
+     * 세 번째 연속 조회 실패를 발생시킵니다.
+     */
+    await act(async () => {
+      await queryClient.refetchQueries({
+        queryKey: relatedNotesQueryKeys.executionClaim(NOTE_ID, CLAIM_ID),
+        exact: true,
+      });
+    });
+
+    /*
+     * 세 번째 연속 실패 후 Client 추적과 UI 잠금이 해제되어야 합니다.
+     */
+    await waitFor(() => {
+      expect(result.current.isRecommendationPolling).toBe(false);
+    });
+
+    expect(
+      getRelatedNoteRecommendationExecutionClaimMock,
+    ).toHaveBeenCalledTimes(3);
+
+    expect(toastErrorMock).toHaveBeenCalledTimes(1);
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      "AI 추천 실행 상태를 확인하지 못했습니다. 잠시 후 다시 시도해주세요.",
+    );
+
+    /*
+     * main query에는 동일 Claim이 여전히 running으로 남아 있습니다.
+     *
+     * main query 데이터를 다시 갱신해 자동 추적 effect를 재평가시켜도
+     * abandoned Claim은 다시 tracked Claim이 되어서는 안 됩니다.
+     */
+    act(() => {
+      queryClient.setQueryData(
+        relatedNotesQueryKeys.byNoteId(NOTE_ID),
+        createRelatedNotesResult({
+          hasRunningRecommendationExecution: true,
+          latestRecommendationExecution: {
+            id: CLAIM_ID,
+            status: "running",
+          },
+        }),
+      );
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.isRecommendationPolling).toBe(false);
+
+    expect(
+      getRelatedNoteRecommendationExecutionClaimMock,
+    ).toHaveBeenCalledTimes(3);
+
+    expect(toastErrorMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("polling 포기 후 새 Claim을 직접 시작하면 이전 포기 상태를 초기화하고 새 Claim을 추적한다", async () => {
+    const queryClient = createTestQueryClient();
+    const dbError = new Error("execution claim query failed");
+
+    getRelatedNotesMock.mockResolvedValue(
+      createRelatedNotesResult({
+        hasRunningRecommendationExecution: true,
+        latestRecommendationExecution: {
+          id: CLAIM_ID,
+          status: "running",
+        },
+      }),
+    );
+
+    getRelatedNoteRecommendationExecutionClaimMock.mockRejectedValue(dbError);
+
+    const { result } = renderHook(() => useRelatedNotes(NOTE_ID), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    /*
+     * 기존 Claim의 최초 조회 실패를 기다립니다.
+     */
+    await waitFor(() => {
+      expect(
+        getRelatedNoteRecommendationExecutionClaimMock,
+      ).toHaveBeenCalledTimes(1);
+    });
+
+    /*
+     * 두 번째 실패를 발생시킵니다.
+     */
+    await act(async () => {
+      await queryClient.refetchQueries({
+        queryKey: relatedNotesQueryKeys.executionClaim(NOTE_ID, CLAIM_ID),
+        exact: true,
+      });
+    });
+
+    expect(result.current.isRecommendationPolling).toBe(true);
+
+    /*
+     * 세 번째 실패를 발생시켜 기존 Claim 추적을 포기합니다.
+     */
+    await act(async () => {
+      await queryClient.refetchQueries({
+        queryKey: relatedNotesQueryKeys.executionClaim(NOTE_ID, CLAIM_ID),
+        exact: true,
+      });
     });
 
     await waitFor(() => {
+      expect(result.current.isRecommendationPolling).toBe(false);
+    });
+
+    expect(
+      getRelatedNoteRecommendationExecutionClaimMock,
+    ).toHaveBeenCalledTimes(3);
+
+    expect(toastErrorMock).toHaveBeenCalledTimes(1);
+
+    /*
+     * 이후 사용자가 새 AI 추천을 실행하여
+     * 새로운 Claim ID를 직접 전달한 상황입니다.
+     */
+    getRelatedNoteRecommendationExecutionClaimMock.mockResolvedValue(
+      createExecutionClaim("running", OTHER_CLAIM_ID),
+    );
+
+    act(() => {
+      result.current.startRecommendationPolling(OTHER_CLAIM_ID);
+    });
+
+    expect(result.current.isRecommendationPolling).toBe(true);
+
+    /*
+     * 새 Claim 전용 query가 실제로 시작되는지 확인합니다.
+     */
+    await waitFor(() => {
       expect(
-        queryClient.getQueryState(
-          relatedNotesQueryKeys.executionClaim(NOTE_ID, CLAIM_ID),
-        )?.status,
-      ).toBe("error");
+        getRelatedNoteRecommendationExecutionClaimMock,
+      ).toHaveBeenCalledWith(NOTE_ID, OTHER_CLAIM_ID);
     });
 
     expect(result.current.isRecommendationPolling).toBe(true);
@@ -469,8 +690,10 @@ describe("useRelatedNotes", () => {
       getRelatedNoteRecommendationExecutionClaimMock.mock.calls.length;
 
     /*
-     * Client에는 별도 timeout이 없습니다.
-     * DB가 계속 running을 반환하는 동안에는 Claim ID 전용 polling이 유지됩니다.
+     * Client에는 실행 자체에 대한 별도 timeout이 없습니다.
+     *
+     * Claim 조회가 정상적으로 성공하면서 DB가 계속 running을 반환하는 동안에는
+     * Claim ID 전용 polling이 유지됩니다.
      */
     await act(async () => {
       await vi.advanceTimersByTimeAsync(180_000);
@@ -481,6 +704,8 @@ describe("useRelatedNotes", () => {
     expect(
       getRelatedNoteRecommendationExecutionClaimMock.mock.calls.length,
     ).toBeGreaterThan(callsBeforePolling);
+
+    expect(toastErrorMock).not.toHaveBeenCalled();
   });
 
   it("polling 중 tracked Claim이 stale로 전환되면 polling을 종료한다", async () => {

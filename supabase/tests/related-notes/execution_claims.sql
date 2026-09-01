@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(31);
+SELECT plan(33);
 
 
 -- ============================================================================
@@ -12,6 +12,7 @@ SELECT plan(31);
 --
 -- 주요 검증 대상:
 --   - 동일 Note version의 중복 실행 방지
+--   - Claim 완료 시 user_id 소유권 검증
 --   - failed Claim 이후 재실행 허용
 --   - succeeded Claim 이후 동일 version 재실행 차단
 --   - 오래된 running Claim의 stale 처리
@@ -500,19 +501,59 @@ SELECT is(
 
 
 -- ----------------------------------------------------------------------------
+-- Claim 완료 소유권 검증
+-- ----------------------------------------------------------------------------
+--
+-- service_role 호출이라도 전달된 user_id가 Claim 소유자와 다르면
+-- 다른 사용자의 running Claim을 완료할 수 없어야 합니다.
+--
+
+-- 다른 사용자의 user_id로 Claim 완료를 시도하면 거부되어야 합니다.
+SELECT throws_ok(
+    format(
+        $sql$
+            SELECT public.complete_related_note_recommendation_execution_claim(
+                %L::uuid,
+                %L::uuid,
+                'failed'
+            );
+        $sql$,
+        current_setting('test.related_note_claims_other_user_id'),
+        :'test_related_note_claims_first_claim_id'
+    ),
+    'P0001',
+    'running execution claim not found',
+    'execution claim completion should reject a claim owned by another user'
+);
+
+-- 잘못된 소유자로 완료를 시도한 뒤에도 원래 Claim은 running 상태를 유지해야 합니다.
+SELECT is(
+    (
+        SELECT status
+        FROM public.related_note_recommendation_execution_claims
+        WHERE id = :'test_related_note_claims_first_claim_id'::uuid
+    ),
+    'running',
+    'rejected cross-user completion should leave the execution claim running'
+);
+
+
+-- ----------------------------------------------------------------------------
 -- failed Claim 이후 동일 Note version 재실행
 -- ----------------------------------------------------------------------------
 --
+-- 실제 Claim 소유자는 running Claim을 정상적으로 완료할 수 있어야 합니다.
 -- failed는 실행 성공 결과가 아니므로 동일 source version을 다시 실행할 수 있어야 합니다.
 --
 
 SELECT is(
     public.complete_related_note_recommendation_execution_claim(
+        current_setting('test.related_note_claims_user_id')::uuid,
         :'test_related_note_claims_first_claim_id'::uuid,
         'failed'
     ),
     :'test_related_note_claims_first_claim_id'::uuid,
-    'execution claim should complete as failed'
+    'execution claim owner should complete the claim as failed'
 );
 
 SELECT *
@@ -544,6 +585,7 @@ SELECT is(
 
 SELECT is(
     public.complete_related_note_recommendation_execution_claim(
+        current_setting('test.related_note_claims_user_id')::uuid,
         :'test_related_note_claims_after_failed_claim_id'::uuid,
         'succeeded'
     ),
@@ -1016,6 +1058,7 @@ SELECT is(
 -- 시작할 수 없어야 합니다.
 --
 
+-- 이메일 인증이 완료되지 않은 사용자는 Claim을 획득할 수 없어야 합니다.
 SELECT throws_ok(
     $sql$
         SELECT *

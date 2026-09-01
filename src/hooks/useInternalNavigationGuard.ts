@@ -14,6 +14,23 @@ function resolveHistoryUrl(url?: string | URL | null) {
 }
 
 /**
+ * navigation guard 관점에서 같은 페이지인지 확인합니다.
+ *
+ * hash만 다른 이동은 현재 페이지 내부 이동이므로
+ * navigation guard 대상으로 취급하지 않습니다.
+ */
+function isSamePageUrl(firstUrl: string | URL, secondUrl: string | URL) {
+  const first = new URL(firstUrl, window.location.href);
+  const second = new URL(secondUrl, window.location.href);
+
+  return (
+    first.origin === second.origin &&
+    first.pathname === second.pathname &&
+    first.search === second.search
+  );
+}
+
+/**
  * History entry에 navigation guard가 사용할 index를 추가합니다.
  *
  * Next.js App Router가 저장한 기존 history state는 그대로 유지하고
@@ -76,6 +93,9 @@ type PendingPopStateRestore = {
  *
  * Next.js Link 클릭과 History API를 통한 프로그래밍 방식의 이동,
  * 브라우저 뒤로가기/앞으로가기를 처리합니다.
+ *
+ * 같은 페이지에서 hash만 변경되는 이동은 페이지 이탈이 아니므로
+ * navigation guard 대상으로 취급하지 않습니다.
  *
  * popstate는 발생 시점에 이미 브라우저 History 위치가 변경된 상태이므로
  * 현재 entry로 먼저 복귀한 뒤 사용자 확인을 받고,
@@ -322,7 +342,11 @@ export function useInternalNavigationGuard({
         return;
       }
 
-      if (nextUrl.href === currentUrl) {
+      /*
+       * 같은 페이지에서 hash만 변경되는 이동은 페이지 이탈이 아니므로
+       * navigation guard 대상으로 취급하지 않습니다.
+       */
+      if (isSamePageUrl(nextUrl, currentUrl)) {
         return;
       }
 
@@ -348,8 +372,9 @@ export function useInternalNavigationGuard({
     });
 
     /*
-     * Next.js App Router는 같은 URL에서 history state만 변경할 수 있으므로
-     * 실제 URL이 바뀌지 않는 경우에는 경고 없이 허용합니다.
+     * Next.js App Router는 같은 페이지에서 history state만 변경하거나
+     * hash만 변경할 수 있으므로 실제 페이지가 바뀌지 않는 경우에는
+     * 경고 없이 허용합니다.
      */
     window.history.pushState = function (
       ...args: Parameters<History["pushState"]>
@@ -363,10 +388,12 @@ export function useInternalNavigationGuard({
       const nextUrl = resolveHistoryUrl(args[2]);
 
       /*
-       * guard가 비활성화되어 있거나 URL 자체가 변경되지 않는 경우에는
+       * guard가 비활성화되어 있거나 같은 페이지 내 History 변경인 경우에는
        * History 변경을 그대로 허용하고 현재 위치만 동기화합니다.
+       *
+       * hash만 변경되는 경우도 같은 페이지로 취급합니다.
        */
-      if (!enabledRef.current || nextUrl === currentUrl) {
+      if (!enabledRef.current || isSamePageUrl(nextUrl, currentUrl)) {
         performPushState(...args);
         return;
       }
@@ -389,10 +416,12 @@ export function useInternalNavigationGuard({
       const nextUrl = resolveHistoryUrl(args[2]);
 
       /*
-       * guard가 비활성화되어 있거나 URL 자체가 변경되지 않는 경우에는
+       * guard가 비활성화되어 있거나 같은 페이지 내 History 변경인 경우에는
        * History 변경을 그대로 허용하고 현재 위치만 동기화합니다.
+       *
+       * hash만 변경되는 경우도 같은 페이지로 취급합니다.
        */
-      if (!enabledRef.current || nextUrl === currentUrl) {
+      if (!enabledRef.current || isSamePageUrl(nextUrl, currentUrl)) {
         performReplaceState(...args);
         return;
       }
@@ -484,15 +513,19 @@ export function useInternalNavigationGuard({
       const nextUrl = window.location.href;
 
       /*
-       * URL은 같고 History state만 변경된 경우에는
-       * 기존 정책대로 navigation guard를 표시하지 않습니다.
+       * 같은 페이지 내 History 이동은 navigation guard 대상으로
+       * 취급하지 않습니다.
+       *
+       * URL이 완전히 같거나 hash만 변경된 경우 모두 포함됩니다.
        */
-      if (nextUrl === currentUrl) {
+      if (isSamePageUrl(nextUrl, currentUrl)) {
         const nextHistoryIndex = getNavigationGuardHistoryIndex(event.state);
 
         if (nextHistoryIndex !== null) {
           currentHistoryIndex = nextHistoryIndex;
         }
+
+        currentUrl = nextUrl;
 
         return;
       }

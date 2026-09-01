@@ -368,30 +368,95 @@ export async function POST(request: Request): Promise<Response> {
     });
   }
 
+  /*
+   * streamClosed는 ReadableStream 자체가 취소되거나 close된 상태를 나타냅니다.
+   * deliveryFailed는 서버에서 클라이언트로 이벤트를 전달할 수 없게 된 상태를
+   * 별도로 나타냅니다.
+   *
+   * 응답 전달 실패는 AI execution 실패와 구분하며,
+   * 이미 진행 중인 AI execution과 저장 처리는 계속 수행합니다.
+   */
   let streamClosed = false;
+  let deliveryFailed = false;
 
   const stream = new ReadableStream({
     start(controller) {
       let errorEventSent = false;
 
       /**
-       * 스트림 이벤트를 NDJSON 데이터로 인코딩해 전달합니다.
+       * 스트림 이벤트를 NDJSON 데이터로 인코딩해 클라이언트에 전달합니다.
+       *
+       * 응답 스트림 전송 실패는 사용자 기능의 전달 오류이지만
+       * 이미 진행 중인 AI 실행의 성공/실패 상태에는 영향을 주지 않습니다.
+       *
+       * 따라서 전송 실패는 operational error로 기록하고
+       * runNoteChatStream으로 예외를 전파하지 않습니다.
        */
-      const enqueueEvent = (event: NoteChatStreamEvent): void => {
-        if (streamClosed) {
+      const enqueueEvent = async (
+        event: NoteChatStreamEvent,
+      ): Promise<void> => {
+        if (streamClosed || deliveryFailed) {
           return;
         }
 
-        if (event.type === "error") {
-          errorEventSent = true;
-        }
+        try {
+          controller.enqueue(encodeNoteChatStreamEvent(event));
 
-        controller.enqueue(encodeNoteChatStreamEvent(event));
+          if (event.type === "error") {
+            errorEventSent = true;
+          }
+        } catch (error) {
+          /*
+           * 클라이언트 응답 전달에 한 번 실패하면
+           * 이후 이벤트 전송은 중단합니다.
+           *
+           * 실제 ReadableStream 종료 상태와는 별개이므로
+           * streamClosed는 여기에서 변경하지 않습니다.
+           */
+          deliveryFailed = true;
+
+          try {
+            await reportNoteChatOperationalError({
+              actorUserId: user.id,
+              context: {
+                conversationId,
+                eventType: event.type,
+                runId,
+                userMessageId,
+              },
+              error,
+              errorCode:
+                NOTE_CHAT_OPERATIONAL_ERROR_CODES.STREAM_EVENT_SEND_FAILED,
+              message: "노트 챗봇 스트림 이벤트 전송에 실패했습니다.",
+              operation:
+                NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.SEND_STREAM_EVENT,
+              stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.EXECUTION,
+              userId: user.id,
+            });
+          } catch {
+            /*
+             * 스트림 전송 오류를 운영 오류로 기록하는 과정 자체가 실패하더라도
+             * 전송 계층 오류가 AI execution 실패로 전파되지 않도록 무시합니다.
+             */
+          }
+        }
       };
 
       void (async () => {
+        /*
+         * start는 HTTP 응답 lifecycle 이벤트이므로 Route에서 전달합니다.
+         *
+         * 전달 자체가 실패하더라도 AI execution과 DB 상태를 실패로
+         * 변경하지 않고 enqueueEvent 내부에서 operational error로만 기록합니다.
+         */
+        await enqueueEvent({
+          runId,
+          type: "start",
+          userMessageId,
+        });
+
         try {
-          await runNoteChatStream(
+          const result = await runNoteChatStream(
             {
               conversationId,
               claimId,
@@ -402,18 +467,51 @@ export async function POST(request: Request): Promise<Response> {
             },
             enqueueEvent,
           );
+
+          /*
+           * AI 실행과 성공 저장이 모두 끝난 뒤 finish를 전달합니다.
+           *
+           * 이 시점에는 Assistant Message 저장과 Claim succeeded가
+           * 이미 확정되어 있으므로 finish 전송 실패가 실행 결과를
+           * failed로 되돌려서는 안 됩니다.
+           */
+          await enqueueEvent({
+            assistantMessageId: result.assistantMessageId,
+            runId: result.runId,
+            type: "finish",
+            usedNoteIds: result.usedNoteIds,
+          });
         } catch {
-          if (!errorEventSent && !streamClosed) {
-            enqueueEvent({
+          /*
+           * 여기까지 전달되는 오류는 runNoteChatStream 내부의
+           * AI 실행 또는 기능 데이터 저장 실패입니다.
+           *
+           * execution의 Run/Claim 실패 정리는 runNoteChatStream에서
+           * 이미 처리하므로 Route는 클라이언트 error 이벤트만 전달합니다.
+           */
+          if (!errorEventSent) {
+            await enqueueEvent({
               message: "답변 생성에 실패했습니다.",
               runId,
               type: "error",
             });
           }
         } finally {
+          /*
+           * deliveryFailed 여부와 관계없이 실제 ReadableStream은
+           * Route 실행 종료 시점에 닫습니다.
+           */
           if (!streamClosed) {
             streamClosed = true;
-            controller.close();
+
+            try {
+              controller.close();
+            } catch {
+              /*
+               * 클라이언트 취소 등으로 이미 스트림이 종료된 경우에는
+               * 별도의 AI execution 실패로 취급하지 않습니다.
+               */
+            }
           }
         }
       })();

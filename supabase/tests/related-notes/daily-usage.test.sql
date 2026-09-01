@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(5);
+SELECT plan(6);
 
 
 -- ============================================================================
@@ -14,6 +14,7 @@ SELECT plan(5);
 --   - Claim이 없는 경우 사용량 0 반환
 --   - running / succeeded Claim만 사용량에 포함
 --   - failed / stale Claim은 사용량에서 제외
+--   - stale 기준을 초과한 running Claim은 조회 전에 stale로 정리
 --   - 사용자와 Note가 다른 Claim은 사용량에서 제외
 --   - KST 기준 오늘 생성된 Claim만 사용량에 포함
 --   - authenticated 사용자만 사용량 조회 RPC 실행 가능
@@ -166,6 +167,9 @@ SELECT is(
 -- 현재 quota 정책과 동일하게 running / succeeded만 사용량에 포함되어야 하며,
 -- failed / stale은 같은 날 생성된 Claim이어도 제외되어야 합니다.
 --
+-- stale 기준을 초과한 running Claim도 함께 준비해 사용량 조회 RPC가
+-- 집계 전에 해당 Claim을 stale로 정리하는지 검증합니다.
+--
 
 SET LOCAL ROLE service_role;
 SELECT set_config('request.jwt.claims', '{}'::text, true);
@@ -210,6 +214,14 @@ VALUES
         'stale',
         now(),
         now()
+    ),
+    (
+        current_setting('test.related_note_daily_usage_user_id')::uuid,
+        current_setting('test.related_note_daily_usage_note_id')::uuid,
+        '2026-01-01T00:00:08Z'::timestamptz,
+        'running',
+        now() - interval '4 minutes',
+        NULL
     );
 
 
@@ -217,8 +229,11 @@ VALUES
 -- Quota status filtering
 -- ============================================================================
 --
--- 같은 사용자와 Note에 오늘 생성된 Claim이 네 개 존재하지만,
--- 실제 quota에 포함되는 running / succeeded 두 개만 사용량으로 계산해야 합니다.
+-- 같은 사용자와 Note에 오늘 생성된 Claim이 다섯 개 존재하지만,
+-- stale 기준을 초과한 running Claim은 먼저 stale로 정리되어야 합니다.
+--
+-- 따라서 실제 quota에 포함되는 현재 running / succeeded 두 개만
+-- 사용량으로 계산해야 합니다.
 --
 
 SET LOCAL ROLE authenticated;
@@ -239,7 +254,31 @@ SELECT is(
         current_setting('test.related_note_daily_usage_note_id')::uuid
     ),
     2,
-    'daily usage should count running and succeeded claims but exclude failed and stale claims'
+    'daily usage should count running and succeeded claims but exclude failed, stale, and expired running claims'
+);
+
+
+-- ============================================================================
+-- Expired running Claim cleanup
+-- ============================================================================
+--
+-- 일일 사용량 조회 RPC는 집계 전에 stale 기준을 초과한 running Claim을
+-- stale로 전환해야 합니다.
+--
+
+SELECT is(
+    (
+        SELECT claims.status
+        FROM public.related_note_recommendation_execution_claims AS claims
+        WHERE claims.user_id =
+            current_setting('test.related_note_daily_usage_user_id')::uuid
+          AND claims.note_id =
+            current_setting('test.related_note_daily_usage_note_id')::uuid
+          AND claims.source_updated_at =
+            '2026-01-01T00:00:08Z'::timestamptz
+    ),
+    'stale',
+    'daily usage should mark expired running claims as stale before counting usage'
 );
 
 

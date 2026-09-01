@@ -85,6 +85,108 @@ describe("useInternalNavigationGuard", () => {
     expect(window.location.pathname).toBe("/note-chats/test");
   });
 
+  it("같은 페이지의 hash 링크는 활성 상태에서도 이동을 보류하지 않는다", async () => {
+    const { result } = renderHook(() =>
+      useInternalNavigationGuard({
+        enabled: true,
+      }),
+    );
+
+    const link = document.createElement("a");
+    link.href = "#section";
+
+    document.body.appendChild(link);
+
+    await dispatchLinkClick(link);
+
+    expect(result.current.isNavigationPending).toBe(false);
+  });
+
+  it("hash 링크 이동 이후의 실제 내부 페이지 이동은 정상적으로 보류한다", async () => {
+    const { result } = renderHook(() =>
+      useInternalNavigationGuard({
+        enabled: true,
+      }),
+    );
+
+    const hashLink = document.createElement("a");
+    hashLink.href = "#section";
+
+    document.body.appendChild(hashLink);
+
+    await dispatchLinkClick(hashLink);
+
+    expect(result.current.isNavigationPending).toBe(false);
+
+    /*
+     * hash-only 이동이 navigation guard의 허용 플래그를 남기지 않아야 합니다.
+     *
+     * 이후 실제 페이지 이동은 기존 정책대로 다시 보류되어야 합니다.
+     * 이번 회귀 문제를 직접 검증하는 테스트입니다.
+     */
+    const pageLink = document.createElement("a");
+    pageLink.href = "/notes";
+
+    document.body.appendChild(pageLink);
+
+    await dispatchLinkClick(pageLink);
+
+    expect(result.current.isNavigationPending).toBe(true);
+    expect(window.location.pathname).toBe("/note-chats/test");
+  });
+
+  it("같은 페이지에서 hash만 다른 pushState는 이동을 보류하지 않는다", () => {
+    const { result } = renderHook(() =>
+      useInternalNavigationGuard({
+        enabled: true,
+      }),
+    );
+
+    act(() => {
+      window.history.pushState({}, "", "/note-chats/test#section");
+    });
+
+    expect(result.current.isNavigationPending).toBe(false);
+    expect(window.location.pathname).toBe("/note-chats/test");
+    expect(window.location.hash).toBe("#section");
+  });
+
+  it("같은 페이지에서 hash만 다른 replaceState는 이동을 보류하지 않는다", () => {
+    const { result } = renderHook(() =>
+      useInternalNavigationGuard({
+        enabled: true,
+      }),
+    );
+
+    act(() => {
+      window.history.replaceState({}, "", "/note-chats/test#section");
+    });
+
+    expect(result.current.isNavigationPending).toBe(false);
+    expect(window.location.pathname).toBe("/note-chats/test");
+    expect(window.location.hash).toBe("#section");
+  });
+
+  it("query string이 변경되는 pushState는 hash 이동과 달리 보류한다", async () => {
+    const { result } = renderHook(() =>
+      useInternalNavigationGuard({
+        enabled: true,
+      }),
+    );
+
+    act(() => {
+      window.history.pushState({}, "", "/note-chats/test?tab=history");
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.isNavigationPending).toBe(true);
+    expect(window.location.pathname).toBe("/note-chats/test");
+    expect(window.location.search).toBe("");
+  });
+
   it("보류된 내부 링크 이동을 취소할 수 있다", async () => {
     const { result } = renderHook(() =>
       useInternalNavigationGuard({
@@ -461,5 +563,30 @@ describe("useInternalNavigationGuard", () => {
     expect(window.history.state[NAVIGATION_GUARD_HISTORY_INDEX_KEY]).toBe(2);
 
     expect(historyGoSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("같은 페이지의 hash History를 popstate로 이동하면 보류하지 않는다", async () => {
+    const originalReplaceState = window.history.replaceState;
+
+    const { result } = renderHook(() =>
+      useInternalNavigationGuard({
+        enabled: true,
+      }),
+    );
+
+    const hashState = createHistoryState(1);
+
+    originalReplaceState.call(
+      window.history,
+      hashState,
+      "",
+      "/note-chats/test#section",
+    );
+
+    await dispatchPopState(hashState);
+
+    expect(result.current.isNavigationPending).toBe(false);
+    expect(window.location.pathname).toBe("/note-chats/test");
+    expect(window.location.hash).toBe("#section");
   });
 });

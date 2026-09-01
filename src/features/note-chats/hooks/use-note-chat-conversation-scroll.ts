@@ -9,14 +9,6 @@ import {
 } from "react";
 
 /**
- * 이전 메시지를 조회할 상단 근접 거리입니다.
- *
- * 이전 메시지 자동 조회를 시작하기 위한 기존 동작 기준이며,
- * 최신 메시지 표시 여부 판단에는 사용하지 않습니다.
- */
-const PREVIOUS_MESSAGE_LOAD_THRESHOLD_PX = 48;
-
-/**
  * DOM 측정 오차로 최신 메시지 표시 상태가 반복해서 바뀌는 것을 방지하기 위한 허용값입니다.
  */
 const LATEST_MESSAGE_VISIBILITY_TOLERANCE_PX = 1;
@@ -94,6 +86,12 @@ type QuestionScrollTarget = string | null;
  * 이전 메시지를 prepend할 때는 기존 화면에 보이던 DOM 요소를 visual anchor로
  * 사용하여 같은 요소가 같은 viewport 위치에 유지되도록 보정합니다.
  *
+ * 이전 메시지 추가 조회는 고정 px 임계값 대신 현재 로딩된 가장 오래된 메시지가
+ * viewport에 실제로 노출되는지를 기준으로 판단합니다.
+ *
+ * prepend 위치 보정으로 코드가 직접 발생시킨 scroll event는 별도로 구분하여
+ * 다음 페이지 조회 trigger로 사용하지 않습니다.
+ *
  * @param params Hook 입력값
  * @param params.conversationId 현재 Conversation ID
  * @param params.conversationHeight Conversation 영역의 계산된 높이
@@ -151,6 +149,14 @@ export function useNoteChatConversationScroll({
 
   /** 중복 이전 메시지 조회를 막기 위한 로컬 실행 guard입니다. */
   const isLoadingPreviousMessagesRef = useRef(false);
+
+  /**
+   * prepend anchor 복원 과정에서 코드가 직접 이동시킨 scrollTop입니다.
+   *
+   * 같은 위치에서 뒤늦게 발생하는 scroll event는 사용자 이동이 아니므로
+   * 다음 이전 메시지 조회 trigger로 사용하지 않습니다.
+   */
+  const prependRestoredScrollTopRef = useRef<number | null>(null);
 
   /** 사용자가 명시적으로 활성화한 최신 답변 follow 상태입니다. */
   const isFollowingLatestRef = useRef(false);
@@ -611,6 +617,10 @@ export function useNoteChatConversationScroll({
 
   /**
    * prepend 전 저장한 visual anchor를 현재 viewport의 같은 위치로 복원합니다.
+   *
+   * 위치 보정을 위해 scrollTop을 직접 변경한 경우에는 최종 위치를 별도로 저장하여,
+   * 해당 보정으로 뒤늦게 발생하는 scroll event가 다음 페이지 조회를
+   * 다시 시작하지 않도록 합니다.
    */
   const restorePrependVisualAnchor = useCallback(() => {
     const viewport = scrollViewportRef.current;
@@ -631,7 +641,13 @@ export function useNoteChatConversationScroll({
     const currentTop =
       anchor.element.getBoundingClientRect().top - viewportRect.top;
 
-    viewport.scrollTop += currentTop - anchor.top;
+    const scrollDelta = currentTop - anchor.top;
+
+    if (Math.abs(scrollDelta) >= LATEST_MESSAGE_VISIBILITY_TOLERANCE_PX) {
+      viewport.scrollTop += scrollDelta;
+      prependRestoredScrollTopRef.current = viewport.scrollTop;
+    }
+
     lastScrollTopRef.current = viewport.scrollTop;
 
     updateLatestMessageButtonVisibility(viewport);
@@ -698,6 +714,12 @@ export function useNoteChatConversationScroll({
    * follow 상태에서 실제 scrollTop이 이전 값보다 위쪽으로 감소하면
    * wheel/touch/key 입력 여부와 관계없이 사용자가 최신 위치를 이탈한 것으로 보고
    * follow를 종료합니다.
+   *
+   * prepend 위치 보정으로 코드가 직접 이동시킨 위치에서 발생한 scroll event는
+   * 이전 메시지 추가 조회 trigger로 사용하지 않습니다.
+   *
+   * 이전 메시지 추가 조회는 고정 px 임계값이 아니라
+   * 현재 로딩된 가장 오래된 메시지가 viewport에 실제로 노출되는지를 기준으로 합니다.
    */
   const handleViewportScroll = useCallback(() => {
     const viewport = scrollViewportRef.current;
@@ -721,7 +743,37 @@ export function useNoteChatConversationScroll({
 
     updateLatestMessageButtonVisibility(viewport);
 
-    if (viewport.scrollTop <= PREVIOUS_MESSAGE_LOAD_THRESHOLD_PX) {
+    const restoredScrollTop = prependRestoredScrollTopRef.current;
+
+    if (restoredScrollTop !== null) {
+      if (
+        Math.abs(currentScrollTop - restoredScrollTop) <
+        LATEST_MESSAGE_VISIBILITY_TOLERANCE_PX
+      ) {
+        return;
+      }
+
+      prependRestoredScrollTopRef.current = null;
+    }
+
+    const firstMessage = viewport.querySelector<HTMLElement>("li");
+
+    if (!firstMessage) {
+      if (currentScrollTop <= 0) {
+        void loadPreviousMessages();
+      }
+
+      return;
+    }
+
+    const viewportRect = viewport.getBoundingClientRect();
+    const firstMessageRect = firstMessage.getBoundingClientRect();
+
+    const isFirstMessageVisible =
+      firstMessageRect.bottom > viewportRect.top &&
+      firstMessageRect.top < viewportRect.bottom;
+
+    if (isFirstMessageVisible) {
       void loadPreviousMessages();
     }
   }, [loadPreviousMessages, updateLatestMessageButtonVisibility]);
@@ -743,6 +795,8 @@ export function useNoteChatConversationScroll({
     activeQuestionAlignmentVersionRef.current += 1;
 
     prependVisualAnchorsRef.current = [];
+    prependRestoredScrollTopRef.current = null;
+    isLoadingPreviousMessagesRef.current = false;
     storedUserMessageElementsRef.current.clear();
     pendingUserMessageElementRef.current = null;
     setQuestionBottomSpacerHeight(0);
@@ -868,13 +922,21 @@ export function useNoteChatConversationScroll({
    * wheel/touch/key 입력은 실제 scroll 이벤트보다 먼저 follow를 종료할 수 있도록
    * 기존 입력 기반 처리를 유지합니다.
    *
+   * viewport 시작점에서 더 위쪽으로 이동하려는 사용자 입력은 실제 scroll event가
+   * 발생하지 않을 수 있으므로 이 경우에는 명시적으로 이전 메시지를 조회합니다.
+   *
    * scrollbar thumb/track처럼 이 입력 이벤트를 거치지 않는 이동은
    * handleViewportScroll에서 실제 scrollTop 감소를 통해 별도로 감지합니다.
    */
   useEffect(() => {
     const viewport = scrollViewportRef.current;
 
-    if (!viewport || !hasDetail) {
+    if (
+      !viewport ||
+      !hasDetail ||
+      typeof viewport.addEventListener !== "function" ||
+      typeof viewport.removeEventListener !== "function"
+    ) {
       return;
     }
 
@@ -884,9 +946,16 @@ export function useNoteChatConversationScroll({
       }
     };
 
+    const loadPreviousMessagesAtViewportStart = () => {
+      if (viewport.scrollTop <= 0) {
+        void loadPreviousMessages();
+      }
+    };
+
     const handleWheel = (event: WheelEvent) => {
       if (event.deltaY < 0) {
         stopFollowForUpwardInput();
+        loadPreviousMessagesAtViewportStart();
       }
     };
 
@@ -904,6 +973,7 @@ export function useNoteChatConversationScroll({
         currentY > touchStartY
       ) {
         stopFollowForUpwardInput();
+        loadPreviousMessagesAtViewportStart();
       }
 
       if (currentY !== undefined) {
@@ -922,6 +992,7 @@ export function useNoteChatConversationScroll({
         event.key === "Home"
       ) {
         stopFollowForUpwardInput();
+        loadPreviousMessagesAtViewportStart();
       }
     };
 
@@ -929,8 +1000,12 @@ export function useNoteChatConversationScroll({
     viewport.addEventListener("touchstart", handleTouchStart, {
       passive: true,
     });
-    viewport.addEventListener("touchmove", handleTouchMove, { passive: true });
-    viewport.addEventListener("touchend", handleTouchEnd, { passive: true });
+    viewport.addEventListener("touchmove", handleTouchMove, {
+      passive: true,
+    });
+    viewport.addEventListener("touchend", handleTouchEnd, {
+      passive: true,
+    });
     viewport.addEventListener("keydown", handleKeyDown);
 
     return () => {
@@ -940,7 +1015,7 @@ export function useNoteChatConversationScroll({
       viewport.removeEventListener("touchend", handleTouchEnd);
       viewport.removeEventListener("keydown", handleKeyDown);
     };
-  }, [conversationHeight, hasDetail]);
+  }, [conversationHeight, hasDetail, loadPreviousMessages]);
 
   return {
     handleViewportScroll,

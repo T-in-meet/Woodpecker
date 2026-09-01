@@ -440,6 +440,7 @@ describe("scheduleRelatedNoteRecommendation", () => {
       claimId: CLAIM_ID,
       status:
         RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_COMPLETION_STATUS.SUCCEEDED,
+      userId: OWNER_USER_ID,
     });
   });
 
@@ -495,6 +496,7 @@ describe("scheduleRelatedNoteRecommendation", () => {
       claimId: CLAIM_ID,
       status:
         RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_COMPLETION_STATUS.FAILED,
+      userId: OWNER_USER_ID,
     });
 
     consoleErrorSpy.mockRestore();
@@ -533,6 +535,7 @@ describe("scheduleRelatedNoteRecommendation", () => {
       claimId: CLAIM_ID,
       status:
         RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_COMPLETION_STATUS.STALE,
+      userId: OWNER_USER_ID,
     });
   });
 
@@ -571,6 +574,7 @@ describe("scheduleRelatedNoteRecommendation", () => {
       claimId: CLAIM_ID,
       status:
         RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_COMPLETION_STATUS.STALE,
+      userId: OWNER_USER_ID,
     });
   });
 
@@ -788,6 +792,7 @@ describe("scheduleRelatedNoteRecommendation", () => {
       claimId: CLAIM_ID,
       status:
         RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_COMPLETION_STATUS.SUCCEEDED,
+      userId: OWNER_USER_ID,
     });
 
     consoleErrorSpy.mockRestore();
@@ -1134,6 +1139,7 @@ describe("scheduleRelatedNoteRecommendation", () => {
       claimId: CLAIM_ID,
       status:
         RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_COMPLETION_STATUS.FAILED,
+      userId: OWNER_USER_ID,
     });
 
     consoleErrorSpy.mockRestore();

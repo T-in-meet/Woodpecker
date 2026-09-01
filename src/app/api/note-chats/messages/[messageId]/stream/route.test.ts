@@ -913,28 +913,17 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
     );
   });
 
-  it("Run 실행 중 발생한 스트림 이벤트를 NDJSON으로 전달한다", async () => {
-    vi.mocked(runNoteChatStream).mockImplementation(async (params, onEvent) => {
-      await onEvent({
-        type: "start",
-        runId: params.runId,
-        userMessageId: params.userMessageId,
-      });
+  it("Route lifecycle 이벤트와 Run 스트림 이벤트를 NDJSON으로 전달한다", async () => {
+    vi.mocked(runNoteChatStream).mockImplementation(
+      async (_params, onEvent) => {
+        await onEvent({
+          type: "text-delta",
+          delta: "수정된 답변입니다.",
+        });
 
-      await onEvent({
-        type: "text-delta",
-        delta: "수정된 답변입니다.",
-      });
-
-      await onEvent({
-        type: "finish",
-        runId: params.runId,
-        assistantMessageId: ASSISTANT_MESSAGE_ID,
-        usedNoteIds: [],
-      });
-
-      return RUN_RESULT;
-    });
+        return RUN_RESULT;
+      },
+    );
 
     const response = await POST(
       createRequest({
@@ -950,62 +939,28 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
     );
 
     const lines = await readStream(response);
+    const events = lines.map((line) => JSON.parse(line));
 
-    expect(lines).toEqual([
-      JSON.stringify({
-        type: "start",
+    expect(events).toEqual([
+      {
         runId: RUN_ID,
+        type: "start",
         userMessageId: USER_MESSAGE_ID,
-      }),
-      JSON.stringify({
+      },
+      {
         type: "text-delta",
         delta: "수정된 답변입니다.",
-      }),
-      JSON.stringify({
-        type: "finish",
-        runId: RUN_ID,
-        assistantMessageId: ASSISTANT_MESSAGE_ID,
-        usedNoteIds: [],
-      }),
-    ]);
-  });
-
-  it("Run 실행 중 error 이벤트가 발생하면 해당 이벤트를 전달한다", async () => {
-    vi.mocked(runNoteChatStream).mockImplementation(async (params, onEvent) => {
-      await onEvent({
-        type: "error",
-        message: "답변 생성에 실패했습니다.",
-        runId: params.runId,
-      });
-
-      return RUN_RESULT;
-    });
-
-    const response = await POST(
-      createRequest({
-        content: {
-          text: "수정된 질문",
-        },
-      }),
-      {
-        params: Promise.resolve({
-          messageId: MESSAGE_ID,
-        }),
       },
-    );
-
-    const lines = await readStream(response);
-
-    expect(lines).toEqual([
-      JSON.stringify({
-        type: "error",
-        message: "답변 생성에 실패했습니다.",
+      {
+        assistantMessageId: ASSISTANT_MESSAGE_ID,
         runId: RUN_ID,
-      }),
+        type: "finish",
+        usedNoteIds: [],
+      },
     ]);
   });
 
-  it("Run 실행이 예외를 발생시키고 error 이벤트가 없으면 기본 error 이벤트를 전달한다", async () => {
+  it("Run 실행이 실패하면 start 이후 기본 error 이벤트를 전달한다", async () => {
     vi.mocked(runNoteChatStream).mockRejectedValue(new Error("stream failed"));
 
     const response = await POST(
@@ -1022,48 +977,80 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
     );
 
     const lines = await readStream(response);
+    const events = lines.map((line) => JSON.parse(line));
 
-    expect(lines).toEqual([
-      JSON.stringify({
+    expect(events).toEqual([
+      {
+        runId: RUN_ID,
+        type: "start",
+        userMessageId: USER_MESSAGE_ID,
+      },
+      {
         message: "답변 생성에 실패했습니다.",
         runId: RUN_ID,
         type: "error",
-      }),
+      },
     ]);
   });
 
-  it("Run 실행에서 error 이벤트가 전달된 경우 예외가 발생해도 중복 error 이벤트를 전달하지 않는다", async () => {
-    vi.mocked(runNoteChatStream).mockImplementation(async (params, onEvent) => {
-      await onEvent({
-        type: "error",
-        message: "실행 실패",
-        runId: params.runId,
+  it("AI 실행 성공 후 finish 이벤트 전송이 실패해도 실행 성공을 실패로 되돌리지 않는다", async () => {
+    const sendError = new Error("finish event send failed");
+    const originalEnqueue = ReadableStreamDefaultController.prototype.enqueue;
+
+    const enqueueSpy = vi
+      .spyOn(ReadableStreamDefaultController.prototype, "enqueue")
+      .mockImplementation(function (
+        this: ReadableStreamDefaultController<Uint8Array>,
+        chunk: Uint8Array,
+      ) {
+        const payload = new TextDecoder().decode(chunk);
+
+        if (payload.includes('"type":"finish"')) {
+          throw sendError;
+        }
+
+        return originalEnqueue.call(this, chunk);
       });
 
-      throw new Error("stream failed after error event");
-    });
-
-    const response = await POST(
-      createRequest({
-        content: {
-          text: "수정된 질문",
-        },
-      }),
-      {
-        params: Promise.resolve({
-          messageId: MESSAGE_ID,
+    try {
+      const response = await POST(
+        createRequest({
+          content: {
+            text: "수정된 질문",
+          },
         }),
-      },
-    );
+        {
+          params: Promise.resolve({
+            messageId: MESSAGE_ID,
+          }),
+        },
+      );
 
-    const lines = await readStream(response);
+      expect(response.status).toBe(200);
 
-    expect(lines).toEqual([
-      JSON.stringify({
-        type: "error",
-        message: "실행 실패",
-        runId: RUN_ID,
-      }),
-    ]);
+      await vi.waitFor(() => {
+        expect(reportNoteChatOperationalError).toHaveBeenCalledWith(
+          expect.objectContaining({
+            actorUserId: USER.id,
+            context: {
+              conversationId: CONVERSATION_ID,
+              eventType: "finish",
+              runId: RUN_ID,
+              userMessageId: USER_MESSAGE_ID,
+            },
+            error: sendError,
+            errorCode: "NOTE_CHAT_STREAM_EVENT_SEND_FAILED",
+            operation: "send_stream_event",
+            userId: USER.id,
+          }),
+        );
+      });
+
+      expect(runNoteChatStream).toHaveBeenCalledTimes(1);
+
+      expect(completeNoteChatExecutionClaim).not.toHaveBeenCalled();
+    } finally {
+      enqueueSpy.mockRestore();
+    }
   });
 });

@@ -76,6 +76,9 @@ export type CompleteRelatedNoteRecommendationExecutionClaimParams = {
 
   /** claim 완료 상태입니다. */
   status: RelatedNoteRecommendationExecutionClaimCompletionStatus;
+
+  /** 완료할 실행 claim의 소유 사용자 ID입니다. */
+  userId: string;
 };
 
 /** Related Notes 추천 실행 claim 저장에 필요한 Supabase Admin Client 최소 형태입니다. */
@@ -159,7 +162,10 @@ export async function claimRelatedNoteRecommendationExecution(
  * claim 완료는 기능 제어용 active claim 해제 책임을 가지므로,
  * run 기록 완료와 별개로 반드시 시도해야 합니다.
  *
- * @param params 완료할 claim ID와 상태
+ * DB RPC에도 사용자 ID를 전달하여 service role 호출에서도
+ * 다른 사용자의 Claim을 완료할 수 없도록 소유권을 함께 검증합니다.
+ *
+ * @param params 완료할 claim ID, 소유 사용자 ID와 상태
  * @param options 테스트에서 주입할 Supabase Client
  */
 export async function completeRelatedNoteRecommendationExecutionClaim(
@@ -175,6 +181,7 @@ export async function completeRelatedNoteRecommendationExecutionClaim(
     {
       p_claim_id: params.claimId,
       p_status: params.status,
+      p_user_id: params.userId,
     },
   );
 

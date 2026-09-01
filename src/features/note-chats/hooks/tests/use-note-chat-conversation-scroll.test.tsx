@@ -572,6 +572,66 @@ describe("useNoteChatConversationScroll", () => {
     });
   });
 
+  it("prepend 위치 복원으로 발생한 programmatic scroll은 다음 이전 메시지 조회를 다시 시작하지 않는다", async () => {
+    let anchorTop = 150;
+
+    const onLoadPreviousMessages = vi.fn(async () => {
+      anchorTop = 350;
+    });
+
+    const { content, result, viewport } = prepareHook({
+      hasPreviousMessages: true,
+      onLoadPreviousMessages,
+    });
+
+    const anchor = document.createElement("li");
+
+    content.insertBefore(anchor, result.current.messageEndRef.current);
+
+    mockElementRect(anchor, () =>
+      createRect({
+        top: anchorTop,
+        bottom: anchorTop + 50,
+      }),
+    );
+
+    /*
+     * 가장 오래된 메시지가 viewport에 노출된 상태에서
+     * 첫 이전 메시지 조회를 시작합니다.
+     */
+    viewport.scrollTop = 20;
+
+    act(() => {
+      result.current.handleViewportScroll();
+    });
+
+    await waitFor(() => {
+      expect(onLoadPreviousMessages).toHaveBeenCalledTimes(1);
+    });
+
+    /*
+     * prepend된 콘텐츠 높이만큼 visual anchor 복원이 수행되어
+     * 코드가 scrollTop을 20 → 220으로 직접 변경합니다.
+     */
+    await waitFor(() => {
+      expect(viewport.scrollTop).toBe(220);
+    });
+
+    /*
+     * 브라우저가 위 programmatic scrollTop 변경에 대한 scroll event를
+     * 뒤늦게 전달한 상황을 재현합니다.
+     *
+     * 가장 오래된 메시지는 여전히 viewport에 보이지만,
+     * 이 이벤트는 사용자 스크롤이 아니므로 다음 페이지 조회를
+     * 다시 시작하면 안 됩니다.
+     */
+    act(() => {
+      result.current.handleViewportScroll();
+    });
+
+    expect(onLoadPreviousMessages).toHaveBeenCalledTimes(1);
+  });
+
   it("이전 메시지 조회가 진행 중이면 중복 조회하지 않는다", async () => {
     let resolveLoad: (() => void) | null = null;
 
