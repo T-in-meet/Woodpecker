@@ -1,7 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { ROUTES } from "@/lib/constants/routes";
 import { formatDateTime } from "@/lib/utils/formatDate";
 
@@ -24,7 +23,6 @@ const {
   getUserMock,
   getGradingsByNoteMock,
   getNoteByIdMock,
-  hasCompletedReviewForNoteTodayMock,
   noteDetailBodyMock,
   notFoundMock,
   redirectMock,
@@ -32,7 +30,6 @@ const {
   getUserMock: vi.fn(),
   getGradingsByNoteMock: vi.fn(),
   getNoteByIdMock: vi.fn(),
-  hasCompletedReviewForNoteTodayMock: vi.fn(),
   noteDetailBodyMock: vi.fn(),
   notFoundMock: vi.fn(),
   redirectMock: vi.fn(),
@@ -59,7 +56,6 @@ vi.mock("@/features/notes/queries", () => ({
 
 vi.mock("@/features/review/queries", () => ({
   getGradingsByNote: getGradingsByNoteMock,
-  hasCompletedReviewForNoteToday: hasCompletedReviewForNoteTodayMock,
 }));
 
 vi.mock("next/navigation", () => ({
@@ -115,8 +111,6 @@ describe("NoteDetailPage", () => {
 
     getUserMock.mockReset();
     getNoteByIdMock.mockReset();
-    hasCompletedReviewForNoteTodayMock.mockReset();
-    hasCompletedReviewForNoteTodayMock.mockResolvedValue(false);
     getGradingsByNoteMock.mockReset();
     getGradingsByNoteMock.mockResolvedValue([]);
     noteDetailBodyMock.mockReset();
@@ -294,30 +288,6 @@ describe("NoteDetailPage", () => {
     });
   });
 
-  it("keeps review entry open but reflects the daily limit when already completed today", async () => {
-    getUserMock.mockResolvedValue(createUser("user-123"));
-    getNoteByIdMock.mockResolvedValue(
-      createNote({
-        title: "Already done today",
-        next_review_at: "2026-03-30T15:00:00.000Z",
-        next_scheduled_at: "2026-03-30T09:00:00.000Z",
-        notification_time_of_day: null,
-      }),
-    );
-    hasCompletedReviewForNoteTodayMock.mockResolvedValue(true);
-
-    await renderPage();
-
-    // 진입은 목록과 같은 기준으로 열어 두고, 오늘 완료했다는 사실은 문구로만 알린다.
-    // 완료 처리를 막는 것은 백지 테스트 화면과 RPC(WP001)의 몫이다.
-    expect(lastBodyProps()).toMatchObject({
-      canStartReview: true,
-      reviewStatusMessage: `오늘 백지 테스트 완료 · 다음 복습 일정: ${formatDateTime(
-        "2026-03-30T09:00:00.000Z",
-      )}`,
-    });
-  });
-
   it("keeps review entry open for a note scheduled in the future", async () => {
     getUserMock.mockResolvedValue(createUser("user-123"));
     getNoteByIdMock.mockResolvedValue(
@@ -328,59 +298,42 @@ describe("NoteDetailPage", () => {
         notification_time_of_day: null,
       }),
     );
-    hasCompletedReviewForNoteTodayMock.mockResolvedValue(false);
 
     await renderPage();
 
     expect(lastBodyProps()).toMatchObject({ canStartReview: true });
   });
 
-  it("closes review entry once every round is finished", async () => {
+  // 회차 상한이 없으므로 횟수를 아무리 채워도 자동으로 끝나지 않는다.
+  it("keeps review entry open no matter how many reviews are done", async () => {
     getUserMock.mockResolvedValue(createUser("user-123"));
     getNoteByIdMock.mockResolvedValue(
       createNote({
-        title: "All rounds done",
-        next_review_at: null,
-        next_scheduled_at: null,
-        notification_time_of_day: null,
-        review_round: MAX_REVIEW_ROUND,
-      }),
-    );
-
-    await renderPage();
-
-    expect(lastBodyProps()).toMatchObject({ canStartReview: false });
-    expect(hasCompletedReviewForNoteTodayMock).not.toHaveBeenCalled();
-  });
-
-  it("falls back to allowing review when the daily-completion lookup fails", async () => {
-    getUserMock.mockResolvedValue(createUser("user-123"));
-    getNoteByIdMock.mockResolvedValue(
-      createNote({
-        title: "Future review note",
-        next_review_at: "2026-03-30T09:00:00.000Z",
+        title: "Reviewed many times",
+        next_review_at: "2026-03-30T15:00:00.000Z",
         next_scheduled_at: "2026-03-30T09:00:00.000Z",
         notification_time_of_day: null,
+        review_round: 12,
       }),
     );
-    hasCompletedReviewForNoteTodayMock.mockRejectedValue(new Error("boom"));
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     await renderPage();
 
-    expect(lastBodyProps()).toMatchObject({ canStartReview: true });
-    errorSpy.mockRestore();
+    expect(lastBodyProps()).toMatchObject({
+      canStartReview: true,
+      isReviewCompleted: false,
+    });
   });
 
-  it("marks the note completed when every review round is finished", async () => {
+  it("marks the note completed when the user finished it", async () => {
     getUserMock.mockResolvedValue(createUser("user-123"));
     getNoteByIdMock.mockResolvedValue(
       createNote({
         title: "Completed note",
-        next_review_at: null,
-        next_scheduled_at: null,
+        next_review_at: "2026-03-30T15:00:00.000Z",
+        next_scheduled_at: "2026-03-30T09:00:00.000Z",
         notification_time_of_day: null,
-        review_round: MAX_REVIEW_ROUND,
+        review_completed_at: "2026-03-29T05:00:00.000Z",
       }),
     );
 
@@ -389,10 +342,8 @@ describe("NoteDetailPage", () => {
     expect(lastBodyProps()).toMatchObject({
       isReviewCompleted: true,
       canStartReview: false,
-      reviewStatusMessage: "1-3-7 복습을 모두 마쳤습니다.",
-      nextScheduledAt: null,
+      reviewStatusMessage: "복습을 완료한 노트입니다.",
     });
-    expect(hasCompletedReviewForNoteTodayMock).not.toHaveBeenCalled();
   });
 
   it("returns not found when the note does not exist for the current user", async () => {

@@ -15,7 +15,11 @@ vi.mock("@/lib/supabase/getUser", () => ({
 
 import { getLearningStats, getMyFeedbacks } from "../queries";
 
-type NotesRow = { review_round: number; next_review_at?: string | null };
+type NotesRow = {
+  review_round: number;
+  next_review_at?: string | null;
+  review_completed_at?: string | null;
+};
 type ReviewLogsRow = {
   round: number;
   scheduled_at: string;
@@ -90,7 +94,7 @@ describe("getLearningStats", () => {
         { review_round: 0 },
         { review_round: 1 },
         { review_round: 1 },
-        { review_round: 3 },
+        { review_round: 9 },
       ],
       reviewLogsData: [],
     });
@@ -99,11 +103,12 @@ describe("getLearningStats", () => {
     const result = await getLearningStats();
 
     expect(result.totalNotes).toBe(4);
+    // 회차 상한이 없으므로 버킷을 고정하지 않는다. 노트가 없는 횟수는 나오지 않고,
+    // 0회만 "학습 전" 칸이라 항상 남는다.
     expect(result.notesByRound).toEqual([
       { round: 0, count: 1 },
       { round: 1, count: 2 },
-      { round: 2, count: 0 },
-      { round: 3, count: 1 },
+      { round: 9, count: 1 },
     ]);
   });
 
@@ -288,17 +293,19 @@ describe("getLearningStats", () => {
     expect(result.reviewWaitingCount).toBe(2);
   });
 
-  it("completedNotesCount: next_review_at이 null이고 round가 MAX인 노트만 포함한다", async () => {
+  it("completedNotesCount: 사용자가 완료 표시한 노트만 포함한다", async () => {
     getUserMock.mockResolvedValue({ id: "user-123" });
 
     const { supabase } = makeSupabase({
       notesData: [
-        { review_round: 3, next_review_at: null }, // 완주 → 포함
-        { review_round: 0, next_review_at: null }, // 미시작 → 제외
         {
           review_round: 3,
-          next_review_at: "2026-05-10T00:00:00.000Z", // 예정 있음 → 제외
+          next_review_at: null,
+          review_completed_at: "2026-05-01T00:00:00.000Z", // 완료 표시 → 포함
         },
+        { review_round: 0, next_review_at: null }, // 미시작 → 제외
+        // 횟수를 아무리 채워도 완료 표시가 없으면 제외
+        { review_round: 9, next_review_at: "2026-05-10T00:00:00.000Z" },
       ],
       reviewLogsData: [],
     });

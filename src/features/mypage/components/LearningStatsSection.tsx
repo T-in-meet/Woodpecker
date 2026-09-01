@@ -44,11 +44,9 @@ function StatCard({
   );
 }
 
+// 복습 횟수에 상한이 없으므로 0회만 이름을 주고 나머지는 숫자로 만든다.
 const NOTES_ROUND_LABELS: Record<number, string> = {
   0: "학습 전",
-  1: "1회차 복습 완료",
-  2: "2회차 복습 완료",
-  3: "3회차 복습 완료",
 };
 
 function formatPercent(numerator: number, denominator: number): string {

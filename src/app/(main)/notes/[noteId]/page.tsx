@@ -19,10 +19,7 @@ import {
   getReviewStatus,
 } from "@/features/notes/utils/noteStatus";
 import { GradingHistorySection } from "@/features/review/components/GradingHistorySection";
-import {
-  getGradingsByNote,
-  hasCompletedReviewForNoteToday,
-} from "@/features/review/queries";
+import { getGradingsByNote } from "@/features/review/queries";
 import { ROUTES } from "@/lib/constants/routes";
 import { logError } from "@/lib/logger";
 import { getUser } from "@/lib/supabase/getUser";
@@ -73,49 +70,28 @@ export default async function NoteDetailPage({
 
   const nextReviewAt = note.next_review_at;
   const nextScheduledAt = note.next_scheduled_at ?? nextReviewAt;
-  // 완료 판정도 목록과 공유한다. 사용자가 직접 끝냈거나 회차 상한까지 채운 노트다.
+  // 회차 상한이 없으므로 복습이 끝나는 경로는 사용자의 완료 표시뿐이다.
   const isReviewCompleted = getReviewStatus(note) === "completed";
-  const isCompletedByUser = Boolean(note.review_completed_at);
   const isReviewDue =
     nextScheduledAt !== null &&
     new Date(nextScheduledAt).getTime() <= Date.now();
 
-  // 진입 조건은 노트 목록과 공유한다. 오늘 이미 복습을 완료했어도 다시 들어올 수 있고,
-  // 완료 처리가 가능한지는 백지 테스트 화면이 따로 판단한다.
+  // 진입 조건은 노트 목록과 공유한다. 언제 몇 번 복습할지는 사용자가 정한다.
   const canReview = canStartReview(note);
 
-  // 완료 버튼 비활성 여부와 상태 문구에만 쓴다. 진입은 이 값으로 막지 않는다.
-  const alreadyCompletedTodayPromise = canReview
-    ? hasCompletedReviewForNoteToday(noteId, user.id).catch((error) => {
-        // 일시적 조회 실패 시 fail-open(false) — 실제 차단은 DB 부분 unique
-        // 인덱스와 RPC가 보증하므로 페이지 표시를 막지 않는다.
-        logError(error);
-        return false;
-      })
-    : Promise.resolve(false);
-
-  const gradingsPromise = getGradingsByNote(noteId, user.id).catch((error) => {
+  const gradings = await getGradingsByNote(noteId, user.id).catch((error) => {
     // 채점 기록은 부가 정보 — 조회 실패 시 섹션만 숨기고 페이지 표시를 막지 않는다.
     logError(error);
     return [];
   });
 
-  const [alreadyCompletedToday, gradings] = await Promise.all([
-    alreadyCompletedTodayPromise,
-    gradingsPromise,
-  ]);
-
-  const reviewStatusMessage = isCompletedByUser
+  const reviewStatusMessage = isReviewCompleted
     ? "복습을 완료한 노트입니다."
-    : isReviewCompleted
-      ? "1-3-7 복습을 모두 마쳤습니다."
-      : nextScheduledAt
-        ? alreadyCompletedToday
-          ? `오늘 백지 테스트 완료 · 다음 복습 일정: ${formatDateTime(nextScheduledAt)}`
-          : isReviewDue
-            ? "지금 백지 테스트를 진행할 수 있습니다."
-            : `다음 복습 일정: ${formatDateTime(nextScheduledAt)}`
-        : "다음 복습 일정이 아직 준비되지 않았습니다.";
+    : nextScheduledAt
+      ? isReviewDue
+        ? "지금 백지 테스트를 진행할 수 있습니다."
+        : `다음 복습 일정: ${formatDateTime(nextScheduledAt)}`
+      : "다음 복습 일정이 아직 준비되지 않았습니다.";
 
   return (
     <div className="mx-auto w-full max-w-4xl px-6 py-10 md:px-12">
@@ -152,7 +128,6 @@ export default async function NoteDetailPage({
         content={note.content}
         reviewRound={note.review_round}
         isReviewCompleted={isReviewCompleted}
-        isCompletedByUser={isCompletedByUser}
         canStartReview={canReview}
         reviewStatusMessage={reviewStatusMessage}
         notificationTimeOfDay={note.notification_time_of_day}

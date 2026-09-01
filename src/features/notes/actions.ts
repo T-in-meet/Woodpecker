@@ -171,11 +171,8 @@ export async function createNoteAction(
 
   await requireCurrentLegalAcceptance(user.id, ROUTES.NOTES_NEW);
 
+  // 아직 한 번도 복습하지 않았으므로 날짜 수 0에 해당하는 첫 간격을 쓴다.
   const firstReviewDate = getNextReviewDate(0);
-
-  if (!firstReviewDate) {
-    return { error: "노트 저장에 실패했습니다. 잠시 후 다시 시도해주세요." };
-  }
 
   const { data: newNoteId, error } = await supabase.rpc(
     "create_note_with_initial_review_log",

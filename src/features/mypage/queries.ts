@@ -1,4 +1,3 @@
-import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { logError } from "@/lib/logger";
 import { getUser } from "@/lib/supabase/getUser";
 import { createServerComponentClient } from "@/lib/supabase/server";
@@ -112,13 +111,8 @@ export async function getLearningStats(): Promise<LearningStats> {
   const totalNotes = notesRows.length;
 
   // 완료 표시한 노트는 대기·오늘 집계에서 뺀다. 노트 목록의 같은 이름 필터와 맞춘다.
-  const isCompletedNote = (n: {
-    next_review_at: string | null;
-    review_completed_at: string | null;
-    review_round: number;
-  }) =>
-    Boolean(n.review_completed_at) ||
-    (n.next_review_at === null && n.review_round === MAX_REVIEW_ROUND);
+  const isCompletedNote = (n: { review_completed_at: string | null }) =>
+    Boolean(n.review_completed_at);
 
   const reviewWaitingCount = notesRows.filter(
     (n) =>
@@ -140,15 +134,12 @@ export async function getLearningStats(): Promise<LearningStats> {
       n.next_review_at <= nowIso,
   ).length;
 
-  const notesByRoundMap = new Map<number, number>([
-    [0, 0],
-    [1, 0],
-    [2, 0],
-    [3, 0],
-  ]);
+  // 복습 횟수에 상한이 없으므로 버킷을 고정하지 않고 실제 데이터에서 만든다.
+  // 0회는 "학습 전" 칸이라 노트가 없어도 항상 보여준다.
+  const notesByRoundMap = new Map<number, number>([[0, 0]]);
   for (const row of notesRows) {
     const r = row.review_round;
-    if (typeof r === "number" && notesByRoundMap.has(r)) {
+    if (typeof r === "number" && Number.isInteger(r) && r >= 0) {
       notesByRoundMap.set(r, (notesByRoundMap.get(r) ?? 0) + 1);
     }
   }

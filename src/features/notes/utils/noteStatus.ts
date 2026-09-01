@@ -1,4 +1,3 @@
-import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { DAY_IN_MS, KST_OFFSET_MS } from "@/lib/constants/time";
 import { formatShortDateKST } from "@/lib/utils/formatDate";
 
@@ -27,11 +26,8 @@ function getKstDayNumber(date: Date): number {
 }
 
 export function getReviewStatus(note: ReviewGateNote): ReviewStatus {
-  // 사용자가 직접 끝낸 노트가 우선이다.
+  // 회차 상한이 없으므로 복습이 끝나는 경로는 사용자의 완료 표시뿐이다.
   if (note.review_completed_at) return "completed";
-  // 회차 상한까지 채운 자동 완료. 상한이 사라지면 이 조건도 함께 없어진다.
-  if (note.review_round >= MAX_REVIEW_ROUND && note.next_review_at === null)
-    return "completed";
   if (!note.next_review_at) return "pending";
   if (new Date(note.next_review_at).getTime() <= Date.now()) return "available";
   return "scheduled";

@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { QuizButton } from "@/features/quiz/components/QuizButton";
 import { RelatedNotesSection } from "@/features/related-notes/components/RelatedNotesSection";
-import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { getNoteReviewRoute } from "@/lib/constants/routes";
 
 import { NoteManageMenu } from "./NoteManageMenu";
@@ -44,9 +43,8 @@ type NoteDetailBodyProps = {
   title: string;
   content: string;
   reviewRound: number;
+  /** 사용자가 복습을 끝냈다고 표시한 노트인지. 관리 메뉴의 토글 문구도 이 값으로 가른다. */
   isReviewCompleted: boolean;
-  /** 사용자가 직접 완료 표시한 노트인지. 관리 메뉴의 토글 문구를 가른다. */
-  isCompletedByUser: boolean;
   canStartReview: boolean;
   reviewStatusMessage: string;
   notificationTimeOfDay: string | null;
@@ -59,7 +57,6 @@ export function NoteDetailBody({
   content,
   reviewRound,
   isReviewCompleted,
-  isCompletedByUser,
   canStartReview,
   reviewStatusMessage,
   notificationTimeOfDay,
@@ -95,7 +92,7 @@ export function NoteDetailBody({
               복습 회차는 그 진행도라 같은 색을 쓴다. 단계를 orange-100으로 잡은 건
               퀴즈 선택지의 "선택됨"(orange-50)과 톤을 갈라두기 위해서다. */}
           <span className="rounded-full bg-orange-100 px-2 py-1 font-medium text-foreground dark:bg-orange-950/40">
-            복습 {reviewRound} / {MAX_REVIEW_ROUND}
+            복습 {reviewRound}회
           </span>
           {isReviewCompleted && (
             <span className="rounded-full bg-emerald-100 px-2 py-1 font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
@@ -127,7 +124,7 @@ export function NoteDetailBody({
               noteTitle={title}
               onEdit={() => setIsEditing(true)}
               onEditIntent={preloadNoteEditForm}
-              isCompletedByUser={isCompletedByUser}
+              isCompletedByUser={isReviewCompleted}
               canChangeNotificationTime={!isReviewCompleted}
               notificationTimeOfDay={notificationTimeOfDay}
               nextScheduledAt={nextScheduledAt}

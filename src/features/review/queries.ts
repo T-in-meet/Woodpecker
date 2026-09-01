@@ -1,22 +1,21 @@
 import { z } from "zod";
 
-import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { createServerComponentClient } from "@/lib/supabase/server";
 
-import { getKstDayBoundsUtc } from "./lib/kstDay";
 import { gradingFeedbackSchema } from "./schema";
 
 const reviewableNoteSchema = z.object({
   title: z.string(),
   next_review_at: z.string().nullable(),
   review_completed_at: z.string().nullable(),
-  review_round: z.number().int().min(0).max(MAX_REVIEW_ROUND),
+  // 누적 복습 횟수. 상한이 없다.
+  review_round: z.number().int().min(0),
 });
 
 const pendingReviewLogSchema = z.object({
   id: z.string().uuid(),
   note_id: z.string().uuid(),
-  round: z.number().int().min(1).max(MAX_REVIEW_ROUND),
+  round: z.number().int().min(1),
   scheduled_at: z.string(),
   completed_at: z.string().nullable(),
 });
@@ -73,26 +72,6 @@ export async function getPendingReviewLog(
   return parsed.success ? parsed.data : null;
 }
 
-export async function hasCompletedReviewForNoteToday(
-  noteId: string,
-  userId: string,
-): Promise<boolean> {
-  const { startUtcIso, endUtcIso } = getKstDayBoundsUtc();
-  const supabase = await createServerComponentClient();
-  const { count, error } = await supabase
-    .from("review_logs")
-    .select("id", { count: "exact", head: true })
-    .eq("note_id", noteId)
-    .eq("user_id", userId)
-    .not("completed_at", "is", null)
-    .gte("completed_at", startUtcIso)
-    .lt("completed_at", endUtcIso);
-
-  if (error) throw error;
-
-  return (count ?? 0) > 0;
-}
-
 export async function getNoteContentForComparison(
   noteId: string,
   userId: string,
@@ -114,7 +93,7 @@ export async function getNoteContentForComparison(
 const reviewGradingSchema = z.object({
   id: z.string().uuid(),
   review_log_id: z.string().uuid(),
-  round: z.number().int().min(1).max(MAX_REVIEW_ROUND),
+  round: z.number().int().min(1),
   score: z.number().int().min(0).max(100),
   feedback: gradingFeedbackSchema,
   created_at: z.string(),

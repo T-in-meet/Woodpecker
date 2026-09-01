@@ -107,11 +107,7 @@ describe("getNotes", () => {
   it.each([
     ["due", "lte", ["next_review_at", expect.any(String)]],
     ["scheduled", "or", [expect.stringContaining("next_review_at.gt.")]],
-    [
-      "completed",
-      "or",
-      [expect.stringContaining("review_completed_at.not.is.null")],
-    ],
+    ["completed", "not", ["review_completed_at", "is", null]],
   ] as const)("%s 보기에 맞는 필터를 적용한다", async (view, method, args) => {
     const { supabase, callsFor } = createSupabaseQueryMock({
       notes: { data: [], count: 0 },

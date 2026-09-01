@@ -3,7 +3,6 @@ import Link from "next/link";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { stripNoteColorSyntax } from "@/features/editor/utils/noteColorMarkdown";
-import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { getNoteDetailRoute } from "@/lib/constants/routes";
 import { stripMarkdown } from "@/lib/utils/stripMarkdown";
 
@@ -41,7 +40,7 @@ export function NoteListItem({ note }: { note: NoteSummary }) {
               {note.title}
             </span>
             <span className="inline-flex shrink-0 items-center rounded bg-gray-100 px-2 py-0.5 text-xs font-medium">
-              복습 {note.review_round} / {MAX_REVIEW_ROUND}
+              복습 {note.review_round}회
             </span>
           </div>
 

@@ -4,7 +4,7 @@
 
 BEGIN;
 
-SELECT plan(26);
+SELECT plan(27);
 
 SELECT set_config('test.review_complete_user_a_id', gen_random_uuid()::text, true);
 SELECT set_config('test.review_complete_user_b_id', gen_random_uuid()::text, true);
@@ -188,6 +188,32 @@ VALUES
     TIMESTAMPTZ '2026-05-01 14:30:00+09'
   );
 
+-- 간격은 "복습한 서로 다른 KST 날짜 수"로 정해진다. review_round만 올려 둔 노트는
+-- 완료 이력이 없어 모두 첫 간격을 받으므로, 회차에 맞는 완료 로그를 함께 심는다.
+INSERT INTO public.review_logs (note_id, user_id, round, scheduled_at, completed_at)
+VALUES
+  (
+    current_setting('test.review_complete_note_round2_id')::uuid,
+    current_setting('test.review_complete_user_a_id')::uuid,
+    1,
+    '2026-01-02T00:00:00Z'::timestamptz,
+    '2026-01-02T03:00:00Z'::timestamptz
+  ),
+  (
+    current_setting('test.review_complete_note_round3_id')::uuid,
+    current_setting('test.review_complete_user_a_id')::uuid,
+    1,
+    '2026-01-02T00:00:00Z'::timestamptz,
+    '2026-01-02T03:00:00Z'::timestamptz
+  ),
+  (
+    current_setting('test.review_complete_note_round3_id')::uuid,
+    current_setting('test.review_complete_user_a_id')::uuid,
+    2,
+    '2026-01-05T00:00:00Z'::timestamptz,
+    '2026-01-05T03:00:00Z'::timestamptz
+  );
+
 INSERT INTO public.notifications (
   id,
   user_id,
@@ -342,28 +368,44 @@ SELECT set_config(
   true
 );
 
-SELECT throws_ok(
-  $sql$
-    SELECT public.complete_review_and_schedule_next(
-      current_setting('test.review_complete_note_round1_id')::uuid,
-      current_setting('test.review_complete_generated_round2_log_id')::uuid
-    );
-  $sql$,
-  'WP001',
-  'daily review completion limit reached',
-  $$a second completion for the same note on the same KST day should be rejected with the daily-limit code$$
+-- 당일 1회 제한이 사라졌다. 같은 날 다시 완료해도 막지 않되, 하루에 여러 번 했다고
+-- 다음 일정이 뒤로 밀리지는 않아야 한다.
+SELECT is(
+  public.complete_review_and_schedule_next(
+    current_setting('test.review_complete_note_round1_id')::uuid,
+    current_setting('test.review_complete_generated_round2_log_id')::uuid
+  )::text,
+  current_setting('test.review_complete_note_round1_id'),
+  $$a second completion on the same KST day should be accepted$$
 );
 
 SELECT ok(
   (
-    SELECT n.review_round = 1
-      AND rl.completed_at IS NULL
+    SELECT n.review_round = 2
+      AND n.next_review_at = public.kst_day_start(
+        first_completed.completed_at + interval '3 days'
+      )
     FROM public.notes n
-    JOIN public.review_logs rl
-      ON rl.id = current_setting('test.review_complete_generated_round2_log_id')::uuid
+    JOIN public.review_logs first_completed
+      ON first_completed.id = current_setting('test.review_complete_log_round1_id')::uuid
     WHERE n.id = current_setting('test.review_complete_note_round1_id')::uuid
   ),
-  $$daily-limit rejection should leave the pending review and note state unchanged$$
+  $$a same-day completion should bump the count without moving the next review$$
+);
+
+SELECT is(
+  (
+    SELECT count(*)
+    FROM public.review_logs rl
+    JOIN public.review_logs consumed
+      ON consumed.id = current_setting('test.review_complete_generated_round2_log_id')::uuid
+    WHERE rl.note_id = current_setting('test.review_complete_note_round1_id')::uuid
+      AND rl.round = 3
+      AND rl.scheduled_at = consumed.scheduled_at
+      AND rl.completed_at IS NULL
+  ),
+  1::bigint,
+  $$a same-day completion should hand the same schedule to the next pending log$$
 );
 
 SELECT throws_ok(
@@ -423,24 +465,35 @@ SELECT is(
   $$round 3 RPC should return the note id$$
 );
 
+-- 회차 상한이 없다. 3회를 넘어서도 시퀀스를 따라 다음 일정이 잡힌다.
+-- 이 노트는 이번 완료로 복습한 날짜가 3일이 되므로 간격은 14일이다.
 SELECT ok(
   (
-    SELECT review_round = 3
-      AND next_review_at IS NULL
-    FROM public.notes
-    WHERE id = current_setting('test.review_complete_note_round3_id')::uuid
+    SELECT n.review_round = 3
+      AND n.next_review_at = public.kst_day_start(
+        rl.completed_at + interval '14 days'
+      )
+    FROM public.notes n
+    JOIN public.review_logs rl
+      ON rl.id = current_setting('test.review_complete_log_round3_id')::uuid
+    WHERE n.id = current_setting('test.review_complete_note_round3_id')::uuid
   ),
-  $$round 3 completion should clear next_review_at$$
+  $$round 3 completion should schedule the next review fourteen days later$$
 );
 
 SELECT is(
   (
     SELECT count(*)
-    FROM public.review_logs
-    WHERE note_id = current_setting('test.review_complete_note_round3_id')::uuid
+    FROM public.review_logs rl
+    JOIN public.review_logs completed
+      ON completed.id = current_setting('test.review_complete_log_round3_id')::uuid
+    WHERE rl.note_id = current_setting('test.review_complete_note_round3_id')::uuid
+      AND rl.round = 4
+      AND rl.scheduled_at = completed.completed_at + interval '14 days'
+      AND rl.completed_at IS NULL
   ),
   1::bigint,
-  $$round 3 completion should not create an extra review log$$
+  $$round 3 completion should still create a pending round 4 log$$
 );
 
 SELECT is(

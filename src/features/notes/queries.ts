@@ -1,7 +1,6 @@
 import { z } from "zod";
 
 import { NOTES_PAGE_SIZE } from "@/lib/constants/notes";
-import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { logError } from "@/lib/logger";
 import { createServerComponentClient } from "@/lib/supabase/server";
 import { escapePostgrestLikePattern } from "@/lib/utils/escapePostgrestLikePattern";
@@ -15,7 +14,8 @@ const noteDetailSchema = z.object({
   next_review_at: z.string().nullable(),
   notification_time_of_day: z.string().nullable(),
   review_completed_at: z.string().nullable(),
-  review_round: z.number().int().min(0).max(MAX_REVIEW_ROUND),
+  // 누적 복습 횟수. 상한이 없다.
+  review_round: z.number().int().min(0),
   created_at: z.string(),
   updated_at: z.string(),
   user_id: z.string().uuid(),
@@ -27,7 +27,8 @@ const noteSummarySchema = z.object({
   content: z.string(),
   next_review_at: z.string().nullable(),
   review_completed_at: z.string().nullable(),
-  review_round: z.number().int().min(0).max(MAX_REVIEW_ROUND),
+  // 누적 복습 횟수. 상한이 없다.
+  review_round: z.number().int().min(0),
 });
 const NOTE_SUMMARY_SELECT =
   "id, title, content, next_review_at, review_completed_at, review_round" as const;
@@ -45,11 +46,6 @@ export type NoteSummary = z.infer<typeof noteSummarySchema>;
 function buildScheduledFilter(nowIso: string): string {
   return `next_review_at.gt.${nowIso},and(next_review_at.is.null,review_round.eq.0)`;
 }
-
-// "복습 완료" 판정 조건. 사용자가 직접 표시한 노트와, 회차 상한까지 채워 자동으로
-// 완료된 노트를 함께 본다. 자동 완료는 회차 상한이 사라지면 같이 없어질 조건이다.
-const COMPLETED_FILTER =
-  `review_completed_at.not.is.null,and(next_review_at.is.null,review_round.eq.${MAX_REVIEW_ROUND})` as const;
 
 function parseNoteSummaries(
   data: unknown,
@@ -94,7 +90,8 @@ export async function getNotes(
       .or(buildScheduledFilter(nowIso))
       .is("review_completed_at", null);
   } else if (view === "completed") {
-    query = query.or(COMPLETED_FILTER);
+    // 복습을 그만두는 유일한 경로는 사용자의 완료 표시다.
+    query = query.not("review_completed_at", "is", null);
   }
 
   if (search.trim()) {
