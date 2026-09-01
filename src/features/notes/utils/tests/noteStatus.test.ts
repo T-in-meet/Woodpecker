@@ -114,7 +114,7 @@ describe("getReviewScheduleDisplay", () => {
 
   it("completed → '완료'", () => {
     expect(getReviewScheduleDisplay("completed", null)).toMatchObject({
-      label: "다음 복습일",
+      label: "복습일",
       primaryText: "완료",
       tone: "default",
     });

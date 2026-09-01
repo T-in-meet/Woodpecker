@@ -40,7 +40,6 @@ describe("NoteListItem", () => {
     expect(screen.getByText("복습일")).toBeInTheDocument();
     expect(screen.getByText("2일 지남")).toBeInTheDocument();
     expect(screen.queryByText("2026. 4. 29 예정")).not.toBeInTheDocument();
-    expect(screen.queryByText("다음 복습일")).not.toBeInTheDocument();
   });
 
   // 상세는 예정일 전에도 진입할 수 있었는데 목록만 막고 있었다. 기준을 상세에 맞춘다.

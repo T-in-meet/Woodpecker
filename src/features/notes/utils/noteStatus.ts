@@ -7,7 +7,7 @@ export type ReviewStatus = "available" | "completed" | "scheduled" | "pending";
 export type ReviewScheduleTone = "default" | "overdue" | "today" | "upcoming";
 
 export type ReviewScheduleDisplay = {
-  label: "다음 복습일" | "복습일";
+  label: "복습일";
   primaryText: string;
   tone: ReviewScheduleTone;
 };
@@ -50,7 +50,7 @@ export function getReviewScheduleDisplay(
   nextReviewAt: string | null,
 ): ReviewScheduleDisplay {
   const defaultDisplay = (primaryText: string): ReviewScheduleDisplay => ({
-    label: "다음 복습일",
+    label: "복습일",
     primaryText,
     tone: "default",
   });
