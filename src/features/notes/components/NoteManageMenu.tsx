@@ -106,9 +106,15 @@ export function NoteManageMenu({
           </Button>
         </DropdownMenuTrigger>
 
-        {/* 기본 min-w-32는 "복습 완료로 표시"가 두 줄로 접힌다. 가장 긴 항목이
-            한 줄에 들어가는 선까지만 넓힌다. */}
-        <DropdownMenuContent align="end" className="min-w-40">
+        {/* min-w: 기본 min-w-32는 "복습 완료로 표시"가 두 줄로 접힌다. 가장 긴
+            항목이 한 줄에 들어가는 선까지만 넓힌다.
+            collisionPadding: Radix 기본값 0이라 좁은 화면에서 메뉴가 뷰포트
+            왼쪽 끝에 붙는다. 가장자리와 간격을 둔다. */}
+        <DropdownMenuContent
+          align="end"
+          collisionPadding={16}
+          className="min-w-40"
+        >
           {/* 편집 폼으로 바뀌면서 이 메뉴(트리거 포함)가 언마운트되므로, 메뉴가
               포커스를 트리거로 되돌린 다음에 전환해야 포커스가 body로 떨어지지 않는다. */}
           <DropdownMenuItem
