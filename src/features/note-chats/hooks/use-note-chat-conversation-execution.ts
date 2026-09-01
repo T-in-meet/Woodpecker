@@ -7,9 +7,26 @@ import { NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE } from "../constants/executi
 import { noteChatQueryKeys } from "../constants/query-keys";
 import { useNoteChatStream } from "./use-note-chat-stream";
 
+/**
+ * Note Chat Conversation 실행 Hook의 입력값입니다.
+ */
 type UseNoteChatConversationExecutionParams = {
+  /** 현재 Conversation ID입니다. */
   conversationId: string;
+
+  /** 서버에 유효한 running Claim이 존재하는지 여부입니다. */
   hasRunningExecution: boolean;
+};
+
+/**
+ * 실패한 사용자 질문의 재시도 정보입니다.
+ */
+type FailedQuestion = {
+  /** 다시 실행할 User Message ID입니다. */
+  messageId: string;
+
+  /** 다시 실행할 사용자 질문입니다. */
+  question: string;
 };
 
 /**
@@ -33,6 +50,16 @@ export function useNoteChatConversationExecution({
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
 
   /**
+   * 현재 임시로 표시 중인 사용자 질문과 대응하는 저장 Message ID입니다.
+   *
+   * 새 질문은 stream start 이벤트 전까지 ID를 알 수 없으므로 null일 수 있으며,
+   * 질문 수정은 기존 User Message ID를 그대로 사용합니다.
+   */
+  const [pendingQuestionMessageId, setPendingQuestionMessageId] = useState<
+    string | null
+  >(null);
+
+  /**
    * 기존 질문 수정 중 현재 화면에 남길 메시지의 기준 sequence입니다.
    *
    * null이면 모든 저장 메시지를 표시하고,
@@ -42,14 +69,14 @@ export function useNoteChatConversationExecution({
     number | null
   >(null);
 
-  const [failedQuestion, setFailedQuestion] = useState<{
-    messageId: string;
-    question: string;
-  } | null>(null);
+  const [failedQuestion, setFailedQuestion] = useState<FailedQuestion | null>(
+    null,
+  );
 
   const [retryCount, setRetryCount] = useState(0);
 
   const {
+    assistantMessageId: streamingAssistantMessageId,
     cancel,
     content: streamingContent,
     error: streamError,
@@ -97,6 +124,7 @@ export function useNoteChatConversationExecution({
    */
   const handleQuestionSubmit = async (question: string) => {
     setPendingQuestion(question);
+    setPendingQuestionMessageId(null);
     setFailedQuestion(null);
     setRetryCount(0);
 
@@ -104,6 +132,15 @@ export function useNoteChatConversationExecution({
       conversationId,
       question,
     });
+
+    /*
+     * 저장 메시지를 다시 조회하기 전에 현재 임시 질문과 대응하는
+     * User Message ID를 먼저 보존합니다.
+     *
+     * Query가 먼저 갱신되더라도 MessageList에서 같은 질문을
+     * 저장 메시지와 임시 메시지로 동시에 표시하지 않도록 하기 위함입니다.
+     */
+    setPendingQuestionMessageId(result.userMessageId);
 
     /*
      * 질문 Route가 User Message를 먼저 저장하므로
@@ -114,7 +151,13 @@ export function useNoteChatConversationExecution({
      */
     await invalidateConversationQueries();
 
+    /*
+     * 저장 메시지 Query 반영이 끝난 뒤 임시 질문을 제거합니다.
+     * 정상 완료된 스트림도 같은 시점에 초기화하여 저장된 Assistant 메시지로
+     * 자연스럽게 전환합니다.
+     */
     setPendingQuestion(null);
+    setPendingQuestionMessageId(null);
 
     if (result.success) {
       reset();
@@ -160,6 +203,7 @@ export function useNoteChatConversationExecution({
      */
     setEditingSequenceNumber(sequenceNumber);
     setPendingQuestion(question);
+    setPendingQuestionMessageId(messageId);
     setFailedQuestion(null);
     setRetryCount(0);
 
@@ -177,8 +221,12 @@ export function useNoteChatConversationExecution({
      */
     await invalidateConversationQueries();
 
+    /*
+     * 갱신된 저장 메시지가 준비된 뒤 수정용 임시 상태를 제거합니다.
+     */
     setEditingSequenceNumber(null);
     setPendingQuestion(null);
+    setPendingQuestionMessageId(null);
 
     if (result.success) {
       reset();
@@ -252,9 +300,12 @@ export function useNoteChatConversationExecution({
     isStreaming,
     onCancel: cancel,
     pendingQuestion,
+    pendingQuestionMessageId,
     retryCount,
+    retryQuestionMessageId: failedQuestion?.messageId ?? null,
     streamError,
     streamErrorCode,
+    streamingAssistantMessageId,
     streamingContent,
   };
 }

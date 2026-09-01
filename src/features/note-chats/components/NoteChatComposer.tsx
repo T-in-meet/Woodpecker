@@ -3,6 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Send, Square } from "lucide-react";
 import type { KeyboardEvent } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 
 import { FeatureInfoPopover } from "@/components/common/FeatureInfoPopover";
@@ -73,6 +74,9 @@ type NoteChatComposerProps = {
  * 답변 표시 중지 버튼은 현재 브라우저에서 실제 스트림을
  * 수신하고 있는 동안에만 표시합니다.
  *
+ * 답변 표시 중지 Dialog가 열린 상태에서 답변 생성이 완료되더라도
+ * Dialog는 자동으로 닫히지 않으며 완료 상태를 안내합니다.
+ *
  * 답변 표시 중지 버튼은 실제 서버 AI 실행을 취소하지 않으므로,
  * 사용자가 중지 동작과 사용 횟수 차감 정책을 확인한 뒤
  * 실행할 수 있도록 Alert Dialog를 표시합니다.
@@ -85,6 +89,8 @@ export function NoteChatComposer({
   onCancel,
   onSubmit,
 }: NoteChatComposerProps) {
+  const [isStopDialogOpen, setIsStopDialogOpen] = useState(false);
+
   const form = useForm<CreateNoteChatQuestionInput>({
     resolver: zodResolver(createNoteChatQuestionInputSchema),
     defaultValues: {
@@ -154,6 +160,15 @@ export function NoteChatComposer({
     }
 
     event.currentTarget.form?.requestSubmit();
+  };
+
+  const handleStopDisplay = () => {
+    if (!isStreaming) {
+      return;
+    }
+
+    onCancel();
+    setIsStopDialogOpen(false);
   };
 
   const questionError = form.formState.errors.content?.text?.message;
@@ -240,38 +255,48 @@ export function NoteChatComposer({
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
-            {isStreaming ? (
-              <AlertDialog>
+            <AlertDialog
+              open={isStopDialogOpen}
+              onOpenChange={setIsStopDialogOpen}
+            >
+              {isStreaming ? (
                 <AlertDialogTrigger asChild>
                   <Button type="button" size="sm" variant="outline">
                     <Square className="size-3.5" />
                     답변 표시 중지
                   </Button>
                 </AlertDialogTrigger>
+              ) : null}
 
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>
-                      답변 표시를 중지하시겠어요?
-                    </AlertDialogTitle>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    {isStreaming
+                      ? "답변 표시를 중지하시겠어요?"
+                      : "답변 생성이 완료되었습니다."}
+                  </AlertDialogTitle>
 
-                    <AlertDialogDescription>
-                      화면의 답변 표시만 중지됩니다. 이미 시작된 AI 실행은
-                      서버에서 계속 진행되며, 이번 실행은 오늘 사용 횟수에
-                      포함됩니다.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
+                  <AlertDialogDescription>
+                    {isStreaming
+                      ? "화면의 답변 표시만 중지됩니다. 이미 시작된 AI 실행은 서버에서 계속 진행되며, 이번 실행은 오늘 사용 횟수에 포함됩니다."
+                      : "답변 생성이 이미 완료되어 더 이상 표시를 중지할 수 없습니다."}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
 
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>계속 보기</AlertDialogCancel>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>
+                    {isStreaming ? "계속 보기" : "닫기"}
+                  </AlertDialogCancel>
 
-                    <AlertDialogAction onClick={onCancel}>
-                      표시 중지
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            ) : null}
+                  <AlertDialogAction
+                    disabled={!isStreaming}
+                    onClick={handleStopDisplay}
+                  >
+                    표시 중지
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
 
             <Button type="submit" size="sm" disabled={isSubmitDisabled}>
               {isAnswerGenerating ? (
