@@ -44,6 +44,9 @@ type SubmitAnswerFieldErrors = Partial<
   Record<keyof SubmitAnswerInput, string[]>
 >;
 
+const REVIEW_COMPLETED_ERROR =
+  "복습을 완료한 노트입니다. 노트 상세에서 복습을 다시 시작해주세요.";
+
 export type SubmitAnswerActionState =
   | {
       success: true;
@@ -196,9 +199,10 @@ export async function submitAnswerAction(
     getNoteReviewRoute(parsed.data.noteId),
   );
 
-  let note, pendingReviewLog;
+  let reviewableNote, note, pendingReviewLog;
   try {
-    [note, pendingReviewLog] = await Promise.all([
+    [reviewableNote, note, pendingReviewLog] = await Promise.all([
+      getReviewableNote(parsed.data.noteId, user.id),
       getNoteContentForComparison(parsed.data.noteId, user.id),
       getPendingReviewLog(parsed.data.noteId, user.id),
     ]);
@@ -208,8 +212,12 @@ export async function submitAnswerAction(
     };
   }
 
-  if (!note) {
+  if (!reviewableNote || !note) {
     return { error: "비교할 노트를 찾을 수 없습니다." };
+  }
+
+  if (reviewableNote.review_completed_at) {
+    return { error: REVIEW_COMPLETED_ERROR };
   }
 
   if (!pendingReviewLog) {
@@ -272,6 +280,10 @@ export async function completeReviewAction(
     return { error: "노트를 찾을 수 없거나 접근 권한이 없습니다." };
   }
 
+  if (reviewableNote.review_completed_at) {
+    return { error: REVIEW_COMPLETED_ERROR };
+  }
+
   if (!pendingReviewLog) {
     return { error: "이미 완료되었거나 진행 중인 복습이 없습니다." };
   }
@@ -287,6 +299,10 @@ export async function completeReviewAction(
       p_note_id: parsed.data.noteId,
       p_review_log_id: parsed.data.reviewLogId,
     });
+
+  if (completeReviewError?.message.includes("review already completed")) {
+    return { error: REVIEW_COMPLETED_ERROR };
+  }
 
   if (completeReviewError || !completedNoteId) {
     return {
@@ -423,6 +439,10 @@ export async function gradeAnswerAction(
 
   if (!reviewableNote || !note) {
     return { error: "노트를 찾을 수 없거나 접근 권한이 없습니다." };
+  }
+
+  if (reviewableNote.review_completed_at) {
+    return { error: REVIEW_COMPLETED_ERROR };
   }
 
   if (!pendingReviewLog || pendingReviewLog.id !== parsed.data.reviewLogId) {

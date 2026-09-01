@@ -1,5 +1,6 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Bell,
   CheckCircle2,
@@ -23,6 +24,7 @@ import {
   LazyNotificationSchedulePicker,
   preloadNotificationSchedulePicker,
 } from "@/features/notifications/components/LazyNotificationSchedulePicker";
+import { NOTIFICATIONS_QUERY_KEY } from "@/features/notifications/query-keys";
 
 import { setNoteReviewCompletedAction } from "../actions";
 import { DeleteNoteDialog } from "./DeleteNoteDialog";
@@ -56,14 +58,15 @@ export function NoteManageMenu({
   nextScheduledAt,
 }: NoteManageMenuProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [hasNotificationOpened, setHasNotificationOpened] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [isTogglingCompletion, startCompletionTransition] = useTransition();
 
   /**
-   * 복습 완료 표시를 켜고 끈다. pending review log는 그대로 두므로, 해제하면
-   * 원래 일정대로 알림과 복습이 다시 이어진다.
+   * 복습 완료 표시를 켜고 끈다. 해제하면 저장된 pending 일정 또는 DB가 복구한
+   * 다음 일정에서 알림과 복습이 다시 이어진다.
    */
   const toggleReviewCompleted = () => {
     startCompletionTransition(async () => {
@@ -76,6 +79,9 @@ export function NoteManageMenu({
         return;
       }
 
+      await queryClient.invalidateQueries({
+        queryKey: NOTIFICATIONS_QUERY_KEY.all,
+      });
       router.refresh();
     });
   };

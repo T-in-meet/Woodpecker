@@ -64,7 +64,7 @@ VALUES (
   public.apply_time_of_day(now(), TIME '14:30')
 );
 
--- 이미 발송된 알림은 옮길 수 없어야 한다.
+-- 이미 발송된 알림도 미래 일정으로 다시 옮길 수 있다.
 UPDATE public.review_logs
 SET notification_dispatched_at = now()
 WHERE id = current_setting('test.schedule_sent_log_id')::uuid;
@@ -154,7 +154,7 @@ SELECT throws_ok(
   $$times earlier today should be rejected$$
 );
 
-SELECT throws_ok(
+SELECT lives_ok(
   format(
     $sql$
       SELECT public.update_notification_schedule('%s'::uuid, '%s'::timestamptz);
@@ -162,8 +162,7 @@ SELECT throws_ok(
     current_setting('test.schedule_sent_note_id'),
     current_setting('test.schedule_target_at')
   ),
-  'no pending review log',
-  $$already dispatched notifications should not be moved$$
+  $$already dispatched notifications should be rearmed at the new schedule$$
 );
 
 SELECT * FROM finish();

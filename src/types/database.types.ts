@@ -2094,6 +2094,10 @@ export type Database = {
         Args: { p_configurations: Json; p_setting_id: string };
         Returns: undefined;
       };
+      set_note_review_completion: {
+        Args: { p_completed: boolean; p_note_id: string };
+        Returns: boolean;
+      };
       update_note_chat_user_message: {
         Args: {
           p_agent_id?: string;

@@ -120,7 +120,7 @@ export default async function NoteReviewPage({
     notFound();
   }
 
-  if (!pendingReviewLog) {
+  if (note.review_completed_at || !pendingReviewLog) {
     const isCompleted = Boolean(note.review_completed_at);
 
     return (

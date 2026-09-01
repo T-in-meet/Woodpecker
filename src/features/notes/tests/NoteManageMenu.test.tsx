@@ -1,5 +1,6 @@
 import "./setup";
 
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -56,20 +57,27 @@ function renderMenu({
   canChangeNotificationTime?: boolean;
   isCompletedByUser?: boolean;
 } = {}) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const invalidateQueriesSpy = vi.spyOn(queryClient, "invalidateQueries");
+
   render(
-    <NoteManageMenu
-      noteId="note-123"
-      noteTitle="노트 제목"
-      onEdit={onEdit}
-      onEditIntent={onEditIntent}
-      isCompletedByUser={isCompletedByUser}
-      canChangeNotificationTime={canChangeNotificationTime}
-      notificationTimeOfDay="21:30:00"
-      nextScheduledAt="2026-05-01T12:30:00.000Z"
-    />,
+    <QueryClientProvider client={queryClient}>
+      <NoteManageMenu
+        noteId="note-123"
+        noteTitle="노트 제목"
+        onEdit={onEdit}
+        onEditIntent={onEditIntent}
+        isCompletedByUser={isCompletedByUser}
+        canChangeNotificationTime={canChangeNotificationTime}
+        notificationTimeOfDay="21:30:00"
+        nextScheduledAt="2026-05-01T12:30:00.000Z"
+      />
+    </QueryClientProvider>,
   );
 
-  return { onEdit, onEditIntent };
+  return { invalidateQueriesSpy, onEdit, onEditIntent };
 }
 
 describe("NoteManageMenu", () => {
@@ -83,7 +91,7 @@ describe("NoteManageMenu", () => {
 
   it("진행 중인 노트에는 복습 완료로 표시를 노출한다", async () => {
     const user = userEvent.setup();
-    renderMenu();
+    const { invalidateQueriesSpy } = renderMenu();
 
     await user.click(screen.getByRole("button", { name: "노트 관리 메뉴" }));
     await user.click(
@@ -95,6 +103,9 @@ describe("NoteManageMenu", () => {
         "note-123",
         true,
       );
+      expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+        queryKey: ["notifications"],
+      });
     });
   });
 

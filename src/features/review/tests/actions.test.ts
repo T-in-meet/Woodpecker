@@ -131,6 +131,12 @@ describe("submitAnswerAction", () => {
     createClientMock.mockReset();
     getNoteContentForComparisonMock.mockReset();
     getPendingReviewLogMock.mockReset();
+    getReviewableNoteMock.mockReset().mockResolvedValue({
+      title: "테스트 노트",
+      next_review_at: "2026-01-02T00:00:00.000Z",
+      review_completed_at: null,
+      review_round: 0,
+    });
     redirectMock.mockReset();
 
     redirectMock.mockImplementation(() => {
@@ -185,6 +191,35 @@ describe("submitAnswerAction", () => {
     const result = await submitAnswerAction(null, formData);
 
     expect(result).toEqual({ error: "진행 중인 복습을 찾을 수 없습니다." });
+  });
+
+  it("rejects answers for a note marked as completed", async () => {
+    createClientMock.mockResolvedValue(createAuthSupabaseMock(TEST_USER_ID));
+    getReviewableNoteMock.mockResolvedValue({
+      title: "테스트 노트",
+      next_review_at: "2026-01-02T00:00:00.000Z",
+      review_completed_at: "2026-01-01T00:00:00.000Z",
+      review_round: 0,
+    });
+    getNoteContentForComparisonMock.mockResolvedValue({ content: "원본 내용" });
+    getPendingReviewLogMock.mockResolvedValue({
+      id: REVIEW_LOG_ID,
+      note_id: NOTE_ID,
+      round: 1,
+      scheduled_at: "2026-01-02T00:00:00.000Z",
+      completed_at: null,
+    });
+
+    const formData = new FormData();
+    formData.set("noteId", NOTE_ID);
+    formData.set("answer", "내 답안");
+
+    const result = await submitAnswerAction(null, formData);
+
+    expect(result).toEqual({
+      error:
+        "복습을 완료한 노트입니다. 노트 상세에서 복습을 다시 시작해주세요.",
+    });
   });
 
   it("returns an error when a query throws", async () => {
@@ -328,6 +363,35 @@ describe("completeReviewAction", () => {
     expect(result).toEqual({
       error: "이미 완료되었거나 진행 중인 복습이 없습니다.",
     });
+  });
+
+  it("rejects completion when the note is marked as completed", async () => {
+    const { rpcMock, supabase } = createCompleteReviewSupabaseMock();
+    createClientMock.mockResolvedValue(supabase);
+    getReviewableNoteMock.mockResolvedValue({
+      title: "테스트 노트",
+      next_review_at: "2026-01-02T00:00:00.000Z",
+      review_completed_at: "2026-01-01T00:00:00.000Z",
+      review_round: 0,
+    });
+    getPendingReviewLogMock.mockResolvedValue({
+      id: REVIEW_LOG_ID,
+      note_id: NOTE_ID,
+      round: 1,
+      scheduled_at: "2026-01-02T00:00:00.000Z",
+      completed_at: null,
+    });
+
+    const result = await completeReviewAction(
+      null,
+      createCompleteReviewFormData(),
+    );
+
+    expect(result).toEqual({
+      error:
+        "복습을 완료한 노트입니다. 노트 상세에서 복습을 다시 시작해주세요.",
+    });
+    expect(rpcMock).not.toHaveBeenCalled();
   });
 
   it("returns an error when the pending review log does not match", async () => {

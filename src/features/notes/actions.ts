@@ -316,8 +316,8 @@ export async function updateNoteAction(
 /**
  * 사용자가 노트의 복습을 직접 끝내거나 다시 시작한다.
  *
- * pending review log는 건드리지 않는다. 완료를 해제하면 원래 일정 그대로 알림이
- * 다시 나가야 하므로, 발송 쪽(`claim_due_review_logs`)이 이 플래그를 보고 거른다.
+ * DB RPC가 완료 상태와 알림을 원자적으로 바꾼다. 완료를 해제할 때 pending log가
+ * 있으면 그 일정을 이어받고, 구 자동 완료 노트처럼 log가 없으면 다음 일정을 만든다.
  */
 export async function setNoteReviewCompletedAction(
   noteId: unknown,
@@ -349,29 +349,29 @@ export async function setNoteReviewCompletedAction(
     getNoteDetailRoute(parsed.data.noteId),
   );
 
-  const { data: updatedNote, error } = await supabase
-    .from("notes")
-    .update({
-      review_completed_at: parsed.data.completed
-        ? new Date().toISOString()
-        : null,
-    })
-    .eq("id", parsed.data.noteId)
-    .eq("user_id", user.id)
-    .select("id")
-    .maybeSingle();
+  const { data: completedState, error } = await supabase.rpc(
+    "set_note_review_completion",
+    {
+      p_note_id: parsed.data.noteId,
+      p_completed: parsed.data.completed,
+    },
+  );
 
   if (error) {
+    if (error.message.includes("note not found")) {
+      return { error: "노트를 찾을 수 없습니다." };
+    }
+
     return {
       error: "복습 완료 상태를 바꾸지 못했습니다. 잠시 후 다시 시도해주세요.",
     };
   }
 
-  if (!updatedNote) {
+  if (completedState === null) {
     return { error: "노트를 찾을 수 없습니다." };
   }
 
-  return { data: { completed: parsed.data.completed } };
+  return { data: { completed: completedState } };
 }
 
 export async function deleteNoteAction(noteId: string) {

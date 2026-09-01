@@ -198,6 +198,39 @@ describe("NoteReviewPage", () => {
     ).toBeInTheDocument();
   });
 
+  it("renders the completed state even when a pending review log is preserved", async () => {
+    createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
+    getReviewableNoteMock.mockResolvedValue({
+      title: "테스트 노트",
+      next_review_at: "2026-01-08T00:00:00.000Z",
+      review_completed_at: "2026-01-07T00:00:00.000Z",
+      review_round: 3,
+    });
+    getPendingReviewLogMock.mockResolvedValue({
+      id: "22222222-2222-2222-2222-222222222222",
+      note_id: "11111111-1111-1111-1111-111111111111",
+      round: 4,
+      scheduled_at: "2026-01-08T00:00:00.000Z",
+      completed_at: null,
+    });
+
+    render(
+      await NoteReviewPage({
+        params: Promise.resolve({
+          noteId: "11111111-1111-1111-1111-111111111111",
+        }),
+      }),
+    );
+
+    expect(
+      screen.getByRole("heading", {
+        name: "이 노트는 모든 복습을 마쳤습니다.",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("blank-test-page")).not.toBeInTheDocument();
+    expect(getGradingByReviewLogMock).not.toHaveBeenCalled();
+  });
+
   it("does not mark the note as completed when the next review is still scheduled", async () => {
     createClientMock.mockResolvedValue(createSupabaseMock("user-123"));
     getReviewableNoteMock.mockResolvedValue({

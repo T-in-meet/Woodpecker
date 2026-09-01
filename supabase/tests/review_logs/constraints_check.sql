@@ -94,7 +94,7 @@ SELECT lives_ok(
 );
 ROLLBACK TO SAVEPOINT constraints_round_insert_3;
 
--- 기존 유효 행의 round를 1, 2, 3 중 다른 유효 값으로 변경할 수 있어야 한다
+-- 기존 유효 행의 round를 다른 양수로 변경할 수 있어야 한다
 SAVEPOINT constraints_round_update_valid;
 SELECT lives_ok(
   format(
@@ -105,7 +105,7 @@ SELECT lives_ok(
     $sql$,
     current_setting('test.constraints_round_log_valid')
   ),
-  $$기존 유효 행의 round를 1, 2, 3 중 다른 유효 값으로 변경할 수 있어야 한다$$
+  $$기존 유효 행의 round를 다른 양수로 변경할 수 있어야 한다$$
 );
 ROLLBACK TO SAVEPOINT constraints_round_update_valid;
 
@@ -125,8 +125,9 @@ SELECT throws_ok(
   $$round가 1보다 작은 review_logs는 생성될 수 없어야 한다$$
 );
 
--- round가 3보다 큰 review_logs는 생성될 수 없어야 한다
-SELECT throws_ok(
+-- 누적 회차에는 상한이 없으므로 round = 5도 생성할 수 있어야 한다.
+SAVEPOINT constraints_round_insert_unbounded;
+SELECT lives_ok(
   format(
     $sql$
       INSERT INTO public.review_logs (id, note_id, user_id, round, scheduled_at)
@@ -135,10 +136,9 @@ SELECT throws_ok(
     current_setting('test.constraints_round_note_a1'),
     current_setting('test.constraints_round_user_a')
   ),
-  '23514',
-  NULL,
-  $$round가 3보다 큰 review_logs는 생성될 수 없어야 한다$$
+  $$round가 3보다 큰 review_logs도 생성될 수 있어야 한다$$
 );
+ROLLBACK TO SAVEPOINT constraints_round_insert_unbounded;
 
 -- 기존 유효 행의 round를 1보다 작은 값으로 변경할 수 없어야 한다
 SELECT throws_ok(
@@ -155,8 +155,8 @@ SELECT throws_ok(
   $$기존 유효 행의 round를 1보다 작은 값으로 변경할 수 없어야 한다$$
 );
 
--- 기존 유효 행의 round를 3보다 큰 값으로 변경할 수 없어야 한다
-SELECT throws_ok(
+-- 기존 행도 3보다 큰 누적 회차로 변경할 수 있어야 한다.
+SELECT lives_ok(
   format(
     $sql$
       UPDATE public.review_logs
@@ -165,9 +165,7 @@ SELECT throws_ok(
     $sql$,
     current_setting('test.constraints_round_log_valid')
   ),
-  '23514',
-  NULL,
-  $$기존 유효 행의 round를 3보다 큰 값으로 변경할 수 없어야 한다$$
+  $$기존 유효 행의 round를 3보다 큰 값으로 변경할 수 있어야 한다$$
 );
 
 -- [경계 조건]
@@ -183,7 +181,7 @@ SELECT is(
 );
 ROLLBACK TO SAVEPOINT constraints_round_boundary_1;
 
--- 상한 경계값인 round = 3은 허용되어야 한다
+-- round = 3은 허용되어야 한다
 SAVEPOINT constraints_round_boundary_3;
 UPDATE public.review_logs
 SET round = 3
@@ -191,7 +189,7 @@ WHERE id = current_setting('test.constraints_round_log_valid')::uuid;
 SELECT is(
   (SELECT round FROM public.review_logs WHERE id = current_setting('test.constraints_round_log_valid')::uuid),
   3,
-  $$상한 경계값인 round = 3은 허용되어야 한다$$
+  $$round = 3은 허용되어야 한다$$
 );
 ROLLBACK TO SAVEPOINT constraints_round_boundary_3;
 
@@ -210,8 +208,9 @@ SELECT throws_ok(
   $$하한 바로 바깥값인 round = 0은 허용되지 않아야 한다$$
 );
 
--- 상한 바로 바깥값인 round = 4는 허용되지 않아야 한다
-SELECT throws_ok(
+-- round = 4도 상한 없이 허용되어야 한다.
+SAVEPOINT constraints_round_boundary_4;
+SELECT lives_ok(
   format(
     $sql$
       INSERT INTO public.review_logs (id, note_id, user_id, round, scheduled_at)
@@ -220,17 +219,16 @@ SELECT throws_ok(
     current_setting('test.constraints_round_note_a1'),
     current_setting('test.constraints_round_user_a')
   ),
-  '23514',
-  NULL,
-  $$상한 바로 바깥값인 round = 4는 허용되지 않아야 한다$$
+  $$round = 4는 허용되어야 한다$$
 );
+ROLLBACK TO SAVEPOINT constraints_round_boundary_4;
 
 -- [불변 조건]
--- review_logs 테이블에는 round가 1 미만이거나 3 초과인 행이 존재해서는 안 된다 (Status)
+-- review_logs 테이블에는 round가 1 미만인 행이 존재해서는 안 된다 (Status)
 SELECT is(
-  (SELECT count(*) FROM public.review_logs WHERE round < 1 OR round > 3),
+  (SELECT count(*) FROM public.review_logs WHERE round < 1),
   0::bigint,
-  $$review_logs 테이블에는 round가 1 미만이거나 3 초과인 행이 존재해서는 안 된다 (Status)$$
+  $$review_logs 테이블에는 round가 1 미만인 행이 존재해서는 안 된다 (Status)$$
 );
 
 -- =====================================================================
