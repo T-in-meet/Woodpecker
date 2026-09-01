@@ -77,6 +77,7 @@ describe("getReviewableNote", () => {
     const { chain, supabase } = createNotesQueryMock({
       title: "테스트 노트",
       next_review_at: "2026-01-06T09:00:00.000Z",
+      review_completed_at: null,
       review_round: 2,
     });
 
@@ -89,11 +90,12 @@ describe("getReviewableNote", () => {
 
     expect(supabase.from).toHaveBeenCalledWith("notes");
     expect(chain.select).toHaveBeenCalledWith(
-      "title, next_review_at, review_round",
+      "title, next_review_at, review_completed_at, review_round",
     );
     expect(result).toEqual({
       title: "테스트 노트",
       next_review_at: "2026-01-06T09:00:00.000Z",
+      review_completed_at: null,
       review_round: 2,
     });
   });

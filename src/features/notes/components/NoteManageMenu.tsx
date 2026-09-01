@@ -1,7 +1,15 @@
 "use client";
 
-import { Bell, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
-import { useState } from "react";
+import {
+  Bell,
+  CheckCircle2,
+  MoreHorizontal,
+  Pencil,
+  RotateCcw,
+  Trash2,
+} from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -16,6 +24,7 @@ import {
   preloadNotificationSchedulePicker,
 } from "@/features/notifications/components/LazyNotificationSchedulePicker";
 
+import { setNoteReviewCompletedAction } from "../actions";
 import { DeleteNoteDialog } from "./DeleteNoteDialog";
 
 type NoteManageMenuProps = {
@@ -23,6 +32,8 @@ type NoteManageMenuProps = {
   noteTitle: string;
   onEdit: () => void;
   onEditIntent: () => void;
+  /** 사용자가 직접 완료 표시한 노트인지. 토글 문구와 아이콘을 가른다. */
+  isCompletedByUser: boolean;
   /** 학습을 모두 마친 노트는 알림을 더 보내지 않으므로 항목을 감춘다. */
   canChangeNotificationTime: boolean;
   notificationTimeOfDay: string | null;
@@ -39,13 +50,35 @@ export function NoteManageMenu({
   noteTitle,
   onEdit,
   onEditIntent,
+  isCompletedByUser,
   canChangeNotificationTime,
   notificationTimeOfDay,
   nextScheduledAt,
 }: NoteManageMenuProps) {
+  const router = useRouter();
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [hasNotificationOpened, setHasNotificationOpened] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [isTogglingCompletion, startCompletionTransition] = useTransition();
+
+  /**
+   * 복습 완료 표시를 켜고 끈다. pending review log는 그대로 두므로, 해제하면
+   * 원래 일정대로 알림과 복습이 다시 이어진다.
+   */
+  const toggleReviewCompleted = () => {
+    startCompletionTransition(async () => {
+      const result = await setNoteReviewCompletedAction(
+        noteId,
+        !isCompletedByUser,
+      );
+
+      if ("error" in result) {
+        return;
+      }
+
+      router.refresh();
+    });
+  };
 
   const openNotificationSchedule = () => {
     setHasNotificationOpened(true);
@@ -73,7 +106,9 @@ export function NoteManageMenu({
           </Button>
         </DropdownMenuTrigger>
 
-        <DropdownMenuContent align="end">
+        {/* 기본 min-w-32는 "복습 완료로 표시"가 두 줄로 접힌다. 가장 긴 항목이
+            한 줄에 들어가는 선까지만 넓힌다. */}
+        <DropdownMenuContent align="end" className="min-w-40">
           {/* 편집 폼으로 바뀌면서 이 메뉴(트리거 포함)가 언마운트되므로, 메뉴가
               포커스를 트리거로 되돌린 다음에 전환해야 포커스가 body로 떨어지지 않는다. */}
           <DropdownMenuItem
@@ -95,6 +130,18 @@ export function NoteManageMenu({
               복습 일정 변경
             </DropdownMenuItem>
           )}
+
+          <DropdownMenuItem
+            disabled={isTogglingCompletion}
+            onSelect={toggleReviewCompleted}
+          >
+            {isCompletedByUser ? (
+              <RotateCcw className="size-4" aria-hidden="true" />
+            ) : (
+              <CheckCircle2 className="size-4" aria-hidden="true" />
+            )}
+            {isCompletedByUser ? "복습 다시 시작" : "복습 완료로 표시"}
+          </DropdownMenuItem>
 
           <DropdownMenuSeparator />
 

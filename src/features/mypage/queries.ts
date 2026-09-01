@@ -93,7 +93,7 @@ export async function getLearningStats(): Promise<LearningStats> {
   const [notesResult, reviewLogsResult] = await Promise.all([
     supabase
       .from("notes")
-      .select("review_round, next_review_at")
+      .select("review_round, next_review_at, review_completed_at")
       .eq("user_id", user.id),
     supabase
       .from("review_logs")
@@ -111,22 +111,33 @@ export async function getLearningStats(): Promise<LearningStats> {
   const notesRows = notesResult.data ?? [];
   const totalNotes = notesRows.length;
 
+  // 완료 표시한 노트는 대기·오늘 집계에서 뺀다. 노트 목록의 같은 이름 필터와 맞춘다.
+  const isCompletedNote = (n: {
+    next_review_at: string | null;
+    review_completed_at: string | null;
+    review_round: number;
+  }) =>
+    Boolean(n.review_completed_at) ||
+    (n.next_review_at === null && n.review_round === MAX_REVIEW_ROUND);
+
   const reviewWaitingCount = notesRows.filter(
     (n) =>
-      (n.next_review_at === null && n.review_round === 0) ||
-      (typeof n.next_review_at === "string" && n.next_review_at > nowIso),
+      !isCompletedNote(n) &&
+      ((n.next_review_at === null && n.review_round === 0) ||
+        (typeof n.next_review_at === "string" && n.next_review_at > nowIso)),
   ).length;
 
-  const completedNotesCount = notesRows.filter(
-    (n) => n.next_review_at === null && n.review_round === MAX_REVIEW_ROUND,
-  ).length;
+  const completedNotesCount = notesRows.filter(isCompletedNote).length;
 
   // 오늘 예정뿐 아니라 기한이 지나 아직 못한 복습도 포함한다.
   // 통계 카드가 노트 목록의 due 보기로 링크되므로, review_logs가 아니라 목록과 같은
   // 소스(notes.next_review_at)에 같은 판정을 써서 두 화면의 숫자가 어긋날 수 없게 한다.
   // getNotes의 view === "due" 필터와 동일한 조건이다.
   const todayReviews = notesRows.filter(
-    (n) => typeof n.next_review_at === "string" && n.next_review_at <= nowIso,
+    (n) =>
+      !isCompletedNote(n) &&
+      typeof n.next_review_at === "string" &&
+      n.next_review_at <= nowIso,
   ).length;
 
   const notesByRoundMap = new Map<number, number>([

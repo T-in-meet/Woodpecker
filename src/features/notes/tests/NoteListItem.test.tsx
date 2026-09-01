@@ -30,6 +30,7 @@ describe("NoteListItem", () => {
           id: "2ae21b49-24d3-4dc2-b0e9-a399b02df514",
           title: "연체 노트",
           content: "복습할 내용",
+          review_completed_at: null,
           review_round: 1,
           next_review_at: "2026-04-28T15:00:00.000Z",
         }}
@@ -50,6 +51,7 @@ describe("NoteListItem", () => {
           id: "2ae21b49-24d3-4dc2-b0e9-a399b02df514",
           title: "예정 노트",
           content: "복습할 내용",
+          review_completed_at: null,
           review_round: 1,
           next_review_at: "2026-05-08T15:00:00.000Z",
         }}
@@ -68,6 +70,7 @@ describe("NoteListItem", () => {
           id: "2ae21b49-24d3-4dc2-b0e9-a399b02df514",
           title: "완료 노트",
           content: "복습할 내용",
+          review_completed_at: null,
           review_round: 3,
           next_review_at: null,
         }}
@@ -86,6 +89,7 @@ describe("NoteListItem", () => {
           id: "2ae21b49-24d3-4dc2-b0e9-a399b02df514",
           title: "연체 노트",
           content: "복습할 내용",
+          review_completed_at: null,
           review_round: 1,
           next_review_at: "2026-04-28T15:00:00.000Z",
         }}

@@ -69,6 +69,7 @@ function renderBody(props: Partial<Parameters<typeof NoteDetailBody>[0]> = {}) {
       content="원래 내용"
       reviewRound={1}
       isReviewCompleted={false}
+      isCompletedByUser={false}
       canStartReview={true}
       reviewStatusMessage="다음 복습 일정: 내일"
       notificationTimeOfDay={null}

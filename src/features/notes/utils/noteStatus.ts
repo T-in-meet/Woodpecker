@@ -19,7 +19,7 @@ export type ReviewScheduleDisplay = {
  */
 export type ReviewGateNote = Pick<
   NoteSummary,
-  "next_review_at" | "review_round"
+  "next_review_at" | "review_completed_at" | "review_round"
 >;
 
 function getKstDayNumber(date: Date): number {
@@ -27,6 +27,9 @@ function getKstDayNumber(date: Date): number {
 }
 
 export function getReviewStatus(note: ReviewGateNote): ReviewStatus {
+  // 사용자가 직접 끝낸 노트가 우선이다.
+  if (note.review_completed_at) return "completed";
+  // 회차 상한까지 채운 자동 완료. 상한이 사라지면 이 조건도 함께 없어진다.
   if (note.review_round >= MAX_REVIEW_ROUND && note.next_review_at === null)
     return "completed";
   if (!note.next_review_at) return "pending";

@@ -14,13 +14,15 @@ import { NoteDetailBody } from "@/features/notes/components/NoteDetailBody";
 import { ScrollToTopButton } from "@/features/notes/components/ScrollToTopButton";
 import { ScrollToTopOnMount } from "@/features/notes/components/ScrollToTopOnMount";
 import { getNoteById } from "@/features/notes/queries";
-import { canStartReview } from "@/features/notes/utils/noteStatus";
+import {
+  canStartReview,
+  getReviewStatus,
+} from "@/features/notes/utils/noteStatus";
 import { GradingHistorySection } from "@/features/review/components/GradingHistorySection";
 import {
   getGradingsByNote,
   hasCompletedReviewForNoteToday,
 } from "@/features/review/queries";
-import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { ROUTES } from "@/lib/constants/routes";
 import { logError } from "@/lib/logger";
 import { getUser } from "@/lib/supabase/getUser";
@@ -71,8 +73,9 @@ export default async function NoteDetailPage({
 
   const nextReviewAt = note.next_review_at;
   const nextScheduledAt = note.next_scheduled_at ?? nextReviewAt;
-  const isReviewCompleted =
-    note.review_round >= MAX_REVIEW_ROUND && nextReviewAt === null;
+  // 완료 판정도 목록과 공유한다. 사용자가 직접 끝냈거나 회차 상한까지 채운 노트다.
+  const isReviewCompleted = getReviewStatus(note) === "completed";
+  const isCompletedByUser = Boolean(note.review_completed_at);
   const isReviewDue =
     nextScheduledAt !== null &&
     new Date(nextScheduledAt).getTime() <= Date.now();
@@ -102,15 +105,17 @@ export default async function NoteDetailPage({
     gradingsPromise,
   ]);
 
-  const reviewStatusMessage = isReviewCompleted
-    ? "1-3-7 복습을 모두 마쳤습니다."
-    : nextScheduledAt
-      ? alreadyCompletedToday
-        ? `오늘 백지 테스트 완료 · 다음 복습 일정: ${formatDateTime(nextScheduledAt)}`
-        : isReviewDue
-          ? "지금 백지 테스트를 진행할 수 있습니다."
-          : `다음 복습 일정: ${formatDateTime(nextScheduledAt)}`
-      : "다음 복습 일정이 아직 준비되지 않았습니다.";
+  const reviewStatusMessage = isCompletedByUser
+    ? "복습을 완료한 노트입니다."
+    : isReviewCompleted
+      ? "1-3-7 복습을 모두 마쳤습니다."
+      : nextScheduledAt
+        ? alreadyCompletedToday
+          ? `오늘 백지 테스트 완료 · 다음 복습 일정: ${formatDateTime(nextScheduledAt)}`
+          : isReviewDue
+            ? "지금 백지 테스트를 진행할 수 있습니다."
+            : `다음 복습 일정: ${formatDateTime(nextScheduledAt)}`
+        : "다음 복습 일정이 아직 준비되지 않았습니다.";
 
   return (
     <div className="mx-auto w-full max-w-4xl px-6 py-10 md:px-12">
@@ -147,6 +152,7 @@ export default async function NoteDetailPage({
         content={note.content}
         reviewRound={note.review_round}
         isReviewCompleted={isReviewCompleted}
+        isCompletedByUser={isCompletedByUser}
         canStartReview={canReview}
         reviewStatusMessage={reviewStatusMessage}
         notificationTimeOfDay={note.notification_time_of_day}

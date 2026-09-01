@@ -6,14 +6,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NoteManageMenu } from "../components/NoteManageMenu";
 
-const { lazyPickerRenderMock, preloadNotificationSchedulePickerMock } =
-  vi.hoisted(() => ({
-    lazyPickerRenderMock: vi.fn(),
-    preloadNotificationSchedulePickerMock: vi.fn(),
-  }));
+const {
+  lazyPickerRenderMock,
+  preloadNotificationSchedulePickerMock,
+  setNoteReviewCompletedActionMock,
+} = vi.hoisted(() => ({
+  lazyPickerRenderMock: vi.fn(),
+  preloadNotificationSchedulePickerMock: vi.fn(),
+  setNoteReviewCompletedActionMock: vi.fn(),
+}));
 
 vi.mock("../actions", () => ({
   deleteNoteAction: vi.fn(),
+  setNoteReviewCompletedAction: setNoteReviewCompletedActionMock,
 }));
 
 vi.mock("@/features/notifications/actions", () => ({
@@ -44,10 +49,12 @@ function renderMenu({
   onEdit = vi.fn(),
   onEditIntent = vi.fn(),
   canChangeNotificationTime = true,
+  isCompletedByUser = false,
 }: {
   onEdit?: () => void;
   onEditIntent?: () => void;
   canChangeNotificationTime?: boolean;
+  isCompletedByUser?: boolean;
 } = {}) {
   render(
     <NoteManageMenu
@@ -55,6 +62,7 @@ function renderMenu({
       noteTitle="노트 제목"
       onEdit={onEdit}
       onEditIntent={onEditIntent}
+      isCompletedByUser={isCompletedByUser}
       canChangeNotificationTime={canChangeNotificationTime}
       notificationTimeOfDay="21:30:00"
       nextScheduledAt="2026-05-01T12:30:00.000Z"
@@ -68,6 +76,43 @@ describe("NoteManageMenu", () => {
   beforeEach(() => {
     lazyPickerRenderMock.mockClear();
     preloadNotificationSchedulePickerMock.mockClear();
+    setNoteReviewCompletedActionMock
+      .mockReset()
+      .mockResolvedValue({ data: { completed: true } });
+  });
+
+  it("진행 중인 노트에는 복습 완료로 표시를 노출한다", async () => {
+    const user = userEvent.setup();
+    renderMenu();
+
+    await user.click(screen.getByRole("button", { name: "노트 관리 메뉴" }));
+    await user.click(
+      await screen.findByRole("menuitem", { name: "복습 완료로 표시" }),
+    );
+
+    await waitFor(() => {
+      expect(setNoteReviewCompletedActionMock).toHaveBeenCalledWith(
+        "note-123",
+        true,
+      );
+    });
+  });
+
+  it("완료 표시한 노트에는 복습 다시 시작을 노출한다", async () => {
+    const user = userEvent.setup();
+    renderMenu({ isCompletedByUser: true });
+
+    await user.click(screen.getByRole("button", { name: "노트 관리 메뉴" }));
+    await user.click(
+      await screen.findByRole("menuitem", { name: "복습 다시 시작" }),
+    );
+
+    await waitFor(() => {
+      expect(setNoteReviewCompletedActionMock).toHaveBeenCalledWith(
+        "note-123",
+        false,
+      );
+    });
   });
 
   it("메뉴를 열기 전에는 항목이 보이지 않는다", () => {

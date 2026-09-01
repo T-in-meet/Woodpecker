@@ -9,6 +9,7 @@ import { gradingFeedbackSchema } from "./schema";
 const reviewableNoteSchema = z.object({
   title: z.string(),
   next_review_at: z.string().nullable(),
+  review_completed_at: z.string().nullable(),
   review_round: z.number().int().min(0).max(MAX_REVIEW_ROUND),
 });
 
@@ -39,7 +40,7 @@ export async function getReviewableNote(
   const supabase = await createServerComponentClient();
   const { data, error } = await supabase
     .from("notes")
-    .select("title, next_review_at, review_round")
+    .select("title, next_review_at, review_completed_at, review_round")
     .eq("id", noteId)
     .eq("user_id", userId)
     .maybeSingle();

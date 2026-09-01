@@ -316,6 +316,67 @@ export async function updateNoteAction(
   return { success: true };
 }
 
+/**
+ * 사용자가 노트의 복습을 직접 끝내거나 다시 시작한다.
+ *
+ * pending review log는 건드리지 않는다. 완료를 해제하면 원래 일정 그대로 알림이
+ * 다시 나가야 하므로, 발송 쪽(`claim_due_review_logs`)이 이 플래그를 보고 거른다.
+ */
+export async function setNoteReviewCompletedAction(
+  noteId: unknown,
+  completed: unknown,
+): Promise<{ data: { completed: boolean } } | { error: string }> {
+  const parsed = z
+    .object({ noteId: noteIdSchema, completed: z.boolean() })
+    .safeParse({ noteId, completed });
+
+  if (!parsed.success) {
+    return { error: "노트를 찾을 수 없습니다." };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "로그인이 필요합니다." };
+  }
+
+  if (user.email_confirmed_at == null) {
+    redirect(`${ROUTES.RESEND_EMAIL}?purpose=signup`);
+  }
+
+  await requireCurrentLegalAcceptance(
+    user.id,
+    getNoteDetailRoute(parsed.data.noteId),
+  );
+
+  const { data: updatedNote, error } = await supabase
+    .from("notes")
+    .update({
+      review_completed_at: parsed.data.completed
+        ? new Date().toISOString()
+        : null,
+    })
+    .eq("id", parsed.data.noteId)
+    .eq("user_id", user.id)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    return {
+      error: "복습 완료 상태를 바꾸지 못했습니다. 잠시 후 다시 시도해주세요.",
+    };
+  }
+
+  if (!updatedNote) {
+    return { error: "노트를 찾을 수 없습니다." };
+  }
+
+  return { data: { completed: parsed.data.completed } };
+}
+
 export async function deleteNoteAction(noteId: string) {
   const parsedNoteId = noteIdSchema.safeParse(noteId);
 

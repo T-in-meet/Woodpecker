@@ -87,6 +87,7 @@ function createNote(overrides: Record<string, unknown> = {}) {
     next_review_at: "2026-03-29T00:00:00.000Z",
     next_scheduled_at: "2026-03-29T09:00:00.000Z",
     notification_time_of_day: "21:30:00",
+    review_completed_at: null,
     review_round: 1,
     created_at: "2026-03-29T00:00:00.000Z",
     updated_at: "2026-03-29T01:00:00.000Z",

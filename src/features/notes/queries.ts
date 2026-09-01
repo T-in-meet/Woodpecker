@@ -14,6 +14,7 @@ const noteDetailSchema = z.object({
   content: z.string(),
   next_review_at: z.string().nullable(),
   notification_time_of_day: z.string().nullable(),
+  review_completed_at: z.string().nullable(),
   review_round: z.number().int().min(0).max(MAX_REVIEW_ROUND),
   created_at: z.string(),
   updated_at: z.string(),
@@ -25,10 +26,11 @@ const noteSummarySchema = z.object({
   title: z.string(),
   content: z.string(),
   next_review_at: z.string().nullable(),
+  review_completed_at: z.string().nullable(),
   review_round: z.number().int().min(0).max(MAX_REVIEW_ROUND),
 });
 const NOTE_SUMMARY_SELECT =
-  "id, title, content, next_review_at, review_round" as const;
+  "id, title, content, next_review_at, review_completed_at, review_round" as const;
 
 // next_scheduled_at는 notes 테이블 컬럼이 아니라 pending review_logs.scheduled_at에서
 // 파생된 실제 알림 발송 시각이다. notes.next_review_at은 KST 자정 마커이므로 시:분
@@ -43,6 +45,11 @@ export type NoteSummary = z.infer<typeof noteSummarySchema>;
 function buildScheduledFilter(nowIso: string): string {
   return `next_review_at.gt.${nowIso},and(next_review_at.is.null,review_round.eq.0)`;
 }
+
+// "복습 완료" 판정 조건. 사용자가 직접 표시한 노트와, 회차 상한까지 채워 자동으로
+// 완료된 노트를 함께 본다. 자동 완료는 회차 상한이 사라지면 같이 없어질 조건이다.
+const COMPLETED_FILTER =
+  `review_completed_at.not.is.null,and(next_review_at.is.null,review_round.eq.${MAX_REVIEW_ROUND})` as const;
 
 function parseNoteSummaries(
   data: unknown,
@@ -80,13 +87,14 @@ export async function getNotes(
   const nowIso = new Date().toISOString();
 
   if (view === "due") {
-    query = query.lte("next_review_at", nowIso);
+    // 완료 표시한 노트는 더 이상 할 일이 아니다.
+    query = query.lte("next_review_at", nowIso).is("review_completed_at", null);
   } else if (view === "scheduled") {
-    query = query.or(buildScheduledFilter(nowIso));
-  } else if (view === "completed") {
     query = query
-      .is("next_review_at", null)
-      .eq("review_round", MAX_REVIEW_ROUND);
+      .or(buildScheduledFilter(nowIso))
+      .is("review_completed_at", null);
+  } else if (view === "completed") {
+    query = query.or(COMPLETED_FILTER);
   }
 
   if (search.trim()) {
@@ -123,7 +131,7 @@ export async function getNoteById(
   const notePromise = supabase
     .from("notes")
     .select(
-      "id, title, content, next_review_at, notification_time_of_day, review_round, created_at, updated_at, user_id",
+      "id, title, content, next_review_at, notification_time_of_day, review_completed_at, review_round, created_at, updated_at, user_id",
     )
     .eq("id", noteId)
     .eq("user_id", userId)

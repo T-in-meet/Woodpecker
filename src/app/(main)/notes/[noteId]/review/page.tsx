@@ -125,7 +125,8 @@ export default async function NoteReviewPage({
   if (!pendingReviewLog) {
     const nextReviewAt = note.next_review_at;
     const isCompleted =
-      note.review_round >= MAX_REVIEW_ROUND && nextReviewAt === null;
+      Boolean(note.review_completed_at) ||
+      (note.review_round >= MAX_REVIEW_ROUND && nextReviewAt === null);
 
     return (
       <div className="mx-auto w-full max-w-3xl px-6 py-10 md:px-12">

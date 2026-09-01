@@ -885,6 +885,7 @@ export type Database = {
           id: string;
           next_review_at: string | null;
           notification_time_of_day: string | null;
+          review_completed_at: string | null;
           review_round: number;
           title: string;
           updated_at: string;
@@ -896,6 +897,7 @@ export type Database = {
           id?: string;
           next_review_at?: string | null;
           notification_time_of_day?: string | null;
+          review_completed_at?: string | null;
           review_round?: number;
           title: string;
           updated_at?: string;
@@ -907,6 +909,7 @@ export type Database = {
           id?: string;
           next_review_at?: string | null;
           notification_time_of_day?: string | null;
+          review_completed_at?: string | null;
           review_round?: number;
           title?: string;
           updated_at?: string;
