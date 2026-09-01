@@ -13,16 +13,36 @@ export type ReviewScheduleDisplay = {
   tone: ReviewScheduleTone;
 };
 
+/**
+ * 복습 진입 판정에 필요한 최소 필드. 목록(`NoteSummary`)과 상세(`getNoteById`)의
+ * 반환 타입이 달라도 같은 판정을 쓸 수 있게 좁혀 둔다.
+ */
+export type ReviewGateNote = Pick<
+  NoteSummary,
+  "next_review_at" | "review_round"
+>;
+
 function getKstDayNumber(date: Date): number {
   return Math.floor((date.getTime() + KST_OFFSET_MS) / DAY_IN_MS);
 }
 
-export function getReviewStatus(note: NoteSummary): ReviewStatus {
+export function getReviewStatus(note: ReviewGateNote): ReviewStatus {
   if (note.review_round >= MAX_REVIEW_ROUND && note.next_review_at === null)
     return "completed";
   if (!note.next_review_at) return "pending";
   if (new Date(note.next_review_at).getTime() <= Date.now()) return "available";
   return "scheduled";
+}
+
+/**
+ * 백지 테스트에 진입할 수 있는지. 목록과 상세가 각자 판정하면 같은 노트가 화면마다
+ * 다르게 보이므로 진입 조건은 여기서만 정한다.
+ *
+ * 예정일이 아직 안 왔든 오늘 이미 복습을 완료했든 진입은 막지 않는다 — 언제 복습할지는
+ * 사용자가 정한다. 완료 처리가 가능한지는 별개 판정(`hasCompletedReviewForNoteToday`)이다.
+ */
+export function canStartReview(note: ReviewGateNote): boolean {
+  return getReviewStatus(note) !== "completed" && note.next_review_at !== null;
 }
 
 /** KST 달력 날짜를 기준으로 복습 일정의 표시 문구와 강조 상태를 만든다. */

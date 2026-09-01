@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getReviewScheduleDisplay, getReviewStatus } from "../noteStatus";
+import {
+  canStartReview,
+  getReviewScheduleDisplay,
+  getReviewStatus,
+} from "../noteStatus";
 
 const MAX_REVIEW_ROUND = 3;
 
@@ -48,6 +52,34 @@ describe("getReviewStatus", () => {
     const now = new Date(Date.now() - 1).toISOString();
     const note = makeNote({ review_round: 1, next_review_at: now });
     expect(getReviewStatus(note)).toBe("available");
+  });
+});
+
+describe("canStartReview", () => {
+  it("예정일이 지난 노트는 진입할 수 있다", () => {
+    const past = new Date(Date.now() - 1000 * 60 * 60).toISOString();
+    const note = makeNote({ review_round: 1, next_review_at: past });
+    expect(canStartReview(note)).toBe(true);
+  });
+
+  // 목록과 상세가 어긋나던 지점이다. 예정일 전이라고 진입을 막지 않는다.
+  it("예정일이 아직 오지 않은 노트도 진입할 수 있다", () => {
+    const future = new Date(Date.now() + 1000 * 60 * 60 * 24).toISOString();
+    const note = makeNote({ review_round: 1, next_review_at: future });
+    expect(canStartReview(note)).toBe(true);
+  });
+
+  it("모든 회차를 마친 노트는 진입할 수 없다", () => {
+    const note = makeNote({
+      review_round: MAX_REVIEW_ROUND,
+      next_review_at: null,
+    });
+    expect(canStartReview(note)).toBe(false);
+  });
+
+  it("다음 일정이 아직 준비되지 않은 노트는 진입할 수 없다", () => {
+    const note = makeNote({ review_round: 0, next_review_at: null });
+    expect(canStartReview(note)).toBe(false);
   });
 });
 

@@ -293,7 +293,7 @@ describe("NoteDetailPage", () => {
     });
   });
 
-  it("blocks a new review and reflects the daily limit when already completed today", async () => {
+  it("keeps review entry open but reflects the daily limit when already completed today", async () => {
     getUserMock.mockResolvedValue(createUser("user-123"));
     getNoteByIdMock.mockResolvedValue(
       createNote({
@@ -307,12 +307,49 @@ describe("NoteDetailPage", () => {
 
     await renderPage();
 
+    // 진입은 목록과 같은 기준으로 열어 두고, 오늘 완료했다는 사실은 문구로만 알린다.
+    // 완료 처리를 막는 것은 백지 테스트 화면과 RPC(WP001)의 몫이다.
     expect(lastBodyProps()).toMatchObject({
-      canStartReview: false,
+      canStartReview: true,
       reviewStatusMessage: `오늘 백지 테스트 완료 · 다음 복습 일정: ${formatDateTime(
         "2026-03-30T09:00:00.000Z",
       )}`,
     });
+  });
+
+  it("keeps review entry open for a note scheduled in the future", async () => {
+    getUserMock.mockResolvedValue(createUser("user-123"));
+    getNoteByIdMock.mockResolvedValue(
+      createNote({
+        title: "Scheduled later",
+        next_review_at: "2099-03-30T15:00:00.000Z",
+        next_scheduled_at: "2099-03-30T09:00:00.000Z",
+        notification_time_of_day: null,
+      }),
+    );
+    hasCompletedReviewForNoteTodayMock.mockResolvedValue(false);
+
+    await renderPage();
+
+    expect(lastBodyProps()).toMatchObject({ canStartReview: true });
+  });
+
+  it("closes review entry once every round is finished", async () => {
+    getUserMock.mockResolvedValue(createUser("user-123"));
+    getNoteByIdMock.mockResolvedValue(
+      createNote({
+        title: "All rounds done",
+        next_review_at: null,
+        next_scheduled_at: null,
+        notification_time_of_day: null,
+        review_round: MAX_REVIEW_ROUND,
+      }),
+    );
+
+    await renderPage();
+
+    expect(lastBodyProps()).toMatchObject({ canStartReview: false });
+    expect(hasCompletedReviewForNoteTodayMock).not.toHaveBeenCalled();
   });
 
   it("falls back to allowing review when the daily-completion lookup fails", async () => {

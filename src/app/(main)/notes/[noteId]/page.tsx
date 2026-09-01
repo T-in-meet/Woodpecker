@@ -14,6 +14,7 @@ import { NoteDetailBody } from "@/features/notes/components/NoteDetailBody";
 import { ScrollToTopButton } from "@/features/notes/components/ScrollToTopButton";
 import { ScrollToTopOnMount } from "@/features/notes/components/ScrollToTopOnMount";
 import { getNoteById } from "@/features/notes/queries";
+import { canStartReview } from "@/features/notes/utils/noteStatus";
 import { GradingHistorySection } from "@/features/review/components/GradingHistorySection";
 import {
   getGradingsByNote,
@@ -76,15 +77,19 @@ export default async function NoteDetailPage({
     nextScheduledAt !== null &&
     new Date(nextScheduledAt).getTime() <= Date.now();
 
-  const alreadyCompletedTodayPromise =
-    !isReviewCompleted && nextReviewAt !== null
-      ? hasCompletedReviewForNoteToday(noteId, user.id).catch((error) => {
-          // 일시적 조회 실패 시 fail-open(false) — 실제 차단은 DB 부분 unique
-          // 인덱스와 RPC가 보증하므로 페이지 표시를 막지 않는다.
-          logError(error);
-          return false;
-        })
-      : Promise.resolve(false);
+  // 진입 조건은 노트 목록과 공유한다. 오늘 이미 복습을 완료했어도 다시 들어올 수 있고,
+  // 완료 처리가 가능한지는 백지 테스트 화면이 따로 판단한다.
+  const canReview = canStartReview(note);
+
+  // 완료 버튼 비활성 여부와 상태 문구에만 쓴다. 진입은 이 값으로 막지 않는다.
+  const alreadyCompletedTodayPromise = canReview
+    ? hasCompletedReviewForNoteToday(noteId, user.id).catch((error) => {
+        // 일시적 조회 실패 시 fail-open(false) — 실제 차단은 DB 부분 unique
+        // 인덱스와 RPC가 보증하므로 페이지 표시를 막지 않는다.
+        logError(error);
+        return false;
+      })
+    : Promise.resolve(false);
 
   const gradingsPromise = getGradingsByNote(noteId, user.id).catch((error) => {
     // 채점 기록은 부가 정보 — 조회 실패 시 섹션만 숨기고 페이지 표시를 막지 않는다.
@@ -97,8 +102,6 @@ export default async function NoteDetailPage({
     gradingsPromise,
   ]);
 
-  const canStartReview =
-    !isReviewCompleted && nextReviewAt !== null && !alreadyCompletedToday;
   const reviewStatusMessage = isReviewCompleted
     ? "1-3-7 복습을 모두 마쳤습니다."
     : nextScheduledAt
@@ -144,7 +147,7 @@ export default async function NoteDetailPage({
         content={note.content}
         reviewRound={note.review_round}
         isReviewCompleted={isReviewCompleted}
-        canStartReview={canStartReview}
+        canStartReview={canReview}
         reviewStatusMessage={reviewStatusMessage}
         notificationTimeOfDay={note.notification_time_of_day}
         nextScheduledAt={nextScheduledAt}

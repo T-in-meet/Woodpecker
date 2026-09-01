@@ -8,13 +8,17 @@ import { getNoteDetailRoute } from "@/lib/constants/routes";
 import { stripMarkdown } from "@/lib/utils/stripMarkdown";
 
 import type { NoteSummary } from "../queries";
-import { getReviewScheduleDisplay, getReviewStatus } from "../utils/noteStatus";
+import {
+  canStartReview,
+  getReviewScheduleDisplay,
+  getReviewStatus,
+} from "../utils/noteStatus";
 import { NoteActions } from "./NoteActions";
 
 export function NoteListItem({ note }: { note: NoteSummary }) {
   const status = getReviewStatus(note);
   const reviewSchedule = getReviewScheduleDisplay(status, note.next_review_at);
-  const canReview = status === "available";
+  const canReview = canStartReview(note);
   const contentPreview = stripMarkdown(stripNoteColorSyntax(note.content));
   const reviewTextClass =
     reviewSchedule.tone === "overdue"
