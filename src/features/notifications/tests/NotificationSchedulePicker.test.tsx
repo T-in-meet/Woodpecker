@@ -459,7 +459,7 @@ describe("NotificationSchedulePicker", () => {
   it("액션이 실패하면 서버가 준 메시지를 보여준다", async () => {
     setNotificationScheduleActionMock.mockResolvedValueOnce({
       success: false,
-      error: "이미 발송된 알림은 일정을 바꿀 수 없습니다.",
+      error: "알림을 보내는 중입니다. 잠시 후 다시 시도해주세요.",
     });
     const user = userEvent.setup();
     render(
@@ -475,7 +475,9 @@ describe("NotificationSchedulePicker", () => {
     await user.click(screen.getByRole("button", { name: /저장/ }));
 
     expect(
-      await screen.findByText("이미 발송된 알림은 일정을 바꿀 수 없습니다."),
+      await screen.findByText(
+        "알림을 보내는 중입니다. 잠시 후 다시 시도해주세요.",
+      ),
     ).toBeInTheDocument();
     expect(refreshMock).not.toHaveBeenCalled();
   });
