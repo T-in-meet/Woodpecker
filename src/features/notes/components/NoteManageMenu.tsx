@@ -25,6 +25,7 @@ import {
   preloadNotificationSchedulePicker,
 } from "@/features/notifications/components/LazyNotificationSchedulePicker";
 import { NOTIFICATIONS_QUERY_KEY } from "@/features/notifications/query-keys";
+import { showToast } from "@/lib/utils/showToast";
 
 import { setNoteReviewCompletedAction } from "../actions";
 import { DeleteNoteDialog } from "./DeleteNoteDialog";
@@ -70,22 +71,33 @@ export function NoteManageMenu({
   /**
    * 복습 완료 표시를 켜고 끈다. 해제하면 저장된 pending 일정 또는 DB가 복구한
    * 다음 일정에서 알림과 복습이 다시 이어진다.
+   *
+   * 실패는 토스트로 알린다. 메뉴는 선택 즉시 닫히고 화면도 그대로여서, 알리지
+   * 않으면 "눌렀는데 아무 일도 없다"와 구분되지 않는다.
    */
   const toggleReviewCompleted = () => {
     startCompletionTransition(async () => {
-      const result = await setNoteReviewCompletedAction(
-        noteId,
-        !isCompletedByUser,
-      );
+      try {
+        const result = await setNoteReviewCompletedAction(
+          noteId,
+          !isCompletedByUser,
+        );
 
-      if ("error" in result) {
-        return;
+        if ("error" in result) {
+          showToast(result.error, { variant: "destructive" });
+          return;
+        }
+
+        await queryClient.invalidateQueries({
+          queryKey: NOTIFICATIONS_QUERY_KEY.all,
+        });
+        router.refresh();
+      } catch {
+        showToast(
+          "복습 완료 상태를 바꾸지 못했습니다. 잠시 후 다시 시도해주세요.",
+          { variant: "destructive" },
+        );
       }
-
-      await queryClient.invalidateQueries({
-        queryKey: NOTIFICATIONS_QUERY_KEY.all,
-      });
-      router.refresh();
     });
   };
 
