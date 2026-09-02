@@ -1,7 +1,6 @@
 import { z } from "zod";
 
 import { NOTES_PAGE_SIZE } from "@/lib/constants/notes";
-import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { logError } from "@/lib/logger";
 import { createServerComponentClient } from "@/lib/supabase/server";
 import { escapePostgrestLikePattern } from "@/lib/utils/escapePostgrestLikePattern";
@@ -14,7 +13,9 @@ const noteDetailSchema = z.object({
   content: z.string(),
   next_review_at: z.string().nullable(),
   notification_time_of_day: z.string().nullable(),
-  review_round: z.number().int().min(0).max(MAX_REVIEW_ROUND),
+  review_completed_at: z.string().nullable(),
+  // 누적 복습 횟수. 상한이 없다.
+  review_round: z.number().int().min(0),
   created_at: z.string(),
   updated_at: z.string(),
   user_id: z.string().uuid(),
@@ -25,10 +26,12 @@ const noteSummarySchema = z.object({
   title: z.string(),
   content: z.string(),
   next_review_at: z.string().nullable(),
-  review_round: z.number().int().min(0).max(MAX_REVIEW_ROUND),
+  review_completed_at: z.string().nullable(),
+  // 누적 복습 횟수. 상한이 없다.
+  review_round: z.number().int().min(0),
 });
 const NOTE_SUMMARY_SELECT =
-  "id, title, content, next_review_at, review_round" as const;
+  "id, title, content, next_review_at, review_completed_at, review_round" as const;
 
 // next_scheduled_at는 notes 테이블 컬럼이 아니라 pending review_logs.scheduled_at에서
 // 파생된 실제 알림 발송 시각이다. notes.next_review_at은 KST 자정 마커이므로 시:분
@@ -79,14 +82,18 @@ export async function getNotes(
 
   const nowIso = new Date().toISOString();
 
-  if (view === "due") {
-    query = query.lte("next_review_at", nowIso);
-  } else if (view === "scheduled") {
-    query = query.or(buildScheduledFilter(nowIso));
-  } else if (view === "completed") {
-    query = query
-      .is("next_review_at", null)
-      .eq("review_round", MAX_REVIEW_ROUND);
+  // 복습을 그만두는 유일한 경로는 사용자의 완료 표시다. completed 보기만 완료 노트를
+  // 모으고, 할 일을 보여주는 나머지 보기는 모두 완료 노트를 뺀다. 보기가 늘어나도 이
+  // 전제를 각 분기가 따로 챙기지 않도록 분기 앞에서 한 번만 건다.
+  if (view === "completed") {
+    query = query.not("review_completed_at", "is", null);
+  } else if (view === "due" || view === "scheduled") {
+    query = query.is("review_completed_at", null);
+
+    query =
+      view === "due"
+        ? query.lte("next_review_at", nowIso)
+        : query.or(buildScheduledFilter(nowIso));
   }
 
   if (search.trim()) {
@@ -123,7 +130,7 @@ export async function getNoteById(
   const notePromise = supabase
     .from("notes")
     .select(
-      "id, title, content, next_review_at, notification_time_of_day, review_round, created_at, updated_at, user_id",
+      "id, title, content, next_review_at, notification_time_of_day, review_completed_at, review_round, created_at, updated_at, user_id",
     )
     .eq("id", noteId)
     .eq("user_id", userId)

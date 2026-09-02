@@ -185,6 +185,7 @@ function buildPushPayload({
       noteId,
       notificationId,
       reviewLogId,
+      type: NOTIFICATION_TYPES.REVIEW,
       url,
     },
   };
@@ -258,6 +259,10 @@ async function ensureNotification(
     );
   }
 
+  // 재사용하는 행의 status는 여기서 건드리지 않습니다. 이 시점의 READ는 발송
+  // 재시도 중에 사용자가 직접 확인했다는 뜻이고, 완료 -> 재시작으로 생긴 READ는
+  // set_note_review_completion이 이미 정리합니다(행을 지우거나 SENT로 되돌림).
+  // 여기서 되돌리면 두 경우를 구분하지 못해 사용자가 치운 알림까지 되살아납니다.
   return { id: existingNotification.id };
 }
 
@@ -278,6 +283,33 @@ async function markReviewLogDispatched(
     .from("review_logs")
     .update({ notification_dispatched_at: new Date().toISOString() })
     .eq("id", reviewLogId);
+
+  if (error) {
+    throw error;
+  }
+}
+
+/**
+ * claim 뒤 완료된 노트에 이미 만들어진 복습 알림을 벨에서 소비합니다.
+ *
+ * 완료 RPC보다 notification 생성이 늦게 끝난 경쟁 상황에서는 완료 RPC가 읽음
+ * 처리할 행이 없었으므로, dispatcher가 외부 Push를 건너뛰기 전에 직접 정리합니다.
+ */
+async function markReviewNotificationRead(
+  supabase: ReturnType<typeof createAdminClient>,
+  notificationId: string,
+  userId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from("notifications")
+    .update({
+      read_at: new Date().toISOString(),
+      status: NOTIFICATION_STATUS.READ,
+    })
+    .eq("id", notificationId)
+    .eq("user_id", userId)
+    .eq("type", NOTIFICATION_TYPES.REVIEW)
+    .eq("status", NOTIFICATION_STATUS.SENT);
 
   if (error) {
     throw error;
@@ -313,7 +345,7 @@ async function dispatchClaimedReviewLog(
   try {
     const noteResult = await supabase
       .from("notes")
-      .select("title")
+      .select("title, review_completed_at")
       .eq("id", claimedLog.note_id)
       .eq("user_id", claimedLog.user_id)
       .maybeSingle();
@@ -333,12 +365,61 @@ async function dispatchClaimedReviewLog(
       return stats;
     }
 
+    if (noteResult.data.review_completed_at) {
+      logWarn({
+        event: "cron.dispatchNotifications.noteReviewCompleted",
+        noteId: claimedLog.note_id,
+        reviewLogId: claimedLog.id,
+        userId: claimedLog.user_id,
+      });
+      return stats;
+    }
+
     const noteTitle = noteResult.data.title;
     const notification = await ensureNotification(
       supabase,
       claimedLog,
       noteTitle,
     );
+
+    // claim과 첫 note 조회 뒤 사용자가 완료할 수 있으므로 외부 Push 직전에 다시
+    // 확인한다. 이 확인 뒤의 완료는 이미 외부 발송이 시작된 것으로 취급한다.
+    const finalNoteResult = await supabase
+      .from("notes")
+      .select("review_completed_at")
+      .eq("id", claimedLog.note_id)
+      .eq("user_id", claimedLog.user_id)
+      .maybeSingle();
+
+    if (finalNoteResult.error) {
+      throw finalNoteResult.error;
+    }
+
+    if (!finalNoteResult.data) {
+      stats.itemFailed += 1;
+      logWarn({
+        event: "cron.dispatchNotifications.noteMissingBeforePush",
+        noteId: claimedLog.note_id,
+        reviewLogId: claimedLog.id,
+        userId: claimedLog.user_id,
+      });
+      return stats;
+    }
+
+    if (finalNoteResult.data.review_completed_at) {
+      await markReviewNotificationRead(
+        supabase,
+        notification.id,
+        claimedLog.user_id,
+      );
+      logWarn({
+        event: "cron.dispatchNotifications.noteReviewCompletedBeforePush",
+        noteId: claimedLog.note_id,
+        reviewLogId: claimedLog.id,
+        userId: claimedLog.user_id,
+      });
+      return stats;
+    }
 
     const payload = buildPushPayload({
       noteId: claimedLog.note_id,

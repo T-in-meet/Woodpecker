@@ -4,7 +4,7 @@
 
 BEGIN;
 
-SELECT plan(14);
+SELECT plan(18);
 
 SELECT set_config('test.notification_time_user_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notification_time_note_id', gen_random_uuid()::text, true);
@@ -12,6 +12,20 @@ SELECT set_config('test.notification_time_log_id', gen_random_uuid()::text, true
 SELECT set_config('test.notification_time_duplicate_log_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notification_time_shift_note_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notification_time_shift_log_id', gen_random_uuid()::text, true);
+SELECT set_config('test.notification_time_completed_note_id', gen_random_uuid()::text, true);
+SELECT set_config('test.notification_time_completed_log_id', gen_random_uuid()::text, true);
+SELECT set_config('test.notification_time_old_completed_note_id', gen_random_uuid()::text, true);
+SELECT set_config('test.notification_time_old_completed_log_id', gen_random_uuid()::text, true);
+SELECT set_config(
+  'test.notification_time_today_target_at',
+  (
+    now()
+      + (
+          public.kst_day_start(now() + interval '1 day') - now()
+        ) / 2
+  )::text,
+  true
+);
 
 SELECT is(
   public.apply_time_of_day(
@@ -49,14 +63,23 @@ VALUES (
 )
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO public.notes (id, user_id, title, content, review_round, next_review_at)
+INSERT INTO public.notes (
+  id,
+  user_id,
+  title,
+  content,
+  review_round,
+  next_review_at,
+  review_completed_at
+)
 VALUES (
   current_setting('test.notification_time_note_id')::uuid,
   current_setting('test.notification_time_user_id')::uuid,
   'notification time note',
   'content',
   0,
-  TIMESTAMPTZ '2026-05-01 14:30:00+09'
+  TIMESTAMPTZ '2026-05-01 14:30:00+09',
+  NULL
 ),
 (
   current_setting('test.notification_time_shift_note_id')::uuid,
@@ -64,7 +87,26 @@ VALUES (
   'notification time shift note',
   'content',
   0,
-  TIMESTAMPTZ '2026-05-01 14:30:00+09'
+  TIMESTAMPTZ '2026-05-01 14:30:00+09',
+  NULL
+),
+(
+  current_setting('test.notification_time_completed_note_id')::uuid,
+  current_setting('test.notification_time_user_id')::uuid,
+  'notification time completed note',
+  'content',
+  0,
+  public.kst_day_start(now()),
+  now() - interval '1 hour'
+),
+(
+  current_setting('test.notification_time_old_completed_note_id')::uuid,
+  current_setting('test.notification_time_user_id')::uuid,
+  'notification time old completed note',
+  'content',
+  0,
+  public.kst_day_start(now()),
+  public.kst_day_start(now()) - interval '1 hour'
 );
 
 INSERT INTO public.review_logs (id, note_id, user_id, round, scheduled_at)
@@ -81,6 +123,20 @@ VALUES (
   current_setting('test.notification_time_user_id')::uuid,
   1,
   TIMESTAMPTZ '2026-05-01 14:30:00+09'
+),
+(
+  current_setting('test.notification_time_completed_log_id')::uuid,
+  current_setting('test.notification_time_completed_note_id')::uuid,
+  current_setting('test.notification_time_user_id')::uuid,
+  1,
+  current_setting('test.notification_time_today_target_at')::timestamptz
+),
+(
+  current_setting('test.notification_time_old_completed_log_id')::uuid,
+  current_setting('test.notification_time_old_completed_note_id')::uuid,
+  current_setting('test.notification_time_user_id')::uuid,
+  1,
+  current_setting('test.notification_time_today_target_at')::timestamptz
 );
 
 SELECT throws_ok(
@@ -221,6 +277,56 @@ SELECT is(
   ),
   public.kst_day_start(TIMESTAMPTZ '2026-05-01 08:00:00+09'),
   $$next_review_at should follow the same KST date when notification time is earlier than base$$
+);
+
+SELECT lives_ok(
+  format(
+    $sql$
+      SELECT public.update_notification_time_of_day('%s'::uuid, '%s'::time);
+    $sql$,
+    current_setting('test.notification_time_completed_note_id'),
+    (
+      current_setting('test.notification_time_today_target_at')::timestamptz
+        AT TIME ZONE 'Asia/Seoul'
+    )::time
+  ),
+  $$a completed note should allow a later time on its completion day$$
+);
+
+SELECT is(
+  (
+    SELECT scheduled_at
+    FROM public.review_logs
+    WHERE id = current_setting('test.notification_time_completed_log_id')::uuid
+  ),
+  current_setting('test.notification_time_today_target_at')::timestamptz,
+  $$same-day time changes should keep the completed note on today$$
+);
+
+-- 완료 표시가 남아 있으면 claim_due_review_logs가 이 로그를 집어가지 않아
+-- 방금 잡은 시각에 알림이 나가지 않는다.
+SELECT ok(
+  (
+    SELECT review_completed_at IS NULL
+    FROM public.notes
+    WHERE id = current_setting('test.notification_time_completed_note_id')::uuid
+  ),
+  $$same-day time changes should resume the completed note$$
+);
+
+SELECT throws_ok(
+  format(
+    $sql$
+      SELECT public.update_notification_time_of_day('%s'::uuid, '%s'::time);
+    $sql$,
+    current_setting('test.notification_time_old_completed_note_id'),
+    (
+      current_setting('test.notification_time_today_target_at')::timestamptz
+        AT TIME ZONE 'Asia/Seoul'
+    )::time
+  ),
+  'completed review schedule must stay on completion day',
+  $$a completed note should reject time changes after its completion day$$
 );
 
 SELECT * FROM finish();

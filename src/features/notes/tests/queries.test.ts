@@ -30,6 +30,7 @@ describe("getNotes", () => {
         title: "최근 노트",
         content: "내용 1",
         next_review_at: "2026-03-30T09:00:00.000Z",
+        review_completed_at: null,
         review_round: 1,
       },
       {
@@ -37,6 +38,7 @@ describe("getNotes", () => {
         title: "이전 노트",
         content: "내용 2",
         next_review_at: null,
+        review_completed_at: null,
         review_round: 3,
       },
     ];
@@ -52,7 +54,10 @@ describe("getNotes", () => {
     const calls = callsFor("notes");
     expect(calls).toContainEqual([
       "select",
-      ["id, title, content, next_review_at, review_round", { count: "exact" }],
+      [
+        "id, title, content, next_review_at, review_completed_at, review_round",
+        { count: "exact" },
+      ],
     ]);
     expect(calls).toContainEqual(["eq", ["user_id", "user-123"]]);
     expect(calls).toContainEqual([
@@ -72,6 +77,7 @@ describe("getNotes", () => {
             title: "잘못된 노트",
             content: "내용",
             next_review_at: null,
+            review_completed_at: null,
             review_round: 1,
             created_at: "2026-03-29T00:00:00.000Z",
             updated_at: "2026-03-29T12:00:00.000Z",
@@ -101,7 +107,7 @@ describe("getNotes", () => {
   it.each([
     ["due", "lte", ["next_review_at", expect.any(String)]],
     ["scheduled", "or", [expect.stringContaining("next_review_at.gt.")]],
-    ["completed", "is", ["next_review_at", null]],
+    ["completed", "not", ["review_completed_at", "is", null]],
   ] as const)("%s 보기에 맞는 필터를 적용한다", async (view, method, args) => {
     const { supabase, callsFor } = createSupabaseQueryMock({
       notes: { data: [], count: 0 },
@@ -116,9 +122,11 @@ describe("getNotes", () => {
         "order",
         ["created_at", { ascending: false }],
       ]);
-    }
-    if (view === "completed") {
-      expect(callsFor("notes")).toContainEqual(["eq", ["review_round", 3]]);
+      // 완료가 아닌 보기에서는 사용자가 끝낸 노트를 빼야 한다.
+      expect(callsFor("notes")).toContainEqual([
+        "is",
+        ["review_completed_at", null],
+      ]);
     }
   });
 
@@ -131,6 +139,7 @@ describe("getNotes", () => {
           content: "note body",
           next_review_at: "2026-03-30T09:00:00.000Z",
           notification_time_of_day: "21:30:00",
+          review_completed_at: null,
           review_round: 1,
           created_at: "2026-03-29T00:00:00.000Z",
           updated_at: "2026-03-29T01:00:00.000Z",
@@ -151,7 +160,7 @@ describe("getNotes", () => {
     expect(noteCalls).toContainEqual([
       "select",
       [
-        "id, title, content, next_review_at, notification_time_of_day, review_round, created_at, updated_at, user_id",
+        "id, title, content, next_review_at, notification_time_of_day, review_completed_at, review_round, created_at, updated_at, user_id",
       ],
     ]);
     expect(noteCalls).toContainEqual([
@@ -197,6 +206,7 @@ describe("getNotes", () => {
           content: "note body",
           next_review_at: null,
           notification_time_of_day: null,
+          review_completed_at: null,
           review_round: 3,
           created_at: "2026-03-29T00:00:00.000Z",
           updated_at: "2026-03-29T01:00:00.000Z",

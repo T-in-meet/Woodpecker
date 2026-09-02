@@ -211,6 +211,40 @@ describe("NotificationSchedulePicker", () => {
     });
   });
 
+  it("완료 당일에는 오늘 일정만 선택할 수 있다", async () => {
+    const user = userEvent.setup();
+    render(
+      <PickerWithTrigger
+        noteId={NOTE_ID}
+        initialTime="21:30:00"
+        initialScheduledAt="2026-05-03T12:30:00.000Z"
+        sameDayOnly
+      />,
+    );
+
+    await openDialog(user);
+
+    expect(
+      screen.getByText(
+        "복습 완료 당일에는 오늘의 미래 시각으로만 변경할 수 있습니다. 저장하면 복습이 다시 시작됩니다.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "오늘" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "내일" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /기본 일정/ })).toBeDisabled();
+    expect(screen.getByLabelText("일")).toHaveValue("01");
+
+    enterDate("2026", "05", "02");
+    fireEvent.blur(screen.getByLabelText("일"));
+
+    expect(
+      screen.getByText("오늘 날짜만 입력할 수 있습니다."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /저장/ })).toBeDisabled();
+  });
+
   it("연도와 월 입력을 마치면 다음 입력칸으로 이동한다", async () => {
     const user = userEvent.setup();
     render(
@@ -271,6 +305,41 @@ describe("NotificationSchedulePicker", () => {
     expect(screen.getByRole("button", { name: /저장/ })).toBeDisabled();
   });
 
+  it("변경한 내용이 없으면 저장이 비활성인 이유를 알려준다", async () => {
+    const user = userEvent.setup();
+    render(
+      <PickerWithTrigger
+        noteId={NOTE_ID}
+        initialTime="21:30:00"
+        initialScheduledAt={SCHEDULED_AT}
+      />,
+    );
+
+    await openDialog(user);
+
+    expect(screen.getByRole("button", { name: /저장/ })).toBeDisabled();
+    expect(screen.getByText("변경한 내용이 없어요.")).toBeInTheDocument();
+  });
+
+  // 날짜 입력은 blur 전까지 자기 오류를 띄우지 않는다. 그 사이에도 버튼이 왜
+  // 죽어 있는지 알 수 있어야 한다.
+  it("날짜가 유효하지 않으면 blur 전에도 저장이 비활성인 이유를 알려준다", async () => {
+    const user = userEvent.setup();
+    render(
+      <PickerWithTrigger
+        noteId={NOTE_ID}
+        initialTime="21:30:00"
+        initialScheduledAt={SCHEDULED_AT}
+      />,
+    );
+
+    await openDialog(user);
+    enterDate("2027", "02", "31");
+    fireEvent.blur(screen.getByLabelText("일"));
+
+    expect(screen.getByText("날짜를 확인해주세요.")).toBeInTheDocument();
+  });
+
   it("시간만 바꿔도 저장할 수 있다", async () => {
     const user = userEvent.setup();
     render(
@@ -283,8 +352,9 @@ describe("NotificationSchedulePicker", () => {
 
     await openDialog(user);
     await user.click(screen.getByRole("button", { name: "오전 선택" }));
+    // "오늘"의 이미 지난 시각은 저장이 막히므로 현재(오전 9시) 이후를 고른다.
     fireEvent.change(screen.getByLabelText("시"), {
-      target: { value: "08" },
+      target: { value: "10" },
     });
     fireEvent.change(screen.getByLabelText("분"), {
       target: { value: "15" },
@@ -296,7 +366,7 @@ describe("NotificationSchedulePicker", () => {
       expect(setNotificationScheduleActionMock).toHaveBeenCalledWith(
         NOTE_ID,
         "2026-05-01",
-        "08:15",
+        "10:15",
       );
     });
   });
@@ -382,8 +452,9 @@ describe("NotificationSchedulePicker", () => {
 
     await openDialog(user);
     await user.click(screen.getByRole("button", { name: "오전 선택" }));
+    // "오늘"의 이미 지난 시각은 저장이 막히므로 현재(오전 9시) 이후를 고른다.
     fireEvent.change(screen.getByLabelText("시"), {
-      target: { value: "07" },
+      target: { value: "11" },
     });
     fireEvent.change(screen.getByLabelText("분"), {
       target: { value: "05" },
@@ -394,7 +465,7 @@ describe("NotificationSchedulePicker", () => {
       expect(setNotificationScheduleActionMock).toHaveBeenCalledWith(
         NOTE_ID,
         "2026-05-01",
-        "07:05",
+        "11:05",
       );
     });
   });
@@ -424,7 +495,7 @@ describe("NotificationSchedulePicker", () => {
   it("액션이 실패하면 서버가 준 메시지를 보여준다", async () => {
     setNotificationScheduleActionMock.mockResolvedValueOnce({
       success: false,
-      error: "이미 발송된 알림은 일정을 바꿀 수 없습니다.",
+      error: "알림을 보내는 중입니다. 잠시 후 다시 시도해주세요.",
     });
     const user = userEvent.setup();
     render(
@@ -440,7 +511,9 @@ describe("NotificationSchedulePicker", () => {
     await user.click(screen.getByRole("button", { name: /저장/ }));
 
     expect(
-      await screen.findByText("이미 발송된 알림은 일정을 바꿀 수 없습니다."),
+      await screen.findByText(
+        "알림을 보내는 중입니다. 잠시 후 다시 시도해주세요.",
+      ),
     ).toBeInTheDocument();
     expect(refreshMock).not.toHaveBeenCalled();
   });

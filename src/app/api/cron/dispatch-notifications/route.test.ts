@@ -39,24 +39,26 @@ function createAuthorizedRequest() {
 
 function createSupabaseMock({
   claimedLogs = [CLAIMED_LOG],
-  existingNotification = { id: NOTIFICATION_ID },
+  existingNotification = { id: NOTIFICATION_ID, status: "SENT" },
+  finalNote = { review_completed_at: null },
   insertedNotification = { id: NOTIFICATION_ID },
-  note = { title: "알림 노트" },
+  note = { review_completed_at: null, title: "알림 노트" },
 }: {
   claimedLogs?: (typeof CLAIMED_LOG)[] | null;
-  existingNotification?: { id: string } | null;
+  existingNotification?: { id: string; status: string } | null;
+  finalNote?: { review_completed_at: string | null } | null;
   insertedNotification?: { id: string } | null;
-  note?: { title: string } | null;
+  note?: { review_completed_at: string | null; title: string } | null;
 } = {}) {
   const rpcMock = vi.fn().mockResolvedValue({
     data: claimedLogs,
     error: null,
   });
 
-  const notesMaybeSingleMock = vi.fn().mockResolvedValue({
-    data: note,
-    error: null,
-  });
+  const notesMaybeSingleMock = vi
+    .fn()
+    .mockResolvedValueOnce({ data: note, error: null })
+    .mockResolvedValueOnce({ data: finalNote, error: null });
   const notesUserEqMock = vi.fn().mockReturnValue({
     maybeSingle: notesMaybeSingleMock,
   });
@@ -93,6 +95,21 @@ function createSupabaseMock({
   const notificationSelectMock = vi.fn().mockReturnValue({
     eq: notificationSelectReviewLogEqMock,
   });
+  const notificationUpdateStatusEqMock = vi
+    .fn()
+    .mockResolvedValue({ error: null });
+  const notificationUpdateTypeEqMock = vi.fn().mockReturnValue({
+    eq: notificationUpdateStatusEqMock,
+  });
+  const notificationUpdateUserEqMock = vi.fn().mockReturnValue({
+    eq: notificationUpdateTypeEqMock,
+  });
+  const notificationUpdateIdEqMock = vi.fn().mockReturnValue({
+    eq: notificationUpdateUserEqMock,
+  });
+  const notificationUpdateMock = vi.fn().mockReturnValue({
+    eq: notificationUpdateIdEqMock,
+  });
 
   const reviewLogUpdateEqMock = vi.fn().mockResolvedValue({ error: null });
   const reviewLogUpdateMock = vi.fn().mockReturnValue({
@@ -109,6 +126,7 @@ function createSupabaseMock({
     if (table === "notifications") {
       return {
         select: notificationSelectMock,
+        update: notificationUpdateMock,
         upsert: notificationUpsertMock,
       };
     }
@@ -125,6 +143,8 @@ function createSupabaseMock({
   return {
     fromMock,
     notificationSelectMock,
+    notificationUpdateMock,
+    notificationUpdateStatusEqMock,
     notificationUpsertMock,
     reviewLogUpdateMock,
     rpcMock,
@@ -218,6 +238,7 @@ describe("/api/cron/dispatch-notifications", () => {
           noteId: NOTE_ID,
           notificationId: NOTIFICATION_ID,
           reviewLogId: REVIEW_LOG_ID,
+          type: "REVIEW",
           url: `/notes/${NOTE_ID}/review`,
         },
         title: "복습할 시간이에요!",
@@ -247,6 +268,60 @@ describe("/api/cron/dispatch-notifications", () => {
     });
     expect(response.status).toBe(200);
     expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it("skips notifications for a note completed after it was claimed", async () => {
+    const { notificationUpsertMock, reviewLogUpdateMock, supabase } =
+      createSupabaseMock({
+        note: {
+          review_completed_at: "2026-04-27T00:05:00.000Z",
+          title: "완료한 노트",
+        },
+      });
+    createAdminClientMock.mockReturnValue(supabase);
+
+    const response = await dispatchRoute.GET(createAuthorizedRequest());
+
+    await expect(response.json()).resolves.toMatchObject({
+      claimed: 1,
+      dispatched: 0,
+      itemFailed: 0,
+      pushed: 0,
+    });
+    expect(notificationUpsertMock).not.toHaveBeenCalled();
+    expect(dispatchPushToUserMock).not.toHaveBeenCalled();
+    expect(reviewLogUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it("consumes a notification when the note is completed before push", async () => {
+    const {
+      notificationUpdateMock,
+      notificationUpdateStatusEqMock,
+      reviewLogUpdateMock,
+      supabase,
+    } = createSupabaseMock({
+      finalNote: { review_completed_at: "2026-04-27T00:05:00.000Z" },
+    });
+    createAdminClientMock.mockReturnValue(supabase);
+
+    const response = await dispatchRoute.GET(createAuthorizedRequest());
+
+    await expect(response.json()).resolves.toMatchObject({
+      claimed: 1,
+      dispatched: 0,
+      itemFailed: 0,
+      pushed: 0,
+    });
+    expect(notificationUpdateMock).toHaveBeenCalledWith({
+      read_at: expect.any(String),
+      status: "READ",
+    });
+    expect(notificationUpdateStatusEqMock).toHaveBeenCalledWith(
+      "status",
+      "SENT",
+    );
+    expect(dispatchPushToUserMock).not.toHaveBeenCalled();
+    expect(reviewLogUpdateMock).not.toHaveBeenCalled();
   });
 
   it("includes expired push subscription stats from push dispatch", async () => {
@@ -296,6 +371,25 @@ describe("/api/cron/dispatch-notifications", () => {
     expect(reviewLogUpdateMock).toHaveBeenCalledWith({
       notification_dispatched_at: expect.any(String),
     });
+  });
+
+  // 재시도로 재사용하는 행이 READ라면 이번 발송을 보고 사용자가 직접 확인했다는
+  // 뜻이다. 완료 -> 재시작으로 생긴 READ는 set_note_review_completion이 이미
+  // 정리하므로, 여기서 되돌리면 사용자가 치운 알림만 안 읽음으로 되살아난다.
+  it("keeps a notification the user already read when reusing its row", async () => {
+    const { notificationUpdateMock, supabase } = createSupabaseMock({
+      existingNotification: { id: NOTIFICATION_ID, status: "READ" },
+      insertedNotification: null,
+    });
+    createAdminClientMock.mockReturnValue(supabase);
+
+    const response = await dispatchRoute.GET(createAuthorizedRequest());
+
+    await expect(response.json()).resolves.toMatchObject({
+      dispatched: 1,
+      pushed: 1,
+    });
+    expect(notificationUpdateMock).not.toHaveBeenCalled();
   });
 
   it("does not create a notification when the note is missing", async () => {

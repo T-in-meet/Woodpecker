@@ -1,4 +1,5 @@
-import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
+import { isReviewCompleted } from "@/features/notes/utils/noteStatus";
+import { MAX_REVIEW_ROUND_BUCKET } from "@/lib/constants/reviewIntervals";
 import { logError } from "@/lib/logger";
 import { getUser } from "@/lib/supabase/getUser";
 import { createServerComponentClient } from "@/lib/supabase/server";
@@ -93,7 +94,7 @@ export async function getLearningStats(): Promise<LearningStats> {
   const [notesResult, reviewLogsResult] = await Promise.all([
     supabase
       .from("notes")
-      .select("review_round, next_review_at")
+      .select("review_round, next_review_at, review_completed_at")
       .eq("user_id", user.id),
     supabase
       .from("review_logs")
@@ -111,34 +112,43 @@ export async function getLearningStats(): Promise<LearningStats> {
   const notesRows = notesResult.data ?? [];
   const totalNotes = notesRows.length;
 
+  // 완료 표시한 노트는 대기·오늘 집계에서 뺀다. 노트 목록과 판정이 어긋나지 않도록
+  // 여기서 다시 정의하지 않고 noteStatus의 공용 판정을 쓴다.
   const reviewWaitingCount = notesRows.filter(
     (n) =>
-      (n.next_review_at === null && n.review_round === 0) ||
-      (typeof n.next_review_at === "string" && n.next_review_at > nowIso),
+      !isReviewCompleted(n) &&
+      ((n.next_review_at === null && n.review_round === 0) ||
+        (typeof n.next_review_at === "string" && n.next_review_at > nowIso)),
   ).length;
 
-  const completedNotesCount = notesRows.filter(
-    (n) => n.next_review_at === null && n.review_round === MAX_REVIEW_ROUND,
-  ).length;
+  const completedNotesCount = notesRows.filter(isReviewCompleted).length;
 
   // 오늘 예정뿐 아니라 기한이 지나 아직 못한 복습도 포함한다.
   // 통계 카드가 노트 목록의 due 보기로 링크되므로, review_logs가 아니라 목록과 같은
   // 소스(notes.next_review_at)에 같은 판정을 써서 두 화면의 숫자가 어긋날 수 없게 한다.
   // getNotes의 view === "due" 필터와 동일한 조건이다.
   const todayReviews = notesRows.filter(
-    (n) => typeof n.next_review_at === "string" && n.next_review_at <= nowIso,
+    (n) =>
+      !isReviewCompleted(n) &&
+      typeof n.next_review_at === "string" &&
+      n.next_review_at <= nowIso,
   ).length;
 
-  const notesByRoundMap = new Map<number, number>([
-    [0, 0],
-    [1, 0],
-    [2, 0],
-    [3, 0],
-  ]);
+  // 복습 횟수에 상한이 없으므로 버킷을 고정하지 않고 실제 데이터에서 만든다.
+  // 다만 MAX_REVIEW_ROUND_BUCKET 이상은 한 칸으로 묶는다. 그대로 두면 오래 쓴
+  // 사용자의 카드가 회차 수만큼 늘어나고, 그 구간은 어차피 간격이 모두 같다.
+  // 0회는 "학습 전" 칸이라 노트가 없어도 항상 보여준다.
+  // 완료 표시한 노트는 진행 중인 단계가 아니므로 뺀다. 특히 한 번도 복습하지 않고
+  // 완료한 노트는 review_round가 0이라 그대로 두면 "학습 전"으로 잡힌다.
+  // 그 노트들은 completedNotesCount가 따로 센다.
+  const notesByRoundMap = new Map<number, number>([[0, 0]]);
   for (const row of notesRows) {
+    if (isReviewCompleted(row)) continue;
+
     const r = row.review_round;
-    if (typeof r === "number" && notesByRoundMap.has(r)) {
-      notesByRoundMap.set(r, (notesByRoundMap.get(r) ?? 0) + 1);
+    if (typeof r === "number" && Number.isInteger(r) && r >= 0) {
+      const bucket = Math.min(r, MAX_REVIEW_ROUND_BUCKET);
+      notesByRoundMap.set(bucket, (notesByRoundMap.get(bucket) ?? 0) + 1);
     }
   }
   const notesByRound = Array.from(notesByRoundMap.entries())

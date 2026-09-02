@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getLegalAcceptanceRequiredPath } from "@/features/auth/lib/userAgreements";
-import { NOTIFICATION_TYPES } from "@/lib/constants/notifications";
 import { ROUTES } from "@/lib/constants/routes";
 import { logError } from "@/lib/logger";
 import { createClient } from "@/lib/supabase/server";
@@ -12,15 +11,17 @@ export const dynamic = "force-dynamic";
 const markNotificationReadRequestSchema = z
   .object({
     notificationId: z.string().uuid(),
+    // 읽음 처리 자체는 타입을 가리지 않는다. 서비스 워커가 보내는 값이라
+    // `.strict()`가 거부하지 않도록 스키마에는 남겨 둔다.
     type: z.string(),
   })
   .strict();
 
 /**
- * Marks a non-review user notification as read for the current session user.
+ * Marks a user notification as read for the current session user.
  *
- * REVIEW notifications are intentionally skipped because review completion is
- * the only event that consumes them.
+ * REVIEW notifications are included: opening a notification consumes it, and
+ * review completion marks it read through a separate path.
  */
 export async function POST(request: Request) {
   let payload: unknown;
@@ -35,10 +36,6 @@ export async function POST(request: Request) {
 
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
-  }
-
-  if (parsed.data.type === NOTIFICATION_TYPES.REVIEW) {
-    return NextResponse.json({ updated: false });
   }
 
   try {

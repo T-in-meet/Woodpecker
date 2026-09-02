@@ -156,7 +156,7 @@ SELECT lives_ok(
   $$review_round = 3으로 INSERT 시 성공해야 한다$$
 );
 
--- review_round가 유효한 값(0~3)에서 다른 유효한 값으로 UPDATE 시 성공해야 한다
+-- review_round가 0 이상의 다른 값으로 UPDATE 시 성공해야 한다
 SELECT lives_ok(
   format(
     $sql$
@@ -166,7 +166,7 @@ SELECT lives_ok(
     $sql$,
     current_setting('test.notes_constraints_check_note_update_valid_id')
   ),
-  $$review_round가 유효한 값(0~3)에서 다른 유효한 값으로 UPDATE 시 성공해야 한다$$
+  $$review_round가 0 이상의 다른 값으로 UPDATE 시 성공해야 한다$$
 );
 
 -- [예외 조건]
@@ -184,8 +184,8 @@ SELECT throws_ok(
   $$review_round = -1로 INSERT 시 CHECK 제약 위반으로 실패해야 한다$$
 );
 
--- review_round = 4로 INSERT 시 CHECK 제약 위반으로 실패해야 한다
-SELECT throws_ok(
+-- 누적 복습 횟수에는 상한이 없으므로 review_round = 4도 허용한다.
+SELECT lives_ok(
   format(
     $sql$
       INSERT INTO public.notes (id, user_id, title, content, review_round)
@@ -193,13 +193,11 @@ SELECT throws_ok(
     $sql$,
     current_setting('test.notes_constraints_check_user_a_id')
   ),
-  '23514',
-  NULL,
-  $$review_round = 4로 INSERT 시 CHECK 제약 위반으로 실패해야 한다$$
+  $$review_round = 4로 INSERT 시 성공해야 한다$$
 );
 
--- review_round를 범위 초과 값(5)으로 UPDATE 시 실패해야 한다
-SELECT throws_ok(
+-- 누적 복습 횟수에는 상한이 없으므로 5로 UPDATE할 수 있다.
+SELECT lives_ok(
   format(
     $sql$
       UPDATE public.notes
@@ -208,9 +206,7 @@ SELECT throws_ok(
     $sql$,
     current_setting('test.notes_constraints_check_note_update_invalid_high_id')
   ),
-  '23514',
-  NULL,
-  $$review_round를 범위 초과 값(5)으로 UPDATE 시 실패해야 한다$$
+  $$review_round를 5로 UPDATE 시 성공해야 한다$$
 );
 
 -- review_round를 범위 미만 값(-1)으로 UPDATE 시 실패해야 한다
@@ -241,7 +237,7 @@ SELECT lives_ok(
   $$review_round = 0은 성공해야 한다 (최소값)$$
 );
 
--- review_round = 3은 성공해야 한다 (최대값)
+-- review_round = 3은 성공해야 한다
 SELECT lives_ok(
   format(
     $sql$
@@ -250,7 +246,7 @@ SELECT lives_ok(
     $sql$,
     current_setting('test.notes_constraints_check_user_a_id')
   ),
-  $$review_round = 3은 성공해야 한다 (최대값)$$
+  $$review_round = 3은 성공해야 한다$$
 );
 
 -- review_round = -1은 실패해야 한다 (최소값 바로 아래)
@@ -267,8 +263,8 @@ SELECT throws_ok(
   $$review_round = -1은 실패해야 한다 (최소값 바로 아래)$$
 );
 
--- review_round = 4는 실패해야 한다 (최대값 바로 위)
-SELECT throws_ok(
+-- review_round = 4도 상한 없이 허용한다.
+SELECT lives_ok(
   format(
     $sql$
       INSERT INTO public.notes (id, user_id, title, content, review_round)
@@ -276,9 +272,7 @@ SELECT throws_ok(
     $sql$,
     current_setting('test.notes_constraints_check_user_a_id')
   ),
-  '23514',
-  NULL,
-  $$review_round = 4는 실패해야 한다 (최대값 바로 위)$$
+  $$review_round = 4는 성공해야 한다$$
 );
 
 -- review_round = 0 → 3으로 UPDATE는 성공해야 한다 (경계 내부 이동)
@@ -294,8 +288,8 @@ SELECT lives_ok(
   $$review_round = 0 → 3으로 UPDATE는 성공해야 한다 (경계 내부 이동)$$
 );
 
--- review_round = 3 → 4로 UPDATE는 실패해야 한다 (경계 초과)
-SELECT throws_ok(
+-- review_round = 3 → 4로 UPDATE도 성공해야 한다.
+SELECT lives_ok(
   format(
     $sql$
       UPDATE public.notes
@@ -304,9 +298,7 @@ SELECT throws_ok(
     $sql$,
     current_setting('test.notes_constraints_check_note_boundary_fail_id')
   ),
-  '23514',
-  NULL,
-  $$review_round = 3 → 4로 UPDATE는 실패해야 한다 (경계 초과)$$
+  $$review_round = 3 → 4로 UPDATE는 성공해야 한다$$
 );
 
 -- [불변 조건]
@@ -317,14 +309,13 @@ SELECT is(
   $$notes 테이블에는 review_round < 0인 행이 존재해서는 안 된다 (Status)$$
 );
 
--- notes 테이블에는 review_round > 3인 행이 존재해서는 안 된다 (Status)
-SELECT is(
-  (SELECT count(*) FROM public.notes WHERE review_round > 3),
-  0::bigint,
-  $$notes 테이블에는 review_round > 3인 행이 존재해서는 안 된다 (Status)$$
+-- 상한을 넘는 누적 복습 횟수가 실제로 저장되어야 한다.
+SELECT ok(
+  EXISTS (SELECT 1 FROM public.notes WHERE review_round > 3),
+  $$notes 테이블은 review_round > 3인 행을 허용해야 한다 (Status)$$
 );
 
--- 유효한 값으로 UPDATE 후 review_round는 항상 0~3 범위를 유지해야 한다 (Status)
+-- 유효한 값으로 UPDATE 후 review_round는 0 이상이어야 한다 (Status)
 UPDATE public.notes
 SET review_round = 3
 WHERE id = current_setting('test.notes_constraints_check_note_invariant_status_id')::uuid;
@@ -332,9 +323,9 @@ SELECT is(
   (SELECT count(*)
    FROM public.notes
    WHERE id = current_setting('test.notes_constraints_check_note_invariant_status_id')::uuid
-     AND review_round BETWEEN 0 AND 3),
+     AND review_round >= 0),
   1::bigint,
-  $$유효한 값으로 UPDATE 후 review_round는 항상 0~3 범위를 유지해야 한다 (Status)$$
+  $$유효한 값으로 UPDATE 후 review_round는 항상 0 이상이어야 한다 (Status)$$
 );
 
 -- UPDATE 성공 시 수정 대상 외 컬럼(id, user_id, created_at 등)은 변경되지 않아야 한다 (Transition)

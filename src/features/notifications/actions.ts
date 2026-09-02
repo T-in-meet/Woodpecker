@@ -262,10 +262,29 @@ export async function setNotificationScheduleAction(
   });
 
   if (error) {
+    if (error.message.includes("notification dispatch in progress")) {
+      return {
+        success: false,
+        error: "알림을 보내는 중입니다. 잠시 후 다시 시도해주세요.",
+      };
+    }
+
+    if (
+      error.message.includes(
+        "completed review schedule must stay on completion day",
+      )
+    ) {
+      return {
+        success: false,
+        error:
+          "복습 완료 당일에만 오늘의 미래 시각으로 일정을 바꿀 수 있습니다.",
+      };
+    }
+
     if (error.message.includes("no pending review log")) {
       return {
         success: false,
-        error: "이미 발송된 알림은 일정을 바꿀 수 없습니다.",
+        error: "일정을 바꿀 복습이 없습니다.",
       };
     }
 
@@ -325,6 +344,18 @@ export async function setNotificationTimeAction(
   );
 
   if (error) {
+    if (
+      error.message.includes(
+        "completed review schedule must stay on completion day",
+      )
+    ) {
+      return {
+        success: false,
+        error:
+          "복습 완료 당일에만 오늘의 미래 시각으로 일정을 바꿀 수 있습니다.",
+      };
+    }
+
     return {
       success: false,
       error: "알림 시간 저장에 실패했습니다. 잠시 후 다시 시도해주세요.",

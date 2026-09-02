@@ -170,11 +170,8 @@ export async function createNoteAction(
 
   await requireCurrentLegalAcceptance(user.id, ROUTES.NOTES_NEW);
 
+  // 아직 한 번도 복습하지 않았으므로 날짜 수 0에 해당하는 첫 간격을 쓴다.
   const firstReviewDate = getNextReviewDate(0);
-
-  if (!firstReviewDate) {
-    return { error: "노트 저장에 실패했습니다. 잠시 후 다시 시도해주세요." };
-  }
 
   const { data: newNoteId, error } = await supabase.rpc(
     "create_note_with_initial_review_log",
@@ -289,6 +286,67 @@ export async function updateNoteAction(
   });
 
   return { success: true };
+}
+
+/**
+ * 사용자가 노트의 복습을 직접 끝내거나 다시 시작한다.
+ *
+ * DB RPC가 완료 상태와 알림을 원자적으로 바꾼다. 완료를 해제할 때 pending log가
+ * 있으면 그 일정을 이어받고, 구 자동 완료 노트처럼 log가 없으면 다음 일정을 만든다.
+ */
+export async function setNoteReviewCompletedAction(
+  noteId: unknown,
+  completed: unknown,
+): Promise<{ data: { completed: boolean } } | { error: string }> {
+  const parsed = z
+    .object({ noteId: noteIdSchema, completed: z.boolean() })
+    .safeParse({ noteId, completed });
+
+  if (!parsed.success) {
+    return { error: "노트를 찾을 수 없습니다." };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "로그인이 필요합니다." };
+  }
+
+  if (user.email_confirmed_at == null) {
+    redirect(`${ROUTES.RESEND_EMAIL}?purpose=signup`);
+  }
+
+  await requireCurrentLegalAcceptance(
+    user.id,
+    getNoteDetailRoute(parsed.data.noteId),
+  );
+
+  const { data: completedState, error } = await supabase.rpc(
+    "set_note_review_completion",
+    {
+      p_note_id: parsed.data.noteId,
+      p_completed: parsed.data.completed,
+    },
+  );
+
+  if (error) {
+    if (error.message.includes("note not found")) {
+      return { error: "노트를 찾을 수 없습니다." };
+    }
+
+    return {
+      error: "복습 완료 상태를 바꾸지 못했습니다. 잠시 후 다시 시도해주세요.",
+    };
+  }
+
+  if (completedState === null) {
+    return { error: "노트를 찾을 수 없습니다." };
+  }
+
+  return { data: { completed: completedState } };
 }
 
 export async function deleteNoteAction(noteId: string) {

@@ -69,6 +69,8 @@ function renderBody(props: Partial<Parameters<typeof NoteDetailBody>[0]> = {}) {
       content="원래 내용"
       reviewRound={1}
       isReviewCompleted={false}
+      canChangeNotificationTime={true}
+      notificationScheduleSameDayOnly={false}
       canStartReview={true}
       reviewStatusMessage="다음 복습 일정: 내일"
       notificationTimeOfDay={null}
@@ -103,7 +105,7 @@ describe("NoteDetailBody", () => {
       reviewStatusMessage: "지금 백지 테스트를 진행할 수 있습니다.",
     });
 
-    const badge = screen.getByText("복습 1 / 3");
+    const badge = screen.getByText("복습 1회");
     const status = screen.getByText("지금 백지 테스트를 진행할 수 있습니다.");
 
     expect(status).toBeInTheDocument();

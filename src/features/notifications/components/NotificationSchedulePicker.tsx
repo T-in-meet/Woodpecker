@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import {
   type FormEvent,
   useEffect,
+  useId,
   useMemo,
   useState,
   useTransition,
@@ -47,6 +48,8 @@ export type NotificationSchedulePickerProps = {
   initialTime: string | null;
   /** 다음 알림이 실제로 나갈 시각. 날짜 입력의 초기값이 된다. */
   initialScheduledAt: string | null;
+  /** 완료 당일 정책으로 오늘의 미래 시각만 선택할 수 있는지. */
+  sameDayOnly?: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
@@ -83,6 +86,7 @@ export function NotificationSchedulePicker({
   noteId,
   initialTime,
   initialScheduledAt,
+  sameDayOnly = false,
   open,
   onOpenChange,
 }: NotificationSchedulePickerProps) {
@@ -106,11 +110,12 @@ export function NotificationSchedulePicker({
         : toInputTime(initialTime),
     [initialScheduledAt, initialTime],
   );
+  const editableDateKey = sameDayOnly ? todayKey : savedDateKey;
 
-  const [dateKey, setDateKey] = useState(savedDateKey);
+  const [dateKey, setDateKey] = useState(editableDateKey);
   const [timeValue, setTimeValue] = useState(savedTime);
   const [isDateInputValid, setIsDateInputValid] = useState(
-    savedDateKey >= todayKey,
+    editableDateKey >= todayKey,
   );
   const [isTimeInputValid, setIsTimeInputValid] = useState(
     notificationTimeSchema.safeParse(savedTime).success,
@@ -122,19 +127,46 @@ export function NotificationSchedulePicker({
   const hasSavedOverride = toInputTime(initialTime).length > 0;
   const hasChanges = timeValue !== savedTime || dateKey !== savedDateKey;
 
+  // 날짜·시간 입력은 각자 자기 범위만 본다. 오늘을 고르면 시각이 이미 지났을 수 있고,
+  // 그대로 저장하면 RPC가 'schedule in the past'로 되돌린다. 완료 당일 모드에서는
+  // 날짜가 오늘로 고정돼 이게 기본 상태가 되므로 버튼 단계에서 미리 막는다.
+  const isScheduleInPast =
+    dateKey < todayKey ||
+    (dateKey === todayKey && timeValue <= getKstTimeValue(new Date()));
+
+  /**
+   * 저장 버튼이 왜 비활성인지 알려 준다. 날짜·시간 입력은 각자 blur 시점에야
+   * 자기 오류를 띄우므로, 그 전에 저장을 누르려는 사용자에게는 버튼이 이유 없이
+   * 죽어 있는 것처럼 보인다.
+   */
+  const saveDisabledReason = !isDateInputValid
+    ? "날짜를 확인해주세요."
+    : !isTimeInputValid
+      ? "알림 시간을 확인해주세요."
+      : isScheduleInPast
+        ? "이미 지난 시각이에요. 더 뒤의 시각을 골라주세요."
+        : !hasChanges
+          ? "변경한 내용이 없어요."
+          : null;
+  // 저장 결과 문구가 있으면 그쪽이 우선이다. 두 줄이 겹쳐 보이지 않게 한다.
+  const saveHint = message || error ? null : saveDisabledReason;
+  const saveHintId = useId();
+
   const quickOffsetKeys = useMemo(
     () =>
-      QUICK_OFFSETS.map((offset) => ({
-        ...offset,
-        dateKey: addDaysToDateKey(todayKey, offset.days),
-      })),
-    [todayKey],
+      QUICK_OFFSETS.filter((offset) => !sameDayOnly || offset.days === 0).map(
+        (offset) => ({
+          ...offset,
+          dateKey: addDaysToDateKey(todayKey, offset.days),
+        }),
+      ),
+    [sameDayOnly, todayKey],
   );
 
   const resetDraft = () => {
-    setDateKey(savedDateKey);
+    setDateKey(editableDateKey);
     setTimeValue(savedTime);
-    setIsDateInputValid(savedDateKey >= todayKey);
+    setIsDateInputValid(editableDateKey >= todayKey);
     setIsTimeInputValid(notificationTimeSchema.safeParse(savedTime).success);
   };
 
@@ -157,11 +189,11 @@ export function NotificationSchedulePicker({
       return;
     }
 
-    setDateKey(savedDateKey);
+    setDateKey(editableDateKey);
     setTimeValue(savedTime);
-    setIsDateInputValid(savedDateKey >= todayKey);
+    setIsDateInputValid(editableDateKey >= todayKey);
     setIsTimeInputValid(notificationTimeSchema.safeParse(savedTime).success);
-  }, [open, savedDateKey, savedTime, todayKey]);
+  }, [editableDateKey, open, savedTime, todayKey]);
 
   const handleOpenChange = (nextOpen: boolean) => {
     onOpenChange(nextOpen);
@@ -185,6 +217,12 @@ export function NotificationSchedulePicker({
 
     if (!isDateInputValid) {
       setError("알림 날짜가 올바르지 않습니다.");
+      return;
+    }
+
+    // 저장 버튼은 막혀 있지만 입력에서 Enter로도 submit이 들어온다.
+    if (isScheduleInPast) {
+      setError("이미 지난 시각으로는 옮길 수 없습니다.");
       return;
     }
 
@@ -277,6 +315,12 @@ export function NotificationSchedulePicker({
               {formatScheduleLabel(savedDateKey, savedTime) ??
                 "기본 복습 예정 시간"}
             </DialogDescription>
+            {sameDayOnly && (
+              <p className="text-xs text-muted-foreground">
+                복습 완료 당일에는 오늘의 미래 시각으로만 변경할 수 있습니다.
+                저장하면 복습이 다시 시작됩니다.
+              </p>
+            )}
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="space-y-3">
@@ -308,6 +352,7 @@ export function NotificationSchedulePicker({
               <ResponsiveDateInput
                 value={dateKey}
                 min={todayKey}
+                {...(sameDayOnly ? { max: todayKey } : {})}
                 disabled={isPending}
                 onValueChange={handleSelectDateKey}
                 onValidityChange={handleDateValidityChange}
@@ -329,12 +374,20 @@ export function NotificationSchedulePicker({
               {error && <p className="text-sm text-destructive">{error}</p>}
             </div>
 
+            {saveHint && (
+              <p id={saveHintId} className="text-xs text-muted-foreground">
+                {saveHint}
+              </p>
+            )}
+
             <DialogFooter className="mt-2 flex-row items-center justify-between gap-2 pt-4">
               <Button
                 type="button"
                 variant="outline"
                 size="md"
-                disabled={isPending || (!hasSavedOverride && !hasChanges)}
+                disabled={
+                  isPending || sameDayOnly || (!hasSavedOverride && !hasChanges)
+                }
                 onClick={handleClear}
               >
                 <RotateCcw aria-hidden="true" />
@@ -354,11 +407,13 @@ export function NotificationSchedulePicker({
                 <Button
                   type="submit"
                   size="md"
+                  aria-describedby={saveHint ? saveHintId : undefined}
                   disabled={
                     isPending ||
                     !hasChanges ||
                     !isDateInputValid ||
-                    !isTimeInputValid
+                    !isTimeInputValid ||
+                    isScheduleInPast
                   }
                 >
                   {isPending ? (

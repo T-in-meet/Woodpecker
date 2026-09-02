@@ -72,6 +72,7 @@ import { requireCurrentLegalAcceptance } from "@/features/auth/utils/requireCurr
 import {
   createNoteAction,
   deleteNoteAction,
+  setNoteReviewCompletedAction,
   updateNoteAction,
 } from "../actions";
 
@@ -80,7 +81,7 @@ function createSupabaseMock(
     userId?: string | null;
     emailConfirmedAt?: string | null | undefined;
     rpcError?: { message: string } | null;
-    rpcResult?: string | null;
+    rpcResult?: boolean | string | null;
     deleteError?: { message: string } | null;
     deletedNote?: { id: string } | null;
     updateError?: { message: string } | null;
@@ -406,6 +407,61 @@ describe("createNoteAction", () => {
     });
     expect(rpcMock).toHaveBeenCalledOnce();
     expect(afterMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("setNoteReviewCompletedAction", () => {
+  const validNoteId = "11111111-1111-4111-8111-111111111111";
+
+  beforeEach(() => {
+    createClientMock.mockReset();
+    redirectMock.mockReset();
+    redirectMock.mockImplementation(() => {
+      throw REDIRECT_ERROR;
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("calls the atomic completion RPC", async () => {
+    const { rpcMock, supabase } = createSupabaseMock({ rpcResult: true });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await setNoteReviewCompletedAction(validNoteId, true);
+
+    expect(result).toEqual({ data: { completed: true } });
+    expect(rpcMock).toHaveBeenCalledWith("set_note_review_completion", {
+      p_note_id: validNoteId,
+      p_completed: true,
+    });
+  });
+
+  it("returns the resumed state from the RPC", async () => {
+    const { rpcMock, supabase } = createSupabaseMock({ rpcResult: false });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await setNoteReviewCompletedAction(validNoteId, false);
+
+    expect(result).toEqual({ data: { completed: false } });
+    expect(rpcMock).toHaveBeenCalledWith("set_note_review_completion", {
+      p_note_id: validNoteId,
+      p_completed: false,
+    });
+  });
+
+  it("returns a general error when the completion RPC fails", async () => {
+    const { supabase } = createSupabaseMock({
+      rpcError: { message: "completion failed" },
+    });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await setNoteReviewCompletedAction(validNoteId, true);
+
+    expect(result).toEqual({
+      error: "복습 완료 상태를 바꾸지 못했습니다. 잠시 후 다시 시도해주세요.",
+    });
   });
 });
 

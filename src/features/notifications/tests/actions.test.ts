@@ -377,7 +377,7 @@ describe("notification server actions", () => {
     expect(createClientMock).not.toHaveBeenCalled();
   });
 
-  it("explains that a dispatched notification can no longer be moved", async () => {
+  it("explains that there is nothing left to reschedule", async () => {
     const { supabase } = createSupabaseMock({
       rpcError: { message: "no pending review log" },
     });
@@ -392,7 +392,68 @@ describe("notification server actions", () => {
 
     expect(result).toEqual({
       success: false,
-      error: "이미 발송된 알림은 일정을 바꿀 수 없습니다.",
+      error: "일정을 바꿀 복습이 없습니다.",
+    });
+    expect(revalidatePathMock).not.toHaveBeenCalled();
+  });
+
+  // 완료 당일에는 오늘만 허용하므로 다른 날짜나 완료 다음 날 요청은 RPC가 거절한다.
+  it("explains the completed-day schedule restriction", async () => {
+    const { supabase } = createSupabaseMock({
+      rpcError: {
+        message: "completed review schedule must stay on completion day",
+      },
+    });
+    createClientMock.mockResolvedValue(supabase);
+    const targetDate = addDaysToDateKey(getKstDateKey(new Date()), 1);
+
+    const result = await setNotificationScheduleAction(
+      NOTE_ID,
+      targetDate,
+      "21:30",
+    );
+
+    expect(result).toEqual({
+      success: false,
+      error: "복습 완료 당일에만 오늘의 미래 시각으로 일정을 바꿀 수 있습니다.",
+    });
+    expect(revalidatePathMock).not.toHaveBeenCalled();
+  });
+
+  it("applies the completed-day restriction when restoring the default time", async () => {
+    const { supabase } = createSupabaseMock({
+      rpcError: {
+        message: "completed review schedule must stay on completion day",
+      },
+    });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await setNotificationTimeAction(NOTE_ID, null);
+
+    expect(result).toEqual({
+      success: false,
+      error: "복습 완료 당일에만 오늘의 미래 시각으로 일정을 바꿀 수 있습니다.",
+    });
+    expect(revalidatePathMock).not.toHaveBeenCalled();
+  });
+
+  // 발송이 진행 중일 때만 막힌다. 이미 나간 알림은 다시 옮길 수 있다.
+  it("asks the user to retry while a dispatch is in flight", async () => {
+    const { supabase } = createSupabaseMock({
+      rpcError: { message: "notification dispatch in progress" },
+    });
+    createClientMock.mockResolvedValue(supabase);
+    const targetDate = addDaysToDateKey(getKstDateKey(new Date()), 1);
+
+    const result = await setNotificationScheduleAction(
+      NOTE_ID,
+      targetDate,
+      "21:30",
+    );
+
+    expect(result).toEqual({
+      success: false,
+      error: "알림을 보내는 중입니다. 잠시 후 다시 시도해주세요.",
     });
     expect(revalidatePathMock).not.toHaveBeenCalled();
   });

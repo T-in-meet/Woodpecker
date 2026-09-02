@@ -14,12 +14,13 @@ import { NoteDetailBody } from "@/features/notes/components/NoteDetailBody";
 import { ScrollToTopButton } from "@/features/notes/components/ScrollToTopButton";
 import { ScrollToTopOnMount } from "@/features/notes/components/ScrollToTopOnMount";
 import { getNoteById } from "@/features/notes/queries";
-import { GradingHistorySection } from "@/features/review/components/GradingHistorySection";
 import {
-  getGradingsByNote,
-  hasCompletedReviewForNoteToday,
-} from "@/features/review/queries";
-import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
+  canStartReview,
+  getReviewStatus,
+} from "@/features/notes/utils/noteStatus";
+import { getKstDateKey } from "@/features/notifications/lib/time";
+import { GradingHistorySection } from "@/features/review/components/GradingHistorySection";
+import { getGradingsByNote } from "@/features/review/queries";
 import { ROUTES } from "@/lib/constants/routes";
 import { logError } from "@/lib/logger";
 import { getUser } from "@/lib/supabase/getUser";
@@ -70,43 +71,31 @@ export default async function NoteDetailPage({
 
   const nextReviewAt = note.next_review_at;
   const nextScheduledAt = note.next_scheduled_at ?? nextReviewAt;
-  const isReviewCompleted =
-    note.review_round >= MAX_REVIEW_ROUND && nextReviewAt === null;
+  // 회차 상한이 없으므로 복습이 끝나는 경로는 사용자의 완료 표시뿐이다.
+  const isReviewCompleted = getReviewStatus(note) === "completed";
+  const isReviewCompletedToday = note.review_completed_at
+    ? getKstDateKey(new Date(note.review_completed_at)) ===
+      getKstDateKey(new Date())
+    : false;
   const isReviewDue =
     nextScheduledAt !== null &&
     new Date(nextScheduledAt).getTime() <= Date.now();
 
-  const alreadyCompletedTodayPromise =
-    !isReviewCompleted && nextReviewAt !== null
-      ? hasCompletedReviewForNoteToday(noteId, user.id).catch((error) => {
-          // 일시적 조회 실패 시 fail-open(false) — 실제 차단은 DB 부분 unique
-          // 인덱스와 RPC가 보증하므로 페이지 표시를 막지 않는다.
-          logError(error);
-          return false;
-        })
-      : Promise.resolve(false);
+  // 진입 조건은 노트 목록과 공유한다. 언제 몇 번 복습할지는 사용자가 정한다.
+  const canReview = canStartReview(note);
 
-  const gradingsPromise = getGradingsByNote(noteId, user.id).catch((error) => {
+  const gradings = await getGradingsByNote(noteId, user.id).catch((error) => {
     // 채점 기록은 부가 정보 — 조회 실패 시 섹션만 숨기고 페이지 표시를 막지 않는다.
     logError(error);
     return [];
   });
 
-  const [alreadyCompletedToday, gradings] = await Promise.all([
-    alreadyCompletedTodayPromise,
-    gradingsPromise,
-  ]);
-
-  const canStartReview =
-    !isReviewCompleted && nextReviewAt !== null && !alreadyCompletedToday;
   const reviewStatusMessage = isReviewCompleted
-    ? "1-3-7 복습을 모두 마쳤습니다."
+    ? "복습을 완료한 노트입니다."
     : nextScheduledAt
-      ? alreadyCompletedToday
-        ? `오늘 백지 테스트 완료 · 다음 복습 일정: ${formatDateTime(nextScheduledAt)}`
-        : isReviewDue
-          ? "지금 백지 테스트를 진행할 수 있습니다."
-          : `다음 복습 일정: ${formatDateTime(nextScheduledAt)}`
+      ? isReviewDue
+        ? "지금 백지 테스트를 진행할 수 있습니다."
+        : `다음 복습 일정: ${formatDateTime(nextScheduledAt)}`
       : "다음 복습 일정이 아직 준비되지 않았습니다.";
 
   return (
@@ -144,7 +133,11 @@ export default async function NoteDetailPage({
         content={note.content}
         reviewRound={note.review_round}
         isReviewCompleted={isReviewCompleted}
-        canStartReview={canStartReview}
+        canChangeNotificationTime={!isReviewCompleted || isReviewCompletedToday}
+        notificationScheduleSameDayOnly={
+          isReviewCompleted && isReviewCompletedToday
+        }
+        canStartReview={canReview}
         reviewStatusMessage={reviewStatusMessage}
         notificationTimeOfDay={note.notification_time_of_day}
         nextScheduledAt={nextScheduledAt}

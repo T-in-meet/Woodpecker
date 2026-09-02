@@ -976,6 +976,7 @@ export type Database = {
           id: string;
           next_review_at: string | null;
           notification_time_of_day: string | null;
+          review_completed_at: string | null;
           review_round: number;
           title: string;
           updated_at: string;
@@ -987,6 +988,7 @@ export type Database = {
           id?: string;
           next_review_at?: string | null;
           notification_time_of_day?: string | null;
+          review_completed_at?: string | null;
           review_round?: number;
           title: string;
           updated_at?: string;
@@ -998,6 +1000,7 @@ export type Database = {
           id?: string;
           next_review_at?: string | null;
           notification_time_of_day?: string | null;
+          review_completed_at?: string | null;
           review_round?: number;
           title?: string;
           updated_at?: string;
@@ -2263,6 +2266,10 @@ export type Database = {
       save_ai_setting_configurations: {
         Args: { p_configurations: Json; p_setting_id: string };
         Returns: undefined;
+      };
+      set_note_review_completion: {
+        Args: { p_completed: boolean; p_note_id: string };
+        Returns: boolean;
       };
       update_note_chat_user_message: {
         Args: { p_content: Json; p_message_id: string; p_user_id: string };

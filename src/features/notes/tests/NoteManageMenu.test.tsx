@@ -1,19 +1,25 @@
 import "./setup";
 
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NoteManageMenu } from "../components/NoteManageMenu";
 
-const { lazyPickerRenderMock, preloadNotificationSchedulePickerMock } =
-  vi.hoisted(() => ({
-    lazyPickerRenderMock: vi.fn(),
-    preloadNotificationSchedulePickerMock: vi.fn(),
-  }));
+const {
+  lazyPickerRenderMock,
+  preloadNotificationSchedulePickerMock,
+  setNoteReviewCompletedActionMock,
+} = vi.hoisted(() => ({
+  lazyPickerRenderMock: vi.fn(),
+  preloadNotificationSchedulePickerMock: vi.fn(),
+  setNoteReviewCompletedActionMock: vi.fn(),
+}));
 
 vi.mock("../actions", () => ({
   deleteNoteAction: vi.fn(),
+  setNoteReviewCompletedAction: setNoteReviewCompletedActionMock,
 }));
 
 vi.mock("@/features/notifications/actions", () => ({
@@ -44,30 +50,83 @@ function renderMenu({
   onEdit = vi.fn(),
   onEditIntent = vi.fn(),
   canChangeNotificationTime = true,
+  notificationScheduleSameDayOnly = false,
+  isCompletedByUser = false,
 }: {
   onEdit?: () => void;
   onEditIntent?: () => void;
   canChangeNotificationTime?: boolean;
+  notificationScheduleSameDayOnly?: boolean;
+  isCompletedByUser?: boolean;
 } = {}) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const invalidateQueriesSpy = vi.spyOn(queryClient, "invalidateQueries");
+
   render(
-    <NoteManageMenu
-      noteId="note-123"
-      noteTitle="노트 제목"
-      onEdit={onEdit}
-      onEditIntent={onEditIntent}
-      canChangeNotificationTime={canChangeNotificationTime}
-      notificationTimeOfDay="21:30:00"
-      nextScheduledAt="2026-05-01T12:30:00.000Z"
-    />,
+    <QueryClientProvider client={queryClient}>
+      <NoteManageMenu
+        noteId="note-123"
+        noteTitle="노트 제목"
+        onEdit={onEdit}
+        onEditIntent={onEditIntent}
+        isCompletedByUser={isCompletedByUser}
+        canChangeNotificationTime={canChangeNotificationTime}
+        notificationScheduleSameDayOnly={notificationScheduleSameDayOnly}
+        notificationTimeOfDay="21:30:00"
+        nextScheduledAt="2026-05-01T12:30:00.000Z"
+      />
+    </QueryClientProvider>,
   );
 
-  return { onEdit, onEditIntent };
+  return { invalidateQueriesSpy, onEdit, onEditIntent };
 }
 
 describe("NoteManageMenu", () => {
   beforeEach(() => {
     lazyPickerRenderMock.mockClear();
     preloadNotificationSchedulePickerMock.mockClear();
+    setNoteReviewCompletedActionMock
+      .mockReset()
+      .mockResolvedValue({ data: { completed: true } });
+  });
+
+  it("진행 중인 노트에는 복습 완료로 표시를 노출한다", async () => {
+    const user = userEvent.setup();
+    const { invalidateQueriesSpy } = renderMenu();
+
+    await user.click(screen.getByRole("button", { name: "노트 관리 메뉴" }));
+    await user.click(
+      await screen.findByRole("menuitem", { name: "복습 완료로 표시" }),
+    );
+
+    await waitFor(() => {
+      expect(setNoteReviewCompletedActionMock).toHaveBeenCalledWith(
+        "note-123",
+        true,
+      );
+      expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+        queryKey: ["notifications"],
+      });
+    });
+  });
+
+  it("완료 표시한 노트에는 복습 다시 시작을 노출한다", async () => {
+    const user = userEvent.setup();
+    renderMenu({ isCompletedByUser: true });
+
+    await user.click(screen.getByRole("button", { name: "노트 관리 메뉴" }));
+    await user.click(
+      await screen.findByRole("menuitem", { name: "복습 다시 시작" }),
+    );
+
+    await waitFor(() => {
+      expect(setNoteReviewCompletedActionMock).toHaveBeenCalledWith(
+        "note-123",
+        false,
+      );
+    });
   });
 
   it("메뉴를 열기 전에는 항목이 보이지 않는다", () => {
@@ -103,7 +162,7 @@ describe("NoteManageMenu", () => {
     ).toBeInTheDocument();
   });
 
-  it("학습을 마친 노트에는 복습 일정 변경을 노출하지 않는다", async () => {
+  it("완료 당일이 지난 노트에는 복습 일정 변경을 노출하지 않는다", async () => {
     const user = userEvent.setup();
     renderMenu({ canChangeNotificationTime: false });
 
@@ -115,6 +174,21 @@ describe("NoteManageMenu", () => {
     expect(
       screen.queryByRole("menuitem", { name: "복습 일정 변경" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("완료 당일에는 복습 일정 변경을 노출한다", async () => {
+    const user = userEvent.setup();
+    renderMenu({
+      canChangeNotificationTime: true,
+      isCompletedByUser: true,
+      notificationScheduleSameDayOnly: true,
+    });
+
+    await user.click(screen.getByRole("button", { name: "노트 관리 메뉴" }));
+
+    expect(
+      await screen.findByRole("menuitem", { name: "복습 일정 변경" }),
+    ).toBeInTheDocument();
   });
 
   it("수정을 선택하면 onEdit을 호출한다", async () => {

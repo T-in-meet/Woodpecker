@@ -4,7 +4,6 @@ import { useActionState, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 
 import { submitAnswerAction } from "../actions";
 import { ANSWER_MAX_LENGTH, type GradingResponse } from "../schema";
@@ -29,7 +28,6 @@ export type RestoredReviewSession = {
 };
 
 type BlankTestPageProps = {
-  alreadyCompletedToday: boolean;
   noteId: string;
   noteTitle: string;
   restoredSession: RestoredReviewSession | null;
@@ -37,7 +35,6 @@ type BlankTestPageProps = {
 };
 
 export function BlankTestPage({
-  alreadyCompletedToday,
   noteId,
   noteTitle,
   restoredSession,
@@ -67,9 +64,7 @@ export function BlankTestPage({
           <span className="rounded-full bg-muted px-2.5 py-1 font-medium text-foreground">
             {reviewRound}차 복습
           </span>
-          <span>
-            백지 테스트 {reviewRound} / {MAX_REVIEW_ROUND}
-          </span>
+          <span>백지 테스트</span>
         </div>
         <h1 className="text-prose-ko text-3xl font-bold text-foreground">
           {noteTitle}
@@ -99,13 +94,11 @@ export function BlankTestPage({
 
           <div className="rounded-xl border border-border/60 bg-muted/30 px-5 py-4">
             <p className="text-prose-ko text-sm text-muted-foreground">
-              {alreadyCompletedToday
-                ? "오늘은 이미 이 노트의 복습을 완료했어요. 내일 자정(KST) 이후 다시 완료할 수 있어요."
-                : "비교를 마쳤다면 이번 복습을 완료 처리하고 다음 간격으로 넘어가세요."}
+              비교를 마쳤다면 이번 복습을 완료 처리하고 다음 간격으로
+              넘어가세요.
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
               <ReviewCompleteButton
-                disabled={alreadyCompletedToday}
                 noteId={noteId}
                 reviewLogId={comparisonState.reviewLogId}
               />

@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { buildNotesUrl } from "@/features/notes/utils/buildNotesUrl";
+import { MAX_REVIEW_ROUND_BUCKET } from "@/lib/constants/reviewIntervals";
 import { ROUTES } from "@/lib/constants/routes";
 import { cn } from "@/lib/utils/cn";
 
@@ -44,11 +45,9 @@ function StatCard({
   );
 }
 
+// 복습 횟수에 상한이 없으므로 0회만 이름을 주고 나머지는 숫자로 만든다.
 const NOTES_ROUND_LABELS: Record<number, string> = {
   0: "학습 전",
-  1: "1회차 복습 완료",
-  2: "2회차 복습 완료",
-  3: "3회차 복습 완료",
 };
 
 function formatPercent(numerator: number, denominator: number): string {
@@ -68,6 +67,13 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
     stats.totalNotes === 0 &&
     stats.completedReviews === 0 &&
     stats.todayReviews === 0;
+
+  // 버킷이 완료 표시한 노트를 빼고 만들어지므로 분모도 버킷 합으로 맞춘다.
+  // totalNotes로 나누면 완료한 만큼이 어떤 줄에도 안 잡혀 합이 100%에 못 미친다.
+  const notesInProgressTotal = stats.notesByRound.reduce(
+    (sum, { count }) => sum + count,
+    0,
+  );
 
   return (
     <Card>
@@ -118,7 +124,10 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
               {stats.notesByRound.map(({ round, count }) => (
                 <div key={round} className="flex items-center gap-3">
                   <span className="w-28 text-sm text-muted-foreground">
-                    {NOTES_ROUND_LABELS[round] ?? `${round}회차`}
+                    {NOTES_ROUND_LABELS[round] ??
+                      (round >= MAX_REVIEW_ROUND_BUCKET
+                        ? `${round}회차 이상`
+                        : `${round}회차`)}
                   </span>
                   <div className="h-2 flex-1 rounded-full bg-muted">
                     <div
@@ -126,15 +135,15 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
                       style={
                         {
                           "--progress-width":
-                            stats.totalNotes === 0
+                            notesInProgressTotal === 0
                               ? "0%"
-                              : `${(count / stats.totalNotes) * 100}%`,
+                              : `${(count / notesInProgressTotal) * 100}%`,
                         } as CSSProperties
                       }
                     />
                   </div>
                   <span className="w-20 text-right text-sm tabular-nums">
-                    {count} ({formatPercent(count, stats.totalNotes)})
+                    {count} ({formatPercent(count, notesInProgressTotal)})
                   </span>
                 </div>
               ))}

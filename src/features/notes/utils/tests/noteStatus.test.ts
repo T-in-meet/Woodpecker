@@ -1,12 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getReviewScheduleDisplay, getReviewStatus } from "../noteStatus";
-
-const MAX_REVIEW_ROUND = 3;
+import {
+  canStartReview,
+  getReviewScheduleDisplay,
+  getReviewStatus,
+} from "../noteStatus";
 
 function makeNote(overrides: {
   review_round?: number;
   next_review_at?: string | null;
+  review_completed_at?: string | null;
 }) {
   return {
     id: "test-id",
@@ -14,15 +17,23 @@ function makeNote(overrides: {
     content: "내용",
     review_round: 0,
     next_review_at: null,
+    review_completed_at: null,
     ...overrides,
   };
 }
 
 describe("getReviewStatus", () => {
-  it("최대 라운드 완료 + next_review_at null → completed", () => {
+  // 회차 상한이 사라져 횟수만으로는 완료가 되지 않는다. 완료는 사용자 표시뿐이다.
+  it("복습을 여러 번 했어도 완료 표시가 없으면 completed가 아니다", () => {
+    const note = makeNote({ review_round: 12, next_review_at: null });
+    expect(getReviewStatus(note)).toBe("pending");
+  });
+
+  it("완료 표시가 있으면 completed", () => {
     const note = makeNote({
-      review_round: MAX_REVIEW_ROUND,
+      review_round: 12,
       next_review_at: null,
+      review_completed_at: "2026-05-01T00:00:00.000Z",
     });
     expect(getReviewStatus(note)).toBe("completed");
   });
@@ -49,6 +60,46 @@ describe("getReviewStatus", () => {
     const note = makeNote({ review_round: 1, next_review_at: now });
     expect(getReviewStatus(note)).toBe("available");
   });
+
+  it("사용자가 완료 표시하면 예정일이 지났어도 completed", () => {
+    const past = new Date(Date.now() - 1000 * 60 * 60).toISOString();
+    const note = makeNote({
+      review_round: 1,
+      next_review_at: past,
+      review_completed_at: "2026-05-01T00:00:00.000Z",
+    });
+    expect(getReviewStatus(note)).toBe("completed");
+  });
+});
+
+describe("canStartReview", () => {
+  it("예정일이 지난 노트는 진입할 수 있다", () => {
+    const past = new Date(Date.now() - 1000 * 60 * 60).toISOString();
+    const note = makeNote({ review_round: 1, next_review_at: past });
+    expect(canStartReview(note)).toBe(true);
+  });
+
+  // 목록과 상세가 어긋나던 지점이다. 예정일 전이라고 진입을 막지 않는다.
+  it("예정일이 아직 오지 않은 노트도 진입할 수 있다", () => {
+    const future = new Date(Date.now() + 1000 * 60 * 60 * 24).toISOString();
+    const note = makeNote({ review_round: 1, next_review_at: future });
+    expect(canStartReview(note)).toBe(true);
+  });
+
+  it("다음 일정이 아직 준비되지 않은 노트는 진입할 수 없다", () => {
+    const note = makeNote({ review_round: 0, next_review_at: null });
+    expect(canStartReview(note)).toBe(false);
+  });
+
+  it("사용자가 완료 표시한 노트는 진입할 수 없다", () => {
+    const past = new Date(Date.now() - 1000 * 60 * 60).toISOString();
+    const note = makeNote({
+      review_round: 1,
+      next_review_at: past,
+      review_completed_at: "2026-05-01T00:00:00.000Z",
+    });
+    expect(canStartReview(note)).toBe(false);
+  });
 });
 
 describe("getReviewScheduleDisplay", () => {
@@ -63,7 +114,7 @@ describe("getReviewScheduleDisplay", () => {
 
   it("completed → '완료'", () => {
     expect(getReviewScheduleDisplay("completed", null)).toMatchObject({
-      label: "다음 복습일",
+      label: "복습일",
       primaryText: "완료",
       tone: "default",
     });

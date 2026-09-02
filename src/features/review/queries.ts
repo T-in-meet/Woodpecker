@@ -1,29 +1,33 @@
 import { z } from "zod";
 
-import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { createServerComponentClient } from "@/lib/supabase/server";
 
-import { getKstDayBoundsUtc } from "./lib/kstDay";
 import { gradingFeedbackSchema } from "./schema";
 
 const reviewableNoteSchema = z.object({
   title: z.string(),
   next_review_at: z.string().nullable(),
-  review_round: z.number().int().min(0).max(MAX_REVIEW_ROUND),
+  review_completed_at: z.string().nullable(),
+  // 누적 복습 횟수. 상한이 없다.
+  review_round: z.number().int().min(0),
 });
 
 const pendingReviewLogSchema = z.object({
   id: z.string().uuid(),
   note_id: z.string().uuid(),
-  round: z.number().int().min(1).max(MAX_REVIEW_ROUND),
+  round: z.number().int().min(1),
   scheduled_at: z.string(),
   completed_at: z.string().nullable(),
 });
 
 // 화면에 보여준 원본과 채점 기준 원본이 같은지는 본문 해시(hashNoteContent)로 확인한다.
 // updated_at은 본문과 무관한 UPDATE에도 바뀌므로 쓰지 않는다. 상세는 lib/contentHash.ts.
+//
+// 완료 판정에 쓰는 review_completed_at도 같이 읽는다. 같은 notes 행을 조건까지 똑같이
+// 조회하므로, 이것만 따로 getReviewableNote로 다시 읽으면 왕복만 한 번 더 생긴다.
 const noteContentForComparisonSchema = z.object({
   content: z.string(),
+  review_completed_at: z.string().nullable(),
 });
 
 export type ReviewableNote = z.infer<typeof reviewableNoteSchema>;
@@ -39,7 +43,7 @@ export async function getReviewableNote(
   const supabase = await createServerComponentClient();
   const { data, error } = await supabase
     .from("notes")
-    .select("title, next_review_at, review_round")
+    .select("title, next_review_at, review_completed_at, review_round")
     .eq("id", noteId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -72,26 +76,6 @@ export async function getPendingReviewLog(
   return parsed.success ? parsed.data : null;
 }
 
-export async function hasCompletedReviewForNoteToday(
-  noteId: string,
-  userId: string,
-): Promise<boolean> {
-  const { startUtcIso, endUtcIso } = getKstDayBoundsUtc();
-  const supabase = await createServerComponentClient();
-  const { count, error } = await supabase
-    .from("review_logs")
-    .select("id", { count: "exact", head: true })
-    .eq("note_id", noteId)
-    .eq("user_id", userId)
-    .not("completed_at", "is", null)
-    .gte("completed_at", startUtcIso)
-    .lt("completed_at", endUtcIso);
-
-  if (error) throw error;
-
-  return (count ?? 0) > 0;
-}
-
 export async function getNoteContentForComparison(
   noteId: string,
   userId: string,
@@ -99,7 +83,7 @@ export async function getNoteContentForComparison(
   const supabase = await createServerComponentClient();
   const { data, error } = await supabase
     .from("notes")
-    .select("content")
+    .select("content, review_completed_at")
     .eq("id", noteId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -113,7 +97,7 @@ export async function getNoteContentForComparison(
 const reviewGradingSchema = z.object({
   id: z.string().uuid(),
   review_log_id: z.string().uuid(),
-  round: z.number().int().min(1).max(MAX_REVIEW_ROUND),
+  round: z.number().int().min(1),
   score: z.number().int().min(0).max(100),
   feedback: gradingFeedbackSchema,
   created_at: z.string(),

@@ -6,7 +6,6 @@ import type { MouseEvent } from "react";
 
 import {
   NOTIFICATION_STATUS,
-  NOTIFICATION_TYPES,
   type NotificationKindType,
 } from "@/lib/constants/notifications";
 import { formatDateTime } from "@/lib/utils/formatDate";
@@ -61,11 +60,9 @@ function getNotificationDescription(
  * @returns 클릭 시 읽음 처리해야 하면 true
  */
 function shouldMarkAsReadOnClick(item: UserNotificationListItemType) {
-  // REVIEW는 복습 완료 RPC에서 READ 처리한다. 그 외 알림은 클릭을 소비로 본다.
-  return (
-    item.status === NOTIFICATION_STATUS.SENT &&
-    item.type !== NOTIFICATION_TYPES.REVIEW
-  );
+  // 타입을 가리지 않고 클릭을 소비로 본다. REVIEW도 복습 완료를 기다리지 않는다 —
+  // 복습 완료 시 읽음 처리하는 경로는 RPC에 그대로 남아 있다.
+  return item.status === NOTIFICATION_STATUS.SENT;
 }
 
 /**

@@ -71,7 +71,7 @@ SELECT is(
   $$kst_date should map UTC timestamps at KST midnight to the next KST date$$
 );
 
-SELECT throws_ok(
+SELECT lives_ok(
   $sql$
     INSERT INTO public.review_logs (id, note_id, user_id, round, scheduled_at, completed_at)
     VALUES (
@@ -83,9 +83,7 @@ SELECT throws_ok(
       TIMESTAMPTZ '2026-04-01 03:30:00+00'
     );
   $sql$,
-  '23505',
-  NULL,
-  $$the same note cannot have two completed review logs on the same KST date$$
+  $$the same note can have multiple completed review logs on the same KST date$$
 );
 
 SAVEPOINT review_logs_unique_different_kst_date;
@@ -149,28 +147,26 @@ VALUES (
   TIMESTAMPTZ '2026-04-01 15:00:00+00'
 );
 
-SELECT throws_ok(
+SELECT lives_ok(
   $sql$
     UPDATE public.review_logs
     SET completed_at = TIMESTAMPTZ '2026-04-01 04:00:00+00'
     WHERE note_id = current_setting('test.review_logs_unique_note_a_id')::uuid
       AND public.kst_date(completed_at) = DATE '2026-04-02';
   $sql$,
-  '23505',
-  NULL,
-  $$updating a completed review into an existing note/KST-date pair should fail$$
+  $$updating a completed review into an existing note/KST-date pair should succeed$$
 );
 ROLLBACK TO SAVEPOINT review_logs_unique_update_duplicate;
 
 SELECT ok(
-  NOT EXISTS (
+  EXISTS (
     SELECT note_id, public.kst_date(completed_at)
     FROM public.review_logs
     WHERE completed_at IS NOT NULL
     GROUP BY note_id, public.kst_date(completed_at)
     HAVING count(*) > 1
   ),
-  $$completed review logs should remain unique per note and KST date$$
+  $$completed review logs may repeat within the same note and KST date$$
 );
 
 SELECT * FROM finish();
