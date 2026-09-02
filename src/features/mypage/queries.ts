@@ -1,4 +1,5 @@
 import { isReviewCompleted } from "@/features/notes/utils/noteStatus";
+import { MAX_REVIEW_ROUND_BUCKET } from "@/lib/constants/reviewIntervals";
 import { logError } from "@/lib/logger";
 import { getUser } from "@/lib/supabase/getUser";
 import { createServerComponentClient } from "@/lib/supabase/server";
@@ -134,6 +135,8 @@ export async function getLearningStats(): Promise<LearningStats> {
   ).length;
 
   // 복습 횟수에 상한이 없으므로 버킷을 고정하지 않고 실제 데이터에서 만든다.
+  // 다만 MAX_REVIEW_ROUND_BUCKET 이상은 한 칸으로 묶는다. 그대로 두면 오래 쓴
+  // 사용자의 카드가 회차 수만큼 늘어나고, 그 구간은 어차피 간격이 모두 같다.
   // 0회는 "학습 전" 칸이라 노트가 없어도 항상 보여준다.
   // 완료 표시한 노트는 진행 중인 단계가 아니므로 뺀다. 특히 한 번도 복습하지 않고
   // 완료한 노트는 review_round가 0이라 그대로 두면 "학습 전"으로 잡힌다.
@@ -144,7 +147,8 @@ export async function getLearningStats(): Promise<LearningStats> {
 
     const r = row.review_round;
     if (typeof r === "number" && Number.isInteger(r) && r >= 0) {
-      notesByRoundMap.set(r, (notesByRoundMap.get(r) ?? 0) + 1);
+      const bucket = Math.min(r, MAX_REVIEW_ROUND_BUCKET);
+      notesByRoundMap.set(bucket, (notesByRoundMap.get(bucket) ?? 0) + 1);
     }
   }
   const notesByRound = Array.from(notesByRoundMap.entries())

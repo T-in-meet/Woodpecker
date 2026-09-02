@@ -105,10 +105,11 @@ describe("getLearningStats", () => {
     expect(result.totalNotes).toBe(4);
     // 회차 상한이 없으므로 버킷을 고정하지 않는다. 노트가 없는 횟수는 나오지 않고,
     // 0회만 "학습 전" 칸이라 항상 남는다.
+    // 다만 목록이 무한히 길어지지 않도록 9회차는 마지막 칸(5회차 이상)에 묶인다.
     expect(result.notesByRound).toEqual([
       { round: 0, count: 1 },
       { round: 1, count: 2 },
-      { round: 9, count: 1 },
+      { round: 5, count: 1 },
     ]);
   });
 

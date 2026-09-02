@@ -8,6 +8,14 @@
  */
 export const REVIEW_INTERVALS_DAYS = [1, 3, 7, 14, 30] as const;
 
+/**
+ * 복습 횟수를 집계 화면에 묶어 보여줄 때 쓰는 마지막 칸.
+ *
+ * 누적 복습 횟수에는 상한이 없어서 실제 값을 그대로 칸으로 만들면 목록이 무한히
+ * 길어진다. 이 값 이상은 모두 같은 간격(마지막 값)을 쓰므로 한 칸으로 묶는다.
+ */
+export const MAX_REVIEW_ROUND_BUCKET = REVIEW_INTERVALS_DAYS.length;
+
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /**

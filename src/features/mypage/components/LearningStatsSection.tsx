@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { buildNotesUrl } from "@/features/notes/utils/buildNotesUrl";
+import { MAX_REVIEW_ROUND_BUCKET } from "@/lib/constants/reviewIntervals";
 import { ROUTES } from "@/lib/constants/routes";
 import { cn } from "@/lib/utils/cn";
 
@@ -123,7 +124,10 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
               {stats.notesByRound.map(({ round, count }) => (
                 <div key={round} className="flex items-center gap-3">
                   <span className="w-28 text-sm text-muted-foreground">
-                    {NOTES_ROUND_LABELS[round] ?? `${round}회차`}
+                    {NOTES_ROUND_LABELS[round] ??
+                      (round >= MAX_REVIEW_ROUND_BUCKET
+                        ? `${round}회차 이상`
+                        : `${round}회차`)}
                   </span>
                   <div className="h-2 flex-1 rounded-full bg-muted">
                     <div
