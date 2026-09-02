@@ -303,6 +303,7 @@ export function NotificationSchedulePicker({
             {sameDayOnly && (
               <p className="text-xs text-muted-foreground">
                 복습 완료 당일에는 오늘의 미래 시각으로만 변경할 수 있습니다.
+                저장하면 복습이 다시 시작됩니다.
               </p>
             )}
           </DialogHeader>

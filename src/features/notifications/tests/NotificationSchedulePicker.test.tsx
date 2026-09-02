@@ -226,7 +226,7 @@ describe("NotificationSchedulePicker", () => {
 
     expect(
       screen.getByText(
-        "복습 완료 당일에는 오늘의 미래 시각으로만 변경할 수 있습니다.",
+        "복습 완료 당일에는 오늘의 미래 시각으로만 변경할 수 있습니다. 저장하면 복습이 다시 시작됩니다.",
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "오늘" })).toBeInTheDocument();

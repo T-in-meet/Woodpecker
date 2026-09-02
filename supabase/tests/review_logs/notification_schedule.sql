@@ -4,7 +4,7 @@
 
 BEGIN;
 
-SELECT plan(11);
+SELECT plan(12);
 
 SELECT set_config('test.schedule_user_id', gen_random_uuid()::text, true);
 SELECT set_config('test.schedule_note_id', gen_random_uuid()::text, true);
@@ -204,6 +204,20 @@ SELECT lives_ok(
   $$already dispatched notifications should be rearmed at the new schedule$$
 );
 
+-- 완료 당일 정책 검사는 성공 케이스보다 먼저 본다. 아래 same-day 변경이 완료
+-- 표시를 풀어 노트를 진행 중으로 되돌리므로, 순서를 바꾸면 완료 노트가 아니게 된다.
+SELECT throws_ok(
+  format(
+    $sql$
+      SELECT public.update_notification_schedule('%s'::uuid, '%s'::timestamptz);
+    $sql$,
+    current_setting('test.schedule_completed_note_id'),
+    current_setting('test.schedule_target_at')
+  ),
+  'completed review schedule must stay on completion day',
+  $$completed notes should not be moved away from their completion day$$
+);
+
 -- 완료 표시한 KST 당일에는 오늘의 미래 시각으로 다시 잡을 수 있다.
 SELECT lives_ok(
   format(
@@ -226,16 +240,15 @@ SELECT is(
   $$same-day rescheduling should update the completed note's pending log$$
 );
 
-SELECT throws_ok(
-  format(
-    $sql$
-      SELECT public.update_notification_schedule('%s'::uuid, '%s'::timestamptz);
-    $sql$,
-    current_setting('test.schedule_completed_note_id'),
-    current_setting('test.schedule_target_at')
+-- 완료 표시가 남아 있으면 claim_due_review_logs가 이 로그를 집어가지 않아
+-- 방금 잡은 시각에 알림이 나가지 않는다.
+SELECT ok(
+  (
+    SELECT review_completed_at IS NULL
+    FROM public.notes
+    WHERE id = current_setting('test.schedule_completed_note_id')::uuid
   ),
-  'completed review schedule must stay on completion day',
-  $$completed notes should not be moved away from their completion day$$
+  $$same-day rescheduling should resume the completed note$$
 );
 
 SELECT * FROM finish();

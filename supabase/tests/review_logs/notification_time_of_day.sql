@@ -4,7 +4,7 @@
 
 BEGIN;
 
-SELECT plan(17);
+SELECT plan(18);
 
 SELECT set_config('test.notification_time_user_id', gen_random_uuid()::text, true);
 SELECT set_config('test.notification_time_note_id', gen_random_uuid()::text, true);
@@ -301,6 +301,17 @@ SELECT is(
   ),
   current_setting('test.notification_time_today_target_at')::timestamptz,
   $$same-day time changes should keep the completed note on today$$
+);
+
+-- 완료 표시가 남아 있으면 claim_due_review_logs가 이 로그를 집어가지 않아
+-- 방금 잡은 시각에 알림이 나가지 않는다.
+SELECT ok(
+  (
+    SELECT review_completed_at IS NULL
+    FROM public.notes
+    WHERE id = current_setting('test.notification_time_completed_note_id')::uuid
+  ),
+  $$same-day time changes should resume the completed note$$
 );
 
 SELECT throws_ok(
