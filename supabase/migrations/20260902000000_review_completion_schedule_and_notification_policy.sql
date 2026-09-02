@@ -399,13 +399,21 @@ BEGIN
       -- 있으므로 지우지 않는다. 지운 뒤 발송이 성공하면 로그는 dispatched로
       -- 마킹되어 다시 claim되지 않고 벨에는 아무것도 남지 않는다.
       -- 완료 표시 때 소비해둔 READ만 되돌려 다시 보이게 한다.
+      --
+      -- read_at으로 그 둘을 가른다. 완료 표시(p_completed = true)는 read_at을
+      -- COALESCE(read_at, 완료 시각)으로 채우므로, 완료가 소비한 행은 read_at이
+      -- 완료 시각과 같고 사용자가 직접 읽은 행은 그보다 앞선다. 이 조건이 없으면
+      -- 발송 진행 중에 사용자가 벨에서 읽고 -> 완료 -> 재시작한 경우, 이미 치운
+      -- 알림이 안 읽음으로 되살아난다.
       UPDATE public.notifications n
       SET status = 'SENT',
           read_at = NULL
       WHERE n.review_log_id = v_pending_review_log_id
         AND n.user_id = v_user_id
         AND n.type = 'REVIEW'
-        AND n.status = 'READ';
+        AND n.status = 'READ'
+        AND n.read_at IS NOT NULL
+        AND n.read_at >= v_review_completed_at;
     END IF;
   END IF;
 
