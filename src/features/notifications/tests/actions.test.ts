@@ -397,11 +397,12 @@ describe("notification server actions", () => {
     expect(revalidatePathMock).not.toHaveBeenCalled();
   });
 
-  // 완료 노트도 pending log를 보존하므로 RPC가 직접 거절한다. UI 가드만으로는
-  // 액션 직접 호출을 막지 못한다.
-  it("rejects rescheduling a note the user already marked as completed", async () => {
+  // 완료 당일에는 오늘만 허용하므로 다른 날짜나 완료 다음 날 요청은 RPC가 거절한다.
+  it("explains the completed-day schedule restriction", async () => {
     const { supabase } = createSupabaseMock({
-      rpcError: { message: "review already completed" },
+      rpcError: {
+        message: "completed review schedule must stay on completion day",
+      },
     });
     createClientMock.mockResolvedValue(supabase);
     const targetDate = addDaysToDateKey(getKstDateKey(new Date()), 1);
@@ -414,7 +415,24 @@ describe("notification server actions", () => {
 
     expect(result).toEqual({
       success: false,
-      error: "복습을 완료한 노트의 알림 일정은 바꿀 수 없습니다.",
+      error: "복습 완료 당일에만 오늘의 미래 시각으로 일정을 바꿀 수 있습니다.",
+    });
+    expect(revalidatePathMock).not.toHaveBeenCalled();
+  });
+
+  it("applies the completed-day restriction when restoring the default time", async () => {
+    const { supabase } = createSupabaseMock({
+      rpcError: {
+        message: "completed review schedule must stay on completion day",
+      },
+    });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await setNotificationTimeAction(NOTE_ID, null);
+
+    expect(result).toEqual({
+      success: false,
+      error: "복습 완료 당일에만 오늘의 미래 시각으로 일정을 바꿀 수 있습니다.",
     });
     expect(revalidatePathMock).not.toHaveBeenCalled();
   });

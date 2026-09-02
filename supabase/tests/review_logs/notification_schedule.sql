@@ -4,7 +4,7 @@
 
 BEGIN;
 
-SELECT plan(9);
+SELECT plan(11);
 
 SELECT set_config('test.schedule_user_id', gen_random_uuid()::text, true);
 SELECT set_config('test.schedule_note_id', gen_random_uuid()::text, true);
@@ -19,6 +19,16 @@ SELECT set_config(
   'test.schedule_target_at',
   (
     public.apply_time_of_day(now() + interval '3 days', TIME '21:30')
+  )::text,
+  true
+);
+SELECT set_config(
+  'test.schedule_today_target_at',
+  (
+    now()
+      + (
+          public.kst_day_start(now() + interval '1 day') - now()
+        ) / 2
   )::text,
   true
 );
@@ -194,7 +204,28 @@ SELECT lives_ok(
   $$already dispatched notifications should be rearmed at the new schedule$$
 );
 
--- UI 가드만으로는 액션 직접 호출을 막지 못하므로 RPC가 직접 거절한다.
+-- 완료 표시한 KST 당일에는 오늘의 미래 시각으로 다시 잡을 수 있다.
+SELECT lives_ok(
+  format(
+    $sql$
+      SELECT public.update_notification_schedule('%s'::uuid, '%s'::timestamptz);
+    $sql$,
+    current_setting('test.schedule_completed_note_id'),
+    current_setting('test.schedule_today_target_at')
+  ),
+  $$completed notes should be reschedulable later on their completion day$$
+);
+
+SELECT is(
+  (
+    SELECT scheduled_at
+    FROM public.review_logs
+    WHERE id = current_setting('test.schedule_completed_log_id')::uuid
+  ),
+  current_setting('test.schedule_today_target_at')::timestamptz,
+  $$same-day rescheduling should update the completed note's pending log$$
+);
+
 SELECT throws_ok(
   format(
     $sql$
@@ -203,8 +234,8 @@ SELECT throws_ok(
     current_setting('test.schedule_completed_note_id'),
     current_setting('test.schedule_target_at')
   ),
-  'review already completed',
-  $$completed notes should not be rescheduled$$
+  'completed review schedule must stay on completion day',
+  $$completed notes should not be moved away from their completion day$$
 );
 
 SELECT * FROM finish();

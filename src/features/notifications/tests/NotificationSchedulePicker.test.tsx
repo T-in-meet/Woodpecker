@@ -211,6 +211,40 @@ describe("NotificationSchedulePicker", () => {
     });
   });
 
+  it("완료 당일에는 오늘 일정만 선택할 수 있다", async () => {
+    const user = userEvent.setup();
+    render(
+      <PickerWithTrigger
+        noteId={NOTE_ID}
+        initialTime="21:30:00"
+        initialScheduledAt="2026-05-03T12:30:00.000Z"
+        sameDayOnly
+      />,
+    );
+
+    await openDialog(user);
+
+    expect(
+      screen.getByText(
+        "복습 완료 당일에는 오늘의 미래 시각으로만 변경할 수 있습니다.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "오늘" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "내일" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /기본 일정/ })).toBeDisabled();
+    expect(screen.getByLabelText("일")).toHaveValue("01");
+
+    enterDate("2026", "05", "02");
+    fireEvent.blur(screen.getByLabelText("일"));
+
+    expect(
+      screen.getByText("오늘 날짜만 입력할 수 있습니다."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /저장/ })).toBeDisabled();
+  });
+
   it("연도와 월 입력을 마치면 다음 입력칸으로 이동한다", async () => {
     const user = userEvent.setup();
     render(

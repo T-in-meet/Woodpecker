@@ -50,11 +50,13 @@ function renderMenu({
   onEdit = vi.fn(),
   onEditIntent = vi.fn(),
   canChangeNotificationTime = true,
+  notificationScheduleSameDayOnly = false,
   isCompletedByUser = false,
 }: {
   onEdit?: () => void;
   onEditIntent?: () => void;
   canChangeNotificationTime?: boolean;
+  notificationScheduleSameDayOnly?: boolean;
   isCompletedByUser?: boolean;
 } = {}) {
   const queryClient = new QueryClient({
@@ -71,6 +73,7 @@ function renderMenu({
         onEditIntent={onEditIntent}
         isCompletedByUser={isCompletedByUser}
         canChangeNotificationTime={canChangeNotificationTime}
+        notificationScheduleSameDayOnly={notificationScheduleSameDayOnly}
         notificationTimeOfDay="21:30:00"
         nextScheduledAt="2026-05-01T12:30:00.000Z"
       />
@@ -159,7 +162,7 @@ describe("NoteManageMenu", () => {
     ).toBeInTheDocument();
   });
 
-  it("학습을 마친 노트에는 복습 일정 변경을 노출하지 않는다", async () => {
+  it("완료 당일이 지난 노트에는 복습 일정 변경을 노출하지 않는다", async () => {
     const user = userEvent.setup();
     renderMenu({ canChangeNotificationTime: false });
 
@@ -171,6 +174,21 @@ describe("NoteManageMenu", () => {
     expect(
       screen.queryByRole("menuitem", { name: "복습 일정 변경" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("완료 당일에는 복습 일정 변경을 노출한다", async () => {
+    const user = userEvent.setup();
+    renderMenu({
+      canChangeNotificationTime: true,
+      isCompletedByUser: true,
+      notificationScheduleSameDayOnly: true,
+    });
+
+    await user.click(screen.getByRole("button", { name: "노트 관리 메뉴" }));
+
+    expect(
+      await screen.findByRole("menuitem", { name: "복습 일정 변경" }),
+    ).toBeInTheDocument();
   });
 
   it("수정을 선택하면 onEdit을 호출한다", async () => {

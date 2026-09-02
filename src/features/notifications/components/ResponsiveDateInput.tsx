@@ -22,6 +22,7 @@ import {
 type ResponsiveDateInputProps = {
   value: string;
   min: string;
+  max?: string;
   disabled: boolean;
   onValueChange: (value: string) => void;
   onValidityChange: (isValid: boolean) => void;
@@ -35,7 +36,7 @@ const DATE_PART_MAX_LENGTH = {
   day: 2,
 } as const;
 
-function getDateInputError(parts: DatePartsType, min: string) {
+function getDateInputError(parts: DatePartsType, min: string, max?: string) {
   const { year, month, day } = parts;
 
   if (year.length !== 4 || month.length !== 2 || day.length !== 2) {
@@ -52,12 +53,17 @@ function getDateInputError(parts: DatePartsType, min: string) {
     return "오늘 이후 날짜를 입력해주세요.";
   }
 
+  if (max && dateKey > max) {
+    return "오늘 날짜만 입력할 수 있습니다.";
+  }
+
   return null;
 }
 
 export function ResponsiveDateInput({
   value,
   min,
+  max,
   disabled,
   onValueChange,
   onValidityChange,
@@ -67,7 +73,7 @@ export function ResponsiveDateInput({
   const dayInputRef = useRef<HTMLInputElement>(null);
   const [parts, setParts] = useState(() => getDateParts(value));
   const [showError, setShowError] = useState(false);
-  const error = getDateInputError(parts, min);
+  const error = getDateInputError(parts, min, max);
 
   useEffect(() => {
     setParts(getDateParts(value));
@@ -81,7 +87,7 @@ export function ResponsiveDateInput({
     const maxLength = DATE_PART_MAX_LENGTH[part];
     const nextPartValue = getNumericInput(event.target.value, maxLength);
     const nextParts = { ...parts, [part]: nextPartValue };
-    const nextError = getDateInputError(nextParts, min);
+    const nextError = getDateInputError(nextParts, min, max);
 
     setParts(nextParts);
     setShowError(false);

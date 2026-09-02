@@ -36,8 +36,10 @@ type NoteManageMenuProps = {
   onEditIntent: () => void;
   /** 사용자가 직접 완료 표시한 노트인지. 토글 문구와 아이콘을 가른다. */
   isCompletedByUser: boolean;
-  /** 학습을 모두 마친 노트는 알림을 더 보내지 않으므로 항목을 감춘다. */
+  /** 완료 당일까지만 포함해 알림 일정을 바꿀 수 있는지. */
   canChangeNotificationTime: boolean;
+  /** 완료 당일 정책으로 오늘 일정만 선택할 수 있는지. */
+  notificationScheduleSameDayOnly: boolean;
   notificationTimeOfDay: string | null;
   /** 다음 알림이 나갈 시각. 달력의 초기 선택 날짜가 된다. */
   nextScheduledAt: string | null;
@@ -54,6 +56,7 @@ export function NoteManageMenu({
   onEditIntent,
   isCompletedByUser,
   canChangeNotificationTime,
+  notificationScheduleSameDayOnly,
   notificationTimeOfDay,
   nextScheduledAt,
 }: NoteManageMenuProps) {
@@ -172,6 +175,7 @@ export function NoteManageMenu({
           noteId={noteId}
           initialTime={notificationTimeOfDay}
           initialScheduledAt={nextScheduledAt}
+          sameDayOnly={notificationScheduleSameDayOnly}
           open={notificationOpen}
           onOpenChange={setNotificationOpen}
         />

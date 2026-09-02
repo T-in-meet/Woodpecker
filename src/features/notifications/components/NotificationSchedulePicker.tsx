@@ -48,6 +48,8 @@ export type NotificationSchedulePickerProps = {
   initialTime: string | null;
   /** 다음 알림이 실제로 나갈 시각. 날짜 입력의 초기값이 된다. */
   initialScheduledAt: string | null;
+  /** 완료 당일 정책으로 오늘의 미래 시각만 선택할 수 있는지. */
+  sameDayOnly?: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
@@ -84,6 +86,7 @@ export function NotificationSchedulePicker({
   noteId,
   initialTime,
   initialScheduledAt,
+  sameDayOnly = false,
   open,
   onOpenChange,
 }: NotificationSchedulePickerProps) {
@@ -107,11 +110,12 @@ export function NotificationSchedulePicker({
         : toInputTime(initialTime),
     [initialScheduledAt, initialTime],
   );
+  const editableDateKey = sameDayOnly ? todayKey : savedDateKey;
 
-  const [dateKey, setDateKey] = useState(savedDateKey);
+  const [dateKey, setDateKey] = useState(editableDateKey);
   const [timeValue, setTimeValue] = useState(savedTime);
   const [isDateInputValid, setIsDateInputValid] = useState(
-    savedDateKey >= todayKey,
+    editableDateKey >= todayKey,
   );
   const [isTimeInputValid, setIsTimeInputValid] = useState(
     notificationTimeSchema.safeParse(savedTime).success,
@@ -141,17 +145,19 @@ export function NotificationSchedulePicker({
 
   const quickOffsetKeys = useMemo(
     () =>
-      QUICK_OFFSETS.map((offset) => ({
-        ...offset,
-        dateKey: addDaysToDateKey(todayKey, offset.days),
-      })),
-    [todayKey],
+      QUICK_OFFSETS.filter((offset) => !sameDayOnly || offset.days === 0).map(
+        (offset) => ({
+          ...offset,
+          dateKey: addDaysToDateKey(todayKey, offset.days),
+        }),
+      ),
+    [sameDayOnly, todayKey],
   );
 
   const resetDraft = () => {
-    setDateKey(savedDateKey);
+    setDateKey(editableDateKey);
     setTimeValue(savedTime);
-    setIsDateInputValid(savedDateKey >= todayKey);
+    setIsDateInputValid(editableDateKey >= todayKey);
     setIsTimeInputValid(notificationTimeSchema.safeParse(savedTime).success);
   };
 
@@ -174,11 +180,11 @@ export function NotificationSchedulePicker({
       return;
     }
 
-    setDateKey(savedDateKey);
+    setDateKey(editableDateKey);
     setTimeValue(savedTime);
-    setIsDateInputValid(savedDateKey >= todayKey);
+    setIsDateInputValid(editableDateKey >= todayKey);
     setIsTimeInputValid(notificationTimeSchema.safeParse(savedTime).success);
-  }, [open, savedDateKey, savedTime, todayKey]);
+  }, [editableDateKey, open, savedTime, todayKey]);
 
   const handleOpenChange = (nextOpen: boolean) => {
     onOpenChange(nextOpen);
@@ -294,6 +300,11 @@ export function NotificationSchedulePicker({
               {formatScheduleLabel(savedDateKey, savedTime) ??
                 "기본 복습 예정 시간"}
             </DialogDescription>
+            {sameDayOnly && (
+              <p className="text-xs text-muted-foreground">
+                복습 완료 당일에는 오늘의 미래 시각으로만 변경할 수 있습니다.
+              </p>
+            )}
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="space-y-3">
@@ -325,6 +336,7 @@ export function NotificationSchedulePicker({
               <ResponsiveDateInput
                 value={dateKey}
                 min={todayKey}
+                {...(sameDayOnly ? { max: todayKey } : {})}
                 disabled={isPending}
                 onValueChange={handleSelectDateKey}
                 onValidityChange={handleDateValidityChange}
@@ -357,7 +369,9 @@ export function NotificationSchedulePicker({
                 type="button"
                 variant="outline"
                 size="md"
-                disabled={isPending || (!hasSavedOverride && !hasChanges)}
+                disabled={
+                  isPending || sameDayOnly || (!hasSavedOverride && !hasChanges)
+                }
                 onClick={handleClear}
               >
                 <RotateCcw aria-hidden="true" />

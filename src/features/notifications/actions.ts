@@ -269,10 +269,15 @@ export async function setNotificationScheduleAction(
       };
     }
 
-    if (error.message.includes("review already completed")) {
+    if (
+      error.message.includes(
+        "completed review schedule must stay on completion day",
+      )
+    ) {
       return {
         success: false,
-        error: "복습을 완료한 노트의 알림 일정은 바꿀 수 없습니다.",
+        error:
+          "복습 완료 당일에만 오늘의 미래 시각으로 일정을 바꿀 수 있습니다.",
       };
     }
 
@@ -339,6 +344,18 @@ export async function setNotificationTimeAction(
   );
 
   if (error) {
+    if (
+      error.message.includes(
+        "completed review schedule must stay on completion day",
+      )
+    ) {
+      return {
+        success: false,
+        error:
+          "복습 완료 당일에만 오늘의 미래 시각으로 일정을 바꿀 수 있습니다.",
+      };
+    }
+
     return {
       success: false,
       error: "알림 시간 저장에 실패했습니다. 잠시 후 다시 시도해주세요.",

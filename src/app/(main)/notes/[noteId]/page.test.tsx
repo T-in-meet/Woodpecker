@@ -13,6 +13,8 @@ type NoteDetailBodyProps = {
   content: string;
   reviewRound: number;
   isReviewCompleted: boolean;
+  canChangeNotificationTime: boolean;
+  notificationScheduleSameDayOnly: boolean;
   canStartReview: boolean;
   reviewStatusMessage: string;
   notificationTimeOfDay: string | null;
@@ -341,8 +343,27 @@ describe("NoteDetailPage", () => {
 
     expect(lastBodyProps()).toMatchObject({
       isReviewCompleted: true,
+      canChangeNotificationTime: true,
+      notificationScheduleSameDayOnly: true,
       canStartReview: false,
       reviewStatusMessage: "복습을 완료한 노트입니다.",
+    });
+  });
+
+  it("완료일이 지나면 복습 일정 변경을 닫는다", async () => {
+    getUserMock.mockResolvedValue(createUser("user-123"));
+    getNoteByIdMock.mockResolvedValue(
+      createNote({
+        review_completed_at: "2026-03-28T05:00:00.000Z",
+      }),
+    );
+
+    await renderPage();
+
+    expect(lastBodyProps()).toMatchObject({
+      isReviewCompleted: true,
+      canChangeNotificationTime: false,
+      notificationScheduleSameDayOnly: false,
     });
   });
 

@@ -18,6 +18,7 @@ import {
   canStartReview,
   getReviewStatus,
 } from "@/features/notes/utils/noteStatus";
+import { getKstDateKey } from "@/features/notifications/lib/time";
 import { GradingHistorySection } from "@/features/review/components/GradingHistorySection";
 import { getGradingsByNote } from "@/features/review/queries";
 import { ROUTES } from "@/lib/constants/routes";
@@ -72,6 +73,10 @@ export default async function NoteDetailPage({
   const nextScheduledAt = note.next_scheduled_at ?? nextReviewAt;
   // 회차 상한이 없으므로 복습이 끝나는 경로는 사용자의 완료 표시뿐이다.
   const isReviewCompleted = getReviewStatus(note) === "completed";
+  const isReviewCompletedToday = note.review_completed_at
+    ? getKstDateKey(new Date(note.review_completed_at)) ===
+      getKstDateKey(new Date())
+    : false;
   const isReviewDue =
     nextScheduledAt !== null &&
     new Date(nextScheduledAt).getTime() <= Date.now();
@@ -128,6 +133,10 @@ export default async function NoteDetailPage({
         content={note.content}
         reviewRound={note.review_round}
         isReviewCompleted={isReviewCompleted}
+        canChangeNotificationTime={!isReviewCompleted || isReviewCompletedToday}
+        notificationScheduleSameDayOnly={
+          isReviewCompleted && isReviewCompletedToday
+        }
         canStartReview={canReview}
         reviewStatusMessage={reviewStatusMessage}
         notificationTimeOfDay={note.notification_time_of_day}

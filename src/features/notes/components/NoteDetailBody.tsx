@@ -45,6 +45,8 @@ type NoteDetailBodyProps = {
   reviewRound: number;
   /** 사용자가 복습을 끝냈다고 표시한 노트인지. 관리 메뉴의 토글 문구도 이 값으로 가른다. */
   isReviewCompleted: boolean;
+  canChangeNotificationTime: boolean;
+  notificationScheduleSameDayOnly: boolean;
   canStartReview: boolean;
   reviewStatusMessage: string;
   notificationTimeOfDay: string | null;
@@ -57,6 +59,8 @@ export function NoteDetailBody({
   content,
   reviewRound,
   isReviewCompleted,
+  canChangeNotificationTime,
+  notificationScheduleSameDayOnly,
   canStartReview,
   reviewStatusMessage,
   notificationTimeOfDay,
@@ -125,7 +129,8 @@ export function NoteDetailBody({
               onEdit={() => setIsEditing(true)}
               onEditIntent={preloadNoteEditForm}
               isCompletedByUser={isReviewCompleted}
-              canChangeNotificationTime={!isReviewCompleted}
+              canChangeNotificationTime={canChangeNotificationTime}
+              notificationScheduleSameDayOnly={notificationScheduleSameDayOnly}
               notificationTimeOfDay={notificationTimeOfDay}
               nextScheduledAt={nextScheduledAt}
             />
