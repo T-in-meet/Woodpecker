@@ -190,7 +190,7 @@ describe("NoteReviewPage", () => {
 
     expect(
       screen.getByRole("heading", {
-        name: "이 노트는 모든 복습을 마쳤습니다.",
+        name: "복습을 완료한 노트입니다.",
       }),
     ).toBeInTheDocument();
     expect(
@@ -224,7 +224,7 @@ describe("NoteReviewPage", () => {
 
     expect(
       screen.getByRole("heading", {
-        name: "이 노트는 모든 복습을 마쳤습니다.",
+        name: "복습을 완료한 노트입니다.",
       }),
     ).toBeInTheDocument();
     expect(screen.queryByTestId("blank-test-page")).not.toBeInTheDocument();
@@ -255,7 +255,7 @@ describe("NoteReviewPage", () => {
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("heading", {
-        name: "이 노트는 모든 복습을 마쳤습니다.",
+        name: "복습을 완료한 노트입니다.",
       }),
     ).not.toBeInTheDocument();
   });
