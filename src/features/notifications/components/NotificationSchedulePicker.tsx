@@ -127,6 +127,13 @@ export function NotificationSchedulePicker({
   const hasSavedOverride = toInputTime(initialTime).length > 0;
   const hasChanges = timeValue !== savedTime || dateKey !== savedDateKey;
 
+  // 날짜·시간 입력은 각자 자기 범위만 본다. 오늘을 고르면 시각이 이미 지났을 수 있고,
+  // 그대로 저장하면 RPC가 'schedule in the past'로 되돌린다. 완료 당일 모드에서는
+  // 날짜가 오늘로 고정돼 이게 기본 상태가 되므로 버튼 단계에서 미리 막는다.
+  const isScheduleInPast =
+    dateKey < todayKey ||
+    (dateKey === todayKey && timeValue <= getKstTimeValue(new Date()));
+
   /**
    * 저장 버튼이 왜 비활성인지 알려 준다. 날짜·시간 입력은 각자 blur 시점에야
    * 자기 오류를 띄우므로, 그 전에 저장을 누르려는 사용자에게는 버튼이 이유 없이
@@ -136,9 +143,11 @@ export function NotificationSchedulePicker({
     ? "날짜를 확인해주세요."
     : !isTimeInputValid
       ? "알림 시간을 확인해주세요."
-      : !hasChanges
-        ? "변경한 내용이 없어요."
-        : null;
+      : isScheduleInPast
+        ? "이미 지난 시각이에요. 더 뒤의 시각을 골라주세요."
+        : !hasChanges
+          ? "변경한 내용이 없어요."
+          : null;
   // 저장 결과 문구가 있으면 그쪽이 우선이다. 두 줄이 겹쳐 보이지 않게 한다.
   const saveHint = message || error ? null : saveDisabledReason;
   const saveHintId = useId();
@@ -208,6 +217,12 @@ export function NotificationSchedulePicker({
 
     if (!isDateInputValid) {
       setError("알림 날짜가 올바르지 않습니다.");
+      return;
+    }
+
+    // 저장 버튼은 막혀 있지만 입력에서 Enter로도 submit이 들어온다.
+    if (isScheduleInPast) {
+      setError("이미 지난 시각으로는 옮길 수 없습니다.");
       return;
     }
 
@@ -397,7 +412,8 @@ export function NotificationSchedulePicker({
                     isPending ||
                     !hasChanges ||
                     !isDateInputValid ||
-                    !isTimeInputValid
+                    !isTimeInputValid ||
+                    isScheduleInPast
                   }
                 >
                   {isPending ? (

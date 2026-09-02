@@ -352,8 +352,9 @@ describe("NotificationSchedulePicker", () => {
 
     await openDialog(user);
     await user.click(screen.getByRole("button", { name: "오전 선택" }));
+    // "오늘"의 이미 지난 시각은 저장이 막히므로 현재(오전 9시) 이후를 고른다.
     fireEvent.change(screen.getByLabelText("시"), {
-      target: { value: "08" },
+      target: { value: "10" },
     });
     fireEvent.change(screen.getByLabelText("분"), {
       target: { value: "15" },
@@ -365,7 +366,7 @@ describe("NotificationSchedulePicker", () => {
       expect(setNotificationScheduleActionMock).toHaveBeenCalledWith(
         NOTE_ID,
         "2026-05-01",
-        "08:15",
+        "10:15",
       );
     });
   });
@@ -451,8 +452,9 @@ describe("NotificationSchedulePicker", () => {
 
     await openDialog(user);
     await user.click(screen.getByRole("button", { name: "오전 선택" }));
+    // "오늘"의 이미 지난 시각은 저장이 막히므로 현재(오전 9시) 이후를 고른다.
     fireEvent.change(screen.getByLabelText("시"), {
-      target: { value: "07" },
+      target: { value: "11" },
     });
     fireEvent.change(screen.getByLabelText("분"), {
       target: { value: "05" },
@@ -463,7 +465,7 @@ describe("NotificationSchedulePicker", () => {
       expect(setNotificationScheduleActionMock).toHaveBeenCalledWith(
         NOTE_ID,
         "2026-05-01",
-        "07:05",
+        "11:05",
       );
     });
   });
