@@ -51,10 +51,13 @@ export const TABLES = {
   noteRelatedNotes: "note_related_notes",
   notes: "notes",
   notifications: "notifications",
+  noteChatExecutionClaims: "note_chat_execution_claims",
   operationalErrorStatusHistory: "operational_error_status_history",
   operationalErrors: "operational_errors",
   profiles: "profiles",
   pushSubscriptions: "push_subscriptions",
+  relatedNoteRecommendationExecutionClaims:
+    "related_note_recommendation_execution_claims",
   relatedNoteRecommendationRuns: "related_note_recommendation_runs",
   reviewLogs: "review_logs",
   userAgreements: "user_agreements",

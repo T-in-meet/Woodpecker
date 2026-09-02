@@ -4,10 +4,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 import {
   completeRelatedNoteRecommendationRun,
-  createRelatedNoteRecommendationRun,
-  RELATED_NOTE_RECOMMENDATION_RUN_CLAIM_STATUS,
+  createRelatedNoteRecommendationRunRecord,
   RELATED_NOTE_RECOMMENDATION_RUN_STATUS,
-  RelatedNoteRecommendationSourceStaleError,
   saveRelatedNoteRunExpandedQuery,
   saveRelatedNoteRunQueryExpansion,
   saveRelatedNoteRunRecommendations,
@@ -56,27 +54,49 @@ function createRunningRunUpdateMock(result: { data: unknown; error: unknown }) {
   };
 }
 
+/**
+ * running Run 기록 INSERT query chain mock을 생성합니다.
+ *
+ * @param result INSERT 이후 select 결과
+ * @returns insert/select/from 호출 검증에 필요한 mock 묶음
+ */
+function createRunRecordInsertMock(result: { data: unknown; error: unknown }) {
+  const maybeSingle = vi.fn().mockResolvedValue(result);
+  const select = vi.fn().mockReturnValue({
+    maybeSingle,
+  });
+  const insert = vi.fn().mockReturnValue({
+    select,
+  });
+  const from = vi.fn().mockReturnValue({
+    insert,
+  });
+
+  return {
+    from,
+    insert,
+    select,
+  };
+}
+
 describe("related note recommendation run persistence", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("running Run을 claim하고 생성된 ID를 반환한다", async () => {
-    const rpc = vi.fn().mockResolvedValue({
-      data: [
-        {
-          run_id: RUN_ID,
-          status: RELATED_NOTE_RECOMMENDATION_RUN_CLAIM_STATUS.CLAIMED,
-        },
-      ],
+  it("running Run 기록을 생성하고 ID를 반환한다", async () => {
+    const { from, insert, select } = createRunRecordInsertMock({
+      data: {
+        id: RUN_ID,
+      },
       error: null,
     });
 
     createAdminClientMock.mockReturnValue({
-      rpc,
+      from,
     } as never);
 
-    const result = await createRelatedNoteRecommendationRun({
+    const result = await createRelatedNoteRecommendationRunRecord({
       answerGenerationModelConfigId: "answer-model-config-id",
       embeddingModelConfigId: "embedding-model-config-id",
       noteId: NOTE_ID,
@@ -86,37 +106,35 @@ describe("related note recommendation run persistence", () => {
       verificationModelConfigId: "verification-model-config-id",
     });
 
-    expect(rpc).toHaveBeenCalledWith("claim_related_note_recommendation_run", {
-      p_answer_generation_model_config_id: "answer-model-config-id",
-      p_daily_recommendation_limit: 10,
-      p_embedding_model_config_id: "embedding-model-config-id",
-      p_note_id: NOTE_ID,
-      p_query_expansion_model_config_id: "query-expansion-model-config-id",
-      p_source_updated_at: "2026-08-20T01:00:00.000Z",
-      p_user_id: USER_ID,
-      p_verification_model_config_id: "verification-model-config-id",
+    expect(from).toHaveBeenCalledWith("related_note_recommendation_runs");
+    expect(insert).toHaveBeenCalledWith({
+      answer_generation_model_config_id: "answer-model-config-id",
+      embedding_model_config_id: "embedding-model-config-id",
+      note_id: NOTE_ID,
+      query_expansion_model_config_id: "query-expansion-model-config-id",
+      source_updated_at: "2026-08-20T01:00:00.000Z",
+      status: RELATED_NOTE_RECOMMENDATION_RUN_STATUS.RUNNING,
+      user_id: USER_ID,
+      verification_model_config_id: "verification-model-config-id",
     });
-    expect(result).toEqual({
-      runId: RUN_ID,
-      status: RELATED_NOTE_RECOMMENDATION_RUN_CLAIM_STATUS.CLAIMED,
-    });
+    expect(select).toHaveBeenCalledWith("id");
+    expect(result).toBe(RUN_ID);
   });
 
-  it("stale source SQLSTATE는 전용 오류로 변환한다", async () => {
-    const rpc = vi.fn().mockResolvedValue({
+  it("Run 기록 생성 실패를 전파한다", async () => {
+    const { from } = createRunRecordInsertMock({
       data: null,
       error: {
-        code: "WP010",
-        message: "recommendation source not found",
+        message: "insert failed",
       },
     });
 
     createAdminClientMock.mockReturnValue({
-      rpc,
+      from,
     } as never);
 
     await expect(
-      createRelatedNoteRecommendationRun({
+      createRelatedNoteRecommendationRunRecord({
         answerGenerationModelConfigId: "answer-model-config-id",
         embeddingModelConfigId: "embedding-model-config-id",
         noteId: NOTE_ID,
@@ -125,7 +143,9 @@ describe("related note recommendation run persistence", () => {
         userId: USER_ID,
         verificationModelConfigId: "verification-model-config-id",
       }),
-    ).rejects.toBeInstanceOf(RelatedNoteRecommendationSourceStaleError);
+    ).rejects.toThrow(
+      "Failed to create related note recommendation run record: insert failed",
+    );
   });
 
   it("Query Expansion usage와 cost를 저장한다", async () => {

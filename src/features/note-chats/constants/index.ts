@@ -13,6 +13,12 @@ export const NOTE_CHAT_CONVERSATION_TITLE_MAX_LENGTH = 50;
 export const NOTE_CHAT_QUESTION_MAX_LENGTH = 10_000;
 
 /**
+ * 노트 챗봇 답변 신뢰도 안내 문구입니다.
+ */
+export const NOTE_CHAT_ASSISTANT_ACCURACY_NOTICE =
+  "챗봇의 답변에는 오류가 있을 수 있습니다. 참고용으로 활용해 주세요.";
+
+/**
  * 노트 챗봇 입력 검증 메시지입니다.
  */
 export const NOTE_CHAT_VALIDATION_MESSAGE = {

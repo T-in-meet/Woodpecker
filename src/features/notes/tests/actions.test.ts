@@ -24,7 +24,6 @@ const {
   generateNoteEmbeddingMock,
   reportAiOperationalErrorMock,
   resolveAiRuntimeEmbeddingConfigurationMock,
-  scheduleRelatedNoteRecommendationMock,
 } = vi.hoisted(() => ({
   afterMock: vi.fn(),
   createAdminClientMock: vi.fn(),
@@ -33,7 +32,6 @@ const {
   generateNoteEmbeddingMock: vi.fn(),
   reportAiOperationalErrorMock: vi.fn(),
   resolveAiRuntimeEmbeddingConfigurationMock: vi.fn(),
-  scheduleRelatedNoteRecommendationMock: vi.fn(),
 }));
 
 vi.mock("next/server", () => ({
@@ -68,13 +66,6 @@ vi.mock("@/features/ai/runtimes", () => ({
 vi.mock("@/features/ai/utils/report-ai-operational-error", () => ({
   reportAiOperationalError: reportAiOperationalErrorMock,
 }));
-
-vi.mock(
-  "@/features/related-notes/execution/schedule-related-note-recommendation",
-  () => ({
-    scheduleRelatedNoteRecommendation: scheduleRelatedNoteRecommendationMock,
-  }),
-);
 
 import { requireCurrentLegalAcceptance } from "@/features/auth/utils/requireCurrentLegalAcceptance";
 
@@ -284,7 +275,6 @@ describe("createNoteAction", () => {
     createAdminClientMock.mockReset();
     createClientMock.mockReset();
     redirectMock.mockReset();
-    scheduleRelatedNoteRecommendationMock.mockReset();
 
     redirectMock.mockImplementation(() => {
       throw REDIRECT_ERROR;
@@ -374,11 +364,12 @@ describe("createNoteAction", () => {
       ROUTES.NOTES_NEW,
     );
 
+    /*
+     * Note 생성 성공 시 자동 Related Notes 추천은 예약하지 않습니다.
+     *
+     * 현재 등록되는 after()는 embedding 후처리 하나뿐입니다.
+     */
     expect(afterMock).toHaveBeenCalledTimes(1);
-    expect(scheduleRelatedNoteRecommendationMock).toHaveBeenCalledWith({
-      noteId: "note-123",
-      ownerUserId: "user-123",
-    });
   });
 
   it("returns a general error when the RPC fails", async () => {
@@ -398,7 +389,6 @@ describe("createNoteAction", () => {
     });
     expect(rpcMock).toHaveBeenCalledOnce();
     expect(afterMock).not.toHaveBeenCalled();
-    expect(scheduleRelatedNoteRecommendationMock).not.toHaveBeenCalled();
   });
 
   it("returns a general error when the RPC returns no note id", async () => {
@@ -416,7 +406,6 @@ describe("createNoteAction", () => {
     });
     expect(rpcMock).toHaveBeenCalledOnce();
     expect(afterMock).not.toHaveBeenCalled();
-    expect(scheduleRelatedNoteRecommendationMock).not.toHaveBeenCalled();
   });
 });
 
@@ -536,7 +525,6 @@ describe("updateNoteAction", () => {
     createAdminClientMock.mockReset();
     createClientMock.mockReset();
     redirectMock.mockReset();
-    scheduleRelatedNoteRecommendationMock.mockReset();
 
     redirectMock.mockImplementation(() => {
       throw REDIRECT_ERROR;
@@ -644,11 +632,12 @@ describe("updateNoteAction", () => {
     expect(updateSelectMock).toHaveBeenCalledWith("id, title, content");
     expect(result).toEqual({ success: true });
 
+    /*
+     * Note 수정 성공 시에도 자동 Related Notes 추천은 예약하지 않습니다.
+     *
+     * 현재 등록되는 after()는 embedding 후처리 하나뿐입니다.
+     */
     expect(afterMock).toHaveBeenCalledTimes(1);
-    expect(scheduleRelatedNoteRecommendationMock).toHaveBeenCalledWith({
-      noteId: validNoteId,
-      ownerUserId: "user-123",
-    });
   });
 
   it("returns a not-found error when no matching note is updated", async () => {
@@ -666,7 +655,6 @@ describe("updateNoteAction", () => {
     expect(result).toEqual({ error: "수정할 노트를 찾을 수 없습니다." });
     expect(updateMaybeSingleMock).toHaveBeenCalledOnce();
     expect(afterMock).not.toHaveBeenCalled();
-    expect(scheduleRelatedNoteRecommendationMock).not.toHaveBeenCalled();
   });
 
   it("returns a general error when note update fails", async () => {
@@ -686,7 +674,6 @@ describe("updateNoteAction", () => {
     });
     expect(updateMaybeSingleMock).toHaveBeenCalledOnce();
     expect(afterMock).not.toHaveBeenCalled();
-    expect(scheduleRelatedNoteRecommendationMock).not.toHaveBeenCalled();
   });
 });
 
@@ -714,7 +701,6 @@ describe("Note embedding integration", () => {
     createAdminClientMock.mockReset();
     createClientMock.mockReset();
     redirectMock.mockReset();
-    scheduleRelatedNoteRecommendationMock.mockReset();
 
     redirectMock.mockImplementation(() => {
       throw REDIRECT_ERROR;

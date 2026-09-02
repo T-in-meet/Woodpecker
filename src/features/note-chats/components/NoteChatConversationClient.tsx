@@ -1,16 +1,21 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { NavigationGuardAlertDialog } from "@/components/common/NavigationGuardAlertDialog";
+import { useBeforeUnloadGuard } from "@/hooks/useBeforeUnloadGuard";
+import { useInternalNavigationGuard } from "@/hooks/useInternalNavigationGuard";
 
-import { NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE } from "../constants/execution";
-import { noteChatQueryKeys } from "../constants/query-keys";
-import { useNoteChatConversationDetailQuery } from "../hooks/use-note-chat-conversation-query";
-import { useNoteChatStream } from "../hooks/use-note-chat-stream";
+import { useNoteChatConversationExecution } from "../hooks/use-note-chat-conversation-execution";
+import {
+  useNoteChatConversationDetailQuery,
+  useNoteChatConversationMessagesQuery,
+} from "../hooks/use-note-chat-conversation-query";
+import { useNoteChatConversationScroll } from "../hooks/use-note-chat-conversation-scroll";
+import { useNoteChatDailyUsageQuery } from "../hooks/use-note-chat-daily-usage-query";
 import { useViewportRemainingHeight } from "../hooks/use-viewport-remaining-height";
 import { NoteChatBreadcrumb } from "./NoteChatBreadcrumb";
 import { NoteChatConversationContent } from "./NoteChatConversationContent";
 import { NoteChatConversationError } from "./NoteChatConversationError";
+import { NoteChatConversationMenu } from "./NoteChatConversationMenu";
 import { NoteChatConversationNotFound } from "./NoteChatConversationNotFound";
 import { NoteChatConversationSkeleton } from "./NoteChatConversationSkeleton";
 
@@ -21,6 +26,9 @@ type NoteChatConversationClientProps = {
 /**
  * 선택한 노트 챗봇 Conversation 화면을 렌더링합니다.
  *
+ * 질문 실행 lifecycle과 Conversation 스크롤 semantic command를 연결하고,
+ * 실제 메시지/Composer UI는 하위 Content 컴포넌트에 전달합니다.
+ *
  * @param props 컴포넌트 속성
  * @param props.conversationId 현재 Conversation ID
  * @returns 선택한 노트 챗봇 Conversation 화면 UI
@@ -28,330 +36,239 @@ type NoteChatConversationClientProps = {
 export function NoteChatConversationClient({
   conversationId,
 }: NoteChatConversationClientProps) {
-  const queryClient = useQueryClient();
-
-  const messageEndRef = useRef<HTMLDivElement | null>(null);
-  const hasInitialScrolledRef = useRef(false);
-
-  const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
-
-  /**
-   * 기존 질문 수정 중 현재 화면에 남길 메시지의 기준 sequence입니다.
-   *
-   * null이면 모든 저장 메시지를 표시하고,
-   * 값이 있으면 해당 sequence 이전 메시지만 표시합니다.
-   */
-  const [editingSequenceNumber, setEditingSequenceNumber] = useState<
-    number | null
-  >(null);
-
-  const [failedQuestion, setFailedQuestion] = useState<{
-    messageId: string;
-    question: string;
-  } | null>(null);
-
-  const [retryCount, setRetryCount] = useState(0);
-
-  const {
-    cancel,
-    content: streamingContent,
-    error: streamError,
-    errorCode: streamErrorCode,
-    isStreaming,
-    reset,
-    start,
-    update,
-  } = useNoteChatStream();
-
   const conversationQuery = useNoteChatConversationDetailQuery(conversationId);
+  const messagesQuery = useNoteChatConversationMessagesQuery(conversationId);
+
+  /*
+   * Note Chat 일일 사용량은 특정 Conversation이 아니라
+   * 현재 사용자의 전체 Note Chat AI 실행을 기준으로 조회합니다.
+   *
+   * ADMIN이나 사용량을 확인할 수 없는 경우에는 null이 반환되며,
+   * Composer에서는 사용량 표시와 입력 제한을 적용하지 않습니다.
+   */
+  const dailyUsageQuery = useNoteChatDailyUsageQuery();
 
   const detail = conversationQuery.data;
-  const { containerRef: conversationContainerRef, height: conversationHeight } =
-    useViewportRemainingHeight<HTMLDivElement>({ recalculationKey: detail });
+  const dailyUsage = dailyUsageQuery.data ?? null;
+  const messagePages = messagesQuery.data?.pages ?? [];
+  const orderedMessagePages = [...messagePages].reverse();
+  const messages = orderedMessagePages.flatMap((page) => page?.messages ?? []);
+  const assistantSources = orderedMessagePages.flatMap(
+    (page) => page?.assistantSources ?? [],
+  );
 
-  /**
-   * 새로운 질문을 전송하고 스트리밍 완료 후
-   * Conversation 상세와 목록 데이터를 다시 조회합니다.
+  const {
+    canRetry,
+    editingSequenceNumber,
+    handleQuestionSubmit,
+    handleQuestionUpdate,
+    handleRetry,
+    isAnswerGenerating,
+    isStreaming,
+    onCancel,
+    pendingQuestion,
+    pendingQuestionMessageId,
+    retryCount,
+    retryQuestionMessageId,
+    streamError,
+    streamErrorCode,
+    streamingAssistantMessageId,
+    streamingContent,
+  } = useNoteChatConversationExecution({
+    conversationId,
+    hasRunningExecution: detail?.hasRunningExecution ?? false,
+  });
+
+  /*
+   * 답변 생성 중 앱 내부 페이지 이동은 바로 막지 않고,
+   * 이동을 보류한 뒤 AlertDialog에서 사용자에게 이동 여부를 확인합니다.
    *
-   * 실행 실패 시 동일 User Message를 다시 실행할 수 있도록
-   * 실패한 질문 정보를 유지합니다.
-   *
-   * @param question 새로 전송할 사용자 질문
-   * @returns 질문 전송 및 서버 상태 동기화 완료 시점의 Promise
+   * 현재 브라우저의 stream뿐 아니라 페이지 재진입 후 복원된
+   * running Claim도 동일한 이탈 경고 대상으로 취급합니다.
    */
-  const handleQuestionSubmit = async (question: string) => {
-    setPendingQuestion(question);
-    setFailedQuestion(null);
-    setRetryCount(0);
-
-    const result = await start({
-      conversationId,
-      question,
+  const { cancelNavigation, confirmNavigation, isNavigationPending } =
+    useInternalNavigationGuard({
+      enabled: isAnswerGenerating,
     });
 
-    /*
-     * 질문 Route가 User Message를 먼저 저장하므로
-     * 성공 여부와 관계없이 서버 상태를 다시 가져옵니다.
-     */
-    await Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: noteChatQueryKeys.conversationDetail(conversationId),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: noteChatQueryKeys.conversationLists(),
-      }),
-    ]);
+  /*
+   * 새로고침, 탭 닫기 등 앱 내부 navigation으로 처리할 수 없는 이탈은
+   * 브라우저의 beforeunload 기본 경고를 사용합니다.
+   */
+  useBeforeUnloadGuard({
+    enabled: isAnswerGenerating,
+  });
 
-    setPendingQuestion(null);
+  const { containerRef: conversationContainerRef, height: conversationHeight } =
+    useViewportRemainingHeight<HTMLDivElement>({
+      recalculationKey: detail,
+    });
 
-    if (result.success) {
-      reset();
-      return;
-    }
+  const {
+    handleViewportScroll,
+    messageEndRef,
+    questionBottomSpacerHeight,
+    registerUserMessageElement,
+    scrollQuestionToViewportStart,
+    scrollToLatestMessage,
+    scrollViewportRef,
+    shouldShowLatestMessageButton,
+    stopFollowingLatest,
+  } = useNoteChatConversationScroll({
+    conversationId,
+    conversationHeight,
+    pendingQuestionMessageId,
+    hasDetail:
+      detail !== undefined &&
+      detail !== null &&
+      messagesQuery.data !== undefined,
+    hasPreviousMessages: messagesQuery.hasNextPage,
+    isFetchingPreviousMessages: messagesQuery.isFetchingNextPage,
+    onLoadPreviousMessages: messagesQuery.fetchNextPage,
+  });
 
-    /*
-     * 일일 실행 횟수를 모두 사용한 경우에는 실제 Run이 생성되지 않으므로
-     * 동일 질문을 다시 실행할 수 있는 재시도 대상으로 만들지 않습니다.
-     */
-    if (result.errorCode === NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE) {
-      return;
-    }
+  const visibleMessages =
+    detail && editingSequenceNumber !== null
+      ? messages.filter(
+          (message) => message.sequence_number < editingSequenceNumber,
+        )
+      : messages;
 
-    if (result.userMessageId) {
-      setFailedQuestion({
-        messageId: result.userMessageId,
-        question,
-      });
-    }
+  /**
+   * 새로운 질문을 전송하고 pending User Question을 viewport 시작점으로 이동합니다.
+   *
+   * scroll target DOM은 pendingQuestion state가 반영된 뒤 등록되므로,
+   * 먼저 semantic command를 예약하고 기존 질문 실행 lifecycle을 그대로 실행합니다.
+   *
+   * @param question 새로 전송할 사용자 질문
+   */
+  const handleSubmitWithScroll = async (question: string) => {
+    scrollQuestionToViewportStart(null);
+    await handleQuestionSubmit(question);
   };
 
   /**
-   * 기존 사용자 질문을 수정하고 해당 질문 이후의 화면을
-   * 새로운 대화 흐름으로 교체합니다.
+   * 기존 질문을 viewport 시작점으로 이동한 뒤 수정하고 다시 실행합니다.
+   *
+   * 수정 대상의 저장된 User Question을 먼저 스크롤 기준으로 사용하여
+   * 이후 메시지가 제거될 때 발생할 수 있는 위치 이동을 방지합니다.
+   * 수정 실행 중에는 동일한 질문의 pending DOM으로 스크롤 기준을 이어갑니다.
    *
    * @param params 수정할 사용자 질문 정보
    * @param params.messageId 수정할 User Message ID
    * @param params.question 수정한 사용자 질문
    * @param params.sequenceNumber 수정할 메시지의 sequence 번호
-   * @returns 질문 수정 및 서버 상태 동기화 완료 시점의 Promise
    */
-  const handleQuestionUpdate = async ({
-    messageId,
-    question,
-    sequenceNumber,
-  }: {
+  const handleUpdateQuestionWithScroll = async (params: {
     messageId: string;
     question: string;
     sequenceNumber: number;
   }) => {
-    /*
-     * 서버 응답을 기다리기 전에 수정 대상 이후의 기존 메시지를
-     * 화면에서 제거하고 수정된 질문을 임시 메시지로 표시합니다.
-     */
-    setEditingSequenceNumber(sequenceNumber);
-    setPendingQuestion(question);
-    setFailedQuestion(null);
-    setRetryCount(0);
-
-    const result = await update({
-      messageId,
-      question,
-    });
-
-    /*
-     * 수정 Route가 User Message 수정과 이후 Message 삭제,
-     * 새 Run 생성을 처리하므로 실행 후 Conversation 데이터를 다시 조회합니다.
-     */
-    await Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: noteChatQueryKeys.conversationDetail(conversationId),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: noteChatQueryKeys.conversationLists(),
-      }),
-    ]);
-
-    setEditingSequenceNumber(null);
-    setPendingQuestion(null);
-
-    if (result.success) {
-      reset();
-      return;
-    }
-
-    /*
-     * 일일 실행 횟수 초과는 재시도로 해결할 수 없으므로
-     * 실패 질문으로 등록하지 않습니다.
-     */
-    if (result.errorCode === NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE) {
-      return;
-    }
-
-    if (result.userMessageId) {
-      setFailedQuestion({
-        messageId: result.userMessageId,
-        question,
-      });
-    }
+    scrollQuestionToViewportStart(params.messageId);
+    await handleQuestionUpdate(params);
   };
 
   /**
-   * 실패한 사용자 질문을 동일한 User Message에서 다시 실행합니다.
-   *
-   * 새로운 User Message를 생성하지 않고 기존 질문 수정 Route를 사용하며,
-   * 사용자 재시도는 최대 2회까지만 허용합니다.
-   *
-   * @returns 재시도 및 서버 상태 동기화 완료 시점의 Promise
+   * 실패한 질문을 재시도하고 기존 User Question을 viewport 시작점으로 이동합니다.
    */
-  const handleRetry = async () => {
-    if (!failedQuestion || retryCount >= 2 || isStreaming) {
+  const handleRetryWithScroll = async () => {
+    if (retryQuestionMessageId === null) {
       return;
     }
 
-    const result = await update({
-      messageId: failedQuestion.messageId,
-      question: failedQuestion.question,
-    });
-
-    await Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: noteChatQueryKeys.conversationDetail(conversationId),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: noteChatQueryKeys.conversationLists(),
-      }),
-    ]);
-
-    if (result.success) {
-      setFailedQuestion(null);
-      setRetryCount(0);
-      reset();
-      return;
-    }
-
-    /*
-     * 재시도 과정에서 일일 실행 횟수에 도달한 경우
-     * 더 이상 재시도할 수 있는 상태로 유지하지 않습니다.
-     */
-    if (result.errorCode === NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE) {
-      setFailedQuestion(null);
-      return;
-    }
-
-    setRetryCount((current) => current + 1);
+    scrollQuestionToViewportStart(retryQuestionMessageId);
+    await handleRetry();
   };
 
   /**
-   * 최초 Conversation과 대화 영역 높이가 준비되면
-   * 레이아웃 반영 후 최신 메시지 위치로 한 번만 이동합니다.
+   * 현재 로컬 답변 표시를 중지하고 최신 메시지 follow를 해제합니다.
+   *
+   * 서버에서 진행 중인 AI 실행은 기존 정책대로 계속됩니다.
    */
-  useEffect(() => {
-    if (
-      hasInitialScrolledRef.current ||
-      !detail ||
-      conversationHeight === null
-    ) {
-      return;
-    }
-
-    const animationFrameId = window.requestAnimationFrame(() => {
-      const messageEnd = messageEndRef.current;
-
-      if (!messageEnd) {
-        return;
-      }
-
-      messageEnd.scrollIntoView({
-        behavior: "auto",
-        block: "end",
-      });
-
-      hasInitialScrolledRef.current = true;
-    });
-
-    return () => {
-      window.cancelAnimationFrame(animationFrameId);
-    };
-  }, [detail, conversationHeight]);
-
-  /**
-   * 새 질문, 수정 질문, 스트리밍 답변이 추가될 때
-   * 메시지 영역을 최신 메시지 위치로 이동합니다.
-   */
-  useEffect(() => {
-    if (!hasInitialScrolledRef.current) {
-      return;
-    }
-
-    messageEndRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "end",
-    });
-  }, [
-    detail?.messages.length,
-    pendingQuestion,
-    streamingContent,
-    editingSequenceNumber,
-  ]);
-
-  const visibleMessages =
-    detail && editingSequenceNumber !== null
-      ? detail.messages.filter(
-          (message) => message.sequence_number < editingSequenceNumber,
-        )
-      : (detail?.messages ?? []);
+  const handleCancelWithScroll = () => {
+    stopFollowingLatest();
+    onCancel();
+  };
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col px-4 md:px-12">
-      {detail ? (
-        <NoteChatBreadcrumb
-          className="my-4"
-          conversationTitle={detail.conversation.title}
-        />
-      ) : null}
-      <div
-        ref={conversationContainerRef}
-        className="flex min-h-0 flex-col overflow-hidden border"
-        style={
-          conversationHeight !== null
-            ? { height: conversationHeight }
-            : undefined
-        }
-      >
-        <section className="flex min-h-0 flex-1 flex-col">
-          {conversationQuery.isLoading ? (
-            <NoteChatConversationSkeleton />
-          ) : conversationQuery.isError ? (
-            <NoteChatConversationError
-              isFetching={conversationQuery.isFetching}
-              onRetry={() => {
-                void conversationQuery.refetch();
-              }}
-            />
-          ) : !detail ? (
-            <NoteChatConversationNotFound />
-          ) : (
-            <NoteChatConversationContent
+    <>
+      <NavigationGuardAlertDialog
+        open={isNavigationPending}
+        title="답변을 생성하고 있습니다."
+        description="페이지를 이동해도 답변 생성은 계속됩니다. 이동하시겠습니까?"
+        onCancel={cancelNavigation}
+        onConfirm={confirmNavigation}
+      />
+
+      <div className="mx-auto flex w-full max-w-6xl flex-col px-4 md:px-12">
+        {detail ? (
+          <div className="my-4 flex items-center justify-between">
+            <NoteChatBreadcrumb conversationTitle={detail.conversation.title} />
+            <NoteChatConversationMenu
               conversationId={conversationId}
               title={detail.conversation.title}
-              assistantSources={detail.assistantSources}
-              messages={visibleMessages}
-              pendingQuestion={pendingQuestion}
-              streamingContent={streamingContent}
-              streamError={streamError}
-              streamErrorCode={streamErrorCode}
-              isStreaming={isStreaming}
-              canRetry={failedQuestion !== null && retryCount < 2}
-              retryCount={retryCount}
-              messageEndRef={messageEndRef}
-              onCancel={cancel}
-              onSubmit={handleQuestionSubmit}
-              onRetry={handleRetry}
-              onUpdateQuestion={handleQuestionUpdate}
             />
-          )}
-        </section>
+          </div>
+        ) : null}
+
+        <div
+          ref={conversationContainerRef}
+          className="flex min-h-0 flex-col overflow-hidden"
+          style={
+            conversationHeight !== null
+              ? { height: conversationHeight }
+              : undefined
+          }
+        >
+          <section className="flex min-h-0 flex-1 flex-col">
+            {conversationQuery.isLoading || messagesQuery.isLoading ? (
+              <NoteChatConversationSkeleton />
+            ) : conversationQuery.isError || messagesQuery.isError ? (
+              <NoteChatConversationError
+                isFetching={
+                  conversationQuery.isFetching || messagesQuery.isFetching
+                }
+                onRetry={() => {
+                  void conversationQuery.refetch();
+                  void messagesQuery.refetch();
+                }}
+              />
+            ) : !detail ? (
+              <NoteChatConversationNotFound />
+            ) : (
+              <NoteChatConversationContent
+                conversationId={conversationId}
+                assistantSources={assistantSources}
+                messages={visibleMessages}
+                pendingQuestion={pendingQuestion}
+                pendingQuestionMessageId={pendingQuestionMessageId}
+                streamingContent={streamingContent}
+                streamingAssistantMessageId={streamingAssistantMessageId}
+                streamError={streamError}
+                streamErrorCode={streamErrorCode}
+                isStreaming={isStreaming}
+                isAnswerGenerating={isAnswerGenerating}
+                hasPreviousMessages={messagesQuery.hasNextPage}
+                isFetchingPreviousMessages={messagesQuery.isFetchingNextPage}
+                canRetry={canRetry}
+                retryCount={retryCount}
+                dailyUsage={dailyUsage}
+                messageEndRef={messageEndRef}
+                scrollViewportRef={scrollViewportRef}
+                questionBottomSpacerHeight={questionBottomSpacerHeight}
+                shouldShowLatestMessageButton={shouldShowLatestMessageButton}
+                registerUserMessageElement={registerUserMessageElement}
+                onViewportScroll={handleViewportScroll}
+                onLatestMessageClick={scrollToLatestMessage}
+                onCancel={handleCancelWithScroll}
+                onSubmit={handleSubmitWithScroll}
+                onRetry={handleRetryWithScroll}
+                onUpdateQuestion={handleUpdateQuestionWithScroll}
+              />
+            )}
+          </section>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
