@@ -43,15 +43,12 @@ function createSupabaseMock({
   finalNote = { review_completed_at: null },
   insertedNotification = { id: NOTIFICATION_ID },
   note = { review_completed_at: null, title: "알림 노트" },
-  // 재무장 직후 첫 claim이면 1. 같은 회차의 발송 재시도는 2 이상이 된다.
-  reviewLogDispatchAttempts = 1,
 }: {
   claimedLogs?: (typeof CLAIMED_LOG)[] | null;
   existingNotification?: { id: string; status: string } | null;
   finalNote?: { review_completed_at: string | null } | null;
   insertedNotification?: { id: string } | null;
   note?: { review_completed_at: string | null; title: string } | null;
-  reviewLogDispatchAttempts?: number;
 } = {}) {
   const rpcMock = vi.fn().mockResolvedValue({
     data: claimedLogs,
@@ -119,20 +116,6 @@ function createSupabaseMock({
     eq: reviewLogUpdateEqMock,
   });
 
-  const reviewLogSelectMaybeSingleMock = vi.fn().mockResolvedValue({
-    data: { notification_dispatch_attempts: reviewLogDispatchAttempts },
-    error: null,
-  });
-  const reviewLogSelectUserEqMock = vi.fn().mockReturnValue({
-    maybeSingle: reviewLogSelectMaybeSingleMock,
-  });
-  const reviewLogSelectIdEqMock = vi.fn().mockReturnValue({
-    eq: reviewLogSelectUserEqMock,
-  });
-  const reviewLogSelectMock = vi.fn().mockReturnValue({
-    eq: reviewLogSelectIdEqMock,
-  });
-
   const fromMock = vi.fn((table: string) => {
     if (table === "notes") {
       return {
@@ -150,7 +133,6 @@ function createSupabaseMock({
 
     if (table === "review_logs") {
       return {
-        select: reviewLogSelectMock,
         update: reviewLogUpdateMock,
       };
     }
@@ -373,7 +355,7 @@ describe("/api/cron/dispatch-notifications", () => {
       dispatched: 1,
       pushed: 1,
     });
-    expect(notificationSelectMock).toHaveBeenCalledWith("id, status");
+    expect(notificationSelectMock).toHaveBeenCalledWith("id");
     expect(dispatchPushToUserMock).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -391,35 +373,13 @@ describe("/api/cron/dispatch-notifications", () => {
     });
   });
 
-  // 완료 -> 재시작을 거친 로그는 이미 READ로 소비된 알림 행을 재사용한다.
-  // 되돌리지 않으면 푸시는 다시 나가는데 벨에는 뜨지 않는다.
-  it("rearms a consumed notification row before pushing it again", async () => {
+  // 재시도로 재사용하는 행이 READ라면 이번 발송을 보고 사용자가 직접 확인했다는
+  // 뜻이다. 완료 -> 재시작으로 생긴 READ는 set_note_review_completion이 이미
+  // 정리하므로, 여기서 되돌리면 사용자가 치운 알림만 안 읽음으로 되살아난다.
+  it("keeps a notification the user already read when reusing its row", async () => {
     const { notificationUpdateMock, supabase } = createSupabaseMock({
       existingNotification: { id: NOTIFICATION_ID, status: "READ" },
       insertedNotification: null,
-    });
-    createAdminClientMock.mockReturnValue(supabase);
-
-    const response = await dispatchRoute.GET(createAuthorizedRequest());
-
-    await expect(response.json()).resolves.toMatchObject({
-      dispatched: 1,
-      pushed: 1,
-    });
-    expect(notificationUpdateMock).toHaveBeenCalledWith({
-      read_at: null,
-      sent_at: expect.any(String),
-      status: "SENT",
-    });
-  });
-
-  // 같은 회차의 발송 재시도(attempts > 1)에서 READ는 이번 발송을 보고 사용자가
-  // 직접 확인했다는 뜻이다. 되돌리면 이미 치운 알림이 안 읽음으로 되살아난다.
-  it("keeps a notification the user already read when retrying the same dispatch", async () => {
-    const { notificationUpdateMock, supabase } = createSupabaseMock({
-      existingNotification: { id: NOTIFICATION_ID, status: "READ" },
-      insertedNotification: null,
-      reviewLogDispatchAttempts: 2,
     });
     createAdminClientMock.mockReturnValue(supabase);
 
