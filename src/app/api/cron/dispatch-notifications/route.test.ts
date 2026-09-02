@@ -39,13 +39,13 @@ function createAuthorizedRequest() {
 
 function createSupabaseMock({
   claimedLogs = [CLAIMED_LOG],
-  existingNotification = { id: NOTIFICATION_ID },
+  existingNotification = { id: NOTIFICATION_ID, status: "SENT" },
   finalNote = { review_completed_at: null },
   insertedNotification = { id: NOTIFICATION_ID },
   note = { review_completed_at: null, title: "알림 노트" },
 }: {
   claimedLogs?: (typeof CLAIMED_LOG)[] | null;
-  existingNotification?: { id: string } | null;
+  existingNotification?: { id: string; status: string } | null;
   finalNote?: { review_completed_at: string | null } | null;
   insertedNotification?: { id: string } | null;
   note?: { review_completed_at: string | null; title: string } | null;
@@ -355,7 +355,7 @@ describe("/api/cron/dispatch-notifications", () => {
       dispatched: 1,
       pushed: 1,
     });
-    expect(notificationSelectMock).toHaveBeenCalledWith("id");
+    expect(notificationSelectMock).toHaveBeenCalledWith("id, status");
     expect(dispatchPushToUserMock).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -370,6 +370,28 @@ describe("/api/cron/dispatch-notifications", () => {
     );
     expect(reviewLogUpdateMock).toHaveBeenCalledWith({
       notification_dispatched_at: expect.any(String),
+    });
+  });
+
+  // 완료 -> 재시작을 거친 로그는 이미 READ로 소비된 알림 행을 재사용한다.
+  // 되돌리지 않으면 푸시는 다시 나가는데 벨에는 뜨지 않는다.
+  it("rearms a consumed notification row before pushing it again", async () => {
+    const { notificationUpdateMock, supabase } = createSupabaseMock({
+      existingNotification: { id: NOTIFICATION_ID, status: "READ" },
+      insertedNotification: null,
+    });
+    createAdminClientMock.mockReturnValue(supabase);
+
+    const response = await dispatchRoute.GET(createAuthorizedRequest());
+
+    await expect(response.json()).resolves.toMatchObject({
+      dispatched: 1,
+      pushed: 1,
+    });
+    expect(notificationUpdateMock).toHaveBeenCalledWith({
+      read_at: null,
+      sent_at: expect.any(String),
+      status: "SENT",
     });
   });
 

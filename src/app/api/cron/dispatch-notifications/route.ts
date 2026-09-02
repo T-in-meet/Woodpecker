@@ -243,7 +243,7 @@ async function ensureNotification(
   const { data: existingNotification, error: existingNotificationError } =
     await supabase
       .from("notifications")
-      .select("id")
+      .select("id, status")
       .eq("review_log_id", claimedLog.id)
       .eq("type", NOTIFICATION_TYPES.REVIEW)
       .eq("user_id", claimedLog.user_id)
@@ -257,6 +257,25 @@ async function ensureNotification(
     throw new Error(
       "Existing notification was not found after upsert conflict.",
     );
+  }
+
+  // 재사용하는 행이 이미 소비된 상태(READ)면 다시 SENT로 되돌립니다. upsert는
+  // 충돌 시 status를 건드리지 않으므로, 완료 -> 재시작을 거친 로그는 푸시는 다시
+  // 나가는데 벨에는 뜨지 않는 상태가 됩니다.
+  if (existingNotification.status !== NOTIFICATION_STATUS.SENT) {
+    const { error: rearmNotificationError } = await supabase
+      .from("notifications")
+      .update({
+        read_at: null,
+        sent_at: new Date().toISOString(),
+        status: NOTIFICATION_STATUS.SENT,
+      })
+      .eq("id", existingNotification.id)
+      .eq("user_id", claimedLog.user_id);
+
+    if (rearmNotificationError) {
+      throw rearmNotificationError;
+    }
   }
 
   return { id: existingNotification.id };
