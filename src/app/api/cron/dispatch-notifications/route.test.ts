@@ -238,6 +238,7 @@ describe("/api/cron/dispatch-notifications", () => {
           noteId: NOTE_ID,
           notificationId: NOTIFICATION_ID,
           reviewLogId: REVIEW_LOG_ID,
+          type: "REVIEW",
           url: `/notes/${NOTE_ID}/review`,
         },
         title: "복습할 시간이에요!",

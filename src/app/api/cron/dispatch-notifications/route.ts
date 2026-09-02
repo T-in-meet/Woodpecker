@@ -185,6 +185,7 @@ function buildPushPayload({
       noteId,
       notificationId,
       reviewLogId,
+      type: NOTIFICATION_TYPES.REVIEW,
       url,
     },
   };
