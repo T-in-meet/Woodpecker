@@ -262,19 +262,36 @@ async function ensureNotification(
   // 재사용하는 행이 이미 소비된 상태(READ)면 다시 SENT로 되돌립니다. upsert는
   // 충돌 시 status를 건드리지 않으므로, 완료 -> 재시작을 거친 로그는 푸시는 다시
   // 나가는데 벨에는 뜨지 않는 상태가 됩니다.
+  //
+  // 단, 로그가 재무장된 뒤 첫 시도일 때만 되돌립니다. 재무장은 attempts를 0으로
+  // 되돌리므로 claim 직후 값이 1입니다. 그보다 크면 같은 회차의 발송 재시도이고,
+  // 그때 READ는 이번 발송을 보고 사용자가 직접 확인했다는 뜻이라 되살리면 안 됩니다.
   if (existingNotification.status !== NOTIFICATION_STATUS.SENT) {
-    const { error: rearmNotificationError } = await supabase
-      .from("notifications")
-      .update({
-        read_at: null,
-        sent_at: new Date().toISOString(),
-        status: NOTIFICATION_STATUS.SENT,
-      })
-      .eq("id", existingNotification.id)
-      .eq("user_id", claimedLog.user_id);
+    const { data: reviewLog, error: reviewLogError } = await supabase
+      .from("review_logs")
+      .select("notification_dispatch_attempts")
+      .eq("id", claimedLog.id)
+      .eq("user_id", claimedLog.user_id)
+      .maybeSingle();
 
-    if (rearmNotificationError) {
-      throw rearmNotificationError;
+    if (reviewLogError) {
+      throw reviewLogError;
+    }
+
+    if ((reviewLog?.notification_dispatch_attempts ?? 0) <= 1) {
+      const { error: rearmNotificationError } = await supabase
+        .from("notifications")
+        .update({
+          read_at: null,
+          sent_at: new Date().toISOString(),
+          status: NOTIFICATION_STATUS.SENT,
+        })
+        .eq("id", existingNotification.id)
+        .eq("user_id", claimedLog.user_id);
+
+      if (rearmNotificationError) {
+        throw rearmNotificationError;
+      }
     }
   }
 

@@ -43,12 +43,15 @@ function createSupabaseMock({
   finalNote = { review_completed_at: null },
   insertedNotification = { id: NOTIFICATION_ID },
   note = { review_completed_at: null, title: "알림 노트" },
+  // 재무장 직후 첫 claim이면 1. 같은 회차의 발송 재시도는 2 이상이 된다.
+  reviewLogDispatchAttempts = 1,
 }: {
   claimedLogs?: (typeof CLAIMED_LOG)[] | null;
   existingNotification?: { id: string; status: string } | null;
   finalNote?: { review_completed_at: string | null } | null;
   insertedNotification?: { id: string } | null;
   note?: { review_completed_at: string | null; title: string } | null;
+  reviewLogDispatchAttempts?: number;
 } = {}) {
   const rpcMock = vi.fn().mockResolvedValue({
     data: claimedLogs,
@@ -116,6 +119,20 @@ function createSupabaseMock({
     eq: reviewLogUpdateEqMock,
   });
 
+  const reviewLogSelectMaybeSingleMock = vi.fn().mockResolvedValue({
+    data: { notification_dispatch_attempts: reviewLogDispatchAttempts },
+    error: null,
+  });
+  const reviewLogSelectUserEqMock = vi.fn().mockReturnValue({
+    maybeSingle: reviewLogSelectMaybeSingleMock,
+  });
+  const reviewLogSelectIdEqMock = vi.fn().mockReturnValue({
+    eq: reviewLogSelectUserEqMock,
+  });
+  const reviewLogSelectMock = vi.fn().mockReturnValue({
+    eq: reviewLogSelectIdEqMock,
+  });
+
   const fromMock = vi.fn((table: string) => {
     if (table === "notes") {
       return {
@@ -133,6 +150,7 @@ function createSupabaseMock({
 
     if (table === "review_logs") {
       return {
+        select: reviewLogSelectMock,
         update: reviewLogUpdateMock,
       };
     }
@@ -393,6 +411,25 @@ describe("/api/cron/dispatch-notifications", () => {
       sent_at: expect.any(String),
       status: "SENT",
     });
+  });
+
+  // 같은 회차의 발송 재시도(attempts > 1)에서 READ는 이번 발송을 보고 사용자가
+  // 직접 확인했다는 뜻이다. 되돌리면 이미 치운 알림이 안 읽음으로 되살아난다.
+  it("keeps a notification the user already read when retrying the same dispatch", async () => {
+    const { notificationUpdateMock, supabase } = createSupabaseMock({
+      existingNotification: { id: NOTIFICATION_ID, status: "READ" },
+      insertedNotification: null,
+      reviewLogDispatchAttempts: 2,
+    });
+    createAdminClientMock.mockReturnValue(supabase);
+
+    const response = await dispatchRoute.GET(createAuthorizedRequest());
+
+    await expect(response.json()).resolves.toMatchObject({
+      dispatched: 1,
+      pushed: 1,
+    });
+    expect(notificationUpdateMock).not.toHaveBeenCalled();
   });
 
   it("does not create a notification when the note is missing", async () => {
