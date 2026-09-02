@@ -67,6 +67,13 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
     stats.completedReviews === 0 &&
     stats.todayReviews === 0;
 
+  // 버킷이 완료 표시한 노트를 빼고 만들어지므로 분모도 버킷 합으로 맞춘다.
+  // totalNotes로 나누면 완료한 만큼이 어떤 줄에도 안 잡혀 합이 100%에 못 미친다.
+  const notesInProgressTotal = stats.notesByRound.reduce(
+    (sum, { count }) => sum + count,
+    0,
+  );
+
   return (
     <Card>
       <CardHeader>
@@ -124,15 +131,15 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
                       style={
                         {
                           "--progress-width":
-                            stats.totalNotes === 0
+                            notesInProgressTotal === 0
                               ? "0%"
-                              : `${(count / stats.totalNotes) * 100}%`,
+                              : `${(count / notesInProgressTotal) * 100}%`,
                         } as CSSProperties
                       }
                     />
                   </div>
                   <span className="w-20 text-right text-sm tabular-nums">
-                    {count} ({formatPercent(count, stats.totalNotes)})
+                    {count} ({formatPercent(count, notesInProgressTotal)})
                   </span>
                 </div>
               ))}
