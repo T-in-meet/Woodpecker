@@ -35,6 +35,14 @@ type ExpandNoteChatQueryParams = {
 
   /** 현재 실행을 발생시킨 사용자 메시지 ID입니다. */
   userMessageId: string;
+
+  /**
+   * Provider 응답 직후 Token usage를 저장하기 위한 callback입니다.
+   *
+   * JSON 파싱이나 schema 검증이 실패하더라도 이미 완료된 Provider 호출의
+   * usage를 Run에 남기기 위해 응답 검증 전에 호출합니다.
+   */
+  onUsage?: (usage: AiTokenUsage) => Promise<void>;
 };
 
 /**
@@ -198,6 +206,8 @@ export async function expandNoteChatQuery(
       question: currentContent.text,
     },
   });
+
+  await params.onUsage?.(result.usage);
 
   /*
    * Provider의 구조화 응답을 그대로 신뢰하지 않고

@@ -1,8 +1,8 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 
-import { relatedNotesQueryKeys } from "../constants/query-keys";
-import { useRelatedNoteCandidates } from "./use-related-note-candidates";
+import { relatedNotesQueryKeys } from "../../constants/query-keys";
+import { useRelatedNoteCandidates } from "../use-related-note-candidates";
 
 vi.mock("@tanstack/react-query", () => ({
   keepPreviousData: Symbol("keepPreviousData"),

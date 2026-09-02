@@ -14,11 +14,14 @@ import {
   NOTE_CHAT_AI_FEATURE_KEY,
   NOTE_CHAT_AI_ROLE_KEY,
 } from "@/features/note-chats/constants/ai";
+import { NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE } from "@/features/note-chats/constants/execution";
 import {
-  NOTE_CHAT_DAILY_EXECUTION_LIMIT,
-  NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE,
-} from "@/features/note-chats/constants/execution";
-import { isNoteChatDailyExecutionLimitError } from "@/features/note-chats/execution/is-daily-execution-limit-error";
+  claimNoteChatExecution,
+  completeNoteChatExecutionClaim,
+  NOTE_CHAT_EXECUTION_CLAIM_COMPLETION_STATUS,
+  NOTE_CHAT_EXECUTION_CLAIM_STATUS,
+} from "@/features/note-chats/execution/execution-claim-persistence";
+import { createNoteChatRunRecord } from "@/features/note-chats/execution/run-persistence";
 import { createNoteChatQuestionInputSchema } from "@/features/note-chats/schema";
 import { runNoteChatStream } from "@/features/note-chats/stream/run-note-chat-stream";
 import { encodeNoteChatStreamEvent } from "@/features/note-chats/stream/serialize";
@@ -184,28 +187,20 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  /*
-   * 사용자 메시지와 Pending Run을 하나의 DB 트랜잭션으로 생성합니다.
-   *
-   * Run에는 이번 실행에서 실제 사용할 Agent·Prompt·Model ID를 기록합니다.
-   */
   const adminClient = createAdminClient();
 
-  const { data: created, error: createError } = await adminClient
-    .rpc("create_note_chat_question", {
-      p_agent_id: chatConfiguration.prompt.agent.id,
-      p_chat_model_config_id: chatConfiguration.model.id,
-      p_content: content,
-      p_conversation_id: conversationId,
-      p_daily_execution_limit: NOTE_CHAT_DAILY_EXECUTION_LIMIT,
-      p_embedding_model_config_id: embeddingConfiguration.model.id,
-      p_prompt_version_id: chatConfiguration.prompt.version.id,
-      p_user_id: user.id,
-    })
-    .single();
+  let claimId: string;
 
-  if (createError) {
-    if (isNoteChatDailyExecutionLimitError(createError)) {
+  try {
+    const claimResult = await claimNoteChatExecution({
+      conversationId,
+      userId: user.id,
+    });
+
+    if (
+      claimResult.status ===
+      NOTE_CHAT_EXECUTION_CLAIM_STATUS.DAILY_LIMIT_EXCEEDED
+    ) {
       return NextResponse.json(
         {
           code: NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE,
@@ -217,8 +212,63 @@ export async function POST(request: Request): Promise<Response> {
       );
     }
 
+    if (claimResult.status === NOTE_CHAT_EXECUTION_CLAIM_STATUS.DUPLICATE) {
+      return NextResponse.json(
+        {
+          error: "이미 이 대화에서 답변을 생성하고 있습니다.",
+        },
+        {
+          status: 409,
+        },
+      );
+    }
+
+    if (claimResult.claimId === null) {
+      throw new Error("Note chat execution claim returned no claim ID.");
+    }
+
+    claimId = claimResult.claimId;
+  } catch (error) {
+    await reportNoteChatOperationalError({
+      actorUserId: user.id,
+      context: {
+        conversationId,
+      },
+      error,
+      errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.EXECUTION_CLAIM_FAILED,
+      message: "노트 챗봇 실행 선점에 실패했습니다.",
+      operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.CLAIM_EXECUTION,
+      stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.DATABASE,
+      userId: user.id,
+    });
+
+    return NextResponse.json(
+      {
+        error: "질문 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+      },
+      {
+        status: 500,
+      },
+    );
+  }
+
+  /*
+   * Claim이 quota와 in-flight를 선점한 뒤 사용자 메시지를 생성합니다.
+   * 이 단계가 실패하면 실제 실행은 시작되지 않았으므로 claim을 failed로
+   * 닫아 quota count에서 제외되도록 합니다.
+   */
+  const { data: userMessageId, error: createError } = await adminClient.rpc(
+    "create_note_chat_question",
+    {
+      p_content: content,
+      p_conversation_id: conversationId,
+      p_user_id: user.id,
+    },
+  );
+
+  if (createError) {
     /*
-     * 질문과 Pending Run을 생성하는 트랜잭션 자체가 실패한 경우
+     * 질문 생성 트랜잭션이 실패한 경우
      * 대상 Conversation만 식별 정보로 남기고 질문 본문은 기록하지 않습니다.
      */
     await reportNoteChatOperationalError({
@@ -234,6 +284,12 @@ export async function POST(request: Request): Promise<Response> {
       userId: user.id,
     });
 
+    await completeClaimAfterPreExecutionFailure({
+      claimId,
+      conversationId,
+      userId: user.id,
+    });
+
     return NextResponse.json(
       {
         error: "질문 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.",
@@ -244,7 +300,7 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  if (!created) {
+  if (!userMessageId) {
     /*
      * DB 오류 없이 RPC 결과가 반환되지 않은 경우도 정상적인 생성 결과가 아니므로
      * 데이터베이스 실행 결과 이상으로 운영 오류에 보고합니다.
@@ -264,6 +320,12 @@ export async function POST(request: Request): Promise<Response> {
       userId: user.id,
     });
 
+    await completeClaimAfterPreExecutionFailure({
+      claimId,
+      conversationId,
+      userId: user.id,
+    });
+
     return NextResponse.json(
       {
         error: "질문 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.",
@@ -280,51 +342,176 @@ export async function POST(request: Request): Promise<Response> {
     embedding: embeddingConfiguration,
   };
 
+  let runId: string | null = null;
+
+  try {
+    runId = await createNoteChatRunRecord({
+      agentId: chatConfiguration.prompt.agent.id,
+      chatModelConfigId: chatConfiguration.model.id,
+      embeddingModelConfigId: embeddingConfiguration.model.id,
+      promptVersionId: chatConfiguration.prompt.version.id,
+      userMessageId,
+    });
+  } catch (error) {
+    await reportNoteChatOperationalError({
+      actorUserId: user.id,
+      context: {
+        conversationId,
+        userMessageId,
+      },
+      error,
+      errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.RUN_CREATE_FAILED,
+      message: "노트 챗봇 Run 실행 이력 생성에 실패했습니다.",
+      operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.CREATE_RUN,
+      stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.DATABASE,
+      userId: user.id,
+    });
+  }
+
+  /*
+   * streamClosed는 ReadableStream 자체가 취소되거나 close된 상태를 나타냅니다.
+   * deliveryFailed는 서버에서 클라이언트로 이벤트를 전달할 수 없게 된 상태를
+   * 별도로 나타냅니다.
+   *
+   * 응답 전달 실패는 AI execution 실패와 구분하며,
+   * 이미 진행 중인 AI execution과 저장 처리는 계속 수행합니다.
+   */
   let streamClosed = false;
+  let deliveryFailed = false;
 
   const stream = new ReadableStream({
     start(controller) {
       let errorEventSent = false;
 
       /**
-       * 스트림 이벤트를 NDJSON 데이터로 인코딩해 전달합니다.
+       * 스트림 이벤트를 NDJSON 데이터로 인코딩해 클라이언트에 전달합니다.
+       *
+       * 응답 스트림 전송 실패는 사용자 기능의 전달 오류이지만
+       * 이미 진행 중인 AI 실행의 성공/실패 상태에는 영향을 주지 않습니다.
+       *
+       * 따라서 전송 실패는 operational error로 기록하고
+       * runNoteChatStream으로 예외를 전파하지 않습니다.
        */
-      const enqueueEvent = (event: NoteChatStreamEvent): void => {
-        if (streamClosed) {
+      const enqueueEvent = async (
+        event: NoteChatStreamEvent,
+      ): Promise<void> => {
+        if (streamClosed || deliveryFailed) {
           return;
         }
 
-        if (event.type === "error") {
-          errorEventSent = true;
-        }
+        try {
+          controller.enqueue(encodeNoteChatStreamEvent(event));
 
-        controller.enqueue(encodeNoteChatStreamEvent(event));
+          if (event.type === "error") {
+            errorEventSent = true;
+          }
+        } catch (error) {
+          /*
+           * 클라이언트 응답 전달에 한 번 실패하면
+           * 이후 이벤트 전송은 중단합니다.
+           *
+           * 실제 ReadableStream 종료 상태와는 별개이므로
+           * streamClosed는 여기에서 변경하지 않습니다.
+           */
+          deliveryFailed = true;
+
+          try {
+            await reportNoteChatOperationalError({
+              actorUserId: user.id,
+              context: {
+                conversationId,
+                eventType: event.type,
+                runId,
+                userMessageId,
+              },
+              error,
+              errorCode:
+                NOTE_CHAT_OPERATIONAL_ERROR_CODES.STREAM_EVENT_SEND_FAILED,
+              message: "노트 챗봇 스트림 이벤트 전송에 실패했습니다.",
+              operation:
+                NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.SEND_STREAM_EVENT,
+              stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.EXECUTION,
+              userId: user.id,
+            });
+          } catch {
+            /*
+             * 스트림 전송 오류를 운영 오류로 기록하는 과정 자체가 실패하더라도
+             * 전송 계층 오류가 AI execution 실패로 전파되지 않도록 무시합니다.
+             */
+          }
+        }
       };
 
       void (async () => {
+        /*
+         * start는 HTTP 응답 lifecycle 이벤트이므로 Route에서 전달합니다.
+         *
+         * 전달 자체가 실패하더라도 AI execution과 DB 상태를 실패로
+         * 변경하지 않고 enqueueEvent 내부에서 operational error로만 기록합니다.
+         */
+        await enqueueEvent({
+          runId,
+          type: "start",
+          userMessageId,
+        });
+
         try {
-          await runNoteChatStream(
+          const result = await runNoteChatStream(
             {
               conversationId,
-              runId: created.run_id,
+              claimId,
+              runId,
               settings,
               userId: user.id,
-              userMessageId: created.user_message_id,
+              userMessageId,
             },
             enqueueEvent,
           );
+
+          /*
+           * AI 실행과 성공 저장이 모두 끝난 뒤 finish를 전달합니다.
+           *
+           * 이 시점에는 Assistant Message 저장과 Claim succeeded가
+           * 이미 확정되어 있으므로 finish 전송 실패가 실행 결과를
+           * failed로 되돌려서는 안 됩니다.
+           */
+          await enqueueEvent({
+            assistantMessageId: result.assistantMessageId,
+            runId: result.runId,
+            type: "finish",
+            usedNoteIds: result.usedNoteIds,
+          });
         } catch {
-          if (!errorEventSent && !streamClosed) {
-            enqueueEvent({
+          /*
+           * 여기까지 전달되는 오류는 runNoteChatStream 내부의
+           * AI 실행 또는 기능 데이터 저장 실패입니다.
+           *
+           * execution의 Run/Claim 실패 정리는 runNoteChatStream에서
+           * 이미 처리하므로 Route는 클라이언트 error 이벤트만 전달합니다.
+           */
+          if (!errorEventSent) {
+            await enqueueEvent({
               message: "답변 생성에 실패했습니다.",
-              runId: created.run_id,
+              runId,
               type: "error",
             });
           }
         } finally {
+          /*
+           * deliveryFailed 여부와 관계없이 실제 ReadableStream은
+           * Route 실행 종료 시점에 닫습니다.
+           */
           if (!streamClosed) {
             streamClosed = true;
-            controller.close();
+
+            try {
+              controller.close();
+            } catch {
+              /*
+               * 클라이언트 취소 등으로 이미 스트림이 종료된 경우에는
+               * 별도의 AI execution 실패로 취급하지 않습니다.
+               */
+            }
           }
         }
       })();
@@ -343,4 +530,38 @@ export async function POST(request: Request): Promise<Response> {
     },
     status: 200,
   });
+}
+
+/**
+ * Provider 실행 전 실패한 claim을 failed 상태로 닫습니다.
+ *
+ * @param params 완료할 claim과 오류 보고 context
+ */
+async function completeClaimAfterPreExecutionFailure(params: {
+  claimId: string;
+  conversationId: string;
+  userId: string;
+}): Promise<void> {
+  try {
+    await completeNoteChatExecutionClaim({
+      claimId: params.claimId,
+      status: NOTE_CHAT_EXECUTION_CLAIM_COMPLETION_STATUS.FAILED,
+    });
+  } catch (error) {
+    await reportNoteChatOperationalError({
+      actorUserId: params.userId,
+      context: {
+        claimId: params.claimId,
+        conversationId: params.conversationId,
+      },
+      error,
+      errorCode:
+        NOTE_CHAT_OPERATIONAL_ERROR_CODES.EXECUTION_CLAIM_COMPLETE_FAILED,
+      message: "노트 챗봇 실행 선점 실패 완료 처리에 실패했습니다.",
+      operation:
+        NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.COMPLETE_EXECUTION_CLAIM,
+      stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.DATABASE,
+      userId: params.userId,
+    });
+  }
 }

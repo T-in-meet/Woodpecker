@@ -4,10 +4,11 @@
 
 BEGIN;
 
-SELECT plan(26);
+SELECT plan(37);
 
 SELECT ok(to_regclass('public.note_chat_conversations') IS NOT NULL, $$conversations table should exist$$);
 SELECT ok(to_regclass('public.note_chat_messages') IS NOT NULL, $$messages table should exist$$);
+SELECT ok(to_regclass('public.note_chat_execution_claims') IS NOT NULL, $$execution claims table should exist$$);
 SELECT ok(to_regclass('public.note_chat_runs') IS NOT NULL, $$runs table should exist$$);
 
 SELECT is(
@@ -35,6 +36,7 @@ SELECT set_config('test.note_chat_schema_user_id', gen_random_uuid()::text, true
 SELECT set_config('test.note_chat_schema_conversation_id', gen_random_uuid()::text, true);
 SELECT set_config('test.note_chat_schema_user_message_id', gen_random_uuid()::text, true);
 SELECT set_config('test.note_chat_schema_assistant_message_id', gen_random_uuid()::text, true);
+SELECT set_config('test.note_chat_schema_claim_conversation_id', gen_random_uuid()::text, true);
 
 INSERT INTO auth.users (id, email, email_confirmed_at, raw_user_meta_data)
 VALUES (
@@ -49,6 +51,17 @@ VALUES (
   current_setting('test.note_chat_schema_conversation_id')::uuid,
   current_setting('test.note_chat_schema_user_id')::uuid,
   'Valid title'
+);
+
+/*
+ * Claim completion 제약 테스트는 기존 running Claim의 partial unique index와
+ * 충돌하지 않도록 별도 conversation을 사용합니다.
+ */
+INSERT INTO public.note_chat_conversations (id, user_id, title)
+VALUES (
+  current_setting('test.note_chat_schema_claim_conversation_id')::uuid,
+  current_setting('test.note_chat_schema_user_id')::uuid,
+  'Claim constraint test'
 );
 
 SELECT throws_ok(
@@ -202,14 +215,117 @@ SELECT throws_ok(
 SELECT throws_ok(
   format(
     $sql$
-      INSERT INTO public.note_chat_runs (user_message_id, usage)
+      INSERT INTO public.note_chat_runs (user_message_id, query_expansion_usage)
       VALUES ('%s'::uuid, '[]'::jsonb);
     $sql$,
     current_setting('test.note_chat_schema_user_message_id')
   ),
   '23514',
   NULL,
-  $$run usage should be null or a JSON object$$
+  $$run query expansion usage should be null or a JSON object$$
+);
+
+SELECT ok(
+  NOT EXISTS (
+    SELECT 1
+    FROM pg_attribute
+    WHERE attrelid = 'public.note_chat_runs'::regclass
+      AND attname = 'usage'
+      AND NOT attisdropped
+  ),
+  $$run aggregate usage column should be removed$$
+);
+
+SELECT lives_ok(
+  format(
+    $sql$
+      INSERT INTO public.note_chat_execution_claims (user_id, conversation_id)
+      VALUES ('%s'::uuid, '%s'::uuid);
+    $sql$,
+    current_setting('test.note_chat_schema_user_id'),
+    current_setting('test.note_chat_schema_conversation_id')
+  ),
+  $$running execution claim should be accepted with defaults$$
+);
+
+SELECT throws_ok(
+  format(
+    $sql$
+      INSERT INTO public.note_chat_execution_claims (user_id, conversation_id, status)
+      VALUES ('%s'::uuid, '%s'::uuid, 'cancelled');
+    $sql$,
+    current_setting('test.note_chat_schema_user_id'),
+    current_setting('test.note_chat_schema_conversation_id')
+  ),
+  '23514',
+  NULL,
+  $$execution claim status should reject unsupported values$$
+);
+
+/*
+ * Claim status와 completed_at은 실행 제어의 정합성을 함께 표현합니다.
+ * running Claim에 완료 시각이 있거나 terminal Claim에 완료 시각이 없으면
+ * quota/in-flight 판단이 서로 다른 상태를 읽게 되므로 DB 제약으로 차단합니다.
+ */
+SELECT throws_ok(
+  format(
+    $sql$
+      INSERT INTO public.note_chat_execution_claims (
+        user_id,
+        conversation_id,
+        status,
+        completed_at
+      )
+      VALUES ('%s'::uuid, '%s'::uuid, 'running', now());
+    $sql$,
+    current_setting('test.note_chat_schema_user_id'),
+    current_setting('test.note_chat_schema_claim_conversation_id')
+  ),
+  '23514',
+  NULL,
+  $$running execution claim should reject completed_at$$
+);
+
+SELECT throws_ok(
+  format(
+    $sql$
+      INSERT INTO public.note_chat_execution_claims (user_id, conversation_id, status)
+      VALUES ('%s'::uuid, '%s'::uuid, 'succeeded');
+    $sql$,
+    current_setting('test.note_chat_schema_user_id'),
+    current_setting('test.note_chat_schema_claim_conversation_id')
+  ),
+  '23514',
+  NULL,
+  $$succeeded execution claim should require completed_at$$
+);
+
+SELECT throws_ok(
+  format(
+    $sql$
+      INSERT INTO public.note_chat_execution_claims (user_id, conversation_id, status)
+      VALUES ('%s'::uuid, '%s'::uuid, 'failed');
+    $sql$,
+    current_setting('test.note_chat_schema_user_id'),
+    current_setting('test.note_chat_schema_claim_conversation_id')
+  ),
+  '23514',
+  NULL,
+  $$failed execution claim should require completed_at$$
+);
+
+SELECT throws_ok(
+  format(
+    $sql$
+      INSERT INTO public.note_chat_execution_claims (user_id, conversation_id, status)
+      VALUES ('%s'::uuid, '%s'::uuid, 'stale');
+    $sql$,
+    current_setting('test.note_chat_schema_user_id'),
+    current_setting('test.note_chat_schema_claim_conversation_id')
+  ),
+  '23514',
+  NULL,
+  $$stale execution claim should require completed_at$$
 );
 
 SELECT lives_ok(
@@ -307,6 +423,23 @@ SELECT ok(to_regclass('public.note_chat_conversations_user_updated_at_idx') IS N
 SELECT ok(to_regclass('public.note_chat_conversations_title_trgm_idx') IS NOT NULL, $$conversation title trigram index should exist$$);
 SELECT ok(to_regclass('public.note_chat_messages_conversation_sequence_idx') IS NOT NULL, $$message sequence index should exist$$);
 SELECT ok(to_regclass('public.note_chat_runs_status_created_at_idx') IS NOT NULL, $$run status index should exist$$);
+
+/*
+ * Claim 조회는 conversation 단위 in-flight 차단, 사용자별 일일 quota 계산,
+ * stale 실행 정리의 세 경로에서 반복되므로 각 접근 패턴의 인덱스를 보장합니다.
+ */
+SELECT ok(
+  to_regclass('public.note_chat_execution_claims_active_uidx') IS NOT NULL,
+  $$execution claim active unique index should exist$$
+);
+SELECT ok(
+  to_regclass('public.note_chat_execution_claims_user_claimed_idx') IS NOT NULL,
+  $$execution claim user quota index should exist$$
+);
+SELECT ok(
+  to_regclass('public.note_chat_execution_claims_status_claimed_idx') IS NOT NULL,
+  $$execution claim status cleanup index should exist$$
+);
 
 SELECT * FROM finish();
 ROLLBACK;

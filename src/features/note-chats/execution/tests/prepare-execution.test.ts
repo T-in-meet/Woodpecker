@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AI_CHAT_MESSAGE_ROLE } from "@/features/ai/chats/constants";
 import { buildNoteContext } from "@/features/ai/rags/note/build-context";
 import { getMatchedNotes } from "@/features/ai/rags/note/get-matched-notes";
-import { searchNoteEmbeddings } from "@/features/ai/rags/note/search-embeddings";
+import { searchNoteEmbeddingsWithUsage } from "@/features/ai/rags/note/search-embeddings";
 import { NOTE_CHAT_OPERATIONAL_ERROR_CODES } from "@/features/operational-errors/constants";
 
 import { getNoteChatConversationDetailForExecution } from "../../internal-queries";
@@ -33,7 +33,7 @@ vi.mock("@/features/ai/rags/note/get-matched-notes", () => ({
 }));
 
 vi.mock("@/features/ai/rags/note/search-embeddings", () => ({
-  searchNoteEmbeddings: vi.fn(),
+  searchNoteEmbeddingsWithUsage: vi.fn(),
 }));
 
 vi.mock("../build-note-sources", () => ({
@@ -85,6 +85,15 @@ const queryExpansionUsage = {
   totalTokens: 30,
 };
 
+/**
+ * 검색 질의 embedding Provider 호출에서 발생한 token 사용량입니다.
+ */
+const queryEmbeddingUsage = {
+  inputTokens: 40,
+  outputTokens: 0,
+  totalTokens: 40,
+};
+
 describe("prepareNoteChatExecution", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -98,7 +107,10 @@ describe("prepareNoteChatExecution", () => {
       usage: queryExpansionUsage,
     });
 
-    vi.mocked(searchNoteEmbeddings).mockResolvedValue([]);
+    vi.mocked(searchNoteEmbeddingsWithUsage).mockResolvedValue({
+      matches: [],
+      usage: queryEmbeddingUsage,
+    });
 
     vi.mocked(getMatchedNotes).mockResolvedValue([]);
 
@@ -122,6 +134,7 @@ describe("prepareNoteChatExecution", () => {
     expect(getNoteChatConversationDetailForExecution).toHaveBeenCalledWith(
       "conversation-1",
       "user-1",
+      "message-1",
     );
 
     expect(expandNoteChatQuery).toHaveBeenCalledWith({
@@ -130,10 +143,11 @@ describe("prepareNoteChatExecution", () => {
       userMessageId: "message-1",
     });
 
-    expect(searchNoteEmbeddings).toHaveBeenCalledWith({
+    expect(searchNoteEmbeddingsWithUsage).toHaveBeenCalledWith({
       embeddingConfiguration: settings.embedding,
       limit: expect.any(Number),
       minSimilarity: expect.any(Number),
+      onUsage: undefined,
       ownerUserId: "user-1",
       question: "확장된 검색 질의",
     });
@@ -161,6 +175,7 @@ describe("prepareNoteChatExecution", () => {
       conversation,
       expandedQuery: "확장된 검색 질의",
       messages: [],
+      queryEmbeddingUsage,
       queryExpansionUsage,
       settings,
       sources: [],
