@@ -10,6 +10,7 @@ import {
   TextCursorInputIcon,
 } from "lucide-react";
 
+import { FeatureInfoPopover } from "@/components/common/FeatureInfoPopover";
 import {
   Dialog,
   DialogContent,
@@ -110,7 +111,17 @@ export function QuizModal({
 
         {phase === "select" && (
           <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-1 sm:space-y-4 sm:pr-0">
-            <p className="text-base font-medium">어떻게 복습할까요?</p>
+            <div className="flex items-center gap-1">
+              <p className="text-base font-medium">어떻게 복습할까요?</p>
+              <FeatureInfoPopover
+                ariaLabel="퀴즈 하루 사용량 안내 보기"
+                centerOnScreen
+              >
+                하루 최대 5회까지 AI 퀴즈를 만들 수 있어요. 사용 횟수는 매일
+                자정(한국 시간) 초기화되고, 한도 소진 후에도 만들어둔 퀴즈는
+                계속 풀어볼 수 있어요.
+              </FeatureInfoPopover>
+            </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
               {QUIZ_TYPE_OPTIONS.map(({ type, label, Icon }) => (
