@@ -59,7 +59,7 @@ describe("NotesToolbar", () => {
       "col-span-2",
       "w-full",
       "sm:col-auto",
-      "sm:w-auto",
+      "sm:w-72",
     );
   });
 
@@ -80,6 +80,72 @@ describe("NotesToolbar", () => {
     expect(pushMock).toHaveBeenCalledWith(
       "/notes?q=%ED%85%8C%EC%8A%A4%ED%8A%B8",
     );
+  });
+
+  it("Enter를 누르면 debounce를 기다리지 않고 즉시 이동한다", () => {
+    render(<NotesToolbar initialQuery="" activeView="all" />);
+    const input = screen.getByPlaceholderText("제목 또는 내용 검색");
+
+    fireEvent.change(input, { target: { value: "테스트" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(pushMock).toHaveBeenCalledTimes(1);
+    expect(pushMock).toHaveBeenCalledWith(
+      "/notes?q=%ED%85%8C%EC%8A%A4%ED%8A%B8",
+    );
+  });
+
+  it("Enter로 이동한 뒤에는 대기 중이던 debounce가 다시 이동시키지 않는다", () => {
+    render(<NotesToolbar initialQuery="" activeView="all" />);
+    const input = screen.getByPlaceholderText("제목 또는 내용 검색");
+
+    fireEvent.change(input, { target: { value: "테스트" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+
+    expect(pushMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("Enter가 아닌 키는 즉시 이동시키지 않는다", () => {
+    render(<NotesToolbar initialQuery="" activeView="all" />);
+    const input = screen.getByPlaceholderText("제목 또는 내용 검색");
+
+    fireEvent.change(input, { target: { value: "테스트" } });
+    fireEvent.keyDown(input, { key: "a" });
+
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it("검색창을 form으로 감싸 Enter 제출과 search 랜드마크를 제공한다", () => {
+    render(<NotesToolbar initialQuery="" activeView="all" />);
+
+    const input = screen.getByPlaceholderText("제목 또는 내용 검색");
+
+    expect(input.closest("form")).toHaveAttribute("role", "search");
+    expect(screen.getByRole("search")).toBeInTheDocument();
+  });
+
+  it("돋보기 버튼을 누르면 debounce를 기다리지 않고 즉시 이동한다", () => {
+    render(<NotesToolbar initialQuery="" activeView="all" />);
+
+    fireEvent.change(screen.getByPlaceholderText("제목 또는 내용 검색"), {
+      target: { value: "테스트" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "검색" }));
+
+    expect(pushMock).toHaveBeenCalledTimes(1);
+    expect(pushMock).toHaveBeenCalledWith(
+      "/notes?q=%ED%85%8C%EC%8A%A4%ED%8A%B8",
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+
+    expect(pushMock).toHaveBeenCalledTimes(1);
   });
 
   it("검색어를 지우면 대기 중인 debounce를 취소하고 즉시 이동한다", () => {

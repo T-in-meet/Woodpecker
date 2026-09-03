@@ -57,6 +57,31 @@ export function NotesToolbar({ initialQuery, activeView }: NotesToolbarProps) {
     }, 300);
   }
 
+  /**
+   * 대기 중인 debounce를 버리고 현재 검색어로 즉시 이동한다.
+   *
+   * Enter를 눌렀는데 300ms를 더 기다리는 건 "입력이 끝났다"는 신호를 무시하는
+   * 것이라, 확정 입력은 타이머를 건너뛰고 바로 반영한다.
+   */
+  function commitQuery() {
+    clearTimeout(debounceRef.current);
+    isTypingRef.current = false;
+    router.push(buildNotesUrl({ query, view: activeView }));
+  }
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    commitQuery();
+  }
+
+  function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key !== "Enter") return;
+
+    // 여기서 막지 않으면 form의 암묵적 제출까지 함께 일어나 이동이 두 번 난다.
+    event.preventDefault();
+    commitQuery();
+  }
+
   function handleClear() {
     setQuery("");
     clearTimeout(debounceRef.current);
@@ -119,28 +144,58 @@ export function NotesToolbar({ initialQuery, activeView }: NotesToolbarProps) {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <div className="relative col-span-2 w-full min-w-0 sm:col-auto sm:w-auto sm:flex-none">
-        <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+      {/* form으로 감싸 Enter가 검색을 확정하게 하고, 돋보기를 제출 버튼으로 둔다.
+          role="search"로 랜드마크도 준다.
+          테두리·모서리·포커스 링을 input이 아니라 이 컨테이너가 갖는다. 그래야
+          제출 버튼을 필드 안쪽 오른쪽 끝까지 꽉 채운 블록으로 붙일 수 있다. */}
+      <form
+        role="search"
+        onSubmit={handleSubmit}
+        className="col-span-2 flex h-9 w-full min-w-0 items-center rounded-md border border-input bg-background ring-offset-background transition-colors focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 sm:col-auto sm:w-72 sm:flex-none"
+      >
         <input
+          type="search"
+          // 모바일 키보드의 확정 키를 "검색"으로 바꿔 Enter의 의미를 드러낸다.
+          enterKeyHint="search"
           value={query}
           onChange={handleQueryChange}
+          onKeyDown={handleKeyDown}
+          aria-label="노트 검색"
           placeholder="제목 또는 내용 검색"
-          className="h-9 w-full rounded-md border border-input bg-background pl-8 pr-8 text-sm outline-none ring-offset-background transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:w-64"
+          // 테두리와 포커스 링은 form이 그리므로 여기서는 배경까지 비운다.
+          // type=search의 브라우저 기본 지우기 버튼은 아래 X 버튼과 중복이라 숨긴다.
+          className="h-full min-w-0 flex-1 bg-transparent pl-3 pr-1 text-sm outline-none [&::-webkit-search-cancel-button]:hidden placeholder:text-muted-foreground"
         />
+
+        {/* 조작부는 필드 끝에 지우기 → 검색 순서로 둔다. 제출은 입력의 마지막 자리에
+            오는 게 관례라(네이버·아마존 등) 선행 아이콘보다 눌러볼 확률이 높다.
+            두 버튼 모두 세로만 ::after로 44px까지 넓힌다 — 가로로 퍼뜨리면 서로,
+            그리고 입력 텍스트 영역과 겹쳐 탭을 가로챈다. 위아래 4px 넘침은
+            그리드 gap(12px) 안이라 겹칠 요소가 없다. */}
         {query ? (
           <button
-            // 아이콘 자체는 14px이라 히트 영역만 ::after로 넓힌다. 입력 필드가 h-9라
-            // 실제 크기를 키우면 넘치고, 좌우에 다른 클릭 대상이 없어 겹칠 일도 없다.
-            // 가로는 입력이 이미 비워 둔 pr-8(32px)에 맞춰 w-9까지만 넓혀
-            // 검색어 끝을 탭해 커서를 놓는 동작을 가로채지 않게 한다.
+            // form 안에서는 type 생략 시 submit이 되므로 명시한다.
+            type="button"
             onClick={handleClear}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 cursor-pointer text-muted-foreground after:absolute after:left-1/2 after:top-1/2 after:h-11 after:w-9 after:-translate-x-1/2 after:-translate-y-1/2 after:content-[''] hover:text-foreground"
             aria-label="검색어 지우기"
+            className="relative flex h-full w-9 shrink-0 cursor-pointer items-center justify-center text-muted-foreground outline-none after:absolute after:inset-x-0 after:top-1/2 after:h-11 after:-translate-y-1/2 after:content-[''] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset hover:text-foreground"
           >
             <X className="h-3.5 w-3.5" />
           </button>
         ) : null}
-      </div>
+
+        {/* 아이콘만 두면 누를 수 있는 것으로 읽히지 않는다. 배경을 채운 블록과
+            구분선으로 분리해 눌리는 요소임을 형태와 대비로 알린다.
+            모서리 반경은 form의 rounded-md에서 테두리 1px을 뺀 값이라야 안쪽에
+            정확히 맞물린다. */}
+        <button
+          type="submit"
+          aria-label="검색"
+          className="relative flex h-full w-10 shrink-0 cursor-pointer items-center justify-center rounded-r-[calc(var(--radius-md)-1px)] border-l border-input bg-muted text-muted-foreground outline-none transition-colors after:absolute after:inset-x-0 after:top-1/2 after:h-11 after:-translate-y-1/2 after:content-[''] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset hover:bg-muted/70 hover:text-foreground"
+        >
+          <Search aria-hidden="true" className="h-3.5 w-3.5" />
+        </button>
+      </form>
     </div>
   );
 }
