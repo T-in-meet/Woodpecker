@@ -1,3 +1,5 @@
+import { requestAuthApi } from "@/features/auth/lib/requestAuthApi";
+
 import {
   LoginSuccessResponse,
   loginSuccessResponseSchema,
@@ -19,18 +21,13 @@ export async function loginMutation(
     ? `/api/auth/login?redirect=${encodeURIComponent(redirect)}`
     : "/api/auth/login";
 
-  const response = await fetch(url, {
+  // 서버 실패 응답 body는 그대로 reject되고(계약 필드 손실 방지),
+  // 오프라인·응답 없음 같은 transport 실패는 GlobalError로 좁혀져서 올라온다.
+  const body = await requestAuthApi(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
-
-  const body = await response.json();
-
-  // 서버 실패 응답 body를 그대로 reject — 계약 필드(code, data.errors 등) 손실 방지
-  if (!response.ok) {
-    throw body;
-  }
 
   return loginSuccessResponseSchema.parse(body);
 }

@@ -1,3 +1,5 @@
+import { requestAuthApi } from "@/features/auth/lib/requestAuthApi";
+
 import { signupSuccessResponseSchema } from "../schema/signupSuccessResponseSchema";
 
 // 회원가입 요청 시 사용하는 payload 타입
@@ -33,20 +35,13 @@ export async function signupMutation(
   const requestBody = { email, password, nickname, agreements };
 
   // 회원가입 API 요청
-  const response = await fetch("/api/auth/signup", {
+  // HTTP 레벨 실패(400, 422, 500 등)는 서버 계약 body가 그대로 reject되고,
+  // 오프라인·응답 없음 같은 transport 실패는 GlobalError로 좁혀져서 올라온다.
+  const body = await requestAuthApi("/api/auth/signup", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(requestBody),
   });
-
-  // 성공/실패 분기 전에 body를 먼저 파싱
-  const body = await response.json();
-
-  // HTTP 레벨 실패 처리 (예: 400, 422, 500 등)
-  // 서버 실패 응답 body를 그대로 reject — 계약 필드(code, data.errors 등) 손실 방지
-  if (!response.ok) {
-    throw body;
-  }
 
   return signupSuccessResponseSchema.parse(body);
 }

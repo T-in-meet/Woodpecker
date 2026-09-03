@@ -62,6 +62,16 @@ describe("signupMutation", () => {
         nickname: validSignupPayload.nickname,
         agreements: validSignupPayload.agreements,
       }),
+      // 응답이 없을 때 무한 대기를 막는 timeout용 signal
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  it("fetch가 throw하면 network GlobalError로 좁혀서 throw한다", async () => {
+    mockFetch.mockRejectedValue(new TypeError("Failed to fetch"));
+
+    await expect(signupMutation(validSignupPayload)).rejects.toEqual({
+      type: "network",
     });
   });
 
