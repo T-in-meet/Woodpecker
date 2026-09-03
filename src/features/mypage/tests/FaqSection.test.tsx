@@ -34,7 +34,7 @@ describe("FaqSection", () => {
     );
     expect(
       screen.getByRole("button", { name: "복습 주기는 어떻게 되나요?" }),
-    ).toBeInTheDocument();
+    ).toHaveClass("cursor-pointer");
     expect(
       screen.queryByRole("button", { name: "복습 알림은 언제 오나요?" }),
     ).not.toBeInTheDocument();
