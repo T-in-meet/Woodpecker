@@ -8,6 +8,7 @@ import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import AuthenticationError from "@/features/auth/components/AuthenticationError";
 import { RATE_LIMIT_TOAST_MESSAGE } from "@/features/auth/errors/rateLimitError";
 import {
   ForgotPasswordActionState,
@@ -45,6 +46,8 @@ export function ForgotPasswordForm({ action }: ForgotPasswordFormProps) {
     register,
     handleSubmit,
     setValue,
+    setError,
+    clearErrors,
     formState: { errors },
   } = useForm<ForgotPasswordFormInput, unknown, ForgotPasswordFormValues>({
     resolver: zodResolver(forgotPasswordFormSchema),
@@ -86,25 +89,27 @@ export function ForgotPasswordForm({ action }: ForgotPasswordFormProps) {
   }, [setValue]);
 
   // Server Action 결과 상태에 따라 사용자 피드백을 출력한다.
-  // 필드 validation은 react-hook-form이 담당하고, 서버 결과는 전역 toast로 처리한다.
+  // 성공은 읽고 흘려보내면 되므로 toast, 실패는 "다시 시도"가 필요하므로
+  // 사라지지 않는 form 오류로 남긴다.
   useEffect(() => {
     if (state.status === "completed") {
+      clearErrors("root");
       showToast(FORGOT_PASSWORD_UI_MESSAGES.success);
     }
     if (state.status === "blocked") {
-      showToast(RATE_LIMIT_TOAST_MESSAGE, {
-        variant: "destructive",
-        dedupeKey: "auth-rate-limit",
-      });
+      setError("root", { type: "server", message: RATE_LIMIT_TOAST_MESSAGE });
     }
     if (state.status === "internal_error") {
-      showToast(AUTH_GLOBAL_ERROR_MESSAGE);
+      setError("root", { type: "server", message: AUTH_GLOBAL_ERROR_MESSAGE });
     }
-  }, [state]);
+  }, [state, setError, clearErrors]);
 
   // react-hook-form 검증을 통과한 값만 Server Action에 전달한다.
   // native form action과 handleSubmit은 충돌할 수 있으므로 FormData를 직접 구성해 dispatch한다.
   const onSubmit = handleSubmit((data) => {
+    // 이전 시도의 오류가 남아 있으면 재시도 결과와 섞여 보인다.
+    clearErrors("root");
+
     const formData = new FormData();
     formData.set("email", data.email);
 
@@ -156,6 +161,9 @@ export function ForgotPasswordForm({ action }: ForgotPasswordFormProps) {
           {isPending ? "전송 중..." : "비밀번호 재설정 메일 받기"}
         </Button>
       </form>
+
+      {/* rate limit·서버 오류를 여기 남긴다. grid 밖에 두어 3열 배치를 흐트러뜨리지 않는다. */}
+      <AuthenticationError error={errors.root} />
     </div>
   );
 }

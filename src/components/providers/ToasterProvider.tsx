@@ -21,6 +21,9 @@ export function ToasterProvider() {
       //  이는 shadcn/ui의 기본 토스트 위치와 일치]
       richColors
       // [설명: 토스트 색상을 자동으로 variant에 맞춰 설정함]
+      closeButton
+      // [설명: 오류 토스트는 showToast에서 duration: Infinity로 띄우므로
+      //  사용자가 직접 닫을 수단이 반드시 있어야 함]
     />
   );
 }

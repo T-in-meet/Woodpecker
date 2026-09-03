@@ -100,7 +100,7 @@ describe("OAuthButtons", () => {
     expect(callbackUrl.searchParams.get("redirect")).toBe("/notes/today");
   });
 
-  it("OAuth 시작 실패 시 destructive toast를 표시한다", async () => {
+  it("OAuth 시작 실패 시 버튼 아래에 오류 문구를 남긴다", async () => {
     const user = userEvent.setup();
     signInWithOAuthMock.mockResolvedValue({
       error: new Error("provider is not enabled"),
@@ -112,15 +112,11 @@ describe("OAuthButtons", () => {
       screen.getByRole("button", { name: "Google 계정으로 계속하기" }),
     );
 
-    await waitFor(() => {
-      expect(showToast).toHaveBeenCalledWith(
-        "소셜 로그인을 시작할 수 없습니다. 잠시 후 다시 시도해주세요.",
-        {
-          variant: "destructive",
-          dedupeKey: "auth-oauth-google",
-        },
-      );
-    });
+    // 재시도가 필요한 오류라 사라지는 toast가 아니라 버튼 아래에 남는다.
+    expect(await screen.findByTestId("form-error")).toHaveTextContent(
+      "소셜 로그인을 시작할 수 없습니다. 잠시 후 다시 시도해주세요.",
+    );
+    expect(showToast).not.toHaveBeenCalled();
   });
 
   it("beforeSignIn이 false를 반환하면 OAuth 로그인을 시작하지 않는다", async () => {

@@ -18,6 +18,7 @@ import {
   authEmailFormSchema,
   AuthEmailFormValues,
 } from "../schemas/authEmailFormSchema";
+import AuthenticationError from "./AuthenticationError";
 
 type AuthEmailFormState = ResendEmailActionState | ForgotPasswordActionState;
 
@@ -226,6 +227,9 @@ export const AuthEmailForm = <TState extends AuthEmailFormState>({
               : "인증 번호 다시 받기"}
         </Button>
       </form>
+
+      {/* rate limit·서버 오류를 여기 남긴다. grid 밖에 두어 3열 배치를 흐트러뜨리지 않는다. */}
+      <AuthenticationError error={errors.root} />
     </div>
   );
 };

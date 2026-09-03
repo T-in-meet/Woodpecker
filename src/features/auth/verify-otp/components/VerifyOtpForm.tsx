@@ -21,7 +21,6 @@ import {
   type VerifyOtpFormValues,
 } from "@/features/auth/verify-otp/schemas/verifyOtpFormSchema";
 import { ROUTES } from "@/lib/constants/routes";
-import { showToast } from "@/lib/utils/showToast";
 
 type VerifyOtpFormProps = {
   action: (
@@ -83,11 +82,11 @@ const VerifyOtpForm = ({
    *
    * - blocked:
    *   rate limit 정책에 의해 요청이 차단된 상태.
-   *   destructive toast로 안내한다.
+   *   form-level 인증 에러로 표시한다.
    *
    * - internal_error:
    *   사용자가 직접 해결할 수 없는 시스템 오류 상태.
-   *   일반화된 글로벌 에러 메시지를 toast로 표시한다.
+   *   일반화된 글로벌 에러 메시지를 form-level 에러로 표시한다.
    */
   useEffect(() => {
     switch (state.status) {
@@ -109,17 +108,19 @@ const VerifyOtpForm = ({
         });
         return;
 
+      // blocked/internal_error 모두 "다시 시도"가 필요한 오류다. 사라지는 토스트
+      // 대신 invalid_otp와 같은 자리(AuthenticationError)에 남긴다.
       case "blocked":
-        showToast(RATE_LIMIT_TOAST_MESSAGE, {
-          variant: "destructive",
-          dedupeKey: "auth-rate-limit",
+        setError("root", {
+          type: "server",
+          message: RATE_LIMIT_TOAST_MESSAGE,
         });
         return;
 
       case "internal_error":
-        showToast(AUTH_GLOBAL_ERROR_MESSAGE, {
-          variant: "destructive",
-          dedupeKey: "auth-global-error",
+        setError("root", {
+          type: "server",
+          message: AUTH_GLOBAL_ERROR_MESSAGE,
         });
         return;
 

@@ -2,9 +2,14 @@
  * LoginForm 전역 에러 처리 테스트
  *
  * 검증 범위:
- * - network/server/timeout 에러 → showToast 호출
- * - rate limit 에러 → showToast 호출
- * - 알 수 없는 에러 → showToast 호출
+ * - network/server/timeout 에러 → 폼 안에 남는 오류 문구
+ * - rate limit 에러 → 폼 안에 남는 오류 문구
+ * - 알 수 없는 에러 → 폼 안에 남는 오류 문구
+ * - OAuth callback 실패 query → toast (폼 제출 결과가 아니라 도착 시 알림)
+ *
+ * 재시도가 필요한 오류는 사라지는 toast가 아니라 자격증명 오류와 같은 자리
+ * (data-testid="form-error")에 남는다. 그래서 이 파일은 showToast 호출이 아니라
+ * 화면에 보이는 문구를 검증한다.
  */
 
 import { screen, waitFor } from "@testing-library/react";
@@ -33,60 +38,54 @@ async function submitValidForm(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: /^로그인$/ }));
 }
 
+/**
+ * 폼 안에 오류 문구가 남았는지 확인한다.
+ *
+ * @param message 기대하는 오류 문구(부분 일치)
+ */
+async function expectFormError(message: string | RegExp) {
+  const formError = await screen.findByTestId("form-error");
+
+  expect(formError).toHaveTextContent(message);
+  expect(showToast).not.toHaveBeenCalled();
+}
+
 describe("LoginForm 전역 에러 처리", () => {
   beforeEach(() => {
     setupDefaultMocks();
   });
 
-  it("network 에러가 발생하면 showToast가 호출된다", async () => {
+  it("network 에러가 발생하면 폼 안에 오류 문구가 남는다", async () => {
     mockMutateAsync.mockRejectedValue({ type: "network" });
     const user = userEvent.setup();
     renderLoginForm();
 
     await submitValidForm(user);
 
-    await waitFor(() => {
-      expect(showToast).toHaveBeenCalledWith("네트워크 연결을 확인해주세요", {
-        variant: "destructive",
-        dedupeKey: "auth-global-network",
-      });
-    });
+    await expectFormError("네트워크 연결을 확인해주세요");
   });
 
-  it("server 에러가 발생하면 showToast가 호출된다", async () => {
+  it("server 에러가 발생하면 폼 안에 오류 문구가 남는다", async () => {
     mockMutateAsync.mockRejectedValue({ type: "server" });
     const user = userEvent.setup();
     renderLoginForm();
 
     await submitValidForm(user);
 
-    await waitFor(() => {
-      expect(showToast).toHaveBeenCalledWith("잠시 후 다시 시도해주세요", {
-        variant: "destructive",
-        dedupeKey: "auth-global-server",
-      });
-    });
+    await expectFormError("잠시 후 다시 시도해주세요");
   });
 
-  it("timeout 에러가 발생하면 showToast가 호출된다", async () => {
+  it("timeout 에러가 발생하면 폼 안에 오류 문구가 남는다", async () => {
     mockMutateAsync.mockRejectedValue({ type: "timeout" });
     const user = userEvent.setup();
     renderLoginForm();
 
     await submitValidForm(user);
 
-    await waitFor(() => {
-      expect(showToast).toHaveBeenCalledWith(
-        "요청 시간이 초과되었습니다. 다시 시도해주세요",
-        {
-          variant: "destructive",
-          dedupeKey: "auth-global-timeout",
-        },
-      );
-    });
+    await expectFormError("요청 시간이 초과되었습니다. 다시 시도해주세요");
   });
 
-  it("rate limit 에러가 발생하면 showToast가 호출된다", async () => {
+  it("rate limit 에러가 발생하면 폼 안에 오류 문구가 남는다", async () => {
     mockMutateAsync.mockRejectedValue({
       success: false,
       code: AUTH_API_CODES.LOGIN_RATE_LIMIT_EXCEEDED,
@@ -97,30 +96,17 @@ describe("LoginForm 전역 에러 처리", () => {
 
     await submitValidForm(user);
 
-    await waitFor(() => {
-      expect(showToast).toHaveBeenCalledWith(
-        expect.stringContaining("요청이 너무 많습니다"),
-        {
-          variant: "destructive",
-          dedupeKey: "auth-rate-limit",
-        },
-      );
-    });
+    await expectFormError(/요청이 너무 많습니다/);
   });
 
-  it("알 수 없는 에러가 발생하면 일시적인 오류 toast가 호출된다", async () => {
+  it("알 수 없는 에러가 발생하면 폼 안에 오류 문구가 남는다", async () => {
     mockMutateAsync.mockRejectedValue(new Error("unexpected"));
     const user = userEvent.setup();
     renderLoginForm();
 
     await submitValidForm(user);
 
-    await waitFor(() => {
-      expect(showToast).toHaveBeenCalledWith("일시적인 오류가 발생했습니다.", {
-        variant: "destructive",
-        dedupeKey: "auth-unknown-error",
-      });
-    });
+    await expectFormError("일시적인 오류가 발생했습니다.");
   });
 
   it("OAuth callback 실패 query가 있으면 소셜 로그인 실패 toast를 표시한다", async () => {

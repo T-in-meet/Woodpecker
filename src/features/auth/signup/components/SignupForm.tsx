@@ -205,26 +205,19 @@ export function SignupForm({
         return;
       }
 
+      // 아래 세 가지는 모두 "다시 시도"가 필요한 오류라 사라지는 토스트로 알리면
+      // 재시도할 근거가 화면에서 없어진다. 제출 버튼 옆 root 오류 자리에 남긴다.
       if (isRateLimitError(e)) {
-        showToast(RATE_LIMIT_TOAST_MESSAGE, {
-          variant: "destructive",
-          dedupeKey: "auth-rate-limit",
-        });
+        setError("root", { message: RATE_LIMIT_TOAST_MESSAGE });
         return;
       }
 
       if (isGlobalError(e)) {
-        showToast(GLOBAL_ERROR_MESSAGES[e.type], {
-          variant: "destructive",
-          dedupeKey: `auth-global-${e.type}`,
-        });
+        setError("root", { message: GLOBAL_ERROR_MESSAGES[e.type] });
         return;
       }
 
-      showToast(UNKNOWN_ERROR_MESSAGE, {
-        variant: "destructive",
-        dedupeKey: "auth-unknown-error",
-      });
+      setError("root", { message: UNKNOWN_ERROR_MESSAGE });
     }
   };
 

@@ -7,7 +7,8 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
-import { showToast } from "@/lib/utils/showToast";
+
+import AuthenticationError from "./AuthenticationError";
 
 type OAuthProviderConfig = {
   provider: Provider;
@@ -59,11 +60,16 @@ export function OAuthButtons({
   showSeparator = true,
 }: OAuthButtonsProps) {
   const [pendingProvider, setPendingProvider] = useState<Provider | null>(null);
+  // 재시도가 필요한 오류라 사라지는 toast 대신 버튼 아래에 남긴다.
+  const [error, setError] = useState<string | null>(null);
 
   /**
    * 선택한 OAuth provider로 로그인 또는 회원가입을 시작한다.
    */
   const handleOAuthSignIn = async (provider: Provider) => {
+    // 이전 시도의 오류가 남아 있으면 재시도 결과와 섞여 보인다.
+    setError(null);
+
     // 회원가입 화면에서는 약관 동의 여부를 확인한 뒤 OAuth redirect를 시작한다.
     if (beforeSignIn && !(await beforeSignIn())) {
       return;
@@ -72,22 +78,16 @@ export function OAuthButtons({
     setPendingProvider(provider);
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOAuth({
+    const { error: signInError } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
         redirectTo: buildCallbackUrl(intent, redirect),
       },
     });
 
-    if (error) {
+    if (signInError) {
       setPendingProvider(null);
-      showToast(
-        "소셜 로그인을 시작할 수 없습니다. 잠시 후 다시 시도해주세요.",
-        {
-          variant: "destructive",
-          dedupeKey: `auth-oauth-${provider}`,
-        },
-      );
+      setError("소셜 로그인을 시작할 수 없습니다. 잠시 후 다시 시도해주세요.");
     }
   };
 
@@ -136,6 +136,8 @@ export function OAuthButtons({
           );
         })}
       </div>
+
+      <AuthenticationError error={error ? { message: error } : undefined} />
     </div>
   );
 }

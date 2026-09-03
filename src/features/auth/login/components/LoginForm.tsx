@@ -135,29 +135,23 @@ export function LoginForm() {
         return;
       }
 
-      // rate limit — 토스트로 안내
+      // 아래 세 가지는 모두 "다시 시도"가 필요한 오류다. 사라지는 토스트로 알리면
+      // 재시도할 근거가 화면에서 없어지므로, 자격증명 오류와 같은 자리에 남긴다.
+
+      // rate limit
       if (isRateLimitError(e)) {
-        showToast(RATE_LIMIT_TOAST_MESSAGE, {
-          variant: "destructive",
-          dedupeKey: "auth-rate-limit",
-        });
+        setError("root", { message: RATE_LIMIT_TOAST_MESSAGE });
         return;
       }
 
-      // 네트워크/서버/타임아웃 에러 — 토스트로 안내
+      // 네트워크/서버/타임아웃 에러
       if (isGlobalError(e)) {
-        showToast(GLOBAL_ERROR_MESSAGES[e.type], {
-          variant: "destructive",
-          dedupeKey: `auth-global-${e.type}`,
-        });
+        setError("root", { message: GLOBAL_ERROR_MESSAGES[e.type] });
         return;
       }
 
       // 그 외 예상하지 못한 에러 — 최소한의 피드백 보장
-      showToast(UNKNOWN_ERROR_MESSAGE, {
-        variant: "destructive",
-        dedupeKey: "auth-unknown-error",
-      });
+      setError("root", { message: UNKNOWN_ERROR_MESSAGE });
     }
   };
 

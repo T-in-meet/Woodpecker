@@ -83,6 +83,18 @@ describe("회원가입 전역 에러 처리", () => {
     await user.click(screen.getByRole("button", { name: /회원가입/i }));
   }
 
+  /**
+   * 제출 버튼 위 전역 오류 영역에 문구가 남았는지 확인한다.
+   *
+   * @param message 기대하는 오류 문구(부분 일치)
+   */
+  async function expectFormError(message: string | RegExp) {
+    const formError = await screen.findByTestId("form-error");
+
+    expect(formError).toHaveTextContent(message);
+    expect(showToast).not.toHaveBeenCalled();
+  }
+
   it("TC-01: network 에러가 발생하면 상단 전역 에러 UI를 표시한다", async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn().mockRejectedValue(networkError);
@@ -90,12 +102,7 @@ describe("회원가입 전역 에러 처리", () => {
 
     await submitValidForm(user);
 
-    await waitFor(() => {
-      expect(showToast).toHaveBeenCalledWith("네트워크 연결을 확인해주세요", {
-        variant: "destructive",
-        dedupeKey: "auth-global-network",
-      });
-    });
+    await expectFormError("네트워크 연결을 확인해주세요");
   });
 
   it("TC-02: server 에러가 발생하면 상단 전역 에러 UI를 표시한다", async () => {
@@ -105,12 +112,7 @@ describe("회원가입 전역 에러 처리", () => {
 
     await submitValidForm(user);
 
-    await waitFor(() => {
-      expect(showToast).toHaveBeenCalledWith("잠시 후 다시 시도해주세요", {
-        variant: "destructive",
-        dedupeKey: "auth-global-server",
-      });
-    });
+    await expectFormError("잠시 후 다시 시도해주세요");
   });
 
   it("TC-03: timeout 에러가 발생하면 상단 전역 에러 UI를 표시한다", async () => {
@@ -120,15 +122,7 @@ describe("회원가입 전역 에러 처리", () => {
 
     await submitValidForm(user);
 
-    await waitFor(() => {
-      expect(showToast).toHaveBeenCalledWith(
-        "요청 시간이 초과되었습니다. 다시 시도해주세요",
-        {
-          variant: "destructive",
-          dedupeKey: "auth-global-timeout",
-        },
-      );
-    });
+    await expectFormError("요청 시간이 초과되었습니다. 다시 시도해주세요");
   });
 
   it("TC-04: submit 실패 후 UI가 loading 상태에 고정되지 않는다", async () => {
@@ -142,12 +136,7 @@ describe("회원가입 전역 에러 처리", () => {
 
     await submitValidForm(user);
 
-    await waitFor(() => {
-      expect(showToast).toHaveBeenCalledWith("잠시 후 다시 시도해주세요", {
-        variant: "destructive",
-        dedupeKey: "auth-global-server",
-      });
-    });
+    await expectFormError("잠시 후 다시 시도해주세요");
     expect(
       screen.getByRole("button", { name: /^회원가입$/ }),
     ).not.toBeDisabled();
@@ -166,9 +155,7 @@ describe("회원가입 전역 에러 처리", () => {
       nickname: "tester",
     });
 
-    await waitFor(() => {
-      expect(showToast).toHaveBeenCalled();
-    });
+    await expectFormError("네트워크 연결을 확인해주세요");
 
     expect(screen.getByLabelText(/이메일/i)).toHaveValue("test@example.com");
     expect(screen.getByLabelText(/^비밀번호$/i)).toHaveValue("12345678");
@@ -198,7 +185,8 @@ describe("회원가입 전역 에러 처리", () => {
     expect(await within(emailField!).findByRole("alert")).toBeInTheDocument();
     expect(within(nicknameField!).getByRole("alert")).toBeInTheDocument();
 
-    // 글로벌 에러 toast는 호출되지 않아야 함
+    // 필드 에러만 표시되고 전역(root) 에러 영역은 비어 있어야 함
+    expect(screen.queryByTestId("form-error")).not.toBeInTheDocument();
     expect(showToast).not.toHaveBeenCalled();
   });
 });

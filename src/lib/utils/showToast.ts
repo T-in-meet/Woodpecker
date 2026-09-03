@@ -43,7 +43,7 @@ type ShowToastOptions = {
  * @param message - 표시할 메시지
  * @param options - 토스트 옵션
  *   - variant: "default" | "destructive" (기본값: "default")
- *   - duration: 표시 시간(ms) (기본값: 3000)
+ *   - duration: 표시 시간(ms) (기본값: 성공 3000, 오류는 자동으로 닫지 않음)
  *   - dedupeKey: 동일 의미 toast 중복 방지 키
  *
  * 예시:
@@ -62,7 +62,14 @@ export function showToast(
   message: string,
   options: ShowToastOptions = {},
 ): void {
-  const { variant = "default", duration = 3000, dedupeKey } = options;
+  const { variant = "default", dedupeKey } = options;
+
+  // 오류는 사용자가 무언가 해야 한다는 뜻이라 스스로 사라지면 안 된다.
+  // 3초 뒤 증발하면 "다시 시도"할 근거가 화면에서 없어진다.
+  // 전역 Toaster의 closeButton으로 직접 닫는다.
+  // 성공 안내는 읽고 흘려보내면 되므로 기존대로 3초 뒤 사라진다.
+  const duration =
+    options.duration ?? (variant === "destructive" ? Infinity : 3000);
 
   const toastOptions = {
     duration,
