@@ -129,8 +129,12 @@ export function NotesToolbar({ initialQuery, activeView }: NotesToolbarProps) {
         />
         {query ? (
           <button
+            // 아이콘 자체는 14px이라 히트 영역만 ::after로 넓힌다. 입력 필드가 h-9라
+            // 실제 크기를 키우면 넘치고, 좌우에 다른 클릭 대상이 없어 겹칠 일도 없다.
+            // 가로는 입력이 이미 비워 둔 pr-8(32px)에 맞춰 w-9까지만 넓혀
+            // 검색어 끝을 탭해 커서를 놓는 동작을 가로채지 않게 한다.
             onClick={handleClear}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 cursor-pointer text-muted-foreground hover:text-foreground"
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 cursor-pointer text-muted-foreground after:absolute after:left-1/2 after:top-1/2 after:h-11 after:w-9 after:-translate-x-1/2 after:-translate-y-1/2 after:content-[''] hover:text-foreground"
             aria-label="검색어 지우기"
           >
             <X className="h-3.5 w-3.5" />

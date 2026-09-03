@@ -336,7 +336,13 @@ export function NotificationSchedulePicker({
                     size="xs"
                     aria-pressed={isSelected}
                     disabled={isPending}
-                    className={cn(isSelected && "bg-muted text-foreground")}
+                    // xs(24px)는 배지 크기라 buttonVariants에서 터치 분기를 두지 않는다.
+                    // 여기는 실제로 손가락으로 고르는 칩이고 flex-wrap 안이라
+                    // 커져도 줄바꿈으로 흡수되므로 이 사용처에서만 40px로 올린다.
+                    className={cn(
+                      "pointer-coarse:h-10",
+                      isSelected && "bg-muted text-foreground",
+                    )}
                     onClick={() => {
                       handleSelectDateKey(offset.dateKey);
                     }}
