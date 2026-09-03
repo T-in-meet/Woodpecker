@@ -45,7 +45,7 @@ export function NoteListItem({
   const contentPreview = getNoteSearchPreview(note.title, note.content, query);
   const reviewTextClass =
     reviewSchedule.tone === "overdue"
-      ? "rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
+      ? "rounded-full bg-pink-100 px-2 py-0.5 text-xs font-medium text-pink-800"
       : reviewSchedule.tone === "today"
         ? "rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800"
         : reviewSchedule.tone === "upcoming"
