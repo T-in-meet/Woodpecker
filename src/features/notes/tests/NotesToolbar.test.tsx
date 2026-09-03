@@ -119,6 +119,25 @@ describe("NotesToolbar", () => {
     expect(pushMock).not.toHaveBeenCalled();
   });
 
+  it("IME 조합 중 Enter는 검색을 제출하지 않는다", () => {
+    render(<NotesToolbar initialQuery="" activeView="all" />);
+    const input = screen.getByPlaceholderText("제목 또는 내용 검색");
+
+    fireEvent.change(input, { target: { value: "테스트" } });
+    fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+
+    expect(pushMock).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+
+    expect(pushMock).toHaveBeenCalledTimes(1);
+    expect(pushMock).toHaveBeenCalledWith(
+      "/notes?q=%ED%85%8C%EC%8A%A4%ED%8A%B8",
+    );
+  });
+
   it("검색창을 form으로 감싸 Enter 제출과 search 랜드마크를 제공한다", () => {
     render(<NotesToolbar initialQuery="" activeView="all" />);
 

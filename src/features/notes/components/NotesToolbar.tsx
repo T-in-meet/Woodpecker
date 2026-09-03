@@ -75,7 +75,7 @@ export function NotesToolbar({ initialQuery, activeView }: NotesToolbarProps) {
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
-    if (event.key !== "Enter") return;
+    if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
 
     // 여기서 막지 않으면 form의 암묵적 제출까지 함께 일어나 이동이 두 번 난다.
     event.preventDefault();
