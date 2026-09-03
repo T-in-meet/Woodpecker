@@ -155,9 +155,17 @@ SELECT set_config(
 -- 1. Update Reason
 -- ============================================================================
 
+-- relation ID로 manual 관계 reason을 수정할 수 있어야 합니다.
 SELECT public.update_note_related_manual_reason(
     current_setting('test.related_notes_update_source_id')::uuid,
-    current_setting('test.related_notes_update_manual_target_id')::uuid,
+    (
+        SELECT id
+        FROM public.note_related_notes
+        WHERE note_id =
+                current_setting('test.related_notes_update_source_id')::uuid
+          AND related_note_id =
+                current_setting('test.related_notes_update_manual_target_id')::uuid
+    ),
     '  수정된 이유  '
 );
 
@@ -183,9 +191,17 @@ SELECT is(
 -- 2. Remove Reason
 -- ============================================================================
 
+-- relation ID로 manual 관계 reason만 제거할 수 있어야 합니다.
 SELECT public.update_note_related_manual_reason(
     current_setting('test.related_notes_update_source_id')::uuid,
-    current_setting('test.related_notes_update_manual_target_id')::uuid,
+    (
+        SELECT id
+        FROM public.note_related_notes
+        WHERE note_id =
+                current_setting('test.related_notes_update_source_id')::uuid
+          AND related_note_id =
+                current_setting('test.related_notes_update_manual_target_id')::uuid
+    ),
     '   '
 );
 
@@ -210,9 +226,17 @@ SELECT is(
 -- 3. Update Reason From Reverse View
 -- ============================================================================
 
+-- relation ID와 화면 기준 Note 조합이면 역방향 화면에서도 같은 row를 수정해야 합니다.
 SELECT public.update_note_related_manual_reason(
     current_setting('test.related_notes_update_manual_target_id')::uuid,
-    current_setting('test.related_notes_update_source_id')::uuid,
+    (
+        SELECT id
+        FROM public.note_related_notes
+        WHERE note_id =
+                current_setting('test.related_notes_update_source_id')::uuid
+          AND related_note_id =
+                current_setting('test.related_notes_update_manual_target_id')::uuid
+    ),
     '역방향 수정 이유'
 );
 
@@ -238,6 +262,7 @@ SELECT is(
 -- 4. AI Relation
 -- ============================================================================
 
+-- relation ID가 AI 관계를 가리키면 manual reason 수정은 거부해야 합니다.
 SELECT throws_ok(
     format(
         $sql$
@@ -248,7 +273,14 @@ SELECT throws_ok(
             );
         $sql$,
         current_setting('test.related_notes_update_source_id'),
-        current_setting('test.related_notes_update_ai_target_id')
+        (
+            SELECT id::text
+            FROM public.note_related_notes
+            WHERE note_id =
+                    current_setting('test.related_notes_update_source_id')::uuid
+              AND related_note_id =
+                    current_setting('test.related_notes_update_ai_target_id')::uuid
+        )
     ),
     'P0002',
     'RELATED_NOTE_MANUAL_RELATION_NOT_FOUND',
@@ -260,6 +292,7 @@ SELECT throws_ok(
 -- 5. Target Ownership
 -- ============================================================================
 
+-- relation ID가 다른 사용자의 target Note를 포함하면 수정할 수 없어야 합니다.
 SELECT throws_ok(
     format(
         $sql$
@@ -270,7 +303,14 @@ SELECT throws_ok(
             );
         $sql$,
         current_setting('test.related_notes_update_source_id'),
-        current_setting('test.related_notes_update_foreign_target_id')
+        (
+            SELECT id::text
+            FROM public.note_related_notes
+            WHERE note_id =
+                    current_setting('test.related_notes_update_source_id')::uuid
+              AND related_note_id =
+                    current_setting('test.related_notes_update_foreign_target_id')::uuid
+        )
     ),
     'P0002',
     'RELATED_NOTE_TARGET_NOT_FOUND',

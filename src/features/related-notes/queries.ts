@@ -226,7 +226,7 @@ export async function getRelatedNotes(
   const relatedNotesQuery = supabase
     .from("note_related_notes")
     .select(
-      "note_id, related_note_id, origin, metadata, source_note:notes!note_related_notes_note_id_fkey(title), related_note:notes!note_related_notes_related_note_id_fkey(title)",
+      "id, note_id, related_note_id, origin, metadata, source_note:notes!note_related_notes_note_id_fkey(title), related_note:notes!note_related_notes_related_note_id_fkey(title)",
     )
     .eq("status", "active")
     .or(
@@ -378,11 +378,13 @@ export async function getRelatedNotes(
           noteId: relatedNote.id,
           origin: "ai",
           ...row.metadata,
+          relationId: row.id,
           title: relatedNote.title,
         };
       }
 
       return {
+        relationId: row.id,
         noteId: relatedNote.id,
         origin: "manual",
         title: relatedNote.title,

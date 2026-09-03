@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(12);
+SELECT plan(14);
 
 
 -- ============================================================================
@@ -146,6 +146,32 @@ SELECT lives_ok(
         current_setting('test.related_notes_note_b_id')
     ),
     'valid AI relationship should be insertable'
+);
+
+-- 신규 관계 row는 자동 생성된 relation ID를 가져야 합니다.
+SELECT ok(
+    (
+        SELECT id IS NOT NULL
+        FROM public.note_related_notes
+        WHERE note_id =
+                current_setting('test.related_notes_note_a_id')::uuid
+          AND related_note_id =
+                current_setting('test.related_notes_note_b_id')::uuid
+    ),
+    'new relationship should get a generated relation id'
+);
+
+-- relation ID는 row마다 고유해야 합니다.
+SELECT is(
+    (
+        SELECT count(DISTINCT id)
+        FROM public.note_related_notes
+    ),
+    (
+        SELECT count(*)
+        FROM public.note_related_notes
+    ),
+    'relationship relation ids should be unique'
 );
 
 

@@ -927,6 +927,7 @@ export type Database = {
       note_related_notes: {
         Row: {
           created_at: string;
+          id: string;
           metadata: Json;
           note_id: string;
           origin: string;
@@ -936,6 +937,7 @@ export type Database = {
         };
         Insert: {
           created_at?: string;
+          id?: string;
           metadata?: Json;
           note_id: string;
           origin: string;
@@ -945,6 +947,7 @@ export type Database = {
         };
         Update: {
           created_at?: string;
+          id?: string;
           metadata?: Json;
           note_id?: string;
           origin?: string;
@@ -1964,7 +1967,7 @@ export type Database = {
         Returns: string;
       };
       complete_related_note_recommendation_execution_claim: {
-        Args: { p_claim_id: string; p_status: string };
+        Args: { p_claim_id: string; p_status: string; p_user_id: string };
         Returns: string;
       };
       complete_review_and_schedule_next: {
@@ -2037,7 +2040,7 @@ export type Database = {
         Returns: number;
       };
       delete_note_related: {
-        Args: { p_note_id: string; p_related_note_id: string };
+        Args: { p_note_id: string; p_relation_id: string };
         Returns: undefined;
       };
       finalize_quiz_generation_v2:
@@ -2279,11 +2282,7 @@ export type Database = {
         }[];
       };
       update_note_related_manual_reason: {
-        Args: {
-          p_note_id: string;
-          p_reason?: string;
-          p_related_note_id: string;
-        };
+        Args: { p_note_id: string; p_reason?: string; p_relation_id: string };
         Returns: undefined;
       };
       update_notification_schedule: {

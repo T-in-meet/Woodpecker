@@ -234,7 +234,7 @@ describe("addManualRelatedNotesAction", () => {
 
 describe("updateManualRelatedNoteReasonAction", () => {
   const noteId = "11111111-1111-4111-8111-111111111111";
-  const relatedNoteId = "22222222-2222-4222-8222-222222222222";
+  const relationId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -252,7 +252,7 @@ describe("updateManualRelatedNoteReasonAction", () => {
 
     const result = await updateManualRelatedNoteReasonAction({
       noteId,
-      relatedNoteId,
+      relationId,
       reason: "수정된 연결 이유",
     });
 
@@ -263,7 +263,7 @@ describe("updateManualRelatedNoteReasonAction", () => {
 
     expect(rpc).toHaveBeenCalledWith("update_note_related_manual_reason", {
       p_note_id: noteId,
-      p_related_note_id: relatedNoteId,
+      p_relation_id: relationId,
       p_reason: "수정된 연결 이유",
     });
 
@@ -284,13 +284,13 @@ describe("updateManualRelatedNoteReasonAction", () => {
 
     const result = await updateManualRelatedNoteReasonAction({
       noteId,
-      relatedNoteId,
+      relationId,
       reason: "",
     });
 
     expect(rpc).toHaveBeenCalledWith("update_note_related_manual_reason", {
       p_note_id: noteId,
-      p_related_note_id: relatedNoteId,
+      p_relation_id: relationId,
     });
 
     expect(result).toEqual({
@@ -301,7 +301,7 @@ describe("updateManualRelatedNoteReasonAction", () => {
   it("입력값이 올바르지 않으면 RPC를 호출하지 않는다", async () => {
     const result = await updateManualRelatedNoteReasonAction({
       noteId: "invalid-note-id",
-      relatedNoteId,
+      relationId,
       reason: "연결 이유",
     });
 
@@ -326,7 +326,7 @@ describe("updateManualRelatedNoteReasonAction", () => {
 
     const result = await updateManualRelatedNoteReasonAction({
       noteId,
-      relatedNoteId,
+      relationId,
       reason: "수정된 연결 이유",
     });
 
@@ -350,7 +350,7 @@ describe("updateManualRelatedNoteReasonAction", () => {
 
     const result = await updateManualRelatedNoteReasonAction({
       noteId,
-      relatedNoteId,
+      relationId,
       reason: "수정된 연결 이유",
     });
 
@@ -374,7 +374,7 @@ describe("updateManualRelatedNoteReasonAction", () => {
 
     const result = await updateManualRelatedNoteReasonAction({
       noteId,
-      relatedNoteId,
+      relationId,
       reason: "수정된 연결 이유",
     });
 
@@ -386,7 +386,7 @@ describe("updateManualRelatedNoteReasonAction", () => {
 
 describe("deleteRelatedNoteAction", () => {
   const noteId = "11111111-1111-4111-8111-111111111111";
-  const relatedNoteId = "22222222-2222-4222-8222-222222222222";
+  const relationId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -404,7 +404,7 @@ describe("deleteRelatedNoteAction", () => {
 
     const result = await deleteRelatedNoteAction({
       noteId,
-      relatedNoteId,
+      relationId,
     });
 
     expect(requireCurrentLegalAcceptanceMock).toHaveBeenCalledWith(
@@ -414,7 +414,7 @@ describe("deleteRelatedNoteAction", () => {
 
     expect(rpc).toHaveBeenCalledWith("delete_note_related", {
       p_note_id: noteId,
-      p_related_note_id: relatedNoteId,
+      p_relation_id: relationId,
     });
 
     expect(result).toEqual({
@@ -425,7 +425,7 @@ describe("deleteRelatedNoteAction", () => {
   it("입력값이 올바르지 않으면 RPC를 호출하지 않는다", async () => {
     const result = await deleteRelatedNoteAction({
       noteId: "invalid-note-id",
-      relatedNoteId,
+      relationId,
     });
 
     expect(result).toEqual({
@@ -449,7 +449,7 @@ describe("deleteRelatedNoteAction", () => {
 
     const result = await deleteRelatedNoteAction({
       noteId,
-      relatedNoteId,
+      relationId,
     });
 
     expect(result).toEqual({
@@ -472,7 +472,7 @@ describe("deleteRelatedNoteAction", () => {
 
     const result = await deleteRelatedNoteAction({
       noteId,
-      relatedNoteId,
+      relationId,
     });
 
     expect(result).toEqual({

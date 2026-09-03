@@ -202,7 +202,7 @@ export async function updateManualRelatedNoteReasonAction(
 
   const { error } = await supabase.rpc("update_note_related_manual_reason", {
     p_note_id: parsed.data.noteId,
-    p_related_note_id: parsed.data.relatedNoteId,
+    p_relation_id: parsed.data.relationId,
     ...(parsed.data.reason
       ? {
           p_reason: parsed.data.reason,
@@ -291,7 +291,7 @@ export async function deleteRelatedNoteAction(
 
   const { error } = await supabase.rpc("delete_note_related", {
     p_note_id: parsed.data.noteId,
-    p_related_note_id: parsed.data.relatedNoteId,
+    p_relation_id: parsed.data.relationId,
   });
 
   if (error) {

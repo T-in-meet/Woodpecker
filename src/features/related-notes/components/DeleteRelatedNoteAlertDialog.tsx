@@ -20,8 +20,8 @@ type DeleteRelatedNoteAlertDialogProps = {
   /** Related Notes가 연결된 기준 Note ID입니다. */
   noteId: string;
 
-  /** 삭제할 Related Note ID입니다. */
-  relatedNoteId: string;
+  /** 삭제할 Related Notes 관계 row ID입니다. */
+  relationId: string;
 
   /** 삭제 확인 문구에 표시할 Related Note 제목입니다. */
   title: string;
@@ -46,7 +46,7 @@ type DeleteRelatedNoteAlertDialogProps = {
  */
 export function DeleteRelatedNoteAlertDialog({
   noteId,
-  relatedNoteId,
+  relationId,
   title,
   origin,
   children,
@@ -59,7 +59,7 @@ export function DeleteRelatedNoteAlertDialog({
     try {
       await deleteRelatedNoteMutation.mutateAsync({
         noteId,
-        relatedNoteId,
+        relationId,
       });
 
       toast.success(
