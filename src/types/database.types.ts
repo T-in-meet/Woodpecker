@@ -411,6 +411,42 @@ export type Database = {
           },
         ];
       };
+      ai_runs: {
+        Row: {
+          completed_at: string | null;
+          created_at: string;
+          feature_ids: string[];
+          feature_type: string;
+          id: string;
+          snapshots: Json;
+          started_at: string;
+          status: string;
+          user_id: string;
+        };
+        Insert: {
+          completed_at?: string | null;
+          created_at?: string;
+          feature_ids?: string[];
+          feature_type: string;
+          id?: string;
+          snapshots: Json;
+          started_at: string;
+          status?: string;
+          user_id: string;
+        };
+        Update: {
+          completed_at?: string | null;
+          created_at?: string;
+          feature_ids?: string[];
+          feature_type?: string;
+          id?: string;
+          snapshots?: Json;
+          started_at?: string;
+          status?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       ai_setting_configurations: {
         Row: {
           created_at: string;
