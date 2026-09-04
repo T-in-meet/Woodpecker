@@ -14,13 +14,14 @@ CREATE TABLE "public"."ai_runs" (
     -- 해당 Run이 생성한 사용자 노출 결과 row의 ID를 저장합니다.
     -- Related Notes처럼 한 번의 실행에서 여러 결과가 생성될 수 있으므로 uuid[]를 사용합니다.
     -- AI 실행 성공과 이후 결과 저장 성공은 별개의 관심사이므로 빈 배열도 유효합니다.
-    "feature_ids" "uuid"[] DEFAULT '{}'::"uuid"[] NOT NULL,
+    "feature_result_ids" "uuid"[] DEFAULT '{}'::"uuid"[] NOT NULL,
 
     -- AI Run의 현재 상태입니다.
     -- running은 비종료 상태이며 succeeded, failed, stale은 종료 상태입니다.
     "status" "text" DEFAULT 'running'::"text" NOT NULL,
 
     -- 기능별 AI 실행 과정에서 확보된 입력·설정·중간 결과·출력·실패 정보를 저장합니다.
+    -- 여러 단계 Snapshot을 하나의 최상위 JSON object 컨테이너 안에 보존합니다.
     -- 기능별 세부 구조는 애플리케이션의 Snapshot Schema에서 검증하며,
     -- DB에서는 최상위 JSON object 여부만 검증합니다.
     "snapshots" "jsonb" NOT NULL,
@@ -104,9 +105,9 @@ CREATE INDEX "ai_runs_feature_type_started_at_idx"
     ON "public"."ai_runs" ("feature_type", "started_at" DESC);
 
 -- 사용자 노출 결과 row ID를 기준으로 해당 결과를 생성한 Run을 역조회하기 위한 인덱스입니다.
-CREATE INDEX "ai_runs_feature_ids_idx"
+CREATE INDEX "ai_runs_feature_result_ids_idx"
     ON "public"."ai_runs"
-    USING "gin" ("feature_ids");
+    USING "gin" ("feature_result_ids");
 
 -- 비정상 종료 후 running 상태에 남은 Run을 stale 후보로 탐색하기 위한 부분 인덱스입니다.
 CREATE INDEX "ai_runs_running_started_at_idx"
@@ -135,14 +136,14 @@ COMMENT ON COLUMN "public"."ai_runs"."user_id" IS
 COMMENT ON COLUMN "public"."ai_runs"."feature_type" IS
     'AI Run이 수행한 기능의 식별값입니다.';
 
-COMMENT ON COLUMN "public"."ai_runs"."feature_ids" IS
+COMMENT ON COLUMN "public"."ai_runs"."feature_result_ids" IS
     '해당 Run이 생성한 사용자 노출 결과 row의 UUID 목록입니다. 결과 저장 여부와 AI 실행 성공 여부는 분리되므로 빈 배열도 유효합니다.';
 
 COMMENT ON COLUMN "public"."ai_runs"."status" IS
     'AI Run의 lifecycle 상태입니다. running, succeeded, failed, stale 중 하나입니다.';
 
 COMMENT ON COLUMN "public"."ai_runs"."snapshots" IS
-    'AI 실행 중 실제 확보된 입력, 설정, 중간 결과, 출력, 실패 정보를 기능별 Snapshot Schema 구조로 저장합니다.';
+    'AI 실행 중 실제 확보된 입력, 설정, 중간 결과, 출력, 실패 정보를 기능별 Snapshot Schema 구조의 단일 JSON object 컨테이너로 저장합니다.';
 
 COMMENT ON COLUMN "public"."ai_runs"."started_at" IS
     '실제 AI 실행이 시작된 시각입니다.';

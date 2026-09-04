@@ -50,6 +50,7 @@ DECLARE
     "v_reason" text;
     "v_relation_note_id" uuid;
     "v_relation_related_note_id" uuid;
+    "v_affected_rows" integer;
 BEGIN
     -- SECURITY DEFINER 함수이므로 현재 인증 세션의 사용자 ID를 직접 확인합니다.
     "v_user_id" := "auth"."uid"();
@@ -120,7 +121,8 @@ BEGIN
             USING ERRCODE = 'P0002';
     END IF;
 
-    -- 같은 pair에 대한 다른 쓰기와 충돌하지 않도록 기존 pair lock을 유지합니다.
+    -- SECURITY DEFINER 권한으로 service_role 전용 pair lock helper를 호출합니다.
+    -- relation row를 읽은 뒤 lock을 획득하므로, 쓰기 시점에 관계 조건을 다시 확인합니다.
     PERFORM "public"."lock_note_related_note_pair"(
         "v_relation_note_id",
         "v_relation_related_note_id"
@@ -135,7 +137,17 @@ BEGIN
             true
         )
         WHERE "id" = "p_relation_id"
+          AND "note_id" = "v_relation_note_id"
+          AND "related_note_id" = "v_relation_related_note_id"
           AND "origin" = 'manual';
+
+        GET DIAGNOSTICS "v_affected_rows" = ROW_COUNT;
+
+        IF "v_affected_rows" = 0 THEN
+            RAISE EXCEPTION
+                'RELATED_NOTE_MANUAL_RELATION_NOT_FOUND'
+                USING ERRCODE = 'P0002';
+        END IF;
 
         RETURN;
     END IF;
@@ -143,7 +155,17 @@ BEGIN
     UPDATE "public"."note_related_notes"
     SET "metadata" = "metadata" - 'reason'
     WHERE "id" = "p_relation_id"
+      AND "note_id" = "v_relation_note_id"
+      AND "related_note_id" = "v_relation_related_note_id"
       AND "origin" = 'manual';
+
+    GET DIAGNOSTICS "v_affected_rows" = ROW_COUNT;
+
+    IF "v_affected_rows" = 0 THEN
+        RAISE EXCEPTION
+            'RELATED_NOTE_MANUAL_RELATION_NOT_FOUND'
+            USING ERRCODE = 'P0002';
+    END IF;
 END;
 $$;
 
@@ -184,6 +206,7 @@ DECLARE
     "v_origin" text;
     "v_relation_note_id" uuid;
     "v_relation_related_note_id" uuid;
+    "v_affected_rows" integer;
 BEGIN
     -- SECURITY DEFINER 함수이므로 현재 인증 세션의 사용자 ID를 직접 확인합니다.
     "v_user_id" := "auth"."uid"();
@@ -244,7 +267,8 @@ BEGIN
             USING ERRCODE = 'P0002';
     END IF;
 
-    -- 같은 pair에 대한 다른 쓰기와 충돌하지 않도록 기존 pair lock을 유지합니다.
+    -- SECURITY DEFINER 권한으로 service_role 전용 pair lock helper를 호출합니다.
+    -- relation row를 읽은 뒤 lock을 획득하므로, 쓰기 시점에 관계 조건을 다시 확인합니다.
     PERFORM "public"."lock_note_related_note_pair"(
         "v_relation_note_id",
         "v_relation_related_note_id"
@@ -253,7 +277,18 @@ BEGIN
     IF "v_origin" = 'manual' THEN
         DELETE FROM "public"."note_related_notes"
         WHERE "id" = "p_relation_id"
-          AND "origin" = 'manual';
+          AND "note_id" = "v_relation_note_id"
+          AND "related_note_id" = "v_relation_related_note_id"
+          AND "origin" = 'manual'
+          AND "status" = 'active';
+
+        GET DIAGNOSTICS "v_affected_rows" = ROW_COUNT;
+
+        IF "v_affected_rows" = 0 THEN
+            RAISE EXCEPTION
+                'RELATED_NOTE_RELATION_NOT_FOUND'
+                USING ERRCODE = 'P0002';
+        END IF;
 
         RETURN;
     END IF;
@@ -262,7 +297,17 @@ BEGIN
         UPDATE "public"."note_related_notes"
         SET "status" = 'dismissed'
         WHERE "id" = "p_relation_id"
+          AND "note_id" = "v_relation_note_id"
+          AND "related_note_id" = "v_relation_related_note_id"
           AND "origin" = 'ai';
+
+        GET DIAGNOSTICS "v_affected_rows" = ROW_COUNT;
+
+        IF "v_affected_rows" = 0 THEN
+            RAISE EXCEPTION
+                'RELATED_NOTE_RELATION_NOT_FOUND'
+                USING ERRCODE = 'P0002';
+        END IF;
 
         RETURN;
     END IF;

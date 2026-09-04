@@ -415,7 +415,7 @@ export type Database = {
         Row: {
           completed_at: string | null;
           created_at: string;
-          feature_ids: string[];
+          feature_result_ids: string[];
           feature_type: string;
           id: string;
           snapshots: Json;
@@ -426,7 +426,7 @@ export type Database = {
         Insert: {
           completed_at?: string | null;
           created_at?: string;
-          feature_ids?: string[];
+          feature_result_ids?: string[];
           feature_type: string;
           id?: string;
           snapshots: Json;
@@ -437,7 +437,7 @@ export type Database = {
         Update: {
           completed_at?: string | null;
           created_at?: string;
-          feature_ids?: string[];
+          feature_result_ids?: string[];
           feature_type?: string;
           id?: string;
           snapshots?: Json;

@@ -375,22 +375,22 @@ export async function getRelatedNotes(
 
       if (row.origin === "ai") {
         return {
+          ...row.metadata,
           noteId: relatedNote.id,
           origin: "ai",
-          ...row.metadata,
           relationId: row.id,
           title: relatedNote.title,
         };
       }
 
       return {
-        relationId: row.id,
-        noteId: relatedNote.id,
-        origin: "manual",
-        title: relatedNote.title,
         ...(row.metadata.reason !== undefined
           ? { reason: row.metadata.reason }
           : {}),
+        noteId: relatedNote.id,
+        origin: "manual",
+        relationId: row.id,
+        title: relatedNote.title,
       };
     }),
   };

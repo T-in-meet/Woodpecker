@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(5);
+SELECT plan(6);
 
 
 -- ============================================================================
@@ -39,6 +39,18 @@ SELECT set_config(
 
 SELECT set_config(
     'test.related_notes_delete_foreign_target_id',
+    gen_random_uuid()::text,
+    true
+);
+
+SELECT set_config(
+    'test.related_notes_delete_unrelated_source_id',
+    gen_random_uuid()::text,
+    true
+);
+
+SELECT set_config(
+    'test.related_notes_delete_unrelated_target_id',
     gen_random_uuid()::text,
     true
 );
@@ -95,6 +107,20 @@ VALUES
         'Foreign Target',
         'Foreign Target Content',
         0
+    ),
+    (
+        current_setting('test.related_notes_delete_unrelated_source_id')::uuid,
+        current_setting('test.related_notes_delete_user_a_id')::uuid,
+        'Unrelated Source',
+        'Unrelated Source Content',
+        0
+    ),
+    (
+        current_setting('test.related_notes_delete_unrelated_target_id')::uuid,
+        current_setting('test.related_notes_delete_user_a_id')::uuid,
+        'Unrelated Target',
+        'Unrelated Target Content',
+        0
     );
 
 INSERT INTO public.note_related_notes (
@@ -125,6 +151,13 @@ VALUES
         'manual',
         'active',
         '{"title":"Foreign Target"}'::jsonb
+    ),
+    (
+        current_setting('test.related_notes_delete_unrelated_source_id')::uuid,
+        current_setting('test.related_notes_delete_unrelated_target_id')::uuid,
+        'manual',
+        'active',
+        '{"title":"Unrelated Target"}'::jsonb
     );
 
 SET LOCAL ROLE authenticated;
@@ -318,7 +351,36 @@ SELECT is(
 
 
 -- ============================================================================
--- 5. Target Ownership
+-- 5. Unrelated Relation ID
+-- ============================================================================
+
+-- relation ID가 존재해도 화면 기준 Note를 포함하지 않으면 삭제할 수 없어야 합니다.
+SELECT throws_ok(
+    format(
+        $sql$
+            SELECT public.delete_note_related(
+                '%s'::uuid,
+                '%s'::uuid
+            );
+        $sql$,
+        current_setting('test.related_notes_delete_source_id'),
+        (
+            SELECT id::text
+            FROM public.note_related_notes
+            WHERE note_id =
+                    current_setting('test.related_notes_delete_unrelated_source_id')::uuid
+              AND related_note_id =
+                    current_setting('test.related_notes_delete_unrelated_target_id')::uuid
+        )
+    ),
+    'P0002',
+    'RELATED_NOTE_RELATION_NOT_FOUND',
+    'relationship id unrelated to the viewed note should not be deletable'
+);
+
+
+-- ============================================================================
+-- 6. Target Ownership
 -- ============================================================================
 
 -- relation ID가 다른 사용자의 target Note를 포함하면 삭제할 수 없어야 합니다.

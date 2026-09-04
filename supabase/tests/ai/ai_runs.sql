@@ -79,12 +79,12 @@ SELECT lives_ok(
   $$valid ai_run should be insertable$$
 );
 
--- 기본값으로 생성 ID, 빈 feature_ids, running 상태, created_at이 설정되어야 합니다.
+-- 기본값으로 생성 ID, 빈 feature_result_ids, running 상태, created_at이 설정되어야 합니다.
 SELECT ok(
   (
     SELECT
       id = current_setting('test.ai_runs_valid_id')::uuid
-      AND feature_ids = '{}'::uuid[]
+      AND feature_result_ids = '{}'::uuid[]
       AND status = 'running'
       AND created_at IS NOT NULL
     FROM public.ai_runs
@@ -449,7 +449,7 @@ SELECT throws_ok(
   $$snapshots should not have an implicit default object$$
 );
 
--- 결과 저장은 AI 실행과 분리되어 있으므로 succeeded row도 빈 feature_ids를 허용해야 합니다.
+-- 결과 저장은 AI 실행과 분리되어 있으므로 succeeded row도 빈 feature_result_ids를 허용해야 합니다.
 SELECT lives_ok(
   format(
     $sql$
@@ -457,7 +457,7 @@ SELECT lives_ok(
         user_id,
         feature_type,
         status,
-        feature_ids,
+        feature_result_ids,
         snapshots,
         started_at,
         completed_at
@@ -474,17 +474,17 @@ SELECT lives_ok(
     $sql$,
     current_setting('test.ai_runs_user_a_id')
   ),
-  $$succeeded ai_runs should allow empty feature_ids$$
+  $$succeeded ai_runs should allow empty feature_result_ids$$
 );
 
--- 여러 결과 row를 생성하는 Run의 feature_ids에는 여러 결과 ID가 들어갈 수 있어야 합니다.
+-- 여러 결과 row를 생성하는 Run의 feature_result_ids에는 여러 결과 ID가 들어갈 수 있어야 합니다.
 SELECT lives_ok(
   format(
     $sql$
       INSERT INTO public.ai_runs (
         user_id,
         feature_type,
-        feature_ids,
+        feature_result_ids,
         snapshots,
         started_at
       )
@@ -498,10 +498,10 @@ SELECT lives_ok(
     $sql$,
     current_setting('test.ai_runs_user_a_id')
   ),
-  $$feature_ids should allow multiple result ids$$
+  $$feature_result_ids should allow multiple result ids$$
 );
 
--- feature_type마다 대상 테이블이 다르므로 feature_ids에는 의도적으로 foreign key를 두지 않습니다.
+-- feature_type마다 대상 테이블이 다르므로 feature_result_ids에는 의도적으로 foreign key를 두지 않습니다.
 SELECT is(
   (
     SELECT count(*)::bigint
@@ -513,19 +513,19 @@ SELECT is(
           SELECT attnum
           FROM pg_attribute
           WHERE attrelid = 'public.ai_runs'::regclass
-            AND attname = 'feature_ids'
+            AND attname = 'feature_result_ids'
         )
       ]::smallint[]
   ),
   0::bigint,
-  $$feature_ids should not have foreign key constraints$$
+  $$feature_result_ids should not have foreign key constraints$$
 );
 
 -- 계약에 정의된 조회 인덱스가 정확한 이름으로 존재해야 합니다.
 SELECT ok(to_regclass('public.ai_runs_started_at_idx') IS NOT NULL, $$started_at index should exist$$);
 SELECT ok(to_regclass('public.ai_runs_user_started_at_idx') IS NOT NULL, $$user started_at index should exist$$);
 SELECT ok(to_regclass('public.ai_runs_feature_type_started_at_idx') IS NOT NULL, $$feature_type started_at index should exist$$);
-SELECT ok(to_regclass('public.ai_runs_feature_ids_idx') IS NOT NULL, $$feature_ids GIN index should exist$$);
+SELECT ok(to_regclass('public.ai_runs_feature_result_ids_idx') IS NOT NULL, $$feature_result_ids GIN index should exist$$);
 SELECT ok(to_regclass('public.ai_runs_running_started_at_idx') IS NOT NULL, $$running partial index should exist$$);
 
 -- ai_runs에는 Row Level Security가 활성화되어 있어야 합니다.
@@ -572,11 +572,10 @@ SELECT ok(
 
 -- service_role은 신뢰된 서버 저장을 위한 CRUD 접근 권한을 유지해야 합니다.
 SELECT ok(
-  has_table_privilege(
-    'service_role',
-    'public.ai_runs',
-    'SELECT,INSERT,UPDATE,DELETE'
-  ),
+  has_table_privilege('service_role', 'public.ai_runs', 'SELECT')
+  AND has_table_privilege('service_role', 'public.ai_runs', 'INSERT')
+  AND has_table_privilege('service_role', 'public.ai_runs', 'UPDATE')
+  AND has_table_privilege('service_role', 'public.ai_runs', 'DELETE'),
   $$service_role should have ai_runs CRUD privileges$$
 );
 
@@ -627,6 +626,8 @@ SELECT throws_ok(
   NULL,
   $$authenticated should not directly DELETE ai_runs$$
 );
+
+RESET ROLE;
 
 SELECT * FROM finish();
 
