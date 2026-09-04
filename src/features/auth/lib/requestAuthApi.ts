@@ -44,25 +44,31 @@ export async function requestAuthApi(
   try {
     response = await fetch(url, { ...init, signal: controller.signal });
   } catch {
+    clearTimeout(timeoutId);
+
     const globalError: GlobalError = didTimeout
       ? { type: "timeout" }
       : { type: "network" };
 
     throw globalError;
-  } finally {
-    clearTimeout(timeoutId);
   }
 
   let body: unknown;
 
   try {
+    // 타이머는 body를 다 읽을 때까지 유지한다. fetch는 헤더만 오면 resolve하므로,
+    // 여기서 타이머를 이미 껐으면 본문이 끝나지 않는 응답에 무한정 묶인다.
     body = await response.json();
   } catch {
     // 프록시·호스팅 플랫폼이 끼어들면 계약 body 대신 HTML 오류 페이지가 온다.
     // 서버 쪽 문제이므로 server로 올린다.
-    const globalError: GlobalError = { type: "server" };
+    const globalError: GlobalError = didTimeout
+      ? { type: "timeout" }
+      : { type: "server" };
 
     throw globalError;
+  } finally {
+    clearTimeout(timeoutId);
   }
 
   if (!response.ok) {
