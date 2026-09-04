@@ -32,7 +32,9 @@ describe("streamNoteChatQuestion", () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(
-        createStreamResponse(['{"type":"started","runId":"run-1"}\n']),
+        createStreamResponse([
+          '{"type":"start","userMessageId":"message-1"}\n',
+        ]),
       );
 
     const stream = streamNoteChatQuestion({
@@ -66,8 +68,8 @@ describe("streamNoteChatQuestion", () => {
 
     expect(events).toEqual([
       {
-        type: "started",
-        runId: "run-1",
+        type: "start",
+        userMessageId: "message-1",
       },
     ]);
   });
@@ -75,8 +77,8 @@ describe("streamNoteChatQuestion", () => {
   it("NDJSON 스트림을 이벤트 순서대로 변환한다", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       createStreamResponse([
-        '{"type":"started","runId":"run-1"}\n{"type":"text-delta","delta":"안녕',
-        '하세요."}\n{"type":"completed"}\n',
+        '{"type":"start","userMessageId":"message-1"}\n{"type":"text-delta","delta":"안녕',
+        '하세요."}\n{"type":"finish","assistantMessageId":"assistant-1","usedNoteIds":[]}\n',
       ]),
     );
 
@@ -95,15 +97,17 @@ describe("streamNoteChatQuestion", () => {
 
     expect(events).toEqual([
       {
-        type: "started",
-        runId: "run-1",
+        type: "start",
+        userMessageId: "message-1",
       },
       {
         type: "text-delta",
         delta: "안녕하세요.",
       },
       {
-        type: "completed",
+        assistantMessageId: "assistant-1",
+        type: "finish",
+        usedNoteIds: [],
       },
     ]);
   });
@@ -137,7 +141,9 @@ describe("streamNoteChatUserMessageUpdate", () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(
-        createStreamResponse(['{"type":"started","runId":"run-2"}\n']),
+        createStreamResponse([
+          '{"type":"start","userMessageId":"message-1"}\n',
+        ]),
       );
 
     const stream = streamNoteChatUserMessageUpdate({

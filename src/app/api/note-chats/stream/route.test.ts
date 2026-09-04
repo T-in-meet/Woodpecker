@@ -12,6 +12,7 @@ import {
   NOTE_RETRIEVAL_AI_FEATURE_KEY,
   NOTE_RETRIEVAL_AI_ROLE_KEY,
 } from "@/features/ai/rags/note/constants/runtime";
+import { createAiRun } from "@/features/ai/runs/persistence";
 import {
   resolveAiRuntimeChatConfiguration,
   resolveAiRuntimeEmbeddingConfiguration,
@@ -23,7 +24,6 @@ import {
   completeNoteChatExecutionClaim,
   NOTE_CHAT_EXECUTION_CLAIM_STATUS,
 } from "@/features/note-chats/execution/execution-claim-persistence";
-import { createNoteChatRunRecord } from "@/features/note-chats/execution/run-persistence";
 import type { RunNoteChatStreamResult } from "@/features/note-chats/stream/run-note-chat-stream";
 import { runNoteChatStream } from "@/features/note-chats/stream/run-note-chat-stream";
 import { reportNoteChatOperationalError } from "@/features/note-chats/utils/report-operational-error";
@@ -64,8 +64,8 @@ vi.mock("@/features/note-chats/execution/execution-claim-persistence", () => ({
   },
 }));
 
-vi.mock("@/features/note-chats/execution/run-persistence", () => ({
-  createNoteChatRunRecord: vi.fn(),
+vi.mock("@/features/ai/runs/persistence", () => ({
+  createAiRun: vi.fn(),
 }));
 
 vi.mock("@/features/note-chats/utils/report-operational-error", () => ({
@@ -126,7 +126,6 @@ const CREATED_QUESTION = USER_MESSAGE_ID;
 const RUN_RESULT: RunNoteChatStreamResult = {
   assistantMessageId: ASSISTANT_MESSAGE_ID,
   content: "답변입니다.",
-  runId: RUN_ID,
   usedNoteIds: [],
 };
 
@@ -228,7 +227,7 @@ describe("POST /api/note-chats/stream", () => {
 
     vi.mocked(completeNoteChatExecutionClaim).mockResolvedValue(undefined);
 
-    vi.mocked(createNoteChatRunRecord).mockResolvedValue(RUN_ID);
+    vi.mocked(createAiRun).mockResolvedValue(RUN_ID);
 
     vi.mocked(runNoteChatStream).mockResolvedValue(RUN_RESULT);
 
@@ -539,7 +538,7 @@ describe("POST /api/note-chats/stream", () => {
     });
 
     expect(reportNoteChatOperationalError).not.toHaveBeenCalled();
-    expect(createNoteChatRunRecord).not.toHaveBeenCalled();
+    expect(createAiRun).not.toHaveBeenCalled();
     expect(runNoteChatStream).not.toHaveBeenCalled();
   });
 
@@ -621,13 +620,12 @@ describe("POST /api/note-chats/stream", () => {
       p_user_id: USER_ID,
     });
 
-    expect(createNoteChatRunRecord).toHaveBeenCalledWith({
-      agentId: CHAT_CONFIGURATION.prompt.agent.id,
-      chatModelConfigId: CHAT_CONFIGURATION.model.id,
-      embeddingModelConfigId: EMBEDDING_CONFIGURATION.model.id,
-      promptVersionId: CHAT_CONFIGURATION.prompt.version.id,
-      userMessageId: USER_MESSAGE_ID,
-    });
+    expect(createAiRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        featureType: "note-chat",
+        userId: USER_ID,
+      }),
+    );
 
     expect(resolveAiRuntimeEmbeddingConfiguration).toHaveBeenCalledWith({
       featureKey: NOTE_RETRIEVAL_AI_FEATURE_KEY,
@@ -637,10 +635,10 @@ describe("POST /api/note-chats/stream", () => {
     expect(runNoteChatStream).toHaveBeenCalledTimes(1);
 
     expect(runNoteChatStream).toHaveBeenCalledWith(
-      {
+      expect.objectContaining({
         claimId: CLAIM_ID,
         conversationId: CONVERSATION_ID,
-        runId: RUN_ID,
+        aiRunId: RUN_ID,
         settings: {
           chat: CHAT_CONFIGURATION,
           queryExpansion: QUERY_EXPANSION_CONFIGURATION,
@@ -648,19 +646,18 @@ describe("POST /api/note-chats/stream", () => {
         },
         userId: USER_ID,
         userMessageId: USER_MESSAGE_ID,
-      },
+      }),
       expect.any(Function),
     );
 
     expect(reportNoteChatOperationalError).not.toHaveBeenCalled();
   });
 
-  it("Run 생성 실패는 운영 오류로 기록하고 runId 없이 AI 스트림을 계속한다", async () => {
+  it("AI Run 생성 실패에도 AI 스트림을 계속한다", async () => {
     const client = createSupabaseClientMock();
-    const runCreateError = new Error("run create failed");
 
     vi.mocked(createClient).mockResolvedValue(client as never);
-    vi.mocked(createNoteChatRunRecord).mockRejectedValue(runCreateError);
+    vi.mocked(createAiRun).mockResolvedValue(null);
 
     const response = await POST(
       createRequest({
@@ -675,23 +672,10 @@ describe("POST /api/note-chats/stream", () => {
 
     await readStream(response);
 
-    expect(reportNoteChatOperationalError).toHaveBeenCalledWith(
-      expect.objectContaining({
-        actorUserId: USER_ID,
-        context: {
-          conversationId: CONVERSATION_ID,
-          userMessageId: USER_MESSAGE_ID,
-        },
-        error: runCreateError,
-        errorCode: "NOTE_CHAT_RUN_CREATE_FAILED",
-        userId: USER_ID,
-      }),
-    );
-
     expect(runNoteChatStream).toHaveBeenCalledWith(
       expect.objectContaining({
         claimId: CLAIM_ID,
-        runId: null,
+        aiRunId: null,
         userMessageId: USER_MESSAGE_ID,
       }),
       expect.any(Function),
@@ -729,7 +713,6 @@ describe("POST /api/note-chats/stream", () => {
     expect(events).toEqual([
       {
         type: "start",
-        runId: RUN_ID,
         userMessageId: USER_MESSAGE_ID,
       },
       {
@@ -738,7 +721,6 @@ describe("POST /api/note-chats/stream", () => {
       },
       {
         type: "finish",
-        runId: RUN_ID,
         assistantMessageId: ASSISTANT_MESSAGE_ID,
         usedNoteIds: [],
       },
@@ -799,7 +781,7 @@ describe("POST /api/note-chats/stream", () => {
             context: {
               conversationId: CONVERSATION_ID,
               eventType: "finish",
-              runId: RUN_ID,
+              aiRunId: RUN_ID,
               userMessageId: USER_MESSAGE_ID,
             },
             error: sendError,
@@ -924,13 +906,11 @@ describe("POST /api/note-chats/stream", () => {
 
     expect(lines).toEqual([
       JSON.stringify({
-        runId: RUN_ID,
         type: "start",
         userMessageId: USER_MESSAGE_ID,
       }),
       JSON.stringify({
         message: "답변 생성에 실패했습니다.",
-        runId: RUN_ID,
         type: "error",
       }),
     ]);

@@ -1,7 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { AiChatStreamEvent } from "@/features/ai/providers/types";
-
 import { executeNoteChat } from "../execute";
 import {
   type NoteChatExecutionSettings,
@@ -46,8 +44,11 @@ describe("executeNoteChat", () => {
 
     const prepared: PreparedNoteChatExecution = {
       conversation: preparedConversation,
+      context: "context",
       expandedQuery: "확장된 검색 질의",
+      history: [],
       messages: preparedMessages,
+      question: "질문",
       queryEmbeddingUsage,
       queryExpansionUsage,
       settings,
@@ -55,10 +56,7 @@ describe("executeNoteChat", () => {
       userMessageId: "message-1",
     };
 
-    const providerStream = {} as AsyncGenerator<AiChatStreamEvent>;
-
     vi.mocked(prepareNoteChatExecution).mockResolvedValue(prepared);
-    vi.mocked(startNoteChatProviderStream).mockReturnValue(providerStream);
 
     const result = await executeNoteChat({
       conversationId: "conversation-1",
@@ -78,12 +76,12 @@ describe("executeNoteChat", () => {
       userMessageId: "message-1",
     });
 
-    expect(startNoteChatProviderStream).toHaveBeenCalledWith(prepared);
+    expect(startNoteChatProviderStream).not.toHaveBeenCalled();
 
     expect(result).toEqual({
       expandedQuery: prepared.expandedQuery,
       prepared,
-      providerStream,
+      providerStream: null,
       queryEmbeddingUsage,
       queryExpansionUsage,
       sources: prepared.sources,

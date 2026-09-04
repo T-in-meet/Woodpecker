@@ -4,12 +4,15 @@ import {
   NOTE_RETRIEVAL_AI_FEATURE_KEY,
   NOTE_RETRIEVAL_AI_ROLE_KEY,
 } from "@/features/ai/rags/note/constants/runtime";
+import { createAiRun } from "@/features/ai/runs/persistence";
+import { AI_RUN_FEATURE_TYPE } from "@/features/ai/runs/types";
 import {
   resolveAiRuntimeChatConfiguration,
   resolveAiRuntimeEmbeddingConfiguration,
 } from "@/features/ai/runtimes";
 import { isReportedAiOperationalError } from "@/features/ai/utils/report-ai-operational-error";
 import { getLegalAcceptanceRequiredPath } from "@/features/auth/lib/userAgreements";
+import { createNoteChatSnapshotAccumulator } from "@/features/note-chats/ai-runs/snapshot-accumulator";
 import {
   NOTE_CHAT_AI_FEATURE_KEY,
   NOTE_CHAT_AI_ROLE_KEY,
@@ -21,7 +24,6 @@ import {
   NOTE_CHAT_EXECUTION_CLAIM_COMPLETION_STATUS,
   NOTE_CHAT_EXECUTION_CLAIM_STATUS,
 } from "@/features/note-chats/execution/execution-claim-persistence";
-import { createNoteChatRunRecord } from "@/features/note-chats/execution/run-persistence";
 import { createNoteChatQuestionInputSchema } from "@/features/note-chats/schema";
 import { runNoteChatStream } from "@/features/note-chats/stream/run-note-chat-stream";
 import { encodeNoteChatStreamEvent } from "@/features/note-chats/stream/serialize";
@@ -342,31 +344,9 @@ export async function POST(request: Request): Promise<Response> {
     embedding: embeddingConfiguration,
   };
 
-  let runId: string | null = null;
-
-  try {
-    runId = await createNoteChatRunRecord({
-      agentId: chatConfiguration.prompt.agent.id,
-      chatModelConfigId: chatConfiguration.model.id,
-      embeddingModelConfigId: embeddingConfiguration.model.id,
-      promptVersionId: chatConfiguration.prompt.version.id,
-      userMessageId,
-    });
-  } catch (error) {
-    await reportNoteChatOperationalError({
-      actorUserId: user.id,
-      context: {
-        conversationId,
-        userMessageId,
-      },
-      error,
-      errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.RUN_CREATE_FAILED,
-      message: "노트 챗봇 Run 실행 이력 생성에 실패했습니다.",
-      operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.CREATE_RUN,
-      stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.DATABASE,
-      userId: user.id,
-    });
-  }
+  // precheck, claim, User Message 저장 뒤에만 실행별 accumulator를 생성한다.
+  const snapshotAccumulator = createNoteChatSnapshotAccumulator();
+  let aiRunId: string | null = null;
 
   /*
    * streamClosed는 ReadableStream 자체가 취소되거나 close된 상태를 나타냅니다.
@@ -421,7 +401,7 @@ export async function POST(request: Request): Promise<Response> {
               context: {
                 conversationId,
                 eventType: event.type,
-                runId,
+                aiRunId,
                 userMessageId,
               },
               error,
@@ -450,18 +430,26 @@ export async function POST(request: Request): Promise<Response> {
          * 변경하지 않고 enqueueEvent 내부에서 operational error로만 기록합니다.
          */
         await enqueueEvent({
-          runId,
           type: "start",
           userMessageId,
         });
 
         try {
+          // 실제 AI runner 진입 직전 시각과 초기 Snapshot으로 Run을 생성한다.
+          aiRunId = await createAiRun({
+            buildSnapshot: snapshotAccumulator.buildSnapshot,
+            featureType: AI_RUN_FEATURE_TYPE.NOTE_CHAT,
+            startedAt: new Date().toISOString(),
+            userId: user.id,
+          });
+
           const result = await runNoteChatStream(
             {
+              aiRunId,
               conversationId,
               claimId,
-              runId,
               settings,
+              snapshotAccumulator,
               userId: user.id,
               userMessageId,
             },
@@ -477,7 +465,6 @@ export async function POST(request: Request): Promise<Response> {
            */
           await enqueueEvent({
             assistantMessageId: result.assistantMessageId,
-            runId: result.runId,
             type: "finish",
             usedNoteIds: result.usedNoteIds,
           });
@@ -492,7 +479,6 @@ export async function POST(request: Request): Promise<Response> {
           if (!errorEventSent) {
             await enqueueEvent({
               message: "답변 생성에 실패했습니다.",
-              runId,
               type: "error",
             });
           }

@@ -13,6 +13,7 @@ import {
   NOTE_CHAT_OPERATIONAL_ERROR_STAGES,
 } from "@/features/operational-errors/constants";
 
+import type { NoteChatSnapshotAccumulator } from "../ai-runs/snapshot-accumulator";
 import {
   NOTE_CHAT_HISTORY_CHAR_LIMIT,
   NOTE_CHAT_HISTORY_MESSAGE_LIMIT,
@@ -43,6 +44,12 @@ type ExpandNoteChatQueryParams = {
    * usage를 Run에 남기기 위해 응답 검증 전에 호출합니다.
    */
   onUsage?: (usage: AiTokenUsage) => Promise<void>;
+
+  /** 실행 관측값을 기록할 Note Chat Snapshot accumulator입니다. */
+  snapshotAccumulator?: NoteChatSnapshotAccumulator | undefined;
+
+  /** 검증된 질의 확장 결과 직후 전체 Snapshot을 저장하는 callback입니다. */
+  onCompleted?: (() => Promise<void>) | undefined;
 };
 
 /**
@@ -192,20 +199,44 @@ export async function expandNoteChatQuery(
     limitedHistoryMessages,
   );
 
+  // 실제 Provider 입력에 사용되는 질문과 제한된 history를 먼저 기록한다.
+  params.snapshotAccumulator?.prepareQueryExpansion({
+    history: limitedHistoryMessages.flatMap((message) =>
+      message.role === "user" || message.role === "assistant"
+        ? [{ content: message.content, role: message.role }]
+        : [],
+    ),
+    question: currentContent.text,
+  });
+
   /*
    * Prompt Template과 Provider 호출은 공통 RAG Query Expansion 실행기에 위임합니다.
    *
    * Note Chat은 대화 이력과 현재 질문을 Prompt 변수로 구성하지만,
    * 실제 Chat Completion 실행 자체는 Note Chat에 종속되지 않습니다.
    */
-  const result = await createQueryExpansionCompletion({
-    configuration: params.configuration,
-    responseSchemaName: "note_chat_query_expansion_response",
-    variables: {
-      messages: serializedMessages,
-      question: currentContent.text,
-    },
-  });
+  let result;
+
+  try {
+    result = await createQueryExpansionCompletion({
+      configuration: params.configuration,
+      responseSchemaName: "note_chat_query_expansion_response",
+      variables: {
+        messages: serializedMessages,
+        question: currentContent.text,
+      },
+      ...(params.snapshotAccumulator === undefined
+        ? {}
+        : {
+            onObservation: (observation) => {
+              params.snapshotAccumulator?.observeQueryExpansion(observation);
+            },
+          }),
+    });
+  } catch (error) {
+    params.snapshotAccumulator?.failQueryExpansion(error);
+    throw error;
+  }
 
   await params.onUsage?.(result.usage);
 
@@ -244,6 +275,7 @@ export async function expandNoteChatQuery(
       stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.EXECUTION,
     });
 
+    params.snapshotAccumulator?.failQueryExpansion(error);
     throw error;
   }
 
@@ -274,8 +306,13 @@ export async function expandNoteChatQuery(
       stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.EXECUTION,
     });
 
+    params.snapshotAccumulator?.failQueryExpansion(error, parsed.error.issues);
     throw error;
   }
+
+  // schema validation이 끝난 값을 기록한 뒤 첫 checkpoint를 수행한다.
+  params.snapshotAccumulator?.completeQueryExpansion(parsed.data.expandedQuery);
+  await params.onCompleted?.();
 
   return {
     expandedQuery: parsed.data.expandedQuery,

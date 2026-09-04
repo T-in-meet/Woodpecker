@@ -12,6 +12,7 @@ import {
   NOTE_RETRIEVAL_AI_FEATURE_KEY,
   NOTE_RETRIEVAL_AI_ROLE_KEY,
 } from "@/features/ai/rags/note/constants/runtime";
+import { createAiRun } from "@/features/ai/runs/persistence";
 import {
   resolveAiRuntimeChatConfiguration,
   resolveAiRuntimeEmbeddingConfiguration,
@@ -27,7 +28,6 @@ import {
   completeNoteChatExecutionClaim,
   NOTE_CHAT_EXECUTION_CLAIM_STATUS,
 } from "@/features/note-chats/execution/execution-claim-persistence";
-import { createNoteChatRunRecord } from "@/features/note-chats/execution/run-persistence";
 import { runNoteChatStream } from "@/features/note-chats/stream/run-note-chat-stream";
 import { reportNoteChatOperationalError } from "@/features/note-chats/utils/report-operational-error";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -59,8 +59,8 @@ vi.mock("@/features/note-chats/execution/execution-claim-persistence", () => ({
   },
 }));
 
-vi.mock("@/features/note-chats/execution/run-persistence", () => ({
-  createNoteChatRunRecord: vi.fn(),
+vi.mock("@/features/ai/runs/persistence", () => ({
+  createAiRun: vi.fn(),
 }));
 
 vi.mock("@/features/note-chats/utils/report-operational-error", () => ({
@@ -221,7 +221,6 @@ const UPDATED_RESULT = {
 const RUN_RESULT = {
   assistantMessageId: ASSISTANT_MESSAGE_ID,
   content: "수정된 답변입니다.",
-  runId: RUN_ID,
   usage: {
     inputTokens: 10,
     outputTokens: 20,
@@ -343,7 +342,7 @@ beforeEach(() => {
 
   vi.mocked(completeNoteChatExecutionClaim).mockResolvedValue(undefined);
 
-  vi.mocked(createNoteChatRunRecord).mockResolvedValue(RUN_ID);
+  vi.mocked(createAiRun).mockResolvedValue(RUN_ID);
 
   vi.mocked(runNoteChatStream).mockResolvedValue(RUN_RESULT);
 
@@ -491,7 +490,7 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
     });
 
     expect(reportNoteChatOperationalError).not.toHaveBeenCalled();
-    expect(createNoteChatRunRecord).not.toHaveBeenCalled();
+    expect(createAiRun).not.toHaveBeenCalled();
     expect(runNoteChatStream).not.toHaveBeenCalled();
   });
 
@@ -829,6 +828,9 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
       "application/x-ndjson; charset=utf-8",
     );
 
+    // ReadableStream 내부의 AI 실행이 완료될 때까지 응답 본문을 소비한다.
+    await readStream(response);
+
     const adminClient = vi.mocked(createAdminClient).mock.results[0]
       ?.value as ReturnType<typeof createAdminClientMock>;
 
@@ -843,13 +845,12 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
       },
     );
 
-    expect(createNoteChatRunRecord).toHaveBeenCalledWith({
-      agentId: CHAT_CONFIGURATION.prompt.agent.id,
-      chatModelConfigId: CHAT_CONFIGURATION.model.id,
-      embeddingModelConfigId: EMBEDDING_CONFIGURATION.model.id,
-      promptVersionId: CHAT_CONFIGURATION.prompt.version.id,
-      userMessageId: USER_MESSAGE_ID,
-    });
+    expect(createAiRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        featureType: "note-chat",
+        userId: USER.id,
+      }),
+    );
 
     expect(resolveAiRuntimeEmbeddingConfiguration).toHaveBeenCalledWith({
       featureKey: NOTE_RETRIEVAL_AI_FEATURE_KEY,
@@ -860,7 +861,7 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
       expect.objectContaining({
         claimId: CLAIM_ID,
         conversationId: CONVERSATION_ID,
-        runId: RUN_ID,
+        aiRunId: RUN_ID,
         userId: USER.id,
         userMessageId: USER_MESSAGE_ID,
       }),
@@ -868,10 +869,8 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
     );
   });
 
-  it("Run 생성 실패는 운영 오류로 기록하고 runId 없이 AI 스트림을 계속한다", async () => {
-    const runCreateError = new Error("run create failed");
-
-    vi.mocked(createNoteChatRunRecord).mockRejectedValue(runCreateError);
+  it("AI Run 생성 실패에도 AI 스트림을 계속한다", async () => {
+    vi.mocked(createAiRun).mockResolvedValue(null);
 
     const response = await POST(
       createRequest({
@@ -890,23 +889,10 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
 
     await readStream(response);
 
-    expect(reportNoteChatOperationalError).toHaveBeenCalledWith(
-      expect.objectContaining({
-        actorUserId: USER.id,
-        context: {
-          conversationId: CONVERSATION_ID,
-          userMessageId: USER_MESSAGE_ID,
-        },
-        error: runCreateError,
-        errorCode: "NOTE_CHAT_RUN_CREATE_FAILED",
-        userId: USER.id,
-      }),
-    );
-
     expect(runNoteChatStream).toHaveBeenCalledWith(
       expect.objectContaining({
         claimId: CLAIM_ID,
-        runId: null,
+        aiRunId: null,
         userMessageId: USER_MESSAGE_ID,
       }),
       expect.any(Function),
@@ -943,7 +929,6 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
 
     expect(events).toEqual([
       {
-        runId: RUN_ID,
         type: "start",
         userMessageId: USER_MESSAGE_ID,
       },
@@ -953,7 +938,6 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
       },
       {
         assistantMessageId: ASSISTANT_MESSAGE_ID,
-        runId: RUN_ID,
         type: "finish",
         usedNoteIds: [],
       },
@@ -981,13 +965,11 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
 
     expect(events).toEqual([
       {
-        runId: RUN_ID,
         type: "start",
         userMessageId: USER_MESSAGE_ID,
       },
       {
         message: "답변 생성에 실패했습니다.",
-        runId: RUN_ID,
         type: "error",
       },
     ]);
@@ -1035,7 +1017,7 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
             context: {
               conversationId: CONVERSATION_ID,
               eventType: "finish",
-              runId: RUN_ID,
+              aiRunId: RUN_ID,
               userMessageId: USER_MESSAGE_ID,
             },
             error: sendError,

@@ -56,7 +56,7 @@ export type NoteChatNoteSource = {
  * 정확한 Embedding chunk와 다시 연결할 수 있습니다.
  *
  * @param notes 실제 Prompt Context에 사용된 검색 Note chunk 목록
- * @returns note_chat_runs.sources에 저장할 JSON 목록
+ * @returns AI Run Retrieval Snapshot과 응답 후처리에 사용할 JSON 목록
  */
 export function buildNoteChatSources(notes: MatchedNote[]): Json[] {
   return notes.map((note, index) => ({

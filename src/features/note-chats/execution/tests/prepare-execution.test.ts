@@ -65,8 +65,10 @@ const conversation = {
 };
 
 const userMessage = {
+  content: { text: "질문" },
   id: "message-1",
   role: AI_CHAT_MESSAGE_ROLE.USER,
+  sequence_number: 1,
 };
 
 const messages = [userMessage];
@@ -173,8 +175,11 @@ describe("prepareNoteChatExecution", () => {
 
     expect(result).toEqual({
       conversation,
+      context: "",
       expandedQuery: "확장된 검색 질의",
+      history: [],
       messages: [],
+      question: "질문",
       queryEmbeddingUsage,
       queryExpansionUsage,
       settings,

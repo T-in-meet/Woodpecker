@@ -255,8 +255,15 @@ function extractStreamingAnswerDelta(
 export async function consumeNoteChatProviderStream(
   providerStream: AsyncGenerator<AiChatStreamEvent>,
   onTextDelta: (event: NoteChatStreamTextDeltaEvent) => void | Promise<void>,
+  onPartialResponse?:
+    | ((input: {
+        partialResponse: string;
+        rawResponse: string;
+      }) => void | Promise<void>)
+    | undefined,
 ): Promise<ConsumedNoteChatProviderStream> {
   let content = "";
+  let partialResponse = "";
   let result: AiChatStreamResult | null = null;
 
   const parserState = createStreamingAnswerParserState();
@@ -269,11 +276,15 @@ export async function consumeNoteChatProviderStream(
         const delta = extractStreamingAnswerDelta(content, parserState);
 
         if (delta.length > 0) {
+          partialResponse += delta;
           await onTextDelta({
             delta,
             type: "text-delta",
           });
         }
+
+        // 매 delta의 현재 누적값은 메모리에만 반영하고 DB checkpoint는 하지 않는다.
+        await onPartialResponse?.({ partialResponse, rawResponse: content });
 
         break;
       }

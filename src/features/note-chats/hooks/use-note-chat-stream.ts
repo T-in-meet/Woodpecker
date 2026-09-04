@@ -25,9 +25,6 @@ export type NoteChatStreamingState = {
   /** 생성 완료된 Assistant Message ID입니다. */
   assistantMessageId: string | null;
 
-  /** 현재 실행 중인 Run ID입니다. */
-  runId: string | null;
-
   /** 답변 생성이 진행 중인지 여부입니다. */
   isStreaming: boolean;
 
@@ -86,7 +83,6 @@ export function useNoteChatStream() {
     error: null,
     errorCode: null,
     isStreaming: false,
-    runId: null,
     usedNoteIds: [],
     userMessageId: null,
   });
@@ -117,7 +113,6 @@ export function useNoteChatStream() {
       error: null,
       errorCode: null,
       isStreaming: false,
-      runId: null,
       usedNoteIds: [],
       userMessageId: null,
     });
@@ -131,7 +126,6 @@ export function useNoteChatStream() {
       case "start": {
         setState((current) => ({
           ...current,
-          runId: event.runId,
           userMessageId: event.userMessageId,
         }));
         break;
@@ -150,7 +144,6 @@ export function useNoteChatStream() {
           ...current,
           assistantMessageId: event.assistantMessageId,
           isStreaming: false,
-          runId: event.runId,
           usedNoteIds: event.usedNoteIds,
         }));
         break;
@@ -162,7 +155,6 @@ export function useNoteChatStream() {
           error: event.message,
           errorCode: null,
           isStreaming: false,
-          runId: event.runId,
         }));
         break;
       }
@@ -187,7 +179,6 @@ export function useNoteChatStream() {
         error: null,
         errorCode: null,
         isStreaming: true,
-        runId: null,
         usedNoteIds: [],
         userMessageId: null,
       });
@@ -293,7 +284,6 @@ export function useNoteChatStream() {
         error: null,
         errorCode: null,
         isStreaming: true,
-        runId: null,
         usedNoteIds: [],
         userMessageId: null,
       });
