@@ -1,11 +1,17 @@
 BEGIN;
 
-SELECT plan(42);
+SELECT plan(51);
 
 SELECT set_config('test.ai_runs_user_a_id', gen_random_uuid()::text, true);
 SELECT set_config('test.ai_runs_user_b_id', gen_random_uuid()::text, true);
 SELECT set_config('test.ai_runs_valid_id', gen_random_uuid()::text, true);
 SELECT set_config('test.ai_runs_cascade_id', gen_random_uuid()::text, true);
+SELECT set_config('test.ai_runs_stale_target_id', gen_random_uuid()::text, true);
+SELECT set_config('test.ai_runs_recent_running_id', gen_random_uuid()::text, true);
+SELECT set_config('test.ai_runs_terminal_succeeded_id', gen_random_uuid()::text, true);
+SELECT set_config('test.ai_runs_terminal_failed_id', gen_random_uuid()::text, true);
+SELECT set_config('test.ai_runs_terminal_stale_id', gen_random_uuid()::text, true);
+SELECT set_config('test.ai_runs_result_id', gen_random_uuid()::text, true);
 
 INSERT INTO auth.users (
   id,
@@ -577,6 +583,166 @@ SELECT ok(
   AND has_table_privilege('service_role', 'public.ai_runs', 'UPDATE')
   AND has_table_privilege('service_role', 'public.ai_runs', 'DELETE'),
   $$service_role should have ai_runs CRUD privileges$$
+);
+
+-- 공통 stale sweeper 함수가 후속 migration으로 생성되어야 합니다.
+SELECT has_function(
+  'public',
+  'sweep_stale_ai_runs',
+  ARRAY[]::text[],
+  $$stale sweeper function should exist$$
+);
+
+-- stale sweeper Cron job은 중복 없이 하나만 등록되어야 합니다.
+SELECT is(
+  (
+    SELECT count(*)::bigint
+    FROM cron.job
+    WHERE jobname = 'sweep-stale-ai-runs'
+  ),
+  1::bigint,
+  $$stale sweeper cron job should exist once$$
+);
+
+-- stale sweeper Cron job은 매 1분 실행되어야 합니다.
+SELECT is(
+  (
+    SELECT schedule
+    FROM cron.job
+    WHERE jobname = 'sweep-stale-ai-runs'
+  ),
+  '* * * * *',
+  $$stale sweeper cron job should run every minute$$
+);
+
+-- Cron job은 공통 stale sweeper 함수만 실행해야 합니다.
+SELECT is(
+  (
+    SELECT command
+    FROM cron.job
+    WHERE jobname = 'sweep-stale-ai-runs'
+  ),
+  'SELECT public.sweep_stale_ai_runs();',
+  $$stale sweeper cron job should call the shared function$$
+);
+
+INSERT INTO public.ai_runs (
+  id,
+  user_id,
+  feature_type,
+  feature_result_ids,
+  snapshots,
+  started_at
+)
+VALUES
+  (
+    current_setting('test.ai_runs_stale_target_id')::uuid,
+    current_setting('test.ai_runs_user_a_id')::uuid,
+    'note-chat',
+    ARRAY[current_setting('test.ai_runs_result_id')::uuid],
+    '{"schemaVersion":1,"checkpoint":"retrieval"}'::jsonb,
+    statement_timestamp() - interval '3 minutes 1 second'
+  ),
+  (
+    current_setting('test.ai_runs_recent_running_id')::uuid,
+    current_setting('test.ai_runs_user_a_id')::uuid,
+    'related-notes',
+    '{}'::uuid[],
+    '{"schemaVersion":1}'::jsonb,
+    statement_timestamp() - interval '2 minutes 59 seconds'
+  );
+
+INSERT INTO public.ai_runs (
+  id,
+  user_id,
+  feature_type,
+  status,
+  snapshots,
+  started_at,
+  completed_at
+)
+VALUES
+  (
+    current_setting('test.ai_runs_terminal_succeeded_id')::uuid,
+    current_setting('test.ai_runs_user_a_id')::uuid,
+    'quiz-generation',
+    'succeeded',
+    '{"schemaVersion":1}'::jsonb,
+    statement_timestamp() - interval '10 minutes',
+    statement_timestamp() - interval '9 minutes'
+  ),
+  (
+    current_setting('test.ai_runs_terminal_failed_id')::uuid,
+    current_setting('test.ai_runs_user_a_id')::uuid,
+    'review-grading',
+    'failed',
+    '{"schemaVersion":1}'::jsonb,
+    statement_timestamp() - interval '10 minutes',
+    statement_timestamp() - interval '9 minutes'
+  ),
+  (
+    current_setting('test.ai_runs_terminal_stale_id')::uuid,
+    current_setting('test.ai_runs_user_a_id')::uuid,
+    'related-notes',
+    'stale',
+    '{"schemaVersion":1}'::jsonb,
+    statement_timestamp() - interval '10 minutes',
+    statement_timestamp() - interval '9 minutes'
+  );
+
+-- sweeper는 3분을 넘은 running Run을 하나 이상 stale로 전환해야 합니다.
+SELECT cmp_ok(
+  public.sweep_stale_ai_runs(),
+  '>=',
+  1::bigint,
+  $$stale sweeper should transition eligible running rows$$
+);
+
+-- stale 대상은 lifecycle constraint에 맞는 완료 시각과 상태를 가져야 합니다.
+SELECT ok(
+  (
+    SELECT status = 'stale'
+      AND completed_at IS NOT NULL
+      AND completed_at >= started_at
+    FROM public.ai_runs
+    WHERE id = current_setting('test.ai_runs_stale_target_id')::uuid
+  ),
+  $$stale sweeper should set terminal status and completed_at$$
+);
+
+-- stale 전환은 마지막 Snapshot과 결과 ID를 변경하지 않아야 합니다.
+SELECT ok(
+  (
+    SELECT snapshots = '{"schemaVersion":1,"checkpoint":"retrieval"}'::jsonb
+      AND feature_result_ids = ARRAY[current_setting('test.ai_runs_result_id')::uuid]
+    FROM public.ai_runs
+    WHERE id = current_setting('test.ai_runs_stale_target_id')::uuid
+  ),
+  $$stale sweeper should preserve snapshots and feature result ids$$
+);
+
+-- 3분 threshold 이내의 running Run은 변경하지 않아야 합니다.
+SELECT ok(
+  (
+    SELECT status = 'running' AND completed_at IS NULL
+    FROM public.ai_runs
+    WHERE id = current_setting('test.ai_runs_recent_running_id')::uuid
+  ),
+  $$stale sweeper should preserve recent running rows$$
+);
+
+-- 이미 종료된 모든 상태는 오래됐더라도 sweeper가 덮어쓰지 않아야 합니다.
+SELECT ok(
+  (
+    SELECT array_agg(status ORDER BY status) = ARRAY['failed', 'stale', 'succeeded']
+    FROM public.ai_runs
+    WHERE id IN (
+      current_setting('test.ai_runs_terminal_succeeded_id')::uuid,
+      current_setting('test.ai_runs_terminal_failed_id')::uuid,
+      current_setting('test.ai_runs_terminal_stale_id')::uuid
+    )
+  ),
+  $$stale sweeper should preserve every terminal row$$
 );
 
 SET LOCAL ROLE authenticated;

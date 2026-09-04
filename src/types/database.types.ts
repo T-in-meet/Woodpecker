@@ -1914,6 +1914,7 @@ export type Database = {
       };
     };
     Functions: {
+      sweep_stale_ai_runs: { Args: never; Returns: number };
       activate_ai_embedding_generation: {
         Args: {
           p_generation_id: string;

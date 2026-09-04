@@ -1,5 +1,7 @@
 import "server-only";
 
+import { type AiObserver, notifyAiObserver } from "./notify-observer";
+
 /**
  * Cloudflare Workers AI 클라이언트.
  *
@@ -65,6 +67,42 @@ export class CloudflareAiError extends Error {
   }
 }
 
+/** Cloudflare JSON 생성 helper가 노출하는 실행 관측 이벤트입니다. */
+export type GenerateJsonObservation =
+  | {
+      /** 실제 fetch body에 사용한 요청 입력과 설정입니다. */
+      type: "request";
+      body: Record<string, unknown>;
+      model: string;
+    }
+  | {
+      /** 성공한 HTTP 응답에서 JSON으로 읽은 Provider envelope입니다. */
+      type: "provider-response";
+      response: unknown;
+      status: number;
+    }
+  | {
+      /** Provider 요청 또는 응답 envelope 처리 실패입니다. */
+      type: "provider-error";
+      error: CloudflareAiError;
+    }
+  | {
+      /** extractJsonText에 실제 전달한 Provider result입니다. */
+      type: "extraction-started";
+      result: unknown;
+    }
+  | {
+      /** 한 번의 extraction에서 확보한 최종 문자열입니다. */
+      type: "extraction-completed";
+      text: string;
+    }
+  | {
+      /** Provider 성공 뒤 response extraction에서 발생한 오류입니다. */
+      type: "extraction-error";
+      error: unknown;
+    };
+
+/** Cloudflare JSON 생성 요청 입력입니다. */
 type GenerateJsonParams = {
   prompt: string;
   /** `toCloudflareResponseSchema()`의 결과. 래핑 없이 그대로 실린다. */
@@ -73,6 +111,8 @@ type GenerateJsonParams = {
   // exactOptionalPropertyTypes가 켜져 있어, 호출부가 "없을 수도 있는 값"을 그대로
   // 넘길 수 있도록 undefined를 명시한다.
   abortSignal?: AbortSignal | undefined;
+  /** AI Runs accumulator가 단계별 실행값을 기록할 best-effort callback입니다. */
+  onObservation?: AiObserver<GenerateJsonObservation> | undefined;
 };
 
 type Credentials = { accountId: string; apiToken: string };
@@ -242,7 +282,23 @@ function extractJsonText(result: unknown): string {
 export async function generateJson(
   params: GenerateJsonParams,
 ): Promise<string> {
-  const { accountId, apiToken } = readCredentials();
+  let credentials: Credentials;
+
+  try {
+    credentials = readCredentials();
+  } catch (error) {
+    const failure =
+      error instanceof CloudflareAiError
+        ? error
+        : new CloudflareAiError("config");
+    await notifyAiObserver(params.onObservation, {
+      error: failure,
+      type: "provider-error",
+    });
+    throw failure;
+  }
+
+  const { accountId, apiToken } = credentials;
 
   const body: Record<string, unknown> = {
     messages: [{ role: "user", content: params.prompt }],
@@ -258,6 +314,13 @@ export async function generateJson(
   if (params.temperature !== undefined) {
     body.temperature = params.temperature;
   }
+
+  // credential과 header를 제외한 실제 Provider body만 관측 경계에 전달한다.
+  await notifyAiObserver(params.onObservation, {
+    body,
+    model: MODEL,
+    type: "request",
+  });
 
   let response: Response;
   try {
@@ -275,7 +338,12 @@ export async function generateJson(
       },
     );
   } catch (error) {
-    throw toLocalFailure(error);
+    const failure = toLocalFailure(error);
+    await notifyAiObserver(params.onObservation, {
+      error: failure,
+      type: "provider-error",
+    });
+    throw failure;
   }
 
   let parsed: unknown;
@@ -286,28 +354,80 @@ export async function generateJson(
     // 그 경우까지 provider 실패로 묶으면 kind가 timeout/aborted로 남지 않아
     // 호출부가 지연 안내 대신 일반 실패 문구를 내보낸다.
     if (isLocalAbort(error)) {
-      throw toLocalFailure(error);
+      const failure = toLocalFailure(error);
+      await notifyAiObserver(params.onObservation, {
+        error: failure,
+        type: "provider-error",
+      });
+      throw failure;
     }
 
-    throw new CloudflareAiError("provider", undefined, response.status);
+    const failure = new CloudflareAiError(
+      "provider",
+      undefined,
+      response.status,
+    );
+    await notifyAiObserver(params.onObservation, {
+      error: failure,
+      type: "provider-error",
+    });
+    throw failure;
   }
 
   if (!response.ok) {
-    throw new CloudflareAiError(
+    const failure = new CloudflareAiError(
       "provider",
       readErrorCode(parsed),
       response.status,
     );
+    await notifyAiObserver(params.onObservation, {
+      error: failure,
+      type: "provider-error",
+    });
+    throw failure;
   }
 
   // HTTP 200이어도 success: false로 실패를 알리는 경우가 있다.
   if ((parsed as { success?: unknown })?.success === false) {
-    throw new CloudflareAiError(
+    const failure = new CloudflareAiError(
       "provider",
       readErrorCode(parsed),
       response.status,
     );
+    await notifyAiObserver(params.onObservation, {
+      error: failure,
+      type: "provider-error",
+    });
+    throw failure;
   }
 
-  return extractJsonText((parsed as { result?: unknown })?.result);
+  // 성공 envelope는 extraction과 구분해 Provider 단계에 먼저 전달한다.
+  await notifyAiObserver(params.onObservation, {
+    response: parsed,
+    status: response.status,
+    type: "provider-response",
+  });
+
+  const result = (parsed as { result?: unknown })?.result;
+
+  await notifyAiObserver(params.onObservation, {
+    result,
+    type: "extraction-started",
+  });
+
+  try {
+    // 기존 extraction을 정확히 한 번만 실행하고 같은 문자열을 관측·반환한다.
+    const text = extractJsonText(result);
+    await notifyAiObserver(params.onObservation, {
+      text,
+      type: "extraction-completed",
+    });
+    return text;
+  } catch (error) {
+    await notifyAiObserver(params.onObservation, {
+      error,
+      type: "extraction-error",
+    });
+    throw error;
+  }
 }

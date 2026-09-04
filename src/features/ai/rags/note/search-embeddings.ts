@@ -9,6 +9,48 @@ import {
   NOTE_EMBEDDING_SOURCE_TYPE,
 } from "@/features/ai/rags/note/constants/embeddings";
 import type { AiRuntimeEmbeddingConfiguration } from "@/features/ai/runtimes/types";
+import { type AiObserver, notifyAiObserver } from "@/lib/ai/notify-observer";
+
+/** Note Embedding 검색 공통 helper가 노출하는 실행 관측 이벤트입니다. */
+export type SearchNoteEmbeddingsObservation =
+  | {
+      /** 실제 query embedding 요청과 Runtime 설정입니다. */
+      type: "embedding-requested";
+      configuration: AiRuntimeEmbeddingConfiguration;
+      input: string;
+    }
+  | {
+      /** vector를 제외한 query embedding 완료 결과입니다. */
+      type: "embedding-completed";
+      metadata: Awaited<
+        ReturnType<typeof createAiEmbeddingWithProvider>
+      >["metadata"];
+      usage: AiTokenUsage;
+    }
+  | {
+      /** query embedding 생성 실패입니다. */
+      type: "embedding-failed";
+      error: unknown;
+    }
+  | {
+      /** 실제 match query에 사용한 검색 설정입니다. */
+      type: "search-requested";
+      excludeSourceIds?: string[];
+      limit: number;
+      minSimilarity: number;
+      modelConfigId: string;
+      ownerUserId: string;
+    }
+  | {
+      /** match query가 반환한 원래 순서의 row 목록입니다. */
+      type: "search-completed";
+      matches: AiEmbeddingMatchRow[];
+    }
+  | {
+      /** embedding 완료 이후 match query에서 발생한 오류입니다. */
+      type: "search-failed";
+      error: unknown;
+    };
 
 /**
  * Note RAG에서 Note chunk Embedding을 검색하는 입력입니다.
@@ -49,6 +91,9 @@ export type SearchNoteEmbeddingsParams = {
    * usage/cost를 호출 계층에서 보존할 수 있게 합니다.
    */
   onUsage?: (usage: AiTokenUsage) => Promise<void>;
+
+  /** AI Runs accumulator가 단계별 실행값을 기록할 best-effort callback입니다. */
+  onObservation?: AiObserver<SearchNoteEmbeddingsObservation> | undefined;
 };
 
 /**
@@ -87,6 +132,7 @@ export async function searchNoteEmbeddings({
   question,
   limit,
   minSimilarity,
+  onObservation,
 }: SearchNoteEmbeddingsParams): Promise<AiEmbeddingMatchRow[]> {
   const result = await searchNoteEmbeddingsWithUsage({
     embeddingConfiguration,
@@ -95,6 +141,7 @@ export async function searchNoteEmbeddings({
     question,
     limit,
     minSimilarity,
+    ...(onObservation === undefined ? {} : { onObservation }),
   });
 
   return result.matches;
@@ -117,6 +164,7 @@ export async function searchNoteEmbeddingsWithUsage({
   limit,
   minSimilarity,
   onUsage,
+  onObservation,
 }: SearchNoteEmbeddingsParams): Promise<SearchNoteEmbeddingsWithUsageResult> {
   const embeddingModel = embeddingConfiguration.model;
 
@@ -134,12 +182,36 @@ export async function searchNoteEmbeddingsWithUsage({
    * 검색 질의 자체는 저장하지 않고 동일 Embedding Model로 vector만 생성합니다.
    * 저장된 Note chunk vector와 같은 vector space에서 비교하기 위한 과정입니다.
    */
-  const queryEmbedding = await createAiEmbeddingWithProvider({
-    apiKey: getProviderApiKey(embeddingModel.provider),
-    dimensions: embeddingModel.dimensions,
+  await notifyAiObserver(onObservation, {
+    configuration: embeddingConfiguration,
     input: question,
-    model: embeddingModel.model,
-    provider: embeddingModel.provider,
+    type: "embedding-requested",
+  });
+
+  let queryEmbedding: Awaited<ReturnType<typeof createAiEmbeddingWithProvider>>;
+
+  try {
+    // 기존과 같은 한 번의 Provider 호출로 vector와 관측 metadata를 함께 확보한다.
+    queryEmbedding = await createAiEmbeddingWithProvider({
+      apiKey: getProviderApiKey(embeddingModel.provider),
+      dimensions: embeddingModel.dimensions,
+      input: question,
+      model: embeddingModel.model,
+      provider: embeddingModel.provider,
+    });
+  } catch (error) {
+    await notifyAiObserver(onObservation, {
+      error,
+      type: "embedding-failed",
+    });
+    throw error;
+  }
+
+  // embedding vector는 의도적으로 제외하고 metadata와 usage만 전달한다.
+  await notifyAiObserver(onObservation, {
+    metadata: queryEmbedding.metadata,
+    type: "embedding-completed",
+    usage: queryEmbedding.usage,
   });
 
   await onUsage?.(queryEmbedding.usage);
@@ -151,15 +223,40 @@ export async function searchNoteEmbeddingsWithUsage({
    * excludeSourceIds가 지정된 경우 해당 Note들의 모든 chunk는
    * ranking 및 LIMIT 적용 전에 제외됩니다.
    */
-  const matches = await matchAiEmbeddings({
-    excludeSourceIds,
-    inputKind: NOTE_EMBEDDING_INPUT_KIND,
+  await notifyAiObserver(onObservation, {
+    ...(excludeSourceIds === undefined ? {} : { excludeSourceIds }),
     limit,
     minSimilarity,
     modelConfigId: embeddingModel.id,
     ownerUserId,
-    queryEmbedding: queryEmbedding.embedding,
-    sourceType: NOTE_EMBEDDING_SOURCE_TYPE,
+    type: "search-requested",
+  });
+
+  let matches: AiEmbeddingMatchRow[];
+
+  try {
+    matches = await matchAiEmbeddings({
+      excludeSourceIds,
+      inputKind: NOTE_EMBEDDING_INPUT_KIND,
+      limit,
+      minSimilarity,
+      modelConfigId: embeddingModel.id,
+      ownerUserId,
+      queryEmbedding: queryEmbedding.embedding,
+      sourceType: NOTE_EMBEDDING_SOURCE_TYPE,
+    });
+  } catch (error) {
+    await notifyAiObserver(onObservation, {
+      error,
+      type: "search-failed",
+    });
+    throw error;
+  }
+
+  // hydration 전에 실제 DB가 반환한 match 순서를 그대로 전달한다.
+  await notifyAiObserver(onObservation, {
+    matches,
+    type: "search-completed",
   });
 
   return {

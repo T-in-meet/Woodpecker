@@ -220,4 +220,84 @@ describe("createQueryExpansionCompletion", () => {
       }),
     ).rejects.toThrow("Provider 호출 실패");
   });
+
+  it("렌더링된 입력과 Provider 완료 결과를 실행 순서대로 관측한다", async () => {
+    const onObservation = vi.fn();
+    const variables = { question: "현재 질문" };
+
+    await createQueryExpansionCompletion({
+      configuration,
+      onObservation,
+      responseSchemaName: "test_query_expansion_response",
+      variables,
+    });
+
+    expect(onObservation.mock.calls.map(([event]) => event.type)).toEqual([
+      "prepared",
+      "completed",
+    ]);
+    expect(onObservation).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        configuration,
+        responseFormat: undefined,
+        systemPrompt: "렌더링된 System Prompt",
+        userPrompt: "렌더링된 User Prompt",
+        variables,
+      }),
+    );
+    expect(onObservation).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        result: expect.objectContaining({ usage }),
+      }),
+    );
+  });
+
+  it("Provider 실패 시 직전 preparation과 원래 오류를 관측한다", async () => {
+    const error = new Error("Provider 호출 실패");
+    const onObservation = vi.fn();
+    vi.mocked(createAiChatCompletionWithProvider).mockRejectedValue(error);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await expect(
+      createQueryExpansionCompletion({
+        configuration,
+        onObservation,
+        responseSchemaName: "test_query_expansion_response",
+        variables: { question: "현재 질문" },
+      }),
+    ).rejects.toBe(error);
+
+    expect(onObservation.mock.calls.map(([event]) => event.type)).toEqual([
+      "prepared",
+      "failed",
+    ]);
+    expect(onObservation).toHaveBeenLastCalledWith({ error, type: "failed" });
+  });
+
+  it("관측 callback 실패가 기존 반환값이나 Provider 호출 횟수를 바꾸지 않는다", async () => {
+    const observerErrorMessage = "application log에 남지 않을 관측 원문";
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const onObservation = vi
+      .fn()
+      .mockRejectedValue(new Error(observerErrorMessage));
+
+    await expect(
+      createQueryExpansionCompletion({
+        configuration,
+        onObservation,
+        responseSchemaName: "test_query_expansion_response",
+        variables: { question: "현재 질문" },
+      }),
+    ).resolves.toEqual({
+      content: JSON.stringify({ expandedQuery: "확장된 검색 질의" }),
+      usage,
+    });
+
+    expect(createAiChatCompletionWithProvider).toHaveBeenCalledOnce();
+    expect(JSON.stringify(errorSpy.mock.calls)).not.toContain(
+      observerErrorMessage,
+    );
+  });
 });

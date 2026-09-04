@@ -176,4 +176,87 @@ describe("searchNoteEmbeddings", () => {
     expect(onUsage).toHaveBeenCalledOnce();
     expect(onUsage).toHaveBeenCalledWith(usage);
   });
+
+  it("embedding 완료 뒤 검색이 실패해도 vector 없는 완료 관측값을 보존한다", async () => {
+    const usage = { inputTokens: 7, outputTokens: 0, totalTokens: 7 };
+    const onObservation = vi.fn();
+
+    vi.mocked(getProviderApiKey).mockReturnValue("test-api-key");
+    vi.mocked(createAiEmbeddingWithProvider).mockResolvedValue({
+      embedding: [0.1, 0.2, 0.3],
+      metadata: { provider: "openai" },
+      usage,
+    });
+    vi.mocked(matchAiEmbeddings).mockRejectedValue(new Error("match failed"));
+
+    await expect(
+      searchNoteEmbeddingsWithUsage({
+        ...SEARCH_INPUT,
+        onObservation,
+      }),
+    ).rejects.toThrow("match failed");
+
+    expect(onObservation.mock.calls.map(([event]) => event.type)).toEqual([
+      "embedding-requested",
+      "embedding-completed",
+      "search-requested",
+      "search-failed",
+    ]);
+    const embeddingCompleted = onObservation.mock.calls[1]?.[0];
+    expect(embeddingCompleted).toEqual({
+      metadata: { provider: "openai" },
+      type: "embedding-completed",
+      usage,
+    });
+    expect(embeddingCompleted).not.toHaveProperty("embedding");
+  });
+
+  it("검색 완료 시 raw match 순서를 그대로 관측한다", async () => {
+    const matches = [
+      { embedding_id: "first", similarity: 0.9, source_id: "note-1" },
+      { embedding_id: "second", similarity: 0.8, source_id: "note-2" },
+    ];
+    const onObservation = vi.fn();
+
+    vi.mocked(getProviderApiKey).mockReturnValue("test-api-key");
+    vi.mocked(createAiEmbeddingWithProvider).mockResolvedValue({
+      embedding: [0.1],
+      metadata: {},
+      usage: { inputTokens: 1, outputTokens: 0, totalTokens: 1 },
+    });
+    vi.mocked(matchAiEmbeddings).mockResolvedValue(matches as never);
+
+    const result = await searchNoteEmbeddingsWithUsage({
+      ...SEARCH_INPUT,
+      onObservation,
+    });
+
+    expect(result.matches).toBe(matches);
+    expect(onObservation).toHaveBeenLastCalledWith({
+      matches,
+      type: "search-completed",
+    });
+  });
+
+  it("관측 callback 실패가 기존 검색 결과와 호출 횟수를 바꾸지 않는다", async () => {
+    const matches = [{ embedding_id: "id", source_id: "note-id" }];
+
+    vi.mocked(getProviderApiKey).mockReturnValue("test-api-key");
+    vi.mocked(createAiEmbeddingWithProvider).mockResolvedValue({
+      embedding: [0.1],
+      metadata: {},
+      usage: { inputTokens: 1, outputTokens: 0, totalTokens: 1 },
+    });
+    vi.mocked(matchAiEmbeddings).mockResolvedValue(matches as never);
+
+    await expect(
+      searchNoteEmbeddings({
+        ...SEARCH_INPUT,
+        onObservation: vi.fn().mockRejectedValue(new Error("관측 실패")),
+      }),
+    ).resolves.toBe(matches);
+
+    expect(createAiEmbeddingWithProvider).toHaveBeenCalledOnce();
+    expect(matchAiEmbeddings).toHaveBeenCalledOnce();
+  });
 });
