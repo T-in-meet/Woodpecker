@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(5);
+SELECT plan(6);
 
 
 -- ============================================================================
@@ -39,6 +39,18 @@ SELECT set_config(
 
 SELECT set_config(
     'test.related_notes_delete_foreign_target_id',
+    gen_random_uuid()::text,
+    true
+);
+
+SELECT set_config(
+    'test.related_notes_delete_unrelated_source_id',
+    gen_random_uuid()::text,
+    true
+);
+
+SELECT set_config(
+    'test.related_notes_delete_unrelated_target_id',
     gen_random_uuid()::text,
     true
 );
@@ -95,6 +107,20 @@ VALUES
         'Foreign Target',
         'Foreign Target Content',
         0
+    ),
+    (
+        current_setting('test.related_notes_delete_unrelated_source_id')::uuid,
+        current_setting('test.related_notes_delete_user_a_id')::uuid,
+        'Unrelated Source',
+        'Unrelated Source Content',
+        0
+    ),
+    (
+        current_setting('test.related_notes_delete_unrelated_target_id')::uuid,
+        current_setting('test.related_notes_delete_user_a_id')::uuid,
+        'Unrelated Target',
+        'Unrelated Target Content',
+        0
     );
 
 INSERT INTO public.note_related_notes (
@@ -125,6 +151,13 @@ VALUES
         'manual',
         'active',
         '{"title":"Foreign Target"}'::jsonb
+    ),
+    (
+        current_setting('test.related_notes_delete_unrelated_source_id')::uuid,
+        current_setting('test.related_notes_delete_unrelated_target_id')::uuid,
+        'manual',
+        'active',
+        '{"title":"Unrelated Target"}'::jsonb
     );
 
 SET LOCAL ROLE authenticated;
@@ -145,9 +178,17 @@ SELECT set_config(
 -- 1. Manual Relation Delete
 -- ============================================================================
 
+-- relation ID로 manual 관계 row를 삭제할 수 있어야 합니다.
 SELECT public.delete_note_related(
     current_setting('test.related_notes_delete_source_id')::uuid,
-    current_setting('test.related_notes_delete_manual_target_id')::uuid
+    (
+        SELECT id
+        FROM public.note_related_notes
+        WHERE note_id =
+                current_setting('test.related_notes_delete_source_id')::uuid
+          AND related_note_id =
+                current_setting('test.related_notes_delete_manual_target_id')::uuid
+    )
 );
 
 SELECT is(
@@ -198,9 +239,17 @@ SELECT set_config(
     true
 );
 
+-- relation ID와 화면 기준 Note 조합이면 역방향 화면에서도 같은 row를 삭제해야 합니다.
 SELECT public.delete_note_related(
     current_setting('test.related_notes_delete_manual_target_id')::uuid,
-    current_setting('test.related_notes_delete_source_id')::uuid
+    (
+        SELECT id
+        FROM public.note_related_notes
+        WHERE note_id =
+                current_setting('test.related_notes_delete_source_id')::uuid
+          AND related_note_id =
+                current_setting('test.related_notes_delete_manual_target_id')::uuid
+    )
 );
 
 SELECT is(
@@ -221,9 +270,17 @@ SELECT is(
 -- 3. AI Relation Dismiss
 -- ============================================================================
 
+-- relation ID로 AI 관계를 dismissed 상태로 전환해야 합니다.
 SELECT public.delete_note_related(
     current_setting('test.related_notes_delete_source_id')::uuid,
-    current_setting('test.related_notes_delete_ai_target_id')::uuid
+    (
+        SELECT id
+        FROM public.note_related_notes
+        WHERE note_id =
+                current_setting('test.related_notes_delete_source_id')::uuid
+          AND related_note_id =
+                current_setting('test.related_notes_delete_ai_target_id')::uuid
+    )
 );
 
 SELECT is(
@@ -266,9 +323,17 @@ SELECT set_config(
     true
 );
 
+-- relation ID와 화면 기준 Note 조합이면 역방향 화면에서도 AI 관계를 숨겨야 합니다.
 SELECT public.delete_note_related(
     current_setting('test.related_notes_delete_ai_target_id')::uuid,
-    current_setting('test.related_notes_delete_source_id')::uuid
+    (
+        SELECT id
+        FROM public.note_related_notes
+        WHERE note_id =
+                current_setting('test.related_notes_delete_source_id')::uuid
+          AND related_note_id =
+                current_setting('test.related_notes_delete_ai_target_id')::uuid
+    )
 );
 
 SELECT is(
@@ -286,9 +351,10 @@ SELECT is(
 
 
 -- ============================================================================
--- 5. Target Ownership
+-- 5. Unrelated Relation ID
 -- ============================================================================
 
+-- relation ID가 존재해도 화면 기준 Note를 포함하지 않으면 삭제할 수 없어야 합니다.
 SELECT throws_ok(
     format(
         $sql$
@@ -298,7 +364,43 @@ SELECT throws_ok(
             );
         $sql$,
         current_setting('test.related_notes_delete_source_id'),
-        current_setting('test.related_notes_delete_foreign_target_id')
+        (
+            SELECT id::text
+            FROM public.note_related_notes
+            WHERE note_id =
+                    current_setting('test.related_notes_delete_unrelated_source_id')::uuid
+              AND related_note_id =
+                    current_setting('test.related_notes_delete_unrelated_target_id')::uuid
+        )
+    ),
+    'P0002',
+    'RELATED_NOTE_RELATION_NOT_FOUND',
+    'relationship id unrelated to the viewed note should not be deletable'
+);
+
+
+-- ============================================================================
+-- 6. Target Ownership
+-- ============================================================================
+
+-- relation ID가 다른 사용자의 target Note를 포함하면 삭제할 수 없어야 합니다.
+SELECT throws_ok(
+    format(
+        $sql$
+            SELECT public.delete_note_related(
+                '%s'::uuid,
+                '%s'::uuid
+            );
+        $sql$,
+        current_setting('test.related_notes_delete_source_id'),
+        (
+            SELECT id::text
+            FROM public.note_related_notes
+            WHERE note_id =
+                    current_setting('test.related_notes_delete_source_id')::uuid
+              AND related_note_id =
+                    current_setting('test.related_notes_delete_foreign_target_id')::uuid
+        )
     ),
     'P0002',
     'RELATED_NOTE_TARGET_NOT_FOUND',

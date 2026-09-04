@@ -55,6 +55,7 @@ export const aiRelatedNoteMetadataSchema = relatedNoteMetadataSchema.extend({
  */
 export const relatedNoteRowSchema = z.discriminatedUnion("origin", [
   z.object({
+    id: z.string().uuid(),
     note_id: z.string().uuid(),
     related_note_id: z.string().uuid(),
     origin: z.literal("manual"),
@@ -67,6 +68,7 @@ export const relatedNoteRowSchema = z.discriminatedUnion("origin", [
     metadata: manualRelatedNoteMetadataSchema,
   }),
   z.object({
+    id: z.string().uuid(),
     note_id: z.string().uuid(),
     related_note_id: z.string().uuid(),
     origin: z.literal("ai"),
@@ -133,8 +135,8 @@ export const updateManualRelatedNoteReasonSchema = z.object({
   /** Related Note를 수정할 기준 Note ID입니다. */
   noteId: z.string().uuid(),
 
-  /** 수정할 Related Note ID입니다. */
-  relatedNoteId: z.string().uuid(),
+  /** 수정할 Related Notes 관계 row ID입니다. */
+  relationId: z.string().uuid(),
 
   /** 수정할 선택적 연결 이유입니다. */
   reason: z
@@ -158,8 +160,8 @@ export const deleteRelatedNoteSchema = z.object({
   /** Related Notes가 연결된 기준 Note ID입니다. */
   noteId: z.string().uuid(),
 
-  /** 삭제할 Related Note ID입니다. */
-  relatedNoteId: z.string().uuid(),
+  /** 삭제할 Related Notes 관계 row ID입니다. */
+  relationId: z.string().uuid(),
 });
 
 export type DeleteRelatedNoteInput = z.infer<typeof deleteRelatedNoteSchema>;

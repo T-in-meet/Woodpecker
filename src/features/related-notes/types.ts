@@ -35,6 +35,9 @@ export type RelatedNoteAiRecommendation = {
  * 노트 상세 화면에 표시할 manual 관련 노트 항목입니다.
  */
 export type ManualRelatedNoteRecommendation = {
+  /** Related Notes 관계 row ID입니다. */
+  relationId: string;
+
   /** 관련 Note ID입니다. */
   noteId: string;
 
@@ -52,6 +55,9 @@ export type ManualRelatedNoteRecommendation = {
  * 노트 상세 화면에 표시할 AI 관련 노트 항목입니다.
  */
 export type AiRelatedNoteRecommendation = RelatedNoteAiRecommendation & {
+  /** Related Notes 관계 row ID입니다. */
+  relationId: string;
+
   /** AI가 생성한 관계입니다. */
   origin: "ai";
 };
