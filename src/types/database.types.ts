@@ -2110,7 +2110,7 @@ export type Database = {
           p_score: number;
           p_user_id: string;
         };
-        Returns: string;
+        Returns: Json;
       };
       get_admin_ai_agent_list: {
         Args: {

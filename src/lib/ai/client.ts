@@ -26,6 +26,14 @@ const MAX_OUTPUT_TOKENS = 8192;
  */
 const REASONING_EFFORT = "low";
 
+/** JSON 생성 호출과 기능별 AI Run Snapshot이 공유하는 Provider 실행 설정입니다. */
+export const CLOUDFLARE_JSON_GENERATION_CONFIG = {
+  provider: "Cloudflare Workers AI",
+  model: MODEL,
+  maxTokens: MAX_OUTPUT_TOKENS,
+  reasoningEffort: REASONING_EFFORT,
+} as const;
+
 /**
  * 호출부가 분기할 오류 종류. Cloudflare가 주는 숫자 코드와는 층이 다르다.
  *

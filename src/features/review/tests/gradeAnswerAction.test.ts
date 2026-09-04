@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { GenerateJsonObservation } from "@/lib/ai/client";
+
 import { GRADING_ERROR_MESSAGES } from "../constants";
 import { hashNoteContent } from "../lib/contentHash";
 
@@ -11,6 +13,8 @@ const NOTE_ID = "11111111-1111-4111-8111-111111111111";
 const REVIEW_LOG_ID = "22222222-2222-4222-8222-222222222222";
 const OTHER_REVIEW_LOG_ID = "33333333-3333-4333-8333-333333333333";
 const CLAIM_TOKEN = "55555555-5555-4555-8555-555555555555";
+const GRADING_ID = "66666666-6666-4666-8666-666666666666";
+const AI_RUN_ID = "77777777-7777-4777-8777-777777777777";
 const TEST_USER_ID = "user-123";
 const CONFIRMED_AT = "2026-01-01T00:00:00.000Z";
 const ANSWER = "기억나는 내용을 적었습니다.";
@@ -42,6 +46,9 @@ const STORED_GRADING = {
 
 const {
   createAdminClientMock,
+  completeAiRunFailedMock,
+  completeAiRunSucceededMock,
+  createAiRunMock,
   createClientMock,
   generateJsonMock,
   getGradingByReviewLogMock,
@@ -53,6 +60,9 @@ const {
 } = vi.hoisted(() => {
   return {
     createAdminClientMock: vi.fn(),
+    completeAiRunFailedMock: vi.fn(),
+    completeAiRunSucceededMock: vi.fn(),
+    createAiRunMock: vi.fn(),
     createClientMock: vi.fn(),
     generateJsonMock: vi.fn(),
     getGradingByReviewLogMock: vi.fn(),
@@ -63,6 +73,12 @@ const {
     revalidatePathMock: vi.fn(),
   };
 });
+
+vi.mock("@/features/ai/runs/persistence", () => ({
+  completeAiRunFailed: completeAiRunFailedMock,
+  completeAiRunSucceeded: completeAiRunSucceededMock,
+  createAiRun: createAiRunMock,
+}));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: createClientMock,
@@ -112,14 +128,14 @@ function setupSupabase({
   emailConfirmedAt = CONFIRMED_AT,
   claimResult = { status: "ok", claimToken: CLAIM_TOKEN } as unknown,
   claimError = null,
-  finalizeResult = "ok",
+  finalizeResult = { status: "ok", gradingId: GRADING_ID } as unknown,
   finalizeError = null,
 }: {
   userId?: string | null;
   emailConfirmedAt?: string | null;
   claimResult?: unknown;
   claimError?: RpcError;
-  finalizeResult?: string;
+  finalizeResult?: unknown;
   finalizeError?: RpcError;
 } = {}) {
   const rpcMock = vi.fn().mockImplementation((fn: string) => {
@@ -128,7 +144,14 @@ function setupSupabase({
     }
 
     if (fn === "finalize_review_grading") {
-      return Promise.resolve({ data: finalizeResult, error: finalizeError });
+      const data =
+        typeof finalizeResult === "string"
+          ? {
+              status: finalizeResult,
+              gradingId: finalizeResult === "ok" ? GRADING_ID : null,
+            }
+          : finalizeResult;
+      return Promise.resolve({ data, error: finalizeError });
     }
 
     return Promise.resolve({ data: null, error: null });
@@ -200,6 +223,7 @@ function mockHappyPathQueries() {
 describe("gradeAnswerAction", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    createAiRunMock.mockResolvedValue(AI_RUN_ID);
   });
 
   it("rejects an invalid payload", async () => {
@@ -357,6 +381,144 @@ describe("gradeAnswerAction", () => {
       },
     });
     expect(revalidatePathMock).toHaveBeenCalledWith(`/notes/${NOTE_ID}`);
+    expect(createAiRunMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        featureType: "review-grading",
+        userId: TEST_USER_ID,
+      }),
+    );
+    expect(completeAiRunSucceededMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        aiRunId: AI_RUN_ID,
+        featureResultIds: [GRADING_ID],
+        userId: TEST_USER_ID,
+      }),
+    );
+  });
+
+  it("records the actual grading inputs and observed stages in one Run Snapshot", async () => {
+    setupSupabase();
+    mockHappyPathQueries();
+    let initialSnapshot: unknown;
+
+    createAiRunMock.mockImplementation(
+      async (params: { buildSnapshot: () => unknown }) => {
+        initialSnapshot = params.buildSnapshot();
+        return AI_RUN_ID;
+      },
+    );
+    generateJsonMock.mockImplementation(
+      async (params: {
+        onObservation?: (
+          observation: GenerateJsonObservation,
+        ) => void | Promise<void>;
+        prompt: string;
+        responseSchema: unknown;
+      }) => {
+        const providerResult = {
+          choices: [
+            {
+              finish_reason: "stop",
+              message: { content: JSON.stringify(VALID_GRADING_RESPONSE) },
+            },
+          ],
+        };
+        await params.onObservation?.({
+          type: "request",
+          model: "@cf/openai/gpt-oss-120b",
+          body: {
+            messages: [{ role: "user", content: params.prompt }],
+            response_format: {
+              type: "json_schema",
+              json_schema: params.responseSchema,
+            },
+            max_tokens: 8192,
+            reasoning_effort: "low",
+          },
+        });
+        await params.onObservation?.({
+          type: "provider-response",
+          response: { success: true, result: providerResult },
+          status: 200,
+        });
+        await params.onObservation?.({
+          type: "extraction-started",
+          result: providerResult,
+        });
+        await params.onObservation?.({
+          type: "extraction-completed",
+          text: JSON.stringify(VALID_GRADING_RESPONSE),
+        });
+        return JSON.stringify(VALID_GRADING_RESPONSE);
+      },
+    );
+
+    await gradeAnswerAction(null, createFormData());
+
+    expect(initialSnapshot).toEqual({
+      schemaVersion: 1,
+      sourceInput: {
+        input: {
+          note: { id: NOTE_ID, content: NOTE_CONTENT },
+          reviewLog: {
+            id: REVIEW_LOG_ID,
+            noteId: NOTE_ID,
+            round: 1,
+            scheduledAt: "2026-07-05T00:00:00.000Z",
+            completedAt: null,
+          },
+          answer: ANSWER,
+          originalContentHash: NOTE_CONTENT_HASH,
+          currentContentHash: NOTE_CONTENT_HASH,
+        },
+      },
+    });
+
+    const terminalParams = completeAiRunSucceededMock.mock.calls[0]?.[0] as
+      | { buildSnapshot: () => unknown }
+      | undefined;
+    expect(terminalParams?.buildSnapshot()).toMatchObject({
+      gradingPreparation: {
+        input: { originalContent: NOTE_CONTENT, userAnswer: ANSWER },
+      },
+      gradingGeneration: {
+        input: {
+          messages: [
+            { role: "user", content: expect.stringContaining(NOTE_CONTENT) },
+          ],
+        },
+      },
+      responseExtraction: {
+        output: { responseText: JSON.stringify(VALID_GRADING_RESPONSE) },
+      },
+      parseAndValidation: {
+        output: {
+          parsedResponse: VALID_GRADING_RESPONSE,
+          validatedGrading: VALID_GRADING_RESPONSE,
+        },
+      },
+      finalOutput: { grading: VALID_GRADING_RESPONSE },
+    });
+  });
+
+  it("does not change the grading result when AI Run creation fails", async () => {
+    setupSupabase();
+    mockHappyPathQueries();
+    createAiRunMock.mockResolvedValue(null);
+    generateJsonMock.mockResolvedValue(JSON.stringify(VALID_GRADING_RESPONSE));
+
+    const result = await gradeAnswerAction(null, createFormData());
+
+    expect(result).toMatchObject({
+      success: true,
+      grading: VALID_GRADING_RESPONSE,
+    });
+    expect(completeAiRunSucceededMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        aiRunId: null,
+        featureResultIds: [GRADING_ID],
+      }),
+    );
   });
 
   // 형식 이탈은 곧 사용자 에러 + 선점이 풀릴 때까지의 대기다. 디코딩 단계에서 먼저 막는다
@@ -440,6 +602,7 @@ describe("gradeAnswerAction", () => {
       },
     });
     expect(generateJsonMock).not.toHaveBeenCalled();
+    expect(createAiRunMock).not.toHaveBeenCalled();
   });
 
   it("skips the AI call when another request holds the claim", async () => {
@@ -633,6 +796,9 @@ describe("gradeAnswerAction", () => {
     expect(result).toEqual({
       error: "AI 채점에 실패했습니다. 잠시 후 다시 시도해주세요.",
     });
+    expect(completeAiRunFailedMock).toHaveBeenCalledWith(
+      expect.objectContaining({ aiRunId: AI_RUN_ID, userId: TEST_USER_ID }),
+    );
 
     consoleErrorSpy.mockRestore();
   });
@@ -653,6 +819,9 @@ describe("gradeAnswerAction", () => {
       error: "채점 결과를 처리할 수 없습니다. 다시 시도해주세요.",
     });
     expect(rpcCallsFor(rpcMock, "finalize_review_grading")).toHaveLength(0);
+    expect(completeAiRunFailedMock).toHaveBeenCalledWith(
+      expect.objectContaining({ aiRunId: AI_RUN_ID, userId: TEST_USER_ID }),
+    );
 
     const logged = consoleErrorSpy.mock.calls.flat().map(String).join(" ");
     expect(logged).not.toContain("노트에 적힌 비밀 내용");
@@ -682,6 +851,9 @@ describe("gradeAnswerAction", () => {
         incorrectPoints: [],
       },
     });
+    expect(completeAiRunSucceededMock).toHaveBeenCalledWith(
+      expect.objectContaining({ featureResultIds: [] }),
+    );
   });
 
   it("returns an error when the claim was taken over by another request", async () => {
@@ -697,6 +869,9 @@ describe("gradeAnswerAction", () => {
     expect(result).toEqual({
       error: "다른 채점 요청이 먼저 진행됐어요. 잠시 후 다시 시도해주세요.",
     });
+    expect(completeAiRunSucceededMock).toHaveBeenCalledWith(
+      expect.objectContaining({ featureResultIds: [] }),
+    );
 
     consoleErrorSpy.mockRestore();
   });
@@ -715,6 +890,9 @@ describe("gradeAnswerAction", () => {
       error: "채점 결과를 저장하지 못했습니다. 잠시 후 다시 시도해주세요.",
     });
     expect(revalidatePathMock).not.toHaveBeenCalled();
+    expect(completeAiRunSucceededMock).toHaveBeenCalledWith(
+      expect.objectContaining({ featureResultIds: [] }),
+    );
 
     consoleErrorSpy.mockRestore();
   });

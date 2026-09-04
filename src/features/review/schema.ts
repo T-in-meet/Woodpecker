@@ -64,6 +64,12 @@ export const gradingResponseSchema = gradingFeedbackSchema.extend({
   score: z.number().int().min(0).max(100),
 });
 
+/** 실제 수신 검증에 사용하는 Zod schema의 JSON Schema Snapshot입니다. */
+export const GRADING_VALIDATION_JSON_SCHEMA = z.toJSONSchema(
+  gradingResponseSchema,
+  { io: "output" },
+);
+
 /**
  * 구조화 출력 JSON Schema에만 쓰는 "생성" 스키마.
  * `.max()`가 JSON Schema의 `maxItems`로 변환돼 디코딩 단계에서 개수를 강제한다.

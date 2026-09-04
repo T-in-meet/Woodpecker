@@ -4,7 +4,7 @@
 
 BEGIN;
 
-SELECT plan(26);
+SELECT plan(28);
 
 -- 채점 기준 원본 해시. 형식(sha256 hex)만 맞으면 되므로 고정값을 쓴다.
 SELECT set_config('test.rg_content_hash', repeat('a', 64), true);
@@ -201,22 +201,41 @@ SELECT is(
     gen_random_uuid(),
     100,
     '{"summary":"forged","missedConcepts":[],"incorrectPoints":[]}'::jsonb
-  ),
+  ) ->> 'status',
   'stale_claim',
   $$선점 토큰이 다르면 확정할 수 없어야 한다$$
 );
 
--- 선점 토큰이 일치하면 채점 결과를 확정할 수 있어야 한다
-SELECT is(
+-- 선점 토큰이 일치하는 확정 응답을 이후 UUID 검증에도 재사용한다
+SELECT set_config(
+  'test.rg_finalize_a',
   public.finalize_review_grading(
     current_setting('test.rg_rls_user_a_id')::uuid,
     current_setting('test.rg_rls_log_a_id')::uuid,
     ((current_setting('test.rg_claim_a')::jsonb) ->> 'claimToken')::uuid,
     85,
     '{"summary":"a","missedConcepts":["개념"],"incorrectPoints":[]}'::jsonb
-  ),
+  )::text,
+  true
+);
+
+-- 선점 토큰이 일치하면 채점 결과를 확정할 수 있어야 한다
+SELECT is(
+  (current_setting('test.rg_finalize_a')::jsonb) ->> 'status',
   'ok',
   $$선점 토큰이 일치하면 채점 결과를 확정할 수 있어야 한다$$
+);
+
+-- 성공 응답은 이 호출이 확정한 Review Grading UUID를 반환해야 한다
+SELECT is(
+  (
+    SELECT id::text
+    FROM public.review_gradings
+    WHERE review_log_id = current_setting('test.rg_rls_log_a_id')::uuid
+      AND user_id = current_setting('test.rg_rls_user_a_id')::uuid
+  ),
+  (current_setting('test.rg_finalize_a')::jsonb) ->> 'gradingId',
+  $$성공 응답은 이 호출이 확정한 Review Grading UUID를 반환해야 한다$$
 );
 
 -- 확정 후 다시 선점하면 already_graded여야 한다 (복습 1회당 채점 1회)
@@ -231,17 +250,31 @@ SELECT is(
   $$확정 후 다시 선점하면 already_graded여야 한다$$
 );
 
--- 확정 후 다시 확정하면 already_graded여야 한다 (점수 덮어쓰기 차단)
-SELECT is(
+-- 확정 후 다시 확정한 응답은 상태와 결과 ID를 함께 검증한다
+SELECT set_config(
+  'test.rg_finalize_already',
   public.finalize_review_grading(
     current_setting('test.rg_rls_user_a_id')::uuid,
     current_setting('test.rg_rls_log_a_id')::uuid,
     ((current_setting('test.rg_claim_a')::jsonb) ->> 'claimToken')::uuid,
     100,
     '{"summary":"overwrite","missedConcepts":[],"incorrectPoints":[]}'::jsonb
-  ),
+  )::text,
+  true
+);
+
+-- 확정 후 다시 확정하면 already_graded여야 한다 (점수 덮어쓰기 차단)
+SELECT is(
+  (current_setting('test.rg_finalize_already')::jsonb) ->> 'status',
   'already_graded',
   $$확정 후 다시 확정하면 already_graded여야 한다$$
+);
+
+-- already_graded는 과거 결과를 현재 실행의 결과 ID로 반환하지 않아야 한다
+SELECT is(
+  (current_setting('test.rg_finalize_already')::jsonb) ->> 'gradingId',
+  NULL,
+  $$already_graded는 과거 Review Grading UUID를 반환하지 않아야 한다$$
 );
 
 -- =========================================
@@ -268,7 +301,7 @@ SELECT is(
     gen_random_uuid(),
     0,
     '{"summary":"hijack","missedConcepts":[],"incorrectPoints":[]}'::jsonb
-  ),
+  ) ->> 'status',
   'not_found',
   $$user_a로는 user_b의 채점 결과를 확정할 수 없어야 한다$$
 );
@@ -396,7 +429,7 @@ SELECT is(
     ((current_setting('test.rg_claim_a2_first')::jsonb) ->> 'claimToken')::uuid,
     99,
     '{"summary":"late","missedConcepts":[],"incorrectPoints":[]}'::jsonb
-  ),
+  ) ->> 'status',
   'stale_claim',
   $$선점을 빼앗긴 이전 요청은 확정할 수 없어야 한다$$
 );
@@ -409,7 +442,7 @@ SELECT is(
     ((current_setting('test.rg_claim_a2_second')::jsonb) ->> 'claimToken')::uuid,
     40,
     '{"summary":"second","missedConcepts":[],"incorrectPoints":[]}'::jsonb
-  ),
+  ) ->> 'status',
   'ok',
   $$이어받은 요청은 자신의 토큰으로 확정할 수 있어야 한다$$
 );
