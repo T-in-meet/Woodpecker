@@ -31,13 +31,15 @@ vi.mock(
 
 const noteId = "11111111-1111-4111-8111-111111111111";
 const relatedNoteId = "22222222-2222-4222-8222-222222222222";
+// 링크 대상 노트 ID와 수정·삭제 대상 관계 ID를 구분해 검증한다.
+const relationId = "33333333-3333-4333-8333-333333333333";
 const title = "긴 관련 노트 제목 ".repeat(10);
 
 function renderItem(origin: "manual" | "ai", reason: string) {
   return render(
     <RelatedNoteItem
       noteId={noteId}
-      relatedNote={{ noteId: relatedNoteId, title, origin, reason }}
+      relatedNote={{ relationId, noteId: relatedNoteId, title, origin, reason }}
     />,
   );
 }
@@ -92,7 +94,7 @@ describe("RelatedNoteItem", () => {
     await user.click(screen.getByRole("button", { name: "저장" }));
     expect(mutations.update).toHaveBeenCalledWith({
       noteId,
-      relatedNoteId,
+      relationId,
       reason: "새 이유",
     });
   });
@@ -108,7 +110,7 @@ describe("RelatedNoteItem", () => {
           name: origin === "manual" ? "삭제" : "숨기기",
         }),
       );
-      expect(mutations.remove).toHaveBeenCalledWith({ noteId, relatedNoteId });
+      expect(mutations.remove).toHaveBeenCalledWith({ noteId, relationId });
     },
   );
 });
