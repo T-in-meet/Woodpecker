@@ -119,9 +119,9 @@ describe("OAuthButtons", () => {
     expect(showToast).not.toHaveBeenCalled();
   });
 
-  it("beforeSignIn이 false를 반환하면 OAuth 로그인을 시작하지 않는다", async () => {
+  it("beforeSignIn이 실패를 반환하면 OAuth 로그인을 시작하지 않는다", async () => {
     const user = userEvent.setup();
-    const beforeSignIn = vi.fn(() => false);
+    const beforeSignIn = vi.fn(() => ({ ok: false }) as const);
 
     render(<OAuthButtons intent="signup" beforeSignIn={beforeSignIn} />);
 
@@ -136,9 +136,49 @@ describe("OAuthButtons", () => {
     ).toBeInTheDocument();
   });
 
+  it("message 없는 실패는 버튼 아래에 아무것도 남기지 않는다", async () => {
+    const user = userEvent.setup();
+    // 호출자가 이미 다른 자리(체크박스 옆 필드 오류)에 표시했다는 뜻이므로
+    // 여기서 한 번 더 띄우면 사용자가 오류 두 개로 읽는다.
+    const beforeSignIn = vi.fn(() => ({ ok: false }) as const);
+
+    render(<OAuthButtons intent="signup" beforeSignIn={beforeSignIn} />);
+
+    await user.click(
+      screen.getByRole("button", { name: "Google 계정으로 계속하기" }),
+    );
+
+    expect(screen.queryByTestId("form-error")).not.toBeInTheDocument();
+    expect(showToast).not.toHaveBeenCalled();
+  });
+
+  it("beforeSignIn이 message를 주면 버튼 아래에 인라인으로 남긴다", async () => {
+    const user = userEvent.setup();
+    const beforeSignIn = vi.fn(
+      () =>
+        ({
+          ok: false,
+          message:
+            "소셜 회원가입을 시작할 수 없습니다. 잠시 후 다시 시도해주세요.",
+        }) as const,
+    );
+
+    render(<OAuthButtons intent="signup" beforeSignIn={beforeSignIn} />);
+
+    await user.click(
+      screen.getByRole("button", { name: "Google 계정으로 계속하기" }),
+    );
+
+    expect(await screen.findByTestId("form-error")).toHaveTextContent(
+      "소셜 회원가입을 시작할 수 없습니다. 잠시 후 다시 시도해주세요.",
+    );
+    expect(signInWithOAuthMock).not.toHaveBeenCalled();
+    expect(showToast).not.toHaveBeenCalled();
+  });
+
   it("beforeSignIn이 resolve된 뒤 OAuth 로그인을 시작한다", async () => {
     const user = userEvent.setup();
-    const beforeSignIn = vi.fn().mockResolvedValue(true);
+    const beforeSignIn = vi.fn().mockResolvedValue({ ok: true });
 
     render(<OAuthButtons intent="signup" beforeSignIn={beforeSignIn} />);
 

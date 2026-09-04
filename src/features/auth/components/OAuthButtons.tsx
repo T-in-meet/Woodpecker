@@ -25,9 +25,22 @@ const OAUTH_PROVIDERS: OAuthProviderConfig[] = [
   },
 ];
 
+/**
+ * OAuth 시작 전 사전 검사 결과.
+ *
+ * message가 없는 실패는 "호출자가 이미 다른 자리(예: 체크박스 옆 필드 오류)에
+ * 표시했으니 여기서는 중단만 하라"는 뜻이다. 같은 내용을 버튼 아래에 한 번 더
+ * 띄우면 사용자가 오류 두 개로 읽는다.
+ */
+export type OAuthBeforeSignInResult =
+  | { ok: true }
+  | { ok: false; message?: string };
+
 type OAuthButtonsProps = {
   intent: "login" | "signup";
-  beforeSignIn?: () => boolean | Promise<boolean>;
+  beforeSignIn?: () =>
+    | OAuthBeforeSignInResult
+    | Promise<OAuthBeforeSignInResult>;
   redirect?: string | null;
   showSeparator?: boolean;
 };
@@ -71,8 +84,16 @@ export function OAuthButtons({
     setError(null);
 
     // 회원가입 화면에서는 약관 동의 여부를 확인한 뒤 OAuth redirect를 시작한다.
-    if (beforeSignIn && !(await beforeSignIn())) {
-      return;
+    if (beforeSignIn) {
+      const result = await beforeSignIn();
+
+      if (!result.ok) {
+        if (result.message) {
+          setError(result.message);
+        }
+
+        return;
+      }
     }
 
     setPendingProvider(provider);

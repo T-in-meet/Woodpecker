@@ -9,7 +9,10 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
-import { OAuthButtons } from "@/features/auth/components/OAuthButtons";
+import {
+  type OAuthBeforeSignInResult,
+  OAuthButtons,
+} from "@/features/auth/components/OAuthButtons";
 import {
   GLOBAL_ERROR_MESSAGES,
   isGlobalError,
@@ -28,7 +31,6 @@ import { EmailSignupFields } from "@/features/auth/signup/components/EmailSignup
 import { SignupActions } from "@/features/auth/signup/components/SignupActions";
 import { signupFormSchema } from "@/features/auth/signup/schema/signupFormSchema";
 import { cn } from "@/lib/utils/cn";
-import { showToast } from "@/lib/utils/showToast";
 import { isServerValidationError } from "@/lib/validation/isServerValidationError";
 import { mapReasonToMessage } from "@/lib/validation/mapReasonToMessage";
 
@@ -248,52 +250,57 @@ export function SignupForm({
 
   /**
    * OAuth 회원가입 전 공통 필수 약관 동의 intent를 저장한다.
+   *
+   * 두 실패를 서로 다른 자리에 남긴다. 사라지는 toast로 알리면 무엇을 고쳐야
+   * 하는지가 화면에서 없어지기 때문이다.
+   * - 약관 미동의 → 고쳐야 할 체크박스 옆 필드 오류
+   * - intent 저장 실패 → 다시 누를 소셜 버튼 아래 인라인 오류
    */
-  const handleOAuthBeforeSignIn = async () => {
-    if (
-      watchedTermsOfService &&
-      watchedPrivacyPolicyAcknowledged &&
-      watchedAge14OrOlder
-    ) {
-      try {
-        const response = await fetch("/api/auth/oauth/agreement-intent", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            agreements: {
-              termsOfService: true,
-              privacyPolicyAcknowledged: true,
-              age14OrOlder: true,
-            },
-          }),
-        });
+  const handleOAuthBeforeSignIn =
+    async (): Promise<OAuthBeforeSignInResult> => {
+      if (
+        watchedTermsOfService &&
+        watchedPrivacyPolicyAcknowledged &&
+        watchedAge14OrOlder
+      ) {
+        try {
+          const response = await fetch("/api/auth/oauth/agreement-intent", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              agreements: {
+                termsOfService: true,
+                privacyPolicyAcknowledged: true,
+                age14OrOlder: true,
+              },
+            }),
+          });
 
-        if (response.ok) {
-          return true;
+          if (response.ok) {
+            return { ok: true };
+          }
+        } catch {
+          // 아래 공통 메시지로 OAuth 시작 실패를 안내한다.
         }
-      } catch {
-        // 아래 공통 toast로 OAuth 시작 실패를 안내한다.
+
+        return {
+          ok: false,
+          message:
+            "소셜 회원가입을 시작할 수 없습니다. 잠시 후 다시 시도해주세요.",
+        };
       }
 
-      showToast(
-        "소셜 회원가입을 시작할 수 없습니다. 잠시 후 다시 시도해주세요.",
-        {
-          variant: "destructive",
-          dedupeKey: "auth-oauth-agreement-intent",
-        },
-      );
-      return false;
-    }
+      // 체크박스마다 오류 슬롯이 이미 있고, AgreementSection이 새로 나타난 오류로
+      // 포커스까지 옮긴다. message를 넘기지 않아 소셜 버튼 아래에는 중복으로
+      // 띄우지 않는다.
+      await trigger([
+        "termsOfService",
+        "privacyPolicyAcknowledged",
+        "age14OrOlder",
+      ]);
 
-    showToast(
-      "이용약관 동의, 개인정보 처리방침 확인, 만 14세 이상 확인이 필요합니다.",
-      {
-        variant: "destructive",
-        dedupeKey: "auth-signup-agreements-required",
-      },
-    );
-    return false;
-  };
+      return { ok: false };
+    };
 
   return (
     <div className="my-0 md:my-4 mx-auto max-w-2xl bg-white border-0 md:border md:border-outline-variant md:rounded-xl rounded-none md:shadow-sm shadow-none overflow-hidden">

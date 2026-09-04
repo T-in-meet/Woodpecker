@@ -14,9 +14,8 @@ import { Label } from "@/components/ui/label";
 import { OAuthButtons } from "@/features/auth/components/OAuthButtons";
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 import {
+  OAUTH_CALLBACK_ERROR_MESSAGE,
   OAUTH_CALLBACK_ERROR_PARAM,
-  OAUTH_CALLBACK_ERROR_TOAST_KEY,
-  OAUTH_CALLBACK_ERROR_TOAST_MESSAGE,
 } from "@/features/auth/constants/oauthCallbackError";
 import {
   GLOBAL_ERROR_MESSAGES,
@@ -35,7 +34,6 @@ import {
 } from "@/features/auth/login/schema/loginFormSchema";
 import { LOGIN_FIELD_SET } from "@/features/auth/login/types/form.types";
 import { ROUTES } from "@/lib/constants/routes";
-import { showToast } from "@/lib/utils/showToast";
 import { isServerValidationError } from "@/lib/validation/isServerValidationError";
 import { mapReasonToMessage } from "@/lib/validation/mapReasonToMessage";
 
@@ -66,14 +64,13 @@ export function LoginForm() {
 
   const redirectParam = searchParams.get("redirect");
 
+  // 다시 시도해야 하는 오류라 사라지는 토스트 대신 자격증명 오류와 같은 자리에
+  // 남긴다. 입력을 시작하거나 다시 제출하면 자동으로 지워진다.
   useEffect(() => {
     if (!searchParams.get(OAUTH_CALLBACK_ERROR_PARAM)) return;
 
-    showToast(OAUTH_CALLBACK_ERROR_TOAST_MESSAGE, {
-      variant: "destructive",
-      dedupeKey: OAUTH_CALLBACK_ERROR_TOAST_KEY,
-    });
-  }, [searchParams]);
+    setError("root", { message: OAUTH_CALLBACK_ERROR_MESSAGE });
+  }, [searchParams, setError]);
 
   const forgotPasswordHref = redirectParam
     ? `${ROUTES.FORGOT_PASSWORD}?${new URLSearchParams({ redirect: redirectParam }).toString()}`

@@ -10,9 +10,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AGREEMENT_REQUIRED_NOTICE_MESSAGE } from "@/features/auth/constants/agreementRequired";
 import {
+  OAUTH_CALLBACK_ERROR_MESSAGE,
   OAUTH_CALLBACK_ERROR_REASON,
-  OAUTH_CALLBACK_ERROR_TOAST_KEY,
-  OAUTH_CALLBACK_ERROR_TOAST_MESSAGE,
 } from "@/features/auth/constants/oauthCallbackError";
 import SignupPageClient from "@/features/auth/signup/components/SignupPageClient";
 import { showToast } from "@/lib/utils/showToast";
@@ -223,18 +222,30 @@ describe("SignupPageClient OAuth callback 실패 안내", () => {
     vi.clearAllMocks();
   });
 
-  it("oauth_error query가 있으면 소셜 로그인 실패 toast를 표시한다", async () => {
+  it("oauth_error query가 있으면 폼 상단 배너에 오류를 남긴다", async () => {
     render(<SignupPageClient />);
 
-    await waitFor(() => {
-      expect(showToast).toHaveBeenCalledWith(
-        OAUTH_CALLBACK_ERROR_TOAST_MESSAGE,
-        {
-          variant: "destructive",
-          dedupeKey: OAUTH_CALLBACK_ERROR_TOAST_KEY,
-        },
-      );
-    });
+    // 다시 시도해야 하는 오류라 사라지는 toast가 아니라 화면에 남는다.
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      OAUTH_CALLBACK_ERROR_MESSAGE,
+    );
+    expect(showToast).not.toHaveBeenCalled();
+  });
+
+  it("약관 재동의 요구가 함께 오면 배너 한 자리를 그쪽이 차지한다", async () => {
+    mockSearchParams.mockReturnValue(
+      new URLSearchParams({
+        agreement_required: "1",
+        oauth_error: OAUTH_CALLBACK_ERROR_REASON.EXCHANGE_FAILED,
+      }),
+    );
+
+    render(<SignupPageClient />);
+
+    // 배너 자리는 하나뿐이고, 더 구체적인 다음 행동을 알려주는 쪽이 이긴다.
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      AGREEMENT_REQUIRED_NOTICE_MESSAGE,
+    );
   });
 });
 

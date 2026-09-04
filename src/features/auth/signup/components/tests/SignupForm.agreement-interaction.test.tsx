@@ -385,7 +385,7 @@ describe("회원가입 폼 동의 상호작용", () => {
     ).not.toBeDisabled();
   });
 
-  it("TC-21: 약관 미동의 상태에서 소셜 회원가입을 클릭하면 toast를 표시한다", async () => {
+  it("TC-21: 약관 미동의 상태에서 소셜 회원가입을 클릭하면 체크박스 옆에 오류를 남긴다", async () => {
     const user = userEvent.setup();
     renderSignupForm();
 
@@ -394,15 +394,32 @@ describe("회원가입 폼 동의 상호작용", () => {
       screen.getByRole("button", { name: "Google 계정으로 계속하기" }),
     );
 
-    expect(showToast).toHaveBeenCalledWith(
-      "이용약관 동의, 개인정보 처리방침 확인, 만 14세 이상 확인이 필요합니다.",
-      {
-        variant: "destructive",
-        dedupeKey: "auth-signup-agreements-required",
-      },
-    );
+    // 고쳐야 할 대상 옆에 남긴다. 사라지는 toast로 알리면 무엇을 체크해야
+    // 하는지가 화면에서 없어진다.
+    expect(await screen.findByText("이용약관에 동의해주세요")).toBeVisible();
+    expect(screen.getByText("개인정보 처리방침을 확인해주세요")).toBeVisible();
+    expect(screen.getByText("만 14세 이상만 가입할 수 있습니다")).toBeVisible();
+
+    expect(showToast).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
     expect(signInWithOAuthMock).not.toHaveBeenCalled();
+  });
+
+  it("TC-21a: 약관 미동의 오류가 뜨면 첫 오류로 포커스가 이동한다", async () => {
+    const user = userEvent.setup();
+    renderSignupForm();
+
+    await user.click(screen.getByRole("button", { name: /Google로 가입/i }));
+    await user.click(
+      screen.getByRole("button", { name: "Google 계정으로 계속하기" }),
+    );
+
+    // 약관 오류 문구는 약관 다이얼로그를 다시 여는 버튼이다.
+    await waitFor(() => {
+      expect(document.activeElement).toBe(
+        screen.getByRole("button", { name: "이용약관에 동의해주세요" }),
+      );
+    });
   });
 
   it("TC-22: 이용약관, 처리방침, 연령을 모두 확인하면 소셜 회원가입을 시작한다", async () => {
@@ -448,9 +465,8 @@ describe("회원가입 폼 동의 상호작용", () => {
     const callbackUrl = new URL(oauthOptions.options.redirectTo as string);
 
     expect(callbackUrl.searchParams.get("intent")).toBe("signup");
-    expect(showToast).not.toHaveBeenCalledWith(
-      "이용약관 동의, 개인정보 처리방침 확인, 만 14세 이상 확인이 필요합니다.",
-      expect.anything(),
-    );
+    expect(
+      screen.queryByText("이용약관에 동의해주세요"),
+    ).not.toBeInTheDocument();
   });
 });

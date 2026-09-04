@@ -22,8 +22,8 @@ export function ToasterProvider() {
       richColors
       // [설명: 토스트 색상을 자동으로 variant에 맞춰 설정함]
       closeButton
-      // [설명: 오류 토스트는 showToast에서 duration: Infinity로 띄우므로
-      //  사용자가 직접 닫을 수단이 반드시 있어야 함]
+      // [설명: 오류 토스트는 성공보다 오래(6초) 떠 있으므로,
+      //  다 읽은 사용자가 기다리지 않고 바로 치울 수단을 준다]
     />
   );
 }

@@ -18,9 +18,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 import {
+  OAUTH_CALLBACK_ERROR_MESSAGE,
   OAUTH_CALLBACK_ERROR_REASON,
-  OAUTH_CALLBACK_ERROR_TOAST_KEY,
-  OAUTH_CALLBACK_ERROR_TOAST_MESSAGE,
 } from "@/features/auth/constants/oauthCallbackError";
 import { showToast } from "@/lib/utils/showToast";
 
@@ -109,21 +108,30 @@ describe("LoginForm 전역 에러 처리", () => {
     await expectFormError("일시적인 오류가 발생했습니다.");
   });
 
-  it("OAuth callback 실패 query가 있으면 소셜 로그인 실패 toast를 표시한다", async () => {
+  it("OAuth callback 실패 query가 있으면 폼 안에 오류 문구가 남는다", async () => {
     setupDefaultMocks({
       oauthError: OAUTH_CALLBACK_ERROR_REASON.EXCHANGE_FAILED,
     });
 
     renderLoginForm();
 
+    // 다시 시도해야 하는 오류라 사라지는 toast가 아니라 폼에 남는다.
+    await expectFormError(OAUTH_CALLBACK_ERROR_MESSAGE);
+  });
+
+  it("OAuth callback 오류는 입력을 시작하면 사라진다", async () => {
+    setupDefaultMocks({
+      oauthError: OAUTH_CALLBACK_ERROR_REASON.EXCHANGE_FAILED,
+    });
+    const user = userEvent.setup();
+
+    renderLoginForm();
+    await screen.findByTestId("form-error");
+
+    await user.type(screen.getByLabelText("이메일"), "a");
+
     await waitFor(() => {
-      expect(showToast).toHaveBeenCalledWith(
-        OAUTH_CALLBACK_ERROR_TOAST_MESSAGE,
-        {
-          variant: "destructive",
-          dedupeKey: OAUTH_CALLBACK_ERROR_TOAST_KEY,
-        },
-      );
+      expect(screen.queryByTestId("form-error")).not.toBeInTheDocument();
     });
   });
 });
