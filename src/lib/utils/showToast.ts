@@ -71,9 +71,16 @@ export function showToast(
   const duration =
     options.duration ?? (variant === "destructive" ? Infinity : 3000);
 
+  // 사라지지 않는 오류 toast는 dedupeKey 없이 반복 호출되면 그대로 쌓인다.
+  // sonner는 기본적으로 3개만 화면에 그리므로, 네 번째 실패부터는 아무것도
+  // 보이지 않아 "눌렀는데 아무 일도 없다"가 된다. 키가 없으면 메시지 자체를
+  // 키로 삼아 같은 실패를 반복해도 같은 자리에서 갱신되게 한다.
+  const toastId =
+    dedupeKey ?? (duration === Infinity ? `message:${message}` : undefined);
+
   const toastOptions = {
     duration,
-    ...(dedupeKey ? { id: dedupeKey } : {}),
+    ...(toastId ? { id: toastId } : {}),
   };
 
   if (variant === "destructive") {
