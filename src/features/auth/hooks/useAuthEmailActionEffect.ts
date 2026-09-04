@@ -1,8 +1,6 @@
 import { useEffect } from "react";
 import { UseFormSetError } from "react-hook-form";
 
-import { showToast } from "@/lib/utils/showToast";
-
 import { AUTH_GLOBAL_ERROR_MESSAGE } from "../constants/messages";
 import { RATE_LIMIT_TOAST_MESSAGE } from "../errors/rateLimitError";
 import { ForgotPasswordActionState } from "../forgot-password/actions/forgotPasswordActionState";
@@ -24,8 +22,8 @@ type UseAuthEmailActionEffectParams = {
  *
  * 처리 정책:
  * - invalid_input → email field error 표시
- * - blocked → rate limit toast 표시
- * - internal_error → 공통 시스템 오류 toast 표시
+ * - blocked → rate limit form 오류 표시
+ * - internal_error → 공통 시스템 오류 form 오류 표시
  *
  * 제외:
  * - invalid_request → page 단계 redirect 대상
@@ -60,11 +58,12 @@ export const useAuthEmailActionEffect = ({
        * rate limit 차단
        *
        * 사용자에게 재시도 안내를 제공한다.
+       * 재시도가 필요한 오류라 사라지는 toast 대신 form 오류로 남긴다.
        */
       case "blocked":
-        showToast(RATE_LIMIT_TOAST_MESSAGE, {
-          variant: "destructive",
-          dedupeKey: "auth-rate-limit",
+        setError("root", {
+          type: "server",
+          message: RATE_LIMIT_TOAST_MESSAGE,
         });
 
         return;
@@ -76,9 +75,9 @@ export const useAuthEmailActionEffect = ({
        * 시스템 오류 등을 공통 메시지로 안내한다.
        */
       case "internal_error":
-        showToast(AUTH_GLOBAL_ERROR_MESSAGE, {
-          variant: "destructive",
-          dedupeKey: "auth-global-error",
+        setError("root", {
+          type: "server",
+          message: AUTH_GLOBAL_ERROR_MESSAGE,
         });
 
         return;

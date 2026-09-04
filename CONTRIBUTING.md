@@ -47,7 +47,7 @@ node -v  # v24.14.0
 npm -v
 ```
 
-> GitHub Actions CI는 Node 20에서 실행되므로, 로컬에서만 재현되는 문제가 있으면 Node 버전 차이를 먼저 의심하세요.
+> GitHub Actions CI와 Lighthouse CI도 `.nvmrc`를 읽어 로컬과 같은 Node.js 버전을 사용합니다.
 
 ---
 
@@ -261,7 +261,7 @@ DB를 변경할 때는 `supabase/migrations/`에 `YYYYMMDDHHMMSS_설명.sql` 형
 
 ### 로컬에서만 재현되는 빌드/타입 오류
 
-GitHub Actions CI는 Node 20에서 실행되지만 로컬 권장 버전은 Node 24.14.0입니다. 로컬에서만 실패하거나 반대로 로컬은 통과하는데 CI만 실패한다면 Node 버전 차이를 가장 먼저 의심하세요. `node -v`로 확인하고 필요하면 `nvm use`.
+GitHub Actions CI와 Lighthouse CI는 `.nvmrc`에 지정된 버전을 사용합니다. 로컬에서만 실패하거나 반대로 로컬은 통과하는데 CI만 실패한다면 `node -v`가 `.nvmrc`와 일치하는지 확인하고 필요하면 `nvm use`를 실행하세요. CI의 의존성·Prettier·TypeScript 캐시 키에도 `.nvmrc`를 포함하므로 Node.js 버전을 바꾸면 캐시가 새로 생성됩니다.
 
 ### Web Push 알림이 로컬에서 동작하지 않음
 

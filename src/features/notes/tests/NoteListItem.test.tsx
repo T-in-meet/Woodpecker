@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NoteListItem } from "../components/NoteListItem";
+import { NotesViewContainer } from "../components/NotesViewContainer";
 
 // canReview를 화면에 드러내서 진입 조건을 렌더 결과로 검증한다.
 vi.mock("../components/NoteActions", () => ({
@@ -14,6 +15,62 @@ vi.mock("../components/NoteActions", () => ({
 }));
 
 describe("NoteListItem", () => {
+  const searchNote = {
+    id: "note-search",
+    title: "React 학습",
+    content: "가".repeat(100) + "React 설명" + "나".repeat(100),
+    review_completed_at: null,
+    review_round: 0,
+    next_review_at: null,
+  };
+
+  it("passes the search phrase from the list and highlights title and excerpt", () => {
+    const { container } = render(
+      <NotesViewContainer
+        notes={[searchNote]}
+        total={1}
+        currentPage={1}
+        pageSize={10}
+        query="react"
+        view="all"
+      />,
+    );
+    expect(
+      Array.from(
+        container.querySelectorAll("mark"),
+        (mark) => mark.textContent,
+      ),
+    ).toEqual(["React", "React"]);
+    expect(container.textContent).toContain("…" + "가".repeat(40));
+    expect(container.textContent).not.toContain("가".repeat(100));
+    expect(screen.getByRole("link")).toHaveAttribute(
+      "href",
+      "/notes/note-search",
+    );
+    expect(screen.getByRole("link")).not.toContainElement(
+      screen.getByRole("button", { name: "노트 액션" }),
+    );
+  });
+
+  it("keeps the original preview when not searching", () => {
+    const { container } = render(<NoteListItem note={searchNote} />);
+    expect(container.querySelector("mark")).toBeNull();
+    expect(screen.getByText(searchNote.content)).toBeInTheDocument();
+  });
+
+  it("explains matches that occur only in the source", () => {
+    render(
+      <NoteListItem
+        note={{ ...searchNote, content: "[문서](https://example.com)" }}
+        query="example"
+      />,
+    );
+    expect(
+      screen.getByText("노트 원문에서 검색어가 일치합니다."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("문서")).toBeInTheDocument();
+  });
+
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-01T14:30:00.000Z"));

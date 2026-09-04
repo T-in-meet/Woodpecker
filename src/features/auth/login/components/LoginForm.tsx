@@ -14,9 +14,8 @@ import { Label } from "@/components/ui/label";
 import { OAuthButtons } from "@/features/auth/components/OAuthButtons";
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 import {
+  OAUTH_CALLBACK_ERROR_MESSAGE,
   OAUTH_CALLBACK_ERROR_PARAM,
-  OAUTH_CALLBACK_ERROR_TOAST_KEY,
-  OAUTH_CALLBACK_ERROR_TOAST_MESSAGE,
 } from "@/features/auth/constants/oauthCallbackError";
 import {
   GLOBAL_ERROR_MESSAGES,
@@ -35,7 +34,6 @@ import {
 } from "@/features/auth/login/schema/loginFormSchema";
 import { LOGIN_FIELD_SET } from "@/features/auth/login/types/form.types";
 import { ROUTES } from "@/lib/constants/routes";
-import { showToast } from "@/lib/utils/showToast";
 import { isServerValidationError } from "@/lib/validation/isServerValidationError";
 import { mapReasonToMessage } from "@/lib/validation/mapReasonToMessage";
 
@@ -66,14 +64,13 @@ export function LoginForm() {
 
   const redirectParam = searchParams.get("redirect");
 
+  // 다시 시도해야 하는 오류라 사라지는 토스트 대신 자격증명 오류와 같은 자리에
+  // 남긴다. 입력을 시작하거나 다시 제출하면 자동으로 지워진다.
   useEffect(() => {
     if (!searchParams.get(OAUTH_CALLBACK_ERROR_PARAM)) return;
 
-    showToast(OAUTH_CALLBACK_ERROR_TOAST_MESSAGE, {
-      variant: "destructive",
-      dedupeKey: OAUTH_CALLBACK_ERROR_TOAST_KEY,
-    });
-  }, [searchParams]);
+    setError("root", { message: OAUTH_CALLBACK_ERROR_MESSAGE });
+  }, [searchParams, setError]);
 
   const forgotPasswordHref = redirectParam
     ? `${ROUTES.FORGOT_PASSWORD}?${new URLSearchParams({ redirect: redirectParam }).toString()}`
@@ -135,29 +132,23 @@ export function LoginForm() {
         return;
       }
 
-      // rate limit — 토스트로 안내
+      // 아래 세 가지는 모두 "다시 시도"가 필요한 오류다. 사라지는 토스트로 알리면
+      // 재시도할 근거가 화면에서 없어지므로, 자격증명 오류와 같은 자리에 남긴다.
+
+      // rate limit
       if (isRateLimitError(e)) {
-        showToast(RATE_LIMIT_TOAST_MESSAGE, {
-          variant: "destructive",
-          dedupeKey: "auth-rate-limit",
-        });
+        setError("root", { message: RATE_LIMIT_TOAST_MESSAGE });
         return;
       }
 
-      // 네트워크/서버/타임아웃 에러 — 토스트로 안내
+      // 네트워크/서버/타임아웃 에러
       if (isGlobalError(e)) {
-        showToast(GLOBAL_ERROR_MESSAGES[e.type], {
-          variant: "destructive",
-          dedupeKey: `auth-global-${e.type}`,
-        });
+        setError("root", { message: GLOBAL_ERROR_MESSAGES[e.type] });
         return;
       }
 
       // 그 외 예상하지 못한 에러 — 최소한의 피드백 보장
-      showToast(UNKNOWN_ERROR_MESSAGE, {
-        variant: "destructive",
-        dedupeKey: "auth-unknown-error",
-      });
+      setError("root", { message: UNKNOWN_ERROR_MESSAGE });
     }
   };
 

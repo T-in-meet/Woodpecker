@@ -298,7 +298,9 @@ export function NoteChatComposer({
               </AlertDialogContent>
             </AlertDialog>
 
-            <Button type="submit" size="sm" disabled={isSubmitDisabled}>
+            {/* 이 화면의 주 액션이라 가장 작은 sm(28px) 대신 기본 크기를 쓴다.
+                터치에서는 buttonVariants의 pointer-coarse 분기로 44px가 된다. */}
+            <Button type="submit" disabled={isSubmitDisabled}>
               {isAnswerGenerating ? (
                 <>
                   <Loader2 className="size-4 animate-spin" />

@@ -47,7 +47,7 @@ export function NotesViewContainer({
       <ul className="flex list-none flex-col gap-3">
         {notes.map((note) => (
           <li key={note.id}>
-            <NoteListItem note={note} />
+            <NoteListItem note={note} query={query} />
           </li>
         ))}
       </ul>

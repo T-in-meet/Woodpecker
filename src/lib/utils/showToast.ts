@@ -31,6 +31,15 @@ import { toast } from "sonner";
 
 type ToastVariant = "default" | "destructive";
 
+// 스스로 사라지는 것이 toast의 정체성이다. 사용자가 반드시 조치해야 하는 오류는
+// toast가 아니라 고쳐질 때까지 남는 인라인 메시지로 알린다(form root 오류, 필드
+// 오류, 상단 배너). toast에는 저위험 확인과, 인라인으로 붙일 자리가 없는 실패만
+// 남긴다. 오류는 읽는 데 시간이 더 걸리므로 성공보다 길게 보여준다.
+const TOAST_DURATION_MS = {
+  default: 3000,
+  destructive: 6000,
+} as const satisfies Record<ToastVariant, number>;
+
 type ShowToastOptions = {
   variant?: ToastVariant;
   duration?: number;
@@ -43,7 +52,7 @@ type ShowToastOptions = {
  * @param message - 표시할 메시지
  * @param options - 토스트 옵션
  *   - variant: "default" | "destructive" (기본값: "default")
- *   - duration: 표시 시간(ms) (기본값: 3000)
+ *   - duration: 표시 시간(ms) (기본값: 성공 3000, 오류 6000)
  *   - dedupeKey: 동일 의미 toast 중복 방지 키
  *
  * 예시:
@@ -62,7 +71,11 @@ export function showToast(
   message: string,
   options: ShowToastOptions = {},
 ): void {
-  const { variant = "default", duration = 3000, dedupeKey } = options;
+  const {
+    variant = "default",
+    duration = TOAST_DURATION_MS[variant],
+    dedupeKey,
+  } = options;
 
   const toastOptions = {
     duration,

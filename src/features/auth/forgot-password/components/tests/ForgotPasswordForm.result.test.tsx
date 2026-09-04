@@ -1,3 +1,4 @@
+import { screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_GLOBAL_ERROR_MESSAGE } from "@/features/auth/constants/messages";
@@ -44,15 +45,18 @@ describe("ForgotPasswordForm.result", () => {
     expect(getEmailInput()).toHaveValue(FIXTURES.valid);
   });
 
-  it("TC16: internal_error 응답에서 global error toast를 표시한다", () => {
+  it("TC16: internal_error 응답에서 global error를 폼 안에 남긴다", async () => {
     setupForgotPasswordFormTest({
       state: { status: "internal_error", fieldErrors: null },
     });
 
     renderForgotPasswordForm();
 
-    expect(showToast).toHaveBeenCalledTimes(1);
-    expect(showToast).toHaveBeenCalledWith(AUTH_GLOBAL_ERROR_MESSAGE);
+    // 재시도가 필요한 오류라 사라지는 toast가 아니라 폼 안에 남는다.
+    expect(await screen.findByTestId("form-error")).toHaveTextContent(
+      AUTH_GLOBAL_ERROR_MESSAGE,
+    );
+    expect(showToast).not.toHaveBeenCalled();
   });
 
   it("TC18: global error 이후에도 input value를 유지한다", async () => {
@@ -66,22 +70,19 @@ describe("ForgotPasswordForm.result", () => {
     expect(getEmailInput()).toHaveValue(FIXTURES.valid);
   });
 
-  it("TC19: blocked 응답이면 rate limit toast를 표시한다", () => {
+  it("TC19: blocked 응답이면 rate limit 안내를 폼 안에 남긴다", async () => {
     setupForgotPasswordFormTest({
       state: { status: "blocked", fieldErrors: null },
     });
 
     renderForgotPasswordForm();
 
-    expect(showToast).toHaveBeenCalledTimes(1);
-    expect(showToast).toHaveBeenCalledWith(
+    expect(await screen.findByTestId("form-error")).toHaveTextContent(
       RATE_LIMIT_TOAST_MESSAGE,
-      expect.objectContaining({
-        variant: "destructive",
-        dedupeKey: "auth-rate-limit",
-      }),
     );
+    expect(showToast).not.toHaveBeenCalled();
   });
+
   it("TC24: invalid_reset_link query면 toast를 1회 표시한다", () => {
     setupForgotPasswordFormTest({
       queryError: "invalid_reset_link",

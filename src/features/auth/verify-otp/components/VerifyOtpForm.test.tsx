@@ -132,7 +132,7 @@ describe("VerifyOtpForm", () => {
     ).toBeInTheDocument();
   });
 
-  it("blocked 상태면 rate limit toast를 표시한다", async () => {
+  it("blocked 상태면 rate limit 안내를 폼 안에 남긴다", async () => {
     const user = userEvent.setup();
 
     const action = vi.fn().mockResolvedValue({
@@ -146,15 +146,13 @@ describe("VerifyOtpForm", () => {
     await user.type(screen.getByPlaceholderText("예: 123456"), validOtp);
     await user.click(screen.getByRole("button", { name: "인증하기" }));
 
-    await waitFor(() => {
-      expect(mocks.showToast).toHaveBeenCalledWith(RATE_LIMIT_TOAST_MESSAGE, {
-        variant: "destructive",
-        dedupeKey: "auth-rate-limit",
-      });
-    });
+    expect(await screen.findByTestId("form-error")).toHaveTextContent(
+      RATE_LIMIT_TOAST_MESSAGE,
+    );
+    expect(mocks.showToast).not.toHaveBeenCalled();
   });
 
-  it("internal_error 상태면 글로벌 에러 toast를 표시한다", async () => {
+  it("internal_error 상태면 글로벌 에러를 폼 안에 남긴다", async () => {
     const user = userEvent.setup();
 
     const action = vi.fn().mockResolvedValue({
@@ -168,12 +166,10 @@ describe("VerifyOtpForm", () => {
     await user.type(screen.getByPlaceholderText("예: 123456"), validOtp);
     await user.click(screen.getByRole("button", { name: "인증하기" }));
 
-    await waitFor(() => {
-      expect(mocks.showToast).toHaveBeenCalledWith(AUTH_GLOBAL_ERROR_MESSAGE, {
-        variant: "destructive",
-        dedupeKey: "auth-global-error",
-      });
-    });
+    expect(await screen.findByTestId("form-error")).toHaveTextContent(
+      AUTH_GLOBAL_ERROR_MESSAGE,
+    );
+    expect(mocks.showToast).not.toHaveBeenCalled();
   });
 
   it("인증번호 재전송 링크를 렌더링한다", () => {

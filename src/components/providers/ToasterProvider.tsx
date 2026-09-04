@@ -21,6 +21,9 @@ export function ToasterProvider() {
       //  이는 shadcn/ui의 기본 토스트 위치와 일치]
       richColors
       // [설명: 토스트 색상을 자동으로 variant에 맞춰 설정함]
+      closeButton
+      // [설명: 오류 토스트는 성공보다 오래(6초) 떠 있으므로,
+      //  다 읽은 사용자가 기다리지 않고 바로 치울 수단을 준다]
     />
   );
 }
