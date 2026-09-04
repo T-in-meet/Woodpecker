@@ -21,9 +21,20 @@ ALTER TABLE "public"."note_related_notes"
     ALTER COLUMN "id" SET DEFAULT gen_random_uuid(),
     ALTER COLUMN "id" SET NOT NULL;
 
-ALTER TABLE ONLY "public"."note_related_notes"
-    ADD CONSTRAINT "note_related_notes_id_key"
-    UNIQUE ("id");
+-- relation ID의 unique constraint가 없는 경우에만 추가합니다.
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'note_related_notes_id_key'
+          AND conrelid = 'public.note_related_notes'::regclass
+    ) THEN
+        ALTER TABLE ONLY "public"."note_related_notes"
+            ADD CONSTRAINT "note_related_notes_id_key"
+         UNIQUE ("id");
+    END IF;
+END $$;
 
 COMMENT ON COLUMN "public"."note_related_notes"."id" IS
     'Related Notes 관계 row를 식별하는 UUID입니다. pair primary key는 그대로 유지합니다.';
