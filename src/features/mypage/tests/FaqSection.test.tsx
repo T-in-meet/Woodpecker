@@ -93,6 +93,15 @@ describe("FaqSection", () => {
       }),
     ).not.toBeInTheDocument();
 
+    // AI 채점 한도는 UI 어디에도 안내가 없어 한도에 걸려야 알 수 있었다.
+    // 퀴즈 한도는 QuizModal 팝오버가 맡고, 채점 한도는 이 FAQ가 유일한 안내다.
+    await user.click(
+      screen.getByRole("button", {
+        name: "AI 채점은 하루에 몇 번까지 받을 수 있나요?",
+      }),
+    );
+    expect(screen.getByText(/하루에 5회까지 받을 수 있고/)).toBeInTheDocument();
+
     await user.click(
       screen.getByRole("button", {
         name: "학습 통계의 연속 학습일과 정시 완료율은 어떻게 계산되나요?",
