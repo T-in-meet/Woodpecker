@@ -621,7 +621,7 @@ export async function gradeAnswerAction(
       onObservation: snapshotAccumulator.observeGeneration,
     });
   } catch (e) {
-    // Provider/extraction 실패까지 확보한 partial Snapshot으로 AI 경계를 닫는다.
+    // Provider/extraction 실패까지 확보한 partial Snapshot으로 failed terminal 저장을 시도한다.
     await completeAiRunFailed({
       aiRunId,
       buildSnapshot: snapshotAccumulator.buildSnapshot,
@@ -721,7 +721,7 @@ export async function gradeAnswerAction(
       ? [parsedFinalizeResult.data.gradingId]
       : [];
 
-  // Final Output 이후 persistence 결과와 무관하게 AI Run 자체는 성공이다.
+  // Final Output 이후 Review Grading 저장 결과와 무관하게 AI 성공으로 보고 succeeded terminal 저장을 시도한다.
   await completeAiRunSucceeded({
     aiRunId,
     buildSnapshot: snapshotAccumulator.buildSnapshot,

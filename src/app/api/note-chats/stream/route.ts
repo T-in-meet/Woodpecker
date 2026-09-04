@@ -50,11 +50,11 @@ import { createClient } from "@/lib/supabase/server";
 export const maxDuration = 90;
 
 /**
- * 새로운 사용자 질문과 Run을 생성한 뒤 AI 답변 스트림을 반환합니다.
+ * 새로운 사용자 질문을 생성한 뒤 AI 답변 스트림을 반환합니다.
  *
  * AI 설정은 클라이언트에서 전달받지 않습니다.
  * Note Chat에 연결된 AI Foundation Runtime Configuration을 서버에서 조회하고,
- * 확정된 동일 설정을 Run 생성과 실제 AI 실행에 사용합니다.
+ * 확정된 동일 설정을 실제 AI 실행과 AI Run Snapshot에 사용합니다.
  *
  * @param request 질문 생성 입력을 포함한 HTTP 요청
  * @returns NDJSON 스트림 또는 요청 오류 응답

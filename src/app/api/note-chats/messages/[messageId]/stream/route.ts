@@ -61,7 +61,7 @@ type NoteChatUserMessageStreamRouteProps = {
  *
  * AI 설정은 클라이언트에서 전달받지 않습니다.
  * Note Chat에 연결된 AI Foundation Runtime Configuration을 서버에서 조회하고,
- * 확정된 동일 설정을 Run 생성과 실제 AI 실행에 사용합니다.
+ * 확정된 동일 설정을 실제 AI 실행과 AI Run Snapshot에 사용합니다.
  *
  * @param request 수정된 사용자 질문을 포함한 HTTP 요청
  * @param params 수정할 User Message ID를 포함한 Route Params
