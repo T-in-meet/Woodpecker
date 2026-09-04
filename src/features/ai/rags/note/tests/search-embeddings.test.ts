@@ -5,6 +5,12 @@ import { matchAiEmbeddings } from "@/features/ai/embeddings/match";
 import { createAiEmbeddingWithProvider } from "@/features/ai/providers";
 import { getProviderApiKey } from "@/features/ai/providers/utils/api-key";
 import type { AiRuntimeEmbeddingConfiguration } from "@/features/ai/runtimes/types";
+import { reportAiOperationalError } from "@/features/ai/utils/report-ai-operational-error";
+import {
+  AI_OPERATIONAL_ERROR_CODE,
+  AI_OPERATIONAL_ERROR_OPERATION,
+  AI_OPERATIONAL_ERROR_STAGE,
+} from "@/features/operational-errors/constants";
 
 import {
   NOTE_EMBEDDING_INPUT_KIND,
@@ -25,6 +31,10 @@ vi.mock("@/features/ai/providers", () => ({
 
 vi.mock("@/features/ai/providers/utils/api-key", () => ({
   getProviderApiKey: vi.fn(),
+}));
+
+vi.mock("@/features/ai/utils/report-ai-operational-error", () => ({
+  reportAiOperationalError: vi.fn(),
 }));
 
 const EMBEDDING_CONFIGURATION = {
@@ -126,7 +136,7 @@ describe("searchNoteEmbeddings", () => {
     });
   });
 
-  it("지원하지 않는 Embedding dimensions이면 Provider를 호출하지 않고 오류를 발생시킨다", async () => {
+  it("지원하지 않는 Embedding dimensions이면 운영 오류를 기록하고 Provider를 호출하지 않는다", async () => {
     const configuration = {
       ...EMBEDDING_CONFIGURATION,
       model: {
@@ -144,7 +154,80 @@ describe("searchNoteEmbeddings", () => {
       `Unsupported note embedding dimensions: ${AI_EMBEDDING_DIMENSIONS + 1}`,
     );
 
+    expect(reportAiOperationalError).toHaveBeenCalledOnce();
+    expect(reportAiOperationalError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        errorCode: AI_OPERATIONAL_ERROR_CODE.EMBEDDING_DIMENSIONS_UNSUPPORTED,
+        operation: AI_OPERATIONAL_ERROR_OPERATION.CREATE_EMBEDDING,
+        stage: AI_OPERATIONAL_ERROR_STAGE.VALIDATION,
+      }),
+    );
+
     expect(getProviderApiKey).not.toHaveBeenCalled();
+    expect(createAiEmbeddingWithProvider).not.toHaveBeenCalled();
+    expect(matchAiEmbeddings).not.toHaveBeenCalled();
+  });
+
+  it("Embedding dimensions 설정이 없으면 운영 오류를 기록하고 Provider를 호출하지 않는다", async () => {
+    const configuration = {
+      ...EMBEDDING_CONFIGURATION,
+      model: {
+        ...EMBEDDING_CONFIGURATION.model,
+        dimensions: null,
+      },
+    } as AiRuntimeEmbeddingConfiguration;
+
+    await expect(
+      searchNoteEmbeddings({
+        ...SEARCH_INPUT,
+        embeddingConfiguration: configuration,
+      }),
+    ).rejects.toThrow(
+      `Embedding 모델의 dimensions 설정이 없습니다: ${EMBEDDING_CONFIGURATION.model.id}`,
+    );
+
+    expect(reportAiOperationalError).toHaveBeenCalledOnce();
+    expect(reportAiOperationalError).toHaveBeenCalledWith({
+      context: {
+        model: EMBEDDING_CONFIGURATION.model.model,
+        modelConfigId: EMBEDDING_CONFIGURATION.model.id,
+        provider: EMBEDDING_CONFIGURATION.model.provider,
+      },
+      error: expect.any(Error),
+      errorCode: AI_OPERATIONAL_ERROR_CODE.EMBEDDING_DIMENSIONS_MISSING,
+      message: "AI embedding 모델의 dimensions 설정이 없습니다.",
+      operation: AI_OPERATIONAL_ERROR_OPERATION.CREATE_EMBEDDING,
+      stage: AI_OPERATIONAL_ERROR_STAGE.VALIDATION,
+    });
+
+    expect(getProviderApiKey).not.toHaveBeenCalled();
+    expect(createAiEmbeddingWithProvider).not.toHaveBeenCalled();
+    expect(matchAiEmbeddings).not.toHaveBeenCalled();
+  });
+
+  it("Provider API key가 없으면 운영 오류를 기록하고 Provider를 호출하지 않는다", async () => {
+    const error = new Error("OPENAI_API_KEY is not configured.");
+
+    vi.mocked(getProviderApiKey).mockImplementation(() => {
+      throw error;
+    });
+
+    await expect(searchNoteEmbeddings(SEARCH_INPUT)).rejects.toThrow(error);
+
+    expect(reportAiOperationalError).toHaveBeenCalledOnce();
+    expect(reportAiOperationalError).toHaveBeenCalledWith({
+      context: {
+        model: EMBEDDING_CONFIGURATION.model.model,
+        modelConfigId: EMBEDDING_CONFIGURATION.model.id,
+        provider: EMBEDDING_CONFIGURATION.model.provider,
+      },
+      error,
+      errorCode: AI_OPERATIONAL_ERROR_CODE.PROVIDER_API_KEY_MISSING,
+      message: "AI Provider API key 설정이 없습니다.",
+      operation: AI_OPERATIONAL_ERROR_OPERATION.CREATE_EMBEDDING,
+      stage: AI_OPERATIONAL_ERROR_STAGE.VALIDATION,
+    });
+
     expect(createAiEmbeddingWithProvider).not.toHaveBeenCalled();
     expect(matchAiEmbeddings).not.toHaveBeenCalled();
   });

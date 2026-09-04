@@ -4,6 +4,12 @@ import type { AiTokenUsage } from "@/features/ai/providers/types";
 import type { AiChatCompletionResult } from "@/features/ai/providers/types";
 import { getProviderApiKey } from "@/features/ai/providers/utils/api-key";
 import type { AiRuntimeChatConfiguration } from "@/features/ai/runtimes/types";
+import { reportAiOperationalError } from "@/features/ai/utils/report-ai-operational-error";
+import {
+  AI_OPERATIONAL_ERROR_CODE,
+  AI_OPERATIONAL_ERROR_OPERATION,
+  AI_OPERATIONAL_ERROR_STAGE,
+} from "@/features/operational-errors/constants";
 import { type AiObserver, notifyAiObserver } from "@/lib/ai/notify-observer";
 import type { Json } from "@/types/db.helpers";
 
@@ -114,10 +120,18 @@ export async function createQueryExpansionCompletion(
       type: "failed",
     });
 
-    console.error(
-      "[Query Expansion Completion API Key Failed]",
-      error instanceof Error ? error.message : error,
-    );
+    await reportAiOperationalError({
+      context: {
+        model: model.model,
+        modelConfigId: model.id,
+        provider: model.provider,
+      },
+      error,
+      errorCode: AI_OPERATIONAL_ERROR_CODE.PROVIDER_API_KEY_MISSING,
+      message: "AI Provider API key 설정이 없습니다.",
+      operation: AI_OPERATIONAL_ERROR_OPERATION.CREATE_CHAT_COMPLETION,
+      stage: AI_OPERATIONAL_ERROR_STAGE.VALIDATION,
+    });
 
     throw error;
   }
@@ -139,11 +153,6 @@ export async function createQueryExpansionCompletion(
       error,
       type: "failed",
     });
-
-    console.error(
-      "[Query Expansion Completion Failed]",
-      error instanceof Error ? error.message : error,
-    );
 
     throw error;
   }

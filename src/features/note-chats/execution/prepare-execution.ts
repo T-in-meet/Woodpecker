@@ -308,6 +308,21 @@ export async function prepareNoteChatExecution(
     });
   } catch (error) {
     params.snapshotAccumulator?.failRetrieval("hydration", error);
+
+    await reportNoteChatOperationalError({
+      actorUserId: detail.conversation.user_id,
+      context: {
+        conversationId: params.conversationId,
+        userMessageId: params.userMessageId,
+      },
+      error,
+      errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.MATCHED_NOTES_LOAD_FAILED,
+      message: "노트 챗봇 검색 노트 조회에 실패했습니다.",
+      operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.GET_MATCHED_NOTES,
+      stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.DATABASE,
+      userId: detail.conversation.user_id,
+    });
+
     throw error;
   }
 

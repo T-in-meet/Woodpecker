@@ -4,6 +4,12 @@ import { renderPromptTemplate } from "@/features/ai/prompts/render";
 import { createAiChatCompletionWithProvider } from "@/features/ai/providers";
 import { getProviderApiKey } from "@/features/ai/providers/utils/api-key";
 import type { AiRuntimeChatConfiguration } from "@/features/ai/runtimes/types";
+import { reportAiOperationalError } from "@/features/ai/utils/report-ai-operational-error";
+import {
+  AI_OPERATIONAL_ERROR_CODE,
+  AI_OPERATIONAL_ERROR_OPERATION,
+  AI_OPERATIONAL_ERROR_STAGE,
+} from "@/features/operational-errors/constants";
 
 import {
   createQueryExpansionCompletion,
@@ -22,6 +28,10 @@ vi.mock("@/features/ai/providers/utils/api-key", () => ({
   getProviderApiKey: vi.fn(),
 }));
 
+vi.mock("@/features/ai/utils/report-ai-operational-error", () => ({
+  reportAiOperationalError: vi.fn(),
+}));
+
 const responseSchema = {
   type: "object",
   properties: {
@@ -35,6 +45,7 @@ const responseSchema = {
 
 const configuration = {
   model: {
+    id: "chat-model-id",
     model: "test-model",
     provider: "openai",
   },
@@ -50,6 +61,7 @@ const configuration = {
 
 const configurationWithSchema = {
   model: {
+    id: "chat-model-id",
     model: "test-model",
     provider: "openai",
   },
@@ -205,6 +217,40 @@ describe("createQueryExpansionCompletion", () => {
     });
   });
 
+  it("Provider API key가 없으면 운영 오류를 기록하고 Provider를 호출하지 않는다", async () => {
+    const error = new Error("OPENAI_API_KEY is not configured.");
+
+    vi.mocked(getProviderApiKey).mockImplementation(() => {
+      throw error;
+    });
+
+    await expect(
+      createQueryExpansionCompletion({
+        configuration,
+        responseSchemaName: "test_query_expansion_response",
+        variables: {
+          question: "현재 질문",
+        },
+      }),
+    ).rejects.toBe(error);
+
+    expect(reportAiOperationalError).toHaveBeenCalledOnce();
+    expect(reportAiOperationalError).toHaveBeenCalledWith({
+      context: {
+        model: "test-model",
+        modelConfigId: "chat-model-id",
+        provider: "openai",
+      },
+      error,
+      errorCode: AI_OPERATIONAL_ERROR_CODE.PROVIDER_API_KEY_MISSING,
+      message: "AI Provider API key 설정이 없습니다.",
+      operation: AI_OPERATIONAL_ERROR_OPERATION.CREATE_CHAT_COMPLETION,
+      stage: AI_OPERATIONAL_ERROR_STAGE.VALIDATION,
+    });
+
+    expect(createAiChatCompletionWithProvider).not.toHaveBeenCalled();
+  });
+
   it("Provider 오류를 변환하지 않고 그대로 전파한다", async () => {
     const error = new Error("Provider 호출 실패");
 
@@ -257,8 +303,8 @@ describe("createQueryExpansionCompletion", () => {
   it("Provider 실패 시 직전 preparation과 원래 오류를 관측한다", async () => {
     const error = new Error("Provider 호출 실패");
     const onObservation = vi.fn();
+
     vi.mocked(createAiChatCompletionWithProvider).mockRejectedValue(error);
-    vi.spyOn(console, "error").mockImplementation(() => {});
 
     await expect(
       createQueryExpansionCompletion({
@@ -278,7 +324,6 @@ describe("createQueryExpansionCompletion", () => {
 
   it("관측 callback 실패가 기존 반환값이나 Provider 호출 횟수를 바꾸지 않는다", async () => {
     const observerErrorMessage = "application log에 남지 않을 관측 원문";
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const onObservation = vi
       .fn()
       .mockRejectedValue(new Error(observerErrorMessage));
@@ -296,8 +341,5 @@ describe("createQueryExpansionCompletion", () => {
     });
 
     expect(createAiChatCompletionWithProvider).toHaveBeenCalledOnce();
-    expect(JSON.stringify(errorSpy.mock.calls)).not.toContain(
-      observerErrorMessage,
-    );
   });
 });

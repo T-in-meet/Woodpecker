@@ -9,6 +9,12 @@ import {
   NOTE_EMBEDDING_SOURCE_TYPE,
 } from "@/features/ai/rags/note/constants/embeddings";
 import type { AiRuntimeEmbeddingConfiguration } from "@/features/ai/runtimes/types";
+import { reportAiOperationalError } from "@/features/ai/utils/report-ai-operational-error";
+import {
+  AI_OPERATIONAL_ERROR_CODE,
+  AI_OPERATIONAL_ERROR_OPERATION,
+  AI_OPERATIONAL_ERROR_STAGE,
+} from "@/features/operational-errors/constants";
 import { type AiObserver, notifyAiObserver } from "@/lib/ai/notify-observer";
 
 /** Note Embedding 검색 공통 helper가 노출하는 실행 관측 이벤트입니다. */
@@ -170,12 +176,50 @@ export async function searchNoteEmbeddingsWithUsage({
 
   /*
    * 현재 AI Foundation의 pgvector 저장 계약은 1536 dimensions로 고정되어 있으므로
-   * 다른 차원의 Embedding Model은 Provider 호출 전에 거부합니다.
+   * dimensions가 없거나 다른 차원의 Embedding Model은 Provider 호출 전에 거부합니다.
    */
+  if (embeddingModel.dimensions === null) {
+    const error = new Error(
+      `Embedding 모델의 dimensions 설정이 없습니다: ${embeddingModel.id}`,
+    );
+
+    await reportAiOperationalError({
+      context: {
+        model: embeddingModel.model,
+        modelConfigId: embeddingModel.id,
+        provider: embeddingModel.provider,
+      },
+      error,
+      errorCode: AI_OPERATIONAL_ERROR_CODE.EMBEDDING_DIMENSIONS_MISSING,
+      message: "AI embedding 모델의 dimensions 설정이 없습니다.",
+      operation: AI_OPERATIONAL_ERROR_OPERATION.CREATE_EMBEDDING,
+      stage: AI_OPERATIONAL_ERROR_STAGE.VALIDATION,
+    });
+
+    throw error;
+  }
+
   if (embeddingModel.dimensions !== AI_EMBEDDING_DIMENSIONS) {
-    throw new Error(
+    const error = new Error(
       `Unsupported note embedding dimensions: ${embeddingModel.dimensions}`,
     );
+
+    await reportAiOperationalError({
+      context: {
+        dimensions: embeddingModel.dimensions,
+        model: embeddingModel.model,
+        modelConfigId: embeddingModel.id,
+        provider: embeddingModel.provider,
+        supportedDimensions: AI_EMBEDDING_DIMENSIONS,
+      },
+      error,
+      errorCode: AI_OPERATIONAL_ERROR_CODE.EMBEDDING_DIMENSIONS_UNSUPPORTED,
+      message: "현재 지원하지 않는 AI embedding dimensions입니다.",
+      operation: AI_OPERATIONAL_ERROR_OPERATION.CREATE_EMBEDDING,
+      stage: AI_OPERATIONAL_ERROR_STAGE.VALIDATION,
+    });
+
+    throw error;
   }
 
   /*
@@ -188,12 +232,38 @@ export async function searchNoteEmbeddingsWithUsage({
     type: "embedding-requested",
   });
 
+  let apiKey: string;
+
+  try {
+    apiKey = getProviderApiKey(embeddingModel.provider);
+  } catch (error) {
+    await notifyAiObserver(onObservation, {
+      error,
+      type: "embedding-failed",
+    });
+
+    await reportAiOperationalError({
+      context: {
+        model: embeddingModel.model,
+        modelConfigId: embeddingModel.id,
+        provider: embeddingModel.provider,
+      },
+      error,
+      errorCode: AI_OPERATIONAL_ERROR_CODE.PROVIDER_API_KEY_MISSING,
+      message: "AI Provider API key 설정이 없습니다.",
+      operation: AI_OPERATIONAL_ERROR_OPERATION.CREATE_EMBEDDING,
+      stage: AI_OPERATIONAL_ERROR_STAGE.VALIDATION,
+    });
+
+    throw error;
+  }
+
   let queryEmbedding: Awaited<ReturnType<typeof createAiEmbeddingWithProvider>>;
 
   try {
     // 기존과 같은 한 번의 Provider 호출로 vector와 관측 metadata를 함께 확보한다.
     queryEmbedding = await createAiEmbeddingWithProvider({
-      apiKey: getProviderApiKey(embeddingModel.provider),
+      apiKey,
       dimensions: embeddingModel.dimensions,
       input: question,
       model: embeddingModel.model,
