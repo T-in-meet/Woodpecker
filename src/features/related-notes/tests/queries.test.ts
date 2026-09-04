@@ -45,6 +45,8 @@ const reportRelatedNotesOperationalErrorMock = vi.mocked(
 
 const authenticatedUserId = "99999999-9999-4999-8999-999999999999";
 const noteId = "11111111-1111-4111-8111-111111111111";
+const firstRelationId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const secondRelationId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const sourceUpdatedAt = "2026-08-28T09:00:00.000Z";
 const executionClaimId = "88888888-8888-4888-8888-888888888888";
 
@@ -140,6 +142,7 @@ describe("getRelatedNotes", () => {
       note_related_notes: {
         data: [
           {
+            id: firstRelationId,
             note_id: noteId,
             related_note_id: "22222222-2222-4222-8222-222222222222",
             origin: "ai",
@@ -156,6 +159,7 @@ describe("getRelatedNotes", () => {
             },
           },
           {
+            id: secondRelationId,
             note_id: noteId,
             related_note_id: "33333333-3333-4333-8333-333333333333",
             origin: "manual",
@@ -214,7 +218,7 @@ describe("getRelatedNotes", () => {
     expect(calls).toContainEqual([
       "select",
       [
-        "note_id, related_note_id, origin, metadata, source_note:notes!note_related_notes_note_id_fkey(title), related_note:notes!note_related_notes_related_note_id_fkey(title)",
+        "id, note_id, related_note_id, origin, metadata, source_note:notes!note_related_notes_note_id_fkey(title), related_note:notes!note_related_notes_related_note_id_fkey(title)",
       ],
     ]);
     expect(calls).toContainEqual([
@@ -265,6 +269,7 @@ describe("getRelatedNotes", () => {
       },
       relatedNotes: [
         {
+          relationId: firstRelationId,
           noteId: "22222222-2222-4222-8222-222222222222",
           origin: "ai",
           title: "현재 AI 관련 노트 제목",
@@ -272,6 +277,7 @@ describe("getRelatedNotes", () => {
           rank: 1,
         },
         {
+          relationId: secondRelationId,
           noteId: "33333333-3333-4333-8333-333333333333",
           origin: "manual",
           title: "현재 직접 연결한 노트 제목",
@@ -287,6 +293,7 @@ describe("getRelatedNotes", () => {
       note_related_notes: {
         data: [
           {
+            id: firstRelationId,
             note_id: "22222222-2222-4222-8222-222222222222",
             related_note_id: noteId,
             origin: "manual",
@@ -325,6 +332,7 @@ describe("getRelatedNotes", () => {
       },
       relatedNotes: [
         {
+          relationId: firstRelationId,
           noteId: "22222222-2222-4222-8222-222222222222",
           origin: "manual",
           title: "저장 row의 기준 노트 제목",

@@ -68,7 +68,7 @@ export function RelatedNoteItem({ noteId, relatedNote }: RelatedNoteItemProps) {
           {isManual && (
             <UpdateRelatedNoteReasonDialog
               noteId={noteId}
-              relatedNoteId={relatedNote.noteId}
+              relationId={relatedNote.relationId}
               title={relatedNote.title}
               reason={reason}
             >
@@ -85,7 +85,7 @@ export function RelatedNoteItem({ noteId, relatedNote }: RelatedNoteItemProps) {
 
           <DeleteRelatedNoteAlertDialog
             noteId={noteId}
-            relatedNoteId={relatedNote.noteId}
+            relationId={relatedNote.relationId}
             title={relatedNote.title}
             origin={relatedNote.origin}
           >
