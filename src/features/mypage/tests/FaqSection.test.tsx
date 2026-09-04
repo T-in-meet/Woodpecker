@@ -100,7 +100,11 @@ describe("FaqSection", () => {
         name: "AI 채점은 하루에 몇 번까지 받을 수 있나요?",
       }),
     );
-    expect(screen.getByText(/하루에 5회까지 받을 수 있고/)).toBeInTheDocument();
+    // 한도 카운터는 claim_review_grading이 KST 자정 기준으로 세므로, 시간대 표기가
+    // 없으면 한국 밖 사용자가 자기 시간대 자정에 풀린다고 읽는다.
+    expect(
+      screen.getByText(/사용 횟수는 매일 자정\(한국 시간\)에 초기화됩니다/),
+    ).toBeInTheDocument();
 
     await user.click(
       screen.getByRole("button", {
@@ -110,6 +114,7 @@ describe("FaqSection", () => {
     expect(
       screen.getByText(/연속 학습일은 복습을 완료한 날이/),
     ).toBeInTheDocument();
-    expect(screen.queryByText(/한국 시간 기준/)).not.toBeInTheDocument();
+    // 연속 학습일·정시 완료율도 KST 기준으로 계산한다.
+    expect(screen.getByText(/모두 한국 시간 기준입니다/)).toBeInTheDocument();
   });
 });
