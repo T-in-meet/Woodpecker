@@ -35,4 +35,14 @@ describe("랜딩 소개 문서", () => {
 
     expect(await response.text()).toContain(`> ${landingDescription}`);
   });
+
+  // 요약은 랜딩 섹션에서 뽑아 쓰므로 이름을 바꾸면 여기서 먼저 걸린다.
+  // 그때는 이 기대값을 함께 고쳐 llms.txt와 index.md가 갈라지지 않게 한다.
+  it("LLM 소개의 index.md 요약이 랜딩 섹션 구성을 따른다", async () => {
+    const response = getLlmsTxt();
+
+    expect(await response.text()).toContain(
+      "학습 흐름(기록·알림·백지 테스트), 학습 도구(퀴즈·관련 노트·노트 챗봇), 자주 묻는 질문",
+    );
+  });
 });
