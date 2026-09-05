@@ -6,7 +6,6 @@ import {
   Search,
   Trash2,
 } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
@@ -142,37 +141,18 @@ export function HeroSection() {
 
         {/* App mockup preview */}
         <div className="mx-auto mt-16 max-w-3xl">
-          <div className="relative pb-20 md:px-10">
-            {/* Main mockup */}
-            <div className="overflow-hidden rounded-2xl border bg-card shadow-lg">
-              {/* Chrome */}
-              <div className="flex items-center gap-2 border-b bg-muted/50 px-4 py-2.5">
-                <div className="size-2.5 rounded-full bg-red-400/60" />
-                <div className="size-2.5 rounded-full bg-yellow-400/60" />
-                <div className="size-2.5 rounded-full bg-green-400/60" />
-                <span className="ml-2 text-xs text-muted-foreground">
-                  딱다구리
-                </span>
-              </div>
-
-              <NotesPreview />
+          <div className="overflow-hidden rounded-2xl border bg-card shadow-lg">
+            {/* Chrome */}
+            <div className="flex items-center gap-2 border-b bg-muted/50 px-4 py-2.5">
+              <div className="size-2.5 rounded-full bg-red-400/60" />
+              <div className="size-2.5 rounded-full bg-yellow-400/60" />
+              <div className="size-2.5 rounded-full bg-green-400/60" />
+              <span className="ml-2 text-xs text-muted-foreground">
+                딱다구리
+              </span>
             </div>
 
-            {/* Floating 알림 카드 — Web Push 알림의 정적 재현.
-                아이콘은 sw.ts의 `icon: "/favicon.svg"`, 제목·본문은
-                dispatch-notifications의 실제 payload와 맞춘다. */}
-            <div className="absolute bottom-0 right-0 w-56 rounded-xl border bg-card p-4 shadow-xl">
-              <div className="mb-1.5 flex items-center gap-2">
-                <Image src="/favicon.svg" alt="" width={20} height={20} />
-                <span className="text-xs text-muted-foreground">
-                  딱다구리 · 지금
-                </span>
-              </div>
-              <p className="text-sm font-semibold">복습할 시간이에요!</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                &quot;세포 호흡의 3단계&quot; 복습할 시간이에요.
-              </p>
-            </div>
+            <NotesPreview />
           </div>
         </div>
       </div>
