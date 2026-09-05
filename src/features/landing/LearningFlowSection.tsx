@@ -23,6 +23,13 @@ const mockupByStep = {
   ReactNode
 >;
 
+/*
+ * 아래 목업 셋은 루트에 `aria-hidden`을 건다. 실제 화면 마크업을 그대로 옮기느라
+ * `nav`·`h3`·`ul`이 들어 있는데, 장식용 스크린샷이 랜드마크 목록과 제목 개요에
+ * 섞이면 랜딩에 진짜 노트와 백지 테스트가 있는 것처럼 읽힌다. 안쪽 컨트롤이
+ * 전부 span이라 포커스 가능한 요소가 없어 숨겨도 잃는 게 없다.
+ */
+
 /** 목업 공통 브라우저 크롬. 캡처가 아니라 DOM이라 어떤 해상도에서도 선명하다. */
 function MockupChrome({ label }: { label: string }) {
   return (
@@ -42,7 +49,10 @@ function MockupChrome({ label }: { label: string }) {
  */
 function NoteMockup() {
   return (
-    <div className="overflow-hidden rounded-2xl border bg-card shadow-lg">
+    <div
+      aria-hidden="true"
+      className="overflow-hidden rounded-2xl border bg-card shadow-lg"
+    >
       <MockupChrome label="노트" />
       <div className="p-5">
         {/* 세로가 빠듯한 모바일에서는 경로를 숨긴다. 데스크톱에서는
@@ -129,7 +139,7 @@ function NotificationMockup() {
   ];
 
   return (
-    <div className="mx-auto max-w-96">
+    <div aria-hidden="true" className="mx-auto max-w-96">
       {/* 브라우저가 띄우는 푸시. 앱 밖에서 뜨는 것이라 폭을 좁히고 오른쪽에
           붙여 아래 알림함과 한눈에 갈라지게 둔다. 좁은 화면에서 아래 "앱
           알림함" 캡션을 덮지 않도록 폭에 상한을 둔다. */}
@@ -210,7 +220,10 @@ function NotificationMockup() {
  */
 function TestMockup() {
   return (
-    <div className="overflow-hidden rounded-2xl border bg-card shadow-lg">
+    <div
+      aria-hidden="true"
+      className="overflow-hidden rounded-2xl border bg-card shadow-lg"
+    >
       <MockupChrome label="백지 테스트" />
       <div className="space-y-4 p-4">
         {/* 랜딩에서 알려야 하는 건 "내 답안과 원본을 나란히 비교한다"는
