@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(12);
+SELECT plan(14);
 
 
 -- ============================================================================
@@ -176,10 +176,43 @@ SELECT is(
                 jsonb_build_object('reason', 'new recommendation')
             )
         )
-    ),
+    ) ->> 'status',
     'replaced',
     'RPC should return replaced when active AI recommendations are updated'
 );
+
+-- replaced 결과는 같은 INSERT가 저장한 relation UUID만 반환해야 합니다.
+CREATE TEMP TABLE related_notes_replace_result AS
+SELECT public.replace_note_related_ai_recommendations(
+        current_setting('test.related_notes_replace_source_id')::uuid,
+        current_setting('test.related_notes_replace_user_id')::uuid,
+        (
+            SELECT updated_at
+            FROM public.notes
+            WHERE id = current_setting('test.related_notes_replace_source_id')::uuid
+        ),
+        jsonb_build_array(
+            jsonb_build_object(
+                'relatedNoteId',
+                current_setting('test.related_notes_replace_new_ai_id'),
+                'metadata',
+                jsonb_build_object('reason', 'new recommendation')
+            )
+        )
+    ) AS result;
+
+-- 반환된 UUID는 별도 조회한 현재 relation row의 UUID와 일치해야 합니다.
+SELECT ok(
+    jsonb_array_length(result -> 'relationIds') = 1
+    AND (result -> 'relationIds' ->> 0)::uuid = (
+        SELECT id
+        FROM public.note_related_notes
+        WHERE note_id = current_setting('test.related_notes_replace_source_id')::uuid
+          AND related_note_id = current_setting('test.related_notes_replace_new_ai_id')::uuid
+    ),
+    'RPC should return the UUID of the relation stored by the same call'
+)
+FROM related_notes_replace_result;
 
 SELECT ok(
     -- manual 관계는 그대로 유지되어야 합니다.
@@ -435,9 +468,27 @@ SELECT is(
                 jsonb_build_object('reason', 'stale recommendation')
             )
         )
-    ),
+    ) ->> 'status',
     'stale',
     'RPC should return stale when the source note changed after recommendation generation'
+);
+
+-- stale 결과는 현재 실행에 귀속되는 relation UUID를 반환하지 않아야 합니다.
+SELECT is(
+    jsonb_array_length(
+        public.replace_note_related_ai_recommendations(
+            current_setting('test.related_notes_stale_source_id')::uuid,
+            current_setting('test.related_notes_replace_user_id')::uuid,
+            (
+                SELECT updated_at - interval '1 second'
+                FROM public.notes
+                WHERE id = current_setting('test.related_notes_stale_source_id')::uuid
+            ),
+            '[]'::jsonb
+        ) -> 'relationIds'
+    ),
+    0,
+    'stale RPC result should return no relation UUIDs'
 );
 
 SELECT ok(
@@ -552,7 +603,7 @@ SELECT is(
                 jsonb_build_object('reason', 'wrong owner recommendation')
             )
         )
-    ),
+    ) ->> 'status',
     'source_not_found',
     'RPC should return source_not_found when source note does not belong to the supplied owner'
 );
@@ -787,7 +838,7 @@ SELECT is(
                 current_setting('test.related_notes_reverse_empty_source_id')::uuid
         ),
         '[]'::jsonb
-    ),
+    ) ->> 'status',
     'replaced',
     'RPC should replace reverse active AI relationships with an empty recommendation set'
 );
@@ -886,7 +937,7 @@ SELECT is(
                 jsonb_build_object('reason', 'still related')
             )
         )
-    ),
+    ) ->> 'status',
     'replaced',
     'RPC should replace reverse active AI relationships with current-direction recommendations'
 );

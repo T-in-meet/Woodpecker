@@ -23,6 +23,17 @@ const replaceRelatedNoteAiRecommendationsStatusSchema = z.enum([
   REPLACE_RELATED_NOTE_AI_RECOMMENDATIONS_STATUS.STALE,
 ]);
 
+/** Related Notes AI 추천 교체 RPC의 구조화된 반환값 schema입니다. */
+const replaceRelatedNoteAiRecommendationsResultSchema = z.object({
+  status: replaceRelatedNoteAiRecommendationsStatusSchema,
+  relationIds: z.array(z.string().uuid()),
+});
+
+/** Related Notes AI 추천 교체 결과입니다. */
+export type ReplaceRelatedNoteAiRecommendationsResult = z.infer<
+  typeof replaceRelatedNoteAiRecommendationsResultSchema
+>;
+
 type ReplaceRelatedNoteAiRecommendationsParams = {
   /** AI 추천 결과를 교체할 대상 Note ID입니다. */
   noteId: string;
@@ -55,14 +66,14 @@ type ReplaceRelatedNoteAiRecommendationsParams = {
  * AI 관계는 RPC에서 유지합니다.
  *
  * @param params 대상 Note ID, 추천 생성에 사용한 Note version 및 새 AI 추천 결과
- * @returns RPC가 반환한 추천 교체 적용 상태
+ * @returns RPC가 반환한 추천 교체 적용 상태와 실제 저장 relation UUID
  */
 export async function replaceRelatedNoteAiRecommendations({
   noteId,
   ownerUserId,
   sourceUpdatedAt,
   recommendations,
-}: ReplaceRelatedNoteAiRecommendationsParams): Promise<ReplaceRelatedNoteAiRecommendationsStatus> {
+}: ReplaceRelatedNoteAiRecommendationsParams): Promise<ReplaceRelatedNoteAiRecommendationsResult> {
   const supabase = createAdminClient();
 
   const recommendationPayload = recommendations.map(
@@ -88,5 +99,5 @@ export async function replaceRelatedNoteAiRecommendations({
     );
   }
 
-  return replaceRelatedNoteAiRecommendationsStatusSchema.parse(data);
+  return replaceRelatedNoteAiRecommendationsResultSchema.parse(data);
 }

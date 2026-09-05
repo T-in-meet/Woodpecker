@@ -118,13 +118,17 @@ describe("prepareRelatedNoteContext", () => {
       onQueryEmbeddingUsage,
     });
 
-    expect(expandRelatedNoteQuery).toHaveBeenCalledWith({
-      configuration: queryExpansionConfiguration,
-      noteId: "33333333-3333-4333-8333-333333333333",
-      title: "대상 노트",
-      content: "대상 노트 내용",
-      onUsage: onQueryExpansionUsage,
-    });
+    expect(expandRelatedNoteQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        configuration: queryExpansionConfiguration,
+        noteId: "33333333-3333-4333-8333-333333333333",
+        title: "대상 노트",
+        content: "대상 노트 내용",
+        onUsage: onQueryExpansionUsage,
+        onObservation: expect.any(Function),
+        onParsed: expect.any(Function),
+      }),
+    );
 
     expect(onExpandedQuery).toHaveBeenCalledOnce();
     expect(onExpandedQuery).toHaveBeenCalledWith("expanded query");
@@ -134,19 +138,22 @@ describe("prepareRelatedNoteContext", () => {
       ownerUserId: "11111111-1111-4111-8111-111111111111",
     });
 
-    expect(searchNoteEmbeddingsWithUsage).toHaveBeenCalledWith({
-      embeddingConfiguration,
-      excludeSourceIds: [
-        "33333333-3333-4333-8333-333333333333",
-        "44444444-4444-4444-8444-444444444444",
-        "55555555-5555-4555-8555-555555555555",
-      ],
-      ownerUserId: "11111111-1111-4111-8111-111111111111",
-      question: "expanded query",
-      limit: 10,
-      minSimilarity: 0.5,
-      onUsage: onQueryEmbeddingUsage,
-    });
+    expect(searchNoteEmbeddingsWithUsage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        embeddingConfiguration,
+        excludeSourceIds: [
+          "33333333-3333-4333-8333-333333333333",
+          "44444444-4444-4444-8444-444444444444",
+          "55555555-5555-4555-8555-555555555555",
+        ],
+        ownerUserId: "11111111-1111-4111-8111-111111111111",
+        question: "expanded query",
+        limit: 10,
+        minSimilarity: 0.5,
+        onUsage: onQueryEmbeddingUsage,
+        onObservation: expect.any(Function),
+      }),
+    );
 
     expect(onQueryEmbeddingUsage).toHaveBeenCalledOnce();
     expect(onQueryEmbeddingUsage).toHaveBeenCalledWith(queryEmbeddingUsage);

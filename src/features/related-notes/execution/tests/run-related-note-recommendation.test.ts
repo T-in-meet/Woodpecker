@@ -157,27 +157,33 @@ describe("runRelatedNoteRecommendation", () => {
       title: "Source note",
     });
 
-    expect(mockGenerateRelatedNoteRecommendations).toHaveBeenCalledWith({
-      configuration: answerConfiguration,
-      content: "Source note content",
-      context: "<note>Related note</note>",
-      notes,
-      title: "Source note",
-    });
+    expect(mockGenerateRelatedNoteRecommendations).toHaveBeenCalledWith(
+      expect.objectContaining({
+        configuration: answerConfiguration,
+        content: "Source note content",
+        context: "<note>Related note</note>",
+        notes,
+        title: "Source note",
+        onObservation: expect.any(Function),
+      }),
+    );
 
-    expect(mockVerifyRelatedNoteRecommendations).toHaveBeenCalledWith({
-      configuration: verificationConfiguration,
-      content: "Source note content",
-      notes,
-      recommendations: [
-        {
-          noteId: RELATED_NOTE_ID,
-          reason: "관련 노트 추천 이유",
-          title: "Related note",
-        },
-      ],
-      title: "Source note",
-    });
+    expect(mockVerifyRelatedNoteRecommendations).toHaveBeenCalledWith(
+      expect.objectContaining({
+        configuration: verificationConfiguration,
+        content: "Source note content",
+        notes,
+        recommendations: [
+          {
+            noteId: RELATED_NOTE_ID,
+            reason: "관련 노트 추천 이유",
+            title: "Related note",
+          },
+        ],
+        title: "Source note",
+        onObservation: expect.any(Function),
+      }),
+    );
 
     expect(onVerificationResults).toHaveBeenCalledWith([
       {

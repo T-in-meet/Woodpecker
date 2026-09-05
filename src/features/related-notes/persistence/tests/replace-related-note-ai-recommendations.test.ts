@@ -22,7 +22,7 @@ describe("replaceRelatedNoteAiRecommendations", () => {
 
   it("관련 노트 추천과 source updated_at을 RPC payload로 변환해 교체한다", async () => {
     const rpc = vi.fn().mockResolvedValue({
-      data: "replaced",
+      data: { status: "replaced", relationIds: [RELATED_NOTE_ID] },
       error: null,
     });
 
@@ -59,12 +59,15 @@ describe("replaceRelatedNoteAiRecommendations", () => {
       },
     );
 
-    expect(result).toBe("replaced");
+    expect(result).toEqual({
+      status: "replaced",
+      relationIds: [RELATED_NOTE_ID],
+    });
   });
 
   it("추천 결과가 비어 있으면 빈 배열로 AI 추천을 교체한다", async () => {
     const rpc = vi.fn().mockResolvedValue({
-      data: "stale",
+      data: { status: "stale", relationIds: [] },
       error: null,
     });
 
@@ -89,7 +92,7 @@ describe("replaceRelatedNoteAiRecommendations", () => {
       },
     );
 
-    expect(result).toBe("stale");
+    expect(result).toEqual({ status: "stale", relationIds: [] });
   });
 
   it("RPC 호출에 실패하면 오류를 전달한다", async () => {

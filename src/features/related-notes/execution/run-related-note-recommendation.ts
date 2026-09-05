@@ -2,6 +2,13 @@ import type { AiTokenUsage } from "@/features/ai/providers/types";
 import type { AiRuntimeChatConfiguration } from "@/features/ai/runtimes/types";
 import type { AiRuntimeEmbeddingConfiguration } from "@/features/ai/runtimes/types";
 
+import {
+  describeRelatedNotesSnapshotError,
+  mapRelatedNotesChatModel,
+  mapRelatedNotesMatchedNote,
+  mapRelatedNotesPrompt,
+  type RelatedNotesSnapshotAccumulator,
+} from "../ai-runs/snapshot-accumulator";
 import { generateRelatedNoteRecommendations } from "./generate-related-note-recommendations";
 import { prepareRelatedNoteContext } from "./prepare-related-note-context";
 import {
@@ -69,6 +76,12 @@ type RunRelatedNoteRecommendationParams = {
   onVerificationResults?: (
     verifications: RelatedNoteVerification[],
   ) => Promise<void>;
+
+  /** 현재 실행의 Related Notes Snapshot accumulator입니다. */
+  snapshotAccumulator?: RelatedNotesSnapshotAccumulator;
+
+  /** Retrieval 또는 Answer 완료 뒤 전체 Snapshot checkpoint callback입니다. */
+  onCheckpoint?: () => void | Promise<void>;
 };
 
 /**
@@ -106,6 +119,8 @@ export async function runRelatedNoteRecommendation({
   onVerificationUsage,
   onRecommendations,
   onVerificationResults,
+  snapshotAccumulator,
+  onCheckpoint,
 }: RunRelatedNoteRecommendationParams) {
   const contextResult = await prepareRelatedNoteContext({
     content,
@@ -117,9 +132,13 @@ export async function runRelatedNoteRecommendation({
     ...(onQueryEmbeddingUsage !== undefined ? { onQueryEmbeddingUsage } : {}),
     ownerUserId,
     queryExpansionConfiguration,
+    ...(snapshotAccumulator === undefined ? {} : { snapshotAccumulator }),
     targetNoteId,
     title,
   });
+
+  // Retrieval hydration과 Context가 확정된 전체 Snapshot을 저장한다.
+  await onCheckpoint?.();
 
   await onMatchedNotes?.(contextResult.notes.map((note) => note.id));
 
@@ -133,6 +152,13 @@ export async function runRelatedNoteRecommendation({
    * 현재 Note에 남아 있는 active AI 추천을 제거하는 의미로 사용됩니다.
    */
   if (contextResult.notes.length === 0) {
+    snapshotAccumulator?.setStage("answerGeneration", {
+      skipped: { reason: "no_candidates" },
+    });
+    snapshotAccumulator?.setStage("verification", {
+      skipped: { reason: "no_candidates" },
+    });
+    snapshotAccumulator?.completeFinalOutput([]);
     await onRecommendations?.([]);
 
     return {
@@ -153,13 +179,66 @@ export async function runRelatedNoteRecommendation({
     ...(onAnswerGenerationUsage !== undefined
       ? { onUsage: onAnswerGenerationUsage }
       : {}),
+    onObservation: (observation) => {
+      if (observation.type === "prepared") {
+        snapshotAccumulator?.setStage("answerGeneration", {
+          configuration: {
+            model: mapRelatedNotesChatModel(observation.configuration),
+            prompt: mapRelatedNotesPrompt(observation.configuration),
+            ...(observation.responseFormat === undefined
+              ? {}
+              : { responseFormat: observation.responseFormat }),
+            temperature: observation.configuration.temperature,
+          },
+          input: {
+            context: observation.context,
+            matchedNotes: observation.notes.map(mapRelatedNotesMatchedNote),
+            renderedSystemPrompt: observation.systemPrompt,
+            renderedUserPrompt: observation.userPrompt,
+            source: { content, title },
+            variables: observation.variables,
+          },
+        });
+      } else {
+        snapshotAccumulator?.updateStage("answerGeneration", (stage) => {
+          if (!("configuration" in stage)) return;
+          if (observation.type === "provider-completed") {
+            stage.output = {
+              providerMetadata: observation.result.metadata,
+              rawResponse: observation.result.content,
+            };
+            stage.usage = observation.result.usage;
+          } else if (observation.type === "parsed" && stage.output) {
+            stage.output.parsed = {
+              recommendations: observation.recommendations,
+            };
+          } else if (observation.type === "post-processed") {
+            stage.postProcessing = {
+              resolvedRecommendations: observation.recommendations,
+            };
+          } else if (observation.type === "failed") {
+            stage.error = describeRelatedNotesSnapshotError(
+              observation.error,
+              observation.issues,
+            );
+          }
+        });
+      }
+    },
   });
+
+  // Answer parse/resolve/dedup 결과가 확정된 전체 Snapshot을 저장한다.
+  await onCheckpoint?.();
 
   /*
    * Answer Agent가 추천을 만들지 않은 경우에는 검증할 대상이 없으므로
    * Verifier 호출을 생략하고 빈 추천을 그대로 저장 단계로 전달합니다.
    */
   if (recommendationResult.recommendations.length === 0) {
+    snapshotAccumulator?.setStage("verification", {
+      skipped: { reason: "no_recommendations" },
+    });
+    snapshotAccumulator?.completeFinalOutput([]);
     await onRecommendations?.([]);
 
     return {
@@ -181,9 +260,72 @@ export async function runRelatedNoteRecommendation({
     ...(onVerificationUsage !== undefined
       ? { onUsage: onVerificationUsage }
       : {}),
+    onObservation: (observation) => {
+      if (observation.type === "prepared") {
+        snapshotAccumulator?.setStage("verification", {
+          configuration: {
+            model: mapRelatedNotesChatModel(observation.configuration),
+            prompt: mapRelatedNotesPrompt(observation.configuration),
+            ...(observation.responseFormat === undefined
+              ? {}
+              : { responseFormat: observation.responseFormat }),
+            temperature: observation.configuration.temperature,
+          },
+          input: {
+            context: observation.context,
+            matchedNotes: observation.notes.map(mapRelatedNotesMatchedNote),
+            recommendations: observation.recommendations,
+            renderedSystemPrompt: observation.systemPrompt,
+            renderedUserPrompt: observation.userPrompt,
+            source: { content, title },
+            variables: observation.variables,
+          },
+        });
+      } else {
+        snapshotAccumulator?.updateStage("verification", (stage) => {
+          if (!("configuration" in stage)) return;
+          if (observation.type === "provider-completed") {
+            stage.output = {
+              providerMetadata: observation.result.metadata,
+              rawResponse: observation.result.content,
+            };
+            stage.usage = observation.result.usage;
+          } else if (observation.type === "parsed" && stage.output) {
+            stage.output.parsed = { verifications: observation.verifications };
+          } else if (observation.type === "id-consistency") {
+            stage.postProcessing = { idConsistency: observation.value };
+            if (
+              observation.value.hasDuplicate ||
+              observation.value.hasMissing ||
+              observation.value.hasUnknown
+            ) {
+              stage.error = {
+                message:
+                  "Related note verification note IDs do not match recommendations.",
+                type: "Error",
+              };
+            }
+          } else if (observation.type === "post-processed") {
+            stage.postProcessing = {
+              ...(stage.postProcessing?.idConsistency === undefined
+                ? {}
+                : { idConsistency: stage.postProcessing.idConsistency }),
+              orderedVerifications: observation.orderedVerifications,
+              recommendations: observation.recommendations,
+            };
+          } else if (observation.type === "failed") {
+            stage.error = describeRelatedNotesSnapshotError(
+              observation.error,
+              observation.issues,
+            );
+          }
+        });
+      }
+    },
   });
 
   await onVerificationResults?.(verificationResult.verifications);
+  snapshotAccumulator?.completeFinalOutput(verificationResult.recommendations);
   await onRecommendations?.(verificationResult.recommendations);
 
   return {
