@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { AiRunPersistenceHandle } from "@/features/ai/runs/types";
+
 const mocks = vi.hoisted(() => ({
   after: vi.fn<(callback: () => Promise<void>) => void>(),
   checkpointAiRun: vi.fn(),
@@ -61,6 +63,14 @@ const CLAIM_ID = "33333333-3333-4333-8333-333333333333";
 const RUN_ID = "44444444-4444-4444-8444-444444444444";
 const RELATION_ID = "55555555-5555-4555-8555-555555555555";
 
+const AI_RUN: AiRunPersistenceHandle = {
+  id: RUN_ID,
+  userId: USER_ID,
+  featureType: "related-notes",
+  startedAt: "2026-09-05T00:00:00.000Z",
+  createPersisted: true,
+};
+
 /** 테스트에서 source Note 조회 chain을 구성합니다. */
 function setupSource() {
   const maybeSingle = vi.fn().mockResolvedValue({
@@ -111,7 +121,7 @@ beforeEach(() => {
   mocks.claim.mockResolvedValue({ claimId: CLAIM_ID, status: "claimed" });
   mocks.resolveEmbedding.mockResolvedValue(runtime("embedding"));
   mocks.resolveChat.mockResolvedValue(runtime("chat"));
-  mocks.createAiRun.mockResolvedValue(RUN_ID);
+  mocks.createAiRun.mockResolvedValue(AI_RUN);
   mocks.run.mockImplementation(
     async (params: {
       snapshotAccumulator: { completeFinalOutput: (items: unknown[]) => void };
@@ -152,7 +162,7 @@ describe("scheduleRelatedNoteRecommendation", () => {
     });
     expect(mocks.completeAiRunSucceeded).toHaveBeenCalledWith(
       expect.objectContaining({
-        aiRunId: RUN_ID,
+        aiRun: AI_RUN,
         featureResultIds: [RELATION_ID],
       }),
     );
@@ -180,6 +190,11 @@ describe("scheduleRelatedNoteRecommendation", () => {
     await vi.waitFor(() =>
       expect(mocks.completeAiRunFailed).toHaveBeenCalled(),
     );
+    expect(mocks.completeAiRunFailed).toHaveBeenCalledWith(
+      expect.objectContaining({
+        aiRun: AI_RUN,
+      }),
+    );
     expect(mocks.completeAiRunSucceeded).not.toHaveBeenCalled();
     expect(mocks.completeClaim).toHaveBeenCalledWith({
       claimId: CLAIM_ID,
@@ -199,7 +214,10 @@ describe("scheduleRelatedNoteRecommendation", () => {
       expect(mocks.completeAiRunSucceeded).toHaveBeenCalled(),
     );
     expect(mocks.completeAiRunSucceeded).toHaveBeenCalledWith(
-      expect.objectContaining({ featureResultIds: [] }),
+      expect.objectContaining({
+        aiRun: AI_RUN,
+        featureResultIds: [],
+      }),
     );
     expect(mocks.completeAiRunFailed).not.toHaveBeenCalled();
     expect(mocks.completeClaim).toHaveBeenCalledWith({
@@ -207,5 +225,30 @@ describe("scheduleRelatedNoteRecommendation", () => {
       status: "failed",
       userId: USER_ID,
     });
+  });
+
+  it("AI Run 초기 persistence 실패에도 같은 Run identity로 실행과 terminal 저장을 계속한다", async () => {
+    const unpersistedAiRun: AiRunPersistenceHandle = {
+      ...AI_RUN,
+      createPersisted: false,
+    };
+    mocks.createAiRun.mockResolvedValue(unpersistedAiRun);
+
+    await scheduleRelatedNoteRecommendation({
+      noteId: NOTE_ID,
+      ownerUserId: USER_ID,
+    });
+
+    await vi.waitFor(() =>
+      expect(mocks.completeAiRunSucceeded).toHaveBeenCalled(),
+    );
+
+    expect(mocks.run).toHaveBeenCalledTimes(1);
+    expect(mocks.completeAiRunSucceeded).toHaveBeenCalledWith(
+      expect.objectContaining({
+        aiRun: unpersistedAiRun,
+        featureResultIds: [RELATION_ID],
+      }),
+    );
   });
 });

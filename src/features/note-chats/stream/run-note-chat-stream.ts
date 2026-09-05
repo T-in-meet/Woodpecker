@@ -3,6 +3,7 @@ import {
   completeAiRunFailed,
   completeAiRunSucceeded,
 } from "@/features/ai/runs/persistence";
+import type { AiRunPersistenceHandle } from "@/features/ai/runs/types";
 import {
   NOTE_CHAT_OPERATIONAL_ERROR_CODES,
   NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS,
@@ -30,8 +31,8 @@ import type { NoteChatStreamEvent } from "./types";
 
 /** 노트 챗봇 스트림 실행 입력입니다. */
 export type RunNoteChatStreamParams = {
-  /** 공통 AI Run ID이며 생성 실패 시 null입니다. */
-  aiRunId: string | null;
+  /** 현재 AI execution의 공통 Run persistence 정보입니다. */
+  aiRun: AiRunPersistenceHandle;
   /** 실행 제어를 담당하는 Claim ID입니다. */
   claimId: string;
   /** 실행할 대화 ID입니다. */
@@ -163,10 +164,9 @@ export async function runNoteChatStream(
   } catch (error) {
     // AI 처리 실패만 failed terminal로 기록하고 기존 Claim 실패 정리를 유지한다.
     await completeAiRunFailed({
-      aiRunId: params.aiRunId,
+      aiRun: params.aiRun,
       buildSnapshot: params.snapshotAccumulator.buildSnapshot,
       completedAt: new Date().toISOString(),
-      userId: params.userId,
     });
     await completeExecutionClaimAfterFailure(params);
     throw error;
@@ -205,9 +205,8 @@ export async function runNoteChatStream(
 /** 현재 전체 Snapshot을 공통 AI Run checkpoint로 저장합니다. */
 async function checkpointRun(params: RunNoteChatStreamParams): Promise<void> {
   await checkpointAiRun({
-    aiRunId: params.aiRunId,
+    aiRun: params.aiRun,
     buildSnapshot: params.snapshotAccumulator.buildSnapshot,
-    userId: params.userId,
   });
 }
 
@@ -217,11 +216,10 @@ async function completeSucceededRun(
   featureResultIds: string[],
 ): Promise<void> {
   await completeAiRunSucceeded({
-    aiRunId: params.aiRunId,
+    aiRun: params.aiRun,
     buildSnapshot: params.snapshotAccumulator.buildSnapshot,
     completedAt: new Date().toISOString(),
     featureResultIds,
-    userId: params.userId,
   });
 }
 
@@ -257,7 +255,7 @@ async function reportExecutionError(
   await reportNoteChatOperationalError({
     actorUserId: params.userId,
     context: {
-      aiRunId: params.aiRunId,
+      aiRunId: params.aiRun.id,
       conversationId: params.conversationId,
       userMessageId: params.userMessageId,
     },

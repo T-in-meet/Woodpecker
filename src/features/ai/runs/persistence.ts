@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import {
   AI_OPERATIONAL_ERROR_CODE,
   AI_OPERATIONAL_ERROR_OPERATION,
@@ -9,6 +11,7 @@ import type { Json } from "@/types/db.helpers";
 import { reportAiOperationalError } from "../utils/report-ai-operational-error";
 import {
   AI_RUN_STATUS,
+  type AiRunPersistenceHandle,
   type AiRunSnapshotBuilder,
   type AiRunTerminalStatus,
   type CheckpointAiRunParams,
@@ -20,117 +23,124 @@ import {
 /** AI Run persistence에서 사용하는 Supabase Admin Client 최소 계약입니다. */
 type AiRunPersistenceClient = Pick<
   ReturnType<typeof createAdminClient>,
-  "from"
+  "from" | "rpc"
 >;
 
-/** 테스트에서만 persistence client를 교체하기 위한 옵션입니다. */
+/** 테스트에서만 persistence dependency를 교체하기 위한 옵션입니다. */
 type AiRunPersistenceOptions = {
   /** 주입하지 않으면 공통 Supabase Admin Client를 생성합니다. */
   supabase?: AiRunPersistenceClient | undefined;
+
+  /** 주입하지 않으면 application에서 UUID를 생성합니다. */
+  createRunId?: (() => string) | undefined;
 };
 
 /** operational error에 포함할 수 있는 안전한 AI Run 식별 context입니다. */
 type AiRunOperationalContext = {
-  /** 생성 이후 확보된 AI Run ID입니다. */
+  /** AI execution 시작 시 확보한 AI Run ID입니다. */
   aiRunId?: string;
 
   /** 인증·인가된 사용자 ID입니다. */
   userId: string;
 };
 
+/** Snapshot build 성공 또는 operational failure 결과입니다. */
+type SnapshotBuildResult = { ok: true; value: Json } | { ok: false };
+
+/** terminal finalize DB operation의 의미 결과입니다. */
+type AiRunFinalizeResult =
+  | "inserted"
+  | "updated"
+  | "already_terminal"
+  | "conflict";
+
 /**
- * 초기 Snapshot을 검증한 뒤 AI Run을 best-effort로 생성합니다.
+ * Run identity를 먼저 확보한 뒤 초기 Snapshot과 running row를 best-effort로 저장합니다.
  *
- * @param params 인증·인가 뒤 확정된 Run 생성 입력
- * @param options 테스트용 persistence client
- * @returns 생성된 Run ID 또는 operational failure인 경우 null
+ * Create persistence 실패 여부와 관계없이 같은 Run identity를 반환합니다.
  */
 export async function createAiRun(
   params: CreateAiRunParams,
   options: AiRunPersistenceOptions = {},
-): Promise<string | null> {
-  // DB client를 만들기 전에 초기 Snapshot 전체를 build하고 검증한다.
+): Promise<AiRunPersistenceHandle> {
+  const id = options.createRunId?.() ?? randomUUID();
+
+  const baseHandle: AiRunPersistenceHandle = {
+    id,
+    userId: params.userId,
+    featureType: params.featureType,
+    startedAt: params.startedAt,
+    createPersisted: false,
+  };
+
   const snapshot = await buildSnapshotSafely({
+    aiRunId: id,
     buildSnapshot: params.buildSnapshot,
     operation: AI_OPERATIONAL_ERROR_OPERATION.CREATE_AI_RUN,
     userId: params.userId,
   });
 
   if (!snapshot.ok) {
-    return null;
+    return baseHandle;
   }
 
   try {
     const supabase = options.supabase ?? createAdminClient();
 
-    // migration의 default를 유지하고 생성에 필수인 값만 명시한다.
-    const { data, error } = await supabase
-      .from("ai_runs")
-      .insert({
-        feature_type: params.featureType,
-        snapshots: snapshot.value,
-        started_at: params.startedAt,
-        user_id: params.userId,
-      })
-      .select("id")
-      .maybeSingle();
+    const { error } = await supabase.from("ai_runs").insert({
+      id,
+      feature_type: params.featureType,
+      snapshots: snapshot.value,
+      started_at: params.startedAt,
+      user_id: params.userId,
+    });
 
     if (error) {
       await reportAiRunOperationalFailure({
         code: AI_OPERATIONAL_ERROR_CODE.AI_RUN_PERSISTENCE_FAILED,
-        context: { userId: params.userId },
+        context: { aiRunId: id, userId: params.userId },
         message: "AI Run 생성 저장에 실패했습니다.",
         operation: AI_OPERATIONAL_ERROR_OPERATION.CREATE_AI_RUN,
         stage: AI_OPERATIONAL_ERROR_STAGE.DATABASE,
       });
-      return null;
+
+      return baseHandle;
     }
 
-    if (!data) {
-      await reportAiRunOperationalFailure({
-        code: AI_OPERATIONAL_ERROR_CODE.AI_RUN_PERSISTENCE_FAILED,
-        context: { userId: params.userId },
-        message: "AI Run 생성 결과 행을 확인할 수 없습니다.",
-        operation: AI_OPERATIONAL_ERROR_OPERATION.CREATE_AI_RUN,
-        stage: AI_OPERATIONAL_ERROR_STAGE.DATABASE,
-      });
-      return null;
-    }
-
-    return data.id;
+    return {
+      ...baseHandle,
+      createPersisted: true,
+    };
   } catch {
-    // Supabase client 자체가 throw하는 예외도 원래 AI 실행으로 전파하지 않는다.
     await reportAiRunOperationalFailure({
       code: AI_OPERATIONAL_ERROR_CODE.AI_RUN_PERSISTENCE_FAILED,
-      context: { userId: params.userId },
+      context: { aiRunId: id, userId: params.userId },
       message: "AI Run 생성 저장에 실패했습니다.",
       operation: AI_OPERATIONAL_ERROR_OPERATION.CREATE_AI_RUN,
       stage: AI_OPERATIONAL_ERROR_STAGE.DATABASE,
     });
-    return null;
+
+    return baseHandle;
   }
 }
 
 /**
  * 실행 중 확보한 전체 Snapshot을 running AI Run에 best-effort로 저장합니다.
- *
- * @param params 소유권과 running guard를 포함한 checkpoint 입력
- * @param options 테스트용 persistence client
  */
 export async function checkpointAiRun(
   params: CheckpointAiRunParams,
   options: AiRunPersistenceOptions = {},
 ): Promise<void> {
-  // 생성 실패 뒤에는 validation과 DB 호출을 모두 생략한다.
-  if (params.aiRunId === null) {
+  // 최초 INSERT가 확립되지 않은 경우 checkpoint를 Create 복구 경로로 사용하지 않는다.
+  if (!params.aiRun.createPersisted) {
     return;
   }
 
   const snapshot = await buildSnapshotSafely({
-    aiRunId: params.aiRunId,
+    aiRunId: params.aiRun.id,
     buildSnapshot: params.buildSnapshot,
     operation: AI_OPERATIONAL_ERROR_OPERATION.CHECKPOINT_AI_RUN,
-    userId: params.userId,
+    userId: params.aiRun.userId,
   });
 
   if (!snapshot.ok) {
@@ -144,29 +154,26 @@ export async function checkpointAiRun(
   } catch {
     await reportAiRunOperationalFailure({
       code: AI_OPERATIONAL_ERROR_CODE.AI_RUN_PERSISTENCE_FAILED,
-      context: { aiRunId: params.aiRunId, userId: params.userId },
+      context: {
+        aiRunId: params.aiRun.id,
+        userId: params.aiRun.userId,
+      },
       message: "AI Run checkpoint client 생성에 실패했습니다.",
       operation: AI_OPERATIONAL_ERROR_OPERATION.CHECKPOINT_AI_RUN,
       stage: AI_OPERATIONAL_ERROR_STAGE.DATABASE,
     });
+
     return;
   }
 
-  await updateRunningAiRunSafely({
-    aiRunId: params.aiRunId,
-    operation: AI_OPERATIONAL_ERROR_OPERATION.CHECKPOINT_AI_RUN,
+  await updateRunningAiRunSnapshotSafely({
+    aiRun: params.aiRun,
+    snapshot: snapshot.value,
     supabase,
-    update: { snapshots: snapshot.value },
-    userId: params.userId,
   });
 }
 
-/**
- * 성공한 AI Run의 Snapshot, 결과 ID와 lifecycle 상태를 한 번에 저장합니다.
- *
- * @param params 성공 terminal 입력
- * @param options 테스트용 persistence client
- */
+/** 성공한 AI Run의 최종 Snapshot과 결과 ID를 best-effort로 저장합니다. */
 export async function completeAiRunSucceeded(
   params: CompleteAiRunSucceededParams,
   options: AiRunPersistenceOptions = {},
@@ -179,12 +186,7 @@ export async function completeAiRunSucceeded(
   );
 }
 
-/**
- * 실패한 AI Run을 빈 결과 ID와 함께 terminal 상태로 저장합니다.
- *
- * @param params 실패 terminal 입력
- * @param options 테스트용 persistence client
- */
+/** 실패한 AI Run을 빈 결과 ID와 함께 best-effort로 저장합니다. */
 export async function completeAiRunFailed(
   params: CompleteAiRunParams,
   options: AiRunPersistenceOptions = {},
@@ -192,14 +194,8 @@ export async function completeAiRunFailed(
   await completeAiRun(params, AI_RUN_STATUS.FAILED, [], options);
 }
 
-/** Snapshot build 성공 또는 operational failure 결과입니다. */
-type SnapshotBuildResult = { ok: true; value: Json } | { ok: false };
-
 /**
  * 기능별 Snapshot builder를 실행하고 실패를 안전하게 보고합니다.
- *
- * @param params build 함수와 안전한 Run 식별 정보
- * @returns DB에 전달할 Snapshot 또는 실패 표시
  */
 async function buildSnapshotSafely(params: {
   aiRunId?: string;
@@ -211,8 +207,10 @@ async function buildSnapshotSafely(params: {
   userId: string;
 }): Promise<SnapshotBuildResult> {
   try {
-    // 기능별 Zod parse를 포함한 builder의 결과를 opaque JSON 문서로 취급한다.
-    return { ok: true, value: params.buildSnapshot() as Json };
+    return {
+      ok: true,
+      value: params.buildSnapshot() as Json,
+    };
   } catch {
     await reportAiRunOperationalFailure({
       code: AI_OPERATIONAL_ERROR_CODE.AI_RUN_SNAPSHOT_BUILD_FAILED,
@@ -224,17 +222,13 @@ async function buildSnapshotSafely(params: {
       operation: params.operation,
       stage: AI_OPERATIONAL_ERROR_STAGE.VALIDATION,
     });
+
     return { ok: false };
   }
 }
 
 /**
- * terminal 상태를 ownership/running guard 아래 한 UPDATE로 저장합니다.
- *
- * @param params 공통 terminal 입력
- * @param status 저장할 terminal 상태
- * @param featureResultIds 이번 실행이 실제 저장한 결과 UUID 목록
- * @param options 테스트용 persistence client
+ * 성공/실패 terminal Snapshot을 원자적이고 idempotent한 DB operation으로 저장합니다.
  */
 async function completeAiRun(
   params: CompleteAiRunParams,
@@ -242,16 +236,11 @@ async function completeAiRun(
   featureResultIds: string[],
   options: AiRunPersistenceOptions,
 ): Promise<void> {
-  // create 실패 뒤에는 terminal build와 DB 저장을 모두 생략한다.
-  if (params.aiRunId === null) {
-    return;
-  }
-
   const snapshot = await buildSnapshotSafely({
-    aiRunId: params.aiRunId,
+    aiRunId: params.aiRun.id,
     buildSnapshot: params.buildSnapshot,
     operation: AI_OPERATIONAL_ERROR_OPERATION.COMPLETE_AI_RUN,
-    userId: params.userId,
+    userId: params.aiRun.userId,
   });
 
   if (!snapshot.ok) {
@@ -265,61 +254,167 @@ async function completeAiRun(
   } catch {
     await reportAiRunOperationalFailure({
       code: AI_OPERATIONAL_ERROR_CODE.AI_RUN_PERSISTENCE_FAILED,
-      context: { aiRunId: params.aiRunId, userId: params.userId },
+      context: {
+        aiRunId: params.aiRun.id,
+        userId: params.aiRun.userId,
+      },
       message: "AI Run terminal client 생성에 실패했습니다.",
       operation: AI_OPERATIONAL_ERROR_OPERATION.COMPLETE_AI_RUN,
       stage: AI_OPERATIONAL_ERROR_STAGE.DATABASE,
     });
+
     return;
   }
 
-  await updateRunningAiRunSafely({
-    aiRunId: params.aiRunId,
-    operation: AI_OPERATIONAL_ERROR_OPERATION.COMPLETE_AI_RUN,
+  const input = {
+    p_completed_at: params.completedAt,
+    p_feature_result_ids: featureResultIds,
+    p_feature_type: params.aiRun.featureType,
+    p_run_id: params.aiRun.id,
+    p_snapshots: snapshot.value,
+    p_started_at: params.aiRun.startedAt,
+    p_terminal_status: status,
+    p_user_id: params.aiRun.userId,
+  };
+
+  const firstAttempt = await finalizeAiRunOnce({
+    aiRun: params.aiRun,
+    input,
     supabase,
-    update: {
-      completed_at: params.completedAt,
-      feature_result_ids: featureResultIds,
-      snapshots: snapshot.value,
-      status,
-    },
-    userId: params.userId,
   });
+
+  if (firstAttempt !== "request_failed") {
+    return;
+  }
+
+  // DB/transport 요청 결과 자체를 얻지 못한 경우에만 동일 idempotent operation을 1회 추가 시도한다.
+  const secondAttempt = await finalizeAiRunOnce({
+    aiRun: params.aiRun,
+    input,
+    supabase,
+  });
+
+  if (secondAttempt === "request_failed") {
+    await reportAiRunOperationalFailure({
+      code: AI_OPERATIONAL_ERROR_CODE.AI_RUN_PERSISTENCE_FAILED,
+      context: {
+        aiRunId: params.aiRun.id,
+        userId: params.aiRun.userId,
+      },
+      message: "AI Run terminal 저장 재시도까지 실패했습니다.",
+      operation: AI_OPERATIONAL_ERROR_OPERATION.COMPLETE_AI_RUN,
+      stage: AI_OPERATIONAL_ERROR_STAGE.DATABASE,
+    });
+  }
 }
 
-/** running AI Run에 적용할 checkpoint 또는 terminal update 값입니다. */
-type RunningAiRunUpdate =
-  | { snapshots: Json }
-  | {
-      completed_at: string;
-      feature_result_ids: string[];
-      snapshots: Json;
-      status: AiRunTerminalStatus;
-    };
+/** terminal finalize 1회 호출 결과입니다. */
+type FinalizeAttemptResult = AiRunFinalizeResult | "request_failed";
 
 /**
- * ownership/running guard가 포함된 UPDATE를 실행하고 변경 행을 확인합니다.
- *
- * @param params update 값과 안전한 Run 식별 정보
+ * terminal finalize DB operation을 정확히 한 번 실행합니다.
  */
-async function updateRunningAiRunSafely(params: {
-  aiRunId: string;
-  operation:
-    | typeof AI_OPERATIONAL_ERROR_OPERATION.CHECKPOINT_AI_RUN
-    | typeof AI_OPERATIONAL_ERROR_OPERATION.COMPLETE_AI_RUN;
+async function finalizeAiRunOnce(params: {
+  aiRun: AiRunPersistenceHandle;
+  input: {
+    p_completed_at: string;
+    p_feature_result_ids: string[];
+    p_feature_type: AiRunPersistenceHandle["featureType"];
+    p_run_id: string;
+    p_snapshots: Json;
+    p_started_at: string;
+    p_terminal_status: AiRunTerminalStatus;
+    p_user_id: string;
+  };
   supabase: AiRunPersistenceClient;
-  update: RunningAiRunUpdate;
-  userId: string;
-}): Promise<void> {
-  const context = { aiRunId: params.aiRunId, userId: params.userId };
+}): Promise<FinalizeAttemptResult> {
+  const context = {
+    aiRunId: params.aiRun.id,
+    userId: params.aiRun.userId,
+  };
 
   try {
-    // Admin client가 RLS를 우회하므로 DB mutation 자체에 ownership/status guard를 둔다.
+    const { data, error } = await params.supabase.rpc(
+      "finalize_ai_run",
+      params.input,
+    );
+
+    if (error) {
+      await reportAiRunOperationalFailure({
+        code: AI_OPERATIONAL_ERROR_CODE.AI_RUN_PERSISTENCE_FAILED,
+        context,
+        message: "AI Run terminal 저장에 실패했습니다.",
+        operation: AI_OPERATIONAL_ERROR_OPERATION.COMPLETE_AI_RUN,
+        stage: AI_OPERATIONAL_ERROR_STAGE.DATABASE,
+      });
+
+      return "request_failed";
+    }
+
+    const result = data as AiRunFinalizeResult;
+
+    if (
+      result === "inserted" ||
+      result === "updated" ||
+      result === "already_terminal"
+    ) {
+      return result;
+    }
+
+    if (result === "conflict") {
+      await reportAiRunOperationalFailure({
+        code: AI_OPERATIONAL_ERROR_CODE.AI_RUN_GUARD_FAILED,
+        context,
+        message:
+          "AI Run terminal 상태 또는 identity 충돌로 저장하지 않았습니다.",
+        operation: AI_OPERATIONAL_ERROR_OPERATION.COMPLETE_AI_RUN,
+        stage: AI_OPERATIONAL_ERROR_STAGE.DATABASE,
+      });
+
+      return result;
+    }
+
+    await reportAiRunOperationalFailure({
+      code: AI_OPERATIONAL_ERROR_CODE.AI_RUN_PERSISTENCE_FAILED,
+      context,
+      message: "AI Run terminal 저장 결과를 확인할 수 없습니다.",
+      operation: AI_OPERATIONAL_ERROR_OPERATION.COMPLETE_AI_RUN,
+      stage: AI_OPERATIONAL_ERROR_STAGE.DATABASE,
+    });
+
+    return "request_failed";
+  } catch {
+    await reportAiRunOperationalFailure({
+      code: AI_OPERATIONAL_ERROR_CODE.AI_RUN_PERSISTENCE_FAILED,
+      context,
+      message: "AI Run terminal 저장에 실패했습니다.",
+      operation: AI_OPERATIONAL_ERROR_OPERATION.COMPLETE_AI_RUN,
+      stage: AI_OPERATIONAL_ERROR_STAGE.DATABASE,
+    });
+
+    return "request_failed";
+  }
+}
+
+/**
+ * 기존 running Run에 checkpoint Snapshot만 저장합니다.
+ */
+async function updateRunningAiRunSnapshotSafely(params: {
+  aiRun: AiRunPersistenceHandle;
+  snapshot: Json;
+  supabase: AiRunPersistenceClient;
+}): Promise<void> {
+  const context = {
+    aiRunId: params.aiRun.id,
+    userId: params.aiRun.userId,
+  };
+
+  try {
     const { data, error } = await params.supabase
       .from("ai_runs")
-      .update(params.update)
-      .eq("id", params.aiRunId)
-      .eq("user_id", params.userId)
+      .update({ snapshots: params.snapshot })
+      .eq("id", params.aiRun.id)
+      .eq("user_id", params.aiRun.userId)
       .eq("status", AI_RUN_STATUS.RUNNING)
       .select("id")
       .maybeSingle();
@@ -328,10 +423,11 @@ async function updateRunningAiRunSafely(params: {
       await reportAiRunOperationalFailure({
         code: AI_OPERATIONAL_ERROR_CODE.AI_RUN_PERSISTENCE_FAILED,
         context,
-        message: "AI Run 갱신 저장에 실패했습니다.",
-        operation: params.operation,
+        message: "AI Run checkpoint 저장에 실패했습니다.",
+        operation: AI_OPERATIONAL_ERROR_OPERATION.CHECKPOINT_AI_RUN,
         stage: AI_OPERATIONAL_ERROR_STAGE.DATABASE,
       });
+
       return;
     }
 
@@ -341,17 +437,16 @@ async function updateRunningAiRunSafely(params: {
         context,
         message:
           "AI Run ownership 또는 running guard를 충족하는 행이 없습니다.",
-        operation: params.operation,
+        operation: AI_OPERATIONAL_ERROR_OPERATION.CHECKPOINT_AI_RUN,
         stage: AI_OPERATIONAL_ERROR_STAGE.DATABASE,
       });
     }
   } catch {
-    // DB SDK의 throw도 best-effort 관측 경계를 벗어나지 않게 한다.
     await reportAiRunOperationalFailure({
       code: AI_OPERATIONAL_ERROR_CODE.AI_RUN_PERSISTENCE_FAILED,
       context,
-      message: "AI Run 갱신 저장에 실패했습니다.",
-      operation: params.operation,
+      message: "AI Run checkpoint 저장에 실패했습니다.",
+      operation: AI_OPERATIONAL_ERROR_OPERATION.CHECKPOINT_AI_RUN,
       stage: AI_OPERATIONAL_ERROR_STAGE.DATABASE,
     });
   }
@@ -376,14 +471,11 @@ type ReportAiRunOperationalFailureParams = {
 
 /**
  * 원문 없이 AI Run operational failure를 보고하고 reporter 실패도 격리합니다.
- *
- * @param params 안전한 식별 정보만 포함한 오류 보고 입력
  */
 async function reportAiRunOperationalFailure(
   params: ReportAiRunOperationalFailureParams,
 ): Promise<void> {
   try {
-    // Snapshot, Provider 원문, DB 오류 원문은 context/error payload에 넣지 않는다.
     await reportAiOperationalError({
       context: params.context,
       errorCode: params.code,
@@ -394,6 +486,6 @@ async function reportAiRunOperationalFailure(
       userId: params.context.userId,
     });
   } catch {
-    // 운영 오류 reporter 자체의 장애도 제품 AI 실행 결과에 영향을 주지 않는다.
+    // operational error reporter 장애도 실제 AI 실행 결과에 영향을 주지 않는다.
   }
 }

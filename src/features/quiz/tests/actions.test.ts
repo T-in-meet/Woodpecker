@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { AiRunPersistenceHandle } from "@/features/ai/runs/types";
 import { createSupabaseQueryMock } from "@/tests/supabaseQueryMock";
 
 const {
@@ -55,7 +56,16 @@ const { generateQuiz, regenerateQuiz } = await import("../actions");
 const NOTE_ID = "11111111-1111-4111-8111-111111111111";
 const USER_ID = "user-123";
 const CLAIM_TOKEN = "55555555-5555-4555-8555-555555555555";
+const AI_RUN_ID = "66666666-6666-4666-8666-666666666666";
 const QUIZ_ID = "77777777-7777-4777-8777-777777777777";
+
+const AI_RUN: AiRunPersistenceHandle = {
+  id: AI_RUN_ID,
+  userId: USER_ID,
+  featureType: "quiz-generation",
+  startedAt: "2026-09-05T00:00:00.000Z",
+  createPersisted: true,
+};
 
 const aiQuestions = {
   questions: [
@@ -246,7 +256,7 @@ function savedHistory(query: ReturnType<typeof setupSupabase>): string[][] {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  createAiRunMock.mockResolvedValue("66666666-6666-4666-8666-666666666666");
+  createAiRunMock.mockResolvedValue(AI_RUN);
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
@@ -528,6 +538,9 @@ describe("generateQuiz", () => {
       });
       expect(rpcNames(query.rpc)).not.toContain("finalize_quiz_generation_v2");
       expect(completeAiRunFailedMock).toHaveBeenCalledOnce();
+      expect(completeAiRunFailedMock).toHaveBeenCalledWith(
+        expect.objectContaining({ aiRun: AI_RUN }),
+      );
       expect(completeAiRunSucceededMock).not.toHaveBeenCalled();
     });
 
@@ -542,8 +555,10 @@ describe("generateQuiz", () => {
       });
       expect(rpcNames(query.rpc)).not.toContain("finalize_quiz_generation_v2");
       const terminalInput = completeAiRunFailedMock.mock.calls[0]?.[0] as {
+        aiRun: AiRunPersistenceHandle;
         buildSnapshot: () => unknown;
       };
+      expect(terminalInput.aiRun).toEqual(AI_RUN);
       expect(terminalInput.buildSnapshot()).toMatchObject({
         parseAndValidation: {
           error: { message: "JSON parse failed" },
@@ -773,11 +788,16 @@ describe("generateQuiz", () => {
         data: { questions: aiQuestions.questions, isNew: true },
       });
       expect(completeAiRunSucceededMock).toHaveBeenCalledWith(
-        expect.objectContaining({ featureResultIds: [QUIZ_ID] }),
+        expect.objectContaining({
+          aiRun: AI_RUN,
+          featureResultIds: [QUIZ_ID],
+        }),
       );
       const terminalInput = completeAiRunSucceededMock.mock.calls[0]?.[0] as {
+        aiRun: AiRunPersistenceHandle;
         buildSnapshot: () => unknown;
       };
+      expect(terminalInput.aiRun).toEqual(AI_RUN);
       expect(terminalInput.buildSnapshot()).toMatchObject({
         quizGeneration: {
           output: {
@@ -800,7 +820,10 @@ describe("generateQuiz", () => {
         data: { questions: aiQuestions.questions, isNew: true },
       });
       expect(completeAiRunSucceededMock).toHaveBeenCalledWith(
-        expect.objectContaining({ featureResultIds: [QUIZ_ID] }),
+        expect.objectContaining({
+          aiRun: AI_RUN,
+          featureResultIds: [QUIZ_ID],
+        }),
       );
     });
 
@@ -815,7 +838,10 @@ describe("generateQuiz", () => {
           "다른 퀴즈 생성 요청이 먼저 진행됐어요. 잠시 후 다시 시도해주세요.",
       });
       expect(completeAiRunSucceededMock).toHaveBeenCalledWith(
-        expect.objectContaining({ featureResultIds: [] }),
+        expect.objectContaining({
+          aiRun: AI_RUN,
+          featureResultIds: [],
+        }),
       );
       expect(completeAiRunFailedMock).not.toHaveBeenCalled();
     });
@@ -847,7 +873,10 @@ describe("generateQuiz", () => {
       });
       expect(console.error).toHaveBeenCalled();
       expect(completeAiRunSucceededMock).toHaveBeenCalledWith(
-        expect.objectContaining({ featureResultIds: [] }),
+        expect.objectContaining({
+          aiRun: AI_RUN,
+          featureResultIds: [],
+        }),
       );
     });
 
@@ -861,6 +890,30 @@ describe("generateQuiz", () => {
         error: "퀴즈 생성에 실패했습니다. 잠시 후 다시 시도해주세요.",
       });
       expect(generateJsonMock).not.toHaveBeenCalled();
+    });
+
+    it("AI Run 초기 persistence 실패에도 같은 Run identity로 퀴즈 생성과 terminal 저장을 계속한다", async () => {
+      const unpersistedAiRun: AiRunPersistenceHandle = {
+        ...AI_RUN,
+        createPersisted: false,
+      };
+      createAiRunMock.mockResolvedValue(unpersistedAiRun);
+
+      setupSupabase({ finalizeResult: "ok" });
+      mockAiSuccess();
+
+      const result = await generateQuiz(NOTE_ID, "ox");
+
+      expect(result).toEqual({
+        data: { questions: aiQuestions.questions, isNew: true },
+      });
+      expect(generateJsonMock).toHaveBeenCalledOnce();
+      expect(completeAiRunSucceededMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          aiRun: unpersistedAiRun,
+          featureResultIds: [QUIZ_ID],
+        }),
+      );
     });
   });
 });

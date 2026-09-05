@@ -585,7 +585,7 @@ export async function gradeAnswerAction(
     originalContentHash: parsed.data.originalContentHash,
     currentContentHash: contentHash,
   });
-  const aiRunId = await createAiRun({
+  const aiRun = await createAiRun({
     buildSnapshot: snapshotAccumulator.buildSnapshot,
     featureType: AI_RUN_FEATURE_TYPE.REVIEW_GRADING,
     startedAt: aiStartedAt,
@@ -623,10 +623,9 @@ export async function gradeAnswerAction(
   } catch (e) {
     // Provider/extraction 실패까지 확보한 partial Snapshot으로 failed terminal 저장을 시도한다.
     await completeAiRunFailed({
-      aiRunId,
+      aiRun,
       buildSnapshot: snapshotAccumulator.buildSnapshot,
       completedAt: new Date().toISOString(),
-      userId: user.id,
     });
     // CloudflareAiError는 프롬프트·노트·답안을 담지 않으므로 그대로 남겨도 안전하다.
     console.error("[gradeAnswerAction] AI 호출 실패:", e);
@@ -646,10 +645,9 @@ export async function gradeAnswerAction(
   } catch (error) {
     snapshotAccumulator.failJsonParse(error);
     await completeAiRunFailed({
-      aiRunId,
+      aiRun,
       buildSnapshot: snapshotAccumulator.buildSnapshot,
       completedAt: new Date().toISOString(),
-      userId: user.id,
     });
     // SyntaxError 메시지에는 파싱에 실패한 원문 조각이 섞여 나오므로 함께 남기지 않는다.
     console.error(
@@ -663,10 +661,9 @@ export async function gradeAnswerAction(
   if (!grading.success) {
     snapshotAccumulator.failValidation(grading.error.issues);
     await completeAiRunFailed({
-      aiRunId,
+      aiRun,
       buildSnapshot: snapshotAccumulator.buildSnapshot,
       completedAt: new Date().toISOString(),
-      userId: user.id,
     });
     console.error(
       `[gradeAnswerAction] Zod 파싱 실패 (응답 길이 ${responseText.length}):`,
@@ -723,11 +720,10 @@ export async function gradeAnswerAction(
 
   // Final Output 이후 Review Grading 저장 결과와 무관하게 AI 성공으로 보고 succeeded terminal 저장을 시도한다.
   await completeAiRunSucceeded({
-    aiRunId,
+    aiRun,
     buildSnapshot: snapshotAccumulator.buildSnapshot,
     completedAt: new Date().toISOString(),
     featureResultIds,
-    userId: user.id,
   });
 
   if (finalizeError || finalizerStatus !== "ok") {

@@ -31,6 +31,20 @@ export type AiRunTerminalStatus =
 /** 현재 메모리 상태를 검증된 Snapshot 문서로 만드는 함수입니다. */
 export type AiRunSnapshotBuilder = () => unknown;
 
+/**
+ * 한 AI execution의 논리적 Run identity와 최초 persistence 상태입니다.
+ *
+ * createPersisted는 호출자가 최초 INSERT 성공 응답을 확인했는지만 나타냅니다.
+ * INSERT commit 뒤 응답이 유실된 경우 DB에는 row가 있어도 false일 수 있습니다.
+ */
+export type AiRunPersistenceHandle = {
+  id: string;
+  userId: string;
+  featureType: AiRunFeatureType;
+  startedAt: string;
+  createPersisted: boolean;
+};
+
 /** AI Run 생성 입력입니다. */
 export type CreateAiRunParams = {
   /** 생성 직전에 초기 Snapshot을 build하고 검증하는 함수입니다. */
@@ -51,15 +65,18 @@ export type CheckpointAiRunParams = {
   /** checkpoint 시점의 전체 Snapshot을 build하고 검증하는 함수입니다. */
   buildSnapshot: AiRunSnapshotBuilder;
 
-  /** 생성 실패 시 null인 AI Run ID입니다. */
-  aiRunId: string | null;
-
-  /** Run 소유권 guard에 사용하는 사용자 ID입니다. */
-  userId: string;
+  /** 이번 AI execution의 Run identity와 Create persistence 상태입니다. */
+  aiRun: AiRunPersistenceHandle;
 };
 
 /** AI Run terminal 저장의 공통 입력입니다. */
-export type CompleteAiRunParams = CheckpointAiRunParams & {
+export type CompleteAiRunParams = {
+  /** terminal 시점의 전체 Snapshot을 build하고 검증하는 함수입니다. */
+  buildSnapshot: AiRunSnapshotBuilder;
+
+  /** 이번 AI execution의 Run identity와 Create persistence 상태입니다. */
+  aiRun: AiRunPersistenceHandle;
+
   /** terminal 상태를 확정한 시각의 ISO 문자열입니다. */
   completedAt: string;
 };

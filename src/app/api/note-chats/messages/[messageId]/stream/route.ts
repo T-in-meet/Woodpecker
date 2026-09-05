@@ -5,7 +5,10 @@ import {
   NOTE_RETRIEVAL_AI_ROLE_KEY,
 } from "@/features/ai/rags/note/constants/runtime";
 import { createAiRun } from "@/features/ai/runs/persistence";
-import { AI_RUN_FEATURE_TYPE } from "@/features/ai/runs/types";
+import {
+  AI_RUN_FEATURE_TYPE,
+  type AiRunPersistenceHandle,
+} from "@/features/ai/runs/types";
 import {
   resolveAiRuntimeChatConfiguration,
   resolveAiRuntimeEmbeddingConfiguration,
@@ -421,9 +424,9 @@ export async function POST(
     embedding: embeddingConfiguration,
   };
 
-  // precheck, claim, User Message 수정 뒤에만 실행별 accumulator를 생성한다.
+  // precheck, claim, User Message 저장 뒤에만 실행별 accumulator를 생성한다.
   const snapshotAccumulator = createNoteChatSnapshotAccumulator();
-  let aiRunId: string | null = null;
+  let aiRun: AiRunPersistenceHandle | null = null;
 
   /*
    * streamClosed는 ReadableStream 자체가 취소되거나 close된 상태를 나타냅니다.
@@ -474,7 +477,7 @@ export async function POST(
               context: {
                 conversationId,
                 eventType: event.type,
-                aiRunId,
+                aiRunId: aiRun?.id ?? null,
                 userMessageId: updated.user_message_id,
               },
               error,
@@ -507,7 +510,7 @@ export async function POST(
 
         try {
           // 실제 AI runner 진입 직전 시각과 초기 Snapshot으로 Run을 생성한다.
-          aiRunId = await createAiRun({
+          aiRun = await createAiRun({
             buildSnapshot: snapshotAccumulator.buildSnapshot,
             featureType: AI_RUN_FEATURE_TYPE.NOTE_CHAT,
             startedAt: new Date().toISOString(),
@@ -520,7 +523,7 @@ export async function POST(
            */
           const result = await runNoteChatStream(
             {
-              aiRunId,
+              aiRun,
               conversationId,
               claimId,
               settings,

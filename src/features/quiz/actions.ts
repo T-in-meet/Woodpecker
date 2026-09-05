@@ -564,7 +564,7 @@ async function createQuiz(
     history,
     previousQuestions,
   });
-  const aiRunId = await createAiRun({
+  const aiRun = await createAiRun({
     buildSnapshot: accumulator.buildSnapshot,
     featureType: AI_RUN_FEATURE_TYPE.QUIZ_GENERATION,
     startedAt: aiRunStartedAt,
@@ -594,10 +594,9 @@ async function createQuiz(
   if ("error" in generated) {
     // AI 처리 실패까지 확보한 partial Snapshot으로 failed terminal 저장을 시도한다.
     await completeAiRunFailed({
-      aiRunId,
+      aiRun,
       buildSnapshot: accumulator.buildSnapshot,
       completedAt: new Date().toISOString(),
-      userId: user.id,
     });
     return { error: generated.error };
   }
@@ -617,12 +616,11 @@ async function createQuiz(
 
   // Final Output 이후 Quiz finalizer 결과와 무관하게 AI 성공으로 보고 succeeded terminal 저장을 시도한다.
   await completeAiRunSucceeded({
-    aiRunId,
+    aiRun,
     buildSnapshot: accumulator.buildSnapshot,
     completedAt: new Date().toISOString(),
     featureResultIds:
       finalized.blocked || finalized.quizId === null ? [] : [finalized.quizId],
-    userId: user.id,
   });
 
   if (finalized.blocked) {

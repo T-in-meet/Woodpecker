@@ -13,6 +13,7 @@ import {
   NOTE_RETRIEVAL_AI_ROLE_KEY,
 } from "@/features/ai/rags/note/constants/runtime";
 import { createAiRun } from "@/features/ai/runs/persistence";
+import type { AiRunPersistenceHandle } from "@/features/ai/runs/types";
 import {
   resolveAiRuntimeChatConfiguration,
   resolveAiRuntimeEmbeddingConfiguration,
@@ -85,6 +86,14 @@ const CLAIM_ID = "550e8400-e29b-41d4-a716-446655440005";
 const USER = {
   id: "550e8400-e29b-41d4-a716-446655440010",
   email_confirmed_at: "2026-08-11T00:00:00.000Z",
+};
+
+const AI_RUN: AiRunPersistenceHandle = {
+  id: RUN_ID,
+  userId: USER.id,
+  featureType: "note-chat",
+  startedAt: "2026-09-05T00:00:00.000Z",
+  createPersisted: true,
 };
 
 const CHAT_CONFIGURATION = {
@@ -342,7 +351,7 @@ beforeEach(() => {
 
   vi.mocked(completeNoteChatExecutionClaim).mockResolvedValue(undefined);
 
-  vi.mocked(createAiRun).mockResolvedValue(RUN_ID);
+  vi.mocked(createAiRun).mockResolvedValue(AI_RUN);
 
   vi.mocked(runNoteChatStream).mockResolvedValue(RUN_RESULT);
 
@@ -828,7 +837,6 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
       "application/x-ndjson; charset=utf-8",
     );
 
-    // ReadableStream 내부의 AI 실행이 완료될 때까지 응답 본문을 소비한다.
     await readStream(response);
 
     const adminClient = vi.mocked(createAdminClient).mock.results[0]
@@ -861,7 +869,7 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
       expect.objectContaining({
         claimId: CLAIM_ID,
         conversationId: CONVERSATION_ID,
-        aiRunId: RUN_ID,
+        aiRun: AI_RUN,
         userId: USER.id,
         userMessageId: USER_MESSAGE_ID,
       }),
@@ -869,8 +877,13 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
     );
   });
 
-  it("AI Run 생성 실패에도 AI 스트림을 계속한다", async () => {
-    vi.mocked(createAiRun).mockResolvedValue(null);
+  it("AI Run 초기 persistence 실패에도 같은 Run identity로 AI 스트림을 계속한다", async () => {
+    const unpersistedAiRun: AiRunPersistenceHandle = {
+      ...AI_RUN,
+      createPersisted: false,
+    };
+
+    vi.mocked(createAiRun).mockResolvedValue(unpersistedAiRun);
 
     const response = await POST(
       createRequest({
@@ -892,7 +905,7 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
     expect(runNoteChatStream).toHaveBeenCalledWith(
       expect.objectContaining({
         claimId: CLAIM_ID,
-        aiRunId: null,
+        aiRun: unpersistedAiRun,
         userMessageId: USER_MESSAGE_ID,
       }),
       expect.any(Function),

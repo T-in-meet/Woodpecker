@@ -163,7 +163,7 @@ export async function scheduleRelatedNoteRecommendation({
         title: source.title,
         updatedAt: source.updated_at,
       });
-      const aiRunId = await createAiRun({
+      const aiRun = await createAiRun({
         buildSnapshot: accumulator.buildSnapshot,
         featureType: AI_RUN_FEATURE_TYPE.RELATED_NOTES,
         startedAt: new Date().toISOString(),
@@ -180,9 +180,8 @@ export async function scheduleRelatedNoteRecommendation({
           minSimilarity: RELATED_NOTES_MIN_SIMILARITY,
           onCheckpoint: () =>
             checkpointAiRun({
-              aiRunId,
+              aiRun,
               buildSnapshot: accumulator.buildSnapshot,
-              userId: ownerUserId,
             }),
           ownerUserId,
           queryExpansionConfiguration,
@@ -193,10 +192,9 @@ export async function scheduleRelatedNoteRecommendation({
         });
       } catch (error) {
         await completeAiRunFailed({
-          aiRunId,
+          aiRun,
           buildSnapshot: accumulator.buildSnapshot,
           completedAt: new Date().toISOString(),
-          userId: ownerUserId,
         });
         await completeClaimOrReport({
           claimId,
@@ -245,11 +243,10 @@ export async function scheduleRelatedNoteRecommendation({
 
       // Final Output 이후 Related Notes replacement 결과와 무관하게 AI 성공으로 보고 succeeded terminal 저장을 시도한다.
       await completeAiRunSucceeded({
-        aiRunId,
+        aiRun,
         buildSnapshot: accumulator.buildSnapshot,
         completedAt: new Date().toISOString(),
         featureResultIds,
-        userId: ownerUserId,
       });
       await completeClaimOrReport({
         claimId,

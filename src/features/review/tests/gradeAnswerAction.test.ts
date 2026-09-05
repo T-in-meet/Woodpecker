@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { AiRunPersistenceHandle } from "@/features/ai/runs/types";
 import type { GenerateJsonObservation } from "@/lib/ai/client";
 
 import { GRADING_ERROR_MESSAGES } from "../constants";
@@ -21,6 +22,14 @@ const ANSWER = "기억나는 내용을 적었습니다.";
 const NOTE_CONTENT = "원본 노트 내용";
 // 해시는 mock하지 않는다. 실제 함수로 만든 값이라야 액션의 대조가 의미 있다.
 const NOTE_CONTENT_HASH = hashNoteContent(NOTE_CONTENT);
+
+const AI_RUN: AiRunPersistenceHandle = {
+  id: AI_RUN_ID,
+  userId: TEST_USER_ID,
+  featureType: "review-grading",
+  startedAt: "2026-09-05T00:00:00.000Z",
+  createPersisted: true,
+};
 
 const VALID_GRADING_RESPONSE = {
   score: 85,
@@ -223,7 +232,7 @@ function mockHappyPathQueries() {
 describe("gradeAnswerAction", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    createAiRunMock.mockResolvedValue(AI_RUN_ID);
+    createAiRunMock.mockResolvedValue(AI_RUN);
   });
 
   it("rejects an invalid payload", async () => {
@@ -389,9 +398,8 @@ describe("gradeAnswerAction", () => {
     );
     expect(completeAiRunSucceededMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        aiRunId: AI_RUN_ID,
+        aiRun: AI_RUN,
         featureResultIds: [GRADING_ID],
-        userId: TEST_USER_ID,
       }),
     );
   });
@@ -404,7 +412,7 @@ describe("gradeAnswerAction", () => {
     createAiRunMock.mockImplementation(
       async (params: { buildSnapshot: () => unknown }) => {
         initialSnapshot = params.buildSnapshot();
-        return AI_RUN_ID;
+        return AI_RUN;
       },
     );
     generateJsonMock.mockImplementation(
@@ -475,8 +483,9 @@ describe("gradeAnswerAction", () => {
     });
 
     const terminalParams = completeAiRunSucceededMock.mock.calls[0]?.[0] as
-      | { buildSnapshot: () => unknown }
+      | { aiRun: AiRunPersistenceHandle; buildSnapshot: () => unknown }
       | undefined;
+    expect(terminalParams?.aiRun).toEqual(AI_RUN);
     expect(terminalParams?.buildSnapshot()).toMatchObject({
       gradingPreparation: {
         input: { originalContent: NOTE_CONTENT, userAnswer: ANSWER },
@@ -501,10 +510,14 @@ describe("gradeAnswerAction", () => {
     });
   });
 
-  it("does not change the grading result when AI Run creation fails", async () => {
+  it("does not change the grading result when AI Run initial persistence fails", async () => {
     setupSupabase();
     mockHappyPathQueries();
-    createAiRunMock.mockResolvedValue(null);
+    const unpersistedAiRun: AiRunPersistenceHandle = {
+      ...AI_RUN,
+      createPersisted: false,
+    };
+    createAiRunMock.mockResolvedValue(unpersistedAiRun);
     generateJsonMock.mockResolvedValue(JSON.stringify(VALID_GRADING_RESPONSE));
 
     const result = await gradeAnswerAction(null, createFormData());
@@ -515,7 +528,7 @@ describe("gradeAnswerAction", () => {
     });
     expect(completeAiRunSucceededMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        aiRunId: null,
+        aiRun: unpersistedAiRun,
         featureResultIds: [GRADING_ID],
       }),
     );
@@ -797,7 +810,7 @@ describe("gradeAnswerAction", () => {
       error: "AI 채점에 실패했습니다. 잠시 후 다시 시도해주세요.",
     });
     expect(completeAiRunFailedMock).toHaveBeenCalledWith(
-      expect.objectContaining({ aiRunId: AI_RUN_ID, userId: TEST_USER_ID }),
+      expect.objectContaining({ aiRun: AI_RUN }),
     );
 
     consoleErrorSpy.mockRestore();
@@ -820,7 +833,7 @@ describe("gradeAnswerAction", () => {
     });
     expect(rpcCallsFor(rpcMock, "finalize_review_grading")).toHaveLength(0);
     expect(completeAiRunFailedMock).toHaveBeenCalledWith(
-      expect.objectContaining({ aiRunId: AI_RUN_ID, userId: TEST_USER_ID }),
+      expect.objectContaining({ aiRun: AI_RUN }),
     );
 
     const logged = consoleErrorSpy.mock.calls.flat().map(String).join(" ");
@@ -852,7 +865,10 @@ describe("gradeAnswerAction", () => {
       },
     });
     expect(completeAiRunSucceededMock).toHaveBeenCalledWith(
-      expect.objectContaining({ featureResultIds: [] }),
+      expect.objectContaining({
+        aiRun: AI_RUN,
+        featureResultIds: [],
+      }),
     );
   });
 
@@ -870,7 +886,10 @@ describe("gradeAnswerAction", () => {
       error: "다른 채점 요청이 먼저 진행됐어요. 잠시 후 다시 시도해주세요.",
     });
     expect(completeAiRunSucceededMock).toHaveBeenCalledWith(
-      expect.objectContaining({ featureResultIds: [] }),
+      expect.objectContaining({
+        aiRun: AI_RUN,
+        featureResultIds: [],
+      }),
     );
 
     consoleErrorSpy.mockRestore();
@@ -891,7 +910,10 @@ describe("gradeAnswerAction", () => {
     });
     expect(revalidatePathMock).not.toHaveBeenCalled();
     expect(completeAiRunSucceededMock).toHaveBeenCalledWith(
-      expect.objectContaining({ featureResultIds: [] }),
+      expect.objectContaining({
+        aiRun: AI_RUN,
+        featureResultIds: [],
+      }),
     );
 
     consoleErrorSpy.mockRestore();

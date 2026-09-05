@@ -13,6 +13,7 @@ import {
   NOTE_RETRIEVAL_AI_ROLE_KEY,
 } from "@/features/ai/rags/note/constants/runtime";
 import { createAiRun } from "@/features/ai/runs/persistence";
+import type { AiRunPersistenceHandle } from "@/features/ai/runs/types";
 import {
   resolveAiRuntimeChatConfiguration,
   resolveAiRuntimeEmbeddingConfiguration,
@@ -78,6 +79,14 @@ const RUN_ID = "550e8400-e29b-41d4-a716-446655440002";
 const USER_MESSAGE_ID = "550e8400-e29b-41d4-a716-446655440003";
 const ASSISTANT_MESSAGE_ID = "550e8400-e29b-41d4-a716-446655440004";
 const CLAIM_ID = "550e8400-e29b-41d4-a716-446655440005";
+
+const AI_RUN: AiRunPersistenceHandle = {
+  id: RUN_ID,
+  userId: USER_ID,
+  featureType: "note-chat",
+  startedAt: "2026-09-05T00:00:00.000Z",
+  createPersisted: true,
+};
 
 const CHAT_CONFIGURATION = {
   kind: "chat",
@@ -227,7 +236,7 @@ describe("POST /api/note-chats/stream", () => {
 
     vi.mocked(completeNoteChatExecutionClaim).mockResolvedValue(undefined);
 
-    vi.mocked(createAiRun).mockResolvedValue(RUN_ID);
+    vi.mocked(createAiRun).mockResolvedValue(AI_RUN);
 
     vi.mocked(runNoteChatStream).mockResolvedValue(RUN_RESULT);
 
@@ -638,7 +647,7 @@ describe("POST /api/note-chats/stream", () => {
       expect.objectContaining({
         claimId: CLAIM_ID,
         conversationId: CONVERSATION_ID,
-        aiRunId: RUN_ID,
+        aiRun: AI_RUN,
         settings: {
           chat: CHAT_CONFIGURATION,
           queryExpansion: QUERY_EXPANSION_CONFIGURATION,
@@ -653,11 +662,17 @@ describe("POST /api/note-chats/stream", () => {
     expect(reportNoteChatOperationalError).not.toHaveBeenCalled();
   });
 
-  it("AI Run 생성 실패에도 AI 스트림을 계속한다", async () => {
+  it("AI Run 초기 persistence 실패에도 같은 Run identity로 AI 스트림을 계속한다", async () => {
     const client = createSupabaseClientMock();
 
     vi.mocked(createClient).mockResolvedValue(client as never);
-    vi.mocked(createAiRun).mockResolvedValue(null);
+
+    const unpersistedAiRun: AiRunPersistenceHandle = {
+      ...AI_RUN,
+      createPersisted: false,
+    };
+
+    vi.mocked(createAiRun).mockResolvedValue(unpersistedAiRun);
 
     const response = await POST(
       createRequest({
@@ -675,7 +690,7 @@ describe("POST /api/note-chats/stream", () => {
     expect(runNoteChatStream).toHaveBeenCalledWith(
       expect.objectContaining({
         claimId: CLAIM_ID,
-        aiRunId: null,
+        aiRun: unpersistedAiRun,
         userMessageId: USER_MESSAGE_ID,
       }),
       expect.any(Function),
@@ -794,17 +809,7 @@ describe("POST /api/note-chats/stream", () => {
         );
       });
 
-      /*
-       * AI 실행은 정상적으로 한 번 완료됐습니다.
-       */
       expect(runNoteChatStream).toHaveBeenCalledTimes(1);
-
-      /*
-       * finish는 AI 실행이 성공한 이후의 응답 전달 단계입니다.
-       *
-       * 따라서 전송 실패 때문에 이미 succeeded로 확정된 Claim을
-       * failed로 다시 완료하려 해서는 안 됩니다.
-       */
       expect(completeNoteChatExecutionClaim).not.toHaveBeenCalled();
     } finally {
       enqueueSpy.mockRestore();
@@ -816,12 +821,6 @@ describe("POST /api/note-chats/stream", () => {
 
     vi.mocked(createClient).mockResolvedValue(client as never);
 
-    /*
-     * 스트림 전송 실패 기록까지 실패하는 상황을 재현합니다.
-     *
-     * 이 오류는 AI execution으로 전파되지 않아야 하며,
-     * 이미 생성된 Claim을 고아 상태로 남기지 않도록 실행 본문은 계속 호출되어야 합니다.
-     */
     vi.mocked(reportNoteChatOperationalError).mockRejectedValue(
       new Error("operational error report failed"),
     );
@@ -858,16 +857,8 @@ describe("POST /api/note-chats/stream", () => {
       expect(response.status).toBe(200);
       expect(await readStream(response)).toEqual([]);
 
-      /*
-       * start 전달 실패가 try 바깥에서 발생해도
-       * runNoteChatStream 호출은 건너뛰면 안 됩니다.
-       */
       expect(runNoteChatStream).toHaveBeenCalledTimes(1);
 
-      /*
-       * 전송 실패 보고는 시도하지만,
-       * 보고 실패가 AI execution 상태 정리로 전파되지는 않습니다.
-       */
       expect(reportNoteChatOperationalError).toHaveBeenCalledWith(
         expect.objectContaining({
           context: expect.objectContaining({

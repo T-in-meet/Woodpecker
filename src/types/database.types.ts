@@ -1914,7 +1914,6 @@ export type Database = {
       };
     };
     Functions: {
-      sweep_stale_ai_runs: { Args: never; Returns: number };
       activate_ai_embedding_generation: {
         Args: {
           p_generation_id: string;
@@ -2079,6 +2078,19 @@ export type Database = {
       delete_note_related: {
         Args: { p_note_id: string; p_relation_id: string };
         Returns: undefined;
+      };
+      finalize_ai_run: {
+        Args: {
+          p_completed_at: string;
+          p_feature_result_ids: string[];
+          p_feature_type: string;
+          p_run_id: string;
+          p_snapshots: Json;
+          p_started_at: string;
+          p_terminal_status: string;
+          p_user_id: string;
+        };
+        Returns: string;
       };
       finalize_quiz_generation_v2:
         | {
@@ -2290,6 +2302,18 @@ export type Database = {
           source_id: string;
         }[];
       };
+      next_review_schedule: {
+        Args: {
+          p_from: string;
+          p_notification_time_of_day: string;
+          p_reviewed_day_count: number;
+        };
+        Returns: {
+          base_at: string;
+          next_at: string;
+        }[];
+      };
+      notification_claim_stale_window: { Args: never; Returns: string };
       publish_ai_prompt_version: {
         Args: { p_version_id: string };
         Returns: string;
@@ -2303,6 +2327,10 @@ export type Database = {
         };
         Returns: Json;
       };
+      review_interval_days: {
+        Args: { p_reviewed_day_count: number };
+        Returns: number;
+      };
       save_ai_setting_configurations: {
         Args: { p_configurations: Json; p_setting_id: string };
         Returns: undefined;
@@ -2311,6 +2339,7 @@ export type Database = {
         Args: { p_completed: boolean; p_note_id: string };
         Returns: boolean;
       };
+      sweep_stale_ai_runs: { Args: never; Returns: number };
       update_note_chat_user_message: {
         Args: { p_content: Json; p_message_id: string; p_user_id: string };
         Returns: {
