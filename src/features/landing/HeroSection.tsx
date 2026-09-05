@@ -142,7 +142,7 @@ export function HeroSection() {
 
         {/* App mockup preview */}
         <div className="mx-auto mt-16 max-w-3xl">
-          <div className="relative pb-24 pr-10">
+          <div className="relative pb-20 md:px-10">
             {/* Main mockup */}
             <div className="overflow-hidden rounded-2xl border bg-card shadow-lg">
               {/* Chrome */}
