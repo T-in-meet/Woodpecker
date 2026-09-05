@@ -9,7 +9,7 @@ export const heroContent = {
 } as const;
 
 export const ctaContent = {
-  title: "오늘의 기록을, 내일의 기억으로",
+  title: "오늘의 기록을,\n내일의 기억으로",
   description:
     "공부한 내용을 노트로 남기고,\n딱다구리와 함께 꾸준히 복습해보세요.",
   ctaLabel: "무료로 시작하기",

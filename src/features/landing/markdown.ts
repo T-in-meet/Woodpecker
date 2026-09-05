@@ -51,9 +51,9 @@ export function renderLandingMarkdown(): string {
     lines.push("");
   }
 
-  lines.push(`## ${ctaContent.title}`);
+  lines.push(`## ${ctaContent.title.replace(/\n/g, " ")}`);
   lines.push("");
-  lines.push(ctaContent.description);
+  lines.push(ctaContent.description.replace(/\n/g, " "));
   lines.push("");
   lines.push(`[${ctaContent.ctaLabel}](${SITE_URL}/signup)`);
   lines.push("");
