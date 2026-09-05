@@ -192,13 +192,7 @@ export function LearningToolsSection() {
   }
 
   return (
-    <section
-      aria-labelledby="learning-tools-heading"
-      // 학습 흐름 섹션의 단계 숫자(text-orange-200)와 같은 색상을 쓰되, 배경으로
-      // 깔리도록 농도를 낮춘다. 무채색 muted를 쓰면 따뜻한 색조의 나머지 섹션
-      // 사이에서 혼자 떠 보인다.
-      className="bg-orange-200/25 dark:bg-orange-950/15"
-    >
+    <section aria-labelledby="learning-tools-heading">
       <div className="mx-auto max-w-6xl px-6 py-16 md:py-20">
         <h2
           id="learning-tools-heading"
