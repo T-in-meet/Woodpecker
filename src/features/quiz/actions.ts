@@ -571,7 +571,7 @@ async function createQuiz(
     userId: user.id,
   });
 
-  // create persistence 시간까지 반영한 값을 AbortSignal과 Snapshot에 함께 사용한다.
+  // AI Run 초기 Snapshot 준비까지의 경과 시간을 반영해 AbortSignal과 Snapshot에 사용할 남은 시간을 계산한다.
   const timeoutMs = Math.max(
     0,
     QUIZ_DEADLINE_MS - (Date.now() - actionStartedAt),

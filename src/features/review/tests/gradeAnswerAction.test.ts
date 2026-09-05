@@ -28,7 +28,6 @@ const AI_RUN: AiRunPersistenceHandle = {
   userId: TEST_USER_ID,
   featureType: "review-grading",
   startedAt: "2026-09-05T00:00:00.000Z",
-  createPersisted: true,
 };
 
 const VALID_GRADING_RESPONSE = {
@@ -508,30 +507,6 @@ describe("gradeAnswerAction", () => {
       },
       finalOutput: { grading: VALID_GRADING_RESPONSE },
     });
-  });
-
-  it("does not change the grading result when AI Run initial persistence fails", async () => {
-    setupSupabase();
-    mockHappyPathQueries();
-    const unpersistedAiRun: AiRunPersistenceHandle = {
-      ...AI_RUN,
-      createPersisted: false,
-    };
-    createAiRunMock.mockResolvedValue(unpersistedAiRun);
-    generateJsonMock.mockResolvedValue(JSON.stringify(VALID_GRADING_RESPONSE));
-
-    const result = await gradeAnswerAction(null, createFormData());
-
-    expect(result).toMatchObject({
-      success: true,
-      grading: VALID_GRADING_RESPONSE,
-    });
-    expect(completeAiRunSucceededMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        aiRun: unpersistedAiRun,
-        featureResultIds: [GRADING_ID],
-      }),
-    );
   });
 
   // 형식 이탈은 곧 사용자 에러 + 선점이 풀릴 때까지의 대기다. 디코딩 단계에서 먼저 막는다

@@ -85,7 +85,6 @@ const AI_RUN: AiRunPersistenceHandle = {
   userId: USER_ID,
   featureType: "note-chat",
   startedAt: "2026-09-05T00:00:00.000Z",
-  createPersisted: true,
 };
 
 const CHAT_CONFIGURATION = {
@@ -660,41 +659,6 @@ describe("POST /api/note-chats/stream", () => {
     );
 
     expect(reportNoteChatOperationalError).not.toHaveBeenCalled();
-  });
-
-  it("AI Run 초기 persistence 실패에도 같은 Run identity로 AI 스트림을 계속한다", async () => {
-    const client = createSupabaseClientMock();
-
-    vi.mocked(createClient).mockResolvedValue(client as never);
-
-    const unpersistedAiRun: AiRunPersistenceHandle = {
-      ...AI_RUN,
-      createPersisted: false,
-    };
-
-    vi.mocked(createAiRun).mockResolvedValue(unpersistedAiRun);
-
-    const response = await POST(
-      createRequest({
-        conversationId: CONVERSATION_ID,
-        content: {
-          text: "질문입니다.",
-        },
-      }),
-    );
-
-    expect(response.status).toBe(200);
-
-    await readStream(response);
-
-    expect(runNoteChatStream).toHaveBeenCalledWith(
-      expect.objectContaining({
-        claimId: CLAIM_ID,
-        aiRun: unpersistedAiRun,
-        userMessageId: USER_MESSAGE_ID,
-      }),
-      expect.any(Function),
-    );
   });
 
   it("Route lifecycle 이벤트와 Run 스트림 이벤트를 NDJSON으로 전달한다", async () => {

@@ -93,7 +93,6 @@ const AI_RUN: AiRunPersistenceHandle = {
   userId: USER.id,
   featureType: "note-chat",
   startedAt: "2026-09-05T00:00:00.000Z",
-  createPersisted: true,
 };
 
 const CHAT_CONFIGURATION = {
@@ -872,41 +871,6 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
         conversationId: CONVERSATION_ID,
         aiRun: AI_RUN,
         userId: USER.id,
-        userMessageId: USER_MESSAGE_ID,
-      }),
-      expect.any(Function),
-    );
-  });
-
-  it("AI Run 초기 persistence 실패에도 같은 Run identity로 AI 스트림을 계속한다", async () => {
-    const unpersistedAiRun: AiRunPersistenceHandle = {
-      ...AI_RUN,
-      createPersisted: false,
-    };
-
-    vi.mocked(createAiRun).mockResolvedValue(unpersistedAiRun);
-
-    const response = await POST(
-      createRequest({
-        content: {
-          text: "수정된 질문",
-        },
-      }),
-      {
-        params: Promise.resolve({
-          messageId: MESSAGE_ID,
-        }),
-      },
-    );
-
-    expect(response.status).toBe(200);
-
-    await readStream(response);
-
-    expect(runNoteChatStream).toHaveBeenCalledWith(
-      expect.objectContaining({
-        claimId: CLAIM_ID,
-        aiRun: unpersistedAiRun,
         userMessageId: USER_MESSAGE_ID,
       }),
       expect.any(Function),

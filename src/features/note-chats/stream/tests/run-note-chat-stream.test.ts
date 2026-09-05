@@ -63,7 +63,6 @@ const aiRun: AiRunPersistenceHandle = {
   userId: "user-1",
   featureType: "note-chat",
   startedAt: "2026-09-05T00:00:00.000Z",
-  createPersisted: true,
 };
 
 /** 테스트용 Snapshot accumulator mock입니다. */

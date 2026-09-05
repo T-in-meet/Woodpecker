@@ -64,7 +64,6 @@ const AI_RUN: AiRunPersistenceHandle = {
   userId: USER_ID,
   featureType: "quiz-generation",
   startedAt: "2026-09-05T00:00:00.000Z",
-  createPersisted: true,
 };
 
 const aiQuestions = {
@@ -890,30 +889,6 @@ describe("generateQuiz", () => {
         error: "퀴즈 생성에 실패했습니다. 잠시 후 다시 시도해주세요.",
       });
       expect(generateJsonMock).not.toHaveBeenCalled();
-    });
-
-    it("AI Run 초기 persistence 실패에도 같은 Run identity로 퀴즈 생성과 terminal 저장을 계속한다", async () => {
-      const unpersistedAiRun: AiRunPersistenceHandle = {
-        ...AI_RUN,
-        createPersisted: false,
-      };
-      createAiRunMock.mockResolvedValue(unpersistedAiRun);
-
-      setupSupabase({ finalizeResult: "ok" });
-      mockAiSuccess();
-
-      const result = await generateQuiz(NOTE_ID, "ox");
-
-      expect(result).toEqual({
-        data: { questions: aiQuestions.questions, isNew: true },
-      });
-      expect(generateJsonMock).toHaveBeenCalledOnce();
-      expect(completeAiRunSucceededMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          aiRun: unpersistedAiRun,
-          featureResultIds: [QUIZ_ID],
-        }),
-      );
     });
   });
 });

@@ -68,7 +68,6 @@ const AI_RUN: AiRunPersistenceHandle = {
   userId: USER_ID,
   featureType: "related-notes",
   startedAt: "2026-09-05T00:00:00.000Z",
-  createPersisted: true,
 };
 
 /** 테스트에서 source Note 조회 chain을 구성합니다. */
@@ -225,30 +224,5 @@ describe("scheduleRelatedNoteRecommendation", () => {
       status: "failed",
       userId: USER_ID,
     });
-  });
-
-  it("AI Run 초기 persistence 실패에도 같은 Run identity로 실행과 terminal 저장을 계속한다", async () => {
-    const unpersistedAiRun: AiRunPersistenceHandle = {
-      ...AI_RUN,
-      createPersisted: false,
-    };
-    mocks.createAiRun.mockResolvedValue(unpersistedAiRun);
-
-    await scheduleRelatedNoteRecommendation({
-      noteId: NOTE_ID,
-      ownerUserId: USER_ID,
-    });
-
-    await vi.waitFor(() =>
-      expect(mocks.completeAiRunSucceeded).toHaveBeenCalled(),
-    );
-
-    expect(mocks.run).toHaveBeenCalledTimes(1);
-    expect(mocks.completeAiRunSucceeded).toHaveBeenCalledWith(
-      expect.objectContaining({
-        aiRun: unpersistedAiRun,
-        featureResultIds: [RELATION_ID],
-      }),
-    );
   });
 });
