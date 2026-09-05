@@ -592,6 +592,7 @@ async function createQuiz(
   });
 
   if ("error" in generated) {
+    // AI 처리 실패까지 확보한 partial Snapshot으로 failed terminal 저장을 시도한다.
     await completeAiRunFailed({
       aiRunId,
       buildSnapshot: accumulator.buildSnapshot,
@@ -614,7 +615,7 @@ async function createQuiz(
     cacheKey,
   });
 
-  // Final Output 뒤의 persistence 결과는 AI 성공 status를 뒤집지 않는다.
+  // Final Output 이후 Quiz finalizer 결과와 무관하게 AI 성공으로 보고 succeeded terminal 저장을 시도한다.
   await completeAiRunSucceeded({
     aiRunId,
     buildSnapshot: accumulator.buildSnapshot,
