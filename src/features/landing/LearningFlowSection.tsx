@@ -5,9 +5,12 @@ import {
   NotebookPen,
 } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ROUTES } from "@/lib/constants/routes";
 
 import { learningFlowContent } from "./content";
 
@@ -274,11 +277,13 @@ export function LearningFlowSection() {
           {learningFlowContent.introduction}
         </p>
 
-        <div className="mt-20 space-y-24">
+        {/* 세 단계는 하나의 흐름이라 단계 사이 간격을 섹션 여백보다 좁게 둔다.
+            멀어질수록 "아직도 기능 소개인가" 하는 인상이 커진다. */}
+        <div className="mt-12 space-y-16 md:mt-16 md:space-y-20">
           {learningFlowContent.scenes.map((scene) => (
             <div
               key={scene.step}
-              className={`flex flex-col gap-10 md:flex-row md:items-center md:gap-16 ${
+              className={`flex flex-col gap-6 md:flex-row md:items-center md:gap-16 ${
                 scene.reverse ? "md:flex-row-reverse" : ""
               }`}
             >
@@ -292,6 +297,13 @@ export function LearningFlowSection() {
                     {scene.eyebrow}
                   </span>
                 </div>
+                {/* scenes는 as const라 항목마다 타입이 다르다. subhead를 가진
+                    단계만 좁혀서 렌더한다. */}
+                {"subhead" in scene ? (
+                  <p className="mt-4 text-sm font-medium text-orange-700 dark:text-orange-400">
+                    {scene.subhead}
+                  </p>
+                ) : null}
                 <h3 className="mt-4 whitespace-pre-line text-2xl font-bold tracking-tight md:text-3xl">
                   {scene.title}
                 </h3>
@@ -304,6 +316,15 @@ export function LearningFlowSection() {
               <div className="flex-1">{mockupByStep[scene.step]}</div>
             </div>
           ))}
+        </div>
+
+        {/* 핵심 흐름을 다 읽은 자리의 CTA. 배경 없이 두고 크기도 Hero·최종
+            CTA(2xl)보다 한 단계 작게 잡아 페이지 끝이 가장 강하게 남게 한다. */}
+        <div className="mt-14 text-center md:mt-16">
+          <p className="text-lg font-medium">{learningFlowContent.cta.text}</p>
+          <Button size="xl" className="mt-4" asChild>
+            <Link href={ROUTES.SIGNUP}>{learningFlowContent.cta.label}</Link>
+          </Button>
         </div>
       </div>
     </section>

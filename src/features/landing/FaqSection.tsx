@@ -50,20 +50,24 @@ export function FaqSection() {
           자주 묻는 질문
         </h2>
 
-        <Accordion type="single" collapsible className="mt-12">
+        {/* 위 기능 섹션보다 글자가 작아 페이지가 갑자기 좁아 보이던 문제가
+            있어, 질문 줄만 한 단계 키우고 행 높이(기본 py-2.5)도 덮는다. */}
+        <Accordion type="single" collapsible className="mt-10">
           {faqs.map((faq, index) => (
             <AccordionItem key={faq.question} value={`item-${index}`}>
-              <AccordionTrigger className="text-left text-sm font-medium">
+              <AccordionTrigger className="py-3.5 text-left text-base font-medium">
                 {faq.question}
               </AccordionTrigger>
-              <AccordionContent className="text-sm text-muted-foreground">
+              <AccordionContent className="text-sm leading-relaxed text-muted-foreground">
                 {faq.answer}
               </AccordionContent>
             </AccordionItem>
           ))}
         </Accordion>
 
-        <div className="mt-12 rounded-xl border bg-card p-6 text-center ">
+        {/* 문의 박스는 FAQ와 최종 CTA 사이의 보조 안내다. 셋이 같은 강도로
+            이어지지 않도록 글자를 낮춰 둔다. */}
+        <div className="mt-12 rounded-xl border bg-card p-5 text-center text-sm text-muted-foreground">
           <p>찾으시는 답변이 없으신가요?</p>
           <p>궁금한 점이 있으시다면 언제든 연락주세요.</p>
           {/*
@@ -71,7 +75,7 @@ export function FaqSection() {
             끊어 "...gmail.co / m"처럼 보인다. 각 조각을 nowrap으로 묶고 그
             사이에만 <wbr>로 끊을 자리를 줘서 골뱅이 뒤에서만 넘어가게 한다.
           */}
-          <p className="mt-2 font-medium">
+          <p className="mt-2 font-medium text-foreground">
             <span className="whitespace-nowrap">woodpecker.dev.team@</span>
             <wbr />
             <span className="whitespace-nowrap">gmail.com</span>

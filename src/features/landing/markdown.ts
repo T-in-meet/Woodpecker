@@ -27,11 +27,18 @@ export function renderLandingMarkdown(): string {
       `### ${scene.step}. ${scene.eyebrow} — ${scene.title.replace(/\n/g, " ")}`,
     );
     lines.push("");
+    // 서브헤드는 일부 단계에만 있다. 화면과 문서가 갈라지지 않게 있으면 싣는다.
+    if ("subhead" in scene) {
+      lines.push(`**${scene.subhead}**`);
+      lines.push("");
+    }
     lines.push(scene.description);
     lines.push("");
   }
 
   lines.push(`## ${learningToolsContent.heading}`);
+  lines.push("");
+  lines.push(learningToolsContent.connector);
   lines.push("");
   lines.push(learningToolsContent.description);
   lines.push("");

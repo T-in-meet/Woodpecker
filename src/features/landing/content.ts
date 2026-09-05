@@ -4,7 +4,7 @@ export const landingDescription =
 export const heroContent = {
   title: "기록이 기억이 되는 공간",
   description:
-    "공부한 내용을 노트로 남기고, 간격을 두고 다시 떠올려보세요.\n복습 알림부터 백지 테스트, AI 피드백까지 한곳에서.",
+    "공부한 내용을 기록하면 복습 시점을 알려주고,\n백지 테스트와 AI 피드백으로 기억할 때까지 반복해요.",
   ctaLabel: "무료로 시작하기",
 } as const;
 
@@ -37,17 +37,29 @@ export const learningFlowContent = {
       reverse: true,
     },
     {
+      // 세 단계 중 이 서비스의 핵심 경험이라 이 항목에만 서브헤드를 둔다.
+      // 기록·알림은 수단이고, 기억을 직접 꺼내보는 건 여기서 일어난다.
       step: "03",
       eyebrow: "백지 테스트",
+      subhead: "읽는 복습에서, 떠올리는 복습으로.",
       title: "기억나는 내용을,\n직접 꺼내보세요",
       description:
         "기억나는 내용을 작성하고 제출한 뒤 원문과 비교해보세요. AI 채점을 요청하면 빠뜨린 개념과 원본과 다르게 기억한 내용을 확인할 수 있어요.",
       reverse: false,
     },
   ],
+  // 세 단계를 다 읽은 직후의 행동 지점. Hero·최종 CTA와 함께 페이지 전체에
+  // CTA는 셋으로 끝낸다.
+  cta: {
+    text: "오늘 공부한 내용부터 복습해보세요.",
+    label: "무료로 시작하기",
+  },
 } as const;
 
 export const learningToolsContent = {
+  // 앞의 "기록 → 알림 → 백지 테스트" 흐름과 이 섹션을 잇는 한 줄.
+  // 이게 없으면 여기서 갑자기 다른 이야기가 시작되는 것처럼 읽힌다.
+  connector: "복습 방식도 한 가지일 필요는 없어요.",
   heading: "하나의 노트로, 여러 방식으로 공부하세요.",
   description:
     "기록한 내용을 문제로 풀고, 다른 노트와 연결하고, 궁금한 점을 질문해보세요.",

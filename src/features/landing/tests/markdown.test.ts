@@ -10,11 +10,14 @@ describe("랜딩 소개 문서", () => {
     const markdown = renderLandingMarkdown();
 
     expect(markdown).toContain(
-      "복습 알림부터 백지 테스트, AI 피드백까지 한곳에서.",
+      "백지 테스트와 AI 피드백으로 기억할 때까지 반복해요.",
     );
     expect(markdown).toContain(
       "간격을 두고 다시 떠올리는 연습, 기록부터 복습까지 세 단계로 이어가세요.",
     );
+    // 화면에만 있고 문서에는 빠지는 카피가 생기지 않게 함께 검증한다.
+    expect(markdown).toContain("**읽는 복습에서, 떠올리는 복습으로.**");
+    expect(markdown).toContain("복습 방식도 한 가지일 필요는 없어요.");
     expect(markdown).toContain("현재 딱다구리는 무료로 이용할 수 있습니다.");
     expect(markdown).toContain("### 퀴즈 — 문제로 풀며 이해를 확인하세요");
     expect(markdown).toContain("관련된 노트를 직접 연결하거나 AI 추천을 받아");
