@@ -1,3 +1,4 @@
+import { landingDescription } from "@/features/landing/content";
 import { SITE_URL } from "@/lib/constants/site";
 
 export const dynamic = "force-static";
@@ -6,7 +7,7 @@ function renderLlmsTxt(): string {
   return [
     "# 딱다구리",
     "",
-    "> 인지 과학 기반 간격 반복 학습 플랫폼. 1-3-7일 복습 알림과 백지 테스트로 학습 내용을 장기 기억으로 전환.",
+    `> ${landingDescription}`,
     "",
     "## 주요 페이지",
     "",

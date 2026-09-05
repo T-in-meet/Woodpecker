@@ -31,11 +31,9 @@ function NoteMockup() {
           <span className="text-base">📅</span>
           <div>
             <p className="text-xs font-medium text-orange-700 dark:text-orange-400">
-              복습 일정이 자동으로 잡혔어요
+              첫 복습 일정이 잡혔어요
             </p>
-            <p className="text-xs text-muted-foreground">
-              1일 후 · 3일 후 · 7일 후
-            </p>
+            <p className="text-xs text-muted-foreground">첫 복습: 1일 후</p>
           </div>
         </div>
 
@@ -98,7 +96,7 @@ function NotificationMockup() {
           <p className="text-xs text-muted-foreground">딱다구리 · 지금</p>
           <p className="mt-0.5 text-sm font-semibold">복습할 시간이에요!</p>
           <p className="text-xs text-muted-foreground">
-            클로저(Closure) — 기억나시나요?
+            &quot;클로저(Closure)란?&quot; 복습할 시간이에요.
           </p>
         </div>
       </div>
@@ -125,12 +123,6 @@ function TestMockup() {
             클로저는 함수가 선언될 때의 렉시컬 환경을 기억하는 것. 외부 함수가
             종료된 후에도 내부 함수에서 접근 가능.
           </p>
-          <div className="mt-4 flex items-center gap-1.5">
-            <div className="size-1.5 rounded-full bg-green-500" />
-            <span className="text-xs text-green-600 dark:text-green-400">
-              핵심 개념 포함
-            </span>
-          </div>
         </div>
         {/* 원문 */}
         <div className="bg-muted/30 p-5">
@@ -153,25 +145,8 @@ export function LearningFlowSection() {
           {learningFlowContent.heading}
         </h2>
 
-        {/* 과학적 근거 수치 카드 */}
-        <div className="mx-auto mt-10 grid max-w-2xl gap-4 sm:grid-cols-2">
-          {learningFlowContent.stats.map((stat) => (
-            <div
-              key={stat.value}
-              className="rounded-xl border bg-card p-5 text-center"
-            >
-              <p className="text-3xl font-bold tracking-tight">{stat.value}</p>
-              <p className="mt-1 text-sm text-muted-foreground">{stat.label}</p>
-              <p className="mt-2 text-xs text-muted-foreground/60">
-                {stat.source}
-              </p>
-            </div>
-          ))}
-        </div>
-
-        <p className="mx-auto mt-8 max-w-xl text-center text-muted-foreground">
-          딱다구리는 인지과학이 검증한 두 가지 원리,
-          <br /> <b>간격 반복</b>과 <b>인출 연습</b>을 세 단계로 구현합니다.
+        <p className="mx-auto mt-8 max-w-xl whitespace-pre-line text-center text-muted-foreground">
+          {learningFlowContent.introduction}
         </p>
 
         <div className="mt-20 space-y-24">

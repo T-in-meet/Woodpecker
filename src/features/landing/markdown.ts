@@ -2,6 +2,7 @@ import {
   ctaContent,
   heroContent,
   learningFlowContent,
+  learningToolsContent,
 } from "@/features/landing/content";
 import { faqs } from "@/features/landing/FaqSection";
 import { SITE_URL } from "@/lib/constants/site";
@@ -18,13 +19,7 @@ export function renderLandingMarkdown(): string {
 
   lines.push(`## ${learningFlowContent.heading.replace(/\n/g, " ")}`);
   lines.push("");
-  for (const stat of learningFlowContent.stats) {
-    lines.push(`- **${stat.value}** — ${stat.label} *(${stat.source})*`);
-  }
-  lines.push("");
-  lines.push(
-    "딱다구리는 인지과학이 검증한 두 가지 원리, **간격 반복**과 **인출 연습**을 세 단계로 구현합니다.",
-  );
+  lines.push(learningFlowContent.introduction.replace(/\n/g, " "));
   lines.push("");
 
   for (const scene of learningFlowContent.scenes) {
@@ -33,6 +28,17 @@ export function renderLandingMarkdown(): string {
     );
     lines.push("");
     lines.push(scene.description);
+    lines.push("");
+  }
+
+  lines.push(`## ${learningToolsContent.heading}`);
+  lines.push("");
+  lines.push(learningToolsContent.description);
+  lines.push("");
+  for (const tool of learningToolsContent.tools) {
+    lines.push(`### ${tool.label} — ${tool.title}`);
+    lines.push("");
+    lines.push(tool.description);
     lines.push("");
   }
 

@@ -93,7 +93,7 @@ export function HeroSection() {
               </div>
               <p className="text-sm font-semibold">복습할 시간이에요!</p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                JavaScript 클로저 — 기억나시나요?
+                &quot;JavaScript 클로저&quot; 복습할 시간이에요.
               </p>
             </div>
           </div>
