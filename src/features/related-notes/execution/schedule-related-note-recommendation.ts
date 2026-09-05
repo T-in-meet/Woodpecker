@@ -243,7 +243,7 @@ export async function scheduleRelatedNoteRecommendation({
         });
       }
 
-      // Final Output 이후 도메인 persistence 결과와 무관하게 AI는 succeeded다.
+      // Final Output 이후 Related Notes replacement 결과와 무관하게 AI 성공으로 보고 succeeded terminal 저장을 시도한다.
       await completeAiRunSucceeded({
         aiRunId,
         buildSnapshot: accumulator.buildSnapshot,
