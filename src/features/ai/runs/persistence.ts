@@ -340,14 +340,6 @@ async function finalizeAiRunOnce(params: {
     );
 
     if (error) {
-      await reportAiRunOperationalFailure({
-        code: AI_OPERATIONAL_ERROR_CODE.AI_RUN_PERSISTENCE_FAILED,
-        context,
-        message: "AI Run terminal 저장에 실패했습니다.",
-        operation: AI_OPERATIONAL_ERROR_OPERATION.COMPLETE_AI_RUN,
-        stage: AI_OPERATIONAL_ERROR_STAGE.DATABASE,
-      });
-
       return "request_failed";
     }
 
@@ -374,24 +366,8 @@ async function finalizeAiRunOnce(params: {
       return result;
     }
 
-    await reportAiRunOperationalFailure({
-      code: AI_OPERATIONAL_ERROR_CODE.AI_RUN_PERSISTENCE_FAILED,
-      context,
-      message: "AI Run terminal 저장 결과를 확인할 수 없습니다.",
-      operation: AI_OPERATIONAL_ERROR_OPERATION.COMPLETE_AI_RUN,
-      stage: AI_OPERATIONAL_ERROR_STAGE.DATABASE,
-    });
-
     return "request_failed";
   } catch {
-    await reportAiRunOperationalFailure({
-      code: AI_OPERATIONAL_ERROR_CODE.AI_RUN_PERSISTENCE_FAILED,
-      context,
-      message: "AI Run terminal 저장에 실패했습니다.",
-      operation: AI_OPERATIONAL_ERROR_OPERATION.COMPLETE_AI_RUN,
-      stage: AI_OPERATIONAL_ERROR_STAGE.DATABASE,
-    });
-
     return "request_failed";
   }
 }

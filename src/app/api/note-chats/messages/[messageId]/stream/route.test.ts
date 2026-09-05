@@ -837,6 +837,7 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
       "application/x-ndjson; charset=utf-8",
     );
 
+    // ReadableStream 내부의 AI 실행이 완료될 때까지 응답 본문을 소비한다.
     await readStream(response);
 
     const adminClient = vi.mocked(createAdminClient).mock.results[0]

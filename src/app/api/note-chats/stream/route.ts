@@ -438,7 +438,7 @@ export async function POST(request: Request): Promise<Response> {
         });
 
         try {
-          // 실제 AI runner 진입 직전 시각과 초기 Snapshot으로 Run을 생성한다.
+          // 실제 AI runner 진입 직전에 Run identity를 확정하고 초기 Snapshot 저장을 시도한다.
           aiRun = await createAiRun({
             buildSnapshot: snapshotAccumulator.buildSnapshot,
             featureType: AI_RUN_FEATURE_TYPE.NOTE_CHAT,

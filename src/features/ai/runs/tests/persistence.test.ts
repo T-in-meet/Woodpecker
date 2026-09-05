@@ -530,6 +530,8 @@ describe("AI Run persistence", () => {
     expect(supabase.rpc).toHaveBeenCalledTimes(2);
 
     expect(supabase.rpc.mock.calls[0]).toEqual(supabase.rpc.mock.calls[1]);
+
+    expect(reportAiOperationalError).not.toHaveBeenCalled();
   });
 
   it("terminal persistence 재시도도 실패하면 추가 시도 없이 종료한다", async () => {
@@ -568,6 +570,8 @@ describe("AI Run persistence", () => {
         errorCode: "AI_RUN_PERSISTENCE_FAILED",
       }),
     );
+
+    expect(reportAiOperationalError).toHaveBeenCalledTimes(1);
   });
 
   it("terminal Snapshot build 실패 시 finalize를 호출하지 않고 오류를 전파하지 않는다", async () => {

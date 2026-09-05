@@ -809,7 +809,17 @@ describe("POST /api/note-chats/stream", () => {
         );
       });
 
+      /*
+       * AI 실행은 정상적으로 한 번 완료됐습니다.
+       */
       expect(runNoteChatStream).toHaveBeenCalledTimes(1);
+
+      /*
+       * finish는 AI 실행이 성공한 이후의 응답 전달 단계입니다.
+       *
+       * 따라서 전송 실패 때문에 이미 succeeded로 확정된 Claim을
+       * failed로 다시 완료하려 해서는 안 됩니다.
+       */
       expect(completeNoteChatExecutionClaim).not.toHaveBeenCalled();
     } finally {
       enqueueSpy.mockRestore();
@@ -821,9 +831,16 @@ describe("POST /api/note-chats/stream", () => {
 
     vi.mocked(createClient).mockResolvedValue(client as never);
 
+    /*
+     * 스트림 전송 실패 기록까지 실패하는 상황을 재현합니다.
+     *
+     * 이 오류는 AI execution으로 전파되지 않아야 하며,
+     * 이미 생성된 Claim을 고아 상태로 남기지 않도록 실행 본문은 계속 호출되어야 합니다.
+     */
     vi.mocked(reportNoteChatOperationalError).mockRejectedValue(
       new Error("operational error report failed"),
     );
+
     vi.mocked(runNoteChatStream).mockResolvedValue(RUN_RESULT);
 
     const sendError = new Error("start event send failed");
@@ -857,8 +874,16 @@ describe("POST /api/note-chats/stream", () => {
       expect(response.status).toBe(200);
       expect(await readStream(response)).toEqual([]);
 
+      /*
+       * start 전달 실패가 try 바깥에서 발생해도
+       * runNoteChatStream 호출은 건너뛰면 안 됩니다.
+       */
       expect(runNoteChatStream).toHaveBeenCalledTimes(1);
 
+      /*
+       * 전송 실패 보고는 시도하지만,
+       * 보고 실패가 AI execution 상태 정리로 전파되지는 않습니다.
+       */
       expect(reportNoteChatOperationalError).toHaveBeenCalledWith(
         expect.objectContaining({
           context: expect.objectContaining({
