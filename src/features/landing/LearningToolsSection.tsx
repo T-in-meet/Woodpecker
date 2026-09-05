@@ -97,11 +97,8 @@ function ChatPreview() {
       <div className="w-full space-y-3 rounded-lg border bg-muted/30 px-4 py-4">
         <p className="text-sm leading-7">
           스코프는 변수를 찾을 수 있는 범위이고, 클로저는 함수가 선언된 위치의
-          스코프를 기억해 나중까지 들고 다니는 성질이에요. 자바스크립트는 호출된
-          위치가 아니라 선언된 위치로 스코프를 정하는 렉시컬 스코프를 쓰기
-          때문에, 바깥 함수가 이미 끝난 뒤에도 안쪽 함수가 그 변수에 접근할 수
-          있습니다. 이 점을 이용하면 카운터처럼 상태를 함수 안에 감춰 두는
-          패턴을 만들 수 있어요.
+          스코프를 기억하는 성질이에요. 그래서 바깥 함수가 끝난 뒤에도 안쪽
+          함수가 그 변수에 접근할 수 있습니다.
         </p>
       </div>
 
@@ -195,7 +192,13 @@ export function LearningToolsSection() {
   }
 
   return (
-    <section aria-labelledby="learning-tools-heading" className="bg-muted/30">
+    <section
+      aria-labelledby="learning-tools-heading"
+      // 학습 흐름 섹션의 단계 숫자(text-orange-200)와 같은 색상을 쓰되, 배경으로
+      // 깔리도록 농도를 낮춘다. 무채색 muted를 쓰면 따뜻한 색조의 나머지 섹션
+      // 사이에서 혼자 떠 보인다.
+      className="bg-orange-200/25 dark:bg-orange-950/15"
+    >
       <div className="mx-auto max-w-6xl px-6 py-16 md:py-20">
         <h2
           id="learning-tools-heading"

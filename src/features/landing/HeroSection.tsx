@@ -124,7 +124,7 @@ export function HeroSection() {
       <div className="absolute -right-40 -top-40 -z-10 size-96 rounded-full bg-linear-to-br from-amber-200/40 to-orange-200/40 blur-3xl dark:from-amber-800/10 dark:to-orange-800/10" />
       <div className="absolute -bottom-20 -left-40 -z-10 size-80 rounded-full bg-linear-to-tr from-rose-200/40 to-pink-200/40 blur-3xl dark:from-rose-800/10 dark:to-pink-800/10" />
 
-      <div className="mx-auto max-w-5xl px-6 py-28 md:py-40">
+      <div className="mx-auto max-w-5xl px-6 py-20 md:py-28">
         <h1 className="text-center text-5xl font-bold tracking-tight">
           {heroContent.title}
         </h1>
