@@ -183,35 +183,63 @@ function NotificationMockup() {
 }
 
 /**
- * 백지 테스트 결과 화면(`ComparisonView`)의 정적 재현.
- * 실제 화면은 Card 두 장을 나란히 두고 제목이 "내 답안"·"원본"이다.
- * 본문은 TipTap 뷰어로 렌더되지만, 랜딩에 에디터 번들을 끌어올 이유가 없어
- * 문단만 옮긴다.
+ * 백지 테스트 화면(`BlankTestPage`의 제출 이후 상태)의 정적 재현.
+ *
+ * 실제 화면은 브레드크럼 → 헤더(회차 배지 + 노트 제목 + 안내 문구) →
+ * `ComparisonView`(내 답안·원본 두 장) 순으로 쌓인다.
+ *
+ * 본문은 실제로 TipTap 뷰어가 렌더하지만 랜딩에 에디터 번들을 끌어올 이유가
+ * 없어 문단만 옮긴다. 카드 안쪽 여백과 높이는 목업 폭에 맞춰 줄였다
+ * (실제는 px-6 py-5에 min-h-[50vh]).
  */
 function TestMockup() {
   return (
     <div className="overflow-hidden rounded-2xl border bg-card shadow-lg">
       <MockupChrome label="백지 테스트" />
-      <div className="grid gap-3 p-4 md:grid-cols-2">
-        <Card className="overflow-hidden">
-          <CardHeader className="border-b border-border/60 pb-3">
-            <CardTitle className="text-sm">내 답안</CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 text-sm leading-relaxed">
-            금속이 전자를 잃고 비금속이 얻으면 이온 결합, 비금속끼리 전자쌍을
-            나눠 가지면 공유 결합.
-          </CardContent>
-        </Card>
+      <div className="space-y-4 p-4">
+        <nav className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span>홈</span>
+          <ChevronRightIcon className="size-3.5" aria-hidden />
+          <span>노트 목록</span>
+          <ChevronRightIcon className="size-3.5" aria-hidden />
+          <span>이온 결합과 공유 결합</span>
+          <ChevronRightIcon className="size-3.5" aria-hidden />
+          <span className="font-medium text-foreground">백지 테스트</span>
+        </nav>
 
-        <Card className="overflow-hidden">
-          <CardHeader className="border-b border-border/60 pb-3">
-            <CardTitle className="text-sm">원본</CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 text-sm leading-relaxed text-muted-foreground">
-            이온 결합은 양이온과 음이온 사이의 정전기적 인력으로 만들어지고,
-            공유 결합은 두 원자가 전자쌍을 공유해 만들어진다.
-          </CardContent>
-        </Card>
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span className="rounded-full bg-muted px-2.5 py-1 font-medium text-foreground">
+              3차 복습
+            </span>
+            <span>백지 테스트</span>
+          </div>
+          <h3 className="text-xl font-bold text-foreground">
+            이온 결합과 공유 결합
+          </h3>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2">
+          <Card className="overflow-hidden">
+            <CardHeader className="border-b border-border/60 pb-3">
+              <CardTitle className="text-sm">내 답안</CardTitle>
+            </CardHeader>
+            <CardContent className="min-h-28 px-4 py-3 text-sm leading-relaxed">
+              금속이 전자를 잃고 비금속이 얻으면 이온 결합, 비금속끼리 전자쌍을
+              나눠 가지면 공유 결합.
+            </CardContent>
+          </Card>
+
+          <Card className="overflow-hidden">
+            <CardHeader className="border-b border-border/60 pb-3">
+              <CardTitle className="text-sm">원본</CardTitle>
+            </CardHeader>
+            <CardContent className="min-h-28 px-4 py-3 text-sm leading-relaxed text-muted-foreground">
+              이온 결합은 양이온과 음이온 사이의 정전기적 인력으로 만들어지고,
+              공유 결합은 두 원자가 전자쌍을 공유해 만들어진다.
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
