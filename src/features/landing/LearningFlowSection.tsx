@@ -248,7 +248,7 @@ function TestMockup() {
 export function LearningFlowSection() {
   return (
     <section id="features">
-      <div className="mx-auto max-w-5xl px-6 py-20 md:py-28">
+      <div className="mx-auto max-w-5xl px-6 py-16 md:py-20">
         <h2 className="mt-2 whitespace-pre-line text-center text-3xl font-bold tracking-tight md:text-4xl">
           {learningFlowContent.heading}
         </h2>

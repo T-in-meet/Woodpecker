@@ -45,7 +45,7 @@ export const faqs = [
 export function FaqSection() {
   return (
     <section id="faq">
-      <div className="mx-auto max-w-3xl px-6 py-20 md:py-28">
+      <div className="mx-auto max-w-3xl px-6 py-16 md:py-20">
         <h2 className="mt-2 text-center text-3xl font-bold tracking-tight md:text-4xl">
           자주 묻는 질문
         </h2>
