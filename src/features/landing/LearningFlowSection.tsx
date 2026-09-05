@@ -1,4 +1,9 @@
-import { BrainIcon, NotebookPen } from "lucide-react";
+import {
+  BrainIcon,
+  ChevronRightIcon,
+  MoreHorizontalIcon,
+  NotebookPen,
+} from "lucide-react";
 import Image from "next/image";
 import type { ReactNode } from "react";
 
@@ -37,31 +42,42 @@ function NoteMockup() {
     <div className="overflow-hidden rounded-2xl border bg-card shadow-lg">
       <MockupChrome label="노트" />
       <div className="p-5">
-        <div className="border-b border-border/60 pb-5">
+        <nav className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span>홈</span>
+          <ChevronRightIcon className="size-3.5" aria-hidden />
+          <span>노트 목록</span>
+          <ChevronRightIcon className="size-3.5" aria-hidden />
+          <span className="text-foreground">임진왜란의 3대 대첩</span>
+        </nav>
+
+        <div className="mt-6 border-b border-border/60 pb-5">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs text-muted-foreground">
             <span className="rounded-full bg-orange-100 px-2 py-1 font-medium text-foreground">
               복습 0회
             </span>
-            <span className="min-w-0">첫 복습은 내일 예정이에요</span>
+            <span className="min-w-0">다음 복습 일정: 내일 오전 09:00</span>
           </div>
 
-          <h3 className="mt-4 text-xl font-bold text-foreground">
+          <h3 className="mt-4 text-2xl font-bold text-foreground">
             임진왜란의 3대 대첩
           </h3>
 
           <div className="mt-5 flex flex-wrap items-center gap-2">
-            <span className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground">
+            <span className="inline-flex h-8 items-center gap-1.5 rounded-full bg-primary pl-2 pr-2.5 text-sm font-medium text-primary-foreground">
               <NotebookPen className="size-4" aria-hidden />
               백지 테스트 시작
             </span>
-            <span className="inline-flex h-9 items-center gap-1.5 rounded-md border px-4 text-sm font-medium">
+            <span className="inline-flex h-8 items-center gap-1.5 rounded-full border bg-background pl-2 pr-2.5 text-sm font-medium">
               <BrainIcon className="size-4" aria-hidden />
               퀴즈 풀기
+            </span>
+            <span className="ml-auto inline-flex size-8 items-center justify-center rounded-full text-muted-foreground">
+              <MoreHorizontalIcon className="size-4" aria-hidden />
             </span>
           </div>
         </div>
 
-        <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
+        <p className="mt-5 text-sm leading-relaxed text-muted-foreground">
           한산도 대첩, 행주 대첩, 진주 대첩을 3대 대첩으로 꼽는다. 한산도 대첩은
           학익진으로 일본 수군을 크게 꺾어 남해의 제해권을 지켜냈다.
         </p>
