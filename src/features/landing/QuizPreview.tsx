@@ -5,10 +5,10 @@ import type { OxQuestion } from "@/features/quiz/schema";
 
 const previewQuestion: OxQuestion = {
   type: "ox",
-  question: "기회비용에는 그 선택 때문에 포기한 대안의 가치가 포함된다.",
+  question: "기회비용에는 포기한 대안의 가치가 포함된다.",
   answer: true,
   explanation:
-    "기회비용은 실제로 치른 명시적 비용에, 포기한 대안에서 얻을 수 있었던 가치까지 더해 따진다.",
+    "기회비용은 실제로 지출한 명시적 비용에, 그 선택 때문에 포기한 차선책의 가치까지 더해 따집니다. 예를 들어 연봉 4천만 원인 직장을 그만두고 창업했다면, 투입한 자본뿐 아니라 받지 못한 연봉도 기회비용에 들어갑니다.",
 };
 
 /**
