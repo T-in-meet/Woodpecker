@@ -167,7 +167,7 @@ export async function runRelatedNoteRecommendation({
     title,
   });
 
-  // Retrieval hydration과 Context가 확정된 전체 Snapshot을 저장한다.
+  // Retrieval hydration과 Context가 확정된 전체 Snapshot의 checkpoint persistence를 등록한다.
   await onCheckpoint?.();
 
   await onMatchedNotes?.(contextResult.notes.map((note) => note.id));
@@ -264,7 +264,7 @@ export async function runRelatedNoteRecommendation({
     },
   });
 
-  // Answer parse/resolve/dedup 결과가 확정된 전체 Snapshot을 저장한다.
+  // Answer parse/resolve/dedup 결과가 확정된 전체 Snapshot의 checkpoint persistence를 등록한다.
   await onCheckpoint?.();
 
   /*

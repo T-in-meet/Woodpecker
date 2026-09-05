@@ -202,7 +202,7 @@ export async function runNoteChatStream(
   return { assistantMessageId, content, usedNoteIds };
 }
 
-/** 현재 전체 Snapshot을 공통 AI Run checkpoint로 저장합니다. */
+/** 현재 전체 Snapshot을 공통 AI Run checkpoint persistence에 등록합니다. */
 async function checkpointRun(params: RunNoteChatStreamParams): Promise<void> {
   await checkpointAiRun({
     aiRun: params.aiRun,
@@ -210,7 +210,7 @@ async function checkpointRun(params: RunNoteChatStreamParams): Promise<void> {
   });
 }
 
-/** 성공한 AI 처리 결과를 best-effort terminal로 저장합니다. */
+/** 성공한 AI 처리 결과를 best-effort terminal persistence에 등록합니다. */
 async function completeSucceededRun(
   params: RunNoteChatStreamParams,
   featureResultIds: string[],
