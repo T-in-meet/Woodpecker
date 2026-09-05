@@ -117,7 +117,7 @@ export default function Home() {
         <Suspense fallback={<HeaderSkeleton />}>
           <Header />
         </Suspense>
-        <main>
+        <main className="text-prose-ko">
           <div className="sr-only" aria-hidden="true">
             이 페이지의 마크다운 버전:{" "}
             <a href={`${SITE_URL}/index.md`}>{SITE_URL}/index.md</a>

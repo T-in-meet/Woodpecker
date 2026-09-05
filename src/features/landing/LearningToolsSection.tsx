@@ -97,7 +97,7 @@ export function LearningToolsSection() {
       <div className="mx-auto max-w-6xl px-6 py-16 md:py-20">
         <h2
           id="learning-tools-heading"
-          className="break-keep text-center text-3xl font-bold tracking-tight md:text-4xl"
+          className="text-center text-3xl font-bold tracking-tight md:text-4xl"
         >
           {learningToolsContent.heading}
         </h2>
@@ -116,7 +116,7 @@ export function LearningToolsSection() {
                   <Icon className="size-4" aria-hidden="true" />
                   {tool.label}
                 </p>
-                <h3 className="mt-3 break-keep text-xl font-semibold tracking-tight">
+                <h3 className="mt-3 text-xl font-semibold tracking-tight">
                   {tool.title}
                 </h3>
                 <p className="mb-6 mt-3 text-sm leading-relaxed text-muted-foreground">
