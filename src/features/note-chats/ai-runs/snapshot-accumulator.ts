@@ -143,6 +143,16 @@ function mapHydratedCandidate(note: MatchedNote) {
   };
 }
 
+/** 선택된 Context 후보를 Hydration 후보 배열 내부 index로 변환합니다. */
+function mapSelectedCandidateIndexes(
+  hydratedCandidates: MatchedNote[],
+  selectedContext: MatchedNote[],
+) {
+  return selectedContext.map((selectedCandidate) =>
+    hydratedCandidates.indexOf(selectedCandidate),
+  );
+}
+
 /** 기존 실행 source를 정본 Retrieval source Snapshot으로 변환합니다. */
 function mapRetrievalSource(source: Json) {
   const parsed = source as NoteChatNoteSource;
@@ -305,7 +315,10 @@ export function createNoteChatSnapshotAccumulator(): NoteChatSnapshotAccumulator
           input.hydratedCandidates.map(mapHydratedCandidate);
         state.retrieval.output = {
           context: input.context,
-          selectedContext: input.selectedContext.map(mapHydratedCandidate),
+          selectedCandidateIndexes: mapSelectedCandidateIndexes(
+            input.hydratedCandidates,
+            input.selectedContext,
+          ),
           sources: input.sources.map(mapRetrievalSource),
         };
       });

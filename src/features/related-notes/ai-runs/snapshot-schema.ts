@@ -155,16 +155,7 @@ export const relatedNotesSnapshotsSchema = z.object({
       z.object({
         input: z.object({
           source: z.object({ title: z.string(), content: z.string() }),
-          matchedNotes: z.array(
-            z.object({
-              noteId: z.string().uuid(),
-              title: z.string(),
-              chunkText: z.string(),
-              embeddingId: z.string().uuid(),
-              similarity: z.number(),
-              distance: z.number(),
-            }),
-          ),
+          matchedCandidateIndexes: z.array(z.number().int().nonnegative()),
           context: z.string(),
           variables: z.object({
             title: z.string(),
@@ -246,16 +237,7 @@ export const relatedNotesSnapshotsSchema = z.object({
               reason: z.string(),
             }),
           ),
-          matchedNotes: z.array(
-            z.object({
-              noteId: z.string().uuid(),
-              title: z.string(),
-              chunkText: z.string(),
-              embeddingId: z.string().uuid(),
-              similarity: z.number(),
-              distance: z.number(),
-            }),
-          ),
+          matchedCandidateIndexes: z.array(z.number().int().nonnegative()),
           context: z.string(),
           variables: z.object({
             title: z.string(),

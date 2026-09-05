@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createNoteChatSnapshotAccumulator } from "../snapshot-accumulator";
+import { noteChatSnapshotsSchema } from "../snapshot-schema";
 
 describe("createNoteChatSnapshotAccumulator", () => {
   it("초기 상태와 no-context 최종 결과를 전체 문서로 build한다", () => {
@@ -62,5 +63,133 @@ describe("createNoteChatSnapshotAccumulator", () => {
         output: { rawResponse: "raw response" },
       },
     });
+  });
+
+  it("Retrieval 후보는 한 번만 저장하고 선택된 Context 후보를 index로 보존한다", () => {
+    const accumulator = createNoteChatSnapshotAccumulator();
+
+    const firstCandidate = {
+      chunkText: "첫 번째 검색 chunk",
+      distance: 0.1,
+      embeddingId: "embedding-1",
+      id: "note-1",
+      similarity: 0.9,
+      title: "첫 번째 노트",
+    };
+
+    const secondCandidate = {
+      chunkText: "두 번째 검색 chunk",
+      distance: 0.2,
+      embeddingId: "embedding-2",
+      id: "note-2",
+      similarity: 0.8,
+      title: "두 번째 노트",
+    };
+
+    const thirdCandidate = {
+      chunkText: "세 번째 검색 chunk",
+      distance: 0.3,
+      embeddingId: "embedding-3",
+      id: "note-3",
+      similarity: 0.7,
+      title: "세 번째 노트",
+    };
+
+    const hydratedCandidates = [
+      firstCandidate,
+      secondCandidate,
+      thirdCandidate,
+    ];
+    const selectedContext = [firstCandidate, thirdCandidate];
+
+    accumulator.prepareRetrieval({
+      configuration: {
+        model: {
+          dimensions: 1536,
+          id: "embedding-model-id",
+          model: "embedding-model",
+          provider: "openai",
+        },
+      } as never,
+      contextLimit: 2,
+      inputText: "확장된 검색 질의",
+      matchLimit: 20,
+      minSimilarity: 0,
+    });
+
+    accumulator.completeRetrieval({
+      context: "생성된 Context",
+      hydratedCandidates,
+      selectedContext,
+      sources: [],
+    });
+
+    const snapshot = noteChatSnapshotsSchema.parse(accumulator.buildSnapshot());
+
+    expect(snapshot.retrieval?.hydratedCandidates).toEqual([
+      {
+        chunk: {
+          id: "embedding-1",
+          inputText: "첫 번째 검색 chunk",
+        },
+        distance: 0.1,
+        embeddingId: "embedding-1",
+        note: {
+          id: "note-1",
+          title: "첫 번째 노트",
+        },
+        noteId: "note-1",
+        similarity: 0.9,
+        sourceId: "note-1",
+      },
+      {
+        chunk: {
+          id: "embedding-2",
+          inputText: "두 번째 검색 chunk",
+        },
+        distance: 0.2,
+        embeddingId: "embedding-2",
+        note: {
+          id: "note-2",
+          title: "두 번째 노트",
+        },
+        noteId: "note-2",
+        similarity: 0.8,
+        sourceId: "note-2",
+      },
+      {
+        chunk: {
+          id: "embedding-3",
+          inputText: "세 번째 검색 chunk",
+        },
+        distance: 0.3,
+        embeddingId: "embedding-3",
+        note: {
+          id: "note-3",
+          title: "세 번째 노트",
+        },
+        noteId: "note-3",
+        similarity: 0.7,
+        sourceId: "note-3",
+      },
+    ]);
+
+    expect(snapshot.retrieval?.output).toEqual({
+      context: "생성된 Context",
+      selectedCandidateIndexes: [0, 2],
+      sources: [],
+    });
+
+    expect(snapshot.retrieval?.output).not.toHaveProperty("selectedContext");
+
+    const reconstructedSelectedContext =
+      snapshot.retrieval?.output?.selectedCandidateIndexes.map(
+        (index) => snapshot.retrieval?.hydratedCandidates?.[index],
+      );
+
+    expect(reconstructedSelectedContext).toEqual([
+      snapshot.retrieval?.hydratedCandidates?.[0],
+      snapshot.retrieval?.hydratedCandidates?.[2],
+    ]);
   });
 });

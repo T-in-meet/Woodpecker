@@ -56,4 +56,32 @@ describe("noteChatSnapshotsSchema", () => {
       }),
     ).toThrow();
   });
+
+  it("Retrieval의 음수 selectedCandidateIndexes를 거부한다", () => {
+    expect(() =>
+      noteChatSnapshotsSchema.parse({
+        retrieval: {
+          configuration: {
+            embeddingModel: {
+              model: "embedding-model",
+              provider: "provider",
+            },
+            search: {
+              contextLimit: 5,
+              matchLimit: 20,
+            },
+          },
+          input: {
+            inputText: "expanded query",
+          },
+          output: {
+            context: "context",
+            selectedCandidateIndexes: [-1],
+            sources: [],
+          },
+        },
+        schemaVersion: 1,
+      }),
+    ).toThrow();
+  });
 });

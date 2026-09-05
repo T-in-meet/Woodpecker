@@ -5,7 +5,6 @@ import type { AiRuntimeEmbeddingConfiguration } from "@/features/ai/runtimes/typ
 import {
   describeRelatedNotesSnapshotError,
   mapRelatedNotesChatModel,
-  mapRelatedNotesMatchedNote,
   mapRelatedNotesPrompt,
   type RelatedNotesSnapshotAccumulator,
 } from "../ai-runs/snapshot-accumulator";
@@ -83,6 +82,37 @@ type RunRelatedNoteRecommendationParams = {
   /** Retrieval 또는 Answer 완료 뒤 전체 Snapshot checkpoint callback입니다. */
   onCheckpoint?: () => void | Promise<void>;
 };
+
+/**
+ * 실제 stage에서 사용한 후보를 Retrieval 정본 후보의 index로 변환합니다.
+ *
+ * 같은 Note의 여러 chunk는 서로 다른 embeddingId를 가지므로
+ * Note ID가 아니라 embeddingId를 기준으로 대응시킵니다.
+ *
+ * 정본 후보에서 대응 항목을 찾지 못한 경우 dangling index를 만들거나
+ * 실행을 실패시키지 않고 Snapshot stage 기록을 생략할 수 있도록 null을 반환합니다.
+ */
+function resolveMatchedCandidateIndexes(
+  hydratedCandidates: Array<{ embeddingId: string }>,
+  matchedCandidates: Array<{ embeddingId: string }>,
+): number[] | null {
+  const indexByEmbeddingId = new Map(
+    hydratedCandidates.map((candidate, index) => [
+      candidate.embeddingId,
+      index,
+    ]),
+  );
+
+  const indexes = matchedCandidates.map((candidate) =>
+    indexByEmbeddingId.get(candidate.embeddingId),
+  );
+
+  if (indexes.some((index) => index === undefined)) {
+    return null;
+  }
+
+  return indexes as number[];
+}
 
 /**
  * Note의 관련 노트 추천을 실행합니다.
@@ -181,6 +211,13 @@ export async function runRelatedNoteRecommendation({
       : {}),
     onObservation: (observation) => {
       if (observation.type === "prepared") {
+        const matchedCandidateIndexes = resolveMatchedCandidateIndexes(
+          contextResult.notes,
+          observation.notes,
+        );
+
+        if (matchedCandidateIndexes === null) return;
+
         snapshotAccumulator?.setStage("answerGeneration", {
           configuration: {
             model: mapRelatedNotesChatModel(observation.configuration),
@@ -192,7 +229,7 @@ export async function runRelatedNoteRecommendation({
           },
           input: {
             context: observation.context,
-            matchedNotes: observation.notes.map(mapRelatedNotesMatchedNote),
+            matchedCandidateIndexes,
             renderedSystemPrompt: observation.systemPrompt,
             renderedUserPrompt: observation.userPrompt,
             source: { content, title },
@@ -262,6 +299,13 @@ export async function runRelatedNoteRecommendation({
       : {}),
     onObservation: (observation) => {
       if (observation.type === "prepared") {
+        const matchedCandidateIndexes = resolveMatchedCandidateIndexes(
+          contextResult.notes,
+          observation.notes,
+        );
+
+        if (matchedCandidateIndexes === null) return;
+
         snapshotAccumulator?.setStage("verification", {
           configuration: {
             model: mapRelatedNotesChatModel(observation.configuration),
@@ -273,7 +317,7 @@ export async function runRelatedNoteRecommendation({
           },
           input: {
             context: observation.context,
-            matchedNotes: observation.notes.map(mapRelatedNotesMatchedNote),
+            matchedCandidateIndexes,
             recommendations: observation.recommendations,
             renderedSystemPrompt: observation.systemPrompt,
             renderedUserPrompt: observation.userPrompt,

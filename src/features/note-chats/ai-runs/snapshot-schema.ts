@@ -106,9 +106,6 @@ const hydratedCandidateSnapshotSchema = z.object({
   }),
 });
 
-/** 최종 Context에 선택된 검색 후보 Snapshot schema입니다. */
-const selectedContextSnapshotSchema = hydratedCandidateSnapshotSchema;
-
 /** Retrieval source Snapshot schema입니다. */
 const retrievalSourceSnapshotSchema = z.object({
   noteId: z.string().optional(),
@@ -159,7 +156,7 @@ const retrievalSnapshotSchema = z.object({
   hydratedCandidates: z.array(hydratedCandidateSnapshotSchema).optional(),
   output: z
     .object({
-      selectedContext: z.array(selectedContextSnapshotSchema),
+      selectedCandidateIndexes: z.array(z.number().int().nonnegative()),
       context: z.string(),
       sources: z.array(retrievalSourceSnapshotSchema),
     })
