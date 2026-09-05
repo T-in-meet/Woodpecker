@@ -131,8 +131,10 @@ export function HeroSection() {
       <div className="absolute -right-40 -top-40 -z-10 size-96 rounded-full bg-linear-to-br from-amber-200/40 to-orange-200/40 blur-3xl dark:from-amber-800/10 dark:to-orange-800/10" />
       <div className="absolute -bottom-20 -left-40 -z-10 size-80 rounded-full bg-linear-to-tr from-rose-200/40 to-pink-200/40 blur-3xl dark:from-rose-800/10 dark:to-pink-800/10" />
 
-      <div className="mx-auto max-w-5xl px-6 py-20 md:py-28">
-        <h1 className="text-center text-5xl font-bold tracking-tight">
+      <div className="mx-auto max-w-5xl px-6 py-14 md:py-24">
+        {/* 모바일에서는 헤더(약 57px) 아래 여백과 제목이 함께 커서 목업이
+            첫 화면 밖으로 밀린다. 위 여백과 제목을 같이 한 단계 낮춘다. */}
+        <h1 className="text-center text-4xl font-bold tracking-tight sm:text-5xl">
           {heroContent.title}
         </h1>
 

@@ -45,10 +45,11 @@ function NoteMockup() {
     <div className="overflow-hidden rounded-2xl border bg-card shadow-lg">
       <MockupChrome label="노트" />
       <div className="p-5">
-        {/* 좁은 화면에서 "노트 / 목록"처럼 라벨이 접히지 않게 nowrap으로 묶고,
-            줄어들 수 있는 건 노트 제목뿐이므로 거기에만 truncate를 준다.
-            화살표는 shrink-0으로 두어 눌리지 않게 한다. */}
-        <nav className="flex items-center gap-1 whitespace-nowrap text-xs text-muted-foreground">
+        {/* 세로가 빠듯한 모바일에서는 경로를 숨긴다. 데스크톱에서는
+            "노트 / 목록"처럼 라벨이 접히지 않게 nowrap으로 묶고, 줄어들 수
+            있는 건 노트 제목뿐이므로 거기에만 truncate를 준다. 화살표는
+            shrink-0으로 두어 눌리지 않게 한다. */}
+        <nav className="hidden items-center gap-1 whitespace-nowrap text-xs text-muted-foreground md:flex">
           <span className="shrink-0">홈</span>
           <ChevronRightIcon className="size-3.5 shrink-0" aria-hidden />
           <span className="shrink-0">노트 목록</span>
@@ -58,7 +59,7 @@ function NoteMockup() {
           </span>
         </nav>
 
-        <div className="mt-6 border-b border-border/60 pb-5">
+        <div className="border-b border-border/60 pb-5 md:mt-6">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs text-muted-foreground">
             <span className="rounded-full bg-orange-100 px-2 py-1 font-medium text-foreground dark:bg-orange-950/40">
               복습 0회
@@ -79,7 +80,7 @@ function NoteMockup() {
               <BrainIcon className="size-4" aria-hidden />
               퀴즈 풀기
             </span>
-            <span className="ml-auto inline-flex size-8 items-center justify-center rounded-full text-muted-foreground">
+            <span className="ml-auto hidden size-8 items-center justify-center rounded-full text-muted-foreground md:inline-flex">
               <MoreHorizontalIcon className="size-4" aria-hidden />
             </span>
           </div>
@@ -212,10 +213,12 @@ function TestMockup() {
     <div className="overflow-hidden rounded-2xl border bg-card shadow-lg">
       <MockupChrome label="백지 테스트" />
       <div className="space-y-4 p-4">
-        {/* 4단계라 모바일에서 가장 빠듯하다. 라벨은 전부 nowrap·shrink-0으로
-            묶고 화살표 간격을 좁힌 뒤, 남는 폭을 노트 제목이 truncate로
+        {/* 랜딩에서 알려야 하는 건 "내 답안과 원본을 나란히 비교한다"는
+            동작이고 경로는 거기에 보태는 게 없어, 세로가 빠듯한 모바일에서는
+            숨긴다. 데스크톱은 4단계라 폭이 가장 빠듯하므로 라벨을 전부
+            nowrap·shrink-0으로 묶고 남는 폭을 노트 제목이 truncate로
             흡수하게 한다. */}
-        <nav className="flex items-center gap-1 whitespace-nowrap text-xs text-muted-foreground">
+        <nav className="hidden items-center gap-1 whitespace-nowrap text-xs text-muted-foreground md:flex">
           <span className="shrink-0">홈</span>
           <ChevronRightIcon className="size-3.5 shrink-0" aria-hidden />
           <span className="shrink-0">노트 목록</span>
@@ -268,22 +271,22 @@ function TestMockup() {
 export function LearningFlowSection() {
   return (
     <section id="features">
-      <div className="mx-auto max-w-5xl px-6 py-16 md:py-20">
+      <div className="mx-auto max-w-5xl px-6 py-12 md:py-20">
         <h2 className="mt-2 whitespace-pre-line text-center text-3xl font-bold tracking-tight md:text-4xl">
           {learningFlowContent.heading}
         </h2>
 
-        <p className="mx-auto mt-8 max-w-xl whitespace-pre-line text-center text-muted-foreground">
+        <p className="mx-auto mt-6 max-w-xl whitespace-pre-line text-center text-muted-foreground md:mt-8">
           {learningFlowContent.introduction}
         </p>
 
         {/* 세 단계는 하나의 흐름이라 단계 사이 간격을 섹션 여백보다 좁게 둔다.
             멀어질수록 "아직도 기능 소개인가" 하는 인상이 커진다. */}
-        <div className="mt-12 space-y-16 md:mt-16 md:space-y-20">
+        <div className="mt-8 space-y-12 md:mt-16 md:space-y-20">
           {learningFlowContent.scenes.map((scene) => (
             <div
               key={scene.step}
-              className={`flex flex-col gap-6 md:flex-row md:items-center md:gap-16 ${
+              className={`flex flex-col gap-5 md:flex-row md:items-center md:gap-16 ${
                 scene.reverse ? "md:flex-row-reverse" : ""
               }`}
             >
@@ -317,10 +320,10 @@ export function LearningFlowSection() {
             </div>
           ))}
         </div>
+      </div>
 
-        {/* 핵심 흐름을 다 읽은 자리의 CTA. 배경 없이 두고 크기도 Hero·최종
-            CTA(2xl)보다 한 단계 작게 잡아 페이지 끝이 가장 강하게 남게 한다. */}
-        <div className="mt-14 text-center md:mt-16">
+      <div className="bg-orange-50 dark:bg-orange-950/40">
+        <div className="mx-auto max-w-5xl px-6 py-10 text-center md:py-14">
           <p className="text-lg font-medium">{learningFlowContent.cta.text}</p>
           <Button size="xl" className="mt-4" asChild>
             <Link href={ROUTES.SIGNUP}>{learningFlowContent.cta.label}</Link>

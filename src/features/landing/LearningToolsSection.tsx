@@ -240,7 +240,7 @@ export function LearningToolsSection() {
 
   return (
     <section aria-labelledby="learning-tools-heading">
-      <div className="mx-auto max-w-6xl px-6 py-16 md:py-20">
+      <div className="mx-auto max-w-6xl px-6 py-12 md:py-20">
         {/* 앞 섹션의 "기록 → 알림 → 백지 테스트" 흐름과 이어주는 한 줄.
             제목보다 작게 두어 위계는 제목이 갖게 한다. */}
         <p className="text-center text-sm font-medium text-muted-foreground">
