@@ -50,7 +50,7 @@ const previewNotes = [
  */
 function NotesPreview() {
   return (
-    <div className="bg-muted/20 p-5 text-left">
+    <div className="bg-muted/20 p-4 text-left sm:p-5">
       {/* 툴바 — NotesToolbar의 보기 필터와 검색 입력 */}
       <div className="flex items-center gap-2">
         <div className="flex h-9 w-32 shrink-0 items-center justify-between rounded-md border bg-background px-3 text-sm">
@@ -70,7 +70,7 @@ function NotesPreview() {
       <div className="mt-4 space-y-3">
         {previewNotes.map((note) => (
           <Card key={note.title} className="relative">
-            <CardContent className="p-5">
+            <CardContent className="p-4 sm:p-5">
               <div className="flex min-w-0 items-center justify-between gap-2">
                 <span className="min-w-0 truncate text-base font-semibold leading-snug">
                   {note.title}
@@ -86,7 +86,11 @@ function NotesPreview() {
 
               <div className="my-3.5 border-t" />
 
-              <div className="flex min-h-8 items-center gap-4 pr-32 text-sm text-muted-foreground">
+              {/* 오른쪽 pr은 아래 절대 배치된 액션 버튼이 차지하는 폭을 비워
+                  두는 값이다. 버튼 크기를 바꾸면 이 값도 같이 맞춰야 한다.
+                  좁은 화면에서는 버튼을 줄여 "복습일 + 배지"가 한 줄에
+                  들어가게 한다. */}
+              <div className="flex min-h-8 items-center gap-4 pr-28 text-sm text-muted-foreground sm:pr-32">
                 <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 whitespace-nowrap">
                   <CalendarClock className="h-3.5 w-3.5 shrink-0" aria-hidden />
                   <span>복습일</span>
@@ -100,12 +104,12 @@ function NotesPreview() {
             </CardContent>
 
             {/* NoteActions의 정적 재현 — 실제 버튼이 아니므로 span으로 둔다 */}
-            <div className="absolute bottom-5 right-5 flex shrink-0 items-center gap-1">
-              <span className="inline-flex h-8 items-center gap-1 rounded-md border border-emerald-600/40 px-2.5 text-xs font-medium text-emerald-700">
+            <div className="absolute bottom-4 right-4 flex shrink-0 items-center gap-0.5 sm:bottom-5 sm:right-5 sm:gap-1">
+              <span className="inline-flex h-7 items-center gap-0.5 rounded-md border border-emerald-600/40 px-2 text-[0.7rem] font-medium text-emerald-700 sm:h-8 sm:gap-1 sm:px-2.5 sm:text-xs">
                 <Play className="h-3.5 w-3.5" aria-hidden />
                 복습 시작
               </span>
-              <span className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground">
+              <span className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground sm:size-8">
                 <Trash2 className="h-4 w-4" aria-hidden />
               </span>
             </div>

@@ -42,12 +42,17 @@ function NoteMockup() {
     <div className="overflow-hidden rounded-2xl border bg-card shadow-lg">
       <MockupChrome label="노트" />
       <div className="p-5">
-        <nav className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <span>홈</span>
-          <ChevronRightIcon className="size-3.5" aria-hidden />
-          <span>노트 목록</span>
-          <ChevronRightIcon className="size-3.5" aria-hidden />
-          <span className="text-foreground">임진왜란의 3대 대첩</span>
+        {/* 좁은 화면에서 "노트 / 목록"처럼 라벨이 접히지 않게 nowrap으로 묶고,
+            줄어들 수 있는 건 노트 제목뿐이므로 거기에만 truncate를 준다.
+            화살표는 shrink-0으로 두어 눌리지 않게 한다. */}
+        <nav className="flex items-center gap-1 whitespace-nowrap text-xs text-muted-foreground">
+          <span className="shrink-0">홈</span>
+          <ChevronRightIcon className="size-3.5 shrink-0" aria-hidden />
+          <span className="shrink-0">노트 목록</span>
+          <ChevronRightIcon className="size-3.5 shrink-0" aria-hidden />
+          <span className="min-w-0 truncate text-foreground">
+            임진왜란의 3대 대첩
+          </span>
         </nav>
 
         <div className="mt-6 border-b border-border/60 pb-5">
@@ -94,6 +99,11 @@ function NoteMockup() {
  * 푸시가 먼저 오고 그 알림이 앱 알림함에 쌓이는 순서이므로, 위아래 순서를
  * 그 순서에 맞추고 캡션과 폭·정렬로 둘을 갈라 둔다.
  *
+ * 둘을 위아래로 떼어 놓으면 목업만 세로로 길어져 부담스러우므로, 푸시를
+ * 알림함 위에 겹쳐 띄운다. 실제로도 푸시는 앱 화면 위에 떠서 나타나므로
+ * 겹치는 편이 동작에 더 가깝다. 겹치는 자리는 알림함 헤더의 오른쪽 빈
+ * 영역이라 "새 알림" 배지 같은 내용은 가리지 않는다.
+ *
  * 캡션은 실제 화면에 없는 목업 전용 라벨이다. 두 경로가 따로 있다는 걸
  * 처음 방문한 사람이 알 수 없어 붙였다.
  *
@@ -115,10 +125,11 @@ function NotificationMockup() {
   ];
 
   return (
-    <div className="mx-auto max-w-96 space-y-8">
+    <div className="mx-auto max-w-96">
       {/* 브라우저가 띄우는 푸시. 앱 밖에서 뜨는 것이라 폭을 좁히고 오른쪽에
-          붙여 아래 알림함과 한눈에 갈라지게 둔다. */}
-      <div className="ml-auto w-64">
+          붙여 아래 알림함과 한눈에 갈라지게 둔다. 좁은 화면에서 아래 "앱
+          알림함" 캡션을 덮지 않도록 폭에 상한을 둔다. */}
+      <div className="relative z-10 ml-auto w-64 max-w-[70%]">
         <p className="mb-2 text-xs text-muted-foreground">브라우저 알림</p>
         <div className="flex items-start gap-3 rounded-xl border bg-card px-4 py-3.5 shadow-xl">
           <Image
@@ -138,8 +149,9 @@ function NotificationMockup() {
         </div>
       </div>
 
-      {/* 앱 안 알림함. 실제 드롭다운과 같은 24rem 폭을 쓴다. */}
-      <div>
+      {/* 앱 안 알림함. 실제 드롭다운과 같은 24rem 폭을 쓴다.
+          음수 마진으로 위 푸시 아래에 파고들어 겹친다. */}
+      <div className="-mt-12">
         <p className="mb-2 text-xs text-muted-foreground">앱 알림함</p>
         <div className="overflow-hidden rounded-lg border bg-background shadow-lg">
           <div className="flex items-center justify-between gap-3 px-4 py-3">
@@ -197,14 +209,19 @@ function TestMockup() {
     <div className="overflow-hidden rounded-2xl border bg-card shadow-lg">
       <MockupChrome label="백지 테스트" />
       <div className="space-y-4 p-4">
-        <nav className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <span>홈</span>
-          <ChevronRightIcon className="size-3.5" aria-hidden />
-          <span>노트 목록</span>
-          <ChevronRightIcon className="size-3.5" aria-hidden />
-          <span>이온 결합과 공유 결합</span>
-          <ChevronRightIcon className="size-3.5" aria-hidden />
-          <span className="font-medium text-foreground">백지 테스트</span>
+        {/* 4단계라 모바일에서 가장 빠듯하다. 라벨은 전부 nowrap·shrink-0으로
+            묶고 화살표 간격을 좁힌 뒤, 남는 폭을 노트 제목이 truncate로
+            흡수하게 한다. */}
+        <nav className="flex items-center gap-1 whitespace-nowrap text-xs text-muted-foreground">
+          <span className="shrink-0">홈</span>
+          <ChevronRightIcon className="size-3.5 shrink-0" aria-hidden />
+          <span className="shrink-0">노트 목록</span>
+          <ChevronRightIcon className="size-3.5 shrink-0" aria-hidden />
+          <span className="min-w-0 truncate">이온 결합과 공유 결합</span>
+          <ChevronRightIcon className="size-3.5 shrink-0" aria-hidden />
+          <span className="shrink-0 font-medium text-foreground">
+            백지 테스트
+          </span>
         </nav>
 
         <div className="space-y-2">
