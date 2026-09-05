@@ -2100,7 +2100,7 @@ export type Database = {
               p_quiz_type: string;
               p_user_id: string;
             };
-            Returns: string;
+            Returns: Json;
           };
       finalize_review_grading: {
         Args: {

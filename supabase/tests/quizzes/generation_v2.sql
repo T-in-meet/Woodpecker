@@ -13,7 +13,7 @@
 
 BEGIN;
 
-SELECT plan(22);
+SELECT plan(23);
 
 SELECT set_config('test.qgv2_user_a_id', gen_random_uuid()::text, true);
 SELECT set_config('test.qgv2_user_b_id', gen_random_uuid()::text, true);
@@ -118,7 +118,7 @@ SELECT is(
     '[{"type":"ox","question":"Q1","answer":true,"explanation":"E1"}]'::jsonb,
     '[["Q1"]]'::jsonb,
     'hash-a-ox-1'
-  ),
+  ) ->> 'status',
   'ok',
   $$선점한 행을 완료로 확정할 수 있어야 한다$$
 );
@@ -166,7 +166,7 @@ SELECT is(
     '{}'::jsonb,
     '[]'::jsonb,
     'unused'
-  ),
+  ) ->> 'status',
   'not_found',
   $$존재하지 않는 claim_token으로 확정하면 not_found여야 한다$$
 );
@@ -189,7 +189,7 @@ SELECT is(
     '[{"type":"ox","question":"Q2","answer":false,"explanation":"E2"}]'::jsonb,
     '[["Q2"],["Q1"]]'::jsonb,
     'hash-a-ox-2'
-  ),
+  ) ->> 'status',
   'ok',
   $$두 번째 선점도 정상 확정돼야 한다$$
 );
@@ -210,9 +210,31 @@ SELECT is(
     '[{"type":"ox","question":"Q2","answer":false,"explanation":"E2"}]'::jsonb,
     '[["Q2"],["Q1"]]'::jsonb,
     'hash-a-ox-2'
-  ),
+  ) ->> 'status',
   'already_completed',
   $$이미 완료된 최신 선점을 다시 확정하면 already_completed여야 한다$$
+);
+
+-- already_completed도 같은 upsert에서 실제 Quiz UUID를 반환해야 한다.
+SELECT is(
+  (
+    public.finalize_quiz_generation_v2(
+      current_setting('test.qgv2_user_a_id')::uuid,
+      current_setting('test.qgv2_note_a_id')::uuid,
+      'ox',
+      ((current_setting('test.qgv2_claim2')::jsonb) ->> 'claimToken')::uuid,
+      '[{"type":"ox","question":"Q2","answer":false,"explanation":"E2"}]'::jsonb,
+      '[["Q2"],["Q1"]]'::jsonb,
+      'hash-a-ox-2'
+    ) ->> 'quizId'
+  )::uuid,
+  (
+    SELECT id
+    FROM public.quizzes
+    WHERE note_id = current_setting('test.qgv2_note_a_id')::uuid
+      AND quiz_type = 'ox'
+  ),
+  $$already_completed는 같은 upsert의 Quiz UUID를 반환해야 한다$$
 );
 
 -- =========================================
@@ -266,7 +288,7 @@ SELECT is(
     '[{"type":"blank","question":"stale ____","answer":"stale","acceptedAnswers":[],"explanation":"E"}]'::jsonb,
     '[["stale"]]'::jsonb,
     'hash-stale-a2-blank'
-  ),
+  ) ->> 'status',
   'stale_claim',
   $$인계당한 과거 토큰으로 확정하면 stale_claim이어야 한다$$
 );
@@ -288,7 +310,7 @@ SELECT is(
     '[{"type":"blank","question":"fresh ____","answer":"fresh","acceptedAnswers":[],"explanation":"E"}]'::jsonb,
     '[["fresh"]]'::jsonb,
     'hash-fresh-a2-blank'
-  ),
+  ) ->> 'status',
   'ok',
   $$최신 선점 토큰으로는 정상 확정돼야 한다$$
 );
@@ -330,7 +352,7 @@ SELECT is(
     '[{"type":"choice","question":"C","options":["1","2","3","4"],"answer":0,"explanation":"E"}]'::jsonb,
     '[["C"]]'::jsonb,
     'hash-c-a2-choice'
-  ),
+  ) ->> 'status',
   'ok',
   $$C 선점을 먼저 완료시킨다$$
 );
@@ -360,7 +382,7 @@ SELECT is(
     '[{"type":"choice","question":"stale C","options":["1","2","3","4"],"answer":1,"explanation":"E"}]'::jsonb,
     '[["stale C"]]'::jsonb,
     'hash-stale-c-a2-choice'
-  ),
+  ) ->> 'status',
   'stale_claim',
   $$완료된 과거 claim보다 새 claim이 있으면 stale_claim이 already_completed보다 우선해야 한다$$
 );

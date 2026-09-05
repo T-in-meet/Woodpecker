@@ -2,9 +2,18 @@
 
 import { z } from "zod";
 
+import {
+  completeAiRunFailed,
+  completeAiRunSucceeded,
+  createAiRun,
+} from "@/features/ai/runs/persistence";
+import { AI_RUN_FEATURE_TYPE } from "@/features/ai/runs/types";
 import { requireCurrentLegalAcceptance } from "@/features/auth/utils/requireCurrentLegalAcceptance";
 import { claimResultSchema } from "@/lib/ai/claimResult";
-import { generateJson } from "@/lib/ai/client";
+import {
+  CLOUDFLARE_JSON_GENERATION_CONFIG,
+  generateJson,
+} from "@/lib/ai/client";
 import { toAiFailureReason } from "@/lib/ai/failureReason";
 import {
   buildQuizPrompt,
@@ -19,6 +28,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/types/database.types";
 
+import {
+  createQuizSnapshotAccumulator,
+  type QuizSnapshotAccumulator,
+} from "./ai-runs/snapshot-accumulator";
+import type { QuizAction } from "./ai-runs/snapshot-schema";
 import { QUIZ_AI_FAILURE_MESSAGES, QUIZ_ERROR_MESSAGES } from "./constants";
 import {
   type QuizQuestion,
@@ -145,6 +159,10 @@ type RequestQuestionsParams = {
   quizType: QuizType;
   previousQuestions: string[];
   temperature: number;
+  /** 실행 중 확보한 값만 누적하는 Quiz AI Run Snapshot입니다. */
+  accumulator: QuizSnapshotAccumulator;
+  /** 실제 Provider 호출에 적용할 남은 제한 시간입니다. */
+  timeoutMs: number;
   /**
    * 액션 진입 시각 기준 deadline으로 만든 호출 중단 신호.
    * 순서: 이 deadline(60초) < 페이지 maxDuration(90초) < in-flight 창(120초).
@@ -156,16 +174,29 @@ async function requestQuestions(
   params: RequestQuestionsParams,
 ): Promise<RequestQuestionsResult> {
   const { title, content, quizType, previousQuestions, temperature } = params;
-  const prompt = buildQuizPrompt(
+  // 결과에 영향을 주는 무작위 관점과 파생 설정은 실행당 한 번만 확정한다.
+  const maxQuestions = getMaxQuestions(content.length);
+  const perspective = pickPerspective(quizType);
+  const responseSchema = QUIZ_RESPONSE_JSON_SCHEMA_BY_TYPE[quizType];
+  const prompt = buildQuizPrompt(title, content, maxQuestions, quizType, {
+    perspective,
+    previousQuestions,
+  });
+
+  // Provider에 전달할 바로 그 값들로 preparation과 generation stage를 구성한다.
+  params.accumulator.recordPreparation({
     title,
     content,
-    getMaxQuestions(content.length),
     quizType,
-    {
-      perspective: pickPerspective(quizType),
-      previousQuestions,
-    },
-  );
+    previousQuestions,
+    maxQuestions,
+    perspective,
+    temperature,
+    prompt,
+    responseSchema,
+    timeoutMs: params.timeoutMs,
+    ...CLOUDFLARE_JSON_GENERATION_CONFIG,
+  });
 
   let responseText: string;
   try {
@@ -173,9 +204,10 @@ async function requestQuestions(
     // 프롬프트만으로 형식을 지시하면 유형·필드가 어긋난 응답이 나온다. 디코딩 단계에서 막는다.
     responseText = await generateJson({
       prompt,
-      responseSchema: QUIZ_RESPONSE_JSON_SCHEMA_BY_TYPE[quizType],
+      responseSchema,
       temperature,
       abortSignal: params.abortSignal,
+      onObservation: params.accumulator.observeGeneration,
     });
   } catch (e) {
     // CloudflareAiError는 프롬프트·노트 내용을 담지 않으므로 그대로 남겨도 안전하다.
@@ -185,9 +217,12 @@ async function requestQuestions(
 
   // 응답 원문에는 노트 내용이 그대로 담기므로 로그에 남기지 않는다.
   let json: unknown;
+  params.accumulator.beginParseAndValidation(responseText);
   try {
     json = JSON.parse(responseText);
   } catch {
+    // SyntaxError 원문 대신 고정된 안전한 오류만 Snapshot에 기록한다.
+    params.accumulator.failParseAndValidation(new Error("JSON parse failed"));
     // SyntaxError 메시지에는 파싱에 실패한 원문 조각이 섞여 나오므로 함께 남기지 않는다.
     console.error(
       `[generateQuiz] JSON 파싱 실패 (응답 길이 ${responseText.length})`,
@@ -195,9 +230,15 @@ async function requestQuestions(
     return { error: QUIZ_ERROR_MESSAGES.parseFailed };
   }
 
+  params.accumulator.recordParsedResponse(json);
+
   // 요청한 유형으로 검증한다. 유형이 섞인 응답은 프롬프트를 무시했다는 뜻이라 세트째 버린다.
   const parsed = quizResponseSchemaFor(quizType).safeParse(json);
   if (!parsed.success) {
+    params.accumulator.failParseAndValidation(
+      new Error("Quiz schema validation failed"),
+      parsed.error.issues,
+    );
     console.error(
       `[generateQuiz] Zod 파싱 실패 (응답 길이 ${responseText.length}):`,
       parsed.error.issues.map((issue) => ({
@@ -208,6 +249,8 @@ async function requestQuestions(
     return { error: QUIZ_ERROR_MESSAGES.parseFailed };
   }
 
+  // 유효한 질문 확정이 AI 성공 경계이며 이후 cache persistence와 분리한다.
+  params.accumulator.completeValidation(parsed.data.questions);
   return { data: parsed.data.questions };
 }
 
@@ -351,10 +394,16 @@ type FinalizeGenerationResult =
    * 포함된다. 어느 쪽이든 캐시는 저장되지 않았지만, 이미 받은 유효한 퀴즈까지 버릴
    * 이유는 없으므로 사용자에게는 그대로 돌려준다.
    */
-  | { blocked: false }
+  | { blocked: false; quizId: string | null }
   /** 더 새로운 선점이 생겼다(stale_claim) — 저장도, 반환도 하지 않는다. 이미 다른
    * 요청이 더 최신 결과를 만들었으므로 지금 이 결과는 버려야 한다. */
   | { blocked: true; error: string };
+
+/** token-aware Quiz finalizer의 확장 반환 계약입니다. */
+const finalizeGenerationResultSchema = z.object({
+  status: z.string(),
+  quizId: z.string().uuid().nullable(),
+});
 
 /**
  * 선점해 둔 행을 완료로 확정하면서, 같은 RPC 호출 안에서 퀴즈 캐시까지 저장한다.
@@ -387,30 +436,42 @@ async function finalizeGeneration(
 
   if (error) {
     console.error("[generateQuiz] 생성 확정·캐시 저장 실패:", error.message);
-    return { blocked: false };
+    return { blocked: false, quizId: null };
   }
 
-  if (data === "ok" || data === "already_completed") {
-    return { blocked: false };
+  const parsed = finalizeGenerationResultSchema.safeParse(data);
+
+  if (!parsed.success) {
+    console.error("[generateQuiz] 생성 확정 응답 형식이 올바르지 않음");
+    return { blocked: false, quizId: null };
   }
 
-  if (data === "stale_claim") {
+  if (
+    parsed.data.status === "ok" ||
+    parsed.data.status === "already_completed"
+  ) {
+    return { blocked: false, quizId: parsed.data.quizId };
+  }
+
+  if (parsed.data.status === "stale_claim") {
     return { blocked: true, error: QUIZ_ERROR_MESSAGES.staleClaim };
   }
 
   // not_found 등 예상 밖 상태. 선점 자체가 이 함수 안에서 방금 만든 것이라 정상 경로에서는 나오지 않는다.
   // 캐시 저장은 안 됐어도(위 blocked:false 케이스와 같은 이유로) 이미 받은 유효한 퀴즈까지
   // 버릴 이유는 없으므로 사용자에게는 그대로 돌려준다.
-  console.error(`[generateQuiz] 예상치 못한 finalize 상태: ${String(data)}`);
-  return { blocked: false };
+  console.error(
+    `[generateQuiz] 예상치 못한 finalize 상태: ${parsed.data.status}`,
+  );
+  return { blocked: false, quizId: null };
 }
 
 async function createQuiz(
   noteId: string,
   quizType: string,
-  options: { useCache: boolean },
+  options: { action: QuizAction; useCache: boolean },
 ): Promise<GenerateQuizResult> {
-  const startedAt = Date.now();
+  const actionStartedAt = Date.now();
   const parsed = parseInput(noteId, quizType);
   if ("error" in parsed) {
     return { error: parsed.error };
@@ -462,7 +523,7 @@ async function createQuiz(
 
   const history = cache?.history ?? [];
 
-  const aiBudgetMs = QUIZ_DEADLINE_MS - (Date.now() - startedAt);
+  const aiBudgetMs = QUIZ_DEADLINE_MS - (Date.now() - actionStartedAt);
 
   if (aiBudgetMs < MIN_AI_BUDGET_MS) {
     console.error(
@@ -489,21 +550,54 @@ async function createQuiz(
     return { error: claimed.error };
   }
 
+  // claim까지 성공해 실제 AI 실행에 진입할 때만 Run과 accumulator를 만든다.
+  const previousQuestions = flattenHistory(history);
+  const aiRunStartedAt = new Date().toISOString();
+  const accumulator = createQuizSnapshotAccumulator({
+    action: options.action,
+    note: {
+      id: parsed.data.noteId,
+      title: note.title,
+      content: note.content,
+    },
+    quizType: parsed.data.quizType,
+    history,
+    previousQuestions,
+  });
+  const aiRunId = await createAiRun({
+    buildSnapshot: accumulator.buildSnapshot,
+    featureType: AI_RUN_FEATURE_TYPE.QUIZ_GENERATION,
+    startedAt: aiRunStartedAt,
+    userId: user.id,
+  });
+
+  // create persistence 시간까지 반영한 값을 AbortSignal과 Snapshot에 함께 사용한다.
+  const timeoutMs = Math.max(
+    0,
+    QUIZ_DEADLINE_MS - (Date.now() - actionStartedAt),
+  );
+
   const generated = await requestQuestions({
     title: note.title,
     content: note.content,
     quizType: parsed.data.quizType,
-    previousQuestions: flattenHistory(history),
+    previousQuestions,
     temperature: options.useCache
       ? TEMPERATURE.initial
       : TEMPERATURE.regenerate,
     // 인증·조회·선점에 쓴 시간까지 포함해야 플랫폼 제한보다 먼저 중단된다.
-    abortSignal: AbortSignal.timeout(
-      Math.max(0, QUIZ_DEADLINE_MS - (Date.now() - startedAt)),
-    ),
+    abortSignal: AbortSignal.timeout(timeoutMs),
+    accumulator,
+    timeoutMs,
   });
 
   if ("error" in generated) {
+    await completeAiRunFailed({
+      aiRunId,
+      buildSnapshot: accumulator.buildSnapshot,
+      completedAt: new Date().toISOString(),
+      userId: user.id,
+    });
     return { error: generated.error };
   }
 
@@ -520,6 +614,16 @@ async function createQuiz(
     cacheKey,
   });
 
+  // Final Output 뒤의 persistence 결과는 AI 성공 status를 뒤집지 않는다.
+  await completeAiRunSucceeded({
+    aiRunId,
+    buildSnapshot: accumulator.buildSnapshot,
+    completedAt: new Date().toISOString(),
+    featureResultIds:
+      finalized.blocked || finalized.quizId === null ? [] : [finalized.quizId],
+    userId: user.id,
+  });
+
   if (finalized.blocked) {
     return { error: finalized.error };
   }
@@ -531,7 +635,7 @@ export async function generateQuiz(
   noteId: string,
   quizType: string,
 ): Promise<GenerateQuizResult> {
-  return createQuiz(noteId, quizType, { useCache: true });
+  return createQuiz(noteId, quizType, { action: "generate", useCache: true });
 }
 
 /**
@@ -542,5 +646,8 @@ export async function regenerateQuiz(
   noteId: string,
   quizType: string,
 ): Promise<GenerateQuizResult> {
-  return createQuiz(noteId, quizType, { useCache: false });
+  return createQuiz(noteId, quizType, {
+    action: "regenerate",
+    useCache: false,
+  });
 }
