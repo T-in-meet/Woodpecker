@@ -17,6 +17,7 @@ describe("랜딩 소개 문서", () => {
     );
     // 화면에만 있고 문서에는 빠지는 카피가 생기지 않게 함께 검증한다.
     expect(markdown).toContain("**읽는 복습에서, 떠올리는 복습으로.**");
+    expect(markdown).toContain("오늘 공부한 내용부터 복습해보세요.");
     expect(markdown).toContain("복습 방식도 한 가지일 필요는 없어요.");
     expect(markdown).toContain(
       "현재 딱다구리의 주요 기능은 무료로 이용할 수 있습니다.",

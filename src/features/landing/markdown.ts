@@ -36,9 +36,16 @@ export function renderLandingMarkdown(): string {
     lines.push("");
   }
 
-  lines.push(`## ${learningToolsContent.heading}`);
+  // 세 단계 뒤의 중간 CTA. 화면에만 있고 문서에는 빠지는 카피를 만들지 않는다.
+  lines.push(learningFlowContent.cta.text);
   lines.push("");
+  lines.push(`[${learningFlowContent.cta.label}](${SITE_URL}/signup)`);
+  lines.push("");
+
+  // 커넥터는 화면에서 제목 위에 있다. 읽는 순서를 화면과 맞춘다.
   lines.push(learningToolsContent.connector);
+  lines.push("");
+  lines.push(`## ${learningToolsContent.heading}`);
   lines.push("");
   lines.push(learningToolsContent.description);
   lines.push("");
