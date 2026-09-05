@@ -57,7 +57,7 @@ function NoteMockup() {
 
         <div className="mt-6 border-b border-border/60 pb-5">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs text-muted-foreground">
-            <span className="rounded-full bg-orange-100 px-2 py-1 font-medium text-foreground">
+            <span className="rounded-full bg-orange-100 px-2 py-1 font-medium text-foreground dark:bg-orange-950/40">
               복습 0회
             </span>
             <span className="min-w-0">다음 복습 일정: 내일 오전 09:00</span>

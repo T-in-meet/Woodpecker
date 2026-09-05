@@ -75,7 +75,10 @@ function NotesPreview() {
                 <span className="min-w-0 truncate text-base font-semibold leading-snug">
                   {note.title}
                 </span>
-                <span className="inline-flex shrink-0 items-center rounded bg-gray-100 px-2 py-0.5 text-xs font-medium">
+                {/* 글자색을 따로 두지 않고 카드 전경색을 그대로 받는 배지라
+                    배경만 테마에 맞춰 뒤집는다. 밝은 회색을 그대로 두면
+                    다크에서 흰 글자가 얹혀 읽히지 않는다. */}
+                <span className="inline-flex shrink-0 items-center rounded bg-gray-100 px-2 py-0.5 text-xs font-medium dark:bg-gray-800">
                   복습 {note.reviewRound}회
                 </span>
               </div>
