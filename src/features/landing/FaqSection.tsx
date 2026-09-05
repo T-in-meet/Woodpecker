@@ -66,7 +66,16 @@ export function FaqSection() {
         <div className="mt-12 rounded-xl border bg-card p-6 text-center ">
           <p>찾으시는 답변이 없으신가요?</p>
           <p>궁금한 점이 있으시다면 언제든 연락주세요.</p>
-          <p className="mt-2 font-medium">woodpecker.dev.team@gmail.com</p>
+          {/*
+            좁은 화면에서 이메일 한 덩어리가 안 들어가면 브라우저가 아무 데서나
+            끊어 "...gmail.co / m"처럼 보인다. 각 조각을 nowrap으로 묶고 그
+            사이에만 <wbr>로 끊을 자리를 줘서 골뱅이 뒤에서만 넘어가게 한다.
+          */}
+          <p className="mt-2 font-medium">
+            <span className="whitespace-nowrap">woodpecker.dev.team@</span>
+            <wbr />
+            <span className="whitespace-nowrap">gmail.com</span>
+          </p>
         </div>
       </div>
     </section>
