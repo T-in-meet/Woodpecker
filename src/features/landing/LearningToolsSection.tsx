@@ -8,7 +8,7 @@ import {
   MessageCircle,
   Sparkles,
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils/cn";
@@ -143,6 +143,22 @@ export function LearningToolsSection() {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
 
+  // 화살표·점이 누른 순간 목표로 잡은 장. smooth 스크롤이 끝나기 전에는 실제
+  // 위치가 아직 이전 장 근처라, onScroll이 계산한 값으로 activeIndex를 되돌리면
+  // 연속으로 눌러도 같은 장을 다시 목표로 잡게 된다. 목표를 여기 따로 들고
+  // 도착할 때까지 onScroll의 판정을 미룬다.
+  const pendingIndexRef = useRef<number | null>(null);
+  // 스크롤이 멎었는지 재는 타이머. 도착 좌표를 직접 비교하지 않는 이유는,
+  // 사용자가 프로그램 스크롤 도중에 손으로 쓸어넘겨 애니메이션이 취소되면
+  // 목표에 영영 닿지 않아 목표가 풀리지 않기 때문이다.
+  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (settleTimerRef.current !== null) clearTimeout(settleTimerRef.current);
+    };
+  }, []);
+
   // 카드의 offsetLeft는 스크롤러가 아니라 위치 지정 조상(여기서는 body) 기준이라
   // 스크롤러의 왼쪽 여백만큼 통째로 밀린 값이 나온다. 그대로 scrollLeft와 비교하면
   // 이동 목표와 활성 인덱스가 함께 어긋나므로 스크롤러 기준 좌표를 직접 구한다.
@@ -155,10 +171,7 @@ export function LearningToolsSection() {
   }
 
   // 카드 폭이 화면 폭에 따라 달라지므로 실제 자식의 위치로 현재 장을 판정한다.
-  function handleScroll() {
-    const scroller = scrollerRef.current;
-    if (!scroller) return;
-
+  function getNearestIndex(scroller: HTMLElement) {
     const cards = Array.from(scroller.children) as HTMLElement[];
     let nearest = 0;
     let nearestDistance = Number.POSITIVE_INFINITY;
@@ -173,13 +186,47 @@ export function LearningToolsSection() {
       nearest = index;
     });
 
-    setActiveIndex(nearest);
+    return nearest;
+  }
+
+  // 스크롤이 멎으면 목표를 풀고 실제 위치로 맞춘다. 목표한 장에 정상적으로
+  // 도착한 경우와 도중에 취소된 경우를 한 곳에서 회수한다. 누른 자리에 이미
+  // 있어 스크롤이 아예 일어나지 않는 경우도 있어 scrollToIndex에서도 건다.
+  function scheduleSettle() {
+    if (settleTimerRef.current !== null) clearTimeout(settleTimerRef.current);
+
+    settleTimerRef.current = setTimeout(() => {
+      settleTimerRef.current = null;
+      pendingIndexRef.current = null;
+
+      const scroller = scrollerRef.current;
+      if (scroller) setActiveIndex(getNearestIndex(scroller));
+    }, 150);
+  }
+
+  function handleScroll() {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+
+    // 목표가 잡혀 있는 동안 지나가는 중간 위치는 무시한다.
+    if (pendingIndexRef.current !== null) {
+      scheduleSettle();
+      return;
+    }
+
+    setActiveIndex(getNearestIndex(scroller));
   }
 
   function scrollToIndex(index: number) {
     const scroller = scrollerRef.current;
     const card = scroller?.children[index] as HTMLElement | undefined;
     if (!scroller || !card) return;
+
+    // 화살표는 activeIndex에서 다음 장을 고르므로, 목표를 먼저 확정하고
+    // activeIndex도 같이 옮겨야 애니메이션 도중에 다시 눌러도 한 장씩 넘어간다.
+    pendingIndexRef.current = index;
+    setActiveIndex(index);
+    scheduleSettle();
 
     const prefersReducedMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
