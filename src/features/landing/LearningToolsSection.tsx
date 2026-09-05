@@ -152,9 +152,18 @@ export function LearningToolsSection() {
   // 사용자가 프로그램 스크롤 도중에 손으로 쓸어넘겨 애니메이션이 취소되면
   // 목표에 영영 닿지 않아 목표가 풀리지 않기 때문이다.
   const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 카드 오프셋 캐시. 스크롤 이벤트마다 다시 재면 프레임마다 강제 리플로우가
+  // 일어나 스와이프가 끊긴다. 값이 달라지는 건 카드 폭이 바뀔 때뿐이다.
+  const cardOffsetsRef = useRef<number[] | null>(null);
 
   useEffect(() => {
+    const invalidateOffsets = () => {
+      cardOffsetsRef.current = null;
+    };
+
+    window.addEventListener("resize", invalidateOffsets);
     return () => {
+      window.removeEventListener("resize", invalidateOffsets);
       if (settleTimerRef.current !== null) clearTimeout(settleTimerRef.current);
     };
   }, []);
@@ -162,24 +171,27 @@ export function LearningToolsSection() {
   // 카드의 offsetLeft는 스크롤러가 아니라 위치 지정 조상(여기서는 body) 기준이라
   // 스크롤러의 왼쪽 여백만큼 통째로 밀린 값이 나온다. 그대로 scrollLeft와 비교하면
   // 이동 목표와 활성 인덱스가 함께 어긋나므로 스크롤러 기준 좌표를 직접 구한다.
-  function getCardOffset(scroller: HTMLElement, card: HTMLElement) {
-    return (
-      card.getBoundingClientRect().left -
-      scroller.getBoundingClientRect().left +
-      scroller.scrollLeft
+  // 계산값이 현재 스크롤 위치와 무관하므로 한 번 재서 들고 있는다.
+  function getCardOffsets(scroller: HTMLElement) {
+    if (cardOffsetsRef.current !== null) return cardOffsetsRef.current;
+
+    const scrollerLeft = scroller.getBoundingClientRect().left;
+    const offsets = Array.from(scroller.children).map(
+      (card) =>
+        card.getBoundingClientRect().left - scrollerLeft + scroller.scrollLeft,
     );
+
+    cardOffsetsRef.current = offsets;
+    return offsets;
   }
 
   // 카드 폭이 화면 폭에 따라 달라지므로 실제 자식의 위치로 현재 장을 판정한다.
   function getNearestIndex(scroller: HTMLElement) {
-    const cards = Array.from(scroller.children) as HTMLElement[];
     let nearest = 0;
     let nearestDistance = Number.POSITIVE_INFINITY;
 
-    cards.forEach((card, index) => {
-      const distance = Math.abs(
-        getCardOffset(scroller, card) - scroller.scrollLeft,
-      );
+    getCardOffsets(scroller).forEach((offset, index) => {
+      const distance = Math.abs(offset - scroller.scrollLeft);
       if (distance >= nearestDistance) return;
 
       nearestDistance = distance;
@@ -219,23 +231,30 @@ export function LearningToolsSection() {
 
   function scrollToIndex(index: number) {
     const scroller = scrollerRef.current;
-    const card = scroller?.children[index] as HTMLElement | undefined;
-    if (!scroller || !card) return;
+    if (!scroller) return;
+
+    // 양 끝 화살표는 disabled로 막지 않으므로(포커스를 잃지 않게) 범위를 벗어난
+    // 인덱스가 그대로 들어온다. 여기서 조용히 무시한다.
+    const offset = getCardOffsets(scroller)[index];
+    if (offset === undefined) return;
 
     // 화살표는 activeIndex에서 다음 장을 고르므로, 목표를 먼저 확정하고
     // activeIndex도 같이 옮겨야 애니메이션 도중에 다시 눌러도 한 장씩 넘어간다.
     pendingIndexRef.current = index;
     setActiveIndex(index);
-    scheduleSettle();
 
     const prefersReducedMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
     ).matches;
 
     scroller.scrollTo({
-      left: getCardOffset(scroller, card),
+      left: offset,
       behavior: prefersReducedMotion ? "auto" : "smooth",
     });
+
+    // 타이머는 스크롤을 건 뒤에 건다. 먼저 걸면 첫 scroll 이벤트가 150ms 안에
+    // 오지 않은 프레임에서 목표가 풀려 activeIndex가 이전 장으로 되돌아간다.
+    scheduleSettle();
   }
 
   return (
@@ -290,12 +309,15 @@ export function LearningToolsSection() {
         </div>
 
         <div className="mt-6 flex items-center justify-center gap-3">
+          {/* disabled를 쓰면 마지막 장으로 넘어가는 순간 포커스를 쥔 버튼이
+              비활성화돼 포커스가 body로 떨어진다. 표시만 aria-disabled로 하고
+              범위를 벗어난 클릭은 scrollToIndex에서 무시한다. */}
           <button
             type="button"
             aria-label="이전 기능 보기"
-            disabled={activeIndex === 0}
+            aria-disabled={activeIndex === 0}
             onClick={() => scrollToIndex(activeIndex - 1)}
-            className="inline-flex size-9 cursor-pointer items-center justify-center rounded-full border bg-background text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+            className="inline-flex size-9 cursor-pointer items-center justify-center rounded-full border bg-background text-muted-foreground transition-colors hover:text-foreground aria-disabled:pointer-events-none aria-disabled:opacity-40"
           >
             <ChevronLeft className="size-4" aria-hidden="true" />
           </button>
@@ -319,9 +341,9 @@ export function LearningToolsSection() {
           <button
             type="button"
             aria-label="다음 기능 보기"
-            disabled={activeIndex === tools.length - 1}
+            aria-disabled={activeIndex === tools.length - 1}
             onClick={() => scrollToIndex(activeIndex + 1)}
-            className="inline-flex size-9 cursor-pointer items-center justify-center rounded-full border bg-background text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+            className="inline-flex size-9 cursor-pointer items-center justify-center rounded-full border bg-background text-muted-foreground transition-colors hover:text-foreground aria-disabled:pointer-events-none aria-disabled:opacity-40"
           >
             <ChevronRight className="size-4" aria-hidden="true" />
           </button>
