@@ -10,6 +10,7 @@ import {
   RELATED_NOTES_OPERATIONAL_ERROR_CODES,
   RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS,
 } from "@/features/operational-errors/constants";
+import { type AiObserver, notifyAiObserver } from "@/lib/ai/notify-observer";
 import type { Json } from "@/types/db.helpers";
 
 import type { RelatedNoteAiRecommendation } from "../types";
@@ -69,7 +70,40 @@ type GenerateRelatedNoteRecommendationsParams = {
    * 호출의 usage를 Run에 남기기 위해 검증 전에 호출합니다.
    */
   onUsage?: (usage: AiTokenUsage) => Promise<void>;
+
+  /** Answer Generation의 실제 실행값을 기록하는 best-effort callback입니다. */
+  onObservation?:
+    | AiObserver<GenerateRelatedNoteRecommendationsObservation>
+    | undefined;
 };
+
+/** Related Notes Answer Generation 단계 관측값입니다. */
+export type GenerateRelatedNoteRecommendationsObservation =
+  | {
+      type: "prepared";
+      configuration: AiRuntimeChatConfiguration;
+      context: string;
+      notes: MatchedNote[];
+      responseFormat: unknown;
+      systemPrompt: string;
+      userPrompt: string;
+      variables: { title: string; content: string; context: string };
+    }
+  | {
+      type: "provider-completed";
+      result: Awaited<ReturnType<typeof createAiChatCompletionWithProvider>>;
+    }
+  | {
+      type: "parsed";
+      recommendations: Array<{ noteId: string; reason: string }>;
+    }
+  | { type: "post-processed"; recommendations: RelatedNoteAiRecommendation[] }
+  | {
+      type: "failed";
+      error: unknown;
+      issues?: unknown[];
+      stage: "provider_call" | "parse" | "validation" | "post_processing";
+    };
 
 /**
  * Related Notes Answer Generation 실행 결과입니다.
@@ -115,6 +149,7 @@ export async function generateRelatedNoteRecommendations({
   context,
   notes,
   onUsage,
+  onObservation,
 }: GenerateRelatedNoteRecommendationsParams): Promise<GenerateRelatedNoteRecommendationsResult> {
   // Answer Agent 실행에 사용할 Prompt와 Model 설정을 가져옵니다.
   const promptVersion = configuration.prompt.version;
@@ -142,24 +177,53 @@ export async function generateRelatedNoteRecommendations({
   );
 
   // Answer Agent를 호출하여 관련 Note ID와 추천 이유를 생성합니다.
-  const result = await createAiChatCompletionWithProvider({
-    apiKey: getProviderApiKey(model.provider),
-    model: model.model,
-    provider: model.provider,
-    responseFormat:
-      responseSchema == null
-        ? undefined
-        : {
-            type: "json_schema",
-            jsonSchema: {
-              name: "related_note_recommendation_response",
-              schema: responseSchema as Json,
-              strict: true,
-            },
+  const responseFormat =
+    responseSchema == null
+      ? undefined
+      : {
+          type: "json_schema" as const,
+          jsonSchema: {
+            name: "related_note_recommendation_response",
+            schema: responseSchema as Json,
+            strict: true,
           },
+        };
+
+  await notifyAiObserver(onObservation, {
+    configuration,
+    context,
+    notes,
+    responseFormat,
     systemPrompt,
-    temperature: configuration.temperature,
+    type: "prepared",
     userPrompt,
+    variables: templateVariables,
+  });
+
+  let result: Awaited<ReturnType<typeof createAiChatCompletionWithProvider>>;
+
+  try {
+    result = await createAiChatCompletionWithProvider({
+      apiKey: getProviderApiKey(model.provider),
+      model: model.model,
+      provider: model.provider,
+      responseFormat,
+      systemPrompt,
+      temperature: configuration.temperature,
+      userPrompt,
+    });
+  } catch (error) {
+    await notifyAiObserver(onObservation, {
+      error,
+      stage: "provider_call",
+      type: "failed",
+    });
+    throw error;
+  }
+
+  await notifyAiObserver(onObservation, {
+    result,
+    type: "provider-completed",
   });
 
   await onUsage?.(result.usage);
@@ -170,6 +234,11 @@ export async function generateRelatedNoteRecommendations({
   try {
     response = JSON.parse(result.content) as unknown;
   } catch (error) {
+    await notifyAiObserver(onObservation, {
+      error,
+      stage: "parse",
+      type: "failed",
+    });
     await reportRelatedNotesOperationalError({
       error,
       errorCode:
@@ -190,6 +259,13 @@ export async function generateRelatedNoteRecommendations({
       "Related note recommendation response does not match the expected schema.",
     );
 
+    await notifyAiObserver(onObservation, {
+      error,
+      issues: parsed.error.issues,
+      stage: "validation",
+      type: "failed",
+    });
+
     await reportRelatedNotesOperationalError({
       error,
       errorCode:
@@ -201,6 +277,11 @@ export async function generateRelatedNoteRecommendations({
 
     throw error;
   }
+
+  await notifyAiObserver(onObservation, {
+    recommendations: parsed.data.recommendations,
+    type: "parsed",
+  });
 
   /*
    * LLM 응답을 그대로 저장하지 않습니다.
@@ -247,6 +328,12 @@ export async function generateRelatedNoteRecommendations({
         `Related note recommendation note ID not found: ${recommendation.noteId}`,
       );
 
+      await notifyAiObserver(onObservation, {
+        error,
+        stage: "post_processing",
+        type: "failed",
+      });
+
       await reportRelatedNotesOperationalError({
         error,
         errorCode:
@@ -280,6 +367,11 @@ export async function generateRelatedNoteRecommendations({
       title: note.title,
     });
   }
+
+  await notifyAiObserver(onObservation, {
+    recommendations,
+    type: "post-processed",
+  });
 
   return {
     recommendations,

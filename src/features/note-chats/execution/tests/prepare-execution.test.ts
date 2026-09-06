@@ -65,8 +65,10 @@ const conversation = {
 };
 
 const userMessage = {
+  content: { text: "질문" },
   id: "message-1",
   role: AI_CHAT_MESSAGE_ROLE.USER,
+  sequence_number: 1,
 };
 
 const messages = [userMessage];
@@ -173,8 +175,11 @@ describe("prepareNoteChatExecution", () => {
 
     expect(result).toEqual({
       conversation,
+      context: "",
       expandedQuery: "확장된 검색 질의",
+      history: [],
       messages: [],
+      question: "질문",
       queryEmbeddingUsage,
       queryExpansionUsage,
       settings,
@@ -258,6 +263,35 @@ describe("prepareNoteChatExecution", () => {
       expect.objectContaining({
         actorUserId: "user-1",
         errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.EXECUTION_STATE_INVALID,
+        userId: "user-1",
+      }),
+    );
+  });
+
+  it("검색된 Note 조회에 실패하면 운영 오류를 보고하고 예외를 발생시킨다", async () => {
+    const error = new Error("matched notes load failed");
+
+    vi.mocked(getMatchedNotes).mockRejectedValue(error);
+
+    await expect(
+      prepareNoteChatExecution({
+        conversationId: "conversation-1",
+        settings,
+        userId: "user-1",
+        userMessageId: "message-1",
+      }),
+    ).rejects.toBe(error);
+
+    expect(reportNoteChatOperationalError).toHaveBeenCalledOnce();
+    expect(reportNoteChatOperationalError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserId: "user-1",
+        context: {
+          conversationId: "conversation-1",
+          userMessageId: "message-1",
+        },
+        error,
+        errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.MATCHED_NOTES_LOAD_FAILED,
         userId: "user-1",
       }),
     );

@@ -755,6 +755,96 @@ describe("useRelatedNotes", () => {
     });
   });
 
+  it("새 Claim을 추적한 뒤에도 이전 terminal Claim을 기억하여 다시 자동 추적하지 않는다", async () => {
+    const queryClient = createTestQueryClient();
+
+    getRelatedNotesMock.mockResolvedValue(createRelatedNotesResult());
+
+    getRelatedNoteRecommendationExecutionClaimMock.mockImplementation(
+      async (_noteId, claimId) => createExecutionClaim("succeeded", claimId),
+    );
+
+    const { result } = renderHook(() => useRelatedNotes(NOTE_ID), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    /*
+     * 첫 번째 Claim을 직접 추적하고 terminal 상태까지 확인합니다.
+     */
+    act(() => {
+      result.current.startRecommendationPolling(CLAIM_ID);
+    });
+
+    await waitFor(() => {
+      expect(
+        getRelatedNoteRecommendationExecutionClaimMock,
+      ).toHaveBeenCalledWith(NOTE_ID, CLAIM_ID);
+    });
+
+    await waitFor(() => {
+      expect(result.current.isRecommendationPolling).toBe(false);
+    });
+
+    /*
+     * 이후 새로운 Claim을 시작합니다.
+     *
+     * 새 Claim을 시작해도 이전 terminal Claim 기록은
+     * 제거되지 않아야 합니다.
+     */
+    act(() => {
+      result.current.startRecommendationPolling(OTHER_CLAIM_ID);
+    });
+
+    await waitFor(() => {
+      expect(
+        getRelatedNoteRecommendationExecutionClaimMock,
+      ).toHaveBeenCalledWith(NOTE_ID, OTHER_CLAIM_ID);
+    });
+
+    await waitFor(() => {
+      expect(result.current.isRecommendationPolling).toBe(false);
+    });
+
+    expect(
+      getRelatedNoteRecommendationExecutionClaimMock,
+    ).toHaveBeenCalledTimes(2);
+
+    /*
+     * main query가 뒤늦게 첫 번째 Claim의 과거 running 상태를
+     * 다시 반환하는 상황을 재현합니다.
+     */
+    act(() => {
+      queryClient.setQueryData(
+        relatedNotesQueryKeys.byNoteId(NOTE_ID),
+        createRelatedNotesResult({
+          hasRunningRecommendationExecution: true,
+          latestRecommendationExecution: {
+            id: CLAIM_ID,
+            status: "running",
+          },
+        }),
+      );
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    /*
+     * 첫 번째 Claim은 이미 terminal 상태를 확인한 Claim이므로
+     * 두 번째 Claim 실행 이후에도 다시 자동 추적하면 안 됩니다.
+     */
+    expect(result.current.isRecommendationPolling).toBe(false);
+
+    expect(
+      getRelatedNoteRecommendationExecutionClaimMock,
+    ).toHaveBeenCalledTimes(2);
+  });
+
   it("Note ID가 변경되면 이전 Note의 polling 상태를 초기화한다", async () => {
     const queryClient = createTestQueryClient();
 
@@ -791,5 +881,193 @@ describe("useRelatedNotes", () => {
     await waitFor(() => {
       expect(result.current.isRecommendationPolling).toBe(false);
     });
+  });
+
+  it("terminal Claim 확인 후 main query 갱신 전 동일 Claim을 다시 자동 추적하지 않는다", async () => {
+    const queryClient = createTestQueryClient();
+
+    let resolveMainQueryRefetch:
+      | ((value: Awaited<ReturnType<typeof getRelatedNotes>>) => void)
+      | null = null;
+
+    /*
+     * 최초 main query에는 현재 Note version의 동일 Claim이
+     * 아직 running 상태로 남아 있습니다.
+     */
+    getRelatedNotesMock
+      .mockResolvedValueOnce(
+        createRelatedNotesResult({
+          hasRunningRecommendationExecution: true,
+          latestRecommendationExecution: {
+            id: CLAIM_ID,
+            status: "running",
+          },
+        }),
+      )
+      /*
+       * terminal Claim 확인 후 실행되는 main query refetch는
+       * pending 상태로 유지합니다.
+       *
+       * 따라서 이 동안 main query cache에는
+       * 최초의 running 상태가 그대로 남아 있습니다.
+       */
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveMainQueryRefetch = resolve;
+          }),
+      );
+
+    /*
+     * Claim ID 전용 query에서는 같은 Claim이 이미
+     * succeeded terminal 상태가 된 것을 반환합니다.
+     */
+    getRelatedNoteRecommendationExecutionClaimMock.mockResolvedValue(
+      createExecutionClaim("succeeded"),
+    );
+
+    const { result } = renderHook(() => useRelatedNotes(NOTE_ID), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    /*
+     * 최초 main query의 running Claim을 발견하면
+     * 해당 Claim을 자동 추적합니다.
+     */
+    await waitFor(() => {
+      expect(
+        getRelatedNoteRecommendationExecutionClaimMock,
+      ).toHaveBeenCalledWith(NOTE_ID, CLAIM_ID);
+    });
+
+    /*
+     * tracked Claim의 terminal 상태를 확인한 뒤
+     * main query를 한 번 다시 조회합니다.
+     */
+    await waitFor(() => {
+      expect(getRelatedNotesMock).toHaveBeenCalledTimes(2);
+    });
+
+    /*
+     * main query refetch는 아직 완료되지 않았으므로
+     * cache에는 동일 Claim의 running 상태가 남아 있습니다.
+     */
+    expect(
+      queryClient.getQueryData(relatedNotesQueryKeys.byNoteId(NOTE_ID)),
+    ).toMatchObject({
+      latestRecommendationExecution: {
+        id: CLAIM_ID,
+        status: "running",
+      },
+    });
+
+    /*
+     * 그래도 terminal 상태를 직접 확인한 동일 Claim을
+     * 다시 자동 추적하면 안 됩니다.
+     */
+    await waitFor(() => {
+      expect(result.current.isRecommendationPolling).toBe(false);
+    });
+
+    expect(
+      getRelatedNoteRecommendationExecutionClaimMock,
+    ).toHaveBeenCalledTimes(1);
+
+    expect(getRelatedNotesMock).toHaveBeenCalledTimes(2);
+
+    /*
+     * 테스트 종료 전에 pending main query refetch를 완료합니다.
+     */
+    await act(async () => {
+      resolveMainQueryRefetch?.(
+        createRelatedNotesResult({
+          latestRecommendationExecution: {
+            id: CLAIM_ID,
+            status: "succeeded",
+          },
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(result.current.data?.latestRecommendationExecution).toEqual({
+        id: CLAIM_ID,
+        status: "succeeded",
+      });
+    });
+
+    expect(result.current.isRecommendationPolling).toBe(false);
+  });
+
+  it("tracked Claim이 존재하지 않고 main query에 동일 Claim의 running 상태가 남아 있어도 다시 자동 추적하지 않는다", async () => {
+    const queryClient = createTestQueryClient();
+
+    let resolveMainQueryRefetch:
+      | ((value: Awaited<ReturnType<typeof getRelatedNotes>>) => void)
+      | null = null;
+
+    getRelatedNotesMock
+      .mockResolvedValueOnce(
+        createRelatedNotesResult({
+          hasRunningRecommendationExecution: true,
+          latestRecommendationExecution: {
+            id: CLAIM_ID,
+            status: "running",
+          },
+        }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveMainQueryRefetch = resolve;
+          }),
+      );
+
+    getRelatedNoteRecommendationExecutionClaimMock.mockResolvedValue(null);
+
+    const { result } = renderHook(() => useRelatedNotes(NOTE_ID), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await waitFor(() => {
+      expect(
+        getRelatedNoteRecommendationExecutionClaimMock,
+      ).toHaveBeenCalledWith(NOTE_ID, CLAIM_ID);
+    });
+
+    await waitFor(() => {
+      expect(getRelatedNotesMock).toHaveBeenCalledTimes(2);
+    });
+
+    expect(
+      queryClient.getQueryData(relatedNotesQueryKeys.byNoteId(NOTE_ID)),
+    ).toMatchObject({
+      latestRecommendationExecution: {
+        id: CLAIM_ID,
+        status: "running",
+      },
+    });
+
+    await waitFor(() => {
+      expect(result.current.isRecommendationPolling).toBe(false);
+    });
+
+    expect(
+      getRelatedNoteRecommendationExecutionClaimMock,
+    ).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveMainQueryRefetch?.(
+        createRelatedNotesResult({
+          latestRecommendationExecution: null,
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(result.current.data?.latestRecommendationExecution).toBeNull();
+    });
+
+    expect(result.current.isRecommendationPolling).toBe(false);
   });
 });

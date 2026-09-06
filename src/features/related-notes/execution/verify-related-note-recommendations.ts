@@ -10,6 +10,7 @@ import {
   RELATED_NOTES_OPERATIONAL_ERROR_CODES,
   RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS,
 } from "@/features/operational-errors/constants";
+import { type AiObserver, notifyAiObserver } from "@/lib/ai/notify-observer";
 import type { Json } from "@/types/db.helpers";
 
 import type {
@@ -63,7 +64,52 @@ type VerifyRelatedNoteRecommendationsParams = {
 
   /** Provider 응답 직후 Token usage를 저장하기 위한 callback입니다. */
   onUsage?: (usage: AiTokenUsage) => Promise<void>;
+
+  /** Verification 실제 실행값을 기록하는 best-effort callback입니다. */
+  onObservation?:
+    | AiObserver<VerifyRelatedNoteRecommendationsObservation>
+    | undefined;
 };
+
+/** Verifier ID 일관성 검사에서 실제 계산한 값입니다. */
+export type RelatedNoteVerificationIdConsistency = {
+  expectedNoteIds: string[];
+  actualNoteIds: string[];
+  hasDuplicate: boolean;
+  hasMissing: boolean;
+  hasUnknown: boolean;
+};
+
+/** Related Notes Verification 단계 관측값입니다. */
+export type VerifyRelatedNoteRecommendationsObservation =
+  | {
+      type: "prepared";
+      configuration: AiRuntimeChatConfiguration;
+      context: string;
+      notes: MatchedNote[];
+      recommendations: RelatedNoteAiRecommendation[];
+      responseFormat: unknown;
+      systemPrompt: string;
+      userPrompt: string;
+      variables: { title: string; content: string; recommendations: string };
+    }
+  | {
+      type: "provider-completed";
+      result: Awaited<ReturnType<typeof createAiChatCompletionWithProvider>>;
+    }
+  | { type: "parsed"; verifications: RelatedNoteVerification[] }
+  | { type: "id-consistency"; value: RelatedNoteVerificationIdConsistency }
+  | {
+      type: "post-processed";
+      orderedVerifications: RelatedNoteVerification[];
+      recommendations: StoredRelatedNoteAiRecommendation[];
+    }
+  | {
+      type: "failed";
+      error: unknown;
+      issues?: unknown[];
+      stage: "provider_call" | "parse" | "validation" | "post_processing";
+    };
 
 /**
  * Related Notes Verifier 실행 결과입니다.
@@ -96,6 +142,7 @@ export async function verifyRelatedNoteRecommendations({
   recommendations,
   notes,
   onUsage,
+  onObservation,
 }: VerifyRelatedNoteRecommendationsParams): Promise<VerifyRelatedNoteRecommendationsResult> {
   await assertRecommendationsHaveEvidence({
     notes,
@@ -126,24 +173,54 @@ export async function verifyRelatedNoteRecommendations({
     templateVariables,
   );
 
-  const result = await createAiChatCompletionWithProvider({
-    apiKey: getProviderApiKey(model.provider),
-    model: model.model,
-    provider: model.provider,
-    responseFormat:
-      responseSchema == null
-        ? undefined
-        : {
-            type: "json_schema",
-            jsonSchema: {
-              name: "related_note_recommendation_verification_response",
-              schema: responseSchema as Json,
-              strict: true,
-            },
+  const responseFormat =
+    responseSchema == null
+      ? undefined
+      : {
+          type: "json_schema" as const,
+          jsonSchema: {
+            name: "related_note_recommendation_verification_response",
+            schema: responseSchema as Json,
+            strict: true,
           },
+        };
+
+  await notifyAiObserver(onObservation, {
+    configuration,
+    context: verificationContext,
+    notes,
+    recommendations,
+    responseFormat,
     systemPrompt,
-    temperature: configuration.temperature,
+    type: "prepared",
     userPrompt,
+    variables: templateVariables,
+  });
+
+  let result: Awaited<ReturnType<typeof createAiChatCompletionWithProvider>>;
+
+  try {
+    result = await createAiChatCompletionWithProvider({
+      apiKey: getProviderApiKey(model.provider),
+      model: model.model,
+      provider: model.provider,
+      responseFormat,
+      systemPrompt,
+      temperature: configuration.temperature,
+      userPrompt,
+    });
+  } catch (error) {
+    await notifyAiObserver(onObservation, {
+      error,
+      stage: "provider_call",
+      type: "failed",
+    });
+    throw error;
+  }
+
+  await notifyAiObserver(onObservation, {
+    result,
+    type: "provider-completed",
   });
 
   await onUsage?.(result.usage);
@@ -153,6 +230,11 @@ export async function verifyRelatedNoteRecommendations({
   try {
     response = JSON.parse(result.content) as unknown;
   } catch (error) {
+    await notifyAiObserver(onObservation, {
+      error,
+      stage: "parse",
+      type: "failed",
+    });
     await reportRelatedNotesOperationalError({
       error,
       errorCode:
@@ -172,6 +254,13 @@ export async function verifyRelatedNoteRecommendations({
       "Related note verification response does not match the expected schema.",
     );
 
+    await notifyAiObserver(onObservation, {
+      error,
+      issues: parsed.error.issues,
+      stage: "validation",
+      type: "failed",
+    });
+
     await reportRelatedNotesOperationalError({
       error,
       errorCode:
@@ -186,7 +275,18 @@ export async function verifyRelatedNoteRecommendations({
 
   const verifications = parsed.data.verifications;
 
+  await notifyAiObserver(onObservation, {
+    type: "parsed",
+    verifications,
+  });
+
   await assertVerificationNoteIdsMatchRecommendations({
+    onConsistency: async (value) => {
+      await notifyAiObserver(onObservation, {
+        type: "id-consistency",
+        value,
+      });
+    },
     recommendations,
     verifications,
   });
@@ -211,21 +311,29 @@ export async function verifyRelatedNoteRecommendations({
     return verification;
   });
 
+  const finalRecommendations = recommendations.flatMap((recommendation) => {
+    const verification = verificationsByNoteId.get(recommendation.noteId);
+
+    if (!verification?.approved) {
+      return [];
+    }
+
+    return [
+      {
+        noteId: recommendation.noteId,
+        reason: recommendation.reason,
+      },
+    ];
+  });
+
+  await notifyAiObserver(onObservation, {
+    orderedVerifications,
+    recommendations: finalRecommendations,
+    type: "post-processed",
+  });
+
   return {
-    recommendations: recommendations.flatMap((recommendation) => {
-      const verification = verificationsByNoteId.get(recommendation.noteId);
-
-      if (!verification?.approved) {
-        return [];
-      }
-
-      return [
-        {
-          noteId: recommendation.noteId,
-          reason: recommendation.reason,
-        },
-      ];
-    }),
+    recommendations: finalRecommendations,
     verifications: orderedVerifications,
     usage: result.usage,
   };
@@ -309,9 +417,13 @@ async function assertRecommendationsHaveEvidence({
 async function assertVerificationNoteIdsMatchRecommendations({
   recommendations,
   verifications,
+  onConsistency,
 }: {
   recommendations: RelatedNoteAiRecommendation[];
   verifications: RelatedNoteVerification[];
+  onConsistency?: (
+    value: RelatedNoteVerificationIdConsistency,
+  ) => void | Promise<void>;
 }): Promise<void> {
   const expectedNoteIds = recommendations.map(
     (recommendation) => recommendation.noteId,
@@ -331,6 +443,14 @@ async function assertVerificationNoteIdsMatchRecommendations({
   const hasUnknown = actualNoteIds.some(
     (noteId) => !expectedNoteIdSet.has(noteId),
   );
+
+  await onConsistency?.({
+    actualNoteIds,
+    expectedNoteIds,
+    hasDuplicate,
+    hasMissing,
+    hasUnknown,
+  });
 
   if (!hasDuplicate && !hasMissing && !hasUnknown) {
     return;

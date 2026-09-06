@@ -178,7 +178,7 @@ SELECT is(
     ((current_setting('test.rgl_claim')::jsonb) ->> 'claimToken')::uuid,
     80,
     '{"summary":"s","missedConcepts":[],"incorrectPoints":[]}'::jsonb
-  ),
+  ) ->> 'status',
   'ok',
   $$선점한 채점을 확정할 수 있어야 한다$$
 );

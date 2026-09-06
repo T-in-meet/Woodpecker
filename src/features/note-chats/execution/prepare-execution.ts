@@ -17,12 +17,14 @@ import {
 } from "@/features/operational-errors/constants";
 import type { Json } from "@/types/db.helpers";
 
+import type { NoteChatSnapshotAccumulator } from "../ai-runs/snapshot-accumulator";
 import {
   NOTE_CHAT_CONTEXT_LIMIT,
   NOTE_CHAT_MATCH_LIMIT,
   NOTE_CHAT_MIN_SIMILARITY,
 } from "../constants/execution";
 import { getNoteChatConversationDetailForExecution } from "../internal-queries";
+import { noteChatUserMessageContentSchema } from "../schema";
 import type { NoteChatConversation } from "../types";
 import { reportNoteChatOperationalError } from "../utils/report-operational-error";
 import { buildNoteChatSources } from "./build-note-sources";
@@ -50,11 +52,20 @@ export type PreparedNoteChatExecution = {
   /** 실행 대상 대화입니다. */
   conversation: NoteChatConversation;
 
+  /** Provider 입력에 사용된 실제 Note Context입니다. */
+  context: string;
+
   /** 문맥 기반 질의 확장을 통해 생성된 노트 검색용 질의입니다. */
   expandedQuery: string;
 
   /** Provider에 전달할 System·대화 이력·현재 질문 메시지입니다. */
   messages: AiProviderChatMessage[];
+
+  /** Provider 입력에 사용된 제한된 이전 대화 이력입니다. */
+  history: AiProviderChatMessage[];
+
+  /** 이번 실행의 실제 사용자 질문입니다. */
+  question: string;
 
   /** 질의 확장 Chat Completion에서 사용한 token 사용량입니다. */
   queryExpansionUsage: AiTokenUsage;
@@ -90,6 +101,15 @@ type PrepareNoteChatExecutionParams = {
 
   /** Query Embedding Provider usage 저장 callback입니다. */
   onQueryEmbeddingUsage?: (usage: AiTokenUsage) => Promise<void>;
+
+  /** 실행 중 확보한 값을 기록할 Snapshot accumulator입니다. */
+  snapshotAccumulator?: NoteChatSnapshotAccumulator | undefined;
+
+  /** Query Expansion 완료 직후 첫 checkpoint callback입니다. */
+  onQueryExpansionCompleted?: (() => Promise<void>) | undefined;
+
+  /** Retrieval 완료 직후 두 번째 checkpoint callback입니다. */
+  onRetrievalCompleted?: (() => Promise<void>) | undefined;
 };
 
 /**
@@ -227,6 +247,12 @@ export async function prepareNoteChatExecution(
       ...(params.onQueryExpansionUsage !== undefined
         ? { onUsage: params.onQueryExpansionUsage }
         : {}),
+      ...(params.onQueryExpansionCompleted === undefined
+        ? {}
+        : { onCompleted: params.onQueryExpansionCompleted }),
+      ...(params.snapshotAccumulator === undefined
+        ? {}
+        : { snapshotAccumulator: params.snapshotAccumulator }),
       userMessageId: params.userMessageId,
     });
 
@@ -234,21 +260,71 @@ export async function prepareNoteChatExecution(
    * 원본 사용자 질문이 아니라 문맥 기반으로 확장된 검색 질의를 Embedding하여
    * 현재 대화 문맥을 반영한 노트 후보를 검색합니다.
    */
-  const searchResult = await searchNoteEmbeddingsWithUsage({
-    embeddingConfiguration: params.settings.embedding,
-    limit: NOTE_CHAT_MATCH_LIMIT,
+  params.snapshotAccumulator?.prepareRetrieval({
+    configuration: params.settings.embedding,
+    contextLimit: NOTE_CHAT_CONTEXT_LIMIT,
+    inputText: expandedQuery,
+    matchLimit: NOTE_CHAT_MATCH_LIMIT,
     minSimilarity: NOTE_CHAT_MIN_SIMILARITY,
-    ownerUserId: detail.conversation.user_id,
-    ...(params.onQueryEmbeddingUsage !== undefined
-      ? { onUsage: params.onQueryEmbeddingUsage }
-      : {}),
-    question: expandedQuery,
   });
 
-  const matchedNotes = await getMatchedNotes({
-    matches: searchResult.matches,
-    ownerUserId: detail.conversation.user_id,
-  });
+  let searchResult;
+
+  try {
+    searchResult = await searchNoteEmbeddingsWithUsage({
+      embeddingConfiguration: params.settings.embedding,
+      limit: NOTE_CHAT_MATCH_LIMIT,
+      minSimilarity: NOTE_CHAT_MIN_SIMILARITY,
+      ownerUserId: detail.conversation.user_id,
+      ...(params.onQueryEmbeddingUsage !== undefined
+        ? { onUsage: params.onQueryEmbeddingUsage }
+        : {}),
+      ...(params.snapshotAccumulator === undefined
+        ? {}
+        : {
+            onObservation: (observation) => {
+              params.snapshotAccumulator?.observeRetrieval(observation);
+            },
+          }),
+      question: expandedQuery,
+    });
+  } catch (error) {
+    // 관측 이전 설정 검증 실패만 fallback으로 embedding stage에 기록한다.
+    params.snapshotAccumulator?.failRetrieval("embedding", error);
+    throw error;
+  }
+
+  // 이후 두 AI 단계가 공통으로 사용하는 실제 질문을 한 번만 검증해 추출한다.
+  const question = noteChatUserMessageContentSchema.parse(
+    currentUserMessage.content,
+  ).text;
+
+  let matchedNotes;
+
+  try {
+    matchedNotes = await getMatchedNotes({
+      matches: searchResult.matches,
+      ownerUserId: detail.conversation.user_id,
+    });
+  } catch (error) {
+    params.snapshotAccumulator?.failRetrieval("hydration", error);
+
+    await reportNoteChatOperationalError({
+      actorUserId: detail.conversation.user_id,
+      context: {
+        conversationId: params.conversationId,
+        userMessageId: params.userMessageId,
+      },
+      error,
+      errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.MATCHED_NOTES_LOAD_FAILED,
+      message: "노트 챗봇 검색 노트 조회에 실패했습니다.",
+      operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.GET_MATCHED_NOTES,
+      stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.DATABASE,
+      userId: detail.conversation.user_id,
+    });
+
+    throw error;
+  }
 
   /*
    * match_ai_embeddings는 청킹 도입 이후 Note가 아니라 chunk 단위로
@@ -266,11 +342,25 @@ export async function prepareNoteChatExecution(
    */
   const contextNotes = matchedNotes.slice(0, NOTE_CHAT_CONTEXT_LIMIT);
 
-  const context = buildNoteContext({
-    notes: contextNotes,
-  });
+  let context;
+  let sources;
 
-  const sources = buildNoteChatSources(contextNotes);
+  try {
+    context = buildNoteContext({ notes: contextNotes });
+    sources = buildNoteChatSources(contextNotes);
+  } catch (error) {
+    params.snapshotAccumulator?.failRetrieval("context_build", error);
+    throw error;
+  }
+
+  // 이미 확보한 hydration·context·source 값으로 Retrieval Snapshot을 완성한다.
+  params.snapshotAccumulator?.completeRetrieval({
+    context,
+    hydratedCandidates: matchedNotes,
+    selectedContext: contextNotes,
+    sources,
+  });
+  await params.onRetrievalCompleted?.();
 
   let messages: AiProviderChatMessage[];
 
@@ -311,8 +401,11 @@ export async function prepareNoteChatExecution(
 
   return {
     conversation: detail.conversation,
+    context,
     expandedQuery,
+    history: messages.slice(1, -1),
     messages,
+    question,
     queryEmbeddingUsage: searchResult.usage,
     queryExpansionUsage,
     settings: params.settings,

@@ -4,12 +4,18 @@ import {
   NOTE_RETRIEVAL_AI_FEATURE_KEY,
   NOTE_RETRIEVAL_AI_ROLE_KEY,
 } from "@/features/ai/rags/note/constants/runtime";
+import { createAiRun } from "@/features/ai/runs/persistence";
+import {
+  AI_RUN_FEATURE_TYPE,
+  type AiRunPersistenceHandle,
+} from "@/features/ai/runs/types";
 import {
   resolveAiRuntimeChatConfiguration,
   resolveAiRuntimeEmbeddingConfiguration,
 } from "@/features/ai/runtimes";
 import { isReportedAiOperationalError } from "@/features/ai/utils/report-ai-operational-error";
 import { getLegalAcceptanceRequiredPath } from "@/features/auth/lib/userAgreements";
+import { createNoteChatSnapshotAccumulator } from "@/features/note-chats/ai-runs/snapshot-accumulator";
 import {
   NOTE_CHAT_AI_FEATURE_KEY,
   NOTE_CHAT_AI_ROLE_KEY,
@@ -21,7 +27,6 @@ import {
   NOTE_CHAT_EXECUTION_CLAIM_COMPLETION_STATUS,
   NOTE_CHAT_EXECUTION_CLAIM_STATUS,
 } from "@/features/note-chats/execution/execution-claim-persistence";
-import { createNoteChatRunRecord } from "@/features/note-chats/execution/run-persistence";
 import { updateNoteChatUserMessageInputSchema } from "@/features/note-chats/schema";
 import { runNoteChatStream } from "@/features/note-chats/stream/run-note-chat-stream";
 import { encodeNoteChatStreamEvent } from "@/features/note-chats/stream/serialize";
@@ -59,7 +64,7 @@ type NoteChatUserMessageStreamRouteProps = {
  *
  * AI 설정은 클라이언트에서 전달받지 않습니다.
  * Note Chat에 연결된 AI Foundation Runtime Configuration을 서버에서 조회하고,
- * 확정된 동일 설정을 Run 생성과 실제 AI 실행에 사용합니다.
+ * 확정된 동일 설정을 실제 AI 실행과 AI Run Snapshot에 사용합니다.
  *
  * @param request 수정된 사용자 질문을 포함한 HTTP 요청
  * @param params 수정할 User Message ID를 포함한 Route Params
@@ -419,31 +424,9 @@ export async function POST(
     embedding: embeddingConfiguration,
   };
 
-  let runId: string | null = null;
-
-  try {
-    runId = await createNoteChatRunRecord({
-      agentId: chatConfiguration.prompt.agent.id,
-      chatModelConfigId: chatConfiguration.model.id,
-      embeddingModelConfigId: embeddingConfiguration.model.id,
-      promptVersionId: chatConfiguration.prompt.version.id,
-      userMessageId: updated.user_message_id,
-    });
-  } catch (error) {
-    await reportNoteChatOperationalError({
-      actorUserId: user.id,
-      context: {
-        conversationId,
-        userMessageId: updated.user_message_id,
-      },
-      error,
-      errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.RUN_CREATE_FAILED,
-      message: "노트 챗봇 Run 실행 이력 생성에 실패했습니다.",
-      operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.CREATE_RUN,
-      stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.DATABASE,
-      userId: user.id,
-    });
-  }
+  // precheck, claim, User Message 저장 뒤에만 실행별 accumulator를 생성한다.
+  const snapshotAccumulator = createNoteChatSnapshotAccumulator();
+  let aiRun: AiRunPersistenceHandle | null = null;
 
   /*
    * streamClosed는 ReadableStream 자체가 취소되거나 close된 상태를 나타냅니다.
@@ -494,7 +477,7 @@ export async function POST(
               context: {
                 conversationId,
                 eventType: event.type,
-                runId,
+                aiRunId: aiRun?.id ?? null,
                 userMessageId: updated.user_message_id,
               },
               error,
@@ -521,22 +504,30 @@ export async function POST(
          * runNoteChatStream이 아니라 Route가 직접 생성합니다.
          */
         await enqueueEvent({
-          runId,
           type: "start",
           userMessageId: updated.user_message_id,
         });
 
         try {
+          // 실제 AI runner 진입 직전에 Run identity를 확정하고 초기 Snapshot 저장을 시도한다.
+          aiRun = await createAiRun({
+            buildSnapshot: snapshotAccumulator.buildSnapshot,
+            featureType: AI_RUN_FEATURE_TYPE.NOTE_CHAT,
+            startedAt: new Date().toISOString(),
+            userId: user.id,
+          });
+
           /*
            * runNoteChatStream은 AI execution과 결과 저장을 책임합니다.
            * 실제 답변의 text-delta 이벤트만 enqueueEvent를 통해 전달합니다.
            */
           const result = await runNoteChatStream(
             {
+              aiRun,
               conversationId,
               claimId,
-              runId,
               settings,
+              snapshotAccumulator,
               userId: user.id,
               userMessageId: updated.user_message_id,
             },
@@ -552,7 +543,6 @@ export async function POST(
            */
           await enqueueEvent({
             assistantMessageId: result.assistantMessageId,
-            runId: result.runId,
             type: "finish",
             usedNoteIds: result.usedNoteIds,
           });
@@ -566,7 +556,6 @@ export async function POST(
            */
           await enqueueEvent({
             message: "답변 생성에 실패했습니다.",
-            runId,
             type: "error",
           });
         } finally {

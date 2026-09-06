@@ -1,13 +1,29 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { AiRunPersistenceHandle } from "@/features/ai/runs/types";
 import { createSupabaseQueryMock } from "@/tests/supabaseQueryMock";
 
-const { createAdminClientMock, createClientMock, generateJsonMock } =
-  vi.hoisted(() => ({
-    createAdminClientMock: vi.fn(),
-    createClientMock: vi.fn(),
-    generateJsonMock: vi.fn(),
-  }));
+const {
+  completeAiRunFailedMock,
+  completeAiRunSucceededMock,
+  createAdminClientMock,
+  createAiRunMock,
+  createClientMock,
+  generateJsonMock,
+} = vi.hoisted(() => ({
+  completeAiRunFailedMock: vi.fn(),
+  completeAiRunSucceededMock: vi.fn(),
+  createAdminClientMock: vi.fn(),
+  createAiRunMock: vi.fn(),
+  createClientMock: vi.fn(),
+  generateJsonMock: vi.fn(),
+}));
+
+vi.mock("@/features/ai/runs/persistence", () => ({
+  completeAiRunFailed: completeAiRunFailedMock,
+  completeAiRunSucceeded: completeAiRunSucceededMock,
+  createAiRun: createAiRunMock,
+}));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: createClientMock,
@@ -40,6 +56,15 @@ const { generateQuiz, regenerateQuiz } = await import("../actions");
 const NOTE_ID = "11111111-1111-4111-8111-111111111111";
 const USER_ID = "user-123";
 const CLAIM_TOKEN = "55555555-5555-4555-8555-555555555555";
+const AI_RUN_ID = "66666666-6666-4666-8666-666666666666";
+const QUIZ_ID = "77777777-7777-4777-8777-777777777777";
+
+const AI_RUN: AiRunPersistenceHandle = {
+  id: AI_RUN_ID,
+  userId: USER_ID,
+  featureType: "quiz-generation",
+  startedAt: "2026-09-05T00:00:00.000Z",
+};
 
 const aiQuestions = {
   questions: [
@@ -64,7 +89,7 @@ type SupabaseMockInput = {
   /** 문자열이면 { status } 로, 객체면 그대로 claim_quiz_generation_v2의 반환값이 된다. */
   claimResult?: string | { status: string; claimToken?: string };
   claimError?: { message: string } | null;
-  finalizeResult?: string;
+  finalizeResult?: string | { status: string; quizId: string | null };
   finalizeError?: { message: string } | null;
 };
 
@@ -76,7 +101,7 @@ function setupSupabase(input: SupabaseMockInput = {}) {
     cacheError = null,
     claimResult = { status: "ok", claimToken: CLAIM_TOKEN },
     claimError = null,
-    finalizeResult = "ok",
+    finalizeResult = { status: "ok", quizId: QUIZ_ID },
     finalizeError = null,
   } = input;
 
@@ -106,7 +131,21 @@ function setupSupabase(input: SupabaseMockInput = {}) {
     }
 
     if (name === "finalize_quiz_generation_v2") {
-      return Promise.resolve({ data: finalizeResult, error: finalizeError });
+      const normalizedFinalizeResult =
+        typeof finalizeResult === "string"
+          ? {
+              status: finalizeResult,
+              quizId:
+                finalizeResult === "ok" ||
+                finalizeResult === "already_completed"
+                  ? QUIZ_ID
+                  : null,
+            }
+          : finalizeResult;
+      return Promise.resolve({
+        data: normalizedFinalizeResult,
+        error: finalizeError,
+      });
     }
 
     return Promise.resolve({ data: null, error: null });
@@ -122,8 +161,37 @@ function rpcNames(rpc: ReturnType<typeof setupSupabase>["rpc"]): string[] {
 }
 
 function mockAiSuccess(payload: unknown = aiQuestions) {
-  // generateJson은 원문 JSON 문자열을 그대로 돌려준다. 파싱·검증은 액션이 맡는다.
-  generateJsonMock.mockResolvedValue(JSON.stringify(payload));
+  // 실제 helper와 같이 Provider와 extraction 관측을 남긴 뒤 JSON 문자열을 반환한다.
+  generateJsonMock.mockImplementation(async (request: AiRequest) => {
+    const text = JSON.stringify(payload);
+    const result = {
+      choices: [{ finish_reason: "stop", message: { content: text } }],
+    };
+    const rawResponse = { result, success: true };
+
+    await request.onObservation?.({
+      type: "request",
+      model: "@cf/openai/gpt-oss-120b",
+      body: {
+        messages: [{ role: "user", content: request.prompt }],
+        response_format: {
+          type: "json_schema",
+          json_schema: request.responseSchema,
+        },
+        temperature: request.temperature,
+        max_tokens: 8192,
+        reasoning_effort: "low",
+      },
+    });
+    await request.onObservation?.({
+      type: "provider-response",
+      response: rawResponse,
+      status: 200,
+    });
+    await request.onObservation?.({ type: "extraction-started", result });
+    await request.onObservation?.({ type: "extraction-completed", text });
+    return text;
+  });
 }
 
 function methodNames(calls: [string, unknown[]][]): string[] {
@@ -135,6 +203,9 @@ type AiRequest = {
   responseSchema: unknown;
   temperature: number;
   abortSignal: AbortSignal;
+  onObservation?:
+    | ((observation: Record<string, unknown>) => void | Promise<void>)
+    | undefined;
 };
 
 function aiRequest(): AiRequest {
@@ -184,6 +255,7 @@ function savedHistory(query: ReturnType<typeof setupSupabase>): string[][] {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  createAiRunMock.mockResolvedValue(AI_RUN);
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
@@ -263,6 +335,7 @@ describe("generateQuiz", () => {
       const result = await generateQuiz(NOTE_ID, "ox");
 
       expect(generateJsonMock).not.toHaveBeenCalled();
+      expect(createAiRunMock).not.toHaveBeenCalled();
       expect(result).toEqual({
         data: { questions: aiQuestions.questions, isNew: false },
       });
@@ -463,11 +536,16 @@ describe("generateQuiz", () => {
         error: "퀴즈 생성에 실패했습니다. 잠시 후 다시 시도해주세요.",
       });
       expect(rpcNames(query.rpc)).not.toContain("finalize_quiz_generation_v2");
+      expect(completeAiRunFailedMock).toHaveBeenCalledOnce();
+      expect(completeAiRunFailedMock).toHaveBeenCalledWith(
+        expect.objectContaining({ aiRun: AI_RUN }),
+      );
+      expect(completeAiRunSucceededMock).not.toHaveBeenCalled();
     });
 
     it("JSON이 아니면 에러를 반환하고 저장하지 않는다", async () => {
       const query = setupSupabase();
-      generateJsonMock.mockResolvedValue({ text: "not json" });
+      generateJsonMock.mockResolvedValue("not json");
 
       const result = await generateQuiz(NOTE_ID, "ox");
 
@@ -475,6 +553,16 @@ describe("generateQuiz", () => {
         error: "퀴즈 생성 결과를 처리할 수 없습니다. 다시 시도해주세요.",
       });
       expect(rpcNames(query.rpc)).not.toContain("finalize_quiz_generation_v2");
+      const terminalInput = completeAiRunFailedMock.mock.calls[0]?.[0] as {
+        aiRun: AiRunPersistenceHandle;
+        buildSnapshot: () => unknown;
+      };
+      expect(terminalInput.aiRun).toEqual(AI_RUN);
+      expect(terminalInput.buildSnapshot()).toMatchObject({
+        parseAndValidation: {
+          error: { message: "JSON parse failed" },
+        },
+      });
     });
 
     it("스키마에 맞지 않으면 에러를 반환한다", async () => {
@@ -536,7 +624,7 @@ describe("generateQuiz", () => {
     it("응답 원문을 로그에 남기지 않는다", async () => {
       setupSupabase();
       const secret = "노트에만 있는 비밀 문장";
-      generateJsonMock.mockResolvedValue({ text: secret });
+      generateJsonMock.mockResolvedValue(secret);
 
       await generateQuiz(NOTE_ID, "ox");
 
@@ -555,6 +643,7 @@ describe("generateQuiz", () => {
         error: "요청이 너무 잦습니다. 잠시 후 다시 시도해주세요.",
       });
       expect(generateJsonMock).not.toHaveBeenCalled();
+      expect(createAiRunMock).not.toHaveBeenCalled();
     });
 
     it("일일 한도를 넘으면 AI를 호출하지 않는다", async () => {
@@ -647,7 +736,7 @@ describe("generateQuiz", () => {
 
     it("응답 파싱에 실패해도 사용량을 되돌리지 않는다", async () => {
       const query = setupSupabase();
-      generateJsonMock.mockResolvedValue({ text: "not json" });
+      generateJsonMock.mockResolvedValue("not json");
 
       await generateQuiz(NOTE_ID, "ox");
 
@@ -697,6 +786,43 @@ describe("generateQuiz", () => {
       expect(result).toEqual({
         data: { questions: aiQuestions.questions, isNew: true },
       });
+      expect(completeAiRunSucceededMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          aiRun: AI_RUN,
+          featureResultIds: [QUIZ_ID],
+        }),
+      );
+      const terminalInput = completeAiRunSucceededMock.mock.calls[0]?.[0] as {
+        aiRun: AiRunPersistenceHandle;
+        buildSnapshot: () => unknown;
+      };
+      expect(terminalInput.aiRun).toEqual(AI_RUN);
+      expect(terminalInput.buildSnapshot()).toMatchObject({
+        quizGeneration: {
+          output: {
+            rawResponse: {
+              result: {
+                choices: [
+                  {
+                    finish_reason: "stop",
+                    message: {
+                      content: JSON.stringify(aiQuestions),
+                    },
+                  },
+                ],
+              },
+              success: true,
+            },
+            providerMetadata: { finishReason: "stop" },
+          },
+        },
+        responseExtraction: {
+          output: {
+            responseText: JSON.stringify(aiQuestions),
+          },
+        },
+        finalOutput: { questions: aiQuestions.questions },
+      });
     });
 
     it("finalize가 already_completed면 멱등 성공으로 반환한다", async () => {
@@ -709,6 +835,12 @@ describe("generateQuiz", () => {
       expect(result).toEqual({
         data: { questions: aiQuestions.questions, isNew: true },
       });
+      expect(completeAiRunSucceededMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          aiRun: AI_RUN,
+          featureResultIds: [QUIZ_ID],
+        }),
+      );
     });
 
     it("finalize가 stale_claim이면 에러를 반환한다", async () => {
@@ -721,6 +853,13 @@ describe("generateQuiz", () => {
         error:
           "다른 퀴즈 생성 요청이 먼저 진행됐어요. 잠시 후 다시 시도해주세요.",
       });
+      expect(completeAiRunSucceededMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          aiRun: AI_RUN,
+          featureResultIds: [],
+        }),
+      );
+      expect(completeAiRunFailedMock).not.toHaveBeenCalled();
     });
 
     it("finalize가 예상 밖 상태를 반환해도 이미 받은 퀴즈는 반환한다", async () => {
@@ -749,6 +888,12 @@ describe("generateQuiz", () => {
         data: { questions: aiQuestions.questions, isNew: true },
       });
       expect(console.error).toHaveBeenCalled();
+      expect(completeAiRunSucceededMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          aiRun: AI_RUN,
+          featureResultIds: [],
+        }),
+      );
     });
 
     it("claim 응답 형식이 올바르지 않으면 생성 실패로 처리한다", async () => {
@@ -788,6 +933,14 @@ describe("regenerateQuiz", () => {
     expect(generateJsonMock).toHaveBeenCalledOnce();
     expect(result).toEqual({
       data: { questions: aiQuestions.questions, isNew: true },
+    });
+    const createInput = createAiRunMock.mock.calls[0]?.[0] as {
+      buildSnapshot: () => unknown;
+      featureType: string;
+    };
+    expect(createInput.featureType).toBe("quiz-generation");
+    expect(createInput.buildSnapshot()).toMatchObject({
+      sourceInput: { input: { action: "regenerate" } },
     });
   });
 
@@ -896,6 +1049,14 @@ describe("regenerateQuiz", () => {
       expect(prompt).toContain("최신문제24");
       expect(prompt).toContain("오래된문제0");
       expect(prompt).not.toContain("오래된문제24");
+      const createInput = createAiRunMock.mock.calls[0]?.[0] as {
+        buildSnapshot: () => {
+          generationInput: { output: { previousQuestions: string[] } };
+        };
+      };
+      expect(
+        createInput.buildSnapshot().generationInput.output.previousQuestions,
+      ).toHaveLength(45);
     });
 
     it("이력 형식이 깨져 있으면 이전 문제 없이 생성한다", async () => {

@@ -2,9 +2,17 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { z } from "zod";
 
+import {
+  completeAiRunFailed,
+  completeAiRunSucceeded,
+  createAiRun,
+} from "@/features/ai/runs/persistence";
+import { AI_RUN_FEATURE_TYPE } from "@/features/ai/runs/types";
 import { requireCurrentLegalAcceptance } from "@/features/auth/utils/requireCurrentLegalAcceptance";
 import { isReviewCompleted } from "@/features/notes/utils/noteStatus";
+import { createReviewGradingSnapshotAccumulator } from "@/features/review/ai-runs/snapshot-accumulator";
 import { claimResultSchema } from "@/lib/ai/claimResult";
 import { generateJson } from "@/lib/ai/client";
 import { toAiFailureReason } from "@/lib/ai/failureReason";
@@ -33,6 +41,7 @@ import {
 import {
   completeReviewSchema,
   gradeAnswerSchema,
+  GRADING_VALIDATION_JSON_SCHEMA,
   gradingGenerationSchema,
   type GradingResponse,
   gradingResponseSchema,
@@ -152,6 +161,15 @@ const MIN_AI_BUDGET_MS = 15_000;
 const GRADING_RESPONSE_JSON_SCHEMA = toCloudflareResponseSchema(
   gradingGenerationSchema,
 );
+
+/** finalizer가 현재 실행에 귀속된 저장 결과 ID와 상태를 반환하는 계약입니다. */
+const finalizeReviewGradingResultSchema = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("ok"), gradingId: z.string().uuid() }),
+  z.object({
+    status: z.enum(["already_graded", "stale_claim", "not_found"]),
+    gradingId: z.null(),
+  }),
+]);
 
 /**
  * 선점이 거절된 이유를 그대로 사용자 문구로 옮기는 상태들.
@@ -552,33 +570,77 @@ export async function gradeAnswerAction(
     return { error: "AI 채점에 실패했습니다. 잠시 후 다시 시도해주세요." };
   }
 
+  // 이 시점부터 실제 새 AI 채점이 시작된다. 앞선 모든 실행 제어 분기에는 Run이 없다.
+  const aiStartedAt = new Date().toISOString();
+  const snapshotAccumulator = createReviewGradingSnapshotAccumulator({
+    note: { id: parsed.data.noteId, content: note.content },
+    reviewLog: {
+      id: pendingReviewLog.id,
+      noteId: pendingReviewLog.note_id,
+      round: pendingReviewLog.round,
+      scheduledAt: pendingReviewLog.scheduled_at,
+      completedAt: pendingReviewLog.completed_at,
+    },
+    answer: parsed.data.answer,
+    originalContentHash: parsed.data.originalContentHash,
+    currentContentHash: contentHash,
+  });
+  const aiRun = await createAiRun({
+    buildSnapshot: snapshotAccumulator.buildSnapshot,
+    featureType: AI_RUN_FEATURE_TYPE.REVIEW_GRADING,
+    startedAt: aiStartedAt,
+    userId: user.id,
+  });
+
   // 제목은 채점 입력에 넣지 않는다. 해시가 지키는 범위가 본문뿐이라, 제목을 넣으면
   // 제목만 바뀐 노트가 해시 검사를 통과하면서 화면에 없던 제목으로 채점된다.
   const prompt = buildGradingPrompt(note.content, parsed.data.answer);
+
+  // 실제 AbortSignal과 generation Snapshot이 같은 남은 실행 예산을 공유한다.
+  const timeoutMs = Math.max(0, GRADING_DEADLINE_MS - (Date.now() - startedAt));
+  snapshotAccumulator.prepareGeneration({
+    prompt,
+    responseSchema: GRADING_RESPONSE_JSON_SCHEMA,
+    timeoutMs,
+  });
 
   let responseText: string;
   try {
     responseText = await generateJson({
       prompt,
       responseSchema: GRADING_RESPONSE_JSON_SCHEMA,
-      // 예산을 여기서 다시 잰다. 위에서 계산한 값을 그대로 쓰면 타이머가 선점 RPC
-      // "이후"부터 흘러서, 종료 시각이 그 RPC에 걸린 시간만큼 뒤로 밀린다.
-      // README의 "채점 deadline < maxDuration" 순서를 지키려면 진입 시각 기준이어야 한다.
-      abortSignal: AbortSignal.timeout(
-        Math.max(0, GRADING_DEADLINE_MS - (Date.now() - startedAt)),
-      ),
+      // 선점 뒤 한 번 계산한 예산을 Signal과 Snapshot에서 함께 사용한다. 진입 시각
+      // 기준이어야 README의 "채점 deadline < maxDuration" 순서가 유지된다.
+      abortSignal: AbortSignal.timeout(timeoutMs),
+      onObservation: snapshotAccumulator.observeGeneration,
     });
   } catch (e) {
+    // Provider/extraction 실패까지 확보한 partial Snapshot으로 failed terminal 저장을 시도한다.
+    await completeAiRunFailed({
+      aiRun,
+      buildSnapshot: snapshotAccumulator.buildSnapshot,
+      completedAt: new Date().toISOString(),
+    });
     // CloudflareAiError는 프롬프트·노트·답안을 담지 않으므로 그대로 남겨도 안전하다.
     console.error("[gradeAnswerAction] AI 호출 실패:", e);
     return { error: GRADING_AI_FAILURE_MESSAGES[toAiFailureReason(e)] };
   }
 
+  snapshotAccumulator.startParseAndValidation({
+    validationSchema: GRADING_VALIDATION_JSON_SCHEMA,
+  });
+
   // 응답 원문에는 노트·답안 내용이 그대로 담기므로 로그에 남기지 않는다.
   let json: unknown;
   try {
     json = JSON.parse(responseText);
-  } catch {
+  } catch (error) {
+    snapshotAccumulator.failJsonParse(error);
+    await completeAiRunFailed({
+      aiRun,
+      buildSnapshot: snapshotAccumulator.buildSnapshot,
+      completedAt: new Date().toISOString(),
+    });
     // SyntaxError 메시지에는 파싱에 실패한 원문 조각이 섞여 나오므로 함께 남기지 않는다.
     console.error(
       `[gradeAnswerAction] JSON 파싱 실패 (응답 길이 ${responseText.length})`,
@@ -589,6 +651,12 @@ export async function gradeAnswerAction(
   const grading = gradingResponseSchema.safeParse(json);
 
   if (!grading.success) {
+    snapshotAccumulator.failValidation(grading.error.issues);
+    await completeAiRunFailed({
+      aiRun,
+      buildSnapshot: snapshotAccumulator.buildSnapshot,
+      completedAt: new Date().toISOString(),
+    });
     console.error(
       `[gradeAnswerAction] Zod 파싱 실패 (응답 길이 ${responseText.length}):`,
       grading.error.issues.map((issue) => ({
@@ -599,26 +667,60 @@ export async function gradeAnswerAction(
     return { error: "채점 결과를 처리할 수 없습니다. 다시 시도해주세요." };
   }
 
+  snapshotAccumulator.completeValidation(grading.data);
+
   // 프롬프트와 생성 스키마가 약속한 개수를 넘겼다면 여기서 맞춘다.
   // 저장 전에 자르지 않으면 UI에도 DB에도 상한을 넘긴 값이 그대로 남는다.
   const normalized = normalizeGradingResponse(grading.data);
+  snapshotAccumulator.completeNormalization();
+  snapshotAccumulator.completeFinalOutput(normalized);
+
   const { score, summary, missedConcepts, incorrectPoints } = normalized;
   const feedback: Json = { summary, missedConcepts, incorrectPoints };
 
-  const { data: finalizeResult, error: finalizeError } = await admin.rpc(
-    "finalize_review_grading",
-    {
+  let finalizeResult: unknown = null;
+  let finalizeError: { message: string } | null = null;
+  try {
+    const result = await admin.rpc("finalize_review_grading", {
       p_user_id: user.id,
       p_review_log_id: parsed.data.reviewLogId,
       p_claim_token: claimToken,
       p_score: score,
       p_feedback: feedback,
-    },
-  );
+    });
+    finalizeResult = result.data;
+    finalizeError = result.error;
+  } catch (error) {
+    // AI 결과 확정 뒤의 DB 예외는 사용자 오류로 처리하되 Run 성공은 유지한다.
+    finalizeError = {
+      message: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
 
-  if (finalizeError || finalizeResult !== "ok") {
+  const parsedFinalizeResult =
+    finalizeReviewGradingResultSchema.safeParse(finalizeResult);
+  const finalizerStatus = parsedFinalizeResult.success
+    ? parsedFinalizeResult.data.status
+    : null;
+  const featureResultIds =
+    finalizeError === null &&
+    parsedFinalizeResult.success &&
+    parsedFinalizeResult.data.status === "ok" &&
+    parsedFinalizeResult.data.gradingId !== null
+      ? [parsedFinalizeResult.data.gradingId]
+      : [];
+
+  // Final Output 이후 Review Grading 저장 결과와 무관하게 AI 성공으로 보고 succeeded terminal 저장을 시도한다.
+  await completeAiRunSucceeded({
+    aiRun,
+    buildSnapshot: snapshotAccumulator.buildSnapshot,
+    completedAt: new Date().toISOString(),
+    featureResultIds,
+  });
+
+  if (finalizeError || finalizerStatus !== "ok") {
     // 선점이 만료된 사이 다른 요청이 먼저 저장한 경우 → 저장된 결과를 정본으로 삼는다
-    if (finalizeResult === "already_graded") {
+    if (finalizerStatus === "already_graded") {
       return resolveAlreadyGraded(
         parsed.data.reviewLogId,
         user.id,
@@ -633,7 +735,7 @@ export async function gradeAnswerAction(
     );
 
     // 저장에 실패한 결과를 성공으로 보여주면 새로고침 시 사라지고 기록에도 남지 않는다.
-    if (finalizeResult === "stale_claim") {
+    if (finalizerStatus === "stale_claim") {
       return {
         error: "다른 채점 요청이 먼저 진행됐어요. 잠시 후 다시 시도해주세요.",
       };

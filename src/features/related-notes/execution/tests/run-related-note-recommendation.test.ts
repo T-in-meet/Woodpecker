@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { createRelatedNotesSnapshotAccumulator } from "../../ai-runs/snapshot-accumulator";
 import { generateRelatedNoteRecommendations } from "../generate-related-note-recommendations";
 import { prepareRelatedNoteContext } from "../prepare-related-note-context";
 import { runRelatedNoteRecommendation } from "../run-related-note-recommendation";
@@ -157,27 +158,33 @@ describe("runRelatedNoteRecommendation", () => {
       title: "Source note",
     });
 
-    expect(mockGenerateRelatedNoteRecommendations).toHaveBeenCalledWith({
-      configuration: answerConfiguration,
-      content: "Source note content",
-      context: "<note>Related note</note>",
-      notes,
-      title: "Source note",
-    });
+    expect(mockGenerateRelatedNoteRecommendations).toHaveBeenCalledWith(
+      expect.objectContaining({
+        configuration: answerConfiguration,
+        content: "Source note content",
+        context: "<note>Related note</note>",
+        notes,
+        title: "Source note",
+        onObservation: expect.any(Function),
+      }),
+    );
 
-    expect(mockVerifyRelatedNoteRecommendations).toHaveBeenCalledWith({
-      configuration: verificationConfiguration,
-      content: "Source note content",
-      notes,
-      recommendations: [
-        {
-          noteId: RELATED_NOTE_ID,
-          reason: "관련 노트 추천 이유",
-          title: "Related note",
-        },
-      ],
-      title: "Source note",
-    });
+    expect(mockVerifyRelatedNoteRecommendations).toHaveBeenCalledWith(
+      expect.objectContaining({
+        configuration: verificationConfiguration,
+        content: "Source note content",
+        notes,
+        recommendations: [
+          {
+            noteId: RELATED_NOTE_ID,
+            reason: "관련 노트 추천 이유",
+            title: "Related note",
+          },
+        ],
+        title: "Source note",
+        onObservation: expect.any(Function),
+      }),
+    );
 
     expect(onVerificationResults).toHaveBeenCalledWith([
       {
@@ -284,5 +291,433 @@ describe("runRelatedNoteRecommendation", () => {
       queryExpansionUsage,
       recommendations: [],
     });
+  });
+
+  it("Answer와 Verification이 사용한 후보를 Retrieval 정본 candidate index로 저장한다", async () => {
+    const FIRST_EMBEDDING_ID = "44444444-4444-4444-8444-444444444444";
+    const SECOND_EMBEDDING_ID = "55555555-5555-4555-8555-555555555555";
+    const MODEL_ID = "66666666-6666-4666-8666-666666666666";
+
+    const notes = [
+      {
+        chunkText: "첫 번째 관련 chunk",
+        distance: 0.1,
+        embeddingId: FIRST_EMBEDDING_ID,
+        id: RELATED_NOTE_ID,
+        similarity: 0.9,
+        title: "Related note",
+      },
+      {
+        chunkText: "두 번째 관련 chunk",
+        distance: 0.2,
+        embeddingId: SECOND_EMBEDDING_ID,
+        id: RELATED_NOTE_ID,
+        similarity: 0.8,
+        title: "Related note",
+      },
+    ] as Awaited<ReturnType<typeof prepareRelatedNoteContext>>["notes"];
+
+    const runtimeConfiguration = {
+      model: {
+        id: MODEL_ID,
+        model: "model",
+        provider: "openai",
+      },
+      prompt: {
+        agent: {},
+        family: {},
+        version: {},
+      },
+      temperature: 0,
+    } as never;
+
+    const snapshotAccumulator = createRelatedNotesSnapshotAccumulator({
+      content: "Source note content",
+      id: TARGET_NOTE_ID,
+      title: "Source note",
+      updatedAt: "2026-09-05T00:00:00.000Z",
+    });
+
+    mockPrepareRelatedNoteContext.mockImplementation(async (params) => {
+      params.snapshotAccumulator?.setStage("retrieval", {
+        configuration: {
+          embeddingModel: {
+            dimensions: 1536,
+            id: MODEL_ID,
+            model: "embedding-model",
+            provider: "openai",
+          },
+          search: {
+            inputKind: "rag_note_content",
+            limit: 5,
+            minSimilarity: 0,
+            sourceType: "note",
+          },
+        },
+        hydratedCandidates: notes.map((note) => ({
+          chunkText: note.chunkText,
+          distance: note.distance,
+          embeddingId: note.embeddingId,
+          noteId: note.id,
+          similarity: note.similarity,
+          title: note.title,
+        })),
+        input: {
+          excludeSourceIds: [TARGET_NOTE_ID],
+          inputText: "expanded related note query",
+        },
+        output: {
+          context: "<note>Related note</note>",
+        },
+      });
+
+      return {
+        context: "<note>Related note</note>",
+        expandedQuery: "expanded related note query",
+        notes,
+        queryEmbeddingUsage,
+        queryExpansionUsage,
+      };
+    });
+
+    mockGenerateRelatedNoteRecommendations.mockImplementation(
+      async (params) => {
+        await params.onObservation?.({
+          configuration: runtimeConfiguration,
+          context: "<note>Related note</note>",
+          notes,
+          responseFormat: undefined,
+          systemPrompt: "answer system",
+          type: "prepared",
+          userPrompt: "answer user",
+          variables: {
+            content: "Source note content",
+            context: "<note>Related note</note>",
+            title: "Source note",
+          },
+        });
+
+        return {
+          recommendations: [
+            {
+              noteId: RELATED_NOTE_ID,
+              reason: "관련 노트 추천 이유",
+              title: "Related note",
+            },
+          ],
+          usage: answerGenerationUsage,
+        };
+      },
+    );
+
+    mockVerifyRelatedNoteRecommendations.mockImplementation(async (params) => {
+      await params.onObservation?.({
+        configuration: runtimeConfiguration,
+        context: "verification context",
+        notes,
+        recommendations: [
+          {
+            noteId: RELATED_NOTE_ID,
+            reason: "관련 노트 추천 이유",
+            title: "Related note",
+          },
+        ],
+        responseFormat: undefined,
+        systemPrompt: "verification system",
+        type: "prepared",
+        userPrompt: "verification user",
+        variables: {
+          content: "Source note content",
+          recommendations: "verification context",
+          title: "Source note",
+        },
+      });
+
+      return {
+        recommendations: [
+          {
+            noteId: RELATED_NOTE_ID,
+            reason: "관련 노트 추천 이유",
+          },
+        ],
+        usage: verificationUsage,
+        verifications: [
+          {
+            approved: true,
+            noteId: RELATED_NOTE_ID,
+            reason: "직접적인 학습 관계가 있습니다.",
+          },
+        ],
+      };
+    });
+
+    await runRelatedNoteRecommendation({
+      ...defaultParams,
+      answerConfiguration: runtimeConfiguration,
+      snapshotAccumulator,
+      verificationConfiguration: runtimeConfiguration,
+    });
+
+    const snapshot = snapshotAccumulator.buildSnapshot() as {
+      retrieval?: {
+        hydratedCandidates?: unknown[];
+      };
+      answerGeneration?: {
+        input?: {
+          matchedCandidateIndexes?: number[];
+          matchedNotes?: unknown;
+        };
+      };
+      verification?: {
+        input?: {
+          context?: string;
+          matchedCandidateIndexes?: number[];
+          matchedNotes?: unknown;
+        };
+      };
+    };
+
+    expect(snapshot.retrieval?.hydratedCandidates).toHaveLength(2);
+
+    expect(snapshot.answerGeneration?.input?.matchedCandidateIndexes).toEqual([
+      0, 1,
+    ]);
+
+    expect(snapshot.verification?.input?.matchedCandidateIndexes).toEqual([
+      0, 1,
+    ]);
+
+    expect(snapshot.answerGeneration?.input).not.toHaveProperty("matchedNotes");
+    expect(snapshot.verification?.input).not.toHaveProperty("matchedNotes");
+
+    const answerCandidates =
+      snapshot.answerGeneration?.input?.matchedCandidateIndexes?.map(
+        (index) => snapshot.retrieval?.hydratedCandidates?.[index],
+      );
+
+    const verificationCandidates =
+      snapshot.verification?.input?.matchedCandidateIndexes?.map(
+        (index) => snapshot.retrieval?.hydratedCandidates?.[index],
+      );
+
+    expect(answerCandidates).toEqual(snapshot.retrieval?.hydratedCandidates);
+    expect(verificationCandidates).toEqual(
+      snapshot.retrieval?.hydratedCandidates,
+    );
+
+    expect(snapshot.verification?.input?.context).toBe("verification context");
+  });
+
+  it("matched candidate index를 찾지 못해도 Answer와 Verification stage를 보존한다", async () => {
+    const RETRIEVAL_EMBEDDING_ID = "44444444-4444-4444-8444-444444444444";
+    const UNKNOWN_EMBEDDING_ID = "55555555-5555-4555-8555-555555555555";
+    const MODEL_ID = "66666666-6666-4666-8666-666666666666";
+
+    const notes = [
+      {
+        chunkText: "관련 chunk",
+        distance: 0.1,
+        embeddingId: RETRIEVAL_EMBEDDING_ID,
+        id: RELATED_NOTE_ID,
+        similarity: 0.9,
+        title: "Related note",
+      },
+    ] as Awaited<ReturnType<typeof prepareRelatedNoteContext>>["notes"];
+
+    const unmatchedNotes = [
+      {
+        ...notes[0],
+        embeddingId: UNKNOWN_EMBEDDING_ID,
+      },
+    ] as Awaited<ReturnType<typeof prepareRelatedNoteContext>>["notes"];
+
+    const runtimeConfiguration = {
+      model: {
+        id: MODEL_ID,
+        model: "model",
+        provider: "openai",
+      },
+      prompt: {
+        agent: {},
+        family: {},
+        version: {},
+      },
+      temperature: 0,
+    } as never;
+
+    const snapshotAccumulator = createRelatedNotesSnapshotAccumulator({
+      content: "Source note content",
+      id: TARGET_NOTE_ID,
+      title: "Source note",
+      updatedAt: "2026-09-05T00:00:00.000Z",
+    });
+
+    mockPrepareRelatedNoteContext.mockImplementation(async (params) => {
+      params.snapshotAccumulator?.setStage("retrieval", {
+        configuration: {
+          embeddingModel: {
+            dimensions: 1536,
+            id: MODEL_ID,
+            model: "embedding-model",
+            provider: "openai",
+          },
+          search: {
+            inputKind: "rag_note_content",
+            limit: 5,
+            minSimilarity: 0,
+            sourceType: "note",
+          },
+        },
+        hydratedCandidates: notes.map((note) => ({
+          chunkText: note.chunkText,
+          distance: note.distance,
+          embeddingId: note.embeddingId,
+          noteId: note.id,
+          similarity: note.similarity,
+          title: note.title,
+        })),
+        input: {
+          excludeSourceIds: [TARGET_NOTE_ID],
+          inputText: "expanded related note query",
+        },
+        output: {
+          context: "<note>Related note</note>",
+        },
+      });
+
+      return {
+        context: "<note>Related note</note>",
+        expandedQuery: "expanded related note query",
+        notes,
+        queryEmbeddingUsage,
+        queryExpansionUsage,
+      };
+    });
+
+    mockGenerateRelatedNoteRecommendations.mockImplementation(
+      async (params) => {
+        await params.onObservation?.({
+          configuration: runtimeConfiguration,
+          context: "<note>Related note</note>",
+          notes: unmatchedNotes,
+          responseFormat: undefined,
+          systemPrompt: "answer system",
+          type: "prepared",
+          userPrompt: "answer user",
+          variables: {
+            content: "Source note content",
+            context: "<note>Related note</note>",
+            title: "Source note",
+          },
+        });
+
+        return {
+          recommendations: [
+            {
+              noteId: RELATED_NOTE_ID,
+              reason: "관련 노트 추천 이유",
+              title: "Related note",
+            },
+          ],
+          usage: answerGenerationUsage,
+        };
+      },
+    );
+
+    mockVerifyRelatedNoteRecommendations.mockImplementation(async (params) => {
+      await params.onObservation?.({
+        configuration: runtimeConfiguration,
+        context: "verification context",
+        notes: unmatchedNotes,
+        recommendations: [
+          {
+            noteId: RELATED_NOTE_ID,
+            reason: "관련 노트 추천 이유",
+            title: "Related note",
+          },
+        ],
+        responseFormat: undefined,
+        systemPrompt: "verification system",
+        type: "prepared",
+        userPrompt: "verification user",
+        variables: {
+          content: "Source note content",
+          recommendations: "verification context",
+          title: "Source note",
+        },
+      });
+
+      return {
+        recommendations: [
+          {
+            noteId: RELATED_NOTE_ID,
+            reason: "관련 노트 추천 이유",
+          },
+        ],
+        usage: verificationUsage,
+        verifications: [
+          {
+            approved: true,
+            noteId: RELATED_NOTE_ID,
+            reason: "직접적인 학습 관계가 있습니다.",
+          },
+        ],
+      };
+    });
+
+    await runRelatedNoteRecommendation({
+      ...defaultParams,
+      answerConfiguration: runtimeConfiguration,
+      snapshotAccumulator,
+      verificationConfiguration: runtimeConfiguration,
+    });
+
+    const snapshot = snapshotAccumulator.buildSnapshot() as {
+      answerGeneration?: {
+        input?: {
+          context?: string;
+          matchedCandidateIndexes?: number[];
+          renderedSystemPrompt?: string;
+          renderedUserPrompt?: string;
+        };
+      };
+      verification?: {
+        input?: {
+          context?: string;
+          matchedCandidateIndexes?: number[];
+          renderedSystemPrompt?: string;
+          renderedUserPrompt?: string;
+        };
+      };
+    };
+
+    expect(snapshot.answerGeneration).toBeDefined();
+    expect(snapshot.verification).toBeDefined();
+
+    expect(
+      snapshot.answerGeneration?.input?.matchedCandidateIndexes,
+    ).toBeUndefined();
+
+    expect(
+      snapshot.verification?.input?.matchedCandidateIndexes,
+    ).toBeUndefined();
+
+    expect(snapshot.answerGeneration?.input?.context).toBe(
+      "<note>Related note</note>",
+    );
+    expect(snapshot.answerGeneration?.input?.renderedSystemPrompt).toBe(
+      "answer system",
+    );
+    expect(snapshot.answerGeneration?.input?.renderedUserPrompt).toBe(
+      "answer user",
+    );
+
+    expect(snapshot.verification?.input?.context).toBe("verification context");
+    expect(snapshot.verification?.input?.renderedSystemPrompt).toBe(
+      "verification system",
+    );
+    expect(snapshot.verification?.input?.renderedUserPrompt).toBe(
+      "verification user",
+    );
   });
 });

@@ -1,12 +1,16 @@
 import { z } from "zod";
 
 import type { AiTokenUsage } from "@/features/ai/providers/types";
-import { createQueryExpansionCompletion } from "@/features/ai/rags/query-expansion/create-query-expansion-completion";
+import {
+  createQueryExpansionCompletion,
+  type QueryExpansionCompletionObservation,
+} from "@/features/ai/rags/query-expansion/create-query-expansion-completion";
 import type { AiRuntimeChatConfiguration } from "@/features/ai/runtimes/types";
 import {
   RELATED_NOTES_OPERATIONAL_ERROR_CODES,
   RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS,
 } from "@/features/operational-errors/constants";
+import { type AiObserver, notifyAiObserver } from "@/lib/ai/notify-observer";
 
 import { reportRelatedNotesOperationalError } from "../utils/report-operational-error";
 
@@ -34,7 +38,21 @@ type ExpandRelatedNoteQueryParams = {
    * usage를 Run에 남기기 위해 응답 검증 전에 호출합니다.
    */
   onUsage?: (usage: AiTokenUsage) => Promise<void>;
+
+  /** 공통 Query Expansion 실행 관측 callback입니다. */
+  onObservation?: (
+    observation: QueryExpansionCompletionObservation,
+  ) => void | Promise<void>;
+
+  /** 파싱·검증 또는 그 실패를 관측하는 callback입니다. */
+  onParsed?: AiObserver<ExpandRelatedNoteQueryParseObservation> | undefined;
 };
+
+/** Related Notes Query Expansion 파싱 관측값입니다. */
+export type ExpandRelatedNoteQueryParseObservation =
+  | { type: "parsed"; expandedQuery: string }
+  | { type: "parse-failed"; error: unknown }
+  | { type: "validation-failed"; error: unknown; issues: unknown[] };
 
 /**
  * Related Notes Query Expansion 실행 결과입니다.
@@ -61,6 +79,9 @@ export async function expandRelatedNoteQuery(
 ): Promise<ExpandRelatedNoteQueryResult> {
   const result = await createQueryExpansionCompletion({
     configuration: params.configuration,
+    ...(params.onObservation === undefined
+      ? {}
+      : { onObservation: params.onObservation }),
     responseSchemaName: "related_note_query_expansion_response",
     variables: {
       title: params.title,
@@ -76,6 +97,8 @@ export async function expandRelatedNoteQuery(
   try {
     response = JSON.parse(result.content) as unknown;
   } catch (error) {
+    // Provider 원문은 callback에 다시 싣지 않고 실패 경계만 기록한다.
+    await notifyAiObserver(params.onParsed, { error, type: "parse-failed" });
     await reportRelatedNotesOperationalError({
       error,
       errorCode:
@@ -99,6 +122,12 @@ export async function expandRelatedNoteQuery(
       "Related note query expansion response does not match the expected schema.",
     );
 
+    await notifyAiObserver(params.onParsed, {
+      error,
+      issues: parsed.error.issues,
+      type: "validation-failed",
+    });
+
     await reportRelatedNotesOperationalError({
       error,
       errorCode:
@@ -114,6 +143,11 @@ export async function expandRelatedNoteQuery(
 
     throw error;
   }
+
+  await notifyAiObserver(params.onParsed, {
+    expandedQuery: parsed.data.expandedQuery,
+    type: "parsed",
+  });
 
   return {
     expandedQuery: parsed.data.expandedQuery,

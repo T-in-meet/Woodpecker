@@ -46,7 +46,7 @@ const CONVERSATION_ID = "550e8400-e29b-41d4-a716-446655440001";
 const MESSAGE_ID_1 = "550e8400-e29b-41d4-a716-446655440002";
 const MESSAGE_ID_2 = "550e8400-e29b-41d4-a716-446655440003";
 const NOTE_ID = "550e8400-e29b-41d4-a716-446655440004";
-const RUN_ID = "550e8400-e29b-41d4-a716-446655440005";
+const NOTE_ID_2 = "550e8400-e29b-41d4-a716-446655440005";
 const CLAIM_ID = "550e8400-e29b-41d4-a716-446655440006";
 
 const conversation = {
@@ -71,7 +71,7 @@ const messages = [
   },
   {
     content: {
-      referencedNoteIds: [NOTE_ID],
+      usedNoteIds: [NOTE_ID, NOTE_ID_2],
       text: "첫 번째 답변",
     },
     conversation_id: CONVERSATION_ID,
@@ -82,17 +82,6 @@ const messages = [
     updated_at: "2026-08-11T00:01:00.000Z",
   },
 ];
-
-const source = {
-  contextIndex: 1,
-  content: "노트 내용",
-  distance: 0.1,
-  embeddingId: RUN_ID,
-  noteId: NOTE_ID,
-  similarity: 0.9,
-  title: "테스트 노트",
-  type: "note",
-};
 
 function createQueryMock<T>(result: {
   data: T;
@@ -542,12 +531,10 @@ describe("getNoteChatConversationMessagePage", () => {
       error: null,
     });
 
-    const runsQuery = createQueryMock({
+    const notesQuery = createQueryMock({
       data: [
-        {
-          assistant_message_id: MESSAGE_ID_2,
-          sources: [source],
-        },
+        { id: NOTE_ID_2, title: "두 번째 최신 제목" },
+        { id: NOTE_ID, title: "첫 번째 최신 제목" },
       ],
       error: null,
     });
@@ -555,7 +542,7 @@ describe("getNoteChatConversationMessagePage", () => {
     const from = mockCreateClient([
       conversationQuery,
       messagesQuery,
-      runsQuery,
+      notesQuery,
     ]);
 
     const result = await getNoteChatConversationMessagePage({
@@ -572,10 +559,9 @@ describe("getNoteChatConversationMessagePage", () => {
     );
     expect(messagesQuery.lt).not.toHaveBeenCalled();
 
-    expect(from).toHaveBeenNthCalledWith(3, "note_chat_runs");
-    expect(runsQuery.in).toHaveBeenCalledWith("assistant_message_id", [
-      MESSAGE_ID_2,
-    ]);
+    expect(from).toHaveBeenNthCalledWith(3, "notes");
+    expect(notesQuery.eq).toHaveBeenCalledWith("user_id", USER_ID);
+    expect(notesQuery.in).toHaveBeenCalledWith("id", [NOTE_ID, NOTE_ID_2]);
 
     expect(result).toEqual({
       messages,
@@ -585,7 +571,11 @@ describe("getNoteChatConversationMessagePage", () => {
           sources: [
             {
               noteId: NOTE_ID,
-              title: "테스트 노트",
+              title: "첫 번째 최신 제목",
+            },
+            {
+              noteId: NOTE_ID_2,
+              title: "두 번째 최신 제목",
             },
           ],
         },
@@ -685,7 +675,7 @@ describe("getNoteChatConversationMessagePage", () => {
     });
   });
 
-  it("Assistant Message가 없으면 Run Source를 조회하지 않는다", async () => {
+  it("Assistant Message가 없으면 참고 Note를 조회하지 않는다", async () => {
     const conversationQuery = createQueryMock({
       data: conversation,
       error: null,
@@ -701,11 +691,11 @@ describe("getNoteChatConversationMessagePage", () => {
       conversationId: CONVERSATION_ID,
     });
 
-    expect(from).not.toHaveBeenCalledWith("note_chat_runs");
+    expect(from).not.toHaveBeenCalledWith("notes");
     expect(result?.assistantSources).toEqual([]);
   });
 
-  it("Run Source 조회에 실패하면 운영 오류를 보고하고 예외를 발생시킨다", async () => {
+  it("참고 Note 조회에 실패하면 운영 오류를 보고하고 예외를 발생시킨다", async () => {
     const error = {
       message: "sources load failed",
     };
@@ -718,12 +708,12 @@ describe("getNoteChatConversationMessagePage", () => {
       data: messages,
       error: null,
     });
-    const runsQuery = createQueryMock({
+    const notesQuery = createQueryMock({
       data: null,
       error,
     });
 
-    mockCreateClient([conversationQuery, messagesQuery, runsQuery]);
+    mockCreateClient([conversationQuery, messagesQuery, notesQuery]);
 
     await expect(
       getNoteChatConversationMessagePage({
@@ -744,7 +734,7 @@ describe("getNoteChatConversationMessagePage", () => {
     });
   });
 
-  it("Run Source 배열이 스키마를 만족하지 않으면 해당 Run의 Source를 제외한다", async () => {
+  it("삭제되었거나 접근할 수 없는 Note는 참고 목록에서 제외한다", async () => {
     const conversationQuery = createQueryMock({
       data: conversation,
       error: null,
@@ -753,28 +743,20 @@ describe("getNoteChatConversationMessagePage", () => {
       data: messages,
       error: null,
     });
-    const runsQuery = createQueryMock({
-      data: [
-        {
-          assistant_message_id: MESSAGE_ID_2,
-          sources: [
-            source,
-            {
-              invalid: true,
-            },
-          ],
-        },
-      ],
+    const notesQuery = createQueryMock({
+      data: [],
       error: null,
     });
 
-    mockCreateClient([conversationQuery, messagesQuery, runsQuery]);
+    mockCreateClient([conversationQuery, messagesQuery, notesQuery]);
 
     const result = await getNoteChatConversationMessagePage({
       conversationId: CONVERSATION_ID,
     });
 
-    expect(result?.assistantSources).toEqual([]);
+    expect(result?.assistantSources).toEqual([
+      { assistantMessageId: MESSAGE_ID_2, sources: [] },
+    ]);
   });
 });
 

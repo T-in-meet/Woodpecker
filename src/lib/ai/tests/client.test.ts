@@ -502,3 +502,119 @@ describe("generateJson — 에러 메시지 유출", () => {
     expect(error.message).not.toContain(API_TOKEN);
   });
 });
+
+describe("generateJson — 실행 관측", () => {
+  it("실제 요청, Provider envelope와 extraction 결과를 순서대로 전달한다", async () => {
+    const envelopeResult = {
+      choices: [
+        { message: { content: '{"score":80}' }, finish_reason: "stop" },
+      ],
+    };
+    const onObservation = vi.fn();
+    mockOk(envelopeResult);
+
+    await expect(
+      generateJson({
+        onObservation,
+        prompt: PROMPT,
+        responseSchema: RESPONSE_SCHEMA,
+        temperature: 0.4,
+      }),
+    ).resolves.toBe('{"score":80}');
+
+    expect(onObservation.mock.calls.map(([event]) => event.type)).toEqual([
+      "request",
+      "provider-response",
+      "extraction-started",
+      "extraction-completed",
+    ]);
+    expect(onObservation).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        body: expect.objectContaining({
+          messages: [{ role: "user", content: PROMPT }],
+          temperature: 0.4,
+        }),
+        model: "@cf/openai/gpt-oss-120b",
+      }),
+    );
+    expect(onObservation).toHaveBeenNthCalledWith(3, {
+      result: envelopeResult,
+      type: "extraction-started",
+    });
+    expect(onObservation).toHaveBeenNthCalledWith(4, {
+      text: '{"score":80}',
+      type: "extraction-completed",
+    });
+  });
+
+  it("Provider 성공 뒤 extraction 실패를 별도 경계로 관측한다", async () => {
+    const result = { unexpected: true };
+    const onObservation = vi.fn();
+    mockOk(result);
+
+    await expectKind(
+      generateJson({
+        onObservation,
+        prompt: PROMPT,
+        responseSchema: RESPONSE_SCHEMA,
+      }),
+      "provider",
+    );
+
+    expect(onObservation.mock.calls.map(([event]) => event.type)).toEqual([
+      "request",
+      "provider-response",
+      "extraction-started",
+      "extraction-error",
+    ]);
+    expect(onObservation).toHaveBeenNthCalledWith(3, {
+      result,
+      type: "extraction-started",
+    });
+  });
+
+  it("Provider 실패에서는 원문 envelope 대신 안전한 오류 분류만 전달한다", async () => {
+    const providerMessage = "저장하거나 로그하면 안 되는 Provider 원문";
+    const onObservation = vi.fn();
+    mockRaw(400, {
+      errors: [{ code: 3003, message: providerMessage }],
+      success: false,
+    });
+
+    await expectKind(
+      generateJson({
+        onObservation,
+        prompt: PROMPT,
+        responseSchema: RESPONSE_SCHEMA,
+      }),
+      "provider",
+    );
+
+    expect(onObservation.mock.calls.map(([event]) => event.type)).toEqual([
+      "request",
+      "provider-error",
+    ]);
+    expect(JSON.stringify(onObservation.mock.calls)).not.toContain(
+      providerMessage,
+    );
+    expect(onObservation).toHaveBeenLastCalledWith({
+      error: expect.objectContaining({ code: 3003, status: 400 }),
+      type: "provider-error",
+    });
+  });
+
+  it("관측 callback 실패가 기존 반환값과 Provider 호출 횟수를 바꾸지 않는다", async () => {
+    mockOk({ response: '{"score":1}' });
+
+    await expect(
+      generateJson({
+        onObservation: vi.fn().mockRejectedValue(new Error("관측 실패")),
+        prompt: PROMPT,
+        responseSchema: RESPONSE_SCHEMA,
+      }),
+    ).resolves.toBe('{"score":1}');
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+});

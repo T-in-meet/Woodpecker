@@ -3,6 +3,7 @@ import type { AiChatStreamEvent } from "@/features/ai/providers/types";
 import { getProviderApiKey } from "@/features/ai/providers/utils/api-key";
 import type { Json } from "@/types/db.helpers";
 
+import type { NoteChatSnapshotAccumulator } from "../ai-runs/snapshot-accumulator";
 import type { PreparedNoteChatExecution } from "./prepare-execution";
 
 /**
@@ -16,27 +17,48 @@ import type { PreparedNoteChatExecution } from "./prepare-execution";
  */
 export function startNoteChatProviderStream(
   prepared: PreparedNoteChatExecution,
+  onPrepared?: (
+    input: Parameters<
+      NoteChatSnapshotAccumulator["prepareAnswerGeneration"]
+    >[0],
+  ) => void,
 ): AsyncGenerator<AiChatStreamEvent> {
   const chatConfiguration = prepared.settings.chat;
   const chatModel = chatConfiguration.model;
   const responseSchema = chatConfiguration.prompt.version.response_schema;
+
+  const responseFormat =
+    responseSchema == null
+      ? undefined
+      : {
+          type: "json_schema" as const,
+          jsonSchema: {
+            name: "note_chat_response",
+            schema: responseSchema as Json,
+            strict: true,
+          },
+        };
+
+  // 준비 단계가 확정한 실제 질문·history·context와 동일한 Provider 입력을 기록한다.
+  onPrepared?.({
+    configuration: chatConfiguration,
+    context: prepared.context,
+    history: prepared.history.flatMap((message) =>
+      message.role === "user" || message.role === "assistant"
+        ? [{ content: message.content, role: message.role }]
+        : [],
+    ),
+    providerMessages: prepared.messages,
+    question: prepared.question,
+    ...(responseFormat === undefined ? {} : { responseFormat }),
+  });
 
   return streamAiChatCompletionWithProvider({
     apiKey: getProviderApiKey(chatModel.provider),
     messages: prepared.messages,
     model: chatModel.model,
     provider: chatModel.provider,
-    responseFormat:
-      responseSchema == null
-        ? undefined
-        : {
-            type: "json_schema",
-            jsonSchema: {
-              name: "note_chat_response",
-              schema: responseSchema as Json,
-              strict: true,
-            },
-          },
+    responseFormat,
     temperature: chatConfiguration.temperature,
   });
 }
