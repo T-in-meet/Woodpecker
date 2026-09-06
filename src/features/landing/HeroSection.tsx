@@ -17,12 +17,16 @@ import { heroContent } from "./content";
 /**
  * 목업에 표시할 노트. 실제 목록 화면의 `NoteSummary`를 그대로 쓰지 않고
  * 화면에 보이는 값만 추린다 — 쿼리 타입이 바뀔 때 랜딩이 끌려다니지 않게 한다.
+ *
+ * `preview`는 한 줄에 담기지 않을 만큼 길게 둔다. 목록과 똑같이 line-clamp-1로
+ * 자르므로 뒤가 말줄임으로 끝나는데, 한 줄에 딱 맞는 짧은 문장보다 내용이 더
+ * 있는 진짜 노트처럼 읽힌다.
  */
 const previewNotes = [
   {
-    title: "세포 호흡의 3단계",
+    title: "베이즈 정리와 사후확률",
     preview:
-      "해당과정, TCA 회로, 전자전달계를 거쳐 포도당 한 분자를 분해하고 ATP를 얻는다.",
+      "사전확률에 새 증거의 우도를 곱해 사후확률로 갱신한다. 검사 정확도가 99%여도 유병률이 0.1%면 양성 판정의 실제 적중률은 10%에 못 미친다.",
     reviewRound: 3,
     scheduleText: "오늘",
     // NoteListItem의 tone별 클래스와 같은 값을 쓴다(today / upcoming).
@@ -31,7 +35,7 @@ const previewNotes = [
   {
     title: "가정법 과거완료",
     preview:
-      "If + 주어 + had p.p., 주어 + would have p.p. 형태로 과거 사실의 반대를 가정한다.",
+      "If + 주어 + had p.p., 주어 + would have p.p. 형태로 과거 사실의 반대를 가정한다. 주절의 시제가 현재면 혼합 가정법이 되어 would + 동사원형을 쓴다.",
     reviewRound: 1,
     scheduleText: "3일 후",
     scheduleClass: "bg-blue-100 text-blue-800",
