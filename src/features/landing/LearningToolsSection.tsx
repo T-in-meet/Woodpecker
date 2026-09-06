@@ -17,11 +17,11 @@ import { learningToolsContent } from "./content";
 import { QuizPreview } from "./QuizPreview";
 
 // 스크롤이 멎었다고 볼 때까지 기다리는 시간.
-const SETTLE_DELAY_MS = 150;
+export const SETTLE_DELAY_MS = 150;
 // 스크롤이 시작조차 못한 채 타이머가 발화했을 때 다시 기다려보는 횟수.
 // 약 900ms까지 버티고, 그 뒤에는 어떤 이유로든 움직이지 않는 것으로 보고
 // 목표를 풀어 activeIndex가 영영 실제 위치와 어긋난 채 남지 않게 한다.
-const MAX_SETTLE_RETRIES = 6;
+export const MAX_SETTLE_RETRIES = 6;
 
 /**
  * 관련 노트 목록(`RelatedNoteItem`)의 정적 재현.
@@ -368,7 +368,10 @@ export function LearningToolsSection() {
             <ChevronLeft className="size-4" aria-hidden="true" />
           </button>
 
-          <div className="flex items-center gap-2">
+          {/* 점은 8px로 보이되 누르는 영역은 24px을 확보한다. 버튼 자체를 8px로
+              두면 모바일에서 겨냥하기 어렵다. 타깃끼리 겹치면 안 되므로 사이
+              간격은 버튼 크기로만 벌어지게 두고 gap은 주지 않는다. */}
+          <div className="flex items-center">
             {tools.map((tool, index) => (
               <button
                 key={tool.id}
@@ -376,11 +379,15 @@ export function LearningToolsSection() {
                 aria-label={`${tool.label} 보기`}
                 aria-current={index === activeIndex}
                 onClick={() => scrollToIndex(index)}
-                className={cn(
-                  "size-2 cursor-pointer rounded-full transition-colors",
-                  index === activeIndex ? "bg-foreground" : "bg-border",
-                )}
-              />
+                className="inline-flex size-6 cursor-pointer items-center justify-center rounded-full"
+              >
+                <span
+                  className={cn(
+                    "size-2 rounded-full transition-colors",
+                    index === activeIndex ? "bg-foreground" : "bg-border",
+                  )}
+                />
+              </button>
             ))}
           </div>
 
