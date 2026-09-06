@@ -57,13 +57,13 @@ export function useRelatedNotes(noteId: string) {
   const [abandonedClaimId, setAbandonedClaimId] = useState<string | null>(null);
 
   /*
-   * Client가 terminal 상태를 확인한 execution Claim ID입니다.
+   * Client가 terminal 상태를 확인한 execution Claim ID 집합입니다.
    *
    * tracked Claim이 terminal 상태가 된 직후 main Related Notes Query에는
    * 이전 running 상태가 잠시 남아 있을 수 있으므로,
-   * 동일 Claim을 다시 자동 추적하지 않도록 사용합니다.
+   * 이미 terminal 상태를 확인한 Claim을 다시 자동 추적하지 않도록 사용합니다.
    */
-  const terminalClaimIdRef = useRef<string | null>(null);
+  const terminalClaimIdsRef = useRef<Set<string>>(new Set());
 
   /*
    * tracked Claim 조회 요청의 연속 실패 횟수입니다.
@@ -79,11 +79,11 @@ export function useRelatedNotes(noteId: string) {
   useEffect(() => {
     /*
      * 다른 Note로 이동하면 이전 Note에서 추적하던 Claim과
-     * 추적 포기 상태를 모두 제거합니다.
+     * 추적 포기 상태, terminal Claim 기록을 모두 제거합니다.
      */
     setTrackedClaimId(null);
     setAbandonedClaimId(null);
-    terminalClaimIdRef.current = null;
+    terminalClaimIdsRef.current.clear();
     consecutiveClaimQueryErrorCountRef.current = 0;
   }, [noteId]);
 
@@ -176,13 +176,13 @@ export function useRelatedNotes(noteId: string) {
      * 현재 Note version에 running Claim이 존재한다면 해당 Claim을 추적합니다.
      *
      * 단, 조회 실패로 Client 추적을 포기했던 동일 Claim과
-     * 이미 terminal 상태를 확인한 동일 Claim은 다시 자동 추적하지 않습니다.
+     * 이미 terminal 상태를 확인한 Claim은 다시 자동 추적하지 않습니다.
      */
     if (
       trackedClaimId === null &&
       latestRecommendationExecution?.status === "running" &&
       latestRecommendationExecution.id !== abandonedClaimId &&
-      latestRecommendationExecution.id !== terminalClaimIdRef.current
+      !terminalClaimIdsRef.current.has(latestRecommendationExecution.id)
     ) {
       /*
        * 새 Claim lifecycle 추적을 시작하므로
@@ -246,7 +246,7 @@ export function useRelatedNotes(noteId: string) {
      * 더 이상 추적할 execution이 없으므로 polling을 종료합니다.
      */
     if (trackedRecommendationExecution === null) {
-      terminalClaimIdRef.current = trackedClaimId;
+      terminalClaimIdsRef.current.add(trackedClaimId);
       setTrackedClaimId(null);
       void query.refetch();
       return;
@@ -264,12 +264,13 @@ export function useRelatedNotes(noteId: string) {
      * 해당 실행의 추적을 종료합니다.
      *
      * main Related Notes Query가 이전 running 상태를 잠시 유지하더라도
-     * 동일 Claim을 다시 자동 추적하지 않도록 terminal Claim ID를 먼저 기록합니다.
+     * 이미 terminal 상태를 확인한 Claim을 다시 자동 추적하지 않도록
+     * terminal Claim ID 집합에 먼저 기록합니다.
      *
      * 이후 main Related Notes Query를 다시 조회하여
      * Related Notes 목록, 실행 상태, 일일 usage를 DB와 동기화합니다.
      */
-    terminalClaimIdRef.current = trackedClaimId;
+    terminalClaimIdsRef.current.add(trackedClaimId);
     setTrackedClaimId(null);
     void query.refetch();
   }, [
@@ -287,14 +288,15 @@ export function useRelatedNotes(noteId: string) {
    * Action에서 `claimed` 결과와 함께 받은 Claim ID를 직접 사용합니다.
    *
    * 사용자의 새로운 실행으로 추적을 시작하는 경우에는
-   * 이전 Claim의 polling 포기 상태와 terminal 상태,
-   * 연속 조회 실패 횟수를 초기화합니다.
+   * 이전 Claim의 polling 포기 상태와 연속 조회 실패 횟수를 초기화합니다.
+   *
+   * 이미 terminal 상태를 확인한 이전 Claim ID는 유지하여
+   * main Query가 과거 running 상태를 다시 반환하더라도 재추적하지 않습니다.
    *
    * @param claimId 이번 수동 요청에서 새로 생성된 execution Claim ID
    */
   const startRecommendationPolling = useCallback((claimId: string) => {
     setAbandonedClaimId(null);
-    terminalClaimIdRef.current = null;
     consecutiveClaimQueryErrorCountRef.current = 0;
     setTrackedClaimId(claimId);
   }, []);

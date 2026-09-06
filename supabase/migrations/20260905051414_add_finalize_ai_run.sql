@@ -18,7 +18,7 @@ CREATE OR REPLACE FUNCTION public.finalize_ai_run(
 RETURNS text
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = ''
 AS $$
 DECLARE
     current_user_id uuid;

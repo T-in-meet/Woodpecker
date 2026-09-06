@@ -261,7 +261,13 @@ export async function checkpointAiRun(
   });
 }
 
-/** 성공한 AI Run의 최종 Snapshot과 결과 ID를 best-effort로 저장합니다. */
+/**
+ * 성공한 AI Run의 최종 Snapshot과 결과 ID를 best-effort로 저장합니다.
+ *
+ * 반환 Promise의 완료는 terminal DB persistence 완료를 의미하지 않습니다.
+ * Snapshot 확정과 persistence 등록까지만 수행하고 실제 DB 작업은 비동기로 처리합니다.
+ */
+
 export async function completeAiRunSucceeded(
   params: CompleteAiRunSucceededParams,
   options: AiRunPersistenceOptions = {},
@@ -274,7 +280,12 @@ export async function completeAiRunSucceeded(
   );
 }
 
-/** 실패한 AI Run을 빈 결과 ID와 함께 best-effort로 저장합니다. */
+/**
+ * 실패한 AI Run을 빈 결과 ID와 함께 best-effort로 저장합니다.
+ *
+ * 반환 Promise의 완료는 terminal DB persistence 완료를 의미하지 않습니다.
+ * Snapshot 확정과 persistence 등록까지만 수행하고 실제 DB 작업은 비동기로 처리합니다.
+ */
 export async function completeAiRunFailed(
   params: CompleteAiRunParams,
   options: AiRunPersistenceOptions = {},

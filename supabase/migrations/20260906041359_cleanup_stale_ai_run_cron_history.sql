@@ -9,7 +9,7 @@ DECLARE
 BEGIN
   -- 다른 cron 작업의 실행 이력은 건드리지 않고 stale sweeper 기록만 정리합니다.
   DELETE FROM cron.job_run_details
-  WHERE jobid = (
+  WHERE jobid IN (
     SELECT jobid
     FROM cron.job
     WHERE jobname = 'sweep-stale-ai-runs'
