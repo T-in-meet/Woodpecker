@@ -16,6 +16,13 @@ import { cn } from "@/lib/utils/cn";
 import { learningToolsContent } from "./content";
 import { QuizPreview } from "./QuizPreview";
 
+// 스크롤이 멎었다고 볼 때까지 기다리는 시간.
+const SETTLE_DELAY_MS = 150;
+// 스크롤이 시작조차 못한 채 타이머가 발화했을 때 다시 기다려보는 횟수.
+// 약 900ms까지 버티고, 그 뒤에는 어떤 이유로든 움직이지 않는 것으로 보고
+// 목표를 풀어 activeIndex가 영영 실제 위치와 어긋난 채 남지 않게 한다.
+const MAX_SETTLE_RETRIES = 6;
+
 /**
  * 관련 노트 목록(`RelatedNoteItem`)의 정적 재현.
  * 항목 테두리·아이콘·출처 배지(직접 연결 = blue, AI 추천 = violet)를
@@ -148,10 +155,15 @@ export function LearningToolsSection() {
   // 연속으로 눌러도 같은 장을 다시 목표로 잡게 된다. 목표를 여기 따로 들고
   // 도착할 때까지 onScroll의 판정을 미룬다.
   const pendingIndexRef = useRef<number | null>(null);
-  // 스크롤이 멎었는지 재는 타이머. 도착 좌표를 직접 비교하지 않는 이유는,
+  // 스크롤이 멎었는지 재는 타이머. 도착 좌표만으로 판정하지 않는 이유는,
   // 사용자가 프로그램 스크롤 도중에 손으로 쓸어넘겨 애니메이션이 취소되면
   // 목표에 영영 닿지 않아 목표가 풀리지 않기 때문이다.
   const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 목표를 건 뒤 scroll 이벤트를 한 번이라도 봤는지. 손으로 쓸어넘겨 취소한
+  // 경우와, 메인 스레드가 막혀 애니메이션이 아직 첫 프레임도 못 그린 경우를
+  // 가른다. 전자는 그대로 회수하고 후자는 조금 더 기다린다.
+  const pendingScrollSeenRef = useRef(false);
+  const settleRetriesRef = useRef(0);
   // 카드 오프셋 캐시. 스크롤 이벤트마다 다시 재면 프레임마다 강제 리플로우가
   // 일어나 스와이프가 끊긴다. 값이 달라지는 건 카드 폭이 바뀔 때뿐이다.
   const cardOffsetsRef = useRef<number[] | null>(null);
@@ -201,6 +213,15 @@ export function LearningToolsSection() {
     return nearest;
   }
 
+  // 목표한 장에 이미 도착했는지. 스냅 위치가 소수점으로 떨어질 수 있어
+  // 1px 오차는 도착으로 본다.
+  function hasReachedIndex(scroller: HTMLElement, index: number) {
+    const offset = getCardOffsets(scroller)[index];
+    if (offset === undefined) return true;
+
+    return Math.abs(scroller.scrollLeft - offset) <= 1;
+  }
+
   // 스크롤이 멎으면 목표를 풀고 실제 위치로 맞춘다. 목표한 장에 정상적으로
   // 도착한 경우와 도중에 취소된 경우를 한 곳에서 회수한다. 누른 자리에 이미
   // 있어 스크롤이 아예 일어나지 않는 경우도 있어 scrollToIndex에서도 건다.
@@ -209,11 +230,34 @@ export function LearningToolsSection() {
 
     settleTimerRef.current = setTimeout(() => {
       settleTimerRef.current = null;
-      pendingIndexRef.current = null;
 
       const scroller = scrollerRef.current;
-      if (scroller) setActiveIndex(getNearestIndex(scroller));
-    }, 150);
+      if (!scroller) {
+        pendingIndexRef.current = null;
+        return;
+      }
+
+      // 목표를 건 스크롤이 아직 시작도 못했고 목표 좌표에도 닿지 않았다면
+      // 애니메이션이 첫 프레임을 못 그린 것이다(하이드레이션·이미지 디코딩으로
+      // 메인 스레드가 막힌 저사양 기기). 여기서 목표를 풀면 activeIndex가
+      // 직전 장으로 되돌아가 화살표를 두 번 눌러도 한 장만 넘어간다.
+      // 손으로 쓸어넘겨 취소한 경우는 scroll 이벤트를 이미 봤으므로 걸리지 않고,
+      // 끝내 움직이지 않는 경우를 위해 재시도 횟수를 제한한다.
+      const pendingIndex = pendingIndexRef.current;
+      if (
+        pendingIndex !== null &&
+        !pendingScrollSeenRef.current &&
+        settleRetriesRef.current < MAX_SETTLE_RETRIES &&
+        !hasReachedIndex(scroller, pendingIndex)
+      ) {
+        settleRetriesRef.current += 1;
+        scheduleSettle();
+        return;
+      }
+
+      pendingIndexRef.current = null;
+      setActiveIndex(getNearestIndex(scroller));
+    }, SETTLE_DELAY_MS);
   }
 
   function handleScroll() {
@@ -222,6 +266,7 @@ export function LearningToolsSection() {
 
     // 목표가 잡혀 있는 동안 지나가는 중간 위치는 무시한다.
     if (pendingIndexRef.current !== null) {
+      pendingScrollSeenRef.current = true;
       scheduleSettle();
       return;
     }
@@ -241,6 +286,8 @@ export function LearningToolsSection() {
     // 화살표는 activeIndex에서 다음 장을 고르므로, 목표를 먼저 확정하고
     // activeIndex도 같이 옮겨야 애니메이션 도중에 다시 눌러도 한 장씩 넘어간다.
     pendingIndexRef.current = index;
+    pendingScrollSeenRef.current = false;
+    settleRetriesRef.current = 0;
     setActiveIndex(index);
 
     const prefersReducedMotion = window.matchMedia(
@@ -252,8 +299,7 @@ export function LearningToolsSection() {
       behavior: prefersReducedMotion ? "auto" : "smooth",
     });
 
-    // 타이머는 스크롤을 건 뒤에 건다. 먼저 걸면 첫 scroll 이벤트가 150ms 안에
-    // 오지 않은 프레임에서 목표가 풀려 activeIndex가 이전 장으로 되돌아간다.
+    // 누른 자리에 이미 있어 scroll 이벤트가 아예 없는 경우를 회수하려고 건다.
     scheduleSettle();
   }
 
