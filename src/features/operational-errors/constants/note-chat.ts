@@ -98,6 +98,14 @@ export const NOTE_CHAT_OPERATIONAL_ERROR_OPERATION_LABELS = {
 
   [NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.RESOLVE_EXECUTION_MESSAGES]:
     "실행 메시지 구성",
+
+  // 과거 operational_errors 행의 표시 호환만 유지한다.
+  create_run: "Run 생성",
+  update_run: "Run 갱신",
+  save_expanded_query: "확장 질의 저장",
+  complete_run_success: "Run 성공 완료 처리",
+  complete_run_failure: "Run 실패 완료 처리",
+  validate_embedding_configuration: "Embedding 설정 검증",
 } as const;
 
 /**
@@ -218,6 +226,14 @@ export const NOTE_CHAT_OPERATIONAL_ERROR_CODE_LABELS = {
 
   [NOTE_CHAT_OPERATIONAL_ERROR_CODES.EXECUTION_MESSAGES_RESOLVE_FAILED]:
     "실행 메시지 구성 실패",
+
+  // 과거 operational_errors 행의 표시 호환만 유지한다.
+  NOTE_CHAT_RUN_CREATE_FAILED: "Run 생성 실패",
+  NOTE_CHAT_RUN_UPDATE_FAILED: "Run 갱신 실패",
+  NOTE_CHAT_EXPANDED_QUERY_SAVE_FAILED: "확장 질의 저장 실패",
+  NOTE_CHAT_RUN_SUCCESS_COMPLETE_FAILED: "Run 성공 완료 처리 실패",
+  NOTE_CHAT_RUN_FAILURE_COMPLETE_FAILED: "Run 실패 완료 처리 실패",
+  NOTE_CHAT_EMBEDDING_CONFIGURATION_INVALID: "Embedding 설정 검증 실패",
 } as const;
 
 export type NoteChatOperationalErrorOperationType =
