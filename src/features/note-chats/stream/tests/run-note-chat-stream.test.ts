@@ -1,8 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AiRunPersistenceHandle } from "@/features/ai/runs/types";
+import {
+  NOTE_CHAT_OPERATIONAL_ERROR_CODES,
+  NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS,
+  NOTE_CHAT_OPERATIONAL_ERROR_STAGES,
+} from "@/features/operational-errors/constants";
 
 import type { NoteChatSnapshotAccumulator } from "../../ai-runs/snapshot-accumulator";
+import { NOTE_CHAT_EXECUTION_CLAIM_COMPLETION_STATUS } from "../../execution/execution-claim-persistence";
 import { NOTE_CHAT_NO_CONTEXT_MESSAGE } from "../constants";
 import { runNoteChatStream } from "../run-note-chat-stream";
 
@@ -214,7 +220,7 @@ describe("runNoteChatStream", () => {
     );
   });
 
-  it("stream 실패 시 partial 관측과 failed terminal을 남긴다", async () => {
+  it("stream 실패 시 partial 관측과 failed terminal을 남기고 EXECUTION stage로 보고한다", async () => {
     const streamError = new Error("stream failed");
 
     mocks.executeNoteChat.mockResolvedValue({
@@ -249,6 +255,17 @@ describe("runNoteChatStream", () => {
       streamError,
     );
 
+    expect(mocks.reportNoteChatOperationalError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: streamError,
+        errorCode:
+          NOTE_CHAT_OPERATIONAL_ERROR_CODES.PROVIDER_STREAM_CONSUME_FAILED,
+        operation:
+          NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.CONSUME_PROVIDER_STREAM,
+        stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.EXECUTION,
+      }),
+    );
+
     expect(mocks.completeAiRunFailed).toHaveBeenCalledWith(
       expect.objectContaining({
         aiRun,
@@ -257,7 +274,7 @@ describe("runNoteChatStream", () => {
     );
   });
 
-  it("Assistant Message 저장 실패는 AI Run을 빈 결과의 succeeded로 유지한다", async () => {
+  it("Assistant Message 저장 실패는 DATABASE stage로 보고하고 AI Run을 빈 결과의 succeeded로 유지한다", async () => {
     const persistenceError = new Error("message failed");
 
     mocks.executeNoteChat.mockResolvedValue({
@@ -271,6 +288,17 @@ describe("runNoteChatStream", () => {
       persistenceError,
     );
 
+    expect(mocks.reportNoteChatOperationalError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: persistenceError,
+        errorCode:
+          NOTE_CHAT_OPERATIONAL_ERROR_CODES.ASSISTANT_MESSAGE_CREATE_FAILED,
+        operation:
+          NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.CREATE_ASSISTANT_MESSAGE,
+        stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.DATABASE,
+      }),
+    );
+
     expect(mocks.completeAiRunSucceeded).toHaveBeenCalledWith(
       expect.objectContaining({
         aiRun,
@@ -281,5 +309,40 @@ describe("runNoteChatStream", () => {
 
     expect(mocks.completeAiRunFailed).not.toHaveBeenCalled();
     expect(mocks.completeNoteChatExecutionClaim).toHaveBeenCalled();
+  });
+
+  it("실패 cleanup 중 execution claim 완료 실패는 DATABASE stage로 보고한다", async () => {
+    const executionError = new Error("execution failed");
+    const claimError = new Error("claim completion failed");
+
+    mocks.executeNoteChat.mockRejectedValue(executionError);
+    mocks.completeNoteChatExecutionClaim.mockRejectedValue(claimError);
+
+    await expect(runNoteChatStream(params, vi.fn())).rejects.toThrow(
+      executionError,
+    );
+
+    expect(mocks.completeAiRunFailed).toHaveBeenCalledWith(
+      expect.objectContaining({
+        aiRun,
+        buildSnapshot: snapshotAccumulator.buildSnapshot,
+      }),
+    );
+
+    expect(mocks.completeNoteChatExecutionClaim).toHaveBeenCalledWith({
+      claimId: params.claimId,
+      status: NOTE_CHAT_EXECUTION_CLAIM_COMPLETION_STATUS.FAILED,
+    });
+
+    expect(mocks.reportNoteChatOperationalError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: claimError,
+        errorCode:
+          NOTE_CHAT_OPERATIONAL_ERROR_CODES.EXECUTION_CLAIM_COMPLETE_FAILED,
+        operation:
+          NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.COMPLETE_EXECUTION_CLAIM,
+        stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.DATABASE,
+      }),
+    );
   });
 });

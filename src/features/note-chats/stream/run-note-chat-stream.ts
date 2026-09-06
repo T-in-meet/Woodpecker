@@ -12,6 +12,7 @@ import {
 import type {
   NoteChatOperationalErrorCodeType,
   NoteChatOperationalErrorOperationType,
+  NoteChatOperationalErrorStageType,
 } from "@/features/operational-errors/constants/note-chat";
 
 import type { NoteChatSnapshotAccumulator } from "../ai-runs/snapshot-accumulator";
@@ -97,6 +98,7 @@ export async function runNoteChatStream(
             params.snapshotAccumulator.appendAnswerPartialResponse(partial);
           },
         );
+
         params.snapshotAccumulator.completeAnswerGenerationProvider(
           consumed.result,
         );
@@ -105,12 +107,14 @@ export async function runNoteChatStream(
           "stream_consumption",
           error,
         );
+
         await reportExecutionError(params, error, {
           code: NOTE_CHAT_OPERATIONAL_ERROR_CODES.PROVIDER_STREAM_CONSUME_FAILED,
           message: "노트 챗봇 Provider 스트림 처리에 실패했습니다.",
           operation:
             NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.CONSUME_PROVIDER_STREAM,
         });
+
         throw error;
       }
 
@@ -118,6 +122,7 @@ export async function runNoteChatStream(
 
       try {
         parsedResponse = parseNoteChatProviderResponse(consumed.content);
+
         params.snapshotAccumulator.completeAnswerGenerationParsing(
           parsedResponse,
         );
@@ -126,13 +131,16 @@ export async function runNoteChatStream(
           error instanceof Error && error.message.includes("invalid structure")
             ? "validation"
             : "parse";
+
         params.snapshotAccumulator.failAnswerGeneration(stage, error);
+
         await reportExecutionError(params, error, {
           code: NOTE_CHAT_OPERATIONAL_ERROR_CODES.PROVIDER_RESPONSE_PARSE_FAILED,
           message: "노트 챗봇 Provider 응답 파싱에 실패했습니다.",
           operation:
             NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.PARSE_PROVIDER_RESPONSE,
         });
+
         throw error;
       }
 
@@ -141,6 +149,7 @@ export async function runNoteChatStream(
           parsedResponse.usedContextIndexes,
           execution.sources,
         );
+
         params.snapshotAccumulator.completeAnswerGenerationPostProcessing({
           usedContextIndexes: parsedResponse.usedContextIndexes,
           usedNoteIds,
@@ -150,11 +159,13 @@ export async function runNoteChatStream(
           "post_processing",
           error,
         );
+
         await reportExecutionError(params, error, {
           code: NOTE_CHAT_OPERATIONAL_ERROR_CODES.USED_NOTES_RESOLVE_FAILED,
           message: "노트 챗봇 사용 노트 확인에 실패했습니다.",
           operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.RESOLVE_USED_NOTES,
         });
+
         throw error;
       }
 
@@ -168,7 +179,9 @@ export async function runNoteChatStream(
       buildSnapshot: params.snapshotAccumulator.buildSnapshot,
       completedAt: new Date().toISOString(),
     });
+
     await completeExecutionClaimAfterFailure(params);
+
     throw error;
   }
 
@@ -189,11 +202,13 @@ export async function runNoteChatStream(
       message: "노트 챗봇 실행 성공 확정에 실패했습니다.",
       operation:
         NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.CREATE_ASSISTANT_MESSAGE,
+      stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.DATABASE,
     });
 
     // AI 자체는 성공했으므로 결과 ID 없이 succeeded terminal을 남긴다.
     await completeSucceededRun(params, []);
     await completeExecutionClaimAfterFailure(params);
+
     throw error;
   }
 
@@ -238,6 +253,7 @@ async function completeExecutionClaimAfterFailure(
       message: "노트 챗봇 실행 선점 완료 처리에 실패했습니다.",
       operation:
         NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.COMPLETE_EXECUTION_CLAIM,
+      stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.DATABASE,
     });
   }
 }
@@ -250,6 +266,7 @@ async function reportExecutionError(
     code: NoteChatOperationalErrorCodeType;
     message: string;
     operation: NoteChatOperationalErrorOperationType;
+    stage?: NoteChatOperationalErrorStageType;
   },
 ): Promise<void> {
   await reportNoteChatOperationalError({
@@ -263,7 +280,7 @@ async function reportExecutionError(
     errorCode: detail.code,
     message: detail.message,
     operation: detail.operation,
-    stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.EXECUTION,
+    stage: detail.stage ?? NOTE_CHAT_OPERATIONAL_ERROR_STAGES.EXECUTION,
     userId: params.userId,
   });
 }
