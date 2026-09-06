@@ -120,7 +120,6 @@ export const retrievalErrorStageSchema = z.enum([
   "embedding",
   "search",
   "hydration",
-  "context_selection",
   "context_build",
 ]);
 

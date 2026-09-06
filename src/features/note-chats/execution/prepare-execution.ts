@@ -340,14 +340,7 @@ export async function prepareNoteChatExecution(
    * Note 단위 결과가 필요한 관련 노트 추천 등의 기능은 이 공통 검색 결과를
    * 사용하는 각 호출 계층에서 별도의 dedup 정책을 적용합니다.
    */
-  let contextNotes;
-
-  try {
-    contextNotes = matchedNotes.slice(0, NOTE_CHAT_CONTEXT_LIMIT);
-  } catch (error) {
-    params.snapshotAccumulator?.failRetrieval("context_selection", error);
-    throw error;
-  }
+  const contextNotes = matchedNotes.slice(0, NOTE_CHAT_CONTEXT_LIMIT);
 
   let context;
   let sources;
