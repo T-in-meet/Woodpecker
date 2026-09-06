@@ -43,7 +43,7 @@ describe("quizSnapshotsSchema", () => {
         schemaVersion: 1,
         sourceInput,
         quizGeneration: {
-          input: { prompt: "prompt", responseSchema: {} },
+          input: { prompt: "prompt" },
           configuration: {
             provider: "Cloudflare Workers AI",
             model: "model",

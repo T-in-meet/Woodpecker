@@ -595,12 +595,6 @@ export async function gradeAnswerAction(
   // 제목은 채점 입력에 넣지 않는다. 해시가 지키는 범위가 본문뿐이라, 제목을 넣으면
   // 제목만 바뀐 노트가 해시 검사를 통과하면서 화면에 없던 제목으로 채점된다.
   const prompt = buildGradingPrompt(note.content, parsed.data.answer);
-  snapshotAccumulator.prepareGrading({
-    originalContent: note.content,
-    userAnswer: parsed.data.answer,
-    renderedPrompt: prompt,
-    responseSchema: GRADING_RESPONSE_JSON_SCHEMA,
-  });
 
   // 실제 AbortSignal과 generation Snapshot이 같은 남은 실행 예산을 공유한다.
   const timeoutMs = Math.max(0, GRADING_DEADLINE_MS - (Date.now() - startedAt));
@@ -633,7 +627,6 @@ export async function gradeAnswerAction(
   }
 
   snapshotAccumulator.startParseAndValidation({
-    responseText,
     validationSchema: GRADING_VALIDATION_JSON_SCHEMA,
   });
 
@@ -641,7 +634,6 @@ export async function gradeAnswerAction(
   let json: unknown;
   try {
     json = JSON.parse(responseText);
-    snapshotAccumulator.completeJsonParse(json);
   } catch (error) {
     snapshotAccumulator.failJsonParse(error);
     await completeAiRunFailed({
@@ -680,7 +672,7 @@ export async function gradeAnswerAction(
   // 프롬프트와 생성 스키마가 약속한 개수를 넘겼다면 여기서 맞춘다.
   // 저장 전에 자르지 않으면 UI에도 DB에도 상한을 넘긴 값이 그대로 남는다.
   const normalized = normalizeGradingResponse(grading.data);
-  snapshotAccumulator.completeNormalization(grading.data, normalized);
+  snapshotAccumulator.completeNormalization();
   snapshotAccumulator.completeFinalOutput(normalized);
 
   const { score, summary, missedConcepts, incorrectPoints } = normalized;

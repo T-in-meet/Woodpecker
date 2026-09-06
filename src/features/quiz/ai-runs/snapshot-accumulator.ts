@@ -14,10 +14,6 @@ import {
 
 /** Quiz generation preparation에 실제 사용된 값입니다. */
 export type QuizGenerationPreparation = {
-  title: string;
-  content: string;
-  quizType: QuizType;
-  previousQuestions: string[];
   maxQuestions: number;
   perspective: string;
   temperature: number;
@@ -35,8 +31,7 @@ export type QuizSnapshotAccumulator = {
   buildSnapshot: () => unknown;
   recordPreparation: (input: QuizGenerationPreparation) => void;
   observeGeneration: (observation: GenerateJsonObservation) => void;
-  beginParseAndValidation: (responseText: string) => void;
-  recordParsedResponse: (parsedResponse: unknown) => void;
+  beginParseAndValidation: () => void;
   failParseAndValidation: (error: unknown, issues?: unknown[]) => void;
   completeValidation: (questions: QuizQuestion[]) => void;
 };
@@ -89,32 +84,16 @@ export function createQuizSnapshotAccumulator(input: {
   return {
     buildSnapshot: accumulator.buildSnapshot,
     recordPreparation: (preparation) => {
-      // 한 번 계산한 preparation 값을 Snapshot과 Provider stage 양쪽에 연결한다.
       accumulator.mutate((state) => {
         state.generationPreparation = {
-          input: {
-            source: {
-              title: preparation.title,
-              content: preparation.content,
-            },
-            quizType: preparation.quizType,
-            previousQuestions: preparation.previousQuestions,
-          },
           configuration: {
             maxQuestions: preparation.maxQuestions,
             perspective: preparation.perspective,
-            temperature: preparation.temperature,
-          },
-          output: {
-            selectedPerspective: preparation.perspective,
-            renderedPrompt: preparation.prompt,
-            responseSchema: preparation.responseSchema,
           },
         };
         state.quizGeneration = {
           input: {
             prompt: preparation.prompt,
-            responseSchema: preparation.responseSchema,
           },
           configuration: {
             provider: preparation.provider,
@@ -160,7 +139,6 @@ export function createQuizSnapshotAccumulator(input: {
             parsedResponseFormat?.type === "json_schema" &&
             "json_schema" in parsedResponseFormat
           ) {
-            generation.input.responseSchema = parsedResponseFormat.json_schema;
             generation.configuration.responseFormat = {
               type: "json_schema",
               json_schema: parsedResponseFormat.json_schema,
@@ -212,17 +190,11 @@ export function createQuizSnapshotAccumulator(input: {
         }
 
         if (observation.type === "extraction-started") {
-          state.responseExtraction = {
-            input: { rawResponse: observation.result },
-          };
+          state.responseExtraction = {};
           return;
         }
 
         if (observation.type === "extraction-completed") {
-          generation.output = {
-            ...generation.output,
-            responseText: observation.text,
-          };
           if (state.responseExtraction) {
             state.responseExtraction.output = {
               responseText: observation.text,
@@ -236,18 +208,9 @@ export function createQuizSnapshotAccumulator(input: {
         }
       });
     },
-    beginParseAndValidation: (responseText) => {
+    beginParseAndValidation: () => {
       accumulator.mutate((state) => {
-        state.parseAndValidation = {
-          input: { responseText },
-          configuration: { quizType: input.quizType },
-        };
-      });
-    },
-    recordParsedResponse: (parsedResponse) => {
-      accumulator.mutate((state) => {
-        if (!state.parseAndValidation) return;
-        state.parseAndValidation.output = { parsedResponse };
+        state.parseAndValidation = {};
       });
     },
     failParseAndValidation: (error, issues) => {
@@ -259,10 +222,6 @@ export function createQuizSnapshotAccumulator(input: {
     completeValidation: (questions) => {
       accumulator.mutate((state) => {
         if (!state.parseAndValidation) return;
-        state.parseAndValidation.output = {
-          ...state.parseAndValidation.output,
-          validatedQuestions: questions,
-        };
         state.finalOutput = { questions };
       });
     },

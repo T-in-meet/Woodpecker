@@ -33,7 +33,7 @@ const GRADING = {
 };
 
 describe("createReviewGradingSnapshotAccumulator", () => {
-  it("실제 preparation, Provider, extraction, parse와 최종 출력을 순서대로 누적한다", () => {
+  it("실제 Provider, extraction, validation과 최종 출력을 순서대로 누적한다", () => {
     const accumulator = createReviewGradingSnapshotAccumulator(SOURCE_INPUT);
     const responseSchema = { type: "object", required: ["score"] };
     const providerResult = {
@@ -46,12 +46,6 @@ describe("createReviewGradingSnapshotAccumulator", () => {
     };
     const providerResponse = { success: true, result: providerResult };
 
-    accumulator.prepareGrading({
-      originalContent: SOURCE_INPUT.note.content,
-      userAnswer: SOURCE_INPUT.answer,
-      renderedPrompt: "실제 prompt",
-      responseSchema,
-    });
     accumulator.prepareGeneration({
       prompt: "실제 prompt",
       responseSchema,
@@ -81,40 +75,41 @@ describe("createReviewGradingSnapshotAccumulator", () => {
       text: JSON.stringify(GRADING),
     });
     accumulator.startParseAndValidation({
-      responseText: JSON.stringify(GRADING),
       validationSchema: responseSchema,
     });
-    accumulator.completeJsonParse(GRADING);
     accumulator.completeValidation(GRADING);
-    accumulator.completeNormalization(GRADING, GRADING);
+    accumulator.completeNormalization();
     accumulator.completeFinalOutput(GRADING);
 
     expect(accumulator.buildSnapshot()).toMatchObject({
       sourceInput: { input: SOURCE_INPUT },
-      gradingPreparation: {
-        output: { renderedPrompt: "실제 prompt", responseSchema },
-      },
       gradingGeneration: {
         input: {
           messages: [{ role: "user", content: "실제 prompt" }],
-          responseSchema,
         },
-        configuration: { timeoutMs: 42_000 },
-        output: { rawResponse: providerResponse },
-      },
-      responseExtraction: {
-        input: { providerResult },
+        configuration: {
+          timeoutMs: 42_000,
+          responseFormat: {
+            type: "json_schema",
+            json_schema: responseSchema,
+          },
+        },
         output: {
-          responseText: JSON.stringify(GRADING),
+          rawResponse: providerResponse,
           providerMetadata: { finishReason: "stop" },
         },
       },
+      responseExtraction: {
+        output: {
+          responseText: JSON.stringify(GRADING),
+        },
+      },
       parseAndValidation: {
-        output: { parsedResponse: GRADING, validatedGrading: GRADING },
+        configuration: { validationSchema: responseSchema },
+        output: { validatedGrading: GRADING },
       },
       normalization: {
-        input: { grading: GRADING },
-        output: { grading: GRADING },
+        configuration: { feedbackItemsMax: 5 },
       },
       finalOutput: { grading: GRADING },
     });
@@ -145,21 +140,18 @@ describe("createReviewGradingSnapshotAccumulator", () => {
     });
   });
 
-  it("schema validation 실패 시 parsed response와 issues를 함께 남긴다", () => {
+  it("schema validation 실패 시 issues를 남긴다", () => {
     const accumulator = createReviewGradingSnapshotAccumulator(SOURCE_INPUT);
-    const parsedResponse = { score: 200 };
     const issues = [{ code: "too_big", path: ["score"] }];
 
     accumulator.startParseAndValidation({
-      responseText: JSON.stringify(parsedResponse),
       validationSchema: { type: "object" },
     });
-    accumulator.completeJsonParse(parsedResponse);
     accumulator.failValidation(issues);
 
     expect(accumulator.buildSnapshot()).toMatchObject({
       parseAndValidation: {
-        output: { parsedResponse },
+        configuration: { validationSchema: { type: "object" } },
         error: { type: "ZodError", issues },
       },
     });

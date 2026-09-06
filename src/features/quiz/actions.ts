@@ -185,10 +185,6 @@ async function requestQuestions(
 
   // Provider에 전달할 바로 그 값들로 preparation과 generation stage를 구성한다.
   params.accumulator.recordPreparation({
-    title,
-    content,
-    quizType,
-    previousQuestions,
     maxQuestions,
     perspective,
     temperature,
@@ -217,7 +213,7 @@ async function requestQuestions(
 
   // 응답 원문에는 노트 내용이 그대로 담기므로 로그에 남기지 않는다.
   let json: unknown;
-  params.accumulator.beginParseAndValidation(responseText);
+  params.accumulator.beginParseAndValidation();
   try {
     json = JSON.parse(responseText);
   } catch {
@@ -229,8 +225,6 @@ async function requestQuestions(
     );
     return { error: QUIZ_ERROR_MESSAGES.parseFailed };
   }
-
-  params.accumulator.recordParsedResponse(json);
 
   // 요청한 유형으로 검증한다. 유형이 섞인 응답은 프롬프트를 무시했다는 뜻이라 세트째 버린다.
   const parsed = quizResponseSchemaFor(quizType).safeParse(json);

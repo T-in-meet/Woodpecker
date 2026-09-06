@@ -33,22 +33,6 @@ const sourceInputSnapshotSchema = z.object({
   }),
 });
 
-/** Prompt와 구조화 출력 schema 준비 단계 Snapshot schema입니다. */
-const gradingPreparationSnapshotSchema = z.object({
-  input: z.object({
-    originalContent: z.string(),
-    userAnswer: z.string(),
-  }),
-  configuration: z.object({
-    feedbackItemsMax: z.number().int().positive(),
-  }),
-  output: z.object({
-    renderedPrompt: z.string(),
-    responseSchema: z.unknown(),
-  }),
-  error: aiRunErrorSnapshotSchema.optional(),
-});
-
 /** Cloudflare Provider 실패 Snapshot schema입니다. */
 const reviewGradingProviderErrorSnapshotSchema =
   aiRunErrorSnapshotSchema.extend({
@@ -80,7 +64,6 @@ const gradingGenerationSnapshotSchema = z.object({
         content: z.string(),
       }),
     ),
-    responseSchema: z.unknown(),
   }),
   configuration: z.object({
     provider: z.string(),
@@ -94,6 +77,7 @@ const gradingGenerationSnapshotSchema = z.object({
   output: z
     .object({
       rawResponse: z.unknown(),
+      providerMetadata: reviewGradingProviderMetadataSnapshotSchema.optional(),
     })
     .optional(),
   error: reviewGradingProviderErrorSnapshotSchema.optional(),
@@ -101,13 +85,9 @@ const gradingGenerationSnapshotSchema = z.object({
 
 /** Provider 결과에서 JSON 문자열을 추출한 단계 Snapshot schema입니다. */
 const responseExtractionSnapshotSchema = z.object({
-  input: z.object({
-    providerResult: z.unknown(),
-  }),
   output: z
     .object({
       responseText: z.string(),
-      providerMetadata: reviewGradingProviderMetadataSnapshotSchema.optional(),
     })
     .optional(),
   error: aiRunErrorSnapshotSchema.optional(),
@@ -123,15 +103,11 @@ const gradingSnapshotSchema = z.object({
 
 /** JSON parse와 grading schema validation 단계 Snapshot schema입니다. */
 const parseAndValidationSnapshotSchema = z.object({
-  input: z.object({
-    responseText: z.string(),
-  }),
   configuration: z.object({
     validationSchema: z.unknown(),
   }),
   output: z
     .object({
-      parsedResponse: z.unknown().optional(),
       validatedGrading: gradingSnapshotSchema.optional(),
     })
     .optional(),
@@ -140,16 +116,9 @@ const parseAndValidationSnapshotSchema = z.object({
 
 /** 피드백 항목 개수를 제한하는 정규화 단계 Snapshot schema입니다. */
 const normalizationSnapshotSchema = z.object({
-  input: z.object({
-    grading: gradingSnapshotSchema,
-  }),
   configuration: z.object({
     feedbackItemsMax: z.number().int().positive(),
   }),
-  output: z.object({
-    grading: gradingSnapshotSchema,
-  }),
-  error: aiRunErrorSnapshotSchema.optional(),
 });
 
 /** AI 처리 경계에서 확정된 최종 채점 Snapshot schema입니다. */
@@ -161,7 +130,6 @@ const finalOutputSnapshotSchema = z.object({
 export const reviewGradingSnapshotsSchema = z.object({
   schemaVersion: z.literal(1),
   sourceInput: sourceInputSnapshotSchema,
-  gradingPreparation: gradingPreparationSnapshotSchema.optional(),
   gradingGeneration: gradingGenerationSnapshotSchema.optional(),
   responseExtraction: responseExtractionSnapshotSchema.optional(),
   parseAndValidation: parseAndValidationSnapshotSchema.optional(),

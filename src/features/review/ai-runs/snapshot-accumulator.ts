@@ -28,30 +28,17 @@ export type ReviewGradingSourceInput = {
 /** Review Grading 실행별 Snapshot accumulator 공개 계약입니다. */
 export type ReviewGradingSnapshotAccumulator = {
   buildSnapshot: () => unknown;
-  prepareGrading: (input: {
-    originalContent: string;
-    userAnswer: string;
-    renderedPrompt: string;
-    responseSchema: unknown;
-  }) => void;
   prepareGeneration: (input: {
     prompt: string;
     responseSchema: unknown;
     timeoutMs: number;
   }) => void;
   observeGeneration: (observation: GenerateJsonObservation) => void;
-  startParseAndValidation: (input: {
-    responseText: string;
-    validationSchema: unknown;
-  }) => void;
-  completeJsonParse: (parsedResponse: unknown) => void;
+  startParseAndValidation: (input: { validationSchema: unknown }) => void;
   failJsonParse: (error: unknown) => void;
   completeValidation: (grading: GradingResponse) => void;
   failValidation: (issues: unknown[]) => void;
-  completeNormalization: (
-    input: GradingResponse,
-    output: GradingResponse,
-  ) => void;
+  completeNormalization: () => void;
   completeFinalOutput: (grading: GradingResponse) => void;
 };
 
@@ -96,16 +83,6 @@ function readProviderMessages(
   });
 }
 
-/** Provider request body에서 실제 response JSON schema를 읽습니다. */
-function readResponseSchema(body: Record<string, unknown>): unknown {
-  const responseFormat = body.response_format;
-  if (responseFormat === null || typeof responseFormat !== "object") {
-    return undefined;
-  }
-
-  return (responseFormat as { json_schema?: unknown }).json_schema;
-}
-
 /** 한 Review Grading AI 실행의 mutable Snapshot accumulator를 생성합니다. */
 export function createReviewGradingSnapshotAccumulator(
   sourceInput: ReviewGradingSourceInput,
@@ -121,27 +98,11 @@ export function createReviewGradingSnapshotAccumulator(
 
   return {
     buildSnapshot: accumulator.buildSnapshot,
-    prepareGrading: (input) => {
-      accumulator.mutate((state) => {
-        state.gradingPreparation = {
-          input: {
-            originalContent: input.originalContent,
-            userAnswer: input.userAnswer,
-          },
-          configuration: { feedbackItemsMax: FEEDBACK_ITEMS_MAX },
-          output: {
-            renderedPrompt: input.renderedPrompt,
-            responseSchema: input.responseSchema,
-          },
-        };
-      });
-    },
     prepareGeneration: (input) => {
       accumulator.mutate((state) => {
         state.gradingGeneration = {
           input: {
             messages: [{ role: "user", content: input.prompt }],
-            responseSchema: input.responseSchema,
           },
           configuration: {
             provider: CLOUDFLARE_JSON_GENERATION_CONFIG.provider,
@@ -166,7 +127,6 @@ export function createReviewGradingSnapshotAccumulator(
           // 공통 client가 실제 fetch에 사용한 body로 준비값을 확정한다.
           generation.input = {
             messages: readProviderMessages(observation.body),
-            responseSchema: readResponseSchema(observation.body),
           };
           generation.configuration = {
             ...generation.configuration,
@@ -187,7 +147,16 @@ export function createReviewGradingSnapshotAccumulator(
         }
 
         if (observation.type === "provider-response") {
-          generation.output = { rawResponse: observation.response };
+          const result = (observation.response as { result?: unknown } | null)
+            ?.result;
+          const finishReason = readFinishReason(result);
+
+          generation.output = {
+            rawResponse: observation.response,
+            ...(finishReason === undefined
+              ? {}
+              : { providerMetadata: { finishReason } }),
+          };
           return;
         }
 
@@ -206,9 +175,7 @@ export function createReviewGradingSnapshotAccumulator(
         }
 
         if (observation.type === "extraction-started") {
-          state.responseExtraction = {
-            input: { providerResult: observation.result },
-          };
+          state.responseExtraction = {};
           return;
         }
 
@@ -216,14 +183,8 @@ export function createReviewGradingSnapshotAccumulator(
         if (!extraction) return;
 
         if (observation.type === "extraction-completed") {
-          const finishReason = readFinishReason(
-            extraction.input.providerResult,
-          );
           extraction.output = {
             responseText: observation.text,
-            ...(finishReason === undefined
-              ? {}
-              : { providerMetadata: { finishReason } }),
           };
           return;
         }
@@ -234,15 +195,8 @@ export function createReviewGradingSnapshotAccumulator(
     startParseAndValidation: (input) => {
       accumulator.mutate((state) => {
         state.parseAndValidation = {
-          input: { responseText: input.responseText },
           configuration: { validationSchema: input.validationSchema },
         };
-      });
-    },
-    completeJsonParse: (parsedResponse) => {
-      accumulator.mutate((state) => {
-        if (!state.parseAndValidation) return;
-        state.parseAndValidation.output = { parsedResponse };
       });
     },
     failJsonParse: (error) => {
@@ -255,7 +209,6 @@ export function createReviewGradingSnapshotAccumulator(
       accumulator.mutate((state) => {
         if (!state.parseAndValidation) return;
         state.parseAndValidation.output = {
-          ...state.parseAndValidation.output,
           validatedGrading: grading,
         };
       });
@@ -270,12 +223,10 @@ export function createReviewGradingSnapshotAccumulator(
         };
       });
     },
-    completeNormalization: (input, output) => {
+    completeNormalization: () => {
       accumulator.mutate((state) => {
         state.normalization = {
-          input: { grading: input },
           configuration: { feedbackItemsMax: FEEDBACK_ITEMS_MAX },
-          output: { grading: output },
         };
       });
     },

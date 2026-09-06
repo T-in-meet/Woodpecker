@@ -25,10 +25,6 @@ function createAccumulator() {
 function prepareAccumulator() {
   const accumulator = createAccumulator();
   accumulator.recordPreparation({
-    title: "제목",
-    content: "내용",
-    quizType: "ox",
-    previousQuestions: ["최근 문제", "이전 문제"],
     maxQuestions: 5,
     perspective: "관점",
     temperature: 0.9,
@@ -99,22 +95,23 @@ describe("createQuizSnapshotAccumulator", () => {
       quizGeneration: {
         input: {
           prompt: "actual prompt",
-          responseSchema: { actual: true },
         },
         configuration: {
           model: "actual-model",
           temperature: 0.8,
           maxTokens: 4096,
           reasoningEffort: "medium",
+          responseFormat: {
+            type: "json_schema",
+            json_schema: { actual: true },
+          },
         },
         output: {
           rawResponse,
-          responseText: '{"questions":[]}',
           providerMetadata: { finishReason: "stop" },
         },
       },
       responseExtraction: {
-        input: { rawResponse: rawResponse.result },
         output: { responseText: '{"questions":[]}' },
       },
     });
@@ -140,19 +137,16 @@ describe("createQuizSnapshotAccumulator", () => {
     });
   });
 
-  it("validation 실패 시 parsed response와 issues를 함께 보존한다", () => {
+  it("validation 실패 시 issues를 보존한다", () => {
     const accumulator = prepareAccumulator();
-    const parsedResponse = { questions: [{ type: "ox" }] };
 
-    accumulator.beginParseAndValidation(JSON.stringify(parsedResponse));
-    accumulator.recordParsedResponse(parsedResponse);
+    accumulator.beginParseAndValidation();
     accumulator.failParseAndValidation(new Error("validation failed"), [
       { code: "invalid_type" },
     ]);
 
     expect(accumulator.buildSnapshot()).toMatchObject({
       parseAndValidation: {
-        output: { parsedResponse },
         error: {
           message: "validation failed",
           issues: [{ code: "invalid_type" }],
@@ -161,7 +155,7 @@ describe("createQuizSnapshotAccumulator", () => {
     });
   });
 
-  it("검증된 질문을 parse output과 Final Output에 같은 값으로 기록한다", () => {
+  it("검증된 질문을 Final Output에 기록한다", () => {
     const accumulator = prepareAccumulator();
     const questions = [
       {
@@ -172,12 +166,11 @@ describe("createQuizSnapshotAccumulator", () => {
       },
     ];
 
-    accumulator.beginParseAndValidation('{"questions":[]}');
-    accumulator.recordParsedResponse({ questions });
+    accumulator.beginParseAndValidation();
     accumulator.completeValidation(questions);
 
     expect(accumulator.buildSnapshot()).toMatchObject({
-      parseAndValidation: { output: { validatedQuestions: questions } },
+      parseAndValidation: {},
       finalOutput: { questions },
     });
   });

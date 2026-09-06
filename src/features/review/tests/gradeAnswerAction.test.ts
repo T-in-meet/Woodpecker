@@ -486,23 +486,44 @@ describe("gradeAnswerAction", () => {
       | undefined;
     expect(terminalParams?.aiRun).toEqual(AI_RUN);
     expect(terminalParams?.buildSnapshot()).toMatchObject({
-      gradingPreparation: {
-        input: { originalContent: NOTE_CONTENT, userAnswer: ANSWER },
-      },
       gradingGeneration: {
         input: {
           messages: [
             { role: "user", content: expect.stringContaining(NOTE_CONTENT) },
           ],
         },
+        configuration: {
+          responseFormat: {
+            type: "json_schema",
+            json_schema: expect.any(Object),
+          },
+        },
+        output: {
+          rawResponse: {
+            success: true,
+            result: expect.any(Object),
+          },
+          providerMetadata: {
+            finishReason: "stop",
+          },
+        },
       },
       responseExtraction: {
-        output: { responseText: JSON.stringify(VALID_GRADING_RESPONSE) },
+        output: {
+          responseText: JSON.stringify(VALID_GRADING_RESPONSE),
+        },
       },
       parseAndValidation: {
+        configuration: {
+          validationSchema: expect.any(Object),
+        },
         output: {
-          parsedResponse: VALID_GRADING_RESPONSE,
           validatedGrading: VALID_GRADING_RESPONSE,
+        },
+      },
+      normalization: {
+        configuration: {
+          feedbackItemsMax: 5,
         },
       },
       finalOutput: { grading: VALID_GRADING_RESPONSE },

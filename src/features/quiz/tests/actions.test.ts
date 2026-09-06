@@ -800,8 +800,25 @@ describe("generateQuiz", () => {
       expect(terminalInput.buildSnapshot()).toMatchObject({
         quizGeneration: {
           output: {
-            responseText: JSON.stringify(aiQuestions),
+            rawResponse: {
+              result: {
+                choices: [
+                  {
+                    finish_reason: "stop",
+                    message: {
+                      content: JSON.stringify(aiQuestions),
+                    },
+                  },
+                ],
+              },
+              success: true,
+            },
             providerMetadata: { finishReason: "stop" },
+          },
+        },
+        responseExtraction: {
+          output: {
+            responseText: JSON.stringify(aiQuestions),
           },
         },
         finalOutput: { questions: aiQuestions.questions },

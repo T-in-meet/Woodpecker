@@ -22,6 +22,7 @@ export const quizActionSnapshotSchema = z.enum(["generate", "regenerate"]);
 /** Quiz 생성 AI Run의 authoritative Snapshot 문서 형식입니다. */
 export const quizSnapshotsSchema = z.object({
   schemaVersion: z.literal(1),
+
   sourceInput: z.object({
     input: z.object({
       note: quizSourceNoteSnapshotSchema,
@@ -29,35 +30,32 @@ export const quizSnapshotsSchema = z.object({
       action: quizActionSnapshotSchema,
     }),
   }),
+
   generationInput: z
     .object({
-      input: z.object({ history: z.array(z.array(z.string())) }),
-      output: z.object({ previousQuestions: z.array(z.string()) }),
-    })
-    .optional(),
-  generationPreparation: z
-    .object({
       input: z.object({
-        source: z.object({ title: z.string(), content: z.string() }),
-        quizType: quizTypeSchema,
+        history: z.array(z.array(z.string())),
+      }),
+      output: z.object({
         previousQuestions: z.array(z.string()),
       }),
+    })
+    .optional(),
+
+  generationPreparation: z
+    .object({
       configuration: z.object({
         maxQuestions: z.number().int().positive(),
         perspective: z.string(),
-        temperature: z.number(),
       }),
-      output: z.object({
-        selectedPerspective: z.string(),
-        renderedPrompt: z.string(),
-        responseSchema: z.unknown(),
-      }),
-      error: aiRunErrorSnapshotSchema.optional(),
     })
     .optional(),
+
   quizGeneration: z
     .object({
-      input: z.object({ prompt: z.string(), responseSchema: z.unknown() }),
+      input: z.object({
+        prompt: z.string(),
+      }),
       configuration: z.object({
         provider: z.string(),
         model: z.string(),
@@ -75,9 +73,10 @@ export const quizSnapshotsSchema = z.object({
       output: z
         .object({
           rawResponse: z.unknown().optional(),
-          responseText: z.string().optional(),
           providerMetadata: z
-            .object({ finishReason: z.string().optional() })
+            .object({
+              finishReason: z.string().optional(),
+            })
             .optional(),
         })
         .optional(),
@@ -90,27 +89,29 @@ export const quizSnapshotsSchema = z.object({
         .optional(),
     })
     .optional(),
+
   responseExtraction: z
     .object({
-      input: z.object({ rawResponse: z.unknown() }),
-      output: z.object({ responseText: z.string() }).optional(),
-      error: aiRunErrorSnapshotSchema.optional(),
-    })
-    .optional(),
-  parseAndValidation: z
-    .object({
-      input: z.object({ responseText: z.string() }),
-      configuration: z.object({ quizType: quizTypeSchema }),
       output: z
         .object({
-          parsedResponse: z.unknown().optional(),
-          validatedQuestions: z.array(quizQuestionSchema).optional(),
+          responseText: z.string(),
         })
         .optional(),
       error: aiRunErrorSnapshotSchema.optional(),
     })
     .optional(),
-  finalOutput: z.object({ questions: z.array(quizQuestionSchema) }).optional(),
+
+  parseAndValidation: z
+    .object({
+      error: aiRunErrorSnapshotSchema.optional(),
+    })
+    .optional(),
+
+  finalOutput: z
+    .object({
+      questions: z.array(quizQuestionSchema),
+    })
+    .optional(),
 });
 
 /** Quiz 생성 AI Run Snapshot 타입입니다. */
