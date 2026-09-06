@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(14);
+SELECT plan(15);
 
 SELECT set_config('test.finalize_ai_run_user_a_id', gen_random_uuid()::text, true);
 SELECT set_config('test.finalize_ai_run_user_b_id', gen_random_uuid()::text, true);
@@ -247,6 +247,7 @@ VALUES (
   TIMESTAMPTZ '2026-09-05 03:03:00+00'
 );
 
+-- timeout 기반 stale 상태는 늦게 도착한 실제 terminal 결과로 교정할 수 있어야 합니다.
 SELECT is(
   public.finalize_ai_run(
     current_setting('test.finalize_ai_run_stale_id')::uuid,
@@ -256,10 +257,23 @@ SELECT is(
     'succeeded',
     TIMESTAMPTZ '2026-09-05 03:04:00+00',
     '{"schemaVersion":1,"finalOutput":{"score":80}}'::jsonb,
-    '{}'::uuid[]
+    ARRAY[current_setting('test.finalize_ai_run_result_id')::uuid]
   ),
-  'conflict',
-  $$stale run should not be overwritten by terminal finalize$$
+  'updated',
+  $$stale run should transition to the late terminal result$$
+);
+
+SELECT ok(
+  (
+    SELECT
+      status = 'succeeded'
+      AND completed_at = TIMESTAMPTZ '2026-09-05 03:04:00+00'
+      AND snapshots = '{"schemaVersion":1,"finalOutput":{"score":80}}'::jsonb
+      AND feature_result_ids = ARRAY[current_setting('test.finalize_ai_run_result_id')::uuid]
+    FROM public.ai_runs
+    WHERE id = current_setting('test.finalize_ai_run_stale_id')::uuid
+  ),
+  $$stale transition should persist the late terminal payload$$
 );
 
 INSERT INTO public.ai_runs (

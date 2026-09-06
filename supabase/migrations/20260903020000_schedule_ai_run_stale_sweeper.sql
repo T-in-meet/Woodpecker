@@ -16,6 +16,9 @@ BEGIN
     status = 'stale',
     completed_at = statement_timestamp()
   WHERE status = 'running'
+    -- AI 기능의 execution claim에서 사용하는 3분 stale 기준과 의도적으로 동일하게 유지합니다.
+    -- claim의 claimed_at보다 ai_runs.started_at이 늦게 기록되므로,
+    -- claim이 먼저 stale이 된 뒤 AI Run이 잠시 running으로 남을 수 있습니다.
     AND started_at <= statement_timestamp() - interval '3 minutes';
 
   GET DIAGNOSTICS v_updated_count = ROW_COUNT;
