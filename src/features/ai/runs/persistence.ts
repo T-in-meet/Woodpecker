@@ -85,6 +85,7 @@ const aiRunPersistenceStates = new WeakMap<
  *
  * Create persistence 실패 여부와 관계없이 같은 Run identity를 반환합니다.
  * DB persistence는 같은 Run의 ordered queue에서 비동기로 수행합니다.
+ * 반환 Promise는 DB persistence 완료를 의미하지 않습니다.
  */
 export async function createAiRun(
   params: CreateAiRunParams,
@@ -170,6 +171,7 @@ export async function createAiRun(
  * 실행 중 확보한 전체 Snapshot을 running AI Run에 best-effort로 저장합니다.
  *
  * Snapshot은 호출 시점에 확정하고 DB persistence는 같은 Run queue에서 수행합니다.
+ * 반환 Promise는 DB persistence 완료를 의미하지 않습니다.
  */
 export async function checkpointAiRun(
   params: CheckpointAiRunParams,
@@ -349,6 +351,7 @@ function completeAiRun(
  * terminal Snapshot과 실행 결과를 finalize_ai_run RPC로 저장합니다.
  *
  * 요청 결과를 확인할 수 없는 경우 동일한 idempotent operation을 1회 재시도합니다.
+ * 동일 요청으로 결과가 달라지지 않는 결정론적 DB 오류는 재시도하지 않습니다.
  */
 async function persistCompletedAiRun(params: {
   aiRun: AiRunPersistenceHandle;
@@ -394,6 +397,26 @@ async function persistCompletedAiRun(params: {
     supabase,
   });
 
+  if (firstAttempt === "non_retryable_request_failed") {
+    /*
+     * CHECK 위반, 권한 오류처럼 같은 입력으로 재호출해도 결과가 달라지지 않는
+     * 결정론적 DB 오류는 불필요한 두 번째 RPC를 수행하지 않습니다.
+     */
+    await reportAiRunOperationalFailure({
+      code: AI_OPERATIONAL_ERROR_CODE.AI_RUN_PERSISTENCE_FAILED,
+      context: {
+        aiRunId: params.aiRun.id,
+        userId: params.aiRun.userId,
+      },
+      message:
+        "AI Run terminal 저장에 재시도할 수 없는 DB 오류가 발생했습니다.",
+      operation: AI_OPERATIONAL_ERROR_OPERATION.COMPLETE_AI_RUN,
+      stage: AI_OPERATIONAL_ERROR_STAGE.DATABASE,
+    });
+
+    return;
+  }
+
   if (firstAttempt !== "request_failed") {
     return;
   }
@@ -405,7 +428,10 @@ async function persistCompletedAiRun(params: {
     supabase,
   });
 
-  if (secondAttempt === "request_failed") {
+  if (
+    secondAttempt === "request_failed" ||
+    secondAttempt === "non_retryable_request_failed"
+  ) {
     await reportAiRunOperationalFailure({
       code: AI_OPERATIONAL_ERROR_CODE.AI_RUN_PERSISTENCE_FAILED,
       context: {
@@ -419,8 +445,29 @@ async function persistCompletedAiRun(params: {
   }
 }
 
-/** terminal finalize 1회 호출 결과입니다. */
-type FinalizeAttemptResult = AiRunFinalizeResult | "request_failed";
+/**
+ * terminal finalize 1회 호출 결과입니다.
+ *
+ * request_failed는 일시적이거나 종류를 확정할 수 없어 재시도할 수 있는 실패이고,
+ * non_retryable_request_failed는 동일 요청을 반복해도 해결되지 않는 DB 오류입니다.
+ */
+type FinalizeAttemptResult =
+  | AiRunFinalizeResult
+  | "request_failed"
+  | "non_retryable_request_failed";
+
+/**
+ * 동일한 입력으로 재시도해도 성공할 수 없는 명확한 PostgreSQL 오류인지 확인합니다.
+ *
+ * 알 수 없는 오류는 기존 동작을 유지하기 위해 재시도 가능한 오류로 취급합니다.
+ */
+function isNonRetryableFinalizeError(error: { code?: string | null }): boolean {
+  return (
+    error.code === "P0001" || // PL/pgSQL RAISE EXCEPTION
+    error.code === "23514" || // check_violation
+    error.code === "42501" // insufficient_privilege
+  );
+}
 
 /**
  * terminal finalize DB operation을 정확히 한 번 실행합니다.
@@ -451,7 +498,13 @@ async function finalizeAiRunOnce(params: {
     );
 
     if (error) {
-      return "request_failed";
+      /*
+       * 동일 입력으로 해결될 수 없는 명확한 DB 오류만 재시도 대상에서 제외합니다.
+       * 그 외 알 수 없는 오류는 기존처럼 1회 재시도합니다.
+       */
+      return isNonRetryableFinalizeError(error)
+        ? "non_retryable_request_failed"
+        : "request_failed";
     }
 
     const result = data as AiRunFinalizeResult;
@@ -568,7 +621,6 @@ async function reportAiRunOperationalFailure(
     await reportAiOperationalError({
       context: params.context,
       errorCode: params.code,
-      fingerprintParts: [params.operation, params.stage],
       message: params.message,
       operation: params.operation,
       stage: params.stage,

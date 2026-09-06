@@ -75,18 +75,15 @@ export async function scheduleRelatedNoteRecommendation({
         RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.LOAD_RECOMMENDATION_SOURCE,
       userId: ownerUserId,
     });
-    console.error(
-      "[Related Notes Recommendation Source Load Failed]",
-      sourceError,
-    );
     throw sourceError;
   }
 
-  if (!source)
+  if (!source) {
     return {
       claimId: null,
       status: RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS.STALE,
     };
+  }
 
   let claimResult: ClaimRelatedNoteRecommendationExecutionResult;
   try {
@@ -106,10 +103,6 @@ export async function scheduleRelatedNoteRecommendation({
         RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.CLAIM_RECOMMENDATION_EXECUTION,
       userId: ownerUserId,
     });
-    console.error(
-      "[Related Notes Recommendation Execution Claim Failed]",
-      error,
-    );
     throw error;
   }
 
@@ -118,14 +111,6 @@ export async function scheduleRelatedNoteRecommendation({
     claimResult.status !==
     RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS.CLAIMED
   ) {
-    if (
-      claimResult.status ===
-      RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS.DAILY_LIMIT_EXCEEDED
-    )
-      console.info("[Related Notes Recommendation Daily Limit Exceeded]", {
-        noteId: source.id,
-        ownerUserId,
-      });
     return claimResult;
   }
 
@@ -190,7 +175,7 @@ export async function scheduleRelatedNoteRecommendation({
           title: source.title,
           verificationConfiguration,
         });
-      } catch (error) {
+      } catch {
         await completeAiRunFailed({
           aiRun,
           buildSnapshot: accumulator.buildSnapshot,
@@ -203,7 +188,6 @@ export async function scheduleRelatedNoteRecommendation({
           status:
             RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_COMPLETION_STATUS.FAILED,
         });
-        console.error("[Related Notes Recommendation Failed]", error);
         return;
       }
 
@@ -225,9 +209,10 @@ export async function scheduleRelatedNoteRecommendation({
           featureResultIds = replacement.relationIds;
           claimStatus =
             RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_COMPLETION_STATUS.SUCCEEDED;
-        } else
+        } else {
           claimStatus =
             RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_COMPLETION_STATUS.STALE;
+        }
       } catch (error) {
         await reportRelatedNotesOperationalError({
           context: { noteId: source.id },
@@ -254,7 +239,7 @@ export async function scheduleRelatedNoteRecommendation({
         ownerUserId,
         status: claimStatus,
       });
-    } catch (error) {
+    } catch {
       // Runtime 설정 등 AI 시작 전 실패에는 Run 없이 Claim만 정리한다.
       await completeClaimOrReport({
         claimId,
@@ -263,7 +248,6 @@ export async function scheduleRelatedNoteRecommendation({
         status:
           RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_COMPLETION_STATUS.FAILED,
       });
-      console.error("[Related Notes Recommendation Failed]", error);
     }
   });
 
@@ -277,7 +261,10 @@ async function completeClaimOrReport(params: {
   ownerUserId: string;
   status: RelatedNoteRecommendationExecutionClaimCompletionStatus;
 }): Promise<void> {
-  if (params.claimId === null) return;
+  if (params.claimId === null) {
+    return;
+  }
+
   try {
     await completeRelatedNoteRecommendationExecutionClaim({
       claimId: params.claimId,
@@ -299,9 +286,5 @@ async function completeClaimOrReport(params: {
         RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.COMPLETE_RECOMMENDATION_EXECUTION_CLAIM,
       userId: params.ownerUserId,
     });
-    console.error(
-      "[Related Notes Recommendation Execution Claim Complete Failed]",
-      error,
-    );
   }
 }

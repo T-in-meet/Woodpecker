@@ -66,7 +66,10 @@ type UpdateResult = {
 
 type FinalizeResult = {
   data: string | null;
-  error: { message: string } | null;
+  error: {
+    code?: string;
+    message: string;
+  } | null;
 };
 
 /**
@@ -1192,6 +1195,56 @@ describe("AI Run persistence", () => {
 
     expect(reportAiOperationalError).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ["P0001", "PL/pgSQL RAISE EXCEPTION"],
+    ["23514", "check violation"],
+    ["42501", "insufficient privilege"],
+  ] as const)(
+    "terminal persistence가 재시도 불가능한 DB 오류 %s(%s)를 반환하면 재시도하지 않는다",
+    async (code, _description) => {
+      const supabase = createFinalizeClient({
+        data: null,
+        error: {
+          code,
+          message: "deterministic database failure",
+        },
+      });
+
+      vi.mocked(createAdminClient).mockReturnValue(supabase.client as never);
+
+      await expect(
+        completeAiRunSucceeded({
+          aiRun: AI_RUN,
+          buildSnapshot: () => ({
+            schemaVersion: 1,
+          }),
+          completedAt: COMPLETED_AT,
+          featureResultIds: [],
+        }),
+      ).resolves.toBeUndefined();
+
+      await flushPersistenceTasks();
+
+      /*
+       * 동일 요청을 반복해도 결과가 바뀌지 않는 결정론적 DB 오류이므로
+       * finalize_ai_run RPC를 두 번째로 호출하지 않아야 한다.
+       */
+      expect(supabase.rpc).toHaveBeenCalledOnce();
+
+      expect(reportAiOperationalError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: {
+            aiRunId: AI_RUN_ID,
+            userId: USER_ID,
+          },
+          errorCode: "AI_RUN_PERSISTENCE_FAILED",
+        }),
+      );
+
+      expect(reportAiOperationalError).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it("terminal persistence 재시도도 실패하면 추가 시도 없이 종료한다", async () => {
     const supabase = createFinalizeClient(
