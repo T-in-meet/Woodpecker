@@ -149,7 +149,9 @@ function mapSelectedCandidateIndexes(
   selectedContext: MatchedNote[],
 ) {
   return selectedContext.map((selectedCandidate) =>
-    hydratedCandidates.indexOf(selectedCandidate),
+    hydratedCandidates.findIndex(
+      (candidate) => candidate.embeddingId === selectedCandidate.embeddingId,
+    ),
   );
 }
 

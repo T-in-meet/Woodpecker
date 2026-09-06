@@ -100,7 +100,8 @@ describe("createNoteChatSnapshotAccumulator", () => {
       secondCandidate,
       thirdCandidate,
     ];
-    const selectedContext = [firstCandidate, thirdCandidate];
+
+    const selectedContext = [{ ...firstCandidate }, { ...thirdCandidate }];
 
     accumulator.prepareRetrieval({
       configuration: {
