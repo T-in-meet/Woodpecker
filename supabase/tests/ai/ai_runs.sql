@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(51);
+SELECT plan(59);
 
 SELECT set_config('test.ai_runs_user_a_id', gen_random_uuid()::text, true);
 SELECT set_config('test.ai_runs_user_b_id', gen_random_uuid()::text, true);
@@ -743,6 +743,172 @@ SELECT ok(
     )
   ),
   $$stale sweeper should preserve every terminal row$$
+);
+
+-- stale sweeper cron 이력 cleanup 함수가 후속 migration으로 생성되어야 합니다.
+SELECT has_function(
+  'public',
+  'cleanup_stale_ai_run_cron_history',
+  ARRAY[]::text[],
+  $$stale sweeper cron history cleanup function should exist$$
+);
+
+-- cleanup Cron job은 중복 없이 하나만 등록되어야 합니다.
+SELECT is(
+  (
+    SELECT count(*)::bigint
+    FROM cron.job
+    WHERE jobname = 'cleanup-stale-ai-run-cron-history'
+  ),
+  1::bigint,
+  $$stale sweeper cron history cleanup job should exist once$$
+);
+
+-- cleanup Cron job은 하루 한 번 실행되어야 합니다.
+SELECT is(
+  (
+    SELECT schedule
+    FROM cron.job
+    WHERE jobname = 'cleanup-stale-ai-run-cron-history'
+  ),
+  '0 0 * * *',
+  $$stale sweeper cron history cleanup job should run daily$$
+);
+
+-- cleanup Cron job은 공통 cleanup 함수만 실행해야 합니다.
+SELECT is(
+  (
+    SELECT command
+    FROM cron.job
+    WHERE jobname = 'cleanup-stale-ai-run-cron-history'
+  ),
+  'SELECT public.cleanup_stale_ai_run_cron_history();',
+  $$stale sweeper cron history cleanup job should call the shared function$$
+);
+
+-- 기존 로컬 실행 이력이 테스트 결과에 영향을 주지 않도록
+-- stale sweeper의 7일 초과 이력만 테스트 전에 정리합니다.
+DELETE FROM cron.job_run_details
+WHERE jobid IN (
+  SELECT jobid
+  FROM cron.job
+  WHERE jobname = 'sweep-stale-ai-runs'
+)
+  AND end_time < statement_timestamp() - interval '7 days';
+
+-- 7일이 지난 stale sweeper 실행 이력을 준비합니다.
+INSERT INTO cron.job_run_details (
+  runid,
+  jobid,
+  database,
+  username,
+  command,
+  status,
+  return_message,
+  start_time,
+  end_time
+)
+SELECT
+  COALESCE((SELECT min(runid) FROM cron.job_run_details), 0) - 1,
+  jobid,
+  current_database(),
+  current_user,
+  command,
+  'succeeded',
+  'pgTAP-old-stale-sweeper',
+  statement_timestamp() - interval '8 days 1 minute',
+  statement_timestamp() - interval '8 days'
+FROM cron.job
+WHERE jobname = 'sweep-stale-ai-runs';
+
+-- 아직 7일이 지나지 않은 stale sweeper 실행 이력을 준비합니다.
+INSERT INTO cron.job_run_details (
+  runid,
+  jobid,
+  database,
+  username,
+  command,
+  status,
+  return_message,
+  start_time,
+  end_time
+)
+SELECT
+  COALESCE((SELECT min(runid) FROM cron.job_run_details), 0) - 1,
+  jobid,
+  current_database(),
+  current_user,
+  command,
+  'succeeded',
+  'pgTAP-recent-stale-sweeper',
+  statement_timestamp() - interval '6 days 1 minute',
+  statement_timestamp() - interval '6 days'
+FROM cron.job
+WHERE jobname = 'sweep-stale-ai-runs';
+
+-- 다른 cron job의 오래된 실행 이력도 준비해 cleanup 범위를 검증합니다.
+INSERT INTO cron.job_run_details (
+  runid,
+  jobid,
+  database,
+  username,
+  command,
+  status,
+  return_message,
+  start_time,
+  end_time
+)
+SELECT
+  COALESCE((SELECT min(runid) FROM cron.job_run_details), 0) - 1,
+  jobid,
+  current_database(),
+  current_user,
+  command,
+  'succeeded',
+  'pgTAP-old-other-job',
+  statement_timestamp() - interval '8 days 1 minute',
+  statement_timestamp() - interval '8 days'
+FROM cron.job
+WHERE jobname = 'cleanup-stale-ai-run-cron-history';
+
+-- cleanup은 7일이 지난 stale sweeper 이력만 삭제해야 합니다.
+SELECT is(
+  public.cleanup_stale_ai_run_cron_history(),
+  1::bigint,
+  $$cron history cleanup should delete only expired stale sweeper rows$$
+);
+
+-- 7일이 지난 stale sweeper 실행 이력은 삭제되어야 합니다.
+SELECT is(
+  (
+    SELECT count(*)::bigint
+    FROM cron.job_run_details
+    WHERE return_message = 'pgTAP-old-stale-sweeper'
+  ),
+  0::bigint,
+  $$cron history cleanup should delete expired stale sweeper history$$
+);
+
+-- 아직 7일이 지나지 않은 stale sweeper 실행 이력은 유지되어야 합니다.
+SELECT is(
+  (
+    SELECT count(*)::bigint
+    FROM cron.job_run_details
+    WHERE return_message = 'pgTAP-recent-stale-sweeper'
+  ),
+  1::bigint,
+  $$cron history cleanup should preserve recent stale sweeper history$$
+);
+
+-- 다른 cron job의 실행 이력은 7일이 지났더라도 삭제하지 않아야 합니다.
+SELECT is(
+  (
+    SELECT count(*)::bigint
+    FROM cron.job_run_details
+    WHERE return_message = 'pgTAP-old-other-job'
+  ),
+  1::bigint,
+  $$cron history cleanup should preserve other cron job history$$
 );
 
 SET LOCAL ROLE authenticated;
