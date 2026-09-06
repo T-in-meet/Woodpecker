@@ -144,6 +144,70 @@ describe("relatedNotesSnapshotsSchema", () => {
     ]);
   });
 
+  it("Answer와 Verification은 matchedCandidateIndexes 없이도 저장할 수 있다", () => {
+    const parsed = relatedNotesSnapshotsSchema.parse({
+      ...partialSnapshot(),
+      answerGeneration: {
+        configuration: chatConfiguration(),
+        input: {
+          source: {
+            title: "제목",
+            content: "내용",
+          },
+          context: "answer context",
+          variables: {
+            title: "제목",
+            content: "내용",
+            context: "answer context",
+          },
+          renderedSystemPrompt: "answer system",
+          renderedUserPrompt: "answer user",
+        },
+      },
+      verification: {
+        configuration: chatConfiguration(),
+        input: {
+          source: {
+            title: "제목",
+            content: "내용",
+          },
+          recommendations: [],
+          context: "verification context",
+          variables: {
+            title: "제목",
+            content: "내용",
+            recommendations: "verification context",
+          },
+          renderedSystemPrompt: "verification system",
+          renderedUserPrompt: "verification user",
+        },
+      },
+    });
+
+    expect(parsed.answerGeneration).toBeDefined();
+    expect(parsed.verification).toBeDefined();
+
+    if (
+      parsed.answerGeneration === undefined ||
+      !("input" in parsed.answerGeneration)
+    ) {
+      throw new Error("Expected executed Answer Generation snapshot.");
+    }
+
+    if (
+      parsed.verification === undefined ||
+      !("input" in parsed.verification)
+    ) {
+      throw new Error("Expected executed Verification snapshot.");
+    }
+
+    expect(
+      parsed.answerGeneration.input.matchedCandidateIndexes,
+    ).toBeUndefined();
+
+    expect(parsed.verification.input.matchedCandidateIndexes).toBeUndefined();
+  });
+
   it("음수 matchedCandidateIndexes를 거부한다", () => {
     expect(() =>
       relatedNotesSnapshotsSchema.parse({

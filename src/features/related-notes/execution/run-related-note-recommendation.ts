@@ -89,8 +89,12 @@ type RunRelatedNoteRecommendationParams = {
  * 같은 Note의 여러 chunk는 서로 다른 embeddingId를 가지므로
  * Note ID가 아니라 embeddingId를 기준으로 대응시킵니다.
  *
+ * Retrieval의 hydratedCandidates는 각 embeddingId가 유일하다는
+ * 검색 결과 계약을 전제로 하며, 이를 embeddingId → index Map으로 변환합니다.
+ *
  * 정본 후보에서 대응 항목을 찾지 못한 경우 dangling index를 만들거나
- * 실행을 실패시키지 않고 Snapshot stage 기록을 생략할 수 있도록 null을 반환합니다.
+ * 실행을 실패시키지 않고 matched candidate index 기록을 생략할 수 있도록
+ * null을 반환합니다.
  */
 function resolveMatchedCandidateIndexes(
   hydratedCandidates: Array<{ embeddingId: string }>,
@@ -216,8 +220,6 @@ export async function runRelatedNoteRecommendation({
           observation.notes,
         );
 
-        if (matchedCandidateIndexes === null) return;
-
         snapshotAccumulator?.setStage("answerGeneration", {
           configuration: {
             model: mapRelatedNotesChatModel(observation.configuration),
@@ -229,7 +231,9 @@ export async function runRelatedNoteRecommendation({
           },
           input: {
             context: observation.context,
-            matchedCandidateIndexes,
+            ...(matchedCandidateIndexes === null
+              ? {}
+              : { matchedCandidateIndexes }),
             renderedSystemPrompt: observation.systemPrompt,
             renderedUserPrompt: observation.userPrompt,
             source: { content, title },
@@ -304,8 +308,6 @@ export async function runRelatedNoteRecommendation({
           observation.notes,
         );
 
-        if (matchedCandidateIndexes === null) return;
-
         snapshotAccumulator?.setStage("verification", {
           configuration: {
             model: mapRelatedNotesChatModel(observation.configuration),
@@ -317,7 +319,9 @@ export async function runRelatedNoteRecommendation({
           },
           input: {
             context: observation.context,
-            matchedCandidateIndexes,
+            ...(matchedCandidateIndexes === null
+              ? {}
+              : { matchedCandidateIndexes }),
             recommendations: observation.recommendations,
             renderedSystemPrompt: observation.systemPrompt,
             renderedUserPrompt: observation.userPrompt,
