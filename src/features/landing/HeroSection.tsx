@@ -46,16 +46,16 @@ const previewNotes = [
  * 링크다. 로그인 없이 열리는 랜딩에는 맞지 않으므로 마크업만 옮긴다.
  * 대신 클릭 가능한 요소는 전부 span으로 두어 실제 컨트롤처럼 보이지 않게 한다.
  *
- * 루트에 `aria-hidden`을 거는 이유는 LearningFlowSection의 목업 셋과 같다.
- * 장식용 스크린샷이 접근성 트리에 남으면 랜딩에 진짜 노트 목록과 "복습 시작"
- * 버튼이 있는 것처럼 읽힌다. 안쪽이 전부 span이라 포커스 가능한 요소가 없어
- * 숨겨도 잃는 게 없다.
+ * `aria-hidden`은 이 컴포넌트가 아니라 브라우저 크롬까지 감싸는 바깥 래퍼에
+ * 건다. 크롬(신호등 점과 창 제목)도 장식이라 여기서만 숨기면 크롬 텍스트가
+ * 접근성 트리에 남아, 랜딩에 진짜 노트 목록과 "복습 시작" 버튼이 있는 것처럼
+ * 읽힌다. 안쪽이 전부 span이라 포커스 가능한 요소가 없어 숨겨도 잃는 게 없다.
  *
  * 목록 화면 UI를 바꾸면 이 목업도 함께 손봐야 한다.
  */
 function NotesPreview() {
   return (
-    <div aria-hidden="true" className="bg-muted/20 p-4 text-left sm:p-5">
+    <div className="bg-muted/20 p-4 text-left sm:p-5">
       {/* 툴바 — NotesToolbar의 보기 필터와 검색 입력 */}
       <div className="flex items-center gap-2">
         <div className="flex h-9 w-32 shrink-0 items-center justify-between rounded-md border bg-background px-3 text-sm">
@@ -155,7 +155,12 @@ export function HeroSection() {
 
         {/* App mockup preview */}
         <div className="mx-auto mt-16 max-w-3xl">
-          <div className="overflow-hidden rounded-2xl border bg-card shadow-lg">
+          {/* 크롬까지 포함해 목업 전체를 접근성 트리에서 뺀다. 크롬만 남으면
+              맥락 없는 "딱다구리" 한 줄이 읽히고 정작 노트 목록은 건너뛴다. */}
+          <div
+            aria-hidden="true"
+            className="overflow-hidden rounded-2xl border bg-card shadow-lg"
+          >
             {/* Chrome */}
             <div className="flex items-center gap-2 border-b bg-muted/50 px-4 py-2.5">
               <div className="size-2.5 rounded-full bg-red-400/60" />
