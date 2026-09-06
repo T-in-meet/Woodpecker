@@ -5,6 +5,7 @@ import {
   learningToolsContent,
 } from "@/features/landing/content";
 import { faqs } from "@/features/landing/FaqSection";
+import { ROUTES } from "@/lib/constants/routes";
 import { SITE_URL } from "@/lib/constants/site";
 
 export function renderLandingMarkdown(): string {
@@ -14,7 +15,7 @@ export function renderLandingMarkdown(): string {
   lines.push("");
   lines.push(`> ${heroContent.description.replace(/\n/g, " ")}`);
   lines.push("");
-  lines.push(`[무료로 시작하기](${SITE_URL}/signup)`);
+  lines.push(`[무료로 시작하기](${SITE_URL}${ROUTES.SIGNUP})`);
   lines.push("");
 
   lines.push(`## ${learningFlowContent.heading.replace(/\n/g, " ")}`);
@@ -39,7 +40,7 @@ export function renderLandingMarkdown(): string {
   // 세 단계 뒤의 중간 CTA. 화면에만 있고 문서에는 빠지는 카피를 만들지 않는다.
   lines.push(learningFlowContent.cta.text);
   lines.push("");
-  lines.push(`[${learningFlowContent.cta.label}](${SITE_URL}/signup)`);
+  lines.push(`[${learningFlowContent.cta.label}](${SITE_URL}${ROUTES.SIGNUP})`);
   lines.push("");
 
   // 커넥터는 화면에서 제목 위에 있다. 읽는 순서를 화면과 맞춘다.
@@ -69,7 +70,7 @@ export function renderLandingMarkdown(): string {
   lines.push("");
   lines.push(ctaContent.description.replace(/\n/g, " "));
   lines.push("");
-  lines.push(`[${ctaContent.ctaLabel}](${SITE_URL}/signup)`);
+  lines.push(`[${ctaContent.ctaLabel}](${SITE_URL}${ROUTES.SIGNUP})`);
   lines.push("");
 
   return lines.join("\n");
