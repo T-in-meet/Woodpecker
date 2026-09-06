@@ -115,7 +115,8 @@ export async function scheduleRelatedNoteRecommendation({
   }
 
   const claimId = claimResult.claimId;
-  after(async () => {
+
+  const executeRecommendation = async () => {
     try {
       // 기존 네 Runtime 설정은 AI Run 생성보다 먼저 병렬로 확정한다.
       const [
@@ -249,7 +250,25 @@ export async function scheduleRelatedNoteRecommendation({
           RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_COMPLETION_STATUS.FAILED,
       });
     }
-  });
+  };
+
+  try {
+    after(executeRecommendation);
+  } catch (error) {
+    /*
+     * 실행 선점 이후 request lifecycle 등록 자체가 실패하면
+     * background callback이 실행되지 않으므로 claim을 즉시 정리한다.
+     */
+    await completeClaimOrReport({
+      claimId,
+      noteId: source.id,
+      ownerUserId,
+      status:
+        RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_COMPLETION_STATUS.FAILED,
+    });
+
+    throw error;
+  }
 
   return claimResult;
 }

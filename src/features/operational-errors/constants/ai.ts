@@ -129,6 +129,7 @@ export const AI_OPERATIONAL_ERROR_OPERATION_LABELS = {
  */
 export const AI_OPERATIONAL_ERROR_STAGE = {
   DATABASE: "database",
+  LIFECYCLE: "lifecycle",
   PROVIDER: "provider",
   VALIDATION: "validation",
 } as const;
@@ -138,6 +139,7 @@ export const AI_OPERATIONAL_ERROR_STAGE = {
  */
 export const AI_OPERATIONAL_ERROR_STAGE_LABELS = {
   [AI_OPERATIONAL_ERROR_STAGE.DATABASE]: "데이터베이스",
+  [AI_OPERATIONAL_ERROR_STAGE.LIFECYCLE]: "라이프사이클",
   [AI_OPERATIONAL_ERROR_STAGE.PROVIDER]: "Provider",
   [AI_OPERATIONAL_ERROR_STAGE.VALIDATION]: "검증",
 } as const;

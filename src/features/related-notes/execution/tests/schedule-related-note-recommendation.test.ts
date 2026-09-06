@@ -179,6 +179,31 @@ describe("scheduleRelatedNoteRecommendation", () => {
     expect(mocks.createAiRun).not.toHaveBeenCalled();
   });
 
+  it("after 등록 실패 시 획득한 claim을 failed로 정리하고 오류를 전파한다", async () => {
+    const registrationError = new Error("after registration failed");
+
+    mocks.after.mockImplementationOnce(() => {
+      throw registrationError;
+    });
+
+    await expect(
+      scheduleRelatedNoteRecommendation({
+        noteId: NOTE_ID,
+        ownerUserId: USER_ID,
+      }),
+    ).rejects.toBe(registrationError);
+
+    expect(mocks.completeClaim).toHaveBeenCalledWith({
+      claimId: CLAIM_ID,
+      status: "failed",
+      userId: USER_ID,
+    });
+
+    expect(mocks.resolveEmbedding).not.toHaveBeenCalled();
+    expect(mocks.resolveChat).not.toHaveBeenCalled();
+    expect(mocks.createAiRun).not.toHaveBeenCalled();
+  });
+
   it("AI processing 실패는 failed terminal과 failed claim으로 완료한다", async () => {
     mocks.run.mockRejectedValue(new Error("provider failed"));
     vi.spyOn(console, "error").mockImplementation(() => undefined);

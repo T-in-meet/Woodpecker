@@ -284,6 +284,51 @@ describe("AI Run persistence", () => {
     await flushPersistenceTasks();
   });
 
+  it("after 등록 실패를 lifecycle operational error로 보고하고 Run 생성에는 전파하지 않는다", async () => {
+    const supabase = createInsertClient({
+      error: null,
+    });
+
+    vi.mocked(after).mockImplementationOnce(() => {
+      throw new Error("after registration failed");
+    });
+
+    const result = await createAiRun(
+      {
+        buildSnapshot: () => ({
+          schemaVersion: 1,
+        }),
+        featureType: "note-chat",
+        startedAt: STARTED_AT,
+        userId: USER_ID,
+      },
+      {
+        createRunId: () => AI_RUN_ID,
+        supabase: supabase.client as never,
+      },
+    );
+
+    expect(result).toEqual(AI_RUN);
+
+    await vi.waitFor(() => {
+      expect(reportAiOperationalError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: {
+            aiRunId: AI_RUN_ID,
+            userId: USER_ID,
+          },
+          errorCode: "AI_RUN_PERSISTENCE_FAILED",
+          message: "AI Run persistence lifecycle 등록에 실패했습니다.",
+          operation: "create_ai_run",
+          stage: "lifecycle",
+          userId: USER_ID,
+        }),
+      );
+    });
+
+    await flushPersistenceTasks();
+  });
+
   it("create DB 완료를 기다리지 않고 Run identity를 반환한다", async () => {
     const deferred = createDeferred<InsertResult>();
 

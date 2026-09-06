@@ -107,12 +107,17 @@ export async function createAiRun(
   const snapshot = buildSnapshotSafely(params.buildSnapshot);
 
   if (!snapshot.ok) {
-    enqueueAiRunPersistenceTask(id, async () => {
-      await reportAiRunSnapshotBuildFailure({
-        aiRunId: id,
-        operation: AI_OPERATIONAL_ERROR_OPERATION.CREATE_AI_RUN,
-        userId: params.userId,
-      });
+    enqueueAiRunPersistenceTask({
+      aiRunId: id,
+      operation: AI_OPERATIONAL_ERROR_OPERATION.CREATE_AI_RUN,
+      task: async () => {
+        await reportAiRunSnapshotBuildFailure({
+          aiRunId: id,
+          operation: AI_OPERATIONAL_ERROR_OPERATION.CREATE_AI_RUN,
+          userId: params.userId,
+        });
+      },
+      userId: params.userId,
     });
 
     return aiRun;
@@ -124,19 +129,37 @@ export async function createAiRun(
 
   aiRunPersistenceStates.set(aiRun, state);
 
-  enqueueAiRunPersistenceTask(id, async () => {
-    try {
-      const supabase = options.supabase ?? createAdminClient();
+  enqueueAiRunPersistenceTask({
+    aiRunId: id,
+    operation: AI_OPERATIONAL_ERROR_OPERATION.CREATE_AI_RUN,
+    task: async () => {
+      try {
+        const supabase = options.supabase ?? createAdminClient();
 
-      const { error } = await supabase.from("ai_runs").insert({
-        id,
-        feature_type: params.featureType,
-        snapshots: snapshot.value,
-        started_at: params.startedAt,
-        user_id: params.userId,
-      });
+        const { error } = await supabase.from("ai_runs").insert({
+          id,
+          feature_type: params.featureType,
+          snapshots: snapshot.value,
+          started_at: params.startedAt,
+          user_id: params.userId,
+        });
 
-      if (error) {
+        if (error) {
+          state.createStatus = "failed";
+
+          await reportAiRunOperationalFailure({
+            code: AI_OPERATIONAL_ERROR_CODE.AI_RUN_PERSISTENCE_FAILED,
+            context: { aiRunId: id, userId: params.userId },
+            message: "AI Run 생성 저장에 실패했습니다.",
+            operation: AI_OPERATIONAL_ERROR_OPERATION.CREATE_AI_RUN,
+            stage: AI_OPERATIONAL_ERROR_STAGE.DATABASE,
+          });
+
+          return;
+        }
+
+        state.createStatus = "persisted";
+      } catch {
         state.createStatus = "failed";
 
         await reportAiRunOperationalFailure({
@@ -146,22 +169,9 @@ export async function createAiRun(
           operation: AI_OPERATIONAL_ERROR_OPERATION.CREATE_AI_RUN,
           stage: AI_OPERATIONAL_ERROR_STAGE.DATABASE,
         });
-
-        return;
       }
-
-      state.createStatus = "persisted";
-    } catch {
-      state.createStatus = "failed";
-
-      await reportAiRunOperationalFailure({
-        code: AI_OPERATIONAL_ERROR_CODE.AI_RUN_PERSISTENCE_FAILED,
-        context: { aiRunId: id, userId: params.userId },
-        message: "AI Run 생성 저장에 실패했습니다.",
-        operation: AI_OPERATIONAL_ERROR_OPERATION.CREATE_AI_RUN,
-        stage: AI_OPERATIONAL_ERROR_STAGE.DATABASE,
-      });
-    }
+    },
+    userId: params.userId,
   });
 
   return aiRun;
@@ -194,50 +204,60 @@ export async function checkpointAiRun(
   const snapshot = buildSnapshotSafely(params.buildSnapshot);
 
   if (!snapshot.ok) {
-    enqueueAiRunPersistenceTask(params.aiRun.id, async () => {
-      await reportAiRunSnapshotBuildFailure({
-        aiRunId: params.aiRun.id,
-        operation: AI_OPERATIONAL_ERROR_OPERATION.CHECKPOINT_AI_RUN,
-        userId: params.aiRun.userId,
-      });
+    enqueueAiRunPersistenceTask({
+      aiRunId: params.aiRun.id,
+      operation: AI_OPERATIONAL_ERROR_OPERATION.CHECKPOINT_AI_RUN,
+      task: async () => {
+        await reportAiRunSnapshotBuildFailure({
+          aiRunId: params.aiRun.id,
+          operation: AI_OPERATIONAL_ERROR_OPERATION.CHECKPOINT_AI_RUN,
+          userId: params.aiRun.userId,
+        });
+      },
+      userId: params.aiRun.userId,
     });
 
     return;
   }
 
-  enqueueAiRunPersistenceTask(params.aiRun.id, async () => {
-    /*
-     * 같은 Run의 create task가 이 checkpoint보다 먼저 실행된다.
-     * create가 최종적으로 실패했다면 checkpoint는 저장하지 않는다.
-     */
-    if (state.createStatus !== "persisted") {
-      return;
-    }
+  enqueueAiRunPersistenceTask({
+    aiRunId: params.aiRun.id,
+    operation: AI_OPERATIONAL_ERROR_OPERATION.CHECKPOINT_AI_RUN,
+    task: async () => {
+      /*
+       * 같은 Run의 create task가 이 checkpoint보다 먼저 실행된다.
+       * create가 최종적으로 실패했다면 checkpoint는 저장하지 않는다.
+       */
+      if (state.createStatus !== "persisted") {
+        return;
+      }
 
-    let supabase: AiRunPersistenceClient;
+      let supabase: AiRunPersistenceClient;
 
-    try {
-      supabase = options.supabase ?? createAdminClient();
-    } catch {
-      await reportAiRunOperationalFailure({
-        code: AI_OPERATIONAL_ERROR_CODE.AI_RUN_PERSISTENCE_FAILED,
-        context: {
-          aiRunId: params.aiRun.id,
-          userId: params.aiRun.userId,
-        },
-        message: "AI Run checkpoint client 생성에 실패했습니다.",
-        operation: AI_OPERATIONAL_ERROR_OPERATION.CHECKPOINT_AI_RUN,
-        stage: AI_OPERATIONAL_ERROR_STAGE.DATABASE,
+      try {
+        supabase = options.supabase ?? createAdminClient();
+      } catch {
+        await reportAiRunOperationalFailure({
+          code: AI_OPERATIONAL_ERROR_CODE.AI_RUN_PERSISTENCE_FAILED,
+          context: {
+            aiRunId: params.aiRun.id,
+            userId: params.aiRun.userId,
+          },
+          message: "AI Run checkpoint client 생성에 실패했습니다.",
+          operation: AI_OPERATIONAL_ERROR_OPERATION.CHECKPOINT_AI_RUN,
+          stage: AI_OPERATIONAL_ERROR_STAGE.DATABASE,
+        });
+
+        return;
+      }
+
+      await updateRunningAiRunSnapshotSafely({
+        aiRun: params.aiRun,
+        snapshot: snapshot.value,
+        supabase,
       });
-
-      return;
-    }
-
-    await updateRunningAiRunSnapshotSafely({
-      aiRun: params.aiRun,
-      snapshot: snapshot.value,
-      supabase,
-    });
+    },
+    userId: params.aiRun.userId,
   });
 }
 
@@ -316,34 +336,44 @@ function completeAiRun(
   const snapshot = buildSnapshotSafely(params.buildSnapshot);
 
   if (!snapshot.ok) {
-    enqueueAiRunPersistenceTask(params.aiRun.id, async () => {
-      try {
-        await reportAiRunSnapshotBuildFailure({
-          aiRunId: params.aiRun.id,
-          operation: AI_OPERATIONAL_ERROR_OPERATION.COMPLETE_AI_RUN,
-          userId: params.aiRun.userId,
-        });
-      } finally {
-        aiRunPersistenceStates.delete(params.aiRun);
-      }
+    enqueueAiRunPersistenceTask({
+      aiRunId: params.aiRun.id,
+      operation: AI_OPERATIONAL_ERROR_OPERATION.COMPLETE_AI_RUN,
+      task: async () => {
+        try {
+          await reportAiRunSnapshotBuildFailure({
+            aiRunId: params.aiRun.id,
+            operation: AI_OPERATIONAL_ERROR_OPERATION.COMPLETE_AI_RUN,
+            userId: params.aiRun.userId,
+          });
+        } finally {
+          aiRunPersistenceStates.delete(params.aiRun);
+        }
+      },
+      userId: params.aiRun.userId,
     });
 
     return;
   }
 
-  enqueueAiRunPersistenceTask(params.aiRun.id, async () => {
-    try {
-      await persistCompletedAiRun({
-        aiRun: params.aiRun,
-        completedAt: params.completedAt,
-        featureResultIds,
-        snapshot: snapshot.value,
-        status,
-        options,
-      });
-    } finally {
-      aiRunPersistenceStates.delete(params.aiRun);
-    }
+  enqueueAiRunPersistenceTask({
+    aiRunId: params.aiRun.id,
+    operation: AI_OPERATIONAL_ERROR_OPERATION.COMPLETE_AI_RUN,
+    task: async () => {
+      try {
+        await persistCompletedAiRun({
+          aiRun: params.aiRun,
+          completedAt: params.completedAt,
+          featureResultIds,
+          snapshot: snapshot.value,
+          status,
+          options,
+        });
+      } finally {
+        aiRunPersistenceStates.delete(params.aiRun);
+      }
+    },
+    userId: params.aiRun.userId,
   });
 }
 
@@ -608,6 +638,7 @@ type ReportAiRunOperationalFailureParams = {
     | typeof AI_OPERATIONAL_ERROR_OPERATION.COMPLETE_AI_RUN;
   stage:
     | typeof AI_OPERATIONAL_ERROR_STAGE.DATABASE
+    | typeof AI_OPERATIONAL_ERROR_STAGE.LIFECYCLE
     | typeof AI_OPERATIONAL_ERROR_STAGE.VALIDATION;
 };
 
@@ -631,6 +662,17 @@ async function reportAiRunOperationalFailure(
   }
 }
 
+/** AI Run persistence queue 등록 입력입니다. */
+type EnqueueAiRunPersistenceTaskParams = {
+  aiRunId: string;
+  operation:
+    | typeof AI_OPERATIONAL_ERROR_OPERATION.CREATE_AI_RUN
+    | typeof AI_OPERATIONAL_ERROR_OPERATION.CHECKPOINT_AI_RUN
+    | typeof AI_OPERATIONAL_ERROR_OPERATION.COMPLETE_AI_RUN;
+  task: () => Promise<void>;
+  userId: string;
+};
+
 /**
  * 같은 Run의 persistence 작업을 호출 순서대로 직렬화합니다.
  *
@@ -638,41 +680,64 @@ async function reportAiRunOperationalFailure(
  * queue 경계에서 rejection을 격리합니다.
  */
 function enqueueAiRunPersistenceTask(
-  aiRunId: string,
-  task: () => Promise<void>,
+  params: EnqueueAiRunPersistenceTaskParams,
 ): void {
-  const previous = aiRunPersistenceQueues.get(aiRunId) ?? Promise.resolve();
+  const previous =
+    aiRunPersistenceQueues.get(params.aiRunId) ?? Promise.resolve();
 
   const current = previous
     .catch(() => undefined)
-    .then(task)
+    .then(params.task)
     .catch(() => undefined)
     .finally(() => {
       /*
        * 현재 task 실행 중 같은 Run에 다음 task가 연결될 수 있으므로
        * 자신이 여전히 최신 tail인 경우에만 제거합니다.
        */
-      if (aiRunPersistenceQueues.get(aiRunId) === current) {
-        aiRunPersistenceQueues.delete(aiRunId);
+      if (aiRunPersistenceQueues.get(params.aiRunId) === current) {
+        aiRunPersistenceQueues.delete(params.aiRunId);
       }
     });
 
-  aiRunPersistenceQueues.set(aiRunId, current);
+  aiRunPersistenceQueues.set(params.aiRunId, current);
 
-  registerAiRunPersistenceTask(current);
+  registerAiRunPersistenceTask({
+    aiRunId: params.aiRunId,
+    operation: params.operation,
+    task: current,
+    userId: params.userId,
+  });
 }
 
 /**
  * background persistence가 response 반환 이후에도
  * 현재 request lifecycle 안에서 실행될 수 있도록 등록합니다.
  */
-function registerAiRunPersistenceTask(task: Promise<void>): void {
+function registerAiRunPersistenceTask(params: {
+  aiRunId: string;
+  operation:
+    | typeof AI_OPERATIONAL_ERROR_OPERATION.CREATE_AI_RUN
+    | typeof AI_OPERATIONAL_ERROR_OPERATION.CHECKPOINT_AI_RUN
+    | typeof AI_OPERATIONAL_ERROR_OPERATION.COMPLETE_AI_RUN;
+  task: Promise<void>;
+  userId: string;
+}): void {
   try {
-    after(() => task);
+    after(() => params.task);
   } catch {
     /*
      * lifecycle 등록 실패도 기존 AI 기능 실행으로 전파하지 않는다.
      * queue task 자체는 이미 시작된 best-effort 작업이다.
      */
+    void reportAiRunOperationalFailure({
+      code: AI_OPERATIONAL_ERROR_CODE.AI_RUN_PERSISTENCE_FAILED,
+      context: {
+        aiRunId: params.aiRunId,
+        userId: params.userId,
+      },
+      message: "AI Run persistence lifecycle 등록에 실패했습니다.",
+      operation: params.operation,
+      stage: AI_OPERATIONAL_ERROR_STAGE.LIFECYCLE,
+    });
   }
 }
