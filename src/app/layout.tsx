@@ -1,7 +1,6 @@
 // layout.tsx (Root Layout)
 // 앱 전체에 공통 적용되는 최상위 레이아웃.
 // 모든 페이지는 이 파일의 RootLayout을 통해 렌더링됨.
-
 import "./globals.css";
 
 import type { Metadata } from "next";
@@ -13,6 +12,7 @@ import { QueryProvider } from "@/components/providers/QueryProvider";
 import { SessionProvider } from "@/components/providers/SessionProvider";
 import { ToasterProvider } from "@/components/providers/ToasterProvider";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { landingDescription } from "@/features/landing/content";
 import { SITE_URL } from "@/lib/constants/site";
 
 /* ─── 폰트 ───────────────────────────────────────────────────────────────────
@@ -43,8 +43,7 @@ export const metadata: Metadata = {
     default: "딱다구리 — 기록이 기억이 되는 간격 반복 학습 공간",
     template: "%s | 딱다구리",
   },
-  description:
-    "기록한 순간부터 복습이 설계됩니다. 인지 과학의 간격 반복 학습을 기반으로 한 1-3-7일 복습 알림과 백지 테스트 등 인출 연습으로 학습 내용을 장기 기억으로 전환하세요.",
+  description: landingDescription,
   icons: {
     icon: "/favicon.svg",
   },
@@ -54,14 +53,12 @@ export const metadata: Metadata = {
     url: SITE_URL,
     siteName: "딱다구리",
     title: "딱다구리 — 기록이 기억이 되는 간격 반복 학습 공간",
-    description:
-      "인지 과학의 간격 반복 학습을 기반으로 한 1-3-7일 복습 알림과 백지 테스트 등 인출 연습으로 학습 내용을 장기 기억으로 전환하세요.",
+    description: landingDescription,
   },
   twitter: {
     card: "summary_large_image",
     title: "딱다구리 — 기록이 기억이 되는 간격 반복 학습 공간",
-    description:
-      "인지 과학의 간격 반복 학습을 기반으로 한 1-3-7일 복습 알림과 백지 테스트 등 인출 연습으로 학습 내용을 장기 기억으로 전환하세요.",
+    description: landingDescription,
   },
   alternates: {
     canonical: SITE_URL,

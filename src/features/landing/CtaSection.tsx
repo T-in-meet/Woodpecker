@@ -13,8 +13,8 @@ export function CtaSection() {
       <div className="absolute -right-20 -top-20 -z-10 size-60 rounded-full bg-linear-to-br from-amber-200/40 to-orange-200/40 blur-3xl dark:from-amber-800/10 dark:to-orange-800/10" />
       <div className="absolute -bottom-20 -left-20 -z-10 size-60 rounded-full bg-linear-to-tr from-rose-200/40 to-pink-200/40 blur-3xl dark:from-rose-800/10 dark:to-pink-800/10" />
 
-      <div className="mx-auto max-w-5xl px-6 py-20 text-center md:py-28">
-        <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
+      <div className="mx-auto max-w-5xl px-6 py-12 text-center md:py-20">
+        <h2 className="whitespace-pre-line text-3xl font-bold tracking-tight md:whitespace-normal md:text-4xl">
           {ctaContent.title}
         </h2>
         <p className="mt-3 whitespace-pre-line text-lg text-muted-foreground">

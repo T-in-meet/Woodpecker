@@ -22,7 +22,12 @@ const footerLinks = [
 export function Footer() {
   return (
     <footer className="border-t bg-muted/30">
-      <div className="mx-auto max-w-5xl px-6 py-12 md:py-16">
+      {/*
+        위쪽 여백은 앞 섹션과 푸터를 떼어놓는 역할이 있어 유지하고, 아래는
+        따라올 내용이 없으므로 줄인다. 상하를 같게 두면 카피라이트 아래가
+        빈 공간으로 남는다.
+      */}
+      <div className="mx-auto max-w-5xl px-6 pb-8 pt-12 md:pb-10 md:pt-16">
         <div className="grid gap-8 md:grid-cols-4">
           {/* Link groups */}
           {footerLinks.map((group) => (
