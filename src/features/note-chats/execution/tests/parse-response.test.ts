@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { parseNoteChatProviderResponse } from "../parse-response";
+import {
+  NoteChatProviderResponseError,
+  parseNoteChatProviderResponse,
+} from "../parse-response";
 
 describe("parseNoteChatProviderResponse", () => {
   it("유효한 Provider 응답을 파싱한다", () => {
@@ -31,20 +34,34 @@ describe("parseNoteChatProviderResponse", () => {
     });
   });
 
-  it("유효하지 않은 JSON이면 오류를 발생시킨다", () => {
-    expect(() => parseNoteChatProviderResponse("invalid json")).toThrow(
-      "Note chat provider response is not valid JSON.",
-    );
+  it("유효하지 않은 JSON이면 parse 오류를 발생시킨다", () => {
+    try {
+      parseNoteChatProviderResponse("invalid json");
+      expect.fail("Expected parseNoteChatProviderResponse to throw");
+    } catch (error) {
+      expect(error).toBeInstanceOf(NoteChatProviderResponseError);
+      expect(error).toMatchObject({
+        stage: "parse",
+        message: "Note chat provider response is not valid JSON.",
+      });
+    }
   });
 
-  it("응답 구조가 유효하지 않으면 오류를 발생시킨다", () => {
-    expect(() =>
+  it("응답 구조가 유효하지 않으면 validation 오류를 발생시킨다", () => {
+    try {
       parseNoteChatProviderResponse(
         JSON.stringify({
           answer: "",
           usedContextIndexes: ["1"],
         }),
-      ),
-    ).toThrow("Note chat provider response has an invalid structure.");
+      );
+      expect.fail("Expected parseNoteChatProviderResponse to throw");
+    } catch (error) {
+      expect(error).toBeInstanceOf(NoteChatProviderResponseError);
+      expect(error).toMatchObject({
+        stage: "validation",
+        message: "Note chat provider response has an invalid structure.",
+      });
+    }
   });
 });

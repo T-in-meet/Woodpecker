@@ -22,7 +22,10 @@ import {
   completeNoteChatExecutionSuccess,
   NOTE_CHAT_EXECUTION_CLAIM_COMPLETION_STATUS,
 } from "../execution/execution-claim-persistence";
-import { parseNoteChatProviderResponse } from "../execution/parse-response";
+import {
+  NoteChatProviderResponseError,
+  parseNoteChatProviderResponse,
+} from "../execution/parse-response";
 import type { NoteChatExecutionSettings } from "../execution/prepare-execution";
 import { resolveNoteChatUsedNoteIds } from "../execution/resolve-used-note-ids";
 import { reportNoteChatOperationalError } from "../utils/report-operational-error";
@@ -128,8 +131,8 @@ export async function runNoteChatStream(
         );
       } catch (error) {
         const stage =
-          error instanceof Error && error.message.includes("invalid structure")
-            ? "validation"
+          error instanceof NoteChatProviderResponseError
+            ? error.stage
             : "parse";
 
         params.snapshotAccumulator.failAnswerGeneration(stage, error);
