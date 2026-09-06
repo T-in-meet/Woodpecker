@@ -1,9 +1,136 @@
+import {
+  CalendarClock,
+  ChevronDown,
+  ListFilter,
+  Play,
+  Search,
+  Trash2,
+} from "lucide-react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { ROUTES } from "@/lib/constants/routes";
 
 import { heroContent } from "./content";
+
+/**
+ * 목업에 표시할 노트. 실제 목록 화면의 `NoteSummary`를 그대로 쓰지 않고
+ * 화면에 보이는 값만 추린다 — 쿼리 타입이 바뀔 때 랜딩이 끌려다니지 않게 한다.
+ *
+ * `preview`는 한 줄에 담기지 않을 만큼 길게 둔다. 목록과 똑같이 line-clamp-1로
+ * 자르므로 뒤가 말줄임으로 끝나는데, 한 줄에 딱 맞는 짧은 문장보다 내용이 더
+ * 있는 진짜 노트처럼 읽힌다.
+ */
+const previewNotes = [
+  {
+    title: "베이즈 정리와 사후확률",
+    preview:
+      "사전확률에 새 증거의 우도를 곱해 사후확률로 갱신한다. 검사 정확도가 99%여도 유병률이 0.1%면 양성 판정의 실제 적중률은 10%에 못 미친다.",
+    reviewRound: 3,
+    scheduleText: "오늘",
+    // NoteListItem의 tone별 클래스와 같은 값을 쓴다(today / upcoming).
+    scheduleClass: "bg-emerald-100 text-emerald-800",
+  },
+  {
+    title: "가정법 과거완료",
+    preview:
+      "If + 주어 + had p.p., 주어 + would have p.p. 형태로 과거 사실의 반대를 가정한다. 주절의 시제가 현재면 혼합 가정법이 되어 would + 동사원형을 쓴다.",
+    reviewRound: 1,
+    scheduleText: "3일 후",
+    scheduleClass: "bg-blue-100 text-blue-800",
+  },
+];
+
+/**
+ * 노트 목록 화면(`features/notes`)의 정적 재현.
+ *
+ * 실제 컴포넌트를 import하지 않는 이유: `NoteListItem`은 `NoteActions`를 통해
+ * 삭제 다이얼로그와 복습 시작 훅을 끌고 오고, 카드 전체가 `/notes/<id>`로 가는
+ * 링크다. 로그인 없이 열리는 랜딩에는 맞지 않으므로 마크업만 옮긴다.
+ * 대신 클릭 가능한 요소는 전부 span으로 두어 실제 컨트롤처럼 보이지 않게 한다.
+ *
+ * `aria-hidden`은 이 컴포넌트가 아니라 브라우저 크롬까지 감싸는 바깥 래퍼에
+ * 건다. 크롬(신호등 점과 창 제목)도 장식이라 여기서만 숨기면 크롬 텍스트가
+ * 접근성 트리에 남아, 랜딩에 진짜 노트 목록과 "복습 시작" 버튼이 있는 것처럼
+ * 읽힌다. 안쪽이 전부 span이라 포커스 가능한 요소가 없어 숨겨도 잃는 게 없다.
+ *
+ * 목록 화면 UI를 바꾸면 이 목업도 함께 손봐야 한다.
+ */
+function NotesPreview() {
+  return (
+    <div className="bg-muted/20 p-4 text-left sm:p-5">
+      {/* 툴바 — NotesToolbar의 보기 필터와 검색 입력 */}
+      <div className="flex items-center gap-2">
+        <div className="flex h-9 w-32 shrink-0 items-center justify-between rounded-md border bg-background px-3 text-sm">
+          <span className="flex items-center gap-1.5">
+            <ListFilter className="size-4 text-muted-foreground" aria-hidden />
+            전체
+          </span>
+          <ChevronDown className="size-4 text-muted-foreground" aria-hidden />
+        </div>
+        <div className="flex h-9 flex-1 items-center gap-2 rounded-md border bg-background px-3 text-sm text-muted-foreground">
+          <Search className="size-4 shrink-0" aria-hidden />
+          노트 검색
+        </div>
+      </div>
+
+      {/* 노트 목록 */}
+      <div className="mt-4 space-y-3">
+        {previewNotes.map((note) => (
+          <Card key={note.title} className="relative">
+            <CardContent className="p-4 sm:p-5">
+              <div className="flex min-w-0 items-center justify-between gap-2">
+                <span className="min-w-0 truncate text-base font-semibold leading-snug">
+                  {note.title}
+                </span>
+                {/* 글자색을 따로 두지 않고 카드 전경색을 그대로 받는 배지라
+                    배경만 테마에 맞춰 뒤집는다. 밝은 회색을 그대로 두면
+                    다크에서 흰 글자가 얹혀 읽히지 않는다. */}
+                <span className="inline-flex shrink-0 items-center rounded bg-gray-100 px-2 py-0.5 text-xs font-medium dark:bg-gray-800">
+                  복습 {note.reviewRound}회
+                </span>
+              </div>
+
+              <p className="mt-2 line-clamp-1 text-sm text-muted-foreground">
+                {note.preview}
+              </p>
+
+              <div className="my-3.5 border-t" />
+
+              {/* 오른쪽 pr은 아래 절대 배치된 액션 버튼이 차지하는 폭을 비워
+                  두는 값이다. 버튼 크기를 바꾸면 이 값도 같이 맞춰야 한다.
+                  좁은 화면에서는 버튼을 줄여 "복습일 + 배지"가 한 줄에
+                  들어가게 한다. */}
+              <div className="flex min-h-8 items-center gap-4 pr-28 text-sm text-muted-foreground sm:pr-32">
+                <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 whitespace-nowrap">
+                  <CalendarClock className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  <span>복습일</span>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${note.scheduleClass}`}
+                  >
+                    {note.scheduleText}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+
+            {/* NoteActions의 정적 재현 — 실제 버튼이 아니므로 span으로 둔다 */}
+            <div className="absolute bottom-4 right-4 flex shrink-0 items-center gap-0.5 sm:bottom-5 sm:right-5 sm:gap-1">
+              <span className="inline-flex h-7 items-center gap-0.5 rounded-md border border-emerald-600/40 px-2 text-[0.7rem] font-medium text-emerald-700 sm:h-8 sm:gap-1 sm:px-2.5 sm:text-xs">
+                <Play className="h-3.5 w-3.5" aria-hidden />
+                복습 시작
+              </span>
+              <span className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground sm:size-8">
+                <Trash2 className="h-4 w-4" aria-hidden />
+              </span>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export function HeroSection() {
   return (
@@ -13,8 +140,10 @@ export function HeroSection() {
       <div className="absolute -right-40 -top-40 -z-10 size-96 rounded-full bg-linear-to-br from-amber-200/40 to-orange-200/40 blur-3xl dark:from-amber-800/10 dark:to-orange-800/10" />
       <div className="absolute -bottom-20 -left-40 -z-10 size-80 rounded-full bg-linear-to-tr from-rose-200/40 to-pink-200/40 blur-3xl dark:from-rose-800/10 dark:to-pink-800/10" />
 
-      <div className="mx-auto max-w-5xl px-6 py-28 md:py-40">
-        <h1 className="text-5xl font-bold tracking-tight text-center">
+      <div className="mx-auto max-w-5xl px-6 py-14 md:py-24">
+        {/* 모바일에서는 헤더(약 57px) 아래 여백과 제목이 함께 커서 목업이
+            첫 화면 밖으로 밀린다. 위 여백과 제목을 같이 한 단계 낮춘다. */}
+        <h1 className="text-center text-4xl font-bold tracking-tight sm:text-5xl">
           {heroContent.title}
         </h1>
 
@@ -28,74 +157,25 @@ export function HeroSection() {
           </Button>
         </div>
 
-        {/* TODO: 앱 목업 교체 필요
-            - 현재: 정적 목업 (임시)
-            - 교체 조건: 기록/알림/복습 화면 디자인 확정 후
-            - 교체 방향: gif 또는 mp4 autoplay로 서비스 흐름 시연 */}
         {/* App mockup preview */}
         <div className="mx-auto mt-16 max-w-3xl">
-          <div className="relative pb-10 pr-10">
-            {/* Main mockup */}
-            <div className="overflow-hidden rounded-2xl border bg-card shadow-lg">
-              {/* Chrome */}
-              <div className="flex items-center gap-2 border-b bg-muted/50 px-4 py-2.5">
-                <div className="size-2.5 rounded-full bg-red-400/60" />
-                <div className="size-2.5 rounded-full bg-yellow-400/60" />
-                <div className="size-2.5 rounded-full bg-green-400/60" />
-                <span className="ml-2 text-xs text-muted-foreground">
-                  딱다구리
-                </span>
-              </div>
-
-              {/* Body */}
-              <div className="p-6 text-left">
-                {/* Record label */}
-                <div className="mb-4 flex items-center gap-2">
-                  <div className="size-1.5 rounded-full bg-orange-500" />
-                  <span className="text-xs text-muted-foreground">
-                    오늘의 기록 · JavaScript 클로저
-                  </span>
-                </div>
-
-                {/* Record 1 */}
-                <p className="text-base font-semibold">클로저(Closure)란?</p>
-                <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                  함수가 자신이 생성될 때의 스코프를 기억하여, 스코프 밖에서
-                  호출되더라도 해당 스코프에 접근할 수 있는 것.
-                </p>
-                <span className="mt-3 inline-flex items-center gap-1 rounded-full border bg-muted px-2.5 py-1 text-xs text-muted-foreground">
-                  🕐 1일 후 복습 예정
-                </span>
-
-                <hr className="my-4 border-border" />
-
-                {/* Record 2 */}
-                <p className="text-sm font-semibold">
-                  React useEffect 생명주기
-                </p>
-                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                  컴포넌트가 렌더링된 후 실행되며, 의존성 배열에 따라 실행
-                  시점이 달라진다.
-                </p>
-                <span className="mt-2.5 inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700">
-                  3일 후 복습 예정
-                </span>
-              </div>
+          {/* 크롬까지 포함해 목업 전체를 접근성 트리에서 뺀다. 크롬만 남으면
+              맥락 없는 "딱다구리" 한 줄이 읽히고 정작 노트 목록은 건너뛴다. */}
+          <div
+            aria-hidden="true"
+            className="overflow-hidden rounded-2xl border bg-card shadow-lg"
+          >
+            {/* Chrome */}
+            <div className="flex items-center gap-2 border-b bg-muted/50 px-4 py-2.5">
+              <div className="size-2.5 rounded-full bg-red-400/60" />
+              <div className="size-2.5 rounded-full bg-yellow-400/60" />
+              <div className="size-2.5 rounded-full bg-green-400/60" />
+              <span className="ml-2 text-xs text-muted-foreground">
+                딱다구리
+              </span>
             </div>
 
-            {/* Floating 알림 카드 */}
-            <div className="absolute bottom-0 right-0 w-56 rounded-xl border bg-card p-4 shadow-xl">
-              <div className="mb-1.5 flex items-center gap-2">
-                <span className="text-base">🔔</span>
-                <span className="text-xs text-muted-foreground">
-                  딱다구리 · 지금
-                </span>
-              </div>
-              <p className="text-sm font-semibold">복습할 시간이에요!</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                JavaScript 클로저 — 기억나시나요?
-              </p>
-            </div>
+            <NotesPreview />
           </div>
         </div>
       </div>

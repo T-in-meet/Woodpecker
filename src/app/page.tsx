@@ -3,10 +3,12 @@ import { Suspense } from "react";
 
 import { Footer } from "@/components/layout/Footer";
 import { Header, HeaderSkeleton } from "@/components/layout/Header";
+import { landingDescription } from "@/features/landing/content";
 import { CtaSection } from "@/features/landing/CtaSection";
 import { faqs, FaqSection } from "@/features/landing/FaqSection";
 import { HeroSection } from "@/features/landing/HeroSection";
 import { LearningFlowSection } from "@/features/landing/LearningFlowSection";
+import { LearningToolsSection } from "@/features/landing/LearningToolsSection";
 import { SITE_URL } from "@/lib/constants/site";
 
 // LLM(ChatGPT, Claude, Perplexity 등)이 토큰 효율적인 마크다운 버전을 발견할 수 있도록
@@ -48,7 +50,7 @@ const jsonLd = {
       name: "딱다구리",
       url: SITE_URL,
       inLanguage: "ko",
-      description: "기록이 기억이 되는 간격 반복 학습 공간",
+      description: landingDescription,
     },
 
     // ── 2. WebApplication: 딱다구리가 어떤 앱인지 상세 정보 전달 ─────────────
@@ -63,18 +65,22 @@ const jsonLd = {
       applicationCategory: "EducationalApplication", // 교육용 앱으로 분류
       operatingSystem: "Web",
       isPartOf: { "@id": `${SITE_URL}/#website` }, // WebSite 노드와 연결
-      description:
-        "기록한 순간부터 복습이 설계됩니다. 인지 과학의 간격 반복 학습을 기반으로 한 1-3-7일 복습 알림과 백지 테스트 등 인출 연습으로 학습 내용을 장기 기억으로 전환하세요.",
+      description: landingDescription,
       offers: {
         "@type": "Offer",
         price: 0,
         priceCurrency: "KRW",
-        description: "베타 기간 무료",
+        description: "현재 무료 제공",
       },
       featureList: [
-        "마크다운 기반 학습 기록",
-        "1-3-7일 간격 반복 알림",
-        "백지 테스트를 통한 인출 연습",
+        "학습 노트 작성",
+        "간격 반복 복습 일정",
+        "브라우저 푸시 알림",
+        "백지 테스트와 원문 비교",
+        "AI 채점 피드백",
+        "노트 기반 퀴즈 생성",
+        "관련 노트 연결과 AI 추천",
+        "노트 챗봇",
       ],
     },
 
@@ -111,13 +117,14 @@ export default function Home() {
         <Suspense fallback={<HeaderSkeleton />}>
           <Header />
         </Suspense>
-        <main>
+        <main className="text-prose-ko">
           <div className="sr-only" aria-hidden="true">
             이 페이지의 마크다운 버전:{" "}
             <a href={`${SITE_URL}/index.md`}>{SITE_URL}/index.md</a>
           </div>
           <HeroSection />
           <LearningFlowSection />
+          <LearningToolsSection />
           <FaqSection />
           <CtaSection />
         </main>
