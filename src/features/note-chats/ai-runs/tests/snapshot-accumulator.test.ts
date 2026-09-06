@@ -184,7 +184,7 @@ describe("createNoteChatSnapshotAccumulator", () => {
     expect(snapshot.retrieval?.output).not.toHaveProperty("selectedContext");
 
     const reconstructedSelectedContext =
-      snapshot.retrieval?.output?.selectedCandidateIndexes.map(
+      snapshot.retrieval?.output?.selectedCandidateIndexes?.map(
         (index) => snapshot.retrieval?.hydratedCandidates?.[index],
       );
 
@@ -192,5 +192,74 @@ describe("createNoteChatSnapshotAccumulator", () => {
       snapshot.retrieval?.hydratedCandidates?.[0],
       snapshot.retrieval?.hydratedCandidates?.[2],
     ]);
+  });
+
+  it("선택된 Context 후보를 찾지 못해도 Retrieval Snapshot을 보존한다", () => {
+    const accumulator = createNoteChatSnapshotAccumulator();
+
+    const hydratedCandidate = {
+      chunkText: "검색된 chunk",
+      distance: 0.1,
+      embeddingId: "embedding-1",
+      id: "note-1",
+      similarity: 0.9,
+      title: "검색된 노트",
+    };
+
+    const unmatchedSelectedCandidate = {
+      ...hydratedCandidate,
+      embeddingId: "embedding-missing",
+    };
+
+    accumulator.prepareRetrieval({
+      configuration: {
+        model: {
+          dimensions: 1536,
+          id: "embedding-model-id",
+          model: "embedding-model",
+          provider: "openai",
+        },
+      } as never,
+      contextLimit: 1,
+      inputText: "확장된 검색 질의",
+      matchLimit: 20,
+      minSimilarity: 0,
+    });
+
+    accumulator.completeRetrieval({
+      context: "생성된 Context",
+      hydratedCandidates: [hydratedCandidate],
+      selectedContext: [unmatchedSelectedCandidate],
+      sources: [],
+    });
+
+    const snapshot = noteChatSnapshotsSchema.parse(accumulator.buildSnapshot());
+
+    expect(snapshot.retrieval?.hydratedCandidates).toEqual([
+      {
+        chunk: {
+          id: "embedding-1",
+          inputText: "검색된 chunk",
+        },
+        distance: 0.1,
+        embeddingId: "embedding-1",
+        note: {
+          id: "note-1",
+          title: "검색된 노트",
+        },
+        noteId: "note-1",
+        similarity: 0.9,
+        sourceId: "note-1",
+      },
+    ]);
+
+    expect(snapshot.retrieval?.output).toEqual({
+      context: "생성된 Context",
+      sources: [],
+    });
+
+    expect(snapshot.retrieval?.output).not.toHaveProperty(
+      "selectedCandidateIndexes",
+    );
   });
 });

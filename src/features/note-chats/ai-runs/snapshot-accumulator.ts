@@ -7,6 +7,7 @@ import {
 import type { MatchedNote } from "@/features/ai/rags/note/get-matched-notes";
 import type { SearchNoteEmbeddingsObservation } from "@/features/ai/rags/note/search-embeddings";
 import type { QueryExpansionCompletionObservation } from "@/features/ai/rags/query-expansion/create-query-expansion-completion";
+import { resolveCandidateIndexes } from "@/features/ai/runs/resolve-candidate-indexes";
 import { createAiRunSnapshotAccumulator } from "@/features/ai/runs/snapshot-accumulator";
 import type { AiRuntimeChatConfiguration } from "@/features/ai/runtimes/types";
 import type { AiRuntimeEmbeddingConfiguration } from "@/features/ai/runtimes/types";
@@ -141,18 +142,6 @@ function mapHydratedCandidate(note: MatchedNote) {
     similarity: note.similarity,
     sourceId: note.id,
   };
-}
-
-/** 선택된 Context 후보를 Hydration 후보 배열 내부 index로 변환합니다. */
-function mapSelectedCandidateIndexes(
-  hydratedCandidates: MatchedNote[],
-  selectedContext: MatchedNote[],
-) {
-  return selectedContext.map((selectedCandidate) =>
-    hydratedCandidates.findIndex(
-      (candidate) => candidate.embeddingId === selectedCandidate.embeddingId,
-    ),
-  );
 }
 
 /** 기존 실행 source를 정본 Retrieval source Snapshot으로 변환합니다. */
@@ -313,14 +302,21 @@ export function createNoteChatSnapshotAccumulator(): NoteChatSnapshotAccumulator
     completeRetrieval: (input) => {
       accumulator.mutate((state) => {
         if (!state.retrieval || state.retrieval.error) return;
+
+        const selectedCandidateIndexes = resolveCandidateIndexes(
+          input.hydratedCandidates,
+          input.selectedContext,
+        );
+
         state.retrieval.hydratedCandidates =
           input.hydratedCandidates.map(mapHydratedCandidate);
         state.retrieval.output = {
           context: input.context,
-          selectedCandidateIndexes: mapSelectedCandidateIndexes(
-            input.hydratedCandidates,
-            input.selectedContext,
-          ),
+          ...(selectedCandidateIndexes === null
+            ? {}
+            : {
+                selectedCandidateIndexes,
+              }),
           sources: input.sources.map(mapRetrievalSource),
         };
       });

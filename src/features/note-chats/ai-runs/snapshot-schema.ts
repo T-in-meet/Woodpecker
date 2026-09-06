@@ -156,7 +156,9 @@ const retrievalSnapshotSchema = z.object({
   hydratedCandidates: z.array(hydratedCandidateSnapshotSchema).optional(),
   output: z
     .object({
-      selectedCandidateIndexes: z.array(z.number().int().nonnegative()),
+      selectedCandidateIndexes: z
+        .array(z.number().int().nonnegative())
+        .optional(),
       context: z.string(),
       sources: z.array(retrievalSourceSnapshotSchema),
     })
