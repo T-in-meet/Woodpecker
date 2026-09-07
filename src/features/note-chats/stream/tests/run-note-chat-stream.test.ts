@@ -1,22 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { AiRunPersistenceHandle } from "@/features/ai/runs/types";
 import {
   NOTE_CHAT_OPERATIONAL_ERROR_CODES,
   NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS,
   NOTE_CHAT_OPERATIONAL_ERROR_STAGES,
 } from "@/features/operational-errors/constants";
 
-import type { NoteChatSnapshotAccumulator } from "../../ai-runs/snapshot-accumulator";
 import { NOTE_CHAT_EXECUTION_CLAIM_COMPLETION_STATUS } from "../../execution/execution-claim-persistence";
-import { NoteChatProviderResponseError } from "../../execution/parse-response";
 import { NOTE_CHAT_NO_CONTEXT_MESSAGE } from "../constants";
 import { runNoteChatStream } from "../run-note-chat-stream";
 
 const mocks = vi.hoisted(() => ({
-  checkpointAiRun: vi.fn(),
-  completeAiRunFailed: vi.fn(),
-  completeAiRunSucceeded: vi.fn(),
   completeNoteChatExecutionClaim: vi.fn(),
   completeNoteChatExecutionSuccess: vi.fn(),
   consumeNoteChatProviderStream: vi.fn(),
@@ -24,12 +18,6 @@ const mocks = vi.hoisted(() => ({
   parseNoteChatProviderResponse: vi.fn(),
   reportNoteChatOperationalError: vi.fn(),
   resolveNoteChatUsedNoteIds: vi.fn(),
-}));
-
-vi.mock("@/features/ai/runs/persistence", () => ({
-  checkpointAiRun: mocks.checkpointAiRun,
-  completeAiRunFailed: mocks.completeAiRunFailed,
-  completeAiRunSucceeded: mocks.completeAiRunSucceeded,
 }));
 
 vi.mock("../../execution/execution-claim-persistence", async () => {
@@ -71,42 +59,11 @@ vi.mock("../consume-provider-stream", () => ({
   consumeNoteChatProviderStream: mocks.consumeNoteChatProviderStream,
 }));
 
-/** 테스트용 AI Run persistence handle입니다. */
-const aiRun: AiRunPersistenceHandle = {
-  id: "ai-run-1",
-  userId: "user-1",
-  featureType: "note-chat",
-  startedAt: "2026-09-05T00:00:00.000Z",
-};
-
-/** 테스트용 Snapshot accumulator mock입니다. */
-const snapshotAccumulator = {
-  appendAnswerPartialResponse: vi.fn(),
-  buildSnapshot: vi.fn(() => ({ schemaVersion: 1 })),
-  completeAnswerGenerationParsing: vi.fn(),
-  completeAnswerGenerationPostProcessing: vi.fn(),
-  completeAnswerGenerationProvider: vi.fn(),
-  completeGeneratedAnswer: vi.fn(),
-  completeNoContextAnswer: vi.fn(),
-  completeQueryExpansion: vi.fn(),
-  completeRetrieval: vi.fn(),
-  failAnswerGeneration: vi.fn(),
-  failQueryExpansion: vi.fn(),
-  failRetrieval: vi.fn(),
-  observeQueryExpansion: vi.fn(),
-  observeRetrieval: vi.fn(),
-  prepareAnswerGeneration: vi.fn(),
-  prepareQueryExpansion: vi.fn(),
-  prepareRetrieval: vi.fn(),
-} satisfies NoteChatSnapshotAccumulator;
-
 /** 테스트용 실행 입력입니다. */
 const params = {
-  aiRun,
   claimId: "claim-1",
   conversationId: "conversation-1",
   settings: {} as Parameters<typeof runNoteChatStream>[0]["settings"],
-  snapshotAccumulator,
   userId: "user-1",
   userMessageId: "message-1",
 };
@@ -133,15 +90,10 @@ describe("runNoteChatStream", () => {
     mocks.completeNoteChatExecutionClaim.mockResolvedValue(undefined);
   });
 
-  it("두 checkpoint 뒤 AI 성공과 Assistant Message ID를 succeeded terminal에 저장한다", async () => {
-    mocks.executeNoteChat.mockImplementation(async (input) => {
-      await input.onQueryExpansionCompleted?.();
-      await input.onRetrievalCompleted?.();
-
-      return {
-        providerStream,
-        sources,
-      };
+  it("Provider 응답을 저장하고 Assistant Message ID를 반환한다", async () => {
+    mocks.executeNoteChat.mockResolvedValue({
+      providerStream,
+      sources,
     });
 
     mocks.consumeNoteChatProviderStream.mockResolvedValue({
@@ -168,33 +120,13 @@ describe("runNoteChatStream", () => {
 
     const result = await runNoteChatStream(params, vi.fn());
 
-    expect(mocks.checkpointAiRun).toHaveBeenCalledTimes(2);
-
-    expect(mocks.checkpointAiRun).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        aiRun,
-        buildSnapshot: snapshotAccumulator.buildSnapshot,
-      }),
-    );
-
-    expect(mocks.checkpointAiRun).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        aiRun,
-        buildSnapshot: snapshotAccumulator.buildSnapshot,
-      }),
-    );
-
-    expect(mocks.completeAiRunSucceeded).toHaveBeenCalledWith(
-      expect.objectContaining({
-        aiRun,
-        buildSnapshot: snapshotAccumulator.buildSnapshot,
-        featureResultIds: ["assistant-1"],
-      }),
-    );
-
-    expect(mocks.completeAiRunFailed).not.toHaveBeenCalled();
+    expect(mocks.completeNoteChatExecutionSuccess).toHaveBeenCalledWith({
+      claimId: params.claimId,
+      content: "답변",
+      usedNoteIds: ["11111111-1111-4111-8111-111111111111"],
+      userId: params.userId,
+      userMessageId: params.userMessageId,
+    });
 
     expect(result).toEqual({
       assistantMessageId: "assistant-1",
@@ -203,7 +135,7 @@ describe("runNoteChatStream", () => {
     });
   });
 
-  it("Context가 없으면 Provider를 호출하지 않고 정상 성공 Snapshot을 저장한다", async () => {
+  it("Context가 없으면 Provider를 호출하지 않고 고정 답변을 저장한다", async () => {
     mocks.executeNoteChat.mockResolvedValue({
       providerStream: null,
       sources: [],
@@ -215,20 +147,19 @@ describe("runNoteChatStream", () => {
 
     expect(mocks.consumeNoteChatProviderStream).not.toHaveBeenCalled();
 
-    expect(snapshotAccumulator.completeNoContextAnswer).toHaveBeenCalledWith(
-      NOTE_CHAT_NO_CONTEXT_MESSAGE,
-    );
-
-    expect(mocks.completeAiRunSucceeded).toHaveBeenCalledWith(
+    expect(onEvent).toHaveBeenCalledWith({
+      delta: NOTE_CHAT_NO_CONTEXT_MESSAGE,
+      type: "text-delta",
+    });
+    expect(mocks.completeNoteChatExecutionSuccess).toHaveBeenCalledWith(
       expect.objectContaining({
-        aiRun,
-        buildSnapshot: snapshotAccumulator.buildSnapshot,
-        featureResultIds: ["assistant-1"],
+        content: NOTE_CHAT_NO_CONTEXT_MESSAGE,
+        usedNoteIds: [],
       }),
     );
   });
 
-  it("stream 실패 시 partial 관측과 failed terminal을 남기고 EXECUTION stage로 보고한다", async () => {
+  it("stream 실패 시 EXECUTION stage로 보고하고 Claim을 실패 처리한다", async () => {
     const streamError = new Error("stream failed");
 
     mocks.executeNoteChat.mockResolvedValue({
@@ -236,30 +167,9 @@ describe("runNoteChatStream", () => {
       sources,
     });
 
-    mocks.consumeNoteChatProviderStream.mockImplementation(
-      async (_stream, _onEvent, onPartial) => {
-        await onPartial?.({
-          partialResponse: "부분",
-          rawResponse: "raw",
-        });
-
-        throw streamError;
-      },
-    );
+    mocks.consumeNoteChatProviderStream.mockRejectedValue(streamError);
 
     await expect(runNoteChatStream(params, vi.fn())).rejects.toThrow(
-      streamError,
-    );
-
-    expect(
-      snapshotAccumulator.appendAnswerPartialResponse,
-    ).toHaveBeenCalledWith({
-      partialResponse: "부분",
-      rawResponse: "raw",
-    });
-
-    expect(snapshotAccumulator.failAnswerGeneration).toHaveBeenCalledWith(
-      "stream_consumption",
       streamError,
     );
 
@@ -274,19 +184,14 @@ describe("runNoteChatStream", () => {
       }),
     );
 
-    expect(mocks.completeAiRunFailed).toHaveBeenCalledWith(
-      expect.objectContaining({
-        aiRun,
-        buildSnapshot: snapshotAccumulator.buildSnapshot,
-      }),
-    );
+    expect(mocks.completeNoteChatExecutionClaim).toHaveBeenCalledWith({
+      claimId: params.claimId,
+      status: NOTE_CHAT_EXECUTION_CLAIM_COMPLETION_STATUS.FAILED,
+    });
   });
 
-  it("Provider 응답 구조 검증 실패를 validation stage로 기록한다", async () => {
-    const validationError = new NoteChatProviderResponseError(
-      "validation",
-      "Provider response validation failed.",
-    );
+  it("Provider 응답 구조 검증 실패를 운영 오류로 보고하고 Claim을 실패 처리한다", async () => {
+    const validationError = new Error("Provider response validation failed.");
 
     mocks.executeNoteChat.mockResolvedValue({
       providerStream,
@@ -314,20 +219,23 @@ describe("runNoteChatStream", () => {
       validationError,
     );
 
-    expect(snapshotAccumulator.failAnswerGeneration).toHaveBeenCalledWith(
-      "validation",
-      validationError,
-    );
-
-    expect(mocks.completeAiRunFailed).toHaveBeenCalledWith(
+    expect(mocks.reportNoteChatOperationalError).toHaveBeenCalledWith(
       expect.objectContaining({
-        aiRun,
-        buildSnapshot: snapshotAccumulator.buildSnapshot,
+        error: validationError,
+        errorCode:
+          NOTE_CHAT_OPERATIONAL_ERROR_CODES.PROVIDER_RESPONSE_PARSE_FAILED,
+        operation:
+          NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.PARSE_PROVIDER_RESPONSE,
+        stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.EXECUTION,
       }),
     );
+    expect(mocks.completeNoteChatExecutionClaim).toHaveBeenCalledWith({
+      claimId: params.claimId,
+      status: NOTE_CHAT_EXECUTION_CLAIM_COMPLETION_STATUS.FAILED,
+    });
   });
 
-  it("Assistant Message 저장 실패는 DATABASE stage로 보고하고 AI Run을 빈 결과의 succeeded로 유지한다", async () => {
+  it("Assistant Message 저장 실패를 DATABASE stage로 보고하고 Claim을 실패 처리한다", async () => {
     const persistenceError = new Error("message failed");
 
     mocks.executeNoteChat.mockResolvedValue({
@@ -352,16 +260,10 @@ describe("runNoteChatStream", () => {
       }),
     );
 
-    expect(mocks.completeAiRunSucceeded).toHaveBeenCalledWith(
-      expect.objectContaining({
-        aiRun,
-        buildSnapshot: snapshotAccumulator.buildSnapshot,
-        featureResultIds: [],
-      }),
-    );
-
-    expect(mocks.completeAiRunFailed).not.toHaveBeenCalled();
-    expect(mocks.completeNoteChatExecutionClaim).toHaveBeenCalled();
+    expect(mocks.completeNoteChatExecutionClaim).toHaveBeenCalledWith({
+      claimId: params.claimId,
+      status: NOTE_CHAT_EXECUTION_CLAIM_COMPLETION_STATUS.FAILED,
+    });
   });
 
   it("실패 cleanup 중 execution claim 완료 실패는 DATABASE stage로 보고한다", async () => {
@@ -373,13 +275,6 @@ describe("runNoteChatStream", () => {
 
     await expect(runNoteChatStream(params, vi.fn())).rejects.toThrow(
       executionError,
-    );
-
-    expect(mocks.completeAiRunFailed).toHaveBeenCalledWith(
-      expect.objectContaining({
-        aiRun,
-        buildSnapshot: snapshotAccumulator.buildSnapshot,
-      }),
     );
 
     expect(mocks.completeNoteChatExecutionClaim).toHaveBeenCalledWith({

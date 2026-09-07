@@ -46,7 +46,7 @@ export type NoteChatNoteSource = {
 
 /**
  * Prompt Context에 사용된 Note chunk 목록을
- * Run에 저장할 Context Source Snapshot으로 변환합니다.
+ * 응답 후처리에 사용할 Context Source 목록으로 변환합니다.
  *
  * 청킹 도입 이후 같은 Note에서 여러 chunk가 검색된 경우에도
  * 각각 별도 Source로 유지합니다.
@@ -56,15 +56,15 @@ export type NoteChatNoteSource = {
  * 정확한 Embedding chunk와 다시 연결할 수 있습니다.
  *
  * @param notes 실제 Prompt Context에 사용된 검색 Note chunk 목록
- * @returns AI Run Retrieval Snapshot과 응답 후처리에 사용할 JSON 목록
+ * @returns Context index와 검색 Note chunk를 매핑한 JSON 목록
  */
 export function buildNoteChatSources(notes: MatchedNote[]): Json[] {
   return notes.map((note, index) => ({
     contextIndex: index + 1,
 
     /*
-     * Note의 현재 전체 본문이 아니라 검색된 Embedding의 input_text를 저장합니다.
-     * 이를 통해 Run Source와 실제 LLM Context가 같은 snapshot을 가리킵니다.
+     * Note의 현재 전체 본문이 아니라 검색된 Embedding의 input_text를 사용하여
+     * Source와 실제 LLM Context가 같은 검색 당시 snapshot을 가리키도록 합니다.
      */
     content: note.chunkText,
 

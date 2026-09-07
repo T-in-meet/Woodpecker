@@ -4,7 +4,6 @@ import type {
 } from "@/features/ai/providers/types";
 import type { Json } from "@/types/db.helpers";
 
-import type { NoteChatSnapshotAccumulator } from "../ai-runs/snapshot-accumulator";
 import {
   type NoteChatExecutionSettings,
   type PreparedNoteChatExecution,
@@ -33,15 +32,6 @@ export type ExecuteNoteChatParams = {
 
   /** Query Embedding Provider usage 저장 callback입니다. */
   onQueryEmbeddingUsage?: (usage: AiTokenUsage) => Promise<void>;
-
-  /** 실행 중 확보한 값을 기록할 Snapshot accumulator입니다. */
-  snapshotAccumulator?: NoteChatSnapshotAccumulator | undefined;
-
-  /** Query Expansion 완료 직후 checkpoint callback입니다. */
-  onQueryExpansionCompleted?: (() => Promise<void>) | undefined;
-
-  /** Retrieval 완료 직후 checkpoint callback입니다. */
-  onRetrievalCompleted?: (() => Promise<void>) | undefined;
 };
 
 /**
@@ -63,7 +53,7 @@ export type NoteChatExecution = {
   /** Provider가 반환하는 공통 Chat 스트림입니다. */
   providerStream: AsyncGenerator<AiChatStreamEvent> | null;
 
-  /** 실행 과정에서 생성된 Context 출처 Snapshot입니다. */
+  /** 실행 과정에서 생성된 Context 출처 정보입니다. */
   sources: Json[];
 };
 
@@ -78,7 +68,7 @@ export type NoteChatExecution = {
  * 4. 질의 확장 결과와 사용량, 답변 생성에 필요한 Context 정보를 반환합니다.
  *
  * 이 함수는 Provider 스트림을 직접 소비하지 않으며,
- * Assistant Message 저장이나 Run 성공·실패 처리도 수행하지 않습니다.
+ * Assistant Message 저장이나 execution claim 완료 처리도 수행하지 않습니다.
  *
  * @param params 실행할 대화, 사용자 메시지 및 Runtime 설정
  * @returns 준비된 실행 정보와 Provider 스트림
@@ -94,15 +84,6 @@ export async function executeNoteChat(
     ...(params.onQueryExpansionUsage !== undefined
       ? { onQueryExpansionUsage: params.onQueryExpansionUsage }
       : {}),
-    ...(params.onQueryExpansionCompleted === undefined
-      ? {}
-      : { onQueryExpansionCompleted: params.onQueryExpansionCompleted }),
-    ...(params.onRetrievalCompleted === undefined
-      ? {}
-      : { onRetrievalCompleted: params.onRetrievalCompleted }),
-    ...(params.snapshotAccumulator === undefined
-      ? {}
-      : { snapshotAccumulator: params.snapshotAccumulator }),
     settings: params.settings,
     userId: params.userId,
     userMessageId: params.userMessageId,
@@ -116,15 +97,7 @@ export async function executeNoteChat(
   let providerStream: AsyncGenerator<AiChatStreamEvent> | null = null;
 
   if (prepared.sources.length > 0) {
-    try {
-      providerStream = startNoteChatProviderStream(prepared, (input) => {
-        // Provider 호출에 전달되는 동일한 설정과 메시지를 Snapshot에 기록한다.
-        params.snapshotAccumulator?.prepareAnswerGeneration(input);
-      });
-    } catch (error) {
-      params.snapshotAccumulator?.failAnswerGeneration("provider_call", error);
-      throw error;
-    }
+    providerStream = startNoteChatProviderStream(prepared);
   }
 
   return {

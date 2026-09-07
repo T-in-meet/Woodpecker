@@ -17,7 +17,6 @@ import {
 } from "@/features/operational-errors/constants";
 import type { Json } from "@/types/db.helpers";
 
-import type { NoteChatSnapshotAccumulator } from "../ai-runs/snapshot-accumulator";
 import {
   NOTE_CHAT_CONTEXT_LIMIT,
   NOTE_CHAT_MATCH_LIMIT,
@@ -76,7 +75,7 @@ export type PreparedNoteChatExecution = {
   /** AI Foundation Runtime에서 확정된 실행 설정입니다. */
   settings: NoteChatExecutionSettings;
 
-  /** 실행 과정에서 LLM Context에 주입한 Note Source Snapshot입니다. */
+  /** 실행 과정에서 LLM Context에 주입한 Note Source 정보입니다. */
   sources: Json[];
 
   /** 현재 실행을 발생시킨 사용자 메시지 ID입니다. */
@@ -101,15 +100,6 @@ type PrepareNoteChatExecutionParams = {
 
   /** Query Embedding Provider usage 저장 callback입니다. */
   onQueryEmbeddingUsage?: (usage: AiTokenUsage) => Promise<void>;
-
-  /** 실행 중 확보한 값을 기록할 Snapshot accumulator입니다. */
-  snapshotAccumulator?: NoteChatSnapshotAccumulator | undefined;
-
-  /** Query Expansion 완료 직후 첫 checkpoint callback입니다. */
-  onQueryExpansionCompleted?: (() => Promise<void>) | undefined;
-
-  /** Retrieval 완료 직후 두 번째 checkpoint callback입니다. */
-  onRetrievalCompleted?: (() => Promise<void>) | undefined;
 };
 
 /**
@@ -122,8 +112,8 @@ type PrepareNoteChatExecutionParams = {
  * 3. 이전 대화 이력을 바탕으로 문맥 기반 검색 질의를 확장합니다.
  * 4. Runtime Embedding Model로 확장 질의 Embedding을 생성합니다.
  * 5. 현재 사용자의 활성 Note chunk Embedding을 검색합니다.
- * 6. 검색된 Embedding에 해당하는 Note와 chunk snapshot을 조회합니다.
- * 7. 검색된 Note chunk로 Prompt Context와 Source Snapshot을 구성합니다.
+ * 6. 검색된 Embedding에 해당하는 Note와 chunk 정보를 조회합니다.
+ * 7. 검색된 Note chunk로 Prompt Context와 Source 정보를 구성합니다.
  * 8. Runtime Prompt Template에 원본 question과 context를 전달하여
  *    Provider 메시지를 생성합니다.
  *
@@ -247,12 +237,6 @@ export async function prepareNoteChatExecution(
       ...(params.onQueryExpansionUsage !== undefined
         ? { onUsage: params.onQueryExpansionUsage }
         : {}),
-      ...(params.onQueryExpansionCompleted === undefined
-        ? {}
-        : { onCompleted: params.onQueryExpansionCompleted }),
-      ...(params.snapshotAccumulator === undefined
-        ? {}
-        : { snapshotAccumulator: params.snapshotAccumulator }),
       userMessageId: params.userMessageId,
     });
 
@@ -260,39 +244,16 @@ export async function prepareNoteChatExecution(
    * 원본 사용자 질문이 아니라 문맥 기반으로 확장된 검색 질의를 Embedding하여
    * 현재 대화 문맥을 반영한 노트 후보를 검색합니다.
    */
-  params.snapshotAccumulator?.prepareRetrieval({
-    configuration: params.settings.embedding,
-    contextLimit: NOTE_CHAT_CONTEXT_LIMIT,
-    inputText: expandedQuery,
-    matchLimit: NOTE_CHAT_MATCH_LIMIT,
+  const searchResult = await searchNoteEmbeddingsWithUsage({
+    embeddingConfiguration: params.settings.embedding,
+    limit: NOTE_CHAT_MATCH_LIMIT,
     minSimilarity: NOTE_CHAT_MIN_SIMILARITY,
+    ownerUserId: detail.conversation.user_id,
+    ...(params.onQueryEmbeddingUsage !== undefined
+      ? { onUsage: params.onQueryEmbeddingUsage }
+      : {}),
+    question: expandedQuery,
   });
-
-  let searchResult;
-
-  try {
-    searchResult = await searchNoteEmbeddingsWithUsage({
-      embeddingConfiguration: params.settings.embedding,
-      limit: NOTE_CHAT_MATCH_LIMIT,
-      minSimilarity: NOTE_CHAT_MIN_SIMILARITY,
-      ownerUserId: detail.conversation.user_id,
-      ...(params.onQueryEmbeddingUsage !== undefined
-        ? { onUsage: params.onQueryEmbeddingUsage }
-        : {}),
-      ...(params.snapshotAccumulator === undefined
-        ? {}
-        : {
-            onObservation: (observation) => {
-              params.snapshotAccumulator?.observeRetrieval(observation);
-            },
-          }),
-      question: expandedQuery,
-    });
-  } catch (error) {
-    // 관측 이전 설정 검증 실패만 fallback으로 embedding stage에 기록한다.
-    params.snapshotAccumulator?.failRetrieval("embedding", error);
-    throw error;
-  }
 
   // 이후 두 AI 단계가 공통으로 사용하는 실제 질문을 한 번만 검증해 추출한다.
   const question = noteChatUserMessageContentSchema.parse(
@@ -307,8 +268,6 @@ export async function prepareNoteChatExecution(
       ownerUserId: detail.conversation.user_id,
     });
   } catch (error) {
-    params.snapshotAccumulator?.failRetrieval("hydration", error);
-
     await reportNoteChatOperationalError({
       actorUserId: detail.conversation.user_id,
       context: {
@@ -342,25 +301,8 @@ export async function prepareNoteChatExecution(
    */
   const contextNotes = matchedNotes.slice(0, NOTE_CHAT_CONTEXT_LIMIT);
 
-  let context;
-  let sources;
-
-  try {
-    context = buildNoteContext({ notes: contextNotes });
-    sources = buildNoteChatSources(contextNotes);
-  } catch (error) {
-    params.snapshotAccumulator?.failRetrieval("context_build", error);
-    throw error;
-  }
-
-  // 이미 확보한 hydration·context·source 값으로 Retrieval Snapshot을 완성한다.
-  params.snapshotAccumulator?.completeRetrieval({
-    context,
-    hydratedCandidates: matchedNotes,
-    selectedContext: contextNotes,
-    sources,
-  });
-  await params.onRetrievalCompleted?.();
+  const context = buildNoteContext({ notes: contextNotes });
+  const sources = buildNoteChatSources(contextNotes);
 
   let messages: AiProviderChatMessage[];
 

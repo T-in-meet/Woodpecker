@@ -18,18 +18,6 @@ export type NoteChatProviderResponse = z.infer<
   typeof noteChatProviderResponseSchema
 >;
 
-export type NoteChatProviderResponseErrorStage = "parse" | "validation";
-
-export class NoteChatProviderResponseError extends Error {
-  constructor(
-    readonly stage: NoteChatProviderResponseErrorStage,
-    message: string,
-  ) {
-    super(message);
-    this.name = "NoteChatProviderResponseError";
-  }
-}
-
 /**
  * Provider가 생성한 최종 문자열을 노트 챗봇 응답으로 변환합니다.
  *
@@ -46,19 +34,13 @@ export function parseNoteChatProviderResponse(
   try {
     parsed = JSON.parse(content);
   } catch {
-    throw new NoteChatProviderResponseError(
-      "parse",
-      "Note chat provider response is not valid JSON.",
-    );
+    throw new Error("Note chat provider response is not valid JSON.");
   }
 
   const result = noteChatProviderResponseSchema.safeParse(parsed);
 
   if (!result.success) {
-    throw new NoteChatProviderResponseError(
-      "validation",
-      "Note chat provider response has an invalid structure.",
-    );
+    throw new Error("Note chat provider response has an invalid structure.");
   }
 
   return {
