@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { renderLandingMarkdown } from "@/features/landing/markdown";
+import { markdownResponse } from "@/lib/seo/markdownResponse";
 
 export const dynamic = "force-static";
 
@@ -16,6 +17,8 @@ async function readContent(filename: string): Promise<string> {
   return readFile(filePath, "utf8");
 }
 
+// llms-full.txt는 세 문서를 이어 붙인 통합본이라 대응하는 HTML 페이지가 없다.
+// markdownResponse가 canonical 대신 X-Robots-Tag: noindex를 붙인다.
 export async function GET(): Promise<Response> {
   const [privacy, terms] = await Promise.all([
     readContent("privacy.md"),
@@ -34,11 +37,5 @@ export async function GET(): Promise<Response> {
     "",
   ].join("\n");
 
-  return new Response(body, {
-    status: 200,
-    headers: {
-      "Content-Type": "text/markdown; charset=utf-8",
-      "Cache-Control": "public, max-age=3600, s-maxage=86400",
-    },
-  });
+  return markdownResponse(body);
 }

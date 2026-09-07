@@ -13,7 +13,8 @@ import { SessionProvider } from "@/components/providers/SessionProvider";
 import { ToasterProvider } from "@/components/providers/ToasterProvider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { landingDescription } from "@/features/landing/content";
-import { SITE_URL } from "@/lib/constants/site";
+import { SITE_NAME, SITE_TITLE, SITE_URL } from "@/lib/constants/site";
+import { buildSocialMetadata } from "@/lib/seo/socialMetadata";
 
 /* ─── 폰트 ───────────────────────────────────────────────────────────────────
    Geist (본문), Geist_Mono (코드) 폰트를 CSS 변수로 등록.
@@ -45,37 +46,18 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "딱다구리 — 기록이 기억이 되는 간격 반복 학습 공간",
-    template: "%s | 딱다구리",
+    default: SITE_TITLE,
+    template: `%s | ${SITE_NAME}`,
   },
   description: landingDescription,
   icons: {
     icon: "/favicon.svg",
   },
-  openGraph: {
-    type: "website",
-    locale: "ko_KR",
+  ...buildSocialMetadata({
+    title: SITE_TITLE,
+    description: landingDescription,
     url: SITE_URL,
-    siteName: "딱다구리",
-    title: "딱다구리 — 기록이 기억이 되는 간격 반복 학습 공간",
-    description: landingDescription,
-    images: [
-      {
-        // metadataBase가 있어 상대 경로가 절대 URL로 변환된다.
-        // 파일은 scripts/generate-og-image.mjs로 굽는다.
-        url: "/og-image.png",
-        width: 1200,
-        height: 630,
-        alt: "딱다구리 — 기록이 기억이 되는 공간",
-      },
-    ],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "딱다구리 — 기록이 기억이 되는 간격 반복 학습 공간",
-    description: landingDescription,
-    images: ["/og-image.png"],
-  },
+  }),
   robots: {
     index: true,
     follow: true,

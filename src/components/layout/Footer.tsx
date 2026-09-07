@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { LEGAL_CONTACT } from "@/lib/constants/legal";
 import { ROUTES } from "@/lib/constants/routes";
 
 const footerLinks = [
@@ -16,6 +17,13 @@ const footerLinks = [
       { label: "이용약관", href: ROUTES.TERMS },
       { label: "개인정보처리방침", href: ROUTES.PRIVACY },
     ],
+  },
+  /* 운영 주체와 연락 경로는 약관·개인정보 처리방침 안에만 있어서, 그 문서를
+     펼치기 전에는 누가 만들고 어디로 문의하는지 알 수 없었다. 모든 페이지에
+     붙는 푸터에 같은 값(LEGAL_CONTACT)으로 한 번 더 노출한다. */
+  {
+    title: "문의",
+    links: [{ label: "이메일 문의", href: `mailto:${LEGAL_CONTACT.email}` }],
   },
 ] as const;
 
@@ -50,7 +58,10 @@ export function Footer() {
         </div>
 
         <div className="mt-10 border-t pt-6">
-          <p className="text-center text-xs text-muted-foreground">
+          {/* <p className="text-center text-xs text-muted-foreground">
+            운영: {LEGAL_CONTACT.department}
+          </p> */}
+          <p className="mt-1.5 text-center text-xs text-muted-foreground">
             &copy; 2026 딱다구리. All rights reserved.
           </p>
         </div>

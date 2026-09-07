@@ -4,6 +4,7 @@ import {
   learningToolsContent,
 } from "@/features/landing/content";
 import { SITE_URL } from "@/lib/constants/site";
+import { markdownResponse } from "@/lib/seo/markdownResponse";
 
 export const dynamic = "force-static";
 
@@ -35,12 +36,8 @@ function renderLlmsTxt(): string {
   ].join("\n");
 }
 
+// llms.txt는 대응하는 HTML 페이지가 없어 canonical로 가리킬 대표 URL이 없다.
+// markdownResponse가 대신 X-Robots-Tag: noindex를 붙여 검색 색인에서만 뺀다.
 export function GET(): Response {
-  return new Response(renderLlmsTxt(), {
-    status: 200,
-    headers: {
-      "Content-Type": "text/markdown; charset=utf-8",
-      "Cache-Control": "public, max-age=3600, s-maxage=86400",
-    },
-  });
+  return markdownResponse(renderLlmsTxt());
 }
