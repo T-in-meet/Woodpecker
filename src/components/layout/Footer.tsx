@@ -4,11 +4,14 @@ import { LEGAL_CONTACT } from "@/lib/constants/legal";
 import { ROUTES } from "@/lib/constants/routes";
 
 const footerLinks = [
+  /* 앵커는 랜딩에만 있는데 이 푸터는 (legal) 레이아웃에도 붙는다. "#faq"처럼
+     경로 없이 두면 /terms에서 /terms#faq로 이동해 아무 데도 가지 않는다.
+     경로를 붙여 어느 페이지에서 눌러도 랜딩의 해당 섹션으로 가게 한다. */
   {
     title: "서비스",
     links: [
-      { label: "자주 묻는 질문", href: "#faq" },
-      { label: "기능 소개", href: "#features" },
+      { label: "자주 묻는 질문", href: `${ROUTES.HOME}#faq` },
+      { label: "기능 소개", href: `${ROUTES.HOME}#features` },
     ],
   },
   {

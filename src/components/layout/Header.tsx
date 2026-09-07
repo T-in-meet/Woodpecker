@@ -29,7 +29,7 @@ export async function Header() {
       {/* 가운데 열은 auto — 1fr 균등 분할 시 768~917px 구간에서 NotesNav가 줄바꿈됨 */}
       <div className="flex justify-between md:grid md:grid-cols-[1fr_auto_1fr] items-center max-w-5xl mx-auto px-6 py-3.5">
         <Link href={ROUTES.HOME} className="flex items-center gap-2">
-          <Image src="/favicon.svg" alt="딱다구리" width={28} height={28} />
+          <Image src="/woodpecker.png" alt="딱다구리" width={28} height={28} />
           {/* font-brand: 브랜드 폰트(주아체), layout.tsx의 next/font/google 참조 */}
           <span className="font-brand text-2xl">딱다구리</span>
         </Link>

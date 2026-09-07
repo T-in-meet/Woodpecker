@@ -142,8 +142,8 @@ async function markNotificationReadOnClick(data: unknown) {
 self.addEventListener("push", (event) => {
   const { body, notificationData, tag, title } = getPushPayload(event.data);
   const options: NotificationOptions = {
-    icon: "/favicon.svg",
-    badge: "/favicon.svg",
+    icon: "/woodpecker.png",
+    badge: "/woodpecker.png",
     data: notificationData,
   };
 

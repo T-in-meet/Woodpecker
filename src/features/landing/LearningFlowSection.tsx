@@ -25,9 +25,14 @@ const mockupByStep = {
 
 /*
  * 아래 목업 셋은 루트에 `aria-hidden`을 건다. 실제 화면 마크업을 그대로 옮기느라
- * `nav`·`h3`·`ul`이 들어 있는데, 장식용 스크린샷이 랜드마크 목록과 제목 개요에
- * 섞이면 랜딩에 진짜 노트와 백지 테스트가 있는 것처럼 읽힌다. 안쪽 컨트롤이
- * 전부 span이라 포커스 가능한 요소가 없어 숨겨도 잃는 게 없다.
+ * `nav`·`ul`이 들어 있는데, 장식용 스크린샷이 랜드마크 목록에 섞이면 랜딩에 진짜
+ * 노트와 백지 테스트가 있는 것처럼 읽힌다. 안쪽 컨트롤이 전부 span이라 포커스
+ * 가능한 요소가 없어 숨겨도 잃는 게 없다.
+ *
+ * 목업 속 노트 제목은 heading 태그를 쓰지 않고 `p`에 스타일만 준다. `aria-hidden`은
+ * 접근성 트리에서만 빼는 속성이라 크롤러의 제목 개요에는 그대로 남는데, 그러면
+ * 랜딩의 소제목이 "임진왜란의 3대 대첩"·"이온 결합과 공유 결합" 같은 예시 데이터로
+ * 채워진다. 구글은 검색결과 제목을 만들 때 heading도 참고하므로 노이즈가 된다.
  */
 
 /** 목업 공통 브라우저 크롬. 캡처가 아니라 DOM이라 어떤 해상도에서도 선명하다. */
@@ -77,9 +82,9 @@ function NoteMockup() {
             <span className="min-w-0">다음 복습 일정: 내일 오전 09:00</span>
           </div>
 
-          <h3 className="mt-4 text-2xl font-bold text-foreground">
+          <p className="mt-4 text-2xl font-bold text-foreground">
             임진왜란의 3대 대첩
-          </h3>
+          </p>
 
           <div className="mt-5 flex flex-wrap items-center gap-2">
             <span className="inline-flex h-8 items-center gap-1.5 rounded-full bg-primary pl-2 pr-2.5 text-sm font-medium text-primary-foreground">
@@ -147,7 +152,7 @@ function NotificationMockup() {
         <p className="mb-2 text-xs text-muted-foreground">브라우저 알림</p>
         <div className="flex items-start gap-3 rounded-xl border bg-card px-4 py-3.5 shadow-xl">
           <Image
-            src="/favicon.svg"
+            src="/woodpecker.png"
             alt=""
             width={20}
             height={20}
@@ -250,9 +255,9 @@ function TestMockup() {
             </span>
             <span>백지 테스트</span>
           </div>
-          <h3 className="text-xl font-bold text-foreground">
+          <p className="text-xl font-bold text-foreground">
             이온 결합과 공유 결합
-          </h3>
+          </p>
         </div>
 
         <div className="grid gap-3 md:grid-cols-2">

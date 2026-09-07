@@ -68,7 +68,7 @@ export const metadata: Metadata = {
   },
   description: landingDescription,
   icons: {
-    icon: "/favicon.svg",
+    icon: "/woodpecker.png",
   },
   ...buildSocialMetadata({
     title: SITE_TITLE,

@@ -37,7 +37,12 @@ export function LegalPage({
 
         <div className="relative mx-auto max-w-3xl px-6 py-20 text-center">
           <div className="mb-6 flex justify-center">
-            <Image src="/favicon.svg" alt="딱다구리" width={44} height={44} />
+            <Image
+              src="/woodpecker.png"
+              alt="딱다구리"
+              width={80}
+              height={80}
+            />
           </div>
           <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-amber-700/70">
             법적 고지

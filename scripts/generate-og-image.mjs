@@ -2,7 +2,7 @@
 //
 // 랜딩 hero와 같은 카피·같은 배경으로 1200x630 카드를 렌더링해 PNG로 굽는다.
 // 한 번 굽고 커밋하는 정적 자산이므로 빌드 파이프라인에는 들어가지 않는다.
-// 카피(heroContent)나 로고(favicon.svg)를 바꾸면 이 스크립트를 다시 돌린다.
+// 카피(heroContent)나 로고(woodpecker.png)를 바꾸면 이 스크립트를 다시 돌린다.
 //
 //   node scripts/generate-og-image.mjs
 //
@@ -22,6 +22,11 @@ const OUTPUT = path.join(ROOT, "public", "og-image.png");
 
 const WIDTH = 1200;
 const HEIGHT = 630;
+const WORDMARK_FONTS = [
+  { file: "jua-wordmark-b531.woff2", unicodeRange: "U+B531" },
+  { file: "jua-wordmark-ad6c.woff2", unicodeRange: "U+AD6C" },
+  { file: "jua-wordmark-b2e4-b9ac.woff2", unicodeRange: "U+B2E4, U+B9AC" },
+];
 
 // 랜딩 hero와 문구를 맞춘다. content.ts는 TS라 여기서 import하지 않고 옮겨 적되,
 // 바뀌면 함께 고친다는 걸 잊지 않도록 출처를 명시한다.
@@ -31,16 +36,22 @@ const DESCRIPTION =
   "공부한 내용을 기록하면 복습 시점을 알려주고,\n백지 테스트와 AI 피드백으로 기억할 때까지 반복해요.";
 
 async function buildHtml() {
-  const logo = await readFile(path.join(ROOT, "public", "favicon.svg"));
-  const logoSrc = `data:image/svg+xml;base64,${logo.toString("base64")}`;
+  const logo = await readFile(path.join(ROOT, "public", "woodpecker.png"));
+  const logoSrc = `data:image/png;base64,${logo.toString("base64")}`;
+  const wordmarkFontFaces = await Promise.all(
+    WORDMARK_FONTS.map(async ({ file, unicodeRange }) => {
+      const font = await readFile(path.join(ROOT, "public", "fonts", file));
+      return `@font-face { font-family: "Woodpecker Jua"; font-style: normal; font-weight: 400; src: url("data:font/woff2;base64,${font.toString("base64")}") format("woff2"); unicode-range: ${unicodeRange}; }`;
+    }),
+  );
 
   return `<!doctype html>
 <html lang="ko">
 <head><meta charset="utf-8" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet"
-  href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;700&display=swap" />
+  href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap" />
 <style>
+  ${wordmarkFontFaces.join("\n  ")}
   /* 워드마크는 layout.tsx가 next/font/google로 쓰는 것과 같은 주아체다
      — 한쪽만 바꾸면 헤더와 OG 이미지의 서비스명이 서로 달라진다. */
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -74,7 +85,7 @@ async function buildHtml() {
   .brand span {
     /* 헤더 워드마크(Header.tsx의 font-brand)와 같은 폰트.
        주아체는 normal 한 벌뿐이라 굵기를 올리면 가짜 볼드가 된다. */
-    font-family: "Jua", "Noto Sans KR", sans-serif;
+    font-family: "Woodpecker Jua", sans-serif;
     font-size: 46px; font-weight: 400; color: #1c1917; letter-spacing: -.01em;
   }
   h1 {
