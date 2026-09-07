@@ -399,13 +399,6 @@ export type Database = {
             foreignKeyName: "ai_prompt_versions_family_id_fkey";
             columns: ["family_id"];
             isOneToOne: false;
-            referencedRelation: "admin_note_chat_run_detail";
-            referencedColumns: ["prompt_family_id"];
-          },
-          {
-            foreignKeyName: "ai_prompt_versions_family_id_fkey";
-            columns: ["family_id"];
-            isOneToOne: false;
             referencedRelation: "ai_prompt_families";
             referencedColumns: ["id"];
           },
@@ -624,13 +617,6 @@ export type Database = {
             foreignKeyName: "note_chat_conversations_user_id_fkey";
             columns: ["user_id"];
             isOneToOne: false;
-            referencedRelation: "admin_note_chat_run_detail";
-            referencedColumns: ["user_id"];
-          },
-          {
-            foreignKeyName: "note_chat_conversations_user_id_fkey";
-            columns: ["user_id"];
-            isOneToOne: false;
             referencedRelation: "admin_user_list";
             referencedColumns: ["id"];
           },
@@ -673,13 +659,6 @@ export type Database = {
             foreignKeyName: "note_chat_execution_claims_conversation_id_fkey";
             columns: ["conversation_id"];
             isOneToOne: false;
-            referencedRelation: "admin_note_chat_run_detail";
-            referencedColumns: ["conversation_id"];
-          },
-          {
-            foreignKeyName: "note_chat_execution_claims_conversation_id_fkey";
-            columns: ["conversation_id"];
-            isOneToOne: false;
             referencedRelation: "note_chat_conversation_list";
             referencedColumns: ["id"];
           },
@@ -689,13 +668,6 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "note_chat_conversations";
             referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "note_chat_execution_claims_user_id_fkey";
-            columns: ["user_id"];
-            isOneToOne: false;
-            referencedRelation: "admin_note_chat_run_detail";
-            referencedColumns: ["user_id"];
           },
           {
             foreignKeyName: "note_chat_execution_claims_user_id_fkey";
@@ -746,13 +718,6 @@ export type Database = {
             foreignKeyName: "note_chat_messages_conversation_id_fkey";
             columns: ["conversation_id"];
             isOneToOne: false;
-            referencedRelation: "admin_note_chat_run_detail";
-            referencedColumns: ["conversation_id"];
-          },
-          {
-            foreignKeyName: "note_chat_messages_conversation_id_fkey";
-            columns: ["conversation_id"];
-            isOneToOne: false;
             referencedRelation: "note_chat_conversation_list";
             referencedColumns: ["id"];
           },
@@ -761,165 +726,6 @@ export type Database = {
             columns: ["conversation_id"];
             isOneToOne: false;
             referencedRelation: "note_chat_conversations";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      note_chat_runs: {
-        Row: {
-          agent_id: string | null;
-          answer_generation_cost_usd: number | null;
-          answer_generation_usage: Json | null;
-          assistant_message_id: string | null;
-          chat_model_config_id: string | null;
-          completed_at: string | null;
-          created_at: string;
-          embedding_model_config_id: string | null;
-          expanded_query: string | null;
-          failure_message: string | null;
-          id: string;
-          memo: string | null;
-          memo_updated_at: string | null;
-          prompt_version_id: string | null;
-          query_embedding_cost_usd: number | null;
-          query_embedding_usage: Json | null;
-          query_expansion_cost_usd: number | null;
-          query_expansion_usage: Json | null;
-          sources: Json;
-          started_at: string | null;
-          status: string;
-          total_cost_usd: number | null;
-          updated_at: string;
-          user_message_id: string;
-        };
-        Insert: {
-          agent_id?: string | null;
-          answer_generation_cost_usd?: number | null;
-          answer_generation_usage?: Json | null;
-          assistant_message_id?: string | null;
-          chat_model_config_id?: string | null;
-          completed_at?: string | null;
-          created_at?: string;
-          embedding_model_config_id?: string | null;
-          expanded_query?: string | null;
-          failure_message?: string | null;
-          id?: string;
-          memo?: string | null;
-          memo_updated_at?: string | null;
-          prompt_version_id?: string | null;
-          query_embedding_cost_usd?: number | null;
-          query_embedding_usage?: Json | null;
-          query_expansion_cost_usd?: number | null;
-          query_expansion_usage?: Json | null;
-          sources?: Json;
-          started_at?: string | null;
-          status?: string;
-          total_cost_usd?: number | null;
-          updated_at?: string;
-          user_message_id: string;
-        };
-        Update: {
-          agent_id?: string | null;
-          answer_generation_cost_usd?: number | null;
-          answer_generation_usage?: Json | null;
-          assistant_message_id?: string | null;
-          chat_model_config_id?: string | null;
-          completed_at?: string | null;
-          created_at?: string;
-          embedding_model_config_id?: string | null;
-          expanded_query?: string | null;
-          failure_message?: string | null;
-          id?: string;
-          memo?: string | null;
-          memo_updated_at?: string | null;
-          prompt_version_id?: string | null;
-          query_embedding_cost_usd?: number | null;
-          query_embedding_usage?: Json | null;
-          query_expansion_cost_usd?: number | null;
-          query_expansion_usage?: Json | null;
-          sources?: Json;
-          started_at?: string | null;
-          status?: string;
-          total_cost_usd?: number | null;
-          updated_at?: string;
-          user_message_id?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "note_chat_runs_agent_id_fkey";
-            columns: ["agent_id"];
-            isOneToOne: false;
-            referencedRelation: "admin_ai_agent_list";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "note_chat_runs_agent_id_fkey";
-            columns: ["agent_id"];
-            isOneToOne: false;
-            referencedRelation: "ai_prompt_agents";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "note_chat_runs_assistant_message_id_fkey";
-            columns: ["assistant_message_id"];
-            isOneToOne: true;
-            referencedRelation: "note_chat_conversation_list";
-            referencedColumns: ["last_message_id"];
-          },
-          {
-            foreignKeyName: "note_chat_runs_assistant_message_id_fkey";
-            columns: ["assistant_message_id"];
-            isOneToOne: true;
-            referencedRelation: "note_chat_messages";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "note_chat_runs_chat_model_config_id_fkey";
-            columns: ["chat_model_config_id"];
-            isOneToOne: false;
-            referencedRelation: "admin_ai_model_list";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "note_chat_runs_chat_model_config_id_fkey";
-            columns: ["chat_model_config_id"];
-            isOneToOne: false;
-            referencedRelation: "ai_model_configs";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "note_chat_runs_embedding_model_config_id_fkey";
-            columns: ["embedding_model_config_id"];
-            isOneToOne: false;
-            referencedRelation: "admin_ai_model_list";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "note_chat_runs_embedding_model_config_id_fkey";
-            columns: ["embedding_model_config_id"];
-            isOneToOne: false;
-            referencedRelation: "ai_model_configs";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "note_chat_runs_prompt_version_id_fkey";
-            columns: ["prompt_version_id"];
-            isOneToOne: false;
-            referencedRelation: "ai_prompt_versions";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "note_chat_runs_user_message_id_fkey";
-            columns: ["user_message_id"];
-            isOneToOne: false;
-            referencedRelation: "note_chat_conversation_list";
-            referencedColumns: ["last_message_id"];
-          },
-          {
-            foreignKeyName: "note_chat_runs_user_message_id_fkey";
-            columns: ["user_message_id"];
-            isOneToOne: false;
-            referencedRelation: "note_chat_messages";
             referencedColumns: ["id"];
           },
         ];
@@ -1354,13 +1160,6 @@ export type Database = {
             foreignKeyName: "related_note_recommendation_execution_claims_user_id_fkey";
             columns: ["user_id"];
             isOneToOne: false;
-            referencedRelation: "admin_note_chat_run_detail";
-            referencedColumns: ["user_id"];
-          },
-          {
-            foreignKeyName: "related_note_recommendation_execution_claims_user_id_fkey";
-            columns: ["user_id"];
-            isOneToOne: false;
             referencedRelation: "admin_user_list";
             referencedColumns: ["id"];
           },
@@ -1369,104 +1168,6 @@ export type Database = {
             columns: ["user_id"];
             isOneToOne: false;
             referencedRelation: "profiles";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      related_note_recommendation_runs: {
-        Row: {
-          answer_generation_cost_usd: number | null;
-          answer_generation_model_config_id: string | null;
-          answer_generation_usage: Json | null;
-          completed_at: string | null;
-          created_at: string;
-          embedding_model_config_id: string | null;
-          expanded_query: string | null;
-          failure_message: string | null;
-          id: string;
-          matched_note_ids: string[];
-          note_id: string;
-          query_embedding_cost_usd: number | null;
-          query_embedding_usage: Json | null;
-          query_expansion_cost_usd: number | null;
-          query_expansion_model_config_id: string | null;
-          query_expansion_usage: Json | null;
-          recommendations: Json;
-          source_updated_at: string | null;
-          started_at: string;
-          status: string;
-          total_cost_usd: number | null;
-          updated_at: string;
-          user_id: string;
-          verification_cost_usd: number | null;
-          verification_model_config_id: string | null;
-          verification_results: Json;
-          verification_usage: Json | null;
-        };
-        Insert: {
-          answer_generation_cost_usd?: number | null;
-          answer_generation_model_config_id?: string | null;
-          answer_generation_usage?: Json | null;
-          completed_at?: string | null;
-          created_at?: string;
-          embedding_model_config_id?: string | null;
-          expanded_query?: string | null;
-          failure_message?: string | null;
-          id?: string;
-          matched_note_ids?: string[];
-          note_id: string;
-          query_embedding_cost_usd?: number | null;
-          query_embedding_usage?: Json | null;
-          query_expansion_cost_usd?: number | null;
-          query_expansion_model_config_id?: string | null;
-          query_expansion_usage?: Json | null;
-          recommendations?: Json;
-          source_updated_at?: string | null;
-          started_at?: string;
-          status?: string;
-          total_cost_usd?: number | null;
-          updated_at?: string;
-          user_id: string;
-          verification_cost_usd?: number | null;
-          verification_model_config_id?: string | null;
-          verification_results?: Json;
-          verification_usage?: Json | null;
-        };
-        Update: {
-          answer_generation_cost_usd?: number | null;
-          answer_generation_model_config_id?: string | null;
-          answer_generation_usage?: Json | null;
-          completed_at?: string | null;
-          created_at?: string;
-          embedding_model_config_id?: string | null;
-          expanded_query?: string | null;
-          failure_message?: string | null;
-          id?: string;
-          matched_note_ids?: string[];
-          note_id?: string;
-          query_embedding_cost_usd?: number | null;
-          query_embedding_usage?: Json | null;
-          query_expansion_cost_usd?: number | null;
-          query_expansion_model_config_id?: string | null;
-          query_expansion_usage?: Json | null;
-          recommendations?: Json;
-          source_updated_at?: string | null;
-          started_at?: string;
-          status?: string;
-          total_cost_usd?: number | null;
-          updated_at?: string;
-          user_id?: string;
-          verification_cost_usd?: number | null;
-          verification_model_config_id?: string | null;
-          verification_results?: Json;
-          verification_usage?: Json | null;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "related_note_recommendation_runs_note_id_fkey";
-            columns: ["note_id"];
-            isOneToOne: false;
-            referencedRelation: "notes";
             referencedColumns: ["id"];
           },
         ];
@@ -1716,133 +1417,6 @@ export type Database = {
             columns: ["agent_id"];
             isOneToOne: false;
             referencedRelation: "ai_prompt_agents";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      admin_note_chat_run_detail: {
-        Row: {
-          agent_display_name: string | null;
-          agent_id: string | null;
-          answer_generation_cost_usd: number | null;
-          answer_generation_usage: Json | null;
-          assistant_message_content: Json | null;
-          assistant_message_created_at: string | null;
-          assistant_message_id: string | null;
-          assistant_message_sequence_number: number | null;
-          assistant_message_updated_at: string | null;
-          chat_model_config_id: string | null;
-          chat_model_display_name: string | null;
-          completed_at: string | null;
-          conversation_id: string | null;
-          conversation_title: string | null;
-          created_at: string | null;
-          embedding_model_config_id: string | null;
-          embedding_model_display_name: string | null;
-          expanded_query: string | null;
-          failure_message: string | null;
-          id: string | null;
-          memo: string | null;
-          memo_updated_at: string | null;
-          prompt_family_display_name: string | null;
-          prompt_family_id: string | null;
-          prompt_version_display_name: string | null;
-          prompt_version_id: string | null;
-          prompt_version_number: number | null;
-          query_embedding_cost_usd: number | null;
-          query_embedding_usage: Json | null;
-          query_expansion_cost_usd: number | null;
-          query_expansion_usage: Json | null;
-          sources: Json | null;
-          started_at: string | null;
-          status: string | null;
-          total_cost_usd: number | null;
-          updated_at: string | null;
-          user_avatar_url: string | null;
-          user_id: string | null;
-          user_message_content: Json | null;
-          user_message_created_at: string | null;
-          user_message_id: string | null;
-          user_message_sequence_number: number | null;
-          user_message_updated_at: string | null;
-          user_nickname: string | null;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "note_chat_runs_agent_id_fkey";
-            columns: ["agent_id"];
-            isOneToOne: false;
-            referencedRelation: "admin_ai_agent_list";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "note_chat_runs_agent_id_fkey";
-            columns: ["agent_id"];
-            isOneToOne: false;
-            referencedRelation: "ai_prompt_agents";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "note_chat_runs_assistant_message_id_fkey";
-            columns: ["assistant_message_id"];
-            isOneToOne: true;
-            referencedRelation: "note_chat_conversation_list";
-            referencedColumns: ["last_message_id"];
-          },
-          {
-            foreignKeyName: "note_chat_runs_assistant_message_id_fkey";
-            columns: ["assistant_message_id"];
-            isOneToOne: true;
-            referencedRelation: "note_chat_messages";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "note_chat_runs_chat_model_config_id_fkey";
-            columns: ["chat_model_config_id"];
-            isOneToOne: false;
-            referencedRelation: "admin_ai_model_list";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "note_chat_runs_chat_model_config_id_fkey";
-            columns: ["chat_model_config_id"];
-            isOneToOne: false;
-            referencedRelation: "ai_model_configs";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "note_chat_runs_embedding_model_config_id_fkey";
-            columns: ["embedding_model_config_id"];
-            isOneToOne: false;
-            referencedRelation: "admin_ai_model_list";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "note_chat_runs_embedding_model_config_id_fkey";
-            columns: ["embedding_model_config_id"];
-            isOneToOne: false;
-            referencedRelation: "ai_model_configs";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "note_chat_runs_prompt_version_id_fkey";
-            columns: ["prompt_version_id"];
-            isOneToOne: false;
-            referencedRelation: "ai_prompt_versions";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "note_chat_runs_user_message_id_fkey";
-            columns: ["user_message_id"];
-            isOneToOne: false;
-            referencedRelation: "note_chat_conversation_list";
-            referencedColumns: ["last_message_id"];
-          },
-          {
-            foreignKeyName: "note_chat_runs_user_message_id_fkey";
-            columns: ["user_message_id"];
-            isOneToOne: false;
-            referencedRelation: "note_chat_messages";
             referencedColumns: ["id"];
           },
         ];
@@ -2161,24 +1735,6 @@ export type Database = {
           p_sort_field?: string;
           p_updated_from?: string;
           p_updated_to?: string;
-        };
-        Returns: {
-          items: Json;
-          total_count: number;
-        }[];
-      };
-      get_admin_note_chat_run_list: {
-        Args: {
-          p_chat_model_config_id_filters: string[];
-          p_created_from: string;
-          p_created_to: string;
-          p_has_memo_filter: boolean;
-          p_page: number;
-          p_page_size: number;
-          p_search_query: string;
-          p_sort_direction: string;
-          p_sort_field: string;
-          p_status_filters: string[];
         };
         Returns: {
           items: Json;

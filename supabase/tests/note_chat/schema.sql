@@ -4,12 +4,11 @@
 
 BEGIN;
 
-SELECT plan(37);
+SELECT plan(24);
 
 SELECT ok(to_regclass('public.note_chat_conversations') IS NOT NULL, $$conversations table should exist$$);
 SELECT ok(to_regclass('public.note_chat_messages') IS NOT NULL, $$messages table should exist$$);
 SELECT ok(to_regclass('public.note_chat_execution_claims') IS NOT NULL, $$execution claims table should exist$$);
-SELECT ok(to_regclass('public.note_chat_runs') IS NOT NULL, $$runs table should exist$$);
 
 SELECT is(
   (
@@ -166,79 +165,6 @@ VALUES (
 SELECT lives_ok(
   format(
     $sql$
-      INSERT INTO public.note_chat_runs (user_message_id)
-      VALUES ('%s'::uuid);
-    $sql$,
-    current_setting('test.note_chat_schema_user_message_id')
-  ),
-  $$pending run should be accepted with defaults$$
-);
-
-SELECT is(
-  (
-    SELECT sources
-    FROM public.note_chat_runs
-    WHERE user_message_id = current_setting('test.note_chat_schema_user_message_id')::uuid
-    ORDER BY created_at DESC
-    LIMIT 1
-  ),
-  '[]'::jsonb,
-  $$run sources should default to an empty array$$
-);
-
-SELECT throws_ok(
-  format(
-    $sql$
-      INSERT INTO public.note_chat_runs (user_message_id, status)
-      VALUES ('%s'::uuid, 'cancelled');
-    $sql$,
-    current_setting('test.note_chat_schema_user_message_id')
-  ),
-  '23514',
-  NULL,
-  $$run status should reject unsupported values$$
-);
-
-SELECT throws_ok(
-  format(
-    $sql$
-      INSERT INTO public.note_chat_runs (user_message_id, sources)
-      VALUES ('%s'::uuid, '{}'::jsonb);
-    $sql$,
-    current_setting('test.note_chat_schema_user_message_id')
-  ),
-  '23514',
-  NULL,
-  $$run sources should be a JSON array$$
-);
-
-SELECT throws_ok(
-  format(
-    $sql$
-      INSERT INTO public.note_chat_runs (user_message_id, query_expansion_usage)
-      VALUES ('%s'::uuid, '[]'::jsonb);
-    $sql$,
-    current_setting('test.note_chat_schema_user_message_id')
-  ),
-  '23514',
-  NULL,
-  $$run query expansion usage should be null or a JSON object$$
-);
-
-SELECT ok(
-  NOT EXISTS (
-    SELECT 1
-    FROM pg_attribute
-    WHERE attrelid = 'public.note_chat_runs'::regclass
-      AND attname = 'usage'
-      AND NOT attisdropped
-  ),
-  $$run aggregate usage column should be removed$$
-);
-
-SELECT lives_ok(
-  format(
-    $sql$
       INSERT INTO public.note_chat_execution_claims (user_id, conversation_id)
       VALUES ('%s'::uuid, '%s'::uuid);
     $sql$,
@@ -328,101 +254,9 @@ SELECT throws_ok(
   $$stale execution claim should require completed_at$$
 );
 
-SELECT lives_ok(
-  format(
-    $sql$
-      INSERT INTO public.note_chat_runs (user_message_id, memo)
-      VALUES ('%s'::uuid, repeat('m', 500));
-    $sql$,
-    current_setting('test.note_chat_schema_user_message_id')
-  ),
-  $$run memo should allow 500 characters$$
-);
-
-SELECT throws_ok(
-  format(
-    $sql$
-      INSERT INTO public.note_chat_runs (user_message_id, memo)
-      VALUES ('%s'::uuid, repeat('m', 501));
-    $sql$,
-    current_setting('test.note_chat_schema_user_message_id')
-  ),
-  '23514',
-  NULL,
-  $$run memo should reject values longer than 500 characters$$
-);
-
-SELECT throws_ok(
-  format(
-    $sql$
-      INSERT INTO public.note_chat_runs (
-        user_message_id,
-        status,
-        started_at
-      )
-      VALUES ('%s'::uuid, 'succeeded', now());
-    $sql$,
-    current_setting('test.note_chat_schema_user_message_id')
-  ),
-  '23514',
-  NULL,
-  $$succeeded run should require completed_at and assistant message$$
-);
-
-SELECT lives_ok(
-  format(
-    $sql$
-      INSERT INTO public.note_chat_runs (
-        user_message_id,
-        assistant_message_id,
-        status,
-        started_at,
-        completed_at
-      )
-      VALUES (
-        '%s'::uuid,
-        '%s'::uuid,
-        'succeeded',
-        now(),
-        now()
-      );
-    $sql$,
-    current_setting('test.note_chat_schema_user_message_id'),
-    current_setting('test.note_chat_schema_assistant_message_id')
-  ),
-  $$succeeded run should allow a connected assistant message$$
-);
-
-SELECT throws_ok(
-  format(
-    $sql$
-      INSERT INTO public.note_chat_runs (
-        user_message_id,
-        assistant_message_id,
-        status,
-        started_at,
-        completed_at
-      )
-      VALUES (
-        '%s'::uuid,
-        '%s'::uuid,
-        'succeeded',
-        now(),
-        now()
-      );
-    $sql$,
-    current_setting('test.note_chat_schema_user_message_id'),
-    current_setting('test.note_chat_schema_assistant_message_id')
-  ),
-  '23505',
-  NULL,
-  $$assistant message should be connected to at most one run$$
-);
-
 SELECT ok(to_regclass('public.note_chat_conversations_user_updated_at_idx') IS NOT NULL, $$conversation list index should exist$$);
 SELECT ok(to_regclass('public.note_chat_conversations_title_trgm_idx') IS NOT NULL, $$conversation title trigram index should exist$$);
 SELECT ok(to_regclass('public.note_chat_messages_conversation_sequence_idx') IS NOT NULL, $$message sequence index should exist$$);
-SELECT ok(to_regclass('public.note_chat_runs_status_created_at_idx') IS NOT NULL, $$run status index should exist$$);
 
 /*
  * Claim 조회는 conversation 단위 in-flight 차단, 사용자별 일일 quota 계산,
@@ -432,14 +266,17 @@ SELECT ok(
   to_regclass('public.note_chat_execution_claims_active_uidx') IS NOT NULL,
   $$execution claim active unique index should exist$$
 );
+
 SELECT ok(
   to_regclass('public.note_chat_execution_claims_user_claimed_idx') IS NOT NULL,
   $$execution claim user quota index should exist$$
 );
+
 SELECT ok(
   to_regclass('public.note_chat_execution_claims_status_claimed_idx') IS NOT NULL,
   $$execution claim status cleanup index should exist$$
 );
 
 SELECT * FROM finish();
+
 ROLLBACK;
