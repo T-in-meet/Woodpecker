@@ -175,11 +175,8 @@ describe("prepareNoteChatExecution", () => {
 
     expect(result).toEqual({
       conversation,
-      context: "",
       expandedQuery: "확장된 검색 질의",
-      history: [],
       messages: [],
-      question: "질문",
       queryEmbeddingUsage,
       queryExpansionUsage,
       settings,
@@ -388,7 +385,7 @@ describe("prepareNoteChatExecution", () => {
 
     /*
      * 검색 결과와 무관하게 질의 확장에서 사용한 token 사용량은
-     * 이후 Note Chat Run에서 합산할 수 있도록 그대로 전달합니다.
+     * 상위 실행 계층에서 사용할 수 있도록 그대로 전달합니다.
      */
     expect(result.queryExpansionUsage).toEqual(queryExpansionUsage);
   });

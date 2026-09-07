@@ -44,11 +44,8 @@ describe("executeNoteChat", () => {
 
     const prepared: PreparedNoteChatExecution = {
       conversation: preparedConversation,
-      context: "context",
       expandedQuery: "확장된 검색 질의",
-      history: [],
       messages: preparedMessages,
-      question: "질문",
       queryEmbeddingUsage,
       queryExpansionUsage,
       settings,

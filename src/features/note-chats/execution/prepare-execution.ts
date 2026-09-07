@@ -23,7 +23,6 @@ import {
   NOTE_CHAT_MIN_SIMILARITY,
 } from "../constants/execution";
 import { getNoteChatConversationDetailForExecution } from "../internal-queries";
-import { noteChatUserMessageContentSchema } from "../schema";
 import type { NoteChatConversation } from "../types";
 import { reportNoteChatOperationalError } from "../utils/report-operational-error";
 import { buildNoteChatSources } from "./build-note-sources";
@@ -51,20 +50,11 @@ export type PreparedNoteChatExecution = {
   /** 실행 대상 대화입니다. */
   conversation: NoteChatConversation;
 
-  /** Provider 입력에 사용된 실제 Note Context입니다. */
-  context: string;
-
   /** 문맥 기반 질의 확장을 통해 생성된 노트 검색용 질의입니다. */
   expandedQuery: string;
 
   /** Provider에 전달할 System·대화 이력·현재 질문 메시지입니다. */
   messages: AiProviderChatMessage[];
-
-  /** Provider 입력에 사용된 제한된 이전 대화 이력입니다. */
-  history: AiProviderChatMessage[];
-
-  /** 이번 실행의 실제 사용자 질문입니다. */
-  question: string;
 
   /** 질의 확장 Chat Completion에서 사용한 token 사용량입니다. */
   queryExpansionUsage: AiTokenUsage;
@@ -108,7 +98,7 @@ type PrepareNoteChatExecutionParams = {
  * 다음 작업을 수행합니다.
  *
  * 1. 현재 사용자가 접근할 수 있는 대화와 실행에 필요한 메시지 이력을 조회합니다.
- * 2. 현재 사용자 메시지에서 질문을 추출합니다.
+ * 2. 현재 사용자 메시지를 실행 대상으로 검증합니다.
  * 3. 이전 대화 이력을 바탕으로 문맥 기반 검색 질의를 확장합니다.
  * 4. Runtime Embedding Model로 확장 질의 Embedding을 생성합니다.
  * 5. 현재 사용자의 활성 Note chunk Embedding을 검색합니다.
@@ -255,11 +245,6 @@ export async function prepareNoteChatExecution(
     question: expandedQuery,
   });
 
-  // 이후 두 AI 단계가 공통으로 사용하는 실제 질문을 한 번만 검증해 추출한다.
-  const question = noteChatUserMessageContentSchema.parse(
-    currentUserMessage.content,
-  ).text;
-
   let matchedNotes;
 
   try {
@@ -343,11 +328,8 @@ export async function prepareNoteChatExecution(
 
   return {
     conversation: detail.conversation,
-    context,
     expandedQuery,
-    history: messages.slice(1, -1),
     messages,
-    question,
     queryEmbeddingUsage: searchResult.usage,
     queryExpansionUsage,
     settings: params.settings,
