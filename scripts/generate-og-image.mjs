@@ -80,13 +80,17 @@ async function buildHtml() {
     align-items: center; justify-content: center; text-align: center;
     padding: 0 80px;
   }
-  .brand { display: flex; align-items: center; gap: 20px; }
-  .brand img { width: 64px; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  /* 세로로 긴 원본 아이콘을 글자 높이에 맞춰 축소한다. */
+  .brand img { width: 52px; height: 52px; }
   .brand span {
     /* 헤더 워드마크(Header.tsx의 font-brand)와 같은 폰트.
        주아체는 normal 한 벌뿐이라 굵기를 올리면 가짜 볼드가 된다. */
     font-family: "Woodpecker Jua", sans-serif;
     font-size: 46px; font-weight: 400; color: #1c1917; letter-spacing: -.01em;
+    /* 아이콘은 투명 여백을 포함한 정사각형이고 글자는 기준선으로 배치된다.
+       글자를 조금 내려 두 요소의 시각적 하단선을 맞춘다. */
+    transform: translateY(3px);
   }
   h1 {
     margin-top: 40px;
