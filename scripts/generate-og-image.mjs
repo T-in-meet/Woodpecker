@@ -8,9 +8,9 @@
 //
 // Playwright 브라우저를 따로 받지 않고 시스템에 설치된 Edge/Chrome을 쓴다.
 //
-// 폰트는 시스템 폰트에 기대지 않고 웹에서 받아 굽는다. 실행 환경이 달라도
-// 결과가 같아야 하기 때문이다. 네트워크가 필요하지만 빌드가 아니라 이 스크립트를
-// 돌릴 때만 그렇다.
+// 폰트는 시스템 폰트에 기대지 않고 Google Fonts에서 받아 굽는다.
+// 실행 환경이 달라도 결과가 같아야 하기 때문이다. 네트워크가 필요하지만
+// 빌드가 아니라 이 스크립트를 돌릴 때만 그렇다.
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -39,16 +39,10 @@ async function buildHtml() {
 <head><meta charset="utf-8" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet"
-  href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap" />
+  href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;700&display=swap" />
 <style>
-  /* 워드마크용 브랜드 폰트. src는 globals.css의 @font-face와 같은 URL이어야
-     한다 — 한쪽만 바꾸면 헤더와 OG 이미지의 서비스명이 서로 달라진다. */
-  @font-face {
-    font-family: "JejuStoneWall";
-    src: url("https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2210-EF@1.0/EF_jejudoldam.woff2")
-      format("woff2");
-    font-weight: normal;
-  }
+  /* 워드마크는 layout.tsx가 next/font/google로 쓰는 것과 같은 주아체다
+     — 한쪽만 바꾸면 헤더와 OG 이미지의 서비스명이 서로 달라진다. */
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
     width: ${WIDTH}px; height: ${HEIGHT}px;
@@ -78,9 +72,9 @@ async function buildHtml() {
   .brand { display: flex; align-items: center; gap: 20px; }
   .brand img { width: 64px; height: 64px; }
   .brand span {
-    /* 헤더 워드마크(Header.tsx의 font-jeju)와 같은 폰트.
-       돌담체는 normal 한 벌뿐이라 굵기를 올리면 가짜 볼드가 된다. */
-    font-family: "JejuStoneWall", "Noto Sans KR", sans-serif;
+    /* 헤더 워드마크(Header.tsx의 font-brand)와 같은 폰트.
+       주아체는 normal 한 벌뿐이라 굵기를 올리면 가짜 볼드가 된다. */
+    font-family: "Jua", "Noto Sans KR", sans-serif;
     font-size: 46px; font-weight: 400; color: #1c1917; letter-spacing: -.01em;
   }
   h1 {

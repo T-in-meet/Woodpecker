@@ -4,7 +4,7 @@
 import "./globals.css";
 
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Jua } from "next/font/google";
 import { headers } from "next/headers";
 
 import { DevelopmentServiceWorkerCleanup } from "@/components/providers/DevelopmentServiceWorkerCleanup";
@@ -17,7 +17,7 @@ import { SITE_NAME, SITE_TITLE, SITE_URL } from "@/lib/constants/site";
 import { buildSocialMetadata } from "@/lib/seo/socialMetadata";
 
 /* ─── 폰트 ───────────────────────────────────────────────────────────────────
-   Geist (본문), Geist_Mono (코드) 폰트를 CSS 변수로 등록.
+   Geist (본문), Geist_Mono (코드), 주아체(브랜드)를 CSS 변수로 등록.
    body의 className에서 변수명으로 참조해 전역 적용함.
 ─────────────────────────────────────────────────────────────────────────── */
 const geistSans = Geist({
@@ -28,6 +28,23 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+/* 브랜드 폰트(주아체, SIL OFL). Header.tsx의 서비스명(딱다구리)과
+   OG 이미지 워드마크에만 쓴다. 폰트를 바꾸면
+   scripts/generate-og-image.mjs도 같은 서체를 보게 고친다.
+   preload를 끈 이유: 워드마크 네 글자 때문에 한글 서브셋을 우선 로드할
+   이유가 없다. swap이라 폴백으로 먼저 그리고 도착하면 교체한다. */
+const jua = Jua({
+  variable: "--font-jua",
+  weight: "400",
+  display: "swap",
+  // subsets를 지정하지 않는다. Google Fonts 원본 메타데이터에는 Jua의 subset이
+  // korean·latin 둘 다 있지만, next/font가 들고 있는 폰트 목록에는 latin만 잡혀 있어
+  // ["korean"]을 넘기면 타입 에러가 난다. 그렇다고 latin만 지정하면 한글이 빠진다.
+  // 생략하면 unicode-range로 쪼개진 CSS 전체를 self-host하므로 한글이 포함되고,
+  // 브라우저는 실제로 쓰는 글자가 든 조각만 받는다. preload가 false라 subsets는 선택이다.
+  preload: false,
 });
 
 /* ─── SEO 메타데이터 ──────────────────────────────────────────────────────────
@@ -89,7 +106,7 @@ export default async function RootLayout({
   return (
     <html lang="ko">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${jua.variable} antialiased`}
       >
         <DevelopmentServiceWorkerCleanup />
         <SessionProvider>

@@ -30,8 +30,8 @@ export async function Header() {
       <div className="flex justify-between md:grid md:grid-cols-[1fr_auto_1fr] items-center max-w-5xl mx-auto px-6 py-3.5">
         <Link href={ROUTES.HOME} className="flex items-center gap-2">
           <Image src="/favicon.svg" alt="딱다구리" width={28} height={28} />
-          {/* font-jeju: 브랜드 폰트(JejuStoneWall), globals.css @font-face 참조 */}
-          <span className="font-jeju text-2xl">딱다구리</span>
+          {/* font-brand: 브랜드 폰트(주아체), layout.tsx의 next/font/google 참조 */}
+          <span className="font-brand text-2xl">딱다구리</span>
         </Link>
 
         <div className="hidden md:flex justify-center">
