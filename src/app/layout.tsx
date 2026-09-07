@@ -34,8 +34,13 @@ const geistMono = Geist_Mono({
    - title.template: 하위 페이지에서 title을 지정하면 "%s | 딱다구리" 형식으로 조합됨
    - openGraph: 카카오톡, 슬랙 등 링크 공유 시 미리보기에 사용
    - twitter: 트위터(X) 링크 공유 시 카드 형태로 표시
-   - alternates.canonical: 검색엔진에 대표 URL을 명시해 중복 색인 방지
    - robots: 검색엔진에 색인(index)·링크 추적(follow) 허용 여부를 코드 레벨에서도 지정
+
+   canonical은 여기 두지 않는다. 루트에 두면 하위 페이지가 이를 상속해서,
+   자기 canonical을 선언하지 않은 페이지가 전부 홈을 대표 URL로 가리키게 된다.
+   대부분이 noindex라 당장 피해는 없지만 "색인하지 말라 + 대표 URL은 다른 페이지"는
+   서로 어긋나는 신호다. 색인 대상 페이지(/, /terms, /privacy)가 각자
+   alternates.canonical을 선언하고 있으므로 그쪽을 정본으로 둔다.
 ─────────────────────────────────────────────────────────────────────────── */
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -54,14 +59,22 @@ export const metadata: Metadata = {
     siteName: "딱다구리",
     title: "딱다구리 — 기록이 기억이 되는 간격 반복 학습 공간",
     description: landingDescription,
+    images: [
+      {
+        // metadataBase가 있어 상대 경로가 절대 URL로 변환된다.
+        // 파일은 scripts/generate-og-image.mjs로 굽는다.
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "딱다구리 — 기록이 기억이 되는 공간",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "딱다구리 — 기록이 기억이 되는 간격 반복 학습 공간",
     description: landingDescription,
-  },
-  alternates: {
-    canonical: SITE_URL,
+    images: ["/og-image.png"],
   },
   robots: {
     index: true,
