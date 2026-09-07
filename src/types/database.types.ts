@@ -411,42 +411,6 @@ export type Database = {
           },
         ];
       };
-      ai_runs: {
-        Row: {
-          completed_at: string | null;
-          created_at: string;
-          feature_result_ids: string[];
-          feature_type: string;
-          id: string;
-          snapshots: Json;
-          started_at: string;
-          status: string;
-          user_id: string;
-        };
-        Insert: {
-          completed_at?: string | null;
-          created_at?: string;
-          feature_result_ids?: string[];
-          feature_type: string;
-          id?: string;
-          snapshots: Json;
-          started_at: string;
-          status?: string;
-          user_id: string;
-        };
-        Update: {
-          completed_at?: string | null;
-          created_at?: string;
-          feature_result_ids?: string[];
-          feature_type?: string;
-          id?: string;
-          snapshots?: Json;
-          started_at?: string;
-          status?: string;
-          user_id?: string;
-        };
-        Relationships: [];
-      };
       ai_setting_configurations: {
         Row: {
           created_at: string;
@@ -2079,19 +2043,6 @@ export type Database = {
         Args: { p_note_id: string; p_relation_id: string };
         Returns: undefined;
       };
-      finalize_ai_run: {
-        Args: {
-          p_completed_at: string;
-          p_feature_result_ids: string[];
-          p_feature_type: string;
-          p_run_id: string;
-          p_snapshots: Json;
-          p_started_at: string;
-          p_terminal_status: string;
-          p_user_id: string;
-        };
-        Returns: string;
-      };
       finalize_quiz_generation_v2:
         | {
             Args: {
@@ -2112,7 +2063,7 @@ export type Database = {
               p_quiz_type: string;
               p_user_id: string;
             };
-            Returns: Json;
+            Returns: string;
           };
       finalize_review_grading: {
         Args: {
@@ -2325,7 +2276,7 @@ export type Database = {
           p_recommendations: Json;
           p_source_updated_at: string;
         };
-        Returns: Json;
+        Returns: string;
       };
       review_interval_days: {
         Args: { p_reviewed_day_count: number };
@@ -2339,7 +2290,6 @@ export type Database = {
         Args: { p_completed: boolean; p_note_id: string };
         Returns: boolean;
       };
-      sweep_stale_ai_runs: { Args: never; Returns: number };
       update_note_chat_user_message: {
         Args: { p_content: Json; p_message_id: string; p_user_id: string };
         Returns: {
