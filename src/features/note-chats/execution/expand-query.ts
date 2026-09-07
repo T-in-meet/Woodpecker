@@ -1,10 +1,7 @@
 import { z } from "zod";
 
 import { AI_CHAT_MESSAGE_ROLE } from "@/features/ai/chats/constants";
-import type {
-  AiProviderChatMessage,
-  AiTokenUsage,
-} from "@/features/ai/providers/types";
+import type { AiProviderChatMessage } from "@/features/ai/providers/types";
 import { createQueryExpansionCompletion } from "@/features/ai/rags/query-expansion/create-query-expansion-completion";
 import type { AiRuntimeChatConfiguration } from "@/features/ai/runtimes/types";
 import {
@@ -35,14 +32,6 @@ type ExpandNoteChatQueryParams = {
 
   /** 현재 실행을 발생시킨 사용자 메시지 ID입니다. */
   userMessageId: string;
-
-  /**
-   * Provider 응답 직후 Token usage를 저장하기 위한 callback입니다.
-   *
-   * JSON 파싱이나 schema 검증이 실패하더라도 이미 완료된 Provider 호출의
-   * usage를 전달하기 위해 응답 검증 전에 호출합니다.
-   */
-  onUsage?: (usage: AiTokenUsage) => Promise<void>;
 };
 
 /**
@@ -51,9 +40,6 @@ type ExpandNoteChatQueryParams = {
 export type ExpandNoteChatQueryResult = {
   /** Embedding 검색에 사용할 문맥 기반 확장 질의입니다. */
   expandedQuery: string;
-
-  /** 질의 확장 Chat Completion에서 사용한 token 사용량입니다. */
-  usage: AiTokenUsage;
 };
 
 /**
@@ -131,10 +117,10 @@ function serializeNoteChatQueryExpansionHistory(
  *
  * Runtime Prompt Version의 `system_template`, `user_template`,
  * `response_schema`를 사용하며 Provider 응답은 애플리케이션 스키마로
- * 다시 검증한 뒤 확장 질의와 token 사용량을 반환합니다.
+ * 다시 검증한 뒤 확장 질의를 반환합니다.
  *
  * @param params 전체 대화 메시지, 현재 사용자 메시지 및 질의 확장 Runtime 설정
- * @returns Embedding 검색에 사용할 문맥 기반 확장 질의와 token 사용량
+ * @returns Embedding 검색에 사용할 문맥 기반 확장 질의
  */
 export async function expandNoteChatQuery(
   params: ExpandNoteChatQueryParams,
@@ -198,7 +184,7 @@ export async function expandNoteChatQuery(
    * Note Chat은 대화 이력과 현재 질문을 Prompt 변수로 구성하지만,
    * 실제 Chat Completion 실행 자체는 Note Chat에 종속되지 않습니다.
    */
-  const result = await createQueryExpansionCompletion({
+  const content = await createQueryExpansionCompletion({
     configuration: params.configuration,
     responseSchemaName: "note_chat_query_expansion_response",
     variables: {
@@ -206,8 +192,6 @@ export async function expandNoteChatQuery(
       question: currentContent.text,
     },
   });
-
-  await params.onUsage?.(result.usage);
 
   /*
    * Provider의 구조화 응답을 그대로 신뢰하지 않고
@@ -218,7 +202,7 @@ export async function expandNoteChatQuery(
   let response: unknown;
 
   try {
-    response = JSON.parse(result.content) as unknown;
+    response = JSON.parse(content) as unknown;
   } catch {
     const error = new Error(
       "Note chat query expansion response is not valid JSON.",
@@ -279,6 +263,5 @@ export async function expandNoteChatQuery(
 
   return {
     expandedQuery: parsed.data.expandedQuery,
-    usage: result.usage,
   };
 }

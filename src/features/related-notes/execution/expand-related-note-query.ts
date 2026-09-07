@@ -1,6 +1,5 @@
 import { z } from "zod";
 
-import type { AiTokenUsage } from "@/features/ai/providers/types";
 import { createQueryExpansionCompletion } from "@/features/ai/rags/query-expansion/create-query-expansion-completion";
 import type { AiRuntimeChatConfiguration } from "@/features/ai/runtimes/types";
 import {
@@ -26,14 +25,6 @@ type ExpandRelatedNoteQueryParams = {
 
   /** 관련 노트를 추천할 대상 노트의 내용입니다. */
   content: string;
-
-  /**
-   * Provider 응답 직후 Token usage를 저장하기 위한 callback입니다.
-   *
-   * JSON 파싱이나 schema 검증이 실패하더라도 이미 완료된 Provider 호출의
-   * usage를 보존할 수 있도록 응답 검증 전에 호출합니다.
-   */
-  onUsage?: (usage: AiTokenUsage) => Promise<void>;
 };
 
 /**
@@ -42,9 +33,6 @@ type ExpandRelatedNoteQueryParams = {
 export type ExpandRelatedNoteQueryResult = {
   /** 관련 노트 검색에 사용할 확장 질의입니다. */
   expandedQuery: string;
-
-  /** Query Expansion Provider 호출에서 반환된 Token 사용량입니다. */
-  usage: AiTokenUsage;
 };
 
 /**
@@ -54,12 +42,12 @@ export type ExpandRelatedNoteQueryResult = {
  * 관련 노트 추천에 필요한 입력과 응답 검증만 이 기능에서 담당합니다.
  *
  * @param params 대상 노트와 Query Expansion Runtime 설정
- * @returns 관련 노트 검색에 사용할 확장 질의와 Provider usage
+ * @returns 관련 노트 검색에 사용할 확장 질의
  */
 export async function expandRelatedNoteQuery(
   params: ExpandRelatedNoteQueryParams,
 ): Promise<ExpandRelatedNoteQueryResult> {
-  const result = await createQueryExpansionCompletion({
+  const content = await createQueryExpansionCompletion({
     configuration: params.configuration,
     responseSchemaName: "related_note_query_expansion_response",
     variables: {
@@ -68,13 +56,11 @@ export async function expandRelatedNoteQuery(
     },
   });
 
-  await params.onUsage?.(result.usage);
-
   let response: unknown;
 
   // Provider가 반환한 문자열 응답을 JSON 값으로 변환합니다.
   try {
-    response = JSON.parse(result.content) as unknown;
+    response = JSON.parse(content) as unknown;
   } catch (error) {
     await reportRelatedNotesOperationalError({
       error,
@@ -117,6 +103,5 @@ export async function expandRelatedNoteQuery(
 
   return {
     expandedQuery: parsed.data.expandedQuery,
-    usage: result.usage,
   };
 }

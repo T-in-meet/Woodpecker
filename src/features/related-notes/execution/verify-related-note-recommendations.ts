@@ -2,7 +2,6 @@ import { z } from "zod";
 
 import { renderPromptTemplate } from "@/features/ai/prompts/render";
 import { createAiChatCompletionWithProvider } from "@/features/ai/providers";
-import type { AiTokenUsage } from "@/features/ai/providers/types";
 import { getProviderApiKey } from "@/features/ai/providers/utils/api-key";
 import type { MatchedNote } from "@/features/ai/rags/note/get-matched-notes";
 import type { AiRuntimeChatConfiguration } from "@/features/ai/runtimes/types";
@@ -34,7 +33,7 @@ const relatedNoteVerificationResponseSchema = z.object({
 /**
  * Verifier Agent가 개별 추천에 대해 반환한 판정입니다.
  */
-export type RelatedNoteVerification = {
+type RelatedNoteVerification = {
   /** 검증 대상 추천 Note ID입니다. */
   noteId: string;
 
@@ -60,9 +59,6 @@ type VerifyRelatedNoteRecommendationsParams = {
 
   /** Retrieval에서 실제 매칭된 Note chunk 목록입니다. */
   notes: MatchedNote[];
-
-  /** Provider 응답 직후 Token usage를 저장하기 위한 callback입니다. */
-  onUsage?: (usage: AiTokenUsage) => Promise<void>;
 };
 
 /**
@@ -71,12 +67,6 @@ type VerifyRelatedNoteRecommendationsParams = {
 export type VerifyRelatedNoteRecommendationsResult = {
   /** Verifier가 승인한 최종 저장 대상 추천 목록입니다. */
   recommendations: StoredRelatedNoteAiRecommendation[];
-
-  /** Answer 추천마다 정확히 하나씩 존재하는 검증 결과입니다. */
-  verifications: RelatedNoteVerification[];
-
-  /** Verifier Provider 호출에서 반환된 Token 사용량입니다. */
-  usage: AiTokenUsage;
 };
 
 /**
@@ -87,7 +77,7 @@ export type VerifyRelatedNoteRecommendationsResult = {
  * 정확히 1:1로 일치해야 하며, 누락/추가/중복이 있으면 검증 실패로 처리합니다.
  *
  * @param params Verifier Runtime 설정, 원본 Note, Answer 추천 및 검색 chunk
- * @returns 승인된 저장 대상 추천과 검증 결과
+ * @returns 승인된 저장 대상 추천
  */
 export async function verifyRelatedNoteRecommendations({
   configuration,
@@ -95,7 +85,6 @@ export async function verifyRelatedNoteRecommendations({
   content,
   recommendations,
   notes,
-  onUsage,
 }: VerifyRelatedNoteRecommendationsParams): Promise<VerifyRelatedNoteRecommendationsResult> {
   await assertRecommendationsHaveEvidence({
     notes,
@@ -148,8 +137,6 @@ export async function verifyRelatedNoteRecommendations({
     userPrompt,
   });
 
-  await onUsage?.(result.usage);
-
   let response: unknown;
 
   try {
@@ -197,22 +184,6 @@ export async function verifyRelatedNoteRecommendations({
     verifications.map((verification) => [verification.noteId, verification]),
   );
 
-  /*
-   * Verifier LLM이 JSON 배열을 임의 순서로 반환해도 저장 순서는
-   * Answer Agent가 만든 원래 추천 순서를 기준으로 보존합니다.
-   */
-  const orderedVerifications = recommendations.map((recommendation) => {
-    const verification = verificationsByNoteId.get(recommendation.noteId);
-
-    if (!verification) {
-      throw new Error(
-        "Related note verification note IDs do not match recommendations.",
-      );
-    }
-
-    return verification;
-  });
-
   const finalRecommendations = recommendations.flatMap((recommendation) => {
     const verification = verificationsByNoteId.get(recommendation.noteId);
 
@@ -230,8 +201,6 @@ export async function verifyRelatedNoteRecommendations({
 
   return {
     recommendations: finalRecommendations,
-    verifications: orderedVerifications,
-    usage: result.usage,
   };
 }
 

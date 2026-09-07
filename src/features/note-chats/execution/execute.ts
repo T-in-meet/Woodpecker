@@ -1,7 +1,4 @@
-import type {
-  AiChatStreamEvent,
-  AiTokenUsage,
-} from "@/features/ai/providers/types";
+import type { AiChatStreamEvent } from "@/features/ai/providers/types";
 import type { Json } from "@/types/db.helpers";
 
 import {
@@ -26,12 +23,6 @@ export type ExecuteNoteChatParams = {
 
   /** 현재 실행을 발생시킨 사용자 메시지 ID입니다. */
   userMessageId: string;
-
-  /** Query Expansion Provider usage 저장 callback입니다. */
-  onQueryExpansionUsage?: (usage: AiTokenUsage) => Promise<void>;
-
-  /** Query Embedding Provider usage 저장 callback입니다. */
-  onQueryEmbeddingUsage?: (usage: AiTokenUsage) => Promise<void>;
 };
 
 /**
@@ -40,12 +31,6 @@ export type ExecuteNoteChatParams = {
 export type NoteChatExecution = {
   /** 문맥 기반 질의 확장을 통해 생성된 노트 검색용 질의입니다. */
   expandedQuery: string;
-
-  /** 질의 확장 Chat Completion에서 사용한 token 사용량입니다. */
-  queryExpansionUsage: AiTokenUsage;
-
-  /** 검색 질의 Embedding Provider 호출에서 사용한 token 사용량입니다. */
-  queryEmbeddingUsage: AiTokenUsage;
 
   /** Provider 호출 직전에 확정된 실행 정보입니다. */
   prepared: PreparedNoteChatExecution;
@@ -78,12 +63,6 @@ export async function executeNoteChat(
 ): Promise<NoteChatExecution> {
   const prepared = await prepareNoteChatExecution({
     conversationId: params.conversationId,
-    ...(params.onQueryEmbeddingUsage !== undefined
-      ? { onQueryEmbeddingUsage: params.onQueryEmbeddingUsage }
-      : {}),
-    ...(params.onQueryExpansionUsage !== undefined
-      ? { onQueryExpansionUsage: params.onQueryExpansionUsage }
-      : {}),
     settings: params.settings,
     userId: params.userId,
     userMessageId: params.userMessageId,
@@ -104,8 +83,6 @@ export async function executeNoteChat(
     expandedQuery: prepared.expandedQuery,
     prepared,
     providerStream,
-    queryEmbeddingUsage: prepared.queryEmbeddingUsage,
-    queryExpansionUsage: prepared.queryExpansionUsage,
     sources: prepared.sources,
   };
 }

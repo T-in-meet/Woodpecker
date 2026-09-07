@@ -1,11 +1,8 @@
 import { AI_CHAT_MESSAGE_ROLE } from "@/features/ai/chats/constants";
-import type {
-  AiProviderChatMessage,
-  AiTokenUsage,
-} from "@/features/ai/providers/types";
+import type { AiProviderChatMessage } from "@/features/ai/providers/types";
 import { buildNoteContext } from "@/features/ai/rags/note/build-context";
 import { getMatchedNotes } from "@/features/ai/rags/note/get-matched-notes";
-import { searchNoteEmbeddingsWithUsage } from "@/features/ai/rags/note/search-embeddings";
+import { searchNoteEmbeddings } from "@/features/ai/rags/note/search-embeddings";
 import type {
   AiRuntimeChatConfiguration,
   AiRuntimeEmbeddingConfiguration,
@@ -56,12 +53,6 @@ export type PreparedNoteChatExecution = {
   /** Provider에 전달할 System·대화 이력·현재 질문 메시지입니다. */
   messages: AiProviderChatMessage[];
 
-  /** 질의 확장 Chat Completion에서 사용한 token 사용량입니다. */
-  queryExpansionUsage: AiTokenUsage;
-
-  /** 검색 질의 Embedding Provider 호출에서 사용한 token 사용량입니다. */
-  queryEmbeddingUsage: AiTokenUsage;
-
   /** AI Foundation Runtime에서 확정된 실행 설정입니다. */
   settings: NoteChatExecutionSettings;
 
@@ -84,12 +75,6 @@ type PrepareNoteChatExecutionParams = {
 
   /** 현재 실행을 발생시킨 사용자 메시지 ID입니다. */
   userMessageId: string;
-
-  /** Query Expansion Provider usage 저장 callback입니다. */
-  onQueryExpansionUsage?: (usage: AiTokenUsage) => Promise<void>;
-
-  /** Query Embedding Provider usage 저장 callback입니다. */
-  onQueryEmbeddingUsage?: (usage: AiTokenUsage) => Promise<void>;
 };
 
 /**
@@ -220,28 +205,21 @@ export async function prepareNoteChatExecution(
    * 확장 질의는 검색 단계에서만 사용하며,
    * 실제 사용자 질문과 최종 답변용 Conversation Message는 변경하지 않습니다.
    */
-  const { expandedQuery, usage: queryExpansionUsage } =
-    await expandNoteChatQuery({
-      configuration: params.settings.queryExpansion,
-      messages: detail.messages,
-      ...(params.onQueryExpansionUsage !== undefined
-        ? { onUsage: params.onQueryExpansionUsage }
-        : {}),
-      userMessageId: params.userMessageId,
-    });
+  const { expandedQuery } = await expandNoteChatQuery({
+    configuration: params.settings.queryExpansion,
+    messages: detail.messages,
+    userMessageId: params.userMessageId,
+  });
 
   /*
    * 원본 사용자 질문이 아니라 문맥 기반으로 확장된 검색 질의를 Embedding하여
    * 현재 대화 문맥을 반영한 노트 후보를 검색합니다.
    */
-  const searchResult = await searchNoteEmbeddingsWithUsage({
+  const matches = await searchNoteEmbeddings({
     embeddingConfiguration: params.settings.embedding,
     limit: NOTE_CHAT_MATCH_LIMIT,
     minSimilarity: NOTE_CHAT_MIN_SIMILARITY,
     ownerUserId: detail.conversation.user_id,
-    ...(params.onQueryEmbeddingUsage !== undefined
-      ? { onUsage: params.onQueryEmbeddingUsage }
-      : {}),
     question: expandedQuery,
   });
 
@@ -249,7 +227,7 @@ export async function prepareNoteChatExecution(
 
   try {
     matchedNotes = await getMatchedNotes({
-      matches: searchResult.matches,
+      matches,
       ownerUserId: detail.conversation.user_id,
     });
   } catch (error) {
@@ -330,8 +308,6 @@ export async function prepareNoteChatExecution(
     conversation: detail.conversation,
     expandedQuery,
     messages,
-    queryEmbeddingUsage: searchResult.usage,
-    queryExpansionUsage,
     settings: params.settings,
     sources,
     userMessageId: params.userMessageId,

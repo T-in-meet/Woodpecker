@@ -58,30 +58,6 @@ const defaultParams = {
   verificationConfiguration,
 };
 
-const queryExpansionUsage = {
-  inputTokens: 1,
-  outputTokens: 2,
-  totalTokens: 3,
-};
-
-const queryEmbeddingUsage = {
-  inputTokens: 4,
-  outputTokens: 0,
-  totalTokens: 4,
-};
-
-const answerGenerationUsage = {
-  inputTokens: 5,
-  outputTokens: 6,
-  totalTokens: 11,
-};
-
-const verificationUsage = {
-  inputTokens: 7,
-  outputTokens: 8,
-  totalTokens: 15,
-};
-
 describe("runRelatedNoteRecommendation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -99,8 +75,6 @@ describe("runRelatedNoteRecommendation", () => {
       context: "<note>Related note</note>",
       expandedQuery: "expanded related note query",
       notes,
-      queryEmbeddingUsage,
-      queryExpansionUsage,
     });
 
     mockGenerateRelatedNoteRecommendations.mockResolvedValue({
@@ -111,7 +85,6 @@ describe("runRelatedNoteRecommendation", () => {
           title: "Related note",
         },
       ],
-      usage: answerGenerationUsage,
     });
 
     mockVerifyRelatedNoteRecommendations.mockResolvedValue({
@@ -121,59 +94,26 @@ describe("runRelatedNoteRecommendation", () => {
           reason: "관련 노트 추천 이유",
         },
       ],
-      usage: verificationUsage,
-      verifications: [
-        {
-          approved: true,
-          noteId: RELATED_NOTE_ID,
-          reason: "직접적인 학습 관계가 있습니다.",
-        },
-      ],
     });
 
-    const onQueryExpansionUsage = vi.fn().mockResolvedValue(undefined);
-    const onExpandedQuery = vi.fn().mockResolvedValue(undefined);
-    const onQueryEmbeddingUsage = vi.fn().mockResolvedValue(undefined);
-    const onMatchedNotes = vi.fn().mockResolvedValue(undefined);
-    const onAnswerGenerationUsage = vi.fn().mockResolvedValue(undefined);
-    const onVerificationUsage = vi.fn().mockResolvedValue(undefined);
-    const onRecommendations = vi.fn().mockResolvedValue(undefined);
-    const onVerificationResults = vi.fn().mockResolvedValue(undefined);
-
-    const result = await runRelatedNoteRecommendation({
-      ...defaultParams,
-      onAnswerGenerationUsage,
-      onExpandedQuery,
-      onMatchedNotes,
-      onQueryEmbeddingUsage,
-      onQueryExpansionUsage,
-      onRecommendations,
-      onVerificationResults,
-      onVerificationUsage,
-    });
+    const result = await runRelatedNoteRecommendation(defaultParams);
 
     expect(mockPrepareRelatedNoteContext).toHaveBeenCalledWith({
       content: "Source note content",
       embeddingConfiguration,
       limit: 5,
       minSimilarity: 0,
-      onExpandedQuery,
-      onQueryEmbeddingUsage,
-      onQueryExpansionUsage,
       ownerUserId: OWNER_USER_ID,
       queryExpansionConfiguration,
       targetNoteId: TARGET_NOTE_ID,
       title: "Source note",
     });
 
-    expect(onMatchedNotes).toHaveBeenCalledWith([RELATED_NOTE_ID]);
-
     expect(mockGenerateRelatedNoteRecommendations).toHaveBeenCalledWith({
       configuration: answerConfiguration,
       content: "Source note content",
       context: "<note>Related note</note>",
       notes,
-      onUsage: onAnswerGenerationUsage,
       title: "Source note",
     });
 
@@ -181,7 +121,6 @@ describe("runRelatedNoteRecommendation", () => {
       configuration: verificationConfiguration,
       content: "Source note content",
       notes,
-      onUsage: onVerificationUsage,
       recommendations: [
         {
           noteId: RELATED_NOTE_ID,
@@ -192,38 +131,11 @@ describe("runRelatedNoteRecommendation", () => {
       title: "Source note",
     });
 
-    expect(onVerificationResults).toHaveBeenCalledWith([
-      {
-        approved: true,
-        noteId: RELATED_NOTE_ID,
-        reason: "직접적인 학습 관계가 있습니다.",
-      },
-    ]);
-    expect(onRecommendations).toHaveBeenCalledWith([
-      {
-        noteId: RELATED_NOTE_ID,
-        reason: "관련 노트 추천 이유",
-      },
-    ]);
-
     expect(result).toEqual({
-      answerGenerationUsage,
-      expandedQuery: "expanded related note query",
-      notes,
-      queryEmbeddingUsage,
-      queryExpansionUsage,
       recommendations: [
         {
           noteId: RELATED_NOTE_ID,
           reason: "관련 노트 추천 이유",
-        },
-      ],
-      verificationUsage,
-      verifications: [
-        {
-          approved: true,
-          noteId: RELATED_NOTE_ID,
-          reason: "직접적인 학습 관계가 있습니다.",
         },
       ],
     });
@@ -234,29 +146,14 @@ describe("runRelatedNoteRecommendation", () => {
       context: "",
       expandedQuery: "expanded related note query",
       notes: [],
-      queryEmbeddingUsage,
-      queryExpansionUsage,
     });
 
-    const onMatchedNotes = vi.fn().mockResolvedValue(undefined);
-    const onRecommendations = vi.fn().mockResolvedValue(undefined);
+    const result = await runRelatedNoteRecommendation(defaultParams);
 
-    const result = await runRelatedNoteRecommendation({
-      ...defaultParams,
-      onMatchedNotes,
-      onRecommendations,
-    });
-
-    expect(onMatchedNotes).toHaveBeenCalledWith([]);
     expect(mockGenerateRelatedNoteRecommendations).not.toHaveBeenCalled();
     expect(mockVerifyRelatedNoteRecommendations).not.toHaveBeenCalled();
-    expect(onRecommendations).toHaveBeenCalledWith([]);
 
     expect(result).toEqual({
-      expandedQuery: "expanded related note query",
-      notes: [],
-      queryEmbeddingUsage,
-      queryExpansionUsage,
       recommendations: [],
     });
   });
@@ -273,31 +170,17 @@ describe("runRelatedNoteRecommendation", () => {
       context: "<note>Related note</note>",
       expandedQuery: "expanded related note query",
       notes,
-      queryEmbeddingUsage,
-      queryExpansionUsage,
     });
 
     mockGenerateRelatedNoteRecommendations.mockResolvedValue({
       recommendations: [],
-      usage: answerGenerationUsage,
     });
 
-    const onRecommendations = vi.fn().mockResolvedValue(undefined);
-
-    const result = await runRelatedNoteRecommendation({
-      ...defaultParams,
-      onRecommendations,
-    });
+    const result = await runRelatedNoteRecommendation(defaultParams);
 
     expect(mockVerifyRelatedNoteRecommendations).not.toHaveBeenCalled();
-    expect(onRecommendations).toHaveBeenCalledWith([]);
 
     expect(result).toEqual({
-      answerGenerationUsage,
-      expandedQuery: "expanded related note query",
-      notes,
-      queryEmbeddingUsage,
-      queryExpansionUsage,
       recommendations: [],
     });
   });

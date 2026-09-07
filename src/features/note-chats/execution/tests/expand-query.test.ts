@@ -166,7 +166,7 @@ describe("expandNoteChatQuery", () => {
     vi.mocked(reportNoteChatOperationalError).mockResolvedValue(undefined);
   });
 
-  it("현재 질문과 이전 대화를 사용해 확장된 검색 질의와 usage를 반환한다", async () => {
+  it("현재 질문과 이전 대화를 사용해 확장된 검색 질의를 반환한다", async () => {
     const result = await expandNoteChatQuery({
       configuration,
       messages,
@@ -175,7 +175,6 @@ describe("expandNoteChatQuery", () => {
 
     expect(result).toEqual({
       expandedQuery: "확장된 검색 질의",
-      usage: queryExpansionUsage,
     });
 
     expect(resolveNoteChatProviderMessages).toHaveBeenCalledWith(

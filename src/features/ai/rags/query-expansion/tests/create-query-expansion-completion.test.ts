@@ -11,10 +11,7 @@ import {
   AI_OPERATIONAL_ERROR_STAGE,
 } from "@/features/operational-errors/constants";
 
-import {
-  createQueryExpansionCompletion,
-  type QueryExpansionCompletionResult,
-} from "../create-query-expansion-completion";
+import { createQueryExpansionCompletion } from "../create-query-expansion-completion";
 
 vi.mock("@/features/ai/prompts/render", () => ({
   renderPromptTemplate: vi.fn(),
@@ -123,12 +120,11 @@ describe("createQueryExpansionCompletion", () => {
       variables,
     });
 
-    expect(result).toEqual<QueryExpansionCompletionResult>({
-      content: JSON.stringify({
+    expect(result).toBe(
+      JSON.stringify({
         expandedQuery: "확장된 검색 질의",
       }),
-      usage,
-    });
+    );
 
     expect(renderPromptTemplate).toHaveBeenNthCalledWith(
       1,
@@ -194,7 +190,7 @@ describe("createQueryExpansionCompletion", () => {
     );
   });
 
-  it("Provider가 반환한 content와 usage를 그대로 반환한다", async () => {
+  it("Provider가 반환한 content를 그대로 반환한다", async () => {
     const content = JSON.stringify({
       expandedQuery: "원본 Provider 응답",
     });
@@ -211,10 +207,7 @@ describe("createQueryExpansionCompletion", () => {
       },
     });
 
-    expect(result).toEqual({
-      content,
-      usage,
-    });
+    expect(result).toBe(content);
   });
 
   it("Provider API key가 없으면 운영 오류를 기록하고 Provider를 호출하지 않는다", async () => {
