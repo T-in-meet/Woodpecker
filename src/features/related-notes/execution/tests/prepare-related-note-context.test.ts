@@ -125,8 +125,6 @@ describe("prepareRelatedNoteContext", () => {
         title: "대상 노트",
         content: "대상 노트 내용",
         onUsage: onQueryExpansionUsage,
-        onObservation: expect.any(Function),
-        onParsed: expect.any(Function),
       }),
     );
 
@@ -151,7 +149,6 @@ describe("prepareRelatedNoteContext", () => {
         limit: 10,
         minSimilarity: 0.5,
         onUsage: onQueryEmbeddingUsage,
-        onObservation: expect.any(Function),
       }),
     );
 
