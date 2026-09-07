@@ -1,11 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import {
+  RELATED_NOTES_OPERATIONAL_ERROR_CODES,
+  RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS,
+} from "@/features/operational-errors/constants";
+
 const mocks = vi.hoisted(() => ({
   after: vi.fn<(callback: () => Promise<void>) => void>(),
   claim: vi.fn(),
   completeClaim: vi.fn(),
   createAdminClient: vi.fn(),
   replace: vi.fn(),
+  reportOperationalError: vi.fn(),
   resolveChat: vi.fn(),
   resolveEmbedding: vi.fn(),
   run: vi.fn(),
@@ -41,6 +47,9 @@ vi.mock(
     return { ...actual, replaceRelatedNoteAiRecommendations: mocks.replace };
   },
 );
+vi.mock("../../utils/report-operational-error", () => ({
+  reportRelatedNotesOperationalError: mocks.reportOperationalError,
+}));
 
 const { scheduleRelatedNoteRecommendation } =
   await import("../schedule-related-note-recommendation");
@@ -50,15 +59,26 @@ const NOTE_ID = "22222222-2222-4222-8222-222222222222";
 const CLAIM_ID = "33333333-3333-4333-8333-333333333333";
 
 /** 테스트에서 source Note 조회 chain을 구성합니다. */
-function setupSource() {
+function setupSource({
+  data = {
+    id: NOTE_ID,
+    title: "제목",
+    content: "내용",
+    updated_at: "2026-09-05T00:00:00.000Z",
+  },
+  error = null,
+}: {
+  data?: {
+    id: string;
+    title: string;
+    content: string;
+    updated_at: string;
+  } | null;
+  error?: unknown;
+} = {}) {
   const maybeSingle = vi.fn().mockResolvedValue({
-    data: {
-      id: NOTE_ID,
-      title: "제목",
-      content: "내용",
-      updated_at: "2026-09-05T00:00:00.000Z",
-    },
-    error: null,
+    data,
+    error,
   });
   const chain = { select: vi.fn(), eq: vi.fn(), maybeSingle };
   chain.select.mockReturnValue(chain);
@@ -97,6 +117,7 @@ beforeEach(() => {
   setupSource();
   mocks.after.mockImplementation((callback) => void callback());
   mocks.claim.mockResolvedValue({ claimId: CLAIM_ID, status: "claimed" });
+  mocks.reportOperationalError.mockResolvedValue(undefined);
   mocks.resolveEmbedding.mockResolvedValue(runtime("embedding"));
   mocks.resolveChat.mockResolvedValue(runtime("chat"));
   mocks.run.mockResolvedValue({ recommendations: [] });
@@ -145,6 +166,103 @@ describe("scheduleRelatedNoteRecommendation", () => {
     expect(mocks.resolveChat).not.toHaveBeenCalled();
     expect(mocks.run).not.toHaveBeenCalled();
     expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
+  it.each(["daily_limit_exceeded", "stale"])(
+    "%s claim에는 background 실행, Runtime 조회, 추천 실행을 시작하지 않는다",
+    async (status) => {
+      mocks.claim.mockResolvedValue({ claimId: null, status });
+
+      const result = await scheduleRelatedNoteRecommendation({
+        noteId: NOTE_ID,
+        ownerUserId: USER_ID,
+      });
+
+      expect(result).toEqual({ claimId: null, status });
+      expect(mocks.after).not.toHaveBeenCalled();
+      expect(mocks.resolveEmbedding).not.toHaveBeenCalled();
+      expect(mocks.resolveChat).not.toHaveBeenCalled();
+      expect(mocks.run).not.toHaveBeenCalled();
+      expect(mocks.replace).not.toHaveBeenCalled();
+      expect(mocks.completeClaim).not.toHaveBeenCalled();
+    },
+  );
+
+  it("execution claim에 실패하면 운영 오류를 보고하고 오류를 전파한다", async () => {
+    const claimError = new Error("claim failed");
+    mocks.claim.mockRejectedValue(claimError);
+
+    await expect(
+      scheduleRelatedNoteRecommendation({
+        noteId: NOTE_ID,
+        ownerUserId: USER_ID,
+      }),
+    ).rejects.toBe(claimError);
+
+    expect(mocks.reportOperationalError).toHaveBeenCalledWith({
+      context: { noteId: NOTE_ID },
+      error: claimError,
+      errorCode:
+        RELATED_NOTES_OPERATIONAL_ERROR_CODES.RECOMMENDATION_EXECUTION_CLAIM_FAILED,
+      message: "Related Note 추천 실행 선점에 실패했습니다.",
+      operation:
+        RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.CLAIM_RECOMMENDATION_EXECUTION,
+      userId: USER_ID,
+    });
+    expect(mocks.after).not.toHaveBeenCalled();
+    expect(mocks.resolveEmbedding).not.toHaveBeenCalled();
+    expect(mocks.resolveChat).not.toHaveBeenCalled();
+    expect(mocks.run).not.toHaveBeenCalled();
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(mocks.completeClaim).not.toHaveBeenCalled();
+  });
+
+  it("source Note가 없으면 stale을 반환하고 claim과 background 실행을 시작하지 않는다", async () => {
+    setupSource({ data: null });
+
+    const result = await scheduleRelatedNoteRecommendation({
+      noteId: NOTE_ID,
+      ownerUserId: USER_ID,
+    });
+
+    expect(result).toEqual({ claimId: null, status: "stale" });
+    expect(mocks.claim).not.toHaveBeenCalled();
+    expect(mocks.after).not.toHaveBeenCalled();
+    expect(mocks.resolveEmbedding).not.toHaveBeenCalled();
+    expect(mocks.resolveChat).not.toHaveBeenCalled();
+    expect(mocks.run).not.toHaveBeenCalled();
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(mocks.reportOperationalError).not.toHaveBeenCalled();
+  });
+
+  it("source Note 조회에 실패하면 운영 오류를 보고하고 오류를 전파한다", async () => {
+    const sourceError = { message: "source load failed" };
+    setupSource({ data: null, error: sourceError });
+
+    await expect(
+      scheduleRelatedNoteRecommendation({
+        noteId: NOTE_ID,
+        ownerUserId: USER_ID,
+      }),
+    ).rejects.toBe(sourceError);
+
+    expect(mocks.reportOperationalError).toHaveBeenCalledWith({
+      context: { noteId: NOTE_ID },
+      error: sourceError,
+      errorCode:
+        RELATED_NOTES_OPERATIONAL_ERROR_CODES.RECOMMENDATION_SOURCE_LOAD_FAILED,
+      message: "Related Note 추천을 위한 Note source 조회에 실패했습니다.",
+      operation:
+        RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.LOAD_RECOMMENDATION_SOURCE,
+      userId: USER_ID,
+    });
+    expect(mocks.claim).not.toHaveBeenCalled();
+    expect(mocks.after).not.toHaveBeenCalled();
+    expect(mocks.resolveEmbedding).not.toHaveBeenCalled();
+    expect(mocks.resolveChat).not.toHaveBeenCalled();
+    expect(mocks.run).not.toHaveBeenCalled();
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(mocks.completeClaim).not.toHaveBeenCalled();
   });
 
   it("after 등록 실패 시 획득한 claim을 failed로 정리하고 오류를 전파한다", async () => {

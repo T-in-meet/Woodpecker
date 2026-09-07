@@ -135,6 +135,53 @@ describe("runNoteChatStream", () => {
     });
   });
 
+  it("Provider가 생성한 스트림 이벤트는 전달한다", async () => {
+    mocks.executeNoteChat.mockResolvedValue({
+      providerStream,
+      sources,
+    });
+
+    const providerEvent = {
+      delta: "답변",
+      type: "text-delta" as const,
+    };
+
+    mocks.consumeNoteChatProviderStream.mockImplementation(
+      async (_stream, onEvent) => {
+        await onEvent(providerEvent);
+
+        return {
+          content: '{"answer":"답변","usedContextIndexes":[1]}',
+          result: {
+            content: '{"answer":"답변","usedContextIndexes":[1]}',
+            metadata: {},
+            usage: {
+              inputTokens: 1,
+              outputTokens: 2,
+              totalTokens: 3,
+            },
+          },
+        };
+      },
+    );
+
+    mocks.parseNoteChatProviderResponse.mockReturnValue({
+      answer: "답변",
+      usedContextIndexes: [1],
+    });
+
+    mocks.resolveNoteChatUsedNoteIds.mockReturnValue([
+      "11111111-1111-4111-8111-111111111111",
+    ]);
+
+    const onEvent = vi.fn();
+
+    await runNoteChatStream(params, onEvent);
+
+    expect(onEvent).toHaveBeenCalledTimes(1);
+    expect(onEvent).toHaveBeenCalledWith(providerEvent);
+  });
+
   it("Context가 없으면 Provider를 호출하지 않고 고정 답변을 저장한다", async () => {
     mocks.executeNoteChat.mockResolvedValue({
       providerStream: null,
