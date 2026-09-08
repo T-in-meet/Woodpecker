@@ -35,9 +35,8 @@ type RelatedNotesSectionProps = {
  * 현재 Note version에 대해 이미 성공한 AI 추천 실행이 존재하면
  * 동일한 version으로 다시 추천을 생성하지 않고 최신 상태로 표시합니다.
  *
- * 일일 AI 추천 제한을 적용받는 사용자는 오늘의 사용량도 함께 표시하며,
- * ADMIN처럼 제한을 적용받지 않는 사용자는 recommendationQuota가 null이므로
- * 별도의 role 판별 없이 사용량을 표시하지 않습니다.
+ * 일일 AI 추천 제한을 적용받는 사용자는 현재 Note의 요청 가능 여부와 사용자 전체 오늘 사용량을 함께 표시하며,
+ * ADMIN처럼 제한을 적용받지 않는 사용자는 recommendationQuota가 null이므로 별도의 role 판별 없이 quota 상태를 표시하지 않습니다.
  *
  * @param props Related Notes를 조회할 기준 Note ID
  */
