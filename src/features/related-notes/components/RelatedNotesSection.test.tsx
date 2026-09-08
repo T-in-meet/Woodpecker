@@ -168,7 +168,7 @@ describe("RelatedNotesSection", () => {
     render(<RelatedNotesSection noteId={noteId} />);
 
     expect(screen.getByRole("button", { name: "AI 추천" })).toBeDisabled();
-    expect(screen.getByText("관련 노트를 찾고 있어요")).toBeInTheDocument();
+    expect(screen.getByText("관련 노트를 찾고 있어요...")).toBeInTheDocument();
   });
 
   it("Claim polling 중이면 AI 추천 버튼을 비활성화하고 진행 상태를 표시한다", () => {
@@ -179,7 +179,7 @@ describe("RelatedNotesSection", () => {
     render(<RelatedNotesSection noteId={noteId} />);
 
     expect(screen.getByRole("button", { name: "AI 추천" })).toBeDisabled();
-    expect(screen.getByText("관련 노트를 찾고 있어요")).toBeInTheDocument();
+    expect(screen.getByText("관련 노트를 찾고 있어요...")).toBeInTheDocument();
   });
 
   it("AI 추천 execution이 running이면 AI 추천 버튼을 비활성화하고 진행 상태를 표시한다", () => {
@@ -194,7 +194,7 @@ describe("RelatedNotesSection", () => {
     render(<RelatedNotesSection noteId={noteId} />);
 
     expect(screen.getByRole("button", { name: "AI 추천" })).toBeDisabled();
-    expect(screen.getByText("관련 노트를 찾고 있어요")).toBeInTheDocument();
+    expect(screen.getByText("관련 노트를 찾고 있어요...")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "관련 노트 추가" }),
     ).toBeInTheDocument();
@@ -215,8 +215,8 @@ describe("RelatedNotesSection", () => {
     render(<RelatedNotesSection noteId={noteId} />);
 
     expect(screen.getByRole("button", { name: "AI 추천" })).toBeDisabled();
-    expect(screen.getByText("최신 상태")).toBeInTheDocument();
-    expect(screen.queryByText("노트 할당량 소진")).not.toBeInTheDocument();
+    expect(screen.getByText("최신 상태 · 오늘 1/10회")).toBeInTheDocument();
+    expect(screen.queryByText(/오늘 추천 완료/)).not.toBeInTheDocument();
   });
 
   it("현재 Note version에 성공한 execution이 없으면 AI 추천 버튼을 다시 사용할 수 있다", () => {
@@ -227,7 +227,7 @@ describe("RelatedNotesSection", () => {
     render(<RelatedNotesSection noteId={noteId} />);
 
     expect(screen.getByRole("button", { name: "AI 추천" })).toBeEnabled();
-    expect(screen.queryByText("최신 상태")).not.toBeInTheDocument();
+    expect(screen.queryByText(/최신 상태/)).not.toBeInTheDocument();
   });
 
   it("AI 추천 execution이 stale로 복구되면 AI 추천 버튼을 다시 사용할 수 있다", () => {
@@ -244,7 +244,7 @@ describe("RelatedNotesSection", () => {
 
     expect(screen.getByRole("button", { name: "AI 추천" })).toBeEnabled();
     expect(
-      screen.queryByText("관련 노트를 찾고 있어요"),
+      screen.queryByText(/관련 노트를 찾고 있어요/),
     ).not.toBeInTheDocument();
   });
 
@@ -276,7 +276,7 @@ describe("RelatedNotesSection", () => {
       screen.getByText("관련 노트 추천에 실패했습니다."),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText("관련 노트를 찾고 있어요"),
+      screen.queryByText(/관련 노트를 찾고 있어요/),
     ).not.toBeInTheDocument();
   });
 
@@ -294,7 +294,7 @@ describe("RelatedNotesSection", () => {
     expect(screen.getByRole("button", { name: "AI 추천" })).toBeEnabled();
   });
 
-  it("현재 Note의 일일 추천 할당량을 소진하면 버튼을 비활성화하고 노트 할당량 소진 상태를 표시한다", () => {
+  it("현재 Note의 일일 추천 할당량을 소진하면 버튼을 비활성화하고 오늘 추천 완료 상태와 사용자 전체 사용량을 표시한다", () => {
     mockRelatedNotesSectionData({
       recommendationQuota: {
         canRequestForNote: false,
@@ -305,11 +305,13 @@ describe("RelatedNotesSection", () => {
     render(<RelatedNotesSection noteId={noteId} />);
 
     expect(screen.getByRole("button", { name: "AI 추천" })).toBeDisabled();
-    expect(screen.getByText("노트 할당량 소진")).toBeInTheDocument();
-    expect(screen.queryByText("오늘 할당량 소진")).not.toBeInTheDocument();
+    expect(
+      screen.getByText("오늘 추천 완료 · 오늘 1/10회"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/오늘 할당량 소진/)).not.toBeInTheDocument();
   });
 
-  it("사용자 전체 일일 추천 할당량을 소진하면 버튼을 비활성화하고 오늘 할당량 소진 상태를 표시한다", () => {
+  it("사용자 전체 일일 추천 할당량을 소진하면 버튼을 비활성화하고 오늘 할당량 소진 상태와 사용량을 표시한다", () => {
     mockRelatedNotesSectionData({
       recommendationQuota: {
         canRequestForNote: false,
@@ -320,8 +322,10 @@ describe("RelatedNotesSection", () => {
     render(<RelatedNotesSection noteId={noteId} />);
 
     expect(screen.getByRole("button", { name: "AI 추천" })).toBeDisabled();
-    expect(screen.getByText("오늘 할당량 소진")).toBeInTheDocument();
-    expect(screen.queryByText("노트 할당량 소진")).not.toBeInTheDocument();
+    expect(
+      screen.getByText("오늘 할당량 소진 · 오늘 10/10회"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/오늘 추천 완료/)).not.toBeInTheDocument();
   });
 
   it("사용자 전체 일일 추천 할당량 소진은 최신 상태보다 우선 표시한다", () => {
@@ -338,8 +342,10 @@ describe("RelatedNotesSection", () => {
 
     render(<RelatedNotesSection noteId={noteId} />);
 
-    expect(screen.getByText("오늘 할당량 소진")).toBeInTheDocument();
-    expect(screen.queryByText("최신 상태")).not.toBeInTheDocument();
+    expect(
+      screen.getByText("오늘 할당량 소진 · 오늘 10/10회"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/최신 상태/)).not.toBeInTheDocument();
   });
 
   it("일일 추천 제한에 도달했더라도 실행 중이면 실행 안내를 우선 표시한다", () => {
@@ -357,8 +363,10 @@ describe("RelatedNotesSection", () => {
 
     render(<RelatedNotesSection noteId={noteId} />);
 
-    expect(screen.getByText("관련 노트를 찾고 있어요")).toBeInTheDocument();
-    expect(screen.queryByText("노트 할당량 소진")).not.toBeInTheDocument();
+    expect(
+      screen.getByText("관련 노트를 찾고 있어요... · 오늘 1/10회"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/오늘 추천 완료/)).not.toBeInTheDocument();
   });
 
   it("일일 추천 제한에 도달했더라도 실행 실패 상태면 실패 안내를 우선 표시한다", () => {
@@ -377,9 +385,9 @@ describe("RelatedNotesSection", () => {
     render(<RelatedNotesSection noteId={noteId} />);
 
     expect(
-      screen.getByText("관련 노트 추천에 실패했습니다."),
+      screen.getByText("관련 노트 추천에 실패했습니다. · 오늘 1/10회"),
     ).toBeInTheDocument();
-    expect(screen.queryByText("노트 할당량 소진")).not.toBeInTheDocument();
+    expect(screen.queryByText(/오늘 추천 완료/)).not.toBeInTheDocument();
   });
 
   it("recommendationQuota가 null이면 일일 추천 상태를 표시하지 않는다", () => {
@@ -389,9 +397,10 @@ describe("RelatedNotesSection", () => {
 
     render(<RelatedNotesSection noteId={noteId} />);
 
-    expect(screen.queryByText(/추천 가능 · 오늘/)).not.toBeInTheDocument();
-    expect(screen.queryByText("노트 할당량 소진")).not.toBeInTheDocument();
-    expect(screen.queryByText("오늘 할당량 소진")).not.toBeInTheDocument();
+    expect(screen.queryByText(/추천 가능/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/오늘 추천 완료/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/오늘 할당량 소진/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/오늘 \d+\/10회/)).not.toBeInTheDocument();
   });
 
   it("추천 요청 또는 실행 중에는 페이지 이탈 guard를 활성화한다", () => {
@@ -440,10 +449,10 @@ describe("RelatedNotesSection", () => {
     render(<RelatedNotesSection noteId={noteId} />);
 
     expect(
-      screen.queryByText("관련 노트를 찾고 있어요"),
+      screen.queryByText(/관련 노트를 찾고 있어요/),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByText("관련 노트 추천에 실패했습니다."),
+      screen.queryByText(/관련 노트 추천에 실패했습니다/),
     ).not.toBeInTheDocument();
     expect(
       screen.getByText("아직 연결된 관련 노트가 없습니다."),

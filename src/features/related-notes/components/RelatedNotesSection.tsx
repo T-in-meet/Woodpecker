@@ -35,8 +35,10 @@ type RelatedNotesSectionProps = {
  * 현재 Note version에 대해 이미 성공한 AI 추천 실행이 존재하면
  * 동일한 version으로 다시 추천을 생성하지 않고 최신 상태로 표시합니다.
  *
- * 일일 AI 추천 제한을 적용받는 사용자는 현재 Note의 요청 가능 여부와 사용자 전체 오늘 사용량을 함께 표시하며,
- * ADMIN처럼 제한을 적용받지 않는 사용자는 recommendationQuota가 null이므로 별도의 role 판별 없이 quota 상태를 표시하지 않습니다.
+ * 일일 AI 추천 제한을 적용받는 사용자는 현재 Note의 요청 가능 여부와
+ * 사용자 전체 오늘 사용량을 함께 표시하며,
+ * ADMIN처럼 제한을 적용받지 않는 사용자는 recommendationQuota가 null이므로
+ * 별도의 role 판별 없이 quota 사용량을 표시하지 않습니다.
  *
  * @param props Related Notes를 조회할 기준 Note ID
  */
@@ -118,7 +120,8 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
     data?.hasFailedRecommendationExecution === true;
 
   /*
-   * 일반 사용자는 오늘의 AI 추천 사용량과 제한을 전달받습니다.
+   * 일반 사용자는 현재 Note의 추천 가능 여부와 사용자 전체 오늘 사용량을
+   * recommendationQuota로 전달받습니다.
    *
    * 일일 제한을 적용받지 않는 ADMIN은 queries 계층에서 null을 반환하므로
    * 이 컴포넌트에서는 사용자 role을 다시 확인하지 않습니다.
@@ -152,6 +155,48 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
     hasReachedUserRecommendationLimit ||
     hasReachedNoteRecommendationLimit;
 
+  /*
+   * AI 추천의 현재 상태를 짧은 문구로 표시합니다.
+   *
+   * 실행 상태와 오류를 quota보다 우선하고,
+   * 안정 상태에서는 사용자 전체 quota 소진 → 최신 상태 →
+   * Note quota 소진 → 추천 가능 순서로 판정합니다.
+   */
+  const recommendationStatus = (() => {
+    if (
+      isRecommendationRequestInProgress ||
+      hasRunningRecommendationExecution
+    ) {
+      return "관련 노트를 찾고 있어요...";
+    }
+
+    if (requestRelatedNoteRecommendation.isError) {
+      return requestRelatedNoteRecommendation.error.message;
+    }
+
+    if (hasFailedRecommendationExecution) {
+      return "관련 노트 추천에 실패했습니다.";
+    }
+
+    if (hasReachedUserRecommendationLimit) {
+      return "오늘 할당량 소진";
+    }
+
+    if (hasSucceededRecommendationExecution) {
+      return "최신 상태";
+    }
+
+    if (hasReachedNoteRecommendationLimit) {
+      return "오늘 추천 완료";
+    }
+
+    if (recommendationQuota) {
+      return "추천 가능";
+    }
+
+    return null;
+  })();
+
   const handleRequestRelatedNoteRecommendation = () => {
     requestRelatedNoteRecommendation.mutate();
   };
@@ -167,23 +212,37 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
       />
 
       <section className="border-t border-border/60 pt-6">
-        <div className="space-y-2">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex min-w-0 items-center gap-1">
-              <h2 className="shrink-0 text-sm font-semibold text-foreground">
-                관련 노트
-              </h2>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-1">
+            <h2 className="shrink-0 text-sm font-semibold text-foreground">
+              관련 노트
+            </h2>
 
-              <FeatureInfoPopover ariaLabel="관련 노트 안내">
-                <div className="space-y-2">
-                  <p>
-                    {`AI 관련 노트 추천은 노트마다 하루 ${RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE}회, 사용자당 하루 최대 ${RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT}회 사용할 수 있으며 매일 자정(KST)에 초기화됩니다.`}
-                  </p>
-                </div>
-              </FeatureInfoPopover>
-            </div>
+            <FeatureInfoPopover ariaLabel="관련 노트 안내">
+              <div className="space-y-2">
+                <p>
+                  {`AI 관련 노트 추천은 노트마다 하루 ${RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE}회, 사용자당 하루 최대 ${RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT}회 사용할 수 있으며 매일 자정(KST)에 초기화됩니다.`}
+                </p>
+              </div>
+            </FeatureInfoPopover>
+          </div>
 
-            <div className="flex shrink-0 items-center gap-2">
+          <div className="flex min-w-0 shrink-0 flex-col items-end gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+            {recommendationStatus ? (
+              <p className="order-2 max-w-full text-right text-xs text-muted-foreground sm:order-1">
+                {recommendationStatus}
+
+                {recommendationQuota ? (
+                  <>
+                    {" · 오늘 "}
+                    {recommendationQuota.userUsed}/
+                    {RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT}회
+                  </>
+                ) : null}
+              </p>
+            ) : null}
+
+            <div className="order-1 flex shrink-0 items-center gap-2 sm:order-2">
               <Button
                 type="button"
                 variant="outline"
@@ -197,58 +256,6 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
               <AddRelatedNoteDialog noteId={noteId} />
             </div>
           </div>
-
-          {isRecommendationRequestInProgress ||
-          hasRunningRecommendationExecution ? (
-            /*
-             * Server Action 요청 중이거나 실제 running execution을 추적 중인 상태를
-             * 동일한 진행 상태로 표시합니다.
-             */
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <span>관련 노트를 찾고 있어요</span>
-
-              <span className="flex gap-0.5">
-                <span className="animate-bounce">.</span>
-                <span className="animate-bounce [animation-delay:150ms]">
-                  .
-                </span>
-                <span className="animate-bounce [animation-delay:300ms]">
-                  .
-                </span>
-              </span>
-            </div>
-          ) : requestRelatedNoteRecommendation.isError ? (
-            /*
-             * Server Action 자체가 요청을 받아들이지 못한 경우입니다.
-             *
-             * background 실행이 시작된 뒤의 실패는 execution claim을 통해
-             * hasFailedRecommendationExecution으로 별도 표시합니다.
-             */
-            <p className="text-xs text-muted-foreground">
-              {requestRelatedNoteRecommendation.error.message}
-            </p>
-          ) : hasFailedRecommendationExecution ? (
-            <p className="text-xs text-muted-foreground">
-              관련 노트 추천에 실패했습니다.
-            </p>
-          ) : hasReachedUserRecommendationLimit ? (
-            <p className="text-xs text-muted-foreground">오늘 할당량 소진</p>
-          ) : hasSucceededRecommendationExecution ? (
-            /*
-             * 현재 Note version에 대해 이미 성공한 추천 실행이 존재합니다.
-             *
-             * 동일한 version에 대한 재요청은 duplicate 처리되므로
-             * 현재 추천이 최신 상태임을 짧게 안내합니다.
-             */
-            <p className="text-xs text-muted-foreground">최신 상태</p>
-          ) : hasReachedNoteRecommendationLimit ? (
-            <p className="text-xs text-muted-foreground">노트 할당량 소진</p>
-          ) : recommendationQuota ? (
-            <p className="text-xs text-muted-foreground">
-              추천 가능 · 오늘 {recommendationQuota.userUsed}/
-              {RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT}회
-            </p>
-          ) : null}
         </div>
 
         {isError ? (
