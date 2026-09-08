@@ -1,11 +1,8 @@
 import { AI_CHAT_MESSAGE_ROLE } from "@/features/ai/chats/constants";
-import type {
-  AiProviderChatMessage,
-  AiTokenUsage,
-} from "@/features/ai/providers/types";
+import type { AiProviderChatMessage } from "@/features/ai/providers/types";
 import { buildNoteContext } from "@/features/ai/rags/note/build-context";
 import { getMatchedNotes } from "@/features/ai/rags/note/get-matched-notes";
-import { searchNoteEmbeddingsWithUsage } from "@/features/ai/rags/note/search-embeddings";
+import { searchNoteEmbeddings } from "@/features/ai/rags/note/search-embeddings";
 import type {
   AiRuntimeChatConfiguration,
   AiRuntimeEmbeddingConfiguration,
@@ -17,14 +14,12 @@ import {
 } from "@/features/operational-errors/constants";
 import type { Json } from "@/types/db.helpers";
 
-import type { NoteChatSnapshotAccumulator } from "../ai-runs/snapshot-accumulator";
 import {
   NOTE_CHAT_CONTEXT_LIMIT,
   NOTE_CHAT_MATCH_LIMIT,
   NOTE_CHAT_MIN_SIMILARITY,
 } from "../constants/execution";
 import { getNoteChatConversationDetailForExecution } from "../internal-queries";
-import { noteChatUserMessageContentSchema } from "../schema";
 import type { NoteChatConversation } from "../types";
 import { reportNoteChatOperationalError } from "../utils/report-operational-error";
 import { buildNoteChatSources } from "./build-note-sources";
@@ -52,31 +47,16 @@ export type PreparedNoteChatExecution = {
   /** 실행 대상 대화입니다. */
   conversation: NoteChatConversation;
 
-  /** Provider 입력에 사용된 실제 Note Context입니다. */
-  context: string;
-
   /** 문맥 기반 질의 확장을 통해 생성된 노트 검색용 질의입니다. */
   expandedQuery: string;
 
   /** Provider에 전달할 System·대화 이력·현재 질문 메시지입니다. */
   messages: AiProviderChatMessage[];
 
-  /** Provider 입력에 사용된 제한된 이전 대화 이력입니다. */
-  history: AiProviderChatMessage[];
-
-  /** 이번 실행의 실제 사용자 질문입니다. */
-  question: string;
-
-  /** 질의 확장 Chat Completion에서 사용한 token 사용량입니다. */
-  queryExpansionUsage: AiTokenUsage;
-
-  /** 검색 질의 Embedding Provider 호출에서 사용한 token 사용량입니다. */
-  queryEmbeddingUsage: AiTokenUsage;
-
   /** AI Foundation Runtime에서 확정된 실행 설정입니다. */
   settings: NoteChatExecutionSettings;
 
-  /** 실행 과정에서 LLM Context에 주입한 Note Source Snapshot입니다. */
+  /** 실행 과정에서 LLM Context에 주입한 Note Source 정보입니다. */
   sources: Json[];
 
   /** 현재 실행을 발생시킨 사용자 메시지 ID입니다. */
@@ -95,21 +75,6 @@ type PrepareNoteChatExecutionParams = {
 
   /** 현재 실행을 발생시킨 사용자 메시지 ID입니다. */
   userMessageId: string;
-
-  /** Query Expansion Provider usage 저장 callback입니다. */
-  onQueryExpansionUsage?: (usage: AiTokenUsage) => Promise<void>;
-
-  /** Query Embedding Provider usage 저장 callback입니다. */
-  onQueryEmbeddingUsage?: (usage: AiTokenUsage) => Promise<void>;
-
-  /** 실행 중 확보한 값을 기록할 Snapshot accumulator입니다. */
-  snapshotAccumulator?: NoteChatSnapshotAccumulator | undefined;
-
-  /** Query Expansion 완료 직후 첫 checkpoint callback입니다. */
-  onQueryExpansionCompleted?: (() => Promise<void>) | undefined;
-
-  /** Retrieval 완료 직후 두 번째 checkpoint callback입니다. */
-  onRetrievalCompleted?: (() => Promise<void>) | undefined;
 };
 
 /**
@@ -118,12 +83,12 @@ type PrepareNoteChatExecutionParams = {
  * 다음 작업을 수행합니다.
  *
  * 1. 현재 사용자가 접근할 수 있는 대화와 실행에 필요한 메시지 이력을 조회합니다.
- * 2. 현재 사용자 메시지에서 질문을 추출합니다.
+ * 2. 현재 사용자 메시지를 실행 대상으로 검증합니다.
  * 3. 이전 대화 이력을 바탕으로 문맥 기반 검색 질의를 확장합니다.
  * 4. Runtime Embedding Model로 확장 질의 Embedding을 생성합니다.
  * 5. 현재 사용자의 활성 Note chunk Embedding을 검색합니다.
- * 6. 검색된 Embedding에 해당하는 Note와 chunk snapshot을 조회합니다.
- * 7. 검색된 Note chunk로 Prompt Context와 Source Snapshot을 구성합니다.
+ * 6. 검색된 Embedding에 해당하는 Note와 chunk 정보를 조회합니다.
+ * 7. 검색된 Note chunk로 Prompt Context와 Source 정보를 구성합니다.
  * 8. Runtime Prompt Template에 원본 question과 context를 전달하여
  *    Provider 메시지를 생성합니다.
  *
@@ -240,75 +205,32 @@ export async function prepareNoteChatExecution(
    * 확장 질의는 검색 단계에서만 사용하며,
    * 실제 사용자 질문과 최종 답변용 Conversation Message는 변경하지 않습니다.
    */
-  const { expandedQuery, usage: queryExpansionUsage } =
-    await expandNoteChatQuery({
-      configuration: params.settings.queryExpansion,
-      messages: detail.messages,
-      ...(params.onQueryExpansionUsage !== undefined
-        ? { onUsage: params.onQueryExpansionUsage }
-        : {}),
-      ...(params.onQueryExpansionCompleted === undefined
-        ? {}
-        : { onCompleted: params.onQueryExpansionCompleted }),
-      ...(params.snapshotAccumulator === undefined
-        ? {}
-        : { snapshotAccumulator: params.snapshotAccumulator }),
-      userMessageId: params.userMessageId,
-    });
+  const { expandedQuery } = await expandNoteChatQuery({
+    configuration: params.settings.queryExpansion,
+    messages: detail.messages,
+    userMessageId: params.userMessageId,
+  });
 
   /*
    * 원본 사용자 질문이 아니라 문맥 기반으로 확장된 검색 질의를 Embedding하여
    * 현재 대화 문맥을 반영한 노트 후보를 검색합니다.
    */
-  params.snapshotAccumulator?.prepareRetrieval({
-    configuration: params.settings.embedding,
-    contextLimit: NOTE_CHAT_CONTEXT_LIMIT,
-    inputText: expandedQuery,
-    matchLimit: NOTE_CHAT_MATCH_LIMIT,
+  const matches = await searchNoteEmbeddings({
+    embeddingConfiguration: params.settings.embedding,
+    limit: NOTE_CHAT_MATCH_LIMIT,
     minSimilarity: NOTE_CHAT_MIN_SIMILARITY,
+    ownerUserId: detail.conversation.user_id,
+    question: expandedQuery,
   });
-
-  let searchResult;
-
-  try {
-    searchResult = await searchNoteEmbeddingsWithUsage({
-      embeddingConfiguration: params.settings.embedding,
-      limit: NOTE_CHAT_MATCH_LIMIT,
-      minSimilarity: NOTE_CHAT_MIN_SIMILARITY,
-      ownerUserId: detail.conversation.user_id,
-      ...(params.onQueryEmbeddingUsage !== undefined
-        ? { onUsage: params.onQueryEmbeddingUsage }
-        : {}),
-      ...(params.snapshotAccumulator === undefined
-        ? {}
-        : {
-            onObservation: (observation) => {
-              params.snapshotAccumulator?.observeRetrieval(observation);
-            },
-          }),
-      question: expandedQuery,
-    });
-  } catch (error) {
-    // 관측 이전 설정 검증 실패만 fallback으로 embedding stage에 기록한다.
-    params.snapshotAccumulator?.failRetrieval("embedding", error);
-    throw error;
-  }
-
-  // 이후 두 AI 단계가 공통으로 사용하는 실제 질문을 한 번만 검증해 추출한다.
-  const question = noteChatUserMessageContentSchema.parse(
-    currentUserMessage.content,
-  ).text;
 
   let matchedNotes;
 
   try {
     matchedNotes = await getMatchedNotes({
-      matches: searchResult.matches,
+      matches,
       ownerUserId: detail.conversation.user_id,
     });
   } catch (error) {
-    params.snapshotAccumulator?.failRetrieval("hydration", error);
-
     await reportNoteChatOperationalError({
       actorUserId: detail.conversation.user_id,
       context: {
@@ -342,25 +264,8 @@ export async function prepareNoteChatExecution(
    */
   const contextNotes = matchedNotes.slice(0, NOTE_CHAT_CONTEXT_LIMIT);
 
-  let context;
-  let sources;
-
-  try {
-    context = buildNoteContext({ notes: contextNotes });
-    sources = buildNoteChatSources(contextNotes);
-  } catch (error) {
-    params.snapshotAccumulator?.failRetrieval("context_build", error);
-    throw error;
-  }
-
-  // 이미 확보한 hydration·context·source 값으로 Retrieval Snapshot을 완성한다.
-  params.snapshotAccumulator?.completeRetrieval({
-    context,
-    hydratedCandidates: matchedNotes,
-    selectedContext: contextNotes,
-    sources,
-  });
-  await params.onRetrievalCompleted?.();
+  const context = buildNoteContext({ notes: contextNotes });
+  const sources = buildNoteChatSources(contextNotes);
 
   let messages: AiProviderChatMessage[];
 
@@ -401,13 +306,8 @@ export async function prepareNoteChatExecution(
 
   return {
     conversation: detail.conversation,
-    context,
     expandedQuery,
-    history: messages.slice(1, -1),
     messages,
-    question,
-    queryEmbeddingUsage: searchResult.usage,
-    queryExpansionUsage,
     settings: params.settings,
     sources,
     userMessageId: params.userMessageId,

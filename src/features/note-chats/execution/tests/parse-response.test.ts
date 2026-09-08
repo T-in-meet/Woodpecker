@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  NoteChatProviderResponseError,
-  parseNoteChatProviderResponse,
-} from "../parse-response";
+import { parseNoteChatProviderResponse } from "../parse-response";
 
 describe("parseNoteChatProviderResponse", () => {
   it("유효한 Provider 응답을 파싱한다", () => {
@@ -39,9 +36,8 @@ describe("parseNoteChatProviderResponse", () => {
       parseNoteChatProviderResponse("invalid json");
       expect.fail("Expected parseNoteChatProviderResponse to throw");
     } catch (error) {
-      expect(error).toBeInstanceOf(NoteChatProviderResponseError);
+      expect(error).toBeInstanceOf(Error);
       expect(error).toMatchObject({
-        stage: "parse",
         message: "Note chat provider response is not valid JSON.",
       });
     }
@@ -55,11 +51,11 @@ describe("parseNoteChatProviderResponse", () => {
           usedContextIndexes: ["1"],
         }),
       );
+
       expect.fail("Expected parseNoteChatProviderResponse to throw");
     } catch (error) {
-      expect(error).toBeInstanceOf(NoteChatProviderResponseError);
+      expect(error).toBeInstanceOf(Error);
       expect(error).toMatchObject({
-        stage: "validation",
         message: "Note chat provider response has an invalid structure.",
       });
     }

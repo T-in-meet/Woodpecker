@@ -14,9 +14,6 @@ export const AI_OPERATIONAL_ERROR_FEATURE_LABELS = {
  * AI Foundation 공통 운영 오류 코드입니다.
  */
 export const AI_OPERATIONAL_ERROR_CODE = {
-  AI_RUN_GUARD_FAILED: "AI_RUN_GUARD_FAILED",
-  AI_RUN_PERSISTENCE_FAILED: "AI_RUN_PERSISTENCE_FAILED",
-  AI_RUN_SNAPSHOT_BUILD_FAILED: "AI_RUN_SNAPSHOT_BUILD_FAILED",
   EMBEDDING_ACTIVATION_FAILED: "AI_EMBEDDING_ACTIVATION_FAILED",
   EMBEDDING_CACHE_READ_FAILED: "AI_EMBEDDING_CACHE_READ_FAILED",
   EMBEDDING_DELETE_FAILED: "AI_EMBEDDING_DELETE_FAILED",
@@ -41,10 +38,6 @@ export const AI_OPERATIONAL_ERROR_CODE = {
  * AI Foundation 운영 오류 코드의 표시 이름입니다.
  */
 export const AI_OPERATIONAL_ERROR_CODE_LABELS = {
-  [AI_OPERATIONAL_ERROR_CODE.AI_RUN_GUARD_FAILED]: "AI Run 상태 조건 불충족",
-  [AI_OPERATIONAL_ERROR_CODE.AI_RUN_PERSISTENCE_FAILED]: "AI Run 저장 실패",
-  [AI_OPERATIONAL_ERROR_CODE.AI_RUN_SNAPSHOT_BUILD_FAILED]:
-    "AI Run Snapshot 생성 실패",
   [AI_OPERATIONAL_ERROR_CODE.EMBEDDING_ACTIVATION_FAILED]:
     "Embedding Generation 활성화 실패",
   [AI_OPERATIONAL_ERROR_CODE.EMBEDDING_CACHE_READ_FAILED]:
@@ -74,15 +67,17 @@ export const AI_OPERATIONAL_ERROR_CODE_LABELS = {
   [AI_OPERATIONAL_ERROR_CODE.RUNTIME_CONFIGURATION_LOAD_FAILED]:
     "Runtime Configuration 조회 실패",
   [AI_OPERATIONAL_ERROR_CODE.VECTOR_MATCH_FAILED]: "Vector 매칭 실패",
+
+  // 과거 operational_errors 행의 표시 호환만 유지한다.
+  AI_RUN_GUARD_FAILED: "AI Run 상태 조건 불충족",
+  AI_RUN_PERSISTENCE_FAILED: "AI Run 저장 실패",
+  AI_RUN_SNAPSHOT_BUILD_FAILED: "AI Run Snapshot 생성 실패",
 } as const;
 
 /**
  * AI Foundation 공통 운영 오류 작업입니다.
  */
 export const AI_OPERATIONAL_ERROR_OPERATION = {
-  CHECKPOINT_AI_RUN: "checkpoint_ai_run",
-  COMPLETE_AI_RUN: "complete_ai_run",
-  CREATE_AI_RUN: "create_ai_run",
   ACTIVATE_EMBEDDING_GENERATION: "activate_embedding_generation",
   CREATE_CHAT_COMPLETION: "create_chat_completion",
   CREATE_EMBEDDING: "create_embedding",
@@ -102,9 +97,6 @@ export const AI_OPERATIONAL_ERROR_OPERATION = {
  * AI Foundation 운영 오류 작업의 표시 이름입니다.
  */
 export const AI_OPERATIONAL_ERROR_OPERATION_LABELS = {
-  [AI_OPERATIONAL_ERROR_OPERATION.CHECKPOINT_AI_RUN]: "AI Run Checkpoint 저장",
-  [AI_OPERATIONAL_ERROR_OPERATION.COMPLETE_AI_RUN]: "AI Run 종료 저장",
-  [AI_OPERATIONAL_ERROR_OPERATION.CREATE_AI_RUN]: "AI Run 생성",
   [AI_OPERATIONAL_ERROR_OPERATION.ACTIVATE_EMBEDDING_GENERATION]:
     "Embedding Generation 활성화",
   [AI_OPERATIONAL_ERROR_OPERATION.CREATE_CHAT_COMPLETION]:
@@ -122,6 +114,11 @@ export const AI_OPERATIONAL_ERROR_OPERATION_LABELS = {
     "Runtime Configuration 조회",
   [AI_OPERATIONAL_ERROR_OPERATION.INSERT_EMBEDDING]: "Embedding 저장",
   [AI_OPERATIONAL_ERROR_OPERATION.MATCH_EMBEDDINGS]: "Embedding 매칭",
+
+  // 과거 operational_errors 행의 표시 호환만 유지한다.
+  checkpoint_ai_run: "AI Run Checkpoint 저장",
+  complete_ai_run: "AI Run 종료 저장",
+  create_ai_run: "AI Run 생성",
 } as const;
 
 /**
@@ -129,7 +126,6 @@ export const AI_OPERATIONAL_ERROR_OPERATION_LABELS = {
  */
 export const AI_OPERATIONAL_ERROR_STAGE = {
   DATABASE: "database",
-  LIFECYCLE: "lifecycle",
   PROVIDER: "provider",
   VALIDATION: "validation",
 } as const;
@@ -139,9 +135,11 @@ export const AI_OPERATIONAL_ERROR_STAGE = {
  */
 export const AI_OPERATIONAL_ERROR_STAGE_LABELS = {
   [AI_OPERATIONAL_ERROR_STAGE.DATABASE]: "데이터베이스",
-  [AI_OPERATIONAL_ERROR_STAGE.LIFECYCLE]: "라이프사이클",
   [AI_OPERATIONAL_ERROR_STAGE.PROVIDER]: "Provider",
   [AI_OPERATIONAL_ERROR_STAGE.VALIDATION]: "검증",
+
+  // 과거 operational_errors 행의 표시 호환만 유지한다.
+  lifecycle: "라이프사이클",
 } as const;
 
 /**

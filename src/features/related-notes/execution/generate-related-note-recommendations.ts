@@ -2,7 +2,6 @@ import { z } from "zod";
 
 import { renderPromptTemplate } from "@/features/ai/prompts/render";
 import { createAiChatCompletionWithProvider } from "@/features/ai/providers";
-import type { AiTokenUsage } from "@/features/ai/providers/types";
 import { getProviderApiKey } from "@/features/ai/providers/utils/api-key";
 import type { MatchedNote } from "@/features/ai/rags/note/get-matched-notes";
 import type { AiRuntimeChatConfiguration } from "@/features/ai/runtimes/types";
@@ -10,7 +9,6 @@ import {
   RELATED_NOTES_OPERATIONAL_ERROR_CODES,
   RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS,
 } from "@/features/operational-errors/constants";
-import { type AiObserver, notifyAiObserver } from "@/lib/ai/notify-observer";
 import type { Json } from "@/types/db.helpers";
 
 import type { RelatedNoteAiRecommendation } from "../types";
@@ -62,48 +60,7 @@ type GenerateRelatedNoteRecommendationsParams = {
    * 같은 Note에서 검색된 여러 chunk는 동일한 Note ID를 가집니다.
    */
   notes: MatchedNote[];
-
-  /**
-   * Provider 응답 직후 Token usage를 저장하기 위한 callback입니다.
-   *
-   * 응답 파싱이나 추천 Note resolve가 실패하더라도 완료된 Answer Generation
-   * 호출의 usage를 Run에 남기기 위해 검증 전에 호출합니다.
-   */
-  onUsage?: (usage: AiTokenUsage) => Promise<void>;
-
-  /** Answer Generation의 실제 실행값을 기록하는 best-effort callback입니다. */
-  onObservation?:
-    | AiObserver<GenerateRelatedNoteRecommendationsObservation>
-    | undefined;
 };
-
-/** Related Notes Answer Generation 단계 관측값입니다. */
-export type GenerateRelatedNoteRecommendationsObservation =
-  | {
-      type: "prepared";
-      configuration: AiRuntimeChatConfiguration;
-      context: string;
-      notes: MatchedNote[];
-      responseFormat: unknown;
-      systemPrompt: string;
-      userPrompt: string;
-      variables: { title: string; content: string; context: string };
-    }
-  | {
-      type: "provider-completed";
-      result: Awaited<ReturnType<typeof createAiChatCompletionWithProvider>>;
-    }
-  | {
-      type: "parsed";
-      recommendations: Array<{ noteId: string; reason: string }>;
-    }
-  | { type: "post-processed"; recommendations: RelatedNoteAiRecommendation[] }
-  | {
-      type: "failed";
-      error: unknown;
-      issues?: unknown[];
-      stage: "provider_call" | "parse" | "validation" | "post_processing";
-    };
 
 /**
  * Related Notes Answer Generation 실행 결과입니다.
@@ -111,9 +68,6 @@ export type GenerateRelatedNoteRecommendationsObservation =
 export type GenerateRelatedNoteRecommendationsResult = {
   /** LLM이 선택한 순서를 유지한 중복 없는 AI 관련 Note 추천 목록입니다. */
   recommendations: RelatedNoteAiRecommendation[];
-
-  /** Answer Generation Provider 호출에서 반환된 Token 사용량입니다. */
-  usage: AiTokenUsage;
 };
 
 /**
@@ -140,7 +94,7 @@ export type GenerateRelatedNoteRecommendationsResult = {
  * 생성된 추천은 저장 계층에서 AI 추천으로 저장됩니다.
  *
  * @param params 관련 노트 추천 실행에 필요한 Runtime 설정, 원본 Note 및 RAG 결과
- * @returns 추천 목록과 Provider usage
+ * @returns 검증된 추천 목록
  */
 export async function generateRelatedNoteRecommendations({
   configuration,
@@ -148,8 +102,6 @@ export async function generateRelatedNoteRecommendations({
   title,
   context,
   notes,
-  onUsage,
-  onObservation,
 }: GenerateRelatedNoteRecommendationsParams): Promise<GenerateRelatedNoteRecommendationsResult> {
   // Answer Agent 실행에 사용할 Prompt와 Model 설정을 가져옵니다.
   const promptVersion = configuration.prompt.version;
@@ -189,44 +141,15 @@ export async function generateRelatedNoteRecommendations({
           },
         };
 
-  await notifyAiObserver(onObservation, {
-    configuration,
-    context,
-    notes,
+  const result = await createAiChatCompletionWithProvider({
+    apiKey: getProviderApiKey(model.provider),
+    model: model.model,
+    provider: model.provider,
     responseFormat,
     systemPrompt,
-    type: "prepared",
+    temperature: configuration.temperature,
     userPrompt,
-    variables: templateVariables,
   });
-
-  let result: Awaited<ReturnType<typeof createAiChatCompletionWithProvider>>;
-
-  try {
-    result = await createAiChatCompletionWithProvider({
-      apiKey: getProviderApiKey(model.provider),
-      model: model.model,
-      provider: model.provider,
-      responseFormat,
-      systemPrompt,
-      temperature: configuration.temperature,
-      userPrompt,
-    });
-  } catch (error) {
-    await notifyAiObserver(onObservation, {
-      error,
-      stage: "provider_call",
-      type: "failed",
-    });
-    throw error;
-  }
-
-  await notifyAiObserver(onObservation, {
-    result,
-    type: "provider-completed",
-  });
-
-  await onUsage?.(result.usage);
 
   // Provider가 반환한 문자열 응답을 검증 가능한 JSON 값으로 변환합니다.
   let response: unknown;
@@ -234,11 +157,6 @@ export async function generateRelatedNoteRecommendations({
   try {
     response = JSON.parse(result.content) as unknown;
   } catch (error) {
-    await notifyAiObserver(onObservation, {
-      error,
-      stage: "parse",
-      type: "failed",
-    });
     await reportRelatedNotesOperationalError({
       error,
       errorCode:
@@ -259,13 +177,6 @@ export async function generateRelatedNoteRecommendations({
       "Related note recommendation response does not match the expected schema.",
     );
 
-    await notifyAiObserver(onObservation, {
-      error,
-      issues: parsed.error.issues,
-      stage: "validation",
-      type: "failed",
-    });
-
     await reportRelatedNotesOperationalError({
       error,
       errorCode:
@@ -277,11 +188,6 @@ export async function generateRelatedNoteRecommendations({
 
     throw error;
   }
-
-  await notifyAiObserver(onObservation, {
-    recommendations: parsed.data.recommendations,
-    type: "parsed",
-  });
 
   /*
    * LLM 응답을 그대로 저장하지 않습니다.
@@ -304,7 +210,7 @@ export async function generateRelatedNoteRecommendations({
    * Note ID를 기준으로 검색 결과를 빠르게 확인할 수 있도록 Map을 구성합니다.
    *
    * 동일 Note ID가 여러 번 등장하는 경우 첫 번째 MatchedNote를 유지합니다.
-   * 최종 추천에 필요한 title은 Note 단위로 동일한 snapshot을 사용하므로
+   * 최종 추천에 필요한 title은 Note 단위로 동일한 값을 사용하므로
    * 어느 chunk에서 가져오더라도 동일한 Note를 가리킵니다.
    */
   const matchedNotesById = new Map<string, MatchedNote>();
@@ -327,12 +233,6 @@ export async function generateRelatedNoteRecommendations({
       const error = new Error(
         `Related note recommendation note ID not found: ${recommendation.noteId}`,
       );
-
-      await notifyAiObserver(onObservation, {
-        error,
-        stage: "post_processing",
-        type: "failed",
-      });
 
       await reportRelatedNotesOperationalError({
         error,
@@ -368,13 +268,7 @@ export async function generateRelatedNoteRecommendations({
     });
   }
 
-  await notifyAiObserver(onObservation, {
-    recommendations,
-    type: "post-processed",
-  });
-
   return {
     recommendations,
-    usage: result.usage,
   };
 }

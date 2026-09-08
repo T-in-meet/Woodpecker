@@ -5,7 +5,7 @@ import type { MatchedNote } from "@/features/ai/rags/note/get-matched-notes";
 import { buildNoteChatSources } from "../build-note-sources";
 
 describe("buildNoteChatSources", () => {
-  it("검색된 Note chunk를 Note Source Snapshot으로 변환한다", () => {
+  it("검색된 Note chunk를 Note Source로 변환한다", () => {
     const notes: MatchedNote[] = [
       {
         chunkText:
@@ -21,13 +21,7 @@ describe("buildNoteChatSources", () => {
     expect(buildNoteChatSources(notes)).toEqual([
       {
         contextIndex: 1,
-        content:
-          "Title:\n다익스트라 알고리즘\n\nContent:\n음수 가중치를 처리할 수 없다.",
-        distance: 0.05,
-        embeddingId: "embedding-1",
         noteId: "11111111-1111-4111-8111-111111111111",
-        similarity: 0.95,
-        title: "다익스트라 알고리즘",
         type: "note",
       },
     ]);
@@ -56,22 +50,12 @@ describe("buildNoteChatSources", () => {
     expect(buildNoteChatSources(notes)).toEqual([
       {
         contextIndex: 1,
-        content: "Title:\n첫 번째 노트\n\nContent:\n첫 번째 chunk",
-        distance: 0.1,
-        embeddingId: "embedding-1",
         noteId: "11111111-1111-4111-8111-111111111111",
-        similarity: 0.9,
-        title: "첫 번째 노트",
         type: "note",
       },
       {
         contextIndex: 2,
-        content: "Title:\n두 번째 노트\n\nContent:\n두 번째 chunk",
-        distance: 0.2,
-        embeddingId: "embedding-2",
         noteId: "22222222-2222-4222-8222-222222222222",
-        similarity: 0.8,
-        title: "두 번째 노트",
         type: "note",
       },
     ]);
@@ -102,14 +86,10 @@ describe("buildNoteChatSources", () => {
     expect(buildNoteChatSources(notes)).toEqual([
       expect.objectContaining({
         contextIndex: 1,
-        content: "Title:\n테스트 노트\n\nContent:\nchunk 0",
-        embeddingId: "embedding-1",
         noteId,
       }),
       expect.objectContaining({
         contextIndex: 2,
-        content: "Title:\n테스트 노트\n\nContent:\nchunk 1",
-        embeddingId: "embedding-2",
         noteId,
       }),
     ]);

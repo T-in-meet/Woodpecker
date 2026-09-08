@@ -106,9 +106,8 @@ type NoteChatExecutionClaimClient = Pick<
 
 /**
  * Note Chat 실행을 conversation 단위로 claim합니다.
- *
- * 이 함수는 run 기록 테이블에 의존하지 않고 conversation in-flight와
- * 일일 실행 제한을 판정합니다. `claimed`일 때만 사용자 메시지 변경과
+ * 이 함수는 conversation in-flight와 일일 실행 제한을 판정합니다.
+ * `claimed`일 때만 사용자 메시지 변경과
  * Provider 실행을 시작해야 합니다.
  *
  * @param params claim할 conversation과 사용자 정보
@@ -214,9 +213,6 @@ export async function completeNoteChatExecutionClaim(
  * 둘 중 하나라도 실패하면 transaction 전체가 rollback되므로,
  * Assistant Message만 저장되고 Claim이 running으로 남거나
  * Claim만 succeeded가 되는 상태를 방지합니다.
- *
- * Run 감사 기록은 이 성공 transaction에 포함하지 않으며
- * 호출부에서 별도 best-effort로 갱신합니다.
  *
  * @param params 성공 확정에 필요한 Claim과 Assistant Message 정보
  * @param options 테스트에서 주입할 Supabase Client

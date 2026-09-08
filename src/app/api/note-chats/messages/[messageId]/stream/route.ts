@@ -4,18 +4,12 @@ import {
   NOTE_RETRIEVAL_AI_FEATURE_KEY,
   NOTE_RETRIEVAL_AI_ROLE_KEY,
 } from "@/features/ai/rags/note/constants/runtime";
-import { createAiRun } from "@/features/ai/runs/persistence";
-import {
-  AI_RUN_FEATURE_TYPE,
-  type AiRunPersistenceHandle,
-} from "@/features/ai/runs/types";
 import {
   resolveAiRuntimeChatConfiguration,
   resolveAiRuntimeEmbeddingConfiguration,
 } from "@/features/ai/runtimes";
 import { isReportedAiOperationalError } from "@/features/ai/utils/report-ai-operational-error";
 import { getLegalAcceptanceRequiredPath } from "@/features/auth/lib/userAgreements";
-import { createNoteChatSnapshotAccumulator } from "@/features/note-chats/ai-runs/snapshot-accumulator";
 import {
   NOTE_CHAT_AI_FEATURE_KEY,
   NOTE_CHAT_AI_ROLE_KEY,
@@ -64,7 +58,7 @@ type NoteChatUserMessageStreamRouteProps = {
  *
  * AI 설정은 클라이언트에서 전달받지 않습니다.
  * Note Chat에 연결된 AI Foundation Runtime Configuration을 서버에서 조회하고,
- * 확정된 동일 설정을 실제 AI 실행과 AI Run Snapshot에 사용합니다.
+ * 확정된 동일 설정을 실제 AI 실행에 사용합니다.
  *
  * @param request 수정된 사용자 질문을 포함한 HTTP 요청
  * @param params 수정할 User Message ID를 포함한 Route Params
@@ -424,10 +418,6 @@ export async function POST(
     embedding: embeddingConfiguration,
   };
 
-  // precheck, claim, User Message 저장 뒤에만 실행별 accumulator를 생성한다.
-  const snapshotAccumulator = createNoteChatSnapshotAccumulator();
-  let aiRun: AiRunPersistenceHandle | null = null;
-
   /*
    * streamClosed는 ReadableStream 자체가 취소되거나 close된 상태를 나타냅니다.
    * deliveryFailed는 서버에서 클라이언트로 이벤트를 전달할 수 없게 된 상태를
@@ -477,7 +467,6 @@ export async function POST(
               context: {
                 conversationId,
                 eventType: event.type,
-                aiRunId: aiRun?.id ?? null,
                 userMessageId: updated.user_message_id,
               },
               error,
@@ -509,25 +498,15 @@ export async function POST(
         });
 
         try {
-          // 실제 AI runner 진입 직전에 Run identity를 확정하고 초기 Snapshot 저장을 시도한다.
-          aiRun = await createAiRun({
-            buildSnapshot: snapshotAccumulator.buildSnapshot,
-            featureType: AI_RUN_FEATURE_TYPE.NOTE_CHAT,
-            startedAt: new Date().toISOString(),
-            userId: user.id,
-          });
-
           /*
            * runNoteChatStream은 AI execution과 결과 저장을 책임합니다.
            * 실제 답변의 text-delta 이벤트만 enqueueEvent를 통해 전달합니다.
            */
           const result = await runNoteChatStream(
             {
-              aiRun,
               conversationId,
               claimId,
               settings,
-              snapshotAccumulator,
               userId: user.id,
               userMessageId: updated.user_message_id,
             },

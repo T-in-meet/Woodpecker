@@ -12,8 +12,6 @@ import {
   NOTE_RETRIEVAL_AI_FEATURE_KEY,
   NOTE_RETRIEVAL_AI_ROLE_KEY,
 } from "@/features/ai/rags/note/constants/runtime";
-import { createAiRun } from "@/features/ai/runs/persistence";
-import type { AiRunPersistenceHandle } from "@/features/ai/runs/types";
 import {
   resolveAiRuntimeChatConfiguration,
   resolveAiRuntimeEmbeddingConfiguration,
@@ -65,27 +63,15 @@ vi.mock("@/features/note-chats/execution/execution-claim-persistence", () => ({
   },
 }));
 
-vi.mock("@/features/ai/runs/persistence", () => ({
-  createAiRun: vi.fn(),
-}));
-
 vi.mock("@/features/note-chats/utils/report-operational-error", () => ({
   reportNoteChatOperationalError: vi.fn(),
 }));
 
 const USER_ID = "550e8400-e29b-41d4-a716-446655440000";
 const CONVERSATION_ID = "550e8400-e29b-41d4-a716-446655440001";
-const RUN_ID = "550e8400-e29b-41d4-a716-446655440002";
 const USER_MESSAGE_ID = "550e8400-e29b-41d4-a716-446655440003";
 const ASSISTANT_MESSAGE_ID = "550e8400-e29b-41d4-a716-446655440004";
 const CLAIM_ID = "550e8400-e29b-41d4-a716-446655440005";
-
-const AI_RUN: AiRunPersistenceHandle = {
-  id: RUN_ID,
-  userId: USER_ID,
-  featureType: "note-chat",
-  startedAt: "2026-09-05T00:00:00.000Z",
-};
 
 const CHAT_CONFIGURATION = {
   kind: "chat",
@@ -234,8 +220,6 @@ describe("POST /api/note-chats/stream", () => {
     });
 
     vi.mocked(completeNoteChatExecutionClaim).mockResolvedValue(undefined);
-
-    vi.mocked(createAiRun).mockResolvedValue(AI_RUN);
 
     vi.mocked(runNoteChatStream).mockResolvedValue(RUN_RESULT);
 
@@ -546,7 +530,6 @@ describe("POST /api/note-chats/stream", () => {
     });
 
     expect(reportNoteChatOperationalError).not.toHaveBeenCalled();
-    expect(createAiRun).not.toHaveBeenCalled();
     expect(runNoteChatStream).not.toHaveBeenCalled();
   });
 
@@ -628,13 +611,6 @@ describe("POST /api/note-chats/stream", () => {
       p_user_id: USER_ID,
     });
 
-    expect(createAiRun).toHaveBeenCalledWith(
-      expect.objectContaining({
-        featureType: "note-chat",
-        userId: USER_ID,
-      }),
-    );
-
     expect(resolveAiRuntimeEmbeddingConfiguration).toHaveBeenCalledWith({
       featureKey: NOTE_RETRIEVAL_AI_FEATURE_KEY,
       roleKey: NOTE_RETRIEVAL_AI_ROLE_KEY,
@@ -646,7 +622,6 @@ describe("POST /api/note-chats/stream", () => {
       expect.objectContaining({
         claimId: CLAIM_ID,
         conversationId: CONVERSATION_ID,
-        aiRun: AI_RUN,
         settings: {
           chat: CHAT_CONFIGURATION,
           queryExpansion: QUERY_EXPANSION_CONFIGURATION,
@@ -661,7 +636,7 @@ describe("POST /api/note-chats/stream", () => {
     expect(reportNoteChatOperationalError).not.toHaveBeenCalled();
   });
 
-  it("Route lifecycle 이벤트와 Run 스트림 이벤트를 NDJSON으로 전달한다", async () => {
+  it("Route lifecycle 이벤트와 실행 스트림 이벤트를 NDJSON으로 전달한다", async () => {
     const client = createSupabaseClientMock();
 
     vi.mocked(createClient).mockResolvedValue(client as never);
@@ -760,7 +735,6 @@ describe("POST /api/note-chats/stream", () => {
             context: {
               conversationId: CONVERSATION_ID,
               eventType: "finish",
-              aiRunId: RUN_ID,
               userMessageId: USER_MESSAGE_ID,
             },
             error: sendError,
@@ -864,7 +838,7 @@ describe("POST /api/note-chats/stream", () => {
     }
   });
 
-  it("Run 실행이 실패하면 start 이후 기본 error 이벤트를 전달한다", async () => {
+  it("AI 실행이 실패하면 start 이후 기본 error 이벤트를 전달한다", async () => {
     const client = createSupabaseClientMock();
 
     vi.mocked(createClient).mockResolvedValue(client as never);

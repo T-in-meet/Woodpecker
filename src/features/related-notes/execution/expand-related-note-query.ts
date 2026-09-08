@@ -1,16 +1,11 @@
 import { z } from "zod";
 
-import type { AiTokenUsage } from "@/features/ai/providers/types";
-import {
-  createQueryExpansionCompletion,
-  type QueryExpansionCompletionObservation,
-} from "@/features/ai/rags/query-expansion/create-query-expansion-completion";
+import { createQueryExpansionCompletion } from "@/features/ai/rags/query-expansion/create-query-expansion-completion";
 import type { AiRuntimeChatConfiguration } from "@/features/ai/runtimes/types";
 import {
   RELATED_NOTES_OPERATIONAL_ERROR_CODES,
   RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS,
 } from "@/features/operational-errors/constants";
-import { type AiObserver, notifyAiObserver } from "@/lib/ai/notify-observer";
 
 import { reportRelatedNotesOperationalError } from "../utils/report-operational-error";
 
@@ -30,29 +25,7 @@ type ExpandRelatedNoteQueryParams = {
 
   /** 관련 노트를 추천할 대상 노트의 내용입니다. */
   content: string;
-
-  /**
-   * Provider 응답 직후 Token usage를 저장하기 위한 callback입니다.
-   *
-   * JSON 파싱이나 schema 검증이 실패하더라도 이미 완료된 Provider 호출의
-   * usage를 Run에 남기기 위해 응답 검증 전에 호출합니다.
-   */
-  onUsage?: (usage: AiTokenUsage) => Promise<void>;
-
-  /** 공통 Query Expansion 실행 관측 callback입니다. */
-  onObservation?: (
-    observation: QueryExpansionCompletionObservation,
-  ) => void | Promise<void>;
-
-  /** 파싱·검증 또는 그 실패를 관측하는 callback입니다. */
-  onParsed?: AiObserver<ExpandRelatedNoteQueryParseObservation> | undefined;
 };
-
-/** Related Notes Query Expansion 파싱 관측값입니다. */
-export type ExpandRelatedNoteQueryParseObservation =
-  | { type: "parsed"; expandedQuery: string }
-  | { type: "parse-failed"; error: unknown }
-  | { type: "validation-failed"; error: unknown; issues: unknown[] };
 
 /**
  * Related Notes Query Expansion 실행 결과입니다.
@@ -60,9 +33,6 @@ export type ExpandRelatedNoteQueryParseObservation =
 export type ExpandRelatedNoteQueryResult = {
   /** 관련 노트 검색에 사용할 확장 질의입니다. */
   expandedQuery: string;
-
-  /** Query Expansion Provider 호출에서 반환된 Token 사용량입니다. */
-  usage: AiTokenUsage;
 };
 
 /**
@@ -72,16 +42,13 @@ export type ExpandRelatedNoteQueryResult = {
  * 관련 노트 추천에 필요한 입력과 응답 검증만 이 기능에서 담당합니다.
  *
  * @param params 대상 노트와 Query Expansion Runtime 설정
- * @returns 관련 노트 검색에 사용할 확장 질의와 Provider usage
+ * @returns 관련 노트 검색에 사용할 확장 질의
  */
 export async function expandRelatedNoteQuery(
   params: ExpandRelatedNoteQueryParams,
 ): Promise<ExpandRelatedNoteQueryResult> {
-  const result = await createQueryExpansionCompletion({
+  const content = await createQueryExpansionCompletion({
     configuration: params.configuration,
-    ...(params.onObservation === undefined
-      ? {}
-      : { onObservation: params.onObservation }),
     responseSchemaName: "related_note_query_expansion_response",
     variables: {
       title: params.title,
@@ -89,16 +56,12 @@ export async function expandRelatedNoteQuery(
     },
   });
 
-  await params.onUsage?.(result.usage);
-
   let response: unknown;
 
   // Provider가 반환한 문자열 응답을 JSON 값으로 변환합니다.
   try {
-    response = JSON.parse(result.content) as unknown;
+    response = JSON.parse(content) as unknown;
   } catch (error) {
-    // Provider 원문은 callback에 다시 싣지 않고 실패 경계만 기록한다.
-    await notifyAiObserver(params.onParsed, { error, type: "parse-failed" });
     await reportRelatedNotesOperationalError({
       error,
       errorCode:
@@ -122,12 +85,6 @@ export async function expandRelatedNoteQuery(
       "Related note query expansion response does not match the expected schema.",
     );
 
-    await notifyAiObserver(params.onParsed, {
-      error,
-      issues: parsed.error.issues,
-      type: "validation-failed",
-    });
-
     await reportRelatedNotesOperationalError({
       error,
       errorCode:
@@ -144,13 +101,7 @@ export async function expandRelatedNoteQuery(
     throw error;
   }
 
-  await notifyAiObserver(params.onParsed, {
-    expandedQuery: parsed.data.expandedQuery,
-    type: "parsed",
-  });
-
   return {
     expandedQuery: parsed.data.expandedQuery,
-    usage: result.usage,
   };
 }
