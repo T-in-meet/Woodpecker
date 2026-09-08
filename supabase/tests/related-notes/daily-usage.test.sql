@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(11);
+SELECT plan(15);
 
 -- Related Notes quota 조회 정책을 사용자와 Note가 분리된 fixture로 검증합니다.
 -- ============================================================================
@@ -123,7 +123,9 @@ SELECT is(
     (
         SELECT quota.can_request_for_note
         FROM public.get_related_note_recommendation_daily_usage(
-            current_setting('test.related_note_quota_empty_note_id')::uuid
+            current_setting('test.related_note_quota_empty_note_id')::uuid,
+            1,
+            10
         ) AS quota
     ),
     true,
@@ -135,11 +137,41 @@ SELECT is(
     (
         SELECT quota.user_used
         FROM public.get_related_note_recommendation_daily_usage(
-            current_setting('test.related_note_quota_empty_note_id')::uuid
+            current_setting('test.related_note_quota_empty_note_id')::uuid,
+            1,
+            10
         ) AS quota
     ),
     0,
     'empty quota should return zero user-wide usage'
+);
+
+-- quota RPC는 TypeScript에서 주입한 Note 한도를 그대로 반환해야 합니다.
+SELECT is(
+    (
+        SELECT quota.note_limit
+        FROM public.get_related_note_recommendation_daily_usage(
+            current_setting('test.related_note_quota_empty_note_id')::uuid,
+            2,
+            20
+        ) AS quota
+    ),
+    2,
+    'quota lookup should return the injected note limit'
+);
+
+-- quota RPC는 TypeScript에서 주입한 사용자 한도를 그대로 반환해야 합니다.
+SELECT is(
+    (
+        SELECT quota.user_limit
+        FROM public.get_related_note_recommendation_daily_usage(
+            current_setting('test.related_note_quota_empty_note_id')::uuid,
+            2,
+            20
+        ) AS quota
+    ),
+    20,
+    'quota lookup should return the injected user limit'
 );
 
 -- ============================================================================
@@ -243,11 +275,27 @@ SELECT is(
     (
         SELECT quota.can_request_for_note
         FROM public.get_related_note_recommendation_daily_usage(
-            current_setting('test.related_note_quota_note_id')::uuid
+            current_setting('test.related_note_quota_note_id')::uuid,
+            1,
+            10
         ) AS quota
     ),
     false,
     'a running claim for the note should prevent another request today'
+);
+
+-- Note 한도 도달 여부는 주입된 Note 한도를 기준으로 명시적으로 반환해야 합니다.
+SELECT is(
+    (
+        SELECT quota.is_note_limit_reached
+        FROM public.get_related_note_recommendation_daily_usage(
+            current_setting('test.related_note_quota_note_id')::uuid,
+            1,
+            10
+        ) AS quota
+    ),
+    true,
+    'quota lookup should identify the reached note limit'
 );
 
 -- 사용자 전체 사용량은 모든 Note의 running과 succeeded만 포함해야 합니다.
@@ -255,7 +303,9 @@ SELECT is(
     (
         SELECT quota.user_used
         FROM public.get_related_note_recommendation_daily_usage(
-            current_setting('test.related_note_quota_note_id')::uuid
+            current_setting('test.related_note_quota_note_id')::uuid,
+            1,
+            10
         ) AS quota
     ),
     2,
@@ -339,7 +389,9 @@ SELECT is(
     (
         SELECT quota.user_used
         FROM public.get_related_note_recommendation_daily_usage(
-            current_setting('test.related_note_quota_empty_note_id')::uuid
+            current_setting('test.related_note_quota_empty_note_id')::uuid,
+            1,
+            10
         ) AS quota
     ),
     2,
@@ -395,11 +447,27 @@ SELECT is(
     (
         SELECT quota.can_request_for_note
         FROM public.get_related_note_recommendation_daily_usage(
-            current_setting('test.related_note_quota_empty_note_id')::uuid
+            current_setting('test.related_note_quota_empty_note_id')::uuid,
+            1,
+            10
         ) AS quota
     ),
     false,
     'user-wide daily limit should prevent a request for an unused note'
+);
+
+-- 사용자 한도 도달 여부는 주입된 사용자 한도를 기준으로 명시적으로 반환해야 합니다.
+SELECT is(
+    (
+        SELECT quota.is_user_limit_reached
+        FROM public.get_related_note_recommendation_daily_usage(
+            current_setting('test.related_note_quota_empty_note_id')::uuid,
+            1,
+            10
+        ) AS quota
+    ),
+    true,
+    'quota lookup should identify the reached user limit'
 );
 
 -- 사용자 전체 한도에 도달한 조회는 오늘 총 사용량 10회를 반환해야 합니다.
@@ -407,7 +475,9 @@ SELECT is(
     (
         SELECT quota.user_used
         FROM public.get_related_note_recommendation_daily_usage(
-            current_setting('test.related_note_quota_empty_note_id')::uuid
+            current_setting('test.related_note_quota_empty_note_id')::uuid,
+            1,
+            10
         ) AS quota
     ),
     10,
@@ -426,7 +496,7 @@ SELECT throws_ok(
     format(
         $sql$
             SELECT *
-            FROM public.get_related_note_recommendation_daily_usage(%L::uuid);
+            FROM public.get_related_note_recommendation_daily_usage(%L::uuid, 1, 10);
         $sql$,
         current_setting('test.related_note_quota_other_user_note_id')
     ),
@@ -451,7 +521,7 @@ SELECT throws_ok(
     format(
         $sql$
             SELECT *
-            FROM public.get_related_note_recommendation_daily_usage(%L::uuid);
+            FROM public.get_related_note_recommendation_daily_usage(%L::uuid, 1, 10);
         $sql$,
         current_setting('test.related_note_quota_note_id')
     ),

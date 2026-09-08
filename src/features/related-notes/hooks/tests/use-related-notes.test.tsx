@@ -69,6 +69,10 @@ function createRelatedNotesResult({
   latestRecommendationExecution = null,
   recommendationQuota = {
     canRequestForNote: true,
+    isNoteLimitReached: false,
+    isUserLimitReached: false,
+    noteLimit: 1,
+    userLimit: 10,
     userUsed: 0,
   },
 }: {
@@ -80,6 +84,10 @@ function createRelatedNotesResult({
   } | null;
   recommendationQuota?: {
     canRequestForNote: boolean;
+    isNoteLimitReached: boolean;
+    isUserLimitReached: boolean;
+    noteLimit: number;
+    userLimit: number;
     userUsed: number;
   };
 } = {}) {

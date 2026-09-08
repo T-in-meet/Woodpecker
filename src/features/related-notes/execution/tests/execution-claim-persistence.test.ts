@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE } from "../../constants/ai";
+import {
+  RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
+  RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
+} from "../../constants/ai";
 import {
   claimRelatedNoteRecommendationExecution,
   completeRelatedNoteRecommendationExecutionClaim,
@@ -50,10 +53,12 @@ describe("related note recommendation execution claim persistence", () => {
     expect(rpc).toHaveBeenCalledWith(
       "claim_related_note_recommendation_execution",
       {
-        p_daily_recommendation_limit:
+        p_note_daily_recommendation_limit:
           RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
         p_note_id: NOTE_ID,
         p_source_updated_at: SOURCE_UPDATED_AT,
+        p_user_daily_recommendation_limit:
+          RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
         p_user_id: USER_ID,
       },
     );

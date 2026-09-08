@@ -128,16 +128,13 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
    */
   const recommendationQuota = data?.recommendationQuota ?? null;
 
-  // 사용자 전체 일일 추천 할당량에 도달했는지 확인합니다.
+  // DB가 판정한 사용자 전체 일일 추천 할당량 도달 상태를 사용합니다.
   const hasReachedUserRecommendationLimit =
-    recommendationQuota !== null &&
-    recommendationQuota.userUsed >= RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT;
+    recommendationQuota?.isUserLimitReached === true;
 
-  // 현재 Note의 일일 추천 할당량에 도달했는지 확인합니다.
+  // DB가 판정한 현재 Note의 일일 추천 할당량 도달 상태를 사용합니다.
   const hasReachedNoteRecommendationLimit =
-    recommendationQuota !== null &&
-    !recommendationQuota.canRequestForNote &&
-    !hasReachedUserRecommendationLimit;
+    recommendationQuota?.isNoteLimitReached === true;
 
   /*
    * 실행 요청 중이거나 실행 상태를 추적 중이거나,
@@ -152,8 +149,7 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
     isRecommendationRequestInProgress ||
     hasRunningRecommendationExecution ||
     hasSucceededRecommendationExecution ||
-    hasReachedUserRecommendationLimit ||
-    hasReachedNoteRecommendationLimit;
+    (recommendationQuota !== null && !recommendationQuota.canRequestForNote);
 
   /*
    * AI 추천의 현재 상태를 짧은 문구로 표시합니다.
@@ -221,22 +217,22 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
             <FeatureInfoPopover ariaLabel="관련 노트 안내">
               <div className="space-y-2">
                 <p>
-                  {`AI 관련 노트 추천은 노트마다 하루 ${RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE}회, 사용자당 하루 최대 ${RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT}회 사용할 수 있으며 매일 자정(KST)에 초기화됩니다.`}
+                  {`AI 관련 노트 추천은 노트마다 하루 ${recommendationQuota?.noteLimit ?? RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE}회, 사용자당 하루 최대 ${recommendationQuota?.userLimit ?? RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT}회 사용할 수 있으며 매일 자정(KST)에 초기화됩니다.`}
                 </p>
               </div>
             </FeatureInfoPopover>
           </div>
 
-          <div className="flex min-w-0 shrink-0 flex-col items-end gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+          <div className="flex min-w-0 flex-col items-end gap-1.5 sm:flex-row sm:items-center sm:gap-3">
             {recommendationStatus ? (
-              <p className="order-2 max-w-full text-right text-xs text-muted-foreground sm:order-1">
+              <p className="order-2 min-w-0 max-w-full whitespace-normal break-words text-right text-xs text-muted-foreground sm:order-1">
                 {recommendationStatus}
 
                 {recommendationQuota ? (
                   <>
                     {" · 오늘 "}
                     {recommendationQuota.userUsed}/
-                    {RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT}회
+                    {recommendationQuota.userLimit}회
                   </>
                 ) : null}
               </p>

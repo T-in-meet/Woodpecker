@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(39);
+SELECT plan(40);
 
 
 -- ============================================================================
@@ -284,7 +284,8 @@ SELECT throws_ok(
                 FROM public.notes
                 WHERE id = current_setting('test.related_note_claims_note_id')::uuid
             ),
-            10
+            10,
+            p_user_daily_recommendation_limit => 10
         );
     $sql$,
     '42501',
@@ -468,7 +469,8 @@ FROM public.claim_related_note_recommendation_execution(
     current_setting('test.related_note_claims_user_id')::uuid,
     current_setting('test.related_note_claims_note_id')::uuid,
     '2000-01-01T00:00:00Z'::timestamptz,
-    10
+    10,
+    p_user_daily_recommendation_limit => 10
 )
 \gset test_related_note_claims_stale_
 
@@ -506,7 +508,8 @@ FROM public.claim_related_note_recommendation_execution(
         FROM public.notes
         WHERE id = current_setting('test.related_note_claims_note_id')::uuid
     ),
-    10
+    10,
+    p_user_daily_recommendation_limit => 10
 )
 \gset test_related_note_claims_first_
 
@@ -544,7 +547,8 @@ FROM public.claim_related_note_recommendation_execution(
         FROM public.notes
         WHERE id = current_setting('test.related_note_claims_note_id')::uuid
     ),
-    10
+    10,
+    p_user_daily_recommendation_limit => 10
 )
 \gset test_related_note_claims_duplicate_
 
@@ -620,7 +624,8 @@ FROM public.claim_related_note_recommendation_execution(
         FROM public.notes
         WHERE id = current_setting('test.related_note_claims_note_id')::uuid
     ),
-    10
+    10,
+    p_user_daily_recommendation_limit => 10
 )
 \gset test_related_note_claims_after_failed_
 
@@ -657,7 +662,8 @@ FROM public.claim_related_note_recommendation_execution(
         FROM public.notes
         WHERE id = current_setting('test.related_note_claims_note_id')::uuid
     ),
-    10
+    10,
+    p_user_daily_recommendation_limit => 10
 )
 \gset test_related_note_claims_after_succeeded_
 
@@ -717,7 +723,8 @@ FROM public.claim_related_note_recommendation_execution(
         FROM public.notes
         WHERE id = current_setting('test.related_note_claims_recent_running_note_id')::uuid
     ),
-    10
+    10,
+    p_user_daily_recommendation_limit => 10
 )
 \gset test_related_note_claims_recent_running_
 
@@ -801,7 +808,8 @@ FROM public.claim_related_note_recommendation_execution(
         FROM public.notes
         WHERE id = current_setting('test.related_note_claims_expired_running_note_id')::uuid
     ),
-    1
+    1,
+    p_user_daily_recommendation_limit => 10
 )
 \gset test_related_note_claims_expired_running_
 
@@ -887,7 +895,8 @@ FROM public.claim_related_note_recommendation_execution(
         FROM public.notes
         WHERE id = current_setting('test.related_note_claims_old_succeeded_note_id')::uuid
     ),
-    10
+    10,
+    p_user_daily_recommendation_limit => 10
 )
 \gset test_related_note_claims_old_succeeded_
 
@@ -948,7 +957,8 @@ FROM public.claim_related_note_recommendation_execution(
         FROM public.notes
         WHERE id = current_setting('test.related_note_claims_note_id')::uuid
     ),
-    1
+    1,
+    p_user_daily_recommendation_limit => 10
 )
 \gset test_related_note_claims_limit_
 
@@ -976,7 +986,8 @@ FROM public.claim_related_note_recommendation_execution(
         FROM public.notes
         WHERE id = current_setting('test.related_note_claims_quota_other_note_id')::uuid
     ),
-    1
+    1,
+    p_user_daily_recommendation_limit => 10
 )
 \gset test_related_note_claims_quota_other_note_
 
@@ -1100,7 +1111,37 @@ WHERE "notes"."user_id" = current_setting(
     )::uuid
   AND "notes"."title" = 'Related Note Global Quota 10';
 
--- 오늘 9회 사용 상태에서는 서로 다른 Note의 10번째 Claim을 허용해야 합니다.
+-- 사용자 전체 한도를 9로 주입하면 오늘 9회 사용 상태에서 새 Claim을 차단해야 합니다.
+SELECT is(
+    (
+        SELECT claim.status
+        FROM public.claim_related_note_recommendation_execution(
+            current_setting('test.related_note_claims_global_quota_user_id')::uuid,
+            (
+                SELECT id
+                FROM public.notes
+                WHERE user_id = current_setting(
+                        'test.related_note_claims_global_quota_user_id'
+                    )::uuid
+                  AND title = 'Related Note Global Quota 11'
+            ),
+            (
+                SELECT updated_at
+                FROM public.notes
+                WHERE user_id = current_setting(
+                        'test.related_note_claims_global_quota_user_id'
+                    )::uuid
+                  AND title = 'Related Note Global Quota 11'
+            ),
+            1,
+            9
+        ) AS claim
+    ),
+    'daily_limit_exceeded',
+    'claim should enforce the injected user-wide daily limit'
+);
+
+-- 오늘 9회 사용 상태에서는 사용자 한도 10으로 서로 다른 Note의 10번째 Claim을 허용해야 합니다.
 SELECT *
 FROM public.claim_related_note_recommendation_execution(
     current_setting('test.related_note_claims_global_quota_user_id')::uuid,
@@ -1120,7 +1161,8 @@ FROM public.claim_related_note_recommendation_execution(
             )::uuid
           AND title = 'Related Note Global Quota 11'
     ),
-    1
+    1,
+    p_user_daily_recommendation_limit => 10
 )
 \gset test_related_note_claims_global_tenth_
 
@@ -1150,7 +1192,8 @@ FROM public.claim_related_note_recommendation_execution(
             )::uuid
           AND title = 'Related Note Global Quota 12'
     ),
-    1
+    1,
+    p_user_daily_recommendation_limit => 10
 )
 \gset test_related_note_claims_global_eleventh_
 
@@ -1243,7 +1286,8 @@ FROM public.claim_related_note_recommendation_execution(
             )::uuid
           AND title = 'Related Note Global Stale 11'
     ),
-    1
+    1,
+    p_user_daily_recommendation_limit => 10
 )
 \gset test_related_note_claims_after_global_stale_
 
@@ -1329,7 +1373,8 @@ FROM public.claim_related_note_recommendation_execution(
         FROM public.notes
         WHERE id = current_setting('test.related_note_claims_excluded_quota_note_id')::uuid
     ),
-    1
+    1,
+    p_user_daily_recommendation_limit => 10
 )
 \gset test_related_note_claims_excluded_quota_statuses_
 
@@ -1402,7 +1447,8 @@ FROM public.claim_related_note_recommendation_execution(
         FROM public.notes
         WHERE id = current_setting('test.related_note_claims_admin_note_id')::uuid
     ),
-    1
+    1,
+    p_user_daily_recommendation_limit => 10
 )
 \gset test_related_note_claims_admin_
 
@@ -1422,7 +1468,8 @@ FROM public.claim_related_note_recommendation_execution(
         FROM public.notes
         WHERE id = current_setting('test.related_note_claims_admin_note_id')::uuid
     ),
-    1
+    1,
+    p_user_daily_recommendation_limit => 10
 )
 \gset test_related_note_claims_admin_duplicate_
 
@@ -1453,7 +1500,8 @@ SELECT throws_ok(
                 FROM public.notes
                 WHERE id = current_setting('test.related_note_claims_unverified_note_id')::uuid
             ),
-            10
+            10,
+            p_user_daily_recommendation_limit => 10
         );
     $sql$,
     'P0001',

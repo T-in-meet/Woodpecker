@@ -62,6 +62,16 @@ const confirmNavigationMock = vi.fn();
 
 type ExecutionStatus = "running" | "succeeded" | "failed" | "stale";
 
+/** Related Notes 컴포넌트 테스트용 quota 상태입니다. */
+type RecommendationQuota = {
+  canRequestForNote: boolean;
+  isNoteLimitReached: boolean;
+  isUserLimitReached: boolean;
+  noteLimit: number;
+  userLimit: number;
+  userUsed: number;
+};
+
 type MockRelatedNotesSectionDataOptions = {
   hasRunningRecommendationExecution?: boolean;
   hasFailedRecommendationExecution?: boolean;
@@ -70,11 +80,23 @@ type MockRelatedNotesSectionDataOptions = {
     status: ExecutionStatus;
   } | null;
   isRecommendationPolling?: boolean;
-  recommendationQuota?: {
-    canRequestForNote: boolean;
-    userUsed: number;
-  } | null;
+  recommendationQuota?: RecommendationQuota | null;
 };
+
+/** 필요한 quota 필드만 덮어쓸 수 있는 기본 테스트 값을 만듭니다. */
+function createRecommendationQuota(
+  overrides: Partial<RecommendationQuota> = {},
+): RecommendationQuota {
+  return {
+    canRequestForNote: true,
+    isNoteLimitReached: false,
+    isUserLimitReached: false,
+    noteLimit: 1,
+    userLimit: 10,
+    userUsed: 0,
+    ...overrides,
+  };
+}
 
 function mockRelatedNotesSectionData({
   hasRunningRecommendationExecution = false,
@@ -206,10 +228,11 @@ describe("RelatedNotesSection", () => {
         id: executionClaimId,
         status: "succeeded",
       },
-      recommendationQuota: {
+      recommendationQuota: createRecommendationQuota({
         canRequestForNote: false,
+        isNoteLimitReached: true,
         userUsed: 1,
-      },
+      }),
     });
 
     render(<RelatedNotesSection noteId={noteId} />);
@@ -282,10 +305,9 @@ describe("RelatedNotesSection", () => {
 
   it("AI 추천을 요청할 수 있으면 사용자 전체 일일 사용량과 추천 가능 상태를 표시한다", () => {
     mockRelatedNotesSectionData({
-      recommendationQuota: {
-        canRequestForNote: true,
+      recommendationQuota: createRecommendationQuota({
         userUsed: 4,
-      },
+      }),
     });
 
     render(<RelatedNotesSection noteId={noteId} />);
@@ -294,12 +316,28 @@ describe("RelatedNotesSection", () => {
     expect(screen.getByRole("button", { name: "AI 추천" })).toBeEnabled();
   });
 
+  it("TypeScript 표시 상수와 다른 서버 한도도 서버 판정과 반환값을 기준으로 표시한다", () => {
+    mockRelatedNotesSectionData({
+      recommendationQuota: createRecommendationQuota({
+        userLimit: 20,
+        userUsed: 10,
+      }),
+    });
+
+    render(<RelatedNotesSection noteId={noteId} />);
+
+    expect(screen.getByRole("button", { name: "AI 추천" })).toBeEnabled();
+    expect(screen.getByText("추천 가능 · 오늘 10/20회")).toBeInTheDocument();
+    expect(screen.queryByText(/오늘 할당량 소진/)).not.toBeInTheDocument();
+  });
+
   it("현재 Note의 일일 추천 할당량을 소진하면 버튼을 비활성화하고 오늘 추천 완료 상태와 사용자 전체 사용량을 표시한다", () => {
     mockRelatedNotesSectionData({
-      recommendationQuota: {
+      recommendationQuota: createRecommendationQuota({
         canRequestForNote: false,
+        isNoteLimitReached: true,
         userUsed: 1,
-      },
+      }),
     });
 
     render(<RelatedNotesSection noteId={noteId} />);
@@ -313,10 +351,11 @@ describe("RelatedNotesSection", () => {
 
   it("사용자 전체 일일 추천 할당량을 소진하면 버튼을 비활성화하고 오늘 할당량 소진 상태와 사용량을 표시한다", () => {
     mockRelatedNotesSectionData({
-      recommendationQuota: {
+      recommendationQuota: createRecommendationQuota({
         canRequestForNote: false,
+        isUserLimitReached: true,
         userUsed: 10,
-      },
+      }),
     });
 
     render(<RelatedNotesSection noteId={noteId} />);
@@ -334,10 +373,11 @@ describe("RelatedNotesSection", () => {
         id: executionClaimId,
         status: "succeeded",
       },
-      recommendationQuota: {
+      recommendationQuota: createRecommendationQuota({
         canRequestForNote: false,
+        isUserLimitReached: true,
         userUsed: 10,
-      },
+      }),
     });
 
     render(<RelatedNotesSection noteId={noteId} />);
@@ -355,10 +395,11 @@ describe("RelatedNotesSection", () => {
         id: executionClaimId,
         status: "running",
       },
-      recommendationQuota: {
+      recommendationQuota: createRecommendationQuota({
         canRequestForNote: false,
+        isNoteLimitReached: true,
         userUsed: 1,
-      },
+      }),
     });
 
     render(<RelatedNotesSection noteId={noteId} />);
@@ -376,10 +417,11 @@ describe("RelatedNotesSection", () => {
         id: executionClaimId,
         status: "failed",
       },
-      recommendationQuota: {
+      recommendationQuota: createRecommendationQuota({
         canRequestForNote: false,
+        isNoteLimitReached: true,
         userUsed: 1,
-      },
+      }),
     });
 
     render(<RelatedNotesSection noteId={noteId} />);
@@ -388,6 +430,30 @@ describe("RelatedNotesSection", () => {
       screen.getByText("관련 노트 추천에 실패했습니다. · 오늘 1/10회"),
     ).toBeInTheDocument();
     expect(screen.queryByText(/오늘 추천 완료/)).not.toBeInTheDocument();
+  });
+
+  it("긴 요청 오류와 quota 문구에 축소 및 줄바꿈 가능한 스타일을 적용한다", () => {
+    const longErrorMessage =
+      "관련 노트 추천 요청에 실패했습니다. 잠시 후 다시 시도해주세요.";
+
+    mockRelatedNotesSectionData({
+      recommendationQuota: createRecommendationQuota({
+        userUsed: 4,
+      }),
+    });
+    mockRecommendationRequest({
+      error: new Error(longErrorMessage),
+      isError: true,
+    });
+
+    render(<RelatedNotesSection noteId={noteId} />);
+
+    const status = screen.getByText(`${longErrorMessage} · 오늘 4/10회`);
+
+    expect(status).toHaveClass("min-w-0", "max-w-full", "break-words");
+    expect(status.parentElement).toHaveClass("min-w-0");
+    expect(status.parentElement).not.toHaveClass("shrink-0");
+    expect(screen.getByRole("button", { name: "AI 추천" })).toBeEnabled();
   });
 
   it("recommendationQuota가 null이면 일일 추천 상태를 표시하지 않는다", () => {
