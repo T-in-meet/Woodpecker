@@ -1,6 +1,14 @@
 BEGIN;
 
-SELECT plan(22);
+SELECT plan(18);
+
+-- v2 전환이 끝난 최종 schema에는 legacy quota RPC가 존재하지 않아야 합니다.
+SELECT hasnt_function(
+    'public',
+    'get_related_note_recommendation_daily_usage',
+    ARRAY['uuid']::name[],
+    'legacy recommendation daily usage RPC is removed'
+);
 
 -- Related Notes quota 조회 정책을 사용자와 Note가 분리된 fixture로 검증합니다.
 -- ============================================================================
@@ -144,26 +152,6 @@ SELECT is(
     ),
     0,
     'empty quota should return zero user-wide usage'
-);
-
--- legacy quota RPC는 기존 Note 단위 정수 사용량 계약을 유지해야 합니다.
-SELECT is(
-    public.get_related_note_recommendation_daily_usage(
-        current_setting('test.related_note_quota_empty_note_id')::uuid
-    ),
-    0,
-    'legacy quota should preserve the note usage contract'
-);
-
--- legacy quota RPC 반환형은 기존 scalar integer 계약을 유지해야 합니다.
-SELECT is(
-    pg_typeof(
-        public.get_related_note_recommendation_daily_usage(
-            current_setting('test.related_note_quota_empty_note_id')::uuid
-        )
-    )::text,
-    'integer',
-    'legacy quota should preserve the scalar integer return type'
 );
 
 -- quota RPC는 TypeScript에서 주입한 Note 한도를 그대로 반환해야 합니다.
@@ -316,15 +304,6 @@ SELECT is(
     ),
     true,
     'quota lookup should identify the reached note limit'
-);
-
--- legacy quota RPC는 현재 Note의 사용량만 정수로 반환해야 합니다.
-SELECT is(
-    public.get_related_note_recommendation_daily_usage(
-        current_setting('test.related_note_quota_note_id')::uuid
-    ),
-    1,
-    'legacy quota should return the current note usage'
 );
 
 -- 사용자 전체 사용량은 모든 Note의 running과 succeeded만 포함해야 합니다.
@@ -556,16 +535,6 @@ SELECT throws_ok(
 -- 실행 권한을 허용하고 anon 사용자의 직접 호출은 차단해야 합니다.
 --
 
--- authenticated 사용자는 legacy quota RPC를 실행할 수 있어야 합니다.
-SELECT ok(
-    has_function_privilege(
-        'authenticated',
-        'public.get_related_note_recommendation_daily_usage(uuid)',
-        'EXECUTE'
-    ),
-    'authenticated should execute the legacy quota RPC'
-);
-
 -- authenticated 사용자는 v2 quota RPC를 실행할 수 있어야 합니다.
 SELECT ok(
     has_function_privilege(
@@ -591,20 +560,6 @@ SELECT throws_ok(
     '42501',
     NULL,
     'anon should not execute related note recommendation quota RPC'
-);
-
--- 익명 사용자는 legacy Related Notes quota RPC도 실행할 수 없어야 합니다.
-SELECT throws_ok(
-    format(
-        $sql$
-            SELECT *
-            FROM public.get_related_note_recommendation_daily_usage(%L::uuid);
-        $sql$,
-        current_setting('test.related_note_quota_note_id')
-    ),
-    '42501',
-    NULL,
-    'anon should not execute the legacy related note quota RPC'
 );
 
 SELECT * FROM finish();

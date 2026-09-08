@@ -487,67 +487,7 @@ describe("getRelatedNotes", () => {
     });
   });
 
-  it("구 DB에 quota v2가 없으면 기존 quota RPC 결과를 사용한다", async () => {
-    const { supabase } = createSupabaseQueryMock({
-      notes: createCurrentNoteResult(),
-      profiles: createUserProfileResult(),
-      note_related_notes: {
-        data: [],
-      },
-      related_note_recommendation_execution_claims: {
-        data: [],
-      },
-    });
-    const rpcMock = vi.fn().mockImplementation((name: string) => {
-      if (name === "get_related_note_recommendation_daily_usage_v2") {
-        return Promise.resolve({
-          data: null,
-          error: {
-            code: "PGRST202",
-            message: "Could not find the function in the schema cache",
-          },
-        });
-      }
-
-      if (name === "get_related_note_recommendation_daily_usage") {
-        return Promise.resolve({
-          data: 1,
-          error: null,
-        });
-      }
-
-      throw new Error(`Unexpected RPC: ${name}`);
-    });
-
-    createClientMock.mockResolvedValue({
-      ...supabase,
-      auth: createAuthMock(),
-      rpc: rpcMock,
-    } as never);
-
-    const result = await getRelatedNotes(noteId);
-
-    expect(rpcMock).toHaveBeenNthCalledWith(
-      2,
-      "get_related_note_recommendation_daily_usage",
-      {
-        p_note_id: noteId,
-      },
-    );
-    expect(result.recommendationQuota).toEqual({
-      status: "available",
-      quota: {
-        canRequestForNote: false,
-        isNoteLimitReached: true,
-        isUserLimitReached: false,
-        noteLimit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
-        userLimit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
-        userUsed: null,
-      },
-    });
-  });
-
-  it("quota v2의 실제 실행 오류는 기존 RPC로 재시도하지 않는다", async () => {
+  it("quota v2 실행 오류를 기록하고 목록 조회는 계속한다", async () => {
     const { supabase } = createSupabaseQueryMock({
       notes: createCurrentNoteResult(),
       profiles: createUserProfileResult(),

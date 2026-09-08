@@ -1,6 +1,14 @@
 BEGIN;
 
-SELECT plan(43);
+SELECT plan(41);
+
+-- v2 전환이 끝난 최종 schema에는 legacy Claim RPC가 존재하지 않아야 합니다.
+SELECT hasnt_function(
+    'public',
+    'claim_related_note_recommendation_execution',
+    ARRAY['uuid', 'uuid', 'timestamp with time zone', 'integer']::name[],
+    'legacy recommendation execution claim RPC is removed'
+);
 
 
 -- ============================================================================
@@ -293,27 +301,6 @@ SELECT throws_ok(
     'authenticated should not execute recommendation execution claim RPC'
 );
 
--- authenticated 사용자는 legacy Claim wrapper도 직접 실행할 수 없어야 합니다.
-SELECT throws_ok(
-    $sql$
-        SELECT *
-        FROM public.claim_related_note_recommendation_execution(
-            current_setting('test.related_note_claims_user_id')::uuid,
-            current_setting('test.related_note_claims_note_id')::uuid,
-            (
-                SELECT updated_at
-                FROM public.notes
-                WHERE id = current_setting('test.related_note_claims_note_id')::uuid
-            ),
-            10
-        );
-    $sql$,
-    '42501',
-    NULL,
-    'authenticated should not execute the legacy recommendation claim RPC'
-);
-
-
 -- ============================================================================
 -- Stale cleanup RPC
 -- ============================================================================
@@ -498,21 +485,6 @@ SELECT is(
     :'test_related_note_claims_stale_status'::text,
     'stale',
     'stale source should return stale before inserting a claim'
-);
-
--- legacy Claim wrapper는 기존 signature와 stale 반환 계약을 유지해야 합니다.
-SELECT is(
-    (
-        SELECT claim.status
-        FROM public.claim_related_note_recommendation_execution(
-            current_setting('test.related_note_claims_user_id')::uuid,
-            current_setting('test.related_note_claims_note_id')::uuid,
-            '2000-01-01T00:00:00Z'::timestamptz,
-            10
-        ) AS claim
-    ),
-    'stale',
-    'legacy claim should preserve the stale result contract'
 );
 
 SELECT is(
@@ -1237,32 +1209,6 @@ SELECT is(
     'daily_limit_exceeded',
     'the eleventh claim across notes should exceed the user-wide daily limit'
 );
-
--- legacy Claim은 구 앱의 Note 단위 계약을 유지해 사용자 전체 10회 이후에도 허용해야 합니다.
-SELECT is(
-    (
-        SELECT claim.status
-        FROM public.claim_related_note_recommendation_execution(
-            current_setting('test.related_note_claims_global_quota_user_id')::uuid,
-            (
-                SELECT id
-                FROM public.notes
-                WHERE user_id = current_setting('test.related_note_claims_global_quota_user_id')::uuid
-                  AND title = 'Related Note Global Quota 12'
-            ),
-            (
-                SELECT updated_at
-                FROM public.notes
-                WHERE user_id = current_setting('test.related_note_claims_global_quota_user_id')::uuid
-                  AND title = 'Related Note Global Quota 12'
-            ),
-            1
-        ) AS claim
-    ),
-    'claimed',
-    'legacy claim should preserve note-only quota after ten user-wide claims'
-);
-
 
 -- ----------------------------------------------------------------------------
 -- 사용자 전체 quota 계산 전 타 Note 만료 Claim 정리
