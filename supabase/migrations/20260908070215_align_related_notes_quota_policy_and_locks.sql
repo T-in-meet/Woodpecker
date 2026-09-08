@@ -376,7 +376,7 @@ $$;
 
 /*
  * 구 앱이 사용하는 기존 quota signature와 정수 반환 계약을 유지합니다.
- * 기존 정책값인 Note 1회, 사용자 전체 10회를 v2에 전달하고 Note 사용량만 반환합니다.
+ * Note 1회와 v2 호출에 필요한 사용자 전체 한도 10회를 전달하고 Note 사용량만 반환합니다.
  */
 CREATE OR REPLACE FUNCTION "public"."get_related_note_recommendation_daily_usage"(
   "p_note_id" "uuid"
