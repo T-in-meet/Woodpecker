@@ -238,7 +238,7 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
               <p className="order-2 min-w-0 max-w-full whitespace-normal break-words text-right text-xs text-muted-foreground sm:order-1">
                 {recommendationStatus}
 
-                {recommendationQuota ? (
+                {typeof recommendationQuota?.userUsed === "number" ? (
                   <>
                     {" · 오늘 "}
                     {recommendationQuota.userUsed}/

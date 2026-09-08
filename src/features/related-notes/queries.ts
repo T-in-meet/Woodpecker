@@ -56,8 +56,8 @@ type RelatedNoteRecommendationQuota = {
   /** 사용자별 전체 일일 추천 한도입니다. */
   userLimit: number;
 
-  /** 사용자의 오늘 전체 추천 사용량입니다. */
-  userUsed: number;
+  /** 사용자의 오늘 전체 추천 사용량이며, 구 DB에서 확인할 수 없으면 null입니다. */
+  userUsed: number | null;
 };
 
 /** Related Notes AI 추천 일일 할당량 조회 상태입니다. */
@@ -271,14 +271,11 @@ export async function getRelatedNotes(
         userId: user.id,
       });
     } else if (legacyRecommendationQuotaResult) {
-      // legacy 결과에는 사용자/Note별 한도 도달 여부가 없어 기존 계약으로 복원합니다.
+      // legacy 정수 결과로 구 DB가 적용하는 Note별 quota 상태만 복원합니다.
       const parsedLegacyRecommendationQuota = z
-        .tuple([
-          z.object({
-            can_request_for_note: z.boolean(),
-            user_used: z.number().int().nonnegative(),
-          }),
-        ])
+        .number()
+        .int()
+        .nonnegative()
         .safeParse(legacyRecommendationQuotaResult.data);
 
       if (!parsedLegacyRecommendationQuota.success) {
@@ -287,20 +284,19 @@ export async function getRelatedNotes(
           error: parsedLegacyRecommendationQuota.error,
         });
       } else {
-        const legacyQuota = parsedLegacyRecommendationQuota.data[0];
-        const isUserLimitReached =
-          legacyQuota.user_used >= RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT;
+        const isNoteLimitReached =
+          parsedLegacyRecommendationQuota.data >=
+          RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE;
 
         recommendationQuota = {
           status: "available",
           quota: {
-            canRequestForNote: legacyQuota.can_request_for_note,
-            isNoteLimitReached:
-              !legacyQuota.can_request_for_note && !isUserLimitReached,
-            isUserLimitReached,
+            canRequestForNote: !isNoteLimitReached,
+            isNoteLimitReached,
+            isUserLimitReached: false,
             noteLimit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
             userLimit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
-            userUsed: legacyQuota.user_used,
+            userUsed: null,
           },
         };
       }

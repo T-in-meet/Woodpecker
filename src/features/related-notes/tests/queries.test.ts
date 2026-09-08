@@ -511,12 +511,7 @@ describe("getRelatedNotes", () => {
 
       if (name === "get_related_note_recommendation_daily_usage") {
         return Promise.resolve({
-          data: [
-            {
-              can_request_for_note: false,
-              user_used: 1,
-            },
-          ],
+          data: 1,
           error: null,
         });
       }
@@ -547,7 +542,7 @@ describe("getRelatedNotes", () => {
         isUserLimitReached: false,
         noteLimit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
         userLimit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
-        userUsed: 1,
+        userUsed: null,
       },
     });
   });

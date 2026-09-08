@@ -284,6 +284,7 @@ RETURNS TABLE (
   "is_note_limit_reached" boolean,
   "is_user_limit_reached" boolean,
   "note_limit" integer,
+  "note_used" integer,
   "user_used" integer,
   "user_limit" integer
 )
@@ -377,29 +378,25 @@ BEGIN
     "v_is_note_limit_reached",
     "v_is_user_limit_reached",
     "p_note_daily_recommendation_limit",
+    "v_note_daily_count",
     "v_user_daily_count",
     "p_user_daily_recommendation_limit";
 END;
 $$;
 
 /*
- * 구 앱이 사용하는 기존 quota signature와 두 필드 반환 계약을 유지합니다.
- * 기존 정책값인 Note 1회, 사용자 전체 10회를 v2에 전달합니다.
+ * 구 앱이 사용하는 기존 quota signature와 정수 반환 계약을 유지합니다.
+ * 기존 정책값인 Note 1회, 사용자 전체 10회를 v2에 전달하고 Note 사용량만 반환합니다.
  */
 CREATE OR REPLACE FUNCTION "public"."get_related_note_recommendation_daily_usage"(
   "p_note_id" "uuid"
 )
-RETURNS TABLE (
-  "can_request_for_note" boolean,
-  "user_used" integer
-)
+RETURNS integer
 LANGUAGE sql
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  SELECT
-    "quota"."can_request_for_note",
-    "quota"."user_used"
+  SELECT "quota"."note_used"
   FROM "public"."get_related_note_recommendation_daily_usage_v2"(
     "p_note_id",
     1,
@@ -485,4 +482,4 @@ COMMENT ON FUNCTION "public"."get_related_note_recommendation_daily_usage_v2"(
 COMMENT ON FUNCTION "public"."get_related_note_recommendation_daily_usage"(
   "uuid"
 ) IS
-  '구 앱 호환용 Related Notes quota wrapper이며 기존 Note 1회/User 10회 정책과 두 필드 반환 계약을 유지합니다.';
+  '구 앱 호환용 Related Notes quota wrapper이며 기존 Note 단위 정수 사용량 반환 계약을 유지합니다.';

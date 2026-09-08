@@ -1775,10 +1775,7 @@ export type Database = {
       get_note_chat_daily_usage: { Args: never; Returns: number };
       get_related_note_recommendation_daily_usage: {
         Args: { p_note_id: string };
-        Returns: {
-          can_request_for_note: boolean;
-          user_used: number;
-        }[];
+        Returns: number;
       };
       get_related_note_recommendation_daily_usage_v2: {
         Args: {
@@ -1791,6 +1788,7 @@ export type Database = {
           is_note_limit_reached: boolean;
           is_user_limit_reached: boolean;
           note_limit: number;
+          note_used: number;
           user_limit: number;
           user_used: number;
         }[];
