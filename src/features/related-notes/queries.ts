@@ -12,7 +12,6 @@ import { logError } from "@/lib/logger";
 import { createServerComponentClient } from "@/lib/supabase/server";
 import { escapePostgrestLikePattern } from "@/lib/utils/escapePostgrestLikePattern";
 
-import { RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE } from "./constants/ai";
 import { relatedNoteRowSchema } from "./schemas";
 import type { RelatedNoteRecommendation } from "./types";
 import { reportRelatedNotesOperationalError } from "./utils/report-operational-error";
@@ -55,14 +54,14 @@ export type RelatedNotesQueryResult = {
   latestRecommendationExecution: RelatedNoteRecommendationExecution | null;
 
   /**
-   * 현재 Note의 오늘 AI 추천 사용량입니다.
+   * 현재 Note의 요청 가능 여부와 사용자의 오늘 전체 AI 추천 사용량입니다.
    *
    * 일일 실행 제한을 적용받는 일반 사용자에게만 반환하며,
    * quota를 우회하는 ADMIN에게는 null을 반환합니다.
    */
-  recommendationUsage: {
-    used: number;
-    limit: number;
+  recommendationQuota: {
+    canRequestForNote: boolean;
+    userUsed: number;
   } | null;
 };
 
@@ -102,7 +101,7 @@ export async function getRelatedNotes(
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
       latestRecommendationExecution: null,
-      recommendationUsage: null,
+      recommendationQuota: null,
       relatedNotes: [],
     };
   }
@@ -118,7 +117,7 @@ export async function getRelatedNotes(
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
       latestRecommendationExecution: null,
-      recommendationUsage: null,
+      recommendationQuota: null,
       relatedNotes: [],
     };
   }
@@ -157,7 +156,7 @@ export async function getRelatedNotes(
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
       latestRecommendationExecution: null,
-      recommendationUsage: null,
+      recommendationQuota: null,
       relatedNotes: [],
     };
   }
@@ -167,7 +166,7 @@ export async function getRelatedNotes(
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
       latestRecommendationExecution: null,
-      recommendationUsage: null,
+      recommendationQuota: null,
       relatedNotes: [],
     };
   }
@@ -220,7 +219,7 @@ export async function getRelatedNotes(
     });
   }
 
-  const shouldQueryRecommendationUsage =
+  const shouldQueryRecommendationQuota =
     !profileError && profile?.role === "USER";
 
   const relatedNotesQuery = supabase
@@ -248,7 +247,7 @@ export async function getRelatedNotes(
     .order("claimed_at", { ascending: false })
     .limit(1);
 
-  const recommendationUsageQuery = shouldQueryRecommendationUsage
+  const recommendationQuotaQuery = shouldQueryRecommendationQuota
     ? supabase.rpc("get_related_note_recommendation_daily_usage", {
         p_note_id: parsedNoteId.data,
       })
@@ -260,11 +259,11 @@ export async function getRelatedNotes(
   const [
     relatedNotesResult,
     latestRecommendationExecutionResult,
-    recommendationUsageResult,
+    recommendationQuotaResult,
   ] = await Promise.all([
     relatedNotesQuery,
     latestRecommendationExecutionQuery,
-    recommendationUsageQuery,
+    recommendationQuotaQuery,
   ]);
 
   const {
@@ -277,14 +276,14 @@ export async function getRelatedNotes(
     user.id,
   );
 
-  let recommendationUsage: RelatedNotesQueryResult["recommendationUsage"] =
+  let recommendationQuota: RelatedNotesQueryResult["recommendationQuota"] =
     null;
 
-  if (shouldQueryRecommendationUsage) {
-    if (recommendationUsageResult.error) {
+  if (shouldQueryRecommendationQuota) {
+    if (recommendationQuotaResult.error) {
       await reportRelatedNotesOperationalError({
         actorUserId: user.id,
-        error: recommendationUsageResult.error,
+        error: recommendationQuotaResult.error,
         errorCode:
           RELATED_NOTES_OPERATIONAL_ERROR_CODES.DAILY_USAGE_LOAD_FAILED,
         message: "Related Notes 일일 AI 추천 사용량 조회에 실패했습니다.",
@@ -292,21 +291,26 @@ export async function getRelatedNotes(
         userId: user.id,
       });
     } else {
-      const parsedRecommendationUsage = z
-        .number()
-        .int()
-        .nonnegative()
-        .safeParse(recommendationUsageResult.data);
+      const parsedRecommendationQuota = z
+        .tuple([
+          z.object({
+            can_request_for_note: z.boolean(),
+            user_used: z.number().int().nonnegative(),
+          }),
+        ])
+        .safeParse(recommendationQuotaResult.data);
 
-      if (!parsedRecommendationUsage.success) {
+      if (!parsedRecommendationQuota.success) {
         logError({
           message: "[getRelatedNotes] AI 추천 일일 사용량 파싱 실패",
-          error: parsedRecommendationUsage.error,
+          error: parsedRecommendationQuota.error,
         });
       } else {
-        recommendationUsage = {
-          used: parsedRecommendationUsage.data,
-          limit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
+        const quota = parsedRecommendationQuota.data[0];
+
+        recommendationQuota = {
+          canRequestForNote: quota.can_request_for_note,
+          userUsed: quota.user_used,
         };
       }
     }
@@ -332,7 +336,7 @@ export async function getRelatedNotes(
       hasFailedRecommendationExecution,
       hasRunningRecommendationExecution,
       latestRecommendationExecution,
-      recommendationUsage,
+      recommendationQuota,
       relatedNotes: [],
     };
   }
@@ -349,7 +353,7 @@ export async function getRelatedNotes(
       hasFailedRecommendationExecution,
       hasRunningRecommendationExecution,
       latestRecommendationExecution,
-      recommendationUsage,
+      recommendationQuota,
       relatedNotes: [],
     };
   }
@@ -358,7 +362,7 @@ export async function getRelatedNotes(
     hasFailedRecommendationExecution,
     hasRunningRecommendationExecution,
     latestRecommendationExecution,
-    recommendationUsage,
+    recommendationQuota,
     relatedNotes: parsed.data.map((row): RelatedNoteRecommendation => {
       const relatedNoteId = resolveOtherRelatedNoteId(row, parsedNoteId.data);
 

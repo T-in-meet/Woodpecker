@@ -67,9 +67,9 @@ function createRelatedNotesResult({
   hasRunningRecommendationExecution = false,
   hasFailedRecommendationExecution = false,
   latestRecommendationExecution = null,
-  recommendationUsage = {
-    used: 0,
-    limit: 10,
+  recommendationQuota = {
+    canRequestForNote: true,
+    userUsed: 0,
   },
 }: {
   hasRunningRecommendationExecution?: boolean;
@@ -78,16 +78,16 @@ function createRelatedNotesResult({
     id: string;
     status: "running" | "succeeded" | "failed" | "stale";
   } | null;
-  recommendationUsage?: {
-    used: number;
-    limit: number;
+  recommendationQuota?: {
+    canRequestForNote: boolean;
+    userUsed: number;
   };
 } = {}) {
   return {
     hasRunningRecommendationExecution,
     hasFailedRecommendationExecution,
     latestRecommendationExecution,
-    recommendationUsage,
+    recommendationQuota,
     relatedNotes: [],
   } satisfies Awaited<ReturnType<typeof getRelatedNotes>>;
 }

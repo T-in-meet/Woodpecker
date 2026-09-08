@@ -70,9 +70,9 @@ type MockRelatedNotesSectionDataOptions = {
     status: ExecutionStatus;
   } | null;
   isRecommendationPolling?: boolean;
-  recommendationUsage?: {
-    used: number;
-    limit: number;
+  recommendationQuota?: {
+    canRequestForNote: boolean;
+    userUsed: number;
   } | null;
 };
 
@@ -81,14 +81,14 @@ function mockRelatedNotesSectionData({
   hasFailedRecommendationExecution = false,
   latestRecommendationExecution = null,
   isRecommendationPolling = false,
-  recommendationUsage = null,
+  recommendationQuota = null,
 }: MockRelatedNotesSectionDataOptions = {}) {
   useRelatedNotesMock.mockReturnValue({
     data: {
       hasFailedRecommendationExecution,
       hasRunningRecommendationExecution,
       latestRecommendationExecution,
-      recommendationUsage,
+      recommendationQuota,
       relatedNotes: [],
     },
     isError: false,
@@ -279,23 +279,23 @@ describe("RelatedNotesSection", () => {
 
   it("일일 AI 추천 사용량이 있으면 사용량을 표시한다", () => {
     mockRelatedNotesSectionData({
-      recommendationUsage: {
-        used: 0,
-        limit: 1,
+      recommendationQuota: {
+        canRequestForNote: true,
+        userUsed: 0,
       },
     });
 
     render(<RelatedNotesSection noteId={noteId} />);
 
-    expect(screen.getByText("오늘 0/1회 사용")).toBeInTheDocument();
+    expect(screen.getByText("오늘 0/10회 사용")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "AI 추천" })).toBeEnabled();
   });
 
   it("일일 AI 추천 사용량이 제한에 도달하면 버튼을 비활성화하고 제한 안내와 사용량을 표시한다", () => {
     mockRelatedNotesSectionData({
-      recommendationUsage: {
-        used: 1,
-        limit: 1,
+      recommendationQuota: {
+        canRequestForNote: false,
+        userUsed: 1,
       },
     });
 
@@ -303,9 +303,11 @@ describe("RelatedNotesSection", () => {
 
     expect(screen.getByRole("button", { name: "AI 추천" })).toBeDisabled();
     expect(
-      screen.getByText("오늘은 이 노트의 AI 추천을 더 생성할 수 없어요. (1/1)"),
+      screen.getByText(
+        "오늘은 이 노트의 AI 추천을 더 생성할 수 없어요. (1/10)",
+      ),
     ).toBeInTheDocument();
-    expect(screen.queryByText("오늘 1/1회 사용")).not.toBeInTheDocument();
+    expect(screen.queryByText("오늘 1/10회 사용")).not.toBeInTheDocument();
   });
 
   it("일일 추천 제한에 도달했더라도 실행 중이면 실행 안내를 우선 표시한다", () => {
@@ -315,9 +317,9 @@ describe("RelatedNotesSection", () => {
         id: executionClaimId,
         status: "running",
       },
-      recommendationUsage: {
-        used: 1,
-        limit: 1,
+      recommendationQuota: {
+        canRequestForNote: false,
+        userUsed: 1,
       },
     });
 
@@ -326,7 +328,7 @@ describe("RelatedNotesSection", () => {
     expect(screen.getByText("관련 노트를 찾고 있어요")).toBeInTheDocument();
     expect(
       screen.queryByText(
-        "오늘은 이 노트의 AI 추천을 더 생성할 수 없어요. (1/1)",
+        "오늘은 이 노트의 AI 추천을 더 생성할 수 없어요. (1/10)",
       ),
     ).not.toBeInTheDocument();
   });
@@ -338,9 +340,9 @@ describe("RelatedNotesSection", () => {
         id: executionClaimId,
         status: "failed",
       },
-      recommendationUsage: {
-        used: 1,
-        limit: 1,
+      recommendationQuota: {
+        canRequestForNote: false,
+        userUsed: 1,
       },
     });
 
@@ -351,14 +353,14 @@ describe("RelatedNotesSection", () => {
     ).toBeInTheDocument();
     expect(
       screen.queryByText(
-        "오늘은 이 노트의 AI 추천을 더 생성할 수 없어요. (1/1)",
+        "오늘은 이 노트의 AI 추천을 더 생성할 수 없어요. (1/10)",
       ),
     ).not.toBeInTheDocument();
   });
 
-  it("recommendationUsage가 null이면 일일 사용량을 표시하지 않는다", () => {
+  it("recommendationQuota가 null이면 일일 사용량을 표시하지 않는다", () => {
     mockRelatedNotesSectionData({
-      recommendationUsage: null,
+      recommendationQuota: null,
     });
 
     render(<RelatedNotesSection noteId={noteId} />);
