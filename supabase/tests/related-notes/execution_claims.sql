@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(40);
+SELECT plan(42);
 
 
 -- ============================================================================
@@ -276,7 +276,7 @@ SELECT set_config(
 SELECT throws_ok(
     $sql$
         SELECT *
-        FROM public.claim_related_note_recommendation_execution(
+        FROM public.claim_related_note_recommendation_execution_v2(
             current_setting('test.related_note_claims_user_id')::uuid,
             current_setting('test.related_note_claims_note_id')::uuid,
             (
@@ -291,6 +291,26 @@ SELECT throws_ok(
     '42501',
     NULL,
     'authenticated should not execute recommendation execution claim RPC'
+);
+
+-- authenticated 사용자는 legacy Claim wrapper도 직접 실행할 수 없어야 합니다.
+SELECT throws_ok(
+    $sql$
+        SELECT *
+        FROM public.claim_related_note_recommendation_execution(
+            current_setting('test.related_note_claims_user_id')::uuid,
+            current_setting('test.related_note_claims_note_id')::uuid,
+            (
+                SELECT updated_at
+                FROM public.notes
+                WHERE id = current_setting('test.related_note_claims_note_id')::uuid
+            ),
+            10
+        );
+    $sql$,
+    '42501',
+    NULL,
+    'authenticated should not execute the legacy recommendation claim RPC'
 );
 
 
@@ -465,7 +485,7 @@ SELECT set_config('request.jwt.claims', '{}'::text, true);
 --
 
 SELECT *
-FROM public.claim_related_note_recommendation_execution(
+FROM public.claim_related_note_recommendation_execution_v2(
     current_setting('test.related_note_claims_user_id')::uuid,
     current_setting('test.related_note_claims_note_id')::uuid,
     '2000-01-01T00:00:00Z'::timestamptz,
@@ -478,6 +498,21 @@ SELECT is(
     :'test_related_note_claims_stale_status'::text,
     'stale',
     'stale source should return stale before inserting a claim'
+);
+
+-- legacy Claim wrapper는 기존 signature와 stale 반환 계약을 유지해야 합니다.
+SELECT is(
+    (
+        SELECT claim.status
+        FROM public.claim_related_note_recommendation_execution(
+            current_setting('test.related_note_claims_user_id')::uuid,
+            current_setting('test.related_note_claims_note_id')::uuid,
+            '2000-01-01T00:00:00Z'::timestamptz,
+            10
+        ) AS claim
+    ),
+    'stale',
+    'legacy claim should preserve the stale result contract'
 );
 
 SELECT is(
@@ -500,7 +535,7 @@ SELECT is(
 --
 
 SELECT *
-FROM public.claim_related_note_recommendation_execution(
+FROM public.claim_related_note_recommendation_execution_v2(
     current_setting('test.related_note_claims_user_id')::uuid,
     current_setting('test.related_note_claims_note_id')::uuid,
     (
@@ -539,7 +574,7 @@ SELECT is(
 --
 
 SELECT *
-FROM public.claim_related_note_recommendation_execution(
+FROM public.claim_related_note_recommendation_execution_v2(
     current_setting('test.related_note_claims_user_id')::uuid,
     current_setting('test.related_note_claims_note_id')::uuid,
     (
@@ -616,7 +651,7 @@ SELECT is(
 );
 
 SELECT *
-FROM public.claim_related_note_recommendation_execution(
+FROM public.claim_related_note_recommendation_execution_v2(
     current_setting('test.related_note_claims_user_id')::uuid,
     current_setting('test.related_note_claims_note_id')::uuid,
     (
@@ -654,7 +689,7 @@ SELECT is(
 );
 
 SELECT *
-FROM public.claim_related_note_recommendation_execution(
+FROM public.claim_related_note_recommendation_execution_v2(
     current_setting('test.related_note_claims_user_id')::uuid,
     current_setting('test.related_note_claims_note_id')::uuid,
     (
@@ -715,7 +750,7 @@ VALUES (
 );
 
 SELECT *
-FROM public.claim_related_note_recommendation_execution(
+FROM public.claim_related_note_recommendation_execution_v2(
     current_setting('test.related_note_claims_user_id')::uuid,
     current_setting('test.related_note_claims_recent_running_note_id')::uuid,
     (
@@ -800,7 +835,7 @@ WHERE id = current_setting('test.related_note_claims_expired_running_note_id')::
  * 이전 Claim은 quota에서 제외되고 새 Claim을 획득할 수 있어야 합니다.
  */
 SELECT *
-FROM public.claim_related_note_recommendation_execution(
+FROM public.claim_related_note_recommendation_execution_v2(
     current_setting('test.related_note_claims_user_id')::uuid,
     current_setting('test.related_note_claims_expired_running_note_id')::uuid,
     (
@@ -887,7 +922,7 @@ VALUES (
 );
 
 SELECT *
-FROM public.claim_related_note_recommendation_execution(
+FROM public.claim_related_note_recommendation_execution_v2(
     current_setting('test.related_note_claims_user_id')::uuid,
     current_setting('test.related_note_claims_old_succeeded_note_id')::uuid,
     (
@@ -949,7 +984,7 @@ SET title = title || ' quota'
 WHERE id = current_setting('test.related_note_claims_note_id')::uuid;
 
 SELECT *
-FROM public.claim_related_note_recommendation_execution(
+FROM public.claim_related_note_recommendation_execution_v2(
     current_setting('test.related_note_claims_user_id')::uuid,
     current_setting('test.related_note_claims_note_id')::uuid,
     (
@@ -978,7 +1013,7 @@ SELECT is(
 --
 
 SELECT *
-FROM public.claim_related_note_recommendation_execution(
+FROM public.claim_related_note_recommendation_execution_v2(
     current_setting('test.related_note_claims_user_id')::uuid,
     current_setting('test.related_note_claims_quota_other_note_id')::uuid,
     (
@@ -1111,11 +1146,11 @@ WHERE "notes"."user_id" = current_setting(
     )::uuid
   AND "notes"."title" = 'Related Note Global Quota 10';
 
--- 사용자 전체 한도를 9로 주입하면 오늘 9회 사용 상태에서 새 Claim을 차단해야 합니다.
+-- 비기본 Note 2회/User 3회 한도에서는 오늘 9회 사용 상태의 새 Claim을 차단해야 합니다.
 SELECT is(
     (
         SELECT claim.status
-        FROM public.claim_related_note_recommendation_execution(
+        FROM public.claim_related_note_recommendation_execution_v2(
             current_setting('test.related_note_claims_global_quota_user_id')::uuid,
             (
                 SELECT id
@@ -1133,17 +1168,17 @@ SELECT is(
                     )::uuid
                   AND title = 'Related Note Global Quota 11'
             ),
-            1,
-            9
+            2,
+            3
         ) AS claim
     ),
     'daily_limit_exceeded',
-    'claim should enforce the injected user-wide daily limit'
+    'v2 claim should enforce injected non-default limits'
 );
 
 -- 오늘 9회 사용 상태에서는 사용자 한도 10으로 서로 다른 Note의 10번째 Claim을 허용해야 합니다.
 SELECT *
-FROM public.claim_related_note_recommendation_execution(
+FROM public.claim_related_note_recommendation_execution_v2(
     current_setting('test.related_note_claims_global_quota_user_id')::uuid,
     (
         SELECT id
@@ -1174,7 +1209,7 @@ SELECT is(
 
 -- 오늘 10회 사용 상태에서는 새 Note의 11번째 Claim을 같은 기존 결과로 차단해야 합니다.
 SELECT *
-FROM public.claim_related_note_recommendation_execution(
+FROM public.claim_related_note_recommendation_execution_v2(
     current_setting('test.related_note_claims_global_quota_user_id')::uuid,
     (
         SELECT id
@@ -1268,7 +1303,7 @@ RETURNING id
 \gset test_related_note_claims_global_expired_
 
 SELECT *
-FROM public.claim_related_note_recommendation_execution(
+FROM public.claim_related_note_recommendation_execution_v2(
     current_setting('test.related_note_claims_global_stale_user_id')::uuid,
     (
         SELECT id
@@ -1365,7 +1400,7 @@ VALUES
     );
 
 SELECT *
-FROM public.claim_related_note_recommendation_execution(
+FROM public.claim_related_note_recommendation_execution_v2(
     current_setting('test.related_note_claims_user_id')::uuid,
     current_setting('test.related_note_claims_excluded_quota_note_id')::uuid,
     (
@@ -1439,7 +1474,7 @@ VALUES (
 );
 
 SELECT *
-FROM public.claim_related_note_recommendation_execution(
+FROM public.claim_related_note_recommendation_execution_v2(
     current_setting('test.related_note_claims_admin_user_id')::uuid,
     current_setting('test.related_note_claims_admin_note_id')::uuid,
     (
@@ -1460,7 +1495,7 @@ SELECT is(
 
 -- ADMIN도 같은 source version을 다시 요청하면 기존 Claim을 duplicate로 반환해야 합니다.
 SELECT *
-FROM public.claim_related_note_recommendation_execution(
+FROM public.claim_related_note_recommendation_execution_v2(
     current_setting('test.related_note_claims_admin_user_id')::uuid,
     current_setting('test.related_note_claims_admin_note_id')::uuid,
     (
@@ -1492,7 +1527,7 @@ SELECT is(
 SELECT throws_ok(
     $sql$
         SELECT *
-        FROM public.claim_related_note_recommendation_execution(
+        FROM public.claim_related_note_recommendation_execution_v2(
             current_setting('test.related_note_claims_unverified_user_id')::uuid,
             current_setting('test.related_note_claims_unverified_note_id')::uuid,
             (

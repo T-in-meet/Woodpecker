@@ -18,6 +18,7 @@ import {
 } from "./constants/ai";
 import { relatedNoteRowSchema } from "./schemas";
 import type { RelatedNoteRecommendation } from "./types";
+import { isMissingRpcFunctionError } from "./utils/is-missing-rpc-function-error";
 import { reportRelatedNotesOperationalError } from "./utils/report-operational-error";
 import { resolveOtherRelatedNoteId } from "./utils/resolve-other-related-note-id";
 
@@ -204,8 +205,8 @@ export async function getRelatedNotes(
      * 일반 사용자는 quota RPC가 사용자 전체 stale Claim 정리까지 수행합니다.
      * 실행 상태를 읽기 전에 완료하여 stale 상태와 UI 상태가 엇갈리지 않게 합니다.
      */
-    const recommendationQuotaResult = await supabase.rpc(
-      "get_related_note_recommendation_daily_usage",
+    const v2RecommendationQuotaResult = await supabase.rpc(
+      "get_related_note_recommendation_daily_usage_v2",
       {
         p_note_daily_recommendation_limit:
           RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
@@ -215,16 +216,64 @@ export async function getRelatedNotes(
       },
     );
 
-    if (recommendationQuotaResult.error) {
+    /*
+     * 신 앱/구 DB 전환 구간에는 v2가 아직 없을 수 있습니다.
+     * 이때만 기존 두 필드 계약을 사용하고 현재 TypeScript 정책값으로 결과를 보완합니다.
+     */
+    const legacyRecommendationQuotaResult = isMissingRpcFunctionError(
+      v2RecommendationQuotaResult.error,
+    )
+      ? await supabase.rpc("get_related_note_recommendation_daily_usage", {
+          p_note_id: parsedNoteId.data,
+        })
+      : null;
+
+    const recommendationQuotaError =
+      legacyRecommendationQuotaResult === null
+        ? v2RecommendationQuotaResult.error
+        : legacyRecommendationQuotaResult.error;
+
+    if (recommendationQuotaError) {
       await reportRelatedNotesOperationalError({
         actorUserId: user.id,
-        error: recommendationQuotaResult.error,
+        error: recommendationQuotaError,
         errorCode:
           RELATED_NOTES_OPERATIONAL_ERROR_CODES.DAILY_USAGE_LOAD_FAILED,
         message: "Related Notes 일일 AI 추천 사용량 조회에 실패했습니다.",
         operation: RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.GET_DAILY_USAGE,
         userId: user.id,
       });
+    } else if (legacyRecommendationQuotaResult) {
+      // legacy 결과에는 사용자/Note별 한도 도달 여부가 없어 기존 계약으로 복원합니다.
+      const parsedLegacyRecommendationQuota = z
+        .tuple([
+          z.object({
+            can_request_for_note: z.boolean(),
+            user_used: z.number().int().nonnegative(),
+          }),
+        ])
+        .safeParse(legacyRecommendationQuotaResult.data);
+
+      if (!parsedLegacyRecommendationQuota.success) {
+        logError({
+          message: "[getRelatedNotes] legacy AI 추천 일일 사용량 파싱 실패",
+          error: parsedLegacyRecommendationQuota.error,
+        });
+      } else {
+        const legacyQuota = parsedLegacyRecommendationQuota.data[0];
+        const isUserLimitReached =
+          legacyQuota.user_used >= RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT;
+
+        recommendationQuota = {
+          canRequestForNote: legacyQuota.can_request_for_note,
+          isNoteLimitReached:
+            !legacyQuota.can_request_for_note && !isUserLimitReached,
+          isUserLimitReached,
+          noteLimit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
+          userLimit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
+          userUsed: legacyQuota.user_used,
+        };
+      }
     } else {
       // DB가 반환한 quota 판정과 표시용 한도를 런타임에서 검증합니다.
       const parsedRecommendationQuota = z
@@ -238,7 +287,7 @@ export async function getRelatedNotes(
             user_used: z.number().int().nonnegative(),
           }),
         ])
-        .safeParse(recommendationQuotaResult.data);
+        .safeParse(v2RecommendationQuotaResult.data);
 
       if (!parsedRecommendationQuota.success) {
         logError({

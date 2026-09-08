@@ -6,14 +6,7 @@
  * 먼저 획득하여 자정 경계에서도 같은 사용자의 Claim 갱신을 직렬화합니다.
  */
 
-DROP FUNCTION "public"."claim_related_note_recommendation_execution"(
-  "uuid",
-  "uuid",
-  timestamp with time zone,
-  integer
-);
-
-CREATE FUNCTION "public"."claim_related_note_recommendation_execution"(
+CREATE FUNCTION "public"."claim_related_note_recommendation_execution_v2"(
   "p_user_id" "uuid",
   "p_note_id" "uuid",
   "p_source_updated_at" timestamp with time zone,
@@ -200,6 +193,31 @@ BEGIN
 END;
 $$;
 
+/*
+ * 구 앱이 사용하는 기존 Claim signature를 유지합니다.
+ * Note 한도는 기존 인자를 전달하고 사용자 전체 한도는 기존 정책값 10을 적용합니다.
+ */
+CREATE OR REPLACE FUNCTION "public"."claim_related_note_recommendation_execution"(
+  "p_user_id" "uuid",
+  "p_note_id" "uuid",
+  "p_source_updated_at" timestamp with time zone,
+  "p_daily_recommendation_limit" integer
+)
+RETURNS TABLE ("status" text, "claim_id" "uuid")
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT *
+  FROM "public"."claim_related_note_recommendation_execution_v2"(
+    "p_user_id",
+    "p_note_id",
+    "p_source_updated_at",
+    "p_daily_recommendation_limit",
+    10
+  );
+$$;
+
 CREATE OR REPLACE FUNCTION "public"."cleanup_related_note_recommendation_stale_execution_claims"(
   "p_note_id" "uuid"
 )
@@ -256,9 +274,7 @@ BEGIN
 END;
 $$;
 
-DROP FUNCTION "public"."get_related_note_recommendation_daily_usage"("uuid");
-
-CREATE FUNCTION "public"."get_related_note_recommendation_daily_usage"(
+CREATE FUNCTION "public"."get_related_note_recommendation_daily_usage_v2"(
   "p_note_id" "uuid",
   "p_note_daily_recommendation_limit" integer,
   "p_user_daily_recommendation_limit" integer
@@ -366,7 +382,32 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION "public"."claim_related_note_recommendation_execution"(
+/*
+ * 구 앱이 사용하는 기존 quota signature와 두 필드 반환 계약을 유지합니다.
+ * 기존 정책값인 Note 1회, 사용자 전체 10회를 v2에 전달합니다.
+ */
+CREATE OR REPLACE FUNCTION "public"."get_related_note_recommendation_daily_usage"(
+  "p_note_id" "uuid"
+)
+RETURNS TABLE (
+  "can_request_for_note" boolean,
+  "user_used" integer
+)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT
+    "quota"."can_request_for_note",
+    "quota"."user_used"
+  FROM "public"."get_related_note_recommendation_daily_usage_v2"(
+    "p_note_id",
+    1,
+    10
+  ) AS "quota";
+$$;
+
+REVOKE ALL ON FUNCTION "public"."claim_related_note_recommendation_execution_v2"(
   "uuid",
   "uuid",
   timestamp with time zone,
@@ -374,7 +415,21 @@ REVOKE ALL ON FUNCTION "public"."claim_related_note_recommendation_execution"(
   integer
 ) FROM PUBLIC, anon, authenticated;
 
+REVOKE ALL ON FUNCTION "public"."claim_related_note_recommendation_execution"(
+  "uuid",
+  "uuid",
+  timestamp with time zone,
+  integer
+) FROM PUBLIC, anon, authenticated;
+
 GRANT EXECUTE ON FUNCTION "public"."claim_related_note_recommendation_execution"(
+  "uuid",
+  "uuid",
+  timestamp with time zone,
+  integer
+) TO service_role;
+
+GRANT EXECUTE ON FUNCTION "public"."claim_related_note_recommendation_execution_v2"(
   "uuid",
   "uuid",
   timestamp with time zone,
@@ -383,14 +438,22 @@ GRANT EXECUTE ON FUNCTION "public"."claim_related_note_recommendation_execution"
 ) TO service_role;
 
 REVOKE ALL ON FUNCTION
-  "public"."get_related_note_recommendation_daily_usage"("uuid", integer, integer)
-FROM PUBLIC, anon;
+  "public"."get_related_note_recommendation_daily_usage"("uuid")
+FROM PUBLIC, anon, service_role;
 
 GRANT EXECUTE ON FUNCTION
-  "public"."get_related_note_recommendation_daily_usage"("uuid", integer, integer)
+  "public"."get_related_note_recommendation_daily_usage"("uuid")
 TO authenticated;
 
-COMMENT ON FUNCTION "public"."claim_related_note_recommendation_execution"(
+REVOKE ALL ON FUNCTION
+  "public"."get_related_note_recommendation_daily_usage_v2"("uuid", integer, integer)
+FROM PUBLIC, anon, service_role;
+
+GRANT EXECUTE ON FUNCTION
+  "public"."get_related_note_recommendation_daily_usage_v2"("uuid", integer, integer)
+TO authenticated;
+
+COMMENT ON FUNCTION "public"."claim_related_note_recommendation_execution_v2"(
   "uuid",
   "uuid",
   timestamp with time zone,
@@ -399,14 +462,27 @@ COMMENT ON FUNCTION "public"."claim_related_note_recommendation_execution"(
 ) IS
   'Related Notes 추천 실행을 claim하며 주입된 Note/User 일일 quota, source version 중복 및 stale 상태를 사용자 단위 lock에서 판정합니다.';
 
+COMMENT ON FUNCTION "public"."claim_related_note_recommendation_execution"(
+  "uuid",
+  "uuid",
+  timestamp with time zone,
+  integer
+) IS
+  '구 앱 호환용 Related Notes Claim wrapper이며 기존 Note 한도와 사용자 전체 기본 한도 10을 v2 RPC에 전달합니다.';
+
 COMMENT ON FUNCTION "public"."cleanup_related_note_recommendation_stale_execution_claims"(
   "uuid"
 ) IS
   '현재 인증 사용자의 특정 Note에서 만료된 running Claim을 사용자 단위 lock 안에서 stale로 정리합니다.';
 
-COMMENT ON FUNCTION "public"."get_related_note_recommendation_daily_usage"(
+COMMENT ON FUNCTION "public"."get_related_note_recommendation_daily_usage_v2"(
   "uuid",
   integer,
   integer
 ) IS
   '현재 인증 사용자의 만료된 running Claim을 정리하고 주입된 Note/User 한도에 대한 요청 가능 여부, 도달 상태와 사용량을 반환합니다.';
+
+COMMENT ON FUNCTION "public"."get_related_note_recommendation_daily_usage"(
+  "uuid"
+) IS
+  '구 앱 호환용 Related Notes quota wrapper이며 기존 Note 1회/User 10회 정책과 두 필드 반환 계약을 유지합니다.';

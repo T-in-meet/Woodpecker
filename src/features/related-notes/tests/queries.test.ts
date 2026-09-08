@@ -128,7 +128,7 @@ function createRelatedNotesRpcMock({
       });
     }
 
-    if (name === "get_related_note_recommendation_daily_usage") {
+    if (name === "get_related_note_recommendation_daily_usage_v2") {
       return Promise.resolve({
         data: usageData,
         error: usageError,
@@ -271,7 +271,7 @@ describe("getRelatedNotes", () => {
       expect.anything(),
     );
     expect(rpcMock).toHaveBeenCalledWith(
-      "get_related_note_recommendation_daily_usage",
+      "get_related_note_recommendation_daily_usage_v2",
       {
         p_note_daily_recommendation_limit:
           RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
@@ -461,7 +461,7 @@ describe("getRelatedNotes", () => {
     const result = await getRelatedNotes(noteId);
 
     expect(rpcMock).toHaveBeenCalledWith(
-      "get_related_note_recommendation_daily_usage",
+      "get_related_note_recommendation_daily_usage_v2",
       {
         p_note_daily_recommendation_limit:
           RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
@@ -479,6 +479,99 @@ describe("getRelatedNotes", () => {
       userLimit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
       userUsed: 1,
     });
+  });
+
+  it("구 DB에 quota v2가 없으면 기존 quota RPC 결과를 사용한다", async () => {
+    const { supabase } = createSupabaseQueryMock({
+      notes: createCurrentNoteResult(),
+      profiles: createUserProfileResult(),
+      note_related_notes: {
+        data: [],
+      },
+      related_note_recommendation_execution_claims: {
+        data: [],
+      },
+    });
+    const rpcMock = vi.fn().mockImplementation((name: string) => {
+      if (name === "get_related_note_recommendation_daily_usage_v2") {
+        return Promise.resolve({
+          data: null,
+          error: {
+            code: "PGRST202",
+            message: "Could not find the function in the schema cache",
+          },
+        });
+      }
+
+      if (name === "get_related_note_recommendation_daily_usage") {
+        return Promise.resolve({
+          data: [
+            {
+              can_request_for_note: false,
+              user_used: 1,
+            },
+          ],
+          error: null,
+        });
+      }
+
+      throw new Error(`Unexpected RPC: ${name}`);
+    });
+
+    createClientMock.mockResolvedValue({
+      ...supabase,
+      auth: createAuthMock(),
+      rpc: rpcMock,
+    } as never);
+
+    const result = await getRelatedNotes(noteId);
+
+    expect(rpcMock).toHaveBeenNthCalledWith(
+      2,
+      "get_related_note_recommendation_daily_usage",
+      {
+        p_note_id: noteId,
+      },
+    );
+    expect(result.recommendationQuota).toEqual({
+      canRequestForNote: false,
+      isNoteLimitReached: true,
+      isUserLimitReached: false,
+      noteLimit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
+      userLimit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
+      userUsed: 1,
+    });
+  });
+
+  it("quota v2의 실제 실행 오류는 기존 RPC로 재시도하지 않는다", async () => {
+    const { supabase } = createSupabaseQueryMock({
+      notes: createCurrentNoteResult(),
+      profiles: createUserProfileResult(),
+      note_related_notes: {
+        data: [],
+      },
+      related_note_recommendation_execution_claims: {
+        data: [],
+      },
+    });
+    const usageError = {
+      code: "P0001",
+      message: "note not found",
+    };
+    const rpcMock = createRelatedNotesRpcMock({ usageError });
+
+    createClientMock.mockResolvedValue({
+      ...supabase,
+      auth: createAuthMock(),
+      rpc: rpcMock,
+    } as never);
+
+    await getRelatedNotes(noteId);
+
+    expect(rpcMock).toHaveBeenCalledTimes(1);
+    expect(reportRelatedNotesOperationalErrorMock).toHaveBeenCalledWith(
+      expect.objectContaining({ error: usageError }),
+    );
   });
 
   it("일반 사용자는 quota cleanup이 끝난 뒤 execution Claim 상태를 조회한다", async () => {
@@ -499,7 +592,7 @@ describe("getRelatedNotes", () => {
     }) => void;
 
     const rpcMock = vi.fn().mockImplementation((name: string) => {
-      if (name === "get_related_note_recommendation_daily_usage") {
+      if (name === "get_related_note_recommendation_daily_usage_v2") {
         return new Promise((resolve) => {
           resolveQuota = resolve;
         });
@@ -518,7 +611,7 @@ describe("getRelatedNotes", () => {
 
     await vi.waitFor(() => {
       expect(rpcMock).toHaveBeenCalledWith(
-        "get_related_note_recommendation_daily_usage",
+        "get_related_note_recommendation_daily_usage_v2",
         expect.anything(),
       );
     });
@@ -572,7 +665,7 @@ describe("getRelatedNotes", () => {
       },
     );
     expect(rpcMock).not.toHaveBeenCalledWith(
-      "get_related_note_recommendation_daily_usage",
+      "get_related_note_recommendation_daily_usage_v2",
       expect.anything(),
     );
 
@@ -613,7 +706,7 @@ describe("getRelatedNotes", () => {
       },
     );
     expect(rpcMock).not.toHaveBeenCalledWith(
-      "get_related_note_recommendation_daily_usage",
+      "get_related_note_recommendation_daily_usage_v2",
       expect.anything(),
     );
 

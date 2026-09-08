@@ -51,7 +51,7 @@ describe("related note recommendation execution claim persistence", () => {
     });
 
     expect(rpc).toHaveBeenCalledWith(
-      "claim_related_note_recommendation_execution",
+      "claim_related_note_recommendation_execution_v2",
       {
         p_note_daily_recommendation_limit:
           RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
@@ -67,6 +67,75 @@ describe("related note recommendation execution claim persistence", () => {
       claimId: CLAIM_ID,
       status: RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS.CLAIMED,
     });
+  });
+
+  it("구 DB에 v2가 없으면 기존 claim RPC로 재시도한다", async () => {
+    const rpc = vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: null,
+        error: {
+          code: "PGRST202",
+          message: "Could not find the function in the schema cache",
+        },
+      })
+      .mockResolvedValueOnce({
+        data: [
+          {
+            claim_id: CLAIM_ID,
+            status: RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS.CLAIMED,
+          },
+        ],
+        error: null,
+      });
+
+    createAdminClientMock.mockReturnValue({ rpc } as never);
+
+    await expect(
+      claimRelatedNoteRecommendationExecution({
+        noteId: NOTE_ID,
+        sourceUpdatedAt: SOURCE_UPDATED_AT,
+        userId: USER_ID,
+      }),
+    ).resolves.toEqual({
+      claimId: CLAIM_ID,
+      status: RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS.CLAIMED,
+    });
+
+    expect(rpc).toHaveBeenNthCalledWith(
+      2,
+      "claim_related_note_recommendation_execution",
+      {
+        p_daily_recommendation_limit:
+          RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
+        p_note_id: NOTE_ID,
+        p_source_updated_at: SOURCE_UPDATED_AT,
+        p_user_id: USER_ID,
+      },
+    );
+  });
+
+  it("v2의 실제 실행 오류는 기존 claim RPC로 재시도하지 않는다", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: null,
+      error: {
+        code: "P0001",
+        message: "note not found",
+      },
+    });
+
+    createAdminClientMock.mockReturnValue({ rpc } as never);
+
+    await expect(
+      claimRelatedNoteRecommendationExecution({
+        noteId: NOTE_ID,
+        sourceUpdatedAt: SOURCE_UPDATED_AT,
+        userId: USER_ID,
+      }),
+    ).rejects.toThrow(
+      "Failed to claim related note recommendation execution: note not found",
+    );
+    expect(rpc).toHaveBeenCalledTimes(1);
   });
 
   it("stale claim 결과는 null claim ID와 함께 반환한다", async () => {

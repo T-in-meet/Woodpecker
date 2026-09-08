@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(15);
+SELECT plan(21);
 
 -- Related Notes quota 조회 정책을 사용자와 Note가 분리된 fixture로 검증합니다.
 -- ============================================================================
@@ -122,7 +122,7 @@ SELECT set_config(
 SELECT is(
     (
         SELECT quota.can_request_for_note
-        FROM public.get_related_note_recommendation_daily_usage(
+        FROM public.get_related_note_recommendation_daily_usage_v2(
             current_setting('test.related_note_quota_empty_note_id')::uuid,
             1,
             10
@@ -136,7 +136,7 @@ SELECT is(
 SELECT is(
     (
         SELECT quota.user_used
-        FROM public.get_related_note_recommendation_daily_usage(
+        FROM public.get_related_note_recommendation_daily_usage_v2(
             current_setting('test.related_note_quota_empty_note_id')::uuid,
             1,
             10
@@ -146,14 +146,38 @@ SELECT is(
     'empty quota should return zero user-wide usage'
 );
 
+-- legacy quota RPC는 기존 Note 요청 가능 여부 계약을 유지해야 합니다.
+SELECT is(
+    (
+        SELECT quota.can_request_for_note
+        FROM public.get_related_note_recommendation_daily_usage(
+            current_setting('test.related_note_quota_empty_note_id')::uuid
+        ) AS quota
+    ),
+    true,
+    'legacy quota should preserve the request availability contract'
+);
+
+-- legacy quota RPC는 기존 사용자 전체 사용량 계약을 유지해야 합니다.
+SELECT is(
+    (
+        SELECT quota.user_used
+        FROM public.get_related_note_recommendation_daily_usage(
+            current_setting('test.related_note_quota_empty_note_id')::uuid
+        ) AS quota
+    ),
+    0,
+    'legacy quota should preserve the user usage contract'
+);
+
 -- quota RPC는 TypeScript에서 주입한 Note 한도를 그대로 반환해야 합니다.
 SELECT is(
     (
         SELECT quota.note_limit
-        FROM public.get_related_note_recommendation_daily_usage(
+        FROM public.get_related_note_recommendation_daily_usage_v2(
             current_setting('test.related_note_quota_empty_note_id')::uuid,
             2,
-            20
+            3
         ) AS quota
     ),
     2,
@@ -164,13 +188,13 @@ SELECT is(
 SELECT is(
     (
         SELECT quota.user_limit
-        FROM public.get_related_note_recommendation_daily_usage(
+        FROM public.get_related_note_recommendation_daily_usage_v2(
             current_setting('test.related_note_quota_empty_note_id')::uuid,
             2,
-            20
+            3
         ) AS quota
     ),
-    20,
+    3,
     'quota lookup should return the injected user limit'
 );
 
@@ -274,7 +298,7 @@ SELECT set_config(
 SELECT is(
     (
         SELECT quota.can_request_for_note
-        FROM public.get_related_note_recommendation_daily_usage(
+        FROM public.get_related_note_recommendation_daily_usage_v2(
             current_setting('test.related_note_quota_note_id')::uuid,
             1,
             10
@@ -288,7 +312,7 @@ SELECT is(
 SELECT is(
     (
         SELECT quota.is_note_limit_reached
-        FROM public.get_related_note_recommendation_daily_usage(
+        FROM public.get_related_note_recommendation_daily_usage_v2(
             current_setting('test.related_note_quota_note_id')::uuid,
             1,
             10
@@ -302,7 +326,7 @@ SELECT is(
 SELECT is(
     (
         SELECT quota.user_used
-        FROM public.get_related_note_recommendation_daily_usage(
+        FROM public.get_related_note_recommendation_daily_usage_v2(
             current_setting('test.related_note_quota_note_id')::uuid,
             1,
             10
@@ -310,6 +334,20 @@ SELECT is(
     ),
     2,
     'user-wide usage should count running and succeeded across notes only'
+);
+
+-- 비기본 Note 2회/User 3회 한도에서는 현재 사용량 1회/2회인 Note를 허용해야 합니다.
+SELECT is(
+    (
+        SELECT quota.can_request_for_note
+        FROM public.get_related_note_recommendation_daily_usage_v2(
+            current_setting('test.related_note_quota_note_id')::uuid,
+            2,
+            3
+        ) AS quota
+    ),
+    true,
+    'v2 quota should enforce injected non-default limits'
 );
 
 -- ============================================================================
@@ -388,7 +426,7 @@ SELECT set_config(
 SELECT is(
     (
         SELECT quota.user_used
-        FROM public.get_related_note_recommendation_daily_usage(
+        FROM public.get_related_note_recommendation_daily_usage_v2(
             current_setting('test.related_note_quota_empty_note_id')::uuid,
             1,
             10
@@ -446,7 +484,7 @@ SELECT set_config(
 SELECT is(
     (
         SELECT quota.can_request_for_note
-        FROM public.get_related_note_recommendation_daily_usage(
+        FROM public.get_related_note_recommendation_daily_usage_v2(
             current_setting('test.related_note_quota_empty_note_id')::uuid,
             1,
             10
@@ -460,7 +498,7 @@ SELECT is(
 SELECT is(
     (
         SELECT quota.is_user_limit_reached
-        FROM public.get_related_note_recommendation_daily_usage(
+        FROM public.get_related_note_recommendation_daily_usage_v2(
             current_setting('test.related_note_quota_empty_note_id')::uuid,
             1,
             10
@@ -474,7 +512,7 @@ SELECT is(
 SELECT is(
     (
         SELECT quota.user_used
-        FROM public.get_related_note_recommendation_daily_usage(
+        FROM public.get_related_note_recommendation_daily_usage_v2(
             current_setting('test.related_note_quota_empty_note_id')::uuid,
             1,
             10
@@ -496,7 +534,7 @@ SELECT throws_ok(
     format(
         $sql$
             SELECT *
-            FROM public.get_related_note_recommendation_daily_usage(%L::uuid, 1, 10);
+            FROM public.get_related_note_recommendation_daily_usage_v2(%L::uuid, 1, 10);
         $sql$,
         current_setting('test.related_note_quota_other_user_note_id')
     ),
@@ -513,6 +551,26 @@ SELECT throws_ok(
 -- 실행 권한을 허용하고 anon 사용자의 직접 호출은 차단해야 합니다.
 --
 
+-- authenticated 사용자는 legacy quota RPC를 실행할 수 있어야 합니다.
+SELECT ok(
+    has_function_privilege(
+        'authenticated',
+        'public.get_related_note_recommendation_daily_usage(uuid)',
+        'EXECUTE'
+    ),
+    'authenticated should execute the legacy quota RPC'
+);
+
+-- authenticated 사용자는 v2 quota RPC를 실행할 수 있어야 합니다.
+SELECT ok(
+    has_function_privilege(
+        'authenticated',
+        'public.get_related_note_recommendation_daily_usage_v2(uuid, integer, integer)',
+        'EXECUTE'
+    ),
+    'authenticated should execute the v2 quota RPC'
+);
+
 SET LOCAL ROLE anon;
 SELECT set_config('request.jwt.claims', '{}'::text, true);
 
@@ -521,13 +579,27 @@ SELECT throws_ok(
     format(
         $sql$
             SELECT *
-            FROM public.get_related_note_recommendation_daily_usage(%L::uuid, 1, 10);
+            FROM public.get_related_note_recommendation_daily_usage_v2(%L::uuid, 1, 10);
         $sql$,
         current_setting('test.related_note_quota_note_id')
     ),
     '42501',
     NULL,
     'anon should not execute related note recommendation quota RPC'
+);
+
+-- 익명 사용자는 legacy Related Notes quota RPC도 실행할 수 없어야 합니다.
+SELECT throws_ok(
+    format(
+        $sql$
+            SELECT *
+            FROM public.get_related_note_recommendation_daily_usage(%L::uuid);
+        $sql$,
+        current_setting('test.related_note_quota_note_id')
+    ),
+    '42501',
+    NULL,
+    'anon should not execute the legacy related note quota RPC'
 );
 
 SELECT * FROM finish();
