@@ -1,7 +1,6 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { z } from "zod";
 
 import {
   NOTE_CHAT_OPERATIONAL_ERROR_CODES,
@@ -15,7 +14,7 @@ import {
   NOTE_CHAT_HISTORY_MESSAGE_LIMIT,
   NOTE_CHAT_MESSAGE_PAGE_SIZE,
 } from "./constants/execution";
-import { noteChatRunSourceSchema } from "./schema";
+import { noteChatAssistantMessageContentSchema } from "./schema";
 import type {
   NoteChatAssistantSources,
   NoteChatConversation,
@@ -68,56 +67,64 @@ async function queryNoteChatConversationForUser(
 async function queryNoteChatAssistantSources(
   supabase: NoteChatQueryClient,
   conversationId: string,
-  assistantMessageIds: string[],
+  userId: string,
+  assistantMessages: NoteChatMessage[],
 ): Promise<NoteChatAssistantSources[]> {
-  if (assistantMessageIds.length === 0) {
+  const messagesWithUsedNoteIds = assistantMessages.flatMap((message) => {
+    const parsed = noteChatAssistantMessageContentSchema.safeParse(
+      message.content,
+    );
+
+    return parsed.success
+      ? [
+          {
+            assistantMessageId: message.id,
+            usedNoteIds: parsed.data.usedNoteIds,
+          },
+        ]
+      : [];
+  });
+  const noteIds = [
+    ...new Set(messagesWithUsedNoteIds.flatMap((item) => item.usedNoteIds)),
+  ];
+
+  if (noteIds.length === 0) {
     return [];
   }
 
-  const { data: runs, error: runsError } = await supabase
-    .from("note_chat_runs")
-    .select("assistant_message_id, sources")
-    .in("assistant_message_id", assistantMessageIds);
+  // RLS client와 명시적인 user_id 조건을 함께 적용해 현재 접근 가능한 Note만 조회한다.
+  const { data: notes, error: notesError } = await supabase
+    .from("notes")
+    .select("id, title")
+    .eq("user_id", userId)
+    .in("id", noteIds);
 
-  if (runsError) {
+  if (notesError) {
     await reportNoteChatOperationalError({
       context: {
         conversationId,
       },
-      error: runsError,
+      error: notesError,
       errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.SOURCES_LOAD_FAILED,
       message: "노트 챗봇 참고 노트 조회에 실패했습니다.",
       operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.GET_SOURCES,
     });
 
     throw new Error(
-      `노트 챗봇 참고 노트 조회에 실패했습니다: ${runsError.message}`,
+      `노트 챗봇 참고 노트 조회에 실패했습니다: ${notesError.message}`,
     );
   }
 
-  return (runs ?? []).flatMap((run) => {
-    if (!run.assistant_message_id) {
-      return [];
-    }
+  const notesById = new Map((notes ?? []).map((note) => [note.id, note]));
 
-    const parsedSources = z
-      .array(noteChatRunSourceSchema)
-      .safeParse(run.sources);
-
-    if (!parsedSources.success) {
-      return [];
-    }
-
-    return [
-      {
-        assistantMessageId: run.assistant_message_id,
-        sources: parsedSources.data.map((source) => ({
-          noteId: source.noteId,
-          title: source.title,
-        })),
-      },
-    ];
-  });
+  // 각 Message의 usedNoteIds 순서대로 최신 제목을 조립하고 누락된 Note는 제외한다.
+  return messagesWithUsedNoteIds.map((item) => ({
+    assistantMessageId: item.assistantMessageId,
+    sources: item.usedNoteIds.flatMap((noteId) => {
+      const note = notesById.get(noteId);
+      return note ? [{ noteId: note.id, title: note.title }] : [];
+    }),
+  }));
 }
 
 /**
@@ -237,14 +244,15 @@ export async function queryNoteChatConversationMessagePage(
       ? oldestMessage.sequence_number
       : null;
 
-  const assistantMessageIds = messages
-    .filter((message) => message.role === "assistant")
-    .map((message) => message.id);
+  const assistantMessages = messages.filter(
+    (message) => message.role === "assistant",
+  );
 
   const assistantSources = await queryNoteChatAssistantSources(
     supabase,
     conversation.id,
-    assistantMessageIds,
+    userId,
+    assistantMessages,
   );
 
   return {

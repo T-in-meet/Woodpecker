@@ -10,9 +10,6 @@ export type NoteChatConversation =
 export type NoteChatMessage =
   Database["public"]["Tables"]["note_chat_messages"]["Row"];
 
-/** 노트 챗봇 실행 DB Row 타입입니다. */
-export type NoteChatRun = Database["public"]["Tables"]["note_chat_runs"]["Row"];
-
 /** 사용자 대화 목록 View Row 타입입니다. */
 export type NoteChatConversationListItem =
   Database["public"]["Views"]["note_chat_conversation_list"]["Row"];

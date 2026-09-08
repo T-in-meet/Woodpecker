@@ -214,7 +214,7 @@ export function useNoteChatConversationExecution({
 
     /*
      * 수정 Route가 User Message 수정과 이후 Message 삭제,
-     * 새 Run 생성을 처리하므로 실행 후 Conversation 데이터를 다시 조회합니다.
+     * 새 실행 처리를 수행하므로 실행 후 Conversation 데이터를 다시 조회합니다.
      *
      * 새 실행의 Claim 상태에 따라 일일 사용량도 달라질 수 있으므로
      * 사용량 Query를 함께 갱신합니다.

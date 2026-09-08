@@ -49,10 +49,6 @@ export const RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS = {
    * 이 operation은 사용자에게 현재 사용량을 표시하기 위한 조회 실패를 기록합니다.
    */
   GET_DAILY_USAGE: "get_daily_usage",
-
-  CREATE_RECOMMENDATION_RUN: "create_recommendation_run",
-  UPDATE_RECOMMENDATION_RUN: "update_recommendation_run",
-  COMPLETE_RECOMMENDATION_RUN: "complete_recommendation_run",
 } as const;
 
 /**
@@ -113,14 +109,10 @@ export const RELATED_NOTES_OPERATIONAL_ERROR_OPERATION_LABELS = {
   [RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.GET_DAILY_USAGE]:
     "일일 사용량 조회",
 
-  [RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.CREATE_RECOMMENDATION_RUN]:
-    "추천 실행 이력 생성",
-
-  [RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.UPDATE_RECOMMENDATION_RUN]:
-    "추천 실행 이력 갱신",
-
-  [RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.COMPLETE_RECOMMENDATION_RUN]:
-    "추천 실행 이력 완료",
+  // 과거 operational_errors 행의 표시 호환만 유지한다.
+  create_recommendation_run: "추천 실행 이력 생성",
+  update_recommendation_run: "추천 실행 이력 갱신",
+  complete_recommendation_run: "추천 실행 이력 완료",
 } as const;
 
 /**
@@ -194,15 +186,6 @@ export const RELATED_NOTES_OPERATIONAL_ERROR_CODES = {
    * 화면에서는 사용량만 표시하지 않는 best-effort 오류로 처리합니다.
    */
   DAILY_USAGE_LOAD_FAILED: "RELATED_NOTES_DAILY_USAGE_LOAD_FAILED",
-
-  RECOMMENDATION_RUN_CREATE_FAILED:
-    "RELATED_NOTES_RECOMMENDATION_RUN_CREATE_FAILED",
-
-  RECOMMENDATION_RUN_UPDATE_FAILED:
-    "RELATED_NOTES_RECOMMENDATION_RUN_UPDATE_FAILED",
-
-  RECOMMENDATION_RUN_COMPLETE_FAILED:
-    "RELATED_NOTES_RECOMMENDATION_RUN_COMPLETE_FAILED",
 } as const;
 
 /**
@@ -263,14 +246,10 @@ export const RELATED_NOTES_OPERATIONAL_ERROR_CODE_LABELS = {
   [RELATED_NOTES_OPERATIONAL_ERROR_CODES.DAILY_USAGE_LOAD_FAILED]:
     "일일 사용량 조회 실패",
 
-  [RELATED_NOTES_OPERATIONAL_ERROR_CODES.RECOMMENDATION_RUN_CREATE_FAILED]:
-    "추천 실행 이력 생성 실패",
-
-  [RELATED_NOTES_OPERATIONAL_ERROR_CODES.RECOMMENDATION_RUN_UPDATE_FAILED]:
-    "추천 실행 이력 갱신 실패",
-
-  [RELATED_NOTES_OPERATIONAL_ERROR_CODES.RECOMMENDATION_RUN_COMPLETE_FAILED]:
-    "추천 실행 이력 완료 실패",
+  // 과거 operational_errors 행의 표시 호환만 유지한다.
+  RELATED_NOTES_RECOMMENDATION_RUN_CREATE_FAILED: "추천 실행 이력 생성 실패",
+  RELATED_NOTES_RECOMMENDATION_RUN_UPDATE_FAILED: "추천 실행 이력 갱신 실패",
+  RELATED_NOTES_RECOMMENDATION_RUN_COMPLETE_FAILED: "추천 실행 이력 완료 실패",
 } as const;
 
 export type RelatedNotesOperationalErrorOperationType =

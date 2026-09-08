@@ -1,9 +1,13 @@
 import { renderPromptTemplate } from "@/features/ai/prompts/render";
 import { createAiChatCompletionWithProvider } from "@/features/ai/providers";
-import type { AiTokenUsage } from "@/features/ai/providers/types";
-import type { AiChatCompletionResult } from "@/features/ai/providers/types";
 import { getProviderApiKey } from "@/features/ai/providers/utils/api-key";
 import type { AiRuntimeChatConfiguration } from "@/features/ai/runtimes/types";
+import { reportAiOperationalError } from "@/features/ai/utils/report-ai-operational-error";
+import {
+  AI_OPERATIONAL_ERROR_CODE,
+  AI_OPERATIONAL_ERROR_OPERATION,
+  AI_OPERATIONAL_ERROR_STAGE,
+} from "@/features/operational-errors/constants";
 import type { Json } from "@/types/db.helpers";
 
 type CreateQueryExpansionCompletionParams = {
@@ -17,14 +21,6 @@ type CreateQueryExpansionCompletionParams = {
   responseSchemaName: string;
 };
 
-export type QueryExpansionCompletionResult = {
-  /** Provider가 반환한 원본 응답 내용입니다. */
-  content: string;
-
-  /** 질의 확장 Chat Completion에서 사용한 token 사용량입니다. */
-  usage: AiTokenUsage;
-};
-
 /**
  * Query Expansion Prompt를 렌더링하고 Provider Chat Completion을 실행합니다.
  *
@@ -34,11 +30,11 @@ export type QueryExpansionCompletionResult = {
  * Provider 응답의 구체적인 JSON 구조와 의미는 호출자가 검증합니다.
  *
  * @param params Query Expansion Runtime Configuration, Prompt 변수 및 Response Schema 정보
- * @returns Provider가 반환한 질의 확장 결과와 token 사용량
+ * @returns Provider가 반환한 질의 확장 응답 내용
  */
 export async function createQueryExpansionCompletion(
   params: CreateQueryExpansionCompletionParams,
-): Promise<QueryExpansionCompletionResult> {
+): Promise<string> {
   const { configuration, variables, responseSchemaName } = params;
   const { model, prompt } = configuration;
   const responseSchema = prompt.version.response_schema;
@@ -53,19 +49,6 @@ export async function createQueryExpansionCompletion(
     variables,
   );
 
-  let apiKey: string;
-
-  try {
-    apiKey = getProviderApiKey(model.provider);
-  } catch (error) {
-    console.error(
-      "[Query Expansion Completion API Key Failed]",
-      error instanceof Error ? error.message : error,
-    );
-
-    throw error;
-  }
-
   const responseFormat =
     responseSchema == null
       ? undefined
@@ -78,29 +61,36 @@ export async function createQueryExpansionCompletion(
           },
         };
 
-  let result: AiChatCompletionResult;
+  let apiKey: string;
 
   try {
-    result = await createAiChatCompletionWithProvider({
-      apiKey,
-      model: model.model,
-      provider: model.provider,
-      responseFormat,
-      systemPrompt,
-      temperature: configuration.temperature,
-      userPrompt,
-    });
+    apiKey = getProviderApiKey(model.provider);
   } catch (error) {
-    console.error(
-      "[Query Expansion Completion Failed]",
-      error instanceof Error ? error.message : error,
-    );
+    await reportAiOperationalError({
+      context: {
+        model: model.model,
+        modelConfigId: model.id,
+        provider: model.provider,
+      },
+      error,
+      errorCode: AI_OPERATIONAL_ERROR_CODE.PROVIDER_API_KEY_MISSING,
+      message: "AI Provider API key 설정이 없습니다.",
+      operation: AI_OPERATIONAL_ERROR_OPERATION.CREATE_CHAT_COMPLETION,
+      stage: AI_OPERATIONAL_ERROR_STAGE.VALIDATION,
+    });
 
     throw error;
   }
 
-  return {
-    content: result.content,
-    usage: result.usage,
-  };
+  const result = await createAiChatCompletionWithProvider({
+    apiKey,
+    model: model.model,
+    provider: model.provider,
+    responseFormat,
+    systemPrompt,
+    temperature: configuration.temperature,
+    userPrompt,
+  });
+
+  return result.content;
 }

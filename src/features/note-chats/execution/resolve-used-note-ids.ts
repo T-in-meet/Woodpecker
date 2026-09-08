@@ -12,7 +12,7 @@ const noteChatNoteSourceSchema = z.object({
  * LLM이 반환한 Context index 목록을 실제 Note ID 목록으로 변환합니다.
  *
  * LLM은 실제 Note UUID를 알지 못하고 Context의 1부터 시작하는 index만
- * 반환합니다. 이 함수는 Run에 보존한 Source 목록을 기준으로 해당 index를
+ * 반환합니다. 이 함수는 현재 실행에서 구성한 Source 목록을 기준으로 해당 index를
  * 실제 Note ID로 변환합니다.
  *
  * 청킹 도입 이후 하나의 Note에서 여러 chunk가 Context에 포함될 수 있으므로,

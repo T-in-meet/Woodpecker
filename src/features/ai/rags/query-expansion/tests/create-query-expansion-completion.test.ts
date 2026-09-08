@@ -4,11 +4,14 @@ import { renderPromptTemplate } from "@/features/ai/prompts/render";
 import { createAiChatCompletionWithProvider } from "@/features/ai/providers";
 import { getProviderApiKey } from "@/features/ai/providers/utils/api-key";
 import type { AiRuntimeChatConfiguration } from "@/features/ai/runtimes/types";
-
+import { reportAiOperationalError } from "@/features/ai/utils/report-ai-operational-error";
 import {
-  createQueryExpansionCompletion,
-  type QueryExpansionCompletionResult,
-} from "../create-query-expansion-completion";
+  AI_OPERATIONAL_ERROR_CODE,
+  AI_OPERATIONAL_ERROR_OPERATION,
+  AI_OPERATIONAL_ERROR_STAGE,
+} from "@/features/operational-errors/constants";
+
+import { createQueryExpansionCompletion } from "../create-query-expansion-completion";
 
 vi.mock("@/features/ai/prompts/render", () => ({
   renderPromptTemplate: vi.fn(),
@@ -20,6 +23,10 @@ vi.mock("@/features/ai/providers", () => ({
 
 vi.mock("@/features/ai/providers/utils/api-key", () => ({
   getProviderApiKey: vi.fn(),
+}));
+
+vi.mock("@/features/ai/utils/report-ai-operational-error", () => ({
+  reportAiOperationalError: vi.fn(),
 }));
 
 const responseSchema = {
@@ -35,6 +42,7 @@ const responseSchema = {
 
 const configuration = {
   model: {
+    id: "chat-model-id",
     model: "test-model",
     provider: "openai",
   },
@@ -50,6 +58,7 @@ const configuration = {
 
 const configurationWithSchema = {
   model: {
+    id: "chat-model-id",
     model: "test-model",
     provider: "openai",
   },
@@ -111,12 +120,11 @@ describe("createQueryExpansionCompletion", () => {
       variables,
     });
 
-    expect(result).toEqual<QueryExpansionCompletionResult>({
-      content: JSON.stringify({
+    expect(result).toBe(
+      JSON.stringify({
         expandedQuery: "확장된 검색 질의",
       }),
-      usage,
-    });
+    );
 
     expect(renderPromptTemplate).toHaveBeenNthCalledWith(
       1,
@@ -182,7 +190,7 @@ describe("createQueryExpansionCompletion", () => {
     );
   });
 
-  it("Provider가 반환한 content와 usage를 그대로 반환한다", async () => {
+  it("Provider가 반환한 content를 그대로 반환한다", async () => {
     const content = JSON.stringify({
       expandedQuery: "원본 Provider 응답",
     });
@@ -199,10 +207,41 @@ describe("createQueryExpansionCompletion", () => {
       },
     });
 
-    expect(result).toEqual({
-      content,
-      usage,
+    expect(result).toBe(content);
+  });
+
+  it("Provider API key가 없으면 운영 오류를 기록하고 Provider를 호출하지 않는다", async () => {
+    const error = new Error("OPENAI_API_KEY is not configured.");
+
+    vi.mocked(getProviderApiKey).mockImplementation(() => {
+      throw error;
     });
+
+    await expect(
+      createQueryExpansionCompletion({
+        configuration,
+        responseSchemaName: "test_query_expansion_response",
+        variables: {
+          question: "현재 질문",
+        },
+      }),
+    ).rejects.toBe(error);
+
+    expect(reportAiOperationalError).toHaveBeenCalledOnce();
+    expect(reportAiOperationalError).toHaveBeenCalledWith({
+      context: {
+        model: "test-model",
+        modelConfigId: "chat-model-id",
+        provider: "openai",
+      },
+      error,
+      errorCode: AI_OPERATIONAL_ERROR_CODE.PROVIDER_API_KEY_MISSING,
+      message: "AI Provider API key 설정이 없습니다.",
+      operation: AI_OPERATIONAL_ERROR_OPERATION.CREATE_CHAT_COMPLETION,
+      stage: AI_OPERATIONAL_ERROR_STAGE.VALIDATION,
+    });
+
+    expect(createAiChatCompletionWithProvider).not.toHaveBeenCalled();
   });
 
   it("Provider 오류를 변환하지 않고 그대로 전파한다", async () => {

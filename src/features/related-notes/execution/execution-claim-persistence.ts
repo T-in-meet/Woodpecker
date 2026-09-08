@@ -90,8 +90,8 @@ type RelatedNoteRecommendationExecutionClaimClient = Pick<
 /**
  * Related Notes 추천 실행을 claim합니다.
  *
- * 이 함수는 run 기록 테이블에 의존하지 않고 source stale, duplicate,
- * 일일 제한을 판정합니다. `claimed`일 때만 Provider 실행을 시작해야 합니다.
+ * 이 함수는 source stale, duplicate, 일일 제한을 판정합니다.
+ * `claimed`일 때만 Provider 실행을 시작해야 합니다.
  *
  * @param params 추천 실행 claim 입력
  * @param options 테스트에서 주입할 Supabase Client
@@ -159,8 +159,8 @@ export async function claimRelatedNoteRecommendationExecution(
 /**
  * Related Notes 추천 실행 claim을 완료 상태로 전환합니다.
  *
- * claim 완료는 기능 제어용 active claim 해제 책임을 가지므로,
- * run 기록 완료와 별개로 반드시 시도해야 합니다.
+ * claim 완료는 기능 제어용 active claim 해제 책임을 가지므로
+ * 실행 종료 시 반드시 시도해야 합니다.
  *
  * DB RPC에도 사용자 ID를 전달하여 service role 호출에서도
  * 다른 사용자의 Claim을 완료할 수 없도록 소유권을 함께 검증합니다.

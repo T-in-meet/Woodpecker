@@ -27,7 +27,6 @@ import {
   completeNoteChatExecutionClaim,
   NOTE_CHAT_EXECUTION_CLAIM_STATUS,
 } from "@/features/note-chats/execution/execution-claim-persistence";
-import { createNoteChatRunRecord } from "@/features/note-chats/execution/run-persistence";
 import { runNoteChatStream } from "@/features/note-chats/stream/run-note-chat-stream";
 import { reportNoteChatOperationalError } from "@/features/note-chats/utils/report-operational-error";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -59,10 +58,6 @@ vi.mock("@/features/note-chats/execution/execution-claim-persistence", () => ({
   },
 }));
 
-vi.mock("@/features/note-chats/execution/run-persistence", () => ({
-  createNoteChatRunRecord: vi.fn(),
-}));
-
 vi.mock("@/features/note-chats/utils/report-operational-error", () => ({
   reportNoteChatOperationalError: vi.fn(),
 }));
@@ -77,7 +72,6 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 const MESSAGE_ID = "550e8400-e29b-41d4-a716-446655440001";
 const CONVERSATION_ID = "550e8400-e29b-41d4-a716-446655440002";
-const RUN_ID = "550e8400-e29b-41d4-a716-446655440003";
 const USER_MESSAGE_ID = MESSAGE_ID;
 const ASSISTANT_MESSAGE_ID = "550e8400-e29b-41d4-a716-446655440004";
 const CLAIM_ID = "550e8400-e29b-41d4-a716-446655440005";
@@ -221,7 +215,6 @@ const UPDATED_RESULT = {
 const RUN_RESULT = {
   assistantMessageId: ASSISTANT_MESSAGE_ID,
   content: "수정된 답변입니다.",
-  runId: RUN_ID,
   usage: {
     inputTokens: 10,
     outputTokens: 20,
@@ -342,8 +335,6 @@ beforeEach(() => {
   });
 
   vi.mocked(completeNoteChatExecutionClaim).mockResolvedValue(undefined);
-
-  vi.mocked(createNoteChatRunRecord).mockResolvedValue(RUN_ID);
 
   vi.mocked(runNoteChatStream).mockResolvedValue(RUN_RESULT);
 
@@ -491,7 +482,6 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
     });
 
     expect(reportNoteChatOperationalError).not.toHaveBeenCalled();
-    expect(createNoteChatRunRecord).not.toHaveBeenCalled();
     expect(runNoteChatStream).not.toHaveBeenCalled();
   });
 
@@ -829,6 +819,9 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
       "application/x-ndjson; charset=utf-8",
     );
 
+    // ReadableStream 내부의 AI 실행이 완료될 때까지 응답 본문을 소비한다.
+    await readStream(response);
+
     const adminClient = vi.mocked(createAdminClient).mock.results[0]
       ?.value as ReturnType<typeof createAdminClientMock>;
 
@@ -843,14 +836,6 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
       },
     );
 
-    expect(createNoteChatRunRecord).toHaveBeenCalledWith({
-      agentId: CHAT_CONFIGURATION.prompt.agent.id,
-      chatModelConfigId: CHAT_CONFIGURATION.model.id,
-      embeddingModelConfigId: EMBEDDING_CONFIGURATION.model.id,
-      promptVersionId: CHAT_CONFIGURATION.prompt.version.id,
-      userMessageId: USER_MESSAGE_ID,
-    });
-
     expect(resolveAiRuntimeEmbeddingConfiguration).toHaveBeenCalledWith({
       featureKey: NOTE_RETRIEVAL_AI_FEATURE_KEY,
       roleKey: NOTE_RETRIEVAL_AI_ROLE_KEY,
@@ -860,7 +845,6 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
       expect.objectContaining({
         claimId: CLAIM_ID,
         conversationId: CONVERSATION_ID,
-        runId: RUN_ID,
         userId: USER.id,
         userMessageId: USER_MESSAGE_ID,
       }),
@@ -868,52 +852,7 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
     );
   });
 
-  it("Run 생성 실패는 운영 오류로 기록하고 runId 없이 AI 스트림을 계속한다", async () => {
-    const runCreateError = new Error("run create failed");
-
-    vi.mocked(createNoteChatRunRecord).mockRejectedValue(runCreateError);
-
-    const response = await POST(
-      createRequest({
-        content: {
-          text: "수정된 질문",
-        },
-      }),
-      {
-        params: Promise.resolve({
-          messageId: MESSAGE_ID,
-        }),
-      },
-    );
-
-    expect(response.status).toBe(200);
-
-    await readStream(response);
-
-    expect(reportNoteChatOperationalError).toHaveBeenCalledWith(
-      expect.objectContaining({
-        actorUserId: USER.id,
-        context: {
-          conversationId: CONVERSATION_ID,
-          userMessageId: USER_MESSAGE_ID,
-        },
-        error: runCreateError,
-        errorCode: "NOTE_CHAT_RUN_CREATE_FAILED",
-        userId: USER.id,
-      }),
-    );
-
-    expect(runNoteChatStream).toHaveBeenCalledWith(
-      expect.objectContaining({
-        claimId: CLAIM_ID,
-        runId: null,
-        userMessageId: USER_MESSAGE_ID,
-      }),
-      expect.any(Function),
-    );
-  });
-
-  it("Route lifecycle 이벤트와 Run 스트림 이벤트를 NDJSON으로 전달한다", async () => {
+  it("Route lifecycle 이벤트와 실행 스트림 이벤트를 NDJSON으로 전달한다", async () => {
     vi.mocked(runNoteChatStream).mockImplementation(
       async (_params, onEvent) => {
         await onEvent({
@@ -943,7 +882,6 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
 
     expect(events).toEqual([
       {
-        runId: RUN_ID,
         type: "start",
         userMessageId: USER_MESSAGE_ID,
       },
@@ -953,14 +891,13 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
       },
       {
         assistantMessageId: ASSISTANT_MESSAGE_ID,
-        runId: RUN_ID,
         type: "finish",
         usedNoteIds: [],
       },
     ]);
   });
 
-  it("Run 실행이 실패하면 start 이후 기본 error 이벤트를 전달한다", async () => {
+  it("AI 실행이 실패하면 start 이후 기본 error 이벤트를 전달한다", async () => {
     vi.mocked(runNoteChatStream).mockRejectedValue(new Error("stream failed"));
 
     const response = await POST(
@@ -981,13 +918,11 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
 
     expect(events).toEqual([
       {
-        runId: RUN_ID,
         type: "start",
         userMessageId: USER_MESSAGE_ID,
       },
       {
         message: "답변 생성에 실패했습니다.",
-        runId: RUN_ID,
         type: "error",
       },
     ]);
@@ -1035,7 +970,6 @@ describe("POST /api/note-chats/messages/[messageId]/stream", () => {
             context: {
               conversationId: CONVERSATION_ID,
               eventType: "finish",
-              runId: RUN_ID,
               userMessageId: USER_MESSAGE_ID,
             },
             error: sendError,

@@ -138,7 +138,6 @@ describe("generateRelatedNoteRecommendations", () => {
           title: "첫 번째 노트",
         },
       ],
-      usage,
     });
 
     expect(reportRelatedNotesOperationalError).not.toHaveBeenCalled();
@@ -172,21 +171,6 @@ describe("generateRelatedNoteRecommendations", () => {
         title: TITLE,
       },
     );
-  });
-
-  it("Provider 응답 직후 usage callback을 호출한다", async () => {
-    const onUsage = vi.fn().mockResolvedValue(undefined);
-
-    await generateRelatedNoteRecommendations({
-      configuration,
-      content: CONTENT,
-      context: CONTEXT,
-      notes,
-      onUsage,
-      title: TITLE,
-    });
-
-    expect(onUsage).toHaveBeenCalledWith(usage);
   });
 
   it("같은 Note ID가 여러 번 반환되어도 첫 번째 추천 이유만 유지한다", async () => {
@@ -232,7 +216,6 @@ describe("generateRelatedNoteRecommendations", () => {
           title: "두 번째 노트",
         },
       ],
-      usage,
     });
   });
 
@@ -255,7 +238,6 @@ describe("generateRelatedNoteRecommendations", () => {
 
     expect(result).toEqual({
       recommendations: [],
-      usage,
     });
     expect(reportRelatedNotesOperationalError).not.toHaveBeenCalled();
   });

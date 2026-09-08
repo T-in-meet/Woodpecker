@@ -58,7 +58,6 @@ export const TABLES = {
   pushSubscriptions: "push_subscriptions",
   relatedNoteRecommendationExecutionClaims:
     "related_note_recommendation_execution_claims",
-  relatedNoteRecommendationRuns: "related_note_recommendation_runs",
   reviewLogs: "review_logs",
   userAgreements: "user_agreements",
   userLegalAcceptances: "user_legal_acceptances",

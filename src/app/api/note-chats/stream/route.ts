@@ -21,7 +21,6 @@ import {
   NOTE_CHAT_EXECUTION_CLAIM_COMPLETION_STATUS,
   NOTE_CHAT_EXECUTION_CLAIM_STATUS,
 } from "@/features/note-chats/execution/execution-claim-persistence";
-import { createNoteChatRunRecord } from "@/features/note-chats/execution/run-persistence";
 import { createNoteChatQuestionInputSchema } from "@/features/note-chats/schema";
 import { runNoteChatStream } from "@/features/note-chats/stream/run-note-chat-stream";
 import { encodeNoteChatStreamEvent } from "@/features/note-chats/stream/serialize";
@@ -48,11 +47,11 @@ import { createClient } from "@/lib/supabase/server";
 export const maxDuration = 90;
 
 /**
- * 새로운 사용자 질문과 Run을 생성한 뒤 AI 답변 스트림을 반환합니다.
+ * 새로운 사용자 질문을 생성한 뒤 AI 답변 스트림을 반환합니다.
  *
  * AI 설정은 클라이언트에서 전달받지 않습니다.
  * Note Chat에 연결된 AI Foundation Runtime Configuration을 서버에서 조회하고,
- * 확정된 동일 설정을 Run 생성과 실제 AI 실행에 사용합니다.
+ * 확정된 동일 설정을 실제 AI 실행에 사용합니다.
  *
  * @param request 질문 생성 입력을 포함한 HTTP 요청
  * @returns NDJSON 스트림 또는 요청 오류 응답
@@ -342,32 +341,6 @@ export async function POST(request: Request): Promise<Response> {
     embedding: embeddingConfiguration,
   };
 
-  let runId: string | null = null;
-
-  try {
-    runId = await createNoteChatRunRecord({
-      agentId: chatConfiguration.prompt.agent.id,
-      chatModelConfigId: chatConfiguration.model.id,
-      embeddingModelConfigId: embeddingConfiguration.model.id,
-      promptVersionId: chatConfiguration.prompt.version.id,
-      userMessageId,
-    });
-  } catch (error) {
-    await reportNoteChatOperationalError({
-      actorUserId: user.id,
-      context: {
-        conversationId,
-        userMessageId,
-      },
-      error,
-      errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.RUN_CREATE_FAILED,
-      message: "노트 챗봇 Run 실행 이력 생성에 실패했습니다.",
-      operation: NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS.CREATE_RUN,
-      stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.DATABASE,
-      userId: user.id,
-    });
-  }
-
   /*
    * streamClosed는 ReadableStream 자체가 취소되거나 close된 상태를 나타냅니다.
    * deliveryFailed는 서버에서 클라이언트로 이벤트를 전달할 수 없게 된 상태를
@@ -421,7 +394,6 @@ export async function POST(request: Request): Promise<Response> {
               context: {
                 conversationId,
                 eventType: event.type,
-                runId,
                 userMessageId,
               },
               error,
@@ -450,7 +422,6 @@ export async function POST(request: Request): Promise<Response> {
          * 변경하지 않고 enqueueEvent 내부에서 operational error로만 기록합니다.
          */
         await enqueueEvent({
-          runId,
           type: "start",
           userMessageId,
         });
@@ -460,7 +431,6 @@ export async function POST(request: Request): Promise<Response> {
             {
               conversationId,
               claimId,
-              runId,
               settings,
               userId: user.id,
               userMessageId,
@@ -477,7 +447,6 @@ export async function POST(request: Request): Promise<Response> {
            */
           await enqueueEvent({
             assistantMessageId: result.assistantMessageId,
-            runId: result.runId,
             type: "finish",
             usedNoteIds: result.usedNoteIds,
           });
@@ -486,13 +455,12 @@ export async function POST(request: Request): Promise<Response> {
            * 여기까지 전달되는 오류는 runNoteChatStream 내부의
            * AI 실행 또는 기능 데이터 저장 실패입니다.
            *
-           * execution의 Run/Claim 실패 정리는 runNoteChatStream에서
+           * execution의 Claim 실패 정리는 runNoteChatStream에서
            * 이미 처리하므로 Route는 클라이언트 error 이벤트만 전달합니다.
            */
           if (!errorEventSent) {
             await enqueueEvent({
               message: "답변 생성에 실패했습니다.",
-              runId,
               type: "error",
             });
           }

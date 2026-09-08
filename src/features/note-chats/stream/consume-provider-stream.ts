@@ -246,7 +246,7 @@ function extractStreamingAnswerDelta(
  * 이미 파싱한 위치를 parser state에 유지하므로,
  * 매 delta마다 전체 누적 문자열을 처음부터 다시 파싱하지 않습니다.
  *
- * 이 함수는 DB 저장이나 Run 상태 변경을 수행하지 않습니다.
+ * 이 함수는 DB 저장이나 실행 상태 변경을 수행하지 않습니다.
  *
  * @param providerStream AI Foundation이 반환한 Provider 공통 스트림
  * @param onTextDelta answer 텍스트 조각이 생성될 때 호출할 함수

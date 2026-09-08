@@ -34,19 +34,16 @@ vi.mock("../../stream/client", async () => {
 const CONVERSATION_ID = "550e8400-e29b-41d4-a716-446655440001";
 const MESSAGE_ID = "550e8400-e29b-41d4-a716-446655440002";
 const USER_MESSAGE_ID = "550e8400-e29b-41d4-a716-446655440003";
-const RUN_ID = "550e8400-e29b-41d4-a716-446655440004";
 const ASSISTANT_MESSAGE_ID = "550e8400-e29b-41d4-a716-446655440005";
 const NOTE_ID = "550e8400-e29b-41d4-a716-446655440006";
 
 const START_EVENT: NoteChatStreamEvent = {
   type: "start",
-  runId: RUN_ID,
   userMessageId: USER_MESSAGE_ID,
 };
 
 const FINISH_EVENT: NoteChatStreamEvent = {
   type: "finish",
-  runId: RUN_ID,
   assistantMessageId: ASSISTANT_MESSAGE_ID,
   usedNoteIds: [NOTE_ID],
 };
@@ -125,7 +122,6 @@ describe("useNoteChatStream", () => {
     });
 
     expect(result.current.content).toBe("안녕하세요.반갑습니다.");
-    expect(result.current.runId).toBe(RUN_ID);
     expect(result.current.userMessageId).toBe(USER_MESSAGE_ID);
     expect(result.current.assistantMessageId).toBe(ASSISTANT_MESSAGE_ID);
     expect(result.current.usedNoteIds).toEqual([NOTE_ID]);
@@ -138,7 +134,6 @@ describe("useNoteChatStream", () => {
     vi.mocked(streamNoteChatQuestion).mockReturnValue(
       createStream(START_EVENT, {
         type: "error",
-        runId: RUN_ID,
         message: "답변 생성에 실패했습니다.",
       }),
     );
@@ -162,7 +157,6 @@ describe("useNoteChatStream", () => {
 
     expect(result.current.error).toBe("답변 생성에 실패했습니다.");
     expect(result.current.errorCode).toBeNull();
-    expect(result.current.runId).toBe(RUN_ID);
     expect(result.current.userMessageId).toBe(USER_MESSAGE_ID);
     expect(result.current.isStreaming).toBe(false);
   });
@@ -320,7 +314,6 @@ describe("useNoteChatStream", () => {
     });
 
     expect(result.current.content).toBe("안녕하세요.");
-    expect(result.current.runId).toBe(RUN_ID);
     expect(result.current.assistantMessageId).toBe(ASSISTANT_MESSAGE_ID);
     expect(result.current.usedNoteIds).toEqual([NOTE_ID]);
     expect(result.current.userMessageId).toBe(USER_MESSAGE_ID);
@@ -335,7 +328,6 @@ describe("useNoteChatStream", () => {
       error: null,
       errorCode: null,
       isStreaming: false,
-      runId: null,
       usedNoteIds: [],
       userMessageId: null,
     });
@@ -376,7 +368,6 @@ describe("useNoteChatStream", () => {
     });
 
     expect(result.current.content).toBe("안녕하세요.");
-    expect(result.current.runId).toBe(RUN_ID);
     expect(result.current.userMessageId).toBe(USER_MESSAGE_ID);
     expect(result.current.assistantMessageId).toBe(ASSISTANT_MESSAGE_ID);
     expect(result.current.usedNoteIds).toEqual([NOTE_ID]);
