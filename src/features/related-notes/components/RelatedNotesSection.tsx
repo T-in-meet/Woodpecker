@@ -126,9 +126,16 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
    */
   const recommendationQuota = data?.recommendationQuota ?? null;
 
-  // Note별 또는 사용자 전체 quota에 도달했는지 확인합니다.
-  const hasReachedRecommendationLimit =
-    recommendationQuota !== null && !recommendationQuota.canRequestForNote;
+  // 사용자 전체 일일 추천 할당량에 도달했는지 확인합니다.
+  const hasReachedUserRecommendationLimit =
+    recommendationQuota !== null &&
+    recommendationQuota.userUsed >= RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT;
+
+  // 현재 Note의 일일 추천 할당량에 도달했는지 확인합니다.
+  const hasReachedNoteRecommendationLimit =
+    recommendationQuota !== null &&
+    !recommendationQuota.canRequestForNote &&
+    !hasReachedUserRecommendationLimit;
 
   /*
    * 실행 요청 중이거나 실행 상태를 추적 중이거나,
@@ -143,7 +150,8 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
     isRecommendationRequestInProgress ||
     hasRunningRecommendationExecution ||
     hasSucceededRecommendationExecution ||
-    hasReachedRecommendationLimit;
+    hasReachedUserRecommendationLimit ||
+    hasReachedNoteRecommendationLimit;
 
   const handleRequestRelatedNoteRecommendation = () => {
     requestRelatedNoteRecommendation.mutate();
@@ -170,11 +178,7 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
               <FeatureInfoPopover ariaLabel="관련 노트 안내">
                 <div className="space-y-2">
                   <p>
-                    {`AI 관련 노트 추천은 노트마다 하루 ${RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE}회, 사용자마다 하루 ${RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT}회 요청할 수 있으며, 매일 자정(KST)에 초기화됩니다.`}
-                  </p>
-
-                  <p className="text-muted-foreground">
-                    현재 노트 내용이 변경되면 AI 추천을 다시 생성할 수 있습니다.
+                    {`AI 관련 노트 추천은 노트마다 하루 ${RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE}회, 사용자당 하루 최대 ${RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT}회 사용할 수 있으며 매일 자정(KST)에 초기화됩니다.`}
                   </p>
                 </div>
               </FeatureInfoPopover>
@@ -228,6 +232,8 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
             <p className="text-xs text-muted-foreground">
               관련 노트 추천에 실패했습니다.
             </p>
+          ) : hasReachedUserRecommendationLimit ? (
+            <p className="text-xs text-muted-foreground">오늘 할당량 소진</p>
           ) : hasSucceededRecommendationExecution ? (
             /*
              * 현재 Note version에 대해 이미 성공한 추천 실행이 존재합니다.
@@ -235,26 +241,14 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
              * 동일한 version에 대한 재요청은 duplicate 처리되므로
              * 현재 추천이 최신 상태임을 짧게 안내합니다.
              */
-            <p className="text-xs text-muted-foreground">
-              AI 추천이 최신 상태입니다.
-            </p>
+            <p className="text-xs text-muted-foreground">최신 상태</p>
+          ) : hasReachedNoteRecommendationLimit ? (
+            <p className="text-xs text-muted-foreground">노트 할당량 소진</p>
           ) : recommendationQuota ? (
-            hasReachedRecommendationLimit ? (
-              /*
-               * 일일 제한 도달은 실행 실패와 다른 정상적인 quota 상태입니다.
-               *
-               * 현재 Note의 AI 추천을 더 생성할 수 없다는 점과
-               * 오늘 사용한 횟수를 함께 표시합니다.
-               */
-              <p className="text-xs text-muted-foreground">
-                {`오늘은 이 노트의 AI 추천을 더 생성할 수 없어요. (${recommendationQuota.userUsed}/${RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT})`}
-              </p>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                오늘 {recommendationQuota.userUsed}/
-                {RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT}회 사용
-              </p>
-            )
+            <p className="text-xs text-muted-foreground">
+              추천 가능 · 오늘 {recommendationQuota.userUsed}/
+              {RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT}회
+            </p>
           ) : null}
         </div>
 
