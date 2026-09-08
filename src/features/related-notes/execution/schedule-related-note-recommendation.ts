@@ -5,13 +5,6 @@ import {
   NOTE_RETRIEVAL_AI_ROLE_KEY,
 } from "@/features/ai/rags/note/constants/runtime";
 import {
-  checkpointAiRun,
-  completeAiRunFailed,
-  completeAiRunSucceeded,
-  createAiRun,
-} from "@/features/ai/runs/persistence";
-import { AI_RUN_FEATURE_TYPE } from "@/features/ai/runs/types";
-import {
   resolveAiRuntimeChatConfiguration,
   resolveAiRuntimeEmbeddingConfiguration,
 } from "@/features/ai/runtimes";
@@ -21,7 +14,6 @@ import {
 } from "@/features/operational-errors/constants";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { createRelatedNotesSnapshotAccumulator } from "../ai-runs/snapshot-accumulator";
 import {
   RELATED_NOTES_AI_FEATURE_KEY,
   RELATED_NOTES_AI_ROLE_KEY,
@@ -106,7 +98,7 @@ export async function scheduleRelatedNoteRecommendation({
     throw error;
   }
 
-  // 실행 권한을 얻지 못한 결과에는 Runtime 조회나 AI Run을 만들지 않는다.
+  // 실행 권한을 얻지 못한 결과에는 background 실행이나 Runtime 조회를 시작하지 않는다.
   if (
     claimResult.status !==
     RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS.CLAIMED
@@ -118,7 +110,7 @@ export async function scheduleRelatedNoteRecommendation({
 
   const executeRecommendation = async () => {
     try {
-      // 기존 네 Runtime 설정은 AI Run 생성보다 먼저 병렬로 확정한다.
+      // 추천 실행에 필요한 네 Runtime 설정을 병렬로 확정한다.
       const [
         embeddingConfiguration,
         queryExpansionConfiguration,
@@ -143,19 +135,6 @@ export async function scheduleRelatedNoteRecommendation({
         }),
       ]);
 
-      const accumulator = createRelatedNotesSnapshotAccumulator({
-        content: source.content,
-        id: source.id,
-        title: source.title,
-        updatedAt: source.updated_at,
-      });
-      const aiRun = await createAiRun({
-        buildSnapshot: accumulator.buildSnapshot,
-        featureType: AI_RUN_FEATURE_TYPE.RELATED_NOTES,
-        startedAt: new Date().toISOString(),
-        userId: ownerUserId,
-      });
-
       let result: Awaited<ReturnType<typeof runRelatedNoteRecommendation>>;
       try {
         result = await runRelatedNoteRecommendation({
@@ -164,24 +143,13 @@ export async function scheduleRelatedNoteRecommendation({
           embeddingConfiguration,
           limit: RELATED_NOTES_SEARCH_LIMIT,
           minSimilarity: RELATED_NOTES_MIN_SIMILARITY,
-          onCheckpoint: () =>
-            checkpointAiRun({
-              aiRun,
-              buildSnapshot: accumulator.buildSnapshot,
-            }),
           ownerUserId,
           queryExpansionConfiguration,
-          snapshotAccumulator: accumulator,
           targetNoteId: source.id,
           title: source.title,
           verificationConfiguration,
         });
       } catch {
-        await completeAiRunFailed({
-          aiRun,
-          buildSnapshot: accumulator.buildSnapshot,
-          completedAt: new Date().toISOString(),
-        });
         await completeClaimOrReport({
           claimId,
           noteId: source.id,
@@ -192,11 +160,10 @@ export async function scheduleRelatedNoteRecommendation({
         return;
       }
 
-      let featureResultIds: string[] = [];
       let claimStatus: RelatedNoteRecommendationExecutionClaimCompletionStatus =
         RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_COMPLETION_STATUS.FAILED;
       try {
-        // replacement는 AI 성공 경계 밖이며 같은 RPC가 저장 UUID를 반환한다.
+        // 최신 source version에만 추천 결과를 교체하고 결과에 따라 claim 상태를 정한다.
         const replacement = await replaceRelatedNoteAiRecommendations({
           noteId: source.id,
           ownerUserId,
@@ -204,10 +171,9 @@ export async function scheduleRelatedNoteRecommendation({
           sourceUpdatedAt: source.updated_at,
         });
         if (
-          replacement.status ===
+          replacement ===
           REPLACE_RELATED_NOTE_AI_RECOMMENDATIONS_STATUS.REPLACED
         ) {
-          featureResultIds = replacement.relationIds;
           claimStatus =
             RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_COMPLETION_STATUS.SUCCEEDED;
         } else {
@@ -227,13 +193,7 @@ export async function scheduleRelatedNoteRecommendation({
         });
       }
 
-      // Final Output 이후 Related Notes replacement 결과와 무관하게 AI 성공으로 보고 succeeded terminal 저장을 시도한다.
-      await completeAiRunSucceeded({
-        aiRun,
-        buildSnapshot: accumulator.buildSnapshot,
-        completedAt: new Date().toISOString(),
-        featureResultIds,
-      });
+      // 추천 저장 결과로 확정한 상태를 execution claim에 반영한다.
       await completeClaimOrReport({
         claimId,
         noteId: source.id,
@@ -241,7 +201,7 @@ export async function scheduleRelatedNoteRecommendation({
         status: claimStatus,
       });
     } catch {
-      // Runtime 설정 등 AI 시작 전 실패에는 Run 없이 Claim만 정리한다.
+      // Runtime 설정 등 추천 실행 전 실패에는 Claim을 failed로 정리한다.
       await completeClaimOrReport({
         claimId,
         noteId: source.id,

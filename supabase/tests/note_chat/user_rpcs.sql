@@ -4,7 +4,7 @@
 
 BEGIN;
 
-SELECT plan(16);
+SELECT plan(13);
 
 SELECT set_config('test.note_chat_rpc_user_id', gen_random_uuid()::text, true);
 SELECT set_config('test.note_chat_rpc_other_user_id', gen_random_uuid()::text, true);
@@ -136,16 +136,6 @@ SELECT is(
   $$first created user message should use sequence number 1$$
 );
 
-SELECT is(
-  (
-    SELECT count(*)
-    FROM public.note_chat_runs
-    WHERE user_message_id = current_setting('test.note_chat_rpc_first_user_message_id')::uuid
-  ),
-  0::bigint,
-  $$create_note_chat_question should not create a Run audit record$$
-);
-
 SELECT throws_ok(
   $sql$
     SELECT public.create_note_chat_question(
@@ -208,9 +198,6 @@ SELECT set_config(
   true
 );
 
-INSERT INTO public.note_chat_runs (user_message_id)
-VALUES (current_setting('test.note_chat_rpc_deleted_message_id')::uuid);
-
 SELECT *
 FROM public.update_note_chat_user_message(
   current_setting('test.note_chat_rpc_user_id')::uuid,
@@ -244,26 +231,6 @@ SELECT is(
   ),
   0::bigint,
   $$update_note_chat_user_message should delete later messages$$
-);
-
-SELECT is(
-  (
-    SELECT count(*)
-    FROM public.note_chat_runs
-    WHERE user_message_id = current_setting('test.note_chat_rpc_deleted_message_id')::uuid
-  ),
-  0::bigint,
-  $$deleting later messages should cascade to connected runs$$
-);
-
-SELECT is(
-  (
-    SELECT count(*)
-    FROM public.note_chat_runs
-    WHERE user_message_id = current_setting('test.note_chat_rpc_second_user_message_id')::uuid
-  ),
-  0::bigint,
-  $$update_note_chat_user_message should not create a Run audit record$$
 );
 
 SELECT throws_ok(

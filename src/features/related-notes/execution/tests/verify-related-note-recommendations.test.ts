@@ -161,19 +161,6 @@ describe("verifyRelatedNoteRecommendations", () => {
           reason: "첫 번째 Answer 추천 이유",
         },
       ],
-      usage,
-      verifications: [
-        {
-          approved: true,
-          noteId: FIRST_NOTE_ID,
-          reason: "직접적인 학습 관계입니다.",
-        },
-        {
-          approved: false,
-          noteId: SECOND_NOTE_ID,
-          reason: "일반적인 공통점만 있습니다.",
-        },
-      ],
     });
   });
 
@@ -198,21 +185,6 @@ describe("verifyRelatedNoteRecommendations", () => {
     expect(templateVariables?.recommendations).toContain(
       "두 번째 노트의 매칭 chunk",
     );
-  });
-
-  it("Verifier usage callback을 Provider 응답 직후 호출한다", async () => {
-    const onUsage = vi.fn().mockResolvedValue(undefined);
-
-    await verifyRelatedNoteRecommendations({
-      configuration,
-      content: "현재 노트 내용",
-      notes,
-      onUsage,
-      recommendations,
-      title: "현재 노트",
-    });
-
-    expect(onUsage).toHaveBeenCalledWith(usage);
   });
 
   it("Verifier 응답 순서와 관계없이 Answer Agent의 추천 순서를 보전한다", async () => {
@@ -257,24 +229,6 @@ describe("verifyRelatedNoteRecommendations", () => {
         {
           noteId: THIRD_NOTE_ID,
           reason: "세 번째 Answer 추천 이유",
-        },
-      ],
-      usage,
-      verifications: [
-        {
-          approved: true,
-          noteId: FIRST_NOTE_ID,
-          reason: "첫 번째 추천은 직접 관련이 있습니다.",
-        },
-        {
-          approved: false,
-          noteId: SECOND_NOTE_ID,
-          reason: "두 번째 추천은 관련성이 약합니다.",
-        },
-        {
-          approved: true,
-          noteId: THIRD_NOTE_ID,
-          reason: "세 번째 추천은 직접 관련이 있습니다.",
         },
       ],
     });

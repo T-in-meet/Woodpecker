@@ -22,11 +22,6 @@ vi.mock("../../utils/report-operational-error", () => ({
 }));
 
 const configuration = {} as AiRuntimeChatConfiguration;
-const usage = {
-  inputTokens: 1,
-  outputTokens: 1,
-  totalTokens: 2,
-};
 
 describe("expandRelatedNoteQuery", () => {
   beforeEach(() => {
@@ -34,12 +29,11 @@ describe("expandRelatedNoteQuery", () => {
 
     vi.mocked(reportRelatedNotesOperationalError).mockResolvedValue(undefined);
 
-    vi.mocked(createQueryExpansionCompletion).mockResolvedValue({
-      content: JSON.stringify({
+    vi.mocked(createQueryExpansionCompletion).mockResolvedValue(
+      JSON.stringify({
         expandedQuery: "확장된 관련 노트 검색 질문",
       }),
-      usage,
-    });
+    );
   });
 
   it("Query Expansion 응답에서 확장된 검색 질의를 반환한다", async () => {
@@ -61,31 +55,13 @@ describe("expandRelatedNoteQuery", () => {
 
     expect(result).toEqual({
       expandedQuery: "확장된 관련 노트 검색 질문",
-      usage,
     });
 
     expect(reportRelatedNotesOperationalError).not.toHaveBeenCalled();
   });
 
-  it("Provider 응답 직후 usage callback을 호출한다", async () => {
-    const onUsage = vi.fn().mockResolvedValue(undefined);
-
-    await expandRelatedNoteQuery({
-      configuration,
-      noteId: "33333333-3333-4333-8333-333333333333",
-      title: "대상 노트",
-      content: "대상 노트 내용",
-      onUsage,
-    });
-
-    expect(onUsage).toHaveBeenCalledWith(usage);
-  });
-
   it("Query Expansion 응답이 유효한 JSON이 아니면 운영 오류를 보고하고 오류를 발생시킨다", async () => {
-    vi.mocked(createQueryExpansionCompletion).mockResolvedValue({
-      content: "invalid-json",
-      usage,
-    });
+    vi.mocked(createQueryExpansionCompletion).mockResolvedValue("invalid-json");
 
     await expect(
       expandRelatedNoteQuery({
@@ -112,12 +88,11 @@ describe("expandRelatedNoteQuery", () => {
   });
 
   it("Query Expansion 응답이 예상한 형식과 다르면 운영 오류를 보고하고 오류를 발생시킨다", async () => {
-    vi.mocked(createQueryExpansionCompletion).mockResolvedValue({
-      content: JSON.stringify({
+    vi.mocked(createQueryExpansionCompletion).mockResolvedValue(
+      JSON.stringify({
         expandedQuery: "",
       }),
-      usage,
-    });
+    );
 
     await expect(
       expandRelatedNoteQuery({

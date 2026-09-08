@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AI_CHAT_MESSAGE_ROLE } from "@/features/ai/chats/constants";
 import { buildNoteContext } from "@/features/ai/rags/note/build-context";
 import { getMatchedNotes } from "@/features/ai/rags/note/get-matched-notes";
-import { searchNoteEmbeddingsWithUsage } from "@/features/ai/rags/note/search-embeddings";
+import { searchNoteEmbeddings } from "@/features/ai/rags/note/search-embeddings";
 import { NOTE_CHAT_OPERATIONAL_ERROR_CODES } from "@/features/operational-errors/constants";
 
 import { getNoteChatConversationDetailForExecution } from "../../internal-queries";
@@ -33,7 +33,7 @@ vi.mock("@/features/ai/rags/note/get-matched-notes", () => ({
 }));
 
 vi.mock("@/features/ai/rags/note/search-embeddings", () => ({
-  searchNoteEmbeddingsWithUsage: vi.fn(),
+  searchNoteEmbeddings: vi.fn(),
 }));
 
 vi.mock("../build-note-sources", () => ({
@@ -78,24 +78,6 @@ const detail = {
   messages,
 } as never;
 
-/**
- * 질의 확장 Chat Completion에서 사용한 token 사용량입니다.
- */
-const queryExpansionUsage = {
-  inputTokens: 10,
-  outputTokens: 20,
-  totalTokens: 30,
-};
-
-/**
- * 검색 질의 embedding Provider 호출에서 발생한 token 사용량입니다.
- */
-const queryEmbeddingUsage = {
-  inputTokens: 40,
-  outputTokens: 0,
-  totalTokens: 40,
-};
-
 describe("prepareNoteChatExecution", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -106,13 +88,9 @@ describe("prepareNoteChatExecution", () => {
 
     vi.mocked(expandNoteChatQuery).mockResolvedValue({
       expandedQuery: "확장된 검색 질의",
-      usage: queryExpansionUsage,
     });
 
-    vi.mocked(searchNoteEmbeddingsWithUsage).mockResolvedValue({
-      matches: [],
-      usage: queryEmbeddingUsage,
-    });
+    vi.mocked(searchNoteEmbeddings).mockResolvedValue([]);
 
     vi.mocked(getMatchedNotes).mockResolvedValue([]);
 
@@ -125,7 +103,7 @@ describe("prepareNoteChatExecution", () => {
     vi.mocked(reportNoteChatOperationalError).mockResolvedValue(undefined);
   });
 
-  it("실행에 필요한 정보와 질의 확장 usage를 준비하고 PreparedNoteChatExecution을 반환한다", async () => {
+  it("실행에 필요한 정보를 준비하고 PreparedNoteChatExecution을 반환한다", async () => {
     const result = await prepareNoteChatExecution({
       conversationId: "conversation-1",
       settings,
@@ -145,11 +123,10 @@ describe("prepareNoteChatExecution", () => {
       userMessageId: "message-1",
     });
 
-    expect(searchNoteEmbeddingsWithUsage).toHaveBeenCalledWith({
+    expect(searchNoteEmbeddings).toHaveBeenCalledWith({
       embeddingConfiguration: settings.embedding,
       limit: expect.any(Number),
       minSimilarity: expect.any(Number),
-      onUsage: undefined,
       ownerUserId: "user-1",
       question: "확장된 검색 질의",
     });
@@ -175,13 +152,8 @@ describe("prepareNoteChatExecution", () => {
 
     expect(result).toEqual({
       conversation,
-      context: "",
       expandedQuery: "확장된 검색 질의",
-      history: [],
       messages: [],
-      question: "질문",
-      queryEmbeddingUsage,
-      queryExpansionUsage,
       settings,
       sources: [],
       userMessageId: "message-1",
@@ -386,10 +358,6 @@ describe("prepareNoteChatExecution", () => {
       userTemplate: settings.chat.prompt.version.user_template,
     });
 
-    /*
-     * 검색 결과와 무관하게 질의 확장에서 사용한 token 사용량은
-     * 이후 Note Chat Run에서 합산할 수 있도록 그대로 전달합니다.
-     */
-    expect(result.queryExpansionUsage).toEqual(queryExpansionUsage);
+    expect(result.sources).toEqual(sources);
   });
 });

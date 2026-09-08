@@ -1,10 +1,4 @@
 import {
-  checkpointAiRun,
-  completeAiRunFailed,
-  completeAiRunSucceeded,
-} from "@/features/ai/runs/persistence";
-import type { AiRunPersistenceHandle } from "@/features/ai/runs/types";
-import {
   NOTE_CHAT_OPERATIONAL_ERROR_CODES,
   NOTE_CHAT_OPERATIONAL_ERROR_OPERATIONS,
   NOTE_CHAT_OPERATIONAL_ERROR_STAGES,
@@ -15,17 +9,13 @@ import type {
   NoteChatOperationalErrorStageType,
 } from "@/features/operational-errors/constants/note-chat";
 
-import type { NoteChatSnapshotAccumulator } from "../ai-runs/snapshot-accumulator";
 import { executeNoteChat } from "../execution/execute";
 import {
   completeNoteChatExecutionClaim,
   completeNoteChatExecutionSuccess,
   NOTE_CHAT_EXECUTION_CLAIM_COMPLETION_STATUS,
 } from "../execution/execution-claim-persistence";
-import {
-  NoteChatProviderResponseError,
-  parseNoteChatProviderResponse,
-} from "../execution/parse-response";
+import { parseNoteChatProviderResponse } from "../execution/parse-response";
 import type { NoteChatExecutionSettings } from "../execution/prepare-execution";
 import { resolveNoteChatUsedNoteIds } from "../execution/resolve-used-note-ids";
 import { reportNoteChatOperationalError } from "../utils/report-operational-error";
@@ -35,14 +25,10 @@ import type { NoteChatStreamEvent } from "./types";
 
 /** 노트 챗봇 스트림 실행 입력입니다. */
 export type RunNoteChatStreamParams = {
-  /** 현재 AI execution의 공통 Run persistence 정보입니다. */
-  aiRun: AiRunPersistenceHandle;
   /** 실행 제어를 담당하는 Claim ID입니다. */
   claimId: string;
   /** 실행할 대화 ID입니다. */
   conversationId: string;
-  /** 실행별 Note Chat Snapshot accumulator입니다. */
-  snapshotAccumulator: NoteChatSnapshotAccumulator;
   /** Route에서 확정된 AI Runtime 설정입니다. */
   settings: NoteChatExecutionSettings;
   /** 현재 AI 실행을 요청한 사용자 ID입니다. */
@@ -70,13 +56,9 @@ export async function runNoteChatStream(
   let usedNoteIds: string[];
 
   try {
-    // Query Expansion과 Retrieval은 완료 지점마다 전체 Snapshot을 checkpoint한다.
     const execution = await executeNoteChat({
       conversationId: params.conversationId,
-      onQueryExpansionCompleted: () => checkpointRun(params),
-      onRetrievalCompleted: () => checkpointRun(params),
       settings: params.settings,
-      snapshotAccumulator: params.snapshotAccumulator,
       userId: params.userId,
       userMessageId: params.userMessageId,
     });
@@ -84,7 +66,6 @@ export async function runNoteChatStream(
     if (execution.sources.length === 0) {
       content = NOTE_CHAT_NO_CONTEXT_MESSAGE;
       usedNoteIds = [];
-      params.snapshotAccumulator.completeNoContextAnswer(content);
       await onEvent({ delta: content, type: "text-delta" });
     } else {
       if (execution.providerStream === null) {
@@ -97,20 +78,8 @@ export async function runNoteChatStream(
         consumed = await consumeNoteChatProviderStream(
           execution.providerStream,
           onEvent,
-          (partial) => {
-            params.snapshotAccumulator.appendAnswerPartialResponse(partial);
-          },
-        );
-
-        params.snapshotAccumulator.completeAnswerGenerationProvider(
-          consumed.result,
         );
       } catch (error) {
-        params.snapshotAccumulator.failAnswerGeneration(
-          "stream_consumption",
-          error,
-        );
-
         await reportExecutionError(params, error, {
           code: NOTE_CHAT_OPERATIONAL_ERROR_CODES.PROVIDER_STREAM_CONSUME_FAILED,
           message: "노트 챗봇 Provider 스트림 처리에 실패했습니다.",
@@ -125,18 +94,7 @@ export async function runNoteChatStream(
 
       try {
         parsedResponse = parseNoteChatProviderResponse(consumed.content);
-
-        params.snapshotAccumulator.completeAnswerGenerationParsing(
-          parsedResponse,
-        );
       } catch (error) {
-        const stage =
-          error instanceof NoteChatProviderResponseError
-            ? error.stage
-            : "parse";
-
-        params.snapshotAccumulator.failAnswerGeneration(stage, error);
-
         await reportExecutionError(params, error, {
           code: NOTE_CHAT_OPERATIONAL_ERROR_CODES.PROVIDER_RESPONSE_PARSE_FAILED,
           message: "노트 챗봇 Provider 응답 파싱에 실패했습니다.",
@@ -152,17 +110,7 @@ export async function runNoteChatStream(
           parsedResponse.usedContextIndexes,
           execution.sources,
         );
-
-        params.snapshotAccumulator.completeAnswerGenerationPostProcessing({
-          usedContextIndexes: parsedResponse.usedContextIndexes,
-          usedNoteIds,
-        });
       } catch (error) {
-        params.snapshotAccumulator.failAnswerGeneration(
-          "post_processing",
-          error,
-        );
-
         await reportExecutionError(params, error, {
           code: NOTE_CHAT_OPERATIONAL_ERROR_CODES.USED_NOTES_RESOLVE_FAILED,
           message: "노트 챗봇 사용 노트 확인에 실패했습니다.",
@@ -173,16 +121,9 @@ export async function runNoteChatStream(
       }
 
       content = parsedResponse.answer;
-      params.snapshotAccumulator.completeGeneratedAnswer(content, usedNoteIds);
     }
   } catch (error) {
-    // AI 처리 실패만 failed terminal로 기록하고 기존 Claim 실패 정리를 유지한다.
-    await completeAiRunFailed({
-      aiRun: params.aiRun,
-      buildSnapshot: params.snapshotAccumulator.buildSnapshot,
-      completedAt: new Date().toISOString(),
-    });
-
+    // AI 처리 실패 시 기존 Claim을 실패 상태로 정리합니다.
     await completeExecutionClaimAfterFailure(params);
 
     throw error;
@@ -208,37 +149,12 @@ export async function runNoteChatStream(
       stage: NOTE_CHAT_OPERATIONAL_ERROR_STAGES.DATABASE,
     });
 
-    // AI 자체는 성공했으므로 결과 ID 없이 succeeded terminal을 남긴다.
-    await completeSucceededRun(params, []);
     await completeExecutionClaimAfterFailure(params);
 
     throw error;
   }
 
-  await completeSucceededRun(params, [assistantMessageId]);
-
   return { assistantMessageId, content, usedNoteIds };
-}
-
-/** 현재 전체 Snapshot을 공통 AI Run checkpoint persistence에 등록합니다. */
-async function checkpointRun(params: RunNoteChatStreamParams): Promise<void> {
-  await checkpointAiRun({
-    aiRun: params.aiRun,
-    buildSnapshot: params.snapshotAccumulator.buildSnapshot,
-  });
-}
-
-/** 성공한 AI 처리 결과를 best-effort terminal persistence에 등록합니다. */
-async function completeSucceededRun(
-  params: RunNoteChatStreamParams,
-  featureResultIds: string[],
-): Promise<void> {
-  await completeAiRunSucceeded({
-    aiRun: params.aiRun,
-    buildSnapshot: params.snapshotAccumulator.buildSnapshot,
-    completedAt: new Date().toISOString(),
-    featureResultIds,
-  });
 }
 
 /** 실패한 execution claim을 기존 정책대로 best-effort 정리합니다. */
@@ -275,7 +191,6 @@ async function reportExecutionError(
   await reportNoteChatOperationalError({
     actorUserId: params.userId,
     context: {
-      aiRunId: params.aiRun.id,
       conversationId: params.conversationId,
       userMessageId: params.userMessageId,
     },

@@ -4,18 +4,12 @@ import {
   NOTE_RETRIEVAL_AI_FEATURE_KEY,
   NOTE_RETRIEVAL_AI_ROLE_KEY,
 } from "@/features/ai/rags/note/constants/runtime";
-import { createAiRun } from "@/features/ai/runs/persistence";
-import {
-  AI_RUN_FEATURE_TYPE,
-  type AiRunPersistenceHandle,
-} from "@/features/ai/runs/types";
 import {
   resolveAiRuntimeChatConfiguration,
   resolveAiRuntimeEmbeddingConfiguration,
 } from "@/features/ai/runtimes";
 import { isReportedAiOperationalError } from "@/features/ai/utils/report-ai-operational-error";
 import { getLegalAcceptanceRequiredPath } from "@/features/auth/lib/userAgreements";
-import { createNoteChatSnapshotAccumulator } from "@/features/note-chats/ai-runs/snapshot-accumulator";
 import {
   NOTE_CHAT_AI_FEATURE_KEY,
   NOTE_CHAT_AI_ROLE_KEY,
@@ -57,7 +51,7 @@ export const maxDuration = 90;
  *
  * AI 설정은 클라이언트에서 전달받지 않습니다.
  * Note Chat에 연결된 AI Foundation Runtime Configuration을 서버에서 조회하고,
- * 확정된 동일 설정을 실제 AI 실행과 AI Run Snapshot에 사용합니다.
+ * 확정된 동일 설정을 실제 AI 실행에 사용합니다.
  *
  * @param request 질문 생성 입력을 포함한 HTTP 요청
  * @returns NDJSON 스트림 또는 요청 오류 응답
@@ -347,10 +341,6 @@ export async function POST(request: Request): Promise<Response> {
     embedding: embeddingConfiguration,
   };
 
-  // precheck, claim, User Message 저장 뒤에만 실행별 accumulator를 생성한다.
-  const snapshotAccumulator = createNoteChatSnapshotAccumulator();
-  let aiRun: AiRunPersistenceHandle | null = null;
-
   /*
    * streamClosed는 ReadableStream 자체가 취소되거나 close된 상태를 나타냅니다.
    * deliveryFailed는 서버에서 클라이언트로 이벤트를 전달할 수 없게 된 상태를
@@ -404,7 +394,6 @@ export async function POST(request: Request): Promise<Response> {
               context: {
                 conversationId,
                 eventType: event.type,
-                aiRunId: aiRun?.id ?? null,
                 userMessageId,
               },
               error,
@@ -438,21 +427,11 @@ export async function POST(request: Request): Promise<Response> {
         });
 
         try {
-          // 실제 AI runner 진입 직전에 Run identity를 확정하고 초기 Snapshot 저장을 시도한다.
-          aiRun = await createAiRun({
-            buildSnapshot: snapshotAccumulator.buildSnapshot,
-            featureType: AI_RUN_FEATURE_TYPE.NOTE_CHAT,
-            startedAt: new Date().toISOString(),
-            userId: user.id,
-          });
-
           const result = await runNoteChatStream(
             {
-              aiRun,
               conversationId,
               claimId,
               settings,
-              snapshotAccumulator,
               userId: user.id,
               userMessageId,
             },
@@ -476,7 +455,7 @@ export async function POST(request: Request): Promise<Response> {
            * 여기까지 전달되는 오류는 runNoteChatStream 내부의
            * AI 실행 또는 기능 데이터 저장 실패입니다.
            *
-           * execution의 Run/Claim 실패 정리는 runNoteChatStream에서
+           * execution의 Claim 실패 정리는 runNoteChatStream에서
            * 이미 처리하므로 Route는 클라이언트 error 이벤트만 전달합니다.
            */
           if (!errorEventSent) {
