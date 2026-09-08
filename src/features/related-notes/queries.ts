@@ -39,6 +39,43 @@ type RelatedNoteRecommendationExecution = {
 export type RelatedNoteRecommendationExecutionClaim =
   RelatedNoteRecommendationExecution;
 
+/** 일반 사용자의 Related Notes AI 추천 일일 할당량입니다. */
+type RelatedNoteRecommendationQuota = {
+  /** 현재 Note에 새 AI 추천을 요청할 수 있는지 여부입니다. */
+  canRequestForNote: boolean;
+
+  /** 현재 Note의 일일 추천 한도 도달 여부입니다. */
+  isNoteLimitReached: boolean;
+
+  /** 사용자의 전체 일일 추천 한도 도달 여부입니다. */
+  isUserLimitReached: boolean;
+
+  /** Note별 일일 추천 한도입니다. */
+  noteLimit: number;
+
+  /** 사용자별 전체 일일 추천 한도입니다. */
+  userLimit: number;
+
+  /** 사용자의 오늘 전체 추천 사용량입니다. */
+  userUsed: number;
+};
+
+/** Related Notes AI 추천 일일 할당량 조회 상태입니다. */
+export type RelatedNoteRecommendationQuotaState =
+  | {
+      /** 일반 사용자의 할당량을 정상적으로 조회한 상태입니다. */
+      status: "available";
+      quota: RelatedNoteRecommendationQuota;
+    }
+  | {
+      /** ADMIN처럼 일일 할당량을 적용하지 않는 상태입니다. */
+      status: "not_applicable";
+    }
+  | {
+      /** 사용자 역할 또는 일반 사용자의 할당량을 확인하지 못한 상태입니다. */
+      status: "unavailable";
+    };
+
 /** Related Notes 섹션 조회 결과입니다. */
 export type RelatedNotesQueryResult = {
   /** 현재 표시할 Related Notes 목록입니다. */
@@ -58,20 +95,8 @@ export type RelatedNotesQueryResult = {
    */
   latestRecommendationExecution: RelatedNoteRecommendationExecution | null;
 
-  /**
-   * 현재 Note의 요청 가능 여부와 사용자의 오늘 전체 AI 추천 사용량입니다.
-   *
-   * 일일 실행 제한을 적용받는 일반 사용자에게만 반환하며,
-   * quota를 우회하는 ADMIN에게는 null을 반환합니다.
-   */
-  recommendationQuota: {
-    canRequestForNote: boolean;
-    isNoteLimitReached: boolean;
-    isUserLimitReached: boolean;
-    noteLimit: number;
-    userLimit: number;
-    userUsed: number;
-  } | null;
+  /** 현재 사용자의 AI 추천 일일 할당량 적용 및 조회 상태입니다. */
+  recommendationQuota: RelatedNoteRecommendationQuotaState;
 };
 
 /** Related Notes AI 추천 실행의 UI 상태입니다. */
@@ -110,7 +135,7 @@ export async function getRelatedNotes(
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
       latestRecommendationExecution: null,
-      recommendationQuota: null,
+      recommendationQuota: { status: "unavailable" },
       relatedNotes: [],
     };
   }
@@ -126,7 +151,7 @@ export async function getRelatedNotes(
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
       latestRecommendationExecution: null,
-      recommendationQuota: null,
+      recommendationQuota: { status: "unavailable" },
       relatedNotes: [],
     };
   }
@@ -165,7 +190,7 @@ export async function getRelatedNotes(
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
       latestRecommendationExecution: null,
-      recommendationQuota: null,
+      recommendationQuota: { status: "unavailable" },
       relatedNotes: [],
     };
   }
@@ -175,7 +200,7 @@ export async function getRelatedNotes(
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
       latestRecommendationExecution: null,
-      recommendationQuota: null,
+      recommendationQuota: { status: "unavailable" },
       relatedNotes: [],
     };
   }
@@ -198,7 +223,9 @@ export async function getRelatedNotes(
     !profileError && profile?.role === "USER";
 
   let recommendationQuota: RelatedNotesQueryResult["recommendationQuota"] =
-    null;
+    !profileError && profile?.role === "ADMIN"
+      ? { status: "not_applicable" }
+      : { status: "unavailable" };
 
   if (shouldQueryRecommendationQuota) {
     /*
@@ -265,13 +292,16 @@ export async function getRelatedNotes(
           legacyQuota.user_used >= RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT;
 
         recommendationQuota = {
-          canRequestForNote: legacyQuota.can_request_for_note,
-          isNoteLimitReached:
-            !legacyQuota.can_request_for_note && !isUserLimitReached,
-          isUserLimitReached,
-          noteLimit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
-          userLimit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
-          userUsed: legacyQuota.user_used,
+          status: "available",
+          quota: {
+            canRequestForNote: legacyQuota.can_request_for_note,
+            isNoteLimitReached:
+              !legacyQuota.can_request_for_note && !isUserLimitReached,
+            isUserLimitReached,
+            noteLimit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
+            userLimit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
+            userUsed: legacyQuota.user_used,
+          },
         };
       }
     } else {
@@ -298,12 +328,15 @@ export async function getRelatedNotes(
         const quota = parsedRecommendationQuota.data[0];
 
         recommendationQuota = {
-          canRequestForNote: quota.can_request_for_note,
-          isNoteLimitReached: quota.is_note_limit_reached,
-          isUserLimitReached: quota.is_user_limit_reached,
-          noteLimit: quota.note_limit,
-          userLimit: quota.user_limit,
-          userUsed: quota.user_used,
+          status: "available",
+          quota: {
+            canRequestForNote: quota.can_request_for_note,
+            isNoteLimitReached: quota.is_note_limit_reached,
+            isUserLimitReached: quota.is_user_limit_reached,
+            noteLimit: quota.note_limit,
+            userLimit: quota.user_limit,
+            userUsed: quota.user_used,
+          },
         };
       }
     }

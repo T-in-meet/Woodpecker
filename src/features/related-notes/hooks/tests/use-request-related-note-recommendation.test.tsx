@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
+import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { requestRelatedNoteRecommendationActionMock } = vi.hoisted(() => ({
@@ -10,6 +11,12 @@ const { requestRelatedNoteRecommendationActionMock } = vi.hoisted(() => ({
 vi.mock("../../actions", () => ({
   requestRelatedNoteRecommendationAction:
     requestRelatedNoteRecommendationActionMock,
+}));
+
+vi.mock("sonner", () => ({
+  toast: {
+    error: vi.fn(),
+  },
 }));
 
 vi.mock("../../execution/execution-claim-persistence", () => ({
@@ -23,6 +30,8 @@ vi.mock("../../execution/execution-claim-persistence", () => ({
 
 import { relatedNotesQueryKeys } from "../../constants/query-keys";
 import { useRequestRelatedNoteRecommendation } from "../use-request-related-note-recommendation";
+
+const toastErrorMock = vi.mocked(toast.error);
 
 /**
  * React Query mutation 테스트에서 retry side effect를 제거한 QueryClient를 생성합니다.
@@ -110,7 +119,7 @@ describe("useRequestRelatedNoteRecommendation", () => {
     expect(callOrder).toEqual(["accepted", "invalidate"]);
   });
 
-  it.each(["duplicate", "stale", "daily_limit_exceeded"] as const)(
+  it.each(["duplicate", "stale"] as const)(
     "%s 상태에서는 새 polling 대상을 등록하지 않고 최신 상태만 다시 조회한다",
     async (status) => {
       const queryClient = createTestQueryClient();
@@ -140,6 +149,7 @@ describe("useRequestRelatedNoteRecommendation", () => {
       });
 
       expect(onAccepted).not.toHaveBeenCalled();
+      expect(toastErrorMock).not.toHaveBeenCalled();
 
       expect(invalidateQueriesSpy).toHaveBeenCalledOnce();
       expect(invalidateQueriesSpy).toHaveBeenCalledWith({
@@ -147,6 +157,42 @@ describe("useRequestRelatedNoteRecommendation", () => {
       });
     },
   );
+
+  it("daily_limit_exceeded 상태에서는 polling 없이 할당량 소진을 안내하고 최신 상태를 다시 조회한다", async () => {
+    const queryClient = createTestQueryClient();
+    const invalidateQueriesSpy = vi.spyOn(queryClient, "invalidateQueries");
+    const onAccepted = vi.fn();
+
+    requestRelatedNoteRecommendationActionMock.mockResolvedValue({
+      success: true,
+      execution: {
+        claimId: null,
+        status: "daily_limit_exceeded",
+      },
+    });
+
+    const { result } = renderHook(
+      () =>
+        useRequestRelatedNoteRecommendation(noteId, {
+          onAccepted,
+        }),
+      {
+        wrapper: createWrapper(queryClient),
+      },
+    );
+
+    await act(async () => {
+      await result.current.mutateAsync();
+    });
+
+    expect(onAccepted).not.toHaveBeenCalled();
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      "오늘 AI 추천 할당량을 모두 사용했습니다.",
+    );
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: relatedNotesQueryKeys.byNoteId(noteId),
+    });
+  });
 
   it("Action이 실패하면 오류를 전달하고 쿼리를 무효화하지 않는다", async () => {
     const queryClient = createTestQueryClient();

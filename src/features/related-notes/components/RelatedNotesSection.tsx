@@ -36,9 +36,9 @@ type RelatedNotesSectionProps = {
  * 동일한 version으로 다시 추천을 생성하지 않고 최신 상태로 표시합니다.
  *
  * 일일 AI 추천 제한을 적용받는 사용자는 현재 Note의 요청 가능 여부와
- * 사용자 전체 오늘 사용량을 함께 표시하며,
- * ADMIN처럼 제한을 적용받지 않는 사용자는 recommendationQuota가 null이므로
- * 별도의 role 판별 없이 quota 사용량을 표시하지 않습니다.
+ * 사용자 전체 오늘 사용량을 함께 표시합니다.
+ * ADMIN의 할당량 미적용과 일반 사용자의 할당량 조회 실패는
+ * query가 반환하는 판별 상태로 구분합니다.
  *
  * @param props Related Notes를 조회할 기준 Note ID
  */
@@ -120,13 +120,18 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
     data?.hasFailedRecommendationExecution === true;
 
   /*
-   * 일반 사용자는 현재 Note의 추천 가능 여부와 사용자 전체 오늘 사용량을
-   * recommendationQuota로 전달받습니다.
-   *
-   * 일일 제한을 적용받지 않는 ADMIN은 queries 계층에서 null을 반환하므로
-   * 이 컴포넌트에서는 사용자 role을 다시 확인하지 않습니다.
+   * query 계층의 판별 상태를 사용해 정상 quota, ADMIN 미적용,
+   * 조회 실패를 별도의 UI 상태로 처리합니다.
    */
-  const recommendationQuota = data?.recommendationQuota ?? null;
+  const recommendationQuotaState = data?.recommendationQuota ?? {
+    status: "unavailable" as const,
+  };
+  const recommendationQuota =
+    recommendationQuotaState.status === "available"
+      ? recommendationQuotaState.quota
+      : null;
+  const isRecommendationQuotaUnavailable =
+    recommendationQuotaState.status === "unavailable";
 
   // DB가 판정한 사용자 전체 일일 추천 할당량 도달 상태를 사용합니다.
   const hasReachedUserRecommendationLimit =
@@ -149,6 +154,7 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
     isRecommendationRequestInProgress ||
     hasRunningRecommendationExecution ||
     hasSucceededRecommendationExecution ||
+    isRecommendationQuotaUnavailable ||
     (recommendationQuota !== null && !recommendationQuota.canRequestForNote);
 
   /*
@@ -174,6 +180,10 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
       return "관련 노트 추천에 실패했습니다.";
     }
 
+    if (isRecommendationQuotaUnavailable) {
+      return "AI 추천 가능 여부를 확인하지 못했습니다. 잠시 후 다시 시도해주세요.";
+    }
+
     if (hasReachedUserRecommendationLimit) {
       return "오늘 할당량 소진";
     }
@@ -186,7 +196,7 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
       return "오늘 추천 완료";
     }
 
-    if (recommendationQuota) {
+    if (recommendationQuota !== null) {
       return "추천 가능";
     }
 

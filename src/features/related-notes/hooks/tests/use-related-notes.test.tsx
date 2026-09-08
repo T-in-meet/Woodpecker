@@ -68,12 +68,15 @@ function createRelatedNotesResult({
   hasFailedRecommendationExecution = false,
   latestRecommendationExecution = null,
   recommendationQuota = {
-    canRequestForNote: true,
-    isNoteLimitReached: false,
-    isUserLimitReached: false,
-    noteLimit: 1,
-    userLimit: 10,
-    userUsed: 0,
+    status: "available",
+    quota: {
+      canRequestForNote: true,
+      isNoteLimitReached: false,
+      isUserLimitReached: false,
+      noteLimit: 1,
+      userLimit: 10,
+      userUsed: 0,
+    },
   },
 }: {
   hasRunningRecommendationExecution?: boolean;
@@ -82,14 +85,9 @@ function createRelatedNotesResult({
     id: string;
     status: "running" | "succeeded" | "failed" | "stale";
   } | null;
-  recommendationQuota?: {
-    canRequestForNote: boolean;
-    isNoteLimitReached: boolean;
-    isUserLimitReached: boolean;
-    noteLimit: number;
-    userLimit: number;
-    userUsed: number;
-  };
+  recommendationQuota?: Awaited<
+    ReturnType<typeof getRelatedNotes>
+  >["recommendationQuota"];
 } = {}) {
   return {
     hasRunningRecommendationExecution,

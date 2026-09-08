@@ -65,13 +65,16 @@ const defaultRecommendationQuotaRow = {
 
 /** query 계층이 변환한 정상적인 기본 quota 결과입니다. */
 const defaultRecommendationQuota = {
-  canRequestForNote: true,
-  isNoteLimitReached: false,
-  isUserLimitReached: false,
-  noteLimit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
-  userLimit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
-  userUsed: 0,
-};
+  status: "available",
+  quota: {
+    canRequestForNote: true,
+    isNoteLimitReached: false,
+    isUserLimitReached: false,
+    noteLimit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
+    userLimit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
+    userUsed: 0,
+  },
+} as const;
 
 /** 인증된 사용자를 반환하는 auth.getUser mock을 만듭니다. */
 function createAuthMock() {
@@ -151,7 +154,7 @@ describe("getRelatedNotes", () => {
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
       latestRecommendationExecution: null,
-      recommendationQuota: null,
+      recommendationQuota: { status: "unavailable" },
       relatedNotes: [],
     });
     expect(createClientMock).not.toHaveBeenCalled();
@@ -472,12 +475,15 @@ describe("getRelatedNotes", () => {
     );
 
     expect(result.recommendationQuota).toEqual({
-      canRequestForNote: false,
-      isNoteLimitReached: true,
-      isUserLimitReached: false,
-      noteLimit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
-      userLimit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
-      userUsed: 1,
+      status: "available",
+      quota: {
+        canRequestForNote: false,
+        isNoteLimitReached: true,
+        isUserLimitReached: false,
+        noteLimit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
+        userLimit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
+        userUsed: 1,
+      },
     });
   });
 
@@ -534,12 +540,15 @@ describe("getRelatedNotes", () => {
       },
     );
     expect(result.recommendationQuota).toEqual({
-      canRequestForNote: false,
-      isNoteLimitReached: true,
-      isUserLimitReached: false,
-      noteLimit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
-      userLimit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
-      userUsed: 1,
+      status: "available",
+      quota: {
+        canRequestForNote: false,
+        isNoteLimitReached: true,
+        isUserLimitReached: false,
+        noteLimit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
+        userLimit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
+        userUsed: 1,
+      },
     });
   });
 
@@ -669,7 +678,9 @@ describe("getRelatedNotes", () => {
       expect.anything(),
     );
 
-    expect(result.recommendationQuota).toBeNull();
+    expect(result.recommendationQuota).toEqual({
+      status: "not_applicable",
+    });
   });
 
   it("사용자 역할 조회에 실패하면 운영 오류를 보고하고 사용량을 반환하지 않는다", async () => {
@@ -710,7 +721,7 @@ describe("getRelatedNotes", () => {
       expect.anything(),
     );
 
-    expect(result.recommendationQuota).toBeNull();
+    expect(result.recommendationQuota).toEqual({ status: "unavailable" });
 
     expect(reportRelatedNotesOperationalErrorMock).toHaveBeenCalledWith({
       actorUserId: authenticatedUserId,
@@ -771,7 +782,7 @@ describe("getRelatedNotes", () => {
         id: executionClaimId,
         status: "running",
       },
-      recommendationQuota: null,
+      recommendationQuota: { status: "not_applicable" },
       relatedNotes: [],
     });
     expect(reportRelatedNotesOperationalErrorMock).toHaveBeenCalledWith({
@@ -819,7 +830,7 @@ describe("getRelatedNotes", () => {
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
       latestRecommendationExecution: null,
-      recommendationQuota: null,
+      recommendationQuota: { status: "unavailable" },
       relatedNotes: [],
     });
 
@@ -857,7 +868,7 @@ describe("getRelatedNotes", () => {
 
     const result = await getRelatedNotes(noteId);
 
-    expect(result.recommendationQuota).toBeNull();
+    expect(result.recommendationQuota).toEqual({ status: "unavailable" });
 
     expect(logErrorMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -890,7 +901,7 @@ describe("getRelatedNotes", () => {
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
       latestRecommendationExecution: null,
-      recommendationQuota: null,
+      recommendationQuota: { status: "unavailable" },
       relatedNotes: [],
     });
     expect(reportRelatedNotesOperationalErrorMock).toHaveBeenCalledWith({
@@ -930,7 +941,7 @@ describe("getRelatedNotes", () => {
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
       latestRecommendationExecution: null,
-      recommendationQuota: null,
+      recommendationQuota: { status: "unavailable" },
       relatedNotes: [],
     });
     expect(callsFor("note_related_notes")).toEqual([]);

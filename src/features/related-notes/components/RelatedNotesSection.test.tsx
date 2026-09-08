@@ -72,6 +72,15 @@ type RecommendationQuota = {
   userUsed: number;
 };
 
+/** Related Notes 컴포넌트 테스트용 quota 조회 상태입니다. */
+type RecommendationQuotaState =
+  | {
+      status: "available";
+      quota: RecommendationQuota;
+    }
+  | { status: "not_applicable" }
+  | { status: "unavailable" };
+
 type MockRelatedNotesSectionDataOptions = {
   hasRunningRecommendationExecution?: boolean;
   hasFailedRecommendationExecution?: boolean;
@@ -80,21 +89,25 @@ type MockRelatedNotesSectionDataOptions = {
     status: ExecutionStatus;
   } | null;
   isRecommendationPolling?: boolean;
-  recommendationQuota?: RecommendationQuota | null;
+  recommendationQuota?: RecommendationQuotaState;
+  relatedNotes?: Array<{ noteId: string; title: string }>;
 };
 
 /** 필요한 quota 필드만 덮어쓸 수 있는 기본 테스트 값을 만듭니다. */
 function createRecommendationQuota(
   overrides: Partial<RecommendationQuota> = {},
-): RecommendationQuota {
+): RecommendationQuotaState {
   return {
-    canRequestForNote: true,
-    isNoteLimitReached: false,
-    isUserLimitReached: false,
-    noteLimit: 1,
-    userLimit: 10,
-    userUsed: 0,
-    ...overrides,
+    status: "available",
+    quota: {
+      canRequestForNote: true,
+      isNoteLimitReached: false,
+      isUserLimitReached: false,
+      noteLimit: 1,
+      userLimit: 10,
+      userUsed: 0,
+      ...overrides,
+    },
   };
 }
 
@@ -103,7 +116,8 @@ function mockRelatedNotesSectionData({
   hasFailedRecommendationExecution = false,
   latestRecommendationExecution = null,
   isRecommendationPolling = false,
-  recommendationQuota = null,
+  recommendationQuota = { status: "not_applicable" },
+  relatedNotes = [],
 }: MockRelatedNotesSectionDataOptions = {}) {
   useRelatedNotesMock.mockReturnValue({
     data: {
@@ -111,7 +125,7 @@ function mockRelatedNotesSectionData({
       hasRunningRecommendationExecution,
       latestRecommendationExecution,
       recommendationQuota,
-      relatedNotes: [],
+      relatedNotes,
     },
     isError: false,
     isLoading: false,
@@ -456,9 +470,9 @@ describe("RelatedNotesSection", () => {
     expect(screen.getByRole("button", { name: "AI 추천" })).toBeEnabled();
   });
 
-  it("recommendationQuota가 null이면 일일 추천 상태를 표시하지 않는다", () => {
+  it("ADMIN quota 미적용 상태는 추천 버튼을 막거나 일일 추천 상태를 표시하지 않는다", () => {
     mockRelatedNotesSectionData({
-      recommendationQuota: null,
+      recommendationQuota: { status: "not_applicable" },
     });
 
     render(<RelatedNotesSection noteId={noteId} />);
@@ -467,6 +481,29 @@ describe("RelatedNotesSection", () => {
     expect(screen.queryByText(/오늘 추천 완료/)).not.toBeInTheDocument();
     expect(screen.queryByText(/오늘 할당량 소진/)).not.toBeInTheDocument();
     expect(screen.queryByText(/오늘 \d+\/10회/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "AI 추천" })).toBeEnabled();
+  });
+
+  it("일반 사용자 quota를 확인하지 못하면 목록을 유지하고 추천 버튼을 비활성화한다", () => {
+    mockRelatedNotesSectionData({
+      recommendationQuota: { status: "unavailable" },
+      relatedNotes: [
+        {
+          noteId: "22222222-2222-4222-8222-222222222222",
+          title: "기존 관련 노트",
+        },
+      ],
+    });
+
+    render(<RelatedNotesSection noteId={noteId} />);
+
+    expect(screen.getByText("기존 관련 노트")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "AI 추천" })).toBeDisabled();
+    expect(
+      screen.getByText(
+        "AI 추천 가능 여부를 확인하지 못했습니다. 잠시 후 다시 시도해주세요.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("추천 요청 또는 실행 중에는 페이지 이탈 guard를 활성화한다", () => {
