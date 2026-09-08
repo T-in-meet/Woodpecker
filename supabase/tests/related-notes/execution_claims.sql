@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(33);
+SELECT plan(39);
 
 
 -- ============================================================================
@@ -16,7 +16,7 @@ SELECT plan(33);
 --   - failed Claim 이후 재실행 허용
 --   - succeeded Claim 이후 동일 version 재실행 차단
 --   - 오래된 running Claim의 stale 처리
---   - 사용자별 Note 단위 일일 실행 제한
+--   - 사용자별 Note 단위 및 사용자 전체 일일 실행 제한
 --   - ADMIN의 일일 실행 제한 우회
 --   - 이메일 미인증 사용자 실행 차단
 --
@@ -25,6 +25,8 @@ SELECT set_config('test.related_note_claims_user_id', gen_random_uuid()::text, t
 SELECT set_config('test.related_note_claims_other_user_id', gen_random_uuid()::text, true);
 SELECT set_config('test.related_note_claims_admin_user_id', gen_random_uuid()::text, true);
 SELECT set_config('test.related_note_claims_unverified_user_id', gen_random_uuid()::text, true);
+SELECT set_config('test.related_note_claims_global_quota_user_id', gen_random_uuid()::text, true);
+SELECT set_config('test.related_note_claims_global_stale_user_id', gen_random_uuid()::text, true);
 
 SELECT set_config('test.related_note_claims_note_id', gen_random_uuid()::text, true);
 SELECT set_config('test.related_note_claims_other_note_id', gen_random_uuid()::text, true);
@@ -94,6 +96,18 @@ VALUES
         current_setting('test.related_note_claims_unverified_user_id')::uuid,
         'related-note-claims-unverified@example.com',
         NULL,
+        '{}'::jsonb
+    ),
+    (
+        current_setting('test.related_note_claims_global_quota_user_id')::uuid,
+        'related-note-claims-global-quota@example.com',
+        now(),
+        '{}'::jsonb
+    ),
+    (
+        current_setting('test.related_note_claims_global_stale_user_id')::uuid,
+        'related-note-claims-global-stale@example.com',
+        now(),
         '{}'::jsonb
     );
 
@@ -183,6 +197,47 @@ VALUES
         'Related Note Claim Cleanup Content',
         0
     );
+
+-- 사용자 전체 quota와 타 Note stale 정리를 독립적으로 검증할 Note를 준비합니다.
+INSERT INTO public.notes (
+    user_id,
+    title,
+    content,
+    review_round
+)
+SELECT
+    current_setting('test.related_note_claims_global_quota_user_id')::uuid,
+    format('Related Note Global Quota %s', "series"),
+    format('Related Note Global Quota Content %s', "series"),
+    0
+FROM generate_series(1, 12) AS "series";
+
+INSERT INTO public.notes (
+    user_id,
+    title,
+    content,
+    review_round
+)
+SELECT
+    current_setting('test.related_note_claims_global_stale_user_id')::uuid,
+    format('Related Note Global Stale %s', "series"),
+    format('Related Note Global Stale Content %s', "series"),
+    0
+FROM generate_series(1, 11) AS "series";
+
+-- ADMIN의 사용자 전체 quota 우회를 검증할 다른 Note들을 준비합니다.
+INSERT INTO public.notes (
+    user_id,
+    title,
+    content,
+    review_round
+)
+SELECT
+    current_setting('test.related_note_claims_admin_user_id')::uuid,
+    format('Related Note Admin Quota %s', "series"),
+    format('Related Note Admin Quota Content %s', "series"),
+    0
+FROM generate_series(1, 10) AS "series";
 
 -- ADMIN 사용자는 일반 사용자와 달리 일일 실행 제한을 적용받지 않습니다.
 UPDATE public.profiles
@@ -863,8 +918,8 @@ SELECT is(
 -- Daily quota behavior
 -- ============================================================================
 --
--- 일반 사용자의 일일 실행 제한은 사용자 전체가 아니라
--- user + note 단위로 계산합니다.
+-- 일반 사용자의 일일 실행 제한은 user + note 단위 하루 1회 정책을 유지하면서,
+-- 여러 Note를 합산한 사용자 전체 하루 10회 정책도 함께 적용합니다.
 --
 -- quota에는 running / succeeded Claim만 포함하고,
 -- failed / stale Claim은 포함하지 않습니다.
@@ -905,13 +960,11 @@ SELECT is(
 
 
 -- ----------------------------------------------------------------------------
--- 같은 사용자의 다른 Note는 quota를 공유하지 않음
+-- 같은 사용자의 다른 Note는 Note별 quota를 독립적으로 사용함
 -- ----------------------------------------------------------------------------
 --
--- 바로 위 Note는 이미 limit=1에 도달했지만,
--- quota는 user + note 단위이므로 같은 사용자의 다른 Note에는 영향을 주지 않아야 합니다.
---
--- 만약 quota가 다시 사용자 전체 단위로 변경된다면 이 테스트가 실패합니다.
+-- 바로 위 Note는 이미 Note별 limit=1에 도달했지만, 사용자 전체 10회 한도에
+-- 도달하기 전에는 같은 사용자의 다른 Note가 자체 1회를 사용할 수 있어야 합니다.
 --
 
 SELECT *
@@ -930,7 +983,293 @@ FROM public.claim_related_note_recommendation_execution(
 SELECT is(
     :'test_related_note_claims_quota_other_note_status'::text,
     'claimed',
-    'daily execution limit should be scoped independently per note'
+    'another note should use its own per-note quota before the user-wide limit'
+);
+
+
+-- ----------------------------------------------------------------------------
+-- KST 기준 사용자 전체 quota
+-- ----------------------------------------------------------------------------
+--
+-- 서로 다른 Note의 오늘 running 5개와 succeeded 4개를 준비합니다.
+-- failed / stale Claim과 KST 오늘 시작 직전의 succeeded Claim은 사용자 전체 quota에서
+-- 제외되어야 하므로, 10번째 오늘 Claim은 허용되고 11번째는 차단되어야 합니다.
+--
+-- 이 경계 테스트는 사용자 전체 집계가 Note별로 분리되거나 UTC 날짜를 사용하거나,
+-- failed / stale을 포함하면 실패합니다.
+--
+
+INSERT INTO public.related_note_recommendation_execution_claims (
+    user_id,
+    note_id,
+    source_updated_at,
+    status,
+    claimed_at,
+    completed_at
+)
+SELECT
+    current_setting('test.related_note_claims_global_quota_user_id')::uuid,
+    "notes"."id",
+    "notes"."updated_at",
+    CASE
+        WHEN "notes"."title" IN (
+            'Related Note Global Quota 1',
+            'Related Note Global Quota 2',
+            'Related Note Global Quota 3',
+            'Related Note Global Quota 4',
+            'Related Note Global Quota 5'
+        ) THEN 'running'
+        ELSE 'succeeded'
+    END,
+    clock_timestamp(),
+    CASE
+        WHEN "notes"."title" IN (
+            'Related Note Global Quota 1',
+            'Related Note Global Quota 2',
+            'Related Note Global Quota 3',
+            'Related Note Global Quota 4',
+            'Related Note Global Quota 5'
+        ) THEN NULL
+        ELSE clock_timestamp()
+    END
+FROM public.notes AS "notes"
+WHERE "notes"."user_id" = current_setting(
+        'test.related_note_claims_global_quota_user_id'
+    )::uuid
+  AND "notes"."title" IN (
+      'Related Note Global Quota 1',
+      'Related Note Global Quota 2',
+      'Related Note Global Quota 3',
+      'Related Note Global Quota 4',
+      'Related Note Global Quota 5',
+      'Related Note Global Quota 6',
+      'Related Note Global Quota 7',
+      'Related Note Global Quota 8',
+      'Related Note Global Quota 9'
+  );
+
+-- failed와 stale은 오늘 생성되어도 사용자 전체 quota를 소비하지 않아야 합니다.
+INSERT INTO public.related_note_recommendation_execution_claims (
+    user_id,
+    note_id,
+    source_updated_at,
+    status,
+    claimed_at,
+    completed_at
+)
+SELECT
+    current_setting('test.related_note_claims_global_quota_user_id')::uuid,
+    "notes"."id",
+    "notes"."updated_at" - "excluded"."version_offset",
+    "excluded"."status",
+    clock_timestamp(),
+    clock_timestamp()
+FROM public.notes AS "notes"
+CROSS JOIN (
+    VALUES
+        ('failed'::text, interval '1 second'),
+        ('stale'::text, interval '2 seconds')
+) AS "excluded"("status", "version_offset")
+WHERE "notes"."user_id" = current_setting(
+        'test.related_note_claims_global_quota_user_id'
+    )::uuid
+  AND "notes"."title" = 'Related Note Global Quota 10';
+
+-- KST 자정 직전의 성공 Claim은 이전 날짜 사용량이므로 오늘 quota에서 제외합니다.
+INSERT INTO public.related_note_recommendation_execution_claims (
+    user_id,
+    note_id,
+    source_updated_at,
+    status,
+    claimed_at,
+    completed_at
+)
+SELECT
+    current_setting('test.related_note_claims_global_quota_user_id')::uuid,
+    "notes"."id",
+    "notes"."updated_at",
+    'succeeded',
+    (
+        (clock_timestamp() AT TIME ZONE 'Asia/Seoul')::date::timestamp
+        AT TIME ZONE 'Asia/Seoul'
+    ) - interval '1 second',
+    clock_timestamp()
+FROM public.notes AS "notes"
+WHERE "notes"."user_id" = current_setting(
+        'test.related_note_claims_global_quota_user_id'
+    )::uuid
+  AND "notes"."title" = 'Related Note Global Quota 10';
+
+-- 오늘 9회 사용 상태에서는 서로 다른 Note의 10번째 Claim을 허용해야 합니다.
+SELECT *
+FROM public.claim_related_note_recommendation_execution(
+    current_setting('test.related_note_claims_global_quota_user_id')::uuid,
+    (
+        SELECT id
+        FROM public.notes
+        WHERE user_id = current_setting(
+                'test.related_note_claims_global_quota_user_id'
+            )::uuid
+          AND title = 'Related Note Global Quota 11'
+    ),
+    (
+        SELECT updated_at
+        FROM public.notes
+        WHERE user_id = current_setting(
+                'test.related_note_claims_global_quota_user_id'
+            )::uuid
+          AND title = 'Related Note Global Quota 11'
+    ),
+    1
+)
+\gset test_related_note_claims_global_tenth_
+
+SELECT is(
+    :'test_related_note_claims_global_tenth_status'::text,
+    'claimed',
+    'the tenth user-wide claim should be allowed with KST and status filtering'
+);
+
+-- 오늘 10회 사용 상태에서는 새 Note의 11번째 Claim을 같은 기존 결과로 차단해야 합니다.
+SELECT *
+FROM public.claim_related_note_recommendation_execution(
+    current_setting('test.related_note_claims_global_quota_user_id')::uuid,
+    (
+        SELECT id
+        FROM public.notes
+        WHERE user_id = current_setting(
+                'test.related_note_claims_global_quota_user_id'
+            )::uuid
+          AND title = 'Related Note Global Quota 12'
+    ),
+    (
+        SELECT updated_at
+        FROM public.notes
+        WHERE user_id = current_setting(
+                'test.related_note_claims_global_quota_user_id'
+            )::uuid
+          AND title = 'Related Note Global Quota 12'
+    ),
+    1
+)
+\gset test_related_note_claims_global_eleventh_
+
+SELECT is(
+    :'test_related_note_claims_global_eleventh_status'::text,
+    'daily_limit_exceeded',
+    'the eleventh claim across notes should exceed the user-wide daily limit'
+);
+
+
+-- ----------------------------------------------------------------------------
+-- 사용자 전체 quota 계산 전 타 Note 만료 Claim 정리
+-- ----------------------------------------------------------------------------
+--
+-- 오늘 succeeded 9개와 다른 Note의 만료 running 1개를 준비합니다.
+-- 새 Note를 claim하기 전에 타 Note의 running Claim까지 stale로 정리하면 10번째
+-- Claim이 허용되고, 현재 Note만 정리하면 사용자 전체 quota에 의해 차단됩니다.
+--
+
+INSERT INTO public.related_note_recommendation_execution_claims (
+    user_id,
+    note_id,
+    source_updated_at,
+    status,
+    claimed_at,
+    completed_at
+)
+SELECT
+    current_setting('test.related_note_claims_global_stale_user_id')::uuid,
+    "notes"."id",
+    "notes"."updated_at",
+    'succeeded',
+    clock_timestamp(),
+    clock_timestamp()
+FROM public.notes AS "notes"
+WHERE "notes"."user_id" = current_setting(
+        'test.related_note_claims_global_stale_user_id'
+    )::uuid
+  AND "notes"."title" IN (
+      'Related Note Global Stale 1',
+      'Related Note Global Stale 2',
+      'Related Note Global Stale 3',
+      'Related Note Global Stale 4',
+      'Related Note Global Stale 5',
+      'Related Note Global Stale 6',
+      'Related Note Global Stale 7',
+      'Related Note Global Stale 8',
+      'Related Note Global Stale 9'
+  );
+
+INSERT INTO public.related_note_recommendation_execution_claims (
+    id,
+    user_id,
+    note_id,
+    source_updated_at,
+    status,
+    claimed_at
+)
+SELECT
+    gen_random_uuid(),
+    current_setting('test.related_note_claims_global_stale_user_id')::uuid,
+    "notes"."id",
+    "notes"."updated_at",
+    'running',
+    clock_timestamp() - interval '4 minutes'
+FROM public.notes AS "notes"
+WHERE "notes"."user_id" = current_setting(
+        'test.related_note_claims_global_stale_user_id'
+    )::uuid
+  AND "notes"."title" = 'Related Note Global Stale 10'
+RETURNING id
+\gset test_related_note_claims_global_expired_
+
+SELECT *
+FROM public.claim_related_note_recommendation_execution(
+    current_setting('test.related_note_claims_global_stale_user_id')::uuid,
+    (
+        SELECT id
+        FROM public.notes
+        WHERE user_id = current_setting(
+                'test.related_note_claims_global_stale_user_id'
+            )::uuid
+          AND title = 'Related Note Global Stale 11'
+    ),
+    (
+        SELECT updated_at
+        FROM public.notes
+        WHERE user_id = current_setting(
+                'test.related_note_claims_global_stale_user_id'
+            )::uuid
+          AND title = 'Related Note Global Stale 11'
+    ),
+    1
+)
+\gset test_related_note_claims_after_global_stale_
+
+SELECT is(
+    :'test_related_note_claims_after_global_stale_status'::text,
+    'claimed',
+    'expired running claims on another note should be removed before user-wide quota'
+);
+
+SELECT is(
+    (
+        SELECT status
+        FROM public.related_note_recommendation_execution_claims
+        WHERE id = :'test_related_note_claims_global_expired_id'::uuid
+    ),
+    'stale',
+    'user-wide stale cleanup should update an expired claim from another note'
+);
+
+SELECT ok(
+    (
+        SELECT completed_at IS NOT NULL
+        FROM public.related_note_recommendation_execution_claims
+        WHERE id = :'test_related_note_claims_global_expired_id'::uuid
+    ),
+    'user-wide stale cleanup should complete an expired claim from another note'
 );
 
 
@@ -1006,9 +1345,33 @@ SELECT is(
 -- ----------------------------------------------------------------------------
 --
 -- ADMIN은 Related Notes 일일 실행 제한을 적용받지 않습니다.
--- 기존 succeeded Claim이 limit만큼 존재해도 새 실행을 claim할 수 있어야 합니다.
+-- 다른 Note에 사용자 전체 한도만큼 Claim이 있고 현재 Note도 Note별 한도에
+-- 도달했더라도 새 실행을 claim할 수 있어야 합니다.
 --
 
+-- 다른 Note의 오늘 성공 Claim 10개로 사용자 전체 quota를 채웁니다.
+INSERT INTO public.related_note_recommendation_execution_claims (
+    user_id,
+    note_id,
+    source_updated_at,
+    status,
+    claimed_at,
+    completed_at
+)
+SELECT
+    current_setting('test.related_note_claims_admin_user_id')::uuid,
+    "notes"."id",
+    "notes"."updated_at",
+    'succeeded',
+    clock_timestamp(),
+    clock_timestamp()
+FROM public.notes AS "notes"
+WHERE "notes"."user_id" = current_setting(
+        'test.related_note_claims_admin_user_id'
+    )::uuid
+  AND "notes"."title" LIKE 'Related Note Admin Quota %';
+
+-- 현재 Note의 이전 version 성공 Claim으로 Note별 quota도 채웁니다.
 INSERT INTO public.related_note_recommendation_execution_claims (
     user_id,
     note_id,
@@ -1046,7 +1409,27 @@ FROM public.claim_related_note_recommendation_execution(
 SELECT is(
     :'test_related_note_claims_admin_status'::text,
     'claimed',
-    'admin should bypass daily execution claim limits'
+    'admin should bypass per-note and user-wide daily execution claim limits'
+);
+
+-- ADMIN도 같은 source version을 다시 요청하면 기존 Claim을 duplicate로 반환해야 합니다.
+SELECT *
+FROM public.claim_related_note_recommendation_execution(
+    current_setting('test.related_note_claims_admin_user_id')::uuid,
+    current_setting('test.related_note_claims_admin_note_id')::uuid,
+    (
+        SELECT updated_at
+        FROM public.notes
+        WHERE id = current_setting('test.related_note_claims_admin_note_id')::uuid
+    ),
+    1
+)
+\gset test_related_note_claims_admin_duplicate_
+
+SELECT is(
+    :'test_related_note_claims_admin_duplicate_status'::text,
+    'duplicate',
+    'admin should keep the existing source version duplicate control'
 );
 
 
