@@ -341,6 +341,12 @@ describe("RelatedNotesSection", () => {
 
     expect(screen.getByText("추천 가능")).toBeInTheDocument();
     expect(screen.queryByText(/오늘 \d+\/10회/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "AI 관련 노트 추천은 노트마다 하루 1회 사용할 수 있으며 매일 자정(KST)에 초기화됩니다.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/사용자당 하루 최대/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "AI 추천" })).toBeEnabled();
   });
 

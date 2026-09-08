@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(42);
+SELECT plan(43);
 
 
 -- ============================================================================
@@ -1236,6 +1236,31 @@ SELECT is(
     :'test_related_note_claims_global_eleventh_status'::text,
     'daily_limit_exceeded',
     'the eleventh claim across notes should exceed the user-wide daily limit'
+);
+
+-- legacy Claim은 구 앱의 Note 단위 계약을 유지해 사용자 전체 10회 이후에도 허용해야 합니다.
+SELECT is(
+    (
+        SELECT claim.status
+        FROM public.claim_related_note_recommendation_execution(
+            current_setting('test.related_note_claims_global_quota_user_id')::uuid,
+            (
+                SELECT id
+                FROM public.notes
+                WHERE user_id = current_setting('test.related_note_claims_global_quota_user_id')::uuid
+                  AND title = 'Related Note Global Quota 12'
+            ),
+            (
+                SELECT updated_at
+                FROM public.notes
+                WHERE user_id = current_setting('test.related_note_claims_global_quota_user_id')::uuid
+                  AND title = 'Related Note Global Quota 12'
+            ),
+            1
+        ) AS claim
+    ),
+    'claimed',
+    'legacy claim should preserve note-only quota after ten user-wide claims'
 );
 
 

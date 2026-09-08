@@ -84,6 +84,21 @@ BEGIN
     )
   );
 
+  /*
+   * legacy Claim과 같은 Note + KST 날짜 lock도 획득하여 구·신 앱 요청 사이의
+   * Note별 quota count와 Claim INSERT를 직렬화합니다.
+   */
+  PERFORM "pg_advisory_xact_lock"(
+    "hashtextextended"(
+      "p_user_id"::text
+      || '|related-notes-execution|'
+      || "p_note_id"::text
+      || '|'
+      || "v_kst_date"::text,
+      0
+    )
+  );
+
   -- 같은 Note version의 duplicate 판정을 사용자 lock 안에서 직렬화합니다.
   PERFORM "pg_advisory_xact_lock"(
     "hashtextextended"(
@@ -191,31 +206,6 @@ BEGIN
 
   RETURN QUERY SELECT 'claimed'::text, "v_claim_id";
 END;
-$$;
-
-/*
- * 구 앱이 사용하는 기존 Claim signature를 유지합니다.
- * Note 한도는 기존 인자를 전달하고 사용자 전체 한도는 기존 정책값 10을 적용합니다.
- */
-CREATE OR REPLACE FUNCTION "public"."claim_related_note_recommendation_execution"(
-  "p_user_id" "uuid",
-  "p_note_id" "uuid",
-  "p_source_updated_at" timestamp with time zone,
-  "p_daily_recommendation_limit" integer
-)
-RETURNS TABLE ("status" text, "claim_id" "uuid")
-LANGUAGE sql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT *
-  FROM "public"."claim_related_note_recommendation_execution_v2"(
-    "p_user_id",
-    "p_note_id",
-    "p_source_updated_at",
-    "p_daily_recommendation_limit",
-    10
-  );
 $$;
 
 CREATE OR REPLACE FUNCTION "public"."cleanup_related_note_recommendation_stale_execution_claims"(
@@ -465,7 +455,7 @@ COMMENT ON FUNCTION "public"."claim_related_note_recommendation_execution"(
   timestamp with time zone,
   integer
 ) IS
-  '구 앱 호환용 Related Notes Claim wrapper이며 기존 Note 한도와 사용자 전체 기본 한도 10을 v2 RPC에 전달합니다.';
+  '구 앱 호환용 Related Notes Claim RPC이며 기존 Note 단위 quota 계약을 유지합니다.';
 
 COMMENT ON FUNCTION "public"."cleanup_related_note_recommendation_stale_execution_claims"(
   "uuid"

@@ -141,6 +141,9 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
   const hasReachedNoteRecommendationLimit =
     recommendationQuota?.isNoteLimitReached === true;
 
+  // 구 DB fallback에서는 사용자 전체 quota가 적용되지 않습니다.
+  const isLegacyRecommendationQuota = recommendationQuota?.userUsed === null;
+
   /*
    * 실행 요청 중이거나 실행 상태를 추적 중이거나,
    * DB에서 running 상태가 확인됐거나,
@@ -227,7 +230,9 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
             <FeatureInfoPopover ariaLabel="관련 노트 안내">
               <div className="space-y-2">
                 <p>
-                  {`AI 관련 노트 추천은 노트마다 하루 ${recommendationQuota?.noteLimit ?? RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE}회, 사용자당 하루 최대 ${recommendationQuota?.userLimit ?? RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT}회 사용할 수 있으며 매일 자정(KST)에 초기화됩니다.`}
+                  {isLegacyRecommendationQuota
+                    ? `AI 관련 노트 추천은 노트마다 하루 ${recommendationQuota.noteLimit}회 사용할 수 있으며 매일 자정(KST)에 초기화됩니다.`
+                    : `AI 관련 노트 추천은 노트마다 하루 ${recommendationQuota?.noteLimit ?? RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE}회, 사용자당 하루 최대 ${recommendationQuota?.userLimit ?? RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT}회 사용할 수 있으며 매일 자정(KST)에 초기화됩니다.`}
                 </p>
               </div>
             </FeatureInfoPopover>
