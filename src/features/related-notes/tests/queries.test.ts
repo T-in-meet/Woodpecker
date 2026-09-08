@@ -10,7 +10,10 @@ import { logError } from "@/lib/logger";
 import { createServerComponentClient } from "@/lib/supabase/server";
 import { createSupabaseQueryMock } from "@/tests/supabaseQueryMock";
 
-import { RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE } from "../constants/ai";
+import {
+  RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
+  RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
+} from "../constants/ai";
 import {
   getRelatedNoteCandidates,
   getRelatedNoteRecommendationExecutionClaim,
@@ -50,6 +53,29 @@ const secondRelationId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const sourceUpdatedAt = "2026-08-28T09:00:00.000Z";
 const executionClaimId = "88888888-8888-4888-8888-888888888888";
 
+/** 정상적인 기본 Related Notes quota RPC row입니다. */
+const defaultRecommendationQuotaRow = {
+  can_request_for_note: true,
+  is_note_limit_reached: false,
+  is_user_limit_reached: false,
+  note_limit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
+  user_limit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
+  user_used: 0,
+};
+
+/** query 계층이 변환한 정상적인 기본 quota 결과입니다. */
+const defaultRecommendationQuota = {
+  status: "available",
+  quota: {
+    canRequestForNote: true,
+    isNoteLimitReached: false,
+    isUserLimitReached: false,
+    noteLimit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
+    userLimit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
+    userUsed: 0,
+  },
+} as const;
+
 /** 인증된 사용자를 반환하는 auth.getUser mock을 만듭니다. */
 function createAuthMock() {
   return {
@@ -85,12 +111,12 @@ function createUserProfileResult() {
 /**
  * getRelatedNotes에서 사용하는 RPC mock을 만듭니다.
  *
- * stale cleanup은 실행 상태 조회 전에 항상 호출되고,
- * 일반 사용자의 경우에만 그 뒤 일일 사용량 RPC가 호출됩니다.
+ * 일반 사용자는 quota RPC에서 stale cleanup까지 수행하고,
+ * quota를 조회하지 않는 경로만 별도 cleanup RPC를 호출합니다.
  */
 function createRelatedNotesRpcMock({
   cleanupError = null,
-  usageData = 0,
+  usageData = [defaultRecommendationQuotaRow],
   usageError = null,
 }: {
   cleanupError?: unknown;
@@ -105,7 +131,7 @@ function createRelatedNotesRpcMock({
       });
     }
 
-    if (name === "get_related_note_recommendation_daily_usage") {
+    if (name === "get_related_note_recommendation_daily_usage_v2") {
       return Promise.resolve({
         data: usageData,
         error: usageError,
@@ -128,7 +154,7 @@ describe("getRelatedNotes", () => {
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
       latestRecommendationExecution: null,
-      recommendationUsage: null,
+      recommendationQuota: { status: "unavailable" },
       relatedNotes: [],
     });
     expect(createClientMock).not.toHaveBeenCalled();
@@ -243,16 +269,18 @@ describe("getRelatedNotes", () => {
     ]);
     expect(executionCalls).toContainEqual(["limit", [1]]);
 
-    expect(rpcMock).toHaveBeenCalledWith(
+    expect(rpcMock).not.toHaveBeenCalledWith(
       "cleanup_related_note_recommendation_stale_execution_claims",
-      {
-        p_note_id: noteId,
-      },
+      expect.anything(),
     );
     expect(rpcMock).toHaveBeenCalledWith(
-      "get_related_note_recommendation_daily_usage",
+      "get_related_note_recommendation_daily_usage_v2",
       {
+        p_note_daily_recommendation_limit:
+          RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
         p_note_id: noteId,
+        p_user_daily_recommendation_limit:
+          RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
       },
     );
 
@@ -263,10 +291,7 @@ describe("getRelatedNotes", () => {
         id: executionClaimId,
         status: "running",
       },
-      recommendationUsage: {
-        used: 0,
-        limit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
-      },
+      recommendationQuota: defaultRecommendationQuota,
       relatedNotes: [
         {
           relationId: firstRelationId,
@@ -326,10 +351,7 @@ describe("getRelatedNotes", () => {
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
       latestRecommendationExecution: null,
-      recommendationUsage: {
-        used: 0,
-        limit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
-      },
+      recommendationQuota: defaultRecommendationQuota,
       relatedNotes: [
         {
           relationId: firstRelationId,
@@ -374,10 +396,7 @@ describe("getRelatedNotes", () => {
         id: executionClaimId,
         status: "failed",
       },
-      recommendationUsage: {
-        used: 0,
-        limit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
-      },
+      recommendationQuota: defaultRecommendationQuota,
       relatedNotes: [],
     });
   });
@@ -425,7 +444,16 @@ describe("getRelatedNotes", () => {
       },
     });
 
-    const rpcMock = createRelatedNotesRpcMock({ usageData: 1 });
+    const rpcMock = createRelatedNotesRpcMock({
+      usageData: [
+        {
+          ...defaultRecommendationQuotaRow,
+          can_request_for_note: false,
+          is_note_limit_reached: true,
+          user_used: 1,
+        },
+      ],
+    });
 
     createClientMock.mockResolvedValue({
       ...supabase,
@@ -436,16 +464,176 @@ describe("getRelatedNotes", () => {
     const result = await getRelatedNotes(noteId);
 
     expect(rpcMock).toHaveBeenCalledWith(
+      "get_related_note_recommendation_daily_usage_v2",
+      {
+        p_note_daily_recommendation_limit:
+          RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
+        p_note_id: noteId,
+        p_user_daily_recommendation_limit:
+          RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
+      },
+    );
+
+    expect(result.recommendationQuota).toEqual({
+      status: "available",
+      quota: {
+        canRequestForNote: false,
+        isNoteLimitReached: true,
+        isUserLimitReached: false,
+        noteLimit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
+        userLimit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
+        userUsed: 1,
+      },
+    });
+  });
+
+  it("구 DB에 quota v2가 없으면 기존 quota RPC 결과를 사용한다", async () => {
+    const { supabase } = createSupabaseQueryMock({
+      notes: createCurrentNoteResult(),
+      profiles: createUserProfileResult(),
+      note_related_notes: {
+        data: [],
+      },
+      related_note_recommendation_execution_claims: {
+        data: [],
+      },
+    });
+    const rpcMock = vi.fn().mockImplementation((name: string) => {
+      if (name === "get_related_note_recommendation_daily_usage_v2") {
+        return Promise.resolve({
+          data: null,
+          error: {
+            code: "PGRST202",
+            message: "Could not find the function in the schema cache",
+          },
+        });
+      }
+
+      if (name === "get_related_note_recommendation_daily_usage") {
+        return Promise.resolve({
+          data: 1,
+          error: null,
+        });
+      }
+
+      throw new Error(`Unexpected RPC: ${name}`);
+    });
+
+    createClientMock.mockResolvedValue({
+      ...supabase,
+      auth: createAuthMock(),
+      rpc: rpcMock,
+    } as never);
+
+    const result = await getRelatedNotes(noteId);
+
+    expect(rpcMock).toHaveBeenNthCalledWith(
+      2,
       "get_related_note_recommendation_daily_usage",
       {
         p_note_id: noteId,
       },
     );
-
-    expect(result.recommendationUsage).toEqual({
-      used: 1,
-      limit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
+    expect(result.recommendationQuota).toEqual({
+      status: "available",
+      quota: {
+        canRequestForNote: false,
+        isNoteLimitReached: true,
+        isUserLimitReached: false,
+        noteLimit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
+        userLimit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
+        userUsed: null,
+      },
     });
+  });
+
+  it("quota v2의 실제 실행 오류는 기존 RPC로 재시도하지 않는다", async () => {
+    const { supabase } = createSupabaseQueryMock({
+      notes: createCurrentNoteResult(),
+      profiles: createUserProfileResult(),
+      note_related_notes: {
+        data: [],
+      },
+      related_note_recommendation_execution_claims: {
+        data: [],
+      },
+    });
+    const usageError = {
+      code: "P0001",
+      message: "note not found",
+    };
+    const rpcMock = createRelatedNotesRpcMock({ usageError });
+
+    createClientMock.mockResolvedValue({
+      ...supabase,
+      auth: createAuthMock(),
+      rpc: rpcMock,
+    } as never);
+
+    await getRelatedNotes(noteId);
+
+    expect(rpcMock).toHaveBeenCalledTimes(1);
+    expect(reportRelatedNotesOperationalErrorMock).toHaveBeenCalledWith(
+      expect.objectContaining({ error: usageError }),
+    );
+  });
+
+  it("일반 사용자는 quota cleanup이 끝난 뒤 execution Claim 상태를 조회한다", async () => {
+    const { supabase, callsFor } = createSupabaseQueryMock({
+      notes: createCurrentNoteResult(),
+      profiles: createUserProfileResult(),
+      note_related_notes: {
+        data: [],
+      },
+      related_note_recommendation_execution_claims: {
+        data: [],
+      },
+    });
+
+    let resolveQuota!: (value: {
+      data: (typeof defaultRecommendationQuotaRow)[];
+      error: null;
+    }) => void;
+
+    const rpcMock = vi.fn().mockImplementation((name: string) => {
+      if (name === "get_related_note_recommendation_daily_usage_v2") {
+        return new Promise((resolve) => {
+          resolveQuota = resolve;
+        });
+      }
+
+      throw new Error(`Unexpected RPC: ${name}`);
+    });
+
+    createClientMock.mockResolvedValue({
+      ...supabase,
+      auth: createAuthMock(),
+      rpc: rpcMock,
+    } as never);
+
+    const pendingResult = getRelatedNotes(noteId);
+
+    await vi.waitFor(() => {
+      expect(rpcMock).toHaveBeenCalledWith(
+        "get_related_note_recommendation_daily_usage_v2",
+        expect.anything(),
+      );
+    });
+
+    expect(callsFor("related_note_recommendation_execution_claims")).toEqual(
+      [],
+    );
+
+    resolveQuota({
+      data: [defaultRecommendationQuotaRow],
+      error: null,
+    });
+
+    await pendingResult;
+
+    expect(
+      callsFor("related_note_recommendation_execution_claims"),
+    ).not.toEqual([]);
   });
 
   it("ADMIN은 일일 사용량 RPC를 호출하지 않고 사용량을 반환하지 않는다", async () => {
@@ -481,11 +669,13 @@ describe("getRelatedNotes", () => {
       },
     );
     expect(rpcMock).not.toHaveBeenCalledWith(
-      "get_related_note_recommendation_daily_usage",
+      "get_related_note_recommendation_daily_usage_v2",
       expect.anything(),
     );
 
-    expect(result.recommendationUsage).toBeNull();
+    expect(result.recommendationQuota).toEqual({
+      status: "not_applicable",
+    });
   });
 
   it("사용자 역할 조회에 실패하면 운영 오류를 보고하고 사용량을 반환하지 않는다", async () => {
@@ -522,11 +712,11 @@ describe("getRelatedNotes", () => {
       },
     );
     expect(rpcMock).not.toHaveBeenCalledWith(
-      "get_related_note_recommendation_daily_usage",
+      "get_related_note_recommendation_daily_usage_v2",
       expect.anything(),
     );
 
-    expect(result.recommendationUsage).toBeNull();
+    expect(result.recommendationQuota).toEqual({ status: "unavailable" });
 
     expect(reportRelatedNotesOperationalErrorMock).toHaveBeenCalledWith({
       actorUserId: authenticatedUserId,
@@ -539,12 +729,16 @@ describe("getRelatedNotes", () => {
     });
   });
 
-  it("stale cleanup에 실패해도 운영 오류를 보고하고 Related Notes 조회를 계속한다", async () => {
+  it("ADMIN stale cleanup에 실패해도 운영 오류를 보고하고 Related Notes 조회를 계속한다", async () => {
     const cleanupError = new Error("stale cleanup failed");
 
     const { supabase } = createSupabaseQueryMock({
       notes: createCurrentNoteResult(),
-      profiles: createUserProfileResult(),
+      profiles: {
+        data: {
+          role: "ADMIN",
+        },
+      },
       note_related_notes: {
         data: [],
       },
@@ -583,10 +777,7 @@ describe("getRelatedNotes", () => {
         id: executionClaimId,
         status: "running",
       },
-      recommendationUsage: {
-        used: 0,
-        limit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
-      },
+      recommendationQuota: { status: "not_applicable" },
       relatedNotes: [],
     });
     expect(reportRelatedNotesOperationalErrorMock).toHaveBeenCalledWith({
@@ -634,7 +825,7 @@ describe("getRelatedNotes", () => {
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
       latestRecommendationExecution: null,
-      recommendationUsage: null,
+      recommendationQuota: { status: "unavailable" },
       relatedNotes: [],
     });
 
@@ -661,7 +852,7 @@ describe("getRelatedNotes", () => {
     });
 
     const rpcMock = createRelatedNotesRpcMock({
-      usageData: -1,
+      usageData: [{ ...defaultRecommendationQuotaRow, user_used: -1 }],
     });
 
     createClientMock.mockResolvedValue({
@@ -672,7 +863,7 @@ describe("getRelatedNotes", () => {
 
     const result = await getRelatedNotes(noteId);
 
-    expect(result.recommendationUsage).toBeNull();
+    expect(result.recommendationQuota).toEqual({ status: "unavailable" });
 
     expect(logErrorMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -705,7 +896,7 @@ describe("getRelatedNotes", () => {
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
       latestRecommendationExecution: null,
-      recommendationUsage: null,
+      recommendationQuota: { status: "unavailable" },
       relatedNotes: [],
     });
     expect(reportRelatedNotesOperationalErrorMock).toHaveBeenCalledWith({
@@ -745,7 +936,7 @@ describe("getRelatedNotes", () => {
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
       latestRecommendationExecution: null,
-      recommendationUsage: null,
+      recommendationQuota: { status: "unavailable" },
       relatedNotes: [],
     });
     expect(callsFor("note_related_notes")).toEqual([]);
@@ -789,10 +980,7 @@ describe("getRelatedNotes", () => {
         id: executionClaimId,
         status: "running",
       },
-      recommendationUsage: {
-        used: 0,
-        limit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
-      },
+      recommendationQuota: defaultRecommendationQuota,
       relatedNotes: [],
     });
     expect(reportRelatedNotesOperationalErrorMock).toHaveBeenCalledWith({
@@ -848,10 +1036,7 @@ describe("getRelatedNotes", () => {
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
       latestRecommendationExecution: null,
-      recommendationUsage: {
-        used: 0,
-        limit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
-      },
+      recommendationQuota: defaultRecommendationQuota,
       relatedNotes: [],
     });
     expect(logErrorMock).toHaveBeenCalledWith(
@@ -888,10 +1073,7 @@ describe("getRelatedNotes", () => {
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
       latestRecommendationExecution: null,
-      recommendationUsage: {
-        used: 0,
-        limit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
-      },
+      recommendationQuota: defaultRecommendationQuota,
       relatedNotes: [],
     });
     expect(reportRelatedNotesOperationalErrorMock).toHaveBeenCalledWith({
@@ -938,10 +1120,7 @@ describe("getRelatedNotes", () => {
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
       latestRecommendationExecution: null,
-      recommendationUsage: {
-        used: 0,
-        limit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
-      },
+      recommendationQuota: defaultRecommendationQuota,
       relatedNotes: [],
     });
     expect(logErrorMock).toHaveBeenCalledWith(

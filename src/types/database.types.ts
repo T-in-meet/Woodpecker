@@ -1514,6 +1514,19 @@ export type Database = {
           status: string;
         }[];
       };
+      claim_related_note_recommendation_execution_v2: {
+        Args: {
+          p_note_daily_recommendation_limit: number;
+          p_note_id: string;
+          p_source_updated_at: string;
+          p_user_daily_recommendation_limit: number;
+          p_user_id: string;
+        };
+        Returns: {
+          claim_id: string;
+          status: string;
+        }[];
+      };
       claim_review_grading: {
         Args: {
           p_content_hash: string;
@@ -1763,6 +1776,22 @@ export type Database = {
       get_related_note_recommendation_daily_usage: {
         Args: { p_note_id: string };
         Returns: number;
+      };
+      get_related_note_recommendation_daily_usage_v2: {
+        Args: {
+          p_note_daily_recommendation_limit: number;
+          p_note_id: string;
+          p_user_daily_recommendation_limit: number;
+        };
+        Returns: {
+          can_request_for_note: boolean;
+          is_note_limit_reached: boolean;
+          is_user_limit_reached: boolean;
+          note_limit: number;
+          note_used: number;
+          user_limit: number;
+          user_used: number;
+        }[];
       };
       increment_operational_error_occurrence: {
         Args: {

@@ -43,10 +43,11 @@ export const RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS = {
     "complete_recommendation_execution_claim",
 
   /*
-   * Related Notes 화면에서 현재 Note의 일일 AI 추천 사용량을 조회하는 작업입니다.
+   * Related Notes 화면에서 현재 Note의 일일 추천 가능 여부와
+   * 사용자의 전체 일일 AI 추천 사용량을 조회하는 작업입니다.
    *
-   * 실제 quota 판정은 execution claim RPC가 담당하며,
-   * 이 operation은 사용자에게 현재 사용량을 표시하기 위한 조회 실패를 기록합니다.
+   * 실제 실행 허용 여부의 최종 판정은 execution claim RPC가 담당하며,
+   * 이 operation은 화면에 표시할 quota 상태 조회 실패를 기록합니다.
    */
   GET_DAILY_USAGE: "get_daily_usage",
 } as const;
@@ -179,11 +180,11 @@ export const RELATED_NOTES_OPERATIONAL_ERROR_CODES = {
     "RELATED_NOTES_RECOMMENDATION_EXECUTION_CLAIM_COMPLETE_FAILED",
 
   /*
-   * Related Notes 일일 AI 추천 사용량을 조회하는 과정에서
+   * Related Notes 일일 AI 추천 quota 상태를 조회하는 과정에서
    * DB/RPC 호출 자체가 실패한 경우 기록하는 오류입니다.
    *
-   * 사용량 조회 실패는 Related Notes 자체의 조회를 중단시키지 않고,
-   * 화면에서는 사용량만 표시하지 않는 best-effort 오류로 처리합니다.
+   * quota 상태 조회 실패는 Related Notes 자체의 조회를 중단시키지 않고,
+   * 화면에서는 quota 상태만 표시하지 않는 best-effort 오류로 처리합니다.
    */
   DAILY_USAGE_LOAD_FAILED: "RELATED_NOTES_DAILY_USAGE_LOAD_FAILED",
 } as const;
