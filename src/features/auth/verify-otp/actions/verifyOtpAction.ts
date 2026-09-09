@@ -194,14 +194,6 @@ export async function verifyOtpAction(
     const existingSignupUser =
       purpose === "signup" ? await getUserByEmail(canonicalEmail) : null;
 
-    const hasPasswordLogin =
-      existingSignupUser !== null
-        ? await getHasPasswordLogin(existingSignupUser.id)
-        : false;
-
-    const shouldSetPasswordAfterSignup =
-      existingSignupUser !== null && !hasPasswordLogin;
-
     /**
      * Supabase OTP 인증 검증 수행
      *
@@ -250,6 +242,14 @@ export async function verifyOtpAction(
         formError: INVALID_OTP_ERROR_MESSAGE,
       };
     }
+
+    const hasPasswordLogin =
+      existingSignupUser !== null
+        ? await getHasPasswordLogin(existingSignupUser.id)
+        : false;
+
+    const shouldSetPasswordAfterSignup =
+      existingSignupUser !== null && !hasPasswordLogin;
 
     /**
      * OTP 인증 완료 로그

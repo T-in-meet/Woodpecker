@@ -8,14 +8,14 @@ const REDIRECT_ERROR = new Error("NEXT_REDIRECT");
 
 const {
   createClientMock,
-  getSessionMock,
+  getUserMock,
   updateUserMock,
   redirectMock,
   validateRedirectPathMock,
   getHasPasswordLoginMock,
 } = vi.hoisted(() => ({
   createClientMock: vi.fn(),
-  getSessionMock: vi.fn(),
+  getUserMock: vi.fn(),
   updateUserMock: vi.fn(),
   redirectMock: vi.fn(),
   validateRedirectPathMock: vi.fn(),
@@ -70,34 +70,38 @@ describe("setPasswordAction", () => {
     redirectMock.mockImplementation(() => {
       throw REDIRECT_ERROR;
     });
+
     createClientMock.mockResolvedValue({
       auth: {
-        getSession: getSessionMock,
+        getUser: getUserMock,
         updateUser: updateUserMock,
       },
     } as never);
-    getSessionMock.mockResolvedValue({
+
+    getUserMock.mockResolvedValue({
       data: {
-        session: {
-          user: {
-            app_metadata: { providers: ["google"] },
-            email: "oauth.user@example.com",
-            id: "oauth-user-id",
-          },
+        user: {
+          app_metadata: { providers: ["google"] },
+          email: "oauth.user@example.com",
+          id: "oauth-user-id",
         },
       },
+      error: null,
     });
+
     updateUserMock.mockResolvedValue({
       data: { user: {} },
       error: null,
     });
+
     getHasPasswordLoginMock.mockResolvedValue(false);
+
     validateRedirectPathMock.mockImplementation((value: unknown) =>
       typeof value === "string" ? value : ROUTES.MYPAGE,
     );
   });
 
-  it("세션이 있으면 현재 사용자에게 password를 설정하고 mypage로 redirect한다", async () => {
+  it("검증된 사용자가 있으면 현재 사용자에게 password를 설정하고 mypage로 redirect한다", async () => {
     await expect(
       setPasswordAction(
         null,
@@ -109,6 +113,7 @@ describe("setPasswordAction", () => {
       ),
     ).rejects.toBe(REDIRECT_ERROR);
 
+    expect(getUserMock).toHaveBeenCalledTimes(1);
     expect(updateUserMock).toHaveBeenCalledWith({
       password: "Password123!",
     });
@@ -132,9 +137,10 @@ describe("setPasswordAction", () => {
     expect(redirectMock).toHaveBeenCalledWith("/notes");
   });
 
-  it("세션이 없으면 signup으로 redirect하고 password를 설정하지 않는다", async () => {
-    getSessionMock.mockResolvedValue({
-      data: { session: null },
+  it("사용자가 없으면 signup으로 redirect하고 password를 설정하지 않는다", async () => {
+    getUserMock.mockResolvedValue({
+      data: { user: null },
+      error: null,
     });
 
     await expect(
@@ -148,22 +154,43 @@ describe("setPasswordAction", () => {
       ),
     ).rejects.toBe(REDIRECT_ERROR);
 
+    expect(getHasPasswordLoginMock).not.toHaveBeenCalled();
     expect(updateUserMock).not.toHaveBeenCalled();
     expect(redirectMock).toHaveBeenCalledWith(ROUTES.SIGNUP);
   });
 
+  it("사용자 조회가 실패하면 password를 설정하지 않고 internal_error를 반환한다", async () => {
+    getUserMock.mockResolvedValue({
+      data: { user: null },
+      error: new Error("get user failed"),
+    });
+
+    const result = await setPasswordAction(
+      null,
+      INITIAL_SET_PASSWORD_ACTION_STATE,
+      makeFormData({
+        password: "Password123!",
+        confirmPassword: "Password123!",
+      }),
+    );
+
+    expect(result).toEqual({ status: "internal_error" });
+    expect(getHasPasswordLoginMock).not.toHaveBeenCalled();
+    expect(updateUserMock).not.toHaveBeenCalled();
+  });
+
   it("Google provider만 있어도 실제 password가 있으면 mypage로 redirect하고 password를 설정하지 않는다", async () => {
     getHasPasswordLoginMock.mockResolvedValue(true);
-    getSessionMock.mockResolvedValue({
+
+    getUserMock.mockResolvedValue({
       data: {
-        session: {
-          user: {
-            app_metadata: { providers: ["google"] },
-            email: "password.user@example.com",
-            id: "password-user-id",
-          },
+        user: {
+          app_metadata: { providers: ["google"] },
+          email: "password.user@example.com",
+          id: "password-user-id",
         },
       },
+      error: null,
     });
 
     await expect(
@@ -193,6 +220,7 @@ describe("setPasswordAction", () => {
     );
 
     expect(result.status).toBe("invalid_input");
+    expect(getUserMock).not.toHaveBeenCalled();
     expect(updateUserMock).not.toHaveBeenCalled();
   });
 

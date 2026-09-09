@@ -140,7 +140,7 @@ describe("verifyOtpAction", () => {
     expect(redirect).toHaveBeenCalledWith(ROUTES.MYPAGE);
   });
 
-  it("signup OTP 인증 전 기존 OAuth-only 사용자로 확인되면 비밀번호 설정 페이지로 redirect한다", async () => {
+  it("signup OTP 인증에 성공하고 기존 OAuth-only 사용자면 비밀번호 설정 페이지로 redirect한다", async () => {
     vi.mocked(getUserByEmail).mockResolvedValue({
       id: "oauth-user-id",
       email: "user@example.com",
@@ -185,7 +185,7 @@ describe("verifyOtpAction", () => {
     expect(redirect).toHaveBeenCalledWith(ROUTES.MYPAGE);
   });
 
-  it("signup OTP 인증 전 기존 OAuth-only 사용자로 확인되고 redirectPath가 있으면 비밀번호 설정 완료 후 이동 경로를 전달한다", async () => {
+  it("signup OTP 인증에 성공하고 기존 OAuth-only 사용자이며 redirectPath가 있으면 비밀번호 설정 완료 후 이동 경로를 전달한다", async () => {
     vi.mocked(getUserByEmail).mockResolvedValue({
       id: "oauth-user-id",
       email: "user@example.com",
@@ -297,7 +297,14 @@ describe("verifyOtpAction", () => {
     expect(applyMinimumActionDelay).toHaveBeenCalledTimes(1);
   });
 
-  it("verifyOtp가 error를 반환하면 invalid_otp로 처리한다", async () => {
+  it("verifyOtp가 error를 반환하면 password 존재 여부를 조회하지 않고 invalid_otp로 처리한다", async () => {
+    vi.mocked(getUserByEmail).mockResolvedValue({
+      id: "oauth-user-id",
+      email: "user@example.com",
+      email_confirmed_at: "2026-03-29T00:00:00.000Z",
+      auth_providers: ["google"],
+    });
+
     vi.mocked(verifyOtp).mockResolvedValue({
       error: new Error("invalid otp"),
     } as Awaited<ReturnType<typeof verifyOtp>>);
@@ -315,10 +322,18 @@ describe("verifyOtpAction", () => {
       formError: INVALID_OTP_ERROR_MESSAGE,
     });
 
+    expect(getHasPasswordLogin).not.toHaveBeenCalled();
     expect(applyMinimumActionDelay).toHaveBeenCalledTimes(1);
   });
 
-  it("verifyOtp가 throw하면 internal_error를 반환한다", async () => {
+  it("verifyOtp가 throw하면 password 존재 여부를 조회하지 않고 internal_error를 반환한다", async () => {
+    vi.mocked(getUserByEmail).mockResolvedValue({
+      id: "oauth-user-id",
+      email: "user@example.com",
+      email_confirmed_at: "2026-03-29T00:00:00.000Z",
+      auth_providers: ["google"],
+    });
+
     vi.mocked(verifyOtp).mockRejectedValue(new Error("unexpected error"));
 
     const formData = createFormData({
@@ -335,6 +350,7 @@ describe("verifyOtpAction", () => {
       fieldErrors: null,
     });
 
+    expect(getHasPasswordLogin).not.toHaveBeenCalled();
     expect(logAuthError).toHaveBeenCalled();
     expect(applyMinimumActionDelay).toHaveBeenCalledTimes(1);
   });

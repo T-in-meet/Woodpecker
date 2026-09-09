@@ -83,16 +83,23 @@ export async function setPasswordAction(
   }
 
   let supabase: Awaited<ReturnType<typeof createClient>>;
-  let session: Awaited<
-    ReturnType<(typeof supabase)["auth"]["getSession"]>
-  >["data"]["session"];
+  let user: Awaited<
+    ReturnType<(typeof supabase)["auth"]["getUser"]>
+  >["data"]["user"];
 
   try {
     supabase = await createClient();
+
     const {
-      data: { session: currentSession },
-    } = await supabase.auth.getSession();
-    session = currentSession;
+      data: { user: currentUser },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError) {
+      throw userError;
+    }
+
+    user = currentUser;
   } catch (error) {
     const normalized = normalizeUnknownError(error);
     logAuthError(AUTH_EVENTS.AUTH_SET_PASSWORD_FAILED, {
@@ -109,7 +116,7 @@ export async function setPasswordAction(
     };
   }
 
-  if (!session?.user?.email) {
+  if (!user?.email) {
     logAuthEvent(AUTH_EVENTS.AUTH_SET_PASSWORD_REJECTED, {
       path: ROUTES.SET_PASSWORD,
       method: "POST",
@@ -125,7 +132,7 @@ export async function setPasswordAction(
 
   try {
     // provider metadata 대신 auth.users의 실제 비밀번호 존재 여부를 확인합니다.
-    hasPasswordLogin = await getHasPasswordLogin(session.user.id);
+    hasPasswordLogin = await getHasPasswordLogin(user.id);
   } catch (error) {
     const normalized = normalizeUnknownError(error);
     logAuthError(AUTH_EVENTS.AUTH_SET_PASSWORD_FAILED, {
