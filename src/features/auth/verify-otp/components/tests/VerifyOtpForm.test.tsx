@@ -9,7 +9,7 @@ import { RATE_LIMIT_TOAST_MESSAGE } from "@/features/auth/errors/rateLimitError"
 import type { VerifyOtpActionState } from "@/features/auth/verify-otp/actions/verifyOtpActionState";
 import { ROUTES } from "@/lib/constants/routes";
 
-import VerifyOtpForm from "./VerifyOtpForm";
+import VerifyOtpForm from "../VerifyOtpForm";
 
 const mocks = vi.hoisted(() => ({
   showToast: vi.fn(),

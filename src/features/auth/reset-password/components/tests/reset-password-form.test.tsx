@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -180,6 +180,122 @@ describe("reset-password-form", () => {
     expect(
       screen.queryByText(RESET_PASSWORD_GLOBAL_ERROR_MESSAGE),
     ).not.toBeInTheDocument();
+  });
+
+  it("same_password ATTEMPT root error는 password를 수정하면 제거한다", async () => {
+    hoisted.useActionStateMock.mockReturnValue([
+      {
+        status: "internal_error",
+        reason: "same_password",
+      },
+      hoisted.formActionMock,
+      false,
+    ]);
+
+    renderResetPasswordForm();
+
+    expect(
+      await screen.findByText(RESET_PASSWORD_SAME_PASSWORD_MESSAGE),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/^비밀번호$/i), {
+      target: { value: "changed-password" },
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.queryByText(RESET_PASSWORD_SAME_PASSWORD_MESSAGE),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it("same_password ATTEMPT root error는 confirmPassword만 수정하면 유지한다", async () => {
+    hoisted.useActionStateMock.mockReturnValue([
+      {
+        status: "internal_error",
+        reason: "same_password",
+      },
+      hoisted.formActionMock,
+      false,
+    ]);
+
+    renderResetPasswordForm();
+
+    expect(
+      await screen.findByText(RESET_PASSWORD_SAME_PASSWORD_MESSAGE),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/비밀번호 확인/i), {
+      target: { value: "changed-password" },
+    });
+
+    expect(
+      screen.getByText(RESET_PASSWORD_SAME_PASSWORD_MESSAGE),
+    ).toBeInTheDocument();
+  });
+
+  it("SYSTEM root error는 password를 수정해도 유지한다", async () => {
+    hoisted.useActionStateMock.mockReturnValue([
+      {
+        status: "internal_error",
+      },
+      hoisted.formActionMock,
+      false,
+    ]);
+
+    renderResetPasswordForm();
+
+    expect(
+      await screen.findByText(RESET_PASSWORD_GLOBAL_ERROR_MESSAGE),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/^비밀번호$/i), {
+      target: { value: "changed-password" },
+    });
+
+    expect(
+      screen.getByText(RESET_PASSWORD_GLOBAL_ERROR_MESSAGE),
+    ).toBeInTheDocument();
+  });
+
+  it("SYSTEM root error는 다음 유효한 submit 시작 시 제거한다", async () => {
+    hoisted.useActionStateMock.mockReturnValue([
+      {
+        status: "internal_error",
+      },
+      hoisted.formActionMock,
+      false,
+    ]);
+
+    renderResetPasswordForm();
+
+    expect(
+      await screen.findByText(RESET_PASSWORD_GLOBAL_ERROR_MESSAGE),
+    ).toBeInTheDocument();
+
+    fillResetPasswordFields({
+      password: "valid-password",
+      confirmPassword: "valid-password",
+    });
+
+    expect(
+      screen.getByText(RESET_PASSWORD_GLOBAL_ERROR_MESSAGE),
+    ).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "비밀번호 변경하기" }),
+      ).toBeEnabled();
+    });
+
+    submitResetPasswordForm();
+
+    await waitFor(() => {
+      expect(hoisted.formActionMock).toHaveBeenCalledTimes(1);
+      expect(
+        screen.queryByText(RESET_PASSWORD_GLOBAL_ERROR_MESSAGE),
+      ).not.toBeInTheDocument();
+    });
   });
 
   it("TC22: idle에서는 global error UI를 표시하지 않는다", async () => {

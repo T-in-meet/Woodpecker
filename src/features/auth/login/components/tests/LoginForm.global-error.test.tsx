@@ -5,7 +5,9 @@
  * - network/server/timeout 에러 → 폼 안에 남는 오류 문구
  * - rate limit 에러 → 폼 안에 남는 오류 문구
  * - 알 수 없는 에러 → 폼 안에 남는 오류 문구
- * - - OAuth callback 실패 query → 폼 안에 남는 오류 문구 (폼 제출 결과가 아니라 도착 시 알림)
+ * - OAuth callback 실패 query → 폼 안에 남는 오류 문구
+ * - SYSTEM root error → 입력 수정 시 유지
+ * - SYSTEM root error → 실제 재요청 시작 시 제거
  *
  * 재시도가 필요한 오류는 사라지는 toast가 아니라 자격증명 오류와 같은 자리
  * (data-testid="form-error")에 남는다. 그래서 이 파일은 showToast 호출이 아니라
@@ -25,6 +27,7 @@ import { showToast } from "@/lib/utils/showToast";
 
 import {
   mockMutateAsync,
+  mockPush,
   renderLoginForm,
   setupDefaultMocks,
 } from "./utils/loginFormTestUtils";
@@ -108,6 +111,70 @@ describe("LoginForm 전역 에러 처리", () => {
     await expectFormError("일시적인 오류가 발생했습니다.");
   });
 
+  it("SYSTEM root error는 이메일과 비밀번호를 수정해도 유지된다", async () => {
+    mockMutateAsync.mockRejectedValue({ type: "network" });
+    const user = userEvent.setup();
+    renderLoginForm();
+
+    await submitValidForm(user);
+    await expectFormError("네트워크 연결을 확인해주세요");
+
+    await user.type(screen.getByLabelText(/이메일/i), "x");
+
+    expect(screen.getByTestId("form-error")).toHaveTextContent(
+      "네트워크 연결을 확인해주세요",
+    );
+
+    await user.type(screen.getByLabelText(/^비밀번호$/i), "x");
+
+    expect(screen.getByTestId("form-error")).toHaveTextContent(
+      "네트워크 연결을 확인해주세요",
+    );
+  });
+
+  it("SYSTEM root error는 실제 재요청을 시작하면 즉시 제거된다", async () => {
+    mockMutateAsync.mockRejectedValueOnce({ type: "network" });
+
+    const user = userEvent.setup();
+    renderLoginForm();
+
+    await submitValidForm(user);
+    await expectFormError("네트워크 연결을 확인해주세요");
+
+    type LoginSuccess = {
+      success: true;
+      code: string;
+      data: {
+        redirectTo: string;
+      };
+    };
+
+    let resolveRetry!: (value: LoginSuccess) => void;
+
+    const retryPromise = new Promise<LoginSuccess>((resolve) => {
+      resolveRetry = resolve;
+    });
+
+    mockMutateAsync.mockImplementationOnce(() => retryPromise);
+
+    await user.click(screen.getByRole("button", { name: /^로그인$/ }));
+
+    await waitFor(() => {
+      expect(mockMutateAsync).toHaveBeenCalledTimes(2);
+      expect(screen.queryByTestId("form-error")).not.toBeInTheDocument();
+    });
+
+    resolveRetry({
+      success: true,
+      code: "LOGIN_SUCCESS",
+      data: { redirectTo: "/mypage" },
+    });
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith("/mypage");
+    });
+  });
+
   it("OAuth callback 실패 query가 있으면 폼 안에 오류 문구가 남는다", async () => {
     setupDefaultMocks({
       oauthError: OAUTH_CALLBACK_ERROR_REASON.EXCHANGE_FAILED,
@@ -115,11 +182,10 @@ describe("LoginForm 전역 에러 처리", () => {
 
     renderLoginForm();
 
-    // 다시 시도해야 하는 오류라 사라지는 toast가 아니라 폼에 남는다.
     await expectFormError(OAUTH_CALLBACK_ERROR_MESSAGE);
   });
 
-  it("OAuth callback 오류는 입력을 시작하면 사라진다", async () => {
+  it("OAuth callback SYSTEM root error는 입력을 수정해도 유지된다", async () => {
     setupDefaultMocks({
       oauthError: OAUTH_CALLBACK_ERROR_REASON.EXCHANGE_FAILED,
     });
@@ -130,8 +196,8 @@ describe("LoginForm 전역 에러 처리", () => {
 
     await user.type(screen.getByLabelText("이메일"), "a");
 
-    await waitFor(() => {
-      expect(screen.queryByTestId("form-error")).not.toBeInTheDocument();
-    });
+    expect(screen.getByTestId("form-error")).toHaveTextContent(
+      OAUTH_CALLBACK_ERROR_MESSAGE,
+    );
   });
 });

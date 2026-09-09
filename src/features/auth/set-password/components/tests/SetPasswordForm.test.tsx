@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useActionState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -164,6 +164,125 @@ describe("SetPasswordForm", () => {
       expect(
         screen.getByText(SET_PASSWORD_SAME_PASSWORD_MESSAGE),
       ).toBeInTheDocument();
+    });
+  });
+
+  it("same_password ATTEMPT root error는 password를 수정하면 제거한다", async () => {
+    const state: SetPasswordActionState = {
+      status: "internal_error",
+      reason: "same_password",
+    };
+
+    mockUseActionState.mockReturnValue([state, mockFormAction, false]);
+
+    render(<SetPasswordForm action={action} />);
+
+    expect(
+      await screen.findByText(SET_PASSWORD_SAME_PASSWORD_MESSAGE),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("비밀번호"), {
+      target: { value: "ChangedPassword123!" },
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.queryByText(SET_PASSWORD_SAME_PASSWORD_MESSAGE),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it("same_password ATTEMPT root error는 confirmPassword만 수정하면 유지한다", async () => {
+    const state: SetPasswordActionState = {
+      status: "internal_error",
+      reason: "same_password",
+    };
+
+    mockUseActionState.mockReturnValue([state, mockFormAction, false]);
+
+    render(<SetPasswordForm action={action} />);
+
+    expect(
+      await screen.findByText(SET_PASSWORD_SAME_PASSWORD_MESSAGE),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("비밀번호 확인"), {
+      target: { value: "ChangedPassword123!" },
+    });
+
+    expect(
+      screen.getByText(SET_PASSWORD_SAME_PASSWORD_MESSAGE),
+    ).toBeInTheDocument();
+  });
+
+  it("SYSTEM root error는 password를 수정해도 유지한다", async () => {
+    const state: SetPasswordActionState = {
+      status: "internal_error",
+    };
+
+    mockUseActionState.mockReturnValue([state, mockFormAction, false]);
+
+    render(<SetPasswordForm action={action} />);
+
+    expect(
+      await screen.findByText(SET_PASSWORD_GLOBAL_ERROR_MESSAGE),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("비밀번호"), {
+      target: { value: "ChangedPassword123!" },
+    });
+
+    expect(
+      screen.getByText(SET_PASSWORD_GLOBAL_ERROR_MESSAGE),
+    ).toBeInTheDocument();
+  });
+
+  it("SYSTEM root error는 유효한 submit 시작 시 제거한다", async () => {
+    const state: SetPasswordActionState = {
+      status: "internal_error",
+    };
+
+    mockUseActionState.mockReturnValue([state, mockFormAction, false]);
+
+    render(<SetPasswordForm action={action} />);
+
+    expect(
+      await screen.findByText(SET_PASSWORD_GLOBAL_ERROR_MESSAGE),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("비밀번호"), {
+      target: { value: "Password123!" },
+    });
+
+    fireEvent.change(screen.getByLabelText("비밀번호 확인"), {
+      target: { value: "Password123!" },
+    });
+
+    expect(
+      screen.getByText(SET_PASSWORD_GLOBAL_ERROR_MESSAGE),
+    ).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "비밀번호 설정하기" }),
+      ).toBeEnabled();
+    });
+
+    const form = screen
+      .getByRole("button", { name: "비밀번호 설정하기" })
+      .closest("form");
+
+    if (!form) {
+      throw new Error("set password form을 찾을 수 없습니다.");
+    }
+
+    fireEvent.submit(form);
+
+    await waitFor(() => {
+      expect(mockFormAction).toHaveBeenCalledTimes(1);
+      expect(
+        screen.queryByText(SET_PASSWORD_GLOBAL_ERROR_MESSAGE),
+      ).not.toBeInTheDocument();
     });
   });
 

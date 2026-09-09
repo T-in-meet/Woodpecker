@@ -3,15 +3,12 @@ import userEvent from "@testing-library/user-event";
 import { useActionState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { RATE_LIMIT_TOAST_MESSAGE } from "../errors/rateLimitError";
 import { ResendEmailActionState } from "../resend-email/actions/resendEmailActionState";
 import AuthEmailForm from "./AuthEmailForm";
 
 vi.mock("../hooks/useAuthEmailPrefill", () => ({
   useAuthEmailPrefill: vi.fn(),
-}));
-
-vi.mock("../hooks/useAuthEmailActionEffect", () => ({
-  useAuthEmailActionEffect: vi.fn(),
 }));
 
 vi.mock("react", async () => {
@@ -30,6 +27,12 @@ const mockFormAction = vi.fn();
 const initialState: ResendEmailActionState = {
   status: "idle",
   fieldErrors: null,
+};
+
+const blockedState: ResendEmailActionState = {
+  status: "blocked",
+  fieldErrors: null,
+  reasonCode: "RATE_LIMIT_EMAIL_SHORT",
 };
 
 const action = vi.fn(
@@ -209,6 +212,45 @@ describe("AuthEmailForm", () => {
     ).toBeInTheDocument();
 
     expect(mockFormAction).not.toHaveBeenCalled();
+  });
+
+  it("SYSTEM root error는 이메일 수정 시 유지하고 실제 재요청 시작 시 제거한다", async () => {
+    const user = userEvent.setup();
+
+    mockUseActionState.mockReturnValue([blockedState, mockFormAction, false]);
+
+    render(
+      <AuthEmailForm
+        action={action}
+        initialState={initialState}
+        email={undefined}
+        purpose="signup"
+        title="인증 번호 재전송"
+        backLink={{
+          href: "/",
+          label: "홈으로 돌아가기",
+        }}
+      />,
+    );
+
+    expect(
+      await screen.findByText(RATE_LIMIT_TOAST_MESSAGE),
+    ).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("이메일"), "test@example.com");
+
+    expect(screen.getByText(RATE_LIMIT_TOAST_MESSAGE)).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "인증 번호 다시 받기" }),
+    );
+
+    await waitFor(() => {
+      expect(mockFormAction).toHaveBeenCalledTimes(1);
+      expect(
+        screen.queryByText(RATE_LIMIT_TOAST_MESSAGE),
+      ).not.toBeInTheDocument();
+    });
   });
 
   it("pending 상태이면 버튼을 비활성화하고 전송 중 문구를 표시한다", () => {

@@ -101,7 +101,7 @@ export const AuthEmailForm = <TState extends AuthEmailFormState>({
   useAuthEmailPrefill({ setValue });
 
   /**
-   * action 결과(field error / toast)를 UI에 반영한다.
+   * action 결과(field error / root error)를 UI에 반영한다.
    */
   useAuthEmailActionEffect({ setError, state });
 
@@ -110,6 +110,7 @@ export const AuthEmailForm = <TState extends AuthEmailFormState>({
    *
    * 역할:
    * - react-hook-form 검증 통과 이후 실행된다.
+   * - 실제 요청을 시작하기 전에 이전 root error를 제거한다.
    * - server action 전달 형식(FormData)으로 변환한다.
    * - 인증 목적과 이메일를 action으로 전달한다.
    *
@@ -118,6 +119,12 @@ export const AuthEmailForm = <TState extends AuthEmailFormState>({
    *   form에서는 purpose / email만 전달한다.
    */
   const onSubmit = handleSubmit((data: AuthEmailFormValues) => {
+    /**
+     * 클라이언트 검증을 통과해 실제 요청을 시작하므로
+     * 이전 요청에서 발생한 root error를 제거한다.
+     */
+    clearErrors("root");
+
     /**
      * server action 전달용 FormData 생성
      */
@@ -179,9 +186,12 @@ export const AuthEmailForm = <TState extends AuthEmailFormState>({
             {...register("email", {
               /**
                * 사용자가 이메일을 수정하면
-               * 이전 제출 결과에서 발생한 form/server error를 모두 제거한다.
+               * 이전 email field error만 제거한다.
+               *
+               * rate limit / server 같은 SYSTEM root error는
+               * 입력 수정으로 해결되지 않으므로 유지한다.
                */
-              onChange: () => clearErrors(),
+              onChange: () => clearErrors("email"),
             })}
           />
         </AuthFormField>

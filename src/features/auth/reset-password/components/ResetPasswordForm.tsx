@@ -6,26 +6,29 @@ import { startTransition, useActionState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
+import { AuthCard } from "@/features/auth/components/AuthCard";
+import AuthFormError from "@/features/auth/components/AuthFormError";
+import { AuthFormField } from "@/features/auth/components/AuthFormField";
+import { AuthFormHeader } from "@/features/auth/components/AuthFormHeader";
 import { PasswordInput } from "@/features/auth/components/PasswordInput";
+import {
+  AUTH_ROOT_ERROR_TYPE,
+  shouldClearRootOnInputChange,
+} from "@/features/auth/errors/authRootError";
+import {
+  INITIAL_RESET_PASSWORD_ACTION_STATE,
+  ResetPasswordActionState,
+} from "@/features/auth/reset-password/actions/resetPasswordActionState";
+import {
+  RESET_PASSWORD_GLOBAL_ERROR_MESSAGE,
+  RESET_PASSWORD_PAGE_LEAVE_CONFIRM_MESSAGE,
+  RESET_PASSWORD_SAME_PASSWORD_MESSAGE,
+} from "@/features/auth/reset-password/constants/messages";
 import {
   type ResetPasswordFormInput,
   resetPasswordFormSchema,
 } from "@/features/auth/reset-password/schemas/resetPasswordFormSchema";
 import { usePreventPageLeave } from "@/hooks/usePreventPageLeave";
-
-import { AuthCard } from "../../components/AuthCard";
-import AuthFormError from "../../components/AuthFormError";
-import { AuthFormField } from "../../components/AuthFormField";
-import { AuthFormHeader } from "../../components/AuthFormHeader";
-import {
-  INITIAL_RESET_PASSWORD_ACTION_STATE,
-  ResetPasswordActionState,
-} from "../actions/resetPasswordActionState";
-import {
-  RESET_PASSWORD_GLOBAL_ERROR_MESSAGE,
-  RESET_PASSWORD_PAGE_LEAVE_CONFIRM_MESSAGE,
-  RESET_PASSWORD_SAME_PASSWORD_MESSAGE,
-} from "../constants/messages";
 
 type ResetPasswordFormProps = {
   action: (
@@ -57,11 +60,23 @@ export function ResetPasswordForm({ action }: ResetPasswordFormProps) {
   });
 
   /**
+   * 현재 root error가 입력 수정으로 해결 가능한 ATTEMPT 오류일 때만 제거한다.
+   *
+   * same_password는 새 password 값 자체와 관련된 실패이므로
+   * password를 수정할 때만 제거한다.
+   */
+  const clearAttemptRootError = () => {
+    if (shouldClearRootOnInputChange(errors.root?.type)) {
+      clearErrors("root");
+    }
+  };
+
+  /**
    * Server Action 결과를 React Hook Form error로 연결한다.
    *
    * - invalid_input → 해당 field error
-   * - same_password → root error
-   * - 기타 internal_error → root error
+   * - same_password → ATTEMPT root error
+   * - 기타 internal_error → SYSTEM root error
    *
    * UI에서는 RHF errors만 참조하므로
    * client/server error 렌더링 경로를 하나로 통일한다.
@@ -89,12 +104,15 @@ export function ResetPasswordForm({ action }: ResetPasswordFormProps) {
     }
 
     if (state.status === "internal_error") {
+      const isSamePassword = state.reason === "same_password";
+
       setError("root", {
-        type: "server",
-        message:
-          state.reason === "same_password"
-            ? RESET_PASSWORD_SAME_PASSWORD_MESSAGE
-            : RESET_PASSWORD_GLOBAL_ERROR_MESSAGE,
+        type: isSamePassword
+          ? AUTH_ROOT_ERROR_TYPE.ATTEMPT
+          : AUTH_ROOT_ERROR_TYPE.SYSTEM,
+        message: isSamePassword
+          ? RESET_PASSWORD_SAME_PASSWORD_MESSAGE
+          : RESET_PASSWORD_GLOBAL_ERROR_MESSAGE,
       });
     }
   }, [state, setError]);
@@ -114,7 +132,11 @@ export function ResetPasswordForm({ action }: ResetPasswordFormProps) {
    * React Hook Form 검증을 통과한 값만 Server Action에 전달한다.
    */
   const onSubmit = handleSubmit((data) => {
-    clearErrors();
+    /**
+     * 클라이언트 검증을 통과해 실제 비밀번호 변경 요청을 시작하므로
+     * 이전 root error를 종류와 관계없이 제거한다.
+     */
+    clearErrors("root");
 
     const formData = new FormData();
 
@@ -142,7 +164,10 @@ export function ResetPasswordForm({ action }: ResetPasswordFormProps) {
             aria-invalid={Boolean(errors.password)}
             placeholder="새 비밀번호를 입력하세요"
             {...register("password", {
-              onChange: () => clearErrors("password"),
+              onChange: () => {
+                clearErrors("password");
+                clearAttemptRootError();
+              },
             })}
           />
         </AuthFormField>

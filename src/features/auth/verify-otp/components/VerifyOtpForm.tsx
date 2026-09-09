@@ -14,6 +14,10 @@ import AuthFormFieldError from "@/features/auth/components/AuthFormFieldError";
 import { AuthFormHeader } from "@/features/auth/components/AuthFormHeader";
 import { AUTH_GLOBAL_ERROR_MESSAGE } from "@/features/auth/constants/messages";
 import { OtpPurpose } from "@/features/auth/constants/otp";
+import {
+  AUTH_ROOT_ERROR_TYPE,
+  shouldClearRootOnInputChange,
+} from "@/features/auth/errors/authRootError";
 import { RATE_LIMIT_TOAST_MESSAGE } from "@/features/auth/errors/rateLimitError";
 import {
   INITIAL_VERIFY_OTP_ACTION_STATE,
@@ -68,10 +72,21 @@ const VerifyOtpForm = ({
   });
 
   /**
+   * 현재 root error가 입력 수정으로 해결 가능한 ATTEMPT 오류일 때만 제거한다.
+   *
+   * Verify OTP에서는 otp가 인증 시도에 직접 관련된 유일한 입력값이다.
+   */
+  const clearAttemptRootError = () => {
+    if (shouldClearRootOnInputChange(errors.root?.type)) {
+      clearErrors("root");
+    }
+  };
+
+  /**
    * Server Action에서 반환한 상태를
    * React Hook Form의 error 구조로 연결한다.
    *
-   * 에러는 크게 세 종류로 구분한다.
+   * 에러는 크게 네 종류로 구분한다.
    *
    * 1. invalid_input
    *    사용자가 OTP 입력값을 직접 수정해서 해결할 수 있는 오류다.
@@ -80,13 +95,20 @@ const VerifyOtpForm = ({
    *    → errors.otp에 저장
    *    → OTP 입력창 아래 AuthFormFieldError에서 표시
    *
-   * 2. invalid_otp / blocked / internal_error
-   *    특정 입력 형식의 문제가 아니라 요청 전체에 대한 오류다.
+   * 2. invalid_otp
+   *    현재 OTP 인증 시도에 대한 실패다.
    *
-   *    → errors.root에 저장
-   *    → 폼 아래 AuthFormError에서 표시
+   *    → ATTEMPT root error
+   *    → OTP 입력 수정 시 제거
    *
-   * 3. invalid_request
+   * 3. blocked / internal_error
+   *    입력 수정으로 해결되지 않는 요청 전체의 오류다.
+   *
+   *    → SYSTEM root error
+   *    → 입력 수정으로 유지
+   *    → 다음 실제 요청 시작 시 제거
+   *
+   * 4. invalid_request
    *    OTP 값의 문제가 아니라 인증 흐름 자체에 필요한
    *    email / purpose / redirect 등의 요청 정보가 유효하지 않은 상태다.
    *
@@ -138,10 +160,11 @@ const VerifyOtpForm = ({
          * OTP 불일치 / 만료 / 재발급으로 인한 무효화 등을
          * 구체적으로 구분하지 않고 안전한 공통 메시지를 표시한다.
          *
-         * 특정 field validation 문제가 아니므로 root error로 처리한다.
+         * 현재 인증 시도에 대한 실패이므로
+         * ATTEMPT root error로 처리한다.
          */
         setError("root", {
-          type: "server",
+          type: AUTH_ROOT_ERROR_TYPE.ATTEMPT,
           message: state.formError,
         });
         return;
@@ -150,11 +173,11 @@ const VerifyOtpForm = ({
         /**
          * Rate Limit에 의해 요청이 차단된 경우.
          *
-         * 사용자의 OTP 입력값 자체가 잘못된 것이 아니므로
-         * field error가 아니라 root error로 표시한다.
+         * 사용자의 OTP 입력값을 수정해도 해결되지 않으므로
+         * SYSTEM root error로 표시한다.
          */
         setError("root", {
-          type: "server",
+          type: AUTH_ROOT_ERROR_TYPE.SYSTEM,
           message: RATE_LIMIT_TOAST_MESSAGE,
         });
         return;
@@ -165,10 +188,10 @@ const VerifyOtpForm = ({
          * 사용자가 입력값을 수정해서 해결할 수 없는 시스템 오류다.
          *
          * 내부 오류 원문은 사용자에게 노출하지 않고
-         * 안전한 공통 메시지를 root error로 표시한다.
+         * 안전한 공통 메시지를 SYSTEM root error로 표시한다.
          */
         setError("root", {
-          type: "server",
+          type: AUTH_ROOT_ERROR_TYPE.SYSTEM,
           message: AUTH_GLOBAL_ERROR_MESSAGE,
         });
         return;
@@ -183,7 +206,8 @@ const VerifyOtpForm = ({
    *
    * 처리 흐름:
    * - react-hook-form + zodResolver를 통해 OTP 형식을 먼저 검증한다.
-   * - 검증 통과 시 서버 action에 전달할 FormData를 생성한다.
+   * - 검증 통과 시 이전 요청의 root error를 제거한다.
+   * - 서버 action에 전달할 FormData를 생성한다.
    * - email / purpose는 page에서 이미 검증된 query 값을 props로 전달받아 사용한다.
    * - 서버에서는 verifyOtpContextSchema와 otpSchema를 통해
    *   요청 context와 OTP 입력값을 다시 검증한다.
@@ -194,6 +218,12 @@ const VerifyOtpForm = ({
    * - otp schema: OTP 입력값 서버 재검증
    */
   const handleValidSubmit = (values: VerifyOtpFormValues) => {
+    /**
+     * 클라이언트 검증을 통과해 실제 인증 요청을 시작하므로
+     * 이전 root error를 종류와 관계없이 제거한다.
+     */
+    clearErrors("root");
+
     const formData = new FormData();
 
     formData.set("email", email);
@@ -248,14 +278,15 @@ const VerifyOtpForm = ({
             placeholder="예: 123456"
             {...register("otp", {
               /**
-               * 새 OTP를 입력하기 시작하면
-               * 이전 OTP 입력 오류와 인증 실패 root error를 함께 제거한다.
+               * OTP를 수정하면 field error를 제거하고,
+               * 이전 root error가 ATTEMPT인 경우에만 함께 제거한다.
                *
-               * OTP 입력 필드는 하나뿐이므로
-               * 사용자가 새 값을 입력하는 순간 이전 요청의 오류를
-               * 계속 보여줄 필요가 없다.
+               * SYSTEM root error는 입력 수정으로 해결되지 않으므로 유지한다.
                */
-              onChange: () => clearErrors(),
+              onChange: () => {
+                clearErrors("otp");
+                clearAttemptRootError();
+              },
             })}
             autoFocus
           />

@@ -2,6 +2,7 @@ import { renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_GLOBAL_ERROR_MESSAGE } from "../constants/messages";
+import { AUTH_ROOT_ERROR_TYPE } from "../errors/authRootError";
 import { RATE_LIMIT_TOAST_MESSAGE } from "../errors/rateLimitError";
 import { useAuthEmailActionEffect } from "./useAuthEmailActionEffect";
 
@@ -47,7 +48,7 @@ describe("useAuthEmailActionEffect", () => {
     expect(setError).not.toHaveBeenCalled();
   });
 
-  it("blocked 상태이면 rate limit을 form 오류로 설정한다", () => {
+  it("blocked 상태이면 SYSTEM root error로 rate limit 오류를 설정한다", () => {
     const setError = vi.fn();
 
     renderHook(() =>
@@ -62,12 +63,12 @@ describe("useAuthEmailActionEffect", () => {
     );
 
     expect(setError).toHaveBeenCalledWith("root", {
-      type: "server",
+      type: AUTH_ROOT_ERROR_TYPE.SYSTEM,
       message: RATE_LIMIT_TOAST_MESSAGE,
     });
   });
 
-  it("internal_error 상태이면 공통 오류를 form 오류로 설정한다", () => {
+  it("internal_error 상태이면 SYSTEM root error로 공통 오류를 설정한다", () => {
     const setError = vi.fn();
 
     renderHook(() =>
@@ -82,7 +83,7 @@ describe("useAuthEmailActionEffect", () => {
     );
 
     expect(setError).toHaveBeenCalledWith("root", {
-      type: "server",
+      type: AUTH_ROOT_ERROR_TYPE.SYSTEM,
       message: AUTH_GLOBAL_ERROR_MESSAGE,
     });
   });

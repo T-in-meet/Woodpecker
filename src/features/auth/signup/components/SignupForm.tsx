@@ -13,6 +13,7 @@ import {
   type OAuthBeforeSignInResult,
   OAuthButtons,
 } from "@/features/auth/components/OAuthButtons";
+import { AUTH_ROOT_ERROR_TYPE } from "@/features/auth/errors/authRootError";
 import {
   GLOBAL_ERROR_MESSAGES,
   isGlobalError,
@@ -204,7 +205,10 @@ export function SignupForm({
         }
 
         if (hasUnknownField) {
-          setError("root", { message: "요청을 처리할 수 없습니다" });
+          setError("root", {
+            type: AUTH_ROOT_ERROR_TYPE.SYSTEM,
+            message: "요청을 처리할 수 없습니다",
+          });
         }
 
         return;
@@ -213,16 +217,25 @@ export function SignupForm({
       // 아래 세 가지는 모두 "다시 시도"가 필요한 오류라 사라지는 토스트로 알리면
       // 재시도할 근거가 화면에서 없어진다. 제출 버튼 옆 root 오류 자리에 남긴다.
       if (isRateLimitError(e)) {
-        setError("root", { message: RATE_LIMIT_TOAST_MESSAGE });
+        setError("root", {
+          type: AUTH_ROOT_ERROR_TYPE.SYSTEM,
+          message: RATE_LIMIT_TOAST_MESSAGE,
+        });
         return;
       }
 
       if (isGlobalError(e)) {
-        setError("root", { message: GLOBAL_ERROR_MESSAGES[e.type] });
+        setError("root", {
+          type: AUTH_ROOT_ERROR_TYPE.SYSTEM,
+          message: GLOBAL_ERROR_MESSAGES[e.type],
+        });
         return;
       }
 
-      setError("root", { message: UNKNOWN_ERROR_MESSAGE });
+      setError("root", {
+        type: AUTH_ROOT_ERROR_TYPE.SYSTEM,
+        message: UNKNOWN_ERROR_MESSAGE,
+      });
     }
   };
 

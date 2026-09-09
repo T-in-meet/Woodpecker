@@ -22,6 +22,10 @@ import {
   OAUTH_CALLBACK_ERROR_PARAM,
 } from "@/features/auth/constants/oauthCallbackError";
 import {
+  AUTH_ROOT_ERROR_TYPE,
+  shouldClearRootOnInputChange,
+} from "@/features/auth/errors/authRootError";
+import {
   GLOBAL_ERROR_MESSAGES,
   isGlobalError,
 } from "@/features/auth/errors/globalError";
@@ -60,20 +64,29 @@ export function LoginForm() {
     defaultValues: { email: "", password: "" },
   });
 
-  const clearRootError = () => {
-    if (errors.root) {
+  /**
+   * 현재 root error가 입력 수정으로 해결 가능한 ATTEMPT 오류일 때만 제거한다.
+   *
+   * 어떤 입력이 해당 오류와 관련 있는지는 각 form이 결정하며,
+   * Login에서는 email/password 모두 인증 시도에 영향을 준다.
+   */
+  const clearAttemptRootError = () => {
+    if (shouldClearRootOnInputChange(errors.root?.type)) {
       clearErrors("root");
     }
   };
 
   const redirectParam = searchParams.get("redirect");
 
-  // 다시 시도해야 하는 오류라 사라지는 토스트 대신 자격증명 오류와 같은 자리에
-  // 남긴다. 입력을 시작하거나 다시 제출하면 자동으로 지워진다.
+  // OAuth callback 실패는 입력 수정으로 해결되지 않는 SYSTEM 오류다.
+  // 입력 변경으로 제거하지 않고 다음 실제 로그인 요청 시작 시 제거한다.
   useEffect(() => {
     if (!searchParams.get(OAUTH_CALLBACK_ERROR_PARAM)) return;
 
-    setError("root", { message: OAUTH_CALLBACK_ERROR_MESSAGE });
+    setError("root", {
+      type: AUTH_ROOT_ERROR_TYPE.SYSTEM,
+      message: OAUTH_CALLBACK_ERROR_MESSAGE,
+    });
   }, [searchParams, setError]);
 
   const forgotPasswordHref = redirectParam
@@ -81,7 +94,11 @@ export function LoginForm() {
     : ROUTES.FORGOT_PASSWORD;
 
   const handleValidSubmit = async (data: LoginFormValues) => {
-    clearErrors();
+    /**
+     * 클라이언트 validation을 통과해 실제 로그인 요청을 시작하므로
+     * 이전 요청의 root error를 종류와 관계없이 제거한다.
+     */
+    clearErrors("root");
 
     try {
       // exactOptionalPropertyTypes: redirectTo가 없을 때는 키 자체를 제외해야 함
@@ -118,7 +135,10 @@ export function LoginForm() {
         }
 
         if (hasUnknownField) {
-          setError("root", { message: "요청을 처리할 수 없습니다" });
+          setError("root", {
+            type: AUTH_ROOT_ERROR_TYPE.SYSTEM,
+            message: "요청을 처리할 수 없습니다",
+          });
         }
         return;
       }
@@ -131,28 +151,37 @@ export function LoginForm() {
         e.code === AUTH_API_CODES.LOGIN_INVALID_CREDENTIALS
       ) {
         setError("root", {
+          type: AUTH_ROOT_ERROR_TYPE.ATTEMPT,
           message: "이메일 또는 비밀번호가 올바르지 않습니다.",
         });
         return;
       }
 
-      // 아래 세 가지는 모두 "다시 시도"가 필요한 오류다. 사라지는 토스트로 알리면
-      // 재시도할 근거가 화면에서 없어지므로, 자격증명 오류와 같은 자리에 남긴다.
+      // 아래 세 가지는 모두 입력 수정으로 해결되지 않는 SYSTEM 오류다.
 
       // rate limit
       if (isRateLimitError(e)) {
-        setError("root", { message: RATE_LIMIT_TOAST_MESSAGE });
+        setError("root", {
+          type: AUTH_ROOT_ERROR_TYPE.SYSTEM,
+          message: RATE_LIMIT_TOAST_MESSAGE,
+        });
         return;
       }
 
       // 네트워크/서버/타임아웃 에러
       if (isGlobalError(e)) {
-        setError("root", { message: GLOBAL_ERROR_MESSAGES[e.type] });
+        setError("root", {
+          type: AUTH_ROOT_ERROR_TYPE.SYSTEM,
+          message: GLOBAL_ERROR_MESSAGES[e.type],
+        });
         return;
       }
 
       // 그 외 예상하지 못한 에러 — 최소한의 피드백 보장
-      setError("root", { message: UNKNOWN_ERROR_MESSAGE });
+      setError("root", {
+        type: AUTH_ROOT_ERROR_TYPE.SYSTEM,
+        message: UNKNOWN_ERROR_MESSAGE,
+      });
     }
   };
 
@@ -177,7 +206,7 @@ export function LoginForm() {
             autoComplete="email"
             placeholder="example@email.com"
             {...register("email", {
-              onChange: clearRootError,
+              onChange: clearAttemptRootError,
             })}
           />
         </AuthFormField>
@@ -192,7 +221,7 @@ export function LoginForm() {
             autoComplete="current-password"
             placeholder="비밀번호를 입력하세요"
             {...register("password", {
-              onChange: clearRootError,
+              onChange: clearAttemptRootError,
             })}
           />
         </AuthFormField>
