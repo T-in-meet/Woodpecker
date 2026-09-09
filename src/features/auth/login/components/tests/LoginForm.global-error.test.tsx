@@ -5,7 +5,7 @@
  * - network/server/timeout 에러 → 폼 안에 남는 오류 문구
  * - rate limit 에러 → 폼 안에 남는 오류 문구
  * - 알 수 없는 에러 → 폼 안에 남는 오류 문구
- * - OAuth callback 실패 query → toast (폼 제출 결과가 아니라 도착 시 알림)
+ * - - OAuth callback 실패 query → 폼 안에 남는 오류 문구 (폼 제출 결과가 아니라 도착 시 알림)
  *
  * 재시도가 필요한 오류는 사라지는 toast가 아니라 자격증명 오류와 같은 자리
  * (data-testid="form-error")에 남는다. 그래서 이 파일은 showToast 호출이 아니라

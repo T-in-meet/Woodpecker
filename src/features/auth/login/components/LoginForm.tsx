@@ -10,8 +10,12 @@ import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { AuthCard } from "@/features/auth/components/AuthCard";
+import AuthFormError from "@/features/auth/components/AuthFormError";
+import { AuthFormField } from "@/features/auth/components/AuthFormField";
+import { AuthFormHeader } from "@/features/auth/components/AuthFormHeader";
 import { OAuthButtons } from "@/features/auth/components/OAuthButtons";
+import { PasswordInput } from "@/features/auth/components/PasswordInput";
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 import {
   OAUTH_CALLBACK_ERROR_MESSAGE,
@@ -153,74 +157,45 @@ export function LoginForm() {
   };
 
   return (
-    <div className="mx-auto my-0 max-w-md overflow-hidden rounded-none border-0 bg-white shadow-none md:my-8 md:rounded-xl md:border md:border-outline-variant md:shadow-sm">
+    <AuthCard variant="compact">
       <form
         aria-label="로그인"
-        className="mx-auto max-w-4xl space-y-4 px-4 py-8 md:px-12"
+        className="space-y-4"
         onSubmit={handleSubmit(handleValidSubmit)}
         noValidate
       >
-        <h1 className="mb-6 text-2xl font-bold tracking-tight text-primary">
-          로그인
-        </h1>
+        <AuthFormHeader title="로그인" />
 
-        {/* 이메일 */}
-        <div>
-          <div className="grid grid-cols-[6.25rem_minmax(0,1fr)] gap-x-4">
-            <div className="flex items-center">
-              <Label htmlFor="email" className="min-w-25 shrink-0">
-                이메일
-              </Label>
-            </div>
-            <Input
-              id="email"
-              type="email"
-              autoComplete="email"
-              placeholder="example@email.com"
-              {...register("email", {
-                onChange: clearRootError,
-              })}
-            />
-            <div />
-            {/* 에러 영역을 고정 높이로 유지 — 레이아웃 흔들림 방지 */}
-            <div className="mt-2 min-h-5">
-              {errors.email && (
-                <p role="alert" className="text-sm text-destructive">
-                  {errors.email.message}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
+        <AuthFormField
+          label="이메일"
+          htmlFor="email"
+          error={errors.email?.message}
+        >
+          <Input
+            id="email"
+            type="email"
+            autoComplete="email"
+            placeholder="example@email.com"
+            {...register("email", {
+              onChange: clearRootError,
+            })}
+          />
+        </AuthFormField>
 
-        {/* 비밀번호 */}
-        <div>
-          <div className="grid grid-cols-[6.25rem_minmax(0,1fr)] gap-x-4">
-            <div className="flex items-center">
-              <Label htmlFor="password" className="min-w-25 shrink-0">
-                비밀번호
-              </Label>
-            </div>
-            <Input
-              id="password"
-              type="password"
-              autoComplete="current-password"
-              placeholder="비밀번호를 입력하세요"
-              {...register("password", {
-                onChange: clearRootError,
-              })}
-            />
-            <div />
-            {/* 에러 영역을 고정 높이로 유지 — 레이아웃 흔들림 방지 */}
-            <div className="mt-2 min-h-5">
-              {errors.password && (
-                <p role="alert" className="text-sm text-destructive">
-                  {errors.password.message}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
+        <AuthFormField
+          label="비밀번호"
+          htmlFor="password"
+          error={errors.password?.message}
+        >
+          <PasswordInput
+            id="password"
+            autoComplete="current-password"
+            placeholder="비밀번호를 입력하세요"
+            {...register("password", {
+              onChange: clearRootError,
+            })}
+          />
+        </AuthFormField>
 
         <Button type="submit" disabled={isPending} className="w-full">
           {isPending && (
@@ -230,16 +205,8 @@ export function LoginForm() {
         </Button>
 
         {/* 인증 실패 / 서버 에러 */}
-        <div className="min-h-5">
-          {errors.root && (
-            <p
-              role="alert"
-              data-testid="form-error"
-              className="text-sm text-destructive"
-            >
-              {errors.root.message}
-            </p>
-          )}
+        <div>
+          <AuthFormError error={errors.root?.message} />
 
           <Link
             href={forgotPasswordHref}
@@ -253,7 +220,7 @@ export function LoginForm() {
         <OAuthButtons intent="login" redirect={redirectParam} />
 
         {/* 액션 영역 */}
-        <div className="flex flex-col gap-5 pt-2 ">
+        <div className="flex flex-col gap-5 pt-2">
           <div className="flex flex-col gap-3">
             <p className="text-sm text-muted-foreground">
               아직 계정이 없으신가요?{" "}
@@ -267,6 +234,6 @@ export function LoginForm() {
           </div>
         </div>
       </form>
-    </div>
+    </AuthCard>
   );
 }
