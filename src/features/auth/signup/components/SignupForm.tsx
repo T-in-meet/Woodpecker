@@ -357,7 +357,7 @@ export function SignupForm({
               variant="outline"
               aria-pressed={signupMethod === SIGNUP_METHODS.email}
               className={cn(
-                "h-auto justify-start px-4 py-3 text-left",
+                "h-auto justify-center px-4 py-3 text-left",
                 signupMethod === SIGNUP_METHODS.email &&
                   "border-primary bg-primary/5 text-primary",
               )}
@@ -371,7 +371,7 @@ export function SignupForm({
               variant="outline"
               aria-pressed={signupMethod === SIGNUP_METHODS.google}
               className={cn(
-                "h-auto justify-start px-4 py-3 text-left",
+                "h-auto justify-center px-4 py-3 text-left",
                 signupMethod === SIGNUP_METHODS.google &&
                   "border-primary bg-primary/5 text-primary",
               )}
