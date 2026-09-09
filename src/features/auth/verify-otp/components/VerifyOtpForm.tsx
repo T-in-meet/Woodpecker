@@ -163,6 +163,17 @@ const VerifyOtpForm = ({
     query.set("redirect", redirect);
   }
 
+  /**
+   * resend-email에서 현재 OTP 인증 단계로 돌아올 수 있도록
+   * 현재 verify-otp 경로를 returnTo로 전달한다.
+   *
+   * returnTo에는 현재 인증 흐름에 필요한
+   * purpose / email / redirect를 그대로 보존한다.
+   */
+  const returnTo = `${ROUTES.VERIFY_OTP}?${query.toString()}`;
+
+  query.set("returnTo", returnTo);
+
   return (
     /**
      * OTP 입력 카드

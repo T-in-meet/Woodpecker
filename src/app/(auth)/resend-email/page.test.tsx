@@ -79,7 +79,7 @@ describe("ResendEmailPage", () => {
     expect(requireOtpResendPage).not.toHaveBeenCalled();
   });
 
-  it("유효한 purpose와 email을 AuthEmailForm에 전달한다", async () => {
+  it("유효한 purpose와 email 및 기본 UI 정보를 AuthEmailForm에 전달한다", async () => {
     const page = await ResendEmailPage({
       searchParams: Promise.resolve({
         email: "user@example.com",
@@ -97,6 +97,82 @@ describe("ResendEmailPage", () => {
         initialState: INITIAL_RESEND_EMAIL_ACTION_STATE,
         email: "user@example.com",
         purpose: "signup",
+        title: "인증 번호 재전송",
+        backLink: {
+          href: ROUTES.HOME,
+          label: "홈으로 돌아가기",
+        },
+      }),
+      undefined,
+    );
+  });
+
+  it("유효한 returnTo가 있으면 이전 OTP 인증 경로를 backLink로 전달한다", async () => {
+    const returnTo = `${ROUTES.VERIFY_OTP}?purpose=signup&email=user%40example.com`;
+
+    const page = await ResendEmailPage({
+      searchParams: Promise.resolve({
+        email: "user@example.com",
+        purpose: "signup",
+        returnTo,
+      }),
+    });
+
+    render(page);
+
+    expect(AuthEmailForm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        backLink: {
+          href: returnTo,
+          label: "이전으로 돌아가기",
+        },
+      }),
+      undefined,
+    );
+  });
+
+  it("redirect가 포함된 유효한 returnTo를 backLink로 전달한다", async () => {
+    const returnTo = `${ROUTES.VERIFY_OTP}?purpose=reset-password&email=user%40example.com&redirect=%2Fmypage`;
+
+    const page = await ResendEmailPage({
+      searchParams: Promise.resolve({
+        email: "user@example.com",
+        purpose: "reset-password",
+        redirect: "/mypage",
+        returnTo,
+      }),
+    });
+
+    render(page);
+
+    expect(AuthEmailForm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        backLink: {
+          href: returnTo,
+          label: "이전으로 돌아가기",
+        },
+      }),
+      undefined,
+    );
+  });
+
+  it("유효하지 않은 returnTo는 무시하고 홈 backLink를 전달한다", async () => {
+    const page = await ResendEmailPage({
+      searchParams: Promise.resolve({
+        email: "user@example.com",
+        purpose: "signup",
+        returnTo: "/verify-otp?purpose=signup&email=other%40example.com",
+      }),
+    });
+
+    render(page);
+
+    expect(AuthEmailForm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        backLink: {
+          href: ROUTES.HOME,
+          label: "홈으로 돌아가기",
+        },
       }),
       undefined,
     );

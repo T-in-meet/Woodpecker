@@ -172,16 +172,53 @@ describe("VerifyOtpForm", () => {
     expect(mocks.showToast).not.toHaveBeenCalled();
   });
 
-  it("인증번호 재전송 링크를 렌더링한다", () => {
+  it("인증번호 재전송 링크에 현재 OTP 인증 경로를 returnTo로 포함한다", () => {
     renderVerifyOtpForm();
 
-    const query = new URLSearchParams({
+    const returnQuery = new URLSearchParams({
       purpose: "signup",
       email: defaultProps.email,
     });
 
+    const returnTo = `/verify-otp?${returnQuery.toString()}`;
+
+    const resendQuery = new URLSearchParams({
+      purpose: "signup",
+      email: defaultProps.email,
+      returnTo,
+    });
+
     expect(
       screen.getByRole("link", { name: "인증번호 재전송" }),
-    ).toHaveAttribute("href", `/resend-email?${query.toString()}`);
+    ).toHaveAttribute("href", `/resend-email?${resendQuery.toString()}`);
+  });
+
+  it("redirect가 있으면 returnTo에 현재 redirect까지 보존한다", () => {
+    render(
+      <VerifyOtpForm
+        {...defaultProps}
+        redirect="/mypage"
+        action={vi.fn().mockResolvedValue(idleState)}
+      />,
+    );
+
+    const returnQuery = new URLSearchParams({
+      purpose: "signup",
+      email: defaultProps.email,
+      redirect: "/mypage",
+    });
+
+    const returnTo = `/verify-otp?${returnQuery.toString()}`;
+
+    const resendQuery = new URLSearchParams({
+      purpose: "signup",
+      email: defaultProps.email,
+      redirect: "/mypage",
+      returnTo,
+    });
+
+    expect(
+      screen.getByRole("link", { name: "인증번호 재전송" }),
+    ).toHaveAttribute("href", `/resend-email?${resendQuery.toString()}`);
   });
 });
