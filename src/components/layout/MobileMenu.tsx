@@ -139,17 +139,27 @@ export function MobileMenu({
             법적 고지
           </p>
           <div className="space-y-1">
-            {MOBILE_LEGAL_ITEMS.map(({ href, label, icon: Icon }) => (
-              <Link
-                key={href}
-                href={href}
-                onClick={() => setOpen(false)}
-                className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <Icon className="size-4" aria-hidden="true" />
-                {label}
-              </Link>
-            ))}
+            {MOBILE_LEGAL_ITEMS.map(({ href, label, icon: Icon }) => {
+              const isCurrent = isCurrentNavRoute(pathname, href);
+
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  aria-current={isCurrent ? "page" : undefined}
+                  onClick={() => setOpen(false)}
+                  className={cn(
+                    "flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    isCurrent
+                      ? "bg-accent text-foreground"
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                  )}
+                >
+                  <Icon className="size-4" aria-hidden="true" />
+                  {label}
+                </Link>
+              );
+            })}
           </div>
         </nav>
 
