@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import { parseHeadingAnchor } from "../lib/headingAnchor";
 
@@ -77,7 +78,12 @@ export function GuideArticle({
         {heading}
       </h1>
       <div className="prose prose-stone mt-8 max-w-none">
-        <ReactMarkdown components={{ a: GuideLink, h2: Heading2 }}>
+        {/* 표는 GFM 문법이라 remark-gfm 없이는 파이프 문자가 그대로 나온다.
+            자동 링크와 취소선도 같은 플러그인이 담당한다. */}
+        <ReactMarkdown
+          components={{ a: GuideLink, h2: Heading2 }}
+          remarkPlugins={[remarkGfm]}
+        >
           {markdown}
         </ReactMarkdown>
       </div>
