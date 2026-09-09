@@ -1,7 +1,5 @@
 import type { User } from "@supabase/supabase-js";
 
-export const PASSWORD_AUTH_PROVIDER = "email";
-
 /**
  * unknown metadata 값을 문자열 배열로 정규화합니다.
  *
@@ -40,14 +38,4 @@ export function getAuthProviders(user: User): string[] {
   }
 
   return [...providers];
-}
-
-/**
- * Supabase Auth user에 이메일/비밀번호 로그인이 연결되어 있는지 확인합니다.
- *
- * @param user Supabase Auth 사용자
- * @returns password provider가 연결되어 있으면 true
- */
-export function hasPasswordLogin(user: User): boolean {
-  return getAuthProviders(user).includes(PASSWORD_AUTH_PROVIDER);
 }

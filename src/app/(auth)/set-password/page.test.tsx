@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getUserMock = vi.hoisted(() => vi.fn());
+const getHasPasswordLoginMock = vi.hoisted(() => vi.fn());
 const redirectMock = vi.hoisted(() => vi.fn());
 const setPasswordBoundActionMock = vi.hoisted(() => vi.fn());
 const setPasswordActionMock = vi.hoisted(() => {
@@ -19,6 +20,10 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/supabase/getUser", () => ({
   getUser: getUserMock,
+}));
+
+vi.mock("@/features/auth/lib/getHasPasswordLogin", () => ({
+  getHasPasswordLogin: getHasPasswordLoginMock,
 }));
 
 vi.mock("@/features/auth/set-password/actions/setPasswordAction", () => ({
@@ -65,6 +70,7 @@ describe("SetPasswordPage", () => {
       throw REDIRECT_ERROR;
     });
     getUserMock.mockResolvedValue(makeUser(["google"]));
+    getHasPasswordLoginMock.mockResolvedValue(false);
   });
 
   it("OAuth-only 사용자에게 비밀번호 설정 폼을 렌더링한다", async () => {
@@ -91,8 +97,9 @@ describe("SetPasswordPage", () => {
     expect(setPasswordActionMock.bind).not.toHaveBeenCalled();
   });
 
-  it("password provider가 있는 사용자는 mypage로 redirect한다", async () => {
-    getUserMock.mockResolvedValue(makeUser(["google", "email"]));
+  it("Google provider만 있어도 실제 password가 있는 사용자는 mypage로 redirect한다", async () => {
+    getUserMock.mockResolvedValue(makeUser(["google"]));
+    getHasPasswordLoginMock.mockResolvedValue(true);
 
     await expect(
       SetPasswordPage({
@@ -101,6 +108,7 @@ describe("SetPasswordPage", () => {
     ).rejects.toBe(REDIRECT_ERROR);
 
     expect(redirectMock).toHaveBeenCalledWith(ROUTES.MYPAGE);
+    expect(getHasPasswordLoginMock).toHaveBeenCalledWith("user-id");
     expect(setPasswordActionMock.bind).not.toHaveBeenCalled();
   });
 

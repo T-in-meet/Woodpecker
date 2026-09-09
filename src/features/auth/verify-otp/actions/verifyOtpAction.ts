@@ -22,6 +22,7 @@ import {
   checkRequestEligibility,
   mapBlockedByToReason,
 } from "../../lib/checkRequestEligibility";
+import { getHasPasswordLogin } from "../../lib/getHasPasswordLogin";
 import { getUserByEmail } from "../../lib/getUserByEmail";
 import { maskEmailForLogging } from "../../lib/maskEmailForLogging";
 import { maskIpForLogging } from "../../lib/maskIpForLogging";
@@ -193,8 +194,13 @@ export async function verifyOtpAction(
     const existingSignupUser =
       purpose === "signup" ? await getUserByEmail(canonicalEmail) : null;
 
+    const hasPasswordLogin =
+      existingSignupUser !== null
+        ? await getHasPasswordLogin(existingSignupUser.id)
+        : false;
+
     const shouldSetPasswordAfterSignup =
-      existingSignupUser !== null && !existingSignupUser.has_password_login;
+      existingSignupUser !== null && !hasPasswordLogin;
 
     /**
      * Supabase OTP 인증 검증 수행

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
-import { hasPasswordLogin } from "@/features/auth/lib/authProviders";
+import { getHasPasswordLogin } from "@/features/auth/lib/getHasPasswordLogin";
 import { setPasswordAction } from "@/features/auth/set-password/actions/setPasswordAction";
 import { SetPasswordForm } from "@/features/auth/set-password/components/SetPasswordForm";
 import { ROUTES } from "@/lib/constants/routes";
@@ -26,7 +26,7 @@ export default async function SetPasswordPage({ searchParams }: Props) {
     redirect(ROUTES.SIGNUP);
   }
 
-  if (hasPasswordLogin(user)) {
+  if (await getHasPasswordLogin(user.id)) {
     redirect(ROUTES.MYPAGE);
   }
 

@@ -12,12 +12,14 @@ const {
   updateUserMock,
   redirectMock,
   validateRedirectPathMock,
+  getHasPasswordLoginMock,
 } = vi.hoisted(() => ({
   createClientMock: vi.fn(),
   getSessionMock: vi.fn(),
   updateUserMock: vi.fn(),
   redirectMock: vi.fn(),
   validateRedirectPathMock: vi.fn(),
+  getHasPasswordLoginMock: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -30,6 +32,10 @@ vi.mock("@/lib/supabase/server", () => ({
 
 vi.mock("@/features/auth/lib/validateRedirectPath", () => ({
   validateRedirectPath: validateRedirectPathMock,
+}));
+
+vi.mock("@/features/auth/lib/getHasPasswordLogin", () => ({
+  getHasPasswordLogin: getHasPasswordLoginMock,
 }));
 
 vi.mock("@/features/auth/lib/authLogger", () => ({
@@ -76,6 +82,7 @@ describe("setPasswordAction", () => {
           user: {
             app_metadata: { providers: ["google"] },
             email: "oauth.user@example.com",
+            id: "oauth-user-id",
           },
         },
       },
@@ -84,6 +91,7 @@ describe("setPasswordAction", () => {
       data: { user: {} },
       error: null,
     });
+    getHasPasswordLoginMock.mockResolvedValue(false);
     validateRedirectPathMock.mockImplementation((value: unknown) =>
       typeof value === "string" ? value : ROUTES.MYPAGE,
     );
@@ -104,6 +112,7 @@ describe("setPasswordAction", () => {
     expect(updateUserMock).toHaveBeenCalledWith({
       password: "Password123!",
     });
+    expect(getHasPasswordLoginMock).toHaveBeenCalledWith("oauth-user-id");
     expect(redirectMock).toHaveBeenCalledWith(ROUTES.MYPAGE);
   });
 
@@ -143,13 +152,15 @@ describe("setPasswordAction", () => {
     expect(redirectMock).toHaveBeenCalledWith(ROUTES.SIGNUP);
   });
 
-  it("password provider가 있으면 mypage로 redirect하고 password를 설정하지 않는다", async () => {
+  it("Google provider만 있어도 실제 password가 있으면 mypage로 redirect하고 password를 설정하지 않는다", async () => {
+    getHasPasswordLoginMock.mockResolvedValue(true);
     getSessionMock.mockResolvedValue({
       data: {
         session: {
           user: {
-            app_metadata: { providers: ["google", "email"] },
+            app_metadata: { providers: ["google"] },
             email: "password.user@example.com",
+            id: "password-user-id",
           },
         },
       },
@@ -167,6 +178,7 @@ describe("setPasswordAction", () => {
     ).rejects.toBe(REDIRECT_ERROR);
 
     expect(updateUserMock).not.toHaveBeenCalled();
+    expect(getHasPasswordLoginMock).toHaveBeenCalledWith("password-user-id");
     expect(redirectMock).toHaveBeenCalledWith(ROUTES.MYPAGE);
   });
 
@@ -181,6 +193,22 @@ describe("setPasswordAction", () => {
     );
 
     expect(result.status).toBe("invalid_input");
+    expect(updateUserMock).not.toHaveBeenCalled();
+  });
+
+  it("비밀번호 존재 여부 조회가 실패하면 password를 설정하지 않고 internal_error를 반환한다", async () => {
+    getHasPasswordLoginMock.mockRejectedValue(new Error("RPC failed"));
+
+    const result = await setPasswordAction(
+      null,
+      INITIAL_SET_PASSWORD_ACTION_STATE,
+      makeFormData({
+        password: "Password123!",
+        confirmPassword: "Password123!",
+      }),
+    );
+
+    expect(result).toEqual({ status: "internal_error" });
     expect(updateUserMock).not.toHaveBeenCalled();
   });
 

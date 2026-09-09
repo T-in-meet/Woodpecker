@@ -9,12 +9,14 @@ const {
   getProfileMock,
   getLearningStatsMock,
   getHasAnyPushSubscriptionMock,
+  getHasPasswordLoginMock,
   redirectMock,
 } = vi.hoisted(() => ({
   getUserMock: vi.fn(),
   getProfileMock: vi.fn(),
   getLearningStatsMock: vi.fn(),
   getHasAnyPushSubscriptionMock: vi.fn(),
+  getHasPasswordLoginMock: vi.fn(),
   redirectMock: vi.fn(),
 }));
 
@@ -26,6 +28,9 @@ vi.mock("@/features/mypage/queries", () => ({
 }));
 vi.mock("@/features/notifications/queries", () => ({
   getHasAnyPushSubscription: getHasAnyPushSubscriptionMock,
+}));
+vi.mock("@/features/auth/lib/getHasPasswordLogin", () => ({
+  getHasPasswordLogin: getHasPasswordLoginMock,
 }));
 vi.mock("next/navigation", () => ({
   redirect: redirectMock,
@@ -57,6 +62,7 @@ describe("MyPage", () => {
     getProfileMock.mockReset();
     getLearningStatsMock.mockReset();
     getHasAnyPushSubscriptionMock.mockReset();
+    getHasPasswordLoginMock.mockReset();
     redirectMock.mockReset();
 
     redirectMock.mockImplementation(() => {
@@ -64,6 +70,7 @@ describe("MyPage", () => {
     });
     getUserMock.mockResolvedValue(mockUser);
     getProfileMock.mockResolvedValue(mockProfile);
+    getHasPasswordLoginMock.mockResolvedValue(false);
   });
 
   it("이메일 미인증 사용자는 RESEND_EMAIL?purpose=signup으로 redirect된다", async () => {

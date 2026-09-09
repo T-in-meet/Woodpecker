@@ -10,7 +10,7 @@ import {
   logRequested,
   normalizeUnknownError,
 } from "@/features/auth/lib/authLogger";
-import { hasPasswordLogin } from "@/features/auth/lib/authProviders";
+import { getHasPasswordLogin } from "@/features/auth/lib/getHasPasswordLogin";
 import { validateRedirectPath } from "@/features/auth/lib/validateRedirectPath";
 import { resetPasswordActionSchema } from "@/features/auth/reset-password/schemas/resetPasswordActionSchema";
 import { ROUTES } from "@/lib/constants/routes";
@@ -121,7 +121,28 @@ export async function setPasswordAction(
     redirect(ROUTES.SIGNUP);
   }
 
-  if (hasPasswordLogin(session.user)) {
+  let hasPasswordLogin: boolean;
+
+  try {
+    // provider metadata 대신 auth.users의 실제 비밀번호 존재 여부를 확인합니다.
+    hasPasswordLogin = await getHasPasswordLogin(session.user.id);
+  } catch (error) {
+    const normalized = normalizeUnknownError(error);
+    logAuthError(AUTH_EVENTS.AUTH_SET_PASSWORD_FAILED, {
+      path: ROUTES.SET_PASSWORD,
+      method: "POST",
+      status: 500,
+      provider: "password",
+      result: "failure",
+      reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+      ...normalized,
+    });
+    return {
+      status: "internal_error",
+    };
+  }
+
+  if (hasPasswordLogin) {
     logAuthEvent(AUTH_EVENTS.AUTH_SET_PASSWORD_REJECTED, {
       path: ROUTES.SET_PASSWORD,
       method: "POST",

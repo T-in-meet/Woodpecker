@@ -153,7 +153,6 @@ describe("회원가입 API 최소 응답 시간 보장 검증", () => {
       email: "test@example.com",
       email_confirmed_at: null,
       auth_providers: ["email"],
-      has_password_login: true,
     });
 
     const promise = POST(makeRequest(validBody));

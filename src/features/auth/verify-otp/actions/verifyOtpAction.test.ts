@@ -34,6 +34,10 @@ vi.mock("../lib/verifyOtp", () => ({
   verifyOtp: vi.fn(),
 }));
 
+vi.mock("../../lib/getHasPasswordLogin", () => ({
+  getHasPasswordLogin: vi.fn(),
+}));
+
 vi.mock("../../lib/getUserByEmail", () => ({
   getUserByEmail: vi.fn(),
 }));
@@ -56,6 +60,7 @@ import {
   checkRequestEligibility,
   mapBlockedByToReason,
 } from "../../lib/checkRequestEligibility";
+import { getHasPasswordLogin } from "../../lib/getHasPasswordLogin";
 import { getUserByEmail } from "../../lib/getUserByEmail";
 import { setResetPasswordIntentCookie } from "../../lib/resetPasswordIntent";
 import { verifyOtp } from "../lib/verifyOtp";
@@ -94,6 +99,7 @@ describe("verifyOtpAction", () => {
     } as Awaited<ReturnType<typeof verifyOtp>>);
 
     vi.mocked(getUserByEmail).mockResolvedValue(null);
+    vi.mocked(getHasPasswordLogin).mockResolvedValue(false);
 
     vi.mocked(applyMinimumActionDelay).mockResolvedValue(undefined);
   });
@@ -140,7 +146,6 @@ describe("verifyOtpAction", () => {
       email: "user@example.com",
       email_confirmed_at: "2026-03-29T00:00:00.000Z",
       auth_providers: ["google"],
-      has_password_login: false,
     });
 
     const formData = createFormData({
@@ -153,7 +158,31 @@ describe("verifyOtpAction", () => {
       `NEXT_REDIRECT:${ROUTES.SET_PASSWORD}`,
     );
 
+    expect(getHasPasswordLogin).toHaveBeenCalledWith("oauth-user-id");
     expect(redirect).toHaveBeenCalledWith(ROUTES.SET_PASSWORD);
+  });
+
+  it("Google provider만 있어도 실제 password가 있으면 비밀번호 설정을 건너뛴다", async () => {
+    vi.mocked(getUserByEmail).mockResolvedValue({
+      id: "oauth-user-id",
+      email: "user@example.com",
+      email_confirmed_at: "2026-03-29T00:00:00.000Z",
+      auth_providers: ["google"],
+    });
+    vi.mocked(getHasPasswordLogin).mockResolvedValue(true);
+
+    const formData = createFormData({
+      email: "user@example.com",
+      purpose: "signup",
+      otp: "123456",
+    });
+
+    await expect(verifyOtpAction(null, prevState, formData)).rejects.toThrow(
+      `NEXT_REDIRECT:${ROUTES.MYPAGE}`,
+    );
+
+    expect(getHasPasswordLogin).toHaveBeenCalledWith("oauth-user-id");
+    expect(redirect).toHaveBeenCalledWith(ROUTES.MYPAGE);
   });
 
   it("signup OTP 인증 전 기존 OAuth-only 사용자로 확인되고 redirectPath가 있으면 비밀번호 설정 완료 후 이동 경로를 전달한다", async () => {
@@ -162,7 +191,6 @@ describe("verifyOtpAction", () => {
       email: "user@example.com",
       email_confirmed_at: "2026-03-29T00:00:00.000Z",
       auth_providers: ["google"],
-      has_password_login: false,
     });
 
     const formData = createFormData({
@@ -178,6 +206,7 @@ describe("verifyOtpAction", () => {
       verifyOtpAction("/target", prevState, formData),
     ).rejects.toThrow(`NEXT_REDIRECT:${expectedPath}`);
 
+    expect(getHasPasswordLogin).toHaveBeenCalledWith("oauth-user-id");
     expect(redirect).toHaveBeenCalledWith(expectedPath);
   });
 

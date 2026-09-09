@@ -11,7 +11,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { hasPasswordLogin } from "@/features/auth/lib/authProviders";
+import { getHasPasswordLogin } from "@/features/auth/lib/getHasPasswordLogin";
 import { LearningStatsSection } from "@/features/mypage/components/LearningStatsSection";
 import {
   MypageNav,
@@ -124,14 +124,17 @@ export default async function MyPage({ searchParams }: Props) {
   // 활성 section에서만 fetch
   let stats: Awaited<ReturnType<typeof getLearningStats>> | null = null;
   let hasAnyPushSubscription = false;
+  let hasPasswordLogin = false;
   let feedbackResult: MyFeedbacksResult | null = null;
 
   if (section === "stats") {
     stats = await getLearningStats();
   } else if (section === "profile") {
-    hasAnyPushSubscription = await getHasAnyPushSubscription({
-      userId: user.id,
-    });
+    // 계정 화면에 필요한 독립 조회를 병렬로 수행합니다.
+    [hasAnyPushSubscription, hasPasswordLogin] = await Promise.all([
+      getHasAnyPushSubscription({ userId: user.id }),
+      getHasPasswordLogin(user.id),
+    ]);
   } else if (section === "support" && supportTab === "inquiry") {
     feedbackResult = await getMyFeedbacks(user.id);
   }
@@ -204,7 +207,7 @@ export default async function MyPage({ searchParams }: Props) {
               <PushSubscribeCard
                 initialHasAnySubscription={hasAnyPushSubscription}
               />
-              <AccountSection hasPasswordLogin={hasPasswordLogin(user)} />
+              <AccountSection hasPasswordLogin={hasPasswordLogin} />
               <DeleteAccountSection userEmail={user?.email ?? ""} />
             </>
           )}
