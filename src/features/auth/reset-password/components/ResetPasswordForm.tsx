@@ -2,18 +2,21 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
-import { startTransition, useActionState } from "react";
+import { startTransition, useActionState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/features/auth/components/PasswordInput";
 import {
   type ResetPasswordFormInput,
   resetPasswordFormSchema,
 } from "@/features/auth/reset-password/schemas/resetPasswordFormSchema";
 import { usePreventPageLeave } from "@/hooks/usePreventPageLeave";
 
+import { AuthCard } from "../../components/AuthCard";
+import AuthFormError from "../../components/AuthFormError";
+import { AuthFormField } from "../../components/AuthFormField";
+import { AuthFormHeader } from "../../components/AuthFormHeader";
 import {
   INITIAL_RESET_PASSWORD_ACTION_STATE,
   ResetPasswordActionState,
@@ -40,7 +43,9 @@ export function ResetPasswordForm({ action }: ResetPasswordFormProps) {
   const {
     register,
     handleSubmit,
-    formState: { errors, isDirty },
+    formState: { errors, isDirty, isValid },
+    setError,
+    clearErrors,
   } = useForm<ResetPasswordFormInput>({
     resolver: zodResolver(resetPasswordFormSchema),
     mode: "onTouched",
@@ -51,33 +56,48 @@ export function ResetPasswordForm({ action }: ResetPasswordFormProps) {
     },
   });
 
-  const passwordErrorId = "reset-password-password-error";
-  const confirmPasswordErrorId = "reset-password-confirm-password-error";
-  const globalErrorId = "reset-password-global-error";
+  /**
+   * Server Action 결과를 React Hook Form error로 연결한다.
+   *
+   * - invalid_input → 해당 field error
+   * - same_password → root error
+   * - 기타 internal_error → root error
+   *
+   * UI에서는 RHF errors만 참조하므로
+   * client/server error 렌더링 경로를 하나로 통일한다.
+   */
+  useEffect(() => {
+    if (state.status === "invalid_input") {
+      const passwordError = state.fieldErrors.password?.[0];
+      const confirmPasswordError = state.fieldErrors.confirmPassword?.[0];
 
-  const hasClientErrors = Boolean(
-    errors.password?.message || errors.confirmPassword?.message,
-  );
-
-  const visibleFieldErrors = hasClientErrors
-    ? {
-        password: errors.password?.message
-          ? [errors.password.message]
-          : undefined,
-        confirmPassword: errors.confirmPassword?.message
-          ? [errors.confirmPassword.message]
-          : undefined,
+      if (passwordError) {
+        setError("password", {
+          type: "server",
+          message: passwordError,
+        });
       }
-    : state.status === "invalid_input"
-      ? state.fieldErrors
-      : {};
 
-  const showGlobalError = state.status === "internal_error" && !hasClientErrors;
+      if (confirmPasswordError) {
+        setError("confirmPassword", {
+          type: "server",
+          message: confirmPasswordError,
+        });
+      }
 
-  const globalErrorMessage =
-    state.status === "internal_error" && state.reason === "same_password"
-      ? RESET_PASSWORD_SAME_PASSWORD_MESSAGE
-      : RESET_PASSWORD_GLOBAL_ERROR_MESSAGE;
+      return;
+    }
+
+    if (state.status === "internal_error") {
+      setError("root", {
+        type: "server",
+        message:
+          state.reason === "same_password"
+            ? RESET_PASSWORD_SAME_PASSWORD_MESSAGE
+            : RESET_PASSWORD_GLOBAL_ERROR_MESSAGE,
+      });
+    }
+  }, [state, setError]);
 
   /**
    * reset-password 페이지 이탈 제어
@@ -91,13 +111,13 @@ export function ResetPasswordForm({ action }: ResetPasswordFormProps) {
   );
 
   /**
-   * react-hook-form 검증을 통과한 값만 Server Action에 전달한다.
-   *
-   * ForgotPasswordForm과 동일하게 native form action을 사용하지 않고,
-   * handleSubmit으로 검증한 뒤 FormData를 직접 구성해 useActionState dispatch를 호출한다.
+   * React Hook Form 검증을 통과한 값만 Server Action에 전달한다.
    */
   const onSubmit = handleSubmit((data) => {
+    clearErrors();
+
     const formData = new FormData();
+
     formData.set("password", data.password);
     formData.set("confirmPassword", data.confirmPassword);
 
@@ -107,104 +127,55 @@ export function ResetPasswordForm({ action }: ResetPasswordFormProps) {
   });
 
   return (
-    <div className="my-0 md:my-4 mx-auto max-w-2xl bg-white border-0 md:border md:border-outline-variant md:rounded-xl rounded-none md:shadow-sm shadow-none overflow-hidden">
-      <form
-        onSubmit={onSubmit}
-        className="mx-auto max-w-4xl space-y-2 py-7 px-4 md:px-8"
-        noValidate
-      >
-        <div className="grid grid-cols-1 md:grid-cols-[6.25rem_minmax(0,1fr)] gap-x-4 gap-y-2">
-          <div className="flex items-center">
-            <Label htmlFor="password" className="shrink-0 min-w-25">
-              비밀번호
-            </Label>
-          </div>
+    <AuthCard variant="compact">
+      <form onSubmit={onSubmit} className="space-y-4" noValidate>
+        <AuthFormHeader title="비밀번호 재설정" />
 
-          <Input
+        <AuthFormField
+          label="비밀번호"
+          htmlFor="password"
+          error={errors.password?.message}
+        >
+          <PasswordInput
             id="password"
-            type="password"
-            aria-invalid={Boolean(visibleFieldErrors.password?.length)}
-            aria-describedby={
-              visibleFieldErrors.password?.length ? passwordErrorId : undefined
-            }
-            {...register("password")}
+            autoComplete="new-password"
+            aria-invalid={Boolean(errors.password)}
+            placeholder="새 비밀번호를 입력하세요"
+            {...register("password", {
+              onChange: () => clearErrors("password"),
+            })}
           />
+        </AuthFormField>
 
-          <div className="hidden md:block" />
-
-          <div className="min-h-5 mt-2">
-            {visibleFieldErrors.password?.map((error) => (
-              <p
-                key={`password-${error}`}
-                id={passwordErrorId}
-                role="alert"
-                className="text-sm text-destructive"
-              >
-                {error}
-              </p>
-            ))}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-[6.25rem_minmax(0,1fr)] gap-x-4 gap-y-2">
-          <div className="flex items-center">
-            <Label htmlFor="confirmPassword" className="shrink-0 min-w-25">
-              비밀번호 확인
-            </Label>
-          </div>
-
-          <Input
+        <AuthFormField
+          label="비밀번호 확인"
+          htmlFor="confirmPassword"
+          error={errors.confirmPassword?.message}
+        >
+          <PasswordInput
             id="confirmPassword"
-            type="password"
-            aria-invalid={Boolean(visibleFieldErrors.confirmPassword?.length)}
-            aria-describedby={
-              visibleFieldErrors.confirmPassword?.length
-                ? confirmPasswordErrorId
-                : undefined
-            }
-            {...register("confirmPassword")}
+            autoComplete="new-password"
+            aria-invalid={Boolean(errors.confirmPassword)}
+            placeholder="새 비밀번호를 다시 입력하세요"
+            {...register("confirmPassword", {
+              onChange: () => clearErrors("confirmPassword"),
+            })}
           />
-
-          <div className="hidden md:block" />
-
-          <div className="min-h-5 mt-2">
-            {visibleFieldErrors.confirmPassword?.map((error) => (
-              <p
-                key={`confirmPassword-${error}`}
-                id={confirmPasswordErrorId}
-                role="alert"
-                className="text-sm text-destructive"
-              >
-                {error}
-              </p>
-            ))}
-          </div>
-        </div>
-
-        <div className="min-h-5">
-          {showGlobalError ? (
-            <p
-              id={globalErrorId}
-              role="alert"
-              className="text-sm text-destructive"
-            >
-              {globalErrorMessage}
-            </p>
-          ) : null}
-        </div>
+        </AuthFormField>
 
         <Button
-          disabled={isPending}
+          disabled={isPending || !isValid}
           type="submit"
-          className="w-full md:w-auto"
-          aria-describedby={showGlobalError ? globalErrorId : undefined}
+          className="w-full"
         >
           {isPending && (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
           )}
           {isPending ? "변경 중..." : "비밀번호 변경하기"}
         </Button>
+
+        <AuthFormError error={errors.root?.message} />
       </form>
-    </div>
+    </AuthCard>
   );
 }
