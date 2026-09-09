@@ -35,10 +35,8 @@ export default async function SetPasswordPage({ searchParams }: Props) {
   const setPasswordFormAction = setPasswordAction.bind(null, redirectPath);
 
   return (
-    <main className="md:flex md:min-h-[calc(100dvh-4.5rem)] md:items-center md:justify-center">
-      <Suspense fallback={null}>
-        <SetPasswordForm action={setPasswordFormAction} />
-      </Suspense>
-    </main>
+    <Suspense fallback={null}>
+      <SetPasswordForm action={setPasswordFormAction} />
+    </Suspense>
   );
 }
