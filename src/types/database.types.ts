@@ -1502,11 +1502,12 @@ export type Database = {
         Args: { p_note_id: string; p_quiz_type: string; p_user_id: string };
         Returns: Json;
       };
-      claim_related_note_recommendation_execution: {
+      claim_related_note_recommendation_execution_v2: {
         Args: {
-          p_daily_recommendation_limit: number;
+          p_note_daily_recommendation_limit: number;
           p_note_id: string;
           p_source_updated_at: string;
+          p_user_daily_recommendation_limit: number;
           p_user_id: string;
         };
         Returns: {
@@ -1760,9 +1761,21 @@ export type Database = {
         }[];
       };
       get_note_chat_daily_usage: { Args: never; Returns: number };
-      get_related_note_recommendation_daily_usage: {
-        Args: { p_note_id: string };
-        Returns: number;
+      get_related_note_recommendation_daily_usage_v2: {
+        Args: {
+          p_note_daily_recommendation_limit: number;
+          p_note_id: string;
+          p_user_daily_recommendation_limit: number;
+        };
+        Returns: {
+          can_request_for_note: boolean;
+          is_note_limit_reached: boolean;
+          is_user_limit_reached: boolean;
+          note_limit: number;
+          note_used: number;
+          user_limit: number;
+          user_used: number;
+        }[];
       };
       increment_operational_error_occurrence: {
         Args: {

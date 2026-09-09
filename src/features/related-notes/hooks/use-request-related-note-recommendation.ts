@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import { requestRelatedNoteRecommendationAction } from "../actions";
 import { relatedNotesQueryKeys } from "../constants/query-keys";
@@ -52,6 +53,17 @@ export function useRequestRelatedNoteRecommendation(
         }
 
         onAccepted(execution.claimId);
+      }
+
+      /*
+       * DB가 사용자 전체 일일 한도를 거절한 경우에는 polling을 시작하지 않고
+       * 내부 Claim 상태 대신 사용자용 할당량 소진 안내를 표시합니다.
+       */
+      if (
+        execution.status ===
+        RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS.DAILY_LIMIT_EXCEEDED
+      ) {
+        toast.error("오늘 AI 추천 할당량을 모두 사용했습니다.");
       }
 
       /*

@@ -12,7 +12,10 @@ import { logError } from "@/lib/logger";
 import { createServerComponentClient } from "@/lib/supabase/server";
 import { escapePostgrestLikePattern } from "@/lib/utils/escapePostgrestLikePattern";
 
-import { RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE } from "./constants/ai";
+import {
+  RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
+  RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
+} from "./constants/ai";
 import { relatedNoteRowSchema } from "./schemas";
 import type { RelatedNoteRecommendation } from "./types";
 import { reportRelatedNotesOperationalError } from "./utils/report-operational-error";
@@ -35,6 +38,43 @@ type RelatedNoteRecommendationExecution = {
 export type RelatedNoteRecommendationExecutionClaim =
   RelatedNoteRecommendationExecution;
 
+/** 일반 사용자의 Related Notes AI 추천 일일 할당량입니다. */
+type RelatedNoteRecommendationQuota = {
+  /** 현재 Note에 새 AI 추천을 요청할 수 있는지 여부입니다. */
+  canRequestForNote: boolean;
+
+  /** 현재 Note의 일일 추천 한도 도달 여부입니다. */
+  isNoteLimitReached: boolean;
+
+  /** 사용자의 전체 일일 추천 한도 도달 여부입니다. */
+  isUserLimitReached: boolean;
+
+  /** Note별 일일 추천 한도입니다. */
+  noteLimit: number;
+
+  /** 사용자별 전체 일일 추천 한도입니다. */
+  userLimit: number;
+
+  /** 사용자의 오늘 전체 추천 사용량입니다. */
+  userUsed: number;
+};
+
+/** Related Notes AI 추천 일일 할당량 조회 상태입니다. */
+export type RelatedNoteRecommendationQuotaState =
+  | {
+      /** 일반 사용자의 할당량을 정상적으로 조회한 상태입니다. */
+      status: "available";
+      quota: RelatedNoteRecommendationQuota;
+    }
+  | {
+      /** ADMIN처럼 일일 할당량을 적용하지 않는 상태입니다. */
+      status: "not_applicable";
+    }
+  | {
+      /** 사용자 역할 또는 일반 사용자의 할당량을 확인하지 못한 상태입니다. */
+      status: "unavailable";
+    };
+
 /** Related Notes 섹션 조회 결과입니다. */
 export type RelatedNotesQueryResult = {
   /** 현재 표시할 Related Notes 목록입니다. */
@@ -54,16 +94,8 @@ export type RelatedNotesQueryResult = {
    */
   latestRecommendationExecution: RelatedNoteRecommendationExecution | null;
 
-  /**
-   * 현재 Note의 오늘 AI 추천 사용량입니다.
-   *
-   * 일일 실행 제한을 적용받는 일반 사용자에게만 반환하며,
-   * quota를 우회하는 ADMIN에게는 null을 반환합니다.
-   */
-  recommendationUsage: {
-    used: number;
-    limit: number;
-  } | null;
+  /** 현재 사용자의 AI 추천 일일 할당량 적용 및 조회 상태입니다. */
+  recommendationQuota: RelatedNoteRecommendationQuotaState;
 };
 
 /** Related Notes AI 추천 실행의 UI 상태입니다. */
@@ -102,7 +134,7 @@ export async function getRelatedNotes(
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
       latestRecommendationExecution: null,
-      recommendationUsage: null,
+      recommendationQuota: { status: "unavailable" },
       relatedNotes: [],
     };
   }
@@ -118,7 +150,7 @@ export async function getRelatedNotes(
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
       latestRecommendationExecution: null,
-      recommendationUsage: null,
+      recommendationQuota: { status: "unavailable" },
       relatedNotes: [],
     };
   }
@@ -157,7 +189,7 @@ export async function getRelatedNotes(
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
       latestRecommendationExecution: null,
-      recommendationUsage: null,
+      recommendationQuota: { status: "unavailable" },
       relatedNotes: [],
     };
   }
@@ -167,43 +199,9 @@ export async function getRelatedNotes(
       hasFailedRecommendationExecution: false,
       hasRunningRecommendationExecution: false,
       latestRecommendationExecution: null,
-      recommendationUsage: null,
+      recommendationQuota: { status: "unavailable" },
       relatedNotes: [],
     };
-  }
-
-  /*
-   * background 실행이 platform/process 종료로 중단되면 Claim completion이 실행되지 않아
-   * 실제 실행은 끝났지만 running Claim만 남을 수 있습니다.
-   *
-   * 실행 상태를 읽기 전에 DB 시간 기준 stale cleanup을 수행하여,
-   * 새 요청이 없어도 조회/polling 경로에서 orphan running Claim을 복구할 수 있게 합니다.
-   *
-   * cleanup은 실행 상태 복구를 위한 best-effort 처리입니다.
-   * cleanup 자체가 실패하더라도 기존 Related Notes 목록 조회까지 막지는 않고,
-   * 운영 오류를 기록한 뒤 현재 DB 상태를 그대로 조회합니다.
-   */
-  const { error: staleCleanupError } = await supabase.rpc(
-    "cleanup_related_note_recommendation_stale_execution_claims",
-    {
-      p_note_id: parsedNoteId.data,
-    },
-  );
-
-  if (staleCleanupError) {
-    await reportRelatedNotesOperationalError({
-      actorUserId: user.id,
-      error: staleCleanupError,
-      errorCode:
-        RELATED_NOTES_OPERATIONAL_ERROR_CODES.RECOMMENDATION_EXECUTION_STATE_LOAD_FAILED,
-      message: "Related Notes AI 추천 만료 실행 상태 정리에 실패했습니다.",
-      operation:
-        RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.LOAD_RECOMMENDATION_EXECUTION_STATE,
-      context: {
-        noteId: parsedNoteId.data,
-      },
-      userId: user.id,
-    });
   }
 
   const { data: profile, error: profileError } = profileResult;
@@ -220,8 +218,104 @@ export async function getRelatedNotes(
     });
   }
 
-  const shouldQueryRecommendationUsage =
+  const shouldQueryRecommendationQuota =
     !profileError && profile?.role === "USER";
+
+  let recommendationQuota: RelatedNotesQueryResult["recommendationQuota"] =
+    !profileError && profile?.role === "ADMIN"
+      ? { status: "not_applicable" }
+      : { status: "unavailable" };
+
+  if (shouldQueryRecommendationQuota) {
+    /*
+     * 일반 사용자는 quota RPC가 사용자 전체 stale Claim 정리까지 수행합니다.
+     * 실행 상태를 읽기 전에 완료하여 stale 상태와 UI 상태가 엇갈리지 않게 합니다.
+     */
+    const recommendationQuotaResult = await supabase.rpc(
+      "get_related_note_recommendation_daily_usage_v2",
+      {
+        p_note_daily_recommendation_limit:
+          RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
+        p_note_id: parsedNoteId.data,
+        p_user_daily_recommendation_limit:
+          RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
+      },
+    );
+
+    if (recommendationQuotaResult.error) {
+      await reportRelatedNotesOperationalError({
+        actorUserId: user.id,
+        error: recommendationQuotaResult.error,
+        errorCode:
+          RELATED_NOTES_OPERATIONAL_ERROR_CODES.DAILY_USAGE_LOAD_FAILED,
+        message: "Related Notes 일일 AI 추천 사용량 조회에 실패했습니다.",
+        operation: RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.GET_DAILY_USAGE,
+        userId: user.id,
+      });
+    } else {
+      // DB가 반환한 quota 판정과 표시용 한도를 런타임에서 검증합니다.
+      const parsedRecommendationQuota = z
+        .tuple([
+          z.object({
+            can_request_for_note: z.boolean(),
+            is_note_limit_reached: z.boolean(),
+            is_user_limit_reached: z.boolean(),
+            note_limit: z.number().int().positive(),
+            user_limit: z.number().int().positive(),
+            user_used: z.number().int().nonnegative(),
+          }),
+        ])
+        .safeParse(recommendationQuotaResult.data);
+
+      if (!parsedRecommendationQuota.success) {
+        logError({
+          message: "[getRelatedNotes] AI 추천 일일 사용량 파싱 실패",
+          error: parsedRecommendationQuota.error,
+        });
+      } else {
+        const quota = parsedRecommendationQuota.data[0];
+
+        recommendationQuota = {
+          status: "available",
+          quota: {
+            canRequestForNote: quota.can_request_for_note,
+            isNoteLimitReached: quota.is_note_limit_reached,
+            isUserLimitReached: quota.is_user_limit_reached,
+            noteLimit: quota.note_limit,
+            userLimit: quota.user_limit,
+            userUsed: quota.user_used,
+          },
+        };
+      }
+    }
+  } else {
+    /*
+     * ADMIN과 role 조회 실패 경로는 quota RPC를 호출하지 않으므로,
+     * 기존 Note 단위 cleanup을 실행 상태 조회 전에 별도로 수행합니다.
+     */
+    const { error: staleCleanupError } = await supabase.rpc(
+      "cleanup_related_note_recommendation_stale_execution_claims",
+      {
+        p_note_id: parsedNoteId.data,
+      },
+    );
+
+    if (staleCleanupError) {
+      await reportRelatedNotesOperationalError({
+        actorUserId: user.id,
+        error: staleCleanupError,
+        errorCode:
+          RELATED_NOTES_OPERATIONAL_ERROR_CODES.RECOMMENDATION_EXECUTION_STATE_LOAD_FAILED,
+        message: "Related Notes AI 추천 만료 실행 상태 정리에 실패했습니다.",
+        operation:
+          RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.LOAD_RECOMMENDATION_EXECUTION_STATE,
+        context: {
+          noteId: parsedNoteId.data,
+        },
+        userId: user.id,
+      });
+    }
+  }
 
   const relatedNotesQuery = supabase
     .from("note_related_notes")
@@ -248,24 +342,8 @@ export async function getRelatedNotes(
     .order("claimed_at", { ascending: false })
     .limit(1);
 
-  const recommendationUsageQuery = shouldQueryRecommendationUsage
-    ? supabase.rpc("get_related_note_recommendation_daily_usage", {
-        p_note_id: parsedNoteId.data,
-      })
-    : Promise.resolve({
-        data: null,
-        error: null,
-      });
-
-  const [
-    relatedNotesResult,
-    latestRecommendationExecutionResult,
-    recommendationUsageResult,
-  ] = await Promise.all([
-    relatedNotesQuery,
-    latestRecommendationExecutionQuery,
-    recommendationUsageQuery,
-  ]);
+  const [relatedNotesResult, latestRecommendationExecutionResult] =
+    await Promise.all([relatedNotesQuery, latestRecommendationExecutionQuery]);
 
   const {
     hasFailedRecommendationExecution,
@@ -276,41 +354,6 @@ export async function getRelatedNotes(
     parsedNoteId.data,
     user.id,
   );
-
-  let recommendationUsage: RelatedNotesQueryResult["recommendationUsage"] =
-    null;
-
-  if (shouldQueryRecommendationUsage) {
-    if (recommendationUsageResult.error) {
-      await reportRelatedNotesOperationalError({
-        actorUserId: user.id,
-        error: recommendationUsageResult.error,
-        errorCode:
-          RELATED_NOTES_OPERATIONAL_ERROR_CODES.DAILY_USAGE_LOAD_FAILED,
-        message: "Related Notes 일일 AI 추천 사용량 조회에 실패했습니다.",
-        operation: RELATED_NOTES_OPERATIONAL_ERROR_OPERATIONS.GET_DAILY_USAGE,
-        userId: user.id,
-      });
-    } else {
-      const parsedRecommendationUsage = z
-        .number()
-        .int()
-        .nonnegative()
-        .safeParse(recommendationUsageResult.data);
-
-      if (!parsedRecommendationUsage.success) {
-        logError({
-          message: "[getRelatedNotes] AI 추천 일일 사용량 파싱 실패",
-          error: parsedRecommendationUsage.error,
-        });
-      } else {
-        recommendationUsage = {
-          used: parsedRecommendationUsage.data,
-          limit: RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
-        };
-      }
-    }
-  }
 
   const { data, error } = relatedNotesResult;
 
@@ -332,7 +375,7 @@ export async function getRelatedNotes(
       hasFailedRecommendationExecution,
       hasRunningRecommendationExecution,
       latestRecommendationExecution,
-      recommendationUsage,
+      recommendationQuota,
       relatedNotes: [],
     };
   }
@@ -349,7 +392,7 @@ export async function getRelatedNotes(
       hasFailedRecommendationExecution,
       hasRunningRecommendationExecution,
       latestRecommendationExecution,
-      recommendationUsage,
+      recommendationQuota,
       relatedNotes: [],
     };
   }
@@ -358,7 +401,7 @@ export async function getRelatedNotes(
     hasFailedRecommendationExecution,
     hasRunningRecommendationExecution,
     latestRecommendationExecution,
-    recommendationUsage,
+    recommendationQuota,
     relatedNotes: parsed.data.map((row): RelatedNoteRecommendation => {
       const relatedNoteId = resolveOtherRelatedNoteId(row, parsedNoteId.data);
 

@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE } from "../../constants/ai";
+import {
+  RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
+  RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
+} from "../../constants/ai";
 import {
   claimRelatedNoteRecommendationExecution,
   completeRelatedNoteRecommendationExecutionClaim,
@@ -48,12 +51,14 @@ describe("related note recommendation execution claim persistence", () => {
     });
 
     expect(rpc).toHaveBeenCalledWith(
-      "claim_related_note_recommendation_execution",
+      "claim_related_note_recommendation_execution_v2",
       {
-        p_daily_recommendation_limit:
+        p_note_daily_recommendation_limit:
           RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
         p_note_id: NOTE_ID,
         p_source_updated_at: SOURCE_UPDATED_AT,
+        p_user_daily_recommendation_limit:
+          RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
         p_user_id: USER_ID,
       },
     );
@@ -62,6 +67,29 @@ describe("related note recommendation execution claim persistence", () => {
       claimId: CLAIM_ID,
       status: RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS.CLAIMED,
     });
+  });
+
+  it("v2 RPC 실행 오류를 호출자에게 전달한다", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: null,
+      error: {
+        code: "P0001",
+        message: "note not found",
+      },
+    });
+
+    createAdminClientMock.mockReturnValue({ rpc } as never);
+
+    await expect(
+      claimRelatedNoteRecommendationExecution({
+        noteId: NOTE_ID,
+        sourceUpdatedAt: SOURCE_UPDATED_AT,
+        userId: USER_ID,
+      }),
+    ).rejects.toThrow(
+      "Failed to claim related note recommendation execution: note not found",
+    );
+    expect(rpc).toHaveBeenCalledTimes(1);
   });
 
   it("stale claim 결과는 null claim ID와 함께 반환한다", async () => {
