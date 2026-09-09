@@ -69,7 +69,7 @@ type RecommendationQuota = {
   isUserLimitReached: boolean;
   noteLimit: number;
   userLimit: number;
-  userUsed: number | null;
+  userUsed: number;
 };
 
 /** Related Notes 컴포넌트 테스트용 quota 조회 상태입니다. */
@@ -327,26 +327,6 @@ describe("RelatedNotesSection", () => {
     render(<RelatedNotesSection noteId={noteId} />);
 
     expect(screen.getByText("추천 가능 · 오늘 4/10회")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "AI 추천" })).toBeEnabled();
-  });
-
-  it("구 DB fallback에서는 Note 추천 가능 여부를 유지하고 알 수 없는 사용자 전체 사용량은 표시하지 않는다", () => {
-    mockRelatedNotesSectionData({
-      recommendationQuota: createRecommendationQuota({
-        userUsed: null,
-      }),
-    });
-
-    render(<RelatedNotesSection noteId={noteId} />);
-
-    expect(screen.getByText("추천 가능")).toBeInTheDocument();
-    expect(screen.queryByText(/오늘 \d+\/10회/)).not.toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "AI 관련 노트 추천은 노트마다 하루 1회 사용할 수 있으며 매일 자정(KST)에 초기화됩니다.",
-      ),
-    ).toBeInTheDocument();
-    expect(screen.queryByText(/사용자당 하루 최대/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "AI 추천" })).toBeEnabled();
   });
 

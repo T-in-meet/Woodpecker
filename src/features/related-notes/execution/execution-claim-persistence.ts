@@ -6,7 +6,6 @@ import {
   RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
   RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
 } from "../constants/ai";
-import { isMissingRpcFunctionError } from "../utils/is-missing-rpc-function-error";
 
 /** Related Notes 추천 실행 claim 상태입니다. */
 export const RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS = {
@@ -109,7 +108,7 @@ export async function claimRelatedNoteRecommendationExecution(
 ): Promise<ClaimRelatedNoteRecommendationExecutionResult> {
   const supabase = options.supabase ?? createAdminClient();
 
-  const v2Result = await supabase.rpc(
+  const { data, error } = await supabase.rpc(
     "claim_related_note_recommendation_execution_v2",
     {
       p_note_daily_recommendation_limit:
@@ -121,20 +120,6 @@ export async function claimRelatedNoteRecommendationExecution(
         RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
     },
   );
-
-  /*
-   * 신 앱이 구 DB와 잠시 함께 실행되는 배포 구간에는 v2가 없을 수 있습니다.
-   * 함수 미존재 오류에만 기존 signature로 재시도하여 실제 실행 오류는 숨기지 않습니다.
-   */
-  const { data, error } = isMissingRpcFunctionError(v2Result.error)
-    ? await supabase.rpc("claim_related_note_recommendation_execution", {
-        p_daily_recommendation_limit:
-          RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
-        p_note_id: params.noteId,
-        p_source_updated_at: params.sourceUpdatedAt,
-        p_user_id: params.userId,
-      })
-    : v2Result;
 
   if (error) {
     throw new Error(
