@@ -4,7 +4,8 @@ import type { ChangeEvent } from "react";
 import type { FieldErrors, UseFormRegisterReturn } from "react-hook-form";
 
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { AuthFormField } from "@/features/auth/components/AuthFormField";
+import { PasswordInput } from "@/features/auth/components/PasswordInput";
 
 import type { FormInput } from "./SignupForm";
 
@@ -29,6 +30,12 @@ type EmailSignupFieldsProps = {
 
 /**
  * 이메일 회원가입에 필요한 입력 필드 묶음
+ *
+ * 일반 Auth 입력 필드는 AuthFormField를 사용하고,
+ * 비밀번호 필드는 표시 여부를 전환할 수 있는 PasswordInput을 사용합니다.
+ *
+ * 각 필드의 React Hook Form 등록 및 validation 동작은 이 컴포넌트에서
+ * 기존과 동일하게 유지합니다.
  */
 export function EmailSignupFields({
   errors,
@@ -41,107 +48,57 @@ export function EmailSignupFields({
 }: EmailSignupFieldsProps) {
   return (
     <div className="space-y-2">
-      {/* 닉네임 */}
-      <div>
-        <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-[6.25rem_minmax(0,1fr)]">
-          <div className="flex items-center">
-            <Label htmlFor="nickname" className="shrink-0 min-w-25">
-              닉네임
-            </Label>
-          </div>
-          <Input
-            id="nickname"
-            type="text"
-            placeholder="닉네임을 입력하세요"
-            {...nicknameRegister}
-          />
-          <div />
-          <div className="min-h-5 mt-2">
-            {errors.nickname && (
-              <p role="alert" className="text-sm text-destructive">
-                {errors.nickname.message}
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
+      <AuthFormField
+        label="닉네임"
+        htmlFor="nickname"
+        error={errors.nickname?.message}
+      >
+        <Input
+          id="nickname"
+          type="text"
+          placeholder="닉네임을 입력하세요"
+          {...nicknameRegister}
+        />
+      </AuthFormField>
 
-      {/* 이메일 */}
-      <div>
-        <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-[6.25rem_minmax(0,1fr)]">
-          <div className="flex items-center">
-            <Label htmlFor="email" className="shrink-0 min-w-25">
-              이메일
-            </Label>
-          </div>
-          <Input
-            id="email"
-            type="email"
-            placeholder="example@email.com"
-            {...emailRegister}
-          />
-          <div />
-          <div className="min-h-5 mt-2">
-            {errors.email && (
-              <p role="alert" className="text-sm text-destructive">
-                {errors.email.message}
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
+      <AuthFormField
+        label="이메일"
+        htmlFor="email"
+        error={errors.email?.message}
+      >
+        <Input
+          id="email"
+          type="email"
+          placeholder="example@email.com"
+          {...emailRegister}
+        />
+      </AuthFormField>
 
-      {/* 비밀번호 */}
-      <div>
-        <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-[6.25rem_minmax(0,1fr)]">
-          <div className="flex items-center">
-            <Label htmlFor="password" className="shrink-0 min-w-25">
-              비밀번호
-            </Label>
-          </div>
-          <Input
-            id="password"
-            type="password"
-            placeholder="8자 이상 입력하세요"
-            {...passwordRegister}
-            onChange={onPasswordChange}
-          />
-          <div />
-          <div className="min-h-5 mt-2">
-            {errors.password && (
-              <p role="alert" className="text-sm text-destructive">
-                {errors.password.message}
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
+      <AuthFormField
+        label="비밀번호"
+        htmlFor="password"
+        error={errors.password?.message}
+      >
+        <PasswordInput
+          id="password"
+          placeholder="8자 이상 입력하세요"
+          {...passwordRegister}
+          onChange={onPasswordChange}
+        />
+      </AuthFormField>
 
-      {/* 비밀번호 확인 */}
-      <div>
-        <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-[6.25rem_minmax(0,1fr)]">
-          <div className="flex items-center">
-            <Label htmlFor="confirmPassword" className="shrink-0 min-w-25">
-              비밀번호 확인
-            </Label>
-          </div>
-          <Input
-            id="confirmPassword"
-            type="password"
-            placeholder="비밀번호를 다시 입력하세요"
-            {...confirmPasswordRegister}
-            onChange={onConfirmPasswordChange}
-          />
-          <div />
-          <div className="min-h-5 mt-2">
-            {errors.confirmPassword && (
-              <p role="alert" className="text-sm text-destructive">
-                {errors.confirmPassword.message}
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
+      <AuthFormField
+        label="비밀번호 확인"
+        htmlFor="confirmPassword"
+        error={errors.confirmPassword?.message}
+      >
+        <PasswordInput
+          id="confirmPassword"
+          placeholder="비밀번호를 다시 입력하세요"
+          {...confirmPasswordRegister}
+          onChange={onConfirmPasswordChange}
+        />
+      </AuthFormField>
     </div>
   );
 }

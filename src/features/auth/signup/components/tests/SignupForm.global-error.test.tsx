@@ -33,6 +33,17 @@ describe("회원가입 전역 에러 처리", () => {
     vi.clearAllMocks();
   });
 
+  function getFieldContainer(label: string | RegExp) {
+    const input = screen.getByLabelText(label);
+    const fieldContainer = input.closest(".grid");
+
+    if (!(fieldContainer instanceof HTMLElement)) {
+      throw new Error("AuthFormField container를 찾을 수 없습니다.");
+    }
+
+    return fieldContainer;
+  }
+
   async function fillValidForm(
     user: ReturnType<typeof userEvent.setup>,
     {
@@ -179,11 +190,11 @@ describe("회원가입 전역 에러 처리", () => {
 
     await submitValidForm(user);
 
-    const emailField = screen.getByLabelText(/이메일/i).closest("div");
-    const nicknameField = screen.getByLabelText(/닉네임/i).closest("div");
+    const emailField = getFieldContainer(/이메일/i);
+    const nicknameField = getFieldContainer(/닉네임/i);
 
-    expect(await within(emailField!).findByRole("alert")).toBeInTheDocument();
-    expect(within(nicknameField!).getByRole("alert")).toBeInTheDocument();
+    expect(await within(emailField).findByRole("alert")).toBeInTheDocument();
+    expect(within(nicknameField).getByRole("alert")).toBeInTheDocument();
 
     // 필드 에러만 표시되고 전역(root) 에러 영역은 비어 있어야 함
     expect(screen.queryByTestId("form-error")).not.toBeInTheDocument();

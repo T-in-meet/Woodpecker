@@ -34,6 +34,9 @@ import { cn } from "@/lib/utils/cn";
 import { isServerValidationError } from "@/lib/validation/isServerValidationError";
 import { mapReasonToMessage } from "@/lib/validation/mapReasonToMessage";
 
+import { AuthCard } from "../../components/AuthCard";
+import { AuthFormHeader } from "../../components/AuthFormHeader";
+
 /**
  * signup 폼에서 처리 가능한 필드 이름 집합
  * resolveFieldName에 주입하여 서버 field → 폼 필드 매핑에 사용한다
@@ -303,20 +306,16 @@ export function SignupForm({
     };
 
   return (
-    <div className="my-0 md:my-4 mx-auto max-w-2xl bg-white border-0 md:border md:border-outline-variant md:rounded-xl rounded-none md:shadow-sm shadow-none overflow-hidden">
+    <AuthCard variant="wide">
       <form
         aria-label="회원가입"
-        className="mx-auto max-w-4xl space-y-6 py-7 px-4 md:px-8"
+        className="space-y-6"
         onSubmit={handleSubmit(handleValidSubmit)}
       >
-        <div className="space-y-2">
-          <h1 className="text-2xl font-bold text-primary tracking-tight">
-            계정 만들기
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            가입 방식을 선택하고 필수 약관에 동의해주세요.
-          </p>
-        </div>
+        <AuthFormHeader
+          title="계정 만들기"
+          description="가입 방식을 선택하고 필수 약관에 동의해주세요."
+        />
 
         {signupNotice ? (
           <div
@@ -338,7 +337,8 @@ export function SignupForm({
           >
             가입 방식
           </h2>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+
+          <div className="grid grid-cols-1 gap-2 auth:grid-cols-2">
             <Button
               type="button"
               variant="outline"
@@ -352,6 +352,7 @@ export function SignupForm({
             >
               이메일로 가입
             </Button>
+
             <Button
               type="button"
               variant="outline"
@@ -407,7 +408,7 @@ export function SignupForm({
 
         {signupMethod === SIGNUP_METHODS.email && (
           <SignupActions
-            rootError={errors.root}
+            rootError={errors.root?.message}
             isPending={isPending}
             isSubmitButtonVisuallyEnabled={isSubmitButtonVisuallyEnabled}
             submitButtonRef={submitButtonRef}
@@ -425,6 +426,6 @@ export function SignupForm({
           </Link>
         </p>
       </form>
-    </div>
+    </AuthCard>
   );
 }

@@ -2,18 +2,16 @@
 
 import { Loader2 } from "lucide-react";
 import type { RefObject } from "react";
-import type { FieldErrors } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
+import AuthFormError from "@/features/auth/components/AuthFormError";
 import { cn } from "@/lib/utils/cn";
-
-import type { FormInput } from "./SignupForm";
 
 /**
  * 회원가입 액션 영역 props
  */
 type SignupActionsProps = {
-  rootError: FieldErrors<FormInput>["root"];
+  rootError?: string | undefined;
   isPending: boolean;
   isSubmitButtonVisuallyEnabled: boolean;
   submitButtonRef: RefObject<HTMLButtonElement | null>;
@@ -30,16 +28,6 @@ export function SignupActions({
 }: SignupActionsProps) {
   return (
     <div className="space-y-4">
-      {rootError && (
-        <p
-          role="alert"
-          data-testid="form-error"
-          className="text-sm text-destructive"
-        >
-          {rootError.message}
-        </p>
-      )}
-
       <div
         data-testid="form-action-area"
         className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
@@ -61,6 +49,8 @@ export function SignupActions({
           {isPending ? "가입 중..." : "회원가입"}
         </Button>
       </div>
+
+      <AuthFormError error={rootError} />
     </div>
   );
 }
