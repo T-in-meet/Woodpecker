@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 
@@ -37,6 +38,26 @@ function Heading2({ children }: { children?: ReactNode }) {
 }
 
 /**
+ * 문서 사이 링크는 next/link로 넘긴다.
+ *
+ * 마크다운이 만드는 `<a>`를 그대로 두면 가이드 사이를 오갈 때마다 전체 페이지가
+ * 다시 로드된다. 세 문서가 서로를 참조하는 구조라 이동이 잦다.
+ */
+function GuideLink({
+  href,
+  children,
+}: {
+  href?: string | undefined;
+  children?: ReactNode;
+}) {
+  if (href?.startsWith("/")) {
+    return <Link href={href}>{children}</Link>;
+  }
+
+  return <a href={href}>{children}</a>;
+}
+
+/**
  * 가이드 본문(마크다운)을 렌더링한다.
  *
  * H1은 넘겨받은 `heading`으로 그리고 마크다운은 H2부터 시작한다. 제목 계층을 한
@@ -56,7 +77,9 @@ export function GuideArticle({
         {heading}
       </h1>
       <div className="prose prose-stone mt-8 max-w-none">
-        <ReactMarkdown components={{ h2: Heading2 }}>{markdown}</ReactMarkdown>
+        <ReactMarkdown components={{ a: GuideLink, h2: Heading2 }}>
+          {markdown}
+        </ReactMarkdown>
       </div>
     </article>
   );
