@@ -21,7 +21,7 @@ html.admin-no-gutter {
 }
 
 @theme inline {
-  /* 브랜드 폰트 변수 — layout.tsx의 next/font/local 및 Header.tsx와 함께 관리 */
+  /* 브랜드 폰트 변수 — layout.tsx의 next/font/google 및 Header.tsx와 함께 관리 */
   --font-brand: var(--font-jua), "Noto Sans KR", sans-serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
