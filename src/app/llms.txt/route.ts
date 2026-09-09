@@ -1,8 +1,10 @@
+import { getPublishedGuideDocuments } from "@/features/guide/content";
 import {
   landingDescription,
   learningFlowContent,
   learningToolsContent,
 } from "@/features/landing/content";
+import { getGuideRoute } from "@/lib/constants/routes";
 import { SITE_URL } from "@/lib/constants/site";
 import { markdownResponse } from "@/lib/seo/markdownResponse";
 
@@ -17,6 +19,26 @@ const toolNames = learningToolsContent.tools
   .map((tool) => tool.label)
   .join("·");
 
+/* 학습 가이드는 본문이 채워진 문서만 싣는다. 대응하는 .md 라우트가 없어 HTML URL을
+   그대로 가리키는데, 이 URL들은 robots.txt에서 크롤이 허용돼 있어 수집에 문제가 없다. */
+function renderGuideSection(): string[] {
+  const publishedGuides = getPublishedGuideDocuments();
+
+  if (publishedGuides.length === 0) {
+    return [];
+  }
+
+  return [
+    "## 학습 가이드",
+    "",
+    ...publishedGuides.map(
+      (document) =>
+        `- [${document.heading}](${SITE_URL}${getGuideRoute(document.slug)}): ${document.summary}`,
+    ),
+    "",
+  ];
+}
+
 function renderLlmsTxt(): string {
   return [
     "# 딱다구리",
@@ -29,9 +51,10 @@ function renderLlmsTxt(): string {
     `- [개인정보 처리방침](${SITE_URL}/privacy.md): 처리 항목, 보유 기간, 위탁·국외 이전, 정보주체 권리 등 14개 조항`,
     `- [이용약관](${SITE_URL}/terms.md): 서비스 범위, AI 이용, 회원 콘텐츠, 이용 제한 등 15개 조항`,
     "",
+    ...renderGuideSection(),
     "## 통합 문서",
     "",
-    `- [전체 콘텐츠](${SITE_URL}/llms-full.txt): 위 3개 문서를 단일 마크다운으로 연결`,
+    `- [전체 콘텐츠](${SITE_URL}/llms-full.txt): 위 문서를 단일 마크다운으로 연결`,
     "",
   ].join("\n");
 }

@@ -34,6 +34,11 @@ export const learningFlowContent = {
       title: "복습할 때가 되면,\n알림으로 알려드려요",
       description:
         "오늘 복습할 노트를 확인해보세요. 지원하는 브라우저에서 알림을 켜두면 복습 일정에 맞춰 푸시 알림을 받을 수 있어요.",
+      // 이 단계가 답하지 않는 "그 일정은 무슨 기준으로 잡히나"를 가이드로 넘긴다.
+      guide: {
+        slug: "review-cycle",
+        label: "복습 주기를 정하는 방법 알아보기",
+      },
       reverse: true,
     },
     {
@@ -45,6 +50,10 @@ export const learningFlowContent = {
       title: "기억나는 내용을,\n직접 꺼내보세요",
       description:
         "기억나는 내용을 작성하고 제출한 뒤 원문과 비교해보세요. AI 채점을 요청하면 빠뜨린 개념과 원본과 다르게 기억한 내용을 확인할 수 있어요.",
+      guide: {
+        slug: "blank-test",
+        label: "백지 테스트하는 법 알아보기",
+      },
       reverse: false,
     },
   ],

@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { getPublishedGuideDocuments } from "@/features/guide/content";
 import { LEGAL_CONTACT } from "@/lib/constants/legal";
 import { ROUTES } from "@/lib/constants/routes";
 
@@ -12,6 +13,12 @@ const footerLinks = [
     links: [
       { label: "자주 묻는 질문", href: `${ROUTES.HOME}#faq` },
       { label: "기능 소개", href: `${ROUTES.HOME}#features` },
+      /* 푸터는 모든 페이지에 붙어서 가이드로 가는 사이트 전역 내부 링크가 된다.
+         다만 읽을 문서가 하나도 없는 동안에는 준비 중인 목록으로 보내게 되므로,
+         첫 문서가 공개된 뒤부터 노출한다. */
+      ...(getPublishedGuideDocuments().length > 0
+        ? [{ label: "학습 가이드", href: ROUTES.GUIDE }]
+        : []),
     ],
   },
   {

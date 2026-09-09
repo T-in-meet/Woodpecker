@@ -10,6 +10,8 @@ import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { GuideInlineLink } from "@/features/guide/components/GuideInlineLink";
+import { isGuidePublished } from "@/features/guide/content";
 import { ROUTES } from "@/lib/constants/routes";
 
 import { learningFlowContent } from "./content";
@@ -298,6 +300,18 @@ export function LearningFlowSection() {
           {learningFlowContent.introduction}
         </p>
 
+        {/* 흐름 소개 바로 아래에서 원리 문서로 나간다. 문서가 공개되기 전에는
+            링크도 감싸는 여백도 그리지 않는다. */}
+        {isGuidePublished("spaced-repetition") ? (
+          <p className="mt-4 text-center text-sm">
+            <GuideInlineLink
+              slug="spaced-repetition"
+              label="간격 반복이 왜 효과적인지 알아보기"
+              className="text-muted-foreground"
+            />
+          </p>
+        ) : null}
+
         {/* 세 단계는 하나의 흐름이라 단계 사이 간격을 섹션 여백보다 좁게 둔다.
             멀어질수록 "아직도 기능 소개인가" 하는 인상이 커진다. */}
         <div className="mt-8 space-y-12 md:mt-16 md:space-y-20">
@@ -331,6 +345,17 @@ export function LearningFlowSection() {
                 <p className="mt-4 text-sm leading-relaxed whitespace-pre-line text-muted-foreground md:text-base">
                   {scene.description}
                 </p>
+                {/* scenes는 as const라 항목마다 타입이 다르다. 가이드 링크를 가진
+                    단계만 좁혀서 렌더한다. */}
+                {"guide" in scene && isGuidePublished(scene.guide.slug) ? (
+                  <p className="mt-4 text-sm">
+                    <GuideInlineLink
+                      slug={scene.guide.slug}
+                      label={scene.guide.label}
+                      className="text-muted-foreground"
+                    />
+                  </p>
+                ) : null}
               </div>
 
               {/* Mockup */}
