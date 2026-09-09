@@ -32,8 +32,10 @@ export function Footer() {
   return (
     <footer className="border-t bg-muted/30">
       <div className="mx-auto max-w-5xl px-6 pb-6 pt-8 md:pt-10">
-        <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
-          {/* Link groups */}
+        <nav
+          aria-label="푸터 링크"
+          className="grid grid-cols-2 gap-8 md:grid-cols-4"
+        >
           {footerLinks.map((group) => (
             <div key={group.title}>
               <h3 className="text-sm font-semibold">{group.title}</h3>
@@ -51,7 +53,7 @@ export function Footer() {
               </ul>
             </div>
           ))}
-        </div>
+        </nav>
 
         <div className="mt-8 border-t pt-5">
           <p className="text-center text-xs text-muted-foreground">
