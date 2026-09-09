@@ -37,11 +37,11 @@ export const GUIDE_DOCUMENTS = [
   {
     slug: "spaced-repetition",
     title: "간격 반복 학습이란? 복습 원리와 근거",
-    heading: "간격 반복이란 무엇인가",
+    heading: "간격 반복 학습이란 무엇인가",
     description:
       "배운 내용은 왜 잊히고, 왜 시간 간격을 두고 다시 봐야 할까요? 몰아서 공부하기와 나눠서 공부하기의 차이, 그리고 복습할 때 다시 읽는 대신 무엇을 해야 하는지 정리했습니다.",
     summary: "왜 시간을 두고 다시 공부해야 하는지 알아봅니다.",
-    revisedOn: null,
+    revisedOn: "2026-09-09",
   },
   {
     slug: "review-cycle",
@@ -50,7 +50,7 @@ export const GUIDE_DOCUMENTS = [
     description:
       "복습 간격은 왜 점점 늘려야 할까요? 1일·3일·7일·14일·30일 간격을 쓰는 이유, 하루에 여러 번 복습할 때의 처리, 밀린 복습을 따라잡는 방법을 딱다구리의 실제 설계로 설명합니다.",
     summary: "언제 다시 복습하는 것이 좋은지 알아봅니다.",
-    revisedOn: null,
+    revisedOn: "2026-09-09",
   },
   {
     slug: "blank-test",
@@ -59,7 +59,7 @@ export const GUIDE_DOCUMENTS = [
     description:
       "노트를 덮고 기억나는 내용을 적는 백지 테스트, 실제로 어떻게 할까요? 시작 전 준비, 아무것도 떠오르지 않을 때의 대처, 원본을 확인하는 시점, 표현이 달라도 기억했다고 볼 기준까지 정리했습니다.",
     summary: "배운 내용을 기억에서 꺼내 확인하는 방법을 알아봅니다.",
-    revisedOn: null,
+    revisedOn: "2026-09-09",
   },
 ] as const satisfies readonly GuideDocument[];
 
