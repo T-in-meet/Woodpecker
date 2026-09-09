@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
@@ -24,6 +24,31 @@ describe("GUIDE_DOCUMENTS", () => {
         existsSync(getGuideMarkdownPath(document.slug)),
         `${document.slug}.md 없음`,
       ).toBe(true);
+    }
+  });
+
+  /* 렌더러에 rehype-raw가 없어 원시 HTML이 걸러지지 않는다. 본문에 남긴 HTML 주석은
+     제거되지 않고 화면에 텍스트로 그대로 나온다. 작성 메모는 README.md에 둔다. */
+  it("본문에 HTML 주석을 두지 않는다", () => {
+    for (const document of GUIDE_DOCUMENTS) {
+      const markdown = readFileSync(
+        getGuideMarkdownPath(document.slug),
+        "utf8",
+      );
+
+      expect(markdown, `${document.slug}.md`).not.toContain("<!--");
+    }
+  });
+
+  /* H1은 페이지 컴포넌트가 heading으로 렌더링한다. 본문에도 두면 H1이 둘이 된다. */
+  it("본문은 H2부터 시작한다", () => {
+    for (const document of GUIDE_DOCUMENTS) {
+      const markdown = readFileSync(
+        getGuideMarkdownPath(document.slug),
+        "utf8",
+      );
+
+      expect(markdown, `${document.slug}.md`).not.toMatch(/^# /m);
     }
   });
 
