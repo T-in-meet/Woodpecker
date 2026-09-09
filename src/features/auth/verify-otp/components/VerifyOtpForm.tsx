@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import AuthenticationError from "@/features/auth/components/AuthenticationError";
+import AuthFormError from "@/features/auth/components/AuthFormError";
 import AuthFormFieldError from "@/features/auth/components/AuthFormFieldError";
 import { AUTH_GLOBAL_ERROR_MESSAGE } from "@/features/auth/constants/messages";
 import { OtpPurpose } from "@/features/auth/constants/otp";
@@ -109,7 +109,7 @@ const VerifyOtpForm = ({
         return;
 
       // blocked/internal_error 모두 "다시 시도"가 필요한 오류다. 사라지는 토스트
-      // 대신 invalid_otp와 같은 자리(AuthenticationError)에 남긴다.
+      // 대신 invalid_otp와 같은 자리(AuthFormError)에 남긴다.
       case "blocked":
         setError("root", {
           type: "server",
@@ -202,7 +202,7 @@ const VerifyOtpForm = ({
             autoFocus
           />
           {/* 유효성 에러 */}
-          <AuthFormFieldError error={errors.otp} />
+          <AuthFormFieldError error={errors.otp?.message} />
         </div>
         <div>
           <p className="text-sm text-muted-foreground">
@@ -220,7 +220,7 @@ const VerifyOtpForm = ({
           </Button>
         </div>
         {/* 인증 실패 */}
-        <AuthenticationError error={errors.root} />
+        <AuthFormError error={errors.root?.message} />
       </form>
     </div>
   );

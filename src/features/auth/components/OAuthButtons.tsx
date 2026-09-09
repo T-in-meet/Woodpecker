@@ -8,7 +8,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 
-import AuthenticationError from "./AuthenticationError";
+import AuthFormError from "./AuthFormError";
 
 type OAuthProviderConfig = {
   provider: Provider;
@@ -158,7 +158,7 @@ export function OAuthButtons({
         })}
       </div>
 
-      <AuthenticationError error={error ? { message: error } : undefined} />
+      <AuthFormError error={error ?? undefined} />
     </div>
   );
 }
