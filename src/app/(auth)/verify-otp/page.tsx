@@ -111,14 +111,12 @@ const VerifyOtpPage = async ({ searchParams }: VerifyOtpPageProps) => {
   const verifyOtpFormAction = verifyOtpAction.bind(null, redirectPath);
 
   return (
-    <div className="md:flex md:min-h-[calc(100dvh-4.5rem)] md:items-center md:justify-center">
-      <VerifyOtpForm
-        action={verifyOtpFormAction}
-        email={email}
-        purpose={otpPurpose}
-        redirect={redirectPath}
-      />
-    </div>
+    <VerifyOtpForm
+      action={verifyOtpFormAction}
+      email={email}
+      purpose={otpPurpose}
+      redirect={redirectPath}
+    />
   );
 };
 

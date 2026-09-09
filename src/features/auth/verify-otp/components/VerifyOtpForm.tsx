@@ -2,13 +2,16 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { startTransition, useActionState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AuthCard } from "@/features/auth/components/AuthCard";
 import AuthFormError from "@/features/auth/components/AuthFormError";
 import AuthFormFieldError from "@/features/auth/components/AuthFormFieldError";
+import { AuthFormHeader } from "@/features/auth/components/AuthFormHeader";
 import { AUTH_GLOBAL_ERROR_MESSAGE } from "@/features/auth/constants/messages";
 import { OtpPurpose } from "@/features/auth/constants/otp";
 import { RATE_LIMIT_TOAST_MESSAGE } from "@/features/auth/errors/rateLimitError";
@@ -38,6 +41,8 @@ const VerifyOtpForm = ({
   purpose,
   redirect,
 }: VerifyOtpFormProps) => {
+  const router = useRouter();
+
   const [state, formAction, isPending] = useActionState(
     action,
     INITIAL_VERIFY_OTP_ACTION_STATE,
@@ -45,52 +50,77 @@ const VerifyOtpForm = ({
 
   /**
    * react-form-hook
+   *
+   * OTP는 입력값이 올바른 경우에만 인증 버튼을 활성화하기 위해
+   * 입력이 변경될 때마다 schema validation을 수행한다.
    */
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isValid },
     setError,
     clearErrors,
   } = useForm<VerifyOtpFormValues>({
     resolver: zodResolver(verifyOtpFormSchema),
-    mode: "onTouched",
+    mode: "onChange",
     reValidateMode: "onChange",
     defaultValues: { otp: "" },
   });
 
   /**
-   * server action 상태를 RHF 및 UI 상태와 동기화한다.
+   * Server Action에서 반환한 상태를
+   * React Hook Form의 error 구조로 연결한다.
    *
-   * 처리 목적:
-   * - 서버에서 반환한 action state를 기반으로
-   *   사용자 입력 에러 및 전역 UI 상태를 반영한다.
+   * 에러는 크게 세 종류로 구분한다.
    *
-   * 상태별 처리:
+   * 1. invalid_input
+   *    사용자가 OTP 입력값을 직접 수정해서 해결할 수 있는 오류다.
+   *    예: OTP 길이가 부족하거나 숫자 형식이 아닌 경우.
    *
-   * - completed:
-   *   OTP 인증이 완료된 상태.
-   *   action에서 반환한 redirectTo 경로로 이동한다.
+   *    → errors.otp에 저장
+   *    → OTP 입력창 아래 AuthFormFieldError에서 표시
    *
-   * - invalid_input:
-   *   OTP 형식/유효성 검증 실패.
-   *   RHF field error로 동기화한다.
+   * 2. invalid_otp / blocked / internal_error
+   *    특정 입력 형식의 문제가 아니라 요청 전체에 대한 오류다.
    *
-   * - invalid_otp:
-   *   OTP 인증 실패 상태.
-   *   form-level 인증 에러로 표시한다.
+   *    → errors.root에 저장
+   *    → 폼 아래 AuthFormError에서 표시
    *
-   * - blocked:
-   *   rate limit 정책에 의해 요청이 차단된 상태.
-   *   form-level 인증 에러로 표시한다.
+   * 3. invalid_request
+   *    OTP 값의 문제가 아니라 인증 흐름 자체에 필요한
+   *    email / purpose / redirect 등의 요청 정보가 유효하지 않은 상태다.
    *
-   * - internal_error:
-   *   사용자가 직접 해결할 수 없는 시스템 오류 상태.
-   *   일반화된 글로벌 에러 메시지를 form-level 에러로 표시한다.
+   *    사용자가 OTP 입력값을 수정해도 해결할 수 없기 때문에
+   *    현재 화면에 에러 메시지만 표시하지 않고
+   *    resend-email 페이지로 이동하여 인증 흐름을 다시 복구한다.
    */
   useEffect(() => {
     switch (state.status) {
+      case "invalid_request": {
+        /**
+         * 현재 OTP 인증 요청의 context가 잘못된 상태다.
+         *
+         * 잘못된 email / redirect 값을 다시 전달하지 않고,
+         * page에서 이미 검증되어 props로 전달된 purpose만 유지한다.
+         *
+         * resend-email에서 이메일을 다시 입력한 후
+         * 새로운 OTP 인증 흐름을 시작할 수 있다.
+         */
+        const params = new URLSearchParams({
+          purpose,
+        });
+
+        router.replace(`${ROUTES.RESEND_EMAIL}?${params.toString()}`);
+        return;
+      }
+
       case "invalid_input": {
+        /**
+         * OTP 입력 형식 오류.
+         *
+         * 사용자가 OTP 입력값을 수정해서 해결할 수 있으므로
+         * field error로 처리한다.
+         */
         const otpError = state.fieldErrors.otp;
         if (!otpError) return;
 
@@ -102,15 +132,27 @@ const VerifyOtpForm = ({
       }
 
       case "invalid_otp":
+        /**
+         * OTP 형식은 올바르지만 실제 인증에 실패한 경우.
+         *
+         * OTP 불일치 / 만료 / 재발급으로 인한 무효화 등을
+         * 구체적으로 구분하지 않고 안전한 공통 메시지를 표시한다.
+         *
+         * 특정 field validation 문제가 아니므로 root error로 처리한다.
+         */
         setError("root", {
           type: "server",
           message: state.formError,
         });
         return;
 
-      // blocked/internal_error 모두 "다시 시도"가 필요한 오류다. 사라지는 토스트
-      // 대신 invalid_otp와 같은 자리(AuthFormError)에 남긴다.
       case "blocked":
+        /**
+         * Rate Limit에 의해 요청이 차단된 경우.
+         *
+         * 사용자의 OTP 입력값 자체가 잘못된 것이 아니므로
+         * field error가 아니라 root error로 표시한다.
+         */
         setError("root", {
           type: "server",
           message: RATE_LIMIT_TOAST_MESSAGE,
@@ -118,6 +160,13 @@ const VerifyOtpForm = ({
         return;
 
       case "internal_error":
+        /**
+         * 네트워크 / Supabase / 예상하지 못한 서버 오류 등
+         * 사용자가 입력값을 수정해서 해결할 수 없는 시스템 오류다.
+         *
+         * 내부 오류 원문은 사용자에게 노출하지 않고
+         * 안전한 공통 메시지를 root error로 표시한다.
+         */
         setError("root", {
           type: "server",
           message: AUTH_GLOBAL_ERROR_MESSAGE,
@@ -127,7 +176,7 @@ const VerifyOtpForm = ({
       default:
         return;
     }
-  }, [state, setError]);
+  }, [state, setError, router, purpose]);
 
   /**
    * 클라이언트 유효성 검증 통과 후 OTP 인증 action 실행
@@ -136,11 +185,13 @@ const VerifyOtpForm = ({
    * - react-hook-form + zodResolver를 통해 OTP 형식을 먼저 검증한다.
    * - 검증 통과 시 서버 action에 전달할 FormData를 생성한다.
    * - email / purpose는 page에서 이미 검증된 query 값을 props로 전달받아 사용한다.
-   * - 최종 인증 및 보안 검증은 verifyOtpActionSchema에서 다시 수행한다.
+   * - 서버에서는 verifyOtpContextSchema와 otpSchema를 통해
+   *   요청 context와 OTP 입력값을 다시 검증한다.
    *
    * 검증 책임:
    * - form schema: 사용자 입력값(otp) UI 검증
-   * - action schema: 서버 입력 전체(email, purpose, otp) 최종 검증
+   * - context schema: email / purpose / redirect 서버 검증
+   * - otp schema: OTP 입력값 서버 재검증
    */
   const handleValidSubmit = (values: VerifyOtpFormValues) => {
     const formData = new FormData();
@@ -175,31 +226,19 @@ const VerifyOtpForm = ({
   query.set("returnTo", returnTo);
 
   return (
-    /**
-     * OTP 입력 카드
-     *
-     * 모바일에서는 화면 전체에 자연스럽게 붙고,
-     * md 이상에서는 카드 형태로 중앙 정렬된다.
-     */
-    <div className="mx-auto my-0 max-w-md overflow-hidden rounded-none border-0 bg-white shadow-none md:my-8 md:rounded-xl md:border md:border-outline-variant md:shadow-sm">
-      {/* 인증 안내 영역 */}
-      <div className="mx-auto max-w-4xl space-y-4 px-4 pt-8 pb-2 md:px-12">
-        <h1 className="mb-2 text-2xl font-bold tracking-tight text-primary">
-          인증 번호 확인
-        </h1>
-        <p className="text-gray-500">
-          입력하신 이메일로 인증 번호가 전송되었습니다.
-          <br />
-          인증 번호를 입력하세요
-        </p>
-      </div>
-      {/*  OTP 입력 폼 */}
+    <AuthCard variant="compact">
       <form
         aria-label="인증번호 입력"
-        className="space-y-4 mx-auto max-w-4xl pt-2 pb-2 px-4 md:px-12"
+        className="space-y-4"
         onSubmit={handleSubmit(handleValidSubmit)}
         noValidate
       >
+        <AuthFormHeader title="인증 번호 확인" />
+
+        <p className="text-sm text-muted-foreground">
+          이메일로 받은 인증번호를 입력하세요.
+        </p>
+
         <div>
           <Input
             id="verify-otp"
@@ -208,32 +247,45 @@ const VerifyOtpForm = ({
             inputMode="numeric" // inputMode: 어떤 키보드를 보여줄지에 대한 힌트: 숫자형 키보드를 제공
             placeholder="예: 123456"
             {...register("otp", {
+              /**
+               * 새 OTP를 입력하기 시작하면
+               * 이전 OTP 입력 오류와 인증 실패 root error를 함께 제거한다.
+               *
+               * OTP 입력 필드는 하나뿐이므로
+               * 사용자가 새 값을 입력하는 순간 이전 요청의 오류를
+               * 계속 보여줄 필요가 없다.
+               */
               onChange: () => clearErrors(),
             })}
             autoFocus
           />
-          {/* 유효성 에러 */}
           <AuthFormFieldError error={errors.otp?.message} />
         </div>
-        <div>
+
+        <div className="space-y-1">
           <p className="text-sm text-muted-foreground">
-            <Link
-              href={`${ROUTES.RESEND_EMAIL}?${query.toString()}`}
-              className="text-sm text-muted-foreground underline hover:text-foreground"
-            >
-              인증번호 재전송
-            </Link>
+            인증번호가 오지 않으면 수신함과 스팸함을 확인하거나 다시
+            요청해주세요.
           </p>
+          <Link
+            href={`${ROUTES.RESEND_EMAIL}?${query.toString()}`}
+            className="text-sm text-muted-foreground underline hover:text-foreground"
+          >
+            인증번호 재전송
+          </Link>
         </div>
-        <div className="mx-auto max-w-4xl">
-          <Button className="w-full" type="submit" disabled={isPending}>
-            {isPending ? "인증 중..." : "인증하기"}
-          </Button>
-        </div>
-        {/* 인증 실패 */}
+
+        <Button
+          className="w-full"
+          type="submit"
+          disabled={isPending || !isValid}
+        >
+          {isPending ? "인증 중..." : "인증하기"}
+        </Button>
+
         <AuthFormError error={errors.root?.message} />
       </form>
-    </div>
+    </AuthCard>
   );
 };
 
