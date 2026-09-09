@@ -71,6 +71,7 @@ export function LegalAcceptanceForm({
               <Link
                 href={ROUTES.TERMS}
                 target="_blank"
+                rel="noopener noreferrer"
                 className="underline hover:text-primary"
               >
                 이용약관
@@ -97,6 +98,7 @@ export function LegalAcceptanceForm({
               <Link
                 href={ROUTES.PRIVACY}
                 target="_blank"
+                rel="noopener noreferrer"
                 className="underline hover:text-primary"
               >
                 개인정보 처리방침
