@@ -27,6 +27,14 @@
   padding-bottom: 0 !important;
 }
 
+/* body가 overflow: hidden이라 뷰포트 밖으로 밀린 푸터는 눈에 보이지 않지만
+   탭 포커스로는 도달할 수 있고, 그 순간 브라우저가 body를 스크롤해 헤더와
+   입력창이 화면 밖으로 사라진다. 이 라우트에서 법적 문서 경로는 UserMenu가
+   맡으므로 푸터 자체를 렌더 트리에서 뺀다. <footer>도 body 안에 유일하다. */
+:global(body):has(.scope) footer {
+  display: none;
+}
+
 .scope {
   height: 100%;
 }

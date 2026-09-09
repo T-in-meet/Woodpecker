@@ -57,7 +57,7 @@ export const faqs = [
 
 export function FaqSection() {
   return (
-    <section id="faq">
+    <section id="faq" className="scroll-mt-[var(--header-height)]">
       <div className="mx-auto max-w-3xl px-6 py-12 md:py-20">
         <h2 className="mt-2 text-center text-3xl font-bold tracking-tight md:text-4xl">
           자주 묻는 질문
