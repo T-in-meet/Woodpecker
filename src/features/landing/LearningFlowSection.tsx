@@ -1,4 +1,5 @@
 import {
+  BookOpen,
   BrainIcon,
   ChevronRightIcon,
   MoreHorizontalIcon,
@@ -11,7 +12,10 @@ import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GuideInlineLink } from "@/features/guide/components/GuideInlineLink";
-import { isGuidePublished } from "@/features/guide/content";
+import {
+  getPublishedGuideDocuments,
+  isGuidePublished,
+} from "@/features/guide/content";
 import { ROUTES } from "@/lib/constants/routes";
 
 import { learningFlowContent } from "./content";
@@ -363,6 +367,37 @@ export function LearningFlowSection() {
             </div>
           ))}
         </div>
+        {getPublishedGuideDocuments().length > 0 && (
+          <aside
+            aria-labelledby="learning-guide-heading"
+            className="mt-12 flex flex-col gap-5 rounded-2xl bg-orange-100 p-6 md:mt-16 md:flex-row md:items-center md:justify-between md:p-8 dark:bg-orange-950/60"
+          >
+            <div className="flex items-start gap-4">
+              <BookOpen
+                aria-hidden="true"
+                className="mt-1 size-5 shrink-0 text-orange-700 dark:text-orange-400"
+              />
+              <div>
+                <h3
+                  id="learning-guide-heading"
+                  className="text-lg font-semibold"
+                >
+                  복습을 어떻게 시작할지 막막한가요?
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  언제 복습하고, 무엇을 해보면 좋을지 알려드려요.
+                </p>
+              </div>
+            </div>
+            <Link
+              href={ROUTES.GUIDE}
+              className="inline-flex min-h-11 shrink-0 items-center gap-2 self-start rounded-md text-sm font-medium text-orange-800 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring cursor-pointer md:self-center dark:text-orange-300"
+            >
+              학습 가이드 읽어보기
+              <ChevronRightIcon aria-hidden="true" className="size-4" />
+            </Link>
+          </aside>
+        )}
       </div>
 
       <div className="bg-orange-50 dark:bg-orange-950/40">
