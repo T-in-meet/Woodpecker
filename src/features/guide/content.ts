@@ -5,6 +5,14 @@
  * 하나를 읽는다. 문서를 늘릴 때 손볼 곳이 여기뿐이어야 각 표면이 갈라지지 않는다.
  */
 
+import { LEGAL_CONTACT } from "@/lib/constants/legal";
+import { ROUTES } from "@/lib/constants/routes";
+
+export const GUIDE_AUTHOR = {
+  name: LEGAL_CONTACT.department,
+  href: `${ROUTES.GUIDE}#about`,
+} as const;
+
 export type GuideDocument = {
   slug: string;
   /**

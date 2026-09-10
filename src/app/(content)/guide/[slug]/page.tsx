@@ -5,6 +5,7 @@ import { GuideArticle } from "@/features/guide/components/GuideArticle";
 import { GuideBreadcrumb } from "@/features/guide/components/GuideBreadcrumb";
 import {
   findGuideDocument,
+  GUIDE_AUTHOR,
   GUIDE_DOCUMENTS,
   GUIDE_INDEX_CONTENT,
   isPublishedGuide,
@@ -81,6 +82,26 @@ export default async function GuideDocumentPage({ params }: GuidePageProps) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: jsonLdString }}
       />
+      {isPublishedGuide(document) && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "Article",
+              headline: document.heading,
+              description: document.description,
+              author: {
+                "@type": "Organization",
+                name: GUIDE_AUTHOR.name,
+                url: `${SITE_URL}${GUIDE_AUTHOR.href}`,
+              },
+              dateModified: document.revisedOn,
+              mainEntityOfPage: pageUrl,
+            }).replace(/</g, "\\u003c"),
+          }}
+        />
+      )}
       <main className="mx-auto max-w-3xl px-6 py-14">
         <GuideBreadcrumb
           entries={[
@@ -94,7 +115,12 @@ export default async function GuideDocumentPage({ params }: GuidePageProps) {
         />
 
         <div className="mt-6">
-          <GuideArticle heading={document.heading} markdown={markdown} />
+          <GuideArticle
+            heading={document.heading}
+            markdown={markdown}
+            author={GUIDE_AUTHOR}
+            revisedOn={document.revisedOn}
+          />
         </div>
       </main>
     </>

@@ -60,6 +60,9 @@ const jsonLd = {
 
     // ── 2. WebApplication: 딱다구리가 어떤 앱인지 상세 정보 전달 ─────────────
     // applicationCategory, operatingSystem, offers 등으로 앱의 성격을 명확히 함.
+    // Google 앱 리치 결과에는 실제 review 또는 aggregateRating도 필요하다.
+    // 현재는 앱 설명용 마크업이며, 공개된 리뷰가 생기면 화면과 함께 반영한다.
+    // https://developers.google.com/search/docs/appearance/structured-data/software-app
     {
       "@type": "WebApplication",
       "@id": `${SITE_URL}/#app`,

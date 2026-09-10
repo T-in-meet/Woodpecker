@@ -68,15 +68,36 @@ function GuideLink({
 export function GuideArticle({
   heading,
   markdown,
+  author,
+  revisedOn,
 }: {
   heading: string;
   markdown: string;
+  author: { name: string; href: string };
+  revisedOn: string | null;
 }) {
   return (
     <article className="text-prose-ko">
       <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
         {heading}
       </h1>
+      <p className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+        <span>
+          작성:{" "}
+          <Link
+            href={author.href}
+            className="cursor-pointer underline underline-offset-4"
+          >
+            {author.name}
+          </Link>
+        </span>
+        {revisedOn && (
+          <span>
+            · 최종 수정:{" "}
+            <time dateTime={revisedOn}>{revisedOn.replaceAll("-", ".")}</time>
+          </span>
+        )}
+      </p>
       <div className="prose prose-stone mt-8 max-w-none">
         {/* 표는 GFM 문법이라 remark-gfm 없이는 파이프 문자가 그대로 나온다.
             자동 링크와 취소선도 같은 플러그인이 담당한다. */}

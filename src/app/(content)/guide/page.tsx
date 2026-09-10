@@ -4,10 +4,12 @@ import Link from "next/link";
 import { GuideBreadcrumb } from "@/features/guide/components/GuideBreadcrumb";
 import {
   getPublishedGuideDocuments,
+  GUIDE_AUTHOR,
   GUIDE_DOCUMENTS,
   GUIDE_INDEX_CONTENT,
   isPublishedGuide,
 } from "@/features/guide/content";
+import { LEGAL_CONTACT } from "@/lib/constants/legal";
 import { getGuideRoute, ROUTES } from "@/lib/constants/routes";
 import { SITE_NAME, SITE_URL } from "@/lib/constants/site";
 import { buildBreadcrumbJsonLd } from "@/lib/seo/breadcrumbJsonLd";
@@ -97,6 +99,31 @@ export default function GuideIndexPage() {
             </li>
           ))}
         </ul>
+        <section
+          id="about"
+          aria-labelledby="guide-about-title"
+          className="mt-14 scroll-mt-24 border-t pt-8"
+        >
+          <h2 id="guide-about-title" className="text-xl font-semibold">
+            가이드를 만드는 사람들
+          </h2>
+          <p className="mt-4 leading-relaxed text-muted-foreground">
+            {GUIDE_AUTHOR.name}은 딱다구리에서 사용하는 학습 방법과 서비스의
+            동작을 설명하기 위해 이 가이드를 작성합니다. 연구를 인용한 글에서는
+            참고문헌으로 근거를 안내하며, 관련 가이드 링크를 통해서도 확인할 수
+            있습니다.
+          </p>
+          <p className="mt-3 text-sm text-muted-foreground">
+            내용에 대한 의견이나 수정 제안은{" "}
+            <a
+              href={`mailto:${LEGAL_CONTACT.email}`}
+              className="cursor-pointer underline underline-offset-4"
+            >
+              {LEGAL_CONTACT.email}
+            </a>
+            로 보내주세요.
+          </p>
+        </section>
       </main>
     </>
   );
