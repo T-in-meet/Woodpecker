@@ -261,6 +261,22 @@ describe("auth callback route", () => {
     );
   });
 
+  it("login intent에서 동의 이력이 없으면 접근 불가 상태여도 회원가입으로 redirect한다", async () => {
+    getLegalAcceptanceStatusMock.mockResolvedValue({
+      canAccessService: false,
+      hasAcceptanceHistory: false,
+    });
+
+    const response = await GET(
+      createRequest("/api/auth/callback?code=oauth-code&intent=login"),
+    );
+
+    expect(signOutMock).toHaveBeenCalledTimes(1);
+    expect(response.headers.get("location")).toBe(
+      "http://localhost:3000/signup?agreement_required=1",
+    );
+  });
+
   it("signup intent에서 fallback nickname이면 프로필 안내 query를 추가한다", async () => {
     exchangeCodeForSessionMock.mockResolvedValue({
       data: {
