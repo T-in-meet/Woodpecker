@@ -27,6 +27,14 @@ import { createClient } from "@/lib/supabase/server";
 const OAUTH_NICKNAME_NOTICE_PARAM = "profile_nickname";
 const OAUTH_SIGN_OUT_FAILED_REASON = "sign_out_failed";
 
+/**
+ * 신규 OAuth 사용자는 계정 생성 직후 첫 로그인이 이루어진다.
+ *
+ * created_at과 last_sign_in_at의 차이가 이 범위 이내인 경우에만
+ * 이번 OAuth login 과정에서 새로 생성된 사용자로 판단한다.
+ */
+const NEW_OAUTH_USER_MAX_SIGN_IN_DELAY_MS = 60 * 1000;
+
 const OAUTH_NICKNAME_NOTICE = {
   provider: "provider",
   fallback: "fallback",
@@ -45,6 +53,36 @@ function getOAuthCanonicalEmail(user: User): string | null {
   const email = user.email?.trim();
 
   return email ? canonicalizeEmail(email) : null;
+}
+
+/**
+ * OAuth login 과정에서 이번에 새로 생성된 사용자인지 확인합니다.
+ *
+ * 기존 Google-only 사용자는 법적 동의 이력이 없을 수 있으므로
+ * 동의 이력 자체를 신규 사용자 판정 기준으로 사용하지 않습니다.
+ *
+ * 신규 OAuth 사용자는 계정 생성과 첫 로그인 시점이 매우 가깝기 때문에
+ * created_at과 last_sign_in_at의 차이를 이용해 판정합니다.
+ *
+ * timestamp를 정상적으로 확인할 수 없는 경우에는
+ * 기존 사용자를 신규 사용자로 잘못 판단하지 않도록 false를 반환합니다.
+ *
+ * @param user OAuth callback에서 세션 교환으로 받은 Supabase 사용자
+ * @returns 이번 OAuth login 과정에서 생성된 사용자로 판단되면 true
+ */
+function isNewlyCreatedOAuthUser(user: User): boolean {
+  const createdAt = Date.parse(user.created_at);
+  const lastSignInAt = user.last_sign_in_at
+    ? Date.parse(user.last_sign_in_at)
+    : Number.NaN;
+
+  if (!Number.isFinite(createdAt) || !Number.isFinite(lastSignInAt)) {
+    return false;
+  }
+
+  const signInDelay = lastSignInAt - createdAt;
+
+  return signInDelay >= 0 && signInDelay <= NEW_OAUTH_USER_MAX_SIGN_IN_DELAY_MS;
 }
 
 /**
@@ -379,13 +417,19 @@ export async function GET(request: NextRequest) {
   const agreementStatus = await getLegalAcceptanceStatus(data.user.id);
 
   /**
-   * login intent인데 법적 동의 이력이 전혀 없다면
-   * 로그인 경로에서 Supabase OAuth가 새 사용자를 생성한 경우로 처리한다.
+   * 동의 이력이 없다는 사실만으로 신규 사용자를 판단하지 않는다.
    *
-   * 개정 약관 시행 전 재동의 유예와 신규 가입 약관 동의는 별개이므로,
-   * 이 경우에는 세션을 종료하고 회원가입 약관 동의 흐름으로 돌려보낸다.
+   * 초기 법적 동의 데이터 백필에서 제외된 Google-only 기존 사용자는
+   * 정상적인 기존 계정이더라도 동의 이력이 없을 수 있다.
+   *
+   * 따라서 동의 이력이 없으면서 계정 생성 시점과 첫 로그인 시점이 가까워
+   * 이번 OAuth login 과정에서 새로 생성된 것으로 판단되는 경우에만
+   * 신규 가입 흐름으로 되돌려 보낸다.
    */
-  if (!agreementStatus.hasAcceptanceHistory) {
+  if (
+    !agreementStatus.hasAcceptanceHistory &&
+    isNewlyCreatedOAuthUser(data.user)
+  ) {
     /**
      * login 경로에서 생성된 신규 OAuth 사용자는 회원가입 약관 동의가 필요하므로
      * 현재 세션을 먼저 종료한다.
@@ -410,6 +454,12 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  /**
+   * 기존 사용자는 동의 이력이 없더라도 기존 법적 문서 시행 정책을 따른다.
+   *
+   * 시행 전에는 canAccessService가 true이므로 기존 redirectPath로 로그인하고,
+   * 시행 후 현재 동의 요건을 충족하지 못하면 agreements 페이지로 이동한다.
+   */
   if (!agreementStatus.canAccessService) {
     return redirectWithClearedIntent(
       new URL(getAgreementRequiredPath(redirectPath), requestUrl.origin),
