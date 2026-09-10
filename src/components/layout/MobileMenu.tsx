@@ -2,6 +2,8 @@
 
 import {
   BookOpen,
+  FileText,
+  Lock,
   LogOut,
   type LucideIcon,
   Menu as MenuIcon,
@@ -47,6 +49,13 @@ const MOBILE_NAV_ITEMS: MobileNavItem[] = [
   { href: ROUTES.NOTES, label: "노트 목록", icon: BookOpen },
   { href: ROUTES.NOTES_NEW, label: "노트 작성", icon: PenLine },
   { href: ROUTES.NOTE_CHATS, label: "노트 챗봇", icon: MessageCircle },
+];
+
+/* 로그인 후 푸터는 데스크톱에만 붙어서, 모바일에서 약관·개인정보처리방침으로
+   갈 수 있는 경로는 이 메뉴뿐이다. 학습 항목과 같은 형태로 노출한다. */
+const MOBILE_LEGAL_ITEMS: MobileNavItem[] = [
+  { href: ROUTES.TERMS, label: "이용약관", icon: FileText },
+  { href: ROUTES.PRIVACY, label: "개인정보처리방침", icon: Lock },
 ];
 
 export function MobileMenu({
@@ -114,6 +123,33 @@ export function MobileMenu({
                   onClick={() => setOpen(false)}
                   className={cn(
                     "flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    isCurrent
+                      ? "bg-accent text-foreground"
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                  )}
+                >
+                  <Icon className="size-4" aria-hidden="true" />
+                  {label}
+                </Link>
+              );
+            })}
+          </div>
+
+          <p className="px-3 pb-2 pt-4 text-xs font-medium text-muted-foreground">
+            법적 고지
+          </p>
+          <div className="space-y-1">
+            {MOBILE_LEGAL_ITEMS.map(({ href, label, icon: Icon }) => {
+              const isCurrent = isCurrentNavRoute(pathname, href);
+
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  aria-current={isCurrent ? "page" : undefined}
+                  onClick={() => setOpen(false)}
+                  className={cn(
+                    "flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     isCurrent
                       ? "bg-accent text-foreground"
                       : "text-muted-foreground hover:bg-accent hover:text-foreground",
