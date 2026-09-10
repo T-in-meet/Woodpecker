@@ -54,7 +54,7 @@ export function SetPasswordForm({ action }: SetPasswordFormProps) {
     clearErrors,
   } = useForm<ResetPasswordFormInput>({
     resolver: zodResolver(resetPasswordFormSchema),
-    mode: "onTouched",
+    mode: "onChange",
     reValidateMode: "onChange",
     defaultValues: {
       password: "",
