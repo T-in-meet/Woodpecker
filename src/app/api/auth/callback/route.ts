@@ -25,6 +25,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 const OAUTH_NICKNAME_NOTICE_PARAM = "profile_nickname";
+const OAUTH_SIGN_OUT_FAILED_REASON = "sign_out_failed";
+
 const OAUTH_NICKNAME_NOTICE = {
   provider: "provider",
   fallback: "fallback",
@@ -348,6 +350,7 @@ export async function GET(request: NextRequest) {
   if (effectiveIntent === "signup") {
     if (!hasSignupAgreementIntent) {
       await supabase.auth.signOut();
+
       return redirectWithClearedIntent(
         new URL(SIGNUP_AGREEMENT_REQUIRED_PATH, requestUrl.origin),
       );
@@ -387,13 +390,19 @@ export async function GET(request: NextRequest) {
      * login 경로에서 생성된 신규 OAuth 사용자는 회원가입 약관 동의가 필요하므로
      * 현재 세션을 먼저 종료한다.
      *
-     * 로그아웃에 실패한 상태로 회원가입 페이지로 이동하면 남아 있는 세션 때문에
-     * 다시 인증된 페이지로 이동할 수 있으므로 실패 시 redirect하지 않는다.
+     * 세션 종료에 실패하면 callback 자체를 500으로 종료하지 않고
+     * 로그인 화면의 OAuth 오류 안내로 되돌려 사용자가 다시 시도할 수 있게 한다.
      */
     const { error: signOutError } = await supabase.auth.signOut();
 
     if (signOutError) {
-      throw signOutError;
+      return redirectWithClearedIntent(
+        buildOAuthErrorUrl(
+          requestUrl.origin,
+          "login",
+          OAUTH_SIGN_OUT_FAILED_REASON,
+        ),
+      );
     }
 
     return redirectWithClearedIntent(

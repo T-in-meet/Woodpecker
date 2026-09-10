@@ -190,7 +190,7 @@ describe("auth callback route", () => {
     );
   });
 
-  it("login intent에서 동의 이력이 없고 세션 종료에 실패하면 회원가입으로 redirect하지 않는다", async () => {
+  it("login intent에서 동의 이력이 없고 세션 종료에 실패하면 로그인 OAuth 오류 화면으로 redirect한다", async () => {
     getLegalAcceptanceStatusMock.mockResolvedValue({
       canAccessService: true,
       hasAcceptanceHistory: false,
@@ -200,9 +200,14 @@ describe("auth callback route", () => {
       error: new Error("sign out failed"),
     });
 
-    await expect(
-      GET(createRequest("/api/auth/callback?code=oauth-code&intent=login")),
-    ).rejects.toThrow("sign out failed");
+    const response = await GET(
+      createRequest("/api/auth/callback?code=oauth-code&intent=login"),
+    );
+
+    expect(signOutMock).toHaveBeenCalledTimes(1);
+    expect(response.headers.get("location")).toBe(
+      `http://localhost:3000${ROUTES.LOGIN}?oauth_error=sign_out_failed`,
+    );
   });
 
   it("login intent에서 최신 확인 기록이 없으면 세션을 유지하고 재확인 화면으로 redirect한다", async () => {
