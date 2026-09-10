@@ -67,9 +67,9 @@ describe("generateMetadata", () => {
     });
 
     expect(metadata.alternates?.canonical).toBe(`${SITE_URL}/guide/blank-test`);
-    expect(metadata.title).toBe("백지 테스트하는 법 — 준비부터 채점까지");
+    expect(metadata.title).toBe("백지 테스트란? 하는 방법부터 채점·복습까지");
     expect(metadata.openGraph?.title).toBe(
-      "백지 테스트하는 법 — 준비부터 채점까지 | 딱다구리",
+      "백지 테스트란? 하는 방법부터 채점·복습까지 | 딱다구리",
     );
   });
 });
