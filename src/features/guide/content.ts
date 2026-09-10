@@ -41,7 +41,7 @@ export const GUIDE_DOCUMENTS = [
     description:
       "배운 내용은 왜 잊히고, 왜 시간 간격을 두고 다시 봐야 할까요? 몰아서 공부하기와 나눠서 공부하기의 차이, 복습 간격을 정하는 기준, 그리고 복습할 때 다시 읽는 대신 무엇을 해야 하는지 정리했습니다.",
     summary: "왜 시간을 두고 다시 공부해야 하는지 알아봅니다.",
-    revisedOn: "2026-09-09",
+    revisedOn: "2026-09-10",
   },
   {
     slug: "review-cycle",
@@ -50,7 +50,7 @@ export const GUIDE_DOCUMENTS = [
     description:
       "복습 간격은 왜 점점 늘려야 할까요? 1일·3일·7일·14일·30일 간격을 쓰는 이유, 하루에 여러 번 복습할 때의 처리, 밀린 복습을 따라잡는 방법을 딱다구리의 실제 설계로 설명합니다.",
     summary: "언제 다시 복습하는 것이 좋은지 알아봅니다.",
-    revisedOn: "2026-09-09",
+    revisedOn: "2026-09-10",
   },
   {
     slug: "blank-test",
