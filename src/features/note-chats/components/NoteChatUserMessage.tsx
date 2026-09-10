@@ -36,7 +36,7 @@ export function NoteChatUserMessage({
             type="button"
             size="icon"
             variant="ghost"
-            className="size-8 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+            className="size-8 shrink-0 opacity-0 transition-opacity pointer-coarse:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
             aria-label="질문 수정"
             disabled={isStreaming}
             onClick={onEdit}

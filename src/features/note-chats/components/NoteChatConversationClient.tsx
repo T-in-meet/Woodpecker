@@ -12,10 +12,9 @@ import {
 import { useNoteChatConversationScroll } from "../hooks/use-note-chat-conversation-scroll";
 import { useNoteChatDailyUsageQuery } from "../hooks/use-note-chat-daily-usage-query";
 import { useViewportRemainingHeight } from "../hooks/use-viewport-remaining-height";
-import { NoteChatBreadcrumb } from "./NoteChatBreadcrumb";
 import { NoteChatConversationContent } from "./NoteChatConversationContent";
 import { NoteChatConversationError } from "./NoteChatConversationError";
-import { NoteChatConversationMenu } from "./NoteChatConversationMenu";
+import { NoteChatConversationHeader } from "./NoteChatConversationHeader";
 import { NoteChatConversationNotFound } from "./NoteChatConversationNotFound";
 import { NoteChatConversationSkeleton } from "./NoteChatConversationSkeleton";
 
@@ -201,15 +200,11 @@ export function NoteChatConversationClient({
       />
 
       <div className="mx-auto flex w-full max-w-6xl flex-col px-4 md:px-12">
-        {detail ? (
-          <div className="my-4 flex items-center justify-between">
-            <NoteChatBreadcrumb conversationTitle={detail.conversation.title} />
-            <NoteChatConversationMenu
-              conversationId={conversationId}
-              title={detail.conversation.title}
-            />
-          </div>
-        ) : null}
+        <NoteChatConversationHeader
+          conversationId={conversationId}
+          conversationTitle={detail?.conversation.title}
+          isLoading={conversationQuery.isLoading}
+        />
 
         <div
           ref={conversationContainerRef}

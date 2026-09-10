@@ -5,7 +5,7 @@
  */
 export function NoteChatEmptyState() {
   return (
-    <div className="flex min-h-80 items-center justify-center px-6 py-12">
+    <div className="flex sm:min-h-80 items-center justify-center px-6 sm:py-12 pb-2">
       <div className="w-full max-w-lg space-y-6 text-center">
         <div className="space-y-2">
           <p className="text-lg font-semibold">무엇이 궁금한가요?</p>

@@ -205,7 +205,9 @@ export function NoteChatConversationContent({
 
       <div className="shrink-0 bg-background px-3 pb-3 md:px-4 md:pb-4">
         <p className="px-1 py-2 text-center text-xs text-muted-foreground">
-          {NOTE_CHAT_ASSISTANT_ACCURACY_NOTICE}
+          <span className="inline-block max-w-full text-left">
+            {NOTE_CHAT_ASSISTANT_ACCURACY_NOTICE}
+          </span>
         </p>
 
         <NoteChatComposer

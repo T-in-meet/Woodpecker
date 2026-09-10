@@ -8,10 +8,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 export function NoteChatConversationSkeleton() {
   return (
     <div className="flex flex-1 flex-col">
-      <div className="border-b px-6 py-4">
-        <Skeleton className="h-6 w-48" />
-      </div>
-
       <div className="flex flex-1 flex-col gap-6 p-6">
         <div className="flex justify-end">
           <Skeleton className="h-16 w-2/3 rounded-2xl" />
