@@ -6,6 +6,7 @@ const getUserMock = vi.hoisted(() => vi.fn());
 const getHasPasswordLoginMock = vi.hoisted(() => vi.fn());
 const validateRedirectPathMock = vi.hoisted(() => vi.fn());
 const redirectMock = vi.hoisted(() => vi.fn());
+const logAuthErrorMock = vi.hoisted(() => vi.fn());
 const setPasswordBoundActionMock = vi.hoisted(() => vi.fn());
 const setPasswordActionMock = vi.hoisted(() => {
   const action = vi.fn();
@@ -31,6 +32,16 @@ vi.mock("@/features/auth/lib/validateRedirectPath", () => ({
   validateRedirectPath: validateRedirectPathMock,
 }));
 
+vi.mock("@/features/auth/lib/authLogger", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/features/auth/lib/authLogger")>();
+
+  return {
+    ...actual,
+    logAuthError: logAuthErrorMock,
+  };
+});
+
 vi.mock("@/features/auth/set-password/actions/setPasswordAction", () => ({
   setPasswordAction: setPasswordActionMock,
 }));
@@ -41,6 +52,7 @@ vi.mock("@/features/auth/set-password/components/SetPasswordForm", async () => {
   return {
     SetPasswordForm: (props: { action: unknown }) => {
       SetPasswordFormMock(props);
+
       return React.createElement("div", {
         "data-testid": "set-password-form",
       });
@@ -48,6 +60,8 @@ vi.mock("@/features/auth/set-password/components/SetPasswordForm", async () => {
   };
 });
 
+import { AUTH_EVENTS } from "@/features/auth/constants/authEvents";
+import { AUTH_LOG_REASONS } from "@/features/auth/constants/authLogReasons";
 import { ROUTES } from "@/lib/constants/routes";
 
 import SetPasswordPage from "./page";
@@ -185,5 +199,38 @@ describe("SetPasswordPage", () => {
     );
 
     expect(screen.getByTestId("set-password-form")).toBeInTheDocument();
+  });
+
+  it("비밀번호 상태 조회 실패를 Auth 로그에 기록하고 오류를 다시 전파한다", async () => {
+    const lookupError = new Error("password login status lookup failed");
+
+    getHasPasswordLoginMock.mockRejectedValue(lookupError);
+
+    await expect(
+      SetPasswordPage({
+        searchParams: Promise.resolve({}),
+      }),
+    ).rejects.toBe(lookupError);
+
+    expect(getHasPasswordLoginMock).toHaveBeenCalledWith("user-id");
+
+    expect(logAuthErrorMock).toHaveBeenCalledTimes(1);
+    expect(logAuthErrorMock).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_SET_PASSWORD_FAILED,
+      {
+        path: ROUTES.SET_PASSWORD,
+        method: "GET",
+        status: 500,
+        provider: "password",
+        result: "failure",
+        reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+        userId: "user-id",
+        errorMessage: "password login status lookup failed",
+        errorName: "Error",
+      },
+    );
+
+    expect(redirectMock).not.toHaveBeenCalled();
+    expect(setPasswordActionMock.bind).not.toHaveBeenCalled();
   });
 });

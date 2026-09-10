@@ -2,6 +2,12 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
+import { AUTH_EVENTS } from "@/features/auth/constants/authEvents";
+import { AUTH_LOG_REASONS } from "@/features/auth/constants/authLogReasons";
+import {
+  logAuthError,
+  normalizeUnknownError,
+} from "@/features/auth/lib/authLogger";
 import { getHasPasswordLogin } from "@/features/auth/lib/getHasPasswordLogin";
 import { validateRedirectPath } from "@/features/auth/lib/validateRedirectPath";
 import { setPasswordAction } from "@/features/auth/set-password/actions/setPasswordAction";
@@ -48,13 +54,43 @@ export default async function SetPasswordPage({ searchParams }: Props) {
     : null;
 
   /**
+   * 실제 비밀번호 로그인 가능 여부를 확인합니다.
+   *
+   * RPC 조회 실패는 비밀번호가 없는 상태(false)로 간주할 수 없으므로
+   * 기존처럼 오류를 전파합니다.
+   *
+   * 다만 Server Component 단계의 조회 실패도 Auth 구조화 로그에서
+   * 확인할 수 있도록 기록한 뒤 동일한 오류를 다시 throw합니다.
+   */
+  let hasPasswordLogin: boolean;
+
+  try {
+    hasPasswordLogin = await getHasPasswordLogin(user.id);
+  } catch (error) {
+    const normalized = normalizeUnknownError(error);
+
+    logAuthError(AUTH_EVENTS.AUTH_SET_PASSWORD_FAILED, {
+      path: ROUTES.SET_PASSWORD,
+      method: "GET",
+      status: 500,
+      provider: "password",
+      result: "failure",
+      reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+      userId: user.id,
+      ...normalized,
+    });
+
+    throw error;
+  }
+
+  /**
    * 이미 실제 비밀번호 로그인이 가능한 사용자라면
    * 비밀번호 설정 폼을 보여주지 않습니다.
    *
    * signup 흐름에서 전달된 redirect가 있으면 해당 경로를 보존하고,
    * 없으면 기존 기본 경로인 MYPAGE로 이동합니다.
    */
-  if (await getHasPasswordLogin(user.id)) {
+  if (hasPasswordLogin) {
     redirect(redirectPath ?? ROUTES.MYPAGE);
   }
 
