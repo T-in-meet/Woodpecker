@@ -51,7 +51,13 @@ describe("auth callback route", () => {
       },
       error: null,
     });
-    getLegalAcceptanceStatusMock.mockResolvedValue({ canAccessService: true });
+
+    // 기본 login 사용자는 기존 가입자로 취급하도록 동의 이력이 있는 상태로 둔다.
+    getLegalAcceptanceStatusMock.mockResolvedValue({
+      canAccessService: true,
+      hasAcceptanceHistory: true,
+    });
+
     upsertUserAgreementMock.mockResolvedValue(undefined);
     signOutMock.mockResolvedValue({ error: null });
     updateProfileMock.mockReturnValue({ eq: updateProfileEqMock });
@@ -168,9 +174,41 @@ describe("auth callback route", () => {
     );
   });
 
+  it("login intent에서 동의 이력이 없으면 세션을 종료하고 회원가입으로 redirect한다", async () => {
+    getLegalAcceptanceStatusMock.mockResolvedValue({
+      canAccessService: true,
+      hasAcceptanceHistory: false,
+    });
+
+    const response = await GET(
+      createRequest("/api/auth/callback?code=oauth-code&intent=login"),
+    );
+
+    expect(signOutMock).toHaveBeenCalledTimes(1);
+    expect(response.headers.get("location")).toBe(
+      "http://localhost:3000/signup?agreement_required=1",
+    );
+  });
+
+  it("login intent에서 동의 이력이 없고 세션 종료에 실패하면 회원가입으로 redirect하지 않는다", async () => {
+    getLegalAcceptanceStatusMock.mockResolvedValue({
+      canAccessService: true,
+      hasAcceptanceHistory: false,
+    });
+
+    signOutMock.mockResolvedValue({
+      error: new Error("sign out failed"),
+    });
+
+    await expect(
+      GET(createRequest("/api/auth/callback?code=oauth-code&intent=login")),
+    ).rejects.toThrow("sign out failed");
+  });
+
   it("login intent에서 최신 확인 기록이 없으면 세션을 유지하고 재확인 화면으로 redirect한다", async () => {
     getLegalAcceptanceStatusMock.mockResolvedValue({
       canAccessService: false,
+      hasAcceptanceHistory: true,
     });
 
     const response = await GET(

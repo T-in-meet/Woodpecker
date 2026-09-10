@@ -374,6 +374,33 @@ export async function GET(request: NextRequest) {
   }
 
   const agreementStatus = await getLegalAcceptanceStatus(data.user.id);
+
+  /**
+   * login intent인데 법적 동의 이력이 전혀 없다면
+   * 로그인 경로에서 Supabase OAuth가 새 사용자를 생성한 경우로 처리한다.
+   *
+   * 개정 약관 시행 전 재동의 유예와 신규 가입 약관 동의는 별개이므로,
+   * 이 경우에는 세션을 종료하고 회원가입 약관 동의 흐름으로 돌려보낸다.
+   */
+  if (!agreementStatus.hasAcceptanceHistory) {
+    /**
+     * login 경로에서 생성된 신규 OAuth 사용자는 회원가입 약관 동의가 필요하므로
+     * 현재 세션을 먼저 종료한다.
+     *
+     * 로그아웃에 실패한 상태로 회원가입 페이지로 이동하면 남아 있는 세션 때문에
+     * 다시 인증된 페이지로 이동할 수 있으므로 실패 시 redirect하지 않는다.
+     */
+    const { error: signOutError } = await supabase.auth.signOut();
+
+    if (signOutError) {
+      throw signOutError;
+    }
+
+    return redirectWithClearedIntent(
+      new URL(SIGNUP_AGREEMENT_REQUIRED_PATH, requestUrl.origin),
+    );
+  }
+
   if (!agreementStatus.canAccessService) {
     return redirectWithClearedIntent(
       new URL(getAgreementRequiredPath(redirectPath), requestUrl.origin),
