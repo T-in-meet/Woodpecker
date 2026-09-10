@@ -243,7 +243,7 @@ describe("LearningToolsSection 캐러셀", () => {
     expect(carousel.activeDotIndex()).toBe(2);
   });
 
-  it("마지막 장에서 다음을 눌러도 스크롤하지 않는다", () => {
+  it("마지막 장에서 다음을 누르면 첫 장으로 돌아온다", () => {
     const carousel = mountCarousel();
 
     carousel.clickNext();
@@ -251,23 +251,38 @@ describe("LearningToolsSection 캐러셀", () => {
     carousel.settle();
     carousel.scrollTo.mockClear();
 
-    expect(
-      screen.getByRole("button", { name: "다음 기능 보기" }),
-    ).toHaveAttribute("aria-disabled", "true");
-
     carousel.clickNext();
+    carousel.settle();
 
-    expect(carousel.scrollTo).not.toHaveBeenCalled();
-    expect(carousel.activeDotIndex()).toBe(tools.length - 1);
+    expect(carousel.scrollTo).toHaveBeenCalledWith(
+      expect.objectContaining({ left: 0 }),
+    );
+    expect(carousel.activeDotIndex()).toBe(0);
   });
 
-  it("첫 장에서 이전을 눌러도 스크롤하지 않는다", () => {
+  it("첫 장에서 이전을 누르면 마지막 장으로 간다", () => {
     const carousel = mountCarousel();
 
     carousel.clickPrev();
+    carousel.settle();
 
-    expect(carousel.scrollTo).not.toHaveBeenCalled();
-    expect(carousel.activeDotIndex()).toBe(0);
+    expect(carousel.scrollTo).toHaveBeenCalledWith(
+      expect.objectContaining({ left: CARD_WIDTH * (tools.length - 1) }),
+    );
+    expect(carousel.activeDotIndex()).toBe(tools.length - 1);
+  });
+
+  it("양 끝에서도 화살표를 비활성화하지 않는다", () => {
+    mountCarousel();
+
+    // 순환하므로 막을 이유가 없다. 끝에서 비활성화하면 포커스를 쥔 버튼이
+    // 사라져 포커스가 body로 떨어진다.
+    expect(
+      screen.getByRole("button", { name: "이전 기능 보기" }),
+    ).not.toHaveAttribute("aria-disabled");
+    expect(
+      screen.getByRole("button", { name: "다음 기능 보기" }),
+    ).not.toHaveAttribute("aria-disabled");
   });
 
   it("프로그램 스크롤 도중 사용자가 쓸어넘기면 목표를 버리고 실제 위치를 따른다", () => {

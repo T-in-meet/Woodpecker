@@ -134,6 +134,16 @@ const previews = {
 };
 
 /**
+ * 인덱스를 0..count-1로 감는다.
+ *
+ * 화살표는 양 끝에서 범위를 벗어난 값을 넘긴다. 그때 반대쪽 끝으로 돌아가게
+ * 해 자동 넘김과 같은 순환을 만든다.
+ */
+function wrapIndex(index: number, count: number) {
+  return ((index % count) + count) % count;
+}
+
+/**
  * 학습 도구 카드를 가로로 넘기는 캐러셀.
  *
  * 3열 그리드로 두면 카드 높이가 가장 높은 것에 맞춰 늘어나는데, 카드마다
@@ -148,9 +158,11 @@ const previews = {
  * 처리해주므로 섹션 하나 때문에 캐러셀 라이브러리를 들일 이유가 없다.
  *
  * 자동으로 한 장씩 넘어간다. 화살표를 누르지 않아도 카드가 더 있다는 걸
- * 알리려는 것이라, 마지막 장에서는 첫 장으로 돌아와 계속 순환한다. 읽는
- * 중에 화면이 움직이는 건 방해이므로 멈추는 조건을 넉넉히 두었다. 조건은
- * 아래 상태 선언의 주석을 본다.
+ * 알리려는 것이다. 읽는 중에 화면이 움직이는 건 방해이므로 멈추는 조건을
+ * 넉넉히 두었다. 조건은 아래 상태 선언의 주석을 본다.
+ *
+ * 양 끝에서는 반대쪽 끝으로 돈다. 자동 넘김과 화살표 모두 같은 규칙이라
+ * 화살표를 비활성화하는 상태가 없다.
  */
 export function LearningToolsSection() {
   const tools = learningToolsContent.tools;
@@ -249,7 +261,7 @@ export function LearningToolsSection() {
     if (!sectionVisible || !documentVisible) return;
 
     const timer = setTimeout(() => {
-      scrollToIndexRef.current((activeIndex + 1) % tools.length);
+      scrollToIndexRef.current(wrapIndex(activeIndex + 1, tools.length));
     }, AUTOPLAY_INTERVAL_MS);
 
     return () => clearTimeout(timer);
@@ -364,8 +376,8 @@ export function LearningToolsSection() {
     const scroller = scrollerRef.current;
     if (!scroller) return;
 
-    // 양 끝 화살표는 disabled로 막지 않으므로(포커스를 잃지 않게) 범위를 벗어난
-    // 인덱스가 그대로 들어온다. 여기서 조용히 무시한다.
+    // 호출부에서 wrapIndex로 감아 넣지만, 카드 수와 오프셋 수가 어긋나는
+    // 순간(첫 렌더 직후 등)에 대비해 범위를 벗어난 인덱스는 무시한다.
     const offset = getCardOffsets(scroller)[index];
     if (offset === undefined) return;
 
@@ -392,10 +404,11 @@ export function LearningToolsSection() {
   scrollToIndexRef.current = scrollToIndex;
 
   // 화살표·점으로 직접 넘긴 경우. 여기서부터는 사용자가 읽을 장을 고르고
-  // 있으므로 자동 넘김을 다시 켜지 않는다.
+  // 있으므로 자동 넘김을 다시 켜지 않는다. 화살표가 넘기는 범위 밖 인덱스는
+  // 반대쪽 끝으로 감는다.
   function goToIndex(index: number) {
     setAutoplayStopped(true);
-    scrollToIndex(index);
+    scrollToIndex(wrapIndex(index, tools.length));
   }
 
   return (
@@ -460,15 +473,14 @@ export function LearningToolsSection() {
           </div>
 
           <div className="mt-6 flex items-center justify-center gap-3">
-            {/* disabled를 쓰면 마지막 장으로 넘어가는 순간 포커스를 쥔 버튼이
-                비활성화돼 포커스가 body로 떨어진다. 표시만 aria-disabled로 하고
-                범위를 벗어난 클릭은 scrollToIndex에서 무시한다. */}
+            {/* 양 끝에서 반대쪽으로 순환하므로 화살표를 막는 상태가 없다.
+                끝에서 비활성화하면 그 순간 포커스를 쥔 버튼이 사라져 포커스가
+                body로 떨어지는 문제도 함께 없어진다. */}
             <button
               type="button"
               aria-label="이전 기능 보기"
-              aria-disabled={activeIndex === 0}
               onClick={() => goToIndex(activeIndex - 1)}
-              className="inline-flex size-9 cursor-pointer items-center justify-center rounded-full border bg-background text-muted-foreground transition-colors hover:text-foreground aria-disabled:pointer-events-none aria-disabled:opacity-40"
+              className="inline-flex size-9 cursor-pointer items-center justify-center rounded-full border bg-background text-muted-foreground transition-colors hover:text-foreground"
             >
               <ChevronLeft className="size-4" aria-hidden="true" />
             </button>
@@ -499,9 +511,8 @@ export function LearningToolsSection() {
             <button
               type="button"
               aria-label="다음 기능 보기"
-              aria-disabled={activeIndex === tools.length - 1}
               onClick={() => goToIndex(activeIndex + 1)}
-              className="inline-flex size-9 cursor-pointer items-center justify-center rounded-full border bg-background text-muted-foreground transition-colors hover:text-foreground aria-disabled:pointer-events-none aria-disabled:opacity-40"
+              className="inline-flex size-9 cursor-pointer items-center justify-center rounded-full border bg-background text-muted-foreground transition-colors hover:text-foreground"
             >
               <ChevronRight className="size-4" aria-hidden="true" />
             </button>
