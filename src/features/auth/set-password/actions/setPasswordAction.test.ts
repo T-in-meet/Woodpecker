@@ -56,6 +56,7 @@ import { setPasswordAction } from "./setPasswordAction";
  */
 function makeFormData(input: Record<string, string>) {
   const formData = new FormData();
+
   for (const [key, value] of Object.entries(input)) {
     formData.set(key, value);
   }
@@ -179,7 +180,7 @@ describe("setPasswordAction", () => {
     expect(updateUserMock).not.toHaveBeenCalled();
   });
 
-  it("Google provider만 있어도 실제 password가 있으면 mypage로 redirect하고 password를 설정하지 않는다", async () => {
+  it("실제 password가 있으면 mypage로 redirect하고 password를 다시 설정하지 않는다", async () => {
     getHasPasswordLoginMock.mockResolvedValue(true);
 
     getUserMock.mockResolvedValue({
@@ -206,7 +207,41 @@ describe("setPasswordAction", () => {
 
     expect(updateUserMock).not.toHaveBeenCalled();
     expect(getHasPasswordLoginMock).toHaveBeenCalledWith("password-user-id");
+    expect(validateRedirectPathMock).not.toHaveBeenCalled();
     expect(redirectMock).toHaveBeenCalledWith(ROUTES.MYPAGE);
+  });
+
+  it("실제 password가 있고 redirectPath가 있으면 검증된 redirect를 보존하고 password를 다시 설정하지 않는다", async () => {
+    getHasPasswordLoginMock.mockResolvedValue(true);
+
+    getUserMock.mockResolvedValue({
+      data: {
+        user: {
+          app_metadata: { providers: ["google"] },
+          email: "password.user@example.com",
+          id: "password-user-id",
+        },
+      },
+      error: null,
+    });
+
+    validateRedirectPathMock.mockReturnValue("/notes");
+
+    await expect(
+      setPasswordAction(
+        "/notes",
+        INITIAL_SET_PASSWORD_ACTION_STATE,
+        makeFormData({
+          password: "Password123!",
+          confirmPassword: "Password123!",
+        }),
+      ),
+    ).rejects.toBe(REDIRECT_ERROR);
+
+    expect(getHasPasswordLoginMock).toHaveBeenCalledWith("password-user-id");
+    expect(validateRedirectPathMock).toHaveBeenCalledWith("/notes");
+    expect(updateUserMock).not.toHaveBeenCalled();
+    expect(redirectMock).toHaveBeenCalledWith("/notes");
   });
 
   it("비밀번호 검증에 실패하면 invalid_input을 반환한다", async () => {

@@ -22,8 +22,6 @@ import {
   checkRequestEligibility,
   mapBlockedByToReason,
 } from "../../lib/checkRequestEligibility";
-import { getHasPasswordLogin } from "../../lib/getHasPasswordLogin";
-import { getUserByEmail } from "../../lib/getUserByEmail";
 import { maskEmailForLogging } from "../../lib/maskEmailForLogging";
 import { maskIpForLogging } from "../../lib/maskIpForLogging";
 import { setResetPasswordIntentCookie } from "../../lib/resetPasswordIntent";
@@ -77,6 +75,7 @@ export async function verifyOtpAction(
   });
 
   let nextUrl = null;
+
   try {
     /**
      * 요청 컨텍스트 검증
@@ -191,9 +190,6 @@ export async function verifyOtpAction(
       return blockedState(reasonCode);
     }
 
-    const existingSignupUser =
-      purpose === "signup" ? await getUserByEmail(canonicalEmail) : null;
-
     /**
      * Supabase OTP 인증 검증 수행
      *
@@ -243,14 +239,6 @@ export async function verifyOtpAction(
       };
     }
 
-    const hasPasswordLogin =
-      existingSignupUser !== null
-        ? await getHasPasswordLogin(existingSignupUser.id)
-        : false;
-
-    const shouldSetPasswordAfterSignup =
-      existingSignupUser !== null && !hasPasswordLogin;
-
     /**
      * OTP 인증 완료 로그
      *
@@ -276,20 +264,24 @@ export async function verifyOtpAction(
      * OTP 인증 성공 후 이동 경로 결정
      *
      * signup:
-     * - 인증 흐름 마지막 단계
-     * - redirect가 있으면 이동
-     * - 없으면 기본 페이지 이동
+     * - OTP 인증 성공 시점에는 이미 인증 세션이 생성된 상태다.
+     * - 비밀번호 존재 여부는 이 Action에서 판정하지 않는다.
+     * - /set-password를 signup 후 공통 분기 지점으로 사용한다.
+     * - /set-password에서 실제 비밀번호 존재 여부를 확인한 뒤
+     *   기존 비밀번호가 있으면 최종 목적지로 이동하고,
+     *   없으면 비밀번호 설정 폼을 제공한다.
+     * - redirect가 있으면 비밀번호 분기 이후에도 유지할 수 있도록 전달한다.
      *
      * reset-password:
-     * - 비밀번호 재설정 페이지로 이동
-     * - 최종 redirect는 reset-password 완료 시점에서 처리
+     * - 기존 비밀번호 재설정 흐름을 유지한다.
+     * - reset-password 페이지로 이동한다.
+     * - 최종 redirect는 reset-password 완료 시점에서 처리한다.
      */
-    const nextPath = shouldSetPasswordAfterSignup
-      ? redirectTo
-        ? `${ROUTES.SET_PASSWORD}?redirect=${encodeURIComponent(redirectTo)}`
-        : ROUTES.SET_PASSWORD
-      : purpose === "signup"
-        ? (redirectTo ?? ROUTES.MYPAGE)
+    const nextPath =
+      purpose === "signup"
+        ? redirectTo
+          ? `${ROUTES.SET_PASSWORD}?redirect=${encodeURIComponent(redirectTo)}`
+          : ROUTES.SET_PASSWORD
         : redirectTo
           ? `${ROUTES.RESET_PASSWORD}?redirect=${encodeURIComponent(redirectTo)}`
           : ROUTES.RESET_PASSWORD;
@@ -315,6 +307,7 @@ export async function verifyOtpAction(
      * 등 시스템 레벨 예외만 처리한다.
      */
     const normalized = normalizeUnknownError(error);
+
     logAuthError(AUTH_EVENTS.AUTH_VERIFY_OTP_FAILED, {
       path: VERIFY_OTP_PATH,
       method: "POST",
@@ -324,6 +317,7 @@ export async function verifyOtpAction(
       reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
       ...normalized,
     });
+
     return internalErrorState();
   } finally {
     await applyMinimumActionDelay(start);

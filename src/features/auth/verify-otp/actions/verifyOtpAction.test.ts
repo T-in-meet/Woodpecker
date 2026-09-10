@@ -34,14 +34,6 @@ vi.mock("../lib/verifyOtp", () => ({
   verifyOtp: vi.fn(),
 }));
 
-vi.mock("../../lib/getHasPasswordLogin", () => ({
-  getHasPasswordLogin: vi.fn(),
-}));
-
-vi.mock("../../lib/getUserByEmail", () => ({
-  getUserByEmail: vi.fn(),
-}));
-
 vi.mock("../../lib/resetPasswordIntent", () => ({
   setResetPasswordIntentCookie: vi.fn(),
 }));
@@ -60,8 +52,6 @@ import {
   checkRequestEligibility,
   mapBlockedByToReason,
 } from "../../lib/checkRequestEligibility";
-import { getHasPasswordLogin } from "../../lib/getHasPasswordLogin";
-import { getUserByEmail } from "../../lib/getUserByEmail";
 import { setResetPasswordIntentCookie } from "../../lib/resetPasswordIntent";
 import { verifyOtp } from "../lib/verifyOtp";
 
@@ -98,56 +88,10 @@ describe("verifyOtpAction", () => {
       error: null,
     } as Awaited<ReturnType<typeof verifyOtp>>);
 
-    vi.mocked(getUserByEmail).mockResolvedValue(null);
-    vi.mocked(getHasPasswordLogin).mockResolvedValue(false);
-
     vi.mocked(applyMinimumActionDelay).mockResolvedValue(undefined);
   });
 
-  it("OTP 인증에 성공하면 redirectPath로 redirect한다", async () => {
-    const formData = createFormData({
-      email: "user@example.com",
-      purpose: "signup",
-      otp: "123456",
-    });
-
-    await expect(
-      verifyOtpAction("/after-login", prevState, formData),
-    ).rejects.toThrow("NEXT_REDIRECT:/after-login");
-
-    expect(redirect).toHaveBeenCalledWith("/after-login");
-
-    expect(verifyOtp).toHaveBeenCalledWith({
-      email: "user@example.com",
-      purpose: "signup",
-      otp: "123456",
-    });
-
-    expect(applyMinimumActionDelay).toHaveBeenCalledTimes(1);
-  });
-
-  it("redirectPath가 없으면 기본 경로로 redirect한다", async () => {
-    const formData = createFormData({
-      email: "user@example.com",
-      purpose: "signup",
-      otp: "123456",
-    });
-
-    await expect(verifyOtpAction(null, prevState, formData)).rejects.toThrow(
-      `NEXT_REDIRECT:${ROUTES.MYPAGE}`,
-    );
-
-    expect(redirect).toHaveBeenCalledWith(ROUTES.MYPAGE);
-  });
-
-  it("signup OTP 인증에 성공하고 기존 OAuth-only 사용자면 비밀번호 설정 페이지로 redirect한다", async () => {
-    vi.mocked(getUserByEmail).mockResolvedValue({
-      id: "oauth-user-id",
-      email: "user@example.com",
-      email_confirmed_at: "2026-03-29T00:00:00.000Z",
-      auth_providers: ["google"],
-    });
-
+  it("signup OTP 인증에 성공하면 비밀번호 설정 페이지로 redirect한다", async () => {
     const formData = createFormData({
       email: "user@example.com",
       purpose: "signup",
@@ -158,18 +102,19 @@ describe("verifyOtpAction", () => {
       `NEXT_REDIRECT:${ROUTES.SET_PASSWORD}`,
     );
 
-    expect(getHasPasswordLogin).toHaveBeenCalledWith("oauth-user-id");
+    expect(verifyOtp).toHaveBeenCalledWith({
+      email: "user@example.com",
+      purpose: "signup",
+      otp: "123456",
+    });
+
     expect(redirect).toHaveBeenCalledWith(ROUTES.SET_PASSWORD);
+    expect(setResetPasswordIntentCookie).not.toHaveBeenCalled();
+    expect(applyMinimumActionDelay).toHaveBeenCalledTimes(1);
   });
 
-  it("Google provider만 있어도 실제 password가 있으면 비밀번호 설정을 건너뛴다", async () => {
-    vi.mocked(getUserByEmail).mockResolvedValue({
-      id: "oauth-user-id",
-      email: "user@example.com",
-      email_confirmed_at: "2026-03-29T00:00:00.000Z",
-      auth_providers: ["google"],
-    });
-    vi.mocked(getHasPasswordLogin).mockResolvedValue(true);
+  it("signup OTP 인증에 성공하고 redirectPath가 있으면 비밀번호 설정 페이지에 redirect query를 포함한다", async () => {
+    const redirectPath = "/notes";
 
     const formData = createFormData({
       email: "user@example.com",
@@ -177,37 +122,17 @@ describe("verifyOtpAction", () => {
       otp: "123456",
     });
 
-    await expect(verifyOtpAction(null, prevState, formData)).rejects.toThrow(
-      `NEXT_REDIRECT:${ROUTES.MYPAGE}`,
-    );
-
-    expect(getHasPasswordLogin).toHaveBeenCalledWith("oauth-user-id");
-    expect(redirect).toHaveBeenCalledWith(ROUTES.MYPAGE);
-  });
-
-  it("signup OTP 인증에 성공하고 기존 OAuth-only 사용자이며 redirectPath가 있으면 비밀번호 설정 완료 후 이동 경로를 전달한다", async () => {
-    vi.mocked(getUserByEmail).mockResolvedValue({
-      id: "oauth-user-id",
-      email: "user@example.com",
-      email_confirmed_at: "2026-03-29T00:00:00.000Z",
-      auth_providers: ["google"],
-    });
-
-    const formData = createFormData({
-      email: "user@example.com",
-      purpose: "signup",
-      otp: "123456",
-    });
     const expectedPath = `${ROUTES.SET_PASSWORD}?redirect=${encodeURIComponent(
-      "/target",
+      redirectPath,
     )}`;
 
     await expect(
-      verifyOtpAction("/target", prevState, formData),
+      verifyOtpAction(redirectPath, prevState, formData),
     ).rejects.toThrow(`NEXT_REDIRECT:${expectedPath}`);
 
-    expect(getHasPasswordLogin).toHaveBeenCalledWith("oauth-user-id");
     expect(redirect).toHaveBeenCalledWith(expectedPath);
+    expect(setResetPasswordIntentCookie).not.toHaveBeenCalled();
+    expect(applyMinimumActionDelay).toHaveBeenCalledTimes(1);
   });
 
   it("context 검증에 실패하면 invalid_request를 반환하고 이후 검증은 실행하지 않는다", async () => {
@@ -297,14 +222,7 @@ describe("verifyOtpAction", () => {
     expect(applyMinimumActionDelay).toHaveBeenCalledTimes(1);
   });
 
-  it("verifyOtp가 error를 반환하면 password 존재 여부를 조회하지 않고 invalid_otp로 처리한다", async () => {
-    vi.mocked(getUserByEmail).mockResolvedValue({
-      id: "oauth-user-id",
-      email: "user@example.com",
-      email_confirmed_at: "2026-03-29T00:00:00.000Z",
-      auth_providers: ["google"],
-    });
-
+  it("verifyOtp가 error를 반환하면 invalid_otp로 처리한다", async () => {
     vi.mocked(verifyOtp).mockResolvedValue({
       error: new Error("invalid otp"),
     } as Awaited<ReturnType<typeof verifyOtp>>);
@@ -322,18 +240,11 @@ describe("verifyOtpAction", () => {
       formError: INVALID_OTP_ERROR_MESSAGE,
     });
 
-    expect(getHasPasswordLogin).not.toHaveBeenCalled();
+    expect(redirect).not.toHaveBeenCalled();
     expect(applyMinimumActionDelay).toHaveBeenCalledTimes(1);
   });
 
-  it("verifyOtp가 throw하면 password 존재 여부를 조회하지 않고 internal_error를 반환한다", async () => {
-    vi.mocked(getUserByEmail).mockResolvedValue({
-      id: "oauth-user-id",
-      email: "user@example.com",
-      email_confirmed_at: "2026-03-29T00:00:00.000Z",
-      auth_providers: ["google"],
-    });
-
+  it("verifyOtp가 throw하면 internal_error를 반환한다", async () => {
     vi.mocked(verifyOtp).mockRejectedValue(new Error("unexpected error"));
 
     const formData = createFormData({
@@ -350,7 +261,7 @@ describe("verifyOtpAction", () => {
       fieldErrors: null,
     });
 
-    expect(getHasPasswordLogin).not.toHaveBeenCalled();
+    expect(redirect).not.toHaveBeenCalled();
     expect(logAuthError).toHaveBeenCalled();
     expect(applyMinimumActionDelay).toHaveBeenCalledTimes(1);
   });
@@ -363,7 +274,7 @@ describe("verifyOtpAction", () => {
     });
 
     await expect(verifyOtpAction(null, prevState, formData)).rejects.toThrow(
-      `NEXT_REDIRECT:${ROUTES.MYPAGE}`,
+      `NEXT_REDIRECT:${ROUTES.SET_PASSWORD}`,
     );
 
     expect(checkRequestEligibility).toHaveBeenCalledWith(
@@ -377,6 +288,8 @@ describe("verifyOtpAction", () => {
       purpose: "signup",
       otp: "123456",
     });
+
+    expect(redirect).toHaveBeenCalledWith(ROUTES.SET_PASSWORD);
   });
 
   it("reset-password OTP 인증에 성공하면 reset-password 경로로 redirect한다", async () => {
@@ -395,7 +308,7 @@ describe("verifyOtpAction", () => {
   });
 
   it("reset-password OTP 인증에 성공하고 redirectPath가 있으면 reset-password 경로에 redirect query를 포함한다", async () => {
-    const redirectPath = "/target";
+    const redirectPath = "/notes";
 
     const formData = createFormData({
       email: "user@example.com",
