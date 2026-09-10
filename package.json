@@ -87,6 +87,7 @@
     "prettier": "^3.8.1",
     "server-only": "^0.0.1",
     "serwist": "^9.5.7",
+    "sharp": "^0.34.5",
     "supabase": "^2.109.1",
     "tailwindcss": "^4",
     "typescript": "^5",

@@ -67,8 +67,12 @@ export const metadata: Metadata = {
     template: `%s | ${SITE_NAME}`,
   },
   description: landingDescription,
+  /* 원본 woodpecker.png(1254x1254, 약 677KB)를 그대로 쓰지 않는다. 이 경로는
+     next/image를 거치지 않아 원본이 그대로 내려가는데, 탭 아이콘은 16~32px로
+     그려진다. scripts/generate-icons.mjs로 구운 크기별 파일을 쓴다. */
   icons: {
-    icon: "/woodpecker.png",
+    icon: "/icons/favicon-32.png",
+    apple: "/icons/apple-touch-icon-180.png",
   },
   ...buildSocialMetadata({
     title: SITE_TITLE,
