@@ -32,6 +32,9 @@ const OAUTH_SIGN_OUT_FAILED_REASON = "sign_out_failed";
  *
  * created_at과 last_sign_in_at의 차이가 이 범위 이내인 경우에만
  * 이번 OAuth login 과정에서 새로 생성된 사용자로 판단한다.
+ *
+ * last_sign_in_at을 사용할 수 없는 경우에는
+ * created_at과 현재 callback 시점의 차이를 동일한 범위로 확인한다.
  */
 const NEW_OAUTH_USER_MAX_SIGN_IN_DELAY_MS = 60 * 1000;
 
@@ -61,28 +64,44 @@ function getOAuthCanonicalEmail(user: User): string | null {
  * 기존 Google-only 사용자는 법적 동의 이력이 없을 수 있으므로
  * 동의 이력 자체를 신규 사용자 판정 기준으로 사용하지 않습니다.
  *
- * 신규 OAuth 사용자는 계정 생성과 첫 로그인 시점이 매우 가깝기 때문에
- * created_at과 last_sign_in_at의 차이를 이용해 판정합니다.
+ * 정상적으로 last_sign_in_at을 확인할 수 있으면
+ * 계정 생성 시점과 첫 로그인 시점의 차이를 기준으로 판정합니다.
  *
- * timestamp를 정상적으로 확인할 수 없는 경우에는
- * 기존 사용자를 신규 사용자로 잘못 판단하지 않도록 false를 반환합니다.
+ * last_sign_in_at이 없거나 정상적인 timestamp가 아니면
+ * created_at과 현재 callback 시점의 차이를 fallback으로 사용합니다.
+ *
+ * 이 fallback은 실제 신규 OAuth 사용자의 last_sign_in_at이 누락되더라도
+ * 동의 없는 상태로 기존 사용자 흐름을 통과하지 않도록 하기 위한 처리입니다.
+ *
+ * created_at 자체를 확인할 수 없거나 현재 시점보다 미래인 경우에는
+ * 신규 사용자로 판단하지 않습니다.
  *
  * @param user OAuth callback에서 세션 교환으로 받은 Supabase 사용자
+ * @param now 현재 callback 시각. 테스트에서는 고정된 시각을 전달할 수 있습니다.
  * @returns 이번 OAuth login 과정에서 생성된 사용자로 판단되면 true
  */
-function isNewlyCreatedOAuthUser(user: User): boolean {
+function isNewlyCreatedOAuthUser(user: User, now = Date.now()): boolean {
   const createdAt = Date.parse(user.created_at);
+
+  if (!Number.isFinite(createdAt)) {
+    return false;
+  }
+
   const lastSignInAt = user.last_sign_in_at
     ? Date.parse(user.last_sign_in_at)
     : Number.NaN;
 
-  if (!Number.isFinite(createdAt) || !Number.isFinite(lastSignInAt)) {
-    return false;
+  if (Number.isFinite(lastSignInAt)) {
+    const signInDelay = lastSignInAt - createdAt;
+
+    return (
+      signInDelay >= 0 && signInDelay <= NEW_OAUTH_USER_MAX_SIGN_IN_DELAY_MS
+    );
   }
 
-  const signInDelay = lastSignInAt - createdAt;
+  const creationAge = now - createdAt;
 
-  return signInDelay >= 0 && signInDelay <= NEW_OAUTH_USER_MAX_SIGN_IN_DELAY_MS;
+  return creationAge >= 0 && creationAge <= NEW_OAUTH_USER_MAX_SIGN_IN_DELAY_MS;
 }
 
 /**

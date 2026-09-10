@@ -273,6 +273,62 @@ describe("auth callback route", () => {
     );
   });
 
+  it("last_sign_in_at이 없는 최근 생성 OAuth 사용자가 동의 이력이 없으면 회원가입으로 redirect한다", async () => {
+    exchangeCodeForSessionMock.mockResolvedValue({
+      data: {
+        user: {
+          id: "new-oauth-user-id",
+          email: "new.oauth@example.com",
+          created_at: new Date(Date.now() - 5_000).toISOString(),
+          user_metadata: {},
+        },
+      },
+      error: null,
+    });
+
+    getLegalAcceptanceStatusMock.mockResolvedValue({
+      canAccessService: true,
+      hasAcceptanceHistory: false,
+    });
+
+    const response = await GET(
+      createRequest("/api/auth/callback?code=oauth-code&intent=login"),
+    );
+
+    expect(signOutMock).toHaveBeenCalledTimes(1);
+    expect(response.headers.get("location")).toBe(
+      "http://localhost:3000/signup?agreement_required=1",
+    );
+  });
+
+  it("last_sign_in_at이 없는 기존 OAuth 사용자가 동의 이력이 없어도 접근 가능하면 기존 로그인 흐름을 유지한다", async () => {
+    exchangeCodeForSessionMock.mockResolvedValue({
+      data: {
+        user: {
+          id: "legacy-oauth-user-id",
+          email: "legacy.oauth@example.com",
+          created_at: "2026-07-01T00:00:00.000Z",
+          user_metadata: {},
+        },
+      },
+      error: null,
+    });
+
+    getLegalAcceptanceStatusMock.mockResolvedValue({
+      canAccessService: true,
+      hasAcceptanceHistory: false,
+    });
+
+    const response = await GET(
+      createRequest("/api/auth/callback?code=oauth-code&intent=login"),
+    );
+
+    expect(signOutMock).not.toHaveBeenCalled();
+    expect(response.headers.get("location")).toBe(
+      `http://localhost:3000${ROUTES.MYPAGE}`,
+    );
+  });
+
   it("login intent에서 기존 OAuth 사용자가 동의 이력이 없고 접근 불가하면 세션을 유지하고 재확인 화면으로 redirect한다", async () => {
     exchangeCodeForSessionMock.mockResolvedValue({
       data: {
