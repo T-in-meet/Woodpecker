@@ -22,6 +22,9 @@ export const SETTLE_DELAY_MS = 150;
 // 약 900ms까지 버티고, 그 뒤에는 어떤 이유로든 움직이지 않는 것으로 보고
 // 목표를 풀어 activeIndex가 영영 실제 위치와 어긋난 채 남지 않게 한다.
 export const MAX_SETTLE_RETRIES = 6;
+// 자동 넘김에서 한 장이 머무는 시간. 카드마다 제목·설명·학습 예시 미리보기까지
+// 들어 있어 훑어보는 데 이 정도는 필요하다.
+export const AUTOPLAY_INTERVAL_MS = 6000;
 
 /**
  * 관련 노트 목록(`RelatedNoteItem`)의 정적 재현.
@@ -143,7 +146,11 @@ const previews = {
  *
  * CSS scroll-snap으로 만든다. 모바일 스와이프와 관성 스크롤을 브라우저가
  * 처리해주므로 섹션 하나 때문에 캐러셀 라이브러리를 들일 이유가 없다.
- * 자동 재생은 넣지 않는다 — 읽는 중에 넘어가면 방해가 된다.
+ *
+ * 자동으로 한 장씩 넘어간다. 화살표를 누르지 않아도 카드가 더 있다는 걸
+ * 알리려는 것이라, 마지막 장에서는 첫 장으로 돌아와 계속 순환한다. 읽는
+ * 중에 화면이 움직이는 건 방해이므로 멈추는 조건을 넉넉히 두었다. 조건은
+ * 아래 상태 선언의 주석을 본다.
  */
 export function LearningToolsSection() {
   const tools = learningToolsContent.tools;
@@ -168,6 +175,20 @@ export function LearningToolsSection() {
   // 일어나 스와이프가 끊긴다. 값이 달라지는 건 카드 폭이 바뀔 때뿐이다.
   const cardOffsetsRef = useRef<number[] | null>(null);
 
+  // 자동 넘김을 멈추는 조건. 서로 다른 이벤트에서 오므로 따로 들고 있는다.
+  // - stopped: 사용자가 직접 넘겼다. 한 번 멈추면 다시 켜지 않는다.
+  // - hovered: 포인터가 올라가 있거나 안쪽 컨트롤에 포커스가 있다.
+  // - sectionVisible: 섹션이 화면에 들어와 있다. 랜딩 한가운데 있는 섹션이라
+  //   보이지 않는 동안 다 넘어가 버리면 자동 넘김이 아무것도 알리지 못한다.
+  // - documentVisible: 다른 탭에 가 있는 동안에는 돌릴 이유가 없다.
+  // - reducedMotion: 움직임을 줄여달라는 설정이면 아예 켜지 않는다.
+  const [autoplayStopped, setAutoplayStopped] = useState(false);
+  const [autoplayHovered, setAutoplayHovered] = useState(false);
+  const [sectionVisible, setSectionVisible] = useState(false);
+  const [documentVisible, setDocumentVisible] = useState(true);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const viewportRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const invalidateOffsets = () => {
       cardOffsetsRef.current = null;
@@ -179,6 +200,68 @@ export function LearningToolsSection() {
       if (settleTimerRef.current !== null) clearTimeout(settleTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = (matches: boolean) => setReducedMotion(matches);
+
+    sync(media.matches);
+
+    const handleChange = (event: MediaQueryListEvent) => sync(event.matches);
+    media.addEventListener("change", handleChange);
+    return () => media.removeEventListener("change", handleChange);
+  }, []);
+
+  useEffect(() => {
+    const syncDocumentVisibility = () => setDocumentVisible(!document.hidden);
+
+    syncDocumentVisibility();
+
+    document.addEventListener("visibilitychange", syncDocumentVisibility);
+    return () =>
+      document.removeEventListener("visibilitychange", syncDocumentVisibility);
+  }, []);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+
+    // 절반 이상 보일 때만 재생한다. 화면 끝에 살짝 걸친 상태에서 넘어가면
+    // 사용자는 넘어간 줄도 모른 채 장을 잃는다.
+    const observer = new IntersectionObserver(
+      ([entry]) => setSectionVisible(entry?.isIntersecting ?? false),
+      { threshold: 0.5 },
+    );
+
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, []);
+
+  // 자동 넘김 타이머가 최신 scrollToIndex를 부르게 한다. 캐러셀 함수들은
+  // 렌더마다 새로 만들어지는데, 이걸 의존성으로 묶으려고 useCallback을 씌우면
+  // 좌표 계산 로직 전체가 딸려 들어온다. 최신 값만 ref로 넘긴다.
+  const scrollToIndexRef = useRef<(index: number) => void>(() => {});
+
+  // 자동 넘김은 활성 장이 바뀔 때마다 타이머를 새로 건다. setInterval로 두면
+  // smooth 스크롤에 걸린 시간만큼 다음 장이 머무는 시간이 짧아진다.
+  useEffect(() => {
+    if (autoplayStopped || autoplayHovered || reducedMotion) return;
+    if (!sectionVisible || !documentVisible) return;
+
+    const timer = setTimeout(() => {
+      scrollToIndexRef.current((activeIndex + 1) % tools.length);
+    }, AUTOPLAY_INTERVAL_MS);
+
+    return () => clearTimeout(timer);
+  }, [
+    activeIndex,
+    autoplayHovered,
+    autoplayStopped,
+    documentVisible,
+    reducedMotion,
+    sectionVisible,
+    tools.length,
+  ]);
 
   // 카드의 offsetLeft는 스크롤러가 아니라 위치 지정 조상(여기서는 body) 기준이라
   // 스크롤러의 왼쪽 여백만큼 통째로 밀린 값이 나온다. 그대로 scrollLeft와 비교하면
@@ -271,6 +354,9 @@ export function LearningToolsSection() {
       return;
     }
 
+    // 목표 없이 들어온 스크롤은 사용자가 직접 쓸어넘긴 것이다. 자동 넘김이
+    // 만든 스크롤은 목표가 잡혀 있어 위에서 걸러진다.
+    setAutoplayStopped(true);
     setActiveIndex(getNearestIndex(scroller));
   }
 
@@ -303,6 +389,15 @@ export function LearningToolsSection() {
     scheduleSettle();
   }
 
+  scrollToIndexRef.current = scrollToIndex;
+
+  // 화살표·점으로 직접 넘긴 경우. 여기서부터는 사용자가 읽을 장을 고르고
+  // 있으므로 자동 넘김을 다시 켜지 않는다.
+  function goToIndex(index: number) {
+    setAutoplayStopped(true);
+    scrollToIndex(index);
+  }
+
   return (
     <section aria-labelledby="learning-tools-heading">
       <div className="mx-auto max-w-6xl px-6 py-12 md:py-20">
@@ -321,85 +416,96 @@ export function LearningToolsSection() {
           {learningToolsContent.description}
         </p>
 
+        {/* 스크롤러와 컨트롤을 함께 감싼다. 자동 넘김이 멈춰야 하는 영역
+            (포인터가 올라갔거나 포커스가 들어온 곳)과 화면에 보이는지 재는
+            영역이 같아서 한 요소로 묶었다. */}
         <div
-          ref={scrollerRef}
-          onScroll={handleScroll}
-          className="mx-auto mt-10 flex w-full max-w-2xl snap-x snap-mandatory items-start gap-6 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          ref={viewportRef}
+          onMouseEnter={() => setAutoplayHovered(true)}
+          onMouseLeave={() => setAutoplayHovered(false)}
+          onFocusCapture={() => setAutoplayHovered(true)}
+          onBlurCapture={() => setAutoplayHovered(false)}
         >
-          {tools.map((tool) => {
-            const { icon: Icon, content } = previews[tool.id];
-            return (
-              <article
-                key={tool.id}
-                className="flex w-full shrink-0 snap-start flex-col rounded-2xl border bg-card p-5"
-              >
-                <p className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                  <Icon className="size-4" aria-hidden="true" />
-                  {tool.label}
-                </p>
-                <h3 className="mt-2 text-lg font-semibold tracking-tight">
-                  {tool.title}
-                </h3>
-                <p className="mb-4 mt-2 text-sm leading-relaxed text-muted-foreground">
-                  {tool.description}
-                </p>
-                <div className="rounded-xl border bg-muted/20 p-3">
-                  <p className="mb-2 text-xs text-muted-foreground">
-                    학습 예시
-                  </p>
-                  {content}
-                </div>
-              </article>
-            );
-          })}
-        </div>
-
-        <div className="mt-6 flex items-center justify-center gap-3">
-          {/* disabled를 쓰면 마지막 장으로 넘어가는 순간 포커스를 쥔 버튼이
-              비활성화돼 포커스가 body로 떨어진다. 표시만 aria-disabled로 하고
-              범위를 벗어난 클릭은 scrollToIndex에서 무시한다. */}
-          <button
-            type="button"
-            aria-label="이전 기능 보기"
-            aria-disabled={activeIndex === 0}
-            onClick={() => scrollToIndex(activeIndex - 1)}
-            className="inline-flex size-9 cursor-pointer items-center justify-center rounded-full border bg-background text-muted-foreground transition-colors hover:text-foreground aria-disabled:pointer-events-none aria-disabled:opacity-40"
+          <div
+            ref={scrollerRef}
+            onScroll={handleScroll}
+            className="mx-auto mt-10 flex w-full max-w-2xl snap-x snap-mandatory items-start gap-6 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           >
-            <ChevronLeft className="size-4" aria-hidden="true" />
-          </button>
-
-          {/* 점은 8px로 보이되 누르는 영역은 24px을 확보한다. 버튼 자체를 8px로
-              두면 모바일에서 겨냥하기 어렵다. 타깃끼리 겹치면 안 되므로 사이
-              간격은 버튼 크기로만 벌어지게 두고 gap은 주지 않는다. */}
-          <div className="flex items-center">
-            {tools.map((tool, index) => (
-              <button
-                key={tool.id}
-                type="button"
-                aria-label={`${tool.label} 보기`}
-                aria-current={index === activeIndex}
-                onClick={() => scrollToIndex(index)}
-                className="inline-flex size-6 cursor-pointer items-center justify-center rounded-full"
-              >
-                <span
-                  className={cn(
-                    "size-2 rounded-full transition-colors",
-                    index === activeIndex ? "bg-foreground" : "bg-border",
-                  )}
-                />
-              </button>
-            ))}
+            {tools.map((tool) => {
+              const { icon: Icon, content } = previews[tool.id];
+              return (
+                <article
+                  key={tool.id}
+                  className="flex w-full shrink-0 snap-start flex-col rounded-2xl border bg-card p-5"
+                >
+                  <p className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                    <Icon className="size-4" aria-hidden="true" />
+                    {tool.label}
+                  </p>
+                  <h3 className="mt-2 text-lg font-semibold tracking-tight">
+                    {tool.title}
+                  </h3>
+                  <p className="mb-4 mt-2 text-sm leading-relaxed text-muted-foreground">
+                    {tool.description}
+                  </p>
+                  <div className="rounded-xl border bg-muted/20 p-3">
+                    <p className="mb-2 text-xs text-muted-foreground">
+                      학습 예시
+                    </p>
+                    {content}
+                  </div>
+                </article>
+              );
+            })}
           </div>
 
-          <button
-            type="button"
-            aria-label="다음 기능 보기"
-            aria-disabled={activeIndex === tools.length - 1}
-            onClick={() => scrollToIndex(activeIndex + 1)}
-            className="inline-flex size-9 cursor-pointer items-center justify-center rounded-full border bg-background text-muted-foreground transition-colors hover:text-foreground aria-disabled:pointer-events-none aria-disabled:opacity-40"
-          >
-            <ChevronRight className="size-4" aria-hidden="true" />
-          </button>
+          <div className="mt-6 flex items-center justify-center gap-3">
+            {/* disabled를 쓰면 마지막 장으로 넘어가는 순간 포커스를 쥔 버튼이
+                비활성화돼 포커스가 body로 떨어진다. 표시만 aria-disabled로 하고
+                범위를 벗어난 클릭은 scrollToIndex에서 무시한다. */}
+            <button
+              type="button"
+              aria-label="이전 기능 보기"
+              aria-disabled={activeIndex === 0}
+              onClick={() => goToIndex(activeIndex - 1)}
+              className="inline-flex size-9 cursor-pointer items-center justify-center rounded-full border bg-background text-muted-foreground transition-colors hover:text-foreground aria-disabled:pointer-events-none aria-disabled:opacity-40"
+            >
+              <ChevronLeft className="size-4" aria-hidden="true" />
+            </button>
+
+            {/* 점은 8px로 보이되 누르는 영역은 24px을 확보한다. 버튼 자체를 8px로
+                두면 모바일에서 겨냥하기 어렵다. 타깃끼리 겹치면 안 되므로 사이
+                간격은 버튼 크기로만 벌어지게 두고 gap은 주지 않는다. */}
+            <div className="flex items-center">
+              {tools.map((tool, index) => (
+                <button
+                  key={tool.id}
+                  type="button"
+                  aria-label={`${tool.label} 보기`}
+                  aria-current={index === activeIndex}
+                  onClick={() => goToIndex(index)}
+                  className="inline-flex size-6 cursor-pointer items-center justify-center rounded-full"
+                >
+                  <span
+                    className={cn(
+                      "size-2 rounded-full transition-colors",
+                      index === activeIndex ? "bg-foreground" : "bg-border",
+                    )}
+                  />
+                </button>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              aria-label="다음 기능 보기"
+              aria-disabled={activeIndex === tools.length - 1}
+              onClick={() => goToIndex(activeIndex + 1)}
+              className="inline-flex size-9 cursor-pointer items-center justify-center rounded-full border bg-background text-muted-foreground transition-colors hover:text-foreground aria-disabled:pointer-events-none aria-disabled:opacity-40"
+            >
+              <ChevronRight className="size-4" aria-hidden="true" />
+            </button>
+          </div>
         </div>
       </div>
     </section>

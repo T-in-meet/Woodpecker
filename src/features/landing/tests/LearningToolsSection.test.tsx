@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { learningToolsContent } from "@/features/landing/content";
 import {
+  AUTOPLAY_INTERVAL_MS,
   LearningToolsSection,
   MAX_SETTLE_RETRIES,
   SETTLE_DELAY_MS,
@@ -15,6 +16,16 @@ const CARD_WIDTH = 600;
 
 const tools = learningToolsContent.tools;
 
+type IntersectionEntryStub = { isIntersecting: boolean };
+
+// 자동 넘김은 섹션이 화면에 보일 때만 돈다. jsdom에는 IntersectionObserver가
+// 없으므로 콜백을 붙잡아 두고 테스트가 직접 발화시킨다. 발화시키지 않으면
+// 화면 밖으로 남아 자동 넘김이 꺼진 상태가 되므로, 자동 넘김과 무관한
+// 테스트는 손댈 필요가 없다.
+let fireIntersection: ((entries: IntersectionEntryStub[]) => void) | null =
+  null;
+let prefersReducedMotion = false;
+
 type Carousel = {
   scrollTo: ReturnType<typeof vi.fn>;
   unmount: () => void;
@@ -25,7 +36,28 @@ type Carousel = {
   clickNext: () => void;
   clickPrev: () => void;
   settle: () => void;
+  // 섹션이 화면에 들어왔다고 알린다. 자동 넘김은 이 뒤에야 돈다.
+  enterViewport: () => void;
+  hover: () => void;
+  unhover: () => void;
+  // 탭을 백그라운드로 보냈다가 되돌린다.
+  hide: () => void;
+  show: () => void;
+  advance: (ms?: number) => void;
 };
+
+// jsdom의 document.hidden은 항상 false다. 값을 갈아끼우고 이벤트를 쏴서
+// 탭 전환을 흉내 낸다.
+function setDocumentHidden(hidden: boolean) {
+  Object.defineProperty(document, "hidden", {
+    configurable: true,
+    get: () => hidden,
+  });
+
+  act(() => {
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+}
 
 function makeRect(left: number, width: number) {
   return {
@@ -78,6 +110,9 @@ function mountCarousel({ animateScroll = true } = {}): Carousel {
   });
   scroller.scrollTo = scrollTo as unknown as HTMLElement["scrollTo"];
 
+  const viewport = scroller.parentElement;
+  if (!viewport) throw new Error("뷰포트를 찾지 못했다");
+
   const clickButton = (name: string) => {
     fireEvent.click(screen.getByRole("button", { name }));
   };
@@ -111,19 +146,71 @@ function mountCarousel({ animateScroll = true } = {}): Carousel {
         vi.advanceTimersByTime(SETTLE_DELAY_MS);
       });
     },
+    enterViewport: () => {
+      act(() => {
+        fireIntersection?.([{ isIntersecting: true }]);
+      });
+    },
+    // React는 onMouseEnter/onMouseLeave를 mouseover/mouseout 위임으로 만든다.
+    // mouseenter를 직접 쏘면 핸들러가 걸리지 않는다.
+    hover: () => {
+      act(() => {
+        fireEvent.mouseOver(viewport);
+      });
+    },
+    unhover: () => {
+      act(() => {
+        fireEvent.mouseOut(viewport, { relatedTarget: document.body });
+      });
+    },
+    hide: () => setDocumentHidden(true),
+    show: () => setDocumentHidden(false),
+    advance: (ms = AUTOPLAY_INTERVAL_MS) => {
+      act(() => {
+        vi.advanceTimersByTime(ms);
+      });
+    },
   };
 }
 
 describe("LearningToolsSection 캐러셀", () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    // scrollToIndex가 prefers-reduced-motion을 본다. jsdom 구현은 환경마다
-    // 달라서 항상 smooth 경로를 타도록 고정한다.
+    fireIntersection = null;
+    prefersReducedMotion = false;
+
+    class IntersectionObserverStub {
+      readonly root = null;
+      readonly rootMargin = "";
+      readonly thresholds: ReadonlyArray<number> = [];
+
+      constructor(callback: IntersectionObserverCallback) {
+        fireIntersection = (entries) => {
+          callback(
+            entries as unknown as IntersectionObserverEntry[],
+            this as unknown as IntersectionObserver,
+          );
+        };
+      }
+
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+      takeRecords(): IntersectionObserverEntry[] {
+        return [];
+      }
+    }
+
+    globalThis.IntersectionObserver =
+      IntersectionObserverStub as unknown as typeof IntersectionObserver;
+
+    // scrollToIndex와 자동 넘김이 prefers-reduced-motion을 본다. jsdom 구현은
+    // 환경마다 달라서 테스트가 직접 값을 정한다. 기본값은 smooth 경로다.
     Object.defineProperty(window, "matchMedia", {
       configurable: true,
       writable: true,
       value: (query: string) => ({
-        matches: false,
+        matches: prefersReducedMotion,
         media: query,
         onchange: null,
         addListener: vi.fn(),
@@ -137,6 +224,7 @@ describe("LearningToolsSection 캐러셀", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    setDocumentHidden(false);
   });
 
   it("화살표를 연속으로 누르면 한 장씩 이어서 넘어간다", () => {
@@ -237,6 +325,112 @@ describe("LearningToolsSection 캐러셀", () => {
     expect(carousel.scrollTo).toHaveBeenCalledWith(
       expect.objectContaining({ left: 2000 }),
     );
+  });
+
+  it("화면에 들어오면 일정 시간마다 다음 장으로 넘어간다", () => {
+    const carousel = mountCarousel();
+
+    carousel.enterViewport();
+    carousel.advance();
+
+    expect(carousel.scrollTo).toHaveBeenCalledWith(
+      expect.objectContaining({ left: CARD_WIDTH }),
+    );
+    expect(carousel.activeDotIndex()).toBe(1);
+  });
+
+  it("마지막 장 다음에는 첫 장으로 돌아온다", () => {
+    const carousel = mountCarousel();
+
+    carousel.enterViewport();
+    // 0 -> 1 -> 2 -> 0. 마지막에서 멈추지 않고 순환한다.
+    carousel.advance();
+    carousel.advance();
+    carousel.advance();
+
+    expect(
+      carousel.scrollTo.mock.calls.map(([options]) => options.left),
+    ).toEqual([CARD_WIDTH, CARD_WIDTH * 2, 0]);
+    expect(carousel.activeDotIndex()).toBe(0);
+  });
+
+  it("화면 밖이면 자동으로 넘어가지 않는다", () => {
+    const carousel = mountCarousel();
+
+    // enterViewport를 부르지 않은 상태 = 섹션이 아직 화면 밖이다.
+    carousel.advance(AUTOPLAY_INTERVAL_MS * 3);
+
+    expect(carousel.scrollTo).not.toHaveBeenCalled();
+    expect(carousel.activeDotIndex()).toBe(0);
+  });
+
+  it("포인터가 올라가 있는 동안에는 넘어가지 않는다", () => {
+    const carousel = mountCarousel();
+
+    carousel.enterViewport();
+    carousel.hover();
+    carousel.advance(AUTOPLAY_INTERVAL_MS * 2);
+
+    expect(carousel.scrollTo).not.toHaveBeenCalled();
+
+    // 포인터가 빠지면 다시 돈다.
+    carousel.unhover();
+    carousel.advance();
+
+    expect(carousel.activeDotIndex()).toBe(1);
+  });
+
+  it("사용자가 직접 넘긴 뒤에는 자동으로 넘어가지 않는다", () => {
+    const carousel = mountCarousel();
+
+    carousel.enterViewport();
+    carousel.clickNext();
+    carousel.settle();
+    carousel.scrollTo.mockClear();
+
+    carousel.advance(AUTOPLAY_INTERVAL_MS * 3);
+
+    expect(carousel.scrollTo).not.toHaveBeenCalled();
+    expect(carousel.activeDotIndex()).toBe(1);
+  });
+
+  it("쓸어넘긴 뒤에도 자동으로 넘어가지 않는다", () => {
+    const carousel = mountCarousel();
+
+    carousel.enterViewport();
+    carousel.swipeTo(CARD_WIDTH);
+    carousel.scrollTo.mockClear();
+
+    carousel.advance(AUTOPLAY_INTERVAL_MS * 3);
+
+    expect(carousel.scrollTo).not.toHaveBeenCalled();
+    expect(carousel.activeDotIndex()).toBe(1);
+  });
+
+  it("다른 탭에 가 있는 동안에는 넘어가지 않는다", () => {
+    const carousel = mountCarousel();
+
+    carousel.enterViewport();
+    carousel.hide();
+    carousel.advance(AUTOPLAY_INTERVAL_MS * 2);
+
+    expect(carousel.scrollTo).not.toHaveBeenCalled();
+
+    carousel.show();
+    carousel.advance();
+
+    expect(carousel.activeDotIndex()).toBe(1);
+  });
+
+  it("움직임을 줄이는 설정이면 자동으로 넘어가지 않는다", () => {
+    prefersReducedMotion = true;
+    const carousel = mountCarousel();
+
+    carousel.enterViewport();
+    carousel.advance(AUTOPLAY_INTERVAL_MS * 3);
+
+    expect(carousel.scrollTo).not.toHaveBeenCalled();
+    expect(carousel.activeDotIndex()).toBe(0);
   });
 
   it("unmount하면 대기 중인 타이머를 정리한다", () => {
