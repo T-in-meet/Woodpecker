@@ -1,4 +1,5 @@
 import {
+  BookOpen,
   BrainIcon,
   ChevronRightIcon,
   MoreHorizontalIcon,
@@ -10,6 +11,11 @@ import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { GuideInlineLink } from "@/features/guide/components/GuideInlineLink";
+import {
+  getPublishedGuideDocuments,
+  isGuidePublished,
+} from "@/features/guide/content";
 import { ROUTES } from "@/lib/constants/routes";
 
 import { learningFlowContent } from "./content";
@@ -25,9 +31,14 @@ const mockupByStep = {
 
 /*
  * 아래 목업 셋은 루트에 `aria-hidden`을 건다. 실제 화면 마크업을 그대로 옮기느라
- * `nav`·`h3`·`ul`이 들어 있는데, 장식용 스크린샷이 랜드마크 목록과 제목 개요에
- * 섞이면 랜딩에 진짜 노트와 백지 테스트가 있는 것처럼 읽힌다. 안쪽 컨트롤이
- * 전부 span이라 포커스 가능한 요소가 없어 숨겨도 잃는 게 없다.
+ * `nav`·`ul`이 들어 있는데, 장식용 스크린샷이 랜드마크 목록에 섞이면 랜딩에 진짜
+ * 노트와 백지 테스트가 있는 것처럼 읽힌다. 안쪽 컨트롤이 전부 span이라 포커스
+ * 가능한 요소가 없어 숨겨도 잃는 게 없다.
+ *
+ * 목업 속 노트 제목은 heading 태그를 쓰지 않고 `p`에 스타일만 준다. `aria-hidden`은
+ * 접근성 트리에서만 빼는 속성이라 크롤러의 제목 개요에는 그대로 남는데, 그러면
+ * 랜딩의 소제목이 "임진왜란의 3대 대첩"·"이온 결합과 공유 결합" 같은 예시 데이터로
+ * 채워진다. 구글은 검색결과 제목을 만들 때 heading도 참고하므로 노이즈가 된다.
  */
 
 /** 목업 공통 브라우저 크롬. 캡처가 아니라 DOM이라 어떤 해상도에서도 선명하다. */
@@ -77,9 +88,9 @@ function NoteMockup() {
             <span className="min-w-0">다음 복습 일정: 내일 오전 09:00</span>
           </div>
 
-          <h3 className="mt-4 text-2xl font-bold text-foreground">
+          <p className="mt-4 text-2xl font-bold text-foreground">
             임진왜란의 3대 대첩
-          </h3>
+          </p>
 
           <div className="mt-5 flex flex-wrap items-center gap-2">
             <span className="inline-flex h-8 items-center gap-1.5 rounded-full bg-primary pl-2 pr-2.5 text-sm font-medium text-primary-foreground">
@@ -147,7 +158,7 @@ function NotificationMockup() {
         <p className="mb-2 text-xs text-muted-foreground">브라우저 알림</p>
         <div className="flex items-start gap-3 rounded-xl border bg-card px-4 py-3.5 shadow-xl">
           <Image
-            src="/favicon.svg"
+            src="/woodpecker.png"
             alt=""
             width={20}
             height={20}
@@ -250,9 +261,9 @@ function TestMockup() {
             </span>
             <span>백지 테스트</span>
           </div>
-          <h3 className="text-xl font-bold text-foreground">
+          <p className="text-xl font-bold text-foreground">
             이온 결합과 공유 결합
-          </h3>
+          </p>
         </div>
 
         <div className="grid gap-3 md:grid-cols-2">
@@ -293,6 +304,18 @@ export function LearningFlowSection() {
           {learningFlowContent.introduction}
         </p>
 
+        {/* 흐름 소개 바로 아래에서 원리 문서로 나간다. 문서가 공개되기 전에는
+            링크도 감싸는 여백도 그리지 않는다. */}
+        {isGuidePublished("spaced-repetition") ? (
+          <p className="mt-4 text-center text-sm">
+            <GuideInlineLink
+              slug="spaced-repetition"
+              label="간격 반복이 왜 효과적인지 알아보기"
+              className="text-muted-foreground"
+            />
+          </p>
+        ) : null}
+
         {/* 세 단계는 하나의 흐름이라 단계 사이 간격을 섹션 여백보다 좁게 둔다.
             멀어질수록 "아직도 기능 소개인가" 하는 인상이 커진다. */}
         <div className="mt-8 space-y-12 md:mt-16 md:space-y-20">
@@ -326,6 +349,17 @@ export function LearningFlowSection() {
                 <p className="mt-4 text-sm leading-relaxed whitespace-pre-line text-muted-foreground md:text-base">
                   {scene.description}
                 </p>
+                {/* scenes는 as const라 항목마다 타입이 다르다. 가이드 링크를 가진
+                    단계만 좁혀서 렌더한다. */}
+                {"guide" in scene && isGuidePublished(scene.guide.slug) ? (
+                  <p className="mt-4 text-sm">
+                    <GuideInlineLink
+                      slug={scene.guide.slug}
+                      label={scene.guide.label}
+                      className="text-muted-foreground"
+                    />
+                  </p>
+                ) : null}
               </div>
 
               {/* Mockup */}
@@ -333,6 +367,37 @@ export function LearningFlowSection() {
             </div>
           ))}
         </div>
+        {getPublishedGuideDocuments().length > 0 && (
+          <aside
+            aria-labelledby="learning-guide-heading"
+            className="mt-12 flex flex-col gap-5 rounded-2xl bg-orange-100 p-6 md:mt-16 md:flex-row md:items-center md:justify-between md:p-8 dark:bg-orange-950/60"
+          >
+            <div className="flex items-start gap-4">
+              <BookOpen
+                aria-hidden="true"
+                className="mt-1 size-5 shrink-0 text-orange-700 dark:text-orange-400"
+              />
+              <div>
+                <h3
+                  id="learning-guide-heading"
+                  className="text-lg font-semibold"
+                >
+                  복습을 어떻게 시작할지 막막한가요?
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  언제 복습하고, 무엇을 해보면 좋을지 알려드려요.
+                </p>
+              </div>
+            </div>
+            <Link
+              href={ROUTES.GUIDE}
+              className="inline-flex min-h-11 shrink-0 items-center gap-2 self-start rounded-md text-sm font-medium text-orange-800 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring cursor-pointer md:self-center dark:text-orange-300"
+            >
+              학습 가이드 읽어보기
+              <ChevronRightIcon aria-hidden="true" className="size-4" />
+            </Link>
+          </aside>
+        )}
       </div>
 
       <div className="bg-orange-50 dark:bg-orange-950/40">

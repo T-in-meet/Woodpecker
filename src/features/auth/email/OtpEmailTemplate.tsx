@@ -231,7 +231,7 @@ export function OtpEmailTemplate({ otp, purpose }: OtpEmailTemplateProps) {
    * 외부 이메일 클라이언트에서도 이미지를 불러올 수 있도록
    * SITE_URL 기반의 절대 URL을 사용한다.
    */
-  const logoUrl = `${SITE_URL}/images/email/logo.png`;
+  const logoUrl = `${SITE_URL}/icons/notification-192.png`;
 
   return (
     <>

@@ -73,7 +73,7 @@ function buildCspDirectives(nonce: string): string[] {
     ]
       .filter(Boolean)
       .join(" "),
-    "font-src 'self' data: https://cdn.jsdelivr.net",
+    "font-src 'self' data:",
     "worker-src 'self'",
     "media-src 'none'",
     "manifest-src 'self'",

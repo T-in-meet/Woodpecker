@@ -8,6 +8,8 @@ export const ROUTES = {
 
   NOTE_CHATS: "/note-chats",
 
+  GUIDE: "/guide",
+
   MYPAGE: "/mypage",
   TERMS: "/terms",
   PRIVACY: "/privacy",
@@ -91,6 +93,16 @@ export function getNoteDetailRoute(noteId: string) {
 
 export function getNoteReviewRoute(noteId: string) {
   return `${getNoteDetailRoute(noteId)}/review`;
+}
+
+/**
+ * 학습 가이드 문서 경로를 생성합니다.
+ *
+ * @param slug `GUIDE_DOCUMENTS`의 slug
+ * @returns `/guide/{slug}` 형식의 route path
+ */
+export function getGuideRoute(slug: string) {
+  return `${ROUTES.GUIDE}/${slug}`;
 }
 
 /**

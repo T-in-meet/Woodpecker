@@ -17,7 +17,11 @@ vi.mock("@/lib/supabase/getUser", () => ({ getUser: getUserMock }));
 vi.mock("@/features/auth/lib/userAgreements", () => ({
   getLegalAcceptanceStatus: getLegalAcceptanceStatusMock,
 }));
-vi.mock("@/lib/constants/legal", () => ({
+/* 전체 교체가 아니라 부분 mock으로 둔다. 이 레이아웃이 직접 쓰는 건 아래 셋뿐이지만,
+   Footer가 같은 모듈의 LEGAL_CONTACT를 읽는 것처럼 트리 안에서 다른 export를 쓰는
+   컴포넌트가 늘어날 수 있다. 그때마다 이 stub에 항목을 더하지 않도록 원본을 깔아 둔다. */
+vi.mock("@/lib/constants/legal", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/constants/legal")>()),
   formatLegalDate: (date: string) => date,
   isLegalRevisionEffective: isLegalRevisionEffectiveMock,
   LEGAL_EFFECTIVE_DATE: "2026-09-20",

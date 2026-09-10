@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -15,6 +16,15 @@ import {
 } from "@/lib/constants/legal";
 import { ROUTES } from "@/lib/constants/routes";
 import { getUser } from "@/lib/supabase/getUser";
+
+/* (main) 하위는 전부 로그인 사용자 전용 화면이라 검색 대상이 아니다.
+   metadata를 두지 않으면 루트 레이아웃의 robots(index: true)를 그대로 상속해
+   "색인해도 된다"고 선언하게 된다. 실제로 /notes/today가 그 상태였다.
+   개별 페이지 선언에 기대지 않고 여기서 한 번 막아 누락이 생기지 않게 한다.
+   페이지가 자기 metadata로 덮어쓸 수 있으므로 기존 선언은 그대로 유효하다. */
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+};
 
 export default async function MainLayout({
   children,

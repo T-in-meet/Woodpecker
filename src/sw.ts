@@ -141,9 +141,12 @@ async function markNotificationReadOnClick(data: unknown) {
 
 self.addEventListener("push", (event) => {
   const { body, notificationData, tag, title } = getPushPayload(event.data);
+  /* badge는 안드로이드 Chrome이 알파 채널만 보고 단색으로 칠하는 슬롯이라
+     컬러 원본을 넣으면 상태표시줄에 의미 없는 덩어리가 뜬다. 단색 실루엣을
+     따로 쓴다. 두 파일 모두 scripts/generate-icons.mjs로 굽는다. */
   const options: NotificationOptions = {
-    icon: "/favicon.svg",
-    badge: "/favicon.svg",
+    icon: "/icons/notification-192.png",
+    badge: "/icons/badge-96.png",
     data: notificationData,
   };
 

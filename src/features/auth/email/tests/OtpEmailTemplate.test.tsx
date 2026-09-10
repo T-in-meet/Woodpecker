@@ -82,7 +82,7 @@ describe("OtpEmailTemplate", () => {
       }),
     );
 
-    expect(html).toContain("/images/email/logo.png");
+    expect(html).toContain("/icons/notification-192.png");
     expect(html).toContain('alt="딱다구리"');
   });
 });

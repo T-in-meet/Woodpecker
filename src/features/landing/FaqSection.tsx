@@ -71,7 +71,15 @@ export function FaqSection() {
               <AccordionTrigger className="py-3.5 text-left text-base font-medium">
                 {faq.question}
               </AccordionTrigger>
-              <AccordionContent className="text-sm leading-relaxed text-muted-foreground">
+              {/* forceMount — 접힌 답변도 HTML에 남긴다. Radix는 닫힌 content를
+                  언마운트해서, 이게 없으면 검색엔진과 JS를 실행하지 않는 AI
+                  크롤러에게 이 페이지의 FAQ는 질문만 있고 답변은 없는 문서로
+                  읽힌다. JSON-LD의 FAQPage는 본문 콘텐츠를 대신하지 못한다.
+                  구글은 접힌 UI 안의 콘텐츠도 HTML에 있으면 색인한다. */}
+              <AccordionContent
+                forceMount
+                className="text-sm leading-relaxed text-muted-foreground"
+              >
                 {faq.answer}
               </AccordionContent>
             </AccordionItem>
