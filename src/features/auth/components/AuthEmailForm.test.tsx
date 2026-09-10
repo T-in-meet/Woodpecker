@@ -3,15 +3,12 @@ import userEvent from "@testing-library/user-event";
 import { useActionState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { RATE_LIMIT_TOAST_MESSAGE } from "../errors/rateLimitError";
 import { ResendEmailActionState } from "../resend-email/actions/resendEmailActionState";
 import AuthEmailForm from "./AuthEmailForm";
 
 vi.mock("../hooks/useAuthEmailPrefill", () => ({
   useAuthEmailPrefill: vi.fn(),
-}));
-
-vi.mock("../hooks/useAuthEmailActionEffect", () => ({
-  useAuthEmailActionEffect: vi.fn(),
 }));
 
 vi.mock("react", async () => {
@@ -30,6 +27,12 @@ const mockFormAction = vi.fn();
 const initialState: ResendEmailActionState = {
   status: "idle",
   fieldErrors: null,
+};
+
+const blockedState: ResendEmailActionState = {
+  status: "blocked",
+  fieldErrors: null,
+  reasonCode: "RATE_LIMIT_EMAIL_SHORT",
 };
 
 const action = vi.fn(
@@ -53,6 +56,11 @@ describe("AuthEmailForm", () => {
         initialState={initialState}
         email={undefined}
         purpose="signup"
+        title="인증 번호 재전송"
+        backLink={{
+          href: "/",
+          label: "홈으로 돌아가기",
+        }}
       />,
     );
 
@@ -62,6 +70,30 @@ describe("AuthEmailForm", () => {
     ).toBeInTheDocument();
   });
 
+  it("전달받은 제목과 이동 링크를 렌더링한다", () => {
+    render(
+      <AuthEmailForm
+        action={action}
+        initialState={initialState}
+        email={undefined}
+        purpose="signup"
+        title="인증 번호 재전송"
+        backLink={{
+          href: "/",
+          label: "홈으로 돌아가기",
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "인증 번호 재전송" }),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("link", { name: "홈으로 돌아가기" }),
+    ).toHaveAttribute("href", "/");
+  });
+
   it("purpose가 reset-password이면 비밀번호 재설정 버튼 문구를 표시한다", () => {
     render(
       <AuthEmailForm
@@ -69,6 +101,11 @@ describe("AuthEmailForm", () => {
         initialState={initialState}
         email={undefined}
         purpose="reset-password"
+        title="비밀번호 재설정"
+        backLink={{
+          href: "/login",
+          label: "로그인으로 돌아가기",
+        }}
       />,
     );
 
@@ -86,6 +123,11 @@ describe("AuthEmailForm", () => {
         initialState={initialState}
         email="test@example.com"
         purpose="signup"
+        title="인증 번호 재전송"
+        backLink={{
+          href: "/",
+          label: "홈으로 돌아가기",
+        }}
       />,
     );
 
@@ -99,6 +141,11 @@ describe("AuthEmailForm", () => {
         initialState={initialState}
         email={undefined}
         purpose="signup"
+        title="인증 번호 재전송"
+        backLink={{
+          href: "/",
+          label: "홈으로 돌아가기",
+        }}
       />,
     );
 
@@ -114,6 +161,11 @@ describe("AuthEmailForm", () => {
         initialState={initialState}
         email={undefined}
         purpose="signup"
+        title="인증 번호 재전송"
+        backLink={{
+          href: "/",
+          label: "홈으로 돌아가기",
+        }}
       />,
     );
 
@@ -133,7 +185,7 @@ describe("AuthEmailForm", () => {
     expect(formData.has("redirect")).toBe(false);
   });
 
-  it("유효하지 않은 이메일이면 formAction을 호출하지 않는다", async () => {
+  it("유효하지 않은 이메일이면 validation 메시지를 표시하고 formAction을 호출하지 않는다", async () => {
     const user = userEvent.setup();
 
     render(
@@ -142,6 +194,11 @@ describe("AuthEmailForm", () => {
         initialState={initialState}
         email={undefined}
         purpose="signup"
+        title="인증 번호 재전송"
+        backLink={{
+          href: "/",
+          label: "홈으로 돌아가기",
+        }}
       />,
     );
 
@@ -150,8 +207,49 @@ describe("AuthEmailForm", () => {
       screen.getByRole("button", { name: "인증 번호 다시 받기" }),
     );
 
+    expect(
+      await screen.findByText("올바른 이메일을 입력해주세요"),
+    ).toBeInTheDocument();
+
+    expect(mockFormAction).not.toHaveBeenCalled();
+  });
+
+  it("SYSTEM root error는 이메일 수정 시 유지하고 실제 재요청 시작 시 제거한다", async () => {
+    const user = userEvent.setup();
+
+    mockUseActionState.mockReturnValue([blockedState, mockFormAction, false]);
+
+    render(
+      <AuthEmailForm
+        action={action}
+        initialState={initialState}
+        email={undefined}
+        purpose="signup"
+        title="인증 번호 재전송"
+        backLink={{
+          href: "/",
+          label: "홈으로 돌아가기",
+        }}
+      />,
+    );
+
+    expect(
+      await screen.findByText(RATE_LIMIT_TOAST_MESSAGE),
+    ).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("이메일"), "test@example.com");
+
+    expect(screen.getByText(RATE_LIMIT_TOAST_MESSAGE)).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "인증 번호 다시 받기" }),
+    );
+
     await waitFor(() => {
-      expect(mockFormAction).not.toHaveBeenCalled();
+      expect(mockFormAction).toHaveBeenCalledTimes(1);
+      expect(
+        screen.queryByText(RATE_LIMIT_TOAST_MESSAGE),
+      ).not.toBeInTheDocument();
     });
   });
 
@@ -164,6 +262,11 @@ describe("AuthEmailForm", () => {
         initialState={initialState}
         email={undefined}
         purpose="signup"
+        title="인증 번호 재전송"
+        backLink={{
+          href: "/",
+          label: "홈으로 돌아가기",
+        }}
       />,
     );
 

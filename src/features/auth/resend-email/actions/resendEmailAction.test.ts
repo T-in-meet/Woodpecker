@@ -11,6 +11,7 @@ import {
   mapBlockedByToReason,
 } from "@/features/auth/lib/checkRequestEligibility";
 import { getServerActionClientIp } from "@/lib/utils/getServerActionClientIp";
+import { VALIDATION_MESSAGES } from "@/lib/validation/messages";
 
 import { resendEmailAction } from "./resendEmailAction";
 import { INITIAL_RESEND_EMAIL_ACTION_STATE } from "./resendEmailActionState";
@@ -103,7 +104,7 @@ describe("resendEmailAction", () => {
     expect(mockApplyMinimumActionDelay).toHaveBeenCalledTimes(1);
   });
 
-  it("email이 invalid이면 invalid_input을 반환하고 이후 로직을 호출하지 않는다", async () => {
+  it("email이 invalid이면 안전한 field error를 반환하고 이후 로직을 호출하지 않는다", async () => {
     const formData = createFormData({
       email: "invalid-email",
       purpose: "signup",
@@ -115,11 +116,36 @@ describe("resendEmailAction", () => {
       formData,
     );
 
-    expect(result.status).toBe("invalid_input");
+    expect(result).toEqual({
+      status: "invalid_input",
+      fieldErrors: {
+        email: [VALIDATION_MESSAGES.emailInvalid],
+      },
+    });
 
-    if (result.status === "invalid_input") {
-      expect(result.fieldErrors.email).toBeDefined();
-    }
+    expect(mockCheckRequestEligibility).not.toHaveBeenCalled();
+    expect(mockIssueOtpAndSendEmail).not.toHaveBeenCalled();
+    expect(mockApplyMinimumActionDelay).toHaveBeenCalledTimes(1);
+  });
+
+  it("email이 비어 있으면 필수 입력 field error를 반환하고 이후 로직을 호출하지 않는다", async () => {
+    const formData = createFormData({
+      email: "   ",
+      purpose: "signup",
+    });
+
+    const result = await resendEmailAction(
+      null,
+      INITIAL_RESEND_EMAIL_ACTION_STATE,
+      formData,
+    );
+
+    expect(result).toEqual({
+      status: "invalid_input",
+      fieldErrors: {
+        email: [VALIDATION_MESSAGES.emailRequired],
+      },
+    });
 
     expect(mockCheckRequestEligibility).not.toHaveBeenCalled();
     expect(mockIssueOtpAndSendEmail).not.toHaveBeenCalled();

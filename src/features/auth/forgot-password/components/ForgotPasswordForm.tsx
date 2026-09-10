@@ -8,7 +8,7 @@ import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import AuthenticationError from "@/features/auth/components/AuthenticationError";
+import AuthFormError from "@/features/auth/components/AuthFormError";
 import { RATE_LIMIT_TOAST_MESSAGE } from "@/features/auth/errors/rateLimitError";
 import {
   ForgotPasswordActionState,
@@ -163,7 +163,7 @@ export function ForgotPasswordForm({ action }: ForgotPasswordFormProps) {
       </form>
 
       {/* rate limit·서버 오류를 여기 남긴다. grid 밖에 두어 3열 배치를 흐트러뜨리지 않는다. */}
-      <AuthenticationError error={errors.root} />
+      <AuthFormError error={errors.root?.message} />
     </div>
   );
 }

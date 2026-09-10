@@ -61,8 +61,9 @@ const VerifyOtpPage = async ({ searchParams }: VerifyOtpPageProps) => {
    * redirect query 처리
    *
    * signup:
-   * - verify-otp가 최종 이동 직전 단계다.
-   * - 최종 이동에 사용될 값이므로 현재 단계에서 검증한다.
+   * - OTP 인증 성공 후 set-password 페이지를 공통 분기 지점으로 사용한다.
+   * - set-password에서 실제 비밀번호 존재 여부를 확인한 뒤 최종 목적지로 이동하거나 비밀번호 설정 폼을 제공한다.
+   * - redirect는 이 후속 흐름에서 최종 이동에 사용되므로 현재 단계에서 검증한 값을 전달한다.
    *
    * reset-password:
    * - verify-otp는 중간 단계다.
@@ -95,8 +96,7 @@ const VerifyOtpPage = async ({ searchParams }: VerifyOtpPageProps) => {
     });
 
     /**
-     * reset-password 같은 후속 이동 목적지가 있으면
-     * 재전송 흐름에서도 유실되지 않도록 함께 전달한다.
+     * 인증 이후 후속 이동 목적지가 있으면 재전송 흐름에서도 유실되지 않도록 함께 전달한다.
      */
     if (redirectPath) {
       params.set("redirect", redirectPath);
@@ -106,19 +106,17 @@ const VerifyOtpPage = async ({ searchParams }: VerifyOtpPageProps) => {
   }
 
   /**
-   * redirect query는 인증 성공 이후 이동할 목적지로 action에 전달한다.
+   * redirect query는 OTP 인증 성공 이후의 후속 흐름에서 사용할 수 있도록 verifyOtpAction에 전달한다.
    */
   const verifyOtpFormAction = verifyOtpAction.bind(null, redirectPath);
 
   return (
-    <div className="md:flex md:min-h-[calc(100dvh-4.5rem)] md:items-center md:justify-center">
-      <VerifyOtpForm
-        action={verifyOtpFormAction}
-        email={email}
-        purpose={otpPurpose}
-        redirect={redirectPath}
-      />
-    </div>
+    <VerifyOtpForm
+      action={verifyOtpFormAction}
+      email={email}
+      purpose={otpPurpose}
+      redirect={redirectPath}
+    />
   );
 };
 

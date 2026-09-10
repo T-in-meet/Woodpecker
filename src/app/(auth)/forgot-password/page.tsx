@@ -4,6 +4,7 @@ import AuthEmailForm from "@/features/auth/components/AuthEmailForm";
 import { forgotPasswordAction } from "@/features/auth/forgot-password/actions/forgotPasswordAction";
 import { INITIAL_FORGOT_PASSWORD_ACTION_STATE } from "@/features/auth/forgot-password/actions/forgotPasswordActionState";
 import { requireGuestPage } from "@/features/auth/utils/requireGuestPage";
+import { ROUTES } from "@/lib/constants/routes";
 
 // 검색 엔진 인덱싱 방지 (robots.txt Disallow보다 확실함 — 삭제 금지)
 export const metadata: Metadata = {
@@ -77,13 +78,16 @@ export default async function ForgotPasswordPage({
   );
 
   return (
-    <div className="md:flex md:min-h-[calc(100dvh-4.5rem)] md:items-center md:justify-center">
-      <AuthEmailForm
-        action={forgotPasswordFormAction}
-        initialState={INITIAL_FORGOT_PASSWORD_ACTION_STATE}
-        email={email}
-        purpose="reset-password"
-      />
-    </div>
+    <AuthEmailForm
+      action={forgotPasswordFormAction}
+      initialState={INITIAL_FORGOT_PASSWORD_ACTION_STATE}
+      email={email}
+      purpose="reset-password"
+      title="비밀번호 재설정"
+      backLink={{
+        href: ROUTES.LOGIN,
+        label: "로그인으로 돌아가기",
+      }}
+    />
   );
 }

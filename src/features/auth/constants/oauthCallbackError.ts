@@ -6,4 +6,5 @@ export const OAUTH_CALLBACK_ERROR_MESSAGE =
 export const OAUTH_CALLBACK_ERROR_REASON = {
   MISSING_CODE: "missing_code",
   EXCHANGE_FAILED: "exchange_failed",
+  SIGN_OUT_FAILED: "sign_out_failed",
 } as const;

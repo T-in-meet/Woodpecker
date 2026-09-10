@@ -37,9 +37,5 @@ export default async function AgreementsPage({
 
   const action = acceptLegalDocumentsAction.bind(null, redirectPath);
 
-  return (
-    <main className="md:flex md:min-h-[calc(100dvh-4.5rem)] md:items-center md:justify-center">
-      <LegalAcceptanceForm action={action} isEnforced={status.isEnforced} />
-    </main>
-  );
+  return <LegalAcceptanceForm action={action} isEnforced={status.isEnforced} />;
 }

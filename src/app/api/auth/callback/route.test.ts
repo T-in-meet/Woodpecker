@@ -16,6 +16,7 @@ const updateProfileEqMock = vi.fn();
 const selectProfileMock = vi.fn();
 const selectProfileEqMock = vi.fn();
 const selectProfileSingleMock = vi.fn();
+const clearSupabaseAuthSessionCookiesMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/features/auth/lib/userAgreements", () => ({
   getLegalAcceptanceStatus: getLegalAcceptanceStatusMock,
@@ -23,6 +24,7 @@ vi.mock("@/features/auth/lib/userAgreements", () => ({
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
+  clearSupabaseAuthSessionCookies: clearSupabaseAuthSessionCookiesMock,
   createClient: vi.fn(async () => ({
     auth: {
       exchangeCodeForSession: exchangeCodeForSessionMock,
@@ -46,12 +48,20 @@ describe("auth callback route", () => {
         user: {
           id: "user-id",
           email: "oauth.user@example.com",
+          created_at: "2026-07-01T00:00:00.000Z",
+          last_sign_in_at: "2026-09-10T06:00:00.000Z",
           user_metadata: {},
         },
       },
       error: null,
     });
-    getLegalAcceptanceStatusMock.mockResolvedValue({ canAccessService: true });
+
+    // 기본 login 사용자는 기존 가입자로 취급하도록 동의 이력이 있는 상태로 둔다.
+    getLegalAcceptanceStatusMock.mockResolvedValue({
+      canAccessService: true,
+      hasAcceptanceHistory: true,
+    });
+
     upsertUserAgreementMock.mockResolvedValue(undefined);
     signOutMock.mockResolvedValue({ error: null });
     updateProfileMock.mockReturnValue({ eq: updateProfileEqMock });
@@ -71,6 +81,7 @@ describe("auth callback route", () => {
         from: vi.fn(),
       },
     } as never);
+    clearSupabaseAuthSessionCookiesMock.mockResolvedValue(undefined);
   });
 
   /**
@@ -168,9 +179,202 @@ describe("auth callback route", () => {
     );
   });
 
+  it("login intent에서 이번 callback에 생성된 사용자가 동의 이력이 없으면 세션을 종료하고 회원가입으로 redirect한다", async () => {
+    exchangeCodeForSessionMock.mockResolvedValue({
+      data: {
+        user: {
+          id: "user-id",
+          email: "oauth.user@example.com",
+          created_at: "2026-09-10T06:00:00.000Z",
+          last_sign_in_at: "2026-09-10T06:00:05.000Z",
+          user_metadata: {},
+        },
+      },
+      error: null,
+    });
+
+    getLegalAcceptanceStatusMock.mockResolvedValue({
+      canAccessService: true,
+      hasAcceptanceHistory: false,
+    });
+
+    const response = await GET(
+      createRequest("/api/auth/callback?code=oauth-code&intent=login"),
+    );
+
+    expect(signOutMock).toHaveBeenCalledTimes(1);
+    expect(clearSupabaseAuthSessionCookiesMock).not.toHaveBeenCalled();
+    expect(response.headers.get("location")).toBe(
+      "http://localhost:3000/signup?agreement_required=1",
+    );
+  });
+
+  it("login intent에서 이번 callback에 생성된 사용자가 동의 이력이 없고 세션 종료에 실패하면 로그인 OAuth 오류 화면으로 redirect한다", async () => {
+    exchangeCodeForSessionMock.mockResolvedValue({
+      data: {
+        user: {
+          id: "user-id",
+          email: "oauth.user@example.com",
+          created_at: "2026-09-10T06:00:00.000Z",
+          last_sign_in_at: "2026-09-10T06:00:05.000Z",
+          user_metadata: {},
+        },
+      },
+      error: null,
+    });
+
+    getLegalAcceptanceStatusMock.mockResolvedValue({
+      canAccessService: true,
+      hasAcceptanceHistory: false,
+    });
+
+    signOutMock.mockResolvedValue({
+      error: new Error("sign out failed"),
+    });
+
+    const response = await GET(
+      createRequest("/api/auth/callback?code=oauth-code&intent=login"),
+    );
+
+    expect(signOutMock).toHaveBeenCalledTimes(1);
+    expect(clearSupabaseAuthSessionCookiesMock).toHaveBeenCalledTimes(1);
+    expect(response.headers.get("location")).toBe(
+      `http://localhost:3000${ROUTES.LOGIN}?oauth_error=${OAUTH_CALLBACK_ERROR_REASON.SIGN_OUT_FAILED}`,
+    );
+  });
+
+  it("login intent에서 기존 OAuth 사용자가 동의 이력이 없어도 접근 가능하면 redirect 경로를 유지한다", async () => {
+    exchangeCodeForSessionMock.mockResolvedValue({
+      data: {
+        user: {
+          id: "legacy-oauth-user-id",
+          email: "legacy.oauth@example.com",
+          created_at: "2026-07-01T00:00:00.000Z",
+          last_sign_in_at: "2026-09-10T06:00:00.000Z",
+          user_metadata: {},
+        },
+      },
+      error: null,
+    });
+
+    getLegalAcceptanceStatusMock.mockResolvedValue({
+      canAccessService: true,
+      hasAcceptanceHistory: false,
+    });
+
+    const noteId = "123e4567-e89b-42d3-a456-426614174000";
+
+    const response = await GET(
+      createRequest(
+        `/api/auth/callback?code=oauth-code&intent=login&redirect=${encodeURIComponent(
+          `/notes/${noteId}`,
+        )}`,
+      ),
+    );
+
+    expect(signOutMock).not.toHaveBeenCalled();
+    expect(response.headers.get("location")).toBe(
+      `http://localhost:3000/notes/${noteId}`,
+    );
+  });
+
+  it("last_sign_in_at이 없는 최근 생성 OAuth 사용자가 동의 이력이 없으면 회원가입으로 redirect한다", async () => {
+    exchangeCodeForSessionMock.mockResolvedValue({
+      data: {
+        user: {
+          id: "new-oauth-user-id",
+          email: "new.oauth@example.com",
+          created_at: new Date(Date.now() - 5_000).toISOString(),
+          user_metadata: {},
+        },
+      },
+      error: null,
+    });
+
+    getLegalAcceptanceStatusMock.mockResolvedValue({
+      canAccessService: true,
+      hasAcceptanceHistory: false,
+    });
+
+    const response = await GET(
+      createRequest("/api/auth/callback?code=oauth-code&intent=login"),
+    );
+
+    expect(signOutMock).toHaveBeenCalledTimes(1);
+    expect(response.headers.get("location")).toBe(
+      "http://localhost:3000/signup?agreement_required=1",
+    );
+  });
+
+  it("last_sign_in_at이 없는 기존 OAuth 사용자가 동의 이력이 없어도 접근 가능하면 기존 로그인 흐름을 유지한다", async () => {
+    exchangeCodeForSessionMock.mockResolvedValue({
+      data: {
+        user: {
+          id: "legacy-oauth-user-id",
+          email: "legacy.oauth@example.com",
+          created_at: "2026-07-01T00:00:00.000Z",
+          user_metadata: {},
+        },
+      },
+      error: null,
+    });
+
+    getLegalAcceptanceStatusMock.mockResolvedValue({
+      canAccessService: true,
+      hasAcceptanceHistory: false,
+    });
+
+    const response = await GET(
+      createRequest("/api/auth/callback?code=oauth-code&intent=login"),
+    );
+
+    expect(signOutMock).not.toHaveBeenCalled();
+    expect(response.headers.get("location")).toBe(
+      `http://localhost:3000${ROUTES.MYPAGE}`,
+    );
+  });
+
+  it("login intent에서 기존 OAuth 사용자가 동의 이력이 없고 접근 불가하면 세션을 유지하고 재확인 화면으로 redirect한다", async () => {
+    exchangeCodeForSessionMock.mockResolvedValue({
+      data: {
+        user: {
+          id: "legacy-oauth-user-id",
+          email: "legacy.oauth@example.com",
+          created_at: "2026-07-01T00:00:00.000Z",
+          last_sign_in_at: "2026-09-10T06:00:00.000Z",
+          user_metadata: {},
+        },
+      },
+      error: null,
+    });
+
+    getLegalAcceptanceStatusMock.mockResolvedValue({
+      canAccessService: false,
+      hasAcceptanceHistory: false,
+    });
+
+    const noteId = "123e4567-e89b-42d3-a456-426614174000";
+
+    const response = await GET(
+      createRequest(
+        `/api/auth/callback?code=oauth-code&intent=login&redirect=${encodeURIComponent(
+          `/notes/${noteId}`,
+        )}`,
+      ),
+    );
+
+    expect(signOutMock).not.toHaveBeenCalled();
+    expect(response.headers.get("location")).toBe(
+      `http://localhost:3000/agreements?redirect=${encodeURIComponent(
+        `/notes/${noteId}`,
+      )}`,
+    );
+  });
+
   it("login intent에서 최신 확인 기록이 없으면 세션을 유지하고 재확인 화면으로 redirect한다", async () => {
     getLegalAcceptanceStatusMock.mockResolvedValue({
       canAccessService: false,
+      hasAcceptanceHistory: true,
     });
 
     const response = await GET(
@@ -202,6 +406,8 @@ describe("auth callback route", () => {
         user: {
           id: "user-id",
           email: "oauth.user@example.com",
+          created_at: "2026-09-10T06:00:00.000Z",
+          last_sign_in_at: "2026-09-10T06:00:05.000Z",
           user_metadata: { name: "GoogleName" },
         },
       },
@@ -223,12 +429,43 @@ describe("auth callback route", () => {
     );
   });
 
+  it("login intent에서 이번 callback에 생성된 사용자가 동의 이력이 없으면 접근 불가 상태여도 회원가입으로 redirect한다", async () => {
+    exchangeCodeForSessionMock.mockResolvedValue({
+      data: {
+        user: {
+          id: "user-id",
+          email: "oauth.user@example.com",
+          created_at: "2026-09-10T06:00:00.000Z",
+          last_sign_in_at: "2026-09-10T06:00:05.000Z",
+          user_metadata: {},
+        },
+      },
+      error: null,
+    });
+
+    getLegalAcceptanceStatusMock.mockResolvedValue({
+      canAccessService: false,
+      hasAcceptanceHistory: false,
+    });
+
+    const response = await GET(
+      createRequest("/api/auth/callback?code=oauth-code&intent=login"),
+    );
+
+    expect(signOutMock).toHaveBeenCalledTimes(1);
+    expect(response.headers.get("location")).toBe(
+      "http://localhost:3000/signup?agreement_required=1",
+    );
+  });
+
   it("signup intent에서 fallback nickname이면 프로필 안내 query를 추가한다", async () => {
     exchangeCodeForSessionMock.mockResolvedValue({
       data: {
         user: {
           id: "abcde-user-id",
           email: "oauth.user@example.com",
+          created_at: "2026-09-10T06:00:00.000Z",
+          last_sign_in_at: "2026-09-10T06:00:05.000Z",
           user_metadata: { name: "Christopher Kim" },
         },
       },
@@ -256,6 +493,8 @@ describe("auth callback route", () => {
         user: {
           id: "user-id",
           email: "OAuth.User+alias@Gmail.com",
+          created_at: "2026-09-10T06:00:00.000Z",
+          last_sign_in_at: "2026-09-10T06:00:05.000Z",
           user_metadata: {},
         },
       },
@@ -299,6 +538,22 @@ describe("auth callback route", () => {
     );
   });
 
+  it("signup intent에서 약관 intent cookie가 없고 세션 종료에 실패하면 로컬 세션을 제거하고 signup OAuth 오류 화면으로 redirect한다", async () => {
+    signOutMock.mockResolvedValue({
+      error: new Error("sign out failed"),
+    });
+
+    const response = await GET(
+      createRequest("/api/auth/callback?code=oauth-code&intent=signup"),
+    );
+
+    expect(signOutMock).toHaveBeenCalledTimes(1);
+    expect(clearSupabaseAuthSessionCookiesMock).toHaveBeenCalledTimes(1);
+    expect(response.headers.get("location")).toBe(
+      `http://localhost:3000${ROUTES.SIGNUP}?oauth_error=${OAUTH_CALLBACK_ERROR_REASON.SIGN_OUT_FAILED}`,
+    );
+  });
+
   it("login intent에서 약관 기록이 있으면 OAuth 이메일을 프로필에 저장한다", async () => {
     await GET(createRequest("/api/auth/callback?code=oauth-code&intent=login"));
 
@@ -313,6 +568,8 @@ describe("auth callback route", () => {
       data: {
         user: {
           id: "user-id",
+          created_at: "2026-07-01T00:00:00.000Z",
+          last_sign_in_at: "2026-09-10T06:00:00.000Z",
           user_metadata: {},
         },
       },

@@ -2,9 +2,9 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
+import { DocumentScrollLock } from "@/components/layout/DocumentScrollLock";
 import { Header } from "@/components/layout/Header";
 import { SidebarInset } from "@/components/ui/sidebar";
-import { AdminBodyOverflowLock } from "@/features/admin/components/layout/AdminBodyOverflowLock";
 import { AdminHeader } from "@/features/admin/components/layout/AdminHeader";
 import { AdminSidebar } from "@/features/admin/components/layout/AdminSidebar";
 import { AdminSidebarProvider } from "@/features/admin/components/layout/AdminSidebarProvider";
@@ -37,7 +37,7 @@ export default async function AdminLayout({ children }: Props) {
   return (
     <>
       <Header />
-      <AdminBodyOverflowLock />
+      <DocumentScrollLock />
 
       <div className="h-[calc(100vh-var(--header-height))] overflow-hidden">
         <AdminSidebarProvider

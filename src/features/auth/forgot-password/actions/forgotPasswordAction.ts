@@ -23,6 +23,7 @@ import { maskIpForLogging } from "@/features/auth/lib/maskIpForLogging";
 import { canonicalizeEmail } from "@/features/auth/utils/canonicalizeEmail";
 import { ROUTES } from "@/lib/constants/routes";
 import { getServerActionClientIp } from "@/lib/utils/getServerActionClientIp";
+import { VALIDATION_MESSAGES } from "@/lib/validation/messages";
 
 import { ForgotPasswordActionState } from "./forgotPasswordActionState";
 
@@ -79,7 +80,13 @@ export async function forgotPasswordAction(
       });
       return {
         status: "invalid_input",
-        fieldErrors: parsed.error.flatten().fieldErrors,
+        fieldErrors: {
+          email: [
+            email.length === 0
+              ? VALIDATION_MESSAGES.emailRequired
+              : VALIDATION_MESSAGES.emailInvalid,
+          ],
+        },
       };
     }
 
