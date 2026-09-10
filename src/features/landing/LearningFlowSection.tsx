@@ -290,7 +290,7 @@ function TestMockup() {
 
 export function LearningFlowSection() {
   return (
-    <section id="features">
+    <section id="features" className="scroll-mt-[var(--header-height)]">
       <div className="mx-auto max-w-5xl px-6 py-12 md:py-20">
         <h2 className="mt-2 whitespace-pre-line text-center text-3xl font-bold tracking-tight md:text-4xl">
           {learningFlowContent.heading}

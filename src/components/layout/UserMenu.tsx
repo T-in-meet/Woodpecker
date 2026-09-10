@@ -1,6 +1,6 @@
 "use client";
 
-import { LogOut, Shield, User } from "lucide-react";
+import { FileText, Lock, LogOut, Shield, User } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
@@ -70,7 +70,7 @@ export function UserMenu({
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-56 rounded-lg border bg-background shadow-lg">
+        <div className="absolute right-0 top-full z-50 mt-2 max-h-[calc(100dvh-5rem)] w-56 overflow-y-auto rounded-lg border bg-background shadow-lg">
           {/* 유저 정보 */}
           <div className="px-4 py-3">
             <p className="text-sm font-medium">{nickname}</p>
@@ -102,6 +102,28 @@ export function UserMenu({
               </Link>
             )}
           </div>
+
+          <div className="border-t" />
+
+          {/* 노트 챗봇처럼 페이지 스크롤이 제한된 화면에서도 법적 문서에 접근한다. */}
+          <nav aria-label="법적 고지" className="py-1">
+            <Link
+              href={ROUTES.TERMS}
+              onClick={() => setOpen(false)}
+              className="flex cursor-pointer items-center gap-2 px-4 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            >
+              <FileText className="size-4" aria-hidden="true" />
+              이용약관
+            </Link>
+            <Link
+              href={ROUTES.PRIVACY}
+              onClick={() => setOpen(false)}
+              className="flex cursor-pointer items-center gap-2 px-4 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            >
+              <Lock className="size-4" aria-hidden="true" />
+              개인정보처리방침
+            </Link>
+          </nav>
 
           <div className="border-t" />
 

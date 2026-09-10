@@ -81,4 +81,27 @@ describe("MobileMenu", () => {
       ROUTES.ADMIN.DASHBOARD,
     );
   });
+
+  /* 로그인 후 푸터는 데스크톱에만 붙으므로, 모바일에서 법적 문서로 가는
+     경로는 이 메뉴가 유일하다. */
+  it("법적 고지 문서로 가는 링크를 표시한다", () => {
+    render(
+      <MobileMenu
+        nickname="딱다구리"
+        email="user@example.com"
+        avatarUrl={null}
+        isAdmin={false}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "메뉴 열기" }));
+
+    expect(screen.getByRole("link", { name: "이용약관" })).toHaveAttribute(
+      "href",
+      ROUTES.TERMS,
+    );
+    expect(
+      screen.getByRole("link", { name: "개인정보처리방침" }),
+    ).toHaveAttribute("href", ROUTES.PRIVACY);
+  });
 });
