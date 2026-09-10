@@ -122,15 +122,20 @@ const VerifyOtpForm = ({
         /**
          * 현재 OTP 인증 요청의 context가 잘못된 상태다.
          *
-         * 잘못된 email / redirect 값을 다시 전달하지 않고,
-         * page에서 이미 검증되어 props로 전달된 purpose만 유지한다.
+         * 잘못된 email은 다시 전달하지 않되,
+         * page 계층에서 목적별 정책에 따라 처리되어 props로 전달된
+         * purpose / redirect는 인증 흐름 복구를 위해 유지한다.
          *
          * resend-email에서 이메일을 다시 입력한 후
-         * 새로운 OTP 인증 흐름을 시작할 수 있다.
+         * 기존 후속 이동 목적지를 유지한 채 새로운 OTP 인증 흐름을 시작할 수 있다.
          */
         const params = new URLSearchParams({
           purpose,
         });
+
+        if (redirect) {
+          params.set("redirect", redirect);
+        }
 
         router.replace(`${ROUTES.RESEND_EMAIL}?${params.toString()}`);
         return;
@@ -199,7 +204,7 @@ const VerifyOtpForm = ({
       default:
         return;
     }
-  }, [state, setError, router, purpose]);
+  }, [state, setError, router, purpose, redirect]);
 
   /**
    * 클라이언트 유효성 검증 통과 후 OTP 인증 action 실행

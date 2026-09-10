@@ -115,8 +115,9 @@ describe("VerifyOtpForm", () => {
     });
   });
 
-  it("invalid_request 상태면 resend-email 페이지로 이동한다", async () => {
+  it("invalid_request 상태면 redirect를 유지한 채 resend-email 페이지로 이동한다", async () => {
     const user = userEvent.setup();
+    const redirect = "/notes/note-id";
 
     const action = vi.fn().mockResolvedValue({
       status: "invalid_request",
@@ -124,14 +125,21 @@ describe("VerifyOtpForm", () => {
       reasonCode: AUTH_LOG_REASONS.SCHEMA_VALIDATION_FAILED,
     } satisfies VerifyOtpActionState);
 
-    renderVerifyOtpForm(action);
+    render(
+      <VerifyOtpForm {...defaultProps} action={action} redirect={redirect} />,
+    );
 
     await user.type(screen.getByPlaceholderText("예: 123456"), validOtp);
     await user.click(screen.getByRole("button", { name: "인증하기" }));
 
+    const params = new URLSearchParams({
+      purpose: defaultProps.purpose,
+      redirect,
+    });
+
     await waitFor(() => {
       expect(mocks.routerReplace).toHaveBeenCalledWith(
-        `${ROUTES.RESEND_EMAIL}?purpose=signup`,
+        `${ROUTES.RESEND_EMAIL}?${params.toString()}`,
       );
     });
   });
