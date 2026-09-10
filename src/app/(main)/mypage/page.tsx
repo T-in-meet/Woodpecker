@@ -11,7 +11,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { hasPasswordLogin } from "@/features/auth/lib/authProviders";
+import { getHasPasswordLogin } from "@/features/auth/lib/getHasPasswordLogin";
 import { LearningStatsSection } from "@/features/mypage/components/LearningStatsSection";
 import {
   MypageNav,
@@ -26,6 +26,7 @@ import {
 import { PushSubscribeCard } from "@/features/notifications/components/PushSubscribeCard";
 import { getHasAnyPushSubscription } from "@/features/notifications/queries";
 import { ROUTES } from "@/lib/constants/routes";
+import { logError } from "@/lib/logger";
 import { getProfile } from "@/lib/supabase/getProfile";
 import { getUser } from "@/lib/supabase/getUser";
 
@@ -124,14 +125,33 @@ export default async function MyPage({ searchParams }: Props) {
   // 활성 section에서만 fetch
   let stats: Awaited<ReturnType<typeof getLearningStats>> | null = null;
   let hasAnyPushSubscription = false;
+  let hasPasswordLogin: boolean | null = null;
   let feedbackResult: MyFeedbacksResult | null = null;
 
   if (section === "stats") {
     stats = await getLearningStats();
   } else if (section === "profile") {
-    hasAnyPushSubscription = await getHasAnyPushSubscription({
-      userId: user.id,
-    });
+    /**
+     * 계정 화면에 필요한 독립 조회를 병렬로 수행합니다.
+     *
+     * 비밀번호 로그인 상태 조회 실패는
+     * 비밀번호 미설정(false)으로 오인하지 않고 null로 구분합니다.
+     *
+     * 이 조회 실패로 계정 관리 화면 전체가 중단되지 않도록 하며,
+     * 상태를 확인할 수 없는 경우 비밀번호 관리 영역만 렌더링하지 않습니다.
+     */
+    [hasAnyPushSubscription, hasPasswordLogin] = await Promise.all([
+      getHasAnyPushSubscription({ userId: user.id }),
+      getHasPasswordLogin(user.id).catch((error) => {
+        logError({
+          event: "mypage.passwordLoginStatusLookup.failed",
+          error,
+          userId: user.id,
+        });
+
+        return null;
+      }),
+    ]);
   } else if (section === "support" && supportTab === "inquiry") {
     feedbackResult = await getMyFeedbacks(user.id);
   }
@@ -204,7 +224,9 @@ export default async function MyPage({ searchParams }: Props) {
               <PushSubscribeCard
                 initialHasAnySubscription={hasAnyPushSubscription}
               />
-              <AccountSection hasPasswordLogin={hasPasswordLogin(user)} />
+              {hasPasswordLogin !== null && (
+                <AccountSection hasPasswordLogin={hasPasswordLogin} />
+              )}
               <DeleteAccountSection userEmail={user?.email ?? ""} />
             </>
           )}

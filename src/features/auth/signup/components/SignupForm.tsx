@@ -13,6 +13,7 @@ import {
   type OAuthBeforeSignInResult,
   OAuthButtons,
 } from "@/features/auth/components/OAuthButtons";
+import { AUTH_ROOT_ERROR_TYPE } from "@/features/auth/errors/authRootError";
 import {
   GLOBAL_ERROR_MESSAGES,
   isGlobalError,
@@ -33,6 +34,9 @@ import { signupFormSchema } from "@/features/auth/signup/schema/signupFormSchema
 import { cn } from "@/lib/utils/cn";
 import { isServerValidationError } from "@/lib/validation/isServerValidationError";
 import { mapReasonToMessage } from "@/lib/validation/mapReasonToMessage";
+
+import { AuthCard } from "../../components/AuthCard";
+import { AuthFormHeader } from "../../components/AuthFormHeader";
 
 /**
  * signup 폼에서 처리 가능한 필드 이름 집합
@@ -201,7 +205,10 @@ export function SignupForm({
         }
 
         if (hasUnknownField) {
-          setError("root", { message: "요청을 처리할 수 없습니다" });
+          setError("root", {
+            type: AUTH_ROOT_ERROR_TYPE.SYSTEM,
+            message: "요청을 처리할 수 없습니다",
+          });
         }
 
         return;
@@ -210,16 +217,25 @@ export function SignupForm({
       // 아래 세 가지는 모두 "다시 시도"가 필요한 오류라 사라지는 토스트로 알리면
       // 재시도할 근거가 화면에서 없어진다. 제출 버튼 옆 root 오류 자리에 남긴다.
       if (isRateLimitError(e)) {
-        setError("root", { message: RATE_LIMIT_TOAST_MESSAGE });
+        setError("root", {
+          type: AUTH_ROOT_ERROR_TYPE.SYSTEM,
+          message: RATE_LIMIT_TOAST_MESSAGE,
+        });
         return;
       }
 
       if (isGlobalError(e)) {
-        setError("root", { message: GLOBAL_ERROR_MESSAGES[e.type] });
+        setError("root", {
+          type: AUTH_ROOT_ERROR_TYPE.SYSTEM,
+          message: GLOBAL_ERROR_MESSAGES[e.type],
+        });
         return;
       }
 
-      setError("root", { message: UNKNOWN_ERROR_MESSAGE });
+      setError("root", {
+        type: AUTH_ROOT_ERROR_TYPE.SYSTEM,
+        message: UNKNOWN_ERROR_MESSAGE,
+      });
     }
   };
 
@@ -303,20 +319,16 @@ export function SignupForm({
     };
 
   return (
-    <div className="my-0 md:my-4 mx-auto max-w-2xl bg-white border-0 md:border md:border-outline-variant md:rounded-xl rounded-none md:shadow-sm shadow-none overflow-hidden">
+    <AuthCard variant="wide">
       <form
         aria-label="회원가입"
-        className="mx-auto max-w-4xl space-y-6 py-7 px-4 md:px-8"
+        className="space-y-6"
         onSubmit={handleSubmit(handleValidSubmit)}
       >
-        <div className="space-y-2">
-          <h1 className="text-2xl font-bold text-primary tracking-tight">
-            계정 만들기
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            가입 방식을 선택하고 필수 약관에 동의해주세요.
-          </p>
-        </div>
+        <AuthFormHeader
+          title="계정 만들기"
+          description="가입 방식을 선택하고 필수 약관에 동의해주세요."
+        />
 
         {signupNotice ? (
           <div
@@ -338,13 +350,14 @@ export function SignupForm({
           >
             가입 방식
           </h2>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+
+          <div className="grid grid-cols-1 gap-2 auth:grid-cols-2">
             <Button
               type="button"
               variant="outline"
               aria-pressed={signupMethod === SIGNUP_METHODS.email}
               className={cn(
-                "h-auto justify-start px-4 py-3 text-left",
+                "h-auto justify-center px-4 py-3 text-left",
                 signupMethod === SIGNUP_METHODS.email &&
                   "border-primary bg-primary/5 text-primary",
               )}
@@ -352,12 +365,13 @@ export function SignupForm({
             >
               이메일로 가입
             </Button>
+
             <Button
               type="button"
               variant="outline"
               aria-pressed={signupMethod === SIGNUP_METHODS.google}
               className={cn(
-                "h-auto justify-start px-4 py-3 text-left",
+                "h-auto justify-center px-4 py-3 text-left",
                 signupMethod === SIGNUP_METHODS.google &&
                   "border-primary bg-primary/5 text-primary",
               )}
@@ -407,7 +421,7 @@ export function SignupForm({
 
         {signupMethod === SIGNUP_METHODS.email && (
           <SignupActions
-            rootError={errors.root}
+            rootError={errors.root?.message}
             isPending={isPending}
             isSubmitButtonVisuallyEnabled={isSubmitButtonVisuallyEnabled}
             submitButtonRef={submitButtonRef}
@@ -425,6 +439,6 @@ export function SignupForm({
           </Link>
         </p>
       </form>
-    </div>
+    </AuthCard>
   );
 }

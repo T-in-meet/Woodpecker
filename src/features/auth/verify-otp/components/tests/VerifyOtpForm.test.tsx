@@ -7,15 +7,23 @@ import { AUTH_GLOBAL_ERROR_MESSAGE } from "@/features/auth/constants/messages";
 import { OTP_LENGTH } from "@/features/auth/constants/otp";
 import { RATE_LIMIT_TOAST_MESSAGE } from "@/features/auth/errors/rateLimitError";
 import type { VerifyOtpActionState } from "@/features/auth/verify-otp/actions/verifyOtpActionState";
+import { ROUTES } from "@/lib/constants/routes";
 
-import VerifyOtpForm from "./VerifyOtpForm";
+import VerifyOtpForm from "../VerifyOtpForm";
 
 const mocks = vi.hoisted(() => ({
   showToast: vi.fn(),
+  routerReplace: vi.fn(),
 }));
 
 vi.mock("@/lib/utils/showToast", () => ({
   showToast: mocks.showToast,
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    replace: mocks.routerReplace,
+  }),
 }));
 
 const validOtp = "1".repeat(OTP_LENGTH);
@@ -57,6 +65,16 @@ describe("VerifyOtpForm", () => {
 
     expect(screen.getByPlaceholderText("예: 123456")).toBeInTheDocument();
 
+    expect(screen.getByRole("button", { name: "인증하기" })).toBeDisabled();
+  });
+
+  it("유효한 OTP를 입력하면 인증 버튼이 활성화된다", async () => {
+    const user = userEvent.setup();
+
+    renderVerifyOtpForm();
+
+    await user.type(screen.getByPlaceholderText("예: 123456"), validOtp);
+
     expect(screen.getByRole("button", { name: "인증하기" })).toBeEnabled();
   });
 
@@ -87,10 +105,42 @@ describe("VerifyOtpForm", () => {
     renderVerifyOtpForm(action);
 
     await user.type(screen.getByPlaceholderText("예: 123456"), "abc");
+
+    expect(screen.getByRole("button", { name: "인증하기" })).toBeDisabled();
+
     await user.click(screen.getByRole("button", { name: "인증하기" }));
 
     await waitFor(() => {
       expect(action).not.toHaveBeenCalled();
+    });
+  });
+
+  it("invalid_request 상태면 redirect를 유지한 채 resend-email 페이지로 이동한다", async () => {
+    const user = userEvent.setup();
+    const redirect = "/notes/note-id";
+
+    const action = vi.fn().mockResolvedValue({
+      status: "invalid_request",
+      fieldErrors: null,
+      reasonCode: AUTH_LOG_REASONS.SCHEMA_VALIDATION_FAILED,
+    } satisfies VerifyOtpActionState);
+
+    render(
+      <VerifyOtpForm {...defaultProps} action={action} redirect={redirect} />,
+    );
+
+    await user.type(screen.getByPlaceholderText("예: 123456"), validOtp);
+    await user.click(screen.getByRole("button", { name: "인증하기" }));
+
+    const params = new URLSearchParams({
+      purpose: defaultProps.purpose,
+      redirect,
+    });
+
+    await waitFor(() => {
+      expect(mocks.routerReplace).toHaveBeenCalledWith(
+        `${ROUTES.RESEND_EMAIL}?${params.toString()}`,
+      );
     });
   });
 
@@ -180,8 +230,12 @@ describe("VerifyOtpForm", () => {
       email: defaultProps.email,
     });
 
+    const returnTo = `${ROUTES.VERIFY_OTP}?${query.toString()}`;
+
+    query.set("returnTo", returnTo);
+
     expect(
       screen.getByRole("link", { name: "인증번호 재전송" }),
-    ).toHaveAttribute("href", `/resend-email?${query.toString()}`);
+    ).toHaveAttribute("href", `${ROUTES.RESEND_EMAIL}?${query.toString()}`);
   });
 });

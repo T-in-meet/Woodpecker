@@ -3,7 +3,10 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getUserMock = vi.hoisted(() => vi.fn());
+const getHasPasswordLoginMock = vi.hoisted(() => vi.fn());
+const validateRedirectPathMock = vi.hoisted(() => vi.fn());
 const redirectMock = vi.hoisted(() => vi.fn());
+const logAuthErrorMock = vi.hoisted(() => vi.fn());
 const setPasswordBoundActionMock = vi.hoisted(() => vi.fn());
 const setPasswordActionMock = vi.hoisted(() => {
   const action = vi.fn();
@@ -21,6 +24,24 @@ vi.mock("@/lib/supabase/getUser", () => ({
   getUser: getUserMock,
 }));
 
+vi.mock("@/features/auth/lib/getHasPasswordLogin", () => ({
+  getHasPasswordLogin: getHasPasswordLoginMock,
+}));
+
+vi.mock("@/features/auth/lib/validateRedirectPath", () => ({
+  validateRedirectPath: validateRedirectPathMock,
+}));
+
+vi.mock("@/features/auth/lib/authLogger", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/features/auth/lib/authLogger")>();
+
+  return {
+    ...actual,
+    logAuthError: logAuthErrorMock,
+  };
+});
+
 vi.mock("@/features/auth/set-password/actions/setPasswordAction", () => ({
   setPasswordAction: setPasswordActionMock,
 }));
@@ -31,6 +52,7 @@ vi.mock("@/features/auth/set-password/components/SetPasswordForm", async () => {
   return {
     SetPasswordForm: (props: { action: unknown }) => {
       SetPasswordFormMock(props);
+
       return React.createElement("div", {
         "data-testid": "set-password-form",
       });
@@ -38,19 +60,18 @@ vi.mock("@/features/auth/set-password/components/SetPasswordForm", async () => {
   };
 });
 
+import { AUTH_EVENTS } from "@/features/auth/constants/authEvents";
+import { AUTH_LOG_REASONS } from "@/features/auth/constants/authLogReasons";
 import { ROUTES } from "@/lib/constants/routes";
 
 import SetPasswordPage from "./page";
 
 /**
  * set-password 페이지 테스트에 필요한 최소 Supabase User 객체를 생성합니다.
- *
- * @param providers app_metadata.providers에 넣을 provider 목록
- * @returns Supabase User 형태의 테스트 객체
  */
-function makeUser(providers: string[]): User {
+function makeUser(): User {
   return {
-    app_metadata: { providers },
+    app_metadata: { providers: ["google"] },
     aud: "authenticated",
     created_at: "2026-08-03T00:00:00.000Z",
     id: "user-id",
@@ -61,13 +82,20 @@ function makeUser(providers: string[]): User {
 describe("SetPasswordPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+
     redirectMock.mockImplementation(() => {
       throw REDIRECT_ERROR;
     });
-    getUserMock.mockResolvedValue(makeUser(["google"]));
+
+    getUserMock.mockResolvedValue(makeUser());
+    getHasPasswordLoginMock.mockResolvedValue(false);
+
+    validateRedirectPathMock.mockImplementation((value: unknown) =>
+      typeof value === "string" ? value : ROUTES.MYPAGE,
+    );
   });
 
-  it("OAuth-only 사용자에게 비밀번호 설정 폼을 렌더링한다", async () => {
+  it("비밀번호가 없는 인증 사용자에게 비밀번호 설정 폼을 렌더링한다", async () => {
     const element = await SetPasswordPage({
       searchParams: Promise.resolve({}),
     });
@@ -75,6 +103,10 @@ describe("SetPasswordPage", () => {
     render(element);
 
     expect(getUserMock).toHaveBeenCalledTimes(1);
+    expect(getHasPasswordLoginMock).toHaveBeenCalledWith("user-id");
+    expect(validateRedirectPathMock).not.toHaveBeenCalled();
+
+    expect(setPasswordActionMock.bind).toHaveBeenCalledWith(null, null);
     expect(screen.getByTestId("set-password-form")).toBeInTheDocument();
   });
 
@@ -88,11 +120,13 @@ describe("SetPasswordPage", () => {
     ).rejects.toBe(REDIRECT_ERROR);
 
     expect(redirectMock).toHaveBeenCalledWith(ROUTES.SIGNUP);
+    expect(getHasPasswordLoginMock).not.toHaveBeenCalled();
+    expect(validateRedirectPathMock).not.toHaveBeenCalled();
     expect(setPasswordActionMock.bind).not.toHaveBeenCalled();
   });
 
-  it("password provider가 있는 사용자는 mypage로 redirect한다", async () => {
-    getUserMock.mockResolvedValue(makeUser(["google", "email"]));
+  it("이미 비밀번호가 있고 redirect가 없으면 mypage로 redirect한다", async () => {
+    getHasPasswordLoginMock.mockResolvedValue(true);
 
     await expect(
       SetPasswordPage({
@@ -100,16 +134,39 @@ describe("SetPasswordPage", () => {
       }),
     ).rejects.toBe(REDIRECT_ERROR);
 
+    expect(getHasPasswordLoginMock).toHaveBeenCalledWith("user-id");
+    expect(validateRedirectPathMock).not.toHaveBeenCalled();
     expect(redirectMock).toHaveBeenCalledWith(ROUTES.MYPAGE);
     expect(setPasswordActionMock.bind).not.toHaveBeenCalled();
   });
 
-  it("redirect query를 Server Action에 bind한다", async () => {
+  it("이미 비밀번호가 있고 redirect가 있으면 검증된 redirect를 보존한다", async () => {
+    getHasPasswordLoginMock.mockResolvedValue(true);
+    validateRedirectPathMock.mockReturnValue("/notes");
+
+    await expect(
+      SetPasswordPage({
+        searchParams: Promise.resolve({ redirect: "/notes" }),
+      }),
+    ).rejects.toBe(REDIRECT_ERROR);
+
+    expect(validateRedirectPathMock).toHaveBeenCalledWith("/notes");
+    expect(getHasPasswordLoginMock).toHaveBeenCalledWith("user-id");
+    expect(redirectMock).toHaveBeenCalledWith("/notes");
+    expect(setPasswordActionMock.bind).not.toHaveBeenCalled();
+  });
+
+  it("비밀번호가 없고 redirect가 있으면 검증된 redirect를 Server Action에 bind한다", async () => {
+    validateRedirectPathMock.mockReturnValue("/notes");
+
     const element = await SetPasswordPage({
       searchParams: Promise.resolve({ redirect: "/notes" }),
     });
 
     render(element);
+
+    expect(validateRedirectPathMock).toHaveBeenCalledWith("/notes");
+    expect(getHasPasswordLoginMock).toHaveBeenCalledWith("user-id");
 
     expect(setPasswordActionMock.bind).toHaveBeenCalledWith(null, "/notes");
     expect(SetPasswordFormMock).toHaveBeenCalledWith(
@@ -117,5 +174,63 @@ describe("SetPasswordPage", () => {
         action: setPasswordBoundActionMock,
       }),
     );
+
+    expect(screen.getByTestId("set-password-form")).toBeInTheDocument();
+  });
+
+  it("유효하지 않은 redirect는 검증 결과를 사용한다", async () => {
+    validateRedirectPathMock.mockReturnValue(ROUTES.MYPAGE);
+
+    const element = await SetPasswordPage({
+      searchParams: Promise.resolve({
+        redirect: "https://example.com",
+      }),
+    });
+
+    render(element);
+
+    expect(validateRedirectPathMock).toHaveBeenCalledWith(
+      "https://example.com",
+    );
+
+    expect(setPasswordActionMock.bind).toHaveBeenCalledWith(
+      null,
+      ROUTES.MYPAGE,
+    );
+
+    expect(screen.getByTestId("set-password-form")).toBeInTheDocument();
+  });
+
+  it("비밀번호 상태 조회 실패를 Auth 로그에 기록하고 오류를 다시 전파한다", async () => {
+    const lookupError = new Error("password login status lookup failed");
+
+    getHasPasswordLoginMock.mockRejectedValue(lookupError);
+
+    await expect(
+      SetPasswordPage({
+        searchParams: Promise.resolve({}),
+      }),
+    ).rejects.toBe(lookupError);
+
+    expect(getHasPasswordLoginMock).toHaveBeenCalledWith("user-id");
+
+    expect(logAuthErrorMock).toHaveBeenCalledTimes(1);
+    expect(logAuthErrorMock).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_SET_PASSWORD_FAILED,
+      {
+        path: ROUTES.SET_PASSWORD,
+        method: "GET",
+        status: 500,
+        provider: "password",
+        result: "failure",
+        reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+        userId: "user-id",
+        errorMessage: "password login status lookup failed",
+        errorName: "Error",
+      },
+    );
+
+    expect(redirectMock).not.toHaveBeenCalled();
+    expect(setPasswordActionMock.bind).not.toHaveBeenCalled();
   });
 });

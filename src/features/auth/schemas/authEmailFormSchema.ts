@@ -1,10 +1,10 @@
 import { z } from "zod";
 
-import { normalizedEmailSchema } from "@/lib/validation/emailSchema";
+import { emailFormSchema } from "@/lib/validation/emailSchema";
 
 export const authEmailFormSchema = z
   .object({
-    email: normalizedEmailSchema,
+    email: emailFormSchema,
   })
   .strict();
 

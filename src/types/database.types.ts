@@ -1777,6 +1777,7 @@ export type Database = {
           user_used: number;
         }[];
       };
+      has_password_login: { Args: { p_user_id: string }; Returns: boolean };
       increment_operational_error_occurrence: {
         Args: {
           p_actor_user_id: string;

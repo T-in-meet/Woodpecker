@@ -5,6 +5,7 @@ import AuthEmailForm from "@/features/auth/components/AuthEmailForm";
 import { forgotPasswordAction } from "@/features/auth/forgot-password/actions/forgotPasswordAction";
 import { INITIAL_FORGOT_PASSWORD_ACTION_STATE } from "@/features/auth/forgot-password/actions/forgotPasswordActionState";
 import { requireGuestPage } from "@/features/auth/utils/requireGuestPage";
+import { ROUTES } from "@/lib/constants/routes";
 
 import ForgotPasswordPage, { metadata } from "./page";
 
@@ -41,7 +42,7 @@ describe("ForgotPasswordPage", () => {
     expect(requireGuestPage).toHaveBeenCalledTimes(1);
   });
 
-  it("AuthEmailForm에 reset-password 목적과 초기 상태를 전달한다", async () => {
+  it("AuthEmailForm에 비밀번호 재설정 목적과 초기 상태 및 UI 정보를 전달한다", async () => {
     const page = await ForgotPasswordPage({
       searchParams: Promise.resolve({}),
     });
@@ -54,6 +55,11 @@ describe("ForgotPasswordPage", () => {
         initialState: INITIAL_FORGOT_PASSWORD_ACTION_STATE,
         email: undefined,
         purpose: "reset-password",
+        title: "비밀번호 재설정",
+        backLink: {
+          href: ROUTES.LOGIN,
+          label: "로그인으로 돌아가기",
+        },
       }),
       undefined,
     );

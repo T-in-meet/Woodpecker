@@ -20,10 +20,10 @@ import {
 import { maskEmailForLogging } from "@/features/auth/lib/maskEmailForLogging";
 import { maskIpForLogging } from "@/features/auth/lib/maskIpForLogging";
 import { authEmailContextSchema } from "@/features/auth/schemas/authEmailContextSchema";
-import { authEmailFormSchema } from "@/features/auth/schemas/authEmailFormSchema";
 import { canonicalizeEmail } from "@/features/auth/utils/canonicalizeEmail";
 import { ROUTES } from "@/lib/constants/routes";
 import { getServerActionClientIp } from "@/lib/utils/getServerActionClientIp";
+import { normalizedEmailSchema } from "@/lib/validation/emailSchema";
 import { VALIDATION_MESSAGES } from "@/lib/validation/messages";
 
 import { ResendEmailActionState } from "./resendEmailActionState";
@@ -143,9 +143,8 @@ export async function resendEmailAction(
      * 사용자가 입력한 이메일 값만 검증한다.
      * context 검증과 분리해, field error는 email 입력 필드에만 연결한다.
      */
-    const emailParsed = authEmailFormSchema.safeParse({
-      email: formData.get("email"),
-    });
+    const rawEmail = formData.get("email");
+    const emailParsed = normalizedEmailSchema.safeParse(rawEmail);
 
     if (!emailParsed.success) {
       logAuthEvent(AUTH_EVENTS.AUTH_RESEND_EMAIL_INVALID_INPUT, {
@@ -157,17 +156,21 @@ export async function resendEmailAction(
         reasonCode: AUTH_LOG_REASONS.SCHEMA_VALIDATION_FAILED,
       });
 
+      const email = typeof rawEmail === "string" ? rawEmail.trim() : "";
+
       return {
         status: "invalid_input",
         fieldErrors: {
-          email:
-            emailParsed.error.flatten().formErrors ??
-            VALIDATION_MESSAGES.emailInvalid,
+          email: [
+            email.length === 0
+              ? VALIDATION_MESSAGES.emailRequired
+              : VALIDATION_MESSAGES.emailInvalid,
+          ],
         },
       };
     }
 
-    const email = emailParsed.data.email;
+    const email = emailParsed.data;
 
     /**
      * rate limit 검증

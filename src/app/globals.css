@@ -13,11 +13,16 @@ html {
 }
 
 /**
- * admin 페이지 전용: 전역 scrollbar-gutter(stable)로 예약된 여백을 해제합니다. 
- * AdminBodyOverflowLock에서 admin 레이아웃 마운트 시에만 html에 이 클래스를 붙입니다.
+ * 레이아웃 내부에 자체 스크롤 영역을 사용하는 페이지에서는
+ * 전역 scrollbar-gutter(stable)로 예약된 여백을 해제합니다.
  */
-html.admin-no-gutter {
+html.no-scrollbar-gutter {
   scrollbar-gutter: auto;
+}
+
+@theme {
+  /* Auth 페이지의 모바일 → 카드형 레이아웃 전환 기준 */
+  --breakpoint-auth: 37.5rem; /* 600px */
 }
 
 @theme inline {

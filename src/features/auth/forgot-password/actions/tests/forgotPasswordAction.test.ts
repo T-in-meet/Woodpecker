@@ -6,6 +6,7 @@ import {
   emailStore,
   ipStore,
 } from "@/features/auth/lib/requestEligibilityStore";
+import { VALIDATION_MESSAGES } from "@/lib/validation/messages";
 
 import {
   buildVerifyOtpUrl,
@@ -70,7 +71,7 @@ describe("forgotPasswordAction", () => {
     });
   });
 
-  it("TC3/TC4/TC5: invalid 입력이면 field_error를 반환한다", async () => {
+  it("TC3/TC4/TC5: 잘못된 email이면 안전한 field error를 반환한다", async () => {
     const mocks = setupActionTest({ email: "invalid-email" });
     const state = await mocks.callAction();
 
@@ -83,7 +84,9 @@ describe("forgotPasswordAction", () => {
 
     expect(state).toMatchObject({
       status: "invalid_input",
-      fieldErrors: { email: expect.any(Array) },
+      fieldErrors: {
+        email: [VALIDATION_MESSAGES.emailInvalid],
+      },
     });
 
     expectNoLegacyActionFields(state);
@@ -93,6 +96,31 @@ describe("forgotPasswordAction", () => {
 
     // checkRequestEligibilityMock 제거됨.
     // 대신 rate limit store가 변경되지 않았는지 검증.
+    expect(ipStore.size).toBe(0);
+    expect(emailStore.size).toBe(0);
+  });
+
+  it("TC3-1: 빈 email이면 필수 입력 field error를 반환한다", async () => {
+    const mocks = setupActionTest({ email: "   " });
+    const state = await mocks.callAction();
+
+    expectExactlyOneTerminalEvent(
+      mocks,
+      AUTH_EVENTS.AUTH_FORGOT_PASSWORD_INVALID_INPUT,
+    );
+
+    expectRequestedBeforeTerminalEvent(mocks);
+
+    expect(state).toMatchObject({
+      status: "invalid_input",
+      fieldErrors: {
+        email: [VALIDATION_MESSAGES.emailRequired],
+      },
+    });
+
+    expect(mocks.issueOtpAndSendEmailMock).not.toHaveBeenCalled();
+    expect(mocks.redirectMock).not.toHaveBeenCalled();
+
     expect(ipStore.size).toBe(0);
     expect(emailStore.size).toBe(0);
   });
@@ -153,6 +181,7 @@ describe("forgotPasswordAction", () => {
     const mocks = setupActionTest();
     blockIpShort();
     const state = await mocks.callAction();
+
     expect(state).toMatchObject({
       status: "blocked",
       fieldErrors: null,

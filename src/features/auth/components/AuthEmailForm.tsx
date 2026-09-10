@@ -1,12 +1,12 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import Link from "next/link";
 import { startTransition, useActionState } from "react";
 import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
 import { OtpPurpose } from "../constants/otp";
 import { ForgotPasswordActionState } from "../forgot-password/actions/forgotPasswordActionState";
@@ -18,7 +18,10 @@ import {
   authEmailFormSchema,
   AuthEmailFormValues,
 } from "../schemas/authEmailFormSchema";
-import AuthenticationError from "./AuthenticationError";
+import { AuthCard } from "./AuthCard";
+import AuthFormError from "./AuthFormError";
+import { AuthFormField } from "./AuthFormField";
+import { AuthFormHeader } from "./AuthFormHeader";
 
 type AuthEmailFormState = ResendEmailActionState | ForgotPasswordActionState;
 
@@ -30,6 +33,11 @@ type AuthEmailFormProps<TState extends AuthEmailFormState> = {
   initialState: Awaited<TState>;
   email: string | undefined;
   purpose: OtpPurpose;
+  title: string;
+  backLink: {
+    href: string;
+    label: string;
+  };
 };
 
 export const AuthEmailForm = <TState extends AuthEmailFormState>({
@@ -37,6 +45,8 @@ export const AuthEmailForm = <TState extends AuthEmailFormState>({
   initialState,
   email,
   purpose,
+  title,
+  backLink,
 }: AuthEmailFormProps<TState>) => {
   const [state, formAction, isPending] = useActionState<TState, FormData>(
     action,
@@ -91,7 +101,7 @@ export const AuthEmailForm = <TState extends AuthEmailFormState>({
   useAuthEmailPrefill({ setValue });
 
   /**
-   * action 결과(field error / toast)를 UI에 반영한다.
+   * action 결과(field error / root error)를 UI에 반영한다.
    */
   useAuthEmailActionEffect({ setError, state });
 
@@ -100,6 +110,7 @@ export const AuthEmailForm = <TState extends AuthEmailFormState>({
    *
    * 역할:
    * - react-hook-form 검증 통과 이후 실행된다.
+   * - 실제 요청을 시작하기 전에 이전 root error를 제거한다.
    * - server action 전달 형식(FormData)으로 변환한다.
    * - 인증 목적과 이메일를 action으로 전달한다.
    *
@@ -108,6 +119,12 @@ export const AuthEmailForm = <TState extends AuthEmailFormState>({
    *   form에서는 purpose / email만 전달한다.
    */
   const onSubmit = handleSubmit((data: AuthEmailFormValues) => {
+    /**
+     * 클라이언트 검증을 통과해 실제 요청을 시작하므로
+     * 이전 요청에서 발생한 root error를 제거한다.
+     */
+    clearErrors("root");
+
     /**
      * server action 전달용 FormData 생성
      */
@@ -137,27 +154,19 @@ export const AuthEmailForm = <TState extends AuthEmailFormState>({
   });
 
   return (
-    <div className="mx-auto my-0 max-w-md overflow-hidden rounded-none border-0 bg-white p-16 shadow-none md:my-8 md:max-w-2xl md:rounded-xl md:border md:border-outline-variant md:shadow-sm">
-      {/* 이메일 재전송 form */}
-      <form
-        onSubmit={onSubmit}
-        className="space-y-3 md:grid md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-start md:gap-x-4 md:space-y-0"
-        noValidate
-      >
-        {/* 이메일 입력 라벨 */}
-        <Label
+    <AuthCard variant="compact">
+      <form onSubmit={onSubmit} className="space-y-4" noValidate>
+        <AuthFormHeader title={title} />
+
+        <AuthFormField
+          label="이메일"
           htmlFor={
             purpose === "reset-password"
               ? "forgot-password-email"
               : "resend-email-email"
           }
-          className="md:h-10 md:leading-10"
+          error={errors.email?.message}
         >
-          이메일
-        </Label>
-
-        {/* 이메일 입력 영역 */}
-        <div className="space-y-2">
           <Input
             id={
               purpose === "reset-password"
@@ -172,44 +181,20 @@ export const AuthEmailForm = <TState extends AuthEmailFormState>({
              */
             aria-invalid={Boolean(errors.email)}
             /**
-             * 접근성:
-             * validation 에러 발생 시
-             * 에러 메시지 영역과 연결
-             */
-            aria-describedby={
-              errors.email
-                ? purpose === "reset-password"
-                  ? "forgot-password-email-error"
-                  : "resend-email-email-error"
-                : undefined
-            }
-            /**
              * react-hook-form register
              */
             {...register("email", {
               /**
                * 사용자가 이메일을 수정하면
-               * 이전 제출 결과에서 발생한 form/server error를 모두 제거한다.
+               * 이전 email field error만 제거한다.
+               *
+               * rate limit / server 같은 SYSTEM root error는
+               * 입력 수정으로 해결되지 않으므로 유지한다.
                */
-              onChange: () => clearErrors(),
+              onChange: () => clearErrors("email"),
             })}
           />
-
-          {/* 이메일 validation 에러 */}
-          {errors.email ? (
-            <p
-              id={
-                purpose === "reset-password"
-                  ? "forgot-password-email-error"
-                  : "resend-email-email-error"
-              }
-              role="alert"
-              className="text-sm text-destructive"
-            >
-              {errors.email.message}
-            </p>
-          ) : null}
-        </div>
+        </AuthFormField>
 
         {/* 이메일 전송 버튼 */}
         <Button
@@ -218,7 +203,7 @@ export const AuthEmailForm = <TState extends AuthEmailFormState>({
            * 중복 제출 방지
            */
           disabled={isPending}
-          className="md:h-10 md:shrink-0"
+          className="w-full"
         >
           {isPending
             ? "전송 중..."
@@ -226,11 +211,19 @@ export const AuthEmailForm = <TState extends AuthEmailFormState>({
               ? "비밀번호 재설정 인증 번호 받기"
               : "인증 번호 다시 받기"}
         </Button>
-      </form>
 
-      {/* rate limit·서버 오류를 여기 남긴다. grid 밖에 두어 3열 배치를 흐트러뜨리지 않는다. */}
-      <AuthenticationError error={errors.root} />
-    </div>
+        {/* rate limit·서버 오류를 폼 안에 유지한다. */}
+        <AuthFormError error={errors.root?.message} />
+
+        {/* 현재 인증 흐름에서 나갈 수 있는 이동 링크 */}
+        <Link
+          href={backLink.href}
+          className="block text-sm text-muted-foreground underline hover:text-foreground"
+        >
+          {backLink.label}
+        </Link>
+      </form>
+    </AuthCard>
   );
 };
 

@@ -7,7 +7,7 @@
  * - 알 수 없는 필드 → form-error 표시
  */
 
-import { screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -28,7 +28,7 @@ describe("LoginForm 서버 validation 에러 매핑", () => {
     setupDefaultMocks();
   });
 
-  it("email 필드 에러 반환 시 이메일 필드 아래에 에러가 표시된다", async () => {
+  it("email 필드 에러 반환 시 이메일 필드 에러가 표시된다", async () => {
     mockMutateAsync.mockRejectedValue({
       success: false,
       code: "LOGIN_INVALID_INPUT",
@@ -39,11 +39,14 @@ describe("LoginForm 서버 validation 에러 매핑", () => {
 
     await submitValidForm(user);
 
-    const emailField = screen.getByLabelText(/이메일/i).closest("div");
-    expect(await within(emailField!).findByRole("alert")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("alert", {
+        name: "",
+      }),
+    ).toHaveTextContent("올바른 형식을 입력해주세요");
   });
 
-  it("password 필드 에러 반환 시 비밀번호 필드 아래에 에러가 표시된다", async () => {
+  it("password 필드 에러 반환 시 비밀번호 필드 에러가 표시된다", async () => {
     mockMutateAsync.mockRejectedValue({
       success: false,
       code: "LOGIN_INVALID_INPUT",
@@ -54,10 +57,9 @@ describe("LoginForm 서버 validation 에러 매핑", () => {
 
     await submitValidForm(user);
 
-    const passwordField = screen.getByLabelText(/^비밀번호$/i).closest("div");
-    expect(
-      await within(passwordField!).findByRole("alert"),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "필수 입력 항목입니다",
+    );
   });
 
   it("알 수 없는 필드 에러 반환 시 필드 에러 없이 폼 수준 에러가 표시된다", async () => {

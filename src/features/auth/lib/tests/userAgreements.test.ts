@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { PREVIOUS_LEGAL_DOCUMENT_VERSION } from "@/lib/constants/legal";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import {
@@ -38,6 +39,7 @@ describe("getLegalAcceptanceStatus", () => {
     );
 
     expect(status.canAccessService).toBe(true);
+    expect(status.hasAcceptanceHistory).toBe(false);
     expect(status.isComplete).toBe(false);
     expect(status.missingEvents).toEqual([
       LEGAL_ACCEPTANCE_EVENT.terms,
@@ -46,9 +48,38 @@ describe("getLegalAcceptanceStatus", () => {
     ]);
   });
 
+  it("이전 버전 동의 기록도 동의 이력으로 판정한다", async () => {
+    queryInMock.mockResolvedValue({
+      data: [
+        {
+          event_type: LEGAL_ACCEPTANCE_EVENT.terms,
+          document_version: PREVIOUS_LEGAL_DOCUMENT_VERSION,
+        },
+        {
+          event_type: LEGAL_ACCEPTANCE_EVENT.privacyNotice,
+          document_version: PREVIOUS_LEGAL_DOCUMENT_VERSION,
+        },
+      ],
+      error: null,
+    });
+
+    const status = await getLegalAcceptanceStatus(
+      "user-id",
+      new Date("2026-09-19T14:59:59.999Z"),
+    );
+
+    expect(status.hasAcceptanceHistory).toBe(true);
+    expect(status.isComplete).toBe(false);
+  });
+
   it("시행 시각부터 누락 기록이 있으면 접근을 차단한다", async () => {
     queryInMock.mockResolvedValue({
-      data: [{ event_type: "terms_accepted", document_version: "2026-09-20" }],
+      data: [
+        {
+          event_type: "terms_accepted",
+          document_version: "2026-09-20",
+        },
+      ],
       error: null,
     });
 
@@ -67,12 +98,18 @@ describe("getLegalAcceptanceStatus", () => {
   it("현재 버전의 세 이벤트가 있으면 접근을 허용한다", async () => {
     queryInMock.mockResolvedValue({
       data: [
-        { event_type: "terms_accepted", document_version: "2026-09-20" },
+        {
+          event_type: "terms_accepted",
+          document_version: "2026-09-20",
+        },
         {
           event_type: "privacy_notice_acknowledged",
           document_version: "2026-09-20",
         },
-        { event_type: "age_14_confirmed", document_version: "2026-09-20" },
+        {
+          event_type: "age_14_confirmed",
+          document_version: "2026-09-20",
+        },
       ],
       error: null,
     });

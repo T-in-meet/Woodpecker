@@ -16,10 +16,8 @@ export default async function LoginPage() {
   await requireGuestPage();
 
   return (
-    <div className="md:flex md:min-h-[calc(100dvh-4.5rem)] md:items-center md:justify-center">
-      <Suspense fallback={null}>
-        <LoginForm />
-      </Suspense>
-    </div>
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }
