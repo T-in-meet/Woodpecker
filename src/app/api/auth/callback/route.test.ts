@@ -16,6 +16,7 @@ const updateProfileEqMock = vi.fn();
 const selectProfileMock = vi.fn();
 const selectProfileEqMock = vi.fn();
 const selectProfileSingleMock = vi.fn();
+const clearSupabaseAuthSessionCookiesMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/features/auth/lib/userAgreements", () => ({
   getLegalAcceptanceStatus: getLegalAcceptanceStatusMock,
@@ -23,6 +24,7 @@ vi.mock("@/features/auth/lib/userAgreements", () => ({
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
+  clearSupabaseAuthSessionCookies: clearSupabaseAuthSessionCookiesMock,
   createClient: vi.fn(async () => ({
     auth: {
       exchangeCodeForSession: exchangeCodeForSessionMock,
@@ -79,6 +81,7 @@ describe("auth callback route", () => {
         from: vi.fn(),
       },
     } as never);
+    clearSupabaseAuthSessionCookiesMock.mockResolvedValue(undefined);
   });
 
   /**
@@ -200,6 +203,7 @@ describe("auth callback route", () => {
     );
 
     expect(signOutMock).toHaveBeenCalledTimes(1);
+    expect(clearSupabaseAuthSessionCookiesMock).not.toHaveBeenCalled();
     expect(response.headers.get("location")).toBe(
       "http://localhost:3000/signup?agreement_required=1",
     );
@@ -233,8 +237,9 @@ describe("auth callback route", () => {
     );
 
     expect(signOutMock).toHaveBeenCalledTimes(1);
+    expect(clearSupabaseAuthSessionCookiesMock).toHaveBeenCalledTimes(1);
     expect(response.headers.get("location")).toBe(
-      `http://localhost:3000${ROUTES.LOGIN}?oauth_error=sign_out_failed`,
+      `http://localhost:3000${ROUTES.LOGIN}?oauth_error=${OAUTH_CALLBACK_ERROR_REASON.SIGN_OUT_FAILED}`,
     );
   });
 
@@ -530,6 +535,22 @@ describe("auth callback route", () => {
     expect(upsertUserAgreementMock).not.toHaveBeenCalled();
     expect(response.headers.get("location")).toBe(
       "http://localhost:3000/signup?agreement_required=1",
+    );
+  });
+
+  it("signup intent에서 약관 intent cookie가 없고 세션 종료에 실패하면 로컬 세션을 제거하고 signup OAuth 오류 화면으로 redirect한다", async () => {
+    signOutMock.mockResolvedValue({
+      error: new Error("sign out failed"),
+    });
+
+    const response = await GET(
+      createRequest("/api/auth/callback?code=oauth-code&intent=signup"),
+    );
+
+    expect(signOutMock).toHaveBeenCalledTimes(1);
+    expect(clearSupabaseAuthSessionCookiesMock).toHaveBeenCalledTimes(1);
+    expect(response.headers.get("location")).toBe(
+      `http://localhost:3000${ROUTES.SIGNUP}?oauth_error=${OAUTH_CALLBACK_ERROR_REASON.SIGN_OUT_FAILED}`,
     );
   });
 

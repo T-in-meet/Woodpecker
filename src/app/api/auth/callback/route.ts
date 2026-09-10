@@ -22,10 +22,12 @@ import { canonicalizeEmail } from "@/features/auth/utils/canonicalizeEmail";
 import { NICKNAME_MAX_LENGTH } from "@/lib/constants/profiles";
 import { ROUTES } from "@/lib/constants/routes";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
+import {
+  clearSupabaseAuthSessionCookies,
+  createClient,
+} from "@/lib/supabase/server";
 
 const OAUTH_NICKNAME_NOTICE_PARAM = "profile_nickname";
-const OAUTH_SIGN_OUT_FAILED_REASON = "sign_out_failed";
 
 /**
  * 신규 OAuth 사용자는 계정 생성 직후 첫 로그인이 이루어진다.
@@ -406,7 +408,19 @@ export async function GET(request: NextRequest) {
 
   if (effectiveIntent === "signup") {
     if (!hasSignupAgreementIntent) {
-      await supabase.auth.signOut();
+      const { error: signOutError } = await supabase.auth.signOut();
+
+      if (signOutError) {
+        await clearSupabaseAuthSessionCookies();
+
+        return redirectWithClearedIntent(
+          buildOAuthErrorUrl(
+            requestUrl.origin,
+            "signup",
+            OAUTH_CALLBACK_ERROR_REASON.SIGN_OUT_FAILED,
+          ),
+        );
+      }
 
       return redirectWithClearedIntent(
         new URL(SIGNUP_AGREEMENT_REQUIRED_PATH, requestUrl.origin),
@@ -459,11 +473,20 @@ export async function GET(request: NextRequest) {
     const { error: signOutError } = await supabase.auth.signOut();
 
     if (signOutError) {
+      /**
+       * 원격 signOut에 실패하면 Supabase Auth session cookie가 남아
+       * 로그인 화면에서 다시 인증된 사용자로 판단될 수 있다.
+       *
+       * 따라서 오류 화면으로 이동하기 전에 현재 브라우저의
+       * Supabase Auth session cookie를 명시적으로 제거한다.
+       */
+      await clearSupabaseAuthSessionCookies();
+
       return redirectWithClearedIntent(
         buildOAuthErrorUrl(
           requestUrl.origin,
           "login",
-          OAUTH_SIGN_OUT_FAILED_REASON,
+          OAUTH_CALLBACK_ERROR_REASON.SIGN_OUT_FAILED,
         ),
       );
     }
