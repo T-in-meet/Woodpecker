@@ -35,7 +35,13 @@ function Heading2({ children }: { children?: ReactNode }) {
 
   const { text, id } = parseHeadingAnchor(raw);
 
-  return <h2 id={id}>{text}</h2>;
+  /* 헤더가 sticky top-0이라 앵커로 이동하면 제목이 그 아래로 들어간다.
+     `/guide` 인덱스의 #about 섹션과 같은 값으로 스크롤 여백을 준다. */
+  return (
+    <h2 id={id} className={id ? "scroll-mt-24" : undefined}>
+      {text}
+    </h2>
+  );
 }
 
 /**
