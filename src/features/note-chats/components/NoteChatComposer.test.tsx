@@ -37,6 +37,37 @@ describe("NoteChatComposer", () => {
     setCoarsePointer(false);
   });
 
+  it("일반 상태에서 질문 입력창에 공통 전송 방법을 접근성 설명으로 연결한다", () => {
+    render(
+      <NoteChatComposer
+        conversationId={CONVERSATION_ID}
+        dailyUsage={null}
+        isStreaming={false}
+        isAnswerGenerating={false}
+        onCancel={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    const textarea = screen.getByRole("textbox", {
+      name: "노트 챗봇 질문",
+    });
+
+    const description = screen.getByText(
+      "질문 보내기 버튼으로 질문을 전송할 수 있습니다.",
+    );
+
+    expect(description).toHaveAttribute(
+      "id",
+      "note-chat-question-accessible-description",
+    );
+
+    expect(textarea).toHaveAttribute(
+      "aria-describedby",
+      "note-chat-question-accessible-description",
+    );
+  });
+
   it("fine pointer 환경에서는 Enter로 질문을 전송한다", async () => {
     const { onSubmit, textarea } = renderComposer();
 

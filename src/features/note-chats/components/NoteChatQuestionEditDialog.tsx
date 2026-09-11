@@ -158,6 +158,7 @@ export function NoteChatQuestionEditDialog({
 
           <div className="space-y-2">
             <Textarea
+              aria-label="수정할 질문"
               aria-describedby={
                 questionError ? "note-chat-question-edit-error" : undefined
               }

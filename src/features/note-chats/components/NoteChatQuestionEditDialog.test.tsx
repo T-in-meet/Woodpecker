@@ -34,7 +34,9 @@ describe("NoteChatQuestionEditDialog", () => {
       />,
     );
 
-    const textarea = screen.getByRole("textbox");
+    const textarea = screen.getByRole("textbox", {
+      name: "수정할 질문",
+    });
 
     await waitFor(() => {
       expect(textarea).toHaveValue("기존 질문");

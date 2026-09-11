@@ -210,7 +210,9 @@ export function NoteChatComposer({
             aria-describedby={
               questionError
                 ? "note-chat-question-error"
-                : "note-chat-question-description"
+                : isDailyLimitReached
+                  ? "note-chat-question-description"
+                  : "note-chat-question-accessible-description"
             }
             aria-invalid={questionError ? true : undefined}
             aria-label="노트 챗봇 질문"
@@ -225,6 +227,10 @@ export function NoteChatComposer({
             onKeyDown={handleKeyDown}
             {...form.register("content.text")}
           />
+
+          <p id="note-chat-question-accessible-description" className="sr-only">
+            질문 보내기 버튼으로 질문을 전송할 수 있습니다.
+          </p>
 
           <div
             className={cn(

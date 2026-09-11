@@ -124,7 +124,7 @@ export function NoteChatCreateDialog() {
               type="button"
               variant="outline"
               disabled={createMutation.isPending}
-              onClick={() => setOpen(false)}
+              onClick={() => handleOpenChange(false)}
             >
               취소
             </Button>
