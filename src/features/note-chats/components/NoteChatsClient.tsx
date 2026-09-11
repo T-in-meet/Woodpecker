@@ -45,11 +45,13 @@ export function NoteChatsClient() {
   return (
     <div
       ref={containerRef}
-      className="mx-auto flex w-full max-w-6xl flex-col space-y-6 px-4 pb-4 sm:px-6 sm:pb-6"
+      className="mx-auto flex w-full max-w-6xl flex-col space-y-6 px-4 pb-4 sm:px-6 sm:pb-6 md:px-12"
       style={containerHeight !== null ? { height: containerHeight } : undefined}
     >
       <div className="shrink-0">
-        <NoteChatBreadcrumb className="my-4" />
+        <div className="my-4 flex min-h-8 items-center pointer-coarse:min-h-11">
+          <NoteChatBreadcrumb />
+        </div>
 
         <div>
           <h1 className="text-3xl font-semibold">노트 챗봇</h1>

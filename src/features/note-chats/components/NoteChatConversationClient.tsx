@@ -199,7 +199,7 @@ export function NoteChatConversationClient({
         onConfirm={confirmNavigation}
       />
 
-      <div className="mx-auto flex w-full max-w-6xl flex-col px-4 md:px-12">
+      <div className="mx-auto flex w-full max-w-6xl flex-col px-4 sm:px-6 md:px-12">
         <NoteChatConversationHeader
           conversationId={conversationId}
           conversationTitle={detail?.conversation.title}
