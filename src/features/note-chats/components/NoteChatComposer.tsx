@@ -84,8 +84,11 @@ function NoteChatUsageInfoContent() {
  * 일반 사용자가 일일 AI 실행 제한에 도달한 경우
  * 추가 질문 입력과 전송을 차단합니다.
  *
- * Enter는 질문을 전송하고,
- * Shift + Enter는 줄바꿈을 입력합니다.
+ * 마우스 환경에서는 Enter로 질문을 전송하고,
+ * Shift + Enter로 줄바꿈을 입력합니다.
+ *
+ * 터치 환경에서는 Enter의 기본 동작을 유지하여 줄바꿈하고,
+ * 질문 보내기 버튼으로 질문을 전송합니다.
  *
  * 답변 표시 중지 버튼은 현재 브라우저에서 실제 스트림을
  * 수신하고 있는 동안에만 표시합니다.
@@ -157,8 +160,11 @@ export function NoteChatComposer({
   });
 
   /**
-   * Enter는 질문을 전송하고,
+   * 마우스 환경에서는 Enter로 질문을 전송하고,
    * Shift + Enter는 기본 동작을 유지하여 줄바꿈합니다.
+   *
+   * 터치 환경에서는 모바일 소프트 키보드의 Enter를 가로채지 않고
+   * textarea의 기본 줄바꿈 동작을 유지합니다.
    */
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (
@@ -166,6 +172,10 @@ export function NoteChatComposer({
       event.shiftKey ||
       event.nativeEvent.isComposing
     ) {
+      return;
+    }
+
+    if (window.matchMedia("(pointer: coarse)").matches) {
       return;
     }
 
@@ -324,8 +334,6 @@ export function NoteChatComposer({
               </AlertDialogContent>
             </AlertDialog>
 
-            {/* 이 화면의 주 액션이라 가장 작은 sm(28px) 대신 기본 크기를 쓴다.
-                터치에서는 buttonVariants의 pointer-coarse 분기로 44px가 된다. */}
             <Button type="submit" size="sm" disabled={isSubmitDisabled}>
               {isAnswerGenerating ? (
                 <>
