@@ -63,15 +63,31 @@ describe("글자색 (인라인)", () => {
     expect(roundTrip("열기만 {c=red} 있음")).toContain("{c=red}");
   });
 
-  // 굵게와 색이 겹치면 마크 순서가 바뀔 수 있으나(**{c=red}…{/c}**) 의미는 같다.
-  it("다른 서식과 함께 써도 서식이 유지되고 재직렬화가 안정적이다", () => {
-    const result = roundTrip("{c=red}**굵은 빨강**{/c}");
+  // 색 마커가 바깥, 굵게가 안쪽이어야 한다. `**{c=red}…{/c}**도`처럼 닫는 `**` 앞이
+  // `}`이면 다시 읽을 때 굵게로 인식되지 않는다.
+  it("굵게와 겹쳐도 색 마커를 바깥에 두어 재직렬화가 안정적이다", () => {
+    const result = roundTrip("{c=red}**굵은 빨강**{/c}도 있다.");
 
-    expect(result).toContain("{c=red}");
-    expect(result).toContain("{/c}");
-    expect(result).toContain("**");
-    expect(result).toContain("굵은 빨강");
+    expect(result).toBe("{c=red}**굵은 빨강**{/c}도 있다.");
     expect(roundTrip(result)).toBe(result);
+  });
+
+  it("굵게 안에 색이 들어가도 그대로 유지한다", () => {
+    expect(roundTrip("**굵게 {c=red}빨강{/c} 굵게**")).toBe(
+      "**굵게 {c=red}빨강{/c} 굵게**",
+    );
+  });
+
+  it("인용문 둘째 줄의 색 마커를 깨뜨리지 않는다", () => {
+    expect(roundTrip("> 첫줄\n> {c=gray}둘째 줄{/c}")).toBe(
+      "> 첫줄\n> {c=gray}둘째 줄{/c}",
+    );
+  });
+
+  it("직렬화 결과에 함수 문자열이 섞이지 않는다", () => {
+    const result = roundTrip("{c=green}**초록**{/c}도 있다.");
+
+    expect(result).not.toContain("native code");
   });
 });
 
