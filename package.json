@@ -96,6 +96,7 @@
   },
   "overrides": {
     "browserslist": "^4.28.9",
+    "postcss": "^8.5.23",
     "sharp": "$sharp"
   },
   "lint-staged": {
