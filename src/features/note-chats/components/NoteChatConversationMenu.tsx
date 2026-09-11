@@ -102,7 +102,9 @@ export function NoteChatConversationMenu({
         <DropdownMenuTrigger asChild>
           <Button type="button" variant="ghost" size="icon">
             <MoreHorizontal className="size-4" />
-            <span className="sr-only">대화 메뉴</span>
+            <span className="sr-only">
+              {title ? `${title} 대화 메뉴` : "대화 메뉴"}
+            </span>
           </Button>
         </DropdownMenuTrigger>
 
@@ -162,12 +164,23 @@ export function NoteChatConversationMenu({
               <Input
                 id="note-chat-conversation-edit-title"
                 enterKeyHint="done"
+                aria-describedby={
+                  titleError
+                    ? "note-chat-conversation-edit-title-error"
+                    : undefined
+                }
                 aria-invalid={titleError ? true : undefined}
                 {...form.register("title")}
               />
 
               {titleError ? (
-                <p className="text-sm text-destructive">{titleError}</p>
+                <p
+                  id="note-chat-conversation-edit-title-error"
+                  role="alert"
+                  className="text-sm text-destructive"
+                >
+                  {titleError}
+                </p>
               ) : null}
 
               {updateMutation.error ? (

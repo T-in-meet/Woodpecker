@@ -39,6 +39,7 @@ export function NoteChatConversationSearch({
         <Input
           type="search"
           enterKeyHint="search"
+          aria-label="대화 제목 검색"
           value={searchInput}
           onChange={(event) => {
             const nextValue = event.target.value;

@@ -73,7 +73,9 @@ describe("NoteChatConversationMenu", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "대화 메뉴" }));
+    await user.click(
+      screen.getByRole("button", { name: "기존 제목 대화 메뉴" }),
+    );
 
     await user.click(
       await screen.findByRole("menuitem", { name: "제목 수정" }),

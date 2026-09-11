@@ -22,7 +22,7 @@ export function NoteChatConversationListError({
   onRetry,
 }: NoteChatConversationListErrorProps) {
   return (
-    <div className="flex h-full items-center justify-center p-6">
+    <div className="flex h-full items-center justify-center p-6" role="alert">
       <div className="space-y-4 text-center">
         <div className="space-y-1">
           <p className="text-sm font-medium">

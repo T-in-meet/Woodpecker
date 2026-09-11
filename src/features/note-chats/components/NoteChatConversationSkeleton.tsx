@@ -7,8 +7,15 @@ import { Skeleton } from "@/components/ui/skeleton";
  */
 export function NoteChatConversationSkeleton() {
   return (
-    <div className="flex flex-1 flex-col">
-      <div className="flex flex-1 flex-col gap-6 p-6">
+    <div
+      role="status"
+      aria-label="대화를 불러오는 중"
+      aria-busy="true"
+      className="flex flex-1 flex-col"
+    >
+      <span className="sr-only">대화를 불러오는 중입니다.</span>
+
+      <div aria-hidden="true" className="flex flex-1 flex-col gap-6 p-6">
         <div className="flex justify-end">
           <Skeleton className="h-16 w-2/3 rounded-2xl" />
         </div>

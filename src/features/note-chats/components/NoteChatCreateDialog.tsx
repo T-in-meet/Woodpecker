@@ -103,13 +103,22 @@ export function NoteChatCreateDialog() {
             <Input
               id="note-chat-conversation-title"
               autoFocus
+              aria-describedby={
+                titleError ? "note-chat-conversation-title-error" : undefined
+              }
               aria-invalid={titleError ? true : undefined}
               placeholder="예: React 공부 정리"
               {...form.register("title")}
             />
 
             {titleError ? (
-              <p className="text-sm text-destructive">{titleError}</p>
+              <p
+                id="note-chat-conversation-title-error"
+                role="alert"
+                className="text-sm text-destructive"
+              >
+                {titleError}
+              </p>
             ) : null}
 
             {createMutation.error ? (
