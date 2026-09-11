@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useEffect } from "react";
+import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +14,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+
+import {
+  type UpdateNoteChatUserMessageInput,
+  updateNoteChatUserMessageInputSchema,
+} from "../schema";
 
 type EditingMessage = {
   id: string;
@@ -48,16 +55,41 @@ export function NoteChatQuestionEditDialog({
   onClose,
   onUpdateQuestion,
 }: NoteChatQuestionEditDialogProps) {
-  const [question, setQuestion] = useState("");
+  const form = useForm<UpdateNoteChatUserMessageInput>({
+    resolver: zodResolver(updateNoteChatUserMessageInputSchema),
+    defaultValues: {
+      messageId: "",
+      content: {
+        text: "",
+      },
+    },
+  });
 
+  /*
+   * 수정할 메시지가 바뀔 때마다 현재 메시지 내용을 Form 초기값으로 반영합니다.
+   * Dialog가 닫히면 입력값과 검증 상태도 함께 초기화합니다.
+   */
   useEffect(() => {
     if (!message) {
-      setQuestion("");
+      form.reset({
+        messageId: "",
+        content: {
+          text: "",
+        },
+      });
       return;
     }
 
-    setQuestion(message.text);
-  }, [message]);
+    form.reset({
+      messageId: message.id,
+      content: {
+        text: message.text,
+      },
+    });
+  }, [form, message]);
+
+  const question = form.watch("content.text");
+  const questionError = form.formState.errors.content?.text?.message;
 
   /**
    * 수정된 질문으로 기존 사용자 메시지를 갱신하고 답변 재생성을 시작합니다.
@@ -65,32 +97,29 @@ export function NoteChatQuestionEditDialog({
    * 실행 상태와 오류는 Conversation 화면에서 표시하므로
    * 요청 시작 전에 Dialog를 닫습니다.
    */
-  const handleUpdate = async () => {
+  const handleUpdate = form.handleSubmit(async (values) => {
     if (!message) {
       return;
     }
 
-    const nextQuestion = question.trim();
-
-    if (!nextQuestion || nextQuestion === message.text.trim()) {
-      return;
-    }
-
-    // Dialog가 닫히면 message가 null이 되므로 실행 전에 수정 대상을 보관합니다.
+    /*
+     * Dialog가 닫히면 message가 null이 되므로
+     * 실행 전에 수정 대상의 sequence 번호를 보관합니다.
+     */
     const targetMessage = message;
 
     onClose();
 
     try {
       await onUpdateQuestion({
-        messageId: targetMessage.id,
-        question: nextQuestion,
+        messageId: values.messageId,
+        question: values.content.text,
         sequenceNumber: targetMessage.sequenceNumber,
       });
     } catch {
       // 수정 실행 오류는 Conversation 화면의 스트림 오류로 표시합니다.
     }
-  };
+  });
 
   return (
     <Dialog
@@ -111,32 +140,46 @@ export function NoteChatQuestionEditDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Textarea
-          value={question}
-          rows={5}
-          onChange={(event) => {
-            setQuestion(event.target.value);
-          }}
-        />
+        <form className="space-y-4" onSubmit={handleUpdate}>
+          <input type="hidden" {...form.register("messageId")} />
 
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose}>
-            취소
-          </Button>
+          <div className="space-y-2">
+            <Textarea
+              aria-describedby={
+                questionError ? "note-chat-question-edit-error" : undefined
+              }
+              aria-invalid={questionError ? true : undefined}
+              rows={5}
+              {...form.register("content.text")}
+            />
 
-          <Button
-            type="button"
-            disabled={
-              question.trim().length === 0 ||
-              question.trim() === message?.text.trim()
-            }
-            onClick={() => {
-              void handleUpdate();
-            }}
-          >
-            수정하고 다시 답변받기
-          </Button>
-        </DialogFooter>
+            {questionError ? (
+              <p
+                id="note-chat-question-edit-error"
+                role="alert"
+                className="text-sm text-destructive"
+              >
+                {questionError}
+              </p>
+            ) : null}
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              취소
+            </Button>
+
+            <Button
+              type="submit"
+              disabled={
+                question.trim().length === 0 ||
+                question.trim() === message?.text.trim()
+              }
+            >
+              수정하고 다시 답변받기
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );
