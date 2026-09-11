@@ -3,7 +3,7 @@
 #
 # - 보안 업데이트는 GitHub 규칙상 기본 브랜치(main)로만 생성되며, target-branch가 있는
 #   블록의 설정은 보안 업데이트에 적용되지 않는다. 그래서 npm 블록을 둘로 나눈다.
-#   1) target-branch 없음 → main: 보안 업데이트 전용(버전 업데이트는 ignore)
+#   1) target-branch 없음 → main: 보안 업데이트 전용(버전 업데이트는 open-pull-requests-limit: 0으로 비활성화)
 #   2) target-branch: development → 일반 버전 업데이트
 # - 보안 업데이트는 Settings → Code security → Dependabot security updates를 켜야 동작한다.
 # - 커밋 메시지 prefix는 commitlint(config-conventional) 타입에 맞춘다.
@@ -25,10 +25,10 @@ updates:
       include: scope
     labels:
       - dependencies
-    # 일반 버전 업데이트는 development 블록이 담당하므로 여기서는 전부 무시한다.
-    # ignore는 보안 업데이트에는 적용되지 않는다.
-    ignore:
-      - dependency-name: "*"
+    # 일반 버전 업데이트는 development 블록이 담당한다.
+    # ignore는 보안 업데이트에도 적용되므로 쓰지 않고, 공식 권장대로
+    # open-pull-requests-limit: 0으로 버전 업데이트만 끈다(보안 PR은 이 제한을 받지 않는다).
+    open-pull-requests-limit: 0
     groups:
       # 보안 경고는 패키지 수와 무관하게 한 PR로 묶는다.
       security:
