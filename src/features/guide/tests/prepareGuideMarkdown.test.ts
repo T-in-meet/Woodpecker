@@ -40,6 +40,28 @@ describe("prepareGuideMarkdown", () => {
     expect(markdown).not.toContain("## 코드 {#");
   });
 
+  it("다른 종류의 펜스는 열린 코드 블록을 닫지 않는다", () => {
+    const { headings } = prepareGuideMarkdown(
+      "~~~~\n```\n## 코드\n~~~~\n\n## 진짜 절\n",
+    );
+
+    expect(headings).toEqual([{ id: "section-1", text: "진짜 절" }]);
+  });
+
+  it("같은 문자라도 여는 펜스보다 짧으면 코드 블록을 닫지 않는다", () => {
+    const { headings } = prepareGuideMarkdown(
+      "````\n```\n## 코드\n````\n\n## 진짜 절\n",
+    );
+
+    expect(headings).toEqual([{ id: "section-1", text: "진짜 절" }]);
+  });
+
+  it("4칸 이상 들여쓴 펜스 형태는 펜스로 보지 않는다", () => {
+    const { headings } = prepareGuideMarkdown("    ```\n\n## 절\n\n    ```\n");
+
+    expect(headings).toEqual([{ id: "section-1", text: "절" }]);
+  });
+
   it("CRLF 본문에서도 H2를 찾는다", () => {
     const { markdown, headings } = prepareGuideMarkdown(
       "도입\r\n\r\n## 첫 절\r\n\r\n본문\r\n",

@@ -12,13 +12,53 @@ export type PreparedGuideMarkdown = {
   headings: GuideHeading[];
 };
 
-/* 코드 블록 안의 `## `는 제목이 아니다. 펜스 안팎을 구분해 지나간다. */
-const FENCE_PATTERN = /^\s*(```|~~~)/;
+/* 코드 블록 안의 `## `는 제목이 아니다. 펜스 안팎을 구분해 지나간다.
+   CommonMark 규칙대로 펜스는 들여쓰기 3칸까지만 인정하고, 닫는 펜스는 여는
+   펜스와 같은 문자로 같거나 더 긴 길이여야 한다. 백틱 펜스의 info string에는
+   백틱이 올 수 없고, 닫는 펜스 뒤에는 공백만 올 수 있다. */
+const FENCE_PATTERN = /^ {0,3}(`{3,}|~{3,})(.*)$/;
 const H2_PATTERN = /^## (.+)$/;
 
 /* autocrlf가 켜진 Windows 체크아웃은 본문이 CRLF다. `\r`이 줄 끝에 남으면
    H2_PATTERN의 `.`이 그것을 소비하지 못해 제목이 하나도 잡히지 않는다. */
 const LINE_BREAK_PATTERN = /\r?\n/;
+
+type Fence = { marker: string; length: number; trailing: string };
+
+function parseFence(line: string): Fence | null {
+  const match = line.match(FENCE_PATTERN);
+
+  if (!match?.[1]) {
+    return null;
+  }
+
+  return {
+    marker: match[1][0]!,
+    length: match[1].length,
+    trailing: match[2] ?? "",
+  };
+}
+
+function opensFence(line: string): Fence | null {
+  const fence = parseFence(line);
+
+  if (!fence) {
+    return null;
+  }
+
+  return fence.marker === "`" && fence.trailing.includes("`") ? null : fence;
+}
+
+function closesFence(line: string, open: Fence): boolean {
+  const fence = parseFence(line);
+
+  return (
+    fence !== null &&
+    fence.marker === open.marker &&
+    fence.length >= open.length &&
+    fence.trailing.trim() === ""
+  );
+}
 
 /**
  * 차례에 쓸 제목 텍스트에서 인라인 마크다운 기호를 걷어낸다.
@@ -47,16 +87,21 @@ export function stripInlineMarkdown(text: string): string {
  */
 export function prepareGuideMarkdown(markdown: string): PreparedGuideMarkdown {
   const headings: GuideHeading[] = [];
-  let inFence = false;
+  let openFence: Fence | null = null;
   let sectionNumber = 0;
 
   const lines = markdown.split(LINE_BREAK_PATTERN).map((line) => {
-    if (FENCE_PATTERN.test(line)) {
-      inFence = !inFence;
+    if (openFence) {
+      if (closesFence(line, openFence)) {
+        openFence = null;
+      }
       return line;
     }
 
-    if (inFence) {
+    const fence = opensFence(line);
+
+    if (fence) {
+      openFence = fence;
       return line;
     }
 
