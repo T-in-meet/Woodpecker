@@ -82,7 +82,7 @@ function NoteMockup() {
 
         <div className="border-b border-border/60 pb-5 md:mt-6">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs text-muted-foreground">
-            <span className="rounded-full bg-orange-100 px-2 py-1 font-medium text-foreground dark:bg-orange-950/40">
+            <span className="rounded-full bg-brand-muted px-2 py-1 font-medium text-foreground">
               복습 0회
             </span>
             <span className="min-w-0">다음 복습 일정: 내일 오전 09:00</span>
@@ -329,17 +329,17 @@ export function LearningFlowSection() {
               {/* Text */}
               <div className="flex-1">
                 <div className="flex items-center gap-3">
-                  <span className="text-4xl font-bold text-orange-200 dark:text-orange-900">
+                  <span className="text-4xl font-bold text-brand/30">
                     {scene.step}
                   </span>
-                  <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-medium text-orange-700 dark:bg-orange-900/40 dark:text-orange-400">
+                  <span className="rounded-full bg-brand-muted px-3 py-1 text-xs font-medium text-brand">
                     {scene.eyebrow}
                   </span>
                 </div>
                 {/* scenes는 as const라 항목마다 타입이 다르다. subhead를 가진
                     단계만 좁혀서 렌더한다. */}
                 {"subhead" in scene ? (
-                  <p className="mt-4 text-sm font-medium text-orange-700 dark:text-orange-400">
+                  <p className="mt-4 text-sm font-medium text-brand">
                     {scene.subhead}
                   </p>
                 ) : null}
@@ -370,12 +370,12 @@ export function LearningFlowSection() {
         {getPublishedGuideDocuments().length > 0 && (
           <aside
             aria-labelledby="learning-guide-heading"
-            className="mt-12 flex flex-col gap-5 rounded-2xl bg-orange-100 p-6 md:mt-16 md:flex-row md:items-center md:justify-between md:p-8 dark:bg-orange-950/60"
+            className="mt-12 flex flex-col gap-5 rounded-2xl bg-brand-muted p-6 md:mt-16 md:flex-row md:items-center md:justify-between md:p-8"
           >
             <div className="flex items-start gap-4">
               <BookOpen
                 aria-hidden="true"
-                className="mt-1 size-5 shrink-0 text-orange-700 dark:text-orange-400"
+                className="mt-1 size-5 shrink-0 text-brand"
               />
               <div>
                 <h3
@@ -391,7 +391,7 @@ export function LearningFlowSection() {
             </div>
             <Link
               href={ROUTES.GUIDE}
-              className="inline-flex min-h-11 shrink-0 items-center gap-2 self-start rounded-md text-sm font-medium text-orange-800 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring cursor-pointer md:self-center dark:text-orange-300"
+              className="inline-flex min-h-11 shrink-0 items-center gap-2 self-start rounded-md text-sm font-medium text-brand underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring cursor-pointer md:self-center"
             >
               학습 가이드 읽어보기
               <ChevronRightIcon aria-hidden="true" className="size-4" />
@@ -400,7 +400,7 @@ export function LearningFlowSection() {
         )}
       </div>
 
-      <div className="bg-orange-50 dark:bg-orange-950/40">
+      <div className="bg-brand-subtle">
         <div className="mx-auto max-w-5xl px-6 py-10 text-center md:py-14">
           <p className="text-lg font-medium">{learningFlowContent.cta.text}</p>
           <Button size="xl" className="mt-4" asChild>

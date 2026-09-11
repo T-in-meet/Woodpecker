@@ -48,7 +48,7 @@ function RelatedNotesPreview() {
         <FileText className="size-4 shrink-0" aria-hidden />
         고전적 조건형성
       </p>
-      <div className="ml-2 space-y-2 border-l border-orange-200 pl-4 dark:border-orange-900/40">
+      <div className="ml-2 space-y-2 border-l border-brand-border pl-4">
         {related.map((item) => (
           <div key={item.title} className="rounded-lg border bg-card px-3 py-2">
             <div className="flex min-w-0 items-center gap-3">

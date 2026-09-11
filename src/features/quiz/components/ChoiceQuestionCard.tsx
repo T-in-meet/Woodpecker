@@ -57,7 +57,7 @@ export function ChoiceQuestionCard({
                 "has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2",
                 !submitted &&
                   isSelected &&
-                  "border-orange-200 bg-orange-50 dark:border-orange-900/40 dark:bg-orange-950/20",
+                  "border-brand-border bg-brand-subtle",
                 !submitted &&
                   !isSelected &&
                   "border-border hover:border-primary/50",
@@ -78,7 +78,7 @@ export function ChoiceQuestionCard({
                 className="sr-only"
               />
 
-              <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-orange-200 bg-orange-50 text-xs font-semibold text-foreground dark:border-orange-900/40 dark:bg-orange-950/20">
+              <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-brand-border bg-brand-subtle text-xs font-semibold text-foreground">
                 {index + 1}
               </span>
 

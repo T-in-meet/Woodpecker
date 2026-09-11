@@ -65,7 +65,7 @@ export function OxQuestionCard({
                 "has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2",
                 !submitted &&
                   isSelected &&
-                  "border-orange-200 bg-orange-50 dark:border-orange-900/40 dark:bg-orange-950/20",
+                  "border-brand-border bg-brand-subtle",
                 !submitted &&
                   !isSelected &&
                   "border-border hover:border-primary/50",
