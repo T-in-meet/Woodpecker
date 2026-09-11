@@ -5,7 +5,7 @@ import GuideDocumentPage from "@/app/(content)/guide/[slug]/page";
 import sitemap from "@/app/sitemap";
 import { SITE_URL } from "@/lib/constants/site";
 
-import { GuideArticle } from "../components/GuideArticle";
+import { GuideArticleMeta } from "../components/GuideArticle";
 import { GUIDE_AUTHOR, GUIDE_DOCUMENTS, isPublishedGuide } from "../content";
 
 vi.mock("@/features/guide/content", async (importOriginal) => {
@@ -24,12 +24,7 @@ afterEach(cleanup);
 describe("가이드 작성자와 날짜", () => {
   it("작성자 소개 링크와 수정일을 표시한다", () => {
     const { container } = render(
-      <GuideArticle
-        heading="가이드"
-        markdown="본문"
-        author={GUIDE_AUTHOR}
-        revisedOn="2026-09-10"
-      />,
+      <GuideArticleMeta author={GUIDE_AUTHOR} revisedOn="2026-09-10" />,
     );
     expect(
       screen.getByRole("link", { name: GUIDE_AUTHOR.name }),
@@ -43,12 +38,7 @@ describe("가이드 작성자와 날짜", () => {
 
   it("미공개 문서에는 날짜를 표시하지 않는다", () => {
     const { container } = render(
-      <GuideArticle
-        heading="가이드"
-        markdown="본문"
-        author={GUIDE_AUTHOR}
-        revisedOn={null}
-      />,
+      <GuideArticleMeta author={GUIDE_AUTHOR} revisedOn={null} />,
     );
     expect(container.querySelector("time")).toBeNull();
     expect(screen.queryByText(/최종 수정/)).not.toBeInTheDocument();

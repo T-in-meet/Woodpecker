@@ -4,6 +4,8 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { parseHeadingAnchor } from "../lib/headingAnchor";
+import type { GuideHeading } from "../lib/prepareGuideMarkdown";
+import { GuideToc } from "./GuideToc";
 
 /**
  * 제목 children이 순수 텍스트일 때만 문자열로 되돌린다.
@@ -65,46 +67,64 @@ function GuideLink({
 }
 
 /**
- * 가이드 본문(마크다운)을 렌더링한다.
+ * 제목 아래 작성자·수정일 한 줄. `GuideHero`의 `children` 자리에 들어간다.
  *
- * H1은 넘겨받은 `heading`으로 그리고 마크다운은 H2부터 시작한다. 제목 계층을 한
- * 곳에서 정하기 위해서다. 본문 파일에도 H1을 두면 문서마다 H1이 둘이 되거나
- * 화면의 제목과 문서의 제목이 갈라진다.
+ * 본문(`GuideArticle`)과 떼어 둔 이유는 H1이 히어로 밴드 안에 있기 때문이다.
+ * 메타는 제목 바로 아래 붙어야 읽히므로 본문이 아니라 히어로를 따라간다.
  */
-export function GuideArticle({
-  heading,
-  markdown,
+export function GuideArticleMeta({
   author,
   revisedOn,
 }: {
-  heading: string;
-  markdown: string;
   author: { name: string; href: string };
   revisedOn: string | null;
 }) {
   return (
-    <article className="text-prose-ko">
-      <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-        {heading}
-      </h1>
-      <p className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+    <p className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
+      <span>
+        작성:{" "}
+        <Link
+          href={author.href}
+          className="cursor-pointer underline underline-offset-4"
+        >
+          {author.name}
+        </Link>
+      </span>
+      {revisedOn && (
         <span>
-          작성:{" "}
-          <Link
-            href={author.href}
-            className="cursor-pointer underline underline-offset-4"
-          >
-            {author.name}
-          </Link>
+          · 최종 수정:{" "}
+          <time dateTime={revisedOn}>{revisedOn.replaceAll("-", ".")}</time>
         </span>
-        {revisedOn && (
-          <span>
-            · 최종 수정:{" "}
-            <time dateTime={revisedOn}>{revisedOn.replaceAll("-", ".")}</time>
-          </span>
-        )}
-      </p>
-      <div className="prose prose-stone mt-8 max-w-none">
+      )}
+    </p>
+  );
+}
+
+/**
+ * 가이드 본문(마크다운)과 차례를 렌더링한다.
+ *
+ * H1은 페이지가 `GuideHero`로 그리고 마크다운은 H2부터 시작한다. 제목 계층을 한
+ * 곳에서 정하기 위해서다. 본문 파일에도 H1을 두면 문서마다 H1이 둘이 되거나
+ * 화면의 제목과 문서의 제목이 갈라진다.
+ *
+ * `markdown`은 `prepareGuideMarkdown`을 거친 문자열이어야 한다. 모든 H2에 id가
+ * 붙어 있어야 `headings`로 그리는 차례가 절로 이동한다.
+ */
+export function GuideArticle({
+  markdown,
+  headings,
+}: {
+  markdown: string;
+  headings: readonly GuideHeading[];
+}) {
+  return (
+    <div className="lg:grid lg:grid-cols-[16rem_minmax(0,1fr)] lg:gap-10">
+      {/* sticky는 aside에 건다. 안쪽 요소에 걸면 aside 높이(=내용 높이) 안에서만
+          움직여 제자리에 고정된다. aside가 grid 항목이면 본문 전체 높이가 기준이 된다. */}
+      <aside className="lg:sticky lg:top-[calc(var(--header-height)+1.5rem)] lg:self-start">
+        <GuideToc headings={headings} />
+      </aside>
+      <div className="prose prose-stone mt-6 max-w-none text-prose-ko lg:mt-0">
         {/* 표는 GFM 문법이라 remark-gfm 없이는 파이프 문자가 그대로 나온다.
             자동 링크와 취소선도 같은 플러그인이 담당한다. */}
         <ReactMarkdown
@@ -114,6 +134,6 @@ export function GuideArticle({
           {markdown}
         </ReactMarkdown>
       </div>
-    </article>
+    </div>
   );
 }

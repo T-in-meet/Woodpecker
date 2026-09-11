@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
+import { ScrollToTopButton } from "@/components/common/ScrollToTopButton";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -11,7 +12,6 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { NoteDetailBody } from "@/features/notes/components/NoteDetailBody";
-import { ScrollToTopButton } from "@/features/notes/components/ScrollToTopButton";
 import { ScrollToTopOnMount } from "@/features/notes/components/ScrollToTopOnMount";
 import { getNoteById } from "@/features/notes/queries";
 import {

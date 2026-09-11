@@ -4,12 +4,16 @@ import { ArrowUp } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils/cn";
 
 /** 이 높이 이상 내려갔을 때만 버튼을 노출한다. 짧은 노트에서는 필요 없는 UI다. */
 const SHOW_THRESHOLD_PX = 400;
 
 /**
- * 노트가 길어졌을 때 화면 크기와 관계없이 맨 위로 돌아가는 버튼.
+ * 긴 페이지에서 화면 크기와 관계없이 맨 위로 돌아가는 버튼.
+ *
+ * 노트 상세와 학습 가이드 문서가 함께 쓴다. 노출 조건을 바꾸고 싶은 화면은
+ * `className`으로 덧붙인다(예: sticky 차례가 있는 넓은 화면에서는 `lg:hidden`).
  *
  * 세로 위치를 `bottom-20`으로 올린 건 toast(`fixed bottom-4 right-4`)와 겹치지 않게 하기 위해서다.
  *
@@ -18,7 +22,7 @@ const SHOW_THRESHOLD_PX = 400;
  * 브라우저 경고를 띄우기 때문이다. `inert`는 포커스를 자동으로 해제하고
  * 탭 순서 제외·포인터 이벤트 차단까지 함께 처리한다.
  */
-export function ScrollToTopButton() {
+export function ScrollToTopButton({ className }: { className?: string }) {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
@@ -71,9 +75,11 @@ export function ScrollToTopButton() {
       aria-label="맨 위로 이동"
       inert={!isVisible}
       onClick={handleClick}
-      className={`fixed right-4 bottom-20 z-40 rounded-full shadow-md transition-opacity sm:right-6 ${
-        isVisible ? "opacity-100" : "opacity-0"
-      }`}
+      className={cn(
+        "fixed right-4 bottom-20 z-40 rounded-full shadow-md transition-opacity sm:right-6",
+        isVisible ? "opacity-100" : "opacity-0",
+        className,
+      )}
     >
       <ArrowUp aria-hidden="true" />
     </Button>
