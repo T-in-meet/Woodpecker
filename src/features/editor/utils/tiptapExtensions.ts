@@ -23,10 +23,6 @@ import {
 import TaskItem from "@tiptap/extension-task-item";
 import TaskList from "@tiptap/extension-task-list";
 import {
-  defaultMarkdownSerializer,
-  MarkdownSerializerState,
-} from "@tiptap/pm/markdown";
-import {
   type Attrs,
   type Fragment,
   type Mark as ProseMirrorMark,
@@ -48,6 +44,10 @@ import python from "highlight.js/lib/languages/python";
 import rust from "highlight.js/lib/languages/rust";
 import typescript from "highlight.js/lib/languages/typescript";
 import { createLowlight } from "lowlight";
+import {
+  defaultMarkdownSerializer,
+  MarkdownSerializerState,
+} from "prosemirror-markdown";
 import { Markdown } from "tiptap-markdown";
 
 import { slashCommandSuggestionRender } from "../components/SlashCommandMenu";

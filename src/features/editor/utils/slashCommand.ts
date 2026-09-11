@@ -92,7 +92,11 @@ export function filterSlashCommandItems(query: string): SlashCommandItem[] {
 
 const slashCommandPluginKey = new PluginKey("slashCommand");
 
-export const SlashCommand = Extension.create({
+export type SlashCommandOptions = {
+  suggestion: Omit<SuggestionOptions<SlashCommandItem>, "editor">;
+};
+
+export const SlashCommand = Extension.create<SlashCommandOptions>({
   name: "slashCommand",
 
   addOptions() {
@@ -100,22 +104,12 @@ export const SlashCommand = Extension.create({
       suggestion: {
         char: "/",
         pluginKey: slashCommandPluginKey,
-        command: ({
-          editor,
-          range,
-          props,
-        }: {
-          editor: Editor;
-          range: { from: number; to: number };
-          props: SlashCommandItem;
-        }) => {
+        command: ({ editor, range, props }) => {
           editor.chain().focus().deleteRange(range).run();
           props.command(editor);
         },
-        items: ({ query }: { query: string }): SlashCommandItem[] => {
-          return filterSlashCommandItems(query);
-        },
-      } satisfies Partial<SuggestionOptions>,
+        items: ({ query }) => filterSlashCommandItems(query),
+      },
     };
   },
 
