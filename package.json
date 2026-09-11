@@ -93,6 +93,9 @@
     "typescript": "^5",
     "vitest": "^4.1.0"
   },
+  "overrides": {
+    "browserslist": "^4.28.9"
+  },
   "lint-staged": {
     "*.{ts,tsx}": [
       "eslint --fix",
