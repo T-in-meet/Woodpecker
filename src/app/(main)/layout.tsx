@@ -58,13 +58,16 @@ export default async function MainLayout({
       {showLegalRevisionNotice ? (
         <aside
           aria-label="법적 문서 개정 안내"
-          className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm text-amber-950"
+          className="border-b border-amber-200 bg-amber-50 text-sm text-amber-950"
         >
-          이용약관과 개인정보 처리방침이 {formatLegalDate(LEGAL_EFFECTIVE_DATE)}
-          부터 개정됩니다. 시행 전에{" "}
-          <Link className="underline" href={ROUTES.AGREEMENTS}>
-            개정 내용을 확인하고 미리 동의하기
-          </Link>
+          {/* 모바일은 Header 컨테이너 패딩에 맞춰 왼쪽 정렬, md 이상은 가운데 정렬 */}
+          <p className="mx-auto max-w-5xl px-6 py-2 text-left md:text-center">
+            이용약관과 개인정보 처리방침이{" "}
+            {formatLegalDate(LEGAL_EFFECTIVE_DATE)}부터 개정됩니다. 시행 전에{" "}
+            <Link className="underline" href={ROUTES.AGREEMENTS}>
+              개정 내용을 확인하고 미리 동의하기
+            </Link>
+          </p>
         </aside>
       ) : null}
       <main className="flex-1 pb-16 md:pb-0">{children}</main>
