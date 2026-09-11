@@ -53,7 +53,7 @@ const QUIZ_TYPE_OPTIONS = [
 
 const TYPE_BUTTON_CLASS = cn(
   "flex min-h-12 cursor-pointer items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-left transition-colors sm:h-16 sm:gap-2.5 sm:py-2.5",
-  "hover:border-orange-200 hover:bg-orange-50 dark:hover:border-orange-900/40 dark:hover:bg-orange-950/20",
+  "hover:border-brand-border hover:bg-brand-subtle",
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
 );
 
@@ -131,7 +131,7 @@ export function QuizModal({
                   onClick={() => startQuiz(type)}
                   className={TYPE_BUTTON_CLASS}
                 >
-                  <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-orange-50 sm:size-9 sm:rounded-xl dark:bg-orange-950/20">
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-subtle sm:size-9 sm:rounded-xl">
                     <Icon aria-hidden="true" className="size-4 sm:size-5" />
                   </span>
                   <span className="min-w-0 text-sm font-medium sm:text-base">

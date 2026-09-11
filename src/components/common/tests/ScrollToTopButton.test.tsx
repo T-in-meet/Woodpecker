@@ -1,10 +1,8 @@
-import "./setup";
-
 import { fireEvent, render, screen } from "@testing-library/react";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ScrollToTopButton } from "../components/ScrollToTopButton";
+import { ScrollToTopButton } from "../ScrollToTopButton";
 
 // jsdom에는 matchMedia 구현이 없어 spyOn이 아니라 직접 주입한다.
 function setReducedMotion(matches: boolean) {

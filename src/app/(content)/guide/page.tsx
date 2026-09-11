@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { GuideBreadcrumb } from "@/features/guide/components/GuideBreadcrumb";
+import { GuideHero } from "@/features/guide/components/GuideHero";
 import {
   getPublishedGuideDocuments,
   GUIDE_AUTHOR,
@@ -53,77 +53,81 @@ export default function GuideIndexPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: jsonLdString }}
       />
-      <main className="mx-auto max-w-3xl px-6 py-14 text-prose-ko">
-        <GuideBreadcrumb
-          entries={[
+      <main>
+        <GuideHero
+          breadcrumb={[
             { name: "홈", href: ROUTES.HOME },
             { name: GUIDE_INDEX_CONTENT.breadcrumbLabel },
           ]}
-        />
-
-        <h1 className="mt-6 text-3xl font-bold tracking-tight sm:text-4xl">
-          {GUIDE_INDEX_CONTENT.heading}
-        </h1>
-        <div className="mt-6 space-y-4 text-muted-foreground">
-          {GUIDE_INDEX_CONTENT.intro.map((paragraph) => (
-            <p key={paragraph}>{paragraph}</p>
-          ))}
-        </div>
-
-        <ul className="mt-10 space-y-4">
-          {GUIDE_DOCUMENTS.map((document) => (
-            <li key={document.slug}>
-              {isPublishedGuide(document) ? (
-                <Link
-                  href={getGuideRoute(document.slug)}
-                  className="block cursor-pointer rounded-lg border p-5 transition-colors hover:bg-muted/50"
-                >
-                  <h2 className="font-semibold">{document.heading}</h2>
-                  <p className="mt-1.5 text-sm text-muted-foreground">
-                    {document.summary}
-                  </p>
-                </Link>
-              ) : (
-                /* 미공개 문서도 목록에는 남긴다. 어떤 글이 준비 중인지는 알리되,
-                   링크를 걸지 않아 빈 페이지로 들어가는 경로는 만들지 않는다. */
-                <div className="rounded-lg border border-dashed p-5">
-                  <h2 className="font-semibold text-muted-foreground">
-                    {document.heading}
-                  </h2>
-                  <p className="mt-1.5 text-sm text-muted-foreground">
-                    {document.summary}
-                  </p>
-                  <p className="mt-3 text-xs text-muted-foreground">준비 중</p>
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
-        <section
-          id="about"
-          aria-labelledby="guide-about-title"
-          className="mt-14 scroll-mt-24 border-t pt-8"
+          title={GUIDE_INDEX_CONTENT.heading}
         >
-          <h2 id="guide-about-title" className="text-xl font-semibold">
-            가이드를 만드는 사람들
-          </h2>
-          <p className="mt-4 leading-relaxed text-muted-foreground">
-            {GUIDE_AUTHOR.name}은 딱다구리에서 사용하는 학습 방법과 서비스의
-            동작을 설명하기 위해 이 가이드를 작성합니다. 연구를 인용한 글에서는
-            참고문헌으로 근거를 안내하며, 관련 가이드 링크를 통해서도 확인할 수
-            있습니다.
-          </p>
-          <p className="mt-3 text-sm text-muted-foreground">
-            내용에 대한 의견이나 수정 제안은{" "}
-            <a
-              href={`mailto:${LEGAL_CONTACT.email}`}
-              className="cursor-pointer underline underline-offset-4"
-            >
-              {LEGAL_CONTACT.email}
-            </a>
-            로 보내주세요.
-          </p>
-        </section>
+          간격 반복 · 복습 주기 · 백지 테스트, 세 편
+        </GuideHero>
+
+        <div className="mx-auto max-w-3xl px-6 py-14 text-prose-ko">
+          <div className="space-y-4 text-muted-foreground">
+            {GUIDE_INDEX_CONTENT.intro.map((paragraph) => (
+              <p key={paragraph}>{paragraph}</p>
+            ))}
+          </div>
+
+          <ul className="mt-10 space-y-4">
+            {GUIDE_DOCUMENTS.map((document) => (
+              <li key={document.slug}>
+                {isPublishedGuide(document) ? (
+                  <Link
+                    href={getGuideRoute(document.slug)}
+                    className="block cursor-pointer rounded-lg border bg-white p-5 transition-colors hover:border-brand-border hover:bg-brand-subtle"
+                  >
+                    <h2 className="font-semibold">{document.heading}</h2>
+                    <p className="mt-1.5 text-sm text-muted-foreground">
+                      {document.summary}
+                    </p>
+                  </Link>
+                ) : (
+                  /* 미공개 문서도 목록에는 남긴다. 어떤 글이 준비 중인지는 알리되,
+                   링크를 걸지 않아 빈 페이지로 들어가는 경로는 만들지 않는다. */
+                  <div className="rounded-lg border border-dashed bg-white p-5">
+                    <h2 className="font-semibold text-muted-foreground">
+                      {document.heading}
+                    </h2>
+                    <p className="mt-1.5 text-sm text-muted-foreground">
+                      {document.summary}
+                    </p>
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      준비 중
+                    </p>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+          <section
+            id="about"
+            aria-labelledby="guide-about-title"
+            className="mt-14 scroll-mt-24 border-t pt-8"
+          >
+            <h2 id="guide-about-title" className="text-xl font-semibold">
+              가이드를 만드는 사람들
+            </h2>
+            <p className="mt-4 leading-relaxed text-muted-foreground">
+              {GUIDE_AUTHOR.name}은 딱다구리에서 사용하는 학습 방법과 서비스의
+              동작을 설명하기 위해 이 가이드를 작성합니다. 연구를 인용한
+              글에서는 참고문헌으로 근거를 안내하며, 관련 가이드 링크를 통해서도
+              확인할 수 있습니다.
+            </p>
+            <p className="mt-3 text-sm text-muted-foreground">
+              내용에 대한 의견이나 수정 제안은{" "}
+              <a
+                href={`mailto:${LEGAL_CONTACT.email}`}
+                className="cursor-pointer underline underline-offset-4"
+              >
+                {LEGAL_CONTACT.email}
+              </a>
+              로 보내주세요.
+            </p>
+          </section>
+        </div>
       </main>
     </>
   );

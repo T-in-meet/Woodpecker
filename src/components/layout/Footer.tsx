@@ -52,7 +52,7 @@ export function Footer() {
       <div className="mx-auto max-w-5xl px-6 pb-6 pt-8 md:pt-10">
         <nav
           aria-label="푸터 링크"
-          className="grid grid-cols-2 gap-8 md:grid-cols-4"
+          className="grid grid-cols-2 gap-8 sm:grid-cols-3"
         >
           {footerLinks.map((group) => (
             <div key={group.title}>

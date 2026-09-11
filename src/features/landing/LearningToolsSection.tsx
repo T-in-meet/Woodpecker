@@ -8,7 +8,7 @@ import {
   MessageCircle,
   Sparkles,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils/cn";
@@ -16,23 +16,13 @@ import { cn } from "@/lib/utils/cn";
 import { learningToolsContent } from "./content";
 import { QuizPreview } from "./QuizPreview";
 
-// 스크롤이 멎었다고 볼 때까지 기다리는 시간.
 export const SETTLE_DELAY_MS = 150;
-// 스크롤이 시작조차 못한 채 타이머가 발화했을 때 다시 기다려보는 횟수.
-// 약 900ms까지 버티고, 그 뒤에는 어떤 이유로든 움직이지 않는 것으로 보고
-// 목표를 풀어 activeIndex가 영영 실제 위치와 어긋난 채 남지 않게 한다.
+
+// 스크롤 시작 지연은 기다리되, 목표가 영구히 남지 않도록 재시도를 제한한다.
 export const MAX_SETTLE_RETRIES = 6;
 
-/**
- * 관련 노트 목록(`RelatedNoteItem`)의 정적 재현.
- * 항목 테두리·아이콘·출처 배지(직접 연결 = blue, AI 추천 = violet)를
- * 실제 화면과 맞춘다. 실제 항목에 붙는 수정·삭제 버튼은 다이얼로그를
- * 끌고 오므로 랜딩에서는 뺐다.
- *
- * 실제 화면은 연결 이유를 팝오버 안에 숨기지만, 랜딩에서는 누를 수 없는
- * 컨트롤을 만들지 않으려고 이유를 항목 아래 한 줄로 펼쳐 둔다. 무엇이
- * 왜 묶였는지가 이 기능의 핵심이라 미리보기에서는 드러나는 편이 낫다.
- */
+export const AUTOPLAY_INTERVAL_MS = 6000;
+
 function RelatedNotesPreview() {
   const related = [
     {
@@ -58,7 +48,7 @@ function RelatedNotesPreview() {
         <FileText className="size-4 shrink-0" aria-hidden />
         고전적 조건형성
       </p>
-      <div className="ml-2 space-y-2 border-l border-orange-200 pl-4 dark:border-orange-900/40">
+      <div className="ml-2 space-y-2 border-l border-brand-border pl-4">
         {related.map((item) => (
           <div key={item.title} className="rounded-lg border bg-card px-3 py-2">
             <div className="flex min-w-0 items-center gap-3">
@@ -87,11 +77,6 @@ function RelatedNotesPreview() {
   );
 }
 
-/**
- * 노트 챗봇 대화(`NoteChatUserMessage`·`NoteChatAssistantMessage`·
- * `NoteChatReferenceNotes`)의 정적 재현. 답변 말풍선은 실제로 마크다운을
- * 렌더하지만 여기서는 문단 하나면 충분해 ReactMarkdown을 끌어오지 않는다.
- */
 function ChatPreview() {
   return (
     <div className="space-y-3 text-sm">
@@ -130,43 +115,82 @@ const previews = {
   chat: { icon: MessageCircle, content: <ChatPreview /> },
 };
 
+function wrapIndex(index: number, count: number) {
+  return ((index % count) + count) % count;
+}
+
+// 복제본 추가 후 위치 보정은 첫 페인트 전에 끝내야 한다.
+const useIsomorphicLayoutEffect =
+  typeof window === "undefined" ? useEffect : useLayoutEffect;
+
 /**
- * 학습 도구 카드를 가로로 넘기는 캐러셀.
- *
- * 3열 그리드로 두면 카드 높이가 가장 높은 것에 맞춰 늘어나는데, 카드마다
- * 담기는 내용의 양이 달라 짧은 카드 안쪽이 비어 보인다. 한 번에 한 장만
- * 보여주고 `items-start`로 각자 내용만큼만 차지하게 둔다.
- *
- * 한 번에 정확히 한 장만 보인다. 옆 카드를 걸쳐 보이게 하지 않는 대신 아래
- * 화살표와 점으로 더 있다는 걸 알린다. 스크롤러 자체를 max-w-2xl로 묶어 두는데,
- * 컨테이너 폭을 꽉 채우면 안쪽 미리보기가 가로로 늘어져 보이기 때문이다.
- *
- * CSS scroll-snap으로 만든다. 모바일 스와이프와 관성 스크롤을 브라우저가
- * 처리해주므로 섹션 하나 때문에 캐러셀 라이브러리를 들일 이유가 없다.
- * 자동 재생은 넣지 않는다 — 읽는 중에 넘어가면 방해가 된다.
+ * [마지막 복제, 원본 카드들, 첫 복제]로 순환하고, 정착 후 원본으로 순간 이동한다.
+ * activeIndex는 원본 인덱스, slot은 복제본을 포함한 위치다.
  */
 export function LearningToolsSection() {
   const tools = learningToolsContent.tools;
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
 
-  // 화살표·점이 누른 순간 목표로 잡은 장. smooth 스크롤이 끝나기 전에는 실제
-  // 위치가 아직 이전 장 근처라, onScroll이 계산한 값으로 activeIndex를 되돌리면
-  // 연속으로 눌러도 같은 장을 다시 목표로 잡게 된다. 목표를 여기 따로 들고
-  // 도착할 때까지 onScroll의 판정을 미룬다.
-  const pendingIndexRef = useRef<number | null>(null);
-  // 스크롤이 멎었는지 재는 타이머. 도착 좌표만으로 판정하지 않는 이유는,
-  // 사용자가 프로그램 스크롤 도중에 손으로 쓸어넘겨 애니메이션이 취소되면
-  // 목표에 영영 닿지 않아 목표가 풀리지 않기 때문이다.
+  // SSR 첫 화면에 마지막 카드가 보이지 않도록 복제본은 마운트 후 추가한다.
+  const [looped, setLooped] = useState(false);
+
+  useEffect(() => {
+    setLooped(true);
+  }, []);
+
+  const slotTools = looped
+    ? [...tools.slice(-1), ...tools, ...tools.slice(0, 1)]
+    : [...tools];
+
+  const firstSlot = looped ? 1 : 0;
+
+  const toSlot = (index: number) => index + firstSlot;
+  const toRealIndex = (slot: number) =>
+    wrapIndex(slot - firstSlot, tools.length);
+  const isCloneSlot = (slot: number) =>
+    looped && (slot === 0 || slot === tools.length + 1);
+
+  // 연속 클릭 중에는 중간 스크롤 위치 대신 목표 인덱스를 유지한다.
+  const pendingSlotRef = useRef<number | null>(null);
+
+  // 복제본으로 이동 중 받은 요청은 원본 복귀 후 처리한다.
+  const queuedSlotRef = useRef<number | null>(null);
+
+  // 원본 복귀 스크롤을 사용자 입력으로 오인해 자동 넘김을 끄지 않도록 한다.
+  const silentTargetRef = useRef<number | null>(null);
+
   const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // 목표를 건 뒤 scroll 이벤트를 한 번이라도 봤는지. 손으로 쓸어넘겨 취소한
-  // 경우와, 메인 스레드가 막혀 애니메이션이 아직 첫 프레임도 못 그린 경우를
-  // 가른다. 전자는 그대로 회수하고 후자는 조금 더 기다린다.
+
   const pendingScrollSeenRef = useRef(false);
   const settleRetriesRef = useRef(0);
-  // 카드 오프셋 캐시. 스크롤 이벤트마다 다시 재면 프레임마다 강제 리플로우가
-  // 일어나 스와이프가 끊긴다. 값이 달라지는 건 카드 폭이 바뀔 때뿐이다.
+
   const cardOffsetsRef = useRef<number[] | null>(null);
+
+  // 직접 조작한 뒤에는 자동 넘김을 재개하지 않는다.
+  const [autoplayStopped, setAutoplayStopped] = useState(false);
+  const [autoplayHovered, setAutoplayHovered] = useState(false);
+  const [autoplayFocused, setAutoplayFocused] = useState(false);
+  const [sectionVisible, setSectionVisible] = useState(false);
+  const [documentVisible, setDocumentVisible] = useState(true);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  useIsomorphicLayoutEffect(() => {
+    if (!looped) return;
+
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+
+    cardOffsetsRef.current = null;
+
+    const offset = getCardOffsets(scroller)[1];
+    if (offset === undefined) return;
+
+    silentTargetRef.current = offset;
+    scroller.scrollLeft = offset;
+  }, [looped]);
 
   useEffect(() => {
     const invalidateOffsets = () => {
@@ -180,10 +204,67 @@ export function LearningToolsSection() {
     };
   }, []);
 
-  // 카드의 offsetLeft는 스크롤러가 아니라 위치 지정 조상(여기서는 body) 기준이라
-  // 스크롤러의 왼쪽 여백만큼 통째로 밀린 값이 나온다. 그대로 scrollLeft와 비교하면
-  // 이동 목표와 활성 인덱스가 함께 어긋나므로 스크롤러 기준 좌표를 직접 구한다.
-  // 계산값이 현재 스크롤 위치와 무관하므로 한 번 재서 들고 있는다.
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = (matches: boolean) => setReducedMotion(matches);
+
+    sync(media.matches);
+
+    const handleChange = (event: MediaQueryListEvent) => sync(event.matches);
+    media.addEventListener("change", handleChange);
+    return () => media.removeEventListener("change", handleChange);
+  }, []);
+
+  useEffect(() => {
+    const syncDocumentVisibility = () => setDocumentVisible(!document.hidden);
+
+    syncDocumentVisibility();
+
+    document.addEventListener("visibilitychange", syncDocumentVisibility);
+    return () =>
+      document.removeEventListener("visibilitychange", syncDocumentVisibility);
+  }, []);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) =>
+        setSectionVisible(
+          Boolean(entry?.isIntersecting && entry.intersectionRatio >= 0.5),
+        ),
+      { threshold: 0.5 },
+    );
+
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, []);
+
+  // 타이머를 재설정하지 않고 최신 이동 함수를 참조한다.
+  const goToNextRef = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    if (autoplayStopped || autoplayHovered || autoplayFocused || reducedMotion)
+      return;
+    if (!sectionVisible || !documentVisible) return;
+
+    const timer = setTimeout(() => {
+      goToNextRef.current();
+    }, AUTOPLAY_INTERVAL_MS);
+
+    return () => clearTimeout(timer);
+  }, [
+    activeIndex,
+    autoplayFocused,
+    autoplayHovered,
+    autoplayStopped,
+    documentVisible,
+    reducedMotion,
+    sectionVisible,
+  ]);
+
+  // 스크롤 중 반복 측정을 피하도록 스크롤러 기준 좌표를 캐시한다.
   function getCardOffsets(scroller: HTMLElement) {
     if (cardOffsetsRef.current !== null) return cardOffsetsRef.current;
 
@@ -197,8 +278,7 @@ export function LearningToolsSection() {
     return offsets;
   }
 
-  // 카드 폭이 화면 폭에 따라 달라지므로 실제 자식의 위치로 현재 장을 판정한다.
-  function getNearestIndex(scroller: HTMLElement) {
+  function getNearestSlot(scroller: HTMLElement) {
     let nearest = 0;
     let nearestDistance = Number.POSITIVE_INFINITY;
 
@@ -213,18 +293,23 @@ export function LearningToolsSection() {
     return nearest;
   }
 
-  // 목표한 장에 이미 도착했는지. 스냅 위치가 소수점으로 떨어질 수 있어
-  // 1px 오차는 도착으로 본다.
-  function hasReachedIndex(scroller: HTMLElement, index: number) {
-    const offset = getCardOffsets(scroller)[index];
+  // 소수점 스냅 좌표를 고려해 1px 오차를 허용한다.
+  function hasReachedSlot(scroller: HTMLElement, slot: number) {
+    const offset = getCardOffsets(scroller)[slot];
     if (offset === undefined) return true;
 
     return Math.abs(scroller.scrollLeft - offset) <= 1;
   }
 
-  // 스크롤이 멎으면 목표를 풀고 실제 위치로 맞춘다. 목표한 장에 정상적으로
-  // 도착한 경우와 도중에 취소된 경우를 한 곳에서 회수한다. 누른 자리에 이미
-  // 있어 스크롤이 아예 일어나지 않는 경우도 있어 scrollToIndex에서도 건다.
+  function jumpToSlot(scroller: HTMLElement, slot: number) {
+    const offset = getCardOffsets(scroller)[slot];
+    if (offset === undefined) return;
+
+    silentTargetRef.current = offset;
+    scroller.scrollLeft = offset;
+  }
+
+  // 사용자 입력으로 이동이 취소돼도 목표를 해제할 수 있도록 정지 시간을 잰다.
   function scheduleSettle() {
     if (settleTimerRef.current !== null) clearTimeout(settleTimerRef.current);
 
@@ -233,30 +318,34 @@ export function LearningToolsSection() {
 
       const scroller = scrollerRef.current;
       if (!scroller) {
-        pendingIndexRef.current = null;
+        pendingSlotRef.current = null;
         return;
       }
 
-      // 목표를 건 스크롤이 아직 시작도 못했고 목표 좌표에도 닿지 않았다면
-      // 애니메이션이 첫 프레임을 못 그린 것이다(하이드레이션·이미지 디코딩으로
-      // 메인 스레드가 막힌 저사양 기기). 여기서 목표를 풀면 activeIndex가
-      // 직전 장으로 되돌아가 화살표를 두 번 눌러도 한 장만 넘어간다.
-      // 손으로 쓸어넘겨 취소한 경우는 scroll 이벤트를 이미 봤으므로 걸리지 않고,
-      // 끝내 움직이지 않는 경우를 위해 재시도 횟수를 제한한다.
-      const pendingIndex = pendingIndexRef.current;
+      // 아직 시작하지 않은 이동을 취소된 이동으로 판단하지 않는다.
+      const pendingSlot = pendingSlotRef.current;
       if (
-        pendingIndex !== null &&
+        pendingSlot !== null &&
         !pendingScrollSeenRef.current &&
         settleRetriesRef.current < MAX_SETTLE_RETRIES &&
-        !hasReachedIndex(scroller, pendingIndex)
+        !hasReachedSlot(scroller, pendingSlot)
       ) {
         settleRetriesRef.current += 1;
         scheduleSettle();
         return;
       }
 
-      pendingIndexRef.current = null;
-      setActiveIndex(getNearestIndex(scroller));
+      pendingSlotRef.current = null;
+
+      const slot = getNearestSlot(scroller);
+      const realIndex = toRealIndex(slot);
+      setActiveIndex(realIndex);
+
+      if (isCloneSlot(slot)) jumpToSlot(scroller, toSlot(realIndex));
+
+      const queuedSlot = queuedSlotRef.current;
+      queuedSlotRef.current = null;
+      if (queuedSlot !== null) scrollToSlot(queuedSlot);
     }, SETTLE_DELAY_MS);
   }
 
@@ -264,31 +353,43 @@ export function LearningToolsSection() {
     const scroller = scrollerRef.current;
     if (!scroller) return;
 
-    // 목표가 잡혀 있는 동안 지나가는 중간 위치는 무시한다.
-    if (pendingIndexRef.current !== null) {
+    const silentTarget = silentTargetRef.current;
+    if (silentTarget !== null) {
+      if (Math.abs(scroller.scrollLeft - silentTarget) <= 1) return;
+      silentTargetRef.current = null;
+    }
+
+    if (pendingSlotRef.current !== null) {
       pendingScrollSeenRef.current = true;
       scheduleSettle();
       return;
     }
 
-    setActiveIndex(getNearestIndex(scroller));
+    setActiveIndex(toRealIndex(getNearestSlot(scroller)));
+
+    scheduleSettle();
   }
 
-  function scrollToIndex(index: number) {
+  function scrollToSlot(slot: number) {
     const scroller = scrollerRef.current;
     if (!scroller) return;
 
-    // 양 끝 화살표는 disabled로 막지 않으므로(포커스를 잃지 않게) 범위를 벗어난
-    // 인덱스가 그대로 들어온다. 여기서 조용히 무시한다.
-    const offset = getCardOffsets(scroller)[index];
+    const offset = getCardOffsets(scroller)[slot];
     if (offset === undefined) return;
 
-    // 화살표는 activeIndex에서 다음 장을 고르므로, 목표를 먼저 확정하고
-    // activeIndex도 같이 옮겨야 애니메이션 도중에 다시 눌러도 한 장씩 넘어간다.
-    pendingIndexRef.current = index;
+    const pendingSlot = pendingSlotRef.current;
+    if (pendingSlot !== null && isCloneSlot(pendingSlot)) {
+      queuedSlotRef.current = slot;
+      setActiveIndex(toRealIndex(slot));
+      return;
+    }
+
+    // 연속 클릭이 다음 장을 가리키도록 실제 도착 전에 활성 인덱스를 갱신한다.
+    pendingSlotRef.current = slot;
     pendingScrollSeenRef.current = false;
     settleRetriesRef.current = 0;
-    setActiveIndex(index);
+    silentTargetRef.current = null;
+    setActiveIndex(toRealIndex(slot));
 
     const prefersReducedMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
@@ -299,15 +400,35 @@ export function LearningToolsSection() {
       behavior: prefersReducedMotion ? "auto" : "smooth",
     });
 
-    // 누른 자리에 이미 있어 scroll 이벤트가 아예 없는 경우를 회수하려고 건다.
+    // 이미 목표 위치라 scroll 이벤트가 발생하지 않는 경우도 회수한다.
     scheduleSettle();
+  }
+
+  function goToNext() {
+    const nextSlot = toSlot(activeIndex) + 1;
+    scrollToSlot(looped ? nextSlot : wrapIndex(nextSlot, tools.length));
+  }
+
+  goToNextRef.current = goToNext;
+
+  function goToSlot(slot: number) {
+    setAutoplayStopped(true);
+    scrollToSlot(looped ? slot : wrapIndex(slot, tools.length));
+  }
+
+  function goToNextByUser() {
+    setAutoplayStopped(true);
+    goToNext();
+  }
+
+  function stopAutoplayByInput() {
+    setAutoplayStopped(true);
+    queuedSlotRef.current = null;
   }
 
   return (
     <section aria-labelledby="learning-tools-heading">
       <div className="mx-auto max-w-6xl px-6 py-12 md:py-20">
-        {/* 앞 섹션의 "기록 → 알림 → 백지 테스트" 흐름과 이어주는 한 줄.
-            제목보다 작게 두어 위계는 제목이 갖게 한다. */}
         <p className="text-center text-sm font-medium text-muted-foreground">
           {learningToolsContent.connector}
         </p>
@@ -322,84 +443,125 @@ export function LearningToolsSection() {
         </p>
 
         <div
-          ref={scrollerRef}
-          onScroll={handleScroll}
-          className="mx-auto mt-10 flex w-full max-w-2xl snap-x snap-mandatory items-start gap-6 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          ref={viewportRef}
+          onMouseEnter={() => setAutoplayHovered(true)}
+          onMouseLeave={() => setAutoplayHovered(false)}
+          onFocusCapture={() => setAutoplayFocused(true)}
+          onBlurCapture={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) {
+              setAutoplayFocused(false);
+            }
+          }}
         >
-          {tools.map((tool) => {
-            const { icon: Icon, content } = previews[tool.id];
-            return (
-              <article
-                key={tool.id}
-                className="flex w-full shrink-0 snap-start flex-col rounded-2xl border bg-card p-5"
-              >
-                <p className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                  <Icon className="size-4" aria-hidden="true" />
-                  {tool.label}
-                </p>
-                <h3 className="mt-2 text-lg font-semibold tracking-tight">
-                  {tool.title}
-                </h3>
-                <p className="mb-4 mt-2 text-sm leading-relaxed text-muted-foreground">
-                  {tool.description}
-                </p>
-                <div className="rounded-xl border bg-muted/20 p-3">
-                  <p className="mb-2 text-xs text-muted-foreground">
-                    학습 예시
-                  </p>
-                  {content}
-                </div>
-              </article>
-            );
-          })}
-        </div>
-
-        <div className="mt-6 flex items-center justify-center gap-3">
-          {/* disabled를 쓰면 마지막 장으로 넘어가는 순간 포커스를 쥔 버튼이
-              비활성화돼 포커스가 body로 떨어진다. 표시만 aria-disabled로 하고
-              범위를 벗어난 클릭은 scrollToIndex에서 무시한다. */}
-          <button
-            type="button"
-            aria-label="이전 기능 보기"
-            aria-disabled={activeIndex === 0}
-            onClick={() => scrollToIndex(activeIndex - 1)}
-            className="inline-flex size-9 cursor-pointer items-center justify-center rounded-full border bg-background text-muted-foreground transition-colors hover:text-foreground aria-disabled:pointer-events-none aria-disabled:opacity-40"
+          <div
+            ref={scrollerRef}
+            onScroll={handleScroll}
+            onTouchStart={(event) => {
+              const touch = event.touches[0];
+              touchStartRef.current = touch
+                ? { x: touch.clientX, y: touch.clientY }
+                : null;
+            }}
+            onTouchMove={(event) => {
+              const start = touchStartRef.current;
+              const touch = event.touches[0];
+              if (!start || !touch) return;
+              const dx = Math.abs(touch.clientX - start.x);
+              const dy = Math.abs(touch.clientY - start.y);
+              if (dx > 8 && dx > dy) stopAutoplayByInput();
+            }}
+            onTouchEnd={() => {
+              touchStartRef.current = null;
+            }}
+            onTouchCancel={() => {
+              touchStartRef.current = null;
+            }}
+            onWheel={(event) => {
+              if (
+                event.deltaX !== 0 ||
+                (event.shiftKey && event.deltaY !== 0)
+              ) {
+                stopAutoplayByInput();
+              }
+            }}
+            onKeyDown={(event) => {
+              if (
+                ["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)
+              ) {
+                stopAutoplayByInput();
+              }
+            }}
+            // relative는 sr-only 입력이 페이지 전체에 가로 넘침을 만드는 것을 막는다.
+            className="relative mx-auto mt-10 flex w-full max-w-2xl snap-x snap-mandatory items-start gap-6 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           >
-            <ChevronLeft className="size-4" aria-hidden="true" />
-          </button>
-
-          {/* 점은 8px로 보이되 누르는 영역은 24px을 확보한다. 버튼 자체를 8px로
-              두면 모바일에서 겨냥하기 어렵다. 타깃끼리 겹치면 안 되므로 사이
-              간격은 버튼 크기로만 벌어지게 두고 gap은 주지 않는다. */}
-          <div className="flex items-center">
-            {tools.map((tool, index) => (
-              <button
-                key={tool.id}
-                type="button"
-                aria-label={`${tool.label} 보기`}
-                aria-current={index === activeIndex}
-                onClick={() => scrollToIndex(index)}
-                className="inline-flex size-6 cursor-pointer items-center justify-center rounded-full"
-              >
-                <span
-                  className={cn(
-                    "size-2 rounded-full transition-colors",
-                    index === activeIndex ? "bg-foreground" : "bg-border",
-                  )}
-                />
-              </button>
-            ))}
+            {slotTools.map((tool, slot) => {
+              const { icon: Icon, content } = previews[tool.id];
+              return (
+                <article
+                  key={`${tool.id}-${slot}`}
+                  aria-hidden={isCloneSlot(slot) || undefined}
+                  className="flex w-full shrink-0 snap-start flex-col rounded-2xl border bg-card p-5"
+                >
+                  <p className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                    <Icon className="size-4" aria-hidden="true" />
+                    {tool.label}
+                  </p>
+                  <h3 className="mt-2 text-lg font-semibold tracking-tight">
+                    {tool.title}
+                  </h3>
+                  <p className="mb-4 mt-2 text-sm leading-relaxed text-muted-foreground">
+                    {tool.description}
+                  </p>
+                  <div className="rounded-xl border bg-muted/20 p-3">
+                    <p className="mb-2 text-xs text-muted-foreground">
+                      학습 예시
+                    </p>
+                    {content}
+                  </div>
+                </article>
+              );
+            })}
           </div>
 
-          <button
-            type="button"
-            aria-label="다음 기능 보기"
-            aria-disabled={activeIndex === tools.length - 1}
-            onClick={() => scrollToIndex(activeIndex + 1)}
-            className="inline-flex size-9 cursor-pointer items-center justify-center rounded-full border bg-background text-muted-foreground transition-colors hover:text-foreground aria-disabled:pointer-events-none aria-disabled:opacity-40"
-          >
-            <ChevronRight className="size-4" aria-hidden="true" />
-          </button>
+          <div className="mt-6 flex items-center justify-center gap-3">
+            <button
+              type="button"
+              aria-label="이전 기능 보기"
+              onClick={() => goToSlot(toSlot(activeIndex) - 1)}
+              className="inline-flex size-9 cursor-pointer items-center justify-center rounded-full border bg-background text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <ChevronLeft className="size-4" aria-hidden="true" />
+            </button>
+
+            <div className="flex items-center">
+              {tools.map((tool, index) => (
+                <button
+                  key={tool.id}
+                  type="button"
+                  aria-label={`${tool.label} 보기`}
+                  aria-current={index === activeIndex}
+                  onClick={() => goToSlot(toSlot(index))}
+                  className="inline-flex size-6 cursor-pointer items-center justify-center rounded-full"
+                >
+                  <span
+                    className={cn(
+                      "size-2 rounded-full transition-colors",
+                      index === activeIndex ? "bg-foreground" : "bg-border",
+                    )}
+                  />
+                </button>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              aria-label="다음 기능 보기"
+              onClick={goToNextByUser}
+              className="inline-flex size-9 cursor-pointer items-center justify-center rounded-full border bg-background text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <ChevronRight className="size-4" aria-hidden="true" />
+            </button>
+          </div>
         </div>
       </div>
     </section>

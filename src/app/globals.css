@@ -57,6 +57,11 @@ html.no-scrollbar-gutter {
   --color-secondary: var(--secondary);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-subtle: var(--brand-subtle);
+  --color-brand-muted: var(--brand-muted);
+  --color-brand-border: var(--brand-border);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
@@ -89,11 +94,12 @@ html.no-scrollbar-gutter {
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.809 0.105 251.813);
-  --chart-2: oklch(0.623 0.214 259.815);
-  --chart-3: oklch(0.546 0.245 262.881);
-  --chart-4: oklch(0.488 0.243 264.376);
-  --chart-5: oklch(0.424 0.199 265.638);
+  /* 통계 히트맵·진행 바용 브랜드 램프: orange-100 → 700 */
+  --chart-1: oklch(0.954 0.038 75.164);
+  --chart-2: oklch(0.901 0.076 70.697);
+  --chart-3: oklch(0.837 0.128 66.29);
+  --chart-4: oklch(0.705 0.213 47.604);
+  --chart-5: oklch(0.553 0.195 38.402);
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
@@ -103,6 +109,16 @@ html.no-scrollbar-gutter {
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  /* 브랜드 액센트(Tailwind orange 계열). primary는 무채색으로 두고 배지·카드 틴트·
+     강조 텍스트처럼 브랜드 색이 필요한 곳에서만 쓴다.
+     brand: orange-700(흰 글자 대비 4.7:1, AA) / subtle: orange-50 / muted: orange-100 /
+     border: orange-200. subtle은 퀴즈 선택지 "선택됨" 같은 넓은 면, muted는 배지처럼
+     좁은 면에 써서 두 톤을 갈라둔다. */
+  --brand: oklch(0.553 0.195 38.402);
+  --brand-foreground: oklch(0.985 0 0);
+  --brand-subtle: oklch(0.98 0.016 73.684);
+  --brand-muted: oklch(0.954 0.038 75.164);
+  --brand-border: oklch(0.901 0.076 70.697);
   --header-height: 70px;
 }
 
@@ -125,11 +141,12 @@ html.no-scrollbar-gutter {
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.809 0.105 251.813);
-  --chart-2: oklch(0.623 0.214 259.815);
-  --chart-3: oklch(0.546 0.245 262.881);
-  --chart-4: oklch(0.488 0.243 264.376);
-  --chart-5: oklch(0.424 0.199 265.638);
+  /* orange-900 → 300 */
+  --chart-1: oklch(0.408 0.123 38.172);
+  --chart-2: oklch(0.47 0.157 37.304);
+  --chart-3: oklch(0.553 0.195 38.402);
+  --chart-4: oklch(0.705 0.213 47.604);
+  --chart-5: oklch(0.837 0.128 66.29);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);
@@ -138,6 +155,13 @@ html.no-scrollbar-gutter {
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  /* brand: orange-400 / foreground: orange-950 / subtle: orange-950 20% /
+     muted: orange-950 40% / border: orange-900 40% */
+  --brand: oklch(0.75 0.183 55.934);
+  --brand-foreground: oklch(0.266 0.079 36.259);
+  --brand-subtle: oklch(0.266 0.079 36.259 / 20%);
+  --brand-muted: oklch(0.266 0.079 36.259 / 40%);
+  --brand-border: oklch(0.408 0.123 38.172 / 40%);
 }
 
 @layer base {

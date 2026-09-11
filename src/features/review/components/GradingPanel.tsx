@@ -59,7 +59,7 @@ export function GradingPanel({
       <Card className="overflow-hidden">
         <CardHeader className="border-b border-border/60 pb-4">
           <CardTitle className="flex items-center gap-2 text-base">
-            <Sparkles aria-hidden className="size-4 text-orange-400" />
+            <Sparkles aria-hidden className="size-4 text-brand" />
             AI 채점 결과
           </CardTitle>
         </CardHeader>

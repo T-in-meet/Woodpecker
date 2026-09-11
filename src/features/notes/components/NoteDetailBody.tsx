@@ -93,9 +93,9 @@ export function NoteDetailBody({
             핵심 행동을 찾는 시선과 경쟁한다. */}
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs text-muted-foreground">
           {/* 오렌지는 이 앱에서 학습 활동/진행량을 뜻한다(마이페이지 학습 히트맵과 동일 계열).
-              복습 회차는 그 진행도라 같은 색을 쓴다. 단계를 orange-100으로 잡은 건
-              퀴즈 선택지의 "선택됨"(orange-50)과 톤을 갈라두기 위해서다. */}
-          <span className="rounded-full bg-orange-100 px-2 py-1 font-medium text-foreground dark:bg-orange-950/40">
+              복습 회차는 그 진행도라 같은 색을 쓴다. 단계를 brand-muted로 잡은 건
+              퀴즈 선택지의 "선택됨"(brand-subtle)과 톤을 갈라두기 위해서다. */}
+          <span className="rounded-full bg-brand-muted px-2 py-1 font-medium text-foreground">
             복습 {reviewRound}회
           </span>
           {isReviewCompleted && (

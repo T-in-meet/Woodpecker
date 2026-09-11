@@ -65,7 +65,7 @@ export function NoteListItem({
             >
               <HighlightedText text={note.title} query={query} />
             </span>
-            <span className="inline-flex shrink-0 items-center rounded bg-gray-100 px-2 py-0.5 text-xs font-medium">
+            <span className="inline-flex shrink-0 items-center rounded bg-muted px-2 py-0.5 text-xs font-medium">
               복습 {note.review_round}회
             </span>
           </div>

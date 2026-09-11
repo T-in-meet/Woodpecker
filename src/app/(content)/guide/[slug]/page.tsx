@@ -1,8 +1,12 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { GuideArticle } from "@/features/guide/components/GuideArticle";
-import { GuideBreadcrumb } from "@/features/guide/components/GuideBreadcrumb";
+import { ScrollToTopButton } from "@/components/common/ScrollToTopButton";
+import {
+  GuideArticle,
+  GuideArticleMeta,
+} from "@/features/guide/components/GuideArticle";
+import { GuideHero } from "@/features/guide/components/GuideHero";
 import {
   findGuideDocument,
   GUIDE_AUTHOR,
@@ -10,6 +14,7 @@ import {
   GUIDE_INDEX_CONTENT,
   isPublishedGuide,
 } from "@/features/guide/content";
+import { prepareGuideMarkdown } from "@/features/guide/lib/prepareGuideMarkdown";
 import { readGuideMarkdown } from "@/features/guide/lib/readGuideMarkdown";
 import { getGuideRoute, ROUTES } from "@/lib/constants/routes";
 import { SITE_NAME, SITE_URL } from "@/lib/constants/site";
@@ -63,7 +68,9 @@ export default async function GuideDocumentPage({ params }: GuidePageProps) {
     notFound();
   }
 
-  const markdown = await readGuideMarkdown(document.slug);
+  const { markdown, headings } = prepareGuideMarkdown(
+    await readGuideMarkdown(document.slug),
+  );
   const pageUrl = `${SITE_URL}${getGuideRoute(document.slug)}`;
   const jsonLdString = JSON.stringify(
     buildBreadcrumbJsonLd([
@@ -102,27 +109,33 @@ export default async function GuideDocumentPage({ params }: GuidePageProps) {
           }}
         />
       )}
-      <main className="mx-auto max-w-3xl px-6 py-14">
-        <GuideBreadcrumb
-          entries={[
-            { name: "홈", href: ROUTES.HOME },
-            {
-              name: GUIDE_INDEX_CONTENT.breadcrumbLabel,
-              href: ROUTES.GUIDE,
-            },
-            { name: document.heading },
-          ]}
-        />
+      <main>
+        <article>
+          <GuideHero
+            breadcrumb={[
+              { name: "홈", href: ROUTES.HOME },
+              {
+                name: GUIDE_INDEX_CONTENT.breadcrumbLabel,
+                href: ROUTES.GUIDE,
+              },
+              { name: document.heading },
+            ]}
+            title={document.heading}
+          >
+            <GuideArticleMeta
+              author={GUIDE_AUTHOR}
+              revisedOn={document.revisedOn}
+            />
+          </GuideHero>
 
-        <div className="mt-6">
-          <GuideArticle
-            heading={document.heading}
-            markdown={markdown}
-            author={GUIDE_AUTHOR}
-            revisedOn={document.revisedOn}
-          />
-        </div>
+          {/* 차례 열이 붙는 넓은 화면에서는 본문 폭을 지키려고 인덱스보다 한 단계 넓힌다. */}
+          <div className="mx-auto max-w-3xl px-6 py-14 lg:max-w-6xl">
+            <GuideArticle markdown={markdown} headings={headings} />
+          </div>
+        </article>
       </main>
+      {/* 넓은 화면에서는 sticky 차례가 이동을 맡으므로 좁은 화면에서만 띄운다. */}
+      <ScrollToTopButton className="lg:hidden" />
     </>
   );
 }

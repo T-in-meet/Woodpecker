@@ -11,7 +11,7 @@ type AdminBadgeProps = Omit<ComponentProps<typeof Badge>, "variant"> & {
 };
 
 const ADMIN_BADGE_COLOR_CLASS_NAME: Record<AdminBadgeColor, string> = {
-  gray: "border-gray-200 bg-gray-100 text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200",
+  gray: "border-border bg-secondary text-secondary-foreground",
   blue: "border-blue-200 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300",
   green:
     "border-green-200 bg-green-100 text-green-700 dark:border-green-800 dark:bg-green-950 dark:text-green-300",
