@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ROUTES } from "@/lib/constants/routes";
 
 type NoteChatConversationListErrorProps = {
+  isFetching: boolean;
   onRetry: () => void;
 };
 
@@ -15,10 +16,12 @@ type NoteChatConversationListErrorProps = {
  * 문제가 계속되는 경우 고객 센터 문의 화면을 새 탭에서 열 수 있습니다.
  *
  * @param props 컴포넌트 속성
+ * @param props.isFetching Conversation 목록 재조회 진행 여부
  * @param props.onRetry Conversation 목록을 다시 조회하는 함수
  * @returns Conversation 목록 조회 실패 UI
  */
 export function NoteChatConversationListError({
+  isFetching,
   onRetry,
 }: NoteChatConversationListErrorProps) {
   return (
@@ -34,8 +37,13 @@ export function NoteChatConversationListError({
           </p>
         </div>
 
-        <Button type="button" variant="outline" onClick={onRetry}>
-          다시 시도
+        <Button
+          type="button"
+          variant="outline"
+          disabled={isFetching}
+          onClick={onRetry}
+        >
+          {isFetching ? "다시 불러오는 중..." : "다시 시도"}
         </Button>
 
         <p className="flex items-center justify-center gap-1 text-xs text-muted-foreground">

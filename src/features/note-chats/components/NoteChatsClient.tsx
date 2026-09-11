@@ -29,7 +29,7 @@ export function NoteChatsClient() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
 
-  const { data, isLoading, isError, refetch } =
+  const { data, isLoading, isError, isFetching, refetch } =
     useNoteChatConversationListQuery({
       page,
       search,
@@ -77,7 +77,10 @@ export function NoteChatsClient() {
           {isLoading ? (
             <NoteChatConversationListSkeleton />
           ) : isError ? (
-            <NoteChatConversationListError onRetry={() => void refetch()} />
+            <NoteChatConversationListError
+              isFetching={isFetching}
+              onRetry={() => void refetch()}
+            />
           ) : (
             <NoteChatConversationList
               conversations={conversations}

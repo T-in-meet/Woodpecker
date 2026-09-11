@@ -8,6 +8,7 @@ const mockRefetch = vi.fn();
 let mockConversationListQuery = {
   data: undefined,
   isError: true,
+  isFetching: false,
   isLoading: false,
   refetch: mockRefetch,
 };
@@ -52,6 +53,7 @@ describe("NoteChatsClient", () => {
     mockConversationListQuery = {
       data: undefined,
       isError: true,
+      isFetching: false,
       isLoading: false,
       refetch: mockRefetch,
     };
@@ -73,5 +75,20 @@ describe("NoteChatsClient", () => {
     );
 
     expect(mockRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("대화 목록 재조회 중에는 다시 시도 버튼을 비활성화한다", () => {
+    mockConversationListQuery = {
+      ...mockConversationListQuery,
+      isFetching: true,
+    };
+
+    render(<NoteChatsClient />);
+
+    expect(
+      screen.getByRole("button", {
+        name: "다시 불러오는 중...",
+      }),
+    ).toBeDisabled();
   });
 });
