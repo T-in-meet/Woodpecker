@@ -8,40 +8,44 @@ import type { GuideHeading } from "../lib/prepareGuideMarkdown";
 import { GuideToc } from "./GuideToc";
 
 /**
- * 제목 children이 순수 텍스트일 때만 문자열로 되돌린다.
+ * 제목 children의 마지막 텍스트 조각에서 앵커 표기(`{#id}`)를 떼어낸다.
  *
- * 앵커 표기(`{#id}`)는 제목 전체가 한 덩어리 텍스트일 때만 의미가 있다. 링크나
- * 강조가 섞인 제목은 파싱하지 않고 그대로 그린다.
+ * `prepareGuideMarkdown`이 모든 H2 끝에 앵커를 붙이므로, 코드·강조·링크가 섞인
+ * 제목도 마지막 조각은 문자열이다. 그 조각만 파싱하고 나머지 children은 그대로
+ * 그려야 표기가 제목 글자로 새지 않는다. 마지막 조각이 문자열이 아니면 앵커가
+ * 없는 제목이다.
  */
-function toPlainText(children: ReactNode): string | null {
+function splitHeadingAnchor(children: ReactNode): {
+  content: ReactNode;
+  id?: string | undefined;
+} {
   if (typeof children === "string") {
-    return children;
+    const { text, id } = parseHeadingAnchor(children);
+    return { content: text, id };
   }
 
-  if (
-    Array.isArray(children) &&
-    children.every((child) => typeof child === "string")
-  ) {
-    return children.join("");
+  if (!Array.isArray(children) || children.length === 0) {
+    return { content: children };
   }
 
-  return null;
+  const last = children[children.length - 1];
+
+  if (typeof last !== "string") {
+    return { content: children };
+  }
+
+  const { text, id } = parseHeadingAnchor(last);
+  return { content: [...children.slice(0, -1), text], id };
 }
 
 function Heading2({ children }: { children?: ReactNode }) {
-  const raw = toPlainText(children);
-
-  if (raw === null) {
-    return <h2>{children}</h2>;
-  }
-
-  const { text, id } = parseHeadingAnchor(raw);
+  const { content, id } = splitHeadingAnchor(children);
 
   /* 헤더가 sticky top-0이라 앵커로 이동하면 제목이 그 아래로 들어간다.
      `/guide` 인덱스의 #about 섹션과 같은 값으로 스크롤 여백을 준다. */
   return (
     <h2 id={id} className={id ? "scroll-mt-24" : undefined}>
-      {text}
+      {content}
     </h2>
   );
 }

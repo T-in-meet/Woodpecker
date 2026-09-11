@@ -40,6 +40,29 @@ describe("prepareGuideMarkdown", () => {
     expect(markdown).not.toContain("## 코드 {#");
   });
 
+  it("CRLF 본문에서도 H2를 찾는다", () => {
+    const { markdown, headings } = prepareGuideMarkdown(
+      "도입\r\n\r\n## 첫 절\r\n\r\n본문\r\n",
+    );
+
+    expect(headings).toEqual([{ id: "section-1", text: "첫 절" }]);
+    expect(markdown).toContain("## 첫 절 {#section-1}");
+    expect(markdown).not.toContain("\r");
+  });
+
+  it("차례 텍스트에서는 인라인 마크다운 기호를 걷어낸다", () => {
+    const { markdown, headings } = prepareGuideMarkdown(
+      "## `review_round`는 **무엇**인가\n\n## [링크](/guide) 절 {#linked}\n",
+    );
+
+    expect(headings).toEqual([
+      { id: "section-1", text: "review_round는 무엇인가" },
+      { id: "linked", text: "링크 절" },
+    ]);
+    /* 본문 마크다운은 그대로 두고 앵커만 붙인다. */
+    expect(markdown).toContain("## `review_round`는 **무엇**인가 {#section-1}");
+  });
+
   it("H2가 없으면 원문을 그대로 돌려준다", () => {
     const source = "제목 없는 글\n\n문단.";
 

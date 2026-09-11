@@ -5,8 +5,9 @@ import GuideDocumentPage from "@/app/(content)/guide/[slug]/page";
 import sitemap from "@/app/sitemap";
 import { SITE_URL } from "@/lib/constants/site";
 
-import { GuideArticleMeta } from "../components/GuideArticle";
+import { GuideArticle, GuideArticleMeta } from "../components/GuideArticle";
 import { GUIDE_AUTHOR, GUIDE_DOCUMENTS, isPublishedGuide } from "../content";
+import { prepareGuideMarkdown } from "../lib/prepareGuideMarkdown";
 
 vi.mock("@/features/guide/content", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../content")>();
@@ -20,6 +21,30 @@ beforeEach(() => {
   );
 });
 afterEach(cleanup);
+
+describe("가이드 본문의 H2 앵커", () => {
+  it("인라인 마크다운이 섞인 제목에도 id를 달고 앵커 표기는 숨긴다", () => {
+    const { markdown, headings } = prepareGuideMarkdown(
+      "## `review_round`는 **무엇**인가\n\n본문\n",
+    );
+    render(<GuideArticle markdown={markdown} headings={headings} />);
+
+    const heading = screen.getByRole("heading", { level: 2 });
+    expect(heading).toHaveAttribute("id", "section-1");
+    expect(heading).toHaveTextContent("review_round는 무엇인가");
+    expect(heading).not.toHaveTextContent("{#");
+    expect(heading.querySelector("code")).toHaveTextContent("review_round");
+    expect(heading.querySelector("strong")).toHaveTextContent("무엇");
+  });
+
+  it("앵커가 없는 제목은 그대로 그린다", () => {
+    render(<GuideArticle markdown="## 평범한 절" headings={[]} />);
+
+    const heading = screen.getByRole("heading", { level: 2 });
+    expect(heading).not.toHaveAttribute("id");
+    expect(heading).toHaveTextContent("평범한 절");
+  });
+});
 
 describe("가이드 작성자와 날짜", () => {
   it("작성자 소개 링크와 수정일을 표시한다", () => {
