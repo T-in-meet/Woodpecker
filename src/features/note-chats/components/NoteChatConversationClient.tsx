@@ -100,7 +100,7 @@ export function NoteChatConversationClient({
 
   const { containerRef: conversationContainerRef, height: conversationHeight } =
     useViewportRemainingHeight<HTMLDivElement>({
-      recalculationKey: detail,
+      recalculationKey: detail ?? conversationQuery.status,
     });
 
   const {
