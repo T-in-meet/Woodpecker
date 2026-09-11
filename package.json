@@ -92,7 +92,7 @@
     "supabase": "^2.109.1",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vitest": "^4.1.0"
+    "vitest": "^4.1.11"
   },
   "overrides": {
     "browserslist": "^4.28.9",
