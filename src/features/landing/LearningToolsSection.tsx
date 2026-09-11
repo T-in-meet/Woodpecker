@@ -207,6 +207,8 @@ export function LearningToolsSection() {
   // 연속으로 눌러도 같은 장을 다시 목표로 잡게 된다. 목표를 여기 따로 들고
   // 도착할 때까지 onScroll의 판정을 미룬다.
   const pendingSlotRef = useRef<number | null>(null);
+  // 복제본으로 이동 중 받은 요청은 원본으로 돌아온 뒤 이어서 처리한다.
+  const queuedSlotRef = useRef<number | null>(null);
   // 복제본에서 진짜 카드로 자리를 옮기며 만든 스크롤의 도착 좌표. 이 스크롤은
   // 사용자 조작이 아니므로 자동 넘김을 끄지 않아야 한다.
   const silentTargetRef = useRef<number | null>(null);
@@ -225,13 +227,14 @@ export function LearningToolsSection() {
 
   // 자동 넘김을 멈추는 조건. 서로 다른 이벤트에서 오므로 따로 들고 있는다.
   // - stopped: 사용자가 직접 넘겼다. 한 번 멈추면 다시 켜지 않는다.
-  // - hovered: 포인터가 올라가 있거나 안쪽 컨트롤에 포커스가 있다.
+  // - hovered / focused: 포인터와 포커스가 각각 영역 안에 있다.
   // - sectionVisible: 섹션이 화면에 들어와 있다. 랜딩 한가운데 있는 섹션이라
   //   보이지 않는 동안 다 넘어가 버리면 자동 넘김이 아무것도 알리지 못한다.
   // - documentVisible: 다른 탭에 가 있는 동안에는 돌릴 이유가 없다.
   // - reducedMotion: 움직임을 줄여달라는 설정이면 아예 켜지 않는다.
   const [autoplayStopped, setAutoplayStopped] = useState(false);
   const [autoplayHovered, setAutoplayHovered] = useState(false);
+  const [autoplayFocused, setAutoplayFocused] = useState(false);
   const [sectionVisible, setSectionVisible] = useState(false);
   const [documentVisible, setDocumentVisible] = useState(true);
   const [reducedMotion, setReducedMotion] = useState(false);
@@ -295,7 +298,10 @@ export function LearningToolsSection() {
     // 절반 이상 보일 때만 재생한다. 화면 끝에 살짝 걸친 상태에서 넘어가면
     // 사용자는 넘어간 줄도 모른 채 장을 잃는다.
     const observer = new IntersectionObserver(
-      ([entry]) => setSectionVisible(entry?.isIntersecting ?? false),
+      ([entry]) =>
+        setSectionVisible(
+          Boolean(entry?.isIntersecting && entry.intersectionRatio >= 0.5),
+        ),
       { threshold: 0.5 },
     );
 
@@ -311,7 +317,8 @@ export function LearningToolsSection() {
   // 자동 넘김은 활성 장이 바뀔 때마다 타이머를 새로 건다. setInterval로 두면
   // smooth 스크롤에 걸린 시간만큼 다음 장이 머무는 시간이 짧아진다.
   useEffect(() => {
-    if (autoplayStopped || autoplayHovered || reducedMotion) return;
+    if (autoplayStopped || autoplayHovered || autoplayFocused || reducedMotion)
+      return;
     if (!sectionVisible || !documentVisible) return;
 
     const timer = setTimeout(() => {
@@ -321,6 +328,7 @@ export function LearningToolsSection() {
     return () => clearTimeout(timer);
   }, [
     activeIndex,
+    autoplayFocused,
     autoplayHovered,
     autoplayStopped,
     documentVisible,
@@ -328,9 +336,7 @@ export function LearningToolsSection() {
     sectionVisible,
   ]);
 
-  // 카드의 offsetLeft는 스크롤러가 아니라 위치 지정 조상(여기서는 body) 기준이라
-  // 스크롤러의 왼쪽 여백만큼 통째로 밀린 값이 나온다. 그대로 scrollLeft와 비교하면
-  // 이동 목표와 활성 인덱스가 함께 어긋나므로 스크롤러 기준 좌표를 직접 구한다.
+  // 위치 지정 조상의 변경에 영향받지 않도록 스크롤러 기준 좌표를 직접 구한다.
   // 계산값이 현재 스크롤 위치와 무관하므로 한 번 재서 들고 있는다.
   function getCardOffsets(scroller: HTMLElement) {
     if (cardOffsetsRef.current !== null) return cardOffsetsRef.current;
@@ -422,6 +428,10 @@ export function LearningToolsSection() {
       // 복제본 위에 멎었으면 똑같은 그림인 진짜 카드로 자리를 옮긴다. 다음
       // 이동이 다시 캐러셀 안쪽에서 시작해야 순환이 이어진다.
       if (isCloneSlot(slot)) jumpToSlot(scroller, toSlot(realIndex));
+
+      const queuedSlot = queuedSlotRef.current;
+      queuedSlotRef.current = null;
+      if (queuedSlot !== null) scrollToSlot(queuedSlot);
     }, SETTLE_DELAY_MS);
   }
 
@@ -461,6 +471,13 @@ export function LearningToolsSection() {
     // 범위를 벗어난 슬롯은 무시한다.
     const offset = getCardOffsets(scroller)[slot];
     if (offset === undefined) return;
+
+    const pendingSlot = pendingSlotRef.current;
+    if (pendingSlot !== null && isCloneSlot(pendingSlot)) {
+      queuedSlotRef.current = slot;
+      setActiveIndex(toRealIndex(slot));
+      return;
+    }
 
     // 화살표는 activeIndex에서 다음 장을 고르므로, 목표를 먼저 확정하고
     // activeIndex도 같이 옮겨야 애니메이션 도중에 다시 눌러도 한 장씩 넘어간다.
@@ -504,6 +521,11 @@ export function LearningToolsSection() {
     goToNext();
   }
 
+  function stopAutoplayByInput() {
+    setAutoplayStopped(true);
+    queuedSlotRef.current = null;
+  }
+
   return (
     <section aria-labelledby="learning-tools-heading">
       <div className="mx-auto max-w-6xl px-6 py-12 md:py-20">
@@ -529,13 +551,22 @@ export function LearningToolsSection() {
           ref={viewportRef}
           onMouseEnter={() => setAutoplayHovered(true)}
           onMouseLeave={() => setAutoplayHovered(false)}
-          onFocusCapture={() => setAutoplayHovered(true)}
-          onBlurCapture={() => setAutoplayHovered(false)}
+          onFocusCapture={() => setAutoplayFocused(true)}
+          onBlurCapture={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) {
+              setAutoplayFocused(false);
+            }
+          }}
         >
           <div
             ref={scrollerRef}
             onScroll={handleScroll}
-            className="mx-auto mt-10 flex w-full max-w-2xl snap-x snap-mandatory items-start gap-6 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            onPointerDown={stopAutoplayByInput}
+            onTouchStart={stopAutoplayByInput}
+            onWheel={stopAutoplayByInput}
+            onKeyDown={stopAutoplayByInput}
+            // sr-only 입력의 절대 위치도 이 스크롤 영역 안에서 계산한다.
+            className="relative mx-auto mt-10 flex w-full max-w-2xl snap-x snap-mandatory items-start gap-6 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           >
             {slotTools.map((tool, slot) => {
               const { icon: Icon, content } = previews[tool.id];

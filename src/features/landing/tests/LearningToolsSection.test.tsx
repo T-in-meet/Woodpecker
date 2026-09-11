@@ -26,7 +26,10 @@ let originalGetBoundingClientRect: typeof Element.prototype.getBoundingClientRec
 
 const tools = learningToolsContent.tools;
 
-type IntersectionEntryStub = { isIntersecting: boolean };
+type IntersectionEntryStub = {
+  isIntersecting: boolean;
+  intersectionRatio: number;
+};
 
 // 자동 넘김은 섹션이 화면에 보일 때만 돈다. jsdom에는 IntersectionObserver가
 // 없으므로 콜백을 붙잡아 두고 테스트가 직접 발화시킨다. 발화시키지 않으면
@@ -155,7 +158,7 @@ function mountCarousel({ animateScroll = true } = {}): Carousel {
     },
     enterViewport: () => {
       act(() => {
-        fireIntersection?.([{ isIntersecting: true }]);
+        fireIntersection?.([{ isIntersecting: true, intersectionRatio: 1 }]);
       });
     },
     // React는 onMouseEnter/onMouseLeave를 mouseover/mouseout 위임으로 만든다.
@@ -256,6 +259,86 @@ describe("LearningToolsSection 캐러셀", () => {
     setDocumentHidden(false);
     Element.prototype.getBoundingClientRect = originalGetBoundingClientRect;
   });
+
+  it("포커스가 남아 있으면 마우스가 나가도 자동 넘김을 멈춘다", () => {
+    const carousel = mountCarousel();
+    carousel.enterViewport();
+    carousel.hover();
+    const next = screen.getByRole("button", { name: "다음 기능 보기" });
+    fireEvent.focus(next);
+    carousel.unhover();
+    carousel.advance();
+    expect(carousel.scrollTo).not.toHaveBeenCalled();
+    fireEvent.blur(next, { relatedTarget: document.body });
+    carousel.advance();
+    expect(carousel.activeDotIndex()).toBe(1);
+  });
+
+  it("마우스가 남아 있으면 포커스가 나가도 자동 넘김을 멈춘다", () => {
+    const carousel = mountCarousel();
+    carousel.enterViewport();
+    carousel.hover();
+    const next = screen.getByRole("button", { name: "다음 기능 보기" });
+    fireEvent.focus(next);
+    fireEvent.blur(next, { relatedTarget: document.body });
+    carousel.advance();
+    expect(carousel.scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("화면에 절반 미만으로 보이면 자동 넘김을 멈춘다", () => {
+    const carousel = mountCarousel();
+    for (const ratio of [0.1, 0.5, 0.4]) {
+      act(() => {
+        fireIntersection?.([
+          { isIntersecting: true, intersectionRatio: ratio },
+        ]);
+      });
+      carousel.advance();
+      expect(carousel.scrollTo).toHaveBeenCalledTimes(ratio === 0.1 ? 0 : 1);
+    }
+  });
+
+  it.each(["pointerDown", "touchStart", "wheel"] as const)(
+    "자동 이동 중 %s 입력을 받으면 자동 넘김을 다시 시작하지 않는다",
+    (event) => {
+      const carousel = mountCarousel();
+      carousel.enterViewport();
+      carousel.advance();
+      const scroller = document.querySelector("article")!.parentElement!;
+      fireEvent[event](scroller);
+      carousel.swipeTo(realLeft(0));
+      carousel.settle();
+      carousel.scrollTo.mockClear();
+      carousel.advance(AUTOPLAY_INTERVAL_MS * 3);
+      expect(carousel.scrollTo).not.toHaveBeenCalled();
+      expect(carousel.activeDotIndex()).toBe(0);
+    },
+  );
+
+  it.each(["next", "prev"] as const)(
+    "%s 순환 중 연속 클릭은 복제본 정착 뒤 이어서 이동한다",
+    (direction) => {
+      const carousel = mountCarousel();
+      if (direction === "next") {
+        carousel.clickNext();
+        carousel.clickNext();
+        carousel.settle();
+      }
+      carousel.scrollTo.mockClear();
+      const click =
+        direction === "next" ? carousel.clickNext : carousel.clickPrev;
+      click();
+      click();
+      expect(carousel.scrollTo).toHaveBeenCalledTimes(1);
+      carousel.settle();
+      expect(carousel.scrollTo).toHaveBeenCalledTimes(2);
+      expect(carousel.scrollTo).toHaveBeenLastCalledWith(
+        expect.objectContaining({ left: realLeft(1) }),
+      );
+      carousel.settle();
+      expect(carousel.activeDotIndex()).toBe(1);
+    },
+  );
 
   it("앞뒤에 복제 카드를 하나씩 덧대고 보조기기에서 숨긴다", () => {
     mountCarousel();
