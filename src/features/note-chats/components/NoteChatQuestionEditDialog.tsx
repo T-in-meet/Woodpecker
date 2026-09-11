@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 
+import { useNoteChatDialogVisualViewport } from "../hooks/use-note-chat-dialog-visual-viewport";
 import {
   type UpdateNoteChatUserMessageInput,
   updateNoteChatUserMessageInputSchema,
@@ -55,6 +56,8 @@ export function NoteChatQuestionEditDialog({
   onClose,
   onUpdateQuestion,
 }: NoteChatQuestionEditDialogProps) {
+  const dialogViewportStyle = useNoteChatDialogVisualViewport(message !== null);
+
   const form = useForm<UpdateNoteChatUserMessageInput>({
     resolver: zodResolver(updateNoteChatUserMessageInputSchema),
     defaultValues: {
@@ -130,7 +133,17 @@ export function NoteChatQuestionEditDialog({
         }
       }}
     >
-      <DialogContent>
+      <DialogContent
+        className="pointer-coarse:overflow-y-auto"
+        style={
+          dialogViewportStyle
+            ? {
+                top: dialogViewportStyle.top,
+                maxHeight: dialogViewportStyle.maxHeight,
+              }
+            : undefined
+        }
+      >
         <DialogHeader>
           <DialogTitle>질문 수정</DialogTitle>
 

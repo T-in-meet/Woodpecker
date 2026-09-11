@@ -21,6 +21,7 @@ import { Label } from "@/components/ui/label";
 import { getNoteChatConversationRoute } from "@/lib/constants/routes";
 
 import { useCreateNoteChatConversationMutation } from "../hooks/use-create-note-chat-conversation-mutation";
+import { useNoteChatDialogVisualViewport } from "../hooks/use-note-chat-dialog-visual-viewport";
 import {
   type CreateNoteChatConversationInput,
   createNoteChatConversationInputSchema,
@@ -34,6 +35,7 @@ export function NoteChatCreateDialog() {
   const [open, setOpen] = useState(false);
 
   const createMutation = useCreateNoteChatConversationMutation();
+  const dialogViewportStyle = useNoteChatDialogVisualViewport(open);
 
   const form = useForm<CreateNoteChatConversationInput>({
     resolver: zodResolver(createNoteChatConversationInputSchema),
@@ -76,7 +78,17 @@ export function NoteChatCreateDialog() {
         </Button>
       </DialogTrigger>
 
-      <DialogContent>
+      <DialogContent
+        className="pointer-coarse:overflow-y-auto"
+        style={
+          dialogViewportStyle
+            ? {
+                top: dialogViewportStyle.top,
+                maxHeight: dialogViewportStyle.maxHeight,
+              }
+            : undefined
+        }
+      >
         <DialogHeader>
           <DialogTitle>새 대화</DialogTitle>
           <DialogDescription>

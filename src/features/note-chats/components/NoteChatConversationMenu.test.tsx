@@ -44,9 +44,16 @@ vi.mock("../hooks/use-delete-note-chat-conversation-mutation", () => ({
   }),
 }));
 
+function setCoarsePointer(matches: boolean) {
+  window.matchMedia = vi.fn(() => ({
+    matches,
+  })) as unknown as typeof window.matchMedia;
+}
+
 describe("NoteChatConversationMenu", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    setCoarsePointer(false);
 
     updateMutateAsyncMock.mockResolvedValue({
       id: CONVERSATION_ID,
@@ -67,6 +74,7 @@ describe("NoteChatConversationMenu", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "대화 메뉴" }));
+
     await user.click(
       await screen.findByRole("menuitem", { name: "제목 수정" }),
     );

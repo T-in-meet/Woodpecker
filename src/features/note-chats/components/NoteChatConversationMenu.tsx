@@ -36,6 +36,7 @@ import { Label } from "@/components/ui/label";
 import { ROUTES } from "@/lib/constants/routes";
 
 import { useDeleteNoteChatConversationMutation } from "../hooks/use-delete-note-chat-conversation-mutation";
+import { useNoteChatDialogVisualViewport } from "../hooks/use-note-chat-dialog-visual-viewport";
 import { useUpdateNoteChatConversationTitleMutation } from "../hooks/use-update-note-chat-conversation-title-mutation";
 import {
   type UpdateNoteChatConversationTitleInput,
@@ -61,6 +62,7 @@ export function NoteChatConversationMenu({
 
   const updateMutation = useUpdateNoteChatConversationTitleMutation();
   const deleteMutation = useDeleteNoteChatConversationMutation();
+  const dialogViewportStyle = useNoteChatDialogVisualViewport(editOpen);
 
   const form = useForm<UpdateNoteChatConversationTitleInput>({
     resolver: zodResolver(updateNoteChatConversationTitleInputSchema),
@@ -133,7 +135,17 @@ export function NoteChatConversationMenu({
       </DropdownMenu>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent>
+        <DialogContent
+          className="pointer-coarse:overflow-y-auto"
+          style={
+            dialogViewportStyle
+              ? {
+                  top: dialogViewportStyle.top,
+                  maxHeight: dialogViewportStyle.maxHeight,
+                }
+              : undefined
+          }
+        >
           <DialogHeader>
             <DialogTitle>대화 제목 수정</DialogTitle>
             <DialogDescription>

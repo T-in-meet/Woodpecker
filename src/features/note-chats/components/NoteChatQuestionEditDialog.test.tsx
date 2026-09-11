@@ -1,12 +1,22 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NoteChatQuestionEditDialog } from "./NoteChatQuestionEditDialog";
 
 const MESSAGE_ID = "00000000-0000-4000-8000-000000000002";
 
+function setCoarsePointer(matches: boolean) {
+  window.matchMedia = vi.fn(() => ({
+    matches,
+  })) as unknown as typeof window.matchMedia;
+}
+
 describe("NoteChatQuestionEditDialog", () => {
+  beforeEach(() => {
+    setCoarsePointer(false);
+  });
+
   it("수정한 질문을 RHF 검증 후 기존 질문 수정 흐름에 전달한다", async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
