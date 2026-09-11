@@ -132,6 +132,7 @@ function mountCarousel({ animateScroll = true } = {}): Carousel {
     unmount,
     swipeTo: (left: number) => {
       act(() => {
+        fireEvent.wheel(scroller, { deltaX: left - scrollLeft });
         scrollLeft = left;
         scroller.dispatchEvent(new Event("scroll"));
       });
@@ -298,15 +299,27 @@ describe("LearningToolsSection 캐러셀", () => {
     }
   });
 
-  it.each(["pointerDown", "touchStart", "wheel"] as const)(
+  it.each(["touch", "wheel"] as const)(
     "자동 이동 중 %s 입력을 받으면 자동 넘김을 다시 시작하지 않는다",
     (event) => {
       const carousel = mountCarousel();
       carousel.enterViewport();
       carousel.advance();
       const scroller = document.querySelector("article")!.parentElement!;
-      fireEvent[event](scroller);
-      carousel.swipeTo(realLeft(0));
+      if (event === "touch") {
+        fireEvent.touchStart(scroller, {
+          touches: [{ clientX: 100, clientY: 100 }],
+        });
+        fireEvent.touchMove(scroller, {
+          touches: [{ clientX: 50, clientY: 100 }],
+        });
+      } else {
+        fireEvent.wheel(scroller, { deltaX: 100 });
+      }
+      act(() => {
+        scroller.scrollLeft = realLeft(0);
+        fireEvent.scroll(scroller);
+      });
       carousel.settle();
       carousel.scrollTo.mockClear();
       carousel.advance(AUTOPLAY_INTERVAL_MS * 3);
@@ -337,6 +350,37 @@ describe("LearningToolsSection 캐러셀", () => {
       );
       carousel.settle();
       expect(carousel.activeDotIndex()).toBe(1);
+    },
+  );
+
+  it.each(["wheel", "touch", "resize"] as const)(
+    "%s로 세로 이동하거나 레이아웃이 바뀌어도 자동 넘김을 유지한다",
+    (event) => {
+      const carousel = mountCarousel();
+      carousel.enterViewport();
+      const scroller = document.querySelector("article")!.parentElement!;
+      if (event === "wheel")
+        fireEvent.wheel(scroller, { deltaX: 0, deltaY: 100 });
+      if (event === "touch") {
+        fireEvent.touchStart(scroller, {
+          touches: [{ clientX: 100, clientY: 100 }],
+        });
+        fireEvent.touchMove(scroller, {
+          touches: [{ clientX: 100, clientY: 40 }],
+        });
+        fireEvent.touchEnd(scroller);
+      }
+      if (event === "resize") {
+        carousel.setCardWidth(400);
+        act(() => {
+          scroller.scrollLeft = 400;
+          fireEvent.scroll(scroller);
+        });
+        carousel.settle();
+      }
+      carousel.advance();
+      expect(carousel.activeDotIndex()).toBe(1);
+      expect(carousel.scrollTo).toHaveBeenCalledTimes(1);
     },
   );
 

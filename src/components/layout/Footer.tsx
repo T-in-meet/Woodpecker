@@ -50,9 +50,6 @@ export function Footer() {
   return (
     <footer className="border-t bg-muted/30">
       <div className="mx-auto max-w-5xl px-6 pb-6 pt-8 md:pt-10">
-        {/* 열 수는 링크 그룹 수에 맞춘다. 4열로 두면 그룹이 셋뿐이라 마지막
-            한 칸이 비고 링크가 왼쪽으로 쏠린다. 그룹을 늘리거나 줄이면 이
-            값도 함께 고친다. */}
         <nav
           aria-label="푸터 링크"
           className="grid grid-cols-2 gap-8 sm:grid-cols-3"

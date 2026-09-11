@@ -16,26 +16,13 @@ import { cn } from "@/lib/utils/cn";
 import { learningToolsContent } from "./content";
 import { QuizPreview } from "./QuizPreview";
 
-// 스크롤이 멎었다고 볼 때까지 기다리는 시간.
 export const SETTLE_DELAY_MS = 150;
-// 스크롤이 시작조차 못한 채 타이머가 발화했을 때 다시 기다려보는 횟수.
-// 약 900ms까지 버티고, 그 뒤에는 어떤 이유로든 움직이지 않는 것으로 보고
-// 목표를 풀어 activeIndex가 영영 실제 위치와 어긋난 채 남지 않게 한다.
+
+// 스크롤 시작 지연은 기다리되, 목표가 영구히 남지 않도록 재시도를 제한한다.
 export const MAX_SETTLE_RETRIES = 6;
-// 자동 넘김에서 한 장이 머무는 시간. 카드마다 제목·설명·학습 예시 미리보기까지
-// 들어 있어 훑어보는 데 이 정도는 필요하다.
+
 export const AUTOPLAY_INTERVAL_MS = 6000;
 
-/**
- * 관련 노트 목록(`RelatedNoteItem`)의 정적 재현.
- * 항목 테두리·아이콘·출처 배지(직접 연결 = blue, AI 추천 = violet)를
- * 실제 화면과 맞춘다. 실제 항목에 붙는 수정·삭제 버튼은 다이얼로그를
- * 끌고 오므로 랜딩에서는 뺐다.
- *
- * 실제 화면은 연결 이유를 팝오버 안에 숨기지만, 랜딩에서는 누를 수 없는
- * 컨트롤을 만들지 않으려고 이유를 항목 아래 한 줄로 펼쳐 둔다. 무엇이
- * 왜 묶였는지가 이 기능의 핵심이라 미리보기에서는 드러나는 편이 낫다.
- */
 function RelatedNotesPreview() {
   const related = [
     {
@@ -90,11 +77,6 @@ function RelatedNotesPreview() {
   );
 }
 
-/**
- * 노트 챗봇 대화(`NoteChatUserMessage`·`NoteChatAssistantMessage`·
- * `NoteChatReferenceNotes`)의 정적 재현. 답변 말풍선은 실제로 마크다운을
- * 렌더하지만 여기서는 문단 하나면 충분해 ReactMarkdown을 끌어오지 않는다.
- */
 function ChatPreview() {
   return (
     <div className="space-y-3 text-sm">
@@ -133,67 +115,34 @@ const previews = {
   chat: { icon: MessageCircle, content: <ChatPreview /> },
 };
 
-/** 인덱스를 0..count-1로 감는다. */
 function wrapIndex(index: number, count: number) {
   return ((index % count) + count) % count;
 }
 
-/**
- * useLayoutEffect는 서버 렌더에서 경고를 낸다. 복제본을 붙인 직후 스크롤
- * 위치를 옮기는 일은 페인트 전에 끝나야 하므로 클라이언트에서만 layout 훅을
- * 쓴다.
- */
+// 복제본 추가 후 위치 보정은 첫 페인트 전에 끝내야 한다.
 const useIsomorphicLayoutEffect =
   typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 /**
- * 학습 도구 카드를 가로로 넘기는 캐러셀.
- *
- * 3열 그리드로 두면 카드 높이가 가장 높은 것에 맞춰 늘어나는데, 카드마다
- * 담기는 내용의 양이 달라 짧은 카드 안쪽이 비어 보인다. 한 번에 한 장만
- * 보여주고 `items-start`로 각자 내용만큼만 차지하게 둔다.
- *
- * 한 번에 정확히 한 장만 보인다. 옆 카드를 걸쳐 보이게 하지 않는 대신 아래
- * 화살표와 점으로 더 있다는 걸 알린다. 스크롤러 자체를 max-w-2xl로 묶어 두는데,
- * 컨테이너 폭을 꽉 채우면 안쪽 미리보기가 가로로 늘어져 보이기 때문이다.
- *
- * CSS scroll-snap으로 만든다. 모바일 스와이프와 관성 스크롤을 브라우저가
- * 처리해주므로 섹션 하나 때문에 캐러셀 라이브러리를 들일 이유가 없다.
- *
- * 자동으로 한 장씩 넘어간다. 화살표를 누르지 않아도 카드가 더 있다는 걸
- * 알리려는 것이다. 읽는 중에 화면이 움직이는 건 방해이므로 멈추는 조건을
- * 넉넉히 두었다. 조건은 아래 상태 선언의 주석을 본다.
- *
- * 양 끝에서는 반대쪽 끝으로 돈다. 자동 넘김과 화살표 모두 같은 규칙이라
- * 화살표를 비활성화하는 상태가 없다.
- *
- * 순환은 앞뒤에 덧댄 복제 카드로 만든다. 마지막 장에서 첫 장으로 갈 때 실제
- * 첫 장까지 세 칸을 되감으면 다른 전환과 달리 크게 튄다. 대신 뒤에 덧댄 첫
- * 장 복제본으로 한 칸만 미끄러지고, 스크롤이 멎은 뒤 똑같은 그림인 진짜 첫
- * 장으로 애니메이션 없이 자리를 옮긴다. 화면에는 늘 한 칸짜리 전환만 보인다.
- *
- * 그래서 이 컴포넌트는 두 가지 인덱스를 쓴다. 바깥으로 드러나는 `activeIndex`
- * 는 실제 카드 인덱스(0..n-1)이고, 좌표 계산은 복제본을 포함한 슬롯 인덱스
- * (0..n+1)로 한다. 둘 사이는 toSlot·toRealIndex로 오간다.
+ * [마지막 복제, 원본 카드들, 첫 복제]로 순환하고, 정착 후 원본으로 순간 이동한다.
+ * activeIndex는 원본 인덱스, slot은 복제본을 포함한 위치다.
  */
 export function LearningToolsSection() {
   const tools = learningToolsContent.tools;
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
 
-  // 복제본은 하이드레이션 뒤에 붙인다. 서버가 그린 HTML에 앞 복제본이 있으면
-  // 스크롤 위치를 옮기기 전 첫 페인트에서 마지막 장이 잠깐 보인다.
+  // SSR 첫 화면에 마지막 카드가 보이지 않도록 복제본은 마운트 후 추가한다.
   const [looped, setLooped] = useState(false);
 
   useEffect(() => {
     setLooped(true);
   }, []);
 
-  // 슬롯에 그려지는 카드. 복제본을 붙이면 [마지막, 0, 1, …, n-1, 첫]이 된다.
   const slotTools = looped
     ? [...tools.slice(-1), ...tools, ...tools.slice(0, 1)]
     : [...tools];
-  // 실제 첫 장이 놓인 슬롯. 복제본을 붙이기 전에는 0이다.
+
   const firstSlot = looped ? 1 : 0;
 
   const toSlot = (index: number) => index + firstSlot;
@@ -202,36 +151,23 @@ export function LearningToolsSection() {
   const isCloneSlot = (slot: number) =>
     looped && (slot === 0 || slot === tools.length + 1);
 
-  // 화살표·점이 누른 순간 목표로 잡은 슬롯. smooth 스크롤이 끝나기 전에는 실제
-  // 위치가 아직 이전 장 근처라, onScroll이 계산한 값으로 activeIndex를 되돌리면
-  // 연속으로 눌러도 같은 장을 다시 목표로 잡게 된다. 목표를 여기 따로 들고
-  // 도착할 때까지 onScroll의 판정을 미룬다.
+  // 연속 클릭 중에는 중간 스크롤 위치 대신 목표 인덱스를 유지한다.
   const pendingSlotRef = useRef<number | null>(null);
-  // 복제본으로 이동 중 받은 요청은 원본으로 돌아온 뒤 이어서 처리한다.
+
+  // 복제본으로 이동 중 받은 요청은 원본 복귀 후 처리한다.
   const queuedSlotRef = useRef<number | null>(null);
-  // 복제본에서 진짜 카드로 자리를 옮기며 만든 스크롤의 도착 좌표. 이 스크롤은
-  // 사용자 조작이 아니므로 자동 넘김을 끄지 않아야 한다.
+
+  // 원본 복귀 스크롤을 사용자 입력으로 오인해 자동 넘김을 끄지 않도록 한다.
   const silentTargetRef = useRef<number | null>(null);
-  // 스크롤이 멎었는지 재는 타이머. 도착 좌표만으로 판정하지 않는 이유는,
-  // 사용자가 프로그램 스크롤 도중에 손으로 쓸어넘겨 애니메이션이 취소되면
-  // 목표에 영영 닿지 않아 목표가 풀리지 않기 때문이다.
+
   const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // 목표를 건 뒤 scroll 이벤트를 한 번이라도 봤는지. 손으로 쓸어넘겨 취소한
-  // 경우와, 메인 스레드가 막혀 애니메이션이 아직 첫 프레임도 못 그린 경우를
-  // 가른다. 전자는 그대로 회수하고 후자는 조금 더 기다린다.
+
   const pendingScrollSeenRef = useRef(false);
   const settleRetriesRef = useRef(0);
-  // 카드 오프셋 캐시. 스크롤 이벤트마다 다시 재면 프레임마다 강제 리플로우가
-  // 일어나 스와이프가 끊긴다. 값이 달라지는 건 카드 폭이 바뀔 때뿐이다.
+
   const cardOffsetsRef = useRef<number[] | null>(null);
 
-  // 자동 넘김을 멈추는 조건. 서로 다른 이벤트에서 오므로 따로 들고 있는다.
-  // - stopped: 사용자가 직접 넘겼다. 한 번 멈추면 다시 켜지 않는다.
-  // - hovered / focused: 포인터와 포커스가 각각 영역 안에 있다.
-  // - sectionVisible: 섹션이 화면에 들어와 있다. 랜딩 한가운데 있는 섹션이라
-  //   보이지 않는 동안 다 넘어가 버리면 자동 넘김이 아무것도 알리지 못한다.
-  // - documentVisible: 다른 탭에 가 있는 동안에는 돌릴 이유가 없다.
-  // - reducedMotion: 움직임을 줄여달라는 설정이면 아예 켜지 않는다.
+  // 직접 조작한 뒤에는 자동 넘김을 재개하지 않는다.
   const [autoplayStopped, setAutoplayStopped] = useState(false);
   const [autoplayHovered, setAutoplayHovered] = useState(false);
   const [autoplayFocused, setAutoplayFocused] = useState(false);
@@ -239,9 +175,8 @@ export function LearningToolsSection() {
   const [documentVisible, setDocumentVisible] = useState(true);
   const [reducedMotion, setReducedMotion] = useState(false);
   const viewportRef = useRef<HTMLDivElement>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
-  // 복제본이 앞에 하나 끼어들면서 카드 수와 좌표가 모두 바뀐다. 페인트 전에
-  // 진짜 첫 장 자리로 옮겨 놓아야 앞 복제본이 보이지 않는다.
   useIsomorphicLayoutEffect(() => {
     if (!looped) return;
 
@@ -250,7 +185,6 @@ export function LearningToolsSection() {
 
     cardOffsetsRef.current = null;
 
-    // 복제본을 붙이는 건 마운트 직후뿐이라 활성 장은 항상 첫 장이다.
     const offset = getCardOffsets(scroller)[1];
     if (offset === undefined) return;
 
@@ -295,8 +229,6 @@ export function LearningToolsSection() {
     const viewport = viewportRef.current;
     if (!viewport) return;
 
-    // 절반 이상 보일 때만 재생한다. 화면 끝에 살짝 걸친 상태에서 넘어가면
-    // 사용자는 넘어간 줄도 모른 채 장을 잃는다.
     const observer = new IntersectionObserver(
       ([entry]) =>
         setSectionVisible(
@@ -309,13 +241,9 @@ export function LearningToolsSection() {
     return () => observer.disconnect();
   }, []);
 
-  // 자동 넘김 타이머가 최신 goToNext를 부르게 한다. 캐러셀 함수들은 렌더마다
-  // 새로 만들어지는데, 이걸 의존성으로 묶으려고 useCallback을 씌우면 좌표
-  // 계산 로직 전체가 딸려 들어온다. 최신 값만 ref로 넘긴다.
+  // 타이머를 재설정하지 않고 최신 이동 함수를 참조한다.
   const goToNextRef = useRef<() => void>(() => {});
 
-  // 자동 넘김은 활성 장이 바뀔 때마다 타이머를 새로 건다. setInterval로 두면
-  // smooth 스크롤에 걸린 시간만큼 다음 장이 머무는 시간이 짧아진다.
   useEffect(() => {
     if (autoplayStopped || autoplayHovered || autoplayFocused || reducedMotion)
       return;
@@ -336,8 +264,7 @@ export function LearningToolsSection() {
     sectionVisible,
   ]);
 
-  // 위치 지정 조상의 변경에 영향받지 않도록 스크롤러 기준 좌표를 직접 구한다.
-  // 계산값이 현재 스크롤 위치와 무관하므로 한 번 재서 들고 있는다.
+  // 스크롤 중 반복 측정을 피하도록 스크롤러 기준 좌표를 캐시한다.
   function getCardOffsets(scroller: HTMLElement) {
     if (cardOffsetsRef.current !== null) return cardOffsetsRef.current;
 
@@ -351,7 +278,6 @@ export function LearningToolsSection() {
     return offsets;
   }
 
-  // 카드 폭이 화면 폭에 따라 달라지므로 실제 자식의 위치로 현재 슬롯을 판정한다.
   function getNearestSlot(scroller: HTMLElement) {
     let nearest = 0;
     let nearestDistance = Number.POSITIVE_INFINITY;
@@ -367,8 +293,7 @@ export function LearningToolsSection() {
     return nearest;
   }
 
-  // 목표한 슬롯에 이미 도착했는지. 스냅 위치가 소수점으로 떨어질 수 있어
-  // 1px 오차는 도착으로 본다.
+  // 소수점 스냅 좌표를 고려해 1px 오차를 허용한다.
   function hasReachedSlot(scroller: HTMLElement, slot: number) {
     const offset = getCardOffsets(scroller)[slot];
     if (offset === undefined) return true;
@@ -376,8 +301,6 @@ export function LearningToolsSection() {
     return Math.abs(scroller.scrollLeft - offset) <= 1;
   }
 
-  // 애니메이션 없이 자리만 옮긴다. 복제본과 진짜 카드는 같은 그림이라 화면은
-  // 그대로다. 이 스크롤을 사용자 조작으로 오해하지 않도록 도착 좌표를 남긴다.
   function jumpToSlot(scroller: HTMLElement, slot: number) {
     const offset = getCardOffsets(scroller)[slot];
     if (offset === undefined) return;
@@ -386,9 +309,7 @@ export function LearningToolsSection() {
     scroller.scrollLeft = offset;
   }
 
-  // 스크롤이 멎으면 목표를 풀고 실제 위치로 맞춘다. 목표한 장에 정상적으로
-  // 도착한 경우와 도중에 취소된 경우를 한 곳에서 회수한다. 누른 자리에 이미
-  // 있어 스크롤이 아예 일어나지 않는 경우도 있어 scrollToIndex에서도 건다.
+  // 사용자 입력으로 이동이 취소돼도 목표를 해제할 수 있도록 정지 시간을 잰다.
   function scheduleSettle() {
     if (settleTimerRef.current !== null) clearTimeout(settleTimerRef.current);
 
@@ -401,12 +322,7 @@ export function LearningToolsSection() {
         return;
       }
 
-      // 목표를 건 스크롤이 아직 시작도 못했고 목표 좌표에도 닿지 않았다면
-      // 애니메이션이 첫 프레임을 못 그린 것이다(하이드레이션·이미지 디코딩으로
-      // 메인 스레드가 막힌 저사양 기기). 여기서 목표를 풀면 activeIndex가
-      // 직전 장으로 되돌아가 화살표를 두 번 눌러도 한 장만 넘어간다.
-      // 손으로 쓸어넘겨 취소한 경우는 scroll 이벤트를 이미 봤으므로 걸리지 않고,
-      // 끝내 움직이지 않는 경우를 위해 재시도 횟수를 제한한다.
+      // 아직 시작하지 않은 이동을 취소된 이동으로 판단하지 않는다.
       const pendingSlot = pendingSlotRef.current;
       if (
         pendingSlot !== null &&
@@ -425,8 +341,6 @@ export function LearningToolsSection() {
       const realIndex = toRealIndex(slot);
       setActiveIndex(realIndex);
 
-      // 복제본 위에 멎었으면 똑같은 그림인 진짜 카드로 자리를 옮긴다. 다음
-      // 이동이 다시 캐러셀 안쪽에서 시작해야 순환이 이어진다.
       if (isCloneSlot(slot)) jumpToSlot(scroller, toSlot(realIndex));
 
       const queuedSlot = queuedSlotRef.current;
@@ -439,27 +353,20 @@ export function LearningToolsSection() {
     const scroller = scrollerRef.current;
     if (!scroller) return;
 
-    // 복제본에서 진짜 카드로 자리를 옮기며 만든 스크롤. 좌표가 그 자리를
-    // 벗어나면 그때부터는 사용자가 움직인 것으로 본다.
     const silentTarget = silentTargetRef.current;
     if (silentTarget !== null) {
       if (Math.abs(scroller.scrollLeft - silentTarget) <= 1) return;
       silentTargetRef.current = null;
     }
 
-    // 목표가 잡혀 있는 동안 지나가는 중간 위치는 무시한다.
     if (pendingSlotRef.current !== null) {
       pendingScrollSeenRef.current = true;
       scheduleSettle();
       return;
     }
 
-    // 목표 없이 들어온 스크롤은 사용자가 직접 쓸어넘긴 것이다. 자동 넘김이
-    // 만든 스크롤은 목표가 잡혀 있어 위에서 걸러진다.
-    setAutoplayStopped(true);
     setActiveIndex(toRealIndex(getNearestSlot(scroller)));
 
-    // 손으로 복제본까지 쓸어넘긴 경우에도 멎은 뒤 진짜 카드로 옮겨야 한다.
     scheduleSettle();
   }
 
@@ -467,8 +374,6 @@ export function LearningToolsSection() {
     const scroller = scrollerRef.current;
     if (!scroller) return;
 
-    // 카드 수와 오프셋 수가 어긋나는 순간(복제본을 붙이기 직전 등)에 대비해
-    // 범위를 벗어난 슬롯은 무시한다.
     const offset = getCardOffsets(scroller)[slot];
     if (offset === undefined) return;
 
@@ -479,8 +384,7 @@ export function LearningToolsSection() {
       return;
     }
 
-    // 화살표는 activeIndex에서 다음 장을 고르므로, 목표를 먼저 확정하고
-    // activeIndex도 같이 옮겨야 애니메이션 도중에 다시 눌러도 한 장씩 넘어간다.
+    // 연속 클릭이 다음 장을 가리키도록 실제 도착 전에 활성 인덱스를 갱신한다.
     pendingSlotRef.current = slot;
     pendingScrollSeenRef.current = false;
     settleRetriesRef.current = 0;
@@ -496,12 +400,10 @@ export function LearningToolsSection() {
       behavior: prefersReducedMotion ? "auto" : "smooth",
     });
 
-    // 누른 자리에 이미 있어 scroll 이벤트가 아예 없는 경우를 회수하려고 건다.
+    // 이미 목표 위치라 scroll 이벤트가 발생하지 않는 경우도 회수한다.
     scheduleSettle();
   }
 
-  // 다음 슬롯으로. 마지막 장에서는 뒤에 덧댄 복제본이 다음 슬롯이라 여기서도
-  // 한 칸만 미끄러진다. 복제본을 붙이기 전이라면 감아서 첫 장으로 돌아간다.
   function goToNext() {
     const nextSlot = toSlot(activeIndex) + 1;
     scrollToSlot(looped ? nextSlot : wrapIndex(nextSlot, tools.length));
@@ -509,8 +411,6 @@ export function LearningToolsSection() {
 
   goToNextRef.current = goToNext;
 
-  // 화살표·점으로 직접 넘긴 경우. 여기서부터는 사용자가 읽을 장을 고르고
-  // 있으므로 자동 넘김을 다시 켜지 않는다.
   function goToSlot(slot: number) {
     setAutoplayStopped(true);
     scrollToSlot(looped ? slot : wrapIndex(slot, tools.length));
@@ -529,8 +429,6 @@ export function LearningToolsSection() {
   return (
     <section aria-labelledby="learning-tools-heading">
       <div className="mx-auto max-w-6xl px-6 py-12 md:py-20">
-        {/* 앞 섹션의 "기록 → 알림 → 백지 테스트" 흐름과 이어주는 한 줄.
-            제목보다 작게 두어 위계는 제목이 갖게 한다. */}
         <p className="text-center text-sm font-medium text-muted-foreground">
           {learningToolsContent.connector}
         </p>
@@ -544,9 +442,6 @@ export function LearningToolsSection() {
           {learningToolsContent.description}
         </p>
 
-        {/* 스크롤러와 컨트롤을 함께 감싼다. 자동 넘김이 멈춰야 하는 영역
-            (포인터가 올라갔거나 포커스가 들어온 곳)과 화면에 보이는지 재는
-            영역이 같아서 한 요소로 묶었다. */}
         <div
           ref={viewportRef}
           onMouseEnter={() => setAutoplayHovered(true)}
@@ -561,11 +456,42 @@ export function LearningToolsSection() {
           <div
             ref={scrollerRef}
             onScroll={handleScroll}
-            onPointerDown={stopAutoplayByInput}
-            onTouchStart={stopAutoplayByInput}
-            onWheel={stopAutoplayByInput}
-            onKeyDown={stopAutoplayByInput}
-            // sr-only 입력의 절대 위치도 이 스크롤 영역 안에서 계산한다.
+            onTouchStart={(event) => {
+              const touch = event.touches[0];
+              touchStartRef.current = touch
+                ? { x: touch.clientX, y: touch.clientY }
+                : null;
+            }}
+            onTouchMove={(event) => {
+              const start = touchStartRef.current;
+              const touch = event.touches[0];
+              if (!start || !touch) return;
+              const dx = Math.abs(touch.clientX - start.x);
+              const dy = Math.abs(touch.clientY - start.y);
+              if (dx > 8 && dx > dy) stopAutoplayByInput();
+            }}
+            onTouchEnd={() => {
+              touchStartRef.current = null;
+            }}
+            onTouchCancel={() => {
+              touchStartRef.current = null;
+            }}
+            onWheel={(event) => {
+              if (
+                event.deltaX !== 0 ||
+                (event.shiftKey && event.deltaY !== 0)
+              ) {
+                stopAutoplayByInput();
+              }
+            }}
+            onKeyDown={(event) => {
+              if (
+                ["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)
+              ) {
+                stopAutoplayByInput();
+              }
+            }}
+            // relative는 sr-only 입력이 페이지 전체에 가로 넘침을 만드는 것을 막는다.
             className="relative mx-auto mt-10 flex w-full max-w-2xl snap-x snap-mandatory items-start gap-6 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           >
             {slotTools.map((tool, slot) => {
@@ -573,8 +499,6 @@ export function LearningToolsSection() {
               return (
                 <article
                   key={`${tool.id}-${slot}`}
-                  /* 복제본은 같은 내용을 한 번 더 읽히게 하므로 보조기기에서
-                     숨긴다. 안에 초점을 받는 요소는 없다. */
                   aria-hidden={isCloneSlot(slot) || undefined}
                   className="flex w-full shrink-0 snap-start flex-col rounded-2xl border bg-card p-5"
                 >
@@ -600,9 +524,6 @@ export function LearningToolsSection() {
           </div>
 
           <div className="mt-6 flex items-center justify-center gap-3">
-            {/* 양 끝에서 반대쪽으로 순환하므로 화살표를 막는 상태가 없다.
-                끝에서 비활성화하면 그 순간 포커스를 쥔 버튼이 사라져 포커스가
-                body로 떨어지는 문제도 함께 없어진다. */}
             <button
               type="button"
               aria-label="이전 기능 보기"
@@ -612,9 +533,6 @@ export function LearningToolsSection() {
               <ChevronLeft className="size-4" aria-hidden="true" />
             </button>
 
-            {/* 점은 8px로 보이되 누르는 영역은 24px을 확보한다. 버튼 자체를 8px로
-                두면 모바일에서 겨냥하기 어렵다. 타깃끼리 겹치면 안 되므로 사이
-                간격은 버튼 크기로만 벌어지게 두고 gap은 주지 않는다. */}
             <div className="flex items-center">
               {tools.map((tool, index) => (
                 <button
