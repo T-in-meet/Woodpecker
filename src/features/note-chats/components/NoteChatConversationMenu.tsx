@@ -1,8 +1,10 @@
 "use client";
 
+import { zodResolver } from "@hookform/resolvers/zod";
 import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useForm } from "react-hook-form";
 
 import {
   AlertDialog,
@@ -34,7 +36,12 @@ import { Label } from "@/components/ui/label";
 import { ROUTES } from "@/lib/constants/routes";
 
 import { useDeleteNoteChatConversationMutation } from "../hooks/use-delete-note-chat-conversation-mutation";
+import { useNoteChatDialogVisualViewport } from "../hooks/use-note-chat-dialog-visual-viewport";
 import { useUpdateNoteChatConversationTitleMutation } from "../hooks/use-update-note-chat-conversation-title-mutation";
+import {
+  type UpdateNoteChatConversationTitleInput,
+  updateNoteChatConversationTitleInputSchema,
+} from "../schema";
 
 type NoteChatConversationMenuProps = {
   conversationId: string;
@@ -52,29 +59,31 @@ export function NoteChatConversationMenu({
 
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [nextTitle, setNextTitle] = useState(title);
 
   const updateMutation = useUpdateNoteChatConversationTitleMutation();
   const deleteMutation = useDeleteNoteChatConversationMutation();
+  const dialogViewportStyle = useNoteChatDialogVisualViewport(editOpen);
 
-  const handleUpdate = async () => {
-    const trimmedTitle = nextTitle.trim();
+  const form = useForm<UpdateNoteChatConversationTitleInput>({
+    resolver: zodResolver(updateNoteChatConversationTitleInputSchema),
+    defaultValues: {
+      conversationId,
+      title,
+    },
+  });
 
-    if (!trimmedTitle) {
-      return;
-    }
+  const nextTitle = form.watch("title");
+  const titleError = form.formState.errors.title?.message;
 
+  const handleUpdate = form.handleSubmit(async (values) => {
     try {
-      await updateMutation.mutateAsync({
-        conversationId,
-        title: trimmedTitle,
-      });
+      await updateMutation.mutateAsync(values);
 
       setEditOpen(false);
     } catch {
       // Mutation 오류는 Dialog 내부에서 표시합니다.
     }
-  };
+  });
 
   const handleDelete = async () => {
     try {
@@ -93,14 +102,19 @@ export function NoteChatConversationMenu({
         <DropdownMenuTrigger asChild>
           <Button type="button" variant="ghost" size="icon">
             <MoreHorizontal className="size-4" />
-            <span className="sr-only">대화 메뉴</span>
+            <span className="sr-only">
+              {title ? `${title} 대화 메뉴` : "대화 메뉴"}
+            </span>
           </Button>
         </DropdownMenuTrigger>
 
         <DropdownMenuContent align="end">
           <DropdownMenuItem
             onSelect={() => {
-              setNextTitle(title);
+              form.reset({
+                conversationId,
+                title,
+              });
               updateMutation.reset();
               setEditOpen(true);
             }}
@@ -123,7 +137,17 @@ export function NoteChatConversationMenu({
       </DropdownMenu>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent>
+        <DialogContent
+          className="pointer-coarse:overflow-y-auto"
+          style={
+            dialogViewportStyle
+              ? {
+                  top: dialogViewportStyle.top,
+                  maxHeight: dialogViewportStyle.maxHeight,
+                }
+              : undefined
+          }
+        >
           <DialogHeader>
             <DialogTitle>대화 제목 수정</DialogTitle>
             <DialogDescription>
@@ -131,44 +155,63 @@ export function NoteChatConversationMenu({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-2">
-            <Label htmlFor="note-chat-conversation-edit-title">대화 제목</Label>
+          <form className="space-y-4" onSubmit={handleUpdate}>
+            <div className="space-y-2">
+              <Label htmlFor="note-chat-conversation-edit-title">
+                대화 제목
+              </Label>
 
-            <Input
-              id="note-chat-conversation-edit-title"
-              value={nextTitle}
-              onChange={(event) => setNextTitle(event.target.value)}
-            />
+              <Input
+                id="note-chat-conversation-edit-title"
+                enterKeyHint="done"
+                aria-describedby={
+                  titleError
+                    ? "note-chat-conversation-edit-title-error"
+                    : undefined
+                }
+                aria-invalid={titleError ? true : undefined}
+                {...form.register("title")}
+              />
 
-            {updateMutation.error ? (
-              <p role="alert" className="text-sm text-destructive">
-                {updateMutation.error.message}
-              </p>
-            ) : null}
-          </div>
+              {titleError ? (
+                <p
+                  id="note-chat-conversation-edit-title-error"
+                  role="alert"
+                  className="text-sm text-destructive"
+                >
+                  {titleError}
+                </p>
+              ) : null}
 
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={updateMutation.isPending}
-              onClick={() => setEditOpen(false)}
-            >
-              취소
-            </Button>
+              {updateMutation.error ? (
+                <p role="alert" className="text-sm text-destructive">
+                  {updateMutation.error.message}
+                </p>
+              ) : null}
+            </div>
 
-            <Button
-              type="button"
-              disabled={
-                updateMutation.isPending ||
-                nextTitle.trim().length === 0 ||
-                nextTitle.trim() === title
-              }
-              onClick={handleUpdate}
-            >
-              {updateMutation.isPending ? "수정 중..." : "수정"}
-            </Button>
-          </DialogFooter>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={updateMutation.isPending}
+                onClick={() => setEditOpen(false)}
+              >
+                취소
+              </Button>
+
+              <Button
+                type="submit"
+                disabled={
+                  updateMutation.isPending ||
+                  nextTitle.trim().length === 0 ||
+                  nextTitle.trim() === title
+                }
+              >
+                {updateMutation.isPending ? "수정 중..." : "수정"}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 

@@ -25,13 +25,23 @@ const mockStopFollowingLatest = vi.fn();
 const mockCancelNavigation = vi.fn();
 const mockConfirmNavigation = vi.fn();
 
-let mockConversationDetail: {
-  conversation: {
-    id: string;
-    title: string;
-  };
-  hasRunningExecution: boolean;
-} | null;
+const mockUseViewportRemainingHeightArgs = vi.fn();
+
+let mockConversationDetail:
+  | {
+      conversation: {
+        id: string;
+        title: string;
+      };
+      hasRunningExecution: boolean;
+    }
+  | null
+  | undefined;
+
+let mockConversationIsError: boolean;
+let mockConversationIsFetching: boolean;
+let mockConversationIsLoading: boolean;
+let mockConversationStatus: "pending" | "error" | "success";
 
 let mockMessages: Array<{
   id: string;
@@ -60,10 +70,11 @@ let mockIsFetchingNextPage: boolean;
 vi.mock("../hooks/use-note-chat-conversation-query", () => ({
   useNoteChatConversationDetailQuery: () => ({
     data: mockConversationDetail,
-    isError: false,
-    isFetching: false,
-    isLoading: false,
+    isError: mockConversationIsError,
+    isFetching: mockConversationIsFetching,
+    isLoading: mockConversationIsLoading,
     refetch: mockConversationRefetch,
+    status: mockConversationStatus,
   }),
 
   useNoteChatConversationMessagesQuery: () => ({
@@ -147,12 +158,16 @@ vi.mock("../hooks/use-note-chat-conversation-scroll", () => ({
 }));
 
 vi.mock("../hooks/use-viewport-remaining-height", () => ({
-  useViewportRemainingHeight: () => ({
-    containerRef: {
-      current: null,
-    },
-    height: null,
-  }),
+  useViewportRemainingHeight: (args: { recalculationKey: unknown }) => {
+    mockUseViewportRemainingHeightArgs(args);
+
+    return {
+      containerRef: {
+        current: null,
+      },
+      height: null,
+    };
+  },
 }));
 
 vi.mock("@/hooks/useInternalNavigationGuard", () => ({
@@ -270,6 +285,11 @@ describe("NoteChatConversationClient", () => {
       },
       hasRunningExecution: false,
     };
+
+    mockConversationIsError = false;
+    mockConversationIsFetching = false;
+    mockConversationIsLoading = false;
+    mockConversationStatus = "success";
 
     mockMessages = [];
 
@@ -461,5 +481,32 @@ describe("NoteChatConversationClient", () => {
     expect(screen.getByTestId("message-ids")).not.toHaveTextContent(
       SECOND_USER_MESSAGE_ID,
     );
+  });
+
+  it("상세 조회가 로딩에서 오류로 전환되면 viewport 재계산 키를 변경한다", () => {
+    mockConversationDetail = undefined;
+    mockConversationIsError = false;
+    mockConversationIsFetching = true;
+    mockConversationIsLoading = true;
+    mockConversationStatus = "pending";
+
+    const { rerender } = render(
+      <NoteChatConversationClient conversationId={CONVERSATION_ID} />,
+    );
+
+    expect(mockUseViewportRemainingHeightArgs).toHaveBeenLastCalledWith({
+      recalculationKey: "pending",
+    });
+
+    mockConversationIsError = true;
+    mockConversationIsFetching = false;
+    mockConversationIsLoading = false;
+    mockConversationStatus = "error";
+
+    rerender(<NoteChatConversationClient conversationId={CONVERSATION_ID} />);
+
+    expect(mockUseViewportRemainingHeightArgs).toHaveBeenLastCalledWith({
+      recalculationKey: "error",
+    });
   });
 });

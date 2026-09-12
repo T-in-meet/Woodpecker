@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils/cn";
 
 import { NOTE_CHAT_QUESTION_MAX_LENGTH } from "../constants";
 import { NOTE_CHAT_DAILY_EXECUTION_LIMIT } from "../constants/execution";
@@ -28,6 +29,8 @@ import {
   type CreateNoteChatQuestionInput,
   createNoteChatQuestionInputSchema,
 } from "../schema";
+
+const SOFTWARE_KEYBOARD_MIN_HEIGHT_PX = 150;
 
 type NoteChatComposerProps = {
   /** 질문을 추가할 노트 챗봇 Conversation ID입니다. */
@@ -60,6 +63,51 @@ type NoteChatComposerProps = {
 };
 
 /**
+ * 현재 소프트 키보드가 열린 상태인지 확인합니다.
+ *
+ * fine pointer 환경은 하드웨어 키보드 입력으로 간주합니다.
+ *
+ * coarse pointer 환경에서는 Visual Viewport가 layout viewport보다
+ * 충분히 작아진 경우 소프트 키보드가 열린 것으로 판단합니다.
+ *
+ * Visual Viewport API를 지원하지 않는 coarse pointer 환경에서는
+ * 기존 동작을 유지하기 위해 소프트 키보드 사용 상태로 취급합니다.
+ */
+function isSoftwareKeyboardOpen() {
+  const isCoarsePointer = window.matchMedia("(pointer: coarse)").matches;
+
+  if (!isCoarsePointer) {
+    return false;
+  }
+
+  const visualViewport = window.visualViewport;
+
+  if (!visualViewport) {
+    return true;
+  }
+
+  return (
+    window.innerHeight - visualViewport.height >=
+    SOFTWARE_KEYBOARD_MIN_HEIGHT_PX
+  );
+}
+
+function NoteChatUsageInfoContent() {
+  return (
+    <div className="space-y-2">
+      <p>
+        {`Note Chat은 하루 최대 ${NOTE_CHAT_DAILY_EXECUTION_LIMIT}회 AI 답변을 생성할 수 있으며, 매일 자정(KST)에 초기화됩니다.`}
+      </p>
+
+      <p className="text-muted-foreground">
+        새 질문, 질문 수정 후 재생성, 답변 재시도는 모두 오늘의 사용 횟수에
+        포함됩니다.
+      </p>
+    </div>
+  );
+}
+
+/**
  * 노트 챗봇 사용자 질문 입력을 담당합니다.
  *
  * 답변 생성 상태는 상위 Conversation 화면이 관리하며,
@@ -68,8 +116,11 @@ type NoteChatComposerProps = {
  * 일반 사용자가 일일 AI 실행 제한에 도달한 경우
  * 추가 질문 입력과 전송을 차단합니다.
  *
- * Enter는 질문을 전송하고,
- * Shift + Enter는 줄바꿈을 입력합니다.
+ * 하드웨어 키보드에서는 Enter로 질문을 전송하고,
+ * Shift + Enter로 줄바꿈을 입력합니다.
+ *
+ * 소프트 키보드가 열린 상태에서는 Enter의 기본 동작을 유지하여 줄바꿈하고,
+ * 질문 보내기 버튼으로 질문을 전송합니다.
  *
  * 답변 표시 중지 버튼은 현재 브라우저에서 실제 스트림을
  * 수신하고 있는 동안에만 표시합니다.
@@ -141,8 +192,11 @@ export function NoteChatComposer({
   });
 
   /**
-   * Enter는 질문을 전송하고,
+   * 하드웨어 키보드에서는 Enter로 질문을 전송하고,
    * Shift + Enter는 기본 동작을 유지하여 줄바꿈합니다.
+   *
+   * 소프트 키보드가 열린 상태에서는 Enter를 가로채지 않고
+   * textarea의 기본 줄바꿈 동작을 유지합니다.
    */
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (
@@ -150,6 +204,10 @@ export function NoteChatComposer({
       event.shiftKey ||
       event.nativeEvent.isComposing
     ) {
+      return;
+    }
+
+    if (isSoftwareKeyboardOpen()) {
       return;
     }
 
@@ -184,7 +242,9 @@ export function NoteChatComposer({
             aria-describedby={
               questionError
                 ? "note-chat-question-error"
-                : "note-chat-question-description"
+                : isDailyLimitReached
+                  ? "note-chat-question-description"
+                  : "note-chat-question-accessible-description"
             }
             aria-invalid={questionError ? true : undefined}
             aria-label="노트 챗봇 질문"
@@ -200,61 +260,75 @@ export function NoteChatComposer({
             {...form.register("content.text")}
           />
 
-          <div className="flex justify-between">
+          <p id="note-chat-question-accessible-description" className="sr-only">
+            질문 보내기 버튼으로 질문을 전송할 수 있습니다.
+          </p>
+
+          <div
+            className={cn(
+              "flex flex-wrap items-center justify-between gap-x-2 gap-y-1",
+              !questionError && !isDailyLimitReached && "pointer-coarse:hidden",
+            )}
+          >
             {questionError ? (
               <p
                 id="note-chat-question-error"
                 role="alert"
-                className="text-sm text-destructive"
+                className="max-w-full shrink-0 text-sm text-destructive"
               >
                 {questionError}
               </p>
             ) : isDailyLimitReached ? (
               <p
                 id="note-chat-question-description"
-                className="text-xs text-muted-foreground"
+                className="max-w-full shrink-0 text-xs text-muted-foreground"
               >
                 {`오늘은 AI 답변을 더 생성할 수 없어요. (${dailyUsage.used}/${dailyUsage.limit})`}
               </p>
             ) : (
               <p
                 id="note-chat-question-description"
-                className="text-xs text-muted-foreground"
+                className="max-w-full shrink-0 text-xs text-muted-foreground"
               >
                 Enter로 전송하고 Shift + Enter로 줄바꿈할 수 있습니다.
               </p>
             )}
 
-            <FeatureInfoPopover ariaLabel="Note Chat 사용 안내" align="end">
-              <div className="space-y-2">
-                <p>
-                  {`Note Chat은 하루 최대 ${NOTE_CHAT_DAILY_EXECUTION_LIMIT}회 AI 답변을 생성할 수 있으며, 매일 자정(KST)에 초기화됩니다.`}
-                </p>
-
-                <p className="text-muted-foreground">
-                  새 질문, 질문 수정 후 재생성, 답변 재시도는 모두 오늘의 사용
-                  횟수에 포함됩니다.
-                </p>
-              </div>
+            <FeatureInfoPopover
+              ariaLabel="Note Chat 사용 안내"
+              align="end"
+              className="pointer-coarse:hidden"
+            >
+              <NoteChatUsageInfoContent />
             </FeatureInfoPopover>
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <p className="text-xs text-muted-foreground">
-              {questionLength.toLocaleString()} /{" "}
-              {NOTE_CHAT_QUESTION_MAX_LENGTH.toLocaleString()}
-            </p>
+        <div className="flex flex-wrap items-center justify-between gap-3 pointer-coarse:flex-col pointer-coarse:items-stretch pointer-coarse:gap-2">
+          <div className="flex items-center gap-3 pointer-coarse:justify-between">
+            <div className="flex shrink-0 items-center gap-1">
+              <p className="whitespace-nowrap text-xs text-muted-foreground">
+                {questionLength.toLocaleString()} /{" "}
+                {NOTE_CHAT_QUESTION_MAX_LENGTH.toLocaleString()}
+              </p>
+
+              <FeatureInfoPopover
+                ariaLabel="Note Chat 사용 안내"
+                align="start"
+                className="hidden pointer-coarse:flex"
+              >
+                <NoteChatUsageInfoContent />
+              </FeatureInfoPopover>
+            </div>
 
             {dailyUsage !== null && !isDailyLimitReached ? (
-              <p className="text-xs text-muted-foreground">
+              <p className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
                 {`오늘 ${dailyUsage.used}/${dailyUsage.limit}회 사용`}
               </p>
             ) : null}
           </div>
 
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2 pointer-coarse:justify-end">
             <AlertDialog
               open={isStopDialogOpen}
               onOpenChange={setIsStopDialogOpen}
@@ -262,8 +336,8 @@ export function NoteChatComposer({
               {isStreaming ? (
                 <AlertDialogTrigger asChild>
                   <Button type="button" size="sm" variant="outline">
-                    <Square className="size-3.5" />
-                    답변 표시 중지
+                    <Square />
+                    <span className="leading-none">답변 표시 중지</span>
                   </Button>
                 </AlertDialogTrigger>
               ) : null}
@@ -298,18 +372,16 @@ export function NoteChatComposer({
               </AlertDialogContent>
             </AlertDialog>
 
-            {/* 이 화면의 주 액션이라 가장 작은 sm(28px) 대신 기본 크기를 쓴다.
-                터치에서는 buttonVariants의 pointer-coarse 분기로 44px가 된다. */}
-            <Button type="submit" disabled={isSubmitDisabled}>
+            <Button type="submit" size="sm" disabled={isSubmitDisabled}>
               {isAnswerGenerating ? (
                 <>
-                  <Loader2 className="size-4 animate-spin" />
-                  답변 생성 중
+                  <Loader2 className="animate-spin" />
+                  <span className="leading-none">답변 생성 중</span>
                 </>
               ) : (
                 <>
-                  <Send className="size-4" />
-                  질문 보내기
+                  <Send />
+                  <span className="leading-none">질문 보내기</span>
                 </>
               )}
             </Button>

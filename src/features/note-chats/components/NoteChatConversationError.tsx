@@ -18,7 +18,7 @@ export function NoteChatConversationError({
   onRetry,
 }: NoteChatConversationErrorProps) {
   return (
-    <div className="flex flex-1 items-center justify-center p-6">
+    <div role="alert" className="flex flex-1 items-center justify-center p-6">
       <div className="space-y-4 text-center">
         <div className="space-y-1">
           <p className="text-sm font-medium">대화를 불러오지 못했습니다.</p>

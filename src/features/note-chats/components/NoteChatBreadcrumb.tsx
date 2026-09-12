@@ -11,9 +11,6 @@ import {
 import { ROUTES } from "@/lib/constants/routes";
 
 type NoteChatBreadcrumbProps = {
-  /** Breadcrumb에 추가할 외부 스타일입니다. */
-  className?: string;
-
   /** 상세 화면에서 표시할 현재 Conversation 제목입니다. */
   conversationTitle?: string;
 };
@@ -25,16 +22,14 @@ type NoteChatBreadcrumbProps = {
  * 제목이 있으면 노트 챗봇 목록 링크와 현재 Conversation 제목을 표시합니다.
  *
  * @param props 컴포넌트 속성
- * @param props.className Breadcrumb에 추가할 외부 스타일
  * @param props.conversationTitle 현재 Conversation 제목
  * @returns 노트 챗봇 Breadcrumb UI
  */
 export function NoteChatBreadcrumb({
-  className,
   conversationTitle,
 }: NoteChatBreadcrumbProps) {
   return (
-    <Breadcrumb className={className}>
+    <Breadcrumb>
       <BreadcrumbList>
         <BreadcrumbItem>
           <BreadcrumbLink asChild>

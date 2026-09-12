@@ -30,7 +30,7 @@ export function NoteChatConversationSearch({
       <div className="relative">
         <button
           type="submit"
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          className="absolute left-1 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center text-muted-foreground hover:text-foreground"
           aria-label="대화 검색"
         >
           <Search className="size-4" />
@@ -39,6 +39,7 @@ export function NoteChatConversationSearch({
         <Input
           type="search"
           enterKeyHint="search"
+          aria-label="대화 제목 검색"
           value={searchInput}
           onChange={(event) => {
             const nextValue = event.target.value;

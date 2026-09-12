@@ -21,6 +21,7 @@ import { Label } from "@/components/ui/label";
 import { getNoteChatConversationRoute } from "@/lib/constants/routes";
 
 import { useCreateNoteChatConversationMutation } from "../hooks/use-create-note-chat-conversation-mutation";
+import { useNoteChatDialogVisualViewport } from "../hooks/use-note-chat-dialog-visual-viewport";
 import {
   type CreateNoteChatConversationInput,
   createNoteChatConversationInputSchema,
@@ -34,6 +35,7 @@ export function NoteChatCreateDialog() {
   const [open, setOpen] = useState(false);
 
   const createMutation = useCreateNoteChatConversationMutation();
+  const dialogViewportStyle = useNoteChatDialogVisualViewport(open);
 
   const form = useForm<CreateNoteChatConversationInput>({
     resolver: zodResolver(createNoteChatConversationInputSchema),
@@ -76,7 +78,17 @@ export function NoteChatCreateDialog() {
         </Button>
       </DialogTrigger>
 
-      <DialogContent>
+      <DialogContent
+        className="pointer-coarse:overflow-y-auto"
+        style={
+          dialogViewportStyle
+            ? {
+                top: dialogViewportStyle.top,
+                maxHeight: dialogViewportStyle.maxHeight,
+              }
+            : undefined
+        }
+      >
         <DialogHeader>
           <DialogTitle>새 대화</DialogTitle>
           <DialogDescription>
@@ -91,13 +103,22 @@ export function NoteChatCreateDialog() {
             <Input
               id="note-chat-conversation-title"
               autoFocus
+              aria-describedby={
+                titleError ? "note-chat-conversation-title-error" : undefined
+              }
               aria-invalid={titleError ? true : undefined}
               placeholder="예: React 공부 정리"
               {...form.register("title")}
             />
 
             {titleError ? (
-              <p className="text-sm text-destructive">{titleError}</p>
+              <p
+                id="note-chat-conversation-title-error"
+                role="alert"
+                className="text-sm text-destructive"
+              >
+                {titleError}
+              </p>
             ) : null}
 
             {createMutation.error ? (
@@ -112,7 +133,7 @@ export function NoteChatCreateDialog() {
               type="button"
               variant="outline"
               disabled={createMutation.isPending}
-              onClick={() => setOpen(false)}
+              onClick={() => handleOpenChange(false)}
             >
               취소
             </Button>
