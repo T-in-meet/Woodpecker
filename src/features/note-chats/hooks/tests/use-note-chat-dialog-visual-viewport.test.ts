@@ -3,6 +3,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { setCoarsePointer } from "../../tests/utils/set-coarse-pointer";
 import { useNoteChatDialogVisualViewport } from "../use-note-chat-dialog-visual-viewport";
 
 type MockVisualViewport = EventTarget & {
@@ -35,12 +36,6 @@ function flushAnimationFrames() {
   callbacks.forEach(([id, callback]) => {
     callback(id);
   });
-}
-
-function setCoarsePointer(matches: boolean) {
-  window.matchMedia = vi.fn(() => ({
-    matches,
-  })) as unknown as typeof window.matchMedia;
 }
 
 function setVisualViewport({

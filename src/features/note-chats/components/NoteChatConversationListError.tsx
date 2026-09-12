@@ -46,8 +46,8 @@ export function NoteChatConversationListError({
           {isFetching ? "다시 불러오는 중..." : "다시 시도"}
         </Button>
 
-        <p className="flex items-center justify-center gap-1 text-xs text-muted-foreground">
-          문제가 계속되면
+        <p className="text-xs text-muted-foreground">
+          문제가 계속되면{" "}
           <Link
             href={`${ROUTES.MYPAGE}?section=support&tab=inquiry`}
             target="_blank"

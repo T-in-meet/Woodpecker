@@ -203,6 +203,7 @@ export function NoteChatConversationClient({
         <NoteChatConversationHeader
           conversationId={conversationId}
           conversationTitle={detail?.conversation.title}
+          isError={conversationQuery.isError}
           isLoading={conversationQuery.isLoading}
         />
 

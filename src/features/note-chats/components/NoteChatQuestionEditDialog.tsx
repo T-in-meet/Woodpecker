@@ -154,8 +154,6 @@ export function NoteChatQuestionEditDialog({
         </DialogHeader>
 
         <form className="space-y-4" onSubmit={handleUpdate}>
-          <input type="hidden" {...form.register("messageId")} />
-
           <div className="space-y-2">
             <Textarea
               aria-label="수정할 질문"

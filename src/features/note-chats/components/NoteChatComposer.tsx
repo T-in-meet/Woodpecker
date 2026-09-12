@@ -30,6 +30,8 @@ import {
   createNoteChatQuestionInputSchema,
 } from "../schema";
 
+const SOFTWARE_KEYBOARD_MIN_HEIGHT_PX = 150;
+
 type NoteChatComposerProps = {
   /** 질문을 추가할 노트 챗봇 Conversation ID입니다. */
   conversationId: string;
@@ -60,6 +62,36 @@ type NoteChatComposerProps = {
   onSubmit: (question: string) => Promise<void>;
 };
 
+/**
+ * 현재 소프트 키보드가 열린 상태인지 확인합니다.
+ *
+ * fine pointer 환경은 하드웨어 키보드 입력으로 간주합니다.
+ *
+ * coarse pointer 환경에서는 Visual Viewport가 layout viewport보다
+ * 충분히 작아진 경우 소프트 키보드가 열린 것으로 판단합니다.
+ *
+ * Visual Viewport API를 지원하지 않는 coarse pointer 환경에서는
+ * 기존 동작을 유지하기 위해 소프트 키보드 사용 상태로 취급합니다.
+ */
+function isSoftwareKeyboardOpen() {
+  const isCoarsePointer = window.matchMedia("(pointer: coarse)").matches;
+
+  if (!isCoarsePointer) {
+    return false;
+  }
+
+  const visualViewport = window.visualViewport;
+
+  if (!visualViewport) {
+    return true;
+  }
+
+  return (
+    window.innerHeight - visualViewport.height >=
+    SOFTWARE_KEYBOARD_MIN_HEIGHT_PX
+  );
+}
+
 function NoteChatUsageInfoContent() {
   return (
     <div className="space-y-2">
@@ -84,10 +116,10 @@ function NoteChatUsageInfoContent() {
  * 일반 사용자가 일일 AI 실행 제한에 도달한 경우
  * 추가 질문 입력과 전송을 차단합니다.
  *
- * 마우스 환경에서는 Enter로 질문을 전송하고,
+ * 하드웨어 키보드에서는 Enter로 질문을 전송하고,
  * Shift + Enter로 줄바꿈을 입력합니다.
  *
- * 터치 환경에서는 Enter의 기본 동작을 유지하여 줄바꿈하고,
+ * 소프트 키보드가 열린 상태에서는 Enter의 기본 동작을 유지하여 줄바꿈하고,
  * 질문 보내기 버튼으로 질문을 전송합니다.
  *
  * 답변 표시 중지 버튼은 현재 브라우저에서 실제 스트림을
@@ -160,10 +192,10 @@ export function NoteChatComposer({
   });
 
   /**
-   * 마우스 환경에서는 Enter로 질문을 전송하고,
+   * 하드웨어 키보드에서는 Enter로 질문을 전송하고,
    * Shift + Enter는 기본 동작을 유지하여 줄바꿈합니다.
    *
-   * 터치 환경에서는 모바일 소프트 키보드의 Enter를 가로채지 않고
+   * 소프트 키보드가 열린 상태에서는 Enter를 가로채지 않고
    * textarea의 기본 줄바꿈 동작을 유지합니다.
    */
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -175,7 +207,7 @@ export function NoteChatComposer({
       return;
     }
 
-    if (window.matchMedia("(pointer: coarse)").matches) {
+    if (isSoftwareKeyboardOpen()) {
       return;
     }
 
@@ -283,7 +315,7 @@ export function NoteChatComposer({
               <FeatureInfoPopover
                 ariaLabel="Note Chat 사용 안내"
                 align="start"
-                className="hidden pointer-coarse:flex pointer-coarse:size-6"
+                className="hidden pointer-coarse:flex"
               >
                 <NoteChatUsageInfoContent />
               </FeatureInfoPopover>

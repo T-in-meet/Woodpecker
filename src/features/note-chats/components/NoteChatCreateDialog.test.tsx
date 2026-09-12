@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { setCoarsePointer } from "../tests/utils/set-coarse-pointer";
 import { NoteChatCreateDialog } from "./NoteChatCreateDialog";
 
 const { createMutateAsyncMock, createResetMock, pushMock } = vi.hoisted(() => ({
@@ -24,12 +25,6 @@ vi.mock("../hooks/use-create-note-chat-conversation-mutation", () => ({
     reset: createResetMock,
   }),
 }));
-
-function setCoarsePointer(matches: boolean) {
-  window.matchMedia = vi.fn(() => ({
-    matches,
-  })) as unknown as typeof window.matchMedia;
-}
 
 describe("NoteChatCreateDialog", () => {
   beforeEach(() => {

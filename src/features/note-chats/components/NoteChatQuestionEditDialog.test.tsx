@@ -2,15 +2,10 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { setCoarsePointer } from "../tests/utils/set-coarse-pointer";
 import { NoteChatQuestionEditDialog } from "./NoteChatQuestionEditDialog";
 
 const MESSAGE_ID = "00000000-0000-4000-8000-000000000002";
-
-function setCoarsePointer(matches: boolean) {
-  window.matchMedia = vi.fn(() => ({
-    matches,
-  })) as unknown as typeof window.matchMedia;
-}
 
 describe("NoteChatQuestionEditDialog", () => {
   beforeEach(() => {
