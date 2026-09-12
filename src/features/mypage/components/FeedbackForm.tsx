@@ -14,6 +14,8 @@ import { cn } from "@/lib/utils/cn";
 
 import { createFeedbackAction } from "../actions";
 import {
+  FEEDBACK_AREA_LABELS,
+  FEEDBACK_AREAS,
   FEEDBACK_CATEGORIES,
   FEEDBACK_CATEGORY_LABELS,
   FEEDBACK_CONTENT_MAX_LENGTH,
@@ -21,6 +23,7 @@ import {
   FEEDBACK_IMAGE_MAX_COUNT,
   FEEDBACK_IMAGE_MAX_SIZE,
   FEEDBACK_TITLE_MAX_LENGTH,
+  type FeedbackArea,
   type FeedbackCategory,
 } from "../schema";
 
@@ -28,7 +31,9 @@ type FeedbackFormProps = {
   hasSubmittedToday: boolean;
 };
 
-type FieldErrors = Partial<Record<"category" | "title" | "content", string[]>>;
+type FieldErrors = Partial<
+  Record<"category" | "area" | "title" | "content", string[]>
+>;
 
 const inputLikeClassName =
   "flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
@@ -39,6 +44,7 @@ export function FeedbackForm({ hasSubmittedToday }: FeedbackFormProps) {
   const [isPending, startTransition] = useTransition();
 
   const [category, setCategory] = useState<FeedbackCategory>("BUG");
+  const [area, setArea] = useState<FeedbackArea>("NOTE");
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [images, setImages] = useState<File[]>([]);
@@ -98,6 +104,7 @@ export function FeedbackForm({ hasSubmittedToday }: FeedbackFormProps) {
 
     const formData = new FormData();
     formData.set("category", category);
+    formData.set("area", area);
     formData.set("title", title);
     formData.set("content", content);
     for (const file of images) {
@@ -143,8 +150,8 @@ export function FeedbackForm({ hasSubmittedToday }: FeedbackFormProps) {
           )}
 
           <div className="space-y-2">
-            <Label>분류</Label>
-            <div className="flex gap-2">
+            <Label>문의 유형</Label>
+            <div className="flex flex-wrap gap-2">
               {FEEDBACK_CATEGORIES.map((value) => (
                 <Button
                   key={value}
@@ -161,6 +168,27 @@ export function FeedbackForm({ hasSubmittedToday }: FeedbackFormProps) {
               <p className="text-sm text-destructive">
                 {fieldErrors.category[0]}
               </p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label>관련 기능</Label>
+            {/* 선택지가 6개라 모바일 폭에서는 줄바꿈이 필요하다. */}
+            <div className="flex flex-wrap gap-2">
+              {FEEDBACK_AREAS.map((value) => (
+                <Button
+                  key={value}
+                  type="button"
+                  size="sm"
+                  variant={area === value ? "default" : "outline"}
+                  onClick={() => setArea(value)}
+                >
+                  {FEEDBACK_AREA_LABELS[value]}
+                </Button>
+              ))}
+            </div>
+            {fieldErrors?.area && (
+              <p className="text-sm text-destructive">{fieldErrors.area[0]}</p>
             )}
           </div>
 

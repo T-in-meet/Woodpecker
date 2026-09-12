@@ -9,6 +9,8 @@ import { useNoteChatConversationListQuery } from "../hooks/use-note-chat-convers
 import { useViewportRemainingHeight } from "../hooks/use-viewport-remaining-height";
 import { NoteChatBreadcrumb } from "./NoteChatBreadcrumb";
 import { NoteChatConversationList } from "./NoteChatConversationList";
+import { NoteChatConversationListError } from "./NoteChatConversationListError";
+import { NoteChatConversationListSkeleton } from "./NoteChatConversationListSkeleton";
 import { NoteChatConversationSearch } from "./NoteChatConversationSearch";
 import { NoteChatCreateDialog } from "./NoteChatCreateDialog";
 
@@ -27,10 +29,11 @@ export function NoteChatsClient() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
 
-  const { data, isLoading, isError } = useNoteChatConversationListQuery({
-    page,
-    search,
-  });
+  const { data, isLoading, isError, isFetching, refetch } =
+    useNoteChatConversationListQuery({
+      page,
+      search,
+    });
 
   const conversations = data?.items ?? [];
 
@@ -42,13 +45,17 @@ export function NoteChatsClient() {
   return (
     <div
       ref={containerRef}
-      className="mx-auto flex w-full max-w-6xl flex-col space-y-6 px-4 pb-4 sm:px-6 sm:pb-6"
+      className="mx-auto flex w-full max-w-6xl flex-col space-y-6 px-4 pb-4 sm:px-6 sm:pb-6 md:px-12"
       style={containerHeight !== null ? { height: containerHeight } : undefined}
     >
       <div className="shrink-0">
-        <NoteChatBreadcrumb className="my-4" />
+        <div className="my-4 flex min-h-8 items-center pointer-coarse:min-h-11">
+          <NoteChatBreadcrumb />
+        </div>
+
         <div>
           <h1 className="text-3xl font-semibold">노트 챗봇</h1>
+
           <p className="mt-1 text-sm text-muted-foreground">
             저장한 노트를 바탕으로 질문하고 답변을 확인해 보세요.
           </p>
@@ -58,6 +65,7 @@ export function NoteChatsClient() {
       <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border">
         <div className="flex shrink-0 items-center justify-between px-5 py-4">
           <h2 className="text-lg font-semibold">대화 목록</h2>
+
           <NoteChatCreateDialog />
         </div>
 
@@ -67,13 +75,12 @@ export function NoteChatsClient() {
 
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
           {isLoading ? (
-            <p className="px-3 py-6 text-sm text-muted-foreground">
-              대화 목록을 불러오는 중입니다.
-            </p>
+            <NoteChatConversationListSkeleton />
           ) : isError ? (
-            <p className="px-3 py-6 text-sm text-destructive">
-              대화 목록을 불러오지 못했습니다.
-            </p>
+            <NoteChatConversationListError
+              isFetching={isFetching}
+              onRetry={() => void refetch()}
+            />
           ) : (
             <NoteChatConversationList
               conversations={conversations}

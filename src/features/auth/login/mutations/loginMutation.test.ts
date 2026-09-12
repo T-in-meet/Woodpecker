@@ -51,6 +51,8 @@ describe("loginMutation", () => {
         email: validPayload.email,
         password: validPayload.password,
       }),
+      // 응답이 없을 때 무한 대기를 막는 timeout용 signal
+      signal: expect.any(AbortSignal),
     });
   });
 
@@ -74,6 +76,7 @@ describe("loginMutation", () => {
           email: validPayload.email,
           password: validPayload.password,
         }),
+        signal: expect.any(AbortSignal),
       },
     );
   });
@@ -135,9 +138,48 @@ describe("loginMutation", () => {
     expect((rejected as typeof failureBody).data.errors).toHaveLength(1);
   });
 
-  it("fetch가 throw하면 에러를 그대로 throw한다", async () => {
-    mockFetch.mockRejectedValue(new Error("network error"));
+  it("fetch가 throw하면 network GlobalError로 좁혀서 throw한다", async () => {
+    // 오프라인 등에서 fetch가 던지는 TypeError는 어떤 타입 가드에도 걸리지 않아,
+    // 좁혀 주지 않으면 폼이 "일시적인 오류"로 뭉뚱그린다.
+    mockFetch.mockRejectedValue(new TypeError("Failed to fetch"));
 
-    await expect(loginMutation(validPayload)).rejects.toThrow("network error");
+    await expect(loginMutation(validPayload)).rejects.toEqual({
+      type: "network",
+    });
+  });
+
+  it("body가 JSON이 아니면 server GlobalError로 좁혀서 throw한다", async () => {
+    // 프록시·호스팅 플랫폼이 끼어들면 계약 body 대신 HTML 오류 페이지가 온다.
+    mockFetch.mockResolvedValue({
+      ok: false,
+      json: async () => {
+        throw new SyntaxError("Unexpected token <");
+      },
+    });
+
+    await expect(loginMutation(validPayload)).rejects.toEqual({
+      type: "server",
+    });
+  });
+
+  it("응답이 오지 않으면 timeout GlobalError로 좁혀서 throw한다", async () => {
+    vi.useFakeTimers();
+
+    mockFetch.mockImplementation(
+      (_url: string, init: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init.signal?.addEventListener("abort", () => {
+            reject(new DOMException("Aborted", "AbortError"));
+          });
+        }),
+    );
+
+    const rejected = loginMutation(validPayload).catch((e: unknown) => e);
+
+    await vi.advanceTimersByTimeAsync(15_000);
+
+    expect(await rejected).toEqual({ type: "timeout" });
+
+    vi.useRealTimers();
   });
 });

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { requireCurrentLegalAcceptance } from "@/features/auth/utils/requireCurrentLegalAcceptance";
+import { isReviewCompleted } from "@/features/notes/utils/noteStatus";
 import { claimResultSchema } from "@/lib/ai/claimResult";
 import { generateJson } from "@/lib/ai/client";
 import { toAiFailureReason } from "@/lib/ai/failureReason";
@@ -43,6 +44,9 @@ import {
 type SubmitAnswerFieldErrors = Partial<
   Record<keyof SubmitAnswerInput, string[]>
 >;
+
+const REVIEW_COMPLETED_ERROR =
+  "복습을 완료한 노트입니다. 노트 상세에서 복습을 다시 시작해주세요.";
 
 export type SubmitAnswerActionState =
   | {
@@ -212,6 +216,10 @@ export async function submitAnswerAction(
     return { error: "비교할 노트를 찾을 수 없습니다." };
   }
 
+  if (isReviewCompleted(note)) {
+    return { error: REVIEW_COMPLETED_ERROR };
+  }
+
   if (!pendingReviewLog) {
     return { error: "진행 중인 복습을 찾을 수 없습니다." };
   }
@@ -272,6 +280,10 @@ export async function completeReviewAction(
     return { error: "노트를 찾을 수 없거나 접근 권한이 없습니다." };
   }
 
+  if (isReviewCompleted(reviewableNote)) {
+    return { error: REVIEW_COMPLETED_ERROR };
+  }
+
   if (!pendingReviewLog) {
     return { error: "이미 완료되었거나 진행 중인 복습이 없습니다." };
   }
@@ -288,11 +300,8 @@ export async function completeReviewAction(
       p_review_log_id: parsed.data.reviewLogId,
     });
 
-  if (completeReviewError?.code === "WP001") {
-    return {
-      error:
-        "오늘은 이미 이 노트의 복습을 완료했어요. 내일 자정(KST) 이후 다시 시도해주세요.",
-    };
+  if (completeReviewError?.message.includes("review already completed")) {
+    return { error: REVIEW_COMPLETED_ERROR };
   }
 
   if (completeReviewError || !completedNoteId) {
@@ -415,10 +424,9 @@ export async function gradeAnswerAction(
     getNoteReviewRoute(parsed.data.noteId),
   );
 
-  let reviewableNote, note, pendingReviewLog;
+  let note, pendingReviewLog;
   try {
-    [reviewableNote, note, pendingReviewLog] = await Promise.all([
-      getReviewableNote(parsed.data.noteId, user.id),
+    [note, pendingReviewLog] = await Promise.all([
       getNoteContentForComparison(parsed.data.noteId, user.id),
       getPendingReviewLog(parsed.data.noteId, user.id),
     ]);
@@ -428,8 +436,12 @@ export async function gradeAnswerAction(
     };
   }
 
-  if (!reviewableNote || !note) {
+  if (!note) {
     return { error: "노트를 찾을 수 없거나 접근 권한이 없습니다." };
+  }
+
+  if (isReviewCompleted(note)) {
+    return { error: REVIEW_COMPLETED_ERROR };
   }
 
   if (!pendingReviewLog || pendingReviewLog.id !== parsed.data.reviewLogId) {

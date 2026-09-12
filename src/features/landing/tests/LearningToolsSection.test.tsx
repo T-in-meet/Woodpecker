@@ -1,0 +1,649 @@
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { learningToolsContent } from "@/features/landing/content";
+import {
+  AUTOPLAY_INTERVAL_MS,
+  LearningToolsSection,
+  MAX_SETTLE_RETRIES,
+  SETTLE_DELAY_MS,
+} from "@/features/landing/LearningToolsSection";
+
+// jsdom에는 레이아웃이 없어 카드 위치·scrollLeft·scrollTo가 전부 0이거나 없다.
+// 캐러셀은 실제 자식 좌표로 현재 장을 판정하므로, 폭이 CARD_WIDTH인 카드가
+// 나란히 놓인 스크롤러를 흉내 내 좌표 계산이 돌아가게 만든다.
+const CARD_WIDTH = 600;
+
+// 캐러셀은 앞뒤에 복제 카드를 하나씩 덧대므로 실제 카드 i는 슬롯 i+1에 놓인다.
+const slotLeft = (slot: number) => slot * CARD_WIDTH;
+const realLeft = (index: number) => slotLeft(index + 1);
+
+// 프로토타입에 건 좌표 흉내가 참조하는 값. 복제 카드가 마운트 도중 붙으므로
+// 요소마다 따로 심지 않고 호출 시점에 계산한다.
+let cardWidth = CARD_WIDTH;
+let scrollLeft = 0;
+let originalGetBoundingClientRect: typeof Element.prototype.getBoundingClientRect;
+
+const tools = learningToolsContent.tools;
+
+type IntersectionEntryStub = {
+  isIntersecting: boolean;
+  intersectionRatio: number;
+};
+
+// 자동 넘김은 섹션이 화면에 보일 때만 돈다. jsdom에는 IntersectionObserver가
+// 없으므로 콜백을 붙잡아 두고 테스트가 직접 발화시킨다. 발화시키지 않으면
+// 화면 밖으로 남아 자동 넘김이 꺼진 상태가 되므로, 자동 넘김과 무관한
+// 테스트는 손댈 필요가 없다.
+let fireIntersection: ((entries: IntersectionEntryStub[]) => void) | null =
+  null;
+let prefersReducedMotion = false;
+
+type Carousel = {
+  scrollTo: ReturnType<typeof vi.fn>;
+  unmount: () => void;
+  // 사용자가 손으로 쓸어넘긴 상황. 프로그램 스크롤과 달리 목표를 걸지 않는다.
+  swipeTo: (left: number) => void;
+  setCardWidth: (width: number) => void;
+  activeDotIndex: () => number;
+  clickNext: () => void;
+  clickPrev: () => void;
+  settle: () => void;
+  // 섹션이 화면에 들어왔다고 알린다. 자동 넘김은 이 뒤에야 돈다.
+  enterViewport: () => void;
+  hover: () => void;
+  unhover: () => void;
+  // 탭을 백그라운드로 보냈다가 되돌린다.
+  hide: () => void;
+  show: () => void;
+  // 복제본에서 진짜 카드로 조용히 옮겨졌는지 확인하는 데 쓴다.
+  currentScrollLeft: () => number;
+  advance: (ms?: number) => void;
+};
+
+// jsdom의 document.hidden은 항상 false다. 값을 갈아끼우고 이벤트를 쏴서
+// 탭 전환을 흉내 낸다.
+function setDocumentHidden(hidden: boolean) {
+  Object.defineProperty(document, "hidden", {
+    configurable: true,
+    get: () => hidden,
+  });
+
+  act(() => {
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+}
+
+function makeRect(left: number, width: number) {
+  return {
+    x: left,
+    y: 0,
+    left,
+    right: left + width,
+    top: 0,
+    bottom: 0,
+    width,
+    height: 0,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+}
+
+/**
+ * @param animateScroll `false`면 scrollTo가 호출만 기록하고 실제로 움직이지
+ *   않는다. 메인 스레드가 막혀 smooth 스크롤이 첫 프레임도 못 그린 상황이다.
+ */
+function mountCarousel({ animateScroll = true } = {}): Carousel {
+  const { container, unmount } = render(<LearningToolsSection />);
+
+  const scroller = container.querySelector("article")?.parentElement;
+  if (!scroller) throw new Error("스크롤러를 찾지 못했다");
+
+  // 컴포넌트가 마운트 직후 실제 첫 장(슬롯 1)으로 자리를 옮긴다. jsdom의
+  // scrollLeft는 대입을 기억하지 않으므로 그 결과를 여기서 반영한다.
+  scrollLeft = realLeft(0);
+
+  Object.defineProperty(scroller, "scrollLeft", {
+    configurable: true,
+    get: () => scrollLeft,
+    set: (value: number) => {
+      scrollLeft = value;
+    },
+  });
+
+  const scrollTo = vi.fn((options: ScrollToOptions) => {
+    if (!animateScroll) return;
+
+    scrollLeft = options.left ?? 0;
+    scroller.dispatchEvent(new Event("scroll"));
+  });
+  scroller.scrollTo = scrollTo as unknown as HTMLElement["scrollTo"];
+
+  const viewport = scroller.parentElement;
+  if (!viewport) throw new Error("뷰포트를 찾지 못했다");
+
+  const clickButton = (name: string) => {
+    fireEvent.click(screen.getByRole("button", { name }));
+  };
+
+  return {
+    scrollTo,
+    unmount,
+    swipeTo: (left: number) => {
+      act(() => {
+        fireEvent.wheel(scroller, { deltaX: left - scrollLeft });
+        scrollLeft = left;
+        scroller.dispatchEvent(new Event("scroll"));
+      });
+    },
+    setCardWidth: (width: number) => {
+      cardWidth = width;
+      act(() => {
+        window.dispatchEvent(new Event("resize"));
+      });
+    },
+    activeDotIndex: () =>
+      tools.findIndex(
+        (tool) =>
+          screen
+            .getByRole("button", { name: `${tool.label} 보기` })
+            .getAttribute("aria-current") === "true",
+      ),
+    clickNext: () => clickButton("다음 기능 보기"),
+    clickPrev: () => clickButton("이전 기능 보기"),
+    settle: () => {
+      act(() => {
+        vi.advanceTimersByTime(SETTLE_DELAY_MS);
+      });
+    },
+    enterViewport: () => {
+      act(() => {
+        fireIntersection?.([{ isIntersecting: true, intersectionRatio: 1 }]);
+      });
+    },
+    // React는 onMouseEnter/onMouseLeave를 mouseover/mouseout 위임으로 만든다.
+    // mouseenter를 직접 쏘면 핸들러가 걸리지 않는다.
+    hover: () => {
+      act(() => {
+        fireEvent.mouseOver(viewport);
+      });
+    },
+    unhover: () => {
+      act(() => {
+        fireEvent.mouseOut(viewport, { relatedTarget: document.body });
+      });
+    },
+    hide: () => setDocumentHidden(true),
+    show: () => setDocumentHidden(false),
+    currentScrollLeft: () => scrollLeft,
+    advance: (ms = AUTOPLAY_INTERVAL_MS) => {
+      act(() => {
+        vi.advanceTimersByTime(ms);
+      });
+    },
+  };
+}
+
+describe("LearningToolsSection 캐러셀", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    fireIntersection = null;
+    prefersReducedMotion = false;
+    cardWidth = CARD_WIDTH;
+    scrollLeft = 0;
+
+    // 복제 카드는 하이드레이션 뒤에 붙어서 render() 도중 자식 수가 바뀐다.
+    // 요소마다 좌표를 심으면 나중에 생긴 복제본이 빠지므로, 호출 시점에
+    // 부모 안에서의 순서로 좌표를 만든다.
+    originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
+    Element.prototype.getBoundingClientRect = function (this: Element) {
+      const parent = this.parentElement;
+      if (this.tagName === "ARTICLE" && parent) {
+        const index = Array.from(parent.children).indexOf(this);
+        return makeRect(index * cardWidth - scrollLeft, cardWidth);
+      }
+
+      // 스크롤러는 카드를 직접 담고 있는 요소다.
+      if (this.firstElementChild?.tagName === "ARTICLE") {
+        return makeRect(0, cardWidth);
+      }
+
+      return originalGetBoundingClientRect.call(this);
+    };
+
+    class IntersectionObserverStub {
+      readonly root = null;
+      readonly rootMargin = "";
+      readonly thresholds: ReadonlyArray<number> = [];
+
+      constructor(callback: IntersectionObserverCallback) {
+        fireIntersection = (entries) => {
+          callback(
+            entries as unknown as IntersectionObserverEntry[],
+            this as unknown as IntersectionObserver,
+          );
+        };
+      }
+
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+      takeRecords(): IntersectionObserverEntry[] {
+        return [];
+      }
+    }
+
+    globalThis.IntersectionObserver =
+      IntersectionObserverStub as unknown as typeof IntersectionObserver;
+
+    // scrollToIndex와 자동 넘김이 prefers-reduced-motion을 본다. jsdom 구현은
+    // 환경마다 달라서 테스트가 직접 값을 정한다. 기본값은 smooth 경로다.
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      writable: true,
+      value: (query: string) => ({
+        matches: prefersReducedMotion,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }),
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    setDocumentHidden(false);
+    Element.prototype.getBoundingClientRect = originalGetBoundingClientRect;
+  });
+
+  it("포커스가 남아 있으면 마우스가 나가도 자동 넘김을 멈춘다", () => {
+    const carousel = mountCarousel();
+    carousel.enterViewport();
+    carousel.hover();
+    const next = screen.getByRole("button", { name: "다음 기능 보기" });
+    fireEvent.focus(next);
+    carousel.unhover();
+    carousel.advance();
+    expect(carousel.scrollTo).not.toHaveBeenCalled();
+    fireEvent.blur(next, { relatedTarget: document.body });
+    carousel.advance();
+    expect(carousel.activeDotIndex()).toBe(1);
+  });
+
+  it("마우스가 남아 있으면 포커스가 나가도 자동 넘김을 멈춘다", () => {
+    const carousel = mountCarousel();
+    carousel.enterViewport();
+    carousel.hover();
+    const next = screen.getByRole("button", { name: "다음 기능 보기" });
+    fireEvent.focus(next);
+    fireEvent.blur(next, { relatedTarget: document.body });
+    carousel.advance();
+    expect(carousel.scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("화면에 절반 미만으로 보이면 자동 넘김을 멈춘다", () => {
+    const carousel = mountCarousel();
+    for (const ratio of [0.1, 0.5, 0.4]) {
+      act(() => {
+        fireIntersection?.([
+          { isIntersecting: true, intersectionRatio: ratio },
+        ]);
+      });
+      carousel.advance();
+      expect(carousel.scrollTo).toHaveBeenCalledTimes(ratio === 0.1 ? 0 : 1);
+    }
+  });
+
+  it.each(["touch", "wheel"] as const)(
+    "자동 이동 중 %s 입력을 받으면 자동 넘김을 다시 시작하지 않는다",
+    (event) => {
+      const carousel = mountCarousel();
+      carousel.enterViewport();
+      carousel.advance();
+      const scroller = document.querySelector("article")!.parentElement!;
+      if (event === "touch") {
+        fireEvent.touchStart(scroller, {
+          touches: [{ clientX: 100, clientY: 100 }],
+        });
+        fireEvent.touchMove(scroller, {
+          touches: [{ clientX: 50, clientY: 100 }],
+        });
+      } else {
+        fireEvent.wheel(scroller, { deltaX: 100 });
+      }
+      act(() => {
+        scroller.scrollLeft = realLeft(0);
+        fireEvent.scroll(scroller);
+      });
+      carousel.settle();
+      carousel.scrollTo.mockClear();
+      carousel.advance(AUTOPLAY_INTERVAL_MS * 3);
+      expect(carousel.scrollTo).not.toHaveBeenCalled();
+      expect(carousel.activeDotIndex()).toBe(0);
+    },
+  );
+
+  it.each(["next", "prev"] as const)(
+    "%s 순환 중 연속 클릭은 복제본 정착 뒤 이어서 이동한다",
+    (direction) => {
+      const carousel = mountCarousel();
+      if (direction === "next") {
+        carousel.clickNext();
+        carousel.clickNext();
+        carousel.settle();
+      }
+      carousel.scrollTo.mockClear();
+      const click =
+        direction === "next" ? carousel.clickNext : carousel.clickPrev;
+      click();
+      click();
+      expect(carousel.scrollTo).toHaveBeenCalledTimes(1);
+      carousel.settle();
+      expect(carousel.scrollTo).toHaveBeenCalledTimes(2);
+      expect(carousel.scrollTo).toHaveBeenLastCalledWith(
+        expect.objectContaining({ left: realLeft(1) }),
+      );
+      carousel.settle();
+      expect(carousel.activeDotIndex()).toBe(1);
+    },
+  );
+
+  it.each(["wheel", "touch", "resize"] as const)(
+    "%s로 세로 이동하거나 레이아웃이 바뀌어도 자동 넘김을 유지한다",
+    (event) => {
+      const carousel = mountCarousel();
+      carousel.enterViewport();
+      const scroller = document.querySelector("article")!.parentElement!;
+      if (event === "wheel")
+        fireEvent.wheel(scroller, { deltaX: 0, deltaY: 100 });
+      if (event === "touch") {
+        fireEvent.touchStart(scroller, {
+          touches: [{ clientX: 100, clientY: 100 }],
+        });
+        fireEvent.touchMove(scroller, {
+          touches: [{ clientX: 100, clientY: 40 }],
+        });
+        fireEvent.touchEnd(scroller);
+      }
+      if (event === "resize") {
+        carousel.setCardWidth(400);
+        act(() => {
+          scroller.scrollLeft = 400;
+          fireEvent.scroll(scroller);
+        });
+        carousel.settle();
+      }
+      carousel.advance();
+      expect(carousel.activeDotIndex()).toBe(1);
+      expect(carousel.scrollTo).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("앞뒤에 복제 카드를 하나씩 덧대고 보조기기에서 숨긴다", () => {
+    mountCarousel();
+
+    const cards = Array.from(document.querySelectorAll("article"));
+
+    expect(cards).toHaveLength(tools.length + 2);
+    // [마지막 복제, 0, 1, …, n-1, 첫 복제] 순서다. 복제본은 대응하는 진짜
+    // 카드와 같은 그림이어야 자리를 옮겨도 화면이 그대로다.
+    expect(cards[0]?.textContent).toBe(cards[tools.length]?.textContent);
+    expect(cards[cards.length - 1]?.textContent).toBe(cards[1]?.textContent);
+
+    // 같은 내용을 두 번 읽히지 않게 복제본만 숨긴다.
+    expect(cards[0]).toHaveAttribute("aria-hidden", "true");
+    expect(cards[cards.length - 1]).toHaveAttribute("aria-hidden", "true");
+    expect(cards[1]).not.toHaveAttribute("aria-hidden");
+  });
+
+  it("화살표를 연속으로 누르면 한 장씩 이어서 넘어간다", () => {
+    const carousel = mountCarousel();
+
+    // 스크롤이 멎기 전에 다시 누르는 상황. 중간 위치로 activeIndex를 되돌리면
+    // 두 번째 클릭이 같은 장을 다시 목표로 잡아 한 장만 넘어간다.
+    carousel.clickNext();
+    carousel.clickNext();
+
+    expect(
+      carousel.scrollTo.mock.calls.map(([options]) => options.left),
+    ).toEqual([realLeft(1), realLeft(2)]);
+
+    carousel.settle();
+    expect(carousel.activeDotIndex()).toBe(2);
+  });
+
+  it("마지막 장에서 다음을 누르면 복제본으로 한 칸만 미끄러진다", () => {
+    const carousel = mountCarousel();
+
+    carousel.clickNext();
+    carousel.clickNext();
+    carousel.settle();
+    carousel.scrollTo.mockClear();
+
+    carousel.clickNext();
+
+    // 실제 첫 장까지 세 칸을 되감지 않고, 뒤에 덧댄 복제본으로 한 칸만 간다.
+    expect(carousel.scrollTo).toHaveBeenCalledWith(
+      expect.objectContaining({ left: slotLeft(tools.length + 1) }),
+    );
+    expect(carousel.activeDotIndex()).toBe(0);
+
+    // 멎은 뒤에는 똑같은 그림인 진짜 첫 장으로 소리 없이 옮겨 간다.
+    carousel.settle();
+    expect(carousel.currentScrollLeft()).toBe(realLeft(0));
+    expect(carousel.activeDotIndex()).toBe(0);
+  });
+
+  it("첫 장에서 이전을 누르면 복제본을 거쳐 마지막 장으로 간다", () => {
+    const carousel = mountCarousel();
+
+    carousel.clickPrev();
+
+    expect(carousel.scrollTo).toHaveBeenCalledWith(
+      expect.objectContaining({ left: slotLeft(0) }),
+    );
+    expect(carousel.activeDotIndex()).toBe(tools.length - 1);
+
+    carousel.settle();
+    expect(carousel.currentScrollLeft()).toBe(realLeft(tools.length - 1));
+    expect(carousel.activeDotIndex()).toBe(tools.length - 1);
+  });
+
+  it("양 끝에서도 화살표를 비활성화하지 않는다", () => {
+    mountCarousel();
+
+    // 순환하므로 막을 이유가 없다. 끝에서 비활성화하면 포커스를 쥔 버튼이
+    // 사라져 포커스가 body로 떨어진다.
+    expect(
+      screen.getByRole("button", { name: "이전 기능 보기" }),
+    ).not.toHaveAttribute("aria-disabled");
+    expect(
+      screen.getByRole("button", { name: "다음 기능 보기" }),
+    ).not.toHaveAttribute("aria-disabled");
+  });
+
+  it("프로그램 스크롤 도중 사용자가 쓸어넘기면 목표를 버리고 실제 위치를 따른다", () => {
+    const carousel = mountCarousel();
+
+    carousel.clickNext();
+    carousel.scrollTo.mockClear();
+
+    // smooth 스크롤이 끝나기 전에 손으로 첫 장까지 되돌린 상황.
+    carousel.swipeTo(realLeft(0));
+    carousel.settle();
+
+    expect(carousel.activeDotIndex()).toBe(0);
+    // 버린 목표로 다시 끌고 가지 않는다.
+    expect(carousel.scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("사용자 스크롤만으로 활성 장이 따라간다", () => {
+    const carousel = mountCarousel();
+
+    carousel.swipeTo(realLeft(2));
+
+    expect(carousel.activeDotIndex()).toBe(2);
+    expect(carousel.scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("스크롤이 첫 프레임을 못 그려도 활성 장을 되돌리지 않고 기다린다", () => {
+    const carousel = mountCarousel({ animateScroll: false });
+
+    carousel.clickNext();
+    expect(carousel.scrollTo).toHaveBeenCalledTimes(1);
+
+    // 여기서 목표를 풀면 activeIndex가 첫 장으로 되돌아가 두 번 눌러도
+    // 한 장만 넘어가는 회귀가 난다.
+    carousel.settle();
+    expect(carousel.activeDotIndex()).toBe(1);
+
+    // 끝내 움직이지 않으면 재시도 한도에서 실제 위치로 회수한다.
+    act(() => {
+      vi.advanceTimersByTime(SETTLE_DELAY_MS * (MAX_SETTLE_RETRIES + 1));
+    });
+    expect(carousel.activeDotIndex()).toBe(0);
+  });
+
+  it("카드 폭이 바뀌면 다시 재서 이동한다", () => {
+    const carousel = mountCarousel();
+
+    carousel.clickNext();
+    carousel.settle();
+
+    carousel.setCardWidth(1000);
+    carousel.scrollTo.mockClear();
+    carousel.clickNext();
+
+    // 두 번째 장(슬롯 2)에서 다음은 슬롯 3이고, 새 폭으로 다시 잰다.
+    expect(carousel.scrollTo).toHaveBeenCalledWith(
+      expect.objectContaining({ left: 3000 }),
+    );
+  });
+
+  it("화면에 들어오면 일정 시간마다 다음 장으로 넘어간다", () => {
+    const carousel = mountCarousel();
+
+    carousel.enterViewport();
+    carousel.advance();
+
+    expect(carousel.scrollTo).toHaveBeenCalledWith(
+      expect.objectContaining({ left: realLeft(1) }),
+    );
+    expect(carousel.activeDotIndex()).toBe(1);
+  });
+
+  it("마지막 장 다음에는 복제본을 거쳐 첫 장으로 돌아온다", () => {
+    const carousel = mountCarousel();
+
+    carousel.enterViewport();
+    // 0 -> 1 -> 2 -> 0. 마지막에서 멈추지 않고 순환한다.
+    carousel.advance();
+    carousel.advance();
+    carousel.advance();
+
+    // 마지막 이동도 앞의 둘과 똑같이 한 칸이다.
+    expect(
+      carousel.scrollTo.mock.calls.map(([options]) => options.left),
+    ).toEqual([realLeft(1), realLeft(2), slotLeft(tools.length + 1)]);
+    expect(carousel.activeDotIndex()).toBe(0);
+
+    carousel.settle();
+    expect(carousel.currentScrollLeft()).toBe(realLeft(0));
+  });
+
+  it("화면 밖이면 자동으로 넘어가지 않는다", () => {
+    const carousel = mountCarousel();
+
+    // enterViewport를 부르지 않은 상태 = 섹션이 아직 화면 밖이다.
+    carousel.advance(AUTOPLAY_INTERVAL_MS * 3);
+
+    expect(carousel.scrollTo).not.toHaveBeenCalled();
+    expect(carousel.activeDotIndex()).toBe(0);
+  });
+
+  it("포인터가 올라가 있는 동안에는 넘어가지 않는다", () => {
+    const carousel = mountCarousel();
+
+    carousel.enterViewport();
+    carousel.hover();
+    carousel.advance(AUTOPLAY_INTERVAL_MS * 2);
+
+    expect(carousel.scrollTo).not.toHaveBeenCalled();
+
+    // 포인터가 빠지면 다시 돈다.
+    carousel.unhover();
+    carousel.advance();
+
+    expect(carousel.activeDotIndex()).toBe(1);
+  });
+
+  it("사용자가 직접 넘긴 뒤에는 자동으로 넘어가지 않는다", () => {
+    const carousel = mountCarousel();
+
+    carousel.enterViewport();
+    carousel.clickNext();
+    carousel.settle();
+    carousel.scrollTo.mockClear();
+
+    carousel.advance(AUTOPLAY_INTERVAL_MS * 3);
+
+    expect(carousel.scrollTo).not.toHaveBeenCalled();
+    expect(carousel.activeDotIndex()).toBe(1);
+  });
+
+  it("쓸어넘긴 뒤에도 자동으로 넘어가지 않는다", () => {
+    const carousel = mountCarousel();
+
+    carousel.enterViewport();
+    carousel.swipeTo(realLeft(1));
+    carousel.scrollTo.mockClear();
+
+    carousel.advance(AUTOPLAY_INTERVAL_MS * 3);
+
+    expect(carousel.scrollTo).not.toHaveBeenCalled();
+    expect(carousel.activeDotIndex()).toBe(1);
+  });
+
+  it("다른 탭에 가 있는 동안에는 넘어가지 않는다", () => {
+    const carousel = mountCarousel();
+
+    carousel.enterViewport();
+    carousel.hide();
+    carousel.advance(AUTOPLAY_INTERVAL_MS * 2);
+
+    expect(carousel.scrollTo).not.toHaveBeenCalled();
+
+    carousel.show();
+    carousel.advance();
+
+    expect(carousel.activeDotIndex()).toBe(1);
+  });
+
+  it("움직임을 줄이는 설정이면 자동으로 넘어가지 않는다", () => {
+    prefersReducedMotion = true;
+    const carousel = mountCarousel();
+
+    carousel.enterViewport();
+    carousel.advance(AUTOPLAY_INTERVAL_MS * 3);
+
+    expect(carousel.scrollTo).not.toHaveBeenCalled();
+    expect(carousel.activeDotIndex()).toBe(0);
+  });
+
+  it("unmount하면 대기 중인 타이머를 정리한다", () => {
+    const carousel = mountCarousel({ animateScroll: false });
+
+    carousel.clickNext();
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+
+    carousel.unmount();
+
+    expect(vi.getTimerCount()).toBe(0);
+    expect(() => vi.advanceTimersByTime(SETTLE_DELAY_MS * 10)).not.toThrow();
+  });
+});

@@ -1,6 +1,8 @@
 import { render } from "@react-email/render";
+import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { OtpEmailTemplate } from "@/features/auth/email/OtpEmailTemplate";
 import { sendViaNodemailer } from "@/features/auth/email/providers/sendViaNodemailer";
 import { sendViaResend } from "@/features/auth/email/providers/sendViaResend";
 import { resolveEmailProvider } from "@/features/auth/email/resolveEmailProvider";
@@ -43,25 +45,46 @@ describe("sendOtpEmail", () => {
     vi.mocked(sendViaResend).mockResolvedValue(undefined);
   });
 
-  it("signup 목적이면 기본 인증 번호 제목으로 이메일을 발송한다.", async () => {
+  it("signup 목적이면 이메일 인증 번호 제목으로 발송한다.", async () => {
     await sendOtpEmail({ email, purpose: "signup", otp });
 
     expect(sendViaNodemailer).toHaveBeenCalledWith({
       from,
       to: email,
-      subject: "인증 번호",
+      subject: "딱다구리 이메일 인증 번호",
       html,
     });
   });
 
-  it("reset-password 목적이면 비밀번호 재설정 인증 번호 제목으로 이메일을 발송한다.", async () => {
+  it("reset-password 목적이면 비밀번호 재설정 인증 번호 제목으로 발송한다.", async () => {
     await sendOtpEmail({ email, purpose: "reset-password", otp });
 
     expect(sendViaNodemailer).toHaveBeenCalledWith({
       from,
       to: email,
-      subject: "비밀번호 재설정 인증 번호",
+      subject: "딱다구리 비밀번호 재설정 인증 번호",
       html,
+    });
+  });
+
+  it("OTP 템플릿에 otp와 purpose를 전달한다.", async () => {
+    await sendOtpEmail({ email, purpose: "signup", otp });
+
+    expect(render).toHaveBeenCalledTimes(1);
+
+    const renderCall = vi.mocked(render).mock.calls[0];
+
+    expect(renderCall).toBeDefined();
+
+    const element = renderCall![0] as ReactElement<{
+      otp: string;
+      purpose: string;
+    }>;
+
+    expect(element.type).toBe(OtpEmailTemplate);
+    expect(element.props).toEqual({
+      otp,
+      purpose: "signup",
     });
   });
 
@@ -99,7 +122,7 @@ describe("sendOtpEmail", () => {
     expect(sendViaNodemailer).toHaveBeenCalledWith({
       from,
       to: email,
-      subject: "인증 번호",
+      subject: "딱다구리 이메일 인증 번호",
       html,
     });
   });

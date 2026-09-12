@@ -23,8 +23,8 @@ type UpdateRelatedNoteReasonDialogProps = {
   /** 수정할 Related Note가 연결된 기준 Note ID입니다. */
   noteId: string;
 
-  /** 수정할 Related Note ID입니다. */
-  relatedNoteId: string;
+  /** 수정할 Related Notes 관계 row ID입니다. */
+  relationId: string;
 
   /** 화면에 표시할 Related Note 제목입니다. */
   title: string;
@@ -53,7 +53,7 @@ type UpdateRelatedNoteReasonFormValues = {
  */
 export function UpdateRelatedNoteReasonDialog({
   noteId,
-  relatedNoteId,
+  relationId,
   title,
   reason,
   children,
@@ -105,7 +105,7 @@ export function UpdateRelatedNoteReasonDialog({
     try {
       await updateReasonMutation.mutateAsync({
         noteId,
-        relatedNoteId,
+        relationId,
         ...(nextReason
           ? {
               reason: nextReason,
@@ -150,7 +150,7 @@ export function UpdateRelatedNoteReasonDialog({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor={`related-note-reason-${relatedNoteId}`}>
+              <Label htmlFor={`related-note-reason-${relationId}`}>
                 연결 이유
                 <span className="ml-1 text-xs font-normal text-muted-foreground">
                   선택
@@ -158,7 +158,7 @@ export function UpdateRelatedNoteReasonDialog({
               </Label>
 
               <Textarea
-                id={`related-note-reason-${relatedNoteId}`}
+                id={`related-note-reason-${relationId}`}
                 rows={4}
                 maxLength={500}
                 placeholder="이 노트를 연결하는 이유를 입력할 수 있습니다."

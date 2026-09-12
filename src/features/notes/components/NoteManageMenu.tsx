@@ -1,7 +1,16 @@
 "use client";
 
-import { Bell, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  Bell,
+  CheckCircle2,
+  MoreHorizontal,
+  Pencil,
+  RotateCcw,
+  Trash2,
+} from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -15,7 +24,10 @@ import {
   LazyNotificationSchedulePicker,
   preloadNotificationSchedulePicker,
 } from "@/features/notifications/components/LazyNotificationSchedulePicker";
+import { NOTIFICATIONS_QUERY_KEY } from "@/features/notifications/query-keys";
+import { showToast } from "@/lib/utils/showToast";
 
+import { setNoteReviewCompletedAction } from "../actions";
 import { DeleteNoteDialog } from "./DeleteNoteDialog";
 
 type NoteManageMenuProps = {
@@ -23,8 +35,12 @@ type NoteManageMenuProps = {
   noteTitle: string;
   onEdit: () => void;
   onEditIntent: () => void;
-  /** 학습을 모두 마친 노트는 알림을 더 보내지 않으므로 항목을 감춘다. */
+  /** 사용자가 직접 완료 표시한 노트인지. 토글 문구와 아이콘을 가른다. */
+  isCompletedByUser: boolean;
+  /** 완료 당일까지만 포함해 알림 일정을 바꿀 수 있는지. */
   canChangeNotificationTime: boolean;
+  /** 완료 당일 정책으로 오늘 일정만 선택할 수 있는지. */
+  notificationScheduleSameDayOnly: boolean;
   notificationTimeOfDay: string | null;
   /** 다음 알림이 나갈 시각. 달력의 초기 선택 날짜가 된다. */
   nextScheduledAt: string | null;
@@ -39,13 +55,51 @@ export function NoteManageMenu({
   noteTitle,
   onEdit,
   onEditIntent,
+  isCompletedByUser,
   canChangeNotificationTime,
+  notificationScheduleSameDayOnly,
   notificationTimeOfDay,
   nextScheduledAt,
 }: NoteManageMenuProps) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [hasNotificationOpened, setHasNotificationOpened] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [isTogglingCompletion, startCompletionTransition] = useTransition();
+
+  /**
+   * 복습 완료 표시를 켜고 끈다. 해제하면 저장된 pending 일정 또는 DB가 복구한
+   * 다음 일정에서 알림과 복습이 다시 이어진다.
+   *
+   * 실패는 토스트로 알린다. 메뉴는 선택 즉시 닫히고 화면도 그대로여서, 알리지
+   * 않으면 "눌렀는데 아무 일도 없다"와 구분되지 않는다.
+   */
+  const toggleReviewCompleted = () => {
+    startCompletionTransition(async () => {
+      try {
+        const result = await setNoteReviewCompletedAction(
+          noteId,
+          !isCompletedByUser,
+        );
+
+        if ("error" in result) {
+          showToast(result.error, { variant: "destructive" });
+          return;
+        }
+
+        await queryClient.invalidateQueries({
+          queryKey: NOTIFICATIONS_QUERY_KEY.all,
+        });
+        router.refresh();
+      } catch {
+        showToast(
+          "복습 완료 상태를 바꾸지 못했습니다. 잠시 후 다시 시도해주세요.",
+          { variant: "destructive" },
+        );
+      }
+    });
+  };
 
   const openNotificationSchedule = () => {
     setHasNotificationOpened(true);
@@ -73,7 +127,15 @@ export function NoteManageMenu({
           </Button>
         </DropdownMenuTrigger>
 
-        <DropdownMenuContent align="end">
+        {/* min-w: 기본 min-w-32는 "복습 완료로 표시"가 두 줄로 접힌다. 가장 긴
+            항목이 한 줄에 들어가는 선까지만 넓힌다.
+            collisionPadding: Radix 기본값 0이라 좁은 화면에서 메뉴가 뷰포트
+            왼쪽 끝에 붙는다. 가장자리와 간격을 둔다. */}
+        <DropdownMenuContent
+          align="end"
+          collisionPadding={16}
+          className="min-w-40"
+        >
           {/* 편집 폼으로 바뀌면서 이 메뉴(트리거 포함)가 언마운트되므로, 메뉴가
               포커스를 트리거로 되돌린 다음에 전환해야 포커스가 body로 떨어지지 않는다. */}
           <DropdownMenuItem
@@ -96,6 +158,18 @@ export function NoteManageMenu({
             </DropdownMenuItem>
           )}
 
+          <DropdownMenuItem
+            disabled={isTogglingCompletion}
+            onSelect={toggleReviewCompleted}
+          >
+            {isCompletedByUser ? (
+              <RotateCcw className="size-4" aria-hidden="true" />
+            ) : (
+              <CheckCircle2 className="size-4" aria-hidden="true" />
+            )}
+            {isCompletedByUser ? "복습 다시 시작" : "복습 완료로 표시"}
+          </DropdownMenuItem>
+
           <DropdownMenuSeparator />
 
           <DropdownMenuItem
@@ -113,6 +187,7 @@ export function NoteManageMenu({
           noteId={noteId}
           initialTime={notificationTimeOfDay}
           initialScheduledAt={nextScheduledAt}
+          sameDayOnly={notificationScheduleSameDayOnly}
           open={notificationOpen}
           onOpenChange={setNotificationOpen}
         />

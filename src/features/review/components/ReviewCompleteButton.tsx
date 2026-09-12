@@ -7,13 +7,11 @@ import { Button } from "@/components/ui/button";
 import { completeReviewAction } from "../actions";
 
 type ReviewCompleteButtonProps = {
-  disabled?: boolean;
   noteId: string;
   reviewLogId: string;
 };
 
 export function ReviewCompleteButton({
-  disabled = false,
   noteId,
   reviewLogId,
 }: ReviewCompleteButtonProps) {
@@ -33,12 +31,8 @@ export function ReviewCompleteButton({
         </p>
       )}
 
-      <Button type="submit" size="lg" disabled={isPending || disabled}>
-        {disabled
-          ? "내일부터 완료 가능"
-          : isPending
-            ? "완료 처리 중..."
-            : "복습 완료"}
+      <Button type="submit" size="lg" disabled={isPending}>
+        {isPending ? "완료 처리 중..." : "복습 완료"}
       </Button>
     </form>
   );

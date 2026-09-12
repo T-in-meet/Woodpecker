@@ -86,25 +86,35 @@ describe("NotificationList", () => {
     expect(screen.queryByText("복습 알림")).not.toBeInTheDocument();
   });
 
-  it("keeps review notifications unread until the review is completed", async () => {
+  // 알림 상태와 복습 완료는 분리한다. 확인하는 순간 소비되고, 복습을 실제로
+  // 했는지는 복습 완료 RPC가 따로 반영한다.
+  it("marks review notifications as read before navigation", async () => {
     const user = userEvent.setup();
+    const onItemRead = vi.fn();
     const onItemNavigate = vi.fn();
+    const item = createNotificationItem();
+    markNotificationAsReadActionMock.mockResolvedValue({
+      success: true,
+      updated: true,
+    });
 
     render(
       <NotificationList
-        items={[createNotificationItem()]}
+        items={[item]}
+        onItemRead={onItemRead}
         onItemNavigate={onItemNavigate}
       />,
     );
 
-    const link = screen.getByRole("link");
-    link.addEventListener("click", (event) => event.preventDefault());
+    await user.click(screen.getByRole("link"));
 
-    await user.click(link);
-
-    expect(markNotificationAsReadActionMock).not.toHaveBeenCalled();
+    expect(markNotificationAsReadActionMock).toHaveBeenCalledWith(
+      NOTIFICATION_ID,
+      item.click_path,
+    );
+    expect(onItemRead).toHaveBeenCalledWith(NOTIFICATION_ID);
     expect(onItemNavigate).toHaveBeenCalledOnce();
-    expect(routerPushMock).not.toHaveBeenCalled();
+    expect(routerPushMock).toHaveBeenCalledWith(item.click_path);
   });
 
   it("marks feedback reply notifications as read before navigation", async () => {

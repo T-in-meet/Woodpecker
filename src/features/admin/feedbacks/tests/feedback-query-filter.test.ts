@@ -63,6 +63,21 @@ describe("applyFeedbackFilters", () => {
     expect(result).toBe(query);
   });
 
+  it("영역 다중 선택 필터를 적용한다", () => {
+    const query = createFeedbackQueryMock();
+
+    const result = applyFeedbackFilters(query as never, {
+      area: {
+        field: "area",
+        type: "multi-select",
+        value: ["AI", "NOTIFICATION"],
+      },
+    });
+
+    expect(query.in).toHaveBeenCalledWith("area", ["AI", "NOTIFICATION"]);
+    expect(result).toBe(query);
+  });
+
   it("등록일 시작일과 종료일을 포함하는 범위 조건을 적용한다", () => {
     const query = createFeedbackQueryMock();
     const from = new Date(2026, 6, 1);

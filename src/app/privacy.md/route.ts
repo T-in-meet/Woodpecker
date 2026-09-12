@@ -1,6 +1,10 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
+import { ROUTES } from "@/lib/constants/routes";
+import { SITE_URL } from "@/lib/constants/site";
+import { markdownResponse } from "@/lib/seo/markdownResponse";
+
 export const dynamic = "force-static";
 
 export async function GET(): Promise<Response> {
@@ -13,11 +17,7 @@ export async function GET(): Promise<Response> {
   );
   const body = await readFile(filePath, "utf8");
 
-  return new Response(body, {
-    status: 200,
-    headers: {
-      "Content-Type": "text/markdown; charset=utf-8",
-      "Cache-Control": "public, max-age=3600, s-maxage=86400",
-    },
+  return markdownResponse(body, {
+    canonicalUrl: `${SITE_URL}${ROUTES.PRIVACY}`,
   });
 }

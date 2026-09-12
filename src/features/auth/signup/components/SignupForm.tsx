@@ -9,7 +9,11 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
-import { OAuthButtons } from "@/features/auth/components/OAuthButtons";
+import {
+  type OAuthBeforeSignInResult,
+  OAuthButtons,
+} from "@/features/auth/components/OAuthButtons";
+import { AUTH_ROOT_ERROR_TYPE } from "@/features/auth/errors/authRootError";
 import {
   GLOBAL_ERROR_MESSAGES,
   isGlobalError,
@@ -28,9 +32,11 @@ import { EmailSignupFields } from "@/features/auth/signup/components/EmailSignup
 import { SignupActions } from "@/features/auth/signup/components/SignupActions";
 import { signupFormSchema } from "@/features/auth/signup/schema/signupFormSchema";
 import { cn } from "@/lib/utils/cn";
-import { showToast } from "@/lib/utils/showToast";
 import { isServerValidationError } from "@/lib/validation/isServerValidationError";
 import { mapReasonToMessage } from "@/lib/validation/mapReasonToMessage";
+
+import { AuthCard } from "../../components/AuthCard";
+import { AuthFormHeader } from "../../components/AuthFormHeader";
 
 /**
  * signup 폼에서 처리 가능한 필드 이름 집합
@@ -199,31 +205,36 @@ export function SignupForm({
         }
 
         if (hasUnknownField) {
-          setError("root", { message: "요청을 처리할 수 없습니다" });
+          setError("root", {
+            type: AUTH_ROOT_ERROR_TYPE.SYSTEM,
+            message: "요청을 처리할 수 없습니다",
+          });
         }
 
         return;
       }
 
+      // 아래 세 가지는 모두 "다시 시도"가 필요한 오류라 사라지는 토스트로 알리면
+      // 재시도할 근거가 화면에서 없어진다. 제출 버튼 옆 root 오류 자리에 남긴다.
       if (isRateLimitError(e)) {
-        showToast(RATE_LIMIT_TOAST_MESSAGE, {
-          variant: "destructive",
-          dedupeKey: "auth-rate-limit",
+        setError("root", {
+          type: AUTH_ROOT_ERROR_TYPE.SYSTEM,
+          message: RATE_LIMIT_TOAST_MESSAGE,
         });
         return;
       }
 
       if (isGlobalError(e)) {
-        showToast(GLOBAL_ERROR_MESSAGES[e.type], {
-          variant: "destructive",
-          dedupeKey: `auth-global-${e.type}`,
+        setError("root", {
+          type: AUTH_ROOT_ERROR_TYPE.SYSTEM,
+          message: GLOBAL_ERROR_MESSAGES[e.type],
         });
         return;
       }
 
-      showToast(UNKNOWN_ERROR_MESSAGE, {
-        variant: "destructive",
-        dedupeKey: "auth-unknown-error",
+      setError("root", {
+        type: AUTH_ROOT_ERROR_TYPE.SYSTEM,
+        message: UNKNOWN_ERROR_MESSAGE,
       });
     }
   };
@@ -255,68 +266,69 @@ export function SignupForm({
 
   /**
    * OAuth 회원가입 전 공통 필수 약관 동의 intent를 저장한다.
+   *
+   * 두 실패를 서로 다른 자리에 남긴다. 사라지는 toast로 알리면 무엇을 고쳐야
+   * 하는지가 화면에서 없어지기 때문이다.
+   * - 약관 미동의 → 고쳐야 할 체크박스 옆 필드 오류
+   * - intent 저장 실패 → 다시 누를 소셜 버튼 아래 인라인 오류
    */
-  const handleOAuthBeforeSignIn = async () => {
-    if (
-      watchedTermsOfService &&
-      watchedPrivacyPolicyAcknowledged &&
-      watchedAge14OrOlder
-    ) {
-      try {
-        const response = await fetch("/api/auth/oauth/agreement-intent", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            agreements: {
-              termsOfService: true,
-              privacyPolicyAcknowledged: true,
-              age14OrOlder: true,
-            },
-          }),
-        });
+  const handleOAuthBeforeSignIn =
+    async (): Promise<OAuthBeforeSignInResult> => {
+      if (
+        watchedTermsOfService &&
+        watchedPrivacyPolicyAcknowledged &&
+        watchedAge14OrOlder
+      ) {
+        try {
+          const response = await fetch("/api/auth/oauth/agreement-intent", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              agreements: {
+                termsOfService: true,
+                privacyPolicyAcknowledged: true,
+                age14OrOlder: true,
+              },
+            }),
+          });
 
-        if (response.ok) {
-          return true;
+          if (response.ok) {
+            return { ok: true };
+          }
+        } catch {
+          // 아래 공통 메시지로 OAuth 시작 실패를 안내한다.
         }
-      } catch {
-        // 아래 공통 toast로 OAuth 시작 실패를 안내한다.
+
+        return {
+          ok: false,
+          message:
+            "소셜 회원가입을 시작할 수 없습니다. 잠시 후 다시 시도해주세요.",
+        };
       }
 
-      showToast(
-        "소셜 회원가입을 시작할 수 없습니다. 잠시 후 다시 시도해주세요.",
-        {
-          variant: "destructive",
-          dedupeKey: "auth-oauth-agreement-intent",
-        },
-      );
-      return false;
-    }
+      // 체크박스마다 오류 슬롯이 이미 있고, AgreementSection이 새로 나타난 오류로
+      // 포커스까지 옮긴다. message를 넘기지 않아 소셜 버튼 아래에는 중복으로
+      // 띄우지 않는다.
+      await trigger([
+        "termsOfService",
+        "privacyPolicyAcknowledged",
+        "age14OrOlder",
+      ]);
 
-    showToast(
-      "이용약관 동의, 개인정보 처리방침 확인, 만 14세 이상 확인이 필요합니다.",
-      {
-        variant: "destructive",
-        dedupeKey: "auth-signup-agreements-required",
-      },
-    );
-    return false;
-  };
+      return { ok: false };
+    };
 
   return (
-    <div className="my-0 md:my-4 mx-auto max-w-2xl bg-white border-0 md:border md:border-outline-variant md:rounded-xl rounded-none md:shadow-sm shadow-none overflow-hidden">
+    <AuthCard variant="wide">
       <form
         aria-label="회원가입"
-        className="mx-auto max-w-4xl space-y-6 py-7 px-4 md:px-8"
+        className="space-y-6"
         onSubmit={handleSubmit(handleValidSubmit)}
       >
-        <div className="space-y-2">
-          <h1 className="text-2xl font-bold text-primary tracking-tight">
-            계정 만들기
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            가입 방식을 선택하고 필수 약관에 동의해주세요.
-          </p>
-        </div>
+        <AuthFormHeader
+          title="계정 만들기"
+          description="가입 방식을 선택하고 필수 약관에 동의해주세요."
+        />
 
         {signupNotice ? (
           <div
@@ -338,13 +350,14 @@ export function SignupForm({
           >
             가입 방식
           </h2>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+
+          <div className="grid grid-cols-1 gap-2 auth:grid-cols-2">
             <Button
               type="button"
               variant="outline"
               aria-pressed={signupMethod === SIGNUP_METHODS.email}
               className={cn(
-                "h-auto justify-start px-4 py-3 text-left",
+                "h-auto justify-center px-4 py-3 text-left",
                 signupMethod === SIGNUP_METHODS.email &&
                   "border-primary bg-primary/5 text-primary",
               )}
@@ -352,12 +365,13 @@ export function SignupForm({
             >
               이메일로 가입
             </Button>
+
             <Button
               type="button"
               variant="outline"
               aria-pressed={signupMethod === SIGNUP_METHODS.google}
               className={cn(
-                "h-auto justify-start px-4 py-3 text-left",
+                "h-auto justify-center px-4 py-3 text-left",
                 signupMethod === SIGNUP_METHODS.google &&
                   "border-primary bg-primary/5 text-primary",
               )}
@@ -407,7 +421,7 @@ export function SignupForm({
 
         {signupMethod === SIGNUP_METHODS.email && (
           <SignupActions
-            rootError={errors.root}
+            rootError={errors.root?.message}
             isPending={isPending}
             isSubmitButtonVisuallyEnabled={isSubmitButtonVisuallyEnabled}
             submitButtonRef={submitButtonRef}
@@ -425,6 +439,6 @@ export function SignupForm({
           </Link>
         </p>
       </form>
-    </div>
+    </AuthCard>
   );
 }

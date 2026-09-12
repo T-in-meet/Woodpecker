@@ -35,8 +35,34 @@ export const FEEDBACK_CATEGORIES = ["BUG", "FEATURE", "ETC"] as const;
 export type FeedbackCategory = (typeof FEEDBACK_CATEGORIES)[number];
 
 export const FEEDBACK_CATEGORY_LABELS: Record<FeedbackCategory, string> = {
-  BUG: "버그 신고",
-  FEATURE: "기능 제안",
+  BUG: "오류 신고",
+  FEATURE: "개선 제안",
+  ETC: "기타 문의",
+};
+
+/**
+ * 문의가 가리키는 기능 영역. 유형(category)과 직교하는 축이다.
+ *
+ * category만으로는 "버그 12건"이 에디터 문제인지 알림 문제인지 알 수 없어,
+ * 관리자 화면이 두 축을 교차 필터할 수 있도록 분리했다.
+ * 값 목록은 feedbacks_area_check 제약과 동일하게 유지할 것.
+ */
+export const FEEDBACK_AREAS = [
+  "NOTE",
+  "REVIEW",
+  "AI",
+  "NOTIFICATION",
+  "ACCOUNT",
+  "ETC",
+] as const;
+export type FeedbackArea = (typeof FEEDBACK_AREAS)[number];
+
+export const FEEDBACK_AREA_LABELS: Record<FeedbackArea, string> = {
+  NOTE: "노트",
+  REVIEW: "복습",
+  AI: "AI",
+  NOTIFICATION: "알림",
+  ACCOUNT: "계정",
   ETC: "기타",
 };
 
@@ -52,7 +78,10 @@ export const FEEDBACK_DAILY_LIMIT_MESSAGE =
 
 export const feedbackSchema = z.object({
   category: z.enum(FEEDBACK_CATEGORIES, {
-    message: "분류를 선택해주세요",
+    message: "문의 유형을 선택해주세요",
+  }),
+  area: z.enum(FEEDBACK_AREAS, {
+    message: "관련 기능을 선택해주세요",
   }),
   title: z
     .string()

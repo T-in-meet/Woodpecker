@@ -77,10 +77,8 @@ export default async function ResetPasswordPage({ searchParams }: Props) {
   const resetPasswordFormAction = resetPasswordAction.bind(null, redirectPath);
 
   return (
-    <main className="md:flex md:min-h-[calc(100dvh-4.5rem)] md:items-center md:justify-center">
-      <Suspense fallback={null}>
-        <ResetPasswordForm action={resetPasswordFormAction} />
-      </Suspense>
-    </main>
+    <Suspense fallback={null}>
+      <ResetPasswordForm action={resetPasswordFormAction} />
+    </Suspense>
   );
 }

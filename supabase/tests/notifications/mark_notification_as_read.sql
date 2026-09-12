@@ -124,21 +124,23 @@ SELECT is(
   $$mark_notification_as_read should return false when the notification is already READ$$
 );
 
+-- 알림 상태와 복습 완료는 분리한다. 확인하면 읽음 처리되고, 복습 완료 시 READ로
+-- 바꾸는 경로(complete_review_and_schedule_next)는 그대로 남는다.
 SELECT is(
   public.mark_notification_as_read(
     current_setting('test.mark_read_review_notification_id')::uuid
   ),
-  false,
-  $$mark_notification_as_read should return false for REVIEW notifications$$
+  true,
+  $$mark_notification_as_read should consume REVIEW notifications too$$
 );
 
 SELECT ok(
   (
-    SELECT status = 'SENT' AND read_at IS NULL
+    SELECT status = 'READ' AND read_at IS NOT NULL
     FROM public.notifications
     WHERE id = current_setting('test.mark_read_review_notification_id')::uuid
   ),
-  $$mark_notification_as_read should leave REVIEW notifications unread$$
+  $$mark_notification_as_read should mark REVIEW notifications as READ$$
 );
 
 SELECT is(

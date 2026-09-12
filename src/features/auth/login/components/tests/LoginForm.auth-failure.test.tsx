@@ -4,6 +4,7 @@
  * 검증 범위:
  * - LOGIN_INVALID_CREDENTIALS → 폼 전체 에러 "이메일 또는 비밀번호가 올바르지 않습니다." 표시
  * - 모든 인증 실패 케이스에 동일한 메시지 (account enumeration 방어)
+ * - 인증 실패 ATTEMPT root error는 이메일/비밀번호 수정 시 제거
  * - 성공 시 에러 없음
  */
 
@@ -62,6 +63,44 @@ describe("LoginForm 인증 실패 처리", () => {
     await waitFor(() => {
       // 폼 전체 에러는 data-testid="form-error" 영역에 표시
       expect(screen.getByTestId("form-error")).toBeInTheDocument();
+    });
+  });
+
+  it("인증 실패 ATTEMPT root error는 이메일을 수정하면 사라진다", async () => {
+    mockMutateAsync.mockRejectedValue({
+      success: false,
+      code: AUTH_API_CODES.LOGIN_INVALID_CREDENTIALS,
+      data: null,
+    });
+    const user = userEvent.setup();
+    renderLoginForm();
+
+    await submitValidForm(user);
+    await screen.findByTestId("form-error");
+
+    await user.type(screen.getByLabelText(/이메일/i), "x");
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("form-error")).not.toBeInTheDocument();
+    });
+  });
+
+  it("인증 실패 ATTEMPT root error는 비밀번호를 수정하면 사라진다", async () => {
+    mockMutateAsync.mockRejectedValue({
+      success: false,
+      code: AUTH_API_CODES.LOGIN_INVALID_CREDENTIALS,
+      data: null,
+    });
+    const user = userEvent.setup();
+    renderLoginForm();
+
+    await submitValidForm(user);
+    await screen.findByTestId("form-error");
+
+    await user.type(screen.getByLabelText(/^비밀번호$/i), "x");
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("form-error")).not.toBeInTheDocument();
     });
   });
 

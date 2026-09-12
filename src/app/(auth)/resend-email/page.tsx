@@ -27,6 +27,7 @@ type ResendEmailPageProps = {
     email?: string | string[];
     purpose?: string | string[];
     redirect?: string | string[];
+    returnTo?: string | string[];
   }>;
 };
 
@@ -45,6 +46,7 @@ const ResendEmailPage = async ({ searchParams }: ResendEmailPageProps) => {
     email: rawEmail,
     purpose: rawPurpose,
     redirect: rawRedirect,
+    returnTo: rawReturnTo,
   } = await searchParams;
 
   /**
@@ -62,6 +64,8 @@ const ResendEmailPage = async ({ searchParams }: ResendEmailPageProps) => {
     rawRedirect !== "undefined"
       ? rawRedirect
       : null;
+  const rawReturnPath =
+    typeof rawReturnTo === "string" ? rawReturnTo : undefined;
 
   /**
    * purpose는 OTP 인증 흐름을 복구하기 위한 필수 값이다.
@@ -77,6 +81,38 @@ const ResendEmailPage = async ({ searchParams }: ResendEmailPageProps) => {
   }
 
   const otpPurpose = parsedOtpPurpose.data;
+
+  /**
+   * returnTo 검증
+   *
+   * VerifyOtpForm에서 resend-email로 이동할 때
+   * 현재 OTP 인증 페이지를 returnTo로 전달한다.
+   *
+   * 임의의 query 값을 그대로 이동 경로로 사용하지 않고,
+   * 현재 resend-email이 가진 purpose / email / redirect를 기준으로
+   * 정상적인 verify-otp 경로를 다시 생성한 뒤 정확히 일치하는 경우만 허용한다.
+   *
+   * email이 없거나 값이 일치하지 않으면
+   * 이전 인증 단계로 안전하게 복귀할 수 없으므로 returnTo를 사용하지 않는다.
+   */
+  let returnPath: string | undefined;
+
+  if (email && rawReturnPath) {
+    const returnQuery = new URLSearchParams({
+      purpose: otpPurpose,
+      email,
+    });
+
+    if (redirectPath) {
+      returnQuery.set("redirect", redirectPath);
+    }
+
+    const expectedReturnPath = `${ROUTES.VERIFY_OTP}?${returnQuery.toString()}`;
+
+    if (rawReturnPath === expectedReturnPath) {
+      returnPath = expectedReturnPath;
+    }
+  }
 
   /**
    * signup 목적의 OTP 재전송 페이지는
@@ -100,14 +136,24 @@ const ResendEmailPage = async ({ searchParams }: ResendEmailPageProps) => {
   const resendEmailFormAction = resendEmailAction.bind(null, redirectPath);
 
   return (
-    <div className="md:flex md:min-h-[calc(100dvh-4.5rem)] md:items-center md:justify-center">
-      <AuthEmailForm
-        action={resendEmailFormAction}
-        initialState={INITIAL_RESEND_EMAIL_ACTION_STATE}
-        email={email}
-        purpose={otpPurpose}
-      />
-    </div>
+    <AuthEmailForm
+      action={resendEmailFormAction}
+      initialState={INITIAL_RESEND_EMAIL_ACTION_STATE}
+      email={email}
+      purpose={otpPurpose}
+      title="인증 번호 재전송"
+      backLink={
+        returnPath
+          ? {
+              href: returnPath,
+              label: "이전으로 돌아가기",
+            }
+          : {
+              href: ROUTES.HOME,
+              label: "홈으로 돌아가기",
+            }
+      }
+    />
   );
 };
 

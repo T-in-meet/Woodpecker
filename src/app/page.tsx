@@ -3,10 +3,12 @@ import { Suspense } from "react";
 
 import { Footer } from "@/components/layout/Footer";
 import { Header, HeaderSkeleton } from "@/components/layout/Header";
+import { landingDescription } from "@/features/landing/content";
 import { CtaSection } from "@/features/landing/CtaSection";
 import { faqs, FaqSection } from "@/features/landing/FaqSection";
 import { HeroSection } from "@/features/landing/HeroSection";
 import { LearningFlowSection } from "@/features/landing/LearningFlowSection";
+import { LearningToolsSection } from "@/features/landing/LearningToolsSection";
 import { SITE_URL } from "@/lib/constants/site";
 
 // LLM(ChatGPT, Claude, Perplexity 등)이 토큰 효율적인 마크다운 버전을 발견할 수 있도록
@@ -32,8 +34,13 @@ export const metadata: Metadata = {
    실질적인 효과:
    - WebSite: 구글이 딱다구리를 독립적인 브랜드 엔티티로 인식하게 함
    - WebApplication: 앱의 카테고리·가격·기능이 구조화되어 검색 결과에 반영될 수 있음
-   - FAQPage: 구글 검색 결과에 Q&A가 직접 펼쳐지는 "리치 결과"로 표시될 수 있음
-               → 클릭율(CTR) 향상에 가장 직접적인 효과
+   - FAQPage: 페이지에 Q&A가 있다는 사실을 기계가 읽을 수 있게 함
+               (구글 리치 결과로는 더 이상 표시되지 않는다. 아래 3번 참고)
+
+   구조화 데이터가 생성형 AI 검색(AI Overviews·AI Mode)의 노출 조건은 아니다.
+   구글은 "생성형 AI 검색에는 구조화된 데이터가 필요하지 않다"고 명시하며,
+   여기서는 어디까지나 일반 검색의 리치 결과·엔티티 인식 목적으로만 둔다.
+   https://developers.google.com/search/docs/fundamentals/ai-optimization-guide
 ─────────────────────────────────────────────────────────────────────────── */
 const jsonLd = {
   // schema.org: 구글·MS·야후 등이 공동으로 만든 구조화 데이터 표준 어휘집
@@ -48,11 +55,14 @@ const jsonLd = {
       name: "딱다구리",
       url: SITE_URL,
       inLanguage: "ko",
-      description: "기록이 기억이 되는 간격 반복 학습 공간",
+      description: landingDescription,
     },
 
     // ── 2. WebApplication: 딱다구리가 어떤 앱인지 상세 정보 전달 ─────────────
     // applicationCategory, operatingSystem, offers 등으로 앱의 성격을 명확히 함.
+    // Google 앱 리치 결과에는 실제 review 또는 aggregateRating도 필요하다.
+    // 현재는 앱 설명용 마크업이며, 공개된 리뷰가 생기면 화면과 함께 반영한다.
+    // https://developers.google.com/search/docs/appearance/structured-data/software-app
     {
       "@type": "WebApplication",
       "@id": `${SITE_URL}/#app`,
@@ -63,24 +73,35 @@ const jsonLd = {
       applicationCategory: "EducationalApplication", // 교육용 앱으로 분류
       operatingSystem: "Web",
       isPartOf: { "@id": `${SITE_URL}/#website` }, // WebSite 노드와 연결
-      description:
-        "기록한 순간부터 복습이 설계됩니다. 인지 과학의 간격 반복 학습을 기반으로 한 1-3-7일 복습 알림과 백지 테스트 등 인출 연습으로 학습 내용을 장기 기억으로 전환하세요.",
+      description: landingDescription,
       offers: {
         "@type": "Offer",
         price: 0,
         priceCurrency: "KRW",
-        description: "베타 기간 무료",
+        description: "현재 무료 제공",
       },
       featureList: [
-        "마크다운 기반 학습 기록",
-        "1-3-7일 간격 반복 알림",
-        "백지 테스트를 통한 인출 연습",
+        "학습 노트 작성",
+        "간격 반복 복습 일정",
+        "브라우저 푸시 알림",
+        "백지 테스트와 원문 비교",
+        "AI 채점 피드백",
+        "노트 기반 퀴즈 생성",
+        "관련 노트 연결과 AI 추천",
+        "노트 챗봇",
       ],
     },
 
     // ── 3. FAQPage: 랜딩 페이지의 FAQ 섹션을 구조화 ─────────────────────────
-    // 구글이 이 데이터를 인식하면 검색 결과에서 질문·답변이 바로 펼쳐지는
-    // "리치 결과(Rich Results)"로 표시될 수 있음 → 클릭율 향상에 직접 기여.
+    // 주의: 구글 FAQ 리치 결과는 2026-05-07부로 폐지됐다. 2023-08에 정부·의료
+    // 사이트로 축소된 뒤 그마저 종료된 것이라, 이 마크업으로 검색 결과에
+    // 질문·답변이 펼쳐지는 일은 이제 없다. 클릭율 효과를 기대하지 말 것.
+    //
+    // 그럼에도 남겨두는 이유: FAQPage는 여전히 유효한 schema.org 타입이고,
+    // 쓰이지 않는 구조화 데이터가 검색에 해가 되지는 않는다. 구글 외 크롤러와
+    // LLM에게 "이 페이지에 Q&A가 있다"는 사실을 전달하는 값은 남아 있다.
+    // 지울 이유가 생기기 전까지는 유지한다.
+    //
     // faqs 배열은 FaqSection 컴포넌트와 동일한 데이터를 공유해 일관성을 유지함.
     {
       "@type": "FAQPage",
@@ -111,13 +132,10 @@ export default function Home() {
         <Suspense fallback={<HeaderSkeleton />}>
           <Header />
         </Suspense>
-        <main>
-          <div className="sr-only" aria-hidden="true">
-            이 페이지의 마크다운 버전:{" "}
-            <a href={`${SITE_URL}/index.md`}>{SITE_URL}/index.md</a>
-          </div>
+        <main className="text-prose-ko">
           <HeroSection />
           <LearningFlowSection />
+          <LearningToolsSection />
           <FaqSection />
           <CtaSection />
         </main>

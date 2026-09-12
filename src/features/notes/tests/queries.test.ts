@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NOTES_PAGE_SIZE } from "@/lib/constants/notes";
 
@@ -14,17 +14,7 @@ vi.mock("@/lib/logger", () => ({ logError: vi.fn() }));
 
 import { createSupabaseQueryMock } from "@/tests/supabaseQueryMock";
 
-import { getNoteById, getNotes, getReviewWaitingNotes } from "../queries";
-
-// ─── 공통 픽스처 ────────────────────────────────────────────────────────────
-
-const BASE_NOTE = {
-  id: "11111111-1111-4111-8111-111111111111",
-  title: "테스트 노트",
-  content: "테스트 내용",
-  next_review_at: "2026-05-07T10:00:00.000Z",
-  review_round: 1,
-};
+import { getNoteById, getNotes } from "../queries";
 
 // ─── getNotes ────────────────────────────────────────────────────────────────
 
@@ -40,6 +30,7 @@ describe("getNotes", () => {
         title: "최근 노트",
         content: "내용 1",
         next_review_at: "2026-03-30T09:00:00.000Z",
+        review_completed_at: null,
         review_round: 1,
       },
       {
@@ -47,6 +38,7 @@ describe("getNotes", () => {
         title: "이전 노트",
         content: "내용 2",
         next_review_at: null,
+        review_completed_at: null,
         review_round: 3,
       },
     ];
@@ -62,7 +54,10 @@ describe("getNotes", () => {
     const calls = callsFor("notes");
     expect(calls).toContainEqual([
       "select",
-      ["id, title, content, next_review_at, review_round", { count: "exact" }],
+      [
+        "id, title, content, next_review_at, review_completed_at, review_round",
+        { count: "exact" },
+      ],
     ]);
     expect(calls).toContainEqual(["eq", ["user_id", "user-123"]]);
     expect(calls).toContainEqual([
@@ -82,6 +77,7 @@ describe("getNotes", () => {
             title: "잘못된 노트",
             content: "내용",
             next_review_at: null,
+            review_completed_at: null,
             review_round: 1,
             created_at: "2026-03-29T00:00:00.000Z",
             updated_at: "2026-03-29T12:00:00.000Z",
@@ -111,7 +107,7 @@ describe("getNotes", () => {
   it.each([
     ["due", "lte", ["next_review_at", expect.any(String)]],
     ["scheduled", "or", [expect.stringContaining("next_review_at.gt.")]],
-    ["completed", "is", ["next_review_at", null]],
+    ["completed", "not", ["review_completed_at", "is", null]],
   ] as const)("%s 보기에 맞는 필터를 적용한다", async (view, method, args) => {
     const { supabase, callsFor } = createSupabaseQueryMock({
       notes: { data: [], count: 0 },
@@ -126,9 +122,11 @@ describe("getNotes", () => {
         "order",
         ["created_at", { ascending: false }],
       ]);
-    }
-    if (view === "completed") {
-      expect(callsFor("notes")).toContainEqual(["eq", ["review_round", 3]]);
+      // 완료가 아닌 보기에서는 사용자가 끝낸 노트를 빼야 한다.
+      expect(callsFor("notes")).toContainEqual([
+        "is",
+        ["review_completed_at", null],
+      ]);
     }
   });
 
@@ -141,6 +139,7 @@ describe("getNotes", () => {
           content: "note body",
           next_review_at: "2026-03-30T09:00:00.000Z",
           notification_time_of_day: "21:30:00",
+          review_completed_at: null,
           review_round: 1,
           created_at: "2026-03-29T00:00:00.000Z",
           updated_at: "2026-03-29T01:00:00.000Z",
@@ -161,7 +160,7 @@ describe("getNotes", () => {
     expect(noteCalls).toContainEqual([
       "select",
       [
-        "id, title, content, next_review_at, notification_time_of_day, review_round, created_at, updated_at, user_id",
+        "id, title, content, next_review_at, notification_time_of_day, review_completed_at, review_round, created_at, updated_at, user_id",
       ],
     ]);
     expect(noteCalls).toContainEqual([
@@ -207,6 +206,7 @@ describe("getNotes", () => {
           content: "note body",
           next_review_at: null,
           notification_time_of_day: null,
+          review_completed_at: null,
           review_round: 3,
           created_at: "2026-03-29T00:00:00.000Z",
           updated_at: "2026-03-29T01:00:00.000Z",
@@ -224,110 +224,5 @@ describe("getNotes", () => {
     );
 
     expect(result?.next_scheduled_at).toBeNull();
-  });
-});
-
-// ─── getReviewWaitingNotes ────────────────────────────────────────────────────
-
-describe("getReviewWaitingNotes", () => {
-  beforeEach(() => {
-    createClientMock.mockReset();
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-05-07T10:00:00.000Z"));
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it("미래 next_review_at을 가진 노트를 반환한다", async () => {
-    const futureNote = {
-      ...BASE_NOTE,
-      next_review_at: "2026-05-08T10:00:00.000Z",
-      review_round: 1,
-    };
-    const { supabase } = createSupabaseQueryMock({
-      notes: { data: [futureNote] },
-    });
-    createClientMock.mockResolvedValue(supabase);
-
-    const result = await getReviewWaitingNotes("user-123");
-
-    expect(result).toEqual([futureNote]);
-  });
-
-  it("next_review_at이 null이고 round가 0인 노트(미시작)를 반환한다", async () => {
-    const newNote = {
-      ...BASE_NOTE,
-      next_review_at: null,
-      review_round: 0,
-    };
-    const { supabase } = createSupabaseQueryMock({
-      notes: { data: [newNote] },
-    });
-    createClientMock.mockResolvedValue(supabase);
-
-    const result = await getReviewWaitingNotes("user-123");
-
-    expect(result).toEqual([newNote]);
-  });
-
-  it("DB 쿼리에서 완주 노트(null && round>0)를 제외하는 필터를 사용한다", async () => {
-    const { supabase, callsFor } = createSupabaseQueryMock({
-      notes: { data: [] },
-    });
-    createClientMock.mockResolvedValue(supabase);
-
-    await getReviewWaitingNotes("user-123");
-
-    expect(callsFor("notes")).toContainEqual([
-      "or",
-      [
-        expect.stringContaining(
-          "and(next_review_at.is.null,review_round.eq.0)",
-        ),
-      ],
-    ]);
-  });
-
-  it("미시작 노트(null && round=0)와 미래 예약 노트를 함께 반환한다", async () => {
-    const newNote = { ...BASE_NOTE, next_review_at: null, review_round: 0 };
-    const futureNote = {
-      ...BASE_NOTE,
-      id: "22222222-2222-4222-8222-222222222222",
-      next_review_at: "2026-05-08T10:00:00.000Z",
-      review_round: 1,
-    };
-    const { supabase } = createSupabaseQueryMock({
-      notes: { data: [newNote, futureNote] },
-    });
-    createClientMock.mockResolvedValue(supabase);
-
-    const result = await getReviewWaitingNotes("user-123");
-
-    expect(result).toEqual([newNote, futureNote]);
-  });
-
-  it("스키마 파싱 실패 시 빈 배열을 반환한다", async () => {
-    const { supabase } = createSupabaseQueryMock({
-      notes: { data: [{ ...BASE_NOTE, id: "not-a-uuid" }] },
-    });
-    createClientMock.mockResolvedValue(supabase);
-
-    const result = await getReviewWaitingNotes("user-123");
-
-    expect(result).toEqual([]);
-  });
-
-  it("DB 쿼리 에러 발생 시 throw한다", async () => {
-    const dbError = new Error("DB connection failed");
-    const { supabase } = createSupabaseQueryMock({
-      notes: { data: null, error: dbError },
-    });
-    createClientMock.mockResolvedValue(supabase);
-
-    await expect(getReviewWaitingNotes("user-123")).rejects.toThrow(
-      "DB connection failed",
-    );
   });
 });

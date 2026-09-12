@@ -24,7 +24,6 @@ const {
   generateNoteEmbeddingMock,
   reportAiOperationalErrorMock,
   resolveAiRuntimeEmbeddingConfigurationMock,
-  scheduleRelatedNoteRecommendationMock,
 } = vi.hoisted(() => ({
   afterMock: vi.fn(),
   createAdminClientMock: vi.fn(),
@@ -33,7 +32,6 @@ const {
   generateNoteEmbeddingMock: vi.fn(),
   reportAiOperationalErrorMock: vi.fn(),
   resolveAiRuntimeEmbeddingConfigurationMock: vi.fn(),
-  scheduleRelatedNoteRecommendationMock: vi.fn(),
 }));
 
 vi.mock("next/server", () => ({
@@ -69,18 +67,12 @@ vi.mock("@/features/ai/utils/report-ai-operational-error", () => ({
   reportAiOperationalError: reportAiOperationalErrorMock,
 }));
 
-vi.mock(
-  "@/features/related-notes/execution/schedule-related-note-recommendation",
-  () => ({
-    scheduleRelatedNoteRecommendation: scheduleRelatedNoteRecommendationMock,
-  }),
-);
-
 import { requireCurrentLegalAcceptance } from "@/features/auth/utils/requireCurrentLegalAcceptance";
 
 import {
   createNoteAction,
   deleteNoteAction,
+  setNoteReviewCompletedAction,
   updateNoteAction,
 } from "../actions";
 
@@ -89,7 +81,7 @@ function createSupabaseMock(
     userId?: string | null;
     emailConfirmedAt?: string | null | undefined;
     rpcError?: { message: string } | null;
-    rpcResult?: string | null;
+    rpcResult?: boolean | string | null;
     deleteError?: { message: string } | null;
     deletedNote?: { id: string } | null;
     updateError?: { message: string } | null;
@@ -284,7 +276,6 @@ describe("createNoteAction", () => {
     createAdminClientMock.mockReset();
     createClientMock.mockReset();
     redirectMock.mockReset();
-    scheduleRelatedNoteRecommendationMock.mockReset();
 
     redirectMock.mockImplementation(() => {
       throw REDIRECT_ERROR;
@@ -374,11 +365,12 @@ describe("createNoteAction", () => {
       ROUTES.NOTES_NEW,
     );
 
+    /*
+     * Note 생성 성공 시 자동 Related Notes 추천은 예약하지 않습니다.
+     *
+     * 현재 등록되는 after()는 embedding 후처리 하나뿐입니다.
+     */
     expect(afterMock).toHaveBeenCalledTimes(1);
-    expect(scheduleRelatedNoteRecommendationMock).toHaveBeenCalledWith({
-      noteId: "note-123",
-      ownerUserId: "user-123",
-    });
   });
 
   it("returns a general error when the RPC fails", async () => {
@@ -398,7 +390,6 @@ describe("createNoteAction", () => {
     });
     expect(rpcMock).toHaveBeenCalledOnce();
     expect(afterMock).not.toHaveBeenCalled();
-    expect(scheduleRelatedNoteRecommendationMock).not.toHaveBeenCalled();
   });
 
   it("returns a general error when the RPC returns no note id", async () => {
@@ -416,7 +407,61 @@ describe("createNoteAction", () => {
     });
     expect(rpcMock).toHaveBeenCalledOnce();
     expect(afterMock).not.toHaveBeenCalled();
-    expect(scheduleRelatedNoteRecommendationMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("setNoteReviewCompletedAction", () => {
+  const validNoteId = "11111111-1111-4111-8111-111111111111";
+
+  beforeEach(() => {
+    createClientMock.mockReset();
+    redirectMock.mockReset();
+    redirectMock.mockImplementation(() => {
+      throw REDIRECT_ERROR;
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("calls the atomic completion RPC", async () => {
+    const { rpcMock, supabase } = createSupabaseMock({ rpcResult: true });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await setNoteReviewCompletedAction(validNoteId, true);
+
+    expect(result).toEqual({ data: { completed: true } });
+    expect(rpcMock).toHaveBeenCalledWith("set_note_review_completion", {
+      p_note_id: validNoteId,
+      p_completed: true,
+    });
+  });
+
+  it("returns the resumed state from the RPC", async () => {
+    const { rpcMock, supabase } = createSupabaseMock({ rpcResult: false });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await setNoteReviewCompletedAction(validNoteId, false);
+
+    expect(result).toEqual({ data: { completed: false } });
+    expect(rpcMock).toHaveBeenCalledWith("set_note_review_completion", {
+      p_note_id: validNoteId,
+      p_completed: false,
+    });
+  });
+
+  it("returns a general error when the completion RPC fails", async () => {
+    const { supabase } = createSupabaseMock({
+      rpcError: { message: "completion failed" },
+    });
+    createClientMock.mockResolvedValue(supabase);
+
+    const result = await setNoteReviewCompletedAction(validNoteId, true);
+
+    expect(result).toEqual({
+      error: "복습 완료 상태를 바꾸지 못했습니다. 잠시 후 다시 시도해주세요.",
+    });
   });
 });
 
@@ -536,7 +581,6 @@ describe("updateNoteAction", () => {
     createAdminClientMock.mockReset();
     createClientMock.mockReset();
     redirectMock.mockReset();
-    scheduleRelatedNoteRecommendationMock.mockReset();
 
     redirectMock.mockImplementation(() => {
       throw REDIRECT_ERROR;
@@ -644,11 +688,12 @@ describe("updateNoteAction", () => {
     expect(updateSelectMock).toHaveBeenCalledWith("id, title, content");
     expect(result).toEqual({ success: true });
 
+    /*
+     * Note 수정 성공 시에도 자동 Related Notes 추천은 예약하지 않습니다.
+     *
+     * 현재 등록되는 after()는 embedding 후처리 하나뿐입니다.
+     */
     expect(afterMock).toHaveBeenCalledTimes(1);
-    expect(scheduleRelatedNoteRecommendationMock).toHaveBeenCalledWith({
-      noteId: validNoteId,
-      ownerUserId: "user-123",
-    });
   });
 
   it("returns a not-found error when no matching note is updated", async () => {
@@ -666,7 +711,6 @@ describe("updateNoteAction", () => {
     expect(result).toEqual({ error: "수정할 노트를 찾을 수 없습니다." });
     expect(updateMaybeSingleMock).toHaveBeenCalledOnce();
     expect(afterMock).not.toHaveBeenCalled();
-    expect(scheduleRelatedNoteRecommendationMock).not.toHaveBeenCalled();
   });
 
   it("returns a general error when note update fails", async () => {
@@ -686,7 +730,6 @@ describe("updateNoteAction", () => {
     });
     expect(updateMaybeSingleMock).toHaveBeenCalledOnce();
     expect(afterMock).not.toHaveBeenCalled();
-    expect(scheduleRelatedNoteRecommendationMock).not.toHaveBeenCalled();
   });
 });
 
@@ -714,7 +757,6 @@ describe("Note embedding integration", () => {
     createAdminClientMock.mockReset();
     createClientMock.mockReset();
     redirectMock.mockReset();
-    scheduleRelatedNoteRecommendationMock.mockReset();
 
     redirectMock.mockImplementation(() => {
       throw REDIRECT_ERROR;

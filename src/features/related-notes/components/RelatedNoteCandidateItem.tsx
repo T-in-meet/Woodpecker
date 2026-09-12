@@ -59,11 +59,14 @@ export function RelatedNoteCandidateItem({
   return (
     <div>
       <div className="flex min-w-0 items-center gap-3 px-4 py-3">
+        {/* 옆의 제목은 노트 상세로 가는 Link라 라벨로 타깃을 넓힐 수 없다.
+            체크박스 하나가 유일한 선택 수단이므로 터치에서는 시각 크기를 20px로
+            키우고 히트 영역은 ::after로 44px까지 넓힌다. */}
         <Checkbox
           checked={selected}
           onCheckedChange={(checked) => handleCheckedChange(checked === true)}
           aria-label={`${title} 관련 노트 선택`}
-          className="shrink-0"
+          className="shrink-0 pointer-coarse:relative pointer-coarse:size-5 pointer-coarse:after:absolute pointer-coarse:after:left-1/2 pointer-coarse:after:top-1/2 pointer-coarse:after:size-11 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-['']"
         />
 
         <Link

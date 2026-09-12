@@ -2,6 +2,8 @@ import Link from "next/link";
 import type { CSSProperties } from "react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { buildNotesUrl } from "@/features/notes/utils/buildNotesUrl";
+import { MAX_REVIEW_ROUND_BUCKET } from "@/lib/constants/reviewIntervals";
 import { ROUTES } from "@/lib/constants/routes";
 import { cn } from "@/lib/utils/cn";
 
@@ -23,7 +25,7 @@ function StatCard({
   const content = (
     <>
       <p className="text-2xl font-bold">{value}</p>
-      <p className="text-sm text-muted-foreground">{label}</p>
+      <p className="text-prose-ko text-sm text-muted-foreground">{label}</p>
     </>
   );
 
@@ -31,21 +33,21 @@ function StatCard({
     return (
       <Link
         href={href}
-        className="rounded-lg border p-4 text-center cursor-pointer transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        className="rounded-lg border p-2 text-center cursor-pointer transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:p-4"
       >
         {content}
       </Link>
     );
   }
 
-  return <div className="rounded-lg border p-4 text-center">{content}</div>;
+  return (
+    <div className="rounded-lg border p-2 text-center sm:p-4">{content}</div>
+  );
 }
 
+// 복습 횟수에 상한이 없으므로 0회만 이름을 주고 나머지는 숫자로 만든다.
 const NOTES_ROUND_LABELS: Record<number, string> = {
   0: "학습 전",
-  1: "1회차 복습 완료",
-  2: "2회차 복습 완료",
-  3: "3회차 복습 완료",
 };
 
 function formatPercent(numerator: number, denominator: number): string {
@@ -55,9 +57,9 @@ function formatPercent(numerator: number, denominator: number): string {
 
 function heatmapClass(count: number): string {
   if (count === 0) return "bg-muted";
-  if (count <= 2) return "bg-orange-100 dark:bg-orange-900";
-  if (count <= 4) return "bg-orange-200 dark:bg-orange-800";
-  return "bg-orange-300 dark:bg-orange-700";
+  if (count <= 2) return "bg-chart-1";
+  if (count <= 4) return "bg-chart-2";
+  return "bg-chart-3";
 }
 
 export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
@@ -66,27 +68,39 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
     stats.completedReviews === 0 &&
     stats.todayReviews === 0;
 
+  // 버킷이 완료 표시한 노트를 빼고 만들어지므로 분모도 버킷 합으로 맞춘다.
+  // totalNotes로 나누면 완료한 만큼이 어떤 줄에도 안 잡혀 합이 100%에 못 미친다.
+  const notesInProgressTotal = stats.notesByRound.reduce(
+    (sum, { count }) => sum + count,
+    0,
+  );
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>학습 통계</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-4 sm:gap-4">
           <StatCard
             label="전체 노트"
             value={stats.totalNotes}
             href={ROUTES.NOTES}
           />
           <StatCard
-            label="오늘의 복습"
+            label="오늘 복습할 노트"
             value={stats.todayReviews}
-            href={ROUTES.NOTES_TODAY}
+            href={buildNotesUrl({ view: "due" })}
           />
           <StatCard
-            label="복습 대기 노트"
+            label="복습 예정 노트"
             value={stats.reviewWaitingCount}
-            href={`${ROUTES.MYPAGE}?section=reviews`}
+            href={buildNotesUrl({ view: "scheduled" })}
+          />
+          <StatCard
+            label="복습 완료 노트"
+            value={stats.completedNotesCount}
+            href={buildNotesUrl({ view: "completed" })}
           />
         </div>
 
@@ -110,23 +124,26 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
               {stats.notesByRound.map(({ round, count }) => (
                 <div key={round} className="flex items-center gap-3">
                   <span className="w-28 text-sm text-muted-foreground">
-                    {NOTES_ROUND_LABELS[round] ?? `${round}회차`}
+                    {NOTES_ROUND_LABELS[round] ??
+                      (round >= MAX_REVIEW_ROUND_BUCKET
+                        ? `${round}회차 이상`
+                        : `${round}회차`)}
                   </span>
                   <div className="h-2 flex-1 rounded-full bg-muted">
                     <div
-                      className="h-full rounded-full bg-orange-300 dark:bg-orange-700 w-(--progress-width)"
+                      className="h-full rounded-full bg-chart-3 w-(--progress-width)"
                       style={
                         {
                           "--progress-width":
-                            stats.totalNotes === 0
+                            notesInProgressTotal === 0
                               ? "0%"
-                              : `${(count / stats.totalNotes) * 100}%`,
+                              : `${(count / notesInProgressTotal) * 100}%`,
                         } as CSSProperties
                       }
                     />
                   </div>
                   <span className="w-20 text-right text-sm tabular-nums">
-                    {count} ({formatPercent(count, stats.totalNotes)})
+                    {count} ({formatPercent(count, notesInProgressTotal)})
                   </span>
                 </div>
               ))}
@@ -177,9 +194,9 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
             <div className="mt-2 flex items-center justify-end gap-2 text-xs text-muted-foreground">
               <span>적음</span>
               <div className="size-3 rounded-sm bg-muted" />
-              <div className="size-3 rounded-sm bg-orange-100 dark:bg-orange-900" />
-              <div className="size-3 rounded-sm bg-orange-200 dark:bg-orange-800" />
-              <div className="size-3 rounded-sm bg-orange-300 dark:bg-orange-700" />
+              <div className="size-3 rounded-sm bg-chart-1" />
+              <div className="size-3 rounded-sm bg-chart-2" />
+              <div className="size-3 rounded-sm bg-chart-3" />
               <span>많음</span>
             </div>
           </div>

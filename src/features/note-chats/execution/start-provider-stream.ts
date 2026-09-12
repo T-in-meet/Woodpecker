@@ -21,22 +21,24 @@ export function startNoteChatProviderStream(
   const chatModel = chatConfiguration.model;
   const responseSchema = chatConfiguration.prompt.version.response_schema;
 
+  const responseFormat =
+    responseSchema == null
+      ? undefined
+      : {
+          type: "json_schema" as const,
+          jsonSchema: {
+            name: "note_chat_response",
+            schema: responseSchema as Json,
+            strict: true,
+          },
+        };
+
   return streamAiChatCompletionWithProvider({
     apiKey: getProviderApiKey(chatModel.provider),
     messages: prepared.messages,
     model: chatModel.model,
     provider: chatModel.provider,
-    responseFormat:
-      responseSchema == null
-        ? undefined
-        : {
-            type: "json_schema",
-            jsonSchema: {
-              name: "note_chat_response",
-              schema: responseSchema as Json,
-              strict: true,
-            },
-          },
+    responseFormat,
     temperature: chatConfiguration.temperature,
   });
 }

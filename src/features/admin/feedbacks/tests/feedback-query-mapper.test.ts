@@ -26,6 +26,7 @@ function createRows(): FeedbackListRow[] {
       user_id: "user-12345678",
       note_id: "note-1",
       category: "BUG",
+      area: "NOTE",
       title: "피드백 제목",
       content: "피드백 본문",
       image_urls: ["image-1", "image-2"],
@@ -163,6 +164,7 @@ describe("mapFeedbackRows", () => {
     expect(result).toEqual([
       {
         id: "feedback-1",
+        area: "NOTE",
         userId: "user-12345678",
         userLabel: "사용자",
         userEmail: "user@example.com",

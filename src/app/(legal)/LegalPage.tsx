@@ -17,7 +17,6 @@ type LegalPageProps = {
     label: string;
   };
   footerNote: string;
-  markdownUrl?: string;
 };
 
 export function LegalPage({
@@ -27,15 +26,9 @@ export function LegalPage({
   sections,
   crossLink,
   footerNote,
-  markdownUrl,
 }: LegalPageProps) {
   return (
     <main className="min-h-screen bg-[#faf8f3]">
-      {markdownUrl && (
-        <div className="sr-only" aria-hidden="true">
-          이 페이지의 마크다운 버전: <a href={markdownUrl}>{markdownUrl}</a>
-        </div>
-      )}
       {/* Hero */}
       <div className="relative overflow-hidden border-b border-stone-200/60">
         <div className="absolute inset-0 bg-linear-to-br from-amber-50 via-orange-50 to-rose-50" />
@@ -44,7 +37,12 @@ export function LegalPage({
 
         <div className="relative mx-auto max-w-3xl px-6 py-20 text-center">
           <div className="mb-6 flex justify-center">
-            <Image src="/favicon.svg" alt="딱다구리" width={44} height={44} />
+            <Image
+              src="/woodpecker.png"
+              alt="딱다구리"
+              width={80}
+              height={80}
+            />
           </div>
           <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-amber-700/70">
             법적 고지

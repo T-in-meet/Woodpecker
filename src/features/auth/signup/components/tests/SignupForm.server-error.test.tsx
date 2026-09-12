@@ -55,6 +55,23 @@ const unknownFieldError = {
 // TC-01 ~ TC-07: 서버 validation 에러 매핑
 describe("서버 유효성 검사 에러 매핑", () => {
   /**
+   * AuthFormField 전체 영역을 찾는다.
+   *
+   * Input은 공통 AuthFormField 내부의 별도 wrapper에 있으므로
+   * 가장 가까운 grid container를 기준으로 field error까지 함께 조회한다.
+   */
+  function getFieldContainer(label: string | RegExp) {
+    const input = screen.getByLabelText(label);
+    const fieldContainer = input.closest(".grid");
+
+    if (!(fieldContainer instanceof HTMLElement)) {
+      throw new Error("AuthFormField container를 찾을 수 없습니다.");
+    }
+
+    return fieldContainer;
+  }
+
+  /**
    * 이메일 가입 방식을 선택한다.
    */
   function selectEmailSignupMethod() {
@@ -111,8 +128,9 @@ describe("서버 유효성 검사 에러 매핑", () => {
   it("TC-01: email REQUIRED 에러 반환 시 이메일 필드 아래에 에러가 표시된다", async () => {
     await renderAndSubmitWithServerError(emailRequiredError);
 
-    const emailField = screen.getByLabelText(/이메일/i).closest("div");
-    expect(await within(emailField!).findByRole("alert")).toBeInTheDocument();
+    const emailField = getFieldContainer(/이메일/i);
+
+    expect(await within(emailField).findByRole("alert")).toBeInTheDocument();
   });
 
   it("TC-02: agreements.termsOfService 중첩 에러 반환 시 이용약관 체크박스 영역에 에러가 표시된다", async () => {
@@ -125,11 +143,11 @@ describe("서버 유효성 검사 에러 매핑", () => {
   it("TC-03: email과 nickname 다중 에러 반환 시 두 필드 모두에 에러가 표시된다", async () => {
     await renderAndSubmitWithServerError(multipleErrors);
 
-    const emailField = screen.getByLabelText(/이메일/i).closest("div");
-    const nicknameField = screen.getByLabelText(/닉네임/i).closest("div");
+    const emailField = getFieldContainer(/이메일/i);
+    const nicknameField = getFieldContainer(/닉네임/i);
 
-    expect(await within(emailField!).findByRole("alert")).toBeInTheDocument();
-    expect(within(nicknameField!).getByRole("alert")).toBeInTheDocument();
+    expect(await within(emailField).findByRole("alert")).toBeInTheDocument();
+    expect(within(nicknameField).getByRole("alert")).toBeInTheDocument();
   });
 
   it("TC-04: 두 번째 제출 시 이전 에러가 초기화되고 새 에러로 교체된다", async () => {
@@ -148,33 +166,33 @@ describe("서버 유효성 검사 에러 매핑", () => {
 
     await fillValidFormAndSubmit(user);
 
-    const emailField = screen.getByLabelText(/이메일/i).closest("div");
-    expect(await within(emailField!).findByRole("alert")).toBeInTheDocument();
+    const emailField = getFieldContainer(/이메일/i);
+    expect(await within(emailField).findByRole("alert")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /회원가입/i }));
 
     await waitFor(() => {
-      expect(within(emailField!).queryByRole("alert")).not.toBeInTheDocument();
+      expect(within(emailField).queryByRole("alert")).not.toBeInTheDocument();
     });
 
-    const nicknameField = screen.getByLabelText(/닉네임/i).closest("div");
-    expect(within(nicknameField!).getByRole("alert")).toBeInTheDocument();
+    const nicknameField = getFieldContainer(/닉네임/i);
+    expect(within(nicknameField).getByRole("alert")).toBeInTheDocument();
   });
 
   it("TC-05: 알 수 없는 필드 에러 반환 시 필드 에러 없이 폼 수준 에러가 표시된다", async () => {
     await renderAndSubmitWithServerError(unknownFieldError);
 
-    const emailField = screen.getByLabelText(/이메일/i).closest("div");
-    const nicknameField = screen.getByLabelText(/닉네임/i).closest("div");
-    const passwordField = screen.getByLabelText(/^비밀번호$/i).closest("div");
+    const emailField = getFieldContainer(/이메일/i);
+    const nicknameField = getFieldContainer(/닉네임/i);
+    const passwordField = getFieldContainer(/^비밀번호$/i);
 
     await waitFor(() => {
-      expect(within(emailField!).queryByRole("alert")).not.toBeInTheDocument();
+      expect(within(emailField).queryByRole("alert")).not.toBeInTheDocument();
       expect(
-        within(nicknameField!).queryByRole("alert"),
+        within(nicknameField).queryByRole("alert"),
       ).not.toBeInTheDocument();
       expect(
-        within(passwordField!).queryByRole("alert"),
+        within(passwordField).queryByRole("alert"),
       ).not.toBeInTheDocument();
     });
 
@@ -188,22 +206,21 @@ describe("서버 유효성 검사 에러 매핑", () => {
       data: { errors: [{ field: "password", reason: "TOO_SHORT" }] },
     });
 
-    const passwordField = screen.getByLabelText(/^비밀번호$/i).closest("div");
-    expect(
-      await within(passwordField!).findByRole("alert"),
-    ).toBeInTheDocument();
+    const passwordField = getFieldContainer(/^비밀번호$/i);
+
+    expect(await within(passwordField).findByRole("alert")).toBeInTheDocument();
     expect(screen.queryByText("TOO_SHORT")).not.toBeInTheDocument();
   });
 
   it("TC-07: 다중 에러가 동시에 표시되며 서로 덮어쓰지 않는다", async () => {
     await renderAndSubmitWithServerError(multipleErrors);
 
-    const emailField = screen.getByLabelText(/이메일/i).closest("div");
-    const nicknameField = screen.getByLabelText(/닉네임/i).closest("div");
+    const emailField = getFieldContainer(/이메일/i);
+    const nicknameField = getFieldContainer(/닉네임/i);
 
     await waitFor(() => {
-      expect(within(emailField!).getByRole("alert")).toBeInTheDocument();
-      expect(within(nicknameField!).getByRole("alert")).toBeInTheDocument();
+      expect(within(emailField).getByRole("alert")).toBeInTheDocument();
+      expect(within(nicknameField).getByRole("alert")).toBeInTheDocument();
     });
   });
 });

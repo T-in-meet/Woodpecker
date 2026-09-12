@@ -11,7 +11,6 @@ import {
   deleteNoteChatConversationInputSchema,
   noteChatAssistantMessageContentSchema,
   noteChatConversationTitleSchema,
-  noteChatRunSourceSchema,
   noteChatUserMessageContentSchema,
   updateNoteChatConversationTitleInputSchema,
   updateNoteChatUserMessageInputSchema,
@@ -254,37 +253,5 @@ describe("deleteNoteChatConversationInputSchema", () => {
         conversationId: "invalid-id",
       }),
     ).toThrow(NOTE_CHAT_VALIDATION_MESSAGE.CONVERSATION_ID_INVALID);
-  });
-});
-
-describe("noteChatRunSourceSchema", () => {
-  it("Note Source Snapshot을 검증한다", () => {
-    const source = {
-      noteId: VALID_NOTE_ID_1,
-      title: "테스트 노트",
-      type: "note" as const,
-    };
-
-    expect(noteChatRunSourceSchema.parse(source)).toEqual(source);
-  });
-
-  it("Note가 아닌 Source type을 거부한다", () => {
-    expect(() =>
-      noteChatRunSourceSchema.parse({
-        noteId: VALID_NOTE_ID_1,
-        title: "테스트 노트",
-        type: "other",
-      }),
-    ).toThrow();
-  });
-
-  it("잘못된 Note ID를 거부한다", () => {
-    expect(() =>
-      noteChatRunSourceSchema.parse({
-        noteId: "invalid-id",
-        title: "테스트 노트",
-        type: "note",
-      }),
-    ).toThrow();
   });
 });

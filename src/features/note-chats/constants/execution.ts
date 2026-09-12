@@ -60,3 +60,15 @@ export const NOTE_CHAT_DAILY_EXECUTION_LIMIT_ERROR_CODE =
  * code 필드로 판별하여 429 응답으로 변환하는 데 사용합니다.
  */
 export const NOTE_CHAT_DAILY_EXECUTION_LIMIT_SQLSTATE = "WP002";
+
+/**
+ * Note Chat running Claim을 유효한 실행으로 간주하는 최대 시간입니다.
+ *
+ * DB의 claim_note_chat_execution() stale 처리 기준과 동일하게 유지해야 합니다.
+ */
+export const NOTE_CHAT_EXECUTION_STALE_AFTER_MS = 3 * 60 * 1000;
+
+/**
+ * 화면 메시지 무한 스크롤에서 한 번에 조회할 메시지 개수입니다.
+ */
+export const NOTE_CHAT_MESSAGE_PAGE_SIZE = 10;

@@ -182,7 +182,6 @@ describe("signup 라우트 인증 로깅", () => {
       email: "user@example.com",
       email_confirmed_at: null,
       auth_providers: ["email"],
-      has_password_login: true,
     });
     vi.mocked(issueOtpAndSendEmail).mockResolvedValue(undefined);
 

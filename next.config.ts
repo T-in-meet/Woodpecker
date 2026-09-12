@@ -60,6 +60,12 @@ export function shouldSkipNextTypeCheck() {
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // 가이드 본문은 요청 시점에 readFile로 읽는다(루트 레이아웃이 headers()를 읽어
+  // 모든 라우트가 동적 렌더링이다). slug가 런타임 값이라 file tracing이 놓칠 수
+  // 있어, 서버 번들에 포함할 파일을 명시한다. 빠지면 배포 환경에서만 ENOENT가 난다.
+  outputFileTracingIncludes: {
+    "/guide/[slug]": ["./src/content/guide/**"],
+  },
   typescript: {
     // GitHub Actions의 Build step에서만 활성화한다. 타입 검사는 Quality가 담당한다.
     ignoreBuildErrors: shouldSkipNextTypeCheck(),

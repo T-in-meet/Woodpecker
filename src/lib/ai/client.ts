@@ -65,6 +65,7 @@ export class CloudflareAiError extends Error {
   }
 }
 
+/** Cloudflare JSON 생성 요청 입력입니다. */
 type GenerateJsonParams = {
   prompt: string;
   /** `toCloudflareResponseSchema()`의 결과. 래핑 없이 그대로 실린다. */
@@ -309,5 +310,7 @@ export async function generateJson(
     );
   }
 
-  return extractJsonText((parsed as { result?: unknown })?.result);
+  const result = (parsed as { result?: unknown })?.result;
+
+  return extractJsonText(result);
 }

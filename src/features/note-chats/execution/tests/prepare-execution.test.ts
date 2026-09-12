@@ -65,8 +65,10 @@ const conversation = {
 };
 
 const userMessage = {
+  content: { text: "질문" },
   id: "message-1",
   role: AI_CHAT_MESSAGE_ROLE.USER,
+  sequence_number: 1,
 };
 
 const messages = [userMessage];
@@ -75,15 +77,6 @@ const detail = {
   conversation,
   messages,
 } as never;
-
-/**
- * 질의 확장 Chat Completion에서 사용한 token 사용량입니다.
- */
-const queryExpansionUsage = {
-  inputTokens: 10,
-  outputTokens: 20,
-  totalTokens: 30,
-};
 
 describe("prepareNoteChatExecution", () => {
   beforeEach(() => {
@@ -95,7 +88,6 @@ describe("prepareNoteChatExecution", () => {
 
     vi.mocked(expandNoteChatQuery).mockResolvedValue({
       expandedQuery: "확장된 검색 질의",
-      usage: queryExpansionUsage,
     });
 
     vi.mocked(searchNoteEmbeddings).mockResolvedValue([]);
@@ -111,7 +103,7 @@ describe("prepareNoteChatExecution", () => {
     vi.mocked(reportNoteChatOperationalError).mockResolvedValue(undefined);
   });
 
-  it("실행에 필요한 정보와 질의 확장 usage를 준비하고 PreparedNoteChatExecution을 반환한다", async () => {
+  it("실행에 필요한 정보를 준비하고 PreparedNoteChatExecution을 반환한다", async () => {
     const result = await prepareNoteChatExecution({
       conversationId: "conversation-1",
       settings,
@@ -122,6 +114,7 @@ describe("prepareNoteChatExecution", () => {
     expect(getNoteChatConversationDetailForExecution).toHaveBeenCalledWith(
       "conversation-1",
       "user-1",
+      "message-1",
     );
 
     expect(expandNoteChatQuery).toHaveBeenCalledWith({
@@ -161,7 +154,6 @@ describe("prepareNoteChatExecution", () => {
       conversation,
       expandedQuery: "확장된 검색 질의",
       messages: [],
-      queryExpansionUsage,
       settings,
       sources: [],
       userMessageId: "message-1",
@@ -243,6 +235,35 @@ describe("prepareNoteChatExecution", () => {
       expect.objectContaining({
         actorUserId: "user-1",
         errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.EXECUTION_STATE_INVALID,
+        userId: "user-1",
+      }),
+    );
+  });
+
+  it("검색된 Note 조회에 실패하면 운영 오류를 보고하고 예외를 발생시킨다", async () => {
+    const error = new Error("matched notes load failed");
+
+    vi.mocked(getMatchedNotes).mockRejectedValue(error);
+
+    await expect(
+      prepareNoteChatExecution({
+        conversationId: "conversation-1",
+        settings,
+        userId: "user-1",
+        userMessageId: "message-1",
+      }),
+    ).rejects.toBe(error);
+
+    expect(reportNoteChatOperationalError).toHaveBeenCalledOnce();
+    expect(reportNoteChatOperationalError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserId: "user-1",
+        context: {
+          conversationId: "conversation-1",
+          userMessageId: "message-1",
+        },
+        error,
+        errorCode: NOTE_CHAT_OPERATIONAL_ERROR_CODES.MATCHED_NOTES_LOAD_FAILED,
         userId: "user-1",
       }),
     );
@@ -337,10 +358,6 @@ describe("prepareNoteChatExecution", () => {
       userTemplate: settings.chat.prompt.version.user_template,
     });
 
-    /*
-     * 검색 결과와 무관하게 질의 확장에서 사용한 token 사용량은
-     * 이후 Note Chat Run에서 합산할 수 있도록 그대로 전달합니다.
-     */
-    expect(result.queryExpansionUsage).toEqual(queryExpansionUsage);
+    expect(result.sources).toEqual(sources);
   });
 });

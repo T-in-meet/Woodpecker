@@ -10,6 +10,7 @@ import {
   TextCursorInputIcon,
 } from "lucide-react";
 
+import { FeatureInfoPopover } from "@/components/common/FeatureInfoPopover";
 import {
   Dialog,
   DialogContent,
@@ -52,7 +53,7 @@ const QUIZ_TYPE_OPTIONS = [
 
 const TYPE_BUTTON_CLASS = cn(
   "flex min-h-12 cursor-pointer items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-left transition-colors sm:h-16 sm:gap-2.5 sm:py-2.5",
-  "hover:border-orange-200 hover:bg-orange-50 dark:hover:border-orange-900/40 dark:hover:bg-orange-950/20",
+  "hover:border-brand-border hover:bg-brand-subtle",
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
 );
 
@@ -110,7 +111,17 @@ export function QuizModal({
 
         {phase === "select" && (
           <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-1 sm:space-y-4 sm:pr-0">
-            <p className="text-base font-medium">어떻게 복습할까요?</p>
+            <div className="flex items-center gap-1">
+              <p className="text-base font-medium">어떻게 복습할까요?</p>
+              <FeatureInfoPopover
+                ariaLabel="퀴즈 하루 사용량 안내 보기"
+                centerOnScreen
+              >
+                하루 최대 5회까지 AI 퀴즈를 만들 수 있어요. 사용 횟수는 매일
+                자정(한국 시간) 초기화되고, 한도 소진 후에도 만들어둔 퀴즈는
+                계속 풀어볼 수 있어요.
+              </FeatureInfoPopover>
+            </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
               {QUIZ_TYPE_OPTIONS.map(({ type, label, Icon }) => (
@@ -120,7 +131,7 @@ export function QuizModal({
                   onClick={() => startQuiz(type)}
                   className={TYPE_BUTTON_CLASS}
                 >
-                  <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-orange-50 sm:size-9 sm:rounded-xl dark:bg-orange-950/20">
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-subtle sm:size-9 sm:rounded-xl">
                     <Icon aria-hidden="true" className="size-4 sm:size-5" />
                   </span>
                   <span className="min-w-0 text-sm font-medium sm:text-base">

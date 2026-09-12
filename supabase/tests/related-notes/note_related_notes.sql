@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(12);
+SELECT plan(15);
 
 
 -- ============================================================================
@@ -148,6 +148,32 @@ SELECT lives_ok(
     'valid AI relationship should be insertable'
 );
 
+-- 신규 관계 row는 자동 생성된 relation ID를 가져야 합니다.
+SELECT ok(
+    (
+        SELECT id IS NOT NULL
+        FROM public.note_related_notes
+        WHERE note_id =
+                current_setting('test.related_notes_note_a_id')::uuid
+          AND related_note_id =
+                current_setting('test.related_notes_note_b_id')::uuid
+    ),
+    'new relationship should get a generated relation id'
+);
+
+-- relation ID는 row마다 고유해야 합니다.
+SELECT is(
+    (
+        SELECT count(DISTINCT id)
+        FROM public.note_related_notes
+    ),
+    (
+        SELECT count(*)
+        FROM public.note_related_notes
+    ),
+    'relationship relation ids should be unique'
+);
+
 
 -- ============================================================================
 -- 3. Duplicate relation
@@ -222,6 +248,61 @@ SELECT ok(
     ),
     'pair lock helper should be callable by service_role but not directly by authenticated users'
 );
+
+SELECT set_config(
+    'test.related_notes_existing_ai_relation_id',
+    (
+        SELECT id::text
+        FROM public.note_related_notes
+        WHERE note_id =
+                current_setting('test.related_notes_note_a_id')::uuid
+          AND related_note_id =
+                current_setting('test.related_notes_note_b_id')::uuid
+    ),
+    true
+);
+
+SET LOCAL ROLE authenticated;
+
+SELECT set_config(
+    'request.jwt.claims',
+    json_build_object(
+        'sub',
+        current_setting('test.related_notes_user_a_id'),
+        'role',
+        'authenticated'
+    )::text,
+    true
+);
+
+SELECT public.add_note_related_manual(
+    current_setting('test.related_notes_note_a_id')::uuid,
+    jsonb_build_array(
+        jsonb_build_object(
+            'relatedNoteId',
+            current_setting('test.related_notes_note_b_id')
+        )
+    )
+);
+
+-- 기존 AI 관계를 manual로 전환할 때 relation ID는 유지되어야 합니다.
+SELECT ok(
+    (
+        SELECT relation.id =
+                current_setting(
+                    'test.related_notes_existing_ai_relation_id'
+                )::uuid
+        FROM public.note_related_notes AS relation
+        WHERE relation.note_id =
+                current_setting('test.related_notes_note_a_id')::uuid
+          AND relation.related_note_id =
+                current_setting('test.related_notes_note_b_id')::uuid
+          AND relation.origin = 'manual'
+    ),
+    'manual conversion should preserve the existing relation id'
+);
+
+RESET ROLE;
 
 
 -- ============================================================================

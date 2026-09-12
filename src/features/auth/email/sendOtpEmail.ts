@@ -1,12 +1,12 @@
 import { render } from "@react-email/render";
 import React from "react";
 
-import { OtpPurpose } from "../constants/otp";
-import { OtpEmailTemplate } from "./OtpEmailTemplate";
-import { sendViaNodemailer } from "./providers/sendViaNodemailer";
-import { sendViaResend } from "./providers/sendViaResend";
-import { resolveEmailProvider } from "./resolveEmailProvider";
-import { resolveFromAddress } from "./resolveFromAddress";
+import type { OtpPurpose } from "@/features/auth/constants/otp";
+import { OtpEmailTemplate } from "@/features/auth/email/OtpEmailTemplate";
+import { sendViaNodemailer } from "@/features/auth/email/providers/sendViaNodemailer";
+import { sendViaResend } from "@/features/auth/email/providers/sendViaResend";
+import { resolveEmailProvider } from "@/features/auth/email/resolveEmailProvider";
+import { resolveFromAddress } from "@/features/auth/email/resolveFromAddress";
 
 type SendOtpEmailProps = {
   email: string;
@@ -33,15 +33,25 @@ type SendOtpEmailProps = {
 export async function sendOtpEmail({ email, purpose, otp }: SendOtpEmailProps) {
   /**
    * React Email 템플릿을 HTML 문자열로 렌더링한다.
+   *
+   * 이메일 본문도 signup / reset-password 목적에 따라
+   * 서로 다른 안내 문구를 사용하므로 purpose를 함께 전달한다.
    */
-  const html = await render(React.createElement(OtpEmailTemplate, { otp }));
+  const html = await render(
+    React.createElement(OtpEmailTemplate, {
+      otp,
+      purpose,
+    }),
+  );
 
   /**
    * OTP 목적(signup / reset-password)에 따라
    * 이메일 제목을 구성한다.
    */
   const subject =
-    purpose === "reset-password" ? "비밀번호 재설정 인증 번호" : "인증 번호";
+    purpose === "reset-password"
+      ? "딱다구리 비밀번호 재설정 인증 번호"
+      : "딱다구리 이메일 인증 번호";
 
   /**
    * 현재 프로젝트 환경에 맞는 이메일 provider를 결정한다.

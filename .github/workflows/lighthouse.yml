@@ -7,6 +7,10 @@ on:
       - development
       - main
 
+env:
+  HUSKY: 0
+  NEXT_TELEMETRY_DISABLED: 1
+
 jobs:
   # ─────────────────────────────────────────
   # Lighthouse: 성능 / SEO / 접근성 점수 측정
@@ -22,11 +26,23 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version-file: .nvmrc
           cache: "npm"
 
+      - name: Restore node_modules cache
+        id: node-modules-cache
+        uses: actions/cache@v6
+        with:
+          path: node_modules
+          key: node-modules-v4-${{ runner.os }}-${{ hashFiles('.nvmrc', 'package-lock.json') }}
+
       - name: Install dependencies
-        run: npm ci
+        if: steps.node-modules-cache.outputs.cache-hit != 'true'
+        run: npm ci --prefer-offline --no-audit --no-fund
+
+      - name: Validate dependency tree
+        if: steps.node-modules-cache.outputs.cache-hit == 'true'
+        run: npm ls --all > /dev/null
 
       # 프로덕션 빌드 후 로컬 서버 실행
       - name: Build

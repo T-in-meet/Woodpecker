@@ -6,6 +6,15 @@ import type { AdminSort } from "../../types/sort";
 /** feedbacks.category DB 제약과 동일한 피드백 카테고리입니다. */
 export type FeedbackCategory = "BUG" | "FEATURE" | "ETC";
 
+/** feedbacks.area DB 제약과 동일한 피드백 기능 영역입니다. */
+export type FeedbackArea =
+  | "NOTE"
+  | "REVIEW"
+  | "AI"
+  | "NOTIFICATION"
+  | "ACCOUNT"
+  | "ETC";
+
 /** feedbacks.status DB 제약과 동일한 피드백 처리 상태입니다. */
 export type FeedbackStatus = "OPEN" | "RESOLVED";
 
@@ -15,6 +24,7 @@ export type FeedbackSearchField = "title" | "content" | "user";
 /** 관리자 피드백 목록에서 필터링 가능한 필드입니다. */
 export type FeedbackFilterField =
   | "category"
+  | "area"
   | "status"
   | "createdAt"
   | "hasImages"
@@ -73,6 +83,9 @@ export type AdminFeedbackListItem = {
 
   /** 피드백 카테고리 */
   category: FeedbackCategory;
+
+  /** 피드백이 가리키는 기능 영역 */
+  area: FeedbackArea;
 
   /** 피드백 처리 상태 */
   status: FeedbackStatus;

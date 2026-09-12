@@ -1,7 +1,7 @@
 import type { User } from "@supabase/supabase-js";
 import { describe, expect, it } from "vitest";
 
-import { getAuthProviders, hasPasswordLogin } from "./authProviders";
+import { getAuthProviders } from "./authProviders";
 
 /**
  * provider 판정 테스트에 필요한 최소 Supabase User 객체를 생성합니다.
@@ -51,25 +51,5 @@ describe("authProviders", () => {
     } as Partial<User>);
 
     expect(getAuthProviders(user)).toEqual(["google"]);
-  });
-
-  it("email provider가 있으면 password login 보유로 판단한다", () => {
-    const user = makeUser({
-      app_metadata: {
-        providers: ["google", "email"],
-      },
-    });
-
-    expect(hasPasswordLogin(user)).toBe(true);
-  });
-
-  it("email provider가 없으면 password login 미보유로 판단한다", () => {
-    const user = makeUser({
-      app_metadata: {
-        providers: ["google"],
-      },
-    });
-
-    expect(hasPasswordLogin(user)).toBe(false);
   });
 });

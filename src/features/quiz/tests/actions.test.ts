@@ -40,7 +40,6 @@ const { generateQuiz, regenerateQuiz } = await import("../actions");
 const NOTE_ID = "11111111-1111-4111-8111-111111111111";
 const USER_ID = "user-123";
 const CLAIM_TOKEN = "55555555-5555-4555-8555-555555555555";
-
 const aiQuestions = {
   questions: [
     {
@@ -467,7 +466,7 @@ describe("generateQuiz", () => {
 
     it("JSON이 아니면 에러를 반환하고 저장하지 않는다", async () => {
       const query = setupSupabase();
-      generateJsonMock.mockResolvedValue({ text: "not json" });
+      generateJsonMock.mockResolvedValue("not json");
 
       const result = await generateQuiz(NOTE_ID, "ox");
 
@@ -536,7 +535,7 @@ describe("generateQuiz", () => {
     it("응답 원문을 로그에 남기지 않는다", async () => {
       setupSupabase();
       const secret = "노트에만 있는 비밀 문장";
-      generateJsonMock.mockResolvedValue({ text: secret });
+      generateJsonMock.mockResolvedValue(secret);
 
       await generateQuiz(NOTE_ID, "ox");
 
@@ -647,7 +646,7 @@ describe("generateQuiz", () => {
 
     it("응답 파싱에 실패해도 사용량을 되돌리지 않는다", async () => {
       const query = setupSupabase();
-      generateJsonMock.mockResolvedValue({ text: "not json" });
+      generateJsonMock.mockResolvedValue("not json");
 
       await generateQuiz(NOTE_ID, "ox");
 

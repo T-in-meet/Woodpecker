@@ -1,7 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { ROUTES } from "@/lib/constants/routes";
 import { formatDateTime } from "@/lib/utils/formatDate";
 
@@ -14,6 +13,8 @@ type NoteDetailBodyProps = {
   content: string;
   reviewRound: number;
   isReviewCompleted: boolean;
+  canChangeNotificationTime: boolean;
+  notificationScheduleSameDayOnly: boolean;
   canStartReview: boolean;
   reviewStatusMessage: string;
   notificationTimeOfDay: string | null;
@@ -24,7 +25,6 @@ const {
   getUserMock,
   getGradingsByNoteMock,
   getNoteByIdMock,
-  hasCompletedReviewForNoteTodayMock,
   noteDetailBodyMock,
   notFoundMock,
   redirectMock,
@@ -32,7 +32,6 @@ const {
   getUserMock: vi.fn(),
   getGradingsByNoteMock: vi.fn(),
   getNoteByIdMock: vi.fn(),
-  hasCompletedReviewForNoteTodayMock: vi.fn(),
   noteDetailBodyMock: vi.fn(),
   notFoundMock: vi.fn(),
   redirectMock: vi.fn(),
@@ -59,7 +58,6 @@ vi.mock("@/features/notes/queries", () => ({
 
 vi.mock("@/features/review/queries", () => ({
   getGradingsByNote: getGradingsByNoteMock,
-  hasCompletedReviewForNoteToday: hasCompletedReviewForNoteTodayMock,
 }));
 
 vi.mock("next/navigation", () => ({
@@ -87,6 +85,7 @@ function createNote(overrides: Record<string, unknown> = {}) {
     next_review_at: "2026-03-29T00:00:00.000Z",
     next_scheduled_at: "2026-03-29T09:00:00.000Z",
     notification_time_of_day: "21:30:00",
+    review_completed_at: null,
     review_round: 1,
     created_at: "2026-03-29T00:00:00.000Z",
     updated_at: "2026-03-29T01:00:00.000Z",
@@ -114,8 +113,6 @@ describe("NoteDetailPage", () => {
 
     getUserMock.mockReset();
     getNoteByIdMock.mockReset();
-    hasCompletedReviewForNoteTodayMock.mockReset();
-    hasCompletedReviewForNoteTodayMock.mockResolvedValue(false);
     getGradingsByNoteMock.mockReset();
     getGradingsByNoteMock.mockResolvedValue([]);
     noteDetailBodyMock.mockReset();
@@ -293,56 +290,52 @@ describe("NoteDetailPage", () => {
     });
   });
 
-  it("blocks a new review and reflects the daily limit when already completed today", async () => {
+  it("keeps review entry open for a note scheduled in the future", async () => {
     getUserMock.mockResolvedValue(createUser("user-123"));
     getNoteByIdMock.mockResolvedValue(
       createNote({
-        title: "Already done today",
-        next_review_at: "2026-03-30T15:00:00.000Z",
-        next_scheduled_at: "2026-03-30T09:00:00.000Z",
+        title: "Scheduled later",
+        next_review_at: "2099-03-30T15:00:00.000Z",
+        next_scheduled_at: "2099-03-30T09:00:00.000Z",
         notification_time_of_day: null,
       }),
     );
-    hasCompletedReviewForNoteTodayMock.mockResolvedValue(true);
-
-    await renderPage();
-
-    expect(lastBodyProps()).toMatchObject({
-      canStartReview: false,
-      reviewStatusMessage: `오늘 백지 테스트 완료 · 다음 복습 일정: ${formatDateTime(
-        "2026-03-30T09:00:00.000Z",
-      )}`,
-    });
-  });
-
-  it("falls back to allowing review when the daily-completion lookup fails", async () => {
-    getUserMock.mockResolvedValue(createUser("user-123"));
-    getNoteByIdMock.mockResolvedValue(
-      createNote({
-        title: "Future review note",
-        next_review_at: "2026-03-30T09:00:00.000Z",
-        next_scheduled_at: "2026-03-30T09:00:00.000Z",
-        notification_time_of_day: null,
-      }),
-    );
-    hasCompletedReviewForNoteTodayMock.mockRejectedValue(new Error("boom"));
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     await renderPage();
 
     expect(lastBodyProps()).toMatchObject({ canStartReview: true });
-    errorSpy.mockRestore();
   });
 
-  it("marks the note completed when every review round is finished", async () => {
+  // 회차 상한이 없으므로 횟수를 아무리 채워도 자동으로 끝나지 않는다.
+  it("keeps review entry open no matter how many reviews are done", async () => {
+    getUserMock.mockResolvedValue(createUser("user-123"));
+    getNoteByIdMock.mockResolvedValue(
+      createNote({
+        title: "Reviewed many times",
+        next_review_at: "2026-03-30T15:00:00.000Z",
+        next_scheduled_at: "2026-03-30T09:00:00.000Z",
+        notification_time_of_day: null,
+        review_round: 12,
+      }),
+    );
+
+    await renderPage();
+
+    expect(lastBodyProps()).toMatchObject({
+      canStartReview: true,
+      isReviewCompleted: false,
+    });
+  });
+
+  it("marks the note completed when the user finished it", async () => {
     getUserMock.mockResolvedValue(createUser("user-123"));
     getNoteByIdMock.mockResolvedValue(
       createNote({
         title: "Completed note",
-        next_review_at: null,
-        next_scheduled_at: null,
+        next_review_at: "2026-03-30T15:00:00.000Z",
+        next_scheduled_at: "2026-03-30T09:00:00.000Z",
         notification_time_of_day: null,
-        review_round: MAX_REVIEW_ROUND,
+        review_completed_at: "2026-03-29T05:00:00.000Z",
       }),
     );
 
@@ -350,11 +343,28 @@ describe("NoteDetailPage", () => {
 
     expect(lastBodyProps()).toMatchObject({
       isReviewCompleted: true,
+      canChangeNotificationTime: true,
+      notificationScheduleSameDayOnly: true,
       canStartReview: false,
-      reviewStatusMessage: "1-3-7 복습을 모두 마쳤습니다.",
-      nextScheduledAt: null,
+      reviewStatusMessage: "복습을 완료한 노트입니다.",
     });
-    expect(hasCompletedReviewForNoteTodayMock).not.toHaveBeenCalled();
+  });
+
+  it("완료일이 지나면 복습 일정 변경을 닫는다", async () => {
+    getUserMock.mockResolvedValue(createUser("user-123"));
+    getNoteByIdMock.mockResolvedValue(
+      createNote({
+        review_completed_at: "2026-03-28T05:00:00.000Z",
+      }),
+    );
+
+    await renderPage();
+
+    expect(lastBodyProps()).toMatchObject({
+      isReviewCompleted: true,
+      canChangeNotificationTime: false,
+      notificationScheduleSameDayOnly: false,
+    });
   });
 
   it("returns not found when the note does not exist for the current user", async () => {

@@ -11,22 +11,22 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import { getHasPasswordLogin } from "@/features/auth/lib/getHasPasswordLogin";
 import { LearningStatsSection } from "@/features/mypage/components/LearningStatsSection";
 import {
   MypageNav,
   type MypageSection,
 } from "@/features/mypage/components/MypageNav";
-import { ReviewWaitingSection } from "@/features/mypage/components/ReviewWaitingSection";
 import type { SupportTab } from "@/features/mypage/components/SupportSection";
 import {
   getLearningStats,
   getMyFeedbacks,
   type MyFeedbacksResult,
 } from "@/features/mypage/queries";
-import { getReviewWaitingNotes } from "@/features/notes/queries";
 import { PushSubscribeCard } from "@/features/notifications/components/PushSubscribeCard";
 import { getHasAnyPushSubscription } from "@/features/notifications/queries";
 import { ROUTES } from "@/lib/constants/routes";
+import { logError } from "@/lib/logger";
 import { getProfile } from "@/lib/supabase/getProfile";
 import { getUser } from "@/lib/supabase/getUser";
 
@@ -55,12 +55,7 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-const VALID_SECTIONS: MypageSection[] = [
-  "profile",
-  "stats",
-  "reviews",
-  "support",
-];
+const VALID_SECTIONS: MypageSection[] = ["profile", "stats", "support"];
 
 function isValidSection(value: unknown): value is MypageSection {
   return VALID_SECTIONS.includes(value as MypageSection);
@@ -69,7 +64,6 @@ function isValidSection(value: unknown): value is MypageSection {
 const SECTION_LABELS: Record<MypageSection, string> = {
   profile: "계정 관리",
   stats: "학습 통계",
-  reviews: "복습 대기",
   support: "고객센터",
 };
 
@@ -131,17 +125,33 @@ export default async function MyPage({ searchParams }: Props) {
   // 활성 section에서만 fetch
   let stats: Awaited<ReturnType<typeof getLearningStats>> | null = null;
   let hasAnyPushSubscription = false;
-  let reviewWaiting: Awaited<ReturnType<typeof getReviewWaitingNotes>> = [];
+  let hasPasswordLogin: boolean | null = null;
   let feedbackResult: MyFeedbacksResult | null = null;
 
   if (section === "stats") {
     stats = await getLearningStats();
   } else if (section === "profile") {
-    hasAnyPushSubscription = await getHasAnyPushSubscription({
-      userId: user.id,
-    });
-  } else if (section === "reviews") {
-    reviewWaiting = await getReviewWaitingNotes(user.id);
+    /**
+     * 계정 화면에 필요한 독립 조회를 병렬로 수행합니다.
+     *
+     * 비밀번호 로그인 상태 조회 실패는
+     * 비밀번호 미설정(false)으로 오인하지 않고 null로 구분합니다.
+     *
+     * 이 조회 실패로 계정 관리 화면 전체가 중단되지 않도록 하며,
+     * 상태를 확인할 수 없는 경우 비밀번호 관리 영역만 렌더링하지 않습니다.
+     */
+    [hasAnyPushSubscription, hasPasswordLogin] = await Promise.all([
+      getHasAnyPushSubscription({ userId: user.id }),
+      getHasPasswordLogin(user.id).catch((error) => {
+        logError({
+          event: "mypage.passwordLoginStatusLookup.failed",
+          error,
+          userId: user.id,
+        });
+
+        return null;
+      }),
+    ]);
   } else if (section === "support" && supportTab === "inquiry") {
     feedbackResult = await getMyFeedbacks(user.id);
   }
@@ -214,15 +224,14 @@ export default async function MyPage({ searchParams }: Props) {
               <PushSubscribeCard
                 initialHasAnySubscription={hasAnyPushSubscription}
               />
-              <AccountSection />
+              {hasPasswordLogin !== null && (
+                <AccountSection hasPasswordLogin={hasPasswordLogin} />
+              )}
               <DeleteAccountSection userEmail={user?.email ?? ""} />
             </>
           )}
           {section === "stats" && stats && (
             <LearningStatsSection stats={stats} />
-          )}
-          {section === "reviews" && (
-            <ReviewWaitingSection notes={reviewWaiting} />
           )}
           {section === "support" && (
             <SupportSection

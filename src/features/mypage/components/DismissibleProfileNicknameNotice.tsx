@@ -58,7 +58,9 @@ export function DismissibleProfileNicknameNotice({
         variant="ghost"
         size="icon-xs"
         aria-label="닉네임 안내 닫기"
-        className="-mr-1 -mt-1 text-muted-foreground hover:text-foreground"
+        // 안내 박스 모서리에 붙는 버튼이라 실제로 키우면 배치가 밀린다.
+        // 왼쪽 이웃이 클릭 대상 아닌 문단이라 히트 영역만 ::after로 넓힌다.
+        className="-mr-1 -mt-1 text-muted-foreground hover:text-foreground pointer-coarse:relative pointer-coarse:after:absolute pointer-coarse:after:left-1/2 pointer-coarse:after:top-1/2 pointer-coarse:after:size-11 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-['']"
         onClick={handleDismiss}
       >
         <X aria-hidden="true" />

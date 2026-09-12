@@ -3,14 +3,18 @@ import { cn } from "@/lib/utils/cn";
 
 const ADMIN_FEEDBACK_TABLE_SKELETON_ROW_COUNT = 5;
 
+// AdminFeedbackTable의 열 순서·개수를 그대로 따라간다. 개수가 어긋나면 로딩 중과
+// 로딩 후의 열 폭이 달라져 표가 흔들린다.
 const ADMIN_FEEDBACK_TABLE_SKELETON_WIDTHS = [
-  "w-20",
-  "w-28",
-  "w-80",
-  "w-24",
-  "w-16",
-  "w-36",
-  "w-24",
+  "w-20", // 상태
+  "w-28", // 카테고리
+  "w-16", // 영역
+  "w-80", // 피드백
+  "w-24", // 사용자
+  "w-16", // 첨부
+  "w-36", // 답변 작성자
+  "w-24", // 연결 노트
+  "w-28", // 등록일
 ] as const;
 
 type AdminFeedbackTableSkeletonProps = {

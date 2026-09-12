@@ -77,8 +77,12 @@ export function NoteChatStreamError({
               className="w-full sm:w-auto sm:shrink-0"
               asChild
             >
-              <Link href={`${ROUTES.MYPAGE}?section=support&tab=inquiry`}>
-                고객 지원으로 이동
+              <Link
+                href={`${ROUTES.MYPAGE}?section=support&tab=inquiry`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                고객 센터 열기
               </Link>
             </Button>
           </div>

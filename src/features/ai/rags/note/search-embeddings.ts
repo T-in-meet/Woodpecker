@@ -2,13 +2,18 @@ import { AI_EMBEDDING_DIMENSIONS } from "@/features/ai/constants/embeddings";
 import { matchAiEmbeddings } from "@/features/ai/embeddings/match";
 import type { AiEmbeddingMatchRow } from "@/features/ai/embeddings/types";
 import { createAiEmbeddingWithProvider } from "@/features/ai/providers";
-import type { AiTokenUsage } from "@/features/ai/providers/types";
 import { getProviderApiKey } from "@/features/ai/providers/utils/api-key";
 import {
   NOTE_EMBEDDING_INPUT_KIND,
   NOTE_EMBEDDING_SOURCE_TYPE,
 } from "@/features/ai/rags/note/constants/embeddings";
 import type { AiRuntimeEmbeddingConfiguration } from "@/features/ai/runtimes/types";
+import { reportAiOperationalError } from "@/features/ai/utils/report-ai-operational-error";
+import {
+  AI_OPERATIONAL_ERROR_CODE,
+  AI_OPERATIONAL_ERROR_OPERATION,
+  AI_OPERATIONAL_ERROR_STAGE,
+} from "@/features/operational-errors/constants";
 
 /**
  * Note RAG에서 Note chunk Embedding을 검색하는 입력입니다.
@@ -41,25 +46,6 @@ export type SearchNoteEmbeddingsParams = {
 
   /** 검색 결과에 허용할 최소 유사도입니다. */
   minSimilarity: number;
-
-  /**
-   * 검색 질의 embedding Provider usage 저장 callback입니다.
-   *
-   * Provider 호출 직후 실행하여 이후 DB 검색 실패가 발생하더라도 이미 발생한
-   * usage/cost를 호출 계층에서 보존할 수 있게 합니다.
-   */
-  onUsage?: (usage: AiTokenUsage) => Promise<void>;
-};
-
-/**
- * Note RAG Embedding 검색 결과와 query embedding usage입니다.
- */
-export type SearchNoteEmbeddingsWithUsageResult = {
-  /** 유사도 순으로 검색된 활성 Note chunk Embedding 목록입니다. */
-  matches: AiEmbeddingMatchRow[];
-
-  /** 검색 질의 embedding Provider 호출에서 반환된 Token 사용량입니다. */
-  usage: AiTokenUsage;
 };
 
 /**
@@ -88,61 +74,88 @@ export async function searchNoteEmbeddings({
   limit,
   minSimilarity,
 }: SearchNoteEmbeddingsParams): Promise<AiEmbeddingMatchRow[]> {
-  const result = await searchNoteEmbeddingsWithUsage({
-    embeddingConfiguration,
-    ...(excludeSourceIds !== undefined ? { excludeSourceIds } : {}),
-    ownerUserId,
-    question,
-    limit,
-    minSimilarity,
-  });
-
-  return result.matches;
-}
-
-/**
- * 검색 질의를 Embedding으로 변환하고 검색 결과와 query embedding usage를 함께 반환합니다.
- *
- * 기존 `searchNoteEmbeddings`의 동작은 유지하면서, Related Notes처럼
- * 검색 질의 embedding 호출 비용을 실행 이력에 저장해야 하는 경로에서 사용합니다.
- *
- * @param params 검색 질의, 사용자, Runtime 설정 및 검색 정책
- * @returns Embedding 검색 결과와 query embedding Provider usage
- */
-export async function searchNoteEmbeddingsWithUsage({
-  embeddingConfiguration,
-  excludeSourceIds,
-  ownerUserId,
-  question,
-  limit,
-  minSimilarity,
-  onUsage,
-}: SearchNoteEmbeddingsParams): Promise<SearchNoteEmbeddingsWithUsageResult> {
   const embeddingModel = embeddingConfiguration.model;
 
   /*
    * 현재 AI Foundation의 pgvector 저장 계약은 1536 dimensions로 고정되어 있으므로
-   * 다른 차원의 Embedding Model은 Provider 호출 전에 거부합니다.
+   * dimensions가 없거나 다른 차원의 Embedding Model은 Provider 호출 전에 거부합니다.
    */
+  if (embeddingModel.dimensions === null) {
+    const error = new Error(
+      `Embedding 모델의 dimensions 설정이 없습니다: ${embeddingModel.id}`,
+    );
+
+    await reportAiOperationalError({
+      context: {
+        model: embeddingModel.model,
+        modelConfigId: embeddingModel.id,
+        provider: embeddingModel.provider,
+      },
+      error,
+      errorCode: AI_OPERATIONAL_ERROR_CODE.EMBEDDING_DIMENSIONS_MISSING,
+      message: "AI embedding 모델의 dimensions 설정이 없습니다.",
+      operation: AI_OPERATIONAL_ERROR_OPERATION.CREATE_EMBEDDING,
+      stage: AI_OPERATIONAL_ERROR_STAGE.VALIDATION,
+    });
+
+    throw error;
+  }
+
   if (embeddingModel.dimensions !== AI_EMBEDDING_DIMENSIONS) {
-    throw new Error(
+    const error = new Error(
       `Unsupported note embedding dimensions: ${embeddingModel.dimensions}`,
     );
+
+    await reportAiOperationalError({
+      context: {
+        dimensions: embeddingModel.dimensions,
+        model: embeddingModel.model,
+        modelConfigId: embeddingModel.id,
+        provider: embeddingModel.provider,
+        supportedDimensions: AI_EMBEDDING_DIMENSIONS,
+      },
+      error,
+      errorCode: AI_OPERATIONAL_ERROR_CODE.EMBEDDING_DIMENSIONS_UNSUPPORTED,
+      message: "현재 지원하지 않는 AI embedding dimensions입니다.",
+      operation: AI_OPERATIONAL_ERROR_OPERATION.CREATE_EMBEDDING,
+      stage: AI_OPERATIONAL_ERROR_STAGE.VALIDATION,
+    });
+
+    throw error;
   }
 
   /*
    * 검색 질의 자체는 저장하지 않고 동일 Embedding Model로 vector만 생성합니다.
    * 저장된 Note chunk vector와 같은 vector space에서 비교하기 위한 과정입니다.
    */
+  let apiKey: string;
+
+  try {
+    apiKey = getProviderApiKey(embeddingModel.provider);
+  } catch (error) {
+    await reportAiOperationalError({
+      context: {
+        model: embeddingModel.model,
+        modelConfigId: embeddingModel.id,
+        provider: embeddingModel.provider,
+      },
+      error,
+      errorCode: AI_OPERATIONAL_ERROR_CODE.PROVIDER_API_KEY_MISSING,
+      message: "AI Provider API key 설정이 없습니다.",
+      operation: AI_OPERATIONAL_ERROR_OPERATION.CREATE_EMBEDDING,
+      stage: AI_OPERATIONAL_ERROR_STAGE.VALIDATION,
+    });
+
+    throw error;
+  }
+
   const queryEmbedding = await createAiEmbeddingWithProvider({
-    apiKey: getProviderApiKey(embeddingModel.provider),
+    apiKey,
     dimensions: embeddingModel.dimensions,
     input: question,
     model: embeddingModel.model,
     provider: embeddingModel.provider,
   });
-
-  await onUsage?.(queryEmbedding.usage);
 
   /*
    * matchAiEmbeddings는 현재 활성 generation의 chunk만 대상으로
@@ -151,7 +164,7 @@ export async function searchNoteEmbeddingsWithUsage({
    * excludeSourceIds가 지정된 경우 해당 Note들의 모든 chunk는
    * ranking 및 LIMIT 적용 전에 제외됩니다.
    */
-  const matches = await matchAiEmbeddings({
+  return matchAiEmbeddings({
     excludeSourceIds,
     inputKind: NOTE_EMBEDDING_INPUT_KIND,
     limit,
@@ -161,9 +174,4 @@ export async function searchNoteEmbeddingsWithUsage({
     queryEmbedding: queryEmbedding.embedding,
     sourceType: NOTE_EMBEDDING_SOURCE_TYPE,
   });
-
-  return {
-    matches,
-    usage: queryEmbedding.usage,
-  };
 }

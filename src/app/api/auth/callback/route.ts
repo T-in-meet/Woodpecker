@@ -22,9 +22,24 @@ import { canonicalizeEmail } from "@/features/auth/utils/canonicalizeEmail";
 import { NICKNAME_MAX_LENGTH } from "@/lib/constants/profiles";
 import { ROUTES } from "@/lib/constants/routes";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
+import {
+  clearSupabaseAuthSessionCookies,
+  createClient,
+} from "@/lib/supabase/server";
 
 const OAUTH_NICKNAME_NOTICE_PARAM = "profile_nickname";
+
+/**
+ * 신규 OAuth 사용자는 계정 생성 직후 첫 로그인이 이루어진다.
+ *
+ * created_at과 last_sign_in_at의 차이가 이 범위 이내인 경우에만
+ * 이번 OAuth login 과정에서 새로 생성된 사용자로 판단한다.
+ *
+ * last_sign_in_at을 사용할 수 없는 경우에는
+ * created_at과 현재 callback 시점의 차이를 동일한 범위로 확인한다.
+ */
+const NEW_OAUTH_USER_MAX_SIGN_IN_DELAY_MS = 60 * 1000;
+
 const OAUTH_NICKNAME_NOTICE = {
   provider: "provider",
   fallback: "fallback",
@@ -43,6 +58,52 @@ function getOAuthCanonicalEmail(user: User): string | null {
   const email = user.email?.trim();
 
   return email ? canonicalizeEmail(email) : null;
+}
+
+/**
+ * OAuth login 과정에서 이번에 새로 생성된 사용자인지 확인합니다.
+ *
+ * 기존 Google-only 사용자는 법적 동의 이력이 없을 수 있으므로
+ * 동의 이력 자체를 신규 사용자 판정 기준으로 사용하지 않습니다.
+ *
+ * 정상적으로 last_sign_in_at을 확인할 수 있으면
+ * 계정 생성 시점과 첫 로그인 시점의 차이를 기준으로 판정합니다.
+ *
+ * last_sign_in_at이 없거나 정상적인 timestamp가 아니면
+ * created_at과 현재 callback 시점의 차이를 fallback으로 사용합니다.
+ *
+ * 이 fallback은 실제 신규 OAuth 사용자의 last_sign_in_at이 누락되더라도
+ * 동의 없는 상태로 기존 사용자 흐름을 통과하지 않도록 하기 위한 처리입니다.
+ *
+ * created_at 자체를 확인할 수 없거나 현재 시점보다 미래인 경우에는
+ * 신규 사용자로 판단하지 않습니다.
+ *
+ * @param user OAuth callback에서 세션 교환으로 받은 Supabase 사용자
+ * @param now 현재 callback 시각. 테스트에서는 고정된 시각을 전달할 수 있습니다.
+ * @returns 이번 OAuth login 과정에서 생성된 사용자로 판단되면 true
+ */
+function isNewlyCreatedOAuthUser(user: User, now = Date.now()): boolean {
+  const createdAt = Date.parse(user.created_at);
+
+  if (!Number.isFinite(createdAt)) {
+    return false;
+  }
+
+  const lastSignInAt = user.last_sign_in_at
+    ? Date.parse(user.last_sign_in_at)
+    : Number.NaN;
+
+  if (Number.isFinite(lastSignInAt)) {
+    const signInDelay = lastSignInAt - createdAt;
+
+    return (
+      signInDelay >= 0 && signInDelay <= NEW_OAUTH_USER_MAX_SIGN_IN_DELAY_MS
+    );
+  }
+
+  const creationAge = now - createdAt;
+
+  return creationAge >= 0 && creationAge <= NEW_OAUTH_USER_MAX_SIGN_IN_DELAY_MS;
 }
 
 /**
@@ -347,7 +408,20 @@ export async function GET(request: NextRequest) {
 
   if (effectiveIntent === "signup") {
     if (!hasSignupAgreementIntent) {
-      await supabase.auth.signOut();
+      const { error: signOutError } = await supabase.auth.signOut();
+
+      if (signOutError) {
+        await clearSupabaseAuthSessionCookies();
+
+        return redirectWithClearedIntent(
+          buildOAuthErrorUrl(
+            requestUrl.origin,
+            "signup",
+            OAUTH_CALLBACK_ERROR_REASON.SIGN_OUT_FAILED,
+          ),
+        );
+      }
+
       return redirectWithClearedIntent(
         new URL(SIGNUP_AGREEMENT_REQUIRED_PATH, requestUrl.origin),
       );
@@ -374,6 +448,60 @@ export async function GET(request: NextRequest) {
   }
 
   const agreementStatus = await getLegalAcceptanceStatus(data.user.id);
+
+  /**
+   * 동의 이력이 없다는 사실만으로 신규 사용자를 판단하지 않는다.
+   *
+   * 초기 법적 동의 데이터 백필에서 제외된 Google-only 기존 사용자는
+   * 정상적인 기존 계정이더라도 동의 이력이 없을 수 있다.
+   *
+   * 따라서 동의 이력이 없으면서 계정 생성 시점과 첫 로그인 시점이 가까워
+   * 이번 OAuth login 과정에서 새로 생성된 것으로 판단되는 경우에만
+   * 신규 가입 흐름으로 되돌려 보낸다.
+   */
+  if (
+    !agreementStatus.hasAcceptanceHistory &&
+    isNewlyCreatedOAuthUser(data.user)
+  ) {
+    /**
+     * login 경로에서 생성된 신규 OAuth 사용자는 회원가입 약관 동의가 필요하므로
+     * 현재 세션을 먼저 종료한다.
+     *
+     * 세션 종료에 실패하면 callback 자체를 500으로 종료하지 않고
+     * 로그인 화면의 OAuth 오류 안내로 되돌려 사용자가 다시 시도할 수 있게 한다.
+     */
+    const { error: signOutError } = await supabase.auth.signOut();
+
+    if (signOutError) {
+      /**
+       * 원격 signOut에 실패하면 Supabase Auth session cookie가 남아
+       * 로그인 화면에서 다시 인증된 사용자로 판단될 수 있다.
+       *
+       * 따라서 오류 화면으로 이동하기 전에 현재 브라우저의
+       * Supabase Auth session cookie를 명시적으로 제거한다.
+       */
+      await clearSupabaseAuthSessionCookies();
+
+      return redirectWithClearedIntent(
+        buildOAuthErrorUrl(
+          requestUrl.origin,
+          "login",
+          OAUTH_CALLBACK_ERROR_REASON.SIGN_OUT_FAILED,
+        ),
+      );
+    }
+
+    return redirectWithClearedIntent(
+      new URL(SIGNUP_AGREEMENT_REQUIRED_PATH, requestUrl.origin),
+    );
+  }
+
+  /**
+   * 기존 사용자는 동의 이력이 없더라도 기존 법적 문서 시행 정책을 따른다.
+   *
+   * 시행 전에는 canAccessService가 true이므로 기존 redirectPath로 로그인하고,
+   * 시행 후 현재 동의 요건을 충족하지 못하면 agreements 페이지로 이동한다.
+   */
   if (!agreementStatus.canAccessService) {
     return redirectWithClearedIntent(
       new URL(getAgreementRequiredPath(redirectPath), requestUrl.origin),

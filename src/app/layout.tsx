@@ -1,11 +1,10 @@
 // layout.tsx (Root Layout)
 // 앱 전체에 공통 적용되는 최상위 레이아웃.
 // 모든 페이지는 이 파일의 RootLayout을 통해 렌더링됨.
-
 import "./globals.css";
 
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Jua } from "next/font/google";
 import { headers } from "next/headers";
 
 import { DevelopmentServiceWorkerCleanup } from "@/components/providers/DevelopmentServiceWorkerCleanup";
@@ -13,10 +12,12 @@ import { QueryProvider } from "@/components/providers/QueryProvider";
 import { SessionProvider } from "@/components/providers/SessionProvider";
 import { ToasterProvider } from "@/components/providers/ToasterProvider";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { SITE_URL } from "@/lib/constants/site";
+import { landingDescription } from "@/features/landing/content";
+import { SITE_NAME, SITE_TITLE, SITE_URL } from "@/lib/constants/site";
+import { buildSocialMetadata } from "@/lib/seo/socialMetadata";
 
 /* ─── 폰트 ───────────────────────────────────────────────────────────────────
-   Geist (본문), Geist_Mono (코드) 폰트를 CSS 변수로 등록.
+   Geist (본문), Geist_Mono (코드), 주아체(브랜드)를 CSS 변수로 등록.
    body의 className에서 변수명으로 참조해 전역 적용함.
 ─────────────────────────────────────────────────────────────────────────── */
 const geistSans = Geist({
@@ -29,43 +30,55 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+/* 브랜드 폰트(주아체, SIL OFL). Header.tsx의 서비스명(딱다구리)과
+   OG 이미지 워드마크에만 쓴다. 폰트를 바꾸면
+   scripts/generate-og-image.mjs도 같은 서체를 보게 고친다.
+   preload를 끈 이유: 워드마크 네 글자 때문에 한글 서브셋을 우선 로드할
+   이유가 없다. swap이라 폴백으로 먼저 그리고 도착하면 교체한다. */
+const jua = Jua({
+  variable: "--font-jua",
+  weight: "400",
+  display: "swap",
+  // subsets를 지정하지 않는다. Google Fonts 원본 메타데이터에는 Jua의 subset이
+  // korean·latin 둘 다 있지만, next/font가 들고 있는 폰트 목록에는 latin만 잡혀 있어
+  // ["korean"]을 넘기면 타입 에러가 난다. 그렇다고 latin만 지정하면 한글이 빠진다.
+  // 생략하면 unicode-range로 쪼개진 CSS 전체를 self-host하므로 한글이 포함되고,
+  // 브라우저는 실제로 쓰는 글자가 든 조각만 받는다. preload가 false라 subsets는 선택이다.
+  preload: false,
+});
+
 /* ─── SEO 메타데이터 ──────────────────────────────────────────────────────────
    Next.js가 <head>에 자동으로 삽입하는 메타 정보.
    - title.template: 하위 페이지에서 title을 지정하면 "%s | 딱다구리" 형식으로 조합됨
    - openGraph: 카카오톡, 슬랙 등 링크 공유 시 미리보기에 사용
    - twitter: 트위터(X) 링크 공유 시 카드 형태로 표시
-   - alternates.canonical: 검색엔진에 대표 URL을 명시해 중복 색인 방지
    - robots: 검색엔진에 색인(index)·링크 추적(follow) 허용 여부를 코드 레벨에서도 지정
+
+   canonical은 여기 두지 않는다. 루트에 두면 하위 페이지가 이를 상속해서,
+   자기 canonical을 선언하지 않은 페이지가 전부 홈을 대표 URL로 가리키게 된다.
+   대부분이 noindex라 당장 피해는 없지만 "색인하지 말라 + 대표 URL은 다른 페이지"는
+   서로 어긋나는 신호다. 색인 대상 페이지(/, /terms, /privacy)가 각자
+   alternates.canonical을 선언하고 있으므로 그쪽을 정본으로 둔다.
 ─────────────────────────────────────────────────────────────────────────── */
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "딱다구리 — 기록이 기억이 되는 간격 반복 학습 공간",
-    template: "%s | 딱다구리",
+    default: SITE_TITLE,
+    template: `%s | ${SITE_NAME}`,
   },
-  description:
-    "기록한 순간부터 복습이 설계됩니다. 인지 과학의 간격 반복 학습을 기반으로 한 1-3-7일 복습 알림과 백지 테스트 등 인출 연습으로 학습 내용을 장기 기억으로 전환하세요.",
+  description: landingDescription,
+  /* 원본 woodpecker.png(1254x1254, 약 677KB)를 그대로 쓰지 않는다. 이 경로는
+     next/image를 거치지 않아 원본이 그대로 내려가는데, 탭 아이콘은 16~32px로
+     그려진다. scripts/generate-icons.mjs로 구운 크기별 파일을 쓴다. */
   icons: {
-    icon: "/favicon.svg",
+    icon: "/icons/favicon-32.png",
+    apple: "/icons/apple-touch-icon-180.png",
   },
-  openGraph: {
-    type: "website",
-    locale: "ko_KR",
+  ...buildSocialMetadata({
+    title: SITE_TITLE,
+    description: landingDescription,
     url: SITE_URL,
-    siteName: "딱다구리",
-    title: "딱다구리 — 기록이 기억이 되는 간격 반복 학습 공간",
-    description:
-      "인지 과학의 간격 반복 학습을 기반으로 한 1-3-7일 복습 알림과 백지 테스트 등 인출 연습으로 학습 내용을 장기 기억으로 전환하세요.",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "딱다구리 — 기록이 기억이 되는 간격 반복 학습 공간",
-    description:
-      "인지 과학의 간격 반복 학습을 기반으로 한 1-3-7일 복습 알림과 백지 테스트 등 인출 연습으로 학습 내용을 장기 기억으로 전환하세요.",
-  },
-  alternates: {
-    canonical: SITE_URL,
-  },
+  }),
   robots: {
     index: true,
     follow: true,
@@ -97,7 +110,7 @@ export default async function RootLayout({
   return (
     <html lang="ko">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${jua.variable} antialiased`}
       >
         <DevelopmentServiceWorkerCleanup />
         <SessionProvider>

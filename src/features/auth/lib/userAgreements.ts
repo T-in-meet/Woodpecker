@@ -44,6 +44,7 @@ const CURRENT_REQUIREMENTS = [
 
 export type LegalAcceptanceStatus = {
   canAccessService: boolean;
+  hasAcceptanceHistory: boolean;
   isComplete: boolean;
   isEnforced: boolean;
   missingEvents: LegalAcceptanceEvent[];
@@ -69,20 +70,35 @@ export async function getLegalAcceptanceStatus(
 
   if (error) throw error;
 
+  const acceptanceRows = data ?? [];
+
   const accepted = new Set(
-    (data ?? []).map(({ event_type, document_version }) =>
+    acceptanceRows.map(({ event_type, document_version }) =>
       requirementKey(event_type, document_version),
     ),
   );
+
   const missingEvents = CURRENT_REQUIREMENTS.filter(
     ({ eventType, documentVersion }) =>
       !accepted.has(requirementKey(eventType, documentVersion)),
   ).map(({ eventType }) => eventType);
+
   const isComplete = missingEvents.length === 0;
   const isEnforced = isLegalRevisionEffective(now);
 
+  /**
+   * 현재 버전 여부와 관계없이 법적 동의 이벤트가 하나라도 존재하는지 나타낸다.
+   *
+   * 개정 약관 시행 전 유예 여부와는 별개의 값이다.
+   * OAuth login callback에서는 정상적인 기존 가입자와
+   * 로그인 경로에서 새로 생성된 사용자를 구분하는 데 사용한다.
+   */
+  const hasAcceptanceHistory = acceptanceRows.length > 0;
+
   return {
+    // 기존 개정 약관 유예 정책은 유지한다.
     canAccessService: !isEnforced || isComplete,
+    hasAcceptanceHistory,
     isComplete,
     isEnforced,
     missingEvents,
@@ -101,6 +117,7 @@ export async function getLegalAcceptanceRequiredPath(
   userId: string,
   redirectPath?: string | null,
 ): Promise<string | null> {
+  // 개정 약관 시행 전에는 기존 정책대로 재동의를 강제하지 않는다.
   if (!isLegalRevisionEffective()) return null;
 
   const status = await getLegalAcceptanceStatus(userId);
@@ -116,6 +133,7 @@ export async function recordCurrentLegalAcceptances(
 ): Promise<void> {
   const adminClient = createAdminClient();
   const occurredAt = new Date().toISOString();
+
   const rows = CURRENT_REQUIREMENTS.map(({ eventType, documentVersion }) => ({
     document_version: documentVersion,
     event_type: eventType,
@@ -123,6 +141,7 @@ export async function recordCurrentLegalAcceptances(
     source,
     user_id: userId,
   }));
+
   const { error } = await adminClient
     .from("user_legal_acceptances")
     .upsert(rows, {

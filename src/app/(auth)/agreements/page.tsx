@@ -8,8 +8,10 @@ import { validateRedirectPath } from "@/features/auth/lib/validateRedirectPath";
 import { ROUTES } from "@/lib/constants/routes";
 import { getUser } from "@/lib/supabase/getUser";
 
+/* 접미사를 직접 붙이지 않는다. 루트 레이아웃의 title.template이 "%s | 딱다구리"로
+   조합하므로, 여기에 브랜드를 적으면 "법적 문서 확인 | 딱다구리 | 딱다구리"가 된다. */
 export const metadata: Metadata = {
-  title: "법적 문서 확인 | 딱다구리",
+  title: "법적 문서 확인",
   robots: { index: false, follow: false },
 };
 
@@ -37,9 +39,5 @@ export default async function AgreementsPage({
 
   const action = acceptLegalDocumentsAction.bind(null, redirectPath);
 
-  return (
-    <main className="md:flex md:min-h-[calc(100dvh-4.5rem)] md:items-center md:justify-center">
-      <LegalAcceptanceForm action={action} isEnforced={status.isEnforced} />
-    </main>
-  );
+  return <LegalAcceptanceForm action={action} isEnforced={status.isEnforced} />;
 }

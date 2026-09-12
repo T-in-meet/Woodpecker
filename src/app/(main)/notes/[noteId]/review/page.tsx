@@ -22,9 +22,7 @@ import {
   getNoteContentForComparison,
   getPendingReviewLog,
   getReviewableNote,
-  hasCompletedReviewForNoteToday,
 } from "@/features/review/queries";
-import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { getNoteDetailRoute, ROUTES } from "@/lib/constants/routes";
 import { logError } from "@/lib/logger";
 import { createServerComponentClient } from "@/lib/supabase/server";
@@ -122,10 +120,8 @@ export default async function NoteReviewPage({
     notFound();
   }
 
-  if (!pendingReviewLog) {
-    const nextReviewAt = note.next_review_at;
-    const isCompleted =
-      note.review_round >= MAX_REVIEW_ROUND && nextReviewAt === null;
+  if (note.review_completed_at || !pendingReviewLog) {
+    const isCompleted = Boolean(note.review_completed_at);
 
     return (
       <div className="mx-auto w-full max-w-3xl px-6 py-10 md:px-12">
@@ -135,7 +131,7 @@ export default async function NoteReviewPage({
             <CardHeader>
               <CardTitle className="text-2xl">
                 {isCompleted
-                  ? "이 노트는 모든 복습을 마쳤습니다."
+                  ? "복습을 완료한 노트입니다."
                   : "진행 중인 백지 테스트가 없습니다."}
               </CardTitle>
             </CardHeader>
@@ -154,19 +150,6 @@ export default async function NoteReviewPage({
         </div>
       </div>
     );
-  }
-
-  // 실패 시 fail-open(false)으로 처리. 이 값은 버튼 disabled hint 용도이고,
-  // 실제 1일 1회 제한은 DB 부분 unique 인덱스와 RPC(WP001)가 보증한다.
-  // 일시적 조회 실패로 페이지 전체를 막지 않는다.
-  let alreadyCompletedToday = false;
-  try {
-    alreadyCompletedToday = await hasCompletedReviewForNoteToday(
-      noteId,
-      user.id,
-    );
-  } catch (error) {
-    logError(error);
   }
 
   // 이미 채점을 받은 회차면 답안·채점·원본을 복원해 비교 화면부터 보여준다.
@@ -205,7 +188,6 @@ export default async function NoteReviewPage({
     <div className="mx-auto w-full max-w-6xl px-6 py-10 md:px-12">
       <NoteReviewBreadcrumb noteId={noteId} noteTitle={note.title} />
       <BlankTestPage
-        alreadyCompletedToday={alreadyCompletedToday}
         noteId={noteId}
         noteTitle={note.title}
         restoredSession={restoredSession}

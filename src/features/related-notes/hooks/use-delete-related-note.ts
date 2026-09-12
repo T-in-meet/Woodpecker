@@ -9,8 +9,8 @@ type DeleteRelatedNoteVariables = {
   /** 현재 보고 있는 기준 Note ID입니다. */
   noteId: string;
 
-  /** 삭제할 Related Note ID입니다. */
-  relatedNoteId: string;
+  /** 삭제할 Related Notes 관계 row ID입니다. */
+  relationId: string;
 };
 
 /**

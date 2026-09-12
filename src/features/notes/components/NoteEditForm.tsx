@@ -40,6 +40,7 @@ export function NoteEditForm({
     state?.error && typeof state.error === "string" ? state.error : null;
 
   const isDirty = title !== initialTitle || content !== initialContent;
+  const excessLength = Math.max(0, content.length - CONTENT_MAX_LENGTH);
   usePreventPageLeave(isDirty);
 
   useEffect(() => {
@@ -58,14 +59,22 @@ export function NoteEditForm({
       <input
         name="title"
         aria-label="제목"
+        aria-invalid={Boolean(fieldErrors?.title)}
+        aria-describedby={
+          fieldErrors?.title ? "note-edit-title-error" : undefined
+        }
         maxLength={100}
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         autoFocus
-        className="w-full border-none bg-transparent text-3xl font-bold leading-snug text-foreground focus:outline-none"
+        className="w-full rounded-md border-none bg-transparent text-3xl font-bold leading-snug text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       />
       {fieldErrors?.title && (
-        <p role="alert" className="mt-2 text-xs text-destructive">
+        <p
+          id="note-edit-title-error"
+          role="alert"
+          className="mt-2 text-xs text-destructive"
+        >
           {fieldErrors.title.join(" ")}
         </p>
       )}
@@ -84,7 +93,22 @@ export function NoteEditForm({
         className="mt-4 [&_.tiptap]:min-h-[60vh]"
       />
 
-      <div className="mt-4 flex items-center justify-end gap-2">
+      <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+        <div
+          id="note-edit-length-help"
+          className="mr-auto min-w-0 basis-full text-xs text-muted-foreground sm:basis-auto"
+        >
+          <p className="tabular-nums">
+            {content.length.toLocaleString("ko-KR")} /{" "}
+            {CONTENT_MAX_LENGTH.toLocaleString("ko-KR")}
+          </p>
+          <p>서식 문자를 포함한 길이입니다.</p>
+          <p aria-live="polite" className="text-destructive">
+            {excessLength > 0
+              ? `내용이 최대 길이를 초과했습니다. ${excessLength.toLocaleString("ko-KR")}자를 줄여주세요.`
+              : ""}
+          </p>
+        </div>
         <Button
           type="button"
           variant="outline"
@@ -97,11 +121,12 @@ export function NoteEditForm({
         </Button>
         <Button
           type="submit"
+          aria-describedby="note-edit-length-help"
           size="sm"
           disabled={isPending || content.length > CONTENT_MAX_LENGTH}
           className="cursor-pointer"
         >
-          {isPending ? "저장 중..." : "저장"}
+          {isPending ? "저장 중…" : "저장"}
         </Button>
       </div>
     </form>

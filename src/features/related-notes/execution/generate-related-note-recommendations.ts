@@ -2,7 +2,6 @@ import { z } from "zod";
 
 import { renderPromptTemplate } from "@/features/ai/prompts/render";
 import { createAiChatCompletionWithProvider } from "@/features/ai/providers";
-import type { AiTokenUsage } from "@/features/ai/providers/types";
 import { getProviderApiKey } from "@/features/ai/providers/utils/api-key";
 import type { MatchedNote } from "@/features/ai/rags/note/get-matched-notes";
 import type { AiRuntimeChatConfiguration } from "@/features/ai/runtimes/types";
@@ -61,14 +60,6 @@ type GenerateRelatedNoteRecommendationsParams = {
    * 같은 Note에서 검색된 여러 chunk는 동일한 Note ID를 가집니다.
    */
   notes: MatchedNote[];
-
-  /**
-   * Provider 응답 직후 Token usage를 저장하기 위한 callback입니다.
-   *
-   * 응답 파싱이나 추천 Note resolve가 실패하더라도 완료된 Answer Generation
-   * 호출의 usage를 Run에 남기기 위해 검증 전에 호출합니다.
-   */
-  onUsage?: (usage: AiTokenUsage) => Promise<void>;
 };
 
 /**
@@ -77,9 +68,6 @@ type GenerateRelatedNoteRecommendationsParams = {
 export type GenerateRelatedNoteRecommendationsResult = {
   /** LLM이 선택한 순서를 유지한 중복 없는 AI 관련 Note 추천 목록입니다. */
   recommendations: RelatedNoteAiRecommendation[];
-
-  /** Answer Generation Provider 호출에서 반환된 Token 사용량입니다. */
-  usage: AiTokenUsage;
 };
 
 /**
@@ -106,7 +94,7 @@ export type GenerateRelatedNoteRecommendationsResult = {
  * 생성된 추천은 저장 계층에서 AI 추천으로 저장됩니다.
  *
  * @param params 관련 노트 추천 실행에 필요한 Runtime 설정, 원본 Note 및 RAG 결과
- * @returns 추천 목록과 Provider usage
+ * @returns 검증된 추천 목록
  */
 export async function generateRelatedNoteRecommendations({
   configuration,
@@ -114,7 +102,6 @@ export async function generateRelatedNoteRecommendations({
   title,
   context,
   notes,
-  onUsage,
 }: GenerateRelatedNoteRecommendationsParams): Promise<GenerateRelatedNoteRecommendationsResult> {
   // Answer Agent 실행에 사용할 Prompt와 Model 설정을 가져옵니다.
   const promptVersion = configuration.prompt.version;
@@ -142,27 +129,27 @@ export async function generateRelatedNoteRecommendations({
   );
 
   // Answer Agent를 호출하여 관련 Note ID와 추천 이유를 생성합니다.
+  const responseFormat =
+    responseSchema == null
+      ? undefined
+      : {
+          type: "json_schema" as const,
+          jsonSchema: {
+            name: "related_note_recommendation_response",
+            schema: responseSchema as Json,
+            strict: true,
+          },
+        };
+
   const result = await createAiChatCompletionWithProvider({
     apiKey: getProviderApiKey(model.provider),
     model: model.model,
     provider: model.provider,
-    responseFormat:
-      responseSchema == null
-        ? undefined
-        : {
-            type: "json_schema",
-            jsonSchema: {
-              name: "related_note_recommendation_response",
-              schema: responseSchema as Json,
-              strict: true,
-            },
-          },
+    responseFormat,
     systemPrompt,
     temperature: configuration.temperature,
     userPrompt,
   });
-
-  await onUsage?.(result.usage);
 
   // Provider가 반환한 문자열 응답을 검증 가능한 JSON 값으로 변환합니다.
   let response: unknown;
@@ -223,7 +210,7 @@ export async function generateRelatedNoteRecommendations({
    * Note ID를 기준으로 검색 결과를 빠르게 확인할 수 있도록 Map을 구성합니다.
    *
    * 동일 Note ID가 여러 번 등장하는 경우 첫 번째 MatchedNote를 유지합니다.
-   * 최종 추천에 필요한 title은 Note 단위로 동일한 snapshot을 사용하므로
+   * 최종 추천에 필요한 title은 Note 단위로 동일한 값을 사용하므로
    * 어느 chunk에서 가져오더라도 동일한 Note를 가리킵니다.
    */
   const matchedNotesById = new Map<string, MatchedNote>();
@@ -283,6 +270,5 @@ export async function generateRelatedNoteRecommendations({
 
   return {
     recommendations,
-    usage: result.usage,
   };
 }

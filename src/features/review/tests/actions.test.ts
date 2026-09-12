@@ -131,6 +131,12 @@ describe("submitAnswerAction", () => {
     createClientMock.mockReset();
     getNoteContentForComparisonMock.mockReset();
     getPendingReviewLogMock.mockReset();
+    getReviewableNoteMock.mockReset().mockResolvedValue({
+      title: "테스트 노트",
+      next_review_at: "2026-01-02T00:00:00.000Z",
+      review_completed_at: null,
+      review_round: 0,
+    });
     redirectMock.mockReset();
 
     redirectMock.mockImplementation(() => {
@@ -187,6 +193,33 @@ describe("submitAnswerAction", () => {
     expect(result).toEqual({ error: "진행 중인 복습을 찾을 수 없습니다." });
   });
 
+  // 완료 판정은 본문과 같은 행에서 함께 읽는다.
+  it("rejects answers for a note marked as completed", async () => {
+    createClientMock.mockResolvedValue(createAuthSupabaseMock(TEST_USER_ID));
+    getNoteContentForComparisonMock.mockResolvedValue({
+      content: "원본 내용",
+      review_completed_at: "2026-01-01T00:00:00.000Z",
+    });
+    getPendingReviewLogMock.mockResolvedValue({
+      id: REVIEW_LOG_ID,
+      note_id: NOTE_ID,
+      round: 1,
+      scheduled_at: "2026-01-02T00:00:00.000Z",
+      completed_at: null,
+    });
+
+    const formData = new FormData();
+    formData.set("noteId", NOTE_ID);
+    formData.set("answer", "내 답안");
+
+    const result = await submitAnswerAction(null, formData);
+
+    expect(result).toEqual({
+      error:
+        "복습을 완료한 노트입니다. 노트 상세에서 복습을 다시 시작해주세요.",
+    });
+  });
+
   it("returns an error when a query throws", async () => {
     createClientMock.mockResolvedValue(createAuthSupabaseMock(TEST_USER_ID));
     getNoteContentForComparisonMock.mockRejectedValue(
@@ -209,6 +242,7 @@ describe("submitAnswerAction", () => {
     createClientMock.mockResolvedValue(createAuthSupabaseMock(TEST_USER_ID));
     getNoteContentForComparisonMock.mockResolvedValue({
       content: "원본 내용",
+      review_completed_at: null,
     });
     getPendingReviewLogMock.mockResolvedValue({
       id: REVIEW_LOG_ID,
@@ -229,6 +263,8 @@ describe("submitAnswerAction", () => {
       TEST_USER_ID,
     );
     expect(getPendingReviewLogMock).toHaveBeenCalledWith(NOTE_ID, TEST_USER_ID);
+    // 완료 판정을 본문과 같은 조회에서 얻으므로 같은 notes 행을 다시 읽지 않는다.
+    expect(getReviewableNoteMock).not.toHaveBeenCalled();
 
     // 채점 요청이 이 해시를 되돌려줘야 서버가 같은 원본인지 확인할 수 있다.
     expect(result).toMatchObject({
@@ -330,6 +366,35 @@ describe("completeReviewAction", () => {
     });
   });
 
+  it("rejects completion when the note is marked as completed", async () => {
+    const { rpcMock, supabase } = createCompleteReviewSupabaseMock();
+    createClientMock.mockResolvedValue(supabase);
+    getReviewableNoteMock.mockResolvedValue({
+      title: "테스트 노트",
+      next_review_at: "2026-01-02T00:00:00.000Z",
+      review_completed_at: "2026-01-01T00:00:00.000Z",
+      review_round: 0,
+    });
+    getPendingReviewLogMock.mockResolvedValue({
+      id: REVIEW_LOG_ID,
+      note_id: NOTE_ID,
+      round: 1,
+      scheduled_at: "2026-01-02T00:00:00.000Z",
+      completed_at: null,
+    });
+
+    const result = await completeReviewAction(
+      null,
+      createCompleteReviewFormData(),
+    );
+
+    expect(result).toEqual({
+      error:
+        "복습을 완료한 노트입니다. 노트 상세에서 복습을 다시 시작해주세요.",
+    });
+    expect(rpcMock).not.toHaveBeenCalled();
+  });
+
   it("returns an error when the pending review log does not match", async () => {
     createClientMock.mockResolvedValue(createAuthSupabaseMock(TEST_USER_ID));
     getReviewableNoteMock.mockResolvedValue({
@@ -411,40 +476,6 @@ describe("completeReviewAction", () => {
       p_note_id: NOTE_ID,
       p_review_log_id: REVIEW_LOG_ID,
     });
-  });
-
-  it("returns a daily limit message when the RPC reports WP001", async () => {
-    const { rpcMock, supabase } = createCompleteReviewSupabaseMock({
-      rpcError: {
-        code: "WP001",
-        message: "daily review completion limit reached",
-      },
-    });
-
-    createClientMock.mockResolvedValue(supabase);
-    getReviewableNoteMock.mockResolvedValue({
-      title: "테스트 노트",
-      review_round: 0,
-    });
-    getPendingReviewLogMock.mockResolvedValue({
-      id: REVIEW_LOG_ID,
-      note_id: NOTE_ID,
-      round: 1,
-      scheduled_at: "2026-01-02T00:00:00.000Z",
-      completed_at: null,
-    });
-
-    const result = await completeReviewAction(
-      null,
-      createCompleteReviewFormData(),
-    );
-
-    expect(result).toEqual({
-      error:
-        "오늘은 이미 이 노트의 복습을 완료했어요. 내일 자정(KST) 이후 다시 시도해주세요.",
-    });
-    expect(rpcMock).toHaveBeenCalledOnce();
-    expect(redirectMock).not.toHaveBeenCalled();
   });
 
   it("returns a generic error when the RPC reports another P0001 failure", async () => {

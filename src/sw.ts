@@ -18,7 +18,6 @@ const serwist = new Serwist({
 serwist.addEventListeners();
 
 const NOTIFICATION_READ_API_PATH = "/api/notifications/read";
-const REVIEW_NOTIFICATION_TYPE = "REVIEW";
 
 /**
  * Returns an object record when the push data shape can be inspected.
@@ -112,18 +111,17 @@ async function openOrFocusNotificationUrl(url: string) {
 }
 
 /**
- * Marks a clicked non-review notification as read without blocking navigation.
+ * Marks a clicked notification as read without blocking navigation.
+ *
+ * 복습 알림도 포함한다. 알림을 여는 것이 곧 확인이고, 복습 완료로 읽음 처리되는
+ * 경로는 별도로 남아 있다.
  */
 async function markNotificationReadOnClick(data: unknown) {
   const record = getRecord(data);
   const notificationId = record?.notificationId;
   const type = record?.type;
 
-  if (
-    typeof notificationId !== "string" ||
-    typeof type !== "string" ||
-    type === REVIEW_NOTIFICATION_TYPE
-  ) {
+  if (typeof notificationId !== "string" || typeof type !== "string") {
     return;
   }
 
@@ -143,9 +141,12 @@ async function markNotificationReadOnClick(data: unknown) {
 
 self.addEventListener("push", (event) => {
   const { body, notificationData, tag, title } = getPushPayload(event.data);
+  /* badge는 안드로이드 Chrome이 알파 채널만 보고 단색으로 칠하는 슬롯이라
+     컬러 원본을 넣으면 상태표시줄에 의미 없는 덩어리가 뜬다. 단색 실루엣을
+     따로 쓴다. 두 파일 모두 scripts/generate-icons.mjs로 굽는다. */
   const options: NotificationOptions = {
-    icon: "/favicon.svg",
-    badge: "/favicon.svg",
+    icon: "/icons/notification-192.png",
+    badge: "/icons/badge-96.png",
     data: notificationData,
   };
 

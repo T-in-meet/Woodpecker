@@ -119,7 +119,6 @@ describe("BlankTestPage", () => {
 
     render(
       <BlankTestPage
-        alreadyCompletedToday={false}
         noteId={NOTE_ID}
         noteTitle="테스트 노트"
         restoredSession={null}
@@ -141,36 +140,12 @@ describe("BlankTestPage", () => {
     ).toBeEnabled();
   });
 
-  it("disables completion after the note was already completed today", () => {
-    mockComparisonState();
-
-    render(
-      <BlankTestPage
-        alreadyCompletedToday
-        noteId={NOTE_ID}
-        noteTitle="테스트 노트"
-        restoredSession={null}
-        reviewRound={1}
-      />,
-    );
-
-    expect(
-      screen.getByText(
-        "오늘은 이미 이 노트의 복습을 완료했어요. 내일 자정(KST) 이후 다시 완료할 수 있어요.",
-      ),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "review-complete" }),
-    ).toBeDisabled();
-  });
-
   // 채점을 받은 회차로 다시 들어온 경우. 답안을 새로 쓰지 않아도 비교와 결과가 보여야 한다.
   it("restores the saved answer and grading instead of showing a blank editor", () => {
     useActionStateMock.mockReturnValue([null, vi.fn(), false]);
 
     render(
       <BlankTestPage
-        alreadyCompletedToday={false}
         noteId={NOTE_ID}
         noteTitle="테스트 노트"
         restoredSession={RESTORED_SESSION}
@@ -197,7 +172,6 @@ describe("BlankTestPage", () => {
 
     render(
       <BlankTestPage
-        alreadyCompletedToday={false}
         noteId={NOTE_ID}
         noteTitle="테스트 노트"
         restoredSession={{ ...RESTORED_SESSION, basisContentChanged: true }}
@@ -217,7 +191,6 @@ describe("BlankTestPage", () => {
 
     render(
       <BlankTestPage
-        alreadyCompletedToday={false}
         noteId={NOTE_ID}
         noteTitle="테스트 노트"
         restoredSession={RESTORED_SESSION}
@@ -236,7 +209,6 @@ describe("BlankTestPage", () => {
 
     render(
       <BlankTestPage
-        alreadyCompletedToday={false}
         noteId={NOTE_ID}
         noteTitle="테스트 노트"
         restoredSession={null}

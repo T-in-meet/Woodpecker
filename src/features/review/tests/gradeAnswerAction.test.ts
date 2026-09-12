@@ -180,10 +180,12 @@ function mockHappyPathQueries() {
   getReviewableNoteMock.mockResolvedValue({
     title: "노트 제목",
     next_review_at: "2026-07-05T00:00:00.000Z",
+    review_completed_at: null,
     review_round: 0,
   });
   getNoteContentForComparisonMock.mockResolvedValue({
     content: NOTE_CONTENT,
+    review_completed_at: null,
   });
   getPendingReviewLogMock.mockResolvedValue({
     id: REVIEW_LOG_ID,
@@ -239,6 +241,25 @@ describe("gradeAnswerAction", () => {
     const result = await gradeAnswerAction(null, createFormData());
 
     expect(result).toEqual({ error: "진행 중인 복습을 찾을 수 없습니다." });
+    expect(generateJsonMock).not.toHaveBeenCalled();
+    expect(rpcMock).not.toHaveBeenCalled();
+  });
+
+  // 완료 판정은 본문과 같은 행에서 함께 읽는다.
+  it("rejects grading for a note marked as completed", async () => {
+    const { rpcMock } = setupSupabase();
+    mockHappyPathQueries();
+    getNoteContentForComparisonMock.mockResolvedValue({
+      content: NOTE_CONTENT,
+      review_completed_at: "2026-07-04T00:00:00.000Z",
+    });
+
+    const result = await gradeAnswerAction(null, createFormData());
+
+    expect(result).toEqual({
+      error:
+        "복습을 완료한 노트입니다. 노트 상세에서 복습을 다시 시작해주세요.",
+    });
     expect(generateJsonMock).not.toHaveBeenCalled();
     expect(rpcMock).not.toHaveBeenCalled();
   });

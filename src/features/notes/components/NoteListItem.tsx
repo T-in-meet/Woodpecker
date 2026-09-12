@@ -2,23 +2,50 @@ import { CalendarClock } from "lucide-react";
 import Link from "next/link";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { stripNoteColorSyntax } from "@/features/editor/utils/noteColorMarkdown";
-import { MAX_REVIEW_ROUND } from "@/lib/constants/reviewIntervals";
 import { getNoteDetailRoute } from "@/lib/constants/routes";
-import { stripMarkdown } from "@/lib/utils/stripMarkdown";
 
 import type { NoteSummary } from "../queries";
-import { getReviewScheduleDisplay, getReviewStatus } from "../utils/noteStatus";
+import {
+  getNoteSearchPreview,
+  highlightSearchText,
+} from "../utils/noteSearchPreview";
+import {
+  canStartReview,
+  getReviewScheduleDisplay,
+  getReviewStatus,
+} from "../utils/noteStatus";
 import { NoteActions } from "./NoteActions";
 
-export function NoteListItem({ note }: { note: NoteSummary }) {
+function HighlightedText({ text, query }: { text: string; query: string }) {
+  return highlightSearchText(text, query).map((part, index) =>
+    part.matched ? (
+      <mark
+        key={index}
+        className="rounded-sm bg-amber-100 text-foreground dark:bg-amber-900/60"
+      >
+        {part.text}
+      </mark>
+    ) : (
+      part.text
+    ),
+  );
+}
+
+export function NoteListItem({
+  note,
+  query = "",
+}: {
+  note: NoteSummary;
+  query?: string;
+}) {
   const status = getReviewStatus(note);
   const reviewSchedule = getReviewScheduleDisplay(status, note.next_review_at);
-  const canReview = status === "available";
-  const contentPreview = stripMarkdown(stripNoteColorSyntax(note.content));
+  const canReview = canStartReview(note);
+  const isSearching = query.trim().length > 0;
+  const contentPreview = getNoteSearchPreview(note.title, note.content, query);
   const reviewTextClass =
     reviewSchedule.tone === "overdue"
-      ? "rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
+      ? "rounded-full bg-pink-100 px-2 py-0.5 text-xs font-medium text-pink-800"
       : reviewSchedule.tone === "today"
         ? "rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800"
         : reviewSchedule.tone === "upcoming"
@@ -33,17 +60,26 @@ export function NoteListItem({ note }: { note: NoteSummary }) {
       >
         <CardContent className="p-5">
           <div className="flex min-w-0 items-center justify-between gap-2">
-            <span className="min-w-0 truncate text-base font-semibold leading-snug">
-              {note.title}
+            <span
+              className={`min-w-0 text-base font-semibold leading-snug ${isSearching ? "[overflow-wrap:anywhere]" : "truncate"}`}
+            >
+              <HighlightedText text={note.title} query={query} />
             </span>
-            <span className="inline-flex shrink-0 items-center rounded bg-gray-100 px-2 py-0.5 text-xs font-medium">
-              복습 {note.review_round} / {MAX_REVIEW_ROUND}
+            <span className="inline-flex shrink-0 items-center rounded bg-muted px-2 py-0.5 text-xs font-medium">
+              복습 {note.review_round}회
             </span>
           </div>
 
           {note.content.trim() && (
-            <p className="mt-2 line-clamp-1 text-sm text-muted-foreground">
-              {contentPreview}
+            <p
+              className={`mt-2 text-sm text-muted-foreground ${isSearching ? "[overflow-wrap:anywhere]" : "line-clamp-1"}`}
+            >
+              <HighlightedText text={contentPreview.text} query={query} />
+            </p>
+          )}
+          {contentPreview.sourceOnlyMatch && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              노트 원문에서 검색어가 일치합니다.
             </p>
           )}
 

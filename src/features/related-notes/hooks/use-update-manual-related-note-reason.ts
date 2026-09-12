@@ -9,8 +9,8 @@ type UpdateManualRelatedNoteReasonVariables = {
   /** 현재 보고 있는 기준 Note ID입니다. */
   noteId: string;
 
-  /** reason을 수정할 manual Related Note ID입니다. */
-  relatedNoteId: string;
+  /** reason을 수정할 manual Related Notes 관계 row ID입니다. */
+  relationId: string;
 
   /** 수정할 선택적 연결 이유입니다. */
   reason?: string;

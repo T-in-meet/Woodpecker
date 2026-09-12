@@ -62,13 +62,14 @@ export function RelatedNoteItem({ noteId, relatedNote }: RelatedNoteItemProps) {
           {isManual ? "직접 연결" : "AI 추천"}
         </Badge>
 
-        <div className="flex w-28 shrink-0 items-center justify-end gap-0.5">
+        {/* 터치 버튼 44px × 3개 + 간격 2px × 2개를 확보한다. */}
+        <div className="flex w-28 shrink-0 items-center justify-end gap-0.5 pointer-coarse:w-34">
           {reason && <RelatedNoteReasonPopover reason={reason} />}
 
           {isManual && (
             <UpdateRelatedNoteReasonDialog
               noteId={noteId}
-              relatedNoteId={relatedNote.noteId}
+              relationId={relatedNote.relationId}
               title={relatedNote.title}
               reason={reason}
             >
@@ -85,7 +86,7 @@ export function RelatedNoteItem({ noteId, relatedNote }: RelatedNoteItemProps) {
 
           <DeleteRelatedNoteAlertDialog
             noteId={noteId}
-            relatedNoteId={relatedNote.noteId}
+            relationId={relatedNote.relationId}
             title={relatedNote.title}
             origin={relatedNote.origin}
           >

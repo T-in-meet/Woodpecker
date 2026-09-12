@@ -4,15 +4,19 @@
 
 BEGIN;
 
-SELECT plan(13);
+SELECT plan(15);
 
 SELECT set_config('test.claim_due_user_id', gen_random_uuid()::text, true);
 SELECT set_config('test.claim_due_note_id', gen_random_uuid()::text, true);
 SELECT set_config('test.claim_due_future_note_id', gen_random_uuid()::text, true);
 SELECT set_config('test.claim_due_exhausted_note_id', gen_random_uuid()::text, true);
+SELECT set_config('test.claim_due_completed_note_id', gen_random_uuid()::text, true);
+SELECT set_config('test.claim_due_completed_exhausted_note_id', gen_random_uuid()::text, true);
 SELECT set_config('test.claim_due_log_id', gen_random_uuid()::text, true);
 SELECT set_config('test.claim_due_future_log_id', gen_random_uuid()::text, true);
 SELECT set_config('test.claim_due_exhausted_log_id', gen_random_uuid()::text, true);
+SELECT set_config('test.claim_due_completed_log_id', gen_random_uuid()::text, true);
+SELECT set_config('test.claim_due_completed_exhausted_log_id', gen_random_uuid()::text, true);
 
 INSERT INTO auth.users (id, email, email_confirmed_at, raw_user_meta_data)
 VALUES (
@@ -23,7 +27,15 @@ VALUES (
 )
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO public.notes (id, user_id, title, content, review_round, next_review_at)
+INSERT INTO public.notes (
+  id,
+  user_id,
+  title,
+  content,
+  review_round,
+  next_review_at,
+  review_completed_at
+)
 VALUES
   (
     current_setting('test.claim_due_note_id')::uuid,
@@ -31,7 +43,8 @@ VALUES
     'claim due note',
     'content',
     0,
-    now() - interval '1 hour'
+    now() - interval '1 hour',
+    NULL
   ),
   (
     current_setting('test.claim_due_future_note_id')::uuid,
@@ -39,7 +52,8 @@ VALUES
     'claim due future note',
     'content',
     0,
-    now() + interval '1 hour'
+    now() + interval '1 hour',
+    NULL
   ),
   (
     current_setting('test.claim_due_exhausted_note_id')::uuid,
@@ -47,7 +61,26 @@ VALUES
     'claim due exhausted note',
     'content',
     0,
-    now() - interval '1 hour'
+    now() - interval '1 hour',
+    NULL
+  ),
+  (
+    current_setting('test.claim_due_completed_note_id')::uuid,
+    current_setting('test.claim_due_user_id')::uuid,
+    'claim due completed note',
+    'content',
+    0,
+    now() - interval '1 hour',
+    now() - interval '2 hours'
+  ),
+  (
+    current_setting('test.claim_due_completed_exhausted_note_id')::uuid,
+    current_setting('test.claim_due_user_id')::uuid,
+    'claim due completed exhausted note',
+    'content',
+    0,
+    now() - interval '1 hour',
+    now() - interval '2 hours'
   );
 
 INSERT INTO public.review_logs (
@@ -81,6 +114,24 @@ VALUES
   (
     current_setting('test.claim_due_exhausted_log_id')::uuid,
     current_setting('test.claim_due_exhausted_note_id')::uuid,
+    current_setting('test.claim_due_user_id')::uuid,
+    1,
+    now() - interval '1 hour',
+    now() - interval '16 minutes',
+    5
+  ),
+  (
+    current_setting('test.claim_due_completed_log_id')::uuid,
+    current_setting('test.claim_due_completed_note_id')::uuid,
+    current_setting('test.claim_due_user_id')::uuid,
+    1,
+    now() - interval '1 hour',
+    NULL,
+    0
+  ),
+  (
+    current_setting('test.claim_due_completed_exhausted_log_id')::uuid,
+    current_setting('test.claim_due_completed_exhausted_note_id')::uuid,
     current_setting('test.claim_due_user_id')::uuid,
     1,
     now() - interval '1 hour',
@@ -131,6 +182,25 @@ SELECT ok(
     WHERE id = current_setting('test.claim_due_future_log_id')::uuid
   ),
   $$future review logs should not be claimed$$
+);
+
+SELECT ok(
+  (
+    SELECT notification_claimed_at IS NULL
+      AND notification_dispatch_attempts = 0
+    FROM public.review_logs
+    WHERE id = current_setting('test.claim_due_completed_log_id')::uuid
+  ),
+  $$completed notes should not have their pending review logs claimed$$
+);
+
+SELECT ok(
+  (
+    SELECT notification_dispatch_failed_at IS NULL
+    FROM public.review_logs
+    WHERE id = current_setting('test.claim_due_completed_exhausted_log_id')::uuid
+  ),
+  $$completed notes should not have exhausted review logs dead-lettered$$
 );
 
 SELECT is(

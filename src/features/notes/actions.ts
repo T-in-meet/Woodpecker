@@ -22,7 +22,6 @@ import {
 import { generateNoteEmbedding } from "../ai/rags/note/generate-embedding";
 import { resolveAiRuntimeEmbeddingConfiguration } from "../ai/runtimes";
 import { reportAiOperationalError } from "../ai/utils/report-ai-operational-error";
-import { scheduleRelatedNoteRecommendation } from "../related-notes/execution/schedule-related-note-recommendation";
 import { type NoteInput, noteSchema } from "./schema";
 
 type NoteActionFieldErrors = Partial<Record<keyof NoteInput, string[]>>;
@@ -171,11 +170,8 @@ export async function createNoteAction(
 
   await requireCurrentLegalAcceptance(user.id, ROUTES.NOTES_NEW);
 
+  // 아직 한 번도 복습하지 않았으므로 날짜 수 0에 해당하는 첫 간격을 쓴다.
   const firstReviewDate = getNextReviewDate(0);
-
-  if (!firstReviewDate) {
-    return { error: "노트 저장에 실패했습니다. 잠시 후 다시 시도해주세요." };
-  }
 
   const { data: newNoteId, error } = await supabase.rpc(
     "create_note_with_initial_review_log",
@@ -197,18 +193,6 @@ export async function createNoteAction(
    * AI 후처리가 Note 생성 응답 속도나 성공 여부에 영향을 주지 않습니다.
    */
   scheduleNoteEmbedding({
-    noteId: newNoteId,
-    ownerUserId: user.id,
-  });
-
-  /*
-   * Related Notes AI 추천도 Note 생성 응답 이후 후처리로 예약합니다.
-   *
-   * Runtime 설정 조회, Query Expansion, RAG 검색, Answer Agent 실행 및
-   * 추천 저장을 Action 응답 경로에서 분리하여,
-   * AI 추천 처리 시간이 Note 생성 성공 응답을 지연시키지 않도록 합니다.
-   */
-  scheduleRelatedNoteRecommendation({
     noteId: newNoteId,
     ownerUserId: user.id,
   });
@@ -301,19 +285,68 @@ export async function updateNoteAction(
     ownerUserId: user.id,
   });
 
-  /*
-   * 수정된 Note의 Related Notes AI 추천도 응답 이후 후처리로 예약합니다.
-   *
-   * 후처리에서는 DB에서 최신 Note snapshot을 다시 조회하고,
-   * 추천 저장 시 updated_at을 검증하므로 연속 수정 중 생성된
-   * stale 추천이 최신 추천을 덮어쓰지 않도록 합니다.
-   */
-  scheduleRelatedNoteRecommendation({
-    noteId: updatedNote.id,
-    ownerUserId: user.id,
-  });
-
   return { success: true };
+}
+
+/**
+ * 사용자가 노트의 복습을 직접 끝내거나 다시 시작한다.
+ *
+ * DB RPC가 완료 상태와 알림을 원자적으로 바꾼다. 완료를 해제할 때 pending log가
+ * 있으면 그 일정을 이어받고, 구 자동 완료 노트처럼 log가 없으면 다음 일정을 만든다.
+ */
+export async function setNoteReviewCompletedAction(
+  noteId: unknown,
+  completed: unknown,
+): Promise<{ data: { completed: boolean } } | { error: string }> {
+  const parsed = z
+    .object({ noteId: noteIdSchema, completed: z.boolean() })
+    .safeParse({ noteId, completed });
+
+  if (!parsed.success) {
+    return { error: "노트를 찾을 수 없습니다." };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "로그인이 필요합니다." };
+  }
+
+  if (user.email_confirmed_at == null) {
+    redirect(`${ROUTES.RESEND_EMAIL}?purpose=signup`);
+  }
+
+  await requireCurrentLegalAcceptance(
+    user.id,
+    getNoteDetailRoute(parsed.data.noteId),
+  );
+
+  const { data: completedState, error } = await supabase.rpc(
+    "set_note_review_completion",
+    {
+      p_note_id: parsed.data.noteId,
+      p_completed: parsed.data.completed,
+    },
+  );
+
+  if (error) {
+    if (error.message.includes("note not found")) {
+      return { error: "노트를 찾을 수 없습니다." };
+    }
+
+    return {
+      error: "복습 완료 상태를 바꾸지 못했습니다. 잠시 후 다시 시도해주세요.",
+    };
+  }
+
+  if (completedState === null) {
+    return { error: "노트를 찾을 수 없습니다." };
+  }
+
+  return { data: { completed: completedState } };
 }
 
 export async function deleteNoteAction(noteId: string) {

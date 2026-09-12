@@ -11,6 +11,18 @@ export const relatedNotesQueryKeys = {
     [...relatedNotesQueryKeys.all, "note", noteId] as const,
 
   /**
+   * 특정 Related Notes AI 추천 execution Claim의 Query key를 생성합니다.
+   *
+   * 현재 Note version의 최신 실행 상태와 별개로,
+   * 이미 추적을 시작한 특정 Claim의 lifecycle을 조회할 때 사용합니다.
+   *
+   * @param noteId Claim이 속한 기준 Note ID
+   * @param claimId 추적할 execution Claim ID
+   */
+  executionClaim: (noteId: string, claimId: string) =>
+    [...relatedNotesQueryKeys.all, "execution-claim", noteId, claimId] as const,
+
+  /**
    * 지정한 Note의 수동 Related Note 후보 목록에 대한 공통 Query key를 생성합니다.
    *
    * 페이지, 검색어, 페이지 크기와 관계없이 해당 Note의 모든 후보 Query를
