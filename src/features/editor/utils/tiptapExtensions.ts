@@ -23,10 +23,6 @@ import {
 import TaskItem from "@tiptap/extension-task-item";
 import TaskList from "@tiptap/extension-task-list";
 import {
-  defaultMarkdownSerializer,
-  MarkdownSerializerState,
-} from "@tiptap/pm/markdown";
-import {
   type Attrs,
   type Fragment,
   type Mark as ProseMirrorMark,
@@ -48,6 +44,10 @@ import python from "highlight.js/lib/languages/python";
 import rust from "highlight.js/lib/languages/rust";
 import typescript from "highlight.js/lib/languages/typescript";
 import { createLowlight } from "lowlight";
+import {
+  defaultMarkdownSerializer,
+  MarkdownSerializerState,
+} from "prosemirror-markdown";
 import { Markdown } from "tiptap-markdown";
 
 import { slashCommandSuggestionRender } from "../components/SlashCommandMenu";
@@ -236,6 +236,20 @@ function isPureTaskListElement(list: Element): boolean {
     )
   );
 }
+
+// tiptap-markdown의 tight 처리는 bulletList·orderedList에만 tight 속성을 붙이므로
+// taskList는 항목 사이와 중첩 목록 앞에 빈 줄이 들어간다. 항상 tight로 직렬화한다.
+const MarkdownTaskList = TaskList.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      tight: {
+        default: true,
+        rendered: false,
+      },
+    };
+  },
+});
 
 // tiptap-markdown는 혼합 리스트(일반 + task item)를 파싱할 때 모든 항목에 task-list-item 클래스를 부여한다.
 // ProseMirror가 이를 그대로 받으면 일반 항목도 체크박스로 렌더링되므로,
@@ -938,6 +952,9 @@ const SafeImage = Image.extend({
 // 블록 노드의 attribute로 다룬다.
 const NoteTextColorMark = Mark.create({
   name: NOTE_TEXT_COLOR_MARK_NAME,
+  // 스키마 마크 순서를 굵게·기울임 등보다 앞에 두어 직렬화 시 색 마커가 가장 바깥에 오게 한다.
+  // `**{c=x}텍스트{/c}**` 형태는 닫는 `**` 앞이 `}`라 다시 읽을 때 굵게로 인식되지 않는다.
+  priority: 1000,
   addAttributes() {
     return {
       token: {
@@ -970,8 +987,10 @@ const NoteTextColorMark = Mark.create({
             buildNoteTextColorCloseMarkup(
               normalizeNoteColorToken(mark.attrs.token),
             ),
+          // expelEnclosingWhitespace를 켜면 tiptap-markdown이 open 값을 문자열
+          // 구분자로 가정하고 출력에 끼워 넣어, 함수인 open이 그대로 직렬화된다.
+          // 색 마커는 공백에 민감하지 않으므로 공백을 밖으로 빼지 않는다.
           mixable: true,
-          expelEnclosingWhitespace: true,
         },
         parse: {
           setup(md: NoteColorMarkdownItType) {
@@ -1179,7 +1198,7 @@ function getBaseExtensions({ readOnly = false }: { readOnly?: boolean } = {}) {
     NoteBlockBackground,
     NoteOrderedListCounter,
     NoteColorClipboardText,
-    TaskList,
+    MarkdownTaskList,
     MarkdownTaskItem.configure({
       nested: true,
     }),

@@ -33,6 +33,10 @@ const fixtures: { name: string; input: string; expected?: string }[] = [
     input: "- [ ] todo\n- [x] done",
   },
   {
+    name: "nested task list",
+    input: "- [ ] 상위\n  - [x] 하위\n    - [ ] 3단계\n- [ ] 상위2",
+  },
+  {
     name: "inline formatting",
     input: "This has **bold**, *italic*, ~~strikethrough~~, and `inline code`.",
   },
