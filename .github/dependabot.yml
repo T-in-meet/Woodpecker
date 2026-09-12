@@ -1,0 +1,129 @@
+# Dependabot 버전·보안 업데이트 설정
+# 문서: https://docs.github.com/code-security/dependabot/working-with-dependabot/dependabot-options-reference
+#
+# - 보안 업데이트는 GitHub 규칙상 기본 브랜치(main)로만 생성되며, target-branch가 있는
+#   블록의 설정은 보안 업데이트에 적용되지 않는다. 그래서 npm 블록을 둘로 나눈다.
+#   1) target-branch 없음 → main: 보안 업데이트 전용(버전 업데이트는 open-pull-requests-limit: 0으로 비활성화)
+#   2) target-branch: development → 일반 버전 업데이트
+# - 보안 업데이트는 Settings → Code security → Dependabot security updates를 켜야 동작한다.
+# - 커밋 메시지 prefix는 commitlint(config-conventional) 타입에 맞춘다.
+version: 2
+
+updates:
+  # ─────────────────────────────────────────
+  # 1) 보안 업데이트 전용 (main)
+  # ─────────────────────────────────────────
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Seoul
+    commit-message:
+      prefix: fix
+      include: scope
+    labels:
+      - dependencies
+    # 일반 버전 업데이트는 development 블록이 담당한다.
+    # ignore는 보안 업데이트에도 적용되므로 쓰지 않고, 공식 권장대로
+    # open-pull-requests-limit: 0으로 버전 업데이트만 끈다(보안 PR은 이 제한을 받지 않는다).
+    open-pull-requests-limit: 0
+    groups:
+      # 보안 경고는 패키지 수와 무관하게 한 PR로 묶는다.
+      security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+
+  # ─────────────────────────────────────────
+  # 2) 일반 버전 업데이트 (development)
+  # ─────────────────────────────────────────
+  - package-ecosystem: npm
+    directory: /
+    target-branch: development
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Seoul
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      prefix-development: chore
+      include: scope
+    labels:
+      - dependencies
+    # Next·React 메이저는 마이그레이션 검토가 필요하므로 자동 PR에서 제외한다.
+    ignore:
+      - dependency-name: next
+        update-types: ["version-update:semver-major"]
+      - dependency-name: react
+        update-types: ["version-update:semver-major"]
+      - dependency-name: react-dom
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
+    groups:
+      # 에디터 스택은 core·확장·pm 버전을 함께 맞춰야 한다.
+      tiptap:
+        patterns:
+          - "@tiptap/*"
+          - "prosemirror-*"
+          - tiptap-markdown
+      supabase:
+        patterns:
+          - "@supabase/*"
+          - supabase
+      radix-ui:
+        patterns:
+          - "@radix-ui/*"
+          - radix-ui
+      # 테스트 도구는 major 포함 묶어도 CI로 검증되므로 한 PR로 받는다.
+      testing:
+        patterns:
+          - vitest
+          - "@vitest/*"
+          - "@vitejs/*"
+          - "@testing-library/*"
+          - "@playwright/*"
+          - jsdom
+      lint-format:
+        patterns:
+          - eslint
+          - eslint-*
+          - "@eslint/*"
+          - prettier
+          - "@commitlint/*"
+          - husky
+          - lint-staged
+      types:
+        patterns:
+          - "@types/*"
+      # 나머지 minor·patch는 한 PR로 묶고, major는 개별 PR로 남겨 검토한다.
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  # ─────────────────────────────────────────
+  # 3) GitHub Actions (development)
+  # ─────────────────────────────────────────
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: development
+    schedule:
+      interval: monthly
+      timezone: Asia/Seoul
+    commit-message:
+      prefix: ci
+    labels:
+      - dependencies
+    groups:
+      actions:
+        patterns:
+          - "*"
