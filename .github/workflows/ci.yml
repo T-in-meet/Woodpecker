@@ -146,6 +146,11 @@ jobs:
           # 마이그레이션 순서 검사가 base 브랜치와 merge-base를 계산하므로 전체 이력이 필요
           fetch-depth: 0
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+
       # 새 마이그레이션의 타임스탬프가 base 브랜치의 마지막 마이그레이션보다 앞서면
       # 운영 `supabase db push`(migrate.yml)가 적용을 거부하므로 릴리스 전에 잡는다.
       # merge group은 최신 base와 앞선 queue 항목을 포함하므로 PR 검사 통과 후에도

@@ -154,6 +154,50 @@ describe("check-migration-order.mjs", () => {
       expect(result.stdout).toContain("신규 0개");
       expect(result.stdout).toContain("base 최신 20260904000000");
     });
+
+    it("분기 후 base가 앞서가면 feature의 마이그레이션을 거부한다", () => {
+      const stale = "20260903000000_feature.sql";
+      addMigration(stale);
+      expect(runScript().status).toBe(0);
+
+      git(["checkout", "-q", BASE_BRANCH]);
+      addMigration("20260904000000_on_base.sql");
+      git(["checkout", "-q", FEATURE_BRANCH]);
+
+      const result = runScript();
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain("20260904000000");
+      expect(result.stderr).toContain(`${MIGRATIONS_DIR}/${stale}`);
+    });
+
+    it.each([
+      { timestamp: "20260903000000", status: 1 },
+      { timestamp: "20260905000000", status: 0 },
+    ])(
+      "병합 커밋에서 $timestamp 파일의 검사 결과는 $status다",
+      ({ timestamp, status }) => {
+        const feature = `${timestamp}_feature.sql`;
+        const base = "20260904000000_on_base.sql";
+        addMigration(feature);
+        git(["checkout", "-q", BASE_BRANCH]);
+        addMigration(base);
+        git(["checkout", "-q", FEATURE_BRANCH]);
+        git(["merge", "--no-ff", "-m", "merge base", BASE_BRANCH]);
+        git(["checkout", "--detach", "HEAD"]);
+
+        const result = runScript();
+
+        expect(result.status).toBe(status);
+        if (status === 0) {
+          expect(result.stdout).toContain("신규 1개");
+          expect(result.stdout).toContain("base 최신 20260904000000");
+        } else {
+          expect(result.stderr).toContain(`${MIGRATIONS_DIR}/${feature}`);
+          expect(result.stderr).not.toContain(`${MIGRATIONS_DIR}/${base}`);
+        }
+      },
+    );
   });
 
   describe("base에 마이그레이션이 없을 때", () => {
@@ -204,11 +248,63 @@ describe("ci.yml Check migration order step", () => {
   it("pull_request와 merge_group의 base 브랜치를 모두 참조한다", () => {
     const block = stepBlock();
 
-    expect(block).toContain("github.base_ref");
-    expect(block).toContain("github.event.merge_group.base_ref");
-    // merge_group.base_ref는 refs/heads/<브랜치> 형식이므로 prefix를 제거해야 한다
-    expect(block).toContain("#refs/heads/");
+    expect(block).toMatch(
+      /^\s*BASE_REF: \$\{\{ github\.base_ref \|\| github\.event\.merge_group\.base_ref \}\}\s*$/m,
+    );
   });
+
+  it.each(["development", "refs/heads/development", "main", "refs/heads/main"])(
+    "%s 입력으로 올바른 브랜치를 fetch하고 검사한다",
+    (baseRef) => {
+      const run = stepBlock().split(/run: \|\r?\n/)[1];
+      expect(run).toBeDefined();
+      // Windows에서는 WSL 대신 git CLI와 함께 설치된 Git Bash를 사용한다.
+      // PATH에 잡힌 git.exe 위치(cmd/, mingw64/bin/)에 따라 상대 경로가 달라지므로
+      // `git --exec-path`(<Git>/mingw64/libexec/git-core)에서 설치 루트를 역산한다.
+      const bash =
+        process.platform === "win32"
+          ? resolve(
+              execFileSync("git", ["--exec-path"], { encoding: "utf8" }).trim(),
+              "../../..",
+              "usr/bin/bash.exe",
+            )
+          : "bash";
+      // 네트워크 호출 없이 실제 workflow 셸 코드가 전달하는 인자를 검증한다.
+      const result = spawnSync(
+        bash,
+        [
+          "--noprofile",
+          "--norc",
+          "-e",
+          "-c",
+          [
+            'git() { printf "git <%s>\\n" "$@"; }',
+            'node() { printf "node <%s>\\n" "$@"; }',
+            run,
+          ].join("\n"),
+        ],
+        {
+          env: { ...process.env, BASE_REF: baseRef },
+          encoding: "utf8",
+        },
+      );
+      const branch = baseRef.endsWith("development") ? "development" : "main";
+
+      expect(result.error).toBeUndefined();
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.stdout.replace(/\r\n/g, "\n")).toBe(
+        [
+          "git <fetch>",
+          "git <--no-tags>",
+          "git <origin>",
+          `git <${branch}>`,
+          "node <scripts/check-migration-order.mjs>",
+          `node <origin/${branch}>`,
+          "",
+        ].join("\n"),
+      );
+    },
+  );
 
   it("워크플로가 pull_request와 merge_group 이벤트를 모두 구독한다", () => {
     const onBlock = workflow.slice(
