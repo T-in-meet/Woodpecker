@@ -256,7 +256,10 @@ describe("ci.yml Check migration order step", () => {
   it.each(["development", "refs/heads/development", "main", "refs/heads/main"])(
     "%s 입력으로 올바른 브랜치를 fetch하고 검사한다",
     (baseRef) => {
-      const run = stepBlock().split(/run: \|\r?\n/)[1];
+      // CRLF로 체크아웃된 저장소에서도 bash에 \r이 넘어가지 않도록 제거한다.
+      const run = stepBlock()
+        .split(/run: \|\r?\n/)[1]
+        ?.replace(/\r/g, "");
       expect(run).toBeDefined();
       // Windows에서는 WSL 대신 git CLI와 함께 설치된 Git Bash를 사용한다.
       // PATH에 잡힌 git.exe 위치(cmd/, mingw64/bin/)에 따라 상대 경로가 달라지므로

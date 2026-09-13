@@ -48,8 +48,11 @@ const baseTimestamps = git([
 const baseLatest = baseTimestamps.at(-1) ?? null;
 
 // 이 브랜치에서 새로 추가된 마이그레이션 (base와의 merge-base 기준)
+// rename 감지가 켜져 있으면 기존 파일을 지우고 비슷한 내용으로 새 이름을 붙인 파일이
+// A가 아닌 R로 분류돼 검사를 빠져나가므로 끈다.
 const added = git([
   "diff",
+  "--no-renames",
   "--name-only",
   "--diff-filter=A",
   `${baseRef}...HEAD`,
