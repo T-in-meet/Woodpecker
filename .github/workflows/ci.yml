@@ -142,6 +142,28 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+        with:
+          # 마이그레이션 순서 검사가 base 브랜치와 merge-base를 계산하므로 전체 이력이 필요
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+
+      # 새 마이그레이션의 타임스탬프가 base 브랜치의 마지막 마이그레이션보다 앞서면
+      # 운영 `supabase db push`(migrate.yml)가 적용을 거부하므로 릴리스 전에 잡는다.
+      # merge_group에서도 재검사하되, 비교 기준은 아직 병합되지 않은 queue 항목을 제외한 base다.
+      # 큐 사용 시 GitHub의 Build concurrency와 최소·최대 병합 PR 수를 모두 1로 설정해
+      # 앞선 PR 병합 후 다음 검사를 실행한다. Actions concurrency로 대체하지 않는다.
+      - name: Check migration order
+        env:
+          # pull_request는 브랜치명, merge_group은 refs/heads/<브랜치> 형식
+          BASE_REF: ${{ github.base_ref || github.event.merge_group.base_ref }}
+        run: |
+          base="${BASE_REF#refs/heads/}"
+          git fetch --no-tags origin "$base"
+          node scripts/check-migration-order.mjs "origin/$base"
 
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1.6.0
