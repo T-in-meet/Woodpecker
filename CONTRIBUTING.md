@@ -193,6 +193,8 @@ hotfix/<kebab-summary>             →  main (+ development 반영)
 | Supabase SQL Test | `supabase db start` 후 `supabase test db` |
 | Build             | `npm run build` (선행 검사 통과 후 실행)  |
 
+Supabase SQL Test job은 `supabase test db`에 앞서 `node scripts/check-migration-order.mjs <base>`로 새 마이그레이션의 타임스탬프가 base 브랜치의 마지막 마이그레이션보다 뒤인지 검사합니다. 앞서면 운영 `supabase db push`가 적용을 거부하므로, 브랜치를 오래 유지했다면 머지 전에 파일명 타임스탬프를 현재 UTC 시각으로 갱신하세요.
+
 **CI 실패 시 머지 불가**
 
 > Format Check가 가장 자주 깨집니다. 파일을 수정했으면 커밋 전에 `npx prettier --write <수정한 파일>`을 실행하세요.
