@@ -195,6 +195,10 @@ hotfix/<kebab-summary>             →  main (+ development 반영)
 
 Supabase SQL Test job은 `supabase test db`에 앞서 `node scripts/check-migration-order.mjs <base>`로 새 마이그레이션의 타임스탬프가 base 브랜치의 마지막 마이그레이션보다 뒤인지 검사합니다. 앞서면 운영 `supabase db push`가 적용을 거부하므로, 브랜치를 오래 유지했다면 머지 전에 파일명 타임스탬프를 현재 UTC 시각으로 갱신하세요.
 
+`main`·`development`에서 merge queue를 사용하는 경우 GitHub 큐 설정의 **Build concurrency**, **Minimum pull requests to merge**, **Maximum pull requests to merge**를 모두 **1**로 유지합니다. `merge_group` 검사도 비교 기준은 대상 브랜치이므로, 아직 병합되지 않은 앞선 PR의 마이그레이션은 기준에 포함되지 않습니다. 큐를 직렬화해 앞선 PR이 병합된 뒤 다음 PR을 갱신된 base로 검사해야 합니다. Actions의 `concurrency`는 큐의 생성·병합을 제어하지 않으므로 이 설정을 대체할 수 없습니다. 큐가 비활성화되어 있다면 이 검사를 위해 새로 활성화할 필요는 없습니다. 기존 필수 검사·리뷰·병합 방식은 유지합니다. 설정 항목은 [GitHub merge queue 공식 문서](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue)를 참고하세요.
+
+큐 설정 변경 후에는 다음 마이그레이션 PR의 `Supabase SQL Test` 로그에서 앞선 PR의 타임스탬프가 base 최신값으로 반영되는지 확인합니다. 로컬 테스트는 병합 후 Git 상태의 검사 결과를 검증하며, GitHub 큐의 실제 실행 순서까지 검증하지는 않습니다.
+
 **CI 실패 시 머지 불가**
 
 > Format Check가 가장 자주 깨집니다. 파일을 수정했으면 커밋 전에 `npx prettier --write <수정한 파일>`을 실행하세요.

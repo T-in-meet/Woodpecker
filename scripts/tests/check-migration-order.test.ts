@@ -200,6 +200,48 @@ describe("check-migration-order.mjs", () => {
     );
   });
 
+  describe("앞선 PR 병합 후 다음 큐 항목을 검사할 때", () => {
+    it.each([
+      { timestamp: "20260902000000", status: 1 },
+      { timestamp: "20260904000000", status: 0 },
+    ])(
+      "앞선 PR의 9월 3일 마이그레이션을 기준으로 $timestamp 파일은 $status다",
+      ({ timestamp, status }) => {
+        const first = "20260903000000_first_pr.sql";
+        const next = `${timestamp}_next_pr.sql`;
+        addMigration("20260901000000_base.sql");
+        git(["checkout", "-q", "-b", FEATURE_BRANCH]);
+        addMigration(next);
+        // 두 PR 모두 최초 base보다 뒤이므로 개별 PR 검사는 통과한다.
+        expect(runScript().status).toBe(0);
+
+        git(["checkout", "-q", "-b", "first-pr", BASE_BRANCH]);
+        addMigration(first);
+        expect(runScript().status).toBe(0);
+        git(["checkout", "-q", BASE_BRANCH]);
+        git(["merge", "--no-ff", "-m", "merge first PR", "first-pr"]);
+
+        // 직렬 큐는 앞선 PR 병합 후 최신 base에 다음 PR을 병합해 검사한다.
+        // GitHub 큐 스케줄링 자체가 아니라 그 결과 Git 상태를 검증한다.
+        git(["checkout", "-q", "-b", "next-queue"]);
+        git(["merge", "--no-ff", "-m", "merge next PR", FEATURE_BRANCH]);
+        git(["checkout", "--detach", "HEAD"]);
+
+        const result = runScript();
+
+        expect(result.status).toBe(status);
+        if (status === 0) {
+          expect(result.stdout).toContain("신규 1개");
+          expect(result.stdout).toContain("base 최신 20260903000000");
+        } else {
+          expect(result.stderr).toContain("20260903000000");
+          expect(result.stderr).toContain(`${MIGRATIONS_DIR}/${next}`);
+          expect(result.stderr).not.toContain(`${MIGRATIONS_DIR}/${first}`);
+        }
+      },
+    );
+  });
+
   describe("base에 마이그레이션이 없을 때", () => {
     beforeEach(() => {
       git(["checkout", "-q", "-b", FEATURE_BRANCH]);

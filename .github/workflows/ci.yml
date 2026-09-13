@@ -153,8 +153,9 @@ jobs:
 
       # 새 마이그레이션의 타임스탬프가 base 브랜치의 마지막 마이그레이션보다 앞서면
       # 운영 `supabase db push`(migrate.yml)가 적용을 거부하므로 릴리스 전에 잡는다.
-      # merge group은 최신 base와 앞선 queue 항목을 포함하므로 PR 검사 통과 후에도
-      # 여기서 다시 검사해야 최종 순서가 보장된다.
+      # merge_group에서도 재검사하되, 비교 기준은 아직 병합되지 않은 queue 항목을 제외한 base다.
+      # 큐 사용 시 GitHub의 Build concurrency와 최소·최대 병합 PR 수를 모두 1로 설정해
+      # 앞선 PR 병합 후 다음 검사를 실행한다. Actions concurrency로 대체하지 않는다.
       - name: Check migration order
         env:
           # pull_request는 브랜치명, merge_group은 refs/heads/<브랜치> 형식
