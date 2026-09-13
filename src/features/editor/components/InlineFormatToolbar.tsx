@@ -70,16 +70,22 @@ export function InlineFormatToolbar({
       view: { hasFocus: () => boolean };
       from: number;
       to: number;
-    }) =>
-      shouldShowInlineFormatToolbar({
+    }) => {
+      // BubbleMenu는 destroy 후에도 디바운스 타이머가 남아 shouldShow를 늦게 호출할 수 있다.
+      if (editor.isDestroyed) return false;
+
+      return shouldShowInlineFormatToolbar({
         editor,
         isBlockMenuOpen,
         // 툴바 버튼을 누르면 에디터가 blur되므로, 툴바 내부 포커스도 유효한 것으로 본다.
+        // 전역 document 대신 element의 ownerDocument를 써서 환경 해제 후 호출돼도 안전하다.
         hasEditorFocus:
-          editorView.hasFocus() || element.contains(document.activeElement),
+          editorView.hasFocus() ||
+          element.contains(element.ownerDocument.activeElement),
         from,
         to,
-      }),
+      });
+    },
     [editor, isBlockMenuOpen],
   );
 
