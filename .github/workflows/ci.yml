@@ -148,12 +148,16 @@ jobs:
 
       # 새 마이그레이션의 타임스탬프가 base 브랜치의 마지막 마이그레이션보다 앞서면
       # 운영 `supabase db push`(migrate.yml)가 적용을 거부하므로 릴리스 전에 잡는다.
-      # merge_group 이벤트에는 base_ref가 없어 PR 이벤트에서만 실행한다.
+      # merge group은 최신 base와 앞선 queue 항목을 포함하므로 PR 검사 통과 후에도
+      # 여기서 다시 검사해야 최종 순서가 보장된다.
       - name: Check migration order
-        if: github.event_name == 'pull_request'
+        env:
+          # pull_request는 브랜치명, merge_group은 refs/heads/<브랜치> 형식
+          BASE_REF: ${{ github.base_ref || github.event.merge_group.base_ref }}
         run: |
-          git fetch --no-tags origin "${{ github.base_ref }}"
-          node scripts/check-migration-order.mjs "origin/${{ github.base_ref }}"
+          base="${BASE_REF#refs/heads/}"
+          git fetch --no-tags origin "$base"
+          node scripts/check-migration-order.mjs "origin/$base"
 
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1.6.0
