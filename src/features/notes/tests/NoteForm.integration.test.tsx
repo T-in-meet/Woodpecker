@@ -1,7 +1,7 @@
 import "./setup";
 
 import { render, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -72,6 +72,7 @@ function typeIntoTipTap(text: string) {
 
 describe("NoteForm editor integration", () => {
   beforeEach(() => {
+    vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: true }));
     createNoteActionMock.mockReset();
     createNoteActionMock.mockResolvedValue(null);
   });
@@ -95,3 +96,5 @@ describe("NoteForm editor integration", () => {
     });
   });
 });
+
+afterEach(() => vi.unstubAllGlobals());

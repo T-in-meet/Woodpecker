@@ -7,10 +7,12 @@ import { useActionState, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { TipTapEditor } from "@/features/editor/components/TipTapEditor";
+import { useDesktopInitialFocus } from "@/hooks/useDesktopInitialFocus";
 import { usePreventPageLeave } from "@/hooks/usePreventPageLeave";
 import { getNoteDetailRoute } from "@/lib/constants/routes";
 
 import { createNoteAction } from "../actions";
+import { useMobileEditorSaveBar } from "../hooks/useMobileEditorSaveBar";
 
 const CONTENT_MAX_LENGTH = 50000;
 
@@ -20,7 +22,12 @@ export function NoteForm() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const focusOnce = useDesktopInitialFocus();
+  useEffect(() => {
+    if (titleInputRef.current) focusOnce(() => titleInputRef.current?.focus());
+  }, [focusOnce]);
   const editorRef = useRef<Editor | null>(null);
+  const { saveBarRef, onEditorReady } = useMobileEditorSaveBar();
 
   const fieldErrors =
     state?.error && typeof state.error === "object" ? state.error : null;
@@ -106,8 +113,7 @@ export function NoteForm() {
             onChange={(e) => setTitle(e.target.value)}
             onKeyDown={handleTitleKeyDown}
             disabled={isBusy}
-            autoFocus
-            className="w-full border-none bg-transparent text-4xl font-bold leading-snug text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus-visible:bg-muted/10 disabled:cursor-wait disabled:opacity-70"
+            className="w-full border-none bg-transparent text-4xl font-bold leading-snug text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-70"
           />
           {fieldErrors?.title ? (
             <p role="alert" className="mt-2 text-xs text-destructive">
@@ -135,12 +141,16 @@ export function NoteForm() {
           placeholder="학습할 내용을 입력하세요. /를 누르면 편집 메뉴가 열립니다."
           onEditorReady={(editor) => {
             editorRef.current = editor;
+            onEditorReady(editor);
           }}
           onArrowUpAtStart={handleArrowUpFromContent}
-          className="rounded-none border-none focus-within:bg-muted/10 focus-within:ring-0 [&_.tiptap]:min-h-[clamp(22rem,52vh,36rem)] [&_.tiptap]:px-5! [&_.tiptap]:py-6! sm:[&_.tiptap]:px-8! md:[&_.tiptap]:px-12! [&_.tiptap_p.is-editor-empty:first-child::before]:opacity-100"
+          className="rounded-none border-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-inset [&_.tiptap]:min-h-[clamp(22rem,52vh,36rem)] [&_.tiptap]:px-5! [&_.tiptap]:py-6! sm:[&_.tiptap]:px-8! md:[&_.tiptap]:px-12! [&_.tiptap_p.is-editor-empty:first-child::before]:opacity-100"
         />
 
-        <footer className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-border/60 px-5 py-3 sm:px-8 md:px-12">
+        <footer
+          ref={saveBarRef}
+          className="sticky bottom-0 z-20 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-border/60 bg-background px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-8 md:static md:px-12 md:py-3"
+        >
           <span
             id="note-save-status"
             role="status"

@@ -66,6 +66,7 @@ function getHiddenContentInput(container: HTMLElement) {
 
 describe("NoteForm", () => {
   beforeEach(() => {
+    vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: true }));
     createNoteActionMock.mockReset();
     createNoteActionMock.mockResolvedValue(null);
     routerReplaceMock.mockReset();
@@ -215,3 +216,5 @@ describe("NoteForm", () => {
     resolveAction(null);
   });
 });
+
+afterEach(() => vi.unstubAllGlobals());

@@ -1,12 +1,14 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { TipTapEditor } from "@/features/editor/components/TipTapEditor";
+import { useDesktopInitialFocus } from "@/hooks/useDesktopInitialFocus";
 import { usePreventPageLeave } from "@/hooks/usePreventPageLeave";
 
 import { updateNoteAction } from "../actions";
+import { useMobileEditorSaveBar } from "../hooks/useMobileEditorSaveBar";
 
 const CONTENT_MAX_LENGTH = 50000;
 
@@ -27,6 +29,12 @@ export function NoteEditForm({
   onCancel,
   onSaved,
 }: NoteEditFormProps) {
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const { saveBarRef, onEditorReady } = useMobileEditorSaveBar();
+  const focusOnce = useDesktopInitialFocus();
+  useEffect(() => {
+    if (titleInputRef.current) focusOnce(() => titleInputRef.current?.focus());
+  }, [focusOnce]);
   const [title, setTitle] = useState(initialTitle);
   const [content, setContent] = useState(initialContent);
   const [state, formAction, isPending] = useActionState(
@@ -66,7 +74,7 @@ export function NoteEditForm({
         maxLength={100}
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        autoFocus
+        ref={titleInputRef}
         className="w-full rounded-md border-none bg-transparent text-3xl font-bold leading-snug text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       />
       {fieldErrors?.title && (
@@ -87,13 +95,17 @@ export function NoteEditForm({
       )}
 
       <TipTapEditor
+        onEditorReady={onEditorReady}
         value={content}
         onChange={setContent}
         aria-label="내용"
         className="mt-4 [&_.tiptap]:min-h-[60vh]"
       />
 
-      <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+      <div
+        ref={saveBarRef}
+        className="sticky bottom-0 z-20 mt-4 flex flex-wrap items-center justify-end gap-2 border-t bg-background pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:static md:border-0 md:py-0"
+      >
         <div
           id="note-edit-length-help"
           className="mr-auto min-w-0 basis-full text-xs text-muted-foreground sm:basis-auto"
