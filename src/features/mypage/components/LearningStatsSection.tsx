@@ -58,6 +58,16 @@ function formatPercent(numerator: number, denominator: number): string {
   return `${Math.round((numerator / denominator) * 100)}%`;
 }
 
+/**
+ * "YYYY-MM-DD" 형태의 KST 날짜 키를 "M월 D일"로 바꾼다.
+ * `new Date("YYYY-MM-DD")`는 UTC 자정으로 해석돼 KST 기준으로 하루가 밀릴 수 있어서
+ * Date를 거치지 않고 문자열을 직접 읽는다.
+ */
+function formatKstDateKey(dateKey: string): string {
+  const [, month, day] = dateKey.split("-");
+  return `${Number(month)}월 ${Number(day)}일`;
+}
+
 function heatmapClass(count: number): string {
   if (count === 0) return "bg-muted";
   if (count <= 2) return "bg-chart-1";
@@ -90,6 +100,14 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
       barClass: "bg-emerald-500",
     },
   ];
+
+  // 히트맵은 색만 보여서 모바일(툴팁 없음)에서는 총량과 기간을 알 수 없다.
+  // 합계와 양 끝 날짜를 글자로 함께 둔다.
+  const recentActivityTotal = stats.recentActivity.reduce(
+    (sum, { count }) => sum + count,
+    0,
+  );
+  const recentActivityStart = stats.recentActivity[0]?.date;
 
   return (
     <Card>
@@ -184,7 +202,12 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
 
         {stats.recentActivity.length > 0 ? (
           <div>
-            <h4 className="mb-3 text-sm font-medium">최근 30일 활동</h4>
+            <div className="mb-3 flex items-baseline justify-between gap-3">
+              <h4 className="text-sm font-medium">최근 30일 활동</h4>
+              <span className="text-xs text-muted-foreground tabular-nums">
+                복습 완료 {recentActivityTotal}건
+              </span>
+            </div>
             <div
               className="grid gap-1 grid-cols-[repeat(var(--activity-days),minmax(0,1fr))]"
               style={
@@ -200,10 +223,16 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
                     "aspect-square rounded-sm",
                     heatmapClass(count),
                   )}
-                  title={`${date}: ${count}건`}
+                  title={`${formatKstDateKey(date)} 복습 ${count}건`}
                 />
               ))}
             </div>
+            {recentActivityStart && (
+              <div className="mt-1 flex justify-between text-xs text-muted-foreground">
+                <span>{formatKstDateKey(recentActivityStart)}</span>
+                <span>오늘</span>
+              </div>
+            )}
             <div className="mt-2 flex items-center justify-end gap-2 text-xs text-muted-foreground">
               <span>적음</span>
               <div className="size-3 rounded-sm bg-muted" />

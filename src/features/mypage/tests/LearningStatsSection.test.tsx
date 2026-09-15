@@ -137,3 +137,33 @@ describe("LearningStatsSection 단계별 복습 현황", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe("LearningStatsSection 최근 30일 활동", () => {
+  const recentActivity = Array.from({ length: 30 }, (_, i) => {
+    const day = String(i + 1).padStart(2, "0");
+    return { date: `2026-04-${day}`, count: i === 2 ? 3 : i === 29 ? 1 : 0 };
+  });
+
+  it("히트맵 옆에 합계, 아래에 시작일과 오늘을 글자로 보여준다", () => {
+    render(
+      <LearningStatsSection
+        stats={makeStats({ totalNotes: 1, recentActivity })}
+      />,
+    );
+
+    expect(screen.getByText("복습 완료 4건")).toBeInTheDocument();
+    expect(screen.getByText("4월 1일")).toBeInTheDocument();
+    expect(screen.getByText("오늘")).toBeInTheDocument();
+  });
+
+  it("칸 툴팁은 날짜와 건수를 같은 표기로 쓴다", () => {
+    render(
+      <LearningStatsSection
+        stats={makeStats({ totalNotes: 1, recentActivity })}
+      />,
+    );
+
+    expect(screen.getByTitle("4월 3일 복습 3건")).toBeInTheDocument();
+    expect(screen.getByTitle("4월 30일 복습 1건")).toBeInTheDocument();
+  });
+});
