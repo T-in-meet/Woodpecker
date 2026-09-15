@@ -41,6 +41,14 @@ export const OTP_LENGTH = 6;
 export const MISSING_EMAIL_OTP_ERROR_MESSAGE = "인증 번호를 받지 못했습니다.";
 
 /**
+ * Supabase OTP generateLink 요청 timeout.
+ *
+ * OTP Issue의 Provider operation이 장시간 pending되는 것을 방지하고
+ * timeout 시 underlying fetch를 실제 abort하기 위한 기준값이다.
+ */
+export const OTP_GENERATE_LINK_TIMEOUT_MS = 10 * 1000;
+
+/**
  * OTP 만료 시간(초 단위)
  *
  * 이메일 안내 문구 및

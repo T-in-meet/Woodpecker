@@ -1,22 +1,48 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { OTP_GENERATE_LINK_TIMEOUT_MS } from "../constants/otp";
 import { issueOtp } from "./issueOtp";
 
-const mockGenerateLink = vi.fn();
+const { mockCreateAdminClient, mockGenerateLink } = vi.hoisted(() => {
+  const mockGenerateLink = vi.fn();
+  const mockCreateAdminClient = vi.fn(
+    (_options?: { fetch?: typeof fetch }) => ({
+      auth: {
+        admin: {
+          generateLink: mockGenerateLink,
+        },
+      },
+    }),
+  );
+
+  return {
+    mockCreateAdminClient,
+    mockGenerateLink,
+  };
+});
 
 vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: () => ({
-    auth: {
-      admin: {
-        generateLink: mockGenerateLink,
-      },
-    },
-  }),
+  createAdminClient: mockCreateAdminClient,
 }));
+
+function getProviderFetch(): typeof fetch {
+  const options = mockCreateAdminClient.mock.calls.at(-1)?.[0];
+
+  if (!options?.fetch) {
+    throw new Error("OTP provider fetch was not configured");
+  }
+
+  return options.fetch;
+}
 
 describe("issueOtp", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it("signup purpose를 magiclink type으로 변환한다", async () => {
@@ -122,6 +148,135 @@ describe("issueOtp", () => {
     expect(result).toEqual({
       otp: null,
       error: null,
+    });
+  });
+
+  it("OTP provider fetch에 10초 timeout signal을 적용한다", async () => {
+    mockGenerateLink.mockResolvedValue({
+      data: { properties: null },
+      error: null,
+    });
+
+    await issueOtp({
+      email: "test@example.com",
+      purpose: "signup",
+    });
+
+    const providerFetch = getProviderFetch();
+    const timeoutSignal = new AbortController().signal;
+    const timeoutSpy = vi
+      .spyOn(AbortSignal, "timeout")
+      .mockReturnValue(timeoutSignal);
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response());
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await providerFetch("https://example.com");
+
+    expect(timeoutSpy).toHaveBeenCalledWith(OTP_GENERATE_LINK_TIMEOUT_MS);
+    expect(fetchMock).toHaveBeenCalledWith("https://example.com", {
+      signal: timeoutSignal,
+    });
+  });
+
+  it("RequestInit signal과 OTP timeout signal을 함께 보존한다", async () => {
+    mockGenerateLink.mockResolvedValue({
+      data: { properties: null },
+      error: null,
+    });
+
+    await issueOtp({
+      email: "test@example.com",
+      purpose: "signup",
+    });
+
+    const providerFetch = getProviderFetch();
+    const existingSignal = new AbortController().signal;
+    const timeoutSignal = new AbortController().signal;
+    const combinedSignal = new AbortController().signal;
+
+    vi.spyOn(AbortSignal, "timeout").mockReturnValue(timeoutSignal);
+    const anySpy = vi
+      .spyOn(AbortSignal, "any")
+      .mockReturnValue(combinedSignal);
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response());
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await providerFetch("https://example.com", {
+      signal: existingSignal,
+    });
+
+    expect(anySpy).toHaveBeenCalledWith([existingSignal, timeoutSignal]);
+    expect(fetchMock).toHaveBeenCalledWith("https://example.com", {
+      signal: combinedSignal,
+    });
+  });
+
+  it("RequestInit signal이 없으면 Request signal을 보존한다", async () => {
+    mockGenerateLink.mockResolvedValue({
+      data: { properties: null },
+      error: null,
+    });
+
+    await issueOtp({
+      email: "test@example.com",
+      purpose: "signup",
+    });
+
+    const providerFetch = getProviderFetch();
+    const request = new Request("https://example.com", {
+      signal: new AbortController().signal,
+    });
+    const timeoutSignal = new AbortController().signal;
+    const combinedSignal = new AbortController().signal;
+
+    vi.spyOn(AbortSignal, "timeout").mockReturnValue(timeoutSignal);
+    const anySpy = vi
+      .spyOn(AbortSignal, "any")
+      .mockReturnValue(combinedSignal);
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response());
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await providerFetch(request);
+
+    expect(anySpy).toHaveBeenCalledWith([request.signal, timeoutSignal]);
+    expect(fetchMock).toHaveBeenCalledWith(request, {
+      signal: combinedSignal,
+    });
+  });
+
+  it("RequestInit signal이 null이면 Request signal로 되돌아가지 않는다", async () => {
+    mockGenerateLink.mockResolvedValue({
+      data: { properties: null },
+      error: null,
+    });
+
+    await issueOtp({
+      email: "test@example.com",
+      purpose: "signup",
+    });
+
+    const providerFetch = getProviderFetch();
+    const request = new Request("https://example.com", {
+      signal: new AbortController().signal,
+    });
+    const timeoutSignal = new AbortController().signal;
+
+    vi.spyOn(AbortSignal, "timeout").mockReturnValue(timeoutSignal);
+    const anySpy = vi.spyOn(AbortSignal, "any");
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response());
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await providerFetch(request, {
+      signal: null,
+    });
+
+    expect(anySpy).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(request, {
+      signal: timeoutSignal,
     });
   });
 });
