@@ -2,8 +2,11 @@
 
 import { useActionState, useState } from "react";
 
+import { NavigationGuardAlertDialog } from "@/components/common/NavigationGuardAlertDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useBeforeUnloadGuard } from "@/hooks/useBeforeUnloadGuard";
+import { useInternalNavigationGuard } from "@/hooks/useInternalNavigationGuard";
 
 import { submitAnswerAction } from "../actions";
 import { ANSWER_MAX_LENGTH, type GradingResponse } from "../schema";
@@ -56,9 +59,22 @@ export function BlankTestPage({
   const restoredComparison =
     isRewriting || state?.success ? null : restoredSession;
   const comparisonState = state?.success ? state : restoredComparison;
+  const shouldGuard = !comparisonState && answer.trim().length > 0;
+  const { cancelNavigation, confirmNavigation, isNavigationPending } =
+    useInternalNavigationGuard({ enabled: shouldGuard });
+  useBeforeUnloadGuard({ enabled: shouldGuard });
 
   return (
     <div className="space-y-8">
+      <NavigationGuardAlertDialog
+        open={isNavigationPending}
+        title="작성 중인 답안을 버리고 이동할까요?"
+        description="아직 제출하지 않은 답안은 저장되지 않습니다."
+        cancelLabel="계속 작성"
+        confirmLabel="답안 버리고 이동"
+        onCancel={cancelNavigation}
+        onConfirm={confirmNavigation}
+      />
       <header className="space-y-3">
         <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           <span className="rounded-full bg-muted px-2.5 py-1 font-medium text-foreground">
