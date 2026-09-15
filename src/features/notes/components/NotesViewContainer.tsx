@@ -40,7 +40,7 @@ export function NotesViewContainer({
                   ? "오늘 복습할 노트"
                   : view === "scheduled"
                     ? "복습 예정 노트"
-                    : "복습 완료 노트"
+                    : "학습 종료 노트"
               } ${total}개`}
       </p>
 

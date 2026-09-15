@@ -131,9 +131,7 @@ describe("BlankTestPage", () => {
       "text-prose-ko",
     );
     expect(
-      screen.getByText(
-        "비교를 마쳤다면 이번 복습을 완료 처리하고 다음 간격으로 넘어가세요.",
-      ),
+      screen.getByText("비교를 마쳤다면 이번 복습을 완료해 주세요."),
     ).toHaveClass("text-prose-ko");
     expect(
       screen.getByRole("button", { name: "review-complete" }),

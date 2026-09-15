@@ -92,8 +92,9 @@ export function BlankTestPage({
                 채점은 회차당 한 번만 가능합니다.
               </p>
               <p>
-                복습을 마쳤다면 아래 <strong>&lsquo;복습 완료&rsquo;</strong>{" "}
-                버튼을 눌러 주세요.
+                복습을 마쳤다면 아래{" "}
+                <strong>&lsquo;이번 복습 완료&rsquo;</strong> 버튼을 눌러
+                주세요.
                 <br />
                 답안을 다시 작성하려면{" "}
                 <strong>&lsquo;답안 다시 작성&rsquo;</strong> 버튼을 눌러
@@ -120,8 +121,7 @@ export function BlankTestPage({
 
           <div className="rounded-xl border border-border/60 bg-muted/30 px-5 py-4">
             <p className="text-prose-ko text-sm text-muted-foreground">
-              비교를 마쳤다면 이번 복습을 완료 처리하고 다음 간격으로
-              넘어가세요.
+              비교를 마쳤다면 이번 복습을 완료해 주세요.
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
               <ReviewCompleteButton

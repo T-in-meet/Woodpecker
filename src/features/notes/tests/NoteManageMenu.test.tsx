@@ -92,13 +92,13 @@ describe("NoteManageMenu", () => {
       .mockResolvedValue({ data: { completed: true } });
   });
 
-  it("진행 중인 노트에는 복습 완료로 표시를 노출한다", async () => {
+  it("진행 중인 노트에는 학습 종료로 표시를 노출한다", async () => {
     const user = userEvent.setup();
     const { invalidateQueriesSpy } = renderMenu();
 
     await user.click(screen.getByRole("button", { name: "노트 관리 메뉴" }));
     await user.click(
-      await screen.findByRole("menuitem", { name: "복습 완료로 표시" }),
+      await screen.findByRole("menuitem", { name: "학습 종료로 표시" }),
     );
 
     await waitFor(() => {

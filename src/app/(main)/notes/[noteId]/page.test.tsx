@@ -387,7 +387,7 @@ describe("NoteDetailPage", () => {
       canChangeNotificationTime: true,
       notificationScheduleSameDayOnly: true,
       canStartReview: false,
-      reviewStatusMessage: "복습을 완료한 노트입니다.",
+      reviewStatusMessage: "학습을 종료한 노트입니다.",
     });
   });
 

@@ -106,7 +106,7 @@ export function NoteDetailBody({
           </span>
           {isReviewCompleted && (
             <span className="rounded-full bg-emerald-100 px-2 py-1 font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-              학습 완료
+              학습 종료
             </span>
           )}
           <span className="min-w-0">{reviewStatusMessage}</span>

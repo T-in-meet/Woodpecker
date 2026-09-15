@@ -338,7 +338,7 @@ export async function setNoteReviewCompletedAction(
     }
 
     return {
-      error: "복습 완료 상태를 바꾸지 못했습니다. 잠시 후 다시 시도해주세요.",
+      error: "학습 종료 상태를 바꾸지 못했습니다. 잠시 후 다시 시도해주세요.",
     };
   }
 

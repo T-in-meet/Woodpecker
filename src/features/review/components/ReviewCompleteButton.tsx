@@ -32,7 +32,7 @@ export function ReviewCompleteButton({
       )}
 
       <Button type="submit" size="lg" disabled={isPending}>
-        {isPending ? "완료 처리 중..." : "복습 완료"}
+        {isPending ? "완료 처리 중..." : "이번 복습 완료"}
       </Button>
     </form>
   );

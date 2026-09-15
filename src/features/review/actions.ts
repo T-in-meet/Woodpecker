@@ -46,7 +46,7 @@ type SubmitAnswerFieldErrors = Partial<
 >;
 
 const REVIEW_COMPLETED_ERROR =
-  "복습을 완료한 노트입니다. 노트 상세에서 복습을 다시 시작해주세요.";
+  "학습을 종료한 노트입니다. 노트 상세에서 복습을 다시 시작해주세요.";
 
 export type SubmitAnswerActionState =
   | {

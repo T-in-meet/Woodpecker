@@ -97,7 +97,7 @@ export default async function NoteDetailPage({
   );
 
   const reviewStatusMessage = isReviewCompleted
-    ? "복습을 완료한 노트입니다."
+    ? "학습을 종료한 노트입니다."
     : nextScheduledAt
       ? isReviewDue
         ? "지금 백지 테스트를 진행할 수 있습니다."
