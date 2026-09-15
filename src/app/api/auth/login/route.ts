@@ -12,10 +12,9 @@ import {
   normalizeUnknownError,
 } from "@/features/auth/lib/authLogger";
 import {
-  checkIpRateLimitPrecheck,
-  checkRequestEligibility,
-  mapBlockedByToReason,
-} from "@/features/auth/lib/checkRequestEligibility";
+  classifyAuthProviderError,
+  isPasswordLoginCredentialFailure,
+} from "@/features/auth/lib/classifyAuthProviderError";
 import { mapAuthValidationErrors } from "@/features/auth/lib/mapAuthValidationErrors";
 import { maskEmailForLogging } from "@/features/auth/lib/maskEmailForLogging";
 import { maskIpForLogging } from "@/features/auth/lib/maskIpForLogging";
@@ -23,25 +22,51 @@ import {
   AuthJsonParseError,
   parseAuthJsonRequestBody,
 } from "@/features/auth/lib/parseAuthJsonRequestBody";
+import { getTrustedAuthClientIp } from "@/features/auth/lib/rate-limit/trustedAuthClientIp";
 import { getLegalAcceptanceStatus } from "@/features/auth/lib/userAgreements";
 import { validateRedirectPath } from "@/features/auth/lib/validateRedirectPath";
+import {
+  loginRateLimit,
+  type LoginRateLimitBlockedBy,
+} from "@/features/auth/login/lib/loginRateLimit";
 import { loginApiSchema } from "@/features/auth/login/schema/loginApiSchema";
 import { canonicalizeEmail } from "@/features/auth/utils/canonicalizeEmail";
 import { failureResponse, successResponse } from "@/lib/api/response";
 import { createClient } from "@/lib/supabase/server";
-import { getClientIp } from "@/lib/utils/getClientIp";
 import { VALIDATION_REASON } from "@/lib/validation/reasons";
 
 /**
- * 로그인 요청의 내부 결과 타입
+ * Password Login local Rate Limit 차단 원인을 내부 로그 reason으로 변환한다.
  *
- * 각 결과 타입은 finally에서 기록할 terminal event 종류를 결정한다:
- * - invalid_input → AUTH_INVALID_INPUT
- * - blocked       → AUTH_RATE_LIMIT_BLOCKED
- * - completed     → AUTH_LOGIN_COMPLETED
- * - failed        → AUTH_LOGIN_FAILED (인증 실패 또는 내부 오류)
+ * IP short/long은 외부 정책 의미가 동일하므로 하나의 Login IP reason으로 기록한다.
  *
- * spec 근거: login-spec.md §8.1 Result Mapping
+ * @param blockedBy Login Rate Limit service 차단 원인
+ * @returns 구조화 로그 reason
+ */
+function mapLoginBlockedByToReason(
+  blockedBy: LoginRateLimitBlockedBy,
+):
+  | typeof AUTH_LOG_REASONS.LOGIN_EMAIL_LIMIT
+  | typeof AUTH_LOG_REASONS.LOGIN_IP_LIMIT
+  | typeof AUTH_LOG_REASONS.LOGIN_FAILURE_STREAK {
+  switch (blockedBy) {
+    case "email_attempt":
+      return AUTH_LOG_REASONS.LOGIN_EMAIL_LIMIT;
+
+    case "ip_short":
+    case "ip_long":
+      return AUTH_LOG_REASONS.LOGIN_IP_LIMIT;
+
+    case "failure_streak":
+      return AUTH_LOG_REASONS.LOGIN_FAILURE_STREAK;
+  }
+}
+
+/**
+ * 로그인 요청의 내부 결과 타입.
+ *
+ * 외부 public code와 내부 structured log reason을 분리하여
+ * Local Rate Limit과 Provider Rate Limit 등 서로 다른 내부 원인을 구분한다.
  */
 type LoginTerminalOutcome =
   | {
@@ -53,11 +78,11 @@ type LoginTerminalOutcome =
     }
   | {
       type: "blocked";
-      reasonCode: // [이유: RATE_LIMIT_IP → RATE_LIMIT_IP_SHORT | RATE_LIMIT_IP_LONG으로 분리됨]
-        | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT
-        | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP_LONG
-        | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT
-        | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG;
+      reasonCode:
+        | typeof AUTH_LOG_REASONS.LOGIN_EMAIL_LIMIT
+        | typeof AUTH_LOG_REASONS.LOGIN_IP_LIMIT
+        | typeof AUTH_LOG_REASONS.LOGIN_FAILURE_STREAK
+        | typeof AUTH_LOG_REASONS.PROVIDER_RATE_LIMIT;
       maskedEmail?: string;
       maskedIp?: string;
     }
@@ -66,62 +91,42 @@ type LoginTerminalOutcome =
       type: "failed";
       reasonCode:
         | typeof AUTH_LOG_REASONS.INVALID_CREDENTIALS
+        | typeof AUTH_LOG_REASONS.IP_UNAVAILABLE
+        | typeof AUTH_LOG_REASONS.PROVIDER_ERROR
         | typeof AUTH_LOG_REASONS.INTERNAL_ERROR;
       maskedEmail?: string;
       errorMessage?: string;
       errorName?: string;
     };
 
+/**
+ * 로그인 핵심 로직 반환값.
+ */
 type ResolveLoginResult = {
   response: Response;
   outcome: LoginTerminalOutcome;
 };
 
 /**
- * 로그인 핵심 로직 — POST 핸들러에서 분리된 내부 함수
+ * 로그인 핵심 로직.
  *
- * 역할:
- * - 입력 검증, rate limit, Supabase 인증을 순서대로 수행
- * - 각 분기에 맞는 응답과 outcome을 반환
- *
- * 타이밍 정책(applyMinimumResponseTime)은 POST 핸들러에서 일괄 적용한다
+ * Provider와 무관한 local 준비를 모두 마친 뒤 Login attempt를 consume하고,
+ * 허용 직후 다른 await/I/O 없이 signInWithPassword를 시작한다.
  *
  * @param request 요청 객체
- * @param validatedRedirect validateRedirectPath로 검증된 redirect 경로
+ * @param validatedRedirect 검증된 성공 redirect 경로
+ * @returns 외부 응답과 structured logging용 terminal outcome
  */
 async function resolveLoginResponse(
   request: NextRequest,
   validatedRedirect: string,
 ): Promise<ResolveLoginResult> {
-  const ip = getClientIp(request);
-  const maskedIp = maskIpForLogging(ip);
-
-  /**
-   * IP 사전 검증 — 본문 파싱 비용 없이 IP 차단
-   * 읽기 전용: 상태 변경 없이 현재 IP 상태만 확인한다
-   */
-  const precheck = checkIpRateLimitPrecheck(ip);
-  if (!precheck.allowed) {
-    const reasonCode =
-      precheck.blockedBy === "ipLong"
-        ? AUTH_LOG_REASONS.RATE_LIMIT_IP_LONG
-        : AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT;
-
-    return {
-      response: failureResponse(AUTH_API_CODES.LOGIN_RATE_LIMIT_EXCEEDED),
-      outcome: {
-        type: "blocked",
-        reasonCode,
-        maskedIp,
-      },
-    };
-  }
-
   let body: unknown;
+
   try {
     body = await parseAuthJsonRequestBody(request);
-  } catch (e) {
-    if (e instanceof AuthJsonParseError) {
+  } catch (error) {
+    if (error instanceof AuthJsonParseError) {
       return {
         response: failureResponse(AUTH_API_CODES.LOGIN_INVALID_INPUT, {
           errors: [{ field: "body", reason: VALIDATION_REASON.INVALID_FORMAT }],
@@ -132,12 +137,11 @@ async function resolveLoginResponse(
         },
       };
     }
-    throw e;
+
+    throw error;
   }
 
-  /**
-   * 입력값 validation — strict schema로 email/password 형식과 extra field 검증
-   */
+  // 입력 형식과 extra field를 Provider 준비 전에 검증한다.
   const parsed = loginApiSchema.safeParse(body);
   if (!parsed.success) {
     return {
@@ -152,26 +156,56 @@ async function resolveLoginResponse(
   }
 
   const { email, password } = parsed.data;
-
-  // 이메일 정규화 — Gmail alias 등을 동일 identity로 취급하기 위해 canonicalize
   const canonicalEmail = canonicalizeEmail(email);
   const maskedEmail = maskEmailForLogging(canonicalEmail);
 
   /**
-   * Request eligibility — IP + email short/long window 통합 판별
-   * atomic하게 판단과 상태 업데이트가 함께 일어난다
+   * Auth Rate Limit에 사용할 trusted end-user IP를 확인한다.
+   *
+   * Preview/Production에서 확보하지 못하면 fail-closed하고,
+   * Provider operation과 Login attempt consumption을 모두 시작하지 않는다.
    */
-  const eligibility = checkRequestEligibility("login", ip, canonicalEmail);
-  if (!eligibility.allowed) {
+  const trustedIp = getTrustedAuthClientIp(request);
+  if (!trustedIp.available) {
+    return {
+      response: failureResponse(AUTH_API_CODES.LOGIN_INTERNAL_ERROR),
+      outcome: {
+        type: "failed",
+        reasonCode: trustedIp.reasonCode,
+        maskedEmail,
+      },
+    };
+  }
+
+  const { ip } = trustedIp;
+  const maskedIp = maskIpForLogging(ip);
+
+  /**
+   * Provider client는 attempt 소비 전에 준비한다.
+   *
+   * 이 local 준비가 실패하면 실제 Provider operation이 시작되지 않았으므로
+   * Email/IP total attempt를 소비하지 않는다.
+   */
+  const supabase = await createClient();
+
+  /**
+   * 실제 Provider 호출 직전에 quota/streak를 atomic하게 확인하고
+   * 허용된 경우 Email/IP attempt를 소비한다.
+   */
+  const rateLimitResult = loginRateLimit.tryStartAttempt({
+    canonicalEmail,
+    ip,
+  });
+
+  if (!rateLimitResult.allowed) {
     return {
       response: failureResponse(AUTH_API_CODES.LOGIN_RATE_LIMIT_EXCEEDED),
       outcome: {
         type: "blocked",
-        reasonCode: mapBlockedByToReason(eligibility.blockedBy),
+        reasonCode: mapLoginBlockedByToReason(rateLimitResult.blockedBy),
         maskedEmail,
-        // [이유: blockedBy "ip" → "ipShort" | "ipLong"으로 분리됨]
-        ...(eligibility.blockedBy === "ipShort" ||
-        eligibility.blockedBy === "ipLong"
+        ...(rateLimitResult.blockedBy === "ip_short" ||
+        rateLimitResult.blockedBy === "ip_long"
           ? { maskedIp }
           : {}),
       },
@@ -179,34 +213,102 @@ async function resolveLoginResponse(
   }
 
   /**
-   * Supabase signInWithPassword 호출
-   *
-   * 실제 email로 인증을 시도한다:
-   * - canonicalEmail은 rate limit / identity key / logging masking 기준으로만 사용한다
-   * - Supabase Auth에는 실제 email이 저장되므로 signInWithPassword에는 사용자가 입력한 email을 그대로 전달한다
-   * - 성공 시 세션 쿠키가 자동으로 설정됨 (SSR client 특성)
-   * - error가 존재하면 어떤 인증 실패든 동일하게 LOGIN_INVALID_CREDENTIALS로 처리
-   *   (계정 존재 여부/비밀번호 불일치/미인증 여부를 외부에 노출하지 않기 위함)
-   *
-   *
+   * tryStartAttempt 성공 뒤에는 다른 await/I/O를 끼우지 않고
+   * 바로 실제 Password Login Provider operation을 시작한다.
    */
-  const supabase = await createClient();
-  const { data: authData, error: authError } =
-    await supabase.auth.signInWithPassword({
+  let authResult: Awaited<
+    ReturnType<typeof supabase.auth.signInWithPassword>
+  >;
+
+  try {
+    authResult = await supabase.auth.signInWithPassword({
       email,
       password,
     });
+  } catch (error) {
+    // Provider operation은 시작되었으므로 total/IP attempt는 rollback하지 않는다.
+    loginRateLimit.recordResult({
+      canonicalEmail,
+      result: "non_credential_failure",
+    });
 
-  if (authError) {
+    const { errorMessage, errorName } = normalizeUnknownError(error);
+
     return {
-      response: failureResponse(AUTH_API_CODES.LOGIN_INVALID_CREDENTIALS),
+      response: failureResponse(AUTH_API_CODES.LOGIN_INTERNAL_ERROR),
       outcome: {
         type: "failed",
-        reasonCode: AUTH_LOG_REASONS.INVALID_CREDENTIALS,
+        reasonCode: AUTH_LOG_REASONS.PROVIDER_ERROR,
         maskedEmail,
+        errorMessage,
+        errorName,
       },
     };
   }
+
+  const { data: authData, error: authError } = authResult;
+
+  if (authError) {
+    /**
+     * 명확히 allowlist된 invalid credential만 consecutive failure로 기록한다.
+     * unknown Provider 오류를 credential failure로 추정하지 않는다.
+     */
+    if (isPasswordLoginCredentialFailure(authError)) {
+      loginRateLimit.recordResult({
+        canonicalEmail,
+        result: "credential_failure",
+      });
+
+      return {
+        response: failureResponse(AUTH_API_CODES.LOGIN_INVALID_CREDENTIALS),
+        outcome: {
+          type: "failed",
+          reasonCode: AUTH_LOG_REASONS.INVALID_CREDENTIALS,
+          maskedEmail,
+        },
+      };
+    }
+
+    const providerClassification = classifyAuthProviderError(authError);
+
+    // Provider 429/system/unknown error는 기존 streak를 증가시키거나 clear하지 않는다.
+    loginRateLimit.recordResult({
+      canonicalEmail,
+      result: "non_credential_failure",
+    });
+
+    if (providerClassification === "provider_rate_limit") {
+      return {
+        // Local Rate Limit과 동일한 외부 observable contract를 사용한다.
+        response: failureResponse(AUTH_API_CODES.LOGIN_RATE_LIMIT_EXCEEDED),
+        outcome: {
+          type: "blocked",
+          reasonCode: AUTH_LOG_REASONS.PROVIDER_RATE_LIMIT,
+          maskedEmail,
+          maskedIp,
+        },
+      };
+    }
+
+    const { errorMessage, errorName } = normalizeUnknownError(authError);
+
+    return {
+      response: failureResponse(AUTH_API_CODES.LOGIN_INTERNAL_ERROR),
+      outcome: {
+        type: "failed",
+        reasonCode: AUTH_LOG_REASONS.PROVIDER_ERROR,
+        maskedEmail,
+        errorMessage,
+        errorName,
+      },
+    };
+  }
+
+  // 실제 Password Login 성공은 기존 credential failure streak를 clear한다.
+  loginRateLimit.recordResult({
+    canonicalEmail,
+    result: "success",
+  });
 
   const userId = authData.user?.id;
   if (!userId) {
@@ -232,18 +334,13 @@ async function resolveLoginResponse(
 }
 
 /**
- * 로그인 API 핸들러
+ * 로그인 API 핸들러.
  *
- * JSON Body Auth Write Route Template 준수:
- * 1. AUTH_LOGIN_REQUESTED 기록
- * 2. startTime 기록
- * 3. redirect query 검증 (validateRedirectPath)
- * 4. try: resolveLoginResponse
- * 5. catch: LOGIN_INTERNAL_ERROR + AUTH_LOGIN_FAILED 기록
- * 6. switch(outcome.type): terminal event 기록
- * 7. applyMinimumResponseTime 적용 (timing attack 방어)
+ * REQUESTED 이후 각 요청은 정확히 하나의 terminal event로 종료하며,
+ * 외부 응답에는 minimum response time 정책을 일괄 적용한다.
  *
- * spec 근거: auth-shared-spec.md §8.1 JSON Body Auth Write Route Template
+ * @param request 로그인 POST 요청
+ * @returns Login API 응답
  */
 export async function POST(request: NextRequest) {
   const start = Date.now();
@@ -254,10 +351,7 @@ export async function POST(request: NextRequest) {
     provider: "email",
   });
 
-  /**
-   * redirect query 검증 — 로그인 성공 후 이동할 경로를 미리 결정
-   * 잘못된 값은 validateRedirectPath가 /mypage로 fallback 처리
-   */
+  // 성공 후 redirect query는 기존 검증 정책을 그대로 유지한다.
   const validatedRedirect = validateRedirectPath(
     request.nextUrl.searchParams.get("redirect"),
   );
@@ -286,10 +380,7 @@ export async function POST(request: NextRequest) {
 
   const { response, outcome } = resolved;
 
-  /**
-   * terminal event 기록 — REQUESTED 이후 정확히 1회만 기록
-   * spec 근거: auth-shared-spec.md §7.2 Single Resolution Rule
-   */
+  // REQUESTED 이후 정확히 하나의 terminal event만 기록한다.
   switch (outcome.type) {
     case "invalid_input":
       logAuthEvent(AUTH_EVENTS.AUTH_INVALID_INPUT, {
@@ -327,8 +418,6 @@ export async function POST(request: NextRequest) {
       break;
 
     case "failed":
-      // 인증 실패(INVALID_CREDENTIALS)와 내부 오류(INTERNAL_ERROR) 모두 AUTH_LOGIN_FAILED로 기록
-      // 외부 응답 코드(401/500)와 내부 로그 이벤트는 분리되어야 한다
       logAuthError(AUTH_EVENTS.AUTH_LOGIN_FAILED, {
         path: request.nextUrl.pathname,
         method: request.method,
