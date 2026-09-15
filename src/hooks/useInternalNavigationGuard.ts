@@ -88,6 +88,27 @@ function getNavigationGuardHistoryIndex(state: unknown, mountId: string) {
   return typeof index === "number" ? index : null;
 }
 
+/**
+ * History state에 남아 있는 guard 기록(마운트 식별자와 index)을 읽습니다.
+ *
+ * 현재 entry에 이전 마운트의 기록이 있으면 그 식별자·index를 이어받아야
+ * 같은 마운트가 만든 앞뒤 entry와 index를 계속 비교할 수 있습니다.
+ */
+function getNavigationGuardHistoryRecord(state: unknown) {
+  if (state === null || typeof state !== "object" || Array.isArray(state)) {
+    return null;
+  }
+
+  const mountId = Reflect.get(state, NAVIGATION_GUARD_MOUNT_ID_KEY);
+  const index = Reflect.get(state, NAVIGATION_GUARD_HISTORY_INDEX_KEY);
+
+  if (typeof mountId !== "string" || typeof index !== "number") {
+    return null;
+  }
+
+  return { mountId, index };
+}
+
 type UseInternalNavigationGuardParams = {
   enabled: boolean;
 };
@@ -195,14 +216,20 @@ export function useInternalNavigationGuard({
     const originalReplaceState = window.history.replaceState;
 
     /*
-     * Hook이 설치된 시점의 현재 History entry를 index 0 기준점으로 사용합니다.
+     * Hook이 설치된 시점의 현재 History entry를 기준점으로 사용합니다.
      *
      * 기존 Next.js history state를 유지한 채 guard 전용 값만 추가합니다.
-     * 이전 마운트가 이 entry에 남긴 index는 마운트 식별자가 달라 무시됩니다.
+     * 이 entry에 이전 마운트의 기록이 있으면 그 식별자·index를 이어받습니다.
+     * 그래야 이전 마운트가 만든 앞쪽 entry(앞으로가기 대상)의 index를
+     * 계속 믿을 수 있습니다. 기록이 없을 때만 새 식별자로 index 0부터 셉니다.
      */
-    const mountId = createNavigationGuardMountId();
+    const existingRecord = getNavigationGuardHistoryRecord(
+      window.history.state,
+    );
 
-    let currentHistoryIndex = 0;
+    const mountId = existingRecord?.mountId ?? createNavigationGuardMountId();
+
+    let currentHistoryIndex = existingRecord?.index ?? 0;
 
     let currentUrl = window.location.href;
 
