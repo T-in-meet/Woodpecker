@@ -41,6 +41,6 @@ describe("DeleteNoteDialog", () => {
     );
 
     expect(container).toBeEmptyDOMElement();
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
 });

@@ -243,11 +243,9 @@ describe("NoteManageMenu", () => {
       await screen.findByRole("menuitem", { name: "노트 삭제" }),
     );
 
-    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(await screen.findByRole("alertdialog")).toBeInTheDocument();
     expect(
-      await screen.findByText(
-        "삭제한 노트는 되돌릴 수 없습니다. 아래 노트를 영구적으로 삭제하시겠습니까?",
-      ),
+      await screen.findByText("삭제한 노트는 되돌릴 수 없습니다."),
     ).toBeInTheDocument();
   });
 });

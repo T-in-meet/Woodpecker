@@ -14,8 +14,15 @@ import { NoteEditForm } from "../components/NoteEditForm";
 
 const { updateMock } = vi.hoisted(() => ({ updateMock: vi.fn() }));
 vi.mock("../actions", () => ({ updateNoteAction: updateMock }));
-vi.mock("@/hooks/usePreventPageLeave", () => ({
-  usePreventPageLeave: vi.fn(),
+vi.mock("@/hooks/useInternalNavigationGuard", () => ({
+  useInternalNavigationGuard: vi.fn(() => ({
+    cancelNavigation: vi.fn(),
+    confirmNavigation: vi.fn(),
+    isNavigationPending: false,
+  })),
+}));
+vi.mock("@/hooks/useBeforeUnloadGuard", () => ({
+  useBeforeUnloadGuard: vi.fn(),
 }));
 vi.mock("@/features/editor/components/TipTapEditor", () => ({
   TipTapEditor: ({

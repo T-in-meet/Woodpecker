@@ -218,7 +218,7 @@ export function NoteChatConversationMenu({
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>대화를 삭제하시겠습니까?</AlertDialogTitle>
+            <AlertDialogTitle>대화를 삭제할까요?</AlertDialogTitle>
             <AlertDialogDescription>
               이 대화와 연결된 메시지가 함께 삭제됩니다. 이 작업은 되돌릴 수
               없습니다.
@@ -231,9 +231,13 @@ export function NoteChatConversationMenu({
             </p>
           ) : null}
 
-          <AlertDialogFooter className="sm:justify-between">
+          <AlertDialogFooter>
+            <AlertDialogCancel autoFocus disabled={deleteMutation.isPending}>
+              취소
+            </AlertDialogCancel>
+
             <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              variant="destructive"
               disabled={deleteMutation.isPending}
               onClick={(event) => {
                 event.preventDefault();
@@ -242,10 +246,6 @@ export function NoteChatConversationMenu({
             >
               {deleteMutation.isPending ? "삭제 중..." : "삭제"}
             </AlertDialogAction>
-
-            <AlertDialogCancel autoFocus disabled={deleteMutation.isPending}>
-              취소
-            </AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
