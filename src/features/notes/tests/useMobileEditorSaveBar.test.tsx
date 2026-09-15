@@ -39,7 +39,7 @@ function setup(width: number) {
   return { ...result, viewport, setOptions };
 }
 
-it("모바일 키보드 위로 저장바를 올리고 그 높이까지 답안 스크롤 여백으로 확보한다", () => {
+it("키보드 높이가 바뀌어도 스크롤 여백은 저장바 높이만 확보한다", () => {
   const { viewport, setOptions, unmount } = setup(390);
   const bar = screen.getByTestId("save-bar");
   expect(bar.style.bottom).toBe("0px");
@@ -49,15 +49,19 @@ it("모바일 키보드 위로 저장바를 올리고 그 높이까지 답안 �
       scrollThreshold: { top: 96, right: 0, bottom: 96, left: 0 },
     },
   });
-  viewport.height = 500;
-  act(() => viewport.dispatchEvent(new Event("resize")));
-  expect(bar.style.bottom).toBe("300px");
-  expect(setOptions).toHaveBeenLastCalledWith({
-    editorProps: {
-      scrollMargin: { top: 96, right: 5, bottom: 396, left: 5 },
-      scrollThreshold: { top: 96, right: 0, bottom: 396, left: 0 },
-    },
-  });
+  // ProseMirror는 visualViewport.height를 사용하므로 키보드 높이는
+  // 저장바 위치에만 적용하고 스크롤 여백에는 중복 반영하지 않는다.
+  for (const height of [500, 400, 800]) {
+    viewport.height = height;
+    act(() => viewport.dispatchEvent(new Event("resize")));
+    expect(bar.style.bottom).toBe(`${800 - height}px`);
+    expect(setOptions).toHaveBeenLastCalledWith({
+      editorProps: {
+        scrollMargin: { top: 96, right: 5, bottom: 96, left: 5 },
+        scrollThreshold: { top: 96, right: 0, bottom: 96, left: 0 },
+      },
+    });
+  }
   unmount();
   setOptions.mockClear();
   act(() => viewport.dispatchEvent(new Event("resize")));

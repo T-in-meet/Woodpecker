@@ -29,9 +29,9 @@ export function useMobileEditorSaveBar() {
               window.innerHeight - viewport.height - viewport.offsetTop,
             )
           : 0;
-      const bottom = mobile
-        ? bar.getBoundingClientRect().height + keyboardInset + 16
-        : 5;
+      // ProseMirror는 visualViewport.height를 기준으로 스크롤하므로
+      // 키보드 높이는 저장바 위치에만 적용하고 여백에는 더하지 않는다.
+      const bottom = mobile ? bar.getBoundingClientRect().height + 16 : 5;
       const geometry = `${mobile}:${keyboardInset}:${bottom}`;
       if (geometry === lastGeometry) return;
       lastGeometry = geometry;
