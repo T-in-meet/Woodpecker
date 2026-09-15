@@ -145,7 +145,9 @@ export function NotesToolbar({ initialQuery, activeView }: NotesToolbarProps) {
     <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
       <nav
         aria-label="노트 보기"
-        className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1 md:flex"
+        // md 이상은 한 줄로 펼치되, 세로 배치(md~lg)에서 부모 flex-col이
+        // 검색창 너비까지 늘리지 않도록 내용만큼만 차지한다.
+        className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1 md:flex md:w-fit"
       >
         {NOTE_VIEW_OPTIONS.map(({ value, label }) => (
           <Link
