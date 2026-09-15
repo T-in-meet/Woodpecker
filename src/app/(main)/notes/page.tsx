@@ -53,7 +53,7 @@ export default async function NotesPage({ searchParams }: NotesPageProps) {
 
   return (
     <div className="-mb-8 mx-auto w-full max-w-5xl px-6 pb-2 pt-10 md:mb-0 md:px-12 md:py-10">
-      <div className="mb-6 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-3 sm:flex sm:justify-between">
+      <div className="mb-6 space-y-5">
         <div className="space-y-1">
           <h1 className="text-3xl font-bold text-foreground">노트 목록</h1>
         </div>

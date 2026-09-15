@@ -126,9 +126,7 @@ describe("NotesPage", () => {
       NOTES_PAGE_SIZE,
       "scheduled",
     );
-    expect(
-      screen.getByRole("button", { name: "노트 보기: 복습 예정" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "복습 예정" })).toBeInTheDocument();
   });
 
   it("DB 조회 오류가 발생하면 빈 목록으로 대체하지 않고 error boundary로 전파한다", async () => {

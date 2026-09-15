@@ -1,11 +1,4 @@
-import {
-  CalendarClock,
-  ChevronDown,
-  ListFilter,
-  Play,
-  Search,
-  Trash2,
-} from "lucide-react";
+import { CalendarClock, Play, Search, Trash2 } from "lucide-react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
@@ -61,15 +54,20 @@ function NotesPreview() {
   return (
     <div className="bg-muted/20 p-4 text-left sm:p-5">
       {/* 툴바 — NotesToolbar의 보기 필터와 검색 입력 */}
-      <div className="flex items-center gap-2">
-        <div className="flex h-9 w-32 shrink-0 items-center justify-between rounded-md border bg-background px-3 text-sm">
-          <span className="flex items-center gap-1.5">
-            <ListFilter className="size-4 text-muted-foreground" aria-hidden />
-            전체
-          </span>
-          <ChevronDown className="size-4 text-muted-foreground" aria-hidden />
+      <div className="flex flex-col gap-3 lg:flex-row">
+        <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1 md:flex">
+          {["전체", "오늘 복습", "복습 예정", "학습 종료"].map(
+            (label, index) => (
+              <span
+                key={label}
+                className={`flex min-h-11 items-center justify-center whitespace-nowrap rounded-md px-3 text-sm ${index === 0 ? "bg-background font-semibold shadow-sm" : "text-muted-foreground"}`}
+              >
+                {label}
+              </span>
+            ),
+          )}
         </div>
-        <div className="flex h-9 flex-1 items-center gap-2 rounded-md border bg-background px-3 text-sm text-muted-foreground">
+        <div className="flex h-11 flex-1 items-center gap-2 rounded-md border bg-background px-3 text-sm text-muted-foreground">
           <Search className="size-4 shrink-0" aria-hidden />
           노트 검색
         </div>
