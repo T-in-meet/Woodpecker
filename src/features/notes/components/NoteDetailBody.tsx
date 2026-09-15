@@ -48,6 +48,11 @@ type NoteDetailBodyProps = {
   canChangeNotificationTime: boolean;
   notificationScheduleSameDayOnly: boolean;
   canStartReview: boolean;
+  /**
+   * 진행 중인 회차에 AI 채점이 이미 있는지. 백지 테스트 페이지가 답안·채점을
+   * 복원해 결과 화면부터 보여주므로, "시작"이라고 쓰면 테스트를 건너뛴 것처럼 보인다.
+   */
+  hasCurrentRoundGrading: boolean;
   reviewStatusMessage: string;
   notificationTimeOfDay: string | null;
   nextScheduledAt: string | null;
@@ -62,6 +67,7 @@ export function NoteDetailBody({
   canChangeNotificationTime,
   notificationScheduleSameDayOnly,
   canStartReview,
+  hasCurrentRoundGrading,
   reviewStatusMessage,
   notificationTimeOfDay,
   nextScheduledAt,
@@ -117,7 +123,9 @@ export function NoteDetailBody({
             <Button asChild>
               <Link href={getNoteReviewRoute(noteId)}>
                 <NotebookPen data-icon="inline-start" aria-hidden="true" />
-                백지 테스트 시작
+                {hasCurrentRoundGrading
+                  ? "백지 테스트 이어하기"
+                  : "백지 테스트 시작"}
               </Link>
             </Button>
           )}

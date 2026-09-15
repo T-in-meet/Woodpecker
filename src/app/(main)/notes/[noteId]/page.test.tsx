@@ -16,6 +16,7 @@ type NoteDetailBodyProps = {
   canChangeNotificationTime: boolean;
   notificationScheduleSameDayOnly: boolean;
   canStartReview: boolean;
+  hasCurrentRoundGrading: boolean;
   reviewStatusMessage: string;
   notificationTimeOfDay: string | null;
   nextScheduledAt: string | null;
@@ -304,6 +305,46 @@ describe("NoteDetailPage", () => {
     await renderPage();
 
     expect(lastBodyProps()).toMatchObject({ canStartReview: true });
+  });
+
+  // 진행 중인 회차(review_round + 1)에 채점이 있으면 백지 테스트 페이지가 결과 화면을
+  // 복원한다. 상세 버튼이 "시작"이라고 말하면 테스트를 건너뛴 것처럼 보이므로 구분한다.
+  it("hasCurrentRoundGrading: 진행 중인 회차의 채점만 인정한다", async () => {
+    getUserMock.mockResolvedValue(createUser("user-123"));
+    getNoteByIdMock.mockResolvedValue(createNote({ review_round: 1 }));
+    getGradingsByNoteMock.mockResolvedValue([
+      {
+        id: "11111111-1111-4111-8111-111111111111",
+        review_log_id: "22222222-2222-4222-8222-222222222222",
+        round: 2,
+        score: 5,
+        feedback: { summary: "요약", missedConcepts: [], incorrectPoints: [] },
+        created_at: "2026-03-29T10:00:00.000Z",
+      },
+    ]);
+
+    await renderPage();
+
+    expect(lastBodyProps()).toMatchObject({ hasCurrentRoundGrading: true });
+  });
+
+  it("hasCurrentRoundGrading: 지난 회차 채점만 있으면 false다", async () => {
+    getUserMock.mockResolvedValue(createUser("user-123"));
+    getNoteByIdMock.mockResolvedValue(createNote({ review_round: 1 }));
+    getGradingsByNoteMock.mockResolvedValue([
+      {
+        id: "11111111-1111-4111-8111-111111111111",
+        review_log_id: "22222222-2222-4222-8222-222222222222",
+        round: 1,
+        score: 80,
+        feedback: { summary: "요약", missedConcepts: [], incorrectPoints: [] },
+        created_at: "2026-03-28T10:00:00.000Z",
+      },
+    ]);
+
+    await renderPage();
+
+    expect(lastBodyProps()).toMatchObject({ hasCurrentRoundGrading: false });
   });
 
   // 회차 상한이 없으므로 횟수를 아무리 채워도 자동으로 끝나지 않는다.
