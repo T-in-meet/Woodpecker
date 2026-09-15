@@ -177,4 +177,23 @@ describe("createInMemoryAuthRateLimitStore", () => {
     // in-flight는 시간 기반 cleanup 대상으로 제거하지 않는다.
     expect(store.hasInFlight("active-in-flight")).toBe(true);
   });
+
+  it("runAtomic에 주입한 now를 opportunistic cleanup 기준으로 사용한다", () => {
+    const logicalNow = 1_000_000;
+
+    // 실제 system clock과 무관한 논리 시각으로 상태를 생성한다.
+    store.runAtomic(() => {
+      store.setTimestampWindow("timestamp", [logicalNow]);
+    }, logicalNow);
+
+    expect(store.getTimestampWindow("timestamp")).toEqual([logicalNow]);
+
+    // 같은 논리 시계를 기준으로 retention을 넘기면 cleanup되어야 한다.
+    store.runAtomic(
+      () => undefined,
+      logicalNow + LOGIN_IP_LONG_WINDOW_MS + 1,
+    );
+
+    expect(store.getTimestampWindow("timestamp")).toBeUndefined();
+  });
 });

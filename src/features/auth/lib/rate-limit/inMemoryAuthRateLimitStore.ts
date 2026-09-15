@@ -222,9 +222,9 @@ export function createInMemoryAuthRateLimitStore(): AuthRateLimitStore {
      * callback 시작 전에 opportunistic cleanup을 수행하고,
      * callback 내부의 mutation 사이에는 추가 cleanup을 실행하지 않는다.
      */
-    runAtomic<T>(operation: () => T): T {
-      // atomic 상태를 읽기 전에 stale global state를 한 번 정리한다.
-      maybeCleanup(Date.now());
+    runAtomic<T>(operation: () => T, now = Date.now()): T {
+      // Rate Limit service가 주입한 논리 시각과 cleanup 시각을 일치시킨다.
+      maybeCleanup(now);
       isRunningAtomicOperation = true;
 
       try {

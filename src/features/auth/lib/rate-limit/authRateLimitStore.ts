@@ -21,8 +21,11 @@ export type AuthRateLimitStore = {
    *
    * callback 안에서는 필요한 조건을 모두 확인한 뒤 상태를 변경해야 하며,
    * 조건이 하나라도 실패한 경우 관련 상태를 부분적으로 변경하지 않는다.
+   *
+   * `now`를 전달하면 opportunistic cleanup도 같은 논리 시각을 사용한다.
+   * 생략하면 Production 기본값으로 현재 시각을 사용한다.
    */
-  runAtomic<T>(operation: () => T): T;
+  runAtomic<T>(operation: () => T, now?: number): T;
 
   /**
    * rolling/sliding window의 timestamp 상태를 조회한다.
