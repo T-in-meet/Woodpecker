@@ -46,8 +46,11 @@ function StatCard({
 }
 
 // 복습 횟수에 상한이 없으므로 0회만 이름을 주고 나머지는 숫자로 만든다.
+// 단위("복습")는 섹션 제목이 한 번만 말하고 줄에는 횟수만 둔다. 줄마다 붙이면
+// 같은 단어가 반복돼 읽기 어렵다. 시작·끝은 "복습 전"·"복습 완료"로 대칭을 맞추고,
+// "복습 완료"는 노트 목록 필터·통계 타일·메뉴와 같은 표현이다.
 const NOTES_ROUND_LABELS: Record<number, string> = {
-  0: "학습 전",
+  0: "복습 전",
 };
 
 function formatPercent(numerator: number, denominator: number): string {
@@ -68,12 +71,25 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
     stats.completedReviews === 0 &&
     stats.todayReviews === 0;
 
-  // 버킷이 완료 표시한 노트를 빼고 만들어지므로 분모도 버킷 합으로 맞춘다.
-  // totalNotes로 나누면 완료한 만큼이 어떤 줄에도 안 잡혀 합이 100%에 못 미친다.
-  const notesInProgressTotal = stats.notesByRound.reduce(
-    (sum, { count }) => sum + count,
-    0,
-  );
+  // 단계 줄(진행 중) + 학습 완료 줄이 노트 전체를 덮으므로 분모는 전체 노트다.
+  // 완료 노트는 어느 회차에서든 사용자가 직접 표시할 수 있어 "5회차 다음 단계"가
+  // 아니다. 사다리 끝의 종착 상태로 색을 갈라 보여준다.
+  const stageRows = [
+    ...stats.notesByRound.map(({ round, count }) => ({
+      key: `round-${round}`,
+      label:
+        NOTES_ROUND_LABELS[round] ??
+        (round >= MAX_REVIEW_ROUND_BUCKET ? `${round}회 이상` : `${round}회`),
+      count,
+      barClass: "bg-chart-3",
+    })),
+    {
+      key: "completed",
+      label: "복습 완료",
+      count: stats.completedNotesCount,
+      barClass: "bg-emerald-500",
+    },
+  ];
 
   return (
     <Card>
@@ -117,33 +133,30 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
           </div>
         </div>
 
-        {stats.notesByRound.some((r) => r.count > 0) ? (
+        {stats.totalNotes > 0 ? (
           <div>
-            <h4 className="mb-3 text-sm font-medium">단계별 학습 현황</h4>
+            <h4 className="mb-3 text-sm font-medium">단계별 복습 현황</h4>
             <div className="space-y-2">
-              {stats.notesByRound.map(({ round, count }) => (
-                <div key={round} className="flex items-center gap-3">
+              {stageRows.map(({ key, label, count, barClass }) => (
+                <div key={key} className="flex items-center gap-3">
                   <span className="w-28 text-sm text-muted-foreground">
-                    {NOTES_ROUND_LABELS[round] ??
-                      (round >= MAX_REVIEW_ROUND_BUCKET
-                        ? `${round}회차 이상`
-                        : `${round}회차`)}
+                    {label}
                   </span>
                   <div className="h-2 flex-1 rounded-full bg-muted">
                     <div
-                      className="h-full rounded-full bg-chart-3 w-(--progress-width)"
+                      className={cn(
+                        "h-full rounded-full w-(--progress-width)",
+                        barClass,
+                      )}
                       style={
                         {
-                          "--progress-width":
-                            notesInProgressTotal === 0
-                              ? "0%"
-                              : `${(count / notesInProgressTotal) * 100}%`,
+                          "--progress-width": `${(count / stats.totalNotes) * 100}%`,
                         } as CSSProperties
                       }
                     />
                   </div>
                   <span className="w-20 text-right text-sm tabular-nums">
-                    {count} ({formatPercent(count, notesInProgressTotal)})
+                    {count} ({formatPercent(count, stats.totalNotes)})
                   </span>
                 </div>
               ))}

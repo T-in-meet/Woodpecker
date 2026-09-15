@@ -103,12 +103,14 @@ describe("getLearningStats", () => {
     const result = await getLearningStats();
 
     expect(result.totalNotes).toBe(4);
-    // 회차 상한이 없으므로 버킷을 고정하지 않는다. 노트가 없는 횟수는 나오지 않고,
-    // 0회만 "학습 전" 칸이라 항상 남는다.
-    // 다만 목록이 무한히 길어지지 않도록 9회차는 마지막 칸(5회차 이상)에 묶인다.
+    // 단계는 복습 주기 사다리와 같은 0~5회차로 고정된다. 노트가 없는 단계도 0으로
+    // 남고, 9회차는 마지막 칸(5회차 이상)에 묶여 목록이 무한히 길어지지 않는다.
     expect(result.notesByRound).toEqual([
       { round: 0, count: 1 },
       { round: 1, count: 2 },
+      { round: 2, count: 0 },
+      { round: 3, count: 0 },
+      { round: 4, count: 0 },
       { round: 5, count: 1 },
     ]);
   });
@@ -136,7 +138,11 @@ describe("getLearningStats", () => {
     expect(result.completedNotesCount).toBe(2);
     expect(result.notesByRound).toEqual([
       { round: 0, count: 1 },
+      { round: 1, count: 0 },
       { round: 2, count: 1 },
+      { round: 3, count: 0 },
+      { round: 4, count: 0 },
+      { round: 5, count: 0 },
     ]);
   });
 
