@@ -53,23 +53,34 @@ const previewNotes = [
 function NotesPreview() {
   return (
     <div className="bg-muted/20 p-4 text-left sm:p-5">
-      {/* 툴바 — NotesToolbar의 보기 필터와 검색 입력 */}
-      <div className="flex flex-col gap-3 lg:flex-row">
-        <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1 md:flex">
+      {/* 툴바 — NotesToolbar의 보기 필터와 검색 입력.
+          실제 화면은 lg에서 한 줄이지만, 목업은 폭이 좁아 항상 두 줄로 둔다. */}
+      <div className="flex flex-col gap-3">
+        {/* 실제 탭은 터치 타깃 때문에 min-h-11이지만 목업은 누를 수 없으므로
+            min-h-9(36px) + 패딩 8px = 44px로 검색창(h-11)과 높이를 같게 둔다. */}
+        <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1 md:flex md:w-fit">
           {["전체", "오늘 복습", "복습 예정", "학습 종료"].map(
             (label, index) => (
               <span
                 key={label}
-                className={`flex min-h-11 items-center justify-center whitespace-nowrap rounded-md px-3 text-sm ${index === 0 ? "bg-background font-semibold shadow-sm" : "text-muted-foreground"}`}
+                className={`flex min-h-9 items-center justify-center whitespace-nowrap rounded-md px-3 text-sm ${index === 0 ? "bg-background font-semibold shadow-sm" : "text-muted-foreground"}`}
               >
                 {label}
               </span>
             ),
           )}
         </div>
-        <div className="flex h-11 flex-1 items-center gap-2 rounded-md border bg-background px-3 text-sm text-muted-foreground">
-          <Search className="size-4 shrink-0" aria-hidden />
-          노트 검색
+        {/* NotesToolbar의 검색 form과 같은 구조: 테두리는 컨테이너가 갖고,
+            오른쪽 끝에 배경을 채운 돋보기 블록이 붙는다.
+            flex-col 안에서 flex-1을 주면 flex-basis 0이 h-11을 덮어써
+            높이가 글자 한 줄로 주저앉으므로 주지 않는다. */}
+        <div className="flex h-11 w-full min-w-0 items-center rounded-md border border-input bg-background">
+          <span className="min-w-0 flex-1 truncate pl-3 pr-1 text-sm text-muted-foreground">
+            제목 또는 내용 검색
+          </span>
+          <span className="flex h-full w-10 shrink-0 items-center justify-center rounded-r-[calc(var(--radius-md)-1px)] border-l border-input bg-muted text-muted-foreground">
+            <Search aria-hidden="true" className="h-3.5 w-3.5" />
+          </span>
         </div>
       </div>
 
