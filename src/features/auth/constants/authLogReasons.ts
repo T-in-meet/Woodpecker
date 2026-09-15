@@ -6,6 +6,12 @@ export const AUTH_LOG_REASONS = {
   RATE_LIMIT_IP_LONG: "RATE_LIMIT_IP_LONG",
   RATE_LIMIT_EMAIL_SHORT: "RATE_LIMIT_EMAIL_SHORT",
   RATE_LIMIT_EMAIL_LONG: "RATE_LIMIT_EMAIL_LONG",
+  /**
+   * Vercel Preview/Production에서 신뢰 가능한 사용자 IP를 확보하지 못한 상태.
+   *
+   * 외부 응답에는 이 내부 사유를 노출하지 않는다.
+   */
+  IP_UNAVAILABLE: "IP_UNAVAILABLE",
   INTERNAL_ERROR: "INTERNAL_ERROR",
   /**
    * 인증 자격 증명 불일치
