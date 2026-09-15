@@ -184,18 +184,20 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
 
         {stats.onTimeRate.completed > 0 ? (
           <div className="rounded-lg border p-4">
-            <h4 className="mb-1 text-sm font-medium">정시 완료율</h4>
-            <p className="text-sm text-muted-foreground">
+            {/* 언제 복습할지는 사용자가 정한다(#359). "정시 완료율"처럼 점수로 읽히는
+                제목과 문장을 피하고 사실만 서술한다. */}
+            <h4 className="mb-1 text-sm font-medium">예정일에 맞춘 복습</h4>
+            <p className="text-prose-ko text-sm text-muted-foreground">
               완료한 복습 {stats.onTimeRate.completed}건 중{" "}
               <span className="font-semibold text-foreground">
-                {stats.onTimeRate.onTime}건
+                {stats.onTimeRate.onTime}건(
+                {formatPercent(
+                  stats.onTimeRate.onTime,
+                  stats.onTimeRate.completed,
+                )}
+                )
               </span>
-              을 예정 날짜 안에 완료 (
-              {formatPercent(
-                stats.onTimeRate.onTime,
-                stats.onTimeRate.completed,
-              )}
-              )
+              을 예정일에 맞춰 복습했어요.
             </p>
           </div>
         ) : null}

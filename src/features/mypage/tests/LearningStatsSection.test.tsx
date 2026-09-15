@@ -167,3 +167,34 @@ describe("LearningStatsSection 최근 30일 활동", () => {
     expect(screen.getByTitle("4월 30일 복습 1건")).toBeInTheDocument();
   });
 });
+
+describe("LearningStatsSection 예정일에 맞춘 복습", () => {
+  it("비율을 평가가 아니라 안내 톤으로 보여준다", () => {
+    render(
+      <LearningStatsSection
+        stats={makeStats({
+          totalNotes: 1,
+          completedReviews: 12,
+          onTimeRate: { completed: 12, onTime: 9 },
+        })}
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "예정일에 맞춘 복습" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("9건(75%)")).toBeInTheDocument();
+    expect(
+      screen.getByText(/을 예정일에 맞춰 복습했어요\./),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("정시 완료율")).not.toBeInTheDocument();
+  });
+
+  it("완료한 복습이 없으면 구역을 숨긴다", () => {
+    render(<LearningStatsSection stats={makeStats({ totalNotes: 1 })} />);
+
+    expect(
+      screen.queryByRole("heading", { name: "예정일에 맞춘 복습" }),
+    ).not.toBeInTheDocument();
+  });
+});
