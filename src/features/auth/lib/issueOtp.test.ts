@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { OTP_GENERATE_LINK_TIMEOUT_MS } from "../constants/otp";
-import { issueOtp } from "./issueOtp";
+import {
+  createOtpIssueClient,
+  issueOtp,
+  type OtpIssueClient,
+} from "./issueOtp";
 
 const { mockCreateAdminClient, mockGenerateLink } = vi.hoisted(() => {
   const mockGenerateLink = vi.fn();
@@ -36,13 +40,43 @@ function getProviderFetch(): typeof fetch {
 }
 
 describe("issueOtp", () => {
+  let client: OtpIssueClient;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    client = createOtpIssueClient();
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it("createOtpIssueClient는 Provider operation을 시작하지 않는다", () => {
+    mockCreateAdminClient.mockClear();
+    mockGenerateLink.mockClear();
+
+    createOtpIssueClient();
+
+    expect(mockCreateAdminClient).toHaveBeenCalledTimes(1);
+    expect(mockGenerateLink).not.toHaveBeenCalled();
+  });
+
+  it("issueOtp는 전달받은 prepared client를 사용하고 새 client를 생성하지 않는다", async () => {
+    mockGenerateLink.mockResolvedValue({
+      data: { properties: null },
+      error: null,
+    });
+    mockCreateAdminClient.mockClear();
+
+    await issueOtp({
+      email: "test@example.com",
+      purpose: "signup",
+      client,
+    });
+
+    expect(mockCreateAdminClient).not.toHaveBeenCalled();
+    expect(mockGenerateLink).toHaveBeenCalledTimes(1);
   });
 
   it("signup purpose를 magiclink type으로 변환한다", async () => {
@@ -58,6 +92,7 @@ describe("issueOtp", () => {
     await issueOtp({
       email: "test@example.com",
       purpose: "signup",
+      client,
     });
 
     expect(mockGenerateLink).toHaveBeenCalledWith({
@@ -79,6 +114,7 @@ describe("issueOtp", () => {
     await issueOtp({
       email: "test@example.com",
       purpose: "reset-password",
+      client,
     });
 
     expect(mockGenerateLink).toHaveBeenCalledWith({
@@ -104,6 +140,7 @@ describe("issueOtp", () => {
     const result = await issueOtp({
       email: "test@example.com",
       purpose: "signup",
+      client,
     });
 
     expect(result).toEqual({
@@ -127,6 +164,7 @@ describe("issueOtp", () => {
     const result = await issueOtp({
       email: "test@example.com",
       purpose: "signup",
+      client,
     });
 
     expect(result.error).toBe(error);
@@ -143,6 +181,7 @@ describe("issueOtp", () => {
     const result = await issueOtp({
       email: "test@example.com",
       purpose: "signup",
+      client,
     });
 
     expect(result).toEqual({
@@ -160,6 +199,7 @@ describe("issueOtp", () => {
     await issueOtp({
       email: "test@example.com",
       purpose: "signup",
+      client,
     });
 
     const providerFetch = getProviderFetch();
@@ -188,6 +228,7 @@ describe("issueOtp", () => {
     await issueOtp({
       email: "test@example.com",
       purpose: "signup",
+      client,
     });
 
     const providerFetch = getProviderFetch();
@@ -222,6 +263,7 @@ describe("issueOtp", () => {
     await issueOtp({
       email: "test@example.com",
       purpose: "signup",
+      client,
     });
 
     const providerFetch = getProviderFetch();
@@ -256,6 +298,7 @@ describe("issueOtp", () => {
     await issueOtp({
       email: "test@example.com",
       purpose: "signup",
+      client,
     });
 
     const providerFetch = getProviderFetch();

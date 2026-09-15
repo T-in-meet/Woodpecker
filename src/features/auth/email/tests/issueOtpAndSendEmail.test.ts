@@ -7,9 +7,14 @@ import {
   issueOtpAndSendEmailWithResult,
 } from "@/features/auth/email/issueOtpAndSendEmail";
 import { sendOtpEmail } from "@/features/auth/email/sendOtpEmail";
-import { issueOtp } from "@/features/auth/lib/issueOtp";
+import {
+  createOtpIssueClient,
+  issueOtp,
+  type OtpIssueClient,
+} from "@/features/auth/lib/issueOtp";
 
 vi.mock("@/features/auth/lib/issueOtp", () => ({
+  createOtpIssueClient: vi.fn(),
   issueOtp: vi.fn(),
 }));
 
@@ -47,6 +52,7 @@ describe("issueOtpAndSendEmailWithResult", () => {
   const email = "test@example.com";
   const purpose = "signup";
   const emailOtp = "123456";
+  const client = {} as OtpIssueClient;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -60,16 +66,17 @@ describe("issueOtpAndSendEmailWithResult", () => {
   });
 
   it("OTP 발급과 이메일 전송이 성공하면 ok 결과를 반환한다.", async () => {
-    const result = await issueOtpAndSendEmailWithResult({
-      email,
-      purpose,
-    });
+    const result = await issueOtpAndSendEmailWithResult(
+      { email, purpose },
+      client,
+    );
 
     expect(result).toEqual({ ok: true });
 
     expect(issueOtp).toHaveBeenCalledWith({
       email,
       purpose,
+      client,
     });
 
     expect(sendOtpEmail).toHaveBeenCalledWith({
@@ -90,10 +97,15 @@ describe("issueOtpAndSendEmailWithResult", () => {
     });
 
     await expect(
-      issueOtpAndSendEmailWithResult({ email, purpose }),
+      issueOtpAndSendEmailWithResult({ email, purpose }, client),
     ).resolves.toEqual({
       ok: false,
       kind: "provider_rate_limit",
+      diagnostic: {
+        errorMessage: "rate limited",
+        errorName: "AuthError",
+        errorCode: "unknown_rate_limit_code",
+      },
     });
 
     expect(sendOtpEmail).not.toHaveBeenCalled();
@@ -110,10 +122,15 @@ describe("issueOtpAndSendEmailWithResult", () => {
     });
 
     await expect(
-      issueOtpAndSendEmailWithResult({ email, purpose }),
+      issueOtpAndSendEmailWithResult({ email, purpose }, client),
     ).resolves.toEqual({
       ok: false,
       kind: "provider_rate_limit",
+      diagnostic: {
+        errorMessage: "email rate limited",
+        errorName: "AuthError",
+        errorCode: "over_email_send_rate_limit",
+      },
     });
 
     expect(sendOtpEmail).not.toHaveBeenCalled();
@@ -130,10 +147,15 @@ describe("issueOtpAndSendEmailWithResult", () => {
     });
 
     await expect(
-      issueOtpAndSendEmailWithResult({ email, purpose }),
+      issueOtpAndSendEmailWithResult({ email, purpose }, client),
     ).resolves.toEqual({
       ok: false,
       kind: "provider_error",
+      diagnostic: {
+        errorMessage: "provider failed",
+        errorName: "AuthError",
+        errorCode: "unexpected_provider_error",
+      },
     });
 
     expect(sendOtpEmail).not.toHaveBeenCalled();
@@ -143,10 +165,14 @@ describe("issueOtpAndSendEmailWithResult", () => {
     vi.mocked(issueOtp).mockRejectedValue(new Error("provider timeout"));
 
     await expect(
-      issueOtpAndSendEmailWithResult({ email, purpose }),
+      issueOtpAndSendEmailWithResult({ email, purpose }, client),
     ).resolves.toEqual({
       ok: false,
       kind: "provider_error",
+      diagnostic: {
+        errorMessage: "provider timeout",
+        errorName: "Error",
+      },
     });
 
     expect(sendOtpEmail).not.toHaveBeenCalled();
@@ -159,10 +185,14 @@ describe("issueOtpAndSendEmailWithResult", () => {
     });
 
     await expect(
-      issueOtpAndSendEmailWithResult({ email, purpose }),
+      issueOtpAndSendEmailWithResult({ email, purpose }, client),
     ).resolves.toEqual({
       ok: false,
       kind: "invalid_provider_response",
+      diagnostic: {
+        errorMessage: MISSING_EMAIL_OTP_ERROR_MESSAGE,
+        errorName: "Error",
+      },
     });
 
     expect(sendOtpEmail).not.toHaveBeenCalled();
@@ -175,10 +205,14 @@ describe("issueOtpAndSendEmailWithResult", () => {
     });
 
     await expect(
-      issueOtpAndSendEmailWithResult({ email, purpose }),
+      issueOtpAndSendEmailWithResult({ email, purpose }, client),
     ).resolves.toEqual({
       ok: false,
       kind: "invalid_provider_response",
+      diagnostic: {
+        errorMessage: MISSING_EMAIL_OTP_ERROR_MESSAGE,
+        errorName: "Error",
+      },
     });
 
     expect(sendOtpEmail).not.toHaveBeenCalled();
@@ -188,10 +222,14 @@ describe("issueOtpAndSendEmailWithResult", () => {
     vi.mocked(sendOtpEmail).mockRejectedValue(new Error("send failed"));
 
     await expect(
-      issueOtpAndSendEmailWithResult({ email, purpose }),
+      issueOtpAndSendEmailWithResult({ email, purpose }, client),
     ).resolves.toEqual({
       ok: false,
       kind: "delivery_error",
+      diagnostic: {
+        errorMessage: "send failed",
+        errorName: "Error",
+      },
     });
   });
 });
@@ -200,9 +238,11 @@ describe("issueOtpAndSendEmail compatibility wrapper", () => {
   const email = "test@example.com";
   const purpose = "signup";
   const emailOtp = "123456";
+  const client = {} as OtpIssueClient;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(createOtpIssueClient).mockReturnValue(client);
 
     vi.mocked(issueOtp).mockResolvedValue({
       otp: createOtpProperties(emailOtp),

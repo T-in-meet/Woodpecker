@@ -6,9 +6,12 @@ import {
   OtpPurpose,
 } from "../constants/otp";
 
+export type OtpIssueClient = ReturnType<typeof createAdminClient>;
+
 type IssueOtpProps = {
   email: string;
   purpose: OtpPurpose;
+  client: OtpIssueClient;
 };
 
 /**
@@ -39,6 +42,23 @@ const otpProviderFetch: typeof fetch = (input, init) => {
 };
 
 /**
+ * OTP Issue 전용 Supabase Admin client를 준비한다.
+ *
+ * 실제 Provider operation은 시작하지 않으며,
+ * generateLink 호출에 사용할 timeout-enabled fetch만 설정한다.
+ *
+ * OTP Issue Rate Limit caller는 tryStartIssue() 전에 이 client를 준비하고,
+ * 허용된 직후 issueOtp()를 호출한다.
+ *
+ * @returns OTP Issue 전용 Supabase Admin client
+ */
+export function createOtpIssueClient(): OtpIssueClient {
+  return createAdminClient({
+    fetch: otpProviderFetch,
+  });
+}
+
+/**
  * OTP 발급 공통 함수
  *
  * 프로젝트의 OTP purpose(signup, recovery)를 기반으로
@@ -51,13 +71,9 @@ const otpProviderFetch: typeof fetch = (input, init) => {
  * generateLink 결과 properties가 포함된다.
  */
 export async function issueOtp(input: IssueOtpProps) {
-  const adminClient = createAdminClient({
-    fetch: otpProviderFetch,
-  });
-
   // 프로젝트의 OTP purpose를 Supabase OTP type으로 변환한다.
   // route 계층이 Supabase 구현 세부사항에 직접 의존하지 않도록 캡슐화한다.
-  const { data, error } = await adminClient.auth.admin.generateLink({
+  const { data, error } = await input.client.auth.admin.generateLink({
     email: input.email,
     type: OTP_PURPOSE_TO_SUPABASE_TYPE[input.purpose],
   });

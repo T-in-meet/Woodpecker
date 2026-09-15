@@ -2,8 +2,13 @@ import {
   MISSING_EMAIL_OTP_ERROR_MESSAGE,
   type OtpPurpose,
 } from "../constants/otp";
+import { normalizeUnknownError } from "../lib/authLogger";
 import { classifyAuthProviderError } from "../lib/classifyAuthProviderError";
-import { issueOtp } from "../lib/issueOtp";
+import {
+  createOtpIssueClient,
+  issueOtp,
+  type OtpIssueClient,
+} from "../lib/issueOtp";
 import { sendOtpEmail } from "./sendOtpEmail";
 
 type IssueOtpAndSendEmailProps = {
@@ -24,6 +29,17 @@ export type IssueOtpAndSendEmailFailureKind =
   | "delivery_error";
 
 /**
+ * OTP Issue 실패의 내부 관측성에 사용하는 안전한 진단 정보.
+ *
+ * raw Error 객체나 Provider 전체 응답은 노출하지 않는다.
+ */
+export type IssueOtpAndSendEmailDiagnostic = {
+  errorMessage: string;
+  errorName: string;
+  errorCode?: string;
+};
+
+/**
  * OTP 발급부터 이메일 전송까지의 전체 결과.
  *
  * issueOtp()의 generateLink 결과만을 의미하지 않으며,
@@ -35,6 +51,7 @@ export type IssueOtpAndSendEmailResult =
   | {
       ok: false;
       kind: IssueOtpAndSendEmailFailureKind;
+      diagnostic: IssueOtpAndSendEmailDiagnostic;
     };
 
 /**
@@ -48,8 +65,50 @@ type IssueOtpAndSendEmailExecutionResult =
   | {
       ok: false;
       kind: IssueOtpAndSendEmailFailureKind;
+      diagnostic: IssueOtpAndSendEmailDiagnostic;
       compatibilityError: unknown;
     };
+
+/**
+ * unknown 오류를 OTP Issue 로그에 전달할 수 있는
+ * 최소 diagnostic 형태로 정규화한다.
+ *
+ * @param error 정규화할 오류 값
+ * @returns 안전한 OTP Issue diagnostic
+ */
+function createIssueDiagnostic(
+  error: unknown,
+): IssueOtpAndSendEmailDiagnostic {
+  const normalized = normalizeUnknownError(error);
+
+  if (typeof error !== "object" || error === null) {
+    return normalized;
+  }
+
+  const errorRecord = error as Record<string, unknown>;
+  const errorMessage =
+    typeof errorRecord["message"] === "string"
+      ? errorRecord["message"]
+      : normalized.errorMessage;
+  const errorName =
+    typeof errorRecord["name"] === "string"
+      ? errorRecord["name"]
+      : normalized.errorName;
+  const errorCode = errorRecord["code"];
+
+  if (typeof errorCode === "string") {
+    return {
+      errorMessage,
+      errorName,
+      errorCode,
+    };
+  }
+
+  return {
+    errorMessage,
+    errorName,
+  };
+}
 
 /**
  * OTP를 발급하고 이메일을 전송한 뒤 결과를 구조화한다.
@@ -62,18 +121,20 @@ type IssueOtpAndSendEmailExecutionResult =
  * - Email delivery 실패 분류
  *
  * @param input OTP 발급에 사용할 이메일과 purpose
+ * @param client Rate Limit 획득 전에 준비된 OTP Issue client
  * @returns OTP 발급 및 이메일 전송 내부 실행 결과
  */
-async function executeOtpIssueAndSendEmail({
-  email,
-  purpose,
-}: IssueOtpAndSendEmailProps): Promise<IssueOtpAndSendEmailExecutionResult> {
+async function executeOtpIssueAndSendEmail(
+  { email, purpose }: IssueOtpAndSendEmailProps,
+  client: OtpIssueClient,
+): Promise<IssueOtpAndSendEmailExecutionResult> {
   let issueResult: Awaited<ReturnType<typeof issueOtp>>;
 
   try {
     issueResult = await issueOtp({
       email,
       purpose,
+      client,
     });
   } catch (error) {
     // 예상하지 못한 Provider/network 예외도
@@ -81,6 +142,7 @@ async function executeOtpIssueAndSendEmail({
     return {
       ok: false,
       kind: "provider_error",
+      diagnostic: createIssueDiagnostic(error),
       compatibilityError: error,
     };
   }
@@ -93,6 +155,7 @@ async function executeOtpIssueAndSendEmail({
     return {
       ok: false,
       kind: classifyAuthProviderError(error),
+      diagnostic: createIssueDiagnostic(error),
 
       // 기존 caller는 Provider error message를 가진
       // 새로운 Error를 전달받아 왔으므로 해당 계약을 유지한다.
@@ -103,10 +166,13 @@ async function executeOtpIssueAndSendEmail({
   // generateLink가 오류 없이 종료됐더라도 email_otp가 없으면
   // 정상적인 OTP 발급 성공으로 확정하지 않는다.
   if (!otp?.email_otp) {
+    const missingEmailOtpError = new Error(MISSING_EMAIL_OTP_ERROR_MESSAGE);
+
     return {
       ok: false,
       kind: "invalid_provider_response",
-      compatibilityError: new Error(MISSING_EMAIL_OTP_ERROR_MESSAGE),
+      diagnostic: createIssueDiagnostic(missingEmailOtpError),
+      compatibilityError: missingEmailOtpError,
     };
   }
 
@@ -122,6 +188,7 @@ async function executeOtpIssueAndSendEmail({
     return {
       ok: false,
       kind: "delivery_error",
+      diagnostic: createIssueDiagnostic(error),
       compatibilityError: error,
     };
   }
@@ -138,12 +205,14 @@ async function executeOtpIssueAndSendEmail({
  * 이 결과를 직접 소비하도록 전환한다.
  *
  * @param input OTP 발급에 사용할 이메일과 purpose
+ * @param client Rate Limit 획득 전에 준비된 OTP Issue client
  * @returns 구조화된 OTP 발급 및 이메일 전송 결과
  */
 export async function issueOtpAndSendEmailWithResult(
   input: IssueOtpAndSendEmailProps,
+  client: OtpIssueClient,
 ): Promise<IssueOtpAndSendEmailResult> {
-  const result = await executeOtpIssueAndSendEmail(input);
+  const result = await executeOtpIssueAndSendEmail(input, client);
 
   if (result.ok) {
     return result;
@@ -152,6 +221,7 @@ export async function issueOtpAndSendEmailWithResult(
   return {
     ok: false,
     kind: result.kind,
+    diagnostic: result.diagnostic,
   };
 }
 
@@ -173,7 +243,8 @@ export async function issueOtpAndSendEmailWithResult(
 export async function issueOtpAndSendEmail(
   input: IssueOtpAndSendEmailProps,
 ): Promise<void> {
-  const result = await executeOtpIssueAndSendEmail(input);
+  const client = createOtpIssueClient();
+  const result = await executeOtpIssueAndSendEmail(input, client);
 
   if (!result.ok) {
     throw result.compatibilityError;
