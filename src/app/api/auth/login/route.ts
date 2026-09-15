@@ -14,6 +14,7 @@ import {
 import {
   classifyAuthProviderError,
   isPasswordLoginCredentialFailure,
+  isPasswordLoginNonCredentialAuthFailure,
 } from "@/features/auth/lib/classifyAuthProviderError";
 import { mapAuthValidationErrors } from "@/features/auth/lib/mapAuthValidationErrors";
 import { maskEmailForLogging } from "@/features/auth/lib/maskEmailForLogging";
@@ -269,6 +270,26 @@ async function resolveLoginResponse(
       };
     }
 
+    /**
+     * 이메일 미인증처럼 streak에는 포함하지 않지만 외부에서는
+     * 일반 로그인 실패로 숨겨야 하는 명시적 인증 거절을 처리한다.
+     */
+    if (isPasswordLoginNonCredentialAuthFailure(authError)) {
+      loginRateLimit.recordResult({
+        canonicalEmail,
+        result: "non_credential_failure",
+      });
+
+      return {
+        response: failureResponse(AUTH_API_CODES.LOGIN_INVALID_CREDENTIALS),
+        outcome: {
+          type: "failed",
+          reasonCode: AUTH_LOG_REASONS.INVALID_CREDENTIALS,
+          maskedEmail,
+        },
+      };
+    }
+
     const providerClassification = classifyAuthProviderError(authError);
 
     // Provider 429/system/unknown error는 기존 streak를 증가시키거나 clear하지 않는다.
@@ -304,16 +325,29 @@ async function resolveLoginResponse(
     };
   }
 
-  // 실제 Password Login 성공은 기존 credential failure streak를 clear한다.
+  const userId = authData.user?.id;
+  if (!userId) {
+    // Provider는 응답했지만 인증 성공으로 확정할 수 없는 비정상 결과다.
+    loginRateLimit.recordResult({
+      canonicalEmail,
+      result: "non_credential_failure",
+    });
+
+    return {
+      response: failureResponse(AUTH_API_CODES.LOGIN_INTERNAL_ERROR),
+      outcome: {
+        type: "failed",
+        reasonCode: AUTH_LOG_REASONS.PROVIDER_ERROR,
+        maskedEmail,
+      },
+    };
+  }
+
+  // 유효한 authenticated user가 확인된 시점에 Password 인증 성공이 확정된다.
   loginRateLimit.recordResult({
     canonicalEmail,
     result: "success",
   });
-
-  const userId = authData.user?.id;
-  if (!userId) {
-    throw new Error("Authenticated user id is missing.");
-  }
 
   const agreementStatus = await getLegalAcceptanceStatus(userId);
   if (!agreementStatus.canAccessService) {

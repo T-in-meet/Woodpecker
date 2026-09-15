@@ -8,6 +8,7 @@ import type { AuthError } from "@supabase/supabase-js";
  */
 const SUPABASE_AUTH_ERROR_CODES = {
   INVALID_CREDENTIALS: "invalid_credentials",
+  EMAIL_NOT_CONFIRMED: "email_not_confirmed",
   OTP_EXPIRED: "otp_expired",
   OVER_REQUEST_RATE_LIMIT: "over_request_rate_limit",
   OVER_EMAIL_SEND_RATE_LIMIT: "over_email_send_rate_limit",
@@ -17,10 +18,11 @@ const SUPABASE_AUTH_ERROR_CODES = {
  * 현재 Supabase 계약에서 확인한 authentication failure HTTP status.
  *
  * status와 code가 모두 현재 확정 fixture와 일치하는 경우에만
- * countable authentication failure로 인정한다.
+ * operation-specific authentication failure로 인정한다.
  */
 const SUPABASE_AUTH_ERROR_STATUS = {
   INVALID_CREDENTIALS: 400,
+  EMAIL_NOT_CONFIRMED: 400,
   OTP_EXPIRED: 403,
 } as const;
 
@@ -86,6 +88,28 @@ export function isPasswordLoginCredentialFailure(
   return (
     error.status === SUPABASE_AUTH_ERROR_STATUS.INVALID_CREDENTIALS &&
     error.code === SUPABASE_AUTH_ERROR_CODES.INVALID_CREDENTIALS
+  );
+}
+
+/**
+ * Password Login 오류가 streak에는 포함되지 않지만
+ * 외부에서는 일반 로그인 실패로 숨겨야 하는 인증 거절인지 확인한다.
+ *
+ * 현재 확정 allowlist:
+ * - HTTP 400
+ * - code = email_not_confirmed
+ *
+ * unknown Provider 오류를 authentication rejection으로 추정하지 않는다.
+ *
+ * @param error Supabase Auth Provider 오류
+ * @returns non-credential Password Login authentication failure 여부
+ */
+export function isPasswordLoginNonCredentialAuthFailure(
+  error: AuthProviderErrorInput,
+): boolean {
+  return (
+    error.status === SUPABASE_AUTH_ERROR_STATUS.EMAIL_NOT_CONFIRMED &&
+    error.code === SUPABASE_AUTH_ERROR_CODES.EMAIL_NOT_CONFIRMED
   );
 }
 

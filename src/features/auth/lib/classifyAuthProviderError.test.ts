@@ -4,6 +4,7 @@ import {
   classifyAuthProviderError,
   isOtpValidityFailure,
   isPasswordLoginCredentialFailure,
+  isPasswordLoginNonCredentialAuthFailure,
 } from "./classifyAuthProviderError";
 
 /**
@@ -15,6 +16,10 @@ const AUTH_PROVIDER_ERROR_FIXTURES = {
   invalidCredentials: {
     status: 400,
     code: "invalid_credentials",
+  },
+  emailNotConfirmed: {
+    status: 400,
+    code: "email_not_confirmed",
   },
   otpExpired: {
     status: 403,
@@ -99,6 +104,29 @@ describe("isPasswordLoginCredentialFailure", () => {
     expect(
       isPasswordLoginCredentialFailure(
         AUTH_PROVIDER_ERROR_FIXTURES.requestRateLimit,
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("isPasswordLoginNonCredentialAuthFailure", () => {
+  it("email_not_confirmed는 credential failure가 아닌 non-credential auth failure다", () => {
+    expect(
+      isPasswordLoginCredentialFailure(
+        AUTH_PROVIDER_ERROR_FIXTURES.emailNotConfirmed,
+      ),
+    ).toBe(false);
+    expect(
+      isPasswordLoginNonCredentialAuthFailure(
+        AUTH_PROVIDER_ERROR_FIXTURES.emailNotConfirmed,
+      ),
+    ).toBe(true);
+  });
+
+  it("unknown structured error를 authentication rejection으로 추정하지 않는다", () => {
+    expect(
+      isPasswordLoginNonCredentialAuthFailure(
+        AUTH_PROVIDER_ERROR_FIXTURES.unknown,
       ),
     ).toBe(false);
   });

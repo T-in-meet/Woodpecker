@@ -43,6 +43,7 @@ describe("로그인 API Provider 결과 분류", () => {
     setupLoginApiMocks();
     setupLoginSecurityMocks();
     mockLoginSuccess();
+    getLegalAcceptanceStatusMock.mockReset();
     getLegalAcceptanceStatusMock.mockResolvedValue({ canAccessService: true });
   });
 
@@ -67,6 +68,45 @@ describe("로그인 API Provider 결과 분류", () => {
     expect(loginRateLimit.recordResult).toHaveBeenCalledWith({
       canonicalEmail: "user@example.com",
       result: "credential_failure",
+    });
+  });
+
+  it("email_not_confirmed는 streak를 유지하면서 invalid_credentials와 동일한 외부 계약을 사용한다", async () => {
+    mockSignIn
+      .mockResolvedValueOnce({
+        data: null,
+        error: {
+          name: "AuthApiError",
+          message: "Invalid login credentials",
+          status: 400,
+          code: "invalid_credentials",
+        },
+      })
+      .mockResolvedValueOnce({
+        data: null,
+        error: {
+          name: "AuthApiError",
+          message: "Email not confirmed",
+          status: 400,
+          code: "email_not_confirmed",
+        },
+      });
+
+    const credentialResponse = await POST(makeLoginRequest(DEFAULT_LOGIN_BODY));
+    const credentialBody = await credentialResponse.json();
+
+    vi.mocked(loginRateLimit.recordResult).mockClear();
+
+    const unconfirmedResponse = await POST(makeLoginRequest(DEFAULT_LOGIN_BODY));
+    const unconfirmedBody = await unconfirmedResponse.json();
+
+    expect(unconfirmedResponse.status).toBe(credentialResponse.status);
+    expect(unconfirmedBody).toEqual(credentialBody);
+    expect(unconfirmedResponse.status).toBe(401);
+    expect(unconfirmedBody.code).toBe(AUTH_API_CODES.LOGIN_INVALID_CREDENTIALS);
+    expect(loginRateLimit.recordResult).toHaveBeenCalledWith({
+      canonicalEmail: "user@example.com",
+      result: "non_credential_failure",
     });
   });
 
@@ -127,6 +167,43 @@ describe("로그인 API Provider 결과 분류", () => {
     expect(loginRateLimit.recordResult).toHaveBeenCalledWith({
       canonicalEmail: "user@example.com",
       result: "non_credential_failure",
+    });
+  });
+
+  it("Provider가 user 없는 성공 형태를 반환하면 success로 기록하지 않는다", async () => {
+    mockSignIn.mockResolvedValue({
+      data: { user: null, session: null },
+      error: null,
+    });
+
+    const response = await POST(makeLoginRequest(DEFAULT_LOGIN_BODY));
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body.code).toBe(AUTH_API_CODES.LOGIN_INTERNAL_ERROR);
+    expect(loginRateLimit.recordResult).toHaveBeenCalledWith({
+      canonicalEmail: "user@example.com",
+      result: "non_credential_failure",
+    });
+    expect(loginRateLimit.recordResult).not.toHaveBeenCalledWith({
+      canonicalEmail: "user@example.com",
+      result: "success",
+    });
+  });
+
+  it("인증 성공 후 application 후처리가 실패해도 success는 이미 기록한다", async () => {
+    getLegalAcceptanceStatusMock.mockRejectedValue(
+      new Error("agreement lookup failed"),
+    );
+
+    const response = await POST(makeLoginRequest(DEFAULT_LOGIN_BODY));
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body.code).toBe(AUTH_API_CODES.LOGIN_INTERNAL_ERROR);
+    expect(loginRateLimit.recordResult).toHaveBeenCalledWith({
+      canonicalEmail: "user@example.com",
+      result: "success",
     });
   });
 
