@@ -153,6 +153,9 @@ export function NotesToolbar({ initialQuery, activeView }: NotesToolbarProps) {
           <Link
             key={value}
             href={buildNotesUrl({ query, view: value })}
+            // href가 입력 중인 검색어로 매번 바뀌므로 prefetch하면 키 입력마다
+            // 탭 수만큼 서버 요청이 나간다. 실제 이동은 클릭 시에만 한다.
+            prefetch={false}
             aria-current={activeView === value ? "page" : undefined}
             onClick={(event) => {
               if (
