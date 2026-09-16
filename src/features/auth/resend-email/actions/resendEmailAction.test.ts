@@ -3,14 +3,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_EVENTS } from "@/features/auth/constants/authEvents";
 import { AUTH_LOG_REASONS } from "@/features/auth/constants/authLogReasons";
-import { issueOtpAndSendEmail } from "@/features/auth/email/issueOtpAndSendEmail";
+import { issueOtpAndSendEmailWithResult } from "@/features/auth/email/issueOtpAndSendEmail";
 import { applyMinimumActionDelay } from "@/features/auth/lib/applyMinimumActionDelay";
 import { logAuthError, logAuthEvent } from "@/features/auth/lib/authLogger";
-import {
-  checkRequestEligibility,
-  mapBlockedByToReason,
-} from "@/features/auth/lib/checkRequestEligibility";
-import { getServerActionClientIp } from "@/lib/utils/getServerActionClientIp";
+import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
+import { createOtpIssueClient } from "@/features/auth/lib/issueOtp";
+import { otpIssueRateLimit } from "@/features/auth/lib/rate-limit/otpIssueRateLimit";
+import { getTrustedAuthServerActionClientIp } from "@/features/auth/lib/rate-limit/trustedAuthClientIp";
+import { ensureUserAgreement } from "@/features/auth/lib/userAgreements";
 import { VALIDATION_MESSAGES } from "@/lib/validation/messages";
 
 import { resendEmailAction } from "./resendEmailAction";
@@ -26,20 +26,39 @@ vi.mock("@/features/auth/lib/authLogger", () => ({
   logRequested: vi.fn(),
   logAuthEvent: vi.fn(),
   logAuthError: vi.fn(),
-  normalizeUnknownError: vi.fn(() => ({ message: "normalized error" })),
-}));
-
-vi.mock("@/features/auth/lib/checkRequestEligibility", () => ({
-  checkRequestEligibility: vi.fn(),
-  mapBlockedByToReason: vi.fn(),
+  normalizeUnknownError: vi.fn((error: unknown) =>
+    error instanceof Error
+      ? { errorMessage: error.message, errorName: error.name }
+      : { errorMessage: String(error), errorName: "UnknownError" },
+  ),
 }));
 
 vi.mock("@/features/auth/email/issueOtpAndSendEmail", () => ({
-  issueOtpAndSendEmail: vi.fn(),
+  issueOtpAndSendEmailWithResult: vi.fn(),
 }));
 
-vi.mock("@/lib/utils/getServerActionClientIp", () => ({
-  getServerActionClientIp: vi.fn(),
+vi.mock("@/features/auth/lib/issueOtp", () => ({
+  createOtpIssueClient: vi.fn(),
+}));
+
+vi.mock("@/features/auth/lib/rate-limit/otpIssueRateLimit", () => ({
+  otpIssueRateLimit: {
+    tryStartIssue: vi.fn(),
+    recordSuccessfulIssue: vi.fn(),
+    releaseIssue: vi.fn(),
+  },
+}));
+
+vi.mock("@/features/auth/lib/rate-limit/trustedAuthClientIp", () => ({
+  getTrustedAuthServerActionClientIp: vi.fn(),
+}));
+
+vi.mock("@/features/auth/lib/getUserByEmail", () => ({
+  getUserByEmail: vi.fn(),
+}));
+
+vi.mock("@/features/auth/lib/userAgreements", () => ({
+  ensureUserAgreement: vi.fn(),
 }));
 
 vi.mock("@/features/auth/lib/applyMinimumActionDelay", () => ({
@@ -47,13 +66,25 @@ vi.mock("@/features/auth/lib/applyMinimumActionDelay", () => ({
 }));
 
 const mockRedirect = vi.mocked(redirect);
-const mockCheckRequestEligibility = vi.mocked(checkRequestEligibility);
-const mockMapBlockedByToReason = vi.mocked(mapBlockedByToReason);
-const mockIssueOtpAndSendEmail = vi.mocked(issueOtpAndSendEmail);
-const mockGetServerActionClientIp = vi.mocked(getServerActionClientIp);
+const mockIssueOtpAndSendEmailWithResult = vi.mocked(
+  issueOtpAndSendEmailWithResult,
+);
+const mockCreateOtpIssueClient = vi.mocked(createOtpIssueClient);
+const mockTryStartIssue = vi.mocked(otpIssueRateLimit.tryStartIssue);
+const mockRecordSuccessfulIssue = vi.mocked(
+  otpIssueRateLimit.recordSuccessfulIssue,
+);
+const mockReleaseIssue = vi.mocked(otpIssueRateLimit.releaseIssue);
+const mockGetTrustedAuthServerActionClientIp = vi.mocked(
+  getTrustedAuthServerActionClientIp,
+);
+const mockGetUserByEmail = vi.mocked(getUserByEmail);
+const mockEnsureUserAgreement = vi.mocked(ensureUserAgreement);
 const mockApplyMinimumActionDelay = vi.mocked(applyMinimumActionDelay);
 const mockLogAuthEvent = vi.mocked(logAuthEvent);
 const mockLogAuthError = vi.mocked(logAuthError);
+
+const OTP_ISSUE_CLIENT = { kind: "otp-issue-client" } as never;
 
 function createFormData(values: {
   email?: string;
@@ -72,25 +103,61 @@ function createFormData(values: {
   return formData;
 }
 
+async function callAction(input: {
+  purpose: "signup" | "reset-password";
+  email?: string;
+  redirect?: string | null;
+}) {
+  return resendEmailAction(
+    input.redirect ?? null,
+    INITIAL_RESEND_EMAIL_ACTION_STATE,
+    createFormData({
+      email: input.email ?? "user@example.com",
+      purpose: input.purpose,
+    }),
+  );
+}
+
+function mockIssueSuccess(): void {
+  mockIssueOtpAndSendEmailWithResult.mockImplementation(async (input) => {
+    if (input.purpose === "signup" && input.signupMode === "new-user") {
+      if (input.beforeDelivery) {
+        await input.beforeDelivery({ userId: "unused-new-user-id" });
+      }
+    } else if (input.beforeDelivery) {
+      await input.beforeDelivery();
+    }
+
+    return { ok: true };
+  });
+}
+
 describe("resendEmailAction", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    mockGetServerActionClientIp.mockResolvedValue("127.0.0.1");
-    mockCheckRequestEligibility.mockReturnValue({ allowed: true });
-    mockIssueOtpAndSendEmail.mockResolvedValue(undefined);
+    mockGetTrustedAuthServerActionClientIp.mockResolvedValue({
+      available: true,
+      ip: "203.0.113.10",
+    });
+    mockGetUserByEmail.mockResolvedValue({
+      id: "user-id",
+      email: "user@example.com",
+      email_confirmed_at: "2026-09-16T00:00:00.000Z",
+      auth_providers: ["email"],
+    });
+    mockEnsureUserAgreement.mockResolvedValue(undefined);
+    mockCreateOtpIssueClient.mockReturnValue(OTP_ISSUE_CLIENT);
+    mockTryStartIssue.mockReturnValue({ allowed: true });
+    mockIssueSuccess();
     mockApplyMinimumActionDelay.mockResolvedValue(undefined);
   });
 
-  it("context가 invalid이면 invalid_request를 반환하고 이후 로직을 호출하지 않는다", async () => {
-    const formData = createFormData({
-      email: "user@example.com",
-    });
-
+  it("context가 invalid이면 invalid_request를 반환하고 OTP Issue lifecycle을 시작하지 않는다", async () => {
     const result = await resendEmailAction(
       null,
       INITIAL_RESEND_EMAIL_ACTION_STATE,
-      formData,
+      createFormData({ email: "user@example.com" }),
     );
 
     expect(result).toEqual({
@@ -98,23 +165,17 @@ describe("resendEmailAction", () => {
       reasonCode: AUTH_LOG_REASONS.SCHEMA_VALIDATION_FAILED,
       fieldErrors: null,
     });
-
-    expect(mockCheckRequestEligibility).not.toHaveBeenCalled();
-    expect(mockIssueOtpAndSendEmail).not.toHaveBeenCalled();
-    expect(mockApplyMinimumActionDelay).toHaveBeenCalledTimes(1);
+    expect(mockGetTrustedAuthServerActionClientIp).not.toHaveBeenCalled();
+    expect(mockCreateOtpIssueClient).not.toHaveBeenCalled();
+    expect(mockTryStartIssue).not.toHaveBeenCalled();
+    expect(mockIssueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
   });
 
-  it("email이 invalid이면 안전한 field error를 반환하고 이후 로직을 호출하지 않는다", async () => {
-    const formData = createFormData({
-      email: "invalid-email",
+  it("email이 invalid이면 안전한 field error를 반환하고 OTP Issue lifecycle을 시작하지 않는다", async () => {
+    const result = await callAction({
       purpose: "signup",
+      email: "invalid-email",
     });
-
-    const result = await resendEmailAction(
-      null,
-      INITIAL_RESEND_EMAIL_ACTION_STATE,
-      formData,
-    );
 
     expect(result).toEqual({
       status: "invalid_input",
@@ -122,23 +183,15 @@ describe("resendEmailAction", () => {
         email: [VALIDATION_MESSAGES.emailInvalid],
       },
     });
-
-    expect(mockCheckRequestEligibility).not.toHaveBeenCalled();
-    expect(mockIssueOtpAndSendEmail).not.toHaveBeenCalled();
-    expect(mockApplyMinimumActionDelay).toHaveBeenCalledTimes(1);
+    expect(mockTryStartIssue).not.toHaveBeenCalled();
+    expect(mockIssueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
   });
 
-  it("email이 비어 있으면 필수 입력 field error를 반환하고 이후 로직을 호출하지 않는다", async () => {
-    const formData = createFormData({
-      email: "   ",
+  it("email이 비어 있으면 필수 입력 field error를 반환한다", async () => {
+    const result = await callAction({
       purpose: "signup",
+      email: "   ",
     });
-
-    const result = await resendEmailAction(
-      null,
-      INITIAL_RESEND_EMAIL_ACTION_STATE,
-      formData,
-    );
 
     expect(result).toEqual({
       status: "invalid_input",
@@ -146,216 +199,372 @@ describe("resendEmailAction", () => {
         email: [VALIDATION_MESSAGES.emailRequired],
       },
     });
-
-    expect(mockCheckRequestEligibility).not.toHaveBeenCalled();
-    expect(mockIssueOtpAndSendEmail).not.toHaveBeenCalled();
-    expect(mockApplyMinimumActionDelay).toHaveBeenCalledTimes(1);
   });
 
-  it("rate limit에 차단되면 blocked를 반환하고 OTP 발급/전송을 호출하지 않는다", async () => {
-    mockCheckRequestEligibility.mockReturnValue({
-      allowed: false,
-      blockedBy: "emailShort",
-    } as ReturnType<typeof checkRequestEligibility>);
-
-    mockMapBlockedByToReason.mockReturnValue(
-      AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT,
-    );
-
-    const formData = createFormData({
-      email: "user@example.com",
-      purpose: "signup",
+  it("trusted IP를 확보하지 못하면 fail-closed하고 Provider를 시작하지 않는다", async () => {
+    mockGetTrustedAuthServerActionClientIp.mockResolvedValue({
+      available: false,
+      reasonCode: AUTH_LOG_REASONS.IP_UNAVAILABLE,
     });
 
-    const result = await resendEmailAction(
-      null,
-      INITIAL_RESEND_EMAIL_ACTION_STATE,
-      formData,
+    const result = await callAction({ purpose: "signup" });
+
+    expect(result).toEqual({
+      status: "internal_error",
+      reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+      fieldErrors: null,
+    });
+    expect(mockGetUserByEmail).not.toHaveBeenCalled();
+    expect(mockCreateOtpIssueClient).not.toHaveBeenCalled();
+    expect(mockTryStartIssue).not.toHaveBeenCalled();
+    expect(mockIssueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
+  });
+
+  it("signup resend에서 사용자가 존재하지 않으면 cooldown/IP attempt를 소비하지 않고 success-like redirect한다", async () => {
+    mockGetUserByEmail.mockResolvedValue(null);
+
+    await expect(callAction({ purpose: "signup" })).rejects.toThrow(
+      "NEXT_REDIRECT:",
     );
+
+    expect(mockCreateOtpIssueClient).not.toHaveBeenCalled();
+    // tryStartIssue() 자체를 호출하지 않으므로 cooldown / IP attempt / in-flight를 소비하지 않는다.
+    expect(mockTryStartIssue).not.toHaveBeenCalled();
+    expect(mockIssueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
+    expect(mockEnsureUserAgreement).not.toHaveBeenCalled();
+    expect(mockRecordSuccessfulIssue).not.toHaveBeenCalled();
+    expect(mockReleaseIssue).not.toHaveBeenCalled();
+    expect(mockRedirect).toHaveBeenCalledTimes(1);
+  });
+
+  it("signup Local Rate Limit 차단은 Provider/agreement side effect 없이 blocked를 반환한다", async () => {
+    mockGetUserByEmail.mockResolvedValue({
+      id: "user-id",
+      email: "user@example.com",
+      email_confirmed_at: null,
+      auth_providers: ["email"],
+    });
+    mockTryStartIssue.mockReturnValue({
+      allowed: false,
+      blockedBy: "cooldown",
+    });
+
+    const result = await callAction({ purpose: "signup" });
 
     expect(result).toEqual({
       status: "blocked",
       reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT,
       fieldErrors: null,
     });
-
-    expect(mockIssueOtpAndSendEmail).not.toHaveBeenCalled();
-    expect(mockApplyMinimumActionDelay).toHaveBeenCalledTimes(1);
+    expect(mockIssueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
+    expect(mockEnsureUserAgreement).not.toHaveBeenCalled();
+    expect(mockRecordSuccessfulIssue).not.toHaveBeenCalled();
+    expect(mockReleaseIssue).not.toHaveBeenCalled();
   });
 
-  it("signup 목적에서 issueOtpAndSendEmail이 throw하면 internal_error를 반환한다", async () => {
-    mockIssueOtpAndSendEmail.mockRejectedValue(new Error("email failed"));
-
-    const formData = createFormData({
-      email: "user@example.com",
-      purpose: "signup",
+  it("reset-password Local Rate Limit 차단은 Provider를 시작하지 않고 success-like redirect한다", async () => {
+    mockTryStartIssue.mockReturnValue({
+      allowed: false,
+      blockedBy: "ip_short",
     });
 
     await expect(
-      resendEmailAction(null, INITIAL_RESEND_EMAIL_ACTION_STATE, formData),
-    ).resolves.toEqual({
-      status: "internal_error",
-      reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
-      fieldErrors: null,
-    });
-
-    expect(mockLogAuthError).toHaveBeenCalledWith(
-      AUTH_EVENTS.AUTH_RESEND_EMAIL_FAILED,
-      expect.objectContaining({
-        status: 500,
-        provider: "password",
-        result: "failure",
-        reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
-      }),
-    );
-
-    expect(mockApplyMinimumActionDelay).toHaveBeenCalledTimes(1);
-  });
-
-  it("reset-password 목적에서 issueOtpAndSendEmail이 throw해도 계정 탐지 방지를 위해 verify-otp로 redirect한다", async () => {
-    mockIssueOtpAndSendEmail.mockRejectedValue(new Error("email failed"));
-
-    const formData = createFormData({
-      email: "user@example.com",
-      purpose: "reset-password",
-    });
-
-    await expect(
-      resendEmailAction(
-        "/reset-password",
-        INITIAL_RESEND_EMAIL_ACTION_STATE,
-        formData,
-      ),
+      callAction({ purpose: "reset-password", redirect: "/reset-password" }),
     ).rejects.toThrow("NEXT_REDIRECT:");
 
-    expect(mockIssueOtpAndSendEmail).toHaveBeenCalledWith({
-      email: "user@example.com",
-      purpose: "reset-password",
-    });
-
-    expect(mockLogAuthError).toHaveBeenCalledWith(
-      AUTH_EVENTS.AUTH_RESEND_EMAIL_FAILED,
-      expect.objectContaining({
-        status: 500,
-        provider: "password",
-        result: "failure",
-        reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
-      }),
-    );
-
-    expect(mockLogAuthEvent).toHaveBeenCalledWith(
-      AUTH_EVENTS.AUTH_RESEND_EMAIL_COMPLETED,
-      expect.objectContaining({
-        status: 200,
-        provider: "password",
-        result: "success",
-      }),
-    );
-
+    expect(mockIssueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
+    expect(mockRecordSuccessfulIssue).not.toHaveBeenCalled();
+    expect(mockReleaseIssue).not.toHaveBeenCalled();
     expect(mockRedirect).toHaveBeenCalledTimes(1);
-
-    const redirectUrl = mockRedirect.mock.calls[0]?.[0] as string;
-
-    expect(redirectUrl).toContain("/verify-otp");
-    expect(redirectUrl).toContain("purpose=reset-password");
-    expect(redirectUrl).toContain("email=user%40example.com");
-    expect(redirectUrl).toContain("redirect=%2Freset-password");
-    expect(mockApplyMinimumActionDelay).toHaveBeenCalledTimes(1);
   });
 
-  it("정상 성공하면 OTP 발급/전송 후 verify-otp로 redirect한다", async () => {
-    const formData = createFormData({
-      email: "user@example.com",
-      purpose: "signup",
+  it("reset-password resend에서 OTP client 생성 실패는 lifecycle을 시작하지 않고 success-like redirect한다", async () => {
+    mockCreateOtpIssueClient.mockImplementationOnce(() => {
+      throw new Error("otp client creation failed");
     });
 
-    await expect(
-      resendEmailAction(null, INITIAL_RESEND_EMAIL_ACTION_STATE, formData),
-    ).rejects.toThrow("NEXT_REDIRECT:");
-
-    expect(mockIssueOtpAndSendEmail).toHaveBeenCalledWith({
-      email: "user@example.com",
-      purpose: "signup",
-    });
-
-    expect(mockLogAuthEvent).toHaveBeenCalledWith(
-      AUTH_EVENTS.AUTH_RESEND_EMAIL_COMPLETED,
-      expect.objectContaining({
-        status: 200,
-        provider: "password",
-        result: "success",
-      }),
+    await expect(callAction({ purpose: "reset-password" })).rejects.toThrow(
+      "NEXT_REDIRECT:",
     );
 
+    expect(mockCreateOtpIssueClient).toHaveBeenCalledTimes(1);
+    expect(mockTryStartIssue).not.toHaveBeenCalled();
+    expect(mockIssueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
+    expect(mockRecordSuccessfulIssue).not.toHaveBeenCalled();
+    expect(mockReleaseIssue).not.toHaveBeenCalled();
     expect(mockRedirect).toHaveBeenCalledTimes(1);
-
-    const redirectUrl = mockRedirect.mock.calls[0]?.[0] as string;
-
-    expect(redirectUrl).toContain("/verify-otp");
-    expect(redirectUrl).toContain("purpose=signup");
-    expect(redirectUrl).toContain("email=user%40example.com");
-    expect(mockApplyMinimumActionDelay).toHaveBeenCalledTimes(1);
   });
 
-  it("redirectPath가 있으면 verify-otp redirect URL에 redirect query를 포함한다", async () => {
-    const formData = createFormData({
-      email: "user@example.com",
-      purpose: "reset-password",
+  it("signup resend에서 OTP client 생성 실패는 lifecycle을 시작하지 않고 internal_error를 반환한다", async () => {
+    mockCreateOtpIssueClient.mockImplementationOnce(() => {
+      throw new Error("otp client creation failed");
     });
 
-    await expect(
-      resendEmailAction(
-        "/reset-password",
-        INITIAL_RESEND_EMAIL_ACTION_STATE,
-        formData,
-      ),
-    ).rejects.toThrow("NEXT_REDIRECT:");
-
-    expect(mockIssueOtpAndSendEmail).toHaveBeenCalledWith({
-      email: "user@example.com",
-      purpose: "reset-password",
-    });
-
-    expect(mockRedirect).toHaveBeenCalledTimes(1);
-
-    const redirectUrl = mockRedirect.mock.calls[0]?.[0] as string;
-
-    expect(redirectUrl).toContain("/verify-otp");
-    expect(redirectUrl).toContain("purpose=reset-password");
-    expect(redirectUrl).toContain("email=user%40example.com");
-    expect(redirectUrl).toContain("redirect=%2Freset-password");
-  });
-
-  it("예상하지 못한 예외가 발생하면 internal_error를 반환한다", async () => {
-    mockGetServerActionClientIp.mockRejectedValue(new Error("ip error"));
-
-    const formData = createFormData({
-      email: "user@example.com",
-      purpose: "signup",
-    });
-
-    const result = await resendEmailAction(
-      null,
-      INITIAL_RESEND_EMAIL_ACTION_STATE,
-      formData,
-    );
+    const result = await callAction({ purpose: "signup" });
 
     expect(result).toEqual({
       status: "internal_error",
       reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
       fieldErrors: null,
     });
+    expect(mockCreateOtpIssueClient).toHaveBeenCalledTimes(1);
+    expect(mockTryStartIssue).not.toHaveBeenCalled();
+    expect(mockIssueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
+    expect(mockRecordSuccessfulIssue).not.toHaveBeenCalled();
+    expect(mockReleaseIssue).not.toHaveBeenCalled();
+    expect(mockRedirect).not.toHaveBeenCalled();
+  });
 
+  it("signup resend는 existing-user magiclink typed input으로 호출하고 성공 quota를 기록한다", async () => {
+    await expect(callAction({ purpose: "signup" })).rejects.toThrow(
+      "NEXT_REDIRECT:",
+    );
+
+    expect(mockGetUserByEmail).toHaveBeenCalledWith("user@example.com");
+    expect(mockTryStartIssue).toHaveBeenCalledWith({
+      purpose: "signup",
+      canonicalEmail: "user@example.com",
+      ip: "203.0.113.10",
+    });
+    expect(mockIssueOtpAndSendEmailWithResult).toHaveBeenCalledWith(
+      {
+        email: "user@example.com",
+        purpose: "signup",
+        signupMode: "existing-user",
+      },
+      OTP_ISSUE_CLIENT,
+    );
+    expect(mockRecordSuccessfulIssue).toHaveBeenCalledWith({
+      purpose: "signup",
+      canonicalEmail: "user@example.com",
+    });
+    expect(mockReleaseIssue).toHaveBeenCalledWith({
+      purpose: "signup",
+      canonicalEmail: "user@example.com",
+    });
+  });
+
+  it("reset-password resend는 recovery typed input을 사용하고 account lookup을 하지 않는다", async () => {
+    await expect(callAction({ purpose: "reset-password" })).rejects.toThrow(
+      "NEXT_REDIRECT:",
+    );
+
+    expect(mockGetUserByEmail).not.toHaveBeenCalled();
+    expect(mockIssueOtpAndSendEmailWithResult).toHaveBeenCalledWith(
+      {
+        email: "user@example.com",
+        purpose: "reset-password",
+      },
+      OTP_ISSUE_CLIENT,
+    );
+    expect(mockRecordSuccessfulIssue).toHaveBeenCalledWith({
+      purpose: "reset-password",
+      canonicalEmail: "user@example.com",
+    });
+  });
+
+  it("signup resend에서 기존 미인증 사용자는 Email 전에 동일 user id agreement를 복구한다", async () => {
+    mockGetUserByEmail.mockResolvedValue({
+      id: "unverified-user-id",
+      email: "stored@example.com",
+      email_confirmed_at: null,
+      auth_providers: ["email"],
+    });
+
+    await expect(callAction({ purpose: "signup" })).rejects.toThrow(
+      "NEXT_REDIRECT:",
+    );
+
+    expect(mockIssueOtpAndSendEmailWithResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: "stored@example.com",
+        purpose: "signup",
+        signupMode: "existing-user",
+        beforeDelivery: expect.any(Function),
+      }),
+      OTP_ISSUE_CLIENT,
+    );
+    expect(mockEnsureUserAgreement).toHaveBeenCalledWith(
+      "unverified-user-id",
+      "email",
+    );
+  });
+
+  it("signup resend에서 인증 완료 사용자는 agreement persistence를 확대하지 않는다", async () => {
+    mockGetUserByEmail.mockResolvedValue({
+      id: "confirmed-user-id",
+      email: "user@example.com",
+      email_confirmed_at: "2026-09-16T00:00:00.000Z",
+      auth_providers: ["email"],
+    });
+
+    await expect(callAction({ purpose: "signup" })).rejects.toThrow(
+      "NEXT_REDIRECT:",
+    );
+
+    expect(mockEnsureUserAgreement).not.toHaveBeenCalled();
+    expect(mockIssueOtpAndSendEmailWithResult).toHaveBeenCalledWith(
+      {
+        email: "user@example.com",
+        purpose: "signup",
+        signupMode: "existing-user",
+      },
+      OTP_ISSUE_CLIENT,
+    );
+  });
+
+  it("agreement 복구가 실패하면 signup은 internal_error이고 success quota 없이 release한다", async () => {
+    mockGetUserByEmail.mockResolvedValue({
+      id: "unverified-user-id",
+      email: "user@example.com",
+      email_confirmed_at: null,
+      auth_providers: ["email"],
+    });
+    mockEnsureUserAgreement.mockRejectedValue(new Error("agreement failed"));
+
+    const result = await callAction({ purpose: "signup" });
+
+    expect(result).toEqual({
+      status: "internal_error",
+      reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+      fieldErrors: null,
+    });
+    expect(mockRecordSuccessfulIssue).not.toHaveBeenCalled();
+    expect(mockReleaseIssue).toHaveBeenCalledTimes(1);
+  });
+
+  it("signup Provider 429는 blocked로 반환하고 내부 reason은 PROVIDER_RATE_LIMIT으로 기록한다", async () => {
+    mockIssueOtpAndSendEmailWithResult.mockResolvedValue({
+      ok: false,
+      kind: "provider_rate_limit",
+      diagnostic: {
+        errorMessage: "rate limited",
+        errorName: "AuthApiError",
+      },
+    });
+
+    const result = await callAction({ purpose: "signup" });
+
+    expect(result.status).toBe("blocked");
+    expect(mockLogAuthEvent).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_RESEND_EMAIL_RATE_LIMITED,
+      expect.objectContaining({
+        reasonCode: AUTH_LOG_REASONS.PROVIDER_RATE_LIMIT,
+      }),
+    );
+    expect(mockRecordSuccessfulIssue).not.toHaveBeenCalled();
+    expect(mockReleaseIssue).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    "provider_rate_limit",
+    "provider_error",
+    "invalid_provider_response",
+    "delivery_error",
+  ] as const)(
+    "reset-password %s 실패는 success-like redirect하고 successful quota를 기록하지 않는다",
+    async (kind) => {
+      mockIssueOtpAndSendEmailWithResult.mockResolvedValue({
+        ok: false,
+        kind,
+        diagnostic: {
+          errorMessage: `${kind} message`,
+          errorName: "TestError",
+        },
+      });
+
+      await expect(callAction({ purpose: "reset-password" })).rejects.toThrow(
+        "NEXT_REDIRECT:",
+      );
+
+      expect(mockRecordSuccessfulIssue).not.toHaveBeenCalled();
+      expect(mockReleaseIssue).toHaveBeenCalledTimes(1);
+      expect(mockRedirect).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(["provider_error", "invalid_provider_response"] as const)(
+    "signup %s 실패는 internal_error이고 successful quota 없이 release한다",
+    async (kind) => {
+      mockIssueOtpAndSendEmailWithResult.mockResolvedValue({
+        ok: false,
+        kind,
+        diagnostic: {
+          errorMessage: `${kind} message`,
+          errorName: "TestError",
+        },
+      });
+
+      const result = await callAction({ purpose: "signup" });
+
+      expect(result).toEqual({
+        status: "internal_error",
+        reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+        fieldErrors: null,
+      });
+      expect(mockRecordSuccessfulIssue).not.toHaveBeenCalled();
+      expect(mockReleaseIssue).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("signup delivery_error는 전용 delivery_error 상태를 반환하고 successful quota 없이 release한다", async () => {
+    mockIssueOtpAndSendEmailWithResult.mockResolvedValue({
+      ok: false,
+      kind: "delivery_error",
+      diagnostic: {
+        errorMessage: "delivery failed",
+        errorName: "TestError",
+      },
+    });
+
+    const result = await callAction({ purpose: "signup" });
+
+    expect(result).toEqual({
+      status: "delivery_error",
+      reasonCode: AUTH_LOG_REASONS.EMAIL_DELIVERY_ERROR,
+      fieldErrors: null,
+    });
+    expect(mockRecordSuccessfulIssue).not.toHaveBeenCalled();
+    expect(mockReleaseIssue).toHaveBeenCalledTimes(1);
+  });
+
+  it("reset-password helper throw도 success-like redirect하고 in-flight를 release한다", async () => {
+    mockIssueOtpAndSendEmailWithResult.mockRejectedValue(
+      new Error("unexpected issue error"),
+    );
+
+    await expect(callAction({ purpose: "reset-password" })).rejects.toThrow(
+      "NEXT_REDIRECT:",
+    );
+
+    expect(mockRecordSuccessfulIssue).not.toHaveBeenCalled();
+    expect(mockReleaseIssue).toHaveBeenCalledTimes(1);
     expect(mockLogAuthError).toHaveBeenCalledWith(
       AUTH_EVENTS.AUTH_RESEND_EMAIL_FAILED,
       expect.objectContaining({
-        status: 500,
-        provider: "password",
-        result: "failure",
         reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
       }),
     );
+  });
 
+  it("redirectPath가 있으면 verify-otp redirect URL에 redirect query를 포함한다", async () => {
+    await expect(
+      callAction({
+        purpose: "reset-password",
+        redirect: "/reset-password",
+      }),
+    ).rejects.toThrow("NEXT_REDIRECT:");
+
+    const redirectUrl = mockRedirect.mock.calls[0]?.[0] as string;
+    expect(redirectUrl).toContain("purpose=reset-password");
+    expect(redirectUrl).toContain("email=user%40example.com");
+    expect(redirectUrl).toContain("redirect=%2Freset-password");
+  });
+
+  it("모든 종료 경로에서 최소 Action delay를 적용한다", async () => {
+    await expect(callAction({ purpose: "signup" })).rejects.toThrow(
+      "NEXT_REDIRECT:",
+    );
     expect(mockApplyMinimumActionDelay).toHaveBeenCalledTimes(1);
   });
 });

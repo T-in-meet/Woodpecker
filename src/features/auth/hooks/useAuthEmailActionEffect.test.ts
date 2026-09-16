@@ -1,7 +1,10 @@
 import { renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { AUTH_GLOBAL_ERROR_MESSAGE } from "../constants/messages";
+import {
+  AUTH_EMAIL_DELIVERY_ERROR_MESSAGE,
+  AUTH_GLOBAL_ERROR_MESSAGE,
+} from "../constants/messages";
 import { AUTH_ROOT_ERROR_TYPE } from "../errors/authRootError";
 import { RATE_LIMIT_TOAST_MESSAGE } from "../errors/rateLimitError";
 import { useAuthEmailActionEffect } from "./useAuthEmailActionEffect";
@@ -65,6 +68,26 @@ describe("useAuthEmailActionEffect", () => {
     expect(setError).toHaveBeenCalledWith("root", {
       type: AUTH_ROOT_ERROR_TYPE.SYSTEM,
       message: RATE_LIMIT_TOAST_MESSAGE,
+    });
+  });
+
+  it("delivery_error 상태이면 SYSTEM root error로 이메일 전송 실패 메시지를 설정한다", () => {
+    const setError = vi.fn();
+
+    renderHook(() =>
+      useAuthEmailActionEffect({
+        state: {
+          status: "delivery_error",
+          fieldErrors: null,
+          reasonCode: "EMAIL_DELIVERY_ERROR",
+        },
+        setError,
+      }),
+    );
+
+    expect(setError).toHaveBeenCalledWith("root", {
+      type: AUTH_ROOT_ERROR_TYPE.SYSTEM,
+      message: AUTH_EMAIL_DELIVERY_ERROR_MESSAGE,
     });
   });
 
