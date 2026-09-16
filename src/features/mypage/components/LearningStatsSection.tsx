@@ -46,13 +46,27 @@ function StatCard({
 }
 
 // 복습 횟수에 상한이 없으므로 0회만 이름을 주고 나머지는 숫자로 만든다.
+// 단위("복습")는 섹션 제목이 한 번만 말하고 줄에는 횟수만 둔다. 줄마다 붙이면
+// 같은 단어가 반복돼 읽기 어렵다. 시작·끝은 "복습 전"·"학습 종료"로 대칭을 맞추고,
+// "학습 종료"는 노트 목록 필터·통계 타일·메뉴와 같은 표현이다. 회차 단위 행동인
+// "복습 완료"와 구분한다.
 const NOTES_ROUND_LABELS: Record<number, string> = {
-  0: "학습 전",
+  0: "복습 전",
 };
 
 function formatPercent(numerator: number, denominator: number): string {
   if (denominator === 0) return "0%";
   return `${Math.round((numerator / denominator) * 100)}%`;
+}
+
+/**
+ * "YYYY-MM-DD" 형태의 KST 날짜 키를 "M월 D일"로 바꾼다.
+ * `new Date("YYYY-MM-DD")`는 UTC 자정으로 해석돼 KST 기준으로 하루가 밀릴 수 있어서
+ * Date를 거치지 않고 문자열을 직접 읽는다.
+ */
+function formatKstDateKey(dateKey: string): string {
+  const [, month, day] = dateKey.split("-");
+  return `${Number(month)}월 ${Number(day)}일`;
 }
 
 function heatmapClass(count: number): string {
@@ -68,12 +82,33 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
     stats.completedReviews === 0 &&
     stats.todayReviews === 0;
 
-  // 버킷이 완료 표시한 노트를 빼고 만들어지므로 분모도 버킷 합으로 맞춘다.
-  // totalNotes로 나누면 완료한 만큼이 어떤 줄에도 안 잡혀 합이 100%에 못 미친다.
-  const notesInProgressTotal = stats.notesByRound.reduce(
+  // 단계 줄(진행 중) + 학습 완료 줄이 노트 전체를 덮으므로 분모는 전체 노트다.
+  // 완료 노트는 어느 회차에서든 사용자가 직접 표시할 수 있어 "5회차 다음 단계"가
+  // 아니다. 사다리 끝의 종착 상태로 색을 갈라 보여준다.
+  const stageRows = [
+    ...stats.notesByRound.map(({ round, count }) => ({
+      key: `round-${round}`,
+      label:
+        NOTES_ROUND_LABELS[round] ??
+        (round >= MAX_REVIEW_ROUND_BUCKET ? `${round}회 이상` : `${round}회`),
+      count,
+      barClass: "bg-chart-3",
+    })),
+    {
+      key: "completed",
+      label: "학습 종료",
+      count: stats.completedNotesCount,
+      barClass: "bg-emerald-500",
+    },
+  ];
+
+  // 히트맵은 색만 보여서 모바일(툴팁 없음)에서는 총량과 기간을 알 수 없다.
+  // 합계와 양 끝 날짜를 글자로 함께 둔다.
+  const recentActivityTotal = stats.recentActivity.reduce(
     (sum, { count }) => sum + count,
     0,
   );
+  const recentActivityStart = stats.recentActivity[0]?.date;
 
   return (
     <Card>
@@ -98,7 +133,7 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
             href={buildNotesUrl({ view: "scheduled" })}
           />
           <StatCard
-            label="복습 완료 노트"
+            label="학습 종료 노트"
             value={stats.completedNotesCount}
             href={buildNotesUrl({ view: "completed" })}
           />
@@ -117,33 +152,30 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
           </div>
         </div>
 
-        {stats.notesByRound.some((r) => r.count > 0) ? (
+        {stats.totalNotes > 0 ? (
           <div>
-            <h4 className="mb-3 text-sm font-medium">단계별 학습 현황</h4>
+            <h4 className="mb-3 text-sm font-medium">단계별 복습 현황</h4>
             <div className="space-y-2">
-              {stats.notesByRound.map(({ round, count }) => (
-                <div key={round} className="flex items-center gap-3">
+              {stageRows.map(({ key, label, count, barClass }) => (
+                <div key={key} className="flex items-center gap-3">
                   <span className="w-28 text-sm text-muted-foreground">
-                    {NOTES_ROUND_LABELS[round] ??
-                      (round >= MAX_REVIEW_ROUND_BUCKET
-                        ? `${round}회차 이상`
-                        : `${round}회차`)}
+                    {label}
                   </span>
                   <div className="h-2 flex-1 rounded-full bg-muted">
                     <div
-                      className="h-full rounded-full bg-chart-3 w-(--progress-width)"
+                      className={cn(
+                        "h-full rounded-full w-(--progress-width)",
+                        barClass,
+                      )}
                       style={
                         {
-                          "--progress-width":
-                            notesInProgressTotal === 0
-                              ? "0%"
-                              : `${(count / notesInProgressTotal) * 100}%`,
+                          "--progress-width": `${(count / stats.totalNotes) * 100}%`,
                         } as CSSProperties
                       }
                     />
                   </div>
                   <span className="w-20 text-right text-sm tabular-nums">
-                    {count} ({formatPercent(count, notesInProgressTotal)})
+                    {count} ({formatPercent(count, stats.totalNotes)})
                   </span>
                 </div>
               ))}
@@ -153,25 +185,32 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
 
         {stats.onTimeRate.completed > 0 ? (
           <div className="rounded-lg border p-4">
-            <h4 className="mb-1 text-sm font-medium">정시 완료율</h4>
-            <p className="text-sm text-muted-foreground">
+            {/* 언제 복습할지는 사용자가 정한다(#359). "정시 완료율"처럼 점수로 읽히는
+                제목과 문장을 피하고 사실만 서술한다. */}
+            <h4 className="mb-1 text-sm font-medium">예정일에 맞춘 복습</h4>
+            <p className="text-prose-ko text-sm text-muted-foreground">
               완료한 복습 {stats.onTimeRate.completed}건 중{" "}
               <span className="font-semibold text-foreground">
-                {stats.onTimeRate.onTime}건
+                {stats.onTimeRate.onTime}건(
+                {formatPercent(
+                  stats.onTimeRate.onTime,
+                  stats.onTimeRate.completed,
+                )}
+                )
               </span>
-              을 예정 날짜 안에 완료 (
-              {formatPercent(
-                stats.onTimeRate.onTime,
-                stats.onTimeRate.completed,
-              )}
-              )
+              을 예정일에 맞춰 복습했어요.
             </p>
           </div>
         ) : null}
 
         {stats.recentActivity.length > 0 ? (
           <div>
-            <h4 className="mb-3 text-sm font-medium">최근 30일 활동</h4>
+            <div className="mb-3 flex items-baseline justify-between gap-3">
+              <h4 className="text-sm font-medium">최근 30일 활동</h4>
+              <span className="text-xs text-muted-foreground tabular-nums">
+                복습 완료 {recentActivityTotal}건
+              </span>
+            </div>
             <div
               className="grid gap-1 grid-cols-[repeat(var(--activity-days),minmax(0,1fr))]"
               style={
@@ -187,10 +226,16 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
                     "aspect-square rounded-sm",
                     heatmapClass(count),
                   )}
-                  title={`${date}: ${count}건`}
+                  title={`${formatKstDateKey(date)} 복습 ${count}건`}
                 />
               ))}
             </div>
+            {recentActivityStart && (
+              <div className="mt-1 flex justify-between text-xs text-muted-foreground">
+                <span>{formatKstDateKey(recentActivityStart)}</span>
+                <span>오늘</span>
+              </div>
+            )}
             <div className="mt-2 flex items-center justify-end gap-2 text-xs text-muted-foreground">
               <span>적음</span>
               <div className="size-3 rounded-sm bg-muted" />

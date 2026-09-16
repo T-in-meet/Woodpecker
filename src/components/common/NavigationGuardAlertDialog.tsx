@@ -61,11 +61,11 @@ export function NavigationGuardAlertDialog({
         </AlertDialogHeader>
 
         <AlertDialogFooter>
+          <AlertDialogCancel>{cancelLabel}</AlertDialogCancel>
+
           <AlertDialogAction variant="destructive" onClick={onConfirm}>
             {confirmLabel}
           </AlertDialogAction>
-
-          <AlertDialogCancel>{cancelLabel}</AlertDialogCancel>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

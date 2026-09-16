@@ -2,15 +2,16 @@
 
 import { useEffect, useState, useTransition } from "react";
 
-import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 import { deleteNoteAction } from "../actions";
 
@@ -54,44 +55,41 @@ export function DeleteNoteDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>노트 삭제</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          {/* DialogDescription이 aria-describedby를 연결한다. */}
-          <DialogDescription>
-            삭제한 노트는 되돌릴 수 없습니다. 아래 노트를 영구적으로
-            삭제하시겠습니까?
-          </DialogDescription>
-          {/* 여기만 `text-prose-ko`(overflow-wrap: break-word) 대신 `anywhere`를 쓴다.
-              사용자가 지은 제목이 공백 없는 긴 문자열일 수 있는데, `break-word`는
-              min-content 계산에 반영되지 않아 좁은 다이얼로그를 밀어낸다. */}
-          <p className="min-w-0 max-w-full whitespace-normal break-keep rounded-lg bg-muted px-3 py-2 text-sm font-medium text-foreground [overflow-wrap:anywhere]">
-            {noteTitle}
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>노트를 삭제할까요?</AlertDialogTitle>
+          <AlertDialogDescription>
+            삭제한 노트는 되돌릴 수 없습니다.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        {/* 여기만 `text-prose-ko`(overflow-wrap: break-word) 대신 `anywhere`를 쓴다.
+            사용자가 지은 제목이 공백 없는 긴 문자열일 수 있는데, `break-word`는
+            min-content 계산에 반영되지 않아 좁은 다이얼로그를 밀어낸다. */}
+        <p className="min-w-0 max-w-full whitespace-normal break-keep rounded-lg bg-muted px-3 py-2 text-sm font-medium text-foreground [overflow-wrap:anywhere]">
+          {noteTitle}
+        </p>
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
           </p>
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          <DialogFooter>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onOpenChange(false)}
-              disabled={isPending}
-            >
-              취소
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={handleDelete}
-              disabled={isPending}
-            >
-              {isPending ? "삭제 중..." : "삭제하기"}
-            </Button>
-          </DialogFooter>
-        </div>
-      </DialogContent>
-    </Dialog>
+        )}
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isPending}>취소</AlertDialogCancel>
+          <AlertDialogAction
+            variant="destructive"
+            disabled={isPending}
+            onClick={(event) => {
+              // 삭제 성공 시 Server Action의 redirect로 페이지가 바뀌므로
+              // 요청 결과와 무관하게 자동으로 닫히지 않게 한다.
+              event.preventDefault();
+              handleDelete();
+            }}
+          >
+            {isPending ? "삭제 중..." : "삭제"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

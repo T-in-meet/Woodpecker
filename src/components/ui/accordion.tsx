@@ -61,19 +61,21 @@ function AccordionTrigger({
   );
 }
 
-/* forceMount를 넘기면 닫힌 항목의 답변도 DOM에 남는다(Radix는 기본적으로 닫힌
-   content를 언마운트한다). 색인돼야 하는 공개 페이지의 FAQ가 이 경우다.
+/* 닫힌 항목도 DOM에 남기고(forceMount) 열고 닫는 전환은 안쪽 래퍼가 맡는다.
 
-   다만 forceMount는 마운트만 유지할 뿐 Radix가 붙이던 hidden 속성까지 없애서,
-   그대로 두면 닫힌 항목이 펼쳐진 채로 보인다. 그래서 닫힘 상태를 CSS로 감춘다.
-   - h-0: 레이아웃에서 자리를 뺀다. 접기 애니메이션이 도는 동안에는 실행 중인
-     animation이 이 값을 덮으므로 애니메이션은 그대로 돈다.
-   - invisible + transition-[visibility] duration-200: visibility는 전환이 끝나는
-     시점에만 hidden으로 바뀌므로, 200ms짜리 accordion-up이 끝난 뒤에 사라진다.
-     display:none과 달리 접기 애니메이션을 죽이지 않으면서, 닫힌 답변을 보조기술과
-     탭 순서에서는 빼준다.
-   forceMount를 쓰지 않는 기존 사용처는 닫히면 언마운트되므로 이 클래스들이
-   퇴장 애니메이션 동안에만 걸리고, 동작은 이전과 같다. */
+   - forceMount: Radix는 기본적으로 닫힌 content를 언마운트한다. 색인돼야 하는
+     공개 페이지의 FAQ는 닫힌 답변도 HTML에 있어야 하고, 아래 CSS transition은
+     Radix Presence가 퇴장 애니메이션으로 감지하지 못해 forceMount 없이는 닫는
+     즉시 언마운트돼 전환이 보이지 않는다.
+   - 전환을 바깥 Content 노드가 아니라 안쪽 래퍼에 두는 이유: Radix는 열림·닫힘이
+     바뀔 때마다 Content 노드에 인라인으로 animation-name: none·
+     transition-duration: 0s를 걸고 높이를 잰 뒤 원복한다. Content 노드에 건
+     transition·닫힘 상태 클래스는 이 측정 순간에 무력화되거나(visibility가 즉시
+     hidden으로 확정) 측정값을 0으로 만들어(다음 열기가 auto로 점프) 전환이
+     끊긴다. 안쪽 래퍼는 이 인라인 스타일의 영향을 받지 않는다.
+   - grid-rows 0fr↔1fr: 높이를 재지 않고도 auto 높이를 전환할 수 있다.
+   - visibility transition: 닫힐 때는 전환이 끝나는 시점에 hidden으로 바뀌어
+     접히는 동안 글자가 보이고, 닫힌 뒤에는 보조기술과 탭 순서에서 빠진다. */
 function AccordionContent({
   className,
   children,
@@ -82,16 +84,21 @@ function AccordionContent({
   return (
     <AccordionPrimitive.Content
       data-slot="accordion-content"
-      className="overflow-hidden text-sm transition-[visibility] duration-200 data-open:animate-accordion-down data-closed:h-0 data-closed:invisible data-closed:animate-accordion-up"
+      forceMount
+      className="group/accordion-content text-sm"
       {...props}
     >
-      <div
-        className={cn(
-          "pt-0 pb-2.5 [&_a]:underline [&_a]:underline-offset-3 [&_a]:hover:text-foreground [&_p:not(:last-child)]:mb-4",
-          className,
-        )}
-      >
-        {children}
+      <div className="grid transition-[grid-template-rows,visibility] duration-200 ease-out motion-reduce:transition-none group-data-[state=closed]/accordion-content:invisible group-data-[state=closed]/accordion-content:grid-rows-[0fr] group-data-[state=open]/accordion-content:grid-rows-[1fr]">
+        <div className="min-h-0 overflow-hidden">
+          <div
+            className={cn(
+              "pt-0 pb-2.5 [&_a]:underline [&_a]:underline-offset-3 [&_a]:hover:text-foreground [&_p:not(:last-child)]:mb-4",
+              className,
+            )}
+          >
+            {children}
+          </div>
+        </div>
       </div>
     </AccordionPrimitive.Content>
   );

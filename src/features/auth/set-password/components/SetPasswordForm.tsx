@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 import { startTransition, useActionState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 
+import { NavigationGuardAlertDialog } from "@/components/common/NavigationGuardAlertDialog";
 import { Button } from "@/components/ui/button";
 import { AuthCard } from "@/features/auth/components/AuthCard";
 import AuthFormError from "@/features/auth/components/AuthFormError";
@@ -25,10 +26,12 @@ import {
 } from "@/features/auth/set-password/actions/setPasswordActionState";
 import {
   SET_PASSWORD_GLOBAL_ERROR_MESSAGE,
-  SET_PASSWORD_PAGE_LEAVE_CONFIRM_MESSAGE,
+  SET_PASSWORD_PAGE_LEAVE_DESCRIPTION,
+  SET_PASSWORD_PAGE_LEAVE_TITLE,
   SET_PASSWORD_SAME_PASSWORD_MESSAGE,
 } from "@/features/auth/set-password/constants/messages";
-import { usePreventPageLeave } from "@/hooks/usePreventPageLeave";
+import { useBeforeUnloadGuard } from "@/hooks/useBeforeUnloadGuard";
+import { useInternalNavigationGuard } from "@/hooks/useInternalNavigationGuard";
 
 type SetPasswordFormProps = {
   action: (
@@ -120,10 +123,10 @@ export function SetPasswordForm({ action }: SetPasswordFormProps) {
     }
   }, [state, setError]);
 
-  usePreventPageLeave(
-    isDirty && !isPending,
-    SET_PASSWORD_PAGE_LEAVE_CONFIRM_MESSAGE,
-  );
+  const shouldGuard = isDirty && !isPending;
+  const { cancelNavigation, confirmNavigation, isNavigationPending } =
+    useInternalNavigationGuard({ enabled: shouldGuard });
+  useBeforeUnloadGuard({ enabled: shouldGuard });
 
   /**
    * React Hook Form 검증을 통과한 값만 Server Action에 전달한다.
@@ -147,6 +150,15 @@ export function SetPasswordForm({ action }: SetPasswordFormProps) {
 
   return (
     <AuthCard variant="compact">
+      <NavigationGuardAlertDialog
+        open={isNavigationPending}
+        title={SET_PASSWORD_PAGE_LEAVE_TITLE}
+        description={SET_PASSWORD_PAGE_LEAVE_DESCRIPTION}
+        cancelLabel="계속 설정"
+        confirmLabel="이동"
+        onCancel={cancelNavigation}
+        onConfirm={confirmNavigation}
+      />
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
         <AuthFormHeader
           title="이메일 로그인 추가"

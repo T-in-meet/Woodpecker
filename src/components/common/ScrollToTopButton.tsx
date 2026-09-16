@@ -70,13 +70,13 @@ export function ScrollToTopButton({ className }: { className?: string }) {
   return (
     <Button
       type="button"
-      variant="outline"
+      variant="default"
       size="icon-lg"
       aria-label="맨 위로 이동"
       inert={!isVisible}
       onClick={handleClick}
       className={cn(
-        "fixed right-4 bottom-20 z-40 rounded-full shadow-md transition-opacity sm:right-6",
+        "fixed bottom-20 left-1/2 z-40 -translate-x-1/2 rounded-full bg-brand text-brand-foreground shadow-md transition-opacity hover:bg-brand/90 focus-visible:border-brand focus-visible:ring-brand/50",
         isVisible ? "opacity-100" : "opacity-0",
         className,
       )}

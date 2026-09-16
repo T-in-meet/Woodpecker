@@ -216,7 +216,7 @@ describe("submitAnswerAction", () => {
 
     expect(result).toEqual({
       error:
-        "복습을 완료한 노트입니다. 노트 상세에서 복습을 다시 시작해주세요.",
+        "학습을 종료한 노트입니다. 노트 상세에서 복습을 다시 시작해주세요.",
     });
   });
 
@@ -390,7 +390,7 @@ describe("completeReviewAction", () => {
 
     expect(result).toEqual({
       error:
-        "복습을 완료한 노트입니다. 노트 상세에서 복습을 다시 시작해주세요.",
+        "학습을 종료한 노트입니다. 노트 상세에서 복습을 다시 시작해주세요.",
     });
     expect(rpcMock).not.toHaveBeenCalled();
   });

@@ -67,7 +67,7 @@ export function getReviewScheduleDisplay(
     tone: "default",
   });
 
-  if (status === "completed") return defaultDisplay("완료");
+  if (status === "completed") return defaultDisplay("학습 종료");
   if (status === "pending") return defaultDisplay("준비 중");
   if (!nextReviewAt) return defaultDisplay("-");
 

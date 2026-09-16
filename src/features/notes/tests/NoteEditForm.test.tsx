@@ -8,14 +8,21 @@ import {
   waitFor,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { NoteEditForm } from "../components/NoteEditForm";
 
 const { updateMock } = vi.hoisted(() => ({ updateMock: vi.fn() }));
 vi.mock("../actions", () => ({ updateNoteAction: updateMock }));
-vi.mock("@/hooks/usePreventPageLeave", () => ({
-  usePreventPageLeave: vi.fn(),
+vi.mock("@/hooks/useInternalNavigationGuard", () => ({
+  useInternalNavigationGuard: vi.fn(() => ({
+    cancelNavigation: vi.fn(),
+    confirmNavigation: vi.fn(),
+    isNavigationPending: false,
+  })),
+}));
+vi.mock("@/hooks/useBeforeUnloadGuard", () => ({
+  useBeforeUnloadGuard: vi.fn(),
 }));
 vi.mock("@/features/editor/components/TipTapEditor", () => ({
   TipTapEditor: ({
@@ -46,6 +53,7 @@ function renderForm(content: string) {
 }
 
 beforeEach(() => {
+  vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: true }));
   vi.clearAllMocks();
   updateMock.mockResolvedValue(null);
 });
@@ -108,3 +116,5 @@ it("associates server title errors with the focused title input", async () => {
   );
   expect(screen.getByLabelText("제목")).toHaveAttribute("aria-invalid", "true");
 });
+
+afterEach(() => vi.unstubAllGlobals());

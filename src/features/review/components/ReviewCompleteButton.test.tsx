@@ -20,6 +20,8 @@ describe("ReviewCompleteButton", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "복습 완료" })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "이번 복습 완료" }),
+    ).toBeEnabled();
   });
 });

@@ -4,6 +4,18 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const NAVIGATION_GUARD_HISTORY_INDEX_KEY =
   "__woodpeckerNavigationGuardHistoryIndex";
+const NAVIGATION_GUARD_MOUNT_ID_KEY = "__woodpeckerNavigationGuardMountId";
+
+/**
+ * guard 마운트마다 새로 만드는 식별자입니다.
+ *
+ * index는 마운트마다 0부터 다시 세므로, 다른 페이지의 guard가 남긴
+ * entry와 index가 우연히 같아질 수 있습니다. 어떤 마운트가 기록한
+ * index인지 구분해야 그 entry의 index를 믿고 delta를 계산할 수 있습니다.
+ */
+function createNavigationGuardMountId() {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
 
 function resolveHistoryUrl(url?: string | URL | null) {
   if (url == null) {
@@ -31,35 +43,70 @@ function isSamePageUrl(firstUrl: string | URL, secondUrl: string | URL) {
 }
 
 /**
- * History entry에 navigation guard가 사용할 index를 추가합니다.
+ * History entry에 navigation guard가 사용할 index와 마운트 식별자를 추가합니다.
  *
  * Next.js App Router가 저장한 기존 history state는 그대로 유지하고
  * guard 전용 값만 추가합니다.
  */
-function withNavigationGuardHistoryIndex(state: unknown, index: number) {
+function withNavigationGuardHistoryIndex(
+  state: unknown,
+  index: number,
+  mountId: string,
+) {
+  const guardState = {
+    [NAVIGATION_GUARD_HISTORY_INDEX_KEY]: index,
+    [NAVIGATION_GUARD_MOUNT_ID_KEY]: mountId,
+  };
+
   if (state !== null && typeof state === "object" && !Array.isArray(state)) {
     return {
       ...state,
-      [NAVIGATION_GUARD_HISTORY_INDEX_KEY]: index,
+      ...guardState,
     };
   }
 
-  return {
-    [NAVIGATION_GUARD_HISTORY_INDEX_KEY]: index,
-  };
+  return guardState;
 }
 
 /**
- * History state에서 navigation guard가 기록한 index를 읽습니다.
+ * History state에서 현재 마운트의 navigation guard가 기록한 index를 읽습니다.
+ *
+ * 다른 마운트(이전 페이지)가 기록한 index는 현재 위치와 비교할 수 없으므로
+ * 기록이 없는 것과 같게 null을 돌려줍니다.
  */
-function getNavigationGuardHistoryIndex(state: unknown) {
+function getNavigationGuardHistoryIndex(state: unknown, mountId: string) {
   if (state === null || typeof state !== "object" || Array.isArray(state)) {
+    return null;
+  }
+
+  if (Reflect.get(state, NAVIGATION_GUARD_MOUNT_ID_KEY) !== mountId) {
     return null;
   }
 
   const index = Reflect.get(state, NAVIGATION_GUARD_HISTORY_INDEX_KEY);
 
   return typeof index === "number" ? index : null;
+}
+
+/**
+ * History state에 남아 있는 guard 기록(마운트 식별자와 index)을 읽습니다.
+ *
+ * 현재 entry에 이전 마운트의 기록이 있으면 그 식별자·index를 이어받아야
+ * 같은 마운트가 만든 앞뒤 entry와 index를 계속 비교할 수 있습니다.
+ */
+function getNavigationGuardHistoryRecord(state: unknown) {
+  if (state === null || typeof state !== "object" || Array.isArray(state)) {
+    return null;
+  }
+
+  const mountId = Reflect.get(state, NAVIGATION_GUARD_MOUNT_ID_KEY);
+  const index = Reflect.get(state, NAVIGATION_GUARD_HISTORY_INDEX_KEY);
+
+  if (typeof mountId !== "string" || typeof index !== "number") {
+    return null;
+  }
+
+  return { mountId, index };
 }
 
 type UseInternalNavigationGuardParams = {
@@ -171,16 +218,25 @@ export function useInternalNavigationGuard({
     /*
      * Hook이 설치된 시점의 현재 History entry를 기준점으로 사용합니다.
      *
-     * 기존 Next.js history state를 유지한 채 guard 전용 index만 추가합니다.
+     * 기존 Next.js history state를 유지한 채 guard 전용 값만 추가합니다.
+     * 이 entry에 이전 마운트의 기록이 있으면 그 식별자·index를 이어받습니다.
+     * 그래야 이전 마운트가 만든 앞쪽 entry(앞으로가기 대상)의 index를
+     * 계속 믿을 수 있습니다. 기록이 없을 때만 새 식별자로 index 0부터 셉니다.
      */
-    let currentHistoryIndex =
-      getNavigationGuardHistoryIndex(window.history.state) ?? 0;
+    const existingRecord = getNavigationGuardHistoryRecord(
+      window.history.state,
+    );
+
+    const mountId = existingRecord?.mountId ?? createNavigationGuardMountId();
+
+    let currentHistoryIndex = existingRecord?.index ?? 0;
 
     let currentUrl = window.location.href;
 
     const initialHistoryState = withNavigationGuardHistoryIndex(
       window.history.state,
       currentHistoryIndex,
+      mountId,
     );
 
     originalReplaceState.call(
@@ -195,7 +251,10 @@ export function useInternalNavigationGuard({
     }: {
       fallbackIndex?: number;
     } = {}) => {
-      const stateIndex = getNavigationGuardHistoryIndex(window.history.state);
+      const stateIndex = getNavigationGuardHistoryIndex(
+        window.history.state,
+        mountId,
+      );
 
       if (stateIndex !== null) {
         currentHistoryIndex = stateIndex;
@@ -216,6 +275,7 @@ export function useInternalNavigationGuard({
       const nextState = withNavigationGuardHistoryIndex(
         args[0],
         nextHistoryIndex,
+        mountId,
       );
 
       originalPushState.call(window.history, nextState, args[1], args[2]);
@@ -237,6 +297,7 @@ export function useInternalNavigationGuard({
       const nextState = withNavigationGuardHistoryIndex(
         args[0],
         currentHistoryIndex,
+        mountId,
       );
 
       originalReplaceState.call(window.history, nextState, args[1], args[2]);
@@ -459,6 +520,7 @@ export function useInternalNavigationGuard({
         const nextState = withNavigationGuardHistoryIndex(
           event.state,
           allowedTargetIndex,
+          mountId,
         );
 
         originalReplaceState.call(
@@ -519,7 +581,10 @@ export function useInternalNavigationGuard({
        * URL이 완전히 같거나 hash만 변경된 경우 모두 포함됩니다.
        */
       if (isSamePageUrl(nextUrl, currentUrl)) {
-        const nextHistoryIndex = getNavigationGuardHistoryIndex(event.state);
+        const nextHistoryIndex = getNavigationGuardHistoryIndex(
+          event.state,
+          mountId,
+        );
 
         if (nextHistoryIndex !== null) {
           currentHistoryIndex = nextHistoryIndex;
@@ -530,14 +595,18 @@ export function useInternalNavigationGuard({
         return;
       }
 
-      const targetHistoryIndex = getNavigationGuardHistoryIndex(event.state);
+      const targetHistoryIndex = getNavigationGuardHistoryIndex(
+        event.state,
+        mountId,
+      );
 
       /*
-       * guard가 활성화된 뒤 만들어진 entry라면 기록된 index로
+       * 이 마운트에서 만들어진 entry라면 기록된 index로
        * 뒤/앞 이동 방향과 거리를 계산할 수 있습니다.
        *
-       * guard가 설치되기 이전 entry에는 index가 없을 수 있으므로
-       * 일반적인 브라우저 뒤로가기 1회를 fallback으로 사용합니다.
+       * guard가 설치되기 이전 entry나 다른 페이지의 guard가 기록한 entry는
+       * index를 믿을 수 없으므로 일반적인 브라우저 뒤로가기 1회를
+       * fallback으로 사용합니다.
        */
       const targetIndex = targetHistoryIndex ?? currentHistoryIndex - 1;
 

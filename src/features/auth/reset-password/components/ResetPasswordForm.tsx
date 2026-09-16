@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 import { startTransition, useActionState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 
+import { NavigationGuardAlertDialog } from "@/components/common/NavigationGuardAlertDialog";
 import { Button } from "@/components/ui/button";
 import { AuthCard } from "@/features/auth/components/AuthCard";
 import AuthFormError from "@/features/auth/components/AuthFormError";
@@ -21,14 +22,16 @@ import {
 } from "@/features/auth/reset-password/actions/resetPasswordActionState";
 import {
   RESET_PASSWORD_GLOBAL_ERROR_MESSAGE,
-  RESET_PASSWORD_PAGE_LEAVE_CONFIRM_MESSAGE,
+  RESET_PASSWORD_PAGE_LEAVE_DESCRIPTION,
+  RESET_PASSWORD_PAGE_LEAVE_TITLE,
   RESET_PASSWORD_SAME_PASSWORD_MESSAGE,
 } from "@/features/auth/reset-password/constants/messages";
 import {
   type ResetPasswordFormInput,
   resetPasswordFormSchema,
 } from "@/features/auth/reset-password/schemas/resetPasswordFormSchema";
-import { usePreventPageLeave } from "@/hooks/usePreventPageLeave";
+import { useBeforeUnloadGuard } from "@/hooks/useBeforeUnloadGuard";
+import { useInternalNavigationGuard } from "@/hooks/useInternalNavigationGuard";
 
 type ResetPasswordFormProps = {
   action: (
@@ -123,10 +126,10 @@ export function ResetPasswordForm({ action }: ResetPasswordFormProps) {
    * 비밀번호 변경 submit 진행 중에는 정상 흐름을 방해하지 않고,
    * 그 외 상황에서는 페이지 이탈 시 재설정 흐름이 중단될 수 있음을 안내한다.
    */
-  usePreventPageLeave(
-    isDirty && !isPending,
-    RESET_PASSWORD_PAGE_LEAVE_CONFIRM_MESSAGE,
-  );
+  const shouldGuard = isDirty && !isPending;
+  const { cancelNavigation, confirmNavigation, isNavigationPending } =
+    useInternalNavigationGuard({ enabled: shouldGuard });
+  useBeforeUnloadGuard({ enabled: shouldGuard });
 
   /**
    * React Hook Form 검증을 통과한 값만 Server Action에 전달한다.
@@ -150,6 +153,15 @@ export function ResetPasswordForm({ action }: ResetPasswordFormProps) {
 
   return (
     <AuthCard variant="compact">
+      <NavigationGuardAlertDialog
+        open={isNavigationPending}
+        title={RESET_PASSWORD_PAGE_LEAVE_TITLE}
+        description={RESET_PASSWORD_PAGE_LEAVE_DESCRIPTION}
+        cancelLabel="계속 변경"
+        confirmLabel="이동"
+        onCancel={cancelNavigation}
+        onConfirm={confirmNavigation}
+      />
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
         <AuthFormHeader title="비밀번호 재설정" />
 

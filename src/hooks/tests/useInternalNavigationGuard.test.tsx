@@ -5,6 +5,7 @@ import { useInternalNavigationGuard } from "../useInternalNavigationGuard";
 
 const NAVIGATION_GUARD_HISTORY_INDEX_KEY =
   "__woodpeckerNavigationGuardHistoryIndex";
+const NAVIGATION_GUARD_MOUNT_ID_KEY = "__woodpeckerNavigationGuardMountId";
 
 async function dispatchLinkClick(link: HTMLAnchorElement) {
   await act(async () => {
@@ -32,9 +33,15 @@ async function dispatchPopState(state: unknown) {
   });
 }
 
+/**
+ * 현재 마운트된 guard가 기록한 것과 같은 마운트 식별자를 가진
+ * History state를 만듭니다. Hook 설치 이후에 호출해야 합니다.
+ */
 function createHistoryState(index: number) {
   return {
     [NAVIGATION_GUARD_HISTORY_INDEX_KEY]: index,
+    [NAVIGATION_GUARD_MOUNT_ID_KEY]:
+      window.history.state[NAVIGATION_GUARD_MOUNT_ID_KEY],
   };
 }
 
@@ -452,6 +459,61 @@ describe("useInternalNavigationGuard", () => {
      */
     expect(historyGoSpy).toHaveBeenCalledTimes(1);
     expect(window.location.pathname).toBe("/notes");
+  });
+
+  it("다른 마운트가 남긴 index와 같은 index의 entry로 뒤로가기해도 이동을 보류한다", async () => {
+    const originalReplaceState = window.history.replaceState;
+
+    const historyGoSpy = vi
+      .spyOn(window.history, "go")
+      .mockImplementation(() => {});
+
+    /*
+     * 이전 페이지의 guard가 자기 entry에 index 0을 남기고 언마운트된 상황입니다.
+     * 그 뒤 새 페이지로 이동해 guard가 다시 마운트되면 이 entry도 index 0에서
+     * 시작하므로, 마운트 식별자가 없으면 두 entry를 같은 위치로 오판합니다.
+     */
+    const previousPageState = {
+      [NAVIGATION_GUARD_HISTORY_INDEX_KEY]: 0,
+      [NAVIGATION_GUARD_MOUNT_ID_KEY]: "previous-mount",
+    };
+
+    originalReplaceState.call(window.history, {}, "", "/notes/new");
+
+    const { result } = renderHook(() =>
+      useInternalNavigationGuard({
+        enabled: true,
+      }),
+    );
+
+    const currentState = window.history.state;
+
+    expect(currentState[NAVIGATION_GUARD_HISTORY_INDEX_KEY]).toBe(0);
+    expect(currentState[NAVIGATION_GUARD_MOUNT_ID_KEY]).not.toBe(
+      "previous-mount",
+    );
+
+    originalReplaceState.call(
+      window.history,
+      previousPageState,
+      "",
+      "/notes/test",
+    );
+
+    await dispatchPopState(previousPageState);
+
+    /*
+     * 다른 마운트의 index는 무시하고 뒤로가기 1회로 취급해 복귀를 요청합니다.
+     */
+    expect(historyGoSpy).toHaveBeenCalledWith(1);
+    expect(result.current.isNavigationPending).toBe(false);
+
+    originalReplaceState.call(window.history, currentState, "", "/notes/new");
+
+    await dispatchPopState(currentState);
+
+    expect(result.current.isNavigationPending).toBe(true);
+    expect(window.location.pathname).toBe("/notes/new");
   });
 
   it("앞으로가기를 확인하면 원래 목표 History 위치로 다시 이동하고 해당 popstate를 다시 보류하지 않는다", async () => {

@@ -6,6 +6,7 @@ import { Suspense } from "react";
 
 import { Footer } from "@/components/layout/Footer";
 import { Header, HeaderSkeleton } from "@/components/layout/Header";
+import { SkipToContentLink } from "@/components/layout/SkipToContentLink";
 import { getAgreementRequiredPath } from "@/features/auth/constants/agreementRequired";
 import { getLegalAcceptanceStatus } from "@/features/auth/lib/userAgreements";
 import { validateRedirectPath } from "@/features/auth/lib/validateRedirectPath";
@@ -52,6 +53,7 @@ export default async function MainLayout({
     /* main의 flex-1이 동작하려면 부모가 flex 컨테이너여야 한다. 그래야 내용이
        짧은 페이지에서도 푸터가 화면 중간에 뜨지 않고 하단에 붙는다. */
     <div className="flex min-h-screen flex-col">
+      <SkipToContentLink />
       <Suspense fallback={<HeaderSkeleton />}>
         <Header />
       </Suspense>
@@ -70,7 +72,13 @@ export default async function MainLayout({
           </p>
         </aside>
       ) : null}
-      <main className="flex-1 pb-16 md:pb-0">{children}</main>
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="flex-1 scroll-mt-24 pb-16 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring md:pb-0"
+      >
+        {children}
+      </main>
       {/* 모바일에서는 화면을 아끼고, 약관·개인정보처리방침 경로는 MobileMenu가 맡는다. */}
       <div className="hidden md:block">
         <Footer />
