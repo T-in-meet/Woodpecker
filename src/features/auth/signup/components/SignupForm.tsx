@@ -13,6 +13,8 @@ import {
   type OAuthBeforeSignInResult,
   OAuthButtons,
 } from "@/features/auth/components/OAuthButtons";
+import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
+import { AUTH_EMAIL_DELIVERY_ERROR_MESSAGE } from "@/features/auth/constants/messages";
 import { AUTH_ROOT_ERROR_TYPE } from "@/features/auth/errors/authRootError";
 import {
   GLOBAL_ERROR_MESSAGES,
@@ -43,6 +45,21 @@ import { AuthFormHeader } from "../../components/AuthFormHeader";
  * resolveFieldName에 주입하여 서버 field → 폼 필드 매핑에 사용한다
  */
 const SIGNUP_FIELD_NAME_SET = new Set(SIGNUP_FIELD_NAMES);
+
+/**
+ * Signup OTP Email delivery 전용 API 오류인지 확인한다.
+ *
+ * @param error Signup submit에서 전달된 unknown 오류
+ * @returns Email delivery 전용 오류 여부
+ */
+function isSignupEmailDeliveryError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === AUTH_API_CODES.SIGNUP_EMAIL_DELIVERY_INTERNAL_ERROR
+  );
+}
 
 /**
  * 회원가입 방식 값 목록
@@ -214,12 +231,20 @@ export function SignupForm({
         return;
       }
 
-      // 아래 세 가지는 모두 "다시 시도"가 필요한 오류라 사라지는 토스트로 알리면
+      // 아래 오류들은 모두 "다시 시도"가 필요한 오류라 사라지는 토스트로 알리면
       // 재시도할 근거가 화면에서 없어진다. 제출 버튼 옆 root 오류 자리에 남긴다.
       if (isRateLimitError(e)) {
         setError("root", {
           type: AUTH_ROOT_ERROR_TYPE.SYSTEM,
           message: RATE_LIMIT_TOAST_MESSAGE,
+        });
+        return;
+      }
+
+      if (isSignupEmailDeliveryError(e)) {
+        setError("root", {
+          type: AUTH_ROOT_ERROR_TYPE.SYSTEM,
+          message: AUTH_EMAIL_DELIVERY_ERROR_MESSAGE,
         });
         return;
       }

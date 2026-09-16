@@ -64,7 +64,7 @@ describe("issueOtp", () => {
 
   it("issueOtp는 전달받은 prepared client를 사용하고 새 client를 생성하지 않는다", async () => {
     mockGenerateLink.mockResolvedValue({
-      data: { properties: null },
+      data: { properties: null, user: null },
       error: null,
     });
     mockCreateAdminClient.mockClear();
@@ -72,6 +72,7 @@ describe("issueOtp", () => {
     await issueOtp({
       email: "test@example.com",
       purpose: "signup",
+      signupMode: "existing-user",
       client,
     });
 
@@ -79,12 +80,87 @@ describe("issueOtp", () => {
     expect(mockGenerateLink).toHaveBeenCalledTimes(1);
   });
 
-  it("signup purpose를 magiclink type으로 변환한다", async () => {
+  it("신규 Signup은 signup type과 password/metadata를 Provider에 전달한다", async () => {
     mockGenerateLink.mockResolvedValue({
       data: {
         properties: {
           email_otp: "123456",
         },
+        user: {
+          id: "new-user-id",
+        },
+      },
+      error: null,
+    });
+
+    await issueOtp({
+      email: "Raw.Email@example.com",
+      purpose: "signup",
+      signupMode: "new-user",
+      password: "StrongPassword123!",
+      metadata: {
+        nickname: "딱다구리",
+        canonical_email: "raw.email@example.com",
+      },
+      client,
+    });
+
+    expect(mockGenerateLink).toHaveBeenCalledWith({
+      email: "Raw.Email@example.com",
+      password: "StrongPassword123!",
+      type: "signup",
+      options: {
+        data: {
+          nickname: "딱다구리",
+          canonical_email: "raw.email@example.com",
+        },
+      },
+    });
+  });
+
+  it("신규 Signup은 Provider가 반환한 user id를 최소 정보로 보존한다", async () => {
+    const properties = {
+      email_otp: "123456",
+      hashed_token: "hashed-token",
+      action_link: "https://example.com",
+    };
+
+    mockGenerateLink.mockResolvedValue({
+      data: {
+        properties,
+        user: {
+          id: "new-user-id",
+        },
+      },
+      error: null,
+    });
+
+    const result = await issueOtp({
+      email: "test@example.com",
+      purpose: "signup",
+      signupMode: "new-user",
+      password: "StrongPassword123!",
+      metadata: {
+        nickname: "딱다구리",
+        canonical_email: "test@example.com",
+      },
+      client,
+    });
+
+    expect(result).toEqual({
+      otp: properties,
+      userId: "new-user-id",
+      error: null,
+    });
+  });
+
+  it("기존 Signup 사용자는 magiclink type으로 재발급한다", async () => {
+    mockGenerateLink.mockResolvedValue({
+      data: {
+        properties: {
+          email_otp: "123456",
+        },
+        user: null,
       },
       error: null,
     });
@@ -92,6 +168,7 @@ describe("issueOtp", () => {
     await issueOtp({
       email: "test@example.com",
       purpose: "signup",
+      signupMode: "existing-user",
       client,
     });
 
@@ -101,12 +178,13 @@ describe("issueOtp", () => {
     });
   });
 
-  it("reset-password purpose를 recovery type으로 변환한다", async () => {
+  it("reset-password purpose는 recovery type으로 변환한다", async () => {
     mockGenerateLink.mockResolvedValue({
       data: {
         properties: {
           email_otp: "123456",
         },
+        user: null,
       },
       error: null,
     });
@@ -133,6 +211,7 @@ describe("issueOtp", () => {
     mockGenerateLink.mockResolvedValue({
       data: {
         properties,
+        user: null,
       },
       error: null,
     });
@@ -140,16 +219,18 @@ describe("issueOtp", () => {
     const result = await issueOtp({
       email: "test@example.com",
       purpose: "signup",
+      signupMode: "existing-user",
       client,
     });
 
     expect(result).toEqual({
       otp: properties,
+      userId: null,
       error: null,
     });
   });
 
-  it("error를 그대로 반환한다", async () => {
+  it("Provider error를 그대로 반환한다", async () => {
     const error = {
       message: "failed",
     };
@@ -157,6 +238,7 @@ describe("issueOtp", () => {
     mockGenerateLink.mockResolvedValue({
       data: {
         properties: null,
+        user: null,
       },
       error,
     });
@@ -164,16 +246,18 @@ describe("issueOtp", () => {
     const result = await issueOtp({
       email: "test@example.com",
       purpose: "signup",
+      signupMode: "existing-user",
       client,
     });
 
     expect(result.error).toBe(error);
   });
 
-  it("properties가 없으면 otp를 null로 반환한다", async () => {
+  it("properties와 user가 없으면 otp와 userId를 null로 반환한다", async () => {
     mockGenerateLink.mockResolvedValue({
       data: {
         properties: undefined,
+        user: undefined,
       },
       error: null,
     });
@@ -181,24 +265,27 @@ describe("issueOtp", () => {
     const result = await issueOtp({
       email: "test@example.com",
       purpose: "signup",
+      signupMode: "existing-user",
       client,
     });
 
     expect(result).toEqual({
       otp: null,
+      userId: null,
       error: null,
     });
   });
 
   it("OTP provider fetch에 10초 timeout signal을 적용한다", async () => {
     mockGenerateLink.mockResolvedValue({
-      data: { properties: null },
+      data: { properties: null, user: null },
       error: null,
     });
 
     await issueOtp({
       email: "test@example.com",
       purpose: "signup",
+      signupMode: "existing-user",
       client,
     });
 
@@ -221,13 +308,14 @@ describe("issueOtp", () => {
 
   it("RequestInit signal과 OTP timeout signal을 함께 보존한다", async () => {
     mockGenerateLink.mockResolvedValue({
-      data: { properties: null },
+      data: { properties: null, user: null },
       error: null,
     });
 
     await issueOtp({
       email: "test@example.com",
       purpose: "signup",
+      signupMode: "existing-user",
       client,
     });
 
@@ -237,9 +325,7 @@ describe("issueOtp", () => {
     const combinedSignal = new AbortController().signal;
 
     vi.spyOn(AbortSignal, "timeout").mockReturnValue(timeoutSignal);
-    const anySpy = vi
-      .spyOn(AbortSignal, "any")
-      .mockReturnValue(combinedSignal);
+    const anySpy = vi.spyOn(AbortSignal, "any").mockReturnValue(combinedSignal);
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response());
 
     vi.stubGlobal("fetch", fetchMock);
@@ -256,13 +342,14 @@ describe("issueOtp", () => {
 
   it("RequestInit signal이 없으면 Request signal을 보존한다", async () => {
     mockGenerateLink.mockResolvedValue({
-      data: { properties: null },
+      data: { properties: null, user: null },
       error: null,
     });
 
     await issueOtp({
       email: "test@example.com",
       purpose: "signup",
+      signupMode: "existing-user",
       client,
     });
 
@@ -274,9 +361,7 @@ describe("issueOtp", () => {
     const combinedSignal = new AbortController().signal;
 
     vi.spyOn(AbortSignal, "timeout").mockReturnValue(timeoutSignal);
-    const anySpy = vi
-      .spyOn(AbortSignal, "any")
-      .mockReturnValue(combinedSignal);
+    const anySpy = vi.spyOn(AbortSignal, "any").mockReturnValue(combinedSignal);
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response());
 
     vi.stubGlobal("fetch", fetchMock);
@@ -291,13 +376,14 @@ describe("issueOtp", () => {
 
   it("RequestInit signal이 null이면 Request signal로 되돌아가지 않는다", async () => {
     mockGenerateLink.mockResolvedValue({
-      data: { properties: null },
+      data: { properties: null, user: null },
       error: null,
     });
 
     await issueOtp({
       email: "test@example.com",
       purpose: "signup",
+      signupMode: "existing-user",
       client,
     });
 

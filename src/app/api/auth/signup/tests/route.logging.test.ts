@@ -1,19 +1,17 @@
 import { NextRequest } from "next/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 import { AUTH_EVENTS } from "@/features/auth/constants/authEvents";
 import { AUTH_LOG_REASONS } from "@/features/auth/constants/authLogReasons";
-import { issueOtpAndSendEmail } from "@/features/auth/email/issueOtpAndSendEmail";
+import { issueOtpAndSendEmailWithResult } from "@/features/auth/email/issueOtpAndSendEmail";
 import {
   logAuthError,
   logAuthEvent,
   logRequested,
 } from "@/features/auth/lib/authLogger";
-import {
-  checkIpRateLimitPrecheck,
-  checkRequestEligibility,
-} from "@/features/auth/lib/checkRequestEligibility";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
+import { createOtpIssueClient } from "@/features/auth/lib/issueOtp";
 import {
   AuthJsonParseError,
   parseAuthJsonRequestBody,
@@ -21,10 +19,16 @@ import {
 
 import { POST } from "../route";
 
-const upsertUserAgreementMock = vi.hoisted(() => vi.fn());
+const ensureUserAgreementMock = vi.hoisted(() => vi.fn());
+const otpIssueClient = vi.hoisted(() => ({ client: "otp-issue-client" }));
+const otpIssueRateLimitMock = vi.hoisted(() => ({
+  tryStartIssue: vi.fn(),
+  recordSuccessfulIssue: vi.fn(),
+  releaseIssue: vi.fn(),
+}));
 
 vi.mock("@/features/auth/lib/userAgreements", () => ({
-  ensureUserAgreement: upsertUserAgreementMock,
+  ensureUserAgreement: ensureUserAgreementMock,
 }));
 
 vi.mock("@/features/auth/lib/applyMinimumResponseTime", () => ({
@@ -45,26 +49,11 @@ vi.mock("@/features/auth/lib/authLogger", () => ({
   ),
 }));
 
-vi.mock("@/features/auth/lib/checkRequestEligibility", () => ({
-  checkIpRateLimitPrecheck: vi.fn(),
-  checkRequestEligibility: vi.fn(),
-  // [이유: BlockedBy "ip" → "ipShort" | "ipLong"으로 분리됨]
-  mapBlockedByToReason: vi.fn(
-    (blockedBy: "ipShort" | "ipLong" | "emailShort" | "emailLong") =>
-      blockedBy === "ipShort"
-        ? "RATE_LIMIT_IP_SHORT"
-        : blockedBy === "ipLong"
-          ? "RATE_LIMIT_IP_LONG"
-          : blockedBy === "emailShort"
-            ? "RATE_LIMIT_EMAIL_SHORT"
-            : "RATE_LIMIT_EMAIL_LONG",
-  ),
-}));
-
 vi.mock("@/features/auth/lib/parseAuthJsonRequestBody", async () => {
   const actual = await vi.importActual<
     typeof import("@/features/auth/lib/parseAuthJsonRequestBody")
   >("@/features/auth/lib/parseAuthJsonRequestBody");
+
   return {
     ...actual,
     parseAuthJsonRequestBody: vi.fn(),
@@ -76,23 +65,15 @@ vi.mock("@/features/auth/lib/getUserByEmail", () => ({
 }));
 
 vi.mock("@/features/auth/email/issueOtpAndSendEmail", () => ({
-  issueOtpAndSendEmail: vi.fn(),
+  issueOtpAndSendEmailWithResult: vi.fn(),
 }));
 
-vi.mock("@/lib/utils/getClientIp", () => ({
-  getClientIp: vi.fn(() => "127.0.0.1"),
+vi.mock("@/features/auth/lib/issueOtp", () => ({
+  createOtpIssueClient: vi.fn(() => otpIssueClient),
 }));
 
-const mockCreateUser = vi.fn(async () => ({ error: null }));
-
-vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: vi.fn(() => ({
-    auth: {
-      admin: {
-        createUser: mockCreateUser,
-      },
-    },
-  })),
+vi.mock("@/features/auth/lib/rate-limit/otpIssueRateLimit", () => ({
+  otpIssueRateLimit: otpIssueRateLimitMock,
 }));
 
 function makeRequest(): NextRequest {
@@ -119,6 +100,7 @@ function terminalEvents(): string[] {
   const eventsFromAuthError = vi
     .mocked(logAuthError)
     .mock.calls.map((call) => call[0]);
+
   return [...eventsFromAuthEvent, ...eventsFromAuthError];
 }
 
@@ -131,9 +113,7 @@ function expectRequestedBeforeSingleTerminal(): void {
 
   expect(requestedOrders).toHaveLength(1);
   expect(terminalOrders).toHaveLength(1);
-  const requestedOrder = requestedOrders[0]!;
-  const terminalOrder = terminalOrders[0]!;
-  expect(requestedOrder).toBeLessThan(terminalOrder);
+  expect(requestedOrders[0]!).toBeLessThan(terminalOrders[0]!);
 }
 
 const FORBIDDEN_FIELDS = [
@@ -156,6 +136,7 @@ const FORBIDDEN_FIELDS = [
 function expectNoForbiddenFields(payload: unknown): void {
   expect(payload).toBeTypeOf("object");
   const entry = payload as Record<string, unknown>;
+
   for (const field of FORBIDDEN_FIELDS) {
     expect(entry).not.toHaveProperty(field);
   }
@@ -165,8 +146,6 @@ describe("signup 라우트 인증 로깅", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    vi.mocked(checkIpRateLimitPrecheck).mockReturnValue({ allowed: true });
-    vi.mocked(checkRequestEligibility).mockReturnValue({ allowed: true });
     vi.mocked(parseAuthJsonRequestBody).mockResolvedValue({
       email: "user@example.com",
       password: "Password1!",
@@ -183,12 +162,16 @@ describe("signup 라우트 인증 로깅", () => {
       email_confirmed_at: null,
       auth_providers: ["email"],
     });
-    vi.mocked(issueOtpAndSendEmail).mockResolvedValue(undefined);
-
-    mockCreateUser.mockResolvedValue({ error: null });
+    vi.mocked(issueOtpAndSendEmailWithResult).mockResolvedValue({ ok: true });
+    otpIssueRateLimitMock.tryStartIssue.mockReturnValue({ allowed: true });
+    ensureUserAgreementMock.mockResolvedValue(undefined);
   });
 
-  it("입력 검증 실패면 AUTH_INVALID_INPUT이 기록되고 최종 이벤트는 정확히 1개다", async () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("입력 검증 실패면 AUTH_INVALID_INPUT과 SCHEMA_VALIDATION_FAILED를 기록한다", async () => {
     vi.mocked(parseAuthJsonRequestBody).mockResolvedValue({
       email: "invalid-email",
       password: "Password1!",
@@ -212,15 +195,10 @@ describe("signup 라우트 인증 로깅", () => {
         reasonCode: AUTH_LOG_REASONS.SCHEMA_VALIDATION_FAILED,
       }),
     );
-
-    const terminals = terminalEvents();
-    expect(terminals).toHaveLength(1);
-    expect(terminals[0]).toBe(AUTH_EVENTS.AUTH_INVALID_INPUT);
-    expect(terminals).not.toContain(AUTH_EVENTS.AUTH_SIGNUP_COMPLETED);
-    expect(terminals).not.toContain(AUTH_EVENTS.AUTH_SIGNUP_FAILED);
+    expect(terminalEvents()).toEqual([AUTH_EVENTS.AUTH_INVALID_INPUT]);
   });
 
-  it("잘못된 JSON이면 AUTH_INVALID_INPUT과 INVALID_JSON 사유코드가 기록된다", async () => {
+  it("잘못된 JSON이면 AUTH_INVALID_INPUT과 INVALID_JSON을 기록한다", async () => {
     vi.mocked(parseAuthJsonRequestBody).mockRejectedValue(
       new AuthJsonParseError("잘못된 JSON"),
     );
@@ -234,14 +212,35 @@ describe("signup 라우트 인증 로깅", () => {
       }),
     );
     expect(vi.mocked(logAuthError)).not.toHaveBeenCalled();
-    expect(vi.mocked(logAuthEvent)).toHaveBeenCalledTimes(1);
   });
 
-  it("요청 제한 차단이면 AUTH_RATE_LIMIT_BLOCKED가 기록되고 최종 이벤트는 정확히 1개다", async () => {
-    // [이유: blockedBy "ip" → "ipShort"로 rename됨]
-    vi.mocked(checkRequestEligibility).mockReturnValue({
+  it("Production에서 trusted IP를 확보하지 못하면 IP_UNAVAILABLE로 fail-closed한다", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+
+    const response = await POST(makeRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR);
+    expect(vi.mocked(logAuthError)).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_SIGNUP_FAILED,
+      expect.objectContaining({
+        reasonCode: AUTH_LOG_REASONS.IP_UNAVAILABLE,
+        maskedEmail: expect.any(String),
+      }),
+    );
+    expect(getUserByEmail).not.toHaveBeenCalled();
+    expect(createOtpIssueClient).not.toHaveBeenCalled();
+    expect(otpIssueRateLimitMock.tryStartIssue).not.toHaveBeenCalled();
+    expect(issueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
+    expect(ensureUserAgreementMock).not.toHaveBeenCalled();
+    expect(terminalEvents()).toEqual([AUTH_EVENTS.AUTH_SIGNUP_FAILED]);
+  });
+
+  it("Local IP short 차단은 AUTH_RATE_LIMIT_BLOCKED와 기존 IP short reason을 기록한다", async () => {
+    otpIssueRateLimitMock.tryStartIssue.mockReturnValueOnce({
       allowed: false,
-      blockedBy: "ipShort",
+      blockedBy: "ip_short",
     });
 
     await POST(makeRequest());
@@ -249,61 +248,17 @@ describe("signup 라우트 인증 로깅", () => {
     expect(vi.mocked(logAuthEvent)).toHaveBeenCalledWith(
       AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED,
       expect.objectContaining({
-        // [이유: RATE_LIMIT_IP → RATE_LIMIT_IP_SHORT로 rename됨]
         reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT,
         maskedIp: "127.0.*.*",
       }),
     );
-
-    const terminals = terminalEvents();
-    expect(terminals).toHaveLength(1);
-    expect(terminals[0]).toBe(AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED);
-    expect(terminals).not.toContain(AUTH_EVENTS.AUTH_SIGNUP_COMPLETED);
-    expect(terminals).not.toContain(AUTH_EVENTS.AUTH_SIGNUP_FAILED);
+    expect(terminalEvents()).toEqual([AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED]);
   });
 
-  it("IP precheck 차단이면 AUTH_RATE_LIMIT_BLOCKED에 maskedIp가 포함된다", async () => {
-    vi.mocked(checkIpRateLimitPrecheck).mockReturnValue({
+  it("successful Email quota 차단은 기존 Email long reason으로 기록한다", async () => {
+    otpIssueRateLimitMock.tryStartIssue.mockReturnValueOnce({
       allowed: false,
-      blockedBy: "ipShort",
-    });
-
-    await POST(makeRequest());
-
-    expect(vi.mocked(logAuthEvent)).toHaveBeenCalledWith(
-      AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED,
-      expect.objectContaining({
-        // [이유: precheck 차단 시 RATE_LIMIT_IP_SHORT 사용 — short가 우선 평가됨]
-        reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT,
-        maskedIp: "127.0.*.*",
-      }),
-    );
-    expect(vi.mocked(logAuthError)).not.toHaveBeenCalled();
-    expect(vi.mocked(logAuthEvent)).toHaveBeenCalledTimes(1);
-  });
-
-  it("요청 제한 차단(emailShort)이면 RATE_LIMIT_EMAIL_SHORT 사유코드가 기록된다", async () => {
-    vi.mocked(checkRequestEligibility).mockReturnValue({
-      allowed: false,
-      blockedBy: "emailShort",
-    });
-
-    await POST(makeRequest());
-
-    expect(vi.mocked(logAuthEvent)).toHaveBeenCalledWith(
-      AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED,
-      expect.objectContaining({
-        reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT,
-      }),
-    );
-    expect(vi.mocked(logAuthError)).not.toHaveBeenCalled();
-    expect(vi.mocked(logAuthEvent)).toHaveBeenCalledTimes(1);
-  });
-
-  it("요청 제한 차단(emailLong)이면 RATE_LIMIT_EMAIL_LONG 사유코드가 기록된다", async () => {
-    vi.mocked(checkRequestEligibility).mockReturnValue({
-      allowed: false,
-      blockedBy: "emailLong",
+      blockedBy: "email_success",
     });
 
     await POST(makeRequest());
@@ -314,48 +269,107 @@ describe("signup 라우트 인증 로깅", () => {
         reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG,
       }),
     );
-    expect(vi.mocked(logAuthError)).not.toHaveBeenCalled();
-    expect(vi.mocked(logAuthEvent)).toHaveBeenCalledTimes(1);
   });
 
-  it("성공이면 AUTH_SIGNUP_COMPLETED가 기록되고 최종 이벤트는 정확히 1개다", async () => {
+  it("Provider 429는 PROVIDER_RATE_LIMIT과 안전한 diagnostic을 blocked 로그에 남긴다", async () => {
+    vi.mocked(issueOtpAndSendEmailWithResult).mockResolvedValueOnce({
+      ok: false,
+      kind: "provider_rate_limit",
+      diagnostic: {
+        errorMessage: "provider limited",
+        errorName: "AuthApiError",
+        errorCode: "over_request_rate_limit",
+      },
+    });
+
+    await POST(makeRequest());
+
+    expect(vi.mocked(logAuthEvent)).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED,
+      expect.objectContaining({
+        reasonCode: AUTH_LOG_REASONS.PROVIDER_RATE_LIMIT,
+        errorMessage: "provider limited",
+        errorName: "AuthApiError",
+        errorCode: "over_request_rate_limit",
+      }),
+    );
+    expect(vi.mocked(logAuthError)).not.toHaveBeenCalled();
+  });
+
+  it.each(["provider_error", "invalid_provider_response"] as const)(
+    "%s는 PROVIDER_ERROR와 diagnostic을 failure 로그에 남긴다",
+    async (kind) => {
+      vi.mocked(issueOtpAndSendEmailWithResult).mockResolvedValueOnce({
+        ok: false,
+        kind,
+        diagnostic: {
+          errorMessage: `${kind} message`,
+          errorName: "ProviderError",
+          errorCode: "provider_error_code",
+        },
+      });
+
+      await POST(makeRequest());
+
+      expect(vi.mocked(logAuthError)).toHaveBeenCalledWith(
+        AUTH_EVENTS.AUTH_SIGNUP_FAILED,
+        expect.objectContaining({
+          reasonCode: AUTH_LOG_REASONS.PROVIDER_ERROR,
+          errorMessage: `${kind} message`,
+          errorName: "ProviderError",
+          errorCode: "provider_error_code",
+        }),
+      );
+    },
+  );
+
+  it("delivery_error는 EMAIL_DELIVERY_ERROR와 diagnostic을 failure 로그에 남긴다", async () => {
+    vi.mocked(issueOtpAndSendEmailWithResult).mockResolvedValueOnce({
+      ok: false,
+      kind: "delivery_error",
+      diagnostic: {
+        errorMessage: "smtp failed",
+        errorName: "Error",
+        errorCode: "smtp_failed",
+      },
+    });
+
+    await POST(makeRequest());
+
+    expect(vi.mocked(logAuthError)).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_SIGNUP_FAILED,
+      expect.objectContaining({
+        reasonCode: AUTH_LOG_REASONS.EMAIL_DELIVERY_ERROR,
+        errorMessage: "smtp failed",
+        errorName: "Error",
+        errorCode: "smtp_failed",
+      }),
+    );
+  });
+
+  it("성공이면 AUTH_SIGNUP_COMPLETED가 기록되고 terminal event는 하나다", async () => {
     await POST(makeRequest());
 
     expect(vi.mocked(logAuthEvent)).toHaveBeenCalledWith(
       AUTH_EVENTS.AUTH_SIGNUP_COMPLETED,
       expect.any(Object),
     );
-
-    const terminals = terminalEvents();
-    expect(terminals).toHaveLength(1);
-    expect(terminals[0]).toBe(AUTH_EVENTS.AUTH_SIGNUP_COMPLETED);
-    expect(terminals).not.toContain(AUTH_EVENTS.AUTH_SIGNUP_FAILED);
+    expect(terminalEvents()).toEqual([AUTH_EVENTS.AUTH_SIGNUP_COMPLETED]);
   });
 
-  it("createUser 실패면 AUTH_SIGNUP_FAILED와 INTERNAL_ERROR가 기록된다", async () => {
+  it("agreement hook 실패는 AUTH_SIGNUP_FAILED와 INTERNAL_ERROR로 기록한다", async () => {
     vi.mocked(getUserByEmail).mockResolvedValueOnce(null);
-    mockCreateUser.mockResolvedValueOnce({
-      error: new Error("create user failed"),
-    } as never);
-
-    await POST(makeRequest());
-
-    expect(vi.mocked(logAuthError)).toHaveBeenCalledWith(
-      AUTH_EVENTS.AUTH_SIGNUP_FAILED,
-      expect.objectContaining({
-        reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
-      }),
+    ensureUserAgreementMock.mockRejectedValueOnce(
+      new Error("agreement failed"),
     );
-    expect(vi.mocked(logAuthEvent)).not.toHaveBeenCalledWith(
-      AUTH_EVENTS.AUTH_SIGNUP_COMPLETED,
-      expect.any(Object),
-    );
-  });
+    vi.mocked(issueOtpAndSendEmailWithResult).mockImplementationOnce(
+      async (input) => {
+        if (input.purpose === "signup" && input.signupMode === "new-user") {
+          await input.beforeDelivery?.({ userId: "new-user-id" });
+        }
 
-  it("issueOtpAndSendEmail 실패면 AUTH_SIGNUP_FAILED와 INTERNAL_ERROR가 기록된다", async () => {
-    vi.mocked(getUserByEmail).mockResolvedValueOnce(null);
-    vi.mocked(issueOtpAndSendEmail).mockRejectedValueOnce(
-      new Error("otp send failed"),
+        return { ok: true };
+      },
     );
 
     await POST(makeRequest());
@@ -364,15 +378,13 @@ describe("signup 라우트 인증 로깅", () => {
       AUTH_EVENTS.AUTH_SIGNUP_FAILED,
       expect.objectContaining({
         reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+        errorMessage: "agreement failed",
+        errorName: "Error",
       }),
-    );
-    expect(vi.mocked(logAuthEvent)).not.toHaveBeenCalledWith(
-      AUTH_EVENTS.AUTH_SIGNUP_COMPLETED,
-      expect.any(Object),
     );
   });
 
-  it("예외면 AUTH_SIGNUP_FAILED가 기록되고 최종 이벤트는 정확히 1개다", async () => {
+  it("예상하지 못한 예외는 AUTH_SIGNUP_FAILED와 INTERNAL_ERROR로 기록한다", async () => {
     vi.mocked(parseAuthJsonRequestBody).mockRejectedValue(
       new Error("unexpected"),
     );
@@ -381,15 +393,11 @@ describe("signup 라우트 인증 로깅", () => {
 
     expect(vi.mocked(logAuthError)).toHaveBeenCalledWith(
       AUTH_EVENTS.AUTH_SIGNUP_FAILED,
-      expect.any(Object),
+      expect.objectContaining({
+        reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+      }),
     );
-
-    const terminals = terminalEvents();
-    expect(terminals).toHaveLength(1);
-    expect(terminals[0]).toBe(AUTH_EVENTS.AUTH_SIGNUP_FAILED);
-
-    // 실패 케이스
-    expect(terminals).not.toContain(AUTH_EVENTS.AUTH_SIGNUP_COMPLETED);
+    expect(terminalEvents()).toEqual([AUTH_EVENTS.AUTH_SIGNUP_FAILED]);
   });
 
   it("route에서 authLogger로 전달되는 payload에는 금지 필드가 없다", async () => {
@@ -423,10 +431,9 @@ describe("signup 라우트 인증 로깅", () => {
   });
 
   it("시퀀스 검증: rate_limit 분기는 REQUESTED 이후 terminal 1개로 끝난다", async () => {
-    // [이유: BlockedBy "ip" → "ipShort"로 rename됨 — short/long 이중 윈도우 분리]
-    vi.mocked(checkRequestEligibility).mockReturnValue({
+    otpIssueRateLimitMock.tryStartIssue.mockReturnValueOnce({
       allowed: false,
-      blockedBy: "ipShort",
+      blockedBy: "ip_short",
     });
 
     await POST(makeRequest());
@@ -439,9 +446,14 @@ describe("signup 라우트 인증 로깅", () => {
   });
 
   it("시퀀스 검증: failed 분기는 REQUESTED 이후 terminal 1개로 끝난다", async () => {
-    vi.mocked(parseAuthJsonRequestBody).mockRejectedValueOnce(
-      new Error("unexpected"),
-    );
+    vi.mocked(issueOtpAndSendEmailWithResult).mockResolvedValueOnce({
+      ok: false,
+      kind: "delivery_error",
+      diagnostic: {
+        errorMessage: "smtp failed",
+        errorName: "Error",
+      },
+    });
 
     await POST(makeRequest());
     expectRequestedBeforeSingleTerminal();

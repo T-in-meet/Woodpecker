@@ -3,7 +3,13 @@ import { NextRequest } from "next/server";
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 import { AUTH_EVENTS } from "@/features/auth/constants/authEvents";
 import { AUTH_LOG_REASONS } from "@/features/auth/constants/authLogReasons";
-import { issueOtpAndSendEmail } from "@/features/auth/email/issueOtpAndSendEmail";
+import { AUTH_EMAIL_DELIVERY_ERROR_MESSAGE } from "@/features/auth/constants/messages";
+import {
+  type IssueOtpAndSendEmailDiagnostic,
+  type IssueOtpAndSendEmailFailureKind,
+  type IssueOtpAndSendEmailInput,
+  issueOtpAndSendEmailWithResult,
+} from "@/features/auth/email/issueOtpAndSendEmail";
 import { applyMinimumResponseTime } from "@/features/auth/lib/applyMinimumResponseTime";
 import {
   logAuthError,
@@ -11,12 +17,8 @@ import {
   logRequested,
   normalizeUnknownError,
 } from "@/features/auth/lib/authLogger";
-import {
-  checkIpRateLimitPrecheck,
-  checkRequestEligibility,
-  mapBlockedByToReason,
-} from "@/features/auth/lib/checkRequestEligibility";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
+import { createOtpIssueClient } from "@/features/auth/lib/issueOtp";
 import { mapAuthValidationErrors } from "@/features/auth/lib/mapAuthValidationErrors";
 import { maskEmailForLogging } from "@/features/auth/lib/maskEmailForLogging";
 import { maskIpForLogging } from "@/features/auth/lib/maskIpForLogging";
@@ -24,20 +26,53 @@ import {
   AuthJsonParseError,
   parseAuthJsonRequestBody,
 } from "@/features/auth/lib/parseAuthJsonRequestBody";
+import {
+  otpIssueRateLimit,
+  type OtpIssueRateLimitBlockedBy,
+} from "@/features/auth/lib/rate-limit/otpIssueRateLimit";
+import { getTrustedAuthClientIp } from "@/features/auth/lib/rate-limit/trustedAuthClientIp";
 import { ensureUserAgreement } from "@/features/auth/lib/userAgreements";
 import { signupApiSchema } from "@/features/auth/signup/schema/signupApiSchema";
 import { canonicalizeEmail } from "@/features/auth/utils/canonicalizeEmail";
 import { failureResponse, successResponse } from "@/lib/api/response";
 import { ROUTES } from "@/lib/constants/routes";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { getClientIp } from "@/lib/utils/getClientIp";
 import { VALIDATION_REASON } from "@/lib/validation/reasons";
 
 /**
- * 회원가입 핵심 로직
+ * Signup OTP Issue local Rate Limit 차단 원인을 기존 structured log reason으로 변환한다.
  *
- * POST 핸들러에서 분리된 내부 함수.
- * 타이밍 정책(최소 응답 시간)은 POST에서 일괄 적용한다.
+ * OTP Issue의 15분 successful quota는 기존 Email long reason에,
+ * cooldown/in-flight는 기존 Email short reason에 대응시켜
+ * Step 11 전환 중 기존 로그 vocabulary를 유지한다.
+ *
+ * @param blockedBy OTP Issue Rate Limit 차단 원인
+ * @returns 구조화 로그 reason
+ */
+function mapOtpIssueBlockedByToReason(
+  blockedBy: OtpIssueRateLimitBlockedBy,
+):
+  | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT
+  | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP_LONG
+  | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT
+  | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG {
+  switch (blockedBy) {
+    case "ip_short":
+      return AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT;
+    case "ip_long":
+      return AUTH_LOG_REASONS.RATE_LIMIT_IP_LONG;
+    case "email_success":
+      return AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG;
+    case "cooldown":
+    case "in_flight":
+      return AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT;
+  }
+}
+
+/**
+ * 회원가입 요청의 terminal outcome.
+ *
+ * 외부 응답 code와 내부 structured log reason을 분리하여
+ * Local Rate Limit / Provider Rate Limit / Provider/System / Delivery 실패를 구분한다.
  */
 type SignupTerminalOutcome =
   | {
@@ -49,68 +84,285 @@ type SignupTerminalOutcome =
     }
   | {
       type: "blocked";
-      reasonCode: // [이유: RATE_LIMIT_IP → RATE_LIMIT_IP_SHORT | RATE_LIMIT_IP_LONG으로 분리됨]
+      reasonCode:
         | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT
         | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP_LONG
         | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT
-        | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG;
+        | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG
+        | typeof AUTH_LOG_REASONS.PROVIDER_RATE_LIMIT;
       maskedEmail?: string;
       maskedIp?: string;
+      errorMessage?: string;
+      errorName?: string;
+      errorCode?: string;
     }
-  | { type: "completed" };
+  | { type: "completed" }
+  | {
+      type: "failed";
+      reasonCode:
+        | typeof AUTH_LOG_REASONS.IP_UNAVAILABLE
+        | typeof AUTH_LOG_REASONS.PROVIDER_ERROR
+        | typeof AUTH_LOG_REASONS.EMAIL_DELIVERY_ERROR;
+      maskedEmail?: string;
+      maskedIp?: string;
+      errorMessage?: string;
+      errorName?: string;
+      errorCode?: string;
+    };
 
+/**
+ * 회원가입 핵심 로직 반환값.
+ */
 type ResolveSignupResult = {
   response: Response;
   outcome: SignupTerminalOutcome;
 };
 
-async function resolveSignupResponse(
-  request: NextRequest,
-): Promise<ResolveSignupResult> {
-  const makeSignupSuccess = (email: string) =>
-    successResponse(AUTH_API_CODES.SIGNUP_SUCCESS, {
-      email,
-      redirectTo: `${ROUTES.VERIFY_OTP}?purpose=signup&email=${encodeURIComponent(email)}`,
+type RunSignupOtpIssueBaseInput = {
+  requestEmail: string;
+  deliveryEmail: string;
+  canonicalEmail: string;
+  ip: string;
+  maskedEmail: string;
+  maskedIp: string;
+};
+
+/**
+ * Signup OTP Issue 실행 입력.
+ *
+ * 신규 사용자는 generateLink(type: "signup")이 사용자 생성까지 담당하고,
+ * 기존 사용자는 magiclink를 발급한다.
+ */
+type RunSignupOtpIssueInput =
+  | (RunSignupOtpIssueBaseInput & {
+      signupMode: "new-user";
+      password: string;
+      nickname: string;
+    })
+  | (RunSignupOtpIssueBaseInput & {
+      signupMode: "existing-user";
+      agreementUserId?: string;
     });
 
-  /**
-   * 요청 IP 추출 (rate limit key)
-   */
-  const ip = getClientIp(request);
-  const maskedIp = maskIpForLogging(ip);
+/**
+ * 회원가입 성공 응답을 생성한다.
+ *
+ * @param email validation 이후 사용자 입력 이메일
+ * @returns 회원가입 성공 응답
+ */
+function makeSignupSuccess(email: string): Response {
+  return successResponse(AUTH_API_CODES.SIGNUP_SUCCESS, {
+    email,
+    redirectTo: `${ROUTES.VERIFY_OTP}?purpose=signup&email=${encodeURIComponent(email)}`,
+  });
+}
 
-  /**
-   * IP 사전 검증 — 본문 파싱 비용 없이 IP 차단
-   *
-   * [이유: spec precheck_ip_rate_limit — must_run_before_body_parsing 요건]
-   * - 읽기 전용: ipStore를 읽기만 함, 상태 변경 금지
-   * - 최종 결정 권한이 아님: 이후 checkRequestEligibility가 최종 판단
-   */
-  const precheck = checkIpRateLimitPrecheck(ip);
-  if (!precheck.allowed) {
-    const reasonCode =
-      precheck.blockedBy === "ipLong"
-        ? AUTH_LOG_REASONS.RATE_LIMIT_IP_LONG
-        : AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT;
-
+/**
+ * typed OTP Issue failure를 Signup 외부 응답과 내부 로그 outcome으로 변환한다.
+ *
+ * @param kind OTP Issue failure 종류
+ * @param diagnostic 안전하게 정규화된 내부 진단 정보
+ * @param maskedEmail 마스킹된 canonical email
+ * @param maskedIp 마스킹된 trusted IP
+ * @returns Signup failure 응답과 terminal outcome
+ */
+function resolveSignupOtpFailure(
+  kind: IssueOtpAndSendEmailFailureKind,
+  diagnostic: IssueOtpAndSendEmailDiagnostic,
+  maskedEmail: string,
+  maskedIp: string,
+): ResolveSignupResult {
+  if (kind === "provider_rate_limit") {
     return {
       response: failureResponse(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED),
       outcome: {
         type: "blocked",
-        reasonCode,
+        reasonCode: AUTH_LOG_REASONS.PROVIDER_RATE_LIMIT,
+        maskedEmail,
         maskedIp,
+        ...diagnostic,
       },
     };
   }
 
+  if (kind === "delivery_error") {
+    return {
+      response: failureResponse(
+        AUTH_API_CODES.SIGNUP_EMAIL_DELIVERY_INTERNAL_ERROR,
+        {
+          message: AUTH_EMAIL_DELIVERY_ERROR_MESSAGE,
+        },
+      ),
+      outcome: {
+        type: "failed",
+        reasonCode: AUTH_LOG_REASONS.EMAIL_DELIVERY_ERROR,
+        maskedEmail,
+        maskedIp,
+        ...diagnostic,
+      },
+    };
+  }
+
+  return {
+    response: failureResponse(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR),
+    outcome: {
+      type: "failed",
+      reasonCode: AUTH_LOG_REASONS.PROVIDER_ERROR,
+      maskedEmail,
+      maskedIp,
+      ...diagnostic,
+    },
+  };
+}
+
+/**
+ * Signup mode별 typed OTP Issue 입력을 준비한다.
+ *
+ * 이 함수는 callback과 plain object만 구성하며 외부 I/O를 수행하지 않는다.
+ * tryStartIssue() 전에 호출하여 Rate Limit 허용 뒤 Provider operation이
+ * 즉시 시작될 수 있게 한다.
+ *
+ * @param input Signup OTP Issue identity와 account state
+ * @returns typed OTP Issue helper 입력
+ */
+function createSignupOtpIssueInput(
+  input: RunSignupOtpIssueInput,
+): IssueOtpAndSendEmailInput {
+  if (input.signupMode === "new-user") {
+    return {
+      email: input.deliveryEmail,
+      purpose: "signup",
+      signupMode: "new-user",
+      password: input.password,
+      metadata: {
+        nickname: input.nickname,
+        canonical_email: input.canonicalEmail,
+      },
+      beforeDelivery: async ({ userId }: { userId: string }) => {
+        await ensureUserAgreement(userId, "email");
+      },
+    };
+  }
+
+  const agreementUserId = input.agreementUserId;
+
+  if (agreementUserId) {
+    return {
+      email: input.deliveryEmail,
+      purpose: "signup",
+      signupMode: "existing-user",
+      beforeDelivery: async () => {
+        await ensureUserAgreement(agreementUserId, "email");
+      },
+    };
+  }
+
+  return {
+    email: input.deliveryEmail,
+    purpose: "signup",
+    signupMode: "existing-user",
+  };
+}
+
+/**
+ * Signup OTP Issue를 Rate Limit lifecycle에 맞춰 실행한다.
+ *
+ * client와 caller-specific 입력 준비는 `tryStartIssue()` 전에 끝내고,
+ * 허용 직후 다른 await/I/O 없이 typed-result helper를 호출하여
+ * 실제 `generateLink()`가 즉시 시작되도록 한다.
+ *
+ * 성공한 경우에만 successful Email quota를 기록하며,
+ * 성공/실패/예외와 관계없이 in-flight는 finally에서 해제한다.
+ *
+ * @param input Signup OTP Issue identity와 account state
+ * @returns Signup OTP Issue 결과
+ */
+async function runSignupOtpIssue(
+  input: RunSignupOtpIssueInput,
+): Promise<ResolveSignupResult> {
+  const otpIssueClient = createOtpIssueClient();
+  const otpIssueInput = createSignupOtpIssueInput(input);
+
+  const rateLimitResult = otpIssueRateLimit.tryStartIssue({
+    purpose: "signup",
+    canonicalEmail: input.canonicalEmail,
+    ip: input.ip,
+  });
+
+  if (!rateLimitResult.allowed) {
+    return {
+      response: failureResponse(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED),
+      outcome: {
+        type: "blocked",
+        reasonCode: mapOtpIssueBlockedByToReason(rateLimitResult.blockedBy),
+        maskedEmail: input.maskedEmail,
+        ...(rateLimitResult.blockedBy === "ip_short" ||
+        rateLimitResult.blockedBy === "ip_long"
+          ? { maskedIp: input.maskedIp }
+          : {}),
+      },
+    };
+  }
+
+  try {
+    // tryStartIssue() 성공 뒤에는 다른 await/I/O 없이 Provider operation을 시작한다.
+    const issueResult = await issueOtpAndSendEmailWithResult(
+      otpIssueInput,
+      otpIssueClient,
+    );
+
+    if (!issueResult.ok) {
+      return resolveSignupOtpFailure(
+        issueResult.kind,
+        issueResult.diagnostic,
+        input.maskedEmail,
+        input.maskedIp,
+      );
+    }
+
+    // successful quota는 OTP 발급 + email_otp 검증 + Email delivery 성공 뒤에만 기록한다.
+    otpIssueRateLimit.recordSuccessfulIssue({
+      purpose: "signup",
+      canonicalEmail: input.canonicalEmail,
+    });
+
+    return {
+      response: makeSignupSuccess(input.requestEmail),
+      outcome: { type: "completed" },
+    };
+  } finally {
+    // 성공 quota 기록보다 먼저 release하지 않는다.
+    otpIssueRateLimit.releaseIssue({
+      purpose: "signup",
+      canonicalEmail: input.canonicalEmail,
+    });
+  }
+}
+
+/**
+ * 회원가입 핵심 로직.
+ *
+ * 기존 조건의 처리:
+ * - malformed JSON / schema validation: 그대로 유지
+ * - trusted IP fail-closed: Provider/account side effect 전에 적용
+ * - canonical email lookup: account-state 외부 노출 없이 내부 분기용으로 사용
+ * - 기존 미인증 사용자: magiclink 발급 전 agreement persistence 복구 hook 연결
+ * - 기존 인증 사용자: magiclink 발급, agreement persistence 확대 없음
+ * - 신규 사용자: 별도 createUser() 없이 generateLink(type: "signup")에서 사용자 생성
+ * - legacy Signup precheck / eligibility limiter: OTP Issue 전용 limiter로 대체
+ *
+ * @param request 회원가입 POST 요청
+ * @returns 외부 응답과 structured logging용 terminal outcome
+ */
+async function resolveSignupResponse(
+  request: NextRequest,
+): Promise<ResolveSignupResult> {
   let body: unknown;
+
   try {
     body = await parseAuthJsonRequestBody(request);
-  } catch (e) {
-    /**
-     * malformed JSON 처리
-     */
-    if (e instanceof AuthJsonParseError) {
+  } catch (error) {
+    if (error instanceof AuthJsonParseError) {
       return {
         response: failureResponse(AUTH_API_CODES.SIGNUP_INVALID_INPUT, {
           errors: [{ field: "body", reason: VALIDATION_REASON.INVALID_FORMAT }],
@@ -121,14 +373,12 @@ async function resolveSignupResponse(
         },
       };
     }
-    throw e;
+
+    throw error;
   }
 
-  /**
-   * 입력값 validation
-   */
+  // Provider/Rate Limit 상태를 만지기 전에 입력값을 검증한다.
   const parsed = signupApiSchema.safeParse(body);
-
   if (!parsed.success) {
     return {
       response: failureResponse(AUTH_API_CODES.SIGNUP_INVALID_INPUT, {
@@ -142,159 +392,82 @@ async function resolveSignupResponse(
   }
 
   const { email, password, nickname } = parsed.data;
-
   const canonicalEmail = canonicalizeEmail(email);
   const maskedEmail = maskEmailForLogging(canonicalEmail);
 
   /**
-   * Request eligibility check — IP, email short, email long 에 대한 통합 판별
+   * OTP Issue Rate Limit identity에 사용할 trusted end-user IP를 확보한다.
    *
-   * 설계:
-   * - single entry point: checkRequestEligibility 하나로 모든 조건 평가
-   * - atomic: 판단과 상태 업데이트가 함수 내에서 함께 일어남
-   * - AND evaluation: 세 조건(IP, short, long) 모두 통과해야 허용
-   * - 차단 시 blockedBy를 반환하며, 로깅은 route handler(여기)에서 담당한다
+   * Preview/Production에서 확보하지 못하면 fail-closed하고,
+   * 계정 조회/생성 및 Provider operation을 시작하지 않는다.
    */
-  const eligibility = checkRequestEligibility("signup", ip, canonicalEmail);
-  if (!eligibility.allowed) {
+  const trustedIp = getTrustedAuthClientIp(request);
+  if (!trustedIp.available) {
     return {
-      response: failureResponse(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED),
+      response: failureResponse(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR),
       outcome: {
-        type: "blocked",
-        reasonCode: mapBlockedByToReason(eligibility.blockedBy),
+        type: "failed",
+        reasonCode: trustedIp.reasonCode,
         maskedEmail,
-        // [이유: blockedBy "ip" → "ipShort" | "ipLong"으로 분리됨]
-        ...(eligibility.blockedBy === "ipShort" ||
-        eligibility.blockedBy === "ipLong"
-          ? { maskedIp }
-          : {}),
       },
     };
   }
 
-  /**
-   * 기존 사용자 조회 (내부 분기용)
-   *
-   * ⚠️ 중요:
-   * - 외부 응답은 반드시 동일해야 함
-   */
+  const { ip } = trustedIp;
+  const maskedIp = maskIpForLogging(ip);
+
+  // 기존 사용자 조회는 account-state 외부 노출 없이 Signup Issue mode를 결정하는 데만 사용한다.
   const existingUser = await getUserByEmail(canonicalEmail);
 
-  /**
-   * [기존 사용자 - 미인증]
-   *
-   * OTP 이메일 재발송 시도 (side-effect)
-   * ⚠️ 설계 의도:
-   * - signup 정책은 OTP 입력 방식으로 이메일 인증을 처리한다.
-   * - 기존 미인증 사용자는 새 계정을 만들지 않고 동일 이메일로 OTP를 재발급한다.
-   */
-  if (existingUser && existingUser.email_confirmed_at === null) {
-    const deliveryEmail = existingUser?.email ?? email;
+  if (existingUser) {
+    const deliveryEmail = existingUser.email ?? email;
 
-    try {
-      await issueOtpAndSendEmail({
-        purpose: "signup",
-        email: deliveryEmail,
-      });
-    } catch {
-      // 외부 응답 계약 통일: side-effect 실패는 여기서 로깅하지 않는다.
-    }
-
-    return {
-      response: makeSignupSuccess(email),
-      outcome: { type: "completed" },
-    };
-  }
-
-  /**
-   * [기존 사용자 - 인증 완료]
-   *
-   * 기존 가입 사용자에게도 동일한 성공 응답을 반환한다.
-   * 계정 존재 여부 노출을 막기 위해 OTP 발송 실패 여부는 외부 응답에 반영하지 않는다.
-   */
-  if (existingUser && existingUser.email_confirmed_at !== null) {
-    const deliveryEmail = existingUser?.email ?? email;
-
-    try {
-      await issueOtpAndSendEmail({
-        purpose: "signup",
-        email: deliveryEmail,
-      });
-    } catch {
-      // 외부 응답 계약 통일: side-effect 실패는 여기서 로깅하지 않는다.
-    }
-
-    return {
-      response: makeSignupSuccess(email),
-      outcome: { type: "completed" },
-    };
-  }
-
-  /**
-   * [신규 사용자 가입]
-   *
-   * 순서:
-   * 1) createUser로 auth user 생성 보장
-   * 2) signup 목적의 OTP 발급
-   * 3) 커스텀 OTP 이메일 발송
-   *
-   * 실패 정책:
-   * - createUser 또는 OTP 발급/이메일 발송 실패는 내부 예외로 처리한다.
-   * - POST 핸들러에서 SIGNUP_INTERNAL_ERROR로 정규화한다.
-   */
-  const adminClient = createAdminClient();
-
-  /**
-   * NOTE:
-   * email_confirm: false는 이메일 인증 상태만 제어하며,
-   * Supabase의 자동 이메일 발송을 비활성화하는 옵션이 아니다.
-   * 검증 기준(2026-04-14): 현재 운영/스테이징 설정에서는 Supabase 기본 이메일이
-   * 발송되지 않아 커스텀 OTP 메일만 발송되고 있다.
-   *
-   * ⚠️ 주의:
-   * Supabase 이메일 설정(Auth Email Provider 포함)이 변경될 경우 기본 메일이 함께
-   * 발송되어 중복 전송이 발생할 수 있으므로, 설정 전제를 유지해야 한다.
-   * 설정 변경 시 signup 메일 발송 회귀 테스트를 반드시 수행한다.
-   */
-  const { data: createUserData, error: createUserError } =
-    await adminClient.auth.admin.createUser({
-      email: email, // raw email — auth.users에 사용자 입력 보존
-      password,
-      email_confirm: false,
-      user_metadata: { nickname, canonical_email: canonicalEmail }, // trigger가 profiles에 기록
+    return runSignupOtpIssue({
+      signupMode: "existing-user",
+      requestEmail: email,
+      deliveryEmail,
+      canonicalEmail,
+      ip,
+      maskedEmail,
+      maskedIp,
+      ...(existingUser.email_confirmed_at === null
+        ? { agreementUserId: existingUser.id }
+        : {}),
     });
-
-  if (createUserError) {
-    throw createUserError;
   }
-
-  if (createUserData.user?.id) {
-    // 이메일 가입은 서버 validation을 통과한 약관 동의 사실을 user_id 기준으로 보존한다.
-    await ensureUserAgreement(createUserData.user.id, "email");
-  }
-
-  await issueOtpAndSendEmail({ email, purpose: "signup" });
 
   /**
-   * 최종 성공 응답
+   * 신규 사용자는 별도 createUser()를 선행하지 않는다.
    *
-   * 계정 존재 여부와 내부 분기 결과를 외부로 노출하지 않기 위해
-   * 성공 가능한 경로는 동일한 SIGNUP_SUCCESS 응답 계약을 유지한다.
+   * Local OTP Issue Rate Limit이 허용된 뒤 첫 Provider operation인
+   * generateLink(type: "signup")이 사용자 생성과 OTP 발급을 함께 수행한다.
+   * 따라서 Local Rate Limit 차단 요청은 사용자 생성 side effect에 도달하지 않는다.
    */
-  return { response: makeSignupSuccess(email), outcome: { type: "completed" } }; // raw email 응답
+  return runSignupOtpIssue({
+    signupMode: "new-user",
+    requestEmail: email,
+    deliveryEmail: email,
+    canonicalEmail,
+    ip,
+    maskedEmail,
+    maskedIp,
+    password,
+    nickname,
+  });
 }
 
 /**
- * 회원가입 API (Account Enumeration 방어 적용)
+ * 회원가입 API.
  *
- * 핵심 원칙:
- * - 외부 응답은 항상 동일하게 유지
- * - 내부 상태 분기는 유지하되 외부로 노출하지 않음
- * - 응답만 보고 계정 존재 여부를 추론할 수 없도록 설계
- * - 모든 경로(성공/실패/예외)는 최소 응답 시간을 보장한다
+ * Account Enumeration 방어를 위해 account state가 아니라
+ * 동일 OTP Issue 결과에 동일한 외부 응답 계약을 적용한다.
+ *
+ * @param request 회원가입 POST 요청
+ * @returns 회원가입 API 응답
  */
 export async function POST(request: NextRequest) {
   const start = Date.now();
+
   logRequested(AUTH_EVENTS.AUTH_SIGNUP_REQUESTED, {
     path: request.nextUrl.pathname,
     method: request.method,
@@ -302,14 +475,13 @@ export async function POST(request: NextRequest) {
   });
 
   let resolved: ResolveSignupResult;
+
   try {
     resolved = await resolveSignupResponse(request);
   } catch (error) {
     const { errorMessage, errorName } = normalizeUnknownError(error);
     const response = failureResponse(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR);
 
-    // 현재는 내부 예외를 INTERNAL_ERROR로 정규화한다.
-    // 상세 원인은 errorMessage/errorName으로 추적하며, reasonCode는 추후 세분화할 예정이다.
     logAuthError(AUTH_EVENTS.AUTH_SIGNUP_FAILED, {
       path: request.nextUrl.pathname,
       method: request.method,
@@ -326,6 +498,7 @@ export async function POST(request: NextRequest) {
 
   const { response, outcome } = resolved;
 
+  // REQUESTED 이후 정확히 하나의 terminal event만 기록한다.
   switch (outcome.type) {
     case "invalid_input":
       logAuthEvent(AUTH_EVENTS.AUTH_INVALID_INPUT, {
@@ -338,6 +511,7 @@ export async function POST(request: NextRequest) {
         ...(outcome.maskedEmail ? { maskedEmail: outcome.maskedEmail } : {}),
       });
       break;
+
     case "blocked":
       logAuthEvent(AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED, {
         path: request.nextUrl.pathname,
@@ -348,8 +522,16 @@ export async function POST(request: NextRequest) {
         reasonCode: outcome.reasonCode,
         ...(outcome.maskedEmail ? { maskedEmail: outcome.maskedEmail } : {}),
         ...(outcome.maskedIp ? { maskedIp: outcome.maskedIp } : {}),
+        ...(outcome.errorMessage
+          ? {
+              errorMessage: outcome.errorMessage,
+              errorName: outcome.errorName ?? "UnknownError",
+            }
+          : {}),
+        ...(outcome.errorCode ? { errorCode: outcome.errorCode } : {}),
       });
       break;
+
     case "completed":
       logAuthEvent(AUTH_EVENTS.AUTH_SIGNUP_COMPLETED, {
         path: request.nextUrl.pathname,
@@ -357,6 +539,26 @@ export async function POST(request: NextRequest) {
         status: response.status,
         provider: "email",
         result: "success",
+      });
+      break;
+
+    case "failed":
+      logAuthError(AUTH_EVENTS.AUTH_SIGNUP_FAILED, {
+        path: request.nextUrl.pathname,
+        method: request.method,
+        status: response.status,
+        provider: "email",
+        result: "failure",
+        reasonCode: outcome.reasonCode,
+        ...(outcome.maskedEmail ? { maskedEmail: outcome.maskedEmail } : {}),
+        ...(outcome.maskedIp ? { maskedIp: outcome.maskedIp } : {}),
+        ...(outcome.errorMessage
+          ? {
+              errorMessage: outcome.errorMessage,
+              errorName: outcome.errorName ?? "UnknownError",
+            }
+          : {}),
+        ...(outcome.errorCode ? { errorCode: outcome.errorCode } : {}),
       });
       break;
   }

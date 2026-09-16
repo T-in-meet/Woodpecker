@@ -78,6 +78,9 @@ type SuccessLogContext = CommonLogFields & {
 type BlockedLogContext = CommonLogFields & {
   result: "blocked";
   reasonCode: AuthLogReason;
+  errorMessage?: string;
+  errorName?: string;
+  errorCode?: string;
 };
 
 type RejectedLogContext = CommonLogFields & {

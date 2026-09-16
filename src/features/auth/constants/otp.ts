@@ -1,19 +1,21 @@
 /**
- * 서비스 OTP 목적을 Supabase OTP 인증 타입으로 변환한다.
+ * 서비스 OTP purpose를 Supabase verifyOtp 타입으로 변환한다.
  *
  * signup
- * → 회원가입 이메일 인증
- * → Supabase magiclink 사용
+ * → 신규 Signup의 signup token과 기존 사용자 재발급의 magiclink token을
+ *   동일한 Signup Verify 흐름에서 검증하기 위해 Supabase email 타입을 사용한다.
  *
  * reset-password
  * → 비밀번호 재설정 인증
  * → Supabase recovery 사용
  */
-export const OTP_PURPOSE_TO_SUPABASE_TYPE: Record<OtpPurpose, SupabaseOtpType> =
-  {
-    signup: "magiclink",
-    "reset-password": "recovery",
-  };
+export const OTP_PURPOSE_TO_SUPABASE_VERIFY_TYPE: Record<
+  OtpPurpose,
+  SupabaseOtpVerifyType
+> = {
+  signup: "email",
+  "reset-password": "recovery",
+};
 
 /**
  * OTP 입력 길이.
@@ -39,6 +41,15 @@ export const OTP_LENGTH = 6;
  * OTP 발급에 실패한 상황에서 사용한다.
  */
 export const MISSING_EMAIL_OTP_ERROR_MESSAGE = "인증 번호를 받지 못했습니다.";
+
+/**
+ * 신규 Signup generateLink 결과에 user id가 존재하지 않을 때 사용하는 내부 에러 메시지.
+ *
+ * 사용자 생성과 OTP 발급을 함께 수행하는 signup Provider 응답에서
+ * 약관 저장에 필요한 사용자 identity가 누락된 상태를 나타낸다.
+ */
+export const MISSING_SIGNUP_USER_ID_ERROR_MESSAGE =
+  "회원가입 사용자 정보를 받지 못했습니다.";
 
 /**
  * Supabase OTP generateLink 요청 timeout.
@@ -89,27 +100,22 @@ export const OTP_PURPOSES = ["signup", "reset-password"] as const;
 export type OtpPurpose = (typeof OTP_PURPOSES)[number];
 
 /**
- * Supabase OTP 인증 타입 목록.
+ * Supabase OTP Verify 타입 목록.
  *
- * magiclink:
- * - 회원가입 이메일 인증에 사용
+ * email:
+ * - Signup purpose의 signup / magiclink token 검증에 사용
  *
  * recovery:
  * - 비밀번호 재설정(recovery) 인증에 사용
- *
- * 사용 목적:
- * - zod enum schema 생성
- * - Supabase OTP 타입 추론
- * - OTP 목적 → Supabase 타입 매핑
  */
-export const SUPABASE_OTP_TYPES = ["magiclink", "recovery"] as const;
+export const SUPABASE_OTP_VERIFY_TYPES = ["email", "recovery"] as const;
 
 /**
- * Supabase OTP 인증 타입.
+ * Supabase OTP Verify 타입.
  *
- * SUPABASE_OTP_TYPES 상수를 기반으로 생성된다.
+ * SUPABASE_OTP_VERIFY_TYPES 상수를 기반으로 생성된다.
  */
-export type SupabaseOtpType = (typeof SUPABASE_OTP_TYPES)[number];
+export type SupabaseOtpVerifyType = (typeof SUPABASE_OTP_VERIFY_TYPES)[number];
 
 /**
  * OTP 인증 실패 안내 메시지.

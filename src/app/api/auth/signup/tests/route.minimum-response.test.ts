@@ -20,10 +20,10 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
-import { issueOtpAndSendEmail } from "@/features/auth/email/issueOtpAndSendEmail";
+import { issueOtpAndSendEmailWithResult } from "@/features/auth/email/issueOtpAndSendEmail";
 import { MIN_RESPONSE_MS } from "@/features/auth/lib/applyMinimumResponseTime";
-import { resetEligibilityStore } from "@/features/auth/lib/checkRequestEligibility";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
+import { resetOtpIssueRateLimitForTests } from "@/features/auth/lib/rate-limit/otpIssueRateLimit";
 import { ROUTES } from "@/lib/constants/routes";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -48,7 +48,7 @@ describe("회원가입 API 최소 응답 시간 보장 검증", () => {
   const mockCreateUser = vi.fn();
 
   beforeEach(() => {
-    resetEligibilityStore();
+    resetOtpIssueRateLimitForTests();
     vi.useRealTimers();
     vi.restoreAllMocks();
     vi.clearAllMocks();
@@ -65,7 +65,7 @@ describe("회원가입 API 최소 응답 시간 보장 검증", () => {
     });
 
     vi.mocked(getUserByEmail).mockResolvedValue(null);
-    vi.mocked(issueOtpAndSendEmail).mockResolvedValue(undefined);
+    vi.mocked(issueOtpAndSendEmailWithResult).mockResolvedValue({ ok: true });
   });
 
   const validBody = {

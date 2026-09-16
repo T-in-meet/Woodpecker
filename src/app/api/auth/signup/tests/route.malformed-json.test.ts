@@ -13,9 +13,9 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
-import { issueOtpAndSendEmail } from "@/features/auth/email/issueOtpAndSendEmail";
-import { resetEligibilityStore } from "@/features/auth/lib/checkRequestEligibility";
+import { issueOtpAndSendEmailWithResult } from "@/features/auth/email/issueOtpAndSendEmail";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
+import { resetOtpIssueRateLimitForTests } from "@/features/auth/lib/rate-limit/otpIssueRateLimit";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { POST } from "../route";
@@ -33,7 +33,7 @@ function makeMalformedJsonRequest(): NextRequest {
 }
 
 beforeEach(() => {
-  resetEligibilityStore();
+  resetOtpIssueRateLimitForTests();
   vi.clearAllMocks();
 });
 
@@ -62,6 +62,6 @@ describe("회원가입 - malformed JSON 처리", () => {
 
     expect(createAdminClient).toHaveBeenCalledTimes(0);
     expect(getUserByEmail).toHaveBeenCalledTimes(0);
-    expect(issueOtpAndSendEmail).toHaveBeenCalledTimes(0);
+    expect(issueOtpAndSendEmailWithResult).toHaveBeenCalledTimes(0);
   });
 });

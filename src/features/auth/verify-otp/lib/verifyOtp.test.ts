@@ -19,7 +19,7 @@ describe("verifyOtp", () => {
     } as never);
   });
 
-  it("signup purpose를 magiclink로 변환한다", async () => {
+  it("signup purpose를 email type으로 변환한다", async () => {
     mockVerifyOtp.mockResolvedValue({
       data: {},
       error: null,
@@ -34,7 +34,7 @@ describe("verifyOtp", () => {
     expect(mockVerifyOtp).toHaveBeenCalledWith({
       email: "user@example.com",
       token: "123456",
-      type: "magiclink",
+      type: "email",
     });
   });
 

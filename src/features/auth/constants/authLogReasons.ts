@@ -32,6 +32,12 @@ export const AUTH_LOG_REASONS = {
    */
   PROVIDER_ERROR: "PROVIDER_ERROR",
   /**
+   * OTP 발급 이후 커스텀 Email delivery 계층에서 발생한 실패.
+   *
+   * Provider/System 오류와 구분하여 기록하며 외부에는 상세 원인을 노출하지 않는다.
+   */
+  EMAIL_DELIVERY_ERROR: "EMAIL_DELIVERY_ERROR",
+  /**
    * Vercel Preview/Production에서 신뢰 가능한 사용자 IP를 확보하지 못한 상태.
    *
    * 외부 응답에는 이 내부 사유를 노출하지 않는다.

@@ -21,9 +21,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
-import { issueOtpAndSendEmail } from "@/features/auth/email/issueOtpAndSendEmail";
-import { resetEligibilityStore } from "@/features/auth/lib/checkRequestEligibility";
+import { issueOtpAndSendEmailWithResult } from "@/features/auth/email/issueOtpAndSendEmail";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
+import { resetOtpIssueRateLimitForTests } from "@/features/auth/lib/rate-limit/otpIssueRateLimit";
 import { ROUTES } from "@/lib/constants/routes";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -40,7 +40,7 @@ vi.mock("@/features/auth/email/issueOtpAndSendEmail");
 vi.mock("@/lib/supabase/admin");
 
 beforeEach(() => {
-  resetEligibilityStore();
+  resetOtpIssueRateLimitForTests();
   vi.clearAllMocks();
   process.env["EMAIL_TICKET_SECRET"] = "test-ticket-secret";
 
@@ -58,7 +58,7 @@ beforeEach(() => {
   });
 
   vi.mocked(getUserByEmail).mockResolvedValue(null);
-  vi.mocked(issueOtpAndSendEmail).mockResolvedValue(undefined);
+  vi.mocked(issueOtpAndSendEmailWithResult).mockResolvedValue({ ok: true });
 });
 
 describe("회원가입 - Gmail alias collision (canonicalization)", () => {
@@ -98,10 +98,13 @@ describe("회원가입 - Gmail alias collision (canonicalization)", () => {
       expect(vi.mocked(getUserByEmail)).toHaveBeenCalledWith("user@gmail.com");
 
       // 발송은 canonical이 아니라 existingUser.email(raw) 기준으로 호출
-      expect(vi.mocked(issueOtpAndSendEmail)).toHaveBeenCalledWith({
-        email: "u.s.e.r+legacy@gmail.com",
-        purpose: "signup",
-      });
+      expect(vi.mocked(issueOtpAndSendEmailWithResult)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          email: "u.s.e.r+legacy@gmail.com",
+          purpose: "signup",
+        }),
+        expect.anything(),
+      );
     });
 
     it("응답은 동일한 SIGNUP_SUCCESS 계약 유지", async () => {

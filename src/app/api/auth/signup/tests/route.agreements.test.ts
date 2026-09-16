@@ -1,88 +1,83 @@
 /**
- * 회원가입 API 약관 동의 검증 전용 테스트
- *
- * 이 파일은 agreements 필드의 구조와 값만 검증한다.
- * - 이용약관 동의, 처리방침 확인, 연령 확인이 false인 경우 NOT_AGREED
- * - agreements 또는 하위 필드 누락 시 REQUIRED
- * - null 입력 시 REQUIRED
- * - 잘못된 타입 입력 시 INVALID_TYPE
- * - 두 약관이 모두 true일 때 정상 가입 성공
- *
- * 핵심 목적:
- * "약관 동의 검증 책임"을 일반 입력 validation과 분리해 읽기 쉽게 유지한다.
+ * 회원가입 API 약관 동의 검증 및 persistence 전용 테스트.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
-import { issueOtpAndSendEmail } from "@/features/auth/email/issueOtpAndSendEmail";
-import { resetEligibilityStore } from "@/features/auth/lib/checkRequestEligibility";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { issueOtpAndSendEmailWithResult } from "@/features/auth/email/issueOtpAndSendEmail";
+import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { VALIDATION_REASON } from "@/lib/validation/reasons";
 
 import { POST } from "../route";
 import { makeRequest } from "./utils/signupTestHelper";
 
-const upsertUserAgreementMock = vi.hoisted(() => vi.fn());
+const ensureUserAgreementMock = vi.hoisted(() => vi.fn());
+const otpIssueClient = vi.hoisted(() => ({ client: "otp-issue-client" }));
+const createOtpIssueClientMock = vi.hoisted(() => vi.fn(() => otpIssueClient));
+const otpIssueRateLimitMock = vi.hoisted(() => ({
+  tryStartIssue: vi.fn(),
+  recordSuccessfulIssue: vi.fn(),
+  releaseIssue: vi.fn(),
+}));
 
 vi.mock("@/features/auth/lib/userAgreements", () => ({
-  ensureUserAgreement: upsertUserAgreementMock,
+  ensureUserAgreement: ensureUserAgreementMock,
 }));
 vi.mock("@/features/auth/lib/getUserByEmail");
 vi.mock("@/features/auth/email/issueOtpAndSendEmail");
-vi.mock("@/lib/supabase/admin");
+vi.mock("@/features/auth/lib/issueOtp", () => ({
+  createOtpIssueClient: createOtpIssueClientMock,
+}));
+vi.mock("@/features/auth/lib/rate-limit/otpIssueRateLimit", () => ({
+  otpIssueRateLimit: otpIssueRateLimitMock,
+}));
 
-// 테스트 간 rate limit store 공유 상태 제거
-beforeEach(() => {
-  resetEligibilityStore();
-});
+const BASE_VALID_PAYLOAD = {
+  email: "test@example.com",
+  password: "Password123!",
+  nickname: "테스터",
+  agreements: {
+    termsOfService: true,
+    privacyPolicyAcknowledged: true,
+    age14OrOlder: true,
+  },
+};
+
+async function expectAgreementFailure(
+  response: Response,
+  field: string,
+  reason: string,
+): Promise<void> {
+  const body = await response.json();
+
+  expect(response.status).toBe(400);
+  expect(body.success).toBe(false);
+  expect(body.code).toBe(AUTH_API_CODES.SIGNUP_INVALID_INPUT);
+  expect(body.data.errors).toEqual(
+    expect.arrayContaining([expect.objectContaining({ field, reason })]),
+  );
+}
 
 describe("PR-API-03 회원가입 약관 동의 검증", () => {
-  const mockCreateUser = vi.fn();
-
-  // 약관만 바꿔가며 테스트하기 위한 기준 payload
-  const BASE_VALID_PAYLOAD = {
-    email: "test@example.com",
-    password: "Password123!",
-    nickname: "테스터",
-    agreements: {
-      termsOfService: true,
-      privacyPolicyAcknowledged: true,
-      age14OrOlder: true,
-    },
-  };
-
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env["EMAIL_TICKET_SECRET"] = "test-ticket-secret";
-    vi.mocked(createAdminClient).mockReturnValue({
-      auth: {
-        admin: { createUser: mockCreateUser },
+
+    vi.mocked(getUserByEmail).mockResolvedValue(null);
+    otpIssueRateLimitMock.tryStartIssue.mockReturnValue({ allowed: true });
+    ensureUserAgreementMock.mockResolvedValue(undefined);
+
+    vi.mocked(issueOtpAndSendEmailWithResult).mockImplementation(
+      async (input) => {
+        if (input.purpose === "signup" && input.signupMode === "new-user") {
+          await input.beforeDelivery?.({ userId: "user-id" });
+        }
+
+        return { ok: true };
       },
-    } as never);
-    mockCreateUser.mockResolvedValue({
-      data: { user: { id: "user-id", email: "test@example.com" } },
-      error: null,
-    });
-    vi.mocked(issueOtpAndSendEmail).mockResolvedValue(undefined);
+    );
   });
 
-  // 약관 실패 케이스마다 동일한 실패 계약을 검증하는 helper
-  async function expectAgreementFailure(
-    response: Response,
-    field: string,
-    reason: string,
-  ) {
-    const body = await response.json();
-    expect(response.status).toBe(400);
-    expect(body.success).toBe(false);
-    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_INVALID_INPUT);
-    expect(body.data.errors).toEqual(
-      expect.arrayContaining([expect.objectContaining({ field, reason })]),
-    );
-  }
-
-  // TC-01: termsOfService = false
   it("TC-01. termsOfService가 false이면 NOT_AGREED 오류를 반환한다", async () => {
     const response = await POST(
       makeRequest({
@@ -100,11 +95,10 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
       "agreements.termsOfService",
       VALIDATION_REASON.NOT_AGREED,
     );
-    expect(mockCreateUser).not.toHaveBeenCalled();
-    expect(vi.mocked(issueOtpAndSendEmail)).not.toHaveBeenCalled();
+    expect(issueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
+    expect(ensureUserAgreementMock).not.toHaveBeenCalled();
   });
 
-  // TC-02: privacyPolicyAcknowledged = false
   it("TC-02. 처리방침 확인이 false이면 NOT_AGREED 오류를 반환한다", async () => {
     const response = await POST(
       makeRequest({
@@ -122,8 +116,8 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
       "agreements.privacyPolicyAcknowledged",
       VALIDATION_REASON.NOT_AGREED,
     );
-    expect(mockCreateUser).not.toHaveBeenCalled();
-    expect(vi.mocked(issueOtpAndSendEmail)).not.toHaveBeenCalled();
+    expect(issueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
+    expect(ensureUserAgreementMock).not.toHaveBeenCalled();
   });
 
   it("TC-03. 연령 확인이 false이면 NOT_AGREED 오류를 반환한다", async () => {
@@ -143,11 +137,10 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
       "agreements.age14OrOlder",
       VALIDATION_REASON.NOT_AGREED,
     );
-    expect(mockCreateUser).not.toHaveBeenCalled();
-    expect(vi.mocked(issueOtpAndSendEmail)).not.toHaveBeenCalled();
+    expect(issueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
+    expect(ensureUserAgreementMock).not.toHaveBeenCalled();
   });
 
-  // TC-04: termsOfService missing
   it("TC-04. termsOfService가 누락되면 REQUIRED 오류를 반환한다", async () => {
     const response = await POST(
       makeRequest({
@@ -164,11 +157,9 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
       "agreements.termsOfService",
       VALIDATION_REASON.REQUIRED,
     );
-    expect(mockCreateUser).not.toHaveBeenCalled();
-    expect(vi.mocked(issueOtpAndSendEmail)).not.toHaveBeenCalled();
+    expect(issueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
   });
 
-  // TC-05: privacyPolicyAcknowledged missing
   it("TC-05. 처리방침 확인이 누락되면 REQUIRED 오류를 반환한다", async () => {
     const response = await POST(
       makeRequest({
@@ -182,11 +173,9 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
       "agreements.privacyPolicyAcknowledged",
       VALIDATION_REASON.REQUIRED,
     );
-    expect(mockCreateUser).not.toHaveBeenCalled();
-    expect(vi.mocked(issueOtpAndSendEmail)).not.toHaveBeenCalled();
+    expect(issueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
   });
 
-  // TC-06: agreements missing
   it("TC-06. agreements 필드 자체가 누락되면 REQUIRED 오류를 반환한다", async () => {
     const { agreements: _, ...withoutAgreements } = BASE_VALID_PAYLOAD;
     const response = await POST(makeRequest(withoutAgreements));
@@ -196,11 +185,9 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
       "agreements",
       VALIDATION_REASON.REQUIRED,
     );
-    expect(mockCreateUser).not.toHaveBeenCalled();
-    expect(vi.mocked(issueOtpAndSendEmail)).not.toHaveBeenCalled();
+    expect(issueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
   });
 
-  // TC-07: agreements null
   it("TC-07. agreements가 null이면 REQUIRED 오류를 반환한다", async () => {
     const response = await POST(
       makeRequest({ ...BASE_VALID_PAYLOAD, agreements: null }),
@@ -211,11 +198,9 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
       "agreements",
       VALIDATION_REASON.REQUIRED,
     );
-    expect(mockCreateUser).not.toHaveBeenCalled();
-    expect(vi.mocked(issueOtpAndSendEmail)).not.toHaveBeenCalled();
+    expect(issueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
   });
 
-  // TC-08: termsOfService null
   it("TC-08. termsOfService가 null이면 REQUIRED 오류를 반환한다", async () => {
     const response = await POST(
       makeRequest({
@@ -233,11 +218,9 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
       "agreements.termsOfService",
       VALIDATION_REASON.REQUIRED,
     );
-    expect(mockCreateUser).not.toHaveBeenCalled();
-    expect(vi.mocked(issueOtpAndSendEmail)).not.toHaveBeenCalled();
+    expect(issueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
   });
 
-  // TC-09: privacyPolicyAcknowledged null
   it("TC-09. 처리방침 확인이 null이면 REQUIRED 오류를 반환한다", async () => {
     const response = await POST(
       makeRequest({
@@ -255,11 +238,9 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
       "agreements.privacyPolicyAcknowledged",
       VALIDATION_REASON.REQUIRED,
     );
-    expect(mockCreateUser).not.toHaveBeenCalled();
-    expect(vi.mocked(issueOtpAndSendEmail)).not.toHaveBeenCalled();
+    expect(issueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
   });
 
-  // TC-10: agreements invalid type
   it("TC-10. agreements가 string이면 INVALID_TYPE 오류를 반환한다", async () => {
     const response = await POST(
       makeRequest({ ...BASE_VALID_PAYLOAD, agreements: "yes" }),
@@ -270,36 +251,146 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
       "agreements",
       VALIDATION_REASON.INVALID_TYPE,
     );
-    expect(mockCreateUser).not.toHaveBeenCalled();
-    expect(vi.mocked(issueOtpAndSendEmail)).not.toHaveBeenCalled();
+    expect(issueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
   });
 
-  // TC-11: both true
-  it("TC-11. agreements가 모두 true이면 회원가입이 성공한다", async () => {
+  it("TC-11. agreements가 모두 true이면 신규 Signup의 beforeDelivery에서 약관 동의를 저장한다", async () => {
     const response = await POST(makeRequest(BASE_VALID_PAYLOAD));
     const body = await response.json();
 
     expect(response.status).toBe(200);
     expect(body.success).toBe(true);
     expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
-    expect(mockCreateUser).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(issueOtpAndSendEmail)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(issueOtpAndSendEmail)).toHaveBeenCalledWith({
-      email: "test@example.com",
-      purpose: "signup",
-    });
-    expect(upsertUserAgreementMock).toHaveBeenCalledTimes(1);
-    expect(upsertUserAgreementMock).toHaveBeenCalledWith("user-id", "email");
+    expect(vi.mocked(issueOtpAndSendEmailWithResult)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: "test@example.com",
+        purpose: "signup",
+        signupMode: "new-user",
+        password: "Password123!",
+        metadata: {
+          nickname: "테스터",
+          canonical_email: "test@example.com",
+        },
+        beforeDelivery: expect.any(Function),
+      }),
+      otpIssueClient,
+    );
+    expect(ensureUserAgreementMock).toHaveBeenCalledTimes(1);
+    expect(ensureUserAgreementMock).toHaveBeenCalledWith("user-id", "email");
   });
 
-  it("TC-12. 사용자 생성에 실패하면 약관 동의를 기록하지 않는다", async () => {
-    mockCreateUser.mockResolvedValueOnce({
-      data: { user: null },
-      error: new Error("create user failed"),
+  it("TC-12. Provider/OTP 단계에서 실패하면 약관 동의를 기록하지 않는다", async () => {
+    vi.mocked(issueOtpAndSendEmailWithResult).mockResolvedValueOnce({
+      ok: false,
+      kind: "provider_error",
+      diagnostic: {
+        errorMessage: "provider failed",
+        errorName: "ProviderError",
+      },
     });
 
     await POST(makeRequest(BASE_VALID_PAYLOAD));
 
-    expect(upsertUserAgreementMock).not.toHaveBeenCalled();
+    expect(ensureUserAgreementMock).not.toHaveBeenCalled();
+  });
+
+  it("TC-13. agreement persistence 실패는 SIGNUP_INTERNAL_ERROR가 되고 successful quota 없이 release한다", async () => {
+    ensureUserAgreementMock.mockRejectedValueOnce(
+      new Error("agreement failed"),
+    );
+
+    const response = await POST(makeRequest(BASE_VALID_PAYLOAD));
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR);
+    expect(ensureUserAgreementMock).toHaveBeenCalledWith("user-id", "email");
+    expect(otpIssueRateLimitMock.recordSuccessfulIssue).not.toHaveBeenCalled();
+    expect(otpIssueRateLimitMock.releaseIssue).toHaveBeenCalledWith({
+      purpose: "signup",
+      canonicalEmail: "test@example.com",
+    });
+  });
+
+  it("TC-14. 신규 Signup agreement 실패 후 재시도하면 existing-unverified 분기에서 동일 user id agreement를 복구한다", async () => {
+    const recoveryUser = {
+      id: "recovery-user-id",
+      email: "test@example.com",
+      email_confirmed_at: null,
+    };
+
+    // 첫 요청은 신규 사용자, 다음 허용된 재시도는 생성된 미인증 사용자로 조회된다.
+    vi.mocked(getUserByEmail)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(recoveryUser as never);
+
+    // 첫 beforeDelivery에서만 agreement persistence가 실패한다.
+    ensureUserAgreementMock.mockRejectedValueOnce(
+      new Error("agreement failed"),
+    );
+
+    vi.mocked(issueOtpAndSendEmailWithResult).mockImplementation(
+      async (input) => {
+        if (input.purpose !== "signup") {
+          return { ok: true };
+        }
+
+        if (input.signupMode === "new-user") {
+          await input.beforeDelivery?.({ userId: "recovery-user-id" });
+        } else {
+          await input.beforeDelivery?.();
+        }
+
+        return { ok: true };
+      },
+    );
+
+    const firstResponse = await POST(makeRequest(BASE_VALID_PAYLOAD));
+    const firstBody = await firstResponse.json();
+
+    expect(firstResponse.status).toBe(500);
+    expect(firstBody.code).toBe(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR);
+    expect(otpIssueRateLimitMock.recordSuccessfulIssue).not.toHaveBeenCalled();
+    expect(otpIssueRateLimitMock.releaseIssue).toHaveBeenCalledTimes(1);
+
+    // 이 테스트는 agreement recovery를 격리하므로 limiter는 허용 상태로 mock한다.
+    // cooldown/IP lifecycle 자체는 route.rate-limit.test.ts에서 별도로 검증한다.
+    const secondResponse = await POST(makeRequest(BASE_VALID_PAYLOAD));
+    const secondBody = await secondResponse.json();
+
+    expect(secondResponse.status).toBe(200);
+    expect(secondBody.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
+
+    const issueCalls = vi.mocked(issueOtpAndSendEmailWithResult).mock.calls;
+    expect(issueCalls).toHaveLength(2);
+    expect(issueCalls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        purpose: "signup",
+        signupMode: "new-user",
+      }),
+    );
+    expect(issueCalls[1]?.[0]).toEqual(
+      expect.objectContaining({
+        purpose: "signup",
+        signupMode: "existing-user",
+        beforeDelivery: expect.any(Function),
+      }),
+    );
+
+    expect(ensureUserAgreementMock).toHaveBeenCalledTimes(2);
+    expect(ensureUserAgreementMock).toHaveBeenNthCalledWith(
+      1,
+      "recovery-user-id",
+      "email",
+    );
+    expect(ensureUserAgreementMock).toHaveBeenNthCalledWith(
+      2,
+      "recovery-user-id",
+      "email",
+    );
+    expect(otpIssueRateLimitMock.recordSuccessfulIssue).toHaveBeenCalledTimes(
+      1,
+    );
+    expect(otpIssueRateLimitMock.releaseIssue).toHaveBeenCalledTimes(2);
   });
 });
