@@ -261,6 +261,38 @@ export async function resendEmailAction(
 
     const { ip } = trustedIp;
     const maskedIp = maskIpForLogging(ip);
+
+    /**
+     * Signup Resend는 account 존재 여부를 조회하기 전에 shared IP quota만
+     * read-only로 확인한다. blocked는 account state와 무관하게 같은
+     * blockedState를 반환하며, allowed는 최종 Provider 시작 허가가 아니다.
+     *
+     * Recovery resend는 account lookup을 선행하지 않고 Local RL도 외부에
+     * success-like로 숨기는 기존 계약을 유지하므로 이 precheck를 적용하지 않는다.
+     */
+    if (purpose === "signup") {
+      const ipPrecheckResult = otpIssueRateLimit.precheckIpIssue({ ip });
+
+      if (!ipPrecheckResult.allowed) {
+        const reasonCode = mapOtpIssueBlockedByToReason(
+          ipPrecheckResult.blockedBy,
+        );
+
+        logAuthEvent(AUTH_EVENTS.AUTH_RESEND_EMAIL_RATE_LIMITED, {
+          path: RESEND_EMAIL_PATH,
+          method: "POST",
+          status: 429,
+          provider: "password",
+          result: "blocked",
+          reasonCode,
+          maskedEmail,
+          maskedIp,
+        });
+
+        return blockedState(reasonCode);
+      }
+    }
+
     const params = new URLSearchParams({
       purpose,
       email,
@@ -272,7 +304,7 @@ export async function resendEmailAction(
 
     verifyOtpUrl = `${ROUTES.VERIFY_OTP}?${params.toString()}`;
 
-    // signup account lookup / agreement callback 준비는 Rate Limit 획득 전에 완료한다.
+    // Signup account lookup은 IP-only precheck 뒤, final tryStartIssue() 전에 수행한다.
     const otpIssueInput = await createResendOtpIssueInput(
       email,
       purpose,

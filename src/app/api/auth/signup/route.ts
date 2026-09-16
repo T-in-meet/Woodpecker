@@ -158,6 +158,27 @@ function makeSignupSuccess(email: string): Response {
 }
 
 /**
+ * Local OTP Issue Rate Limit 차단을 Signup 외부 응답과 로그 outcome으로 변환한다.
+ */
+function resolveSignupLocalRateLimitBlocked(
+  blockedBy: OtpIssueRateLimitBlockedBy,
+  maskedEmail: string,
+  maskedIp: string,
+): ResolveSignupResult {
+  return {
+    response: failureResponse(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED),
+    outcome: {
+      type: "blocked",
+      reasonCode: mapOtpIssueBlockedByToReason(blockedBy),
+      maskedEmail,
+      ...(blockedBy === "ip_short" || blockedBy === "ip_long"
+        ? { maskedIp }
+        : {}),
+    },
+  };
+}
+
+/**
  * typed OTP Issue failure를 Signup 외부 응답과 내부 로그 outcome으로 변환한다.
  *
  * @param kind OTP Issue failure 종류
@@ -290,18 +311,11 @@ async function runSignupOtpIssue(
   });
 
   if (!rateLimitResult.allowed) {
-    return {
-      response: failureResponse(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED),
-      outcome: {
-        type: "blocked",
-        reasonCode: mapOtpIssueBlockedByToReason(rateLimitResult.blockedBy),
-        maskedEmail: input.maskedEmail,
-        ...(rateLimitResult.blockedBy === "ip_short" ||
-        rateLimitResult.blockedBy === "ip_long"
-          ? { maskedIp: input.maskedIp }
-          : {}),
-      },
-    };
+    return resolveSignupLocalRateLimitBlocked(
+      rateLimitResult.blockedBy,
+      input.maskedEmail,
+      input.maskedIp,
+    );
   }
 
   try {
@@ -345,6 +359,7 @@ async function runSignupOtpIssue(
  * 기존 조건의 처리:
  * - malformed JSON / schema validation: 그대로 유지
  * - trusted IP fail-closed: Provider/account side effect 전에 적용
+ * - full read-only precheck: 이미 차단된 요청은 account lookup 전에 fast-fail
  * - canonical email lookup: account-state 외부 노출 없이 내부 분기용으로 사용
  * - 기존 미인증 사용자: magiclink 발급 전 agreement persistence 복구 hook 연결
  * - 기존 인증 사용자: magiclink 발급, agreement persistence 확대 없음
@@ -415,6 +430,27 @@ async function resolveSignupResponse(
 
   const { ip } = trustedIp;
   const maskedIp = maskIpForLogging(ip);
+
+  /**
+   * Account lookup 전에 현재 OTP Issue 상태를 read-only로 확인한다.
+   *
+   * blocked는 즉시 거절할 수 있지만 allowed는 Provider 시작 허가가 아니다.
+   * account state와 caller input을 준비한 뒤 tryStartIssue()에서 다시
+   * atomic하게 최종 판정한다.
+   */
+  const precheckResult = otpIssueRateLimit.precheckIssue({
+    purpose: "signup",
+    canonicalEmail,
+    ip,
+  });
+
+  if (!precheckResult.allowed) {
+    return resolveSignupLocalRateLimitBlocked(
+      precheckResult.blockedBy,
+      maskedEmail,
+      maskedIp,
+    );
+  }
 
   // 기존 사용자 조회는 account-state 외부 노출 없이 Signup Issue mode를 결정하는 데만 사용한다.
   const existingUser = await getUserByEmail(canonicalEmail);

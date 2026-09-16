@@ -34,6 +34,11 @@ export type OtpIssueRateLimitBlockedBy =
   | "ip_long"
   | "in_flight";
 
+export type OtpIssueIpRateLimitBlockedBy = Extract<
+  OtpIssueRateLimitBlockedBy,
+  "ip_short" | "ip_long"
+>;
+
 /**
  * OTP Issue 시작 판정 결과.
  */
@@ -47,11 +52,31 @@ export type OtpIssueRateLimitStartResult =
     };
 
 /**
+ * OTP Issue IP-only 사전 판정 결과.
+ */
+export type OtpIssueIpPrecheckResult =
+  | {
+      allowed: true;
+    }
+  | {
+      allowed: false;
+      blockedBy: OtpIssueIpRateLimitBlockedBy;
+    };
+
+/**
  * OTP Issue 시작 입력.
  */
 type TryStartOtpIssueInput = {
   purpose: OtpPurpose;
   canonicalEmail: string;
+  ip: string;
+  now?: number;
+};
+
+/**
+ * OTP Issue IP-only 사전 판정 입력.
+ */
+type PrecheckOtpIssueIpInput = {
   ip: string;
   now?: number;
 };
@@ -72,6 +97,16 @@ type ReleaseOtpIssueInput = {
   purpose: OtpPurpose;
   canonicalEmail: string;
   now?: number;
+};
+
+type OtpIssueIpEvaluation = {
+  result: OtpIssueIpPrecheckResult;
+  prunedLongWindow: number[];
+};
+
+type OtpIssueEvaluation = {
+  result: OtpIssueRateLimitStartResult;
+  prunedIpLongWindow: number[];
 };
 
 /**
@@ -127,6 +162,128 @@ function getOtpIssueIpAttemptKey(ip: string): string {
 }
 
 /**
+ * OTP Issue shared IP quota를 평가한다.
+ *
+ * 이 함수는 순수 판정만 수행하며 Store를 변경하지 않는다.
+ */
+function evaluateOtpIssueIpState(
+  ipState: number[],
+  now: number,
+): OtpIssueIpEvaluation {
+  const ipShortEvaluation = evaluateSlidingWindow(
+    ipState,
+    OTP_ISSUE_IP_SHORT_LIMIT,
+    OTP_ISSUE_IP_SHORT_WINDOW_MS,
+    now,
+    { appendOnAllow: false },
+  );
+
+  const ipLongEvaluation = evaluateSlidingWindow(
+    ipState,
+    OTP_ISSUE_IP_LONG_LIMIT,
+    OTP_ISSUE_IP_LONG_WINDOW_MS,
+    now,
+    { appendOnAllow: false },
+  );
+
+  if (!ipShortEvaluation.allowed) {
+    return {
+      result: {
+        allowed: false,
+        blockedBy: "ip_short",
+      },
+      prunedLongWindow: ipLongEvaluation.pruned,
+    };
+  }
+
+  if (!ipLongEvaluation.allowed) {
+    return {
+      result: {
+        allowed: false,
+        blockedBy: "ip_long",
+      },
+      prunedLongWindow: ipLongEvaluation.pruned,
+    };
+  }
+
+  return {
+    result: { allowed: true },
+    prunedLongWindow: ipLongEvaluation.pruned,
+  };
+}
+
+/**
+ * OTP Issue 전체 시작 조건을 평가한다.
+ *
+ * Email-specific 상태와 shared IP 상태를 동일한 blocker 우선순위로 평가한다.
+ * 이 함수는 순수 판정만 수행하며 Store를 변경하지 않는다.
+ */
+function evaluateOtpIssueState(input: {
+  emailSuccessState: number[];
+  ipState: number[];
+  lastStartedAt: number | undefined;
+  hasInFlight: boolean;
+  now: number;
+}): OtpIssueEvaluation {
+  const emailSuccessEvaluation = evaluateSlidingWindow(
+    input.emailSuccessState,
+    OTP_ISSUE_EMAIL_SUCCESS_LIMIT,
+    OTP_ISSUE_EMAIL_SUCCESS_WINDOW_MS,
+    input.now,
+    { appendOnAllow: false },
+  );
+
+  if (!emailSuccessEvaluation.allowed) {
+    return {
+      result: {
+        allowed: false,
+        blockedBy: "email_success",
+      },
+      prunedIpLongWindow: evaluateOtpIssueIpState(input.ipState, input.now)
+        .prunedLongWindow,
+    };
+  }
+
+  const cooldownActive =
+    input.lastStartedAt !== undefined &&
+    input.now - input.lastStartedAt < OTP_ISSUE_COOLDOWN_MS;
+
+  if (cooldownActive) {
+    return {
+      result: {
+        allowed: false,
+        blockedBy: "cooldown",
+      },
+      prunedIpLongWindow: evaluateOtpIssueIpState(input.ipState, input.now)
+        .prunedLongWindow,
+    };
+  }
+
+  const ipEvaluation = evaluateOtpIssueIpState(input.ipState, input.now);
+  if (!ipEvaluation.result.allowed) {
+    return {
+      result: ipEvaluation.result,
+      prunedIpLongWindow: ipEvaluation.prunedLongWindow,
+    };
+  }
+
+  if (input.hasInFlight) {
+    return {
+      result: {
+        allowed: false,
+        blockedBy: "in_flight",
+      },
+      prunedIpLongWindow: ipEvaluation.prunedLongWindow,
+    };
+  }
+
+  return {
+    result: { allowed: true },
+    prunedIpLongWindow: ipEvaluation.prunedLongWindow,
+  };
+}
+
+/**
  * OTP Issue Rate Limit service를 생성한다.
  *
  * Email 상태는 purpose별로 분리하고 IP attempt는 두 purpose가 공유한다.
@@ -137,6 +294,52 @@ function getOtpIssueIpAttemptKey(ip: string): string {
  */
 export function createOtpIssueRateLimit(store: AuthRateLimitStore) {
   return {
+    /**
+     * Account-dependent I/O 전에 현재 상태에서 이미 차단된 요청을 판정한다.
+     *
+     * read-only precheck이므로 어떤 Rate Limit 상태도 변경하지 않는다.
+     * `allowed`는 Provider 시작 허가가 아니며, 실제 시작 직전 반드시
+     * `tryStartIssue()`의 atomic 최종 판정을 다시 받아야 한다.
+     */
+    precheckIssue(input: TryStartOtpIssueInput): OtpIssueRateLimitStartResult {
+      const now = input.now ?? Date.now();
+      const emailSuccessKey = getOtpIssueEmailSuccessKey(
+        input.purpose,
+        input.canonicalEmail,
+      );
+      const cooldownKey = getOtpIssueCooldownKey(
+        input.purpose,
+        input.canonicalEmail,
+      );
+      const inFlightKey = getOtpIssueInFlightKey(
+        input.purpose,
+        input.canonicalEmail,
+      );
+      const ipKey = getOtpIssueIpAttemptKey(input.ip);
+
+      return evaluateOtpIssueState({
+        emailSuccessState: store.getTimestampWindow(emailSuccessKey) ?? [],
+        ipState: store.getTimestampWindow(ipKey) ?? [],
+        lastStartedAt: store.getCooldown(cooldownKey),
+        hasInFlight: store.hasInFlight(inFlightKey),
+        now,
+      }).result;
+    },
+
+    /**
+     * Signup Resend의 account lookup 전에 shared IP quota만 사전 판정한다.
+     *
+     * Email-specific 상태를 보지 않으며 어떤 상태도 변경하지 않는다.
+     * `allowed`는 Provider 시작 허가가 아니다.
+     */
+    precheckIpIssue(input: PrecheckOtpIssueIpInput): OtpIssueIpPrecheckResult {
+      const now = input.now ?? Date.now();
+      const ipKey = getOtpIssueIpAttemptKey(input.ip);
+
+      return evaluateOtpIssueIpState(store.getTimestampWindow(ipKey) ?? [], now)
+        .result;
+    },
+
     /**
      * 실제 OTP Issue Provider operation을 시작할 수 있는지 확인한다.
      *
@@ -171,74 +374,16 @@ export function createOtpIssueRateLimit(store: AuthRateLimitStore) {
       const ipKey = getOtpIssueIpAttemptKey(input.ip);
 
       return store.runAtomic(() => {
-        const emailSuccessState =
-          store.getTimestampWindow(emailSuccessKey) ?? [];
-        const ipState = store.getTimestampWindow(ipKey) ?? [];
-
-        // successful Email quota는 시작 시점에는 확인만 한다.
-        // 실제 성공이 확정되기 전에는 절대 consume하지 않는다.
-        const emailSuccessEvaluation = evaluateSlidingWindow(
-          emailSuccessState,
-          OTP_ISSUE_EMAIL_SUCCESS_LIMIT,
-          OTP_ISSUE_EMAIL_SUCCESS_WINDOW_MS,
+        const evaluation = evaluateOtpIssueState({
+          emailSuccessState: store.getTimestampWindow(emailSuccessKey) ?? [],
+          ipState: store.getTimestampWindow(ipKey) ?? [],
+          lastStartedAt: store.getCooldown(cooldownKey),
+          hasInFlight: store.hasInFlight(inFlightKey),
           now,
-          { appendOnAllow: false },
-        );
+        });
 
-        const ipShortEvaluation = evaluateSlidingWindow(
-          ipState,
-          OTP_ISSUE_IP_SHORT_LIMIT,
-          OTP_ISSUE_IP_SHORT_WINDOW_MS,
-          now,
-          { appendOnAllow: false },
-        );
-
-        const ipLongEvaluation = evaluateSlidingWindow(
-          ipState,
-          OTP_ISSUE_IP_LONG_LIMIT,
-          OTP_ISSUE_IP_LONG_WINDOW_MS,
-          now,
-          { appendOnAllow: false },
-        );
-
-        const lastStartedAt = store.getCooldown(cooldownKey);
-        const cooldownActive =
-          lastStartedAt !== undefined &&
-          now - lastStartedAt < OTP_ISSUE_COOLDOWN_MS;
-
-        if (!emailSuccessEvaluation.allowed) {
-          return {
-            allowed: false,
-            blockedBy: "email_success",
-          };
-        }
-
-        if (cooldownActive) {
-          return {
-            allowed: false,
-            blockedBy: "cooldown",
-          };
-        }
-
-        if (!ipShortEvaluation.allowed) {
-          return {
-            allowed: false,
-            blockedBy: "ip_short",
-          };
-        }
-
-        if (!ipLongEvaluation.allowed) {
-          return {
-            allowed: false,
-            blockedBy: "ip_long",
-          };
-        }
-
-        if (store.hasInFlight(inFlightKey)) {
-          return {
-            allowed: false,
-            blockedBy: "in_flight",
-          };
+        if (!evaluation.result.allowed) {
+          return evaluation.result;
         }
 
         // 모든 check가 통과한 뒤에만 상태를 함께 변경한다.
@@ -248,7 +393,10 @@ export function createOtpIssueRateLimit(store: AuthRateLimitStore) {
         store.setCooldown(cooldownKey, now);
 
         // IP short/long은 같은 timestamp collection을 공유한다.
-        store.setTimestampWindow(ipKey, [...ipLongEvaluation.pruned, now]);
+        store.setTimestampWindow(ipKey, [
+          ...evaluation.prunedIpLongWindow,
+          now,
+        ]);
 
         return { allowed: true };
       }, now);

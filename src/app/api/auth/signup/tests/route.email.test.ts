@@ -16,6 +16,7 @@ import {
   issueOtpAndSendEmailWithResult,
 } from "@/features/auth/email/issueOtpAndSendEmail";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
+import type { OtpIssueRateLimitStartResult } from "@/features/auth/lib/rate-limit/otpIssueRateLimit";
 
 import { POST } from "../route";
 import { makeRequest } from "./utils/signupTestHelper";
@@ -24,7 +25,8 @@ const upsertUserAgreementMock = vi.hoisted(() => vi.fn());
 const otpIssueClient = vi.hoisted(() => ({ client: "otp-issue-client" }));
 const createOtpIssueClientMock = vi.hoisted(() => vi.fn(() => otpIssueClient));
 const otpIssueRateLimitMock = vi.hoisted(() => ({
-  tryStartIssue: vi.fn(() => ({ allowed: true as const })),
+  precheckIssue: vi.fn((): OtpIssueRateLimitStartResult => ({ allowed: true })),
+  tryStartIssue: vi.fn((): OtpIssueRateLimitStartResult => ({ allowed: true })),
   recordSuccessfulIssue: vi.fn(),
   releaseIssue: vi.fn(),
 }));

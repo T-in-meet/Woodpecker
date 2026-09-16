@@ -33,7 +33,8 @@ const upsertUserAgreementMock = vi.hoisted(() => vi.fn());
 const otpIssueClient = vi.hoisted(() => ({ client: "otp-issue-client" }));
 const createOtpIssueClientMock = vi.hoisted(() => vi.fn(() => otpIssueClient));
 const otpIssueRateLimitMock = vi.hoisted(() => ({
-  tryStartIssue: vi.fn((): OtpIssueRateLimitStartResult => ({ allowed: true })),
+  precheckIssue: vi.fn((): OtpIssueRateLimitStartResult => ({ allowed: true })),
+  tryStartIssue: vi.fn(),
   recordSuccessfulIssue: vi.fn(),
   releaseIssue: vi.fn(),
 }));
@@ -225,7 +226,7 @@ describe("회원가입 API 최소 응답 시간 보장 검증", () => {
   it("TC-08: fast rate-limit path도 최소 응답 시간 이전에 응답하지 않는다", async () => {
     useFakeClockWithNoElapsedTime();
 
-    otpIssueRateLimitMock.tryStartIssue.mockReturnValueOnce({
+    otpIssueRateLimitMock.precheckIssue.mockReturnValueOnce({
       allowed: false,
       blockedBy: "ip_short",
     });
@@ -241,7 +242,26 @@ describe("회원가입 API 최소 응답 시간 보장 검증", () => {
     expect(body.code).toBe(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
   });
 
-  it("TC-09: malformed JSON path도 최소 응답 시간 이전에 응답하지 않는다", async () => {
+  it("TC-09: fast precheck rate-limit path도 최소 응답 시간 이전에 응답하지 않는다", async () => {
+    useFakeClockWithNoElapsedTime();
+
+    otpIssueRateLimitMock.precheckIssue.mockReturnValueOnce({
+      allowed: false,
+      blockedBy: "ip_short",
+    });
+
+    const promise = POST(makeRequest(validBody));
+
+    await expectPendingUntilMinimumTime(promise);
+
+    const response = await promise;
+    const body = await response.json();
+
+    expect(response.status).toBe(429);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
+  });
+
+  it("TC-10: malformed JSON path도 최소 응답 시간 이전에 응답하지 않는다", async () => {
     useFakeClockWithNoElapsedTime();
 
     const promise = POST(makeMalformedJsonRequest());

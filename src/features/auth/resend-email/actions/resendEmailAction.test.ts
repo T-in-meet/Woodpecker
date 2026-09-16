@@ -8,6 +8,7 @@ import { applyMinimumActionDelay } from "@/features/auth/lib/applyMinimumActionD
 import { logAuthError, logAuthEvent } from "@/features/auth/lib/authLogger";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { createOtpIssueClient } from "@/features/auth/lib/issueOtp";
+import type { OtpIssueIpPrecheckResult } from "@/features/auth/lib/rate-limit/otpIssueRateLimit";
 import { otpIssueRateLimit } from "@/features/auth/lib/rate-limit/otpIssueRateLimit";
 import { getTrustedAuthServerActionClientIp } from "@/features/auth/lib/rate-limit/trustedAuthClientIp";
 import { ensureUserAgreement } from "@/features/auth/lib/userAgreements";
@@ -43,6 +44,7 @@ vi.mock("@/features/auth/lib/issueOtp", () => ({
 
 vi.mock("@/features/auth/lib/rate-limit/otpIssueRateLimit", () => ({
   otpIssueRateLimit: {
+    precheckIpIssue: vi.fn((): OtpIssueIpPrecheckResult => ({ allowed: true })),
     tryStartIssue: vi.fn(),
     recordSuccessfulIssue: vi.fn(),
     releaseIssue: vi.fn(),
