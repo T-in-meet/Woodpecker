@@ -1,12 +1,10 @@
 import {
   MISSING_EMAIL_OTP_ERROR_MESSAGE,
   MISSING_SIGNUP_USER_ID_ERROR_MESSAGE,
-  type OtpPurpose,
 } from "../constants/otp";
 import { normalizeUnknownError } from "../lib/authLogger";
 import { classifyAuthProviderError } from "../lib/classifyAuthProviderError";
 import {
-  createOtpIssueClient,
   type ExistingUserSignupOtpIssueRequest,
   issueOtp,
   type NewUserSignupOtpIssueRequest,
@@ -14,11 +12,6 @@ import {
   type ResetPasswordOtpIssueRequest,
 } from "../lib/issueOtp";
 import { sendOtpEmail } from "./sendOtpEmail";
-
-type LegacyIssueOtpAndSendEmailProps = {
-  email: string;
-  purpose: OtpPurpose;
-};
 
 type NewUserSignupBeforeDelivery = (context: {
   userId: string;
@@ -82,21 +75,6 @@ export type IssueOtpAndSendEmailResult =
       ok: false;
       kind: IssueOtpAndSendEmailFailureKind;
       diagnostic: IssueOtpAndSendEmailDiagnostic;
-    };
-
-/**
- * Step 10 compatibility wrapper가 기존 throw semantics를
- * 보존하기 위해 사용하는 내부 실행 결과.
- *
- * compatibilityError는 typed result의 public contract에는 노출하지 않는다.
- */
-type IssueOtpAndSendEmailExecutionResult =
-  | { ok: true }
-  | {
-      ok: false;
-      kind: IssueOtpAndSendEmailFailureKind;
-      diagnostic: IssueOtpAndSendEmailDiagnostic;
-      compatibilityError: unknown;
     };
 
 /**
@@ -190,12 +168,12 @@ function runIssueOtp(input: IssueOtpAndSendEmailInput, client: OtpIssueClient) {
  *
  * @param input OTP 발급 입력과 선택적 beforeDelivery hook
  * @param client Rate Limit 획득 전에 준비된 OTP Issue client
- * @returns OTP 발급 및 이메일 전송 내부 실행 결과
+ * @returns 구조화된 OTP 발급 및 이메일 전송 결과
  */
 async function executeOtpIssueAndSendEmail(
   input: IssueOtpAndSendEmailInput,
   client: OtpIssueClient,
-): Promise<IssueOtpAndSendEmailExecutionResult> {
+): Promise<IssueOtpAndSendEmailResult> {
   let issueResult: Awaited<ReturnType<typeof issueOtp>>;
 
   try {
@@ -207,7 +185,6 @@ async function executeOtpIssueAndSendEmail(
       ok: false,
       kind: "provider_error",
       diagnostic: createIssueDiagnostic(error),
-      compatibilityError: error,
     };
   }
 
@@ -220,10 +197,6 @@ async function executeOtpIssueAndSendEmail(
       ok: false,
       kind: classifyAuthProviderError(error),
       diagnostic: createIssueDiagnostic(error),
-
-      // 기존 caller는 Provider error message를 가진
-      // 새로운 Error를 전달받아 왔으므로 해당 계약을 유지한다.
-      compatibilityError: new Error(error.message),
     };
   }
 
@@ -236,7 +209,6 @@ async function executeOtpIssueAndSendEmail(
       ok: false,
       kind: "invalid_provider_response",
       diagnostic: createIssueDiagnostic(missingEmailOtpError),
-      compatibilityError: missingEmailOtpError,
     };
   }
 
@@ -252,7 +224,6 @@ async function executeOtpIssueAndSendEmail(
         ok: false,
         kind: "invalid_provider_response",
         diagnostic: createIssueDiagnostic(missingUserIdError),
-        compatibilityError: missingUserIdError,
       };
     }
 
@@ -276,7 +247,6 @@ async function executeOtpIssueAndSendEmail(
       ok: false,
       kind: "delivery_error",
       diagnostic: createIssueDiagnostic(error),
-      compatibilityError: error,
     };
   }
 
@@ -288,8 +258,7 @@ async function executeOtpIssueAndSendEmail(
 /**
  * OTP 발급부터 이메일 전송까지의 typed result를 반환한다.
  *
- * Step 11에서 Signup / Recovery / Resend caller가
- * 이 결과를 직접 소비하도록 전환한다.
+ * Signup / Recovery / Resend caller가 이 결과를 직접 소비한다.
  *
  * @param input OTP 발급 입력과 선택적 beforeDelivery hook
  * @param client Rate Limit 획득 전에 준비된 OTP Issue client
@@ -299,53 +268,5 @@ export async function issueOtpAndSendEmailWithResult(
   input: IssueOtpAndSendEmailInput,
   client: OtpIssueClient,
 ): Promise<IssueOtpAndSendEmailResult> {
-  const result = await executeOtpIssueAndSendEmail(input, client);
-
-  if (result.ok === false) {
-    return {
-      ok: false,
-      kind: result.kind,
-      diagnostic: result.diagnostic,
-    };
-  }
-
-  return result;
-}
-
-/**
- * #401 Step 10 compatibility wrapper.
- *
- * Stage 2에서는 Signup route만 typed caller로 전환하므로
- * 아직 전환되지 않은 Forgot/Resend가 사용하는 기존 public 입력을 유지한다.
- *
- * 임시 mapping:
- * - legacy signup → existing-user → magiclink
- * - legacy reset-password → recovery
- *
- * Stage 3에서 Forgot/Resend를 typed caller로 전환한 뒤 adapter를 제거하고,
- * Stage 4에서 이 wrapper 자체를 제거한다.
- *
- * @param input 기존 caller가 사용하는 이메일과 purpose
- */
-export async function issueOtpAndSendEmail(
-  input: LegacyIssueOtpAndSendEmailProps,
-): Promise<void> {
-  const client = createOtpIssueClient();
-  const adaptedInput: IssueOtpAndSendEmailInput =
-    input.purpose === "signup"
-      ? {
-          email: input.email,
-          purpose: "signup",
-          signupMode: "existing-user",
-        }
-      : {
-          email: input.email,
-          purpose: "reset-password",
-        };
-
-  const result = await executeOtpIssueAndSendEmail(adaptedInput, client);
-
-  if (result.ok === false) {
-    throw result.compatibilityError;
-  }
+  return executeOtpIssueAndSendEmail(input, client);
 }

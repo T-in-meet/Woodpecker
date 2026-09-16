@@ -5,19 +5,11 @@ import {
   MISSING_EMAIL_OTP_ERROR_MESSAGE,
   MISSING_SIGNUP_USER_ID_ERROR_MESSAGE,
 } from "@/features/auth/constants/otp";
-import {
-  issueOtpAndSendEmail,
-  issueOtpAndSendEmailWithResult,
-} from "@/features/auth/email/issueOtpAndSendEmail";
+import { issueOtpAndSendEmailWithResult } from "@/features/auth/email/issueOtpAndSendEmail";
 import { sendOtpEmail } from "@/features/auth/email/sendOtpEmail";
-import {
-  createOtpIssueClient,
-  issueOtp,
-  type OtpIssueClient,
-} from "@/features/auth/lib/issueOtp";
+import { issueOtp, type OtpIssueClient } from "@/features/auth/lib/issueOtp";
 
 vi.mock("@/features/auth/lib/issueOtp", () => ({
-  createOtpIssueClient: vi.fn(),
   issueOtp: vi.fn(),
 }));
 
@@ -125,6 +117,22 @@ describe("issueOtpAndSendEmailWithResult", () => {
         nickname: "딱다구리",
         canonical_email: email,
       },
+      client,
+    });
+  });
+
+  it("Recovery 입력을 reset-password issueOtp 계약으로 전달한다", async () => {
+    await issueOtpAndSendEmailWithResult(
+      {
+        email,
+        purpose: "reset-password",
+      },
+      client,
+    );
+
+    expect(issueOtp).toHaveBeenCalledWith({
+      email,
+      purpose: "reset-password",
       client,
     });
   });
@@ -396,105 +404,5 @@ describe("issueOtpAndSendEmailWithResult", () => {
         errorName: "Error",
       },
     });
-  });
-});
-
-describe("issueOtpAndSendEmail compatibility wrapper", () => {
-  const email = "test@example.com";
-  const emailOtp = "123456";
-  const client = {} as OtpIssueClient;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(createOtpIssueClient).mockReturnValue(client);
-
-    vi.mocked(issueOtp).mockResolvedValue({
-      otp: createOtpProperties(emailOtp),
-      userId: null,
-      error: null,
-    });
-
-    vi.mocked(sendOtpEmail).mockResolvedValue(undefined);
-  });
-
-  it("legacy signup 입력을 existing-user Signup으로 변환한다", async () => {
-    await issueOtpAndSendEmail({
-      email,
-      purpose: "signup",
-    });
-
-    expect(issueOtp).toHaveBeenCalledWith({
-      email,
-      purpose: "signup",
-      signupMode: "existing-user",
-      client,
-    });
-  });
-
-  it("legacy reset-password 입력은 recovery용 요청 계약을 유지한다", async () => {
-    await issueOtpAndSendEmail({
-      email,
-      purpose: "reset-password",
-    });
-
-    expect(issueOtp).toHaveBeenCalledWith({
-      email,
-      purpose: "reset-password",
-      client,
-    });
-  });
-
-  it("성공 시 기존처럼 void로 완료한다", async () => {
-    await expect(
-      issueOtpAndSendEmail({ email, purpose: "signup" }),
-    ).resolves.toBeUndefined();
-  });
-
-  it("Provider error의 기존 message 기반 throw 계약을 보존한다", async () => {
-    vi.mocked(issueOtp).mockResolvedValue({
-      otp: null,
-      userId: null,
-      error: createAuthError({
-        message: "OTP issue failed",
-      }),
-    });
-
-    await expect(
-      issueOtpAndSendEmail({ email, purpose: "signup" }),
-    ).rejects.toThrow("OTP issue failed");
-  });
-
-  it("issueOtp 자체의 thrown value를 그대로 전파한다", async () => {
-    const error = new Error("provider timeout");
-
-    vi.mocked(issueOtp).mockRejectedValue(error);
-
-    await expect(
-      issueOtpAndSendEmail({ email, purpose: "signup" }),
-    ).rejects.toBe(error);
-  });
-
-  it("email_otp 누락 시 기존 에러 메시지를 보존한다", async () => {
-    vi.mocked(issueOtp).mockResolvedValue({
-      otp: null,
-      userId: null,
-      error: null,
-    });
-
-    await expect(
-      issueOtpAndSendEmail({ email, purpose: "signup" }),
-    ).rejects.toThrow(MISSING_EMAIL_OTP_ERROR_MESSAGE);
-
-    expect(sendOtpEmail).not.toHaveBeenCalled();
-  });
-
-  it("sendOtpEmail의 thrown value를 그대로 전파한다", async () => {
-    const error = new Error("send failed");
-
-    vi.mocked(sendOtpEmail).mockRejectedValue(error);
-
-    await expect(
-      issueOtpAndSendEmail({ email, purpose: "signup" }),
-    ).rejects.toBe(error);
   });
 });
