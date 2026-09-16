@@ -69,7 +69,7 @@ export function NoteManageMenu({
   const [isTogglingCompletion, startCompletionTransition] = useTransition();
 
   /**
-   * 복습 완료 표시를 켜고 끈다. 해제하면 저장된 pending 일정 또는 DB가 복구한
+   * 학습 종료 표시를 켜고 끈다. 해제하면 저장된 pending 일정 또는 DB가 복구한
    * 다음 일정에서 알림과 복습이 다시 이어진다.
    *
    * 실패는 토스트로 알린다. 메뉴는 선택 즉시 닫히고 화면도 그대로여서, 알리지

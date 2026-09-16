@@ -47,7 +47,7 @@ describe("LearningStatsSection 단계별 복습 현황", () => {
     if (!section) throw new Error("단계별 복습 현황 섹션을 찾지 못했다");
 
     const labels = within(section)
-      .getAllByText(/복습 전|^\d+회|복습 완료/)
+      .getAllByText(/복습 전|^\d+회|학습 종료/)
       .map((el) => el.textContent);
     expect(labels).toEqual([
       "복습 전",
@@ -56,7 +56,7 @@ describe("LearningStatsSection 단계별 복습 현황", () => {
       "3회",
       "4회",
       "5회 이상",
-      "복습 완료",
+      "학습 종료",
     ]);
   });
 
@@ -96,7 +96,7 @@ describe("LearningStatsSection 단계별 복습 현황", () => {
       />,
     );
 
-    const completedRow = screen.getByText("복습 완료").parentElement;
+    const completedRow = screen.getByText("학습 종료").parentElement;
     const stageRow = screen.getByText("복습 전").parentElement;
     if (!completedRow || !stageRow) throw new Error("줄을 찾지 못했다");
 

@@ -47,8 +47,9 @@ function StatCard({
 
 // 복습 횟수에 상한이 없으므로 0회만 이름을 주고 나머지는 숫자로 만든다.
 // 단위("복습")는 섹션 제목이 한 번만 말하고 줄에는 횟수만 둔다. 줄마다 붙이면
-// 같은 단어가 반복돼 읽기 어렵다. 시작·끝은 "복습 전"·"복습 완료"로 대칭을 맞추고,
-// "복습 완료"는 노트 목록 필터·통계 타일·메뉴와 같은 표현이다.
+// 같은 단어가 반복돼 읽기 어렵다. 시작·끝은 "복습 전"·"학습 종료"로 대칭을 맞추고,
+// "학습 종료"는 노트 목록 필터·통계 타일·메뉴와 같은 표현이다. 회차 단위 행동인
+// "복습 완료"와 구분한다.
 const NOTES_ROUND_LABELS: Record<number, string> = {
   0: "복습 전",
 };
@@ -95,7 +96,7 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
     })),
     {
       key: "completed",
-      label: "복습 완료",
+      label: "학습 종료",
       count: stats.completedNotesCount,
       barClass: "bg-emerald-500",
     },
@@ -132,7 +133,7 @@ export function LearningStatsSection({ stats }: LearningStatsSectionProps) {
             href={buildNotesUrl({ view: "scheduled" })}
           />
           <StatCard
-            label="복습 완료 노트"
+            label="학습 종료 노트"
             value={stats.completedNotesCount}
             href={buildNotesUrl({ view: "completed" })}
           />
