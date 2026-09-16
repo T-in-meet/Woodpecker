@@ -563,10 +563,77 @@ describe("resendEmailAction", () => {
     expect(redirectUrl).toContain("redirect=%2Freset-password");
   });
 
-  it("모든 종료 경로에서 최소 Action delay를 적용한다", async () => {
-    await expect(callAction({ purpose: "signup" })).rejects.toThrow(
-      "NEXT_REDIRECT:",
-    );
-    expect(mockApplyMinimumActionDelay).toHaveBeenCalledTimes(1);
+  describe("minimum action delay", () => {
+    it("invalid request에서도 적용한다", async () => {
+      const result = await resendEmailAction(
+        null,
+        INITIAL_RESEND_EMAIL_ACTION_STATE,
+        createFormData({ email: "user@example.com" }),
+      );
+
+      expect(result.status).toBe("invalid_request");
+      expect(mockApplyMinimumActionDelay).toHaveBeenCalledTimes(1);
+    });
+
+    it("trusted IP fail-closed에서도 적용한다", async () => {
+      mockGetTrustedAuthServerActionClientIp.mockResolvedValueOnce({
+        available: false,
+        reasonCode: AUTH_LOG_REASONS.IP_UNAVAILABLE,
+      });
+
+      const result = await callAction({ purpose: "signup" });
+
+      expect(result.status).toBe("internal_error");
+      expect(mockApplyMinimumActionDelay).toHaveBeenCalledTimes(1);
+    });
+
+    it("Signup Local Rate Limit 차단에서도 적용한다", async () => {
+      mockTryStartIssue.mockReturnValueOnce({
+        allowed: false,
+        blockedBy: "cooldown",
+      });
+
+      const result = await callAction({ purpose: "signup" });
+
+      expect(result.status).toBe("blocked");
+      expect(mockApplyMinimumActionDelay).toHaveBeenCalledTimes(1);
+    });
+
+    it("Signup typed failure에서도 적용한다", async () => {
+      mockIssueOtpAndSendEmailWithResult.mockResolvedValueOnce({
+        ok: false,
+        kind: "delivery_error",
+        diagnostic: {
+          errorMessage: "delivery failed",
+          errorName: "TestError",
+        },
+      });
+
+      const result = await callAction({ purpose: "signup" });
+
+      expect(result.status).toBe("delivery_error");
+      expect(mockApplyMinimumActionDelay).toHaveBeenCalledTimes(1);
+    });
+
+    it("Recovery success-like redirect에서도 적용한다", async () => {
+      mockTryStartIssue.mockReturnValueOnce({
+        allowed: false,
+        blockedBy: "ip_short",
+      });
+
+      await expect(callAction({ purpose: "reset-password" })).rejects.toThrow(
+        "NEXT_REDIRECT:",
+      );
+
+      expect(mockApplyMinimumActionDelay).toHaveBeenCalledTimes(1);
+    });
+
+    it("성공 redirect에서도 적용한다", async () => {
+      await expect(callAction({ purpose: "signup" })).rejects.toThrow(
+        "NEXT_REDIRECT:",
+      );
+
+      expect(mockApplyMinimumActionDelay).toHaveBeenCalledTimes(1);
+    });
   });
 });
