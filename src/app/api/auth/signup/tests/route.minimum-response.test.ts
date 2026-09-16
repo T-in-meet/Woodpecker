@@ -23,7 +23,7 @@ import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 import { issueOtpAndSendEmailWithResult } from "@/features/auth/email/issueOtpAndSendEmail";
 import { MIN_RESPONSE_MS } from "@/features/auth/lib/applyMinimumResponseTime";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
-import { resetOtpIssueRateLimitForTests } from "@/features/auth/lib/rate-limit/otpIssueRateLimit";
+import type { OtpIssueRateLimitStartResult } from "@/features/auth/lib/rate-limit/otpIssueRateLimit";
 import { ROUTES } from "@/lib/constants/routes";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -31,12 +31,20 @@ import { POST } from "../route";
 import { makeRequest } from "./utils/signupTestHelper";
 
 const upsertUserAgreementMock = vi.hoisted(() => vi.fn());
+const otpIssueRateLimitMock = vi.hoisted(() => ({
+  tryStartIssue: vi.fn((): OtpIssueRateLimitStartResult => ({ allowed: true })),
+  recordSuccessfulIssue: vi.fn(),
+  releaseIssue: vi.fn(),
+}));
 
 vi.mock("@/features/auth/lib/userAgreements", () => ({
   ensureUserAgreement: upsertUserAgreementMock,
 }));
 vi.mock("@/features/auth/lib/getUserByEmail");
 vi.mock("@/features/auth/email/issueOtpAndSendEmail");
+vi.mock("@/features/auth/lib/rate-limit/otpIssueRateLimit", () => ({
+  otpIssueRateLimit: otpIssueRateLimitMock,
+}));
 vi.mock("@/lib/supabase/admin");
 
 /**
@@ -48,10 +56,10 @@ describe("회원가입 API 최소 응답 시간 보장 검증", () => {
   const mockCreateUser = vi.fn();
 
   beforeEach(() => {
-    resetOtpIssueRateLimitForTests();
     vi.useRealTimers();
     vi.restoreAllMocks();
     vi.clearAllMocks();
+    otpIssueRateLimitMock.tryStartIssue.mockReturnValue({ allowed: true });
     process.env["EMAIL_TICKET_SECRET"] = "test-ticket-secret";
 
     vi.mocked(createAdminClient).mockReturnValue({
@@ -92,17 +100,6 @@ describe("회원가입 API 최소 응답 시간 보장 검증", () => {
     });
   }
 
-  function makeRequestWithIp(body: object, ip: string): NextRequest {
-    return new NextRequest("http://localhost/api/auth/signup", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-forwarded-for": ip,
-      },
-      body: JSON.stringify(body),
-    });
-  }
-
   async function expectPendingUntilMinimumTime<T>(promise: Promise<T>) {
     let resolved = false;
 
@@ -116,11 +113,6 @@ describe("회원가입 API 최소 응답 시간 보장 검증", () => {
     await vi.advanceTimersByTimeAsync(1);
     await Promise.resolve();
     expect(resolved).toBe(true);
-  }
-
-  async function resolveAfterMinimumTime<T>(promise: Promise<T>) {
-    await vi.advanceTimersByTimeAsync(MIN_RESPONSE_MS);
-    return promise;
   }
 
   /**
@@ -242,31 +234,12 @@ describe("회원가입 API 최소 응답 시간 보장 검증", () => {
   it("TC-08: fast rate-limit path도 최소 응답 시간 이전에 응답하지 않는다", async () => {
     useFakeClockWithNoElapsedTime();
 
-    const ip = "127.0.0.1";
+    otpIssueRateLimitMock.tryStartIssue.mockReturnValueOnce({
+      allowed: false,
+      blockedBy: "ip_short",
+    });
 
-    for (let i = 0; i < 10; i++) {
-      await resolveAfterMinimumTime(
-        POST(
-          makeRequestWithIp(
-            {
-              ...validBody,
-              email: `tc08user${i}@example.com`,
-            },
-            ip,
-          ),
-        ),
-      );
-    }
-
-    const promise = POST(
-      makeRequestWithIp(
-        {
-          ...validBody,
-          email: "tc08overflow@example.com",
-        },
-        ip,
-      ),
-    );
+    const promise = POST(makeRequest(validBody));
 
     await expectPendingUntilMinimumTime(promise);
 

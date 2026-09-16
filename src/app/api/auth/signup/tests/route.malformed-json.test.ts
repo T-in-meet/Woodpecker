@@ -15,7 +15,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 import { issueOtpAndSendEmailWithResult } from "@/features/auth/email/issueOtpAndSendEmail";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
-import { resetOtpIssueRateLimitForTests } from "@/features/auth/lib/rate-limit/otpIssueRateLimit";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { POST } from "../route";
@@ -33,7 +32,6 @@ function makeMalformedJsonRequest(): NextRequest {
 }
 
 beforeEach(() => {
-  resetOtpIssueRateLimitForTests();
   vi.clearAllMocks();
 });
 

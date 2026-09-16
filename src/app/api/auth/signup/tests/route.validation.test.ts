@@ -25,7 +25,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 import { issueOtpAndSendEmailWithResult } from "@/features/auth/email/issueOtpAndSendEmail";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
-import { resetOtpIssueRateLimitForTests } from "@/features/auth/lib/rate-limit/otpIssueRateLimit";
 import { PASSWORD_MIN_LENGTH } from "@/lib/constants/user";
 import { VALIDATION_REASON } from "@/lib/validation/reasons";
 
@@ -35,6 +34,11 @@ import { makeRequest } from "./utils/signupTestHelper";
 const upsertUserAgreementMock = vi.hoisted(() => vi.fn());
 const otpIssueClient = vi.hoisted(() => ({ client: "otp-issue-client" }));
 const createOtpIssueClientMock = vi.hoisted(() => vi.fn(() => otpIssueClient));
+const otpIssueRateLimitMock = vi.hoisted(() => ({
+  tryStartIssue: vi.fn(() => ({ allowed: true as const })),
+  recordSuccessfulIssue: vi.fn(),
+  releaseIssue: vi.fn(),
+}));
 
 vi.mock("@/features/auth/lib/userAgreements", () => ({
   ensureUserAgreement: upsertUserAgreementMock,
@@ -43,11 +47,13 @@ vi.mock("@/features/auth/lib/getUserByEmail");
 vi.mock("@/features/auth/lib/issueOtp", () => ({
   createOtpIssueClient: createOtpIssueClientMock,
 }));
+vi.mock("@/features/auth/lib/rate-limit/otpIssueRateLimit", () => ({
+  otpIssueRateLimit: otpIssueRateLimitMock,
+}));
 vi.mock("@/features/auth/email/issueOtpAndSendEmail");
 
-// 테스트 간 rate limit store 공유 상태 제거
 beforeEach(() => {
-  resetOtpIssueRateLimitForTests();
+  otpIssueRateLimitMock.tryStartIssue.mockReturnValue({ allowed: true });
 });
 
 describe("PR-API-02 회원가입 입력 검증 - 필수값 검증", () => {

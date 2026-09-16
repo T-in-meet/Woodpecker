@@ -16,7 +16,6 @@ import {
   issueOtpAndSendEmailWithResult,
 } from "@/features/auth/email/issueOtpAndSendEmail";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
-import { resetOtpIssueRateLimitForTests } from "@/features/auth/lib/rate-limit/otpIssueRateLimit";
 
 import { POST } from "../route";
 import { makeRequest } from "./utils/signupTestHelper";
@@ -24,6 +23,11 @@ import { makeRequest } from "./utils/signupTestHelper";
 const upsertUserAgreementMock = vi.hoisted(() => vi.fn());
 const otpIssueClient = vi.hoisted(() => ({ client: "otp-issue-client" }));
 const createOtpIssueClientMock = vi.hoisted(() => vi.fn(() => otpIssueClient));
+const otpIssueRateLimitMock = vi.hoisted(() => ({
+  tryStartIssue: vi.fn(() => ({ allowed: true as const })),
+  recordSuccessfulIssue: vi.fn(),
+  releaseIssue: vi.fn(),
+}));
 
 vi.mock("@/features/auth/lib/userAgreements", () => ({
   ensureUserAgreement: upsertUserAgreementMock,
@@ -31,6 +35,9 @@ vi.mock("@/features/auth/lib/userAgreements", () => ({
 vi.mock("@/features/auth/lib/getUserByEmail");
 vi.mock("@/features/auth/lib/issueOtp", () => ({
   createOtpIssueClient: createOtpIssueClientMock,
+}));
+vi.mock("@/features/auth/lib/rate-limit/otpIssueRateLimit", () => ({
+  otpIssueRateLimit: otpIssueRateLimitMock,
 }));
 vi.mock("@/features/auth/email/issueOtpAndSendEmail");
 
@@ -73,8 +80,8 @@ function makeDeliveryFailure(): IssueOtpAndSendEmailResult {
 }
 
 beforeEach(() => {
-  resetOtpIssueRateLimitForTests();
   vi.clearAllMocks();
+  otpIssueRateLimitMock.tryStartIssue.mockReturnValue({ allowed: true });
 
   vi.mocked(getUserByEmail).mockResolvedValue(null);
   vi.mocked(issueOtpAndSendEmailWithResult).mockResolvedValue({ ok: true });

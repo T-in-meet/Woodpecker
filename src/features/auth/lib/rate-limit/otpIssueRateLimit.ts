@@ -9,10 +9,7 @@ import {
   OTP_ISSUE_IP_SHORT_WINDOW_MS,
 } from "@/features/auth/lib/rate-limit/authRateLimitConstants";
 import type { AuthRateLimitStore } from "@/features/auth/lib/rate-limit/authRateLimitStore";
-import {
-  createInMemoryAuthRateLimitStore,
-  inMemoryAuthRateLimitStore,
-} from "@/features/auth/lib/rate-limit/inMemoryAuthRateLimitStore";
+import { inMemoryAuthRateLimitStore } from "@/features/auth/lib/rate-limit/inMemoryAuthRateLimitStore";
 import {
   evaluateSlidingWindow,
   pruneExpired,
@@ -309,18 +306,6 @@ export function createOtpIssueRateLimit(store: AuthRateLimitStore) {
 /**
  * 현재 process에서 사용하는 OTP Issue Rate Limit singleton.
  */
-export let otpIssueRateLimit = createOtpIssueRateLimit(
+export const otpIssueRateLimit = createOtpIssueRateLimit(
   inMemoryAuthRateLimitStore,
 );
-
-/**
- * OTP Issue Rate Limit singleton 상태를 테스트용 독립 Store로 초기화한다.
- *
- * Production 코드에서는 호출하지 않으며, 각 Route/Action 테스트가
- * process-local 상태를 서로 공유하지 않도록 할 때만 사용한다.
- */
-export function resetOtpIssueRateLimitForTests(): void {
-  otpIssueRateLimit = createOtpIssueRateLimit(
-    createInMemoryAuthRateLimitStore(),
-  );
-}
