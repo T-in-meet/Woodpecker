@@ -25,12 +25,13 @@ import { MIN_RESPONSE_MS } from "@/features/auth/lib/applyMinimumResponseTime";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import type { OtpIssueRateLimitStartResult } from "@/features/auth/lib/rate-limit/otpIssueRateLimit";
 import { ROUTES } from "@/lib/constants/routes";
-import { createAdminClient } from "@/lib/supabase/admin";
 
 import { POST } from "../route";
 import { makeRequest } from "./utils/signupTestHelper";
 
 const upsertUserAgreementMock = vi.hoisted(() => vi.fn());
+const otpIssueClient = vi.hoisted(() => ({ client: "otp-issue-client" }));
+const createOtpIssueClientMock = vi.hoisted(() => vi.fn(() => otpIssueClient));
 const otpIssueRateLimitMock = vi.hoisted(() => ({
   tryStartIssue: vi.fn((): OtpIssueRateLimitStartResult => ({ allowed: true })),
   recordSuccessfulIssue: vi.fn(),
@@ -42,10 +43,12 @@ vi.mock("@/features/auth/lib/userAgreements", () => ({
 }));
 vi.mock("@/features/auth/lib/getUserByEmail");
 vi.mock("@/features/auth/email/issueOtpAndSendEmail");
+vi.mock("@/features/auth/lib/issueOtp", () => ({
+  createOtpIssueClient: createOtpIssueClientMock,
+}));
 vi.mock("@/features/auth/lib/rate-limit/otpIssueRateLimit", () => ({
   otpIssueRateLimit: otpIssueRateLimitMock,
 }));
-vi.mock("@/lib/supabase/admin");
 
 /**
  * Date.now() mock의 기준 시각 (임의의 epoch ms)
@@ -53,24 +56,12 @@ vi.mock("@/lib/supabase/admin");
 const START_TIME = 1_000_000;
 
 describe("회원가입 API 최소 응답 시간 보장 검증", () => {
-  const mockCreateUser = vi.fn();
-
   beforeEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
     vi.clearAllMocks();
     otpIssueRateLimitMock.tryStartIssue.mockReturnValue({ allowed: true });
     process.env["EMAIL_TICKET_SECRET"] = "test-ticket-secret";
-
-    vi.mocked(createAdminClient).mockReturnValue({
-      auth: {
-        admin: { createUser: mockCreateUser },
-      },
-    } as never);
-    mockCreateUser.mockResolvedValue({
-      data: { user: { id: "user-id", email: "test@example.com" } },
-      error: null,
-    });
 
     vi.mocked(getUserByEmail).mockResolvedValue(null);
     vi.mocked(issueOtpAndSendEmailWithResult).mockResolvedValue({ ok: true });

@@ -15,13 +15,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 import { issueOtpAndSendEmailWithResult } from "@/features/auth/email/issueOtpAndSendEmail";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
-import { createAdminClient } from "@/lib/supabase/admin";
 
 import { POST } from "../route";
 
 vi.mock("@/features/auth/lib/getUserByEmail");
 vi.mock("@/features/auth/email/issueOtpAndSendEmail");
-vi.mock("@/lib/supabase/admin");
 
 function makeMalformedJsonRequest(): NextRequest {
   return new NextRequest("http://localhost/api/auth/signup", {
@@ -58,7 +56,6 @@ describe("회원가입 - malformed JSON 처리", () => {
   it("TC-02. malformed JSON 요청 시 외부 의존 호출이 전혀 발생하지 않는다", async () => {
     await POST(makeMalformedJsonRequest());
 
-    expect(createAdminClient).toHaveBeenCalledTimes(0);
     expect(getUserByEmail).toHaveBeenCalledTimes(0);
     expect(issueOtpAndSendEmailWithResult).toHaveBeenCalledTimes(0);
   });
