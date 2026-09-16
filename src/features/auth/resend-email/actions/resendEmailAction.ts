@@ -81,14 +81,6 @@ function internalErrorState(): ResendEmailActionState {
   };
 }
 
-function deliveryErrorState(): ResendEmailActionState {
-  return {
-    status: "delivery_error",
-    reasonCode: AUTH_LOG_REASONS.EMAIL_DELIVERY_ERROR,
-    fieldErrors: null,
-  };
-}
-
 /**
  * typed OTP Issue 실패를 Resend 내부 로그에 기록한다.
  */
@@ -324,8 +316,9 @@ export async function resendEmailAction(
         maskedIp,
       });
     } else {
-      // Recovery resend는 client 준비 단계의 system failure도 success-like로 숨긴다.
-      // Signup resend는 같은 failure를 기존처럼 internal_error로 반환한다.
+      // 이 시점에는 Signup account state가 existing으로 확인됐다.
+      // 이후 account-dependent failure는 내부 reason/lifecycle만 유지하고
+      // 외부에는 success-like redirect로 숨긴다.
       try {
         const otpIssueClient = createOtpIssueClient();
         const rateLimitResult = otpIssueRateLimit.tryStartIssue({
@@ -350,10 +343,8 @@ export async function resendEmailAction(
             maskedIp,
           });
 
-          // Recovery resend는 Local RL도 외부에는 success-like redirect로 숨긴다.
-          if (purpose === "signup") {
-            return blockedState(reasonCode);
-          }
+          // account state 확인 이후 Local RL은 purpose와 관계없이
+          // 내부 reason만 기록하고 외부에는 success-like redirect로 숨긴다.
         } else {
           try {
             // 허용 직후 다른 await/I/O 없이 Provider operation을 시작한다.
@@ -385,18 +376,8 @@ export async function resendEmailAction(
                 maskedIp,
               );
 
-              if (purpose === "signup") {
-                if (issueResult.kind === "provider_rate_limit") {
-                  // 기존 ActionState의 public rate-limit vocabulary를 유지한다.
-                  return blockedState(AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT);
-                }
-
-                if (issueResult.kind === "delivery_error") {
-                  return deliveryErrorState();
-                }
-
-                return internalErrorState();
-              }
+              // account state 확인 이후 Provider / Email failure는
+              // 내부 reason만 구분하고 외부에는 success-like redirect로 숨긴다.
             }
           } finally {
             // in-flight를 실제로 획득한 경우에만 release한다.
@@ -420,10 +401,8 @@ export async function resendEmailAction(
           ...normalized,
         });
 
-        // Recovery resend는 client 준비 실패를 포함한 내부 예외를 외부에 숨긴다.
-        if (purpose === "signup") {
-          return internalErrorState();
-        }
+        // account state 확인 이후 client / agreement 등 내부 예외도
+        // 외부에는 success-like redirect로 숨긴다.
       }
     }
   } catch (error) {
@@ -442,6 +421,6 @@ export async function resendEmailAction(
     await applyMinimumActionDelay(start);
   }
 
-  // Recovery 실패/차단은 success-like redirect, 정상 성공은 purpose와 관계없이 verify-otp로 이동한다.
+  // account state 확인 이후 실패/차단과 정상 성공은 모두 verify-otp로 이동한다.
   redirect(verifyOtpUrl!);
 }

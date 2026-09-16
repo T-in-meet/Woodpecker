@@ -85,6 +85,7 @@ const mockEnsureUserAgreement = vi.mocked(ensureUserAgreement);
 const mockApplyMinimumActionDelay = vi.mocked(applyMinimumActionDelay);
 const mockLogAuthEvent = vi.mocked(logAuthEvent);
 const mockLogAuthError = vi.mocked(logAuthError);
+const mockPrecheckIpIssue = vi.mocked(otpIssueRateLimit.precheckIpIssue);
 
 const OTP_ISSUE_CLIENT = { kind: "otp-issue-client" } as never;
 
@@ -222,6 +223,42 @@ describe("resendEmailAction", () => {
     expect(mockIssueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
   });
 
+  it("Signup IP-only precheck 차단은 account lookup 전에 blocked를 반환한다", async () => {
+    mockPrecheckIpIssue.mockReturnValueOnce({
+      allowed: false,
+      blockedBy: "ip_short",
+    });
+
+    const result = await callAction({ purpose: "signup" });
+
+    expect(result).toEqual({
+      status: "blocked",
+      reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT,
+      fieldErrors: null,
+    });
+    expect(mockGetUserByEmail).not.toHaveBeenCalled();
+    expect(mockCreateOtpIssueClient).not.toHaveBeenCalled();
+    expect(mockTryStartIssue).not.toHaveBeenCalled();
+    expect(mockIssueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
+  });
+
+  it("Signup account lookup 자체가 실패하면 pre-account internal_error를 유지한다", async () => {
+    mockGetUserByEmail.mockRejectedValueOnce(
+      new Error("account lookup failed"),
+    );
+
+    const result = await callAction({ purpose: "signup" });
+
+    expect(result).toEqual({
+      status: "internal_error",
+      reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+      fieldErrors: null,
+    });
+    expect(mockCreateOtpIssueClient).not.toHaveBeenCalled();
+    expect(mockTryStartIssue).not.toHaveBeenCalled();
+    expect(mockIssueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
+  });
+
   it("signup resend에서 사용자가 존재하지 않으면 cooldown/IP attempt를 소비하지 않고 success-like redirect한다", async () => {
     mockGetUserByEmail.mockResolvedValue(null);
 
@@ -239,7 +276,7 @@ describe("resendEmailAction", () => {
     expect(mockRedirect).toHaveBeenCalledTimes(1);
   });
 
-  it("signup Local Rate Limit 차단은 Provider/agreement side effect 없이 blocked를 반환한다", async () => {
+  it("signup existing account의 final Local Rate Limit 차단은 Provider/agreement side effect 없이 success-like redirect한다", async () => {
     mockGetUserByEmail.mockResolvedValue({
       id: "user-id",
       email: "user@example.com",
@@ -251,17 +288,15 @@ describe("resendEmailAction", () => {
       blockedBy: "cooldown",
     });
 
-    const result = await callAction({ purpose: "signup" });
+    await expect(callAction({ purpose: "signup" })).rejects.toThrow(
+      "NEXT_REDIRECT:",
+    );
 
-    expect(result).toEqual({
-      status: "blocked",
-      reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT,
-      fieldErrors: null,
-    });
     expect(mockIssueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
     expect(mockEnsureUserAgreement).not.toHaveBeenCalled();
     expect(mockRecordSuccessfulIssue).not.toHaveBeenCalled();
     expect(mockReleaseIssue).not.toHaveBeenCalled();
+    expect(mockRedirect).toHaveBeenCalledTimes(1);
   });
 
   it("reset-password Local Rate Limit 차단은 Provider를 시작하지 않고 success-like redirect한다", async () => {
@@ -297,24 +332,21 @@ describe("resendEmailAction", () => {
     expect(mockRedirect).toHaveBeenCalledTimes(1);
   });
 
-  it("signup resend에서 OTP client 생성 실패는 lifecycle을 시작하지 않고 internal_error를 반환한다", async () => {
+  it("signup existing account에서 OTP client 생성 실패는 lifecycle을 시작하지 않고 success-like redirect한다", async () => {
     mockCreateOtpIssueClient.mockImplementationOnce(() => {
       throw new Error("otp client creation failed");
     });
 
-    const result = await callAction({ purpose: "signup" });
+    await expect(callAction({ purpose: "signup" })).rejects.toThrow(
+      "NEXT_REDIRECT:",
+    );
 
-    expect(result).toEqual({
-      status: "internal_error",
-      reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
-      fieldErrors: null,
-    });
     expect(mockCreateOtpIssueClient).toHaveBeenCalledTimes(1);
     expect(mockTryStartIssue).not.toHaveBeenCalled();
     expect(mockIssueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
     expect(mockRecordSuccessfulIssue).not.toHaveBeenCalled();
     expect(mockReleaseIssue).not.toHaveBeenCalled();
-    expect(mockRedirect).not.toHaveBeenCalled();
+    expect(mockRedirect).toHaveBeenCalledTimes(1);
   });
 
   it("signup resend는 existing-user magiclink typed input으로 호출하고 성공 quota를 기록한다", async () => {
@@ -415,7 +447,7 @@ describe("resendEmailAction", () => {
     );
   });
 
-  it("agreement 복구가 실패하면 signup은 internal_error이고 success quota 없이 release한다", async () => {
+  it("agreement 복구가 실패하면 signup은 success-like redirect하고 success quota 없이 release한다", async () => {
     mockGetUserByEmail.mockResolvedValue({
       id: "unverified-user-id",
       email: "user@example.com",
@@ -424,18 +456,16 @@ describe("resendEmailAction", () => {
     });
     mockEnsureUserAgreement.mockRejectedValue(new Error("agreement failed"));
 
-    const result = await callAction({ purpose: "signup" });
+    await expect(callAction({ purpose: "signup" })).rejects.toThrow(
+      "NEXT_REDIRECT:",
+    );
 
-    expect(result).toEqual({
-      status: "internal_error",
-      reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
-      fieldErrors: null,
-    });
     expect(mockRecordSuccessfulIssue).not.toHaveBeenCalled();
     expect(mockReleaseIssue).toHaveBeenCalledTimes(1);
+    expect(mockRedirect).toHaveBeenCalledTimes(1);
   });
 
-  it("signup Provider 429는 blocked로 반환하고 내부 reason은 PROVIDER_RATE_LIMIT으로 기록한다", async () => {
+  it("signup Provider 429는 내부 reason을 유지하되 외부에는 success-like redirect한다", async () => {
     mockIssueOtpAndSendEmailWithResult.mockResolvedValue({
       ok: false,
       kind: "provider_rate_limit",
@@ -445,9 +475,10 @@ describe("resendEmailAction", () => {
       },
     });
 
-    const result = await callAction({ purpose: "signup" });
+    await expect(callAction({ purpose: "signup" })).rejects.toThrow(
+      "NEXT_REDIRECT:",
+    );
 
-    expect(result.status).toBe("blocked");
     expect(mockLogAuthEvent).toHaveBeenCalledWith(
       AUTH_EVENTS.AUTH_RESEND_EMAIL_RATE_LIMITED,
       expect.objectContaining({
@@ -456,6 +487,7 @@ describe("resendEmailAction", () => {
     );
     expect(mockRecordSuccessfulIssue).not.toHaveBeenCalled();
     expect(mockReleaseIssue).toHaveBeenCalledTimes(1);
+    expect(mockRedirect).toHaveBeenCalledTimes(1);
   });
 
   it.each([
@@ -485,8 +517,12 @@ describe("resendEmailAction", () => {
     },
   );
 
-  it.each(["provider_error", "invalid_provider_response"] as const)(
-    "signup %s 실패는 internal_error이고 successful quota 없이 release한다",
+  it.each([
+    "provider_error",
+    "invalid_provider_response",
+    "delivery_error",
+  ] as const)(
+    "signup %s 실패는 내부 reason을 유지하되 success-like redirect하고 successful quota 없이 release한다",
     async (kind) => {
       mockIssueOtpAndSendEmailWithResult.mockResolvedValue({
         ok: false,
@@ -497,38 +533,24 @@ describe("resendEmailAction", () => {
         },
       });
 
-      const result = await callAction({ purpose: "signup" });
+      await expect(callAction({ purpose: "signup" })).rejects.toThrow(
+        "NEXT_REDIRECT:",
+      );
 
-      expect(result).toEqual({
-        status: "internal_error",
-        reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
-        fieldErrors: null,
-      });
+      expect(mockLogAuthError).toHaveBeenCalledWith(
+        AUTH_EVENTS.AUTH_RESEND_EMAIL_FAILED,
+        expect.objectContaining({
+          reasonCode:
+            kind === "delivery_error"
+              ? AUTH_LOG_REASONS.EMAIL_DELIVERY_ERROR
+              : AUTH_LOG_REASONS.PROVIDER_ERROR,
+        }),
+      );
       expect(mockRecordSuccessfulIssue).not.toHaveBeenCalled();
       expect(mockReleaseIssue).toHaveBeenCalledTimes(1);
+      expect(mockRedirect).toHaveBeenCalledTimes(1);
     },
   );
-
-  it("signup delivery_error는 전용 delivery_error 상태를 반환하고 successful quota 없이 release한다", async () => {
-    mockIssueOtpAndSendEmailWithResult.mockResolvedValue({
-      ok: false,
-      kind: "delivery_error",
-      diagnostic: {
-        errorMessage: "delivery failed",
-        errorName: "TestError",
-      },
-    });
-
-    const result = await callAction({ purpose: "signup" });
-
-    expect(result).toEqual({
-      status: "delivery_error",
-      reasonCode: AUTH_LOG_REASONS.EMAIL_DELIVERY_ERROR,
-      fieldErrors: null,
-    });
-    expect(mockRecordSuccessfulIssue).not.toHaveBeenCalled();
-    expect(mockReleaseIssue).toHaveBeenCalledTimes(1);
-  });
 
   it("reset-password helper throw도 success-like redirect하고 in-flight를 release한다", async () => {
     mockIssueOtpAndSendEmailWithResult.mockRejectedValue(
@@ -587,19 +609,20 @@ describe("resendEmailAction", () => {
       expect(mockApplyMinimumActionDelay).toHaveBeenCalledTimes(1);
     });
 
-    it("Signup Local Rate Limit 차단에서도 적용한다", async () => {
+    it("Signup account-dependent Local Rate Limit 차단에서도 적용한다", async () => {
       mockTryStartIssue.mockReturnValueOnce({
         allowed: false,
         blockedBy: "cooldown",
       });
 
-      const result = await callAction({ purpose: "signup" });
+      await expect(callAction({ purpose: "signup" })).rejects.toThrow(
+        "NEXT_REDIRECT:",
+      );
 
-      expect(result.status).toBe("blocked");
       expect(mockApplyMinimumActionDelay).toHaveBeenCalledTimes(1);
     });
 
-    it("Signup typed failure에서도 적용한다", async () => {
+    it("Signup account-dependent typed failure에서도 적용한다", async () => {
       mockIssueOtpAndSendEmailWithResult.mockResolvedValueOnce({
         ok: false,
         kind: "delivery_error",
@@ -609,9 +632,10 @@ describe("resendEmailAction", () => {
         },
       });
 
-      const result = await callAction({ purpose: "signup" });
+      await expect(callAction({ purpose: "signup" })).rejects.toThrow(
+        "NEXT_REDIRECT:",
+      );
 
-      expect(result.status).toBe("delivery_error");
       expect(mockApplyMinimumActionDelay).toHaveBeenCalledTimes(1);
     });
 
