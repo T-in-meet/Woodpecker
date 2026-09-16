@@ -75,9 +75,12 @@ type SuccessLogContext = CommonLogFields & {
   reasonCode?: never;
 };
 
+export type AuthRateLimitSource = "otp_issue" | "signup_resend_request";
+
 type BlockedLogContext = CommonLogFields & {
   result: "blocked";
   reasonCode: AuthLogReason;
+  rateLimitSource?: AuthRateLimitSource;
   errorMessage?: string;
   errorName?: string;
   errorCode?: string;

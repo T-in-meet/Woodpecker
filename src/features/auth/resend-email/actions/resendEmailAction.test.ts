@@ -10,6 +10,8 @@ import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { createOtpIssueClient } from "@/features/auth/lib/issueOtp";
 import type { OtpIssueIpPrecheckResult } from "@/features/auth/lib/rate-limit/otpIssueRateLimit";
 import { otpIssueRateLimit } from "@/features/auth/lib/rate-limit/otpIssueRateLimit";
+import type { SignupResendRequestRateLimitResult } from "@/features/auth/lib/rate-limit/signupResendRequestRateLimit";
+import { signupResendRequestRateLimit } from "@/features/auth/lib/rate-limit/signupResendRequestRateLimit";
 import { getTrustedAuthServerActionClientIp } from "@/features/auth/lib/rate-limit/trustedAuthClientIp";
 import { ensureUserAgreement } from "@/features/auth/lib/userAgreements";
 import { VALIDATION_MESSAGES } from "@/lib/validation/messages";
@@ -51,6 +53,14 @@ vi.mock("@/features/auth/lib/rate-limit/otpIssueRateLimit", () => ({
   },
 }));
 
+vi.mock("@/features/auth/lib/rate-limit/signupResendRequestRateLimit", () => ({
+  signupResendRequestRateLimit: {
+    tryConsume: vi.fn(
+      (): SignupResendRequestRateLimitResult => ({ allowed: true }),
+    ),
+  },
+}));
+
 vi.mock("@/features/auth/lib/rate-limit/trustedAuthClientIp", () => ({
   getTrustedAuthServerActionClientIp: vi.fn(),
 }));
@@ -72,6 +82,10 @@ const mockIssueOtpAndSendEmailWithResult = vi.mocked(
   issueOtpAndSendEmailWithResult,
 );
 const mockCreateOtpIssueClient = vi.mocked(createOtpIssueClient);
+const mockPrecheckIpIssue = vi.mocked(otpIssueRateLimit.precheckIpIssue);
+const mockTryConsumeSignupResendRequest = vi.mocked(
+  signupResendRequestRateLimit.tryConsume,
+);
 const mockTryStartIssue = vi.mocked(otpIssueRateLimit.tryStartIssue);
 const mockRecordSuccessfulIssue = vi.mocked(
   otpIssueRateLimit.recordSuccessfulIssue,
@@ -85,7 +99,6 @@ const mockEnsureUserAgreement = vi.mocked(ensureUserAgreement);
 const mockApplyMinimumActionDelay = vi.mocked(applyMinimumActionDelay);
 const mockLogAuthEvent = vi.mocked(logAuthEvent);
 const mockLogAuthError = vi.mocked(logAuthError);
-const mockPrecheckIpIssue = vi.mocked(otpIssueRateLimit.precheckIpIssue);
 
 const OTP_ISSUE_CLIENT = { kind: "otp-issue-client" } as never;
 
@@ -151,6 +164,8 @@ describe("resendEmailAction", () => {
     });
     mockEnsureUserAgreement.mockResolvedValue(undefined);
     mockCreateOtpIssueClient.mockReturnValue(OTP_ISSUE_CLIENT);
+    mockPrecheckIpIssue.mockReturnValue({ allowed: true });
+    mockTryConsumeSignupResendRequest.mockReturnValue({ allowed: true });
     mockTryStartIssue.mockReturnValue({ allowed: true });
     mockIssueSuccess();
     mockApplyMinimumActionDelay.mockResolvedValue(undefined);
@@ -169,6 +184,8 @@ describe("resendEmailAction", () => {
       fieldErrors: null,
     });
     expect(mockGetTrustedAuthServerActionClientIp).not.toHaveBeenCalled();
+    expect(mockPrecheckIpIssue).not.toHaveBeenCalled();
+    expect(mockTryConsumeSignupResendRequest).not.toHaveBeenCalled();
     expect(mockCreateOtpIssueClient).not.toHaveBeenCalled();
     expect(mockTryStartIssue).not.toHaveBeenCalled();
     expect(mockIssueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
@@ -186,6 +203,9 @@ describe("resendEmailAction", () => {
         email: [VALIDATION_MESSAGES.emailInvalid],
       },
     });
+    expect(mockPrecheckIpIssue).not.toHaveBeenCalled();
+    expect(mockTryConsumeSignupResendRequest).not.toHaveBeenCalled();
+    expect(mockGetUserByEmail).not.toHaveBeenCalled();
     expect(mockTryStartIssue).not.toHaveBeenCalled();
     expect(mockIssueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
   });
@@ -217,14 +237,16 @@ describe("resendEmailAction", () => {
       reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
       fieldErrors: null,
     });
+    expect(mockPrecheckIpIssue).not.toHaveBeenCalled();
+    expect(mockTryConsumeSignupResendRequest).not.toHaveBeenCalled();
     expect(mockGetUserByEmail).not.toHaveBeenCalled();
     expect(mockCreateOtpIssueClient).not.toHaveBeenCalled();
     expect(mockTryStartIssue).not.toHaveBeenCalled();
     expect(mockIssueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
   });
 
-  it("Signup IP-only precheck 차단은 account lookup 전에 blocked를 반환한다", async () => {
-    mockPrecheckIpIssue.mockReturnValueOnce({
+  it("Signup OTP Issue IP precheck가 blocked면 request limiter와 account lookup을 실행하지 않는다", async () => {
+    mockPrecheckIpIssue.mockReturnValue({
       allowed: false,
       blockedBy: "ip_short",
     });
@@ -236,19 +258,77 @@ describe("resendEmailAction", () => {
       reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT,
       fieldErrors: null,
     });
+    expect(mockTryConsumeSignupResendRequest).not.toHaveBeenCalled();
     expect(mockGetUserByEmail).not.toHaveBeenCalled();
-    expect(mockCreateOtpIssueClient).not.toHaveBeenCalled();
     expect(mockTryStartIssue).not.toHaveBeenCalled();
-    expect(mockIssueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
+    expect(mockLogAuthEvent).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_RESEND_EMAIL_RATE_LIMITED,
+      expect.objectContaining({
+        reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT,
+        rateLimitSource: "otp_issue",
+      }),
+    );
   });
 
-  it("Signup account lookup 자체가 실패하면 pre-account internal_error를 유지한다", async () => {
-    mockGetUserByEmail.mockRejectedValueOnce(
-      new Error("account lookup failed"),
-    );
+  it("Signup request limiter가 blocked면 account lookup 전에 blocked를 반환한다", async () => {
+    mockTryConsumeSignupResendRequest.mockReturnValue({
+      allowed: false,
+      blockedBy: "ip_long",
+    });
 
     const result = await callAction({ purpose: "signup" });
 
+    expect(mockPrecheckIpIssue).toHaveBeenCalledWith({
+      ip: "203.0.113.10",
+    });
+    expect(mockTryConsumeSignupResendRequest).toHaveBeenCalledWith({
+      ip: "203.0.113.10",
+    });
+    expect(result).toEqual({
+      status: "blocked",
+      reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_IP_LONG,
+      fieldErrors: null,
+    });
+    expect(mockGetUserByEmail).not.toHaveBeenCalled();
+    expect(mockTryStartIssue).not.toHaveBeenCalled();
+    expect(mockLogAuthEvent).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_RESEND_EMAIL_RATE_LIMITED,
+      expect.objectContaining({
+        reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_IP_LONG,
+        rateLimitSource: "signup_resend_request",
+      }),
+    );
+  });
+
+  it("Signup은 OTP Issue IP precheck → request limiter → account lookup 순서로 실행한다", async () => {
+    await expect(callAction({ purpose: "signup" })).rejects.toThrow(
+      "NEXT_REDIRECT:",
+    );
+
+    const precheckOrder = mockPrecheckIpIssue.mock.invocationCallOrder[0];
+    const requestLimitOrder =
+      mockTryConsumeSignupResendRequest.mock.invocationCallOrder[0];
+    const lookupOrder = mockGetUserByEmail.mock.invocationCallOrder[0];
+
+    expect(precheckOrder).toBeDefined();
+    expect(requestLimitOrder).toBeDefined();
+    expect(lookupOrder).toBeDefined();
+    expect(precheckOrder!).toBeLessThan(requestLimitOrder!);
+    expect(requestLimitOrder!).toBeLessThan(lookupOrder!);
+  });
+
+  it("Signup account lookup 자체가 실패하면 pre-account internal_error를 유지한다", async () => {
+    mockGetUserByEmail.mockRejectedValue(new Error("account lookup failed"));
+
+    const result = await callAction({ purpose: "signup" });
+
+    expect(mockPrecheckIpIssue).toHaveBeenCalledWith({
+      ip: "203.0.113.10",
+    });
+    expect(mockTryConsumeSignupResendRequest).toHaveBeenCalledWith({
+      ip: "203.0.113.10",
+    });
+    expect(mockGetUserByEmail).toHaveBeenCalledWith("user@example.com");
     expect(result).toEqual({
       status: "internal_error",
       reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
@@ -257,6 +337,10 @@ describe("resendEmailAction", () => {
     expect(mockCreateOtpIssueClient).not.toHaveBeenCalled();
     expect(mockTryStartIssue).not.toHaveBeenCalled();
     expect(mockIssueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
+    expect(mockEnsureUserAgreement).not.toHaveBeenCalled();
+    expect(mockRecordSuccessfulIssue).not.toHaveBeenCalled();
+    expect(mockReleaseIssue).not.toHaveBeenCalled();
+    expect(mockRedirect).not.toHaveBeenCalled();
   });
 
   it("signup resend에서 사용자가 존재하지 않으면 cooldown/IP attempt를 소비하지 않고 success-like redirect한다", async () => {
@@ -266,6 +350,9 @@ describe("resendEmailAction", () => {
       "NEXT_REDIRECT:",
     );
 
+    expect(mockTryConsumeSignupResendRequest).toHaveBeenCalledWith({
+      ip: "203.0.113.10",
+    });
     expect(mockCreateOtpIssueClient).not.toHaveBeenCalled();
     // tryStartIssue() 자체를 호출하지 않으므로 cooldown / IP attempt / in-flight를 소비하지 않는다.
     expect(mockTryStartIssue).not.toHaveBeenCalled();
@@ -296,6 +383,13 @@ describe("resendEmailAction", () => {
     expect(mockEnsureUserAgreement).not.toHaveBeenCalled();
     expect(mockRecordSuccessfulIssue).not.toHaveBeenCalled();
     expect(mockReleaseIssue).not.toHaveBeenCalled();
+    expect(mockLogAuthEvent).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_RESEND_EMAIL_RATE_LIMITED,
+      expect.objectContaining({
+        reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT,
+        rateLimitSource: "otp_issue",
+      }),
+    );
     expect(mockRedirect).toHaveBeenCalledTimes(1);
   });
 
@@ -383,6 +477,7 @@ describe("resendEmailAction", () => {
       "NEXT_REDIRECT:",
     );
 
+    expect(mockTryConsumeSignupResendRequest).not.toHaveBeenCalled();
     expect(mockGetUserByEmail).not.toHaveBeenCalled();
     expect(mockIssueOtpAndSendEmailWithResult).toHaveBeenCalledWith(
       {
@@ -485,6 +580,13 @@ describe("resendEmailAction", () => {
         reasonCode: AUTH_LOG_REASONS.PROVIDER_RATE_LIMIT,
       }),
     );
+    const providerRateLimitCall = mockLogAuthEvent.mock.calls.find(
+      ([event, context]) =>
+        event === AUTH_EVENTS.AUTH_RESEND_EMAIL_RATE_LIMITED &&
+        context.reasonCode === AUTH_LOG_REASONS.PROVIDER_RATE_LIMIT,
+    );
+    expect(providerRateLimitCall?.[1]).not.toHaveProperty("rateLimitSource");
+
     expect(mockRecordSuccessfulIssue).not.toHaveBeenCalled();
     expect(mockReleaseIssue).toHaveBeenCalledTimes(1);
     expect(mockRedirect).toHaveBeenCalledTimes(1);

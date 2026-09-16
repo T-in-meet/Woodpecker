@@ -26,6 +26,7 @@ import {
   otpIssueRateLimit,
   type OtpIssueRateLimitBlockedBy,
 } from "@/features/auth/lib/rate-limit/otpIssueRateLimit";
+import { signupResendRequestRateLimit } from "@/features/auth/lib/rate-limit/signupResendRequestRateLimit";
 import { getTrustedAuthServerActionClientIp } from "@/features/auth/lib/rate-limit/trustedAuthClientIp";
 import { ensureUserAgreement } from "@/features/auth/lib/userAgreements";
 import { authEmailContextSchema } from "@/features/auth/schemas/authEmailContextSchema";
@@ -277,6 +278,33 @@ export async function resendEmailAction(
           provider: "password",
           result: "blocked",
           reasonCode,
+          rateLimitSource: "otp_issue",
+          maskedEmail,
+          maskedIp,
+        });
+
+        return blockedState(reasonCode);
+      }
+    }
+
+    if (purpose === "signup") {
+      const requestRateLimitResult = signupResendRequestRateLimit.tryConsume({
+        ip,
+      });
+
+      if (!requestRateLimitResult.allowed) {
+        const reasonCode = mapOtpIssueBlockedByToReason(
+          requestRateLimitResult.blockedBy,
+        );
+
+        logAuthEvent(AUTH_EVENTS.AUTH_RESEND_EMAIL_RATE_LIMITED, {
+          path: RESEND_EMAIL_PATH,
+          method: "POST",
+          status: 429,
+          provider: "password",
+          result: "blocked",
+          reasonCode,
+          rateLimitSource: "signup_resend_request",
           maskedEmail,
           maskedIp,
         });
@@ -296,7 +324,8 @@ export async function resendEmailAction(
 
     verifyOtpUrl = `${ROUTES.VERIFY_OTP}?${params.toString()}`;
 
-    // Signup account lookup은 IP-only precheck 뒤, final tryStartIssue() 전에 수행한다.
+    // Signup account lookup은 IP-only precheck와 request limiter를 통과한 뒤,
+    // final tryStartIssue() 전에 수행한다.
     const otpIssueInput = await createResendOtpIssueInput(
       email,
       purpose,
@@ -339,6 +368,7 @@ export async function resendEmailAction(
             provider: "password",
             result: "blocked",
             reasonCode,
+            rateLimitSource: "otp_issue",
             maskedEmail,
             maskedIp,
           });

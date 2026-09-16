@@ -9,6 +9,9 @@ import {
   OTP_ISSUE_COOLDOWN_MS,
   OTP_ISSUE_EMAIL_SUCCESS_LIMIT,
   OTP_ISSUE_IP_LONG_LIMIT,
+  SIGNUP_RESEND_REQUEST_IP_LONG_LIMIT,
+  SIGNUP_RESEND_REQUEST_IP_SHORT_LIMIT,
+  SIGNUP_RESEND_REQUEST_IP_SHORT_WINDOW_MS,
 } from "@/features/auth/lib/rate-limit/authRateLimitConstants";
 import { canonicalizeEmail } from "@/features/auth/utils/canonicalizeEmail";
 import { ROUTES } from "@/lib/constants/routes";
@@ -19,8 +22,14 @@ const PRODUCTION_HOSTNAME = "woodpecker-blue.vercel.app";
 
 const DEFAULT_SAMPLE_COUNT = 20;
 
-const DEFAULT_EXISTING_REQUEST_GAP_MS = 7_000;
-const MIN_EXISTING_REQUEST_GAP_MS = 7_000;
+const REQUESTS_PER_PAIR = 2;
+
+const MIN_EXISTING_REQUEST_GAP_MS =
+  Math.floor(
+    (SIGNUP_RESEND_REQUEST_IP_SHORT_WINDOW_MS * REQUESTS_PER_PAIR) /
+      SIGNUP_RESEND_REQUEST_IP_SHORT_LIMIT,
+  ) + 1;
+const DEFAULT_EXISTING_REQUEST_GAP_MS = MIN_EXISTING_REQUEST_GAP_MS;
 
 const SAMPLE_TIMEOUT_MS = 45_000;
 
@@ -546,6 +555,20 @@ test.describe("Signup Resend timing diagnostic", () => {
       );
     }
 
+    const totalSignupResendRequests = sampleCount * REQUESTS_PER_PAIR;
+
+    if (totalSignupResendRequests > SIGNUP_RESEND_REQUEST_IP_LONG_LIMIT) {
+      throw new Error(
+        [
+          "AUTH_TIMING_SAMPLE_COUNT would exceed",
+          "the Signup Resend request IP long limit.",
+          `sampleCount=${sampleCount}`,
+          `totalRequests=${totalSignupResendRequests}`,
+          `limit=${SIGNUP_RESEND_REQUEST_IP_LONG_LIMIT}`,
+        ].join(" "),
+      );
+    }
+
     const existingRequestGapMs = parsePositiveInteger(
       process.env.AUTH_TIMING_EXISTING_REQUEST_GAP_MS,
 
@@ -559,6 +582,8 @@ test.describe("Signup Resend timing diagnostic", () => {
         [
           "AUTH_TIMING_EXISTING_REQUEST_GAP_MS",
           `must be at least ${MIN_EXISTING_REQUEST_GAP_MS}.`,
+          "This protects the diagnostic from",
+          "Signup Resend request IP short-limit contamination.",
         ].join(" "),
       );
     }

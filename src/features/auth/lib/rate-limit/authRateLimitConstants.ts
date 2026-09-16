@@ -62,6 +62,19 @@ export const OTP_ISSUE_IP_LONG_LIMIT = 50;
 export const OTP_ISSUE_IP_LONG_WINDOW_MS = 15 * 60 * 1000;
 
 /**
+ * Signup Resend pre-lookup request IP 정책.
+ *
+ * account 존재 여부를 확인하기 전 Signup Resend 요청 자체를 제한하여
+ * 반복적인 account lookup resource abuse를 방어한다.
+ *
+ * OTP Issue IP attempt와 같은 제한 수치를 사용하지만 별도 state/key를 사용한다.
+ */
+export const SIGNUP_RESEND_REQUEST_IP_SHORT_LIMIT = 10;
+export const SIGNUP_RESEND_REQUEST_IP_SHORT_WINDOW_MS = 60 * 1000;
+export const SIGNUP_RESEND_REQUEST_IP_LONG_LIMIT = 50;
+export const SIGNUP_RESEND_REQUEST_IP_LONG_WINDOW_MS = 15 * 60 * 1000;
+
+/**
  * OTP Verify Email total attempt 정책.
  *
  * signup/reset-password purpose별 canonicalEmail 상태를 독립적으로 관리한다.
