@@ -105,3 +105,17 @@ export const OTP_VERIFY_IP_LONG_WINDOW_MS = 15 * 60 * 1000;
  */
 export const OTP_VERIFY_FAILURE_STREAK_LIMIT = 5;
 export const OTP_VERIFY_FAILURE_STREAK_INACTIVITY_MS = 10 * 60 * 1000;
+
+/**
+ * Signup OTP Verify 성공 후 발급하는 Set Password Intent TTL.
+ *
+ * timestamp는 epoch seconds를 사용하며 Intent 발급 시점부터 15분간 유효하다.
+ */
+export const SET_PASSWORD_INTENT_TTL_SECONDS = 15 * 60;
+
+/**
+ * Recovery OTP Verify 성공 후 발급하는 Reset Password Intent TTL.
+ *
+ * timestamp는 epoch seconds를 사용하며 Intent 발급 시점부터 15분간 유효하다.
+ */
+export const RESET_PASSWORD_INTENT_TTL_SECONDS = 15 * 60;
