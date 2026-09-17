@@ -3,12 +3,15 @@
 import { redirect } from "next/navigation";
 
 import { ROUTES } from "@/lib/constants/routes";
-import { getServerActionClientIp } from "@/lib/utils/getServerActionClientIp";
+import { createClient } from "@/lib/supabase/server";
 import { VALIDATION_MESSAGES } from "@/lib/validation/messages";
 import { otpSchema } from "@/lib/validation/otpSchema";
 
 import { AUTH_EVENTS } from "../../constants/authEvents";
-import { AUTH_LOG_REASONS } from "../../constants/authLogReasons";
+import {
+  AUTH_LOG_REASONS,
+  AuthLogReason,
+} from "../../constants/authLogReasons";
 import { INVALID_OTP_ERROR_MESSAGE } from "../../constants/otp";
 import { VERIFY_OTP_PATH } from "../../constants/routes";
 import { applyMinimumActionDelay } from "../../lib/applyMinimumActionDelay";
@@ -19,27 +22,25 @@ import {
   normalizeUnknownError,
 } from "../../lib/authLogger";
 import {
-  checkRequestEligibility,
-  mapBlockedByToReason,
-} from "../../lib/checkRequestEligibility";
+  classifyAuthProviderError,
+  isOtpValidityFailure,
+} from "../../lib/classifyAuthProviderError";
 import { maskEmailForLogging } from "../../lib/maskEmailForLogging";
 import { maskIpForLogging } from "../../lib/maskIpForLogging";
+import {
+  otpVerifyRateLimit,
+  OtpVerifyRateLimitBlockedBy,
+} from "../../lib/rate-limit/otpVerifyRateLimit";
+import { getTrustedAuthServerActionClientIp } from "../../lib/rate-limit/trustedAuthClientIp";
 import { setResetPasswordIntentCookie } from "../../lib/resetPasswordIntent";
 import { canonicalizeEmail } from "../../utils/canonicalizeEmail";
 import { verifyOtp } from "../lib/verifyOtp";
 import { verifyOtpContextSchema } from "../schemas/verifyOtpContextSchema";
 import { VerifyOtpActionState } from "./verifyOtpActionState";
 
-function blockedState(
-  reasonCode:
-    | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT
-    | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP_LONG
-    | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT
-    | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG,
-): VerifyOtpActionState {
+function blockedState(): VerifyOtpActionState {
   return {
     status: "blocked",
-    reasonCode,
     fieldErrors: null,
   };
 }
@@ -47,9 +48,26 @@ function blockedState(
 function internalErrorState(): VerifyOtpActionState {
   return {
     status: "internal_error",
-    reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
     fieldErrors: null,
   };
+}
+
+function mapOtpVerifyBlockedByToReason(
+  blockedBy: OtpVerifyRateLimitBlockedBy,
+): AuthLogReason {
+  switch (blockedBy) {
+    case "email_total":
+      return AUTH_LOG_REASONS.OTP_VERIFY_EMAIL_LIMIT;
+    case "ip_short":
+    case "ip_long":
+      return AUTH_LOG_REASONS.OTP_VERIFY_IP_LIMIT;
+    case "failure_streak":
+      return AUTH_LOG_REASONS.OTP_VERIFY_FAILURE_STREAK;
+    default: {
+      const exhaustiveCheck: never = blockedBy;
+      return exhaustiveCheck;
+    }
+  }
 }
 
 /**
@@ -108,7 +126,6 @@ export async function verifyOtpAction(
 
       return {
         status: "invalid_request",
-        reasonCode: AUTH_LOG_REASONS.SCHEMA_VALIDATION_FAILED,
         fieldErrors: null,
       };
     }
@@ -150,6 +167,32 @@ export async function verifyOtpAction(
       };
     }
 
+    const canonicalEmail = canonicalizeEmail(email);
+    const maskedEmail = maskEmailForLogging(canonicalEmail);
+
+    const trustedIp = await getTrustedAuthServerActionClientIp();
+
+    if (!trustedIp.available) {
+      logAuthError(AUTH_EVENTS.AUTH_VERIFY_OTP_FAILED, {
+        path: VERIFY_OTP_PATH,
+        method: "POST",
+        status: 503,
+        provider: "password",
+        result: "failure",
+        reasonCode: AUTH_LOG_REASONS.IP_UNAVAILABLE,
+        maskedEmail,
+        purpose,
+      });
+
+      return internalErrorState();
+    }
+
+    const clientIp = trustedIp.ip;
+    const maskedIp = maskIpForLogging(clientIp);
+
+    // Rate Limit attempt를 소비하기 전에 Supabase client 준비를 완료한다.
+    const supabase = await createClient();
+
     /**
      * Rate limit 검증
      *
@@ -162,19 +205,14 @@ export async function verifyOtpAction(
      * 요청 제한에 걸린 경우에는 Supabase verifyOtp를 호출하지 않고
      * blocked 상태를 반환한다.
      */
-    const canonicalEmail = canonicalizeEmail(email);
-    const clientIp = await getServerActionClientIp();
-    const maskedEmail = maskEmailForLogging(canonicalEmail);
-    const maskedIp = maskIpForLogging(clientIp);
-
-    const eligibility = checkRequestEligibility(
-      "verify-otp",
-      clientIp,
+    const attempt = otpVerifyRateLimit.tryStartAttempt({
+      purpose,
       canonicalEmail,
-    );
+      ip: clientIp,
+    });
 
-    if (!eligibility.allowed) {
-      const reasonCode = mapBlockedByToReason(eligibility.blockedBy);
+    if (!attempt.allowed) {
+      const reasonCode = mapOtpVerifyBlockedByToReason(attempt.blockedBy);
 
       logAuthEvent(AUTH_EVENTS.AUTH_VERIFY_OTP_RATE_LIMITED, {
         path: VERIFY_OTP_PATH,
@@ -187,7 +225,7 @@ export async function verifyOtpAction(
         maskedIp,
       });
 
-      return blockedState(reasonCode);
+      return blockedState();
     }
 
     /**
@@ -200,44 +238,122 @@ export async function verifyOtpAction(
      * 주의:
      * - verifyOtp는 throw 대신 error 객체를 반환할 수 있으므로
      *   반드시 반환 결과의 error 여부를 확인해야 한다.
-     * - OTP 불일치, 만료 등의 인증 실패도 error로 반환된다.
+     * - OTP 불일치/만료 error와 Provider 오류는 caller에서 구분한다.
      */
-    const { error } = await verifyOtp({
-      email,
-      purpose,
-      otp: otpParsed.data,
-    });
+    let error;
+
+    try {
+      ({ error } = await verifyOtp({
+        supabase,
+        email,
+        purpose,
+        otp: otpParsed.data,
+      }));
+    } catch (providerError) {
+      otpVerifyRateLimit.recordResult({
+        canonicalEmail,
+        outcome: "provider_error",
+      });
+
+      const normalized = normalizeUnknownError(providerError);
+
+      logAuthError(AUTH_EVENTS.AUTH_VERIFY_OTP_FAILED, {
+        path: VERIFY_OTP_PATH,
+        method: "POST",
+        status: 500,
+        provider: "password",
+        result: "failure",
+        reasonCode: AUTH_LOG_REASONS.PROVIDER_ERROR,
+        maskedEmail,
+        maskedIp,
+        purpose,
+        ...normalized,
+      });
+
+      return internalErrorState();
+    }
 
     /**
      * OTP 인증 실패 처리
      *
      * Supabase verifyOtp의 error는 throw가 아니라
      * 반환값으로 전달될 수 있다.
-     *
-     * 이 error는 주로 OTP 불일치, 만료, 재발급으로 인한 이전 OTP 무효화 등
-     * 사용자가 다시 입력하거나 재전송으로 해결할 수 있는 인증 실패를 의미한다.
-     *
-     * 따라서 서버 내부 오류로 처리하지 않고
-     * invalid_input 상태로 반환해 현재 OTP 입력 화면에서 안내한다.
      */
     if (error) {
-      logAuthEvent(AUTH_EVENTS.AUTH_VERIFY_OTP_INVALID_OTP, {
+      if (isOtpValidityFailure(error)) {
+        otpVerifyRateLimit.recordResult({
+          canonicalEmail,
+          outcome: "otp_failure",
+        });
+
+        logAuthEvent(AUTH_EVENTS.AUTH_VERIFY_OTP_INVALID_OTP, {
+          path: VERIFY_OTP_PATH,
+          method: "POST",
+          status: 401,
+          provider: "password",
+          result: "failure",
+          reasonCode: AUTH_LOG_REASONS.INVALID_OTP,
+          maskedEmail,
+          maskedIp,
+          purpose,
+        });
+
+        return {
+          status: "invalid_otp",
+          formError: INVALID_OTP_ERROR_MESSAGE,
+        };
+      }
+
+      const classification = classifyAuthProviderError(error);
+
+      if (classification === "provider_rate_limit") {
+        otpVerifyRateLimit.recordResult({
+          canonicalEmail,
+          outcome: "provider_rate_limited",
+        });
+
+        logAuthEvent(AUTH_EVENTS.AUTH_VERIFY_OTP_RATE_LIMITED, {
+          path: VERIFY_OTP_PATH,
+          method: "POST",
+          status: 429,
+          provider: "password",
+          result: "blocked",
+          reasonCode: AUTH_LOG_REASONS.PROVIDER_RATE_LIMIT,
+          maskedEmail,
+          maskedIp,
+          purpose,
+        });
+
+        return blockedState();
+      }
+
+      otpVerifyRateLimit.recordResult({
+        canonicalEmail,
+        outcome: "provider_error",
+      });
+
+      const normalized = normalizeUnknownError(error);
+
+      logAuthError(AUTH_EVENTS.AUTH_VERIFY_OTP_FAILED, {
         path: VERIFY_OTP_PATH,
         method: "POST",
-        status: 401,
+        status: 500,
         provider: "password",
         result: "failure",
-        reasonCode: AUTH_LOG_REASONS.INVALID_OTP,
+        reasonCode: AUTH_LOG_REASONS.PROVIDER_ERROR,
         maskedEmail,
         maskedIp,
         purpose,
+        ...normalized,
       });
 
-      return {
-        status: "invalid_otp",
-        formError: INVALID_OTP_ERROR_MESSAGE,
-      };
+      return internalErrorState();
     }
+
+    otpVerifyRateLimit.recordResult({
+      canonicalEmail,
+      outcome: "success",
+    });
 
     /**
      * OTP 인증 완료 로그
@@ -295,16 +411,11 @@ export async function verifyOtpAction(
     /**
      * 예상하지 못한 시스템 예외 처리
      *
-     * verifyOtp의 인증 실패(OTP 불일치/만료)는
-     * 반환값(error)으로 처리한다.
+     * Provider operation에서 발생한 반환 error와 throw는
+     * 위의 Provider 경계에서 별도로 분류한다.
      *
-     * 이 catch는:
-     * - Supabase client 생성 실패
-     * - 네트워크 오류
-     * - 런타임 예외
-     * - 예상하지 못한 throw
-     *
-     * 등 시스템 레벨 예외만 처리한다.
+     * 이 catch는 Provider operation 밖에서 발생한
+     * 예상하지 못한 시스템 예외를 처리한다.
      */
     const normalized = normalizeUnknownError(error);
 

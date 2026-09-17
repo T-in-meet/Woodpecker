@@ -2,7 +2,6 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useActionState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AUTH_LOG_REASONS } from "@/features/auth/constants/authLogReasons";
 import { RATE_LIMIT_TOAST_MESSAGE } from "@/features/auth/errors/rateLimitError";
 import {
   INITIAL_VERIFY_OTP_ACTION_STATE,
@@ -13,7 +12,6 @@ import VerifyOtpForm from "../VerifyOtpForm";
 
 const mocks = vi.hoisted(() => {
   const routerReplace = vi.fn();
-
   return {
     routerReplace,
     router: {
@@ -24,7 +22,6 @@ const mocks = vi.hoisted(() => {
 
 vi.mock("react", async () => {
   const actual = await vi.importActual<typeof import("react")>("react");
-
   return {
     ...actual,
     useActionState: vi.fn(),
@@ -62,7 +59,6 @@ function getOtpInput() {
 describe("VerifyOtpForm root error lifecycle", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-
     mockUseActionState.mockReturnValue([
       INITIAL_VERIFY_OTP_ACTION_STATE,
       mockFormAction,
@@ -75,9 +71,7 @@ describe("VerifyOtpForm root error lifecycle", () => {
       status: "invalid_otp",
       formError: "인증 번호가 올바르지 않거나 만료되었습니다.",
     };
-
     setActionState(state);
-
     renderVerifyOtpForm();
 
     expect(await screen.findByTestId("form-error")).toHaveTextContent(
@@ -97,11 +91,8 @@ describe("VerifyOtpForm root error lifecycle", () => {
     const state: VerifyOtpActionState = {
       status: "blocked",
       fieldErrors: null,
-      reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT,
     };
-
     setActionState(state);
-
     renderVerifyOtpForm();
 
     expect(await screen.findByTestId("form-error")).toHaveTextContent(
@@ -121,11 +112,8 @@ describe("VerifyOtpForm root error lifecycle", () => {
     const state: VerifyOtpActionState = {
       status: "blocked",
       fieldErrors: null,
-      reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT,
     };
-
     setActionState(state);
-
     renderVerifyOtpForm();
 
     expect(await screen.findByTestId("form-error")).toHaveTextContent(

@@ -21,6 +21,20 @@ export const AUTH_LOG_REASONS = {
    */
   LOGIN_FAILURE_STREAK: "LOGIN_FAILURE_STREAK",
   /**
+   * OTP Verify Email total attempt 제한.
+   */
+  OTP_VERIFY_EMAIL_LIMIT: "OTP_VERIFY_EMAIL_LIMIT",
+  /**
+   * OTP Verify IP attempt 제한.
+   *
+   * short/long window는 같은 외부 정책 의미이므로 내부 reason도 하나로 묶는다.
+   */
+  OTP_VERIFY_IP_LIMIT: "OTP_VERIFY_IP_LIMIT",
+  /**
+   * OTP Verify consecutive validity failure streak 제한.
+   */
+  OTP_VERIFY_FAILURE_STREAK: "OTP_VERIFY_FAILURE_STREAK",
+  /**
    * Auth Provider 자체 Rate Limit.
    *
    * Woodpecker local Rate Limit과 내부적으로 구분한다.

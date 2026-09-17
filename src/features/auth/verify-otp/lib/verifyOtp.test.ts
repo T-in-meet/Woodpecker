@@ -1,22 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createClient } from "@/lib/supabase/server";
+import type { createClient } from "@/lib/supabase/server";
 
 import { verifyOtp } from "./verifyOtp";
 
-vi.mock("@/lib/supabase/server");
-
 const mockVerifyOtp = vi.fn();
+
+const supabase = {
+  auth: {
+    verifyOtp: mockVerifyOtp,
+  },
+} as unknown as Awaited<ReturnType<typeof createClient>>;
 
 describe("verifyOtp", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-
-    vi.mocked(createClient).mockResolvedValue({
-      auth: {
-        verifyOtp: mockVerifyOtp,
-      },
-    } as never);
   });
 
   it("signup purpose를 email type으로 변환한다", async () => {
@@ -26,6 +24,7 @@ describe("verifyOtp", () => {
     });
 
     await verifyOtp({
+      supabase,
       email: "user@example.com",
       otp: "123456",
       purpose: "signup",
@@ -45,6 +44,7 @@ describe("verifyOtp", () => {
     });
 
     await verifyOtp({
+      supabase,
       email: "user@example.com",
       otp: "123456",
       purpose: "reset-password",
@@ -68,6 +68,7 @@ describe("verifyOtp", () => {
     mockVerifyOtp.mockResolvedValue(response);
 
     const result = await verifyOtp({
+      supabase,
       email: "user@example.com",
       otp: "123456",
       purpose: "signup",
@@ -89,6 +90,7 @@ describe("verifyOtp", () => {
     mockVerifyOtp.mockResolvedValue(response);
 
     const result = await verifyOtp({
+      supabase,
       email: "user@example.com",
       otp: "123456",
       purpose: "signup",

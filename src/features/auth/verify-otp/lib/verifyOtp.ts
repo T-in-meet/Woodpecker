@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import type { createClient } from "@/lib/supabase/server";
 
 import {
   OTP_PURPOSE_TO_SUPABASE_VERIFY_TYPE,
@@ -6,6 +6,7 @@ import {
 } from "../../constants/otp";
 
 type VerifyOtp = {
+  supabase: Awaited<ReturnType<typeof createClient>>;
   email: string;
   otp: string;
   purpose: OtpPurpose;
@@ -25,13 +26,17 @@ type VerifyOtp = {
  * - Supabase verifyOtp 호출
  *
  * 주의:
+ * - Supabase client는 Rate Limit attempt 소비 전에 caller에서 준비한다.
  * - 입력값 검증은 action/schema 계층에서 처리한다.
  * - logging 및 상태 분기 처리도 action 계층에서 수행한다.
  * - 해당 함수는 Supabase verifyOtp 결과를 그대로 반환한다.
  */
-export const verifyOtp = async ({ email, otp, purpose }: VerifyOtp) => {
-  const supabase = await createClient();
-
+export const verifyOtp = async ({
+  supabase,
+  email,
+  otp,
+  purpose,
+}: VerifyOtp) => {
   return await supabase.auth.verifyOtp({
     email,
     token: otp,

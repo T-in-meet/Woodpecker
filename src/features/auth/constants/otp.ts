@@ -60,15 +60,16 @@ export const MISSING_SIGNUP_USER_ID_ERROR_MESSAGE =
 export const OTP_GENERATE_LINK_TIMEOUT_MS = 10 * 1000;
 
 /**
- * OTP 만료 시간(초 단위)
+ * Woodpecker의 OTP hard expiration 정책 기준값.
  *
- * 이메일 안내 문구 및
- * OTP 인증 정책의 기준값으로 사용한다.
+ * 사용자 안내와 서비스 정책은 10분으로 통일한다.
+ * 실제 OTP 만료 enforcement는 Supabase Auth의 otp_expiry 설정이 담당하므로
+ * Local/Production Supabase 설정도 반드시 같은 600초를 사용해야 한다.
  */
-export const OTP_EXPIRES_IN_SECONDS = 3600;
+export const OTP_EXPIRES_IN_SECONDS = 600;
 
 /**
- * OTP 만료 시간(분 단위)
+ * OTP 만료 시간(분 단위).
  *
  * 사용자에게 표시할 이메일 안내 문구 등
  * 사람이 읽기 쉬운 형태가 필요한 UI 계층에서 사용한다.
