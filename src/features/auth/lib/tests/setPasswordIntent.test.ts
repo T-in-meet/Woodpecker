@@ -11,7 +11,7 @@
  * - create / verify configuration error propagation
  *
  * 공통 Signed Intent의 base64url / JSON / HMAC / timing-safe 비교 matrix는
- * passwordIntent.test.ts에서 이미 검증하므로 여기서 중복하지 않습니다.
+ * signedIntent.test.ts에서 이미 검증하므로 여기서 중복하지 않습니다.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -113,9 +113,9 @@ describe("setPasswordIntent", () => {
 
   it("reset-password purpose token은 Set verifier에서 거부한다", async () => {
     const { verifySetPasswordIntent } = await loadSetPasswordIntent();
-    const { createSignedPasswordIntent } = await import("../passwordIntent");
+    const { createSignedIntent } = await import("../signedIntent");
 
-    const token = createSignedPasswordIntent({
+    const token = createSignedIntent({
       purpose: "reset-password",
       userId: TEST_USER_ID,
       nowSeconds: NOW_SECONDS,

@@ -8,15 +8,15 @@ import {
 } from "./rate-limit/authRateLimitConstants";
 
 /**
- * Password Intent가 허용하는 인증 목적.
+ * Signed Intent가 허용하는 인증 목적.
  *
  * 동일한 signing primitive를 Set Password와 Reset Password가 공유하되,
  * verifier에서 expected purpose를 반드시 다시 확인해 흐름 간 Intent 재사용을 막는다.
  */
-export type PasswordIntentPurpose = "signup-set-password" | "reset-password";
+export type SignedIntentPurpose = "signup-set-password" | "reset-password";
 
 /**
- * Signed Password Intent에 포함되는 공통 payload.
+ * Signed Intent에 포함되는 공통 payload.
  *
  * timestamp는 모두 epoch seconds를 사용한다.
  *
@@ -25,35 +25,35 @@ export type PasswordIntentPurpose = "signup-set-password" | "reset-password";
  * @property issuedAt Intent 발급 시각
  * @property expiresAt Intent 만료 시각
  */
-export type PasswordIntentPayload = {
-  purpose: PasswordIntentPurpose;
+export type SignedIntentPayload = {
+  purpose: SignedIntentPurpose;
   userId: string;
   issuedAt: number;
   expiresAt: number;
 };
 
 /**
- * Signed Password Intent 생성 입력.
+ * Signed Intent 생성 입력.
  *
  * `nowSeconds`는 deterministic test를 위해 선택적으로 주입할 수 있다.
  */
-type CreateSignedPasswordIntentParams = {
-  purpose: PasswordIntentPurpose;
+type CreateSignedIntentParams = {
+  purpose: SignedIntentPurpose;
   userId: string;
   nowSeconds?: number;
 };
 
 /**
- * Signed Password Intent 검증 입력.
+ * Signed Intent 검증 입력.
  *
  * purpose와 userId는 caller가 기대하는 값을 반드시 전달해야 하며,
  * verifier 내부에서 payload와 직접 비교한다.
  *
  * `nowSeconds`는 deterministic test를 위해 선택적으로 주입할 수 있다.
  */
-type VerifySignedPasswordIntentParams = {
+type VerifySignedIntentParams = {
   token: string;
-  expectedPurpose: PasswordIntentPurpose;
+  expectedPurpose: SignedIntentPurpose;
   expectedUserId: string;
   nowSeconds?: number;
 };
@@ -63,7 +63,7 @@ type VerifySignedPasswordIntentParams = {
  *
  * 예상하지 않은 필드가 포함된 payload도 schema 불일치로 거부하기 위해 사용한다.
  */
-const PASSWORD_INTENT_PAYLOAD_KEYS = [
+const SIGNED_INTENT_PAYLOAD_KEYS = [
   "purpose",
   "userId",
   "issuedAt",
@@ -83,15 +83,15 @@ const HMAC_SHA256_DIGEST_BYTES = 32;
 const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 /**
- * Password Intent 전용 signing secret을 반환한다.
+ * Signed Intent 전용 signing secret을 반환한다.
  *
  * 런타임 임시 secret 생성이나 다른 secret으로의 fallback은 허용하지 않는다.
  * 설정이 누락되거나 공백이면 configuration error로 즉시 실패한다.
  *
- * @returns Password Intent HMAC signing secret
+ * @returns Signed Intent HMAC signing secret
  * @throws PASSWORD_INTENT_SIGNING_SECRET이 없거나 공백인 경우
  */
-function getPasswordIntentSigningSecret(): string {
+function getSignedIntentSigningSecret(): string {
   const secret = process.env.PASSWORD_INTENT_SIGNING_SECRET;
 
   if (!secret || secret.trim().length === 0) {
@@ -102,15 +102,15 @@ function getPasswordIntentSigningSecret(): string {
 }
 
 /**
- * Password Intent purpose에 해당하는 최대 TTL을 반환한다.
+ * Signed Intent purpose에 해당하는 최대 TTL을 반환한다.
  *
  * Set Password와 Reset Password는 현재 모두 15분이지만,
  * 정책 상수를 purpose별로 분리해 향후 정책 변경 시 책임을 유지한다.
  *
- * @param purpose Password Intent 목적
+ * @param purpose Signed Intent 목적
  * @returns 허용 TTL(second)
  */
-function getPasswordIntentTtlSeconds(purpose: PasswordIntentPurpose): number {
+function getSignedIntentTtlSeconds(purpose: SignedIntentPurpose): number {
   return purpose === "signup-set-password"
     ? SET_PASSWORD_INTENT_TTL_SECONDS
     : RESET_PASSWORD_INTENT_TTL_SECONDS;
@@ -148,16 +148,14 @@ function decodeCanonicalBase64Url(value: string): Buffer | null {
 }
 
 /**
- * unknown 값이 허용된 Password Intent purpose인지 확인한다.
+ * unknown 값이 허용된 Signed Intent purpose인지 확인한다.
  */
-function isPasswordIntentPurpose(
-  value: unknown,
-): value is PasswordIntentPurpose {
+function isSignedIntentPurpose(value: unknown): value is SignedIntentPurpose {
   return value === "signup-set-password" || value === "reset-password";
 }
 
 /**
- * signature 검증을 통과한 parsed JSON이 정확한 Password Intent schema인지 확인한다.
+ * signature 검증을 통과한 parsed JSON이 정확한 Signed Intent schema인지 확인한다.
  *
  * 다음을 모두 요구한다.
  * - plain object
@@ -167,11 +165,9 @@ function isPasswordIntentPurpose(
  * - non-negative integer epoch seconds
  *
  * @param value JSON.parse 결과
- * @returns PasswordIntentPayload schema와 정확히 일치하는지 여부
+ * @returns SignedIntentPayload schema와 정확히 일치하는지 여부
  */
-function isPasswordIntentPayload(
-  value: unknown,
-): value is PasswordIntentPayload {
+function isSignedIntentPayload(value: unknown): value is SignedIntentPayload {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return false;
   }
@@ -181,14 +177,14 @@ function isPasswordIntentPayload(
 
   // 예상하지 않은 추가 필드가 포함된 payload도 허용하지 않는다.
   if (
-    keys.length !== PASSWORD_INTENT_PAYLOAD_KEYS.length ||
-    !PASSWORD_INTENT_PAYLOAD_KEYS.every((key) => key in record)
+    keys.length !== SIGNED_INTENT_PAYLOAD_KEYS.length ||
+    !SIGNED_INTENT_PAYLOAD_KEYS.every((key) => key in record)
   ) {
     return false;
   }
 
   return (
-    isPasswordIntentPurpose(record.purpose) &&
+    isSignedIntentPurpose(record.purpose) &&
     typeof record.userId === "string" &&
     record.userId.trim().length > 0 &&
     Number.isInteger(record.issuedAt) &&
@@ -201,7 +197,7 @@ function isPasswordIntentPayload(
 }
 
 /**
- * Set/Reset Password 흐름에서 사용할 Signed Password Intent를 생성한다.
+ * Set/Reset Password 흐름에서 사용할 Signed Intent를 생성한다.
  *
  * wire format:
  *
@@ -211,15 +207,15 @@ function isPasswordIntentPayload(
  * verifier도 동일한 문자열을 그대로 사용해 signature를 재계산한다.
  *
  * @param params Intent 생성 정보
- * @returns signed Password Intent token
+ * @returns signed Intent token
  * @throws userId가 비어 있거나 nowSeconds가 잘못된 경우
  * @throws PASSWORD_INTENT_SIGNING_SECRET이 설정되지 않은 경우
  */
-export function createSignedPasswordIntent({
+export function createSignedIntent({
   purpose,
   userId,
   nowSeconds = Math.floor(Date.now() / 1000),
-}: CreateSignedPasswordIntentParams): string {
+}: CreateSignedIntentParams): string {
   if (userId.trim().length === 0) {
     throw new Error("Password Intent userId is required");
   }
@@ -230,8 +226,8 @@ export function createSignedPasswordIntent({
     );
   }
 
-  const ttlSeconds = getPasswordIntentTtlSeconds(purpose);
-  const payload: PasswordIntentPayload = {
+  const ttlSeconds = getSignedIntentTtlSeconds(purpose);
+  const payload: SignedIntentPayload = {
     purpose,
     userId,
     issuedAt: nowSeconds,
@@ -243,7 +239,7 @@ export function createSignedPasswordIntent({
   );
 
   // JSON을 다시 직렬화한 값이 아니라 실제 wire payloadPart를 서명한다.
-  const signaturePart = createHmac("sha256", getPasswordIntentSigningSecret())
+  const signaturePart = createHmac("sha256", getSignedIntentSigningSecret())
     .update(payloadPart, "utf8")
     .digest("base64url");
 
@@ -251,7 +247,7 @@ export function createSignedPasswordIntent({
 }
 
 /**
- * Signed Password Intent의 무결성, schema, authorization binding,
+ * Signed Intent의 무결성, schema, authorization binding,
  * TTL 및 만료 여부를 검증한다.
  *
  * 검증 순서는 다음과 같다.
@@ -273,12 +269,12 @@ export function createSignedPasswordIntent({
  * @returns 검증된 payload 또는 invalid Intent인 경우 null
  * @throws PASSWORD_INTENT_SIGNING_SECRET이 설정되지 않은 경우
  */
-export function verifySignedPasswordIntent({
+export function verifySignedIntent({
   token,
   expectedPurpose,
   expectedUserId,
   nowSeconds = Math.floor(Date.now() / 1000),
-}: VerifySignedPasswordIntentParams): PasswordIntentPayload | null {
+}: VerifySignedIntentParams): SignedIntentPayload | null {
   if (
     expectedUserId.trim().length === 0 ||
     !Number.isInteger(nowSeconds) ||
@@ -312,10 +308,7 @@ export function verifySignedPasswordIntent({
   }
 
   // payload 내부를 해석하기 전에 전송된 payloadPart 자체의 무결성을 검증한다.
-  const expectedSignature = createHmac(
-    "sha256",
-    getPasswordIntentSigningSecret(),
-  )
+  const expectedSignature = createHmac("sha256", getSignedIntentSigningSecret())
     .update(payloadPart, "utf8")
     .digest();
 
@@ -338,7 +331,7 @@ export function verifySignedPasswordIntent({
     return null;
   }
 
-  if (!isPasswordIntentPayload(parsedPayload)) {
+  if (!isSignedIntentPayload(parsedPayload)) {
     return null;
   }
 
@@ -350,7 +343,7 @@ export function verifySignedPasswordIntent({
     return null;
   }
 
-  const ttlSeconds = getPasswordIntentTtlSeconds(expectedPurpose);
+  const ttlSeconds = getSignedIntentTtlSeconds(expectedPurpose);
 
   // 시간 계약:
   // - 미래에 발급된 Intent는 허용하지 않는다.

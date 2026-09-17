@@ -2,12 +2,12 @@ import "server-only";
 
 import { cookies } from "next/headers";
 
-import {
-  createSignedPasswordIntent,
-  type PasswordIntentPayload,
-  verifySignedPasswordIntent,
-} from "./passwordIntent";
 import { SET_PASSWORD_INTENT_TTL_SECONDS } from "./rate-limit/authRateLimitConstants";
+import {
+  createSignedIntent,
+  type SignedIntentPayload,
+  verifySignedIntent,
+} from "./signedIntent";
 
 export const SET_PASSWORD_INTENT_COOKIE = "set_password_intent";
 
@@ -21,7 +21,7 @@ const SET_PASSWORD_INTENT_COOKIE_OPTIONS = {
   path: SET_PASSWORD_INTENT_COOKIE_PATH,
 };
 
-export type SetPasswordIntentPayload = PasswordIntentPayload & {
+export type SetPasswordIntentPayload = SignedIntentPayload & {
   purpose: typeof SET_PASSWORD_INTENT_PURPOSE;
 };
 
@@ -45,18 +45,18 @@ type CreateSetPasswordIntentParams = {
  * Set Password 흐름에서 사용할 signed Intent token을 생성합니다.
  *
  * purpose는 signup-set-password로 고정하며 실제 signing과 TTL 계산은
- * 공통 Password Intent 구현에 위임합니다.
+ * 공통 Signed Intent 구현에 위임합니다.
  */
 function createSetPasswordIntentToken({
   userId,
   nowSeconds,
 }: CreateSetPasswordIntentTokenParams): string {
   return nowSeconds === undefined
-    ? createSignedPasswordIntent({
+    ? createSignedIntent({
         purpose: SET_PASSWORD_INTENT_PURPOSE,
         userId,
       })
-    : createSignedPasswordIntent({
+    : createSignedIntent({
         purpose: SET_PASSWORD_INTENT_PURPOSE,
         userId,
         nowSeconds,
@@ -76,12 +76,12 @@ export function verifySetPasswordIntent({
 }: VerifySetPasswordIntentParams): SetPasswordIntentPayload | null {
   const payload =
     nowSeconds === undefined
-      ? verifySignedPasswordIntent({
+      ? verifySignedIntent({
           token,
           expectedPurpose: SET_PASSWORD_INTENT_PURPOSE,
           expectedUserId,
         })
-      : verifySignedPasswordIntent({
+      : verifySignedIntent({
           token,
           expectedPurpose: SET_PASSWORD_INTENT_PURPOSE,
           expectedUserId,
@@ -110,7 +110,7 @@ export async function readSetPasswordIntent(): Promise<string | null> {
 /**
  * Set Password Intent를 생성해 전용 HttpOnly cookie에 저장합니다.
  *
- * 실제 signing과 15분 payload TTL은 공통 Password Intent 구현에 위임하고,
+ * 실제 signing과 15분 payload TTL은 공통 Signed Intent 구현에 위임하고,
  * cookie Max-Age도 동일한 정책 상수를 사용합니다.
  */
 export async function createSetPasswordIntent({

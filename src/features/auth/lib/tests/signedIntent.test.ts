@@ -1,5 +1,5 @@
 /**
- * Password Signed Intent 단위 테스트.
+ * Signed Intent 단위 테스트.
  *
  * 검증 범위:
  * - Set/Reset Password Intent sign → verify 정상 round-trip
@@ -17,20 +17,20 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// passwordIntent.ts는 server-only를 import하므로 Vitest 환경에서는 비워서 mock한다.
-// vi.mock은 정적 import보다 먼저 hoist되므로 아래 passwordIntent import가 안전하다.
+// signedIntent.ts는 server-only를 import하므로 Vitest 환경에서는 비워서 mock한다.
+// vi.mock은 정적 import보다 먼저 hoist되므로 아래 signedIntent import가 안전하다.
 vi.mock("server-only", () => ({}));
 
-import {
-  createSignedPasswordIntent,
-  type PasswordIntentPayload,
-  type PasswordIntentPurpose,
-  verifySignedPasswordIntent,
-} from "../passwordIntent";
 import {
   RESET_PASSWORD_INTENT_TTL_SECONDS,
   SET_PASSWORD_INTENT_TTL_SECONDS,
 } from "../rate-limit/authRateLimitConstants";
+import {
+  createSignedIntent,
+  type SignedIntentPayload,
+  type SignedIntentPurpose,
+  verifySignedIntent,
+} from "../signedIntent";
 
 vi.mock("node:crypto", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:crypto")>();
@@ -47,7 +47,7 @@ const OTHER_USER_ID = "user-456";
 const NOW_SECONDS = 1_700_000_000;
 
 const PURPOSE_CASES: Array<{
-  purpose: PasswordIntentPurpose;
+  purpose: SignedIntentPurpose;
   ttlSeconds: number;
 }> = [
   {
@@ -86,8 +86,8 @@ function createTokenForPayload(payload: unknown): string {
 
 /** 기본적으로 유효한 Set Password payload를 생성한다. */
 function createValidPayload(
-  overrides: Partial<PasswordIntentPayload> = {},
-): PasswordIntentPayload {
+  overrides: Partial<SignedIntentPayload> = {},
+): SignedIntentPayload {
   return {
     purpose: "signup-set-password",
     userId: TEST_USER_ID,
@@ -97,7 +97,7 @@ function createValidPayload(
   };
 }
 
-describe("passwordIntent", () => {
+describe("signedIntent", () => {
   beforeEach(() => {
     vi.stubEnv("PASSWORD_INTENT_SIGNING_SECRET", TEST_SECRET);
     vi.mocked(timingSafeEqual).mockClear();
@@ -111,13 +111,13 @@ describe("passwordIntent", () => {
   it.each(PURPOSE_CASES)(
     "$purpose Intent를 sign한 뒤 같은 purpose/user로 verify하면 payload를 반환한다",
     ({ purpose, ttlSeconds }) => {
-      const token = createSignedPasswordIntent({
+      const token = createSignedIntent({
         purpose,
         userId: TEST_USER_ID,
         nowSeconds: NOW_SECONDS,
       });
 
-      const result = verifySignedPasswordIntent({
+      const result = verifySignedIntent({
         token,
         expectedPurpose: purpose,
         expectedUserId: TEST_USER_ID,
@@ -135,7 +135,7 @@ describe("passwordIntent", () => {
 
   it.each(["", "   "])("signer는 빈/공백 userId(%j)를 거부한다", (userId) => {
     expect(() =>
-      createSignedPasswordIntent({
+      createSignedIntent({
         purpose: "signup-set-password",
         userId,
         nowSeconds: NOW_SECONDS,
@@ -147,7 +147,7 @@ describe("passwordIntent", () => {
     "signer는 잘못된 nowSeconds(%s)를 거부한다",
     (nowSeconds) => {
       expect(() =>
-        createSignedPasswordIntent({
+        createSignedIntent({
           purpose: "signup-set-password",
           userId: TEST_USER_ID,
           nowSeconds,
@@ -157,14 +157,14 @@ describe("passwordIntent", () => {
   );
 
   it("expected purpose가 다르면 같은 사용자 token도 거부한다", () => {
-    const token = createSignedPasswordIntent({
+    const token = createSignedIntent({
       purpose: "signup-set-password",
       userId: TEST_USER_ID,
       nowSeconds: NOW_SECONDS,
     });
 
     expect(
-      verifySignedPasswordIntent({
+      verifySignedIntent({
         token,
         expectedPurpose: "reset-password",
         expectedUserId: TEST_USER_ID,
@@ -174,14 +174,14 @@ describe("passwordIntent", () => {
   });
 
   it("expected userId가 다르면 같은 purpose token도 거부한다", () => {
-    const token = createSignedPasswordIntent({
+    const token = createSignedIntent({
       purpose: "signup-set-password",
       userId: TEST_USER_ID,
       nowSeconds: NOW_SECONDS,
     });
 
     expect(
-      verifySignedPasswordIntent({
+      verifySignedIntent({
         token,
         expectedPurpose: "signup-set-password",
         expectedUserId: OTHER_USER_ID,
@@ -194,7 +194,7 @@ describe("passwordIntent", () => {
     "2-part 구조가 아닌 token(%s)은 거부한다",
     (token) => {
       expect(
-        verifySignedPasswordIntent({
+        verifySignedIntent({
           token,
           expectedPurpose: "signup-set-password",
           expectedUserId: TEST_USER_ID,
@@ -208,7 +208,7 @@ describe("passwordIntent", () => {
     const payloadPart = encodePayload(createValidPayload());
 
     expect(
-      verifySignedPasswordIntent({
+      verifySignedIntent({
         token: `${payloadPart}.***`,
         expectedPurpose: "signup-set-password",
         expectedUserId: TEST_USER_ID,
@@ -225,7 +225,7 @@ describe("passwordIntent", () => {
         Buffer.alloc(signatureBytes).toString("base64url");
 
       expect(
-        verifySignedPasswordIntent({
+        verifySignedIntent({
           token: `${payloadPart}.${invalidLengthSignature}`,
           expectedPurpose: "signup-set-password",
           expectedUserId: TEST_USER_ID,
@@ -241,7 +241,7 @@ describe("passwordIntent", () => {
     const wrongSignature = Buffer.alloc(32, 1).toString("base64url");
 
     expect(
-      verifySignedPasswordIntent({
+      verifySignedIntent({
         token: `${payloadPart}.${wrongSignature}`,
         expectedPurpose: "signup-set-password",
         expectedUserId: TEST_USER_ID,
@@ -255,7 +255,7 @@ describe("passwordIntent", () => {
     const token = signPayloadPart("***");
 
     expect(
-      verifySignedPasswordIntent({
+      verifySignedIntent({
         token,
         expectedPurpose: "signup-set-password",
         expectedUserId: TEST_USER_ID,
@@ -269,7 +269,7 @@ describe("passwordIntent", () => {
     const token = signPayloadPart(payloadPart);
 
     expect(
-      verifySignedPasswordIntent({
+      verifySignedIntent({
         token,
         expectedPurpose: "signup-set-password",
         expectedUserId: TEST_USER_ID,
@@ -304,7 +304,7 @@ describe("passwordIntent", () => {
     const token = createTokenForPayload(payload);
 
     expect(
-      verifySignedPasswordIntent({
+      verifySignedIntent({
         token,
         expectedPurpose: "signup-set-password",
         expectedUserId: TEST_USER_ID,
@@ -339,7 +339,7 @@ describe("passwordIntent", () => {
     const token = createTokenForPayload(payload);
 
     expect(
-      verifySignedPasswordIntent({
+      verifySignedIntent({
         token,
         expectedPurpose: "signup-set-password",
         expectedUserId: TEST_USER_ID,
@@ -357,7 +357,7 @@ describe("passwordIntent", () => {
     const token = createTokenForPayload(payload);
 
     expect(
-      verifySignedPasswordIntent({
+      verifySignedIntent({
         token,
         expectedPurpose: "signup-set-password",
         expectedUserId: TEST_USER_ID,
@@ -370,7 +370,7 @@ describe("passwordIntent", () => {
     vi.stubEnv("PASSWORD_INTENT_SIGNING_SECRET", "");
 
     expect(() =>
-      createSignedPasswordIntent({
+      createSignedIntent({
         purpose: "signup-set-password",
         userId: TEST_USER_ID,
         nowSeconds: NOW_SECONDS,
@@ -379,7 +379,7 @@ describe("passwordIntent", () => {
   });
 
   it("signing secret이 없으면 verifier도 fallback 없이 throw한다", () => {
-    const token = createSignedPasswordIntent({
+    const token = createSignedIntent({
       purpose: "signup-set-password",
       userId: TEST_USER_ID,
       nowSeconds: NOW_SECONDS,
@@ -388,7 +388,7 @@ describe("passwordIntent", () => {
     vi.stubEnv("PASSWORD_INTENT_SIGNING_SECRET", "");
 
     expect(() =>
-      verifySignedPasswordIntent({
+      verifySignedIntent({
         token,
         expectedPurpose: "signup-set-password",
         expectedUserId: TEST_USER_ID,
