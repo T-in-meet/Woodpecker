@@ -134,14 +134,19 @@ export async function getLearningStats(): Promise<LearningStats> {
       n.next_review_at <= nowIso,
   ).length;
 
-  // 복습 횟수에 상한이 없으므로 버킷을 고정하지 않고 실제 데이터에서 만든다.
-  // 다만 MAX_REVIEW_ROUND_BUCKET 이상은 한 칸으로 묶는다. 그대로 두면 오래 쓴
-  // 사용자의 카드가 회차 수만큼 늘어나고, 그 구간은 어차피 간격이 모두 같다.
-  // 0회는 "학습 전" 칸이라 노트가 없어도 항상 보여준다.
+  // 단계는 복습 주기 사다리(REVIEW_INTERVALS_DAYS)와 같은 개수로 고정한다. 노트가 없는
+  // 단계도 빈 줄로 남겨야 사용자가 "어디까지 가야 하는지"를 그래프에서 읽을 수 있다.
+  // 복습 횟수에는 상한이 없지만 MAX_REVIEW_ROUND_BUCKET 이상은 간격이 모두 같으므로
+  // 마지막 칸에 묶는다. 그대로 두면 오래 쓴 사용자의 줄이 회차 수만큼 늘어난다.
   // 완료 표시한 노트는 진행 중인 단계가 아니므로 뺀다. 특히 한 번도 복습하지 않고
   // 완료한 노트는 review_round가 0이라 그대로 두면 "학습 전"으로 잡힌다.
   // 그 노트들은 completedNotesCount가 따로 센다.
-  const notesByRoundMap = new Map<number, number>([[0, 0]]);
+  const notesByRoundMap = new Map<number, number>(
+    Array.from({ length: MAX_REVIEW_ROUND_BUCKET + 1 }, (_, round) => [
+      round,
+      0,
+    ]),
+  );
   for (const row of notesRows) {
     if (isReviewCompleted(row)) continue;
 

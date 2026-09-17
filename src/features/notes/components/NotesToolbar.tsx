@@ -1,149 +1,180 @@
 "use client";
 
-import { ChevronDown, ListFilter, Search, X } from "lucide-react";
+import { Search, X } from "lucide-react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-
-import { type NoteView, noteViewSchema } from "../schema";
+import type { NoteView } from "../schema";
 import { buildNotesUrl } from "../utils/buildNotesUrl";
-
-type NotesToolbarProps = {
-  initialQuery: string;
-  activeView: NoteView;
-};
 
 const NOTE_VIEW_OPTIONS = [
   { value: "all", label: "전체" },
   { value: "due", label: "오늘 복습" },
   { value: "scheduled", label: "복습 예정" },
-  { value: "completed", label: "복습 완료" },
-] as const satisfies ReadonlyArray<{ value: NoteView; label: string }>;
+  { value: "completed", label: "학습 종료" },
+] as const;
+
+type NotesToolbarProps = { initialQuery: string; activeView: NoteView };
 
 export function NotesToolbar({ initialQuery, activeView }: NotesToolbarProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const urlQuery = searchParams.toString();
   const [query, setQuery] = useState(initialQuery);
-  const activeViewOption =
-    NOTE_VIEW_OPTIONS.find(({ value }) => value === activeView) ??
-    NOTE_VIEW_OPTIONS[0];
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
-  const isTypingRef = useRef(false);
+  const composingRef = useRef(false);
+  const inputRevisionRef = useRef(0);
+  const requestedSearchesRef = useRef(new Map<string, number>());
+  const lastUrlRef = useRef(
+    buildNotesUrl({
+      query: initialQuery,
+      view: activeView,
+      page: Number(searchParams.get("page")),
+    }),
+  );
 
-  // URL이 변경되면 검색어 상태 동기화
-  useEffect(() => {
-    if (isTypingRef.current) return;
-    setQuery(searchParams.get("q") ?? "");
-  }, [searchParams]);
-
-  function handleQueryChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const q = e.target.value;
-    setQuery(q);
-    isTypingRef.current = true;
+  function cancelSearch() {
     clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      isTypingRef.current = false;
-      router.push(buildNotesUrl({ query: q, view: activeView }));
-    }, 300);
   }
 
-  /**
-   * 대기 중인 debounce를 버리고 현재 검색어로 즉시 이동한다.
-   *
-   * Enter를 눌렀는데 300ms를 더 기다리는 건 "입력이 끝났다"는 신호를 무시하는
-   * 것이라, 확정 입력은 타이머를 건너뛰고 바로 반영한다.
-   */
-  function commitQuery() {
-    clearTimeout(debounceRef.current);
-    isTypingRef.current = false;
-    router.push(buildNotesUrl({ query, view: activeView }));
+  useEffect(() => {
+    const params = new URLSearchParams(urlQuery);
+    const url = buildNotesUrl({
+      query: params.get("q") ?? "",
+      view: activeView,
+      page: Number(params.get("page")),
+    });
+    const requestedRevision = requestedSearchesRef.current.get(url);
+    requestedSearchesRef.current.delete(url);
+    // A slow search response must not overwrite text typed since that request.
+    if (
+      requestedRevision !== undefined &&
+      requestedRevision < inputRevisionRef.current
+    )
+      return;
+    cancelSearch();
+    setQuery(params.get("q") ?? "");
+    lastUrlRef.current = url;
+  }, [urlQuery, activeView]);
+
+  useEffect(() => {
+    // Browser history changes must cancel the timer before the next route render.
+    const onHistory = () => {
+      cancelSearch();
+      requestedSearchesRef.current.clear();
+    };
+    const onNavigation = (event: MouseEvent) => {
+      if (
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      )
+        return;
+      const link =
+        event.target instanceof Element
+          ? event.target.closest("a[href]")
+          : null;
+      if (
+        link instanceof HTMLAnchorElement &&
+        link.target !== "_blank" &&
+        !link.hasAttribute("download")
+      )
+        onHistory();
+    };
+    window.addEventListener("popstate", onHistory);
+    window.addEventListener("pagehide", onHistory);
+    document.addEventListener("click", onNavigation, true);
+    return () => {
+      cancelSearch();
+      window.removeEventListener("popstate", onHistory);
+      window.removeEventListener("pagehide", onHistory);
+      document.removeEventListener("click", onNavigation, true);
+    };
+  }, []);
+
+  function replaceQuery(value: string) {
+    cancelSearch();
+    const url = buildNotesUrl({ query: value, view: activeView });
+    if (lastUrlRef.current === url) return;
+    lastUrlRef.current = url;
+    requestedSearchesRef.current.set(url, inputRevisionRef.current);
+    router.replace(url, { scroll: false });
+  }
+
+  function scheduleQuery(value: string) {
+    cancelSearch();
+    if (composingRef.current) return;
+    debounceRef.current = setTimeout(() => replaceQuery(value), 300);
+  }
+
+  function handleQueryChange(event: React.ChangeEvent<HTMLInputElement>) {
+    inputRevisionRef.current += 1;
+    setQuery(event.target.value);
+    scheduleQuery(event.target.value);
   }
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    commitQuery();
+    if (!composingRef.current) replaceQuery(query);
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
-    if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
-
-    // 여기서 막지 않으면 form의 암묵적 제출까지 함께 일어나 이동이 두 번 난다.
+    if (
+      event.key !== "Enter" ||
+      event.nativeEvent.isComposing ||
+      composingRef.current
+    )
+      return;
     event.preventDefault();
-    commitQuery();
+    replaceQuery(query);
   }
 
   function handleClear() {
+    inputRevisionRef.current += 1;
+    composingRef.current = false;
     setQuery("");
-    clearTimeout(debounceRef.current);
-    // debounce 타이머를 취소하면 타이머 안의 isTypingRef 해제도 함께 사라지므로
-    // 여기서 직접 내려야 이후 URL 변경(뒤로가기 등)이 검색어 상태에 반영된다.
-    isTypingRef.current = false;
-    router.push(buildNotesUrl({ view: activeView }));
+    replaceQuery("");
   }
-
-  function handleViewChange(value: string) {
-    const parsed = noteViewSchema.safeParse(value);
-    if (!parsed.success) return;
-
-    clearTimeout(debounceRef.current);
-    isTypingRef.current = false;
-    router.push(buildNotesUrl({ query, view: parsed.data }));
-  }
-
-  useEffect(() => () => clearTimeout(debounceRef.current), []);
 
   return (
-    <div className="contents sm:flex sm:w-auto sm:items-center sm:gap-2">
-      <DropdownMenu modal={false}>
-        <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            variant="outline"
-            size="lg"
-            aria-label={`노트 보기: ${activeViewOption.label}`}
-            className="w-36 justify-between justify-self-end rounded-md px-3 data-[state=open]:rounded-b-none data-[state=open]:border-b-transparent data-[state=open]:bg-popover data-[state=open]:text-popover-foreground sm:justify-self-auto"
+    <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <nav
+        aria-label="노트 보기"
+        // md 이상은 한 줄로 펼치되, 세로 배치(md~lg)에서 부모 flex-col이
+        // 검색창 너비까지 늘리지 않도록 내용만큼만 차지한다.
+        className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1 md:flex md:w-fit"
+      >
+        {NOTE_VIEW_OPTIONS.map(({ value, label }) => (
+          <Link
+            key={value}
+            href={buildNotesUrl({ query, view: value })}
+            // href가 입력 중인 검색어로 매번 바뀌므로 prefetch하면 키 입력마다
+            // 탭 수만큼 서버 요청이 나간다. 실제 이동은 클릭 시에만 한다.
+            prefetch={false}
+            aria-current={activeView === value ? "page" : undefined}
+            onClick={(event) => {
+              if (
+                event.metaKey ||
+                event.ctrlKey ||
+                event.shiftKey ||
+                event.altKey
+              )
+                return;
+              cancelSearch();
+              if (lastUrlRef.current === buildNotesUrl({ query, view: value }))
+                event.preventDefault();
+            }}
+            className={`flex min-h-11 cursor-pointer items-center justify-center whitespace-nowrap rounded-md px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${activeView === value ? "bg-background font-semibold text-foreground shadow-sm" : "text-muted-foreground hover:bg-background/70 hover:text-foreground"}`}
           >
-            <span className="flex items-center gap-1.5">
-              <ListFilter className="text-muted-foreground" />
-              {activeViewOption.label}
-            </span>
-            <ChevronDown className="text-muted-foreground" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="start"
-          side="bottom"
-          sideOffset={0}
-          avoidCollisions={false}
-          className="min-w-(--radix-dropdown-menu-trigger-width) rounded-t-none border border-t-0 border-border ring-0"
-        >
-          <DropdownMenuRadioGroup
-            value={activeView}
-            onValueChange={handleViewChange}
-          >
-            {NOTE_VIEW_OPTIONS.map(({ value, label }) => (
-              <DropdownMenuRadioItem
-                key={value}
-                value={value}
-                className="cursor-pointer whitespace-nowrap py-2"
-              >
-                {label}
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
+            {label}
+          </Link>
+        ))}
+      </nav>
       {/* form으로 감싸 Enter가 검색을 확정하게 하고, 돋보기를 제출 버튼으로 둔다.
           role="search"로 랜드마크도 준다.
           테두리·모서리·포커스 링을 input이 아니라 이 컨테이너가 갖는다. 그래야
@@ -151,7 +182,7 @@ export function NotesToolbar({ initialQuery, activeView }: NotesToolbarProps) {
       <form
         role="search"
         onSubmit={handleSubmit}
-        className="col-span-2 flex h-9 w-full min-w-0 items-center rounded-md border border-input bg-background ring-offset-background transition-colors focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 sm:col-auto sm:w-72 sm:flex-none"
+        className="flex h-11 w-full min-w-0 items-center rounded-md border border-input bg-background ring-offset-background transition-colors focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 lg:w-72 lg:flex-none"
       >
         <input
           type="search"
@@ -159,6 +190,18 @@ export function NotesToolbar({ initialQuery, activeView }: NotesToolbarProps) {
           enterKeyHint="search"
           value={query}
           onChange={handleQueryChange}
+          onCompositionStart={() => {
+            composingRef.current = true;
+            cancelSearch();
+          }}
+          onCompositionEnd={(event) => {
+            composingRef.current = false;
+            inputRevisionRef.current += 1;
+            setQuery(event.currentTarget.value);
+            scheduleQuery(event.currentTarget.value);
+          }}
+          name="q"
+          autoComplete="off"
           onKeyDown={handleKeyDown}
           aria-label="노트 검색"
           placeholder="제목 또는 내용 검색"

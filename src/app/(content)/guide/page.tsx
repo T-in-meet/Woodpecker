@@ -61,7 +61,7 @@ export default function GuideIndexPage() {
           ]}
           title={GUIDE_INDEX_CONTENT.heading}
         >
-          간격 반복 · 복습 주기 · 백지 테스트, 세 편
+          간격 반복 학습 · 복습 주기 · 백지 테스트
         </GuideHero>
 
         <div className="mx-auto max-w-3xl px-6 py-14 text-prose-ko">

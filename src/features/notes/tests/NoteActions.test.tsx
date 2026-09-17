@@ -29,7 +29,7 @@ describe("NoteActions", () => {
 
     await user.click(screen.getByRole("button", { name: "노트 삭제" }));
 
-    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(await screen.findByRole("alertdialog")).toBeInTheDocument();
     expect(screen.getByText("삭제할 노트")).toBeInTheDocument();
     expect(confirmSpy).not.toHaveBeenCalled();
 

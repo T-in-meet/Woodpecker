@@ -90,8 +90,14 @@ export default async function NoteDetailPage({
     return [];
   });
 
+  // 진행 중인 회차는 항상 review_round + 1이다(RPC가 이 관계를 강제한다).
+  // 그 회차에 채점이 있으면 백지 테스트 페이지가 결과 화면부터 복원한다.
+  const hasCurrentRoundGrading = gradings.some(
+    (grading) => grading.round === note.review_round + 1,
+  );
+
   const reviewStatusMessage = isReviewCompleted
-    ? "복습을 완료한 노트입니다."
+    ? "학습을 종료한 노트입니다."
     : nextScheduledAt
       ? isReviewDue
         ? "지금 백지 테스트를 진행할 수 있습니다."
@@ -138,6 +144,7 @@ export default async function NoteDetailPage({
           isReviewCompleted && isReviewCompletedToday
         }
         canStartReview={canReview}
+        hasCurrentRoundGrading={hasCurrentRoundGrading}
         reviewStatusMessage={reviewStatusMessage}
         notificationTimeOfDay={note.notification_time_of_day}
         nextScheduledAt={nextScheduledAt}

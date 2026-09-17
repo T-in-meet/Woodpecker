@@ -69,7 +69,7 @@ export function NoteManageMenu({
   const [isTogglingCompletion, startCompletionTransition] = useTransition();
 
   /**
-   * 복습 완료 표시를 켜고 끈다. 해제하면 저장된 pending 일정 또는 DB가 복구한
+   * 학습 종료 표시를 켜고 끈다. 해제하면 저장된 pending 일정 또는 DB가 복구한
    * 다음 일정에서 알림과 복습이 다시 이어진다.
    *
    * 실패는 토스트로 알린다. 메뉴는 선택 즉시 닫히고 화면도 그대로여서, 알리지
@@ -94,7 +94,7 @@ export function NoteManageMenu({
         router.refresh();
       } catch {
         showToast(
-          "복습 완료 상태를 바꾸지 못했습니다. 잠시 후 다시 시도해주세요.",
+          "학습 종료 상태를 바꾸지 못했습니다. 잠시 후 다시 시도해주세요.",
           { variant: "destructive" },
         );
       }
@@ -127,7 +127,7 @@ export function NoteManageMenu({
           </Button>
         </DropdownMenuTrigger>
 
-        {/* min-w: 기본 min-w-32는 "복습 완료로 표시"가 두 줄로 접힌다. 가장 긴
+        {/* min-w: 기본 min-w-32는 "학습 종료로 표시"가 두 줄로 접힌다. 가장 긴
             항목이 한 줄에 들어가는 선까지만 넓힌다.
             collisionPadding: Radix 기본값 0이라 좁은 화면에서 메뉴가 뷰포트
             왼쪽 끝에 붙는다. 가장자리와 간격을 둔다. */}
@@ -167,7 +167,7 @@ export function NoteManageMenu({
             ) : (
               <CheckCircle2 className="size-4" aria-hidden="true" />
             )}
-            {isCompletedByUser ? "복습 다시 시작" : "복습 완료로 표시"}
+            {isCompletedByUser ? "복습 다시 시작" : "학습 종료로 표시"}
           </DropdownMenuItem>
 
           <DropdownMenuSeparator />

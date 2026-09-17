@@ -64,11 +64,10 @@ export function AdminComponentPlaygroundClient() {
               삭제
             </Button>
           }
-          title="답변을 삭제하시겠습니까?"
+          title="답변을 삭제할까요?"
           description="삭제된 답변은 복구할 수 없습니다."
           confirmLabel="삭제"
           confirmVariant="destructive"
-          reverseActions
           pending={isPending}
           onConfirm={handleDelete}
         />

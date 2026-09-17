@@ -112,10 +112,10 @@ describe("getReviewScheduleDisplay", () => {
     vi.useRealTimers();
   });
 
-  it("completed → '완료'", () => {
+  it("completed → '학습 종료'", () => {
     expect(getReviewScheduleDisplay("completed", null)).toMatchObject({
       label: "복습일",
-      primaryText: "완료",
+      primaryText: "학습 종료",
       tone: "default",
     });
   });

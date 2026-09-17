@@ -1,7 +1,6 @@
 "use client";
 
-import type { VariantProps } from "class-variance-authority";
-import type { ReactElement, ReactNode } from "react";
+import type { ComponentProps, ReactElement, ReactNode } from "react";
 
 import {
   AlertDialog,
@@ -14,7 +13,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { buttonVariants } from "@/components/ui/button";
 
 /**
  * 관리자 확인 대화상자가 공통으로 사용하는 속성입니다.
@@ -35,14 +33,8 @@ type AdminAlertDialogBaseProps = {
   /** 취소 버튼에 표시할 문구 */
   cancelLabel?: string;
 
-  /** 확인 버튼의 variant (지정 시 destructive보다 우선 적용됩니다) */
-  confirmVariant?: VariantProps<typeof buttonVariants>["variant"];
-
-  /** 취소 버튼의 variant (기본값: outline) */
-  cancelVariant?: VariantProps<typeof buttonVariants>["variant"];
-
-  /** true면 확인 버튼을 좌측, 취소 버튼을 우측에 렌더링합니다. */
-  reverseActions?: boolean;
+  /** 확인 버튼의 variant. 되돌릴 수 없는 작업은 destructive를 씁니다. */
+  confirmVariant?: ComponentProps<typeof AlertDialogAction>["variant"];
 
   /** 작업 처리 중인지 여부 */
   pending?: boolean;
@@ -70,6 +62,7 @@ type AdminAlertDialogProps =
  *
  * shadcn/ui의 AlertDialog를 기반으로 하며,
  * 위험 작업 스타일과 처리 중 상태를 공통으로 제공합니다.
+ * 버튼 순서는 공통 규칙대로 [취소][확인]으로 고정입니다.
  */
 export function AdminAlertDialog({
   trigger,
@@ -78,30 +71,11 @@ export function AdminAlertDialog({
   confirmLabel = "확인",
   cancelLabel = "취소",
   confirmVariant,
-  cancelVariant,
-  reverseActions = false,
   pending = false,
   open,
   onOpenChange,
   onConfirm,
 }: AdminAlertDialogProps) {
-  const cancelButton = (
-    <AlertDialogCancel key="cancel" variant={cancelVariant} disabled={pending}>
-      {cancelLabel}
-    </AlertDialogCancel>
-  );
-
-  const confirmButton = (
-    <AlertDialogAction
-      key="confirm"
-      variant={confirmVariant ?? "default"}
-      disabled={pending}
-      onClick={onConfirm}
-    >
-      {pending ? "처리 중..." : confirmLabel}
-    </AlertDialogAction>
-  );
-
   return (
     <AlertDialog
       {...(open !== undefined ? { open } : {})}
@@ -120,10 +94,18 @@ export function AdminAlertDialog({
           ) : null}
         </AlertDialogHeader>
 
-        <AlertDialogFooter className="sm:justify-between">
-          {reverseActions
-            ? [confirmButton, cancelButton]
-            : [cancelButton, confirmButton]}
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={pending}>
+            {cancelLabel}
+          </AlertDialogCancel>
+
+          <AlertDialogAction
+            variant={confirmVariant ?? "default"}
+            disabled={pending}
+            onClick={onConfirm}
+          >
+            {pending ? "처리 중..." : confirmLabel}
+          </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

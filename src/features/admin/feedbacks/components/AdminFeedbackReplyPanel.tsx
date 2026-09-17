@@ -232,11 +232,10 @@ export function AdminFeedbackReplyPanel({
                       삭제
                     </Button>
                   }
-                  title="관리자 답변을 삭제하시겠습니까?"
+                  title="관리자 답변을 삭제할까요?"
                   description="삭제된 답변과 첨부 이미지는 복구할 수 없습니다. 피드백 상태는 미해결로 변경됩니다."
                   confirmLabel="삭제"
                   confirmVariant="destructive"
-                  reverseActions
                   pending={deleteMutation.isPending}
                   onConfirm={handleReplyDelete}
                 />

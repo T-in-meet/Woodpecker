@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -22,7 +22,20 @@ vi.mock("../actions", () => ({
 }));
 
 vi.mock("./BlankEditor", () => ({
-  BlankEditor: () => <div data-testid="blank-editor" />,
+  BlankEditor: ({
+    value,
+    onChange,
+  }: {
+    value: string;
+    onChange: (value: string) => void;
+  }) => (
+    <textarea
+      data-testid="blank-editor"
+      aria-label="답안"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    />
+  ),
 }));
 
 vi.mock("./ComparisonView", () => ({
@@ -112,6 +125,7 @@ function mockComparisonState() {
 describe("BlankTestPage", () => {
   beforeEach(() => {
     useActionStateMock.mockReset();
+    history.replaceState(null, "", "/notes/test/review");
   });
 
   it("keeps the complete button enabled before today's limit is reached", () => {
@@ -131,9 +145,7 @@ describe("BlankTestPage", () => {
       "text-prose-ko",
     );
     expect(
-      screen.getByText(
-        "비교를 마쳤다면 이번 복습을 완료 처리하고 다음 간격으로 넘어가세요.",
-      ),
+      screen.getByText("비교를 마쳤다면 이번 복습을 완료해 주세요."),
     ).toHaveClass("text-prose-ko");
     expect(
       screen.getByRole("button", { name: "review-complete" }),
@@ -224,5 +236,105 @@ describe("BlankTestPage", () => {
       "data-initial-score",
       "",
     );
+  });
+});
+
+function renderDraft(restoredSession: RestoredReviewSession | null = null) {
+  return render(
+    <BlankTestPage
+      noteId={NOTE_ID}
+      noteTitle="테스트"
+      restoredSession={restoredSession}
+      reviewRound={1}
+    />,
+  );
+}
+function beforeUnload() {
+  const event = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(event);
+  return event.defaultPrevented;
+}
+
+describe("미제출 답안 보호", () => {
+  beforeEach(() => {
+    useActionStateMock.mockReturnValue([null, vi.fn(), false]);
+    history.replaceState(null, "", "/notes/test/review");
+  });
+  it("공백은 보호하지 않고 입력 후 보호하며 모두 지우면 해제한다", () => {
+    renderDraft();
+    expect(beforeUnload()).toBe(false);
+    fireEvent.change(screen.getByLabelText("답안"), {
+      target: { value: "  " },
+    });
+    expect(beforeUnload()).toBe(false);
+    fireEvent.change(screen.getByLabelText("답안"), {
+      target: { value: "내 답안" },
+    });
+    expect(beforeUnload()).toBe(true);
+    fireEvent.change(screen.getByLabelText("답안"), { target: { value: "" } });
+    expect(beforeUnload()).toBe(false);
+  });
+  it("내부 이동에 자체 모달을 열고 취소하면 답안을 보존하며 확정하면 이동한다", async () => {
+    const user = userEvent.setup();
+    renderDraft();
+    fireEvent.change(screen.getByLabelText("답안"), {
+      target: { value: "내 답안" },
+    });
+    await act(async () => {
+      history.pushState(null, "", "/notes");
+    });
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/notes/test/review");
+    await user.click(screen.getByRole("button", { name: "계속 작성" }));
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("답안")).toHaveValue("내 답안");
+    await act(async () => {
+      history.pushState(null, "", "/notes");
+    });
+    await user.click(screen.getByRole("button", { name: "답안 버리고 이동" }));
+    expect(window.location.pathname).toBe("/notes");
+  });
+  it("제출 중과 실패에는 보호를 유지하고 비교 화면에 진입하면 해제한다", () => {
+    const { rerender } = renderDraft();
+    fireEvent.change(screen.getByLabelText("답안"), {
+      target: { value: "내 답안" },
+    });
+    for (const response of [
+      [null, vi.fn(), true],
+      [{ error: "다시 시도해주세요" }, vi.fn(), false],
+    ]) {
+      useActionStateMock.mockReturnValue(response);
+      rerender(
+        <BlankTestPage
+          noteId={NOTE_ID}
+          noteTitle="테스트"
+          restoredSession={null}
+          reviewRound={1}
+        />,
+      );
+      expect(beforeUnload()).toBe(true);
+    }
+    mockComparisonState();
+    rerender(
+      <BlankTestPage
+        noteId={NOTE_ID}
+        noteTitle="테스트"
+        restoredSession={null}
+        reviewRound={1}
+      />,
+    );
+    expect(beforeUnload()).toBe(false);
+  });
+  it("복원 결과와 빈 재작성은 보호하지 않고 재입력하면 보호한다", async () => {
+    renderDraft(RESTORED_SESSION);
+    expect(beforeUnload()).toBe(false);
+    await userEvent
+      .setup()
+      .click(screen.getByRole("button", { name: "답안 다시 작성" }));
+    expect(beforeUnload()).toBe(false);
+    fireEvent.change(screen.getByLabelText("답안"), {
+      target: { value: "새 답안" },
+    });
+    expect(beforeUnload()).toBe(true);
   });
 });

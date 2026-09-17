@@ -108,13 +108,13 @@ describe("FaqSection", () => {
 
     await user.click(
       screen.getByRole("button", {
-        name: "학습 통계의 연속 학습일과 정시 완료율은 어떻게 계산되나요?",
+        name: "학습 통계의 연속 학습일과 예정일에 맞춘 복습은 어떻게 계산되나요?",
       }),
     );
     expect(
       screen.getByText(/연속 학습일은 복습을 완료한 날이/),
     ).toBeInTheDocument();
-    // 연속 학습일·정시 완료율도 KST 기준으로 계산한다.
+    // 연속 학습일·예정일에 맞춘 복습도 KST 기준으로 계산한다.
     expect(screen.getByText(/모두 한국 시간 기준입니다/)).toBeInTheDocument();
   });
 });

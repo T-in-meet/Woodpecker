@@ -21,11 +21,12 @@ export function NoteActions({
   const { handleStartReview } = useNoteActions(noteId);
 
   // 아웃라인 초록. 글자색은 흰 배경 대비 AA를 위해 emerald-700을 쓰고 테두리는 한 단계 연하게 둔다.
-  // pointer-coarse: 손가락 입력일 때만 44px로 키운다(마우스 환경의 목록 밀도는 유지).
+  // pointer-coarse: 손가락 입력일 때만 40px로 키운다(마우스 환경의 목록 밀도는 유지).
+  // 44px는 삭제 버튼과 붙어 있는 이 행에서 구분선 쪽으로 튀어 보여 한 단계 줄였다.
   const reviewClass =
-    "inline-flex h-8 items-center gap-1 rounded-md border border-emerald-600/40 px-2.5 text-xs font-medium text-emerald-700 cursor-pointer transition-colors hover:bg-emerald-50 pointer-coarse:h-11";
+    "inline-flex h-8 items-center gap-1 rounded-md border border-emerald-600/40 px-2.5 text-xs font-medium text-emerald-700 cursor-pointer transition-colors hover:bg-emerald-50 pointer-coarse:h-10";
   const deleteClass =
-    "inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive pointer-coarse:size-11";
+    "inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive pointer-coarse:size-10";
 
   return (
     <>
