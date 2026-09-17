@@ -2,6 +2,7 @@ import "server-only";
 
 import { cookies } from "next/headers";
 
+import { SET_PASSWORD_PATH } from "../constants/routes";
 import { SET_PASSWORD_INTENT_TTL_SECONDS } from "./rate-limit/authRateLimitConstants";
 import {
   createSignedIntent,
@@ -12,13 +13,12 @@ import {
 export const SET_PASSWORD_INTENT_COOKIE = "set_password_intent";
 
 const SET_PASSWORD_INTENT_PURPOSE = "signup-set-password" as const;
-const SET_PASSWORD_INTENT_COOKIE_PATH = "/set-password";
 
 const SET_PASSWORD_INTENT_COOKIE_OPTIONS = {
   httpOnly: true,
   sameSite: "lax" as const,
   secure: process.env.NODE_ENV === "production",
-  path: SET_PASSWORD_INTENT_COOKIE_PATH,
+  path: SET_PASSWORD_PATH,
 };
 
 export type SetPasswordIntentPayload = SignedIntentPayload & {
