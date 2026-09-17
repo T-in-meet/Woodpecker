@@ -33,6 +33,7 @@ import {
 } from "../../lib/rate-limit/otpVerifyRateLimit";
 import { getTrustedAuthServerActionClientIp } from "../../lib/rate-limit/trustedAuthClientIp";
 import { setResetPasswordIntentCookie } from "../../lib/resetPasswordIntent";
+import { createSetPasswordIntent } from "../../lib/setPasswordIntent";
 import { canonicalizeEmail } from "../../utils/canonicalizeEmail";
 import { verifyOtp } from "../lib/verifyOtp";
 import { verifyOtpContextSchema } from "../schemas/verifyOtpContextSchema";
@@ -240,15 +241,15 @@ export async function verifyOtpAction(
      *   반드시 반환 결과의 error 여부를 확인해야 한다.
      * - OTP 불일치/만료 error와 Provider 오류는 caller에서 구분한다.
      */
-    let error;
+    let verifyResult: Awaited<ReturnType<typeof verifyOtp>>;
 
     try {
-      ({ error } = await verifyOtp({
+      verifyResult = await verifyOtp({
         supabase,
         email,
         purpose,
         otp: otpParsed.data,
-      }));
+      });
     } catch (providerError) {
       otpVerifyRateLimit.recordResult({
         canonicalEmail,
@@ -272,6 +273,8 @@ export async function verifyOtpAction(
 
       return internalErrorState();
     }
+
+    const { data, error } = verifyResult;
 
     /**
      * OTP 인증 실패 처리
@@ -350,6 +353,20 @@ export async function verifyOtpAction(
       return internalErrorState();
     }
 
+    let verifiedSignupUserId: string | null = null;
+
+    if (purpose === "signup") {
+      const verifiedUser = data.user;
+
+      if (verifiedUser === null) {
+        throw new Error(
+          "Signup OTP verification succeeded without an authenticated user.",
+        );
+      }
+
+      verifiedSignupUserId = verifiedUser.id;
+    }
+
     otpVerifyRateLimit.recordResult({
       canonicalEmail,
       outcome: "success",
@@ -402,7 +419,9 @@ export async function verifyOtpAction(
           ? `${ROUTES.RESET_PASSWORD}?redirect=${encodeURIComponent(redirectTo)}`
           : ROUTES.RESET_PASSWORD;
 
-    if (purpose === "reset-password") {
+    if (verifiedSignupUserId !== null) {
+      await createSetPasswordIntent({ userId: verifiedSignupUserId });
+    } else if (purpose === "reset-password") {
       await setResetPasswordIntentCookie();
     }
 

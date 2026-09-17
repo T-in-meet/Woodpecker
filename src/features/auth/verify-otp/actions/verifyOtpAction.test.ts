@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 
+import { AUTH_EVENTS } from "../../constants/authEvents";
 import { AUTH_LOG_REASONS } from "../../constants/authLogReasons";
 import { INVALID_OTP_ERROR_MESSAGE } from "../../constants/otp";
 import { applyMinimumActionDelay } from "../../lib/applyMinimumActionDelay";
@@ -13,6 +14,7 @@ import {
 } from "../../lib/rate-limit/otpVerifyRateLimit";
 import { getTrustedAuthServerActionClientIp } from "../../lib/rate-limit/trustedAuthClientIp";
 import { setResetPasswordIntentCookie } from "../../lib/resetPasswordIntent";
+import { createSetPasswordIntent } from "../../lib/setPasswordIntent";
 import { verifyOtp } from "../lib/verifyOtp";
 import { verifyOtpAction } from "./verifyOtpAction";
 
@@ -52,6 +54,10 @@ vi.mock("../lib/verifyOtp", () => ({
 
 vi.mock("../../lib/resetPasswordIntent", () => ({
   setResetPasswordIntentCookie: vi.fn(),
+}));
+
+vi.mock("../../lib/setPasswordIntent", () => ({
+  createSetPasswordIntent: vi.fn(),
 }));
 
 vi.mock("../../lib/applyMinimumActionDelay", () => ({
@@ -110,9 +116,15 @@ describe("verifyOtpAction", () => {
     });
 
     vi.mocked(verifyOtp).mockResolvedValue({
+      data: {
+        user: {
+          id: "verified-user-id",
+        },
+      },
       error: null,
     } as Awaited<ReturnType<typeof verifyOtp>>);
 
+    vi.mocked(createSetPasswordIntent).mockResolvedValue(undefined);
     vi.mocked(setResetPasswordIntentCookie).mockResolvedValue(undefined);
     vi.mocked(applyMinimumActionDelay).mockResolvedValue(undefined);
   });
@@ -162,6 +174,121 @@ describe("verifyOtpAction", () => {
     expect(redirect).toHaveBeenCalledWith(expectedPath);
     expect(setResetPasswordIntentCookie).not.toHaveBeenCalled();
     expect(applyMinimumActionDelay).toHaveBeenCalledTimes(1);
+  });
+
+  it("signup OTP 인증 성공 시 Provider user id로 Set Password Intent를 발급한다", async () => {
+    const formData = createFormData({
+      email: "user@example.com",
+      purpose: "signup",
+      otp: "123456",
+    });
+
+    await expect(verifyOtpAction(null, prevState, formData)).rejects.toThrow(
+      `NEXT_REDIRECT:${ROUTES.SET_PASSWORD}`,
+    );
+
+    expect(createSetPasswordIntent).toHaveBeenCalledTimes(1);
+    expect(createSetPasswordIntent).toHaveBeenCalledWith({
+      userId: "verified-user-id",
+    });
+    expect(setResetPasswordIntentCookie).not.toHaveBeenCalled();
+
+    expect(
+      vi.mocked(otpVerifyRateLimit.recordResult).mock.invocationCallOrder[0]!,
+    ).toBeLessThan(
+      vi.mocked(createSetPasswordIntent).mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("client가 userId를 전달해도 Set Password Intent는 Provider user id만 사용한다", async () => {
+    const formData = createFormData({
+      email: "user@example.com",
+      purpose: "signup",
+      otp: "123456",
+    });
+    formData.set("userId", "client-controlled-user-id");
+
+    await expect(verifyOtpAction(null, prevState, formData)).rejects.toThrow(
+      `NEXT_REDIRECT:${ROUTES.SET_PASSWORD}`,
+    );
+
+    expect(createSetPasswordIntent).toHaveBeenCalledWith({
+      userId: "verified-user-id",
+    });
+    expect(createSetPasswordIntent).not.toHaveBeenCalledWith({
+      userId: "client-controlled-user-id",
+    });
+  });
+
+  it("signup Verify 응답에 authenticated user가 없으면 success로 기록하지 않고 fail-closed한다", async () => {
+    vi.mocked(verifyOtp).mockResolvedValue({
+      data: {
+        user: null,
+      },
+      error: null,
+    } as Awaited<ReturnType<typeof verifyOtp>>);
+
+    const result = await verifyOtpAction(
+      null,
+      prevState,
+      createFormData({
+        email: "user@example.com",
+        purpose: "signup",
+        otp: "123456",
+      }),
+    );
+
+    expect(result).toEqual({
+      status: "internal_error",
+      fieldErrors: null,
+    });
+    expect(otpVerifyRateLimit.recordResult).not.toHaveBeenCalled();
+    expect(logAuthEvent).not.toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_VERIFY_OTP_COMPLETED,
+      expect.anything(),
+    );
+    expect(createSetPasswordIntent).not.toHaveBeenCalled();
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("signup Verify 성공 후 Set Password Intent 발급이 실패하면 internal_error로 종료한다", async () => {
+    vi.mocked(createSetPasswordIntent).mockRejectedValue(
+      new Error("set password intent failed"),
+    );
+
+    const result = await verifyOtpAction(
+      null,
+      prevState,
+      createFormData({
+        email: "user@example.com",
+        purpose: "signup",
+        otp: "123456",
+      }),
+    );
+
+    expect(result).toEqual({
+      status: "internal_error",
+      fieldErrors: null,
+    });
+    expect(otpVerifyRateLimit.recordResult).toHaveBeenCalledTimes(1);
+    expect(otpVerifyRateLimit.recordResult).toHaveBeenCalledWith({
+      canonicalEmail: "user@example.com",
+      outcome: "success",
+    });
+    expect(logAuthEvent).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_VERIFY_OTP_COMPLETED,
+      expect.anything(),
+    );
+    expect(createSetPasswordIntent).toHaveBeenCalledWith({
+      userId: "verified-user-id",
+    });
+    expect(logAuthError).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+      }),
+    );
+    expect(redirect).not.toHaveBeenCalled();
   });
 
   it("context 검증에 실패하면 내부 reason을 외부 상태에 노출하지 않고 이후 검증을 실행하지 않는다", async () => {
@@ -321,6 +448,7 @@ describe("verifyOtpAction", () => {
       canonicalEmail: "user@example.com",
       outcome: "otp_failure",
     });
+    expect(createSetPasswordIntent).not.toHaveBeenCalled();
     expect(redirect).not.toHaveBeenCalled();
   });
 
@@ -356,6 +484,7 @@ describe("verifyOtpAction", () => {
         reasonCode: AUTH_LOG_REASONS.PROVIDER_RATE_LIMIT,
       }),
     );
+    expect(createSetPasswordIntent).not.toHaveBeenCalled();
   });
 
   it("unknown Provider error는 provider_error로 기록하고 internal_error를 반환한다", async () => {
@@ -390,6 +519,7 @@ describe("verifyOtpAction", () => {
         reasonCode: AUTH_LOG_REASONS.PROVIDER_ERROR,
       }),
     );
+    expect(createSetPasswordIntent).not.toHaveBeenCalled();
   });
 
   it("Provider 호출이 throw하면 provider_error로 기록하고 internal_error를 반환한다", async () => {
@@ -419,6 +549,7 @@ describe("verifyOtpAction", () => {
         reasonCode: AUTH_LOG_REASONS.PROVIDER_ERROR,
       }),
     );
+    expect(createSetPasswordIntent).not.toHaveBeenCalled();
   });
 
   it("limiter에는 canonical email을 사용하고 Provider에는 context email을 그대로 전달한다", async () => {
@@ -462,6 +593,7 @@ describe("verifyOtpAction", () => {
 
     expect(redirect).toHaveBeenCalledWith(ROUTES.RESET_PASSWORD);
     expect(setResetPasswordIntentCookie).toHaveBeenCalledTimes(1);
+    expect(createSetPasswordIntent).not.toHaveBeenCalled();
   });
 
   it("reset-password 성공 후 intent cookie 처리가 실패해도 Verify 성공 결과를 유지한다", async () => {
@@ -491,6 +623,7 @@ describe("verifyOtpAction", () => {
     });
 
     expect(setResetPasswordIntentCookie).toHaveBeenCalledTimes(1);
+    expect(createSetPasswordIntent).not.toHaveBeenCalled();
 
     expect(
       vi.mocked(otpVerifyRateLimit.recordResult).mock.invocationCallOrder[0]!,
@@ -528,5 +661,6 @@ describe("verifyOtpAction", () => {
 
     expect(redirect).toHaveBeenCalledWith(expectedPath);
     expect(setResetPasswordIntentCookie).toHaveBeenCalledTimes(1);
+    expect(createSetPasswordIntent).not.toHaveBeenCalled();
   });
 });
