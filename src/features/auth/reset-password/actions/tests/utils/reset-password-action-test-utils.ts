@@ -27,7 +27,6 @@ const hoisted = vi.hoisted(() => ({
   isAuthSessionMissingError: vi.fn(),
   resetPasswordActionSchema: { safeParse: vi.fn() },
   changePasswordSchema: { safeParse: vi.fn() },
-  checkRequestEligibility: vi.fn(),
 }));
 
 vi.mock("@supabase/supabase-js", () => ({
@@ -73,10 +72,6 @@ vi.mock(
 
 vi.mock("@/features/mypage/schema", () => ({
   changePasswordSchema: hoisted.changePasswordSchema,
-}));
-
-vi.mock("@/features/auth/lib/checkRequestEligibility", () => ({
-  checkRequestEligibility: hoisted.checkRequestEligibility,
 }));
 
 export function makeFormData(input: Record<string, string>) {
@@ -203,7 +198,6 @@ export function setupActionTest() {
     isAuthError: hoisted.isAuthError,
     isAuthSessionMissingError: hoisted.isAuthSessionMissingError,
     changePasswordSchema: hoisted.changePasswordSchema,
-    checkRequestEligibility: hoisted.checkRequestEligibility,
     resetPasswordActionSchema: hoisted.resetPasswordActionSchema,
   };
 }
