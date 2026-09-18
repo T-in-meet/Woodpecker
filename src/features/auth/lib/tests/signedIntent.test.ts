@@ -10,7 +10,8 @@
  * - issuedAt / expiresAt / TTL / expiration 경계
  * - signing secret 누락 시 fail-closed 동작
  *
- * 실제 cookie lifecycle과 password page/action 연결은 Step 15~18에서 검증한다.
+ * 이 테스트는 Signed Intent 자체의 계약만 검증하며,
+ * cookie lifecycle과 page/action 연결은 해당 전용 테스트에서 검증한다.
  */
 
 import { createHmac, timingSafeEqual } from "node:crypto";

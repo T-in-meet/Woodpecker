@@ -39,11 +39,10 @@ import { ROUTES } from "@/lib/constants/routes";
 import { VALIDATION_REASON } from "@/lib/validation/reasons";
 
 /**
- * Signup OTP Issue local Rate Limit 차단 원인을 기존 structured log reason으로 변환한다.
+ * Signup OTP Issue local Rate Limit 차단 원인을 structured log reason으로 변환한다.
  *
- * OTP Issue의 15분 successful quota는 기존 Email long reason에,
- * cooldown/in-flight는 기존 Email short reason에 대응시켜
- * Step 11 전환 중 기존 로그 vocabulary를 유지한다.
+ * email_success는 Email long reason으로,
+ * cooldown/in-flight는 Email short reason으로 기록한다.
  *
  * @param blockedBy OTP Issue Rate Limit 차단 원인
  * @returns 구조화 로그 reason
@@ -356,15 +355,14 @@ async function runSignupOtpIssue(
 /**
  * 회원가입 핵심 로직.
  *
- * 기존 조건의 처리:
- * - malformed JSON / schema validation: 그대로 유지
- * - trusted IP fail-closed: Provider/account side effect 전에 적용
- * - full read-only precheck: 이미 차단된 요청은 account lookup 전에 fast-fail
- * - canonical email lookup: account-state 외부 노출 없이 내부 분기용으로 사용
- * - 기존 미인증 사용자: magiclink 발급 전 agreement persistence 복구 hook 연결
- * - 기존 인증 사용자: magiclink 발급, agreement persistence 확대 없음
- * - 신규 사용자: 별도 createUser() 없이 generateLink(type: "signup")에서 사용자 생성
- * - legacy Signup precheck / eligibility limiter: OTP Issue 전용 limiter로 대체
+ * 처리 순서와 보안 경계:
+ * - malformed JSON / schema validation은 Provider 및 Rate Limit 접근 전에 종료
+ * - trusted IP를 확보하지 못하면 account/Provider side effect 전에 fail-closed
+ * - read-only precheck로 명백히 차단된 요청을 account lookup 전에 종료
+ * - canonical email lookup은 account state를 외부에 노출하지 않고 내부 분기에만 사용
+ * - 미인증 기존 사용자는 magiclink 발급 전 agreement persistence를 보장
+ * - 인증된 기존 사용자는 magiclink를 발급하며 agreement persistence 범위를 확대하지 않음
+ * - 신규 사용자는 generateLink(type: "signup")에서 사용자 생성과 OTP 발급을 수행
  *
  * @param request 회원가입 POST 요청
  * @returns 외부 응답과 structured logging용 terminal outcome

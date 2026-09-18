@@ -10,7 +10,7 @@
  * - production / non-production Secure 차이
  * - create → read → verify integration seam
  * - create / verify configuration error propagation
- * - Step 16 동안 legacy fixed-value helper 계약 유지
+ * - legacy fixed-value Reset helper와 signed helper의 독립된 계약
  *
  * 공통 Signed Intent의 base64url / JSON / HMAC / timing-safe 비교 matrix는
  * signedIntent.test.ts에서 이미 검증하므로 여기서 중복하지 않습니다.
@@ -333,7 +333,7 @@ describe("signedResetPasswordIntent", () => {
     ).toThrow("PASSWORD_INTENT_SIGNING_SECRET is not configured");
   });
 
-  it("Step 16에서는 legacy fixed-value Reset helper 계약을 변경하지 않는다", async () => {
+  it("legacy fixed-value Reset helper는 기존 cookie 계약을 유지한다", async () => {
     vi.stubEnv("NODE_ENV", "test");
     vi.resetModules();
 
