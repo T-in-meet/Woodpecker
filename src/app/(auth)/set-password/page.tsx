@@ -9,6 +9,10 @@ import {
   normalizeUnknownError,
 } from "@/features/auth/lib/authLogger";
 import { getHasPasswordLogin } from "@/features/auth/lib/getHasPasswordLogin";
+import {
+  readSetPasswordIntent,
+  verifySetPasswordIntent,
+} from "@/features/auth/lib/setPasswordIntent";
 import { validateRedirectPath } from "@/features/auth/lib/validateRedirectPath";
 import { setPasswordAction } from "@/features/auth/set-password/actions/setPasswordAction";
 import { SetPasswordForm } from "@/features/auth/set-password/components/SetPasswordForm";
@@ -24,13 +28,14 @@ type Props = {
 };
 
 /**
- * signup OTP 인증 이후 비밀번호 로그인 상태를 확인하는 페이지입니다.
+ * signup OTP 인증 이후 비밀번호 로그인 상태와 signed Intent를 확인하는 페이지입니다.
  *
  * 역할:
  * - 현재 인증된 사용자 확인
  * - 실제 비밀번호 존재 여부 확인
  * - 이미 비밀번호가 있으면 최종 목적지로 이동
- * - 비밀번호가 없으면 설정 폼 제공
+ * - 비밀번호가 없으면 signed Set Password Intent 검증
+ * - 유효한 Intent가 있을 때만 설정 폼 제공
  *
  * redirect는 외부 입력이므로 이 페이지에서도 다시 검증합니다.
  */
@@ -87,15 +92,37 @@ export default async function SetPasswordPage({ searchParams }: Props) {
    * 이미 실제 비밀번호 로그인이 가능한 사용자라면
    * 비밀번호 설정 폼을 보여주지 않습니다.
    *
-   * signup 흐름에서 전달된 redirect가 있으면 해당 경로를 보존하고,
-   * 없으면 기존 기본 경로인 MYPAGE로 이동합니다.
+   * Set Password 목적이 이미 소멸한 상태이므로
+   * signed Intent를 추가로 검증하지 않고 기존 redirect 계약을 유지합니다.
    */
   if (hasPasswordLogin) {
     redirect(redirectPath ?? ROUTES.MYPAGE);
   }
 
   /**
-   * 실제 비밀번호가 없는 사용자만 비밀번호 설정 폼을 표시합니다.
+   * 실제 비밀번호가 없는 사용자만 signed Set Password Intent를 검증합니다.
+   *
+   * cookie가 없거나 verifier가 거부한 credential은 fail-closed하고,
+   * request의 redirectPath를 실패 목적지로 사용하지 않습니다.
+   */
+  const setPasswordIntent = await readSetPasswordIntent();
+
+  if (setPasswordIntent === null) {
+    redirect(ROUTES.MYPAGE);
+  }
+
+  const verifiedSetPasswordIntent = verifySetPasswordIntent({
+    token: setPasswordIntent,
+    expectedUserId: user.id,
+  });
+
+  if (!verifiedSetPasswordIntent) {
+    redirect(ROUTES.MYPAGE);
+  }
+
+  /**
+   * 실제 비밀번호가 없고 signed Intent까지 유효한 사용자에게만
+   * 비밀번호 설정 폼을 표시합니다.
    *
    * 설정 완료 후에도 동일한 최종 목적지를 사용할 수 있도록
    * 검증된 redirectPath를 Server Action에 전달합니다.
