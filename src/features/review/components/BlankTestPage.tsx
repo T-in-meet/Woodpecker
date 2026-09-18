@@ -2,8 +2,11 @@
 
 import { useActionState, useState } from "react";
 
+import { NavigationGuardAlertDialog } from "@/components/common/NavigationGuardAlertDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useBeforeUnloadGuard } from "@/hooks/useBeforeUnloadGuard";
+import { useInternalNavigationGuard } from "@/hooks/useInternalNavigationGuard";
 
 import { submitAnswerAction } from "../actions";
 import { ANSWER_MAX_LENGTH, type GradingResponse } from "../schema";
@@ -56,9 +59,22 @@ export function BlankTestPage({
   const restoredComparison =
     isRewriting || state?.success ? null : restoredSession;
   const comparisonState = state?.success ? state : restoredComparison;
+  const shouldGuard = !comparisonState && answer.trim().length > 0;
+  const { cancelNavigation, confirmNavigation, isNavigationPending } =
+    useInternalNavigationGuard({ enabled: shouldGuard });
+  useBeforeUnloadGuard({ enabled: shouldGuard });
 
   return (
     <div className="space-y-8">
+      <NavigationGuardAlertDialog
+        open={isNavigationPending}
+        title="작성 중인 답안을 버리고 이동할까요?"
+        description="아직 제출하지 않은 답안은 저장되지 않습니다."
+        cancelLabel="계속 작성"
+        confirmLabel="답안 버리고 이동"
+        onCancel={cancelNavigation}
+        onConfirm={confirmNavigation}
+      />
       <header className="space-y-3">
         <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           <span className="rounded-full bg-muted px-2.5 py-1 font-medium text-foreground">
@@ -76,6 +92,33 @@ export function BlankTestPage({
 
       {comparisonState ? (
         <section className="space-y-6">
+          {/* 복원된 화면은 방금 제출한 화면과 똑같이 생겨서, 노트 상세에서 "백지 테스트"를
+              눌러 들어온 사용자는 테스트를 건너뛴 것처럼 느낀다. 왜 결과부터 보이는지와
+              여기서 할 수 있는 일을 먼저 말해준다. */}
+          {restoredComparison && (
+            <div
+              role="status"
+              className="space-y-3 rounded-lg border border-border/60 bg-muted/40 px-4 py-3 text-prose-ko text-sm text-foreground"
+            >
+              {/* 문장마다 줄을 나눈다. 화면 폭과 무관하게 한 문장이 한 줄에서 시작해야
+                  "무엇을 불러왔는지"와 "무엇을 할 수 있는지"가 각각 따로 읽힌다. */}
+              <p>
+                이전에 제출한 답안과 AI 채점 결과를 불러왔습니다.
+                <br />
+                채점은 회차당 한 번만 가능합니다.
+              </p>
+              <p>
+                복습을 마쳤다면 아래{" "}
+                <strong>&lsquo;이번 복습 완료&rsquo;</strong> 버튼을 눌러
+                주세요.
+                <br />
+                답안을 다시 작성하려면{" "}
+                <strong>&lsquo;답안 다시 작성&rsquo;</strong> 버튼을 눌러
+                주세요.
+              </p>
+            </div>
+          )}
+
           <ComparisonView
             userAnswer={comparisonState.userAnswer}
             originalContent={comparisonState.originalContent}
@@ -94,8 +137,7 @@ export function BlankTestPage({
 
           <div className="rounded-xl border border-border/60 bg-muted/30 px-5 py-4">
             <p className="text-prose-ko text-sm text-muted-foreground">
-              비교를 마쳤다면 이번 복습을 완료 처리하고 다음 간격으로
-              넘어가세요.
+              비교를 마쳤다면 이번 복습을 완료해 주세요.
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
               <ReviewCompleteButton

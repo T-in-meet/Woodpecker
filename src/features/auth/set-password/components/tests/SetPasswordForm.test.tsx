@@ -10,10 +10,10 @@ import {
 } from "@/features/auth/set-password/actions/setPasswordActionState";
 import {
   SET_PASSWORD_GLOBAL_ERROR_MESSAGE,
-  SET_PASSWORD_PAGE_LEAVE_CONFIRM_MESSAGE,
   SET_PASSWORD_SAME_PASSWORD_MESSAGE,
 } from "@/features/auth/set-password/constants/messages";
-import { usePreventPageLeave } from "@/hooks/usePreventPageLeave";
+import { useBeforeUnloadGuard } from "@/hooks/useBeforeUnloadGuard";
+import { useInternalNavigationGuard } from "@/hooks/useInternalNavigationGuard";
 import { VALIDATION_MESSAGES } from "@/lib/validation/messages";
 
 import { SetPasswordForm } from "../SetPasswordForm";
@@ -27,12 +27,21 @@ vi.mock("react", async () => {
   };
 });
 
-vi.mock("@/hooks/usePreventPageLeave", () => ({
-  usePreventPageLeave: vi.fn(),
+vi.mock("@/hooks/useInternalNavigationGuard", () => ({
+  useInternalNavigationGuard: vi.fn(() => ({
+    cancelNavigation: vi.fn(),
+    confirmNavigation: vi.fn(),
+    isNavigationPending: false,
+  })),
+}));
+
+vi.mock("@/hooks/useBeforeUnloadGuard", () => ({
+  useBeforeUnloadGuard: vi.fn(),
 }));
 
 const mockUseActionState = vi.mocked(useActionState);
-const mockUsePreventPageLeave = vi.mocked(usePreventPageLeave);
+const mockUseInternalNavigationGuard = vi.mocked(useInternalNavigationGuard);
+const mockUseBeforeUnloadGuard = vi.mocked(useBeforeUnloadGuard);
 const mockFormAction = vi.fn();
 
 const action = vi.fn(
@@ -330,18 +339,22 @@ describe("SetPasswordForm", () => {
 
     render(<SetPasswordForm action={action} />);
 
-    expect(mockUsePreventPageLeave).toHaveBeenLastCalledWith(
-      false,
-      SET_PASSWORD_PAGE_LEAVE_CONFIRM_MESSAGE,
-    );
+    expect(mockUseInternalNavigationGuard).toHaveBeenLastCalledWith({
+      enabled: false,
+    });
+    expect(mockUseBeforeUnloadGuard).toHaveBeenLastCalledWith({
+      enabled: false,
+    });
 
     await user.type(screen.getByLabelText("비밀번호"), "P");
 
     await waitFor(() => {
-      expect(mockUsePreventPageLeave).toHaveBeenLastCalledWith(
-        true,
-        SET_PASSWORD_PAGE_LEAVE_CONFIRM_MESSAGE,
-      );
+      expect(mockUseInternalNavigationGuard).toHaveBeenLastCalledWith({
+        enabled: true,
+      });
+      expect(mockUseBeforeUnloadGuard).toHaveBeenLastCalledWith({
+        enabled: true,
+      });
     });
   });
 

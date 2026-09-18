@@ -1,6 +1,6 @@
 import "./setup";
 
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -66,6 +66,7 @@ function getHiddenContentInput(container: HTMLElement) {
 
 describe("NoteForm", () => {
   beforeEach(() => {
+    vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: true }));
     createNoteActionMock.mockReset();
     createNoteActionMock.mockResolvedValue(null);
     routerReplaceMock.mockReset();
@@ -155,7 +156,6 @@ describe("NoteForm", () => {
 
   it("저장 성공 후 이탈 방지를 해제하고 상세 페이지로 이동한다", async () => {
     const user = userEvent.setup();
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
     createNoteActionMock.mockResolvedValueOnce({
       success: true,
       newNoteId: "note-123",
@@ -182,7 +182,7 @@ describe("NoteForm", () => {
     expect(screen.getByRole("button", { name: "저장됨" })).toBeDisabled();
     expect(screen.getByLabelText("제목")).toBeDisabled();
     expect(screen.getByTestId("tiptap-editor")).toBeDisabled();
-    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(window.location.pathname).toBe(getNoteDetailRoute("note-123"));
   });
 
@@ -194,8 +194,6 @@ describe("NoteForm", () => {
         resolveAction = resolve;
       }),
     );
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
-
     render(<NoteForm />);
 
     await user.type(screen.getByLabelText("제목"), "테스트 노트");
@@ -207,11 +205,15 @@ describe("NoteForm", () => {
       expect(screen.getByRole("status")).toHaveTextContent("저장 중…");
     });
 
-    history.pushState(null, "", "/after-submit");
+    await act(async () => {
+      history.pushState(null, "", "/after-submit");
+    });
 
-    expect(confirmSpy).toHaveBeenCalled();
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
     expect(window.location.pathname).not.toBe("/after-submit");
 
     resolveAction(null);
   });
 });
+
+afterEach(() => vi.unstubAllGlobals());

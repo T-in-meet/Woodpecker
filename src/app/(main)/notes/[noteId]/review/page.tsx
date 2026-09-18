@@ -131,7 +131,7 @@ export default async function NoteReviewPage({
             <CardHeader>
               <CardTitle className="text-2xl">
                 {isCompleted
-                  ? "복습을 완료한 노트입니다."
+                  ? "학습을 종료한 노트입니다."
                   : "진행 중인 백지 테스트가 없습니다."}
               </CardTitle>
             </CardHeader>

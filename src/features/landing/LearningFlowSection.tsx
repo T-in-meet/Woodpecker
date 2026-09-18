@@ -370,9 +370,12 @@ export function LearningFlowSection() {
         {getPublishedGuideDocuments().length > 0 && (
           <aside
             aria-labelledby="learning-guide-heading"
-            className="mt-12 flex flex-col gap-5 rounded-2xl bg-brand-muted p-6 md:mt-16 md:flex-row md:items-center md:justify-between md:p-8"
+            className="mt-12 flex flex-wrap items-center gap-x-8 gap-y-4 rounded-2xl bg-brand-muted p-6 md:mt-16 md:p-8"
           >
-            <div className="flex items-start gap-4">
+            {/* 브레이크포인트 대신 flex-wrap으로 줄바꿈한다. 글 영역이 basis-80
+                (320px) 아래로 눌리기 전까지는 버튼이 오른쪽에 남고, 그보다 좁아지면
+                버튼만 다음 줄로 내려간다. */}
+            <div className="flex basis-80 grow items-start gap-4">
               <BookOpen
                 aria-hidden="true"
                 className="mt-1 size-5 shrink-0 text-brand"
@@ -389,9 +392,12 @@ export function LearningFlowSection() {
                 </p>
               </div>
             </div>
+            {/* ml-9는 아이콘 폭(20px) + gap(16px). 다음 줄로 내려갔을 때 위 문단과
+                같은 열에 붙고, 같은 줄에 있을 때는 글 영역이 grow라 오른쪽 끝에
+                붙으므로 여백으로만 남는다. */}
             <Link
               href={ROUTES.GUIDE}
-              className="inline-flex min-h-11 shrink-0 items-center gap-2 self-start rounded-md text-sm font-medium text-brand underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring cursor-pointer md:self-center"
+              className="ml-9 inline-flex min-h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-brand-border bg-background px-4 text-sm font-medium text-brand transition-colors hover:bg-brand-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
               학습 가이드 읽어보기
               <ChevronRightIcon aria-hidden="true" className="size-4" />

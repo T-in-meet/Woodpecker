@@ -86,7 +86,7 @@ export function NoteListItem({
           <div className="my-3.5 border-t" />
 
           <div
-            className={`flex min-h-8 items-center gap-4 text-sm text-muted-foreground ${
+            className={`flex min-h-8 items-center gap-4 text-sm text-muted-foreground pointer-coarse:min-h-10 ${
               canReview ? "pr-32" : "pr-10"
             }`}
           >

@@ -72,6 +72,7 @@ function renderBody(props: Partial<Parameters<typeof NoteDetailBody>[0]> = {}) {
       canChangeNotificationTime={true}
       notificationScheduleSameDayOnly={false}
       canStartReview={true}
+      hasCurrentRoundGrading={false}
       reviewStatusMessage="다음 복습 일정: 내일"
       notificationTimeOfDay={null}
       nextScheduledAt={null}
@@ -89,6 +90,25 @@ describe("NoteDetailBody", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it("진행 중인 회차에 채점이 있으면 백지 테스트 버튼을 '이어하기'로 보여준다", () => {
+    renderBody({ hasCurrentRoundGrading: true });
+
+    expect(
+      screen.getByRole("link", { name: "백지 테스트 이어하기" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "백지 테스트 시작" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("채점이 없으면 백지 테스트 버튼을 '시작'으로 보여준다", () => {
+    renderBody({ hasCurrentRoundGrading: false });
+
+    expect(
+      screen.getByRole("link", { name: "백지 테스트 시작" }),
+    ).toBeInTheDocument();
   });
 
   it("shows read-only content by default", () => {
