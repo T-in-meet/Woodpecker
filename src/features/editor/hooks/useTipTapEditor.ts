@@ -3,10 +3,8 @@ import { type Editor, useEditor } from "@tiptap/react";
 import { useEffect, useMemo, useRef } from "react";
 
 import { serializeTipTapMarkdown } from "@/features/editor/utils/serializeTipTapMarkdown";
-import {
-  getReadOnlyTipTapExtensions,
-  getTipTapExtensions,
-} from "@/features/editor/utils/tiptapExtensions";
+import { getTipTapExtensions } from "@/features/editor/utils/tiptapEditorExtensions";
+import { getReadOnlyTipTapExtensions } from "@/features/editor/utils/tiptapExtensions";
 
 type UseTipTapEditorOptions = {
   value: string;

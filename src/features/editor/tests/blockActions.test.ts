@@ -11,7 +11,7 @@ import {
   moveSelectedBlock,
 } from "../utils/blockActions";
 import { serializeTipTapMarkdown } from "../utils/serializeTipTapMarkdown";
-import { getTipTapExtensions } from "../utils/tiptapExtensions";
+import { getTipTapExtensions } from "../utils/tiptapEditorExtensions";
 
 function createMountedEditor(content: string) {
   const element = document.createElement("div");

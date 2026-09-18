@@ -13,7 +13,6 @@ import {
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import Image, { inputRegex as imageInputRegex } from "@tiptap/extension-image";
 import Link from "@tiptap/extension-link";
-import Placeholder from "@tiptap/extension-placeholder";
 import {
   Table,
   TableCell,
@@ -50,7 +49,6 @@ import {
 } from "prosemirror-markdown";
 import { Markdown } from "tiptap-markdown";
 
-import { slashCommandSuggestionRender } from "../components/SlashCommandMenu";
 import { normalizeNoteColorToken } from "../noteColors";
 import { isSafeLinkHref, normalizeImageSrc } from "./linkValidation";
 import {
@@ -73,11 +71,11 @@ import {
   getUniformNoteTextColor,
   NOTE_LINE_COLOR_TYPE_NAMES,
 } from "./noteLineTextColor";
-import { SlashCommand } from "./slashCommand";
 
 const LINE_COLOR_TYPES = new Set<string>(NOTE_LINE_COLOR_TYPE_NAMES);
 
-const lowlight = createLowlight();
+// 서버 읽기 전용 렌더(renderNoteHtml)가 코드블록 강조를 같은 인스턴스로 재현한다.
+export const lowlight = createLowlight();
 lowlight.register("javascript", javascript);
 lowlight.register("typescript", typescript);
 lowlight.register("python", python);
@@ -1005,6 +1003,8 @@ const NoteTextColorMark = Mark.create({
 // 목록 마커는 항목의 color를 따르므로 인라인 마크만으로는 색이 입혀지지 않는다.
 // 항목 전체가 한 색일 때만 항목에 표시를 붙여 CSS가 마커까지 물들이게 한다.
 // 저장되는 값이 아니라 문서에서 매번 계산하는 파생 상태라 decoration으로 처리한다.
+// decoration은 EditorView가 있어야 그려지므로 서버 렌더(renderNoteHtml)는 같은 판정을
+// 직렬화 시점에 직접 붙인다. 표시 규칙을 바꾸면 그쪽도 같이 고친다.
 const NoteLineTextColor = Extension.create({
   name: "noteLineTextColor",
   addProseMirrorPlugins() {
@@ -1152,7 +1152,9 @@ const NoteColorClipboardText = Extension.create({
   },
 });
 
-function getBaseExtensions({ readOnly = false }: { readOnly?: boolean } = {}) {
+export function getBaseExtensions({
+  readOnly = false,
+}: { readOnly?: boolean } = {}) {
   return [
     StarterKit.configure({
       codeBlock: false,
@@ -1164,6 +1166,8 @@ function getBaseExtensions({ readOnly = false }: { readOnly?: boolean } = {}) {
     BulletTaskItemInputRule,
     OrderedBulletItemInputRule,
     DividerInputRule,
+    // 구문 강조는 view 시점 decoration이라 서버 렌더(renderNoteHtml)가 같은 lowlight
+    // 인스턴스로 span을 직접 만든다. 언어 목록·분기를 바꾸면 그쪽도 같이 고친다.
     CodeBlockLowlight.extend({
       renderHTML({ node, HTMLAttributes }) {
         return [
@@ -1216,18 +1220,9 @@ function getBaseExtensions({ readOnly = false }: { readOnly?: boolean } = {}) {
   ];
 }
 
-export function getTipTapExtensions({
-  placeholder,
-}: { placeholder?: string | undefined } = {}) {
-  return [
-    ...getBaseExtensions(),
-    SlashCommand.configure({
-      suggestion: slashCommandSuggestionRender(),
-    }),
-    ...(placeholder ? [Placeholder.configure({ placeholder })] : []),
-  ];
-}
-
+// 편집 전용 확장(슬래시 메뉴·placeholder)은 React 렌더러를 끌고 오므로
+// ./tiptapEditorExtensions.ts의 getTipTapExtensions에 둔다. 이 파일은 서버의
+// 읽기 전용 렌더(renderNoteHtml)에서도 import하므로 클라이언트 전용 모듈을 참조하지 않는다.
 export function getReadOnlyTipTapExtensions() {
   return getBaseExtensions({ readOnly: true });
 }

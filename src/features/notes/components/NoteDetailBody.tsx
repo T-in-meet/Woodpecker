@@ -4,7 +4,7 @@ import { NotebookPen } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useState } from "react";
+import { type ReactNode, useCallback, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,7 +13,6 @@ import { RelatedNotesSection } from "@/features/related-notes/components/Related
 import { getNoteReviewRoute } from "@/lib/constants/routes";
 
 import { NoteManageMenu } from "./NoteManageMenu";
-import { NoteViewer } from "./NoteViewer";
 
 /**
  * 편집 폼은 TipTap 에디터를 통째로 끌고 온다. 노트 상세는 읽기가 기본이고
@@ -41,7 +40,10 @@ function preloadNoteEditForm() {
 type NoteDetailBodyProps = {
   noteId: string;
   title: string;
+  /** 마크다운 원문. 편집 폼의 초기값으로만 쓴다. */
   content: string;
+  /** 서버에서 렌더한 읽기 전용 본문(NoteContent). 읽기 모드에서 그대로 보여준다. */
+  body: ReactNode;
   reviewRound: number;
   /** 사용자가 복습을 끝냈다고 표시한 노트인지. 관리 메뉴의 토글 문구도 이 값으로 가른다. */
   isReviewCompleted: boolean;
@@ -62,6 +64,7 @@ export function NoteDetailBody({
   noteId,
   title,
   content,
+  body,
   reviewRound,
   isReviewCompleted,
   canChangeNotificationTime,
@@ -146,7 +149,7 @@ export function NoteDetailBody({
         </div>
       </header>
 
-      <NoteViewer content={content} className="min-h-[60vh]" />
+      {body}
       <RelatedNotesSection noteId={noteId} />
     </>
   );

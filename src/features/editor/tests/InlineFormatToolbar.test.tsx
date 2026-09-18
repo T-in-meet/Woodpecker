@@ -11,7 +11,7 @@ import {
   InlineFormatToolbarContent,
   shouldShowInlineFormatToolbar,
 } from "../components/InlineFormatToolbar";
-import { getTipTapExtensions } from "../utils/tiptapExtensions";
+import { getTipTapExtensions } from "../utils/tiptapEditorExtensions";
 
 function createMountedEditor(content: string) {
   const element = document.createElement("div");

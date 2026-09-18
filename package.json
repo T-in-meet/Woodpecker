@@ -37,6 +37,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^4.4.0",
+    "happy-dom": "^20.14.5",
     "highlight.js": "^11.11.1",
     "js-tiktoken": "^1.0.21",
     "lowlight": "^3.3.0",

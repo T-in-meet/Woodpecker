@@ -7,10 +7,8 @@ import { applyNoteBlockBackground } from "../utils/noteBlockBackground";
 import { stripNoteColorSyntax } from "../utils/noteColorMarkdown";
 import { getUniformNoteTextColor } from "../utils/noteLineTextColor";
 import { serializeTipTapMarkdown } from "../utils/serializeTipTapMarkdown";
-import {
-  getReadOnlyTipTapExtensions,
-  getTipTapExtensions,
-} from "../utils/tiptapExtensions";
+import { getTipTapExtensions } from "../utils/tiptapEditorExtensions";
+import { getReadOnlyTipTapExtensions } from "../utils/tiptapExtensions";
 
 function createEditor(content: string, extensions = getTipTapExtensions()) {
   return new Editor({ extensions, content, editable: false });

@@ -1,4 +1,5 @@
 import { render, screen, within } from "@testing-library/react";
+import { isValidElement, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ROUTES } from "@/lib/constants/routes";
@@ -11,6 +12,7 @@ type NoteDetailBodyProps = {
   noteId: string;
   title: string;
   content: string;
+  body: ReactNode;
   reviewRound: number;
   isReviewCompleted: boolean;
   canChangeNotificationTime: boolean;
@@ -51,6 +53,14 @@ vi.mock("@/features/notes/components/NoteDetailBody", () => ({
     noteDetailBodyMock(props);
     return <div data-testid="note-detail-body" />;
   },
+}));
+
+// 본문 서버 렌더는 renderNoteHtml.test.ts가 검증한다. 여기서는 페이지가 본문을
+// NoteContent 슬롯으로 넘기는지만 본다.
+vi.mock("@/features/notes/components/NoteContent", () => ({
+  NoteContent: ({ content }: { content: string }) => (
+    <div data-testid="note-content">{content}</div>
+  ),
 }));
 
 vi.mock("@/features/notes/queries", () => ({
@@ -176,6 +186,21 @@ describe("NoteDetailPage", () => {
       reviewStatusMessage: "지금 백지 테스트를 진행할 수 있습니다.",
       notificationTimeOfDay: "21:30:00",
     });
+  });
+
+  it("passes the note body as a server-rendered NoteContent slot", async () => {
+    getUserMock.mockResolvedValue(createUser("user-123"));
+    getNoteByIdMock.mockResolvedValue(createNote());
+
+    await renderPage();
+
+    const { body } = lastBodyProps();
+    expect(isValidElement<{ content: string }>(body)).toBe(true);
+    if (!isValidElement<{ content: string }>(body)) return;
+
+    expect(body.props.content).toBe("note body");
+    render(body);
+    expect(screen.getByTestId("note-content")).toHaveTextContent("note body");
   });
 
   it("renders a breadcrumb linking back to home and the notes list", async () => {

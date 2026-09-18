@@ -67,6 +67,7 @@ function renderBody(props: Partial<Parameters<typeof NoteDetailBody>[0]> = {}) {
       noteId="note-123"
       title="원래 제목"
       content="원래 내용"
+      body={<div data-testid="note-body">서버에서 렌더한 본문</div>}
       reviewRound={1}
       isReviewCompleted={false}
       canChangeNotificationTime={true}
@@ -117,7 +118,12 @@ describe("NoteDetailBody", () => {
     expect(
       screen.getByRole("heading", { name: "원래 제목" }),
     ).toBeInTheDocument();
+    // 본문은 서버가 렌더해 슬롯으로 넘긴다. 읽기 모드에서는 그 슬롯을 그대로 보여준다.
+    expect(screen.getByTestId("note-body")).toHaveTextContent(
+      "서버에서 렌더한 본문",
+    );
     expect(screen.queryByLabelText("제목")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("tiptap-editor")).not.toBeInTheDocument();
   });
 
   it("복습 상태 문구를 배지 줄에 함께 보여준다", () => {
@@ -141,6 +147,7 @@ describe("NoteDetailBody", () => {
     // NoteEditForm은 next/dynamic으로 지연 로드되므로 첫 진입에서는 청크 도착을 기다린다.
     expect(await screen.findByLabelText("제목")).toHaveValue("원래 제목");
     expect(screen.getByTestId("tiptap-editor")).toBeInTheDocument();
+    expect(screen.queryByTestId("note-body")).not.toBeInTheDocument();
   });
 
   it("cancels editing and restores the original values", async () => {
