@@ -59,6 +59,13 @@ export const AUTH_LOG_REASONS = {
   IP_UNAVAILABLE: "IP_UNAVAILABLE",
   INTERNAL_ERROR: "INTERNAL_ERROR",
   /**
+   * Password 변경 성공 후 signed Password Intent cleanup에 실패한 경우 사용합니다.
+   *
+   * password mutation/provider failure나 verifier/Auth system failure와 구분하여
+   * 이미 mutation은 성공했고 credential cleanup postcondition만 실패한 상태를 나타냅니다.
+   */
+  PASSWORD_INTENT_CLEANUP_FAILED: "PASSWORD_INTENT_CLEANUP_FAILED",
+  /**
    * 인증 자격 증명 불일치.
    *
    * Provider classifier가 명확히 allowlist한 credential failure에만 사용한다.

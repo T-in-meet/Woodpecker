@@ -1,9 +1,11 @@
 "use server";
 
+import { isAuthSessionMissingError } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
 
 import { AUTH_EVENTS } from "@/features/auth/constants/authEvents";
 import { AUTH_LOG_REASONS } from "@/features/auth/constants/authLogReasons";
+import { SET_PASSWORD_INTENT_CLEANUP_PATH } from "@/features/auth/constants/routes";
 import {
   logAuthError,
   logAuthEvent,
@@ -11,6 +13,11 @@ import {
   normalizeUnknownError,
 } from "@/features/auth/lib/authLogger";
 import { getHasPasswordLogin } from "@/features/auth/lib/getHasPasswordLogin";
+import {
+  clearSetPasswordIntent,
+  readSetPasswordIntent,
+  verifySetPasswordIntent,
+} from "@/features/auth/lib/setPasswordIntent";
 import { validateRedirectPath } from "@/features/auth/lib/validateRedirectPath";
 import { resetPasswordActionSchema } from "@/features/auth/reset-password/schemas/resetPasswordActionSchema";
 import { ROUTES } from "@/lib/constants/routes";
@@ -55,15 +62,14 @@ function isSamePasswordError(error: unknown) {
 }
 
 /**
- * signup OTP 인증 이후 비밀번호가 없는 인증 사용자에게
- * 이메일/비밀번호 로그인을 추가하기 위한 비밀번호 설정 Action입니다.
+ * signed Set Password Intent가 허용한 인증 사용자에게 비밀번호 로그인을 추가합니다.
  *
- * 페이지 진입 시 비밀번호 존재 여부를 이미 확인하지만,
- * 페이지 렌더링 이후 제출 시점까지 사용자 상태가 변경될 수 있으므로
- * Action에서도 현재 사용자와 실제 비밀번호 존재 여부를 다시 확인합니다.
+ * GET에서 이미 검증한 상태를 신뢰하지 않고 제출 시점에 current user,
+ * Password Login 존재 여부, signed Intent와 user binding을 다시 확인한 뒤에만
+ * updateUser를 호출합니다.
  *
- * 비밀번호가 이미 존재하는 경우에는 updateUser를 실행하지 않고,
- * signup 흐름에서 전달받은 최종 redirect를 보존하여 이동합니다.
+ * Password Login이 이미 존재하면 Set Password 목적이 소멸한 상태로 보고
+ * mutation을 수행하지 않으며, 남은 Intent는 cleanup 경계로 위임합니다.
  */
 export async function setPasswordAction(
   redirectPath: string | null,
@@ -108,7 +114,7 @@ export async function setPasswordAction(
       error: userError,
     } = await supabase.auth.getUser();
 
-    if (userError) {
+    if (userError && !isAuthSessionMissingError(userError)) {
       throw userError;
     }
 
@@ -131,12 +137,6 @@ export async function setPasswordAction(
     };
   }
 
-  /**
-   * 비밀번호 설정은 인증된 사용자만 수행할 수 있습니다.
-   *
-   * 세션이 만료되었거나 유효한 이메일을 가진 사용자를 확인할 수 없으면
-   * 비밀번호를 변경하지 않고 signup 흐름으로 돌려보냅니다.
-   */
   if (!user?.email) {
     logAuthEvent(AUTH_EVENTS.AUTH_SET_PASSWORD_REJECTED, {
       path: ROUTES.SET_PASSWORD,
@@ -153,15 +153,6 @@ export async function setPasswordAction(
   let hasPasswordLogin: boolean;
 
   try {
-    /**
-     * 페이지 진입 시점의 판정만 신뢰하지 않고 제출 시점에 다시 확인합니다.
-     *
-     * provider metadata가 아니라 auth.users의 실제 비밀번호 존재 여부를
-     * service-role 전용 RPC를 통해 조회합니다.
-     *
-     * 이를 통해 페이지 렌더링과 폼 제출 사이에 다른 경로에서
-     * 비밀번호가 설정된 경우에도 중복 updateUser를 방지합니다.
-     */
     hasPasswordLogin = await getHasPasswordLogin(user.id);
   } catch (error) {
     const normalized = normalizeUnknownError(error);
@@ -181,13 +172,28 @@ export async function setPasswordAction(
     };
   }
 
-  /**
-   * 제출 시점에 이미 비밀번호가 존재한다면
-   * 비밀번호를 다시 설정하지 않고 후속 목적지로 이동합니다.
-   *
-   * redirectPath가 있으면 signup 시작 시점의 목적지를 보존하고,
-   * 없거나 유효하지 않으면 기존 기본 경로인 MYPAGE를 사용합니다.
-   */
+  let setPasswordIntent: string | null;
+
+  try {
+    setPasswordIntent = await readSetPasswordIntent();
+  } catch (error) {
+    const normalized = normalizeUnknownError(error);
+
+    logAuthError(AUTH_EVENTS.AUTH_SET_PASSWORD_FAILED, {
+      path: ROUTES.SET_PASSWORD,
+      method: "POST",
+      status: 500,
+      provider: "password",
+      result: "failure",
+      reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+      ...normalized,
+    });
+
+    return {
+      status: "internal_error",
+    };
+  }
+
   if (hasPasswordLogin) {
     logAuthEvent(AUTH_EVENTS.AUTH_SET_PASSWORD_REJECTED, {
       path: ROUTES.SET_PASSWORD,
@@ -198,9 +204,65 @@ export async function setPasswordAction(
       reasonCode: AUTH_LOG_REASONS.INVALID_CREDENTIALS,
     });
 
-    redirect(resolveRedirectPath(redirectPath));
+    if (setPasswordIntent !== null) {
+      redirect(SET_PASSWORD_INTENT_CLEANUP_PATH);
+    }
+
+    redirect(ROUTES.MYPAGE);
   }
 
+  if (setPasswordIntent === null) {
+    logAuthEvent(AUTH_EVENTS.AUTH_SET_PASSWORD_REJECTED, {
+      path: ROUTES.SET_PASSWORD,
+      method: "POST",
+      status: 303,
+      provider: "password",
+      result: "rejected",
+      reasonCode: AUTH_LOG_REASONS.INVALID_CREDENTIALS,
+    });
+
+    redirect(ROUTES.MYPAGE);
+  }
+
+  let verifiedSetPasswordIntent;
+
+  try {
+    verifiedSetPasswordIntent = verifySetPasswordIntent({
+      token: setPasswordIntent,
+      expectedUserId: user.id,
+    });
+  } catch (error) {
+    const normalized = normalizeUnknownError(error);
+
+    logAuthError(AUTH_EVENTS.AUTH_SET_PASSWORD_FAILED, {
+      path: ROUTES.SET_PASSWORD,
+      method: "POST",
+      status: 500,
+      provider: "password",
+      result: "failure",
+      reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+      ...normalized,
+    });
+
+    return {
+      status: "internal_error",
+    };
+  }
+
+  if (!verifiedSetPasswordIntent) {
+    logAuthEvent(AUTH_EVENTS.AUTH_SET_PASSWORD_REJECTED, {
+      path: ROUTES.SET_PASSWORD,
+      method: "POST",
+      status: 303,
+      provider: "password",
+      result: "rejected",
+      reasonCode: AUTH_LOG_REASONS.INVALID_CREDENTIALS,
+    });
+
+    redirect(SET_PASSWORD_INTENT_CLEANUP_PATH);
+  }
+
+  const finalRedirectPath = resolveRedirectPath(redirectPath);
   let updateError: unknown = null;
 
   try {
@@ -253,6 +315,30 @@ export async function setPasswordAction(
     };
   }
 
+  let intentClearFailed = false;
+
+  try {
+    await clearSetPasswordIntent();
+  } catch (error) {
+    const normalized = normalizeUnknownError(error);
+
+    logAuthError(AUTH_EVENTS.AUTH_SET_PASSWORD_FAILED, {
+      path: ROUTES.SET_PASSWORD,
+      method: "POST",
+      status: 303,
+      provider: "password",
+      result: "failure",
+      reasonCode: AUTH_LOG_REASONS.PASSWORD_INTENT_CLEANUP_FAILED,
+      ...normalized,
+    });
+
+    intentClearFailed = true;
+  }
+
+  if (intentClearFailed) {
+    redirect(SET_PASSWORD_INTENT_CLEANUP_PATH);
+  }
+
   logAuthEvent(AUTH_EVENTS.AUTH_SET_PASSWORD_COMPLETED, {
     path: ROUTES.SET_PASSWORD,
     method: "POST",
@@ -261,5 +347,5 @@ export async function setPasswordAction(
     result: "success",
   });
 
-  redirect(resolveRedirectPath(redirectPath));
+  redirect(finalRedirectPath);
 }

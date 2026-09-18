@@ -19,6 +19,7 @@ describe("resetPasswordAction - validation", () => {
       null,
       makeFormData({ password: "short", confirmPassword: "short" }),
     );
+
     expect(state).toMatchObject({
       status: "invalid_input",
       fieldErrors: { password: expect.any(Array) },
@@ -38,6 +39,7 @@ describe("resetPasswordAction - validation", () => {
         confirmPassword: "different-password",
       }),
     );
+
     expect(state).toMatchObject({
       status: "invalid_input",
       fieldErrors: {
@@ -46,13 +48,19 @@ describe("resetPasswordAction - validation", () => {
     });
   });
 
-  it("TC8: validation 실패 시 updateUser/cookie delete/redirect를 호출하지 않는다", async () => {
+  it("TC8: validation 실패 시 Auth/Intent/update/clear/redirect를 호출하지 않는다", async () => {
     const mocks = setupActionTest();
+
     await runResetPasswordAction(
       null,
       makeFormData({ password: "short", confirmPassword: "short" }),
     );
+
+    expect(mocks.getUser).not.toHaveBeenCalled();
+    expect(mocks.readSignedResetPasswordIntent).not.toHaveBeenCalled();
+    expect(mocks.verifyResetPasswordIntent).not.toHaveBeenCalled();
     expect(mocks.updateUser).not.toHaveBeenCalled();
+    expect(mocks.clearSignedResetPasswordIntent).not.toHaveBeenCalled();
     expect(mocks.redirect).not.toHaveBeenCalled();
   });
 
@@ -63,13 +71,16 @@ describe("resetPasswordAction - validation", () => {
       confirmPassword: "valid-password",
       role: "admin",
     } as Record<string, string>);
+
     const state = await runResetPasswordAction(null, form);
+
     expect(state).toMatchObject({ status: "invalid_input" });
     expect(mocks.updateUser).not.toHaveBeenCalled();
   });
 
   it("TC26: redirect는 payload schema 대상이 아니다", async () => {
     const mocks = setupActionTest();
+
     await expect(
       runResetPasswordAction(
         "/notes",
@@ -79,6 +90,7 @@ describe("resetPasswordAction - validation", () => {
         }),
       ),
     ).rejects.toBe(REDIRECT_ERROR);
+
     expect(mocks.resetPasswordActionSchema.safeParse).toHaveBeenCalledWith({
       password: "valid-password",
       confirmPassword: "valid-password",
@@ -87,6 +99,7 @@ describe("resetPasswordAction - validation", () => {
 
   it("TC27: resetPasswordActionSchema를 사용한다", async () => {
     const mocks = setupActionTest();
+
     await expect(
       runResetPasswordAction(
         null,
@@ -96,6 +109,7 @@ describe("resetPasswordAction - validation", () => {
         }),
       ),
     ).rejects.toBe(REDIRECT_ERROR);
+
     expect(mocks.resetPasswordActionSchema.safeParse).toHaveBeenCalledTimes(1);
     expect(mocks.changePasswordSchema.safeParse).not.toHaveBeenCalled();
   });

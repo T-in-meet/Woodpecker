@@ -1,9 +1,11 @@
 "use server";
 
+import { isAuthSessionMissingError } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
 
 import { AUTH_EVENTS } from "@/features/auth/constants/authEvents";
 import { AUTH_LOG_REASONS } from "@/features/auth/constants/authLogReasons";
+import { RESET_PASSWORD_INTENT_CLEANUP_PATH } from "@/features/auth/constants/routes";
 import {
   logAuthError,
   logAuthEvent,
@@ -11,9 +13,10 @@ import {
   normalizeUnknownError,
 } from "@/features/auth/lib/authLogger";
 import {
-  clearResetPasswordIntentCookie,
-  hasResetPasswordIntentCookie,
-} from "@/features/auth/lib/resetPasswordIntent";
+  clearSignedResetPasswordIntent,
+  readSignedResetPasswordIntent,
+  verifyResetPasswordIntent,
+} from "@/features/auth/lib/signedResetPasswordIntent";
 import { validateRedirectPath } from "@/features/auth/lib/validateRedirectPath";
 import { resetPasswordActionSchema } from "@/features/auth/reset-password/schemas/resetPasswordActionSchema";
 import { ROUTES } from "@/lib/constants/routes";
@@ -29,6 +32,7 @@ function resolveRedirectPath(redirectPath: string | null): string {
   if (!redirectPath) {
     return ROUTES.MYPAGE;
   }
+
   return validateRedirectPath(redirectPath);
 }
 
@@ -66,6 +70,7 @@ export async function resetPasswordAction(
       result: "failure",
       reasonCode: AUTH_LOG_REASONS.SCHEMA_VALIDATION_FAILED,
     });
+
     return {
       status: "invalid_input",
       fieldErrors: parsed.error.flatten().fieldErrors,
@@ -73,18 +78,26 @@ export async function resetPasswordAction(
   }
 
   let supabase: Awaited<ReturnType<typeof createClient>>;
-  let session: Awaited<
-    ReturnType<(typeof supabase)["auth"]["getSession"]>
-  >["data"]["session"];
+  let user: Awaited<
+    ReturnType<(typeof supabase)["auth"]["getUser"]>
+  >["data"]["user"];
 
   try {
     supabase = await createClient();
+
     const {
-      data: { session: currentSession },
-    } = await supabase.auth.getSession();
-    session = currentSession;
+      data: { user: currentUser },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError && !isAuthSessionMissingError(userError)) {
+      throw userError;
+    }
+
+    user = currentUser;
   } catch (error) {
     const normalized = normalizeUnknownError(error);
+
     logAuthError(AUTH_EVENTS.AUTH_RESET_PASSWORD_FAILED, {
       path: ROUTES.RESET_PASSWORD,
       method: "POST",
@@ -94,12 +107,13 @@ export async function resetPasswordAction(
       reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
       ...normalized,
     });
+
     return {
       status: "internal_error",
     };
   }
 
-  if (!session) {
+  if (!user) {
     logAuthEvent(AUTH_EVENTS.AUTH_RESET_PASSWORD_REJECTED, {
       path: ROUTES.RESET_PASSWORD,
       method: "POST",
@@ -108,29 +122,17 @@ export async function resetPasswordAction(
       result: "rejected",
       reasonCode: AUTH_LOG_REASONS.INVALID_CREDENTIALS,
     });
+
     redirect(ROUTES.FORGOT_PASSWORD);
   }
 
-  if (!(await hasResetPasswordIntentCookie())) {
-    logAuthEvent(AUTH_EVENTS.AUTH_RESET_PASSWORD_REJECTED, {
-      path: ROUTES.RESET_PASSWORD,
-      method: "POST",
-      status: 303,
-      provider: "password",
-      result: "rejected",
-      reasonCode: AUTH_LOG_REASONS.INVALID_CREDENTIALS,
-    });
-    redirect(ROUTES.FORGOT_PASSWORD);
-  }
+  let resetPasswordIntent: string | null;
 
-  let updateError: unknown = null;
   try {
-    const { error } = await supabase.auth.updateUser({
-      password: parsed.data.password,
-    });
-    updateError = error;
+    resetPasswordIntent = await readSignedResetPasswordIntent();
   } catch (error) {
     const normalized = normalizeUnknownError(error);
+
     logAuthError(AUTH_EVENTS.AUTH_RESET_PASSWORD_FAILED, {
       path: ROUTES.RESET_PASSWORD,
       method: "POST",
@@ -140,6 +142,85 @@ export async function resetPasswordAction(
       reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
       ...normalized,
     });
+
+    return {
+      status: "internal_error",
+    };
+  }
+
+  if (resetPasswordIntent === null) {
+    logAuthEvent(AUTH_EVENTS.AUTH_RESET_PASSWORD_REJECTED, {
+      path: ROUTES.RESET_PASSWORD,
+      method: "POST",
+      status: 303,
+      provider: "password",
+      result: "rejected",
+      reasonCode: AUTH_LOG_REASONS.INVALID_CREDENTIALS,
+    });
+
+    redirect(ROUTES.FORGOT_PASSWORD);
+  }
+
+  let verifiedResetPasswordIntent;
+
+  try {
+    verifiedResetPasswordIntent = verifyResetPasswordIntent({
+      token: resetPasswordIntent,
+      expectedUserId: user.id,
+    });
+  } catch (error) {
+    const normalized = normalizeUnknownError(error);
+
+    logAuthError(AUTH_EVENTS.AUTH_RESET_PASSWORD_FAILED, {
+      path: ROUTES.RESET_PASSWORD,
+      method: "POST",
+      status: 500,
+      provider: "password",
+      result: "failure",
+      reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+      ...normalized,
+    });
+
+    return {
+      status: "internal_error",
+    };
+  }
+
+  if (!verifiedResetPasswordIntent) {
+    logAuthEvent(AUTH_EVENTS.AUTH_RESET_PASSWORD_REJECTED, {
+      path: ROUTES.RESET_PASSWORD,
+      method: "POST",
+      status: 303,
+      provider: "password",
+      result: "rejected",
+      reasonCode: AUTH_LOG_REASONS.INVALID_CREDENTIALS,
+    });
+
+    redirect(RESET_PASSWORD_INTENT_CLEANUP_PATH);
+  }
+
+  const finalRedirectPath = resolveRedirectPath(redirectPath);
+  let updateError: unknown = null;
+
+  try {
+    const { error } = await supabase.auth.updateUser({
+      password: parsed.data.password,
+    });
+
+    updateError = error;
+  } catch (error) {
+    const normalized = normalizeUnknownError(error);
+
+    logAuthError(AUTH_EVENTS.AUTH_RESET_PASSWORD_FAILED, {
+      path: ROUTES.RESET_PASSWORD,
+      method: "POST",
+      status: 500,
+      provider: "password",
+      result: "failure",
+      reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+      ...normalized,
+    });
+
     return {
       status: "internal_error",
     };
@@ -159,12 +240,6 @@ export async function resetPasswordAction(
         : AUTH_LOG_REASONS.INTERNAL_ERROR,
     });
 
-    /**
-     * Supabase는 기존 비밀번호와 동일한 경우 updateUser를 422 same_password로 실패시킨다.
-     *
-     * 외부 상태는 reset-password 실패로 동일하게 처리하되,
-     * UI에서 전용 안내 문구를 보여줄 수 있도록 same_password인 경우에만 reason을 함께 반환한다.
-     */
     if (isSamePassword) {
       return {
         status: "internal_error",
@@ -172,16 +247,34 @@ export async function resetPasswordAction(
       };
     }
 
-    /**
-     * 그 외 updateUser 실패는 내부 오류로만 처리한다.
-     * provider 세부 오류는 사용자에게 노출하지 않는다.
-     */
     return {
       status: "internal_error",
     };
   }
 
-  const finalRedirectPath = resolveRedirectPath(redirectPath);
+  let intentClearFailed = false;
+
+  try {
+    await clearSignedResetPasswordIntent();
+  } catch (error) {
+    const normalized = normalizeUnknownError(error);
+
+    logAuthError(AUTH_EVENTS.AUTH_RESET_PASSWORD_FAILED, {
+      path: ROUTES.RESET_PASSWORD,
+      method: "POST",
+      status: 303,
+      provider: "password",
+      result: "failure",
+      reasonCode: AUTH_LOG_REASONS.PASSWORD_INTENT_CLEANUP_FAILED,
+      ...normalized,
+    });
+
+    intentClearFailed = true;
+  }
+
+  if (intentClearFailed) {
+    redirect(RESET_PASSWORD_INTENT_CLEANUP_PATH);
+  }
 
   logAuthEvent(AUTH_EVENTS.AUTH_RESET_PASSWORD_COMPLETED, {
     path: ROUTES.RESET_PASSWORD,
@@ -190,8 +283,6 @@ export async function resetPasswordAction(
     provider: "password",
     result: "success",
   });
-
-  await clearResetPasswordIntentCookie();
 
   redirect(finalRedirectPath);
 }
