@@ -32,8 +32,8 @@ import {
   OtpVerifyRateLimitBlockedBy,
 } from "../../lib/rate-limit/otpVerifyRateLimit";
 import { getTrustedAuthServerActionClientIp } from "../../lib/rate-limit/trustedAuthClientIp";
-import { setResetPasswordIntentCookie } from "../../lib/resetPasswordIntent";
 import { createSetPasswordIntent } from "../../lib/setPasswordIntent";
+import { createSignedResetPasswordIntent } from "../../lib/signedResetPasswordIntent";
 import { canonicalizeEmail } from "../../utils/canonicalizeEmail";
 import { verifyOtp } from "../lib/verifyOtp";
 import { verifyOtpContextSchema } from "../schemas/verifyOtpContextSchema";
@@ -354,6 +354,7 @@ export async function verifyOtpAction(
     }
 
     let verifiedSignupUserId: string | null = null;
+    let verifiedResetPasswordUserId: string | null = null;
 
     if (purpose === "signup") {
       const verifiedUser = data.user;
@@ -365,6 +366,16 @@ export async function verifyOtpAction(
       }
 
       verifiedSignupUserId = verifiedUser.id;
+    } else if (purpose === "reset-password") {
+      const verifiedUser = data.user;
+
+      if (verifiedUser === null) {
+        throw new Error(
+          "Recovery OTP verification succeeded without an authenticated user.",
+        );
+      }
+
+      verifiedResetPasswordUserId = verifiedUser.id;
     }
 
     otpVerifyRateLimit.recordResult({
@@ -421,8 +432,10 @@ export async function verifyOtpAction(
 
     if (verifiedSignupUserId !== null) {
       await createSetPasswordIntent({ userId: verifiedSignupUserId });
-    } else if (purpose === "reset-password") {
-      await setResetPasswordIntentCookie();
+    } else if (verifiedResetPasswordUserId !== null) {
+      await createSignedResetPasswordIntent({
+        userId: verifiedResetPasswordUserId,
+      });
     }
 
     nextUrl = nextPath;
