@@ -410,11 +410,10 @@ export async function verifyOtpAction(
      * signup:
      * - OTP 인증 성공 시점에는 이미 인증 세션이 생성된 상태다.
      * - 비밀번호 존재 여부는 이 Action에서 판정하지 않는다.
-     * - /set-password를 signup 후 공통 분기 지점으로 사용한다.
-     * - /set-password에서 실제 비밀번호 존재 여부를 확인한 뒤
-     *   기존 비밀번호가 있으면 최종 목적지로 이동하고,
-     *   없으면 비밀번호 설정 폼을 제공한다.
-     * - redirect가 있으면 비밀번호 분기 이후에도 유지할 수 있도록 전달한다.
+     * - Set Password Intent를 발급한 뒤 /set-password로 이동한다.
+     * - /set-password에서 실제 비밀번호 존재 여부와 Set Password Intent를 확인한다.
+     * - 비밀번호가 없고 Intent가 유효한 경우에만 비밀번호 설정 폼을 제공한다.
+     * - redirect는 유효한 Set Password 흐름의 비밀번호 설정 완료 후 이동 경로로 전달한다.
      *
      * reset-password:
      * - 기존 비밀번호 재설정 흐름을 유지한다.

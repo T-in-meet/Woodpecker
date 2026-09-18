@@ -130,7 +130,7 @@ describe("ResetPasswordPage", () => {
     expect(ResetPasswordFormMock).not.toHaveBeenCalled();
   });
 
-  it("signed reset intent 검증이 실패하면 forgot-password로 redirect한다", async () => {
+  it("signed reset intent 검증이 실패하면 cleanup route로 redirect한다", async () => {
     verifyResetPasswordIntentMock.mockReturnValue(null);
 
     await expect(
@@ -143,12 +143,14 @@ describe("ResetPasswordPage", () => {
       token: SIGNED_RESET_PASSWORD_INTENT,
       expectedUserId: AUTHENTICATED_USER.id,
     });
-    expect(redirectMock).toHaveBeenCalledWith(ROUTES.FORGOT_PASSWORD);
+    expect(redirectMock).toHaveBeenCalledWith(
+      "/api/auth/reset-password/cleanup",
+    );
     expect(resetPasswordActionMock.bind).not.toHaveBeenCalled();
     expect(ResetPasswordFormMock).not.toHaveBeenCalled();
   });
 
-  it("legacy verified 값은 authorization proof로 허용하지 않는다", async () => {
+  it("legacy verified 값은 authorization proof로 허용하지 않고 cleanup route로 redirect한다", async () => {
     readSignedResetPasswordIntentMock.mockResolvedValue("verified");
     verifyResetPasswordIntentMock.mockReturnValue(null);
 
@@ -162,7 +164,9 @@ describe("ResetPasswordPage", () => {
       token: "verified",
       expectedUserId: AUTHENTICATED_USER.id,
     });
-    expect(redirectMock).toHaveBeenCalledWith(ROUTES.FORGOT_PASSWORD);
+    expect(redirectMock).toHaveBeenCalledWith(
+      "/api/auth/reset-password/cleanup",
+    );
     expect(resetPasswordActionMock.bind).not.toHaveBeenCalled();
     expect(ResetPasswordFormMock).not.toHaveBeenCalled();
   });
