@@ -376,7 +376,7 @@ export async function GET(request: NextRequest) {
       hasSignupAgreementIntent,
     });
 
-    return NextResponse.redirect(
+    return redirectWithClearedIntent(
       buildOAuthErrorUrl(
         requestUrl.origin,
         effectiveIntent,

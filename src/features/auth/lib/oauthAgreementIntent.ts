@@ -21,11 +21,8 @@ export function hasOAuthAgreementIntentCookie(request: NextRequest): boolean {
 }
 
 export function clearOAuthAgreementIntentCookie(response: NextResponse) {
-  response.cookies.set(OAUTH_AGREEMENT_INTENT_COOKIE, "", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    maxAge: 0,
+  response.cookies.delete({
+    name: OAUTH_AGREEMENT_INTENT_COOKIE,
     path: "/",
   });
 }

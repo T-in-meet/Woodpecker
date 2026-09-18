@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { OAUTH_CALLBACK_ERROR_REASON } from "@/features/auth/constants/oauthCallbackError";
+import { OAUTH_AGREEMENT_INTENT_COOKIE } from "@/features/auth/lib/oauthAgreementIntent";
 import { ROUTES } from "@/lib/constants/routes";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -94,6 +95,22 @@ describe("auth callback route", () => {
     );
   }
 
+  function expectOAuthAgreementIntentCleared(response: Response) {
+    const intentCookie = response.headers
+      .getSetCookie()
+      .find((cookie) => cookie.startsWith(`${OAUTH_AGREEMENT_INTENT_COOKIE}=`));
+
+    expect(intentCookie).toBeDefined();
+
+    const attributes = intentCookie!
+      .split(";")
+      .map((attribute) => attribute.trim());
+
+    expect(attributes[0]).toBe(`${OAUTH_AGREEMENT_INTENT_COOKIE}=`);
+    expect(attributes).toContain("Path=/");
+    expect(attributes).toContain("Expires=Thu, 01 Jan 1970 00:00:00 GMT");
+  }
+
   it("code가 없으면 login으로 redirect한다", async () => {
     const response = await GET(createRequest("/api/auth/callback"));
 
@@ -101,6 +118,22 @@ describe("auth callback route", () => {
       `http://localhost:3000${ROUTES.LOGIN}?oauth_error=${OAUTH_CALLBACK_ERROR_REASON.MISSING_CODE}`,
     );
 
+    expect(exchangeCodeForSessionMock).not.toHaveBeenCalled();
+    expectOAuthAgreementIntentCleared(response);
+  });
+
+  it("OAuth code가 없어 callback이 종료되어도 signup agreement intent를 제거한다", async () => {
+    const response = await GET(
+      createRequest("/api/auth/callback?intent=signup", {
+        Cookie: "oauth_agreement_intent=accepted",
+      }),
+    );
+
+    expect(response.headers.get("location")).toBe(
+      `http://localhost:3000${ROUTES.SIGNUP}?oauth_error=${OAUTH_CALLBACK_ERROR_REASON.MISSING_CODE}`,
+    );
+
+    expectOAuthAgreementIntentCleared(response);
     expect(exchangeCodeForSessionMock).not.toHaveBeenCalled();
   });
 
@@ -398,6 +431,7 @@ describe("auth callback route", () => {
       `http://localhost:3000${ROUTES.MYPAGE}`,
     );
     expect(upsertUserAgreementMock).toHaveBeenCalledWith("user-id", "oauth");
+    expectOAuthAgreementIntentCleared(response);
   });
 
   it("signup intent에서 provider 이름이 nickname으로 저장되었으면 프로필 안내 query를 추가한다", async () => {
