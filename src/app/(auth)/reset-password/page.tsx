@@ -2,11 +2,14 @@ import type { Metadata } from "next";
 import { redirect as nextRedirect } from "next/navigation";
 import { Suspense } from "react";
 
-import { hasResetPasswordIntentCookie } from "@/features/auth/lib/resetPasswordIntent";
+import {
+  readSignedResetPasswordIntent,
+  verifyResetPasswordIntent,
+} from "@/features/auth/lib/signedResetPasswordIntent";
 import { resetPasswordAction } from "@/features/auth/reset-password/actions/resetPasswordAction";
 import { ResetPasswordForm } from "@/features/auth/reset-password/components/ResetPasswordForm";
-import { requireAuthUser } from "@/features/auth/utils/requireAuthUser";
 import { ROUTES } from "@/lib/constants/routes";
+import { getUser } from "@/lib/supabase/getUser";
 
 // 검색 엔진 인덱싱 방지 (robots.txt Disallow보다 확실함 — 삭제 금지)
 export const metadata: Metadata = {
@@ -27,7 +30,8 @@ type Props = {
  *
  * 접근 제어:
  * - /reset-password 접근 가능 여부는 page에서 getUser 기준으로 판단한다
- * - 비인증 접근 시 /forgot-password로 redirect한다
+ * - signed Reset Password Intent를 현재 authenticated user에 바인딩해 검증한다
+ * - 비인증 또는 invalid Intent 접근 시 /forgot-password로 redirect한다
  *
  * redirect:
  * - 최종 이동은 Server Action에서 수행한다
@@ -42,10 +46,32 @@ type Props = {
  * 오류가 발생한다.
  */
 export default async function ResetPasswordPage({ searchParams }: Props) {
-  // 인증되지 않은 사용자는 forgot-password로 redirect
-  await requireAuthUser({ redirectTo: ROUTES.FORGOT_PASSWORD });
+  /**
+   * 현재 사용자와 signed Reset Password Intent를 검증해 GET 접근을 제어한다.
+   */
+  const user = await getUser();
 
-  if (!(await hasResetPasswordIntentCookie())) {
+  // 인증되지 않은 사용자는 접근 차단
+  if (!user) {
+    nextRedirect(ROUTES.FORGOT_PASSWORD);
+  }
+
+  // signed Reset Password Intent cookie 조회
+  const resetPasswordIntent = await readSignedResetPasswordIntent();
+
+  // Intent가 없으면 접근 차단
+  if (!resetPasswordIntent) {
+    nextRedirect(ROUTES.FORGOT_PASSWORD);
+  }
+
+  // 현재 authenticated user 기준으로 signed Intent 검증
+  const verifiedIntent = verifyResetPasswordIntent({
+    token: resetPasswordIntent,
+    expectedUserId: user.id,
+  });
+
+  // 유효하지 않은 Intent는 접근 차단
+  if (!verifiedIntent) {
     nextRedirect(ROUTES.FORGOT_PASSWORD);
   }
 
