@@ -19,6 +19,7 @@ const {
   readSetPasswordIntentMock,
   verifySetPasswordIntentMock,
   clearSetPasswordIntentMock,
+  isAuthErrorMock,
   isAuthSessionMissingErrorMock,
   logRequestedMock,
   logAuthEventMock,
@@ -33,6 +34,7 @@ const {
   readSetPasswordIntentMock: vi.fn(),
   verifySetPasswordIntentMock: vi.fn(),
   clearSetPasswordIntentMock: vi.fn(),
+  isAuthErrorMock: vi.fn(),
   isAuthSessionMissingErrorMock: vi.fn(),
   logRequestedMock: vi.fn(),
   logAuthEventMock: vi.fn(),
@@ -40,6 +42,7 @@ const {
 }));
 
 vi.mock("@supabase/supabase-js", () => ({
+  isAuthError: isAuthErrorMock,
   isAuthSessionMissingError: isAuthSessionMissingErrorMock,
 }));
 
@@ -88,6 +91,25 @@ function makeFormData(input: Record<string, string>) {
   return formData;
 }
 
+const SET_PASSWORD_TERMINAL_EVENTS = new Set<string>([
+  AUTH_EVENTS.AUTH_SET_PASSWORD_COMPLETED,
+  AUTH_EVENTS.AUTH_SET_PASSWORD_REJECTED,
+  AUTH_EVENTS.AUTH_SET_PASSWORD_FAILED,
+  AUTH_EVENTS.AUTH_SET_PASSWORD_INVALID_INPUT,
+  AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED,
+]);
+
+function getSetPasswordTerminalEventCallCount() {
+  const fromLogAuthEvent = logAuthEventMock.mock.calls.filter((call) =>
+    SET_PASSWORD_TERMINAL_EVENTS.has(String(call[0])),
+  ).length;
+  const fromLogAuthError = logAuthErrorMock.mock.calls.filter((call) =>
+    SET_PASSWORD_TERMINAL_EVENTS.has(String(call[0])),
+  ).length;
+
+  return fromLogAuthEvent + fromLogAuthError;
+}
+
 describe("setPasswordAction", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -120,6 +142,7 @@ describe("setPasswordAction", () => {
     });
 
     getHasPasswordLoginMock.mockResolvedValue(false);
+    isAuthErrorMock.mockReturnValue(false);
     isAuthSessionMissingErrorMock.mockReturnValue(false);
     readSetPasswordIntentMock.mockResolvedValue("signed-set-intent");
     verifySetPasswordIntentMock.mockReturnValue({
@@ -500,6 +523,139 @@ describe("setPasswordAction", () => {
     expect(logAuthEventMock).not.toHaveBeenCalledWith(
       AUTH_EVENTS.AUTH_SET_PASSWORD_COMPLETED,
       expect.anything(),
+    );
+  });
+
+  it("Provider 429 반환이면 blocked를 반환하고 Set Intent를 유지한다", async () => {
+    updateUserMock.mockResolvedValue({
+      data: { user: null },
+      error: { status: 429, code: undefined },
+    });
+
+    const result = await setPasswordAction(
+      null,
+      INITIAL_SET_PASSWORD_ACTION_STATE,
+      makeFormData({
+        password: "Password123!",
+        confirmPassword: "Password123!",
+      }),
+    );
+
+    expect(result).toEqual({ status: "blocked" });
+    expect(updateUserMock).toHaveBeenCalledTimes(1);
+    expect(clearSetPasswordIntentMock).not.toHaveBeenCalled();
+    expect(redirectMock).not.toHaveBeenCalled();
+    expect(logAuthEventMock).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED,
+      expect.objectContaining({
+        status: 429,
+        result: "blocked",
+        reasonCode: AUTH_LOG_REASONS.PROVIDER_RATE_LIMIT,
+      }),
+    );
+    expect(logAuthErrorMock).not.toHaveBeenCalled();
+    expect(logAuthEventMock).not.toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_SET_PASSWORD_COMPLETED,
+      expect.anything(),
+    );
+    expect(getSetPasswordTerminalEventCallCount()).toBe(1);
+  });
+
+  it("throw된 Auth 429도 blocked로 수렴하고 terminal event를 중복 기록하지 않는다", async () => {
+    const authRateLimitError = {
+      status: 429,
+      code: "unexpected_rate_limit_code",
+      message: "rate limited",
+    };
+
+    isAuthErrorMock.mockImplementation((error) => error === authRateLimitError);
+    updateUserMock.mockRejectedValue(authRateLimitError);
+
+    const result = await setPasswordAction(
+      null,
+      INITIAL_SET_PASSWORD_ACTION_STATE,
+      makeFormData({
+        password: "Password123!",
+        confirmPassword: "Password123!",
+      }),
+    );
+
+    expect(result).toEqual({ status: "blocked" });
+    expect(updateUserMock).toHaveBeenCalledTimes(1);
+    expect(clearSetPasswordIntentMock).not.toHaveBeenCalled();
+    expect(logAuthEventMock).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED,
+      expect.objectContaining({
+        status: 429,
+        result: "blocked",
+        reasonCode: AUTH_LOG_REASONS.PROVIDER_RATE_LIMIT,
+      }),
+    );
+    expect(logAuthErrorMock).not.toHaveBeenCalled();
+    expect(getSetPasswordTerminalEventCallCount()).toBe(1);
+  });
+
+  it("일반 Provider error는 PROVIDER_ERROR를 기록하고 민감값을 로그에 남기지 않는다", async () => {
+    updateUserMock.mockResolvedValue({
+      data: { user: null },
+      error: {
+        status: 500,
+        code: "unexpected_failure",
+        message: "provider failed",
+      },
+    });
+
+    const result = await setPasswordAction(
+      null,
+      INITIAL_SET_PASSWORD_ACTION_STATE,
+      makeFormData({
+        password: "Password123!",
+        confirmPassword: "Password123!",
+      }),
+    );
+
+    expect(result).toEqual({ status: "internal_error" });
+    expect(clearSetPasswordIntentMock).not.toHaveBeenCalled();
+    expect(logAuthErrorMock).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_SET_PASSWORD_FAILED,
+      expect.objectContaining({
+        status: 500,
+        result: "failure",
+        reasonCode: AUTH_LOG_REASONS.PROVIDER_ERROR,
+      }),
+    );
+
+    const payload = logAuthErrorMock.mock.calls.find(
+      (call) => call[0] === AUTH_EVENTS.AUTH_SET_PASSWORD_FAILED,
+    )?.[1] as Record<string, unknown> | undefined;
+
+    expect(payload).toBeDefined();
+    expect(payload).not.toHaveProperty("password");
+    expect(payload).not.toHaveProperty("confirmPassword");
+  });
+
+  it("same_password는 SAME_PASSWORD + 422를 기록한다", async () => {
+    updateUserMock.mockResolvedValue({
+      data: { user: null },
+      error: { status: 422, code: "same_password" },
+    });
+
+    await setPasswordAction(
+      null,
+      INITIAL_SET_PASSWORD_ACTION_STATE,
+      makeFormData({
+        password: "Password123!",
+        confirmPassword: "Password123!",
+      }),
+    );
+
+    expect(logAuthErrorMock).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_SET_PASSWORD_FAILED,
+      expect.objectContaining({
+        status: 422,
+        result: "failure",
+        reasonCode: AUTH_LOG_REASONS.SAME_PASSWORD,
+      }),
     );
   });
 });

@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { useActionState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { RATE_LIMIT_TOAST_MESSAGE } from "@/features/auth/errors/rateLimitError";
 import {
   INITIAL_SET_PASSWORD_ACTION_STATE,
   SetPasswordActionState,
@@ -341,6 +342,76 @@ describe("SetPasswordForm", () => {
         true,
         SET_PASSWORD_PAGE_LEAVE_CONFIRM_MESSAGE,
       );
+    });
+  });
+
+  it("blocked 상태이면 공통 Rate Limit 메시지를 표시한다", async () => {
+    const state: SetPasswordActionState = { status: "blocked" };
+    mockUseActionState.mockReturnValue([state, mockFormAction, false]);
+
+    render(<SetPasswordForm action={action} />);
+
+    expect(
+      await screen.findByText(RATE_LIMIT_TOAST_MESSAGE),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(SET_PASSWORD_GLOBAL_ERROR_MESSAGE),
+    ).not.toBeInTheDocument();
+  });
+
+  it("blocked SYSTEM root error는 password를 수정해도 유지한다", async () => {
+    const state: SetPasswordActionState = { status: "blocked" };
+    mockUseActionState.mockReturnValue([state, mockFormAction, false]);
+
+    render(<SetPasswordForm action={action} />);
+    expect(
+      await screen.findByText(RATE_LIMIT_TOAST_MESSAGE),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("비밀번호"), {
+      target: { value: "ChangedPassword123!" },
+    });
+
+    expect(screen.getByText(RATE_LIMIT_TOAST_MESSAGE)).toBeInTheDocument();
+  });
+
+  it("blocked SYSTEM root error는 다음 유효한 submit 시작 시 제거한다", async () => {
+    const state: SetPasswordActionState = { status: "blocked" };
+    mockUseActionState.mockReturnValue([state, mockFormAction, false]);
+
+    render(<SetPasswordForm action={action} />);
+    expect(
+      await screen.findByText(RATE_LIMIT_TOAST_MESSAGE),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("비밀번호"), {
+      target: { value: "Password123!" },
+    });
+    fireEvent.change(screen.getByLabelText("비밀번호 확인"), {
+      target: { value: "Password123!" },
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "비밀번호 설정하기" }),
+      ).toBeEnabled();
+    });
+
+    const form = screen
+      .getByRole("button", { name: "비밀번호 설정하기" })
+      .closest("form");
+
+    if (!form) {
+      throw new Error("set password form을 찾을 수 없습니다.");
+    }
+
+    fireEvent.submit(form);
+
+    await waitFor(() => {
+      expect(mockFormAction).toHaveBeenCalledTimes(1);
+      expect(
+        screen.queryByText(RATE_LIMIT_TOAST_MESSAGE),
+      ).not.toBeInTheDocument();
     });
   });
 });

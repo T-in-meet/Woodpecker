@@ -17,6 +17,7 @@ const TERMINAL_EVENTS = new Set<string>([
   AUTH_EVENTS.AUTH_RESET_PASSWORD_REJECTED,
   AUTH_EVENTS.AUTH_RESET_PASSWORD_FAILED,
   AUTH_EVENTS.AUTH_RESET_PASSWORD_INVALID_INPUT,
+  AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED,
 ]);
 
 function getTerminalEventCallCount(mocks: {
@@ -212,5 +213,128 @@ describe("resetPasswordAction - logging", () => {
       expect.anything(),
     );
     expect(mocks.updateUser).toHaveBeenCalledTimes(1);
+  });
+
+  it("Provider 429는 PROVIDER_RATE_LIMIT + 429 blocked terminal event를 기록한다", async () => {
+    mocks.updateUser.mockResolvedValueOnce({
+      data: { user: null },
+      error: { status: 429, code: undefined },
+    });
+
+    await runResetPasswordAction(
+      null,
+      makeFormData({
+        password: "valid-password",
+        confirmPassword: "valid-password",
+      }),
+    );
+
+    expect(mocks.logAuthEvent).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED,
+      expect.objectContaining({
+        status: 429,
+        result: "blocked",
+        reasonCode: AUTH_LOG_REASONS.PROVIDER_RATE_LIMIT,
+      }),
+    );
+    expect(mocks.updateUser).toHaveBeenCalledTimes(1);
+    expect(mocks.logAuthError).not.toHaveBeenCalled();
+    expect(getTerminalEventCallCount(mocks)).toBe(1);
+  });
+
+  it("throw된 Auth 429도 PROVIDER_RATE_LIMIT + 429 blocked terminal event로 수렴한다", async () => {
+    const authRateLimitError = {
+      status: 429,
+      code: "unexpected_rate_limit_code",
+      message: "rate limited",
+    };
+
+    mocks.isAuthError.mockImplementation(
+      (error) => error === authRateLimitError,
+    );
+    mocks.updateUser.mockRejectedValueOnce(authRateLimitError);
+
+    await runResetPasswordAction(
+      null,
+      makeFormData({
+        password: "valid-password",
+        confirmPassword: "valid-password",
+      }),
+    );
+
+    expect(mocks.updateUser).toHaveBeenCalledTimes(1);
+    expect(mocks.logAuthEvent).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED,
+      expect.objectContaining({
+        status: 429,
+        result: "blocked",
+        reasonCode: AUTH_LOG_REASONS.PROVIDER_RATE_LIMIT,
+      }),
+    );
+    expect(mocks.logAuthError).not.toHaveBeenCalled();
+    expect(getTerminalEventCallCount(mocks)).toBe(1);
+  });
+
+  it("일반 Provider error는 PROVIDER_ERROR + 500으로 기록한다", async () => {
+    mockUpdateUser("error");
+
+    await runResetPasswordAction(
+      null,
+      makeFormData({
+        password: "valid-password",
+        confirmPassword: "valid-password",
+      }),
+    );
+
+    expect(mocks.logAuthError).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_RESET_PASSWORD_FAILED,
+      expect.objectContaining({
+        status: 500,
+        result: "failure",
+        reasonCode: AUTH_LOG_REASONS.PROVIDER_ERROR,
+      }),
+    );
+    expect(getTerminalEventCallCount(mocks)).toBe(1);
+  });
+
+  it("non-Auth throw도 PROVIDER_ERROR + 500으로 기록한다", async () => {
+    mockUpdateUser("throw");
+    mocks.isAuthError.mockReturnValue(false);
+
+    await runResetPasswordAction(
+      null,
+      makeFormData({
+        password: "valid-password",
+        confirmPassword: "valid-password",
+      }),
+    );
+
+    expect(mocks.logAuthError).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_RESET_PASSWORD_FAILED,
+      expect.objectContaining({
+        status: 500,
+        reasonCode: AUTH_LOG_REASONS.PROVIDER_ERROR,
+      }),
+    );
+  });
+
+  it("Provider error logging payload에 password/confirmPassword를 남기지 않는다", async () => {
+    mockUpdateUser("error");
+
+    await runResetPasswordAction(
+      null,
+      makeFormData({
+        password: "valid-password",
+        confirmPassword: "valid-password",
+      }),
+    );
+
+    const providerLogPayload = mocks.logAuthError.mock.calls.find(
+      (call) => call[0] === AUTH_EVENTS.AUTH_RESET_PASSWORD_FAILED,
+    )?.[1] as Record<string, unknown> | undefined;
+
+    expect(providerLogPayload).toBeDefined();
+    expect(providerLogPayload).not.toHaveProperty("password");
+    expect(providerLogPayload).not.toHaveProperty("confirmPassword");
   });
 });

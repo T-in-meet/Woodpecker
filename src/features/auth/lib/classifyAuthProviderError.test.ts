@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   classifyAuthProviderError,
+  classifyPasswordUpdateError,
   isOtpValidityFailure,
   isPasswordLoginCredentialFailure,
   isPasswordLoginNonCredentialAuthFailure,
@@ -39,12 +40,33 @@ const AUTH_PROVIDER_ERROR_FIXTURES = {
   },
 } as const;
 
+const PASSWORD_UPDATE_ERROR_FIXTURES = {
+  samePassword: {
+    status: 422,
+    code: "same_password",
+  },
+  samePasswordWrongStatus: {
+    status: 500,
+    code: "same_password",
+  },
+  samePasswordRateLimited: {
+    status: 429,
+    code: "same_password",
+  },
+  rateLimitWithoutCode: {
+    status: 429,
+    code: undefined,
+  },
+  unknown: {
+    status: 500,
+    code: "unexpected_failure",
+  },
+} as const;
+
 describe("classifyAuthProviderError", () => {
   it("HTTP 429는 Provider Rate Limit으로 분류한다", () => {
     expect(
-      classifyAuthProviderError(
-        AUTH_PROVIDER_ERROR_FIXTURES.requestRateLimit,
-      ),
+      classifyAuthProviderError(AUTH_PROVIDER_ERROR_FIXTURES.requestRateLimit),
     ).toBe("provider_rate_limit");
   });
 
@@ -79,6 +101,68 @@ describe("classifyAuthProviderError", () => {
         code: undefined,
       }),
     ).toBe("provider_error");
+  });
+});
+
+describe("classifyPasswordUpdateError", () => {
+  it("422 + same_password만 same_password로 분류한다", () => {
+    expect(
+      classifyPasswordUpdateError(PASSWORD_UPDATE_ERROR_FIXTURES.samePassword),
+    ).toBe("same_password");
+  });
+
+  it("same_password code라도 non-429 다른 status면 Provider Error로 fallback한다", () => {
+    expect(
+      classifyPasswordUpdateError(
+        PASSWORD_UPDATE_ERROR_FIXTURES.samePasswordWrongStatus,
+      ),
+    ).toBe("provider_error");
+  });
+
+  it("same_password code라도 status 429면 Provider Rate Limit precedence를 따른다", () => {
+    expect(
+      classifyPasswordUpdateError(
+        PASSWORD_UPDATE_ERROR_FIXTURES.samePasswordRateLimited,
+      ),
+    ).toBe("provider_rate_limit");
+  });
+
+  it("429는 code가 없어도 Provider Rate Limit으로 분류한다", () => {
+    expect(
+      classifyPasswordUpdateError(
+        PASSWORD_UPDATE_ERROR_FIXTURES.rateLimitWithoutCode,
+      ),
+    ).toBe("provider_rate_limit");
+  });
+
+  it("unknown non-429 code는 Provider Error로 fallback한다", () => {
+    expect(
+      classifyPasswordUpdateError(PASSWORD_UPDATE_ERROR_FIXTURES.unknown),
+    ).toBe("provider_error");
+  });
+
+  it("기존 Rate Limit code-only allowlist를 보존한다", () => {
+    expect(
+      classifyPasswordUpdateError({
+        status: 400,
+        code: "over_request_rate_limit",
+      }),
+    ).toBe("provider_rate_limit");
+  });
+
+  it("same_password 분류는 raw message에 의존하지 않는다", () => {
+    const first = {
+      ...PASSWORD_UPDATE_ERROR_FIXTURES.samePassword,
+      message: "first message",
+    };
+
+    const second = {
+      ...PASSWORD_UPDATE_ERROR_FIXTURES.samePassword,
+      message: "완전히 다른 메시지",
+    };
+
+    expect(classifyPasswordUpdateError(first)).toBe("same_password");
+    expect(classifyPasswordUpdateError(second)).toBe("same_password");
   });
 });
 
@@ -134,9 +218,9 @@ describe("isPasswordLoginNonCredentialAuthFailure", () => {
 
 describe("isOtpValidityFailure", () => {
   it("확정된 otp_expired fixture를 OTP validity failure로 인정한다", () => {
-    expect(
-      isOtpValidityFailure(AUTH_PROVIDER_ERROR_FIXTURES.otpExpired),
-    ).toBe(true);
+    expect(isOtpValidityFailure(AUTH_PROVIDER_ERROR_FIXTURES.otpExpired)).toBe(
+      true,
+    );
   });
 
   it("동일 code라도 status가 다르면 OTP failure로 추정하지 않는다", () => {
@@ -150,9 +234,7 @@ describe("isOtpValidityFailure", () => {
 
   it("Provider Rate Limit은 OTP validity failure가 아니다", () => {
     expect(
-      isOtpValidityFailure(
-        AUTH_PROVIDER_ERROR_FIXTURES.requestRateLimit,
-      ),
+      isOtpValidityFailure(AUTH_PROVIDER_ERROR_FIXTURES.requestRateLimit),
     ).toBe(false);
   });
 });

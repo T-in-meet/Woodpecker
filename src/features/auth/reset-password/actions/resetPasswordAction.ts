@@ -1,6 +1,6 @@
 "use server";
 
-import { isAuthSessionMissingError } from "@supabase/supabase-js";
+import { isAuthError, isAuthSessionMissingError } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
 
 import { AUTH_EVENTS } from "@/features/auth/constants/authEvents";
@@ -12,6 +12,7 @@ import {
   logRequested,
   normalizeUnknownError,
 } from "@/features/auth/lib/authLogger";
+import { classifyPasswordUpdateError } from "@/features/auth/lib/classifyAuthProviderError";
 import {
   clearSignedResetPasswordIntent,
   readSignedResetPasswordIntent,
@@ -34,17 +35,6 @@ function resolveRedirectPath(redirectPath: string | null): string {
   }
 
   return validateRedirectPath(redirectPath);
-}
-
-function isSamePasswordError(error: unknown) {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "status" in error &&
-    "code" in error &&
-    error.status === 422 &&
-    error.code === "same_password"
-  );
 }
 
 export async function resetPasswordAction(
@@ -200,7 +190,7 @@ export async function resetPasswordAction(
   }
 
   const finalRedirectPath = resolveRedirectPath(redirectPath);
-  let updateError: unknown = null;
+  let updateError = null;
 
   try {
     const { error } = await supabase.auth.updateUser({
@@ -209,7 +199,62 @@ export async function resetPasswordAction(
 
     updateError = error;
   } catch (error) {
-    const normalized = normalizeUnknownError(error);
+    if (isAuthError(error)) {
+      updateError = error;
+    } else {
+      const normalized = normalizeUnknownError(error);
+
+      logAuthError(AUTH_EVENTS.AUTH_RESET_PASSWORD_FAILED, {
+        path: ROUTES.RESET_PASSWORD,
+        method: "POST",
+        status: 500,
+        provider: "password",
+        result: "failure",
+        reasonCode: AUTH_LOG_REASONS.PROVIDER_ERROR,
+        ...normalized,
+      });
+
+      return {
+        status: "internal_error",
+      };
+    }
+  }
+
+  if (updateError) {
+    const classification = classifyPasswordUpdateError(updateError);
+
+    if (classification === "same_password") {
+      logAuthError(AUTH_EVENTS.AUTH_RESET_PASSWORD_FAILED, {
+        path: ROUTES.RESET_PASSWORD,
+        method: "POST",
+        status: 422,
+        provider: "password",
+        result: "failure",
+        reasonCode: AUTH_LOG_REASONS.SAME_PASSWORD,
+      });
+
+      return {
+        status: "internal_error",
+        reason: "same_password",
+      };
+    }
+
+    if (classification === "provider_rate_limit") {
+      logAuthEvent(AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED, {
+        path: ROUTES.RESET_PASSWORD,
+        method: "POST",
+        status: 429,
+        provider: "password",
+        result: "blocked",
+        reasonCode: AUTH_LOG_REASONS.PROVIDER_RATE_LIMIT,
+      });
+
+      return {
+        status: "blocked",
+      };
+    }
+
+    const normalized = normalizeUnknownError(updateError);
 
     logAuthError(AUTH_EVENTS.AUTH_RESET_PASSWORD_FAILED, {
       path: ROUTES.RESET_PASSWORD,
@@ -217,35 +262,9 @@ export async function resetPasswordAction(
       status: 500,
       provider: "password",
       result: "failure",
-      reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+      reasonCode: AUTH_LOG_REASONS.PROVIDER_ERROR,
       ...normalized,
     });
-
-    return {
-      status: "internal_error",
-    };
-  }
-
-  if (updateError) {
-    const isSamePassword = isSamePasswordError(updateError);
-
-    logAuthError(AUTH_EVENTS.AUTH_RESET_PASSWORD_FAILED, {
-      path: ROUTES.RESET_PASSWORD,
-      method: "POST",
-      status: isSamePassword ? 422 : 500,
-      provider: "password",
-      result: "failure",
-      reasonCode: isSamePassword
-        ? AUTH_LOG_REASONS.SAME_PASSWORD
-        : AUTH_LOG_REASONS.INTERNAL_ERROR,
-    });
-
-    if (isSamePassword) {
-      return {
-        status: "internal_error",
-        reason: "same_password",
-      };
-    }
 
     return {
       status: "internal_error",

@@ -23,6 +23,7 @@ const hoisted = vi.hoisted(() => ({
   readSignedResetPasswordIntent: vi.fn(),
   verifyResetPasswordIntent: vi.fn(),
   clearSignedResetPasswordIntent: vi.fn(),
+  isAuthError: vi.fn(),
   isAuthSessionMissingError: vi.fn(),
   resetPasswordActionSchema: { safeParse: vi.fn() },
   changePasswordSchema: { safeParse: vi.fn() },
@@ -30,6 +31,7 @@ const hoisted = vi.hoisted(() => ({
 }));
 
 vi.mock("@supabase/supabase-js", () => ({
+  isAuthError: hoisted.isAuthError,
   isAuthSessionMissingError: hoisted.isAuthSessionMissingError,
 }));
 
@@ -106,7 +108,11 @@ export function mockUpdateUser(result: "success" | "error" | "throw") {
   if (result === "error") {
     hoisted.updateUser.mockResolvedValue({
       data: { user: null },
-      error: new Error("supabase error"),
+      error: {
+        status: 500,
+        code: "unexpected_failure",
+        message: "supabase error",
+      },
     });
     return;
   }
@@ -131,6 +137,7 @@ export function setupActionTest() {
   mockUser({ id: "reset-user-id" });
   mockUpdateUser("success");
 
+  hoisted.isAuthError.mockReturnValue(false);
   hoisted.isAuthSessionMissingError.mockReturnValue(false);
   hoisted.readSignedResetPasswordIntent.mockResolvedValue(
     "signed-reset-intent",
@@ -193,6 +200,7 @@ export function setupActionTest() {
     readSignedResetPasswordIntent: hoisted.readSignedResetPasswordIntent,
     verifyResetPasswordIntent: hoisted.verifyResetPasswordIntent,
     clearSignedResetPasswordIntent: hoisted.clearSignedResetPasswordIntent,
+    isAuthError: hoisted.isAuthError,
     isAuthSessionMissingError: hoisted.isAuthSessionMissingError,
     changePasswordSchema: hoisted.changePasswordSchema,
     checkRequestEligibility: hoisted.checkRequestEligibility,

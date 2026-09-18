@@ -10,6 +10,7 @@ const SUPABASE_AUTH_ERROR_CODES = {
   INVALID_CREDENTIALS: "invalid_credentials",
   EMAIL_NOT_CONFIRMED: "email_not_confirmed",
   OTP_EXPIRED: "otp_expired",
+  SAME_PASSWORD: "same_password",
   OVER_REQUEST_RATE_LIMIT: "over_request_rate_limit",
   OVER_EMAIL_SEND_RATE_LIMIT: "over_email_send_rate_limit",
 } as const;
@@ -24,6 +25,7 @@ const SUPABASE_AUTH_ERROR_STATUS = {
   INVALID_CREDENTIALS: 400,
   EMAIL_NOT_CONFIRMED: 400,
   OTP_EXPIRED: 403,
+  SAME_PASSWORD: 422,
 } as const;
 
 /**
@@ -68,6 +70,32 @@ export function classifyAuthProviderError(
   }
 
   return "provider_error";
+}
+
+/**
+ * Password update Provider 오류 분류 결과.
+ */
+export type PasswordUpdateErrorClassification =
+  | "same_password"
+  | AuthProviderErrorClassification;
+
+/**
+ * Password update에서만 의미가 있는 same_password를 먼저 해석한다.
+ *
+ * same_password는 HTTP 422 + stable code 조합에서만 인정하며,
+ * 그 외 오류는 기존 공통 Provider classifier 규칙을 그대로 따른다.
+ */
+export function classifyPasswordUpdateError(
+  error: AuthProviderErrorInput,
+): PasswordUpdateErrorClassification {
+  if (
+    error.status === SUPABASE_AUTH_ERROR_STATUS.SAME_PASSWORD &&
+    error.code === SUPABASE_AUTH_ERROR_CODES.SAME_PASSWORD
+  ) {
+    return "same_password";
+  }
+
+  return classifyAuthProviderError(error);
 }
 
 /**
@@ -122,9 +150,7 @@ export function isPasswordLoginNonCredentialAuthFailure(
  * @param error Supabase Auth Provider 오류
  * @returns countable OTP validity failure 여부
  */
-export function isOtpValidityFailure(
-  error: AuthProviderErrorInput,
-): boolean {
+export function isOtpValidityFailure(error: AuthProviderErrorInput): boolean {
   return (
     error.status === SUPABASE_AUTH_ERROR_STATUS.OTP_EXPIRED &&
     error.code === SUPABASE_AUTH_ERROR_CODES.OTP_EXPIRED

@@ -94,4 +94,49 @@ describe("resetPasswordAction - supabase", () => {
     expect(state).not.toHaveProperty("reason");
     expect(mocks.clearSignedResetPasswordIntent).not.toHaveBeenCalled();
   });
+
+  it("Provider 429 반환이면 blocked state를 반환하고 signed Intent를 유지한다", async () => {
+    mocks.updateUser.mockResolvedValueOnce({
+      data: { user: null },
+      error: { status: 429, code: undefined },
+    });
+
+    const state = await runResetPasswordAction(
+      null,
+      makeFormData({
+        password: "valid-password",
+        confirmPassword: "valid-password",
+      }),
+    );
+
+    expect(state).toEqual({ status: "blocked" });
+    expect(mocks.updateUser).toHaveBeenCalledTimes(1);
+    expect(mocks.clearSignedResetPasswordIntent).not.toHaveBeenCalled();
+    expect(mocks.redirect).not.toHaveBeenCalled();
+  });
+
+  it("throw된 Auth 429도 blocked state로 수렴하고 signed Intent를 유지한다", async () => {
+    const authRateLimitError = {
+      status: 429,
+      code: "unexpected_rate_limit_code",
+      message: "rate limited",
+    };
+
+    mocks.isAuthError.mockImplementation(
+      (error) => error === authRateLimitError,
+    );
+    mocks.updateUser.mockRejectedValueOnce(authRateLimitError);
+
+    const state = await runResetPasswordAction(
+      null,
+      makeFormData({
+        password: "valid-password",
+        confirmPassword: "valid-password",
+      }),
+    );
+
+    expect(state).toEqual({ status: "blocked" });
+    expect(mocks.updateUser).toHaveBeenCalledTimes(1);
+    expect(mocks.clearSignedResetPasswordIntent).not.toHaveBeenCalled();
+  });
 });
