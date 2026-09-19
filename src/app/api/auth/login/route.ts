@@ -4,6 +4,7 @@ import { getAgreementRequiredPath } from "@/features/auth/constants/agreementReq
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 import { AUTH_EVENTS } from "@/features/auth/constants/authEvents";
 import { AUTH_LOG_REASONS } from "@/features/auth/constants/authLogReasons";
+import { AUTH_PROVIDER_TIMEOUT_MS } from "@/features/auth/constants/authProviderTimeout";
 import { applyMinimumResponseTime } from "@/features/auth/lib/applyMinimumResponseTime";
 import {
   logAuthError,
@@ -11,6 +12,7 @@ import {
   logRequested,
   normalizeUnknownError,
 } from "@/features/auth/lib/authLogger";
+import { createAuthProviderTimeoutContext } from "@/features/auth/lib/authProviderTimeout";
 import {
   classifyAuthProviderError,
   isPasswordLoginCredentialFailure,
@@ -95,6 +97,7 @@ type LoginTerminalOutcome =
       reasonCode:
         | typeof AUTH_LOG_REASONS.INVALID_CREDENTIALS
         | typeof AUTH_LOG_REASONS.IP_UNAVAILABLE
+        | typeof AUTH_LOG_REASONS.PROVIDER_TIMEOUT
         | typeof AUTH_LOG_REASONS.PROVIDER_ERROR
         | typeof AUTH_LOG_REASONS.INTERNAL_ERROR;
       maskedEmail?: string;
@@ -193,10 +196,16 @@ async function resolveLoginResponse(
   /**
    * Provider client는 attempt 소비 전에 준비한다.
    *
+   * timeout context 생성 자체는 timer를 시작하지 않는다.
+   * 실제 Provider fetch invocation 시점부터 full timeout budget을 사용한다.
+   *
    * 이 local 준비가 실패하면 실제 Provider operation이 시작되지 않았으므로
    * Email/IP total attempt를 소비하지 않는다.
    */
-  const supabase = await createClient();
+  const providerTimeout = createAuthProviderTimeoutContext({
+    timeoutMs: AUTH_PROVIDER_TIMEOUT_MS,
+  });
+  const supabase = await createClient({ fetch: providerTimeout.fetch });
 
   /**
    * 실제 Provider 호출 직전에 quota/streak를 atomic하게 확인하고
@@ -246,7 +255,9 @@ async function resolveLoginResponse(
       response: failureResponse(AUTH_API_CODES.LOGIN_INTERNAL_ERROR),
       outcome: {
         type: "failed",
-        reasonCode: AUTH_LOG_REASONS.PROVIDER_ERROR,
+        reasonCode: providerTimeout.didTimeout()
+          ? AUTH_LOG_REASONS.PROVIDER_TIMEOUT
+          : AUTH_LOG_REASONS.PROVIDER_ERROR,
         maskedEmail,
         errorMessage,
         errorName,
@@ -257,6 +268,30 @@ async function resolveLoginResponse(
   const { data: authData, error: authError } = authResult;
 
   if (authError) {
+    /**
+     * Supabase Auth가 transport timeout을 AuthRetryableFetchError 등으로 감싸
+     * 반환할 수 있으므로 error shape보다 request-scoped timeout context를 먼저 본다.
+     */
+    if (providerTimeout.didTimeout()) {
+      loginRateLimit.recordResult({
+        canonicalEmail,
+        result: "non_credential_failure",
+      });
+
+      const { errorMessage, errorName } = normalizeUnknownError(authError);
+
+      return {
+        response: failureResponse(AUTH_API_CODES.LOGIN_INTERNAL_ERROR),
+        outcome: {
+          type: "failed",
+          reasonCode: AUTH_LOG_REASONS.PROVIDER_TIMEOUT,
+          maskedEmail,
+          errorMessage,
+          errorName,
+        },
+      };
+    }
+
     /**
      * 명확히 allowlist된 invalid credential만 consecutive failure로 기록한다.
      * unknown Provider 오류를 credential failure로 추정하지 않는다.

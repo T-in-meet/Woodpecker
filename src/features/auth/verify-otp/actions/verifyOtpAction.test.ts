@@ -107,6 +107,62 @@ function createProviderError(input: { status: number; code: string }) {
   };
 }
 
+type CapturedVerifyProviderFetch = {
+  current: typeof fetch | undefined;
+};
+
+function captureVerifyProviderFetch(): CapturedVerifyProviderFetch {
+  const captured: CapturedVerifyProviderFetch = { current: undefined };
+
+  vi.mocked(createClient).mockImplementation((async (...args: unknown[]) => {
+    const options = args[0] as { fetch?: typeof fetch } | undefined;
+    captured.current = options?.fetch;
+    return mockSupabase;
+  }) as never);
+
+  return captured;
+}
+
+function installVerifyAbortableTransport() {
+  const transportFetch = vi.fn(
+    (_input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) =>
+      new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal;
+
+        if (!signal) {
+          reject(new Error("expected provider signal"));
+          return;
+        }
+
+        const rejectAbort = () =>
+          reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
+
+        if (signal.aborted) {
+          rejectAbort();
+          return;
+        }
+
+        signal.addEventListener("abort", rejectAbort, { once: true });
+      }),
+  );
+
+  vi.stubGlobal("fetch", transportFetch);
+  return transportFetch;
+}
+
+async function triggerVerifyOwnTimeout(
+  providerFetch: typeof fetch | undefined,
+  timeoutController: AbortController,
+): Promise<void> {
+  if (!providerFetch) {
+    throw new Error("expected timeout-enabled Provider fetch");
+  }
+
+  const pending = providerFetch("https://provider.test/auth/v1/verify");
+  timeoutController.abort(new DOMException("Provider timeout", "TimeoutError"));
+  await pending.catch(() => undefined);
+}
+
 describe("verifyOtpAction", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -884,4 +940,203 @@ describe("verifyOtpAction", () => {
       expect(redirect).not.toHaveBeenCalled();
     },
   );
+
+  it("반환 wrapped Provider error가 own timeout이면 provider_error + PROVIDER_TIMEOUT으로 종료한다", async () => {
+    const captured = captureVerifyProviderFetch();
+    const timeoutController = new AbortController();
+    const timeoutSpy = vi
+      .spyOn(AbortSignal, "timeout")
+      .mockReturnValue(timeoutController.signal);
+    installVerifyAbortableTransport();
+
+    vi.mocked(verifyOtp).mockImplementation(async () => {
+      await triggerVerifyOwnTimeout(captured.current, timeoutController);
+
+      return {
+        data: { user: null },
+        error: {
+          name: "AuthRetryableFetchError",
+          message: "fetch failed",
+          status: 0,
+        },
+      } as Awaited<ReturnType<typeof verifyOtp>>;
+    });
+
+    try {
+      const result = await verifyOtpAction(
+        null,
+        prevState,
+        createFormData({
+          email: "user@example.com",
+          purpose: "signup",
+          otp: "123456",
+        }),
+      );
+
+      expect(result).toEqual({
+        status: "internal_error",
+        fieldErrors: null,
+      });
+      expect(otpVerifyRateLimit.recordResult).toHaveBeenCalledTimes(1);
+      expect(otpVerifyRateLimit.recordResult).toHaveBeenCalledWith({
+        canonicalEmail: "user@example.com",
+        outcome: "provider_error",
+      });
+      expect(logAuthError).toHaveBeenCalledWith(
+        AUTH_EVENTS.AUTH_VERIFY_OTP_FAILED,
+        expect.objectContaining({
+          reasonCode: AUTH_LOG_REASONS.PROVIDER_TIMEOUT,
+        }),
+      );
+      expect(createSetPasswordIntent).not.toHaveBeenCalled();
+      expect(createSignedResetPasswordIntent).not.toHaveBeenCalled();
+      expect(redirect).not.toHaveBeenCalled();
+    } finally {
+      timeoutSpy.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("verifyOtp throw 경로도 own timeout이면 동일한 PROVIDER_TIMEOUT 계약을 사용한다", async () => {
+    const captured = captureVerifyProviderFetch();
+    const timeoutController = new AbortController();
+    const timeoutSpy = vi
+      .spyOn(AbortSignal, "timeout")
+      .mockReturnValue(timeoutController.signal);
+    installVerifyAbortableTransport();
+
+    vi.mocked(verifyOtp).mockImplementation(async () => {
+      await triggerVerifyOwnTimeout(captured.current, timeoutController);
+      throw new Error("verify transport failed after timeout");
+    });
+
+    try {
+      const result = await verifyOtpAction(
+        null,
+        prevState,
+        createFormData({
+          email: "user@example.com",
+          purpose: "signup",
+          otp: "123456",
+        }),
+      );
+
+      expect(result).toEqual({
+        status: "internal_error",
+        fieldErrors: null,
+      });
+      expect(otpVerifyRateLimit.recordResult).toHaveBeenCalledTimes(1);
+      expect(otpVerifyRateLimit.recordResult).toHaveBeenCalledWith({
+        canonicalEmail: "user@example.com",
+        outcome: "provider_error",
+      });
+      expect(logAuthError).toHaveBeenCalledWith(
+        AUTH_EVENTS.AUTH_VERIFY_OTP_FAILED,
+        expect.objectContaining({
+          reasonCode: AUTH_LOG_REASONS.PROVIDER_TIMEOUT,
+        }),
+      );
+      expect(createSetPasswordIntent).not.toHaveBeenCalled();
+      expect(createSignedResetPasswordIntent).not.toHaveBeenCalled();
+      expect(redirect).not.toHaveBeenCalled();
+    } finally {
+      timeoutSpy.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("wrapped Provider error라도 own timeout이 아니면 기존 PROVIDER_ERROR를 유지한다", async () => {
+    const captured = captureVerifyProviderFetch();
+
+    vi.mocked(verifyOtp).mockResolvedValue({
+      data: { user: null },
+      error: {
+        name: "AuthRetryableFetchError",
+        message: "network failed",
+        status: 0,
+      },
+    } as Awaited<ReturnType<typeof verifyOtp>>);
+
+    const result = await verifyOtpAction(
+      null,
+      prevState,
+      createFormData({
+        email: "user@example.com",
+        purpose: "signup",
+        otp: "123456",
+      }),
+    );
+
+    expect(captured.current).toBeTypeOf("function");
+    expect(result).toEqual({
+      status: "internal_error",
+      fieldErrors: null,
+    });
+    expect(logAuthError).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_VERIFY_OTP_FAILED,
+      expect.objectContaining({
+        reasonCode: AUTH_LOG_REASONS.PROVIDER_ERROR,
+      }),
+    );
+  });
+
+  it("timeout-enabled client 준비 → attempt consume → Verify Provider 순서를 지킨다", async () => {
+    const captured = captureVerifyProviderFetch();
+
+    await expect(
+      verifyOtpAction(
+        null,
+        prevState,
+        createFormData({
+          email: "user@example.com",
+          purpose: "signup",
+          otp: "123456",
+        }),
+      ),
+    ).rejects.toThrow(`NEXT_REDIRECT:${ROUTES.SET_PASSWORD}`);
+
+    expect(captured.current).toBeTypeOf("function");
+
+    const createClientOrder =
+      vi.mocked(createClient).mock.invocationCallOrder[0]!;
+    const tryStartOrder = vi.mocked(otpVerifyRateLimit.tryStartAttempt).mock
+      .invocationCallOrder[0]!;
+    const verifyOrder = vi.mocked(verifyOtp).mock.invocationCallOrder[0]!;
+
+    expect(createClientOrder).toBeLessThan(tryStartOrder);
+    expect(tryStartOrder).toBeLessThan(verifyOrder);
+  });
+
+  it("Verify limiter blocked에서는 Provider와 timeout fetch를 시작하지 않는다", async () => {
+    const transportFetch = vi.fn();
+    vi.stubGlobal("fetch", transportFetch);
+    const captured = captureVerifyProviderFetch();
+
+    vi.mocked(otpVerifyRateLimit.tryStartAttempt).mockReturnValue({
+      allowed: false,
+      blockedBy: "email_total",
+    });
+
+    try {
+      const result = await verifyOtpAction(
+        null,
+        prevState,
+        createFormData({
+          email: "user@example.com",
+          purpose: "signup",
+          otp: "123456",
+        }),
+      );
+
+      expect(result).toEqual({
+        status: "blocked",
+        fieldErrors: null,
+      });
+      expect(captured.current).toBeTypeOf("function");
+      expect(verifyOtp).not.toHaveBeenCalled();
+      expect(transportFetch).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

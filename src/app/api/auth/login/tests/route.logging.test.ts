@@ -162,6 +162,67 @@ function clearLoggingMocks(): void {
   vi.mocked(parseAuthJsonRequestBody).mockClear();
 }
 
+type CapturedProviderFetch = {
+  current: typeof fetch | undefined;
+};
+
+function captureProviderFetch(): CapturedProviderFetch {
+  const captured: CapturedProviderFetch = { current: undefined };
+
+  vi.mocked(createClient).mockImplementation((async (...args: unknown[]) => {
+    const options = args[0] as { fetch?: typeof fetch } | undefined;
+    captured.current = options?.fetch;
+
+    return {
+      auth: {
+        signInWithPassword: mockSignIn,
+      },
+    } as never;
+  }) as never);
+
+  return captured;
+}
+
+function installAbortableTransportFetch() {
+  const transportFetch = vi.fn(
+    (_input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) =>
+      new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal;
+
+        if (!signal) {
+          reject(new Error("expected provider signal"));
+          return;
+        }
+
+        const rejectAbort = () =>
+          reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
+
+        if (signal.aborted) {
+          rejectAbort();
+          return;
+        }
+
+        signal.addEventListener("abort", rejectAbort, { once: true });
+      }),
+  );
+
+  vi.stubGlobal("fetch", transportFetch);
+  return transportFetch;
+}
+
+async function triggerOwnProviderTimeout(
+  providerFetch: typeof fetch | undefined,
+  timeoutController: AbortController,
+): Promise<void> {
+  if (!providerFetch) {
+    throw new Error("expected timeout-enabled Provider fetch");
+  }
+
+  const pending = providerFetch("https://provider.test/auth/v1/token");
+  timeoutController.abort(new DOMException("Provider timeout", "TimeoutError"));
+  await pending.catch(() => undefined);
+}
+
 describe("로그인 API 로깅 검증", () => {
   beforeEach(() => {
     resetLoginApiMocks();
@@ -377,5 +438,98 @@ describe("로그인 API 로깅 검증", () => {
     for (const [, payload] of vi.mocked(logAuthError).mock.calls) {
       expectNoForbiddenFields(payload);
     }
+  });
+
+  it("반환 wrapped error가 own timeout이면 AUTH_LOGIN_FAILED + PROVIDER_TIMEOUT을 정확히 1회 기록한다", async () => {
+    const captured = captureProviderFetch();
+    const timeoutController = new AbortController();
+    const timeoutSpy = vi
+      .spyOn(AbortSignal, "timeout")
+      .mockReturnValue(timeoutController.signal);
+    installAbortableTransportFetch();
+
+    mockSignIn.mockImplementation(async () => {
+      await triggerOwnProviderTimeout(captured.current, timeoutController);
+
+      return {
+        data: null,
+        error: {
+          name: "AuthRetryableFetchError",
+          message: "fetch failed",
+          status: 0,
+        },
+      };
+    });
+
+    try {
+      await POST(makeRequest());
+
+      expect(logAuthError).toHaveBeenCalledWith(
+        AUTH_EVENTS.AUTH_LOGIN_FAILED,
+        expect.objectContaining({
+          reasonCode: AUTH_LOG_REASONS.PROVIDER_TIMEOUT,
+        }),
+      );
+      expect(terminalEvents()).toEqual([AUTH_EVENTS.AUTH_LOGIN_FAILED]);
+
+      const [, payload] = vi.mocked(logAuthError).mock.calls[0]!;
+      expectNoForbiddenFields(payload);
+    } finally {
+      timeoutSpy.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("throw 경로가 own timeout이어도 PROVIDER_TIMEOUT을 기록한다", async () => {
+    const captured = captureProviderFetch();
+    const timeoutController = new AbortController();
+    const timeoutSpy = vi
+      .spyOn(AbortSignal, "timeout")
+      .mockReturnValue(timeoutController.signal);
+    installAbortableTransportFetch();
+
+    mockSignIn.mockImplementation(async () => {
+      await triggerOwnProviderTimeout(captured.current, timeoutController);
+      throw new Error("provider transport failed after timeout");
+    });
+
+    try {
+      await POST(makeRequest());
+
+      expect(logAuthError).toHaveBeenCalledWith(
+        AUTH_EVENTS.AUTH_LOGIN_FAILED,
+        expect.objectContaining({
+          reasonCode: AUTH_LOG_REASONS.PROVIDER_TIMEOUT,
+        }),
+      );
+      expect(terminalEvents()).toEqual([AUTH_EVENTS.AUTH_LOGIN_FAILED]);
+    } finally {
+      timeoutSpy.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("wrapped Provider error라도 own timeout이 아니면 PROVIDER_ERROR를 유지한다", async () => {
+    const captured = captureProviderFetch();
+
+    mockSignIn.mockResolvedValue({
+      data: null,
+      error: {
+        name: "AuthRetryableFetchError",
+        message: "network failed",
+        status: 0,
+      },
+    });
+
+    await POST(makeRequest());
+
+    expect(captured.current).toBeTypeOf("function");
+    expect(logAuthError).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_LOGIN_FAILED,
+      expect.objectContaining({
+        reasonCode: AUTH_LOG_REASONS.PROVIDER_ERROR,
+      }),
+    );
+    expect(terminalEvents()).toEqual([AUTH_EVENTS.AUTH_LOGIN_FAILED]);
   });
 });

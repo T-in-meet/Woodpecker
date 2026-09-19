@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 import { loginRateLimit } from "@/features/auth/login/lib/loginRateLimit";
+import { createClient } from "@/lib/supabase/server";
 
 import { POST } from "../route";
 import {
@@ -42,6 +43,67 @@ vi.mock("@/features/auth/login/lib/loginRateLimit", () => ({
   },
 }));
 vi.mock("@/lib/supabase/server");
+
+type CapturedProviderFetch = {
+  current: typeof fetch | undefined;
+};
+
+function captureProviderFetch(): CapturedProviderFetch {
+  const captured: CapturedProviderFetch = { current: undefined };
+
+  vi.mocked(createClient).mockImplementation((async (...args: unknown[]) => {
+    const options = args[0] as { fetch?: typeof fetch } | undefined;
+    captured.current = options?.fetch;
+
+    return {
+      auth: {
+        signInWithPassword: mockSignIn,
+      },
+    } as never;
+  }) as never);
+
+  return captured;
+}
+
+function installAbortableTransportFetch() {
+  const transportFetch = vi.fn(
+    (_input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) =>
+      new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal;
+
+        if (!signal) {
+          reject(new Error("expected provider signal"));
+          return;
+        }
+
+        const rejectAbort = () =>
+          reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
+
+        if (signal.aborted) {
+          rejectAbort();
+          return;
+        }
+
+        signal.addEventListener("abort", rejectAbort, { once: true });
+      }),
+  );
+
+  vi.stubGlobal("fetch", transportFetch);
+  return transportFetch;
+}
+
+async function triggerOwnProviderTimeout(
+  providerFetch: typeof fetch | undefined,
+  timeoutController: AbortController,
+): Promise<void> {
+  if (!providerFetch) {
+    throw new Error("expected timeout-enabled Provider fetch");
+  }
+
+  const pending = providerFetch("https://provider.test/auth/v1/token");
+  timeoutController.abort(new DOMException("Provider timeout", "TimeoutError"));
+  await pending.catch(() => undefined);
+}
 
 describe("로그인 API Provider 결과 분류", () => {
   beforeEach(() => {
@@ -231,5 +293,102 @@ describe("로그인 API Provider 결과 분류", () => {
 
     expect(JSON.stringify(body)).not.toContain("sensitive provider detail");
     expect(JSON.stringify(body)).not.toContain("provider_internal_detail");
+  });
+
+  it("반환 wrapped Provider error라도 own timeout이면 internal_error + non_credential_failure로 처리한다", async () => {
+    const captured = captureProviderFetch();
+    const timeoutController = new AbortController();
+    const timeoutSpy = vi
+      .spyOn(AbortSignal, "timeout")
+      .mockReturnValue(timeoutController.signal);
+    installAbortableTransportFetch();
+
+    mockSignIn.mockImplementation(async () => {
+      await triggerOwnProviderTimeout(captured.current, timeoutController);
+
+      return {
+        data: null,
+        error: {
+          name: "AuthRetryableFetchError",
+          message: "fetch failed",
+          status: 0,
+        },
+      };
+    });
+
+    try {
+      const response = await POST(makeLoginRequest(DEFAULT_LOGIN_BODY));
+      const body = await response.json();
+
+      expect(response.status).toBe(500);
+      expect(body.code).toBe(AUTH_API_CODES.LOGIN_INTERNAL_ERROR);
+      expect(loginRateLimit.recordResult).toHaveBeenCalledTimes(1);
+      expect(loginRateLimit.recordResult).toHaveBeenCalledWith({
+        canonicalEmail: "user@example.com",
+        result: "non_credential_failure",
+      });
+      expect(loginRateLimit.recordResult).not.toHaveBeenCalledWith({
+        canonicalEmail: "user@example.com",
+        result: "credential_failure",
+      });
+    } finally {
+      timeoutSpy.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("Provider throw 경로도 own timeout이면 동일한 non_credential_failure 계약을 사용한다", async () => {
+    const captured = captureProviderFetch();
+    const timeoutController = new AbortController();
+    const timeoutSpy = vi
+      .spyOn(AbortSignal, "timeout")
+      .mockReturnValue(timeoutController.signal);
+    installAbortableTransportFetch();
+
+    mockSignIn.mockImplementation(async () => {
+      await triggerOwnProviderTimeout(captured.current, timeoutController);
+      throw new Error("provider transport failed after timeout");
+    });
+
+    try {
+      const response = await POST(makeLoginRequest(DEFAULT_LOGIN_BODY));
+      const body = await response.json();
+
+      expect(response.status).toBe(500);
+      expect(body.code).toBe(AUTH_API_CODES.LOGIN_INTERNAL_ERROR);
+      expect(loginRateLimit.recordResult).toHaveBeenCalledTimes(1);
+      expect(loginRateLimit.recordResult).toHaveBeenCalledWith({
+        canonicalEmail: "user@example.com",
+        result: "non_credential_failure",
+      });
+    } finally {
+      timeoutSpy.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("wrapped Provider error라도 own timeout이 아니면 기존 Provider error 계약을 유지한다", async () => {
+    const captured = captureProviderFetch();
+
+    mockSignIn.mockResolvedValue({
+      data: null,
+      error: {
+        name: "AuthRetryableFetchError",
+        message: "network failed",
+        status: 0,
+      },
+    });
+
+    const response = await POST(makeLoginRequest(DEFAULT_LOGIN_BODY));
+    const body = await response.json();
+
+    expect(captured.current).toBeTypeOf("function");
+    expect(response.status).toBe(500);
+    expect(body.code).toBe(AUTH_API_CODES.LOGIN_INTERNAL_ERROR);
+    expect(loginRateLimit.recordResult).toHaveBeenCalledTimes(1);
+    expect(loginRateLimit.recordResult).toHaveBeenCalledWith({
+      canonicalEmail: "user@example.com",
+      result: "non_credential_failure",
+    });
   });
 });

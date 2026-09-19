@@ -53,6 +53,12 @@ export const AUTH_LOG_REASONS = {
    */
   PROVIDER_RATE_LIMIT: "PROVIDER_RATE_LIMIT",
   /**
+   * Auth Provider 요청이 Woodpecker의 bounded-settle timeout에 의해 중단된 상태.
+   *
+   * 일반 Provider/System 오류와 구분해 기록하되 외부 응답 계약은 변경하지 않는다.
+   */
+  PROVIDER_TIMEOUT: "PROVIDER_TIMEOUT",
+  /**
    * 명확한 authentication rejection 또는 Provider Rate Limit이 아닌
    * Provider/System 오류.
    */

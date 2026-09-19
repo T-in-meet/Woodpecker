@@ -12,6 +12,7 @@ import {
   AUTH_LOG_REASONS,
   AuthLogReason,
 } from "../../constants/authLogReasons";
+import { AUTH_PROVIDER_TIMEOUT_MS } from "../../constants/authProviderTimeout";
 import { INVALID_OTP_ERROR_MESSAGE } from "../../constants/otp";
 import { VERIFY_OTP_PATH } from "../../constants/routes";
 import { applyMinimumActionDelay } from "../../lib/applyMinimumActionDelay";
@@ -21,6 +22,7 @@ import {
   logRequested,
   normalizeUnknownError,
 } from "../../lib/authLogger";
+import { createAuthProviderTimeoutContext } from "../../lib/authProviderTimeout";
 import {
   classifyAuthProviderError,
   isOtpValidityFailure,
@@ -210,8 +212,11 @@ export async function verifyOtpAction(
       return blockedState();
     }
 
-    // OTP Verify operation-specific attempt를 소비하기 전에 Supabase client 준비를 완료한다.
-    const supabase = await createClient();
+    // OTP Verify operation-specific attempt를 소비하기 전에 timeout-enabled Supabase client 준비를 완료한다.
+    const providerTimeout = createAuthProviderTimeoutContext({
+      timeoutMs: AUTH_PROVIDER_TIMEOUT_MS,
+    });
+    const supabase = await createClient({ fetch: providerTimeout.fetch });
 
     /**
      * Rate limit 검증
@@ -283,7 +288,9 @@ export async function verifyOtpAction(
         status: 500,
         provider: "password",
         result: "failure",
-        reasonCode: AUTH_LOG_REASONS.PROVIDER_ERROR,
+        reasonCode: providerTimeout.didTimeout()
+          ? AUTH_LOG_REASONS.PROVIDER_TIMEOUT
+          : AUTH_LOG_REASONS.PROVIDER_ERROR,
         maskedEmail,
         maskedIp,
         purpose,
@@ -302,6 +309,34 @@ export async function verifyOtpAction(
      * 반환값으로 전달될 수 있다.
      */
     if (error) {
+      /**
+       * Supabase Auth가 transport timeout을 wrapped error로 반환할 수 있으므로
+       * OTP validity/provider error shape보다 request-scoped timeout context를 먼저 본다.
+       */
+      if (providerTimeout.didTimeout()) {
+        otpVerifyRateLimit.recordResult({
+          canonicalEmail,
+          outcome: "provider_error",
+        });
+
+        const normalized = normalizeUnknownError(error);
+
+        logAuthError(AUTH_EVENTS.AUTH_VERIFY_OTP_FAILED, {
+          path: VERIFY_OTP_PATH,
+          method: "POST",
+          status: 500,
+          provider: "password",
+          result: "failure",
+          reasonCode: AUTH_LOG_REASONS.PROVIDER_TIMEOUT,
+          maskedEmail,
+          maskedIp,
+          purpose,
+          ...normalized,
+        });
+
+        return internalErrorState();
+      }
+
       if (isOtpValidityFailure(error)) {
         otpVerifyRateLimit.recordResult({
           canonicalEmail,

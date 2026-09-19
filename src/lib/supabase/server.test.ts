@@ -34,6 +34,9 @@ vi.mock("@supabase/ssr", async () => {
         _url: string,
         _key: string,
         opts: {
+          global?: {
+            fetch?: typeof fetch;
+          };
           cookies: {
             getAll: () => { name: string; value: string }[];
             setAll: (
@@ -45,6 +48,8 @@ vi.mock("@supabase/ssr", async () => {
     ),
   };
 });
+
+import { createServerClient } from "@supabase/ssr";
 
 import {
   clearSupabaseAuthSessionCookies,
@@ -92,6 +97,37 @@ describe("createClient (Server Action / Route Handler용)", () => {
 
     expect(mockSet).toHaveBeenCalledWith("a", "1", { path: "/" });
   });
+
+  it("custom fetch를 createServerClient global.fetch로 전달한다", async () => {
+    const customFetch = vi.fn() as unknown as typeof fetch;
+
+    await createClient({ fetch: customFetch });
+
+    const [, , options] = vi.mocked(createServerClient).mock.calls.at(-1)!;
+
+    expect(options).toEqual(
+      expect.objectContaining({
+        global: expect.objectContaining({
+          fetch: customFetch,
+        }),
+        cookies: expect.any(Object),
+      }),
+    );
+  });
+
+  it("무옵션 createClient는 custom global.fetch 없이 기존 cookie adapter 계약을 유지한다", async () => {
+    const adapter = (await createClient()) as unknown as CookieAdapter;
+
+    expect(adapter.getAll()).toEqual([{ name: "sb-token", value: "abc" }]);
+    const [, , options] = vi.mocked(createServerClient).mock.calls.at(-1)!;
+
+    expect(options).toEqual(
+      expect.objectContaining({
+        cookies: expect.any(Object),
+      }),
+    );
+    expect(options).not.toHaveProperty("global");
+  });
 });
 
 describe("createServerComponentClient (Server Component용)", () => {
@@ -131,6 +167,19 @@ describe("createServerComponentClient (Server Component용)", () => {
     adapter.setAll([{ name: "a", value: "1", options: { path: "/" } }]);
 
     expect(mockSet).toHaveBeenCalledWith("a", "1", { path: "/" });
+  });
+
+  it("createServerComponentClient는 custom fetch 주입 변경의 영향을 받지 않는다", async () => {
+    await createServerComponentClient();
+
+    const [, , options] = vi.mocked(createServerClient).mock.calls.at(-1)!;
+
+    expect(options).toEqual(
+      expect.objectContaining({
+        cookies: expect.any(Object),
+      }),
+    );
+    expect(options).not.toHaveProperty("global");
   });
 });
 

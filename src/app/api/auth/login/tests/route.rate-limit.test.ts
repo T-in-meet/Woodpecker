@@ -207,4 +207,42 @@ describe("로그인 API Rate Limit 처리", () => {
       result: "non_credential_failure",
     });
   });
+
+  it("timeout-enabled Provider client를 attempt consume 전에 준비한다", async () => {
+    await POST(makeLoginRequest(DEFAULT_LOGIN_BODY));
+
+    expect(createClient).toHaveBeenCalledWith({
+      fetch: expect.any(Function),
+    });
+
+    const createClientOrder =
+      vi.mocked(createClient).mock.invocationCallOrder[0]!;
+    const tryStartOrder = vi.mocked(loginRateLimit.tryStartAttempt).mock
+      .invocationCallOrder[0]!;
+    const providerOrder = mockSignIn.mock.invocationCallOrder[0]!;
+
+    expect(createClientOrder).toBeLessThan(tryStartOrder);
+    expect(tryStartOrder).toBeLessThan(providerOrder);
+  });
+
+  it("Local Rate Limit blocked에서는 Provider와 timeout fetch를 실제 시작하지 않는다", async () => {
+    const transportFetch = vi.fn();
+    vi.stubGlobal("fetch", transportFetch);
+    vi.mocked(loginRateLimit.tryStartAttempt).mockReturnValue({
+      allowed: false,
+      blockedBy: "email_attempt",
+    });
+
+    try {
+      await POST(makeLoginRequest(DEFAULT_LOGIN_BODY));
+
+      expect(createClient).toHaveBeenCalledWith({
+        fetch: expect.any(Function),
+      });
+      expect(mockSignIn).not.toHaveBeenCalled();
+      expect(transportFetch).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
