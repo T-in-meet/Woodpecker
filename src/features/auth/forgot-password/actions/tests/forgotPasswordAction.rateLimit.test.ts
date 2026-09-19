@@ -29,6 +29,7 @@ describe("forgotPasswordAction - OTP Issue rate limit", () => {
     ["cooldown", AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT],
     ["in_flight", AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT],
     ["email_success", AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG],
+    ["email_attempt", AUTH_LOG_REASONS.OTP_ISSUE_EMAIL_ATTEMPT_LIMIT],
   ] as const)(
     "%s Local Rate Limit 차단은 Provider를 시작하지 않고 Recovery success-like redirect한다",
     async (blockedBy, reasonCode) => {

@@ -135,6 +135,7 @@ export type ForgotPasswordActionTestOptions = {
   globalBlocked?: boolean;
   blockedBy?:
     | "email_success"
+    | "email_attempt"
     | "cooldown"
     | "ip_short"
     | "ip_long"

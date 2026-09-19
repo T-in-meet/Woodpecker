@@ -136,6 +136,24 @@ describe("Signup Route OTP Issue Rate Limit 연결", () => {
     expect(issueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
   });
 
+  it("Email attempt precheck 차단은 account lookup 전에 429로 종료하고 downstream에 진입하지 않는다", async () => {
+    otpIssueRateLimitMock.precheckIssue.mockReturnValueOnce({
+      allowed: false,
+      blockedBy: "email_attempt",
+    });
+
+    const response = await POST(makeRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(429);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
+    expect(getUserByEmail).not.toHaveBeenCalled();
+    expect(createOtpIssueClientMock).not.toHaveBeenCalled();
+    expect(otpIssueRateLimitMock.tryStartIssue).not.toHaveBeenCalled();
+    expect(issueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
+    expect(ensureUserAgreementMock).not.toHaveBeenCalled();
+  });
+
   it("Local Rate Limit 차단 시 Provider operation을 시작하지 않고 429를 반환한다", async () => {
     otpIssueRateLimitMock.tryStartIssue.mockReturnValueOnce({
       allowed: false,

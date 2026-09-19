@@ -48,7 +48,8 @@ export type ResendEmailActionState =
         | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT
         | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP_LONG
         | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT
-        | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG;
+        | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG
+        | typeof AUTH_LOG_REASONS.OTP_ISSUE_EMAIL_ATTEMPT_LIMIT;
     }
   /**
    * 인증 이메일 전송 실패 상태

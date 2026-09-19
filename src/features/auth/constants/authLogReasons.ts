@@ -7,6 +7,11 @@ export const AUTH_LOG_REASONS = {
   RATE_LIMIT_EMAIL_SHORT: "RATE_LIMIT_EMAIL_SHORT",
   RATE_LIMIT_EMAIL_LONG: "RATE_LIMIT_EMAIL_LONG",
   /**
+   * OTP Issue Provider-start Email attempt 제한.
+   * successful Email quota와 별도 운영 원인으로 기록한다.
+   */
+  OTP_ISSUE_EMAIL_ATTEMPT_LIMIT: "OTP_ISSUE_EMAIL_ATTEMPT_LIMIT",
+  /**
    * Auth Global shared IP request 제한.
    *
    * Login / Signup / Forgot Password / Resend / Verify OTP가 공유하는

@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
+import type { OtpPurpose } from "@/features/auth/constants/otp";
 import {
   OTP_ISSUE_COOLDOWN_MS,
+  OTP_ISSUE_EMAIL_ATTEMPT_LIMIT,
+  OTP_ISSUE_EMAIL_ATTEMPT_WINDOW_MS,
   OTP_ISSUE_EMAIL_SUCCESS_LIMIT,
   OTP_ISSUE_EMAIL_SUCCESS_WINDOW_MS,
   OTP_ISSUE_IP_LONG_LIMIT,
@@ -15,6 +18,52 @@ import { createOtpIssueRateLimit } from "./otpIssueRateLimit";
 const BASE_NOW = 1_000_000;
 const EMAIL = "user@example.com";
 const IP = "203.0.113.10";
+
+type ConsumeAttemptsInput = {
+  count: number;
+  purpose?: OtpPurpose;
+  canonicalEmail?: string;
+  ip?: string;
+  baseNow?: number;
+};
+
+function consumeAttempts({
+  count,
+  purpose = "signup",
+  canonicalEmail = EMAIL,
+  ip = IP,
+  baseNow = BASE_NOW,
+}: ConsumeAttemptsInput) {
+  const store = createInMemoryAuthRateLimitStore();
+  const rateLimit = createOtpIssueRateLimit(store);
+
+  for (let index = 0; index < count; index += 1) {
+    const now = baseNow + index * OTP_ISSUE_COOLDOWN_MS;
+
+    expect(
+      rateLimit.tryStartIssue({
+        purpose,
+        canonicalEmail,
+        ip,
+        now,
+      }),
+    ).toEqual({ allowed: true });
+
+    rateLimit.releaseIssue({
+      purpose,
+      canonicalEmail,
+      now,
+    });
+  }
+
+  return {
+    rateLimit,
+    baseNow,
+    purpose,
+    canonicalEmail,
+    ip,
+  };
+}
 
 describe("otpIssueRateLimit", () => {
   it("Provider 시작 시 cooldown을 소비하고 정확히 15초 후 다시 허용한다", () => {
@@ -62,13 +111,8 @@ describe("otpIssueRateLimit", () => {
     const store = createInMemoryAuthRateLimitStore();
     const rateLimit = createOtpIssueRateLimit(store);
 
-    for (
-      let index = 0;
-      index <= OTP_ISSUE_EMAIL_SUCCESS_LIMIT;
-      index += 1
-    ) {
-      const now =
-        BASE_NOW + index * (OTP_ISSUE_COOLDOWN_MS + 1);
+    for (let index = 0; index <= OTP_ISSUE_EMAIL_SUCCESS_LIMIT; index += 1) {
+      const now = BASE_NOW + index * (OTP_ISSUE_COOLDOWN_MS + 1);
 
       expect(
         rateLimit.tryStartIssue({
@@ -92,13 +136,8 @@ describe("otpIssueRateLimit", () => {
     const store = createInMemoryAuthRateLimitStore();
     const rateLimit = createOtpIssueRateLimit(store);
 
-    for (
-      let index = 0;
-      index < OTP_ISSUE_EMAIL_SUCCESS_LIMIT;
-      index += 1
-    ) {
-      const now =
-        BASE_NOW + index * (OTP_ISSUE_COOLDOWN_MS + 1);
+    for (let index = 0; index < OTP_ISSUE_EMAIL_SUCCESS_LIMIT; index += 1) {
+      const now = BASE_NOW + index * (OTP_ISSUE_COOLDOWN_MS + 1);
 
       expect(
         rateLimit.tryStartIssue({
@@ -123,8 +162,7 @@ describe("otpIssueRateLimit", () => {
     }
 
     const blockedAt =
-      BASE_NOW +
-      OTP_ISSUE_EMAIL_SUCCESS_LIMIT * (OTP_ISSUE_COOLDOWN_MS + 1);
+      BASE_NOW + OTP_ISSUE_EMAIL_SUCCESS_LIMIT * (OTP_ISSUE_COOLDOWN_MS + 1);
 
     expect(
       rateLimit.tryStartIssue({
@@ -249,11 +287,7 @@ describe("otpIssueRateLimit", () => {
     const afterCooldown = BASE_NOW + OTP_ISSUE_COOLDOWN_MS;
 
     // IP short quota를 총 9회까지 채운다.
-    for (
-      let index = 1;
-      index < OTP_ISSUE_IP_SHORT_LIMIT - 1;
-      index += 1
-    ) {
+    for (let index = 1; index < OTP_ISSUE_IP_SHORT_LIMIT - 1; index += 1) {
       const canonicalEmail = `other-${index}@example.com`;
 
       expect(
@@ -306,13 +340,8 @@ describe("otpIssueRateLimit", () => {
     const store = createInMemoryAuthRateLimitStore();
     const rateLimit = createOtpIssueRateLimit(store);
 
-    for (
-      let index = 0;
-      index < OTP_ISSUE_IP_SHORT_LIMIT;
-      index += 1
-    ) {
-      const purpose =
-        index % 2 === 0 ? "signup" : "reset-password";
+    for (let index = 0; index < OTP_ISSUE_IP_SHORT_LIMIT; index += 1) {
+      const purpose = index % 2 === 0 ? "signup" : "reset-password";
       const canonicalEmail = `user-${index}@example.com`;
 
       expect(
@@ -360,13 +389,11 @@ describe("otpIssueRateLimit", () => {
     const store = createInMemoryAuthRateLimitStore();
     const rateLimit = createOtpIssueRateLimit(store);
 
-    const interval =
-      OTP_ISSUE_IP_LONG_WINDOW_MS / OTP_ISSUE_IP_LONG_LIMIT;
+    const interval = OTP_ISSUE_IP_LONG_WINDOW_MS / OTP_ISSUE_IP_LONG_LIMIT;
 
     for (let index = 0; index < OTP_ISSUE_IP_LONG_LIMIT; index += 1) {
       const now = BASE_NOW + index * interval;
-      const purpose =
-        index % 2 === 0 ? "signup" : "reset-password";
+      const purpose = index % 2 === 0 ? "signup" : "reset-password";
       const canonicalEmail = `long-${index}@example.com`;
 
       expect(
@@ -406,5 +433,373 @@ describe("otpIssueRateLimit", () => {
         now: BASE_NOW + OTP_ISSUE_IP_LONG_WINDOW_MS + 1,
       }),
     ).toEqual({ allowed: true });
+  });
+
+  it("failure-only Provider-start를 10회 허용하고 11번째를 email_attempt로 차단한다", () => {
+    const { rateLimit, baseNow, purpose, canonicalEmail, ip } = consumeAttempts(
+      {
+        count: OTP_ISSUE_EMAIL_ATTEMPT_LIMIT,
+      },
+    );
+
+    const now = baseNow + OTP_ISSUE_EMAIL_ATTEMPT_LIMIT * OTP_ISSUE_COOLDOWN_MS;
+
+    expect(
+      rateLimit.tryStartIssue({
+        purpose,
+        canonicalEmail,
+        ip,
+        now,
+      }),
+    ).toEqual({
+      allowed: false,
+      blockedBy: "email_attempt",
+    });
+  });
+
+  it("정확히 15분에는 oldest attempt가 유효하고 +1ms에서 만료된다", () => {
+    const { rateLimit, baseNow, purpose, canonicalEmail, ip } = consumeAttempts(
+      {
+        count: OTP_ISSUE_EMAIL_ATTEMPT_LIMIT,
+      },
+    );
+
+    expect(
+      rateLimit.tryStartIssue({
+        purpose,
+        canonicalEmail,
+        ip,
+        now: baseNow + OTP_ISSUE_EMAIL_ATTEMPT_WINDOW_MS,
+      }),
+    ).toEqual({
+      allowed: false,
+      blockedBy: "email_attempt",
+    });
+
+    expect(
+      rateLimit.tryStartIssue({
+        purpose,
+        canonicalEmail,
+        ip,
+        now: baseNow + OTP_ISSUE_EMAIL_ATTEMPT_WINDOW_MS + 1,
+      }),
+    ).toEqual({ allowed: true });
+  });
+
+  it("attempt quota는 purpose별로 분리한다", () => {
+    const { rateLimit, baseNow, canonicalEmail, ip } = consumeAttempts({
+      count: OTP_ISSUE_EMAIL_ATTEMPT_LIMIT,
+      purpose: "signup",
+    });
+
+    const now = baseNow + OTP_ISSUE_EMAIL_ATTEMPT_LIMIT * OTP_ISSUE_COOLDOWN_MS;
+
+    expect(
+      rateLimit.tryStartIssue({
+        purpose: "signup",
+        canonicalEmail,
+        ip,
+        now,
+      }),
+    ).toEqual({
+      allowed: false,
+      blockedBy: "email_attempt",
+    });
+
+    expect(
+      rateLimit.tryStartIssue({
+        purpose: "reset-password",
+        canonicalEmail,
+        ip,
+        now,
+      }),
+    ).toEqual({ allowed: true });
+  });
+
+  it("precheckIssue는 attempt quota를 읽기만 하고 precheckIpIssue는 IP-only를 유지한다", () => {
+    const { rateLimit, baseNow, purpose, canonicalEmail, ip } = consumeAttempts(
+      {
+        count: OTP_ISSUE_EMAIL_ATTEMPT_LIMIT,
+      },
+    );
+
+    const now = baseNow + OTP_ISSUE_EMAIL_ATTEMPT_LIMIT * OTP_ISSUE_COOLDOWN_MS;
+
+    expect(
+      rateLimit.precheckIssue({
+        purpose,
+        canonicalEmail,
+        ip,
+        now,
+      }),
+    ).toEqual({
+      allowed: false,
+      blockedBy: "email_attempt",
+    });
+
+    expect(rateLimit.precheckIpIssue({ ip, now })).toEqual({ allowed: true });
+
+    // read-only precheck가 attempt를 추가로 소비하지 않았으므로
+    // 원래 window가 만료되는 즉시 다시 시작할 수 있다.
+    expect(
+      rateLimit.tryStartIssue({
+        purpose,
+        canonicalEmail,
+        ip,
+        now: baseNow + OTP_ISSUE_EMAIL_ATTEMPT_WINDOW_MS + 1,
+      }),
+    ).toEqual({ allowed: true });
+  });
+
+  it("releaseIssue는 in-flight만 해제하고 attempt를 rollback하지 않는다", () => {
+    const store = createInMemoryAuthRateLimitStore();
+    const rateLimit = createOtpIssueRateLimit(store);
+
+    for (let index = 0; index < OTP_ISSUE_EMAIL_ATTEMPT_LIMIT; index += 1) {
+      const now = BASE_NOW + index * OTP_ISSUE_COOLDOWN_MS;
+
+      expect(
+        rateLimit.tryStartIssue({
+          purpose: "signup",
+          canonicalEmail: EMAIL,
+          ip: IP,
+          now,
+        }),
+      ).toEqual({ allowed: true });
+
+      rateLimit.releaseIssue({
+        purpose: "signup",
+        canonicalEmail: EMAIL,
+        now,
+      });
+    }
+
+    expect(
+      rateLimit.tryStartIssue({
+        purpose: "signup",
+        canonicalEmail: EMAIL,
+        ip: IP,
+        now: BASE_NOW + OTP_ISSUE_EMAIL_ATTEMPT_LIMIT * OTP_ISSUE_COOLDOWN_MS,
+      }),
+    ).toEqual({
+      allowed: false,
+      blockedBy: "email_attempt",
+    });
+  });
+
+  it("기존 blocker로 차단된 요청은 Email attempt를 부분 소비하지 않는다", () => {
+    const store = createInMemoryAuthRateLimitStore();
+    const rateLimit = createOtpIssueRateLimit(store);
+
+    expect(
+      rateLimit.tryStartIssue({
+        purpose: "signup",
+        canonicalEmail: EMAIL,
+        ip: IP,
+        now: BASE_NOW,
+      }),
+    ).toEqual({ allowed: true });
+
+    // 첫 Issue를 release하지 않아 in-flight를 유지한다.
+    // cooldown이 끝난 시점의 차단 요청은 attempt를 소비하면 안 된다.
+    expect(
+      rateLimit.tryStartIssue({
+        purpose: "signup",
+        canonicalEmail: EMAIL,
+        ip: IP,
+        now: BASE_NOW + OTP_ISSUE_COOLDOWN_MS,
+      }),
+    ).toEqual({
+      allowed: false,
+      blockedBy: "in_flight",
+    });
+
+    rateLimit.releaseIssue({
+      purpose: "signup",
+      canonicalEmail: EMAIL,
+      now: BASE_NOW + OTP_ISSUE_COOLDOWN_MS,
+    });
+
+    // 첫 allowed start 외에는 attempt가 소비되지 않았으므로 남은 9회가 모두 허용된다.
+    for (let index = 1; index < OTP_ISSUE_EMAIL_ATTEMPT_LIMIT; index += 1) {
+      const now = BASE_NOW + (index + 1) * OTP_ISSUE_COOLDOWN_MS;
+
+      expect(
+        rateLimit.tryStartIssue({
+          purpose: "signup",
+          canonicalEmail: EMAIL,
+          ip: IP,
+          now,
+        }),
+      ).toEqual({ allowed: true });
+
+      rateLimit.releaseIssue({
+        purpose: "signup",
+        canonicalEmail: EMAIL,
+        now,
+      });
+    }
+  });
+
+  it("email_attempt 차단은 shared IP attempt를 부분 소비하지 않는다", () => {
+    const store = createInMemoryAuthRateLimitStore();
+    const rateLimit = createOtpIssueRateLimit(store);
+    const targetEmail = "target@example.com";
+
+    // target Email attempt quota를 서로 다른 IP로 소진하여 shared IP quota와 분리한다.
+    for (let index = 0; index < OTP_ISSUE_EMAIL_ATTEMPT_LIMIT; index += 1) {
+      const now = BASE_NOW + index * OTP_ISSUE_COOLDOWN_MS;
+      const ip = `203.0.113.${index + 1}`;
+
+      expect(
+        rateLimit.tryStartIssue({
+          purpose: "signup",
+          canonicalEmail: targetEmail,
+          ip,
+          now,
+        }),
+      ).toEqual({ allowed: true });
+
+      rateLimit.releaseIssue({
+        purpose: "signup",
+        canonicalEmail: targetEmail,
+        now,
+      });
+    }
+
+    const sharedIp = "198.51.100.50";
+    const blockedAt =
+      BASE_NOW + OTP_ISSUE_EMAIL_ATTEMPT_LIMIT * OTP_ISSUE_COOLDOWN_MS;
+
+    // 같은 shared IP를 다른 Email들로 short quota 직전까지 채운다.
+    for (let index = 0; index < 9; index += 1) {
+      const email = `ip-fill-${index}@example.com`;
+
+      expect(
+        rateLimit.tryStartIssue({
+          purpose: "signup",
+          canonicalEmail: email,
+          ip: sharedIp,
+          now: blockedAt,
+        }),
+      ).toEqual({ allowed: true });
+
+      rateLimit.releaseIssue({
+        purpose: "signup",
+        canonicalEmail: email,
+        now: blockedAt,
+      });
+    }
+
+    expect(
+      rateLimit.tryStartIssue({
+        purpose: "signup",
+        canonicalEmail: targetEmail,
+        ip: sharedIp,
+        now: blockedAt,
+      }),
+    ).toEqual({
+      allowed: false,
+      blockedBy: "email_attempt",
+    });
+
+    // email_attempt 차단이 IP를 소비하지 않았다면 마지막 10번째 IP attempt가 허용된다.
+    expect(
+      rateLimit.tryStartIssue({
+        purpose: "signup",
+        canonicalEmail: "last-ip-slot@example.com",
+        ip: sharedIp,
+        now: blockedAt,
+      }),
+    ).toEqual({ allowed: true });
+  });
+
+  it("email_success와 email_attempt가 동시에 소진되면 email_success가 우선한다", () => {
+    const store = createInMemoryAuthRateLimitStore();
+    const rateLimit = createOtpIssueRateLimit(store);
+
+    for (let index = 0; index < OTP_ISSUE_EMAIL_ATTEMPT_LIMIT; index += 1) {
+      const now = BASE_NOW + index * OTP_ISSUE_COOLDOWN_MS;
+      const ip = `198.51.100.${index + 1}`;
+
+      expect(
+        rateLimit.tryStartIssue({
+          purpose: "signup",
+          canonicalEmail: EMAIL,
+          ip,
+          now,
+        }),
+      ).toEqual({ allowed: true });
+
+      rateLimit.releaseIssue({
+        purpose: "signup",
+        canonicalEmail: EMAIL,
+        now,
+      });
+    }
+
+    // priority 판정만 고정하기 위해 successful quota state를 별도로 준비한다.
+    for (let index = 0; index < OTP_ISSUE_EMAIL_SUCCESS_LIMIT; index += 1) {
+      rateLimit.recordSuccessfulIssue({
+        purpose: "signup",
+        canonicalEmail: EMAIL,
+        now: BASE_NOW + index * OTP_ISSUE_COOLDOWN_MS,
+      });
+    }
+
+    expect(
+      rateLimit.tryStartIssue({
+        purpose: "signup",
+        canonicalEmail: EMAIL,
+        ip: "203.0.113.250",
+        now: BASE_NOW + OTP_ISSUE_EMAIL_ATTEMPT_LIMIT * OTP_ISSUE_COOLDOWN_MS,
+      }),
+    ).toEqual({
+      allowed: false,
+      blockedBy: "email_success",
+    });
+  });
+
+  it("email_attempt와 cooldown/in-flight가 동시에 활성화되면 email_attempt가 우선한다", () => {
+    const store = createInMemoryAuthRateLimitStore();
+    const rateLimit = createOtpIssueRateLimit(store);
+
+    for (let index = 0; index < OTP_ISSUE_EMAIL_ATTEMPT_LIMIT; index += 1) {
+      const now = BASE_NOW + index * OTP_ISSUE_COOLDOWN_MS;
+      const ip = `192.0.2.${index + 1}`;
+
+      expect(
+        rateLimit.tryStartIssue({
+          purpose: "signup",
+          canonicalEmail: EMAIL,
+          ip,
+          now,
+        }),
+      ).toEqual({ allowed: true });
+
+      if (index < OTP_ISSUE_EMAIL_ATTEMPT_LIMIT - 1) {
+        rateLimit.releaseIssue({
+          purpose: "signup",
+          canonicalEmail: EMAIL,
+          now,
+        });
+      }
+    }
+
+    const lastStartedAt =
+      BASE_NOW + (OTP_ISSUE_EMAIL_ATTEMPT_LIMIT - 1) * OTP_ISSUE_COOLDOWN_MS;
+
+    // 마지막 start의 cooldown과 in-flight가 모두 남아 있지만 attempt가 더 높은 우선순위다.
+    expect(
+      rateLimit.tryStartIssue({
+        purpose: "signup",
+        canonicalEmail: EMAIL,
+        ip: "192.0.2.250",
+        now: lastStartedAt + 1,
+      }),
+    ).toEqual({
+      allowed: false,
+      blockedBy: "email_attempt",
+    });
   });
 });

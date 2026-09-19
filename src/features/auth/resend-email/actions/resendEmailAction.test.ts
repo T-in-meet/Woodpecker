@@ -405,6 +405,59 @@ describe("resendEmailAction", () => {
     expect(mockRedirect).toHaveBeenCalledTimes(1);
   });
 
+  it("signup existing account의 Email attempt 차단은 Provider/agreement side effect 없이 success-like redirect한다", async () => {
+    mockGetUserByEmail.mockResolvedValue({
+      id: "user-id",
+      email: "user@example.com",
+      email_confirmed_at: null,
+      auth_providers: ["email"],
+    });
+    mockTryStartIssue.mockReturnValue({
+      allowed: false,
+      blockedBy: "email_attempt",
+    });
+
+    await expect(callAction({ purpose: "signup" })).rejects.toThrow(
+      "NEXT_REDIRECT:",
+    );
+
+    expect(mockIssueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
+    expect(mockEnsureUserAgreement).not.toHaveBeenCalled();
+    expect(mockRecordSuccessfulIssue).not.toHaveBeenCalled();
+    expect(mockReleaseIssue).not.toHaveBeenCalled();
+    expect(mockLogAuthEvent).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_RESEND_EMAIL_RATE_LIMITED,
+      expect.objectContaining({
+        reasonCode: AUTH_LOG_REASONS.OTP_ISSUE_EMAIL_ATTEMPT_LIMIT,
+        rateLimitSource: "otp_issue",
+      }),
+    );
+    expect(mockRedirect).toHaveBeenCalledTimes(1);
+  });
+
+  it("reset-password Email attempt 차단은 Provider를 시작하지 않고 success-like redirect한다", async () => {
+    mockTryStartIssue.mockReturnValue({
+      allowed: false,
+      blockedBy: "email_attempt",
+    });
+
+    await expect(
+      callAction({ purpose: "reset-password", redirect: "/reset-password" }),
+    ).rejects.toThrow("NEXT_REDIRECT:");
+
+    expect(mockIssueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
+    expect(mockRecordSuccessfulIssue).not.toHaveBeenCalled();
+    expect(mockReleaseIssue).not.toHaveBeenCalled();
+    expect(mockLogAuthEvent).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_RESEND_EMAIL_RATE_LIMITED,
+      expect.objectContaining({
+        reasonCode: AUTH_LOG_REASONS.OTP_ISSUE_EMAIL_ATTEMPT_LIMIT,
+        rateLimitSource: "otp_issue",
+      }),
+    );
+    expect(mockRedirect).toHaveBeenCalledTimes(1);
+  });
+
   it("reset-password Local Rate Limit 차단은 Provider를 시작하지 않고 success-like redirect한다", async () => {
     mockTryStartIssue.mockReturnValue({
       allowed: false,

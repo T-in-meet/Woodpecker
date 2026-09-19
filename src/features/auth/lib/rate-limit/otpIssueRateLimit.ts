@@ -1,6 +1,8 @@
 import type { OtpPurpose } from "@/features/auth/constants/otp";
 import {
   OTP_ISSUE_COOLDOWN_MS,
+  OTP_ISSUE_EMAIL_ATTEMPT_LIMIT,
+  OTP_ISSUE_EMAIL_ATTEMPT_WINDOW_MS,
   OTP_ISSUE_EMAIL_SUCCESS_LIMIT,
   OTP_ISSUE_EMAIL_SUCCESS_WINDOW_MS,
   OTP_ISSUE_IP_LONG_LIMIT,
@@ -29,6 +31,7 @@ const OTP_ISSUE_IP_ATTEMPT_KEY_PREFIX = "auth:otp-issue:ip:attempt:";
  */
 export type OtpIssueRateLimitBlockedBy =
   | "email_success"
+  | "email_attempt"
   | "cooldown"
   | "ip_short"
   | "ip_long"
@@ -108,6 +111,16 @@ type OtpIssueEvaluation = {
   result: OtpIssueRateLimitStartResult;
   prunedIpLongWindow: number[];
 };
+
+/**
+ * OTP Issue Provider-start Email attempt quota key를 생성한다.
+ */
+function getOtpIssueEmailAttemptKey(
+  purpose: OtpPurpose,
+  canonicalEmail: string,
+): string {
+  return `auth:otp-issue:${purpose}:email:attempt:${canonicalEmail}`;
+}
 
 /**
  * OTP Issue successful Email quota key를 생성한다.
@@ -220,6 +233,7 @@ function evaluateOtpIssueIpState(
  */
 function evaluateOtpIssueState(input: {
   emailSuccessState: number[];
+  emailAttemptState: number[];
   ipState: number[];
   lastStartedAt: number | undefined;
   hasInFlight: boolean;
@@ -238,6 +252,25 @@ function evaluateOtpIssueState(input: {
       result: {
         allowed: false,
         blockedBy: "email_success",
+      },
+      prunedIpLongWindow: evaluateOtpIssueIpState(input.ipState, input.now)
+        .prunedLongWindow,
+    };
+  }
+
+  const emailAttemptEvaluation = evaluateSlidingWindow(
+    input.emailAttemptState,
+    OTP_ISSUE_EMAIL_ATTEMPT_LIMIT,
+    OTP_ISSUE_EMAIL_ATTEMPT_WINDOW_MS,
+    input.now,
+    { appendOnAllow: false },
+  );
+
+  if (!emailAttemptEvaluation.allowed) {
+    return {
+      result: {
+        allowed: false,
+        blockedBy: "email_attempt",
       },
       prunedIpLongWindow: evaluateOtpIssueIpState(input.ipState, input.now)
         .prunedLongWindow,
@@ -307,6 +340,10 @@ export function createOtpIssueRateLimit(store: AuthRateLimitStore) {
         input.purpose,
         input.canonicalEmail,
       );
+      const emailAttemptKey = getOtpIssueEmailAttemptKey(
+        input.purpose,
+        input.canonicalEmail,
+      );
       const cooldownKey = getOtpIssueCooldownKey(
         input.purpose,
         input.canonicalEmail,
@@ -319,6 +356,7 @@ export function createOtpIssueRateLimit(store: AuthRateLimitStore) {
 
       return evaluateOtpIssueState({
         emailSuccessState: store.getTimestampWindow(emailSuccessKey) ?? [],
+        emailAttemptState: store.getTimestampWindow(emailAttemptKey) ?? [],
         ipState: store.getTimestampWindow(ipKey) ?? [],
         lastStartedAt: store.getCooldown(cooldownKey),
         hasInFlight: store.hasInFlight(inFlightKey),
@@ -344,6 +382,7 @@ export function createOtpIssueRateLimit(store: AuthRateLimitStore) {
      * 실제 OTP Issue Provider operation을 시작할 수 있는지 확인한다.
      *
      * 모든 조건을 통과한 경우에만 같은 atomic section에서:
+     * - Provider-start Email attempt 소비
      * - in-flight 획득
      * - cooldown 소비
      * - IP attempt 소비
@@ -363,6 +402,10 @@ export function createOtpIssueRateLimit(store: AuthRateLimitStore) {
         input.purpose,
         input.canonicalEmail,
       );
+      const emailAttemptKey = getOtpIssueEmailAttemptKey(
+        input.purpose,
+        input.canonicalEmail,
+      );
       const cooldownKey = getOtpIssueCooldownKey(
         input.purpose,
         input.canonicalEmail,
@@ -376,6 +419,7 @@ export function createOtpIssueRateLimit(store: AuthRateLimitStore) {
       return store.runAtomic(() => {
         const evaluation = evaluateOtpIssueState({
           emailSuccessState: store.getTimestampWindow(emailSuccessKey) ?? [],
+          emailAttemptState: store.getTimestampWindow(emailAttemptKey) ?? [],
           ipState: store.getTimestampWindow(ipKey) ?? [],
           lastStartedAt: store.getCooldown(cooldownKey),
           hasInFlight: store.hasInFlight(inFlightKey),
@@ -389,6 +433,17 @@ export function createOtpIssueRateLimit(store: AuthRateLimitStore) {
         // 모든 check가 통과한 뒤에만 상태를 함께 변경한다.
         // 이 atomic section이 끝난 직후 호출부는 다른 await/I/O 없이
         // 실제 OTP Issue Provider operation을 시작해야 한다.
+        const emailAttemptState =
+          store.getTimestampWindow(emailAttemptKey) ?? [];
+        const prunedEmailAttempts = pruneExpired(
+          emailAttemptState,
+          OTP_ISSUE_EMAIL_ATTEMPT_WINDOW_MS,
+          now,
+        );
+        store.setTimestampWindow(emailAttemptKey, [
+          ...prunedEmailAttempts,
+          now,
+        ]);
         store.addInFlight(inFlightKey);
         store.setCooldown(cooldownKey, now);
 

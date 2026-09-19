@@ -42,7 +42,8 @@ function mapOtpIssueBlockedByToReason(
   | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT
   | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP_LONG
   | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT
-  | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG {
+  | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG
+  | typeof AUTH_LOG_REASONS.OTP_ISSUE_EMAIL_ATTEMPT_LIMIT {
   switch (blockedBy) {
     case "ip_short":
       return AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT;
@@ -50,6 +51,8 @@ function mapOtpIssueBlockedByToReason(
       return AUTH_LOG_REASONS.RATE_LIMIT_IP_LONG;
     case "email_success":
       return AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG;
+    case "email_attempt":
+      return AUTH_LOG_REASONS.OTP_ISSUE_EMAIL_ATTEMPT_LIMIT;
     case "cooldown":
     case "in_flight":
       return AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT;

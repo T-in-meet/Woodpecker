@@ -56,6 +56,16 @@ export const OTP_ISSUE_EMAIL_SUCCESS_LIMIT = 6;
 export const OTP_ISSUE_EMAIL_SUCCESS_WINDOW_MS = 15 * 60 * 1000;
 
 /**
+ * OTP Issue Email Provider-start attempt quota.
+ *
+ * signup/reset-password purpose별 canonicalEmail 상태를 독립적으로 관리한다.
+ * 실제 Provider operation을 시작하도록 허용된 요청을 성공/실패와 관계없이
+ * rolling/sliding 15분 window에서 최대 10회까지 허용한다.
+ */
+export const OTP_ISSUE_EMAIL_ATTEMPT_LIMIT = 10;
+export const OTP_ISSUE_EMAIL_ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
+
+/**
  * OTP Issue attempt cooldown.
  *
  * purpose + canonicalEmail 기준으로 마지막 Provider operation 시작 시점부터

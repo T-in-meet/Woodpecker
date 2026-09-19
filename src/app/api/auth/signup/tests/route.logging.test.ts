@@ -264,6 +264,24 @@ describe("signup 라우트 인증 로깅", () => {
     expect(terminalEvents()).toEqual([AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED]);
   });
 
+  it("final Email attempt 차단은 전용 Provider-start attempt reason으로 기록한다", async () => {
+    otpIssueRateLimitMock.tryStartIssue.mockReturnValueOnce({
+      allowed: false,
+      blockedBy: "email_attempt",
+    });
+
+    await POST(makeRequest());
+
+    expect(vi.mocked(logAuthEvent)).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED,
+      expect.objectContaining({
+        reasonCode: AUTH_LOG_REASONS.OTP_ISSUE_EMAIL_ATTEMPT_LIMIT,
+      }),
+    );
+    expect(issueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
+    expect(terminalEvents()).toEqual([AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED]);
+  });
+
   it("successful Email quota 차단은 기존 Email long reason으로 기록한다", async () => {
     otpIssueRateLimitMock.tryStartIssue.mockReturnValueOnce({
       allowed: false,
