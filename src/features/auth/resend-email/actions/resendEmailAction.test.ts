@@ -6,7 +6,10 @@ import { AUTH_LOG_REASONS } from "@/features/auth/constants/authLogReasons";
 import { issueOtpAndSendEmailWithResult } from "@/features/auth/email/issueOtpAndSendEmail";
 import { applyMinimumActionDelay } from "@/features/auth/lib/applyMinimumActionDelay";
 import { logAuthError, logAuthEvent } from "@/features/auth/lib/authLogger";
-import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
+import {
+  getUserByEmail,
+  GetUserByEmailError,
+} from "@/features/auth/lib/getUserByEmail";
 import { createOtpIssueClient } from "@/features/auth/lib/issueOtp";
 import { authGlobalRequestRateLimit } from "@/features/auth/lib/rate-limit/authGlobalRequestRateLimit";
 import type { OtpIssueIpPrecheckResult } from "@/features/auth/lib/rate-limit/otpIssueRateLimit";
@@ -72,9 +75,16 @@ vi.mock("@/features/auth/lib/rate-limit/trustedAuthClientIp", () => ({
   getTrustedAuthServerActionClientIp: vi.fn(),
 }));
 
-vi.mock("@/features/auth/lib/getUserByEmail", () => ({
-  getUserByEmail: vi.fn(),
-}));
+vi.mock("@/features/auth/lib/getUserByEmail", async () => {
+  const actual = await vi.importActual<
+    typeof import("@/features/auth/lib/getUserByEmail")
+  >("@/features/auth/lib/getUserByEmail");
+
+  return {
+    ...actual,
+    getUserByEmail: vi.fn(),
+  };
+});
 
 vi.mock("@/features/auth/lib/userAgreements", () => ({
   recordCurrentLegalAcceptances: vi.fn(),
@@ -331,8 +341,13 @@ describe("resendEmailAction", () => {
     expect(requestLimitOrder!).toBeLessThan(lookupOrder!);
   });
 
-  it("Signup account lookup 자체가 실패하면 pre-account internal_error를 유지한다", async () => {
-    mockGetUserByEmail.mockRejectedValue(new Error("account lookup failed"));
+  it("Signup profiles lookup failure는 pre-account internal_error를 유지한다", async () => {
+    mockGetUserByEmail.mockRejectedValue(
+      new GetUserByEmailError(
+        "profile_lookup",
+        new Error("profiles lookup failed"),
+      ),
+    );
 
     const result = await callAction({ purpose: "signup" });
 
@@ -355,6 +370,36 @@ describe("resendEmailAction", () => {
     expect(mockRecordSuccessfulIssue).not.toHaveBeenCalled();
     expect(mockReleaseIssue).not.toHaveBeenCalled();
     expect(mockRedirect).not.toHaveBeenCalled();
+  });
+
+  it("Signup Auth Admin lookup failure는 내부 오류를 기록하되 success-like redirect한다", async () => {
+    mockGetUserByEmail.mockRejectedValue(
+      new GetUserByEmailError(
+        "auth_user_lookup",
+        new Error("auth user lookup failed"),
+      ),
+    );
+
+    await expect(callAction({ purpose: "signup" })).rejects.toThrow(
+      "NEXT_REDIRECT:",
+    );
+
+    expect(mockGetUserByEmail).toHaveBeenCalledWith("user@example.com");
+    expect(mockLogAuthError).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_RESEND_EMAIL_FAILED,
+      expect.objectContaining({
+        reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+        errorMessage: "auth user lookup failed",
+        errorName: "Error",
+      }),
+    );
+    expect(mockCreateOtpIssueClient).not.toHaveBeenCalled();
+    expect(mockTryStartIssue).not.toHaveBeenCalled();
+    expect(mockIssueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
+    expect(mockRecordCurrentLegalAcceptances).not.toHaveBeenCalled();
+    expect(mockRecordSuccessfulIssue).not.toHaveBeenCalled();
+    expect(mockReleaseIssue).not.toHaveBeenCalled();
+    expect(mockRedirect).toHaveBeenCalledTimes(1);
   });
 
   it("signup resend에서 사용자가 존재하지 않으면 cooldown/IP attempt를 소비하지 않고 success-like redirect한다", async () => {

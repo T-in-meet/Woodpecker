@@ -81,15 +81,16 @@ describe("Signup Route OTP Issue precheck", () => {
     const response = await POST(makeRequest());
     const body = await response.json();
 
-    expect(response.status).toBe(429);
-    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
     expect(otpIssueRateLimitMock.precheckIssue).toHaveBeenCalledWith({
       purpose: "signup",
       canonicalEmail: "user@example.com",
       ip: "203.0.113.10",
     });
+    expect(createOtpIssueClientMock).toHaveBeenCalledTimes(1);
     expect(getUserByEmail).not.toHaveBeenCalled();
-    expect(createOtpIssueClientMock).not.toHaveBeenCalled();
     expect(otpIssueRateLimitMock.tryStartIssue).not.toHaveBeenCalled();
     expect(issueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
   });
@@ -103,8 +104,9 @@ describe("Signup Route OTP Issue precheck", () => {
     const response = await POST(makeRequest());
     const body = await response.json();
 
-    expect(response.status).toBe(429);
-    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
     expect(otpIssueRateLimitMock.precheckIssue).toHaveBeenCalledTimes(1);
     expect(getUserByEmail).toHaveBeenCalledWith("user@example.com");
     expect(createOtpIssueClientMock).toHaveBeenCalledTimes(1);

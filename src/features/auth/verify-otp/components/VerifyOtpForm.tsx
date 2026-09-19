@@ -309,6 +309,20 @@ const VerifyOtpForm = ({
           >
             인증번호 재전송
           </Link>
+
+          {purpose === "signup" && (
+            <>
+              <p className="text-sm text-muted-foreground">
+                인증번호가 계속 오지 않으면 회원가입을 다시 시도해주세요.
+              </p>
+              <Link
+                href={ROUTES.SIGNUP}
+                className="text-sm text-muted-foreground underline hover:text-foreground"
+              >
+                회원가입 다시 시도
+              </Link>
+            </>
+          )}
         </div>
 
         <Button

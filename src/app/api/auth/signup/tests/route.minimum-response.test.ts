@@ -229,10 +229,10 @@ describe("회원가입 API 최소 응답 시간 보장 검증", () => {
     expect(body.code).toBe(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR);
   });
 
-  it("TC-08: fast rate-limit path도 최소 응답 시간 이전에 응답하지 않는다", async () => {
+  it("TC-08: final Local Rate Limit success-like path도 최소 응답 시간 이전에 응답하지 않는다", async () => {
     useFakeClockWithNoElapsedTime();
 
-    otpIssueRateLimitMock.precheckIssue.mockReturnValueOnce({
+    otpIssueRateLimitMock.tryStartIssue.mockReturnValueOnce({
       allowed: false,
       blockedBy: "ip_short",
     });
@@ -244,8 +244,8 @@ describe("회원가입 API 최소 응답 시간 보장 검증", () => {
     const response = await promise;
     const body = await response.json();
 
-    expect(response.status).toBe(429);
-    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
+    expect(response.status).toBe(200);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
   });
 
   it("TC-09: fast precheck rate-limit path도 최소 응답 시간 이전에 응답하지 않는다", async () => {
@@ -263,8 +263,8 @@ describe("회원가입 API 최소 응답 시간 보장 검증", () => {
     const response = await promise;
     const body = await response.json();
 
-    expect(response.status).toBe(429);
-    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
+    expect(response.status).toBe(200);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
   });
 
   it("TC-10: malformed JSON path도 최소 응답 시간 이전에 응답하지 않는다", async () => {

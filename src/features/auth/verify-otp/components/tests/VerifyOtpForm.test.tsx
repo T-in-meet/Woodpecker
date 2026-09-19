@@ -184,6 +184,28 @@ describe("VerifyOtpForm", () => {
     expect(mocks.showToast).not.toHaveBeenCalled();
   });
 
+  it("signup purpose에서는 회원가입 다시 시도 링크를 렌더링한다", () => {
+    renderVerifyOtpForm();
+
+    expect(
+      screen.getByRole("link", { name: "회원가입 다시 시도" }),
+    ).toHaveAttribute("href", ROUTES.SIGNUP);
+  });
+
+  it("reset-password purpose에서는 회원가입 다시 시도 링크를 렌더링하지 않는다", () => {
+    render(
+      <VerifyOtpForm
+        {...defaultProps}
+        purpose="reset-password"
+        action={vi.fn().mockResolvedValue(idleState)}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("link", { name: "회원가입 다시 시도" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("인증번호 재전송 링크를 렌더링한다", () => {
     renderVerifyOtpForm();
     const query = new URLSearchParams({

@@ -6,7 +6,10 @@ import {
   type IssueOtpAndSendEmailResult,
   issueOtpAndSendEmailWithResult,
 } from "@/features/auth/email/issueOtpAndSendEmail";
-import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
+import {
+  getUserByEmail,
+  GetUserByEmailError,
+} from "@/features/auth/lib/getUserByEmail";
 import { authGlobalRequestRateLimit } from "@/features/auth/lib/rate-limit/authGlobalRequestRateLimit";
 import type { OtpIssueRateLimitStartResult } from "@/features/auth/lib/rate-limit/otpIssueRateLimit";
 import { ROUTES } from "@/lib/constants/routes";
@@ -47,7 +50,16 @@ vi.mock("@/features/auth/lib/applyMinimumResponseTime", () => ({
   ),
 }));
 
-vi.mock("@/features/auth/lib/getUserByEmail");
+vi.mock("@/features/auth/lib/getUserByEmail", async () => {
+  const actual = await vi.importActual<
+    typeof import("@/features/auth/lib/getUserByEmail")
+  >("@/features/auth/lib/getUserByEmail");
+
+  return {
+    ...actual,
+    getUserByEmail: vi.fn(),
+  };
+});
 vi.mock("@/features/auth/email/issueOtpAndSendEmail");
 
 function makeRequest(
@@ -168,7 +180,7 @@ describe("Signup Route OTP Issue Rate Limit 연결", () => {
     expect(issueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
   });
 
-  it("Email attempt precheck 차단은 account lookup 전에 429로 종료하고 downstream에 진입하지 않는다", async () => {
+  it("Email attempt precheck 차단은 success-like로 응답하고 account lookup 전에 종료한다", async () => {
     otpIssueRateLimitMock.precheckIssue.mockReturnValueOnce({
       allowed: false,
       blockedBy: "email_attempt",
@@ -177,16 +189,68 @@ describe("Signup Route OTP Issue Rate Limit 연결", () => {
     const response = await POST(makeRequest());
     const body = await response.json();
 
-    expect(response.status).toBe(429);
-    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
+    expect(createOtpIssueClientMock).toHaveBeenCalledTimes(1);
     expect(getUserByEmail).not.toHaveBeenCalled();
-    expect(createOtpIssueClientMock).not.toHaveBeenCalled();
     expect(otpIssueRateLimitMock.tryStartIssue).not.toHaveBeenCalled();
     expect(issueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
     expect(recordCurrentLegalAcceptancesMock).not.toHaveBeenCalled();
   });
 
-  it("Local Rate Limit 차단 시 Provider operation을 시작하지 않고 429를 반환한다", async () => {
+  it("profiles lookup failure는 기존 SIGNUP_INTERNAL_ERROR를 유지하고 Provider lifecycle에 진입하지 않는다", async () => {
+    vi.mocked(getUserByEmail).mockRejectedValueOnce(
+      new GetUserByEmailError(
+        "profile_lookup",
+        new Error("profiles lookup failed"),
+      ),
+    );
+
+    const response = await POST(makeRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR);
+    expect(createOtpIssueClientMock).toHaveBeenCalledTimes(1);
+    expect(otpIssueRateLimitMock.precheckIssue).toHaveBeenCalledTimes(1);
+    expect(otpIssueRateLimitMock.tryStartIssue).not.toHaveBeenCalled();
+    expect(issueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
+    expect(recordCurrentLegalAcceptancesMock).not.toHaveBeenCalled();
+    expect(otpIssueRateLimitMock.recordSuccessfulIssue).not.toHaveBeenCalled();
+    expect(otpIssueRateLimitMock.releaseIssue).not.toHaveBeenCalled();
+  });
+
+  it("Auth Admin lookup failure는 success-like로 masking하고 Provider lifecycle에 진입하지 않는다", async () => {
+    vi.mocked(getUserByEmail).mockRejectedValueOnce(
+      new GetUserByEmailError(
+        "auth_user_lookup",
+        new Error("auth user lookup failed"),
+      ),
+    );
+
+    const response = await POST(makeRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({
+      success: true,
+      code: AUTH_API_CODES.SIGNUP_SUCCESS,
+      data: {
+        email: "user@example.com",
+        redirectTo: `${ROUTES.VERIFY_OTP}?purpose=signup&email=${encodeURIComponent("user@example.com")}`,
+      },
+    });
+    expect(createOtpIssueClientMock).toHaveBeenCalledTimes(1);
+    expect(otpIssueRateLimitMock.precheckIssue).toHaveBeenCalledTimes(1);
+    expect(otpIssueRateLimitMock.tryStartIssue).not.toHaveBeenCalled();
+    expect(issueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
+    expect(recordCurrentLegalAcceptancesMock).not.toHaveBeenCalled();
+    expect(otpIssueRateLimitMock.recordSuccessfulIssue).not.toHaveBeenCalled();
+    expect(otpIssueRateLimitMock.releaseIssue).not.toHaveBeenCalled();
+  });
+
+  it("final Local Rate Limit 차단은 Provider operation 없이 success-like 응답을 반환한다", async () => {
     otpIssueRateLimitMock.tryStartIssue.mockReturnValueOnce({
       allowed: false,
       blockedBy: "ip_short",
@@ -195,8 +259,9 @@ describe("Signup Route OTP Issue Rate Limit 연결", () => {
     const response = await POST(makeRequest());
     const body = await response.json();
 
-    expect(response.status).toBe(429);
-    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
     expect(createOtpIssueClientMock).toHaveBeenCalledTimes(1);
     expect(issueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
     expect(otpIssueRateLimitMock.recordSuccessfulIssue).not.toHaveBeenCalled();
@@ -213,8 +278,9 @@ describe("Signup Route OTP Issue Rate Limit 연결", () => {
     const response = await POST(makeRequest());
     const body = await response.json();
 
-    expect(response.status).toBe(429);
-    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
     expect(getUserByEmail).toHaveBeenCalledWith("user@example.com");
     expect(createOtpIssueClientMock).toHaveBeenCalledTimes(1);
     expect(issueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
@@ -230,6 +296,9 @@ describe("Signup Route OTP Issue Rate Limit 연결", () => {
 
     const createClientOrder =
       createOtpIssueClientMock.mock.invocationCallOrder[0]!;
+    const precheckOrder =
+      otpIssueRateLimitMock.precheckIssue.mock.invocationCallOrder[0]!;
+    const lookupOrder = vi.mocked(getUserByEmail).mock.invocationCallOrder[0]!;
     const tryStartOrder =
       otpIssueRateLimitMock.tryStartIssue.mock.invocationCallOrder[0]!;
     const issueOrder = vi.mocked(issueOtpAndSendEmailWithResult).mock
@@ -239,7 +308,9 @@ describe("Signup Route OTP Issue Rate Limit 연결", () => {
     const releaseOrder =
       otpIssueRateLimitMock.releaseIssue.mock.invocationCallOrder[0]!;
 
-    expect(createClientOrder).toBeLessThan(tryStartOrder);
+    expect(createClientOrder).toBeLessThan(precheckOrder);
+    expect(precheckOrder).toBeLessThan(lookupOrder);
+    expect(lookupOrder).toBeLessThan(tryStartOrder);
     expect(tryStartOrder).toBeLessThan(issueOrder);
     expect(issueOrder).toBeLessThan(recordOrder);
     expect(recordOrder).toBeLessThan(releaseOrder);
@@ -292,7 +363,7 @@ describe("Signup Route OTP Issue Rate Limit 연결", () => {
   });
 
   it.each(accountStates)(
-    "$label account state에서 atomic tryStartIssue 차단은 동일 429를 유지한다",
+    "$label account state에서 atomic tryStartIssue 차단은 동일 success-like 응답을 유지한다",
     async ({ user }) => {
       vi.mocked(getUserByEmail).mockResolvedValue(user as never);
       otpIssueRateLimitMock.tryStartIssue.mockReturnValueOnce({
@@ -303,9 +374,9 @@ describe("Signup Route OTP Issue Rate Limit 연결", () => {
       const response = await POST(makeRequest());
       const body = await response.json();
 
-      expect(response.status).toBe(429);
-      expect(body.success).toBe(false);
-      expect(body.code).toBe(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
+      expect(response.status).toBe(200);
+      expect(body.success).toBe(true);
+      expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
       expect(issueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
       expect(
         otpIssueRateLimitMock.recordSuccessfulIssue,
@@ -344,27 +415,50 @@ describe("Signup Route OTP Issue Rate Limit 연결", () => {
     },
   );
 
-  it.each(accountStates)(
-    "$label account state에서 createOtpIssueClient 실패는 기존 500을 유지하고 downstream에 진입하지 않는다",
-    async ({ user }) => {
-      vi.mocked(getUserByEmail).mockResolvedValue(user as never);
-      createOtpIssueClientMock.mockImplementationOnce(() => {
-        throw new Error("otp issue client failed");
-      });
+  it("createOtpIssueClient 실패는 precheck/account lookup 전 common 500으로 종료한다", async () => {
+    createOtpIssueClientMock.mockImplementationOnce(() => {
+      throw new Error("otp issue client failed");
+    });
 
-      const response = await POST(makeRequest());
-      const body = await response.json();
+    const response = await POST(makeRequest());
+    const body = await response.json();
 
-      expect(response.status).toBe(500);
-      expect(body.success).toBe(false);
-      expect(body.code).toBe(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR);
-      expect(otpIssueRateLimitMock.tryStartIssue).not.toHaveBeenCalled();
-      expect(issueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
-      expect(recordCurrentLegalAcceptancesMock).not.toHaveBeenCalled();
-      expect(
-        otpIssueRateLimitMock.recordSuccessfulIssue,
-      ).not.toHaveBeenCalled();
-      expect(otpIssueRateLimitMock.releaseIssue).not.toHaveBeenCalled();
-    },
-  );
+    expect(response.status).toBe(500);
+    expect(body.success).toBe(false);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR);
+    expect(otpIssueRateLimitMock.precheckIssue).not.toHaveBeenCalled();
+    expect(getUserByEmail).not.toHaveBeenCalled();
+    expect(otpIssueRateLimitMock.tryStartIssue).not.toHaveBeenCalled();
+    expect(issueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
+    expect(recordCurrentLegalAcceptancesMock).not.toHaveBeenCalled();
+    expect(otpIssueRateLimitMock.recordSuccessfulIssue).not.toHaveBeenCalled();
+    expect(otpIssueRateLimitMock.releaseIssue).not.toHaveBeenCalled();
+  });
+
+  it("정상/precheck blocked/final blocked success-like 응답은 API-controlled content-type을 동일하게 유지한다", async () => {
+    const successResponse = await POST(makeRequest());
+
+    otpIssueRateLimitMock.precheckIssue.mockReturnValueOnce({
+      allowed: false,
+      blockedBy: "email_attempt",
+    });
+    const precheckBlockedResponse = await POST(makeRequest());
+
+    otpIssueRateLimitMock.precheckIssue.mockReturnValue({ allowed: true });
+    otpIssueRateLimitMock.tryStartIssue.mockReturnValueOnce({
+      allowed: false,
+      blockedBy: "cooldown",
+    });
+    const finalBlockedResponse = await POST(makeRequest());
+
+    const successContentType = successResponse.headers.get("content-type");
+
+    expect(successContentType).toBeTruthy();
+    expect(precheckBlockedResponse.headers.get("content-type")).toBe(
+      successContentType,
+    );
+    expect(finalBlockedResponse.headers.get("content-type")).toBe(
+      successContentType,
+    );
+  });
 });

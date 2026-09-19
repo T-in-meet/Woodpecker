@@ -10,7 +10,10 @@ import {
   logAuthEvent,
   logRequested,
 } from "@/features/auth/lib/authLogger";
-import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
+import {
+  getUserByEmail,
+  GetUserByEmailError,
+} from "@/features/auth/lib/getUserByEmail";
 import { createOtpIssueClient } from "@/features/auth/lib/issueOtp";
 import {
   AuthJsonParseError,
@@ -68,9 +71,16 @@ vi.mock("@/features/auth/lib/parseAuthJsonRequestBody", async () => {
   };
 });
 
-vi.mock("@/features/auth/lib/getUserByEmail", () => ({
-  getUserByEmail: vi.fn(),
-}));
+vi.mock("@/features/auth/lib/getUserByEmail", async () => {
+  const actual = await vi.importActual<
+    typeof import("@/features/auth/lib/getUserByEmail")
+  >("@/features/auth/lib/getUserByEmail");
+
+  return {
+    ...actual,
+    getUserByEmail: vi.fn(),
+  };
+});
 
 vi.mock("@/features/auth/email/issueOtpAndSendEmail", () => ({
   issueOtpAndSendEmailWithResult: vi.fn(),
@@ -252,8 +262,9 @@ describe("signup 라우트 인증 로깅", () => {
       blockedBy: "ip_short",
     });
 
-    await POST(makeRequest());
+    const response = await POST(makeRequest());
 
+    expect(response.status).toBe(200);
     expect(vi.mocked(logAuthEvent)).toHaveBeenCalledWith(
       AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED,
       expect.objectContaining({
@@ -296,6 +307,34 @@ describe("signup 라우트 인증 로깅", () => {
         reasonCode: AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG,
       }),
     );
+  });
+
+  it("Auth Admin lookup failure는 success-like 응답과 INTERNAL_ERROR 진단 로그를 남긴다", async () => {
+    vi.mocked(getUserByEmail).mockRejectedValueOnce(
+      new GetUserByEmailError(
+        "auth_user_lookup",
+        new Error("auth user lookup failed"),
+      ),
+    );
+
+    const response = await POST(makeRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
+    expect(vi.mocked(logAuthError)).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_SIGNUP_FAILED,
+      expect.objectContaining({
+        reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+        errorMessage: "auth user lookup failed",
+        errorName: "Error",
+      }),
+    );
+    expect(createOtpIssueClient).toHaveBeenCalledTimes(1);
+    expect(otpIssueRateLimitMock.precheckIssue).toHaveBeenCalledTimes(1);
+    expect(otpIssueRateLimitMock.tryStartIssue).not.toHaveBeenCalled();
+    expect(issueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
+    expect(terminalEvents()).toEqual([AUTH_EVENTS.AUTH_SIGNUP_FAILED]);
   });
 
   it("Provider 429는 PROVIDER_RATE_LIMIT과 안전한 diagnostic을 blocked 로그에 남긴다", async () => {

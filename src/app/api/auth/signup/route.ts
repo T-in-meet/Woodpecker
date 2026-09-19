@@ -16,7 +16,10 @@ import {
   logRequested,
   normalizeUnknownError,
 } from "@/features/auth/lib/authLogger";
-import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
+import {
+  getUserByEmail,
+  GetUserByEmailError,
+} from "@/features/auth/lib/getUserByEmail";
 import { createOtpIssueClient } from "@/features/auth/lib/issueOtp";
 import { mapAuthValidationErrors } from "@/features/auth/lib/mapAuthValidationErrors";
 import { maskEmailForLogging } from "@/features/auth/lib/maskEmailForLogging";
@@ -130,6 +133,7 @@ type RunSignupOtpIssueBaseInput = {
   ip: string;
   maskedEmail: string;
   maskedIp: string;
+  otpIssueClient: ReturnType<typeof createOtpIssueClient>;
 };
 
 /**
@@ -167,11 +171,12 @@ function makeSignupSuccess(email: string): Response {
  */
 function resolveSignupLocalRateLimitBlocked(
   blockedBy: OtpIssueRateLimitBlockedBy,
+  requestEmail: string,
   maskedEmail: string,
   maskedIp: string,
 ): ResolveSignupResult {
   return {
-    response: failureResponse(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED),
+    response: makeSignupSuccess(requestEmail),
     outcome: {
       type: "blocked",
       reasonCode: mapOtpIssueBlockedByToReason(blockedBy),
@@ -322,7 +327,6 @@ function createSignupOtpIssueInput(
 async function runSignupOtpIssue(
   input: RunSignupOtpIssueInput,
 ): Promise<ResolveSignupResult> {
-  const otpIssueClient = createOtpIssueClient();
   const otpIssueInput = createSignupOtpIssueInput(input);
 
   const rateLimitResult = otpIssueRateLimit.tryStartIssue({
@@ -334,6 +338,7 @@ async function runSignupOtpIssue(
   if (!rateLimitResult.allowed) {
     return resolveSignupLocalRateLimitBlocked(
       rateLimitResult.blockedBy,
+      input.requestEmail,
       input.maskedEmail,
       input.maskedIp,
     );
@@ -343,7 +348,7 @@ async function runSignupOtpIssue(
     // tryStartIssue() 성공 뒤에는 다른 await/I/O 없이 Provider operation을 시작한다.
     const issueResult = await issueOtpAndSendEmailWithResult(
       otpIssueInput,
-      otpIssueClient,
+      input.otpIssueClient,
     );
 
     if (!issueResult.ok) {
@@ -475,6 +480,15 @@ async function resolveSignupResponse(
   const maskedEmail = maskEmailForLogging(canonicalEmail);
 
   /**
+   * OTP Issue client 준비는 실제 Provider I/O를 시작하지 않는
+   * account-independent common infrastructure 단계다.
+   *
+   * Local precheck와 account lookup보다 먼저 준비하여 client preparation
+   * failure가 account state에 따라 다른 public contract로 갈리지 않게 한다.
+   */
+  const otpIssueClient = createOtpIssueClient();
+
+  /**
    * Account lookup 전에 현재 OTP Issue 상태를 read-only로 확인한다.
    *
    * blocked는 즉시 거절할 수 있지만 allowed는 Provider 시작 허가가 아니다.
@@ -490,13 +504,38 @@ async function resolveSignupResponse(
   if (!precheckResult.allowed) {
     return resolveSignupLocalRateLimitBlocked(
       precheckResult.blockedBy,
+      email,
       maskedEmail,
       maskedIp,
     );
   }
 
   // 기존 사용자 조회는 account-state 외부 노출 없이 Signup Issue mode를 결정하는 데만 사용한다.
-  const existingUser = await getUserByEmail(canonicalEmail);
+  let existingUser: Awaited<ReturnType<typeof getUserByEmail>>;
+
+  try {
+    existingUser = await getUserByEmail(canonicalEmail);
+  } catch (error) {
+    if (
+      !(error instanceof GetUserByEmailError) ||
+      error.kind !== "auth_user_lookup"
+    ) {
+      throw error;
+    }
+
+    const diagnostic = normalizeUnknownError(error.cause);
+
+    return {
+      response: makeSignupSuccess(email),
+      outcome: {
+        type: "failed",
+        reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+        maskedEmail,
+        maskedIp,
+        ...diagnostic,
+      },
+    };
+  }
 
   if (existingUser) {
     const deliveryEmail = existingUser.email ?? email;
@@ -509,6 +548,7 @@ async function resolveSignupResponse(
       ip,
       maskedEmail,
       maskedIp,
+      otpIssueClient,
       ...(existingUser.email_confirmed_at === null
         ? { agreementUserId: existingUser.id }
         : {}),
@@ -530,6 +570,7 @@ async function resolveSignupResponse(
     ip,
     maskedEmail,
     maskedIp,
+    otpIssueClient,
     password,
     nickname,
   });
@@ -559,7 +600,9 @@ export async function POST(request: NextRequest) {
   try {
     resolved = await resolveSignupResponse(request);
   } catch (error) {
-    const { errorMessage, errorName } = normalizeUnknownError(error);
+    const normalizedError =
+      error instanceof GetUserByEmailError ? error.cause : error;
+    const { errorMessage, errorName } = normalizeUnknownError(normalizedError);
     const response = failureResponse(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR);
 
     logAuthError(AUTH_EVENTS.AUTH_SIGNUP_FAILED, {

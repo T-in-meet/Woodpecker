@@ -18,7 +18,10 @@ import {
   logRequested,
   normalizeUnknownError,
 } from "@/features/auth/lib/authLogger";
-import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
+import {
+  getUserByEmail,
+  GetUserByEmailError,
+} from "@/features/auth/lib/getUserByEmail";
 import { createOtpIssueClient } from "@/features/auth/lib/issueOtp";
 import { maskEmailForLogging } from "@/features/auth/lib/maskEmailForLogging";
 import { maskIpForLogging } from "@/features/auth/lib/maskIpForLogging";
@@ -350,24 +353,53 @@ export async function resendEmailAction(
 
       // Signup account lookup은 IP-only precheck와 request limiter를 통과한 뒤,
       // final tryStartIssue() 전에 수행한다.
-      const otpIssueInput = await createResendOtpIssueInput(
-        email,
-        purpose,
-        canonicalEmail,
-      );
+      let otpIssueInput: IssueOtpAndSendEmailInput | null;
+      let maskedAccountLookupFailure = false;
 
-      if (otpIssueInput === null) {
-        // 존재하지 않는 Signup 이메일은 Provider를 시작하지 않고 success-like로 숨긴다.
-        // tryStartIssue()를 호출하지 않으므로 cooldown / IP attempt / in-flight도 소비하지 않는다.
-        logAuthEvent(AUTH_EVENTS.AUTH_RESEND_EMAIL_COMPLETED, {
+      try {
+        otpIssueInput = await createResendOtpIssueInput(
+          email,
+          purpose,
+          canonicalEmail,
+        );
+      } catch (error) {
+        if (
+          !(error instanceof GetUserByEmailError) ||
+          error.kind !== "auth_user_lookup"
+        ) {
+          throw error;
+        }
+
+        maskedAccountLookupFailure = true;
+        otpIssueInput = null;
+
+        logAuthError(AUTH_EVENTS.AUTH_RESEND_EMAIL_FAILED, {
           path: RESEND_EMAIL_PATH,
           method: "POST",
-          status: 200,
+          status: 500,
           provider: "password",
-          result: "success",
+          result: "failure",
+          reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
           maskedEmail,
           maskedIp,
+          ...normalizeUnknownError(error.cause),
         });
+      }
+
+      if (otpIssueInput === null) {
+        if (!maskedAccountLookupFailure) {
+          // 존재하지 않는 Signup 이메일은 Provider를 시작하지 않고 success-like로 숨긴다.
+          // tryStartIssue()를 호출하지 않으므로 cooldown / IP attempt / in-flight도 소비하지 않는다.
+          logAuthEvent(AUTH_EVENTS.AUTH_RESEND_EMAIL_COMPLETED, {
+            path: RESEND_EMAIL_PATH,
+            method: "POST",
+            status: 200,
+            provider: "password",
+            result: "success",
+            maskedEmail,
+            maskedIp,
+          });
+        }
       } else {
         // 이 시점에는 Signup account state가 existing으로 확인됐다.
         // 이후 account-dependent failure는 내부 reason/lifecycle만 유지하고
@@ -461,7 +493,9 @@ export async function resendEmailAction(
       }
     }
   } catch (error) {
-    const normalized = normalizeUnknownError(error);
+    const normalizedError =
+      error instanceof GetUserByEmailError ? error.cause : error;
+    const normalized = normalizeUnknownError(normalizedError);
     logAuthError(AUTH_EVENTS.AUTH_RESEND_EMAIL_FAILED, {
       path: RESEND_EMAIL_PATH,
       method: "POST",
