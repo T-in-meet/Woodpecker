@@ -31,7 +31,7 @@ vi.mock("@/features/auth/lib/issueOtp", () => ({
 vi.mock("@/features/auth/lib/getUserByEmail");
 vi.mock("@/features/auth/email/issueOtpAndSendEmail");
 vi.mock("@/features/auth/lib/userAgreements", () => ({
-  ensureUserAgreement: vi.fn(),
+  recordCurrentLegalAcceptances: vi.fn(),
 }));
 vi.mock("@/features/auth/lib/applyMinimumResponseTime", () => ({
   applyMinimumResponseTime: vi.fn(

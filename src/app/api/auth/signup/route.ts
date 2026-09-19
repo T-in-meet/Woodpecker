@@ -3,7 +3,6 @@ import { NextRequest } from "next/server";
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 import { AUTH_EVENTS } from "@/features/auth/constants/authEvents";
 import { AUTH_LOG_REASONS } from "@/features/auth/constants/authLogReasons";
-import { AUTH_EMAIL_DELIVERY_ERROR_MESSAGE } from "@/features/auth/constants/messages";
 import {
   type IssueOtpAndSendEmailDiagnostic,
   type IssueOtpAndSendEmailFailureKind,
@@ -32,7 +31,7 @@ import {
   type OtpIssueRateLimitBlockedBy,
 } from "@/features/auth/lib/rate-limit/otpIssueRateLimit";
 import { getTrustedAuthClientIp } from "@/features/auth/lib/rate-limit/trustedAuthClientIp";
-import { ensureUserAgreement } from "@/features/auth/lib/userAgreements";
+import { recordCurrentLegalAcceptances } from "@/features/auth/lib/userAgreements";
 import { signupApiSchema } from "@/features/auth/signup/schema/signupApiSchema";
 import { canonicalizeEmail } from "@/features/auth/utils/canonicalizeEmail";
 import { failureResponse, successResponse } from "@/lib/api/response";
@@ -107,7 +106,8 @@ type SignupTerminalOutcome =
       reasonCode:
         | typeof AUTH_LOG_REASONS.IP_UNAVAILABLE
         | typeof AUTH_LOG_REASONS.PROVIDER_ERROR
-        | typeof AUTH_LOG_REASONS.EMAIL_DELIVERY_ERROR;
+        | typeof AUTH_LOG_REASONS.EMAIL_DELIVERY_ERROR
+        | typeof AUTH_LOG_REASONS.INTERNAL_ERROR;
       maskedEmail?: string;
       maskedIp?: string;
       errorMessage?: string;
@@ -190,17 +190,18 @@ function resolveSignupLocalRateLimitBlocked(
  * @param diagnostic 안전하게 정규화된 내부 진단 정보
  * @param maskedEmail 마스킹된 canonical email
  * @param maskedIp 마스킹된 trusted IP
- * @returns Signup failure 응답과 terminal outcome
+ * @returns enumeration-safe Signup 응답과 terminal outcome
  */
 function resolveSignupOtpFailure(
   kind: IssueOtpAndSendEmailFailureKind,
   diagnostic: IssueOtpAndSendEmailDiagnostic,
+  requestEmail: string,
   maskedEmail: string,
   maskedIp: string,
 ): ResolveSignupResult {
   if (kind === "provider_rate_limit") {
     return {
-      response: failureResponse(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED),
+      response: makeSignupSuccess(requestEmail),
       outcome: {
         type: "blocked",
         reasonCode: AUTH_LOG_REASONS.PROVIDER_RATE_LIMIT,
@@ -213,12 +214,7 @@ function resolveSignupOtpFailure(
 
   if (kind === "delivery_error") {
     return {
-      response: failureResponse(
-        AUTH_API_CODES.SIGNUP_EMAIL_DELIVERY_INTERNAL_ERROR,
-        {
-          message: AUTH_EMAIL_DELIVERY_ERROR_MESSAGE,
-        },
-      ),
+      response: makeSignupSuccess(requestEmail),
       outcome: {
         type: "failed",
         reasonCode: AUTH_LOG_REASONS.EMAIL_DELIVERY_ERROR,
@@ -230,7 +226,7 @@ function resolveSignupOtpFailure(
   }
 
   return {
-    response: failureResponse(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR),
+    response: makeSignupSuccess(requestEmail),
     outcome: {
       type: "failed",
       reasonCode: AUTH_LOG_REASONS.PROVIDER_ERROR,
@@ -239,6 +235,26 @@ function resolveSignupOtpFailure(
       ...diagnostic,
     },
   };
+}
+
+class SignupAgreementPersistenceError extends Error {
+  readonly originalErrorName: string;
+
+  constructor(error: unknown) {
+    const { errorMessage, errorName } = normalizeUnknownError(error);
+
+    super(errorMessage);
+    this.name = "SignupAgreementPersistenceError";
+    this.originalErrorName = errorName;
+  }
+}
+
+async function recordSignupLegalAcceptances(userId: string): Promise<void> {
+  try {
+    await recordCurrentLegalAcceptances(userId, "email");
+  } catch (error) {
+    throw new SignupAgreementPersistenceError(error);
+  }
 }
 
 /**
@@ -265,7 +281,7 @@ function createSignupOtpIssueInput(
         canonical_email: input.canonicalEmail,
       },
       beforeDelivery: async ({ userId }: { userId: string }) => {
-        await ensureUserAgreement(userId, "email");
+        await recordSignupLegalAcceptances(userId);
       },
     };
   }
@@ -278,7 +294,7 @@ function createSignupOtpIssueInput(
       purpose: "signup",
       signupMode: "existing-user",
       beforeDelivery: async () => {
-        await ensureUserAgreement(agreementUserId, "email");
+        await recordSignupLegalAcceptances(agreementUserId);
       },
     };
   }
@@ -334,6 +350,7 @@ async function runSignupOtpIssue(
       return resolveSignupOtpFailure(
         issueResult.kind,
         issueResult.diagnostic,
+        input.requestEmail,
         input.maskedEmail,
         input.maskedIp,
       );
@@ -348,6 +365,22 @@ async function runSignupOtpIssue(
     return {
       response: makeSignupSuccess(input.requestEmail),
       outcome: { type: "completed" },
+    };
+  } catch (error) {
+    if (!(error instanceof SignupAgreementPersistenceError)) {
+      throw error;
+    }
+
+    return {
+      response: makeSignupSuccess(input.requestEmail),
+      outcome: {
+        type: "failed",
+        reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+        maskedEmail: input.maskedEmail,
+        maskedIp: input.maskedIp,
+        errorMessage: error.message,
+        errorName: error.originalErrorName,
+      },
     };
   } finally {
     // 성공 quota 기록보다 먼저 release하지 않는다.
@@ -506,7 +539,8 @@ async function resolveSignupResponse(
  * 회원가입 API.
  *
  * Account Enumeration 방어를 위해 account state가 아니라
- * 동일 OTP Issue 결과에 동일한 외부 응답 계약을 적용한다.
+ * account-state-dependent failure는 success-like 응답으로 masking하고,
+ * account-state-independent failure는 기존 외부 오류 계약을 유지한다.
  *
  * @param request 회원가입 POST 요청
  * @returns 회원가입 API 응답

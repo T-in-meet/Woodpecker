@@ -13,7 +13,7 @@ import { ROUTES } from "@/lib/constants/routes";
 import { POST } from "../route";
 import { makeRequest } from "./utils/signupTestHelper";
 
-const ensureUserAgreementMock = vi.hoisted(() => vi.fn());
+const recordCurrentLegalAcceptancesMock = vi.hoisted(() => vi.fn());
 const otpIssueClient = vi.hoisted(() => ({ client: "otp-issue-client" }));
 const createOtpIssueClientMock = vi.hoisted(() => vi.fn(() => otpIssueClient));
 const otpIssueRateLimitMock = vi.hoisted(() => ({
@@ -30,7 +30,7 @@ vi.mock("@/features/auth/lib/rate-limit/authGlobalRequestRateLimit", () => ({
 }));
 
 vi.mock("@/features/auth/lib/userAgreements", () => ({
-  ensureUserAgreement: ensureUserAgreementMock,
+  recordCurrentLegalAcceptances: recordCurrentLegalAcceptancesMock,
 }));
 vi.mock("@/features/auth/lib/getUserByEmail");
 vi.mock("@/features/auth/email/issueOtpAndSendEmail");
@@ -58,7 +58,7 @@ describe("회원가입 API 신규 사용자 기본 성공 흐름 검증", () => 
 
     vi.mocked(getUserByEmail).mockResolvedValue(null);
     otpIssueRateLimitMock.tryStartIssue.mockReturnValue({ allowed: true });
-    ensureUserAgreementMock.mockResolvedValue(undefined);
+    recordCurrentLegalAcceptancesMock.mockResolvedValue(undefined);
     vi.mocked(issueOtpAndSendEmailWithResult).mockImplementation(
       async (input) => {
         if (input.purpose === "signup" && input.signupMode === "new-user") {
@@ -107,8 +107,8 @@ describe("회원가입 API 신규 사용자 기본 성공 흐름 검증", () => 
   it("TC-03: 신규 사용자 Provider가 반환한 userId로 약관 동의를 저장한다", async () => {
     await POST(makeRequest(requestBody));
 
-    expect(ensureUserAgreementMock).toHaveBeenCalledTimes(1);
-    expect(ensureUserAgreementMock).toHaveBeenCalledWith(
+    expect(recordCurrentLegalAcceptancesMock).toHaveBeenCalledTimes(1);
+    expect(recordCurrentLegalAcceptancesMock).toHaveBeenCalledWith(
       "new-user-id",
       "email",
     );

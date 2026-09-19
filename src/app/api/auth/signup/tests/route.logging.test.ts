@@ -20,7 +20,7 @@ import type { OtpIssueRateLimitStartResult } from "@/features/auth/lib/rate-limi
 
 import { POST } from "../route";
 
-const ensureUserAgreementMock = vi.hoisted(() => vi.fn());
+const recordCurrentLegalAcceptancesMock = vi.hoisted(() => vi.fn());
 const otpIssueClient = vi.hoisted(() => ({ client: "otp-issue-client" }));
 const otpIssueRateLimitMock = vi.hoisted(() => ({
   precheckIssue: vi.fn((): OtpIssueRateLimitStartResult => ({ allowed: true })),
@@ -36,7 +36,7 @@ vi.mock("@/features/auth/lib/rate-limit/authGlobalRequestRateLimit", () => ({
 }));
 
 vi.mock("@/features/auth/lib/userAgreements", () => ({
-  ensureUserAgreement: ensureUserAgreementMock,
+  recordCurrentLegalAcceptances: recordCurrentLegalAcceptancesMock,
 }));
 
 vi.mock("@/features/auth/lib/applyMinimumResponseTime", () => ({
@@ -172,7 +172,7 @@ describe("signup 라우트 인증 로깅", () => {
     });
     vi.mocked(issueOtpAndSendEmailWithResult).mockResolvedValue({ ok: true });
     otpIssueRateLimitMock.tryStartIssue.mockReturnValue({ allowed: true });
-    ensureUserAgreementMock.mockResolvedValue(undefined);
+    recordCurrentLegalAcceptancesMock.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -242,7 +242,7 @@ describe("signup 라우트 인증 로깅", () => {
     expect(createOtpIssueClient).not.toHaveBeenCalled();
     expect(otpIssueRateLimitMock.tryStartIssue).not.toHaveBeenCalled();
     expect(issueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
-    expect(ensureUserAgreementMock).not.toHaveBeenCalled();
+    expect(recordCurrentLegalAcceptancesMock).not.toHaveBeenCalled();
     expect(terminalEvents()).toEqual([AUTH_EVENTS.AUTH_SIGNUP_FAILED]);
   });
 
@@ -309,8 +309,11 @@ describe("signup 라우트 인증 로깅", () => {
       },
     });
 
-    await POST(makeRequest());
+    const response = await POST(makeRequest());
+    const body = await response.json();
 
+    expect(response.status).toBe(200);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
     expect(vi.mocked(logAuthEvent)).toHaveBeenCalledWith(
       AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED,
       expect.objectContaining({
@@ -321,6 +324,7 @@ describe("signup 라우트 인증 로깅", () => {
       }),
     );
     expect(vi.mocked(logAuthError)).not.toHaveBeenCalled();
+    expect(terminalEvents()).toEqual([AUTH_EVENTS.AUTH_RATE_LIMIT_BLOCKED]);
   });
 
   it.each(["provider_error", "invalid_provider_response"] as const)(
@@ -336,8 +340,11 @@ describe("signup 라우트 인증 로깅", () => {
         },
       });
 
-      await POST(makeRequest());
+      const response = await POST(makeRequest());
+      const body = await response.json();
 
+      expect(response.status).toBe(200);
+      expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
       expect(vi.mocked(logAuthError)).toHaveBeenCalledWith(
         AUTH_EVENTS.AUTH_SIGNUP_FAILED,
         expect.objectContaining({
@@ -347,6 +354,7 @@ describe("signup 라우트 인증 로깅", () => {
           errorCode: "provider_error_code",
         }),
       );
+      expect(terminalEvents()).toEqual([AUTH_EVENTS.AUTH_SIGNUP_FAILED]);
     },
   );
 
@@ -361,8 +369,11 @@ describe("signup 라우트 인증 로깅", () => {
       },
     });
 
-    await POST(makeRequest());
+    const response = await POST(makeRequest());
+    const body = await response.json();
 
+    expect(response.status).toBe(200);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
     expect(vi.mocked(logAuthError)).toHaveBeenCalledWith(
       AUTH_EVENTS.AUTH_SIGNUP_FAILED,
       expect.objectContaining({
@@ -372,6 +383,7 @@ describe("signup 라우트 인증 로깅", () => {
         errorCode: "smtp_failed",
       }),
     );
+    expect(terminalEvents()).toEqual([AUTH_EVENTS.AUTH_SIGNUP_FAILED]);
   });
 
   it("성공이면 AUTH_SIGNUP_COMPLETED가 기록되고 terminal event는 하나다", async () => {
@@ -386,7 +398,7 @@ describe("signup 라우트 인증 로깅", () => {
 
   it("agreement hook 실패는 AUTH_SIGNUP_FAILED와 INTERNAL_ERROR로 기록한다", async () => {
     vi.mocked(getUserByEmail).mockResolvedValueOnce(null);
-    ensureUserAgreementMock.mockRejectedValueOnce(
+    recordCurrentLegalAcceptancesMock.mockRejectedValueOnce(
       new Error("agreement failed"),
     );
     vi.mocked(issueOtpAndSendEmailWithResult).mockImplementationOnce(
@@ -399,8 +411,11 @@ describe("signup 라우트 인증 로깅", () => {
       },
     );
 
-    await POST(makeRequest());
+    const response = await POST(makeRequest());
+    const body = await response.json();
 
+    expect(response.status).toBe(200);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
     expect(vi.mocked(logAuthError)).toHaveBeenCalledWith(
       AUTH_EVENTS.AUTH_SIGNUP_FAILED,
       expect.objectContaining({
@@ -409,6 +424,40 @@ describe("signup 라우트 인증 로깅", () => {
         errorName: "Error",
       }),
     );
+    expect(terminalEvents()).toEqual([AUTH_EVENTS.AUTH_SIGNUP_FAILED]);
+  });
+
+  it("기존 미인증 agreement 복구 실패도 success-like 응답과 INTERNAL_ERROR failure 로그를 유지한다", async () => {
+    recordCurrentLegalAcceptancesMock.mockRejectedValueOnce(
+      new Error("agreement recovery failed"),
+    );
+    vi.mocked(issueOtpAndSendEmailWithResult).mockImplementationOnce(
+      async (input) => {
+        if (
+          input.purpose === "signup" &&
+          input.signupMode === "existing-user"
+        ) {
+          await input.beforeDelivery?.();
+        }
+
+        return { ok: true };
+      },
+    );
+
+    const response = await POST(makeRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
+    expect(vi.mocked(logAuthError)).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_SIGNUP_FAILED,
+      expect.objectContaining({
+        reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+        errorMessage: "agreement recovery failed",
+        errorName: "Error",
+      }),
+    );
+    expect(terminalEvents()).toEqual([AUTH_EVENTS.AUTH_SIGNUP_FAILED]);
   });
 
   it("예상하지 못한 예외는 AUTH_SIGNUP_FAILED와 INTERNAL_ERROR로 기록한다", async () => {

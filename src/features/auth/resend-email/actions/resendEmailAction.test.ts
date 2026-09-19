@@ -14,7 +14,7 @@ import { otpIssueRateLimit } from "@/features/auth/lib/rate-limit/otpIssueRateLi
 import type { SignupResendRequestRateLimitResult } from "@/features/auth/lib/rate-limit/signupResendRequestRateLimit";
 import { signupResendRequestRateLimit } from "@/features/auth/lib/rate-limit/signupResendRequestRateLimit";
 import { getTrustedAuthServerActionClientIp } from "@/features/auth/lib/rate-limit/trustedAuthClientIp";
-import { ensureUserAgreement } from "@/features/auth/lib/userAgreements";
+import { recordCurrentLegalAcceptances } from "@/features/auth/lib/userAgreements";
 import { VALIDATION_MESSAGES } from "@/lib/validation/messages";
 
 import { resendEmailAction } from "./resendEmailAction";
@@ -77,7 +77,7 @@ vi.mock("@/features/auth/lib/getUserByEmail", () => ({
 }));
 
 vi.mock("@/features/auth/lib/userAgreements", () => ({
-  ensureUserAgreement: vi.fn(),
+  recordCurrentLegalAcceptances: vi.fn(),
 }));
 
 vi.mock("@/features/auth/lib/applyMinimumActionDelay", () => ({
@@ -103,7 +103,9 @@ const mockGetTrustedAuthServerActionClientIp = vi.mocked(
   getTrustedAuthServerActionClientIp,
 );
 const mockGetUserByEmail = vi.mocked(getUserByEmail);
-const mockEnsureUserAgreement = vi.mocked(ensureUserAgreement);
+const mockRecordCurrentLegalAcceptances = vi.mocked(
+  recordCurrentLegalAcceptances,
+);
 const mockApplyMinimumActionDelay = vi.mocked(applyMinimumActionDelay);
 const mockLogAuthEvent = vi.mocked(logAuthEvent);
 const mockLogAuthError = vi.mocked(logAuthError);
@@ -170,7 +172,7 @@ describe("resendEmailAction", () => {
       email_confirmed_at: "2026-09-16T00:00:00.000Z",
       auth_providers: ["email"],
     });
-    mockEnsureUserAgreement.mockResolvedValue(undefined);
+    mockRecordCurrentLegalAcceptances.mockResolvedValue(undefined);
     mockCreateOtpIssueClient.mockReturnValue(OTP_ISSUE_CLIENT);
     mockGlobalTryConsume.mockReturnValue({ allowed: true });
     mockPrecheckIpIssue.mockReturnValue({ allowed: true });
@@ -349,7 +351,7 @@ describe("resendEmailAction", () => {
     expect(mockCreateOtpIssueClient).not.toHaveBeenCalled();
     expect(mockTryStartIssue).not.toHaveBeenCalled();
     expect(mockIssueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
-    expect(mockEnsureUserAgreement).not.toHaveBeenCalled();
+    expect(mockRecordCurrentLegalAcceptances).not.toHaveBeenCalled();
     expect(mockRecordSuccessfulIssue).not.toHaveBeenCalled();
     expect(mockReleaseIssue).not.toHaveBeenCalled();
     expect(mockRedirect).not.toHaveBeenCalled();
@@ -369,7 +371,7 @@ describe("resendEmailAction", () => {
     // tryStartIssue() 자체를 호출하지 않으므로 cooldown / IP attempt / in-flight를 소비하지 않는다.
     expect(mockTryStartIssue).not.toHaveBeenCalled();
     expect(mockIssueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
-    expect(mockEnsureUserAgreement).not.toHaveBeenCalled();
+    expect(mockRecordCurrentLegalAcceptances).not.toHaveBeenCalled();
     expect(mockRecordSuccessfulIssue).not.toHaveBeenCalled();
     expect(mockReleaseIssue).not.toHaveBeenCalled();
     expect(mockRedirect).toHaveBeenCalledTimes(1);
@@ -392,7 +394,7 @@ describe("resendEmailAction", () => {
     );
 
     expect(mockIssueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
-    expect(mockEnsureUserAgreement).not.toHaveBeenCalled();
+    expect(mockRecordCurrentLegalAcceptances).not.toHaveBeenCalled();
     expect(mockRecordSuccessfulIssue).not.toHaveBeenCalled();
     expect(mockReleaseIssue).not.toHaveBeenCalled();
     expect(mockLogAuthEvent).toHaveBeenCalledWith(
@@ -422,7 +424,7 @@ describe("resendEmailAction", () => {
     );
 
     expect(mockIssueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
-    expect(mockEnsureUserAgreement).not.toHaveBeenCalled();
+    expect(mockRecordCurrentLegalAcceptances).not.toHaveBeenCalled();
     expect(mockRecordSuccessfulIssue).not.toHaveBeenCalled();
     expect(mockReleaseIssue).not.toHaveBeenCalled();
     expect(mockLogAuthEvent).toHaveBeenCalledWith(
@@ -578,7 +580,7 @@ describe("resendEmailAction", () => {
       }),
       OTP_ISSUE_CLIENT,
     );
-    expect(mockEnsureUserAgreement).toHaveBeenCalledWith(
+    expect(mockRecordCurrentLegalAcceptances).toHaveBeenCalledWith(
       "unverified-user-id",
       "email",
     );
@@ -596,7 +598,7 @@ describe("resendEmailAction", () => {
       "NEXT_REDIRECT:",
     );
 
-    expect(mockEnsureUserAgreement).not.toHaveBeenCalled();
+    expect(mockRecordCurrentLegalAcceptances).not.toHaveBeenCalled();
     expect(mockIssueOtpAndSendEmailWithResult).toHaveBeenCalledWith(
       {
         email: "user@example.com",
@@ -614,7 +616,9 @@ describe("resendEmailAction", () => {
       email_confirmed_at: null,
       auth_providers: ["email"],
     });
-    mockEnsureUserAgreement.mockRejectedValue(new Error("agreement failed"));
+    mockRecordCurrentLegalAcceptances.mockRejectedValue(
+      new Error("agreement failed"),
+    );
 
     await expect(callAction({ purpose: "signup" })).rejects.toThrow(
       "NEXT_REDIRECT:",

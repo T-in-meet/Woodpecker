@@ -9,10 +9,11 @@ import {
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { authGlobalRequestRateLimit } from "@/features/auth/lib/rate-limit/authGlobalRequestRateLimit";
 import type { OtpIssueRateLimitStartResult } from "@/features/auth/lib/rate-limit/otpIssueRateLimit";
+import { ROUTES } from "@/lib/constants/routes";
 
 import { POST } from "../route";
 
-const ensureUserAgreementMock = vi.hoisted(() => vi.fn());
+const recordCurrentLegalAcceptancesMock = vi.hoisted(() => vi.fn());
 const otpIssueRateLimitMock = vi.hoisted(() => ({
   precheckIssue: vi.fn((): OtpIssueRateLimitStartResult => ({ allowed: true })),
   tryStartIssue: vi.fn(),
@@ -23,7 +24,7 @@ const otpIssueClient = vi.hoisted(() => ({ client: "otp-issue-client" }));
 const createOtpIssueClientMock = vi.hoisted(() => vi.fn(() => otpIssueClient));
 
 vi.mock("@/features/auth/lib/userAgreements", () => ({
-  ensureUserAgreement: ensureUserAgreementMock,
+  recordCurrentLegalAcceptances: recordCurrentLegalAcceptancesMock,
 }));
 
 vi.mock("@/features/auth/lib/rate-limit/authGlobalRequestRateLimit", () => ({
@@ -90,6 +91,37 @@ function makeIssueFailure(
   };
 }
 
+const accountStates = [
+  { label: "new-user", user: null },
+  {
+    label: "existing-unverified",
+    user: {
+      id: "existing-unverified-id",
+      email: "user@example.com",
+      email_confirmed_at: null,
+    },
+  },
+  {
+    label: "existing-verified",
+    user: {
+      id: "existing-verified-id",
+      email: "user@example.com",
+      email_confirmed_at: "2026-09-19T00:00:00.000Z",
+    },
+  },
+] as const;
+
+const maskedFailureKinds = [
+  "provider_rate_limit",
+  "provider_error",
+  "invalid_provider_response",
+  "delivery_error",
+] as const;
+
+const maskedFailureCases = accountStates.flatMap((accountState) =>
+  maskedFailureKinds.map((kind) => ({ ...accountState, kind })),
+);
+
 describe("Signup Route OTP Issue Rate Limit 연결", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -106,7 +138,7 @@ describe("Signup Route OTP Issue Rate Limit 연결", () => {
 
     otpIssueRateLimitMock.tryStartIssue.mockReturnValue({ allowed: true });
     vi.mocked(issueOtpAndSendEmailWithResult).mockResolvedValue({ ok: true });
-    ensureUserAgreementMock.mockResolvedValue(undefined);
+    recordCurrentLegalAcceptancesMock.mockResolvedValue(undefined);
   });
 
   it("Auth Global 차단은 malformed body보다 먼저 429로 종료하고 downstream에 진입하지 않는다", async () => {
@@ -151,7 +183,7 @@ describe("Signup Route OTP Issue Rate Limit 연결", () => {
     expect(createOtpIssueClientMock).not.toHaveBeenCalled();
     expect(otpIssueRateLimitMock.tryStartIssue).not.toHaveBeenCalled();
     expect(issueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
-    expect(ensureUserAgreementMock).not.toHaveBeenCalled();
+    expect(recordCurrentLegalAcceptancesMock).not.toHaveBeenCalled();
   });
 
   it("Local Rate Limit 차단 시 Provider operation을 시작하지 않고 429를 반환한다", async () => {
@@ -186,7 +218,7 @@ describe("Signup Route OTP Issue Rate Limit 연결", () => {
     expect(getUserByEmail).toHaveBeenCalledWith("user@example.com");
     expect(createOtpIssueClientMock).toHaveBeenCalledTimes(1);
     expect(issueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
-    expect(ensureUserAgreementMock).not.toHaveBeenCalled();
+    expect(recordCurrentLegalAcceptancesMock).not.toHaveBeenCalled();
     expect(otpIssueRateLimitMock.recordSuccessfulIssue).not.toHaveBeenCalled();
     expect(otpIssueRateLimitMock.releaseIssue).not.toHaveBeenCalled();
   });
@@ -242,7 +274,7 @@ describe("Signup Route OTP Issue Rate Limit 연결", () => {
     });
   });
 
-  it("beforeDelivery 같은 caller-specific rejection도 successful quota 없이 in-flight를 release한다", async () => {
+  it("OTP Issue helper의 unexpected rejection은 500을 유지하고 in-flight를 release한다", async () => {
     vi.mocked(issueOtpAndSendEmailWithResult).mockRejectedValueOnce(
       new Error("agreement failed"),
     );
@@ -259,24 +291,33 @@ describe("Signup Route OTP Issue Rate Limit 연결", () => {
     });
   });
 
-  it("Provider 429는 Local Rate Limit과 같은 Signup 429 외부 계약으로 매핑한다", async () => {
-    vi.mocked(issueOtpAndSendEmailWithResult).mockResolvedValueOnce(
-      makeIssueFailure("provider_rate_limit"),
-    );
+  it.each(accountStates)(
+    "$label account state에서 atomic tryStartIssue 차단은 동일 429를 유지한다",
+    async ({ user }) => {
+      vi.mocked(getUserByEmail).mockResolvedValue(user as never);
+      otpIssueRateLimitMock.tryStartIssue.mockReturnValueOnce({
+        allowed: false,
+        blockedBy: "ip_short",
+      });
 
-    const response = await POST(makeRequest());
-    const body = await response.json();
+      const response = await POST(makeRequest());
+      const body = await response.json();
 
-    expect(response.status).toBe(429);
-    expect(body.success).toBe(false);
-    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
-    expect(otpIssueRateLimitMock.recordSuccessfulIssue).not.toHaveBeenCalled();
-    expect(otpIssueRateLimitMock.releaseIssue).toHaveBeenCalledTimes(1);
-  });
+      expect(response.status).toBe(429);
+      expect(body.success).toBe(false);
+      expect(body.code).toBe(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
+      expect(issueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
+      expect(
+        otpIssueRateLimitMock.recordSuccessfulIssue,
+      ).not.toHaveBeenCalled();
+      expect(otpIssueRateLimitMock.releaseIssue).not.toHaveBeenCalled();
+    },
+  );
 
-  it.each(["provider_error", "invalid_provider_response"] as const)(
-    "%s는 SIGNUP_INTERNAL_ERROR로 매핑한다",
-    async (kind) => {
+  it.each(maskedFailureCases)(
+    "$label account state의 $kind failure는 동일 success-like 응답으로 masking한다",
+    async ({ user, kind }) => {
+      vi.mocked(getUserByEmail).mockResolvedValue(user as never);
       vi.mocked(issueOtpAndSendEmailWithResult).mockResolvedValueOnce(
         makeIssueFailure(kind),
       );
@@ -284,30 +325,46 @@ describe("Signup Route OTP Issue Rate Limit 연결", () => {
       const response = await POST(makeRequest());
       const body = await response.json();
 
-      expect(response.status).toBe(500);
-      expect(body.code).toBe(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR);
+      expect(response.status).toBe(200);
+      expect(body).toEqual({
+        success: true,
+        code: AUTH_API_CODES.SIGNUP_SUCCESS,
+        data: {
+          email: "user@example.com",
+          redirectTo: `${ROUTES.VERIFY_OTP}?purpose=signup&email=${encodeURIComponent("user@example.com")}`,
+        },
+      });
       expect(
         otpIssueRateLimitMock.recordSuccessfulIssue,
       ).not.toHaveBeenCalled();
-      expect(otpIssueRateLimitMock.releaseIssue).toHaveBeenCalledTimes(1);
+      expect(otpIssueRateLimitMock.releaseIssue).toHaveBeenCalledWith({
+        purpose: "signup",
+        canonicalEmail: "user@example.com",
+      });
     },
   );
 
-  it("delivery_error는 전용 Signup delivery code와 일반화된 메시지로 매핑한다", async () => {
-    vi.mocked(issueOtpAndSendEmailWithResult).mockResolvedValueOnce(
-      makeIssueFailure("delivery_error"),
-    );
+  it.each(accountStates)(
+    "$label account state에서 createOtpIssueClient 실패는 기존 500을 유지하고 downstream에 진입하지 않는다",
+    async ({ user }) => {
+      vi.mocked(getUserByEmail).mockResolvedValue(user as never);
+      createOtpIssueClientMock.mockImplementationOnce(() => {
+        throw new Error("otp issue client failed");
+      });
 
-    const response = await POST(makeRequest());
-    const body = await response.json();
+      const response = await POST(makeRequest());
+      const body = await response.json();
 
-    expect(response.status).toBe(500);
-    expect(body.success).toBe(false);
-    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_EMAIL_DELIVERY_INTERNAL_ERROR);
-    expect(body.message).toBe(
-      "인증 이메일을 전송하지 못했습니다. 잠시 후 다시 시도해주세요.",
-    );
-    expect(otpIssueRateLimitMock.recordSuccessfulIssue).not.toHaveBeenCalled();
-    expect(otpIssueRateLimitMock.releaseIssue).toHaveBeenCalledTimes(1);
-  });
+      expect(response.status).toBe(500);
+      expect(body.success).toBe(false);
+      expect(body.code).toBe(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR);
+      expect(otpIssueRateLimitMock.tryStartIssue).not.toHaveBeenCalled();
+      expect(issueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
+      expect(recordCurrentLegalAcceptancesMock).not.toHaveBeenCalled();
+      expect(
+        otpIssueRateLimitMock.recordSuccessfulIssue,
+      ).not.toHaveBeenCalled();
+      expect(otpIssueRateLimitMock.releaseIssue).not.toHaveBeenCalled();
+    },
+  );
 });

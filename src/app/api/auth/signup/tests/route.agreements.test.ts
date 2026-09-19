@@ -13,7 +13,7 @@ import { VALIDATION_REASON } from "@/lib/validation/reasons";
 import { POST } from "../route";
 import { makeRequest } from "./utils/signupTestHelper";
 
-const ensureUserAgreementMock = vi.hoisted(() => vi.fn());
+const recordCurrentLegalAcceptancesMock = vi.hoisted(() => vi.fn());
 const otpIssueClient = vi.hoisted(() => ({ client: "otp-issue-client" }));
 const createOtpIssueClientMock = vi.hoisted(() => vi.fn(() => otpIssueClient));
 const otpIssueRateLimitMock = vi.hoisted(() => ({
@@ -30,7 +30,7 @@ vi.mock("@/features/auth/lib/rate-limit/authGlobalRequestRateLimit", () => ({
 }));
 
 vi.mock("@/features/auth/lib/userAgreements", () => ({
-  ensureUserAgreement: ensureUserAgreementMock,
+  recordCurrentLegalAcceptances: recordCurrentLegalAcceptancesMock,
 }));
 vi.mock("@/features/auth/lib/getUserByEmail");
 vi.mock("@/features/auth/email/issueOtpAndSendEmail");
@@ -73,7 +73,7 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
 
     vi.mocked(getUserByEmail).mockResolvedValue(null);
     otpIssueRateLimitMock.tryStartIssue.mockReturnValue({ allowed: true });
-    ensureUserAgreementMock.mockResolvedValue(undefined);
+    recordCurrentLegalAcceptancesMock.mockResolvedValue(undefined);
 
     vi.mocked(issueOtpAndSendEmailWithResult).mockImplementation(
       async (input) => {
@@ -104,7 +104,7 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
       VALIDATION_REASON.NOT_AGREED,
     );
     expect(issueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
-    expect(ensureUserAgreementMock).not.toHaveBeenCalled();
+    expect(recordCurrentLegalAcceptancesMock).not.toHaveBeenCalled();
   });
 
   it("TC-02. 처리방침 확인이 false이면 NOT_AGREED 오류를 반환한다", async () => {
@@ -125,7 +125,7 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
       VALIDATION_REASON.NOT_AGREED,
     );
     expect(issueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
-    expect(ensureUserAgreementMock).not.toHaveBeenCalled();
+    expect(recordCurrentLegalAcceptancesMock).not.toHaveBeenCalled();
   });
 
   it("TC-03. 연령 확인이 false이면 NOT_AGREED 오류를 반환한다", async () => {
@@ -146,7 +146,7 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
       VALIDATION_REASON.NOT_AGREED,
     );
     expect(issueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
-    expect(ensureUserAgreementMock).not.toHaveBeenCalled();
+    expect(recordCurrentLegalAcceptancesMock).not.toHaveBeenCalled();
   });
 
   it("TC-04. termsOfService가 누락되면 REQUIRED 오류를 반환한다", async () => {
@@ -283,8 +283,11 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
       }),
       otpIssueClient,
     );
-    expect(ensureUserAgreementMock).toHaveBeenCalledTimes(1);
-    expect(ensureUserAgreementMock).toHaveBeenCalledWith("user-id", "email");
+    expect(recordCurrentLegalAcceptancesMock).toHaveBeenCalledTimes(1);
+    expect(recordCurrentLegalAcceptancesMock).toHaveBeenCalledWith(
+      "user-id",
+      "email",
+    );
   });
 
   it("TC-12. Provider/OTP 단계에서 실패하면 약관 동의를 기록하지 않는다", async () => {
@@ -299,20 +302,24 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
 
     await POST(makeRequest(BASE_VALID_PAYLOAD));
 
-    expect(ensureUserAgreementMock).not.toHaveBeenCalled();
+    expect(recordCurrentLegalAcceptancesMock).not.toHaveBeenCalled();
   });
 
-  it("TC-13. agreement persistence 실패는 SIGNUP_INTERNAL_ERROR가 되고 successful quota 없이 release한다", async () => {
-    ensureUserAgreementMock.mockRejectedValueOnce(
+  it("TC-13. agreement persistence 실패는 success-like 응답으로 masking하고 successful quota 없이 release한다", async () => {
+    recordCurrentLegalAcceptancesMock.mockRejectedValueOnce(
       new Error("agreement failed"),
     );
 
     const response = await POST(makeRequest(BASE_VALID_PAYLOAD));
     const body = await response.json();
 
-    expect(response.status).toBe(500);
-    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR);
-    expect(ensureUserAgreementMock).toHaveBeenCalledWith("user-id", "email");
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
+    expect(recordCurrentLegalAcceptancesMock).toHaveBeenCalledWith(
+      "user-id",
+      "email",
+    );
     expect(otpIssueRateLimitMock.recordSuccessfulIssue).not.toHaveBeenCalled();
     expect(otpIssueRateLimitMock.releaseIssue).toHaveBeenCalledWith({
       purpose: "signup",
@@ -333,7 +340,7 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
       .mockResolvedValueOnce(recoveryUser as never);
 
     // 첫 beforeDelivery에서만 agreement persistence가 실패한다.
-    ensureUserAgreementMock.mockRejectedValueOnce(
+    recordCurrentLegalAcceptancesMock.mockRejectedValueOnce(
       new Error("agreement failed"),
     );
 
@@ -356,8 +363,9 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
     const firstResponse = await POST(makeRequest(BASE_VALID_PAYLOAD));
     const firstBody = await firstResponse.json();
 
-    expect(firstResponse.status).toBe(500);
-    expect(firstBody.code).toBe(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR);
+    expect(firstResponse.status).toBe(200);
+    expect(firstBody.success).toBe(true);
+    expect(firstBody.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
     expect(otpIssueRateLimitMock.recordSuccessfulIssue).not.toHaveBeenCalled();
     expect(otpIssueRateLimitMock.releaseIssue).toHaveBeenCalledTimes(1);
 
@@ -385,13 +393,13 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
       }),
     );
 
-    expect(ensureUserAgreementMock).toHaveBeenCalledTimes(2);
-    expect(ensureUserAgreementMock).toHaveBeenNthCalledWith(
+    expect(recordCurrentLegalAcceptancesMock).toHaveBeenCalledTimes(2);
+    expect(recordCurrentLegalAcceptancesMock).toHaveBeenNthCalledWith(
       1,
       "recovery-user-id",
       "email",
     );
-    expect(ensureUserAgreementMock).toHaveBeenNthCalledWith(
+    expect(recordCurrentLegalAcceptancesMock).toHaveBeenNthCalledWith(
       2,
       "recovery-user-id",
       "email",

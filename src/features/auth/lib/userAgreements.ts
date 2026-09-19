@@ -164,11 +164,3 @@ export async function upsertUserAgreement(
 ): Promise<void> {
   await recordCurrentLegalAcceptances(userId, source);
 }
-
-/** @deprecated 신규 코드는 recordCurrentLegalAcceptances를 사용합니다. */
-export async function ensureUserAgreement(
-  userId: string,
-  source: LegalAcceptanceSource,
-): Promise<void> {
-  await recordCurrentLegalAcceptances(userId, source);
-}

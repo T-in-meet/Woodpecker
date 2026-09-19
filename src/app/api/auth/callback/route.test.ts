@@ -9,7 +9,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { GET } from "./route";
 
 const getLegalAcceptanceStatusMock = vi.hoisted(() => vi.fn());
-const upsertUserAgreementMock = vi.hoisted(() => vi.fn());
+const recordCurrentLegalAcceptancesMock = vi.hoisted(() => vi.fn());
 const exchangeCodeForSessionMock = vi.fn();
 const signOutMock = vi.fn();
 const updateProfileMock = vi.fn();
@@ -21,7 +21,7 @@ const clearSupabaseAuthSessionCookiesMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/features/auth/lib/userAgreements", () => ({
   getLegalAcceptanceStatus: getLegalAcceptanceStatusMock,
-  ensureUserAgreement: upsertUserAgreementMock,
+  recordCurrentLegalAcceptances: recordCurrentLegalAcceptancesMock,
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -63,7 +63,7 @@ describe("auth callback route", () => {
       hasAcceptanceHistory: true,
     });
 
-    upsertUserAgreementMock.mockResolvedValue(undefined);
+    recordCurrentLegalAcceptancesMock.mockResolvedValue(undefined);
     signOutMock.mockResolvedValue({ error: null });
     updateProfileMock.mockReturnValue({ eq: updateProfileEqMock });
     updateProfileEqMock.mockResolvedValue({ error: null });
@@ -430,7 +430,10 @@ describe("auth callback route", () => {
     expect(response.headers.get("location")).toBe(
       `http://localhost:3000${ROUTES.MYPAGE}`,
     );
-    expect(upsertUserAgreementMock).toHaveBeenCalledWith("user-id", "oauth");
+    expect(recordCurrentLegalAcceptancesMock).toHaveBeenCalledWith(
+      "user-id",
+      "oauth",
+    );
     expectOAuthAgreementIntentCleared(response);
   });
 
@@ -557,7 +560,10 @@ describe("auth callback route", () => {
     expect(response.headers.get("location")).toBe(
       `http://localhost:3000${ROUTES.MYPAGE}`,
     );
-    expect(upsertUserAgreementMock).toHaveBeenCalledWith("user-id", "oauth");
+    expect(recordCurrentLegalAcceptancesMock).toHaveBeenCalledWith(
+      "user-id",
+      "oauth",
+    );
   });
 
   it("signup intent에서 약관 intent cookie가 없으면 세션을 종료하고 회원가입으로 redirect한다", async () => {
@@ -566,7 +572,7 @@ describe("auth callback route", () => {
     );
 
     expect(signOutMock).toHaveBeenCalledTimes(1);
-    expect(upsertUserAgreementMock).not.toHaveBeenCalled();
+    expect(recordCurrentLegalAcceptancesMock).not.toHaveBeenCalled();
     expect(response.headers.get("location")).toBe(
       "http://localhost:3000/signup?agreement_required=1",
     );

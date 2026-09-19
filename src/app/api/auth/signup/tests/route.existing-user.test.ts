@@ -13,7 +13,7 @@ import { ROUTES } from "@/lib/constants/routes";
 import { POST } from "../route";
 import { makeRequest } from "./utils/signupTestHelper";
 
-const ensureUserAgreementMock = vi.hoisted(() => vi.fn());
+const recordCurrentLegalAcceptancesMock = vi.hoisted(() => vi.fn());
 const otpIssueClient = vi.hoisted(() => ({ client: "otp-issue-client" }));
 const createOtpIssueClientMock = vi.hoisted(() => vi.fn(() => otpIssueClient));
 const otpIssueRateLimitMock = vi.hoisted(() => ({
@@ -30,7 +30,7 @@ vi.mock("@/features/auth/lib/rate-limit/authGlobalRequestRateLimit", () => ({
 }));
 
 vi.mock("@/features/auth/lib/userAgreements", () => ({
-  ensureUserAgreement: ensureUserAgreementMock,
+  recordCurrentLegalAcceptances: recordCurrentLegalAcceptancesMock,
 }));
 vi.mock("@/features/auth/lib/getUserByEmail");
 vi.mock("@/features/auth/email/issueOtpAndSendEmail");
@@ -67,7 +67,7 @@ const verifiedUser = {
 beforeEach(() => {
   vi.clearAllMocks();
   otpIssueRateLimitMock.tryStartIssue.mockReturnValue({ allowed: true });
-  ensureUserAgreementMock.mockResolvedValue(undefined);
+  recordCurrentLegalAcceptancesMock.mockResolvedValue(undefined);
   vi.mocked(issueOtpAndSendEmailWithResult).mockResolvedValue({ ok: true });
 });
 
@@ -119,8 +119,8 @@ describe("회원가입 - 기존 사용자 재요청 분기", () => {
     const response = await POST(makeRequest(requestBody));
 
     expect(response.status).toBe(200);
-    expect(ensureUserAgreementMock).toHaveBeenCalledTimes(1);
-    expect(ensureUserAgreementMock).toHaveBeenCalledWith(
+    expect(recordCurrentLegalAcceptancesMock).toHaveBeenCalledTimes(1);
+    expect(recordCurrentLegalAcceptancesMock).toHaveBeenCalledWith(
       "unverified-user-id",
       "email",
     );
@@ -150,7 +150,7 @@ describe("회원가입 - 기존 사용자 재요청 분기", () => {
 
     await POST(makeRequest(requestBody));
 
-    expect(ensureUserAgreementMock).not.toHaveBeenCalled();
+    expect(recordCurrentLegalAcceptancesMock).not.toHaveBeenCalled();
 
     const issueInput = vi.mocked(issueOtpAndSendEmailWithResult).mock
       .calls[0]?.[0];
@@ -182,9 +182,9 @@ describe("회원가입 - 기존 사용자 재요청 분기", () => {
     );
   });
 
-  it("기존 미인증 agreement 복구 실패는 SIGNUP_INTERNAL_ERROR가 되고 in-flight를 release한다", async () => {
+  it("기존 미인증 agreement 복구 실패는 success-like 응답으로 masking하고 in-flight를 release한다", async () => {
     vi.mocked(getUserByEmail).mockResolvedValue(unverifiedUser as never);
-    ensureUserAgreementMock.mockRejectedValueOnce(
+    recordCurrentLegalAcceptancesMock.mockRejectedValueOnce(
       new Error("agreement failed"),
     );
     vi.mocked(issueOtpAndSendEmailWithResult).mockImplementationOnce(
@@ -203,8 +203,9 @@ describe("회원가입 - 기존 사용자 재요청 분기", () => {
     const response = await POST(makeRequest(requestBody));
     const body = await response.json();
 
-    expect(response.status).toBe(500);
-    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR);
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
     expect(otpIssueRateLimitMock.recordSuccessfulIssue).not.toHaveBeenCalled();
     expect(otpIssueRateLimitMock.releaseIssue).toHaveBeenCalledWith({
       purpose: "signup",

@@ -59,7 +59,7 @@ vi.mock("@/features/auth/lib/getUserByEmail", () => ({
   getUserByEmail: vi.fn(),
 }));
 vi.mock("@/features/auth/lib/userAgreements", () => ({
-  ensureUserAgreement: vi.fn(),
+  recordCurrentLegalAcceptances: vi.fn(),
 }));
 vi.mock("@/features/auth/lib/applyMinimumActionDelay", () => ({
   applyMinimumActionDelay: vi.fn(),

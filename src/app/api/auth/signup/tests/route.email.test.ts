@@ -3,14 +3,13 @@
  *
  * 정책:
  * - 신규 / 기존 미인증 / 기존 인증 사용자는 동일 OTP Issue 결과에 동일 외부 계약을 사용한다.
- * - delivery_error는 계정 상태와 무관하게 전용 일반화 오류를 반환한다.
+ * - account-state-dependent Provider/Delivery failure는 계정 상태와 무관하게 success-like 응답으로 masking한다.
  * - 기존 사용자는 새 계정을 만들지 않고 저장된 auth email로 OTP를 발송한다.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
-import { AUTH_EMAIL_DELIVERY_ERROR_MESSAGE } from "@/features/auth/constants/messages";
 import {
   type IssueOtpAndSendEmailResult,
   issueOtpAndSendEmailWithResult,
@@ -21,7 +20,7 @@ import type { OtpIssueRateLimitStartResult } from "@/features/auth/lib/rate-limi
 import { POST } from "../route";
 import { makeRequest } from "./utils/signupTestHelper";
 
-const upsertUserAgreementMock = vi.hoisted(() => vi.fn());
+const recordCurrentLegalAcceptancesMock = vi.hoisted(() => vi.fn());
 const otpIssueClient = vi.hoisted(() => ({ client: "otp-issue-client" }));
 const createOtpIssueClientMock = vi.hoisted(() => vi.fn(() => otpIssueClient));
 const otpIssueRateLimitMock = vi.hoisted(() => ({
@@ -38,7 +37,7 @@ vi.mock("@/features/auth/lib/rate-limit/authGlobalRequestRateLimit", () => ({
 }));
 
 vi.mock("@/features/auth/lib/userAgreements", () => ({
-  ensureUserAgreement: upsertUserAgreementMock,
+  recordCurrentLegalAcceptances: recordCurrentLegalAcceptancesMock,
 }));
 vi.mock("@/features/auth/lib/getUserByEmail");
 vi.mock("@/features/auth/lib/issueOtp", () => ({
@@ -94,7 +93,7 @@ beforeEach(() => {
   vi.mocked(getUserByEmail).mockResolvedValue(null);
   vi.mocked(issueOtpAndSendEmailWithResult).mockResolvedValue({ ok: true });
 
-  upsertUserAgreementMock.mockResolvedValue(undefined);
+  recordCurrentLegalAcceptancesMock.mockResolvedValue(undefined);
 });
 
 describe("회원가입 이메일 발송 - 신규 사용자", () => {
@@ -131,7 +130,7 @@ describe("회원가입 이메일 발송 - 신규 사용자", () => {
     );
   });
 
-  it("신규 사용자 Provider 실패는 SIGNUP_INTERNAL_ERROR를 유지한다", async () => {
+  it("신규 사용자 Provider 실패는 success-like Signup 응답으로 masking한다", async () => {
     vi.mocked(issueOtpAndSendEmailWithResult).mockResolvedValueOnce({
       ok: false,
       kind: "provider_error",
@@ -145,8 +144,9 @@ describe("회원가입 이메일 발송 - 신규 사용자", () => {
     const response = await POST(makeRequest(requestBody));
     const body = await response.json();
 
-    expect(response.status).toBe(500);
-    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR);
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
     expect(vi.mocked(issueOtpAndSendEmailWithResult)).toHaveBeenCalledTimes(1);
   });
 });
@@ -199,7 +199,7 @@ describe("회원가입 이메일 발송 - delivery_error 외부 계약", () => {
     ["기존 미인증", unverifiedUser],
     ["기존 인증", verifiedUser],
   ] as const)(
-    "%s 사용자의 delivery_error는 동일한 전용 실패 응답을 반환한다",
+    "%s 사용자의 delivery_error는 동일한 success-like 응답을 반환한다",
     async (_label, existingUser) => {
       vi.mocked(getUserByEmail).mockResolvedValue(existingUser as never);
       vi.mocked(issueOtpAndSendEmailWithResult).mockResolvedValueOnce(
@@ -209,12 +209,10 @@ describe("회원가입 이메일 발송 - delivery_error 외부 계약", () => {
       const response = await POST(makeRequest(requestBody));
       const body = await response.json();
 
-      expect(response.status).toBe(500);
-      expect(body.success).toBe(false);
-      expect(body.code).toBe(
-        AUTH_API_CODES.SIGNUP_EMAIL_DELIVERY_INTERNAL_ERROR,
-      );
-      expect(body.message).toBe(AUTH_EMAIL_DELIVERY_ERROR_MESSAGE);
+      expect(response.status).toBe(200);
+      expect(body.success).toBe(true);
+      expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
+      expect(body.data.email).toBe(requestBody.email);
     },
   );
 });

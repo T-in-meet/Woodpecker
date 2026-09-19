@@ -29,7 +29,7 @@ import {
 } from "@/features/auth/lib/rate-limit/otpIssueRateLimit";
 import { signupResendRequestRateLimit } from "@/features/auth/lib/rate-limit/signupResendRequestRateLimit";
 import { getTrustedAuthServerActionClientIp } from "@/features/auth/lib/rate-limit/trustedAuthClientIp";
-import { ensureUserAgreement } from "@/features/auth/lib/userAgreements";
+import { recordCurrentLegalAcceptances } from "@/features/auth/lib/userAgreements";
 import { authEmailContextSchema } from "@/features/auth/schemas/authEmailContextSchema";
 import { canonicalizeEmail } from "@/features/auth/utils/canonicalizeEmail";
 import { ROUTES } from "@/lib/constants/routes";
@@ -162,7 +162,7 @@ async function createResendOtpIssueInput(
       purpose: "signup",
       signupMode: "existing-user",
       beforeDelivery: async () => {
-        await ensureUserAgreement(existingUser.id, "email");
+        await recordCurrentLegalAcceptances(existingUser.id, "email");
       },
     };
   }

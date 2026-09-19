@@ -32,7 +32,7 @@ import { VALIDATION_REASON } from "@/lib/validation/reasons";
 import { POST } from "../route";
 import { makeRequest } from "./utils/signupTestHelper";
 
-const upsertUserAgreementMock = vi.hoisted(() => vi.fn());
+const recordCurrentLegalAcceptancesMock = vi.hoisted(() => vi.fn());
 const otpIssueClient = vi.hoisted(() => ({ client: "otp-issue-client" }));
 const createOtpIssueClientMock = vi.hoisted(() => vi.fn(() => otpIssueClient));
 const otpIssueRateLimitMock = vi.hoisted(() => ({
@@ -43,7 +43,7 @@ const otpIssueRateLimitMock = vi.hoisted(() => ({
 }));
 
 vi.mock("@/features/auth/lib/userAgreements", () => ({
-  ensureUserAgreement: upsertUserAgreementMock,
+  recordCurrentLegalAcceptances: recordCurrentLegalAcceptancesMock,
 }));
 vi.mock("@/features/auth/lib/getUserByEmail");
 vi.mock("@/features/auth/lib/issueOtp", () => ({
@@ -585,7 +585,7 @@ describe("PR-API-02 회원가입 입력 검증 - 실패 응답 계약 / 외부 �
     expect(vi.mocked(getUserByEmail)).not.toHaveBeenCalled();
     expect(createOtpIssueClientMock).not.toHaveBeenCalled();
     expect(vi.mocked(issueOtpAndSendEmailWithResult)).not.toHaveBeenCalled();
-    expect(upsertUserAgreementMock).not.toHaveBeenCalled();
+    expect(recordCurrentLegalAcceptancesMock).not.toHaveBeenCalled();
   });
 
   // TC-25: 다중 오류 수집

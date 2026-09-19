@@ -9,9 +9,9 @@ vi.mock("@/lib/supabase/admin", () => ({
   })),
 }));
 
-import { ensureUserAgreement } from "./userAgreements";
+import { recordCurrentLegalAcceptances } from "./userAgreements";
 
-describe("ensureUserAgreement", () => {
+describe("recordCurrentLegalAcceptances", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
@@ -22,7 +22,7 @@ describe("ensureUserAgreement", () => {
   });
 
   it("현재 버전의 세 법적 이벤트를 중복 없이 기록한다", async () => {
-    await ensureUserAgreement("user-id", "email");
+    await recordCurrentLegalAcceptances("user-id", "email");
 
     expect(fromMock).toHaveBeenCalledWith("user_legal_acceptances");
     expect(upsertMock).toHaveBeenCalledWith(
@@ -57,6 +57,8 @@ describe("ensureUserAgreement", () => {
     const error = new Error("upsert failed");
     upsertMock.mockResolvedValue({ error });
 
-    await expect(ensureUserAgreement("user-id", "oauth")).rejects.toBe(error);
+    await expect(
+      recordCurrentLegalAcceptances("user-id", "oauth"),
+    ).rejects.toBe(error);
   });
 });
