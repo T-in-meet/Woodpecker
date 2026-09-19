@@ -405,4 +405,21 @@ describe("issueOtpAndSendEmailWithResult", () => {
       },
     });
   });
+
+  it("이메일 delivery timeout도 기존 delivery_error 계약으로 매핑한다", async () => {
+    const timeoutError = new Error("OTP email delivery timed out.");
+    timeoutError.name = "OtpEmailDeliveryTimeoutError";
+    vi.mocked(sendOtpEmail).mockRejectedValue(timeoutError);
+
+    await expect(
+      issueOtpAndSendEmailWithResult(existingSignupInput, client),
+    ).resolves.toEqual({
+      ok: false,
+      kind: "delivery_error",
+      diagnostic: {
+        errorMessage: "OTP email delivery timed out.",
+        errorName: "OtpEmailDeliveryTimeoutError",
+      },
+    });
+  });
 });

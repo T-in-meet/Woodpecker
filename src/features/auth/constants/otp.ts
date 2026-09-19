@@ -60,6 +60,17 @@ export const MISSING_SIGNUP_USER_ID_ERROR_MESSAGE =
 export const OTP_GENERATE_LINK_TIMEOUT_MS = 10 * 1000;
 
 /**
+ * OTP 이메일 delivery 전체 대기 timeout.
+ *
+ * Provider SDK가 resolve/reject하지 않는 경우에도 상위 OTP Issue caller가
+ * 유한한 시간 안에 settle하여 in-flight guard를 release할 수 있도록 한다.
+ *
+ * 이 값은 Nodemailer의 개별 network phase timeout이나
+ * OTP generateLink timeout과 별개의 caller-side wall-clock upper bound다.
+ */
+export const OTP_EMAIL_DELIVERY_TIMEOUT_MS = 20 * 1000;
+
+/**
  * Woodpecker의 OTP hard expiration 정책 기준값.
  *
  * 사용자 안내와 서비스 정책은 10분으로 통일한다.

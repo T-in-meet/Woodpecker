@@ -1,7 +1,8 @@
 import { render } from "@react-email/render";
 import type { ReactElement } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { OTP_EMAIL_DELIVERY_TIMEOUT_MS } from "@/features/auth/constants/otp";
 import { OtpEmailTemplate } from "@/features/auth/email/OtpEmailTemplate";
 import { sendViaNodemailer } from "@/features/auth/email/providers/sendViaNodemailer";
 import { sendViaResend } from "@/features/auth/email/providers/sendViaResend";
@@ -43,6 +44,10 @@ describe("sendOtpEmail", () => {
     vi.mocked(resolveEmailProvider).mockReturnValue("nodemailer");
     vi.mocked(sendViaNodemailer).mockResolvedValue(undefined);
     vi.mocked(sendViaResend).mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("signup 목적이면 이메일 인증 번호 제목으로 발송한다.", async () => {
@@ -145,5 +150,63 @@ describe("sendOtpEmail", () => {
     await expect(
       sendOtpEmail({ email, purpose: "signup", otp }),
     ).rejects.toThrow("resend failed");
+  });
+
+  it.each(["nodemailer", "resend"] as const)(
+    "%s Provider가 pending이면 delivery deadline에서 timeout reject한다",
+    async (provider) => {
+      vi.useFakeTimers();
+      vi.mocked(resolveEmailProvider).mockReturnValue(provider);
+
+      const pendingPromise = new Promise<void>(() => undefined);
+
+      if (provider === "nodemailer") {
+        vi.mocked(sendViaNodemailer).mockReturnValue(pendingPromise);
+      } else {
+        vi.mocked(sendViaResend).mockReturnValue(pendingPromise);
+      }
+
+      const delivery = sendOtpEmail({ email, purpose: "signup", otp });
+      let settlement: "pending" | "resolved" | "rejected" = "pending";
+
+      void delivery.then(
+        () => {
+          settlement = "resolved";
+        },
+        () => {
+          settlement = "rejected";
+        },
+      );
+
+      await vi.advanceTimersByTimeAsync(OTP_EMAIL_DELIVERY_TIMEOUT_MS - 1);
+      expect(settlement).toBe("pending");
+
+      await vi.advanceTimersByTimeAsync(1);
+
+      await expect(delivery).rejects.toMatchObject({
+        name: "OtpEmailDeliveryTimeoutError",
+        message: "OTP email delivery timed out.",
+      });
+      expect(settlement).toBe("rejected");
+    },
+  );
+
+  it("정상 resolve 후 delivery timeout timer를 남기지 않는다", async () => {
+    vi.useFakeTimers();
+
+    await sendOtpEmail({ email, purpose: "signup", otp });
+
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("Provider reject 후 delivery timeout timer를 남기지 않는다", async () => {
+    vi.useFakeTimers();
+    vi.mocked(sendViaNodemailer).mockRejectedValue(new Error("send failed"));
+
+    await expect(
+      sendOtpEmail({ email, purpose: "signup", otp }),
+    ).rejects.toThrow("send failed");
+
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

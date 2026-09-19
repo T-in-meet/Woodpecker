@@ -1,7 +1,10 @@
 import { render } from "@react-email/render";
 import React from "react";
 
-import type { OtpPurpose } from "@/features/auth/constants/otp";
+import {
+  OTP_EMAIL_DELIVERY_TIMEOUT_MS,
+  type OtpPurpose,
+} from "@/features/auth/constants/otp";
 import { OtpEmailTemplate } from "@/features/auth/email/OtpEmailTemplate";
 import { sendViaNodemailer } from "@/features/auth/email/providers/sendViaNodemailer";
 import { sendViaResend } from "@/features/auth/email/providers/sendViaResend";
@@ -14,6 +17,40 @@ type SendOtpEmailProps = {
   otp: string;
 };
 
+class OtpEmailDeliveryTimeoutError extends Error {
+  constructor() {
+    super("OTP email delivery timed out.");
+    this.name = "OtpEmailDeliveryTimeoutError";
+  }
+}
+
+/**
+ * 실제 Email Provider 호출의 caller-side wall-clock wait를 제한한다.
+ *
+ * Provider SDK가 cancellation signal을 지원하지 않는 경우 timeout 이후에도
+ * underlying remote operation이 늦게 완료될 수 있다. 이 helper의 목적은
+ * remote cancellation이 아니라 Woodpecker caller의 bounded-settle 보장이다.
+ */
+async function waitForEmailDelivery(
+  deliveryPromise: Promise<void>,
+): Promise<void> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new OtpEmailDeliveryTimeoutError());
+    }, OTP_EMAIL_DELIVERY_TIMEOUT_MS);
+  });
+
+  try {
+    await Promise.race([deliveryPromise, timeoutPromise]);
+  } finally {
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
 /**
  * OTP 이메일 발송 함수
  *
@@ -25,10 +62,12 @@ type SendOtpEmailProps = {
  * - purpose 기반 이메일 제목 구성
  * - provider(nodemailer/resend) 분기 처리
  * - 이메일 발송 실행
+ * - Provider delivery 전체 wait를 유한한 시간으로 제한
  *
  * 주의:
  * - OTP 발급(generateLink)은 담당하지 않는다.
  * - 실제 OTP 발급은 issueOtp 계층에서 수행한다.
+ * - delivery timeout은 caller wait만 종료하며 remote cancellation을 보장하지 않는다.
  */
 export async function sendOtpEmail({ email, purpose, otp }: SendOtpEmailProps) {
   /**
@@ -69,15 +108,13 @@ export async function sendOtpEmail({ email, purpose, otp }: SendOtpEmailProps) {
   };
 
   /**
-   * nodemailer 사용 환경이면 SMTP 기반으로 발송한다.
+   * 실제 Provider send Promise에만 공통 wall-clock deadline을 적용한다.
+   * 템플릿 렌더링과 payload 준비 시간은 Email delivery timeout에 포함하지 않는다.
    */
-  if (provider === "nodemailer") {
-    await sendViaNodemailer(payload);
-    return;
-  }
+  const deliveryPromise =
+    provider === "nodemailer"
+      ? sendViaNodemailer(payload)
+      : sendViaResend(payload);
 
-  /**
-   * 그 외 환경에서는 Resend provider를 사용한다.
-   */
-  await sendViaResend(payload);
+  await waitForEmailDelivery(deliveryPromise);
 }
