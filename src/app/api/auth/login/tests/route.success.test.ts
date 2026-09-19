@@ -26,6 +26,11 @@ import {
 
 const getLegalAcceptanceStatusMock = vi.hoisted(() => vi.fn());
 
+vi.mock("@/features/auth/lib/rate-limit/authGlobalRequestRateLimit", () => ({
+  authGlobalRequestRateLimit: {
+    tryConsume: vi.fn(() => ({ allowed: true })),
+  },
+}));
 vi.mock("@/features/auth/lib/rate-limit/trustedAuthClientIp", () => ({
   getTrustedAuthClientIp: vi.fn(),
 }));

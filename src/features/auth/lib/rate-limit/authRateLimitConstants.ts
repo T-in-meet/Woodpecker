@@ -1,4 +1,18 @@
 /**
+ * Auth Global shared IP request 정책.
+ *
+ * Login / Signup / Forgot Password / Resend / Verify OTP가
+ * 같은 trusted IP 기준 request budget을 공유한다.
+ *
+ * operation-specific limiter보다 높은 aggregate ceiling으로 두며,
+ * short/long rolling window를 함께 적용한다.
+ */
+export const AUTH_GLOBAL_REQUEST_IP_SHORT_LIMIT = 30;
+export const AUTH_GLOBAL_REQUEST_IP_SHORT_WINDOW_MS = 60 * 1000;
+export const AUTH_GLOBAL_REQUEST_IP_LONG_LIMIT = 150;
+export const AUTH_GLOBAL_REQUEST_IP_LONG_WINDOW_MS = 15 * 60 * 1000;
+
+/**
  * Password Login Email total attempt 정책.
  *
  * 같은 canonicalEmail의 실제 Password Login Provider attempt를

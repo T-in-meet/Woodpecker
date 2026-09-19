@@ -44,6 +44,7 @@ export type ResendEmailActionState =
       status: "blocked";
       fieldErrors: null;
       reasonCode:
+        | typeof AUTH_LOG_REASONS.AUTH_GLOBAL_IP_LIMIT
         | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT
         | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP_LONG
         | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT

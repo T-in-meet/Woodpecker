@@ -8,6 +8,7 @@ import { applyMinimumActionDelay } from "@/features/auth/lib/applyMinimumActionD
 import { logAuthError, logAuthEvent } from "@/features/auth/lib/authLogger";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { createOtpIssueClient } from "@/features/auth/lib/issueOtp";
+import { authGlobalRequestRateLimit } from "@/features/auth/lib/rate-limit/authGlobalRequestRateLimit";
 import type { OtpIssueIpPrecheckResult } from "@/features/auth/lib/rate-limit/otpIssueRateLimit";
 import { otpIssueRateLimit } from "@/features/auth/lib/rate-limit/otpIssueRateLimit";
 import type { SignupResendRequestRateLimitResult } from "@/features/auth/lib/rate-limit/signupResendRequestRateLimit";
@@ -42,6 +43,12 @@ vi.mock("@/features/auth/email/issueOtpAndSendEmail", () => ({
 
 vi.mock("@/features/auth/lib/issueOtp", () => ({
   createOtpIssueClient: vi.fn(),
+}));
+
+vi.mock("@/features/auth/lib/rate-limit/authGlobalRequestRateLimit", () => ({
+  authGlobalRequestRateLimit: {
+    tryConsume: vi.fn(),
+  },
 }));
 
 vi.mock("@/features/auth/lib/rate-limit/otpIssueRateLimit", () => ({
@@ -82,6 +89,7 @@ const mockIssueOtpAndSendEmailWithResult = vi.mocked(
   issueOtpAndSendEmailWithResult,
 );
 const mockCreateOtpIssueClient = vi.mocked(createOtpIssueClient);
+const mockGlobalTryConsume = vi.mocked(authGlobalRequestRateLimit.tryConsume);
 const mockPrecheckIpIssue = vi.mocked(otpIssueRateLimit.precheckIpIssue);
 const mockTryConsumeSignupResendRequest = vi.mocked(
   signupResendRequestRateLimit.tryConsume,
@@ -164,6 +172,7 @@ describe("resendEmailAction", () => {
     });
     mockEnsureUserAgreement.mockResolvedValue(undefined);
     mockCreateOtpIssueClient.mockReturnValue(OTP_ISSUE_CLIENT);
+    mockGlobalTryConsume.mockReturnValue({ allowed: true });
     mockPrecheckIpIssue.mockReturnValue({ allowed: true });
     mockTryConsumeSignupResendRequest.mockReturnValue({ allowed: true });
     mockTryStartIssue.mockReturnValue({ allowed: true });
@@ -184,6 +193,7 @@ describe("resendEmailAction", () => {
       fieldErrors: null,
     });
     expect(mockGetTrustedAuthServerActionClientIp).not.toHaveBeenCalled();
+    expect(mockGlobalTryConsume).not.toHaveBeenCalled();
     expect(mockPrecheckIpIssue).not.toHaveBeenCalled();
     expect(mockTryConsumeSignupResendRequest).not.toHaveBeenCalled();
     expect(mockCreateOtpIssueClient).not.toHaveBeenCalled();
@@ -203,6 +213,7 @@ describe("resendEmailAction", () => {
         email: [VALIDATION_MESSAGES.emailInvalid],
       },
     });
+    expect(mockGlobalTryConsume).not.toHaveBeenCalled();
     expect(mockPrecheckIpIssue).not.toHaveBeenCalled();
     expect(mockTryConsumeSignupResendRequest).not.toHaveBeenCalled();
     expect(mockGetUserByEmail).not.toHaveBeenCalled();
@@ -237,6 +248,7 @@ describe("resendEmailAction", () => {
       reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
       fieldErrors: null,
     });
+    expect(mockGlobalTryConsume).not.toHaveBeenCalled();
     expect(mockPrecheckIpIssue).not.toHaveBeenCalled();
     expect(mockTryConsumeSignupResendRequest).not.toHaveBeenCalled();
     expect(mockGetUserByEmail).not.toHaveBeenCalled();

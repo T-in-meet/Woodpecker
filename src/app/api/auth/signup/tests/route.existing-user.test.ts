@@ -23,6 +23,12 @@ const otpIssueRateLimitMock = vi.hoisted(() => ({
   releaseIssue: vi.fn(),
 }));
 
+vi.mock("@/features/auth/lib/rate-limit/authGlobalRequestRateLimit", () => ({
+  authGlobalRequestRateLimit: {
+    tryConsume: vi.fn(() => ({ allowed: true })),
+  },
+}));
+
 vi.mock("@/features/auth/lib/userAgreements", () => ({
   ensureUserAgreement: ensureUserAgreementMock,
 }));

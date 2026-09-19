@@ -61,6 +61,7 @@ export function expectNoLegacyActionFields(state: Record<string, unknown>) {
 const hoisted = vi.hoisted(() => ({
   issueOtpAndSendEmailWithResult: vi.fn(),
   createOtpIssueClient: vi.fn(),
+  tryConsumeGlobal: vi.fn(),
   tryStartIssue: vi.fn(),
   recordSuccessfulIssue: vi.fn(),
   releaseIssue: vi.fn(),
@@ -82,6 +83,12 @@ vi.mock("@/features/auth/email/issueOtpAndSendEmail", () => ({
 
 vi.mock("@/features/auth/lib/issueOtp", () => ({
   createOtpIssueClient: hoisted.createOtpIssueClient,
+}));
+
+vi.mock("@/features/auth/lib/rate-limit/authGlobalRequestRateLimit", () => ({
+  authGlobalRequestRateLimit: {
+    tryConsume: hoisted.tryConsumeGlobal,
+  },
 }));
 
 vi.mock("@/features/auth/lib/rate-limit/otpIssueRateLimit", () => ({
@@ -125,6 +132,7 @@ export type ForgotPasswordActionTestOptions = {
   redirect?: string | null;
   ip?: string;
   trustedIpAvailable?: boolean;
+  globalBlocked?: boolean;
   blockedBy?:
     | "email_success"
     | "cooldown"
@@ -222,6 +230,12 @@ export function setupActionTest(options: ForgotPasswordActionTestOptions = {}) {
       : { available: true, ip },
   );
 
+  hoisted.tryConsumeGlobal.mockReturnValue(
+    options.globalBlocked
+      ? { allowed: false, blockedBy: "ip_short" }
+      : { allowed: true },
+  );
+
   hoisted.tryStartIssue.mockReturnValue(
     options.blockedBy
       ? { allowed: false, blockedBy: options.blockedBy }
@@ -249,6 +263,7 @@ export function setupActionTest(options: ForgotPasswordActionTestOptions = {}) {
     otpIssueClient,
     issueOtpAndSendEmailWithResultMock: hoisted.issueOtpAndSendEmailWithResult,
     createOtpIssueClientMock: hoisted.createOtpIssueClient,
+    tryConsumeGlobalMock: hoisted.tryConsumeGlobal,
     tryStartIssueMock: hoisted.tryStartIssue,
     recordSuccessfulIssueMock: hoisted.recordSuccessfulIssue,
     releaseIssueMock: hoisted.releaseIssue,

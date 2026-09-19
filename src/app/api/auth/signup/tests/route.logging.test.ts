@@ -29,6 +29,12 @@ const otpIssueRateLimitMock = vi.hoisted(() => ({
   releaseIssue: vi.fn(),
 }));
 
+vi.mock("@/features/auth/lib/rate-limit/authGlobalRequestRateLimit", () => ({
+  authGlobalRequestRateLimit: {
+    tryConsume: vi.fn(() => ({ allowed: true })),
+  },
+}));
+
 vi.mock("@/features/auth/lib/userAgreements", () => ({
   ensureUserAgreement: ensureUserAgreementMock,
 }));
@@ -228,9 +234,10 @@ describe("signup 라우트 인증 로깅", () => {
       AUTH_EVENTS.AUTH_SIGNUP_FAILED,
       expect.objectContaining({
         reasonCode: AUTH_LOG_REASONS.IP_UNAVAILABLE,
-        maskedEmail: expect.any(String),
       }),
     );
+    const [, failContext] = vi.mocked(logAuthError).mock.calls[0]!;
+    expect(failContext).not.toHaveProperty("maskedEmail");
     expect(getUserByEmail).not.toHaveBeenCalled();
     expect(createOtpIssueClient).not.toHaveBeenCalled();
     expect(otpIssueRateLimitMock.tryStartIssue).not.toHaveBeenCalled();

@@ -7,6 +7,13 @@ export const AUTH_LOG_REASONS = {
   RATE_LIMIT_EMAIL_SHORT: "RATE_LIMIT_EMAIL_SHORT",
   RATE_LIMIT_EMAIL_LONG: "RATE_LIMIT_EMAIL_LONG",
   /**
+   * Auth Global shared IP request 제한.
+   *
+   * Login / Signup / Forgot Password / Resend / Verify OTP가 공유하는
+   * request-level IP budget 차단을 operation-specific IP 제한과 구분한다.
+   */
+  AUTH_GLOBAL_IP_LIMIT: "AUTH_GLOBAL_IP_LIMIT",
+  /**
    * Password Login Email total attempt 제한.
    */
   LOGIN_EMAIL_LIMIT: "LOGIN_EMAIL_LIMIT",

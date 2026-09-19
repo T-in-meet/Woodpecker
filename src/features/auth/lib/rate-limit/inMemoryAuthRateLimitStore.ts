@@ -1,6 +1,7 @@
 import { pruneExpired } from "@/features/auth/utils/rateLimit.utils";
 
 import {
+  AUTH_GLOBAL_REQUEST_IP_LONG_WINDOW_MS,
   LOGIN_EMAIL_ATTEMPT_WINDOW_MS,
   LOGIN_FAILURE_STREAK_INACTIVITY_MS,
   LOGIN_IP_LONG_WINDOW_MS,
@@ -35,6 +36,7 @@ const CLEANUP_INTERVAL_MS = 60 * 1000;
  * timestamp 상태에 사용되는 가장 긴 window를 기준으로 정리한다.
  */
 const TIMESTAMP_RETENTION_MS = Math.max(
+  AUTH_GLOBAL_REQUEST_IP_LONG_WINDOW_MS,
   LOGIN_EMAIL_ATTEMPT_WINDOW_MS,
   LOGIN_IP_LONG_WINDOW_MS,
   OTP_ISSUE_EMAIL_SUCCESS_WINDOW_MS,
@@ -186,10 +188,7 @@ export function createInMemoryAuthRateLimitStore(): AuthRateLimitStore {
    */
   function maybeCleanup(now: number): void {
     // 아직 cleanup interval이 지나지 않았다면 전체 scan을 생략한다.
-    if (
-      lastCleanupAt !== null &&
-      now - lastCleanupAt < CLEANUP_INTERVAL_MS
-    ) {
+    if (lastCleanupAt !== null && now - lastCleanupAt < CLEANUP_INTERVAL_MS) {
       return;
     }
 
@@ -260,7 +259,7 @@ export function createInMemoryAuthRateLimitStore(): AuthRateLimitStore {
     },
 
     /**
-     * rolling/sliding window timestamp 상태를 제거한다.
+     * rolling/sliding window 상태를 제거한다.
      */
     deleteTimestampWindow(key: string): void {
       cleanupBeforeMutation();
@@ -320,14 +319,14 @@ export function createInMemoryAuthRateLimitStore(): AuthRateLimitStore {
     },
 
     /**
-     * OTP Issue cooldown 상태를 조회한다.
+     * OTP Issue의 마지막 Provider operation 시작 시각을 조회한다.
      */
     getCooldown(key: string): CooldownState | undefined {
       return cooldownStore.get(key);
     },
 
     /**
-     * OTP Issue cooldown 상태를 저장한다.
+     * OTP Issue의 마지막 Provider operation 시작 시각을 저장한다.
      */
     setCooldown(key: string, state: CooldownState): void {
       cleanupBeforeMutation();

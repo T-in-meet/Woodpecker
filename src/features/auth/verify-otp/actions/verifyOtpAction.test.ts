@@ -8,6 +8,7 @@ import { AUTH_LOG_REASONS } from "../../constants/authLogReasons";
 import { INVALID_OTP_ERROR_MESSAGE } from "../../constants/otp";
 import { applyMinimumActionDelay } from "../../lib/applyMinimumActionDelay";
 import { logAuthError, logAuthEvent } from "../../lib/authLogger";
+import { authGlobalRequestRateLimit } from "../../lib/rate-limit/authGlobalRequestRateLimit";
 import {
   otpVerifyRateLimit,
   OtpVerifyRateLimitBlockedBy,
@@ -39,6 +40,12 @@ vi.mock("@/lib/supabase/server", () => ({
 
 vi.mock("../../lib/rate-limit/trustedAuthClientIp", () => ({
   getTrustedAuthServerActionClientIp: vi.fn(),
+}));
+
+vi.mock("../../lib/rate-limit/authGlobalRequestRateLimit", () => ({
+  authGlobalRequestRateLimit: {
+    tryConsume: vi.fn(),
+  },
 }));
 
 vi.mock("../../lib/rate-limit/otpVerifyRateLimit", () => ({
@@ -110,6 +117,10 @@ describe("verifyOtpAction", () => {
     });
 
     vi.mocked(createClient).mockResolvedValue(mockSupabase);
+
+    vi.mocked(authGlobalRequestRateLimit.tryConsume).mockReturnValue({
+      allowed: true,
+    });
 
     vi.mocked(otpVerifyRateLimit.tryStartAttempt).mockReturnValue({
       allowed: true,
@@ -306,6 +317,7 @@ describe("verifyOtpAction", () => {
       fieldErrors: null,
     });
     expect(getTrustedAuthServerActionClientIp).not.toHaveBeenCalled();
+    expect(authGlobalRequestRateLimit.tryConsume).not.toHaveBeenCalled();
     expect(createClient).not.toHaveBeenCalled();
     expect(otpVerifyRateLimit.tryStartAttempt).not.toHaveBeenCalled();
     expect(verifyOtp).not.toHaveBeenCalled();
@@ -329,6 +341,7 @@ describe("verifyOtpAction", () => {
     }
     expect(result.fieldErrors?.otp).toBeDefined();
     expect(getTrustedAuthServerActionClientIp).not.toHaveBeenCalled();
+    expect(authGlobalRequestRateLimit.tryConsume).not.toHaveBeenCalled();
     expect(otpVerifyRateLimit.tryStartAttempt).not.toHaveBeenCalled();
     expect(verifyOtp).not.toHaveBeenCalled();
   });
@@ -353,6 +366,7 @@ describe("verifyOtpAction", () => {
       status: "internal_error",
       fieldErrors: null,
     });
+    expect(authGlobalRequestRateLimit.tryConsume).not.toHaveBeenCalled();
     expect(createClient).not.toHaveBeenCalled();
     expect(otpVerifyRateLimit.tryStartAttempt).not.toHaveBeenCalled();
     expect(otpVerifyRateLimit.recordResult).not.toHaveBeenCalled();
@@ -361,6 +375,39 @@ describe("verifyOtpAction", () => {
       expect.anything(),
       expect.objectContaining({
         reasonCode: AUTH_LOG_REASONS.IP_UNAVAILABLE,
+      }),
+    );
+  });
+
+  it("Auth Global 차단은 기존 blocked 상태를 반환하고 client/Verify limiter/Provider를 호출하지 않는다", async () => {
+    vi.mocked(authGlobalRequestRateLimit.tryConsume).mockReturnValue({
+      allowed: false,
+      blockedBy: "ip_short",
+    });
+
+    const result = await verifyOtpAction(
+      null,
+      prevState,
+      createFormData({
+        email: "user@example.com",
+        purpose: "signup",
+        otp: "123456",
+      }),
+    );
+
+    expect(result).toEqual({
+      status: "blocked",
+      fieldErrors: null,
+    });
+    expect(createClient).not.toHaveBeenCalled();
+    expect(otpVerifyRateLimit.tryStartAttempt).not.toHaveBeenCalled();
+    expect(verifyOtp).not.toHaveBeenCalled();
+    expect(logAuthEvent).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_VERIFY_OTP_RATE_LIMITED,
+      expect.objectContaining({
+        status: 429,
+        result: "blocked",
+        reasonCode: AUTH_LOG_REASONS.AUTH_GLOBAL_IP_LIMIT,
       }),
     );
   });

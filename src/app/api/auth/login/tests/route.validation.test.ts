@@ -1,12 +1,14 @@
 /**
  * 로그인 API 입력 검증 전용 테스트.
  *
- * 검증 실패는 trusted IP 조회, Rate Limit consume, Provider 호출 전에 종료되어야 한다.
+ * trusted IP 및 Auth Global request guard를 통과한 뒤 validation이 실행된다.
+ * validation 실패는 operation-specific Login Rate Limit consume과 Provider 호출 전에 종료되어야 한다.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
+import { authGlobalRequestRateLimit } from "@/features/auth/lib/rate-limit/authGlobalRequestRateLimit";
 import { getTrustedAuthClientIp } from "@/features/auth/lib/rate-limit/trustedAuthClientIp";
 import { loginRateLimit } from "@/features/auth/login/lib/loginRateLimit";
 import { VALIDATION_REASON } from "@/lib/validation/reasons";
@@ -23,6 +25,11 @@ import {
 
 const getLegalAcceptanceStatusMock = vi.hoisted(() => vi.fn());
 
+vi.mock("@/features/auth/lib/rate-limit/authGlobalRequestRateLimit", () => ({
+  authGlobalRequestRateLimit: {
+    tryConsume: vi.fn(),
+  },
+}));
 vi.mock("@/features/auth/lib/rate-limit/trustedAuthClientIp", () => ({
   getTrustedAuthClientIp: vi.fn(),
 }));
@@ -44,6 +51,9 @@ describe("로그인 API 입력 검증", () => {
     setupLoginSecurityMocks();
     mockLoginSuccess();
     getLegalAcceptanceStatusMock.mockResolvedValue({ canAccessService: true });
+    vi.mocked(authGlobalRequestRateLimit.tryConsume).mockReturnValue({
+      allowed: true,
+    });
   });
 
   /**
@@ -198,10 +208,11 @@ describe("로그인 API 입력 검증", () => {
   });
 
   describe("검증 실패 시 후속 처리 차단", () => {
-    it("TC-10: validation 실패 시 trusted IP, Rate Limit, Provider를 시작하지 않는다", async () => {
+    it("TC-10: validation 실패 시 global guard까지 실행하고 operation limiter/Provider는 시작하지 않는다", async () => {
       await POST(makeLoginRequest({ email: "bad-email", password: "pass" }));
 
-      expect(getTrustedAuthClientIp).not.toHaveBeenCalled();
+      expect(getTrustedAuthClientIp).toHaveBeenCalled();
+      expect(authGlobalRequestRateLimit.tryConsume).toHaveBeenCalled();
       expect(loginRateLimit.tryStartAttempt).not.toHaveBeenCalled();
       expect(mockSignIn).not.toHaveBeenCalled();
     });

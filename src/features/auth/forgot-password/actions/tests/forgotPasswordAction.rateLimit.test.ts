@@ -5,6 +5,24 @@ import { AUTH_LOG_REASONS } from "@/features/auth/constants/authLogReasons";
 import { setupActionTest } from "./utils/forgot-password-action-test-utils";
 
 describe("forgotPasswordAction - OTP Issue rate limit", () => {
+  it("Auth Global 차단은 Recovery success-like redirect를 유지하고 downstream을 시작하지 않는다", async () => {
+    const mocks = setupActionTest({ globalBlocked: true });
+
+    await expect(mocks.callAction()).rejects.toThrow("NEXT_REDIRECT");
+
+    expect(mocks.createOtpIssueClientMock).not.toHaveBeenCalled();
+    expect(mocks.tryStartIssueMock).not.toHaveBeenCalled();
+    expect(mocks.issueOtpAndSendEmailWithResultMock).not.toHaveBeenCalled();
+    expect(mocks.logAuthEventMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        status: 429,
+        result: "blocked",
+        reasonCode: AUTH_LOG_REASONS.AUTH_GLOBAL_IP_LIMIT,
+      }),
+    );
+  });
+
   it.each([
     ["ip_short", AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT],
     ["ip_long", AUTH_LOG_REASONS.RATE_LIMIT_IP_LONG],

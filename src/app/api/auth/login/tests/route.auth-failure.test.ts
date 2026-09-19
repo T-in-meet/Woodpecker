@@ -23,6 +23,12 @@ import {
 
 const getLegalAcceptanceStatusMock = vi.hoisted(() => vi.fn());
 
+vi.mock("@/features/auth/lib/rate-limit/authGlobalRequestRateLimit", () => ({
+  authGlobalRequestRateLimit: {
+    tryConsume: vi.fn(() => ({ allowed: true })),
+  },
+}));
+
 vi.mock("@/features/auth/lib/rate-limit/trustedAuthClientIp", () => ({
   getTrustedAuthClientIp: vi.fn(),
 }));
@@ -97,7 +103,9 @@ describe("로그인 API Provider 결과 분류", () => {
 
     vi.mocked(loginRateLimit.recordResult).mockClear();
 
-    const unconfirmedResponse = await POST(makeLoginRequest(DEFAULT_LOGIN_BODY));
+    const unconfirmedResponse = await POST(
+      makeLoginRequest(DEFAULT_LOGIN_BODY),
+    );
     const unconfirmedBody = await unconfirmedResponse.json();
 
     expect(unconfirmedResponse.status).toBe(credentialResponse.status);

@@ -5,7 +5,9 @@ import { AUTH_LOG_REASONS } from "@/features/auth/constants/authLogReasons";
 import { issueOtpAndSendEmailWithResult } from "@/features/auth/email/issueOtpAndSendEmail";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { createOtpIssueClient } from "@/features/auth/lib/issueOtp";
+import { authGlobalRequestRateLimit } from "@/features/auth/lib/rate-limit/authGlobalRequestRateLimit";
 import { otpIssueRateLimit } from "@/features/auth/lib/rate-limit/otpIssueRateLimit";
+import { signupResendRequestRateLimit } from "@/features/auth/lib/rate-limit/signupResendRequestRateLimit";
 import { getTrustedAuthServerActionClientIp } from "@/features/auth/lib/rate-limit/trustedAuthClientIp";
 
 import { resendEmailAction } from "./resendEmailAction";
@@ -32,12 +34,22 @@ vi.mock("@/features/auth/email/issueOtpAndSendEmail", () => ({
 vi.mock("@/features/auth/lib/issueOtp", () => ({
   createOtpIssueClient: vi.fn(),
 }));
+vi.mock("@/features/auth/lib/rate-limit/authGlobalRequestRateLimit", () => ({
+  authGlobalRequestRateLimit: {
+    tryConsume: vi.fn(),
+  },
+}));
 vi.mock("@/features/auth/lib/rate-limit/otpIssueRateLimit", () => ({
   otpIssueRateLimit: {
     precheckIpIssue: vi.fn(),
     tryStartIssue: vi.fn(),
     recordSuccessfulIssue: vi.fn(),
     releaseIssue: vi.fn(),
+  },
+}));
+vi.mock("@/features/auth/lib/rate-limit/signupResendRequestRateLimit", () => ({
+  signupResendRequestRateLimit: {
+    tryConsume: vi.fn(),
   },
 }));
 vi.mock("@/features/auth/lib/rate-limit/trustedAuthClientIp", () => ({
@@ -58,7 +70,11 @@ const mockIssueOtpAndSendEmailWithResult = vi.mocked(
   issueOtpAndSendEmailWithResult,
 );
 const mockCreateOtpIssueClient = vi.mocked(createOtpIssueClient);
+const mockGlobalTryConsume = vi.mocked(authGlobalRequestRateLimit.tryConsume);
 const mockPrecheckIpIssue = vi.mocked(otpIssueRateLimit.precheckIpIssue);
+const mockSignupResendTryConsume = vi.mocked(
+  signupResendRequestRateLimit.tryConsume,
+);
 const mockTryStartIssue = vi.mocked(otpIssueRateLimit.tryStartIssue);
 const mockGetTrustedAuthServerActionClientIp = vi.mocked(
   getTrustedAuthServerActionClientIp,
@@ -89,7 +105,9 @@ describe("Signup Resend IP-only precheck", () => {
       available: true,
       ip: "203.0.113.10",
     });
+    mockGlobalTryConsume.mockReturnValue({ allowed: true });
     mockPrecheckIpIssue.mockReturnValue({ allowed: true });
+    mockSignupResendTryConsume.mockReturnValue({ allowed: true });
     mockTryStartIssue.mockReturnValue({ allowed: true });
     mockGetUserByEmail.mockResolvedValue({
       id: "user-id",
@@ -99,6 +117,47 @@ describe("Signup Resend IP-only precheck", () => {
     });
     mockCreateOtpIssueClient.mockReturnValue(OTP_ISSUE_CLIENT);
     mockIssueOtpAndSendEmailWithResult.mockResolvedValue({ ok: true });
+  });
+
+  it("signup Auth Global 차단은 account-independent blocked 상태로 종료하고 downstream을 호출하지 않는다", async () => {
+    mockGlobalTryConsume.mockReturnValueOnce({
+      allowed: false,
+      blockedBy: "ip_short",
+    });
+
+    const result = await callAction("signup");
+
+    expect(result).toEqual({
+      status: "blocked",
+      reasonCode: AUTH_LOG_REASONS.AUTH_GLOBAL_IP_LIMIT,
+      fieldErrors: null,
+    });
+    expect(mockPrecheckIpIssue).not.toHaveBeenCalled();
+    expect(mockSignupResendTryConsume).not.toHaveBeenCalled();
+    expect(mockGetUserByEmail).not.toHaveBeenCalled();
+    expect(mockCreateOtpIssueClient).not.toHaveBeenCalled();
+    expect(mockTryStartIssue).not.toHaveBeenCalled();
+    expect(mockIssueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
+    expect(mockRedirect).not.toHaveBeenCalled();
+  });
+
+  it("reset-password Auth Global 차단은 success-like redirect하고 downstream을 호출하지 않는다", async () => {
+    mockGlobalTryConsume.mockReturnValueOnce({
+      allowed: false,
+      blockedBy: "ip_short",
+    });
+
+    await expect(callAction("reset-password")).rejects.toThrow(
+      "NEXT_REDIRECT:",
+    );
+
+    expect(mockPrecheckIpIssue).not.toHaveBeenCalled();
+    expect(mockSignupResendTryConsume).not.toHaveBeenCalled();
+    expect(mockGetUserByEmail).not.toHaveBeenCalled();
+    expect(mockCreateOtpIssueClient).not.toHaveBeenCalled();
+    expect(mockTryStartIssue).not.toHaveBeenCalled();
+    expect(mockIssueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
+    expect(mockRedirect).toHaveBeenCalledTimes(1);
   });
 
   it("signup IP precheck blocked면 account lookup 전에 blockedState를 반환한다", async () => {
@@ -130,6 +189,7 @@ describe("Signup Resend IP-only precheck", () => {
     await expect(callAction("signup")).rejects.toThrow("NEXT_REDIRECT:");
 
     expect(mockPrecheckIpIssue).toHaveBeenCalledTimes(1);
+    expect(mockSignupResendTryConsume).toHaveBeenCalledTimes(1);
     expect(mockGetUserByEmail).toHaveBeenCalledWith("user@example.com");
     expect(mockCreateOtpIssueClient).not.toHaveBeenCalled();
     expect(mockTryStartIssue).not.toHaveBeenCalled();
@@ -137,12 +197,13 @@ describe("Signup Resend IP-only precheck", () => {
     expect(mockRedirect).toHaveBeenCalledTimes(1);
   });
 
-  it("reset-password resend에는 새로운 IP-only precheck를 적용하지 않는다", async () => {
+  it("reset-password resend에는 Signup 전용 IP-only precheck/request limiter를 적용하지 않는다", async () => {
     await expect(callAction("reset-password")).rejects.toThrow(
       "NEXT_REDIRECT:",
     );
 
     expect(mockPrecheckIpIssue).not.toHaveBeenCalled();
+    expect(mockSignupResendTryConsume).not.toHaveBeenCalled();
     expect(mockGetUserByEmail).not.toHaveBeenCalled();
     expect(mockTryStartIssue).toHaveBeenCalledWith({
       purpose: "reset-password",

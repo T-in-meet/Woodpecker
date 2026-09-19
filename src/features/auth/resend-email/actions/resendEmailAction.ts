@@ -22,6 +22,7 @@ import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 import { createOtpIssueClient } from "@/features/auth/lib/issueOtp";
 import { maskEmailForLogging } from "@/features/auth/lib/maskEmailForLogging";
 import { maskIpForLogging } from "@/features/auth/lib/maskIpForLogging";
+import { authGlobalRequestRateLimit } from "@/features/auth/lib/rate-limit/authGlobalRequestRateLimit";
 import {
   otpIssueRateLimit,
   type OtpIssueRateLimitBlockedBy,
@@ -62,6 +63,7 @@ function mapOtpIssueBlockedByToReason(
 
 function blockedState(
   reasonCode:
+    | typeof AUTH_LOG_REASONS.AUTH_GLOBAL_IP_LIMIT
     | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT
     | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP_LONG
     | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT
@@ -254,65 +256,6 @@ export async function resendEmailAction(
 
     const { ip } = trustedIp;
     const maskedIp = maskIpForLogging(ip);
-
-    /**
-     * Signup Resend는 account 존재 여부를 조회하기 전에 shared IP quota만
-     * read-only로 확인한다. blocked는 account state와 무관하게 같은
-     * blockedState를 반환하며, allowed는 최종 Provider 시작 허가가 아니다.
-     *
-     * Recovery resend는 account lookup을 선행하지 않고 Local RL도 외부에
-     * success-like로 숨기는 기존 계약을 유지하므로 이 precheck를 적용하지 않는다.
-     */
-    if (purpose === "signup") {
-      const ipPrecheckResult = otpIssueRateLimit.precheckIpIssue({ ip });
-
-      if (!ipPrecheckResult.allowed) {
-        const reasonCode = mapOtpIssueBlockedByToReason(
-          ipPrecheckResult.blockedBy,
-        );
-
-        logAuthEvent(AUTH_EVENTS.AUTH_RESEND_EMAIL_RATE_LIMITED, {
-          path: RESEND_EMAIL_PATH,
-          method: "POST",
-          status: 429,
-          provider: "password",
-          result: "blocked",
-          reasonCode,
-          rateLimitSource: "otp_issue",
-          maskedEmail,
-          maskedIp,
-        });
-
-        return blockedState(reasonCode);
-      }
-    }
-
-    if (purpose === "signup") {
-      const requestRateLimitResult = signupResendRequestRateLimit.tryConsume({
-        ip,
-      });
-
-      if (!requestRateLimitResult.allowed) {
-        const reasonCode = mapOtpIssueBlockedByToReason(
-          requestRateLimitResult.blockedBy,
-        );
-
-        logAuthEvent(AUTH_EVENTS.AUTH_RESEND_EMAIL_RATE_LIMITED, {
-          path: RESEND_EMAIL_PATH,
-          method: "POST",
-          status: 429,
-          provider: "password",
-          result: "blocked",
-          reasonCode,
-          rateLimitSource: "signup_resend_request",
-          maskedEmail,
-          maskedIp,
-        });
-
-        return blockedState(reasonCode);
-      }
-    }
-
     const params = new URLSearchParams({
       purpose,
       email,
@@ -324,41 +267,39 @@ export async function resendEmailAction(
 
     verifyOtpUrl = `${ROUTES.VERIFY_OTP}?${params.toString()}`;
 
-    // Signup account lookup은 IP-only precheck와 request limiter를 통과한 뒤,
-    // final tryStartIssue() 전에 수행한다.
-    const otpIssueInput = await createResendOtpIssueInput(
-      email,
-      purpose,
-      canonicalEmail,
-    );
+    const globalRateLimitResult = authGlobalRequestRateLimit.tryConsume({ ip });
 
-    if (otpIssueInput === null) {
-      // 존재하지 않는 Signup 이메일은 Provider를 시작하지 않고 success-like로 숨긴다.
-      // tryStartIssue()를 호출하지 않으므로 cooldown / IP attempt / in-flight도 소비하지 않는다.
-      logAuthEvent(AUTH_EVENTS.AUTH_RESEND_EMAIL_COMPLETED, {
+    if (!globalRateLimitResult.allowed) {
+      logAuthEvent(AUTH_EVENTS.AUTH_RESEND_EMAIL_RATE_LIMITED, {
         path: RESEND_EMAIL_PATH,
         method: "POST",
-        status: 200,
+        status: 429,
         provider: "password",
-        result: "success",
+        result: "blocked",
+        reasonCode: AUTH_LOG_REASONS.AUTH_GLOBAL_IP_LIMIT,
+        rateLimitSource: "auth_global",
         maskedEmail,
         maskedIp,
       });
-    } else {
-      // 이 시점에는 Signup account state가 existing으로 확인됐다.
-      // 이후 account-dependent failure는 내부 reason/lifecycle만 유지하고
-      // 외부에는 success-like redirect로 숨긴다.
-      try {
-        const otpIssueClient = createOtpIssueClient();
-        const rateLimitResult = otpIssueRateLimit.tryStartIssue({
-          purpose,
-          canonicalEmail,
-          ip,
-        });
 
-        if (!rateLimitResult.allowed) {
+      if (purpose === "signup") {
+        return blockedState(AUTH_LOG_REASONS.AUTH_GLOBAL_IP_LIMIT);
+      }
+    } else {
+      /**
+       * Signup Resend는 account 존재 여부를 조회하기 전에 shared IP quota만
+       * read-only로 확인한다. blocked는 account state와 무관하게 같은
+       * blockedState를 반환하며, allowed는 최종 Provider 시작 허가가 아니다.
+       *
+       * Recovery resend는 account lookup을 선행하지 않고 Local RL도 외부에
+       * success-like로 숨기는 기존 계약을 유지하므로 이 precheck를 적용하지 않는다.
+       */
+      if (purpose === "signup") {
+        const ipPrecheckResult = otpIssueRateLimit.precheckIpIssue({ ip });
+
+        if (!ipPrecheckResult.allowed) {
           const reasonCode = mapOtpIssueBlockedByToReason(
-            rateLimitResult.blockedBy,
+            ipPrecheckResult.blockedBy,
           );
 
           logAuthEvent(AUTH_EVENTS.AUTH_RESEND_EMAIL_RATE_LIMITED, {
@@ -373,66 +314,146 @@ export async function resendEmailAction(
             maskedIp,
           });
 
-          // account state 확인 이후 Local RL은 purpose와 관계없이
-          // 내부 reason만 기록하고 외부에는 success-like redirect로 숨긴다.
-        } else {
-          try {
-            // 허용 직후 다른 await/I/O 없이 Provider operation을 시작한다.
-            const issueResult = await issueOtpAndSendEmailWithResult(
-              otpIssueInput,
-              otpIssueClient,
+          return blockedState(reasonCode);
+        }
+      }
+
+      if (purpose === "signup") {
+        const requestRateLimitResult = signupResendRequestRateLimit.tryConsume({
+          ip,
+        });
+
+        if (!requestRateLimitResult.allowed) {
+          const reasonCode = mapOtpIssueBlockedByToReason(
+            requestRateLimitResult.blockedBy,
+          );
+
+          logAuthEvent(AUTH_EVENTS.AUTH_RESEND_EMAIL_RATE_LIMITED, {
+            path: RESEND_EMAIL_PATH,
+            method: "POST",
+            status: 429,
+            provider: "password",
+            result: "blocked",
+            reasonCode,
+            rateLimitSource: "signup_resend_request",
+            maskedEmail,
+            maskedIp,
+          });
+
+          return blockedState(reasonCode);
+        }
+      }
+
+      // Signup account lookup은 IP-only precheck와 request limiter를 통과한 뒤,
+      // final tryStartIssue() 전에 수행한다.
+      const otpIssueInput = await createResendOtpIssueInput(
+        email,
+        purpose,
+        canonicalEmail,
+      );
+
+      if (otpIssueInput === null) {
+        // 존재하지 않는 Signup 이메일은 Provider를 시작하지 않고 success-like로 숨긴다.
+        // tryStartIssue()를 호출하지 않으므로 cooldown / IP attempt / in-flight도 소비하지 않는다.
+        logAuthEvent(AUTH_EVENTS.AUTH_RESEND_EMAIL_COMPLETED, {
+          path: RESEND_EMAIL_PATH,
+          method: "POST",
+          status: 200,
+          provider: "password",
+          result: "success",
+          maskedEmail,
+          maskedIp,
+        });
+      } else {
+        // 이 시점에는 Signup account state가 existing으로 확인됐다.
+        // 이후 account-dependent failure는 내부 reason/lifecycle만 유지하고
+        // 외부에는 success-like redirect로 숨긴다.
+        try {
+          const otpIssueClient = createOtpIssueClient();
+          const rateLimitResult = otpIssueRateLimit.tryStartIssue({
+            purpose,
+            canonicalEmail,
+            ip,
+          });
+
+          if (!rateLimitResult.allowed) {
+            const reasonCode = mapOtpIssueBlockedByToReason(
+              rateLimitResult.blockedBy,
             );
 
-            if (issueResult.ok) {
-              otpIssueRateLimit.recordSuccessfulIssue({
+            logAuthEvent(AUTH_EVENTS.AUTH_RESEND_EMAIL_RATE_LIMITED, {
+              path: RESEND_EMAIL_PATH,
+              method: "POST",
+              status: 429,
+              provider: "password",
+              result: "blocked",
+              reasonCode,
+              rateLimitSource: "otp_issue",
+              maskedEmail,
+              maskedIp,
+            });
+
+            // account state 확인 이후 Local RL은 purpose와 관계없이
+            // 내부 reason만 기록하고 외부에는 success-like redirect로 숨긴다.
+          } else {
+            try {
+              // 허용 직후 다른 await/I/O 없이 Provider operation을 시작한다.
+              const issueResult = await issueOtpAndSendEmailWithResult(
+                otpIssueInput,
+                otpIssueClient,
+              );
+
+              if (issueResult.ok) {
+                otpIssueRateLimit.recordSuccessfulIssue({
+                  purpose,
+                  canonicalEmail,
+                });
+
+                logAuthEvent(AUTH_EVENTS.AUTH_RESEND_EMAIL_COMPLETED, {
+                  path: RESEND_EMAIL_PATH,
+                  method: "POST",
+                  status: 200,
+                  provider: "password",
+                  result: "success",
+                  maskedEmail,
+                  maskedIp,
+                });
+              } else {
+                logResendOtpIssueFailure(
+                  issueResult.kind,
+                  issueResult.diagnostic,
+                  maskedEmail,
+                  maskedIp,
+                );
+
+                // account state 확인 이후 Provider / Email failure는
+                // 내부 reason만 구분하고 외부에는 success-like redirect로 숨긴다.
+              }
+            } finally {
+              // in-flight를 실제로 획득한 경우에만 release한다.
+              otpIssueRateLimit.releaseIssue({
                 purpose,
                 canonicalEmail,
               });
-
-              logAuthEvent(AUTH_EVENTS.AUTH_RESEND_EMAIL_COMPLETED, {
-                path: RESEND_EMAIL_PATH,
-                method: "POST",
-                status: 200,
-                provider: "password",
-                result: "success",
-                maskedEmail,
-                maskedIp,
-              });
-            } else {
-              logResendOtpIssueFailure(
-                issueResult.kind,
-                issueResult.diagnostic,
-                maskedEmail,
-                maskedIp,
-              );
-
-              // account state 확인 이후 Provider / Email failure는
-              // 내부 reason만 구분하고 외부에는 success-like redirect로 숨긴다.
             }
-          } finally {
-            // in-flight를 실제로 획득한 경우에만 release한다.
-            otpIssueRateLimit.releaseIssue({
-              purpose,
-              canonicalEmail,
-            });
           }
-        }
-      } catch (error) {
-        const normalized = normalizeUnknownError(error);
-        logAuthError(AUTH_EVENTS.AUTH_RESEND_EMAIL_FAILED, {
-          path: RESEND_EMAIL_PATH,
-          method: "POST",
-          status: 500,
-          provider: "password",
-          result: "failure",
-          reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
-          maskedEmail,
-          maskedIp,
-          ...normalized,
-        });
+        } catch (error) {
+          const normalized = normalizeUnknownError(error);
+          logAuthError(AUTH_EVENTS.AUTH_RESEND_EMAIL_FAILED, {
+            path: RESEND_EMAIL_PATH,
+            method: "POST",
+            status: 500,
+            provider: "password",
+            result: "failure",
+            reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+            maskedEmail,
+            maskedIp,
+            ...normalized,
+          });
 
-        // account state 확인 이후 client / agreement 등 내부 예외도
-        // 외부에는 success-like redirect로 숨긴다.
+          // account state 확인 이후 client / agreement 등 내부 예외도
+          // 외부에는 success-like redirect로 숨긴다.
+        }
       }
     }
   } catch (error) {

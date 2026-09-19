@@ -49,6 +49,11 @@ vi.mock("@/features/auth/lib/getUserByEmail");
 vi.mock("@/features/auth/lib/issueOtp", () => ({
   createOtpIssueClient: createOtpIssueClientMock,
 }));
+vi.mock("@/features/auth/lib/rate-limit/authGlobalRequestRateLimit", () => ({
+  authGlobalRequestRateLimit: {
+    tryConsume: vi.fn(() => ({ allowed: true })),
+  },
+}));
 vi.mock("@/features/auth/lib/rate-limit/otpIssueRateLimit", () => ({
   otpIssueRateLimit: otpIssueRateLimitMock,
 }));

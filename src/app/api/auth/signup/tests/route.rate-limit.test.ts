@@ -7,6 +7,7 @@ import {
   issueOtpAndSendEmailWithResult,
 } from "@/features/auth/email/issueOtpAndSendEmail";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
+import { authGlobalRequestRateLimit } from "@/features/auth/lib/rate-limit/authGlobalRequestRateLimit";
 import type { OtpIssueRateLimitStartResult } from "@/features/auth/lib/rate-limit/otpIssueRateLimit";
 
 import { POST } from "../route";
@@ -23,6 +24,12 @@ const createOtpIssueClientMock = vi.hoisted(() => vi.fn(() => otpIssueClient));
 
 vi.mock("@/features/auth/lib/userAgreements", () => ({
   ensureUserAgreement: ensureUserAgreementMock,
+}));
+
+vi.mock("@/features/auth/lib/rate-limit/authGlobalRequestRateLimit", () => ({
+  authGlobalRequestRateLimit: {
+    tryConsume: vi.fn(),
+  },
 }));
 
 vi.mock("@/features/auth/lib/rate-limit/otpIssueRateLimit", () => ({
@@ -87,6 +94,10 @@ describe("Signup Route OTP Issue Rate Limit 연결", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
+    vi.mocked(authGlobalRequestRateLimit.tryConsume).mockReturnValue({
+      allowed: true,
+    });
+
     vi.mocked(getUserByEmail).mockResolvedValue({
       id: "existing-user-id",
       email: "user@example.com",
@@ -96,6 +107,33 @@ describe("Signup Route OTP Issue Rate Limit 연결", () => {
     otpIssueRateLimitMock.tryStartIssue.mockReturnValue({ allowed: true });
     vi.mocked(issueOtpAndSendEmailWithResult).mockResolvedValue({ ok: true });
     ensureUserAgreementMock.mockResolvedValue(undefined);
+  });
+
+  it("Auth Global 차단은 malformed body보다 먼저 429로 종료하고 downstream에 진입하지 않는다", async () => {
+    vi.mocked(authGlobalRequestRateLimit.tryConsume).mockReturnValue({
+      allowed: false,
+      blockedBy: "ip_short",
+    });
+
+    const request = new NextRequest("http://localhost/api/auth/signup", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-forwarded-for": "203.0.113.10",
+      },
+      body: "{malformed",
+    });
+
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(429);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
+    expect(otpIssueRateLimitMock.precheckIssue).not.toHaveBeenCalled();
+    expect(getUserByEmail).not.toHaveBeenCalled();
+    expect(createOtpIssueClientMock).not.toHaveBeenCalled();
+    expect(otpIssueRateLimitMock.tryStartIssue).not.toHaveBeenCalled();
+    expect(issueOtpAndSendEmailWithResult).not.toHaveBeenCalled();
   });
 
   it("Local Rate Limit 차단 시 Provider operation을 시작하지 않고 429를 반환한다", async () => {

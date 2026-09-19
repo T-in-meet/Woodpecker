@@ -18,6 +18,12 @@ const otpIssueRateLimitMock = vi.hoisted(() => ({
 
 const otpIssueClient = vi.hoisted(() => ({ client: "otp-issue-client" }));
 
+vi.mock("@/features/auth/lib/rate-limit/authGlobalRequestRateLimit", () => ({
+  authGlobalRequestRateLimit: {
+    tryConsume: vi.fn(() => ({ allowed: true })),
+  },
+}));
+
 vi.mock("@/features/auth/lib/rate-limit/otpIssueRateLimit", () => ({
   otpIssueRateLimit: otpIssueRateLimitMock,
 }));

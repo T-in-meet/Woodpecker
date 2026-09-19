@@ -18,6 +18,12 @@ import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
 
 import { POST } from "../route";
 
+vi.mock("@/features/auth/lib/rate-limit/authGlobalRequestRateLimit", () => ({
+  authGlobalRequestRateLimit: {
+    tryConsume: vi.fn(() => ({ allowed: true })),
+  },
+}));
+
 vi.mock("@/features/auth/lib/getUserByEmail");
 vi.mock("@/features/auth/email/issueOtpAndSendEmail");
 

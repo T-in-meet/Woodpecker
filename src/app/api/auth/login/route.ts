@@ -23,6 +23,7 @@ import {
   AuthJsonParseError,
   parseAuthJsonRequestBody,
 } from "@/features/auth/lib/parseAuthJsonRequestBody";
+import { authGlobalRequestRateLimit } from "@/features/auth/lib/rate-limit/authGlobalRequestRateLimit";
 import { getTrustedAuthClientIp } from "@/features/auth/lib/rate-limit/trustedAuthClientIp";
 import { getLegalAcceptanceStatus } from "@/features/auth/lib/userAgreements";
 import { validateRedirectPath } from "@/features/auth/lib/validateRedirectPath";
@@ -80,6 +81,7 @@ type LoginTerminalOutcome =
   | {
       type: "blocked";
       reasonCode:
+        | typeof AUTH_LOG_REASONS.AUTH_GLOBAL_IP_LIMIT
         | typeof AUTH_LOG_REASONS.LOGIN_EMAIL_LIMIT
         | typeof AUTH_LOG_REASONS.LOGIN_IP_LIMIT
         | typeof AUTH_LOG_REASONS.LOGIN_FAILURE_STREAK
@@ -111,8 +113,9 @@ type ResolveLoginResult = {
 /**
  * 로그인 핵심 로직.
  *
- * Provider와 무관한 local 준비를 모두 마친 뒤 Login attempt를 consume하고,
- * 허용 직후 다른 await/I/O 없이 signInWithPassword를 시작한다.
+ * trusted IP와 Auth Global request guard는 body parsing 전에 확인한다.
+ * Global guard를 통과한 뒤 기존 입력 검증과 operation-specific Login limiter,
+ * Provider lifecycle을 그대로 수행한다.
  *
  * @param request 요청 객체
  * @param validatedRedirect 검증된 성공 redirect 경로
@@ -122,6 +125,33 @@ async function resolveLoginResponse(
   request: NextRequest,
   validatedRedirect: string,
 ): Promise<ResolveLoginResult> {
+  const trustedIp = getTrustedAuthClientIp(request);
+
+  if (!trustedIp.available) {
+    return {
+      response: failureResponse(AUTH_API_CODES.LOGIN_INTERNAL_ERROR),
+      outcome: {
+        type: "failed",
+        reasonCode: trustedIp.reasonCode,
+      },
+    };
+  }
+
+  const { ip } = trustedIp;
+  const maskedIp = maskIpForLogging(ip);
+  const globalRateLimitResult = authGlobalRequestRateLimit.tryConsume({ ip });
+
+  if (!globalRateLimitResult.allowed) {
+    return {
+      response: failureResponse(AUTH_API_CODES.LOGIN_RATE_LIMIT_EXCEEDED),
+      outcome: {
+        type: "blocked",
+        reasonCode: AUTH_LOG_REASONS.AUTH_GLOBAL_IP_LIMIT,
+        maskedIp,
+      },
+    };
+  }
+
   let body: unknown;
 
   try {
@@ -161,27 +191,6 @@ async function resolveLoginResponse(
   const maskedEmail = maskEmailForLogging(canonicalEmail);
 
   /**
-   * Auth Rate Limit에 사용할 trusted end-user IP를 확인한다.
-   *
-   * Preview/Production에서 확보하지 못하면 fail-closed하고,
-   * Provider operation과 Login attempt consumption을 모두 시작하지 않는다.
-   */
-  const trustedIp = getTrustedAuthClientIp(request);
-  if (!trustedIp.available) {
-    return {
-      response: failureResponse(AUTH_API_CODES.LOGIN_INTERNAL_ERROR),
-      outcome: {
-        type: "failed",
-        reasonCode: trustedIp.reasonCode,
-        maskedEmail,
-      },
-    };
-  }
-
-  const { ip } = trustedIp;
-  const maskedIp = maskIpForLogging(ip);
-
-  /**
    * Provider client는 attempt 소비 전에 준비한다.
    *
    * 이 local 준비가 실패하면 실제 Provider operation이 시작되지 않았으므로
@@ -217,9 +226,7 @@ async function resolveLoginResponse(
    * tryStartAttempt 성공 뒤에는 다른 await/I/O를 끼우지 않고
    * 바로 실제 Password Login Provider operation을 시작한다.
    */
-  let authResult: Awaited<
-    ReturnType<typeof supabase.auth.signInWithPassword>
-  >;
+  let authResult: Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>;
 
   try {
     authResult = await supabase.auth.signInWithPassword({

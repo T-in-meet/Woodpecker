@@ -27,6 +27,7 @@ import {
 } from "../../lib/classifyAuthProviderError";
 import { maskEmailForLogging } from "../../lib/maskEmailForLogging";
 import { maskIpForLogging } from "../../lib/maskIpForLogging";
+import { authGlobalRequestRateLimit } from "../../lib/rate-limit/authGlobalRequestRateLimit";
 import {
   otpVerifyRateLimit,
   OtpVerifyRateLimitBlockedBy,
@@ -190,8 +191,26 @@ export async function verifyOtpAction(
 
     const clientIp = trustedIp.ip;
     const maskedIp = maskIpForLogging(clientIp);
+    const globalRateLimitResult = authGlobalRequestRateLimit.tryConsume({
+      ip: clientIp,
+    });
 
-    // Rate Limit attempt를 소비하기 전에 Supabase client 준비를 완료한다.
+    if (!globalRateLimitResult.allowed) {
+      logAuthEvent(AUTH_EVENTS.AUTH_VERIFY_OTP_RATE_LIMITED, {
+        path: VERIFY_OTP_PATH,
+        method: "POST",
+        status: 429,
+        provider: "password",
+        result: "blocked",
+        reasonCode: AUTH_LOG_REASONS.AUTH_GLOBAL_IP_LIMIT,
+        maskedEmail,
+        maskedIp,
+      });
+
+      return blockedState();
+    }
+
+    // OTP Verify operation-specific attempt를 소비하기 전에 Supabase client 준비를 완료한다.
     const supabase = await createClient();
 
     /**

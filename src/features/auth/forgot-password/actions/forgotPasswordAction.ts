@@ -21,6 +21,7 @@ import {
 import { createOtpIssueClient } from "@/features/auth/lib/issueOtp";
 import { maskEmailForLogging } from "@/features/auth/lib/maskEmailForLogging";
 import { maskIpForLogging } from "@/features/auth/lib/maskIpForLogging";
+import { authGlobalRequestRateLimit } from "@/features/auth/lib/rate-limit/authGlobalRequestRateLimit";
 import {
   otpIssueRateLimit,
   type OtpIssueRateLimitBlockedBy,
@@ -177,85 +178,100 @@ export async function forgotPasswordAction(
 
     verifyOtpUrl = `${ROUTES.VERIFY_OTP}?${params.toString()}`;
 
-    // Recovery는 client 준비 단계의 system failure도 success-like로 숨긴다.
-    try {
-      // client와 typed input은 Rate Limit 획득 전에 준비한다.
-      const otpIssueClient = createOtpIssueClient();
-      const otpIssueInput = {
-        email,
-        purpose: "reset-password" as const,
-      };
+    const globalRateLimitResult = authGlobalRequestRateLimit.tryConsume({ ip });
 
-      const rateLimitResult = otpIssueRateLimit.tryStartIssue({
-        purpose: "reset-password",
-        canonicalEmail,
-        ip,
+    if (!globalRateLimitResult.allowed) {
+      logAuthEvent(AUTH_EVENTS.AUTH_FORGOT_PASSWORD_RATE_LIMITED, {
+        path: FORGOT_PASSWORD_PATH,
+        method: "POST",
+        status: 429,
+        provider: "password",
+        result: "blocked",
+        reasonCode: AUTH_LOG_REASONS.AUTH_GLOBAL_IP_LIMIT,
+        maskedEmail,
+        maskedIp,
       });
+    } else {
+      // Recovery는 client 준비 단계의 system failure도 success-like로 숨긴다.
+      try {
+        // client와 typed input은 OTP Issue operation-specific Rate Limit 획득 전에 준비한다.
+        const otpIssueClient = createOtpIssueClient();
+        const otpIssueInput = {
+          email,
+          purpose: "reset-password" as const,
+        };
 
-      if (!rateLimitResult.allowed) {
-        logAuthEvent(AUTH_EVENTS.AUTH_FORGOT_PASSWORD_RATE_LIMITED, {
-          path: FORGOT_PASSWORD_PATH,
-          method: "POST",
-          status: 429,
-          provider: "password",
-          result: "blocked",
-          reasonCode: mapOtpIssueBlockedByToReason(rateLimitResult.blockedBy),
-          maskedEmail,
-          maskedIp,
+        const rateLimitResult = otpIssueRateLimit.tryStartIssue({
+          purpose: "reset-password",
+          canonicalEmail,
+          ip,
         });
-      } else {
-        try {
-          // 허용 직후 다른 await/I/O 없이 Provider operation을 시작한다.
-          const issueResult = await issueOtpAndSendEmailWithResult(
-            otpIssueInput,
-            otpIssueClient,
-          );
 
-          if (issueResult.ok) {
-            otpIssueRateLimit.recordSuccessfulIssue({
+        if (!rateLimitResult.allowed) {
+          logAuthEvent(AUTH_EVENTS.AUTH_FORGOT_PASSWORD_RATE_LIMITED, {
+            path: FORGOT_PASSWORD_PATH,
+            method: "POST",
+            status: 429,
+            provider: "password",
+            result: "blocked",
+            reasonCode: mapOtpIssueBlockedByToReason(rateLimitResult.blockedBy),
+            maskedEmail,
+            maskedIp,
+          });
+        } else {
+          try {
+            // 허용 직후 다른 await/I/O 없이 Provider operation을 시작한다.
+            const issueResult = await issueOtpAndSendEmailWithResult(
+              otpIssueInput,
+              otpIssueClient,
+            );
+
+            if (issueResult.ok) {
+              otpIssueRateLimit.recordSuccessfulIssue({
+                purpose: "reset-password",
+                canonicalEmail,
+              });
+
+              logAuthEvent(AUTH_EVENTS.AUTH_FORGOT_PASSWORD_COMPLETED, {
+                path: FORGOT_PASSWORD_PATH,
+                method: "POST",
+                status: 200,
+                provider: "password",
+                result: "success",
+                maskedEmail,
+                maskedIp,
+              });
+            } else {
+              logRecoveryOtpIssueFailure(
+                issueResult.kind,
+                issueResult.diagnostic,
+                maskedEmail,
+                maskedIp,
+              );
+            }
+          } finally {
+            // in-flight를 실제로 획득한 경우에만 release한다.
+            otpIssueRateLimit.releaseIssue({
               purpose: "reset-password",
               canonicalEmail,
             });
-
-            logAuthEvent(AUTH_EVENTS.AUTH_FORGOT_PASSWORD_COMPLETED, {
-              path: FORGOT_PASSWORD_PATH,
-              method: "POST",
-              status: 200,
-              provider: "password",
-              result: "success",
-              maskedEmail,
-              maskedIp,
-            });
-          } else {
-            logRecoveryOtpIssueFailure(
-              issueResult.kind,
-              issueResult.diagnostic,
-              maskedEmail,
-              maskedIp,
-            );
           }
-        } finally {
-          // in-flight를 실제로 획득한 경우에만 release한다.
-          otpIssueRateLimit.releaseIssue({
-            purpose: "reset-password",
-            canonicalEmail,
-          });
         }
+      } catch (error) {
+        // client 준비 실패를 포함한 Recovery 내부 system failure는 외부에 숨긴다.
+        const normalized = normalizeUnknownError(error);
+        logAuthError(AUTH_EVENTS.AUTH_FORGOT_PASSWORD_FAILED, {
+          path: FORGOT_PASSWORD_PATH,
+          method: "POST",
+          status: 500,
+          provider: "password",
+          result: "failure",
+          reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+          maskedEmail,
+          maskedIp,
+          ...normalized,
+        });
       }
-    } catch (error) {
-      // client 준비 실패를 포함한 Recovery 내부 system failure는 외부에 숨긴다.
-      const normalized = normalizeUnknownError(error);
-      logAuthError(AUTH_EVENTS.AUTH_FORGOT_PASSWORD_FAILED, {
-        path: FORGOT_PASSWORD_PATH,
-        method: "POST",
-        status: 500,
-        provider: "password",
-        result: "failure",
-        reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
-        maskedEmail,
-        maskedIp,
-        ...normalized,
-      });
     }
   } catch (error) {
     const normalized = normalizeUnknownError(error);

@@ -26,6 +26,7 @@ import {
   AuthJsonParseError,
   parseAuthJsonRequestBody,
 } from "@/features/auth/lib/parseAuthJsonRequestBody";
+import { authGlobalRequestRateLimit } from "@/features/auth/lib/rate-limit/authGlobalRequestRateLimit";
 import {
   otpIssueRateLimit,
   type OtpIssueRateLimitBlockedBy,
@@ -84,6 +85,7 @@ type SignupTerminalOutcome =
   | {
       type: "blocked";
       reasonCode:
+        | typeof AUTH_LOG_REASONS.AUTH_GLOBAL_IP_LIMIT
         | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT
         | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP_LONG
         | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT
@@ -356,9 +358,9 @@ async function runSignupOtpIssue(
  * 회원가입 핵심 로직.
  *
  * 처리 순서와 보안 경계:
- * - malformed JSON / schema validation은 Provider 및 Rate Limit 접근 전에 종료
- * - trusted IP를 확보하지 못하면 account/Provider side effect 전에 fail-closed
- * - read-only precheck로 명백히 차단된 요청을 account lookup 전에 종료
+ * - trusted IP와 Auth Global request guard를 body parsing 전에 확인
+ * - global allowed 요청만 malformed JSON / schema validation으로 진입
+ * - read-only OTP Issue precheck로 명백히 차단된 요청을 account lookup 전에 종료
  * - canonical email lookup은 account state를 외부에 노출하지 않고 내부 분기에만 사용
  * - 미인증 기존 사용자는 magiclink 발급 전 agreement persistence를 보장
  * - 인증된 기존 사용자는 magiclink를 발급하며 agreement persistence 범위를 확대하지 않음
@@ -370,6 +372,33 @@ async function runSignupOtpIssue(
 async function resolveSignupResponse(
   request: NextRequest,
 ): Promise<ResolveSignupResult> {
+  const trustedIp = getTrustedAuthClientIp(request);
+
+  if (!trustedIp.available) {
+    return {
+      response: failureResponse(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR),
+      outcome: {
+        type: "failed",
+        reasonCode: trustedIp.reasonCode,
+      },
+    };
+  }
+
+  const { ip } = trustedIp;
+  const maskedIp = maskIpForLogging(ip);
+  const globalRateLimitResult = authGlobalRequestRateLimit.tryConsume({ ip });
+
+  if (!globalRateLimitResult.allowed) {
+    return {
+      response: failureResponse(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED),
+      outcome: {
+        type: "blocked",
+        reasonCode: AUTH_LOG_REASONS.AUTH_GLOBAL_IP_LIMIT,
+        maskedIp,
+      },
+    };
+  }
+
   let body: unknown;
 
   try {
@@ -390,7 +419,7 @@ async function resolveSignupResponse(
     throw error;
   }
 
-  // Provider/Rate Limit 상태를 만지기 전에 입력값을 검증한다.
+  // Global request guard를 통과한 요청의 입력값을 Provider 준비 전에 검증한다.
   const parsed = signupApiSchema.safeParse(body);
   if (!parsed.success) {
     return {
@@ -407,27 +436,6 @@ async function resolveSignupResponse(
   const { email, password, nickname } = parsed.data;
   const canonicalEmail = canonicalizeEmail(email);
   const maskedEmail = maskEmailForLogging(canonicalEmail);
-
-  /**
-   * OTP Issue Rate Limit identity에 사용할 trusted end-user IP를 확보한다.
-   *
-   * Preview/Production에서 확보하지 못하면 fail-closed하고,
-   * 계정 조회/생성 및 Provider operation을 시작하지 않는다.
-   */
-  const trustedIp = getTrustedAuthClientIp(request);
-  if (!trustedIp.available) {
-    return {
-      response: failureResponse(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR),
-      outcome: {
-        type: "failed",
-        reasonCode: trustedIp.reasonCode,
-        maskedEmail,
-      },
-    };
-  }
-
-  const { ip } = trustedIp;
-  const maskedIp = maskIpForLogging(ip);
 
   /**
    * Account lookup 전에 현재 OTP Issue 상태를 read-only로 확인한다.
