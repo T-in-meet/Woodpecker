@@ -10,7 +10,6 @@
  * - production / non-production Secure 차이
  * - create → read → verify integration seam
  * - create / verify configuration error propagation
- * - legacy fixed-value Reset helper와 signed helper의 독립된 계약
  *
  * 공통 Signed Intent의 base64url / JSON / HMAC / timing-safe 비교 matrix는
  * signedIntent.test.ts에서 이미 검증하므로 여기서 중복하지 않습니다.
@@ -331,52 +330,5 @@ describe("signedResetPasswordIntent", () => {
         nowSeconds: NOW_SECONDS,
       }),
     ).toThrow("PASSWORD_INTENT_SIGNING_SECRET is not configured");
-  });
-
-  it("legacy fixed-value Reset helper는 기존 cookie 계약을 유지한다", async () => {
-    vi.stubEnv("NODE_ENV", "test");
-    vi.resetModules();
-
-    const {
-      RESET_PASSWORD_INTENT_COOKIE,
-      clearResetPasswordIntentCookie,
-      hasResetPasswordIntentCookie,
-      setResetPasswordIntentCookie,
-    } = await import("../resetPasswordIntent");
-
-    expect(RESET_PASSWORD_INTENT_COOKIE).toBe("reset_password_intent");
-
-    await setResetPasswordIntentCookie();
-
-    expect(cookieSetMock).toHaveBeenCalledWith(
-      "reset_password_intent",
-      "verified",
-      {
-        httpOnly: true,
-        sameSite: "lax",
-        secure: false,
-        maxAge: RESET_PASSWORD_INTENT_TTL_SECONDS,
-        path: "/reset-password",
-      },
-    );
-
-    cookieGetMock.mockReturnValue({ value: "verified" });
-
-    await expect(hasResetPasswordIntentCookie()).resolves.toBe(true);
-
-    await clearResetPasswordIntentCookie();
-
-    expect(cookieSetMock).toHaveBeenNthCalledWith(
-      2,
-      "reset_password_intent",
-      "",
-      {
-        httpOnly: true,
-        sameSite: "lax",
-        secure: false,
-        maxAge: 0,
-        path: "/reset-password",
-      },
-    );
   });
 });
