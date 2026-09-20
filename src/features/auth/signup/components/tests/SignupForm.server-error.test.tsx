@@ -8,9 +8,6 @@ import {
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
-import { AUTH_EMAIL_DELIVERY_ERROR_MESSAGE } from "@/features/auth/constants/messages";
-
 import { SignupForm } from "../SignupForm";
 
 vi.mock("@tanstack/react-query", async (importOriginal) => {
@@ -225,18 +222,5 @@ describe("서버 유효성 검사 에러 매핑", () => {
       expect(within(emailField).getByRole("alert")).toBeInTheDocument();
       expect(within(nicknameField).getByRole("alert")).toBeInTheDocument();
     });
-  });
-
-  it("TC-08: Signup Email delivery 실패는 전용 일반화 메시지를 폼 오류로 표시한다", async () => {
-    await renderAndSubmitWithServerError({
-      success: false,
-      code: AUTH_API_CODES.SIGNUP_EMAIL_DELIVERY_INTERNAL_ERROR,
-      data: null,
-      message: AUTH_EMAIL_DELIVERY_ERROR_MESSAGE,
-    });
-
-    expect(await screen.findByTestId("form-error")).toHaveTextContent(
-      AUTH_EMAIL_DELIVERY_ERROR_MESSAGE,
-    );
   });
 });

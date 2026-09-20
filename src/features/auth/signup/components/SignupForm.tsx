@@ -13,8 +13,6 @@ import {
   type OAuthBeforeSignInResult,
   OAuthButtons,
 } from "@/features/auth/components/OAuthButtons";
-import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
-import { AUTH_EMAIL_DELIVERY_ERROR_MESSAGE } from "@/features/auth/constants/messages";
 import { AUTH_ROOT_ERROR_TYPE } from "@/features/auth/errors/authRootError";
 import {
   GLOBAL_ERROR_MESSAGES,
@@ -45,21 +43,6 @@ import { AuthFormHeader } from "../../components/AuthFormHeader";
  * resolveFieldName에 주입하여 서버 field → 폼 필드 매핑에 사용한다
  */
 const SIGNUP_FIELD_NAME_SET = new Set(SIGNUP_FIELD_NAMES);
-
-/**
- * Signup OTP Email delivery 전용 API 오류인지 확인한다.
- *
- * @param error Signup submit에서 전달된 unknown 오류
- * @returns Email delivery 전용 오류 여부
- */
-function isSignupEmailDeliveryError(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    error.code === AUTH_API_CODES.SIGNUP_EMAIL_DELIVERY_INTERNAL_ERROR
-  );
-}
 
 /**
  * 회원가입 방식 값 목록
@@ -237,14 +220,6 @@ export function SignupForm({
         setError("root", {
           type: AUTH_ROOT_ERROR_TYPE.SYSTEM,
           message: RATE_LIMIT_TOAST_MESSAGE,
-        });
-        return;
-      }
-
-      if (isSignupEmailDeliveryError(e)) {
-        setError("root", {
-          type: AUTH_ROOT_ERROR_TYPE.SYSTEM,
-          message: AUTH_EMAIL_DELIVERY_ERROR_MESSAGE,
         });
         return;
       }

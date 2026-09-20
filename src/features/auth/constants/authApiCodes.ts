@@ -17,8 +17,10 @@ import {
  */
 export const AUTH_API_CODES = {
   /**
-   * 회원가입 성공
-   * - 정상적으로 회원이 생성된 경우
+   * 회원가입 성공 응답
+   * - 정상적인 회원가입 성공에 사용한다.
+   * - account enumeration 방지를 위해 일부 Provider/Email delivery 실패도
+   *   동일한 success-like public 응답으로 masking할 때 사용한다.
    */
   SIGNUP_SUCCESS: makeApiCode("signup", API_RESULTS.SUCCESS),
 
@@ -33,17 +35,6 @@ export const AUTH_API_CODES = {
    * - rate limit에 걸린 경우 (429)
    */
   SIGNUP_RATE_LIMIT_EXCEEDED: makeApiCode("signup", API_RESULTS.RATE_LIMITED),
-
-  /**
-   * 회원가입 OTP 이메일 delivery 실패
-   * - Provider OTP 발급은 완료됐지만 커스텀 이메일 전송에 실패한 경우 (500)
-   * - Provider/SMTP 상세 원인은 외부에 노출하지 않는다.
-   */
-  SIGNUP_EMAIL_DELIVERY_INTERNAL_ERROR: makeApiActionCode(
-    "signup",
-    "email-delivery",
-    API_RESULTS.INTERNAL_ERROR,
-  ),
 
   /**
    * 이메일 인증 재전송 성공

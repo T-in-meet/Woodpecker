@@ -1,10 +1,7 @@
 import { useEffect } from "react";
 import { UseFormSetError } from "react-hook-form";
 
-import {
-  AUTH_EMAIL_DELIVERY_ERROR_MESSAGE,
-  AUTH_GLOBAL_ERROR_MESSAGE,
-} from "../constants/messages";
+import { AUTH_GLOBAL_ERROR_MESSAGE } from "../constants/messages";
 import { AUTH_ROOT_ERROR_TYPE } from "../errors/authRootError";
 import { RATE_LIMIT_TOAST_MESSAGE } from "../errors/rateLimitError";
 import { ForgotPasswordActionState } from "../forgot-password/actions/forgotPasswordActionState";
@@ -27,7 +24,6 @@ type UseAuthEmailActionEffectParams = {
  * 처리 정책:
  * - invalid_input → email field error 표시
  * - blocked → SYSTEM root error 표시
- * - delivery_error → SYSTEM root error로 전송 실패 메시지 표시
  * - internal_error → SYSTEM root error 표시
  *
  * 제외:
@@ -74,24 +70,10 @@ export const useAuthEmailActionEffect = ({
         return;
 
       /**
-       * 인증 이메일 전송 실패
-       *
-       * Provider/SMTP 상세 원인은 노출하지 않고
-       * 확정된 일반화 전송 실패 메시지를 표시한다.
-       */
-      case "delivery_error":
-        setError("root", {
-          type: AUTH_ROOT_ERROR_TYPE.SYSTEM,
-          message: AUTH_EMAIL_DELIVERY_ERROR_MESSAGE,
-        });
-
-        return;
-
-      /**
        * 서버 내부 오류
        *
-       * provider 장애, 시스템 오류 등 사용자가 입력 수정으로
-       * 해결할 수 없는 문제이므로 SYSTEM root error로 표시한다.
+       * public action state로 전달된 시스템 오류는
+       * 사용자가 입력 수정으로 해결할 수 없으므로 SYSTEM root error로 표시한다.
        */
       case "internal_error":
         setError("root", {
