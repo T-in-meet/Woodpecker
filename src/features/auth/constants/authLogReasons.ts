@@ -77,6 +77,14 @@ export const AUTH_LOG_REASONS = {
   IP_UNAVAILABLE: "IP_UNAVAILABLE",
   INTERNAL_ERROR: "INTERNAL_ERROR",
   /**
+   * OTP Verify 성공 후 Password Intent 발급 실패를 복구하는 과정에서
+   * current-session local signOut과 Auth cookie cleanup이 모두 실패한 상태.
+   *
+   * 원래 Intent 발급 오류를 대체하지 않고 추가 운영 진단 reason으로만 사용한다.
+   * 외부 Action state는 기존 internal_error 계약을 유지한다.
+   */
+  AUTH_SESSION_COMPENSATION_FAILED: "AUTH_SESSION_COMPENSATION_FAILED",
+  /**
    * Password 변경 성공 후 signed Password Intent cleanup에 실패한 경우 사용합니다.
    *
    * password mutation/provider failure나 verifier/Auth system failure와 구분하여

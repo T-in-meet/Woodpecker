@@ -3,7 +3,10 @@
 import { redirect } from "next/navigation";
 
 import { ROUTES } from "@/lib/constants/routes";
-import { createClient } from "@/lib/supabase/server";
+import {
+  clearSupabaseAuthSessionCookies,
+  createClient,
+} from "@/lib/supabase/server";
 import { VALIDATION_MESSAGES } from "@/lib/validation/messages";
 import { otpSchema } from "@/lib/validation/otpSchema";
 
@@ -73,6 +76,63 @@ function mapOtpVerifyBlockedByToReason(
       return exhaustiveCheck;
     }
   }
+}
+
+/**
+ * OTP Verify 성공 후 Password Intent 발급에 실패한 경우
+ * 이번 인증 흐름에서 생성된 current session을 best-effort로 정리한다.
+ *
+ * - Verify Provider에 사용한 settled client/timeout context를 재사용하지 않는다.
+ * - remote signOut은 current session만 대상으로 scope: "local"을 사용한다.
+ * - remote signOut 성공/실패와 관계없이 현재 브라우저의 Supabase Auth cookie를 정리한다.
+ * - remote signOut과 cookie cleanup이 모두 실패한 경우에만
+ *   caller가 추가 compensation failure를 기록할 수 있도록 오류를 반환한다.
+ */
+async function compensateVerifiedSession(): Promise<unknown | null> {
+  let signOutFailure: unknown | null = null;
+
+  try {
+    const compensationTimeout = createAuthProviderTimeoutContext({
+      timeoutMs: AUTH_PROVIDER_TIMEOUT_MS,
+    });
+
+    try {
+      const compensationSupabase = await createClient({
+        fetch: compensationTimeout.fetch,
+      });
+
+      const { error: signOutError } = await compensationSupabase.auth.signOut({
+        scope: "local",
+      });
+
+      if (signOutError) {
+        signOutFailure = signOutError;
+      }
+    } catch (error) {
+      signOutFailure = error;
+    } finally {
+      compensationTimeout.settle();
+    }
+  } catch (error) {
+    signOutFailure = error;
+  }
+
+  let cookieClearFailure: unknown | null = null;
+
+  try {
+    await clearSupabaseAuthSessionCookies();
+  } catch (error) {
+    cookieClearFailure = error;
+  }
+
+  if (signOutFailure !== null && cookieClearFailure !== null) {
+    return new AggregateError(
+      [signOutFailure, cookieClearFailure],
+      "Auth session compensation failed after local signOut and cookie cleanup failures.",
+    );
+  }
+
+  return null;
 }
 
 /**
@@ -439,9 +499,11 @@ export async function verifyOtpAction(
     });
 
     /**
-     * OTP 인증 완료 로그
+     * OTP Provider 인증 성공 milestone.
      *
      * Supabase verifyOtp가 성공적으로 완료된 상태를 기록한다.
+     * 이 이벤트는 Verify Action 전체 terminal completion을 의미하지 않으며,
+     * 이후 Password Intent 발급 또는 session compensation 실패와 공존할 수 있다.
      * purpose는 어떤 OTP 인증 흐름이 성공했는지 운영 로그에서 구분하기 위해 함께 기록한다.
      * OTP 자체는 민감 정보이므로 로그에 남기지 않는다.
      */
@@ -470,16 +532,94 @@ export async function verifyOtpAction(
     if (verifiedSignupUserId !== null) {
       const signedRedirectPath = validateRedirectPath(redirectTo);
 
-      await createSetPasswordIntent({
-        userId: verifiedSignupUserId,
-        redirectPath: signedRedirectPath,
-      });
+      try {
+        await createSetPasswordIntent({
+          userId: verifiedSignupUserId,
+          redirectPath: signedRedirectPath,
+        });
+      } catch (intentError) {
+        const compensationError = await compensateVerifiedSession();
+
+        const normalizedIntentError = normalizeUnknownError(intentError);
+
+        logAuthError(AUTH_EVENTS.AUTH_VERIFY_OTP_FAILED, {
+          path: VERIFY_OTP_PATH,
+          method: "POST",
+          status: 500,
+          provider: "password",
+          result: "failure",
+          reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+          maskedEmail,
+          maskedIp,
+          purpose,
+          ...normalizedIntentError,
+        });
+
+        if (compensationError !== null) {
+          const normalizedCompensationError =
+            normalizeUnknownError(compensationError);
+
+          logAuthError(AUTH_EVENTS.AUTH_VERIFY_OTP_FAILED, {
+            path: VERIFY_OTP_PATH,
+            method: "POST",
+            status: 500,
+            provider: "password",
+            result: "failure",
+            reasonCode: AUTH_LOG_REASONS.AUTH_SESSION_COMPENSATION_FAILED,
+            maskedEmail,
+            maskedIp,
+            purpose,
+            ...normalizedCompensationError,
+          });
+        }
+
+        return internalErrorState();
+      }
 
       nextUrl = ROUTES.SET_PASSWORD;
     } else if (verifiedResetPasswordUserId !== null) {
-      await createSignedResetPasswordIntent({
-        userId: verifiedResetPasswordUserId,
-      });
+      try {
+        await createSignedResetPasswordIntent({
+          userId: verifiedResetPasswordUserId,
+        });
+      } catch (intentError) {
+        const compensationError = await compensateVerifiedSession();
+
+        const normalizedIntentError = normalizeUnknownError(intentError);
+
+        logAuthError(AUTH_EVENTS.AUTH_VERIFY_OTP_FAILED, {
+          path: VERIFY_OTP_PATH,
+          method: "POST",
+          status: 500,
+          provider: "password",
+          result: "failure",
+          reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+          maskedEmail,
+          maskedIp,
+          purpose,
+          ...normalizedIntentError,
+        });
+
+        if (compensationError !== null) {
+          const normalizedCompensationError =
+            normalizeUnknownError(compensationError);
+
+          logAuthError(AUTH_EVENTS.AUTH_VERIFY_OTP_FAILED, {
+            path: VERIFY_OTP_PATH,
+            method: "POST",
+            status: 500,
+            provider: "password",
+            result: "failure",
+            reasonCode: AUTH_LOG_REASONS.AUTH_SESSION_COMPENSATION_FAILED,
+            maskedEmail,
+            maskedIp,
+            purpose,
+            ...normalizedCompensationError,
+          });
+        }
+
+        return internalErrorState();
+      }
 
       nextUrl = redirectTo
         ? `${ROUTES.RESET_PASSWORD}?redirect=${encodeURIComponent(redirectTo)}`
