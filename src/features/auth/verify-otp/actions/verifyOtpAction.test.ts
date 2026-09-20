@@ -150,6 +150,47 @@ function installVerifyAbortableTransport() {
   return transportFetch;
 }
 
+function installVerifyBodyPendingTransport() {
+  const transportFetch = vi.fn(
+    (
+      _input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ) => {
+      const signal = init?.signal;
+
+      if (!signal) {
+        return Promise.reject(new Error("expected provider signal"));
+      }
+
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          const rejectBody = () =>
+            controller.error(
+              signal.reason ?? new DOMException("Aborted", "AbortError"),
+            );
+
+          if (signal.aborted) {
+            rejectBody();
+            return;
+          }
+
+          signal.addEventListener("abort", rejectBody, { once: true });
+        },
+      });
+
+      return Promise.resolve(
+        new Response(body, {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    },
+  );
+
+  vi.stubGlobal("fetch", transportFetch);
+  return transportFetch;
+}
+
 async function triggerVerifyOwnTimeout(
   providerFetch: typeof fetch | undefined,
   timeoutController: AbortController,
@@ -1026,6 +1067,73 @@ describe("verifyOtpAction", () => {
         fieldErrors: null,
       });
       expect(otpVerifyRateLimit.recordResult).toHaveBeenCalledTimes(1);
+      expect(otpVerifyRateLimit.recordResult).toHaveBeenCalledWith({
+        canonicalEmail: "user@example.com",
+        outcome: "provider_error",
+      });
+      expect(logAuthError).toHaveBeenCalledWith(
+        AUTH_EVENTS.AUTH_VERIFY_OTP_FAILED,
+        expect.objectContaining({
+          reasonCode: AUTH_LOG_REASONS.PROVIDER_TIMEOUT,
+        }),
+      );
+      expect(createSetPasswordIntent).not.toHaveBeenCalled();
+      expect(createSignedResetPasswordIntent).not.toHaveBeenCalled();
+      expect(redirect).not.toHaveBeenCalled();
+    } finally {
+      timeoutSpy.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("headers 반환 후 body read own timeout도 PROVIDER_TIMEOUT으로 기록한다", async () => {
+    const captured = captureVerifyProviderFetch();
+    const timeoutController = new AbortController();
+    const timeoutSpy = vi
+      .spyOn(AbortSignal, "timeout")
+      .mockReturnValue(timeoutController.signal);
+    installVerifyBodyPendingTransport();
+
+    vi.mocked(verifyOtp).mockImplementation(async () => {
+      if (!captured.current) {
+        throw new Error("expected timeout-enabled Provider fetch");
+      }
+
+      const response = await captured.current(
+        "https://provider.test/auth/v1/verify",
+      );
+      const bodyPromise = response.text();
+
+      timeoutController.abort(
+        new DOMException("Provider body timeout", "TimeoutError"),
+      );
+      await bodyPromise.catch(() => undefined);
+
+      return {
+        data: { user: null },
+        error: {
+          name: "AuthRetryableFetchError",
+          message: "fetch failed",
+          status: 0,
+        },
+      } as Awaited<ReturnType<typeof verifyOtp>>;
+    });
+
+    try {
+      const result = await verifyOtpAction(
+        null,
+        prevState,
+        createFormData({
+          email: "user@example.com",
+          purpose: "signup",
+          otp: "123456",
+        }),
+      );
+
+      expect(result).toEqual({
+        status: "internal_error",
+        fieldErrors: null,
+      });
       expect(otpVerifyRateLimit.recordResult).toHaveBeenCalledWith({
         canonicalEmail: "user@example.com",
         outcome: "provider_error",

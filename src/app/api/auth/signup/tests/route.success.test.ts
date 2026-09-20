@@ -111,6 +111,7 @@ describe("회원가입 API 신규 사용자 기본 성공 흐름 검증", () => 
     expect(recordCurrentLegalAcceptancesMock).toHaveBeenCalledWith(
       "new-user-id",
       "email",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
 

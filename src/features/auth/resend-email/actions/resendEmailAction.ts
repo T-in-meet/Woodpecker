@@ -25,6 +25,7 @@ import {
 import { createOtpIssueClient } from "@/features/auth/lib/issueOtp";
 import { maskEmailForLogging } from "@/features/auth/lib/maskEmailForLogging";
 import { maskIpForLogging } from "@/features/auth/lib/maskIpForLogging";
+import { recordOtpAgreementLegalAcceptances } from "@/features/auth/lib/otpAgreementPersistence";
 import { authGlobalRequestRateLimit } from "@/features/auth/lib/rate-limit/authGlobalRequestRateLimit";
 import {
   otpIssueRateLimit,
@@ -32,7 +33,6 @@ import {
 } from "@/features/auth/lib/rate-limit/otpIssueRateLimit";
 import { signupResendRequestRateLimit } from "@/features/auth/lib/rate-limit/signupResendRequestRateLimit";
 import { getTrustedAuthServerActionClientIp } from "@/features/auth/lib/rate-limit/trustedAuthClientIp";
-import { recordCurrentLegalAcceptances } from "@/features/auth/lib/userAgreements";
 import { authEmailContextSchema } from "@/features/auth/schemas/authEmailContextSchema";
 import { canonicalizeEmail } from "@/features/auth/utils/canonicalizeEmail";
 import { ROUTES } from "@/lib/constants/routes";
@@ -165,7 +165,7 @@ async function createResendOtpIssueInput(
       purpose: "signup",
       signupMode: "existing-user",
       beforeDelivery: async () => {
-        await recordCurrentLegalAcceptances(existingUser.id, "email");
+        await recordOtpAgreementLegalAcceptances(existingUser.id);
       },
     };
   }

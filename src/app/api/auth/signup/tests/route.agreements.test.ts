@@ -287,6 +287,7 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
     expect(recordCurrentLegalAcceptancesMock).toHaveBeenCalledWith(
       "user-id",
       "email",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
 
@@ -319,6 +320,7 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
     expect(recordCurrentLegalAcceptancesMock).toHaveBeenCalledWith(
       "user-id",
       "email",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(otpIssueRateLimitMock.recordSuccessfulIssue).not.toHaveBeenCalled();
     expect(otpIssueRateLimitMock.releaseIssue).toHaveBeenCalledWith({
@@ -398,11 +400,13 @@ describe("PR-API-03 회원가입 약관 동의 검증", () => {
       1,
       "recovery-user-id",
       "email",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(recordCurrentLegalAcceptancesMock).toHaveBeenNthCalledWith(
       2,
       "recovery-user-id",
       "email",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(otpIssueRateLimitMock.recordSuccessfulIssue).toHaveBeenCalledTimes(
       1,

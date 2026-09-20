@@ -24,6 +24,7 @@ import { createOtpIssueClient } from "@/features/auth/lib/issueOtp";
 import { mapAuthValidationErrors } from "@/features/auth/lib/mapAuthValidationErrors";
 import { maskEmailForLogging } from "@/features/auth/lib/maskEmailForLogging";
 import { maskIpForLogging } from "@/features/auth/lib/maskIpForLogging";
+import { recordOtpAgreementLegalAcceptances } from "@/features/auth/lib/otpAgreementPersistence";
 import {
   AuthJsonParseError,
   parseAuthJsonRequestBody,
@@ -34,7 +35,6 @@ import {
   type OtpIssueRateLimitBlockedBy,
 } from "@/features/auth/lib/rate-limit/otpIssueRateLimit";
 import { getTrustedAuthClientIp } from "@/features/auth/lib/rate-limit/trustedAuthClientIp";
-import { recordCurrentLegalAcceptances } from "@/features/auth/lib/userAgreements";
 import { signupApiSchema } from "@/features/auth/signup/schema/signupApiSchema";
 import { canonicalizeEmail } from "@/features/auth/utils/canonicalizeEmail";
 import { failureResponse, successResponse } from "@/lib/api/response";
@@ -256,7 +256,7 @@ class SignupAgreementPersistenceError extends Error {
 
 async function recordSignupLegalAcceptances(userId: string): Promise<void> {
   try {
-    await recordCurrentLegalAcceptances(userId, "email");
+    await recordOtpAgreementLegalAcceptances(userId);
   } catch (error) {
     throw new SignupAgreementPersistenceError(error);
   }

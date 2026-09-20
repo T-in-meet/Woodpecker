@@ -55,6 +55,54 @@ function createDeferredTransport() {
   };
 }
 
+function createBodyPendingTransport() {
+  return vi.fn(
+    (
+      _input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ) => {
+      const signal = init?.signal;
+
+      if (!signal) {
+        return Promise.reject(new Error("expected composed signal"));
+      }
+
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          const rejectBody = () =>
+            controller.error(
+              signal.reason ?? new DOMException("Aborted", "AbortError"),
+            );
+
+          if (signal.aborted) {
+            rejectBody();
+            return;
+          }
+
+          signal.addEventListener("abort", rejectBody, { once: true });
+        },
+      });
+
+      return Promise.resolve(
+        new Response(body, {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    },
+  );
+}
+
+function getLifecycleEnd(
+  context: ReturnType<typeof createAuthProviderTimeoutContext>,
+): (() => void) | undefined {
+  const lifecycleContext = context as unknown as {
+    settle?: () => void;
+    dispose?: () => void;
+  };
+
+  return lifecycleContext.settle ?? lifecycleContext.dispose;
+}
 function getPassedSignal(transportFetch: ReturnType<typeof vi.fn>) {
   const call = transportFetch.mock.calls[0] as
     | [Parameters<typeof fetch>[0], Parameters<typeof fetch>[1]?]
@@ -257,7 +305,7 @@ describe("createAuthProviderTimeoutContext", () => {
     expect(context.didTimeout()).toBe(false);
   });
 
-  it("generic network reject로 settle된 뒤 late own timeout이 와도 false를 유지한다", async () => {
+  it("generic network reject 후 lifecycle 종료 뒤 late own timeout이 와도 false를 유지한다", async () => {
     const timeoutController = new AbortController();
     vi.spyOn(AbortSignal, "timeout").mockReturnValue(timeoutController.signal);
     vi.stubGlobal(
@@ -273,11 +321,35 @@ describe("createAuthProviderTimeoutContext", () => {
       context.fetch("https://provider.test/auth/v1/token"),
     ).rejects.toThrow("network failed");
 
+    expect(context.didTimeout()).toBe(false);
+
+    const lifecycleEnd = getLifecycleEnd(context);
+    expect(lifecycleEnd).toBeTypeOf("function");
+    lifecycleEnd!();
+
     timeoutController.abort(new DOMException("late timeout", "TimeoutError"));
     expect(context.didTimeout()).toBe(false);
   });
 
-  it("fetch success로 settle된 뒤 late own timeout이 와도 false를 유지한다", async () => {
+  it("Response 반환 후 Provider operation settle 전 own timeout은 timeout source로 보존한다", async () => {
+    const timeoutController = new AbortController();
+    vi.spyOn(AbortSignal, "timeout").mockReturnValue(timeoutController.signal);
+    vi.stubGlobal("fetch", createBodyPendingTransport());
+
+    const context = createAuthProviderTimeoutContext({
+      timeoutMs: AUTH_PROVIDER_TIMEOUT_MS,
+    });
+
+    const response = await context.fetch("https://provider.test/auth/v1/token");
+    const bodyPromise = response.text();
+
+    timeoutController.abort(new DOMException("body timeout", "TimeoutError"));
+
+    await expect(bodyPromise).rejects.toBeDefined();
+    expect(context.didTimeout()).toBe(true);
+  });
+
+  it("Provider operation lifecycle 종료 API를 제공한다", async () => {
     const timeoutController = new AbortController();
     vi.spyOn(AbortSignal, "timeout").mockReturnValue(timeoutController.signal);
     vi.stubGlobal(
@@ -289,11 +361,210 @@ describe("createAuthProviderTimeoutContext", () => {
       timeoutMs: AUTH_PROVIDER_TIMEOUT_MS,
     });
 
-    await expect(
-      context.fetch("https://provider.test/auth/v1/token"),
-    ).resolves.toBeInstanceOf(Response);
+    await context.fetch("https://provider.test/auth/v1/token");
+
+    expect(getLifecycleEnd(context)).toBeTypeOf("function");
+  });
+
+  it("Provider operation 정상 종료 후 late own timeout은 attribution을 변경하지 않는다", async () => {
+    const timeoutController = new AbortController();
+    vi.spyOn(AbortSignal, "timeout").mockReturnValue(timeoutController.signal);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(null, { status: 200 })),
+    );
+
+    const context = createAuthProviderTimeoutContext({
+      timeoutMs: AUTH_PROVIDER_TIMEOUT_MS,
+    });
+
+    await context.fetch("https://provider.test/auth/v1/token");
+
+    const lifecycleEnd = getLifecycleEnd(context);
+    expect(lifecycleEnd).toBeTypeOf("function");
+    lifecycleEnd!();
 
     timeoutController.abort(new DOMException("late timeout", "TimeoutError"));
     expect(context.didTimeout()).toBe(false);
+  });
+
+  it("own timeout이 먼저 latch된 뒤 lifecycle을 종료해도 true를 유지한다", async () => {
+    const timeoutController = new AbortController();
+    vi.spyOn(AbortSignal, "timeout").mockReturnValue(timeoutController.signal);
+    vi.stubGlobal("fetch", createBodyPendingTransport());
+
+    const context = createAuthProviderTimeoutContext({
+      timeoutMs: AUTH_PROVIDER_TIMEOUT_MS,
+    });
+
+    const response = await context.fetch("https://provider.test/auth/v1/token");
+    const bodyPromise = response.text();
+
+    timeoutController.abort(new DOMException("body timeout", "TimeoutError"));
+    await expect(bodyPromise).rejects.toBeDefined();
+
+    const lifecycleEnd = getLifecycleEnd(context);
+    expect(lifecycleEnd).toBeTypeOf("function");
+    lifecycleEnd!();
+
+    expect(context.didTimeout()).toBe(true);
+  });
+
+  it("Provider operation lifecycle 종료는 idempotent하다", async () => {
+    const timeoutController = new AbortController();
+    vi.spyOn(AbortSignal, "timeout").mockReturnValue(timeoutController.signal);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(null, { status: 200 })),
+    );
+
+    const context = createAuthProviderTimeoutContext({
+      timeoutMs: AUTH_PROVIDER_TIMEOUT_MS,
+    });
+
+    await context.fetch("https://provider.test/auth/v1/token");
+
+    const lifecycleEnd = getLifecycleEnd(context);
+    expect(lifecycleEnd).toBeTypeOf("function");
+
+    expect(() => {
+      lifecycleEnd!();
+      lifecycleEnd!();
+    }).not.toThrow();
+    expect(context.didTimeout()).toBe(false);
+  });
+
+  it("Provider operation lifecycle 종료 전에는 listener를 유지하고 종료 시 own timeout listener를 제거한다", async () => {
+    const timeoutController = new AbortController();
+    const timeoutAddSpy = vi.spyOn(
+      timeoutController.signal,
+      "addEventListener",
+    );
+    const timeoutRemoveSpy = vi.spyOn(
+      timeoutController.signal,
+      "removeEventListener",
+    );
+
+    vi.spyOn(AbortSignal, "timeout").mockReturnValue(timeoutController.signal);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(null, { status: 200 })),
+    );
+
+    const context = createAuthProviderTimeoutContext({
+      timeoutMs: AUTH_PROVIDER_TIMEOUT_MS,
+    });
+
+    await context.fetch("https://provider.test/auth/v1/token");
+
+    const timeoutAbortListener = timeoutAddSpy.mock.calls.find(
+      ([type]) => type === "abort",
+    )?.[1];
+
+    expect(timeoutAbortListener).toBeDefined();
+    expect(timeoutRemoveSpy).not.toHaveBeenCalledWith(
+      "abort",
+      timeoutAbortListener,
+    );
+
+    const lifecycleEnd = getLifecycleEnd(context);
+    expect(lifecycleEnd).toBeTypeOf("function");
+    lifecycleEnd!();
+
+    expect(timeoutRemoveSpy).toHaveBeenCalledWith(
+      "abort",
+      timeoutAbortListener,
+    );
+  });
+
+  it("Provider operation lifecycle 종료 시 external + own timeout listener를 모두 제거한다", async () => {
+    const timeoutController = new AbortController();
+    const externalController = new AbortController();
+
+    const timeoutAddSpy = vi.spyOn(
+      timeoutController.signal,
+      "addEventListener",
+    );
+    const timeoutRemoveSpy = vi.spyOn(
+      timeoutController.signal,
+      "removeEventListener",
+    );
+    const externalAddSpy = vi.spyOn(
+      externalController.signal,
+      "addEventListener",
+    );
+    const externalRemoveSpy = vi.spyOn(
+      externalController.signal,
+      "removeEventListener",
+    );
+
+    vi.spyOn(AbortSignal, "timeout").mockReturnValue(timeoutController.signal);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(null, { status: 200 })),
+    );
+
+    const context = createAuthProviderTimeoutContext({
+      timeoutMs: AUTH_PROVIDER_TIMEOUT_MS,
+    });
+
+    await context.fetch("https://provider.test/auth/v1/token", {
+      signal: externalController.signal,
+    });
+
+    const timeoutAbortListener = timeoutAddSpy.mock.calls.find(
+      ([type]) => type === "abort",
+    )?.[1];
+    const externalAbortListener = externalAddSpy.mock.calls.find(
+      ([type]) => type === "abort",
+    )?.[1];
+
+    expect(timeoutAbortListener).toBeDefined();
+    expect(externalAbortListener).toBeDefined();
+    expect(timeoutRemoveSpy).not.toHaveBeenCalledWith(
+      "abort",
+      timeoutAbortListener,
+    );
+    expect(externalRemoveSpy).not.toHaveBeenCalledWith(
+      "abort",
+      externalAbortListener,
+    );
+
+    const lifecycleEnd = getLifecycleEnd(context);
+    expect(lifecycleEnd).toBeTypeOf("function");
+    lifecycleEnd!();
+
+    expect(timeoutRemoveSpy).toHaveBeenCalledWith(
+      "abort",
+      timeoutAbortListener,
+    );
+    expect(externalRemoveSpy).toHaveBeenCalledWith(
+      "abort",
+      externalAbortListener,
+    );
+
+    const timeoutRemoveCount = timeoutRemoveSpy.mock.calls.filter(
+      ([type, listener]) =>
+        type === "abort" && listener === timeoutAbortListener,
+    ).length;
+    const externalRemoveCount = externalRemoveSpy.mock.calls.filter(
+      ([type, listener]) =>
+        type === "abort" && listener === externalAbortListener,
+    ).length;
+
+    lifecycleEnd!();
+
+    expect(
+      timeoutRemoveSpy.mock.calls.filter(
+        ([type, listener]) =>
+          type === "abort" && listener === timeoutAbortListener,
+      ),
+    ).toHaveLength(timeoutRemoveCount);
+    expect(
+      externalRemoveSpy.mock.calls.filter(
+        ([type, listener]) =>
+          type === "abort" && listener === externalAbortListener,
+      ),
+    ).toHaveLength(externalRemoveCount);
   });
 });

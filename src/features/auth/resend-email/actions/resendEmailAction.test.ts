@@ -628,6 +628,7 @@ describe("resendEmailAction", () => {
     expect(mockRecordCurrentLegalAcceptances).toHaveBeenCalledWith(
       "unverified-user-id",
       "email",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
 

@@ -268,12 +268,17 @@ export async function verifyOtpAction(
     let verifyResult: Awaited<ReturnType<typeof verifyOtp>>;
 
     try {
-      verifyResult = await verifyOtp({
-        supabase,
-        email,
-        purpose,
-        otp: otpParsed.data,
-      });
+      try {
+        verifyResult = await verifyOtp({
+          supabase,
+          email,
+          purpose,
+          otp: otpParsed.data,
+        });
+      } finally {
+        // Response body 소비까지 포함한 Provider operation 종료 시점에 attribution을 freeze한다.
+        providerTimeout.settle();
+      }
     } catch (providerError) {
       otpVerifyRateLimit.recordResult({
         canonicalEmail,

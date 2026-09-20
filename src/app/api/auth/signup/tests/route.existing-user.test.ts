@@ -123,6 +123,7 @@ describe("회원가입 - 기존 사용자 재요청 분기", () => {
     expect(recordCurrentLegalAcceptancesMock).toHaveBeenCalledWith(
       "unverified-user-id",
       "email",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(vi.mocked(issueOtpAndSendEmailWithResult)).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -9,6 +9,7 @@
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
 import { AUTH_EVENTS } from "@/features/auth/constants/authEvents";
 import { AUTH_LOG_REASONS } from "@/features/auth/constants/authLogReasons";
 import {
@@ -204,6 +205,47 @@ function installAbortableTransportFetch() {
 
         signal.addEventListener("abort", rejectAbort, { once: true });
       }),
+  );
+
+  vi.stubGlobal("fetch", transportFetch);
+  return transportFetch;
+}
+
+function installBodyPendingTransportFetch() {
+  const transportFetch = vi.fn(
+    (
+      _input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ) => {
+      const signal = init?.signal;
+
+      if (!signal) {
+        return Promise.reject(new Error("expected provider signal"));
+      }
+
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          const rejectBody = () =>
+            controller.error(
+              signal.reason ?? new DOMException("Aborted", "AbortError"),
+            );
+
+          if (signal.aborted) {
+            rejectBody();
+            return;
+          }
+
+          signal.addEventListener("abort", rejectBody, { once: true });
+        },
+      });
+
+      return Promise.resolve(
+        new Response(body, {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    },
   );
 
   vi.stubGlobal("fetch", transportFetch);
@@ -496,6 +538,62 @@ describe("로그인 API 로깅 검증", () => {
     try {
       await POST(makeRequest());
 
+      expect(logAuthError).toHaveBeenCalledWith(
+        AUTH_EVENTS.AUTH_LOGIN_FAILED,
+        expect.objectContaining({
+          reasonCode: AUTH_LOG_REASONS.PROVIDER_TIMEOUT,
+        }),
+      );
+      expect(terminalEvents()).toEqual([AUTH_EVENTS.AUTH_LOGIN_FAILED]);
+    } finally {
+      timeoutSpy.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("headers 반환 후 body read own timeout도 PROVIDER_TIMEOUT으로 기록한다", async () => {
+    const captured = captureProviderFetch();
+    const timeoutController = new AbortController();
+    const timeoutSpy = vi
+      .spyOn(AbortSignal, "timeout")
+      .mockReturnValue(timeoutController.signal);
+    installBodyPendingTransportFetch();
+
+    mockSignIn.mockImplementation(async () => {
+      if (!captured.current) {
+        throw new Error("expected timeout-enabled Provider fetch");
+      }
+
+      const response = await captured.current(
+        "https://provider.test/auth/v1/token",
+      );
+      const bodyPromise = response.text();
+
+      timeoutController.abort(
+        new DOMException("Provider body timeout", "TimeoutError"),
+      );
+      await bodyPromise.catch(() => undefined);
+
+      return {
+        data: null,
+        error: {
+          name: "AuthRetryableFetchError",
+          message: "fetch failed",
+          status: 0,
+        },
+      };
+    });
+
+    try {
+      const response = await POST(makeRequest());
+      const body = await response.json();
+
+      expect(response.status).toBe(500);
+      expect(body.code).toBe(AUTH_API_CODES.LOGIN_INTERNAL_ERROR);
+      expect(loginRateLimit.recordResult).toHaveBeenCalledWith({
+        canonicalEmail: "user@example.com",
+        result: "non_credential_failure",
+      });
       expect(logAuthError).toHaveBeenCalledWith(
         AUTH_EVENTS.AUTH_LOGIN_FAILED,
         expect.objectContaining({

@@ -238,10 +238,15 @@ async function resolveLoginResponse(
   let authResult: Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>;
 
   try {
-    authResult = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      authResult = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+    } finally {
+      // Response body 소비까지 포함한 Provider operation 종료 시점에 attribution을 freeze한다.
+      providerTimeout.settle();
+    }
   } catch (error) {
     // Provider operation은 시작되었으므로 total/IP attempt는 rollback하지 않는다.
     loginRateLimit.recordResult({
