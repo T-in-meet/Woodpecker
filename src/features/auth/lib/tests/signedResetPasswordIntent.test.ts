@@ -119,6 +119,7 @@ describe("signedResetPasswordIntent", () => {
     const token = createSignedIntent({
       purpose: "signup-set-password",
       userId: TEST_USER_ID,
+      redirectPath: "/notes",
       nowSeconds: NOW_SECONDS,
     });
 

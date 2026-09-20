@@ -2,16 +2,13 @@
  * Set Password Intent 전용 단위 테스트.
  *
  * 검증 범위:
- * - signup-set-password purpose / userId / 15분 TTL 계약
- * - Set 전용 verifier의 user binding / expiration 경계
- * - raw cookie read 경계
- * - cookie create / clear lifecycle 및 보안 속성
+ * - signup-set-password exact 5-claim / signed redirectPath
+ * - redirect wrapper 재검증 및 MYPAGE fallback
+ * - final token UTF-8 byte-size budget
+ * - user binding / expiration
+ * - raw cookie read / create / clear lifecycle
  * - production / non-production Secure 차이
- * - create → read → verify integration seam
- * - create / verify configuration error propagation
- *
- * 공통 Signed Intent의 base64url / JSON / HMAC / timing-safe 비교 matrix는
- * signedIntent.test.ts에서 이미 검증하므로 여기서 중복하지 않습니다.
+ * - configuration error fail-closed
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -25,16 +22,18 @@ vi.mock("next/headers", () => ({
   cookies: cookiesMock,
 }));
 
+import { ROUTES } from "@/lib/constants/routes";
+
 import { SET_PASSWORD_INTENT_TTL_SECONDS } from "../rate-limit/authRateLimitConstants";
 
 const TEST_SECRET = "set-password-intent-test-secret";
 const TEST_USER_ID = "user-123";
 const OTHER_USER_ID = "user-456";
+const TEST_REDIRECT_PATH = "/notes";
 const NOW_SECONDS = 1_700_000_000;
 
 type TestNodeEnv = "test" | "production";
 
-/** NODE_ENV별 cookie options를 독립적으로 평가하도록 모듈 cache를 초기화합니다. */
 async function loadSetPasswordIntent(nodeEnv: TestNodeEnv = "test") {
   vi.stubEnv("NODE_ENV", nodeEnv);
   vi.resetModules();
@@ -42,7 +41,6 @@ async function loadSetPasswordIntent(nodeEnv: TestNodeEnv = "test") {
   return import("../setPasswordIntent");
 }
 
-/** createSetPasswordIntent()가 저장한 raw token을 반환합니다. */
 function getStoredToken(): string {
   return cookieSetMock.mock.calls[0]?.[1] as string;
 }
@@ -66,20 +64,19 @@ describe("setPasswordIntent", () => {
     vi.resetModules();
   });
 
-  it("Set Intent 생성/검증 시 signup-set-password purpose와 15분 TTL을 고정한다", async () => {
+  it("Set Intent 생성/검증 시 signed redirectPath와 15분 TTL을 고정한다", async () => {
     const { createSetPasswordIntent, verifySetPasswordIntent } =
       await loadSetPasswordIntent();
 
     await createSetPasswordIntent({
       userId: TEST_USER_ID,
+      redirectPath: TEST_REDIRECT_PATH,
       nowSeconds: NOW_SECONDS,
     });
 
-    const token = getStoredToken();
-
     expect(
       verifySetPasswordIntent({
-        token,
+        token: getStoredToken(),
         expectedUserId: TEST_USER_ID,
         nowSeconds: NOW_SECONDS,
       }),
@@ -88,7 +85,62 @@ describe("setPasswordIntent", () => {
       userId: TEST_USER_ID,
       issuedAt: NOW_SECONDS,
       expiresAt: NOW_SECONDS + SET_PASSWORD_INTENT_TTL_SECONDS,
+      redirectPath: TEST_REDIRECT_PATH,
     });
+  });
+
+  it.each([
+    ["redirect 없음", undefined],
+    ["빈 redirect", ""],
+    ["외부 URL", "https://evil.example"],
+    ["차단된 auth path", "/login"],
+  ])(
+    "%s이면 MYPAGE를 signed destination으로 사용한다",
+    async (_name, redirectPath) => {
+      const { createSetPasswordIntent, verifySetPasswordIntent } =
+        await loadSetPasswordIntent();
+
+      await createSetPasswordIntent({
+        userId: TEST_USER_ID,
+        redirectPath,
+        nowSeconds: NOW_SECONDS,
+      });
+
+      expect(
+        verifySetPasswordIntent({
+          token: getStoredToken(),
+          expectedUserId: TEST_USER_ID,
+          nowSeconds: NOW_SECONDS,
+        }),
+      ).toEqual(
+        expect.objectContaining({
+          redirectPath: ROUTES.MYPAGE,
+        }),
+      );
+    },
+  );
+
+  it("허용된 query가 있는 redirect를 정규화해 signed claim으로 보존한다", async () => {
+    const { createSetPasswordIntent, verifySetPasswordIntent } =
+      await loadSetPasswordIntent();
+
+    await createSetPasswordIntent({
+      userId: TEST_USER_ID,
+      redirectPath: "/mypage?section=profile",
+      nowSeconds: NOW_SECONDS,
+    });
+
+    expect(
+      verifySetPasswordIntent({
+        token: getStoredToken(),
+        expectedUserId: TEST_USER_ID,
+        nowSeconds: NOW_SECONDS,
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        redirectPath: "/mypage?section=profile",
+      }),
+    );
   });
 
   it("다른 사용자의 Set Intent는 거부한다", async () => {
@@ -97,14 +149,13 @@ describe("setPasswordIntent", () => {
 
     await createSetPasswordIntent({
       userId: TEST_USER_ID,
+      redirectPath: TEST_REDIRECT_PATH,
       nowSeconds: NOW_SECONDS,
     });
 
-    const token = getStoredToken();
-
     expect(
       verifySetPasswordIntent({
-        token,
+        token: getStoredToken(),
         expectedUserId: OTHER_USER_ID,
         nowSeconds: NOW_SECONDS,
       }),
@@ -136,14 +187,13 @@ describe("setPasswordIntent", () => {
 
     await createSetPasswordIntent({
       userId: TEST_USER_ID,
+      redirectPath: TEST_REDIRECT_PATH,
       nowSeconds: NOW_SECONDS,
     });
 
-    const token = getStoredToken();
-
     expect(
       verifySetPasswordIntent({
-        token,
+        token: getStoredToken(),
         expectedUserId: TEST_USER_ID,
         nowSeconds: NOW_SECONDS + SET_PASSWORD_INTENT_TTL_SECONDS,
       }),
@@ -173,7 +223,7 @@ describe("setPasswordIntent", () => {
     expect(cookieSetMock).not.toHaveBeenCalled();
   });
 
-  it("non-production create는 Set cookie 계약과 15분 Max-Age를 적용한다", async () => {
+  it("non-production create는 Set cookie identity와 TTL을 적용한다", async () => {
     const {
       createSetPasswordIntent,
       SET_PASSWORD_INTENT_COOKIE,
@@ -184,6 +234,7 @@ describe("setPasswordIntent", () => {
 
     await createSetPasswordIntent({
       userId: TEST_USER_ID,
+      redirectPath: TEST_REDIRECT_PATH,
       nowSeconds: NOW_SECONDS,
     });
 
@@ -199,11 +250,9 @@ describe("setPasswordIntent", () => {
       },
     );
 
-    const token = getStoredToken();
-
     expect(
       verifySetPasswordIntent({
-        token,
+        token: getStoredToken(),
         expectedUserId: TEST_USER_ID,
         nowSeconds: NOW_SECONDS,
       }),
@@ -216,6 +265,7 @@ describe("setPasswordIntent", () => {
 
     await createSetPasswordIntent({
       userId: TEST_USER_ID,
+      redirectPath: TEST_REDIRECT_PATH,
       nowSeconds: NOW_SECONDS,
     });
 
@@ -246,7 +296,7 @@ describe("setPasswordIntent", () => {
     });
   });
 
-  it("create → read → verify round-trip이 동일 Set Intent 경계를 유지한다", async () => {
+  it("create → read → verify round-trip에서 signed destination을 유지한다", async () => {
     const {
       createSetPasswordIntent,
       readSetPasswordIntent,
@@ -255,6 +305,7 @@ describe("setPasswordIntent", () => {
 
     await createSetPasswordIntent({
       userId: TEST_USER_ID,
+      redirectPath: TEST_REDIRECT_PATH,
       nowSeconds: NOW_SECONDS,
     });
 
@@ -275,16 +326,70 @@ describe("setPasswordIntent", () => {
       userId: TEST_USER_ID,
       issuedAt: NOW_SECONDS,
       expiresAt: NOW_SECONDS + SET_PASSWORD_INTENT_TTL_SECONDS,
+      redirectPath: TEST_REDIRECT_PATH,
     });
   });
 
-  it("create 시 signing secret configuration error를 Set lifecycle에서 숨기지 않는다", async () => {
+  it("최종 token byte budget을 넘는 redirect는 signed MYPAGE token으로 fallback한다", async () => {
+    const {
+      createSetPasswordIntent,
+      SET_PASSWORD_INTENT_MAX_TOKEN_BYTES,
+      verifySetPasswordIntent,
+    } = await loadSetPasswordIntent();
+
+    const oversizedAfterNormalization = `/notes?q=${"가".repeat(1_000)}`;
+
+    await createSetPasswordIntent({
+      userId: TEST_USER_ID,
+      redirectPath: oversizedAfterNormalization,
+      nowSeconds: NOW_SECONDS,
+    });
+
+    const token = getStoredToken();
+
+    expect(Buffer.byteLength(token, "utf8")).toBeLessThanOrEqual(
+      SET_PASSWORD_INTENT_MAX_TOKEN_BYTES,
+    );
+    expect(
+      verifySetPasswordIntent({
+        token,
+        expectedUserId: TEST_USER_ID,
+        nowSeconds: NOW_SECONDS,
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        redirectPath: ROUTES.MYPAGE,
+      }),
+    );
+  });
+
+  it("MYPAGE fallback token도 byte budget을 넘으면 cookie를 쓰지 않고 system error로 실패한다", async () => {
+    const { createSetPasswordIntent, SET_PASSWORD_INTENT_MAX_TOKEN_BYTES } =
+      await loadSetPasswordIntent();
+
+    const oversizedUserId = "u".repeat(SET_PASSWORD_INTENT_MAX_TOKEN_BYTES * 2);
+
+    await expect(
+      createSetPasswordIntent({
+        userId: oversizedUserId,
+        redirectPath: ROUTES.MYPAGE,
+        nowSeconds: NOW_SECONDS,
+      }),
+    ).rejects.toThrow(
+      "Set Password Intent exceeds the cookie-safe size budget",
+    );
+
+    expect(cookieSetMock).not.toHaveBeenCalled();
+  });
+
+  it("create 시 signing secret configuration error를 숨기지 않는다", async () => {
     const { createSetPasswordIntent } = await loadSetPasswordIntent();
     vi.stubEnv("PASSWORD_INTENT_SIGNING_SECRET", "");
 
     await expect(
       createSetPasswordIntent({
         userId: TEST_USER_ID,
+        redirectPath: TEST_REDIRECT_PATH,
         nowSeconds: NOW_SECONDS,
       }),
     ).rejects.toThrow("PASSWORD_INTENT_SIGNING_SECRET is not configured");
@@ -298,6 +403,7 @@ describe("setPasswordIntent", () => {
 
     await createSetPasswordIntent({
       userId: TEST_USER_ID,
+      redirectPath: TEST_REDIRECT_PATH,
       nowSeconds: NOW_SECONDS,
     });
 

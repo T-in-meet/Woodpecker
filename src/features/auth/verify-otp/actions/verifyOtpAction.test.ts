@@ -16,6 +16,7 @@ import {
 import { getTrustedAuthServerActionClientIp } from "../../lib/rate-limit/trustedAuthClientIp";
 import { createSetPasswordIntent } from "../../lib/setPasswordIntent";
 import { createSignedResetPasswordIntent } from "../../lib/signedResetPasswordIntent";
+import { validateRedirectPath } from "../../lib/validateRedirectPath";
 import { verifyOtp } from "../lib/verifyOtp";
 import { verifyOtpAction } from "./verifyOtpAction";
 
@@ -65,6 +66,10 @@ vi.mock("../../lib/setPasswordIntent", () => ({
 
 vi.mock("../../lib/signedResetPasswordIntent", () => ({
   createSignedResetPasswordIntent: vi.fn(),
+}));
+
+vi.mock("../../lib/validateRedirectPath", () => ({
+  validateRedirectPath: vi.fn(),
 }));
 
 vi.mock("../../lib/applyMinimumActionDelay", () => ({
@@ -232,12 +237,17 @@ describe("verifyOtpAction", () => {
       error: null,
     } as Awaited<ReturnType<typeof verifyOtp>>);
 
+    vi.mocked(validateRedirectPath).mockImplementation((value: unknown) =>
+      typeof value === "string" && value.startsWith("/")
+        ? value
+        : ROUTES.MYPAGE,
+    );
     vi.mocked(createSetPasswordIntent).mockResolvedValue(undefined);
     vi.mocked(createSignedResetPasswordIntent).mockResolvedValue(undefined);
     vi.mocked(applyMinimumActionDelay).mockResolvedValue(undefined);
   });
 
-  it("signup OTP 인증에 성공하면 비밀번호 설정 페이지로 redirect한다", async () => {
+  it("signup OTP 인증 성공 시 plain set-password로 이동하고 MYPAGE를 signed destination으로 발급한다", async () => {
     const formData = createFormData({
       email: "user@example.com",
       purpose: "signup",
@@ -254,7 +264,11 @@ describe("verifyOtpAction", () => {
       purpose: "signup",
       otp: "123456",
     });
-
+    expect(validateRedirectPath).toHaveBeenCalledWith(undefined);
+    expect(createSetPasswordIntent).toHaveBeenCalledWith({
+      userId: "verified-user-id",
+      redirectPath: ROUTES.MYPAGE,
+    });
     expect(otpVerifyRateLimit.recordResult).toHaveBeenCalledWith({
       canonicalEmail: "user@example.com",
       outcome: "success",
@@ -264,51 +278,57 @@ describe("verifyOtpAction", () => {
     expect(applyMinimumActionDelay).toHaveBeenCalledTimes(1);
   });
 
-  it("signup OTP 인증에 성공하고 redirectPath가 있으면 비밀번호 설정 페이지에 redirect query를 포함한다", async () => {
+  it("signup redirectPath는 revalidate 후 signed Intent에 넣고 URL query에는 노출하지 않는다", async () => {
     const redirectPath = "/notes";
-    const formData = createFormData({
-      email: "user@example.com",
-      purpose: "signup",
-      otp: "123456",
-    });
-    const expectedPath = `${ROUTES.SET_PASSWORD}?redirect=${encodeURIComponent(
-      redirectPath,
-    )}`;
 
     await expect(
-      verifyOtpAction(redirectPath, prevState, formData),
-    ).rejects.toThrow(`NEXT_REDIRECT:${expectedPath}`);
+      verifyOtpAction(
+        redirectPath,
+        prevState,
+        createFormData({
+          email: "user@example.com",
+          purpose: "signup",
+          otp: "123456",
+        }),
+      ),
+    ).rejects.toThrow(`NEXT_REDIRECT:${ROUTES.SET_PASSWORD}`);
 
-    expect(redirect).toHaveBeenCalledWith(expectedPath);
-    expect(createSignedResetPasswordIntent).not.toHaveBeenCalled();
-    expect(applyMinimumActionDelay).toHaveBeenCalledTimes(1);
-  });
-
-  it("signup OTP 인증 성공 시 Provider user id로 Set Password Intent를 발급한다", async () => {
-    const formData = createFormData({
-      email: "user@example.com",
-      purpose: "signup",
-      otp: "123456",
-    });
-
-    await expect(verifyOtpAction(null, prevState, formData)).rejects.toThrow(
-      `NEXT_REDIRECT:${ROUTES.SET_PASSWORD}`,
-    );
-
-    expect(createSetPasswordIntent).toHaveBeenCalledTimes(1);
+    expect(validateRedirectPath).toHaveBeenCalledWith(redirectPath);
     expect(createSetPasswordIntent).toHaveBeenCalledWith({
       userId: "verified-user-id",
+      redirectPath,
     });
-    expect(createSignedResetPasswordIntent).not.toHaveBeenCalled();
-
-    expect(
-      vi.mocked(otpVerifyRateLimit.recordResult).mock.invocationCallOrder[0]!,
-    ).toBeLessThan(
-      vi.mocked(createSetPasswordIntent).mock.invocationCallOrder[0]!,
+    expect(redirect).toHaveBeenCalledWith(ROUTES.SET_PASSWORD);
+    expect(redirect).not.toHaveBeenCalledWith(
+      expect.stringContaining("?redirect="),
     );
+    expect(createSignedResetPasswordIntent).not.toHaveBeenCalled();
   });
 
-  it("client가 userId를 전달해도 Set Password Intent는 Provider user id만 사용한다", async () => {
+  it("signup redirect 재검증 결과를 그대로 Intent issuer에 전달한다", async () => {
+    vi.mocked(validateRedirectPath).mockReturnValue(ROUTES.MYPAGE);
+
+    await expect(
+      verifyOtpAction(
+        "/login",
+        prevState,
+        createFormData({
+          email: "user@example.com",
+          purpose: "signup",
+          otp: "123456",
+        }),
+      ),
+    ).rejects.toThrow(`NEXT_REDIRECT:${ROUTES.SET_PASSWORD}`);
+
+    expect(validateRedirectPath).toHaveBeenCalledWith("/login");
+    expect(createSetPasswordIntent).toHaveBeenCalledWith({
+      userId: "verified-user-id",
+      redirectPath: ROUTES.MYPAGE,
+    });
+    expect(redirect).toHaveBeenCalledWith(ROUTES.SET_PASSWORD);
+  });
+
+  it("signup Set Password Intent는 client userId가 아니라 Provider user id만 사용한다", async () => {
     const formData = createFormData({
       email: "user@example.com",
       purpose: "signup",
@@ -316,24 +336,25 @@ describe("verifyOtpAction", () => {
     });
     formData.set("userId", "client-controlled-user-id");
 
-    await expect(verifyOtpAction(null, prevState, formData)).rejects.toThrow(
-      `NEXT_REDIRECT:${ROUTES.SET_PASSWORD}`,
-    );
+    await expect(
+      verifyOtpAction("/notes", prevState, formData),
+    ).rejects.toThrow(`NEXT_REDIRECT:${ROUTES.SET_PASSWORD}`);
 
     expect(createSetPasswordIntent).toHaveBeenCalledWith({
       userId: "verified-user-id",
+      redirectPath: "/notes",
     });
-    expect(createSetPasswordIntent).not.toHaveBeenCalledWith({
-      userId: "client-controlled-user-id",
-    });
+    expect(createSetPasswordIntent).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "client-controlled-user-id",
+      }),
+    );
     expect(createSignedResetPasswordIntent).not.toHaveBeenCalled();
   });
 
   it("signup Verify 응답에 authenticated user가 없으면 success로 기록하지 않고 fail-closed한다", async () => {
     vi.mocked(verifyOtp).mockResolvedValue({
-      data: {
-        user: null,
-      },
+      data: { user: null },
       error: null,
     } as Awaited<ReturnType<typeof verifyOtp>>);
 
@@ -367,7 +388,7 @@ describe("verifyOtpAction", () => {
     );
 
     const result = await verifyOtpAction(
-      null,
+      "/notes",
       prevState,
       createFormData({
         email: "user@example.com",
@@ -391,6 +412,7 @@ describe("verifyOtpAction", () => {
     );
     expect(createSetPasswordIntent).toHaveBeenCalledWith({
       userId: "verified-user-id",
+      redirectPath: "/notes",
     });
     expect(createSignedResetPasswordIntent).not.toHaveBeenCalled();
     expect(logAuthError).toHaveBeenCalledWith(
@@ -402,7 +424,7 @@ describe("verifyOtpAction", () => {
     expect(redirect).not.toHaveBeenCalled();
   });
 
-  it("context 검증에 실패하면 내부 reason을 외부 상태에 노출하지 않고 이후 검증을 실행하지 않는다", async () => {
+  it("context 검증에 실패하면 이후 검증을 실행하지 않는다", async () => {
     const result = await verifyOtpAction(
       null,
       prevState,
@@ -476,7 +498,7 @@ describe("verifyOtpAction", () => {
     );
   });
 
-  it("Auth Global 차단은 기존 blocked 상태를 반환하고 client/Verify limiter/Provider를 호출하지 않는다", async () => {
+  it("Auth Global 차단은 blocked 상태를 반환하고 Provider를 호출하지 않는다", async () => {
     vi.mocked(authGlobalRequestRateLimit.tryConsume).mockReturnValue({
       allowed: false,
       blockedBy: "ip_short",
@@ -599,7 +621,7 @@ describe("verifyOtpAction", () => {
     expect(redirect).not.toHaveBeenCalled();
   });
 
-  it("Provider 429는 provider_rate_limited로 기록하고 local blocker와 같은 blocked 외부 상태를 반환한다", async () => {
+  it("Provider 429는 provider_rate_limited로 기록하고 blocked를 반환한다", async () => {
     vi.mocked(verifyOtp).mockResolvedValue({
       error: createProviderError({
         status: 429,
@@ -725,10 +747,15 @@ describe("verifyOtpAction", () => {
     });
   });
 
-  it("reset-password OTP 인증에 성공하면 Provider user id로 signed Reset Password Intent를 발급하고 redirect한다", async () => {
+  it("reset-password OTP 성공은 기존 signed Reset Intent + query redirect lifecycle을 유지한다", async () => {
+    const redirectPath = "/notes";
+    const expectedPath = `${ROUTES.RESET_PASSWORD}?redirect=${encodeURIComponent(
+      redirectPath,
+    )}`;
+
     await expect(
       verifyOtpAction(
-        null,
+        redirectPath,
         prevState,
         createFormData({
           email: "user@example.com",
@@ -736,14 +763,14 @@ describe("verifyOtpAction", () => {
           otp: "123456",
         }),
       ),
-    ).rejects.toThrow(`NEXT_REDIRECT:${ROUTES.RESET_PASSWORD}`);
+    ).rejects.toThrow(`NEXT_REDIRECT:${expectedPath}`);
 
-    expect(createSignedResetPasswordIntent).toHaveBeenCalledTimes(1);
     expect(createSignedResetPasswordIntent).toHaveBeenCalledWith({
       userId: "verified-user-id",
     });
     expect(createSetPasswordIntent).not.toHaveBeenCalled();
-    expect(redirect).toHaveBeenCalledWith(ROUTES.RESET_PASSWORD);
+    expect(validateRedirectPath).not.toHaveBeenCalled();
+    expect(redirect).toHaveBeenCalledWith(expectedPath);
 
     const recordOrder = vi.mocked(otpVerifyRateLimit.recordResult).mock
       .invocationCallOrder[0]!;
@@ -762,7 +789,7 @@ describe("verifyOtpAction", () => {
     expect(completedOrder).toBeLessThan(issuerOrder);
   });
 
-  it("client가 userId를 전달해도 Reset Password Intent는 Provider user id만 사용한다", async () => {
+  it("reset-password client userId는 무시하고 Provider user id만 사용한다", async () => {
     const formData = createFormData({
       email: "user@example.com",
       purpose: "reset-password",
@@ -782,11 +809,9 @@ describe("verifyOtpAction", () => {
     });
   });
 
-  it("reset-password Verify 응답에 authenticated user가 없으면 success로 기록하지 않고 fail-closed한다", async () => {
+  it("reset-password Verify 응답에 authenticated user가 없으면 fail-closed한다", async () => {
     vi.mocked(verifyOtp).mockResolvedValue({
-      data: {
-        user: null,
-      },
+      data: { user: null },
       error: null,
     } as Awaited<ReturnType<typeof verifyOtp>>);
 
@@ -814,7 +839,7 @@ describe("verifyOtpAction", () => {
     expect(redirect).not.toHaveBeenCalled();
   });
 
-  it("reset-password 성공 후 signed Intent 발급이 실패하면 Verify 성공 결과를 유지한다", async () => {
+  it("reset-password signed Intent 발급 실패는 internal_error로 종료한다", async () => {
     vi.mocked(createSignedResetPasswordIntent).mockRejectedValue(
       new Error("signed reset intent failed"),
     );
@@ -833,8 +858,6 @@ describe("verifyOtpAction", () => {
       status: "internal_error",
       fieldErrors: null,
     });
-
-    expect(otpVerifyRateLimit.recordResult).toHaveBeenCalledTimes(1);
     expect(otpVerifyRateLimit.recordResult).toHaveBeenCalledWith({
       canonicalEmail: "user@example.com",
       outcome: "success",
@@ -843,7 +866,6 @@ describe("verifyOtpAction", () => {
       AUTH_EVENTS.AUTH_VERIFY_OTP_COMPLETED,
       expect.anything(),
     );
-
     expect(createSignedResetPasswordIntent).toHaveBeenCalledTimes(1);
     expect(createSignedResetPasswordIntent).toHaveBeenCalledWith({
       userId: "verified-user-id",
@@ -873,32 +895,6 @@ describe("verifyOtpAction", () => {
       }),
     );
     expect(redirect).not.toHaveBeenCalled();
-  });
-
-  it("reset-password 성공 시 redirectPath를 유지한다", async () => {
-    const redirectPath = "/notes";
-    const expectedPath = `${ROUTES.RESET_PASSWORD}?redirect=${encodeURIComponent(
-      redirectPath,
-    )}`;
-
-    await expect(
-      verifyOtpAction(
-        redirectPath,
-        prevState,
-        createFormData({
-          email: "user@example.com",
-          purpose: "reset-password",
-          otp: "123456",
-        }),
-      ),
-    ).rejects.toThrow(`NEXT_REDIRECT:${expectedPath}`);
-
-    expect(redirect).toHaveBeenCalledWith(expectedPath);
-    expect(createSignedResetPasswordIntent).toHaveBeenCalledTimes(1);
-    expect(createSignedResetPasswordIntent).toHaveBeenCalledWith({
-      userId: "verified-user-id",
-    });
-    expect(createSetPasswordIntent).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -982,7 +978,7 @@ describe("verifyOtpAction", () => {
     },
   );
 
-  it("반환 wrapped Provider error가 own timeout이면 provider_error + PROVIDER_TIMEOUT으로 종료한다", async () => {
+  it("반환 wrapped Provider error가 own timeout이면 PROVIDER_TIMEOUT으로 종료한다", async () => {
     const captured = captureVerifyProviderFetch();
     const timeoutController = new AbortController();
     const timeoutSpy = vi
@@ -1038,7 +1034,7 @@ describe("verifyOtpAction", () => {
     }
   });
 
-  it("verifyOtp throw 경로도 own timeout이면 동일한 PROVIDER_TIMEOUT 계약을 사용한다", async () => {
+  it("verifyOtp throw 경로도 own timeout이면 PROVIDER_TIMEOUT을 사용한다", async () => {
     const captured = captureVerifyProviderFetch();
     const timeoutController = new AbortController();
     const timeoutSpy = vi
@@ -1153,7 +1149,7 @@ describe("verifyOtpAction", () => {
     }
   });
 
-  it("wrapped Provider error라도 own timeout이 아니면 기존 PROVIDER_ERROR를 유지한다", async () => {
+  it("wrapped Provider error라도 own timeout이 아니면 PROVIDER_ERROR를 유지한다", async () => {
     const captured = captureVerifyProviderFetch();
 
     vi.mocked(verifyOtp).mockResolvedValue({

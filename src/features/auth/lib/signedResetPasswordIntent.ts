@@ -6,9 +6,11 @@ import { RESET_PASSWORD_PATH } from "../constants/routes";
 import { RESET_PASSWORD_INTENT_TTL_SECONDS } from "./rate-limit/authRateLimitConstants";
 import {
   createSignedIntent,
-  type SignedIntentPayload,
+  type ResetPasswordIntentPayload,
   verifySignedIntent,
 } from "./signedIntent";
+
+export { type ResetPasswordIntentPayload } from "./signedIntent";
 
 export const SIGNED_RESET_PASSWORD_INTENT_COOKIE = "reset_password_intent";
 
@@ -19,10 +21,6 @@ const RESET_PASSWORD_INTENT_COOKIE_OPTIONS = {
   sameSite: "lax" as const,
   secure: process.env.NODE_ENV === "production",
   path: RESET_PASSWORD_PATH,
-};
-
-export type ResetPasswordIntentPayload = SignedIntentPayload & {
-  purpose: typeof RESET_PASSWORD_INTENT_PURPOSE;
 };
 
 type CreateResetPasswordIntentTokenParams = {
@@ -77,25 +75,18 @@ export function verifyResetPasswordIntent({
   expectedUserId,
   nowSeconds,
 }: VerifyResetPasswordIntentParams): ResetPasswordIntentPayload | null {
-  const payload =
-    nowSeconds === undefined
-      ? verifySignedIntent({
-          token,
-          expectedPurpose: RESET_PASSWORD_INTENT_PURPOSE,
-          expectedUserId,
-        })
-      : verifySignedIntent({
-          token,
-          expectedPurpose: RESET_PASSWORD_INTENT_PURPOSE,
-          expectedUserId,
-          nowSeconds,
-        });
-
-  if (!payload) {
-    return null;
-  }
-
-  return payload as ResetPasswordIntentPayload;
+  return nowSeconds === undefined
+    ? verifySignedIntent({
+        token,
+        expectedPurpose: RESET_PASSWORD_INTENT_PURPOSE,
+        expectedUserId,
+      })
+    : verifySignedIntent({
+        token,
+        expectedPurpose: RESET_PASSWORD_INTENT_PURPOSE,
+        expectedUserId,
+        nowSeconds,
+      });
 }
 
 /**

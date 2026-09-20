@@ -2,24 +2,27 @@
  * Signed Intent 단위 테스트.
  *
  * 검증 범위:
- * - Set/Reset Password Intent sign → verify 정상 round-trip
- * - signer 입력 계약(userId / nowSeconds)
- * - HMAC signature 무결성 및 timing-safe 비교 경로
- * - strict base64url / JSON / payload schema 검증
+ * - Set Password exact 5-claim / Reset Password exact 4-claim
+ * - purpose-aware sign → verify 정상 round-trip
+ * - strict base64url / JSON / exact payload schema
  * - purpose / userId authorization binding
+ * - redirectPath tamper 검출
  * - issuedAt / expiresAt / TTL / expiration 경계
- * - signing secret 누락 시 fail-closed 동작
- *
- * 이 테스트는 Signed Intent 자체의 계약만 검증하며,
- * cookie lifecycle과 page/action 연결은 해당 전용 테스트에서 검증한다.
+ * - signing secret 누락 시 fail-closed
  */
 
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  expectTypeOf,
+  it,
+  vi,
+} from "vitest";
 
-// signedIntent.ts는 server-only를 import하므로 Vitest 환경에서는 비워서 mock한다.
-// vi.mock은 정적 import보다 먼저 hoist되므로 아래 signedIntent import가 안전하다.
 vi.mock("server-only", () => ({}));
 
 import {
@@ -28,8 +31,8 @@ import {
 } from "../rate-limit/authRateLimitConstants";
 import {
   createSignedIntent,
-  type SignedIntentPayload,
-  type SignedIntentPurpose,
+  type ResetPasswordIntentPayload,
+  type SetPasswordIntentPayload,
   verifySignedIntent,
 } from "../signedIntent";
 
@@ -45,33 +48,13 @@ vi.mock("node:crypto", async (importOriginal) => {
 const TEST_SECRET = "password-intent-test-secret";
 const TEST_USER_ID = "user-123";
 const OTHER_USER_ID = "user-456";
+const TEST_REDIRECT_PATH = "/notes";
 const NOW_SECONDS = 1_700_000_000;
 
-const PURPOSE_CASES: Array<{
-  purpose: SignedIntentPurpose;
-  ttlSeconds: number;
-}> = [
-  {
-    purpose: "signup-set-password",
-    ttlSeconds: SET_PASSWORD_INTENT_TTL_SECONDS,
-  },
-  {
-    purpose: "reset-password",
-    ttlSeconds: RESET_PASSWORD_INTENT_TTL_SECONDS,
-  },
-];
-
-/** JSON 값을 production wire format과 동일한 base64url payloadPart로 만든다. */
 function encodePayload(value: unknown): string {
   return Buffer.from(JSON.stringify(value), "utf8").toString("base64url");
 }
 
-/**
- * 임의 payloadPart에 테스트 secret으로 HMAC-SHA256 signature를 붙인다.
- *
- * verifier의 malformed payload/schema/time 경로를 signer와 독립적으로 검증하기 위한
- * 테스트 전용 helper다.
- */
 function signPayloadPart(payloadPart: string): string {
   const signaturePart = createHmac("sha256", TEST_SECRET)
     .update(payloadPart, "utf8")
@@ -80,20 +63,19 @@ function signPayloadPart(payloadPart: string): string {
   return `${payloadPart}.${signaturePart}`;
 }
 
-/** 임의 payload를 정상 signature가 붙은 Signed Intent token으로 만든다. */
 function createTokenForPayload(payload: unknown): string {
   return signPayloadPart(encodePayload(payload));
 }
 
-/** 기본적으로 유효한 Set Password payload를 생성한다. */
-function createValidPayload(
-  overrides: Partial<SignedIntentPayload> = {},
-): SignedIntentPayload {
+function createValidSetPayload(
+  overrides: Partial<SetPasswordIntentPayload> = {},
+): SetPasswordIntentPayload {
   return {
     purpose: "signup-set-password",
     userId: TEST_USER_ID,
     issuedAt: NOW_SECONDS,
     expiresAt: NOW_SECONDS + SET_PASSWORD_INTENT_TTL_SECONDS,
+    redirectPath: TEST_REDIRECT_PATH,
     ...overrides,
   };
 }
@@ -109,40 +91,108 @@ describe("signedIntent", () => {
     vi.clearAllMocks();
   });
 
-  it.each(PURPOSE_CASES)(
-    "$purpose Intent를 sign한 뒤 같은 purpose/user로 verify하면 payload를 반환한다",
-    ({ purpose, ttlSeconds }) => {
-      const token = createSignedIntent({
-        purpose,
-        userId: TEST_USER_ID,
-        nowSeconds: NOW_SECONDS,
-      });
+  it("Set Password Intent는 exact 5-claim payload로 sign/verify된다", () => {
+    const token = createSignedIntent({
+      purpose: "signup-set-password",
+      userId: TEST_USER_ID,
+      redirectPath: TEST_REDIRECT_PATH,
+      nowSeconds: NOW_SECONDS,
+    });
 
-      const result = verifySignedIntent({
+    expect(
+      verifySignedIntent({
         token,
-        expectedPurpose: purpose,
+        expectedPurpose: "signup-set-password",
         expectedUserId: TEST_USER_ID,
         nowSeconds: NOW_SECONDS,
-      });
+      }),
+    ).toEqual({
+      purpose: "signup-set-password",
+      userId: TEST_USER_ID,
+      issuedAt: NOW_SECONDS,
+      expiresAt: NOW_SECONDS + SET_PASSWORD_INTENT_TTL_SECONDS,
+      redirectPath: TEST_REDIRECT_PATH,
+    });
+  });
 
-      expect(result).toEqual({
-        purpose,
-        userId: TEST_USER_ID,
-        issuedAt: NOW_SECONDS,
-        expiresAt: NOW_SECONDS + ttlSeconds,
-      });
-    },
-  );
+  it("Reset Password Intent는 기존 exact 4-claim payload를 유지한다", () => {
+    const token = createSignedIntent({
+      purpose: "reset-password",
+      userId: TEST_USER_ID,
+      nowSeconds: NOW_SECONDS,
+    });
+
+    expect(
+      verifySignedIntent({
+        token,
+        expectedPurpose: "reset-password",
+        expectedUserId: TEST_USER_ID,
+        nowSeconds: NOW_SECONDS,
+      }),
+    ).toEqual({
+      purpose: "reset-password",
+      userId: TEST_USER_ID,
+      issuedAt: NOW_SECONDS,
+      expiresAt: NOW_SECONDS + RESET_PASSWORD_INTENT_TTL_SECONDS,
+    });
+  });
+
+  it("expectedPurpose literal에 따라 verifier 반환 타입이 purpose-aware하게 좁혀진다", () => {
+    const setToken = createSignedIntent({
+      purpose: "signup-set-password",
+      userId: TEST_USER_ID,
+      redirectPath: TEST_REDIRECT_PATH,
+      nowSeconds: NOW_SECONDS,
+    });
+    const resetToken = createSignedIntent({
+      purpose: "reset-password",
+      userId: TEST_USER_ID,
+      nowSeconds: NOW_SECONDS,
+    });
+
+    const setResult = verifySignedIntent({
+      token: setToken,
+      expectedPurpose: "signup-set-password",
+      expectedUserId: TEST_USER_ID,
+      nowSeconds: NOW_SECONDS,
+    });
+    const resetResult = verifySignedIntent({
+      token: resetToken,
+      expectedPurpose: "reset-password",
+      expectedUserId: TEST_USER_ID,
+      nowSeconds: NOW_SECONDS,
+    });
+
+    expectTypeOf(setResult).toEqualTypeOf<SetPasswordIntentPayload | null>();
+    expectTypeOf(
+      resetResult,
+    ).toEqualTypeOf<ResetPasswordIntentPayload | null>();
+  });
 
   it.each(["", "   "])("signer는 빈/공백 userId(%j)를 거부한다", (userId) => {
     expect(() =>
       createSignedIntent({
         purpose: "signup-set-password",
         userId,
+        redirectPath: TEST_REDIRECT_PATH,
         nowSeconds: NOW_SECONDS,
       }),
     ).toThrow("Password Intent userId is required");
   });
+
+  it.each(["", "   "])(
+    "Set signer는 빈/공백 redirectPath(%j)를 거부한다",
+    (redirectPath) => {
+      expect(() =>
+        createSignedIntent({
+          purpose: "signup-set-password",
+          userId: TEST_USER_ID,
+          redirectPath,
+          nowSeconds: NOW_SECONDS,
+        }),
+      ).toThrow("Set Password Intent redirectPath is required");
+    },
+  );
 
   it.each([-1, NOW_SECONDS + 0.5])(
     "signer는 잘못된 nowSeconds(%s)를 거부한다",
@@ -151,16 +201,18 @@ describe("signedIntent", () => {
         createSignedIntent({
           purpose: "signup-set-password",
           userId: TEST_USER_ID,
+          redirectPath: TEST_REDIRECT_PATH,
           nowSeconds,
         }),
       ).toThrow("Password Intent nowSeconds must be a non-negative integer");
     },
   );
 
-  it("expected purpose가 다르면 같은 사용자 token도 거부한다", () => {
+  it("Set token을 Reset purpose로 재사용할 수 없다", () => {
     const token = createSignedIntent({
       purpose: "signup-set-password",
       userId: TEST_USER_ID,
+      redirectPath: TEST_REDIRECT_PATH,
       nowSeconds: NOW_SECONDS,
     });
 
@@ -174,10 +226,28 @@ describe("signedIntent", () => {
     ).toBeNull();
   });
 
+  it("Reset token을 Set purpose로 재사용할 수 없다", () => {
+    const token = createSignedIntent({
+      purpose: "reset-password",
+      userId: TEST_USER_ID,
+      nowSeconds: NOW_SECONDS,
+    });
+
+    expect(
+      verifySignedIntent({
+        token,
+        expectedPurpose: "signup-set-password",
+        expectedUserId: TEST_USER_ID,
+        nowSeconds: NOW_SECONDS,
+      }),
+    ).toBeNull();
+  });
+
   it("expected userId가 다르면 같은 purpose token도 거부한다", () => {
     const token = createSignedIntent({
       purpose: "signup-set-password",
       userId: TEST_USER_ID,
+      redirectPath: TEST_REDIRECT_PATH,
       nowSeconds: NOW_SECONDS,
     });
 
@@ -206,7 +276,7 @@ describe("signedIntent", () => {
   );
 
   it("signature가 malformed base64url이면 거부한다", () => {
-    const payloadPart = encodePayload(createValidPayload());
+    const payloadPart = encodePayload(createValidSetPayload());
 
     expect(
       verifySignedIntent({
@@ -221,7 +291,7 @@ describe("signedIntent", () => {
   it.each([31, 33])(
     "signature digest 길이가 SHA-256 길이와 다른 %s byte이면 timingSafeEqual 전에 거부한다",
     (signatureBytes) => {
-      const payloadPart = encodePayload(createValidPayload());
+      const payloadPart = encodePayload(createValidSetPayload());
       const invalidLengthSignature =
         Buffer.alloc(signatureBytes).toString("base64url");
 
@@ -238,7 +308,7 @@ describe("signedIntent", () => {
   );
 
   it("같은 길이의 잘못된 signature는 timingSafeEqual 비교 후 거부한다", () => {
-    const payloadPart = encodePayload(createValidPayload());
+    const payloadPart = encodePayload(createValidSetPayload());
     const wrongSignature = Buffer.alloc(32, 1).toString("base64url");
 
     expect(
@@ -283,25 +353,27 @@ describe("signedIntent", () => {
     ["null payload", null],
     ["array payload", []],
     [
-      "필드 누락",
+      "Set redirectPath 누락",
       {
         purpose: "signup-set-password",
         userId: TEST_USER_ID,
         issuedAt: NOW_SECONDS,
+        expiresAt: NOW_SECONDS + SET_PASSWORD_INTENT_TTL_SECONDS,
       },
     ],
-    ["추가 필드", { ...createValidPayload(), extra: true }],
+    ["Set 추가 필드", { ...createValidSetPayload(), extra: true }],
     [
       "unsupported purpose",
-      { ...createValidPayload(), purpose: "unsupported-purpose" },
+      { ...createValidSetPayload(), purpose: "unsupported-purpose" },
     ],
-    ["non-string userId", { ...createValidPayload(), userId: 123 }],
-    ["빈 userId", createValidPayload({ userId: "" })],
-    ["음수 issuedAt", createValidPayload({ issuedAt: -1 })],
-    ["소수 issuedAt", createValidPayload({ issuedAt: NOW_SECONDS + 0.5 })],
-    ["음수 expiresAt", createValidPayload({ expiresAt: -1 })],
-    ["소수 expiresAt", createValidPayload({ expiresAt: NOW_SECONDS + 1.5 })],
-  ])("잘못된 payload schema(%s)는 거부한다", (_name, payload) => {
+    ["non-string userId", { ...createValidSetPayload(), userId: 123 }],
+    ["빈 userId", createValidSetPayload({ userId: "" })],
+    ["빈 redirectPath", createValidSetPayload({ redirectPath: "" })],
+    ["음수 issuedAt", createValidSetPayload({ issuedAt: -1 })],
+    ["소수 issuedAt", createValidSetPayload({ issuedAt: NOW_SECONDS + 0.5 })],
+    ["음수 expiresAt", createValidSetPayload({ expiresAt: -1 })],
+    ["소수 expiresAt", createValidSetPayload({ expiresAt: NOW_SECONDS + 1.5 })],
+  ])("잘못된 Set payload schema(%s)는 거부한다", (_name, payload) => {
     const token = createTokenForPayload(payload);
 
     expect(
@@ -314,24 +386,72 @@ describe("signedIntent", () => {
     ).toBeNull();
   });
 
+  it("Reset payload에 redirectPath가 추가되면 exact 4-claim schema에서 거부한다", () => {
+    const token = createTokenForPayload({
+      purpose: "reset-password",
+      userId: TEST_USER_ID,
+      issuedAt: NOW_SECONDS,
+      expiresAt: NOW_SECONDS + RESET_PASSWORD_INTENT_TTL_SECONDS,
+      redirectPath: TEST_REDIRECT_PATH,
+    });
+
+    expect(
+      verifySignedIntent({
+        token,
+        expectedPurpose: "reset-password",
+        expectedUserId: TEST_USER_ID,
+        nowSeconds: NOW_SECONDS,
+      }),
+    ).toBeNull();
+  });
+
+  it("redirectPath를 변조하고 기존 signature를 재사용하면 거부한다", () => {
+    const token = createSignedIntent({
+      purpose: "signup-set-password",
+      userId: TEST_USER_ID,
+      redirectPath: TEST_REDIRECT_PATH,
+      nowSeconds: NOW_SECONDS,
+    });
+    const [payloadPart, signaturePart] = token.split(".");
+    const payload = JSON.parse(
+      Buffer.from(payloadPart!, "base64url").toString("utf8"),
+    ) as SetPasswordIntentPayload;
+    const tamperedPayloadPart = encodePayload({
+      ...payload,
+      redirectPath: "/mypage",
+    });
+
+    expect(
+      verifySignedIntent({
+        token: `${tamperedPayloadPart}.${signaturePart}`,
+        expectedPurpose: "signup-set-password",
+        expectedUserId: TEST_USER_ID,
+        nowSeconds: NOW_SECONDS,
+      }),
+    ).toBeNull();
+  });
+
   it.each([
     [
       "future issuedAt",
-      createValidPayload({
+      createValidSetPayload({
         issuedAt: NOW_SECONDS + 1,
         expiresAt: NOW_SECONDS + 1 + SET_PASSWORD_INTENT_TTL_SECONDS,
       }),
     ],
-    ["expiresAt === issuedAt", createValidPayload({ expiresAt: NOW_SECONDS })],
+    [
+      "expiresAt === issuedAt",
+      createValidSetPayload({ expiresAt: NOW_SECONDS }),
+    ],
     [
       "TTL 초과",
-      createValidPayload({
+      createValidSetPayload({
         expiresAt: NOW_SECONDS + SET_PASSWORD_INTENT_TTL_SECONDS + 1,
       }),
     ],
     [
       "exact expiration",
-      createValidPayload({
+      createValidSetPayload({
         issuedAt: NOW_SECONDS - SET_PASSWORD_INTENT_TTL_SECONDS,
         expiresAt: NOW_SECONDS,
       }),
@@ -351,7 +471,7 @@ describe("signedIntent", () => {
 
   it("만료 1초 전(now === expiresAt - 1)에는 유효하다", () => {
     const expiresAt = NOW_SECONDS + 1;
-    const payload = createValidPayload({
+    const payload = createValidSetPayload({
       issuedAt: expiresAt - SET_PASSWORD_INTENT_TTL_SECONDS,
       expiresAt,
     });
@@ -374,6 +494,7 @@ describe("signedIntent", () => {
       createSignedIntent({
         purpose: "signup-set-password",
         userId: TEST_USER_ID,
+        redirectPath: TEST_REDIRECT_PATH,
         nowSeconds: NOW_SECONDS,
       }),
     ).toThrow("PASSWORD_INTENT_SIGNING_SECRET is not configured");
@@ -383,6 +504,7 @@ describe("signedIntent", () => {
     const token = createSignedIntent({
       purpose: "signup-set-password",
       userId: TEST_USER_ID,
+      redirectPath: TEST_REDIRECT_PATH,
       nowSeconds: NOW_SECONDS,
     });
 

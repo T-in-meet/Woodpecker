@@ -44,6 +44,22 @@ describe("set password intent cleanup route", () => {
     );
   });
 
+  it("legacy next query가 다시 들어와도 destination으로 사용하지 않고 fixed mypage로 보낸다", async () => {
+    const response = await GET(
+      new Request(
+        "http://localhost:3000/api/auth/set-password/cleanup?next=%2Fnotes",
+      ),
+    );
+
+    expect(clearSetPasswordIntentMock).toHaveBeenCalledTimes(1);
+    expect(response.headers.get("location")).toBe(
+      `http://localhost:3000${ROUTES.MYPAGE}`,
+    );
+    expect(response.headers.get("location")).not.toBe(
+      "http://localhost:3000/notes",
+    );
+  });
+
   it("Set cleanup은 Reset Intent clear helper를 호출하지 않는다", async () => {
     await GET(
       new Request("http://localhost:3000/api/auth/set-password/cleanup"),

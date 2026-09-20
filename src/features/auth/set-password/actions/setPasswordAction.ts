@@ -5,7 +5,10 @@ import { redirect } from "next/navigation";
 
 import { AUTH_EVENTS } from "@/features/auth/constants/authEvents";
 import { AUTH_LOG_REASONS } from "@/features/auth/constants/authLogReasons";
-import { SET_PASSWORD_INTENT_CLEANUP_PATH } from "@/features/auth/constants/routes";
+import {
+  SET_PASSWORD_COMPLETE_PATH,
+  SET_PASSWORD_INTENT_CLEANUP_PATH,
+} from "@/features/auth/constants/routes";
 import {
   logAuthError,
   logAuthEvent,
@@ -34,32 +37,18 @@ function toPayload(formData: FormData) {
 }
 
 /**
- * 최종 이동 경로를 안전한 내부 경로로 정규화합니다.
- *
- * redirectPath가 없으면 기본 경로인 MYPAGE를 사용하고,
- * 값이 있으면 validateRedirectPath를 통해 허용된 내부 경로인지
- * 다시 검증한 뒤 사용합니다.
- */
-function resolveRedirectPath(redirectPath: string | null): string {
-  if (!redirectPath) {
-    return ROUTES.MYPAGE;
-  }
-
-  return validateRedirectPath(redirectPath);
-}
-
-/**
  * signed Set Password Intent가 허용한 인증 사용자에게 비밀번호 로그인을 추가합니다.
  *
  * GET에서 이미 검증한 상태를 신뢰하지 않고 제출 시점에 current user,
  * Password Login 존재 여부, signed Intent와 user binding을 다시 확인한 뒤에만
  * updateUser를 호출합니다.
  *
- * Password Login이 이미 존재하면 Set Password 목적이 소멸한 상태로 보고
- * mutation을 수행하지 않으며, 남은 Intent는 cleanup 경계로 위임합니다.
+ * final destination은 verified Intent의 signed redirectPath만 사용합니다.
+ * Password Login이 이미 존재하면 mutation을 수행하지 않고 completion Route로 넘기며,
+ * updateUser 성공 후 direct clear가 실패한 경우에도 completion이 clear만 재시도하므로
+ * password mutation을 다시 실행하지 않습니다.
  */
 export async function setPasswordAction(
-  redirectPath: string | null,
   _prevState: SetPasswordActionState,
   formData: FormData,
 ): Promise<SetPasswordActionState> {
@@ -182,6 +171,10 @@ export async function setPasswordAction(
   }
 
   if (hasPasswordLogin) {
+    if (setPasswordIntent !== null) {
+      redirect(SET_PASSWORD_COMPLETE_PATH);
+    }
+
     logAuthEvent(AUTH_EVENTS.AUTH_SET_PASSWORD_REJECTED, {
       path: ROUTES.SET_PASSWORD,
       method: "POST",
@@ -190,10 +183,6 @@ export async function setPasswordAction(
       result: "rejected",
       reasonCode: AUTH_LOG_REASONS.INVALID_CREDENTIALS,
     });
-
-    if (setPasswordIntent !== null) {
-      redirect(SET_PASSWORD_INTENT_CLEANUP_PATH);
-    }
 
     redirect(ROUTES.MYPAGE);
   }
@@ -249,7 +238,9 @@ export async function setPasswordAction(
     redirect(SET_PASSWORD_INTENT_CLEANUP_PATH);
   }
 
-  const finalRedirectPath = resolveRedirectPath(redirectPath);
+  const finalRedirectPath = validateRedirectPath(
+    verifiedSetPasswordIntent.redirectPath,
+  );
   let updateError = null;
 
   try {
@@ -331,8 +322,6 @@ export async function setPasswordAction(
     };
   }
 
-  let intentClearFailed = false;
-
   try {
     await clearSetPasswordIntent();
   } catch (error) {
@@ -348,11 +337,7 @@ export async function setPasswordAction(
       ...normalized,
     });
 
-    intentClearFailed = true;
-  }
-
-  if (intentClearFailed) {
-    redirect(SET_PASSWORD_INTENT_CLEANUP_PATH);
+    redirect(SET_PASSWORD_COMPLETE_PATH);
   }
 
   logAuthEvent(AUTH_EVENTS.AUTH_SET_PASSWORD_COMPLETED, {

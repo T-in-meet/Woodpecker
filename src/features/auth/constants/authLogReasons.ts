@@ -84,6 +84,12 @@ export const AUTH_LOG_REASONS = {
    */
   PASSWORD_INTENT_CLEANUP_FAILED: "PASSWORD_INTENT_CLEANUP_FAILED",
   /**
+   * valid Set Password Intent가 있지만 Password Login postcondition이 아직 false인 상태.
+   *
+   * credential mismatch가 아니라 완료 전 direct completion 진입을 의미한다.
+   */
+  SET_PASSWORD_INCOMPLETE: "SET_PASSWORD_INCOMPLETE",
+  /**
    * 인증 자격 증명 불일치.
    *
    * Provider classifier가 명확히 allowlist한 credential failure에만 사용한다.

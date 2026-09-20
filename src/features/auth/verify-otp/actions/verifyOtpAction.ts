@@ -37,6 +37,7 @@ import {
 import { getTrustedAuthServerActionClientIp } from "../../lib/rate-limit/trustedAuthClientIp";
 import { createSetPasswordIntent } from "../../lib/setPasswordIntent";
 import { createSignedResetPasswordIntent } from "../../lib/signedResetPasswordIntent";
+import { validateRedirectPath } from "../../lib/validateRedirectPath";
 import { canonicalizeEmail } from "../../utils/canonicalizeEmail";
 import { verifyOtp } from "../lib/verifyOtp";
 import { verifyOtpContextSchema } from "../schemas/verifyOtpContextSchema";
@@ -173,7 +174,6 @@ export async function verifyOtpAction(
 
     const canonicalEmail = canonicalizeEmail(email);
     const maskedEmail = maskEmailForLogging(canonicalEmail);
-
     const trustedIp = await getTrustedAuthServerActionClientIp();
 
     if (!trustedIp.available) {
@@ -212,7 +212,7 @@ export async function verifyOtpAction(
       return blockedState();
     }
 
-    // OTP Verify operation-specific attempt를 소비하기 전에 timeout-enabled Supabase client 준비를 완료한다.
+    // operation-specific attempt를 소비하기 전에 timeout-enabled Supabase client를 준비한다.
     const providerTimeout = createAuthProviderTimeoutContext({
       timeoutMs: AUTH_PROVIDER_TIMEOUT_MS,
     });
@@ -256,8 +256,7 @@ export async function verifyOtpAction(
     /**
      * Supabase OTP 인증 검증 수행
      *
-     * 검증된 요청 컨텍스트(email, purpose)와
-     * 사용자 입력 OTP를 기반으로
+     * 검증된 요청 컨텍스트(email, purpose)와 사용자 입력 OTP를 기반으로
      * Supabase verifyOtp를 호출한다.
      *
      * 주의:
@@ -310,14 +309,11 @@ export async function verifyOtpAction(
     /**
      * OTP 인증 실패 처리
      *
-     * Supabase verifyOtp의 error는 throw가 아니라
-     * 반환값으로 전달될 수 있다.
+     * Supabase verifyOtp의 error는 throw가 아니라 반환값으로 전달될 수 있다.
+     * Supabase Auth가 transport timeout을 wrapped error로 반환할 수 있으므로
+     * OTP validity/provider error shape보다 request-scoped timeout context를 먼저 본다.
      */
     if (error) {
-      /**
-       * Supabase Auth가 transport timeout을 wrapped error로 반환할 수 있으므로
-       * OTP validity/provider error shape보다 request-scoped timeout context를 먼저 본다.
-       */
       if (providerTimeout.didTimeout()) {
         otpVerifyRateLimit.recordResult({
           canonicalEmail,
@@ -446,10 +442,7 @@ export async function verifyOtpAction(
      * OTP 인증 완료 로그
      *
      * Supabase verifyOtp가 성공적으로 완료된 상태를 기록한다.
-     *
-     * purpose는 어떤 OTP 인증 흐름이 성공했는지
-     * 운영 로그에서 구분하기 위해 함께 기록한다.
-     *
+     * purpose는 어떤 OTP 인증 흐름이 성공했는지 운영 로그에서 구분하기 위해 함께 기록한다.
      * OTP 자체는 민감 정보이므로 로그에 남기지 않는다.
      */
     logAuthEvent(AUTH_EVENTS.AUTH_VERIFY_OTP_COMPLETED, {
@@ -464,39 +457,36 @@ export async function verifyOtpAction(
     });
 
     /**
-     * OTP 인증 성공 후 이동 경로 결정
+     * OTP 인증 성공 후 이동 경로 결정.
      *
      * signup:
-     * - OTP 인증 성공 시점에는 이미 인증 세션이 생성된 상태다.
-     * - 비밀번호 존재 여부는 이 Action에서 판정하지 않는다.
-     * - Set Password Intent를 발급한 뒤 /set-password로 이동한다.
-     * - /set-password에서 실제 비밀번호 존재 여부와 Set Password Intent를 확인한다.
-     * - 비밀번호가 없고 Intent가 유효한 경우에만 비밀번호 설정 폼을 제공한다.
-     * - redirect는 유효한 Set Password 흐름의 비밀번호 설정 완료 후 이동 경로로 전달한다.
+     * - redirect를 strong validator로 다시 정규화한다.
+     * - 정규화된 destination을 Set Password Intent의 signed redirectPath로 저장한다.
+     * - /set-password URL에는 final redirect query를 더 이상 전달하지 않는다.
      *
      * reset-password:
-     * - 기존 비밀번호 재설정 흐름을 유지한다.
-     * - reset-password 페이지로 이동한다.
-     * - 최종 redirect는 reset-password 완료 시점에서 처리한다.
+     * - 기존 Reset Password Intent와 query 기반 redirect lifecycle을 유지한다.
      */
-    const nextPath =
-      purpose === "signup"
-        ? redirectTo
-          ? `${ROUTES.SET_PASSWORD}?redirect=${encodeURIComponent(redirectTo)}`
-          : ROUTES.SET_PASSWORD
-        : redirectTo
-          ? `${ROUTES.RESET_PASSWORD}?redirect=${encodeURIComponent(redirectTo)}`
-          : ROUTES.RESET_PASSWORD;
-
     if (verifiedSignupUserId !== null) {
-      await createSetPasswordIntent({ userId: verifiedSignupUserId });
+      const signedRedirectPath = validateRedirectPath(redirectTo);
+
+      await createSetPasswordIntent({
+        userId: verifiedSignupUserId,
+        redirectPath: signedRedirectPath,
+      });
+
+      nextUrl = ROUTES.SET_PASSWORD;
     } else if (verifiedResetPasswordUserId !== null) {
       await createSignedResetPasswordIntent({
         userId: verifiedResetPasswordUserId,
       });
-    }
 
-    nextUrl = nextPath;
+      nextUrl = redirectTo
+        ? `${ROUTES.RESET_PASSWORD}?redirect=${encodeURIComponent(redirectTo)}`
+        : ROUTES.RESET_PASSWORD;
+    } else {
+      nextUrl = ROUTES.SET_PASSWORD;
+    }
   } catch (error) {
     /**
      * 예상하지 못한 시스템 예외 처리

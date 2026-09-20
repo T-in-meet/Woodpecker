@@ -11,13 +11,13 @@ import { createClient } from "@/lib/supabase/server";
 
 const MYPAGE_PROFILE_PATH = `${ROUTES.MYPAGE}?section=profile`;
 
-const SET_PASSWORD_FROM_MYPAGE_PATH = `${ROUTES.SET_PASSWORD}?redirect=${encodeURIComponent(MYPAGE_PROFILE_PATH)}`;
-
 /**
  * MyPage에서 비밀번호 설정 흐름을 시작합니다.
  *
  * 페이지 렌더 이후 세션·계정 상태가 바뀔 수 있으므로
  * Action 실행 시점의 서버 상태를 다시 확인한 뒤 signed Intent를 발급합니다.
+ * 완료 후 돌아갈 MyPage profile destination은 query로 전달하지 않고
+ * Set Password Intent의 signed redirectPath claim에 저장합니다.
  */
 export async function startSetPasswordFromMypageAction(): Promise<never> {
   const supabase = await createClient();
@@ -57,7 +57,10 @@ export async function startSetPasswordFromMypageAction(): Promise<never> {
     redirect(MYPAGE_PROFILE_PATH);
   }
 
-  await createSetPasswordIntent({ userId: user.id });
+  await createSetPasswordIntent({
+    userId: user.id,
+    redirectPath: MYPAGE_PROFILE_PATH,
+  });
 
-  redirect(SET_PASSWORD_FROM_MYPAGE_PATH);
+  redirect(ROUTES.SET_PASSWORD);
 }

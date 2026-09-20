@@ -5,7 +5,6 @@ import { ROUTES } from "@/lib/constants/routes";
 const REDIRECT_ERROR = new Error("NEXT_REDIRECT");
 const LEGAL_REDIRECT_ERROR = new Error("NEXT_REDIRECT:/agreements");
 const MYPAGE_PROFILE_PATH = `${ROUTES.MYPAGE}?section=profile`;
-const SET_PASSWORD_FROM_MYPAGE_PATH = `${ROUTES.SET_PASSWORD}?redirect=${encodeURIComponent(MYPAGE_PROFILE_PATH)}`;
 
 const {
   createClientMock,
@@ -82,7 +81,7 @@ describe("startSetPasswordFromMypageAction", () => {
     createSetPasswordIntentMock.mockResolvedValue(undefined);
   });
 
-  it("비밀번호가 없는 정상 사용자는 Intent를 발급한 뒤 set-password로 이동한다", async () => {
+  it("비밀번호가 없는 정상 사용자는 MyPage profile destination을 signed Intent에 넣고 plain set-password로 이동한다", async () => {
     await expect(startSetPasswordFromMypageAction()).rejects.toBe(
       REDIRECT_ERROR,
     );
@@ -94,8 +93,12 @@ describe("startSetPasswordFromMypageAction", () => {
     expect(getHasPasswordLoginMock).toHaveBeenCalledWith("oauth-user-id");
     expect(createSetPasswordIntentMock).toHaveBeenCalledWith({
       userId: "oauth-user-id",
+      redirectPath: MYPAGE_PROFILE_PATH,
     });
-    expect(redirectMock).toHaveBeenCalledWith(SET_PASSWORD_FROM_MYPAGE_PATH);
+    expect(redirectMock).toHaveBeenCalledWith(ROUTES.SET_PASSWORD);
+    expect(redirectMock).not.toHaveBeenCalledWith(
+      expect.stringContaining("?redirect="),
+    );
   });
 
   it("인증 사용자가 없으면 Intent를 발급하지 않고 login으로 이동한다", async () => {
