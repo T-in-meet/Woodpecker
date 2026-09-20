@@ -404,7 +404,9 @@ async function runSignupOtpIssue(
  * - global allowed 요청만 malformed JSON / schema validation으로 진입
  * - read-only OTP Issue precheck로 명백히 차단된 요청을 account lookup 전에 종료
  * - canonical email lookup은 account state를 외부에 노출하지 않고 내부 분기에만 사용
- * - 미인증 기존 사용자는 magiclink 발급 전 agreement persistence를 보장
+ * - 미인증 기존 사용자는 OTP Provider 발급 성공 후, Email delivery 전에 agreement persistence를 보장
+ * - agreement persistence 실패 시 Email delivery와 successful issue quota 기록은 수행하지 않지만,
+ *   이미 소비된 Provider-start attempt / cooldown / IP attempt는 rollback하지 않음
  * - 인증된 기존 사용자는 magiclink를 발급하며 agreement persistence 범위를 확대하지 않음
  * - 신규 사용자는 generateLink(type: "signup")에서 사용자 생성과 OTP 발급을 수행
  *
