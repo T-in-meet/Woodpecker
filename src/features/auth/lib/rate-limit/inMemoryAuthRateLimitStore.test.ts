@@ -189,10 +189,7 @@ describe("createInMemoryAuthRateLimitStore", () => {
     expect(store.getTimestampWindow("timestamp")).toEqual([logicalNow]);
 
     // 같은 논리 시계를 기준으로 retention을 넘기면 cleanup되어야 한다.
-    store.runAtomic(
-      () => undefined,
-      logicalNow + LOGIN_IP_LONG_WINDOW_MS + 1,
-    );
+    store.runAtomic(() => undefined, logicalNow + LOGIN_IP_LONG_WINDOW_MS + 1);
 
     expect(store.getTimestampWindow("timestamp")).toBeUndefined();
   });

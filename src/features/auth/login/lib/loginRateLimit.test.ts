@@ -77,9 +77,9 @@ describe("createLoginRateLimit", () => {
 
     expect(result).toEqual({ allowed: true });
 
-    expect(
-      store.getTimestampWindow(emailAttemptKey(TEST_EMAIL)),
-    ).toEqual([BASE_TIME]);
+    expect(store.getTimestampWindow(emailAttemptKey(TEST_EMAIL))).toEqual([
+      BASE_TIME,
+    ]);
 
     expect(store.getTimestampWindow(ipAttemptKey(TEST_IP))).toEqual([
       BASE_TIME,
@@ -198,17 +198,11 @@ describe("createLoginRateLimit", () => {
     });
 
     // Email 차단 때문에 Provider가 시작되지 않았으므로 새 IP도 소비되지 않는다.
-    expect(
-      store.getTimestampWindow(ipAttemptKey(otherIp)),
-    ).toBeUndefined();
+    expect(store.getTimestampWindow(ipAttemptKey(otherIp))).toBeUndefined();
   });
 
   it("5회의 consecutive credential failure 이후 새 attempt를 차단한다", () => {
-    for (
-      let index = 0;
-      index < LOGIN_FAILURE_STREAK_LIMIT;
-      index += 1
-    ) {
+    for (let index = 0; index < LOGIN_FAILURE_STREAK_LIMIT; index += 1) {
       const now = BASE_TIME + index * 1000;
 
       expect(
@@ -239,11 +233,7 @@ describe("createLoginRateLimit", () => {
   });
 
   it("failure streak 차단은 Email/IP attempt를 추가 소비하지 않는다", () => {
-    for (
-      let index = 0;
-      index < LOGIN_FAILURE_STREAK_LIMIT;
-      index += 1
-    ) {
+    for (let index = 0; index < LOGIN_FAILURE_STREAK_LIMIT; index += 1) {
       const now = BASE_TIME + index * 1000;
 
       rateLimit.tryStartAttempt({
@@ -261,8 +251,7 @@ describe("createLoginRateLimit", () => {
 
     const emailBefore =
       store.getTimestampWindow(emailAttemptKey(TEST_EMAIL)) ?? [];
-    const ipBefore =
-      store.getTimestampWindow(ipAttemptKey(TEST_IP)) ?? [];
+    const ipBefore = store.getTimestampWindow(ipAttemptKey(TEST_IP)) ?? [];
 
     rateLimit.tryStartAttempt({
       canonicalEmail: TEST_EMAIL,
@@ -270,13 +259,11 @@ describe("createLoginRateLimit", () => {
       now: BASE_TIME + 10_000,
     });
 
-    expect(
-      store.getTimestampWindow(emailAttemptKey(TEST_EMAIL)),
-    ).toEqual(emailBefore);
-
-    expect(store.getTimestampWindow(ipAttemptKey(TEST_IP))).toEqual(
-      ipBefore,
+    expect(store.getTimestampWindow(emailAttemptKey(TEST_EMAIL))).toEqual(
+      emailBefore,
     );
+
+    expect(store.getTimestampWindow(ipAttemptKey(TEST_IP))).toEqual(ipBefore);
   });
 
   it("Password Login 성공은 failure streak를 clear한다", () => {
@@ -288,9 +275,7 @@ describe("createLoginRateLimit", () => {
       });
     }
 
-    expect(
-      store.getFailureStreak(failureStreakKey(TEST_EMAIL)),
-    ).toEqual({
+    expect(store.getFailureStreak(failureStreakKey(TEST_EMAIL))).toEqual({
       count: 4,
       lastFailureAt: BASE_TIME + 3_000,
     });
@@ -321,8 +306,7 @@ describe("createLoginRateLimit", () => {
       rateLimit.tryStartAttempt({
         canonicalEmail: TEST_EMAIL,
         ip: TEST_IP,
-        now:
-          lastFailureAt + LOGIN_FAILURE_STREAK_INACTIVITY_MS,
+        now: lastFailureAt + LOGIN_FAILURE_STREAK_INACTIVITY_MS,
       }),
     ).toEqual({ allowed: true });
 
@@ -334,20 +318,12 @@ describe("createLoginRateLimit", () => {
     rateLimit.recordResult({
       canonicalEmail: TEST_EMAIL,
       result: "credential_failure",
-      now:
-        lastFailureAt +
-        LOGIN_FAILURE_STREAK_INACTIVITY_MS +
-        1,
+      now: lastFailureAt + LOGIN_FAILURE_STREAK_INACTIVITY_MS + 1,
     });
 
-    expect(
-      store.getFailureStreak(failureStreakKey(TEST_EMAIL)),
-    ).toEqual({
+    expect(store.getFailureStreak(failureStreakKey(TEST_EMAIL))).toEqual({
       count: 1,
-      lastFailureAt:
-        lastFailureAt +
-        LOGIN_FAILURE_STREAK_INACTIVITY_MS +
-        1,
+      lastFailureAt: lastFailureAt + LOGIN_FAILURE_STREAK_INACTIVITY_MS + 1,
     });
   });
 
@@ -358,9 +334,7 @@ describe("createLoginRateLimit", () => {
       now: BASE_TIME,
     });
 
-    const streakBefore = store.getFailureStreak(
-      failureStreakKey(TEST_EMAIL),
-    );
+    const streakBefore = store.getFailureStreak(failureStreakKey(TEST_EMAIL));
 
     expect(
       rateLimit.tryStartAttempt({
@@ -376,29 +350,25 @@ describe("createLoginRateLimit", () => {
       now: BASE_TIME + 1000,
     });
 
-    expect(
-      store.getTimestampWindow(emailAttemptKey(TEST_EMAIL)),
-    ).toHaveLength(1);
-
-    expect(store.getTimestampWindow(ipAttemptKey(TEST_IP))).toHaveLength(
+    expect(store.getTimestampWindow(emailAttemptKey(TEST_EMAIL))).toHaveLength(
       1,
     );
 
-    expect(
-      store.getFailureStreak(failureStreakKey(TEST_EMAIL)),
-    ).toEqual(streakBefore);
+    expect(store.getTimestampWindow(ipAttemptKey(TEST_IP))).toHaveLength(1);
+
+    expect(store.getFailureStreak(failureStreakKey(TEST_EMAIL))).toEqual(
+      streakBefore,
+    );
   });
 
   it("동시 진입 형태에서도 Email check+consume이 한도를 초과하지 않는다", async () => {
     const results = await Promise.all(
-      Array.from(
-        { length: LOGIN_EMAIL_ATTEMPT_LIMIT + 1 },
-        async () =>
-          rateLimit.tryStartAttempt({
-            canonicalEmail: TEST_EMAIL,
-            ip: TEST_IP,
-            now: BASE_TIME,
-          }),
+      Array.from({ length: LOGIN_EMAIL_ATTEMPT_LIMIT + 1 }, async () =>
+        rateLimit.tryStartAttempt({
+          canonicalEmail: TEST_EMAIL,
+          ip: TEST_IP,
+          now: BASE_TIME,
+        }),
       ),
     );
 
@@ -406,13 +376,11 @@ describe("createLoginRateLimit", () => {
       LOGIN_EMAIL_ATTEMPT_LIMIT,
     );
 
-    expect(
-      results.filter((result) => !result.allowed),
-    ).toHaveLength(1);
+    expect(results.filter((result) => !result.allowed)).toHaveLength(1);
 
-    expect(
-      store.getTimestampWindow(emailAttemptKey(TEST_EMAIL)),
-    ).toHaveLength(LOGIN_EMAIL_ATTEMPT_LIMIT);
+    expect(store.getTimestampWindow(emailAttemptKey(TEST_EMAIL))).toHaveLength(
+      LOGIN_EMAIL_ATTEMPT_LIMIT,
+    );
 
     expect(store.getTimestampWindow(ipAttemptKey(TEST_IP))).toHaveLength(
       LOGIN_EMAIL_ATTEMPT_LIMIT,

@@ -25,8 +25,7 @@ const LOGIN_IP_ATTEMPT_KEY_PREFIX = "auth:login:ip:attempt:";
 /**
  * Password Login credential failure streak key prefix.
  */
-const LOGIN_FAILURE_STREAK_KEY_PREFIX =
-  "auth:login:email:failure-streak:";
+const LOGIN_FAILURE_STREAK_KEY_PREFIX = "auth:login:email:failure-streak:";
 
 /**
  * Password Login 시작 차단 원인.
@@ -178,8 +177,7 @@ export function createLoginRateLimit(store: AuthRateLimitStore) {
         // inactivity가 지나지 않은 streak만 현재 연속 실패로 인정한다.
         const activeStreak =
           streak &&
-          now - streak.lastFailureAt <
-            LOGIN_FAILURE_STREAK_INACTIVITY_MS
+          now - streak.lastFailureAt < LOGIN_FAILURE_STREAK_INACTIVITY_MS
             ? streak
             : undefined;
 
@@ -204,10 +202,7 @@ export function createLoginRateLimit(store: AuthRateLimitStore) {
           };
         }
 
-        if (
-          activeStreak &&
-          activeStreak.count >= LOGIN_FAILURE_STREAK_LIMIT
-        ) {
+        if (activeStreak && activeStreak.count >= LOGIN_FAILURE_STREAK_LIMIT) {
           return {
             allowed: false,
             blockedBy: "failure_streak",
@@ -215,17 +210,11 @@ export function createLoginRateLimit(store: AuthRateLimitStore) {
         }
 
         // 모든 check가 통과한 경우에만 Email/IP attempt를 함께 소비한다.
-        store.setTimestampWindow(emailKey, [
-          ...emailEvaluation.pruned,
-          now,
-        ]);
+        store.setTimestampWindow(emailKey, [...emailEvaluation.pruned, now]);
 
         // IP short/long은 같은 attempt collection을 공유한다.
         // 가장 긴 long window 기준 상태를 보존하면 short window는 조회 시 prune할 수 있다.
-        store.setTimestampWindow(ipKey, [
-          ...ipLongEvaluation.pruned,
-          now,
-        ]);
+        store.setTimestampWindow(ipKey, [...ipLongEvaluation.pruned, now]);
 
         // inactivity가 지난 streak는 허용된 새 operation 시작 시 정리한다.
         if (streak && !activeStreak) {
@@ -255,9 +244,7 @@ export function createLoginRateLimit(store: AuthRateLimitStore) {
       }
 
       const now = input.now ?? Date.now();
-      const streakKey = getLoginFailureStreakKey(
-        input.canonicalEmail,
-      );
+      const streakKey = getLoginFailureStreakKey(input.canonicalEmail);
 
       store.runAtomic(() => {
         if (input.result === "success") {
@@ -269,8 +256,7 @@ export function createLoginRateLimit(store: AuthRateLimitStore) {
 
         const isActive =
           current !== undefined &&
-          now - current.lastFailureAt <
-            LOGIN_FAILURE_STREAK_INACTIVITY_MS;
+          now - current.lastFailureAt < LOGIN_FAILURE_STREAK_INACTIVITY_MS;
 
         store.setFailureStreak(streakKey, {
           count: isActive ? current.count + 1 : 1,
@@ -284,6 +270,4 @@ export function createLoginRateLimit(store: AuthRateLimitStore) {
 /**
  * 현재 process에서 사용하는 Password Login Rate Limit singleton.
  */
-export const loginRateLimit = createLoginRateLimit(
-  inMemoryAuthRateLimitStore,
-);
+export const loginRateLimit = createLoginRateLimit(inMemoryAuthRateLimitStore);

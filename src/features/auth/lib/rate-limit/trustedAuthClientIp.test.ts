@@ -22,9 +22,7 @@ vi.mock("next/headers", () => ({
  * @param requestHeaders 요청에 포함할 헤더
  * @returns 테스트용 NextRequest
  */
-function makeRequest(
-  requestHeaders: Record<string, string> = {},
-): NextRequest {
+function makeRequest(requestHeaders: Record<string, string> = {}): NextRequest {
   return new NextRequest("http://localhost/api/auth/login", {
     method: "POST",
     headers: requestHeaders,
