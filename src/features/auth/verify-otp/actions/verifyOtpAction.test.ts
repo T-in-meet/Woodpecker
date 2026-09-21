@@ -36,6 +36,7 @@ vi.mock("../../lib/authLogger", () => ({
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
+  clearSupabaseAuthSessionCookies: vi.fn(),
   createClient: vi.fn(),
 }));
 
@@ -85,6 +86,7 @@ const prevState = {
 
 const mockSupabase = {
   auth: {
+    signOut: vi.fn().mockResolvedValue({ error: null }),
     verifyOtp: vi.fn(),
   },
 } as never;

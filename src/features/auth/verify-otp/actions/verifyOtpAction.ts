@@ -79,8 +79,8 @@ function mapOtpVerifyBlockedByToReason(
 }
 
 /**
- * OTP Verify 성공 후 Password Intent 발급에 실패한 경우
- * 이번 인증 흐름에서 생성된 current session을 best-effort로 정리한다.
+ * OTP Verify Provider operation 이후 후속 인증 흐름을 안전하게 계속할 수 없는 경우
+ * 이번 인증 흐름에서 생성됐을 수 있는 current session을 best-effort로 정리한다.
  *
  * - Verify Provider에 사용한 settled client/timeout context를 재사용하지 않는다.
  * - remote signOut은 current session만 대상으로 scope: "local"을 사용한다.
@@ -475,9 +475,30 @@ export async function verifyOtpAction(
       const verifiedUser = data.user;
 
       if (verifiedUser === null) {
-        throw new Error(
+        const invariantError = new Error(
           "Signup OTP verification succeeded without an authenticated user.",
         );
+        const compensationError = await compensateVerifiedSession();
+
+        if (compensationError !== null) {
+          const normalizedCompensationError =
+            normalizeUnknownError(compensationError);
+
+          logAuthError(AUTH_EVENTS.AUTH_VERIFY_OTP_FAILED, {
+            path: VERIFY_OTP_PATH,
+            method: "POST",
+            status: 500,
+            provider: "password",
+            result: "failure",
+            reasonCode: AUTH_LOG_REASONS.AUTH_SESSION_COMPENSATION_FAILED,
+            maskedEmail,
+            maskedIp,
+            purpose,
+            ...normalizedCompensationError,
+          });
+        }
+
+        throw invariantError;
       }
 
       verifiedSignupUserId = verifiedUser.id;
@@ -485,9 +506,30 @@ export async function verifyOtpAction(
       const verifiedUser = data.user;
 
       if (verifiedUser === null) {
-        throw new Error(
+        const invariantError = new Error(
           "Recovery OTP verification succeeded without an authenticated user.",
         );
+        const compensationError = await compensateVerifiedSession();
+
+        if (compensationError !== null) {
+          const normalizedCompensationError =
+            normalizeUnknownError(compensationError);
+
+          logAuthError(AUTH_EVENTS.AUTH_VERIFY_OTP_FAILED, {
+            path: VERIFY_OTP_PATH,
+            method: "POST",
+            status: 500,
+            provider: "password",
+            result: "failure",
+            reasonCode: AUTH_LOG_REASONS.AUTH_SESSION_COMPENSATION_FAILED,
+            maskedEmail,
+            maskedIp,
+            purpose,
+            ...normalizedCompensationError,
+          });
+        }
+
+        throw invariantError;
       }
 
       verifiedResetPasswordUserId = verifiedUser.id;
@@ -625,7 +667,13 @@ export async function verifyOtpAction(
         ? `${ROUTES.RESET_PASSWORD}?redirect=${encodeURIComponent(redirectTo)}`
         : ROUTES.RESET_PASSWORD;
     } else {
-      nextUrl = ROUTES.SET_PASSWORD;
+      if (purpose === "signup" || purpose === "reset-password") {
+        throw new Error("OTP verification purpose invariant violated.");
+      }
+
+      purpose satisfies never;
+
+      throw new Error("Unsupported OTP verification purpose.");
     }
   } catch (error) {
     /**

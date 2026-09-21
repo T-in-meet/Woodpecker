@@ -223,6 +223,152 @@ describe("verifyOtpAction session compensation", () => {
       .mockResolvedValue(compensationSupabase);
   });
 
+  it("signup user-null에서 current-session compensation을 수행한다", async () => {
+    vi.mocked(verifyOtp).mockResolvedValue({
+      data: { user: null },
+      error: null,
+    } as Awaited<ReturnType<typeof verifyOtp>>);
+
+    const result = await verifyOtpAction(
+      null,
+      prevState,
+      createFormData({
+        email: "user@example.com",
+        purpose: "signup",
+        otp: "123456",
+      }),
+    );
+
+    expect(result).toEqual({
+      status: "internal_error",
+      fieldErrors: null,
+    });
+    expect(createAuthProviderTimeoutContext).toHaveBeenCalledTimes(2);
+    expect(createClient).toHaveBeenCalledTimes(2);
+    expect(compensationSignOut).toHaveBeenCalledTimes(1);
+    expect(compensationSignOut).toHaveBeenCalledWith({
+      scope: "local",
+    });
+    expect(clearSupabaseAuthSessionCookies).toHaveBeenCalledTimes(1);
+    expect(compensationProviderSettle).toHaveBeenCalledTimes(1);
+
+    expect(otpVerifyRateLimit.recordResult).not.toHaveBeenCalled();
+    expect(logAuthEvent).not.toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_VERIFY_OTP_COMPLETED,
+      expect.anything(),
+    );
+    expect(createSetPasswordIntent).not.toHaveBeenCalled();
+    expect(createSignedResetPasswordIntent).not.toHaveBeenCalled();
+    expect(redirect).not.toHaveBeenCalled();
+
+    expect(logAuthError).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_VERIFY_OTP_FAILED,
+      expect.objectContaining({
+        reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+        errorMessage:
+          "Signup OTP verification succeeded without an authenticated user.",
+      }),
+    );
+  });
+
+  it("reset-password user-null에서도 동일한 current-session compensation을 수행한다", async () => {
+    vi.mocked(verifyOtp).mockResolvedValue({
+      data: { user: null },
+      error: null,
+    } as Awaited<ReturnType<typeof verifyOtp>>);
+
+    const result = await verifyOtpAction(
+      null,
+      prevState,
+      createFormData({
+        email: "user@example.com",
+        purpose: "reset-password",
+        otp: "123456",
+      }),
+    );
+
+    expect(result).toEqual({
+      status: "internal_error",
+      fieldErrors: null,
+    });
+    expect(createAuthProviderTimeoutContext).toHaveBeenCalledTimes(2);
+    expect(createClient).toHaveBeenCalledTimes(2);
+    expect(compensationSignOut).toHaveBeenCalledTimes(1);
+    expect(compensationSignOut).toHaveBeenCalledWith({
+      scope: "local",
+    });
+    expect(clearSupabaseAuthSessionCookies).toHaveBeenCalledTimes(1);
+    expect(compensationProviderSettle).toHaveBeenCalledTimes(1);
+
+    expect(otpVerifyRateLimit.recordResult).not.toHaveBeenCalled();
+    expect(logAuthEvent).not.toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_VERIFY_OTP_COMPLETED,
+      expect.anything(),
+    );
+    expect(createSetPasswordIntent).not.toHaveBeenCalled();
+    expect(createSignedResetPasswordIntent).not.toHaveBeenCalled();
+    expect(redirect).not.toHaveBeenCalled();
+
+    expect(logAuthError).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_VERIFY_OTP_FAILED,
+      expect.objectContaining({
+        reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+        errorMessage:
+          "Recovery OTP verification succeeded without an authenticated user.",
+      }),
+    );
+  });
+
+  it("user-null compensation 이중 실패에도 원래 invariant error를 보존하고 compensation failure를 추가 기록한다", async () => {
+    vi.mocked(verifyOtp).mockResolvedValue({
+      data: { user: null },
+      error: null,
+    } as Awaited<ReturnType<typeof verifyOtp>>);
+    compensationSignOut.mockResolvedValue({
+      error: new Error("local signout failed"),
+    });
+    vi.mocked(clearSupabaseAuthSessionCookies).mockRejectedValue(
+      new Error("cookie clear failed"),
+    );
+
+    const result = await verifyOtpAction(
+      null,
+      prevState,
+      createFormData({
+        email: "user@example.com",
+        purpose: "signup",
+        otp: "123456",
+      }),
+    );
+
+    expect(result).toEqual({
+      status: "internal_error",
+      fieldErrors: null,
+    });
+    expect(logAuthError).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_VERIFY_OTP_FAILED,
+      expect.objectContaining({
+        reasonCode: AUTH_LOG_REASONS.AUTH_SESSION_COMPENSATION_FAILED,
+      }),
+    );
+    expect(logAuthError).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_VERIFY_OTP_FAILED,
+      expect.objectContaining({
+        reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+        errorMessage:
+          "Signup OTP verification succeeded without an authenticated user.",
+      }),
+    );
+    expect(otpVerifyRateLimit.recordResult).not.toHaveBeenCalled();
+    expect(logAuthEvent).not.toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_VERIFY_OTP_COMPLETED,
+      expect.anything(),
+    );
+    expect(createSetPasswordIntent).not.toHaveBeenCalled();
+    expect(createSignedResetPasswordIntent).not.toHaveBeenCalled();
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
   it("signup Intent 발급 실패 시 OTP success를 유지하고 current-session compensation을 수행한다", async () => {
     vi.mocked(createSetPasswordIntent).mockRejectedValue(
       new Error("set password intent failed"),
