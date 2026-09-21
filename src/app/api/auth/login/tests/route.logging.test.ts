@@ -6,6 +6,7 @@
  * 내부 reason으로 구분한다.
  */
 
+import { AuthApiError } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -317,6 +318,38 @@ describe("로그인 API 로깅 검증", () => {
       }),
     );
     expect(terminalEvents()).toHaveLength(1);
+  });
+
+  it("account-state AuthApiError 4xx는 public 401로 숨기면서 내부 PROVIDER_ERROR를 유지한다", async () => {
+    mockSignIn.mockResolvedValue({
+      data: null,
+      error: new AuthApiError("User is banned", 400, "user_banned"),
+    });
+
+    const response = await POST(makeRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body.code).toBe(AUTH_API_CODES.LOGIN_INVALID_CREDENTIALS);
+    expect(logAuthError).toHaveBeenCalledWith(
+      AUTH_EVENTS.AUTH_LOGIN_FAILED,
+      expect.objectContaining({
+        status: 401,
+        reasonCode: AUTH_LOG_REASONS.PROVIDER_ERROR,
+        errorMessage: "User is banned",
+        errorName: "AuthApiError",
+      }),
+    );
+    expect(terminalEvents()).toEqual([AUTH_EVENTS.AUTH_LOGIN_FAILED]);
+    expect(loginRateLimit.recordResult).toHaveBeenCalledTimes(1);
+    expect(loginRateLimit.recordResult).toHaveBeenCalledWith({
+      canonicalEmail: "user@example.com",
+      result: "non_credential_failure",
+    });
+    expect(loginRateLimit.recordResult).not.toHaveBeenCalledWith({
+      canonicalEmail: "user@example.com",
+      result: "credential_failure",
+    });
   });
 
   it("validation 실패는 AUTH_INVALID_INPUT으로 기록한다", async () => {

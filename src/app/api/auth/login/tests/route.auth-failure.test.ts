@@ -5,6 +5,7 @@
  * Provider 429/system/unknown/throw는 credential streak에 포함하지 않는다.
  */
 
+import { AuthApiError } from "@supabase/supabase-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
@@ -174,6 +175,49 @@ describe("로그인 API Provider 결과 분류", () => {
     expect(unconfirmedBody).toEqual(credentialBody);
     expect(unconfirmedResponse.status).toBe(401);
     expect(unconfirmedBody.code).toBe(AUTH_API_CODES.LOGIN_INVALID_CREDENTIALS);
+    expect(loginRateLimit.recordResult).toHaveBeenCalledWith({
+      canonicalEmail: "user@example.com",
+      result: "non_credential_failure",
+    });
+  });
+
+  it("남은 AuthApiError 4xx는 계정 상태를 노출하지 않고 generic invalid credentials로 마스킹한다", async () => {
+    mockSignIn.mockResolvedValue({
+      data: null,
+      error: new AuthApiError("User is banned", 400, "user_banned"),
+    });
+
+    const response = await POST(makeLoginRequest(DEFAULT_LOGIN_BODY));
+    const body = await response.json();
+    const serializedBody = JSON.stringify(body);
+
+    expect(response.status).toBe(401);
+    expect(body.code).toBe(AUTH_API_CODES.LOGIN_INVALID_CREDENTIALS);
+    expect(serializedBody).not.toContain("User is banned");
+    expect(serializedBody).not.toContain("user_banned");
+    expect(loginRateLimit.recordResult).toHaveBeenCalledTimes(1);
+    expect(loginRateLimit.recordResult).toHaveBeenCalledWith({
+      canonicalEmail: "user@example.com",
+      result: "non_credential_failure",
+    });
+    expect(loginRateLimit.recordResult).not.toHaveBeenCalledWith({
+      canonicalEmail: "user@example.com",
+      result: "credential_failure",
+    });
+  });
+
+  it("code 기반 Provider Rate Limit 4xx는 generic 401 masking보다 우선한다", async () => {
+    mockSignIn.mockResolvedValue({
+      data: null,
+      error: new AuthApiError("Rate limited", 400, "over_request_rate_limit"),
+    });
+
+    const response = await POST(makeLoginRequest(DEFAULT_LOGIN_BODY));
+    const body = await response.json();
+
+    expect(response.status).toBe(429);
+    expect(body.code).toBe(AUTH_API_CODES.LOGIN_RATE_LIMIT_EXCEEDED);
+    expect(loginRateLimit.recordResult).toHaveBeenCalledTimes(1);
     expect(loginRateLimit.recordResult).toHaveBeenCalledWith({
       canonicalEmail: "user@example.com",
       result: "non_credential_failure",

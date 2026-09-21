@@ -1,3 +1,4 @@
+import { isAuthApiError } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
 
 import { getAgreementRequiredPath } from "@/features/auth/constants/agreementRequired";
@@ -359,6 +360,23 @@ async function resolveLoginResponse(
     }
 
     const { errorMessage, errorName } = normalizeUnknownError(authError);
+
+    if (
+      isAuthApiError(authError) &&
+      authError.status >= 400 &&
+      authError.status < 500
+    ) {
+      return {
+        response: failureResponse(AUTH_API_CODES.LOGIN_INVALID_CREDENTIALS),
+        outcome: {
+          type: "failed",
+          reasonCode: AUTH_LOG_REASONS.PROVIDER_ERROR,
+          maskedEmail,
+          errorMessage,
+          errorName,
+        },
+      };
+    }
 
     return {
       response: failureResponse(AUTH_API_CODES.LOGIN_INTERNAL_ERROR),
