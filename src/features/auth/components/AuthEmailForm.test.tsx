@@ -3,6 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { useActionState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { VALIDATION_MESSAGES } from "@/lib/validation/messages";
+
 import { RATE_LIMIT_TOAST_MESSAGE } from "../errors/rateLimitError";
 import { ResendEmailActionState } from "../resend-email/actions/resendEmailActionState";
 import AuthEmailForm from "./AuthEmailForm";
@@ -183,6 +185,70 @@ describe("AuthEmailForm", () => {
     expect(formData.get("purpose")).toBe("signup");
     expect(formData.get("email")).toBe("test@example.com");
     expect(formData.has("redirect")).toBe(false);
+  });
+
+  it("공백이 포함된 유효한 이메일은 trim된 값으로 formAction에 전달한다", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <AuthEmailForm
+        action={action}
+        initialState={initialState}
+        email={undefined}
+        purpose="reset-password"
+        title="비밀번호 재설정"
+        backLink={{
+          href: "/login",
+          label: "로그인으로 돌아가기",
+        }}
+      />,
+    );
+
+    await user.type(screen.getByLabelText("이메일"), "  test@example.com  ");
+    await user.click(
+      screen.getByRole("button", {
+        name: "비밀번호 재설정 인증 번호 받기",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(mockFormAction).toHaveBeenCalledTimes(1);
+    });
+
+    const formData = mockFormAction.mock.calls[0]?.[0] as FormData;
+
+    expect(formData.get("purpose")).toBe("reset-password");
+    expect(formData.get("email")).toBe("test@example.com");
+  });
+
+  it("공백만 입력하면 required validation 메시지를 표시하고 formAction을 호출하지 않는다", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <AuthEmailForm
+        action={action}
+        initialState={initialState}
+        email={undefined}
+        purpose="reset-password"
+        title="비밀번호 재설정"
+        backLink={{
+          href: "/login",
+          label: "로그인으로 돌아가기",
+        }}
+      />,
+    );
+
+    await user.type(screen.getByLabelText("이메일"), "   ");
+    await user.click(
+      screen.getByRole("button", {
+        name: "비밀번호 재설정 인증 번호 받기",
+      }),
+    );
+
+    expect(
+      await screen.findByText(VALIDATION_MESSAGES.emailRequired),
+    ).toBeInTheDocument();
+    expect(mockFormAction).not.toHaveBeenCalled();
   });
 
   it("유효하지 않은 이메일이면 validation 메시지를 표시하고 formAction을 호출하지 않는다", async () => {

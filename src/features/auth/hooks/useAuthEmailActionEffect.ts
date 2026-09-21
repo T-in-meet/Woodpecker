@@ -28,7 +28,6 @@ type UseAuthEmailActionEffectParams = {
  *
  * 제외:
  * - invalid_request → page 단계 redirect 대상
- * - completed → 성공 후 navigation 흐름에서 별도 처리
  */
 export const useAuthEmailActionEffect = ({
   state,
