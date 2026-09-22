@@ -11,6 +11,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import { NoteContent } from "@/features/notes/components/NoteContent";
 import { NoteDetailBody } from "@/features/notes/components/NoteDetailBody";
 import { ScrollToTopOnMount } from "@/features/notes/components/ScrollToTopOnMount";
 import { getNoteById } from "@/features/notes/queries";
@@ -137,6 +138,9 @@ export default async function NoteDetailPage({
         noteId={note.id}
         title={note.title}
         content={note.content}
+        // 본문은 서버에서 HTML로 렌더해 슬롯으로 넘긴다. 클라이언트 번들에 에디터가
+        // 실리지 않고, 저장 후 router.refresh()가 이 슬롯을 다시 렌더한다.
+        body={<NoteContent content={note.content} className="min-h-[60vh]" />}
         reviewRound={note.review_round}
         isReviewCompleted={isReviewCompleted}
         canChangeNotificationTime={!isReviewCompleted || isReviewCompletedToday}

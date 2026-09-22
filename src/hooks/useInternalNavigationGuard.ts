@@ -109,6 +109,25 @@ function getNavigationGuardHistoryRecord(state: unknown) {
   return { mountId, index };
 }
 
+/**
+ * Navigation API의 index는 guard 마운트와 무관한 실제 History 위치다.
+ * 구형 브라우저나 currentEntry가 없는 문서에서는 guard 기록을 사용한다.
+ */
+function getBrowserHistoryIndex(): number | null {
+  const navigation = (
+    window as Window & {
+      navigation?: {
+        currentEntry: Pick<NavigationHistoryEntry, "index"> | null;
+      };
+    }
+  ).navigation;
+  const index = navigation?.currentEntry?.index;
+
+  return typeof index === "number" && Number.isSafeInteger(index) && index >= 0
+    ? index
+    : null;
+}
+
 type UseInternalNavigationGuardParams = {
   enabled: boolean;
 };
@@ -230,6 +249,7 @@ export function useInternalNavigationGuard({
     const mountId = existingRecord?.mountId ?? createNavigationGuardMountId();
 
     let currentHistoryIndex = existingRecord?.index ?? 0;
+    let currentBrowserHistoryIndex = getBrowserHistoryIndex();
 
     let currentUrl = window.location.href;
 
@@ -263,6 +283,7 @@ export function useInternalNavigationGuard({
       }
 
       currentUrl = window.location.href;
+      currentBrowserHistoryIndex = getBrowserHistoryIndex();
     };
 
     /*
@@ -532,6 +553,7 @@ export function useInternalNavigationGuard({
 
         currentHistoryIndex = allowedTargetIndex;
         currentUrl = window.location.href;
+        currentBrowserHistoryIndex = getBrowserHistoryIndex();
 
         return;
       }
@@ -591,6 +613,7 @@ export function useInternalNavigationGuard({
         }
 
         currentUrl = nextUrl;
+        currentBrowserHistoryIndex = getBrowserHistoryIndex();
 
         return;
       }
@@ -599,18 +622,23 @@ export function useInternalNavigationGuard({
         event.state,
         mountId,
       );
+      const targetBrowserHistoryIndex = getBrowserHistoryIndex();
 
       /*
-       * 이 마운트에서 만들어진 entry라면 기록된 index로
-       * 뒤/앞 이동 방향과 거리를 계산할 수 있습니다.
+       * 브라우저의 실제 index를 우선 사용해야 다른 마운트나 기록 없는
+       * entry로의 앞으로가기, 여러 칸 이동도 정확히 복원할 수 있습니다.
        *
-       * guard가 설치되기 이전 entry나 다른 페이지의 guard가 기록한 entry는
-       * index를 믿을 수 없으므로 일반적인 브라우저 뒤로가기 1회를
-       * fallback으로 사용합니다.
+       * Navigation API가 없는 구형 브라우저는 같은 마운트의 index를 사용합니다.
+       * 둘 다 없으면 History API만으로는 방향·거리를 알 수 없으므로 기존의
+       * 뒤로가기 1회 fallback만 가능합니다.
        */
-      const targetIndex = targetHistoryIndex ?? currentHistoryIndex - 1;
-
-      const delta = targetIndex - currentHistoryIndex;
+      const delta =
+        currentBrowserHistoryIndex !== null &&
+        targetBrowserHistoryIndex !== null
+          ? targetBrowserHistoryIndex - currentBrowserHistoryIndex
+          : (targetHistoryIndex ?? currentHistoryIndex - 1) -
+            currentHistoryIndex;
+      const targetIndex = currentHistoryIndex + delta;
 
       if (delta === 0) {
         syncCurrentHistory({

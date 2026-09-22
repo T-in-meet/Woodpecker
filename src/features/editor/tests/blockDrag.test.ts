@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createBlockSelection } from "../components/BlockHandleMenu";
 import { endBlockDrag, startBlockDrag } from "../utils/blockDrag";
-import { getTipTapExtensions } from "../utils/tiptapExtensions";
+import { getTipTapExtensions } from "../utils/tiptapEditorExtensions";
 
 function createMountedEditor(content: string) {
   const element = document.createElement("div");

@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { z } from "zod";
@@ -186,6 +187,8 @@ export async function createNoteAction(
     return { error: "노트 저장에 실패했습니다. 잠시 후 다시 시도해주세요." };
   }
 
+  revalidatePath(ROUTES.NOTES);
+
   /*
    * Note 저장 성공 이후 embedding 생성을 후처리로 예약합니다.
    *
@@ -273,6 +276,8 @@ export async function updateNoteAction(
   if (!updatedNote) {
     return { error: "수정할 노트를 찾을 수 없습니다." };
   }
+
+  revalidatePath(ROUTES.NOTES);
 
   /*
    * Note 수정 성공 이후 embedding 재생성을 후처리로 예약합니다.

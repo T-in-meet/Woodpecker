@@ -4,7 +4,7 @@ import { Editor } from "@tiptap/core";
 import { describe, expect, it } from "vitest";
 
 import { serializeTipTapMarkdown } from "../utils/serializeTipTapMarkdown";
-import { getTipTapExtensions } from "../utils/tiptapExtensions";
+import { getTipTapExtensions } from "../utils/tiptapEditorExtensions";
 
 /**
  * Phase 0: TipTap round-trip 검증 스파이크
