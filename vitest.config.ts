@@ -11,6 +11,7 @@ const JSDOM_TEST_FILES = [
   "src/features/editor/tests/blockActions.test.ts",
   "src/features/editor/tests/blockDrag.test.ts",
   "src/features/editor/tests/noteColor.test.ts",
+  "src/features/editor/tests/renderNoteHtml.test.ts",
   "src/features/editor/tests/tiptap-roundtrip.test.ts",
   "src/features/editor/tests/tiptapExtensions.test.ts",
   "src/features/quiz/tests/useQuiz.test.ts",

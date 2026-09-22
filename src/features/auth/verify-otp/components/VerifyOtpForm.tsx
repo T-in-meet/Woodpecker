@@ -300,8 +300,8 @@ const VerifyOtpForm = ({
 
         <div className="space-y-1">
           <p className="text-sm text-muted-foreground">
-            인증번호가 오지 않으면 수신함과 스팸함을 확인하거나 다시
-            요청해주세요.
+            인증번호가 오지 않으면 입력한 이메일 주소와 수신함·스팸함을
+            확인하거나 다시 요청해주세요.
           </p>
           <Link
             href={`${ROUTES.RESEND_EMAIL}?${query.toString()}`}
@@ -309,6 +309,20 @@ const VerifyOtpForm = ({
           >
             인증번호 재전송
           </Link>
+
+          {purpose === "signup" && (
+            <>
+              <p className="text-sm text-muted-foreground">
+                인증번호가 계속 오지 않으면 회원가입을 다시 시도해주세요.
+              </p>
+              <Link
+                href={ROUTES.SIGNUP}
+                className="text-sm text-muted-foreground underline hover:text-foreground"
+              >
+                회원가입 다시 시도
+              </Link>
+            </>
+          )}
         </div>
 
         <Button

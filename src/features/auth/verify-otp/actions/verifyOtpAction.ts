@@ -3,12 +3,19 @@
 import { redirect } from "next/navigation";
 
 import { ROUTES } from "@/lib/constants/routes";
-import { getServerActionClientIp } from "@/lib/utils/getServerActionClientIp";
+import {
+  clearSupabaseAuthSessionCookies,
+  createClient,
+} from "@/lib/supabase/server";
 import { VALIDATION_MESSAGES } from "@/lib/validation/messages";
 import { otpSchema } from "@/lib/validation/otpSchema";
 
 import { AUTH_EVENTS } from "../../constants/authEvents";
-import { AUTH_LOG_REASONS } from "../../constants/authLogReasons";
+import {
+  AUTH_LOG_REASONS,
+  AuthLogReason,
+} from "../../constants/authLogReasons";
+import { AUTH_PROVIDER_TIMEOUT_MS } from "../../constants/authProviderTimeout";
 import { INVALID_OTP_ERROR_MESSAGE } from "../../constants/otp";
 import { VERIFY_OTP_PATH } from "../../constants/routes";
 import { applyMinimumActionDelay } from "../../lib/applyMinimumActionDelay";
@@ -18,28 +25,30 @@ import {
   logRequested,
   normalizeUnknownError,
 } from "../../lib/authLogger";
+import { createAuthProviderTimeoutContext } from "../../lib/authProviderTimeout";
 import {
-  checkRequestEligibility,
-  mapBlockedByToReason,
-} from "../../lib/checkRequestEligibility";
+  classifyAuthProviderError,
+  isOtpValidityFailure,
+} from "../../lib/classifyAuthProviderError";
 import { maskEmailForLogging } from "../../lib/maskEmailForLogging";
 import { maskIpForLogging } from "../../lib/maskIpForLogging";
-import { setResetPasswordIntentCookie } from "../../lib/resetPasswordIntent";
+import { authGlobalRequestRateLimit } from "../../lib/rate-limit/authGlobalRequestRateLimit";
+import {
+  otpVerifyRateLimit,
+  OtpVerifyRateLimitBlockedBy,
+} from "../../lib/rate-limit/otpVerifyRateLimit";
+import { getTrustedAuthServerActionClientIp } from "../../lib/rate-limit/trustedAuthClientIp";
+import { createSetPasswordIntent } from "../../lib/setPasswordIntent";
+import { createSignedResetPasswordIntent } from "../../lib/signedResetPasswordIntent";
+import { validateRedirectPath } from "../../lib/validateRedirectPath";
 import { canonicalizeEmail } from "../../utils/canonicalizeEmail";
 import { verifyOtp } from "../lib/verifyOtp";
 import { verifyOtpContextSchema } from "../schemas/verifyOtpContextSchema";
 import { VerifyOtpActionState } from "./verifyOtpActionState";
 
-function blockedState(
-  reasonCode:
-    | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT
-    | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP_LONG
-    | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT
-    | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG,
-): VerifyOtpActionState {
+function blockedState(): VerifyOtpActionState {
   return {
     status: "blocked",
-    reasonCode,
     fieldErrors: null,
   };
 }
@@ -47,9 +56,83 @@ function blockedState(
 function internalErrorState(): VerifyOtpActionState {
   return {
     status: "internal_error",
-    reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
     fieldErrors: null,
   };
+}
+
+function mapOtpVerifyBlockedByToReason(
+  blockedBy: OtpVerifyRateLimitBlockedBy,
+): AuthLogReason {
+  switch (blockedBy) {
+    case "email_total":
+      return AUTH_LOG_REASONS.OTP_VERIFY_EMAIL_LIMIT;
+    case "ip_short":
+    case "ip_long":
+      return AUTH_LOG_REASONS.OTP_VERIFY_IP_LIMIT;
+    case "failure_streak":
+      return AUTH_LOG_REASONS.OTP_VERIFY_FAILURE_STREAK;
+    default: {
+      const exhaustiveCheck: never = blockedBy;
+      return exhaustiveCheck;
+    }
+  }
+}
+
+/**
+ * OTP Verify Provider operation 이후 후속 인증 흐름을 안전하게 계속할 수 없는 경우
+ * 이번 인증 흐름에서 생성됐을 수 있는 current session을 best-effort로 정리한다.
+ *
+ * - Verify Provider에 사용한 settled client/timeout context를 재사용하지 않는다.
+ * - remote signOut은 current session만 대상으로 scope: "local"을 사용한다.
+ * - remote signOut 성공/실패와 관계없이 현재 브라우저의 Supabase Auth cookie를 정리한다.
+ * - remote signOut과 cookie cleanup이 모두 실패한 경우에만
+ *   caller가 추가 compensation failure를 기록할 수 있도록 오류를 반환한다.
+ */
+async function compensateVerifiedSession(): Promise<unknown | null> {
+  let signOutFailure: unknown | null = null;
+
+  try {
+    const compensationTimeout = createAuthProviderTimeoutContext({
+      timeoutMs: AUTH_PROVIDER_TIMEOUT_MS,
+    });
+
+    try {
+      const compensationSupabase = await createClient({
+        fetch: compensationTimeout.fetch,
+      });
+
+      const { error: signOutError } = await compensationSupabase.auth.signOut({
+        scope: "local",
+      });
+
+      if (signOutError) {
+        signOutFailure = signOutError;
+      }
+    } catch (error) {
+      signOutFailure = error;
+    } finally {
+      compensationTimeout.settle();
+    }
+  } catch (error) {
+    signOutFailure = error;
+  }
+
+  let cookieClearFailure: unknown | null = null;
+
+  try {
+    await clearSupabaseAuthSessionCookies();
+  } catch (error) {
+    cookieClearFailure = error;
+  }
+
+  if (signOutFailure !== null && cookieClearFailure !== null) {
+    return new AggregateError(
+      [signOutFailure, cookieClearFailure],
+      "Auth session compensation failed after local signOut and cookie cleanup failures.",
+    );
+  }
+
+  return null;
 }
 
 /**
@@ -108,7 +191,6 @@ export async function verifyOtpAction(
 
       return {
         status: "invalid_request",
-        reasonCode: AUTH_LOG_REASONS.SCHEMA_VALIDATION_FAILED,
         fieldErrors: null,
       };
     }
@@ -150,6 +232,52 @@ export async function verifyOtpAction(
       };
     }
 
+    const canonicalEmail = canonicalizeEmail(email);
+    const maskedEmail = maskEmailForLogging(canonicalEmail);
+    const trustedIp = await getTrustedAuthServerActionClientIp();
+
+    if (!trustedIp.available) {
+      logAuthError(AUTH_EVENTS.AUTH_VERIFY_OTP_FAILED, {
+        path: VERIFY_OTP_PATH,
+        method: "POST",
+        status: 503,
+        provider: "password",
+        result: "failure",
+        reasonCode: AUTH_LOG_REASONS.IP_UNAVAILABLE,
+        maskedEmail,
+        purpose,
+      });
+
+      return internalErrorState();
+    }
+
+    const clientIp = trustedIp.ip;
+    const maskedIp = maskIpForLogging(clientIp);
+    const globalRateLimitResult = authGlobalRequestRateLimit.tryConsume({
+      ip: clientIp,
+    });
+
+    if (!globalRateLimitResult.allowed) {
+      logAuthEvent(AUTH_EVENTS.AUTH_VERIFY_OTP_RATE_LIMITED, {
+        path: VERIFY_OTP_PATH,
+        method: "POST",
+        status: 429,
+        provider: "password",
+        result: "blocked",
+        reasonCode: AUTH_LOG_REASONS.AUTH_GLOBAL_IP_LIMIT,
+        maskedEmail,
+        maskedIp,
+      });
+
+      return blockedState();
+    }
+
+    // operation-specific attempt를 소비하기 전에 timeout-enabled Supabase client를 준비한다.
+    const providerTimeout = createAuthProviderTimeoutContext({
+      timeoutMs: AUTH_PROVIDER_TIMEOUT_MS,
+    });
+    const supabase = await createClient({ fetch: providerTimeout.fetch });
+
     /**
      * Rate limit 검증
      *
@@ -162,19 +290,14 @@ export async function verifyOtpAction(
      * 요청 제한에 걸린 경우에는 Supabase verifyOtp를 호출하지 않고
      * blocked 상태를 반환한다.
      */
-    const canonicalEmail = canonicalizeEmail(email);
-    const clientIp = await getServerActionClientIp();
-    const maskedEmail = maskEmailForLogging(canonicalEmail);
-    const maskedIp = maskIpForLogging(clientIp);
-
-    const eligibility = checkRequestEligibility(
-      "verify-otp",
-      clientIp,
+    const attempt = otpVerifyRateLimit.tryStartAttempt({
+      purpose,
       canonicalEmail,
-    );
+      ip: clientIp,
+    });
 
-    if (!eligibility.allowed) {
-      const reasonCode = mapBlockedByToReason(eligibility.blockedBy);
+    if (!attempt.allowed) {
+      const reasonCode = mapOtpVerifyBlockedByToReason(attempt.blockedBy);
 
       logAuthEvent(AUTH_EVENTS.AUTH_VERIFY_OTP_RATE_LIMITED, {
         path: VERIFY_OTP_PATH,
@@ -187,66 +310,243 @@ export async function verifyOtpAction(
         maskedIp,
       });
 
-      return blockedState(reasonCode);
+      return blockedState();
     }
 
     /**
      * Supabase OTP 인증 검증 수행
      *
-     * 검증된 요청 컨텍스트(email, purpose)와
-     * 사용자 입력 OTP를 기반으로
+     * 검증된 요청 컨텍스트(email, purpose)와 사용자 입력 OTP를 기반으로
      * Supabase verifyOtp를 호출한다.
      *
      * 주의:
      * - verifyOtp는 throw 대신 error 객체를 반환할 수 있으므로
      *   반드시 반환 결과의 error 여부를 확인해야 한다.
-     * - OTP 불일치, 만료 등의 인증 실패도 error로 반환된다.
+     * - OTP 불일치/만료 error와 Provider 오류는 caller에서 구분한다.
      */
-    const { error } = await verifyOtp({
-      email,
-      purpose,
-      otp: otpParsed.data,
-    });
+    let verifyResult: Awaited<ReturnType<typeof verifyOtp>>;
+
+    try {
+      try {
+        verifyResult = await verifyOtp({
+          supabase,
+          email,
+          purpose,
+          otp: otpParsed.data,
+        });
+      } finally {
+        // Response body 소비까지 포함한 Provider operation 종료 시점에 attribution을 freeze한다.
+        providerTimeout.settle();
+      }
+    } catch (providerError) {
+      otpVerifyRateLimit.recordResult({
+        canonicalEmail,
+        outcome: "provider_error",
+      });
+
+      const normalized = normalizeUnknownError(providerError);
+
+      logAuthError(AUTH_EVENTS.AUTH_VERIFY_OTP_FAILED, {
+        path: VERIFY_OTP_PATH,
+        method: "POST",
+        status: 500,
+        provider: "password",
+        result: "failure",
+        reasonCode: providerTimeout.didTimeout()
+          ? AUTH_LOG_REASONS.PROVIDER_TIMEOUT
+          : AUTH_LOG_REASONS.PROVIDER_ERROR,
+        maskedEmail,
+        maskedIp,
+        purpose,
+        ...normalized,
+      });
+
+      return internalErrorState();
+    }
+
+    const { data, error } = verifyResult;
 
     /**
      * OTP 인증 실패 처리
      *
-     * Supabase verifyOtp의 error는 throw가 아니라
-     * 반환값으로 전달될 수 있다.
-     *
-     * 이 error는 주로 OTP 불일치, 만료, 재발급으로 인한 이전 OTP 무효화 등
-     * 사용자가 다시 입력하거나 재전송으로 해결할 수 있는 인증 실패를 의미한다.
-     *
-     * 따라서 서버 내부 오류로 처리하지 않고
-     * invalid_input 상태로 반환해 현재 OTP 입력 화면에서 안내한다.
+     * Supabase verifyOtp의 error는 throw가 아니라 반환값으로 전달될 수 있다.
+     * Supabase Auth가 transport timeout을 wrapped error로 반환할 수 있으므로
+     * OTP validity/provider error shape보다 request-scoped timeout context를 먼저 본다.
      */
     if (error) {
-      logAuthEvent(AUTH_EVENTS.AUTH_VERIFY_OTP_INVALID_OTP, {
+      if (providerTimeout.didTimeout()) {
+        otpVerifyRateLimit.recordResult({
+          canonicalEmail,
+          outcome: "provider_error",
+        });
+
+        const normalized = normalizeUnknownError(error);
+
+        logAuthError(AUTH_EVENTS.AUTH_VERIFY_OTP_FAILED, {
+          path: VERIFY_OTP_PATH,
+          method: "POST",
+          status: 500,
+          provider: "password",
+          result: "failure",
+          reasonCode: AUTH_LOG_REASONS.PROVIDER_TIMEOUT,
+          maskedEmail,
+          maskedIp,
+          purpose,
+          ...normalized,
+        });
+
+        return internalErrorState();
+      }
+
+      if (isOtpValidityFailure(error)) {
+        otpVerifyRateLimit.recordResult({
+          canonicalEmail,
+          outcome: "otp_failure",
+        });
+
+        logAuthEvent(AUTH_EVENTS.AUTH_VERIFY_OTP_INVALID_OTP, {
+          path: VERIFY_OTP_PATH,
+          method: "POST",
+          status: 401,
+          provider: "password",
+          result: "failure",
+          reasonCode: AUTH_LOG_REASONS.INVALID_OTP,
+          maskedEmail,
+          maskedIp,
+          purpose,
+        });
+
+        return {
+          status: "invalid_otp",
+          formError: INVALID_OTP_ERROR_MESSAGE,
+        };
+      }
+
+      const classification = classifyAuthProviderError(error);
+
+      if (classification === "provider_rate_limit") {
+        otpVerifyRateLimit.recordResult({
+          canonicalEmail,
+          outcome: "provider_rate_limited",
+        });
+
+        logAuthEvent(AUTH_EVENTS.AUTH_VERIFY_OTP_RATE_LIMITED, {
+          path: VERIFY_OTP_PATH,
+          method: "POST",
+          status: 429,
+          provider: "password",
+          result: "blocked",
+          reasonCode: AUTH_LOG_REASONS.PROVIDER_RATE_LIMIT,
+          maskedEmail,
+          maskedIp,
+          purpose,
+        });
+
+        return blockedState();
+      }
+
+      otpVerifyRateLimit.recordResult({
+        canonicalEmail,
+        outcome: "provider_error",
+      });
+
+      const normalized = normalizeUnknownError(error);
+
+      logAuthError(AUTH_EVENTS.AUTH_VERIFY_OTP_FAILED, {
         path: VERIFY_OTP_PATH,
         method: "POST",
-        status: 401,
+        status: 500,
         provider: "password",
         result: "failure",
-        reasonCode: AUTH_LOG_REASONS.INVALID_OTP,
+        reasonCode: AUTH_LOG_REASONS.PROVIDER_ERROR,
         maskedEmail,
         maskedIp,
         purpose,
+        ...normalized,
       });
 
-      return {
-        status: "invalid_otp",
-        formError: INVALID_OTP_ERROR_MESSAGE,
-      };
+      return internalErrorState();
     }
 
+    let verifiedSignupUserId: string | null = null;
+    let verifiedResetPasswordUserId: string | null = null;
+
+    if (purpose === "signup") {
+      const verifiedUser = data.user;
+
+      if (verifiedUser === null) {
+        const invariantError = new Error(
+          "Signup OTP verification succeeded without an authenticated user.",
+        );
+        const compensationError = await compensateVerifiedSession();
+
+        if (compensationError !== null) {
+          const normalizedCompensationError =
+            normalizeUnknownError(compensationError);
+
+          logAuthError(AUTH_EVENTS.AUTH_VERIFY_OTP_FAILED, {
+            path: VERIFY_OTP_PATH,
+            method: "POST",
+            status: 500,
+            provider: "password",
+            result: "failure",
+            reasonCode: AUTH_LOG_REASONS.AUTH_SESSION_COMPENSATION_FAILED,
+            maskedEmail,
+            maskedIp,
+            purpose,
+            ...normalizedCompensationError,
+          });
+        }
+
+        throw invariantError;
+      }
+
+      verifiedSignupUserId = verifiedUser.id;
+    } else if (purpose === "reset-password") {
+      const verifiedUser = data.user;
+
+      if (verifiedUser === null) {
+        const invariantError = new Error(
+          "Recovery OTP verification succeeded without an authenticated user.",
+        );
+        const compensationError = await compensateVerifiedSession();
+
+        if (compensationError !== null) {
+          const normalizedCompensationError =
+            normalizeUnknownError(compensationError);
+
+          logAuthError(AUTH_EVENTS.AUTH_VERIFY_OTP_FAILED, {
+            path: VERIFY_OTP_PATH,
+            method: "POST",
+            status: 500,
+            provider: "password",
+            result: "failure",
+            reasonCode: AUTH_LOG_REASONS.AUTH_SESSION_COMPENSATION_FAILED,
+            maskedEmail,
+            maskedIp,
+            purpose,
+            ...normalizedCompensationError,
+          });
+        }
+
+        throw invariantError;
+      }
+
+      verifiedResetPasswordUserId = verifiedUser.id;
+    }
+
+    otpVerifyRateLimit.recordResult({
+      canonicalEmail,
+      outcome: "success",
+    });
+
     /**
-     * OTP 인증 완료 로그
+     * OTP Provider 인증 성공 milestone.
      *
      * Supabase verifyOtp가 성공적으로 완료된 상태를 기록한다.
-     *
-     * purpose는 어떤 OTP 인증 흐름이 성공했는지
-     * 운영 로그에서 구분하기 위해 함께 기록한다.
-     *
+     * 이 이벤트는 Verify Action 전체 terminal completion을 의미하지 않으며,
+     * 이후 Password Intent 발급 또는 session compensation 실패와 공존할 수 있다.
+     * purpose는 어떤 OTP 인증 흐름이 성공했는지 운영 로그에서 구분하기 위해 함께 기록한다.
      * OTP 자체는 민감 정보이므로 로그에 남기지 않는다.
      */
     logAuthEvent(AUTH_EVENTS.AUTH_VERIFY_OTP_COMPLETED, {
@@ -261,50 +561,129 @@ export async function verifyOtpAction(
     });
 
     /**
-     * OTP 인증 성공 후 이동 경로 결정
+     * OTP 인증 성공 후 이동 경로 결정.
      *
      * signup:
-     * - OTP 인증 성공 시점에는 이미 인증 세션이 생성된 상태다.
-     * - 비밀번호 존재 여부는 이 Action에서 판정하지 않는다.
-     * - /set-password를 signup 후 공통 분기 지점으로 사용한다.
-     * - /set-password에서 실제 비밀번호 존재 여부를 확인한 뒤
-     *   기존 비밀번호가 있으면 최종 목적지로 이동하고,
-     *   없으면 비밀번호 설정 폼을 제공한다.
-     * - redirect가 있으면 비밀번호 분기 이후에도 유지할 수 있도록 전달한다.
+     * - redirect를 strong validator로 다시 정규화한다.
+     * - 정규화된 destination을 Set Password Intent의 signed redirectPath로 저장한다.
+     * - /set-password URL에는 final redirect query를 더 이상 전달하지 않는다.
      *
      * reset-password:
-     * - 기존 비밀번호 재설정 흐름을 유지한다.
-     * - reset-password 페이지로 이동한다.
-     * - 최종 redirect는 reset-password 완료 시점에서 처리한다.
+     * - 기존 Reset Password Intent와 query 기반 redirect lifecycle을 유지한다.
      */
-    const nextPath =
-      purpose === "signup"
-        ? redirectTo
-          ? `${ROUTES.SET_PASSWORD}?redirect=${encodeURIComponent(redirectTo)}`
-          : ROUTES.SET_PASSWORD
-        : redirectTo
-          ? `${ROUTES.RESET_PASSWORD}?redirect=${encodeURIComponent(redirectTo)}`
-          : ROUTES.RESET_PASSWORD;
+    if (verifiedSignupUserId !== null) {
+      const signedRedirectPath = validateRedirectPath(redirectTo);
 
-    if (purpose === "reset-password") {
-      await setResetPasswordIntentCookie();
+      try {
+        await createSetPasswordIntent({
+          userId: verifiedSignupUserId,
+          redirectPath: signedRedirectPath,
+        });
+      } catch (intentError) {
+        const compensationError = await compensateVerifiedSession();
+
+        const normalizedIntentError = normalizeUnknownError(intentError);
+
+        logAuthError(AUTH_EVENTS.AUTH_VERIFY_OTP_FAILED, {
+          path: VERIFY_OTP_PATH,
+          method: "POST",
+          status: 500,
+          provider: "password",
+          result: "failure",
+          reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+          maskedEmail,
+          maskedIp,
+          purpose,
+          ...normalizedIntentError,
+        });
+
+        if (compensationError !== null) {
+          const normalizedCompensationError =
+            normalizeUnknownError(compensationError);
+
+          logAuthError(AUTH_EVENTS.AUTH_VERIFY_OTP_FAILED, {
+            path: VERIFY_OTP_PATH,
+            method: "POST",
+            status: 500,
+            provider: "password",
+            result: "failure",
+            reasonCode: AUTH_LOG_REASONS.AUTH_SESSION_COMPENSATION_FAILED,
+            maskedEmail,
+            maskedIp,
+            purpose,
+            ...normalizedCompensationError,
+          });
+        }
+
+        return internalErrorState();
+      }
+
+      nextUrl = ROUTES.SET_PASSWORD;
+    } else if (verifiedResetPasswordUserId !== null) {
+      try {
+        await createSignedResetPasswordIntent({
+          userId: verifiedResetPasswordUserId,
+        });
+      } catch (intentError) {
+        const compensationError = await compensateVerifiedSession();
+
+        const normalizedIntentError = normalizeUnknownError(intentError);
+
+        logAuthError(AUTH_EVENTS.AUTH_VERIFY_OTP_FAILED, {
+          path: VERIFY_OTP_PATH,
+          method: "POST",
+          status: 500,
+          provider: "password",
+          result: "failure",
+          reasonCode: AUTH_LOG_REASONS.INTERNAL_ERROR,
+          maskedEmail,
+          maskedIp,
+          purpose,
+          ...normalizedIntentError,
+        });
+
+        if (compensationError !== null) {
+          const normalizedCompensationError =
+            normalizeUnknownError(compensationError);
+
+          logAuthError(AUTH_EVENTS.AUTH_VERIFY_OTP_FAILED, {
+            path: VERIFY_OTP_PATH,
+            method: "POST",
+            status: 500,
+            provider: "password",
+            result: "failure",
+            reasonCode: AUTH_LOG_REASONS.AUTH_SESSION_COMPENSATION_FAILED,
+            maskedEmail,
+            maskedIp,
+            purpose,
+            ...normalizedCompensationError,
+          });
+        }
+
+        return internalErrorState();
+      }
+
+      nextUrl = redirectTo
+        ? `${ROUTES.RESET_PASSWORD}?redirect=${encodeURIComponent(redirectTo)}`
+        : ROUTES.RESET_PASSWORD;
+    } else {
+      if (purpose === "signup" || purpose === "reset-password") {
+        throw new Error("OTP verification purpose invariant violated.");
+      }
+
+      purpose satisfies never;
+
+      throw new Error("Unsupported OTP verification purpose.");
     }
-
-    nextUrl = nextPath;
   } catch (error) {
     /**
      * 예상하지 못한 시스템 예외 처리
      *
-     * verifyOtp의 인증 실패(OTP 불일치/만료)는
-     * 반환값(error)으로 처리한다.
+     * Provider operation에서 발생한 반환 error와 throw는
+     * 위의 Provider 경계에서 별도로 분류한다.
      *
-     * 이 catch는:
-     * - Supabase client 생성 실패
-     * - 네트워크 오류
-     * - 런타임 예외
-     * - 예상하지 못한 throw
-     *
-     * 등 시스템 레벨 예외만 처리한다.
+     * 이 catch는 Provider operation 밖에서 발생한
+     * 예상하지 못한 시스템 예외를 처리한다.
      */
     const normalized = normalizeUnknownError(error);
 

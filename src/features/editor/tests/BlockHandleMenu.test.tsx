@@ -25,7 +25,7 @@ import {
   isPointerNearEditor,
   resolveBlockElement,
 } from "../components/BlockHandleMenu";
-import { getTipTapExtensions } from "../utils/tiptapExtensions";
+import { getTipTapExtensions } from "../utils/tiptapEditorExtensions";
 
 function renderWithTooltipProvider(ui: React.ReactElement) {
   return render(<TooltipProvider delayDuration={0}>{ui}</TooltipProvider>);

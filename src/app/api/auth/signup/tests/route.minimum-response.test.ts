@@ -20,24 +20,42 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
-import { issueOtpAndSendEmail } from "@/features/auth/email/issueOtpAndSendEmail";
+import { issueOtpAndSendEmailWithResult } from "@/features/auth/email/issueOtpAndSendEmail";
 import { MIN_RESPONSE_MS } from "@/features/auth/lib/applyMinimumResponseTime";
-import { resetEligibilityStore } from "@/features/auth/lib/checkRequestEligibility";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
+import type { OtpIssueRateLimitStartResult } from "@/features/auth/lib/rate-limit/otpIssueRateLimit";
 import { ROUTES } from "@/lib/constants/routes";
-import { createAdminClient } from "@/lib/supabase/admin";
 
 import { POST } from "../route";
 import { makeRequest } from "./utils/signupTestHelper";
 
-const upsertUserAgreementMock = vi.hoisted(() => vi.fn());
+const recordCurrentLegalAcceptancesMock = vi.hoisted(() => vi.fn());
+const otpIssueClient = vi.hoisted(() => ({ client: "otp-issue-client" }));
+const createOtpIssueClientMock = vi.hoisted(() => vi.fn(() => otpIssueClient));
+const otpIssueRateLimitMock = vi.hoisted(() => ({
+  precheckIssue: vi.fn((): OtpIssueRateLimitStartResult => ({ allowed: true })),
+  tryStartIssue: vi.fn(),
+  recordSuccessfulIssue: vi.fn(),
+  releaseIssue: vi.fn(),
+}));
+
+vi.mock("@/features/auth/lib/rate-limit/authGlobalRequestRateLimit", () => ({
+  authGlobalRequestRateLimit: {
+    tryConsume: vi.fn(() => ({ allowed: true })),
+  },
+}));
 
 vi.mock("@/features/auth/lib/userAgreements", () => ({
-  ensureUserAgreement: upsertUserAgreementMock,
+  recordCurrentLegalAcceptances: recordCurrentLegalAcceptancesMock,
 }));
 vi.mock("@/features/auth/lib/getUserByEmail");
 vi.mock("@/features/auth/email/issueOtpAndSendEmail");
-vi.mock("@/lib/supabase/admin");
+vi.mock("@/features/auth/lib/issueOtp", () => ({
+  createOtpIssueClient: createOtpIssueClientMock,
+}));
+vi.mock("@/features/auth/lib/rate-limit/otpIssueRateLimit", () => ({
+  otpIssueRateLimit: otpIssueRateLimitMock,
+}));
 
 /**
  * Date.now() mock의 기준 시각 (임의의 epoch ms)
@@ -45,27 +63,15 @@ vi.mock("@/lib/supabase/admin");
 const START_TIME = 1_000_000;
 
 describe("회원가입 API 최소 응답 시간 보장 검증", () => {
-  const mockCreateUser = vi.fn();
-
   beforeEach(() => {
-    resetEligibilityStore();
     vi.useRealTimers();
     vi.restoreAllMocks();
     vi.clearAllMocks();
+    otpIssueRateLimitMock.tryStartIssue.mockReturnValue({ allowed: true });
     process.env["EMAIL_TICKET_SECRET"] = "test-ticket-secret";
 
-    vi.mocked(createAdminClient).mockReturnValue({
-      auth: {
-        admin: { createUser: mockCreateUser },
-      },
-    } as never);
-    mockCreateUser.mockResolvedValue({
-      data: { user: { id: "user-id", email: "test@example.com" } },
-      error: null,
-    });
-
     vi.mocked(getUserByEmail).mockResolvedValue(null);
-    vi.mocked(issueOtpAndSendEmail).mockResolvedValue(undefined);
+    vi.mocked(issueOtpAndSendEmailWithResult).mockResolvedValue({ ok: true });
   });
 
   const validBody = {
@@ -92,17 +98,6 @@ describe("회원가입 API 최소 응답 시간 보장 검증", () => {
     });
   }
 
-  function makeRequestWithIp(body: object, ip: string): NextRequest {
-    return new NextRequest("http://localhost/api/auth/signup", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-forwarded-for": ip,
-      },
-      body: JSON.stringify(body),
-    });
-  }
-
   async function expectPendingUntilMinimumTime<T>(promise: Promise<T>) {
     let resolved = false;
 
@@ -116,11 +111,6 @@ describe("회원가입 API 최소 응답 시간 보장 검증", () => {
     await vi.advanceTimersByTimeAsync(1);
     await Promise.resolve();
     expect(resolved).toBe(true);
-  }
-
-  async function resolveAfterMinimumTime<T>(promise: Promise<T>) {
-    await vi.advanceTimersByTimeAsync(MIN_RESPONSE_MS);
-    return promise;
   }
 
   /**
@@ -239,45 +229,45 @@ describe("회원가입 API 최소 응답 시간 보장 검증", () => {
     expect(body.code).toBe(AUTH_API_CODES.SIGNUP_INTERNAL_ERROR);
   });
 
-  it("TC-08: fast rate-limit path도 최소 응답 시간 이전에 응답하지 않는다", async () => {
+  it("TC-08: final Local Rate Limit success-like path도 최소 응답 시간 이전에 응답하지 않는다", async () => {
     useFakeClockWithNoElapsedTime();
 
-    const ip = "127.0.0.1";
+    otpIssueRateLimitMock.tryStartIssue.mockReturnValueOnce({
+      allowed: false,
+      blockedBy: "ip_short",
+    });
 
-    for (let i = 0; i < 10; i++) {
-      await resolveAfterMinimumTime(
-        POST(
-          makeRequestWithIp(
-            {
-              ...validBody,
-              email: `tc08user${i}@example.com`,
-            },
-            ip,
-          ),
-        ),
-      );
-    }
-
-    const promise = POST(
-      makeRequestWithIp(
-        {
-          ...validBody,
-          email: "tc08overflow@example.com",
-        },
-        ip,
-      ),
-    );
+    const promise = POST(makeRequest(validBody));
 
     await expectPendingUntilMinimumTime(promise);
 
     const response = await promise;
     const body = await response.json();
 
-    expect(response.status).toBe(429);
-    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_RATE_LIMIT_EXCEEDED);
+    expect(response.status).toBe(200);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
   });
 
-  it("TC-09: malformed JSON path도 최소 응답 시간 이전에 응답하지 않는다", async () => {
+  it("TC-09: fast precheck rate-limit path도 최소 응답 시간 이전에 응답하지 않는다", async () => {
+    useFakeClockWithNoElapsedTime();
+
+    otpIssueRateLimitMock.precheckIssue.mockReturnValueOnce({
+      allowed: false,
+      blockedBy: "ip_short",
+    });
+
+    const promise = POST(makeRequest(validBody));
+
+    await expectPendingUntilMinimumTime(promise);
+
+    const response = await promise;
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.code).toBe(AUTH_API_CODES.SIGNUP_SUCCESS);
+  });
+
+  it("TC-10: malformed JSON path도 최소 응답 시간 이전에 응답하지 않는다", async () => {
     useFakeClockWithNoElapsedTime();
 
     const promise = POST(makeMalformedJsonRequest());

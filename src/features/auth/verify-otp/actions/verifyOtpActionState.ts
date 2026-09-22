@@ -1,5 +1,3 @@
-import { AUTH_LOG_REASONS } from "../../constants/authLogReasons";
-
 /**
  * verifyOtp server action의 UI 상태 계약
  *
@@ -46,25 +44,19 @@ export type VerifyOtpActionState =
   | {
       status: "invalid_request";
       fieldErrors: null;
-      reasonCode: typeof AUTH_LOG_REASONS.SCHEMA_VALIDATION_FAILED;
     }
 
   /**
    * Rate Limit 차단 상태
    *
-   * IP 또는 이메일 기준 요청 제한 정책에 의해
+   * Local Rate Limit 또는 Provider Rate Limit에 의해
    * 인증 요청이 차단된 상태를 의미한다.
    *
-   * reasonCode는 logging 및 정책 분기를 위해 사용한다.
+   * 상세 차단 원인은 외부 상태에 노출하지 않고 structured log에서 구분한다.
    */
   | {
       status: "blocked";
       fieldErrors: null;
-      reasonCode:
-        | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT
-        | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP_LONG
-        | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG
-        | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT;
     }
 
   /**
@@ -81,7 +73,6 @@ export type VerifyOtpActionState =
   | {
       status: "internal_error";
       fieldErrors: null;
-      reasonCode: typeof AUTH_LOG_REASONS.INTERNAL_ERROR;
     }
 
   /**

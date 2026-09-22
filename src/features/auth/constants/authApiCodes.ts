@@ -17,8 +17,10 @@ import {
  */
 export const AUTH_API_CODES = {
   /**
-   * 회원가입 성공
-   * - 정상적으로 회원이 생성된 경우
+   * 회원가입 성공 응답
+   * - 정상적인 회원가입 성공에 사용한다.
+   * - account enumeration 방지를 위해 일부 Provider/Email delivery 실패도
+   *   동일한 success-like public 응답으로 masking할 때 사용한다.
    */
   SIGNUP_SUCCESS: makeApiCode("signup", API_RESULTS.SUCCESS),
 

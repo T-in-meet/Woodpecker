@@ -47,6 +47,7 @@ function createHistoryState(index: number) {
 
 describe("useInternalNavigationGuard", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     window.history.replaceState({}, "", "/note-chats/test");
   });
 
@@ -55,6 +56,7 @@ describe("useInternalNavigationGuard", () => {
     document.body.innerHTML = "";
     window.history.replaceState({}, "", "/");
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("비활성 상태에서는 내부 링크 이동을 보류하지 않는다", async () => {
@@ -625,6 +627,125 @@ describe("useInternalNavigationGuard", () => {
     expect(window.history.state[NAVIGATION_GUARD_HISTORY_INDEX_KEY]).toBe(2);
 
     expect(historyGoSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    { label: "기록 없는 앞으로가기", state: {}, delta: 1 },
+    { label: "기록 없는 두 칸 앞으로가기", state: {}, delta: 2 },
+    { label: "기록 없는 두 칸 뒤로가기", state: {}, delta: -2 },
+    {
+      label: "다른 마운트의 앞으로가기",
+      state: {
+        [NAVIGATION_GUARD_HISTORY_INDEX_KEY]: 0,
+        [NAVIGATION_GUARD_MOUNT_ID_KEY]: "another-mount",
+      },
+      delta: 1,
+    },
+  ])(
+    "$label 후 취소하면 원래 entry를 유지하고 확인하면 목표로 이동한다",
+    async ({ state, delta }) => {
+      const navigation = { currentEntry: { index: 10 } };
+      vi.stubGlobal("navigation", navigation);
+      const originalReplaceState = window.history.replaceState;
+      const historyGoSpy = vi
+        .spyOn(window.history, "go")
+        .mockImplementation(() => {});
+      const { result } = renderHook(() =>
+        useInternalNavigationGuard({ enabled: true }),
+      );
+      const currentState = window.history.state;
+      const routerPopState = vi.fn();
+      window.addEventListener("popstate", routerPopState);
+
+      try {
+        for (const decision of ["cancel", "confirm"] as const) {
+          navigation.currentEntry.index = 10 + delta;
+          originalReplaceState.call(window.history, state, "", "/notes/target");
+          await dispatchPopState(state);
+
+          expect(historyGoSpy).toHaveBeenLastCalledWith(-delta);
+          expect(result.current.isNavigationPending).toBe(false);
+          expect(routerPopState).not.toHaveBeenCalled();
+
+          navigation.currentEntry.index = 10;
+          originalReplaceState.call(
+            window.history,
+            currentState,
+            "",
+            "/note-chats/test",
+          );
+          await dispatchPopState(currentState);
+          expect(result.current.isNavigationPending).toBe(true);
+          expect(routerPopState).not.toHaveBeenCalled();
+
+          const callCount = historyGoSpy.mock.calls.length;
+          act(() => {
+            if (decision === "cancel") result.current.cancelNavigation();
+            else result.current.confirmNavigation();
+          });
+          expect(result.current.isNavigationPending).toBe(false);
+
+          if (decision === "cancel") {
+            expect(historyGoSpy).toHaveBeenCalledTimes(callCount);
+            expect(window.location.pathname).toBe("/note-chats/test");
+          } else {
+            expect(historyGoSpy).toHaveBeenLastCalledWith(delta);
+            navigation.currentEntry.index = 10 + delta;
+            originalReplaceState.call(
+              window.history,
+              state,
+              "",
+              "/notes/target",
+            );
+            await dispatchPopState(state);
+            expect(result.current.isNavigationPending).toBe(false);
+            expect(routerPopState).toHaveBeenCalledOnce();
+            expect(window.location.pathname).toBe("/notes/target");
+          }
+        }
+      } finally {
+        window.removeEventListener("popstate", routerPopState);
+      }
+    },
+  );
+
+  it.each([
+    "pushState",
+    "replaceState",
+    "hash popstate",
+    "disabled popstate",
+  ] as const)("%s 이후 실제 History 위치를 동기화한다", async (method) => {
+    const navigation = { currentEntry: { index: 10 } };
+    vi.stubGlobal("navigation", navigation);
+    const originalReplaceState = window.history.replaceState;
+    const historyGoSpy = vi
+      .spyOn(window.history, "go")
+      .mockImplementation(() => {});
+    const { rerender } = renderHook(
+      ({ enabled }) => useInternalNavigationGuard({ enabled }),
+      { initialProps: { enabled: method !== "disabled popstate" } },
+    );
+
+    // replaceState는 entry를 추가하지 않는다. 나머지는 한 칸 이동한다.
+    const currentIndex = method === "replaceState" ? 10 : 11;
+    navigation.currentEntry.index = currentIndex;
+    if (method === "pushState" || method === "replaceState") {
+      act(() => window.history[method]({}, "", "/note-chats/test#section"));
+    } else {
+      originalReplaceState.call(
+        window.history,
+        {},
+        "",
+        "/note-chats/test#section",
+      );
+      await dispatchPopState({});
+    }
+    rerender({ enabled: true });
+
+    navigation.currentEntry.index = currentIndex + 1;
+    originalReplaceState.call(window.history, {}, "", "/notes/target");
+    await dispatchPopState({});
+    expect(historyGoSpy).toHaveBeenCalledExactlyOnceWith(-1);
   });
 
   it("같은 페이지의 hash History를 popstate로 이동하면 보류하지 않는다", async () => {

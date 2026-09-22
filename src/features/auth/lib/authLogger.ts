@@ -75,9 +75,24 @@ type SuccessLogContext = CommonLogFields & {
   reasonCode?: never;
 };
 
+/**
+ * Rate Limit 차단을 발생시킨 limiter source.
+ *
+ * operation-specific OTP Issue / Signup Resend request limiter와
+ * 전체 Auth surface가 공유하는 global IP request guard를 구분한다.
+ */
+export type AuthRateLimitSource =
+  | "auth_global"
+  | "otp_issue"
+  | "signup_resend_request";
+
 type BlockedLogContext = CommonLogFields & {
   result: "blocked";
   reasonCode: AuthLogReason;
+  rateLimitSource?: AuthRateLimitSource;
+  errorMessage?: string;
+  errorName?: string;
+  errorCode?: string;
 };
 
 type RejectedLogContext = CommonLogFields & {

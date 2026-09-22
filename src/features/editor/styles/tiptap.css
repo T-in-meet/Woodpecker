@@ -11,6 +11,11 @@
   font-size: 1rem;
   line-height: 1.625;
   color: var(--foreground);
+  /* 서버 본문은 EditorView가 기본 CSS를 주입하지 않으므로 여기서 공백과 긴 단어의
+     줄바꿈을 보장한다. 편집 화면에도 같은 규칙을 적용한다. */
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+  white-space: break-spaces;
 }
 
 /* Placeholder */
@@ -274,6 +279,7 @@
 
 /* Code block */
 .tiptap-wrapper .tiptap pre {
+  white-space: pre-wrap;
   border-radius: 0.5rem;
   background-color: var(--muted);
   padding: 1rem;

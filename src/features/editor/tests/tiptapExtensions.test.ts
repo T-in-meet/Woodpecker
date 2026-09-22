@@ -6,10 +6,8 @@ import { TextSelection } from "@tiptap/pm/state";
 import { describe, expect, it } from "vitest";
 
 import { serializeTipTapMarkdown } from "../utils/serializeTipTapMarkdown";
-import {
-  getReadOnlyTipTapExtensions,
-  getTipTapExtensions,
-} from "../utils/tiptapExtensions";
+import { getTipTapExtensions } from "../utils/tiptapEditorExtensions";
+import { getReadOnlyTipTapExtensions } from "../utils/tiptapExtensions";
 
 function createEditor(
   content: string | JSONContent,

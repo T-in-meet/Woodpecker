@@ -35,6 +35,13 @@ export const AUTH_EVENTS = {
   AUTH_VERIFY_OTP_RATE_LIMITED: "AUTH_VERIFY_OTP_RATE_LIMITED",
   AUTH_VERIFY_OTP_INVALID_OTP: "AUTH_VERIFY_OTP_INVALID_OTP",
   AUTH_VERIFY_OTP_FAILED: "AUTH_VERIFY_OTP_FAILED",
+  /**
+   * Supabase OTP Provider 검증 성공 milestone.
+   *
+   * Verify Action 전체 terminal completion을 의미하지 않는다.
+   * 이후 Password Intent 발급 또는 session compensation이 실패하면
+   * AUTH_VERIFY_OTP_FAILED와 같은 요청에서 함께 기록될 수 있다.
+   */
   AUTH_VERIFY_OTP_COMPLETED: "AUTH_VERIFY_OTP_COMPLETED",
   AUTH_RATE_LIMIT_BLOCKED: "AUTH_RATE_LIMIT_BLOCKED",
   AUTH_INVALID_INPUT: "AUTH_INVALID_INPUT",
@@ -97,8 +104,13 @@ export type AuthFailureEvent =
   | typeof AUTH_EVENTS.AUTH_VERIFY_OTP_FAILED;
 
 /**
- * 정상 처리 완료(success) 이벤트 유니온
- * rate limit / invalid_input과 함께 logAuthEvent에서 사용된다
+ * success 이벤트 유니온.
+ *
+ * 대부분은 정상 처리 완료를 의미한다.
+ * 단 AUTH_VERIFY_OTP_COMPLETED는 Verify Action 전체 완료가 아니라
+ * OTP Provider 검증 성공 milestone이며 후속 Action-level 실패와 공존할 수 있다.
+ *
+ * rate limit / invalid_input과 함께 logAuthEvent에서 사용된다.
  */
 export type AuthCompletedEvent =
   | typeof AUTH_EVENTS.AUTH_SIGNUP_COMPLETED

@@ -214,7 +214,7 @@ export function SignupForm({
         return;
       }
 
-      // 아래 세 가지는 모두 "다시 시도"가 필요한 오류라 사라지는 토스트로 알리면
+      // 아래 오류들은 모두 "다시 시도"가 필요한 오류라 사라지는 토스트로 알리면
       // 재시도할 근거가 화면에서 없어진다. 제출 버튼 옆 root 오류 자리에 남긴다.
       if (isRateLimitError(e)) {
         setError("root", {
