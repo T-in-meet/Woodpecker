@@ -63,7 +63,7 @@ export default async function ForgotPasswordPage({
       : null;
 
   /**
-   * ForgotPasswordForm에 전달할 Server Action
+   * AuthEmailForm에 전달할 Server Action
    *
    * - forgotPasswordAction은 (redirectPath, prevState, formData) 형태를 요구한다
    * - searchParams.redirect를 action의 redirectPath로 전달하여

@@ -1,6 +1,50 @@
 import { getAuthProviders } from "@/features/auth/lib/authProviders";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+export type GetUserByEmailErrorKind = "profile_lookup" | "auth_user_lookup";
+
+/**
+ * getUserByEmail() 단계별 조회 실패.
+ *
+ * account 존재 여부를 판정하기 전 profile 조회 실패와,
+ * profile 존재 후에만 실행되는 Auth Admin 조회 실패를 caller가 구분할 수 있게 한다.
+ */
+export class GetUserByEmailError extends Error {
+  readonly kind: GetUserByEmailErrorKind;
+  readonly cause: unknown;
+
+  constructor(kind: GetUserByEmailErrorKind, cause: unknown) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+
+    super(message);
+    this.name = "GetUserByEmailError";
+    this.kind = kind;
+    this.cause = cause;
+  }
+}
+
+function toGetUserByEmailError(
+  kind: GetUserByEmailErrorKind,
+  cause: unknown,
+): GetUserByEmailError {
+  if (cause instanceof GetUserByEmailError) {
+    return cause;
+  }
+
+  return new GetUserByEmailError(kind, cause);
+}
+
+async function runLookupStage<T>(
+  kind: GetUserByEmailErrorKind,
+  operation: () => PromiseLike<T>,
+): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    throw toGetUserByEmailError(kind, error);
+  }
+}
+
 /**
  * canonical_email으로 사용자 조회
  *
@@ -36,17 +80,21 @@ export async function getUserByEmail(canonicalEmail: string): Promise<{
    * - canonical_email은 UNIQUE index로 빠른 조회 (O(1))
    * - null 값은 UNIQUE 제약에서 제외되므로 maybeSingle() 안전
    */
-  const { data: profile, error: profileError } = await adminClient
-    .from("profiles")
-    .select("id")
-    .eq("canonical_email", canonicalEmail)
-    .maybeSingle();
+  const { data: profile, error: profileError } = await runLookupStage(
+    "profile_lookup",
+    () =>
+      adminClient
+        .from("profiles")
+        .select("id")
+        .eq("canonical_email", canonicalEmail)
+        .maybeSingle(),
+  );
 
   /**
    * profiles 조회 실패 시 에러 전파
    */
   if (profileError) {
-    throw profileError;
+    throw toGetUserByEmailError("profile_lookup", profileError);
   }
 
   /**
@@ -65,14 +113,16 @@ export async function getUserByEmail(canonicalEmail: string): Promise<{
    * 2단계: auth.users에서 해당 id로 사용자 조회
    * - email_confirmed_at을 포함하여 이메일 인증 상태 확인
    */
-  const { data: userData, error: userError } =
-    await adminClient.auth.admin.getUserById(profile.id);
+  const { data: userData, error: userError } = await runLookupStage(
+    "auth_user_lookup",
+    () => adminClient.auth.admin.getUserById(profile.id),
+  );
 
   /**
    * auth.users 조회 실패 시 에러 전파
    */
   if (userError) {
-    throw userError;
+    throw toGetUserByEmailError("auth_user_lookup", userError);
   }
 
   /**

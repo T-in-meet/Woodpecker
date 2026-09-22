@@ -14,6 +14,10 @@ export type SetPasswordActionState =
       };
     }
   | {
+      status: "blocked";
+      fieldErrors?: undefined;
+    }
+  | {
       status: "internal_error";
       fieldErrors?: undefined;
       reason?: "same_password";

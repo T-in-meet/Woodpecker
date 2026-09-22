@@ -13,16 +13,19 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
-import { issueOtpAndSendEmail } from "@/features/auth/email/issueOtpAndSendEmail";
-import { resetEligibilityStore } from "@/features/auth/lib/checkRequestEligibility";
+import { issueOtpAndSendEmailWithResult } from "@/features/auth/email/issueOtpAndSendEmail";
 import { getUserByEmail } from "@/features/auth/lib/getUserByEmail";
-import { createAdminClient } from "@/lib/supabase/admin";
 
 import { POST } from "../route";
 
+vi.mock("@/features/auth/lib/rate-limit/authGlobalRequestRateLimit", () => ({
+  authGlobalRequestRateLimit: {
+    tryConsume: vi.fn(() => ({ allowed: true })),
+  },
+}));
+
 vi.mock("@/features/auth/lib/getUserByEmail");
 vi.mock("@/features/auth/email/issueOtpAndSendEmail");
-vi.mock("@/lib/supabase/admin");
 
 function makeMalformedJsonRequest(): NextRequest {
   return new NextRequest("http://localhost/api/auth/signup", {
@@ -33,7 +36,6 @@ function makeMalformedJsonRequest(): NextRequest {
 }
 
 beforeEach(() => {
-  resetEligibilityStore();
   vi.clearAllMocks();
 });
 
@@ -60,8 +62,7 @@ describe("회원가입 - malformed JSON 처리", () => {
   it("TC-02. malformed JSON 요청 시 외부 의존 호출이 전혀 발생하지 않는다", async () => {
     await POST(makeMalformedJsonRequest());
 
-    expect(createAdminClient).toHaveBeenCalledTimes(0);
     expect(getUserByEmail).toHaveBeenCalledTimes(0);
-    expect(issueOtpAndSendEmail).toHaveBeenCalledTimes(0);
+    expect(issueOtpAndSendEmailWithResult).toHaveBeenCalledTimes(0);
   });
 });

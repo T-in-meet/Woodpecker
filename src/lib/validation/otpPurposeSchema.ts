@@ -18,9 +18,10 @@ import { OTP_PURPOSES } from "@/features/auth/constants/otp";
  * - 서비스 내부 OTP 목적값 validation
  *
  * 주의:
- * - Supabase OTP 타입(magiclink, recovery)과는 구분된다.
- * - 실제 Supabase 타입 변환은
- *   OTP_PURPOSE_TO_SUPABASE_TYPE에서 처리한다.
+ * - Supabase OTP Issue type(signup, magiclink, recovery) 및
+ *   Verify type(email, recovery)과는 구분된다.
+ * - Issue type은 issueOtp()의 signupMode에서 결정하고,
+ *   Verify type은 OTP_PURPOSE_TO_SUPABASE_VERIFY_TYPE에서 변환한다.
  */
 export const otpPurposeSchema = z.enum(OTP_PURPOSES);
 

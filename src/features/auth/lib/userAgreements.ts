@@ -130,6 +130,7 @@ export async function getLegalAcceptanceRequiredPath(
 export async function recordCurrentLegalAcceptances(
   userId: string,
   source: LegalAcceptanceSource,
+  options?: { signal?: AbortSignal },
 ): Promise<void> {
   const adminClient = createAdminClient();
   const occurredAt = new Date().toISOString();
@@ -142,12 +143,14 @@ export async function recordCurrentLegalAcceptances(
     user_id: userId,
   }));
 
-  const { error } = await adminClient
-    .from("user_legal_acceptances")
-    .upsert(rows, {
-      ignoreDuplicates: true,
-      onConflict: "user_id,event_type,document_version",
-    });
+  const query = adminClient.from("user_legal_acceptances").upsert(rows, {
+    ignoreDuplicates: true,
+    onConflict: "user_id,event_type,document_version",
+  });
+
+  const { error } = options?.signal
+    ? await query.abortSignal(options.signal)
+    : await query;
 
   if (error) throw error;
 }
@@ -159,14 +162,6 @@ export async function hasUserAgreement(userId: string): Promise<boolean> {
 
 /** @deprecated 신규 코드는 recordCurrentLegalAcceptances를 사용합니다. */
 export async function upsertUserAgreement(
-  userId: string,
-  source: LegalAcceptanceSource,
-): Promise<void> {
-  await recordCurrentLegalAcceptances(userId, source);
-}
-
-/** @deprecated 신규 코드는 recordCurrentLegalAcceptances를 사용합니다. */
-export async function ensureUserAgreement(
   userId: string,
   source: LegalAcceptanceSource,
 ): Promise<void> {

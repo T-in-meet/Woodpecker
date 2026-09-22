@@ -10,7 +10,6 @@ import { AUTH_LOG_REASONS } from "../../constants/authLogReasons";
  * 상태 구분:
  * - idle: 초기 상태
  * - invalid_request: 이전 페이지에서 전달된 context(query) 자체가 잘못된 경우
- * - completed: OTP 재전송 완료
  * - blocked: rate limit 차단
  * - internal_error: 시스템 내부 오류
  * - invalid_input: 사용자가 입력한 email 검증 실패
@@ -43,16 +42,18 @@ export type ResendEmailActionState =
       status: "blocked";
       fieldErrors: null;
       reasonCode:
+        | typeof AUTH_LOG_REASONS.AUTH_GLOBAL_IP_LIMIT
         | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP_SHORT
         | typeof AUTH_LOG_REASONS.RATE_LIMIT_IP_LONG
         | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_SHORT
-        | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG;
+        | typeof AUTH_LOG_REASONS.RATE_LIMIT_EMAIL_LONG
+        | typeof AUTH_LOG_REASONS.OTP_ISSUE_EMAIL_ATTEMPT_LIMIT;
     }
   /**
    * 시스템 내부 오류 상태
    *
-   * OTP 발급 실패, 이메일 전송 실패,
-   * 외부 provider 장애 등 서버 내부 문제에 사용한다.
+   * public action state로 반환되는 예상하지 못한
+   * 시스템/사전 처리 오류에 사용한다.
    */
   | {
       status: "internal_error";

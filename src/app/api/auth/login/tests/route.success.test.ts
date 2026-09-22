@@ -1,17 +1,16 @@
 /**
- * 로그인 API 성공 흐름 전용 테스트
+ * 로그인 API 성공 흐름 전용 테스트.
  *
  * 검증 범위:
- * - 200 OK + LOGIN_SUCCESS 응답 계약
- * - data.redirectTo 반환 (기본값 /mypage, 유효한 redirect query 반영)
- * - 잘못된 redirect query → /mypage fallback
- * - signInWithPassword 호출 여부 및 인자
+ * - 성공 응답/redirect 계약 유지
+ * - Provider에는 사용자가 입력한 실제 email 전달
+ * - 성공 시 Login failure streak clear
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
-import { resetEligibilityStore } from "@/features/auth/lib/checkRequestEligibility";
+import { loginRateLimit } from "@/features/auth/login/lib/loginRateLimit";
 
 import { POST } from "../route";
 import {
@@ -22,23 +21,35 @@ import {
   mockSignOut,
   resetLoginApiMocks,
   setupLoginApiMocks,
+  setupLoginSecurityMocks,
 } from "./utils/loginTestHelper";
 
 const getLegalAcceptanceStatusMock = vi.hoisted(() => vi.fn());
 
+vi.mock("@/features/auth/lib/rate-limit/authGlobalRequestRateLimit", () => ({
+  authGlobalRequestRateLimit: {
+    tryConsume: vi.fn(() => ({ allowed: true })),
+  },
+}));
+vi.mock("@/features/auth/lib/rate-limit/trustedAuthClientIp", () => ({
+  getTrustedAuthClientIp: vi.fn(),
+}));
 vi.mock("@/features/auth/lib/userAgreements", () => ({
   getLegalAcceptanceStatus: getLegalAcceptanceStatusMock,
 }));
-vi.mock("@/lib/supabase/server");
-vi.mock("@/lib/utils/getClientIp", () => ({
-  getClientIp: vi.fn(() => "127.0.0.1"),
+vi.mock("@/features/auth/login/lib/loginRateLimit", () => ({
+  loginRateLimit: {
+    tryStartAttempt: vi.fn(),
+    recordResult: vi.fn(),
+  },
 }));
+vi.mock("@/lib/supabase/server");
 
 describe("로그인 API 성공 흐름", () => {
   beforeEach(() => {
-    resetEligibilityStore();
     resetLoginApiMocks();
     setupLoginApiMocks();
+    setupLoginSecurityMocks();
     mockLoginSuccess();
     getLegalAcceptanceStatusMock.mockResolvedValue({ canAccessService: true });
   });
@@ -71,31 +82,30 @@ describe("로그인 API 성공 흐름", () => {
     expect(body.data.redirectTo).toBe("/notes");
   });
 
-  it("TC-05: 차단된 redirect query(/login)가 있으면 data.redirectTo는 /mypage로 fallback된다", async () => {
+  it("TC-05: 차단된 redirect query(/login)는 /mypage로 fallback된다", async () => {
     const response = await POST(makeLoginRequest(DEFAULT_LOGIN_BODY, "/login"));
     const body = await response.json();
 
-    // 차단 경로는 validateRedirectPath가 /mypage로 fallback 처리
     expect(body.data.redirectTo).toBe("/mypage");
   });
 
-  it("TC-06: /notes/550e8400-e29b-41d4-a716-446655440000 dynamic route redirect는 data.redirectTo에 반영된다", async () => {
+  it("TC-06: dynamic note redirect를 data.redirectTo에 반영한다", async () => {
+    const redirectTo = "/notes/550e8400-e29b-41d4-a716-446655440000";
+
     const response = await POST(
-      makeLoginRequest(
-        DEFAULT_LOGIN_BODY,
-        "/notes/550e8400-e29b-41d4-a716-446655440000",
-      ),
+      makeLoginRequest(DEFAULT_LOGIN_BODY, redirectTo),
     );
     const body = await response.json();
 
-    expect(body.data.redirectTo).toBe(
-      "/notes/550e8400-e29b-41d4-a716-446655440000",
-    );
+    expect(body.data.redirectTo).toBe(redirectTo);
   });
 
   it("TC-07: signInWithPassword는 사용자가 입력한 실제 email로 호출된다", async () => {
     await POST(
-      makeLoginRequest({ email: "User@Example.COM", password: "Password123!" }),
+      makeLoginRequest({
+        email: "User@Example.COM",
+        password: "Password123!",
+      }),
     );
 
     expect(mockSignIn).toHaveBeenCalledWith(
@@ -109,7 +119,6 @@ describe("로그인 API 성공 흐름", () => {
     const response = await POST(makeLoginRequest(DEFAULT_LOGIN_BODY));
     const body = await response.json();
 
-    // 계정 상태를 추론할 수 있는 필드가 없어야 함
     expect(Object.keys(body.data)).toEqual(["redirectTo"]);
   });
 
@@ -123,5 +132,14 @@ describe("로그인 API 성공 흐름", () => {
 
     expect(mockSignOut).not.toHaveBeenCalled();
     expect(body.data.redirectTo).toBe("/agreements?redirect=%2Fmypage");
+  });
+
+  it("TC-10: Provider 성공은 failure streak를 clear하도록 기록한다", async () => {
+    await POST(makeLoginRequest(DEFAULT_LOGIN_BODY));
+
+    expect(loginRateLimit.recordResult).toHaveBeenCalledWith({
+      canonicalEmail: "user@example.com",
+      result: "success",
+    });
   });
 });

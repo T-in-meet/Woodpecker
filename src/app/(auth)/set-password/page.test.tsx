@@ -4,17 +4,22 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getUserMock = vi.hoisted(() => vi.fn());
 const getHasPasswordLoginMock = vi.hoisted(() => vi.fn());
-const validateRedirectPathMock = vi.hoisted(() => vi.fn());
+const readSetPasswordIntentMock = vi.hoisted(() => vi.fn());
+const verifySetPasswordIntentMock = vi.hoisted(() => vi.fn());
 const redirectMock = vi.hoisted(() => vi.fn());
 const logAuthErrorMock = vi.hoisted(() => vi.fn());
-const setPasswordBoundActionMock = vi.hoisted(() => vi.fn());
-const setPasswordActionMock = vi.hoisted(() => {
-  const action = vi.fn();
-  action.bind = vi.fn(() => setPasswordBoundActionMock);
-  return action;
-});
+const setPasswordActionMock = vi.hoisted(() => vi.fn());
 const SetPasswordFormMock = vi.hoisted(() => vi.fn());
+
 const REDIRECT_ERROR = new Error("NEXT_REDIRECT");
+const SIGNED_SET_PASSWORD_INTENT = "signed-set-password-intent";
+const VALID_SET_PASSWORD_INTENT = {
+  purpose: "signup-set-password",
+  userId: "user-id",
+  issuedAt: 1_700_000_000,
+  expiresAt: 1_700_000_900,
+  redirectPath: "/notes",
+};
 
 vi.mock("next/navigation", () => ({
   redirect: redirectMock,
@@ -28,8 +33,9 @@ vi.mock("@/features/auth/lib/getHasPasswordLogin", () => ({
   getHasPasswordLogin: getHasPasswordLoginMock,
 }));
 
-vi.mock("@/features/auth/lib/validateRedirectPath", () => ({
-  validateRedirectPath: validateRedirectPathMock,
+vi.mock("@/features/auth/lib/setPasswordIntent", () => ({
+  readSetPasswordIntent: readSetPasswordIntentMock,
+  verifySetPasswordIntent: verifySetPasswordIntentMock,
 }));
 
 vi.mock("@/features/auth/lib/authLogger", async (importOriginal) => {
@@ -62,13 +68,14 @@ vi.mock("@/features/auth/set-password/components/SetPasswordForm", async () => {
 
 import { AUTH_EVENTS } from "@/features/auth/constants/authEvents";
 import { AUTH_LOG_REASONS } from "@/features/auth/constants/authLogReasons";
+import {
+  SET_PASSWORD_COMPLETE_PATH,
+  SET_PASSWORD_INTENT_CLEANUP_PATH,
+} from "@/features/auth/constants/routes";
 import { ROUTES } from "@/lib/constants/routes";
 
 import SetPasswordPage from "./page";
 
-/**
- * set-password 페이지 테스트에 필요한 최소 Supabase User 객체를 생성합니다.
- */
 function makeUser(): User {
   return {
     app_metadata: { providers: ["google"] },
@@ -89,116 +96,67 @@ describe("SetPasswordPage", () => {
 
     getUserMock.mockResolvedValue(makeUser());
     getHasPasswordLoginMock.mockResolvedValue(false);
-
-    validateRedirectPathMock.mockImplementation((value: unknown) =>
-      typeof value === "string" ? value : ROUTES.MYPAGE,
-    );
+    readSetPasswordIntentMock.mockResolvedValue(SIGNED_SET_PASSWORD_INTENT);
+    verifySetPasswordIntentMock.mockReturnValue(VALID_SET_PASSWORD_INTENT);
   });
 
-  it("비밀번호가 없는 인증 사용자에게 비밀번호 설정 폼을 렌더링한다", async () => {
-    const element = await SetPasswordPage({
-      searchParams: Promise.resolve({}),
-    });
+  it("비밀번호가 없는 인증 사용자가 valid Set Intent를 가지면 unbound action으로 폼을 렌더링한다", async () => {
+    const element = await SetPasswordPage();
 
     render(element);
 
     expect(getUserMock).toHaveBeenCalledTimes(1);
     expect(getHasPasswordLoginMock).toHaveBeenCalledWith("user-id");
-    expect(validateRedirectPathMock).not.toHaveBeenCalled();
-
-    expect(setPasswordActionMock.bind).toHaveBeenCalledWith(null, null);
+    expect(readSetPasswordIntentMock).toHaveBeenCalledTimes(1);
+    expect(verifySetPasswordIntentMock).toHaveBeenCalledWith({
+      token: SIGNED_SET_PASSWORD_INTENT,
+      expectedUserId: "user-id",
+    });
+    expect(SetPasswordFormMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: setPasswordActionMock,
+      }),
+    );
     expect(screen.getByTestId("set-password-form")).toBeInTheDocument();
   });
 
   it("인증되지 않은 사용자는 signup으로 redirect한다", async () => {
     getUserMock.mockResolvedValue(null);
 
-    await expect(
-      SetPasswordPage({
-        searchParams: Promise.resolve({}),
-      }),
-    ).rejects.toBe(REDIRECT_ERROR);
+    await expect(SetPasswordPage()).rejects.toBe(REDIRECT_ERROR);
 
     expect(redirectMock).toHaveBeenCalledWith(ROUTES.SIGNUP);
     expect(getHasPasswordLoginMock).not.toHaveBeenCalled();
-    expect(validateRedirectPathMock).not.toHaveBeenCalled();
-    expect(setPasswordActionMock.bind).not.toHaveBeenCalled();
+    expect(readSetPasswordIntentMock).not.toHaveBeenCalled();
+    expect(verifySetPasswordIntentMock).not.toHaveBeenCalled();
+    expect(SetPasswordFormMock).not.toHaveBeenCalled();
   });
 
-  it("이미 비밀번호가 있고 redirect가 없으면 mypage로 redirect한다", async () => {
+  it("이미 비밀번호가 있고 Set Intent가 없으면 MYPAGE로 redirect한다", async () => {
     getHasPasswordLoginMock.mockResolvedValue(true);
+    readSetPasswordIntentMock.mockResolvedValue(null);
 
-    await expect(
-      SetPasswordPage({
-        searchParams: Promise.resolve({}),
-      }),
-    ).rejects.toBe(REDIRECT_ERROR);
+    await expect(SetPasswordPage()).rejects.toBe(REDIRECT_ERROR);
 
     expect(getHasPasswordLoginMock).toHaveBeenCalledWith("user-id");
-    expect(validateRedirectPathMock).not.toHaveBeenCalled();
+    expect(readSetPasswordIntentMock).toHaveBeenCalledTimes(1);
+    expect(verifySetPasswordIntentMock).not.toHaveBeenCalled();
     expect(redirectMock).toHaveBeenCalledWith(ROUTES.MYPAGE);
-    expect(setPasswordActionMock.bind).not.toHaveBeenCalled();
+    expect(SetPasswordFormMock).not.toHaveBeenCalled();
   });
 
-  it("이미 비밀번호가 있고 redirect가 있으면 검증된 redirect를 보존한다", async () => {
+  it("이미 비밀번호가 있고 Set Intent가 남아 있으면 verifier 없이 completion으로 보낸다", async () => {
     getHasPasswordLoginMock.mockResolvedValue(true);
-    validateRedirectPathMock.mockReturnValue("/notes");
 
-    await expect(
-      SetPasswordPage({
-        searchParams: Promise.resolve({ redirect: "/notes" }),
-      }),
-    ).rejects.toBe(REDIRECT_ERROR);
+    await expect(SetPasswordPage()).rejects.toBe(REDIRECT_ERROR);
 
-    expect(validateRedirectPathMock).toHaveBeenCalledWith("/notes");
-    expect(getHasPasswordLoginMock).toHaveBeenCalledWith("user-id");
-    expect(redirectMock).toHaveBeenCalledWith("/notes");
-    expect(setPasswordActionMock.bind).not.toHaveBeenCalled();
-  });
-
-  it("비밀번호가 없고 redirect가 있으면 검증된 redirect를 Server Action에 bind한다", async () => {
-    validateRedirectPathMock.mockReturnValue("/notes");
-
-    const element = await SetPasswordPage({
-      searchParams: Promise.resolve({ redirect: "/notes" }),
-    });
-
-    render(element);
-
-    expect(validateRedirectPathMock).toHaveBeenCalledWith("/notes");
-    expect(getHasPasswordLoginMock).toHaveBeenCalledWith("user-id");
-
-    expect(setPasswordActionMock.bind).toHaveBeenCalledWith(null, "/notes");
-    expect(SetPasswordFormMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: setPasswordBoundActionMock,
-      }),
+    expect(readSetPasswordIntentMock).toHaveBeenCalledTimes(1);
+    expect(verifySetPasswordIntentMock).not.toHaveBeenCalled();
+    expect(redirectMock).toHaveBeenCalledWith(SET_PASSWORD_COMPLETE_PATH);
+    expect(redirectMock).not.toHaveBeenCalledWith(
+      SET_PASSWORD_INTENT_CLEANUP_PATH,
     );
-
-    expect(screen.getByTestId("set-password-form")).toBeInTheDocument();
-  });
-
-  it("유효하지 않은 redirect는 검증 결과를 사용한다", async () => {
-    validateRedirectPathMock.mockReturnValue(ROUTES.MYPAGE);
-
-    const element = await SetPasswordPage({
-      searchParams: Promise.resolve({
-        redirect: "https://example.com",
-      }),
-    });
-
-    render(element);
-
-    expect(validateRedirectPathMock).toHaveBeenCalledWith(
-      "https://example.com",
-    );
-
-    expect(setPasswordActionMock.bind).toHaveBeenCalledWith(
-      null,
-      ROUTES.MYPAGE,
-    );
-
-    expect(screen.getByTestId("set-password-form")).toBeInTheDocument();
+    expect(SetPasswordFormMock).not.toHaveBeenCalled();
   });
 
   it("비밀번호 상태 조회 실패를 Auth 로그에 기록하고 오류를 다시 전파한다", async () => {
@@ -206,14 +164,9 @@ describe("SetPasswordPage", () => {
 
     getHasPasswordLoginMock.mockRejectedValue(lookupError);
 
-    await expect(
-      SetPasswordPage({
-        searchParams: Promise.resolve({}),
-      }),
-    ).rejects.toBe(lookupError);
+    await expect(SetPasswordPage()).rejects.toBe(lookupError);
 
     expect(getHasPasswordLoginMock).toHaveBeenCalledWith("user-id");
-
     expect(logAuthErrorMock).toHaveBeenCalledTimes(1);
     expect(logAuthErrorMock).toHaveBeenCalledWith(
       AUTH_EVENTS.AUTH_SET_PASSWORD_FAILED,
@@ -229,8 +182,57 @@ describe("SetPasswordPage", () => {
         errorName: "Error",
       },
     );
-
     expect(redirectMock).not.toHaveBeenCalled();
-    expect(setPasswordActionMock.bind).not.toHaveBeenCalled();
+    expect(readSetPasswordIntentMock).not.toHaveBeenCalled();
+    expect(verifySetPasswordIntentMock).not.toHaveBeenCalled();
+    expect(SetPasswordFormMock).not.toHaveBeenCalled();
+  });
+
+  it("Set Intent가 없으면 MYPAGE로 redirect하고 verifier를 호출하지 않는다", async () => {
+    readSetPasswordIntentMock.mockResolvedValue(null);
+
+    await expect(SetPasswordPage()).rejects.toBe(REDIRECT_ERROR);
+
+    expect(getHasPasswordLoginMock).toHaveBeenCalledWith("user-id");
+    expect(readSetPasswordIntentMock).toHaveBeenCalledTimes(1);
+    expect(verifySetPasswordIntentMock).not.toHaveBeenCalled();
+    expect(redirectMock).toHaveBeenCalledWith(ROUTES.MYPAGE);
+    expect(SetPasswordFormMock).not.toHaveBeenCalled();
+  });
+
+  it("invalid Set Intent는 cleanup route로 redirect한다", async () => {
+    verifySetPasswordIntentMock.mockReturnValue(null);
+
+    await expect(SetPasswordPage()).rejects.toBe(REDIRECT_ERROR);
+
+    expect(getHasPasswordLoginMock).toHaveBeenCalledWith("user-id");
+    expect(readSetPasswordIntentMock).toHaveBeenCalledTimes(1);
+    expect(verifySetPasswordIntentMock).toHaveBeenCalledWith({
+      token: SIGNED_SET_PASSWORD_INTENT,
+      expectedUserId: "user-id",
+    });
+    expect(redirectMock).toHaveBeenCalledWith(SET_PASSWORD_INTENT_CLEANUP_PATH);
+    expect(SetPasswordFormMock).not.toHaveBeenCalled();
+  });
+
+  it("Set Intent verifier configuration error를 redirect로 숨기지 않고 그대로 전파한다", async () => {
+    const configurationError = new Error(
+      "PASSWORD_INTENT_SIGNING_SECRET is not configured",
+    );
+
+    verifySetPasswordIntentMock.mockImplementation(() => {
+      throw configurationError;
+    });
+
+    await expect(SetPasswordPage()).rejects.toBe(configurationError);
+
+    expect(getHasPasswordLoginMock).toHaveBeenCalledWith("user-id");
+    expect(readSetPasswordIntentMock).toHaveBeenCalledTimes(1);
+    expect(verifySetPasswordIntentMock).toHaveBeenCalledWith({
+      token: SIGNED_SET_PASSWORD_INTENT,
+      expectedUserId: "user-id",
+    });
+    expect(redirectMock).not.toHaveBeenCalled();
+    expect(SetPasswordFormMock).not.toHaveBeenCalled();
   });
 });

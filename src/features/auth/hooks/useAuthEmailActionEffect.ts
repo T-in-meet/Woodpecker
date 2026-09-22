@@ -28,7 +28,6 @@ type UseAuthEmailActionEffectParams = {
  *
  * 제외:
  * - invalid_request → page 단계 redirect 대상
- * - completed → 성공 후 navigation 흐름에서 별도 처리
  */
 export const useAuthEmailActionEffect = ({
   state,
@@ -72,9 +71,8 @@ export const useAuthEmailActionEffect = ({
       /**
        * 서버 내부 오류
        *
-       * provider 장애, 이메일 발송 실패,
-       * 시스템 오류 등 사용자가 입력 수정으로
-       * 해결할 수 없는 문제이므로 SYSTEM root error로 표시한다.
+       * public action state로 전달된 시스템 오류는
+       * 사용자가 입력 수정으로 해결할 수 없으므로 SYSTEM root error로 표시한다.
        */
       case "internal_error":
         setError("root", {

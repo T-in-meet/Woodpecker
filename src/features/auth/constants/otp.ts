@@ -1,19 +1,21 @@
 /**
- * 서비스 OTP 목적을 Supabase OTP 인증 타입으로 변환한다.
+ * 서비스 OTP purpose를 Supabase verifyOtp 타입으로 변환한다.
  *
  * signup
- * → 회원가입 이메일 인증
- * → Supabase magiclink 사용
+ * → 신규 Signup의 signup token과 기존 사용자 재발급의 magiclink token을
+ *   동일한 Signup Verify 흐름에서 검증하기 위해 Supabase email 타입을 사용한다.
  *
  * reset-password
  * → 비밀번호 재설정 인증
  * → Supabase recovery 사용
  */
-export const OTP_PURPOSE_TO_SUPABASE_TYPE: Record<OtpPurpose, SupabaseOtpType> =
-  {
-    signup: "magiclink",
-    "reset-password": "recovery",
-  };
+export const OTP_PURPOSE_TO_SUPABASE_VERIFY_TYPE: Record<
+  OtpPurpose,
+  SupabaseOtpVerifyType
+> = {
+  signup: "email",
+  "reset-password": "recovery",
+};
 
 /**
  * OTP 입력 길이.
@@ -41,15 +43,44 @@ export const OTP_LENGTH = 6;
 export const MISSING_EMAIL_OTP_ERROR_MESSAGE = "인증 번호를 받지 못했습니다.";
 
 /**
- * OTP 만료 시간(초 단위)
+ * 신규 Signup generateLink 결과에 user id가 존재하지 않을 때 사용하는 내부 에러 메시지.
  *
- * 이메일 안내 문구 및
- * OTP 인증 정책의 기준값으로 사용한다.
+ * 사용자 생성과 OTP 발급을 함께 수행하는 signup Provider 응답에서
+ * 약관 저장에 필요한 사용자 identity가 누락된 상태를 나타낸다.
  */
-export const OTP_EXPIRES_IN_SECONDS = 3600;
+export const MISSING_SIGNUP_USER_ID_ERROR_MESSAGE =
+  "회원가입 사용자 정보를 받지 못했습니다.";
 
 /**
- * OTP 만료 시간(분 단위)
+ * Supabase OTP generateLink 요청 timeout.
+ *
+ * OTP Issue의 Provider operation이 장시간 pending되는 것을 방지하고
+ * timeout 시 underlying fetch를 실제 abort하기 위한 기준값이다.
+ */
+export const OTP_GENERATE_LINK_TIMEOUT_MS = 10 * 1000;
+
+/**
+ * OTP 이메일 delivery 전체 대기 timeout.
+ *
+ * Provider SDK가 resolve/reject하지 않는 경우에도 상위 OTP Issue caller가
+ * 유한한 시간 안에 settle하여 in-flight guard를 release할 수 있도록 한다.
+ *
+ * 이 값은 Nodemailer의 개별 network phase timeout이나
+ * OTP generateLink timeout과 별개의 caller-side wall-clock upper bound다.
+ */
+export const OTP_EMAIL_DELIVERY_TIMEOUT_MS = 20 * 1000;
+
+/**
+ * Woodpecker의 OTP hard expiration 정책 기준값.
+ *
+ * 사용자 안내와 서비스 정책은 10분으로 통일한다.
+ * 실제 OTP 만료 enforcement는 Supabase Auth의 otp_expiry 설정이 담당하므로
+ * Local/Production Supabase 설정도 반드시 같은 600초를 사용해야 한다.
+ */
+export const OTP_EXPIRES_IN_SECONDS = 600;
+
+/**
+ * OTP 만료 시간(분 단위).
  *
  * 사용자에게 표시할 이메일 안내 문구 등
  * 사람이 읽기 쉬운 형태가 필요한 UI 계층에서 사용한다.
@@ -81,27 +112,22 @@ export const OTP_PURPOSES = ["signup", "reset-password"] as const;
 export type OtpPurpose = (typeof OTP_PURPOSES)[number];
 
 /**
- * Supabase OTP 인증 타입 목록.
+ * Supabase OTP Verify 타입 목록.
  *
- * magiclink:
- * - 회원가입 이메일 인증에 사용
+ * email:
+ * - Signup purpose의 signup / magiclink token 검증에 사용
  *
  * recovery:
  * - 비밀번호 재설정(recovery) 인증에 사용
- *
- * 사용 목적:
- * - zod enum schema 생성
- * - Supabase OTP 타입 추론
- * - OTP 목적 → Supabase 타입 매핑
  */
-export const SUPABASE_OTP_TYPES = ["magiclink", "recovery"] as const;
+export const SUPABASE_OTP_VERIFY_TYPES = ["email", "recovery"] as const;
 
 /**
- * Supabase OTP 인증 타입.
+ * Supabase OTP Verify 타입.
  *
- * SUPABASE_OTP_TYPES 상수를 기반으로 생성된다.
+ * SUPABASE_OTP_VERIFY_TYPES 상수를 기반으로 생성된다.
  */
-export type SupabaseOtpType = (typeof SUPABASE_OTP_TYPES)[number];
+export type SupabaseOtpVerifyType = (typeof SUPABASE_OTP_VERIFY_TYPES)[number];
 
 /**
  * OTP 인증 실패 안내 메시지.

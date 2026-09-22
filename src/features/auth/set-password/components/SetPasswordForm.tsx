@@ -16,6 +16,7 @@ import {
   AUTH_ROOT_ERROR_TYPE,
   shouldClearRootOnInputChange,
 } from "@/features/auth/errors/authRootError";
+import { RATE_LIMIT_TOAST_MESSAGE } from "@/features/auth/errors/rateLimitError";
 import {
   type ResetPasswordFormInput,
   resetPasswordFormSchema,
@@ -106,6 +107,14 @@ export function SetPasswordForm({ action }: SetPasswordFormProps) {
         });
       }
 
+      return;
+    }
+
+    if (state.status === "blocked") {
+      setError("root", {
+        type: AUTH_ROOT_ERROR_TYPE.SYSTEM,
+        message: RATE_LIMIT_TOAST_MESSAGE,
+      });
       return;
     }
 

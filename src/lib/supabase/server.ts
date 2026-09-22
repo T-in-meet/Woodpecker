@@ -48,14 +48,25 @@ export async function clearSupabaseAuthSessionCookies(): Promise<void> {
   });
 }
 
+type CreateClientOptions = {
+  fetch?: typeof fetch;
+};
+
 // Server Action / Route Handler용 — 쿠키 쓰기 실패 시 예외 전파
-export async function createClient() {
+export async function createClient(options: CreateClientOptions = {}) {
   const cookieStore = await cookies();
 
   return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      ...(options.fetch
+        ? {
+            global: {
+              fetch: options.fetch,
+            },
+          }
+        : {}),
       cookies: {
         getAll() {
           return cookieStore.getAll();
