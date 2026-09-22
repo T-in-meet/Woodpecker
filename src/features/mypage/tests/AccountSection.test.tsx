@@ -2,11 +2,22 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const changePasswordActionMock = vi.hoisted(() => vi.fn());
+const { changePasswordActionMock, startSetPasswordFromMypageActionMock } =
+  vi.hoisted(() => ({
+    changePasswordActionMock: vi.fn(),
+    startSetPasswordFromMypageActionMock: vi.fn(),
+  }));
 
 vi.mock("../actions", () => ({
   changePasswordAction: changePasswordActionMock,
 }));
+
+vi.mock(
+  "@/features/auth/set-password/actions/startSetPasswordFromMypageAction",
+  () => ({
+    startSetPasswordFromMypageAction: startSetPasswordFromMypageActionMock,
+  }),
+);
 
 import { AccountSection } from "../components/AccountSection";
 
@@ -14,6 +25,7 @@ describe("AccountSection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     changePasswordActionMock.mockResolvedValue(null);
+    startSetPasswordFromMypageActionMock.mockResolvedValue(undefined);
   });
 
   describe("비밀번호 로그인이 연결된 계정", () => {
@@ -31,11 +43,11 @@ describe("AccountSection", () => {
       ).toBeInTheDocument();
     });
 
-    it("비밀번호 설정 안내와 링크는 보여주지 않는다", () => {
+    it("비밀번호 설정 안내와 버튼은 보여주지 않는다", () => {
       render(<AccountSection hasPasswordLogin />);
 
       expect(
-        screen.queryByRole("link", { name: "비밀번호 설정하기" }),
+        screen.queryByRole("button", { name: "비밀번호 설정하기" }),
       ).not.toBeInTheDocument();
     });
 
@@ -61,7 +73,7 @@ describe("AccountSection", () => {
   });
 
   describe("소셜 로그인만 연결된 계정", () => {
-    it("비밀번호 변경 폼 대신 설정 안내를 보여준다", () => {
+    it("비밀번호 변경 폼 대신 설정 안내와 시작 버튼을 보여준다", () => {
       render(<AccountSection hasPasswordLogin={false} />);
 
       expect(
@@ -71,16 +83,21 @@ describe("AccountSection", () => {
       expect(
         screen.queryByRole("button", { name: "비밀번호 변경" }),
       ).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "비밀번호 설정하기" }),
+      ).toBeInTheDocument();
     });
 
-    it("계정 관리로 돌아오는 redirect를 붙여 set-password로 링크한다", () => {
+    it("비밀번호 설정하기를 누르면 서버의 Set Password 시작 Action을 호출한다", async () => {
+      const user = userEvent.setup();
+
       render(<AccountSection hasPasswordLogin={false} />);
 
-      const link = screen.getByRole("link", { name: "비밀번호 설정하기" });
-      expect(link).toHaveAttribute(
-        "href",
-        `/set-password?redirect=${encodeURIComponent("/mypage?section=profile")}`,
+      await user.click(
+        screen.getByRole("button", { name: "비밀번호 설정하기" }),
       );
+
+      expect(startSetPasswordFromMypageActionMock).toHaveBeenCalledTimes(1);
     });
   });
 });

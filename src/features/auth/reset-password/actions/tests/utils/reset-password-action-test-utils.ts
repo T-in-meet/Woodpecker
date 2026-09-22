@@ -13,18 +13,25 @@ export const REDIRECT_ERROR = new Error("NEXT_REDIRECT");
 
 const hoisted = vi.hoisted(() => ({
   createClientMock: vi.fn(),
-  getSession: vi.fn(),
+  getUser: vi.fn(),
   updateUser: vi.fn(),
   redirect: vi.fn(),
   validateRedirectPath: vi.fn(),
   logRequested: vi.fn(),
   logAuthEvent: vi.fn(),
   logAuthError: vi.fn(),
-  hasResetPasswordIntentCookie: vi.fn(),
-  clearResetPasswordIntentCookie: vi.fn(),
+  readSignedResetPasswordIntent: vi.fn(),
+  verifyResetPasswordIntent: vi.fn(),
+  clearSignedResetPasswordIntent: vi.fn(),
+  isAuthError: vi.fn(),
+  isAuthSessionMissingError: vi.fn(),
   resetPasswordActionSchema: { safeParse: vi.fn() },
   changePasswordSchema: { safeParse: vi.fn() },
-  checkRequestEligibility: vi.fn(),
+}));
+
+vi.mock("@supabase/supabase-js", () => ({
+  isAuthError: hoisted.isAuthError,
+  isAuthSessionMissingError: hoisted.isAuthSessionMissingError,
 }));
 
 vi.mock("next/navigation", () => ({
@@ -50,9 +57,10 @@ vi.mock("@/features/auth/lib/authLogger", () => ({
   ),
 }));
 
-vi.mock("@/features/auth/lib/resetPasswordIntent", () => ({
-  hasResetPasswordIntentCookie: hoisted.hasResetPasswordIntentCookie,
-  clearResetPasswordIntentCookie: hoisted.clearResetPasswordIntentCookie,
+vi.mock("@/features/auth/lib/signedResetPasswordIntent", () => ({
+  readSignedResetPasswordIntent: hoisted.readSignedResetPasswordIntent,
+  verifyResetPasswordIntent: hoisted.verifyResetPasswordIntent,
+  clearSignedResetPasswordIntent: hoisted.clearSignedResetPasswordIntent,
 }));
 
 vi.mock(
@@ -66,21 +74,20 @@ vi.mock("@/features/mypage/schema", () => ({
   changePasswordSchema: hoisted.changePasswordSchema,
 }));
 
-vi.mock("@/features/auth/lib/checkRequestEligibility", () => ({
-  checkRequestEligibility: hoisted.checkRequestEligibility,
-}));
-
 export function makeFormData(input: Record<string, string>) {
   const formData = new FormData();
-  for (const [k, v] of Object.entries(input)) {
-    formData.set(k, v);
+
+  for (const [key, value] of Object.entries(input)) {
+    formData.set(key, value);
   }
+
   return formData;
 }
 
-export function mockSession(session: object | null) {
-  hoisted.getSession.mockResolvedValue({
-    data: { session },
+export function mockUser(user: object | null, error: unknown = null) {
+  hoisted.getUser.mockResolvedValue({
+    data: { user },
+    error,
   });
 }
 
@@ -92,13 +99,19 @@ export function mockUpdateUser(result: "success" | "error" | "throw") {
     });
     return;
   }
+
   if (result === "error") {
     hoisted.updateUser.mockResolvedValue({
       data: { user: null },
-      error: new Error("supabase error"),
+      error: {
+        status: 500,
+        code: "unexpected_failure",
+        message: "supabase error",
+      },
     });
     return;
   }
+
   hoisted.updateUser.mockRejectedValue(new Error("network error"));
 }
 
@@ -111,15 +124,26 @@ export function setupActionTest() {
 
   hoisted.createClientMock.mockResolvedValue({
     auth: {
-      getSession: hoisted.getSession,
+      getUser: hoisted.getUser,
       updateUser: hoisted.updateUser,
     },
   } as never);
 
-  mockSession({});
+  mockUser({ id: "reset-user-id" });
   mockUpdateUser("success");
-  hoisted.hasResetPasswordIntentCookie.mockResolvedValue(true);
-  hoisted.clearResetPasswordIntentCookie.mockResolvedValue(undefined);
+
+  hoisted.isAuthError.mockReturnValue(false);
+  hoisted.isAuthSessionMissingError.mockReturnValue(false);
+  hoisted.readSignedResetPasswordIntent.mockResolvedValue(
+    "signed-reset-intent",
+  );
+  hoisted.verifyResetPasswordIntent.mockReturnValue({
+    purpose: "reset-password",
+    userId: "reset-user-id",
+    issuedAt: 1,
+    expiresAt: 2,
+  });
+  hoisted.clearSignedResetPasswordIntent.mockResolvedValue(undefined);
 
   hoisted.validateRedirectPath.mockImplementation((input: unknown) =>
     typeof input === "string" && input.startsWith("/") ? input : "/mypage",
@@ -144,6 +168,7 @@ export function setupActionTest() {
         });
 
       const parsed = schema.safeParse(payload);
+
       if (parsed.success) {
         return parsed;
       }
@@ -160,17 +185,19 @@ export function setupActionTest() {
   hoisted.changePasswordSchema.safeParse.mockReset();
 
   return {
-    getSession: hoisted.getSession,
+    getUser: hoisted.getUser,
     updateUser: hoisted.updateUser,
     redirect: hoisted.redirect,
     validateRedirectPath: hoisted.validateRedirectPath,
     logRequested: hoisted.logRequested,
     logAuthEvent: hoisted.logAuthEvent,
     logAuthError: hoisted.logAuthError,
-    hasResetPasswordIntentCookie: hoisted.hasResetPasswordIntentCookie,
-    clearResetPasswordIntentCookie: hoisted.clearResetPasswordIntentCookie,
+    readSignedResetPasswordIntent: hoisted.readSignedResetPasswordIntent,
+    verifyResetPasswordIntent: hoisted.verifyResetPasswordIntent,
+    clearSignedResetPasswordIntent: hoisted.clearSignedResetPasswordIntent,
+    isAuthError: hoisted.isAuthError,
+    isAuthSessionMissingError: hoisted.isAuthSessionMissingError,
     changePasswordSchema: hoisted.changePasswordSchema,
-    checkRequestEligibility: hoisted.checkRequestEligibility,
     resetPasswordActionSchema: hoisted.resetPasswordActionSchema,
   };
 }
@@ -181,5 +208,6 @@ export async function runResetPasswordAction(
   prevState: ResetPasswordActionState = INITIAL_RESET_PASSWORD_ACTION_STATE,
 ) {
   const mod = await import("../../resetPasswordAction");
+
   return mod.resetPasswordAction(redirectValue, prevState, formData);
 }

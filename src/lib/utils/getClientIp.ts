@@ -1,6 +1,44 @@
 import { NextRequest } from "next/server";
 
 /**
+ * 클라이언트 IP 헤더를 읽는 최소 계약.
+ */
+type ClientIpHeaderReader = {
+  get(name: string): string | null;
+};
+
+/**
+ * 신뢰 대상으로 사용하는 요청 헤더에서 클라이언트 IP를 추출한다.
+ *
+ * 현재 Vercel 단독 배포 가정에 따라 다음 우선순위를 사용한다.
+ *
+ * 1. x-real-ip
+ * 2. x-forwarded-for
+ *
+ * 두 헤더 모두 사용할 수 없으면 fallback 값을 만들지 않고 null을 반환한다.
+ *
+ * @param headers 요청 헤더 reader
+ * @returns 추출한 클라이언트 IP 또는 null
+ */
+export function extractClientIp(headers: ClientIpHeaderReader): string | null {
+  // Vercel이 제공하는 x-real-ip를 우선 사용한다.
+  const realIp = headers.get("x-real-ip")?.trim();
+
+  if (realIp) {
+    return realIp;
+  }
+
+  // x-real-ip가 없으면 x-forwarded-for를 사용한다.
+  const forwarded = headers.get("x-forwarded-for")?.trim();
+
+  if (forwarded) {
+    return forwarded;
+  }
+
+  return null;
+}
+
+/**
  * 요청 헤더에서 클라이언트 IP를 추출한다.
  *
  * 생성 이유 (보안 관점):
@@ -22,19 +60,15 @@ import { NextRequest } from "next/server";
  * 2. x-forwarded-for
  * 3. "unknown"
  *
- * ⚠️ 중요:
+ * 주의:
+ * - 이 함수의 "unknown" fallback은 기존 Auth 흐름 호환을 위한 legacy 동작이다.
+ * - 새로운 Auth Rate Limit 흐름에서는 trusted IP helper를 사용한다.
  * - Vercel 앞단에 별도 프록시를 두거나 Trusted Proxy를 사용하는 경우
- *   현재 로직은 안전하지 않을 수 있으므로 반드시 재검토해야 한다
+ *   현재 로직은 안전하지 않을 수 있으므로 반드시 재검토해야 한다.
  *
  * @param request NextRequest
  * @returns 클라이언트 IP 또는 "unknown"
  */
 export function getClientIp(request: NextRequest): string {
-  const realIp = request.headers.get("x-real-ip")?.trim();
-  if (realIp) return realIp;
-
-  const forwarded = request.headers.get("x-forwarded-for")?.trim();
-  if (forwarded) return forwarded;
-
-  return "unknown";
+  return extractClientIp(request.headers) ?? "unknown";
 }

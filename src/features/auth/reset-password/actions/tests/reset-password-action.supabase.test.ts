@@ -15,7 +15,7 @@ describe("resetPasswordAction - supabase", () => {
     mocks = setupActionTest();
   });
 
-  it("TC1: valid input + session + cookie면 updateUser({ password }) 호출", async () => {
+  it("valid signed Reset Intent를 현재 user id로 검증한 뒤 updateUser({ password })를 호출한다", async () => {
     await expect(
       runResetPasswordAction(
         null,
@@ -26,6 +26,11 @@ describe("resetPasswordAction - supabase", () => {
       ),
     ).rejects.toBe(REDIRECT_ERROR);
 
+    expect(mocks.verifyResetPasswordIntent).toHaveBeenCalledWith({
+      token: "signed-reset-intent",
+      expectedUserId: "reset-user-id",
+    });
+    expect(mocks.updateUser).toHaveBeenCalledTimes(1);
     expect(mocks.updateUser).toHaveBeenCalledWith({
       password: "valid-password",
     });
@@ -36,8 +41,9 @@ describe("resetPasswordAction - supabase", () => {
     );
   });
 
-  it("TC13: updateUser error 반환이면 internal_error state 반환", async () => {
+  it("updateUser error 반환이면 internal_error state를 반환하고 signed Intent를 유지한다", async () => {
     mockUpdateUser("error");
+
     const state = await runResetPasswordAction(
       null,
       makeFormData({
@@ -45,12 +51,12 @@ describe("resetPasswordAction - supabase", () => {
         confirmPassword: "valid-password",
       }),
     );
-    expect(state).toEqual({
-      status: "internal_error",
-    });
+
+    expect(state).toEqual({ status: "internal_error" });
+    expect(mocks.clearSignedResetPasswordIntent).not.toHaveBeenCalled();
   });
 
-  it("TC14: updateUser가 same_password error를 반환하면 동일 비밀번호 메시지로 internal_error state를 반환한다", async () => {
+  it("updateUser가 same_password error를 반환하면 signed Intent를 유지한다", async () => {
     mocks.updateUser.mockResolvedValueOnce({
       error: {
         status: 422,
@@ -70,10 +76,12 @@ describe("resetPasswordAction - supabase", () => {
       reason: "same_password",
       status: "internal_error",
     });
+    expect(mocks.clearSignedResetPasswordIntent).not.toHaveBeenCalled();
   });
 
-  it("TC15: updateUser throw면 internal_error state 반환", async () => {
+  it("updateUser throw면 internal_error state를 반환하고 signed Intent를 유지한다", async () => {
     mockUpdateUser("throw");
+
     const state = await runResetPasswordAction(
       null,
       makeFormData({
@@ -81,9 +89,54 @@ describe("resetPasswordAction - supabase", () => {
         confirmPassword: "valid-password",
       }),
     );
-    expect(state).toEqual({
-      status: "internal_error",
-    });
+
+    expect(state).toEqual({ status: "internal_error" });
     expect(state).not.toHaveProperty("reason");
+    expect(mocks.clearSignedResetPasswordIntent).not.toHaveBeenCalled();
+  });
+
+  it("Provider 429 반환이면 blocked state를 반환하고 signed Intent를 유지한다", async () => {
+    mocks.updateUser.mockResolvedValueOnce({
+      data: { user: null },
+      error: { status: 429, code: undefined },
+    });
+
+    const state = await runResetPasswordAction(
+      null,
+      makeFormData({
+        password: "valid-password",
+        confirmPassword: "valid-password",
+      }),
+    );
+
+    expect(state).toEqual({ status: "blocked" });
+    expect(mocks.updateUser).toHaveBeenCalledTimes(1);
+    expect(mocks.clearSignedResetPasswordIntent).not.toHaveBeenCalled();
+    expect(mocks.redirect).not.toHaveBeenCalled();
+  });
+
+  it("throw된 Auth 429도 blocked state로 수렴하고 signed Intent를 유지한다", async () => {
+    const authRateLimitError = {
+      status: 429,
+      code: "unexpected_rate_limit_code",
+      message: "rate limited",
+    };
+
+    mocks.isAuthError.mockImplementation(
+      (error) => error === authRateLimitError,
+    );
+    mocks.updateUser.mockRejectedValueOnce(authRateLimitError);
+
+    const state = await runResetPasswordAction(
+      null,
+      makeFormData({
+        password: "valid-password",
+        confirmPassword: "valid-password",
+      }),
+    );
+
+    expect(state).toEqual({ status: "blocked" });
+    expect(mocks.updateUser).toHaveBeenCalledTimes(1);
+    expect(mocks.clearSignedResetPasswordIntent).not.toHaveBeenCalled();
   });
 });

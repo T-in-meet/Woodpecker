@@ -1,18 +1,16 @@
 /**
- * 로그인 API 입력 검증 전용 테스트
+ * 로그인 API 입력 검증 전용 테스트.
  *
- * 검증 범위:
- * - 필수값 누락 → 400 + LOGIN_INVALID_INPUT
- * - 이메일 형식 오류 → INVALID_FORMAT reason
- * - malformed JSON → INVALID_INPUT
- * - extra field → INVALID_INPUT (strict mode)
- * - 검증 실패 시 signInWithPassword 호출 차단
+ * trusted IP 및 Auth Global request guard를 통과한 뒤 validation이 실행된다.
+ * validation 실패는 operation-specific Login Rate Limit consume과 Provider 호출 전에 종료되어야 한다.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AUTH_API_CODES } from "@/features/auth/constants/authApiCodes";
-import { resetEligibilityStore } from "@/features/auth/lib/checkRequestEligibility";
+import { authGlobalRequestRateLimit } from "@/features/auth/lib/rate-limit/authGlobalRequestRateLimit";
+import { getTrustedAuthClientIp } from "@/features/auth/lib/rate-limit/trustedAuthClientIp";
+import { loginRateLimit } from "@/features/auth/login/lib/loginRateLimit";
 import { VALIDATION_REASON } from "@/lib/validation/reasons";
 
 import { POST } from "../route";
@@ -22,34 +20,56 @@ import {
   mockSignIn,
   resetLoginApiMocks,
   setupLoginApiMocks,
+  setupLoginSecurityMocks,
 } from "./utils/loginTestHelper";
 
 const getLegalAcceptanceStatusMock = vi.hoisted(() => vi.fn());
 
+vi.mock("@/features/auth/lib/rate-limit/authGlobalRequestRateLimit", () => ({
+  authGlobalRequestRateLimit: {
+    tryConsume: vi.fn(),
+  },
+}));
+vi.mock("@/features/auth/lib/rate-limit/trustedAuthClientIp", () => ({
+  getTrustedAuthClientIp: vi.fn(),
+}));
 vi.mock("@/features/auth/lib/userAgreements", () => ({
   getLegalAcceptanceStatus: getLegalAcceptanceStatusMock,
 }));
-vi.mock("@/lib/supabase/server");
-vi.mock("@/lib/utils/getClientIp", () => ({
-  getClientIp: vi.fn(() => "127.0.0.1"),
+vi.mock("@/features/auth/login/lib/loginRateLimit", () => ({
+  loginRateLimit: {
+    tryStartAttempt: vi.fn(),
+    recordResult: vi.fn(),
+  },
 }));
+vi.mock("@/lib/supabase/server");
 
 describe("로그인 API 입력 검증", () => {
   beforeEach(() => {
-    resetEligibilityStore();
     resetLoginApiMocks();
     setupLoginApiMocks();
+    setupLoginSecurityMocks();
     mockLoginSuccess();
     getLegalAcceptanceStatusMock.mockResolvedValue({ canAccessService: true });
+    vi.mocked(authGlobalRequestRateLimit.tryConsume).mockReturnValue({
+      allowed: true,
+    });
   });
 
-  /** 검증 실패 응답의 공통 계약을 확인하는 헬퍼 */
+  /**
+   * 검증 실패 응답의 공통 계약을 확인한다.
+   *
+   * @param response Login API 응답
+   * @param field 실패 필드
+   * @param reason validation reason
+   */
   async function expectValidationFailure(
     response: Response,
     field: string,
     reason: string,
-  ) {
+  ): Promise<void> {
     const body = await response.json();
+
     expect(response.status).toBe(400);
     expect(body.success).toBe(false);
     expect(body.code).toBe(AUTH_API_CODES.LOGIN_INVALID_INPUT);
@@ -63,6 +83,7 @@ describe("로그인 API 입력 검증", () => {
       const response = await POST(
         makeLoginRequest({ password: "Password123!" }),
       );
+
       await expectValidationFailure(
         response,
         "email",
@@ -74,6 +95,7 @@ describe("로그인 API 입력 검증", () => {
       const response = await POST(
         makeLoginRequest({ email: "user@example.com" }),
       );
+
       await expectValidationFailure(
         response,
         "password",
@@ -81,10 +103,11 @@ describe("로그인 API 입력 검증", () => {
       );
     });
 
-    it("TC-03: 이메일이 빈 문자열이면 400 + LOGIN_INVALID_INPUT을 반환한다", async () => {
+    it("TC-03: 이메일이 빈 문자열이면 REQUIRED로 실패한다", async () => {
       const response = await POST(
         makeLoginRequest({ email: "", password: "Password123!" }),
       );
+
       await expectValidationFailure(
         response,
         "email",
@@ -92,10 +115,11 @@ describe("로그인 API 입력 검증", () => {
       );
     });
 
-    it("TC-04: 비밀번호가 빈 문자열이면 400 + LOGIN_INVALID_INPUT을 반환한다", async () => {
+    it("TC-04: 비밀번호가 빈 문자열이면 REQUIRED로 실패한다", async () => {
       const response = await POST(
         makeLoginRequest({ email: "user@example.com", password: "" }),
       );
+
       await expectValidationFailure(
         response,
         "password",
@@ -107,8 +131,12 @@ describe("로그인 API 입력 검증", () => {
   describe("형식 오류", () => {
     it("TC-05: 이메일 형식이 아니면 INVALID_FORMAT reason으로 실패한다", async () => {
       const response = await POST(
-        makeLoginRequest({ email: "not-an-email", password: "Password123!" }),
+        makeLoginRequest({
+          email: "not-an-email",
+          password: "Password123!",
+        }),
       );
+
       await expectValidationFailure(
         response,
         "email",
@@ -116,10 +144,14 @@ describe("로그인 API 입력 검증", () => {
       );
     });
 
-    it("TC-06: 이메일 앞뒤 공백 trim 후 형식이 올바르지 않으면 실패한다", async () => {
+    it("TC-06: trim 후에도 이메일 형식이 올바르지 않으면 실패한다", async () => {
       const response = await POST(
-        makeLoginRequest({ email: "  invalid  ", password: "Password123!" }),
+        makeLoginRequest({
+          email: "  invalid  ",
+          password: "Password123!",
+        }),
       );
+
       await expectValidationFailure(
         response,
         "email",
@@ -128,7 +160,7 @@ describe("로그인 API 입력 검증", () => {
     });
   });
 
-  describe("strict mode — 허용되지 않은 필드 거부", () => {
+  describe("strict mode", () => {
     it("TC-07: extra field가 포함되면 400 + LOGIN_INVALID_INPUT을 반환한다", async () => {
       const response = await POST(
         makeLoginRequest({
@@ -137,8 +169,8 @@ describe("로그인 API 입력 검증", () => {
           extraField: "should-fail",
         }),
       );
-
       const body = await response.json();
+
       expect(response.status).toBe(400);
       expect(body.code).toBe(AUTH_API_CODES.LOGIN_INVALID_INPUT);
     });
@@ -151,7 +183,6 @@ describe("로그인 API 입력 검증", () => {
           redirect: "/notes",
         }),
       );
-
       const body = await response.json();
 
       expect(response.status).toBe(400);
@@ -176,9 +207,13 @@ describe("로그인 API 입력 검증", () => {
     });
   });
 
-  describe("검증 실패 시 외부 호출 차단", () => {
-    it("TC-10: 검증 실패 시 signInWithPassword가 호출되지 않는다", async () => {
+  describe("검증 실패 시 후속 처리 차단", () => {
+    it("TC-10: validation 실패 시 global guard까지 실행하고 operation limiter/Provider는 시작하지 않는다", async () => {
       await POST(makeLoginRequest({ email: "bad-email", password: "pass" }));
+
+      expect(getTrustedAuthClientIp).toHaveBeenCalled();
+      expect(authGlobalRequestRateLimit.tryConsume).toHaveBeenCalled();
+      expect(loginRateLimit.tryStartAttempt).not.toHaveBeenCalled();
       expect(mockSignIn).not.toHaveBeenCalled();
     });
   });

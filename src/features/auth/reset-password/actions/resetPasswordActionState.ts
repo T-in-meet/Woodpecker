@@ -16,6 +16,10 @@ export type ResetPasswordActionState =
       };
     }
   | {
+      status: "blocked";
+      fieldErrors?: undefined;
+    }
+  | {
       status: "internal_error";
       fieldErrors?: undefined;
       reason?: "same_password";

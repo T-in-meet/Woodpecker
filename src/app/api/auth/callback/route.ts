@@ -14,8 +14,8 @@ import {
   hasOAuthAgreementIntentCookie,
 } from "@/features/auth/lib/oauthAgreementIntent";
 import {
-  ensureUserAgreement,
   getLegalAcceptanceStatus,
+  recordCurrentLegalAcceptances,
 } from "@/features/auth/lib/userAgreements";
 import { validateRedirectPath } from "@/features/auth/lib/validateRedirectPath";
 import { canonicalizeEmail } from "@/features/auth/utils/canonicalizeEmail";
@@ -376,7 +376,7 @@ export async function GET(request: NextRequest) {
       hasSignupAgreementIntent,
     });
 
-    return NextResponse.redirect(
+    return redirectWithClearedIntent(
       buildOAuthErrorUrl(
         requestUrl.origin,
         effectiveIntent,
@@ -427,7 +427,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    await ensureUserAgreement(data.user.id, "oauth");
+    await recordCurrentLegalAcceptances(data.user.id, "oauth");
     await trySyncOAuthCanonicalEmailToProfile(data.user);
 
     try {

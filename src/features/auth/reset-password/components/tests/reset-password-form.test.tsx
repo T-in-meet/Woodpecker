@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { RATE_LIMIT_TOAST_MESSAGE } from "@/features/auth/errors/rateLimitError";
 import {
   fillResetPasswordFields,
   renderResetPasswordForm,
@@ -342,5 +343,74 @@ describe("reset-password-form", () => {
     await user.type(screen.getByLabelText(/비밀번호 확인/i), "secret-value");
 
     expect(screen.queryByText(/거부|rejected/i)).not.toBeInTheDocument();
+  });
+
+  it("blocked 상태이면 공통 Rate Limit 메시지를 표시한다", async () => {
+    hoisted.useActionStateMock.mockReturnValue([
+      { status: "blocked" },
+      hoisted.formActionMock,
+      false,
+    ]);
+
+    renderResetPasswordForm();
+
+    expect(
+      await screen.findByText(RATE_LIMIT_TOAST_MESSAGE),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(RESET_PASSWORD_GLOBAL_ERROR_MESSAGE),
+    ).not.toBeInTheDocument();
+  });
+
+  it("blocked SYSTEM root error는 password를 수정해도 유지한다", async () => {
+    hoisted.useActionStateMock.mockReturnValue([
+      { status: "blocked" },
+      hoisted.formActionMock,
+      false,
+    ]);
+
+    renderResetPasswordForm();
+    expect(
+      await screen.findByText(RATE_LIMIT_TOAST_MESSAGE),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/^비밀번호$/i), {
+      target: { value: "changed-password" },
+    });
+
+    expect(screen.getByText(RATE_LIMIT_TOAST_MESSAGE)).toBeInTheDocument();
+  });
+
+  it("blocked SYSTEM root error는 다음 유효한 submit 시작 시 제거한다", async () => {
+    hoisted.useActionStateMock.mockReturnValue([
+      { status: "blocked" },
+      hoisted.formActionMock,
+      false,
+    ]);
+
+    renderResetPasswordForm();
+    expect(
+      await screen.findByText(RATE_LIMIT_TOAST_MESSAGE),
+    ).toBeInTheDocument();
+
+    fillResetPasswordFields({
+      password: "valid-password",
+      confirmPassword: "valid-password",
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "비밀번호 변경하기" }),
+      ).toBeEnabled();
+    });
+
+    submitResetPasswordForm();
+
+    await waitFor(() => {
+      expect(hoisted.formActionMock).toHaveBeenCalledTimes(1);
+      expect(
+        screen.queryByText(RATE_LIMIT_TOAST_MESSAGE),
+      ).not.toBeInTheDocument();
+    });
   });
 });
