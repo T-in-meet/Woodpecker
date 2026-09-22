@@ -21,6 +21,7 @@ const {
   createAdminClientMock,
   createClientMock,
   redirectMock,
+  revalidatePathMock,
   generateNoteEmbeddingMock,
   reportAiOperationalErrorMock,
   resolveAiRuntimeEmbeddingConfigurationMock,
@@ -29,6 +30,7 @@ const {
   createAdminClientMock: vi.fn(),
   createClientMock: vi.fn(),
   redirectMock: vi.fn(),
+  revalidatePathMock: vi.fn(),
   generateNoteEmbeddingMock: vi.fn(),
   reportAiOperationalErrorMock: vi.fn(),
   resolveAiRuntimeEmbeddingConfigurationMock: vi.fn(),
@@ -37,6 +39,14 @@ const {
 vi.mock("next/server", () => ({
   after: afterMock,
 }));
+
+vi.mock("next/cache", () => ({
+  revalidatePath: revalidatePathMock,
+}));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: createClientMock,
@@ -360,6 +370,7 @@ describe("createNoteAction", () => {
       },
     );
     expect(result).toEqual({ success: true, newNoteId: "note-123" });
+    expect(revalidatePathMock).toHaveBeenCalledExactlyOnceWith(ROUTES.NOTES);
     expect(requireCurrentLegalAcceptance).toHaveBeenCalledWith(
       "user-123",
       ROUTES.NOTES_NEW,
@@ -390,6 +401,7 @@ describe("createNoteAction", () => {
     });
     expect(rpcMock).toHaveBeenCalledOnce();
     expect(afterMock).not.toHaveBeenCalled();
+    expect(revalidatePathMock).not.toHaveBeenCalled();
   });
 
   it("returns a general error when the RPC returns no note id", async () => {
@@ -407,6 +419,7 @@ describe("createNoteAction", () => {
     });
     expect(rpcMock).toHaveBeenCalledOnce();
     expect(afterMock).not.toHaveBeenCalled();
+    expect(revalidatePathMock).not.toHaveBeenCalled();
   });
 });
 
@@ -687,6 +700,7 @@ describe("updateNoteAction", () => {
     expect(updateUserEqMock).toHaveBeenCalledWith("user_id", "user-123");
     expect(updateSelectMock).toHaveBeenCalledWith("id, title, content");
     expect(result).toEqual({ success: true });
+    expect(revalidatePathMock).toHaveBeenCalledExactlyOnceWith(ROUTES.NOTES);
 
     /*
      * Note 수정 성공 시에도 자동 Related Notes 추천은 예약하지 않습니다.
@@ -711,6 +725,7 @@ describe("updateNoteAction", () => {
     expect(result).toEqual({ error: "수정할 노트를 찾을 수 없습니다." });
     expect(updateMaybeSingleMock).toHaveBeenCalledOnce();
     expect(afterMock).not.toHaveBeenCalled();
+    expect(revalidatePathMock).not.toHaveBeenCalled();
   });
 
   it("returns a general error when note update fails", async () => {
@@ -730,6 +745,7 @@ describe("updateNoteAction", () => {
     });
     expect(updateMaybeSingleMock).toHaveBeenCalledOnce();
     expect(afterMock).not.toHaveBeenCalled();
+    expect(revalidatePathMock).not.toHaveBeenCalled();
   });
 });
 
