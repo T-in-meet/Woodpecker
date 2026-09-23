@@ -49,7 +49,7 @@ const addRelatedNotesSchema = z.object({
 
 type AddRelatedNotesFormValues = z.infer<typeof addRelatedNotesSchema>;
 
-type AddRelatedNoteDialogProps = {
+export type AddRelatedNoteDialogProps = {
   /** Related Notes를 추가할 기준 Note ID입니다. */
   noteId: string;
 };

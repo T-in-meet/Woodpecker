@@ -6,18 +6,15 @@ import {
   RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
   RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
 } from "../constants/ai";
+import {
+  RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS,
+  type RelatedNoteRecommendationExecutionClaimStatus,
+} from "../constants/execution";
 
-/** Related Notes 추천 실행 claim 상태입니다. */
-export const RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS = {
-  CLAIMED: "claimed",
-  DAILY_LIMIT_EXCEEDED: "daily_limit_exceeded",
-  DUPLICATE: "duplicate",
-  STALE: "stale",
-} as const;
-
-/** Related Notes 추천 실행 claim 상태 타입입니다. */
-export type RelatedNoteRecommendationExecutionClaimStatus =
-  (typeof RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS)[keyof typeof RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS];
+export {
+  RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS,
+  type RelatedNoteRecommendationExecutionClaimStatus,
+};
 
 /** Related Notes 추천 실행 claim RPC 반환 상태 검증 schema입니다. */
 const relatedNoteRecommendationExecutionClaimStatusSchema = z.enum([
