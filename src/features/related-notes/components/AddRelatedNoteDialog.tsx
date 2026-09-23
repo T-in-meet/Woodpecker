@@ -90,6 +90,7 @@ export function AddRelatedNoteDialog({ noteId }: AddRelatedNoteDialogProps) {
     page,
     search,
     pageSize: PAGE_SIZE,
+    enabled: open,
   });
 
   const candidates = data?.notes ?? [];

@@ -17,6 +17,9 @@ type UseRelatedNoteCandidatesParams = {
 
   /** 페이지당 조회할 후보 수입니다. */
   pageSize?: number;
+
+  /** 후보 선택 UI가 열려 있을 때만 조회합니다. */
+  enabled?: boolean;
 };
 
 /**
@@ -39,13 +42,13 @@ export function useRelatedNoteCandidates({
   page,
   search,
   pageSize = 8,
+  enabled = true,
 }: UseRelatedNoteCandidatesParams) {
   return useQuery({
     queryKey: relatedNotesQueryKeys.candidates(noteId, page, search, pageSize),
     queryFn: () => getRelatedNoteCandidates(noteId, page, search, pageSize),
     placeholderData: keepPreviousData,
 
-    // 기준 Note ID가 준비된 경우에만 후보 조회를 실행합니다.
-    enabled: Boolean(noteId),
+    enabled: enabled && Boolean(noteId),
   });
 }
