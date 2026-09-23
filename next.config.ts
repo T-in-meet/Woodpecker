@@ -75,6 +75,9 @@ const nextConfig: NextConfig = {
       // 관리자 답변은 5MB 이미지 여러 개를 FormData로 전달할 수 있어 기본 1MB보다 크게 둔다.
       bodySizeLimit: "30mb",
     },
+    // 전역 CSS를 <link> 대신 HTML에 넣어 렌더링 차단 요청을 없앤다(프로덕션 빌드에만 적용).
+    // 인라인 <style>은 middleware CSP의 style-src 'unsafe-inline'으로 허용된다.
+    inlineCss: true,
   },
   images: {
     remotePatterns: supabaseImagePatterns ?? [],
