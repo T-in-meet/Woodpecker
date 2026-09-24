@@ -11,7 +11,7 @@ import {
   requestRelatedNoteRecommendationAction,
   updateManualRelatedNoteReasonAction,
 } from "../actions";
-import { RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS } from "../execution/execution-claim-persistence";
+import { RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS } from "../constants/execution";
 import { scheduleRelatedNoteRecommendation } from "../execution/schedule-related-note-recommendation";
 
 vi.mock("@/lib/supabase/server", () => ({

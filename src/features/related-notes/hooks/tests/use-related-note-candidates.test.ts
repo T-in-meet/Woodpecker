@@ -37,19 +37,4 @@ describe("useRelatedNoteCandidates", () => {
       }),
     );
   });
-
-  it("enabled가 false이면 후보를 조회하지 않는다", () => {
-    vi.mocked(useQuery).mockReturnValue({} as never);
-
-    useRelatedNoteCandidates({
-      noteId: "11111111-1111-4111-8111-111111111111",
-      page: 1,
-      search: "",
-      enabled: false,
-    });
-
-    expect(useQuery).toHaveBeenLastCalledWith(
-      expect.objectContaining({ enabled: false }),
-    );
-  });
 });

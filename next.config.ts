@@ -75,7 +75,10 @@ const nextConfig: NextConfig = {
       // 관리자 답변은 5MB 이미지 여러 개를 FormData로 전달할 수 있어 기본 1MB보다 크게 둔다.
       bodySizeLimit: "30mb",
     },
-    // 전역 CSS를 <link> 대신 HTML에 넣어 렌더링 차단 요청을 없앤다(프로덕션 빌드에만 적용).
+    // CSS를 <link> 대신 HTML에 넣어 렌더링 차단 요청을 없앤다(프로덕션 빌드에만 적용).
+    // 전역 CSS뿐 아니라 페이지가 쓰는 CSS 전체가 인라인되어 브라우저 캐시를 쓰지 못하므로
+    // 첫 접속·새로고침마다 HTML이 그만큼 커진다. 앱 내 이동은 HTML을 다시 받지 않아 영향이 없다.
+    // CSS가 커져 HTML 크기 부담이 LCP 이득보다 커지면 이 옵션을 다시 검토한다.
     // 인라인 <style>은 middleware CSP의 style-src 'unsafe-inline'으로 허용된다.
     inlineCss: true,
   },

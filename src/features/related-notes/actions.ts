@@ -6,7 +6,7 @@ import { requireCurrentLegalAcceptance } from "@/features/auth/utils/requireCurr
 import { getNoteDetailRoute, ROUTES } from "@/lib/constants/routes";
 import { createClient } from "@/lib/supabase/server";
 
-import { type RelatedNoteRecommendationExecutionClaimStatus } from "./execution/execution-claim-persistence";
+import { type RelatedNoteRecommendationExecutionClaimStatus } from "./constants/execution";
 import { scheduleRelatedNoteRecommendation } from "./execution/schedule-related-note-recommendation";
 import {
   type AddManualRelatedNotesInput,

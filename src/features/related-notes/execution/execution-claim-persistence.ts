@@ -11,11 +11,6 @@ import {
   type RelatedNoteRecommendationExecutionClaimStatus,
 } from "../constants/execution";
 
-export {
-  RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS,
-  type RelatedNoteRecommendationExecutionClaimStatus,
-};
-
 /** Related Notes 추천 실행 claim RPC 반환 상태 검증 schema입니다. */
 const relatedNoteRecommendationExecutionClaimStatusSchema = z.enum([
   RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS.CLAIMED,

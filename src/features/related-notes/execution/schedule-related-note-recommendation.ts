@@ -20,6 +20,7 @@ import {
   RELATED_NOTES_MIN_SIMILARITY,
   RELATED_NOTES_SEARCH_LIMIT,
 } from "../constants/ai";
+import { RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS } from "../constants/execution";
 import {
   REPLACE_RELATED_NOTE_AI_RECOMMENDATIONS_STATUS,
   replaceRelatedNoteAiRecommendations,
@@ -30,7 +31,6 @@ import {
   type ClaimRelatedNoteRecommendationExecutionResult,
   completeRelatedNoteRecommendationExecutionClaim,
   RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_COMPLETION_STATUS,
-  RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS,
   type RelatedNoteRecommendationExecutionClaimCompletionStatus,
 } from "./execution-claim-persistence";
 import { runRelatedNoteRecommendation } from "./run-related-note-recommendation";
