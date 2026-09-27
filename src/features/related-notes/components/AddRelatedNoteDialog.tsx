@@ -9,13 +9,11 @@ import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -52,6 +50,8 @@ type AddRelatedNotesFormValues = z.infer<typeof addRelatedNotesSchema>;
 export type AddRelatedNoteDialogProps = {
   /** Related Notes를 추가할 기준 Note ID입니다. */
   noteId: string;
+  /** 저장 또는 취소 후 대화상자를 닫습니다. */
+  onClose: () => void;
 };
 
 /**
@@ -63,8 +63,10 @@ export type AddRelatedNoteDialogProps = {
  *
  * @param props Related Notes를 추가할 기준 Note ID
  */
-export function AddRelatedNoteDialog({ noteId }: AddRelatedNoteDialogProps) {
-  const [open, setOpen] = useState(false);
+export function AddRelatedNoteDialog({
+  noteId,
+  onClose,
+}: AddRelatedNoteDialogProps) {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -90,7 +92,6 @@ export function AddRelatedNoteDialog({ noteId }: AddRelatedNoteDialogProps) {
     page,
     search,
     pageSize: PAGE_SIZE,
-    enabled: open,
   });
 
   const candidates = data?.notes ?? [];
@@ -113,21 +114,7 @@ export function AddRelatedNoteDialog({ noteId }: AddRelatedNoteDialogProps) {
     setSearch(searchInput.trim());
   }
 
-  /*
-   * Dialog를 닫을 때 다음 열기에서 이전 상태가 남지 않도록
-   * 검색, pagination, form 상태를 모두 초기화합니다.
-   */
-  function handleOpenChange(nextOpen: boolean) {
-    setOpen(nextOpen);
-
-    if (!nextOpen) {
-      setSearchInput("");
-      setSearch("");
-      setPage(1);
-      form.reset();
-      addManualRelatedNotesMutation.reset();
-    }
-  }
+  // 부모가 열려 있을 때만 마운트하므로 닫으면 검색·선택·mutation 상태도 초기화된다.
 
   /**
    * 후보 Note 선택 상태를 전환합니다.
@@ -165,7 +152,7 @@ export function AddRelatedNoteDialog({ noteId }: AddRelatedNoteDialogProps) {
         })),
       });
 
-      handleOpenChange(false);
+      onClose();
 
       toast.success(
         values.relatedNotes.length === 1
@@ -212,110 +199,98 @@ export function AddRelatedNoteDialog({ noteId }: AddRelatedNoteDialogProps) {
   }, [page, pagination.totalPages, data]);
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <Button type="button" size="sm" variant="outline">
-          관련 노트 추가
-        </Button>
-      </DialogTrigger>
+    <DialogContent className="left-0 top-0 flex h-dvh w-screen max-w-none translate-x-0 translate-y-0 flex-col overflow-hidden rounded-none p-4 sm:left-1/2 sm:top-1/2 sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:w-[90vw] sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-lg sm:p-6">
+      <DialogHeader className="shrink-0">
+        <DialogTitle>관련 노트 추가</DialogTitle>
+        <DialogDescription>
+          연결할 노트를 선택하고 필요하면 각 노트의 연결 이유를 입력할 수
+          있습니다.
+        </DialogDescription>
+      </DialogHeader>
 
-      <DialogContent className="left-0 top-0 flex h-dvh w-screen max-w-none translate-x-0 translate-y-0 flex-col overflow-hidden rounded-none p-4 sm:left-1/2 sm:top-1/2 sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:w-[90vw] sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-lg sm:p-6">
-        <DialogHeader className="shrink-0">
-          <DialogTitle>관련 노트 추가</DialogTitle>
-          <DialogDescription>
-            연결할 노트를 선택하고 필요하면 각 노트의 연결 이유를 입력할 수
-            있습니다.
-          </DialogDescription>
-        </DialogHeader>
+      <form
+        className="flex min-h-0 flex-1 flex-col"
+        onSubmit={form.handleSubmit(handleSubmit)}
+      >
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto [scrollbar-gutter:stable] -mr-4 pr-4 sm:-mr-6 sm:pr-6">
+          <div className="space-y-2">
+            <Label htmlFor="related-note-search">노트 검색</Label>
 
-        <form
-          className="flex min-h-0 flex-1 flex-col"
-          onSubmit={form.handleSubmit(handleSubmit)}
-        >
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto [scrollbar-gutter:stable] -mr-4 pr-4 sm:-mr-6 sm:pr-6">
-            <div className="space-y-2">
-              <Label htmlFor="related-note-search">노트 검색</Label>
-
-              <div className="flex min-w-0 gap-2">
-                <Input
-                  id="related-note-search"
-                  className="min-w-0"
-                  value={searchInput}
-                  onChange={(event) => setSearchInput(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      handleSearch();
-                    }
-                  }}
-                  placeholder="노트 제목 검색"
-                />
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={handleSearch}
-                  aria-label="노트 검색"
-                >
-                  <Search className="size-4" />
-                </Button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>연결할 노트</Label>
-
-              <RelatedNoteCandidateList
-                candidates={candidates}
-                selectedRelatedNotes={selectedRelatedNotes}
-                isLoading={isLoading}
-                isFetching={isFetching}
-                onToggle={handleCandidateToggle}
-                onReasonChange={handleReasonChange}
+            <div className="flex min-w-0 gap-2">
+              <Input
+                id="related-note-search"
+                className="min-w-0"
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    handleSearch();
+                  }
+                }}
+                placeholder="노트 제목 검색"
               />
 
-              {form.formState.errors.relatedNotes?.root && (
-                <p className="text-sm text-destructive">
-                  {form.formState.errors.relatedNotes.root.message}
-                </p>
-              )}
-
-              <RelatedNoteCandidatePagination
-                page={page}
-                totalCount={total}
-                pageSize={PAGE_SIZE}
-                isFetching={isFetching}
-                onPageChange={setPage}
-              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={handleSearch}
+                aria-label="노트 검색"
+              >
+                <Search className="size-4" />
+              </Button>
             </div>
           </div>
 
-          <DialogFooter className="shrink-0 border-t pt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => handleOpenChange(false)}
-            >
-              취소
-            </Button>
+          <div className="space-y-2">
+            <Label>연결할 노트</Label>
 
-            <Button
-              type="submit"
-              disabled={
-                selectedRelatedNotes.length === 0 ||
-                addManualRelatedNotesMutation.isPending
-              }
-            >
-              {addManualRelatedNotesMutation.isPending
-                ? "추가 중..."
-                : selectedRelatedNotes.length > 1
-                  ? `${selectedRelatedNotes.length}개 추가`
-                  : "추가"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+            <RelatedNoteCandidateList
+              candidates={candidates}
+              selectedRelatedNotes={selectedRelatedNotes}
+              isLoading={isLoading}
+              isFetching={isFetching}
+              onToggle={handleCandidateToggle}
+              onReasonChange={handleReasonChange}
+            />
+
+            {form.formState.errors.relatedNotes?.root && (
+              <p className="text-sm text-destructive">
+                {form.formState.errors.relatedNotes.root.message}
+              </p>
+            )}
+
+            <RelatedNoteCandidatePagination
+              page={page}
+              totalCount={total}
+              pageSize={PAGE_SIZE}
+              isFetching={isFetching}
+              onPageChange={setPage}
+            />
+          </div>
+        </div>
+
+        <DialogFooter className="shrink-0 border-t pt-4">
+          <Button type="button" variant="outline" onClick={onClose}>
+            취소
+          </Button>
+
+          <Button
+            type="submit"
+            disabled={
+              selectedRelatedNotes.length === 0 ||
+              addManualRelatedNotesMutation.isPending
+            }
+          >
+            {addManualRelatedNotesMutation.isPending
+              ? "추가 중..."
+              : selectedRelatedNotes.length > 1
+                ? `${selectedRelatedNotes.length}개 추가`
+                : "추가"}
+          </Button>
+        </DialogFooter>
+      </form>
+    </DialogContent>
   );
 }
