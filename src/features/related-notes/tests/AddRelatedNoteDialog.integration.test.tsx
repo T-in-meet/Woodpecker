@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { LazyAddRelatedNoteDialog } from "@/features/related-notes/components/LazyAddRelatedNoteDialog";
 
@@ -21,6 +21,12 @@ const noteId = "11111111-1111-4111-8111-111111111111";
 const relatedNoteId = "22222222-2222-4222-8222-222222222222";
 
 describe("관련 노트 지연 로딩과 폼 연결", () => {
+  // 첫 동적 import는 폼 의존성 변환으로 findByRole 기본 대기(1초)를 넘길 수 있다.
+  // 로딩·실패 상태는 LazyAddRelatedNoteDialog.test.tsx가 검증하므로 여기서는 모듈을 미리 불러 둔다.
+  beforeAll(async () => {
+    await import("@/features/related-notes/components/AddRelatedNoteDialog");
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mutateAsync.mockReset().mockResolvedValue({ success: true });
