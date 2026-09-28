@@ -9,7 +9,7 @@ vi.mock("@tanstack/react-query", () => ({
   useQuery: vi.fn(),
 }));
 
-vi.mock("../queries", () => ({
+vi.mock("../../queries", () => ({
   getRelatedNoteCandidates: vi.fn(),
 }));
 

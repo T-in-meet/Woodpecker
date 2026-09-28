@@ -105,6 +105,11 @@ export function TipTapEditor({
     };
   }, [editor, onArrowUpAtStart]);
 
+  // 에디터는 클라이언트에서 생성되므로 서버 HTML의 본문 영역이 비어 LCP가 에디터 생성을 기다린다.
+  // Placeholder 확장이 만드는 빈 문단과 같은 마크업을 먼저 그려 같은 CSS로 같은 크기를 유지한다.
+  const showStaticPlaceholder =
+    !editor && !readOnly && !extensions && Boolean(placeholder) && value === "";
+
   return (
     <div
       className={cn(
@@ -125,6 +130,13 @@ export function TipTapEditor({
             isBlockMenuOpen={isBlockMenuOpen}
           />
         </>
+      )}
+      {showStaticPlaceholder && (
+        <div className="tiptap" aria-hidden="true" data-static-placeholder="">
+          <p className="is-editor-empty" data-placeholder={placeholder}>
+            <br className="ProseMirror-trailingBreak" />
+          </p>
+        </div>
       )}
       <EditorContent editor={editor} />
     </div>

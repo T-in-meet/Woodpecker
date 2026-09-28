@@ -12,7 +12,7 @@ import {
 } from "../constants/ai";
 import { useRelatedNotes } from "../hooks/use-related-notes";
 import { useRequestRelatedNoteRecommendation } from "../hooks/use-request-related-note-recommendation";
-import { AddRelatedNoteDialog } from "./AddRelatedNoteDialog";
+import { LazyAddRelatedNoteDialog } from "./LazyAddRelatedNoteDialog";
 import { RelatedNoteItem } from "./RelatedNoteItem";
 
 type RelatedNotesSectionProps = {
@@ -259,7 +259,7 @@ export function RelatedNotesSection({ noteId }: RelatedNotesSectionProps) {
                 AI 추천
               </Button>
 
-              <AddRelatedNoteDialog noteId={noteId} />
+              <LazyAddRelatedNoteDialog noteId={noteId} />
             </div>
           </div>
         </div>

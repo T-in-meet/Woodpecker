@@ -1,10 +1,16 @@
-import type { AnyExtension } from "@tiptap/core";
+import type { AnyExtension, JSONContent } from "@tiptap/core";
 import { type Editor, useEditor } from "@tiptap/react";
 import { useEffect, useMemo, useRef } from "react";
 
 import { serializeTipTapMarkdown } from "@/features/editor/utils/serializeTipTapMarkdown";
 import { getTipTapExtensions } from "@/features/editor/utils/tiptapEditorExtensions";
 import { getReadOnlyTipTapExtensions } from "@/features/editor/utils/tiptapExtensions";
+
+// 기본 스키마의 빈 문서. 빈 문자열도 수행하던 Markdown → HTML → DOM 파싱을 건너뛴다.
+const EMPTY_DOCUMENT: JSONContent = {
+  type: "doc",
+  content: [{ type: "paragraph" }],
+};
 
 type UseTipTapEditorOptions = {
   value: string;
@@ -42,7 +48,8 @@ export function useTipTapEditor({
 
   const editor = useEditor({
     extensions,
-    content: value,
+    // 사용자 지정 확장은 paragraph가 없는 스키마일 수 있으므로 원래 입력을 유지한다.
+    content: value === "" && !customExtensions ? EMPTY_DOCUMENT : value,
     editable: !readOnly,
     immediatelyRender: false,
     autofocus: autoFocus ? "end" : false,

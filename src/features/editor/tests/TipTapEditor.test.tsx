@@ -9,6 +9,7 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { Editor } from "@tiptap/react";
+import { renderToString } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -102,8 +103,45 @@ describe("TipTapEditor", () => {
     );
 
     await waitFor(() => {
-      expect(document.querySelector("[data-placeholder]")).toBeInTheDocument();
+      expect(
+        document.querySelector("[contenteditable] [data-placeholder]"),
+      ).toBeInTheDocument();
     });
+    expect(
+      document.querySelector("[data-static-placeholder]"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders the empty placeholder in server HTML before the editor exists", () => {
+    const html = renderToString(
+      <Wrapper>
+        <TipTapEditor
+          value=""
+          onChange={vi.fn()}
+          placeholder="내용을 입력해주세요"
+        />
+      </Wrapper>,
+    );
+
+    expect(html).toContain('data-placeholder="내용을 입력해주세요"');
+    expect(html).toContain("is-editor-empty");
+  });
+
+  it.each([
+    ["value", { value: "본문", placeholder: "내용을 입력해주세요" }],
+    [
+      "readOnly",
+      { value: "", placeholder: "내용을 입력해주세요", readOnly: true },
+    ],
+    ["placeholder 없음", { value: "" }],
+  ])("does not render the server placeholder with %s", (_, props) => {
+    const html = renderToString(
+      <Wrapper>
+        <TipTapEditor onChange={vi.fn()} {...props} />
+      </Wrapper>,
+    );
+
+    expect(html).not.toContain("data-placeholder");
   });
 
   it("focuses the editor when autoFocus is enabled", async () => {

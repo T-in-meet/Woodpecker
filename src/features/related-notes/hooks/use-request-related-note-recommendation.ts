@@ -4,8 +4,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { requestRelatedNoteRecommendationAction } from "../actions";
+import { RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS } from "../constants/execution";
 import { relatedNotesQueryKeys } from "../constants/query-keys";
-import { RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS } from "../execution/execution-claim-persistence";
 
 type UseRequestRelatedNoteRecommendationOptions = {
   /**

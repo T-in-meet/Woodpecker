@@ -19,15 +19,6 @@ vi.mock("sonner", () => ({
   },
 }));
 
-vi.mock("../../execution/execution-claim-persistence", () => ({
-  RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS: {
-    CLAIMED: "claimed",
-    DAILY_LIMIT_EXCEEDED: "daily_limit_exceeded",
-    DUPLICATE: "duplicate",
-    STALE: "stale",
-  },
-}));
-
 import { relatedNotesQueryKeys } from "../../constants/query-keys";
 import { useRequestRelatedNoteRecommendation } from "../use-request-related-note-recommendation";
 

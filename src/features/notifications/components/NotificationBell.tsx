@@ -6,15 +6,11 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { legalAcceptanceRequiredResponseSchema } from "@/features/auth/schemas/legalAcceptanceRequiredResponseSchema";
 import { ROUTES } from "@/lib/constants/routes";
 import { cn } from "@/lib/utils/cn";
 
 import { NOTIFICATIONS_QUERY_KEY } from "../query-keys";
-import {
-  notificationsResponseSchema,
-  type NotificationsResponseType,
-} from "../schema";
+import type { NotificationsResponseType } from "../schema";
 import {
   NotificationList,
   type UserNotificationListItemType,
@@ -55,9 +51,18 @@ export function removeReadNotificationFromResponse(
 }
 
 async function fetchNotifications(): Promise<NotificationsResponseType> {
-  const response = await fetch("/api/notifications", {
-    credentials: "same-origin",
-  });
+  // 헤더는 모든 화면에 로드되므로 응답 검증 스키마(zod)를 초기 번들에 넣지 않고 조회 시점에 불러온다.
+  const [
+    response,
+    { legalAcceptanceRequiredResponseSchema },
+    { notificationsResponseSchema },
+  ] = await Promise.all([
+    fetch("/api/notifications", {
+      credentials: "same-origin",
+    }),
+    import("@/features/auth/schemas/legalAcceptanceRequiredResponseSchema"),
+    import("../schema"),
+  ]);
 
   const payload: unknown = await response.json().catch(() => null);
 

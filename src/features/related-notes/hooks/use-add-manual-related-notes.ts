@@ -51,8 +51,10 @@ export function useAddManualRelatedNotes() {
         queryClient.invalidateQueries({
           queryKey: relatedNotesQueryKeys.byNoteId(variables.noteId),
         }),
+        // 추가 직후 Dialog가 닫히므로 stale 표시만 하고 다음 열기 때 다시 조회합니다.
         queryClient.invalidateQueries({
           queryKey: relatedNotesQueryKeys.candidateList(variables.noteId),
+          refetchType: "none",
         }),
       ]);
     },
