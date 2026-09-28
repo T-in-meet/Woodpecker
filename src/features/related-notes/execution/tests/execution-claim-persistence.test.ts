@@ -6,11 +6,11 @@ import {
   RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT,
   RELATED_NOTES_DAILY_RECOMMENDATION_LIMIT_PER_NOTE,
 } from "../../constants/ai";
+import { RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS } from "../../constants/execution";
 import {
   claimRelatedNoteRecommendationExecution,
   completeRelatedNoteRecommendationExecutionClaim,
   RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_COMPLETION_STATUS,
-  RELATED_NOTE_RECOMMENDATION_EXECUTION_CLAIM_STATUS,
 } from "../execution-claim-persistence";
 
 vi.mock("@/lib/supabase/admin", () => ({
