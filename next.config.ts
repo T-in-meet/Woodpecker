@@ -75,12 +75,9 @@ const nextConfig: NextConfig = {
       // 관리자 답변은 5MB 이미지 여러 개를 FormData로 전달할 수 있어 기본 1MB보다 크게 둔다.
       bodySizeLimit: "30mb",
     },
-    // CSS를 <link> 대신 HTML에 넣어 렌더링 차단 요청을 없앤다(프로덕션 빌드에만 적용).
-    // 전역 CSS뿐 아니라 페이지가 쓰는 CSS 전체가 인라인되어 브라우저 캐시를 쓰지 못하므로
-    // 첫 접속·새로고침마다 HTML이 그만큼 커진다. 앱 내 이동은 HTML을 다시 받지 않아 영향이 없다.
-    // CSS가 커져 HTML 크기 부담이 LCP 이득보다 커지면 이 옵션을 다시 검토한다.
-    // 인라인 <style>은 middleware CSP의 style-src 'unsafe-inline'으로 허용된다.
-    inlineCss: true,
+    // inlineCss는 쓰지 않는다(#416). Next 15.5에서는 CSS가 <style>과 RSC 페이로드에 중복으로 들어가
+    // HTML이 CSS의 약 2배만큼 커지고 hydration 중 페이로드 해석 비용이 늘어, FCP와 목록·작성 화면의 TBT가 나빠졌다.
+    // 다시 켜려면 중복이 해결된 버전인지 운영 HTML에서 확인하고 전후 측정으로 판단한다.
   },
   images: {
     remotePatterns: supabaseImagePatterns ?? [],

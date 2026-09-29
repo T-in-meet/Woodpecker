@@ -73,6 +73,12 @@ function typeIntoTipTap(text: string) {
 describe("NoteForm editor integration", () => {
   beforeEach(() => {
     vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: true }));
+    // 지연 로드 시점이 아니라 입력 동기화를 검증하므로 에디터를 곧바로 불러온다.
+    vi.stubGlobal("requestIdleCallback", (callback: () => void) => {
+      callback();
+      return 1;
+    });
+    vi.stubGlobal("cancelIdleCallback", vi.fn());
     createNoteActionMock.mockReset();
     createNoteActionMock.mockResolvedValue(null);
   });
@@ -81,9 +87,13 @@ describe("NoteForm editor integration", () => {
     const { container } = renderNoteForm();
     const hiddenContentInput = getHiddenContentInput(container);
 
-    await waitFor(() => {
-      expect(document.querySelector("[contenteditable]")).toBeTruthy();
-    });
+    // 에디터는 dynamic import로 불러오므로 테스트 환경에서 TipTap 모듈 변환 시간까지 기다린다.
+    await waitFor(
+      () => {
+        expect(document.querySelector("[contenteditable]")).toBeTruthy();
+      },
+      { timeout: 5000 },
+    );
     expect(document.querySelector("[data-placeholder]")).toHaveAttribute(
       "data-placeholder",
       "학습할 내용을 입력하세요. /를 누르면 편집 메뉴가 열립니다.",

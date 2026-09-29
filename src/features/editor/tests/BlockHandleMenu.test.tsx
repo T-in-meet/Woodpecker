@@ -11,7 +11,7 @@ import userEvent from "@testing-library/user-event";
 import { Editor as TipTapEditorInstance } from "@tiptap/core";
 import { NodeSelection } from "@tiptap/pm/state";
 import type { Editor } from "@tiptap/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -631,6 +631,97 @@ describe("BlockHandleMenu", () => {
 
     return screen.findByRole("menu");
   }
+
+  describe("모바일 폭", () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it("하위 메뉴를 옆에 띄우지 않고 같은 패널에서 전환한다", async () => {
+      vi.stubGlobal("innerWidth", 412);
+      const user = userEvent.setup();
+      const editor = createMountedEditor("first\n\nsecond");
+
+      vi.spyOn(editor.view, "hasFocus").mockReturnValue(true);
+      editor.commands.setTextSelection(8);
+
+      const menu = await openHandleMenu(editor);
+
+      await user.click(
+        await screen.findByRole("menuitem", { name: "유형 변경" }),
+      );
+
+      expect(screen.getAllByRole("menu")).toHaveLength(1);
+      expect(
+        screen.getByRole("menuitem", { name: "제목 1" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole("menuitem", { name: "서식" }),
+      ).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole("menuitem", { name: "유형 변경" }));
+
+      expect(menu).toBeInTheDocument();
+      expect(
+        screen.getByRole("menuitem", { name: "서식" }),
+      ).toBeInTheDocument();
+
+      editor.destroy();
+    });
+
+    it("하위 항목을 실행하면 블록에 적용하고 메뉴를 닫는다", async () => {
+      vi.stubGlobal("innerWidth", 412);
+      const user = userEvent.setup();
+      const editor = createMountedEditor("first\n\nsecond");
+
+      vi.spyOn(editor.view, "hasFocus").mockReturnValue(true);
+      editor.commands.setTextSelection(8);
+
+      await openHandleMenu(editor);
+
+      await user.click(
+        await screen.findByRole("menuitem", { name: "유형 변경" }),
+      );
+      await user.click(screen.getByRole("menuitem", { name: "제목 1" }));
+
+      await waitFor(() => {
+        expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+      });
+      expect(editor.getJSON().content?.[1]).toMatchObject({
+        type: "heading",
+        attrs: { level: 1 },
+      });
+
+      editor.destroy();
+    });
+
+    it("하위 메뉴 진입과 뒤로 이동 후에도 키보드로 탐색한다", async () => {
+      vi.stubGlobal("innerWidth", 412);
+      const user = userEvent.setup();
+      const editor = createMountedEditor("first\n\nsecond");
+      vi.spyOn(editor.view, "hasFocus").mockReturnValue(true);
+      editor.commands.setTextSelection(8);
+
+      try {
+        await openHandleMenu(editor);
+        await user.click(screen.getByRole("menuitem", { name: "서식" }));
+        expect(screen.getByRole("menuitem", { name: "서식" })).toHaveFocus();
+
+        await user.keyboard("{ArrowDown}");
+        expect(screen.getByRole("menuitem", { name: /굵게/ })).toHaveFocus();
+        await user.keyboard("{ArrowUp}{Enter}");
+        expect(screen.getByRole("menuitem", { name: "서식" })).toHaveFocus();
+        await user.keyboard("{ArrowDown}");
+        expect(screen.getByRole("menuitem", { name: "글자 색" })).toHaveFocus();
+      } finally {
+        editor.destroy();
+      }
+    });
+  });
 
   it.each(["Delete", "Backspace"])(
     "deletes the block when %s is pressed while the menu is open",
