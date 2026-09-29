@@ -1,6 +1,7 @@
 "use client";
 
 import type { Editor } from "@tiptap/react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 
 import {
@@ -16,6 +17,7 @@ import {
   type BlockActionType,
   buildBlockActionGroups,
 } from "@/features/editor/utils/blockActionGroups";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 import { LinkEditPopover } from "./LinkEditPopover";
 import { NoteColorSwatch } from "./NoteColorSwatch";
@@ -32,6 +34,11 @@ export function BlockActionMenu({
   onCloseMenu,
 }: BlockActionMenuProps) {
   const [showLinkEdit, setShowLinkEdit] = useState(false);
+  // 모바일은 메인 메뉴 옆에 하위 메뉴를 띄울 폭이 없어, 같은 패널 안에서 하위 항목으로 전환한다.
+  const isMobile = useIsMobile();
+  const [openGroupId, setOpenGroupId] = useState<string | null>(null);
+  // 핸들 왼쪽에 공간이 없는 좁은 화면에서는 핸들 아래로 연다.
+  const menuSide = isMobile ? "bottom" : "left";
 
   const handleLinkSubmit = useCallback(
     (url: string) => {
@@ -76,13 +83,18 @@ export function BlockActionMenu({
     [editor, onDeleteBlock],
   );
 
+  const openGroup = isMobile
+    ? groups.find((group) => group.id === openGroupId && group.submenu)
+    : undefined;
+
   if (showLinkEdit) {
     return (
       <DropdownMenuContent
         align="start"
-        side="left"
+        side={menuSide}
         sideOffset={8}
-        className="w-64 p-0"
+        collisionPadding={16}
+        className="w-64 max-w-[calc(100vw-2rem)] p-0"
         onCloseAutoFocus={(event) => event.preventDefault()}
       >
         <LinkEditPopover
@@ -97,42 +109,77 @@ export function BlockActionMenu({
   return (
     <DropdownMenuContent
       align="start"
-      side="left"
+      side={menuSide}
       sideOffset={8}
-      className="w-64"
+      collisionPadding={16}
+      className="w-64 max-w-[calc(100vw-2rem)]"
       onKeyDown={handleDeleteShortcut}
       onCloseAutoFocus={(event) => {
         // Radix 기본 동작은 트리거(핸들 버튼)로 포커스를 되돌리는데, 그러면 블록이
         // 선택된 상태여도 Ctrl+C가 에디터에 닿지 않는다.
         event.preventDefault();
+        // 다시 열면 하위 항목이 아니라 첫 목록부터 보이게 한다.
+        setOpenGroupId(null);
 
         if (!editor.isDestroyed) {
           editor.view.focus();
         }
       }}
     >
-      {groups.map((group, groupIndex) => (
-        <div key={group.id}>
-          {groupIndex > 0 && <DropdownMenuSeparator />}
-          {group.submenu ? (
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger className="cursor-pointer">
+      {openGroup ? (
+        <>
+          <DropdownMenuItem
+            className="cursor-pointer font-medium"
+            onSelect={(event) => {
+              // 메뉴를 닫지 않고 첫 목록으로 돌아간다.
+              event.preventDefault();
+              setOpenGroupId(null);
+            }}
+          >
+            <ChevronLeft />
+            {openGroup.label}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          {openGroup.actions.map((action) => (
+            <BlockActionMenuItem key={action.id} action={action} />
+          ))}
+        </>
+      ) : (
+        groups.map((group, groupIndex) => (
+          <div key={group.id}>
+            {groupIndex > 0 && <DropdownMenuSeparator />}
+            {group.submenu && isMobile ? (
+              <DropdownMenuItem
+                className="cursor-pointer"
+                onSelect={(event) => {
+                  event.preventDefault();
+                  setOpenGroupId(group.id);
+                }}
+              >
                 <group.icon />
-                {group.label}
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent className="w-52">
-                {group.actions.map((action) => (
-                  <BlockActionMenuItem key={action.id} action={action} />
-                ))}
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
-          ) : (
-            group.actions.map((action) => (
-              <BlockActionMenuItem key={action.id} action={action} />
-            ))
-          )}
-        </div>
-      ))}
+                <span className="flex-1 truncate">{group.label}</span>
+                <ChevronRight className="ml-auto" />
+              </DropdownMenuItem>
+            ) : group.submenu ? (
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className="cursor-pointer">
+                  <group.icon />
+                  {group.label}
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="w-52">
+                  {group.actions.map((action) => (
+                    <BlockActionMenuItem key={action.id} action={action} />
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            ) : (
+              group.actions.map((action) => (
+                <BlockActionMenuItem key={action.id} action={action} />
+              ))
+            )}
+          </div>
+        ))
+      )}
     </DropdownMenuContent>
   );
 }
