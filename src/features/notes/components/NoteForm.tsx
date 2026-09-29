@@ -2,12 +2,14 @@
 
 import type { Editor } from "@tiptap/react";
 import { Check, Loader2 } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef, useState } from "react";
 
 import { NavigationGuardAlertDialog } from "@/components/common/NavigationGuardAlertDialog";
 import { Button } from "@/components/ui/button";
-import { TipTapEditor } from "@/features/editor/components/TipTapEditor";
+import { TipTapEditorShell } from "@/features/editor/components/TipTapEditorPlaceholder";
+import { useDeferredEditorLoad } from "@/features/editor/hooks/useDeferredEditorLoad";
 import { useBeforeUnloadGuard } from "@/hooks/useBeforeUnloadGuard";
 import { useDesktopInitialFocus } from "@/hooks/useDesktopInitialFocus";
 import { useInternalNavigationGuard } from "@/hooks/useInternalNavigationGuard";
@@ -17,6 +19,30 @@ import { createNoteAction } from "../actions";
 import { useMobileEditorSaveBar } from "../hooks/useMobileEditorSaveBar";
 
 const CONTENT_MAX_LENGTH = 50000;
+const CONTENT_PLACEHOLDER =
+  "학습할 내용을 입력하세요. /를 누르면 편집 메뉴가 열립니다.";
+const EDITOR_CLASS_NAME =
+  "rounded-none border-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-inset [&_.tiptap]:min-h-[clamp(22rem,52vh,36rem)] [&_.tiptap]:px-5! [&_.tiptap]:py-6! sm:[&_.tiptap]:px-8! md:[&_.tiptap]:px-12! [&_.tiptap_p.is-editor-empty:first-child::before]:opacity-100";
+
+/**
+ * 에디터 번들은 모듈 평가와 인스턴스 생성만으로 긴 작업을 만든다. 서버 placeholder가
+ * 첫 화면을 맡으므로 페이지 청크에서 빼고, useDeferredEditorLoad가 정한 시점에 불러온다.
+ */
+const importTipTapEditor = () =>
+  import("@/features/editor/components/TipTapEditor");
+
+const TipTapEditor = dynamic(
+  () => importTipTapEditor().then((m) => m.TipTapEditor),
+  {
+    ssr: false,
+    loading: () => (
+      <TipTapEditorShell
+        placeholder={CONTENT_PLACEHOLDER}
+        className={EDITOR_CLASS_NAME}
+      />
+    ),
+  },
+);
 
 export function NoteForm() {
   const router = useRouter();
@@ -29,6 +55,10 @@ export function NoteForm() {
     if (titleInputRef.current) focusOnce(() => titleInputRef.current?.focus());
   }, [focusOnce]);
   const editorRef = useRef<Editor | null>(null);
+  // 에디터가 생기기 전에 본문으로 이동하려 한 경우, 준비되는 즉시 포커스를 옮긴다.
+  const pendingContentFocusRef = useRef(false);
+  const { shouldLoad: shouldLoadEditor, requestLoad: requestEditorLoad } =
+    useDeferredEditorLoad();
   const { saveBarRef, onEditorReady } = useMobileEditorSaveBar();
 
   const fieldErrors =
@@ -68,7 +98,13 @@ export function NoteForm() {
   }, [state, router]);
 
   const focusContentStart = () => {
-    editorRef.current?.commands.focus("start");
+    if (editorRef.current) {
+      editorRef.current.commands.focus("start");
+      return;
+    }
+
+    pendingContentFocusRef.current = true;
+    requestEditorLoad();
   };
 
   const handleTitleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -125,6 +161,7 @@ export function NoteForm() {
               maxLength={100}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              onFocus={requestEditorLoad}
               onKeyDown={handleTitleKeyDown}
               disabled={isBusy}
               className="w-full border-none bg-transparent text-4xl font-bold leading-snug text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-70"
@@ -147,19 +184,34 @@ export function NoteForm() {
 
           <input type="hidden" name="content" value={content} />
 
-          <TipTapEditor
-            value={content}
-            onChange={setContent}
-            aria-label="내용"
-            readOnly={isBusy}
-            placeholder="학습할 내용을 입력하세요. /를 누르면 편집 메뉴가 열립니다."
-            onEditorReady={(editor) => {
-              editorRef.current = editor;
-              onEditorReady(editor);
-            }}
-            onArrowUpAtStart={handleArrowUpFromContent}
-            className="rounded-none border-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-inset [&_.tiptap]:min-h-[clamp(22rem,52vh,36rem)] [&_.tiptap]:px-5! [&_.tiptap]:py-6! sm:[&_.tiptap]:px-8! md:[&_.tiptap]:px-12! [&_.tiptap_p.is-editor-empty:first-child::before]:opacity-100"
-          />
+          {shouldLoadEditor ? (
+            <TipTapEditor
+              value={content}
+              onChange={setContent}
+              aria-label="내용"
+              readOnly={isBusy}
+              placeholder={CONTENT_PLACEHOLDER}
+              onEditorReady={(editor) => {
+                editorRef.current = editor;
+                onEditorReady(editor);
+                if (pendingContentFocusRef.current) {
+                  pendingContentFocusRef.current = false;
+                  editor.commands.focus("start");
+                }
+              }}
+              onArrowUpAtStart={handleArrowUpFromContent}
+              className={EDITOR_CLASS_NAME}
+            />
+          ) : (
+            <TipTapEditorShell
+              placeholder={CONTENT_PLACEHOLDER}
+              className={EDITOR_CLASS_NAME}
+              onPointerDown={() => {
+                pendingContentFocusRef.current = true;
+                requestEditorLoad();
+              }}
+            />
+          )}
 
           <footer
             ref={saveBarRef}

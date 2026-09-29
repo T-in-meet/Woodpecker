@@ -1,38 +1,68 @@
 import "./setup";
 
-import { act, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getNoteDetailRoute } from "@/lib/constants/routes";
 
-const { createNoteActionMock, routerReplaceMock } = vi.hoisted(() => ({
-  createNoteActionMock: vi.fn(),
-  routerReplaceMock: vi.fn(),
-}));
+const { createNoteActionMock, routerReplaceMock, editorFocusMock } = vi.hoisted(
+  () => ({
+    createNoteActionMock: vi.fn(),
+    routerReplaceMock: vi.fn(),
+    editorFocusMock: vi.fn(),
+  }),
+);
 
 import { NoteForm } from "../components/NoteForm";
 
-vi.mock("@/features/editor/components/TipTapEditor", () => ({
-  TipTapEditor: ({
-    value,
-    onChange,
-    readOnly,
-  }: {
-    value: string;
-    onChange: (value: string) => void;
-    readOnly?: boolean;
-  }) => (
-    <button
-      type="button"
-      data-testid="tiptap-editor"
-      disabled={readOnly}
-      onClick={() => onChange("markdown content")}
-    >
-      markdown:{value}
-    </button>
-  ),
-}));
+vi.mock("@/features/editor/components/TipTapEditor", async () => {
+  const { useEffect } = await import("react");
+
+  return {
+    TipTapEditor: ({
+      value,
+      onChange,
+      readOnly,
+      onEditorReady,
+    }: {
+      value: string;
+      onChange: (value: string) => void;
+      readOnly?: boolean;
+      onEditorReady?: (editor: unknown) => void;
+    }) => {
+      useEffect(() => {
+        // useMobileEditorSaveBar가 읽는 필드까지 갖춘 최소 에디터.
+        onEditorReady?.({
+          commands: { focus: editorFocusMock, scrollIntoView: vi.fn() },
+          options: { editorProps: {} },
+          setOptions: vi.fn(),
+          isDestroyed: false,
+          isFocused: false,
+        });
+        // 실제 TipTapEditor처럼 준비 콜백은 한 번만 호출한다.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, []);
+
+      return (
+        <button
+          type="button"
+          data-testid="tiptap-editor"
+          disabled={readOnly}
+          onClick={() => onChange("markdown content")}
+        >
+          markdown:{value}
+        </button>
+      );
+    },
+  };
+});
 
 vi.mock("../actions", () => ({
   createNoteAction: createNoteActionMock,
@@ -70,6 +100,7 @@ describe("NoteForm", () => {
     createNoteActionMock.mockReset();
     createNoteActionMock.mockResolvedValue(null);
     routerReplaceMock.mockReset();
+    editorFocusMock.mockReset();
     history.replaceState(null, "", "/notes/new");
   });
 
@@ -77,10 +108,10 @@ describe("NoteForm", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders the tiptap editor", () => {
+  it("renders the tiptap editor", async () => {
     render(<NoteForm />);
 
-    expect(screen.getByTestId("tiptap-editor")).toBeInTheDocument();
+    expect(await screen.findByTestId("tiptap-editor")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("노트 제목")).toBeInTheDocument();
     expect(
       screen.getByText("제목과 내용을 입력하면 저장할 수 있어요"),
@@ -98,7 +129,7 @@ describe("NoteForm", () => {
     expect(screen.getByText("내용을 입력해주세요")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "저장" })).toBeDisabled();
 
-    await user.click(screen.getByTestId("tiptap-editor"));
+    await user.click(await screen.findByTestId("tiptap-editor"));
 
     expect(screen.getByText("저장되지 않은 변경사항")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "저장" })).toBeEnabled();
@@ -111,7 +142,7 @@ describe("NoteForm", () => {
     const hiddenContentInput = getHiddenContentInput(container);
 
     await user.type(screen.getByLabelText("제목"), "테스트 노트");
-    await user.click(screen.getByTestId("tiptap-editor"));
+    await user.click(await screen.findByTestId("tiptap-editor"));
 
     const formData = new FormData(form);
 
@@ -132,7 +163,7 @@ describe("NoteForm", () => {
     render(<NoteForm />);
 
     await user.type(screen.getByLabelText("제목"), "테스트 노트");
-    await user.click(screen.getByTestId("tiptap-editor"));
+    await user.click(await screen.findByTestId("tiptap-editor"));
     await user.click(screen.getByRole("button", { name: "저장" }));
 
     expect(await screen.findByText("제목을 입력해주세요")).toBeInTheDocument();
@@ -148,7 +179,7 @@ describe("NoteForm", () => {
     render(<NoteForm />);
 
     await user.type(screen.getByLabelText("제목"), "테스트 노트");
-    await user.click(screen.getByTestId("tiptap-editor"));
+    await user.click(await screen.findByTestId("tiptap-editor"));
     await user.click(screen.getByRole("button", { name: "저장" }));
 
     expect(await screen.findByText("로그인이 필요합니다.")).toBeInTheDocument();
@@ -167,7 +198,7 @@ describe("NoteForm", () => {
     render(<NoteForm />);
 
     await user.type(screen.getByLabelText("제목"), "테스트 노트");
-    await user.click(screen.getByTestId("tiptap-editor"));
+    await user.click(await screen.findByTestId("tiptap-editor"));
     await user.click(screen.getByRole("button", { name: "저장" }));
 
     await waitFor(() => {
@@ -197,7 +228,7 @@ describe("NoteForm", () => {
     render(<NoteForm />);
 
     await user.type(screen.getByLabelText("제목"), "테스트 노트");
-    await user.click(screen.getByTestId("tiptap-editor"));
+    await user.click(await screen.findByTestId("tiptap-editor"));
     await user.click(screen.getByRole("button", { name: "저장" }));
 
     await waitFor(() => {
@@ -213,6 +244,79 @@ describe("NoteForm", () => {
     expect(window.location.pathname).not.toBe("/after-submit");
 
     resolveAction(null);
+  });
+
+  describe("에디터 지연 로드", () => {
+    let runIdleCallback: (() => void) | undefined;
+
+    beforeEach(() => {
+      runIdleCallback = undefined;
+      vi.stubGlobal(
+        "requestIdleCallback",
+        vi.fn((callback: () => void) => {
+          runIdleCallback = callback;
+          return 1;
+        }),
+      );
+      vi.stubGlobal("cancelIdleCallback", vi.fn());
+      // 제목 자동 포커스가 곧바로 로드를 시작하지 않도록 모바일 환경으로 둔다.
+      vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: false }));
+    });
+
+    it("처음에는 서버 placeholder를 보여주고 유휴 시간에 에디터를 불러온다", async () => {
+      const { container } = render(<NoteForm />);
+
+      expect(
+        container.querySelector("[data-static-placeholder]"),
+      ).toBeInTheDocument();
+      expect(screen.queryByTestId("tiptap-editor")).not.toBeInTheDocument();
+
+      act(() => {
+        runIdleCallback?.();
+      });
+
+      expect(await screen.findByTestId("tiptap-editor")).toBeInTheDocument();
+      expect(
+        container.querySelector("[data-static-placeholder]"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("유휴 시간 전이라도 제목에 포커스하면 에디터를 불러온다", async () => {
+      render(<NoteForm />);
+
+      act(() => {
+        screen.getByLabelText("제목").focus();
+      });
+
+      expect(await screen.findByTestId("tiptap-editor")).toBeInTheDocument();
+    });
+
+    it("유휴 시간 전이라도 본문 placeholder를 누르면 에디터를 불러와 포커스한다", async () => {
+      const { container } = render(<NoteForm />);
+      const shell = container.querySelector(
+        "[data-static-placeholder]",
+      )?.parentElement;
+
+      if (!shell) {
+        throw new Error("editor shell not found");
+      }
+
+      fireEvent.pointerDown(shell);
+
+      expect(await screen.findByTestId("tiptap-editor")).toBeInTheDocument();
+      expect(editorFocusMock).toHaveBeenCalledWith("start");
+    });
+
+    it("에디터가 준비되기 전에 제목에서 Enter를 누르면 준비된 뒤 본문으로 포커스한다", async () => {
+      render(<NoteForm />);
+
+      expect(screen.queryByTestId("tiptap-editor")).not.toBeInTheDocument();
+
+      fireEvent.keyDown(screen.getByLabelText("제목"), { key: "Enter" });
+
+      expect(await screen.findByTestId("tiptap-editor")).toBeInTheDocument();
+      expect(editorFocusMock).toHaveBeenCalledWith("start");
+    });
   });
 });
 
