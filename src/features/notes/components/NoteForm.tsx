@@ -184,34 +184,37 @@ export function NoteForm() {
 
           <input type="hidden" name="content" value={content} />
 
-          {shouldLoadEditor ? (
-            <TipTapEditor
-              value={content}
-              onChange={setContent}
-              aria-label="내용"
-              readOnly={isBusy}
-              placeholder={CONTENT_PLACEHOLDER}
-              onEditorReady={(editor) => {
-                editorRef.current = editor;
-                onEditorReady(editor);
-                if (pendingContentFocusRef.current) {
-                  pendingContentFocusRef.current = false;
-                  editor.commands.focus("start");
-                }
-              }}
-              onArrowUpAtStart={handleArrowUpFromContent}
-              className={EDITOR_CLASS_NAME}
-            />
-          ) : (
-            <TipTapEditorShell
-              placeholder={CONTENT_PLACEHOLDER}
-              className={EDITOR_CLASS_NAME}
-              onPointerDown={() => {
-                pendingContentFocusRef.current = true;
-                requestEditorLoad();
-              }}
-            />
-          )}
+          <div
+            onPointerDown={() => {
+              // dynamic fallback과 에디터 생성 전 placeholder에서도 클릭 의도를 보존한다.
+              if (!editorRef.current) focusContentStart();
+            }}
+          >
+            {shouldLoadEditor ? (
+              <TipTapEditor
+                value={content}
+                onChange={setContent}
+                aria-label="내용"
+                readOnly={isBusy}
+                placeholder={CONTENT_PLACEHOLDER}
+                onEditorReady={(editor) => {
+                  editorRef.current = editor;
+                  onEditorReady(editor);
+                  if (pendingContentFocusRef.current) {
+                    pendingContentFocusRef.current = false;
+                    editor.commands.focus("start");
+                  }
+                }}
+                onArrowUpAtStart={handleArrowUpFromContent}
+                className={EDITOR_CLASS_NAME}
+              />
+            ) : (
+              <TipTapEditorShell
+                placeholder={CONTENT_PLACEHOLDER}
+                className={EDITOR_CLASS_NAME}
+              />
+            )}
+          </div>
 
           <footer
             ref={saveBarRef}

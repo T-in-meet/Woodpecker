@@ -2,7 +2,7 @@
 
 import type { Editor } from "@tiptap/react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   DropdownMenuContent,
@@ -37,6 +37,20 @@ export function BlockActionMenu({
   // 모바일은 메인 메뉴 옆에 하위 메뉴를 띄울 폭이 없어, 같은 패널 안에서 하위 항목으로 전환한다.
   const isMobile = useIsMobile();
   const [openGroupId, setOpenGroupId] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const pendingGroupFocusRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const groupId = pendingGroupFocusRef.current;
+    if (!groupId) return;
+    pendingGroupFocusRef.current = null;
+    // 항목 교체로 사라진 포커스를 진입 시 뒤로 버튼, 복귀 시 원래 그룹에 돌려준다.
+    menuRef.current
+      ?.querySelector<HTMLElement>(
+        `[data-mobile-menu-item="${openGroupId ? "back" : groupId}"]`,
+      )
+      ?.focus();
+  }, [openGroupId]);
   // 핸들 왼쪽에 공간이 없는 좁은 화면에서는 핸들 아래로 연다.
   const menuSide = isMobile ? "bottom" : "left";
 
@@ -108,6 +122,7 @@ export function BlockActionMenu({
 
   return (
     <DropdownMenuContent
+      ref={menuRef}
       align="start"
       side={menuSide}
       sideOffset={8}
@@ -129,10 +144,12 @@ export function BlockActionMenu({
       {openGroup ? (
         <>
           <DropdownMenuItem
+            data-mobile-menu-item="back"
             className="cursor-pointer font-medium"
             onSelect={(event) => {
               // 메뉴를 닫지 않고 첫 목록으로 돌아간다.
               event.preventDefault();
+              pendingGroupFocusRef.current = openGroup.id;
               setOpenGroupId(null);
             }}
           >
@@ -150,9 +167,11 @@ export function BlockActionMenu({
             {groupIndex > 0 && <DropdownMenuSeparator />}
             {group.submenu && isMobile ? (
               <DropdownMenuItem
+                data-mobile-menu-item={group.id}
                 className="cursor-pointer"
                 onSelect={(event) => {
                   event.preventDefault();
+                  pendingGroupFocusRef.current = group.id;
                   setOpenGroupId(group.id);
                 }}
               >

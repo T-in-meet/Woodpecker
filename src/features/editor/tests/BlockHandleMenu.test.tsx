@@ -11,7 +11,7 @@ import userEvent from "@testing-library/user-event";
 import { Editor as TipTapEditorInstance } from "@tiptap/core";
 import { NodeSelection } from "@tiptap/pm/state";
 import type { Editor } from "@tiptap/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -633,6 +633,10 @@ describe("BlockHandleMenu", () => {
   }
 
   describe("모바일 폭", () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
     afterEach(() => {
       vi.unstubAllGlobals();
     });
@@ -693,6 +697,29 @@ describe("BlockHandleMenu", () => {
       });
 
       editor.destroy();
+    });
+
+    it("하위 메뉴 진입과 뒤로 이동 후에도 키보드로 탐색한다", async () => {
+      vi.stubGlobal("innerWidth", 412);
+      const user = userEvent.setup();
+      const editor = createMountedEditor("first\n\nsecond");
+      vi.spyOn(editor.view, "hasFocus").mockReturnValue(true);
+      editor.commands.setTextSelection(8);
+
+      try {
+        await openHandleMenu(editor);
+        await user.click(screen.getByRole("menuitem", { name: "서식" }));
+        expect(screen.getByRole("menuitem", { name: "서식" })).toHaveFocus();
+
+        await user.keyboard("{ArrowDown}");
+        expect(screen.getByRole("menuitem", { name: /굵게/ })).toHaveFocus();
+        await user.keyboard("{ArrowUp}{Enter}");
+        expect(screen.getByRole("menuitem", { name: "서식" })).toHaveFocus();
+        await user.keyboard("{ArrowDown}");
+        expect(screen.getByRole("menuitem", { name: "글자 색" })).toHaveFocus();
+      } finally {
+        editor.destroy();
+      }
     });
   });
 
