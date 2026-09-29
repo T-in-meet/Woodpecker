@@ -97,6 +97,12 @@ function getHiddenContentInput(container: HTMLElement) {
 describe("NoteForm", () => {
   beforeEach(() => {
     vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: true }));
+    // 지연 로드와 무관한 테스트는 에디터를 곧바로 불러온다.
+    vi.stubGlobal("requestIdleCallback", (callback: () => void) => {
+      callback();
+      return 1;
+    });
+    vi.stubGlobal("cancelIdleCallback", vi.fn());
     createNoteActionMock.mockReset();
     createNoteActionMock.mockResolvedValue(null);
     routerReplaceMock.mockReset();
@@ -259,8 +265,6 @@ describe("NoteForm", () => {
         }),
       );
       vi.stubGlobal("cancelIdleCallback", vi.fn());
-      // 제목 자동 포커스가 곧바로 로드를 시작하지 않도록 모바일 환경으로 둔다.
-      vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: false }));
     });
 
     it("처음에는 서버 placeholder를 보여주고 유휴 시간에 에디터를 불러온다", async () => {
@@ -281,12 +285,49 @@ describe("NoteForm", () => {
       ).not.toBeInTheDocument();
     });
 
-    it("유휴 시간 전이라도 제목에 포커스하면 에디터를 불러온다", async () => {
+    it("데스크톱 제목 자동 포커스만으로는 에디터를 불러오지 않는다", async () => {
+      const { container, unmount } = render(<NoteForm />);
+
+      expect(screen.getByLabelText("제목")).toHaveFocus();
+      // 로드가 요청됐다면 모킹된 에디터 모듈이 해석될 시간을 준다.
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+
+      expect(screen.queryByTestId("tiptap-editor")).not.toBeInTheDocument();
+      expect(
+        container.querySelector("[data-static-placeholder]"),
+      ).toBeInTheDocument();
+      // 대기 중인 idle 콜백 정리는 전역 stub이 살아 있을 때 실행한다.
+      unmount();
+    });
+
+    it("유휴 시간 전이라도 제목을 누르면 에디터를 불러온다", async () => {
       render(<NoteForm />);
 
-      act(() => {
-        screen.getByLabelText("제목").focus();
-      });
+      fireEvent.pointerDown(screen.getByLabelText("제목"));
+
+      expect(await screen.findByTestId("tiptap-editor")).toBeInTheDocument();
+    });
+
+    it("requestIdleCallback이 없으면 상한 시간이 지난 뒤 에디터를 불러온다", async () => {
+      vi.stubGlobal("requestIdleCallback", undefined);
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
+      try {
+        render(<NoteForm />);
+
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(1999);
+        });
+        expect(screen.queryByTestId("tiptap-editor")).not.toBeInTheDocument();
+
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(1);
+        });
+      } finally {
+        vi.useRealTimers();
+      }
 
       expect(await screen.findByTestId("tiptap-editor")).toBeInTheDocument();
     });

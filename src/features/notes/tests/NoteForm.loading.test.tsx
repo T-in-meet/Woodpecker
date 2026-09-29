@@ -72,7 +72,7 @@ afterEach(() => {
 
 it("번들 다운로드 중 본문을 누르면 준비된 에디터로 포커스를 옮긴다", async () => {
   const { container } = render(<NoteForm />);
-  act(() => screen.getByLabelText("제목").focus());
+  fireEvent.pointerDown(screen.getByLabelText("제목"));
   await waitFor(() => expect(moduleStarted).toHaveBeenCalled());
   expect(screen.queryByTestId("loaded-editor")).not.toBeInTheDocument();
   const placeholder = container.querySelector("[data-static-placeholder]");

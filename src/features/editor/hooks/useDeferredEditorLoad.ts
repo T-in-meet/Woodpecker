@@ -16,9 +16,10 @@ export function useDeferredEditorLoad() {
   useEffect(() => {
     if (shouldLoad) return;
 
-    // Safari 등 requestIdleCallback이 없는 브라우저는 다음 태스크로 미룬다.
+    // Safari 등 requestIdleCallback이 없는 브라우저는 유휴 시간을 알 수 없으므로
+    // 같은 상한 시간 뒤에 불러온다. 그 전의 사용자 상호작용은 requestLoad로 즉시 불러온다.
     if (typeof window.requestIdleCallback !== "function") {
-      const timer = window.setTimeout(requestLoad, 0);
+      const timer = window.setTimeout(requestLoad, IDLE_LOAD_TIMEOUT_MS);
       return () => window.clearTimeout(timer);
     }
 

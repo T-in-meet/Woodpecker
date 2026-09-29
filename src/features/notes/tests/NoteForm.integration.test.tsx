@@ -73,6 +73,12 @@ function typeIntoTipTap(text: string) {
 describe("NoteForm editor integration", () => {
   beforeEach(() => {
     vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: true }));
+    // 지연 로드 시점이 아니라 입력 동기화를 검증하므로 에디터를 곧바로 불러온다.
+    vi.stubGlobal("requestIdleCallback", (callback: () => void) => {
+      callback();
+      return 1;
+    });
+    vi.stubGlobal("cancelIdleCallback", vi.fn());
     createNoteActionMock.mockReset();
     createNoteActionMock.mockResolvedValue(null);
   });

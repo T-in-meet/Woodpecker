@@ -161,7 +161,8 @@ export function NoteForm() {
               maxLength={100}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              onFocus={requestEditorLoad}
+              // 데스크톱 자동 포커스로는 불러오지 않도록 onFocus 대신 실제 누름에만 반응한다.
+              onPointerDown={requestEditorLoad}
               onKeyDown={handleTitleKeyDown}
               disabled={isBusy}
               className="w-full border-none bg-transparent text-4xl font-bold leading-snug text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-70"
