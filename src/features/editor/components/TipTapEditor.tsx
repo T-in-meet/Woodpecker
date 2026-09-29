@@ -10,6 +10,10 @@ import { cn } from "@/lib/utils/cn";
 import { useTipTapEditor } from "../hooks/useTipTapEditor";
 import { BlockHandleMenu } from "./BlockHandleMenu";
 import { InlineFormatToolbar } from "./InlineFormatToolbar";
+import {
+  TIPTAP_WRAPPER_CLASS_NAME,
+  TipTapEditorPlaceholder,
+} from "./TipTapEditorPlaceholder";
 
 type TipTapEditorProps = {
   value: string;
@@ -105,16 +109,14 @@ export function TipTapEditor({
     };
   }, [editor, onArrowUpAtStart]);
 
-  // 에디터는 클라이언트에서 생성되므로 서버 HTML의 본문 영역이 비어 LCP가 에디터 생성을 기다린다.
-  // Placeholder 확장이 만드는 빈 문단과 같은 마크업을 먼저 그려 같은 CSS로 같은 크기를 유지한다.
+  // 에디터가 생기기 전까지 Placeholder 확장과 같은 마크업을 먼저 그린다.
   const showStaticPlaceholder =
     !editor && !readOnly && !extensions && Boolean(placeholder) && value === "";
 
   return (
     <div
       className={cn(
-        "tiptap-wrapper relative overflow-hidden rounded-md border border-border bg-background text-base transition-colors",
-        "focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20",
+        TIPTAP_WRAPPER_CLASS_NAME,
         readOnly && "[&_.tiptap]:cursor-default",
         className,
       )}
@@ -131,12 +133,8 @@ export function TipTapEditor({
           />
         </>
       )}
-      {showStaticPlaceholder && (
-        <div className="tiptap" aria-hidden="true" data-static-placeholder="">
-          <p className="is-editor-empty" data-placeholder={placeholder}>
-            <br className="ProseMirror-trailingBreak" />
-          </p>
-        </div>
+      {showStaticPlaceholder && placeholder && (
+        <TipTapEditorPlaceholder placeholder={placeholder} />
       )}
       <EditorContent editor={editor} />
     </div>
