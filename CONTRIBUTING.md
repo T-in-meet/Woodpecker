@@ -136,6 +136,23 @@ npm run dev
 - E2E는 `tests/e2e/`의 Playwright 테스트입니다.
 - 코드 변경은 범위가 작아도 관련 테스트를 실행합니다. 문서만 변경한 경우 수정 문서의 포맷·참조·내용을 검증합니다.
 
+### E2E 테스트
+
+`playwright.config.ts`는 `http://localhost:3000`을 대상으로 `npm run dev`를 실행하며, 3000번 포트에 기존 서버가 있으면 재사용합니다. 실행 전에 앱의 개발 환경변수를 준비하고, 기존 서버를 재사용할 때는 동일한 개발 환경을 사용하는지 확인하세요.
+
+```bash
+npx playwright test
+```
+
+`tests/e2e/set-password-completion-cookie-scope.spec.ts`는 실제 Supabase에 테스트 사용자를 생성하고 종료 시 삭제합니다. 운영 DB 대신 개발용 DB를 사용하고, `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `PASSWORD_INTENT_SIGNING_SECRET`을 준비하세요. 테스트와 앱 서버는 같은 Supabase 프로젝트와 서명 비밀값을 사용해야 합니다.
+
+인증 타이밍 진단 테스트는 기본 실행에서 건너뜁니다. 수동 진단이 필요할 때만 해당 테스트의 입력 검증과 추가 환경변수 요구사항을 확인한 뒤 활성화합니다.
+
+| 진단 테스트                                             | 활성화 환경변수                       |
+| ------------------------------------------------------- | ------------------------------------- |
+| [가입 타이밍](./tests/e2e/auth-signup-timing.spec.ts)   | `RUN_AUTH_SIGNUP_TIMING_DIAGNOSTIC=1` |
+| [재발송 타이밍](./tests/e2e/auth-resend-timing.spec.ts) | `RUN_AUTH_TIMING_DIAGNOSTIC=1`        |
+
 ### DB 테스트
 
 `supabase/tests/`의 pgTAP 테스트는 DB 제약·RLS·RPC를 검증합니다. Docker가 실행 중이어야 하며, Supabase CLI는 프로젝트 의존성에 포함되어 있습니다.
@@ -225,6 +242,8 @@ hotfix/<kebab-summary>             →  main (+ development 반영)
 
 Quality job은 `npm run lint`, `npx prettier --check .`, `npx next typegen`, `npx tsc --noEmit` 순서로 검사하며, 실제 캐시·증분 검사 옵션은 workflow를 기준으로 합니다. Build job은 `SKIP_NEXT_TYPE_CHECK=1`로 빌드 내부 타입 검사를 생략하고, 타입 검증은 Quality job에서 수행합니다. 빌드 성공만으로 전체 CI가 통과한 것은 아닙니다.
 
+별도의 [Lighthouse CI workflow](./.github/workflows/lighthouse.yml)도 `development`·`main` 대상 PR에서 실행됩니다. 개발 환경의 Supabase 설정으로 프로덕션 빌드한 앱을 `npm run start`로 띄우고, `http://localhost:3000`의 랜딩 페이지 성능·접근성·SEO 등을 측정합니다. 결과는 Actions 아티팩트와 임시 공개 저장소에 업로드됩니다. 이 workflow에는 `merge_group` 트리거가 없습니다.
+
 Supabase SQL Test job은 `supabase test db`에 앞서 `node scripts/check-migration-order.mjs <base>`로 새 마이그레이션의 타임스탬프가 base 브랜치의 마지막 마이그레이션보다 뒤인지 검사합니다. 앞서면 운영 `supabase db push`가 적용을 거부하므로, 브랜치를 오래 유지했다면 머지 전에 파일명 타임스탬프를 현재 UTC 시각으로 갱신하세요.
 
 `main`·`development`에서 merge queue를 사용하는 경우 GitHub 큐 설정의 **Build concurrency**, **Minimum pull requests to merge**, **Maximum pull requests to merge**를 모두 **1**로 유지합니다. `merge_group` 검사도 비교 기준은 대상 브랜치이므로, 아직 병합되지 않은 앞선 PR의 마이그레이션은 기준에 포함되지 않습니다. 큐를 직렬화해 앞선 PR이 병합된 뒤 다음 PR을 갱신된 base로 검사해야 합니다. Actions의 `concurrency`는 큐의 생성·병합을 제어하지 않으므로 이 설정을 대체할 수 없습니다. 기존 필수 검사·리뷰·병합 방식은 유지합니다. 설정 항목은 [GitHub merge queue 공식 문서](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue)를 참고하세요.
@@ -243,11 +262,7 @@ Supabase SQL Test job은 `supabase test db`에 앞서 `node scripts/check-migrat
 
 - **Prettier**: 설정 파일 없이 기본값을 사용합니다.
 - **ESLint**: `eslint.config.mjs` — `next/core-web-vitals` + `next/typescript` + `simple-import-sort`
-- **import 정렬 순서**:
-  1. 외부 라이브러리 (`react`, `next`, 서드파티)
-  2. 내부 절대경로 (`@/lib`, `@/components`, `@/features`)
-  3. 상대경로 (`./`, `../`)
-  4. 스타일/에셋
+- **import 정렬**: `simple-import-sort`의 기본 규칙과 ESLint 자동 수정을 따릅니다. `eslint.config.mjs`에는 별도 그룹 설정이 없으며, `import "./styles.css"`처럼 부수 효과만 있는 import는 기본 규칙에 따라 먼저 배치됩니다.
 - 클릭 가능한 요소에는 `cursor-pointer`를 적용합니다.
 - 라우트 경로는 문자열을 직접 쓰지 말고 `@/lib/constants/routes`의 상수/헬퍼를 사용합니다.
 
