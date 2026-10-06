@@ -55,7 +55,7 @@ npm -v
 
 ```bash
 git clone https://github.com/T-in-meet/Woodpecker.git
-cd woodpecker
+cd Woodpecker
 npm install
 ```
 
@@ -74,7 +74,21 @@ cp .env.example .env.local
 팀 공유 채널에서 환경 변수 값을 받아 `.env.local`에 입력하세요.
 새 환경 변수를 추가하면 `.env.example`에도 반드시 추가합니다.
 
-`NEXT_PUBLIC_*`만 클라이언트 번들에 노출됩니다. 그 외(`SUPABASE_SERVICE_ROLE_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SKIP_NEXT_TYPE_CHECK`, `APP_URL`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `CRON_SECRET`, `EMAIL_TICKET_SECRET`, `SUPABASE_HOOK_SECRET`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `RESEND_API_KEY`, `AUTH_EMAIL_FROM`, `AUTH_EMAIL_PROVIDER`, `SMTP_*`, `NGROK_AUTHTOKEN`)는 서버 전용이므로 클라이언트 코드에서 참조하지 않습니다.
+환경변수의 전체 목록과 용도는 [.env.example](./.env.example)을 기준으로 합니다. `NEXT_PUBLIC_*`만 클라이언트 번들에 노출되며, 그 외 변수는 서버 전용이므로 클라이언트 코드에서 참조하지 않습니다. 이메일 인증용 `EMAIL_TICKET_SECRET`과 비밀번호 설정·재설정용 `PASSWORD_INTENT_SIGNING_SECRET`도 서버 전용 비밀값입니다.
+
+### 인증 이메일
+
+현재 `src/features/auth/email/resolveEmailProvider.ts`는 모든 환경에서 Nodemailer를 사용하도록 고정되어 있습니다. `.env.example`을 참고해 `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `AUTH_EMAIL_FROM`을 설정하세요.
+
+Resend 연동 코드는 있지만 현재 비활성화되어 있습니다. `RESEND_API_KEY`만 설정하거나 `AUTH_EMAIL_PROVIDER` 값을 변경해도 발송 방식은 바뀌지 않습니다.
+
+### Supabase 환경 준비
+
+- **기존 팀 개발 DB 사용**: 팀에서 전달받은 개발 프로젝트의 URL·anon key·service role key를 `.env.local`에 설정합니다. 필요한 마이그레이션이 해당 개발 DB에 적용되어 있는지 확인합니다.
+- **새 개발 프로젝트 구성**: `supabase/migrations/`의 마이그레이션을 파일명 순서대로 적용해 테이블·RLS·RPC·Storage 구성을 준비합니다. 개발 DB 적용 방식은 [§13 DB 마이그레이션](#13-db-마이그레이션)을 따릅니다. 프로젝트별 인증 URL과 Google OAuth provider 설정도 별도로 확인해야 합니다.
+- **로컬 Supabase 사용**: Docker 실행 환경과 프로젝트의 Supabase CLI가 필요합니다. `supabase/config.toml`을 확인한 뒤 `npx supabase start`로 전체 스택을 시작하고, 출력된 로컬 URL·키를 앱의 `.env.local`에 설정합니다. 현재 설정은 Google provider를 활성화하므로 CLI 실행 환경에서도 `GOOGLE_CLIENT_ID`와 `GOOGLE_CLIENT_SECRET`을 제공해야 합니다. Next.js용 `.env.local` 설정만으로 CLI에 값이 전달된다고 가정하지 마세요.
+
+DB 마이그레이션은 외부 서비스의 인증 정보나 대시보드 설정을 대신하지 않습니다. 인증 이메일은 위 SMTP 설정을, AI·Web Push는 [README의 기능별 추가 설정](./README.md#기능별-추가-설정)을 참고하세요.
 
 ### 알림 발송 Cron
 
@@ -106,6 +120,7 @@ npm run dev
 | `npm run type-check`          | TypeScript 타입 검사                                         |
 | `npx vitest run`              | 단위/컴포넌트 테스트 1회 실행                                |
 | `npx playwright test`         | E2E 테스트 (`tests/e2e/`)                                    |
+| `npm run test:db`             | 로컬 Supabase 전체 스택 시작 후 pgTAP DB 테스트 실행         |
 | `npx prettier --write <경로>` | 포맷 (CI가 `--check`로 검사)                                 |
 
 > `dev:sw`로 Service Worker를 활성화해야 하는 이유와 동작 방식은 [트러블슈팅 §Web Push 알림이 로컬에서 동작하지 않음](#web-push-알림이-로컬에서-동작하지-않음)을 참고하세요.
@@ -119,7 +134,41 @@ npm run dev
 - 테스트 배치는 도메인 로직·유틸·컴포넌트는 대상 파일 옆 `tests/` 폴더를 기본으로 하고, App Router 페이지 테스트(`page.test.tsx`)와 `src/middleware.test.ts`는 대상 파일 옆에 직접 둡니다.
 - 공용 Supabase 쿼리 mock은 `src/tests/supabaseQueryMock.ts`를 사용합니다.
 - E2E는 `tests/e2e/`의 Playwright 테스트입니다.
-- 변경 범위가 작아도 관련 테스트는 실행하고 PR을 올립니다.
+- 코드 변경은 범위가 작아도 관련 테스트를 실행합니다. 문서만 변경한 경우 수정 문서의 포맷·참조·내용을 검증합니다.
+
+### E2E 테스트
+
+`playwright.config.ts`는 `http://localhost:3000`을 대상으로 `npm run dev`를 실행하며, 3000번 포트에 기존 서버가 있으면 재사용합니다. 실행 전에 앱의 개발 환경변수를 준비하고, 기존 서버를 재사용할 때는 동일한 개발 환경을 사용하는지 확인하세요.
+
+```bash
+npx playwright test
+```
+
+`tests/e2e/set-password-completion-cookie-scope.spec.ts`는 실제 Supabase에 테스트 사용자를 생성하고 종료 시 삭제합니다. 운영 DB 대신 개발용 DB를 사용하고, `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `PASSWORD_INTENT_SIGNING_SECRET`을 준비하세요. 테스트와 앱 서버는 같은 Supabase 프로젝트와 서명 비밀값을 사용해야 합니다.
+
+인증 타이밍 진단 테스트는 기본 실행에서 건너뜁니다. 수동 진단이 필요할 때만 해당 테스트의 입력 검증과 추가 환경변수 요구사항을 확인한 뒤 활성화합니다.
+
+| 진단 테스트                                             | 활성화 환경변수                       |
+| ------------------------------------------------------- | ------------------------------------- |
+| [가입 타이밍](./tests/e2e/auth-signup-timing.spec.ts)   | `RUN_AUTH_SIGNUP_TIMING_DIAGNOSTIC=1` |
+| [재발송 타이밍](./tests/e2e/auth-resend-timing.spec.ts) | `RUN_AUTH_TIMING_DIAGNOSTIC=1`        |
+
+### DB 테스트
+
+`supabase/tests/`의 pgTAP 테스트는 DB 제약·RLS·RPC를 검증합니다. Docker가 실행 중이어야 하며, Supabase CLI는 프로젝트 의존성에 포함되어 있습니다.
+
+```bash
+npm run test:db
+```
+
+이 스크립트는 `supabase start`로 전체 로컬 스택을 시작한 뒤 `supabase test db`를 실행합니다. 전체 스택의 인증 설정은 [§3 Supabase 환경 준비](#supabase-환경-준비)를 참고하세요. CI처럼 DB만 시작해 검증하려면 다음 명령을 사용합니다.
+
+```bash
+npx supabase db start
+npx supabase test db
+```
+
+기존 로컬 DB를 사용하는 경우 시작 명령만으로 새 마이그레이션까지 적용되었다고 가정하지 말고 적용 상태를 확인하세요. 테스트 준비를 위해 데이터가 있는 로컬 DB를 임의로 초기화하지 않습니다.
 
 ---
 
@@ -181,17 +230,19 @@ hotfix/<kebab-summary>             →  main (+ development 반영)
 
 ## 9. CI/CD
 
-`development` 또는 `main`으로 PR을 열면 GitHub Actions(`.github/workflows/ci.yml`)가 자동 실행됩니다.
+`development` 또는 `main`으로 PR을 열거나 업데이트하면 GitHub Actions(`.github/workflows/ci.yml`)가 실행됩니다. Merge queue의 `merge_group` 이벤트에서도 실행되며, Dependency Review는 PR 이벤트에서만 실행됩니다.
 
-| Job               | 명령                                      |
-| ----------------- | ----------------------------------------- |
-| Lint              | `npm run lint`                            |
-| Format Check      | `npx prettier --check .`                  |
-| Dependency Review | `actions/dependency-review-action`        |
-| Type Check        | `npx tsc --noEmit`                        |
-| Test              | `npx vitest run`                          |
-| Supabase SQL Test | `supabase db start` 후 `supabase test db` |
-| Build             | `npm run build` (선행 검사 통과 후 실행)  |
+| Job               | 명령                                                           |
+| ----------------- | -------------------------------------------------------------- |
+| Quality           | ESLint → Prettier → Next.js 라우트 타입 생성 → TypeScript 검사 |
+| Dependency Review | `actions/dependency-review-action`                             |
+| Test              | `npx vitest run`                                               |
+| Supabase SQL Test | `supabase db start` 후 `supabase test db`                      |
+| Build             | `npm run build` (다른 job과 독립적으로 병렬 실행)              |
+
+Quality job은 `npm run lint`, `npx prettier --check .`, `npx next typegen`, `npx tsc --noEmit` 순서로 검사하며, 실제 캐시·증분 검사 옵션은 workflow를 기준으로 합니다. Build job은 `SKIP_NEXT_TYPE_CHECK=1`로 빌드 내부 타입 검사를 생략하고, 타입 검증은 Quality job에서 수행합니다. 빌드 성공만으로 전체 CI가 통과한 것은 아닙니다.
+
+별도의 [Lighthouse CI workflow](./.github/workflows/lighthouse.yml)도 `development`·`main` 대상 PR에서 실행됩니다. 개발 환경의 Supabase 설정으로 프로덕션 빌드한 앱을 `npm run start`로 띄우고, `http://localhost:3000`의 랜딩 페이지 성능·접근성·SEO 등을 측정합니다. 결과는 Actions 아티팩트와 임시 공개 저장소에 업로드됩니다. 이 workflow에는 `merge_group` 트리거가 없습니다.
 
 Supabase SQL Test job은 `supabase test db`에 앞서 `node scripts/check-migration-order.mjs <base>`로 새 마이그레이션의 타임스탬프가 base 브랜치의 마지막 마이그레이션보다 뒤인지 검사합니다. 앞서면 운영 `supabase db push`가 적용을 거부하므로, 브랜치를 오래 유지했다면 머지 전에 파일명 타임스탬프를 현재 UTC 시각으로 갱신하세요.
 
@@ -211,11 +262,7 @@ Supabase SQL Test job은 `supabase test db`에 앞서 `node scripts/check-migrat
 
 - **Prettier**: 설정 파일 없이 기본값을 사용합니다.
 - **ESLint**: `eslint.config.mjs` — `next/core-web-vitals` + `next/typescript` + `simple-import-sort`
-- **import 정렬 순서**:
-  1. 외부 라이브러리 (`react`, `next`, 서드파티)
-  2. 내부 절대경로 (`@/lib`, `@/components`, `@/features`)
-  3. 상대경로 (`./`, `../`)
-  4. 스타일/에셋
+- **import 정렬**: `simple-import-sort`의 기본 규칙과 ESLint 자동 수정을 따릅니다. `eslint.config.mjs`에는 별도 그룹 설정이 없으며, `import "./styles.css"`처럼 부수 효과만 있는 import는 기본 규칙에 따라 먼저 배치됩니다.
 - 클릭 가능한 요소에는 `cursor-pointer`를 적용합니다.
 - 라우트 경로는 문자열을 직접 쓰지 말고 `@/lib/constants/routes`의 상수/헬퍼를 사용합니다.
 
@@ -241,12 +288,15 @@ Supabase SQL Test job은 `supabase test db`에 앞서 `node scripts/check-migrat
 | 여러 도메인이 쓰는 훅                  | `src/hooks/`                                                       |
 | 외부 서비스 어댑터, 순수 유틸(UI 없음) | `src/lib/`                                                         |
 | 전역 DB·도메인 타입                    | `src/types/`                                                       |
+| 관리자 화면별 컴포넌트                 | `src/features/admin/<화면>/components/`                            |
+| 관리자 공용 UI                         | `src/features/admin/components/common/`, `Admin*` 접두사           |
 | 라우팅                                 | `src/app/` — 비즈니스 로직을 두지 않습니다                         |
 
 Server Action은 Zod `safeParse`로 입력을 검증하고 `{ data: T } | { error: string | fieldErrors }` 형태로 반환합니다. 인증이 필요한 작업은 `supabase.auth.getUser()`로 사용자를 확인한 뒤 수행합니다.
 
-`auth`, `ai` 도메인은 이 평면 구조의 예외로 sub-feature 구조를 씁니다.
+다음은 의도된 구조 예외이므로 일반 도메인 형태로 일괄 변경하지 않습니다.
 
+- `operational-errors`는 서버 내부 유틸입니다. `record.ts`, `report.ts`와 `constants/`, `utils/`, `tests/` 구조를 유지합니다.
 - `auth`는 `login`·`signup`의 API Route + mutation 훅 방식과 나머지 인증 기능의 Server Action 방식이 공존합니다. 기존 sub-feature를 확장할 때는 해당 구조를 따르고, 새 인증 기능은 Server Action 방식을 기본으로 합니다.
 - `ai`는 `chats`·`embeddings`·`models`·`prompts`·`providers`·`rags`·`runtimes`·`usage` 등 기능별 하위 도메인에 필요한 `actions`·`queries`·`schema`·`types`를 선택적으로 배치합니다. 새 AI 로직은 관련 하위 도메인 안에 둡니다.
 
@@ -275,8 +325,10 @@ GitHub Actions CI와 Lighthouse CI는 `.nvmrc`에 지정된 버전을 사용합�
 
 `npm run dev`는 Turbopack과 Serwist 간 호환 문제를 피하기 위해 Service Worker(`/sw.js`)를 비활성화한 상태로 실행됩니다(`next.config.ts`의 `disable` 조건 참고). Web Push 흐름을 로컬에서 검증하려면 SW가 등록되어야 하므로 `npm run dev:sw`로 실행하세요.
 
-- `dev:sw` 스크립트는 `ENABLE_SW=true` 환경변수를 주입해 Serwist를 활성화합니다.
+- `dev:sw` 스크립트는 `ENABLE_SW=true`로 Serwist를 활성화하고, `NEXT_PUBLIC_ENABLE_SW=true`로 클라이언트의 푸시 구독 UI에서도 활성화 상태를 인식하게 합니다.
 - 환경변수 설정에 `cross-env`를 쓰는 이유: Windows cmd/PowerShell에서는 `ENABLE_SW=true next dev` 같은 인라인 문법이 동작하지 않습니다. 모든 셸에서 동일하게 동작시키기 위해 `cross-env`를 거칩니다.
+
+VAPID 환경변수 설정과 브라우저 알림 권한 허용·구독도 필요합니다. 실제 발송은 인증 헤더를 포함한 cron 엔드포인트 호출로 이루어지므로 개발 서버 실행만으로 알림이 발송되지는 않습니다.
 
 ### `VAPID_SUBJECT` 관련 에러
 
@@ -288,15 +340,15 @@ web-push 라이브러리는 subject 값으로 `https:` 또는 `mailto:` URL만 �
 
 ### PR CI의 Format Check 실패
 
-Format Check가 가장 자주 깨지는 job입니다. 파일을 수정했으면 커밋 전에 `npx prettier --write <수정한 파일>`을 실행하세요. (전체 파일에 `prettier --write .`를 돌리면 무관한 파일까지 diff에 섞이니 피하세요.)
+포맷 검사는 Quality job의 `Check formatting` 단계에서 실행됩니다. 파일을 수정했으면 커밋 전에 `npx prettier --write <수정한 파일>`을 실행하세요. (전체 파일에 `prettier --write .`를 돌리면 무관한 파일까지 diff에 섞이니 피하세요.)
 
 ### PowerShell에서 라우트 경로를 다루는 명령이 깨짐
 
-Next.js App Router의 route group(`(main)`, `(auth)`, `(legal)`)과 dynamic segment(`[noteId]`)가 들어간 경로를 PowerShell에서 인자로 넘기면 괄호/대괄호가 셸에 의해 해석되어 오류가 납니다. 항상 경로를 따옴표로 감싸세요.
+Next.js App Router의 route group(`(main)`, `(auth)`, `(legal)`)과 dynamic segment(`[noteId]`)가 들어간 경로는 항상 따옴표로 감싸세요. `Get-Content` 같은 파일 읽기 cmdlet에는 `-LiteralPath`도 사용해야 합니다. `-Path`는 따옴표 안의 대괄호도 와일드카드로 해석합니다.
 
 ```powershell
 git diff -- "src/app/(main)/notes/[noteId]/page.tsx"
-Get-Content -Path "src/app/(main)/notes/[noteId]/page.tsx"
+Get-Content -LiteralPath "src/app/(main)/notes/[noteId]/page.tsx"
 ```
 
 ## 15. VSCode 추천 익스텐션
